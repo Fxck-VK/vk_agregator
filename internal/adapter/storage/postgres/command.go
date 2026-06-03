@@ -39,7 +39,7 @@ func (r *CommandRepository) Create(ctx context.Context, cmd *domain.Command) err
 		RETURNING ` + commandColumns
 	row := r.db.QueryRow(ctx, q,
 		cmd.ID, cmd.UserID, cmd.VKPeerID, cmd.InboundEventID, cmd.Type, cmd.RawText,
-		[]byte(cmd.Args), cmd.AttachmentArtifactIDs, cmd.IdempotencyKey, cmd.CorrelationID,
+		[]byte(cmd.Args), uuidArray(cmd.AttachmentArtifactIDs), cmd.IdempotencyKey, cmd.CorrelationID,
 	)
 	return mapError(scanCommand(row, cmd))
 }

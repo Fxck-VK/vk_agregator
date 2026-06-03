@@ -1,0 +1,173 @@
+# TESTING
+
+Operational guide for running the VK AI Aggregator locally and verifying the
+full pipeline: `VK webhook → Job → Queue → Worker → Provider → Artifact →
+Delivery → Billing Capture`.
+
+## Prerequisites
+
+- Go 1.22+
+- Docker + Docker Compose (Postgres, Redis, MinIO)
+- `curl` (or any HTTP client)
+
+## Architecture at runtime
+
+Three binaries:
+
+| Binary            | Role                                                        |
+| ----------------- | ----------------------------------------------------------- |
+| `cmd/migrate`     | Applies SQL migrations from `migrations/`.                  |
+| `cmd/api`         | HTTP intake: VK webhook, admin API, `/health`. No provider calls. |
+| `cmd/worker`      | Generation / poll / delivery worker pools over Redis Streams. The only place providers are called. |
+
+## Configuration (environment variables)
+
+All have local-dev defaults (see `internal/platform/config/config.go`):
+
+| Var                     | Default                                                                                  |
+| ----------------------- | ---------------------------------------------------------------------------------------- |
+| `HTTP_ADDR`             | `:8080`                                                                                   |
+| `DATABASE_URL`          | `postgres://vk_ai_aggregator:vk_ai_aggregator@localhost:5432/vk_ai_aggregator?sslmode=disable` |
+| `MIGRATIONS_DIR`        | `migrations`                                                                              |
+| `REDIS_ADDR`            | `localhost:6379`                                                                          |
+| `S3_ENDPOINT`           | `localhost:9000`                                                                          |
+| `S3_ACCESS_KEY`         | `minioadmin`                                                                              |
+| `S3_SECRET_KEY`         | `minioadmin`                                                                              |
+| `S3_BUCKET`             | `artifacts`                                                                               |
+| `VK_CONFIRMATION_TOKEN` | `dev-confirmation`                                                                        |
+| `VK_SECRET`             | _(empty = no secret check)_                                                               |
+| `ADMIN_TOKEN`           | _(empty = admin API open)_                                                                |
+
+## Startup commands
+
+```bash
+# 1. Infrastructure
+docker compose up -d
+docker compose ps          # postgres/redis healthy; minio running
+
+# 2. Migrations
+go run ./cmd/migrate up
+go run ./cmd/migrate status   # all "applied"
+
+# 3. API (terminal A)
+go run ./cmd/api
+
+# 4. Worker (terminal B)
+go run ./cmd/worker
+```
+
+The worker auto-creates the MinIO bucket and the Redis consumer groups on
+startup, and reclaims un-acked work (restart recovery).
+
+## Migration commands
+
+```bash
+go run ./cmd/migrate up       # apply all pending
+go run ./cmd/migrate down     # roll back the most recent
+go run ./cmd/migrate status   # list applied/pending
+```
+
+## curl examples
+
+Health:
+
+```bash
+curl -s localhost:8080/health
+# {"status":"ok","checks":{"postgres":"ok","redis":"ok"}}
+```
+
+VK confirmation:
+
+```bash
+curl -s -X POST localhost:8080/webhooks/vk \
+  -H 'Content-Type: application/json' \
+  -d '{"type":"confirmation","group_id":1}'
+# dev-confirmation
+```
+
+VK message (creates user → command → job; text generation):
+
+```bash
+curl -s -X POST localhost:8080/webhooks/vk \
+  -H 'Content-Type: application/json' \
+  -d '{"type":"message_new","event_id":"evt-1","object":{"message":{"from_id":777,"peer_id":777,"text":"hello world"}}}'
+# ok
+```
+
+Image / video jobs (slash commands):
+
+```bash
+# image
+... "text":"/image a red cat" ...
+# video
+... "text":"/video a flying car" ...
+```
+
+Idempotency check — re-send the **same** `event_id`; no second job is created:
+
+```bash
+curl -s -X POST localhost:8080/webhooks/vk -H 'Content-Type: application/json' \
+  -d '{"type":"message_new","event_id":"evt-1","object":{"message":{"from_id":777,"peer_id":777,"text":"hello world"}}}'
+# ok  (deduped)
+```
+
+Admin API (add `-H "X-Admin-Token: $ADMIN_TOKEN"` if set):
+
+```bash
+curl -s 'localhost:8080/admin/jobs?limit=20'
+curl -s 'localhost:8080/admin/jobs?status=succeeded&operation=text_generate'
+curl -s localhost:8080/admin/jobs/<job_id>
+curl -s localhost:8080/admin/users/<user_id>
+curl -s localhost:8080/admin/deliveries/<delivery_id>
+```
+
+## Expected results (happy path)
+
+1. `message_new` → HTTP `200 ok`.
+2. User row created (first contact), command row created, billing reservation
+   created, job created with status `queued`.
+3. Worker consumes the job, calls the mock provider, creates an artifact, and
+   enqueues delivery.
+4. Delivery worker sends to VK (mock), captures the reservation, sets job
+   `succeeded`.
+5. `GET /admin/jobs/<id>` → `status: "succeeded"` with `output_artifact_ids`.
+
+## Automated smoke / regression test
+
+The full pipeline is exercised in-memory (no infra required) and is the fastest
+way to validate behavior end-to-end:
+
+```bash
+go test ./...                                   # whole suite
+go test ./internal/worker/ -run TestEndToEnd -v # full VK→…→Capture flow
+```
+
+Covered: business flow, webhook/delivery/capture idempotency, provider timeout
+/ rate-limit / internal-error classification, retry + terminal transitions, and
+restart recovery (consumer-group AutoClaim).
+
+Postgres and Redis integration tests run only when their env vars are set:
+
+```bash
+TEST_DATABASE_URL="$DATABASE_URL" go test ./internal/adapter/storage/postgres/...
+TEST_REDIS_ADDR="localhost:6379" go test ./internal/adapter/queue/redis/...
+```
+
+## Troubleshooting
+
+| Symptom                                   | Cause / fix                                                                 |
+| ----------------------------------------- | --------------------------------------------------------------------------- |
+| `/health` returns 503                     | Postgres or Redis unreachable. `docker compose ps`; check `DATABASE_URL` / `REDIS_ADDR`. |
+| `migrate: connect` error                  | Postgres not ready yet. Wait for `docker compose ps` healthy, retry.        |
+| Jobs stay `queued`                        | Worker not running, or pointing at a different Redis. Start `cmd/worker`; check `REDIS_ADDR`. |
+| `s3 connectivity check` / bucket error    | MinIO not up or wrong creds. Check `S3_ENDPOINT` / keys; console at `:9001`. |
+| Duplicate VK events create duplicate jobs | Ensure VK sends a stable `event_id`; dedup keys are derived from it.         |
+| Provider always fails                     | Mock provider injects errors on prompts containing `mock_timeout`, `mock_rate_limit`, `mock_provider_error`. Use a normal prompt. |
+| `409`/conflict on retry                   | Expected idempotency guard; the operation already succeeded — safe to ignore. |
+
+## Notes / known limitations (MVP)
+
+- Only the **mock** AI provider and a **mock** VK delivery client are wired; the
+  `openai`/`google`/`kling` provider and real VK delivery adapters are stubs.
+- `docker compose` brings up Postgres, Redis, MinIO; the app binaries run on the
+  host (no app Dockerfile yet).

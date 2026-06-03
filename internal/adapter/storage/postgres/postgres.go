@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -84,6 +85,16 @@ func rawOrNil(raw json.RawMessage) []byte {
 		return nil
 	}
 	return []byte(raw)
+}
+
+// uuidArray coerces a nil UUID slice into a non-nil empty slice. pgx encodes a
+// nil slice as SQL NULL, which violates the NOT NULL UUID[] columns; an empty
+// non-nil slice encodes as the empty array '{}' the schema expects.
+func uuidArray(ids []uuid.UUID) []uuid.UUID {
+	if ids == nil {
+		return []uuid.UUID{}
+	}
+	return ids
 }
 
 // TxFunc is a unit of work executed inside a database transaction.

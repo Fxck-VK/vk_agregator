@@ -49,7 +49,7 @@ func (r *JobRepository) Create(ctx context.Context, job *domain.Job) error {
 	row := r.db.QueryRow(ctx, q,
 		job.ID, job.UserID, job.VKPeerID, job.CommandID, job.OperationType, job.Modality,
 		job.ProviderID, job.ModelID, job.Status, job.Priority, job.IdempotencyKey, job.CorrelationID,
-		job.InputArtifactIDs, job.OutputArtifactIDs, []byte(job.Params), job.CostEstimate, job.CostReserved,
+		uuidArray(job.InputArtifactIDs), uuidArray(job.OutputArtifactIDs), []byte(job.Params), job.CostEstimate, job.CostReserved,
 		job.CostCaptured, job.ErrorCode, job.ErrorMessage, job.ExpiresAt,
 	)
 	return mapError(scanJob(row, job))
@@ -108,7 +108,7 @@ func (r *JobRepository) Update(ctx context.Context, job *domain.Job) error {
 		RETURNING ` + jobColumns
 	row := r.db.QueryRow(ctx, q,
 		job.ID, job.ProviderID, job.ModelID, job.Priority, job.CorrelationID,
-		job.InputArtifactIDs, job.OutputArtifactIDs, []byte(job.Params),
+		uuidArray(job.InputArtifactIDs), uuidArray(job.OutputArtifactIDs), []byte(job.Params),
 		job.CostEstimate, job.CostReserved, job.CostCaptured,
 		job.ErrorCode, job.ErrorMessage, job.ExpiresAt,
 	)

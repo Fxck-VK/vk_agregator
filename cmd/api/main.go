@@ -1,0 +1,135 @@
+// Command api runs the HTTP server: the VK callback webhook, the read-only
+// admin API and a health endpoint. It performs intake only and never calls AI
+// providers (that happens in the worker).
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"log/slog"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"github.com/redis/go-redis/v9"
+
+	adminapi "vk-ai-aggregator/internal/adapter/inbound/admin"
+	vkinbound "vk-ai-aggregator/internal/adapter/inbound/vk"
+	redisqueue "vk-ai-aggregator/internal/adapter/queue/redis"
+	"vk-ai-aggregator/internal/adapter/storage/postgres"
+	"vk-ai-aggregator/internal/platform/config"
+	"vk-ai-aggregator/internal/service/billingservice"
+	"vk-ai-aggregator/internal/service/commandrouter"
+	"vk-ai-aggregator/internal/service/joborchestrator"
+)
+
+func main() {
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	cfg := config.Load()
+
+	ctx := context.Background()
+	pool, err := postgres.NewPool(ctx, cfg.DatabaseURL)
+	if err != nil {
+		logger.Error("postgres connect failed", "error", err)
+		os.Exit(1)
+	}
+	defer pool.Close()
+
+	rdb := redisqueue.NewClient(cfg.RedisAddr, cfg.RedisPassword, cfg.RedisDB)
+	defer rdb.Close()
+
+	// Repositories and services.
+	users := postgres.NewUserRepository(pool)
+	jobs := postgres.NewJobRepository(pool)
+	commands := postgres.NewCommandRepository(pool)
+	inbound := postgres.NewInboundEventRepository(pool)
+	idem := postgres.NewIdempotencyRepository(pool)
+	deliveries := postgres.NewDeliveryRepository(pool)
+	billingRepo := postgres.NewBillingRepository(pool)
+
+	billing := billingservice.New(billingRepo)
+	uowMgr := postgres.NewUnitOfWork(pool)
+	publisher := redisqueue.NewPublisher(rdb, 100000)
+	orch := joborchestrator.New(jobs, uowMgr, billing, publisher)
+	router := commandrouter.New()
+
+	vkHandler := vkinbound.NewHandler(vkinbound.Config{
+		ConfirmationToken: cfg.VKConfirmationToken,
+		Secret:            cfg.VKSecret,
+	}, vkinbound.Deps{
+		Idempotency:  idem,
+		Inbound:      inbound,
+		Users:        users,
+		Commands:     commands,
+		Billing:      billing,
+		Orchestrator: orch,
+		Router:       router,
+		Logger:       logger,
+	})
+
+	admin := adminapi.NewHandler(adminapi.Config{Token: cfg.AdminToken}, adminapi.Deps{
+		Jobs:       jobs,
+		Users:      users,
+		Deliveries: deliveries,
+		Billing:    billingRepo,
+	})
+
+	mux := http.NewServeMux()
+	mux.Handle("/webhooks/vk", vkHandler)
+	mux.Handle("/admin/", admin.Routes())
+	mux.HandleFunc("GET /health", healthHandler(pool, rdb))
+	mux.HandleFunc("GET /healthz", healthHandler(pool, rdb))
+
+	srv := &http.Server{
+		Addr:              cfg.HTTPAddr,
+		Handler:           mux,
+		ReadHeaderTimeout: 10 * time.Second,
+	}
+
+	go func() {
+		logger.Info("api listening", "addr", cfg.HTTPAddr)
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			logger.Error("server error", "error", err)
+			os.Exit(1)
+		}
+	}()
+
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
+	<-stop
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	_ = srv.Shutdown(shutdownCtx)
+	logger.Info("api stopped")
+}
+
+// healthHandler reports 200 only when PostgreSQL and Redis are both reachable.
+func healthHandler(pool interface {
+	Ping(context.Context) error
+}, rdb *redis.Client) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+		defer cancel()
+
+		checks := map[string]string{"postgres": "ok", "redis": "ok"}
+		status := http.StatusOK
+		if err := pool.Ping(ctx); err != nil {
+			checks["postgres"] = "down"
+			status = http.StatusServiceUnavailable
+		}
+		if err := rdb.Ping(ctx).Err(); err != nil {
+			checks["redis"] = "down"
+			status = http.StatusServiceUnavailable
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(status)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"status": map[int]string{http.StatusOK: "ok", http.StatusServiceUnavailable: "degraded"}[status],
+			"checks": checks,
+		})
+	}
+}

@@ -81,6 +81,27 @@ Apply migrations:
 go run ./cmd/migrate up
 ```
 
+Start the API (VK webhook, admin API, health endpoint) — listens on `:8080`:
+
+```bash
+go run ./cmd/api
+```
+
+Start the workers (generation, provider poll, delivery) in a second terminal:
+
+```bash
+go run ./cmd/worker
+```
+
+Check health:
+
+```bash
+curl localhost:8080/health   # {"status":"ok","checks":{"postgres":"ok","redis":"ok"}}
+```
+
+See `TESTING.md` for full runtime validation, curl examples and expected
+results.
+
 ## Admin API
 
 Read-only operator endpoints (DTO responses, pagination, filters). If an admin
@@ -98,7 +119,7 @@ List responses are wrapped as `{ "items": [...], "pagination": { "limit", "offse
 Example:
 
 ```bash
-curl "http://localhost:8081/admin/jobs?status=succeeded&limit=20" -H "X-Admin-Token: $ADMIN_TOKEN"
+curl "http://localhost:8080/admin/jobs?status=succeeded&limit=20" -H "X-Admin-Token: $ADMIN_TOKEN"
 ```
 
 ## Testing

@@ -306,7 +306,41 @@
 
 ---
 
-## Next step — Step 7
+## Step 7 — Runnable entrypoints + MVP smoke check (готово)
+
+- **`internal/platform/config`**: загрузка конфигурации из env с локальными дефолтами
+  (Postgres/Redis/MinIO/VK/Admin/worker group).
+- **`cmd/migrate`**: применение/откат SQL-миграций (`up`/`down`/`status`) с таблицей
+  `schema_migrations`.
+- **`cmd/api`**: HTTP-интейк — VK webhook (`/webhooks/vk`), Admin API (`/admin/...`),
+  `/health` (пинг Postgres+Redis, 503 при недоступности). Провайдеры не вызываются.
+- **`cmd/worker`**: пулы воркеров (generation text/image/video, poll, delivery) поверх
+  Redis Streams; авто-создание бакета MinIO и consumer-групп, recovery через AutoClaim.
+- **`TESTING.md`**: prerequisites, запуск, миграции, curl-примеры, ожидаемые результаты,
+  troubleshooting.
+
+### Проверки
+
+- `go build ./...`, `gofmt -w`, `go vet ./...` — чисто; `go test ./...` — зелёный.
+- Полный бизнес-флоу + идемпотентность + failure-сценарии валидируются in-memory
+  E2E (`internal/worker/TestEndToEnd`) и воркер/vk тестами.
+- Live-валидация против реальных Postgres/Redis/MinIO (docker compose) пройдена:
+  `/health` 200; полный E2E для text/image/video — job `succeeded`, артефакт в MinIO,
+  delivery `sent`, capture закоммичен (1/10/50); стримы стабильны (нет бесконечных retry).
+
+### Найдено и исправлено при live-прогоне
+
+- **NOT NULL по UUID[]-колонкам** (`commands.attachment_artifact_ids`,
+  `jobs.input/output_artifact_ids`): pgx кодировал nil-срез как SQL NULL, перекрывая
+  `DEFAULT '{}'`. Webhook падал с 500. Фикс — `uuidArray()` приводит nil к пустому срезу.
+- **Бесконечный re-enqueue**: mock-провайдер отдаёт `mock://` output URL, который реальный
+  HTTP-downloader не может скачать → `handleFailure` бесконечно переочередял job. Фикс —
+  `mock.NewDownloader()` (резолвит `mock://` в реальные байты), подключён в `cmd/worker`
+  через `artifactservice.WithDownloader`.
+
+---
+
+## Next step — Step 8
 
 **Реальные адаптеры и outbox relay.**
 
