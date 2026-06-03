@@ -121,6 +121,34 @@ curl -s localhost:8080/admin/users/<user_id>
 curl -s localhost:8080/admin/deliveries/<delivery_id>
 ```
 
+## Hardening checks (moderation, DLQ, metrics)
+
+```bash
+# Moderation REJECT: a banned term blocks delivery
+curl -s -X POST localhost:8080/webhooks/vk -H 'Content-Type: application/json' \
+  -d '{"type":"message_new","event_id":"mod-1","object":{"message":{"from_id":9001,"peer_id":9001,"text":"please generate nsfw content"}}}'
+# -> job ends in status "rejected", cost_captured = 0, reservation released,
+#    one moderation_results row (decision=block), no VK send.
+
+# DLQ + retry budget: a poison provider error is dead-lettered (no infinite loop)
+curl -s -X POST localhost:8080/webhooks/vk -H 'Content-Type: application/json' \
+  -d '{"type":"message_new","event_id":"dlq-1","object":{"message":{"from_id":9002,"peer_id":9002,"text":"mock_provider_error"}}}'
+# -> job ends in status "failed_terminal", cost_captured = 0
+docker exec vk-ai-aggregator-redis redis-cli XLEN stream:jobs:dlq   # >= 1
+
+# Metrics (process-local: scrape api and each worker separately)
+curl -s localhost:8080/metrics | grep vkagg_
+
+# Inspect moderation audit / DLQ in Postgres
+docker exec vk-ai-aggregator-postgres psql -U vk_ai_aggregator -d vk_ai_aggregator \
+  -c "SELECT job_id, stage, decision, provider FROM moderation_results ORDER BY created_at DESC LIMIT 5;"
+```
+
+Expected: moderation **pass** delivers+captures as the happy path; moderation
+**reject** → `rejected` (no charge); poison error → `failed_terminal` + a DLQ
+entry. In production (`APP_ENV=production`) the API refuses to start without
+`VK_SECRET`/`ADMIN_TOKEN`/`VK_CONFIRMATION_TOKEN`.
+
 ## Expected results (happy path)
 
 1. `message_new` → HTTP `200 ok`.

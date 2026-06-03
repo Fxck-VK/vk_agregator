@@ -167,6 +167,30 @@ func (s *Service) Release(ctx context.Context, reservationID uuid.UUID) error {
 	return s.repo.Release(ctx, reservationID, "rel:"+reservationID.String())
 }
 
+// ReleaseForJob frees the job's reservation without charging it. It is
+// idempotent: a reservation that is no longer in the reserved state (already
+// captured/released) is treated as success. Used when output moderation blocks
+// delivery so reserved credits are not held or charged.
+func (s *Service) ReleaseForJob(ctx context.Context, jobID uuid.UUID) error {
+	res, err := s.repo.GetReservationByJob(ctx, jobID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return nil
+		}
+		return err
+	}
+	if res.Status != domain.ReservationReserved {
+		return nil
+	}
+	if err := s.repo.Release(ctx, res.ID, "rel:"+res.ID.String()); err != nil {
+		if errors.Is(err, domain.ErrConflict) {
+			return nil
+		}
+		return err
+	}
+	return nil
+}
+
 // Refund returns previously captured credits to the user's account by appending
 // a committed positive ledger entry. It is idempotent per job.
 func (s *Service) Refund(ctx context.Context, userID, jobID uuid.UUID, amount int64) error {

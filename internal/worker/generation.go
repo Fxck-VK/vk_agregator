@@ -50,12 +50,12 @@ func (g *GenerationWorker) Process(ctx context.Context, task queue.Task) error {
 		if perr != nil {
 			return perr
 		}
-		return g.pollOnce(ctx, job, active, provider)
+		return g.pollOnce(ctx, job, active, provider, task)
 	}
 
 	provider, err := g.providers.ForOperation(job.OperationType)
 	if err != nil {
-		return g.handleFailure(ctx, job, domain.ProviderErrUnsupportedCapab, err.Error())
+		return g.handleFailure(ctx, job, task, domain.ProviderErrUnsupportedCapab, err.Error())
 	}
 
 	if err := g.toDispatching(ctx, job); err != nil {
@@ -71,7 +71,7 @@ func (g *GenerationWorker) Process(ctx context.Context, task queue.Task) error {
 	req := g.buildRequest(job, attempt)
 	submitted, err := provider.Submit(ctx, req)
 	if err != nil {
-		return g.handleFailure(ctx, job, classOf(err), err.Error())
+		return g.handleFailure(ctx, job, task, classOf(err), err.Error())
 	}
 
 	pt, err := g.persistTask(ctx, job, provider.Name(), submitted, req, attempt)
@@ -81,7 +81,7 @@ func (g *GenerationWorker) Process(ctx context.Context, task queue.Task) error {
 	if err := g.setStatus(ctx, job, domain.JobStatusProviderSubmitted, "", ""); err != nil {
 		return err
 	}
-	return g.pollOnce(ctx, job, pt, provider)
+	return g.pollOnce(ctx, job, pt, provider, task)
 }
 
 // toDispatching moves a queued job into dispatching_provider, tolerating a job

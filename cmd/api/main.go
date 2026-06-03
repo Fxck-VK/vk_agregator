@@ -21,6 +21,8 @@ import (
 	redisqueue "vk-ai-aggregator/internal/adapter/queue/redis"
 	"vk-ai-aggregator/internal/adapter/storage/postgres"
 	"vk-ai-aggregator/internal/platform/config"
+	"vk-ai-aggregator/internal/platform/metrics"
+	"vk-ai-aggregator/internal/platform/ratelimit"
 	"vk-ai-aggregator/internal/service/billingservice"
 	"vk-ai-aggregator/internal/service/commandrouter"
 	"vk-ai-aggregator/internal/service/joborchestrator"
@@ -29,6 +31,13 @@ import (
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	cfg := config.Load()
+
+	// Fail closed: refuse to start in production without the secrets that
+	// protect the webhook intake and admin API (audit S1).
+	if err := cfg.Validate(); err != nil {
+		logger.Error("invalid configuration", "error", err)
+		os.Exit(1)
+	}
 
 	ctx := context.Background()
 	pool, err := postgres.NewPool(ctx, cfg.DatabaseURL)
@@ -77,9 +86,14 @@ func main() {
 		Billing:    billingRepo,
 	})
 
+	// Per-IP rate limiting protects the webhook intake from flooding/abuse
+	// (audit S3).
+	webhookLimiter := ratelimit.New(cfg.WebhookRateLimitRPS, cfg.WebhookRateLimitBurst)
+
 	mux := http.NewServeMux()
-	mux.Handle("/webhooks/vk", vkHandler)
-	mux.Handle("/admin/", admin.Routes())
+	mux.Handle("/webhooks/vk", webhookLimiter.Middleware(metrics.Middleware("webhook", vkHandler)))
+	mux.Handle("/admin/", metrics.Middleware("admin", admin.Routes()))
+	mux.Handle("GET /metrics", metrics.Handler())
 	mux.HandleFunc("GET /health", healthHandler(pool, rdb))
 	mux.HandleFunc("GET /healthz", healthHandler(pool, rdb))
 

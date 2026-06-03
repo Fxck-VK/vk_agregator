@@ -1,7 +1,13 @@
 # Roadmap — VK AI Aggregator
 
 Phased plan aligned with `docs/ARCHITECTURE.md` (§37) and the `AUDIT.md` findings.
-Current release: **v0.1.0 (end of Phase 1 — MVP)**.
+Current release: **v0.1.0 + post-release hardening (end of Phase 1 — MVP)**.
+
+> Post-release hardening landed several Phase 2 items early: output moderation
+> (A1), DLQ + retry budget (R1/Q1/E1), fail-closed secrets (S1), SSRF allowlist
+> (S2), webhook rate limiting (S3) and Prometheus metrics (O1). Remaining Phase 2
+> high items: real provider adapters (P1), real VK delivery (V1), outbox relay
+> (A2), atomic billing (B1), and OpenTelemetry tracing.
 
 ---
 
@@ -33,14 +39,16 @@ Current release: **v0.1.0 (end of Phase 1 — MVP)**.
 - Real text/image generation, safety, and operational visibility; make it functional for limited real users.
 
 **Required tasks**
-- Real provider adapters: OpenAI + Google/Gemini (image) behind `Provider` interface (AUDIT P1).
-- Real VK delivery client: upload servers + `messages.send` (AUDIT V1).
-- Output + input moderation stage before delivery (AUDIT A1, invariant #15).
-- Observability: Prometheus metrics + OpenTelemetry tracing + dashboards/alerts (AUDIT O1).
-- Reliability: hard retry budget per job + dead-letter stream (AUDIT R1, Q1, E1).
+- Real provider adapters: OpenAI + Google/Gemini (image) behind `Provider` interface (AUDIT P1). *(needs external credentials)*
+- Real VK delivery client: upload servers + `messages.send` (AUDIT V1). *(needs external credentials)*
 - Outbox relay (drain → publish → mark) feeding the queue (AUDIT A2).
 - Atomic reserve+job+outbox via `Querier` (AUDIT B1).
-- Security: fail-closed secrets/admin auth, SSRF allowlist, per-IP/user rate limits (AUDIT S1, S2, S3).
+- OpenTelemetry tracing across VK→job→provider→delivery (remainder of AUDIT O1).
+- Admin DLQ inspection/replay tooling; shared/Redis rate limiter for multi-instance (remainder of Q1, S3).
+- [x] Output moderation stage before delivery (AUDIT A1, invariant #15). ✅ done in hardening
+- [x] Prometheus metrics + `/metrics` (AUDIT O1, metrics part). ✅ done in hardening
+- [x] Hard retry budget per phase + dead-letter stream (AUDIT R1, Q1, E1). ✅ done in hardening
+- [x] Fail-closed secrets/admin auth, SSRF allowlist, per-IP webhook rate limits (AUDIT S1, S2, S3). ✅ done in hardening
 
 **Done criteria**
 - Real text + image jobs delivered to VK; no infinite retries (DLQ proven); metrics/alerts live; moderation blocks unsafe output; secrets enforced in non-dev.

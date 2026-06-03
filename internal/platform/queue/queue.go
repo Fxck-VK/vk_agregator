@@ -23,6 +23,10 @@ type Task struct {
 	Modality domain.Modality `json:"modality"`
 	// CorrelationID links the task to the originating request flow.
 	CorrelationID string `json:"correlation_id"`
+	// Attempt is the delivery attempt counter for this task. It is incremented
+	// each time the task is re-enqueued after a retryable failure and is used to
+	// enforce a hard retry budget (after which the task is dead-lettered).
+	Attempt int `json:"attempt,omitempty"`
 }
 
 // QueueName returns the logical queue a task belongs to, derived from its

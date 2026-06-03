@@ -9,7 +9,9 @@ import (
 	"github.com/google/uuid"
 
 	vkdelivery "vk-ai-aggregator/internal/adapter/delivery/vk"
+	redisqueue "vk-ai-aggregator/internal/adapter/queue/redis"
 	"vk-ai-aggregator/internal/domain"
+	"vk-ai-aggregator/internal/platform/metrics"
 	"vk-ai-aggregator/internal/platform/queue"
 )
 
@@ -31,7 +33,14 @@ type DeliveryDeps struct {
 	Objects    ObjectStore
 	VK         vkdelivery.Client
 	Billing    DeliveryBiller
-	Now        func() time.Time
+	// Streams, when set, receives dead-lettered delivery tasks once the retry
+	// budget is exhausted.
+	Streams StreamPublisher
+	// MaxAttempts caps delivery send attempts before dead-lettering (default 3).
+	MaxAttempts int
+	// Backoff returns the delay before the next delivery retry; defaults to none.
+	Backoff func(attempt int) time.Duration
+	Now     func() time.Time
 }
 
 // DeliveryWorker consumes the delivery stream and runs the final stage of the
@@ -39,13 +48,16 @@ type DeliveryDeps struct {
 // idempotent (one delivery row per job, deduped by key), uses a deterministic
 // random_id so VK suppresses duplicate sends, and is safe to retry/recover.
 type DeliveryWorker struct {
-	jobs       domain.JobRepository
-	deliveries domain.DeliveryRepository
-	artifacts  domain.ArtifactRepository
-	objects    ObjectStore
-	vk         vkdelivery.Client
-	billing    DeliveryBiller
-	now        func() time.Time
+	jobs        domain.JobRepository
+	deliveries  domain.DeliveryRepository
+	artifacts   domain.ArtifactRepository
+	objects     ObjectStore
+	vk          vkdelivery.Client
+	billing     DeliveryBiller
+	streams     StreamPublisher
+	maxAttempts int
+	backoff     func(attempt int) time.Duration
+	now         func() time.Time
 }
 
 // NewDeliveryWorker builds a DeliveryWorker.
@@ -54,14 +66,25 @@ func NewDeliveryWorker(d DeliveryDeps) *DeliveryWorker {
 	if now == nil {
 		now = time.Now
 	}
+	maxAttempts := d.MaxAttempts
+	if maxAttempts <= 0 {
+		maxAttempts = maxProviderAttempts
+	}
+	backoff := d.Backoff
+	if backoff == nil {
+		backoff = func(int) time.Duration { return 0 }
+	}
 	return &DeliveryWorker{
-		jobs:       d.Jobs,
-		deliveries: d.Deliveries,
-		artifacts:  d.Artifacts,
-		objects:    d.Objects,
-		vk:         d.VK,
-		billing:    d.Billing,
-		now:        now,
+		jobs:        d.Jobs,
+		deliveries:  d.Deliveries,
+		artifacts:   d.Artifacts,
+		objects:     d.Objects,
+		vk:          d.VK,
+		billing:     d.Billing,
+		streams:     d.Streams,
+		maxAttempts: maxAttempts,
+		backoff:     backoff,
+		now:         now,
 	}
 }
 
@@ -98,7 +121,19 @@ func (w *DeliveryWorker) Process(ctx context.Context, task queue.Task) error {
 		if err := w.send(ctx, del); err != nil {
 			del.Status = domain.DeliveryStatusRetrying
 			del.ErrorMessage = err.Error()
+			del.AttemptNo++
 			_ = w.deliveries.Update(ctx, del)
+			// Retry budget: dead-letter once exhausted so a permanently failing
+			// VK send can no longer be retried forever.
+			if del.AttemptNo > w.maxAttempts {
+				metrics.DLQRouted.WithLabelValues("delivery").Inc()
+				if w.streams != nil {
+					_ = w.streams.PublishTo(ctx, redisqueue.StreamDLQ, task)
+				}
+				metrics.JobsTerminal.WithLabelValues(string(domain.JobStatusFailedTerminal)).Inc()
+				return w.setStatus(ctx, job, domain.JobStatusFailedTerminal, "delivery_failed", err.Error())
+			}
+			w.sleepBackoff(ctx, del.AttemptNo)
 			return fmt.Errorf("worker: vk send: %w", err)
 		}
 	}
@@ -116,6 +151,8 @@ func (w *DeliveryWorker) Process(ctx context.Context, task queue.Task) error {
 		}
 	}
 
+	metrics.DeliveriesSent.Inc()
+	metrics.JobsTerminal.WithLabelValues(string(domain.JobStatusSucceeded)).Inc()
 	return w.setStatus(ctx, job, domain.JobStatusSucceeded, "", "")
 }
 
@@ -216,6 +253,21 @@ func (w *DeliveryWorker) send(ctx context.Context, del *domain.Delivery) error {
 	del.ErrorCode = ""
 	del.ErrorMessage = ""
 	return w.deliveries.Update(ctx, del)
+}
+
+// sleepBackoff waits for the configured backoff before the next retry, honoring
+// context cancellation.
+func (w *DeliveryWorker) sleepBackoff(ctx context.Context, attempt int) {
+	d := w.backoff(attempt)
+	if d <= 0 {
+		return
+	}
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+	case <-t.C:
+	}
 }
 
 func (w *DeliveryWorker) setStatus(ctx context.Context, job *domain.Job, to domain.JobStatus, code, msg string) error {

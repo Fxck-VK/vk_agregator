@@ -225,6 +225,11 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 	// Job: only commands that map to an AI operation become jobs. Control
 	// commands (balance/status/cancel/help) are recorded but produce no job.
 	if parsed.CreatesJob() {
+		// Carry the user's prompt on the job so workers can render it and the
+		// output-moderation stage has the request text to evaluate.
+		params, _ := json.Marshal(struct {
+			Prompt string `json:"prompt"`
+		}{Prompt: parsed.Prompt})
 		job, err := h.deps.Orchestrator.CreateJob(ctx, joborchestrator.CreateJobInput{
 			UserID:         user.ID,
 			VKPeerID:       peerID,
@@ -233,6 +238,7 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 			Modality:       parsed.Modality,
 			IdempotencyKey: "vk_job:" + strconv.FormatInt(cb.GroupID, 10) + ":" + eventID,
 			CorrelationID:  idemKey,
+			Params:         params,
 		})
 		switch {
 		case err == nil:

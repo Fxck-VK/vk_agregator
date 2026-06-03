@@ -130,7 +130,7 @@ const (
 var jobTransitions = map[JobStatus][]JobStatus{
 	JobStatusReceived:            {JobStatusValidated, JobStatusRejected, JobStatusCancelled},
 	JobStatusValidated:           {JobStatusAwaitingPayment, JobStatusCreditsReserved, JobStatusRejected, JobStatusCancelled},
-	JobStatusRejected:            {},
+	JobStatusRejected:            {JobStatusRefunded},
 	JobStatusAwaitingPayment:     {JobStatusCreditsReserved, JobStatusCancelled, JobStatusExpired},
 	JobStatusCreditsReserved:     {JobStatusQueued, JobStatusCancelled, JobStatusRefunded},
 	JobStatusQueued:              {JobStatusDispatchingProvider, JobStatusCancelled, JobStatusExpired},
@@ -138,7 +138,7 @@ var jobTransitions = map[JobStatus][]JobStatus{
 	JobStatusProviderSubmitted:   {JobStatusProviderPending, JobStatusProviderProcessing, JobStatusProviderSucceeded, JobStatusProviderFailed},
 	JobStatusProviderPending:     {JobStatusProviderProcessing, JobStatusProviderSucceeded, JobStatusProviderFailed, JobStatusCancelled},
 	JobStatusProviderProcessing:  {JobStatusProviderSucceeded, JobStatusProviderFailed, JobStatusCancelled},
-	JobStatusProviderSucceeded:   {JobStatusPostprocessing, JobStatusResultReady, JobStatusFailedRetryable},
+	JobStatusProviderSucceeded:   {JobStatusPostprocessing, JobStatusResultReady, JobStatusFailedRetryable, JobStatusRejected},
 	JobStatusProviderFailed:      {JobStatusFailedRetryable, JobStatusFailedTerminal, JobStatusRefunded},
 	JobStatusPostprocessing:      {JobStatusResultReady, JobStatusFailedRetryable, JobStatusFailedTerminal},
 	JobStatusResultReady:         {JobStatusDelivering, JobStatusFailedRetryable},

@@ -9,6 +9,27 @@ import (
 	"vk-ai-aggregator/internal/platform/queue"
 )
 
+// ExponentialBackoff returns a backoff function that grows as base*2^(attempt-1)
+// capped at max. attempt is 1-based. A non-positive base disables backoff.
+func ExponentialBackoff(base, max time.Duration) func(attempt int) time.Duration {
+	return func(attempt int) time.Duration {
+		if base <= 0 || attempt <= 0 {
+			return 0
+		}
+		d := base
+		for i := 1; i < attempt; i++ {
+			d *= 2
+			if max > 0 && d >= max {
+				return max
+			}
+		}
+		if max > 0 && d > max {
+			return max
+		}
+		return d
+	}
+}
+
 // Reader is the slice of the Redis consumer the engine needs. It is satisfied
 // by *redisqueue.Consumer and faked in tests.
 type Reader interface {

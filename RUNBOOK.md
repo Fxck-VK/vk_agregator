@@ -52,8 +52,30 @@ no `.env` is required for local runs. Override via environment when needed:
 | `VK_SECRET` | `` (empty = no check) | VK callback secret |
 | `ADMIN_TOKEN` | `` (empty = open) | Admin API `X-Admin-Token` |
 | `WORKER_GROUP` / `WORKER_CONSUMER` | `workers` / hostname | Consumer group identity |
+| `APP_ENV` | `development` | `production` enforces fail-closed secrets |
+| `MAX_ATTEMPTS` | `3` | Retry budget before dead-lettering |
+| `RETRY_BASE_DELAY` / `RETRY_MAX_DELAY` | `500ms` / `30s` | Exponential backoff bounds |
+| `MODERATION_EXTRA_TERMS` | `` | Comma-separated extra blocklist terms |
+| `WEBHOOK_RATE_LIMIT_RPS` / `WEBHOOK_RATE_LIMIT_BURST` | `20` / `40` | Per-IP webhook rate limit |
 
-> Production note: set `VK_SECRET` and `ADMIN_TOKEN` to non-empty values (see `AUDIT.md` S1).
+> Production note: set `APP_ENV=production`; the API then **refuses to start**
+> unless `VK_SECRET`, `ADMIN_TOKEN`, and a non-default `VK_CONFIRMATION_TOKEN`
+> are set (fail-closed, `AUDIT.md` S1).
+
+### Hardening features (post-release)
+
+- **Output moderation** gates delivery: a blocked prompt sets the job to
+  `rejected`, releases the reservation (no capture), and writes a
+  `moderation_results` audit row (migration `000003`). Default classifier is
+  keyword-based (`MODERATION_EXTRA_TERMS` extends it).
+- **DLQ + retry budget**: exhausted/poison tasks go to `stream:jobs:dlq`
+  (not auto-consumed) and the job becomes `failed_terminal`. Inspect with
+  `docker exec vk-ai-aggregator-redis redis-cli XLEN stream:jobs:dlq`.
+- **Metrics**: `GET /metrics` (Prometheus). Note metrics are process-local —
+  scrape the API and each worker separately.
+- **SSRF**: artifact downloader blocks private/loopback/link-local hosts and
+  non-http(s) schemes; optional host allowlist.
+- **Rate limit**: per-IP token bucket on `/webhooks/vk` (429 when exceeded).
 
 ---
 
@@ -154,6 +176,7 @@ Expected log:
 |----------|----------|
 | `GET /health` | `200` `{"status":"ok","checks":{"postgres":"ok","redis":"ok"}}` |
 | `GET /healthz` | same (alias) |
+| `GET /metrics` | `200` Prometheus exposition (`vkagg_*` + Go/process) |
 
 `503 {"status":"degraded",...}` means Postgres or Redis is unreachable — see Troubleshooting.
 

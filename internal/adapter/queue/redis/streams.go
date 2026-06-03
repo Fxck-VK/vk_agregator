@@ -25,9 +25,14 @@ const (
 	StreamVideo        = "stream:jobs:video"
 	StreamDelivery     = "stream:jobs:delivery"
 	StreamProviderPoll = "stream:jobs:provider_poll"
+	// StreamDLQ is the dead-letter stream for tasks that exhausted their retry
+	// budget. It is not consumed by workers; entries are inspected/replayed by
+	// operators.
+	StreamDLQ = "stream:jobs:dlq"
 )
 
-// AllStreams lists every stream the platform uses.
+// AllStreams lists every worker-consumed stream (the DLQ is intentionally
+// excluded; nothing auto-consumes it).
 var AllStreams = []string{StreamText, StreamImage, StreamVideo, StreamDelivery, StreamProviderPoll}
 
 // taskField is the Redis stream entry field that carries the JSON task body.

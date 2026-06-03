@@ -10,7 +10,10 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -45,9 +48,21 @@ type Service struct {
 // Option customizes a Service.
 type Option func(*Service)
 
-// WithDownloader overrides the remote downloader (defaults to an HTTP client).
+// WithDownloader overrides the remote downloader (defaults to a SSRF-hardened
+// HTTP client).
 func WithDownloader(d Downloader) Option {
 	return func(s *Service) { s.downloader = d }
+}
+
+// WithAllowedHosts restricts the default downloader to an egress allowlist of
+// hostnames (case-insensitive). Empty means "any public host" (private/
+// loopback/link-local addresses are still blocked).
+func WithAllowedHosts(hosts ...string) Option {
+	return func(s *Service) {
+		if d, ok := s.downloader.(*httpDownloader); ok {
+			d.setAllowedHosts(hosts)
+		}
+	}
 }
 
 // New builds an artifact Service that stores bytes in the given bucket.
@@ -55,7 +70,7 @@ func New(repo domain.ArtifactRepository, store ObjectStore, bucket string, opts 
 	s := &Service{
 		repo:       repo,
 		store:      store,
-		downloader: &httpDownloader{client: http.DefaultClient},
+		downloader: newHTTPDownloader(),
 		bucket:     bucket,
 		now:        time.Now,
 	}
@@ -139,13 +154,95 @@ func extFor(mediaType domain.MediaType) string {
 	}
 }
 
-// httpDownloader is the default Downloader backed by net/http.
+// httpDownloader is the default Downloader backed by net/http. It is hardened
+// against SSRF: only http/https are allowed, every URL (including redirect
+// targets) is validated, and requests to private/loopback/link-local addresses
+// are refused. An optional host allowlist narrows egress further.
 type httpDownloader struct {
-	client *http.Client
+	client       *http.Client
+	allowedHosts map[string]struct{}
+	blockPrivate bool
 }
 
-func (d *httpDownloader) Download(ctx context.Context, url string) ([]byte, string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+// newHTTPDownloader builds the default SSRF-hardened downloader.
+func newHTTPDownloader() *httpDownloader {
+	d := &httpDownloader{blockPrivate: true}
+	d.client = &http.Client{
+		Timeout: 60 * time.Second,
+		CheckRedirect: func(req *http.Request, _ []*http.Request) error {
+			return d.guard(req.URL)
+		},
+	}
+	return d
+}
+
+func (d *httpDownloader) setAllowedHosts(hosts []string) {
+	if len(hosts) == 0 {
+		d.allowedHosts = nil
+		return
+	}
+	m := make(map[string]struct{}, len(hosts))
+	for _, h := range hosts {
+		if h = strings.ToLower(strings.TrimSpace(h)); h != "" {
+			m[h] = struct{}{}
+		}
+	}
+	d.allowedHosts = m
+}
+
+// guard validates a URL against the SSRF policy.
+func (d *httpDownloader) guard(u *url.URL) error {
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return fmt.Errorf("artifactservice: blocked url scheme %q", u.Scheme)
+	}
+	host := strings.ToLower(u.Hostname())
+	if host == "" {
+		return fmt.Errorf("artifactservice: missing host")
+	}
+	if len(d.allowedHosts) > 0 {
+		if _, ok := d.allowedHosts[host]; !ok {
+			return fmt.Errorf("artifactservice: host %q not in egress allowlist", host)
+		}
+	}
+	if !d.blockPrivate {
+		return nil
+	}
+	ips, err := net.LookupIP(host)
+	if err != nil {
+		return fmt.Errorf("artifactservice: resolve %q: %w", host, err)
+	}
+	for _, ip := range ips {
+		if isBlockedIP(ip) {
+			return fmt.Errorf("artifactservice: blocked non-public address %s", ip)
+		}
+	}
+	return nil
+}
+
+// isBlockedIP reports whether an IP is in a range that must not be reached from
+// the artifact downloader (SSRF protection).
+func isBlockedIP(ip net.IP) bool {
+	if ip.IsLoopback() || ip.IsPrivate() || ip.IsUnspecified() ||
+		ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() ||
+		ip.IsInterfaceLocalMulticast() {
+		return true
+	}
+	// 100.64.0.0/10 carrier-grade NAT (not covered by IsPrivate).
+	if v4 := ip.To4(); v4 != nil && v4[0] == 100 && v4[1] >= 64 && v4[1] <= 127 {
+		return true
+	}
+	return false
+}
+
+func (d *httpDownloader) Download(ctx context.Context, rawURL string) ([]byte, string, error) {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return nil, "", fmt.Errorf("artifactservice: parse url: %w", err)
+	}
+	if err := d.guard(u); err != nil {
+		return nil, "", err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
 		return nil, "", err
 	}

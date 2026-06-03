@@ -22,7 +22,9 @@ import (
 
 	redisqueue "vk-ai-aggregator/internal/adapter/queue/redis"
 	"vk-ai-aggregator/internal/domain"
+	"vk-ai-aggregator/internal/platform/metrics"
 	"vk-ai-aggregator/internal/platform/queue"
+	"vk-ai-aggregator/internal/service/moderationservice"
 )
 
 // maxProviderAttempts caps how many times a job is re-submitted to a provider
@@ -87,12 +89,31 @@ func (r *Registry) ForName(name domain.ProviderName) (domain.Provider, error) {
 // processor holds the shared dependencies and result-handling logic used by
 // both the generation and poll workers.
 type processor struct {
-	jobs      domain.JobRepository
-	tasks     domain.ProviderTaskRepository
-	artifacts ArtifactSaver
-	providers *Registry
-	streams   StreamPublisher
-	now       func() time.Time
+	jobs        domain.JobRepository
+	tasks       domain.ProviderTaskRepository
+	artifacts   ArtifactSaver
+	providers   *Registry
+	streams     StreamPublisher
+	moderator   Moderator
+	modResults  domain.ModerationResultRepository
+	releaser    ReservationReleaser
+	maxAttempts int
+	backoff     func(attempt int) time.Duration
+	now         func() time.Time
+}
+
+// Moderator gates delivery: generated output must pass a moderation check
+// before it is delivered (invariant #15). Implemented by moderationservice.
+type Moderator interface {
+	Name() string
+	Check(ctx context.Context, in moderationservice.Input) (moderationservice.Outcome, error)
+}
+
+// ReservationReleaser frees a job's reserved credits when delivery is blocked
+// (e.g. by moderation) so blocked jobs are never charged. Implemented by
+// billingservice.Service.
+type ReservationReleaser interface {
+	ReleaseForJob(ctx context.Context, jobID uuid.UUID) error
 }
 
 // Deps bundles the dependencies shared by the workers.
@@ -102,6 +123,18 @@ type Deps struct {
 	Artifacts ArtifactSaver
 	Providers *Registry
 	Streams   StreamPublisher
+	// Moderator, when set, runs an output moderation check before delivery.
+	// When nil, moderation is skipped (allow-all) for local/test wiring.
+	Moderator Moderator
+	// ModResults, when set, persists moderation verdicts for audit.
+	ModResults domain.ModerationResultRepository
+	// Releaser, when set, frees reserved credits for moderation-blocked jobs.
+	Releaser ReservationReleaser
+	// MaxAttempts caps retryable re-enqueues before dead-lettering (default 3).
+	MaxAttempts int
+	// Backoff returns the delay before re-enqueue for the given attempt number.
+	// Defaults to no delay (keeps tests fast).
+	Backoff func(attempt int) time.Duration
 	// Now overrides the clock; defaults to time.Now.
 	Now func() time.Time
 }
@@ -111,13 +144,26 @@ func newProcessor(d Deps) processor {
 	if now == nil {
 		now = time.Now
 	}
+	maxAttempts := d.MaxAttempts
+	if maxAttempts <= 0 {
+		maxAttempts = maxProviderAttempts
+	}
+	backoff := d.Backoff
+	if backoff == nil {
+		backoff = func(int) time.Duration { return 0 }
+	}
 	return processor{
-		jobs:      d.Jobs,
-		tasks:     d.Tasks,
-		artifacts: d.Artifacts,
-		providers: d.Providers,
-		streams:   d.Streams,
-		now:       now,
+		jobs:        d.Jobs,
+		tasks:       d.Tasks,
+		artifacts:   d.Artifacts,
+		providers:   d.Providers,
+		streams:     d.Streams,
+		moderator:   d.Moderator,
+		modResults:  d.ModResults,
+		releaser:    d.Releaser,
+		maxAttempts: maxAttempts,
+		backoff:     backoff,
+		now:         now,
 	}
 }
 
@@ -251,18 +297,18 @@ func (p *processor) latestTask(ctx context.Context, jobID uuid.UUID) (*domain.Pr
 }
 
 // pollOnce polls the provider once and applies the normalized result.
-func (p *processor) pollOnce(ctx context.Context, job *domain.Job, pt *domain.ProviderTask, provider domain.Provider) error {
+func (p *processor) pollOnce(ctx context.Context, job *domain.Job, pt *domain.ProviderTask, provider domain.Provider, task queue.Task) error {
 	res, err := provider.Poll(ctx, domain.ProviderTaskRef{Provider: pt.Provider, ExternalID: pt.ExternalID})
 	if err != nil {
-		return p.handleFailure(ctx, job, classOf(err), err.Error())
+		return p.handleFailure(ctx, job, task, classOf(err), err.Error())
 	}
-	return p.applyResult(ctx, job, pt, res)
+	return p.applyResult(ctx, job, pt, res, task)
 }
 
 // applyResult persists the task result and advances the job: success stores
 // artifacts and enqueues delivery, in-progress requeues for polling, failure is
 // classified and retried or made terminal.
-func (p *processor) applyResult(ctx context.Context, job *domain.Job, pt *domain.ProviderTask, res domain.ProviderTaskResult) error {
+func (p *processor) applyResult(ctx context.Context, job *domain.Job, pt *domain.ProviderTask, res domain.ProviderTaskResult, task queue.Task) error {
 	pt.Status = res.Status
 	if raw, err := json.Marshal(res); err == nil {
 		pt.Result = raw
@@ -282,10 +328,19 @@ func (p *processor) applyResult(ctx context.Context, job *domain.Job, pt *domain
 	case domain.ProviderTaskSucceeded:
 		if err := p.saveOutputs(ctx, job, res.OutputURLs); err != nil {
 			// A download failure is retryable provider-side.
-			return p.handleFailure(ctx, job, domain.ProviderErrOutputDownloadFailed, err.Error())
+			return p.handleFailure(ctx, job, task, domain.ProviderErrOutputDownloadFailed, err.Error())
 		}
 		if err := p.setStatus(ctx, job, domain.JobStatusProviderSucceeded, "", ""); err != nil {
 			return err
+		}
+		// Output moderation gates delivery (invariant #15). A block stops the
+		// pipeline here: no delivery, no capture.
+		blocked, err := p.moderateOutput(ctx, job)
+		if err != nil {
+			return err
+		}
+		if blocked {
+			return nil
 		}
 		if err := p.setStatus(ctx, job, domain.JobStatusResultReady, "", ""); err != nil {
 			return err
@@ -305,7 +360,7 @@ func (p *processor) applyResult(ctx context.Context, job *domain.Job, pt *domain
 		return p.streams.PublishTo(ctx, redisqueue.StreamProviderPoll, taskOf(job))
 
 	case domain.ProviderTaskFailed:
-		return p.handleFailure(ctx, job, res.ErrorClass, res.ErrorMessage)
+		return p.handleFailure(ctx, job, task, res.ErrorClass, res.ErrorMessage)
 
 	case domain.ProviderTaskCancelled:
 		// Cancellation may arrive from a non-cancellable state; best effort.
@@ -332,8 +387,13 @@ func (p *processor) saveOutputs(ctx context.Context, job *domain.Job, urls []str
 }
 
 // handleFailure classifies a provider failure and either re-queues the job for
-// another attempt or moves it to a terminal failed state.
-func (p *processor) handleFailure(ctx context.Context, job *domain.Job, class domain.ProviderErrorClass, msg string) error {
+// another attempt (with backoff) or, once the retry budget is exhausted (or the
+// error is non-retryable), dead-letters the task and moves the job to a terminal
+// failed state. The budget spans every phase (submit, poll, download): it is the
+// max of the provider-task count and the task's own re-enqueue counter, so a
+// failure that does not create a new provider task (e.g. output_download_failed)
+// can no longer loop forever.
+func (p *processor) handleFailure(ctx context.Context, job *domain.Job, task queue.Task, class domain.ProviderErrorClass, msg string) error {
 	code := string(class)
 
 	// If a provider task was running, record the provider_failed state first.
@@ -342,21 +402,113 @@ func (p *processor) handleFailure(ctx context.Context, job *domain.Job, class do
 		_ = p.setStatus(ctx, job, domain.JobStatusProviderFailed, code, msg)
 	}
 
-	attempts, err := p.attemptCount(ctx, job.ID)
+	providerAttempts, err := p.attemptCount(ctx, job.ID)
 	if err != nil {
 		return err
 	}
-	if isRetryable(class) && attempts < maxProviderAttempts {
+	attempts := providerAttempts
+	if task.Attempt+1 > attempts {
+		attempts = task.Attempt + 1
+	}
+
+	if isRetryable(class) && attempts < p.maxAttempts {
 		if err := p.setStatus(ctx, job, domain.JobStatusFailedRetryable, code, msg); err != nil {
 			return err
 		}
-		// Keep the failure reason on the re-queued job for observability.
 		if err := p.setStatus(ctx, job, domain.JobStatusQueued, code, msg); err != nil {
 			return err
 		}
-		return p.streams.PublishTo(ctx, redisqueue.StreamForOperation(job.OperationType), taskOf(job))
+		next := task
+		next.Attempt = task.Attempt + 1
+		p.sleepBackoff(ctx, next.Attempt)
+		return p.streams.PublishTo(ctx, redisqueue.StreamForOperation(job.OperationType), next)
 	}
+
+	// Budget exhausted (retryable) or non-retryable: dead-letter retryable
+	// failures for inspection, then move the job to a terminal state.
+	if isRetryable(class) {
+		p.toDLQ(ctx, task, code, msg)
+	}
+	metrics.JobsTerminal.WithLabelValues(string(domain.JobStatusFailedTerminal)).Inc()
 	return p.setStatus(ctx, job, domain.JobStatusFailedTerminal, code, msg)
+}
+
+// moderateOutput runs the output moderation check and, on a block, rejects the
+// job (no delivery, no capture), releases the reservation and records an audit
+// verdict. It returns blocked=true when delivery must be stopped. When no
+// moderator is configured it is a no-op (allow).
+func (p *processor) moderateOutput(ctx context.Context, job *domain.Job) (bool, error) {
+	if p.moderator == nil {
+		return false, nil
+	}
+	var pp promptParams
+	if len(job.Params) > 0 {
+		_ = json.Unmarshal(job.Params, &pp)
+	}
+	out, err := p.moderator.Check(ctx, moderationservice.Input{
+		Stage:    domain.ModerationStageOutput,
+		Modality: job.Modality,
+		Prompt:   pp.Prompt,
+	})
+	if err != nil {
+		return false, err
+	}
+
+	if p.modResults != nil {
+		var artID *uuid.UUID
+		if len(job.OutputArtifactIDs) > 0 {
+			id := job.OutputArtifactIDs[0]
+			artID = &id
+		}
+		_ = p.modResults.Create(ctx, &domain.ModerationResult{
+			JobID:      job.ID,
+			ArtifactID: artID,
+			Stage:      domain.ModerationStageOutput,
+			Decision:   out.Decision,
+			Categories: out.Categories,
+			Provider:   p.moderator.Name(),
+		})
+	}
+
+	metrics.ModerationDecisions.WithLabelValues(string(out.Decision)).Inc()
+	if out.Decision.Allowed() {
+		return false, nil
+	}
+
+	if err := p.setStatus(ctx, job, domain.JobStatusRejected, "content_rejected", "blocked by output moderation"); err != nil {
+		return false, err
+	}
+	metrics.JobsTerminal.WithLabelValues(string(domain.JobStatusRejected)).Inc()
+	if p.releaser != nil {
+		if err := p.releaser.ReleaseForJob(ctx, job.ID); err != nil {
+			return false, err
+		}
+	}
+	return true, nil
+}
+
+// toDLQ publishes the exhausted task to the dead-letter stream. It is best
+// effort: a DLQ publish failure must not block moving the job to terminal.
+func (p *processor) toDLQ(ctx context.Context, task queue.Task, code, msg string) {
+	metrics.DLQRouted.WithLabelValues("provider").Inc()
+	_ = p.streams.PublishTo(ctx, redisqueue.StreamDLQ, task)
+	_ = code
+	_ = msg
+}
+
+// sleepBackoff waits for the configured backoff before a re-enqueue, honoring
+// context cancellation.
+func (p *processor) sleepBackoff(ctx context.Context, attempt int) {
+	d := p.backoff(attempt)
+	if d <= 0 {
+		return
+	}
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+	case <-t.C:
+	}
 }
 
 func (p *processor) attemptCount(ctx context.Context, jobID uuid.UUID) (int, error) {

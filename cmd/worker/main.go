@@ -20,6 +20,7 @@ import (
 	"vk-ai-aggregator/internal/platform/config"
 	"vk-ai-aggregator/internal/service/artifactservice"
 	"vk-ai-aggregator/internal/service/billingservice"
+	"vk-ai-aggregator/internal/service/moderationservice"
 	"vk-ai-aggregator/internal/worker"
 )
 
@@ -61,6 +62,7 @@ func main() {
 	artRepo := postgres.NewArtifactRepository(pool)
 	deliveries := postgres.NewDeliveryRepository(pool)
 	billingRepo := postgres.NewBillingRepository(pool)
+	modResults := postgres.NewModerationResultRepository(pool)
 
 	billing := billingservice.New(billingRepo)
 	// The mock provider emits synthetic mock:// output URLs, so use a matching
@@ -70,28 +72,34 @@ func main() {
 
 	// Provider registry: only the mock provider is implemented so far.
 	providers := worker.NewRegistry(mock.New())
+	// Output moderation gates delivery (invariant #15). The keyword moderator is
+	// the default; swap for a provider-backed Moderator when available.
+	moderator := moderationservice.NewKeywordModerator(cfg.ModerationExtraTerms...)
 
-	gen := worker.NewGenerationWorker(worker.Deps{
-		Jobs:      jobs,
-		Tasks:     tasks,
-		Artifacts: artSvc,
-		Providers: providers,
-		Streams:   publisher,
-	})
-	poll := worker.NewPollWorker(worker.Deps{
-		Jobs:      jobs,
-		Tasks:     tasks,
-		Artifacts: artSvc,
-		Providers: providers,
-		Streams:   publisher,
-	})
+	deps := worker.Deps{
+		Jobs:        jobs,
+		Tasks:       tasks,
+		Artifacts:   artSvc,
+		Providers:   providers,
+		Streams:     publisher,
+		Moderator:   moderator,
+		ModResults:  modResults,
+		Releaser:    billing,
+		MaxAttempts: cfg.MaxAttempts,
+		Backoff:     worker.ExponentialBackoff(cfg.RetryBaseDelay, cfg.RetryMaxDelay),
+	}
+	gen := worker.NewGenerationWorker(deps)
+	poll := worker.NewPollWorker(deps)
 	delivery := worker.NewDeliveryWorker(worker.DeliveryDeps{
-		Jobs:       jobs,
-		Deliveries: deliveries,
-		Artifacts:  artRepo,
-		Objects:    store,
-		VK:         vkdelivery.NewMockClient(),
-		Billing:    billing,
+		Jobs:        jobs,
+		Deliveries:  deliveries,
+		Artifacts:   artRepo,
+		Objects:     store,
+		VK:          vkdelivery.NewMockClient(),
+		Billing:     billing,
+		Streams:     publisher,
+		MaxAttempts: cfg.MaxAttempts,
+		Backoff:     worker.ExponentialBackoff(cfg.RetryBaseDelay, cfg.RetryMaxDelay),
 	})
 
 	consumer := redisqueue.NewConsumer(rdb, cfg.WorkerGroup, cfg.WorkerConsumer)

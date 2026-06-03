@@ -52,5 +52,5 @@ func (w *PollWorker) Process(ctx context.Context, task queue.Task) error {
 	if err != nil {
 		return err
 	}
-	return w.pollOnce(ctx, job, pt, provider)
+	return w.pollOnce(ctx, job, pt, provider, task)
 }
