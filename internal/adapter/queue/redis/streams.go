@@ -58,6 +58,12 @@ func NewClient(addr, password string, db int) *redis.Client {
 	return redis.NewClient(&redis.Options{Addr: addr, Password: password, DB: db})
 }
 
+// NewClientWithPool builds a Redis client with an explicit connection pool size
+// (0 leaves the go-redis default) (audit SC1).
+func NewClientWithPool(addr, password string, db, poolSize int) *redis.Client {
+	return redis.NewClient(&redis.Options{Addr: addr, Password: password, DB: db, PoolSize: poolSize})
+}
+
 // Publisher writes tasks to Redis Streams. It satisfies queue.Publisher by
 // routing each task to the stream for its operation.
 type Publisher struct {

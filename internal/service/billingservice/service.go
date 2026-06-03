@@ -60,6 +60,17 @@ func WithPrices(prices map[domain.OperationType]int64) Option {
 	return func(s *Service) { s.prices = prices }
 }
 
+// WithPriceOverrides merges per-operation price overrides (keyed by the
+// operation string) onto the existing price list, leaving unspecified
+// operations unchanged (audit C1).
+func WithPriceOverrides(overrides map[string]int64) Option {
+	return func(s *Service) {
+		for op, amount := range overrides {
+			s.prices[domain.OperationType(op)] = amount
+		}
+	}
+}
+
 // WithClock overrides the time source (useful in tests).
 func WithClock(now func() time.Time) Option {
 	return func(s *Service) { s.now = now }
@@ -93,7 +104,14 @@ func (s *Service) Estimate(op domain.OperationType) (int64, error) {
 // EnsureAccount returns the user's credit account, creating it with the
 // starting balance if it does not yet exist.
 func (s *Service) EnsureAccount(ctx context.Context, userID uuid.UUID) (*domain.CreditAccount, error) {
-	acc, err := s.repo.GetAccountByUser(ctx, userID, s.currency)
+	return s.ensureAccountWith(ctx, s.repo, userID)
+}
+
+// ensureAccountWith resolves or creates the user's account using the supplied
+// repository, which may be transaction-bound so account creation joins the
+// caller's unit of work.
+func (s *Service) ensureAccountWith(ctx context.Context, repo domain.BillingRepository, userID uuid.UUID) (*domain.CreditAccount, error) {
+	acc, err := repo.GetAccountByUser(ctx, userID, s.currency)
 	if err == nil {
 		return acc, nil
 	}
@@ -105,10 +123,10 @@ func (s *Service) EnsureAccount(ctx context.Context, userID uuid.UUID) (*domain.
 		Currency:      s.currency,
 		BalanceCached: s.startingBalance,
 	}
-	if err := s.repo.CreateAccount(ctx, acc); err != nil {
+	if err := repo.CreateAccount(ctx, acc); err != nil {
 		// A concurrent creation may have won the race; re-read in that case.
 		if errors.Is(err, domain.ErrConflict) {
-			return s.repo.GetAccountByUser(ctx, userID, s.currency)
+			return repo.GetAccountByUser(ctx, userID, s.currency)
 		}
 		return nil, err
 	}
@@ -119,7 +137,15 @@ func (s *Service) EnsureAccount(ctx context.Context, userID uuid.UUID) (*domain.
 // the available balance is too low. The reservation is keyed by the job so the
 // call is idempotent per job.
 func (s *Service) Reserve(ctx context.Context, userID, jobID uuid.UUID, amount int64) (*domain.CreditReservation, error) {
-	acc, err := s.EnsureAccount(ctx, userID)
+	return s.ReserveWith(ctx, s.repo, userID, jobID, amount)
+}
+
+// ReserveWith holds credits using the supplied repository. Passing a
+// transaction-bound billing repository lets the reservation commit atomically
+// with job creation (audit B1). The reservation is keyed by the job, so the call
+// is idempotent per job.
+func (s *Service) ReserveWith(ctx context.Context, repo domain.BillingRepository, userID, jobID uuid.UUID, amount int64) (*domain.CreditReservation, error) {
+	acc, err := s.ensureAccountWith(ctx, repo, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -131,7 +157,7 @@ func (s *Service) Reserve(ctx context.Context, userID, jobID uuid.UUID, amount i
 		IdempotencyKey: "resv:" + jobID.String(),
 		ExpiresAt:      s.now().Add(s.reservationTTL),
 	}
-	if err := s.repo.Reserve(ctx, res); err != nil {
+	if err := repo.Reserve(ctx, res); err != nil {
 		return nil, err
 	}
 	return res, nil

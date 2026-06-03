@@ -51,6 +51,38 @@ type Config struct {
 	// WebhookRateLimitRPS/Burst bound inbound webhook traffic per source.
 	WebhookRateLimitRPS   float64
 	WebhookRateLimitBurst int
+
+	// DBMaxConns/DBMinConns size the Postgres pool (audit SC1).
+	DBMaxConns int32
+	DBMinConns int32
+	// RedisPoolSize sizes the Redis connection pool (audit SC1).
+	RedisPoolSize int
+
+	// PriceOverrides replaces per-operation prices, e.g.
+	// "text_generate=2,image_generate=12" (audit C1).
+	PriceOverrides map[string]int64
+	// MaxJobCost rejects any job whose estimate exceeds this cap (0 = no cap).
+	MaxJobCost int64
+
+	// Provider selects the generation provider: "mock" (default) or "openai".
+	Provider         string
+	OpenAIAPIKey     string
+	OpenAIBaseURL    string
+	OpenAITextModel  string
+	OpenAIImageModel string
+
+	// VKDeliveryMode selects the delivery client: "mock" (default) or "real".
+	VKDeliveryMode string
+	VKAccessToken  string
+	VKAPIVersion   string
+	VKAPIBaseURL   string
+
+	// ArtifactURLTTL is how long signed artifact delivery URLs stay valid.
+	ArtifactURLTTL time.Duration
+	// SignedDelivery delivers media via signed URLs instead of bucket refs (ST1).
+	SignedDelivery bool
+	// ArtifactRetentionDays configures object lifecycle expiry (0 = keep) (ST1).
+	ArtifactRetentionDays int
 }
 
 // IsProduction reports whether the service runs in a production environment.
@@ -73,6 +105,12 @@ func (c Config) Validate() error {
 	}
 	if c.VKConfirmationToken == "" || c.VKConfirmationToken == "dev-confirmation" {
 		missing = append(missing, "VK_CONFIRMATION_TOKEN")
+	}
+	if c.Provider == "openai" && c.OpenAIAPIKey == "" {
+		missing = append(missing, "OPENAI_API_KEY")
+	}
+	if c.VKDeliveryMode == "real" && c.VKAccessToken == "" {
+		missing = append(missing, "VK_ACCESS_TOKEN")
 	}
 	if len(missing) > 0 {
 		return fmt.Errorf("config: missing required production secrets: %s", strings.Join(missing, ", "))
@@ -115,6 +153,28 @@ func Load() Config {
 
 		WebhookRateLimitRPS:   envFloat("WEBHOOK_RATE_LIMIT_RPS", 20),
 		WebhookRateLimitBurst: envInt("WEBHOOK_RATE_LIMIT_BURST", 40),
+
+		DBMaxConns:    int32(envInt("DB_MAX_CONNS", 10)),
+		DBMinConns:    int32(envInt("DB_MIN_CONNS", 0)),
+		RedisPoolSize: envInt("REDIS_POOL_SIZE", 10),
+
+		PriceOverrides: envPriceMap("PRICES"),
+		MaxJobCost:     int64(envInt("MAX_JOB_COST", 0)),
+
+		Provider:         env("PROVIDER", "mock"),
+		OpenAIAPIKey:     env("OPENAI_API_KEY", ""),
+		OpenAIBaseURL:    env("OPENAI_BASE_URL", "https://api.openai.com/v1"),
+		OpenAITextModel:  env("OPENAI_TEXT_MODEL", "gpt-4o-mini"),
+		OpenAIImageModel: env("OPENAI_IMAGE_MODEL", "gpt-image-1"),
+
+		VKDeliveryMode: env("VK_DELIVERY_MODE", "mock"),
+		VKAccessToken:  env("VK_ACCESS_TOKEN", ""),
+		VKAPIVersion:   env("VK_API_VERSION", "5.199"),
+		VKAPIBaseURL:   env("VK_API_BASE_URL", "https://api.vk.com/method"),
+
+		ArtifactURLTTL:        envDuration("ARTIFACT_URL_TTL", time.Hour),
+		SignedDelivery:        envBool("SIGNED_DELIVERY", false),
+		ArtifactRetentionDays: envInt("ARTIFACT_RETENTION_DAYS", 0),
 	}
 }
 
@@ -159,6 +219,31 @@ func envDuration(key string, def time.Duration) time.Duration {
 		}
 	}
 	return def
+}
+
+// envPriceMap parses a comma-separated "op=amount" list into a price map.
+func envPriceMap(key string) map[string]int64 {
+	v := os.Getenv(key)
+	if v == "" {
+		return nil
+	}
+	out := map[string]int64{}
+	for _, pair := range strings.Split(v, ",") {
+		kv := strings.SplitN(strings.TrimSpace(pair), "=", 2)
+		if len(kv) != 2 {
+			continue
+		}
+		op := strings.TrimSpace(kv[0])
+		amount, err := strconv.ParseInt(strings.TrimSpace(kv[1]), 10, 64)
+		if err != nil || op == "" {
+			continue
+		}
+		out[op] = amount
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 func envList(key string) []string {

@@ -12,6 +12,7 @@ import (
 
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
+	"github.com/minio/minio-go/v7/pkg/lifecycle"
 )
 
 // Config holds the connection settings for the object store.
@@ -60,6 +61,25 @@ func (s *Store) EnsureBucket(ctx context.Context, bucket string) error {
 	}
 	if err := s.client.MakeBucket(ctx, bucket, minio.MakeBucketOptions{}); err != nil {
 		return fmt.Errorf("s3: make bucket %s: %w", bucket, err)
+	}
+	return nil
+}
+
+// SetRetention configures (or clears) an object-expiry lifecycle rule on the
+// bucket so stored artifacts are purged after the given number of days. A
+// non-positive value removes the rule. This bounds storage growth and limits
+// how long generated media is retained (audit ST1).
+func (s *Store) SetRetention(ctx context.Context, bucket string, days int) error {
+	cfg := lifecycle.NewConfiguration()
+	if days > 0 {
+		cfg.Rules = []lifecycle.Rule{{
+			ID:         "artifact-expiry",
+			Status:     "Enabled",
+			Expiration: lifecycle.Expiration{Days: lifecycle.ExpirationDays(days)},
+		}}
+	}
+	if err := s.client.SetBucketLifecycle(ctx, bucket, cfg); err != nil {
+		return fmt.Errorf("s3: set lifecycle %s: %w", bucket, err)
 	}
 	return nil
 }

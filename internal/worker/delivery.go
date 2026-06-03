@@ -20,6 +20,13 @@ type ObjectStore interface {
 	GetObject(ctx context.Context, bucket, key string) ([]byte, error)
 }
 
+// URLSigner issues time-limited download URLs for stored artifacts so media is
+// delivered via signed URLs rather than exposing the raw storage location
+// (audit ST1).
+type URLSigner interface {
+	PresignedGetURL(ctx context.Context, bucket, key string, expiry time.Duration) (string, error)
+}
+
 // DeliveryBiller captures a job's reserved credits once it is delivered.
 type DeliveryBiller interface {
 	CaptureForJob(ctx context.Context, jobID uuid.UUID, amount int64) error
@@ -40,7 +47,14 @@ type DeliveryDeps struct {
 	MaxAttempts int
 	// Backoff returns the delay before the next delivery retry; defaults to none.
 	Backoff func(attempt int) time.Duration
-	Now     func() time.Time
+	// Signer issues signed media URLs when SignedURLs is enabled (audit ST1).
+	Signer URLSigner
+	// SignedURLs delivers media via time-limited signed URLs instead of raw
+	// bucket/key references.
+	SignedURLs bool
+	// URLTTL is the validity window of signed media URLs (default 1h).
+	URLTTL time.Duration
+	Now    func() time.Time
 }
 
 // DeliveryWorker consumes the delivery stream and runs the final stage of the
@@ -57,6 +71,9 @@ type DeliveryWorker struct {
 	streams     StreamPublisher
 	maxAttempts int
 	backoff     func(attempt int) time.Duration
+	signer      URLSigner
+	signURLs    bool
+	urlTTL      time.Duration
 	now         func() time.Time
 }
 
@@ -74,6 +91,10 @@ func NewDeliveryWorker(d DeliveryDeps) *DeliveryWorker {
 	if backoff == nil {
 		backoff = func(int) time.Duration { return 0 }
 	}
+	urlTTL := d.URLTTL
+	if urlTTL <= 0 {
+		urlTTL = time.Hour
+	}
 	return &DeliveryWorker{
 		jobs:        d.Jobs,
 		deliveries:  d.Deliveries,
@@ -84,6 +105,9 @@ func NewDeliveryWorker(d DeliveryDeps) *DeliveryWorker {
 		streams:     d.Streams,
 		maxAttempts: maxAttempts,
 		backoff:     backoff,
+		signer:      d.Signer,
+		signURLs:    d.SignedURLs,
+		urlTTL:      urlTTL,
 		now:         now,
 	}
 }
@@ -207,10 +231,10 @@ func (w *DeliveryWorker) buildDelivery(ctx context.Context, job *domain.Job, key
 	switch art.MediaType {
 	case domain.MediaTypeImage:
 		del.Type = domain.DeliveryTypePhoto
-		del.Attachment = attachmentRef(art)
+		del.Attachment = w.mediaAttachment(ctx, art)
 	case domain.MediaTypeVideo:
 		del.Type = domain.DeliveryTypeVideo
-		del.Attachment = attachmentRef(art)
+		del.Attachment = w.mediaAttachment(ctx, art)
 	default:
 		del.Type = domain.DeliveryTypeMessage
 		del.Text = w.textContent(ctx, art)
@@ -279,6 +303,19 @@ func (w *DeliveryWorker) setStatus(ctx context.Context, job *domain.Job, to doma
 	}
 	job.Status = to
 	return nil
+}
+
+// mediaAttachment resolves the attachment reference for a media artifact. When
+// signed delivery is enabled it issues a time-limited signed URL so the raw
+// storage location is never exposed (audit ST1); otherwise it falls back to the
+// artifact's public URL or storage location.
+func (w *DeliveryWorker) mediaAttachment(ctx context.Context, art *domain.Artifact) string {
+	if w.signURLs && w.signer != nil && art.StorageKey != "" {
+		if signed, err := w.signer.PresignedGetURL(ctx, art.StorageBucket, art.StorageKey, w.urlTTL); err == nil && signed != "" {
+			return signed
+		}
+	}
+	return attachmentRef(art)
 }
 
 // attachmentRef returns the VK attachment reference for a media artifact,

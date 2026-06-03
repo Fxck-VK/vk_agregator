@@ -40,14 +40,14 @@ func main() {
 	}
 
 	ctx := context.Background()
-	pool, err := postgres.NewPool(ctx, cfg.DatabaseURL)
+	pool, err := postgres.NewPoolConfigured(ctx, cfg.DatabaseURL, cfg.DBMaxConns, cfg.DBMinConns)
 	if err != nil {
 		logger.Error("postgres connect failed", "error", err)
 		os.Exit(1)
 	}
 	defer pool.Close()
 
-	rdb := redisqueue.NewClient(cfg.RedisAddr, cfg.RedisPassword, cfg.RedisDB)
+	rdb := redisqueue.NewClientWithPool(cfg.RedisAddr, cfg.RedisPassword, cfg.RedisDB, cfg.RedisPoolSize)
 	defer rdb.Close()
 
 	// Repositories and services.
@@ -59,10 +59,12 @@ func main() {
 	deliveries := postgres.NewDeliveryRepository(pool)
 	billingRepo := postgres.NewBillingRepository(pool)
 
-	billing := billingservice.New(billingRepo)
+	billing := billingservice.New(billingRepo, billingservice.WithPriceOverrides(cfg.PriceOverrides))
 	uowMgr := postgres.NewUnitOfWork(pool)
-	publisher := redisqueue.NewPublisher(rdb, 100000)
-	orch := joborchestrator.New(jobs, uowMgr, billing, publisher)
+	// The orchestrator records a queued outbox event; the worker's outbox relay
+	// publishes it to the queue, so the api process does not enqueue directly
+	// (audit A2).
+	orch := joborchestrator.New(jobs, uowMgr, billing, cfg.MaxJobCost)
 	router := commandrouter.New()
 
 	vkHandler := vkinbound.NewHandler(vkinbound.Config{

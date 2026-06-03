@@ -21,6 +21,10 @@ var ErrConflict = errors.New("domain: conflicting write")
 // reservation cannot be satisfied by the available balance.
 var ErrInsufficientCredits = errors.New("domain: insufficient credits")
 
+// ErrCostCapExceeded is returned when a job's estimated cost exceeds the
+// configured per-job spend cap.
+var ErrCostCapExceeded = errors.New("domain: cost cap exceeded")
+
 // OutboxStatus is the publishing state of an outbox event.
 type OutboxStatus string
 

@@ -28,8 +28,9 @@ var _ uow.Manager = (*UnitOfWork)(nil)
 func (u *UnitOfWork) Within(ctx context.Context, fn func(ctx context.Context, repos uow.Repositories) error) error {
 	return RunInTx(ctx, u.pool, func(ctx context.Context, tx pgx.Tx) error {
 		return fn(ctx, uow.Repositories{
-			Jobs:   NewJobRepository(tx),
-			Outbox: NewOutboxRepository(tx),
+			Jobs:    NewJobRepository(tx),
+			Outbox:  NewOutboxRepository(tx),
+			Billing: NewBillingRepositoryTx(tx),
 		})
 	})
 }

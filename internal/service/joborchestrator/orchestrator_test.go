@@ -12,6 +12,7 @@ import (
 	"vk-ai-aggregator/internal/platform/queue"
 	"vk-ai-aggregator/internal/service/billingservice"
 	"vk-ai-aggregator/internal/service/joborchestrator"
+	"vk-ai-aggregator/internal/service/outboxrelay"
 )
 
 type fixture struct {
@@ -19,21 +20,33 @@ type fixture struct {
 	outbox  *memory.OutboxRepo
 	billing *billingservice.Service
 	pub     *queue.MemoryPublisher
+	relay   *outboxrelay.Relay
 	orch    *joborchestrator.Orchestrator
 }
 
 func newFixture(opts ...billingservice.Option) *fixture {
 	jobs := memory.NewJobRepo()
 	outbox := memory.NewOutboxRepo()
-	billing := billingservice.New(memory.NewBillingRepo(), opts...)
+	bill := memory.NewBillingRepo()
+	billing := billingservice.New(bill, opts...)
 	pub := queue.NewMemoryPublisher()
-	uowMgr := memory.NewUnitOfWork(jobs, outbox)
+	uowMgr := memory.NewUnitOfWork(jobs, outbox, bill)
 	return &fixture{
 		jobs:    jobs,
 		outbox:  outbox,
 		billing: billing,
 		pub:     pub,
-		orch:    joborchestrator.New(jobs, uowMgr, billing, pub),
+		relay:   outboxrelay.New(uowMgr, pub),
+		orch:    joborchestrator.New(jobs, uowMgr, billing, 0),
+	}
+}
+
+// drain publishes any queued outbox events to the in-memory queue, mirroring
+// what the outbox relay does in the worker process.
+func (f *fixture) drain(t *testing.T) {
+	t.Helper()
+	if _, err := f.relay.Drain(context.Background()); err != nil {
+		t.Fatalf("relay drain: %v", err)
 	}
 }
 
@@ -77,7 +90,8 @@ func TestCreateJobHappyPath(t *testing.T) {
 		t.Fatalf("unexpected event types: %s, %s", events[0].EventType, events[1].EventType)
 	}
 
-	// Task enqueued on the video queue.
+	// The relay publishes the queued event onto the video queue.
+	f.drain(t)
 	tasks := f.pub.Tasks("queue.video.generate")
 	if len(tasks) != 1 || tasks[0].JobID != job.ID {
 		t.Fatalf("expected task for job on video queue, got %+v", tasks)
@@ -106,6 +120,7 @@ func TestCreateJobIdempotent(t *testing.T) {
 	if first.ID != second.ID {
 		t.Fatal("expected same job id for identical idempotency key")
 	}
+	f.drain(t)
 	if f.pub.Len() != 1 {
 		t.Fatalf("expected exactly 1 enqueued task, got %d", f.pub.Len())
 	}
@@ -130,6 +145,7 @@ func TestCreateJobInsufficientCredits(t *testing.T) {
 	if job == nil || job.Status != domain.JobStatusAwaitingPayment {
 		t.Fatalf("expected job parked in awaiting_payment, got %+v", job)
 	}
+	f.drain(t)
 	if f.pub.Len() != 0 {
 		t.Fatalf("expected no enqueued tasks, got %d", f.pub.Len())
 	}

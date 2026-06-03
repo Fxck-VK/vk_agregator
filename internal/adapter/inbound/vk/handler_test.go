@@ -14,6 +14,7 @@ import (
 	"vk-ai-aggregator/internal/service/billingservice"
 	"vk-ai-aggregator/internal/service/commandrouter"
 	"vk-ai-aggregator/internal/service/joborchestrator"
+	"vk-ai-aggregator/internal/service/outboxrelay"
 )
 
 type harness struct {
@@ -23,6 +24,7 @@ type harness struct {
 	jobs    *memory.JobRepo
 	inbound *memory.InboundRepo
 	pub     *queue.MemoryPublisher
+	relay   *outboxrelay.Relay
 }
 
 func newHarness() *harness {
@@ -32,9 +34,11 @@ func newHarness() *harness {
 	outbox := memory.NewOutboxRepo()
 	inbound := memory.NewInboundRepo()
 	idem := memory.NewIdempotencyRepo()
-	billing := billingservice.New(memory.NewBillingRepo())
+	bill := memory.NewBillingRepo()
+	billing := billingservice.New(bill)
 	pub := queue.NewMemoryPublisher()
-	orch := joborchestrator.New(jobs, memory.NewUnitOfWork(jobs, outbox), billing, pub)
+	uowMgr := memory.NewUnitOfWork(jobs, outbox, bill)
+	orch := joborchestrator.New(jobs, uowMgr, billing, 0)
 
 	h := vk.NewHandler(vk.Config{ConfirmationToken: "conf-token-123", Secret: "s3cr3t"}, vk.Deps{
 		Idempotency:  idem,
@@ -45,13 +49,16 @@ func newHarness() *harness {
 		Orchestrator: orch,
 		Router:       commandrouter.New(),
 	})
-	return &harness{handler: h, users: users, cmds: cmds, jobs: jobs, inbound: inbound, pub: pub}
+	return &harness{handler: h, users: users, cmds: cmds, jobs: jobs, inbound: inbound, pub: pub, relay: outboxrelay.New(uowMgr, pub)}
 }
 
+// post serves the webhook and then drains the outbox relay, mirroring the
+// api+worker split where the relay publishes queued jobs to the worker queue.
 func (h *harness) post(body string) *httptest.ResponseRecorder {
 	req := httptest.NewRequest(http.MethodPost, "/webhooks/vk", strings.NewReader(body))
 	rec := httptest.NewRecorder()
 	h.handler.ServeHTTP(rec, req)
+	_, _ = h.relay.Drain(context.Background())
 	return rec
 }
 

@@ -513,9 +513,14 @@ type UnitOfWork struct {
 	repos uow.Repositories
 }
 
-// NewUnitOfWork builds a UnitOfWork bound to the given repositories.
-func NewUnitOfWork(jobs *JobRepo, outbox *OutboxRepo) *UnitOfWork {
-	return &UnitOfWork{repos: uow.Repositories{Jobs: jobs, Outbox: outbox}}
+// NewUnitOfWork builds a UnitOfWork bound to the given repositories. billing may
+// be nil for callers that do not compose reservations transactionally.
+func NewUnitOfWork(jobs *JobRepo, outbox *OutboxRepo, billing *BillingRepo) *UnitOfWork {
+	repos := uow.Repositories{Jobs: jobs, Outbox: outbox}
+	if billing != nil {
+		repos.Billing = billing
+	}
+	return &UnitOfWork{repos: repos}
 }
 
 var _ uow.Manager = (*UnitOfWork)(nil)

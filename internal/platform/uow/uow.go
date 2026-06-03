@@ -17,6 +17,9 @@ type Repositories struct {
 	// Outbox writes domain events within the same transaction as the state
 	// change that produced them (transactional outbox pattern).
 	Outbox domain.OutboxRepository
+	// Billing reserves credits within the same transaction as job creation so
+	// reservation and job persistence commit or roll back together (audit B1).
+	Billing domain.BillingRepository
 }
 
 // Manager runs a unit of work inside a transaction, committing on success and

@@ -37,9 +37,22 @@ const pgUniqueViolation = "23505"
 
 // NewPool opens a pgx connection pool against dsn and verifies connectivity.
 func NewPool(ctx context.Context, dsn string) (*pgxpool.Pool, error) {
+	return NewPoolConfigured(ctx, dsn, 0, 0)
+}
+
+// NewPoolConfigured opens a pgx pool with explicit max/min connection sizing
+// (0 leaves the pgx default). Tuning the pool bounds throughput and protects the
+// database from connection storms (audit SC1).
+func NewPoolConfigured(ctx context.Context, dsn string, maxConns, minConns int32) (*pgxpool.Pool, error) {
 	cfg, err := pgxpool.ParseConfig(dsn)
 	if err != nil {
 		return nil, fmt.Errorf("postgres: parse dsn: %w", err)
+	}
+	if maxConns > 0 {
+		cfg.MaxConns = maxConns
+	}
+	if minConns > 0 {
+		cfg.MinConns = minConns
 	}
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {

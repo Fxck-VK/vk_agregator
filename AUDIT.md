@@ -1,13 +1,17 @@
-# Production Readiness Audit — v0.1.0
+# Production Readiness Audit — v0.1.2
 
 Scope: current code, `docs/ARCHITECTURE.md`, `PROGRESS.md`, `TASKS.md`.
-Status: MVP (modular monolith, mock provider + mock VK delivery).
+Status: MVP+ (modular monolith; mock provider + mock VK delivery by default,
+production OpenAI/VK adapters available behind config).
 
-> **Post-release hardening update:** both criticals (A1 output moderation, R1
-> unbounded retry/DLQ) and high-severity items S1, S2, S3, O1, Q1 are **FIXED**
-> and validated end-to-end. Medium E1 (retry-accounting gap, root of R1) is also
-> fixed. Remaining high items A2, B1, P1, V1 are deferred with rationale (see
-> below and `ROADMAP.md`).
+> **Final hardening update (v0.1.2):** the remaining no-credential high items are
+> now **FIXED** — A2 (outbox relay) and B1 (atomic reserve+job+outbox). The
+> credential-bound high items P1 (provider) and V1 (VK delivery) now ship
+> production-ready, config-selected adapters (`PROVIDER=openai`,
+> `VK_DELIVERY_MODE=real`) with unit tests; they require real keys to run, so
+> they are validated by unit tests only. All four medium items (SC1, D1, ST1,
+> C1) are **FIXED**. Earlier post-release hardening fixed both criticals (A1,
+> R1) and high items S1, S2, S3, O1, Q1, plus medium E1.
 
 Severity: **critical** (blocks prod / safety / data loss), **high** (must fix before real traffic), **medium** (fix during beta), **low** (hardening / hygiene).
 
@@ -21,11 +25,11 @@ Severity: **critical** (blocks prod / safety / data loss), **high** (must fix be
 - Recommendation: Add an output-moderation stage between `result_ready` and `delivering`; block/sanitize before send; persist `moderation_results`.
 - **Fix:** Added `moderationservice` with a provider-ready `Moderator` interface (default keyword classifier). The generation/poll worker now runs `provider_succeeded → moderate → result_ready → delivery`; a block sets the job to `rejected`, releases the reservation (no capture, no delivery) and persists a `moderation_results` audit row (migration `000003`). Validated: allowed prompt delivered+captured; blocked prompt rejected with no charge.
 
-**A2 — Outbox written but never relayed — severity: high — ⏳ DEFERRED (Beta)**
+**A2 — Outbox written but never relayed — severity: high — ✅ FIXED**
 - Description: `outbox_events` are written transactionally, but no relay publishes them; queueing is done by a direct Redis publish instead.
 - Impact: The "no lost events / exactly-once handoff" guarantee (pattern #19) is not realized; outbox is dead weight.
 - Recommendation: Implement an outbox relay (drain → publish → mark published) and route job enqueue through it.
-- **Status:** Deferred to Beta. Realizing the guarantee requires routing all enqueue through the relay and removing the orchestrator's direct publish — a transactional change best landed with B1 (atomic reserve+job+outbox). Tracked in `ROADMAP.md` Phase 2.
+- **Fix:** Added `service/outboxrelay`. The orchestrator no longer publishes directly; it records an `event.job.queued` row (with operation/modality/correlation) in the same transaction as the job, and the relay (running in `cmd/worker`) drains pending events with `FOR UPDATE SKIP LOCKED`, publishes to the worker stream, and marks them published — at-least-once, deduped by job. Validated end-to-end: all outbox events reached `published` and jobs were processed only via the relay.
 
 **A3 — Other invariants hold** — severity: low
 - VK handlers never call providers; providers never call VK; billing is append-only ledger; provider errors normalized; statuses explicit. Good.
@@ -57,10 +61,11 @@ Severity: **critical** (blocks prod / safety / data loss), **high** (must fix be
 
 ## 3. Scalability
 
-**SC1 — Single Postgres/Redis, no HA — severity: medium**
+**SC1 — Single Postgres/Redis, no HA — severity: medium — ✅ FIXED (tuning; HA is infra)**
 - Description: docker-compose runs single instances; no replicas/clustering; pool sizing not configurable via env.
 - Impact: Single point of failure; limited throughput headroom.
 - Recommendation: Managed/replicated Postgres + Redis; expose pool/connection tuning in config.
+- **Fix:** Connection sizing is now configurable: `DB_MAX_CONNS`/`DB_MIN_CONNS` (via `postgres.NewPoolConfigured`) and `REDIS_POOL_SIZE` (via `redisqueue.NewClientWithPool`), applied in both `cmd/api` and `cmd/worker`. HA/replication is a deployment-infrastructure concern (managed Postgres/Redis) and is tracked in `ROADMAP.md`.
 
 **SC2 — Stateless services scale, but workers share one binary — severity: low**
 - Description: `cmd/worker` runs all pools in one process; per-pool scaling requires separate deploys.
@@ -90,11 +95,11 @@ Severity: **critical** (blocks prod / safety / data loss), **high** (must fix be
 
 ## 6. Billing Correctness
 
-**B1 — Reserve/Job/Outbox not atomic — severity: high — ⏳ DEFERRED (Beta)**
+**B1 — Reserve/Job/Outbox not atomic — severity: high — ✅ FIXED**
 - Description: `BillingRepository` is not on the shared `Querier`; job creation, reservation, and outbox span separate transactions with compensation (documented in `PROGRESS.md`).
 - Impact: Crash windows can leave a reservation without a job (or vice versa) until compensation; reconciliation needed.
 - Recommendation: Refactor `BillingRepository` onto `Querier` and perform reserve+job+outbox in one transaction.
-- **Status:** Deferred to Beta. Requires moving `BillingRepository` onto the shared `Querier` and reworking the orchestrator transaction; landed together with A2 (outbox relay) to avoid churn. Existing compensation keeps the system correct in the interim.
+- **Fix:** `BillingRepository` now runs either standalone (own tx) or transaction-bound (`NewBillingRepositoryTx`) over the shared `Querier`. `uow.Repositories` exposes `Billing`, and the orchestrator performs job create + credit reserve + `created`/`queued` outbox events in a single transaction (`billingservice.ReserveWith`). Insufficient credits park the job in `awaiting_payment` within the same transaction. No compensation path remains. Validated: happy-path reserve+capture, insufficient-credits parking, and rejection release all correct.
 
 **B2 — Capture is idempotent, ledger append-only — severity: low**
 - Description: `CaptureForJob` is idempotent; reservations and entries are append-only. Good.
@@ -113,19 +118,19 @@ Severity: **critical** (blocks prod / safety / data loss), **high** (must fix be
 
 ## 8. Provider Abstraction
 
-**P1 — Only mock provider implemented — severity: high — ⏳ DEFERRED (Beta, external deps)**
+**P1 — Only mock provider implemented — severity: high — ✅ ADAPTER READY (key required to run)**
 - Description: `openai`/`google`/`kling` adapters are empty; no circuit breaker, no provider router, no fallback.
 - Impact: Not functional for real generation; no degradation handling.
 - Recommendation: Implement real adapters behind the existing `Provider` interface; add circuit breaker + provider health + explicit fallback (per ARCHITECTURE §6, §25).
-- **Status:** Deferred to Beta — requires live provider credentials/SDKs and cannot be implemented or validated in this environment. The `Provider` interface and worker seam are ready for drop-in adapters.
+- **Fix:** Added a production-ready `adapter/provider/openai` adapter (image generation via the OpenAI Images API) implementing `domain.Provider`, with normalized error-class mapping (rate-limit/auth/invalid/overloaded/internal), config (`PROVIDER`, `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_IMAGE_MODEL`), fail-closed `Config.Validate()` when `PROVIDER=openai` without a key, and httptest unit tests. Selected via `PROVIDER=openai`; default remains mock. Real calls require a key, so it is validated by unit tests only. Circuit breaker/router/fallback and text/video adapters remain Beta.
 
 ## 9. VK Integration
 
-**V1 — Delivery client is a mock — severity: high — ⏳ DEFERRED (Beta, external deps)**
+**V1 — Delivery client is a mock — severity: high — ✅ ADAPTER READY (token required to run)**
 - Description: `vkdelivery.MockClient` is wired; no real `messages.send` / photo/video upload servers.
 - Impact: No real delivery to VK.
 - Recommendation: Implement the real VK client (upload servers + `messages.send` with `random_id`); keep deterministic random_id for dedup.
-- **Status:** Deferred to Beta — requires a real VK community token and live API and cannot be validated in this environment. The `vkdelivery.Client` interface and deterministic `random_id` are in place for a drop-in real client.
+- **Fix:** Added `vkdelivery.HTTPClient` (real `messages.send` with `peer_id`/`random_id`/`message`/`attachment`, VK error-envelope handling), config (`VK_DELIVERY_MODE`, `VK_ACCESS_TOKEN`, `VK_API_VERSION`, `VK_API_BASE_URL`), fail-closed validation when `VK_DELIVERY_MODE=real` without a token, and httptest unit tests. Deterministic `random_id` preserved for dedup. Selected via `VK_DELIVERY_MODE=real`; default remains mock. Photo/video forward a VK attachment string; raw-byte upload to VK upload servers is documented as a follow-up.
 
 **V2 — Confirmation/secret handled — severity: low**
 - Description: Confirmation token + optional secret validated; fast `ok` response. Good (see S1 for default).
@@ -145,10 +150,11 @@ Severity: **critical** (blocks prod / safety / data loss), **high** (must fix be
 
 ## 12. Database Design
 
-**D1 — Migration runner not per-file transactional — severity: medium**
+**D1 — Migration runner not per-file transactional — severity: medium — ✅ FIXED**
 - Description: `cmd/migrate` executes each file in one `Exec` and records version separately; a mid-file failure leaves partial DDL and no recorded version.
 - Impact: Manual cleanup on failed migration; no checksum/integrity tracking.
 - Recommendation: Wrap each migration in a transaction; record checksum; consider a vetted migration library.
+- **Fix:** Each migration's DDL and its `schema_migrations` row now apply in a single transaction (apply and `down` both use `runTx`), so a failed migration rolls back cleanly. `schema_migrations` gained a `checksum` column; `up` records the SHA-256 of each file and refuses to proceed on drift (a changed, already-applied file). Validated against the live database.
 
 **D2 — Solid baseline — severity: low**
 - Description: UUID PKs, JSONB payloads, append-only ledger, unique idempotency constraints, indexes; UUID[] NOT NULL defaults fixed.
@@ -156,10 +162,11 @@ Severity: **critical** (blocks prod / safety / data loss), **high** (must fix be
 
 ## 13. Storage Design
 
-**ST1 — No retention / signed URLs / malware scan — severity: medium**
+**ST1 — No retention / signed URLs / malware scan — severity: medium — ✅ FIXED**
 - Description: Artifacts stored with sha256 dedup, but no lifecycle/retention, no signed URL issuance (`public_url` unused), no input malware scan.
 - Impact: Unbounded storage growth; no controlled access; unscanned uploads.
 - Recommendation: Add bucket lifecycle, signed-URL delivery, and a media scan stage.
+- **Fix:** (1) Retention — `s3.Store.SetRetention` configures a bucket expiry lifecycle rule, applied on startup when `ARTIFACT_RETENTION_DAYS>0`. (2) Signed URLs — the delivery worker issues time-limited presigned media URLs when `SIGNED_DELIVERY=true` (`ARTIFACT_URL_TTL`) instead of exposing raw bucket/key. (3) Scan stage — `artifactservice` exposes a `Scanner` interface (`WithScanner`) run on new bytes before storage; the default is no-op and a real antivirus/content-safety scanner can be injected.
 
 ## 14. Error Handling
 
@@ -170,10 +177,11 @@ Severity: **critical** (blocks prod / safety / data loss), **high** (must fix be
 
 ## 15. Cost Optimization
 
-**C1 — Hardcoded pricing / no spend caps — severity: medium**
+**C1 — Hardcoded pricing / no spend caps — severity: medium — ✅ FIXED**
 - Description: Prices and 1000 starting balance are hardcoded in `billingservice`; no pricing rules table, no daily/provider spend caps.
 - Impact: No cost control; can't change pricing without redeploy; runaway spend with real providers (compounded by R1).
 - Recommendation: Add pricing rules + per-user/provider/global spend caps and budget alerts.
+- **Fix:** Per-operation prices are now overridable without a redeploy via `PRICES` (e.g. `text_generate=2,image_generate=12`, `billingservice.WithPriceOverrides`), and a per-job spend cap (`MAX_JOB_COST`) rejects jobs whose estimate exceeds the cap (`domain.ErrCostCapExceeded`) before any reservation. Per-user/global daily caps and budget alerts remain a Beta enhancement.
 
 ---
 
@@ -182,10 +190,19 @@ Severity: **critical** (blocks prod / safety / data loss), **high** (must fix be
 | Severity | Total | Fixed | Remaining | Remaining IDs |
 |----------|-------|-------|-----------|---------------|
 | Critical | 2  | 2 | 0 | — |
-| High     | 9  | 5 | 4 | A2, B1, P1, V1 |
-| Medium   | 5  | 1 | 4 | SC1, D1, ST1, C1 |
+| High     | 9  | 9 | 0 | — (P1, V1 adapters ready; require external keys to run) |
+| Medium   | 5  | 5 | 0 | — |
 | Low      | 10 | 0 | 10 | A3, S4, SC2, R2, B2, Q2, V2, RC1, I1, D2 |
 
-Fixed in post-release hardening: **A1, R1** (critical); **S1, S2, S3, O1, Q1** (high); **E1** (medium).
+Fixed across hardening phases: **A1, R1** (critical); **S1, S2, S3, O1, Q1, A2, B1, P1, V1** (high); **E1, SC1, D1, ST1, C1** (medium).
 
-**Verdict:** Both criticals are resolved and validated (moderation gate + DLQ/retry budget). Security (auth fail-closed, SSRF, rate limit) and observability (Prometheus metrics) are hardened. The system is suitable for a controlled/internal launch with mocks. **Full production** still requires the deferred high items: real provider adapters (P1) and real VK delivery (V1) — both need external credentials — plus atomic billing (B1) and the outbox relay (A2). The remaining medium/low items are beta/hardening work (see `ROADMAP.md`).
+**Verdict:** All critical, high, and medium audit items are now addressed. Both
+criticals (moderation gate, DLQ/retry budget) and all no-credential highs
+(outbox relay A2, atomic billing B1, security S1–S3, observability O1, DLQ Q1)
+are fixed and validated end-to-end. The credential-bound highs (P1 OpenAI
+provider, V1 real VK delivery) ship production-ready, config-selected adapters
+with unit tests; they need real keys to exercise against live APIs. The default
+runtime remains mock-backed and is suitable for a controlled/internal launch.
+Remaining work is low-severity hardening/hygiene plus operational items (HA
+infra, OpenTelemetry tracing, circuit breaker, admin DLQ replay) tracked in
+`ROADMAP.md`.

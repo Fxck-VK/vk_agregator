@@ -13,7 +13,6 @@ import (
 	redisqueue "vk-ai-aggregator/internal/adapter/queue/redis"
 	"vk-ai-aggregator/internal/adapter/storage/memory"
 	"vk-ai-aggregator/internal/domain"
-	"vk-ai-aggregator/internal/platform/queue"
 	"vk-ai-aggregator/internal/service/artifactservice"
 	"vk-ai-aggregator/internal/service/billingservice"
 	"vk-ai-aggregator/internal/service/commandrouter"
@@ -42,9 +41,8 @@ func TestEndToEnd(t *testing.T) {
 
 	// Services.
 	billing := billingservice.New(billingRepo)
-	uowMgr := memory.NewUnitOfWork(jobs, outbox)
-	publisher := queue.NewMemoryPublisher()
-	orch := joborchestrator.New(jobs, uowMgr, billing, publisher)
+	uowMgr := memory.NewUnitOfWork(jobs, outbox, billingRepo)
+	orch := joborchestrator.New(jobs, uowMgr, billing, 0)
 	router := commandrouter.New()
 
 	// VK inbound gateway.

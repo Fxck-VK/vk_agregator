@@ -21,18 +21,50 @@ import (
 //   - Capture turns a hold into a committed charge (balance_cached decreases);
 //     Release frees the hold without charging.
 //
-// Mutations that must be atomic open their own transaction, so this repository
-// holds a connection pool rather than a bare Querier.
+// A BillingRepository can run either standalone (over a pool, opening its own
+// transaction for atomic mutations) or transaction-bound (over a Querier that is
+// already a pgx.Tx), letting reservations compose with job creation in a single
+// transaction (audit B1).
 type BillingRepository struct {
 	pool *pgxpool.Pool
+	db   Querier
 }
 
-// NewBillingRepository builds a BillingRepository over the given pool.
+// NewBillingRepository builds a standalone BillingRepository over the given
+// pool. Atomic mutations open their own transaction.
 func NewBillingRepository(pool *pgxpool.Pool) *BillingRepository {
 	return &BillingRepository{pool: pool}
 }
 
+// NewBillingRepositoryTx builds a transaction-bound BillingRepository over a
+// caller-managed querier (a pgx.Tx). Mutations run directly on that querier so
+// they commit or roll back with the surrounding unit of work (audit B1).
+func NewBillingRepositoryTx(db Querier) *BillingRepository {
+	return &BillingRepository{db: db}
+}
+
 var _ domain.BillingRepository = (*BillingRepository)(nil)
+
+// q returns the querier used for reads: the pool when standalone, otherwise the
+// transaction-bound querier.
+func (r *BillingRepository) q() Querier {
+	if r.pool != nil {
+		return r.pool
+	}
+	return r.db
+}
+
+// inTx runs fn with a transaction-scoped querier. In standalone mode it opens a
+// new transaction; in transaction-bound mode it reuses the caller's querier so
+// the work joins the surrounding unit of work.
+func (r *BillingRepository) inTx(ctx context.Context, fn func(q Querier) error) error {
+	if r.pool != nil {
+		return RunInTx(ctx, r.pool, func(ctx context.Context, tx pgx.Tx) error {
+			return fn(tx)
+		})
+	}
+	return fn(r.db)
+}
 
 const accountColumns = `id, user_id, currency, balance_cached, created_at, updated_at`
 
@@ -54,14 +86,14 @@ func (r *BillingRepository) CreateAccount(ctx context.Context, a *domain.CreditA
 		INSERT INTO credit_accounts (id, user_id, currency, balance_cached)
 		VALUES ($1, $2, $3, $4)
 		RETURNING ` + accountColumns
-	return mapError(scanAccount(r.pool.QueryRow(ctx, q, a.ID, a.UserID, a.Currency, a.BalanceCached), a))
+	return mapError(scanAccount(r.q().QueryRow(ctx, q, a.ID, a.UserID, a.Currency, a.BalanceCached), a))
 }
 
 // GetAccount fetches an account by id.
 func (r *BillingRepository) GetAccount(ctx context.Context, id uuid.UUID) (*domain.CreditAccount, error) {
 	const q = `SELECT ` + accountColumns + ` FROM credit_accounts WHERE id = $1`
 	var a domain.CreditAccount
-	if err := mapError(scanAccount(r.pool.QueryRow(ctx, q, id), &a)); err != nil {
+	if err := mapError(scanAccount(r.q().QueryRow(ctx, q, id), &a)); err != nil {
 		return nil, err
 	}
 	return &a, nil
@@ -71,7 +103,7 @@ func (r *BillingRepository) GetAccount(ctx context.Context, id uuid.UUID) (*doma
 func (r *BillingRepository) GetAccountByUser(ctx context.Context, userID uuid.UUID, currency domain.Currency) (*domain.CreditAccount, error) {
 	const q = `SELECT ` + accountColumns + ` FROM credit_accounts WHERE user_id = $1 AND currency = $2`
 	var a domain.CreditAccount
-	if err := mapError(scanAccount(r.pool.QueryRow(ctx, q, userID, currency), &a)); err != nil {
+	if err := mapError(scanAccount(r.q().QueryRow(ctx, q, userID, currency), &a)); err != nil {
 		return nil, err
 	}
 	return &a, nil
@@ -80,12 +112,12 @@ func (r *BillingRepository) GetAccountByUser(ctx context.Context, userID uuid.UU
 // AppendEntry inserts an immutable ledger entry, adjusting the cached balance by
 // the entry amount when the entry is committed.
 func (r *BillingRepository) AppendEntry(ctx context.Context, entry *domain.LedgerEntry) error {
-	return RunInTx(ctx, r.pool, func(ctx context.Context, tx pgx.Tx) error {
-		if err := insertLedgerEntry(ctx, tx, entry); err != nil {
+	return r.inTx(ctx, func(q Querier) error {
+		if err := insertLedgerEntry(ctx, q, entry); err != nil {
 			return err
 		}
 		if entry.Status == domain.LedgerStatusCommitted && entry.Amount != 0 {
-			return adjustBalance(ctx, tx, entry.AccountID, entry.Amount)
+			return adjustBalance(ctx, q, entry.AccountID, entry.Amount)
 		}
 		return nil
 	})
@@ -97,7 +129,7 @@ func (r *BillingRepository) ListEntries(ctx context.Context, accountID uuid.UUID
 		FROM ledger_entries WHERE account_id = $1
 		ORDER BY created_at DESC
 		LIMIT $2 OFFSET $3`
-	rows, err := r.pool.Query(ctx, q, accountID, limit, offset)
+	rows, err := r.q().Query(ctx, q, accountID, limit, offset)
 	if err != nil {
 		return nil, mapError(err)
 	}
@@ -123,8 +155,8 @@ func (r *BillingRepository) Reserve(ctx context.Context, res *domain.CreditReser
 	if res.Status == "" {
 		res.Status = domain.ReservationReserved
 	}
-	return RunInTx(ctx, r.pool, func(ctx context.Context, tx pgx.Tx) error {
-		available, err := availableBalance(ctx, tx, res.AccountID)
+	return r.inTx(ctx, func(q Querier) error {
+		available, err := availableBalance(ctx, q, res.AccountID)
 		if err != nil {
 			return err
 		}
@@ -135,7 +167,7 @@ func (r *BillingRepository) Reserve(ctx context.Context, res *domain.CreditReser
 			INSERT INTO credit_reservations (id, account_id, job_id, amount, status, idempotency_key, expires_at)
 			VALUES ($1, $2, $3, $4, $5, $6, $7)
 			RETURNING ` + reservationColumns
-		row := tx.QueryRow(ctx, insRes,
+		row := q.QueryRow(ctx, insRes,
 			res.ID, res.AccountID, res.JobID, res.Amount, res.Status, res.IdempotencyKey, res.ExpiresAt,
 		)
 		if err := mapError(scanReservation(row, res)); err != nil {
@@ -151,21 +183,21 @@ func (r *BillingRepository) Reserve(ctx context.Context, res *domain.CreditReser
 			IdempotencyKey: "reserve:" + res.IdempotencyKey,
 			Reason:         "credit reservation",
 		}
-		return insertLedgerEntry(ctx, tx, entry)
+		return insertLedgerEntry(ctx, q, entry)
 	})
 }
 
 // Capture converts a reservation into a committed charge.
 func (r *BillingRepository) Capture(ctx context.Context, reservationID uuid.UUID, amount int64, idempotencyKey string) error {
-	return RunInTx(ctx, r.pool, func(ctx context.Context, tx pgx.Tx) error {
-		res, err := lockReservation(ctx, tx, reservationID)
+	return r.inTx(ctx, func(q Querier) error {
+		res, err := lockReservation(ctx, q, reservationID)
 		if err != nil {
 			return err
 		}
 		if res.Status != domain.ReservationReserved {
 			return domain.ErrConflict
 		}
-		if _, err := tx.Exec(ctx,
+		if _, err := q.Exec(ctx,
 			`UPDATE credit_reservations SET status = $2, updated_at = now() WHERE id = $1`,
 			reservationID, domain.ReservationCaptured,
 		); err != nil {
@@ -181,24 +213,24 @@ func (r *BillingRepository) Capture(ctx context.Context, reservationID uuid.UUID
 			IdempotencyKey: idempotencyKey,
 			Reason:         "credit capture",
 		}
-		if err := insertLedgerEntry(ctx, tx, entry); err != nil {
+		if err := insertLedgerEntry(ctx, q, entry); err != nil {
 			return err
 		}
-		return adjustBalance(ctx, tx, res.AccountID, -amount)
+		return adjustBalance(ctx, q, res.AccountID, -amount)
 	})
 }
 
 // Release frees a reservation without charging the account.
 func (r *BillingRepository) Release(ctx context.Context, reservationID uuid.UUID, idempotencyKey string) error {
-	return RunInTx(ctx, r.pool, func(ctx context.Context, tx pgx.Tx) error {
-		res, err := lockReservation(ctx, tx, reservationID)
+	return r.inTx(ctx, func(q Querier) error {
+		res, err := lockReservation(ctx, q, reservationID)
 		if err != nil {
 			return err
 		}
 		if res.Status != domain.ReservationReserved {
 			return domain.ErrConflict
 		}
-		if _, err := tx.Exec(ctx,
+		if _, err := q.Exec(ctx,
 			`UPDATE credit_reservations SET status = $2, updated_at = now() WHERE id = $1`,
 			reservationID, domain.ReservationReleased,
 		); err != nil {
@@ -214,7 +246,7 @@ func (r *BillingRepository) Release(ctx context.Context, reservationID uuid.UUID
 			IdempotencyKey: idempotencyKey,
 			Reason:         "credit release",
 		}
-		return insertLedgerEntry(ctx, tx, entry)
+		return insertLedgerEntry(ctx, q, entry)
 	})
 }
 
@@ -222,7 +254,7 @@ func (r *BillingRepository) Release(ctx context.Context, reservationID uuid.UUID
 func (r *BillingRepository) GetReservation(ctx context.Context, id uuid.UUID) (*domain.CreditReservation, error) {
 	const q = `SELECT ` + reservationColumns + ` FROM credit_reservations WHERE id = $1`
 	var res domain.CreditReservation
-	if err := mapError(scanReservation(r.pool.QueryRow(ctx, q, id), &res)); err != nil {
+	if err := mapError(scanReservation(r.q().QueryRow(ctx, q, id), &res)); err != nil {
 		return nil, err
 	}
 	return &res, nil
@@ -234,7 +266,7 @@ func (r *BillingRepository) GetReservationByJob(ctx context.Context, jobID uuid.
 		FROM credit_reservations WHERE job_id = $1
 		ORDER BY created_at DESC LIMIT 1`
 	var res domain.CreditReservation
-	if err := mapError(scanReservation(r.pool.QueryRow(ctx, q, jobID), &res)); err != nil {
+	if err := mapError(scanReservation(r.q().QueryRow(ctx, q, jobID), &res)); err != nil {
 		return nil, err
 	}
 	return &res, nil
@@ -242,8 +274,8 @@ func (r *BillingRepository) GetReservationByJob(ctx context.Context, jobID uuid.
 
 // availableBalance returns balance_cached minus the sum of active holds for an
 // account, locking the account row for the duration of the transaction.
-func availableBalance(ctx context.Context, tx pgx.Tx, accountID uuid.UUID) (int64, error) {
-	const q = `
+func availableBalance(ctx context.Context, q Querier, accountID uuid.UUID) (int64, error) {
+	const sql = `
 		SELECT c.balance_cached - COALESCE((
 			SELECT SUM(amount) FROM credit_reservations
 			WHERE account_id = c.id AND status = 'reserved'
@@ -252,40 +284,40 @@ func availableBalance(ctx context.Context, tx pgx.Tx, accountID uuid.UUID) (int6
 		WHERE c.id = $1
 		FOR UPDATE`
 	var available int64
-	if err := tx.QueryRow(ctx, q, accountID).Scan(&available); err != nil {
+	if err := q.QueryRow(ctx, sql, accountID).Scan(&available); err != nil {
 		return 0, mapError(err)
 	}
 	return available, nil
 }
 
-func lockReservation(ctx context.Context, tx pgx.Tx, id uuid.UUID) (*domain.CreditReservation, error) {
-	const q = `SELECT ` + reservationColumns + ` FROM credit_reservations WHERE id = $1 FOR UPDATE`
+func lockReservation(ctx context.Context, q Querier, id uuid.UUID) (*domain.CreditReservation, error) {
+	const sql = `SELECT ` + reservationColumns + ` FROM credit_reservations WHERE id = $1 FOR UPDATE`
 	var res domain.CreditReservation
-	if err := mapError(scanReservation(tx.QueryRow(ctx, q, id), &res)); err != nil {
+	if err := mapError(scanReservation(q.QueryRow(ctx, sql, id), &res)); err != nil {
 		return nil, err
 	}
 	return &res, nil
 }
 
-func insertLedgerEntry(ctx context.Context, tx pgx.Tx, e *domain.LedgerEntry) error {
+func insertLedgerEntry(ctx context.Context, q Querier, e *domain.LedgerEntry) error {
 	if e.ID == uuid.Nil {
 		e.ID = uuid.New()
 	}
 	if e.Status == "" {
 		e.Status = domain.LedgerStatusCommitted
 	}
-	const q = `
+	const sql = `
 		INSERT INTO ledger_entries (id, account_id, job_id, reservation_id, type, amount, status, idempotency_key, reason)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		RETURNING ` + ledgerColumns
-	row := tx.QueryRow(ctx, q,
+	row := q.QueryRow(ctx, sql,
 		e.ID, e.AccountID, e.JobID, e.ReservationID, e.Type, e.Amount, e.Status, e.IdempotencyKey, e.Reason,
 	)
 	return mapError(scanLedgerEntry(row, e))
 }
 
-func adjustBalance(ctx context.Context, tx pgx.Tx, accountID uuid.UUID, delta int64) error {
-	_, err := tx.Exec(ctx,
+func adjustBalance(ctx context.Context, q Querier, accountID uuid.UUID, delta int64) error {
+	_, err := q.Exec(ctx,
 		`UPDATE credit_accounts SET balance_cached = balance_cached + $2, updated_at = now() WHERE id = $1`,
 		accountID, delta,
 	)

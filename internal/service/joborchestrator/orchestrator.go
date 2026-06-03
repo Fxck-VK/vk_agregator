@@ -1,7 +1,10 @@
 // Package joborchestrator turns a normalized command into a billable, queued
 // Job. It is the only place that ties together estimation, credit reservation,
-// job persistence, the transactional outbox and task enqueueing. It never calls
-// AI providers directly; that happens later in worker pools.
+// job persistence and the transactional outbox. It never calls AI providers
+// directly; that happens later in worker pools. Enqueueing is not done here:
+// the queued job is recorded as an outbox event and the outbox relay publishes
+// it to the worker queue, so a process crash after commit cannot lose the task
+// (audit A2).
 package joborchestrator
 
 import (
@@ -14,15 +17,15 @@ import (
 	"github.com/google/uuid"
 
 	"vk-ai-aggregator/internal/domain"
-	"vk-ai-aggregator/internal/platform/queue"
 	"vk-ai-aggregator/internal/platform/uow"
 )
 
-// Biller is the subset of the billing service the orchestrator depends on.
+// Biller is the subset of the billing service the orchestrator depends on. The
+// reservation is performed with a transaction-bound repository so it commits
+// atomically with job creation (audit B1).
 type Biller interface {
 	Estimate(op domain.OperationType) (int64, error)
-	Reserve(ctx context.Context, userID, jobID uuid.UUID, amount int64) (*domain.CreditReservation, error)
-	Release(ctx context.Context, reservationID uuid.UUID) error
+	ReserveWith(ctx context.Context, repo domain.BillingRepository, userID, jobID uuid.UUID, amount int64) (*domain.CreditReservation, error)
 }
 
 // CreateJobInput is the normalized request to create a job from a command.
@@ -48,23 +51,26 @@ type CreateJobInput struct {
 }
 
 // Orchestrator implements the command -> estimate -> reserve -> job -> outbox
-// -> queue flow.
+// flow. The job, its reservation and the outbox events all commit in one
+// transaction.
 type Orchestrator struct {
 	jobs    domain.JobRepository
 	uow     uow.Manager
 	billing Biller
-	queue   queue.Publisher
+	maxCost int64
 	now     func() time.Time
 }
 
-// New builds an Orchestrator. jobs is used for reads and out-of-transaction
-// status updates; uow composes the job write with its outbox event atomically.
-func New(jobs domain.JobRepository, manager uow.Manager, billing Biller, publisher queue.Publisher) *Orchestrator {
+// New builds an Orchestrator. jobs is used for the idempotency read; uow
+// composes the job write, its credit reservation and the outbox events
+// atomically. maxCost (0 = unlimited) rejects jobs whose estimate exceeds the
+// per-job spend cap (audit C1).
+func New(jobs domain.JobRepository, manager uow.Manager, billing Biller, maxCost int64) *Orchestrator {
 	return &Orchestrator{
 		jobs:    jobs,
 		uow:     manager,
 		billing: billing,
-		queue:   publisher,
+		maxCost: maxCost,
 		now:     time.Now,
 	}
 }
@@ -80,14 +86,15 @@ func (o *Orchestrator) CreateJob(ctx context.Context, in CreateJobInput) (*domai
 		return nil, fmt.Errorf("joborchestrator: idempotency lookup: %w", err)
 	}
 
-	// 1. Estimate the cost of the operation.
+	// 1. Estimate the cost of the operation and enforce the spend cap.
 	estimate, err := o.billing.Estimate(in.Operation)
 	if err != nil {
 		return nil, fmt.Errorf("joborchestrator: estimate: %w", err)
 	}
+	if o.maxCost > 0 && estimate > o.maxCost {
+		return nil, fmt.Errorf("joborchestrator: %w: estimate %d exceeds cap %d", domain.ErrCostCapExceeded, estimate, o.maxCost)
+	}
 
-	// 2. Persist the validated job together with its created event so the
-	//    reservation (which references the job) has a row to point at.
 	job := &domain.Job{
 		ID:               uuid.New(),
 		UserID:           in.UserID,
@@ -102,28 +109,31 @@ func (o *Orchestrator) CreateJob(ctx context.Context, in CreateJobInput) (*domai
 		Params:           in.Params,
 		CostEstimate:     estimate,
 	}
+
+	// 2. Persist the job, reserve its credits and record the created+queued
+	//    events in a single transaction. Either everything commits or nothing
+	//    does, so a reservation can never outlive a missing job and a queued job
+	//    always has its enqueue event in the outbox (audit B1).
+	var insufficient bool
 	if err := o.uow.Within(ctx, func(ctx context.Context, repos uow.Repositories) error {
 		if err := repos.Jobs.Create(ctx, job); err != nil {
 			return err
 		}
-		return repos.Outbox.Add(ctx, jobEvent("event.job.created", job))
-	}); err != nil {
-		return nil, fmt.Errorf("joborchestrator: persist job: %w", err)
-	}
-
-	// 3. Reserve credits for the job.
-	reservation, err := o.billing.Reserve(ctx, in.UserID, job.ID, estimate)
-	if err != nil {
-		if errors.Is(err, domain.ErrInsufficientCredits) {
-			_ = o.jobs.UpdateStatus(ctx, job.ID, domain.JobStatusValidated, domain.JobStatusAwaitingPayment, "insufficient_credits", "not enough credits to reserve")
-			job.Status = domain.JobStatusAwaitingPayment
-			return job, domain.ErrInsufficientCredits
+		if err := repos.Outbox.Add(ctx, jobEvent("event.job.created", job)); err != nil {
+			return err
 		}
-		return nil, fmt.Errorf("joborchestrator: reserve: %w", err)
-	}
 
-	// 4. Mark the job reserved + queued and record the events atomically.
-	if err := o.uow.Within(ctx, func(ctx context.Context, repos uow.Repositories) error {
+		if _, err := o.billing.ReserveWith(ctx, repos.Billing, in.UserID, job.ID, estimate); err != nil {
+			if errors.Is(err, domain.ErrInsufficientCredits) {
+				if err := repos.Jobs.UpdateStatus(ctx, job.ID, domain.JobStatusValidated, domain.JobStatusAwaitingPayment, "insufficient_credits", "not enough credits to reserve"); err != nil {
+					return err
+				}
+				insufficient = true
+				return nil
+			}
+			return err
+		}
+
 		if err := repos.Jobs.UpdateStatus(ctx, job.ID, domain.JobStatusValidated, domain.JobStatusCreditsReserved, "", ""); err != nil {
 			return err
 		}
@@ -136,33 +146,30 @@ func (o *Orchestrator) CreateJob(ctx context.Context, in CreateJobInput) (*domai
 		}
 		return repos.Outbox.Add(ctx, jobEvent("event.job.queued", job))
 	}); err != nil {
-		// Compensate: the reservation succeeded but bookkeeping failed.
-		_ = o.billing.Release(ctx, reservation.ID)
-		return nil, fmt.Errorf("joborchestrator: queue job: %w", err)
+		return nil, fmt.Errorf("joborchestrator: create job: %w", err)
 	}
+
+	if insufficient {
+		job.Status = domain.JobStatusAwaitingPayment
+		return job, domain.ErrInsufficientCredits
+	}
+
 	job.Status = domain.JobStatusQueued
-
-	// 5. Hand the job to the appropriate worker queue.
-	if err := o.queue.Enqueue(ctx, queue.Task{
-		JobID:         job.ID,
-		Operation:     job.OperationType,
-		Modality:      job.Modality,
-		CorrelationID: job.CorrelationID,
-	}); err != nil {
-		return nil, fmt.Errorf("joborchestrator: enqueue: %w", err)
-	}
-
 	return job, nil
 }
 
-// jobEvent builds an outbox event describing a job state change.
+// jobEvent builds an outbox event describing a job state change. The queued
+// event carries everything the outbox relay needs to reconstruct the worker
+// task (operation, modality, correlation id).
 func jobEvent(eventType string, job *domain.Job) *domain.OutboxEvent {
 	payload, _ := json.Marshal(struct {
-		JobID     uuid.UUID            `json:"job_id"`
-		Status    domain.JobStatus     `json:"status"`
-		Operation domain.OperationType `json:"operation"`
-		UserID    uuid.UUID            `json:"user_id"`
-	}{job.ID, job.Status, job.OperationType, job.UserID})
+		JobID         uuid.UUID            `json:"job_id"`
+		Status        domain.JobStatus     `json:"status"`
+		Operation     domain.OperationType `json:"operation"`
+		Modality      domain.Modality      `json:"modality"`
+		UserID        uuid.UUID            `json:"user_id"`
+		CorrelationID string               `json:"correlation_id,omitempty"`
+	}{job.ID, job.Status, job.OperationType, job.Modality, job.UserID, job.CorrelationID})
 
 	return &domain.OutboxEvent{
 		AggregateType: "job",

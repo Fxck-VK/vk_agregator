@@ -11,16 +11,20 @@ import (
 	"os/signal"
 	"sync"
 	"syscall"
+	"time"
 
 	vkdelivery "vk-ai-aggregator/internal/adapter/delivery/vk"
 	"vk-ai-aggregator/internal/adapter/provider/mock"
+	"vk-ai-aggregator/internal/adapter/provider/openai"
 	redisqueue "vk-ai-aggregator/internal/adapter/queue/redis"
 	"vk-ai-aggregator/internal/adapter/storage/postgres"
 	"vk-ai-aggregator/internal/adapter/storage/s3"
+	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/platform/config"
 	"vk-ai-aggregator/internal/service/artifactservice"
 	"vk-ai-aggregator/internal/service/billingservice"
 	"vk-ai-aggregator/internal/service/moderationservice"
+	"vk-ai-aggregator/internal/service/outboxrelay"
 	"vk-ai-aggregator/internal/worker"
 )
 
@@ -31,14 +35,14 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	pool, err := postgres.NewPool(ctx, cfg.DatabaseURL)
+	pool, err := postgres.NewPoolConfigured(ctx, cfg.DatabaseURL, cfg.DBMaxConns, cfg.DBMinConns)
 	if err != nil {
 		logger.Error("postgres connect failed", "error", err)
 		os.Exit(1)
 	}
 	defer pool.Close()
 
-	rdb := redisqueue.NewClient(cfg.RedisAddr, cfg.RedisPassword, cfg.RedisDB)
+	rdb := redisqueue.NewClientWithPool(cfg.RedisAddr, cfg.RedisPassword, cfg.RedisDB, cfg.RedisPoolSize)
 	defer rdb.Close()
 
 	store, err := s3.New(ctx, s3.Config{
@@ -55,6 +59,13 @@ func main() {
 		logger.Error("s3 ensure bucket failed", "error", err)
 		os.Exit(1)
 	}
+	// Configure object retention so generated artifacts are purged on a schedule
+	// (audit ST1).
+	if cfg.ArtifactRetentionDays > 0 {
+		if err := store.SetRetention(ctx, cfg.S3Bucket, cfg.ArtifactRetentionDays); err != nil {
+			logger.Warn("s3 set retention failed", "error", err)
+		}
+	}
 
 	// Repositories and services.
 	jobs := postgres.NewJobRepository(pool)
@@ -64,14 +75,44 @@ func main() {
 	billingRepo := postgres.NewBillingRepository(pool)
 	modResults := postgres.NewModerationResultRepository(pool)
 
-	billing := billingservice.New(billingRepo)
-	// The mock provider emits synthetic mock:// output URLs, so use a matching
-	// downloader to resolve them into real bytes for storage.
-	artSvc := artifactservice.New(artRepo, store, cfg.S3Bucket, artifactservice.WithDownloader(mock.NewDownloader()))
+	billing := billingservice.New(billingRepo, billingservice.WithPriceOverrides(cfg.PriceOverrides))
 	publisher := redisqueue.NewPublisher(rdb, 100000)
 
-	// Provider registry: only the mock provider is implemented so far.
-	providers := worker.NewRegistry(mock.New())
+	// Provider selection: the mock provider is the default; the OpenAI adapter is
+	// used only when PROVIDER=openai and a key is configured (audit P1).
+	var provider domain.Provider
+	var artOpts []artifactservice.Option
+	switch cfg.Provider {
+	case "openai":
+		provider = openai.New(openai.Config{
+			APIKey:     cfg.OpenAIAPIKey,
+			BaseURL:    cfg.OpenAIBaseURL,
+			ImageModel: cfg.OpenAIImageModel,
+		})
+		logger.Info("using openai provider")
+	default:
+		provider = mock.New()
+		// The mock provider emits synthetic mock:// output URLs, so use a matching
+		// downloader to resolve them into real bytes for storage.
+		artOpts = append(artOpts, artifactservice.WithDownloader(mock.NewDownloader()))
+	}
+	artSvc := artifactservice.New(artRepo, store, cfg.S3Bucket, artOpts...)
+	providers := worker.NewRegistry(provider)
+
+	// Delivery client selection: mock by default, real VK API when configured
+	// (audit V1).
+	var vkClient vkdelivery.Client
+	switch cfg.VKDeliveryMode {
+	case "real":
+		vkClient = vkdelivery.NewHTTPClient(vkdelivery.HTTPConfig{
+			AccessToken: cfg.VKAccessToken,
+			APIVersion:  cfg.VKAPIVersion,
+			BaseURL:     cfg.VKAPIBaseURL,
+		})
+		logger.Info("using real vk delivery client")
+	default:
+		vkClient = vkdelivery.NewMockClient()
+	}
 	// Output moderation gates delivery (invariant #15). The keyword moderator is
 	// the default; swap for a provider-backed Moderator when available.
 	moderator := moderationservice.NewKeywordModerator(cfg.ModerationExtraTerms...)
@@ -95,12 +136,20 @@ func main() {
 		Deliveries:  deliveries,
 		Artifacts:   artRepo,
 		Objects:     store,
-		VK:          vkdelivery.NewMockClient(),
+		VK:          vkClient,
 		Billing:     billing,
 		Streams:     publisher,
 		MaxAttempts: cfg.MaxAttempts,
 		Backoff:     worker.ExponentialBackoff(cfg.RetryBaseDelay, cfg.RetryMaxDelay),
+		Signer:      store,
+		SignedURLs:  cfg.SignedDelivery,
+		URLTTL:      cfg.ArtifactURLTTL,
 	})
+
+	// The outbox relay publishes queued jobs from the transactional outbox to the
+	// worker queue, so a crash between commit and enqueue cannot lose work
+	// (audit A2).
+	relay := outboxrelay.New(postgres.NewUnitOfWork(pool), publisher, outboxrelay.WithLogger(logger))
 
 	consumer := redisqueue.NewConsumer(rdb, cfg.WorkerGroup, cfg.WorkerConsumer)
 	if err := consumer.EnsureGroups(ctx, redisqueue.AllStreams...); err != nil {
@@ -123,6 +172,11 @@ func main() {
 			_ = eng.Run(ctx)
 		}(e)
 	}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		relay.Run(ctx, time.Second)
+	}()
 	logger.Info("workers started", "group", cfg.WorkerGroup, "consumer", cfg.WorkerConsumer)
 
 	stop := make(chan os.Signal, 1)

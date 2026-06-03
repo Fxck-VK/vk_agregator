@@ -36,11 +36,20 @@ type Downloader interface {
 	Download(ctx context.Context, url string) (data []byte, contentType string, err error)
 }
 
+// Scanner inspects artifact bytes before they are stored and returns an error
+// to reject unsafe content (malware, disallowed media). The default is no
+// scanning; inject a real scanner (e.g. an antivirus or content-safety service)
+// via WithScanner (audit ST1).
+type Scanner interface {
+	Scan(ctx context.Context, mediaType domain.MediaType, mimeType string, data []byte) error
+}
+
 // Service stores artifacts.
 type Service struct {
 	repo       domain.ArtifactRepository
 	store      ObjectStore
 	downloader Downloader
+	scanner    Scanner
 	bucket     string
 	now        func() time.Time
 }
@@ -63,6 +72,12 @@ func WithAllowedHosts(hosts ...string) Option {
 			d.setAllowedHosts(hosts)
 		}
 	}
+}
+
+// WithScanner installs a content scanner that runs on new artifact bytes before
+// they are stored (audit ST1).
+func WithScanner(sc Scanner) Option {
+	return func(s *Service) { s.scanner = sc }
 }
 
 // New builds an artifact Service that stores bytes in the given bucket.
@@ -111,6 +126,13 @@ func (s *Service) saveBytes(ctx context.Context, ownerID uuid.UUID, jobID *uuid.
 
 	if existing, err := s.repo.GetBySHA256(ctx, ownerID, sha); err == nil {
 		return existing, nil
+	}
+
+	// Scan new content before it is persisted or delivered (audit ST1).
+	if s.scanner != nil {
+		if err := s.scanner.Scan(ctx, mediaType, mimeType, data); err != nil {
+			return nil, fmt.Errorf("artifactservice: content scan rejected: %w", err)
+		}
 	}
 
 	key := fmt.Sprintf("artifacts/%s/%s.%s", ownerID, sha, extFor(mediaType))
