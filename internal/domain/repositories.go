@@ -101,7 +101,7 @@ type UserRepository interface {
 	GetByVKUserID(ctx context.Context, vkUserID int64) (*User, error)
 }
 
-// JobRepository persists jobs and their provider tasks.
+// JobRepository persists jobs.
 type JobRepository interface {
 	// Create inserts a new job.
 	Create(ctx context.Context, job *Job) error
@@ -110,19 +110,41 @@ type JobRepository interface {
 	// GetByIdempotencyKey fetches a job by its idempotency key.
 	GetByIdempotencyKey(ctx context.Context, key string) (*Job, error)
 	// UpdateStatus applies an explicit state-machine transition, persisting the
-	// new status together with any error code/message.
+	// new status together with any error code/message. It returns ErrConflict if
+	// the stored status does not match from (lost-update protection).
 	UpdateStatus(ctx context.Context, id uuid.UUID, from, to JobStatus, errCode, errMessage string) error
 	// Update persists non-status changes to a job (cost, artifacts, routing).
 	Update(ctx context.Context, job *Job) error
 	// ListByUser returns the most recent jobs for a user, newest first.
 	ListByUser(ctx context.Context, userID uuid.UUID, limit, offset int) ([]*Job, error)
+}
 
-	// CreateProviderTask inserts a provider task for a job.
-	CreateProviderTask(ctx context.Context, task *ProviderTask) error
-	// UpdateProviderTask persists changes to a provider task.
-	UpdateProviderTask(ctx context.Context, task *ProviderTask) error
-	// GetProviderTask fetches a provider task by id, ErrNotFound if missing.
-	GetProviderTask(ctx context.Context, id uuid.UUID) (*ProviderTask, error)
+// CommandRepository persists normalized commands parsed from inbound events.
+type CommandRepository interface {
+	// Create inserts a new command.
+	Create(ctx context.Context, command *Command) error
+	// GetByID fetches a command by id, ErrNotFound if missing.
+	GetByID(ctx context.Context, id uuid.UUID) (*Command, error)
+	// GetByIdempotencyKey fetches a command by idempotency key, used to dedup
+	// repeated inbound events for the same message.
+	GetByIdempotencyKey(ctx context.Context, key string) (*Command, error)
+	// ListByUser returns the most recent commands for a user, newest first.
+	ListByUser(ctx context.Context, userID uuid.UUID, limit, offset int) ([]*Command, error)
+}
+
+// ProviderTaskRepository persists provider tasks and their lifecycle.
+type ProviderTaskRepository interface {
+	// Create inserts a provider task for a job.
+	Create(ctx context.Context, task *ProviderTask) error
+	// Update persists changes to a provider task.
+	Update(ctx context.Context, task *ProviderTask) error
+	// GetByID fetches a provider task by id, ErrNotFound if missing.
+	GetByID(ctx context.Context, id uuid.UUID) (*ProviderTask, error)
+	// GetByExternalID fetches a task by provider and external id, used to
+	// reconcile incoming provider webhooks.
+	GetByExternalID(ctx context.Context, provider ProviderName, externalID string) (*ProviderTask, error)
+	// ListByJob returns all provider tasks for a job, oldest attempt first.
+	ListByJob(ctx context.Context, jobID uuid.UUID) ([]*ProviderTask, error)
 }
 
 // ArtifactRepository persists artifacts and their variants.

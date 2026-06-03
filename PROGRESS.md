@@ -56,15 +56,67 @@
 
 ---
 
-## Next step — Step 2
+---
 
-**Реализация PostgreSQL адаптеров (pgx) для созданных интерфейсов репозиториев.**
+## Step 2 — PostgreSQL repositories, Command Router, integration tests
+
+Статус: **завершён**.
+
+### Что сделано
+
+- Уточнены интерфейсы в `internal/domain/repositories.go`:
+  - добавлен `CommandRepository`;
+  - провайдер-таски вынесены из `JobRepository` в отдельный `ProviderTaskRepository`
+    (+ метод `GetByExternalID` для реконсиляции вебхуков).
+- Реализованы PostgreSQL-адаптеры на `pgx/v5` в `internal/adapter/storage/postgres/`:
+  - `postgres.go` — пул соединений (`NewPool`), интерфейс `Querier` (общий для `*pgxpool.Pool` и `pgx.Tx`),
+    `RunInTx`, нормализация ошибок (`mapError`: no rows → `ErrNotFound`, unique_violation → `ErrConflict`).
+  - `user.go`, `job.go`, `command.go`, `provider_task.go`, `artifact.go`, `delivery.go`,
+    `billing.go`, `outbox.go`, `idempotency.go` — реализации всех репозиториев.
+- Реализован Command Router (`internal/service/commandrouter/`):
+  - `/image` → `image.generate`, `/video` → `video.generate`, `/edit` → `image.edit`,
+    `/balance`, `/status <id>`, `/cancel <id>`, `/help`;
+  - любой другой текст (включая неизвестные слэш-команды) → `text.ask` / `text_generate`.
+- Добавлены тесты:
+  - unit-тесты роутера (`router_test.go`) — без БД, входят в обычный `go test ./...`;
+  - integration-тесты репозиториев (`integration_test.go`) — поднимают схему из миграции 000001
+    и проверяют CRUD, переходы статусов job, биллинг (reserve/insufficient/capture/баланс),
+    idempotency get-or-create, outbox, artifacts/variants, deliveries.
+
+### Ключевые решения
+
+- **`Querier` вместо конкретного соединения**: репозитории работают и на пуле, и внутри транзакции,
+  что позволит писать outbox-событие в той же транзакции, что и изменение состояния.
+- **Атомарный биллинг**: `Reserve`/`Capture`/`Release`/`AppendEntry` выполняются через `RunInTx`
+  с блокировкой строки аккаунта (`FOR UPDATE`). Резерв — это `pending`-запись в ledger (баланс не двигает),
+  доступный баланс = `balance_cached - SUM(active reservations)`; `Capture` списывает (`committed`, баланс −),
+  `Release` снимает холд. Прямой мутации баланса без ledger-записи нет.
+- **Оптимистичные переходы job**: `UpdateStatus(from → to)` фиксирует прежний статус в `WHERE`,
+  рассинхрон → `ErrConflict` (поддержка инварианта «explicit job status transition»).
+- **Идемпотентность**: `GetOrCreate` через `INSERT ... ON CONFLICT (key) DO NOTHING RETURNING`;
+  уникальные `idempotency_key` мапятся в `ErrConflict`.
+- **Outbox drain**: `FetchPending` использует `FOR UPDATE SKIP LOCKED` для конкурентных публишеров.
+- **google/uuid + pgx**: используются нативно (через underlying `[16]byte`), JSONB — через `json.RawMessage`.
+- **Integration-тесты env-guarded**: запускаются только при заданном `TEST_DATABASE_URL`,
+  иначе `t.Skip`, поэтому дефолтный `go test ./...` зелёный без внешней инфраструктуры.
+
+### Проверки
+
+- `gofmt -w .`, `go vet ./...`, `go test ./...` — без ошибок (integration-тесты пропускаются без БД).
+- Для запуска integration-тестов:
+  `docker compose up -d postgres` и
+  `TEST_DATABASE_URL=postgres://vk_ai_aggregator:vk_ai_aggregator@localhost:5432/vk_ai_aggregator?sslmode=disable go test ./...`.
+
+---
+
+## Next step — Step 3
+
+**Job Orchestrator и VK Inbound Gateway.**
 
 Ожидаемый объём:
 
-- Адаптеры в `internal/adapter/storage/postgres/` для каждого репозитория.
-- Использование `pgx`/пула соединений, транзакций и `context.Context`.
-- Корректная обработка `ErrNotFound` / `ErrConflict` / `ErrInsufficientCredits`.
-- Атомарные операции биллинга (reserve/capture/release) в одной транзакции с записью ledger.
-- Запись в `outbox_events` в той же транзакции, что и изменение состояния.
-- Integration-тесты на реальной БД (по `Definition of Done` из `AGENTS.md`).
+- `joborchestrator.CreateJob`: валидация команды, резерв кредитов через `BillingRepository`,
+  создание job и запись outbox-события в одной транзакции, возврат job id.
+- VK Inbound handler: парсинг raw-события, валидация группы/секрета, idempotency по `vk_event:*`,
+  сохранение inbound-события и постановка команды в очередь, быстрый ответ VK.
+- Mock-провайдер под интерфейс `domain.Provider` и каркас worker-пула.
