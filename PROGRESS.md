@@ -158,13 +158,61 @@
 
 ---
 
-## Next step — Step 4
+## Step 4 — Redis Streams, Provider Layer (mock), Artifact Service, S3/MinIO
 
-**Provider Gateway и worker-пулы.**
+Статус: **завершён**.
 
-Ожидаемый объём:
+### Что сделано
 
-- Mock-провайдер под интерфейс `domain.Provider` (Submit/Poll/Cancel/Estimate) + mock-тесты.
-- Worker, читающий задачи из очереди: dispatch в provider, сохранение `ProviderTask`,
-  переходы статусов job, capture/refund по результату, запись артефактов.
+- **Redis Streams + consumer groups** (`internal/adapter/queue/redis`, пакет `redisqueue`):
+  - стримы `stream:jobs:text`, `stream:jobs:image`, `stream:jobs:video`,
+    `stream:jobs:delivery`, `stream:jobs:provider_poll` (`AllStreams`);
+  - `Publisher` реализует `queue.Publisher` (XADD, маршрутизация операции → стрим
+    через `StreamForOperation`) + `PublishTo` для delivery/provider_poll;
+  - `Consumer`: `EnsureGroups` (XGROUP CREATE MKSTREAM, идемпотентно к BUSYGROUP),
+    `Read` (XREADGROUP, at-least-once), `Ack` (XACK); poison-сообщения ацкаются и пропускаются.
+- **Provider Layer / MockProvider** (`internal/adapter/provider/mock`) под `domain.Provider`:
+  - `Estimate`/`Submit`/`Poll`/`Cancel` + `Capabilities`; поддержка `text_generate`,
+    `image_generate`, `video_generate` (прочие операции → ошибка `unsupported_capability`);
+  - детерминированный жизненный цикл (`pending → processing → succeeded`,
+    `WithCompleteAfterPolls`), выдача `OutputURLs`;
+  - инъекция ошибок по ключевым словам в prompt: `mock_timeout` → `provider_timeout`,
+    `mock_rate_limit` → `rate_limited`, `mock_provider_error` → `provider_internal_error`.
+- **Artifact Service** (`internal/service/artifactservice`):
+  - `SaveTextArtifact`, `SaveBytesArtifact`, `SaveRemoteArtifact`;
+  - sha256-хеширование, дедуп по `(owner, sha256)`, загрузка в `ObjectStore`,
+    запись метаданных через `domain.ArtifactRepository` (статус `ready`);
+  - контракты `ObjectStore` и `Downloader` (дефолтный — HTTP с лимитом 256 MiB).
+- **S3/MinIO adapter** (`internal/adapter/storage/s3`): `New` (проверка коннекта),
+  `EnsureBucket`, `Put`, `PresignedGetURL` на базе `minio-go/v7`.
+- **In-memory** `ArtifactRepo` и `ObjectStore` (`internal/adapter/storage/memory`) для unit-тестов.
+
+### Ключевые решения
+
+- **Стрим на модальность**: медленное видео не блокирует быстрый текст; delivery и
+  provider_poll — отдельные стримы (продюсятся явно, не из операции).
+- **Consumer groups + ручной ACK**: at-least-once семантика, pending-список для рекавери;
+  воркеры должны быть retry-safe (инвариант #5).
+- **`ObjectStore` как структурный интерфейс** в `artifactservice`: S3-адаптер удовлетворяет
+  его без обратной зависимости адаптера на сервис (адаптер не знает о бизнес-слое).
+- **Дедуп артефактов** по контент-хешу делает запись идемпотентной (инвариант: media → Artifact).
+- **Env-guarded Redis-тест**: запускается только при `TEST_REDIS_ADDR`, иначе `t.Skip` —
+  дефолтный `go test ./...` зелёный без Redis.
+
+### Проверки
+
+- `gofmt -w .`, `go vet ./...`, `go test ./...` — зелёные (Redis-интеграционка пропускается без `TEST_REDIS_ADDR`).
+- Для Redis-интеграции: `docker compose up -d redis` и
+  `TEST_REDIS_ADDR=localhost:6379 go test ./internal/adapter/queue/redis/...`.
+
+---
+
+## Next step — Step 5
+
+**Worker-пулы и реконсиляция.**
+
+- Воркеры на `redisqueue.Consumer`: dispatch задачи в `domain.Provider`, сохранение
+  `ProviderTask`, переходы статусов job, `provider_poll` для асинхронных результатов.
+- По результату провайдера: скачивание выходов через `artifactservice.SaveRemoteArtifact`,
+  `capture`/`refund` в биллинге, постановка в `stream:jobs:delivery`.
 - Рефакторинг `BillingRepository` на `Querier`, чтобы job+reserve+outbox шли одной транзакцией.
