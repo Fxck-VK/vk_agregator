@@ -40,17 +40,19 @@
 - [x] Retry safety, idempotency (active-task + per-attempt key), error classification, recovery после рестарта.
 - [x] Провайдер вызывается только внутри воркера; unit-тесты sync/async/idempotency/retry/terminal.
 
+### Step 6 — VK Delivery, Admin API, E2E
+- [x] `vkdelivery.Client` + `MockClient` (`SendText`/`SendPhoto`/`SendVideo`), deterministic `random_id`, no duplicate sends.
+- [x] Delivery worker: `Artifact → Delivery → Billing Capture → Job Success`, идемпотентность доставки.
+- [x] `billingservice.CaptureForJob` + `BillingRepository.GetReservationByJob` (postgres + memory).
+- [x] Admin API: `GET /admin/jobs`, `/admin/jobs/{id}`, `/admin/users/{id}`, `/admin/deliveries/{id}` (pagination/filters/DTO) + `JobRepository.List`.
+- [x] Полный E2E `VK → Job → Queue → Provider → Artifact → Delivery → Capture`; README + troubleshooting.
+
 ---
 
-## Next — Step 6: VK Delivery worker, биллинг по результату, outbox relay
-- [ ] Delivery-воркер на `stream:jobs:delivery`: upload+send в VK, дедуп по `vk_random_id`, `result_ready → delivering → succeeded`.
-- [ ] `capture` при успехе / `refund` при терминальном fail (lookup reservation по job).
-- [ ] Outbox relay: drain `outbox_events` → publish в стримы.
-- [ ] Рефакторинг `BillingRepository` на `Querier` (job+reserve+outbox в одной транзакции).
-
-## Backlog
-- [ ] VK delivery adapter (`internal/adapter/delivery/vk`): upload + send, дедуп по `vk_random_id`.
+## Next — Step 7: Реальные адаптеры, outbox relay, модерация
+- [ ] Реальный VK API клиент под `vkdelivery.Client` (upload + `messages.send`).
 - [ ] Реальные provider-адаптеры (OpenAI/Google/Kling/Runway) через нормализацию.
 - [ ] Модерация перед выдачей результата (инвариант #15).
 - [ ] Outbox relay (drain `outbox_events` → publish в стримы).
+- [ ] Рефакторинг `BillingRepository` на `Querier` (job+reserve+outbox в одной транзакции).
 - [ ] Observability: метрики очередей/воркеров, трейсинг по `correlation_id`.

@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"time"
 
 	"github.com/minio/minio-go/v7"
@@ -71,6 +72,20 @@ func (s *Store) Put(ctx context.Context, bucket, key string, data []byte, conten
 		return fmt.Errorf("s3: put %s/%s: %w", bucket, key, err)
 	}
 	return nil
+}
+
+// GetObject downloads an object's bytes from bucket/key.
+func (s *Store) GetObject(ctx context.Context, bucket, key string) ([]byte, error) {
+	obj, err := s.client.GetObject(ctx, bucket, key, minio.GetObjectOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("s3: get %s/%s: %w", bucket, key, err)
+	}
+	defer obj.Close()
+	data, err := io.ReadAll(obj)
+	if err != nil {
+		return nil, fmt.Errorf("s3: read %s/%s: %w", bucket, key, err)
+	}
+	return data, nil
 }
 
 // PresignedGetURL returns a time-limited URL to download the object.

@@ -228,6 +228,18 @@ func (r *BillingRepository) GetReservation(ctx context.Context, id uuid.UUID) (*
 	return &res, nil
 }
 
+// GetReservationByJob fetches the most recent reservation for a job.
+func (r *BillingRepository) GetReservationByJob(ctx context.Context, jobID uuid.UUID) (*domain.CreditReservation, error) {
+	const q = `SELECT ` + reservationColumns + `
+		FROM credit_reservations WHERE job_id = $1
+		ORDER BY created_at DESC LIMIT 1`
+	var res domain.CreditReservation
+	if err := mapError(scanReservation(r.pool.QueryRow(ctx, q, jobID), &res)); err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
 // availableBalance returns balance_cached minus the sum of active holds for an
 // account, locking the account row for the duration of the transaction.
 func availableBalance(ctx context.Context, tx pgx.Tx, accountID uuid.UUID) (int64, error) {

@@ -142,6 +142,26 @@ func (s *Service) Capture(ctx context.Context, reservationID uuid.UUID, amount i
 	return s.repo.Capture(ctx, reservationID, amount, "cap:"+reservationID.String())
 }
 
+// CaptureForJob captures the job's reservation by amount. It is idempotent: an
+// already-captured reservation is treated as success, so a re-delivered
+// delivery never double-charges.
+func (s *Service) CaptureForJob(ctx context.Context, jobID uuid.UUID, amount int64) error {
+	res, err := s.repo.GetReservationByJob(ctx, jobID)
+	if err != nil {
+		return err
+	}
+	if res.Status == domain.ReservationCaptured {
+		return nil
+	}
+	if err := s.repo.Capture(ctx, res.ID, amount, "cap:"+res.ID.String()); err != nil {
+		if errors.Is(err, domain.ErrConflict) {
+			return nil
+		}
+		return err
+	}
+	return nil
+}
+
 // Release frees a reservation without charging the account.
 func (s *Service) Release(ctx context.Context, reservationID uuid.UUID) error {
 	return s.repo.Release(ctx, reservationID, "rel:"+reservationID.String())

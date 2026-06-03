@@ -255,12 +255,62 @@
 
 ---
 
-## Next step — Step 6
+## Step 6 — VK Delivery, Admin API, E2E
 
-**VK Delivery worker и outbox relay.**
+Статус: **завершён**.
 
-- Delivery-воркер на `stream:jobs:delivery`: upload+send в VK через `internal/adapter/delivery/vk`,
-  дедуп по `vk_random_id`, переходы `result_ready → delivering → succeeded`.
-- Биллинг по результату: `capture` при успехе, `refund` при терминальном fail (нужен lookup
-  reservation по job; рефактор `BillingRepository` на `Querier`).
-- Outbox relay: drain `outbox_events` → publish в стримы.
+### Что сделано
+
+- **VK Delivery client** (`internal/adapter/delivery/vk`, пакет `vkdelivery`) — единственное место
+  вызова VK `messages.send`:
+  - интерфейс `Client` с `SendText` / `SendPhoto` / `SendVideo`;
+  - `MockClient` — детерминированные `MessageID`, дедуп по `random_id` (повтор не шлёт второе
+    сообщение, `Duplicate=true`), `FailNext` для тестов retry;
+  - `DeterministicRandomID(key)` — стабильный неотрицательный `random_id` из ключа доставки.
+- **Delivery worker** (`internal/worker/delivery.go`), стрим `stream:jobs:delivery`:
+  flow `Artifact → Delivery → Billing Capture → Job Success`.
+  - Идемпотентность доставки: одна строка `delivery` на job (ключ `delivery:{job}`),
+    дедуп через `GetByIdempotencyKey` + `ErrConflict`-reload; `random_id` детерминирован →
+    нет дублей отправок; capture идемпотентен (`CaptureForJob`).
+  - Переходы `result_ready → delivering → succeeded`; при сбое отправки — `retrying` и возврат
+    ошибки (сообщение остаётся pending для ретрая).
+- **Billing**: добавлен `CaptureForJob` (lookup резервации по job + идемпотентный capture) и
+  контракт `BillingRepository.GetReservationByJob` (postgres + memory).
+- **Admin API** (`internal/adapter/inbound/admin`), read-only, DTO-ответы:
+  - `GET /admin/jobs` (фильтры `status`/`user_id`/`operation`, пагинация `limit`/`offset`,
+    `has_more` через выборку `limit+1`), `GET /admin/jobs/{id}`, `GET /admin/users/{id}`
+    (с балансом), `GET /admin/deliveries/{id}`;
+  - опциональная авторизация по `X-Admin-Token`.
+  - Контракт `JobRepository.List(filter, limit, offset)` + `domain.JobFilter` (postgres + memory).
+- **E2E** (`internal/worker/e2e_test.go`, `TestEndToEnd`): полный сценарий
+  `VK → Job → Queue → Provider → Artifact → Delivery → Capture` на in-memory адаптерах.
+- **In-memory** `DeliveryRepo` и `ObjectStore.GetObject`; **S3** `GetObject`.
+- **README.md** с обзором, схемой flow, запуском, Admin API и разделом **Troubleshooting**.
+
+### Ключевые решения
+
+- **Capture при доставке**: кредиты захватываются в delivery-воркере после успешной отправки
+  (`reserve` на интейке → `capture` на доставке), баланс двигается только через ledger.
+- **Deterministic random_id** вместо случайного — ретраи доставки переиспользуют тот же id,
+  и VK сам подавляет дубль (инвариант: every delivery deduplicated).
+- **Контракты расширены по необходимости**: `GetReservationByJob` (capture без проброса
+  reservation-id через очередь) и `JobRepository.List` (админ-листинг) — без упрощения архитектуры.
+- **Admin отдаёт DTO**, а не доменные структуры, и не выполняет мутаций.
+
+### Проверки
+
+- `gofmt -l .` — пусто; `go vet ./...` — чисто; `go test ./...` — зелёный.
+- Покрытие: vk mock (dedup/fail), delivery worker (success+capture, идемпотентная повторная
+  доставка без двойного списания, текстовая доставка, ретрай при сбое send), admin
+  (пагинация/фильтры/404/400/auth), полный E2E.
+
+---
+
+## Next step — Step 7
+
+**Реальные адаптеры и outbox relay.**
+
+- Реальный VK API клиент (`messages.send`, upload серверы) под `vkdelivery.Client`.
+- Реальные provider-адаптеры (OpenAI/Google/Kling/Runway) под `domain.Provider`.
+- Outbox relay: drain `outbox_events` → publish в стримы; модерация перед выдачей (инвариант #15).
+- Рефактор `BillingRepository` на `Querier` (job+reserve+outbox в одной транзакции).

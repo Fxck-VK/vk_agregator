@@ -2,6 +2,8 @@ package postgres
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 
@@ -120,6 +122,51 @@ func (r *JobRepository) ListByUser(ctx context.Context, userID uuid.UUID, limit,
 		ORDER BY created_at DESC
 		LIMIT $2 OFFSET $3`
 	rows, err := r.db.Query(ctx, q, userID, limit, offset)
+	if err != nil {
+		return nil, mapError(err)
+	}
+	defer rows.Close()
+
+	var jobs []*domain.Job
+	for rows.Next() {
+		var job domain.Job
+		if err := scanJob(rows, &job); err != nil {
+			return nil, mapError(err)
+		}
+		jobs = append(jobs, &job)
+	}
+	return jobs, mapError(rows.Err())
+}
+
+// List returns jobs matching the filter, newest first. The WHERE clause is
+// built dynamically from the non-zero filter fields.
+func (r *JobRepository) List(ctx context.Context, filter domain.JobFilter, limit, offset int) ([]*domain.Job, error) {
+	q := `SELECT ` + jobColumns + ` FROM jobs`
+	var (
+		conds []string
+		args  []any
+	)
+	if filter.UserID != nil {
+		args = append(args, *filter.UserID)
+		conds = append(conds, fmt.Sprintf("user_id = $%d", len(args)))
+	}
+	if filter.Status != "" {
+		args = append(args, filter.Status)
+		conds = append(conds, fmt.Sprintf("status = $%d", len(args)))
+	}
+	if filter.Operation != "" {
+		args = append(args, filter.Operation)
+		conds = append(conds, fmt.Sprintf("operation_type = $%d", len(args)))
+	}
+	if len(conds) > 0 {
+		q += " WHERE " + strings.Join(conds, " AND ")
+	}
+	args = append(args, limit)
+	q += fmt.Sprintf(" ORDER BY created_at DESC LIMIT $%d", len(args))
+	args = append(args, offset)
+	q += fmt.Sprintf(" OFFSET $%d", len(args))
+
+	rows, err := r.db.Query(ctx, q, args...)
 	if err != nil {
 		return nil, mapError(err)
 	}

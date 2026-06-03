@@ -101,6 +101,17 @@ type UserRepository interface {
 	GetByVKUserID(ctx context.Context, vkUserID int64) (*User, error)
 }
 
+// JobFilter narrows a job listing. Zero-valued fields are ignored, so an empty
+// filter matches all jobs. It backs the admin jobs listing.
+type JobFilter struct {
+	// UserID, when set, restricts results to one user.
+	UserID *uuid.UUID
+	// Status, when non-empty, restricts results to one job status.
+	Status JobStatus
+	// Operation, when non-empty, restricts results to one operation type.
+	Operation OperationType
+}
+
 // JobRepository persists jobs.
 type JobRepository interface {
 	// Create inserts a new job.
@@ -117,6 +128,8 @@ type JobRepository interface {
 	Update(ctx context.Context, job *Job) error
 	// ListByUser returns the most recent jobs for a user, newest first.
 	ListByUser(ctx context.Context, userID uuid.UUID, limit, offset int) ([]*Job, error)
+	// List returns jobs matching the filter, newest first, for admin queries.
+	List(ctx context.Context, filter JobFilter, limit, offset int) ([]*Job, error)
 }
 
 // InboundEventRepository persists raw inbound events for audit and idempotent
@@ -215,6 +228,10 @@ type BillingRepository interface {
 	Release(ctx context.Context, reservationID uuid.UUID, idempotencyKey string) error
 	// GetReservation fetches a reservation by id, ErrNotFound if missing.
 	GetReservation(ctx context.Context, id uuid.UUID) (*CreditReservation, error)
+	// GetReservationByJob fetches the most recent reservation for a job, used by
+	// workers to capture credits without threading the reservation id through
+	// the queue. ErrNotFound if the job has no reservation.
+	GetReservationByJob(ctx context.Context, jobID uuid.UUID) (*CreditReservation, error)
 }
 
 // OutboxRepository persists and drains domain events using the outbox pattern.

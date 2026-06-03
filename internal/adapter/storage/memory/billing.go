@@ -233,3 +233,24 @@ func (r *BillingRepo) GetReservation(_ context.Context, id uuid.UUID) (*domain.C
 	}
 	return &res, nil
 }
+
+func (r *BillingRepo) GetReservationByJob(_ context.Context, jobID uuid.UUID) (*domain.CreditReservation, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var (
+		latest domain.CreditReservation
+		found  bool
+	)
+	for _, res := range r.reservations {
+		if res.JobID != jobID {
+			continue
+		}
+		if !found || res.CreatedAt.After(latest.CreatedAt) {
+			latest, found = res, true
+		}
+	}
+	if !found {
+		return nil, domain.ErrNotFound
+	}
+	return &latest, nil
+}

@@ -138,6 +138,20 @@ func (s *ObjectStore) Get(bucket, key string) ([]byte, bool) {
 	return obj.Data, ok
 }
 
+// GetObject returns the stored bytes, or domain.ErrNotFound if absent. It
+// satisfies the object-fetch contract the delivery worker depends on.
+func (s *ObjectStore) GetObject(_ context.Context, bucket, key string) ([]byte, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	obj, ok := s.objects[bucket+"/"+key]
+	if !ok {
+		return nil, domain.ErrNotFound
+	}
+	cp := make([]byte, len(obj.Data))
+	copy(cp, obj.Data)
+	return cp, nil
+}
+
 // Len returns the number of stored objects.
 func (s *ObjectStore) Len() int {
 	s.mu.Lock()
