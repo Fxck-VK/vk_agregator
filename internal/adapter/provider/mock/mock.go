@@ -46,6 +46,10 @@ type Error struct {
 
 func (e *Error) Error() string { return fmt.Sprintf("mock provider: %s: %s", e.Class, e.Message) }
 
+// ProviderErrorClass exposes the normalized error class so callers (workers)
+// can classify the failure without depending on this package's concrete type.
+func (e *Error) ProviderErrorClass() domain.ProviderErrorClass { return e.Class }
+
 // taskState tracks one submitted task across Poll calls.
 type taskState struct {
 	jobID     uuid.UUID

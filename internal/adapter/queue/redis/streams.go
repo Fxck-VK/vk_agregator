@@ -197,6 +197,41 @@ func (c *Consumer) Ack(ctx context.Context, stream string, ids ...string) error 
 	return nil
 }
 
+// AutoClaim reclaims entries that have been pending (delivered but unacked)
+// longer than minIdle and reassigns them to this consumer. It is used on
+// startup to recover work left behind by a crashed consumer, giving
+// at-least-once processing across restarts.
+func (c *Consumer) AutoClaim(ctx context.Context, stream string, minIdle time.Duration, count int64) ([]Delivery, error) {
+	if count <= 0 {
+		count = 100
+	}
+	msgs, _, err := c.client.XAutoClaim(ctx, &redis.XAutoClaimArgs{
+		Stream:   stream,
+		Group:    c.group,
+		Consumer: c.consumer,
+		MinIdle:  minIdle,
+		Start:    "0",
+		Count:    count,
+	}).Result()
+	if err != nil {
+		if errors.Is(err, redis.Nil) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("redisqueue: xautoclaim %s: %w", stream, err)
+	}
+
+	var out []Delivery
+	for _, msg := range msgs {
+		task, derr := decodeTask(msg)
+		if derr != nil {
+			_ = c.Ack(ctx, stream, msg.ID)
+			continue
+		}
+		out = append(out, Delivery{Stream: stream, ID: msg.ID, Task: task})
+	}
+	return out, nil
+}
+
 func decodeTask(msg redis.XMessage) (queue.Task, error) {
 	var task queue.Task
 	raw, ok := msg.Values[taskField]

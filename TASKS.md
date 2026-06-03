@@ -33,12 +33,19 @@
 - [x] S3/MinIO adapter (`minio-go/v7`: EnsureBucket/Put/PresignedGetURL).
 - [x] In-memory `ArtifactRepo` + `ObjectStore`, unit-тесты провайдера и artifact-сервиса, env-guarded Redis-тест.
 
+### Step 5 — Workers и Provider Poll
+- [x] `GenerationWorker` (text/image/video): `Job → Provider → ProviderTask → Artifact → Delivery Queue`.
+- [x] `PollWorker`: `Poll → Update Status → Requeue → Artifact → Delivery Queue`.
+- [x] `Engine` (Read/Ack/Recover через `XAUTOCLAIM`), `Registry`, in-memory `ProviderTaskRepo`.
+- [x] Retry safety, idempotency (active-task + per-attempt key), error classification, recovery после рестарта.
+- [x] Провайдер вызывается только внутри воркера; unit-тесты sync/async/idempotency/retry/terminal.
+
 ---
 
-## Next — Step 5: Worker-пулы и реконсиляция
-- [ ] Воркеры поверх `redisqueue.Consumer`: dispatch в `domain.Provider`, запись `ProviderTask`, переходы job-статусов.
-- [ ] `provider_poll`-воркер для асинхронных результатов; реконсиляция по `GetByExternalID`.
-- [ ] По результату: `artifactservice.SaveRemoteArtifact`, `capture`/`refund`, постановка в `stream:jobs:delivery`.
+## Next — Step 6: VK Delivery worker, биллинг по результату, outbox relay
+- [ ] Delivery-воркер на `stream:jobs:delivery`: upload+send в VK, дедуп по `vk_random_id`, `result_ready → delivering → succeeded`.
+- [ ] `capture` при успехе / `refund` при терминальном fail (lookup reservation по job).
+- [ ] Outbox relay: drain `outbox_events` → publish в стримы.
 - [ ] Рефакторинг `BillingRepository` на `Querier` (job+reserve+outbox в одной транзакции).
 
 ## Backlog

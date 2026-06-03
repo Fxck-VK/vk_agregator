@@ -207,12 +207,60 @@
 
 ---
 
-## Next step — Step 5
+## Step 5 — Workers (text/image/video) и Provider Poll Worker
 
-**Worker-пулы и реконсиляция.**
+Статус: **завершён**.
 
-- Воркеры на `redisqueue.Consumer`: dispatch задачи в `domain.Provider`, сохранение
-  `ProviderTask`, переходы статусов job, `provider_poll` для асинхронных результатов.
-- По результату провайдера: скачивание выходов через `artifactservice.SaveRemoteArtifact`,
-  `capture`/`refund` в биллинге, постановка в `stream:jobs:delivery`.
-- Рефакторинг `BillingRepository` на `Querier`, чтобы job+reserve+outbox шли одной транзакцией.
+### Что сделано
+
+- **Worker-пакет** (`internal/worker`) — единственное место вызова провайдера (инвариант:
+  VK-хендлеры и оркестратор провайдеров не вызывают):
+  - `GenerationWorker` (один тип на все модальности; стрим определяет, какие job он видит):
+    flow `Job → Provider.Submit → ProviderTask → Poll → Artifact → stream:jobs:delivery`.
+    Синхронный результат завершается сразу; асинхронный — статус `provider_processing/pending`
+    и постановка в `stream:jobs:provider_poll`.
+  - `PollWorker`: flow `Poll → Update Status → Requeue (пока running) → Artifact → Delivery Queue`.
+  - `Engine` поверх `redisqueue` (`Reader`-интерфейс): `Read → handle → Ack` (ацк только успешно
+    обработанных), `Recover` через `XAUTOCLAIM` (рекавери после рестарта), `Run`-цикл.
+  - `Registry` для выбора провайдера (`ForOperation` — статический дефолт, `ForName` — для
+    реконсиляции по сохранённому `ProviderTask.Provider`).
+- **Redis Consumer**: добавлен `AutoClaim` (XAUTOCLAIM) для перехвата зависших pending-сообщений.
+- **Mock.Error**: метод `ProviderErrorClass()` — воркер классифицирует ошибку без зависимости
+  от пакета провайдера.
+- **In-memory** `ProviderTaskRepo` (`internal/adapter/storage/memory`) для unit-тестов.
+
+### Ключевые решения
+
+- **Retry safety**: handler возвращает `nil` только для полностью обработанных задач (успех,
+  терминальный fail, requeue) — тогда сообщение ацкается; при инфраструктурной ошибке возвращается
+  `error`, сообщение остаётся в pending и переобрабатывается (at-least-once + рекавери через `Recover`).
+- **Idempotency**: перед сабмитом проверяется активный `ProviderTask` (pending/processing/succeeded) —
+  повторная доставка не сабмитит повторно; ключ сабмита `provider_submit:{job}:{attempt}` (per-attempt),
+  артефакты дедуп по sha256, id артефактов добавляются в job без дублей.
+- **Error classification**: `ProviderErrorClass → retryable?` (`rate_limited`/`timeout`/`overloaded`/
+  `internal`/`output_download_failed` → retryable). Retryable → `failed_retryable → queued` + повторная
+  постановка в стрим операции (кап `maxProviderAttempts=3`); иначе `failed_terminal`.
+- **Recovery после рестарта**: `Engine.Recover` (`XAUTOCLAIM` с `minIdle`) забирает доставленные,
+  но не ацкнутые сообщения из PEL и переобрабатывает их при старте.
+- **Переходы строго по стейт-машине job** (`queued → dispatching_provider → provider_submitted →
+  provider_processing/pending → provider_succeeded → result_ready`), `setStatus` идемпотентен
+  (no-op, если статус уже целевой).
+
+### Проверки
+
+- `gofmt -l .` — пусто; `go vet ./...` — чисто; `go test ./...` — зелёный.
+- Покрытие: sync-успех (delivery enqueue), async-flow через poll-воркер, идемпотентная повторная
+  доставка (без повторного сабмита), терминальная ошибка, retryable-ошибка (requeue) и переход в
+  terminal по достижении лимита попыток, no-op для неизвестного job.
+
+---
+
+## Next step — Step 6
+
+**VK Delivery worker и outbox relay.**
+
+- Delivery-воркер на `stream:jobs:delivery`: upload+send в VK через `internal/adapter/delivery/vk`,
+  дедуп по `vk_random_id`, переходы `result_ready → delivering → succeeded`.
+- Биллинг по результату: `capture` при успехе, `refund` при терминальном fail (нужен lookup
+  reservation по job; рефактор `BillingRepository` на `Querier`).
+- Outbox relay: drain `outbox_events` → publish в стримы.
