@@ -1,0 +1,211 @@
+package domain
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"time"
+
+	"github.com/google/uuid"
+)
+
+// ErrNotFound is returned by repositories when a requested entity does not
+// exist. Callers compare with errors.Is.
+var ErrNotFound = errors.New("domain: entity not found")
+
+// ErrConflict is returned when a write violates a uniqueness or optimistic
+// concurrency constraint (e.g. a duplicate idempotency key).
+var ErrConflict = errors.New("domain: conflicting write")
+
+// ErrInsufficientCredits is returned by the billing repository when a
+// reservation cannot be satisfied by the available balance.
+var ErrInsufficientCredits = errors.New("domain: insufficient credits")
+
+// OutboxStatus is the publishing state of an outbox event.
+type OutboxStatus string
+
+const (
+	// OutboxPending means the event is awaiting publication.
+	OutboxPending OutboxStatus = "pending"
+	// OutboxPublished means the event was published to the bus.
+	OutboxPublished OutboxStatus = "published"
+	// OutboxFailed means publication permanently failed.
+	OutboxFailed OutboxStatus = "failed"
+)
+
+// OutboxEvent is a domain event persisted in the same transaction as the state
+// change that produced it, then published asynchronously (outbox pattern).
+type OutboxEvent struct {
+	// ID is the internal primary key.
+	ID uuid.UUID `json:"id"`
+	// AggregateType is the kind of aggregate that emitted the event.
+	AggregateType string `json:"aggregate_type"`
+	// AggregateID is the id of the emitting aggregate.
+	AggregateID uuid.UUID `json:"aggregate_id"`
+	// EventType is the event name, e.g. "event.job.created".
+	EventType string `json:"event_type"`
+	// Payload is the serialized event body.
+	Payload json.RawMessage `json:"payload"`
+	// Status is the publishing state.
+	Status OutboxStatus `json:"status"`
+	// Attempts is how many times publication has been tried.
+	Attempts int `json:"attempts"`
+	// NextAttemptAt is when the next publication should be tried.
+	NextAttemptAt time.Time `json:"next_attempt_at"`
+	// CreatedAt is the row creation timestamp.
+	CreatedAt time.Time `json:"created_at"`
+	// PublishedAt is when the event was published, if it was.
+	PublishedAt *time.Time `json:"published_at,omitempty"`
+}
+
+// IdempotencyStatus is the processing state of an idempotency key.
+type IdempotencyStatus string
+
+const (
+	// IdempotencyStarted means processing began for this key.
+	IdempotencyStarted IdempotencyStatus = "started"
+	// IdempotencyCompleted means the operation finished successfully.
+	IdempotencyCompleted IdempotencyStatus = "completed"
+	// IdempotencyFailed means the operation failed and may be retried.
+	IdempotencyFailed IdempotencyStatus = "failed"
+)
+
+// IdempotencyRecord guarantees that an external operation runs at most once. The
+// Key encodes the scope and natural identity of the operation.
+type IdempotencyRecord struct {
+	// Key is the globally unique idempotency key.
+	Key string `json:"key"`
+	// Scope is the operation class, e.g. "inbound_event" or "provider_submit".
+	Scope string `json:"scope"`
+	// ResourceType is the kind of resource the operation produced.
+	ResourceType string `json:"resource_type"`
+	// ResourceID is the id of the produced resource, set once known.
+	ResourceID *uuid.UUID `json:"resource_id,omitempty"`
+	// Status is the processing state of the key.
+	Status IdempotencyStatus `json:"status"`
+	// CreatedAt is the row creation timestamp.
+	CreatedAt time.Time `json:"created_at"`
+	// ExpiresAt is when the key may be garbage-collected.
+	ExpiresAt time.Time `json:"expires_at"`
+}
+
+// UserRepository persists and retrieves users.
+type UserRepository interface {
+	// Create inserts a new user.
+	Create(ctx context.Context, user *User) error
+	// Update persists changes to an existing user.
+	Update(ctx context.Context, user *User) error
+	// GetByID fetches a user by internal id, ErrNotFound if missing.
+	GetByID(ctx context.Context, id uuid.UUID) (*User, error)
+	// GetByVKUserID fetches a user by external VK id, ErrNotFound if missing.
+	GetByVKUserID(ctx context.Context, vkUserID int64) (*User, error)
+}
+
+// JobRepository persists jobs and their provider tasks.
+type JobRepository interface {
+	// Create inserts a new job.
+	Create(ctx context.Context, job *Job) error
+	// GetByID fetches a job by id, ErrNotFound if missing.
+	GetByID(ctx context.Context, id uuid.UUID) (*Job, error)
+	// GetByIdempotencyKey fetches a job by its idempotency key.
+	GetByIdempotencyKey(ctx context.Context, key string) (*Job, error)
+	// UpdateStatus applies an explicit state-machine transition, persisting the
+	// new status together with any error code/message.
+	UpdateStatus(ctx context.Context, id uuid.UUID, from, to JobStatus, errCode, errMessage string) error
+	// Update persists non-status changes to a job (cost, artifacts, routing).
+	Update(ctx context.Context, job *Job) error
+	// ListByUser returns the most recent jobs for a user, newest first.
+	ListByUser(ctx context.Context, userID uuid.UUID, limit, offset int) ([]*Job, error)
+
+	// CreateProviderTask inserts a provider task for a job.
+	CreateProviderTask(ctx context.Context, task *ProviderTask) error
+	// UpdateProviderTask persists changes to a provider task.
+	UpdateProviderTask(ctx context.Context, task *ProviderTask) error
+	// GetProviderTask fetches a provider task by id, ErrNotFound if missing.
+	GetProviderTask(ctx context.Context, id uuid.UUID) (*ProviderTask, error)
+}
+
+// ArtifactRepository persists artifacts and their variants.
+type ArtifactRepository interface {
+	// Create inserts a new artifact.
+	Create(ctx context.Context, artifact *Artifact) error
+	// Update persists changes to an artifact.
+	Update(ctx context.Context, artifact *Artifact) error
+	// GetByID fetches an artifact by id, ErrNotFound if missing.
+	GetByID(ctx context.Context, id uuid.UUID) (*Artifact, error)
+	// GetBySHA256 fetches an artifact by content hash for deduplication.
+	GetBySHA256(ctx context.Context, ownerID uuid.UUID, sha256 string) (*Artifact, error)
+
+	// AddVariant inserts a derived variant of an artifact.
+	AddVariant(ctx context.Context, variant *ArtifactVariant) error
+	// ListVariants returns all variants of an artifact.
+	ListVariants(ctx context.Context, artifactID uuid.UUID) ([]*ArtifactVariant, error)
+}
+
+// DeliveryRepository persists VK delivery attempts.
+type DeliveryRepository interface {
+	// Create inserts a new delivery attempt.
+	Create(ctx context.Context, delivery *Delivery) error
+	// Update persists changes to a delivery attempt.
+	Update(ctx context.Context, delivery *Delivery) error
+	// GetByID fetches a delivery by id, ErrNotFound if missing.
+	GetByID(ctx context.Context, id uuid.UUID) (*Delivery, error)
+	// GetByIdempotencyKey fetches a delivery by idempotency key for dedup.
+	GetByIdempotencyKey(ctx context.Context, key string) (*Delivery, error)
+	// ListByJob returns all delivery attempts for a job.
+	ListByJob(ctx context.Context, jobID uuid.UUID) ([]*Delivery, error)
+}
+
+// BillingRepository persists the append-only credit ledger, accounts and
+// reservations. Balance is only ever changed through ledger entries.
+type BillingRepository interface {
+	// GetAccount fetches an account by id, ErrNotFound if missing.
+	GetAccount(ctx context.Context, id uuid.UUID) (*CreditAccount, error)
+	// GetAccountByUser fetches a user's account for a currency.
+	GetAccountByUser(ctx context.Context, userID uuid.UUID, currency Currency) (*CreditAccount, error)
+	// CreateAccount inserts a new credit account.
+	CreateAccount(ctx context.Context, account *CreditAccount) error
+
+	// AppendEntry inserts an immutable ledger entry and updates the cached
+	// balance atomically. It returns ErrConflict on a duplicate idempotency key.
+	AppendEntry(ctx context.Context, entry *LedgerEntry) error
+	// ListEntries returns ledger entries for an account, newest first.
+	ListEntries(ctx context.Context, accountID uuid.UUID, limit, offset int) ([]*LedgerEntry, error)
+
+	// Reserve creates a reservation and its reserve ledger entry atomically,
+	// returning ErrInsufficientCredits if the balance is too low.
+	Reserve(ctx context.Context, reservation *CreditReservation) error
+	// Capture converts a reservation into a charge with a capture entry.
+	Capture(ctx context.Context, reservationID uuid.UUID, amount int64, idempotencyKey string) error
+	// Release frees a reservation with a release entry.
+	Release(ctx context.Context, reservationID uuid.UUID, idempotencyKey string) error
+	// GetReservation fetches a reservation by id, ErrNotFound if missing.
+	GetReservation(ctx context.Context, id uuid.UUID) (*CreditReservation, error)
+}
+
+// OutboxRepository persists and drains domain events using the outbox pattern.
+type OutboxRepository interface {
+	// Add inserts an outbox event. It is expected to be called inside the same
+	// transaction as the state change that produced the event.
+	Add(ctx context.Context, event *OutboxEvent) error
+	// FetchPending returns up to limit events ready for publication.
+	FetchPending(ctx context.Context, limit int) ([]*OutboxEvent, error)
+	// MarkPublished marks an event as successfully published.
+	MarkPublished(ctx context.Context, id uuid.UUID, publishedAt time.Time) error
+	// MarkFailed records a failed publication and schedules the next attempt.
+	MarkFailed(ctx context.Context, id uuid.UUID, nextAttemptAt time.Time) error
+}
+
+// IdempotencyRepository guarantees at-most-once processing of external
+// operations such as inbound events, provider submits and deliveries.
+type IdempotencyRepository interface {
+	// GetOrCreate atomically creates a record in the started state, or returns
+	// the existing record. The boolean reports whether it was newly created.
+	GetOrCreate(ctx context.Context, record *IdempotencyRecord) (existing *IdempotencyRecord, created bool, err error)
+	// MarkCompleted records successful completion and the resource produced.
+	MarkCompleted(ctx context.Context, key string, resourceID uuid.UUID) error
+	// MarkFailed records a failed attempt so it may be retried.
+	MarkFailed(ctx context.Context, key string) error
+	// Get fetches a record by key, ErrNotFound if missing.
+	Get(ctx context.Context, key string) (*IdempotencyRecord, error)
+}
