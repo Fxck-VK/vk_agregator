@@ -119,6 +119,18 @@ type JobRepository interface {
 	ListByUser(ctx context.Context, userID uuid.UUID, limit, offset int) ([]*Job, error)
 }
 
+// InboundEventRepository persists raw inbound events for audit and idempotent
+// reprocessing.
+type InboundEventRepository interface {
+	// Create inserts a new inbound event.
+	Create(ctx context.Context, event *InboundEvent) error
+	// GetByIdempotencyKey fetches an event by idempotency key, ErrNotFound if
+	// missing. It is used to detect duplicate deliveries.
+	GetByIdempotencyKey(ctx context.Context, key string) (*InboundEvent, error)
+	// SetStatus updates the processing status of an event.
+	SetStatus(ctx context.Context, id uuid.UUID, status InboundEventStatus) error
+}
+
 // CommandRepository persists normalized commands parsed from inbound events.
 type CommandRepository interface {
 	// Create inserts a new command.

@@ -58,7 +58,14 @@ func applySchema(ctx context.Context, pool *pgxpool.Pool) error {
 	if err != nil {
 		return err
 	}
-	for _, name := range []string{"000001_init_schema.down.sql", "000001_init_schema.up.sql"} {
+	scripts := []string{
+		// Drop in reverse dependency order, then recreate in forward order.
+		"000002_inbound_events.down.sql",
+		"000001_init_schema.down.sql",
+		"000001_init_schema.up.sql",
+		"000002_inbound_events.up.sql",
+	}
+	for _, name := range scripts {
 		raw, err := os.ReadFile(filepath.Join(root, "migrations", name))
 		if err != nil {
 			return err

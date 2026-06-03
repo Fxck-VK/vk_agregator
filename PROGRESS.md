@@ -109,14 +109,62 @@
 
 ---
 
-## Next step — Step 3
+## Step 3 — Billing Service, Job Orchestrator, VK Webhook
 
-**Job Orchestrator и VK Inbound Gateway.**
+Статус: **завершён**.
+
+### Что сделано
+
+- **Billing Service** (`internal/service/billingservice/`) поверх `domain.BillingRepository`:
+  - `Estimate` по прайс-листу: `text_generate=1`, `image_generate=10`, `image_edit=10`,
+    `video_generate=50`, `image_to_video=50` (неизвестная операция → `ErrUnknownOperation`).
+  - `EnsureAccount` — создаёт аккаунт со стартовым балансом **1000** test credits (идемпотентно).
+  - `Reserve` / `Capture` / `Release` / `Refund` — идемпотентные по job ключи, поверх ledger.
+- **Job Orchestrator** (`internal/service/joborchestrator/`):
+  - Flow `Command → Estimate → Reserve → Job → Outbox → Queue`.
+  - Job + outbox-событие пишутся атомарно через `uow.Manager` (transactional outbox);
+    при нехватке кредитов job паркуется в `awaiting_payment` (`ErrInsufficientCredits`),
+    при сбое после резерва — компенсирующий `Release`.
+  - Идемпотентность по `idempotency_key` job (повторный вызов возвращает существующий job).
+- **VK Webhook** (`internal/adapter/inbound/vk/`), `POST /webhooks/vk`:
+  - `confirmation` → возврат токена; `message_new` → flow `InboundEvent → User → Command → Job`.
+  - Идемпотентность по `vk_event:{group}:{event_id}`, валидация `secret`, быстрый ответ `ok`.
+  - **VK handler не вызывает Provider** — только нормализованный intake.
+- **Domain**: добавлены `InboundEvent` + `InboundEventRepository`; миграция `000002_inbound_events`.
+- **Инфраструктура**: `internal/platform/queue` (контракт `Publisher` + in-memory, маршрутизация
+  по модальности в `queue.<modality>.generate`), `internal/platform/uow` (unit of work) с
+  PostgreSQL-реализацией `postgres.UnitOfWork`, и in-memory адаптеры всех репозиториев
+  (`internal/adapter/storage/memory`) для unit-тестов без БД.
+
+### Ключевые решения
+
+- **Порядок job-перед-reserve**: т.к. `credit_reservations.job_id` имеет FK на `jobs(id)`,
+  job создаётся (committed) до резерва; затем статусы `validated → credits_reserved → queued`.
+  Логически flow `Estimate → Reserve → Job` сохранён, но строки job предшествует резерву из-за FK.
+- **Транзакционность**: job+outbox — в одной транзакции (`uow`); резерв — собственная транзакция
+  billing-репозитория. Полная атомарность (job+reserve+outbox в одном tx) отложена до рефакторинга
+  `BillingRepository` на приём `Querier` — отмечено как следующий шаг.
+- **Стартовый баланс 1000** выдаётся лениво в `EnsureAccount` при первом обращении (в т.ч. из webhook
+  при создании пользователя), без отдельного провижининга.
+- **In-memory адаптеры** повторяют семантику Postgres (idempotency-конфликты, оптимистичные переходы
+  статусов, ledger-баланс), что позволило покрыть сервисы и webhook unit-тестами без внешней инфраструктуры.
+
+### Проверки
+
+- `gofmt -l .` — пусто; `go vet ./...` — чисто; `go test ./...` — зелёный.
+- Покрытие тестами: billing (estimate/ensure/reserve/capture/release/refund/insufficient),
+  orchestrator (happy path, идемпотентность, нехватка кредитов), VK webhook
+  (confirmation, неверный secret, message_new создаёт job, дедуп дубля, control-команда без job).
+
+---
+
+## Next step — Step 4
+
+**Provider Gateway и worker-пулы.**
 
 Ожидаемый объём:
 
-- `joborchestrator.CreateJob`: валидация команды, резерв кредитов через `BillingRepository`,
-  создание job и запись outbox-события в одной транзакции, возврат job id.
-- VK Inbound handler: парсинг raw-события, валидация группы/секрета, idempotency по `vk_event:*`,
-  сохранение inbound-события и постановка команды в очередь, быстрый ответ VK.
-- Mock-провайдер под интерфейс `domain.Provider` и каркас worker-пула.
+- Mock-провайдер под интерфейс `domain.Provider` (Submit/Poll/Cancel/Estimate) + mock-тесты.
+- Worker, читающий задачи из очереди: dispatch в provider, сохранение `ProviderTask`,
+  переходы статусов job, capture/refund по результату, запись артефактов.
+- Рефакторинг `BillingRepository` на `Querier`, чтобы job+reserve+outbox шли одной транзакцией.
