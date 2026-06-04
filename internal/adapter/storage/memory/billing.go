@@ -52,8 +52,26 @@ func (r *BillingRepo) CreateAccount(_ context.Context, a *domain.CreditAccount) 
 	}
 	now := time.Now()
 	a.CreatedAt, a.UpdatedAt = now, now
+	// The account always starts at zero; a requested starting balance is granted
+	// through a committed opening ledger entry so balance_cached never diverges
+	// from the ledger sum (invariant #14, audit B1).
+	grant := a.BalanceCached
+	a.BalanceCached = 0
 	r.accounts[a.ID] = *a
 	r.byUser[key] = a.ID
+	if grant != 0 {
+		if err := r.appendLocked(&domain.LedgerEntry{
+			AccountID:      a.ID,
+			Type:           domain.LedgerTopup,
+			Amount:         grant,
+			Status:         domain.LedgerStatusCommitted,
+			IdempotencyKey: "grant:open:" + a.ID.String(),
+			Reason:         "opening balance grant",
+		}); err != nil {
+			return err
+		}
+		a.BalanceCached = r.accounts[a.ID].BalanceCached
+	}
 	return nil
 }
 

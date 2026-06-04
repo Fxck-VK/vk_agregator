@@ -156,6 +156,11 @@ func (c Config) Validate() error {
 		if c.VKConfirmationToken == "" || c.VKConfirmationToken == "dev-confirmation" {
 			missing = append(missing, "VK_CONFIRMATION_TOKEN")
 		}
+		// The Mini App BFF must verify launch-param signatures for real in
+		// production; an empty secret would silently disable the check.
+		if c.VKAppSecret == "" {
+			missing = append(missing, "VK_APP_SECRET")
+		}
 	}
 	if c.usesOpenAI() && c.OpenAIAPIKey == "" {
 		missing = append(missing, "OPENAI_API_KEY")

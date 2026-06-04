@@ -17,7 +17,7 @@ func TestValidateProductionSecrets(t *testing.T) {
 		t.Fatal("expected validation error")
 	}
 	msg := err.Error()
-	for _, want := range []string{"VK_SECRET", "ADMIN_TOKEN", "VK_CONFIRMATION_TOKEN"} {
+	for _, want := range []string{"VK_SECRET", "ADMIN_TOKEN", "VK_CONFIRMATION_TOKEN", "VK_APP_SECRET"} {
 		if !strings.Contains(msg, want) {
 			t.Fatalf("expected %s in validation error, got %q", want, msg)
 		}
