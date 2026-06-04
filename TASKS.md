@@ -110,6 +110,9 @@
 - [x] Production fail-closed при пустом `VK_APP_SECRET`.
 - [x] Ownership: задачи доступны только своему `vk_user_id`.
 - [x] Фронт `web/miniapp` (React + VK Bridge, без VKUI): чат-интерфейс (`chat/`), ч/б `theme.css`, слои api/hooks/ui/chat; `X-Launch-Params` из URL; поллинг задач ≥2с с лимитом; медиа только через `artifactUrl` (UUID).
+- [x] История чатов Mini App: `localStorage` ключ `vk_miniapp_chats_v1`, шторка `ChatList`, `useChats`, заголовок активного чата и «Новый чат».
+- [x] Выбор модальности и модели: сегмент `Текст/Фото/Видео` и dropdown модели в `Composer`, связка с `operation` для `/miniapp/jobs`.
+- [x] Графитовая тема Mini App: тёмная палитра `#1A1A1D`, стили `segment`, `model-select`, `drawer`.
 - [x] Восстановление `web/miniapp/src/**` из `HEAD` после ручной чистки: целевая чат-структура на месте, legacy `panels`/`screens` не импортируются, `tsc` и `build` зелёные.
 - [x] Hardening чат-фронта: cleanup для `bridge.subscribe` через `bridge.unsubscribe`, polling без стартовой задержки и без размножения таймеров, `patchMessage` по id мемоизирован.
 - [ ] Бэкенд: `GET /miniapp/artifacts/{id}` для отдачи текста/медиа в Mini App (фронт готов, endpoint остаётся follow-up).

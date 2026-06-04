@@ -1,13 +1,17 @@
 ﻿// src/chat/Composer.tsx
 import { useRef, useState, type ChangeEvent, type KeyboardEvent } from "react";
-import { MODELS } from "./types";
+import { MODALITIES, modalityById, type ModalityId } from "./types";
 
 export function Composer({
+  modalityId,
+  onModality,
   modelId,
   onModel,
   onSend,
   disabled,
 }: {
+  modalityId: ModalityId;
+  onModality: (id: ModalityId) => void;
   modelId: string;
   onModel: (id: string) => void;
   onSend: (text: string) => void;
@@ -15,7 +19,7 @@ export function Composer({
 }) {
   const [text, setText] = useState("");
   const ref = useRef<HTMLTextAreaElement>(null);
-  const active = MODELS.find((m) => m.id === modelId) ?? MODELS[0];
+  const modality = modalityById(modalityId);
 
   function grow() {
     const el = ref.current;
@@ -46,18 +50,34 @@ export function Composer({
 
   return (
     <div className="composer">
-      <div className="models">
-        {MODELS.map((m) => (
-          <button
-            key={m.id}
-            type="button"
-            className={"model" + (m.id === modelId ? " is-active" : "")}
-            onClick={() => onModel(m.id)}
+      <div className="composer__controls">
+        <div className="segment" role="tablist">
+          {MODALITIES.map((m) => (
+            <button
+              key={m.id}
+              type="button"
+              role="tab"
+              aria-selected={m.id === modalityId}
+              className={"segment__btn" + (m.id === modalityId ? " is-active" : "")}
+              onClick={() => onModality(m.id)}
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
+        <div className="model-select">
+          <select
+            value={modelId}
+            onChange={(e) => onModel(e.target.value)}
+            aria-label="Модель"
           >
-            {m.label}
-          </button>
-        ))}
-        <span className="model__hint">{active.label}</span>
+            {modality.models.map((md) => (
+              <option key={md.id} value={md.id}>
+                {md.label}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
       <div className="composer__row">
         <textarea

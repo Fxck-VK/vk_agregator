@@ -629,3 +629,27 @@ resume hardening.
 - `npm run lint` не настроен в `package.json`; ручной поиск опасных и legacy
   паттернов (`panels`, `screens`, VKUI, `console`, `dangerouslySetInnerHTML`,
   `eval`, `new Function`) — без совпадений.
+
+---
+
+## Step (доп.) — Mini App: история чатов, модальности и графитовая тема
+
+Статус: **завершён**.
+
+### Что сделано
+
+- Добавлена локальная история чатов в `localStorage` (`vk_miniapp_chats_v1`):
+  `src/chat/store.ts`, `src/hooks/useChats.ts`, шторка `src/chat/ChatList.tsx`.
+- `Composer` теперь поддерживает выбор модальности (`Текст`, `Фото`, `Видео`) и
+  dropdown модели для выбранной модальности.
+- `ChatScreen` использует `useChats`, список чатов, заголовок активного чата и
+  действие «Новый чат».
+- `theme.css` переведён на графитовую тёмную тему `#1A1A1D` и дополнен стилями
+  `segment`, `model-select`, `drawer`.
+
+### Проверки
+
+- `npx tsc --noEmit` — без вывода, exit 0.
+- `npm run build` — без ошибок/предупреждений.
+- `npm run lint` отсутствует в `package.json`; ручная проверка legacy/опасных
+  паттернов в `web/miniapp/src` — без проблем.
