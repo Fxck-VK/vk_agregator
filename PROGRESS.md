@@ -569,3 +569,32 @@ resume hardening.
 ### Проверки
 
 - `npx tsc --noEmit` и `npm run build` в `web/miniapp` — без ошибок.
+
+---
+
+## Step (доп.) — Mini App: восстановление чат-фронта из HEAD
+
+Статус: **завершён**.
+
+### Что было сломано
+
+- Рабочее дерево было грязным после ручной чистки: ожидались пропавшие импорты
+  `./hooks/useBridge` и `./chat/ChatScreen`, а legacy `src/panels/` остался на
+  диске пустой директорией. Источник истины — уже закоммиченная чат-архитектура
+  в `feature/vk-miniapp`.
+
+### Что сделано
+
+- `web/miniapp/src/**` восстановлен из `HEAD`: `main.tsx`, `App.tsx`,
+  `api/client.ts`, `hooks/useBridge.ts`, `ui/theme.css`, `ui/ui.tsx`,
+  `chat/types.ts`, `chat/MessageBubble.tsx`, `chat/Composer.tsx`,
+  `chat/ChatScreen.tsx`.
+- Проверено, что в `web/miniapp/src` нет ссылок на `panels`/`screens`, VKUI,
+  `dangerouslySetInnerHTML`, `eval`, `new Function` или `console.log`.
+
+### Проверки
+
+- `npx tsc --noEmit` — без ошибок.
+- `npm run build` — без ошибок.
+- `npm run lint` отсутствует в `package.json`; ручная проверка неиспользуемых
+  legacy-ссылок выполнена поиском.
