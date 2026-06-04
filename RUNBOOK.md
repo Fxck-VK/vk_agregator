@@ -431,12 +431,16 @@ signature verification (HMAC-SHA256).
 
 | Variable | Default | Required |
 |---|---|---|
-| `VK_APP_SECRET` | `""` (skip check in dev) | Production only |
-| `VK_APP_ID` | `""` | Informational |
+| `VK_APP_SECRET` | `""` (skip check in dev) | **Yes in production (fail-closed)** |
+| `VK_APP_ID` | `""` | Used by the tunnel; informational for the BFF |
 | `MINIAPP_LAUNCH_PARAMS_MAX_AGE` | `1h` | Optional |
 
-When `VK_APP_SECRET` is empty the signature check is skipped (dev/mock mode).
-The server still requires `vk_user_id` in the launch params.
+When `VK_APP_SECRET` is set the launch-params HMAC-SHA256 signature is verified
+for real: invalid, missing, or expired (`vk_ts` older than
+`MINIAPP_LAUNCH_PARAMS_MAX_AGE`) params return `401` with no detail, and the dev
+`X-VK-User-ID` bypass is disabled. When `VK_APP_SECRET` is empty the signature
+check is skipped (dev/mock convenience) but `vk_user_id` is still required. In
+**production** an empty `VK_APP_SECRET` fails startup (fail-closed).
 
 ### Local development without real VK
 
@@ -466,6 +470,29 @@ npm run dev
 ```
 
 The Vite proxy routes `/miniapp/*` to `http://localhost:8080`.
+
+### Open the Mini App inside VK via VK Tunnel
+
+VK Tunnel exposes the local Vite dev server over HTTPS so the app can run inside
+the real VK webview without deploying.
+
+```powershell
+# 1. API + worker running (mock) and the Vite dev server up (npm run dev).
+# 2. In web/miniapp, with VK_APP_ID exported from .env.ps1:
+. .\.env.ps1
+cd web\miniapp
+npm run tunnel
+```
+
+`npm run tunnel` requires a **one-time interactive VK OAuth**: it prints an
+`oauth.vk.ru` link — open it, authorize, then press ENTER in the terminal. The
+tunnel then prints a stable `https://...tunnel.vk-apps.com` URL.
+
+Paste that URL into your app at **dev.vk.com → your app → Settings → Mini Apps
+→ "Адрес сервиса" / iframe URL** (App URL). Open the app from VK; the SPA reads
+the launch params VK appends to the URL and the BFF verifies the signature.
+
+> Note: the tunnel's OAuth step cannot be automated; it needs a human VK login.
 
 ### Production
 

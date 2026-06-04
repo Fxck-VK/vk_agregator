@@ -468,3 +468,48 @@
 См. актуальный backlog в `TASKS.md`; ближайший фокус — live smoke с реальными
 ключами, второй реальный provider для fallback, video media pipeline и worker
 resume hardening.
+
+---
+
+## Шаг 10 — VK Mini App: BFF, фронт, монохромный UI, фикс биллинга
+
+### Что сделано
+
+- **BFF `/miniapp/*`** в `cmd/api` (адаптер `internal/adapter/inbound/miniapp`):
+  `POST /miniapp/jobs`, `GET /miniapp/jobs`, `GET /miniapp/jobs/{id}`,
+  `GET /miniapp/balance`. Хендлеры не вызывают провайдеров — только
+  `joborchestrator` + существующий биллинг-путь (reserve/capture поверх ledger).
+  Ownership: задачи доступны только своему `vk_user_id` (иначе 404).
+- **Проверка подписи launch-параметров** (`sign.go`, HMAC-SHA256 по спецификации
+  VK). При заданном `VK_APP_SECRET` подпись проверяется по-настоящему:
+  невалидная/просроченная/без подписи → `401` без деталей, dev-обход
+  (`X-VK-User-ID`) отключается. В production пустой `VK_APP_SECRET` =
+  fail-closed на старте.
+- **Фронт `web/miniapp`** (React 18 + VKUI 8 + VK Bridge): экраны список задач,
+  создание (текст/фото/видео), детали с авто-обновлением, баланс. Монохромный
+  ч/б стиль через переопределение токенов VKUI (`theme.css`); дешёвые/цветные
+  эмодзи убраны, иконки — лаконичные моно из `@vkontakte/icons`.
+- **VK Tunnel** (`@vkontakte/vk-tunnel`) + npm-скрипт `tunnel` для запуска
+  локального фронта внутри VK.
+- **Фикс биллинга (AUDIT B1a):** стартовый грант 1000 теперь создаётся
+  committed-проводкой в ledger атомарно с созданием аккаунта; миграция
+  `000004` бэкоффилит открывающие проводки для существующих аккаунтов. Воркер
+  больше не пишет `billing balance mismatch`.
+
+### Проверки
+
+- `go build ./...`, `go test ./...` — зелёные; `tsc --noEmit` и
+  `npm run build` в `web/miniapp` — без ошибок.
+- Live (mock): `/health`=200; create→list→detail→balance прошёл через воркер
+  (`queued → succeeded`, артефакт создан, баланс 1000→999).
+- Подпись: с заданным секретом invalid/missing/dev-bypass → `401`;
+  валидный accept-путь покрыт `TestHandler_ValidSign`.
+- Биллинг: post-migration реконсиляция — 0 mismatch; у нового аккаунта есть
+  запись `opening balance grant`.
+
+### Текущее ограничение
+
+- VK Tunnel требует интерактивной OAuth-авторизации в браузере, поэтому https-URL
+  туннеля выдаётся только после ручного логина (`npm run tunnel` → открыть
+  ссылку → подтвердить → Enter). Этот URL затем вставляется в настройки
+  приложения на dev.vk.com.

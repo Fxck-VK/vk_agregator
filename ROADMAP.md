@@ -53,6 +53,14 @@ Current release: **v0.1.3 / Beta integrations foundation**.
   creation for generated photo/video artifacts (AUDIT V1). ✅ done in v0.1.3
 - [x] VK `/start` product menu with inline keyboard and safe control buttons
   (no empty billable jobs). ✅ done after v0.1.3 foundation
+- [x] VK Mini App: BFF `/miniapp/*` (create/list/get job + balance) with real
+  launch-params signature verification, ownership checks, and a monochrome
+  VKUI + VK Bridge SPA in `web/miniapp` (Step 10). ✅
+- [x] Billing opening-grant fix: starting balance recorded as a committed ledger
+  entry; backfill migration `000004`; reconciliation mismatch eliminated
+  (AUDIT B1a). ✅
+- Paste the VK Tunnel https URL into the dev.vk.com app settings to open the
+  Mini App inside VK (requires one-time manual VK OAuth for the tunnel).
 - Production welcome banner attachment for `/start` via `VK_WELCOME_ATTACHMENT`
   or an upload flow.
 - Live smoke with real `OPENAI_API_KEY` and `VK_ACCESS_TOKEN` on dev accounts.

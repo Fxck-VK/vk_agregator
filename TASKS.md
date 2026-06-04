@@ -103,6 +103,19 @@
 
 ---
 
+## VK Mini App (Step 10)
+
+- [x] BFF `/miniapp/*` в `cmd/api` (`internal/adapter/inbound/miniapp`): create/list/get job + balance, переиспользуют `joborchestrator` и существующий биллинг-путь, провайдеры не вызываются.
+- [x] Проверка подписи launch-параметров (HMAC-SHA256 по VK-спеке): при заданном `VK_APP_SECRET` подпись валидируется реально, invalid/expired/missing → 401 без деталей, dev-обход отключается; `vk_user_id` только из проверенных параметров.
+- [x] Production fail-closed при пустом `VK_APP_SECRET`.
+- [x] Ownership: задачи доступны только своему `vk_user_id`.
+- [x] Фронт `web/miniapp` (React + VKUI + VK Bridge): монохромный ч/б UI без дешёвых эмодзи, моно-иконки; экраны список/создание/детали/баланс.
+- [x] VK Tunnel (`@vkontakte/vk-tunnel`) + npm-скрипт `tunnel` для запуска внутри VK.
+- [x] Фикс биллинга (AUDIT B1a): стартовый грант 1000 создаётся committed-проводкой в ledger атомарно; миграция `000004` бэкоффилит открывающие проводки; mismatch устранён.
+- [ ] Получить https-URL VK Tunnel (требует ручной OAuth-авторизации в браузере) и вписать его в настройки приложения на dev.vk.com.
+
+---
+
 ## Current Gaps / Known Follow-Ups
 
 ### Integration validation / next providers
