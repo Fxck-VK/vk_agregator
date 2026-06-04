@@ -20,6 +20,29 @@ type SendResult struct {
 	Duplicate bool
 }
 
+// Message is a full VK outbound message. It is used for product/control
+// responses that need a keyboard or a pre-uploaded attachment.
+type Message struct {
+	Text       string
+	Attachment string
+	Keyboard   *Keyboard
+}
+
+// Keyboard is the subset of VK bot keyboard JSON the product menu needs.
+type Keyboard struct {
+	OneTime bool
+	Inline  bool
+	Buttons [][]KeyboardButton
+}
+
+// KeyboardButton is a VK text button. Payload must be a JSON string because VK
+// sends it back as message.payload on button clicks.
+type KeyboardButton struct {
+	Label   string
+	Payload string
+	Color   string
+}
+
 // Client sends messages and media to VK conversations. Implementations must
 // pass random_id through to messages.send so retries are deduplicated.
 type Client interface {
@@ -31,6 +54,18 @@ type Client interface {
 	// SendVideo sends a video (referenced by a VK attachment string or URL) with
 	// an optional caption.
 	SendVideo(ctx context.Context, peerID, randomID int64, attachment, caption string) (SendResult, error)
+}
+
+// ControlClient sends non-job control/product messages such as the /start menu.
+type ControlClient interface {
+	SendMessage(ctx context.Context, peerID, randomID int64, msg Message) (SendResult, error)
+}
+
+// MediaUploader uploads raw artifact bytes to VK and returns the canonical
+// attachment string accepted by messages.send, e.g. photo123_456_accesskey.
+type MediaUploader interface {
+	UploadPhoto(ctx context.Context, peerID int64, filename string, data []byte, mimeType string) (string, error)
+	UploadVideo(ctx context.Context, peerID int64, filename string, data []byte, mimeType string) (string, error)
 }
 
 // DeterministicRandomID derives a stable, non-negative random_id from a key

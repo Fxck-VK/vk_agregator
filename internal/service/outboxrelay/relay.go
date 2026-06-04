@@ -114,6 +114,7 @@ type queuedPayload struct {
 	Operation     domain.OperationType `json:"operation"`
 	Modality      domain.Modality      `json:"modality"`
 	CorrelationID string               `json:"correlation_id"`
+	Traceparent   string               `json:"traceparent"`
 }
 
 // publish turns a single outbox event into a queue task. Non-enqueue events are
@@ -131,5 +132,6 @@ func (r *Relay) publish(ctx context.Context, e *domain.OutboxEvent) error {
 		Operation:     p.Operation,
 		Modality:      p.Modality,
 		CorrelationID: p.CorrelationID,
+		Traceparent:   p.Traceparent,
 	})
 }

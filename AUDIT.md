@@ -1,17 +1,20 @@
-# Production Readiness Audit — v0.1.2
+# Production Readiness Audit — v0.1.3
 
 Scope: current code, `docs/ARCHITECTURE.md`, `PROGRESS.md`, `TASKS.md`.
-Status: MVP+ (modular monolith; mock provider + mock VK delivery by default,
-production OpenAI/VK adapters available behind config).
+Status: MVP+ (modular monolith; mock provider + mock VK delivery by default).
+OpenAI text/image/video generation, provider routing/fallback/circuit breaker,
+VK `messages.send` plus raw photo/video upload, OpenAI moderation and OpenAI
+text/image artifact scanning are available behind config. VK `/start` product
+menu with inline keyboard is implemented through the VK delivery adapter. Real
+calls remain credential-bound and need live smoke before external users.
 
-> **Final hardening update (v0.1.2):** the remaining no-credential high items are
-> now **FIXED** — A2 (outbox relay) and B1 (atomic reserve+job+outbox). The
-> credential-bound high items P1 (provider) and V1 (VK delivery) now ship
-> production-ready, config-selected adapters (`PROVIDER=openai`,
-> `VK_DELIVERY_MODE=real`) with unit tests; they require real keys to run, so
-> they are validated by unit tests only. All four medium items (SC1, D1, ST1,
-> C1) are **FIXED**. Earlier post-release hardening fixed both criticals (A1,
-> R1) and high items S1, S2, S3, O1, Q1, plus medium E1.
+> **Final integration update (v0.1.3):** P1 (provider) and V1 (VK delivery) are
+> now **FIXED in code** with unit tests. Full beta still needs live smoke with
+> real OpenAI/VK credentials, a production welcome banner attachment, a second
+> real provider for non-mock fallback, and the Phase 3 video media pipeline.
+> Earlier hardening fixed both criticals
+> (A1, R1), all no-credential high items (S1, S2, S3, O1, Q1, A2, B1), and all
+> medium items (E1, SC1, D1, ST1, C1).
 
 Severity: **critical** (blocks prod / safety / data loss), **high** (must fix before real traffic), **medium** (fix during beta), **low** (hardening / hygiene).
 
@@ -80,18 +83,19 @@ Severity: **critical** (blocks prod / safety / data loss), **high** (must fix be
 - Recommendation: Track attempts on the job (or per stream entry), enforce a hard cap across all failure phases, and route exhausted entries to a dead-letter stream.
 - **Fix:** Tasks now carry an `Attempt` counter; the retry budget spans every phase as `max(provider-task count, task.Attempt+1)`. Re-enqueues apply exponential backoff; once the budget is exhausted (or the error is non-retryable) the task is routed to `stream:jobs:dlq` and the job goes `failed_terminal`. Delivery uses the same budget on `delivery.attempt_no`. Validated: `mock_provider_error` → `failed_terminal`, 1 DLQ entry, no charge, no loop.
 
-**R2 — No graceful drain on shutdown — severity: low**
+**R2 — No graceful drain on shutdown — severity: low — ✅ FIXED**
 - Description: Worker shutdown cancels context; in-flight tasks rely on at-least-once redelivery rather than draining.
 - Impact: More redeliveries/duplicate work on deploys (idempotency mitigates correctness).
 - Recommendation: Add a drain phase (stop reading, finish in-flight, then exit).
+- **Fix:** `cmd/worker` now uses separate read and handler contexts. Shutdown stops Redis reads/outbox/maintenance first, waits for in-flight handlers to finish, and only cancels handlers after `WORKER_SHUTDOWN_GRACE`.
 
 ## 5. Observability
 
-**O1 — No metrics or tracing — severity: high — ✅ FIXED (metrics; tracing deferred)**
+**O1 — No metrics or tracing — severity: high — ✅ FIXED**
 - Description: `platform/metrics` and `platform/tracing` are empty; only structured logs exist.
 - Impact: No queue-depth/latency/error-rate/spend visibility; blind operation; no alerting.
 - Recommendation: Add Prometheus metrics (queue depth, job latency by modality, provider error rate, delivery failures, billing mismatches) and OpenTelemetry tracing across VK→job→provider→delivery.
-- **Fix:** Added `platform/metrics` (Prometheus) with counters for webhooks, terminal jobs by status, moderation decisions, DLQ routes (by phase), deliveries, and HTTP request count/latency, exposed at `GET /metrics` plus Go/process collectors. OpenTelemetry tracing remains deferred to Beta.
+- **Fix:** Added `platform/metrics` (Prometheus) with counters for webhooks, terminal jobs by status, moderation decisions, DLQ routes (by phase), deliveries, HTTP request count/latency, maintenance cleanup, stream trimming and billing mismatches, exposed at `GET /metrics` plus Go/process collectors. Added `platform/tracing` with OpenTelemetry trace context propagation: VK intake starts the trace, outbox/Redis carries `traceparent`, and worker/provider/artifact/moderation/delivery phases add child spans.
 
 ## 6. Billing Correctness
 
@@ -101,9 +105,10 @@ Severity: **critical** (blocks prod / safety / data loss), **high** (must fix be
 - Recommendation: Refactor `BillingRepository` onto `Querier` and perform reserve+job+outbox in one transaction.
 - **Fix:** `BillingRepository` now runs either standalone (own tx) or transaction-bound (`NewBillingRepositoryTx`) over the shared `Querier`. `uow.Repositories` exposes `Billing`, and the orchestrator performs job create + credit reserve + `created`/`queued` outbox events in a single transaction (`billingservice.ReserveWith`). Insufficient credits park the job in `awaiting_payment` within the same transaction. No compensation path remains. Validated: happy-path reserve+capture, insufficient-credits parking, and rejection release all correct.
 
-**B2 — Capture is idempotent, ledger append-only — severity: low**
+**B2 — Capture is idempotent, ledger append-only — severity: low — ✅ FIXED**
 - Description: `CaptureForJob` is idempotent; reservations and entries are append-only. Good.
 - Recommendation: Add a periodic balance-vs-ledger reconciliation job + `billing_mismatch` metric.
+- **Fix:** Added worker-side maintenance reconciliation. It compares `credit_accounts.balance_cached` with committed `ledger_entries` projection, logs mismatches without mutating balances, and exports `vkagg_billing_mismatches`.
 
 ## 7. Queue Reliability
 
@@ -118,19 +123,21 @@ Severity: **critical** (blocks prod / safety / data loss), **high** (must fix be
 
 ## 8. Provider Abstraction
 
-**P1 — Only mock provider implemented — severity: high — ✅ ADAPTER READY (key required to run)**
-- Description: `openai`/`google`/`kling` adapters are empty; no circuit breaker, no provider router, no fallback.
-- Impact: Not functional for real generation; no degradation handling.
-- Recommendation: Implement real adapters behind the existing `Provider` interface; add circuit breaker + provider health + explicit fallback (per ARCHITECTURE §6, §25).
-- **Fix:** Added a production-ready `adapter/provider/openai` adapter (image generation via the OpenAI Images API) implementing `domain.Provider`, with normalized error-class mapping (rate-limit/auth/invalid/overloaded/internal), config (`PROVIDER`, `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_IMAGE_MODEL`), fail-closed `Config.Validate()` when `PROVIDER=openai` without a key, and httptest unit tests. Selected via `PROVIDER=openai`; default remains mock. Real calls require a key, so it is validated by unit tests only. Circuit breaker/router/fallback and text/video adapters remain Beta.
+**P1 — Real provider coverage incomplete — severity: high — ✅ FIXED (credential-bound live smoke pending)**
+- Description: default runtime still uses the mock provider, but real OpenAI text/image/video adapters and provider routing now exist behind opt-in config.
+- Impact: The code path can run real OpenAI text/image/video jobs and route/fallback across configured providers. Real calls require credentials and may incur provider cost, so live validation remains an operational step.
+- Recommendation: Run a live smoke with `OPENAI_API_KEY`; add a second real provider later for non-mock fallback.
+- **Fix:** `adapter/provider/openai` now implements text via `/responses`, image via `/images/generations`, async video via `/videos` + poll/content download, and normalized provider errors. `worker.Registry` now routes by capabilities, estimated cost, observed latency and circuit-breaker health, and `PROVIDER_CHAIN=openai,mock` enables explicit fallback. Unit tests cover OpenAI text/image/video and router fallback.
+- **Remaining:** Google/Gemini/Kling provider adapters and live credential smoke remain Beta/Phase 3 work.
 
 ## 9. VK Integration
 
-**V1 — Delivery client is a mock — severity: high — ✅ ADAPTER READY (token required to run)**
-- Description: `vkdelivery.MockClient` is wired; no real `messages.send` / photo/video upload servers.
-- Impact: No real delivery to VK.
-- Recommendation: Implement the real VK client (upload servers + `messages.send` with `random_id`); keep deterministic random_id for dedup.
-- **Fix:** Added `vkdelivery.HTTPClient` (real `messages.send` with `peer_id`/`random_id`/`message`/`attachment`, VK error-envelope handling), config (`VK_DELIVERY_MODE`, `VK_ACCESS_TOKEN`, `VK_API_VERSION`, `VK_API_BASE_URL`), fail-closed validation when `VK_DELIVERY_MODE=real` without a token, and httptest unit tests. Deterministic `random_id` preserved for dedup. Selected via `VK_DELIVERY_MODE=real`; default remains mock. Photo/video forward a VK attachment string; raw-byte upload to VK upload servers is documented as a follow-up.
+**V1 — Real VK media delivery incomplete — severity: high — ✅ FIXED (credential-bound live smoke pending)**
+- Description: default runtime still uses `vkdelivery.MockClient`, but the real VK client now supports both `messages.send` and raw photo/video upload flows.
+- Impact: Generated media artifacts can be loaded from object storage, uploaded to VK upload servers and delivered as canonical VK `photo...` / `video...` attachments.
+- Recommendation: Run a live smoke with `VK_ACCESS_TOKEN` against a dev group/conversation.
+- **Fix:** `vkdelivery.HTTPClient` implements `MediaUploader`: photo uses `photos.getMessagesUploadServer` → upload → `photos.saveMessagesPhoto`; video uses `video.save` → upload. Delivery worker now uploads raw artifact bytes before sending media. Deterministic `random_id` remains the delivery dedup key. Unit tests cover photo/video upload flows and worker-level upload-to-send behavior.
+- **Remaining:** Video transcode/probe/VK-ready variants remain Phase 3 media-pipeline work.
 
 **V2 — Confirmation/secret handled — severity: low**
 - Description: Confirmation token + optional secret validated; fast `ok` response. Good (see S1 for default).
@@ -144,9 +151,10 @@ Severity: **critical** (blocks prod / safety / data loss), **high** (must fix be
 
 ## 11. Idempotency
 
-**I1 — Broad coverage — severity: low**
+**I1 — Broad coverage — severity: low — ✅ FIXED**
 - Description: Idempotency keys for inbound events, commands, jobs, deliveries (deterministic random_id), and captures. Verified no duplicate job/charge/send in validation.
 - Recommendation: Add TTL/cleanup for `idempotency_keys`; document key scopes.
+- **Fix:** Worker maintenance deletes expired `idempotency_keys` on `MAINTENANCE_INTERVAL`.
 
 ## 12. Database Design
 
@@ -187,22 +195,23 @@ Severity: **critical** (blocks prod / safety / data loss), **high** (must fix be
 
 ## Summary
 
-| Severity | Total | Fixed | Remaining | Remaining IDs |
-|----------|-------|-------|-----------|---------------|
-| Critical | 2  | 2 | 0 | — |
-| High     | 9  | 9 | 0 | — (P1, V1 adapters ready; require external keys to run) |
-| Medium   | 5  | 5 | 0 | — |
-| Low      | 10 | 0 | 10 | A3, S4, SC2, R2, B2, Q2, V2, RC1, I1, D2 |
+| Severity | Total | Fixed | Partial | Remaining | Remaining IDs |
+|----------|-------|-------|---------|-----------|---------------|
+| Critical | 2  | 2 | 0 | 0 | — |
+| High     | 9  | 9 | 0 | 0 | — |
+| Medium   | 5  | 5 | 0 | 0 | — |
+| Low      | 10 | 3 | 0 | 7 | A3, S4, SC2, Q2, V2, RC1, D2 |
 
-Fixed across hardening phases: **A1, R1** (critical); **S1, S2, S3, O1, Q1, A2, B1, P1, V1** (high); **E1, SC1, D1, ST1, C1** (medium).
+Fixed across hardening/integration phases: **A1, R1** (critical); **S1, S2,
+S3, O1, Q1, A2, B1, P1, V1** (high); **E1, SC1, D1, ST1, C1** (medium);
+**R2, B2, I1** (low).
 
-**Verdict:** All critical, high, and medium audit items are now addressed. Both
-criticals (moderation gate, DLQ/retry budget) and all no-credential highs
-(outbox relay A2, atomic billing B1, security S1–S3, observability O1, DLQ Q1)
-are fixed and validated end-to-end. The credential-bound highs (P1 OpenAI
-provider, V1 real VK delivery) ship production-ready, config-selected adapters
-with unit tests; they need real keys to exercise against live APIs. The default
-runtime remains mock-backed and is suitable for a controlled/internal launch.
-Remaining work is low-severity hardening/hygiene plus operational items (HA
-infra, OpenTelemetry tracing, circuit breaker, admin DLQ replay) tracked in
-`ROADMAP.md`.
+**Verdict:** All critical, high and medium audit items are addressed in code.
+No-credential hardening is validated end-to-end. Credential-bound integrations
+now have unit-tested adapters and worker wiring for OpenAI text/image/video,
+provider routing/fallback/circuit breaker, VK `messages.send` plus media upload,
+VK `/start` product menu, OpenAI moderation and text/image artifact scanning.
+The default runtime remains mock-backed; before external users, run a live smoke
+with real OpenAI/VK credentials, attach a production welcome banner if needed,
+and add the remaining Phase 3 media pipeline for video scan/transcode/VK-ready
+variants. Remaining work is tracked in `TASKS.md` and `ROADMAP.md`.

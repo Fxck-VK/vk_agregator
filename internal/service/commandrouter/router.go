@@ -45,6 +45,25 @@ func New() *Router {
 // as a free-form text generation request.
 func (r *Router) Parse(rawText string) Result {
 	trimmed := strings.TrimSpace(rawText)
+	normalized := strings.ToLower(strings.Join(strings.Fields(trimmed), " "))
+	switch normalized {
+	case "/start", "start", "старт", "🚀 старт", "▶️ старт", "начать":
+		return Result{Type: domain.CommandStart}
+	case "показать меню", "меню", "menu":
+		return Result{Type: domain.CommandShowMenu}
+	case "🎬 создать видео", "создать видео":
+		return Result{Type: domain.CommandMenuVideo}
+	case "🖼️ создать фото", "🖼 создать фото", "создать фото", "создать изображение":
+		return Result{Type: domain.CommandMenuImage}
+	case "💬 спросить у gpt", "спросить у gpt", "задать вопрос":
+		return Result{Type: domain.CommandMenuText}
+	case "🎁 студентам и школьникам", "студентам и школьникам":
+		return Result{Type: domain.CommandMenuStudents}
+	case "👤 мой аккаунт", "мой аккаунт", "аккаунт":
+		return Result{Type: domain.CommandAccount}
+	case "💰 пополнить баланс", "пополнить баланс":
+		return Result{Type: domain.CommandTopUp}
+	}
 	token, rest := splitFirstToken(trimmed)
 
 	switch strings.ToLower(token) {

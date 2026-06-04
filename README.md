@@ -11,6 +11,44 @@ moves through an explicit state machine. The architecture source of truth is
 [`AGENTS.md`](AGENTS.md); the build log is in [`PROGRESS.md`](PROGRESS.md) and
 the backlog in [`TASKS.md`](TASKS.md).
 
+## Current status
+
+Current release: **v0.1.3 / Beta integrations foundation**.
+
+The default local runtime is fully runnable with:
+
+- PostgreSQL, Redis and MinIO from `docker-compose.yml`;
+- mock AI provider;
+- mock VK delivery client;
+- in-memory E2E tests for the full VK -> Job -> Provider -> Artifact -> Delivery -> Capture flow.
+
+Production-shaped hardening already exists: transactional outbox relay, atomic
+job+reserve+outbox, output moderation, retry budget, DLQ, SSRF protection,
+webhook rate limiting, Prometheus metrics, OpenTelemetry trace propagation,
+migration checksums, S3 retention, signed artifact URL support, maintenance
+cleanup and billing reconciliation metrics.
+API metrics are served at `GET /metrics`; worker-local metrics are served at
+`WORKER_METRICS_ADDR` (default `:9090`).
+
+Real integrations are implemented at adapter level and remain **opt-in**:
+
+- `PROVIDER=openai` enables OpenAI text (`Responses`), image (`Images`) and
+  async video (`Videos`) generation.
+- `PROVIDER_CHAIN=openai,mock` enables the provider router with
+  health/circuit-breaker, fallback, cost and observed-latency aware selection.
+- `VK_DELIVERY_MODE=real` enables VK `messages.send` plus raw photo/video
+  artifact upload to VK upload servers before send.
+- `cmd/api` can send the VK `/start` Super GPT menu and inline keyboard through
+  the VK delivery adapter when `VK_ACCESS_TOKEN` is configured. The optional
+  `VK_WELCOME_ATTACHMENT` env attaches a pre-uploaded VK banner.
+- `MODERATION_PROVIDER=openai` enables OpenAI output moderation.
+- `ARTIFACT_SCANNER=openai` enables OpenAI text/image artifact scanning before
+  storage. Video scanning/transcoding is still part of the future media
+  pipeline.
+
+Credential-bound live smoke with real OpenAI/VK accounts is still required
+before calling this production-ready. The default runtime remains mock-backed.
+
 ## End-to-end flow
 
 ```
@@ -52,6 +90,7 @@ internal/
     inbound/admin/   read-only admin HTTP API
     delivery/vk/     outbound VK client (+ mock)
     provider/mock/   mock AI provider
+    provider/openai/ OpenAI generation/moderation/scanning adapters
     queue/redis/     Redis Streams publisher/consumer (consumer groups)
     storage/postgres pgx repositories
     storage/s3/      S3/MinIO object store
@@ -101,6 +140,35 @@ curl localhost:8080/health   # {"status":"ok","checks":{"postgres":"ok","redis":
 
 See `TESTING.md` for full runtime validation, curl examples and expected
 results.
+
+Real adapter modes are opt-in:
+
+```bash
+# OpenAI text/image/video generation; requires a real key.
+PROVIDER=openai OPENAI_API_KEY=... go run ./cmd/worker
+
+# OpenAI primary with mock fallback through the provider router.
+PROVIDER_CHAIN=openai,mock OPENAI_API_KEY=... go run ./cmd/worker
+
+# Real VK messages.send + photo/video upload; requires a real token.
+VK_DELIVERY_MODE=real VK_ACCESS_TOKEN=... go run ./cmd/worker
+
+# Real VK /start menu replies from the API; requires a real token.
+VK_ACCESS_TOKEN=... go run ./cmd/api
+
+# Real output moderation and text/image artifact scanner.
+MODERATION_PROVIDER=openai ARTIFACT_SCANNER=openai OPENAI_API_KEY=... go run ./cmd/worker
+```
+
+For production, set `APP_ENV=production` and configure non-default
+`VK_SECRET`, `ADMIN_TOKEN` and `VK_CONFIRMATION_TOKEN`. Both `cmd/api` and
+`cmd/worker` run fail-closed config validation; `PROVIDER=openai` requires
+`OPENAI_API_KEY`, and `VK_DELIVERY_MODE=real` requires `VK_ACCESS_TOKEN` in any
+environment.
+`PROVIDER_CHAIN`, `MODERATION_PROVIDER=openai` and `ARTIFACT_SCANNER=openai`
+also require `OPENAI_API_KEY`.
+For a VK welcome banner, set `VK_WELCOME_ATTACHMENT` to a pre-uploaded
+attachment string such as `photo-239332376_123_accesskey`.
 
 ## Admin API
 
@@ -177,6 +245,11 @@ then become `failed_terminal`. Inspect `error_code` on the job DTO.
 It shouldn't: deliveries use a deterministic `random_id` derived from the
 delivery idempotency key, and VK deduplicates repeats. If you see duplicates,
 verify the delivery worker is not generating a fresh `random_id` per attempt.
+
+**`/start` sends text but no keyboard.**
+Enable bot features in the VK community message settings. VK returns
+`error_code=912` when keyboards are disabled; the API falls back to welcome text
+without keyboard so the callback still succeeds.
 
 **Provider was called outside a worker.**
 That violates a core invariant. Providers must only be invoked from

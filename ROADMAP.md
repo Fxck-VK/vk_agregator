@@ -1,13 +1,20 @@
 # Roadmap — VK AI Aggregator
 
 Phased plan aligned with `docs/ARCHITECTURE.md` (§37) and the `AUDIT.md` findings.
-Current release: **v0.1.0 + post-release hardening (end of Phase 1 — MVP)**.
+Current release: **v0.1.3 / Beta integrations foundation**.
 
 > Post-release hardening landed several Phase 2 items early: output moderation
-> (A1), DLQ + retry budget (R1/Q1/E1), fail-closed secrets (S1), SSRF allowlist
-> (S2), webhook rate limiting (S3) and Prometheus metrics (O1). Remaining Phase 2
-> high items: real provider adapters (P1), real VK delivery (V1), outbox relay
-> (A2), atomic billing (B1), and OpenTelemetry tracing.
+> (A1), DLQ + retry budget (R1/Q1/E1), fail-closed API startup (S1), SSRF
+> protection (S2), webhook rate limiting (S3), Prometheus metrics (O1),
+> outbox relay (A2), atomic billing (B1), migration checksums (D1), storage
+> retention/signed URLs/scanner hook (ST1), and configurable pricing/cost cap
+> (C1), OpenTelemetry trace propagation, worker fail-closed validation,
+> graceful drain, maintenance cleanup and billing reconciliation metric.
+> v0.1.3 also landed OpenAI text/image/video adapters, provider
+> routing/fallback/circuit breaker, VK raw photo/video upload, VK `/start`
+> product menu with inline keyboard, OpenAI moderation, and OpenAI text/image
+> artifact scanning. Live smoke with real credentials remains required before
+> external users.
 
 ---
 
@@ -36,22 +43,37 @@ Current release: **v0.1.0 + post-release hardening (end of Phase 1 — MVP)**.
 ## Phase 2 — Beta
 
 **Goals**
-- Real text/image generation, safety, and operational visibility; make it functional for limited real users.
+- Real text/image/video generation, real VK delivery for text and media, safety,
+  and operational visibility; make it functional for limited real users.
 
 **Required tasks**
-- Real provider adapters: OpenAI + Google/Gemini (image) behind `Provider` interface (AUDIT P1). *(needs external credentials)*
-- Real VK delivery client: upload servers + `messages.send` (AUDIT V1). *(needs external credentials)*
-- Outbox relay (drain → publish → mark) feeding the queue (AUDIT A2).
-- Atomic reserve+job+outbox via `Querier` (AUDIT B1).
-- OpenTelemetry tracing across VK→job→provider→delivery (remainder of AUDIT O1).
+- [x] Real OpenAI provider adapters for text/image/video plus provider
+  router/fallback/circuit breaker (AUDIT P1). ✅ done in v0.1.3
+- [x] Real VK delivery client: `messages.send`, upload servers and VK attachment
+  creation for generated photo/video artifacts (AUDIT V1). ✅ done in v0.1.3
+- [x] VK `/start` product menu with inline keyboard and safe control buttons
+  (no empty billable jobs). ✅ done after v0.1.3 foundation
+- Production welcome banner attachment for `/start` via `VK_WELCOME_ATTACHMENT`
+  or an upload flow.
+- Live smoke with real `OPENAI_API_KEY` and `VK_ACCESS_TOKEN` on dev accounts.
+- Add a second real provider for non-mock fallback (Google/Gemini or Kling).
+- [x] Outbox relay (drain → publish → mark) feeding the queue (AUDIT A2). ✅ done in v0.1.2
+- [x] Atomic reserve+job+outbox via transaction-bound `Querier` (AUDIT B1). ✅ done in v0.1.2
 - Admin DLQ inspection/replay tooling; shared/Redis rate limiter for multi-instance (remainder of Q1, S3).
+- [x] OpenAI output moderation provider and text/image artifact scanner. ✅ done in v0.1.3
+- Video artifact scanning/probe/transcode and VK-ready variants remain Phase 3 media pipeline.
+- [x] OpenTelemetry trace propagation across VK→job→provider→artifact→delivery. ✅ done in hardening follow-up
+- [x] `cmd/worker` fail-closed config validation, graceful drain, cleanup/retention and billing reconciliation metric. ✅ done in hardening follow-up
 - [x] Output moderation stage before delivery (AUDIT A1, invariant #15). ✅ done in hardening
 - [x] Prometheus metrics + `/metrics` (AUDIT O1, metrics part). ✅ done in hardening
 - [x] Hard retry budget per phase + dead-letter stream (AUDIT R1, Q1, E1). ✅ done in hardening
 - [x] Fail-closed secrets/admin auth, SSRF allowlist, per-IP webhook rate limits (AUDIT S1, S2, S3). ✅ done in hardening
 
 **Done criteria**
-- Real text + image jobs delivered to VK; no infinite retries (DLQ proven); metrics/alerts live; moderation blocks unsafe output; secrets enforced in non-dev.
+- Real text + image jobs delivered to VK; generated media is uploaded as proper
+  VK attachments; `/start` menu works in VK with keyboard; no infinite retries
+  (DLQ proven); metrics/alerts live; moderation blocks unsafe output; secrets
+  enforced in non-dev for both API and worker; live smoke is recorded.
 
 ---
 
@@ -62,11 +84,12 @@ Current release: **v0.1.0 + post-release hardening (end of Phase 1 — MVP)**.
 
 **Required tasks**
 - Kling (and one fallback) video provider; async polling/webhook receiver (`cmd/provider-webhook`).
-- Media pipeline: download, scan, ffmpeg transcode, VK video/doc variants.
+- Media pipeline: video scan/probe, ffmpeg transcode, VK video/doc variants.
 - Pricing service (pricing rules) + per-user/provider/global spend caps + budget alerts (AUDIT C1).
-- Storage lifecycle/retention + signed-URL delivery + malware scan (AUDIT ST1).
+- Storage lifecycle/retention + signed-URL delivery + malware scan beyond
+  OpenAI text/image safety checks (AUDIT ST1).
 - Transactional migration runner + checksums (AUDIT D1); HA Postgres/Redis (AUDIT SC1).
-- Graceful worker drain; balance↔ledger reconciliation job (AUDIT R2, B2).
+- Worker resume hardening for `provider_task=succeeded` but artifact/result not yet restored.
 - CI/CD, staging environment, backup/restore runbook drills.
 
 **Done criteria**
@@ -80,7 +103,8 @@ Current release: **v0.1.0 + post-release hardening (end of Phase 1 — MVP)**.
 - Multi-provider intelligence, elasticity, and analytics for growth.
 
 **Required tasks**
-- Provider router with health/circuit breaker, explicit fallback, latency/cost-aware selection (ARCHITECTURE §6, §25).
+- Multi-real-provider router tuning with health/circuit breaker, explicit
+  fallback, latency/cost-aware selection (ARCHITECTURE §6, §25).
 - Workflow engine (Temporal) for multi-stage flows (image→video→audio→mux).
 - Event log (Kafka/Redpanda) + ClickHouse analytics + cost reporting.
 - Kubernetes + Helm; autoscaling by queue depth and provider backpressure (per-pool scaling, AUDIT SC2).

@@ -57,24 +57,65 @@ no `.env` is required for local runs. Override via environment when needed:
 | `RETRY_BASE_DELAY` / `RETRY_MAX_DELAY` | `500ms` / `30s` | Exponential backoff bounds |
 | `MODERATION_EXTRA_TERMS` | `` | Comma-separated extra blocklist terms |
 | `WEBHOOK_RATE_LIMIT_RPS` / `WEBHOOK_RATE_LIMIT_BURST` | `20` / `40` | Per-IP webhook rate limit |
+| `PROVIDER` | `mock` | Primary provider adapter: `mock` or `openai` |
+| `PROVIDER_CHAIN` | value of `PROVIDER` | Comma-separated router/fallback chain, e.g. `openai,mock` |
+| `OPENAI_API_KEY` | `` | Required when OpenAI provider/moderation/scanner is enabled |
+| `OPENAI_BASE_URL` | `https://api.openai.com/v1` | OpenAI API root |
+| `OPENAI_TEXT_MODEL` / `OPENAI_IMAGE_MODEL` | OpenAI defaults | OpenAI text/image model codes |
+| `OPENAI_IMAGE_SIZE` | `1024x1024` | OpenAI image size |
+| `OPENAI_VIDEO_MODEL` / `OPENAI_VIDEO_SECONDS` / `OPENAI_VIDEO_SIZE` | `sora-2` / `4` / `720x1280` | OpenAI video settings |
+| `OPENAI_TEXT_PRICE` / `OPENAI_IMAGE_PRICE` / `OPENAI_VIDEO_PRICE` | `1` / `10` / `50` | Internal provider-router cost estimates |
+| `MODERATION_PROVIDER` | `keyword` | Output moderation provider: `keyword` or `openai` |
+| `OPENAI_MODERATION_MODEL` | `omni-moderation-latest` | OpenAI moderation model |
+| `ARTIFACT_SCANNER` | `none` | Artifact scanner: `none` or `openai` |
+| `VK_DELIVERY_MODE` | `mock` | VK delivery adapter: `mock` or `real` |
+| `VK_ACCESS_TOKEN` / `VK_API_VERSION` | `` / `5.199` | Required for real VK send/upload and API-side `/start` control menu responses |
+| `VK_API_BASE_URL` | `https://api.vk.com/method` | VK API method root |
+| `VK_WELCOME_ATTACHMENT` | `` | Optional pre-uploaded VK photo/video attachment sent with `/start` menu |
+| `SIGNED_DELIVERY` / `ARTIFACT_URL_TTL` | `false` / `1h` | Deliver media through signed artifact URLs |
+| `ARTIFACT_RETENTION_DAYS` | `0` | Optional S3 lifecycle expiry |
+| `PRICES` | `` | Price overrides, e.g. `text_generate=2,image_generate=12` |
+| `MAX_JOB_COST` | `0` | Per-job cost cap; `0` disables the cap |
+| `STREAM_MAX_LEN` | `100000` | Redis stream max length; `0` disables trimming |
+| `WORKER_SHUTDOWN_GRACE` | `30s` | Time allowed to drain in-flight worker handlers |
+| `WORKER_METRICS_ADDR` | `:9090` | Worker `/metrics` and `/healthz`; empty disables |
+| `MAINTENANCE_INTERVAL` | `1h` | Cleanup cadence for idempotency/outbox/streams |
+| `OUTBOX_RETENTION` | `168h` | Retention for terminal outbox events |
+| `BILLING_RECONCILIATION_INTERVAL` | `5m` | Balance-vs-ledger reconciliation cadence |
+| `BILLING_RECONCILIATION_LIMIT` | `100` | Accounts checked per reconciliation pass |
+| `OTEL_TRACES_EXPORTER` | `none` | `none` or `stdout` |
+| `OTEL_SERVICE_NAME` | `vk-ai-aggregator` | OpenTelemetry service name prefix |
 
 > Production note: set `APP_ENV=production`; the API then **refuses to start**
 > unless `VK_SECRET`, `ADMIN_TOKEN`, and a non-default `VK_CONFIRMATION_TOKEN`
-> are set (fail-closed, `AUDIT.md` S1).
+> are set (fail-closed, `AUDIT.md` S1). Both `cmd/api` and `cmd/worker` run the
+> same validation. `PROVIDER=openai`, `PROVIDER_CHAIN` containing `openai`,
+> `MODERATION_PROVIDER=openai`, or `ARTIFACT_SCANNER=openai` require
+> `OPENAI_API_KEY`; `VK_DELIVERY_MODE=real` requires `VK_ACCESS_TOKEN` in any
+> environment.
 
 ### Hardening features (post-release)
 
 - **Output moderation** gates delivery: a blocked prompt sets the job to
   `rejected`, releases the reservation (no capture), and writes a
   `moderation_results` audit row (migration `000003`). Default classifier is
-  keyword-based (`MODERATION_EXTRA_TERMS` extends it).
+  keyword-based (`MODERATION_EXTRA_TERMS` extends it); `MODERATION_PROVIDER=openai`
+  switches the check to OpenAI moderation.
 - **DLQ + retry budget**: exhausted/poison tasks go to `stream:jobs:dlq`
   (not auto-consumed) and the job becomes `failed_terminal`. Inspect with
   `docker exec vk-ai-aggregator-redis redis-cli XLEN stream:jobs:dlq`.
 - **Metrics**: `GET /metrics` (Prometheus). Note metrics are process-local —
   scrape the API and each worker separately.
+- **Tracing**: `OTEL_TRACES_EXPORTER=stdout` enables OpenTelemetry stdout spans;
+  trace context is propagated through outbox/Redis with `traceparent`.
+- **Maintenance**: worker runs cleanup for expired `idempotency_keys`, old
+  terminal `outbox_events`, Redis Stream trimming, and billing reconciliation.
+  Billing mismatch count is exported as `vkagg_billing_mismatches`.
+- **Artifact scanning**: `ARTIFACT_SCANNER=openai` scans text/image artifact
+  bytes before storage; video scan/transcode remains a media-pipeline follow-up.
 - **SSRF**: artifact downloader blocks private/loopback/link-local hosts and
-  non-http(s) schemes; optional host allowlist.
+  non-http(s) schemes; optional host allowlist. Provider data URLs are accepted
+  for normalized OpenAI text/image/video outputs.
 - **Rate limit**: per-IP token bucket on `/webhooks/vk` (429 when exceeded).
 
 ---
@@ -114,7 +155,8 @@ Expected:
 ```
 applied 000001_init_schema
 applied 000002_inbound_events
-up complete: 2 migration(s) applied
+applied 000003_moderation_results
+up complete: 3 migration(s) applied
 ```
 `status` should list every migration as `applied`.
 
@@ -161,7 +203,29 @@ It runs these pools over Redis Streams (one consumer group, recovery via `XAUTOC
 | polling worker | `stream:jobs:provider_poll` | poll async provider tasks |
 | delivery worker | `stream:jobs:delivery` | Artifact → Delivery → Capture → succeeded |
 
-> Scaling note: run multiple `cmd/worker` instances (each joins the same group) for more throughput. Per-pool isolation is a Phase-2 item (`AUDIT.md` SC2). The worker auto-creates the MinIO bucket and consumer groups on start.
+> Scaling note: run multiple `cmd/worker` instances (each joins the same group)
+> for more throughput. Per-pool isolation via `WORKER_POOLS` is still a Beta
+> follow-up (`AUDIT.md` SC2). The worker auto-creates the MinIO bucket and
+> consumer groups on start.
+
+Real adapter modes are opt-in:
+
+```bash
+# OpenAI text/image/video generation.
+PROVIDER=openai OPENAI_API_KEY=... go run ./cmd/worker
+
+# OpenAI primary with mock fallback through router/circuit breaker.
+PROVIDER_CHAIN=openai,mock OPENAI_API_KEY=... go run ./cmd/worker
+
+# API-side VK /start menu responses with keyboard.
+VK_ACCESS_TOKEN=... go run ./cmd/api
+
+# Real VK messages.send plus raw photo/video upload to VK upload servers.
+VK_DELIVERY_MODE=real VK_ACCESS_TOKEN=... go run ./cmd/worker
+
+# Real output moderation and text/image artifact scanning.
+MODERATION_PROVIDER=openai ARTIFACT_SCANNER=openai OPENAI_API_KEY=... go run ./cmd/worker
+```
 
 Expected log:
 ```
@@ -198,6 +262,20 @@ curl -s -X POST localhost:8080/webhooks/vk \
   -d '{"type":"confirmation","group_id":1}'
 # -> dev-confirmation
 ```
+
+### VK /start menu
+```bash
+curl -s -X POST localhost:8080/webhooks/vk \
+  -H 'Content-Type: application/json' \
+  -d '{"type":"message_new","group_id":1,"event_id":"menu-1","object":{"message":{"from_id":777,"peer_id":777,"text":"/start"}}}'
+# -> ok
+```
+
+Expected: inbound event + command are persisted, no billable job is created.
+When `cmd/api` has `VK_ACCESS_TOKEN`, it sends the Super GPT welcome text with
+a VK inline keyboard under the message. Set `VK_WELCOME_ATTACHMENT` to a
+pre-uploaded VK attachment string if the welcome message should include a
+banner image.
 
 ### VK message → full pipeline
 ```bash
@@ -259,12 +337,28 @@ go test ./internal/worker/ -run TestEndToEnd -v  # full VK→…→Capture
 - Job `failed_terminal`: inspect `error_code` on the job (`/admin/jobs/{id}`); for mock, check for trigger keywords in the prompt.
 - After crash: pending entries are auto-reclaimed via `XAUTOCLAIM` on next start.
 
+**VK menu / keyboard**
+- `/start` records command but no keyboard appears: make sure `cmd/api` has
+  `VK_ACCESS_TOKEN` and the community has bot features enabled in VK community
+  message settings. VK returns `error_code=912` when keyboards are disabled; the
+  API falls back to sending the welcome text without keyboard.
+- Banner is absent: set `VK_WELCOME_ATTACHMENT` to an already uploaded VK
+  attachment string (`photo...`, `video...`). The API does not upload the banner
+  image itself yet.
+
 **Migrations**
-- Partial/failed migration: re-run `go run ./cmd/migrate status`; a file failing mid-way may need manual cleanup (runner is not yet per-file transactional — `AUDIT.md` D1). Fix DDL, then re-run `up`.
+- Partial/failed migration: re-run `go run ./cmd/migrate status`. The runner
+  records SHA-256 checksums and applies each migration file with its
+  `schema_migrations` row in one transaction. If checksum drift is reported,
+  restore the migration file to the applied contents or perform an explicit
+  migration.
 - Reset local DB (DESTRUCTIVE): `docker compose down -v && docker compose up -d` then re-run migrations.
 
 **Queue**
-- Stream length keeps growing with no progress: indicates a retry loop — check worker logs for `handler failed`; inspect the offending job's `error_code`. (Hard retry budget/DLQ is Phase-2, `AUDIT.md` R1/Q1.)
+- Stream length keeps growing with no progress: check worker logs for
+  `handler failed`; inspect the offending job's `error_code`.
+- Poison/retry-exhausted tasks are routed to `stream:jobs:dlq`; inspect with
+  `docker exec vk-ai-aggregator-redis redis-cli XLEN stream:jobs:dlq`.
 - Drain check: `redis-cli XLEN <stream>` stable over time = no loop.
 
 ---
@@ -316,7 +410,8 @@ Shutdown order: Workers → API → (optionally) Infrastructure.
 3. Restart API then workers (Deployment Order steps 3–5).
 
 **Release tag**
-- Releases are tagged (e.g. `v0.1.0`). To roll back code: `git checkout <previous-tag>` and redeploy.
+- Releases are tagged (current: `v0.1.3`). To roll back code:
+  `git checkout <previous-tag>` and redeploy.
 
 **Data**
 - If a bad migration corrupted data, restore Postgres from the latest backup (§10), then redeploy the matching app version. Artifacts in MinIO are immutable/content-addressed and generally need no rollback.

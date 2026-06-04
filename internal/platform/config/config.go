@@ -37,6 +37,9 @@ type Config struct {
 
 	WorkerGroup    string
 	WorkerConsumer string
+	// WorkerMetricsAddr exposes worker-local Prometheus metrics. Empty disables
+	// the endpoint.
+	WorkerMetricsAddr string
 
 	// MaxAttempts bounds retryable re-enqueues before a task is dead-lettered.
 	MaxAttempts int
@@ -57,6 +60,8 @@ type Config struct {
 	DBMinConns int32
 	// RedisPoolSize sizes the Redis connection pool (audit SC1).
 	RedisPoolSize int
+	// StreamMaxLen caps Redis stream backlog; 0 disables trimming.
+	StreamMaxLen int64
 
 	// PriceOverrides replaces per-operation prices, e.g.
 	// "text_generate=2,image_generate=12" (audit C1).
@@ -64,18 +69,38 @@ type Config struct {
 	// MaxJobCost rejects any job whose estimate exceeds this cap (0 = no cap).
 	MaxJobCost int64
 
-	// Provider selects the generation provider: "mock" (default) or "openai".
-	Provider         string
-	OpenAIAPIKey     string
-	OpenAIBaseURL    string
-	OpenAITextModel  string
-	OpenAIImageModel string
+	// Provider selects the primary generation provider. ProviderChain, when set,
+	// enables router/fallback selection across multiple providers.
+	Provider      string
+	ProviderChain []string
+
+	OpenAIAPIKey       string
+	OpenAIBaseURL      string
+	OpenAITextModel    string
+	OpenAIImageModel   string
+	OpenAIImageSize    string
+	OpenAIVideoModel   string
+	OpenAIVideoSeconds string
+	OpenAIVideoSize    string
+	OpenAITextPrice    int64
+	OpenAIImagePrice   int64
+	OpenAIVideoPrice   int64
+
+	// ModerationProvider selects output moderation: "keyword" (default) or
+	// "openai". ArtifactScanner selects artifact byte scanning: "none" or
+	// "openai".
+	ModerationProvider    string
+	OpenAIModerationModel string
+	ArtifactScanner       string
 
 	// VKDeliveryMode selects the delivery client: "mock" (default) or "real".
 	VKDeliveryMode string
 	VKAccessToken  string
 	VKAPIVersion   string
 	VKAPIBaseURL   string
+	// VKWelcomeAttachment is an optional pre-uploaded VK attachment sent with
+	// the /start menu, e.g. photo-239332376_123_accesskey.
+	VKWelcomeAttachment string
 
 	// ArtifactURLTTL is how long signed artifact delivery URLs stay valid.
 	ArtifactURLTTL time.Duration
@@ -83,6 +108,24 @@ type Config struct {
 	SignedDelivery bool
 	// ArtifactRetentionDays configures object lifecycle expiry (0 = keep) (ST1).
 	ArtifactRetentionDays int
+
+	// WorkerShutdownGrace is how long workers may drain in-flight work after a
+	// shutdown signal before their processing context is cancelled.
+	WorkerShutdownGrace time.Duration
+
+	// MaintenanceInterval runs operational cleanup jobs on this cadence.
+	MaintenanceInterval time.Duration
+	// OutboxRetention keeps already-published/failed outbox rows for this long.
+	OutboxRetention time.Duration
+	// BillingReconciliationInterval runs balance-vs-ledger checks on this cadence.
+	BillingReconciliationInterval time.Duration
+	// BillingReconciliationLimit caps accounts checked per reconciliation pass.
+	BillingReconciliationLimit int
+
+	// TracingServiceName is reported in OpenTelemetry resource attributes.
+	TracingServiceName string
+	// TracingExporter selects the trace exporter: "none" (default) or "stdout".
+	TracingExporter string
 }
 
 // IsProduction reports whether the service runs in a production environment.
@@ -93,20 +136,19 @@ func (c Config) IsProduction() bool {
 // Validate fails closed: in production, secrets that protect inbound webhooks
 // and the admin API must be set. Returns a descriptive error otherwise.
 func (c Config) Validate() error {
-	if !c.IsProduction() {
-		return nil
-	}
 	var missing []string
-	if c.VKSecret == "" {
-		missing = append(missing, "VK_SECRET")
+	if c.IsProduction() {
+		if c.VKSecret == "" {
+			missing = append(missing, "VK_SECRET")
+		}
+		if c.AdminToken == "" {
+			missing = append(missing, "ADMIN_TOKEN")
+		}
+		if c.VKConfirmationToken == "" || c.VKConfirmationToken == "dev-confirmation" {
+			missing = append(missing, "VK_CONFIRMATION_TOKEN")
+		}
 	}
-	if c.AdminToken == "" {
-		missing = append(missing, "ADMIN_TOKEN")
-	}
-	if c.VKConfirmationToken == "" || c.VKConfirmationToken == "dev-confirmation" {
-		missing = append(missing, "VK_CONFIRMATION_TOKEN")
-	}
-	if c.Provider == "openai" && c.OpenAIAPIKey == "" {
+	if c.usesOpenAI() && c.OpenAIAPIKey == "" {
 		missing = append(missing, "OPENAI_API_KEY")
 	}
 	if c.VKDeliveryMode == "real" && c.VKAccessToken == "" {
@@ -121,6 +163,11 @@ func (c Config) Validate() error {
 // Load reads configuration from the environment.
 func Load() Config {
 	host, _ := os.Hostname()
+	provider := env("PROVIDER", "mock")
+	providerChain := envList("PROVIDER_CHAIN")
+	if len(providerChain) == 0 {
+		providerChain = []string{provider}
+	}
 	return Config{
 		Env:           env("APP_ENV", "development"),
 		HTTPAddr:      env("HTTP_ADDR", ":8080"),
@@ -142,8 +189,9 @@ func Load() Config {
 
 		AdminToken: env("ADMIN_TOKEN", ""),
 
-		WorkerGroup:    env("WORKER_GROUP", "workers"),
-		WorkerConsumer: env("WORKER_CONSUMER", defaultStr(host, "worker-1")),
+		WorkerGroup:       env("WORKER_GROUP", "workers"),
+		WorkerConsumer:    env("WORKER_CONSUMER", defaultStr(host, "worker-1")),
+		WorkerMetricsAddr: env("WORKER_METRICS_ADDR", ":9090"),
 
 		MaxAttempts:    envInt("MAX_ATTEMPTS", 3),
 		RetryBaseDelay: envDuration("RETRY_BASE_DELAY", 500*time.Millisecond),
@@ -157,25 +205,61 @@ func Load() Config {
 		DBMaxConns:    int32(envInt("DB_MAX_CONNS", 10)),
 		DBMinConns:    int32(envInt("DB_MIN_CONNS", 0)),
 		RedisPoolSize: envInt("REDIS_POOL_SIZE", 10),
+		StreamMaxLen:  int64(envInt("STREAM_MAX_LEN", 100000)),
 
 		PriceOverrides: envPriceMap("PRICES"),
 		MaxJobCost:     int64(envInt("MAX_JOB_COST", 0)),
 
-		Provider:         env("PROVIDER", "mock"),
-		OpenAIAPIKey:     env("OPENAI_API_KEY", ""),
-		OpenAIBaseURL:    env("OPENAI_BASE_URL", "https://api.openai.com/v1"),
-		OpenAITextModel:  env("OPENAI_TEXT_MODEL", "gpt-4o-mini"),
-		OpenAIImageModel: env("OPENAI_IMAGE_MODEL", "gpt-image-1"),
+		Provider:              provider,
+		ProviderChain:         providerChain,
+		OpenAIAPIKey:          env("OPENAI_API_KEY", ""),
+		OpenAIBaseURL:         env("OPENAI_BASE_URL", "https://api.openai.com/v1"),
+		OpenAITextModel:       env("OPENAI_TEXT_MODEL", "gpt-4.1-mini"),
+		OpenAIImageModel:      env("OPENAI_IMAGE_MODEL", "gpt-image-1"),
+		OpenAIImageSize:       env("OPENAI_IMAGE_SIZE", "1024x1024"),
+		OpenAIVideoModel:      env("OPENAI_VIDEO_MODEL", "sora-2"),
+		OpenAIVideoSeconds:    env("OPENAI_VIDEO_SECONDS", "4"),
+		OpenAIVideoSize:       env("OPENAI_VIDEO_SIZE", "720x1280"),
+		OpenAITextPrice:       int64(envInt("OPENAI_TEXT_PRICE", 1)),
+		OpenAIImagePrice:      int64(envInt("OPENAI_IMAGE_PRICE", 10)),
+		OpenAIVideoPrice:      int64(envInt("OPENAI_VIDEO_PRICE", 50)),
+		ModerationProvider:    env("MODERATION_PROVIDER", "keyword"),
+		OpenAIModerationModel: env("OPENAI_MODERATION_MODEL", "omni-moderation-latest"),
+		ArtifactScanner:       env("ARTIFACT_SCANNER", "none"),
 
-		VKDeliveryMode: env("VK_DELIVERY_MODE", "mock"),
-		VKAccessToken:  env("VK_ACCESS_TOKEN", ""),
-		VKAPIVersion:   env("VK_API_VERSION", "5.199"),
-		VKAPIBaseURL:   env("VK_API_BASE_URL", "https://api.vk.com/method"),
+		VKDeliveryMode:      env("VK_DELIVERY_MODE", "mock"),
+		VKAccessToken:       env("VK_ACCESS_TOKEN", ""),
+		VKAPIVersion:        env("VK_API_VERSION", "5.199"),
+		VKAPIBaseURL:        env("VK_API_BASE_URL", "https://api.vk.com/method"),
+		VKWelcomeAttachment: env("VK_WELCOME_ATTACHMENT", ""),
 
 		ArtifactURLTTL:        envDuration("ARTIFACT_URL_TTL", time.Hour),
 		SignedDelivery:        envBool("SIGNED_DELIVERY", false),
 		ArtifactRetentionDays: envInt("ARTIFACT_RETENTION_DAYS", 0),
+
+		WorkerShutdownGrace:           envDuration("WORKER_SHUTDOWN_GRACE", 30*time.Second),
+		MaintenanceInterval:           envDuration("MAINTENANCE_INTERVAL", time.Hour),
+		OutboxRetention:               envDuration("OUTBOX_RETENTION", 7*24*time.Hour),
+		BillingReconciliationInterval: envDuration("BILLING_RECONCILIATION_INTERVAL", 5*time.Minute),
+		BillingReconciliationLimit:    envInt("BILLING_RECONCILIATION_LIMIT", 100),
+
+		TracingServiceName: env("OTEL_SERVICE_NAME", "vk-ai-aggregator"),
+		TracingExporter:    env("OTEL_TRACES_EXPORTER", "none"),
 	}
+}
+
+func (c Config) usesOpenAI() bool {
+	if strings.EqualFold(c.Provider, "openai") ||
+		strings.EqualFold(c.ModerationProvider, "openai") ||
+		strings.EqualFold(c.ArtifactScanner, "openai") {
+		return true
+	}
+	for _, provider := range c.ProviderChain {
+		if strings.EqualFold(provider, "openai") {
+			return true
+		}
+	}
+	return false
 }
 
 func env(key, def string) string {

@@ -60,6 +60,24 @@ var (
 		Help:    "HTTP request latency by route.",
 		Buckets: prometheus.DefBuckets,
 	}, []string{"route"})
+
+	// MaintenanceDeleted counts rows removed by retention cleanup jobs.
+	MaintenanceDeleted = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "vkagg_maintenance_deleted_total",
+		Help: "Rows deleted by maintenance cleanup jobs, labeled by resource.",
+	}, []string{"resource"})
+
+	// StreamTrimmed counts Redis Stream entries trimmed by maintenance.
+	StreamTrimmed = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "vkagg_stream_trimmed_total",
+		Help: "Redis Stream entries trimmed by maintenance, labeled by stream.",
+	}, []string{"stream"})
+
+	// BillingMismatches tracks current balance-vs-ledger mismatches.
+	BillingMismatches = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "vkagg_billing_mismatches",
+		Help: "Number of credit accounts whose cached balance differs from the committed ledger projection.",
+	})
 )
 
 func init() {
@@ -67,7 +85,8 @@ func init() {
 		collectors.NewGoCollector(),
 		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
 		WebhookReceived, JobsTerminal, ModerationDecisions, DLQRouted,
-		DeliveriesSent, HTTPRequests, HTTPDuration,
+		DeliveriesSent, HTTPRequests, HTTPDuration, MaintenanceDeleted,
+		StreamTrimmed, BillingMismatches,
 	)
 }
 

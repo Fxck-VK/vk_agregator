@@ -6,9 +6,11 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"go.opentelemetry.io/otel/attribute"
 
 	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/platform/queue"
+	"vk-ai-aggregator/internal/platform/tracing"
 )
 
 // GenerationWorker handles text/image/video generation tasks: it submits the
@@ -53,11 +55,6 @@ func (g *GenerationWorker) Process(ctx context.Context, task queue.Task) error {
 		return g.pollOnce(ctx, job, active, provider, task)
 	}
 
-	provider, err := g.providers.ForOperation(job.OperationType)
-	if err != nil {
-		return g.handleFailure(ctx, job, task, domain.ProviderErrUnsupportedCapab, err.Error())
-	}
-
 	if err := g.toDispatching(ctx, job); err != nil {
 		return err
 	}
@@ -69,12 +66,29 @@ func (g *GenerationWorker) Process(ctx context.Context, task queue.Task) error {
 	attempt++
 
 	req := g.buildRequest(job, attempt)
-	submitted, err := provider.Submit(ctx, req)
+	provider, err := g.providers.ForRequest(ctx, req)
 	if err != nil {
+		return g.handleFailure(ctx, job, task, domain.ProviderErrUnsupportedCapab, err.Error())
+	}
+	submitCtx, submitSpan := tracing.Start(ctx, "provider.submit",
+		attribute.String("job.id", job.ID.String()),
+		attribute.String("provider", string(provider.Name())),
+		attribute.String("operation", string(job.OperationType)),
+		tracing.CorrelationAttr(job.CorrelationID),
+	)
+	submitted, err := provider.Submit(submitCtx, req)
+	if err != nil {
+		tracing.RecordError(submitSpan, err)
+		submitSpan.End()
 		return g.handleFailure(ctx, job, task, classOf(err), err.Error())
 	}
+	submitSpan.End()
 
-	pt, err := g.persistTask(ctx, job, provider.Name(), submitted, req, attempt)
+	taskProvider := provider.Name()
+	if submitted.Provider != "" {
+		taskProvider = submitted.Provider
+	}
+	pt, err := g.persistTask(ctx, job, taskProvider, submitted, req, attempt)
 	if err != nil {
 		return err
 	}

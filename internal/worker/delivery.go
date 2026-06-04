@@ -4,15 +4,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"go.opentelemetry.io/otel/attribute"
 
 	vkdelivery "vk-ai-aggregator/internal/adapter/delivery/vk"
 	redisqueue "vk-ai-aggregator/internal/adapter/queue/redis"
 	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/platform/metrics"
 	"vk-ai-aggregator/internal/platform/queue"
+	"vk-ai-aggregator/internal/platform/tracing"
 )
 
 // ObjectStore fetches stored artifact bytes (needed to deliver text results).
@@ -39,6 +42,10 @@ type DeliveryDeps struct {
 	Artifacts  domain.ArtifactRepository
 	Objects    ObjectStore
 	VK         vkdelivery.Client
+	// VKUploader uploads raw photo/video artifact bytes to VK before send when
+	// available. If nil and VK also implements vkdelivery.MediaUploader, the
+	// worker uses VK as the uploader.
+	VKUploader vkdelivery.MediaUploader
 	Billing    DeliveryBiller
 	// Streams, when set, receives dead-lettered delivery tasks once the retry
 	// budget is exhausted.
@@ -67,6 +74,7 @@ type DeliveryWorker struct {
 	artifacts   domain.ArtifactRepository
 	objects     ObjectStore
 	vk          vkdelivery.Client
+	vkUploader  vkdelivery.MediaUploader
 	billing     DeliveryBiller
 	streams     StreamPublisher
 	maxAttempts int
@@ -95,12 +103,19 @@ func NewDeliveryWorker(d DeliveryDeps) *DeliveryWorker {
 	if urlTTL <= 0 {
 		urlTTL = time.Hour
 	}
+	uploader := d.VKUploader
+	if uploader == nil {
+		if up, ok := d.VK.(vkdelivery.MediaUploader); ok {
+			uploader = up
+		}
+	}
 	return &DeliveryWorker{
 		jobs:        d.Jobs,
 		deliveries:  d.Deliveries,
 		artifacts:   d.Artifacts,
 		objects:     d.Objects,
 		vk:          d.VK,
+		vkUploader:  uploader,
 		billing:     d.Billing,
 		streams:     d.Streams,
 		maxAttempts: maxAttempts,
@@ -115,13 +130,22 @@ func NewDeliveryWorker(d DeliveryDeps) *DeliveryWorker {
 // Process delivers one job's result. Returning nil acknowledges the task;
 // returning an error leaves it pending for retry/recovery.
 func (w *DeliveryWorker) Process(ctx context.Context, task queue.Task) error {
+	ctx, span := tracing.Start(ctx, "delivery.process",
+		attribute.String("job.id", task.JobID.String()),
+		attribute.String("operation", string(task.Operation)),
+		tracing.CorrelationAttr(task.CorrelationID),
+	)
+	defer span.End()
+
 	job, err := w.jobs.GetByID(ctx, task.JobID)
 	if errors.Is(err, domain.ErrNotFound) {
 		return nil
 	}
 	if err != nil {
+		tracing.RecordError(span, err)
 		return err
 	}
+	span.SetAttributes(attribute.String("job.status", string(job.Status)))
 	switch job.Status {
 	case domain.JobStatusSucceeded:
 		return nil
@@ -133,16 +157,19 @@ func (w *DeliveryWorker) Process(ctx context.Context, task queue.Task) error {
 	}
 
 	if err := w.setStatus(ctx, job, domain.JobStatusDelivering, "", ""); err != nil {
+		tracing.RecordError(span, err)
 		return err
 	}
 
 	del, err := w.ensureDelivery(ctx, job)
 	if err != nil {
+		tracing.RecordError(span, err)
 		return err
 	}
 
 	if del.Status != domain.DeliveryStatusSent {
 		if err := w.send(ctx, del); err != nil {
+			tracing.RecordError(span, err)
 			del.Status = domain.DeliveryStatusRetrying
 			del.ErrorMessage = err.Error()
 			del.AttemptNo++
@@ -164,12 +191,22 @@ func (w *DeliveryWorker) Process(ctx context.Context, task queue.Task) error {
 
 	// Billing capture: charge the reserved credits now that delivery succeeded.
 	if job.CostReserved > 0 {
-		if err := w.billing.CaptureForJob(ctx, job.ID, job.CostReserved); err != nil {
+		captureCtx, captureSpan := tracing.Start(ctx, "billing.capture",
+			attribute.String("job.id", job.ID.String()),
+			attribute.Int64("billing.amount", job.CostReserved),
+			tracing.CorrelationAttr(job.CorrelationID),
+		)
+		if err := w.billing.CaptureForJob(captureCtx, job.ID, job.CostReserved); err != nil {
+			tracing.RecordError(captureSpan, err)
+			captureSpan.End()
+			tracing.RecordError(span, err)
 			return fmt.Errorf("worker: capture: %w", err)
 		}
+		captureSpan.End()
 		if job.CostCaptured != job.CostReserved {
 			job.CostCaptured = job.CostReserved
 			if err := w.jobs.Update(ctx, job); err != nil {
+				tracing.RecordError(span, err)
 				return err
 			}
 		}
@@ -231,10 +268,18 @@ func (w *DeliveryWorker) buildDelivery(ctx context.Context, job *domain.Job, key
 	switch art.MediaType {
 	case domain.MediaTypeImage:
 		del.Type = domain.DeliveryTypePhoto
-		del.Attachment = w.mediaAttachment(ctx, art)
+		attachment, err := w.mediaAttachment(ctx, job.VKPeerID, art)
+		if err != nil {
+			return nil, err
+		}
+		del.Attachment = attachment
 	case domain.MediaTypeVideo:
 		del.Type = domain.DeliveryTypeVideo
-		del.Attachment = w.mediaAttachment(ctx, art)
+		attachment, err := w.mediaAttachment(ctx, job.VKPeerID, art)
+		if err != nil {
+			return nil, err
+		}
+		del.Attachment = attachment
 	default:
 		del.Type = domain.DeliveryTypeMessage
 		del.Text = w.textContent(ctx, art)
@@ -256,6 +301,13 @@ func (w *DeliveryWorker) textContent(ctx context.Context, art *domain.Artifact) 
 }
 
 func (w *DeliveryWorker) send(ctx context.Context, del *domain.Delivery) error {
+	ctx, span := tracing.Start(ctx, "vk.delivery.send",
+		attribute.String("delivery.id", del.ID.String()),
+		attribute.String("delivery.type", string(del.Type)),
+		attribute.Int64("vk.peer_id", del.VKPeerID),
+	)
+	defer span.End()
+
 	var (
 		res vkdelivery.SendResult
 		err error
@@ -269,9 +321,11 @@ func (w *DeliveryWorker) send(ctx context.Context, del *domain.Delivery) error {
 		res, err = w.vk.SendText(ctx, del.VKPeerID, del.VKRandomID, del.Text)
 	}
 	if err != nil {
+		tracing.RecordError(span, err)
 		return err
 	}
 	msgID := res.MessageID
+	span.SetAttributes(attribute.Int64("vk.message_id", msgID))
 	del.Status = domain.DeliveryStatusSent
 	del.VKMessageID = &msgID
 	del.ErrorCode = ""
@@ -305,17 +359,34 @@ func (w *DeliveryWorker) setStatus(ctx context.Context, job *domain.Job, to doma
 	return nil
 }
 
-// mediaAttachment resolves the attachment reference for a media artifact. When
-// signed delivery is enabled it issues a time-limited signed URL so the raw
-// storage location is never exposed (audit ST1); otherwise it falls back to the
+// mediaAttachment resolves the attachment reference for a media artifact. With a
+// real VK uploader and stored bytes, it uploads raw photo/video artifacts to VK
+// and returns the VK attachment string. Otherwise, when signed delivery is
+// enabled it issues a time-limited signed URL; finally it falls back to the
 // artifact's public URL or storage location.
-func (w *DeliveryWorker) mediaAttachment(ctx context.Context, art *domain.Artifact) string {
-	if w.signURLs && w.signer != nil && art.StorageKey != "" {
-		if signed, err := w.signer.PresignedGetURL(ctx, art.StorageBucket, art.StorageKey, w.urlTTL); err == nil && signed != "" {
-			return signed
+func (w *DeliveryWorker) mediaAttachment(ctx context.Context, peerID int64, art *domain.Artifact) (string, error) {
+	if ref := attachmentRef(art); isVKAttachment(ref) {
+		return ref, nil
+	}
+	if w.vkUploader != nil && w.objects != nil && art.StorageKey != "" {
+		data, err := w.objects.GetObject(ctx, art.StorageBucket, art.StorageKey)
+		if err != nil {
+			return "", fmt.Errorf("worker: load artifact for vk upload: %w", err)
+		}
+		name := artifactFilename(art)
+		switch art.MediaType {
+		case domain.MediaTypeImage:
+			return w.vkUploader.UploadPhoto(ctx, peerID, name, data, art.MimeType)
+		case domain.MediaTypeVideo:
+			return w.vkUploader.UploadVideo(ctx, peerID, name, data, art.MimeType)
 		}
 	}
-	return attachmentRef(art)
+	if w.signURLs && w.signer != nil && art.StorageKey != "" {
+		if signed, err := w.signer.PresignedGetURL(ctx, art.StorageBucket, art.StorageKey, w.urlTTL); err == nil && signed != "" {
+			return signed, nil
+		}
+	}
+	return attachmentRef(art), nil
 }
 
 // attachmentRef returns the VK attachment reference for a media artifact,
@@ -325,4 +396,19 @@ func attachmentRef(art *domain.Artifact) string {
 		return art.PublicURL
 	}
 	return art.StorageBucket + "/" + art.StorageKey
+}
+
+func isVKAttachment(ref string) bool {
+	return strings.HasPrefix(ref, "photo") || strings.HasPrefix(ref, "video") || strings.HasPrefix(ref, "doc")
+}
+
+func artifactFilename(art *domain.Artifact) string {
+	ext := "bin"
+	switch art.MediaType {
+	case domain.MediaTypeImage:
+		ext = "png"
+	case domain.MediaTypeVideo:
+		ext = "mp4"
+	}
+	return art.ID.String() + "." + ext
 }

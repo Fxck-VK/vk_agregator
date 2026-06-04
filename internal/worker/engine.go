@@ -5,8 +5,11 @@ import (
 	"log/slog"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
+
 	redisqueue "vk-ai-aggregator/internal/adapter/queue/redis"
 	"vk-ai-aggregator/internal/platform/queue"
+	"vk-ai-aggregator/internal/platform/tracing"
 )
 
 // ExponentialBackoff returns a backoff function that grows as base*2^(attempt-1)
@@ -113,25 +116,53 @@ func (e *Engine) Poll(ctx context.Context) (int, error) {
 
 // Run recovers pending work then loops Poll until the context is cancelled.
 func (e *Engine) Run(ctx context.Context) error {
-	if err := e.Recover(ctx); err != nil {
-		e.logger.WarnContext(ctx, "worker recovery failed", "error", err)
+	return e.RunWithHandlerContext(ctx, ctx)
+}
+
+// RunWithHandlerContext recovers pending work and polls with readCtx, while
+// handlers receive handlerCtx. Worker entrypoints use this to stop taking new
+// Redis entries on shutdown while allowing in-flight handlers to drain.
+func (e *Engine) RunWithHandlerContext(readCtx, handlerCtx context.Context) error {
+	if err := e.RecoverWithHandlerContext(readCtx, handlerCtx); err != nil {
+		e.logger.WarnContext(readCtx, "worker recovery failed", "error", err)
 	}
 	for {
-		if ctx.Err() != nil {
-			return ctx.Err()
+		if readCtx.Err() != nil {
+			return readCtx.Err()
 		}
-		if _, err := e.Poll(ctx); err != nil {
-			if ctx.Err() != nil {
-				return ctx.Err()
+		if _, err := e.PollWithHandlerContext(readCtx, handlerCtx); err != nil {
+			if readCtx.Err() != nil {
+				return readCtx.Err()
 			}
-			e.logger.WarnContext(ctx, "worker poll failed", "error", err)
+			e.logger.WarnContext(readCtx, "worker poll failed", "error", err)
 			select {
-			case <-ctx.Done():
-				return ctx.Err()
+			case <-readCtx.Done():
+				return readCtx.Err()
 			case <-time.After(time.Second):
 			}
 		}
 	}
+}
+
+// RecoverWithHandlerContext is Recover with a distinct handler context.
+func (e *Engine) RecoverWithHandlerContext(readCtx, handlerCtx context.Context) error {
+	for _, stream := range e.streams {
+		deliveries, err := e.reader.AutoClaim(readCtx, stream, e.minIdle, e.count)
+		if err != nil {
+			return err
+		}
+		e.dispatch(handlerCtx, deliveries)
+	}
+	return nil
+}
+
+// PollWithHandlerContext is Poll with a distinct handler context.
+func (e *Engine) PollWithHandlerContext(readCtx, handlerCtx context.Context) (int, error) {
+	deliveries, err := e.reader.Read(readCtx, redisqueue.ReadOptions{Streams: e.streams, Count: e.count, Block: e.block})
+	if err != nil {
+		return 0, err
+	}
+	return e.dispatch(handlerCtx, deliveries), nil
 }
 
 // dispatch processes each delivery, acknowledging only those handled without
@@ -139,15 +170,29 @@ func (e *Engine) Run(ctx context.Context) error {
 func (e *Engine) dispatch(ctx context.Context, deliveries []redisqueue.Delivery) int {
 	handled := 0
 	for _, d := range deliveries {
-		if err := e.handle(ctx, d.Task); err != nil {
-			e.logger.WarnContext(ctx, "worker handler failed; leaving entry pending",
+		taskCtx := tracing.ContextWithTraceparent(ctx, d.Task.Traceparent)
+		taskCtx, span := tracing.Start(taskCtx, "worker.task",
+			attribute.String("messaging.system", "redis"),
+			attribute.String("messaging.source.name", d.Stream),
+			attribute.String("messaging.message.id", d.ID),
+			attribute.String("job.id", d.Task.JobID.String()),
+			attribute.String("operation", string(d.Task.Operation)),
+			tracing.CorrelationAttr(d.Task.CorrelationID),
+		)
+		if err := e.handle(taskCtx, d.Task); err != nil {
+			tracing.RecordError(span, err)
+			span.End()
+			e.logger.WarnContext(taskCtx, "worker handler failed; leaving entry pending",
 				"stream", d.Stream, "job_id", d.Task.JobID, "error", err)
 			continue
 		}
-		if err := e.reader.Ack(ctx, d.Stream, d.ID); err != nil {
-			e.logger.WarnContext(ctx, "worker ack failed", "stream", d.Stream, "error", err)
+		if err := e.reader.Ack(taskCtx, d.Stream, d.ID); err != nil {
+			tracing.RecordError(span, err)
+			span.End()
+			e.logger.WarnContext(taskCtx, "worker ack failed", "stream", d.Stream, "error", err)
 			continue
 		}
+		span.End()
 		handled++
 	}
 	return handled

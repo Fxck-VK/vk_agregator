@@ -15,8 +15,10 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"go.opentelemetry.io/otel/attribute"
 
 	"vk-ai-aggregator/internal/domain"
+	"vk-ai-aggregator/internal/platform/tracing"
 	"vk-ai-aggregator/internal/platform/uow"
 )
 
@@ -80,19 +82,31 @@ func New(jobs domain.JobRepository, manager uow.Manager, billing Biller, maxCost
 // user cannot afford the operation the job is parked in awaiting_payment and
 // domain.ErrInsufficientCredits is returned alongside the job.
 func (o *Orchestrator) CreateJob(ctx context.Context, in CreateJobInput) (*domain.Job, error) {
+	ctx, span := tracing.Start(ctx, "job.create",
+		attribute.String("operation", string(in.Operation)),
+		attribute.String("modality", string(in.Modality)),
+		tracing.CorrelationAttr(in.CorrelationID),
+	)
+	defer span.End()
+
 	if existing, err := o.jobs.GetByIdempotencyKey(ctx, in.IdempotencyKey); err == nil {
+		span.SetAttributes(attribute.String("job.id", existing.ID.String()), attribute.Bool("job.idempotent", true))
 		return existing, nil
 	} else if !errors.Is(err, domain.ErrNotFound) {
+		tracing.RecordError(span, err)
 		return nil, fmt.Errorf("joborchestrator: idempotency lookup: %w", err)
 	}
 
 	// 1. Estimate the cost of the operation and enforce the spend cap.
 	estimate, err := o.billing.Estimate(in.Operation)
 	if err != nil {
+		tracing.RecordError(span, err)
 		return nil, fmt.Errorf("joborchestrator: estimate: %w", err)
 	}
 	if o.maxCost > 0 && estimate > o.maxCost {
-		return nil, fmt.Errorf("joborchestrator: %w: estimate %d exceeds cap %d", domain.ErrCostCapExceeded, estimate, o.maxCost)
+		err := fmt.Errorf("joborchestrator: %w: estimate %d exceeds cap %d", domain.ErrCostCapExceeded, estimate, o.maxCost)
+		tracing.RecordError(span, err)
+		return nil, err
 	}
 
 	job := &domain.Job{
@@ -109,6 +123,7 @@ func (o *Orchestrator) CreateJob(ctx context.Context, in CreateJobInput) (*domai
 		Params:           in.Params,
 		CostEstimate:     estimate,
 	}
+	span.SetAttributes(attribute.String("job.id", job.ID.String()), attribute.Int64("job.cost_estimate", estimate))
 
 	// 2. Persist the job, reserve its credits and record the created+queued
 	//    events in a single transaction. Either everything commits or nothing
@@ -119,7 +134,7 @@ func (o *Orchestrator) CreateJob(ctx context.Context, in CreateJobInput) (*domai
 		if err := repos.Jobs.Create(ctx, job); err != nil {
 			return err
 		}
-		if err := repos.Outbox.Add(ctx, jobEvent("event.job.created", job)); err != nil {
+		if err := repos.Outbox.Add(ctx, jobEvent(ctx, "event.job.created", job)); err != nil {
 			return err
 		}
 
@@ -144,8 +159,9 @@ func (o *Orchestrator) CreateJob(ctx context.Context, in CreateJobInput) (*domai
 		if err := repos.Jobs.UpdateStatus(ctx, job.ID, domain.JobStatusCreditsReserved, domain.JobStatusQueued, "", ""); err != nil {
 			return err
 		}
-		return repos.Outbox.Add(ctx, jobEvent("event.job.queued", job))
+		return repos.Outbox.Add(ctx, jobEvent(ctx, "event.job.queued", job))
 	}); err != nil {
+		tracing.RecordError(span, err)
 		return nil, fmt.Errorf("joborchestrator: create job: %w", err)
 	}
 
@@ -161,7 +177,7 @@ func (o *Orchestrator) CreateJob(ctx context.Context, in CreateJobInput) (*domai
 // jobEvent builds an outbox event describing a job state change. The queued
 // event carries everything the outbox relay needs to reconstruct the worker
 // task (operation, modality, correlation id).
-func jobEvent(eventType string, job *domain.Job) *domain.OutboxEvent {
+func jobEvent(ctx context.Context, eventType string, job *domain.Job) *domain.OutboxEvent {
 	payload, _ := json.Marshal(struct {
 		JobID         uuid.UUID            `json:"job_id"`
 		Status        domain.JobStatus     `json:"status"`
@@ -169,7 +185,8 @@ func jobEvent(eventType string, job *domain.Job) *domain.OutboxEvent {
 		Modality      domain.Modality      `json:"modality"`
 		UserID        uuid.UUID            `json:"user_id"`
 		CorrelationID string               `json:"correlation_id,omitempty"`
-	}{job.ID, job.Status, job.OperationType, job.Modality, job.UserID, job.CorrelationID})
+		Traceparent   string               `json:"traceparent,omitempty"`
+	}{job.ID, job.Status, job.OperationType, job.Modality, job.UserID, job.CorrelationID, tracing.Traceparent(ctx)})
 
 	return &domain.OutboxEvent{
 		AggregateType: "job",

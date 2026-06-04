@@ -1,0 +1,174 @@
+// Package maintenance runs operational cleanup and consistency checks.
+package maintenance
+
+import (
+	"context"
+	"log/slog"
+	"time"
+
+	"vk-ai-aggregator/internal/domain"
+	"vk-ai-aggregator/internal/platform/metrics"
+)
+
+// Store is the database-side maintenance contract.
+type Store interface {
+	CleanupExpiredIdempotencyKeys(ctx context.Context, now time.Time) (int64, error)
+	CleanupOutboxEvents(ctx context.Context, cutoff time.Time) (int64, error)
+	BalanceMismatches(ctx context.Context, limit int) ([]domain.BalanceMismatch, error)
+}
+
+// StreamTrimmer is the Redis-side maintenance contract.
+type StreamTrimmer interface {
+	Trim(ctx context.Context) (map[string]int64, error)
+}
+
+// Config controls operational maintenance jobs.
+type Config struct {
+	Interval                      time.Duration
+	OutboxRetention               time.Duration
+	BillingReconciliationInterval time.Duration
+	BillingReconciliationLimit    int
+}
+
+// Service runs cleanup and consistency jobs. It never mutates balances during
+// reconciliation; it only emits metrics/logs so operators can investigate.
+type Service struct {
+	store   Store
+	streams StreamTrimmer
+	cfg     Config
+	log     *slog.Logger
+	now     func() time.Time
+}
+
+// Option customizes Service.
+type Option func(*Service)
+
+// WithLogger sets the structured logger.
+func WithLogger(l *slog.Logger) Option {
+	return func(s *Service) {
+		if l != nil {
+			s.log = l
+		}
+	}
+}
+
+// WithClock overrides the clock for tests.
+func WithClock(now func() time.Time) Option {
+	return func(s *Service) {
+		if now != nil {
+			s.now = now
+		}
+	}
+}
+
+// New builds a maintenance service.
+func New(store Store, streams StreamTrimmer, cfg Config, opts ...Option) *Service {
+	if cfg.Interval <= 0 {
+		cfg.Interval = time.Hour
+	}
+	if cfg.OutboxRetention <= 0 {
+		cfg.OutboxRetention = 7 * 24 * time.Hour
+	}
+	if cfg.BillingReconciliationInterval <= 0 {
+		cfg.BillingReconciliationInterval = 5 * time.Minute
+	}
+	if cfg.BillingReconciliationLimit <= 0 {
+		cfg.BillingReconciliationLimit = 100
+	}
+	s := &Service{
+		store:   store,
+		streams: streams,
+		cfg:     cfg,
+		log:     slog.Default(),
+		now:     time.Now,
+	}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s
+}
+
+// Run starts cleanup and reconciliation loops until ctx is cancelled.
+func (s *Service) Run(ctx context.Context) {
+	cleanupTicker := time.NewTicker(s.cfg.Interval)
+	reconcileTicker := time.NewTicker(s.cfg.BillingReconciliationInterval)
+	defer cleanupTicker.Stop()
+	defer reconcileTicker.Stop()
+
+	s.runCleanup(ctx)
+	s.runReconciliation(ctx)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-cleanupTicker.C:
+			s.runCleanup(ctx)
+		case <-reconcileTicker.C:
+			s.runReconciliation(ctx)
+		}
+	}
+}
+
+func (s *Service) runCleanup(ctx context.Context) {
+	if err := s.Cleanup(ctx); err != nil {
+		s.log.WarnContext(ctx, "maintenance cleanup failed", "error", err)
+	}
+}
+
+func (s *Service) runReconciliation(ctx context.Context) {
+	if err := s.ReconcileBilling(ctx); err != nil {
+		s.log.WarnContext(ctx, "billing reconciliation failed", "error", err)
+	}
+}
+
+// Cleanup deletes expired idempotency keys, terminal outbox rows past retention
+// and trims Redis stream backlog.
+func (s *Service) Cleanup(ctx context.Context) error {
+	now := s.now()
+	idemDeleted, err := s.store.CleanupExpiredIdempotencyKeys(ctx, now)
+	if err != nil {
+		return err
+	}
+	outboxDeleted, err := s.store.CleanupOutboxEvents(ctx, now.Add(-s.cfg.OutboxRetention))
+	if err != nil {
+		return err
+	}
+	metrics.MaintenanceDeleted.WithLabelValues("idempotency_keys").Add(float64(idemDeleted))
+	metrics.MaintenanceDeleted.WithLabelValues("outbox_events").Add(float64(outboxDeleted))
+
+	if s.streams != nil {
+		trimmed, err := s.streams.Trim(ctx)
+		if err != nil {
+			return err
+		}
+		for stream, n := range trimmed {
+			metrics.StreamTrimmed.WithLabelValues(stream).Add(float64(n))
+		}
+	}
+	if idemDeleted > 0 || outboxDeleted > 0 {
+		s.log.InfoContext(ctx, "maintenance cleanup completed",
+			"idempotency_keys_deleted", idemDeleted,
+			"outbox_events_deleted", outboxDeleted)
+	}
+	return nil
+}
+
+// ReconcileBilling compares cached balances with the committed ledger
+// projection and emits the mismatch metric.
+func (s *Service) ReconcileBilling(ctx context.Context) error {
+	mismatches, err := s.store.BalanceMismatches(ctx, s.cfg.BillingReconciliationLimit)
+	if err != nil {
+		return err
+	}
+	metrics.BillingMismatches.Set(float64(len(mismatches)))
+	for _, m := range mismatches {
+		s.log.ErrorContext(ctx, "billing balance mismatch",
+			"account_id", m.AccountID,
+			"user_id", m.UserID,
+			"currency", m.Currency,
+			"balance_cached", m.BalanceCached,
+			"ledger_balance", m.LedgerBalance,
+			"difference", m.Difference)
+	}
+	return nil
+}

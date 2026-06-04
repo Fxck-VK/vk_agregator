@@ -256,3 +256,77 @@ func TestProcessUnknownJobIsAcked(t *testing.T) {
 		t.Fatalf("unknown job should be a no-op ack, got %v", err)
 	}
 }
+
+func TestProviderRegistryFallbackOnRetryableSubmit(t *testing.T) {
+	primary := &routingProvider{
+		name: domain.ProviderName("primary"),
+		cost: 1,
+		fail: routingError{class: domain.ProviderErrRateLimited},
+	}
+	fallback := &routingProvider{name: domain.ProviderName("fallback"), cost: 10}
+	reg := worker.NewRegistry(primary, fallback)
+	req := domain.ProviderRequest{
+		JobID:     uuid.New(),
+		Operation: domain.OperationTextGenerate,
+		Modality:  domain.ModalityText,
+		Prompt:    "hello",
+	}
+
+	provider, err := reg.ForRequest(context.Background(), req)
+	if err != nil {
+		t.Fatalf("for request: %v", err)
+	}
+	task, err := provider.Submit(context.Background(), req)
+	if err != nil {
+		t.Fatalf("submit through router: %v", err)
+	}
+	if task.Provider != fallback.name {
+		t.Fatalf("task provider = %q, want fallback", task.Provider)
+	}
+	if primary.submits != 1 || fallback.submits != 1 {
+		t.Fatalf("submits primary=%d fallback=%d", primary.submits, fallback.submits)
+	}
+}
+
+type routingProvider struct {
+	name    domain.ProviderName
+	cost    int64
+	fail    error
+	submits int
+}
+
+func (p *routingProvider) Name() domain.ProviderName { return p.name }
+
+func (p *routingProvider) Capabilities(context.Context) ([]domain.Capability, error) {
+	return []domain.Capability{{Operation: domain.OperationTextGenerate, Modality: domain.ModalityText, ModelCode: string(p.name) + "-model"}}, nil
+}
+
+func (p *routingProvider) Estimate(context.Context, domain.ProviderRequest) (domain.CostEstimate, error) {
+	return domain.CostEstimate{AmountCredits: p.cost, Currency: "credits"}, nil
+}
+
+func (p *routingProvider) Submit(_ context.Context, req domain.ProviderRequest) (domain.ProviderTask, error) {
+	p.submits++
+	if p.fail != nil {
+		return domain.ProviderTask{}, p.fail
+	}
+	return domain.ProviderTask{
+		JobID:      req.JobID,
+		Provider:   p.name,
+		ModelCode:  string(p.name) + "-model",
+		ExternalID: string(p.name) + "-task",
+		Status:     domain.ProviderTaskSucceeded,
+	}, nil
+}
+
+func (p *routingProvider) Poll(context.Context, domain.ProviderTaskRef) (domain.ProviderTaskResult, error) {
+	return domain.ProviderTaskResult{Status: domain.ProviderTaskSucceeded, OutputURLs: []string{"data:text/plain;base64,b2s="}}, nil
+}
+
+func (p *routingProvider) Cancel(context.Context, domain.ProviderTaskRef) error { return nil }
+
+type routingError struct{ class domain.ProviderErrorClass }
+
+func (e routingError) Error() string { return string(e.class) }
+
+func (e routingError) ProviderErrorClass() domain.ProviderErrorClass { return e.class }

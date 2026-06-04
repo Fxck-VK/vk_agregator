@@ -1,8 +1,9 @@
 // Package vk implements the VK inbound gateway: a thin HTTP handler that accepts
 // VK Callback API events, persists them idempotently and turns them into
-// commands and jobs. It deliberately knows nothing about AI providers, billing
-// internals or delivery — it only translates VK events into the platform's
-// normalized intake flow (invariant: VK handlers never call providers).
+// commands and jobs. It deliberately knows nothing about AI providers. VK
+// control responses, when enabled, are sent only through the outbound VK
+// delivery adapter, preserving the "no direct VK API calls outside delivery"
+// boundary.
 package vk
 
 import (
@@ -14,8 +15,13 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 
+	"go.opentelemetry.io/otel/attribute"
+
+	vkdelivery "vk-ai-aggregator/internal/adapter/delivery/vk"
 	"vk-ai-aggregator/internal/domain"
+	"vk-ai-aggregator/internal/platform/tracing"
 	"vk-ai-aggregator/internal/service/billingservice"
 	"vk-ai-aggregator/internal/service/commandrouter"
 	"vk-ai-aggregator/internal/service/joborchestrator"
@@ -28,6 +34,9 @@ type Config struct {
 	ConfirmationToken string
 	// Secret, when non-empty, must match the secret on every incoming event.
 	Secret string
+	// WelcomeAttachment is an optional pre-uploaded VK attachment string
+	// (for example photo-239332376_123_accesskey) sent with the /start menu.
+	WelcomeAttachment string
 }
 
 // Deps are the collaborators the handler needs. All are interfaces or services
@@ -40,6 +49,7 @@ type Deps struct {
 	Billing      *billingservice.Service
 	Orchestrator *joborchestrator.Orchestrator
 	Router       *commandrouter.Router
+	Control      vkdelivery.ControlClient
 	Logger       *slog.Logger
 }
 
@@ -72,24 +82,57 @@ type callback struct {
 // message under "message" in modern API versions; the flat fields cover older
 // versions.
 type messageNew struct {
-	Message *vkMessage `json:"message"`
-	FromID  int64      `json:"from_id"`
-	PeerID  int64      `json:"peer_id"`
-	Text    string     `json:"text"`
+	Message     *vkMessage     `json:"message"`
+	FromID      int64          `json:"from_id"`
+	PeerID      int64          `json:"peer_id"`
+	Text        string         `json:"text"`
+	Payload     string         `json:"payload"`
+	Attachments []vkAttachment `json:"attachments"`
 }
 
 type vkMessage struct {
-	FromID                int64  `json:"from_id"`
-	PeerID                int64  `json:"peer_id"`
-	Text                  string `json:"text"`
-	ConversationMessageID int64  `json:"conversation_message_id"`
+	FromID                int64          `json:"from_id"`
+	PeerID                int64          `json:"peer_id"`
+	Text                  string         `json:"text"`
+	Payload               string         `json:"payload"`
+	ConversationMessageID int64          `json:"conversation_message_id"`
+	Attachments           []vkAttachment `json:"attachments"`
 }
 
-func (m messageNew) resolve() (fromID, peerID int64, text string) {
+type vkAttachment struct {
+	Type    string     `json:"type"`
+	Sticker *vkSticker `json:"sticker,omitempty"`
+}
+
+type vkSticker struct {
+	StickerID int64  `json:"sticker_id"`
+	ProductID int64  `json:"product_id"`
+	Emoji     string `json:"emoji"`
+}
+
+func (m messageNew) resolve() (fromID, peerID int64, text, payload string) {
 	if m.Message != nil {
-		return m.Message.FromID, m.Message.PeerID, m.Message.Text
+		return m.Message.FromID, m.Message.PeerID, normalizedMessageText(m.Message.Text, m.Message.Attachments), m.Message.Payload
 	}
-	return m.FromID, m.PeerID, m.Text
+	return m.FromID, m.PeerID, normalizedMessageText(m.Text, m.Attachments), m.Payload
+}
+
+func normalizedMessageText(text string, attachments []vkAttachment) string {
+	if strings.TrimSpace(text) != "" {
+		return text
+	}
+	for _, attachment := range attachments {
+		if attachment.Type != "sticker" || attachment.Sticker == nil {
+			continue
+		}
+		sticker := attachment.Sticker
+		prompt := fmt.Sprintf("Пользователь отправил VK-стикер (sticker_id=%d, product_id=%d). Ответь коротко и дружелюбно.", sticker.StickerID, sticker.ProductID)
+		if sticker.Emoji != "" {
+			prompt = fmt.Sprintf("Пользователь отправил VK-стикер %q (sticker_id=%d, product_id=%d). Ответь коротко и дружелюбно.", sticker.Emoji, sticker.StickerID, sticker.ProductID)
+		}
+		return prompt
+	}
+	return text
 }
 
 // ServeHTTP implements http.Handler. It always responds quickly: "confirmation"
@@ -133,7 +176,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (h *Handler) handleMessageNew(ctx context.Context, cb callback, rawBody []byte) error {
+func (h *Handler) handleMessageNew(ctx context.Context, cb callback, rawBody []byte) (err error) {
 	eventID := cb.EventID
 
 	var obj messageNew
@@ -142,7 +185,7 @@ func (h *Handler) handleMessageNew(ctx context.Context, cb callback, rawBody []b
 			return fmt.Errorf("decode object: %w", err)
 		}
 	}
-	fromID, peerID, text := obj.resolve()
+	fromID, peerID, text, payload := obj.resolve()
 	if fromID == 0 {
 		return errors.New("message has no from_id")
 	}
@@ -152,6 +195,18 @@ func (h *Handler) handleMessageNew(ctx context.Context, cb callback, rawBody []b
 	}
 
 	idemKey := fmt.Sprintf("vk_event:%d:%s", cb.GroupID, eventID)
+	ctx, span := tracing.Start(ctx, "vk.message_new",
+		attribute.Int64("vk.group_id", cb.GroupID),
+		attribute.String("vk.event_id", eventID),
+		attribute.Int64("vk.peer_id", peerID),
+		attribute.Int64("vk.user_id", fromID),
+		tracing.CorrelationAttr(idemKey),
+	)
+	defer func() {
+		tracing.RecordError(span, err)
+		span.End()
+	}()
+
 	record := &domain.IdempotencyRecord{
 		Key:          idemKey,
 		Scope:        "inbound_event",
@@ -166,7 +221,7 @@ func (h *Handler) handleMessageNew(ctx context.Context, cb callback, rawBody []b
 		return nil
 	}
 
-	if err := h.process(ctx, cb, rawBody, eventID, idemKey, fromID, peerID, text); err != nil {
+	if err := h.process(ctx, cb, rawBody, eventID, idemKey, fromID, peerID, text, payload); err != nil {
 		_ = h.deps.Idempotency.MarkFailed(ctx, idemKey)
 		return err
 	}
@@ -174,7 +229,7 @@ func (h *Handler) handleMessageNew(ctx context.Context, cb callback, rawBody []b
 }
 
 // process runs the InboundEvent -> User -> Command -> Job flow.
-func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, eventID, idemKey string, fromID, peerID int64, text string) error {
+func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, eventID, idemKey string, fromID, peerID int64, text, payload string) error {
 	// InboundEvent: persist the raw event for audit and reprocessing.
 	inbound := &domain.InboundEvent{
 		Source:         "vk",
@@ -199,6 +254,9 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 
 	// Command: classify the message into a normalized command.
 	parsed := h.deps.Router.Parse(text)
+	if controlType, ok := controlTypeFromPayload(payload); ok {
+		parsed = commandrouter.Result{Type: controlType}
+	}
 	cmd := &domain.Command{
 		UserID:         user.ID,
 		VKPeerID:       peerID,
@@ -221,6 +279,12 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 	}
 
 	resourceID := cmd.ID
+
+	if shouldSendControlResponse(parsed.Type) {
+		if err := h.sendControlResponse(ctx, parsed.Type, idemKey, peerID, user); err != nil {
+			return fmt.Errorf("send control response: %w", err)
+		}
+	}
 
 	// Job: only commands that map to an AI operation become jobs. Control
 	// commands (balance/status/cancel/help) are recorded but produce no job.

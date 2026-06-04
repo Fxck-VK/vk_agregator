@@ -2,8 +2,10 @@ package vkdelivery
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -31,6 +33,43 @@ func TestHTTPClientSendText(t *testing.T) {
 	}
 }
 
+func TestHTTPClientSendMessageWithKeyboard(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = r.ParseForm()
+		if r.FormValue("message") != "menu" {
+			t.Errorf("message = %q", r.FormValue("message"))
+		}
+		var keyboard vkKeyboard
+		if err := json.Unmarshal([]byte(r.FormValue("keyboard")), &keyboard); err != nil {
+			t.Fatalf("keyboard json: %v", err)
+		}
+		if len(keyboard.Buttons) != 1 || len(keyboard.Buttons[0]) != 1 {
+			t.Fatalf("unexpected keyboard: %+v", keyboard)
+		}
+		button := keyboard.Buttons[0][0]
+		if button.Action.Type != "text" || button.Action.Label != "🎬 Создать видео" || button.Color != "primary" {
+			t.Fatalf("unexpected button: %+v", button)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"response":12346}`))
+	}))
+	defer srv.Close()
+
+	c := NewHTTPClient(HTTPConfig{AccessToken: "tok", BaseURL: srv.URL, HTTPClient: srv.Client()})
+	res, err := c.SendMessage(context.Background(), 42, 11, Message{
+		Text: "menu",
+		Keyboard: &Keyboard{Buttons: [][]KeyboardButton{{
+			{Label: "🎬 Создать видео", Payload: `{"command":"menu.video"}`, Color: "primary"},
+		}}},
+	})
+	if err != nil {
+		t.Fatalf("send message: %v", err)
+	}
+	if res.MessageID != 12346 {
+		t.Fatalf("message_id = %d", res.MessageID)
+	}
+}
+
 func TestHTTPClientVKError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`{"error":{"error_code":5,"error_msg":"User authorization failed"}}`))
@@ -40,5 +79,85 @@ func TestHTTPClientVKError(t *testing.T) {
 	c := NewHTTPClient(HTTPConfig{AccessToken: "bad", BaseURL: srv.URL, HTTPClient: srv.Client()})
 	if _, err := c.SendText(context.Background(), 1, 1, "x"); err == nil {
 		t.Fatal("expected error for vk error envelope")
+	} else if !IsAPIErrorCode(err, 5) {
+		t.Fatalf("expected API error code 5, got %v", err)
+	}
+}
+
+func TestHTTPClientUploadPhoto(t *testing.T) {
+	var uploadHit bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/photos.getMessagesUploadServer":
+			_ = r.ParseForm()
+			if r.FormValue("peer_id") != "42" {
+				t.Errorf("peer_id = %q", r.FormValue("peer_id"))
+			}
+			_, _ = w.Write([]byte(`{"response":{"upload_url":"` + "http://" + r.Host + `/upload_photo"}}`))
+		case "/upload_photo":
+			uploadHit = true
+			if err := r.ParseMultipartForm(1 << 20); err != nil {
+				t.Fatalf("parse multipart: %v", err)
+			}
+			if r.MultipartForm.File["photo"] == nil {
+				t.Fatalf("missing photo upload field")
+			}
+			_, _ = w.Write([]byte(`{"server":7,"photo":"[]","hash":"h"}`))
+		case "/photos.saveMessagesPhoto":
+			_ = r.ParseForm()
+			if r.FormValue("server") != "7" || r.FormValue("hash") != "h" {
+				t.Errorf("unexpected save form: %v", r.Form)
+			}
+			_, _ = w.Write([]byte(`{"response":[{"id":456,"owner_id":123,"access_key":"ak"}]}`))
+		default:
+			t.Fatalf("unexpected path %s", r.URL.Path)
+		}
+	}))
+	defer srv.Close()
+
+	c := NewHTTPClient(HTTPConfig{AccessToken: "tok", BaseURL: srv.URL, HTTPClient: srv.Client()})
+	attachment, err := c.UploadPhoto(context.Background(), 42, "out.png", []byte("png"), "image/png")
+	if err != nil {
+		t.Fatalf("upload photo: %v", err)
+	}
+	if !uploadHit || attachment != "photo123_456_ak" {
+		t.Fatalf("attachment = %q uploadHit=%v", attachment, uploadHit)
+	}
+}
+
+func TestHTTPClientUploadVideo(t *testing.T) {
+	var uploadHit bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/video.save":
+			_ = r.ParseForm()
+			if !strings.Contains(r.FormValue("name"), ".mp4") {
+				t.Errorf("name = %q", r.FormValue("name"))
+			}
+			_, _ = w.Write([]byte(`{"response":{"upload_url":"` + "http://" + r.Host + `/upload_video","owner_id":-10,"video_id":99,"access_key":"vk"}}`))
+		case "/upload_video":
+			uploadHit = true
+			if err := r.ParseMultipartForm(1 << 20); err != nil {
+				t.Fatalf("parse multipart: %v", err)
+			}
+			if r.MultipartForm.File["video_file"] == nil {
+				t.Fatalf("missing video upload field")
+			}
+			_, _ = w.Write([]byte(`{"size":9}`))
+		default:
+			t.Fatalf("unexpected path %s", r.URL.Path)
+		}
+	}))
+	defer srv.Close()
+
+	c := NewHTTPClient(HTTPConfig{AccessToken: "tok", BaseURL: srv.URL, HTTPClient: srv.Client()})
+	attachment, err := c.UploadVideo(context.Background(), 42, "out.mp4", []byte("mp4"), "video/mp4")
+	if err != nil {
+		t.Fatalf("upload video: %v", err)
+	}
+	if !uploadHit || attachment != "video-10_99_vk" {
+		t.Fatalf("attachment = %q uploadHit=%v", attachment, uploadHit)
 	}
 }

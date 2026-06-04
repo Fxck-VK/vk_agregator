@@ -16,6 +16,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
+	vkdelivery "vk-ai-aggregator/internal/adapter/delivery/vk"
 	adminapi "vk-ai-aggregator/internal/adapter/inbound/admin"
 	vkinbound "vk-ai-aggregator/internal/adapter/inbound/vk"
 	redisqueue "vk-ai-aggregator/internal/adapter/queue/redis"
@@ -23,6 +24,7 @@ import (
 	"vk-ai-aggregator/internal/platform/config"
 	"vk-ai-aggregator/internal/platform/metrics"
 	"vk-ai-aggregator/internal/platform/ratelimit"
+	"vk-ai-aggregator/internal/platform/tracing"
 	"vk-ai-aggregator/internal/service/billingservice"
 	"vk-ai-aggregator/internal/service/commandrouter"
 	"vk-ai-aggregator/internal/service/joborchestrator"
@@ -40,6 +42,20 @@ func main() {
 	}
 
 	ctx := context.Background()
+	shutdownTracing, err := tracing.Init(ctx, tracing.Config{
+		ServiceName: cfg.TracingServiceName + "-api",
+		Exporter:    cfg.TracingExporter,
+	}, logger)
+	if err != nil {
+		logger.Error("tracing init failed", "error", err)
+		os.Exit(1)
+	}
+	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = shutdownTracing(shutdownCtx)
+	}()
+
 	pool, err := postgres.NewPoolConfigured(ctx, cfg.DatabaseURL, cfg.DBMaxConns, cfg.DBMinConns)
 	if err != nil {
 		logger.Error("postgres connect failed", "error", err)
@@ -67,9 +83,22 @@ func main() {
 	orch := joborchestrator.New(jobs, uowMgr, billing, cfg.MaxJobCost)
 	router := commandrouter.New()
 
+	var vkControl vkdelivery.ControlClient
+	if cfg.VKAccessToken != "" {
+		vkControl = vkdelivery.NewHTTPClient(vkdelivery.HTTPConfig{
+			AccessToken: cfg.VKAccessToken,
+			APIVersion:  cfg.VKAPIVersion,
+			BaseURL:     cfg.VKAPIBaseURL,
+		})
+		logger.Info("using real vk control delivery client")
+	} else {
+		logger.Warn("vk control responses disabled because VK_ACCESS_TOKEN is empty")
+	}
+
 	vkHandler := vkinbound.NewHandler(vkinbound.Config{
 		ConfirmationToken: cfg.VKConfirmationToken,
 		Secret:            cfg.VKSecret,
+		WelcomeAttachment: cfg.VKWelcomeAttachment,
 	}, vkinbound.Deps{
 		Idempotency:  idem,
 		Inbound:      inbound,
@@ -78,6 +107,7 @@ func main() {
 		Billing:      billing,
 		Orchestrator: orch,
 		Router:       router,
+		Control:      vkControl,
 		Logger:       logger,
 	})
 

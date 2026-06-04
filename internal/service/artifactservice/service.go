@@ -7,6 +7,7 @@ package artifactservice
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -17,8 +18,10 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"go.opentelemetry.io/otel/attribute"
 
 	"vk-ai-aggregator/internal/domain"
+	"vk-ai-aggregator/internal/platform/tracing"
 )
 
 // maxRemoteBytes caps how much a remote download may pull, guarding memory.
@@ -108,10 +111,22 @@ func (s *Service) SaveBytesArtifact(ctx context.Context, ownerID uuid.UUID, jobI
 // SaveRemoteArtifact downloads a remote URL (e.g. a provider output) and stores
 // it as an artifact. The content type from the response fills in an empty mime.
 func (s *Service) SaveRemoteArtifact(ctx context.Context, ownerID uuid.UUID, jobID *uuid.UUID, kind domain.ArtifactKind, mediaType domain.MediaType, url string) (*domain.Artifact, error) {
+	ctx, span := tracing.Start(ctx, "artifact.download",
+		attribute.String("owner.id", ownerID.String()),
+		attribute.String("artifact.kind", string(kind)),
+		attribute.String("artifact.media_type", string(mediaType)),
+	)
+	if jobID != nil {
+		span.SetAttributes(attribute.String("job.id", jobID.String()))
+	}
 	data, contentType, err := s.downloader.Download(ctx, url)
 	if err != nil {
+		tracing.RecordError(span, err)
+		span.End()
 		return nil, fmt.Errorf("artifactservice: download %s: %w", url, err)
 	}
+	span.SetAttributes(attribute.Int("artifact.download_bytes", len(data)))
+	span.End()
 	if contentType == "" {
 		contentType = "application/octet-stream"
 	}
@@ -121,22 +136,37 @@ func (s *Service) SaveRemoteArtifact(ctx context.Context, ownerID uuid.UUID, job
 // saveBytes computes the content hash, deduplicates by (owner, sha256), uploads
 // the bytes and records the artifact metadata.
 func (s *Service) saveBytes(ctx context.Context, ownerID uuid.UUID, jobID *uuid.UUID, kind domain.ArtifactKind, mediaType domain.MediaType, mimeType string, data []byte) (*domain.Artifact, error) {
+	ctx, span := tracing.Start(ctx, "artifact.store",
+		attribute.String("owner.id", ownerID.String()),
+		attribute.String("artifact.kind", string(kind)),
+		attribute.String("artifact.media_type", string(mediaType)),
+		attribute.String("artifact.mime_type", mimeType),
+		attribute.Int("artifact.size_bytes", len(data)),
+	)
+	defer span.End()
+	if jobID != nil {
+		span.SetAttributes(attribute.String("job.id", jobID.String()))
+	}
+
 	sum := sha256.Sum256(data)
 	sha := hex.EncodeToString(sum[:])
 
 	if existing, err := s.repo.GetBySHA256(ctx, ownerID, sha); err == nil {
+		span.SetAttributes(attribute.Bool("artifact.dedup_hit", true))
 		return existing, nil
 	}
 
 	// Scan new content before it is persisted or delivered (audit ST1).
 	if s.scanner != nil {
 		if err := s.scanner.Scan(ctx, mediaType, mimeType, data); err != nil {
+			tracing.RecordError(span, err)
 			return nil, fmt.Errorf("artifactservice: content scan rejected: %w", err)
 		}
 	}
 
 	key := fmt.Sprintf("artifacts/%s/%s.%s", ownerID, sha, extFor(mediaType))
 	if err := s.store.Put(ctx, s.bucket, key, data, mimeType); err != nil {
+		tracing.RecordError(span, err)
 		return nil, fmt.Errorf("artifactservice: store object: %w", err)
 	}
 
@@ -154,8 +184,10 @@ func (s *Service) saveBytes(ctx context.Context, ownerID uuid.UUID, jobID *uuid.
 		Status:        domain.ArtifactStatusReady,
 	}
 	if err := s.repo.Create(ctx, artifact); err != nil {
+		tracing.RecordError(span, err)
 		return nil, fmt.Errorf("artifactservice: record artifact: %w", err)
 	}
+	span.SetAttributes(attribute.String("artifact.id", artifact.ID.String()))
 	return artifact, nil
 }
 
@@ -261,6 +293,9 @@ func (d *httpDownloader) Download(ctx context.Context, rawURL string) ([]byte, s
 	if err != nil {
 		return nil, "", fmt.Errorf("artifactservice: parse url: %w", err)
 	}
+	if u.Scheme == "data" {
+		return decodeDataURL(rawURL)
+	}
 	if err := d.guard(u); err != nil {
 		return nil, "", err
 	}
@@ -281,4 +316,39 @@ func (d *httpDownloader) Download(ctx context.Context, rawURL string) ([]byte, s
 		return nil, "", err
 	}
 	return data, resp.Header.Get("Content-Type"), nil
+}
+
+func decodeDataURL(raw string) ([]byte, string, error) {
+	const prefix = "data:"
+	if !strings.HasPrefix(raw, prefix) {
+		return nil, "", fmt.Errorf("artifactservice: invalid data url")
+	}
+	headerAndData := strings.SplitN(raw[len(prefix):], ",", 2)
+	if len(headerAndData) != 2 {
+		return nil, "", fmt.Errorf("artifactservice: malformed data url")
+	}
+	header := headerAndData[0]
+	payload := headerAndData[1]
+	contentType := "text/plain;charset=US-ASCII"
+	if header != "" {
+		parts := strings.Split(header, ";")
+		if parts[0] != "" {
+			contentType = parts[0]
+		}
+		if parts[len(parts)-1] == "base64" {
+			data, err := base64.StdEncoding.DecodeString(payload)
+			if err != nil {
+				return nil, "", fmt.Errorf("artifactservice: decode data url: %w", err)
+			}
+			if len(data) > maxRemoteBytes {
+				return nil, "", fmt.Errorf("artifactservice: data url too large")
+			}
+			return data, contentType, nil
+		}
+	}
+	data := []byte(payload)
+	if len(data) > maxRemoteBytes {
+		return nil, "", fmt.Errorf("artifactservice: data url too large")
+	}
+	return data, contentType, nil
 }

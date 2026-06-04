@@ -13,9 +13,11 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
+	"go.opentelemetry.io/otel/attribute"
 
 	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/platform/queue"
+	"vk-ai-aggregator/internal/platform/tracing"
 )
 
 // Stream names, one per worker pool.
@@ -34,6 +36,10 @@ const (
 // AllStreams lists every worker-consumed stream (the DLQ is intentionally
 // excluded; nothing auto-consumes it).
 var AllStreams = []string{StreamText, StreamImage, StreamVideo, StreamDelivery, StreamProviderPoll}
+
+// AllStreamsWithDLQ lists worker streams plus the operator-inspected DLQ for
+// maintenance trimming.
+var AllStreamsWithDLQ = []string{StreamText, StreamImage, StreamVideo, StreamDelivery, StreamProviderPoll, StreamDLQ}
 
 // taskField is the Redis stream entry field that carries the JSON task body.
 const taskField = "task"
@@ -87,8 +93,24 @@ func (p *Publisher) Enqueue(ctx context.Context, task queue.Task) error {
 // PublishTo appends the task to a specific stream (used for delivery and
 // provider-poll work that is not derived from an operation).
 func (p *Publisher) PublishTo(ctx context.Context, stream string, task queue.Task) error {
+	if task.Traceparent != "" {
+		ctx = tracing.ContextWithTraceparent(ctx, task.Traceparent)
+	}
+	ctx, span := tracing.Start(ctx, "queue.publish",
+		attribute.String("messaging.system", "redis"),
+		attribute.String("messaging.destination.name", stream),
+		attribute.String("job.id", task.JobID.String()),
+		attribute.String("operation", string(task.Operation)),
+		tracing.CorrelationAttr(task.CorrelationID),
+	)
+	defer span.End()
+
+	if task.Traceparent == "" {
+		task.Traceparent = tracing.Traceparent(ctx)
+	}
 	body, err := json.Marshal(task)
 	if err != nil {
+		tracing.RecordError(span, err)
 		return fmt.Errorf("redisqueue: marshal task: %w", err)
 	}
 	args := &redis.XAddArgs{
@@ -100,6 +122,7 @@ func (p *Publisher) PublishTo(ctx context.Context, stream string, task queue.Tas
 		args.Approx = true
 	}
 	if err := p.client.XAdd(ctx, args).Err(); err != nil {
+		tracing.RecordError(span, err)
 		return fmt.Errorf("redisqueue: xadd %s: %w", stream, err)
 	}
 	return nil
@@ -241,6 +264,43 @@ func (c *Consumer) AutoClaim(ctx context.Context, stream string, minIdle time.Du
 		out = append(out, Delivery{Stream: stream, ID: msg.ID, Task: task})
 	}
 	return out, nil
+}
+
+// TrimStreams caps Redis Stream backlogs. It is exact rather than approximate
+// so operator cleanup has deterministic results.
+func TrimStreams(ctx context.Context, client redis.Cmdable, maxLen int64, streams ...string) (map[string]int64, error) {
+	if maxLen <= 0 {
+		return map[string]int64{}, nil
+	}
+	if len(streams) == 0 {
+		streams = AllStreamsWithDLQ
+	}
+	trimmed := make(map[string]int64, len(streams))
+	for _, stream := range streams {
+		n, err := client.XTrimMaxLen(ctx, stream, maxLen).Result()
+		if err != nil {
+			return trimmed, fmt.Errorf("redisqueue: trim %s: %w", stream, err)
+		}
+		trimmed[stream] = n
+	}
+	return trimmed, nil
+}
+
+// Trimmer performs stream retention cleanup for maintenance jobs.
+type Trimmer struct {
+	client  redis.Cmdable
+	maxLen  int64
+	streams []string
+}
+
+// NewTrimmer builds a Redis stream trimmer. maxLen <= 0 disables trimming.
+func NewTrimmer(client redis.Cmdable, maxLen int64, streams ...string) *Trimmer {
+	return &Trimmer{client: client, maxLen: maxLen, streams: streams}
+}
+
+// Trim caps configured streams and returns per-stream entries removed.
+func (t *Trimmer) Trim(ctx context.Context) (map[string]int64, error) {
+	return TrimStreams(ctx, t.client, t.maxLen, t.streams...)
 }
 
 func decodeTask(msg redis.XMessage) (queue.Task, error) {

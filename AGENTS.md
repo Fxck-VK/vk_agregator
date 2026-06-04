@@ -6,6 +6,17 @@ This repository is a Go backend for VK AI Aggregator.
 The system is an AI Job Processing Platform, not a simple chatbot.
 
 The architecture source of truth is `docs/ARCHITECTURE.md`.
+Current implementation status is tracked in `PROGRESS.md`, `TASKS.md`,
+`ROADMAP.md`, and `AUDIT.md`.
+
+Current release: `v0.1.3 / Beta integrations foundation`.
+The default runtime uses the mock provider and mock VK delivery. Real
+integrations are opt-in: OpenAI text/image/video provider, provider
+router/fallback/circuit breaker, VK `messages.send` with raw photo/video upload,
+VK `/start` product menu with inline keyboard, OpenAI output moderation, and
+OpenAI text/image artifact scanning are
+implemented. Credential-bound live smoke and the full video media pipeline
+(scan/transcode/VK-ready variants) remain follow-up work.
 
 ## Strict Architecture Rules
 
@@ -14,6 +25,8 @@ The architecture source of truth is `docs/ARCHITECTURE.md`.
 - All external inbound events must be idempotent.
 - All provider calls must go through `internal/adapter/provider`.
 - All VK API calls must go through `internal/adapter/delivery/vk`.
+- VK control/menu responses must use `vkdelivery.ControlClient` and a deterministic `random_id`.
+- VK menu buttons must not create billable Jobs until the user supplies a prompt.
 - Billing must use ledger entries and reservations; never mutate balance directly without ledger.
 - Media files must be stored as Artifacts before delivery.
 - Workers must be safe to retry.
@@ -43,8 +56,11 @@ The architecture source of truth is `docs/ARCHITECTURE.md`.
 ## Commands
 
 - Run tests: `go test ./...`
+- Run vet: `go vet ./...`
 - Run lint: `golangci-lint run`
-- Format: `gofmt -w .`
+- Check format: `gofmt -l .`
+- Format: `gofmt -w <files>`
+- Validate compose: `docker compose config`
 - Run migrations locally: `go run ./cmd/migrate up`
 - Run local stack: `docker compose up -d`
 
@@ -56,3 +72,7 @@ The architecture source of truth is `docs/ARCHITECTURE.md`.
 - New DB changes include migrations.
 - New provider adapters include mock tests.
 - New workers are idempotent and retry-safe.
+- Documentation is updated when behavior, setup, architecture status, or known
+  limitations change.
+- Real-provider or real-VK changes explicitly document which parts are live,
+  which require credentials, and which remain mock/partial.

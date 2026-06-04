@@ -23,6 +23,8 @@ type Task struct {
 	Modality domain.Modality `json:"modality"`
 	// CorrelationID links the task to the originating request flow.
 	CorrelationID string `json:"correlation_id"`
+	// Traceparent carries W3C trace context across asynchronous queue boundaries.
+	Traceparent string `json:"traceparent,omitempty"`
 	// Attempt is the delivery attempt counter for this task. It is incremented
 	// each time the task is re-enqueued after a retryable failure and is used to
 	// enforce a hard retry budget (after which the task is dead-lettered).

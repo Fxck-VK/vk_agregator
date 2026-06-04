@@ -340,11 +340,131 @@
 
 ---
 
-## Next step — Step 8
+## Step 8 — v0.1.2 production hardening
 
-**Реальные адаптеры и outbox relay.**
+Статус: **завершён как MVP+ hardening**.
 
-- Реальный VK API клиент (`messages.send`, upload серверы) под `vkdelivery.Client`.
-- Реальные provider-адаптеры (OpenAI/Google/Kling/Runway) под `domain.Provider`.
-- Outbox relay: drain `outbox_events` → publish в стримы; модерация перед выдачей (инвариант #15).
-- Рефактор `BillingRepository` на `Querier` (job+reserve+outbox в одной транзакции).
+### Что сделано
+
+- **Output moderation**:
+  - добавлен `moderationservice` с интерфейсом `Moderator`;
+  - добавлен audit trail `moderation_results` и миграция `000003`;
+  - generation/poll worker блокирует delivery, если moderation verdict не позволяет выдачу;
+  - при блокировке job получает `rejected`, reservation release выполняется без capture.
+- **DLQ и retry budget**:
+  - retry budget теперь охватывает submit/poll/download/delivery phases;
+  - exhausted tasks уходят в `stream:jobs:dlq`;
+  - бесконечный re-enqueue для download/provider/delivery failures закрыт.
+- **Outbox relay**:
+  - orchestrator больше не публикует job напрямую в Redis;
+  - `event.job.queued` пишется в `outbox_events`;
+  - `service/outboxrelay` публикует pending events в Redis Streams и помечает их published.
+- **Atomic billing**:
+  - `BillingRepository` может работать standalone или transaction-bound через `Querier`;
+  - job creation + reserve + outbox выполняются в одной транзакции.
+- **Security / hardening**:
+  - production / real-mode config validation в `cmd/api` и `cmd/worker`;
+  - SSRF protection в artifact downloader;
+  - per-IP webhook rate limiting;
+  - Prometheus metrics at `/metrics`.
+- **Operational hardening**:
+  - OpenTelemetry trace context propagation через `traceparent` от VK intake до worker pipeline;
+  - graceful worker drain через `WORKER_SHUTDOWN_GRACE`;
+  - maintenance cleanup для `idempotency_keys`, terminal `outbox_events` и Redis Stream backlog;
+  - balance-vs-ledger reconciliation metric `vkagg_billing_mismatches`.
+- **Storage / migrations / cost controls**:
+  - migration checksums и transactional apply/rollback;
+  - S3 retention lifecycle, signed artifact URLs, scanner hook;
+  - `PRICES` overrides и `MAX_JOB_COST`.
+- **Real adapter starts**:
+  - OpenAI image-generation adapter behind `PROVIDER=openai`;
+  - real VK `messages.send` adapter behind `VK_DELIVERY_MODE=real`.
+
+### Проверки
+
+- `go test ./...`, `go vet ./...`, `docker compose config` — зелёные на `v0.1.2`.
+- Unit/in-memory coverage включает:
+  - VK inbound idempotency;
+  - billing reserve/capture/release;
+  - job orchestrator;
+  - provider mock/OpenAI adapter;
+  - Redis Streams;
+  - output moderation;
+  - DLQ/retry budget;
+  - delivery idempotency/capture;
+  - full in-memory E2E `VK → Job → Queue → Provider → Artifact → Delivery → Capture`.
+
+### Текущие ограничения после v0.1.2
+
+- OpenAI adapter покрывал только image generation.
+- Real VK adapter покрывал только `messages.send`; upload raw photo/video artifacts в VK upload servers ещё был нужен.
+- Output moderation была keyword-based; real moderation provider и artifact scanner оставались follow-up.
+- Нужен resume fix для edge-case: `provider_task=succeeded`, но artifact/result_ready ещё не сохранены после crash.
+
+---
+
+## Step 9 — v0.1.3 real integrations foundation
+
+Статус: **завершён как adapter-level foundation; live smoke с реальными ключами ещё нужен**.
+
+### Что сделано
+
+- **OpenAI provider**:
+  - text generation через `/responses`;
+  - image generation через `/images/generations`, включая `url` и `b64_json`;
+  - async video generation через `/videos`, polling `/videos/{id}` и download `/videos/{id}/content`;
+  - output нормализуется в Artifact-compatible URLs, включая `data:` URLs для inline bytes.
+- **Provider router**:
+  - `PROVIDER_CHAIN` задаёт ordered fallback chain;
+  - router проверяет capabilities, estimated cost, observed latency и circuit-breaker health;
+  - retryable submit failures (`rate_limited`, `timeout`, `overloaded`, `internal`) пробуют следующий provider в той же попытке;
+  - persisted `ProviderTask.Provider` хранит фактического provider, принявшего задачу.
+- **VK media delivery**:
+  - `vkdelivery.HTTPClient` теперь реализует `MediaUploader`;
+  - photo flow: `photos.getMessagesUploadServer` → multipart upload → `photos.saveMessagesPhoto`;
+  - video flow: `video.save` → multipart upload;
+  - delivery worker загружает raw artifact bytes в VK и отправляет canonical `photo...` / `video...` attachment через `messages.send`.
+- **Moderation / scanner**:
+  - `MODERATION_PROVIDER=openai` включает OpenAI moderation вместо keyword-only moderator;
+  - `ARTIFACT_SCANNER=openai` проверяет text/image artifact bytes до storage;
+  - video scanning/transcode остаётся частью будущего media pipeline.
+- **Config/docs/tests**:
+  - добавлены env-переменные OpenAI text/image/video/moderation/scanner и `PROVIDER_CHAIN`;
+  - обновлены `README.md`, `RUNBOOK.md`, `TESTING.md`, `TASKS.md`, `AGENTS.md`, `AUDIT.md`, `ROADMAP.md`;
+  - добавлены unit-тесты OpenAI text/image/video/moderation/scanner, VK upload pipeline, delivery upload и provider fallback.
+- **VK inbound attachments**:
+  - sticker-only сообщения больше не превращаются в пустой prompt;
+  - handler синтезирует text prompt с `sticker_id/product_id`, поэтому стикер проходит через обычный `InboundEvent -> Command -> Job` flow;
+  - фото/видео/аудио attachments остаются задачей полноценного input Artifact pipeline.
+- **VK product menu**:
+  - первичная нижняя VK keyboard содержит только одну кнопку `Старт`;
+  - после нажатия `Старт` бот заменяет нижнюю постоянную клавиатуру на одну кнопку `Показать меню`;
+  - `Показать меню` хранится как отдельный `show_menu` control-command и открывает VK inline keyboard под welcome-сообщением без повторной переустановки нижней клавиатуры;
+  - `Старт`, `/start`, `меню` и `начать` открывают VK inline keyboard под welcome-сообщением в стиле Super GPT;
+  - `vkdelivery.HTTPClient` получил `SendMessage` с `keyboard` JSON, поэтому VK API по-прежнему вызывается только из `internal/adapter/delivery/vk`;
+  - кнопки `Создать видео`, `Создать фото`, `Спросить у GPT`, `Студентам и школьникам`, `Мой аккаунт`, `Пополнить баланс` классифицируются как control commands и не создают пустые billable jobs;
+  - баланс в меню берется через `billingservice.EnsureAccount`, без прямой мутации баланса;
+  - опциональный баннер подключается через `VK_WELCOME_ATTACHMENT` как уже готовый VK attachment string;
+  - если VK возвращает `error_code=912` из-за выключенных bot features, API повторяет отправку без keyboard, чтобы callback не падал.
+
+### Проверки
+
+- Targeted tests: `go test ./internal/adapter/provider/openai ./internal/adapter/delivery/vk ./internal/adapter/inbound/vk ./internal/service/commandrouter ./internal/worker ./internal/platform/config`.
+- Full regression checks выполняются после документационного sync.
+- Live VK `/start` smoke: callback returned `ok`, command persisted as `start`,
+  zero jobs created, welcome text delivered to VK. After enabling bot features
+  in community settings, VK accepts keyboard sends without `error_code=912`.
+
+### Текущие ограничения
+
+- Реальные OpenAI/VK вызовы не прогонялись без пользовательских credentials; нужен live smoke на dev-аккаунтах.
+- Второй реальный provider для fallback ещё не добавлен; сейчас fallback можно проверить с `mock`.
+- VK control/menu responses пока отправляются напрямую из API через `vkdelivery.ControlClient` с deterministic `random_id`; если на product/control sends распространяем invariant `Every delivery attempt is persisted`, нужен отдельный persisted delivery/outbox flow для таких сообщений.
+- Video artifact scanner пока fail-open; полноценный video scan/probe/transcode остаётся Phase 3 media pipeline.
+- Нужен resume fix для edge-case: `provider_task=succeeded`, но artifact/result_ready ещё не сохранены после crash.
+
+### Next step
+
+См. актуальный backlog в `TASKS.md`; ближайший фокус — live smoke с реальными
+ключами, второй реальный provider для fallback, video media pipeline и worker
+resume hardening.

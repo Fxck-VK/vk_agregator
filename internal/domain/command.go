@@ -26,8 +26,24 @@ const (
 	CommandVideoExtend CommandType = "video.extend"
 	// CommandAudioTTS synthesizes speech from text.
 	CommandAudioTTS CommandType = "audio.tts"
+	// CommandStart opens the VK product menu.
+	CommandStart CommandType = "start"
+	// CommandShowMenu reopens the VK product menu after onboarding.
+	CommandShowMenu CommandType = "show_menu"
 	// CommandBalance reports the user's credit balance.
 	CommandBalance CommandType = "balance"
+	// CommandAccount reports the user's account state.
+	CommandAccount CommandType = "account"
+	// CommandTopUp starts the balance top-up flow.
+	CommandTopUp CommandType = "top_up"
+	// CommandMenuText explains how to ask the text model.
+	CommandMenuText CommandType = "menu.text"
+	// CommandMenuImage explains how to generate an image.
+	CommandMenuImage CommandType = "menu.image"
+	// CommandMenuVideo explains how to generate a video.
+	CommandMenuVideo CommandType = "menu.video"
+	// CommandMenuStudents opens the student/schoolchild help section.
+	CommandMenuStudents CommandType = "menu.students"
 	// CommandCancel cancels an in-flight job.
 	CommandCancel CommandType = "cancel"
 	// CommandStatus reports the status of a job.
@@ -48,7 +64,15 @@ func (c CommandType) Valid() bool {
 		CommandVideoImageToVideo,
 		CommandVideoExtend,
 		CommandAudioTTS,
+		CommandStart,
+		CommandShowMenu,
 		CommandBalance,
+		CommandAccount,
+		CommandTopUp,
+		CommandMenuText,
+		CommandMenuImage,
+		CommandMenuVideo,
+		CommandMenuStudents,
 		CommandCancel,
 		CommandStatus,
 		CommandHelp,

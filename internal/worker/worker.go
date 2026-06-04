@@ -16,14 +16,18 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
+	"go.opentelemetry.io/otel/attribute"
 
 	redisqueue "vk-ai-aggregator/internal/adapter/queue/redis"
 	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/platform/metrics"
 	"vk-ai-aggregator/internal/platform/queue"
+	"vk-ai-aggregator/internal/platform/tracing"
 	"vk-ai-aggregator/internal/service/moderationservice"
 )
 
@@ -48,43 +52,342 @@ type classedError interface {
 	ProviderErrorClass() domain.ProviderErrorClass
 }
 
-// Registry resolves which provider handles an operation, and looks providers up
-// by name when reconciling persisted provider tasks.
+// Registry resolves which provider handles a request, and looks providers up
+// by name when reconciling persisted provider tasks. Selection prefers healthy
+// capable providers with lower configured cost and observed latency, then falls
+// back across the chain when retryable submit failures occur.
 type Registry struct {
-	byName map[domain.ProviderName]domain.Provider
-	def    domain.Provider
+	mu       sync.Mutex
+	byName   map[domain.ProviderName]domain.Provider
+	order    []domain.ProviderName
+	breakers map[domain.ProviderName]*breakerState
+	now      func() time.Time
 }
 
 // NewRegistry builds a registry with a default provider and optional extras.
 func NewRegistry(def domain.Provider, more ...domain.Provider) *Registry {
-	r := &Registry{byName: map[domain.ProviderName]domain.Provider{}, def: def}
+	r := &Registry{
+		byName:   map[domain.ProviderName]domain.Provider{},
+		breakers: map[domain.ProviderName]*breakerState{},
+		now:      time.Now,
+	}
 	if def != nil {
-		r.byName[def.Name()] = def
+		r.add(def)
 	}
 	for _, p := range more {
-		r.byName[p.Name()] = p
+		r.add(p)
 	}
 	return r
 }
 
-// ForOperation returns the provider that should handle an operation. Routing is
-// currently static (the default provider); model/provider routing is future
-// work, but the seam is here.
+func (r *Registry) add(p domain.Provider) {
+	name := p.Name()
+	if _, exists := r.byName[name]; !exists {
+		r.order = append(r.order, name)
+	}
+	r.byName[name] = p
+	if _, exists := r.breakers[name]; !exists {
+		r.breakers[name] = &breakerState{}
+	}
+}
+
+// ForOperation returns the provider that should handle an operation. It is kept
+// for old callers/tests; new generation flow uses ForRequest so the router can
+// account for modality and cost.
 func (r *Registry) ForOperation(_ domain.OperationType) (domain.Provider, error) {
-	if r.def == nil {
+	if len(r.order) == 0 {
 		return nil, errors.New("worker: no default provider configured")
 	}
-	return r.def, nil
+	return r.ForName(r.order[0])
+}
+
+// ForRequest returns a routed provider wrapper. Submit on the wrapper tries the
+// selected provider chain in order and returns the task from the actual provider
+// that accepted the request.
+func (r *Registry) ForRequest(ctx context.Context, req domain.ProviderRequest) (domain.Provider, error) {
+	candidates, err := r.candidates(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	return &routedProvider{registry: r, candidates: candidates}, nil
 }
 
 // ForName returns the provider with the given name.
 func (r *Registry) ForName(name domain.ProviderName) (domain.Provider, error) {
+	p, err := r.rawForName(name)
+	if err != nil {
+		return nil, err
+	}
+	return &observedProvider{registry: r, provider: p}, nil
+}
+
+func (r *Registry) rawForName(name domain.ProviderName) (domain.Provider, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	p, ok := r.byName[name]
 	if !ok {
 		return nil, fmt.Errorf("worker: unknown provider %q", name)
 	}
 	return p, nil
 }
+
+type providerCandidate struct {
+	provider domain.Provider
+	name     domain.ProviderName
+	cost     int64
+	latency  time.Duration
+	open     bool
+	order    int
+}
+
+type breakerState struct {
+	failures    int
+	openedUntil time.Time
+	latency     time.Duration
+}
+
+func (r *Registry) candidates(ctx context.Context, req domain.ProviderRequest) ([]providerCandidate, error) {
+	r.mu.Lock()
+	order := append([]domain.ProviderName(nil), r.order...)
+	providers := make(map[domain.ProviderName]domain.Provider, len(r.byName))
+	states := make(map[domain.ProviderName]breakerState, len(r.breakers))
+	now := r.now()
+	for name, provider := range r.byName {
+		providers[name] = provider
+	}
+	for name, state := range r.breakers {
+		states[name] = *state
+	}
+	r.mu.Unlock()
+
+	var healthy []providerCandidate
+	var open []providerCandidate
+	for idx, name := range order {
+		provider := providers[name]
+		if provider == nil {
+			continue
+		}
+		if ok, err := supports(ctx, provider, req); err != nil || !ok {
+			continue
+		}
+		estimate, err := provider.Estimate(ctx, req)
+		if err != nil {
+			if classOf(err) == domain.ProviderErrUnsupportedCapab {
+				continue
+			}
+			estimate.AmountCredits = int64(idx + 1)
+		}
+		st := states[name]
+		candidate := providerCandidate{
+			provider: provider,
+			name:     name,
+			cost:     estimate.AmountCredits,
+			latency:  st.latency,
+			open:     !st.openedUntil.IsZero() && now.Before(st.openedUntil),
+			order:    idx,
+		}
+		if candidate.open {
+			open = append(open, candidate)
+			continue
+		}
+		healthy = append(healthy, candidate)
+	}
+	sortCandidates(healthy)
+	if len(healthy) > 0 {
+		return healthy, nil
+	}
+	sortCandidates(open)
+	if len(open) > 0 {
+		// All capable providers are open. Try them anyway so a temporary breaker
+		// window cannot make the platform permanently unavailable.
+		return open, nil
+	}
+	return nil, fmt.Errorf("worker: no provider supports %s/%s", req.Operation, req.Modality)
+}
+
+func sortCandidates(c []providerCandidate) {
+	sort.SliceStable(c, func(i, j int) bool {
+		if c[i].cost != c[j].cost {
+			return c[i].cost < c[j].cost
+		}
+		if c[i].latency != c[j].latency {
+			if c[i].latency == 0 {
+				return false
+			}
+			if c[j].latency == 0 {
+				return true
+			}
+			return c[i].latency < c[j].latency
+		}
+		return c[i].order < c[j].order
+	})
+}
+
+func supports(ctx context.Context, provider domain.Provider, req domain.ProviderRequest) (bool, error) {
+	caps, err := provider.Capabilities(ctx)
+	if err != nil {
+		return false, err
+	}
+	for _, cap := range caps {
+		if cap.Operation != req.Operation {
+			continue
+		}
+		if cap.Modality != "" && req.Modality != "" && cap.Modality != req.Modality {
+			continue
+		}
+		if req.ModelCode != "" && cap.ModelCode != "" && req.ModelCode != cap.ModelCode {
+			continue
+		}
+		return true, nil
+	}
+	return false, nil
+}
+
+func (r *Registry) record(name domain.ProviderName, started time.Time, err error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	state := r.breakers[name]
+	if state == nil {
+		state = &breakerState{}
+		r.breakers[name] = state
+	}
+	if !started.IsZero() {
+		elapsed := r.now().Sub(started)
+		if elapsed > 0 {
+			if state.latency == 0 {
+				state.latency = elapsed
+			} else {
+				state.latency = (state.latency + elapsed) / 2
+			}
+		}
+	}
+	if err == nil {
+		state.failures = 0
+		state.openedUntil = time.Time{}
+		return
+	}
+	if !isRetryable(classOf(err)) {
+		return
+	}
+	state.failures++
+	if state.failures >= 2 {
+		state.openedUntil = r.now().Add(time.Duration(state.failures) * 30 * time.Second)
+	}
+}
+
+type observedProvider struct {
+	registry *Registry
+	provider domain.Provider
+}
+
+func (p *observedProvider) Name() domain.ProviderName { return p.provider.Name() }
+func (p *observedProvider) Capabilities(ctx context.Context) ([]domain.Capability, error) {
+	return p.provider.Capabilities(ctx)
+}
+func (p *observedProvider) Estimate(ctx context.Context, req domain.ProviderRequest) (domain.CostEstimate, error) {
+	return p.provider.Estimate(ctx, req)
+}
+func (p *observedProvider) Submit(ctx context.Context, req domain.ProviderRequest) (domain.ProviderTask, error) {
+	started := p.registry.now()
+	task, err := p.provider.Submit(ctx, req)
+	p.registry.record(p.provider.Name(), started, err)
+	return task, err
+}
+func (p *observedProvider) Poll(ctx context.Context, ref domain.ProviderTaskRef) (domain.ProviderTaskResult, error) {
+	started := p.registry.now()
+	res, err := p.provider.Poll(ctx, ref)
+	recordErr := err
+	if err == nil && res.Status == domain.ProviderTaskFailed && isRetryable(res.ErrorClass) {
+		recordErr = providerResultError{class: res.ErrorClass, message: res.ErrorMessage}
+	}
+	p.registry.record(p.provider.Name(), started, recordErr)
+	return res, err
+}
+func (p *observedProvider) Cancel(ctx context.Context, ref domain.ProviderTaskRef) error {
+	started := p.registry.now()
+	err := p.provider.Cancel(ctx, ref)
+	p.registry.record(p.provider.Name(), started, err)
+	return err
+}
+
+type routedProvider struct {
+	registry   *Registry
+	candidates []providerCandidate
+}
+
+func (p *routedProvider) Name() domain.ProviderName {
+	if len(p.candidates) == 0 {
+		return ""
+	}
+	return p.candidates[0].name
+}
+func (p *routedProvider) Capabilities(ctx context.Context) ([]domain.Capability, error) {
+	if len(p.candidates) == 0 {
+		return nil, errors.New("worker: no routed provider candidates")
+	}
+	return p.candidates[0].provider.Capabilities(ctx)
+}
+func (p *routedProvider) Estimate(ctx context.Context, req domain.ProviderRequest) (domain.CostEstimate, error) {
+	if len(p.candidates) == 0 {
+		return domain.CostEstimate{}, errors.New("worker: no routed provider candidates")
+	}
+	return p.candidates[0].provider.Estimate(ctx, req)
+}
+func (p *routedProvider) Submit(ctx context.Context, req domain.ProviderRequest) (domain.ProviderTask, error) {
+	var last error
+	for _, candidate := range p.candidates {
+		started := p.registry.now()
+		task, err := candidate.provider.Submit(ctx, req)
+		p.registry.record(candidate.name, started, err)
+		if err == nil {
+			if task.Provider == "" {
+				task.Provider = candidate.name
+			}
+			return task, nil
+		}
+		last = err
+		if !isFallbackError(err) {
+			break
+		}
+	}
+	if last == nil {
+		last = errors.New("worker: no routed provider candidates")
+	}
+	return domain.ProviderTask{}, last
+}
+func (p *routedProvider) Poll(ctx context.Context, ref domain.ProviderTaskRef) (domain.ProviderTaskResult, error) {
+	provider, err := p.registry.ForName(ref.Provider)
+	if err != nil {
+		return domain.ProviderTaskResult{}, err
+	}
+	return provider.Poll(ctx, ref)
+}
+func (p *routedProvider) Cancel(ctx context.Context, ref domain.ProviderTaskRef) error {
+	provider, err := p.registry.ForName(ref.Provider)
+	if err != nil {
+		return err
+	}
+	return provider.Cancel(ctx, ref)
+}
+
+func isFallbackError(err error) bool {
+	class := classOf(err)
+	return isRetryable(class) || class == domain.ProviderErrUnsupportedCapab
+}
+
+type providerResultError struct {
+	class   domain.ProviderErrorClass
+	message string
+}
+
+func (e providerResultError) Error() string {
+	if e.message != "" {
+		return e.message
+	}
+	return string(e.class)
+}
+
+func (e providerResultError) ProviderErrorClass() domain.ProviderErrorClass { return e.class }
 
 // processor holds the shared dependencies and result-handling logic used by
 // both the generation and poll workers.
@@ -298,10 +601,20 @@ func (p *processor) latestTask(ctx context.Context, jobID uuid.UUID) (*domain.Pr
 
 // pollOnce polls the provider once and applies the normalized result.
 func (p *processor) pollOnce(ctx context.Context, job *domain.Job, pt *domain.ProviderTask, provider domain.Provider, task queue.Task) error {
-	res, err := provider.Poll(ctx, domain.ProviderTaskRef{Provider: pt.Provider, ExternalID: pt.ExternalID})
+	pollCtx, span := tracing.Start(ctx, "provider.poll",
+		attribute.String("job.id", job.ID.String()),
+		attribute.String("provider", string(provider.Name())),
+		attribute.String("provider.external_id", pt.ExternalID),
+		tracing.CorrelationAttr(job.CorrelationID),
+	)
+	res, err := provider.Poll(pollCtx, domain.ProviderTaskRef{Provider: pt.Provider, ExternalID: pt.ExternalID})
 	if err != nil {
+		tracing.RecordError(span, err)
+		span.End()
 		return p.handleFailure(ctx, job, task, classOf(err), err.Error())
 	}
+	span.SetAttributes(attribute.String("provider.task_status", string(res.Status)))
+	span.End()
 	return p.applyResult(ctx, job, pt, res, task)
 }
 
@@ -373,17 +686,30 @@ func (p *processor) applyResult(ctx context.Context, job *domain.Job, pt *domain
 // saveOutputs stores each provider output URL as an output artifact and records
 // the artifact ids on the job, skipping ids already attached (idempotent).
 func (p *processor) saveOutputs(ctx context.Context, job *domain.Job, urls []string) error {
+	ctx, span := tracing.Start(ctx, "artifact.save_outputs",
+		attribute.String("job.id", job.ID.String()),
+		attribute.String("modality", string(job.Modality)),
+		attribute.Int("artifact.output_count", len(urls)),
+		tracing.CorrelationAttr(job.CorrelationID),
+	)
+	defer span.End()
+
 	mediaType := mediaTypeFor(job.Modality)
 	for _, url := range urls {
 		art, err := p.artifacts.SaveRemoteArtifact(ctx, job.UserID, &job.ID, domain.ArtifactKindOutput, mediaType, url)
 		if err != nil {
+			tracing.RecordError(span, err)
 			return err
 		}
 		if !containsID(job.OutputArtifactIDs, art.ID) {
 			job.OutputArtifactIDs = append(job.OutputArtifactIDs, art.ID)
 		}
 	}
-	return p.jobs.Update(ctx, job)
+	if err := p.jobs.Update(ctx, job); err != nil {
+		tracing.RecordError(span, err)
+		return err
+	}
+	return nil
 }
 
 // handleFailure classifies a provider failure and either re-queues the job for
@@ -441,6 +767,13 @@ func (p *processor) moderateOutput(ctx context.Context, job *domain.Job) (bool, 
 	if p.moderator == nil {
 		return false, nil
 	}
+	ctx, span := tracing.Start(ctx, "moderation.output",
+		attribute.String("job.id", job.ID.String()),
+		attribute.String("modality", string(job.Modality)),
+		tracing.CorrelationAttr(job.CorrelationID),
+	)
+	defer span.End()
+
 	var pp promptParams
 	if len(job.Params) > 0 {
 		_ = json.Unmarshal(job.Params, &pp)
@@ -451,8 +784,10 @@ func (p *processor) moderateOutput(ctx context.Context, job *domain.Job) (bool, 
 		Prompt:   pp.Prompt,
 	})
 	if err != nil {
+		tracing.RecordError(span, err)
 		return false, err
 	}
+	span.SetAttributes(attribute.String("moderation.decision", string(out.Decision)))
 
 	if p.modResults != nil {
 		var artID *uuid.UUID
@@ -476,11 +811,13 @@ func (p *processor) moderateOutput(ctx context.Context, job *domain.Job) (bool, 
 	}
 
 	if err := p.setStatus(ctx, job, domain.JobStatusRejected, "content_rejected", "blocked by output moderation"); err != nil {
+		tracing.RecordError(span, err)
 		return false, err
 	}
 	metrics.JobsTerminal.WithLabelValues(string(domain.JobStatusRejected)).Inc()
 	if p.releaser != nil {
 		if err := p.releaser.ReleaseForJob(ctx, job.ID); err != nil {
+			tracing.RecordError(span, err)
 			return false, err
 		}
 	}

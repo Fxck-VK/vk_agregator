@@ -6,7 +6,7 @@ Delivery → Billing Capture`.
 
 ## Prerequisites
 
-- Go 1.22+
+- Go 1.25+
 - Docker + Docker Compose (Postgres, Redis, MinIO)
 - `curl` (or any HTTP client)
 
@@ -37,6 +37,23 @@ All have local-dev defaults (see `internal/platform/config/config.go`):
 | `VK_CONFIRMATION_TOKEN` | `dev-confirmation`                                                                        |
 | `VK_SECRET`             | _(empty = no secret check)_                                                               |
 | `ADMIN_TOKEN`           | _(empty = admin API open)_                                                                |
+| `PROVIDER`              | `mock`                                                                                    |
+| `PROVIDER_CHAIN`        | value of `PROVIDER`                                                                        |
+| `OPENAI_API_KEY`        | _(required when OpenAI provider/moderation/scanner is enabled)_                           |
+| `OPENAI_TEXT_MODEL`     | `gpt-4.1-mini`                                                                             |
+| `OPENAI_IMAGE_MODEL`    | `gpt-image-1`                                                                              |
+| `OPENAI_VIDEO_MODEL`    | `sora-2`                                                                                   |
+| `MODERATION_PROVIDER`   | `keyword`                                                                                  |
+| `ARTIFACT_SCANNER`      | `none`                                                                                     |
+| `VK_DELIVERY_MODE`      | `mock`                                                                                    |
+| `VK_ACCESS_TOKEN`       | _(required when `VK_DELIVERY_MODE=real`; also enables API-side `/start` menu sends)_       |
+| `VK_WELCOME_ATTACHMENT` | _(optional VK attachment string for `/start` banner)_                                     |
+| `MAX_ATTEMPTS`          | `3`                                                                                       |
+| `SIGNED_DELIVERY`       | `false`                                                                                   |
+| `STREAM_MAX_LEN`        | `100000`                                                                                  |
+| `WORKER_SHUTDOWN_GRACE` | `30s`                                                                                     |
+| `WORKER_METRICS_ADDR`   | `:9090`                                                                                   |
+| `OTEL_TRACES_EXPORTER`  | `none` (`stdout` for local trace output)                                                  |
 
 ## Startup commands
 
@@ -58,6 +75,25 @@ go run ./cmd/worker
 
 The worker auto-creates the MinIO bucket and the Redis consumer groups on
 startup, and reclaims un-acked work (restart recovery).
+
+Real integration smoke commands (credential-bound):
+
+```bash
+# OpenAI text/image/video provider.
+PROVIDER=openai OPENAI_API_KEY=... go run ./cmd/worker
+
+# Provider router: OpenAI primary, mock fallback.
+PROVIDER_CHAIN=openai,mock OPENAI_API_KEY=... go run ./cmd/worker
+
+# API-side VK /start menu responses with keyboard.
+VK_ACCESS_TOKEN=... go run ./cmd/api
+
+# VK messages.send + raw photo/video upload.
+VK_DELIVERY_MODE=real VK_ACCESS_TOKEN=... go run ./cmd/worker
+
+# OpenAI output moderation and text/image artifact scanner.
+MODERATION_PROVIDER=openai ARTIFACT_SCANNER=openai OPENAI_API_KEY=... go run ./cmd/worker
+```
 
 ## Migration commands
 
@@ -93,6 +129,20 @@ curl -s -X POST localhost:8080/webhooks/vk \
   -d '{"type":"message_new","event_id":"evt-1","object":{"message":{"from_id":777,"peer_id":777,"text":"hello world"}}}'
 # ok
 ```
+
+VK `/start` menu (creates user → command, but **no job**):
+
+```bash
+curl -s -X POST localhost:8080/webhooks/vk \
+  -H 'Content-Type: application/json' \
+  -d '{"type":"message_new","group_id":1,"event_id":"menu-1","object":{"message":{"from_id":777,"peer_id":777,"text":"/start"}}}'
+# ok
+```
+
+Expected: command type `start`, no queued job, no billing reservation. If
+`cmd/api` is running with `VK_ACCESS_TOKEN`, the peer receives the Super GPT
+welcome text and VK inline keyboard. `VK_WELCOME_ATTACHMENT` may point at a
+pre-uploaded VK banner attachment.
 
 Image / video jobs (slash commands):
 
@@ -190,12 +240,26 @@ TEST_REDIS_ADDR="localhost:6379" go test ./internal/adapter/queue/redis/...
 | Jobs stay `queued`                        | Worker not running, or pointing at a different Redis. Start `cmd/worker`; check `REDIS_ADDR`. |
 | `s3 connectivity check` / bucket error    | MinIO not up or wrong creds. Check `S3_ENDPOINT` / keys; console at `:9001`. |
 | Duplicate VK events create duplicate jobs | Ensure VK sends a stable `event_id`; dedup keys are derived from it.         |
+| `/start` sends text but no keyboard        | Enable bot features in VK community message settings; VK returns `error_code=912` when keyboards are disabled. |
 | Provider always fails                     | Mock provider injects errors on prompts containing `mock_timeout`, `mock_rate_limit`, `mock_provider_error`. Use a normal prompt. |
 | `409`/conflict on retry                   | Expected idempotency guard; the operation already succeeded — safe to ignore. |
 
 ## Notes / known limitations (MVP)
 
-- Only the **mock** AI provider and a **mock** VK delivery client are wired; the
-  `openai`/`google`/`kling` provider and real VK delivery adapters are stubs.
+- Default local runs use the **mock** AI provider and **mock** VK delivery.
+- `PROVIDER=openai` enables real OpenAI text/image/video adapters. Live tests
+  require a real key and may incur provider cost.
+- `PROVIDER_CHAIN=openai,mock` exercises router/fallback/circuit breaker logic
+  with OpenAI primary and mock fallback.
+- `VK_DELIVERY_MODE=real` enables real VK `messages.send` plus generated
+  photo/video upload into VK attachment ids.
+- VK `/start` menu replies are sent by `cmd/api` through
+  `vkdelivery.ControlClient` when `VK_ACCESS_TOKEN` is set. Button clicks are
+  control commands and do not create billable jobs without a prompt.
+- `MODERATION_PROVIDER=openai` and `ARTIFACT_SCANNER=openai` require
+  `OPENAI_API_KEY`; artifact scanning currently covers text/image bytes, while
+  video scan/transcode remains part of the future media pipeline.
 - `docker compose` brings up Postgres, Redis, MinIO; the app binaries run on the
   host (no app Dockerfile yet).
+- `cmd/api` and `cmd/worker` both validate production secrets fail-closed.
+  Real OpenAI/VK modes require their credentials even in local runs.

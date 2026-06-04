@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	vkdelivery "vk-ai-aggregator/internal/adapter/delivery/vk"
 	"vk-ai-aggregator/internal/adapter/inbound/vk"
 	"vk-ai-aggregator/internal/adapter/storage/memory"
 	"vk-ai-aggregator/internal/domain"
@@ -28,6 +29,10 @@ type harness struct {
 }
 
 func newHarness() *harness {
+	return newHarnessWithControl(nil)
+}
+
+func newHarnessWithControl(control vkdelivery.ControlClient) *harness {
 	users := memory.NewUserRepo()
 	cmds := memory.NewCommandRepo()
 	jobs := memory.NewJobRepo()
@@ -39,7 +44,6 @@ func newHarness() *harness {
 	pub := queue.NewMemoryPublisher()
 	uowMgr := memory.NewUnitOfWork(jobs, outbox, bill)
 	orch := joborchestrator.New(jobs, uowMgr, billing, 0)
-
 	h := vk.NewHandler(vk.Config{ConfirmationToken: "conf-token-123", Secret: "s3cr3t"}, vk.Deps{
 		Idempotency:  idem,
 		Inbound:      inbound,
@@ -48,6 +52,7 @@ func newHarness() *harness {
 		Billing:      billing,
 		Orchestrator: orch,
 		Router:       commandrouter.New(),
+		Control:      control,
 	})
 	return &harness{handler: h, users: users, cmds: cmds, jobs: jobs, inbound: inbound, pub: pub, relay: outboxrelay.New(uowMgr, pub)}
 }
@@ -110,6 +115,143 @@ func TestMessageNewCreatesJob(t *testing.T) {
 	}
 }
 
+func TestMessageNewStickerCreatesTextJob(t *testing.T) {
+	h := newHarness()
+	body := `{
+		"type":"message_new","group_id":1,"event_id":"evt-sticker","secret":"s3cr3t",
+		"object":{"message":{
+			"from_id":556,"peer_id":556,"text":"",
+			"attachments":[{"type":"sticker","sticker":{"sticker_id":123,"product_id":456,"emoji":"🙂"}}]
+		}}
+	}`
+	rec := h.post(body)
+	if rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	ctx := context.Background()
+	user, err := h.users.GetByVKUserID(ctx, 556)
+	if err != nil {
+		t.Fatalf("user not created: %v", err)
+	}
+	cmds, _ := h.cmds.ListByUser(ctx, user.ID, 10, 0)
+	if len(cmds) != 1 || !strings.Contains(cmds[0].RawText, "VK-стикер") || !strings.Contains(cmds[0].RawText, "sticker_id=123") {
+		t.Fatalf("unexpected command raw text: %+v", cmds)
+	}
+	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
+	if len(jobs) != 1 || jobs[0].OperationType != domain.OperationTextGenerate {
+		t.Fatalf("expected one text job, got %+v", jobs)
+	}
+	if h.pub.Len() != 1 {
+		t.Fatalf("expected 1 enqueued task, got %d", h.pub.Len())
+	}
+}
+
+func TestStartSendsWelcomeMenuNoJob(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	h := newHarnessWithControl(control)
+	body := `{
+		"type":"message_new","group_id":1,"event_id":"evt-start","secret":"s3cr3t",
+		"object":{"message":{"from_id":557,"peer_id":557,"text":"/start"}}
+	}`
+	rec := h.post(body)
+	if rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	ctx := context.Background()
+	user, err := h.users.GetByVKUserID(ctx, 557)
+	if err != nil {
+		t.Fatalf("user not created: %v", err)
+	}
+	cmds, _ := h.cmds.ListByUser(ctx, user.ID, 10, 0)
+	if len(cmds) != 1 || cmds[0].Type != domain.CommandStart {
+		t.Fatalf("unexpected commands: %+v", cmds)
+	}
+	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
+	if len(jobs) != 0 {
+		t.Fatalf("start menu must not create a job, got %d", len(jobs))
+	}
+	if h.pub.Len() != 0 {
+		t.Fatalf("expected no enqueued tasks, got %d", h.pub.Len())
+	}
+	sent := control.Sent()
+	if len(sent) != 2 {
+		t.Fatalf("expected persistent keyboard update and welcome message, got %+v", sent)
+	}
+	if !strings.Contains(sent[0].Keyboard, "Показать меню") || !strings.Contains(sent[0].Keyboard, `"inline":false`) {
+		t.Fatalf("unexpected persistent keyboard: %q", sent[0].Keyboard)
+	}
+	if !strings.Contains(sent[1].Text, "Добро пожаловать в Super GPT") {
+		t.Fatalf("unexpected text: %q", sent[1].Text)
+	}
+	if !strings.Contains(sent[1].Keyboard, `"inline":true`) || !strings.Contains(sent[1].Keyboard, "Создать видео") || !strings.Contains(sent[1].Keyboard, "Пополнить баланс") {
+		t.Fatalf("unexpected keyboard: %q", sent[1].Keyboard)
+	}
+}
+
+func TestShowMenuSendsWelcomeWithoutResettingPersistentKeyboard(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	h := newHarnessWithControl(control)
+	body := `{
+		"type":"message_new","group_id":1,"event_id":"evt-show-menu","secret":"s3cr3t",
+		"object":{"message":{"from_id":559,"peer_id":559,"text":"Показать меню","payload":"{\"command\":\"show_menu\"}"}}
+	}`
+	rec := h.post(body)
+	if rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	ctx := context.Background()
+	user, err := h.users.GetByVKUserID(ctx, 559)
+	if err != nil {
+		t.Fatalf("user not created: %v", err)
+	}
+	cmds, _ := h.cmds.ListByUser(ctx, user.ID, 10, 0)
+	if len(cmds) != 1 || cmds[0].Type != domain.CommandShowMenu {
+		t.Fatalf("unexpected commands: %+v", cmds)
+	}
+	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
+	if len(jobs) != 0 {
+		t.Fatalf("show menu must not create a job, got %d", len(jobs))
+	}
+	sent := control.Sent()
+	if len(sent) != 1 {
+		t.Fatalf("expected one welcome message, got %+v", sent)
+	}
+	if !strings.Contains(sent[0].Text, "Добро пожаловать в Super GPT") {
+		t.Fatalf("unexpected text: %q", sent[0].Text)
+	}
+	if !strings.Contains(sent[0].Keyboard, `"inline":true`) || strings.Contains(sent[0].Keyboard, "Показать меню") {
+		t.Fatalf("unexpected keyboard: %q", sent[0].Keyboard)
+	}
+}
+
+func TestStartFallsBackWhenVKKeyboardDisabled(t *testing.T) {
+	control := &keyboardFailControl{}
+	h := newHarnessWithControl(control)
+	body := `{
+		"type":"message_new","group_id":1,"event_id":"evt-start-fallback","secret":"s3cr3t",
+		"object":{"message":{"from_id":558,"peer_id":558,"text":"/start"}}
+	}`
+	rec := h.post(body)
+	if rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+	}
+	if len(control.sent) != 3 {
+		t.Fatalf("expected keyboard attempt and fallback send, got %+v", control.sent)
+	}
+	if control.sent[0].Keyboard == nil {
+		t.Fatalf("first send must include persistent keyboard")
+	}
+	if control.sent[1].Keyboard == nil {
+		t.Fatalf("second send must include inline keyboard")
+	}
+	if control.sent[2].Keyboard != nil {
+		t.Fatalf("fallback send must omit keyboard")
+	}
+}
+
 func TestMessageNewDuplicateIsDeduped(t *testing.T) {
 	h := newHarness()
 	body := `{
@@ -135,6 +277,18 @@ func TestMessageNewDuplicateIsDeduped(t *testing.T) {
 	if h.pub.Len() != 1 {
 		t.Fatalf("expected exactly 1 enqueued task, got %d", h.pub.Len())
 	}
+}
+
+type keyboardFailControl struct {
+	sent []vkdelivery.Message
+}
+
+func (c *keyboardFailControl) SendMessage(_ context.Context, _ int64, _ int64, msg vkdelivery.Message) (vkdelivery.SendResult, error) {
+	c.sent = append(c.sent, msg)
+	if msg.Keyboard != nil {
+		return vkdelivery.SendResult{}, &vkdelivery.APIError{Code: 912, Message: "Chat bot feature"}
+	}
+	return vkdelivery.SendResult{MessageID: int64(len(c.sent)), PeerID: 558}, nil
 }
 
 func TestMessageNewControlCommandNoJob(t *testing.T) {

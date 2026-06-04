@@ -55,6 +55,21 @@ func newDeliveryHarness(t *testing.T) *deliveryHarness {
 	}
 }
 
+type fakeVKUploader struct {
+	photoBytes []byte
+	videoBytes []byte
+}
+
+func (u *fakeVKUploader) UploadPhoto(_ context.Context, peerID int64, filename string, data []byte, _ string) (string, error) {
+	u.photoBytes = append([]byte(nil), data...)
+	return "photo123_456_key", nil
+}
+
+func (u *fakeVKUploader) UploadVideo(_ context.Context, peerID int64, filename string, data []byte, _ string) (string, error) {
+	u.videoBytes = append([]byte(nil), data...)
+	return "video123_456_key", nil
+}
+
 // resultReadyJob creates a user account, reserves credits, stores an output
 // artifact and a job in result_ready, returning the job.
 func (h *deliveryHarness) resultReadyJob(t *testing.T, mediaType domain.MediaType, body string) *domain.Job {
@@ -135,6 +150,33 @@ func TestDeliverySuccessCapturesAndSucceeds(t *testing.T) {
 	dels, _ := h.deliveries.ListByJob(ctx, job.ID)
 	if len(dels) != 1 || dels[0].Status != domain.DeliveryStatusSent {
 		t.Fatalf("unexpected deliveries: %+v", dels)
+	}
+}
+
+func TestDeliveryUploadsRawPhotoArtifactToVK(t *testing.T) {
+	h := newDeliveryHarness(t)
+	uploader := &fakeVKUploader{}
+	h.worker = worker.NewDeliveryWorker(worker.DeliveryDeps{
+		Jobs:       h.jobs,
+		Deliveries: h.deliveries,
+		Artifacts:  h.artifacts,
+		Objects:    h.objects,
+		VK:         h.vk,
+		VKUploader: uploader,
+		Billing:    h.billing,
+	})
+	ctx := context.Background()
+	job := h.resultReadyJob(t, domain.MediaTypeImage, "raw png bytes")
+
+	if err := h.worker.Process(ctx, deliveryTask(job)); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+	if string(uploader.photoBytes) != "raw png bytes" {
+		t.Fatalf("uploaded bytes = %q", string(uploader.photoBytes))
+	}
+	sent := h.vk.Sent()
+	if len(sent) != 1 || sent[0].Attachment != "photo123_456_key" {
+		t.Fatalf("expected uploaded VK attachment send, got %+v", sent)
 	}
 }
 

@@ -6,9 +6,12 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -21,8 +24,11 @@ import (
 	"vk-ai-aggregator/internal/adapter/storage/s3"
 	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/platform/config"
+	"vk-ai-aggregator/internal/platform/metrics"
+	"vk-ai-aggregator/internal/platform/tracing"
 	"vk-ai-aggregator/internal/service/artifactservice"
 	"vk-ai-aggregator/internal/service/billingservice"
+	"vk-ai-aggregator/internal/service/maintenance"
 	"vk-ai-aggregator/internal/service/moderationservice"
 	"vk-ai-aggregator/internal/service/outboxrelay"
 	"vk-ai-aggregator/internal/worker"
@@ -32,10 +38,31 @@ func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	cfg := config.Load()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	if err := cfg.Validate(); err != nil {
+		logger.Error("invalid configuration", "error", err)
+		os.Exit(1)
+	}
 
-	pool, err := postgres.NewPoolConfigured(ctx, cfg.DatabaseURL, cfg.DBMaxConns, cfg.DBMinConns)
+	rootCtx := context.Background()
+	shutdownTracing, err := tracing.Init(rootCtx, tracing.Config{
+		ServiceName: cfg.TracingServiceName + "-worker",
+		Exporter:    cfg.TracingExporter,
+	}, logger)
+	if err != nil {
+		logger.Error("tracing init failed", "error", err)
+		os.Exit(1)
+	}
+	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = shutdownTracing(shutdownCtx)
+	}()
+
+	readCtx, stopReads := context.WithCancel(rootCtx)
+	handlerCtx, stopHandlers := context.WithCancel(rootCtx)
+	defer stopHandlers()
+
+	pool, err := postgres.NewPoolConfigured(readCtx, cfg.DatabaseURL, cfg.DBMaxConns, cfg.DBMinConns)
 	if err != nil {
 		logger.Error("postgres connect failed", "error", err)
 		os.Exit(1)
@@ -45,7 +72,7 @@ func main() {
 	rdb := redisqueue.NewClientWithPool(cfg.RedisAddr, cfg.RedisPassword, cfg.RedisDB, cfg.RedisPoolSize)
 	defer rdb.Close()
 
-	store, err := s3.New(ctx, s3.Config{
+	store, err := s3.New(readCtx, s3.Config{
 		Endpoint:  cfg.S3Endpoint,
 		AccessKey: cfg.S3AccessKey,
 		SecretKey: cfg.S3SecretKey,
@@ -55,14 +82,14 @@ func main() {
 		logger.Error("s3 connect failed", "error", err)
 		os.Exit(1)
 	}
-	if err := store.EnsureBucket(ctx, cfg.S3Bucket); err != nil {
+	if err := store.EnsureBucket(readCtx, cfg.S3Bucket); err != nil {
 		logger.Error("s3 ensure bucket failed", "error", err)
 		os.Exit(1)
 	}
 	// Configure object retention so generated artifacts are purged on a schedule
 	// (audit ST1).
 	if cfg.ArtifactRetentionDays > 0 {
-		if err := store.SetRetention(ctx, cfg.S3Bucket, cfg.ArtifactRetentionDays); err != nil {
+		if err := store.SetRetention(readCtx, cfg.S3Bucket, cfg.ArtifactRetentionDays); err != nil {
 			logger.Warn("s3 set retention failed", "error", err)
 		}
 	}
@@ -74,30 +101,69 @@ func main() {
 	deliveries := postgres.NewDeliveryRepository(pool)
 	billingRepo := postgres.NewBillingRepository(pool)
 	modResults := postgres.NewModerationResultRepository(pool)
+	maintenanceRepo := postgres.NewMaintenanceRepository(pool)
 
 	billing := billingservice.New(billingRepo, billingservice.WithPriceOverrides(cfg.PriceOverrides))
-	publisher := redisqueue.NewPublisher(rdb, 100000)
+	publisher := redisqueue.NewPublisher(rdb, cfg.StreamMaxLen)
 
-	// Provider selection: the mock provider is the default; the OpenAI adapter is
-	// used only when PROVIDER=openai and a key is configured (audit P1).
-	var provider domain.Provider
+	// Provider routing: the first provider is primary; later providers are
+	// fallback candidates used by the worker registry when retryable submit
+	// failures trip circuit breakers.
+	var providerList []domain.Provider
 	var artOpts []artifactservice.Option
-	switch cfg.Provider {
-	case "openai":
-		provider = openai.New(openai.Config{
-			APIKey:     cfg.OpenAIAPIKey,
-			BaseURL:    cfg.OpenAIBaseURL,
-			ImageModel: cfg.OpenAIImageModel,
-		})
-		logger.Info("using openai provider")
-	default:
-		provider = mock.New()
+	hasMockProvider := false
+	for _, name := range cfg.ProviderChain {
+		switch strings.ToLower(strings.TrimSpace(name)) {
+		case "openai":
+			providerList = append(providerList, openai.New(openai.Config{
+				APIKey:       cfg.OpenAIAPIKey,
+				BaseURL:      cfg.OpenAIBaseURL,
+				TextModel:    cfg.OpenAITextModel,
+				ImageModel:   cfg.OpenAIImageModel,
+				ImageSize:    cfg.OpenAIImageSize,
+				VideoModel:   cfg.OpenAIVideoModel,
+				VideoSeconds: cfg.OpenAIVideoSeconds,
+				VideoSize:    cfg.OpenAIVideoSize,
+				TextPrice:    cfg.OpenAITextPrice,
+				ImagePrice:   cfg.OpenAIImagePrice,
+				VideoPrice:   cfg.OpenAIVideoPrice,
+			}))
+			logger.Info("registered openai provider")
+		case "mock":
+			providerList = append(providerList, mock.New())
+			hasMockProvider = true
+			logger.Info("registered mock provider")
+		case "":
+			continue
+		default:
+			logger.Warn("unknown provider skipped", "provider", name)
+		}
+	}
+	if len(providerList) == 0 {
+		providerList = append(providerList, mock.New())
+		hasMockProvider = true
+		logger.Warn("provider chain empty; using mock provider")
+	}
+	if hasMockProvider {
 		// The mock provider emits synthetic mock:// output URLs, so use a matching
 		// downloader to resolve them into real bytes for storage.
 		artOpts = append(artOpts, artifactservice.WithDownloader(mock.NewDownloader()))
 	}
+
+	var openAIModerator *openai.Moderator
+	if strings.EqualFold(cfg.ModerationProvider, "openai") || strings.EqualFold(cfg.ArtifactScanner, "openai") {
+		openAIModerator = openai.NewModerator(openai.ModerationConfig{
+			APIKey:  cfg.OpenAIAPIKey,
+			BaseURL: cfg.OpenAIBaseURL,
+			Model:   cfg.OpenAIModerationModel,
+		})
+	}
+	if strings.EqualFold(cfg.ArtifactScanner, "openai") {
+		artOpts = append(artOpts, artifactservice.WithScanner(openAIModerator))
+		logger.Info("using openai artifact scanner")
+	}
 	artSvc := artifactservice.New(artRepo, store, cfg.S3Bucket, artOpts...)
-	providers := worker.NewRegistry(provider)
+	providers := worker.NewRegistry(providerList[0], providerList[1:]...)
 
 	// Delivery client selection: mock by default, real VK API when configured
 	// (audit V1).
@@ -113,9 +179,13 @@ func main() {
 	default:
 		vkClient = vkdelivery.NewMockClient()
 	}
-	// Output moderation gates delivery (invariant #15). The keyword moderator is
-	// the default; swap for a provider-backed Moderator when available.
-	moderator := moderationservice.NewKeywordModerator(cfg.ModerationExtraTerms...)
+	// Output moderation gates delivery (invariant #15). Keyword moderation is
+	// the local default; OpenAI moderation is enabled with MODERATION_PROVIDER.
+	var moderator worker.Moderator = moderationservice.NewKeywordModerator(cfg.ModerationExtraTerms...)
+	if strings.EqualFold(cfg.ModerationProvider, "openai") {
+		moderator = openAIModerator
+		logger.Info("using openai moderation provider")
+	}
 
 	deps := worker.Deps{
 		Jobs:        jobs,
@@ -152,7 +222,7 @@ func main() {
 	relay := outboxrelay.New(postgres.NewUnitOfWork(pool), publisher, outboxrelay.WithLogger(logger))
 
 	consumer := redisqueue.NewConsumer(rdb, cfg.WorkerGroup, cfg.WorkerConsumer)
-	if err := consumer.EnsureGroups(ctx, redisqueue.AllStreams...); err != nil {
+	if err := consumer.EnsureGroups(readCtx, redisqueue.AllStreams...); err != nil {
 		logger.Error("ensure consumer groups failed", "error", err)
 		os.Exit(1)
 	}
@@ -169,21 +239,84 @@ func main() {
 		wg.Add(1)
 		go func(eng *worker.Engine) {
 			defer wg.Done()
-			_ = eng.Run(ctx)
+			_ = eng.RunWithHandlerContext(readCtx, handlerCtx)
 		}(e)
 	}
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		relay.Run(ctx, time.Second)
+		relay.Run(readCtx, time.Second)
 	}()
+
+	maintenanceSvc := maintenance.New(
+		maintenanceRepo,
+		redisqueue.NewTrimmer(rdb, cfg.StreamMaxLen, redisqueue.AllStreamsWithDLQ...),
+		maintenance.Config{
+			Interval:                      cfg.MaintenanceInterval,
+			OutboxRetention:               cfg.OutboxRetention,
+			BillingReconciliationInterval: cfg.BillingReconciliationInterval,
+			BillingReconciliationLimit:    cfg.BillingReconciliationLimit,
+		},
+		maintenance.WithLogger(logger),
+	)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		maintenanceSvc.Run(readCtx)
+	}()
+
+	var metricsSrv *http.Server
+	if cfg.WorkerMetricsAddr != "" {
+		mux := http.NewServeMux()
+		mux.Handle("GET /metrics", metrics.Handler())
+		mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("ok"))
+		})
+		metricsSrv = &http.Server{
+			Addr:              cfg.WorkerMetricsAddr,
+			Handler:           mux,
+			ReadHeaderTimeout: 10 * time.Second,
+		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			logger.Info("worker metrics listening", "addr", cfg.WorkerMetricsAddr)
+			if err := metricsSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				logger.Error("worker metrics server error", "error", err)
+				os.Exit(1)
+			}
+		}()
+	}
 	logger.Info("workers started", "group", cfg.WorkerGroup, "consumer", cfg.WorkerConsumer)
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 	<-stop
-	logger.Info("shutting down workers")
-	cancel()
-	wg.Wait()
+	logger.Info("shutting down workers", "grace", cfg.WorkerShutdownGrace)
+	stopReads()
+	if metricsSrv != nil {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		_ = metricsSrv.Shutdown(shutdownCtx)
+		cancel()
+	}
+
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	grace := cfg.WorkerShutdownGrace
+	if grace <= 0 {
+		grace = 30 * time.Second
+	}
+	select {
+	case <-done:
+	case <-time.After(grace):
+		logger.Warn("worker drain timeout; cancelling in-flight handlers")
+		stopHandlers()
+		<-done
+	}
 	logger.Info("workers stopped")
 }
