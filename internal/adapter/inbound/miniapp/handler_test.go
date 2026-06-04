@@ -1,0 +1,400 @@
+package miniapp_test
+
+import (
+	"bytes"
+	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"sort"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/google/uuid"
+
+	miniappinbound "vk-ai-aggregator/internal/adapter/inbound/miniapp"
+	"vk-ai-aggregator/internal/adapter/storage/memory"
+	"vk-ai-aggregator/internal/domain"
+	"vk-ai-aggregator/internal/service/billingservice"
+	"vk-ai-aggregator/internal/service/joborchestrator"
+)
+
+// ---------------------------------------------------------------------------
+// Sign verification unit tests
+// ---------------------------------------------------------------------------
+
+// buildSignedParams constructs a valid VK launch-params query string.
+func buildSignedParams(vkUserID int64, appSecret string, ts int64) string {
+	params := url.Values{}
+	params.Set("vk_user_id", fmt.Sprintf("%d", vkUserID))
+	params.Set("vk_app_id", "123456")
+	params.Set("vk_ts", fmt.Sprintf("%d", ts))
+	params.Set("vk_platform", "desktop_web")
+
+	// Compute sign over sorted vk_* params.
+	vkParams := make(url.Values)
+	for k, v := range params {
+		if strings.HasPrefix(k, "vk_") {
+			vkParams[k] = v
+		}
+	}
+	toSign := vkParams.Encode()
+	mac := hmac.New(sha256.New, []byte(appSecret))
+	mac.Write([]byte(toSign))
+	sign := base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+	params.Set("sign", sign)
+
+	// Build deterministic query string.
+	keys := make([]string, 0, len(params))
+	for k := range params {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	parts := make([]string, 0, len(keys))
+	for _, k := range keys {
+		parts = append(parts, k+"="+url.QueryEscape(params.Get(k)))
+	}
+	return strings.Join(parts, "&")
+}
+
+func TestVerifyLaunchParams_Valid(t *testing.T) {
+	const secret = "test-secret"
+	raw := buildSignedParams(777, secret, time.Now().Unix())
+
+	params, err := miniappinbound.VerifyLaunchParams(raw, secret, time.Hour)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if params.Get("vk_user_id") != "777" {
+		t.Fatalf("expected vk_user_id=777, got %s", params.Get("vk_user_id"))
+	}
+}
+
+func TestVerifyLaunchParams_InvalidSign(t *testing.T) {
+	const secret = "test-secret"
+	raw := buildSignedParams(777, "wrong-secret", time.Now().Unix())
+
+	_, err := miniappinbound.VerifyLaunchParams(raw, secret, time.Hour)
+	if err == nil {
+		t.Fatal("expected error for invalid sign, got nil")
+	}
+}
+
+func TestVerifyLaunchParams_Expired(t *testing.T) {
+	const secret = "test-secret"
+	oldTS := time.Now().Add(-2 * time.Hour).Unix()
+	raw := buildSignedParams(777, secret, oldTS)
+
+	_, err := miniappinbound.VerifyLaunchParams(raw, secret, time.Hour)
+	if err == nil {
+		t.Fatal("expected error for expired params, got nil")
+	}
+}
+
+func TestVerifyLaunchParams_EmptySecret_SkipsSignCheck(t *testing.T) {
+	// When appSecret is empty, signature check is skipped (dev/mock mode).
+	raw := "vk_user_id=42&sign=whatever"
+	params, err := miniappinbound.VerifyLaunchParams(raw, "", 0)
+	if err != nil {
+		t.Fatalf("expected no error in dev mode, got %v", err)
+	}
+	if params.Get("vk_user_id") != "42" {
+		t.Fatalf("expected vk_user_id=42, got %s", params.Get("vk_user_id"))
+	}
+}
+
+func TestVerifyLaunchParams_MissingUserID(t *testing.T) {
+	_, err := miniappinbound.VerifyLaunchParams("sign=abc", "", 0)
+	if err == nil {
+		t.Fatal("expected error for missing vk_user_id")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Handler integration tests (in-memory adapters)
+// ---------------------------------------------------------------------------
+
+// newTestHandler wires a Handler with in-memory repositories.
+func newTestHandler(appSecret string) *miniappinbound.Handler {
+	userRepo := memory.NewUserRepo()
+	jobRepo := memory.NewJobRepo()
+	billingRepo := memory.NewBillingRepo()
+	outboxRepo := memory.NewOutboxRepo()
+	uowMgr := memory.NewUnitOfWork(jobRepo, outboxRepo, billingRepo)
+
+	billing := billingservice.New(billingRepo)
+	orch := joborchestrator.New(jobRepo, uowMgr, billing, 0)
+
+	return miniappinbound.NewHandler(
+		miniappinbound.Config{
+			AppSecret:          appSecret,
+			LaunchParamsMaxAge: time.Hour,
+		},
+		miniappinbound.Deps{
+			Users:        userRepo,
+			Jobs:         jobRepo,
+			Billing:      billing,
+			BillingRepo:  billingRepo,
+			Orchestrator: orch,
+		},
+	)
+}
+
+// devLaunchParams returns a minimal dev-mode launch-params string (no secret).
+func devLaunchParams(vkUserID int64) string {
+	return fmt.Sprintf("vk_user_id=%d", vkUserID)
+}
+
+func TestHandler_CreateJob_OK(t *testing.T) {
+	routes := newTestHandler("").Routes()
+
+	body, _ := json.Marshal(map[string]string{
+		"operation": "text_generate",
+		"prompt":    "hello world",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/miniapp/jobs", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Launch-Params", devLaunchParams(777))
+
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	var resp map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("invalid response json: %v", err)
+	}
+	if resp["id"] == nil {
+		t.Fatal("expected job id in response")
+	}
+}
+
+func TestHandler_CreateJob_InvalidOperation(t *testing.T) {
+	routes := newTestHandler("").Routes()
+
+	body, _ := json.Marshal(map[string]string{
+		"operation": "unknown_op",
+		"prompt":    "hello",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/miniapp/jobs", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Launch-Params", devLaunchParams(777))
+
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestHandler_CreateJob_MissingPrompt(t *testing.T) {
+	routes := newTestHandler("").Routes()
+
+	body, _ := json.Marshal(map[string]string{"operation": "text_generate"})
+	req := httptest.NewRequest(http.MethodPost, "/miniapp/jobs", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Launch-Params", devLaunchParams(777))
+
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestHandler_CreateJob_UnauthorizedNoParams(t *testing.T) {
+	routes := newTestHandler("real-secret").Routes()
+
+	body, _ := json.Marshal(map[string]string{
+		"operation": "text_generate",
+		"prompt":    "hello",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/miniapp/jobs", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	// No X-Launch-Params header, secret is set → must reject.
+
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", w.Code)
+	}
+}
+
+func TestHandler_GetJob_OwnershipCheck(t *testing.T) {
+	userRepo := memory.NewUserRepo()
+	jobRepo := memory.NewJobRepo()
+	billingRepo := memory.NewBillingRepo()
+	outboxRepo := memory.NewOutboxRepo()
+	uowMgr := memory.NewUnitOfWork(jobRepo, outboxRepo, billingRepo)
+	billing := billingservice.New(billingRepo)
+	orch := joborchestrator.New(jobRepo, uowMgr, billing, 0)
+
+	handler := miniappinbound.NewHandler(
+		miniappinbound.Config{},
+		miniappinbound.Deps{
+			Users:        userRepo,
+			Jobs:         jobRepo,
+			Billing:      billing,
+			BillingRepo:  billingRepo,
+			Orchestrator: orch,
+		},
+	)
+	routes := handler.Routes()
+
+	// Create two users.
+	user1 := &domain.User{VKUserID: 100, Role: domain.RoleUser, Status: domain.StatusActive, Locale: "ru", Timezone: "UTC"}
+	user2 := &domain.User{VKUserID: 200, Role: domain.RoleUser, Status: domain.StatusActive, Locale: "ru", Timezone: "UTC"}
+	ctx := context.Background()
+	_ = userRepo.Create(ctx, user1)
+	_ = userRepo.Create(ctx, user2)
+
+	// Create a job owned by user1.
+	job := &domain.Job{
+		ID:             uuid.New(),
+		UserID:         user1.ID,
+		VKPeerID:       100,
+		OperationType:  domain.OperationTextGenerate,
+		Modality:       domain.ModalityText,
+		Status:         domain.JobStatusQueued,
+		IdempotencyKey: "test-job-ownership",
+	}
+	_ = jobRepo.Create(ctx, job)
+
+	// User2 tries to access user1's job → 404.
+	req := httptest.NewRequest(http.MethodGet, "/miniapp/jobs/"+job.ID.String(), nil)
+	req.Header.Set("X-Launch-Params", devLaunchParams(200))
+
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for cross-user job access, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestHandler_GetBalance(t *testing.T) {
+	routes := newTestHandler("").Routes()
+
+	req := httptest.NewRequest(http.MethodGet, "/miniapp/balance", nil)
+	req.Header.Set("X-Launch-Params", devLaunchParams(777))
+
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		BalanceCredits int64 `json:"balance_credits"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("invalid response: %v", err)
+	}
+	// New user gets the default starting balance.
+	if resp.BalanceCredits != billingservice.DefaultStartingBalance {
+		t.Fatalf("expected %d credits, got %d", billingservice.DefaultStartingBalance, resp.BalanceCredits)
+	}
+}
+
+func TestHandler_ValidSign(t *testing.T) {
+	const secret = "my-app-secret"
+	routes := newTestHandler(secret).Routes()
+
+	raw := buildSignedParams(777, secret, time.Now().Unix())
+	req := httptest.NewRequest(http.MethodGet, "/miniapp/balance", nil)
+	req.Header.Set("X-Launch-Params", raw)
+
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 with valid sign, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestHandler_InvalidSign(t *testing.T) {
+	const secret = "my-app-secret"
+	routes := newTestHandler(secret).Routes()
+
+	// Build params signed with a different secret.
+	raw := buildSignedParams(777, "wrong-secret", time.Now().Unix())
+	req := httptest.NewRequest(http.MethodGet, "/miniapp/balance", nil)
+	req.Header.Set("X-Launch-Params", raw)
+
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 with wrong sign, got %d", w.Code)
+	}
+}
+
+func TestHandler_ListJobs_Empty(t *testing.T) {
+	routes := newTestHandler("").Routes()
+
+	req := httptest.NewRequest(http.MethodGet, "/miniapp/jobs", nil)
+	req.Header.Set("X-Launch-Params", devLaunchParams(999))
+
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		Items []any `json:"items"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("invalid response: %v", err)
+	}
+	if len(resp.Items) != 0 {
+		t.Fatalf("expected empty items, got %d", len(resp.Items))
+	}
+}
+
+func TestHandler_CreateJob_Idempotency(t *testing.T) {
+	routes := newTestHandler("").Routes()
+
+	body, _ := json.Marshal(map[string]string{
+		"operation": "text_generate",
+		"prompt":    "idempotent prompt",
+	})
+
+	makeReq := func() *http.Request {
+		req := httptest.NewRequest(http.MethodPost, "/miniapp/jobs", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Launch-Params", devLaunchParams(777))
+		req.Header.Set("X-Idempotency-Key", "client-key-xyz")
+		return req
+	}
+
+	w1 := httptest.NewRecorder()
+	routes.ServeHTTP(w1, makeReq())
+	if w1.Code != http.StatusCreated {
+		t.Fatalf("first call: expected 201, got %d: %s", w1.Code, w1.Body.String())
+	}
+
+	w2 := httptest.NewRecorder()
+	routes.ServeHTTP(w2, makeReq())
+	if w2.Code != http.StatusCreated {
+		t.Fatalf("second call (idempotent): expected 201, got %d: %s", w2.Code, w2.Body.String())
+	}
+
+	var r1, r2 map[string]any
+	_ = json.Unmarshal(w1.Body.Bytes(), &r1)
+	_ = json.Unmarshal(w2.Body.Bytes(), &r2)
+	if r1["id"] != r2["id"] {
+		t.Fatalf("idempotent requests must return the same job id: %v != %v", r1["id"], r2["id"])
+	}
+}

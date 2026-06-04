@@ -418,3 +418,58 @@ Shutdown order: Workers → API → (optionally) Infrastructure.
 
 **Verify after rollback**
 - `/health` = 200; `migrate status` matches the deployed version; send a smoke webhook and confirm a job reaches `succeeded`.
+
+---
+
+## 12. VK Mini App BFF
+
+The Mini App backend-for-frontend (BFF) is part of `cmd/api`. It listens on the
+`/miniapp/*` path prefix and authenticates every request using VK launch-params
+signature verification (HMAC-SHA256).
+
+### New environment variables
+
+| Variable | Default | Required |
+|---|---|---|
+| `VK_APP_SECRET` | `""` (skip check in dev) | Production only |
+| `VK_APP_ID` | `""` | Informational |
+| `MINIAPP_LAUNCH_PARAMS_MAX_AGE` | `1h` | Optional |
+
+When `VK_APP_SECRET` is empty the signature check is skipped (dev/mock mode).
+The server still requires `vk_user_id` in the launch params.
+
+### Local development without real VK
+
+```powershell
+# Start infrastructure + API in mock mode:
+docker compose up -d
+go run ./cmd/migrate up
+. .\.env.ps1
+go run ./cmd/api
+
+# Call BFF endpoints directly (X-VK-User-ID header accepted in dev mode
+# when VK_APP_SECRET is not set):
+curl -s http://localhost:8080/miniapp/balance -H "X-Launch-Params: vk_user_id=777"
+curl -s -X POST http://localhost:8080/miniapp/jobs \
+  -H "Content-Type: application/json" \
+  -H "X-Launch-Params: vk_user_id=777" \
+  -d '{"operation":"text_generate","prompt":"hello world"}'
+```
+
+### Frontend dev server
+
+```powershell
+cd web\miniapp
+npm install
+npm run dev
+# → http://localhost:5173/?vk_user_id=777
+```
+
+The Vite proxy routes `/miniapp/*` to `http://localhost:8080`.
+
+### Production
+
+1. Set `VK_APP_SECRET` to the app's Protected Key from the VK Mini App settings.
+2. Build the frontend: `cd web/miniapp && npm run build`
+3. Host `web/miniapp/dist/` as the Mini App's static URL in VK admin.
+4. The BFF runs as part of the existing `cmd/api` binary — no extra process.

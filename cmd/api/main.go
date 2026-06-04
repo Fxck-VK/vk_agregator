@@ -18,6 +18,7 @@ import (
 
 	vkdelivery "vk-ai-aggregator/internal/adapter/delivery/vk"
 	adminapi "vk-ai-aggregator/internal/adapter/inbound/admin"
+	miniappapi "vk-ai-aggregator/internal/adapter/inbound/miniapp"
 	vkinbound "vk-ai-aggregator/internal/adapter/inbound/vk"
 	redisqueue "vk-ai-aggregator/internal/adapter/queue/redis"
 	"vk-ai-aggregator/internal/adapter/storage/postgres"
@@ -118,6 +119,18 @@ func main() {
 		Billing:    billingRepo,
 	})
 
+	miniapp := miniappapi.NewHandler(miniappapi.Config{
+		AppSecret:          cfg.VKAppSecret,
+		LaunchParamsMaxAge: cfg.MiniAppLaunchParamsMaxAge,
+	}, miniappapi.Deps{
+		Users:        users,
+		Jobs:         jobs,
+		Billing:      billing,
+		BillingRepo:  billingRepo,
+		Orchestrator: orch,
+		Logger:       logger,
+	})
+
 	// Per-IP rate limiting protects the webhook intake from flooding/abuse
 	// (audit S3).
 	webhookLimiter := ratelimit.New(cfg.WebhookRateLimitRPS, cfg.WebhookRateLimitBurst)
@@ -125,6 +138,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.Handle("/webhooks/vk", webhookLimiter.Middleware(metrics.Middleware("webhook", vkHandler)))
 	mux.Handle("/admin/", metrics.Middleware("admin", admin.Routes()))
+	mux.Handle("/miniapp/", metrics.Middleware("miniapp", miniapp.Routes()))
 	mux.Handle("GET /metrics", metrics.Handler())
 	mux.HandleFunc("GET /health", healthHandler(pool, rdb))
 	mux.HandleFunc("GET /healthz", healthHandler(pool, rdb))

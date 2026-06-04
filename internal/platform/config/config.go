@@ -102,6 +102,15 @@ type Config struct {
 	// the /start menu, e.g. photo-239332376_123_accesskey.
 	VKWelcomeAttachment string
 
+	// VKAppID is the VK Mini App application identifier.
+	VKAppID string
+	// VKAppSecret is the VK Mini App protected key used to verify launch-params
+	// signatures. When empty the signature check is skipped (dev/mock mode).
+	VKAppSecret string
+	// MiniAppLaunchParamsMaxAge is the maximum age of VK launch params before
+	// they are rejected. Zero disables the age check.
+	MiniAppLaunchParamsMaxAge time.Duration
+
 	// ArtifactURLTTL is how long signed artifact delivery URLs stay valid.
 	ArtifactURLTTL time.Duration
 	// SignedDelivery delivers media via signed URLs instead of bucket refs (ST1).
@@ -232,6 +241,10 @@ func Load() Config {
 		VKAPIVersion:        env("VK_API_VERSION", "5.199"),
 		VKAPIBaseURL:        env("VK_API_BASE_URL", "https://api.vk.com/method"),
 		VKWelcomeAttachment: env("VK_WELCOME_ATTACHMENT", ""),
+
+		VKAppID:                   env("VK_APP_ID", ""),
+		VKAppSecret:               env("VK_APP_SECRET", ""),
+		MiniAppLaunchParamsMaxAge: envDuration("MINIAPP_LAUNCH_PARAMS_MAX_AGE", time.Hour),
 
 		ArtifactURLTTL:        envDuration("ARTIFACT_URL_TTL", time.Hour),
 		SignedDelivery:        envBool("SIGNED_DELIVERY", false),
