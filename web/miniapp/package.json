@@ -10,9 +10,7 @@
     "tunnel": "vk-tunnel --insecure=1 --http-protocol=http --ws-protocol=ws --host=localhost --port=5173"
   },
   "dependencies": {
-    "@vkontakte/icons": "3.56.0",
     "@vkontakte/vk-bridge": "3.0.2",
-    "@vkontakte/vkui": "8.2.1",
     "react": "19.2.7",
     "react-dom": "19.2.7"
   },

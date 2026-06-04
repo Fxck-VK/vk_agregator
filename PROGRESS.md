@@ -547,3 +547,25 @@ resume hardening.
 
 - `cloudflared tunnel --protocol http2 --url http://localhost:5173` → вставить
   выданный https-URL в dev.vk.com → «Версия для vk.com» → «URL для разработки».
+
+---
+
+## Step (доп.) — Mini App: чат-интерфейс
+
+Статус: **завершён** (фронт).
+
+### Что сделано
+
+- Переход с таб-экранов на **чат** (`src/chat/`: `ChatScreen`, `Composer`,
+  `MessageBubble`, `types.ts`). Слои: `api/client.ts` (DTO = `miniapp.JobDTO`),
+  `hooks/useBridge.ts` (тема VK + `VKWebAppGetUserInfo` только для UI),
+  `ui/` (примитивы без сети).
+- `@vkontakte/vkui` и `@vkontakte/icons` удалены из зависимостей.
+- Поллинг: интервал 2с, макс. 90 итераций, остановка при unmount/терминальном
+  статусе; `patchMessage` по id.
+- `artifactUrl` — только UUID из `output_artifact_ids`; `fetchArtifactText` для
+  text_generate (ожидает `GET /miniapp/artifacts/{id}` на бэке).
+
+### Проверки
+
+- `npx tsc --noEmit` и `npm run build` в `web/miniapp` — без ошибок.

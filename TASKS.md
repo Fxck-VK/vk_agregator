@@ -109,7 +109,8 @@
 - [x] Проверка подписи launch-параметров (HMAC-SHA256 по VK-спеке): при заданном `VK_APP_SECRET` подпись валидируется реально, invalid/expired/missing → 401 без деталей, dev-обход отключается; `vk_user_id` только из проверенных параметров.
 - [x] Production fail-closed при пустом `VK_APP_SECRET`.
 - [x] Ownership: задачи доступны только своему `vk_user_id`.
-- [x] Фронт `web/miniapp` (React + VKUI + VK Bridge): монохромный ч/б UI без дешёвых эмодзи, моно-иконки; экраны список/создание/детали/баланс.
+- [x] Фронт `web/miniapp` (React + VK Bridge, без VKUI): чат-интерфейс (`chat/`), ч/б `theme.css`, слои api/hooks/ui/chat; `X-Launch-Params` из URL; поллинг задач ≥2с с лимитом; медиа только через `artifactUrl` (UUID).
+- [ ] Бэкенд: `GET /miniapp/artifacts/{id}` для отдачи текста/медиа в Mini App (сейчас фронт готов, эндпоинт в `cmd/api` ещё нет).
 - [x] VK Tunnel (`@vkontakte/vk-tunnel`) + npm-скрипт `tunnel` для запуска внутри VK.
 - [x] Dev-туннель через `cloudflared` (VK Tunnel на техработах с 02.10.2025): `vite.config.ts` `server` — `host: true`, `allowedHosts: true`, `hmr.protocol: wss`/`clientPort: 443`, proxy `/miniapp`+`/api` → `:8080`; mixed-content под https устранён, домен туннеля не хардкодится. E2E (mock) через прокси-эндпоинты проверен.
 - [x] Фикс биллинга (AUDIT B1a): стартовый грант 1000 создаётся committed-проводкой в ledger атомарно; миграция `000004` бэкоффилит открывающие проводки; mismatch устранён.
