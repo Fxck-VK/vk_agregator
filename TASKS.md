@@ -111,8 +111,9 @@
 - [x] Ownership: задачи доступны только своему `vk_user_id`.
 - [x] Фронт `web/miniapp` (React + VKUI + VK Bridge): монохромный ч/б UI без дешёвых эмодзи, моно-иконки; экраны список/создание/детали/баланс.
 - [x] VK Tunnel (`@vkontakte/vk-tunnel`) + npm-скрипт `tunnel` для запуска внутри VK.
+- [x] Dev-туннель через `cloudflared` (VK Tunnel на техработах с 02.10.2025): `vite.config.ts` `server` — `host: true`, `allowedHosts: true`, `hmr.protocol: wss`/`clientPort: 443`, proxy `/miniapp`+`/api` → `:8080`; mixed-content под https устранён, домен туннеля не хардкодится. E2E (mock) через прокси-эндпоинты проверен.
 - [x] Фикс биллинга (AUDIT B1a): стартовый грант 1000 создаётся committed-проводкой в ledger атомарно; миграция `000004` бэкоффилит открывающие проводки; mismatch устранён.
-- [ ] Получить https-URL VK Tunnel (требует ручной OAuth-авторизации в браузере) и вписать его в настройки приложения на dev.vk.com.
+- [ ] Получить https-URL `cloudflared` (`cloudflared tunnel --protocol http2 --url http://localhost:5173`) и вписать его в dev.vk.com → «Версия для vk.com» → «URL для разработки». Ручной шаг оператора — URL меняется каждый запуск.
 
 ---
 

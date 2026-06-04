@@ -471,28 +471,25 @@ npm run dev
 
 The Vite proxy routes `/miniapp/*` to `http://localhost:8080`.
 
-### Open the Mini App inside VK via VK Tunnel
+### Open the Mini App inside VK via an HTTPS tunnel (cloudflared)
 
-VK Tunnel exposes the local Vite dev server over HTTPS so the app can run inside
-the real VK webview without deploying.
+VK Tunnel is under maintenance (since 2025-10-02), so we expose the local Vite
+dev server over HTTPS with **cloudflared** — the workaround VK currently
+recommends. The Vite dev config (`host: true`, `allowedHosts: true`,
+`hmr.protocol: wss`, `/miniapp` + `/api` proxy) already accepts the rotating
+tunnel domain and keeps backend calls same-origin (no mixed content).
 
 ```powershell
 # 1. API + worker running (mock) and the Vite dev server up (npm run dev).
-# 2. In web/miniapp, with VK_APP_ID exported from .env.ps1:
-. .\.env.ps1
-cd web\miniapp
-npm run tunnel
+# 2. Tunnel the dev server (prints a fresh https://<random>.trycloudflare.com URL):
+cloudflared tunnel --protocol http2 --url http://localhost:5173
 ```
 
-`npm run tunnel` requires a **one-time interactive VK OAuth**: it prints an
-`oauth.vk.ru` link — open it, authorize, then press ENTER in the terminal. The
-tunnel then prints a stable `https://...tunnel.vk-apps.com` URL.
-
-Paste that URL into your app at **dev.vk.com → your app → Settings → Mini Apps
-→ "Адрес сервиса" / iframe URL** (App URL). Open the app from VK; the SPA reads
-the launch params VK appends to the URL and the BFF verifies the signature.
-
-> Note: the tunnel's OAuth step cannot be automated; it needs a human VK login.
+Paste the printed `https://...trycloudflare.com` URL into **dev.vk.com → your
+app → Версия для vk.com → "URL для разработки"**. The URL changes every run —
+do **not** hardcode it anywhere (`allowedHosts: true` handles the domain). Open
+the app from VK; the SPA reads the launch params VK appends to the URL and the
+BFF verifies the signature.
 
 ### Production
 

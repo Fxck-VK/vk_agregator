@@ -513,3 +513,37 @@ resume hardening.
   туннеля выдаётся только после ручного логина (`npm run tunnel` → открыть
   ссылку → подтвердить → Enter). Этот URL затем вставляется в настройки
   приложения на dev.vk.com.
+
+---
+
+## Step (доп.) — Mini App в iframe VK: dev-туннель и mixed-content
+
+Статус: **завершён**.
+
+### Что сделано
+
+- **VK Tunnel на техработах с 02.10.2025** → перешли на `cloudflared` (обходной
+  путь, рекомендованный VK).
+- **`web/miniapp/vite.config.ts`, секция `server`:** `host: true`,
+  `allowedHosts: true` (принимает меняющийся домен `*.trycloudflare.com`, URL
+  нигде не хардкодится), `hmr: { clientPort: 443, protocol: 'wss' }` (HMR через
+  https-туннель), proxy `/miniapp` и `/api` → `http://localhost:8080`. Так
+  фронт ходит к бэку через тот же origin — mixed-content под https устранён.
+- **API-клиент фронта** уже использует относительные пути (`BASE_URL` пустой в
+  dev) — изменений не потребовалось.
+- **Launch params**: фронт читает `window.location.search` и шлёт в заголовке
+  `X-Launch-Params`; бэк проверяет подпись при заданном `VK_APP_SECRET`, иначе
+  dev-fallback по `X-VK-User-ID`. Оба пути проверены.
+
+### Проверки
+
+- Live (mock, через эндпоинты бэка): `GET /miniapp/balance`=1000,
+  `POST /miniapp/jobs` (`queued → succeeded`, артефакт создан),
+  `GET /miniapp/jobs` и detail — данные отдаются, баланс 1000→999.
+- Гейты: `go test ./...` — зелёные; `tsc --noEmit`=0; `npm run build` — без
+  ошибок.
+
+### Ручной шаг оператора
+
+- `cloudflared tunnel --protocol http2 --url http://localhost:5173` → вставить
+  выданный https-URL в dev.vk.com → «Версия для vk.com» → «URL для разработки».
