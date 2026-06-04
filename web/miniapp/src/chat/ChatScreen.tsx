@@ -50,9 +50,9 @@ export function ChatScreen({ user }: { user: VkUser }) {
   const mountedRef = useRef(true);
   const pollingRef = useRef(new Set<string>());
 
-  function patchMessage(id: string, patch: Partial<ChatMessage>) {
+  const patchMessage = useCallback((id: string, patch: Partial<ChatMessage>) => {
     setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, ...patch } : m)));
-  }
+  }, []);
 
   const refreshBalance = useCallback(() => {
     getBalance().then(setBalance).catch(() => undefined);
@@ -62,12 +62,13 @@ export function ChatScreen({ user }: { user: VkUser }) {
     async (botMsgId: string, jobId: string) => {
       for (let i = 0; i < POLL_MAX; i++) {
         if (!mountedRef.current) return;
-        await new Promise((r) => setTimeout(r, POLL_MS));
-        if (!mountedRef.current) return;
         let job: Job;
         try {
           job = await getJob(jobId);
         } catch {
+          if (i < POLL_MAX - 1) {
+            await new Promise((r) => setTimeout(r, POLL_MS));
+          }
           continue;
         }
         if (isTerminal(job.status)) {
@@ -92,12 +93,15 @@ export function ChatScreen({ user }: { user: VkUser }) {
           return;
         }
         patchMessage(botMsgId, { status: job.status });
+        if (i < POLL_MAX - 1) {
+          await new Promise((r) => setTimeout(r, POLL_MS));
+        }
       }
       if (mountedRef.current) {
         patchMessage(botMsgId, { pending: false, error: "Превышено время ожидания" });
       }
     },
-    [refreshBalance],
+    [patchMessage, refreshBalance],
   );
 
   const startPoll = useCallback(

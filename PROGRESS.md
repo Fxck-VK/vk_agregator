@@ -598,3 +598,34 @@ resume hardening.
 - `npm run build` — без ошибок.
 - `npm run lint` отсутствует в `package.json`; ручная проверка неиспользуемых
   legacy-ссылок выполнена поиском.
+
+---
+
+## Step (доп.) — Mini App: hardening чат-фронта после ручной чистки
+
+Статус: **завершён**.
+
+### Что было сломано
+
+- В IDE были симптомы битых импортов `./hooks/useBridge` и
+  `./chat/ChatScreen` после ручной чистки. Диагностика показала, что целевые
+  файлы уже есть на диске и в `HEAD`, `src/panels/` остался только пустой
+  legacy-каталог, а `tsc` не выдаёт TS2307/TS6133.
+
+### Что сделано
+
+- Удалён пустой legacy-каталог `web/miniapp/src/panels`; ссылок на
+  `panels`/`screens` в `web/miniapp/src` нет.
+- `useBridge.ts`: подписка `bridge.subscribe` теперь снимается через
+  `bridge.unsubscribe(handler)` в cleanup.
+- `ChatScreen.tsx`: `patchMessage` мемоизирован, polling делает первый запрос
+  сразу, затем ждёт 2 секунды между итерациями; лимит и stop-on-unmount
+  сохранены.
+
+### Проверки
+
+- `npx tsc --noEmit` — без вывода, exit 0.
+- `npm run build` — без ошибок/предупреждений.
+- `npm run lint` не настроен в `package.json`; ручной поиск опасных и legacy
+  паттернов (`panels`, `screens`, VKUI, `console`, `dangerouslySetInnerHTML`,
+  `eval`, `new Function`) — без совпадений.

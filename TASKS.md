@@ -111,6 +111,7 @@
 - [x] Ownership: задачи доступны только своему `vk_user_id`.
 - [x] Фронт `web/miniapp` (React + VK Bridge, без VKUI): чат-интерфейс (`chat/`), ч/б `theme.css`, слои api/hooks/ui/chat; `X-Launch-Params` из URL; поллинг задач ≥2с с лимитом; медиа только через `artifactUrl` (UUID).
 - [x] Восстановление `web/miniapp/src/**` из `HEAD` после ручной чистки: целевая чат-структура на месте, legacy `panels`/`screens` не импортируются, `tsc` и `build` зелёные.
+- [x] Hardening чат-фронта: cleanup для `bridge.subscribe` через `bridge.unsubscribe`, polling без стартовой задержки и без размножения таймеров, `patchMessage` по id мемоизирован.
 - [ ] Бэкенд: `GET /miniapp/artifacts/{id}` для отдачи текста/медиа в Mini App (фронт готов, endpoint остаётся follow-up).
 - [x] VK Tunnel (`@vkontakte/vk-tunnel`) + npm-скрипт `tunnel` для запуска внутри VK.
 - [x] Dev-туннель через `cloudflared` (VK Tunnel на техработах с 02.10.2025): `vite.config.ts` `server` — `host: true`, `allowedHosts: true`, `hmr.protocol: wss`/`clientPort: 443`, proxy `/miniapp`+`/api` → `:8080`; mixed-content под https устранён, домен туннеля не хардкодится. E2E (mock) через прокси-эндпоинты проверен.

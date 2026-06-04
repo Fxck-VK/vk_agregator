@@ -21,14 +21,12 @@ export function useBridge() {
   useEffect(() => {
     let active = true;
 
-    bridge.subscribe(
-      ((e: { detail?: { type?: string; data?: { appearance?: string; scheme?: string } } }) => {
-        const d = e?.detail;
-        if (d?.type === "VKWebAppUpdateConfig") {
-          applyScheme(d.data?.appearance ?? d.data?.scheme);
-        }
-      }) as Parameters<typeof bridge.subscribe>[0],
-    );
+    const handleConfigUpdate: Parameters<typeof bridge.subscribe>[0] = (event) => {
+      if (event.detail.type !== "VKWebAppUpdateConfig") return;
+      const data = event.detail.data as { appearance?: string; scheme?: string };
+      applyScheme(data.appearance ?? data.scheme);
+    };
+    bridge.subscribe(handleConfigUpdate);
 
     (async () => {
       try {
@@ -69,6 +67,7 @@ export function useBridge() {
 
     return () => {
       active = false;
+      bridge.unsubscribe(handleConfigUpdate);
     };
   }, []);
 
