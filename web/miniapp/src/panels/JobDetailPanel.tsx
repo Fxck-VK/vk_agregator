@@ -75,7 +75,7 @@ export function JobDetailPanel({ jobId, onBack }: Props) {
 
       {loading && !job && (
         <Group>
-          <Spinner size="large" style={{ margin: '40px auto', display: 'block' }} />
+          <Spinner size="l" style={{ margin: '40px auto', display: 'block' }} />
         </Group>
       )}
 
@@ -92,7 +92,7 @@ export function JobDetailPanel({ jobId, onBack }: Props) {
 
       {job && (
         <>
-          <Group header={<Header mode="secondary">Детали задачи</Header>}>
+          <Group header={<Header>Детали задачи</Header>}>
             <SimpleCell>
               <InfoRow header="Тип">
                 {OPERATION_LABELS[job.operation] ?? job.operation}
@@ -102,7 +102,7 @@ export function JobDetailPanel({ jobId, onBack }: Props) {
               <InfoRow header="Статус">
                 {STATUS_LABELS[job.status] ?? job.status}
                 {!TERMINAL_STATUSES.has(job.status) && (
-                  <Spinner size="small" style={{ marginLeft: 8, display: 'inline-block' }} />
+                  <Spinner size="s" style={{ marginLeft: 8, display: 'inline-block' }} />
                 )}
               </InfoRow>
             </SimpleCell>
@@ -124,14 +124,14 @@ export function JobDetailPanel({ jobId, onBack }: Props) {
           </Group>
 
           {job.output_artifact_ids.length > 0 && (
-            <Group header={<Header mode="secondary">Результат</Header>}>
+            <Group header={<Header>Результат</Header>}>
               {job.output_artifact_ids.map((aid) => (
                 <Cell key={aid} subtitle={aid}>
                   Артефакт готов
                 </Cell>
               ))}
               <Div>
-                <Text weight="regular" style={{ fontSize: 12, color: 'var(--vkui--color_text_secondary)' }}>
+                <Text style={{ fontSize: 12, color: 'var(--vkui--color_text_secondary)' }}>
                   Результат также доставлен в ваш чат ВКонтакте.
                 </Text>
               </Div>

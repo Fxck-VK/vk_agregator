@@ -2,15 +2,13 @@ import { useState } from 'react';
 import {
   Button,
   FormItem,
-  FormLayout,
   Group,
   PanelHeader,
   PanelHeaderBack,
   SegmentedControl,
-  Textarea,
   Snackbar,
+  Textarea,
 } from '@vkontakte/vkui';
-import { Icon24ErrorCircle } from '@vkontakte/icons';
 import { api } from '../api';
 
 interface Props {
@@ -35,6 +33,7 @@ export function NewJobPanel({ onBack, onJobCreated }: Props) {
   const [prompt, setPrompt] = useState('');
   const [loading, setLoading] = useState(false);
   const [snackbar, setSnackbar] = useState<string | null>(null);
+  const [snackbarVisible, setSnackbarVisible] = useState(false);
 
   const handleSubmit = async () => {
     if (!prompt.trim()) return;
@@ -44,6 +43,7 @@ export function NewJobPanel({ onBack, onJobCreated }: Props) {
       onJobCreated(job.id);
     } catch (e) {
       setSnackbar(e instanceof Error ? e.message : 'Ошибка создания задачи');
+      setSnackbarVisible(true);
     } finally {
       setLoading(false);
     }
@@ -56,43 +56,41 @@ export function NewJobPanel({ onBack, onJobCreated }: Props) {
       </PanelHeader>
 
       <Group>
-        <FormLayout>
-          <FormItem top="Тип генерации">
-            <SegmentedControl
-              value={operation}
-              onChange={(v) => setOperation(v as string)}
-              options={OPERATIONS}
-            />
-          </FormItem>
+        <FormItem top="Тип генерации">
+          <SegmentedControl
+            value={operation}
+            onChange={(v) => setOperation(v as string)}
+            options={OPERATIONS}
+          />
+        </FormItem>
 
-          <FormItem top="Запрос">
-            <Textarea
-              placeholder={PLACEHOLDERS[operation]}
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              rows={5}
-              disabled={loading}
-            />
-          </FormItem>
+        <FormItem top="Запрос">
+          <Textarea
+            placeholder={PLACEHOLDERS[operation]}
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            rows={5}
+            disabled={loading}
+          />
+        </FormItem>
 
-          <FormItem>
-            <Button
-              size="l"
-              stretched
-              loading={loading}
-              disabled={!prompt.trim() || loading}
-              onClick={() => void handleSubmit()}
-            >
-              Отправить
-            </Button>
-          </FormItem>
-        </FormLayout>
+        <FormItem>
+          <Button
+            size="l"
+            stretched
+            loading={loading}
+            disabled={!prompt.trim() || loading}
+            onClick={() => void handleSubmit()}
+          >
+            Отправить
+          </Button>
+        </FormItem>
       </Group>
 
-      {snackbar && (
+      {snackbarVisible && snackbar && (
         <Snackbar
-          onClose={() => setSnackbar(null)}
-          before={<Icon24ErrorCircle fill="var(--vkui--color_icon_negative)" />}
+          onClose={() => setSnackbarVisible(false)}
+          onClosed={() => setSnackbar(null)}
         >
           {snackbar}
         </Snackbar>

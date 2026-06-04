@@ -20,11 +20,10 @@ interface Props {
   onViewJob: (jobId: string) => void;
 }
 
-function statusBadge(status: string): 'accent' | 'positive' | 'negative' | 'prominent' | undefined {
-  if (status === 'succeeded') return 'positive';
-  if (status === 'failed_terminal' || status === 'rejected') return 'negative';
-  if (status === 'awaiting_payment') return 'prominent';
-  return 'accent';
+function statusBadgeMode(status: string): 'new' | 'prominent' | undefined {
+  if (status === 'succeeded') return 'new';
+  if (status === 'failed_terminal' || status === 'rejected') return 'prominent';
+  return undefined;
 }
 
 export function JobsPanel({ onNewJob, onViewJob }: Props) {
@@ -68,7 +67,7 @@ export function JobsPanel({ onNewJob, onViewJob }: Props) {
 
       {loading && (
         <Group>
-          <Spinner size="large" style={{ margin: '40px auto', display: 'block' }} />
+          <Spinner size="l" style={{ margin: '40px auto', display: 'block' }} />
         </Group>
       )}
 
@@ -86,7 +85,7 @@ export function JobsPanel({ onNewJob, onViewJob }: Props) {
       {!loading && !error && jobs.length === 0 && (
         <Group>
           <Placeholder
-            header="Задач пока нет"
+            title="Задач пока нет"
             action={
               <Button onClick={onNewJob}>Создать первую задачу</Button>
             }
@@ -98,13 +97,17 @@ export function JobsPanel({ onNewJob, onViewJob }: Props) {
       )}
 
       {!loading && !error && jobs.length > 0 && (
-        <Group header={<Header mode="secondary">Последние задачи</Header>}>
+        <Group header={<Header>Последние задачи</Header>}>
           <List>
             {jobs.map((job) => (
               <Cell
                 key={job.id}
                 subtitle={STATUS_LABELS[job.status] ?? job.status}
-                after={<Badge mode={statusBadge(job.status)}>{OPERATION_LABELS[job.operation] ?? job.operation}</Badge>}
+                after={
+                  statusBadgeMode(job.status) !== undefined
+                    ? <Badge mode={statusBadgeMode(job.status)}>{OPERATION_LABELS[job.operation] ?? job.operation}</Badge>
+                    : undefined
+                }
                 onClick={() => onViewJob(job.id)}
               >
                 <Title level="3" style={{ fontSize: 14 }}>

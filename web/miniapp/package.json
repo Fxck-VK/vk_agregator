@@ -9,16 +9,17 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@vkontakte/vk-bridge": "^2.28.3",
-    "@vkontakte/vkui": "^7.19.1",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "@vkontakte/icons": "3.56.0",
+    "@vkontakte/vk-bridge": "3.0.2",
+    "@vkontakte/vkui": "8.2.1",
+    "react": "19.2.7",
+    "react-dom": "19.2.7"
   },
   "devDependencies": {
-    "@types/react": "^18.3.23",
-    "@types/react-dom": "^18.3.7",
-    "@vitejs/plugin-react": "^4.5.2",
-    "typescript": "^5.8.3",
-    "vite": "^6.3.5"
+    "@types/react": "19.2.16",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "6.0.2",
+    "typescript": "6.0.3",
+    "vite": "8.0.16"
   }
 }

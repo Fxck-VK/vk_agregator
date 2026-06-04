@@ -40,7 +40,7 @@ export function BalancePanel() {
     <>
       {loading && (
         <Group>
-          <Spinner size="large" style={{ margin: '40px auto', display: 'block' }} />
+          <Spinner size="l" style={{ margin: '40px auto', display: 'block' }} />
         </Group>
       )}
 
@@ -60,7 +60,7 @@ export function BalancePanel() {
           <Group>
             <Placeholder
               icon={<Icon28WalletOutline width={56} height={56} />}
-              header="Мой баланс"
+              title="Мой баланс"
             >
               <Title level="1" style={{ fontSize: 48, lineHeight: 1 }}>
                 {balance.balance_credits}
@@ -69,7 +69,7 @@ export function BalancePanel() {
             </Placeholder>
           </Group>
 
-          <Group header={<Header mode="secondary">Стоимость операций</Header>}>
+          <Group header={<Header>Стоимость операций</Header>}>
             <SimpleCell>
               <InfoRow header="💬 Текст (GPT)">1 кредит</InfoRow>
             </SimpleCell>
@@ -80,7 +80,7 @@ export function BalancePanel() {
               <InfoRow header="🎬 Видео">50 кредитов</InfoRow>
             </SimpleCell>
             <Div>
-              <Text weight="regular" style={{ fontSize: 12, color: 'var(--vkui--color_text_secondary)' }}>
+              <Text style={{ fontSize: 12, color: 'var(--vkui--color_text_secondary)' }}>
                 Новые пользователи получают 1 000 кредитов бесплатно.
               </Text>
             </Div>

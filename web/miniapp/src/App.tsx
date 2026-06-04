@@ -77,7 +77,7 @@ export default function App() {
                     setActivePanel('jobs');
                   }}
                   selected={activeStory === 'jobs'}
-                  text="Задачи"
+                  label="Задачи"
                 >
                   <Icon28NewsfeedOutline />
                 </TabbarItem>
@@ -87,7 +87,7 @@ export default function App() {
                     setActivePanel('balance');
                   }}
                   selected={activeStory === 'balance'}
-                  text="Баланс"
+                  label="Баланс"
                 >
                   <Icon28WalletOutline />
                 </TabbarItem>
