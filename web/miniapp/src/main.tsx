@@ -1,10 +1,10 @@
-import React from 'react';
-import ReactDOM from 'react-dom/client';
-import '@vkontakte/vkui/dist/vkui.css';
-import './theme.css';
-import App from './App';
+// src/main.tsx
+import React from "react";
+import { createRoot } from "react-dom/client";
+import App from "./App";
+import "./ui/theme.css";
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
+createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <App />
   </React.StrictMode>,

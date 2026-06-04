@@ -1,128 +1,56 @@
-import { useEffect, useState } from 'react';
-import bridge from '@vkontakte/vk-bridge';
-import {
-  AdaptivityProvider,
-  AppRoot,
-  ConfigProvider,
-  Epic,
-  Tabbar,
-  TabbarItem,
-  View,
-  Panel,
-} from '@vkontakte/vkui';
-import { Icon28ListBulletSquareOutline, Icon28MoneyCircleOutline } from '@vkontakte/icons';
-import { setLaunchParams } from './api';
-import { JobsPanel } from './panels/JobsPanel';
-import { NewJobPanel } from './panels/NewJobPanel';
-import { JobDetailPanel } from './panels/JobDetailPanel';
-import { BalancePanel } from './panels/BalancePanel';
+// src/App.tsx
+import { useState } from "react";
+import { useBridgeInit } from "./hooks/useBridge";
+import { NewJobPanel } from "./screens/NewJobPanel";
+import { JobsPanel } from "./screens/JobsPanel";
+import { JobDetailScreen } from "./screens/JobDetailScreen";
+import { BalanceScreen } from "./screens/BalanceScreen";
+import { Spinner } from "./ui/ui";
 
-type ActiveStory = 'jobs' | 'balance';
-type ActivePanel = 'jobs' | 'new_job' | 'job_detail' | 'balance';
+type TabId = "create" | "jobs" | "balance";
 
 export default function App() {
-  const [activeStory, setActiveStory] = useState<ActiveStory>('jobs');
-  const [activePanel, setActivePanel] = useState<ActivePanel>('jobs');
-  const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
-  const [initialized, setInitialized] = useState(false);
+  const ready = useBridgeInit();
+  const [tab, setTab] = useState<TabId>("create");
+  const [jobId, setJobId] = useState<string | null>(null);
 
-  useEffect(() => {
-    // Initialize VK Bridge and capture launch params.
-    bridge.send('VKWebAppInit').catch(() => {
-      // Running outside VK (local dev) – safe to ignore.
-    });
-
-    // Launch params are the URL query string passed by VK.
-    const raw = window.location.search.slice(1);
-    if (raw) {
-      setLaunchParams(raw);
-    }
-    setInitialized(true);
-  }, []);
-
-  if (!initialized) {
-    return null;
+  if (!ready) {
+    return (
+      <div className="app app--center">
+        <Spinner size={28} />
+      </div>
+    );
   }
 
-  const handleOpenNewJob = () => {
-    setActivePanel('new_job');
-    setActiveStory('jobs');
-  };
-
-  const handleJobCreated = (jobId: string) => {
-    setSelectedJobId(jobId);
-    setActivePanel('job_detail');
-  };
-
-  const handleViewJob = (jobId: string) => {
-    setSelectedJobId(jobId);
-    setActivePanel('job_detail');
-  };
-
-  const handleBack = () => {
-    setActivePanel('jobs');
-  };
-
   return (
-    <ConfigProvider>
-      <AdaptivityProvider>
-        <AppRoot>
-          <Epic
-            activeStory={activeStory}
-            tabbar={
-              <Tabbar>
-                <TabbarItem
-                  onClick={() => {
-                    setActiveStory('jobs');
-                    setActivePanel('jobs');
-                  }}
-                  selected={activeStory === 'jobs'}
-                  label="Задачи"
-                >
-                  <Icon28ListBulletSquareOutline />
-                </TabbarItem>
-                <TabbarItem
-                  onClick={() => {
-                    setActiveStory('balance');
-                    setActivePanel('balance');
-                  }}
-                  selected={activeStory === 'balance'}
-                  label="Баланс"
-                >
-                  <Icon28MoneyCircleOutline />
-                </TabbarItem>
-              </Tabbar>
-            }
-          >
-            <View id="jobs" activePanel={activePanel}>
-              <Panel id="jobs">
-                <JobsPanel
-                  onNewJob={handleOpenNewJob}
-                  onViewJob={handleViewJob}
-                />
-              </Panel>
-              <Panel id="new_job">
-                <NewJobPanel
-                  onBack={handleBack}
-                  onJobCreated={handleJobCreated}
-                />
-              </Panel>
-              <Panel id="job_detail">
-                <JobDetailPanel
-                  jobId={selectedJobId}
-                  onBack={handleBack}
-                />
-              </Panel>
-            </View>
+    <div className="app">
+      <main className="app__main">
+        {jobId ? (
+          <JobDetailScreen jobId={jobId} onBack={() => setJobId(null)} />
+        ) : tab === "create" ? (
+          <NewJobPanel onCreated={setJobId} />
+        ) : tab === "jobs" ? (
+          <JobsPanel onOpen={setJobId} />
+        ) : (
+          <BalanceScreen />
+        )}
+      </main>
 
-            <View id="balance" activePanel="balance">
-              <Panel id="balance">
-                <BalancePanel />
-              </Panel>
-            </View>
-          </Epic>
-        </AppRoot>
-      </AdaptivityProvider>
-    </ConfigProvider>
+      {!jobId && (
+        <nav className="tabbar">
+          <TabButton label="Создать" active={tab === "create"} onClick={() => setTab("create")} />
+          <TabButton label="Задачи" active={tab === "jobs"} onClick={() => setTab("jobs")} />
+          <TabButton label="Баланс" active={tab === "balance"} onClick={() => setTab("balance")} />
+        </nav>
+      )}
+    </div>
+  );
+}
+
+function TabButton({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+  return (
+    <button className={"tab" + (active ? " is-active" : "")} onClick={onClick}>
+      {label}
+    </button>
   );
 }
