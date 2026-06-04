@@ -48,6 +48,22 @@ string, so test with:
 http://localhost:5173/?vk_user_id=777
 ```
 
+### Open inside VK via VK Tunnel
+
+```bash
+# API + worker running (mock); Vite dev server up via `npm run dev`.
+# Export VK_APP_ID (the project uses .env.ps1 on Windows), then:
+npm run tunnel
+```
+
+`npm run tunnel` runs `@vkontakte/vk-tunnel` against the local dev server
+(`localhost:5173`). It needs a **one-time VK OAuth**: open the printed
+`oauth.vk.ru` link, authorize, press ENTER. The tunnel then prints an HTTPS URL.
+
+Paste that URL into **dev.vk.com → your app → Settings → Mini Apps** as the app
+(iframe) URL, then open the app from VK. The OAuth step is interactive and
+cannot be scripted.
+
 ### Using vk-bridge-mock (optional)
 
 To simulate VK Bridge methods without opening the app inside VK:
@@ -84,8 +100,8 @@ App admin panel as the "Application URL".
 
 | Variable | Description |
 |---|---|
-| `VK_APP_SECRET` | VK App protected key for sign verification (empty = dev mode, no check) |
-| `VK_APP_ID` | VK Application ID (informational) |
+| `VK_APP_SECRET` | VK App protected key for sign verification. Set = real check; empty = dev mode (no check); empty in production = fail-closed startup |
+| `VK_APP_ID` | VK Application ID (used by `npm run tunnel`) |
 | `MINIAPP_LAUNCH_PARAMS_MAX_AGE` | Max age of launch params (default `1h`) |
 
 ## Authentication flow

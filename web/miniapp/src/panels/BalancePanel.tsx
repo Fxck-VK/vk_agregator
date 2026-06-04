@@ -11,7 +11,7 @@ import {
   Title,
   Div,
 } from '@vkontakte/vkui';
-import { Icon28WalletOutline } from '@vkontakte/icons';
+import { Icon28MoneyCircleOutline } from '@vkontakte/icons';
 import { api, Balance } from '../api';
 
 export function BalancePanel() {
@@ -59,10 +59,10 @@ export function BalancePanel() {
         <>
           <Group>
             <Placeholder
-              icon={<Icon28WalletOutline width={56} height={56} />}
+              icon={<Icon28MoneyCircleOutline width={56} height={56} />}
               title="Мой баланс"
             >
-              <Title level="1" style={{ fontSize: 48, lineHeight: 1 }}>
+              <Title level="1" className="app-balance-amount" style={{ fontSize: 48, lineHeight: 1 }}>
                 {balance.balance_credits}
               </Title>
               <Text style={{ marginTop: 4 }}>кредитов</Text>
@@ -71,13 +71,13 @@ export function BalancePanel() {
 
           <Group header={<Header>Стоимость операций</Header>}>
             <SimpleCell>
-              <InfoRow header="💬 Текст (GPT)">1 кредит</InfoRow>
+              <InfoRow header="Текст (GPT)">1 кредит</InfoRow>
             </SimpleCell>
             <SimpleCell>
-              <InfoRow header="🖼️ Изображение">10 кредитов</InfoRow>
+              <InfoRow header="Изображение">10 кредитов</InfoRow>
             </SimpleCell>
             <SimpleCell>
-              <InfoRow header="🎬 Видео">50 кредитов</InfoRow>
+              <InfoRow header="Видео">50 кредитов</InfoRow>
             </SimpleCell>
             <Div>
               <Text style={{ fontSize: 12, color: 'var(--vkui--color_text_secondary)' }}>

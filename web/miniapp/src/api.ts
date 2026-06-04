@@ -91,9 +91,9 @@ export const api = {
 };
 
 export const OPERATION_LABELS: Record<string, string> = {
-  text_generate: '💬 Текст (GPT)',
-  image_generate: '🖼️ Изображение',
-  video_generate: '🎬 Видео',
+  text_generate: 'Текст',
+  image_generate: 'Изображение',
+  video_generate: 'Видео',
 };
 
 export const STATUS_LABELS: Record<string, string> = {
@@ -103,14 +103,14 @@ export const STATUS_LABELS: Record<string, string> = {
   dispatching_provider: 'Отправка провайдеру',
   provider_submitted: 'Провайдер принял',
   provider_pending: 'Провайдер ожидает',
-  provider_processing: 'Провайдер обрабатывает',
+  provider_processing: 'Обработка',
   provider_succeeded: 'Провайдер завершил',
   result_ready: 'Результат готов',
   delivering: 'Доставляется',
-  succeeded: '✅ Выполнено',
-  failed_terminal: '❌ Ошибка',
-  failed_retryable: '⏳ Повторная попытка',
-  awaiting_payment: '💳 Недостаточно кредитов',
-  cancelled: '🚫 Отменено',
-  rejected: '🚫 Отклонено',
+  succeeded: 'Выполнено',
+  failed_terminal: 'Ошибка',
+  failed_retryable: 'Повторная попытка',
+  awaiting_payment: 'Недостаточно кредитов',
+  cancelled: 'Отменено',
+  rejected: 'Отклонено',
 };

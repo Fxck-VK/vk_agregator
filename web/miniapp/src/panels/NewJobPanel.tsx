@@ -17,9 +17,9 @@ interface Props {
 }
 
 const OPERATIONS = [
-  { label: '💬 Текст', value: 'text_generate' },
-  { label: '🖼️ Фото', value: 'image_generate' },
-  { label: '🎬 Видео', value: 'video_generate' },
+  { label: 'Текст', value: 'text_generate' },
+  { label: 'Фото', value: 'image_generate' },
+  { label: 'Видео', value: 'video_generate' },
 ];
 
 const PLACEHOLDERS: Record<string, string> = {

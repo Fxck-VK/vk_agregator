@@ -1,29 +1,21 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
   Button,
-  Cell,
   Group,
   Header,
   List,
   PanelHeader,
   Placeholder,
+  SimpleCell,
   Spinner,
-  Title,
   Text,
-  Badge,
 } from '@vkontakte/vkui';
-import { Icon28AddOutline } from '@vkontakte/icons';
+import { Icon28AddOutline, Icon24ChevronRight } from '@vkontakte/icons';
 import { api, Job, OPERATION_LABELS, STATUS_LABELS } from '../api';
 
 interface Props {
   onNewJob: () => void;
   onViewJob: (jobId: string) => void;
-}
-
-function statusBadgeMode(status: string): 'new' | 'prominent' | undefined {
-  if (status === 'succeeded') return 'new';
-  if (status === 'failed_terminal' || status === 'rejected') return 'prominent';
-  return undefined;
 }
 
 export function JobsPanel({ onNewJob, onViewJob }: Props) {
@@ -100,20 +92,14 @@ export function JobsPanel({ onNewJob, onViewJob }: Props) {
         <Group header={<Header>Последние задачи</Header>}>
           <List>
             {jobs.map((job) => (
-              <Cell
+              <SimpleCell
                 key={job.id}
                 subtitle={STATUS_LABELS[job.status] ?? job.status}
-                after={
-                  statusBadgeMode(job.status) !== undefined
-                    ? <Badge mode={statusBadgeMode(job.status)}>{OPERATION_LABELS[job.operation] ?? job.operation}</Badge>
-                    : undefined
-                }
+                after={<Icon24ChevronRight />}
                 onClick={() => onViewJob(job.id)}
               >
-                <Title level="3" style={{ fontSize: 14 }}>
-                  {OPERATION_LABELS[job.operation] ?? job.operation}
-                </Title>
-              </Cell>
+                {OPERATION_LABELS[job.operation] ?? job.operation}
+              </SimpleCell>
             ))}
           </List>
         </Group>

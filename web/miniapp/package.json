@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "tunnel": "vk-tunnel --insecure=1 --http-protocol=http --ws-protocol=ws --host=localhost --port=5173"
   },
   "dependencies": {
     "@vkontakte/icons": "3.56.0",
@@ -19,6 +20,7 @@
     "@types/react": "19.2.16",
     "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react": "6.0.2",
+    "@vkontakte/vk-tunnel": "0.2.10",
     "typescript": "6.0.3",
     "vite": "8.0.16"
   }

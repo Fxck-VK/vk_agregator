@@ -10,7 +10,7 @@ import {
   View,
   Panel,
 } from '@vkontakte/vkui';
-import { Icon28NewsfeedOutline, Icon28WalletOutline } from '@vkontakte/icons';
+import { Icon28ListBulletSquareOutline, Icon28MoneyCircleOutline } from '@vkontakte/icons';
 import { setLaunchParams } from './api';
 import { JobsPanel } from './panels/JobsPanel';
 import { NewJobPanel } from './panels/NewJobPanel';
@@ -79,7 +79,7 @@ export default function App() {
                   selected={activeStory === 'jobs'}
                   label="Задачи"
                 >
-                  <Icon28NewsfeedOutline />
+                  <Icon28ListBulletSquareOutline />
                 </TabbarItem>
                 <TabbarItem
                   onClick={() => {
@@ -89,7 +89,7 @@ export default function App() {
                   selected={activeStory === 'balance'}
                   label="Баланс"
                 >
-                  <Icon28WalletOutline />
+                  <Icon28MoneyCircleOutline />
                 </TabbarItem>
               </Tabbar>
             }
