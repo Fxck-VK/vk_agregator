@@ -113,9 +113,12 @@
 - [x] История чатов Mini App: `localStorage` ключ `vk_miniapp_chats_v1`, шторка `ChatList`, `useChats`, заголовок активного чата и «Новый чат».
 - [x] Выбор модальности и модели: сегмент `Текст/Фото/Видео` и dropdown модели в `Composer`, связка с `operation` для `/miniapp/jobs`.
 - [x] Графитовая тема Mini App: тёмная палитра `#1A1A1D`, стили `segment`, `model-select`, `drawer`.
+- [x] Composer textarea: скрыт нативный scrollbar при сохранении внутренней прокрутки.
+- [x] Frontend audit: `docs/AUDIT.md` описывает безопасность, утечки и оптимизацию новых Mini App фич.
 - [x] Восстановление `web/miniapp/src/**` из `HEAD` после ручной чистки: целевая чат-структура на месте, legacy `panels`/`screens` не импортируются, `tsc` и `build` зелёные.
 - [x] Hardening чат-фронта: cleanup для `bridge.subscribe` через `bridge.unsubscribe`, polling без стартовой задержки и без размножения таймеров, `patchMessage` по id мемоизирован.
 - [ ] Бэкенд: `GET /miniapp/artifacts/{id}` для отдачи текста/медиа в Mini App (фронт готов, endpoint остаётся follow-up).
+- [ ] Mini App API: поле выбранной модели пока UI-only и не передаётся в `POST /miniapp/jobs`; нужна backend/API договорённость.
 - [x] VK Tunnel (`@vkontakte/vk-tunnel`) + npm-скрипт `tunnel` для запуска внутри VK.
 - [x] Dev-туннель через `cloudflared` (VK Tunnel на техработах с 02.10.2025): `vite.config.ts` `server` — `host: true`, `allowedHosts: true`, `hmr.protocol: wss`/`clientPort: 443`, proxy `/miniapp`+`/api` → `:8080`; mixed-content под https устранён, домен туннеля не хардкодится. E2E (mock) через прокси-эндпоинты проверен.
 - [x] Фикс биллинга (AUDIT B1a): стартовый грант 1000 создаётся committed-проводкой в ledger атомарно; миграция `000004` бэкоффилит открывающие проводки; mismatch устранён.
