@@ -32,10 +32,17 @@ type Config struct {
 	LaunchParamsMaxAge time.Duration
 }
 
+// ObjectReader loads stored artifact bytes (S3/MinIO).
+type ObjectReader interface {
+	GetObject(ctx context.Context, bucket, key string) ([]byte, error)
+}
+
 // Deps are the collaborators needed by the miniapp handler.
 type Deps struct {
 	Users        domain.UserRepository
 	Jobs         domain.JobRepository
+	Artifacts    domain.ArtifactRepository
+	Objects      ObjectReader
 	Billing      *billingservice.Service
 	BillingRepo  domain.BillingRepository
 	Orchestrator *joborchestrator.Orchestrator
@@ -65,6 +72,7 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /miniapp/jobs", h.auth(h.listJobs))
 	mux.HandleFunc("GET /miniapp/jobs/{id}", h.auth(h.getJob))
 	mux.HandleFunc("GET /miniapp/balance", h.auth(h.getBalance))
+	mux.HandleFunc("GET /miniapp/artifacts/{id}", h.auth(h.getArtifact))
 	return mux
 }
 
@@ -356,6 +364,66 @@ func (h *Handler) getBalance(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, BalanceDTO{BalanceCredits: acc.BalanceCached})
+}
+
+func (h *Handler) getArtifact(w http.ResponseWriter, r *http.Request) {
+	if h.deps.Artifacts == nil || h.deps.Objects == nil {
+		writeError(w, http.StatusServiceUnavailable, "artifact storage unavailable")
+		return
+	}
+
+	vkUserID, ok := vkUserIDFromCtx(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	artID, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid artifact id")
+		return
+	}
+
+	user, err := h.deps.Users.GetByVKUserID(r.Context(), vkUserID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "not found")
+		} else {
+			writeError(w, http.StatusInternalServerError, "internal error")
+		}
+		return
+	}
+
+	art, err := h.deps.Artifacts.GetByID(r.Context(), artID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "not found")
+		} else {
+			writeError(w, http.StatusInternalServerError, "internal error")
+		}
+		return
+	}
+
+	if art.OwnerUserID != user.ID {
+		writeError(w, http.StatusNotFound, "not found")
+		return
+	}
+
+	data, err := h.deps.Objects.GetObject(r.Context(), art.StorageBucket, art.StorageKey)
+	if err != nil {
+		h.logger.Error("miniapp: get artifact object failed", slog.String("error", err.Error()))
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	ct := art.MimeType
+	if ct == "" {
+		ct = "application/octet-stream"
+	}
+	w.Header().Set("Content-Type", ct)
+	w.Header().Set("Cache-Control", "private, max-age=300")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(data)
 }
 
 // ---------------------------------------------------------------------------

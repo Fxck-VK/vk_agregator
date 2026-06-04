@@ -22,6 +22,7 @@ import (
 	vkinbound "vk-ai-aggregator/internal/adapter/inbound/vk"
 	redisqueue "vk-ai-aggregator/internal/adapter/queue/redis"
 	"vk-ai-aggregator/internal/adapter/storage/postgres"
+	s3store "vk-ai-aggregator/internal/adapter/storage/s3"
 	"vk-ai-aggregator/internal/platform/config"
 	"vk-ai-aggregator/internal/platform/metrics"
 	"vk-ai-aggregator/internal/platform/ratelimit"
@@ -75,6 +76,20 @@ func main() {
 	idem := postgres.NewIdempotencyRepository(pool)
 	deliveries := postgres.NewDeliveryRepository(pool)
 	billingRepo := postgres.NewBillingRepository(pool)
+	artifacts := postgres.NewArtifactRepository(pool)
+
+	var objectStore miniappapi.ObjectReader
+	store, err := s3store.New(ctx, s3store.Config{
+		Endpoint:  cfg.S3Endpoint,
+		AccessKey: cfg.S3AccessKey,
+		SecretKey: cfg.S3SecretKey,
+		UseSSL:    cfg.S3UseSSL,
+	})
+	if err != nil {
+		logger.Warn("s3 connect failed; miniapp artifact downloads disabled", "error", err)
+	} else {
+		objectStore = store
+	}
 
 	billing := billingservice.New(billingRepo, billingservice.WithPriceOverrides(cfg.PriceOverrides))
 	uowMgr := postgres.NewUnitOfWork(pool)
@@ -125,6 +140,8 @@ func main() {
 	}, miniappapi.Deps{
 		Users:        users,
 		Jobs:         jobs,
+		Artifacts:    artifacts,
+		Objects:      objectStore,
 		Billing:      billing,
 		BillingRepo:  billingRepo,
 		Orchestrator: orch,

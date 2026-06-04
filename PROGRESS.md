@@ -675,3 +675,40 @@ resume hardening.
 
 - `npx tsc --noEmit` — без вывода, exit 0.
 - `npm run build` — без ошибок/предупреждений.
+
+---
+
+## Step (доп.) — Mini App: аудит безопасности/архитектуры + бэклог фиксов
+
+Статус: **завершён** (ревью только-чтение; код по находкам не правился).
+
+### Что сделано
+
+- Проведён глубокий read-only аудит безопасности и архитектуры всего репозитория
+  (Go-бэкенд + React-фронтенд Mini App). Отчёт — `docs/REVIEW.md`: сводная таблица
+  по разделам, находки с severity (`Critical/High/Medium/Low`),
+  файл:строка, суть и рекомендация, ТОП-5 приоритетов.
+- Подтверждён корректный периметр: fail-closed в проде (`config.Validate`
+  требует `VK_APP_SECRET`/`ADMIN_TOKEN`), ownership-проверки на job/artifact/balance,
+  параметризованный SQL, append-only ledger с `FOR UPDATE` и идемпотентными
+  записями (двойного списания нет), таймауты внешних вызовов (OpenAI 120s/30s),
+  graceful drain воркеров, cleanup поллинга и `bridge.unsubscribe` на фронте.
+- Зафиксирован **резолв** ранее заявленного рассинхрона фронт↔бэк: роут
+  `GET /miniapp/artifacts/{id}` существует (`handler.go:75`, ownership +
+  `Cache-Control: private`), текст отдаётся как `text/plain` артефакт
+  (`artifactservice/service.go:102-103`) и читается фронтом
+  (`client.ts:107-118`); поля `result_text` в DTO нет намеренно.
+- Главные находки вынесены в `TASKS.md` → раздел «Бэклог по аудиту» как отдельные
+  задачи (High: rate-limiting на `/miniapp/*`; Medium: fail-closed `vk_ts`,
+  проброс модели в API, мягкая деградация `getArtifact` при недоступности S3;
+  Low→Medium: развязать `mountedRef` и перезапуск эффекта; и т.д.). Сейчас **не**
+  исправлялись.
+- Зафиксирована UI-итерация Mini App (уже в коммитах ветки): история чатов в
+  `localStorage` (`vk_miniapp_chats_v1`), выбор модальности `Текст/Фото/Видео` +
+  dropdown модели, графитовая тема `#1A1A1D`, скрытие нативного scrollbar в
+  composer textarea.
+
+### Проверки
+
+- `npx tsc --noEmit` — без вывода, exit 0.
+- `npm run build` — без ошибок (vite 8, `dist` собран, gzip JS ~66.7 kB).

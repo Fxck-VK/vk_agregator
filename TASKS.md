@@ -117,12 +117,53 @@
 - [x] Frontend audit: `docs/AUDIT.md` описывает безопасность, утечки и оптимизацию новых Mini App фич.
 - [x] Восстановление `web/miniapp/src/**` из `HEAD` после ручной чистки: целевая чат-структура на месте, legacy `panels`/`screens` не импортируются, `tsc` и `build` зелёные.
 - [x] Hardening чат-фронта: cleanup для `bridge.subscribe` через `bridge.unsubscribe`, polling без стартовой задержки и без размножения таймеров, `patchMessage` по id мемоизирован.
-- [ ] Бэкенд: `GET /miniapp/artifacts/{id}` для отдачи текста/медиа в Mini App (фронт готов, endpoint остаётся follow-up).
-- [ ] Mini App API: поле выбранной модели пока UI-only и не передаётся в `POST /miniapp/jobs`; нужна backend/API договорённость.
+- [x] Бэкенд: `GET /miniapp/artifacts/{id}` отдаёт байты артефакта с ownership-проверкой (`art.OwnerUserID == user.ID`), `Cache-Control: private`; текст приходит как `text/plain`, фронт читает его через `fetchArtifactText`. Зависит от доступности S3 в `cmd/api` (см. бэклог аудита).
+- [ ] Mini App API: поле выбранной модели пока UI-only и не передаётся в `POST /miniapp/jobs`; нужна backend/API договорённость (см. бэклог аудита).
 - [x] VK Tunnel (`@vkontakte/vk-tunnel`) + npm-скрипт `tunnel` для запуска внутри VK.
 - [x] Dev-туннель через `cloudflared` (VK Tunnel на техработах с 02.10.2025): `vite.config.ts` `server` — `host: true`, `allowedHosts: true`, `hmr.protocol: wss`/`clientPort: 443`, proxy `/miniapp`+`/api` → `:8080`; mixed-content под https устранён, домен туннеля не хардкодится. E2E (mock) через прокси-эндпоинты проверен.
 - [x] Фикс биллинга (AUDIT B1a): стартовый грант 1000 создаётся committed-проводкой в ledger атомарно; миграция `000004` бэкоффилит открывающие проводки; mismatch устранён.
 - [ ] Получить https-URL `cloudflared` (`cloudflared tunnel --protocol http2 --url http://localhost:5173`) и вписать его в dev.vk.com → «Версия для vk.com» → «URL для разработки». Ручной шаг оператора — URL меняется каждый запуск.
+
+---
+
+## Бэклог по аудиту (`docs/REVIEW.md`)
+
+Полный аудит безопасности/архитектуры — `docs/REVIEW.md` (read-only ревью от
+2026-06-04). Код по аудиту **не правился**; ниже — приоритезированный бэклог
+фиксов. Не исправлять «заодно» — отдельными задачами.
+
+- [ ] **[High] Rate-limiting на `/miniapp/*`** (`cmd/api/main.go:158`). Сейчас
+  per-IP лимитер навешен только на `/webhooks/vk`; `POST /miniapp/jobs` создаёт
+  биллируемые Job без ограничения частоты. Обернуть `miniapp.Routes()` в
+  `ratelimit` (ключ по `vk_user_id`/IP, отдельные RPS/Burst, минимум на `POST /jobs`).
+- [ ] **[Medium] Fail-closed проверка `vk_ts`** (`internal/adapter/inbound/miniapp/sign.go:75-86`).
+  При `maxAge > 0` отсутствие/битость `vk_ts` сейчас просто пропускает TTL-проверку →
+  окно replay. Требовать корректный `vk_ts` (пустой/битый → `ErrExpiredParams`).
+- [ ] **[Medium] Проброс выбора модели на бэкенд**. Добавить поле `model` в
+  `CreateJobRequest` (`internal/adapter/inbound/miniapp/dto.go`) и слать его из
+  `createJob` (`web/miniapp/src/api/client.ts`) — сейчас уходит только
+  `{operation, prompt}`, выбор модели в UI игнорируется. Нужна валидация модели
+  по белому списку + проброс в оркестратор/провайдер.
+- [ ] **[Medium] Мягкая деградация `getArtifact` при недоступности S3**
+  (`cmd/api/main.go:88-92`, `handler.go:369-373`). Сейчас при сбое подключения к
+  S3 `objectStore == nil` и роут молча отдаёт `503`, хотя Job успешен. В проде —
+  считать S3 обязательной зависимостью (падать/алертить) либо явно отражать
+  недоступность артефактов в UI; задокументировать связность `api ↔ S3`.
+- [ ] **[Low→Medium] Развязать `mountedRef` и перезапуск эффекта**
+  (`web/miniapp/src/chat/ChatScreen.tsx:177-231`). Главный `useEffect` завязан на
+  `chats.length` и сбрасывает `mountedRef.current = false` при каждом перезапуске,
+  смешивая «размонтирован» и «эффект перезапущен». Держать флаг mount/unmount в
+  отдельном `useEffect(() => {...}, [])`.
+- [ ] **[Low] Constant-time сравнение `ADMIN_TOKEN`**
+  (`internal/adapter/inbound/admin/handler.go:61`) — заменить `!=` на
+  `subtle.ConstantTimeCompare`/`hmac.Equal`.
+- [ ] **[Low] Составной индекс `jobs (user_id, created_at DESC)`** под `ListByUser`
+  (сейчас отдельные индексы `user_id` и `status`; сортировка по `created_at`).
+- [ ] **[уточнить] CORS-политика** — зависит от модели развёртывания (same-origin
+  proxy vs прямой доступ). Не подтверждается кодом, требует решения.
+- [ ] **[уточнить] Retention/шифрование контента в `localStorage`**
+  (`vk_miniapp_chats_v1` хранит промпты и тексты в plaintext). Решить TTL/очистку
+  или отказ от хранения тел сообщений.
 
 ---
 
