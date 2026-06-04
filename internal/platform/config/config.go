@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/joho/godotenv"
 )
 
 // Config is the full application configuration shared by the entrypoints.
@@ -160,8 +162,10 @@ func (c Config) Validate() error {
 	return nil
 }
 
-// Load reads configuration from the environment.
+// Load reads configuration from .env and the process environment.
 func Load() Config {
+	loadDotenv()
+
 	host, _ := os.Hostname()
 	provider := env("PROVIDER", "mock")
 	providerChain := envList("PROVIDER_CHAIN")
@@ -260,6 +264,10 @@ func (c Config) usesOpenAI() bool {
 		}
 	}
 	return false
+}
+
+func loadDotenv() {
+	_ = godotenv.Load()
 }
 
 func env(key, def string) string {

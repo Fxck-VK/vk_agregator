@@ -429,6 +429,7 @@
   - `ARTIFACT_SCANNER=openai` проверяет text/image artifact bytes до storage;
   - video scanning/transcode остаётся частью будущего media pipeline.
 - **Config/docs/tests**:
+  - added `.env.example` and automatic local `.env` loading through `internal/platform/config`; real OS/CI env still wins over `.env`;
   - добавлены env-переменные OpenAI text/image/video/moderation/scanner и `PROVIDER_CHAIN`;
   - обновлены `README.md`, `RUNBOOK.md`, `TESTING.md`, `TASKS.md`, `AGENTS.md`, `AUDIT.md`, `ROADMAP.md`;
   - добавлены unit-тесты OpenAI text/image/video/moderation/scanner, VK upload pipeline, delivery upload и provider fallback.

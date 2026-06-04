@@ -76,6 +76,7 @@
 - [x] Real VK `messages.send` adapter behind `VK_DELIVERY_MODE=real` (requires real token).
 
 ### Documentation sync
+- [x] `.env.example` added as the committed handoff template; local `.env` is ignored by Git and loaded automatically from the repository root.
 - [x] `README.md` describes `v0.1.3 / Beta integrations foundation`, default mock runtime and opt-in real integrations.
 - [x] `RUNBOOK.md` reflects 3 migrations, DLQ/retry budget, migration checksums and real adapter modes.
 - [x] `TESTING.md` no longer calls real adapters stubs and documents current limitations.

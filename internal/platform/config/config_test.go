@@ -54,6 +54,41 @@ func TestLoadProviderChain(t *testing.T) {
 	}
 }
 
+func TestLoadReadsDotenvWithoutOverridingEnvironment(t *testing.T) {
+	restoreEnv := clearEnv(t, "HTTP_ADDR")
+	defer restoreEnv()
+	restoreVKVersion := clearEnv(t, "VK_API_VERSION")
+	defer restoreVKVersion()
+
+	tmp := t.TempDir()
+	if err := os.WriteFile(tmp+"/.env", []byte("HTTP_ADDR=:7777\nVK_API_VERSION=5.200\n"), 0600); err != nil {
+		t.Fatalf("write .env: %v", err)
+	}
+
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("get cwd: %v", err)
+	}
+	if err := os.Chdir(tmp); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	defer func() {
+		if err := os.Chdir(wd); err != nil {
+			t.Fatalf("restore cwd: %v", err)
+		}
+	}()
+
+	t.Setenv("HTTP_ADDR", ":9999")
+	cfg := config.Load()
+
+	if cfg.HTTPAddr != ":9999" {
+		t.Fatalf("HTTPAddr = %q, want environment value", cfg.HTTPAddr)
+	}
+	if cfg.VKAPIVersion != "5.200" {
+		t.Fatalf("VKAPIVersion = %q, want value from .env", cfg.VKAPIVersion)
+	}
+}
+
 func TestValidateOpenAIModerationRequiresKey(t *testing.T) {
 	cfg := config.Config{
 		Env:                "development",
@@ -70,4 +105,19 @@ func TestValidateOpenAIModerationRequiresKey(t *testing.T) {
 
 func TestMain(m *testing.M) {
 	os.Exit(m.Run())
+}
+
+func clearEnv(t *testing.T, key string) func() {
+	t.Helper()
+	old, ok := os.LookupEnv(key)
+	if err := os.Unsetenv(key); err != nil {
+		t.Fatalf("unset %s: %v", key, err)
+	}
+	return func() {
+		if ok {
+			_ = os.Setenv(key, old)
+			return
+		}
+		_ = os.Unsetenv(key)
+	}
 }

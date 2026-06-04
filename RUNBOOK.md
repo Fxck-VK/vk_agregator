@@ -35,7 +35,25 @@ go build ./...
 ### Environment configuration
 
 All variables have local-dev defaults (`internal/platform/config/config.go`), so
-no `.env` is required for local runs. Override via environment when needed:
+the mock-backed runtime can start without secrets. For handoff/local real VK
+testing, create a real local `.env` next to `.env.example`:
+
+```bash
+cp .env.example .env
+```
+
+Windows PowerShell:
+
+```powershell
+Copy-Item .env.example .env
+notepad .env
+```
+
+`cmd/api`, `cmd/worker`, and `cmd/migrate` load `.env` automatically when
+started from the repository root. OS/CI environment variables override values
+from `.env`. The real `.env` is ignored by Git; commit only `.env.example`.
+
+Override these values when needed:
 
 | Var | Default | Purpose |
 |-----|---------|---------|

@@ -22,7 +22,23 @@ Three binaries:
 
 ## Configuration (environment variables)
 
-All have local-dev defaults (see `internal/platform/config/config.go`):
+All have local-dev defaults (see `internal/platform/config/config.go`). For
+local handoff, copy the committed template and fill real secrets only in the
+ignored `.env` file:
+
+```bash
+cp .env.example .env
+```
+
+Windows PowerShell:
+
+```powershell
+Copy-Item .env.example .env
+notepad .env
+```
+
+The binaries load `.env` automatically when started from the repository root.
+OS/CI environment variables override `.env` values.
 
 | Var                     | Default                                                                                  |
 | ----------------------- | ---------------------------------------------------------------------------------------- |
@@ -58,6 +74,9 @@ All have local-dev defaults (see `internal/platform/config/config.go`):
 ## Startup commands
 
 ```bash
+# 0. Local env file
+cp .env.example .env
+
 # 1. Infrastructure
 docker compose up -d
 docker compose ps          # postgres/redis healthy; minio running

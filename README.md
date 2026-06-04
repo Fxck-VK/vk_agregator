@@ -101,6 +101,23 @@ migrations/          SQL migrations
 
 ## Running locally
 
+Create a local environment file from the committed template:
+
+```bash
+cp .env.example .env
+# edit .env and fill VK_ACCESS_TOKEN / VK_SECRET / VK_CONFIRMATION_TOKEN if needed
+```
+
+On Windows PowerShell:
+
+```powershell
+Copy-Item .env.example .env
+notepad .env
+```
+
+The application loads `.env` automatically when started from the repository
+root. The real `.env` is ignored by Git; only `.env.example` is committed.
+
 Start the infrastructure (PostgreSQL, Redis, MinIO):
 
 ```bash
