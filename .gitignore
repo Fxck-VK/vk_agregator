@@ -22,6 +22,7 @@ pnpm-debug.log*
 # Docker/local data
 *.pid
 *.log
+*-live.err
 
 # IDEs and editors
 .idea/

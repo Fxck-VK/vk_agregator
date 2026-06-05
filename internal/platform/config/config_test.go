@@ -54,6 +54,28 @@ func TestLoadProviderChain(t *testing.T) {
 	}
 }
 
+func TestLoadDeepInfraConfig(t *testing.T) {
+	t.Setenv("PROVIDER", "deepinfra")
+	t.Setenv("DEEPINFRA_API_KEY", "test-key")
+	t.Setenv("DEEPINFRA_BASE_URL", "https://example.com/v1/openai")
+	t.Setenv("DEEPINFRA_TEXT_MODEL", "deepseek-ai/DeepSeek-V4-Flash")
+	t.Setenv("DEEPINFRA_TEXT_PRICE", "2")
+
+	cfg := config.Load()
+	if cfg.DeepInfraAPIKey != "test-key" {
+		t.Fatal("DeepInfraAPIKey was not loaded")
+	}
+	if cfg.DeepInfraBaseURL != "https://example.com/v1/openai" {
+		t.Fatalf("DeepInfraBaseURL = %q", cfg.DeepInfraBaseURL)
+	}
+	if cfg.DeepInfraTextModel != "deepseek-ai/DeepSeek-V4-Flash" {
+		t.Fatalf("DeepInfraTextModel = %q", cfg.DeepInfraTextModel)
+	}
+	if cfg.DeepInfraTextPrice != 2 {
+		t.Fatalf("DeepInfraTextPrice = %d, want 2", cfg.DeepInfraTextPrice)
+	}
+}
+
 func TestLoadVKMenuButtonMode(t *testing.T) {
 	t.Setenv("VK_MENU_BUTTON_MODE", "text")
 
@@ -152,6 +174,19 @@ func TestValidateOpenAIModerationRequiresKey(t *testing.T) {
 	err := cfg.Validate()
 	if err == nil || !strings.Contains(err.Error(), "OPENAI_API_KEY") {
 		t.Fatalf("expected OPENAI_API_KEY validation error, got %v", err)
+	}
+}
+
+func TestValidateDeepInfraRequiresKey(t *testing.T) {
+	cfg := config.Config{
+		Env:           "development",
+		Provider:      "mock",
+		ProviderChain: []string{"deepinfra", "mock"},
+	}
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "DEEPINFRA_API_KEY") {
+		t.Fatalf("expected DEEPINFRA_API_KEY validation error, got %v", err)
 	}
 }
 

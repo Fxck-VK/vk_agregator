@@ -75,8 +75,12 @@ Override these values when needed:
 | `RETRY_BASE_DELAY` / `RETRY_MAX_DELAY` | `500ms` / `30s` | Exponential backoff bounds |
 | `MODERATION_EXTRA_TERMS` | `` | Comma-separated extra blocklist terms |
 | `WEBHOOK_RATE_LIMIT_RPS` / `WEBHOOK_RATE_LIMIT_BURST` | `20` / `40` | Per-IP webhook rate limit |
-| `PROVIDER` | `mock` | Primary provider adapter: `mock` or `openai` |
-| `PROVIDER_CHAIN` | value of `PROVIDER` | Comma-separated router/fallback chain, e.g. `openai,mock` |
+| `PROVIDER` | `mock` | Primary provider adapter: `mock`, `openai`, or `deepinfra` |
+| `PROVIDER_CHAIN` | value of `PROVIDER` | Comma-separated router/fallback chain, e.g. `openai,mock` or `deepinfra,mock` |
+| `DEEPINFRA_API_KEY` | `` | Required when DeepInfra provider is enabled |
+| `DEEPINFRA_BASE_URL` | `https://api.deepinfra.com/v1/openai` | DeepInfra OpenAI-compatible API root |
+| `DEEPINFRA_TEXT_MODEL` | `deepseek-ai/DeepSeek-V4-Flash` | DeepInfra text model code |
+| `DEEPINFRA_TEXT_PRICE` | `1` | Internal provider-router cost estimate |
 | `OPENAI_API_KEY` | `` | Required when OpenAI provider/moderation/scanner is enabled |
 | `OPENAI_BASE_URL` | `https://api.openai.com/v1` | OpenAI API root |
 | `OPENAI_TEXT_MODEL` / `OPENAI_IMAGE_MODEL` | OpenAI defaults | OpenAI text/image model codes |
@@ -112,8 +116,9 @@ Override these values when needed:
 > are set (fail-closed, `AUDIT.md` S1). Both `cmd/api` and `cmd/worker` run the
 > same validation. `PROVIDER=openai`, `PROVIDER_CHAIN` containing `openai`,
 > `MODERATION_PROVIDER=openai`, or `ARTIFACT_SCANNER=openai` require
-> `OPENAI_API_KEY`; `VK_DELIVERY_MODE=real` requires `VK_ACCESS_TOKEN` in any
-> environment.
+> `OPENAI_API_KEY`; `PROVIDER=deepinfra` or `PROVIDER_CHAIN` containing
+> `deepinfra` requires `DEEPINFRA_API_KEY`; `VK_DELIVERY_MODE=real` requires
+> `VK_ACCESS_TOKEN` in any environment.
 
 ### Hardening features (post-release)
 
@@ -237,6 +242,10 @@ PROVIDER=openai OPENAI_API_KEY=... go run ./cmd/worker
 
 # OpenAI primary with mock fallback through router/circuit breaker.
 PROVIDER_CHAIN=openai,mock OPENAI_API_KEY=... go run ./cmd/worker
+
+# DeepInfra DeepSeek-V4-Flash text generation with mock fallback for other
+# modalities.
+PROVIDER_CHAIN=deepinfra,mock DEEPINFRA_API_KEY=... go run ./cmd/worker
 
 # API-side VK /start menu responses with keyboard.
 VK_ACCESS_TOKEN=... go run ./cmd/api

@@ -13,6 +13,7 @@ Current release: `v0.1.3 / Beta integrations foundation`.
 The default runtime uses the mock provider and mock VK delivery. Real
 integrations are opt-in: OpenAI text/image/video provider, provider
 router/fallback/circuit breaker, VK `messages.send` with raw photo/video upload,
+DeepInfra DeepSeek-V4-Flash text provider,
 VK `/start` product menu with callback/text inline keyboard and active-menu `messages.edit`,
 process-local GPT text mode with unrouted-text gating, OpenAI output moderation,
 per-button VK menu feature flags, and OpenAI text/image artifact scanning are

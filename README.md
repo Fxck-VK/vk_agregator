@@ -34,8 +34,13 @@ Real integrations are implemented at adapter level and remain **opt-in**:
 
 - `PROVIDER=openai` enables OpenAI text (`Responses`), image (`Images`) and
   async video (`Videos`) generation.
+- `PROVIDER=deepinfra` enables DeepInfra text generation through
+  `deepseek-ai/DeepSeek-V4-Flash` (`/chat/completions` on DeepInfra's
+  OpenAI-compatible API).
 - `PROVIDER_CHAIN=openai,mock` enables the provider router with
   health/circuit-breaker, fallback, cost and observed-latency aware selection.
+  `PROVIDER_CHAIN=deepinfra,mock` uses DeepInfra for text and mock fallback for
+  unsupported or retryable paths.
 - `VK_DELIVERY_MODE=real` enables VK `messages.send` plus raw photo/video
   artifact upload to VK upload servers before send.
 - `cmd/api` can send the VK `/start` Super GPT menu and inline keyboard through
@@ -126,6 +131,7 @@ internal/
     inbound/admin/   read-only admin HTTP API
     delivery/vk/     outbound VK client (+ mock)
     provider/mock/   mock AI provider
+    provider/deepinfra/ DeepInfra text-generation adapter
     provider/openai/ OpenAI generation/moderation/scanning adapters
     queue/redis/     Redis Streams publisher/consumer (consumer groups)
     storage/postgres pgx repositories
@@ -203,6 +209,10 @@ PROVIDER=openai OPENAI_API_KEY=... go run ./cmd/worker
 # OpenAI primary with mock fallback through the provider router.
 PROVIDER_CHAIN=openai,mock OPENAI_API_KEY=... go run ./cmd/worker
 
+# DeepInfra DeepSeek-V4-Flash text generation; image/video should keep mock or
+# another capable provider in the fallback chain.
+PROVIDER_CHAIN=deepinfra,mock DEEPINFRA_API_KEY=... go run ./cmd/worker
+
 # Real VK messages.send + photo/video upload; requires a real token.
 VK_DELIVERY_MODE=real VK_ACCESS_TOKEN=... go run ./cmd/worker
 
@@ -216,10 +226,11 @@ MODERATION_PROVIDER=openai ARTIFACT_SCANNER=openai OPENAI_API_KEY=... go run ./c
 For production, set `APP_ENV=production` and configure non-default
 `VK_SECRET`, `ADMIN_TOKEN` and `VK_CONFIRMATION_TOKEN`. Both `cmd/api` and
 `cmd/worker` run fail-closed config validation; `PROVIDER=openai` requires
-`OPENAI_API_KEY`, and `VK_DELIVERY_MODE=real` requires `VK_ACCESS_TOKEN` in any
-environment.
+`OPENAI_API_KEY`, `PROVIDER=deepinfra` requires `DEEPINFRA_API_KEY`, and
+`VK_DELIVERY_MODE=real` requires `VK_ACCESS_TOKEN` in any environment.
 `PROVIDER_CHAIN`, `MODERATION_PROVIDER=openai` and `ARTIFACT_SCANNER=openai`
-also require `OPENAI_API_KEY`.
+also require the corresponding provider key when they include/enable that
+provider.
 For a VK welcome banner, set `VK_WELCOME_ATTACHMENT` to a pre-uploaded
 attachment string such as `photo-239332376_123_accesskey`.
 

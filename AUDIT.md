@@ -125,11 +125,12 @@ Severity: **critical** (blocks prod / safety / data loss), **high** (must fix be
 ## 8. Provider Abstraction
 
 **P1 — Real provider coverage incomplete — severity: high — ✅ FIXED (credential-bound live smoke pending)**
-- Description: default runtime still uses the mock provider, but real OpenAI text/image/video adapters and provider routing now exist behind opt-in config.
-- Impact: The code path can run real OpenAI text/image/video jobs and route/fallback across configured providers. Real calls require credentials and may incur provider cost, so live validation remains an operational step.
-- Recommendation: Run a live smoke with `OPENAI_API_KEY`; add a second real provider later for non-mock fallback.
+- Description: default runtime still uses the mock provider, but real OpenAI text/image/video adapters, DeepInfra text adapter and provider routing now exist behind opt-in config.
+- Impact: The code path can run real OpenAI text/image/video jobs, real DeepInfra DeepSeek-V4-Flash text jobs and route/fallback across configured providers. Real calls require credentials and may incur provider cost, so live validation remains an operational step.
+- Recommendation: Run live smoke with `OPENAI_API_KEY` and `DEEPINFRA_API_KEY`; add real image/video fallback providers later.
 - **Fix:** `adapter/provider/openai` now implements text via `/responses`, image via `/images/generations`, async video via `/videos` + poll/content download, and normalized provider errors. `worker.Registry` now routes by capabilities, estimated cost, observed latency and circuit-breaker health, and `PROVIDER_CHAIN=openai,mock` enables explicit fallback. Unit tests cover OpenAI text/image/video and router fallback.
-- **Remaining:** Google/Gemini/Kling provider adapters and live credential smoke remain Beta/Phase 3 work.
+- **Fix:** `adapter/provider/deepinfra` implements text generation through DeepInfra's OpenAI-compatible `/chat/completions` endpoint for `deepseek-ai/DeepSeek-V4-Flash`, with normalized text artifacts and provider error classes. `PROVIDER_CHAIN=deepinfra,mock` enables DeepInfra text with mock fallback.
+- **Remaining:** Google/Gemini/Kling image/video provider adapters and live credential smoke remain Beta/Phase 3 work.
 
 ## 9. VK Integration
 

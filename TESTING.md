@@ -55,6 +55,8 @@ OS/CI environment variables override `.env` values.
 | `ADMIN_TOKEN`           | _(empty = admin API open)_                                                                |
 | `PROVIDER`              | `mock`                                                                                    |
 | `PROVIDER_CHAIN`        | value of `PROVIDER`                                                                        |
+| `DEEPINFRA_API_KEY`     | _(required when DeepInfra provider is enabled)_                                           |
+| `DEEPINFRA_TEXT_MODEL`  | `deepseek-ai/DeepSeek-V4-Flash`                                                           |
 | `OPENAI_API_KEY`        | _(required when OpenAI provider/moderation/scanner is enabled)_                           |
 | `OPENAI_TEXT_MODEL`     | `gpt-4.1-mini`                                                                             |
 | `OPENAI_IMAGE_MODEL`    | `gpt-image-1`                                                                              |
@@ -106,6 +108,10 @@ PROVIDER=openai OPENAI_API_KEY=... go run ./cmd/worker
 
 # Provider router: OpenAI primary, mock fallback.
 PROVIDER_CHAIN=openai,mock OPENAI_API_KEY=... go run ./cmd/worker
+
+# DeepInfra DeepSeek-V4-Flash text provider with mock fallback for unsupported
+# modalities.
+PROVIDER_CHAIN=deepinfra,mock DEEPINFRA_API_KEY=... go run ./cmd/worker
 
 # API-side VK /start menu responses with keyboard.
 VK_ACCESS_TOKEN=... go run ./cmd/api
@@ -317,8 +323,14 @@ TEST_REDIS_ADDR="localhost:6379" go test ./internal/adapter/queue/redis/...
 - Default local runs use the **mock** AI provider and **mock** VK delivery.
 - `PROVIDER=openai` enables real OpenAI text/image/video adapters. Live tests
   require a real key and may incur provider cost.
+- `PROVIDER=deepinfra` enables real DeepInfra text generation through
+  `deepseek-ai/DeepSeek-V4-Flash`; live tests require a real key and may incur
+  provider cost. DeepInfra is text-only in this codebase, so keep `mock` or
+  another capable provider in `PROVIDER_CHAIN` for image/video jobs.
 - `PROVIDER_CHAIN=openai,mock` exercises router/fallback/circuit breaker logic
   with OpenAI primary and mock fallback.
+  `PROVIDER_CHAIN=deepinfra,mock` uses DeepInfra for text and mock fallback for
+  unsupported/retryable paths.
 - `VK_DELIVERY_MODE=real` enables real VK `messages.send` plus generated
   photo/video upload into VK attachment ids.
 - VK `/start` menu replies are sent by `cmd/api` through
@@ -330,4 +342,4 @@ TEST_REDIS_ADDR="localhost:6379" go test ./internal/adapter/queue/redis/...
 - `docker compose` brings up Postgres, Redis, MinIO; the app binaries run on the
   host (no app Dockerfile yet).
 - `cmd/api` and `cmd/worker` both validate production secrets fail-closed.
-  Real OpenAI/VK modes require their credentials even in local runs.
+  Real OpenAI/DeepInfra/VK modes require their credentials even in local runs.

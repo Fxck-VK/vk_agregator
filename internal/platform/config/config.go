@@ -88,6 +88,11 @@ type Config struct {
 	OpenAIImagePrice   int64
 	OpenAIVideoPrice   int64
 
+	DeepInfraAPIKey    string
+	DeepInfraBaseURL   string
+	DeepInfraTextModel string
+	DeepInfraTextPrice int64
+
 	// ModerationProvider selects output moderation: "keyword" (default) or
 	// "openai". ArtifactScanner selects artifact byte scanning: "none" or
 	// "openai".
@@ -192,6 +197,9 @@ func (c Config) Validate() error {
 	if c.usesOpenAI() && c.OpenAIAPIKey == "" {
 		missing = append(missing, "OPENAI_API_KEY")
 	}
+	if c.usesDeepInfra() && c.DeepInfraAPIKey == "" {
+		missing = append(missing, "DEEPINFRA_API_KEY")
+	}
 	if c.VKDeliveryMode == "real" && c.VKAccessToken == "" {
 		missing = append(missing, "VK_ACCESS_TOKEN")
 	}
@@ -266,6 +274,10 @@ func Load() Config {
 		OpenAITextPrice:       int64(envInt("OPENAI_TEXT_PRICE", 1)),
 		OpenAIImagePrice:      int64(envInt("OPENAI_IMAGE_PRICE", 10)),
 		OpenAIVideoPrice:      int64(envInt("OPENAI_VIDEO_PRICE", 50)),
+		DeepInfraAPIKey:       env("DEEPINFRA_API_KEY", ""),
+		DeepInfraBaseURL:      env("DEEPINFRA_BASE_URL", "https://api.deepinfra.com/v1/openai"),
+		DeepInfraTextModel:    env("DEEPINFRA_TEXT_MODEL", "deepseek-ai/DeepSeek-V4-Flash"),
+		DeepInfraTextPrice:    int64(envInt("DEEPINFRA_TEXT_PRICE", 1)),
 		ModerationProvider:    env("MODERATION_PROVIDER", "keyword"),
 		OpenAIModerationModel: env("OPENAI_MODERATION_MODEL", "omni-moderation-latest"),
 		ArtifactScanner:       env("ARTIFACT_SCANNER", "none"),
@@ -325,6 +337,18 @@ func (c Config) usesOpenAI() bool {
 	}
 	for _, provider := range c.ProviderChain {
 		if strings.EqualFold(provider, "openai") {
+			return true
+		}
+	}
+	return false
+}
+
+func (c Config) usesDeepInfra() bool {
+	if strings.EqualFold(c.Provider, "deepinfra") {
+		return true
+	}
+	for _, provider := range c.ProviderChain {
+		if strings.EqualFold(provider, "deepinfra") {
 			return true
 		}
 	}

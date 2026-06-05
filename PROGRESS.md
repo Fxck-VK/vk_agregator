@@ -414,6 +414,10 @@
   - image generation через `/images/generations`, включая `url` и `b64_json`;
   - async video generation через `/videos`, polling `/videos/{id}` и download `/videos/{id}/content`;
   - output нормализуется в Artifact-compatible URLs, включая `data:` URLs для inline bytes.
+- **DeepInfra provider**:
+  - `deepseek-ai/DeepSeek-V4-Flash` text generation is wired through DeepInfra's OpenAI-compatible `/chat/completions` endpoint;
+  - `PROVIDER=deepinfra` or `PROVIDER_CHAIN=deepinfra,mock` enables it;
+  - the adapter is text-only, returns normalized `data:text/plain` outputs, and maps DeepInfra HTTP failures into internal provider error classes.
 - **Provider router**:
   - `PROVIDER_CHAIN` задаёт ordered fallback chain;
   - router проверяет capabilities, estimated cost, observed latency и circuit-breaker health;
@@ -430,9 +434,9 @@
   - video scanning/transcode остаётся частью будущего media pipeline.
 - **Config/docs/tests**:
   - added `.env.example` and automatic local `.env` loading through `internal/platform/config`; real OS/CI env still wins over `.env`;
-  - добавлены env-переменные OpenAI text/image/video/moderation/scanner и `PROVIDER_CHAIN`;
+  - добавлены env-переменные OpenAI text/image/video/moderation/scanner, DeepInfra text и `PROVIDER_CHAIN`;
   - обновлены `README.md`, `RUNBOOK.md`, `TESTING.md`, `TASKS.md`, `AGENTS.md`, `AUDIT.md`, `ROADMAP.md`;
-  - добавлены unit-тесты OpenAI text/image/video/moderation/scanner, VK upload pipeline, delivery upload и provider fallback.
+  - добавлены unit-тесты OpenAI text/image/video/moderation/scanner, DeepInfra text, VK upload pipeline, delivery upload и provider fallback.
 - **VK inbound attachments**:
   - sticker-only сообщения больше не превращаются в пустой prompt;
   - handler синтезирует text prompt с `sticker_id/product_id`; prompt проходит в `text.ask` job только при активном GPT text mode или legacy `VK_UNROUTED_TEXT_MODE=gpt`, поэтому стикер не теряется и не создает случайный billable job вне режима;
@@ -468,6 +472,7 @@
 ### Проверки
 
 - Targeted tests: `go test ./internal/adapter/provider/openai ./internal/adapter/delivery/vk ./internal/adapter/inbound/vk ./internal/service/commandrouter ./internal/worker ./internal/platform/config`.
+- DeepInfra targeted tests: `go test ./internal/adapter/provider/deepinfra ./internal/platform/config`.
 - Added VK menu UX coverage: `EditMessage` request shape, mock edit semantics, active-menu edit, lower `Показать меню` fresh send, and plain-message text-only hint behavior.
 - Added callback menu coverage: callback keyboard JSON, `VK_MENU_BUTTON_MODE` config validation, `message_event` command processing, no-job invariant, and legacy text-button mode.
 - Added callback ack coverage: real `messages.sendMessageEventAnswer` request shape, mock answer recording, and inbound `message_event` acknowledgement.
@@ -480,8 +485,8 @@
 
 ### Текущие ограничения
 
-- Реальные OpenAI/VK вызовы не прогонялись без пользовательских credentials; нужен live smoke на dev-аккаунтах.
-- Второй реальный provider для fallback ещё не добавлен; сейчас fallback можно проверить с `mock`.
+- Реальные OpenAI/DeepInfra/VK вызовы требуют credential-bound live smoke на dev-аккаунтах; unit-тесты используют mock HTTP servers.
+- Второй реальный provider для text fallback добавлен через DeepInfra; реальные image/video fallback providers остаются follow-up.
 - VK control/menu responses пока отправляются напрямую из API через `vkdelivery.ControlClient` с deterministic `random_id`; если на product/control sends распространяем invariant `Every delivery attempt is persisted`, нужен отдельный persisted delivery/outbox flow для таких сообщений.
 - Active-menu tracking и GPT dialog mode пока хранятся в памяти процесса `cmd/api`; после рестарта API или при multi-instance балансировке меню может отправиться новым сообщением, а пользователь может потерять выбранный GPT mode. Перед production-scale нужен persisted conversation/menu state.
 - Video artifact scanner пока fail-open; полноценный video scan/probe/transcode остаётся Phase 3 media pipeline.
@@ -490,5 +495,5 @@
 ### Next step
 
 См. актуальный backlog в `TASKS.md`; ближайший фокус — live smoke с реальными
-ключами, второй реальный provider для fallback, video media pipeline и worker
+ключами, реальные image/video fallback providers, video media pipeline и worker
 resume hardening.
