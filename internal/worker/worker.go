@@ -35,6 +35,10 @@ import (
 // before a retryable failure is treated as terminal.
 const maxProviderAttempts = 3
 
+// defaultProviderCallTimeout bounds one provider Submit/Poll call inside the
+// worker so a stuck provider cannot keep a job generating forever.
+const defaultProviderCallTimeout = 60 * time.Second
+
 // ArtifactSaver stores provider outputs as artifacts. Implemented by
 // artifactservice.Service.
 type ArtifactSaver interface {
@@ -402,6 +406,7 @@ type processor struct {
 	releaser    ReservationReleaser
 	maxAttempts int
 	backoff     func(attempt int) time.Duration
+	callTimeout time.Duration
 	now         func() time.Time
 }
 
@@ -431,13 +436,16 @@ type Deps struct {
 	Moderator Moderator
 	// ModResults, when set, persists moderation verdicts for audit.
 	ModResults domain.ModerationResultRepository
-	// Releaser, when set, frees reserved credits for moderation-blocked jobs.
+	// Releaser, when set, frees reserved credits for moderation-blocked jobs
+	// and terminal provider failures before capture.
 	Releaser ReservationReleaser
 	// MaxAttempts caps retryable re-enqueues before dead-lettering (default 3).
 	MaxAttempts int
 	// Backoff returns the delay before re-enqueue for the given attempt number.
 	// Defaults to no delay (keeps tests fast).
 	Backoff func(attempt int) time.Duration
+	// ProviderCallTimeout bounds one provider Submit/Poll call (default 60s).
+	ProviderCallTimeout time.Duration
 	// Now overrides the clock; defaults to time.Now.
 	Now func() time.Time
 }
@@ -455,6 +463,10 @@ func newProcessor(d Deps) processor {
 	if backoff == nil {
 		backoff = func(int) time.Duration { return 0 }
 	}
+	callTimeout := d.ProviderCallTimeout
+	if callTimeout <= 0 {
+		callTimeout = defaultProviderCallTimeout
+	}
 	return processor{
 		jobs:        d.Jobs,
 		tasks:       d.Tasks,
@@ -466,6 +478,7 @@ func newProcessor(d Deps) processor {
 		releaser:    d.Releaser,
 		maxAttempts: maxAttempts,
 		backoff:     backoff,
+		callTimeout: callTimeout,
 		now:         now,
 	}
 }
@@ -558,7 +571,17 @@ func classOf(err error) domain.ProviderErrorClass {
 	if errors.As(err, &ce) {
 		return ce.ProviderErrorClass()
 	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return domain.ProviderErrTimeout
+	}
 	return domain.ProviderErrInternal
+}
+
+func (p *processor) providerCallContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	if p.callTimeout <= 0 {
+		return ctx, func() {}
+	}
+	return context.WithTimeout(ctx, p.callTimeout)
 }
 
 // setStatus applies a state-machine transition, treating "already there" as a
@@ -602,7 +625,8 @@ func (p *processor) latestTask(ctx context.Context, jobID uuid.UUID) (*domain.Pr
 
 // pollOnce polls the provider once and applies the normalized result.
 func (p *processor) pollOnce(ctx context.Context, job *domain.Job, pt *domain.ProviderTask, provider domain.Provider, task queue.Task) error {
-	pollCtx, span := tracing.Start(ctx, "provider.poll",
+	callCtx, cancel := p.providerCallContext(ctx)
+	pollCtx, span := tracing.Start(callCtx, "provider.poll",
 		attribute.String("job.id", job.ID.String()),
 		attribute.String("provider", string(provider.Name())),
 		attribute.String("provider.external_id", pt.ExternalID),
@@ -612,10 +636,12 @@ func (p *processor) pollOnce(ctx context.Context, job *domain.Job, pt *domain.Pr
 	if err != nil {
 		tracing.RecordError(span, err)
 		span.End()
+		cancel()
 		return p.handleFailure(ctx, job, task, classOf(err), err.Error())
 	}
 	span.SetAttributes(attribute.String("provider.task_status", string(res.Status)))
 	span.End()
+	cancel()
 	return p.applyResult(ctx, job, pt, res, task)
 }
 
@@ -753,11 +779,21 @@ func (p *processor) handleFailure(ctx context.Context, job *domain.Job, task que
 
 	// Budget exhausted (retryable) or non-retryable: dead-letter retryable
 	// failures for inspection, then move the job to a terminal state.
+	if err := p.releaseReserved(ctx, job); err != nil {
+		return err
+	}
 	if isRetryable(class) {
 		p.toDLQ(ctx, task, code, msg)
 	}
 	metrics.JobsTerminal.WithLabelValues(string(domain.JobStatusFailedTerminal)).Inc()
 	return p.setStatus(ctx, job, domain.JobStatusFailedTerminal, code, msg)
+}
+
+func (p *processor) releaseReserved(ctx context.Context, job *domain.Job) error {
+	if p.releaser == nil || job.CostReserved <= 0 || job.CostCaptured > 0 {
+		return nil
+	}
+	return p.releaser.ReleaseForJob(ctx, job.ID)
 }
 
 // moderateOutput runs the output moderation check and, on a block, rejects the

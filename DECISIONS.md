@@ -145,3 +145,31 @@ Consequences: VKUI is technically compatible with React 19, so no React
 downgrade is needed. VKUI should remain uninstalled until a scoped migration PR
 chooses exact components, measures final bundle impact, and preserves Mini App
 security invariants. Review this after VKUI or app bundle constraints change.
+
+---
+
+## ADR-006 - Worker provider call timeout and terminal release
+
+Status: accepted
+
+Date: 2026-06-05
+
+Context: Mini App `POST /miniapp/jobs` already returns after
+`joborchestrator.CreateJob`; it does not call AI providers. VK text bot intake
+uses the same orchestrator path. Provider calls happen only in
+`internal/worker`, where a stuck `Submit` or `Poll` could keep a job in an
+active state longer than intended. Existing retry/backoff settings are
+`MAX_ATTEMPTS=3`, `RETRY_BASE_DELAY=500ms` and `RETRY_MAX_DELAY=30s`.
+
+Decision: keep Mini App submit async and add a worker-level timeout around one
+provider `Submit` or `Poll` call. The default timeout is 60 seconds and is
+configurable in tests through `worker.Deps.ProviderCallTimeout`. Context
+deadline errors are normalized to `provider_timeout`, which remains retryable.
+When retry budget is exhausted, or a non-retryable provider failure is terminal,
+the worker releases any reserved credits before moving the job to
+`failed_terminal`.
+
+Consequences: BFF and VK handlers still never call providers directly.
+Provider stalls are bounded by worker context timeouts plus existing retry
+backoff. Billing remains append-only: failures before capture release the hold
+via the existing reservation releaser instead of mutating balance directly.

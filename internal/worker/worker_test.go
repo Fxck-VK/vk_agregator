@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -35,12 +36,17 @@ type harness struct {
 	artRepo  *memory.ArtifactRepo
 	store    *memory.ObjectStore
 	streams  *fakeStreams
-	provider *mock.Provider
+	provider domain.Provider
+	releaser *fakeReleaser
 	gen      *worker.GenerationWorker
 	poll     *worker.PollWorker
 }
 
 func newHarness(t *testing.T, opts ...mock.Option) *harness {
+	return newHarnessWithProvider(t, mock.New(opts...), nil)
+}
+
+func newHarnessWithProvider(t *testing.T, provider domain.Provider, configure func(*worker.Deps)) *harness {
 	t.Helper()
 	jobs := memory.NewJobRepo()
 	tasks := memory.NewProviderTaskRepo()
@@ -49,14 +55,18 @@ func newHarness(t *testing.T, opts ...mock.Option) *harness {
 	// Download anything to fixed bytes so SaveRemoteArtifact succeeds offline.
 	dl := stubDownloader{data: []byte("output"), contentType: "application/octet-stream"}
 	artSvc := artifactservice.New(artRepo, store, "artifacts", artifactservice.WithDownloader(dl))
-	provider := mock.New(opts...)
 	streams := newFakeStreams()
+	releaser := &fakeReleaser{}
 	deps := worker.Deps{
 		Jobs:      jobs,
 		Tasks:     tasks,
 		Artifacts: artSvc,
 		Providers: worker.NewRegistry(provider),
 		Streams:   streams,
+		Releaser:  releaser,
+	}
+	if configure != nil {
+		configure(&deps)
 	}
 	return &harness{
 		jobs:     jobs,
@@ -65,6 +75,7 @@ func newHarness(t *testing.T, opts ...mock.Option) *harness {
 		store:    store,
 		streams:  streams,
 		provider: provider,
+		releaser: releaser,
 		gen:      worker.NewGenerationWorker(deps),
 		poll:     worker.NewPollWorker(deps),
 	}
@@ -91,6 +102,7 @@ func (h *harness) queueJob(t *testing.T, op domain.OperationType, mod domain.Mod
 		Status:         domain.JobStatusQueued,
 		IdempotencyKey: "job:" + uuid.NewString(),
 		CorrelationID:  "corr",
+		CostReserved:   10,
 		Params:         params,
 	}
 	if err := h.jobs.Create(context.Background(), job); err != nil {
@@ -206,6 +218,9 @@ func TestTerminalProviderError(t *testing.T) {
 	if got.ErrorCode != string(domain.ProviderErrUnsupportedCapab) {
 		t.Fatalf("error code = %q", got.ErrorCode)
 	}
+	if len(h.releaser.released) != 1 || h.releaser.released[0] != job.ID {
+		t.Fatalf("expected reservation release for terminal failure, got %v", h.releaser.released)
+	}
 }
 
 // Retryable error classification: a retryable failure re-queues the job for
@@ -246,6 +261,33 @@ func TestRetryableErrorBecomesTerminalAfterMaxAttempts(t *testing.T) {
 	}
 	if got := h.reload(t, job.ID); got.Status != domain.JobStatusFailedTerminal {
 		t.Fatalf("status = %q, want failed_terminal after max attempts", got.Status)
+	}
+	if len(h.releaser.released) != 1 || h.releaser.released[0] != job.ID {
+		t.Fatalf("expected one reservation release after exhausted attempts, got %v", h.releaser.released)
+	}
+}
+
+func TestProviderSubmitTimeoutBecomesTerminalAndReleasesReservation(t *testing.T) {
+	h := newHarnessWithProvider(t, &timeoutProvider{name: domain.ProviderName("timeout")}, func(d *worker.Deps) {
+		d.MaxAttempts = 1
+		d.ProviderCallTimeout = time.Millisecond
+	})
+	ctx := context.Background()
+	job := h.queueJob(t, domain.OperationTextGenerate, domain.ModalityText, "slow")
+
+	if err := h.gen.Process(ctx, taskFor(job)); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+
+	got := h.reload(t, job.ID)
+	if got.Status != domain.JobStatusFailedTerminal {
+		t.Fatalf("status = %q, want failed_terminal", got.Status)
+	}
+	if got.ErrorCode != string(domain.ProviderErrTimeout) {
+		t.Fatalf("error code = %q, want %q", got.ErrorCode, domain.ProviderErrTimeout)
+	}
+	if len(h.releaser.released) != 1 || h.releaser.released[0] != job.ID {
+		t.Fatalf("expected reservation release for timed out job, got %v", h.releaser.released)
 	}
 }
 
@@ -330,3 +372,33 @@ type routingError struct{ class domain.ProviderErrorClass }
 func (e routingError) Error() string { return string(e.class) }
 
 func (e routingError) ProviderErrorClass() domain.ProviderErrorClass { return e.class }
+
+type timeoutProvider struct {
+	name domain.ProviderName
+}
+
+func (p *timeoutProvider) Name() domain.ProviderName { return p.name }
+
+func (p *timeoutProvider) Capabilities(context.Context) ([]domain.Capability, error) {
+	return []domain.Capability{{
+		Operation: domain.OperationTextGenerate,
+		Modality:  domain.ModalityText,
+		ModelCode: string(p.name) + "-model",
+	}}, nil
+}
+
+func (p *timeoutProvider) Estimate(context.Context, domain.ProviderRequest) (domain.CostEstimate, error) {
+	return domain.CostEstimate{AmountCredits: 10, Currency: "credits"}, nil
+}
+
+func (p *timeoutProvider) Submit(ctx context.Context, req domain.ProviderRequest) (domain.ProviderTask, error) {
+	<-ctx.Done()
+	return domain.ProviderTask{JobID: req.JobID, Provider: p.name}, ctx.Err()
+}
+
+func (p *timeoutProvider) Poll(ctx context.Context, _ domain.ProviderTaskRef) (domain.ProviderTaskResult, error) {
+	<-ctx.Done()
+	return domain.ProviderTaskResult{}, ctx.Err()
+}
+
+func (p *timeoutProvider) Cancel(context.Context, domain.ProviderTaskRef) error { return nil }

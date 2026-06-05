@@ -998,3 +998,30 @@ resume hardening.
 - `npm audit --json` после временной установки VKUI — 0 vulnerabilities.
 - Финальный `npm run build` текущего кода после удаления VKUI/prototype —
   exit 0.
+
+---
+
+## PR-13 - Mini App API hang hotfix
+
+Status: **completed**.
+
+### What changed
+
+- Step 0 confirmed that Mini App `POST /miniapp/jobs` is already async:
+  the handler calls `joborchestrator.CreateJob` and returns the DTO without a
+  provider call. VK text bot intake uses the same orchestrator path.
+- Worker provider `Submit` and `Poll` calls now run under a bounded
+  per-call context timeout. Deadline errors are normalized as
+  `provider_timeout` and use the existing retry/backoff policy.
+- Terminal provider failures release reserved credits before the job is moved
+  to `failed_terminal`; billing remains append-only through the existing
+  reservation release path.
+- Regression tests cover terminal provider failure release, exhausted retry
+  release and stuck submit timeout handling.
+
+### Checks
+
+- `go test ./internal/worker` - exit 0.
+- `go test ./...` - exit 0.
+- `go build ./...` - exit 0.
+- `npm run build` in `web/miniapp` - exit 0.
