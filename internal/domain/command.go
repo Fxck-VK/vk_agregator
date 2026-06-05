@@ -42,6 +42,14 @@ const (
 	CommandMenuImage CommandType = "menu.image"
 	// CommandMenuVideo explains how to generate a video.
 	CommandMenuVideo CommandType = "menu.video"
+	// CommandMenuVideoSora2 selects Sora 2 in the VK video model picker.
+	CommandMenuVideoSora2 CommandType = "menu.video.sora_2"
+	// CommandMenuVideoKling21 selects Kling v2.1 in the VK video model picker.
+	CommandMenuVideoKling21 CommandType = "menu.video.kling_v2_1"
+	// CommandMenuVideoSeedance1 selects Seedance 1 in the VK video model picker.
+	CommandMenuVideoSeedance1 CommandType = "menu.video.seedance_1"
+	// CommandMenuVideoHaiuo02 selects Haiuo v0.2 in the VK video model picker.
+	CommandMenuVideoHaiuo02 CommandType = "menu.video.haiuo_v0_2"
 	// CommandMenuStudents opens the student/schoolchild help section.
 	CommandMenuStudents CommandType = "menu.students"
 	// CommandCancel cancels an in-flight job.
@@ -72,6 +80,10 @@ func (c CommandType) Valid() bool {
 		CommandMenuText,
 		CommandMenuImage,
 		CommandMenuVideo,
+		CommandMenuVideoSora2,
+		CommandMenuVideoKling21,
+		CommandMenuVideoSeedance1,
+		CommandMenuVideoHaiuo02,
 		CommandMenuStudents,
 		CommandCancel,
 		CommandStatus,

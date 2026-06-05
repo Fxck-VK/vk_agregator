@@ -227,6 +227,85 @@ func TestShowMenuSendsWelcomeWithoutResettingPersistentKeyboard(t *testing.T) {
 	}
 }
 
+func TestVideoMenuButtonSendsModelPickerNoJob(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	h := newHarnessWithControl(control)
+	body := `{
+		"type":"message_new","group_id":1,"event_id":"evt-video-menu","secret":"s3cr3t",
+		"object":{"message":{"from_id":560,"peer_id":560,"text":"🎬 Создать видео","payload":"{\"command\":\"menu.video\"}"}}
+	}`
+	rec := h.post(body)
+	if rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	ctx := context.Background()
+	user, err := h.users.GetByVKUserID(ctx, 560)
+	if err != nil {
+		t.Fatalf("user not created: %v", err)
+	}
+	cmds, _ := h.cmds.ListByUser(ctx, user.ID, 10, 0)
+	if len(cmds) != 1 || cmds[0].Type != domain.CommandMenuVideo {
+		t.Fatalf("unexpected commands: %+v", cmds)
+	}
+	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
+	if len(jobs) != 0 {
+		t.Fatalf("video menu must not create a job, got %d", len(jobs))
+	}
+	sent := control.Sent()
+	if len(sent) != 1 {
+		t.Fatalf("expected one model picker message, got %+v", sent)
+	}
+	if sent[0].Text != "Выбери модель для генерации:" {
+		t.Fatalf("unexpected text: %q", sent[0].Text)
+	}
+	for _, want := range []string{
+		"Sora 2 — видео текст+фото",
+		"Kling v2.1 — видео текст+фото",
+		"Seedance 1 — видео по тексту",
+		"Haiuo v0.2 — видео текст+фото",
+		"⬅️ Назад",
+	} {
+		if !strings.Contains(sent[0].Keyboard, want) {
+			t.Fatalf("expected %q in keyboard: %q", want, sent[0].Keyboard)
+		}
+	}
+}
+
+func TestVideoModelButtonIsControlCommandNoJob(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	h := newHarnessWithControl(control)
+	body := `{
+		"type":"message_new","group_id":1,"event_id":"evt-video-model","secret":"s3cr3t",
+		"object":{"message":{"from_id":561,"peer_id":561,"text":"Sora 2 — видео текст+фото","payload":"{\"command\":\"menu.video.sora_2\"}"}}
+	}`
+	rec := h.post(body)
+	if rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	ctx := context.Background()
+	user, err := h.users.GetByVKUserID(ctx, 561)
+	if err != nil {
+		t.Fatalf("user not created: %v", err)
+	}
+	cmds, _ := h.cmds.ListByUser(ctx, user.ID, 10, 0)
+	if len(cmds) != 1 || cmds[0].Type != domain.CommandMenuVideoSora2 {
+		t.Fatalf("unexpected commands: %+v", cmds)
+	}
+	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
+	if len(jobs) != 0 {
+		t.Fatalf("video model selection must not create a job, got %d", len(jobs))
+	}
+	sent := control.Sent()
+	if len(sent) != 1 || !strings.Contains(sent[0].Text, "Sora 2 выбрана") {
+		t.Fatalf("unexpected model response: %+v", sent)
+	}
+	if !strings.Contains(sent[0].Keyboard, "⬅️ Назад") {
+		t.Fatalf("expected back button in keyboard: %q", sent[0].Keyboard)
+	}
+}
+
 func TestStartFallsBackWhenVKKeyboardDisabled(t *testing.T) {
 	control := &keyboardFailControl{}
 	h := newHarnessWithControl(control)

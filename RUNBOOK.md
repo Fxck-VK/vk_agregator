@@ -294,6 +294,9 @@ When `cmd/api` has `VK_ACCESS_TOKEN`, it sends the Super GPT welcome text with
 a VK inline keyboard under the message. Set `VK_WELCOME_ATTACHMENT` to a
 pre-uploaded VK attachment string if the welcome message should include a
 banner image.
+Clicking `🎬 Создать видео` opens the video model picker with `Sora 2`,
+`Kling v2.1`, `Seedance 1`, `Haiuo v0.2`, and `⬅️ Назад`. These model buttons
+are control-only for now and must not create billable jobs.
 
 ### VK message → full pipeline
 ```bash

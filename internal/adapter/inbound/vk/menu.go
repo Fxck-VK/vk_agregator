@@ -28,6 +28,10 @@ func controlTypeFromPayload(payload string) (domain.CommandType, bool) {
 		domain.CommandMenuText,
 		domain.CommandMenuImage,
 		domain.CommandMenuVideo,
+		domain.CommandMenuVideoSora2,
+		domain.CommandMenuVideoKling21,
+		domain.CommandMenuVideoSeedance1,
+		domain.CommandMenuVideoHaiuo02,
 		domain.CommandMenuStudents:
 		return domain.CommandType(data.Command), true
 	default:
@@ -46,6 +50,10 @@ func shouldSendControlResponse(t domain.CommandType) bool {
 		domain.CommandMenuText,
 		domain.CommandMenuImage,
 		domain.CommandMenuVideo,
+		domain.CommandMenuVideoSora2,
+		domain.CommandMenuVideoKling21,
+		domain.CommandMenuVideoSeedance1,
+		domain.CommandMenuVideoHaiuo02,
 		domain.CommandMenuStudents:
 		return true
 	default:
@@ -77,7 +85,7 @@ func (h *Handler) sendControlResponse(ctx context.Context, t domain.CommandType,
 
 	msg := vkdelivery.Message{
 		Text:     controlResponseText(t, balance),
-		Keyboard: welcomeKeyboard(),
+		Keyboard: controlResponseKeyboard(t),
 	}
 	if t == domain.CommandStart || t == domain.CommandShowMenu || t == domain.CommandHelp {
 		msg.Attachment = h.cfg.WelcomeAttachment
@@ -124,7 +132,12 @@ func controlResponseText(t domain.CommandType, balance int64) string {
 	case domain.CommandBalance, domain.CommandAccount:
 		return fmt.Sprintf("👤 Мой аккаунт\n\nВаш баланс: %d 💎\n\nВыберите действие:", balance)
 	case domain.CommandMenuVideo:
-		return "🎬 Создать видео\n\nОтправьте описание после команды /video.\n\nПример:\n/video девушка идет по ночному Токио, cinematic, вертикальный кадр"
+		return "Выбери модель для генерации:"
+	case domain.CommandMenuVideoSora2,
+		domain.CommandMenuVideoKling21,
+		domain.CommandMenuVideoSeedance1,
+		domain.CommandMenuVideoHaiuo02:
+		return videoModelSelectedText(t)
 	case domain.CommandMenuImage:
 		return "🖼️ Создать фото\n\nОтправьте описание после команды /image.\n\nПример:\n/image футуристичный аватар для VK, мягкий свет, детально"
 	case domain.CommandMenuText:
@@ -135,6 +148,34 @@ func controlResponseText(t domain.CommandType, balance int64) string {
 		return "💰 Пополнить баланс\n\nПополнение будет подключено отдельным платежным потоком. Пока для тестирования доступны стартовые кредиты."
 	default:
 		return welcomeText(balance)
+	}
+}
+
+func controlResponseKeyboard(t domain.CommandType) *vkdelivery.Keyboard {
+	switch t {
+	case domain.CommandMenuVideo,
+		domain.CommandMenuVideoSora2,
+		domain.CommandMenuVideoKling21,
+		domain.CommandMenuVideoSeedance1,
+		domain.CommandMenuVideoHaiuo02:
+		return videoModelKeyboard()
+	default:
+		return welcomeKeyboard()
+	}
+}
+
+func videoModelSelectedText(t domain.CommandType) string {
+	switch t {
+	case domain.CommandMenuVideoSora2:
+		return "Sora 2 выбрана.\n\nОтправьте описание видео командой /video. Выбор конкретной модели будет подключен в следующем шаге."
+	case domain.CommandMenuVideoKling21:
+		return "Kling v2.1 выбрана.\n\nОтправьте описание видео командой /video. Выбор конкретной модели будет подключен в следующем шаге."
+	case domain.CommandMenuVideoSeedance1:
+		return "Seedance 1 выбрана.\n\nОтправьте описание видео командой /video. Выбор конкретной модели будет подключен в следующем шаге."
+	case domain.CommandMenuVideoHaiuo02:
+		return "Haiuo v0.2 выбрана.\n\nОтправьте описание видео командой /video. Выбор конкретной модели будет подключен в следующем шаге."
+	default:
+		return "Выбери модель для генерации:"
 	}
 }
 
@@ -162,6 +203,30 @@ func welcomeKeyboard() *vkdelivery.Keyboard {
 			{
 				button("👤 Мой аккаунт", domain.CommandAccount, "secondary"),
 				button("💰 Пополнить баланс", domain.CommandTopUp, "positive"),
+			},
+		},
+	}
+}
+
+func videoModelKeyboard() *vkdelivery.Keyboard {
+	return &vkdelivery.Keyboard{
+		OneTime: false,
+		Inline:  true,
+		Buttons: [][]vkdelivery.KeyboardButton{
+			{
+				button("Sora 2 — видео текст+фото", domain.CommandMenuVideoSora2, "secondary"),
+			},
+			{
+				button("Kling v2.1 — видео текст+фото", domain.CommandMenuVideoKling21, "secondary"),
+			},
+			{
+				button("Seedance 1 — видео по тексту", domain.CommandMenuVideoSeedance1, "secondary"),
+			},
+			{
+				button("Haiuo v0.2 — видео текст+фото", domain.CommandMenuVideoHaiuo02, "secondary"),
+			},
+			{
+				button("⬅️ Назад", domain.CommandShowMenu, "secondary"),
 			},
 		},
 	}

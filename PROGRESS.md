@@ -442,6 +442,8 @@
   - после нажатия `Старт` бот заменяет нижнюю постоянную клавиатуру на одну кнопку `Показать меню`;
   - `Показать меню` хранится как отдельный `show_menu` control-command и открывает VK inline keyboard под welcome-сообщением без повторной переустановки нижней клавиатуры;
   - `Старт`, `/start`, `меню` и `начать` открывают VK inline keyboard под welcome-сообщением в стиле Super GPT;
+  - `Создать видео` теперь открывает отдельный inline-экран `Выбери модель для генерации:` с моделями `Sora 2`, `Kling v2.1`, `Seedance 1`, `Haiuo v0.2` и кнопкой `Назад`;
+  - кнопки выбора video-модели записываются как control commands и не создают billable jobs до подключения model-specific generation state;
   - `vkdelivery.HTTPClient` получил `SendMessage` с `keyboard` JSON, поэтому VK API по-прежнему вызывается только из `internal/adapter/delivery/vk`;
   - кнопки `Создать видео`, `Создать фото`, `Спросить у GPT`, `Студентам и школьникам`, `Мой аккаунт`, `Пополнить баланс` классифицируются как control commands и не создают пустые billable jobs;
   - баланс в меню берется через `billingservice.EnsureAccount`, без прямой мутации баланса;

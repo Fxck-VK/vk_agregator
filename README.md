@@ -41,6 +41,9 @@ Real integrations are implemented at adapter level and remain **opt-in**:
 - `cmd/api` can send the VK `/start` Super GPT menu and inline keyboard through
   the VK delivery adapter when `VK_ACCESS_TOKEN` is configured. The optional
   `VK_WELCOME_ATTACHMENT` env attaches a pre-uploaded VK banner.
+- The VK `Создать видео` menu button opens a model picker (`Sora 2`,
+  `Kling v2.1`, `Seedance 1`, `Haiuo v0.2`) with a `Назад` control; model
+  buttons are control-only until model-specific generation state is wired.
 - `MODERATION_PROVIDER=openai` enables OpenAI output moderation.
 - `ARTIFACT_SCANNER=openai` enables OpenAI text/image artifact scanning before
   storage. Video scanning/transcoding is still part of the future media

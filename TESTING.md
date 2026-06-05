@@ -162,6 +162,9 @@ Expected: command type `start`, no queued job, no billing reservation. If
 `cmd/api` is running with `VK_ACCESS_TOKEN`, the peer receives the Super GPT
 welcome text and VK inline keyboard. `VK_WELCOME_ATTACHMENT` may point at a
 pre-uploaded VK banner attachment.
+Clicking `🎬 Создать видео` should return `Выбери модель для генерации:` with
+`Sora 2`, `Kling v2.1`, `Seedance 1`, `Haiuo v0.2`, and `⬅️ Назад`; these
+button presses are control commands and should not enqueue jobs.
 
 Image / video jobs (slash commands):
 
