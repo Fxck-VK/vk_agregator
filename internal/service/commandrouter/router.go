@@ -55,12 +55,24 @@ func (r *Router) Parse(rawText string) Result {
 		return Result{Type: domain.CommandMenuVideo}
 	case "sora 2 — видео текст+фото", "sora 2 - видео текст+фото":
 		return Result{Type: domain.CommandMenuVideoSora2}
+	case "sora 2 начать генерацию", "sora 2 examples", "sora 2 примеры":
+		return Result{Type: domain.CommandMenuVideoSora2}
 	case "kling v2.1 — видео текст+фото", "kling v2.1 - видео текст+фото":
+		return Result{Type: domain.CommandMenuVideoKling21}
+	case "kling v2.1 начать генерацию", "kling v2.1 examples", "kling v2.1 примеры":
 		return Result{Type: domain.CommandMenuVideoKling21}
 	case "seedance 1 — видео по тексту", "seedance 1 - видео по тексту":
 		return Result{Type: domain.CommandMenuVideoSeedance1}
+	case "seedance 1 lite":
+		return Result{Type: domain.CommandMenuVideoSeedance1Lite}
+	case "seedance 1 pro":
+		return Result{Type: domain.CommandMenuVideoSeedance1Pro}
 	case "haiuo v0.2 — видео текст+фото", "haiuo v0.2 - видео текст+фото":
 		return Result{Type: domain.CommandMenuVideoHaiuo02}
+	case "haiuo v0.2 обычный", "haiuo v0.2 standard":
+		return Result{Type: domain.CommandMenuVideoHaiuo02Standard}
+	case "haiuo v0.2 fast":
+		return Result{Type: domain.CommandMenuVideoHaiuo02Fast}
 	case "⬅️ назад", "назад":
 		return Result{Type: domain.CommandShowMenu}
 	case "🖼️ создать фото", "🖼 создать фото", "создать фото", "создать изображение":

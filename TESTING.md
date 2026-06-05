@@ -172,6 +172,11 @@ pre-uploaded VK banner attachment.
 Clicking `🎬 Создать видео` should return `Выбери модель для генерации:` with
 `Sora 2`, `Kling v2.1`, `Seedance 1`, `Haiuo v0.2`, and `⬅️ Назад`; these
 button presses are control commands and should not enqueue jobs.
+Clicking `Sora 2` or `Kling v2.1` should open a detail screen with model
+description, example prompt, instruction link, `😀 Начать генерацию`,
+`ℹ️ Примеры`, and `⬅️ Назад`. Clicking `Seedance 1` should open `Lite` / `Pro`;
+clicking `Haiuo v0.2` should open `Обычный` / `Fast`. These nested buttons are
+also control commands and should not enqueue jobs.
 Clicking `🖼️ Создать фото` should return the daily-free-attempt photo
 instruction screen directly with `Фото по тексту`, `Фото с референсом`, and
 `⬅️ Назад`; these mode buttons are also control commands. Clicking

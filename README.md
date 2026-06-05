@@ -42,8 +42,12 @@ Real integrations are implemented at adapter level and remain **opt-in**:
   the VK delivery adapter when `VK_ACCESS_TOKEN` is configured. The optional
   `VK_WELCOME_ATTACHMENT` env attaches a pre-uploaded VK banner.
 - The VK `Создать видео` menu button opens a model picker (`Sora 2`,
-  `Kling v2.1`, `Seedance 1`, `Haiuo v0.2`) with a `Назад` control; model
-  buttons are control-only until model-specific generation state is wired.
+  `Kling v2.1`, `Seedance 1`, `Haiuo v0.2`) with a `Назад` control. `Sora 2`
+  and `Kling v2.1` open detail screens with description, prompt example,
+  instruction link, `Начать генерацию`, `Примеры`, and `Назад`; `Seedance 1`
+  opens `Lite` / `Pro`; `Haiuo v0.2` opens `Обычный` / `Fast`. These video
+  submenu buttons are control-only until model-specific generation state is
+  wired.
 - VK menu screens are described through a small declarative registry. `Создать
   фото` skips model selection when only one main image model is available and
   opens the text/reference photo instruction screen directly; `Спросить у GPT`

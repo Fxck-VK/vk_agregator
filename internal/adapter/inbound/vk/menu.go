@@ -71,20 +71,52 @@ var menuScreens = map[domain.CommandType]menuScreen{
 		keyboard: videoModelKeyboard,
 	},
 	domain.CommandMenuVideoSora2: {
-		text:     fixedText("Sora 2 выбрана.\n\nОтправьте описание видео командой /video. Выбор конкретной модели будет подключен в следующем шаге."),
-		keyboard: videoModelKeyboard,
+		text:     fixedText(sora2Text),
+		keyboard: sora2Keyboard,
+	},
+	domain.CommandMenuVideoSora2Start: {
+		text:     fixedText(sora2StartText),
+		keyboard: sora2BackKeyboard,
+	},
+	domain.CommandMenuVideoSora2Examples: {
+		text:     fixedText(sora2ExamplesText),
+		keyboard: sora2BackKeyboard,
 	},
 	domain.CommandMenuVideoKling21: {
-		text:     fixedText("Kling v2.1 выбрана.\n\nОтправьте описание видео командой /video. Выбор конкретной модели будет подключен в следующем шаге."),
-		keyboard: videoModelKeyboard,
+		text:     fixedText(kling21Text),
+		keyboard: kling21Keyboard,
+	},
+	domain.CommandMenuVideoKling21Start: {
+		text:     fixedText(kling21StartText),
+		keyboard: kling21BackKeyboard,
+	},
+	domain.CommandMenuVideoKling21Examples: {
+		text:     fixedText(kling21ExamplesText),
+		keyboard: kling21BackKeyboard,
 	},
 	domain.CommandMenuVideoSeedance1: {
-		text:     fixedText("Seedance 1 выбрана.\n\nОтправьте описание видео командой /video. Выбор конкретной модели будет подключен в следующем шаге."),
-		keyboard: videoModelKeyboard,
+		text:     fixedText(seedance1Text),
+		keyboard: seedance1Keyboard,
+	},
+	domain.CommandMenuVideoSeedance1Lite: {
+		text:     fixedText(seedance1LiteText),
+		keyboard: seedance1BackKeyboard,
+	},
+	domain.CommandMenuVideoSeedance1Pro: {
+		text:     fixedText(seedance1ProText),
+		keyboard: seedance1BackKeyboard,
 	},
 	domain.CommandMenuVideoHaiuo02: {
-		text:     fixedText("Haiuo v0.2 выбрана.\n\nОтправьте описание видео командой /video. Выбор конкретной модели будет подключен в следующем шаге."),
-		keyboard: videoModelKeyboard,
+		text:     fixedText(haiuo02Text),
+		keyboard: haiuo02Keyboard,
+	},
+	domain.CommandMenuVideoHaiuo02Standard: {
+		text:     fixedText(haiuo02StandardText),
+		keyboard: haiuo02BackKeyboard,
+	},
+	domain.CommandMenuVideoHaiuo02Fast: {
+		text:     fixedText(haiuo02FastText),
+		keyboard: haiuo02BackKeyboard,
 	},
 	domain.CommandMenuStudents: {
 		text:     fixedText(studentsText),
@@ -115,6 +147,22 @@ const (
 
 	photoTextModeText      = "▶️ Генерация фото по тексту выбрана.\n\nОпишите, что хотите увидеть, командой /image.\n\nПример:\n/image кот в очках на пляже"
 	photoReferenceModeText = "📸 Генерация фото с референсом пока будет подключена после входящих фото-артефактов.\n\nСейчас доступна генерация по тексту через /image."
+
+	sora2Text         = "sora-2\nОписание: Генерирует видео по тексту или фото.\n\n“ A hyper-realistic police bodycam video of a kangaroo making punching feints toward a police officer on a dusty rural road in Australia. The kangaroo stands ”\n\n🔗Инструкция: https://t.me/sora_video_1"
+	sora2StartText    = "sora-2\n\nВвод промпта для этой модели будет подключен следующим шагом.\n\nПока можно вернуться назад и выбрать другой режим."
+	sora2ExamplesText = "ℹ️ Примеры sora-2\n\n1. A cinematic drone shot over a neon city at night, rain reflections on the street, realistic camera movement.\n\n2. A close-up handheld video of a chef cutting fruit in a bright kitchen, natural motion, realistic details."
+
+	kling21Text         = "Kling v2.1 master\nОписание: Генерирует видео по тексту или фото.\n\n“ The setting has warm lighting from streetlights or soft party lights. A little boy around 2 to 3 years old, with light skin tone, brown hair, and big green ”\n\n🔗Инструкция: https://t.me/pakrnet"
+	kling21StartText    = "Kling v2.1 master\n\nВвод промпта для этой модели будет подключен следующим шагом.\n\nПока можно вернуться назад и выбрать другой режим."
+	kling21ExamplesText = "ℹ️ Примеры Kling v2.1\n\n1. A warm cinematic scene of friends walking under streetlights, soft party lights, realistic skin and motion.\n\n2. A product video of a glass bottle rotating on a table, studio lighting, smooth camera movement."
+
+	seedance1Text     = "🔹 Seedance\n\nLite — это как «лайт-версия» приложения: самое простое, чтобы попробовать.\n\nPro — это как «премиум»: больше функций, настроек и возможностей для крутого результата.\n\n☝️ Если хочешь быстро и просто — бери Lite. Если любишь «по максимуму» — тогда Pro."
+	seedance1LiteText = "Seedance 1 Lite выбран.\n\nВвод промпта для этого варианта будет подключен следующим шагом."
+	seedance1ProText  = "Seedance 1 Pro выбран.\n\nВвод промпта для этого варианта будет подключен следующим шагом."
+
+	haiuo02Text         = "🔹 Haiuo 02\n\nHaiuo 02 — картинка суперчёткая, реалистичная, прям как в фильме.\n\nHaiuo 02 Fast — версия «на скорость»: делает видео быстрее, но качество чуть ниже.\n\n☝️ Если нужен «вау-визуал» — бери Haiuo. Если важнее быстро и удобно — Fast."
+	haiuo02StandardText = "Haiuo v0.2 Обычный выбран.\n\nВвод промпта для этого варианта будет подключен следующим шагом."
+	haiuo02FastText     = "Haiuo v0.2 Fast выбран.\n\nВвод промпта для этого варианта будет подключен следующим шагом."
 
 	studentsText = "🎁Данные нейронные сети помогут вам во время учебы"
 
@@ -378,6 +426,84 @@ func videoModelKeyboard() *vkdelivery.Keyboard {
 	}
 }
 
+func sora2Keyboard() *vkdelivery.Keyboard {
+	return videoDetailKeyboard(domain.CommandMenuVideoSora2Start, domain.CommandMenuVideoSora2Examples)
+}
+
+func sora2BackKeyboard() *vkdelivery.Keyboard {
+	return backToKeyboard(domain.CommandMenuVideoSora2)
+}
+
+func kling21Keyboard() *vkdelivery.Keyboard {
+	return videoDetailKeyboard(domain.CommandMenuVideoKling21Start, domain.CommandMenuVideoKling21Examples)
+}
+
+func kling21BackKeyboard() *vkdelivery.Keyboard {
+	return backToKeyboard(domain.CommandMenuVideoKling21)
+}
+
+func videoDetailKeyboard(startCommand, examplesCommand domain.CommandType) *vkdelivery.Keyboard {
+	return &vkdelivery.Keyboard{
+		OneTime: false,
+		Inline:  true,
+		Buttons: [][]vkdelivery.KeyboardButton{
+			{
+				button("😀 Начать генерацию", startCommand, "primary"),
+			},
+			{
+				button("ℹ️ Примеры", examplesCommand, "secondary"),
+			},
+			{
+				button("⬅️ Назад", domain.CommandMenuVideo, "secondary"),
+			},
+		},
+	}
+}
+
+func seedance1Keyboard() *vkdelivery.Keyboard {
+	return &vkdelivery.Keyboard{
+		OneTime: false,
+		Inline:  true,
+		Buttons: [][]vkdelivery.KeyboardButton{
+			{
+				button("Seedance 1 Lite", domain.CommandMenuVideoSeedance1Lite, "secondary"),
+			},
+			{
+				button("Seedance 1 Pro", domain.CommandMenuVideoSeedance1Pro, "secondary"),
+			},
+			{
+				button("⬅️ Назад", domain.CommandMenuVideo, "secondary"),
+			},
+		},
+	}
+}
+
+func seedance1BackKeyboard() *vkdelivery.Keyboard {
+	return backToKeyboard(domain.CommandMenuVideoSeedance1)
+}
+
+func haiuo02Keyboard() *vkdelivery.Keyboard {
+	return &vkdelivery.Keyboard{
+		OneTime: false,
+		Inline:  true,
+		Buttons: [][]vkdelivery.KeyboardButton{
+			{
+				button("Haiuo v0.2 Обычный", domain.CommandMenuVideoHaiuo02Standard, "secondary"),
+			},
+			{
+				button("Haiuo v0.2 Fast", domain.CommandMenuVideoHaiuo02Fast, "secondary"),
+			},
+			{
+				button("⬅️ Назад", domain.CommandMenuVideo, "secondary"),
+			},
+		},
+	}
+}
+
+func haiuo02BackKeyboard() *vkdelivery.Keyboard {
+	return backToKeyboard(domain.CommandMenuVideoHaiuo02)
+}
+
 func photoModeKeyboard() *vkdelivery.Keyboard {
 	return &vkdelivery.Keyboard{
 		OneTime: false,
@@ -427,6 +553,18 @@ func backKeyboard() *vkdelivery.Keyboard {
 		Buttons: [][]vkdelivery.KeyboardButton{
 			{
 				button("⬅️ Назад", domain.CommandShowMenu, "secondary"),
+			},
+		},
+	}
+}
+
+func backToKeyboard(command domain.CommandType) *vkdelivery.Keyboard {
+	return &vkdelivery.Keyboard{
+		OneTime: false,
+		Inline:  true,
+		Buttons: [][]vkdelivery.KeyboardButton{
+			{
+				button("⬅️ Назад", command, "secondary"),
 			},
 		},
 	}

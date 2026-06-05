@@ -90,6 +90,26 @@ func TestRouterParse(t *testing.T) {
 			wantType: domain.CommandMenuVideoSora2,
 		},
 		{
+			name:     "vk video seedance lite button",
+			input:    "Seedance 1 Lite",
+			wantType: domain.CommandMenuVideoSeedance1Lite,
+		},
+		{
+			name:     "vk video seedance pro button",
+			input:    "Seedance 1 Pro",
+			wantType: domain.CommandMenuVideoSeedance1Pro,
+		},
+		{
+			name:     "vk video haiuo standard button",
+			input:    "Haiuo v0.2 Обычный",
+			wantType: domain.CommandMenuVideoHaiuo02Standard,
+		},
+		{
+			name:     "vk video haiuo fast button",
+			input:    "Haiuo v0.2 Fast",
+			wantType: domain.CommandMenuVideoHaiuo02Fast,
+		},
+		{
 			name:     "vk video back button",
 			input:    "⬅️ Назад",
 			wantType: domain.CommandShowMenu,
@@ -187,7 +207,7 @@ func TestResultCreatesJob(t *testing.T) {
 		}
 	}
 
-	controlCommands := []string{"/balance", "/status 1", "/cancel 1", "/help", "/start", "Старт", "Показать меню", "🎬 Создать видео", "Sora 2 — видео текст+фото", "⬅️ Назад", "👤 Мой аккаунт", "▶️ Фото по тексту", "📸 Фото с референсом", "Решальник задач", "Генерация презентаций (скоро)", "Создание рефератов (скоро)", "❓ Ответы на вопросы"}
+	controlCommands := []string{"/balance", "/status 1", "/cancel 1", "/help", "/start", "Старт", "Показать меню", "🎬 Создать видео", "Sora 2 — видео текст+фото", "Seedance 1 Lite", "Seedance 1 Pro", "Haiuo v0.2 Обычный", "Haiuo v0.2 Fast", "⬅️ Назад", "👤 Мой аккаунт", "▶️ Фото по тексту", "📸 Фото с референсом", "Решальник задач", "Генерация презентаций (скоро)", "Создание рефератов (скоро)", "❓ Ответы на вопросы"}
 	for _, in := range controlCommands {
 		if r.Parse(in).CreatesJob() {
 			t.Errorf("expected %q to NOT create a job", in)

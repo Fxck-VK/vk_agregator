@@ -2,6 +2,7 @@ package vk_test
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -863,11 +864,111 @@ func TestVideoModelButtonIsControlCommandNoJob(t *testing.T) {
 		t.Fatalf("video model selection must not create a job, got %d", len(jobs))
 	}
 	sent := control.Sent()
-	if len(sent) != 1 || !strings.Contains(sent[0].Text, "Sora 2 выбрана") {
+	if len(sent) != 1 || !strings.Contains(sent[0].Text, "sora-2") || !strings.Contains(sent[0].Text, "Генерирует видео по тексту или фото") || !strings.Contains(sent[0].Text, "https://t.me/sora_video_1") {
 		t.Fatalf("unexpected model response: %+v", sent)
 	}
-	if !strings.Contains(sent[0].Keyboard, "⬅️ Назад") {
-		t.Fatalf("expected back button in keyboard: %q", sent[0].Keyboard)
+	for _, want := range []string{"😀 Начать генерацию", "ℹ️ Примеры", "⬅️ Назад", "menu.video.sora_2.start", "menu.video.sora_2.examples"} {
+		if !strings.Contains(sent[0].Keyboard, want) {
+			t.Fatalf("expected %q in keyboard: %q", want, sent[0].Keyboard)
+		}
+	}
+}
+
+func TestVideoNestedButtonsAreControlCommandsNoJob(t *testing.T) {
+	tests := []struct {
+		name     string
+		eventID  string
+		text     string
+		command  domain.CommandType
+		wantText string
+		wantKeys []string
+	}{
+		{
+			name:     "sora examples",
+			eventID:  "evt-video-sora-examples",
+			text:     "ℹ️ Примеры",
+			command:  domain.CommandMenuVideoSora2Examples,
+			wantText: "Примеры sora-2",
+			wantKeys: []string{"⬅️ Назад", "menu.video.sora_2"},
+		},
+		{
+			name:     "sora start",
+			eventID:  "evt-video-sora-start",
+			text:     "😀 Начать генерацию",
+			command:  domain.CommandMenuVideoSora2Start,
+			wantText: "Ввод промпта для этой модели",
+			wantKeys: []string{"⬅️ Назад", "menu.video.sora_2"},
+		},
+		{
+			name:     "seedance picker",
+			eventID:  "evt-video-seedance",
+			text:     "Seedance 1 — видео по тексту",
+			command:  domain.CommandMenuVideoSeedance1,
+			wantText: "Seedance",
+			wantKeys: []string{"Seedance 1 Lite", "Seedance 1 Pro", "⬅️ Назад"},
+		},
+		{
+			name:     "seedance lite",
+			eventID:  "evt-video-seedance-lite",
+			text:     "Seedance 1 Lite",
+			command:  domain.CommandMenuVideoSeedance1Lite,
+			wantText: "Seedance 1 Lite выбран",
+			wantKeys: []string{"⬅️ Назад", "menu.video.seedance_1"},
+		},
+		{
+			name:     "haiuo picker",
+			eventID:  "evt-video-haiuo",
+			text:     "Haiuo v0.2 — видео текст+фото",
+			command:  domain.CommandMenuVideoHaiuo02,
+			wantText: "Haiuo 02",
+			wantKeys: []string{"Haiuo v0.2 Обычный", "Haiuo v0.2 Fast", "⬅️ Назад"},
+		},
+		{
+			name:     "haiuo fast",
+			eventID:  "evt-video-haiuo-fast",
+			text:     "Haiuo v0.2 Fast",
+			command:  domain.CommandMenuVideoHaiuo02Fast,
+			wantText: "Haiuo v0.2 Fast выбран",
+			wantKeys: []string{"⬅️ Назад", "menu.video.haiuo_v0_2"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			control := vkdelivery.NewMockClient()
+			h := newHarnessWithControl(control)
+			body := fmt.Sprintf(`{
+				"type":"message_new","group_id":1,"event_id":%q,"secret":"s3cr3t",
+				"object":{"message":{"from_id":561,"peer_id":561,"text":%q,"payload":"{\"command\":\"%s\"}"}}
+			}`, tt.eventID, tt.text, tt.command)
+			rec := h.post(body)
+			if rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+				t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+			}
+
+			ctx := context.Background()
+			user, err := h.users.GetByVKUserID(ctx, 561)
+			if err != nil {
+				t.Fatalf("user not created: %v", err)
+			}
+			cmds, _ := h.cmds.ListByUser(ctx, user.ID, 10, 0)
+			if len(cmds) != 1 || cmds[0].Type != tt.command {
+				t.Fatalf("unexpected commands: %+v", cmds)
+			}
+			jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
+			if len(jobs) != 0 {
+				t.Fatalf("nested video control must not create a job, got %d", len(jobs))
+			}
+			sent := control.Sent()
+			if len(sent) != 1 || !strings.Contains(sent[0].Text, tt.wantText) {
+				t.Fatalf("unexpected nested video response: %+v", sent)
+			}
+			for _, want := range tt.wantKeys {
+				if !strings.Contains(sent[0].Keyboard, want) {
+					t.Fatalf("expected %q in keyboard: %q", want, sent[0].Keyboard)
+				}
+			}
+		})
 	}
 }
 
