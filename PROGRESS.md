@@ -964,3 +964,37 @@ resume hardening.
 - `go build ./...` — exit 0.
 - Поиск `dangerouslySetInnerHTML`, `innerHTML`, `eval`, `new Function`,
   sensitive/localStorage patterns в Mini App frontend scope reviewed.
+
+---
+
+## PR-11 - Mini App: VKUI compatibility research ADR
+
+Статус: **завершён**.
+
+### Что сделано
+
+- Проверена VKUI совместимость с текущим frontend stack: React `19.2.7`,
+  React DOM `19.2.7`, VKUI `8.2.1`.
+- `npm info @vkontakte/vkui` показал peer dependencies
+  `react: ^18.2.0 || ^19.0.0`, `react-dom: ^18.2.0 || ^19.0.0`; downgrade
+  React до 18 не требуется.
+- Временная установка `@vkontakte/vkui --save-dev` использовалась только для
+  research и не сохранена в репозитории.
+- Изолированный prototype с `Button`, `Input`, `Panel`, `PanelHeader`,
+  `Tabbar`, `TabbarItem` и `vkui.css` собрался, но показал большой bundle
+  impact: baseline `254.06 kB` raw / `77.85 kB gzip`, VKUI prototype
+  `661.27 kB` raw / `132.42 kB gzip`, delta `+407.21 kB` raw /
+  `+54.57 kB gzip`.
+- DX note: `TabbarItem` в VKUI `8.2.1` использует children для label, не старый
+  `text` prop.
+- ADR outcome: `C - hybrid`, без blind migration; VKUI не добавлен в
+  production dependencies.
+
+### Проверки
+
+- `npm run build` baseline — exit 0.
+- `npm run build` после временной devDependency без импортов — exit 0.
+- `npm run build` isolated VKUI prototype — exit 0.
+- `npm audit --json` после временной установки VKUI — 0 vulnerabilities.
+- Финальный `npm run build` текущего кода после удаления VKUI/prototype —
+  exit 0.
