@@ -302,6 +302,10 @@ there is one main image model in the VK UX. It shows `Фото по тексту
 `Фото с референсом`, and `⬅️ Назад`; those mode buttons are control-only until
 stateful image mode selection is wired. Clicking `💬 Спросить у GPT` sends the
 `SUPER GPT активен` prompt screen and also does not enqueue a job.
+Clicking `🎁 Студентам и школьникам` opens the study submenu:
+`Решальник задач`, `Генерация презентаций (скоро)`,
+`Создание рефератов (скоро)`, `❓ Ответы на вопросы`, and `⬅️ Назад`.
+Those buttons are control-only until the corresponding scenario state is wired.
 
 ### VK message → full pipeline
 ```bash

@@ -56,6 +56,14 @@ const (
 	CommandMenuVideoHaiuo02 CommandType = "menu.video.haiuo_v0_2"
 	// CommandMenuStudents opens the student/schoolchild help section.
 	CommandMenuStudents CommandType = "menu.students"
+	// CommandMenuStudentSolver opens the task solver student flow.
+	CommandMenuStudentSolver CommandType = "menu.students.solver"
+	// CommandMenuStudentPresentation opens the presentation generation placeholder.
+	CommandMenuStudentPresentation CommandType = "menu.students.presentation"
+	// CommandMenuStudentReport opens the report generation placeholder.
+	CommandMenuStudentReport CommandType = "menu.students.report"
+	// CommandMenuStudentQA opens the student question-answer flow.
+	CommandMenuStudentQA CommandType = "menu.students.qa"
 	// CommandCancel cancels an in-flight job.
 	CommandCancel CommandType = "cancel"
 	// CommandStatus reports the status of a job.
@@ -91,6 +99,10 @@ func (c CommandType) Valid() bool {
 		CommandMenuVideoSeedance1,
 		CommandMenuVideoHaiuo02,
 		CommandMenuStudents,
+		CommandMenuStudentSolver,
+		CommandMenuStudentPresentation,
+		CommandMenuStudentReport,
+		CommandMenuStudentQA,
 		CommandCancel,
 		CommandStatus,
 		CommandHelp,

@@ -88,7 +88,23 @@ var menuScreens = map[domain.CommandType]menuScreen{
 	},
 	domain.CommandMenuStudents: {
 		text:     fixedText(studentsText),
-		keyboard: backKeyboard,
+		keyboard: studentsKeyboard,
+	},
+	domain.CommandMenuStudentSolver: {
+		text:     fixedText("Решальник задач активен.\n\nПришлите условие задачи обычным сообщением, и GPT поможет разобрать решение пошагово."),
+		keyboard: studentsKeyboard,
+	},
+	domain.CommandMenuStudentPresentation: {
+		text:     fixedText("Генерация презентаций скоро появится.\n\nПока можно попросить GPT составить структуру презентации обычным сообщением."),
+		keyboard: studentsKeyboard,
+	},
+	domain.CommandMenuStudentReport: {
+		text:     fixedText("Создание рефератов скоро появится.\n\nПока можно попросить GPT составить план, тезисы или черновик обычным сообщением."),
+		keyboard: studentsKeyboard,
+	},
+	domain.CommandMenuStudentQA: {
+		text:     fixedText("Ответы на вопросы активны.\n\nНапишите учебный вопрос обычным сообщением, и GPT поможет с объяснением."),
+		keyboard: studentsKeyboard,
 	},
 }
 
@@ -100,7 +116,7 @@ const (
 	photoTextModeText      = "▶️ Генерация фото по тексту выбрана.\n\nОпишите, что хотите увидеть, командой /image.\n\nПример:\n/image кот в очках на пляже"
 	photoReferenceModeText = "📸 Генерация фото с референсом пока будет подключена после входящих фото-артефактов.\n\nСейчас доступна генерация по тексту через /image."
 
-	studentsText = "🎁 Студентам и школьникам\n\nМожно просить объяснить тему, составить план, проверить текст или подготовить конспект. Просто напишите задачу обычным сообщением."
+	studentsText = "🎁Данные нейронные сети помогут вам во время учебы"
 
 	topUpText = "💰 Пополнить баланс\n\nПополнение будет подключено отдельным платежным потоком. Пока для тестирования доступны стартовые кредиты."
 )
@@ -273,6 +289,30 @@ func photoModeKeyboard() *vkdelivery.Keyboard {
 			},
 			{
 				button("📸 Фото с референсом", domain.CommandMenuImageReference, "secondary"),
+			},
+			{
+				button("⬅️ Назад", domain.CommandShowMenu, "secondary"),
+			},
+		},
+	}
+}
+
+func studentsKeyboard() *vkdelivery.Keyboard {
+	return &vkdelivery.Keyboard{
+		OneTime: false,
+		Inline:  true,
+		Buttons: [][]vkdelivery.KeyboardButton{
+			{
+				button("Решальник задач", domain.CommandMenuStudentSolver, "secondary"),
+			},
+			{
+				button("Генерация презентаций (скоро)", domain.CommandMenuStudentPresentation, "secondary"),
+			},
+			{
+				button("Создание рефератов (скоро)", domain.CommandMenuStudentReport, "secondary"),
+			},
+			{
+				button("❓ Ответы на вопросы", domain.CommandMenuStudentQA, "secondary"),
 			},
 			{
 				button("⬅️ Назад", domain.CommandShowMenu, "secondary"),

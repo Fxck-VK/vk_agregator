@@ -73,6 +73,14 @@ func (r *Router) Parse(rawText string) Result {
 		return Result{Type: domain.CommandMenuText}
 	case "🎁 студентам и школьникам", "студентам и школьникам":
 		return Result{Type: domain.CommandMenuStudents}
+	case "решальник задач":
+		return Result{Type: domain.CommandMenuStudentSolver}
+	case "генерация презентаций (скоро)", "генерация презентаций":
+		return Result{Type: domain.CommandMenuStudentPresentation}
+	case "создание рефератов (скоро)", "создание рефератов":
+		return Result{Type: domain.CommandMenuStudentReport}
+	case "❓ ответы на вопросы", "ответы на вопросы":
+		return Result{Type: domain.CommandMenuStudentQA}
 	case "👤 мой аккаунт", "мой аккаунт", "аккаунт":
 		return Result{Type: domain.CommandAccount}
 	case "💰 пополнить баланс", "пополнить баланс":

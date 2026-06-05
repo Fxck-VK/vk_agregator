@@ -170,6 +170,10 @@ instruction screen directly with `Фото по тексту`, `Фото с ре
 `⬅️ Назад`; these mode buttons are also control commands. Clicking
 `💬 Спросить у GPT` should return `SUPER GPT активен` and wait for the next
 plain user message.
+Clicking `🎁 Студентам и школьникам` should return the study submenu with
+`Решальник задач`, `Генерация презентаций (скоро)`,
+`Создание рефератов (скоро)`, `❓ Ответы на вопросы`, and `⬅️ Назад`; these
+button presses must not enqueue jobs.
 
 Image / video jobs (slash commands):
 

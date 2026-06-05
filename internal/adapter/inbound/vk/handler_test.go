@@ -376,6 +376,80 @@ func TestGPTMenuButtonSendsActivePromptNoJob(t *testing.T) {
 	}
 }
 
+func TestStudentsMenuButtonSendsStudyMenuNoJob(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	h := newHarnessWithControl(control)
+	body := `{
+		"type":"message_new","group_id":1,"event_id":"evt-students-menu","secret":"s3cr3t",
+		"object":{"message":{"from_id":565,"peer_id":565,"text":"🎁 Студентам и школьникам","payload":"{\"command\":\"menu.students\"}"}}
+	}`
+	rec := h.post(body)
+	if rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	ctx := context.Background()
+	user, err := h.users.GetByVKUserID(ctx, 565)
+	if err != nil {
+		t.Fatalf("user not created: %v", err)
+	}
+	cmds, _ := h.cmds.ListByUser(ctx, user.ID, 10, 0)
+	if len(cmds) != 1 || cmds[0].Type != domain.CommandMenuStudents {
+		t.Fatalf("unexpected commands: %+v", cmds)
+	}
+	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
+	if len(jobs) != 0 {
+		t.Fatalf("students menu must not create a job, got %d", len(jobs))
+	}
+	sent := control.Sent()
+	if len(sent) != 1 {
+		t.Fatalf("expected one students menu response, got %+v", sent)
+	}
+	for _, want := range []string{
+		"Данные нейронные сети помогут вам во время учебы",
+		"Решальник задач",
+		"Генерация презентаций (скоро)",
+		"Создание рефератов (скоро)",
+		"Ответы на вопросы",
+		"⬅️ Назад",
+	} {
+		if !strings.Contains(sent[0].Text+sent[0].Keyboard, want) {
+			t.Fatalf("expected %q in students response: text=%q keyboard=%q", want, sent[0].Text, sent[0].Keyboard)
+		}
+	}
+}
+
+func TestStudentsScenarioButtonIsControlCommandNoJob(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	h := newHarnessWithControl(control)
+	body := `{
+		"type":"message_new","group_id":1,"event_id":"evt-students-solver","secret":"s3cr3t",
+		"object":{"message":{"from_id":566,"peer_id":566,"text":"Решальник задач","payload":"{\"command\":\"menu.students.solver\"}"}}
+	}`
+	rec := h.post(body)
+	if rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	ctx := context.Background()
+	user, err := h.users.GetByVKUserID(ctx, 566)
+	if err != nil {
+		t.Fatalf("user not created: %v", err)
+	}
+	cmds, _ := h.cmds.ListByUser(ctx, user.ID, 10, 0)
+	if len(cmds) != 1 || cmds[0].Type != domain.CommandMenuStudentSolver {
+		t.Fatalf("unexpected commands: %+v", cmds)
+	}
+	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
+	if len(jobs) != 0 {
+		t.Fatalf("students scenario must not create a job, got %d", len(jobs))
+	}
+	sent := control.Sent()
+	if len(sent) != 1 || !strings.Contains(sent[0].Text, "Решальник задач активен") || !strings.Contains(sent[0].Keyboard, "Ответы на вопросы") {
+		t.Fatalf("unexpected students scenario response: %+v", sent)
+	}
+}
+
 func TestVideoModelButtonIsControlCommandNoJob(t *testing.T) {
 	control := vkdelivery.NewMockClient()
 	h := newHarnessWithControl(control)

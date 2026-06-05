@@ -110,6 +110,26 @@ func TestRouterParse(t *testing.T) {
 			wantType: domain.CommandMenuImageReference,
 		},
 		{
+			name:     "vk student solver button",
+			input:    "Решальник задач",
+			wantType: domain.CommandMenuStudentSolver,
+		},
+		{
+			name:     "vk student presentations button",
+			input:    "Генерация презентаций (скоро)",
+			wantType: domain.CommandMenuStudentPresentation,
+		},
+		{
+			name:     "vk student reports button",
+			input:    "Создание рефератов (скоро)",
+			wantType: domain.CommandMenuStudentReport,
+		},
+		{
+			name:     "vk student qa button",
+			input:    "❓ Ответы на вопросы",
+			wantType: domain.CommandMenuStudentQA,
+		},
+		{
 			name:      "plain text becomes text generate",
 			input:     "напиши пост для VK",
 			wantType:  domain.CommandTextAsk,
@@ -167,7 +187,7 @@ func TestResultCreatesJob(t *testing.T) {
 		}
 	}
 
-	controlCommands := []string{"/balance", "/status 1", "/cancel 1", "/help", "/start", "Старт", "Показать меню", "🎬 Создать видео", "Sora 2 — видео текст+фото", "⬅️ Назад", "👤 Мой аккаунт", "▶️ Фото по тексту", "📸 Фото с референсом"}
+	controlCommands := []string{"/balance", "/status 1", "/cancel 1", "/help", "/start", "Старт", "Показать меню", "🎬 Создать видео", "Sora 2 — видео текст+фото", "⬅️ Назад", "👤 Мой аккаунт", "▶️ Фото по тексту", "📸 Фото с референсом", "Решальник задач", "Генерация презентаций (скоро)", "Создание рефератов (скоро)", "❓ Ответы на вопросы"}
 	for _, in := range controlCommands {
 		if r.Parse(in).CreatesJob() {
 			t.Errorf("expected %q to NOT create a job", in)
