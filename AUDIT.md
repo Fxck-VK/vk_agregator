@@ -61,6 +61,10 @@ Severity: **critical** (blocks prod / safety / data loss), **high** (must fix be
 - Description: Webhook rate limiting already covered `/webhooks/vk`, but Mini App `POST /miniapp/jobs` created billable jobs without a separate intake throttle.
 - **Fix:** `POST /miniapp/jobs` is now rate-limited after launch-param verification with key `miniapp_job:<verified vk_user_id>`, separate `MINIAPP_JOB_RATE_LIMIT_RPS` / `MINIAPP_JOB_RATE_LIMIT_BURST`, safe `429` response and `Retry-After`. This is an in-memory per-instance limiter; Redis/shared limiter or WAF remains future multi-instance hardening.
 
+**S3b — Mini App submit idempotency and safe API errors — ✅ FIXED**
+- Description: Frontend create-job submits relied on UI disabled state and surfaced raw API error messages.
+- **Fix:** Mini App now sends stable per-submit `X-Idempotency-Key`, blocks duplicate in-flight submit attempts, preserves HTTP status/retry metadata in typed API errors, and maps API/network failures to safe user-facing messages.
+
 **S4 — Potential PII in logs — severity: low**
 - Description: Inbound logs use `group_id`; confirm `vk_user_id`/`peer_id` are hashed, not raw.
 - Impact: PII exposure in logs (invariant #13).

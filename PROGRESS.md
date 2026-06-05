@@ -750,3 +750,20 @@ resume hardening.
 
 - `npm install` — exit 0.
 - `npm run build` — exit 0.
+
+---
+
+## PR-3 — Mini App: submit idempotency and API errors
+
+Статус: **завершён**.
+
+### Что сделано
+
+- Frontend `createJob` sends `X-Idempotency-Key` generated per submit attempt.
+- Submit flow has a minimal in-flight guard beyond disabled button UX.
+- API errors are normalized into safe user-facing messages, including network
+  failures and `429` with `Retry-After` metadata.
+
+### Проверки
+
+- `npm run build` — exit 0.

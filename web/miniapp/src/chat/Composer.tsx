@@ -14,7 +14,7 @@ export function Composer({
   onModality: (id: ModalityId) => void;
   modelId: string;
   onModel: (id: string) => void;
-  onSend: (text: string) => void;
+  onSend: (text: string) => boolean;
   disabled?: boolean;
 }) {
   const [text, setText] = useState("");
@@ -36,7 +36,7 @@ export function Composer({
   function submit() {
     const value = text.trim();
     if (!value || disabled) return;
-    onSend(value);
+    if (!onSend(value)) return;
     setText("");
     if (ref.current) ref.current.style.height = "auto";
   }

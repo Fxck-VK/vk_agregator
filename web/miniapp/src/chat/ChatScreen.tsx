@@ -7,12 +7,14 @@ import { ChatList } from "./ChatList";
 import { modalityById, uid, type ChatMessage, type ModalityId } from "./types";
 import {
   createJob,
+  createIdempotencyKey,
   getJob,
   listJobs,
   getBalance,
   isTerminal,
   statusKind,
   errorLabel,
+  apiUserMessage,
   resolveBotText,
   type Job,
 } from "../api/client";
@@ -58,12 +60,14 @@ export function ChatScreen({ user }: { user: VkUser }) {
   const [modelId, setModelId] = useState(modalityById("text").models[0].id);
   const [balance, setBalance] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const mountedRef = useRef(true);
   const pollingRef = useRef(new Set<string>());
   const seededRef = useRef(false);
+  const submittingRef = useRef(false);
 
   function changeModality(id: ModalityId) {
     setModalityId(id);
@@ -143,10 +147,22 @@ export function ChatScreen({ user }: { user: VkUser }) {
     [poll],
   );
 
-  async function handleSend(text: string) {
+  function handleSend(text: string): boolean {
+    if (submittingRef.current) return false;
+    submittingRef.current = true;
+    setSubmitting(true);
+    void submitJob(text).finally(() => {
+      submittingRef.current = false;
+      if (mountedRef.current) setSubmitting(false);
+    });
+    return true;
+  }
+
+  async function submitJob(text: string) {
     const modality = modalityById(modalityId);
     const chatId = ensureActive();
     const botId = "b-" + uid();
+    const idempotencyKey = createIdempotencyKey();
     setMessages(chatId, (prev) => [
       ...prev,
       { id: "u-" + uid(), role: "user", text },
@@ -161,13 +177,16 @@ export function ChatScreen({ user }: { user: VkUser }) {
     ]);
     haptic("light");
     try {
-      const job = await createJob({ operation: modality.operation, prompt: text });
+      const job = await createJob(
+        { operation: modality.operation, prompt: text },
+        { idempotencyKey },
+      );
       patchInChat(chatId, botId, { jobId: job.id, status: job.status });
       startPoll(chatId, botId, job.id);
     } catch (e) {
       patchInChat(chatId, botId, {
         pending: false,
-        error: e instanceof Error ? e.message : "Не удалось отправить",
+        error: apiUserMessage(e),
       });
       haptic("error");
     }
@@ -302,7 +321,7 @@ export function ChatScreen({ user }: { user: VkUser }) {
         modelId={modelId}
         onModel={setModelId}
         onSend={handleSend}
-        disabled={loading}
+        disabled={loading || submitting}
       />
     </div>
   );
