@@ -1,11 +1,15 @@
 // src/hooks/useChats.ts
 import { useCallback, useEffect, useState } from "react";
-import { chatTitle, loadChats, saveChats } from "../chat/store";
+import { chatTitle, clearLocalHistory, loadChats, saveChats } from "../chat/store";
 import { uid, type Chat, type ChatMessage } from "../chat/types";
 
 export function useChats() {
-  const [chats, setChats] = useState<Chat[]>(() => loadChats());
-  const [activeId, setActiveId] = useState<string | null>(() => loadChats()[0]?.id ?? null);
+  const [initial] = useState(() => {
+    const loaded = loadChats();
+    return { chats: loaded, activeId: loaded[0]?.id ?? null };
+  });
+  const [chats, setChats] = useState<Chat[]>(initial.chats);
+  const [activeId, setActiveId] = useState<string | null>(initial.activeId);
 
   useEffect(() => {
     saveChats(chats);
@@ -31,6 +35,12 @@ export function useChats() {
   const deleteChat = useCallback((id: string) => {
     setChats((prev) => prev.filter((c) => c.id !== id));
     setActiveId((cur) => (cur === id ? null : cur));
+  }, []);
+
+  const clearChats = useCallback(() => {
+    clearLocalHistory();
+    setChats([]);
+    setActiveId(null);
   }, []);
 
   const ensureActive = useCallback((): string => {
@@ -59,6 +69,7 @@ export function useChats() {
     newChat,
     selectChat,
     deleteChat,
+    clearChats,
     ensureActive,
     setMessages,
     setChats,

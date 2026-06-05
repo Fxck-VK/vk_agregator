@@ -5,7 +5,7 @@ import { MessageBubble } from "./MessageBubble";
 import { Composer } from "./Composer";
 import { ChatList } from "./ChatList";
 import { ResultCard } from "../components/ResultCard";
-import { modalityById, uid, type ChatMessage, type ModalityId } from "./types";
+import { modalityById, uid, type Chat, type ChatMessage, type ModalityId } from "./types";
 import {
   createJob,
   createIdempotencyKey,
@@ -28,22 +28,81 @@ const POLL_MS = 2000;
 const POLL_MAX = 90;
 const ESTIMATE_DEBOUNCE_MS = 450;
 
-function jobToMessages(job: Job): ChatMessage[] {
+function chatIdForJob(jobId: string): string {
+  return "job-" + jobId;
+}
+
+function titleForJob(job: Job): string {
+  switch (job.operation) {
+    case "text_generate":
+      return "Текст · " + job.status;
+    case "image_generate":
+      return "Фото · " + job.status;
+    case "video_generate":
+      return "Видео · " + job.status;
+    default:
+      return "Генерация · " + job.status;
+  }
+}
+
+function botMessageFromJob(job: Job): ChatMessage {
   const terminal = isTerminal(job.status);
   const failed = statusKind(job.status) === "failed";
+  return {
+    id: "b-" + job.id,
+    role: "bot",
+    jobId: job.id,
+    operation: job.operation,
+    status: job.status,
+    pending: !terminal,
+    error: failed ? errorLabel(job) : undefined,
+    artifactIds: terminal && !failed ? job.output_artifact_ids : undefined,
+    createdAt: job.created_at,
+  };
+}
+
+function jobToMessages(job: Job): ChatMessage[] {
+  const messages: ChatMessage[] = [];
+  if (job.prompt) {
+    messages.push({ id: "u-" + job.id, role: "user", text: job.prompt });
+  }
+  messages.push(botMessageFromJob(job));
+  return messages;
+}
+
+function upsertJobChat(chats: Chat[], job: Job): Chat[] {
+  const bot = botMessageFromJob(job);
+  let updated = false;
+  const next = chats.map((chat) => {
+    const index = chat.messages.findIndex((msg) => msg.jobId === job.id);
+    if (index === -1) return chat;
+    updated = true;
+    const messages = chat.messages.map((msg, i) =>
+      i === index ? { ...msg, ...bot, text: msg.text } : msg,
+    );
+    return { ...chat, title: titleForJob(job), messages, updatedAt: Date.now() };
+  });
+  if (updated) return next;
   return [
-    { id: "u-" + job.id, role: "user", text: job.prompt ?? "(запрос)" },
     {
-      id: "b-" + job.id,
-      role: "bot",
-      jobId: job.id,
-      operation: job.operation,
-      status: job.status,
-      pending: !terminal,
-      error: failed ? errorLabel(job) : undefined,
-      artifactIds: job.output_artifact_ids,
+      id: chatIdForJob(job.id),
+      title: titleForJob(job),
+      createdAt: Date.parse(job.created_at) || Date.now(),
+      updatedAt: Date.parse(job.updated_at) || Date.now(),
+      messages: jobToMessages(job),
     },
+    ...next,
   ];
+}
+
+function jobIdsFromChats(chats: Chat[]): Set<string> {
+  const ids = new Set<string>();
+  for (const chat of chats) {
+    for (const msg of chat.messages) {
+      if (msg.jobId) ids.add(msg.jobId);
+    }
+  }
+  return ids;
 }
 
 function promptForBot(messages: ChatMessage[], index: number): string {
@@ -62,6 +121,7 @@ export function ChatScreen({ user }: { user: VkUser }) {
     newChat,
     selectChat,
     deleteChat,
+    clearChats,
     ensureActive,
     setMessages,
     setChats,
@@ -82,6 +142,7 @@ export function ChatScreen({ user }: { user: VkUser }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const mountedRef = useRef(true);
   const pollingRef = useRef(new Set<string>());
+  const pollTimersRef = useRef(new Map<string, number>());
   const seededRef = useRef(false);
   const submittingRef = useRef(false);
 
@@ -101,6 +162,16 @@ export function ChatScreen({ user }: { user: VkUser }) {
 
   const refreshBalance = useCallback(() => {
     getBalance().then(setBalance).catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      pollTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+      pollTimersRef.current.clear();
+      pollingRef.current.clear();
+    };
   }, []);
 
   useEffect(() => {
@@ -144,6 +215,15 @@ export function ChatScreen({ user }: { user: VkUser }) {
 
   const poll = useCallback(
     async (chatId: string, botMsgId: string, jobId: string) => {
+      const waitForNextPoll = () =>
+        new Promise<void>((resolve) => {
+          const timer = window.setTimeout(() => {
+            pollTimersRef.current.delete(jobId);
+            resolve();
+          }, POLL_MS);
+          pollTimersRef.current.set(jobId, timer);
+        });
+
       for (let i = 0; i < POLL_MAX; i++) {
         if (!mountedRef.current) return;
         let job: Job;
@@ -151,7 +231,7 @@ export function ChatScreen({ user }: { user: VkUser }) {
           job = await getJob(jobId);
         } catch {
           if (i < POLL_MAX - 1) {
-            await new Promise((r) => setTimeout(r, POLL_MS));
+            await waitForNextPoll();
           }
           continue;
         }
@@ -178,7 +258,7 @@ export function ChatScreen({ user }: { user: VkUser }) {
         }
         patchInChat(chatId, botMsgId, { status: job.status });
         if (i < POLL_MAX - 1) {
-          await new Promise((r) => setTimeout(r, POLL_MS));
+          await waitForNextPoll();
         }
       }
       if (mountedRef.current) {
@@ -251,7 +331,11 @@ export function ChatScreen({ user }: { user: VkUser }) {
         { operation, prompt: text, model_id: selectedModel },
         { idempotencyKey },
       );
-      patchInChat(chatId, botId, { jobId: job.id, status: job.status });
+      patchInChat(chatId, botId, {
+        jobId: job.id,
+        status: job.status,
+        createdAt: job.created_at,
+      });
       startPoll(chatId, botId, job.id);
     } catch (e) {
       patchInChat(chatId, botId, {
@@ -262,9 +346,8 @@ export function ChatScreen({ user }: { user: VkUser }) {
     }
   }
 
-  // Первый запуск: баланс + (если локальных чатов нет) затравка из истории задач.
+  // Первый запуск: баланс + восстановление активных и локально отмеченных задач.
   useEffect(() => {
-    mountedRef.current = true;
     refreshBalance();
     if (seededRef.current) {
       setLoading(false);
@@ -274,39 +357,25 @@ export function ChatScreen({ user }: { user: VkUser }) {
     listJobs()
       .then((jobs) => {
         if (!mountedRef.current) return;
-        if (chats.length === 0 && jobs.length > 0) {
-          const sorted = [...jobs].sort((a, b) =>
-            a.created_at.localeCompare(b.created_at),
-          );
-          const messages = sorted.flatMap(jobToMessages);
-          const seededId = uid();
+        const sorted = [...jobs].sort((a, b) => b.created_at.localeCompare(a.created_at));
+        const localJobIds = jobIdsFromChats(chats);
+        const restored = sorted.filter((job) => !isTerminal(job.status) || localJobIds.has(job.id));
+        if (restored.length > 0) {
           setChats((prev) =>
-            prev.length > 0
-              ? prev
-              : [
-                  {
-                    id: seededId,
-                    title: "История",
-                    createdAt: Date.now(),
-                    updatedAt: Date.now(),
-                    messages,
-                  },
-                ],
+            restored.reduceRight((next, job) => upsertJobChat(next, job), prev),
           );
-          setActiveId((cur) => cur ?? seededId);
-          for (const j of sorted) {
-            if (!isTerminal(j.status)) {
-              startPoll(seededId, "b-" + j.id, j.id);
-            } else if (
-              statusKind(j.status) === "done" &&
-              j.operation === "text_generate"
-            ) {
-              void resolveBotText(j).then((t) => {
-                if (t && mountedRef.current) {
-                  patchInChat(seededId, "b-" + j.id, { text: t });
-                }
-              });
-            }
+          setActiveId((cur) => cur ?? chatIdForJob(restored[0].id));
+        }
+        for (const job of restored) {
+          const chatId = chatIdForJob(job.id);
+          if (!isTerminal(job.status)) {
+            startPoll(chatId, "b-" + job.id, job.id);
+          } else if (statusKind(job.status) === "done" && job.operation === "text_generate") {
+            void resolveBotText(job).then((text) => {
+              if (text && mountedRef.current) {
+                patchInChat(chatId, "b-" + job.id, { text });
+              }
+            });
           }
         }
       })
@@ -314,9 +383,6 @@ export function ChatScreen({ user }: { user: VkUser }) {
       .finally(() => {
         if (mountedRef.current) setLoading(false);
       });
-    return () => {
-      mountedRef.current = false;
-    };
   }, [chats.length, refreshBalance, setChats, setActiveId, startPoll, patchInChat]);
 
   useEffect(() => {
@@ -343,6 +409,7 @@ export function ChatScreen({ user }: { user: VkUser }) {
           setDrawerOpen(false);
         }}
         onDelete={deleteChat}
+        onClearHistory={clearChats}
       />
 
       <header className="chat__header">

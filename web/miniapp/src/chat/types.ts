@@ -12,6 +12,7 @@ export interface ChatMessage {
   pending?: boolean;
   artifactIds?: string[];
   error?: string;
+  createdAt?: string;
 }
 
 export type ModalityId = "text" | "image" | "video";

@@ -9,6 +9,7 @@ export function ChatList({
   onSelect,
   onNew,
   onDelete,
+  onClearHistory,
 }: {
   chats: Chat[];
   activeId: string | null;
@@ -17,6 +18,7 @@ export function ChatList({
   onSelect: (id: string) => void;
   onNew: () => void;
   onDelete: (id: string) => void;
+  onClearHistory: () => void;
 }) {
   return (
     <>
@@ -28,8 +30,11 @@ export function ChatList({
         <button type="button" className="drawer__new" onClick={onNew}>
           + Новый чат
         </button>
+        <p className="drawer__privacy">
+          Локально хранятся только job ID, тип, статус и дата за 7 дней. Тексты запросов, ссылки и ключи не сохраняются.
+        </p>
         <div className="drawer__list">
-          {chats.length === 0 && <div className="chat-empty">Пока нет чатов</div>}
+          {chats.length === 0 && <div className="chat-empty">Пока нет локальной истории</div>}
           {chats.map((c) => (
             <div
               key={c.id}
@@ -51,6 +56,9 @@ export function ChatList({
             </div>
           ))}
         </div>
+        <button type="button" className="drawer__clear" onClick={onClearHistory}>
+          Очистить локальную историю
+        </button>
       </aside>
     </>
   );

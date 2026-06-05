@@ -902,3 +902,33 @@ resume hardening.
 - `npm run build` в `web/miniapp` — exit 0.
 - Поиск `dangerouslySetInnerHTML`, `innerHTML`, `eval`, `new Function`,
   `markdown`, `marked` в `web/miniapp/src` — без совпадений.
+
+---
+
+## PR-9 - Mini App: history reload recovery and local retention
+
+Статус: **завершён**.
+
+### Что сделано
+
+- Mini App on startup calls `GET /miniapp/jobs`, restores non-terminal jobs and
+  resumes polling after reload. Locally remembered terminal jobs are restored as
+  lightweight UI shells and resolved from backend artifacts only when allowed.
+- `localStorage` schema for `vk_miniapp_chats_v1` now stores only
+  `job_id`, `operation_type`, `status` and `created_at`, with a 7-day TTL and
+  max 50 entries. Prompt bodies, generated text, artifact IDs/URLs, balance,
+  launch params and provider details are not persisted.
+- Legacy or suspicious local history containing sensitive-looking keys is
+  cleared on initialization with a warning that does not include field values.
+- Polling keeps one active poller and one timeout per job, clears timers on
+  terminal states and component unmount, and does not create duplicate pollers
+  for the same `job_id`.
+- Added clear local history action and a privacy note explaining that only job
+  metadata is stored locally; backend job history is not deleted.
+
+### Проверки
+
+- `npm run build` в `web/miniapp` — exit 0.
+- Поиск localStorage/sensitive/XSS patterns in Mini App frontend scope reviewed:
+  persisted history contains only allowed metadata and no raw HTML rendering was
+  added.

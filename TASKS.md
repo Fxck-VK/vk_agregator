@@ -135,6 +135,7 @@
 - [x] Mini App API: фронт передаёт выбранный `model_id` в `POST /miniapp/jobs`; BFF валидирует model_id по operation whitelist и не раскрывает его в job API responses.
 - [x] Mini App estimate before submit: `POST /miniapp/estimate` возвращает backend-owned `cost_estimate`, `balance_credits` и `enough_credits` без создания job/резерва/ledger; фронт показывает стоимость и предупреждение до submit.
 - [x] Mini App result UX: результат показывается карточкой «Готовый VK-пост» с plain-text copy, retry action и image/video preview только через backend artifact route.
+- [x] Mini App history reload recovery: running jobs восстанавливаются через `GET /miniapp/jobs`, локальная история хранит только `job_id`, `operation_type`, `status`, `created_at` за 7 дней, есть clear local history и privacy note.
 - [x] Obsolete VK Tunnel tooling removed: `@vkontakte/vk-tunnel`, npm `tunnel` script and `web/miniapp/vk-tunnel-config.json`; dev tunnel path normalized to `cloudflared` / `*.trycloudflare.com`.
 - [x] Dev-туннель через `cloudflared` (VK Tunnel на техработах с 02.10.2025): `vite.config.ts` `server` — `host: true`, `allowedHosts: true`, `hmr.protocol: wss`/`clientPort: 443`, proxy `/miniapp`+`/api` → `:8080`; mixed-content под https устранён, домен туннеля не хардкодится. E2E (mock) через прокси-эндпоинты проверен.
 - [x] Фикс биллинга (AUDIT B1a): стартовый грант 1000 создаётся committed-проводкой в ledger атомарно; миграция `000004` бэкоффилит открывающие проводки; mismatch устранён.
@@ -175,9 +176,10 @@
   (сейчас отдельные индексы `user_id` и `status`; сортировка по `created_at`).
 - [ ] **[уточнить] CORS-политика** — зависит от модели развёртывания (same-origin
   proxy vs прямой доступ). Не подтверждается кодом, требует решения.
-- [ ] **[уточнить] Retention/шифрование контента в `localStorage`**
-  (`vk_miniapp_chats_v1` хранит промпты и тексты в plaintext). Решить TTL/очистку
-  или отказ от хранения тел сообщений.
+- [x] **[уточнить] Retention/шифрование контента в `localStorage`**
+  Fixed in PR-9: `vk_miniapp_chats_v1` keeps only `job_id`, `operation_type`,
+  `status`, `created_at` for 7 days; prompt bodies, generated text and artifact
+  URLs are not persisted, and clear local history removes only local UI state.
 
 ---
 
