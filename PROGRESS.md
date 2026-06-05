@@ -732,3 +732,21 @@ resume hardening.
 
 - `go test ./internal/adapter/inbound/miniapp ./internal/platform/config` — exit 0.
 - `go test ./...` — exit 0.
+
+---
+
+## PR-2 — Mini App: remove obsolete VK Tunnel tooling
+
+Статус: **завершён**.
+
+### Что сделано
+
+- Удалены `@vkontakte/vk-tunnel`, npm-скрипт `tunnel` и obsolete
+  `web/miniapp/vk-tunnel-config.json`.
+- Dev tunnel documentation нормализована на `cloudflared` /
+  `*.trycloudflare.com`; backend calls остаются same-origin через Vite proxy.
+
+### Проверки
+
+- `npm install` — exit 0.
+- `npm run build` — exit 0.

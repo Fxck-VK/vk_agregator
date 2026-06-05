@@ -122,6 +122,7 @@ Severity: **critical** (blocks prod / safety / data loss), **high** (must fix be
 **S-iframe — Mini App HTTPS tunnel / mixed-content in VK webview — ✅ FIXED (dev)**
 - Description: When the SPA is opened inside the VK webview over HTTPS (via a tunnel), an HTTPS page calling `http://localhost:8080` is blocked as mixed content, and the dev server rejected the rotating tunnel host. VK Tunnel is under maintenance (since 2025-10-02), so cloudflared is used as the VK-recommended workaround.
 - **Fix:** `web/miniapp/vite.config.ts` `server` now sets `host: true`, `allowedHosts: true` (accepts the rotating `*.trycloudflare.com` domain — never hardcoded), `hmr: { clientPort: 443, protocol: 'wss' }`, and proxies `/miniapp` + `/api` to `http://localhost:8080` so all backend calls stay same-origin. The frontend API client already uses relative paths (`BASE_URL` empty in dev). Validated live: through the proxy in mock mode, `GET /miniapp/balance` (1000), `POST /miniapp/jobs` (queued→succeeded with artifact), `GET /miniapp/jobs`, and detail all returned data; balance reconciled 1000→999. Tunnel URL is pasted into dev.vk.com → "URL для разработки" by the operator; see `RUNBOOK.md`.
+- **Follow-up:** Obsolete `@vkontakte/vk-tunnel` tooling, npm script and local config were removed; cloudflared/trycloudflare is the documented dev tunnel path.
 
 **B2 — Capture is idempotent, ledger append-only — severity: low — ✅ FIXED**
 - Description: `CaptureForJob` is idempotent; reservations and entries are append-only. Good.

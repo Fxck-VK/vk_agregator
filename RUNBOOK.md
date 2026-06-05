@@ -477,9 +477,9 @@ The Vite proxy routes `/miniapp/*` to `http://localhost:8080`.
 
 ### Open the Mini App inside VK via an HTTPS tunnel (cloudflared)
 
-VK Tunnel is under maintenance (since 2025-10-02), so we expose the local Vite
-dev server over HTTPS with **cloudflared** — the workaround VK currently
-recommends. The Vite dev config (`host: true`, `allowedHosts: true`,
+VK Tunnel is under maintenance (since 2025-10-02), so the obsolete
+`@vkontakte/vk-tunnel` dev dependency and npm `tunnel` script were removed.
+Expose the local Vite dev server over HTTPS with **cloudflared**. The Vite dev config (`host: true`, `allowedHosts: true`,
 `hmr.protocol: wss`, `/miniapp` + `/api` proxy) already accepts the rotating
 tunnel domain and keeps backend calls same-origin (no mixed content).
 
