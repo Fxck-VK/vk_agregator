@@ -316,9 +316,11 @@ Clicking `🎁 Студентам и школьникам` opens the study subme
 `Создание рефератов (скоро)`, `❓ Ответы на вопросы`, and `⬅️ Назад`.
 Those buttons are control-only until the corresponding scenario state is wired.
 Inline menu navigation is hybrid: while the last bot message is still the
-active menu, button clicks edit that message through VK `messages.edit` instead
-of adding new bot messages. With default `VK_UNROUTED_TEXT_MODE=reply`, plain
-text outside GPT mode records an `unknown` command and sends only
+active menu, inline button clicks edit that message through VK `messages.edit`
+instead of adding new bot messages. The persistent lower `Показать меню` button
+always sends a fresh menu at the bottom of the chat. With default
+`VK_UNROUTED_TEXT_MODE=reply`, plain text outside GPT mode records an `unknown`
+command and sends only
 `Выберите режим в меню выше.` instead of duplicating the inline menu or creating
 a billable job; `silent` records it without a response, and `gpt` restores the
 legacy any-text-to-GPT behavior. If VK rejects an edit, the API falls back to

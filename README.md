@@ -55,10 +55,12 @@ Real integrations are implemented at adapter level and remain **opt-in**:
   Plain text and stickers create `text.ask` jobs only while GPT mode is active
   or when `VK_UNROUTED_TEXT_MODE=gpt` is explicitly configured.
 - VK inline menu navigation uses a hybrid UX: if the last bot message is the
-  active menu, button clicks edit it through VK `messages.edit`; after a plain
-  user message outside GPT mode, the default `VK_UNROUTED_TEXT_MODE=reply`
-  sends only the text hint `Выберите режим в меню выше.` and does not duplicate
-  the inline menu. Edit failure falls back to a normal send. In Beta this
+  active menu, inline button clicks edit it through VK `messages.edit`; pressing
+  the persistent lower `Показать меню` button always sends a fresh menu at the
+  bottom of the chat. After a plain user message outside GPT mode, the default
+  `VK_UNROUTED_TEXT_MODE=reply` sends only the text hint
+  `Выберите режим в меню выше.` and does not duplicate the inline menu. Edit
+  failure falls back to a normal send. In Beta this
   active-menu/dialog-mode state is process-local to `cmd/api`.
 - Inline menu buttons default to VK `callback` actions
   (`VK_MENU_BUTTON_MODE=callback`), so button clicks arrive as `message_event`

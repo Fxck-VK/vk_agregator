@@ -302,6 +302,14 @@ func TestTextMenuButtonModeKeepsInlineButtonsAsText(t *testing.T) {
 func TestShowMenuSendsWelcomeWithoutResettingPersistentKeyboard(t *testing.T) {
 	control := vkdelivery.NewMockClient()
 	h := newHarnessWithControl(control)
+	start := `{
+		"type":"message_new","group_id":1,"event_id":"evt-show-menu-start","secret":"s3cr3t",
+		"object":{"message":{"from_id":559,"peer_id":559,"text":"/start"}}
+	}`
+	if rec := h.post(start); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected start response: %d %q", rec.Code, rec.Body.String())
+	}
+
 	body := `{
 		"type":"message_new","group_id":1,"event_id":"evt-show-menu","secret":"s3cr3t",
 		"object":{"message":{"from_id":559,"peer_id":559,"text":"Показать меню","payload":"{\"command\":\"show_menu\"}"}}
@@ -317,7 +325,7 @@ func TestShowMenuSendsWelcomeWithoutResettingPersistentKeyboard(t *testing.T) {
 		t.Fatalf("user not created: %v", err)
 	}
 	cmds, _ := h.cmds.ListByUser(ctx, user.ID, 10, 0)
-	if len(cmds) != 1 || cmds[0].Type != domain.CommandShowMenu {
+	if !hasCommandTypes(cmds, domain.CommandStart, domain.CommandShowMenu) {
 		t.Fatalf("unexpected commands: %+v", cmds)
 	}
 	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
@@ -325,14 +333,17 @@ func TestShowMenuSendsWelcomeWithoutResettingPersistentKeyboard(t *testing.T) {
 		t.Fatalf("show menu must not create a job, got %d", len(jobs))
 	}
 	sent := control.Sent()
-	if len(sent) != 1 {
-		t.Fatalf("expected one welcome message, got %+v", sent)
+	if len(sent) != 3 {
+		t.Fatalf("expected persistent keyboard, start menu, and fresh show-menu message, got %+v", sent)
 	}
-	if !strings.Contains(sent[0].Text, "Добро пожаловать в Super GPT") {
-		t.Fatalf("unexpected text: %q", sent[0].Text)
+	if !strings.Contains(sent[2].Text, "Добро пожаловать в Super GPT") {
+		t.Fatalf("unexpected text: %q", sent[2].Text)
 	}
-	if !strings.Contains(sent[0].Keyboard, `"inline":true`) || strings.Contains(sent[0].Keyboard, "Показать меню") {
-		t.Fatalf("unexpected keyboard: %q", sent[0].Keyboard)
+	if !strings.Contains(sent[2].Keyboard, `"inline":true`) || strings.Contains(sent[2].Keyboard, "Показать меню") {
+		t.Fatalf("unexpected keyboard: %q", sent[2].Keyboard)
+	}
+	if edits := control.Edits(); len(edits) != 0 {
+		t.Fatalf("lower show-menu button must send a fresh menu instead of editing, got edits %+v", edits)
 	}
 }
 
@@ -400,7 +411,7 @@ func TestCallbackMenuEventEditsActiveMenuNoJob(t *testing.T) {
 		t.Fatalf("user not created: %v", err)
 	}
 	cmds, _ := h.cmds.ListByUser(ctx, user.ID, 10, 0)
-	if len(cmds) != 2 || cmds[1].Type != domain.CommandMenuVideo {
+	if !hasCommandTypes(cmds, domain.CommandStart, domain.CommandMenuVideo) {
 		t.Fatalf("unexpected commands: %+v", cmds)
 	}
 	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
@@ -420,7 +431,7 @@ func TestCallbackMenuEventEditsActiveMenuNoJob(t *testing.T) {
 	}
 }
 
-func TestPlainMessageKeepsPreviousActiveMenuAndSendsTextHint(t *testing.T) {
+func TestPlainMessageKeepsPreviousMenuAndLowerShowMenuSendsFreshMenu(t *testing.T) {
 	control := vkdelivery.NewMockClient()
 	h := newHarnessWithControl(control)
 	start := `{
@@ -430,7 +441,6 @@ func TestPlainMessageKeepsPreviousActiveMenuAndSendsTextHint(t *testing.T) {
 	if rec := h.post(start); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
 		t.Fatalf("unexpected start response: %d %q", rec.Code, rec.Body.String())
 	}
-	activeID := control.Sent()[1].MessageID
 
 	plain := `{
 		"type":"message_new","group_id":1,"event_id":"evt-menu-clear-text","secret":"s3cr3t",
@@ -456,14 +466,17 @@ func TestPlainMessageKeepsPreviousActiveMenuAndSendsTextHint(t *testing.T) {
 	}
 
 	sent := control.Sent()
-	if len(sent) != 3 {
-		t.Fatalf("next menu should edit the previous active menu without sending a duplicate menu, got %+v", sent)
+	if len(sent) != 4 {
+		t.Fatalf("lower show-menu should send a fresh menu below the text hint, got %+v", sent)
 	}
 	if sent[2].Text != "Выберите режим в меню выше." || sent[2].Keyboard != "" {
-		t.Fatalf("text-only hint should remain unchanged after menu edit, got %+v", sent[2])
+		t.Fatalf("text-only hint should remain unchanged after lower show-menu, got %+v", sent[2])
 	}
-	if edits := control.Edits(); len(edits) != 1 || edits[0].MessageID != activeID {
-		t.Fatalf("next menu should edit the previous active menu, got edits %+v", edits)
+	if !strings.Contains(sent[3].Text, "Добро пожаловать в Super GPT") || !strings.Contains(sent[3].Keyboard, `"inline":true`) {
+		t.Fatalf("expected fresh welcome menu after lower show-menu, got %+v", sent[3])
+	}
+	if edits := control.Edits(); len(edits) != 0 {
+		t.Fatalf("lower show-menu must not edit an older menu, got edits %+v", edits)
 	}
 }
 
@@ -739,7 +752,7 @@ func TestGPTMenuButtonEnablesPlainTextJobs(t *testing.T) {
 		t.Fatalf("user not created: %v", err)
 	}
 	cmds, _ := h.cmds.ListByUser(ctx, user.ID, 10, 0)
-	if len(cmds) != 2 || cmds[0].Type != domain.CommandMenuText || cmds[1].Type != domain.CommandTextAsk {
+	if !hasCommandTypes(cmds, domain.CommandMenuText, domain.CommandTextAsk) {
 		t.Fatalf("unexpected command types: %+v", commandTypes(cmds))
 	}
 	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
@@ -782,7 +795,7 @@ func TestOtherMenuButtonClearsGPTMode(t *testing.T) {
 		t.Fatalf("user not created: %v", err)
 	}
 	cmds, _ := h.cmds.ListByUser(ctx, user.ID, 10, 0)
-	if len(cmds) != 3 || cmds[0].Type != domain.CommandMenuText || cmds[1].Type != domain.CommandMenuVideo || cmds[2].Type != domain.CommandUnknown {
+	if !hasCommandTypes(cmds, domain.CommandMenuText, domain.CommandMenuVideo, domain.CommandUnknown) {
 		t.Fatalf("unexpected command types after gpt mode clear: %+v", commandTypes(cmds))
 	}
 	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
@@ -828,7 +841,8 @@ func TestStickerInGPTModeCreatesTextJob(t *testing.T) {
 		t.Fatalf("user not created: %v", err)
 	}
 	cmds, _ := h.cmds.ListByUser(ctx, user.ID, 10, 0)
-	if len(cmds) != 2 || cmds[1].Type != domain.CommandTextAsk || !strings.Contains(cmds[1].RawText, "sticker_id=123") {
+	textCmd, ok := commandByType(cmds, domain.CommandTextAsk)
+	if !hasCommandTypes(cmds, domain.CommandMenuText, domain.CommandTextAsk) || !ok || !strings.Contains(textCmd.RawText, "sticker_id=123") {
 		t.Fatalf("unexpected commands: %+v", cmds)
 	}
 	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
@@ -1159,6 +1173,32 @@ func commandTypes(cmds []*domain.Command) []domain.CommandType {
 		types = append(types, cmd.Type)
 	}
 	return types
+}
+
+func hasCommandTypes(cmds []*domain.Command, want ...domain.CommandType) bool {
+	if len(cmds) != len(want) {
+		return false
+	}
+	counts := map[domain.CommandType]int{}
+	for _, cmd := range cmds {
+		counts[cmd.Type]++
+	}
+	for _, t := range want {
+		if counts[t] == 0 {
+			return false
+		}
+		counts[t]--
+	}
+	return true
+}
+
+func commandByType(cmds []*domain.Command, t domain.CommandType) (*domain.Command, bool) {
+	for _, cmd := range cmds {
+		if cmd.Type == t {
+			return cmd, true
+		}
+	}
+	return nil, false
 }
 
 func TestMessageNewControlCommandNoJob(t *testing.T) {

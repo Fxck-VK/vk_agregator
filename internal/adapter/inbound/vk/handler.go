@@ -465,7 +465,8 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 			return fmt.Errorf("send unrouted text response: %w", err)
 		}
 	case shouldSendControlResponse(parsed.Type):
-		if err := h.sendControlResponse(ctx, parsed.Type, idemKey, peerID, user, controlFromPayload); err != nil {
+		allowEdit := controlFromPayload && !(parsed.Type == domain.CommandShowMenu && !controlOnly)
+		if err := h.sendControlResponse(ctx, parsed.Type, idemKey, peerID, user, allowEdit); err != nil {
 			return fmt.Errorf("send control response: %w", err)
 		}
 		if parsed.Type == domain.CommandMenuText {

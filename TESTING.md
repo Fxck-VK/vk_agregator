@@ -192,11 +192,13 @@ Clicking `🎁 Студентам и школьникам` should return the stu
 `Создание рефератов (скоро)`, `❓ Ответы на вопросы`, and `⬅️ Назад`; these
 button presses must not enqueue jobs.
 For live VK UX, click several inline menu buttons in a row: the bot should edit
-the active menu message instead of posting a new bot message each time. Then
-send plain text outside GPT mode: with the default `reply` setting, the bot
-should post only `Выберите режим в меню выше.`, should not attach an inline
-keyboard, and should still create no job. This active-menu/dialog-mode state is
-process-local to the running API instance.
+the active menu message instead of posting a new bot message each time. Press
+the persistent lower `Показать меню` button: the bot should send a fresh menu at
+the bottom instead of editing the old one. Then send plain text outside GPT
+mode: with the default `reply` setting, the bot should post only
+`Выберите режим в меню выше.`, should not attach an inline keyboard, and should
+still create no job. This active-menu/dialog-mode state is process-local to the
+running API instance.
 With `VK_MENU_BUTTON_MODE=callback`, inline menu clicks should not appear as
 user messages in the chat. Make sure VK Callback API has callback-button events
 (`message_event`) enabled. To verify legacy fallback, set
