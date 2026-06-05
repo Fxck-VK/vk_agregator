@@ -95,6 +95,7 @@
 
 ### Real integrations
 - [x] DeepInfra provider supports `deepseek-ai/DeepSeek-V4-Flash` text generation through the OpenAI-compatible `/chat/completions` endpoint behind `PROVIDER=deepinfra` / `PROVIDER_CHAIN=deepinfra,mock`.
+- [x] Mock-aware downloader supports provider `data:` URLs, so `PROVIDER_CHAIN=deepinfra,mock` can store DeepInfra text outputs before VK delivery.
 - [x] Реальный OpenAI provider покрывает text (`/responses`), image (`/images/generations`) и async video (`/videos`, poll, content download) behind `PROVIDER=openai`.
 - [x] Provider router выбирает capable provider по health/circuit breaker, fallback chain, estimated cost и observed latency; `PROVIDER_CHAIN=openai,mock` включает fallback.
 - [x] Реальный VK delivery покрывает `messages.send` и upload pipeline для raw photo/video artifacts в VK upload servers (`photos.getMessagesUploadServer` -> upload -> `photos.saveMessagesPhoto`, `video.save` -> upload).

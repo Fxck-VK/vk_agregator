@@ -418,6 +418,7 @@
   - `deepseek-ai/DeepSeek-V4-Flash` text generation is wired through DeepInfra's OpenAI-compatible `/chat/completions` endpoint;
   - `PROVIDER=deepinfra` or `PROVIDER_CHAIN=deepinfra,mock` enables it;
   - the adapter is text-only, returns normalized `data:text/plain` outputs, and maps DeepInfra HTTP failures into internal provider error classes.
+  - follow-up fix: the mock-aware downloader now decodes provider `data:` URLs, so `PROVIDER_CHAIN=deepinfra,mock` can store DeepInfra text outputs before VK delivery.
 - **Provider router**:
   - `PROVIDER_CHAIN` задаёт ordered fallback chain;
   - router проверяет capabilities, estimated cost, observed latency и circuit-breaker health;
@@ -473,6 +474,7 @@
 
 - Targeted tests: `go test ./internal/adapter/provider/openai ./internal/adapter/delivery/vk ./internal/adapter/inbound/vk ./internal/service/commandrouter ./internal/worker ./internal/platform/config`.
 - DeepInfra targeted tests: `go test ./internal/adapter/provider/deepinfra ./internal/platform/config`.
+- DeepInfra delivery regression: `go test ./internal/adapter/provider/mock ./internal/service/artifactservice ./internal/worker`.
 - Added VK menu UX coverage: `EditMessage` request shape, mock edit semantics, active-menu edit, lower `Показать меню` fresh send, and plain-message text-only hint behavior.
 - Added callback menu coverage: callback keyboard JSON, `VK_MENU_BUTTON_MODE` config validation, `message_event` command processing, no-job invariant, and legacy text-button mode.
 - Added callback ack coverage: real `messages.sendMessageEventAnswer` request shape, mock answer recording, and inbound `message_event` acknowledgement.

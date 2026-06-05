@@ -326,7 +326,9 @@ TEST_REDIS_ADDR="localhost:6379" go test ./internal/adapter/queue/redis/...
 - `PROVIDER=deepinfra` enables real DeepInfra text generation through
   `deepseek-ai/DeepSeek-V4-Flash`; live tests require a real key and may incur
   provider cost. DeepInfra is text-only in this codebase, so keep `mock` or
-  another capable provider in `PROVIDER_CHAIN` for image/video jobs.
+  another capable provider in `PROVIDER_CHAIN` for image/video jobs. The
+  mock-aware downloader also accepts provider `data:` URLs used by DeepInfra
+  text outputs.
 - `PROVIDER_CHAIN=openai,mock` exercises router/fallback/circuit breaker logic
   with OpenAI primary and mock fallback.
   `PROVIDER_CHAIN=deepinfra,mock` uses DeepInfra for text and mock fallback for
