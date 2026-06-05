@@ -24,6 +24,12 @@ var ErrInvalidSign = errors.New("miniapp: invalid signature")
 // ErrExpiredParams is returned when vk_ts is older than the allowed max age.
 var ErrExpiredParams = errors.New("miniapp: launch params expired")
 
+// ErrMissingTimestamp is returned when vk_ts is required but absent.
+var ErrMissingTimestamp = errors.New("miniapp: missing vk_ts")
+
+// ErrInvalidTimestamp is returned when vk_ts cannot be trusted.
+var ErrInvalidTimestamp = errors.New("miniapp: invalid vk_ts")
+
 // ErrMissingUserID is returned when vk_user_id is absent or zero.
 var ErrMissingUserID = errors.New("miniapp: missing vk_user_id")
 
@@ -74,14 +80,19 @@ func VerifyLaunchParams(rawQuery, appSecret string, maxAge time.Duration) (url.V
 
 	if maxAge > 0 {
 		tsStr := params.Get("vk_ts")
-		if tsStr != "" {
-			ts, err := strconv.ParseInt(tsStr, 10, 64)
-			if err == nil {
-				age := time.Since(time.Unix(ts, 0))
-				if age > maxAge {
-					return nil, ErrExpiredParams
-				}
-			}
+		if tsStr == "" {
+			return nil, ErrMissingTimestamp
+		}
+		ts, err := strconv.ParseInt(tsStr, 10, 64)
+		if err != nil {
+			return nil, ErrInvalidTimestamp
+		}
+		age := time.Since(time.Unix(ts, 0))
+		if age < 0 {
+			return nil, ErrInvalidTimestamp
+		}
+		if age > maxAge {
+			return nil, ErrExpiredParams
 		}
 	}
 

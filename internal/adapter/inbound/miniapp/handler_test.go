@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -36,7 +37,10 @@ func buildSignedParams(vkUserID int64, appSecret string, ts int64) string {
 	params.Set("vk_app_id", "123456")
 	params.Set("vk_ts", fmt.Sprintf("%d", ts))
 	params.Set("vk_platform", "desktop_web")
+	return buildSignedParamsFromValues(params, appSecret)
+}
 
+func buildSignedParamsFromValues(params url.Values, appSecret string) string {
 	// Compute sign over sorted vk_* params.
 	vkParams := make(url.Values)
 	for k, v := range params {
@@ -94,6 +98,35 @@ func TestVerifyLaunchParams_Expired(t *testing.T) {
 	_, err := miniappinbound.VerifyLaunchParams(raw, secret, time.Hour)
 	if err == nil {
 		t.Fatal("expected error for expired params, got nil")
+	}
+}
+
+func TestVerifyLaunchParams_MissingTimestampWithMaxAge(t *testing.T) {
+	const secret = "test-secret"
+	params := url.Values{}
+	params.Set("vk_user_id", "777")
+	params.Set("vk_app_id", "123456")
+	params.Set("vk_platform", "desktop_web")
+	raw := buildSignedParamsFromValues(params, secret)
+
+	_, err := miniappinbound.VerifyLaunchParams(raw, secret, time.Hour)
+	if !errors.Is(err, miniappinbound.ErrMissingTimestamp) {
+		t.Fatalf("expected ErrMissingTimestamp, got %v", err)
+	}
+}
+
+func TestVerifyLaunchParams_InvalidTimestampWithMaxAge(t *testing.T) {
+	const secret = "test-secret"
+	params := url.Values{}
+	params.Set("vk_user_id", "777")
+	params.Set("vk_app_id", "123456")
+	params.Set("vk_ts", "not-a-timestamp")
+	params.Set("vk_platform", "desktop_web")
+	raw := buildSignedParamsFromValues(params, secret)
+
+	_, err := miniappinbound.VerifyLaunchParams(raw, secret, time.Hour)
+	if !errors.Is(err, miniappinbound.ErrInvalidTimestamp) {
+		t.Fatalf("expected ErrInvalidTimestamp, got %v", err)
 	}
 }
 
@@ -166,7 +199,7 @@ func (l *countingLimiter) Allow(key string) bool {
 
 // devLaunchParams returns a minimal dev-mode launch-params string (no secret).
 func devLaunchParams(vkUserID int64) string {
-	return fmt.Sprintf("vk_user_id=%d", vkUserID)
+	return fmt.Sprintf("vk_user_id=%d&vk_ts=%d", vkUserID, time.Now().Unix())
 }
 
 func TestHandler_CreateJob_OK(t *testing.T) {
@@ -246,6 +279,78 @@ func TestHandler_CreateJob_UnauthorizedNoParams(t *testing.T) {
 
 	if w.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401, got %d", w.Code)
+	}
+}
+
+func TestHandler_CreateJob_FailClosedOnInvalidVKTimestamp(t *testing.T) {
+	const secret = "my-app-secret"
+
+	cases := []struct {
+		name string
+		raw  string
+	}{
+		{
+			name: "missing",
+			raw: buildSignedParamsFromValues(url.Values{
+				"vk_user_id":  {"777"},
+				"vk_app_id":   {"123456"},
+				"vk_platform": {"desktop_web"},
+			}, secret),
+		},
+		{
+			name: "invalid",
+			raw: buildSignedParamsFromValues(url.Values{
+				"vk_user_id":  {"777"},
+				"vk_app_id":   {"123456"},
+				"vk_ts":       {"not-a-timestamp"},
+				"vk_platform": {"desktop_web"},
+			}, secret),
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			routes := newTestHandler(secret).Routes()
+			body, _ := json.Marshal(map[string]string{
+				"operation": "text_generate",
+				"prompt":    "hello",
+			})
+
+			req := httptest.NewRequest(http.MethodPost, "/miniapp/jobs", bytes.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("X-Launch-Params", tc.raw)
+			req.Header.Set("X-Idempotency-Key", "client-key")
+			w := httptest.NewRecorder()
+			routes.ServeHTTP(w, req)
+
+			if w.Code != http.StatusUnauthorized {
+				t.Fatalf("expected 401, got %d: %s", w.Code, w.Body.String())
+			}
+			var errResp map[string]string
+			if err := json.Unmarshal(w.Body.Bytes(), &errResp); err != nil {
+				t.Fatalf("invalid error response json: %v", err)
+			}
+			if errResp["error"] != "unauthorized" {
+				t.Fatalf("unexpected error body: %s", w.Body.String())
+			}
+
+			listReq := httptest.NewRequest(http.MethodGet, "/miniapp/jobs", nil)
+			listReq.Header.Set("X-Launch-Params", buildSignedParams(777, secret, time.Now().Unix()))
+			listW := httptest.NewRecorder()
+			routes.ServeHTTP(listW, listReq)
+			if listW.Code != http.StatusOK {
+				t.Fatalf("list after rejected create: expected 200, got %d: %s", listW.Code, listW.Body.String())
+			}
+			var listResp struct {
+				Items []any `json:"items"`
+			}
+			if err := json.Unmarshal(listW.Body.Bytes(), &listResp); err != nil {
+				t.Fatalf("invalid list response json: %v", err)
+			}
+			if len(listResp.Items) != 0 {
+				t.Fatalf("rejected request must not create a job, got %d jobs", len(listResp.Items))
+			}
+		})
 	}
 }
 

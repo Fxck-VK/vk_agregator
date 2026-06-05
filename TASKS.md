@@ -139,9 +139,8 @@
   `ratelimit` (ключ по `vk_user_id`/IP, отдельные RPS/Burst, минимум на `POST /jobs`).
   Fixed for `POST /miniapp/jobs`: verified `vk_user_id` key, separate env RPS/Burst,
   safe `429` + `Retry-After`, deterministic tests.
-- [ ] **[Medium] Fail-closed проверка `vk_ts`** (`internal/adapter/inbound/miniapp/sign.go:75-86`).
-  При `maxAge > 0` отсутствие/битость `vk_ts` сейчас просто пропускает TTL-проверку →
-  окно replay. Требовать корректный `vk_ts` (пустой/битый → `ErrExpiredParams`).
+- [x] **[Medium] Fail-closed проверка `vk_ts`** (`internal/adapter/inbound/miniapp/sign.go`).
+  Реализовано: при `maxAge > 0` пустой, битый, future или expired `vk_ts` отклоняется до job creation; клиент получает безопасный `401`.
 - [ ] **[Medium] Проброс выбора модели на бэкенд**. Добавить поле `model` в
   `CreateJobRequest` (`internal/adapter/inbound/miniapp/dto.go`) и слать его из
   `createJob` (`web/miniapp/src/api/client.ts`) — сейчас уходит только

@@ -767,3 +767,21 @@ resume hardening.
 ### Проверки
 
 - `npm run build` — exit 0.
+
+---
+
+## PR-4 — Mini App: fail-closed vk_ts
+
+Статус: **завершён**.
+
+### Что сделано
+
+- `VerifyLaunchParams` rejects missing, invalid, future, or expired `vk_ts`
+  whenever `MINIAPP_LAUNCH_PARAMS_MAX_AGE` is enabled.
+- `POST /miniapp/jobs` now fails safely at auth middleware before job creation
+  when `vk_ts` cannot be trusted.
+- Added handler coverage that verifies safe `401` response and no job creation.
+
+### Проверки
+
+- `go test ./internal/adapter/inbound/miniapp ./internal/platform/config` — exit 0.
