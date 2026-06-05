@@ -191,7 +191,7 @@ func TestStartSendsWelcomeMenuNoJob(t *testing.T) {
 	if !strings.Contains(sent[0].Keyboard, `"type":"text"`) || strings.Contains(sent[0].Keyboard, `"type":"callback"`) {
 		t.Fatalf("persistent keyboard must stay text-only: %q", sent[0].Keyboard)
 	}
-	if !strings.Contains(sent[1].Text, "Добро пожаловать в Super GPT") {
+	if !strings.Contains(sent[1].Text, "Добро пожаловать в НейроХаб") {
 		t.Fatalf("unexpected text: %q", sent[1].Text)
 	}
 	if !strings.Contains(sent[1].Keyboard, `"inline":true`) || !strings.Contains(sent[1].Keyboard, "Создать видео") || !strings.Contains(sent[1].Keyboard, "Пополнить баланс") {
@@ -267,7 +267,7 @@ func TestDisabledMenuPayloadFallsBackToCurrentMenuNoJob(t *testing.T) {
 		t.Fatalf("disabled payload must not create jobs, jobs=%+v tasks=%d", jobs, h.pub.Len())
 	}
 	sent := control.Sent()
-	if len(sent) != 1 || !strings.Contains(sent[0].Text, "Добро пожаловать в Super GPT") {
+	if len(sent) != 1 || !strings.Contains(sent[0].Text, "Добро пожаловать в НейроХаб") {
 		t.Fatalf("expected current welcome menu fallback, got %+v", sent)
 	}
 	if strings.Contains(sent[0].Keyboard, "Студентам и школьникам") {
@@ -337,7 +337,7 @@ func TestShowMenuSendsWelcomeWithoutResettingPersistentKeyboard(t *testing.T) {
 	if len(sent) != 3 {
 		t.Fatalf("expected persistent keyboard, start menu, and fresh show-menu message, got %+v", sent)
 	}
-	if !strings.Contains(sent[2].Text, "Добро пожаловать в Super GPT") {
+	if !strings.Contains(sent[2].Text, "Добро пожаловать в НейроХаб") {
 		t.Fatalf("unexpected text: %q", sent[2].Text)
 	}
 	if !strings.Contains(sent[2].Keyboard, `"inline":true`) || strings.Contains(sent[2].Keyboard, "Показать меню") {
@@ -473,7 +473,7 @@ func TestPlainMessageKeepsPreviousMenuAndLowerShowMenuSendsFreshMenu(t *testing.
 	if sent[2].Text != "Выберите режим в меню выше." || sent[2].Keyboard != "" {
 		t.Fatalf("text-only hint should remain unchanged after lower show-menu, got %+v", sent[2])
 	}
-	if !strings.Contains(sent[3].Text, "Добро пожаловать в Super GPT") || !strings.Contains(sent[3].Keyboard, `"inline":true`) {
+	if !strings.Contains(sent[3].Text, "Добро пожаловать в НейроХаб") || !strings.Contains(sent[3].Keyboard, `"inline":true`) {
 		t.Fatalf("expected fresh welcome menu after lower show-menu, got %+v", sent[3])
 	}
 	if edits := control.Edits(); len(edits) != 0 {

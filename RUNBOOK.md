@@ -308,7 +308,7 @@ curl -s -X POST localhost:8080/webhooks/vk \
 ```
 
 Expected: inbound event + command are persisted, no billable job is created.
-When `cmd/api` has `VK_ACCESS_TOKEN`, it sends the Super GPT welcome text with
+When `cmd/api` has `VK_ACCESS_TOKEN`, it sends the НейроХаб welcome text with
 a VK inline keyboard under the message. Set `VK_WELCOME_ATTACHMENT` to a
 pre-uploaded VK attachment string if the welcome message should include a
 banner image.

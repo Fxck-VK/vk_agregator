@@ -455,8 +455,8 @@ func (h *Handler) sendPersistentMenuButton(ctx context.Context, idemKey string, 
 	return err
 }
 
-func welcomeText(balance int64) string {
-	return fmt.Sprintf("👋 Добро пожаловать в Super GPT!\n\n🤖 Здесь вы можете создавать уникальные тексты, генерировать изображения и видео с помощью нейросетей!\n\nВаш баланс: %d 💎\n🎁 Вам доступна одна бесплатная генерация\n\n📌 Совет: Закрепляй бота и используй промты, которые мы оставили в каждой генеративной модели.", balance)
+func welcomeText(_ int64) string {
+	return "👋 Добро пожаловать в НейроХаб!\n\n🤖 Здесь вы можете создавать уникальные тексты с помощью нейросети!\n\n📌 Совет: Закрепляй бота, чтобы всегда быть на связи"
 }
 
 func accountText(balance int64) string {
