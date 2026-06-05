@@ -56,6 +56,10 @@ type Config struct {
 	// WebhookRateLimitRPS/Burst bound inbound webhook traffic per source.
 	WebhookRateLimitRPS   float64
 	WebhookRateLimitBurst int
+	// MiniAppJobRateLimitRPS/Burst bound Mini App job creation per verified
+	// vk_user_id.
+	MiniAppJobRateLimitRPS   float64
+	MiniAppJobRateLimitBurst int
 
 	// DBMaxConns/DBMinConns size the Postgres pool (audit SC1).
 	DBMaxConns int32
@@ -142,6 +146,15 @@ type Config struct {
 	VKMenuStudentsReportEnabled       bool
 	VKMenuStudentsQAEnabled           bool
 
+	// VKAppID is the VK Mini App application identifier.
+	VKAppID string
+	// VKAppSecret is the VK Mini App protected key used to verify launch-params
+	// signatures. When empty the signature check is skipped (dev/mock mode).
+	VKAppSecret string
+	// MiniAppLaunchParamsMaxAge is the maximum age of VK launch params before
+	// they are rejected. Zero disables the age check.
+	MiniAppLaunchParamsMaxAge time.Duration
+
 	// ArtifactURLTTL is how long signed artifact delivery URLs stay valid.
 	ArtifactURLTTL time.Duration
 	// SignedDelivery delivers media via signed URLs instead of bucket refs (ST1).
@@ -192,6 +205,11 @@ func (c Config) Validate() error {
 		}
 		if c.VKConfirmationToken == "" || c.VKConfirmationToken == "dev-confirmation" {
 			missing = append(missing, "VK_CONFIRMATION_TOKEN")
+		}
+		// The Mini App BFF must verify launch-param signatures for real in
+		// production; an empty secret would silently disable the check.
+		if c.VKAppSecret == "" {
+			missing = append(missing, "VK_APP_SECRET")
 		}
 	}
 	if c.usesOpenAI() && c.OpenAIAPIKey == "" {
@@ -250,8 +268,10 @@ func Load() Config {
 
 		ModerationExtraTerms: envList("MODERATION_EXTRA_TERMS"),
 
-		WebhookRateLimitRPS:   envFloat("WEBHOOK_RATE_LIMIT_RPS", 20),
-		WebhookRateLimitBurst: envInt("WEBHOOK_RATE_LIMIT_BURST", 40),
+		WebhookRateLimitRPS:      envFloat("WEBHOOK_RATE_LIMIT_RPS", 20),
+		WebhookRateLimitBurst:    envInt("WEBHOOK_RATE_LIMIT_BURST", 40),
+		MiniAppJobRateLimitRPS:   envFloat("MINIAPP_JOB_RATE_LIMIT_RPS", 1),
+		MiniAppJobRateLimitBurst: envInt("MINIAPP_JOB_RATE_LIMIT_BURST", 5),
 
 		DBMaxConns:    int32(envInt("DB_MAX_CONNS", 10)),
 		DBMinConns:    int32(envInt("DB_MIN_CONNS", 0)),
@@ -313,6 +333,10 @@ func Load() Config {
 		VKMenuStudentsPresentationEnabled: envBool("VK_MENU_STUDENTS_PRESENTATION_ENABLED", true),
 		VKMenuStudentsReportEnabled:       envBool("VK_MENU_STUDENTS_REPORT_ENABLED", true),
 		VKMenuStudentsQAEnabled:           envBool("VK_MENU_STUDENTS_QA_ENABLED", true),
+
+		VKAppID:                   env("VK_APP_ID", ""),
+		VKAppSecret:               env("VK_APP_SECRET", ""),
+		MiniAppLaunchParamsMaxAge: envDuration("MINIAPP_LAUNCH_PARAMS_MAX_AGE", time.Hour),
 
 		ArtifactURLTTL:        envDuration("ARTIFACT_URL_TTL", time.Hour),
 		SignedDelivery:        envBool("SIGNED_DELIVERY", false),

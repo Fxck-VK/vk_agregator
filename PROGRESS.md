@@ -5,6 +5,19 @@
 
 ---
 
+## Integration — Mini App + VK bot backend merge
+
+Статус: **завершён**.
+
+### Что сделано
+
+- Принят semantic merge plan между `feature/integration-web-backend` и `feature/vk-miniapp`.
+- Сохраняется единый backend platform: VK bot и Mini App идут через `/webhooks/vk` и `/miniapp/*`, но создают jobs через `joborchestrator`.
+- Приняты интеграционные решения: frontend sends `model_id`, BFF validates it; `GET /miniapp/artifacts/{id}` fails closed unless job is `succeeded` and output moderation passed; VK control/menu sends остаются documented control-path exception.
+- Проверки интеграции зелёные: backend `go build/test/vet`, Mini App `npm ci` + `npm run build`, `git diff --check`.
+
+---
+
 ## Step 1 — Domain layer, repository interfaces, initial migration
 
 Статус: **завершён**.
@@ -501,3 +514,339 @@
 См. актуальный backlog в `TASKS.md`; ближайший фокус — live smoke с реальными
 ключами, реальные image/video fallback providers, video media pipeline и worker
 resume hardening.
+
+---
+
+## Шаг 10 — VK Mini App: BFF, фронт, монохромный UI, фикс биллинга
+
+### Что сделано
+
+- **BFF `/miniapp/*`** в `cmd/api` (адаптер `internal/adapter/inbound/miniapp`):
+  `POST /miniapp/jobs`, `GET /miniapp/jobs`, `GET /miniapp/jobs/{id}`,
+  `GET /miniapp/balance`. Хендлеры не вызывают провайдеров — только
+  `joborchestrator` + существующий биллинг-путь (reserve/capture поверх ledger).
+  Ownership: задачи доступны только своему `vk_user_id` (иначе 404).
+- **Проверка подписи launch-параметров** (`sign.go`, HMAC-SHA256 по спецификации
+  VK). При заданном `VK_APP_SECRET` подпись проверяется по-настоящему:
+  невалидная/просроченная/без подписи → `401` без деталей, dev-обход
+  (`X-VK-User-ID`) отключается. В production пустой `VK_APP_SECRET` =
+  fail-closed на старте.
+- **Фронт `web/miniapp`** (React 18 + VKUI 8 + VK Bridge): экраны список задач,
+  создание (текст/фото/видео), детали с авто-обновлением, баланс. Монохромный
+  ч/б стиль через переопределение токенов VKUI (`theme.css`); дешёвые/цветные
+  эмодзи убраны, иконки — лаконичные моно из `@vkontakte/icons`.
+- **VK Tunnel** (`@vkontakte/vk-tunnel`) + npm-скрипт `tunnel` для запуска
+  локального фронта внутри VK.
+- **Фикс биллинга (AUDIT B1a):** стартовый грант 1000 теперь создаётся
+  committed-проводкой в ledger атомарно с созданием аккаунта; миграция
+  `000004` бэкоффилит открывающие проводки для существующих аккаунтов. Воркер
+  больше не пишет `billing balance mismatch`.
+
+### Проверки
+
+- `go build ./...`, `go test ./...` — зелёные; `tsc --noEmit` и
+  `npm run build` в `web/miniapp` — без ошибок.
+- Live (mock): `/health`=200; create→list→detail→balance прошёл через воркер
+  (`queued → succeeded`, артефакт создан, баланс 1000→999).
+- Подпись: с заданным секретом invalid/missing/dev-bypass → `401`;
+  валидный accept-путь покрыт `TestHandler_ValidSign`.
+- Биллинг: post-migration реконсиляция — 0 mismatch; у нового аккаунта есть
+  запись `opening balance grant`.
+
+### Текущее ограничение
+
+- VK Tunnel требует интерактивной OAuth-авторизации в браузере, поэтому https-URL
+  туннеля выдаётся только после ручного логина (`npm run tunnel` → открыть
+  ссылку → подтвердить → Enter). Этот URL затем вставляется в настройки
+  приложения на dev.vk.com.
+
+---
+
+## Step (доп.) — Mini App в iframe VK: dev-туннель и mixed-content
+
+Статус: **завершён**.
+
+### Что сделано
+
+- **VK Tunnel на техработах с 02.10.2025** → перешли на `cloudflared` (обходной
+  путь, рекомендованный VK).
+- **`web/miniapp/vite.config.ts`, секция `server`:** `host: true`,
+  `allowedHosts: true` (принимает меняющийся домен `*.trycloudflare.com`, URL
+  нигде не хардкодится), `hmr: { clientPort: 443, protocol: 'wss' }` (HMR через
+  https-туннель), proxy `/miniapp` и `/api` → `http://localhost:8080`. Так
+  фронт ходит к бэку через тот же origin — mixed-content под https устранён.
+- **API-клиент фронта** уже использует относительные пути (`BASE_URL` пустой в
+  dev) — изменений не потребовалось.
+- **Launch params**: фронт читает `window.location.search` и шлёт в заголовке
+  `X-Launch-Params`; бэк проверяет подпись при заданном `VK_APP_SECRET`, иначе
+  dev-fallback по `X-VK-User-ID`. Оба пути проверены.
+
+### Проверки
+
+- Live (mock, через эндпоинты бэка): `GET /miniapp/balance`=1000,
+  `POST /miniapp/jobs` (`queued → succeeded`, артефакт создан),
+  `GET /miniapp/jobs` и detail — данные отдаются, баланс 1000→999.
+- Гейты: `go test ./...` — зелёные; `tsc --noEmit`=0; `npm run build` — без
+  ошибок.
+
+### Ручной шаг оператора
+
+- `cloudflared tunnel --protocol http2 --url http://localhost:5173` → вставить
+  выданный https-URL в dev.vk.com → «Версия для vk.com» → «URL для разработки».
+
+---
+
+## Step (доп.) — Mini App: чат-интерфейс
+
+Статус: **завершён** (фронт).
+
+### Что сделано
+
+- Переход с таб-экранов на **чат** (`src/chat/`: `ChatScreen`, `Composer`,
+  `MessageBubble`, `types.ts`). Слои: `api/client.ts` (DTO = `miniapp.JobDTO`),
+  `hooks/useBridge.ts` (тема VK + `VKWebAppGetUserInfo` только для UI),
+  `ui/` (примитивы без сети).
+- `@vkontakte/vkui` и `@vkontakte/icons` удалены из зависимостей.
+- Поллинг: интервал 2с, макс. 90 итераций, остановка при unmount/терминальном
+  статусе; `patchMessage` по id.
+- `artifactUrl` — только UUID из `output_artifact_ids`; `fetchArtifactText` для
+  text_generate (ожидает `GET /miniapp/artifacts/{id}` на бэке).
+
+### Проверки
+
+- `npx tsc --noEmit` и `npm run build` в `web/miniapp` — без ошибок.
+
+---
+
+## Step (доп.) — Mini App: восстановление чат-фронта из HEAD
+
+Статус: **завершён**.
+
+### Что было сломано
+
+- Рабочее дерево было грязным после ручной чистки: ожидались пропавшие импорты
+  `./hooks/useBridge` и `./chat/ChatScreen`, а legacy `src/panels/` остался на
+  диске пустой директорией. Источник истины — уже закоммиченная чат-архитектура
+  в `feature/vk-miniapp`.
+
+### Что сделано
+
+- `web/miniapp/src/**` восстановлен из `HEAD`: `main.tsx`, `App.tsx`,
+  `api/client.ts`, `hooks/useBridge.ts`, `ui/theme.css`, `ui/ui.tsx`,
+  `chat/types.ts`, `chat/MessageBubble.tsx`, `chat/Composer.tsx`,
+  `chat/ChatScreen.tsx`.
+- Проверено, что в `web/miniapp/src` нет ссылок на `panels`/`screens`, VKUI,
+  `dangerouslySetInnerHTML`, `eval`, `new Function` или `console.log`.
+
+### Проверки
+
+- `npx tsc --noEmit` — без ошибок.
+- `npm run build` — без ошибок.
+- `npm run lint` отсутствует в `package.json`; ручная проверка неиспользуемых
+  legacy-ссылок выполнена поиском.
+
+---
+
+## Step (доп.) — Mini App: hardening чат-фронта после ручной чистки
+
+Статус: **завершён**.
+
+### Что было сломано
+
+- В IDE были симптомы битых импортов `./hooks/useBridge` и
+  `./chat/ChatScreen` после ручной чистки. Диагностика показала, что целевые
+  файлы уже есть на диске и в `HEAD`, `src/panels/` остался только пустой
+  legacy-каталог, а `tsc` не выдаёт TS2307/TS6133.
+
+### Что сделано
+
+- Удалён пустой legacy-каталог `web/miniapp/src/panels`; ссылок на
+  `panels`/`screens` в `web/miniapp/src` нет.
+- `useBridge.ts`: подписка `bridge.subscribe` теперь снимается через
+  `bridge.unsubscribe(handler)` в cleanup.
+- `ChatScreen.tsx`: `patchMessage` мемоизирован, polling делает первый запрос
+  сразу, затем ждёт 2 секунды между итерациями; лимит и stop-on-unmount
+  сохранены.
+
+### Проверки
+
+- `npx tsc --noEmit` — без вывода, exit 0.
+- `npm run build` — без ошибок/предупреждений.
+- `npm run lint` не настроен в `package.json`; ручной поиск опасных и legacy
+  паттернов (`panels`, `screens`, VKUI, `console`, `dangerouslySetInnerHTML`,
+  `eval`, `new Function`) — без совпадений.
+
+---
+
+## Step (доп.) — Mini App: история чатов, модальности и графитовая тема
+
+Статус: **завершён**.
+
+### Что сделано
+
+- Добавлена локальная история чатов в `localStorage` (`vk_miniapp_chats_v1`):
+  `src/chat/store.ts`, `src/hooks/useChats.ts`, шторка `src/chat/ChatList.tsx`.
+- `Composer` теперь поддерживает выбор модальности (`Текст`, `Фото`, `Видео`) и
+  dropdown модели для выбранной модальности.
+- `ChatScreen` использует `useChats`, список чатов, заголовок активного чата и
+  действие «Новый чат».
+- `theme.css` переведён на графитовую тёмную тему `#1A1A1D` и дополнен стилями
+  `segment`, `model-select`, `drawer`.
+
+### Проверки
+
+- `npx tsc --noEmit` — без вывода, exit 0.
+- `npm run build` — без ошибок/предупреждений.
+- `npm run lint` отсутствует в `package.json`; ручная проверка legacy/опасных
+  паттернов в `web/miniapp/src` — без проблем.
+
+---
+
+## Step (доп.) — Mini App: фиксация UI-итерации и аудит фронта
+
+Статус: **завершён**.
+
+### Что сделано
+
+- Зафиксирована UI-итерация Mini App: история чатов в `localStorage`
+  (`vk_miniapp_chats_v1`), выбор модальности (`Текст`/`Фото`/`Видео`) и
+  dropdown модели.
+- Тёмная тема Mini App переведена на графитовую палитру `#1A1A1D`.
+- Исправлен видимый scrollbar в composer textarea: прокрутка сохранена, но
+  нативный scrollbar скрыт для WebKit/Firefox/старого Edge.
+- Добавлен `docs/AUDIT.md` с аудитом безопасности, утечек и оптимизации новых
+  фронтенд-фич.
+
+### Проверки
+
+- `npx tsc --noEmit` — без вывода, exit 0.
+- `npm run build` — без ошибок/предупреждений.
+
+---
+
+## Step (доп.) — Mini App: аудит безопасности/архитектуры + бэклог фиксов
+
+Статус: **завершён** (ревью только-чтение; код по находкам не правился).
+
+### Что сделано
+
+- Проведён глубокий read-only аудит безопасности и архитектуры всего репозитория
+  (Go-бэкенд + React-фронтенд Mini App). Отчёт — `docs/REVIEW.md`: сводная таблица
+  по разделам, находки с severity (`Critical/High/Medium/Low`),
+  файл:строка, суть и рекомендация, ТОП-5 приоритетов.
+- Подтверждён корректный периметр: fail-closed в проде (`config.Validate`
+  требует `VK_APP_SECRET`/`ADMIN_TOKEN`), ownership-проверки на job/artifact/balance,
+  параметризованный SQL, append-only ledger с `FOR UPDATE` и идемпотентными
+  записями (двойного списания нет), таймауты внешних вызовов (OpenAI 120s/30s),
+  graceful drain воркеров, cleanup поллинга и `bridge.unsubscribe` на фронте.
+- Зафиксирован **резолв** ранее заявленного рассинхрона фронт↔бэк: роут
+  `GET /miniapp/artifacts/{id}` существует (`handler.go:75`, ownership +
+  `Cache-Control: private`), текст отдаётся как `text/plain` артефакт
+  (`artifactservice/service.go:102-103`) и читается фронтом
+  (`client.ts:107-118`); поля `result_text` в DTO нет намеренно.
+- Главные находки вынесены в `TASKS.md` → раздел «Бэклог по аудиту» как отдельные
+  задачи (High: rate-limiting на `/miniapp/*`; Medium: fail-closed `vk_ts`,
+  проброс модели в API, мягкая деградация `getArtifact` при недоступности S3;
+  Low→Medium: развязать `mountedRef` и перезапуск эффекта; и т.д.). Сейчас **не**
+  исправлялись.
+- Зафиксирована UI-итерация Mini App (уже в коммитах ветки): история чатов в
+  `localStorage` (`vk_miniapp_chats_v1`), выбор модальности `Текст/Фото/Видео` +
+  dropdown модели, графитовая тема `#1A1A1D`, скрытие нативного scrollbar в
+  composer textarea.
+
+### Проверки
+
+- `npx tsc --noEmit` — без вывода, exit 0.
+- `npm run build` — без ошибок (vite 8, `dist` собран, gzip JS ~66.7 kB).
+
+---
+
+## Step (доп.) — Mini App: job intake rate limiting
+
+Статус: **завершён**.
+
+### Что сделано
+
+- `POST /miniapp/jobs` теперь rate-limited после проверки launch params, с ключом
+  `miniapp_job:<verified vk_user_id>`.
+- Добавлены отдельные настройки `MINIAPP_JOB_RATE_LIMIT_RPS` и
+  `MINIAPP_JOB_RATE_LIMIT_BURST`; webhook limit не переиспользуется.
+- При превышении лимита BFF возвращает безопасный `429` и `Retry-After`; новый
+  job при rate limit не создаётся.
+
+### Проверки
+
+- `go test ./internal/adapter/inbound/miniapp ./internal/platform/config` — exit 0.
+- `go test ./...` — exit 0.
+
+---
+
+## PR-2 — Mini App: remove obsolete VK Tunnel tooling
+
+Статус: **завершён**.
+
+### Что сделано
+
+- Удалены `@vkontakte/vk-tunnel`, npm-скрипт `tunnel` и obsolete
+  `web/miniapp/vk-tunnel-config.json`.
+- Dev tunnel documentation нормализована на `cloudflared` /
+  `*.trycloudflare.com`; backend calls остаются same-origin через Vite proxy.
+
+### Проверки
+
+- `npm install` — exit 0.
+- `npm run build` — exit 0.
+
+---
+
+## PR-3 — Mini App: submit idempotency and API errors
+
+Статус: **завершён**.
+
+### Что сделано
+
+- Frontend `createJob` sends `X-Idempotency-Key` generated per submit attempt.
+- Submit flow has a minimal in-flight guard beyond disabled button UX.
+- API errors are normalized into safe user-facing messages, including network
+  failures and `429` with `Retry-After` metadata.
+
+### Проверки
+
+- `npm run build` — exit 0.
+
+---
+
+## PR-4 — Mini App: fail-closed vk_ts
+
+Статус: **завершён**.
+
+### Что сделано
+
+- `VerifyLaunchParams` rejects missing, invalid, future, or expired `vk_ts`
+  whenever `MINIAPP_LAUNCH_PARAMS_MAX_AGE` is enabled.
+- `POST /miniapp/jobs` now fails safely at auth middleware before job creation
+  when `vk_ts` cannot be trusted.
+- Added handler coverage that verifies safe `401` response and no job creation.
+
+### Проверки
+
+- `go test ./internal/adapter/inbound/miniapp ./internal/platform/config` — exit 0.
+
+---
+
+## PR-5 — Mini App: backend model_id contract
+
+Статус: **завершён**.
+
+### Что сделано
+
+- `POST /miniapp/jobs` accepts optional `model_id` and validates it by operation
+  against the Mini App backend whitelist.
+- Unsupported or cross-operation model IDs return safe `400` before user,
+  billing or job creation.
+- Supported `model_id` is stored in normalized job params; job API responses do
+  not expose model selector/model_id.
+
+### Проверки
+
+- `go test ./internal/adapter/inbound/miniapp ./internal/platform/config` — exit 0.

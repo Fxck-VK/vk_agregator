@@ -74,7 +74,10 @@ const reservationColumns = `id, account_id, job_id, amount, status, idempotency_
 const ledgerColumns = `id, account_id, job_id, reservation_id, type, amount, status,
 	idempotency_key, reason, created_at`
 
-// CreateAccount inserts a new credit account.
+// CreateAccount inserts a new credit account. The account is always created
+// with a zero cached balance; any requested starting balance is granted through
+// a committed opening ledger entry in the same transaction, so balance_cached
+// never diverges from the ledger sum (invariant #14, audit B1).
 func (r *BillingRepository) CreateAccount(ctx context.Context, a *domain.CreditAccount) error {
 	if a.ID == uuid.Nil {
 		a.ID = uuid.New()
@@ -82,11 +85,37 @@ func (r *BillingRepository) CreateAccount(ctx context.Context, a *domain.CreditA
 	if a.Currency == "" {
 		a.Currency = domain.CurrencyCredits
 	}
-	const q = `
-		INSERT INTO credit_accounts (id, user_id, currency, balance_cached)
-		VALUES ($1, $2, $3, $4)
-		RETURNING ` + accountColumns
-	return mapError(scanAccount(r.q().QueryRow(ctx, q, a.ID, a.UserID, a.Currency, a.BalanceCached), a))
+	grant := a.BalanceCached
+	return r.inTx(ctx, func(q Querier) error {
+		const insAcc = `
+			INSERT INTO credit_accounts (id, user_id, currency, balance_cached)
+			VALUES ($1, $2, $3, 0)
+			RETURNING ` + accountColumns
+		if err := mapError(scanAccount(q.QueryRow(ctx, insAcc, a.ID, a.UserID, a.Currency), a)); err != nil {
+			return err
+		}
+		if grant == 0 {
+			return nil
+		}
+		// Opening grant: a committed ledger entry that establishes the starting
+		// balance, keyed uniquely per account so it is created exactly once.
+		entry := &domain.LedgerEntry{
+			AccountID:      a.ID,
+			Type:           domain.LedgerTopup,
+			Amount:         grant,
+			Status:         domain.LedgerStatusCommitted,
+			IdempotencyKey: "grant:open:" + a.ID.String(),
+			Reason:         "opening balance grant",
+		}
+		if err := insertLedgerEntry(ctx, q, entry); err != nil {
+			return err
+		}
+		if err := adjustBalance(ctx, q, a.ID, grant); err != nil {
+			return err
+		}
+		a.BalanceCached = grant
+		return nil
+	})
 }
 
 // GetAccount fetches an account by id.

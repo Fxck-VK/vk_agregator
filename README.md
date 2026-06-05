@@ -30,6 +30,11 @@ cleanup and billing reconciliation metrics.
 API metrics are served at `GET /metrics`; worker-local metrics are served at
 `WORKER_METRICS_ADDR` (default `:9090`).
 
+The same `cmd/api` binary also serves the VK Mini App BFF under `/miniapp/*`.
+Mini App requests verify VK launch params server-side, create jobs through the
+shared `joborchestrator`, use backend billing/idempotency, and fetch artifacts
+only through owner-checked backend endpoints.
+
 Real integrations are implemented at adapter level and remain **opt-in**:
 
 - `PROVIDER=openai` enables OpenAI text (`Responses`), image (`Images`) and

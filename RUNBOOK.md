@@ -68,6 +68,9 @@ Override these values when needed:
 | `S3_USE_SSL` | `false` | HTTPS to S3 |
 | `VK_CONFIRMATION_TOKEN` | `dev-confirmation` | Returned for VK `confirmation` |
 | `VK_SECRET` | `` (empty = no check) | VK callback secret |
+| `VK_APP_ID` | `` | VK Mini App id (informational for BFF/dev setup) |
+| `VK_APP_SECRET` | `` | VK Mini App protected key; required in production |
+| `MINIAPP_LAUNCH_PARAMS_MAX_AGE` | `1h` | Maximum accepted VK Mini App launch-param age |
 | `ADMIN_TOKEN` | `` (empty = open) | Admin API `X-Admin-Token` |
 | `WORKER_GROUP` / `WORKER_CONSUMER` | `workers` / hostname | Consumer group identity |
 | `APP_ENV` | `development` | `production` enforces fail-closed secrets |
@@ -81,6 +84,7 @@ Override these values when needed:
 | `DEEPINFRA_BASE_URL` | `https://api.deepinfra.com/v1/openai` | DeepInfra OpenAI-compatible API root |
 | `DEEPINFRA_TEXT_MODEL` | `deepseek-ai/DeepSeek-V4-Flash` | DeepInfra text model code |
 | `DEEPINFRA_TEXT_PRICE` | `1` | Internal provider-router cost estimate |
+| `MINIAPP_JOB_RATE_LIMIT_RPS` / `MINIAPP_JOB_RATE_LIMIT_BURST` | `1` / `5` | Per-user Mini App `POST /miniapp/jobs` rate limit |
 | `OPENAI_API_KEY` | `` | Required when OpenAI provider/moderation/scanner is enabled |
 | `OPENAI_BASE_URL` | `https://api.openai.com/v1` | OpenAI API root |
 | `OPENAI_TEXT_MODEL` / `OPENAI_IMAGE_MODEL` | OpenAI defaults | OpenAI text/image model codes |
@@ -112,7 +116,7 @@ Override these values when needed:
 | `OTEL_SERVICE_NAME` | `vk-ai-aggregator` | OpenTelemetry service name prefix |
 
 > Production note: set `APP_ENV=production`; the API then **refuses to start**
-> unless `VK_SECRET`, `ADMIN_TOKEN`, and a non-default `VK_CONFIRMATION_TOKEN`
+> unless `VK_SECRET`, `ADMIN_TOKEN`, `VK_APP_SECRET`, and a non-default `VK_CONFIRMATION_TOKEN`
 > are set (fail-closed, `AUDIT.md` S1). Both `cmd/api` and `cmd/worker` run the
 > same validation. `PROVIDER=openai`, `PROVIDER_CHAIN` containing `openai`,
 > `MODERATION_PROVIDER=openai`, or `ARTIFACT_SCANNER=openai` require
@@ -530,3 +534,88 @@ Shutdown order: Workers → API → (optionally) Infrastructure.
 
 **Verify after rollback**
 - `/health` = 200; `migrate status` matches the deployed version; send a smoke webhook and confirm a job reaches `succeeded`.
+
+---
+
+## 12. VK Mini App BFF
+
+The Mini App backend-for-frontend (BFF) is part of `cmd/api`. It listens on the
+`/miniapp/*` path prefix and authenticates every request using VK launch-params
+signature verification (HMAC-SHA256).
+
+### New environment variables
+
+| Variable | Default | Required |
+|---|---|---|
+| `VK_APP_SECRET` | `""` (skip check in dev) | **Yes in production (fail-closed)** |
+| `VK_APP_ID` | `""` | Used by the tunnel; informational for the BFF |
+| `MINIAPP_LAUNCH_PARAMS_MAX_AGE` | `1h` | Optional |
+| `MINIAPP_JOB_RATE_LIMIT_RPS` / `MINIAPP_JOB_RATE_LIMIT_BURST` | `1` / `5` | Optional |
+
+When `VK_APP_SECRET` is set the launch-params HMAC-SHA256 signature is verified
+for real: invalid, missing, or expired (`vk_ts` older than
+`MINIAPP_LAUNCH_PARAMS_MAX_AGE`) params return `401` with no detail, and the dev
+`X-VK-User-ID` bypass is disabled. When `VK_APP_SECRET` is empty the signature
+check is skipped (dev/mock convenience) but `vk_user_id` is still required. In
+**production** an empty `VK_APP_SECRET` fails startup (fail-closed).
+Job creation through `POST /miniapp/jobs` has a separate per-verified-user
+in-memory token bucket; exceeded limits return `429` with `Retry-After`.
+Artifact bytes from `GET /miniapp/artifacts/{id}` are served only for the
+verified owner after the producing job is `succeeded` and output moderation has
+allowed the artifact; otherwise the BFF returns `404`.
+
+### Local development without real VK
+
+```powershell
+# Start infrastructure + API in mock mode:
+docker compose up -d
+go run ./cmd/migrate up
+. .\.env.ps1
+go run ./cmd/api
+
+# Call BFF endpoints directly (X-VK-User-ID header accepted in dev mode
+# when VK_APP_SECRET is not set):
+curl -s http://localhost:8080/miniapp/balance -H "X-Launch-Params: vk_user_id=777"
+curl -s -X POST http://localhost:8080/miniapp/jobs \
+  -H "Content-Type: application/json" \
+  -H "X-Launch-Params: vk_user_id=777" \
+  -d '{"operation":"text_generate","prompt":"hello world"}'
+```
+
+### Frontend dev server
+
+```powershell
+cd web\miniapp
+npm install
+npm run dev
+# → http://localhost:5173/?vk_user_id=777
+```
+
+The Vite proxy routes `/miniapp/*` to `http://localhost:8080`.
+
+### Open the Mini App inside VK via an HTTPS tunnel (cloudflared)
+
+VK Tunnel is under maintenance (since 2025-10-02), so the obsolete
+`@vkontakte/vk-tunnel` dev dependency and npm `tunnel` script were removed.
+Expose the local Vite dev server over HTTPS with **cloudflared**. The Vite dev config (`host: true`, `allowedHosts: true`,
+`hmr.protocol: wss`, `/miniapp` + `/api` proxy) already accepts the rotating
+tunnel domain and keeps backend calls same-origin (no mixed content).
+
+```powershell
+# 1. API + worker running (mock) and the Vite dev server up (npm run dev).
+# 2. Tunnel the dev server (prints a fresh https://<random>.trycloudflare.com URL):
+cloudflared tunnel --protocol http2 --url http://localhost:5173
+```
+
+Paste the printed `https://...trycloudflare.com` URL into **dev.vk.com → your
+app → Версия для vk.com → "URL для разработки"**. The URL changes every run —
+do **not** hardcode it anywhere (`allowedHosts: true` handles the domain). Open
+the app from VK; the SPA reads the launch params VK appends to the URL and the
+BFF verifies the signature.
+
+### Production
+
+1. Set `VK_APP_SECRET` to the app's Protected Key from the VK Mini App settings.
+2. Build the frontend: `cd web/miniapp && npm run build`
+3. Host `web/miniapp/dist/` as the Mini App's static URL in VK admin.
+4. The BFF runs as part of the existing `cmd/api` binary — no extra process.

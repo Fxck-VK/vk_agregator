@@ -17,7 +17,7 @@ func TestValidateProductionSecrets(t *testing.T) {
 		t.Fatal("expected validation error")
 	}
 	msg := err.Error()
-	for _, want := range []string{"VK_SECRET", "ADMIN_TOKEN", "VK_CONFIRMATION_TOKEN"} {
+	for _, want := range []string{"VK_SECRET", "ADMIN_TOKEN", "VK_CONFIRMATION_TOKEN", "VK_APP_SECRET"} {
 		if !strings.Contains(msg, want) {
 			t.Fatalf("expected %s in validation error, got %q", want, msg)
 		}
@@ -160,6 +160,19 @@ func TestLoadReadsDotenvWithoutOverridingEnvironment(t *testing.T) {
 	}
 	if cfg.VKAPIVersion != "5.200" {
 		t.Fatalf("VKAPIVersion = %q, want value from .env", cfg.VKAPIVersion)
+	}
+}
+
+func TestLoadMiniAppJobRateLimit(t *testing.T) {
+	t.Setenv("MINIAPP_JOB_RATE_LIMIT_RPS", "2.5")
+	t.Setenv("MINIAPP_JOB_RATE_LIMIT_BURST", "7")
+
+	cfg := config.Load()
+	if cfg.MiniAppJobRateLimitRPS != 2.5 {
+		t.Fatalf("MiniAppJobRateLimitRPS = %v", cfg.MiniAppJobRateLimitRPS)
+	}
+	if cfg.MiniAppJobRateLimitBurst != 7 {
+		t.Fatalf("MiniAppJobRateLimitBurst = %v", cfg.MiniAppJobRateLimitBurst)
 	}
 }
 

@@ -18,9 +18,11 @@ import (
 
 	vkdelivery "vk-ai-aggregator/internal/adapter/delivery/vk"
 	adminapi "vk-ai-aggregator/internal/adapter/inbound/admin"
+	miniappapi "vk-ai-aggregator/internal/adapter/inbound/miniapp"
 	vkinbound "vk-ai-aggregator/internal/adapter/inbound/vk"
 	redisqueue "vk-ai-aggregator/internal/adapter/queue/redis"
 	"vk-ai-aggregator/internal/adapter/storage/postgres"
+	s3store "vk-ai-aggregator/internal/adapter/storage/s3"
 	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/platform/config"
 	"vk-ai-aggregator/internal/platform/metrics"
@@ -75,6 +77,21 @@ func main() {
 	idem := postgres.NewIdempotencyRepository(pool)
 	deliveries := postgres.NewDeliveryRepository(pool)
 	billingRepo := postgres.NewBillingRepository(pool)
+	artifacts := postgres.NewArtifactRepository(pool)
+	modResults := postgres.NewModerationResultRepository(pool)
+
+	var objectStore miniappapi.ObjectReader
+	store, err := s3store.New(ctx, s3store.Config{
+		Endpoint:  cfg.S3Endpoint,
+		AccessKey: cfg.S3AccessKey,
+		SecretKey: cfg.S3SecretKey,
+		UseSSL:    cfg.S3UseSSL,
+	})
+	if err != nil {
+		logger.Warn("s3 connect failed; miniapp artifact downloads disabled", "error", err)
+	} else {
+		objectStore = store
+	}
 
 	billing := billingservice.New(billingRepo, billingservice.WithPriceOverrides(cfg.PriceOverrides))
 	uowMgr := postgres.NewUnitOfWork(pool)
@@ -122,6 +139,25 @@ func main() {
 		Billing:    billingRepo,
 	})
 
+	// Per-user rate limiting protects billable Mini App job creation after
+	// launch params have been verified by the BFF.
+	miniappJobLimiter := ratelimit.New(cfg.MiniAppJobRateLimitRPS, cfg.MiniAppJobRateLimitBurst)
+	miniapp := miniappapi.NewHandler(miniappapi.Config{
+		AppSecret:          cfg.VKAppSecret,
+		LaunchParamsMaxAge: cfg.MiniAppLaunchParamsMaxAge,
+		JobRateLimiter:     miniappJobLimiter,
+	}, miniappapi.Deps{
+		Users:        users,
+		Jobs:         jobs,
+		Artifacts:    artifacts,
+		Moderation:   modResults,
+		Objects:      objectStore,
+		Billing:      billing,
+		BillingRepo:  billingRepo,
+		Orchestrator: orch,
+		Logger:       logger,
+	})
+
 	// Per-IP rate limiting protects the webhook intake from flooding/abuse
 	// (audit S3).
 	webhookLimiter := ratelimit.New(cfg.WebhookRateLimitRPS, cfg.WebhookRateLimitBurst)
@@ -129,6 +165,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.Handle("/webhooks/vk", webhookLimiter.Middleware(metrics.Middleware("webhook", vkHandler)))
 	mux.Handle("/admin/", metrics.Middleware("admin", admin.Routes()))
+	mux.Handle("/miniapp/", metrics.Middleware("miniapp", miniapp.Routes()))
 	mux.Handle("GET /metrics", metrics.Handler())
 	mux.HandleFunc("GET /health", healthHandler(pool, rdb))
 	mux.HandleFunc("GET /healthz", healthHandler(pool, rdb))

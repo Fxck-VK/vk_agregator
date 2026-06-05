@@ -52,6 +52,10 @@ OS/CI environment variables override `.env` values.
 | `S3_BUCKET`             | `artifacts`                                                                               |
 | `VK_CONFIRMATION_TOKEN` | `dev-confirmation`                                                                        |
 | `VK_SECRET`             | _(empty = no secret check)_                                                               |
+| `VK_APP_ID`             | _(empty)_                                                                                 |
+| `VK_APP_SECRET`         | _(empty = dev/mock Mini App signature bypass; required in production)_                    |
+| `MINIAPP_LAUNCH_PARAMS_MAX_AGE` | `1h`                                                                             |
+| `MINIAPP_JOB_RATE_LIMIT_RPS` / `MINIAPP_JOB_RATE_LIMIT_BURST` | `1` / `5`                                       |
 | `ADMIN_TOKEN`           | _(empty = admin API open)_                                                                |
 | `PROVIDER`              | `mock`                                                                                    |
 | `PROVIDER_CHAIN`        | value of `PROVIDER`                                                                        |
@@ -299,6 +303,9 @@ way to validate behavior end-to-end:
 ```bash
 go test ./...                                   # whole suite
 go test ./internal/worker/ -run TestEndToEnd -v # full VK→…→Capture flow
+
+go test ./internal/adapter/inbound/miniapp ./internal/platform/config
+cd web/miniapp && npm ci && npm run build
 ```
 
 Covered: business flow, webhook/delivery/capture idempotency, provider timeout
