@@ -7,12 +7,14 @@ dist/
 coverage.out
 vendor/
 
-# Node
+# Node / Frontend
 node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+web/miniapp/dist/
+web/miniapp/.vite/
 
 # Environment and secrets
 .env
@@ -22,6 +24,7 @@ pnpm-debug.log*
 # Docker/local data
 *.pid
 *.log
+*-live.err
 
 # IDEs and editors
 .idea/

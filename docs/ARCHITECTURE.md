@@ -190,6 +190,7 @@ Cloudflare / Nginx / Traefik / Envoy
 
 ```text
 - принять Callback API event;
+- принять `message_new` и `message_event` для callback-кнопок меню;
 - проверить group_id / secret / confirmation;
 - сохранить raw event в inbound_events;
 - создать idempotency key;
@@ -733,6 +734,8 @@ Delivery Service делает:
 - загрузить фото как VK photo attachment;
 - загрузить видео как VK video или document;
 - отправить файл;
+- редактировать product/control сообщения меню через VK `messages.edit`, если UX требует менять активное меню вместо отправки нового сообщения;
+- подтверждать callback-кнопки через VK `messages.sendMessageEventAnswer`, чтобы клиент не оставлял кнопку в состоянии загрузки;
 - обработать ошибки VK;
 - не отправить дубль;
 - сохранить delivery status.

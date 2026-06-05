@@ -15,6 +15,8 @@ type ProviderName string
 const (
 	// ProviderOpenAI is the OpenAI provider.
 	ProviderOpenAI ProviderName = "openai"
+	// ProviderDeepInfra is the DeepInfra provider.
+	ProviderDeepInfra ProviderName = "deepinfra"
 	// ProviderGoogle is the Google Gemini provider.
 	ProviderGoogle ProviderName = "google"
 	// ProviderKling is the Kling video provider.

@@ -17,7 +17,7 @@ func TestValidateProductionSecrets(t *testing.T) {
 		t.Fatal("expected validation error")
 	}
 	msg := err.Error()
-	for _, want := range []string{"VK_SECRET", "ADMIN_TOKEN", "VK_CONFIRMATION_TOKEN"} {
+	for _, want := range []string{"VK_SECRET", "ADMIN_TOKEN", "VK_CONFIRMATION_TOKEN", "VK_APP_SECRET"} {
 		if !strings.Contains(msg, want) {
 			t.Fatalf("expected %s in validation error, got %q", want, msg)
 		}
@@ -51,6 +51,80 @@ func TestLoadProviderChain(t *testing.T) {
 	cfg := config.Load()
 	if !reflect.DeepEqual(cfg.ProviderChain, []string{"openai", "mock"}) {
 		t.Fatalf("provider chain = %#v", cfg.ProviderChain)
+	}
+}
+
+func TestLoadDeepInfraConfig(t *testing.T) {
+	t.Setenv("PROVIDER", "deepinfra")
+	t.Setenv("DEEPINFRA_API_KEY", "test-key")
+	t.Setenv("DEEPINFRA_BASE_URL", "https://example.com/v1/openai")
+	t.Setenv("DEEPINFRA_TEXT_MODEL", "deepseek-ai/DeepSeek-V4-Flash")
+	t.Setenv("DEEPINFRA_TEXT_PRICE", "2")
+
+	cfg := config.Load()
+	if cfg.DeepInfraAPIKey != "test-key" {
+		t.Fatal("DeepInfraAPIKey was not loaded")
+	}
+	if cfg.DeepInfraBaseURL != "https://example.com/v1/openai" {
+		t.Fatalf("DeepInfraBaseURL = %q", cfg.DeepInfraBaseURL)
+	}
+	if cfg.DeepInfraTextModel != "deepseek-ai/DeepSeek-V4-Flash" {
+		t.Fatalf("DeepInfraTextModel = %q", cfg.DeepInfraTextModel)
+	}
+	if cfg.DeepInfraTextPrice != 2 {
+		t.Fatalf("DeepInfraTextPrice = %d, want 2", cfg.DeepInfraTextPrice)
+	}
+}
+
+func TestLoadVKMenuButtonMode(t *testing.T) {
+	t.Setenv("VK_MENU_BUTTON_MODE", "text")
+
+	cfg := config.Load()
+	if cfg.VKMenuButtonMode != "text" {
+		t.Fatalf("VKMenuButtonMode = %q, want text", cfg.VKMenuButtonMode)
+	}
+}
+
+func TestLoadVKUnroutedTextMode(t *testing.T) {
+	t.Setenv("VK_UNROUTED_TEXT_MODE", "silent")
+
+	cfg := config.Load()
+	if cfg.VKUnroutedTextMode != "silent" {
+		t.Fatalf("VKUnroutedTextMode = %q, want silent", cfg.VKUnroutedTextMode)
+	}
+}
+
+func TestLoadVKMenuFeatureFlags(t *testing.T) {
+	t.Setenv("VK_MENU_STUDENTS_ENABLED", "false")
+	t.Setenv("VK_MENU_VIDEO_SORA2_EXAMPLES_ENABLED", "false")
+
+	cfg := config.Load()
+	if cfg.VKMenuStudentsEnabled {
+		t.Fatal("VKMenuStudentsEnabled = true, want false")
+	}
+	if cfg.VKMenuVideoSora2ExamplesEnabled {
+		t.Fatal("VKMenuVideoSora2ExamplesEnabled = true, want false")
+	}
+	if !cfg.VKMenuVideoEnabled {
+		t.Fatal("VKMenuVideoEnabled = false, want default true")
+	}
+}
+
+func TestValidateVKMenuButtonMode(t *testing.T) {
+	cfg := config.Config{VKMenuButtonMode: "bad"}
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "VK_MENU_BUTTON_MODE") {
+		t.Fatalf("expected VK_MENU_BUTTON_MODE validation error, got %v", err)
+	}
+}
+
+func TestValidateVKUnroutedTextMode(t *testing.T) {
+	cfg := config.Config{VKUnroutedTextMode: "bad"}
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "VK_UNROUTED_TEXT_MODE") {
+		t.Fatalf("expected VK_UNROUTED_TEXT_MODE validation error, got %v", err)
 	}
 }
 
@@ -89,6 +163,19 @@ func TestLoadReadsDotenvWithoutOverridingEnvironment(t *testing.T) {
 	}
 }
 
+func TestLoadMiniAppJobRateLimit(t *testing.T) {
+	t.Setenv("MINIAPP_JOB_RATE_LIMIT_RPS", "2.5")
+	t.Setenv("MINIAPP_JOB_RATE_LIMIT_BURST", "7")
+
+	cfg := config.Load()
+	if cfg.MiniAppJobRateLimitRPS != 2.5 {
+		t.Fatalf("MiniAppJobRateLimitRPS = %v", cfg.MiniAppJobRateLimitRPS)
+	}
+	if cfg.MiniAppJobRateLimitBurst != 7 {
+		t.Fatalf("MiniAppJobRateLimitBurst = %v", cfg.MiniAppJobRateLimitBurst)
+	}
+}
+
 func TestValidateOpenAIModerationRequiresKey(t *testing.T) {
 	cfg := config.Config{
 		Env:                "development",
@@ -100,6 +187,19 @@ func TestValidateOpenAIModerationRequiresKey(t *testing.T) {
 	err := cfg.Validate()
 	if err == nil || !strings.Contains(err.Error(), "OPENAI_API_KEY") {
 		t.Fatalf("expected OPENAI_API_KEY validation error, got %v", err)
+	}
+}
+
+func TestValidateDeepInfraRequiresKey(t *testing.T) {
+	cfg := config.Config{
+		Env:           "development",
+		Provider:      "mock",
+		ProviderChain: []string{"deepinfra", "mock"},
+	}
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "DEEPINFRA_API_KEY") {
+		t.Fatalf("expected DEEPINFRA_API_KEY validation error, got %v", err)
 	}
 }
 

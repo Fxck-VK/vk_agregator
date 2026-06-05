@@ -122,6 +122,21 @@ func TestCancel(t *testing.T) {
 	}
 }
 
+func TestDownloaderDecodesDataURL(t *testing.T) {
+	d := mock.NewDownloader()
+
+	data, contentType, err := d.Download(context.Background(), "data:text/plain;base64,SGVsbG8=")
+	if err != nil {
+		t.Fatalf("download data url: %v", err)
+	}
+	if string(data) != "Hello" {
+		t.Fatalf("data = %q, want Hello", data)
+	}
+	if contentType != "text/plain" {
+		t.Fatalf("contentType = %q, want text/plain", contentType)
+	}
+}
+
 func asMockError(err error, target **mock.Error) bool {
 	if e, ok := err.(*mock.Error); ok {
 		*target = e

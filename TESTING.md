@@ -52,9 +52,15 @@ OS/CI environment variables override `.env` values.
 | `S3_BUCKET`             | `artifacts`                                                                               |
 | `VK_CONFIRMATION_TOKEN` | `dev-confirmation`                                                                        |
 | `VK_SECRET`             | _(empty = no secret check)_                                                               |
+| `VK_APP_ID`             | _(empty)_                                                                                 |
+| `VK_APP_SECRET`         | _(empty = dev/mock Mini App signature bypass; required in production)_                    |
+| `MINIAPP_LAUNCH_PARAMS_MAX_AGE` | `1h`                                                                             |
+| `MINIAPP_JOB_RATE_LIMIT_RPS` / `MINIAPP_JOB_RATE_LIMIT_BURST` | `1` / `5`                                       |
 | `ADMIN_TOKEN`           | _(empty = admin API open)_                                                                |
 | `PROVIDER`              | `mock`                                                                                    |
 | `PROVIDER_CHAIN`        | value of `PROVIDER`                                                                        |
+| `DEEPINFRA_API_KEY`     | _(required when DeepInfra provider is enabled)_                                           |
+| `DEEPINFRA_TEXT_MODEL`  | `deepseek-ai/DeepSeek-V4-Flash`                                                           |
 | `OPENAI_API_KEY`        | _(required when OpenAI provider/moderation/scanner is enabled)_                           |
 | `OPENAI_TEXT_MODEL`     | `gpt-4.1-mini`                                                                             |
 | `OPENAI_IMAGE_MODEL`    | `gpt-image-1`                                                                              |
@@ -64,6 +70,9 @@ OS/CI environment variables override `.env` values.
 | `VK_DELIVERY_MODE`      | `mock`                                                                                    |
 | `VK_ACCESS_TOKEN`       | _(required when `VK_DELIVERY_MODE=real`; also enables API-side `/start` menu sends)_       |
 | `VK_WELCOME_ATTACHMENT` | _(optional VK attachment string for `/start` banner)_                                     |
+| `VK_MENU_BUTTON_MODE`   | `callback`                                                                                |
+| `VK_UNROUTED_TEXT_MODE` | `reply`                                                                                   |
+| `VK_MENU_*_ENABLED`     | `true`                                                                                    |
 | `MAX_ATTEMPTS`          | `3`                                                                                       |
 | `SIGNED_DELIVERY`       | `false`                                                                                   |
 | `STREAM_MAX_LEN`        | `100000`                                                                                  |
@@ -104,6 +113,10 @@ PROVIDER=openai OPENAI_API_KEY=... go run ./cmd/worker
 # Provider router: OpenAI primary, mock fallback.
 PROVIDER_CHAIN=openai,mock OPENAI_API_KEY=... go run ./cmd/worker
 
+# DeepInfra DeepSeek-V4-Flash text provider with mock fallback for unsupported
+# modalities.
+PROVIDER_CHAIN=deepinfra,mock DEEPINFRA_API_KEY=... go run ./cmd/worker
+
 # API-side VK /start menu responses with keyboard.
 VK_ACCESS_TOKEN=... go run ./cmd/api
 
@@ -140,12 +153,17 @@ curl -s -X POST localhost:8080/webhooks/vk \
 # dev-confirmation
 ```
 
-VK message (creates user → command → job; text generation):
+VK text mode + message (creates user → control command → text job):
 
 ```bash
 curl -s -X POST localhost:8080/webhooks/vk \
   -H 'Content-Type: application/json' \
-  -d '{"type":"message_new","event_id":"evt-1","object":{"message":{"from_id":777,"peer_id":777,"text":"hello world"}}}'
+  -d '{"type":"message_new","event_id":"text-mode-1","object":{"message":{"from_id":777,"peer_id":777,"text":"💬 Спросить у НейроХаб","payload":"{\"command\":\"menu.text\"}"}}}'
+# ok
+
+curl -s -X POST localhost:8080/webhooks/vk \
+  -H 'Content-Type: application/json' \
+  -d '{"type":"message_new","event_id":"text-1","object":{"message":{"from_id":777,"peer_id":777,"text":"hello world"}}}'
 # ok
 ```
 
@@ -162,6 +180,54 @@ Expected: command type `start`, no queued job, no billing reservation. If
 `cmd/api` is running with `VK_ACCESS_TOKEN`, the peer receives the Super GPT
 welcome text and VK inline keyboard. `VK_WELCOME_ATTACHMENT` may point at a
 pre-uploaded VK banner attachment.
+Clicking `🎬 Создать видео` should return `Выбери модель для генерации:` with
+`Sora 2`, `Kling v2.1`, `Seedance 1`, `Haiuo v0.2`, and `⬅️ Назад`; these
+button presses are control commands and should not enqueue jobs.
+Clicking `Sora 2` or `Kling v2.1` should open a detail screen with model
+description, example prompt, instruction link, `😀 Начать генерацию`,
+`ℹ️ Примеры`, and `⬅️ Назад`. Clicking `Seedance 1` should open `Lite` / `Pro`;
+clicking `Haiuo v0.2` should open `Обычный` / `Fast`. These nested buttons are
+also control commands and should not enqueue jobs.
+Clicking `🖼️ Создать фото` should return the daily-free-attempt photo
+instruction screen directly with `Фото по тексту`, `Фото с референсом`, and
+`⬅️ Назад`; these mode buttons are also control commands. Clicking
+`💬 Спросить у НейроХаб` should return `SUPER GPT активен` and wait for the next
+plain user message; that next text or sticker should create a `text.ask` job.
+In active GPT mode, the bot should first send `GPT думает...`; after the
+provider result is ready, that same VK message should be edited to the answer
+instead of sending a second bot message. This placeholder/edit UX is only for
+the button-enabled GPT mode, not for legacy `VK_UNROUTED_TEXT_MODE=gpt`. If the
+answer is too long for one VK message, the edited placeholder should contain
+the first chunk and the remaining chunks should be sent as deterministic
+follow-up text messages.
+Plain text outside GPT mode is controlled by `VK_UNROUTED_TEXT_MODE`: `reply`
+(default) sends only `Выберите режим в меню выше.` and creates no job, `silent`
+creates no job and sends nothing, `gpt` preserves legacy any-text-to-GPT
+behavior.
+Clicking `🎁 Студентам и школьникам` should return the study submenu with
+`Решальник задач`, `Генерация презентаций (скоро)`,
+`Создание рефератов (скоро)`, `❓ Ответы на вопросы`, and `⬅️ Назад`; these
+button presses must not enqueue jobs.
+For live VK UX, click several inline menu buttons in a row: the bot should edit
+the active menu message instead of posting a new bot message each time. Press
+the persistent lower `Показать меню` button: the bot should send a fresh menu at
+the bottom instead of editing the old one. Then send plain text outside GPT
+mode: with the default `reply` setting, the bot should post only
+`Выберите режим в меню выше.`, should not attach an inline keyboard, and should
+still create no job. This active-menu/dialog-mode state is process-local to the
+running API instance.
+With `VK_MENU_BUTTON_MODE=callback`, inline menu clicks should not appear as
+user messages in the chat. Make sure VK Callback API has callback-button events
+(`message_event`) enabled. To verify legacy fallback, set
+`VK_MENU_BUTTON_MODE=text`, restart `cmd/api`, and confirm button labels are sent
+as user messages again.
+The clicked callback button should not keep spinning: `cmd/api` acknowledges
+every `message_event` with blank `messages.sendMessageEventAnswer` before
+editing/sending the menu.
+Feature flag smoke: set `VK_MENU_STUDENTS_ENABLED=false`, restart `cmd/api`,
+open `Показать меню`, and confirm `🎁 Студентам и школьникам` is absent while
+other main buttons remain. Re-enable it with `true`. The same pattern applies
+to all `VK_MENU_*_ENABLED` flags in `.env.example`.
 
 Image / video jobs (slash commands):
 
@@ -176,7 +242,7 @@ Idempotency check — re-send the **same** `event_id`; no second job is created:
 
 ```bash
 curl -s -X POST localhost:8080/webhooks/vk -H 'Content-Type: application/json' \
-  -d '{"type":"message_new","event_id":"evt-1","object":{"message":{"from_id":777,"peer_id":777,"text":"hello world"}}}'
+  -d '{"type":"message_new","event_id":"text-1","object":{"message":{"from_id":777,"peer_id":777,"text":"hello world"}}}'
 # ok  (deduped)
 ```
 
@@ -237,6 +303,9 @@ way to validate behavior end-to-end:
 ```bash
 go test ./...                                   # whole suite
 go test ./internal/worker/ -run TestEndToEnd -v # full VK→…→Capture flow
+
+go test ./internal/adapter/inbound/miniapp ./internal/platform/config
+cd web/miniapp && npm ci && npm run build
 ```
 
 Covered: business flow, webhook/delivery/capture idempotency, provider timeout
@@ -268,8 +337,16 @@ TEST_REDIS_ADDR="localhost:6379" go test ./internal/adapter/queue/redis/...
 - Default local runs use the **mock** AI provider and **mock** VK delivery.
 - `PROVIDER=openai` enables real OpenAI text/image/video adapters. Live tests
   require a real key and may incur provider cost.
+- `PROVIDER=deepinfra` enables real DeepInfra text generation through
+  `deepseek-ai/DeepSeek-V4-Flash`; live tests require a real key and may incur
+  provider cost. DeepInfra is text-only in this codebase, so keep `mock` or
+  another capable provider in `PROVIDER_CHAIN` for image/video jobs. The
+  mock-aware downloader also accepts provider `data:` URLs used by DeepInfra
+  text outputs.
 - `PROVIDER_CHAIN=openai,mock` exercises router/fallback/circuit breaker logic
   with OpenAI primary and mock fallback.
+  `PROVIDER_CHAIN=deepinfra,mock` uses DeepInfra for text and mock fallback for
+  unsupported/retryable paths.
 - `VK_DELIVERY_MODE=real` enables real VK `messages.send` plus generated
   photo/video upload into VK attachment ids.
 - VK `/start` menu replies are sent by `cmd/api` through
@@ -281,4 +358,4 @@ TEST_REDIS_ADDR="localhost:6379" go test ./internal/adapter/queue/redis/...
 - `docker compose` brings up Postgres, Redis, MinIO; the app binaries run on the
   host (no app Dockerfile yet).
 - `cmd/api` and `cmd/worker` both validate production secrets fail-closed.
-  Real OpenAI/VK modes require their credentials even in local runs.
+  Real OpenAI/DeepInfra/VK modes require their credentials even in local runs.

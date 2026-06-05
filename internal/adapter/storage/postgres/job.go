@@ -35,6 +35,12 @@ func (r *JobRepository) Create(ctx context.Context, job *domain.Job) error {
 	if len(job.Params) == 0 {
 		job.Params = []byte("{}")
 	}
+	// command_id is nullable; pass nil when the job has no associated command
+	// (e.g. jobs created directly through the Mini App BFF).
+	var commandID *uuid.UUID
+	if job.CommandID != uuid.Nil {
+		commandID = &job.CommandID
+	}
 	const q = `
 		INSERT INTO jobs (
 			id, user_id, vk_peer_id, command_id, operation_type, modality,
@@ -47,7 +53,7 @@ func (r *JobRepository) Create(ctx context.Context, job *domain.Job) error {
 		)
 		RETURNING ` + jobColumns
 	row := r.db.QueryRow(ctx, q,
-		job.ID, job.UserID, job.VKPeerID, job.CommandID, job.OperationType, job.Modality,
+		job.ID, job.UserID, job.VKPeerID, commandID, job.OperationType, job.Modality,
 		job.ProviderID, job.ModelID, job.Status, job.Priority, job.IdempotencyKey, job.CorrelationID,
 		uuidArray(job.InputArtifactIDs), uuidArray(job.OutputArtifactIDs), []byte(job.Params), job.CostEstimate, job.CostReserved,
 		job.CostCaptured, job.ErrorCode, job.ErrorMessage, job.ExpiresAt,
@@ -184,10 +190,17 @@ func (r *JobRepository) List(ctx context.Context, filter domain.JobFilter, limit
 }
 
 func scanJob(row rowScanner, job *domain.Job) error {
-	return row.Scan(
-		&job.ID, &job.UserID, &job.VKPeerID, &job.CommandID, &job.OperationType, &job.Modality,
+	var commandID *uuid.UUID
+	if err := row.Scan(
+		&job.ID, &job.UserID, &job.VKPeerID, &commandID, &job.OperationType, &job.Modality,
 		&job.ProviderID, &job.ModelID, &job.Status, &job.Priority, &job.IdempotencyKey, &job.CorrelationID,
 		&job.InputArtifactIDs, &job.OutputArtifactIDs, &job.Params, &job.CostEstimate, &job.CostReserved,
 		&job.CostCaptured, &job.ErrorCode, &job.ErrorMessage, &job.CreatedAt, &job.UpdatedAt, &job.ExpiresAt,
-	)
+	); err != nil {
+		return err
+	}
+	if commandID != nil {
+		job.CommandID = *commandID
+	}
+	return nil
 }

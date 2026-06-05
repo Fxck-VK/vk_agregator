@@ -56,6 +56,10 @@ type Config struct {
 	// WebhookRateLimitRPS/Burst bound inbound webhook traffic per source.
 	WebhookRateLimitRPS   float64
 	WebhookRateLimitBurst int
+	// MiniAppJobRateLimitRPS/Burst bound Mini App job creation per verified
+	// vk_user_id.
+	MiniAppJobRateLimitRPS   float64
+	MiniAppJobRateLimitBurst int
 
 	// DBMaxConns/DBMinConns size the Postgres pool (audit SC1).
 	DBMaxConns int32
@@ -88,6 +92,11 @@ type Config struct {
 	OpenAIImagePrice   int64
 	OpenAIVideoPrice   int64
 
+	DeepInfraAPIKey    string
+	DeepInfraBaseURL   string
+	DeepInfraTextModel string
+	DeepInfraTextPrice int64
+
 	// ModerationProvider selects output moderation: "keyword" (default) or
 	// "openai". ArtifactScanner selects artifact byte scanning: "none" or
 	// "openai".
@@ -103,6 +112,48 @@ type Config struct {
 	// VKWelcomeAttachment is an optional pre-uploaded VK attachment sent with
 	// the /start menu, e.g. photo-239332376_123_accesskey.
 	VKWelcomeAttachment string
+	// VKMenuButtonMode controls inline product menu buttons: "callback"
+	// prevents user echo messages; "text" keeps legacy behavior.
+	VKMenuButtonMode string
+	// VKUnroutedTextMode controls plain VK text outside an active text mode:
+	// "reply" asks the user to choose a mode, "silent" ignores it, and "gpt"
+	// preserves the legacy behavior where any text creates a GPT job.
+	VKUnroutedTextMode string
+	// VK menu feature flags hide individual product-menu buttons without
+	// removing the underlying screens. Defaults are all enabled.
+	VKMenuVideoEnabled                bool
+	VKMenuImageEnabled                bool
+	VKMenuGPTEnabled                  bool
+	VKMenuStudentsEnabled             bool
+	VKMenuAccountEnabled              bool
+	VKMenuTopUpEnabled                bool
+	VKMenuVideoSora2Enabled           bool
+	VKMenuVideoSora2StartEnabled      bool
+	VKMenuVideoSora2ExamplesEnabled   bool
+	VKMenuVideoKling21Enabled         bool
+	VKMenuVideoKling21StartEnabled    bool
+	VKMenuVideoKling21ExamplesEnabled bool
+	VKMenuVideoSeedance1Enabled       bool
+	VKMenuVideoSeedance1LiteEnabled   bool
+	VKMenuVideoSeedance1ProEnabled    bool
+	VKMenuVideoHaiuo02Enabled         bool
+	VKMenuVideoHaiuo02StandardEnabled bool
+	VKMenuVideoHaiuo02FastEnabled     bool
+	VKMenuImageTextEnabled            bool
+	VKMenuImageReferenceEnabled       bool
+	VKMenuStudentsSolverEnabled       bool
+	VKMenuStudentsPresentationEnabled bool
+	VKMenuStudentsReportEnabled       bool
+	VKMenuStudentsQAEnabled           bool
+
+	// VKAppID is the VK Mini App application identifier.
+	VKAppID string
+	// VKAppSecret is the VK Mini App protected key used to verify launch-params
+	// signatures. When empty the signature check is skipped (dev/mock mode).
+	VKAppSecret string
+	// MiniAppLaunchParamsMaxAge is the maximum age of VK launch params before
+	// they are rejected. Zero disables the age check.
+	MiniAppLaunchParamsMaxAge time.Duration
 
 	// ArtifactURLTTL is how long signed artifact delivery URLs stay valid.
 	ArtifactURLTTL time.Duration
@@ -139,6 +190,12 @@ func (c Config) IsProduction() bool {
 // and the admin API must be set. Returns a descriptive error otherwise.
 func (c Config) Validate() error {
 	var missing []string
+	if mode := strings.ToLower(strings.TrimSpace(c.VKMenuButtonMode)); mode != "" && mode != "callback" && mode != "text" {
+		return fmt.Errorf("config: VK_MENU_BUTTON_MODE must be callback or text")
+	}
+	if mode := strings.ToLower(strings.TrimSpace(c.VKUnroutedTextMode)); mode != "" && mode != "reply" && mode != "silent" && mode != "gpt" {
+		return fmt.Errorf("config: VK_UNROUTED_TEXT_MODE must be reply, silent, or gpt")
+	}
 	if c.IsProduction() {
 		if c.VKSecret == "" {
 			missing = append(missing, "VK_SECRET")
@@ -149,9 +206,17 @@ func (c Config) Validate() error {
 		if c.VKConfirmationToken == "" || c.VKConfirmationToken == "dev-confirmation" {
 			missing = append(missing, "VK_CONFIRMATION_TOKEN")
 		}
+		// The Mini App BFF must verify launch-param signatures for real in
+		// production; an empty secret would silently disable the check.
+		if c.VKAppSecret == "" {
+			missing = append(missing, "VK_APP_SECRET")
+		}
 	}
 	if c.usesOpenAI() && c.OpenAIAPIKey == "" {
 		missing = append(missing, "OPENAI_API_KEY")
+	}
+	if c.usesDeepInfra() && c.DeepInfraAPIKey == "" {
+		missing = append(missing, "DEEPINFRA_API_KEY")
 	}
 	if c.VKDeliveryMode == "real" && c.VKAccessToken == "" {
 		missing = append(missing, "VK_ACCESS_TOKEN")
@@ -203,8 +268,10 @@ func Load() Config {
 
 		ModerationExtraTerms: envList("MODERATION_EXTRA_TERMS"),
 
-		WebhookRateLimitRPS:   envFloat("WEBHOOK_RATE_LIMIT_RPS", 20),
-		WebhookRateLimitBurst: envInt("WEBHOOK_RATE_LIMIT_BURST", 40),
+		WebhookRateLimitRPS:      envFloat("WEBHOOK_RATE_LIMIT_RPS", 20),
+		WebhookRateLimitBurst:    envInt("WEBHOOK_RATE_LIMIT_BURST", 40),
+		MiniAppJobRateLimitRPS:   envFloat("MINIAPP_JOB_RATE_LIMIT_RPS", 1),
+		MiniAppJobRateLimitBurst: envInt("MINIAPP_JOB_RATE_LIMIT_BURST", 5),
 
 		DBMaxConns:    int32(envInt("DB_MAX_CONNS", 10)),
 		DBMinConns:    int32(envInt("DB_MIN_CONNS", 0)),
@@ -227,15 +294,49 @@ func Load() Config {
 		OpenAITextPrice:       int64(envInt("OPENAI_TEXT_PRICE", 1)),
 		OpenAIImagePrice:      int64(envInt("OPENAI_IMAGE_PRICE", 10)),
 		OpenAIVideoPrice:      int64(envInt("OPENAI_VIDEO_PRICE", 50)),
+		DeepInfraAPIKey:       env("DEEPINFRA_API_KEY", ""),
+		DeepInfraBaseURL:      env("DEEPINFRA_BASE_URL", "https://api.deepinfra.com/v1/openai"),
+		DeepInfraTextModel:    env("DEEPINFRA_TEXT_MODEL", "deepseek-ai/DeepSeek-V4-Flash"),
+		DeepInfraTextPrice:    int64(envInt("DEEPINFRA_TEXT_PRICE", 1)),
 		ModerationProvider:    env("MODERATION_PROVIDER", "keyword"),
 		OpenAIModerationModel: env("OPENAI_MODERATION_MODEL", "omni-moderation-latest"),
 		ArtifactScanner:       env("ARTIFACT_SCANNER", "none"),
 
-		VKDeliveryMode:      env("VK_DELIVERY_MODE", "mock"),
-		VKAccessToken:       env("VK_ACCESS_TOKEN", ""),
-		VKAPIVersion:        env("VK_API_VERSION", "5.199"),
-		VKAPIBaseURL:        env("VK_API_BASE_URL", "https://api.vk.com/method"),
-		VKWelcomeAttachment: env("VK_WELCOME_ATTACHMENT", ""),
+		VKDeliveryMode:                    env("VK_DELIVERY_MODE", "mock"),
+		VKAccessToken:                     env("VK_ACCESS_TOKEN", ""),
+		VKAPIVersion:                      env("VK_API_VERSION", "5.199"),
+		VKAPIBaseURL:                      env("VK_API_BASE_URL", "https://api.vk.com/method"),
+		VKWelcomeAttachment:               env("VK_WELCOME_ATTACHMENT", ""),
+		VKMenuButtonMode:                  env("VK_MENU_BUTTON_MODE", "callback"),
+		VKUnroutedTextMode:                env("VK_UNROUTED_TEXT_MODE", "reply"),
+		VKMenuVideoEnabled:                envBool("VK_MENU_VIDEO_ENABLED", true),
+		VKMenuImageEnabled:                envBool("VK_MENU_IMAGE_ENABLED", true),
+		VKMenuGPTEnabled:                  envBool("VK_MENU_GPT_ENABLED", true),
+		VKMenuStudentsEnabled:             envBool("VK_MENU_STUDENTS_ENABLED", true),
+		VKMenuAccountEnabled:              envBool("VK_MENU_ACCOUNT_ENABLED", true),
+		VKMenuTopUpEnabled:                envBool("VK_MENU_TOP_UP_ENABLED", true),
+		VKMenuVideoSora2Enabled:           envBool("VK_MENU_VIDEO_SORA2_ENABLED", true),
+		VKMenuVideoSora2StartEnabled:      envBool("VK_MENU_VIDEO_SORA2_START_ENABLED", true),
+		VKMenuVideoSora2ExamplesEnabled:   envBool("VK_MENU_VIDEO_SORA2_EXAMPLES_ENABLED", true),
+		VKMenuVideoKling21Enabled:         envBool("VK_MENU_VIDEO_KLING21_ENABLED", true),
+		VKMenuVideoKling21StartEnabled:    envBool("VK_MENU_VIDEO_KLING21_START_ENABLED", true),
+		VKMenuVideoKling21ExamplesEnabled: envBool("VK_MENU_VIDEO_KLING21_EXAMPLES_ENABLED", true),
+		VKMenuVideoSeedance1Enabled:       envBool("VK_MENU_VIDEO_SEEDANCE1_ENABLED", true),
+		VKMenuVideoSeedance1LiteEnabled:   envBool("VK_MENU_VIDEO_SEEDANCE1_LITE_ENABLED", true),
+		VKMenuVideoSeedance1ProEnabled:    envBool("VK_MENU_VIDEO_SEEDANCE1_PRO_ENABLED", true),
+		VKMenuVideoHaiuo02Enabled:         envBool("VK_MENU_VIDEO_HAIUO02_ENABLED", true),
+		VKMenuVideoHaiuo02StandardEnabled: envBool("VK_MENU_VIDEO_HAIUO02_STANDARD_ENABLED", true),
+		VKMenuVideoHaiuo02FastEnabled:     envBool("VK_MENU_VIDEO_HAIUO02_FAST_ENABLED", true),
+		VKMenuImageTextEnabled:            envBool("VK_MENU_IMAGE_TEXT_ENABLED", true),
+		VKMenuImageReferenceEnabled:       envBool("VK_MENU_IMAGE_REFERENCE_ENABLED", true),
+		VKMenuStudentsSolverEnabled:       envBool("VK_MENU_STUDENTS_SOLVER_ENABLED", true),
+		VKMenuStudentsPresentationEnabled: envBool("VK_MENU_STUDENTS_PRESENTATION_ENABLED", true),
+		VKMenuStudentsReportEnabled:       envBool("VK_MENU_STUDENTS_REPORT_ENABLED", true),
+		VKMenuStudentsQAEnabled:           envBool("VK_MENU_STUDENTS_QA_ENABLED", true),
+
+		VKAppID:                   env("VK_APP_ID", ""),
+		VKAppSecret:               env("VK_APP_SECRET", ""),
+		MiniAppLaunchParamsMaxAge: envDuration("MINIAPP_LAUNCH_PARAMS_MAX_AGE", time.Hour),
 
 		ArtifactURLTTL:        envDuration("ARTIFACT_URL_TTL", time.Hour),
 		SignedDelivery:        envBool("SIGNED_DELIVERY", false),
@@ -260,6 +361,18 @@ func (c Config) usesOpenAI() bool {
 	}
 	for _, provider := range c.ProviderChain {
 		if strings.EqualFold(provider, "openai") {
+			return true
+		}
+	}
+	return false
+}
+
+func (c Config) usesDeepInfra() bool {
+	if strings.EqualFold(c.Provider, "deepinfra") {
+		return true
+	}
+	for _, provider := range c.ProviderChain {
+		if strings.EqualFold(provider, "deepinfra") {
 			return true
 		}
 	}

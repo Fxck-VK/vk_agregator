@@ -2,8 +2,10 @@ package worker
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -17,6 +19,8 @@ import (
 	"vk-ai-aggregator/internal/platform/queue"
 	"vk-ai-aggregator/internal/platform/tracing"
 )
+
+const vkTextChunkLimit = 3500
 
 // ObjectStore fetches stored artifact bytes (needed to deliver text results).
 type ObjectStore interface {
@@ -42,6 +46,9 @@ type DeliveryDeps struct {
 	Artifacts  domain.ArtifactRepository
 	Objects    ObjectStore
 	VK         vkdelivery.Client
+	// VKControl edits control/product messages. If nil and VK also implements
+	// vkdelivery.ControlClient, the worker uses VK as the control client.
+	VKControl vkdelivery.ControlClient
 	// VKUploader uploads raw photo/video artifact bytes to VK before send when
 	// available. If nil and VK also implements vkdelivery.MediaUploader, the
 	// worker uses VK as the uploader.
@@ -74,6 +81,7 @@ type DeliveryWorker struct {
 	artifacts   domain.ArtifactRepository
 	objects     ObjectStore
 	vk          vkdelivery.Client
+	vkControl   vkdelivery.ControlClient
 	vkUploader  vkdelivery.MediaUploader
 	billing     DeliveryBiller
 	streams     StreamPublisher
@@ -109,12 +117,19 @@ func NewDeliveryWorker(d DeliveryDeps) *DeliveryWorker {
 			uploader = up
 		}
 	}
+	control := d.VKControl
+	if control == nil {
+		if c, ok := d.VK.(vkdelivery.ControlClient); ok {
+			control = c
+		}
+	}
 	return &DeliveryWorker{
 		jobs:        d.Jobs,
 		deliveries:  d.Deliveries,
 		artifacts:   d.Artifacts,
 		objects:     d.Objects,
 		vk:          d.VK,
+		vkControl:   control,
 		vkUploader:  uploader,
 		billing:     d.Billing,
 		streams:     d.Streams,
@@ -242,6 +257,11 @@ func (w *DeliveryWorker) ensureDelivery(ctx context.Context, job *domain.Job) (*
 
 // buildDelivery assembles a pending delivery from the job's output artifact.
 func (w *DeliveryWorker) buildDelivery(ctx context.Context, job *domain.Job, key string) (*domain.Delivery, error) {
+	var params promptParams
+	if len(job.Params) > 0 {
+		_ = json.Unmarshal(job.Params, &params)
+	}
+
 	del := &domain.Delivery{
 		JobID:          job.ID,
 		UserID:         job.UserID,
@@ -283,6 +303,10 @@ func (w *DeliveryWorker) buildDelivery(ctx context.Context, job *domain.Job, key
 	default:
 		del.Type = domain.DeliveryTypeMessage
 		del.Text = w.textContent(ctx, art)
+		if params.VKPlaceholderMessageID > 0 {
+			msgID := params.VKPlaceholderMessageID
+			del.VKMessageID = &msgID
+		}
 	}
 	return del, nil
 }
@@ -318,7 +342,7 @@ func (w *DeliveryWorker) send(ctx context.Context, del *domain.Delivery) error {
 	case domain.DeliveryTypeVideo:
 		res, err = w.vk.SendVideo(ctx, del.VKPeerID, del.VKRandomID, del.Attachment, del.Text)
 	default:
-		res, err = w.vk.SendText(ctx, del.VKPeerID, del.VKRandomID, del.Text)
+		res, err = w.sendTextDelivery(ctx, del)
 	}
 	if err != nil {
 		tracing.RecordError(span, err)
@@ -331,6 +355,64 @@ func (w *DeliveryWorker) send(ctx context.Context, del *domain.Delivery) error {
 	del.ErrorCode = ""
 	del.ErrorMessage = ""
 	return w.deliveries.Update(ctx, del)
+}
+
+func (w *DeliveryWorker) sendTextDelivery(ctx context.Context, del *domain.Delivery) (vkdelivery.SendResult, error) {
+	chunks := splitVKText(del.Text)
+	if len(chunks) == 0 {
+		chunks = []string{""}
+	}
+
+	var first vkdelivery.SendResult
+	var err error
+	if del.VKMessageID != nil && *del.VKMessageID > 0 && w.vkControl != nil {
+		first, err = w.vkControl.EditMessage(ctx, del.VKPeerID, *del.VKMessageID, vkdelivery.Message{Text: chunks[0]})
+	} else {
+		first, err = w.vk.SendText(ctx, del.VKPeerID, del.VKRandomID, chunks[0])
+	}
+	if err != nil {
+		return vkdelivery.SendResult{}, err
+	}
+
+	for i := 1; i < len(chunks); i++ {
+		randomID := vkdelivery.DeterministicRandomID(del.IdempotencyKey + ":chunk:" + strconv.Itoa(i))
+		if _, err := w.vk.SendText(ctx, del.VKPeerID, randomID, chunks[i]); err != nil {
+			return vkdelivery.SendResult{}, err
+		}
+	}
+	return first, nil
+}
+
+func splitVKText(text string) []string {
+	if text == "" {
+		return nil
+	}
+	runes := []rune(text)
+	if len(runes) <= vkTextChunkLimit {
+		return []string{text}
+	}
+
+	var chunks []string
+	for len(runes) > 0 {
+		n := vkTextChunkLimit
+		if len(runes) < n {
+			n = len(runes)
+		}
+		cut := n
+		for i := n - 1; i > 0; i-- {
+			switch runes[i] {
+			case '\n', ' ', '\t':
+				cut = i + 1
+				i = 0
+			}
+		}
+		chunk := strings.TrimSpace(string(runes[:cut]))
+		if chunk != "" {
+			chunks = append(chunks, chunk)
+		}
+		runes = runes[cut:]
+	}
+	return chunks
 }
 
 // sleepBackoff waits for the configured backoff before the next retry, honoring

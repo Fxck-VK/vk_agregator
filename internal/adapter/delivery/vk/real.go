@@ -81,6 +81,50 @@ func (c *HTTPClient) SendMessage(ctx context.Context, peerID, randomID int64, ms
 	return c.send(ctx, peerID, randomID, msg)
 }
 
+// EditMessage edits an existing VK message with optional attachment and
+// keyboard. VK returns a boolean-like response for messages.edit, so the
+// normalized result keeps the caller-provided message id.
+func (c *HTTPClient) EditMessage(ctx context.Context, peerID, messageID int64, msg Message) (SendResult, error) {
+	form := url.Values{}
+	form.Set("peer_id", strconv.FormatInt(peerID, 10))
+	form.Set("message_id", strconv.FormatInt(messageID, 10))
+	if msg.Text != "" {
+		form.Set("message", msg.Text)
+	}
+	if msg.Attachment != "" {
+		form.Set("attachment", msg.Attachment)
+	}
+	if msg.Keyboard != nil {
+		keyboard, err := encodeKeyboard(msg.Keyboard)
+		if err != nil {
+			return SendResult{}, err
+		}
+		form.Set("keyboard", keyboard)
+	}
+
+	var decoded vkMessageResponse
+	if err := c.api(ctx, "messages.edit", form, &decoded); err != nil {
+		return SendResult{}, err
+	}
+	return SendResult{MessageID: messageID, PeerID: peerID}, nil
+}
+
+// AnswerMessageEvent acknowledges a VK callback button click. An empty
+// event_data is enough to stop the loading animation without showing a snackbar.
+func (c *HTTPClient) AnswerMessageEvent(ctx context.Context, eventID string, userID, peerID int64) error {
+	form := url.Values{}
+	form.Set("event_id", eventID)
+	form.Set("user_id", strconv.FormatInt(userID, 10))
+	form.Set("peer_id", strconv.FormatInt(peerID, 10))
+	form.Set("event_data", "")
+
+	var decoded vkMessageResponse
+	if err := c.api(ctx, "messages.sendMessageEventAnswer", form, &decoded); err != nil {
+		return err
+	}
+	return nil
+}
+
 // vkMessageResponse is the VK messages.send envelope. On success response holds
 // the message id; on failure error is populated.
 type vkMessageResponse struct {
@@ -166,9 +210,13 @@ func encodeKeyboard(k *Keyboard) (string, error) {
 	for _, row := range k.Buttons {
 		vkRow := make([]vkKeyboardButton, 0, len(row))
 		for _, button := range row {
+			actionType := button.ActionType
+			if actionType == "" {
+				actionType = "text"
+			}
 			vkRow = append(vkRow, vkKeyboardButton{
 				Action: vkKeyboardAction{
-					Type:    "text",
+					Type:    actionType,
 					Label:   button.Label,
 					Payload: button.Payload,
 				},

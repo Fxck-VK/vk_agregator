@@ -17,6 +17,7 @@ import (
 	"time"
 
 	vkdelivery "vk-ai-aggregator/internal/adapter/delivery/vk"
+	"vk-ai-aggregator/internal/adapter/provider/deepinfra"
 	"vk-ai-aggregator/internal/adapter/provider/mock"
 	"vk-ai-aggregator/internal/adapter/provider/openai"
 	redisqueue "vk-ai-aggregator/internal/adapter/queue/redis"
@@ -114,6 +115,14 @@ func main() {
 	hasMockProvider := false
 	for _, name := range cfg.ProviderChain {
 		switch strings.ToLower(strings.TrimSpace(name)) {
+		case "deepinfra":
+			providerList = append(providerList, deepinfra.New(deepinfra.Config{
+				APIKey:    cfg.DeepInfraAPIKey,
+				BaseURL:   cfg.DeepInfraBaseURL,
+				TextModel: cfg.DeepInfraTextModel,
+				TextPrice: cfg.DeepInfraTextPrice,
+			}))
+			logger.Info("registered deepinfra provider")
 		case "openai":
 			providerList = append(providerList, openai.New(openai.Config{
 				APIKey:       cfg.OpenAIAPIKey,

@@ -68,6 +68,9 @@ Override these values when needed:
 | `S3_USE_SSL` | `false` | HTTPS to S3 |
 | `VK_CONFIRMATION_TOKEN` | `dev-confirmation` | Returned for VK `confirmation` |
 | `VK_SECRET` | `` (empty = no check) | VK callback secret |
+| `VK_APP_ID` | `` | VK Mini App id (informational for BFF/dev setup) |
+| `VK_APP_SECRET` | `` | VK Mini App protected key; required in production |
+| `MINIAPP_LAUNCH_PARAMS_MAX_AGE` | `1h` | Maximum accepted VK Mini App launch-param age |
 | `ADMIN_TOKEN` | `` (empty = open) | Admin API `X-Admin-Token` |
 | `WORKER_GROUP` / `WORKER_CONSUMER` | `workers` / hostname | Consumer group identity |
 | `APP_ENV` | `development` | `production` enforces fail-closed secrets |
@@ -75,8 +78,13 @@ Override these values when needed:
 | `RETRY_BASE_DELAY` / `RETRY_MAX_DELAY` | `500ms` / `30s` | Exponential backoff bounds |
 | `MODERATION_EXTRA_TERMS` | `` | Comma-separated extra blocklist terms |
 | `WEBHOOK_RATE_LIMIT_RPS` / `WEBHOOK_RATE_LIMIT_BURST` | `20` / `40` | Per-IP webhook rate limit |
-| `PROVIDER` | `mock` | Primary provider adapter: `mock` or `openai` |
-| `PROVIDER_CHAIN` | value of `PROVIDER` | Comma-separated router/fallback chain, e.g. `openai,mock` |
+| `PROVIDER` | `mock` | Primary provider adapter: `mock`, `openai`, or `deepinfra` |
+| `PROVIDER_CHAIN` | value of `PROVIDER` | Comma-separated router/fallback chain, e.g. `openai,mock` or `deepinfra,mock` |
+| `DEEPINFRA_API_KEY` | `` | Required when DeepInfra provider is enabled |
+| `DEEPINFRA_BASE_URL` | `https://api.deepinfra.com/v1/openai` | DeepInfra OpenAI-compatible API root |
+| `DEEPINFRA_TEXT_MODEL` | `deepseek-ai/DeepSeek-V4-Flash` | DeepInfra text model code |
+| `DEEPINFRA_TEXT_PRICE` | `1` | Internal provider-router cost estimate |
+| `MINIAPP_JOB_RATE_LIMIT_RPS` / `MINIAPP_JOB_RATE_LIMIT_BURST` | `1` / `5` | Per-user Mini App `POST /miniapp/jobs` rate limit |
 | `OPENAI_API_KEY` | `` | Required when OpenAI provider/moderation/scanner is enabled |
 | `OPENAI_BASE_URL` | `https://api.openai.com/v1` | OpenAI API root |
 | `OPENAI_TEXT_MODEL` / `OPENAI_IMAGE_MODEL` | OpenAI defaults | OpenAI text/image model codes |
@@ -90,6 +98,9 @@ Override these values when needed:
 | `VK_ACCESS_TOKEN` / `VK_API_VERSION` | `` / `5.199` | Required for real VK send/upload and API-side `/start` control menu responses |
 | `VK_API_BASE_URL` | `https://api.vk.com/method` | VK API method root |
 | `VK_WELCOME_ATTACHMENT` | `` | Optional pre-uploaded VK photo/video attachment sent with `/start` menu |
+| `VK_MENU_BUTTON_MODE` | `callback` | Inline menu buttons: `callback` hides user echo messages; `text` keeps legacy text-button behavior |
+| `VK_UNROUTED_TEXT_MODE` | `reply` | Plain text outside GPT mode: `reply` sends text-only hint to use the menu above, `silent` sends nothing, `gpt` preserves legacy text-to-GPT behavior |
+| `VK_MENU_*_ENABLED` | `true` | Per-button VK product menu flags; set to `false` to hide a button without deleting its screen |
 | `SIGNED_DELIVERY` / `ARTIFACT_URL_TTL` | `false` / `1h` | Deliver media through signed artifact URLs |
 | `ARTIFACT_RETENTION_DAYS` | `0` | Optional S3 lifecycle expiry |
 | `PRICES` | `` | Price overrides, e.g. `text_generate=2,image_generate=12` |
@@ -105,12 +116,13 @@ Override these values when needed:
 | `OTEL_SERVICE_NAME` | `vk-ai-aggregator` | OpenTelemetry service name prefix |
 
 > Production note: set `APP_ENV=production`; the API then **refuses to start**
-> unless `VK_SECRET`, `ADMIN_TOKEN`, and a non-default `VK_CONFIRMATION_TOKEN`
+> unless `VK_SECRET`, `ADMIN_TOKEN`, `VK_APP_SECRET`, and a non-default `VK_CONFIRMATION_TOKEN`
 > are set (fail-closed, `AUDIT.md` S1). Both `cmd/api` and `cmd/worker` run the
 > same validation. `PROVIDER=openai`, `PROVIDER_CHAIN` containing `openai`,
 > `MODERATION_PROVIDER=openai`, or `ARTIFACT_SCANNER=openai` require
-> `OPENAI_API_KEY`; `VK_DELIVERY_MODE=real` requires `VK_ACCESS_TOKEN` in any
-> environment.
+> `OPENAI_API_KEY`; `PROVIDER=deepinfra` or `PROVIDER_CHAIN` containing
+> `deepinfra` requires `DEEPINFRA_API_KEY`; `VK_DELIVERY_MODE=real` requires
+> `VK_ACCESS_TOKEN` in any environment.
 
 ### Hardening features (post-release)
 
@@ -235,6 +247,10 @@ PROVIDER=openai OPENAI_API_KEY=... go run ./cmd/worker
 # OpenAI primary with mock fallback through router/circuit breaker.
 PROVIDER_CHAIN=openai,mock OPENAI_API_KEY=... go run ./cmd/worker
 
+# DeepInfra DeepSeek-V4-Flash text generation with mock fallback for other
+# modalities.
+PROVIDER_CHAIN=deepinfra,mock DEEPINFRA_API_KEY=... go run ./cmd/worker
+
 # API-side VK /start menu responses with keyboard.
 VK_ACCESS_TOKEN=... go run ./cmd/api
 
@@ -244,6 +260,12 @@ VK_DELIVERY_MODE=real VK_ACCESS_TOKEN=... go run ./cmd/worker
 # Real output moderation and text/image artifact scanning.
 MODERATION_PROVIDER=openai ARTIFACT_SCANNER=openai OPENAI_API_KEY=... go run ./cmd/worker
 ```
+
+Text provider adapters add an internal instruction to the user's prompt: answer
+as `НейроХаб бот`, stay concise (`<= 3000` characters), and do not reveal
+provider/model/backend details. This reduces VK overlong-message failures,
+while delivery still chunks longer text outputs if the provider ignores the
+instruction.
 
 Expected log:
 ```
@@ -290,16 +312,79 @@ curl -s -X POST localhost:8080/webhooks/vk \
 ```
 
 Expected: inbound event + command are persisted, no billable job is created.
-When `cmd/api` has `VK_ACCESS_TOKEN`, it sends the Super GPT welcome text with
+When `cmd/api` has `VK_ACCESS_TOKEN`, it sends the НейроХаб welcome text with
 a VK inline keyboard under the message. Set `VK_WELCOME_ATTACHMENT` to a
 pre-uploaded VK attachment string if the welcome message should include a
 banner image.
+Clicking `🎬 Создать видео` opens the video model picker with `Sora 2`,
+`Kling v2.1`, `Seedance 1`, `Haiuo v0.2`, and `⬅️ Назад`. `Sora 2` and
+`Kling v2.1` open detail screens with description, prompt example, instruction
+link, `😀 Начать генерацию`, `ℹ️ Примеры`, and `⬅️ Назад`. `Seedance 1` opens
+`Seedance 1 Lite` / `Seedance 1 Pro`; `Haiuo v0.2` opens `Haiuo v0.2 Обычный`
+/ `Haiuo v0.2 Fast`. These video submenu buttons are control-only for now and
+must not create billable jobs.
+Clicking `🖼️ Создать фото` opens the photo instruction screen directly because
+there is one main image model in the VK UX. It shows `Фото по тексту`,
+`Фото с референсом`, and `⬅️ Назад`; those mode buttons are control-only until
+stateful image mode selection is wired. Clicking `💬 Спросить у НейроХаб` sends the
+`SUPER GPT активен` prompt screen, sets process-local GPT mode for that peer,
+and also does not enqueue a job. The next plain text or sticker from the same
+peer becomes a `text.ask` job; the API sends `GPT думает...`, stores that VK
+message id in `job.Params`, and the delivery worker edits the same message to
+the final provider answer when the text artifact is delivered. If the answer is
+too long for one VK message, the first chunk replaces the placeholder and the
+remaining chunks are sent as follow-up messages with deterministic `random_id`.
+Opening another menu screen clears GPT mode. Legacy `VK_UNROUTED_TEXT_MODE=gpt`
+keeps normal text delivery without this placeholder/edit UX.
+Clicking `🎁 Студентам и школьникам` opens the study submenu:
+`Решальник задач`, `Генерация презентаций (скоро)`,
+`Создание рефератов (скоро)`, `❓ Ответы на вопросы`, and `⬅️ Назад`.
+Those buttons are control-only until the corresponding scenario state is wired.
+Inline menu navigation is hybrid: while the last bot message is still the
+active menu, inline button clicks edit that message through VK `messages.edit`
+instead of adding new bot messages. The persistent lower `Показать меню` button
+always sends a fresh menu at the bottom of the chat. With default
+`VK_UNROUTED_TEXT_MODE=reply`, plain text outside GPT mode records an `unknown`
+command and sends only
+`Выберите режим в меню выше.` instead of duplicating the inline menu or creating
+a billable job; `silent` records it without a response, and `gpt` restores the
+legacy any-text-to-GPT behavior. If VK rejects an edit, the API falls back to
+sending a new menu message.
+By default, inline menu buttons use VK `callback` actions
+(`VK_MENU_BUTTON_MODE=callback`), so clicking `Создать видео`, `Назад`, etc.
+does not create a user message in the chat. VK Callback API must have the
+`message_event` / callback-button event type enabled. To return to the old
+behavior where button labels are sent as user messages, set
+`VK_MENU_BUTTON_MODE=text` and restart `cmd/api`.
+For every callback-button click, the API sends a blank
+`messages.sendMessageEventAnswer` through `vkdelivery.ControlClient`; this is
+what clears the loading spinner in the VK client.
+Each product-menu button is guarded by a boolean env flag. Defaults are `true`.
+Set a flag to `false` and restart `cmd/api` to hide the button. Main menu flags:
+`VK_MENU_VIDEO_ENABLED`, `VK_MENU_IMAGE_ENABLED`, `VK_MENU_GPT_ENABLED`,
+`VK_MENU_STUDENTS_ENABLED`, `VK_MENU_ACCOUNT_ENABLED`,
+`VK_MENU_TOP_UP_ENABLED`. Nested flags:
+`VK_MENU_VIDEO_SORA2_ENABLED`, `VK_MENU_VIDEO_SORA2_START_ENABLED`,
+`VK_MENU_VIDEO_SORA2_EXAMPLES_ENABLED`, `VK_MENU_VIDEO_KLING21_ENABLED`,
+`VK_MENU_VIDEO_KLING21_START_ENABLED`,
+`VK_MENU_VIDEO_KLING21_EXAMPLES_ENABLED`,
+`VK_MENU_VIDEO_SEEDANCE1_ENABLED`, `VK_MENU_VIDEO_SEEDANCE1_LITE_ENABLED`,
+`VK_MENU_VIDEO_SEEDANCE1_PRO_ENABLED`, `VK_MENU_VIDEO_HAIUO02_ENABLED`,
+`VK_MENU_VIDEO_HAIUO02_STANDARD_ENABLED`, `VK_MENU_VIDEO_HAIUO02_FAST_ENABLED`,
+`VK_MENU_IMAGE_TEXT_ENABLED`, `VK_MENU_IMAGE_REFERENCE_ENABLED`,
+`VK_MENU_STUDENTS_SOLVER_ENABLED`, `VK_MENU_STUDENTS_PRESENTATION_ENABLED`,
+`VK_MENU_STUDENTS_REPORT_ENABLED`, `VK_MENU_STUDENTS_QA_ENABLED`.
+If a user clicks a disabled stale button from an older message, the handler
+falls back to the current main menu and still creates no job.
 
 ### VK message → full pipeline
 ```bash
-# text
+# enable text/GPT mode (control command, no job)
 curl -s -X POST localhost:8080/webhooks/vk -H 'Content-Type: application/json' \
-  -d '{"type":"message_new","event_id":"evt-1","object":{"message":{"from_id":777,"peer_id":777,"text":"hello world"}}}'
+  -d '{"type":"message_new","event_id":"text-mode-1","object":{"message":{"from_id":777,"peer_id":777,"text":"💬 Спросить у НейроХаб","payload":"{\"command\":\"menu.text\"}"}}}'
+# text job after GPT mode is active
+curl -s -X POST localhost:8080/webhooks/vk -H 'Content-Type: application/json' \
+  -d '{"type":"message_new","event_id":"text-1","object":{"message":{"from_id":777,"peer_id":777,"text":"hello world"}}}'
 # image
 curl -s -X POST localhost:8080/webhooks/vk -H 'Content-Type: application/json' \
   -d '{"type":"message_new","event_id":"evt-2","object":{"message":{"from_id":777,"peer_id":777,"text":"/image a red cat"}}}'
@@ -360,6 +445,19 @@ go test ./internal/worker/ -run TestEndToEnd -v  # full VK→…→Capture
   `VK_ACCESS_TOKEN` and the community has bot features enabled in VK community
   message settings. VK returns `error_code=912` when keyboards are disabled; the
   API falls back to sending the welcome text without keyboard.
+- Menu clicks keep creating new bot messages: this is expected after the user
+  has sent plain text after an API restart, after the active menu pointer was
+  lost, or after an edit rejection from VK. With `VK_UNROUTED_TEXT_MODE=reply`,
+  plain text outside GPT mode should only post `Выберите режим в меню выше.`
+  without duplicating the menu keyboard. Active-menu/dialog-mode tracking is
+  process-local in the current Beta implementation.
+- Callback menu buttons do nothing: enable the VK Callback API event type for
+  callback-button clicks (`message_event`) and confirm `VK_MENU_BUTTON_MODE` is
+  `callback`. If you need a quick fallback, set `VK_MENU_BUTTON_MODE=text` and
+  restart `cmd/api`.
+- Callback button keeps spinning: check `api-live.log` for
+  `vk message_event answer failed`. VK requires `messages.sendMessageEventAnswer`
+  for every callback click; menu edit/send alone is not enough.
 - Banner is absent: set `VK_WELCOME_ATTACHMENT` to an already uploaded VK
   attachment string (`photo...`, `video...`). The API does not upload the banner
   image itself yet.
@@ -436,3 +534,88 @@ Shutdown order: Workers → API → (optionally) Infrastructure.
 
 **Verify after rollback**
 - `/health` = 200; `migrate status` matches the deployed version; send a smoke webhook and confirm a job reaches `succeeded`.
+
+---
+
+## 12. VK Mini App BFF
+
+The Mini App backend-for-frontend (BFF) is part of `cmd/api`. It listens on the
+`/miniapp/*` path prefix and authenticates every request using VK launch-params
+signature verification (HMAC-SHA256).
+
+### New environment variables
+
+| Variable | Default | Required |
+|---|---|---|
+| `VK_APP_SECRET` | `""` (skip check in dev) | **Yes in production (fail-closed)** |
+| `VK_APP_ID` | `""` | Used by the tunnel; informational for the BFF |
+| `MINIAPP_LAUNCH_PARAMS_MAX_AGE` | `1h` | Optional |
+| `MINIAPP_JOB_RATE_LIMIT_RPS` / `MINIAPP_JOB_RATE_LIMIT_BURST` | `1` / `5` | Optional |
+
+When `VK_APP_SECRET` is set the launch-params HMAC-SHA256 signature is verified
+for real: invalid, missing, or expired (`vk_ts` older than
+`MINIAPP_LAUNCH_PARAMS_MAX_AGE`) params return `401` with no detail, and the dev
+`X-VK-User-ID` bypass is disabled. When `VK_APP_SECRET` is empty the signature
+check is skipped (dev/mock convenience) but `vk_user_id` is still required. In
+**production** an empty `VK_APP_SECRET` fails startup (fail-closed).
+Job creation through `POST /miniapp/jobs` has a separate per-verified-user
+in-memory token bucket; exceeded limits return `429` with `Retry-After`.
+Artifact bytes from `GET /miniapp/artifacts/{id}` are served only for the
+verified owner after the producing job is `succeeded` and output moderation has
+allowed the artifact; otherwise the BFF returns `404`.
+
+### Local development without real VK
+
+```powershell
+# Start infrastructure + API in mock mode:
+docker compose up -d
+go run ./cmd/migrate up
+. .\.env.ps1
+go run ./cmd/api
+
+# Call BFF endpoints directly (X-VK-User-ID header accepted in dev mode
+# when VK_APP_SECRET is not set):
+curl -s http://localhost:8080/miniapp/balance -H "X-Launch-Params: vk_user_id=777"
+curl -s -X POST http://localhost:8080/miniapp/jobs \
+  -H "Content-Type: application/json" \
+  -H "X-Launch-Params: vk_user_id=777" \
+  -d '{"operation":"text_generate","prompt":"hello world"}'
+```
+
+### Frontend dev server
+
+```powershell
+cd web\miniapp
+npm install
+npm run dev
+# → http://localhost:5173/?vk_user_id=777
+```
+
+The Vite proxy routes `/miniapp/*` to `http://localhost:8080`.
+
+### Open the Mini App inside VK via an HTTPS tunnel (cloudflared)
+
+VK Tunnel is under maintenance (since 2025-10-02), so the obsolete
+`@vkontakte/vk-tunnel` dev dependency and npm `tunnel` script were removed.
+Expose the local Vite dev server over HTTPS with **cloudflared**. The Vite dev config (`host: true`, `allowedHosts: true`,
+`hmr.protocol: wss`, `/miniapp` + `/api` proxy) already accepts the rotating
+tunnel domain and keeps backend calls same-origin (no mixed content).
+
+```powershell
+# 1. API + worker running (mock) and the Vite dev server up (npm run dev).
+# 2. Tunnel the dev server (prints a fresh https://<random>.trycloudflare.com URL):
+cloudflared tunnel --protocol http2 --url http://localhost:5173
+```
+
+Paste the printed `https://...trycloudflare.com` URL into **dev.vk.com → your
+app → Версия для vk.com → "URL для разработки"**. The URL changes every run —
+do **not** hardcode it anywhere (`allowedHosts: true` handles the domain). Open
+the app from VK; the SPA reads the launch params VK appends to the URL and the
+BFF verifies the signature.
+
+### Production
+
+1. Set `VK_APP_SECRET` to the app's Protected Key from the VK Mini App settings.
+2. Build the frontend: `cd web/miniapp && npm run build`
+3. Host `web/miniapp/dist/` as the Mini App's static URL in VK admin.
+4. The BFF runs as part of the existing `cmd/api` binary — no extra process.

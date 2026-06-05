@@ -22,7 +22,7 @@
 
 ### Step 2 — PostgreSQL adapters, Command Router
 - [x] `pgx/v5` репозитории всех сущностей (+ `Querier`, `RunInTx`, `mapError`).
-- [x] Command Router (`/image`, `/video`, `/edit`, `/balance`, `/status`, `/cancel`, `/help`; прочее -> `text_generate`).
+- [x] Command Router (`/image`, `/video`, `/edit`, `/balance`, `/status`, `/cancel`, `/help`; прочее -> `text_generate` at parser level, with VK inbound gated by active GPT mode / `VK_UNROUTED_TEXT_MODE`).
 - [x] Env-guarded integration-тесты репозиториев.
 
 ### Step 3 — Billing, Orchestrator, VK Webhook
@@ -94,24 +94,102 @@
 - [x] Balance-vs-ledger reconciliation runs periodically and exports `vkagg_billing_mismatches`.
 
 ### Real integrations
+- [x] DeepInfra provider supports `deepseek-ai/DeepSeek-V4-Flash` text generation through the OpenAI-compatible `/chat/completions` endpoint behind `PROVIDER=deepinfra` / `PROVIDER_CHAIN=deepinfra,mock`.
+- [x] Text providers receive an internal instruction in addition to the user's prompt: answer as `НейроХаб бот`, keep replies concise (`<= 3000 characters`), and do not reveal provider/model/backend details; VK delivery still splits long answers as a fallback.
+- [x] Mock-aware downloader supports provider `data:` URLs, so `PROVIDER_CHAIN=deepinfra,mock` can store DeepInfra text outputs before VK delivery.
 - [x] Реальный OpenAI provider покрывает text (`/responses`), image (`/images/generations`) и async video (`/videos`, poll, content download) behind `PROVIDER=openai`.
 - [x] Provider router выбирает capable provider по health/circuit breaker, fallback chain, estimated cost и observed latency; `PROVIDER_CHAIN=openai,mock` включает fallback.
 - [x] Реальный VK delivery покрывает `messages.send` и upload pipeline для raw photo/video artifacts в VK upload servers (`photos.getMessagesUploadServer` -> upload -> `photos.saveMessagesPhoto`, `video.save` -> upload).
 - [x] Реальный output moderation provider включается через `MODERATION_PROVIDER=openai` и пишет verdict в существующий `moderation_results` flow.
 - [x] Реальный artifact scanner включается через `ARTIFACT_SCANNER=openai`; scanner проверяет text/image bytes до storage, video остается задачей полноценного media pipeline.
-- [x] VK inbound распознает sticker-only сообщения и превращает их в text job prompt, чтобы стикеры не терялись как пустой текст.
-- [x] VK onboarding keyboard: первичная нижняя кнопка `Старт` запускает welcome flow; после `Старт` нижняя постоянная клавиатура заменяется на одну кнопку `Показать меню`; `Показать меню` использует отдельный `show_menu` control-command и открывает Super GPT inline menu без повторной переустановки нижней клавиатуры. Кнопки меню не создают пустые billable jobs без промпта; при VK `error_code=912` есть fallback на текст без keyboard.
+- [x] VK inbound распознает sticker-only сообщения и превращает их в text prompt; prompt становится `text.ask` job только когда включен GPT text mode или legacy `VK_UNROUTED_TEXT_MODE=gpt`, поэтому стикеры не теряются как пустой текст и не создают случайные jobs вне режима.
+- [x] VK onboarding keyboard: первичная нижняя кнопка `Старт` запускает welcome flow; после `Старт` нижняя постоянная клавиатура заменяется на одну кнопку `Показать меню`; нижняя `Показать меню` использует отдельный `show_menu` control-command и всегда отправляет свежее НейроХаб inline menu вниз без повторной переустановки нижней клавиатуры. Кнопки меню не создают пустые billable jobs без промпта; при VK `error_code=912` есть fallback на текст без keyboard.
+- [x] VK video menu: кнопка `🎬 Создать видео` открывает inline-экран `Выбери модель для генерации:` с кнопками `Sora 2`, `Kling v2.1`, `Seedance 1`, `Haiuo v0.2` и `⬅️ Назад`; `Sora 2`/`Kling v2.1` открывают detail-экраны с описанием, примером prompt, ссылкой на инструкцию, `Начать генерацию`, `Примеры`, `Назад`; `Seedance 1` открывает `Lite`/`Pro`, `Haiuo v0.2` открывает `Обычный`/`Fast`; все video submenu кнопки пока control-only и не создают billable job.
+- [x] VK menu registry: control-экраны описаны декларативно; `🖼️ Создать фото` при одной основной модели сразу открывает инструкцию с режимами `Фото по тексту` / `Фото с референсом`, а `💬 Спросить у НейроХаб` открывает active-сообщение без лишнего выбора модели.
+- [x] VK student menu: `🎁 Студентам и школьникам` открывает учебный экран с кнопками `Решальник задач`, `Генерация презентаций (скоро)`, `Создание рефератов (скоро)`, `Ответы на вопросы` и `Назад`; все кнопки пока control-only.
+- [x] VK active menu UX: inline menu navigation edits the current menu message via `messages.edit`; plain user text outside GPT mode keeps the previous menu usable and with default `VK_UNROUTED_TEXT_MODE=reply` sends only `Выберите режим в меню выше.` instead of duplicating the menu or creating a billable job. Edit failures fall back to a normal send.
+- [x] VK callback menu buttons: inline menu can run with `VK_MENU_BUTTON_MODE=callback`, processing VK `message_event` without user echo messages; `VK_MENU_BUTTON_MODE=text` keeps the legacy text-button fallback. Persistent lower `Показать меню` remains text.
+- [x] VK callback button ack: every `message_event` is acknowledged through blank `messages.sendMessageEventAnswer`, so VK client button loading spinner stops after a click.
+- [x] VK unrouted text gating: `Спросить у НейроХаб` sets process-local GPT mode for the peer; ordinary text/stickers outside GPT mode are configurable via `VK_UNROUTED_TEXT_MODE=reply|silent|gpt` and do not create jobs by default. Old text label `Спросить у GPT` remains a compatible alias.
+- [x] VK GPT pending UX: after `Спросить у НейроХаб`, the next text/sticker sends `GPT думает...`; when the text job is delivered, delivery worker edits that same VK message with the provider answer instead of posting a second bot message. Long text answers are split into deterministic follow-up chunks so VK `error_code=914` does not leave the placeholder stuck. Legacy `VK_UNROUTED_TEXT_MODE=gpt` still uses normal text delivery.
+- [x] VK menu feature flags: every main and nested product-menu button has a `VK_MENU_*_ENABLED` env flag; disabled buttons are hidden from new keyboards, stale disabled payload clicks fall back to the current main menu, and no jobs are created.
+
+---
+
+## VK Mini App (Step 10)
+
+- [x] BFF `/miniapp/*` в `cmd/api` (`internal/adapter/inbound/miniapp`): create/list/get job + balance, переиспользуют `joborchestrator` и существующий биллинг-путь, провайдеры не вызываются.
+- [x] Проверка подписи launch-параметров (HMAC-SHA256 по VK-спеке): при заданном `VK_APP_SECRET` подпись валидируется реально, invalid/expired/missing → 401 без деталей, dev-обход отключается; `vk_user_id` только из проверенных параметров.
+- [x] Production fail-closed при пустом `VK_APP_SECRET`.
+- [x] Ownership: задачи доступны только своему `vk_user_id`.
+- [x] Фронт `web/miniapp` (React + VK Bridge, без VKUI): чат-интерфейс (`chat/`), ч/б `theme.css`, слои api/hooks/ui/chat; `X-Launch-Params` из URL; поллинг задач ≥2с с лимитом; медиа только через `artifactUrl` (UUID).
+- [x] История чатов Mini App: `localStorage` ключ `vk_miniapp_chats_v1`, шторка `ChatList`, `useChats`, заголовок активного чата и «Новый чат».
+- [x] Выбор модальности и модели: сегмент `Текст/Фото/Видео` и dropdown модели в `Composer`, связка с `operation` для `/miniapp/jobs`.
+- [x] Графитовая тема Mini App: тёмная палитра `#1A1A1D`, стили `segment`, `model-select`, `drawer`.
+- [x] Composer textarea: скрыт нативный scrollbar при сохранении внутренней прокрутки.
+- [x] Frontend audit: `docs/AUDIT.md` описывает безопасность, утечки и оптимизацию новых Mini App фич.
+- [x] Восстановление `web/miniapp/src/**` из `HEAD` после ручной чистки: целевая чат-структура на месте, legacy `panels`/`screens` не импортируются, `tsc` и `build` зелёные.
+- [x] Hardening чат-фронта: cleanup для `bridge.subscribe` через `bridge.unsubscribe`, polling без стартовой задержки и без размножения таймеров, `patchMessage` по id мемоизирован.
+- [x] Бэкенд: `GET /miniapp/artifacts/{id}` отдаёт байты артефакта с ownership-проверкой (`art.OwnerUserID == user.ID`), `job.status == succeeded` и passed output moderation guard; `Cache-Control: private`; текст приходит как `text/plain`, фронт читает его через `fetchArtifactText`. Зависит от доступности S3 в `cmd/api` (см. бэклог аудита).
+- [x] Frontend submit hardening: `POST /miniapp/jobs` sends stable per-submit `X-Idempotency-Key`; API/network errors normalize to safe user-facing messages; duplicate in-flight submits are guarded.
+- [x] Mini App API: фронт передаёт выбранный `model_id` в `POST /miniapp/jobs`; BFF валидирует model_id по operation whitelist и не раскрывает его в job API responses.
+- [x] Obsolete VK Tunnel tooling removed: `@vkontakte/vk-tunnel`, npm `tunnel` script and `web/miniapp/vk-tunnel-config.json`; dev tunnel path normalized to `cloudflared` / `*.trycloudflare.com`.
+- [x] Dev-туннель через `cloudflared` (VK Tunnel на техработах с 02.10.2025): `vite.config.ts` `server` — `host: true`, `allowedHosts: true`, `hmr.protocol: wss`/`clientPort: 443`, proxy `/miniapp`+`/api` → `:8080`; mixed-content под https устранён, домен туннеля не хардкодится. E2E (mock) через прокси-эндпоинты проверен.
+- [x] Фикс биллинга (AUDIT B1a): стартовый грант 1000 создаётся committed-проводкой в ledger атомарно; миграция `000004` бэкоффилит открывающие проводки; mismatch устранён.
+- [ ] Получить https-URL `cloudflared` (`cloudflared tunnel --protocol http2 --url http://localhost:5173`) и вписать его в dev.vk.com → «Версия для vk.com» → «URL для разработки». Ручной шаг оператора — URL меняется каждый запуск.
+
+---
+
+## Бэклог по аудиту (`docs/REVIEW.md`)
+
+Полный аудит безопасности/архитектуры — `docs/REVIEW.md` (read-only ревью от
+2026-06-04). Код по аудиту **не правился**; ниже — приоритезированный бэклог
+фиксов. Не исправлять «заодно» — отдельными задачами.
+
+- [x] **[High] Rate-limiting на `/miniapp/*`** (`cmd/api/main.go:158`). Сейчас
+  per-IP лимитер навешен только на `/webhooks/vk`; `POST /miniapp/jobs` создаёт
+  биллируемые Job без ограничения частоты. Обернуть `miniapp.Routes()` в
+  `ratelimit` (ключ по `vk_user_id`/IP, отдельные RPS/Burst, минимум на `POST /jobs`).
+  Fixed for `POST /miniapp/jobs`: verified `vk_user_id` key, separate env RPS/Burst,
+  safe `429` + `Retry-After`, deterministic tests.
+- [x] **[Medium] Fail-closed проверка `vk_ts`** (`internal/adapter/inbound/miniapp/sign.go`).
+  Реализовано: при `maxAge > 0` пустой, битый, future или expired `vk_ts` отклоняется до job creation; клиент получает безопасный `401`.
+- [x] **[Medium] Проброс выбора модели на бэкенд**.
+  Frontend sends selected `model_id`; backend contract реализован: `POST /miniapp/jobs` принимает optional `model_id`, валидирует по operation whitelist, сохраняет supported value в job params и не раскрывает selector/model_id в job API responses. Worker/provider routing по выбранной модели остаётся отдельным follow-up.
+- [ ] **[Medium] Мягкая деградация `getArtifact` при недоступности S3**
+  (`cmd/api/main.go:88-92`, `handler.go:369-373`). Сейчас при сбое подключения к
+  S3 `objectStore == nil` и роут молча отдаёт `503`, хотя Job успешен. В проде —
+  считать S3 обязательной зависимостью (падать/алертить) либо явно отражать
+  недоступность артефактов в UI; задокументировать связность `api ↔ S3`.
+- [ ] **[Low→Medium] Развязать `mountedRef` и перезапуск эффекта**
+  (`web/miniapp/src/chat/ChatScreen.tsx:177-231`). Главный `useEffect` завязан на
+  `chats.length` и сбрасывает `mountedRef.current = false` при каждом перезапуске,
+  смешивая «размонтирован» и «эффект перезапущен». Держать флаг mount/unmount в
+  отдельном `useEffect(() => {...}, [])`.
+- [ ] **[Low] Constant-time сравнение `ADMIN_TOKEN`**
+  (`internal/adapter/inbound/admin/handler.go:61`) — заменить `!=` на
+  `subtle.ConstantTimeCompare`/`hmac.Equal`.
+- [ ] **[Low] Составной индекс `jobs (user_id, created_at DESC)`** под `ListByUser`
+  (сейчас отдельные индексы `user_id` и `status`; сортировка по `created_at`).
+- [ ] **[уточнить] CORS-политика** — зависит от модели развёртывания (same-origin
+  proxy vs прямой доступ). Не подтверждается кодом, требует решения.
+- [ ] **[уточнить] Retention/шифрование контента в `localStorage`**
+  (`vk_miniapp_chats_v1` хранит промпты и тексты в plaintext). Решить TTL/очистку
+  или отказ от хранения тел сообщений.
 
 ---
 
 ## Current Gaps / Known Follow-Ups
 
 ### Integration validation / next providers
+- [ ] Live smoke with `DEEPINFRA_API_KEY`: GPT text mode should return DeepSeek-V4-Flash output through the normal Job -> Artifact -> Delivery flow.
 - [ ] Live smoke с реальными `OPENAI_API_KEY` и `VK_ACCESS_TOKEN`: text/image/video generation, VK photo/video upload, moderation allow/block.
 - [ ] Подключить production-баннер к `/start` через `VK_WELCOME_ATTACHMENT` или отдельный upload flow.
 - [x] Bot features включены в настройках сообщений VK-сообщества; VK начал принимать keyboard без `error_code=912`.
+- [ ] В VK Callback API включить event type для callback-кнопок (`message_event`) перед live-тестом callback menu mode.
 - [ ] Перевести VK control/menu responses в persisted delivery/outbox, если product/control sends должны строго попадать под invariant `Every delivery attempt is persisted`.
-- [ ] Добавить второго реального provider для fallback не только на mock: Google/Gemini image или Kling/video.
+- [ ] Вынести active-menu tracking из памяти `cmd/api` в persisted conversation state перед multi-instance deploy, чтобы `messages.edit` переживал рестарты и балансировку.
+- [~] Добавить второго реального provider для fallback не только на mock: DeepInfra text is implemented; Google/Gemini image или Kling/video остаются follow-up.
 - [ ] Расширить VK inbound/media pipeline для photo/video/audio attachments: сохранять входящие вложения как input Artifacts, ffmpeg probe/transcode, malware scan, VK-ready variants.
 
 ### Worker reliability

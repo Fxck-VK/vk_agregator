@@ -10,11 +10,13 @@ Current release: **v0.1.3 / Beta integrations foundation**.
 > retention/signed URLs/scanner hook (ST1), and configurable pricing/cost cap
 > (C1), OpenTelemetry trace propagation, worker fail-closed validation,
 > graceful drain, maintenance cleanup and billing reconciliation metric.
-> v0.1.3 also landed OpenAI text/image/video adapters, provider
-> routing/fallback/circuit breaker, VK raw photo/video upload, VK `/start`
-> product menu with inline keyboard, OpenAI moderation, and OpenAI text/image
-> artifact scanning. Live smoke with real credentials remains required before
-> external users.
+> v0.1.3 also landed OpenAI text/image/video adapters, DeepInfra
+> DeepSeek-V4-Flash text adapter, provider routing/fallback/circuit breaker,
+> VK raw photo/video upload, VK `/start`
+> product menu with callback/text inline keyboard and active-menu
+> `messages.edit`, GPT pending-message edit UX, OpenAI moderation, and OpenAI
+> text/image artifact scanning.
+> Live smoke with real credentials remains required before external users.
 
 ---
 
@@ -49,14 +51,27 @@ Current release: **v0.1.3 / Beta integrations foundation**.
 **Required tasks**
 - [x] Real OpenAI provider adapters for text/image/video plus provider
   router/fallback/circuit breaker (AUDIT P1). ✅ done in v0.1.3
+- [x] DeepInfra `deepseek-ai/DeepSeek-V4-Flash` text provider adapter behind
+  `PROVIDER=deepinfra` / `PROVIDER_CHAIN=deepinfra,mock`.
 - [x] Real VK delivery client: `messages.send`, upload servers and VK attachment
   creation for generated photo/video artifacts (AUDIT V1). ✅ done in v0.1.3
-- [x] VK `/start` product menu with inline keyboard and safe control buttons
-  (no empty billable jobs). ✅ done after v0.1.3 foundation
+- [x] VK `/start` product menu with callback/text inline keyboard, active-menu edit UX,
+  GPT pending-message edit UX and safe control buttons (no empty billable jobs). ✅ done after v0.1.3 foundation
+- [x] VK Mini App: BFF `/miniapp/*` (create/list/get job + balance) with real
+  launch-params signature verification, ownership checks, and a monochrome
+  VKUI + VK Bridge SPA in `web/miniapp` (Step 10). ✅
+- [x] Billing opening-grant fix: starting balance recorded as a committed ledger
+  entry; backfill migration `000004`; reconciliation mismatch eliminated
+  (AUDIT B1a). ✅
+- [x] Mini App dev tunnel normalized to `cloudflared` / `*.trycloudflare.com`;
+  obsolete VK Tunnel tooling removed.
 - Production welcome banner attachment for `/start` via `VK_WELCOME_ATTACHMENT`
   or an upload flow.
-- Live smoke with real `OPENAI_API_KEY` and `VK_ACCESS_TOKEN` on dev accounts.
-- Add a second real provider for non-mock fallback (Google/Gemini or Kling).
+- Live smoke with real `OPENAI_API_KEY`, `DEEPINFRA_API_KEY` and
+  `VK_ACCESS_TOKEN` on dev accounts.
+- Add real image/video providers for non-mock fallback (Google/Gemini or Kling).
+- Persist VK active-menu/conversation state before multi-instance API scaling;
+  current `messages.edit` tracking is process-local.
 - [x] Outbox relay (drain → publish → mark) feeding the queue (AUDIT A2). ✅ done in v0.1.2
 - [x] Atomic reserve+job+outbox via transaction-bound `Querier` (AUDIT B1). ✅ done in v0.1.2
 - Admin DLQ inspection/replay tooling; shared/Redis rate limiter for multi-instance (remainder of Q1, S3).

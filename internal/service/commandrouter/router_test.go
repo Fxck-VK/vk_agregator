@@ -85,9 +85,74 @@ func TestRouterParse(t *testing.T) {
 			wantType: domain.CommandMenuVideo,
 		},
 		{
+			name:     "vk video sora model button",
+			input:    "Sora 2 — видео текст+фото",
+			wantType: domain.CommandMenuVideoSora2,
+		},
+		{
+			name:     "vk video seedance lite button",
+			input:    "Seedance 1 Lite",
+			wantType: domain.CommandMenuVideoSeedance1Lite,
+		},
+		{
+			name:     "vk video seedance pro button",
+			input:    "Seedance 1 Pro",
+			wantType: domain.CommandMenuVideoSeedance1Pro,
+		},
+		{
+			name:     "vk video haiuo standard button",
+			input:    "Haiuo v0.2 Обычный",
+			wantType: domain.CommandMenuVideoHaiuo02Standard,
+		},
+		{
+			name:     "vk video haiuo fast button",
+			input:    "Haiuo v0.2 Fast",
+			wantType: domain.CommandMenuVideoHaiuo02Fast,
+		},
+		{
+			name:     "vk video back button",
+			input:    "⬅️ Назад",
+			wantType: domain.CommandShowMenu,
+		},
+		{
 			name:     "vk account menu button",
 			input:    "👤 Мой аккаунт",
 			wantType: domain.CommandAccount,
+		},
+		{
+			name:     "vk photo text mode button",
+			input:    "▶️ Фото по тексту",
+			wantType: domain.CommandMenuImageText,
+		},
+		{
+			name:     "vk photo reference mode button",
+			input:    "📸 Фото с референсом",
+			wantType: domain.CommandMenuImageReference,
+		},
+		{
+			name:     "vk neurohub text menu button",
+			input:    "💬 Спросить у НейроХаб",
+			wantType: domain.CommandMenuText,
+		},
+		{
+			name:     "vk student solver button",
+			input:    "Решальник задач",
+			wantType: domain.CommandMenuStudentSolver,
+		},
+		{
+			name:     "vk student presentations button",
+			input:    "Генерация презентаций (скоро)",
+			wantType: domain.CommandMenuStudentPresentation,
+		},
+		{
+			name:     "vk student reports button",
+			input:    "Создание рефератов (скоро)",
+			wantType: domain.CommandMenuStudentReport,
+		},
+		{
+			name:     "vk student qa button",
+			input:    "❓ Ответы на вопросы",
+			wantType: domain.CommandMenuStudentQA,
 		},
 		{
 			name:      "plain text becomes text generate",
@@ -147,7 +212,7 @@ func TestResultCreatesJob(t *testing.T) {
 		}
 	}
 
-	controlCommands := []string{"/balance", "/status 1", "/cancel 1", "/help", "/start", "Старт", "Показать меню", "🎬 Создать видео", "👤 Мой аккаунт"}
+	controlCommands := []string{"/balance", "/status 1", "/cancel 1", "/help", "/start", "Старт", "Показать меню", "🎬 Создать видео", "Sora 2 — видео текст+фото", "Seedance 1 Lite", "Seedance 1 Pro", "Haiuo v0.2 Обычный", "Haiuo v0.2 Fast", "⬅️ Назад", "👤 Мой аккаунт", "▶️ Фото по тексту", "📸 Фото с референсом", "💬 Спросить у НейроХаб", "💬 Спросить у GPT", "Решальник задач", "Генерация презентаций (скоро)", "Создание рефератов (скоро)", "❓ Ответы на вопросы"}
 	for _, in := range controlCommands {
 		if r.Parse(in).CreatesJob() {
 			t.Errorf("expected %q to NOT create a job", in)

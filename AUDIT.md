@@ -5,8 +5,9 @@ Status: MVP+ (modular monolith; mock provider + mock VK delivery by default).
 OpenAI text/image/video generation, provider routing/fallback/circuit breaker,
 VK `messages.send` plus raw photo/video upload, OpenAI moderation and OpenAI
 text/image artifact scanning are available behind config. VK `/start` product
-menu with inline keyboard is implemented through the VK delivery adapter. Real
-calls remain credential-bound and need live smoke before external users.
+menu with callback/text inline keyboard and active-menu `messages.edit` is
+implemented through the VK delivery adapter. Real calls remain credential-bound
+and need live smoke before external users.
 
 > **Final integration update (v0.1.3):** P1 (provider) and V1 (VK delivery) are
 > now **FIXED in code** with unit tests. Full beta still needs live smoke with
@@ -57,6 +58,22 @@ Severity: **critical** (blocks prod / safety / data loss), **high** (must fix be
 - Recommendation: Add per-IP/per-user rate limits and body-size limits at the edge/ingress.
 - **Fix:** Added `platform/ratelimit` (per-IP token bucket) wired as middleware on `/webhooks/vk` (configurable RPS/burst, returns 429). A shared/Redis limiter or WAF is still recommended for multi-instance deploys (noted in Beta).
 
+**S3a — Mini App job intake rate limiting — severity: high — ✅ FIXED**
+- Description: Webhook rate limiting already covered `/webhooks/vk`, but Mini App `POST /miniapp/jobs` created billable jobs without a separate intake throttle.
+- **Fix:** `POST /miniapp/jobs` is now rate-limited after launch-param verification with key `miniapp_job:<verified vk_user_id>`, separate `MINIAPP_JOB_RATE_LIMIT_RPS` / `MINIAPP_JOB_RATE_LIMIT_BURST`, safe `429` response and `Retry-After`. This is an in-memory per-instance limiter; Redis/shared limiter or WAF remains future multi-instance hardening.
+
+**S3b — Mini App submit idempotency and safe API errors — ✅ FIXED**
+- Description: Frontend create-job submits relied on UI disabled state and surfaced raw API error messages.
+- **Fix:** Mini App now sends stable per-submit `X-Idempotency-Key`, blocks duplicate in-flight submit attempts, preserves HTTP status/retry metadata in typed API errors, and maps API/network failures to safe user-facing messages.
+
+**S3c — Mini App model_id contract — ✅ FIXED**
+- Description: Mini App had a visible model selector while `POST /miniapp/jobs` ignored model selection, leaving no backend contract for supported models.
+- **Fix:** Mini App frontend now sends selected `model_id` with `POST /miniapp/jobs`. The BFF validates it by operation-specific whitelist before user/billing/job creation, persists only supported values in normalized job params, and does not expose selector/model_id in job API responses. Unsupported model IDs return safe `400` and create no job. Worker/provider routing by selected model remains a separate provider-routing task.
+
+**S3d — Mini App artifact access guard — ✅ FIXED**
+- Description: `GET /miniapp/artifacts/{id}` relied on ownership and frontend request order, so a direct request could fetch an owned output artifact before the backend had independently confirmed terminal success and output moderation.
+- **Fix:** The BFF now returns artifact bytes only when the artifact belongs to the verified user, is an output artifact for a job with `status=succeeded`, is listed on that job, and has an output moderation verdict whose decision is allowed. Otherwise it returns safe `404`.
+
 **S4 — Potential PII in logs — severity: low**
 - Description: Inbound logs use `group_id`; confirm `vk_user_id`/`peer_id` are hashed, not raw.
 - Impact: PII exposure in logs (invariant #13).
@@ -105,6 +122,21 @@ Severity: **critical** (blocks prod / safety / data loss), **high** (must fix be
 - Recommendation: Refactor `BillingRepository` onto `Querier` and perform reserve+job+outbox in one transaction.
 - **Fix:** `BillingRepository` now runs either standalone (own tx) or transaction-bound (`NewBillingRepositoryTx`) over the shared `Querier`. `uow.Repositories` exposes `Billing`, and the orchestrator performs job create + credit reserve + `created`/`queued` outbox events in a single transaction (`billingservice.ReserveWith`). Insufficient credits park the job in `awaiting_payment` within the same transaction. No compensation path remains. Validated: happy-path reserve+capture, insufficient-credits parking, and rejection release all correct.
 
+**B1a — Opening grant not recorded in ledger — severity: high — ✅ FIXED**
+- Description: New accounts were created with `balance_cached` seeded directly to the 1000-credit starting grant, with **no** corresponding committed ledger entry. This violated invariant #14 ("no balance change without a ledger entry"): `balance_cached` exceeded the committed ledger sum by exactly 1000, and the worker's balance reconciliation logged a recurring `billing balance mismatch` for every account.
+- Impact: Reconciliation false positives, masked real drift, and a broken append-only-ledger invariant on the very first balance of every user.
+- Recommendation: Grant the starting balance through a committed opening ledger entry in the same transaction as account creation; backfill existing accounts.
+- **Fix:** `BillingRepository.CreateAccount` (and the in-memory mirror) now insert the account at `balance_cached = 0` and, when a starting grant is requested, append a committed `topup` ledger entry (`grant:open:<account_id>`) and adjust the balance in the same transaction. Migration `000004_backfill_opening_grants` backfills a committed opening grant for every pre-existing account whose cached balance exceeds its committed ledger sum, using the exact positive difference so already-spent (negative) movements are never touched. Validated live: post-migration reconciliation reports **0** mismatches, a fresh account creates its `opening balance grant` entry, the create→worker→capture pipeline charges correctly (1000→999), and the worker logs **no** mismatch warnings.
+
+**S-sign — Mini App launch-params signature verification — ✅ IMPLEMENTED**
+- Description: The Mini App BFF (`/miniapp/*`) authenticates every request by verifying the VK launch-params HMAC-SHA256 signature (`internal/adapter/inbound/miniapp/sign.go`) per the VK spec.
+- Behavior: When `VK_APP_SECRET` is set the signature is verified for real — invalid, missing, expired (`vk_ts` older than `MINIAPP_LAUNCH_PARAMS_MAX_AGE`), missing `vk_ts`, or invalid/future `vk_ts` params return `401` with no detail before job creation, and the dev `X-VK-User-ID` bypass is disabled. `vk_user_id` is taken only from verified params. Empty `VK_APP_SECRET` is a dev/mock convenience and is rejected fail-closed in production startup. Validated live: with the real secret set, invalid/missing/dev-bypass all returned `401`; the valid-signature accept path is covered by `TestHandler_ValidSign`.
+
+**S-iframe — Mini App HTTPS tunnel / mixed-content in VK webview — ✅ FIXED (dev)**
+- Description: When the SPA is opened inside the VK webview over HTTPS (via a tunnel), an HTTPS page calling `http://localhost:8080` is blocked as mixed content, and the dev server rejected the rotating tunnel host. VK Tunnel is under maintenance (since 2025-10-02), so cloudflared is used as the VK-recommended workaround.
+- **Fix:** `web/miniapp/vite.config.ts` `server` now sets `host: true`, `allowedHosts: true` (accepts the rotating `*.trycloudflare.com` domain — never hardcoded), `hmr: { clientPort: 443, protocol: 'wss' }`, and proxies `/miniapp` + `/api` to `http://localhost:8080` so all backend calls stay same-origin. The frontend API client already uses relative paths (`BASE_URL` empty in dev). Validated live: through the proxy in mock mode, `GET /miniapp/balance` (1000), `POST /miniapp/jobs` (queued→succeeded with artifact), `GET /miniapp/jobs`, and detail all returned data; balance reconciled 1000→999. Tunnel URL is pasted into dev.vk.com → "URL для разработки" by the operator; see `RUNBOOK.md`.
+- **Follow-up:** Obsolete `@vkontakte/vk-tunnel` tooling, npm script and local config were removed; cloudflared/trycloudflare is the documented dev tunnel path.
+
 **B2 — Capture is idempotent, ledger append-only — severity: low — ✅ FIXED**
 - Description: `CaptureForJob` is idempotent; reservations and entries are append-only. Good.
 - Recommendation: Add a periodic balance-vs-ledger reconciliation job + `billing_mismatch` metric.
@@ -124,11 +156,12 @@ Severity: **critical** (blocks prod / safety / data loss), **high** (must fix be
 ## 8. Provider Abstraction
 
 **P1 — Real provider coverage incomplete — severity: high — ✅ FIXED (credential-bound live smoke pending)**
-- Description: default runtime still uses the mock provider, but real OpenAI text/image/video adapters and provider routing now exist behind opt-in config.
-- Impact: The code path can run real OpenAI text/image/video jobs and route/fallback across configured providers. Real calls require credentials and may incur provider cost, so live validation remains an operational step.
-- Recommendation: Run a live smoke with `OPENAI_API_KEY`; add a second real provider later for non-mock fallback.
+- Description: default runtime still uses the mock provider, but real OpenAI text/image/video adapters, DeepInfra text adapter and provider routing now exist behind opt-in config.
+- Impact: The code path can run real OpenAI text/image/video jobs, real DeepInfra DeepSeek-V4-Flash text jobs and route/fallback across configured providers. Real calls require credentials and may incur provider cost, so live validation remains an operational step.
+- Recommendation: Run live smoke with `OPENAI_API_KEY` and `DEEPINFRA_API_KEY`; add real image/video fallback providers later.
 - **Fix:** `adapter/provider/openai` now implements text via `/responses`, image via `/images/generations`, async video via `/videos` + poll/content download, and normalized provider errors. `worker.Registry` now routes by capabilities, estimated cost, observed latency and circuit-breaker health, and `PROVIDER_CHAIN=openai,mock` enables explicit fallback. Unit tests cover OpenAI text/image/video and router fallback.
-- **Remaining:** Google/Gemini/Kling provider adapters and live credential smoke remain Beta/Phase 3 work.
+- **Fix:** `adapter/provider/deepinfra` implements text generation through DeepInfra's OpenAI-compatible `/chat/completions` endpoint for `deepseek-ai/DeepSeek-V4-Flash`, with normalized text artifacts and provider error classes. `PROVIDER_CHAIN=deepinfra,mock` enables DeepInfra text with mock fallback.
+- **Remaining:** Google/Gemini/Kling image/video provider adapters and live credential smoke remain Beta/Phase 3 work.
 
 ## 9. VK Integration
 
@@ -138,6 +171,22 @@ Severity: **critical** (blocks prod / safety / data loss), **high** (must fix be
 - Recommendation: Run a live smoke with `VK_ACCESS_TOKEN` against a dev group/conversation.
 - **Fix:** `vkdelivery.HTTPClient` implements `MediaUploader`: photo uses `photos.getMessagesUploadServer` → upload → `photos.saveMessagesPhoto`; video uses `video.save` → upload. Delivery worker now uploads raw artifact bytes before sending media. Deterministic `random_id` remains the delivery dedup key. Unit tests cover photo/video upload flows and worker-level upload-to-send behavior.
 - **Remaining:** Video transcode/probe/VK-ready variants remain Phase 3 media-pipeline work.
+- **Menu note:** VK product/control menu navigation uses `vkdelivery.ControlClient`
+  for both `messages.send` and `messages.edit`; inline buttons default to
+  `callback` and are processed through VK `message_event`, with
+  `VK_MENU_BUTTON_MODE=text` as a legacy fallback. Active-menu tracking is
+  currently process-local. Every current product-menu button has a
+  `VK_MENU_*_ENABLED` flag for rollout/hiding without deleting screens. Plain
+  text/stickers become `text.ask` jobs only after `Спросить у НейроХаб` enables
+  process-local GPT mode, unless
+  `VK_UNROUTED_TEXT_MODE=gpt` restores legacy behavior. Active GPT mode sends
+  `GPT думает...`, stores the placeholder VK `message_id` in `job.Params`, and
+  delivery edits that same message with the text result. Persist active menu and
+  dialog mode before multi-instance API scaling.
+
+**V1a — VK control/menu sends are a known delivery-persistence exception — severity: medium — OPEN**
+- Description: Product/control menu responses use `vkdelivery.ControlClient` directly from the API path for fast UX (`messages.send`, `messages.edit`, and `messages.sendMessageEventAnswer`) and are not persisted as `deliveries` rows.
+- Decision: Keep current behavior during this integration; it is an explicitly documented control-path exception, not a generated-output delivery path. Move these sends into persisted delivery/outbox if product/control messages must satisfy the strict "every delivery attempt is persisted" invariant in a future hardening PR.
 
 **V2 — Confirmation/secret handled — severity: low**
 - Description: Confirmation token + optional secret validated; fast `ok` response. Good (see S1 for default).

@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 
 	"go.opentelemetry.io/otel/attribute"
 
@@ -37,6 +38,22 @@ type Config struct {
 	// WelcomeAttachment is an optional pre-uploaded VK attachment string
 	// (for example photo-239332376_123_accesskey) sent with the /start menu.
 	WelcomeAttachment string
+	// MenuButtonMode controls inline menu button action type: "callback" or
+	// "text". Callback avoids user echo messages; text preserves legacy VK UX.
+	MenuButtonMode string
+	// UnroutedTextMode controls plain text outside an active text mode:
+	// "reply" asks the user to choose a mode, "silent" does nothing, and
+	// "gpt" preserves the legacy behavior where any text becomes a GPT job.
+	UnroutedTextMode string
+	// MenuFeatures controls which VK product-menu buttons are visible and
+	// reachable. Empty means every known menu command is enabled.
+	MenuFeatures MenuFeatureFlags
+}
+
+// MenuFeatureFlags allows deployments to hide VK menu buttons without deleting
+// the menu screens or changing command parsing.
+type MenuFeatureFlags struct {
+	DisabledCommands map[domain.CommandType]bool
 }
 
 // Deps are the collaborators the handler needs. All are interfaces or services
@@ -58,6 +75,12 @@ type Handler struct {
 	cfg    Config
 	deps   Deps
 	logger *slog.Logger
+
+	menuMu      sync.Mutex
+	activeMenus map[int64]activeMenuMessage
+
+	modeMu      sync.Mutex
+	dialogModes map[int64]dialogMode
 }
 
 // NewHandler builds a VK callback handler.
@@ -66,7 +89,54 @@ func NewHandler(cfg Config, deps Deps) *Handler {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Handler{cfg: cfg, deps: deps, logger: logger}
+	cfg.MenuButtonMode = normalizeMenuButtonMode(cfg.MenuButtonMode)
+	cfg.UnroutedTextMode = normalizeUnroutedTextMode(cfg.UnroutedTextMode)
+	return &Handler{
+		cfg:         cfg,
+		deps:        deps,
+		logger:      logger,
+		activeMenus: map[int64]activeMenuMessage{},
+		dialogModes: map[int64]dialogMode{},
+	}
+}
+
+func normalizeMenuButtonMode(mode string) string {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "text":
+		return "text"
+	default:
+		return "callback"
+	}
+}
+
+const (
+	unroutedTextModeReply  = "reply"
+	unroutedTextModeSilent = "silent"
+	unroutedTextModeGPT    = "gpt"
+)
+
+func normalizeUnroutedTextMode(mode string) string {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case unroutedTextModeSilent:
+		return unroutedTextModeSilent
+	case unroutedTextModeGPT:
+		return unroutedTextModeGPT
+	default:
+		return unroutedTextModeReply
+	}
+}
+
+type activeMenuMessage struct {
+	MessageID int64
+}
+
+type dialogMode string
+
+const dialogModeGPT dialogMode = "gpt"
+
+type jobParams struct {
+	Prompt                 string `json:"prompt"`
+	VKPlaceholderMessageID int64  `json:"vk_placeholder_message_id,omitempty"`
 }
 
 // callback is the common VK Callback API envelope.
@@ -97,6 +167,26 @@ type vkMessage struct {
 	Payload               string         `json:"payload"`
 	ConversationMessageID int64          `json:"conversation_message_id"`
 	Attachments           []vkAttachment `json:"attachments"`
+}
+
+type messageEvent struct {
+	UserID                int64           `json:"user_id"`
+	PeerID                int64           `json:"peer_id"`
+	EventID               string          `json:"event_id"`
+	Payload               json.RawMessage `json:"payload"`
+	ConversationMessageID int64           `json:"conversation_message_id"`
+}
+
+func (m messageEvent) payloadString() string {
+	raw := strings.TrimSpace(string(m.Payload))
+	if raw == "" || raw == "null" {
+		return ""
+	}
+	var s string
+	if err := json.Unmarshal(m.Payload, &s); err == nil {
+		return s
+	}
+	return raw
 }
 
 type vkAttachment struct {
@@ -170,6 +260,14 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeText(w, http.StatusOK, "ok")
+	case "message_event":
+		if err := h.handleMessageEvent(r.Context(), cb, body); err != nil {
+			h.logger.Error("vk message_event processing failed",
+				slog.Int64("group_id", cb.GroupID), slog.String("error", err.Error()))
+			http.Error(w, "processing error", http.StatusInternalServerError)
+			return
+		}
+		writeText(w, http.StatusOK, "ok")
 	default:
 		// Acknowledge unhandled event types so VK does not retry them.
 		writeText(w, http.StatusOK, "ok")
@@ -221,15 +319,87 @@ func (h *Handler) handleMessageNew(ctx context.Context, cb callback, rawBody []b
 		return nil
 	}
 
-	if err := h.process(ctx, cb, rawBody, eventID, idemKey, fromID, peerID, text, payload); err != nil {
+	if err := h.process(ctx, cb, rawBody, eventID, idemKey, fromID, peerID, text, payload, false); err != nil {
 		_ = h.deps.Idempotency.MarkFailed(ctx, idemKey)
 		return err
 	}
 	return nil
 }
 
+func (h *Handler) handleMessageEvent(ctx context.Context, cb callback, rawBody []byte) (err error) {
+	var obj messageEvent
+	if len(cb.Object) > 0 {
+		if err := json.Unmarshal(cb.Object, &obj); err != nil {
+			return fmt.Errorf("decode object: %w", err)
+		}
+	}
+	fromID, peerID, payload := obj.UserID, obj.PeerID, obj.payloadString()
+	if fromID == 0 {
+		return errors.New("message_event has no user_id")
+	}
+	if peerID == 0 {
+		return errors.New("message_event has no peer_id")
+	}
+	eventID := cb.EventID
+	if eventID == "" {
+		eventID = obj.EventID
+	}
+	if eventID == "" {
+		eventID = fmt.Sprintf("message_event:%d:%d:%x", peerID, fromID, hashText(payload))
+	}
+
+	idemKey := fmt.Sprintf("vk_event:%d:%s", cb.GroupID, eventID)
+	ctx, span := tracing.Start(ctx, "vk.message_event",
+		attribute.Int64("vk.group_id", cb.GroupID),
+		attribute.String("vk.event_id", eventID),
+		attribute.Int64("vk.peer_id", peerID),
+		attribute.Int64("vk.user_id", fromID),
+		tracing.CorrelationAttr(idemKey),
+	)
+	defer func() {
+		tracing.RecordError(span, err)
+		span.End()
+	}()
+
+	record := &domain.IdempotencyRecord{
+		Key:          idemKey,
+		Scope:        "inbound_event",
+		ResourceType: "command",
+	}
+	existing, created, err := h.deps.Idempotency.GetOrCreate(ctx, record)
+	if err != nil {
+		return fmt.Errorf("idempotency: %w", err)
+	}
+	if !created && existing.Status == domain.IdempotencyCompleted {
+		return nil
+	}
+
+	answerEventID := obj.EventID
+	if answerEventID == "" {
+		answerEventID = eventID
+	}
+	h.answerMessageEvent(ctx, answerEventID, fromID, peerID)
+
+	if err := h.process(ctx, cb, rawBody, eventID, idemKey, fromID, peerID, "", payload, true); err != nil {
+		_ = h.deps.Idempotency.MarkFailed(ctx, idemKey)
+		return err
+	}
+	return nil
+}
+
+func (h *Handler) answerMessageEvent(ctx context.Context, eventID string, userID, peerID int64) {
+	if eventID == "" || h.deps.Control == nil {
+		return
+	}
+	if err := h.deps.Control.AnswerMessageEvent(ctx, eventID, userID, peerID); err != nil {
+		h.logger.Warn("vk message_event answer failed",
+			slog.Int64("peer_id", peerID),
+			slog.String("error", err.Error()))
+	}
+}
+
 // process runs the InboundEvent -> User -> Command -> Job flow.
-func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, eventID, idemKey string, fromID, peerID int64, text, payload string) error {
+func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, eventID, idemKey string, fromID, peerID int64, text, payload string, controlOnly bool) error {
 	// InboundEvent: persist the raw event for audit and reprocessing.
 	inbound := &domain.InboundEvent{
 		Source:         "vk",
@@ -254,8 +424,22 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 
 	// Command: classify the message into a normalized command.
 	parsed := h.deps.Router.Parse(text)
+	controlFromPayload := false
 	if controlType, ok := controlTypeFromPayload(payload); ok {
 		parsed = commandrouter.Result{Type: controlType}
+		controlFromPayload = true
+	} else if controlOnly {
+		parsed = commandrouter.Result{Type: domain.CommandUnknown}
+	}
+	if isMenuCommand(parsed.Type) && !h.menuCommandEnabled(parsed.Type) {
+		parsed = commandrouter.Result{Type: domain.CommandShowMenu}
+		controlFromPayload = true
+	}
+
+	unroutedText := false
+	if parsed.Type == domain.CommandTextAsk && !h.textAskEnabled(peerID) {
+		unroutedText = true
+		parsed = commandrouter.Result{Type: domain.CommandUnknown}
 	}
 	cmd := &domain.Command{
 		UserID:         user.ID,
@@ -280,20 +464,42 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 
 	resourceID := cmd.ID
 
-	if shouldSendControlResponse(parsed.Type) {
-		if err := h.sendControlResponse(ctx, parsed.Type, idemKey, peerID, user); err != nil {
+	switch {
+	case unroutedText:
+		if err := h.sendUnroutedTextResponse(ctx, idemKey, peerID); err != nil {
+			return fmt.Errorf("send unrouted text response: %w", err)
+		}
+	case shouldSendControlResponse(parsed.Type):
+		allowEdit := controlFromPayload && !(parsed.Type == domain.CommandShowMenu && !controlOnly)
+		if err := h.sendControlResponse(ctx, parsed.Type, idemKey, peerID, user, allowEdit); err != nil {
 			return fmt.Errorf("send control response: %w", err)
+		}
+		if parsed.Type == domain.CommandMenuText {
+			h.setDialogMode(peerID, dialogModeGPT)
+		} else {
+			h.clearDialogMode(peerID)
+		}
+	default:
+		h.clearActiveMenu(peerID)
+		if parsed.Type != domain.CommandTextAsk {
+			h.clearDialogMode(peerID)
 		}
 	}
 
 	// Job: only commands that map to an AI operation become jobs. Control
 	// commands (balance/status/cancel/help) are recorded but produce no job.
 	if parsed.CreatesJob() {
+		placeholderID := int64(0)
+		if parsed.Type == domain.CommandTextAsk && h.gptDialogActive(peerID) {
+			placeholderID = h.sendGPTPendingMessage(ctx, idemKey, peerID)
+		}
+
 		// Carry the user's prompt on the job so workers can render it and the
 		// output-moderation stage has the request text to evaluate.
-		params, _ := json.Marshal(struct {
-			Prompt string `json:"prompt"`
-		}{Prompt: parsed.Prompt})
+		params, _ := json.Marshal(jobParams{
+			Prompt:                 parsed.Prompt,
+			VKPlaceholderMessageID: placeholderID,
+		})
 		job, err := h.deps.Orchestrator.CreateJob(ctx, joborchestrator.CreateJobInput{
 			UserID:         user.ID,
 			VKPeerID:       peerID,
@@ -310,7 +516,9 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 		case errors.Is(err, domain.ErrInsufficientCredits):
 			// Expected business outcome: job is parked in awaiting_payment.
 			resourceID = job.ID
+			h.editGPTPendingMessage(ctx, peerID, placeholderID, "Недостаточно средств для запроса. Пополните баланс или выберите другой режим.")
 		default:
+			h.editGPTPendingMessage(ctx, peerID, placeholderID, "Не удалось поставить запрос в очередь. Попробуйте позже.")
 			return fmt.Errorf("create job: %w", err)
 		}
 	}
@@ -322,6 +530,37 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 		return fmt.Errorf("mark idempotency completed: %w", err)
 	}
 	return nil
+}
+
+func (h *Handler) textAskEnabled(peerID int64) bool {
+	if h.cfg.UnroutedTextMode == unroutedTextModeGPT {
+		return true
+	}
+	return h.gptDialogActive(peerID)
+}
+
+func (h *Handler) gptDialogActive(peerID int64) bool {
+	mode, ok := h.getDialogMode(peerID)
+	return ok && mode == dialogModeGPT
+}
+
+func (h *Handler) getDialogMode(peerID int64) (dialogMode, bool) {
+	h.modeMu.Lock()
+	defer h.modeMu.Unlock()
+	mode, ok := h.dialogModes[peerID]
+	return mode, ok
+}
+
+func (h *Handler) setDialogMode(peerID int64, mode dialogMode) {
+	h.modeMu.Lock()
+	defer h.modeMu.Unlock()
+	h.dialogModes[peerID] = mode
+}
+
+func (h *Handler) clearDialogMode(peerID int64) {
+	h.modeMu.Lock()
+	defer h.modeMu.Unlock()
+	delete(h.dialogModes, peerID)
 }
 
 func (h *Handler) ensureUser(ctx context.Context, vkUserID int64) (*domain.User, error) {

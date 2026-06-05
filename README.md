@@ -30,17 +30,69 @@ cleanup and billing reconciliation metrics.
 API metrics are served at `GET /metrics`; worker-local metrics are served at
 `WORKER_METRICS_ADDR` (default `:9090`).
 
+The same `cmd/api` binary also serves the VK Mini App BFF under `/miniapp/*`.
+Mini App requests verify VK launch params server-side, create jobs through the
+shared `joborchestrator`, use backend billing/idempotency, and fetch artifacts
+only through owner-checked backend endpoints.
+
 Real integrations are implemented at adapter level and remain **opt-in**:
 
 - `PROVIDER=openai` enables OpenAI text (`Responses`), image (`Images`) and
   async video (`Videos`) generation.
+- `PROVIDER=deepinfra` enables DeepInfra text generation through
+  `deepseek-ai/DeepSeek-V4-Flash` (`/chat/completions` on DeepInfra's
+  OpenAI-compatible API). Text providers receive an internal instruction to
+  answer as `НейроХаб бот`, keep replies concise and under 3000 characters, and
+  avoid exposing provider/model/backend details; VK delivery still chunks longer
+  output as a fallback.
 - `PROVIDER_CHAIN=openai,mock` enables the provider router with
   health/circuit-breaker, fallback, cost and observed-latency aware selection.
+  `PROVIDER_CHAIN=deepinfra,mock` uses DeepInfra for text and mock fallback for
+  unsupported or retryable paths.
 - `VK_DELIVERY_MODE=real` enables VK `messages.send` plus raw photo/video
   artifact upload to VK upload servers before send.
 - `cmd/api` can send the VK `/start` Super GPT menu and inline keyboard through
   the VK delivery adapter when `VK_ACCESS_TOKEN` is configured. The optional
   `VK_WELCOME_ATTACHMENT` env attaches a pre-uploaded VK banner.
+- The VK `Создать видео` menu button opens a model picker (`Sora 2`,
+  `Kling v2.1`, `Seedance 1`, `Haiuo v0.2`) with a `Назад` control. `Sora 2`
+  and `Kling v2.1` open detail screens with description, prompt example,
+  instruction link, `Начать генерацию`, `Примеры`, and `Назад`; `Seedance 1`
+  opens `Lite` / `Pro`; `Haiuo v0.2` opens `Обычный` / `Fast`. These video
+  submenu buttons are control-only until model-specific generation state is
+  wired.
+- VK menu screens are described through a small declarative registry. `Создать
+  фото` skips model selection when only one main image model is available and
+  opens the text/reference photo instruction screen directly; `Спросить у НейроХаб`
+  opens the active GPT prompt screen and enables text GPT mode for that peer.
+  Plain text and stickers create `text.ask` jobs only while GPT mode is active
+  or when `VK_UNROUTED_TEXT_MODE=gpt` is explicitly configured. In active GPT
+  mode, the bot sends `GPT думает...` and the delivery worker edits that same
+  VK message to the provider answer; legacy `VK_UNROUTED_TEXT_MODE=gpt` keeps
+  normal text delivery.
+- VK inline menu navigation uses a hybrid UX: if the last bot message is the
+  active menu, inline button clicks edit it through VK `messages.edit`; pressing
+  the persistent lower `Показать меню` button always sends a fresh menu at the
+  bottom of the chat. After a plain user message outside GPT mode, the default
+  `VK_UNROUTED_TEXT_MODE=reply` sends only the text hint
+  `Выберите режим в меню выше.` and does not duplicate the inline menu. Edit
+  failure falls back to a normal send. In Beta this
+  active-menu/dialog-mode state is process-local to `cmd/api`.
+- Inline menu buttons default to VK `callback` actions
+  (`VK_MENU_BUTTON_MODE=callback`), so button clicks arrive as `message_event`
+  and do not add user echo messages to the chat. Set
+  `VK_MENU_BUTTON_MODE=text` to return to legacy text buttons. The persistent
+  lower `Показать меню` button stays a text button.
+- `VK_UNROUTED_TEXT_MODE` controls ordinary text outside GPT mode: `reply`
+  (default) sends the text-only hint `Выберите режим в меню выше.`, `silent`
+  records the command but sends nothing, and `gpt` preserves the old behavior
+  where any text becomes a GPT job.
+- Every VK product-menu button has an env feature flag (`VK_MENU_*_ENABLED`).
+  Disabled buttons are hidden from new keyboards, while stale payload clicks
+  from older messages fall back to the current main menu instead of opening a
+  hidden section.
+- `Студентам и школьникам` opens a study submenu with task solving,
+  presentations/reports placeholders, question answering, and back navigation.
 - `MODERATION_PROVIDER=openai` enables OpenAI output moderation.
 - `ARTIFACT_SCANNER=openai` enables OpenAI text/image artifact scanning before
   storage. Video scanning/transcoding is still part of the future media
@@ -90,6 +142,7 @@ internal/
     inbound/admin/   read-only admin HTTP API
     delivery/vk/     outbound VK client (+ mock)
     provider/mock/   mock AI provider
+    provider/deepinfra/ DeepInfra text-generation adapter
     provider/openai/ OpenAI generation/moderation/scanning adapters
     queue/redis/     Redis Streams publisher/consumer (consumer groups)
     storage/postgres pgx repositories
@@ -167,6 +220,10 @@ PROVIDER=openai OPENAI_API_KEY=... go run ./cmd/worker
 # OpenAI primary with mock fallback through the provider router.
 PROVIDER_CHAIN=openai,mock OPENAI_API_KEY=... go run ./cmd/worker
 
+# DeepInfra DeepSeek-V4-Flash text generation; image/video should keep mock or
+# another capable provider in the fallback chain.
+PROVIDER_CHAIN=deepinfra,mock DEEPINFRA_API_KEY=... go run ./cmd/worker
+
 # Real VK messages.send + photo/video upload; requires a real token.
 VK_DELIVERY_MODE=real VK_ACCESS_TOKEN=... go run ./cmd/worker
 
@@ -180,10 +237,11 @@ MODERATION_PROVIDER=openai ARTIFACT_SCANNER=openai OPENAI_API_KEY=... go run ./c
 For production, set `APP_ENV=production` and configure non-default
 `VK_SECRET`, `ADMIN_TOKEN` and `VK_CONFIRMATION_TOKEN`. Both `cmd/api` and
 `cmd/worker` run fail-closed config validation; `PROVIDER=openai` requires
-`OPENAI_API_KEY`, and `VK_DELIVERY_MODE=real` requires `VK_ACCESS_TOKEN` in any
-environment.
+`OPENAI_API_KEY`, `PROVIDER=deepinfra` requires `DEEPINFRA_API_KEY`, and
+`VK_DELIVERY_MODE=real` requires `VK_ACCESS_TOKEN` in any environment.
 `PROVIDER_CHAIN`, `MODERATION_PROVIDER=openai` and `ARTIFACT_SCANNER=openai`
-also require `OPENAI_API_KEY`.
+also require the corresponding provider key when they include/enable that
+provider.
 For a VK welcome banner, set `VK_WELCOME_ATTACHMENT` to a pre-uploaded
 attachment string such as `photo-239332376_123_accesskey`.
 

@@ -472,8 +472,9 @@ func newProcessor(d Deps) processor {
 
 // promptParams is the subset of job params the provider request needs.
 type promptParams struct {
-	Prompt         string `json:"prompt"`
-	NegativePrompt string `json:"negative_prompt"`
+	Prompt                 string `json:"prompt"`
+	NegativePrompt         string `json:"negative_prompt"`
+	VKPlaceholderMessageID int64  `json:"vk_placeholder_message_id,omitempty"`
 }
 
 // buildRequest builds the normalized provider request for a job. The submit

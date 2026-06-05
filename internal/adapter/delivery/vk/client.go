@@ -35,12 +35,14 @@ type Keyboard struct {
 	Buttons [][]KeyboardButton
 }
 
-// KeyboardButton is a VK text button. Payload must be a JSON string because VK
-// sends it back as message.payload on button clicks.
+// KeyboardButton is a VK keyboard button. Payload must be a JSON string because
+// VK sends it back on button clicks (`message.payload` for text buttons,
+// `message_event.object.payload` for callback buttons).
 type KeyboardButton struct {
-	Label   string
-	Payload string
-	Color   string
+	Label      string
+	Payload    string
+	Color      string
+	ActionType string
 }
 
 // Client sends messages and media to VK conversations. Implementations must
@@ -59,6 +61,8 @@ type Client interface {
 // ControlClient sends non-job control/product messages such as the /start menu.
 type ControlClient interface {
 	SendMessage(ctx context.Context, peerID, randomID int64, msg Message) (SendResult, error)
+	EditMessage(ctx context.Context, peerID, messageID int64, msg Message) (SendResult, error)
+	AnswerMessageEvent(ctx context.Context, eventID string, userID, peerID int64) error
 }
 
 // MediaUploader uploads raw artifact bytes to VK and returns the canonical

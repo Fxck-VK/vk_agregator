@@ -40,10 +40,46 @@ const (
 	CommandMenuText CommandType = "menu.text"
 	// CommandMenuImage explains how to generate an image.
 	CommandMenuImage CommandType = "menu.image"
+	// CommandMenuImageText selects text-to-image mode in the VK image menu.
+	CommandMenuImageText CommandType = "menu.image.text"
+	// CommandMenuImageReference selects image generation with a reference photo.
+	CommandMenuImageReference CommandType = "menu.image.reference"
 	// CommandMenuVideo explains how to generate a video.
 	CommandMenuVideo CommandType = "menu.video"
+	// CommandMenuVideoSora2 selects Sora 2 in the VK video model picker.
+	CommandMenuVideoSora2 CommandType = "menu.video.sora_2"
+	// CommandMenuVideoSora2Start opens the Sora 2 generation placeholder.
+	CommandMenuVideoSora2Start CommandType = "menu.video.sora_2.start"
+	// CommandMenuVideoSora2Examples opens Sora 2 prompt examples.
+	CommandMenuVideoSora2Examples CommandType = "menu.video.sora_2.examples"
+	// CommandMenuVideoKling21 selects Kling v2.1 in the VK video model picker.
+	CommandMenuVideoKling21 CommandType = "menu.video.kling_v2_1"
+	// CommandMenuVideoKling21Start opens the Kling v2.1 generation placeholder.
+	CommandMenuVideoKling21Start CommandType = "menu.video.kling_v2_1.start"
+	// CommandMenuVideoKling21Examples opens Kling v2.1 prompt examples.
+	CommandMenuVideoKling21Examples CommandType = "menu.video.kling_v2_1.examples"
+	// CommandMenuVideoSeedance1 selects Seedance 1 in the VK video model picker.
+	CommandMenuVideoSeedance1 CommandType = "menu.video.seedance_1"
+	// CommandMenuVideoSeedance1Lite selects the Seedance 1 Lite variant.
+	CommandMenuVideoSeedance1Lite CommandType = "menu.video.seedance_1.lite"
+	// CommandMenuVideoSeedance1Pro selects the Seedance 1 Pro variant.
+	CommandMenuVideoSeedance1Pro CommandType = "menu.video.seedance_1.pro"
+	// CommandMenuVideoHaiuo02 selects Haiuo v0.2 in the VK video model picker.
+	CommandMenuVideoHaiuo02 CommandType = "menu.video.haiuo_v0_2"
+	// CommandMenuVideoHaiuo02Standard selects the regular Haiuo v0.2 variant.
+	CommandMenuVideoHaiuo02Standard CommandType = "menu.video.haiuo_v0_2.standard"
+	// CommandMenuVideoHaiuo02Fast selects the fast Haiuo v0.2 variant.
+	CommandMenuVideoHaiuo02Fast CommandType = "menu.video.haiuo_v0_2.fast"
 	// CommandMenuStudents opens the student/schoolchild help section.
 	CommandMenuStudents CommandType = "menu.students"
+	// CommandMenuStudentSolver opens the task solver student flow.
+	CommandMenuStudentSolver CommandType = "menu.students.solver"
+	// CommandMenuStudentPresentation opens the presentation generation placeholder.
+	CommandMenuStudentPresentation CommandType = "menu.students.presentation"
+	// CommandMenuStudentReport opens the report generation placeholder.
+	CommandMenuStudentReport CommandType = "menu.students.report"
+	// CommandMenuStudentQA opens the student question-answer flow.
+	CommandMenuStudentQA CommandType = "menu.students.qa"
 	// CommandCancel cancels an in-flight job.
 	CommandCancel CommandType = "cancel"
 	// CommandStatus reports the status of a job.
@@ -71,8 +107,26 @@ func (c CommandType) Valid() bool {
 		CommandTopUp,
 		CommandMenuText,
 		CommandMenuImage,
+		CommandMenuImageText,
+		CommandMenuImageReference,
 		CommandMenuVideo,
+		CommandMenuVideoSora2,
+		CommandMenuVideoSora2Start,
+		CommandMenuVideoSora2Examples,
+		CommandMenuVideoKling21,
+		CommandMenuVideoKling21Start,
+		CommandMenuVideoKling21Examples,
+		CommandMenuVideoSeedance1,
+		CommandMenuVideoSeedance1Lite,
+		CommandMenuVideoSeedance1Pro,
+		CommandMenuVideoHaiuo02,
+		CommandMenuVideoHaiuo02Standard,
+		CommandMenuVideoHaiuo02Fast,
 		CommandMenuStudents,
+		CommandMenuStudentSolver,
+		CommandMenuStudentPresentation,
+		CommandMenuStudentReport,
+		CommandMenuStudentQA,
 		CommandCancel,
 		CommandStatus,
 		CommandHelp,

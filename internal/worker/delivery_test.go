@@ -2,7 +2,9 @@ package worker_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -220,6 +222,83 @@ func TestDeliveryTextSendsBody(t *testing.T) {
 	sent := h.vk.Sent()
 	if len(sent) != 1 || sent[0].Type != "text" || sent[0].Text != "generated answer" {
 		t.Fatalf("unexpected text send: %+v", sent)
+	}
+}
+
+func TestDeliveryTextEditsGPTPlaceholder(t *testing.T) {
+	h := newDeliveryHarness(t)
+	ctx := context.Background()
+	pending, err := h.vk.SendMessage(ctx, 555, 9001, vkdelivery.Message{Text: "GPT думает..."})
+	if err != nil {
+		t.Fatalf("send pending: %v", err)
+	}
+	job := h.resultReadyJob(t, domain.MediaTypeText, "generated answer")
+	job.OperationType = domain.OperationTextGenerate
+	job.Modality = domain.ModalityText
+	params, _ := json.Marshal(struct {
+		Prompt                 string `json:"prompt"`
+		VKPlaceholderMessageID int64  `json:"vk_placeholder_message_id"`
+	}{
+		Prompt:                 "привет",
+		VKPlaceholderMessageID: pending.MessageID,
+	})
+	job.Params = params
+	_ = h.jobs.Update(ctx, job)
+
+	if err := h.worker.Process(ctx, deliveryTask(job)); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+	sent := h.vk.Sent()
+	if len(sent) != 1 || sent[0].Type != "message" || sent[0].Text != "generated answer" {
+		t.Fatalf("expected placeholder edit without a new send, got %+v", sent)
+	}
+	edits := h.vk.Edits()
+	if len(edits) != 1 || edits[0].MessageID != pending.MessageID || edits[0].Text != "generated answer" {
+		t.Fatalf("unexpected edits: %+v", edits)
+	}
+	dels, _ := h.deliveries.ListByJob(ctx, job.ID)
+	if len(dels) != 1 || dels[0].VKMessageID == nil || *dels[0].VKMessageID != pending.MessageID {
+		t.Fatalf("delivery should keep the edited VK message id, got %+v", dels)
+	}
+}
+
+func TestDeliveryTextSplitsLongGPTPlaceholderAnswer(t *testing.T) {
+	h := newDeliveryHarness(t)
+	ctx := context.Background()
+	pending, err := h.vk.SendMessage(ctx, 555, 9001, vkdelivery.Message{Text: "GPT думает..."})
+	if err != nil {
+		t.Fatalf("send pending: %v", err)
+	}
+	longAnswer := strings.Repeat("answer ", 700)
+	job := h.resultReadyJob(t, domain.MediaTypeText, longAnswer)
+	job.OperationType = domain.OperationTextGenerate
+	job.Modality = domain.ModalityText
+	params, _ := json.Marshal(struct {
+		Prompt                 string `json:"prompt"`
+		VKPlaceholderMessageID int64  `json:"vk_placeholder_message_id"`
+	}{
+		Prompt:                 "long",
+		VKPlaceholderMessageID: pending.MessageID,
+	})
+	job.Params = params
+	_ = h.jobs.Update(ctx, job)
+
+	if err := h.worker.Process(ctx, deliveryTask(job)); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+	edits := h.vk.Edits()
+	if len(edits) != 1 || edits[0].MessageID != pending.MessageID {
+		t.Fatalf("expected one placeholder edit, got %+v", edits)
+	}
+	sent := h.vk.Sent()
+	if len(sent) != 2 || sent[0].MessageID != pending.MessageID || sent[1].Type != "text" {
+		t.Fatalf("expected edited placeholder plus one extra text chunk, got %+v", sent)
+	}
+	if len([]rune(sent[0].Text)) > 3500 || len([]rune(sent[1].Text)) > 3500 {
+		t.Fatalf("chunks are too long: first=%d second=%d", len([]rune(sent[0].Text)), len([]rune(sent[1].Text)))
+	}
+	if !strings.Contains(sent[0].Text, "answer") || !strings.Contains(sent[1].Text, "answer") {
+		t.Fatalf("unexpected split content: %+v", sent)
 	}
 }
 
