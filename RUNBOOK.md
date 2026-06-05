@@ -91,6 +91,7 @@ Override these values when needed:
 | `VK_API_BASE_URL` | `https://api.vk.com/method` | VK API method root |
 | `VK_WELCOME_ATTACHMENT` | `` | Optional pre-uploaded VK photo/video attachment sent with `/start` menu |
 | `VK_MENU_BUTTON_MODE` | `callback` | Inline menu buttons: `callback` hides user echo messages; `text` keeps legacy text-button behavior |
+| `VK_UNROUTED_TEXT_MODE` | `reply` | Plain text outside GPT mode: `reply` sends choose-mode menu, `silent` sends nothing, `gpt` preserves legacy text-to-GPT behavior |
 | `SIGNED_DELIVERY` / `ARTIFACT_URL_TTL` | `false` / `1h` | Deliver media through signed artifact URLs |
 | `ARTIFACT_RETENTION_DAYS` | `0` | Optional S3 lifecycle expiry |
 | `PRICES` | `` | Price overrides, e.g. `text_generate=2,image_generate=12` |
@@ -302,17 +303,21 @@ Clicking `🖼️ Создать фото` opens the photo instruction screen di
 there is one main image model in the VK UX. It shows `Фото по тексту`,
 `Фото с референсом`, and `⬅️ Назад`; those mode buttons are control-only until
 stateful image mode selection is wired. Clicking `💬 Спросить у GPT` sends the
-`SUPER GPT активен` prompt screen and also does not enqueue a job.
+`SUPER GPT активен` prompt screen, sets process-local GPT mode for that peer,
+and also does not enqueue a job. The next plain text or sticker from the same
+peer becomes a `text.ask` job; opening another menu screen clears GPT mode.
 Clicking `🎁 Студентам и школьникам` opens the study submenu:
 `Решальник задач`, `Генерация презентаций (скоро)`,
 `Создание рефератов (скоро)`, `❓ Ответы на вопросы`, and `⬅️ Назад`.
 Those buttons are control-only until the corresponding scenario state is wired.
 Inline menu navigation is hybrid: while the last bot message is still the
 active menu, button clicks edit that message through VK `messages.edit` instead
-of adding new bot messages. If the user sends a plain prompt/text message, the
-active menu pointer is cleared and the next `Показать меню` or menu button sends
-a fresh menu at the bottom of the chat. If VK rejects an edit, the API falls back
-to sending a new menu message.
+of adding new bot messages. If the user sends plain text, the active menu
+pointer is cleared. With default `VK_UNROUTED_TEXT_MODE=reply`, plain text
+outside GPT mode records an `unknown` command and sends a fresh choose-mode menu
+instead of creating a billable job; `silent` records it without a response, and
+`gpt` restores the legacy any-text-to-GPT behavior. If VK rejects an edit, the
+API falls back to sending a new menu message.
 By default, inline menu buttons use VK `callback` actions
 (`VK_MENU_BUTTON_MODE=callback`), so clicking `Создать видео`, `Назад`, etc.
 does not create a user message in the chat. VK Callback API must have the
@@ -325,9 +330,12 @@ what clears the loading spinner in the VK client.
 
 ### VK message → full pipeline
 ```bash
-# text
+# enable text/GPT mode (control command, no job)
 curl -s -X POST localhost:8080/webhooks/vk -H 'Content-Type: application/json' \
-  -d '{"type":"message_new","event_id":"evt-1","object":{"message":{"from_id":777,"peer_id":777,"text":"hello world"}}}'
+  -d '{"type":"message_new","event_id":"text-mode-1","object":{"message":{"from_id":777,"peer_id":777,"text":"💬 Спросить у GPT","payload":"{\"command\":\"menu.text\"}"}}}'
+# text job after GPT mode is active
+curl -s -X POST localhost:8080/webhooks/vk -H 'Content-Type: application/json' \
+  -d '{"type":"message_new","event_id":"text-1","object":{"message":{"from_id":777,"peer_id":777,"text":"hello world"}}}'
 # image
 curl -s -X POST localhost:8080/webhooks/vk -H 'Content-Type: application/json' \
   -d '{"type":"message_new","event_id":"evt-2","object":{"message":{"from_id":777,"peer_id":777,"text":"/image a red cat"}}}'
@@ -389,8 +397,9 @@ go test ./internal/worker/ -run TestEndToEnd -v  # full VK→…→Capture
   message settings. VK returns `error_code=912` when keyboards are disabled; the
   API falls back to sending the welcome text without keyboard.
 - Menu clicks keep creating new bot messages: this is expected after the user
-  has sent a plain prompt/text message, after an API restart, or after an edit
-  rejection from VK. Active-menu tracking is process-local in the current Beta
+  has sent plain text outside GPT mode and `VK_UNROUTED_TEXT_MODE=reply` posted
+  a fresh choose-mode menu, after an API restart, or after an edit rejection from
+  VK. Active-menu/dialog-mode tracking is process-local in the current Beta
   implementation.
 - Callback menu buttons do nothing: enable the VK Callback API event type for
   callback-button clicks (`message_event`) and confirm `VK_MENU_BUTTON_MODE` is

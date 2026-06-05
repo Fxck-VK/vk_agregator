@@ -100,6 +100,7 @@ func main() {
 		Secret:            cfg.VKSecret,
 		WelcomeAttachment: cfg.VKWelcomeAttachment,
 		MenuButtonMode:    cfg.VKMenuButtonMode,
+		UnroutedTextMode:  cfg.VKUnroutedTextMode,
 	}, vkinbound.Deps{
 		Idempotency:  idem,
 		Inbound:      inbound,

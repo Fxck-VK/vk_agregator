@@ -65,6 +65,7 @@ OS/CI environment variables override `.env` values.
 | `VK_ACCESS_TOKEN`       | _(required when `VK_DELIVERY_MODE=real`; also enables API-side `/start` menu sends)_       |
 | `VK_WELCOME_ATTACHMENT` | _(optional VK attachment string for `/start` banner)_                                     |
 | `VK_MENU_BUTTON_MODE`   | `callback`                                                                                |
+| `VK_UNROUTED_TEXT_MODE` | `reply`                                                                                   |
 | `MAX_ATTEMPTS`          | `3`                                                                                       |
 | `SIGNED_DELIVERY`       | `false`                                                                                   |
 | `STREAM_MAX_LEN`        | `100000`                                                                                  |
@@ -141,12 +142,17 @@ curl -s -X POST localhost:8080/webhooks/vk \
 # dev-confirmation
 ```
 
-VK message (creates user → command → job; text generation):
+VK text mode + message (creates user → control command → text job):
 
 ```bash
 curl -s -X POST localhost:8080/webhooks/vk \
   -H 'Content-Type: application/json' \
-  -d '{"type":"message_new","event_id":"evt-1","object":{"message":{"from_id":777,"peer_id":777,"text":"hello world"}}}'
+  -d '{"type":"message_new","event_id":"text-mode-1","object":{"message":{"from_id":777,"peer_id":777,"text":"💬 Спросить у GPT","payload":"{\"command\":\"menu.text\"}"}}}'
+# ok
+
+curl -s -X POST localhost:8080/webhooks/vk \
+  -H 'Content-Type: application/json' \
+  -d '{"type":"message_new","event_id":"text-1","object":{"message":{"from_id":777,"peer_id":777,"text":"hello world"}}}'
 # ok
 ```
 
@@ -170,16 +176,19 @@ Clicking `🖼️ Создать фото` should return the daily-free-attempt 
 instruction screen directly with `Фото по тексту`, `Фото с референсом`, and
 `⬅️ Назад`; these mode buttons are also control commands. Clicking
 `💬 Спросить у GPT` should return `SUPER GPT активен` and wait for the next
-plain user message.
+plain user message; that next text or sticker should create a `text.ask` job.
+Plain text outside GPT mode is controlled by `VK_UNROUTED_TEXT_MODE`: `reply`
+(default) sends a choose-mode menu and creates no job, `silent` creates no job
+and sends nothing, `gpt` preserves legacy any-text-to-GPT behavior.
 Clicking `🎁 Студентам и школьникам` should return the study submenu with
 `Решальник задач`, `Генерация презентаций (скоро)`,
 `Создание рефератов (скоро)`, `❓ Ответы на вопросы`, and `⬅️ Назад`; these
 button presses must not enqueue jobs.
 For live VK UX, click several inline menu buttons in a row: the bot should edit
 the active menu message instead of posting a new bot message each time. Then
-send a plain prompt/text message and press `Показать меню`: the menu should be
-sent as a new bottom message. This active-menu state is process-local to the
-running API instance.
+send plain text outside GPT mode: with the default `reply` setting, the bot
+should post a fresh choose-mode menu at the bottom and still create no job. This
+active-menu/dialog-mode state is process-local to the running API instance.
 With `VK_MENU_BUTTON_MODE=callback`, inline menu clicks should not appear as
 user messages in the chat. Make sure VK Callback API has callback-button events
 (`message_event`) enabled. To verify legacy fallback, set
@@ -202,7 +211,7 @@ Idempotency check — re-send the **same** `event_id`; no second job is created:
 
 ```bash
 curl -s -X POST localhost:8080/webhooks/vk -H 'Content-Type: application/json' \
-  -d '{"type":"message_new","event_id":"evt-1","object":{"message":{"from_id":777,"peer_id":777,"text":"hello world"}}}'
+  -d '{"type":"message_new","event_id":"text-1","object":{"message":{"from_id":777,"peer_id":777,"text":"hello world"}}}'
 # ok  (deduped)
 ```
 

@@ -22,7 +22,7 @@
 
 ### Step 2 — PostgreSQL adapters, Command Router
 - [x] `pgx/v5` репозитории всех сущностей (+ `Querier`, `RunInTx`, `mapError`).
-- [x] Command Router (`/image`, `/video`, `/edit`, `/balance`, `/status`, `/cancel`, `/help`; прочее -> `text_generate`).
+- [x] Command Router (`/image`, `/video`, `/edit`, `/balance`, `/status`, `/cancel`, `/help`; прочее -> `text_generate` at parser level, with VK inbound gated by active GPT mode / `VK_UNROUTED_TEXT_MODE`).
 - [x] Env-guarded integration-тесты репозиториев.
 
 ### Step 3 — Billing, Orchestrator, VK Webhook
@@ -99,14 +99,15 @@
 - [x] Реальный VK delivery покрывает `messages.send` и upload pipeline для raw photo/video artifacts в VK upload servers (`photos.getMessagesUploadServer` -> upload -> `photos.saveMessagesPhoto`, `video.save` -> upload).
 - [x] Реальный output moderation provider включается через `MODERATION_PROVIDER=openai` и пишет verdict в существующий `moderation_results` flow.
 - [x] Реальный artifact scanner включается через `ARTIFACT_SCANNER=openai`; scanner проверяет text/image bytes до storage, video остается задачей полноценного media pipeline.
-- [x] VK inbound распознает sticker-only сообщения и превращает их в text job prompt, чтобы стикеры не терялись как пустой текст.
+- [x] VK inbound распознает sticker-only сообщения и превращает их в text prompt; prompt становится `text.ask` job только когда включен GPT text mode или legacy `VK_UNROUTED_TEXT_MODE=gpt`, поэтому стикеры не теряются как пустой текст и не создают случайные jobs вне режима.
 - [x] VK onboarding keyboard: первичная нижняя кнопка `Старт` запускает welcome flow; после `Старт` нижняя постоянная клавиатура заменяется на одну кнопку `Показать меню`; `Показать меню` использует отдельный `show_menu` control-command и открывает Super GPT inline menu без повторной переустановки нижней клавиатуры. Кнопки меню не создают пустые billable jobs без промпта; при VK `error_code=912` есть fallback на текст без keyboard.
 - [x] VK video menu: кнопка `🎬 Создать видео` открывает inline-экран `Выбери модель для генерации:` с кнопками `Sora 2`, `Kling v2.1`, `Seedance 1`, `Haiuo v0.2` и `⬅️ Назад`; выбор модели пока control-only и не создает billable job.
 - [x] VK menu registry: control-экраны описаны декларативно; `🖼️ Создать фото` при одной основной модели сразу открывает инструкцию с режимами `Фото по тексту` / `Фото с референсом`, а `💬 Спросить у GPT` открывает active-сообщение без лишнего выбора модели.
 - [x] VK student menu: `🎁 Студентам и школьникам` открывает учебный экран с кнопками `Решальник задач`, `Генерация презентаций (скоро)`, `Создание рефератов (скоро)`, `Ответы на вопросы` и `Назад`; все кнопки пока control-only.
-- [x] VK active menu UX: inline menu navigation edits the current menu message via `messages.edit`; after a plain user prompt/text message the active menu is cleared and the next menu action sends a fresh bottom message. Edit failures fall back to a normal send.
+- [x] VK active menu UX: inline menu navigation edits the current menu message via `messages.edit`; plain user text clears the active menu pointer, and with default `VK_UNROUTED_TEXT_MODE=reply` sends a fresh choose-mode menu instead of a billable job. Edit failures fall back to a normal send.
 - [x] VK callback menu buttons: inline menu can run with `VK_MENU_BUTTON_MODE=callback`, processing VK `message_event` without user echo messages; `VK_MENU_BUTTON_MODE=text` keeps the legacy text-button fallback. Persistent lower `Показать меню` remains text.
 - [x] VK callback button ack: every `message_event` is acknowledged through blank `messages.sendMessageEventAnswer`, so VK client button loading spinner stops after a click.
+- [x] VK unrouted text gating: `Спросить у GPT` sets process-local GPT mode for the peer; ordinary text/stickers outside GPT mode are configurable via `VK_UNROUTED_TEXT_MODE=reply|silent|gpt` and do not create jobs by default.
 
 ---
 

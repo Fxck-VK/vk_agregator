@@ -76,7 +76,7 @@
 - Реализован Command Router (`internal/service/commandrouter/`):
   - `/image` → `image.generate`, `/video` → `video.generate`, `/edit` → `image.edit`,
     `/balance`, `/status <id>`, `/cancel <id>`, `/help`;
-  - любой другой текст (включая неизвестные слэш-команды) → `text.ask` / `text_generate`.
+  - любой другой текст (включая неизвестные слэш-команды) → `text.ask` / `text_generate` на уровне parser; VK inbound дополнительно gate-ит такой текст через active GPT mode / `VK_UNROUTED_TEXT_MODE`.
 - Добавлены тесты:
   - unit-тесты роутера (`router_test.go`) — без БД, входят в обычный `go test ./...`;
   - integration-тесты репозиториев (`integration_test.go`) — поднимают схему из миграции 000001
@@ -435,7 +435,7 @@
   - добавлены unit-тесты OpenAI text/image/video/moderation/scanner, VK upload pipeline, delivery upload и provider fallback.
 - **VK inbound attachments**:
   - sticker-only сообщения больше не превращаются в пустой prompt;
-  - handler синтезирует text prompt с `sticker_id/product_id`, поэтому стикер проходит через обычный `InboundEvent -> Command -> Job` flow;
+  - handler синтезирует text prompt с `sticker_id/product_id`; prompt проходит в `text.ask` job только при активном GPT text mode или legacy `VK_UNROUTED_TEXT_MODE=gpt`, поэтому стикер не теряется и не создает случайный billable job вне режима;
   - фото/видео/аудио attachments остаются задачей полноценного input Artifact pipeline.
 - **VK product menu**:
   - menu flow переведен на декларативный `menuScreen` registry: каждый control-command указывает текст, inline keyboard, необходимость баланса и optional welcome attachment;
@@ -446,13 +446,14 @@
   - `Создать видео` теперь открывает отдельный inline-экран `Выбери модель для генерации:` с моделями `Sora 2`, `Kling v2.1`, `Seedance 1`, `Haiuo v0.2` и кнопкой `Назад`;
   - кнопки выбора video-модели записываются как control commands и не создают billable jobs до подключения model-specific generation state;
   - `Создать фото` при одной основной модели пропускает выбор модели и сразу показывает инструкцию по `Фото по тексту` / `Фото с референсом` с кнопками режимов и `Назад`;
-  - `Спросить у GPT` открывает active-сообщение `SUPER GPT активен` без создания job; следующий обычный текст пользователя уже проходит через обычный text.ask flow;
+  - `Спросить у GPT` открывает active-сообщение `SUPER GPT активен` без создания job и включает process-local GPT text mode для `peer_id`; следующий обычный текст/стикер пользователя проходит через `text.ask` flow;
   - `Студентам и школьникам` открывает учебное подменю: `Решальник задач`, `Генерация презентаций (скоро)`, `Создание рефератов (скоро)`, `Ответы на вопросы`, `Назад`;
   - `vkdelivery.HTTPClient` получил `SendMessage` с `keyboard` JSON, поэтому VK API по-прежнему вызывается только из `internal/adapter/delivery/vk`;
   - `vkdelivery.HTTPClient` получил `EditMessage` поверх VK `messages.edit`, а `ControlClient` теперь покрывает и send, и edit для product/control меню;
   - `vkdelivery.KeyboardButton` получил `ActionType`, поэтому inline menu можно рендерить как VK `callback` или legacy `text` без переписывания payload;
   - `VK_MENU_BUTTON_MODE=callback` стал дефолтом для inline menu: нажатия приходят как VK `message_event` и не добавляют пользовательские echo-сообщения в чат; `VK_MENU_BUTTON_MODE=text` возвращает прежнее поведение;
-  - handler хранит process-local active menu по `peer_id`: кнопочные payload-переходы редактируют текущий menu message, обычный пользовательский prompt/text сбрасывает active menu, и следующий вызов меню отправляет новое сообщение внизу чата;
+  - handler хранит process-local active menu и dialog mode по `peer_id`: кнопочные payload-переходы редактируют текущий menu message, обычный пользовательский текст сбрасывает active menu pointer, а другой control-экран сбрасывает GPT mode;
+  - `VK_UNROUTED_TEXT_MODE=reply` стал дефолтом для обычного текста вне GPT mode: handler записывает `unknown` command, не создает Job и отправляет fresh choose-mode menu; `silent` молчит, `gpt` возвращает legacy any-text-to-GPT behavior;
   - handler обрабатывает `message_event` как control-only inbound event: сохраняет inbound/command, но не создает Job и не дергает provider;
   - каждый `message_event` подтверждается blank `messages.sendMessageEventAnswer` через `vkdelivery.ControlClient`, чтобы VK-клиент снимал loading spinner с callback-кнопки;
   - если VK не разрешает edit текущего menu message, API логирует warn, очищает active menu и делает fallback на обычный `messages.send`;
@@ -467,6 +468,7 @@
 - Added VK menu UX coverage: `EditMessage` request shape, mock edit semantics, active-menu edit, and plain-message reset to new menu send.
 - Added callback menu coverage: callback keyboard JSON, `VK_MENU_BUTTON_MODE` config validation, `message_event` command processing, no-job invariant, and legacy text-button mode.
 - Added callback ack coverage: real `messages.sendMessageEventAnswer` request shape, mock answer recording, and inbound `message_event` acknowledgement.
+- Added unrouted text coverage: default choose-mode reply/no-job, `silent` no-response mode, legacy `gpt` mode, GPT button enabling text jobs, menu transitions clearing GPT mode, and sticker-to-text job only inside GPT mode.
 - Full regression checks выполняются после документационного sync.
 - Live VK `/start` smoke: callback returned `ok`, command persisted as `start`,
   zero jobs created, welcome text delivered to VK. After enabling bot features
@@ -477,7 +479,7 @@
 - Реальные OpenAI/VK вызовы не прогонялись без пользовательских credentials; нужен live smoke на dev-аккаунтах.
 - Второй реальный provider для fallback ещё не добавлен; сейчас fallback можно проверить с `mock`.
 - VK control/menu responses пока отправляются напрямую из API через `vkdelivery.ControlClient` с deterministic `random_id`; если на product/control sends распространяем invariant `Every delivery attempt is persisted`, нужен отдельный persisted delivery/outbox flow для таких сообщений.
-- Active-menu tracking для `messages.edit` пока хранится в памяти процесса `cmd/api`; после рестарта API или при multi-instance балансировке меню может отправиться новым сообщением. Перед production-scale нужен persisted conversation/menu state.
+- Active-menu tracking и GPT dialog mode пока хранятся в памяти процесса `cmd/api`; после рестарта API или при multi-instance балансировке меню может отправиться новым сообщением, а пользователь может потерять выбранный GPT mode. Перед production-scale нужен persisted conversation/menu state.
 - Video artifact scanner пока fail-open; полноценный video scan/probe/transcode остаётся Phase 3 media pipeline.
 - Нужен resume fix для edge-case: `provider_task=succeeded`, но artifact/result_ready ещё не сохранены после crash.
 

@@ -106,6 +106,10 @@ type Config struct {
 	// VKMenuButtonMode controls inline product menu buttons: "callback"
 	// prevents user echo messages; "text" keeps legacy behavior.
 	VKMenuButtonMode string
+	// VKUnroutedTextMode controls plain VK text outside an active text mode:
+	// "reply" asks the user to choose a mode, "silent" ignores it, and "gpt"
+	// preserves the legacy behavior where any text creates a GPT job.
+	VKUnroutedTextMode string
 
 	// ArtifactURLTTL is how long signed artifact delivery URLs stay valid.
 	ArtifactURLTTL time.Duration
@@ -144,6 +148,9 @@ func (c Config) Validate() error {
 	var missing []string
 	if mode := strings.ToLower(strings.TrimSpace(c.VKMenuButtonMode)); mode != "" && mode != "callback" && mode != "text" {
 		return fmt.Errorf("config: VK_MENU_BUTTON_MODE must be callback or text")
+	}
+	if mode := strings.ToLower(strings.TrimSpace(c.VKUnroutedTextMode)); mode != "" && mode != "reply" && mode != "silent" && mode != "gpt" {
+		return fmt.Errorf("config: VK_UNROUTED_TEXT_MODE must be reply, silent, or gpt")
 	}
 	if c.IsProduction() {
 		if c.VKSecret == "" {
@@ -243,6 +250,7 @@ func Load() Config {
 		VKAPIBaseURL:        env("VK_API_BASE_URL", "https://api.vk.com/method"),
 		VKWelcomeAttachment: env("VK_WELCOME_ATTACHMENT", ""),
 		VKMenuButtonMode:    env("VK_MENU_BUTTON_MODE", "callback"),
+		VKUnroutedTextMode:  env("VK_UNROUTED_TEXT_MODE", "reply"),
 
 		ArtifactURLTTL:        envDuration("ARTIFACT_URL_TTL", time.Hour),
 		SignedDelivery:        envBool("SIGNED_DELIVERY", false),

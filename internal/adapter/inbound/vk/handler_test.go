@@ -119,7 +119,7 @@ func TestMessageNewCreatesJob(t *testing.T) {
 	}
 }
 
-func TestMessageNewStickerCreatesTextJob(t *testing.T) {
+func TestMessageNewStickerOutsideGPTDoesNotCreateTextJob(t *testing.T) {
 	h := newHarness()
 	body := `{
 		"type":"message_new","group_id":1,"event_id":"evt-sticker","secret":"s3cr3t",
@@ -139,15 +139,15 @@ func TestMessageNewStickerCreatesTextJob(t *testing.T) {
 		t.Fatalf("user not created: %v", err)
 	}
 	cmds, _ := h.cmds.ListByUser(ctx, user.ID, 10, 0)
-	if len(cmds) != 1 || !strings.Contains(cmds[0].RawText, "VK-стикер") || !strings.Contains(cmds[0].RawText, "sticker_id=123") {
+	if len(cmds) != 1 || cmds[0].Type != domain.CommandUnknown || !strings.Contains(cmds[0].RawText, "VK-стикер") || !strings.Contains(cmds[0].RawText, "sticker_id=123") {
 		t.Fatalf("unexpected command raw text: %+v", cmds)
 	}
 	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
-	if len(jobs) != 1 || jobs[0].OperationType != domain.OperationTextGenerate {
-		t.Fatalf("expected one text job, got %+v", jobs)
+	if len(jobs) != 0 {
+		t.Fatalf("sticker outside GPT mode must not create a text job, got %+v", jobs)
 	}
-	if h.pub.Len() != 1 {
-		t.Fatalf("expected 1 enqueued task, got %d", h.pub.Len())
+	if h.pub.Len() != 0 {
+		t.Fatalf("expected no enqueued task, got %d", h.pub.Len())
 	}
 }
 
@@ -346,7 +346,7 @@ func TestCallbackMenuEventEditsActiveMenuNoJob(t *testing.T) {
 	}
 }
 
-func TestPlainMessageClearsActiveMenuBeforeNextMenu(t *testing.T) {
+func TestPlainMessageSendsFreshChooseModeBeforeNextMenuEdit(t *testing.T) {
 	control := vkdelivery.NewMockClient()
 	h := newHarnessWithControl(control)
 	start := `{
@@ -364,6 +364,11 @@ func TestPlainMessageClearsActiveMenuBeforeNextMenu(t *testing.T) {
 	if rec := h.post(plain); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
 		t.Fatalf("unexpected plain response: %d %q", rec.Code, rec.Body.String())
 	}
+	afterPlain := control.Sent()
+	if len(afterPlain) != 3 {
+		t.Fatalf("plain text should send a fresh choose-mode message, got %+v", afterPlain)
+	}
+	chooseID := afterPlain[2].MessageID
 
 	menu := `{
 		"type":"message_new","group_id":1,"event_id":"evt-menu-clear-show","secret":"s3cr3t",
@@ -375,10 +380,13 @@ func TestPlainMessageClearsActiveMenuBeforeNextMenu(t *testing.T) {
 
 	sent := control.Sent()
 	if len(sent) != 3 {
-		t.Fatalf("menu after plain text should be sent as a new message, got %+v", sent)
+		t.Fatalf("plain text should send one fresh choose-mode message before menu edit, got %+v", sent)
 	}
-	if edits := control.Edits(); len(edits) != 0 {
-		t.Fatalf("plain text should clear active menu before next menu, got edits %+v", edits)
+	if !strings.Contains(sent[2].Text, "Добро пожаловать в Super GPT") {
+		t.Fatalf("next menu should edit the choose-mode message into the welcome menu, got %+v", sent[2])
+	}
+	if edits := control.Edits(); len(edits) != 1 || edits[0].MessageID != chooseID {
+		t.Fatalf("next menu should edit the fresh choose-mode message, got edits %+v", edits)
 	}
 }
 
@@ -528,6 +536,224 @@ func TestGPTMenuButtonSendsActivePromptNoJob(t *testing.T) {
 	sent := control.Sent()
 	if len(sent) != 1 || !strings.Contains(sent[0].Text, "SUPER GPT активен") || !strings.Contains(sent[0].Keyboard, "⬅️ Назад") {
 		t.Fatalf("unexpected gpt response: %+v", sent)
+	}
+}
+
+func TestPlainTextOutsideModeRepliesWithChooseModeNoJob(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	h := newHarnessWithControl(control)
+	body := `{
+		"type":"message_new","group_id":1,"event_id":"evt-unrouted-reply","secret":"s3cr3t",
+		"object":{"message":{"from_id":574,"peer_id":574,"text":"придумай идею"}}
+	}`
+	rec := h.post(body)
+	if rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	ctx := context.Background()
+	user, err := h.users.GetByVKUserID(ctx, 574)
+	if err != nil {
+		t.Fatalf("user not created: %v", err)
+	}
+	cmds, _ := h.cmds.ListByUser(ctx, user.ID, 10, 0)
+	if len(cmds) != 1 || cmds[0].Type != domain.CommandUnknown {
+		t.Fatalf("plain text outside mode should be recorded as unknown, got %+v", cmds)
+	}
+	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
+	if len(jobs) != 0 || h.pub.Len() != 0 {
+		t.Fatalf("plain text outside mode must not create jobs, jobs=%+v tasks=%d", jobs, h.pub.Len())
+	}
+	sent := control.Sent()
+	if len(sent) != 1 {
+		t.Fatalf("expected one choose-mode response, got %+v", sent)
+	}
+	if !strings.Contains(sent[0].Text, "Выберите режим") || !strings.Contains(sent[0].Keyboard, "Спросить у GPT") {
+		t.Fatalf("unexpected choose-mode response: %+v", sent)
+	}
+}
+
+func TestPlainTextOutsideModeCanBeSilent(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	h := newHarnessWithConfig(control, vk.Config{
+		ConfirmationToken: "conf-token-123",
+		Secret:            "s3cr3t",
+		UnroutedTextMode:  "silent",
+	})
+	body := `{
+		"type":"message_new","group_id":1,"event_id":"evt-unrouted-silent","secret":"s3cr3t",
+		"object":{"message":{"from_id":575,"peer_id":575,"text":"придумай идею"}}
+	}`
+	rec := h.post(body)
+	if rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	ctx := context.Background()
+	user, err := h.users.GetByVKUserID(ctx, 575)
+	if err != nil {
+		t.Fatalf("user not created: %v", err)
+	}
+	cmds, _ := h.cmds.ListByUser(ctx, user.ID, 10, 0)
+	if len(cmds) != 1 || cmds[0].Type != domain.CommandUnknown {
+		t.Fatalf("plain text outside mode should be recorded as unknown, got %+v", cmds)
+	}
+	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
+	if len(jobs) != 0 || h.pub.Len() != 0 {
+		t.Fatalf("plain text outside mode must not create jobs, jobs=%+v tasks=%d", jobs, h.pub.Len())
+	}
+	if sent := control.Sent(); len(sent) != 0 {
+		t.Fatalf("silent mode should not send a choose-mode response, got %+v", sent)
+	}
+}
+
+func TestPlainTextCanKeepLegacyGPTMode(t *testing.T) {
+	h := newHarnessWithConfig(nil, vk.Config{
+		ConfirmationToken: "conf-token-123",
+		Secret:            "s3cr3t",
+		UnroutedTextMode:  "gpt",
+	})
+	body := `{
+		"type":"message_new","group_id":1,"event_id":"evt-unrouted-gpt","secret":"s3cr3t",
+		"object":{"message":{"from_id":576,"peer_id":576,"text":"придумай идею"}}
+	}`
+	rec := h.post(body)
+	if rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	ctx := context.Background()
+	user, err := h.users.GetByVKUserID(ctx, 576)
+	if err != nil {
+		t.Fatalf("user not created: %v", err)
+	}
+	cmds, _ := h.cmds.ListByUser(ctx, user.ID, 10, 0)
+	if len(cmds) != 1 || cmds[0].Type != domain.CommandTextAsk {
+		t.Fatalf("legacy gpt mode should record text.ask, got %+v", cmds)
+	}
+	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
+	if len(jobs) != 1 || jobs[0].OperationType != domain.OperationTextGenerate || h.pub.Len() != 1 {
+		t.Fatalf("legacy gpt mode should create one text job, jobs=%+v tasks=%d", jobs, h.pub.Len())
+	}
+}
+
+func TestGPTMenuButtonEnablesPlainTextJobs(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	h := newHarnessWithControl(control)
+	gpt := `{
+		"type":"message_new","group_id":1,"event_id":"evt-gpt-mode-on","secret":"s3cr3t",
+		"object":{"message":{"from_id":577,"peer_id":577,"text":"💬 Спросить у GPT","payload":"{\"command\":\"menu.text\"}"}}
+	}`
+	if rec := h.post(gpt); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected gpt response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	plain := `{
+		"type":"message_new","group_id":1,"event_id":"evt-gpt-mode-text","secret":"s3cr3t",
+		"object":{"message":{"from_id":577,"peer_id":577,"text":"придумай идею"}}
+	}`
+	if rec := h.post(plain); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected plain response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	ctx := context.Background()
+	user, err := h.users.GetByVKUserID(ctx, 577)
+	if err != nil {
+		t.Fatalf("user not created: %v", err)
+	}
+	cmds, _ := h.cmds.ListByUser(ctx, user.ID, 10, 0)
+	if len(cmds) != 2 || cmds[0].Type != domain.CommandMenuText || cmds[1].Type != domain.CommandTextAsk {
+		t.Fatalf("unexpected commands: %+v", cmds)
+	}
+	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
+	if len(jobs) != 1 || jobs[0].OperationType != domain.OperationTextGenerate || h.pub.Len() != 1 {
+		t.Fatalf("gpt mode should create one text job, jobs=%+v tasks=%d", jobs, h.pub.Len())
+	}
+	if sent := control.Sent(); len(sent) != 1 || !strings.Contains(sent[0].Text, "SUPER GPT активен") {
+		t.Fatalf("unexpected control responses: %+v", sent)
+	}
+}
+
+func TestOtherMenuButtonClearsGPTMode(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	h := newHarnessWithControl(control)
+	gpt := `{
+		"type":"message_new","group_id":1,"event_id":"evt-gpt-mode-clear-on","secret":"s3cr3t",
+		"object":{"message":{"from_id":578,"peer_id":578,"text":"💬 Спросить у GPT","payload":"{\"command\":\"menu.text\"}"}}
+	}`
+	if rec := h.post(gpt); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected gpt response: %d %q", rec.Code, rec.Body.String())
+	}
+	video := `{
+		"type":"message_event","group_id":1,"event_id":"evt-gpt-mode-clear-video","secret":"s3cr3t",
+		"object":{"user_id":578,"peer_id":578,"event_id":"vk-button-event-clear","payload":{"command":"menu.video"}}
+	}`
+	if rec := h.post(video); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected video response: %d %q", rec.Code, rec.Body.String())
+	}
+	plain := `{
+		"type":"message_new","group_id":1,"event_id":"evt-gpt-mode-clear-text","secret":"s3cr3t",
+		"object":{"message":{"from_id":578,"peer_id":578,"text":"придумай идею"}}
+	}`
+	if rec := h.post(plain); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected plain response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	ctx := context.Background()
+	user, err := h.users.GetByVKUserID(ctx, 578)
+	if err != nil {
+		t.Fatalf("user not created: %v", err)
+	}
+	cmds, _ := h.cmds.ListByUser(ctx, user.ID, 10, 0)
+	if len(cmds) != 3 || cmds[0].Type != domain.CommandMenuText || cmds[1].Type != domain.CommandMenuVideo || cmds[2].Type != domain.CommandUnknown {
+		t.Fatalf("unexpected commands after gpt mode clear: %+v", cmds)
+	}
+	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
+	if len(jobs) != 0 || h.pub.Len() != 0 {
+		t.Fatalf("plain text after mode clear must not create jobs, jobs=%+v tasks=%d", jobs, h.pub.Len())
+	}
+	sent := control.Sent()
+	if len(sent) != 2 || !strings.Contains(sent[1].Text, "Выберите режим") {
+		t.Fatalf("expected choose-mode response after mode clear, got %+v", sent)
+	}
+	if answers := control.EventAnswers(); len(answers) != 1 || answers[0].EventID != "vk-button-event-clear" {
+		t.Fatalf("expected callback event answer, got %+v", answers)
+	}
+}
+
+func TestStickerInGPTModeCreatesTextJob(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	h := newHarnessWithControl(control)
+	gpt := `{
+		"type":"message_new","group_id":1,"event_id":"evt-sticker-gpt-on","secret":"s3cr3t",
+		"object":{"message":{"from_id":579,"peer_id":579,"text":"💬 Спросить у GPT","payload":"{\"command\":\"menu.text\"}"}}
+	}`
+	if rec := h.post(gpt); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected gpt response: %d %q", rec.Code, rec.Body.String())
+	}
+	sticker := `{
+		"type":"message_new","group_id":1,"event_id":"evt-sticker-gpt-text","secret":"s3cr3t",
+		"object":{"message":{
+			"from_id":579,"peer_id":579,"text":"",
+			"attachments":[{"type":"sticker","sticker":{"sticker_id":123,"product_id":456,"emoji":"🙂"}}]
+		}}
+	}`
+	if rec := h.post(sticker); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected sticker response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	ctx := context.Background()
+	user, err := h.users.GetByVKUserID(ctx, 579)
+	if err != nil {
+		t.Fatalf("user not created: %v", err)
+	}
+	cmds, _ := h.cmds.ListByUser(ctx, user.ID, 10, 0)
+	if len(cmds) != 2 || cmds[1].Type != domain.CommandTextAsk || !strings.Contains(cmds[1].RawText, "sticker_id=123") {
+		t.Fatalf("unexpected commands: %+v", cmds)
+	}
+	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
+	if len(jobs) != 1 || jobs[0].OperationType != domain.OperationTextGenerate || h.pub.Len() != 1 {
+		t.Fatalf("sticker in gpt mode should create one text job, jobs=%+v tasks=%d", jobs, h.pub.Len())
 	}
 }
 

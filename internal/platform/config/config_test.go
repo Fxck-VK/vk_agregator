@@ -63,12 +63,30 @@ func TestLoadVKMenuButtonMode(t *testing.T) {
 	}
 }
 
+func TestLoadVKUnroutedTextMode(t *testing.T) {
+	t.Setenv("VK_UNROUTED_TEXT_MODE", "silent")
+
+	cfg := config.Load()
+	if cfg.VKUnroutedTextMode != "silent" {
+		t.Fatalf("VKUnroutedTextMode = %q, want silent", cfg.VKUnroutedTextMode)
+	}
+}
+
 func TestValidateVKMenuButtonMode(t *testing.T) {
 	cfg := config.Config{VKMenuButtonMode: "bad"}
 
 	err := cfg.Validate()
 	if err == nil || !strings.Contains(err.Error(), "VK_MENU_BUTTON_MODE") {
 		t.Fatalf("expected VK_MENU_BUTTON_MODE validation error, got %v", err)
+	}
+}
+
+func TestValidateVKUnroutedTextMode(t *testing.T) {
+	cfg := config.Config{VKUnroutedTextMode: "bad"}
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "VK_UNROUTED_TEXT_MODE") {
+		t.Fatalf("expected VK_UNROUTED_TEXT_MODE validation error, got %v", err)
 	}
 }
 

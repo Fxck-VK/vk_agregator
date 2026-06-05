@@ -143,8 +143,10 @@ Severity: **critical** (blocks prod / safety / data loss), **high** (must fix be
   for both `messages.send` and `messages.edit`; inline buttons default to
   `callback` and are processed through VK `message_event`, with
   `VK_MENU_BUTTON_MODE=text` as a legacy fallback. Active-menu tracking is
-  currently process-local and should become persisted before multi-instance API
-  scaling.
+  currently process-local. Plain text/stickers become `text.ask` jobs only after
+  `Спросить у GPT` enables process-local GPT mode, unless
+  `VK_UNROUTED_TEXT_MODE=gpt` restores legacy behavior. Persist active menu and
+  dialog mode before multi-instance API scaling.
 
 **V2 — Confirmation/secret handled — severity: low**
 - Description: Confirmation token + optional secret validated; fast `ok` response. Good (see S1 for default).

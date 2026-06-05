@@ -119,6 +119,8 @@ const (
 	studentsText = "🎁Данные нейронные сети помогут вам во время учебы"
 
 	topUpText = "💰 Пополнить баланс\n\nПополнение будет подключено отдельным платежным потоком. Пока для тестирования доступны стартовые кредиты."
+
+	chooseModeText = "Выберите режим в меню ниже."
 )
 
 func controlTypeFromPayload(payload string) (domain.CommandType, bool) {
@@ -245,6 +247,28 @@ func (h *Handler) sendControlMessage(ctx context.Context, t domain.CommandType, 
 		slog.String("error", err.Error()))
 	msg.Keyboard = nil
 	return h.deps.Control.SendMessage(ctx, peerID, randomID, msg)
+}
+
+func (h *Handler) sendUnroutedTextResponse(ctx context.Context, idemKey string, peerID int64) error {
+	if h.cfg.UnroutedTextMode != unroutedTextModeReply {
+		return nil
+	}
+	if h.deps.Control == nil {
+		h.logger.Warn("vk unrouted text response skipped because VK_ACCESS_TOKEN is not configured")
+		return nil
+	}
+
+	msg := vkdelivery.Message{
+		Text:     chooseModeText,
+		Keyboard: welcomeKeyboard(),
+	}
+	h.applyMenuButtonMode(msg.Keyboard)
+	randomID := vkdelivery.DeterministicRandomID("vk_control_unrouted:" + idemKey)
+	result, err := h.sendControlMessage(ctx, domain.CommandShowMenu, peerID, randomID, msg)
+	if err == nil {
+		h.setActiveMenu(peerID, result.MessageID)
+	}
+	return err
 }
 
 func (h *Handler) getActiveMenu(peerID int64) (activeMenuMessage, bool) {

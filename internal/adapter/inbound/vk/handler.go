@@ -41,6 +41,10 @@ type Config struct {
 	// MenuButtonMode controls inline menu button action type: "callback" or
 	// "text". Callback avoids user echo messages; text preserves legacy VK UX.
 	MenuButtonMode string
+	// UnroutedTextMode controls plain text outside an active text mode:
+	// "reply" asks the user to choose a mode, "silent" does nothing, and
+	// "gpt" preserves the legacy behavior where any text becomes a GPT job.
+	UnroutedTextMode string
 }
 
 // Deps are the collaborators the handler needs. All are interfaces or services
@@ -65,6 +69,9 @@ type Handler struct {
 
 	menuMu      sync.Mutex
 	activeMenus map[int64]activeMenuMessage
+
+	modeMu      sync.Mutex
+	dialogModes map[int64]dialogMode
 }
 
 // NewHandler builds a VK callback handler.
@@ -74,11 +81,13 @@ func NewHandler(cfg Config, deps Deps) *Handler {
 		logger = slog.Default()
 	}
 	cfg.MenuButtonMode = normalizeMenuButtonMode(cfg.MenuButtonMode)
+	cfg.UnroutedTextMode = normalizeUnroutedTextMode(cfg.UnroutedTextMode)
 	return &Handler{
 		cfg:         cfg,
 		deps:        deps,
 		logger:      logger,
 		activeMenus: map[int64]activeMenuMessage{},
+		dialogModes: map[int64]dialogMode{},
 	}
 }
 
@@ -91,9 +100,30 @@ func normalizeMenuButtonMode(mode string) string {
 	}
 }
 
+const (
+	unroutedTextModeReply  = "reply"
+	unroutedTextModeSilent = "silent"
+	unroutedTextModeGPT    = "gpt"
+)
+
+func normalizeUnroutedTextMode(mode string) string {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case unroutedTextModeSilent:
+		return unroutedTextModeSilent
+	case unroutedTextModeGPT:
+		return unroutedTextModeGPT
+	default:
+		return unroutedTextModeReply
+	}
+}
+
 type activeMenuMessage struct {
 	MessageID int64
 }
+
+type dialogMode string
+
+const dialogModeGPT dialogMode = "gpt"
 
 // callback is the common VK Callback API envelope.
 type callback struct {
@@ -387,6 +417,12 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 	} else if controlOnly {
 		parsed = commandrouter.Result{Type: domain.CommandUnknown}
 	}
+
+	unroutedText := false
+	if parsed.Type == domain.CommandTextAsk && !h.textAskEnabled(peerID) {
+		unroutedText = true
+		parsed = commandrouter.Result{Type: domain.CommandUnknown}
+	}
 	cmd := &domain.Command{
 		UserID:         user.ID,
 		VKPeerID:       peerID,
@@ -410,12 +446,26 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 
 	resourceID := cmd.ID
 
-	if shouldSendControlResponse(parsed.Type) {
+	switch {
+	case unroutedText:
+		h.clearActiveMenu(peerID)
+		if err := h.sendUnroutedTextResponse(ctx, idemKey, peerID); err != nil {
+			return fmt.Errorf("send unrouted text response: %w", err)
+		}
+	case shouldSendControlResponse(parsed.Type):
 		if err := h.sendControlResponse(ctx, parsed.Type, idemKey, peerID, user, controlFromPayload); err != nil {
 			return fmt.Errorf("send control response: %w", err)
 		}
-	} else {
+		if parsed.Type == domain.CommandMenuText {
+			h.setDialogMode(peerID, dialogModeGPT)
+		} else {
+			h.clearDialogMode(peerID)
+		}
+	default:
 		h.clearActiveMenu(peerID)
+		if parsed.Type != domain.CommandTextAsk {
+			h.clearDialogMode(peerID)
+		}
 	}
 
 	// Job: only commands that map to an AI operation become jobs. Control
@@ -454,6 +504,33 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 		return fmt.Errorf("mark idempotency completed: %w", err)
 	}
 	return nil
+}
+
+func (h *Handler) textAskEnabled(peerID int64) bool {
+	if h.cfg.UnroutedTextMode == unroutedTextModeGPT {
+		return true
+	}
+	mode, ok := h.getDialogMode(peerID)
+	return ok && mode == dialogModeGPT
+}
+
+func (h *Handler) getDialogMode(peerID int64) (dialogMode, bool) {
+	h.modeMu.Lock()
+	defer h.modeMu.Unlock()
+	mode, ok := h.dialogModes[peerID]
+	return mode, ok
+}
+
+func (h *Handler) setDialogMode(peerID int64, mode dialogMode) {
+	h.modeMu.Lock()
+	defer h.modeMu.Unlock()
+	h.dialogModes[peerID] = mode
+}
+
+func (h *Handler) clearDialogMode(peerID int64) {
+	h.modeMu.Lock()
+	defer h.modeMu.Unlock()
+	delete(h.dialogModes, peerID)
 }
 
 func (h *Handler) ensureUser(ctx context.Context, vkUserID int64) (*domain.User, error) {
