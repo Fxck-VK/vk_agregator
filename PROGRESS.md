@@ -1052,3 +1052,31 @@ Status: **completed**.
 - `go test ./...` - exit 0.
 - `go build ./...` - exit 0.
 - `npm run build` in `web/miniapp` - exit 0.
+
+---
+
+## PR-14 - Mini App VKUI hybrid base primitives
+
+Status: **completed**.
+
+### What changed
+
+- Added `@vkontakte/vkui` `8.2.1` as a production dependency for the Mini App.
+- Wrapped the app root with VKUI `ConfigProvider`, `AdaptivityProvider` and
+  `AppRoot`; VK light/dark appearance is bridged through the existing
+  `data-scheme` token path.
+- Migrated base controls to VKUI: primary/secondary buttons, model/status
+  selects, prompt textareas, root panel and the top-level `Chat` / `Workflow`
+  `Tabbar`.
+- Kept custom signature UX: workflow shell, quick scenario cards, backend job
+  rows, `ResultCard`, VK post preview and status timeline.
+- Preserved backend-owned decisions: no BFF contract changes, no client-side
+  billing/status source of truth, no provider calls from Mini App.
+
+### Checks
+
+- `npm run build` in `web/miniapp` - exit 0. Hybrid bundle:
+  `695.18 kB` raw / `142.18 kB gzip`; delta vs PR-14 baseline:
+  `+440.69 kB` raw / `+64.04 kB gzip`.
+- `go build ./...` - exit 0.
+- `npm audit` in `web/miniapp` - 0 vulnerabilities.

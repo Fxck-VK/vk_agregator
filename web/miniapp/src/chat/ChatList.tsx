@@ -1,4 +1,5 @@
 // src/chat/ChatList.tsx
+import { Button } from "@vkontakte/vkui";
 import type { Chat } from "./types";
 
 export function ChatList({
@@ -27,9 +28,9 @@ export function ChatList({
         onClick={onClose}
       />
       <aside className={"drawer" + (open ? " is-open" : "")}>
-        <button type="button" className="drawer__new" onClick={onNew}>
+        <Button type="button" className="drawer__new" mode="primary" size="l" stretched onClick={onNew}>
           + Новый чат
-        </button>
+        </Button>
         <p className="drawer__privacy">
           Локально хранятся только job ID, тип, статус и дата за 7 дней. Тексты запросов, ссылки и ключи не сохраняются.
         </p>
@@ -42,9 +43,12 @@ export function ChatList({
               onClick={() => onSelect(c.id)}
             >
               <span className="chat-item__title">{c.title}</span>
-              <button
+              <Button
                 type="button"
                 className="chat-item__del"
+                mode="tertiary"
+                appearance="neutral"
+                size="s"
                 aria-label="Удалить чат"
                 onClick={(e) => {
                   e.stopPropagation();
@@ -52,13 +56,21 @@ export function ChatList({
                 }}
               >
                 ✕
-              </button>
+              </Button>
             </div>
           ))}
         </div>
-        <button type="button" className="drawer__clear" onClick={onClearHistory}>
+        <Button
+          type="button"
+          className="drawer__clear"
+          mode="secondary"
+          appearance="neutral"
+          size="m"
+          stretched
+          onClick={onClearHistory}
+        >
           Очистить локальную историю
-        </button>
+        </Button>
       </aside>
     </>
   );

@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@vkontakte/vk-bridge": "3.0.2",
+    "@vkontakte/vkui": "8.2.1",
     "react": "19.2.7",
     "react-dom": "19.2.7"
   },

@@ -1,5 +1,6 @@
 ﻿// src/chat/ChatScreen.tsx
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Button, Panel, Tabbar, TabbarItem } from "@vkontakte/vkui";
 import { Avatar, Spinner } from "../ui/ui";
 import { MessageBubble } from "./MessageBubble";
 import { Composer } from "./Composer";
@@ -419,7 +420,8 @@ export function ChatScreen({ user }: { user: VkUser }) {
   const empty = !loading && messages.length === 0;
 
   return (
-    <div className="chat">
+    <Panel id="miniapp-root-panel" className="chat-panel" mode="plain">
+      <div className="chat">
       <ChatList
         chats={chats}
         activeId={activeId}
@@ -438,15 +440,18 @@ export function ChatScreen({ user }: { user: VkUser }) {
       />
 
       <header className="chat__header">
-        <button
+        <Button
           type="button"
           className={"icon-btn" + (mode === "workflow" ? " icon-btn--ghost" : "")}
+          mode="tertiary"
+          appearance="neutral"
+          size="l"
           aria-label="Чаты"
           onClick={() => setDrawerOpen(true)}
           disabled={mode === "workflow"}
         >
           ☰
-        </button>
+        </Button>
         <Avatar src={null} fallback="AI" />
         <div className="chat__title">
           <span className="chat__name">{mode === "workflow" ? "Workflow" : "Ассистент"}</span>
@@ -455,26 +460,6 @@ export function ChatScreen({ user }: { user: VkUser }) {
           </span>
         </div>
         <span className="chat__spacer" />
-        <div className="mode-switch" role="tablist" aria-label="Режим Mini App">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mode === "chat"}
-            className={mode === "chat" ? "is-active" : ""}
-            onClick={() => changeMode("chat")}
-          >
-            Chat
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mode === "workflow"}
-            className={mode === "workflow" ? "is-active" : ""}
-            onClick={() => changeMode("workflow")}
-          >
-            Workflow
-          </button>
-        </div>
         {balance !== null && (
           <span className="balance-pill">{balance.toLocaleString("ru-RU")} кр.</span>
         )}
@@ -537,6 +522,26 @@ export function ChatScreen({ user }: { user: VkUser }) {
           onClearLocalHistory={clearChats}
         />
       )}
-    </div>
+
+      <Tabbar className="mode-tabbar" mode="horizontal" plain>
+        <TabbarItem
+          selected={mode === "chat"}
+          label="Chat"
+          aria-label="Chat"
+          onClick={() => changeMode("chat")}
+        >
+          <span className="mode-tabbar__icon" aria-hidden="true">C</span>
+        </TabbarItem>
+        <TabbarItem
+          selected={mode === "workflow"}
+          label="Workflow"
+          aria-label="Workflow"
+          onClick={() => changeMode("workflow")}
+        >
+          <span className="mode-tabbar__icon" aria-hidden="true">W</span>
+        </TabbarItem>
+      </Tabbar>
+      </div>
+    </Panel>
   );
 }

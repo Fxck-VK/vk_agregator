@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Button, NativeSelect, Textarea } from "@vkontakte/vkui";
 import {
   apiUserMessage,
   estimateJob,
@@ -152,14 +153,17 @@ function ModeTabs({ screen, onScreen }: { screen: WorkflowScreen; onScreen: (scr
   return (
     <nav className="workflow-tabs" aria-label="Workflow sections">
       {tabs.map((tab) => (
-        <button
+        <Button
           key={tab.id}
           type="button"
           className={"workflow-tabs__btn" + (screen === tab.id ? " is-active" : "")}
+          mode={screen === tab.id ? "primary" : "tertiary"}
+          appearance={screen === tab.id ? "neutral" : "neutral"}
+          size="m"
           onClick={() => onScreen(tab.id)}
         >
           {tab.label}
-        </button>
+        </Button>
       ))}
     </nav>
   );
@@ -288,9 +292,15 @@ export function WorkflowMode({
             <span className="workflow-kicker">Content workflow</span>
             <h1>{user.firstName}, создайте VK-пост без лишнего шума</h1>
             <p>Сначала выберите сценарий, затем проверьте стоимость и дождитесь результата в спокойном статус-экране.</p>
-            <button type="button" className="workflow-primary" onClick={() => setScreen("generate")}>
+            <Button
+              type="button"
+              className="workflow-primary"
+              mode="primary"
+              size="l"
+              onClick={() => setScreen("generate")}
+            >
               Создать VK-пост
-            </button>
+            </Button>
           </div>
 
           <div className="workflow-balance" aria-live="polite">
@@ -319,9 +329,16 @@ export function WorkflowMode({
           <section className="workflow-section" aria-labelledby="recent-title">
             <div className="section-head">
               <h2 id="recent-title">Последние генерации</h2>
-              <button type="button" className="quiet-action" onClick={() => setScreen("history")}>
+              <Button
+                type="button"
+                className="quiet-action"
+                mode="secondary"
+                appearance="neutral"
+                size="m"
+                onClick={() => setScreen("history")}
+              >
                 История
-              </button>
+              </Button>
             </div>
             {loading ? (
               <div className="workflow-empty">Загружаем историю</div>
@@ -345,38 +362,48 @@ export function WorkflowMode({
               <label>Тип результата</label>
               <div className="workflow-segment" role="tablist">
                 {MODALITIES.map((item) => (
-                  <button
+                  <Button
                     key={item.id}
                     type="button"
                     role="tab"
                     aria-selected={item.id === modalityId}
                     className={item.id === modalityId ? "is-active" : ""}
+                    mode={item.id === modalityId ? "primary" : "tertiary"}
+                    appearance={item.id === modalityId ? "accent" : "neutral"}
+                    size="m"
                     onClick={() => changeModality(item.id)}
                   >
                     {item.label}
-                  </button>
+                  </Button>
                 ))}
               </div>
             </div>
 
             <div className="workflow-field">
               <label htmlFor="workflow-model">Модель</label>
-              <select id="workflow-model" value={modelId} onChange={(event) => setModelId(event.target.value)}>
+              <NativeSelect
+                id="workflow-model"
+                className="workflow-select"
+                value={modelId}
+                onChange={(event) => setModelId(event.target.value)}
+              >
                 {currentModality.models.map((model) => (
                   <option key={model.id} value={model.id}>
                     {model.label}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </div>
 
             <div className="workflow-field">
               <label htmlFor="workflow-prompt">Промпт</label>
-              <textarea
+              <Textarea
                 id="workflow-prompt"
+                className="workflow-textarea"
                 value={prompt}
                 maxLength={PROMPT_LIMIT + 100}
                 onChange={(event) => setPrompt(event.target.value)}
+                rows={6}
                 placeholder="Что нужно получить для VK?"
               />
               <span className={promptTooLong ? "field-note is-warn" : "field-note"}>
@@ -402,9 +429,16 @@ export function WorkflowMode({
 
             {submitError && <div className="workflow-error">{submitError}</div>}
 
-            <button type="button" className="workflow-primary" onClick={submitWorkflow} disabled={!canSubmit}>
+            <Button
+              type="button"
+              className="workflow-primary"
+              mode="primary"
+              size="l"
+              onClick={submitWorkflow}
+              disabled={!canSubmit}
+            >
               Запустить генерацию
-            </button>
+            </Button>
           </div>
         </section>
       )}
@@ -417,9 +451,17 @@ export function WorkflowMode({
         <section className="workflow-screen">
           <ScreenTitle eyebrow="Result" title="Пост готов к проверке" text="Preview показывает контент так, как он будет ощущаться в VK." />
           <ResultCard msg={activeMessage} prompt={activePrompt} onRetry={submitWorkflow} />
-          <button type="button" className="quiet-action quiet-action--wide" onClick={() => setScreen("history")}>
+          <Button
+            type="button"
+            className="quiet-action quiet-action--wide"
+            mode="secondary"
+            appearance="neutral"
+            size="m"
+            stretched
+            onClick={() => setScreen("history")}
+          >
             Перейти в историю
-          </button>
+          </Button>
         </section>
       )}
 
@@ -427,21 +469,21 @@ export function WorkflowMode({
         <section className="workflow-screen">
           <ScreenTitle eyebrow="History" title="История генераций" text="Список приходит с backend; локальная очистка не удаляет jobs." />
           <div className="filter-row">
-            <select value={modalityFilter} onChange={(event) => setModalityFilter(event.target.value as "all" | ModalityId)} aria-label="Фильтр типа">
+            <NativeSelect value={modalityFilter} onChange={(event) => setModalityFilter(event.target.value as "all" | ModalityId)} aria-label="Фильтр типа">
               <option value="all">Все типы</option>
               {MODALITIES.map((item) => (
                 <option key={item.id} value={item.id}>
                   {item.label}
                 </option>
               ))}
-            </select>
-            <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)} aria-label="Фильтр статуса">
+            </NativeSelect>
+            <NativeSelect value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)} aria-label="Фильтр статуса">
               {HISTORY_STATUS_FILTERS.map((item) => (
                 <option key={item.id} value={item.id}>
                   {item.label}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </div>
           {filteredJobs.length === 0 ? (
             <div className="workflow-empty">Нет генераций под этот фильтр.</div>
@@ -455,9 +497,17 @@ export function WorkflowMode({
               onRepeat={repeatJob}
             />
           )}
-          <button type="button" className="quiet-action quiet-action--wide" onClick={onClearLocalHistory}>
+          <Button
+            type="button"
+            className="quiet-action quiet-action--wide"
+            mode="secondary"
+            appearance="neutral"
+            size="m"
+            stretched
+            onClick={onClearLocalHistory}
+          >
             Очистить локальную историю
-          </button>
+          </Button>
         </section>
       )}
     </main>
@@ -495,9 +545,17 @@ function JobList({
               <small>{dateLabel(job.created_at)}</small>
             </button>
             {onRepeat && (
-              <button type="button" className="job-row__repeat" onClick={() => onRepeat(job)} disabled={!job.prompt}>
+              <Button
+                type="button"
+                className="job-row__repeat"
+                mode="secondary"
+                appearance="neutral"
+                size="m"
+                onClick={() => onRepeat(job)}
+                disabled={!job.prompt}
+              >
                 Repeat
-              </button>
+              </Button>
             )}
           </article>
         );
@@ -527,9 +585,15 @@ function StatusScreen({ job, onResult }: { job: Job; onResult: () => void }) {
         })}
       </ol>
       {isTerminal(job.status) && statusKind(job.status) === "done" && (
-        <button type="button" className="workflow-primary" onClick={onResult}>
+        <Button
+          type="button"
+          className="workflow-primary"
+          mode="primary"
+          size="l"
+          onClick={onResult}
+        >
           Смотреть результат
-        </button>
+        </Button>
       )}
     </section>
   );

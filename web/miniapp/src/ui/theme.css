@@ -39,6 +39,7 @@
   --radius-sm: var(--radius-control);
   --maxw: 680px;
   --workflow-maxw: 760px;
+  --mode-tabbar-height: 60px;
   --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --font-display: "SF Pro Display", "Inter", var(--font);
 }
@@ -90,7 +91,36 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-.chat { display: flex; flex-direction: column; height: 100dvh; }
+.vkui-miniapp {
+  min-height: 100%;
+  background: var(--bg);
+  color: var(--fg);
+  --vkui--color_background_accent: var(--accent);
+  --vkui--color_text_contrast: var(--on-accent);
+  --vkui--color_background_content: var(--surface);
+  --vkui--color_background_secondary: var(--surface-2);
+  --vkui--color_field_background: var(--surface);
+  --vkui--color_field_border_alpha: var(--line);
+  --vkui--color_text_primary: var(--fg);
+  --vkui--color_text_secondary: var(--fg-muted);
+  --vkui--color_text_accent: var(--accent);
+  --vkui--color_separator_primary: var(--line);
+}
+
+.chat-panel {
+  min-height: 100%;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+.chat-panel .vkuiInternalPanel__in { min-height: 100dvh; }
+
+.chat {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  padding-bottom: calc(var(--mode-tabbar-height) + env(safe-area-inset-bottom));
+}
 
 .chat__header {
   position: sticky; top: 0; z-index: 10;
@@ -267,9 +297,9 @@ body {
 @keyframes blink { 0%, 80%, 100% { opacity: .25; } 40% { opacity: 1; } }
 
 .composer {
-  position: sticky; bottom: 0;
+  position: sticky; bottom: calc(var(--mode-tabbar-height) + env(safe-area-inset-bottom));
   width: 100%; max-width: var(--maxw); margin: 0 auto;
-  padding: 8px 16px calc(10px + env(safe-area-inset-bottom));
+  padding: 8px 16px 10px;
   background: color-mix(in srgb, var(--bg) 82%, transparent);
   backdrop-filter: saturate(180%) blur(20px);
   border-top: 1px solid var(--line);
@@ -296,7 +326,15 @@ body {
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
+.composer__input textarea {
+  font: inherit;
+  color: var(--fg);
+  line-height: 1.4;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
 .composer__input::-webkit-scrollbar { width: 0; height: 0; display: none; }
+.composer__input textarea::-webkit-scrollbar { width: 0; height: 0; display: none; }
 
 .composer__send {
   flex: 0 0 auto; width: 44px; height: 44px; border: 0; cursor: pointer;
@@ -322,6 +360,7 @@ body {
 .segment__btn { flex: 1; appearance: none; cursor: pointer; font: inherit; font-size: 13px; font-weight: 600; color: var(--fg-muted); background: transparent; border: 0; border-radius: var(--radius-pill); min-height: 36px; padding: 6px 10px; transition: color var(--motion-fast) var(--ease-out), background var(--motion-fast) var(--ease-out); }
 .segment__btn.is-active { color: var(--on-accent); background: var(--accent); }
 .model-select { position: relative; flex: 0 0 auto; }
+.model-select .vkuiInternalNativeSelect { max-width: 170px; min-height: 44px; }
 .model-select select { appearance: none; font: inherit; font-size: 13px; font-weight: 600; color: var(--fg); background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius-pill); min-height: 44px; padding: 7px 28px 7px 12px; cursor: pointer; max-width: 160px; }
 .model-select::after { content: "▾"; position: absolute; right: 12px; top: 50%; transform: translateY(-50%); pointer-events: none; color: var(--fg-muted); font-size: 11px; }
 .estimate-line { min-height: 18px; display: flex; gap: 8px; align-items: center; justify-content: space-between; margin: 0 2px 8px; color: var(--fg-muted); font-size: 12px; font-weight: 600; }
@@ -347,11 +386,31 @@ body {
 .chat-item__del:hover { opacity: 1; }
 .chat-empty { color: var(--fg-muted); font-size: 13px; text-align: center; padding: 24px 8px; }
 
-.mode-switch { display: flex; gap: 3px; padding: 3px; border: 1px solid var(--line); border-radius: var(--radius-pill); background: var(--surface-2); }
-.mode-switch button { appearance: none; border: 0; border-radius: var(--radius-pill); background: transparent; color: var(--fg-muted); cursor: pointer; font: inherit; font-size: 12px; font-weight: 800; min-height: 32px; padding: 0 10px; transition: background var(--motion-fast) var(--ease-out), color var(--motion-fast) var(--ease-out); }
-.mode-switch button.is-active { background: var(--accent); color: var(--on-accent); }
+.mode-tabbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 35;
+  min-height: calc(var(--mode-tabbar-height) + env(safe-area-inset-bottom));
+  padding-bottom: env(safe-area-inset-bottom);
+  border-top: 1px solid var(--line);
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  backdrop-filter: saturate(180%) blur(20px);
+}
+.mode-tabbar__icon {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-control);
+  background: var(--surface-2);
+  color: var(--fg);
+  font-size: 12px;
+  font-weight: 900;
+}
 
-.workflow { flex: 1; overflow-y: auto; width: 100%; max-width: var(--workflow-maxw); margin: 0 auto; padding: var(--space-4) var(--space-4) calc(var(--space-5) + env(safe-area-inset-bottom)); }
+.workflow { flex: 1; overflow-y: auto; width: 100%; max-width: var(--workflow-maxw); margin: 0 auto; padding: var(--space-4) var(--space-4) calc(var(--space-5) + var(--mode-tabbar-height) + env(safe-area-inset-bottom)); }
 .workflow-tabs { position: sticky; top: 0; z-index: 4; display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-1); margin: 0 0 var(--space-5); padding: var(--space-1); border: 1px solid var(--line); border-radius: var(--radius-pill); background: color-mix(in srgb, var(--surface) 92%, transparent); backdrop-filter: blur(18px); }
 .workflow-tabs__btn { appearance: none; border: 0; border-radius: var(--radius-pill); background: transparent; color: var(--fg-muted); cursor: pointer; font: inherit; font-size: 13px; font-weight: 800; min-height: 44px; transition: background var(--motion-fast) var(--ease-out), color var(--motion-fast) var(--ease-out); }
 .workflow-tabs__btn.is-active { background: var(--fg); color: var(--bg); }
@@ -383,7 +442,10 @@ body {
 .workflow-field { display: flex; flex-direction: column; gap: var(--space-2); }
 .workflow-field label { font-size: 13px; font-weight: 850; color: var(--fg); }
 .workflow-field select, .workflow-field textarea, .filter-row select { width: 100%; border: 1px solid var(--line); border-radius: var(--radius-control); background: var(--surface); color: var(--fg); font: inherit; min-height: 48px; padding: 0 var(--space-3); }
+.workflow-select, .filter-row .vkuiInternalNativeSelect { width: 100%; min-height: 48px; }
 .workflow-field textarea { min-height: 164px; padding: var(--space-3); resize: vertical; line-height: 1.45; }
+.workflow-textarea { min-height: 164px; }
+.workflow-textarea textarea { min-height: 140px; line-height: 1.45; resize: vertical; }
 .workflow-segment { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-1); padding: var(--space-1); border: 1px solid var(--line); border-radius: var(--radius-pill); background: var(--surface-2); }
 .workflow-segment button { appearance: none; border: 0; border-radius: var(--radius-pill); background: transparent; color: var(--fg-muted); cursor: pointer; font: inherit; font-weight: 800; min-height: 44px; }
 .workflow-segment button.is-active { background: var(--accent); color: var(--on-accent); }
@@ -415,7 +477,6 @@ body {
 @media (max-width: 640px) {
   .chat__header { gap: var(--space-2); }
   .chat__title { min-width: 0; }
-  .mode-switch button { padding: 0 8px; }
   .balance-pill { display: none; }
   .workflow-hero h1, .screen-title h1 { font-size: 30px; }
   .scenario-grid { grid-template-columns: 1fr; }

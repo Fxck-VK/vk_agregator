@@ -1,5 +1,6 @@
 ﻿// src/chat/Composer.tsx
 import { useRef, useState, type ChangeEvent, type KeyboardEvent } from "react";
+import { Button, NativeSelect, Textarea } from "@vkontakte/vkui";
 import { MODALITIES, modalityById, type ModalityId } from "./types";
 
 export function Composer({
@@ -61,27 +62,36 @@ export function Composer({
     }
   }
 
+  function onModelChange(_: ChangeEvent<HTMLSelectElement>, value: unknown) {
+    if (typeof value === "string") {
+      onModel(value);
+    }
+  }
+
   return (
     <div className="composer">
       <div className="composer__controls">
         <div className="segment" role="tablist">
           {MODALITIES.map((m) => (
-            <button
+            <Button
               key={m.id}
               type="button"
               role="tab"
               aria-selected={m.id === modalityId}
               className={"segment__btn" + (m.id === modalityId ? " is-active" : "")}
+              mode={m.id === modalityId ? "primary" : "tertiary"}
+              appearance={m.id === modalityId ? "accent" : "neutral"}
+              size="m"
               onClick={() => onModality(m.id)}
             >
               {m.label}
-            </button>
+            </Button>
           ))}
         </div>
         <div className="model-select">
-          <select
+          <NativeSelect
             value={modelId}
-            onChange={(e) => onModel(e.target.value)}
+            onChange={onModelChange}
             aria-label="Модель"
           >
             {modality.models.map((md) => (
@@ -89,7 +99,7 @@ export function Composer({
                 {md.label}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </div>
       </div>
       <div className="estimate-line" aria-live="polite">
@@ -109,24 +119,30 @@ export function Composer({
         )}
       </div>
       <div className="composer__row">
-        <textarea
-          ref={ref}
+        <Textarea
+          getRef={ref}
           className="composer__input"
           rows={1}
+          grow
+          maxHeight={140}
           placeholder="Напишите сообщение…"
           value={text}
           onChange={onInput}
           onKeyDown={onKey}
         />
-        <button
+        <Button
           type="button"
           className="composer__send"
+          mode="primary"
+          appearance="accent"
+          size="l"
+          rounded
           onClick={submit}
           disabled={disabled || !text.trim()}
           aria-label="Отправить"
         >
           ↑
-        </button>
+        </Button>
       </div>
     </div>
   );

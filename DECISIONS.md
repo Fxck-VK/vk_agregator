@@ -207,3 +207,44 @@ release.
 Consequences: the release smoke now covers the real backend/worker/provider
 path for DeepSeek text jobs. The BFF still only validates and persists
 `model_id`; provider selection and pricing remain backend-owned.
+
+---
+
+## ADR-008 - VKUI hybrid production integration
+
+Status: accepted
+
+Date: 2026-06-05
+
+Context: ADR-005 recommended Outcome C: a scoped VKUI hybrid instead of a blind
+UI-kit migration. The Mini App needs VK-native base controls, but the workflow
+shell, status timeline and VK post preview are product-specific surfaces that
+must stay custom. Backend/BFF contracts, polling, history retention, artifact
+routes and safe rendering must not change as part of the UI migration.
+
+Decision: graduate `@vkontakte/vkui` `8.2.1` from research to a production
+dependency. Wrap the Mini App in `ConfigProvider`, `AdaptivityProvider` and
+`AppRoot`; bridge VK light/dark appearance through the existing
+`data-scheme` attribute so the app tokens and VKUI tokens stay aligned. Migrate
+base controls to VKUI primitives: `Button`, `NativeSelect`, `Textarea`,
+`Panel`, `Tabbar` and `TabbarItem`. Use the VKUI `Tabbar` only for top-level
+`Chat` / `Workflow` switching; `ChatScreen` remains mounted, so active polling
+refs are not reset by mode changes.
+
+Custom surfaces remain custom: workflow shell layout, quick scenario cards,
+backend job rows, `ResultCard`, VK post preview and the status timeline. These
+surfaces keep plain React text rendering and backend-owned artifact URLs; no
+`innerHTML` path is introduced.
+
+Bundle data from the PR-14 implementation build:
+
+- Baseline before VKUI integration: CSS `20.45 kB` (`4.57 kB gzip`), JS
+  `233.61 kB` (`73.28 kB gzip`), total `254.49 kB` raw / `78.14 kB gzip`.
+- VKUI hybrid build: CSS `412.07 kB` (`52.73 kB gzip`), JS `282.68 kB`
+  (`89.16 kB gzip`), total `695.18 kB` raw / `142.18 kB gzip`.
+- Delta: `+440.69 kB` raw / `+64.04 kB gzip`.
+
+Consequences: React 19 remains supported; no downgrade is needed. The Mini App
+gets VK-native base controls and tab navigation while retaining its custom
+workflow/result identity. The bundle cost is accepted for this hybrid step and
+should be rechecked before any broader VKUI migration.
