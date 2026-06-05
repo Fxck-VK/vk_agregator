@@ -36,8 +36,9 @@ Real integrations are implemented at adapter level and remain **opt-in**:
   async video (`Videos`) generation.
 - `PROVIDER=deepinfra` enables DeepInfra text generation through
   `deepseek-ai/DeepSeek-V4-Flash` (`/chat/completions` on DeepInfra's
-  OpenAI-compatible API). Text providers receive an internal instruction to keep
-  replies concise and under 3000 characters; VK delivery still chunks longer
+  OpenAI-compatible API). Text providers receive an internal instruction to
+  answer as `НейроХаб бот`, keep replies concise and under 3000 characters, and
+  avoid exposing provider/model/backend details; VK delivery still chunks longer
   output as a fallback.
 - `PROVIDER_CHAIN=openai,mock` enables the provider router with
   health/circuit-breaker, fallback, cost and observed-latency aware selection.

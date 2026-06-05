@@ -84,7 +84,7 @@ func TestSubmitPollTextSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("submit text: %v", err)
 	}
-	if seen.Input != "hello" || !strings.Contains(seen.Instructions, "3000 characters") || seen.Store {
+	if seen.Input != "hello" || !strings.Contains(seen.Instructions, "3000 characters") || !strings.Contains(seen.Instructions, "НейроХаб бот") || !strings.Contains(seen.Instructions, "model name") || seen.Store {
 		t.Fatalf("unexpected text request: %+v", seen)
 	}
 	res, err := p.Poll(context.Background(), domain.ProviderTaskRef{Provider: task.Provider, ExternalID: task.ExternalID})

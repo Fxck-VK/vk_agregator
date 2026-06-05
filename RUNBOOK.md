@@ -257,8 +257,9 @@ VK_DELIVERY_MODE=real VK_ACCESS_TOKEN=... go run ./cmd/worker
 MODERATION_PROVIDER=openai ARTIFACT_SCANNER=openai OPENAI_API_KEY=... go run ./cmd/worker
 ```
 
-Text provider adapters add an internal concise-answer instruction (`<= 3000`
-characters) to the user's prompt. This reduces VK overlong-message failures,
+Text provider adapters add an internal instruction to the user's prompt: answer
+as `НейроХаб бот`, stay concise (`<= 3000` characters), and do not reveal
+provider/model/backend details. This reduces VK overlong-message failures,
 while delivery still chunks longer text outputs if the provider ignores the
 instruction.
 

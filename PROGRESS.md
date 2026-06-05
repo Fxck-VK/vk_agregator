@@ -418,7 +418,7 @@
   - `deepseek-ai/DeepSeek-V4-Flash` text generation is wired through DeepInfra's OpenAI-compatible `/chat/completions` endpoint;
   - `PROVIDER=deepinfra` or `PROVIDER_CHAIN=deepinfra,mock` enables it;
   - the adapter is text-only, returns normalized `data:text/plain` outputs, and maps DeepInfra HTTP failures into internal provider error classes.
-  - text providers now receive an internal concise-answer instruction (`<= 3000 characters`) alongside the user prompt; VK delivery still chunks longer outputs as a fallback.
+  - text providers now receive an internal instruction alongside the user prompt: answer as `НейроХаб бот`, stay concise (`<= 3000 characters`) and do not reveal provider/model/backend details; VK delivery still chunks longer outputs as a fallback.
   - follow-up fix: the mock-aware downloader now decodes provider `data:` URLs, so `PROVIDER_CHAIN=deepinfra,mock` can store DeepInfra text outputs before VK delivery.
 - **Provider router**:
   - `PROVIDER_CHAIN` задаёт ordered fallback chain;

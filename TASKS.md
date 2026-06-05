@@ -95,7 +95,7 @@
 
 ### Real integrations
 - [x] DeepInfra provider supports `deepseek-ai/DeepSeek-V4-Flash` text generation through the OpenAI-compatible `/chat/completions` endpoint behind `PROVIDER=deepinfra` / `PROVIDER_CHAIN=deepinfra,mock`.
-- [x] Text providers receive an internal concise-answer instruction (`<= 3000 characters`) in addition to the user's prompt; VK delivery still splits long answers as a fallback.
+- [x] Text providers receive an internal instruction in addition to the user's prompt: answer as `НейроХаб бот`, keep replies concise (`<= 3000 characters`), and do not reveal provider/model/backend details; VK delivery still splits long answers as a fallback.
 - [x] Mock-aware downloader supports provider `data:` URLs, so `PROVIDER_CHAIN=deepinfra,mock` can store DeepInfra text outputs before VK delivery.
 - [x] Реальный OpenAI provider покрывает text (`/responses`), image (`/images/generations`) и async video (`/videos`, poll, content download) behind `PROVIDER=openai`.
 - [x] Provider router выбирает capable provider по health/circuit breaker, fallback chain, estimated cost и observed latency; `PROVIDER_CHAIN=openai,mock` включает fallback.
