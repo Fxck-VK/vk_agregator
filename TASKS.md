@@ -110,6 +110,7 @@
 - [x] VK callback menu buttons: inline menu can run with `VK_MENU_BUTTON_MODE=callback`, processing VK `message_event` without user echo messages; `VK_MENU_BUTTON_MODE=text` keeps the legacy text-button fallback. Persistent lower `Показать меню` remains text.
 - [x] VK callback button ack: every `message_event` is acknowledged through blank `messages.sendMessageEventAnswer`, so VK client button loading spinner stops after a click.
 - [x] VK unrouted text gating: `Спросить у GPT` sets process-local GPT mode for the peer; ordinary text/stickers outside GPT mode are configurable via `VK_UNROUTED_TEXT_MODE=reply|silent|gpt` and do not create jobs by default.
+- [x] VK GPT pending UX: after `Спросить у GPT`, the next text/sticker sends `GPT думает...`; when the text job is delivered, delivery worker edits that same VK message with the provider answer instead of posting a second bot message. Legacy `VK_UNROUTED_TEXT_MODE=gpt` still uses normal text delivery.
 - [x] VK menu feature flags: every main and nested product-menu button has a `VK_MENU_*_ENABLED` env flag; disabled buttons are hidden from new keyboards, stale disabled payload clicks fall back to the current main menu, and no jobs are created.
 
 ---

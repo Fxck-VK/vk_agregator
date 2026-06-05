@@ -14,7 +14,8 @@ Current release: **v0.1.3 / Beta integrations foundation**.
 > DeepSeek-V4-Flash text adapter, provider routing/fallback/circuit breaker,
 > VK raw photo/video upload, VK `/start`
 > product menu with callback/text inline keyboard and active-menu
-> `messages.edit`, OpenAI moderation, and OpenAI text/image artifact scanning.
+> `messages.edit`, GPT pending-message edit UX, OpenAI moderation, and OpenAI
+> text/image artifact scanning.
 > Live smoke with real credentials remains required before external users.
 
 ---
@@ -54,8 +55,8 @@ Current release: **v0.1.3 / Beta integrations foundation**.
   `PROVIDER=deepinfra` / `PROVIDER_CHAIN=deepinfra,mock`.
 - [x] Real VK delivery client: `messages.send`, upload servers and VK attachment
   creation for generated photo/video artifacts (AUDIT V1). ✅ done in v0.1.3
-- [x] VK `/start` product menu with callback/text inline keyboard, active-menu edit UX and
-  safe control buttons (no empty billable jobs). ✅ done after v0.1.3 foundation
+- [x] VK `/start` product menu with callback/text inline keyboard, active-menu edit UX,
+  GPT pending-message edit UX and safe control buttons (no empty billable jobs). ✅ done after v0.1.3 foundation
 - Production welcome banner attachment for `/start` via `VK_WELCOME_ATTACHMENT`
   or an upload flow.
 - Live smoke with real `OPENAI_API_KEY`, `DEEPINFRA_API_KEY` and

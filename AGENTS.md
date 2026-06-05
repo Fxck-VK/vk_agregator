@@ -15,7 +15,7 @@ integrations are opt-in: OpenAI text/image/video provider, provider
 router/fallback/circuit breaker, VK `messages.send` with raw photo/video upload,
 DeepInfra DeepSeek-V4-Flash text provider,
 VK `/start` product menu with callback/text inline keyboard and active-menu `messages.edit`,
-process-local GPT text mode with unrouted-text gating, OpenAI output moderation,
+process-local GPT text mode with `GPT думает...` placeholder edits and unrouted-text gating, OpenAI output moderation,
 per-button VK menu feature flags, and OpenAI text/image artifact scanning are
 implemented. Credential-bound live smoke and the full video media pipeline
 (scan/transcode/VK-ready variants) remain follow-up work.
@@ -28,6 +28,7 @@ implemented. Credential-bound live smoke and the full video media pipeline
 - All provider calls must go through `internal/adapter/provider`.
 - All VK API calls must go through `internal/adapter/delivery/vk`.
 - VK control/menu responses must use `vkdelivery.ControlClient`; new sends use a deterministic `random_id`, while active-menu edits target a tracked VK `message_id`.
+- VK GPT pending placeholders must be created through `vkdelivery.ControlClient`; text delivery may edit the tracked placeholder `message_id`, but must fall back to normal delivery when no placeholder exists.
 - VK inline menu buttons may be rendered as `callback` or `text` via `VK_MENU_BUTTON_MODE`; callback clicks must be handled as VK `message_event` control events, acknowledged through `vkdelivery.ControlClient`, and must not create Jobs.
 - VK menu buttons must not create billable Jobs until the user supplies a prompt.
 - New VK product-menu buttons must have a `VK_MENU_*_ENABLED` feature flag and disabled stale payloads must not open hidden sections.

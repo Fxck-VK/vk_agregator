@@ -2,6 +2,7 @@ package vk_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -759,8 +760,19 @@ func TestGPTMenuButtonEnablesPlainTextJobs(t *testing.T) {
 	if len(jobs) != 1 || jobs[0].OperationType != domain.OperationTextGenerate || h.pub.Len() != 1 {
 		t.Fatalf("gpt mode should create one text job, jobs=%+v tasks=%d", jobs, h.pub.Len())
 	}
-	if sent := control.Sent(); len(sent) != 1 || !strings.Contains(sent[0].Text, "SUPER GPT активен") {
+	sent := control.Sent()
+	if len(sent) != 2 || !strings.Contains(sent[0].Text, "SUPER GPT активен") || sent[1].Text != "GPT думает..." {
 		t.Fatalf("unexpected control responses: %+v", sent)
+	}
+	var params struct {
+		Prompt                 string `json:"prompt"`
+		VKPlaceholderMessageID int64  `json:"vk_placeholder_message_id"`
+	}
+	if err := json.Unmarshal(jobs[0].Params, &params); err != nil {
+		t.Fatalf("decode job params: %v", err)
+	}
+	if params.Prompt == "" || params.VKPlaceholderMessageID != sent[1].MessageID {
+		t.Fatalf("unexpected job params: %+v, pending message=%+v", params, sent[1])
 	}
 }
 

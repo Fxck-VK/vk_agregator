@@ -134,6 +134,11 @@ type dialogMode string
 
 const dialogModeGPT dialogMode = "gpt"
 
+type jobParams struct {
+	Prompt                 string `json:"prompt"`
+	VKPlaceholderMessageID int64  `json:"vk_placeholder_message_id,omitempty"`
+}
+
 // callback is the common VK Callback API envelope.
 type callback struct {
 	Type    string          `json:"type"`
@@ -484,11 +489,17 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 	// Job: only commands that map to an AI operation become jobs. Control
 	// commands (balance/status/cancel/help) are recorded but produce no job.
 	if parsed.CreatesJob() {
+		placeholderID := int64(0)
+		if parsed.Type == domain.CommandTextAsk && h.gptDialogActive(peerID) {
+			placeholderID = h.sendGPTPendingMessage(ctx, idemKey, peerID)
+		}
+
 		// Carry the user's prompt on the job so workers can render it and the
 		// output-moderation stage has the request text to evaluate.
-		params, _ := json.Marshal(struct {
-			Prompt string `json:"prompt"`
-		}{Prompt: parsed.Prompt})
+		params, _ := json.Marshal(jobParams{
+			Prompt:                 parsed.Prompt,
+			VKPlaceholderMessageID: placeholderID,
+		})
 		job, err := h.deps.Orchestrator.CreateJob(ctx, joborchestrator.CreateJobInput{
 			UserID:         user.ID,
 			VKPeerID:       peerID,
@@ -505,7 +516,9 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 		case errors.Is(err, domain.ErrInsufficientCredits):
 			// Expected business outcome: job is parked in awaiting_payment.
 			resourceID = job.ID
+			h.editGPTPendingMessage(ctx, peerID, placeholderID, "Недостаточно средств для запроса. Пополните баланс или выберите другой режим.")
 		default:
+			h.editGPTPendingMessage(ctx, peerID, placeholderID, "Не удалось поставить запрос в очередь. Попробуйте позже.")
 			return fmt.Errorf("create job: %w", err)
 		}
 	}
@@ -523,6 +536,10 @@ func (h *Handler) textAskEnabled(peerID int64) bool {
 	if h.cfg.UnroutedTextMode == unroutedTextModeGPT {
 		return true
 	}
+	return h.gptDialogActive(peerID)
+}
+
+func (h *Handler) gptDialogActive(peerID int64) bool {
 	mode, ok := h.getDialogMode(peerID)
 	return ok && mode == dialogModeGPT
 }

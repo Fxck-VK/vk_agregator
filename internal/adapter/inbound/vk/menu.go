@@ -318,6 +318,36 @@ func (h *Handler) sendUnroutedTextResponse(ctx context.Context, idemKey string, 
 	return err
 }
 
+func (h *Handler) sendGPTPendingMessage(ctx context.Context, idemKey string, peerID int64) int64 {
+	if h.deps.Control == nil {
+		h.logger.Warn("vk gpt pending message skipped because VK_ACCESS_TOKEN is not configured")
+		return 0
+	}
+
+	msg := vkdelivery.Message{Text: "GPT думает..."}
+	randomID := vkdelivery.DeterministicRandomID("vk_control_gpt_pending:" + idemKey)
+	result, err := h.sendControlMessage(ctx, domain.CommandMenuText, peerID, randomID, msg)
+	if err != nil {
+		h.logger.Warn("vk gpt pending message send failed",
+			slog.Int64("peer_id", peerID),
+			slog.String("error", err.Error()))
+		return 0
+	}
+	return result.MessageID
+}
+
+func (h *Handler) editGPTPendingMessage(ctx context.Context, peerID, messageID int64, text string) {
+	if h.deps.Control == nil || messageID == 0 {
+		return
+	}
+	if _, err := h.deps.Control.EditMessage(ctx, peerID, messageID, vkdelivery.Message{Text: text}); err != nil {
+		h.logger.Warn("vk gpt pending message edit failed",
+			slog.Int64("peer_id", peerID),
+			slog.Int64("message_id", messageID),
+			slog.String("error", err.Error()))
+	}
+}
+
 func (h *Handler) filterMenuKeyboard(keyboard *vkdelivery.Keyboard) {
 	if keyboard == nil {
 		return

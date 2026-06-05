@@ -319,7 +319,11 @@ there is one main image model in the VK UX. It shows `Фото по тексту
 stateful image mode selection is wired. Clicking `💬 Спросить у GPT` sends the
 `SUPER GPT активен` prompt screen, sets process-local GPT mode for that peer,
 and also does not enqueue a job. The next plain text or sticker from the same
-peer becomes a `text.ask` job; opening another menu screen clears GPT mode.
+peer becomes a `text.ask` job; the API sends `GPT думает...`, stores that VK
+message id in `job.Params`, and the delivery worker edits the same message to
+the final provider answer when the text artifact is delivered. Opening another
+menu screen clears GPT mode. Legacy `VK_UNROUTED_TEXT_MODE=gpt` keeps normal
+text delivery without this placeholder/edit UX.
 Clicking `🎁 Студентам и школьникам` opens the study submenu:
 `Решальник задач`, `Генерация презентаций (скоро)`,
 `Создание рефератов (скоро)`, `❓ Ответы на вопросы`, and `⬅️ Назад`.

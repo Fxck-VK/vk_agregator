@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -42,6 +43,9 @@ type DeliveryDeps struct {
 	Artifacts  domain.ArtifactRepository
 	Objects    ObjectStore
 	VK         vkdelivery.Client
+	// VKControl edits control/product messages. If nil and VK also implements
+	// vkdelivery.ControlClient, the worker uses VK as the control client.
+	VKControl vkdelivery.ControlClient
 	// VKUploader uploads raw photo/video artifact bytes to VK before send when
 	// available. If nil and VK also implements vkdelivery.MediaUploader, the
 	// worker uses VK as the uploader.
@@ -74,6 +78,7 @@ type DeliveryWorker struct {
 	artifacts   domain.ArtifactRepository
 	objects     ObjectStore
 	vk          vkdelivery.Client
+	vkControl   vkdelivery.ControlClient
 	vkUploader  vkdelivery.MediaUploader
 	billing     DeliveryBiller
 	streams     StreamPublisher
@@ -109,12 +114,19 @@ func NewDeliveryWorker(d DeliveryDeps) *DeliveryWorker {
 			uploader = up
 		}
 	}
+	control := d.VKControl
+	if control == nil {
+		if c, ok := d.VK.(vkdelivery.ControlClient); ok {
+			control = c
+		}
+	}
 	return &DeliveryWorker{
 		jobs:        d.Jobs,
 		deliveries:  d.Deliveries,
 		artifacts:   d.Artifacts,
 		objects:     d.Objects,
 		vk:          d.VK,
+		vkControl:   control,
 		vkUploader:  uploader,
 		billing:     d.Billing,
 		streams:     d.Streams,
@@ -242,6 +254,11 @@ func (w *DeliveryWorker) ensureDelivery(ctx context.Context, job *domain.Job) (*
 
 // buildDelivery assembles a pending delivery from the job's output artifact.
 func (w *DeliveryWorker) buildDelivery(ctx context.Context, job *domain.Job, key string) (*domain.Delivery, error) {
+	var params promptParams
+	if len(job.Params) > 0 {
+		_ = json.Unmarshal(job.Params, &params)
+	}
+
 	del := &domain.Delivery{
 		JobID:          job.ID,
 		UserID:         job.UserID,
@@ -283,6 +300,10 @@ func (w *DeliveryWorker) buildDelivery(ctx context.Context, job *domain.Job, key
 	default:
 		del.Type = domain.DeliveryTypeMessage
 		del.Text = w.textContent(ctx, art)
+		if params.VKPlaceholderMessageID > 0 {
+			msgID := params.VKPlaceholderMessageID
+			del.VKMessageID = &msgID
+		}
 	}
 	return del, nil
 }
@@ -318,7 +339,11 @@ func (w *DeliveryWorker) send(ctx context.Context, del *domain.Delivery) error {
 	case domain.DeliveryTypeVideo:
 		res, err = w.vk.SendVideo(ctx, del.VKPeerID, del.VKRandomID, del.Attachment, del.Text)
 	default:
-		res, err = w.vk.SendText(ctx, del.VKPeerID, del.VKRandomID, del.Text)
+		if del.VKMessageID != nil && *del.VKMessageID > 0 && w.vkControl != nil {
+			res, err = w.vkControl.EditMessage(ctx, del.VKPeerID, *del.VKMessageID, vkdelivery.Message{Text: del.Text})
+		} else {
+			res, err = w.vk.SendText(ctx, del.VKPeerID, del.VKRandomID, del.Text)
+		}
 	}
 	if err != nil {
 		tracing.RecordError(span, err)
