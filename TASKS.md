@@ -132,10 +132,12 @@
 2026-06-04). Код по аудиту **не правился**; ниже — приоритезированный бэклог
 фиксов. Не исправлять «заодно» — отдельными задачами.
 
-- [ ] **[High] Rate-limiting на `/miniapp/*`** (`cmd/api/main.go:158`). Сейчас
+- [x] **[High] Rate-limiting на `/miniapp/*`** (`cmd/api/main.go:158`). Сейчас
   per-IP лимитер навешен только на `/webhooks/vk`; `POST /miniapp/jobs` создаёт
   биллируемые Job без ограничения частоты. Обернуть `miniapp.Routes()` в
   `ratelimit` (ключ по `vk_user_id`/IP, отдельные RPS/Burst, минимум на `POST /jobs`).
+  Fixed for `POST /miniapp/jobs`: verified `vk_user_id` key, separate env RPS/Burst,
+  safe `429` + `Retry-After`, deterministic tests.
 - [ ] **[Medium] Fail-closed проверка `vk_ts`** (`internal/adapter/inbound/miniapp/sign.go:75-86`).
   При `maxAge > 0` отсутствие/битость `vk_ts` сейчас просто пропускает TTL-проверку →
   окно replay. Требовать корректный `vk_ts` (пустой/битый → `ErrExpiredParams`).

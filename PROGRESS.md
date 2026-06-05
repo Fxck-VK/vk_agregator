@@ -712,3 +712,23 @@ resume hardening.
 
 - `npx tsc --noEmit` — без вывода, exit 0.
 - `npm run build` — без ошибок (vite 8, `dist` собран, gzip JS ~66.7 kB).
+
+---
+
+## Step (доп.) — Mini App: job intake rate limiting
+
+Статус: **завершён**.
+
+### Что сделано
+
+- `POST /miniapp/jobs` теперь rate-limited после проверки launch params, с ключом
+  `miniapp_job:<verified vk_user_id>`.
+- Добавлены отдельные настройки `MINIAPP_JOB_RATE_LIMIT_RPS` и
+  `MINIAPP_JOB_RATE_LIMIT_BURST`; webhook limit не переиспользуется.
+- При превышении лимита BFF возвращает безопасный `429` и `Retry-After`; новый
+  job при rate limit не создаётся.
+
+### Проверки
+
+- `go test ./internal/adapter/inbound/miniapp ./internal/platform/config` — exit 0.
+- `go test ./...` — exit 0.

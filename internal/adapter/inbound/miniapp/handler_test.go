@@ -122,6 +122,10 @@ func TestVerifyLaunchParams_MissingUserID(t *testing.T) {
 
 // newTestHandler wires a Handler with in-memory repositories.
 func newTestHandler(appSecret string) *miniappinbound.Handler {
+	return newTestHandlerWithLimiter(appSecret, nil)
+}
+
+func newTestHandlerWithLimiter(appSecret string, limiter interface{ Allow(string) bool }) *miniappinbound.Handler {
 	userRepo := memory.NewUserRepo()
 	jobRepo := memory.NewJobRepo()
 	billingRepo := memory.NewBillingRepo()
@@ -135,6 +139,7 @@ func newTestHandler(appSecret string) *miniappinbound.Handler {
 		miniappinbound.Config{
 			AppSecret:          appSecret,
 			LaunchParamsMaxAge: time.Hour,
+			JobRateLimiter:     limiter,
 		},
 		miniappinbound.Deps{
 			Users:        userRepo,
@@ -144,6 +149,19 @@ func newTestHandler(appSecret string) *miniappinbound.Handler {
 			Orchestrator: orch,
 		},
 	)
+}
+
+type countingLimiter struct {
+	burst  int
+	counts map[string]int
+}
+
+func (l *countingLimiter) Allow(key string) bool {
+	if l.counts == nil {
+		l.counts = map[string]int{}
+	}
+	l.counts[key]++
+	return l.counts[key] <= l.burst
 }
 
 // devLaunchParams returns a minimal dev-mode launch-params string (no secret).
@@ -396,5 +414,69 @@ func TestHandler_CreateJob_Idempotency(t *testing.T) {
 	_ = json.Unmarshal(w2.Body.Bytes(), &r2)
 	if r1["id"] != r2["id"] {
 		t.Fatalf("idempotent requests must return the same job id: %v != %v", r1["id"], r2["id"])
+	}
+}
+
+func TestHandler_CreateJob_RateLimitByVerifiedUserID(t *testing.T) {
+	limiter := &countingLimiter{burst: 1}
+	routes := newTestHandlerWithLimiter("", limiter).Routes()
+
+	body, _ := json.Marshal(map[string]string{
+		"operation": "text_generate",
+		"prompt":    "limited prompt",
+	})
+	makeReq := func(vkUserID int64) *http.Request {
+		req := httptest.NewRequest(http.MethodPost, "/miniapp/jobs", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Launch-Params", devLaunchParams(vkUserID))
+		return req
+	}
+
+	w1 := httptest.NewRecorder()
+	routes.ServeHTTP(w1, makeReq(777))
+	if w1.Code != http.StatusCreated {
+		t.Fatalf("first user request: expected 201, got %d: %s", w1.Code, w1.Body.String())
+	}
+
+	w2 := httptest.NewRecorder()
+	routes.ServeHTTP(w2, makeReq(777))
+	if w2.Code != http.StatusTooManyRequests {
+		t.Fatalf("second same-user request: expected 429, got %d: %s", w2.Code, w2.Body.String())
+	}
+	if got := w2.Header().Get("Retry-After"); got != "1" {
+		t.Fatalf("expected Retry-After=1, got %q", got)
+	}
+	var errResp map[string]string
+	if err := json.Unmarshal(w2.Body.Bytes(), &errResp); err != nil {
+		t.Fatalf("invalid 429 response json: %v", err)
+	}
+	if errResp["error"] != "rate limit exceeded" {
+		t.Fatalf("unexpected 429 body: %s", w2.Body.String())
+	}
+
+	listReq := httptest.NewRequest(http.MethodGet, "/miniapp/jobs", nil)
+	listReq.Header.Set("X-Launch-Params", devLaunchParams(777))
+	listW := httptest.NewRecorder()
+	routes.ServeHTTP(listW, listReq)
+	if listW.Code != http.StatusOK {
+		t.Fatalf("list after rate limit: expected 200, got %d: %s", listW.Code, listW.Body.String())
+	}
+	var listResp struct {
+		Items []any `json:"items"`
+	}
+	if err := json.Unmarshal(listW.Body.Bytes(), &listResp); err != nil {
+		t.Fatalf("invalid list response json: %v", err)
+	}
+	if len(listResp.Items) != 1 {
+		t.Fatalf("rate-limited request must not create a new job, got %d jobs", len(listResp.Items))
+	}
+
+	w3 := httptest.NewRecorder()
+	routes.ServeHTTP(w3, makeReq(888))
+	if w3.Code != http.StatusCreated {
+		t.Fatalf("different user request: expected 201, got %d: %s", w3.Code, w3.Body.String())
+	}
+	if limiter.counts["miniapp_job:777"] != 2 || limiter.counts["miniapp_job:888"] != 1 {
+		t.Fatalf("limiter keys = %#v, want verified vk_user_id counts", limiter.counts)
 	}
 }

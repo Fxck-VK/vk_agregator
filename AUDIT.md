@@ -57,6 +57,10 @@ Severity: **critical** (blocks prod / safety / data loss), **high** (must fix be
 - Recommendation: Add per-IP/per-user rate limits and body-size limits at the edge/ingress.
 - **Fix:** Added `platform/ratelimit` (per-IP token bucket) wired as middleware on `/webhooks/vk` (configurable RPS/burst, returns 429). A shared/Redis limiter or WAF is still recommended for multi-instance deploys (noted in Beta).
 
+**S3a — Mini App job intake rate limiting — severity: high — ✅ FIXED**
+- Description: Webhook rate limiting already covered `/webhooks/vk`, but Mini App `POST /miniapp/jobs` created billable jobs without a separate intake throttle.
+- **Fix:** `POST /miniapp/jobs` is now rate-limited after launch-param verification with key `miniapp_job:<verified vk_user_id>`, separate `MINIAPP_JOB_RATE_LIMIT_RPS` / `MINIAPP_JOB_RATE_LIMIT_BURST`, safe `429` response and `Retry-After`. This is an in-memory per-instance limiter; Redis/shared limiter or WAF remains future multi-instance hardening.
+
 **S4 — Potential PII in logs — severity: low**
 - Description: Inbound logs use `group_id`; confirm `vk_user_id`/`peer_id` are hashed, not raw.
 - Impact: PII exposure in logs (invariant #13).

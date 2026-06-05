@@ -54,6 +54,10 @@ type Config struct {
 	// WebhookRateLimitRPS/Burst bound inbound webhook traffic per source.
 	WebhookRateLimitRPS   float64
 	WebhookRateLimitBurst int
+	// MiniAppJobRateLimitRPS/Burst bound Mini App job creation per verified
+	// vk_user_id.
+	MiniAppJobRateLimitRPS   float64
+	MiniAppJobRateLimitBurst int
 
 	// DBMaxConns/DBMinConns size the Postgres pool (audit SC1).
 	DBMaxConns int32
@@ -213,8 +217,10 @@ func Load() Config {
 
 		ModerationExtraTerms: envList("MODERATION_EXTRA_TERMS"),
 
-		WebhookRateLimitRPS:   envFloat("WEBHOOK_RATE_LIMIT_RPS", 20),
-		WebhookRateLimitBurst: envInt("WEBHOOK_RATE_LIMIT_BURST", 40),
+		WebhookRateLimitRPS:      envFloat("WEBHOOK_RATE_LIMIT_RPS", 20),
+		WebhookRateLimitBurst:    envInt("WEBHOOK_RATE_LIMIT_BURST", 40),
+		MiniAppJobRateLimitRPS:   envFloat("MINIAPP_JOB_RATE_LIMIT_RPS", 1),
+		MiniAppJobRateLimitBurst: envInt("MINIAPP_JOB_RATE_LIMIT_BURST", 5),
 
 		DBMaxConns:    int32(envInt("DB_MAX_CONNS", 10)),
 		DBMinConns:    int32(envInt("DB_MIN_CONNS", 0)),

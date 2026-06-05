@@ -54,6 +54,19 @@ func TestLoadProviderChain(t *testing.T) {
 	}
 }
 
+func TestLoadMiniAppJobRateLimit(t *testing.T) {
+	t.Setenv("MINIAPP_JOB_RATE_LIMIT_RPS", "2.5")
+	t.Setenv("MINIAPP_JOB_RATE_LIMIT_BURST", "7")
+
+	cfg := config.Load()
+	if cfg.MiniAppJobRateLimitRPS != 2.5 {
+		t.Fatalf("MiniAppJobRateLimitRPS = %v", cfg.MiniAppJobRateLimitRPS)
+	}
+	if cfg.MiniAppJobRateLimitBurst != 7 {
+		t.Fatalf("MiniAppJobRateLimitBurst = %v", cfg.MiniAppJobRateLimitBurst)
+	}
+}
+
 func TestValidateOpenAIModerationRequiresKey(t *testing.T) {
 	cfg := config.Config{
 		Env:                "development",

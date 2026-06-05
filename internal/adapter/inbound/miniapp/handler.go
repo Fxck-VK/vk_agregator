@@ -22,6 +22,11 @@ type contextKey int
 
 const ctxVKUserIDKey contextKey = iota
 
+// JobRateLimiter is the minimal limiter contract used by POST /miniapp/jobs.
+type JobRateLimiter interface {
+	Allow(key string) bool
+}
+
 // Config holds per-deployment miniapp settings.
 type Config struct {
 	// AppSecret is the VK App's protected key for verifying launch-params
@@ -30,6 +35,9 @@ type Config struct {
 	// LaunchParamsMaxAge is the maximum allowed age of the vk_ts timestamp.
 	// Zero disables the age check.
 	LaunchParamsMaxAge time.Duration
+	// JobRateLimiter bounds POST /miniapp/jobs after launch params have been
+	// verified, keyed by the verified vk_user_id.
+	JobRateLimiter JobRateLimiter
 }
 
 // ObjectReader loads stored artifact bytes (S3/MinIO).
@@ -68,7 +76,7 @@ func NewHandler(cfg Config, deps Deps) *Handler {
 // Routes returns an http.Handler with the miniapp routes registered.
 func (h *Handler) Routes() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /miniapp/jobs", h.auth(h.createJob))
+	mux.HandleFunc("POST /miniapp/jobs", h.auth(h.rateLimitJob(h.createJob)))
 	mux.HandleFunc("GET /miniapp/jobs", h.auth(h.listJobs))
 	mux.HandleFunc("GET /miniapp/jobs/{id}", h.auth(h.getJob))
 	mux.HandleFunc("GET /miniapp/balance", h.auth(h.getBalance))
@@ -130,6 +138,26 @@ func (h *Handler) auth(next http.HandlerFunc) http.HandlerFunc {
 func vkUserIDFromCtx(ctx context.Context) (int64, bool) {
 	v, ok := ctx.Value(ctxVKUserIDKey).(int64)
 	return v, ok && v > 0
+}
+
+func (h *Handler) rateLimitJob(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if h.cfg.JobRateLimiter == nil {
+			next(w, r)
+			return
+		}
+		vkUserID, ok := vkUserIDFromCtx(r.Context())
+		if !ok {
+			writeError(w, http.StatusUnauthorized, "unauthorized")
+			return
+		}
+		if !h.cfg.JobRateLimiter.Allow("miniapp_job:" + strconv.FormatInt(vkUserID, 10)) {
+			w.Header().Set("Retry-After", "1")
+			writeError(w, http.StatusTooManyRequests, "rate limit exceeded")
+			return
+		}
+		next(w, r)
+	}
 }
 
 // ensureUser returns the existing user or creates a new one with a billing
@@ -243,10 +271,10 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusCreated, newJobDTO(job))
 	case errors.Is(err, domain.ErrInsufficientCredits):
 		writeJSON(w, http.StatusPaymentRequired, map[string]any{
-			"error":          "insufficient_credits",
-			"job_id":         job.ID,
-			"status":         string(job.Status),
-			"cost_estimate":  job.CostEstimate,
+			"error":         "insufficient_credits",
+			"job_id":        job.ID,
+			"status":        string(job.Status),
+			"cost_estimate": job.CostEstimate,
 		})
 	case errors.Is(err, domain.ErrCostCapExceeded):
 		writeError(w, http.StatusBadRequest, "job cost exceeds platform limit")

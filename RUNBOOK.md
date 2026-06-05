@@ -57,6 +57,7 @@ no `.env` is required for local runs. Override via environment when needed:
 | `RETRY_BASE_DELAY` / `RETRY_MAX_DELAY` | `500ms` / `30s` | Exponential backoff bounds |
 | `MODERATION_EXTRA_TERMS` | `` | Comma-separated extra blocklist terms |
 | `WEBHOOK_RATE_LIMIT_RPS` / `WEBHOOK_RATE_LIMIT_BURST` | `20` / `40` | Per-IP webhook rate limit |
+| `MINIAPP_JOB_RATE_LIMIT_RPS` / `MINIAPP_JOB_RATE_LIMIT_BURST` | `1` / `5` | Per-user Mini App `POST /miniapp/jobs` rate limit |
 | `PROVIDER` | `mock` | Primary provider adapter: `mock` or `openai` |
 | `PROVIDER_CHAIN` | value of `PROVIDER` | Comma-separated router/fallback chain, e.g. `openai,mock` |
 | `OPENAI_API_KEY` | `` | Required when OpenAI provider/moderation/scanner is enabled |
@@ -434,6 +435,7 @@ signature verification (HMAC-SHA256).
 | `VK_APP_SECRET` | `""` (skip check in dev) | **Yes in production (fail-closed)** |
 | `VK_APP_ID` | `""` | Used by the tunnel; informational for the BFF |
 | `MINIAPP_LAUNCH_PARAMS_MAX_AGE` | `1h` | Optional |
+| `MINIAPP_JOB_RATE_LIMIT_RPS` / `MINIAPP_JOB_RATE_LIMIT_BURST` | `1` / `5` | Optional |
 
 When `VK_APP_SECRET` is set the launch-params HMAC-SHA256 signature is verified
 for real: invalid, missing, or expired (`vk_ts` older than
@@ -441,6 +443,8 @@ for real: invalid, missing, or expired (`vk_ts` older than
 `X-VK-User-ID` bypass is disabled. When `VK_APP_SECRET` is empty the signature
 check is skipped (dev/mock convenience) but `vk_user_id` is still required. In
 **production** an empty `VK_APP_SECRET` fails startup (fail-closed).
+Job creation through `POST /miniapp/jobs` has a separate per-verified-user
+in-memory token bucket; exceeded limits return `429` with `Retry-After`.
 
 ### Local development without real VK
 
