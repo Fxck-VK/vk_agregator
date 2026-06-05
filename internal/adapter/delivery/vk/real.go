@@ -109,6 +109,22 @@ func (c *HTTPClient) EditMessage(ctx context.Context, peerID, messageID int64, m
 	return SendResult{MessageID: messageID, PeerID: peerID}, nil
 }
 
+// AnswerMessageEvent acknowledges a VK callback button click. An empty
+// event_data is enough to stop the loading animation without showing a snackbar.
+func (c *HTTPClient) AnswerMessageEvent(ctx context.Context, eventID string, userID, peerID int64) error {
+	form := url.Values{}
+	form.Set("event_id", eventID)
+	form.Set("user_id", strconv.FormatInt(userID, 10))
+	form.Set("peer_id", strconv.FormatInt(peerID, 10))
+	form.Set("event_data", "")
+
+	var decoded vkMessageResponse
+	if err := c.api(ctx, "messages.sendMessageEventAnswer", form, &decoded); err != nil {
+		return err
+	}
+	return nil
+}
+
 // vkMessageResponse is the VK messages.send envelope. On success response holds
 // the message id; on failure error is populated.
 type vkMessageResponse struct {

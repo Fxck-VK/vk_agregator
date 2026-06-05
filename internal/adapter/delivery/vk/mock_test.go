@@ -87,6 +87,17 @@ func TestMockEditMessageUpdatesExistingMessage(t *testing.T) {
 	}
 }
 
+func TestMockAnswerMessageEvent(t *testing.T) {
+	c := vkdelivery.NewMockClient()
+	if err := c.AnswerMessageEvent(context.Background(), "evt", 1, 2); err != nil {
+		t.Fatalf("answer: %v", err)
+	}
+	answers := c.EventAnswers()
+	if len(answers) != 1 || answers[0].EventID != "evt" || answers[0].UserID != 1 || answers[0].PeerID != 2 {
+		t.Fatalf("unexpected answers: %+v", answers)
+	}
+}
+
 func TestMockFailNext(t *testing.T) {
 	c := vkdelivery.NewMockClient()
 	want := errors.New("boom")

@@ -106,6 +106,7 @@
 - [x] VK student menu: `🎁 Студентам и школьникам` открывает учебный экран с кнопками `Решальник задач`, `Генерация презентаций (скоро)`, `Создание рефератов (скоро)`, `Ответы на вопросы` и `Назад`; все кнопки пока control-only.
 - [x] VK active menu UX: inline menu navigation edits the current menu message via `messages.edit`; after a plain user prompt/text message the active menu is cleared and the next menu action sends a fresh bottom message. Edit failures fall back to a normal send.
 - [x] VK callback menu buttons: inline menu can run with `VK_MENU_BUTTON_MODE=callback`, processing VK `message_event` without user echo messages; `VK_MENU_BUTTON_MODE=text` keeps the legacy text-button fallback. Persistent lower `Показать меню` remains text.
+- [x] VK callback button ack: every `message_event` is acknowledged through blank `messages.sendMessageEventAnswer`, so VK client button loading spinner stops after a click.
 
 ---
 

@@ -17,6 +17,13 @@ type SentMessage struct {
 	MessageID  int64
 }
 
+// EventAnswer records one callback-button acknowledgement.
+type EventAnswer struct {
+	EventID string
+	UserID  int64
+	PeerID  int64
+}
+
 // MockClient is an in-memory Client for tests and local development. It honors
 // VK's random_id semantics: sending the same (peerID, randomID) twice returns
 // the original result with Duplicate=true and does not record a second message.
@@ -24,6 +31,7 @@ type MockClient struct {
 	mu        sync.Mutex
 	sent      []SentMessage
 	edits     []SentMessage
+	answers   []EventAnswer
 	byRandom  map[int64]SentMessage
 	nextMsgID int64
 	failNext  error
@@ -61,6 +69,15 @@ func (c *MockClient) Edits() []SentMessage {
 	defer c.mu.Unlock()
 	out := make([]SentMessage, len(c.edits))
 	copy(out, c.edits)
+	return out
+}
+
+// EventAnswers returns a copy of all recorded callback-button acknowledgements.
+func (c *MockClient) EventAnswers() []EventAnswer {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	out := make([]EventAnswer, len(c.answers))
+	copy(out, c.answers)
 	return out
 }
 
@@ -124,6 +141,20 @@ func (c *MockClient) EditMessage(_ context.Context, peerID, messageID int64, msg
 	}
 
 	return SendResult{}, fmt.Errorf("vkdelivery: message %d not found for peer %d", messageID, peerID)
+}
+
+// AnswerMessageEvent implements ControlClient.
+func (c *MockClient) AnswerMessageEvent(_ context.Context, eventID string, userID, peerID int64) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.failNext != nil {
+		err := c.failNext
+		c.failNext = nil
+		return err
+	}
+	c.answers = append(c.answers, EventAnswer{EventID: eventID, UserID: userID, PeerID: peerID})
+	return nil
 }
 
 func (c *MockClient) record(peerID, randomID int64, kind, text, attachment, keyboard string) (SendResult, error) {

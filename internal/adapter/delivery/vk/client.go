@@ -62,6 +62,7 @@ type Client interface {
 type ControlClient interface {
 	SendMessage(ctx context.Context, peerID, randomID int64, msg Message) (SendResult, error)
 	EditMessage(ctx context.Context, peerID, messageID int64, msg Message) (SendResult, error)
+	AnswerMessageEvent(ctx context.Context, eventID string, userID, peerID int64) error
 }
 
 // MediaUploader uploads raw artifact bytes to VK and returns the canonical

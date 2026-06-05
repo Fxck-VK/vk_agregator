@@ -319,6 +319,9 @@ does not create a user message in the chat. VK Callback API must have the
 `message_event` / callback-button event type enabled. To return to the old
 behavior where button labels are sent as user messages, set
 `VK_MENU_BUTTON_MODE=text` and restart `cmd/api`.
+For every callback-button click, the API sends a blank
+`messages.sendMessageEventAnswer` through `vkdelivery.ControlClient`; this is
+what clears the loading spinner in the VK client.
 
 ### VK message → full pipeline
 ```bash
@@ -393,6 +396,9 @@ go test ./internal/worker/ -run TestEndToEnd -v  # full VK→…→Capture
   callback-button clicks (`message_event`) and confirm `VK_MENU_BUTTON_MODE` is
   `callback`. If you need a quick fallback, set `VK_MENU_BUTTON_MODE=text` and
   restart `cmd/api`.
+- Callback button keeps spinning: check `api-live.log` for
+  `vk message_event answer failed`. VK requires `messages.sendMessageEventAnswer`
+  for every callback click; menu edit/send alone is not enough.
 - Banner is absent: set `VK_WELCOME_ATTACHMENT` to an already uploaded VK
   attachment string (`photo...`, `video...`). The API does not upload the banner
   image itself yet.

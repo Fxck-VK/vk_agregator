@@ -185,6 +185,9 @@ user messages in the chat. Make sure VK Callback API has callback-button events
 (`message_event`) enabled. To verify legacy fallback, set
 `VK_MENU_BUTTON_MODE=text`, restart `cmd/api`, and confirm button labels are sent
 as user messages again.
+The clicked callback button should not keep spinning: `cmd/api` acknowledges
+every `message_event` with blank `messages.sendMessageEventAnswer` before
+editing/sending the menu.
 
 Image / video jobs (slash commands):
 

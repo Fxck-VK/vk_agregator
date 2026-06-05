@@ -340,6 +340,10 @@ func TestCallbackMenuEventEditsActiveMenuNoJob(t *testing.T) {
 	if len(edits) != 1 || edits[0].MessageID != activeID || !strings.Contains(edits[0].Text, "Выбери модель") {
 		t.Fatalf("expected active menu edit to video picker, got %+v", edits)
 	}
+	answers := control.EventAnswers()
+	if len(answers) != 1 || answers[0].EventID != "vk-button-event-1" || answers[0].UserID != 573 || answers[0].PeerID != 573 {
+		t.Fatalf("expected callback event answer, got %+v", answers)
+	}
 }
 
 func TestPlainMessageClearsActiveMenuBeforeNextMenu(t *testing.T) {
@@ -705,6 +709,10 @@ func (c *keyboardFailControl) EditMessage(_ context.Context, _ int64, _ int64, m
 		return vkdelivery.SendResult{}, &vkdelivery.APIError{Code: 912, Message: "Chat bot feature"}
 	}
 	return vkdelivery.SendResult{MessageID: int64(len(c.sent)), PeerID: 558}, nil
+}
+
+func (c *keyboardFailControl) AnswerMessageEvent(_ context.Context, _ string, _, _ int64) error {
+	return nil
 }
 
 func TestMessageNewControlCommandNoJob(t *testing.T) {

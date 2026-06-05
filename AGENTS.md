@@ -26,7 +26,7 @@ implemented. Credential-bound live smoke and the full video media pipeline
 - All provider calls must go through `internal/adapter/provider`.
 - All VK API calls must go through `internal/adapter/delivery/vk`.
 - VK control/menu responses must use `vkdelivery.ControlClient`; new sends use a deterministic `random_id`, while active-menu edits target a tracked VK `message_id`.
-- VK inline menu buttons may be rendered as `callback` or `text` via `VK_MENU_BUTTON_MODE`; callback clicks must be handled as VK `message_event` control events and must not create Jobs.
+- VK inline menu buttons may be rendered as `callback` or `text` via `VK_MENU_BUTTON_MODE`; callback clicks must be handled as VK `message_event` control events, acknowledged through `vkdelivery.ControlClient`, and must not create Jobs.
 - VK menu buttons must not create billable Jobs until the user supplies a prompt.
 - Billing must use ledger entries and reservations; never mutate balance directly without ledger.
 - Media files must be stored as Artifacts before delivery.

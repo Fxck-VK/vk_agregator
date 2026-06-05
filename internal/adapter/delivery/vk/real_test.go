@@ -136,6 +136,29 @@ func TestHTTPClientEditMessageWithKeyboard(t *testing.T) {
 	}
 }
 
+func TestHTTPClientAnswerMessageEvent(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/messages.sendMessageEventAnswer" {
+			t.Fatalf("unexpected path %s", r.URL.Path)
+		}
+		_ = r.ParseForm()
+		if r.FormValue("event_id") != "evt-button" || r.FormValue("user_id") != "7" || r.FormValue("peer_id") != "42" {
+			t.Fatalf("unexpected form: %v", r.Form)
+		}
+		if r.FormValue("event_data") != "" {
+			t.Fatalf("event_data = %q, want blank answer", r.FormValue("event_data"))
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"response":1}`))
+	}))
+	defer srv.Close()
+
+	c := NewHTTPClient(HTTPConfig{AccessToken: "tok", BaseURL: srv.URL, HTTPClient: srv.Client()})
+	if err := c.AnswerMessageEvent(context.Background(), "evt-button", 7, 42); err != nil {
+		t.Fatalf("answer message event: %v", err)
+	}
+}
+
 func TestHTTPClientVKError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`{"error":{"error_code":5,"error_msg":"User authorization failed"}}`))

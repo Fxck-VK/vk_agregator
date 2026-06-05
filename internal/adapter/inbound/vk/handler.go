@@ -330,11 +330,28 @@ func (h *Handler) handleMessageEvent(ctx context.Context, cb callback, rawBody [
 		return nil
 	}
 
+	answerEventID := obj.EventID
+	if answerEventID == "" {
+		answerEventID = eventID
+	}
+	h.answerMessageEvent(ctx, answerEventID, fromID, peerID)
+
 	if err := h.process(ctx, cb, rawBody, eventID, idemKey, fromID, peerID, "", payload, true); err != nil {
 		_ = h.deps.Idempotency.MarkFailed(ctx, idemKey)
 		return err
 	}
 	return nil
+}
+
+func (h *Handler) answerMessageEvent(ctx context.Context, eventID string, userID, peerID int64) {
+	if eventID == "" || h.deps.Control == nil {
+		return
+	}
+	if err := h.deps.Control.AnswerMessageEvent(ctx, eventID, userID, peerID); err != nil {
+		h.logger.Warn("vk message_event answer failed",
+			slog.Int64("peer_id", peerID),
+			slog.String("error", err.Error()))
+	}
 }
 
 // process runs the InboundEvent -> User -> Command -> Job flow.
