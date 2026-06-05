@@ -522,6 +522,116 @@ func TestHandler_CreateJob_Idempotency(t *testing.T) {
 	}
 }
 
+func TestHandler_CreateJob_AcceptsSupportedModelID(t *testing.T) {
+	userRepo := memory.NewUserRepo()
+	jobRepo := memory.NewJobRepo()
+	billingRepo := memory.NewBillingRepo()
+	outboxRepo := memory.NewOutboxRepo()
+	uowMgr := memory.NewUnitOfWork(jobRepo, outboxRepo, billingRepo)
+	billing := billingservice.New(billingRepo)
+	orch := joborchestrator.New(jobRepo, uowMgr, billing, 0)
+
+	handler := miniappinbound.NewHandler(
+		miniappinbound.Config{},
+		miniappinbound.Deps{
+			Users:        userRepo,
+			Jobs:         jobRepo,
+			Billing:      billing,
+			BillingRepo:  billingRepo,
+			Orchestrator: orch,
+		},
+	)
+	routes := handler.Routes()
+
+	body, _ := json.Marshal(map[string]string{
+		"operation": "text_generate",
+		"prompt":    "model prompt",
+		"model_id":  "gpt-4o-mini",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/miniapp/jobs", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Launch-Params", devLaunchParams(777))
+
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("invalid response json: %v", err)
+	}
+	if _, ok := resp["model_id"]; ok {
+		t.Fatalf("job response must not expose model_id: %s", w.Body.String())
+	}
+	idRaw, ok := resp["id"].(string)
+	if !ok {
+		t.Fatalf("expected job id in response: %s", w.Body.String())
+	}
+	jobID, err := uuid.Parse(idRaw)
+	if err != nil {
+		t.Fatalf("invalid job id: %v", err)
+	}
+	job, err := jobRepo.GetByID(context.Background(), jobID)
+	if err != nil {
+		t.Fatalf("expected stored job: %v", err)
+	}
+	var params struct {
+		Prompt  string `json:"prompt"`
+		ModelID string `json:"model_id"`
+	}
+	if err := json.Unmarshal(job.Params, &params); err != nil {
+		t.Fatalf("invalid job params: %v", err)
+	}
+	if params.ModelID != "gpt-4o-mini" {
+		t.Fatalf("expected model_id persisted in params, got %q", params.ModelID)
+	}
+}
+
+func TestHandler_CreateJob_RejectsUnsupportedModelID(t *testing.T) {
+	routes := newTestHandler("").Routes()
+
+	body, _ := json.Marshal(map[string]string{
+		"operation": "text_generate",
+		"prompt":    "model prompt",
+		"model_id":  "kling",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/miniapp/jobs", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Launch-Params", devLaunchParams(777))
+
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+	var errResp map[string]string
+	if err := json.Unmarshal(w.Body.Bytes(), &errResp); err != nil {
+		t.Fatalf("invalid error response json: %v", err)
+	}
+	if errResp["error"] != "unsupported model" {
+		t.Fatalf("unexpected error body: %s", w.Body.String())
+	}
+
+	listReq := httptest.NewRequest(http.MethodGet, "/miniapp/jobs", nil)
+	listReq.Header.Set("X-Launch-Params", devLaunchParams(777))
+	listW := httptest.NewRecorder()
+	routes.ServeHTTP(listW, listReq)
+	if listW.Code != http.StatusOK {
+		t.Fatalf("list after rejected create: expected 200, got %d: %s", listW.Code, listW.Body.String())
+	}
+	var listResp struct {
+		Items []any `json:"items"`
+	}
+	if err := json.Unmarshal(listW.Body.Bytes(), &listResp); err != nil {
+		t.Fatalf("invalid list response json: %v", err)
+	}
+	if len(listResp.Items) != 0 {
+		t.Fatalf("rejected model must not create a job, got %d jobs", len(listResp.Items))
+	}
+}
+
 func TestHandler_CreateJob_RateLimitByVerifiedUserID(t *testing.T) {
 	limiter := &countingLimiter{burst: 1}
 	routes := newTestHandlerWithLimiter("", limiter).Routes()

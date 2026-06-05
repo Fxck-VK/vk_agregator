@@ -65,6 +65,10 @@ Severity: **critical** (blocks prod / safety / data loss), **high** (must fix be
 - Description: Frontend create-job submits relied on UI disabled state and surfaced raw API error messages.
 - **Fix:** Mini App now sends stable per-submit `X-Idempotency-Key`, blocks duplicate in-flight submit attempts, preserves HTTP status/retry metadata in typed API errors, and maps API/network failures to safe user-facing messages.
 
+**S3c — Mini App model_id contract — ✅ IMPLEMENTED**
+- Description: Mini App had a visible model selector while `POST /miniapp/jobs` ignored model selection, leaving no backend contract for supported models.
+- **Fix:** Mini App BFF now accepts optional `model_id`, validates it by operation-specific whitelist before user/billing/job creation, persists only supported values in normalized job params, and does not expose model selector/model_id in job API responses. Unsupported model IDs return safe `400` and create no job.
+
 **S4 — Potential PII in logs — severity: low**
 - Description: Inbound logs use `group_id`; confirm `vk_user_id`/`peer_id` are hashed, not raw.
 - Impact: PII exposure in logs (invariant #13).

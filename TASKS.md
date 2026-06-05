@@ -141,11 +141,9 @@
   safe `429` + `Retry-After`, deterministic tests.
 - [x] **[Medium] Fail-closed проверка `vk_ts`** (`internal/adapter/inbound/miniapp/sign.go`).
   Реализовано: при `maxAge > 0` пустой, битый, future или expired `vk_ts` отклоняется до job creation; клиент получает безопасный `401`.
-- [ ] **[Medium] Проброс выбора модели на бэкенд**. Добавить поле `model` в
-  `CreateJobRequest` (`internal/adapter/inbound/miniapp/dto.go`) и слать его из
-  `createJob` (`web/miniapp/src/api/client.ts`) — сейчас уходит только
-  `{operation, prompt}`, выбор модели в UI игнорируется. Нужна валидация модели
-  по белому списку + проброс в оркестратор/провайдер.
+- [~] **[Medium] Проброс выбора модели на бэкенд**.
+  Backend contract реализован: `POST /miniapp/jobs` принимает optional `model_id`, валидирует по operation whitelist, сохраняет supported value в job params и не раскрывает selector/model_id в job API responses.
+  Осталось: фронт должен начать слать `model_id`; worker/provider routing по выбранной модели остаётся отдельным PR.
 - [ ] **[Medium] Мягкая деградация `getArtifact` при недоступности S3**
   (`cmd/api/main.go:88-92`, `handler.go:369-373`). Сейчас при сбое подключения к
   S3 `objectStore == nil` и роут молча отдаёт `503`, хотя Job успешен. В проде —

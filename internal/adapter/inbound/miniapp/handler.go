@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -204,6 +205,34 @@ func operationMeta(op string) (domain.OperationType, domain.Modality, bool) {
 	}
 }
 
+var miniAppSupportedModels = map[domain.OperationType]map[string]struct{}{
+	domain.OperationTextGenerate: {
+		"gpt-4o-mini": {},
+		"gpt-4o":      {},
+		"llama-3.1":   {},
+	},
+	domain.OperationImageGenerate: {
+		"sdxl":      {},
+		"kandinsky": {},
+	},
+	domain.OperationVideoGenerate: {
+		"kling": {},
+	},
+}
+
+func validateMiniAppModelID(op domain.OperationType, raw string) (string, bool) {
+	modelID := strings.TrimSpace(raw)
+	if modelID == "" {
+		return "", true
+	}
+	models, ok := miniAppSupportedModels[op]
+	if !ok {
+		return "", false
+	}
+	_, ok = models[modelID]
+	return modelID, ok
+}
+
 // ---------------------------------------------------------------------------
 // Handlers
 // ---------------------------------------------------------------------------
@@ -220,7 +249,11 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "cannot read body")
 		return
 	}
-	var req CreateJobRequest
+	var req struct {
+		Operation string `json:"operation"`
+		Prompt    string `json:"prompt"`
+		ModelID   string `json:"model_id,omitempty"`
+	}
 	if err := json.Unmarshal(body, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid json")
 		return
@@ -233,6 +266,11 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 	opType, modality, ok := operationMeta(req.Operation)
 	if !ok {
 		writeError(w, http.StatusBadRequest, "unsupported operation; allowed: text_generate, image_generate, video_generate")
+		return
+	}
+	modelID, ok := validateMiniAppModelID(opType, req.ModelID)
+	if !ok {
+		writeError(w, http.StatusBadRequest, "unsupported model")
 		return
 	}
 
@@ -253,8 +291,12 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 	correlationID := fmt.Sprintf("miniapp:%d:%s", vkUserID, clientKey)
 
 	params, _ := json.Marshal(struct {
-		Prompt string `json:"prompt"`
-	}{Prompt: req.Prompt})
+		Prompt  string `json:"prompt"`
+		ModelID string `json:"model_id,omitempty"`
+	}{
+		Prompt:  req.Prompt,
+		ModelID: modelID,
+	})
 
 	job, err := h.deps.Orchestrator.CreateJob(r.Context(), joborchestrator.CreateJobInput{
 		UserID:         user.ID,

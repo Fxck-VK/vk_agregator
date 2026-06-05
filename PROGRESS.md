@@ -785,3 +785,22 @@ resume hardening.
 ### Проверки
 
 - `go test ./internal/adapter/inbound/miniapp ./internal/platform/config` — exit 0.
+
+---
+
+## PR-5 — Mini App: backend model_id contract
+
+Статус: **завершён**.
+
+### Что сделано
+
+- `POST /miniapp/jobs` accepts optional `model_id` and validates it by operation
+  against the Mini App backend whitelist.
+- Unsupported or cross-operation model IDs return safe `400` before user,
+  billing or job creation.
+- Supported `model_id` is stored in normalized job params; job API responses do
+  not expose model selector/model_id.
+
+### Проверки
+
+- `go test ./internal/adapter/inbound/miniapp ./internal/platform/config` — exit 0.
