@@ -64,6 +64,29 @@ func TestMockSendPhotoVideo(t *testing.T) {
 	}
 }
 
+func TestMockEditMessageUpdatesExistingMessage(t *testing.T) {
+	c := vkdelivery.NewMockClient()
+	ctx := context.Background()
+	sent, err := c.SendMessage(ctx, 100, 11, vkdelivery.Message{Text: "menu"})
+	if err != nil {
+		t.Fatalf("send message: %v", err)
+	}
+	if _, err := c.EditMessage(ctx, 100, sent.MessageID, vkdelivery.Message{Text: "updated"}); err != nil {
+		t.Fatalf("edit message: %v", err)
+	}
+	messages := c.Sent()
+	if len(messages) != 1 {
+		t.Fatalf("edit should not append a sent message, got %+v", messages)
+	}
+	if messages[0].Text != "updated" {
+		t.Fatalf("message was not updated: %+v", messages[0])
+	}
+	edits := c.Edits()
+	if len(edits) != 1 || edits[0].MessageID != sent.MessageID || edits[0].Text != "updated" {
+		t.Fatalf("unexpected edits: %+v", edits)
+	}
+}
+
 func TestMockFailNext(t *testing.T) {
 	c := vkdelivery.NewMockClient()
 	want := errors.New("boom")

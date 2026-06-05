@@ -59,6 +59,7 @@ type Client interface {
 // ControlClient sends non-job control/product messages such as the /start menu.
 type ControlClient interface {
 	SendMessage(ctx context.Context, peerID, randomID int64, msg Message) (SendResult, error)
+	EditMessage(ctx context.Context, peerID, messageID int64, msg Message) (SendResult, error)
 }
 
 // MediaUploader uploads raw artifact bytes to VK and returns the canonical

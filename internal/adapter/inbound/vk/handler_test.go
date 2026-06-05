@@ -227,6 +227,79 @@ func TestShowMenuSendsWelcomeWithoutResettingPersistentKeyboard(t *testing.T) {
 	}
 }
 
+func TestMenuButtonEditsActiveMenuMessage(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	h := newHarnessWithControl(control)
+	start := `{
+		"type":"message_new","group_id":1,"event_id":"evt-menu-edit-start","secret":"s3cr3t",
+		"object":{"message":{"from_id":570,"peer_id":570,"text":"/start"}}
+	}`
+	if rec := h.post(start); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected start response: %d %q", rec.Code, rec.Body.String())
+	}
+	initial := control.Sent()
+	if len(initial) != 2 {
+		t.Fatalf("expected persistent keyboard and active menu, got %+v", initial)
+	}
+	activeID := initial[1].MessageID
+
+	video := `{
+		"type":"message_new","group_id":1,"event_id":"evt-menu-edit-video","secret":"s3cr3t",
+		"object":{"message":{"from_id":570,"peer_id":570,"text":"рџЋ¬ РЎРѕР·РґР°С‚СЊ РІРёРґРµРѕ","payload":"{\"command\":\"menu.video\"}"}}
+	}`
+	if rec := h.post(video); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected video response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	sent := control.Sent()
+	if len(sent) != 2 {
+		t.Fatalf("menu button should edit the active menu instead of sending a new one, got %+v", sent)
+	}
+	edits := control.Edits()
+	if len(edits) != 1 || edits[0].MessageID != activeID {
+		t.Fatalf("expected one edit of active menu %d, got %+v", activeID, edits)
+	}
+	if sent[1].Text != "Выбери модель для генерации:" {
+		t.Fatalf("active menu was not updated to video picker: %+v", sent[1])
+	}
+}
+
+func TestPlainMessageClearsActiveMenuBeforeNextMenu(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	h := newHarnessWithControl(control)
+	start := `{
+		"type":"message_new","group_id":1,"event_id":"evt-menu-clear-start","secret":"s3cr3t",
+		"object":{"message":{"from_id":571,"peer_id":571,"text":"/start"}}
+	}`
+	if rec := h.post(start); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected start response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	plain := `{
+		"type":"message_new","group_id":1,"event_id":"evt-menu-clear-text","secret":"s3cr3t",
+		"object":{"message":{"from_id":571,"peer_id":571,"text":"РџСЂРёРґСѓРјР°Р№ РёРґРµСЋ РґР»СЏ РІРёРґРµРѕ"}}
+	}`
+	if rec := h.post(plain); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected plain response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	menu := `{
+		"type":"message_new","group_id":1,"event_id":"evt-menu-clear-show","secret":"s3cr3t",
+		"object":{"message":{"from_id":571,"peer_id":571,"text":"РџРѕРєР°Р·Р°С‚СЊ РјРµРЅСЋ","payload":"{\"command\":\"show_menu\"}"}}
+	}`
+	if rec := h.post(menu); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected menu response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	sent := control.Sent()
+	if len(sent) != 3 {
+		t.Fatalf("menu after plain text should be sent as a new message, got %+v", sent)
+	}
+	if edits := control.Edits(); len(edits) != 0 {
+		t.Fatalf("plain text should clear active menu before next menu, got edits %+v", edits)
+	}
+}
+
 func TestVideoMenuButtonSendsModelPickerNoJob(t *testing.T) {
 	control := vkdelivery.NewMockClient()
 	h := newHarnessWithControl(control)
@@ -541,6 +614,14 @@ type keyboardFailControl struct {
 }
 
 func (c *keyboardFailControl) SendMessage(_ context.Context, _ int64, _ int64, msg vkdelivery.Message) (vkdelivery.SendResult, error) {
+	c.sent = append(c.sent, msg)
+	if msg.Keyboard != nil {
+		return vkdelivery.SendResult{}, &vkdelivery.APIError{Code: 912, Message: "Chat bot feature"}
+	}
+	return vkdelivery.SendResult{MessageID: int64(len(c.sent)), PeerID: 558}, nil
+}
+
+func (c *keyboardFailControl) EditMessage(_ context.Context, _ int64, _ int64, msg vkdelivery.Message) (vkdelivery.SendResult, error) {
 	c.sent = append(c.sent, msg)
 	if msg.Keyboard != nil {
 		return vkdelivery.SendResult{}, &vkdelivery.APIError{Code: 912, Message: "Chat bot feature"}

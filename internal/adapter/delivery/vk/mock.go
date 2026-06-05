@@ -2,6 +2,7 @@ package vkdelivery
 
 import (
 	"context"
+	"fmt"
 	"sync"
 )
 
@@ -22,6 +23,7 @@ type SentMessage struct {
 type MockClient struct {
 	mu        sync.Mutex
 	sent      []SentMessage
+	edits     []SentMessage
 	byRandom  map[int64]SentMessage
 	nextMsgID int64
 	failNext  error
@@ -53,6 +55,15 @@ func (c *MockClient) Sent() []SentMessage {
 	return out
 }
 
+// Edits returns a copy of all recorded edit operations.
+func (c *MockClient) Edits() []SentMessage {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	out := make([]SentMessage, len(c.edits))
+	copy(out, c.edits)
+	return out
+}
+
 // SendText implements Client.
 func (c *MockClient) SendText(_ context.Context, peerID, randomID int64, text string) (SendResult, error) {
 	return c.record(peerID, randomID, "text", text, "", "")
@@ -75,6 +86,44 @@ func (c *MockClient) SendMessage(_ context.Context, peerID, randomID int64, msg 
 		keyboard, _ = encodeKeyboard(msg.Keyboard)
 	}
 	return c.record(peerID, randomID, "message", msg.Text, msg.Attachment, keyboard)
+}
+
+// EditMessage implements ControlClient.
+func (c *MockClient) EditMessage(_ context.Context, peerID, messageID int64, msg Message) (SendResult, error) {
+	keyboard := ""
+	if msg.Keyboard != nil {
+		keyboard, _ = encodeKeyboard(msg.Keyboard)
+	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.failNext != nil {
+		err := c.failNext
+		c.failNext = nil
+		return SendResult{}, err
+	}
+
+	for i := range c.sent {
+		if c.sent[i].PeerID != peerID || c.sent[i].MessageID != messageID {
+			continue
+		}
+		c.sent[i].Text = msg.Text
+		c.sent[i].Attachment = msg.Attachment
+		c.sent[i].Keyboard = keyboard
+		edit := SentMessage{
+			PeerID:     peerID,
+			Type:       "edit",
+			Text:       msg.Text,
+			Attachment: msg.Attachment,
+			Keyboard:   keyboard,
+			MessageID:  messageID,
+		}
+		c.edits = append(c.edits, edit)
+		return SendResult{MessageID: messageID, PeerID: peerID}, nil
+	}
+
+	return SendResult{}, fmt.Errorf("vkdelivery: message %d not found for peer %d", messageID, peerID)
 }
 
 func (c *MockClient) record(peerID, randomID int64, kind, text, attachment, keyboard string) (SendResult, error) {

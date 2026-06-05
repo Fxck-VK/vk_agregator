@@ -5,8 +5,9 @@ Status: MVP+ (modular monolith; mock provider + mock VK delivery by default).
 OpenAI text/image/video generation, provider routing/fallback/circuit breaker,
 VK `messages.send` plus raw photo/video upload, OpenAI moderation and OpenAI
 text/image artifact scanning are available behind config. VK `/start` product
-menu with inline keyboard is implemented through the VK delivery adapter. Real
-calls remain credential-bound and need live smoke before external users.
+menu with inline keyboard and active-menu `messages.edit` is implemented
+through the VK delivery adapter. Real calls remain credential-bound and need
+live smoke before external users.
 
 > **Final integration update (v0.1.3):** P1 (provider) and V1 (VK delivery) are
 > now **FIXED in code** with unit tests. Full beta still needs live smoke with
@@ -138,6 +139,9 @@ Severity: **critical** (blocks prod / safety / data loss), **high** (must fix be
 - Recommendation: Run a live smoke with `VK_ACCESS_TOKEN` against a dev group/conversation.
 - **Fix:** `vkdelivery.HTTPClient` implements `MediaUploader`: photo uses `photos.getMessagesUploadServer` → upload → `photos.saveMessagesPhoto`; video uses `video.save` → upload. Delivery worker now uploads raw artifact bytes before sending media. Deterministic `random_id` remains the delivery dedup key. Unit tests cover photo/video upload flows and worker-level upload-to-send behavior.
 - **Remaining:** Video transcode/probe/VK-ready variants remain Phase 3 media-pipeline work.
+- **Menu note:** VK product/control menu navigation uses `vkdelivery.ControlClient`
+  for both `messages.send` and `messages.edit`; active-menu tracking is currently
+  process-local and should become persisted before multi-instance API scaling.
 
 **V2 — Confirmation/secret handled — severity: low**
 - Description: Confirmation token + optional secret validated; fast `ok` response. Good (see S1 for default).

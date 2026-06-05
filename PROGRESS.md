@@ -449,6 +449,9 @@
   - `Спросить у GPT` открывает active-сообщение `SUPER GPT активен` без создания job; следующий обычный текст пользователя уже проходит через обычный text.ask flow;
   - `Студентам и школьникам` открывает учебное подменю: `Решальник задач`, `Генерация презентаций (скоро)`, `Создание рефератов (скоро)`, `Ответы на вопросы`, `Назад`;
   - `vkdelivery.HTTPClient` получил `SendMessage` с `keyboard` JSON, поэтому VK API по-прежнему вызывается только из `internal/adapter/delivery/vk`;
+  - `vkdelivery.HTTPClient` получил `EditMessage` поверх VK `messages.edit`, а `ControlClient` теперь покрывает и send, и edit для product/control меню;
+  - handler хранит process-local active menu по `peer_id`: кнопочные payload-переходы редактируют текущий menu message, обычный пользовательский prompt/text сбрасывает active menu, и следующий вызов меню отправляет новое сообщение внизу чата;
+  - если VK не разрешает edit текущего menu message, API логирует warn, очищает active menu и делает fallback на обычный `messages.send`;
   - кнопки `Создать видео`, `Создать фото`, `Спросить у GPT`, `Студентам и школьникам`, `Мой аккаунт`, `Пополнить баланс` классифицируются как control commands и не создают пустые billable jobs;
   - баланс в меню берется через `billingservice.EnsureAccount`, без прямой мутации баланса;
   - опциональный баннер подключается через `VK_WELCOME_ATTACHMENT` как уже готовый VK attachment string;
@@ -457,6 +460,7 @@
 ### Проверки
 
 - Targeted tests: `go test ./internal/adapter/provider/openai ./internal/adapter/delivery/vk ./internal/adapter/inbound/vk ./internal/service/commandrouter ./internal/worker ./internal/platform/config`.
+- Added VK menu UX coverage: `EditMessage` request shape, mock edit semantics, active-menu edit, and plain-message reset to new menu send.
 - Full regression checks выполняются после документационного sync.
 - Live VK `/start` smoke: callback returned `ok`, command persisted as `start`,
   zero jobs created, welcome text delivered to VK. After enabling bot features
@@ -467,6 +471,7 @@
 - Реальные OpenAI/VK вызовы не прогонялись без пользовательских credentials; нужен live smoke на dev-аккаунтах.
 - Второй реальный provider для fallback ещё не добавлен; сейчас fallback можно проверить с `mock`.
 - VK control/menu responses пока отправляются напрямую из API через `vkdelivery.ControlClient` с deterministic `random_id`; если на product/control sends распространяем invariant `Every delivery attempt is persisted`, нужен отдельный persisted delivery/outbox flow для таких сообщений.
+- Active-menu tracking для `messages.edit` пока хранится в памяти процесса `cmd/api`; после рестарта API или при multi-instance балансировке меню может отправиться новым сообщением. Перед production-scale нужен persisted conversation/menu state.
 - Video artifact scanner пока fail-open; полноценный video scan/probe/transcode остаётся Phase 3 media pipeline.
 - Нужен resume fix для edge-case: `provider_task=succeeded`, но artifact/result_ready ещё не сохранены после crash.
 

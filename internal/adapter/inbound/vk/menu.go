@@ -153,7 +153,7 @@ func fixedText(text string) func(int64) string {
 	}
 }
 
-func (h *Handler) sendControlResponse(ctx context.Context, t domain.CommandType, idemKey string, peerID int64, user *domain.User) error {
+func (h *Handler) sendControlResponse(ctx context.Context, t domain.CommandType, idemKey string, peerID int64, user *domain.User, allowEdit bool) error {
 	if h.deps.Control == nil {
 		h.logger.Warn("vk control response skipped because VK_ACCESS_TOKEN is not configured",
 			slog.String("command_type", string(t)))
@@ -188,20 +188,84 @@ func (h *Handler) sendControlResponse(ctx context.Context, t domain.CommandType,
 		msg.Attachment = h.cfg.WelcomeAttachment
 	}
 	randomID := vkdelivery.DeterministicRandomID("vk_control:" + idemKey + ":" + string(t))
-	_, err := h.deps.Control.SendMessage(ctx, peerID, randomID, msg)
+	result, err := h.deliverControlResponse(ctx, t, peerID, randomID, msg, allowEdit)
 	if err == nil {
+		h.setActiveMenu(peerID, result.MessageID)
 		return nil
 	}
+	return err
+}
+
+func (h *Handler) deliverControlResponse(ctx context.Context, t domain.CommandType, peerID, randomID int64, msg vkdelivery.Message, allowEdit bool) (vkdelivery.SendResult, error) {
+	if allowEdit {
+		if active, ok := h.getActiveMenu(peerID); ok {
+			result, err := h.editControlMessage(ctx, t, peerID, active.MessageID, msg)
+			if err == nil {
+				return result, nil
+			}
+			h.clearActiveMenu(peerID)
+			h.logger.Warn("vk menu edit failed; sending a new control response",
+				slog.String("command_type", string(t)),
+				slog.Int64("peer_id", peerID),
+				slog.Int64("message_id", active.MessageID),
+				slog.String("error", err.Error()))
+		}
+	}
+	return h.sendControlMessage(ctx, t, peerID, randomID, msg)
+}
+
+func (h *Handler) editControlMessage(ctx context.Context, t domain.CommandType, peerID, messageID int64, msg vkdelivery.Message) (vkdelivery.SendResult, error) {
+	result, err := h.deps.Control.EditMessage(ctx, peerID, messageID, msg)
+	if err == nil {
+		return result, nil
+	}
 	if msg.Keyboard == nil || !vkdelivery.IsAPIErrorCode(err, 911, 912) {
-		return err
+		return vkdelivery.SendResult{}, err
+	}
+
+	h.logger.Warn("vk keyboard edit failed; retrying control response edit without keyboard",
+		slog.String("command_type", string(t)),
+		slog.String("error", err.Error()))
+	msg.Keyboard = nil
+	return h.deps.Control.EditMessage(ctx, peerID, messageID, msg)
+}
+
+func (h *Handler) sendControlMessage(ctx context.Context, t domain.CommandType, peerID, randomID int64, msg vkdelivery.Message) (vkdelivery.SendResult, error) {
+	result, err := h.deps.Control.SendMessage(ctx, peerID, randomID, msg)
+	if err == nil {
+		return result, nil
+	}
+	if msg.Keyboard == nil || !vkdelivery.IsAPIErrorCode(err, 911, 912) {
+		return vkdelivery.SendResult{}, err
 	}
 
 	h.logger.Warn("vk keyboard send failed; retrying control response without keyboard",
 		slog.String("command_type", string(t)),
 		slog.String("error", err.Error()))
 	msg.Keyboard = nil
-	_, err = h.deps.Control.SendMessage(ctx, peerID, randomID, msg)
-	return err
+	return h.deps.Control.SendMessage(ctx, peerID, randomID, msg)
+}
+
+func (h *Handler) getActiveMenu(peerID int64) (activeMenuMessage, bool) {
+	h.menuMu.Lock()
+	defer h.menuMu.Unlock()
+	msg, ok := h.activeMenus[peerID]
+	return msg, ok
+}
+
+func (h *Handler) setActiveMenu(peerID, messageID int64) {
+	if messageID == 0 {
+		return
+	}
+	h.menuMu.Lock()
+	defer h.menuMu.Unlock()
+	h.activeMenus[peerID] = activeMenuMessage{MessageID: messageID}
+}
+
+func (h *Handler) clearActiveMenu(peerID int64) {
+	h.menuMu.Lock()
+	defer h.menuMu.Unlock()
+	delete(h.activeMenus, peerID)
 }
 
 func (h *Handler) sendPersistentMenuButton(ctx context.Context, idemKey string, peerID int64) error {

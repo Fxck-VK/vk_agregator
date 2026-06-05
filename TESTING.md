@@ -174,6 +174,11 @@ Clicking `🎁 Студентам и школьникам` should return the stu
 `Решальник задач`, `Генерация презентаций (скоро)`,
 `Создание рефератов (скоро)`, `❓ Ответы на вопросы`, and `⬅️ Назад`; these
 button presses must not enqueue jobs.
+For live VK UX, click several inline menu buttons in a row: the bot should edit
+the active menu message instead of posting a new bot message each time. Then
+send a plain prompt/text message and press `Показать меню`: the menu should be
+sent as a new bottom message. This active-menu state is process-local to the
+running API instance.
 
 Image / video jobs (slash commands):
 

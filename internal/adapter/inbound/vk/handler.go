@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 
 	"go.opentelemetry.io/otel/attribute"
 
@@ -58,6 +59,9 @@ type Handler struct {
 	cfg    Config
 	deps   Deps
 	logger *slog.Logger
+
+	menuMu      sync.Mutex
+	activeMenus map[int64]activeMenuMessage
 }
 
 // NewHandler builds a VK callback handler.
@@ -66,7 +70,16 @@ func NewHandler(cfg Config, deps Deps) *Handler {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Handler{cfg: cfg, deps: deps, logger: logger}
+	return &Handler{
+		cfg:         cfg,
+		deps:        deps,
+		logger:      logger,
+		activeMenus: map[int64]activeMenuMessage{},
+	}
+}
+
+type activeMenuMessage struct {
+	MessageID int64
 }
 
 // callback is the common VK Callback API envelope.
@@ -254,8 +267,10 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 
 	// Command: classify the message into a normalized command.
 	parsed := h.deps.Router.Parse(text)
+	controlFromPayload := false
 	if controlType, ok := controlTypeFromPayload(payload); ok {
 		parsed = commandrouter.Result{Type: controlType}
+		controlFromPayload = true
 	}
 	cmd := &domain.Command{
 		UserID:         user.ID,
@@ -281,9 +296,11 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 	resourceID := cmd.ID
 
 	if shouldSendControlResponse(parsed.Type) {
-		if err := h.sendControlResponse(ctx, parsed.Type, idemKey, peerID, user); err != nil {
+		if err := h.sendControlResponse(ctx, parsed.Type, idemKey, peerID, user, controlFromPayload); err != nil {
 			return fmt.Errorf("send control response: %w", err)
 		}
+	} else {
+		h.clearActiveMenu(peerID)
 	}
 
 	// Job: only commands that map to an AI operation become jobs. Control

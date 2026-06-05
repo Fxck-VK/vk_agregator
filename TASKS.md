@@ -104,6 +104,7 @@
 - [x] VK video menu: кнопка `🎬 Создать видео` открывает inline-экран `Выбери модель для генерации:` с кнопками `Sora 2`, `Kling v2.1`, `Seedance 1`, `Haiuo v0.2` и `⬅️ Назад`; выбор модели пока control-only и не создает billable job.
 - [x] VK menu registry: control-экраны описаны декларативно; `🖼️ Создать фото` при одной основной модели сразу открывает инструкцию с режимами `Фото по тексту` / `Фото с референсом`, а `💬 Спросить у GPT` открывает active-сообщение без лишнего выбора модели.
 - [x] VK student menu: `🎁 Студентам и школьникам` открывает учебный экран с кнопками `Решальник задач`, `Генерация презентаций (скоро)`, `Создание рефератов (скоро)`, `Ответы на вопросы` и `Назад`; все кнопки пока control-only.
+- [x] VK active menu UX: inline menu navigation edits the current menu message via `messages.edit`; after a plain user prompt/text message the active menu is cleared and the next menu action sends a fresh bottom message. Edit failures fall back to a normal send.
 
 ---
 
@@ -114,6 +115,7 @@
 - [ ] Подключить production-баннер к `/start` через `VK_WELCOME_ATTACHMENT` или отдельный upload flow.
 - [x] Bot features включены в настройках сообщений VK-сообщества; VK начал принимать keyboard без `error_code=912`.
 - [ ] Перевести VK control/menu responses в persisted delivery/outbox, если product/control sends должны строго попадать под invariant `Every delivery attempt is persisted`.
+- [ ] Вынести active-menu tracking из памяти `cmd/api` в persisted conversation state перед multi-instance deploy, чтобы `messages.edit` переживал рестарты и балансировку.
 - [ ] Добавить второго реального provider для fallback не только на mock: Google/Gemini image или Kling/video.
 - [ ] Расширить VK inbound/media pipeline для photo/video/audio attachments: сохранять входящие вложения как input Artifacts, ffmpeg probe/transcode, malware scan, VK-ready variants.
 

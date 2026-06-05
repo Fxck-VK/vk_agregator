@@ -306,6 +306,12 @@ Clicking `🎁 Студентам и школьникам` opens the study subme
 `Решальник задач`, `Генерация презентаций (скоро)`,
 `Создание рефератов (скоро)`, `❓ Ответы на вопросы`, and `⬅️ Назад`.
 Those buttons are control-only until the corresponding scenario state is wired.
+Inline menu navigation is hybrid: while the last bot message is still the
+active menu, button clicks edit that message through VK `messages.edit` instead
+of adding new bot messages. If the user sends a plain prompt/text message, the
+active menu pointer is cleared and the next `Показать меню` or menu button sends
+a fresh menu at the bottom of the chat. If VK rejects an edit, the API falls back
+to sending a new menu message.
 
 ### VK message → full pipeline
 ```bash
@@ -372,6 +378,10 @@ go test ./internal/worker/ -run TestEndToEnd -v  # full VK→…→Capture
   `VK_ACCESS_TOKEN` and the community has bot features enabled in VK community
   message settings. VK returns `error_code=912` when keyboards are disabled; the
   API falls back to sending the welcome text without keyboard.
+- Menu clicks keep creating new bot messages: this is expected after the user
+  has sent a plain prompt/text message, after an API restart, or after an edit
+  rejection from VK. Active-menu tracking is process-local in the current Beta
+  implementation.
 - Banner is absent: set `VK_WELCOME_ATTACHMENT` to an already uploaded VK
   attachment string (`photo...`, `video...`). The API does not upload the banner
   image itself yet.

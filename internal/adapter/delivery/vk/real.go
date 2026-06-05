@@ -81,6 +81,34 @@ func (c *HTTPClient) SendMessage(ctx context.Context, peerID, randomID int64, ms
 	return c.send(ctx, peerID, randomID, msg)
 }
 
+// EditMessage edits an existing VK message with optional attachment and
+// keyboard. VK returns a boolean-like response for messages.edit, so the
+// normalized result keeps the caller-provided message id.
+func (c *HTTPClient) EditMessage(ctx context.Context, peerID, messageID int64, msg Message) (SendResult, error) {
+	form := url.Values{}
+	form.Set("peer_id", strconv.FormatInt(peerID, 10))
+	form.Set("message_id", strconv.FormatInt(messageID, 10))
+	if msg.Text != "" {
+		form.Set("message", msg.Text)
+	}
+	if msg.Attachment != "" {
+		form.Set("attachment", msg.Attachment)
+	}
+	if msg.Keyboard != nil {
+		keyboard, err := encodeKeyboard(msg.Keyboard)
+		if err != nil {
+			return SendResult{}, err
+		}
+		form.Set("keyboard", keyboard)
+	}
+
+	var decoded vkMessageResponse
+	if err := c.api(ctx, "messages.edit", form, &decoded); err != nil {
+		return SendResult{}, err
+	}
+	return SendResult{MessageID: messageID, PeerID: peerID}, nil
+}
+
 // vkMessageResponse is the VK messages.send envelope. On success response holds
 // the message id; on failure error is populated.
 type vkMessageResponse struct {

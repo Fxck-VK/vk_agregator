@@ -70,6 +70,45 @@ func TestHTTPClientSendMessageWithKeyboard(t *testing.T) {
 	}
 }
 
+func TestHTTPClientEditMessageWithKeyboard(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/messages.edit" {
+			t.Fatalf("unexpected path %s", r.URL.Path)
+		}
+		_ = r.ParseForm()
+		if r.FormValue("peer_id") != "42" || r.FormValue("message_id") != "777" {
+			t.Errorf("missing peer/message id: %v", r.Form)
+		}
+		if r.FormValue("message") != "updated menu" {
+			t.Errorf("message = %q", r.FormValue("message"))
+		}
+		var keyboard vkKeyboard
+		if err := json.Unmarshal([]byte(r.FormValue("keyboard")), &keyboard); err != nil {
+			t.Fatalf("keyboard json: %v", err)
+		}
+		if len(keyboard.Buttons) != 1 || keyboard.Buttons[0][0].Action.Label != "Back" {
+			t.Fatalf("unexpected keyboard: %+v", keyboard)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"response":1}`))
+	}))
+	defer srv.Close()
+
+	c := NewHTTPClient(HTTPConfig{AccessToken: "tok", BaseURL: srv.URL, HTTPClient: srv.Client()})
+	res, err := c.EditMessage(context.Background(), 42, 777, Message{
+		Text: "updated menu",
+		Keyboard: &Keyboard{Buttons: [][]KeyboardButton{{
+			{Label: "Back", Payload: `{"command":"show_menu"}`, Color: "secondary"},
+		}}},
+	})
+	if err != nil {
+		t.Fatalf("edit message: %v", err)
+	}
+	if res.MessageID != 777 || res.PeerID != 42 {
+		t.Fatalf("unexpected result: %+v", res)
+	}
+}
+
 func TestHTTPClientVKError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`{"error":{"error_code":5,"error_msg":"User authorization failed"}}`))
