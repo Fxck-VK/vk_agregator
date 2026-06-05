@@ -192,7 +192,10 @@ plain user message; that next text or sticker should create a `text.ask` job.
 In active GPT mode, the bot should first send `GPT думает...`; after the
 provider result is ready, that same VK message should be edited to the answer
 instead of sending a second bot message. This placeholder/edit UX is only for
-the button-enabled GPT mode, not for legacy `VK_UNROUTED_TEXT_MODE=gpt`.
+the button-enabled GPT mode, not for legacy `VK_UNROUTED_TEXT_MODE=gpt`. If the
+answer is too long for one VK message, the edited placeholder should contain
+the first chunk and the remaining chunks should be sent as deterministic
+follow-up text messages.
 Plain text outside GPT mode is controlled by `VK_UNROUTED_TEXT_MODE`: `reply`
 (default) sends only `Выберите режим в меню выше.` and creates no job, `silent`
 creates no job and sends nothing, `gpt` preserves legacy any-text-to-GPT

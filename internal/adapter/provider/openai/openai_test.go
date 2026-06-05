@@ -3,6 +3,7 @@ package openai
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -60,9 +61,13 @@ func TestSubmitPollImageSuccess(t *testing.T) {
 }
 
 func TestSubmitPollTextSuccess(t *testing.T) {
+	var seen responsesRequest
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/responses" {
 			t.Errorf("path = %q, want /responses", r.URL.Path)
+		}
+		if err := json.NewDecoder(r.Body).Decode(&seen); err != nil {
+			t.Fatalf("decode request: %v", err)
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"id":"resp_1","output_text":"hello from responses"}`))
@@ -78,6 +83,9 @@ func TestSubmitPollTextSuccess(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("submit text: %v", err)
+	}
+	if seen.Input != "hello" || !strings.Contains(seen.Instructions, "3000 characters") || seen.Store {
+		t.Fatalf("unexpected text request: %+v", seen)
 	}
 	res, err := p.Poll(context.Background(), domain.ProviderTaskRef{Provider: task.Provider, ExternalID: task.ExternalID})
 	if err != nil {

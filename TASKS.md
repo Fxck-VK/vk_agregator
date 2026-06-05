@@ -95,6 +95,7 @@
 
 ### Real integrations
 - [x] DeepInfra provider supports `deepseek-ai/DeepSeek-V4-Flash` text generation through the OpenAI-compatible `/chat/completions` endpoint behind `PROVIDER=deepinfra` / `PROVIDER_CHAIN=deepinfra,mock`.
+- [x] Text providers receive an internal concise-answer instruction (`<= 3000 characters`) in addition to the user's prompt; VK delivery still splits long answers as a fallback.
 - [x] Mock-aware downloader supports provider `data:` URLs, so `PROVIDER_CHAIN=deepinfra,mock` can store DeepInfra text outputs before VK delivery.
 - [x] Реальный OpenAI provider покрывает text (`/responses`), image (`/images/generations`) и async video (`/videos`, poll, content download) behind `PROVIDER=openai`.
 - [x] Provider router выбирает capable provider по health/circuit breaker, fallback chain, estimated cost и observed latency; `PROVIDER_CHAIN=openai,mock` включает fallback.
@@ -110,7 +111,7 @@
 - [x] VK callback menu buttons: inline menu can run with `VK_MENU_BUTTON_MODE=callback`, processing VK `message_event` without user echo messages; `VK_MENU_BUTTON_MODE=text` keeps the legacy text-button fallback. Persistent lower `Показать меню` remains text.
 - [x] VK callback button ack: every `message_event` is acknowledged through blank `messages.sendMessageEventAnswer`, so VK client button loading spinner stops after a click.
 - [x] VK unrouted text gating: `Спросить у GPT` sets process-local GPT mode for the peer; ordinary text/stickers outside GPT mode are configurable via `VK_UNROUTED_TEXT_MODE=reply|silent|gpt` and do not create jobs by default.
-- [x] VK GPT pending UX: after `Спросить у GPT`, the next text/sticker sends `GPT думает...`; when the text job is delivered, delivery worker edits that same VK message with the provider answer instead of posting a second bot message. Legacy `VK_UNROUTED_TEXT_MODE=gpt` still uses normal text delivery.
+- [x] VK GPT pending UX: after `Спросить у GPT`, the next text/sticker sends `GPT думает...`; when the text job is delivered, delivery worker edits that same VK message with the provider answer instead of posting a second bot message. Long text answers are split into deterministic follow-up chunks so VK `error_code=914` does not leave the placeholder stuck. Legacy `VK_UNROUTED_TEXT_MODE=gpt` still uses normal text delivery.
 - [x] VK menu feature flags: every main and nested product-menu button has a `VK_MENU_*_ENABLED` env flag; disabled buttons are hidden from new keyboards, stale disabled payload clicks fall back to the current main menu, and no jobs are created.
 
 ---

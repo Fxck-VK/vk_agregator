@@ -257,6 +257,11 @@ VK_DELIVERY_MODE=real VK_ACCESS_TOKEN=... go run ./cmd/worker
 MODERATION_PROVIDER=openai ARTIFACT_SCANNER=openai OPENAI_API_KEY=... go run ./cmd/worker
 ```
 
+Text provider adapters add an internal concise-answer instruction (`<= 3000`
+characters) to the user's prompt. This reduces VK overlong-message failures,
+while delivery still chunks longer text outputs if the provider ignores the
+instruction.
+
 Expected log:
 ```
 {"level":"INFO","msg":"workers started","group":"workers","consumer":"<host>"}
@@ -321,9 +326,11 @@ stateful image mode selection is wired. Clicking `💬 Спросить у GPT` 
 and also does not enqueue a job. The next plain text or sticker from the same
 peer becomes a `text.ask` job; the API sends `GPT думает...`, stores that VK
 message id in `job.Params`, and the delivery worker edits the same message to
-the final provider answer when the text artifact is delivered. Opening another
-menu screen clears GPT mode. Legacy `VK_UNROUTED_TEXT_MODE=gpt` keeps normal
-text delivery without this placeholder/edit UX.
+the final provider answer when the text artifact is delivered. If the answer is
+too long for one VK message, the first chunk replaces the placeholder and the
+remaining chunks are sent as follow-up messages with deterministic `random_id`.
+Opening another menu screen clears GPT mode. Legacy `VK_UNROUTED_TEXT_MODE=gpt`
+keeps normal text delivery without this placeholder/edit UX.
 Clicking `🎁 Студентам и школьникам` opens the study submenu:
 `Решальник задач`, `Генерация презентаций (скоро)`,
 `Создание рефератов (скоро)`, `❓ Ответы на вопросы`, and `⬅️ Назад`.

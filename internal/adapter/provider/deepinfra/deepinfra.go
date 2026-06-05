@@ -20,7 +20,10 @@ import (
 	"vk-ai-aggregator/internal/domain"
 )
 
-const defaultTextModel = "deepseek-ai/DeepSeek-V4-Flash"
+const (
+	defaultTextModel           = "deepseek-ai/DeepSeek-V4-Flash"
+	textGenerationSystemPrompt = "You answer VK users. Reply in the user's language, keep the answer concise and useful, and do not exceed 3000 characters. If the topic needs a long comparison, give a compact conclusion and short bullet points."
+)
 
 // Config holds DeepInfra connection settings.
 type Config struct {
@@ -177,6 +180,7 @@ func (p *Provider) generateText(ctx context.Context, model, prompt, idempotencyK
 	body := chatRequest{
 		Model: model,
 		Messages: []chatMessage{
+			{Role: "system", Content: textGenerationSystemPrompt},
 			{Role: "user", Content: prompt},
 		},
 		Stream: false,
