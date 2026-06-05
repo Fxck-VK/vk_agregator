@@ -7,9 +7,10 @@ import { Composer } from "./Composer";
 import { ChatList } from "./ChatList";
 import { ResultCard } from "../components/ResultCard";
 import { WorkflowMode } from "../workflow/WorkflowMode";
-import { modalityById, uid, type Chat, type ChatMessage, type ModalityId } from "./types";
+import { modalityByOperation, uid, type Chat, type ChatMessage } from "./types";
 import { loadAppMode, saveAppMode, type AppMode } from "../mode";
 import {
+  createChatMessage,
   createJob,
   createIdempotencyKey,
   estimateJob,
@@ -30,6 +31,15 @@ import { useChats } from "../hooks/useChats";
 const POLL_MS = 2000;
 const POLL_MAX = 90;
 const ESTIMATE_DEBOUNCE_MS = 450;
+const CHAT_OPERATION = "text_generate";
+const CHAT_MODEL_ID = "chatgpt";
+const CHAT_MODEL_NAME = "ChatGPT";
+
+type SubmitRequest = {
+  operation: string;
+  modelId: string;
+  chat?: boolean;
+};
 
 function chatIdForJob(jobId: string): string {
   return "job-" + jobId;
@@ -137,8 +147,6 @@ export function ChatScreen({ user }: { user: VkUser }) {
     setActiveId,
   } = useChats();
 
-  const [modalityId, setModalityId] = useState<ModalityId>("text");
-  const [modelId, setModelId] = useState(modalityById("text").models[0].id);
   const [balance, setBalance] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -156,11 +164,6 @@ export function ChatScreen({ user }: { user: VkUser }) {
   const pollTimersRef = useRef(new Map<string, number>());
   const seededRef = useRef(false);
   const submittingRef = useRef(false);
-
-  function changeModality(id: ModalityId) {
-    setModalityId(id);
-    setModelId(modalityById(id).models[0].id);
-  }
 
   const patchInChat = useCallback(
     (chatId: string, msgId: string, patch: Partial<ChatMessage>) => {
@@ -201,10 +204,9 @@ export function ChatScreen({ user }: { user: VkUser }) {
     }
 
     let cancelled = false;
-    const modality = modalityById(modalityId);
     const timer = window.setTimeout(() => {
       setEstimateLoading(true);
-      estimateJob({ operation: modality.operation, prompt, model_id: modelId })
+      estimateJob({ operation: CHAT_OPERATION, prompt, model_id: CHAT_MODEL_ID })
         .then((data) => {
           if (cancelled) return;
           setEstimate(data);
@@ -228,7 +230,7 @@ export function ChatScreen({ user }: { user: VkUser }) {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [draft, modalityId, modelId]);
+  }, [draft]);
 
   const poll = useCallback(
     async (chatId: string, botMsgId: string, jobId: string) => {
@@ -300,7 +302,7 @@ export function ChatScreen({ user }: { user: VkUser }) {
     [poll],
   );
 
-  function runSubmit(text: string, request?: { operation: string; modelId: string }): boolean {
+  function runSubmit(text: string, request?: SubmitRequest): boolean {
     if (submittingRef.current) return false;
     submittingRef.current = true;
     setSubmitting(true);
@@ -312,25 +314,27 @@ export function ChatScreen({ user }: { user: VkUser }) {
   }
 
   function handleSend(text: string): boolean {
-    return runSubmit(text);
+    return runSubmit(text, { operation: CHAT_OPERATION, modelId: CHAT_MODEL_ID, chat: true });
   }
 
   function handleRetry(msg: ChatMessage, prompt: string): void {
     if (!prompt) return;
-    const modality = modalityById(modalityId);
+    const operation = msg.operation ?? CHAT_OPERATION;
+    const fallbackModel = modalityByOperation(operation).models[0]?.id ?? CHAT_MODEL_ID;
     runSubmit(prompt, {
-      operation: msg.operation ?? modality.operation,
-      modelId: msg.model ?? modelId,
+      operation,
+      modelId: msg.model ?? fallbackModel,
+      chat: operation === CHAT_OPERATION,
     });
   }
 
   async function submitJob(
     text: string,
-    request?: { operation: string; modelId: string },
+    request?: SubmitRequest,
   ): Promise<Job | null> {
-    const modality = modalityById(modalityId);
-    const operation = request?.operation ?? modality.operation;
-    const selectedModel = request?.modelId ?? modelId;
+    const operation = request?.operation ?? CHAT_OPERATION;
+    const selectedModel = request?.modelId ?? CHAT_MODEL_ID;
+    const isChat = request?.chat === true;
     const chatId = ensureActive();
     const botId = "b-" + uid();
     const idempotencyKey = createIdempotencyKey();
@@ -348,10 +352,15 @@ export function ChatScreen({ user }: { user: VkUser }) {
     ]);
     haptic("light");
     try {
-      const job = await createJob(
-        { operation, prompt: text, model_id: selectedModel },
-        { idempotencyKey },
-      );
+      const job = isChat
+        ? await createChatMessage(
+            { prompt: text },
+            { idempotencyKey },
+          )
+        : await createJob(
+            { operation, prompt: text, model_id: selectedModel },
+            { idempotencyKey },
+          );
       patchInChat(chatId, botId, {
         jobId: job.id,
         status: job.status,
@@ -456,7 +465,7 @@ export function ChatScreen({ user }: { user: VkUser }) {
         <div className="chat__title">
           <span className="chat__name">{mode === "workflow" ? "Workflow" : "Ассистент"}</span>
           <span className="chat__sub">
-            {mode === "workflow" ? "создание VK-контента" : activeChat?.title ?? "генеративный помощник"}
+            {mode === "workflow" ? "создание VK-контента" : activeChat?.title ?? "ChatGPT диалог"}
           </span>
         </div>
         <span className="chat__spacer" />
@@ -478,7 +487,7 @@ export function ChatScreen({ user }: { user: VkUser }) {
                 <span className="greeting__avatar">AI</span>
                 <h1 className="greeting__title">Привет, {user.firstName}!</h1>
                 <p className="greeting__text">
-                  Выберите тип и модель, напишите запрос — я сгенерирую текст, изображение или видео.
+                  Напишите сообщение — ChatGPT ответит в этом диалоге с учетом последних реплик.
                 </p>
               </div>
             )}
@@ -497,10 +506,7 @@ export function ChatScreen({ user }: { user: VkUser }) {
           </div>
 
           <Composer
-            modalityId={modalityId}
-            onModality={changeModality}
-            modelId={modelId}
-            onModel={setModelId}
+            modelName={CHAT_MODEL_NAME}
             onDraftChange={setDraft}
             onSend={handleSend}
             disabled={loading || submitting}

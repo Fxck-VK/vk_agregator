@@ -248,3 +248,40 @@ Consequences: React 19 remains supported; no downgrade is needed. The Mini App
 gets VK-native base controls and tab navigation while retaining its custom
 workflow/result identity. The bundle cost is accepted for this hybrid step and
 should be rechecked before any broader VKUI migration.
+
+---
+
+## ADR-009 - Mini App ChatGPT alias and chat parity
+
+Status: accepted
+
+Date: 2026-06-06
+
+Context: VK text bot conversational mode creates `text_generate` jobs through
+`commandrouter -> joborchestrator.CreateJob`; provider calls still happen only
+in workers. The active VK GPT mode is process-local by peer and uses the
+DeepInfra text adapter's internal system prompt for persona/rules, including
+the rule that provider/model/backend details are not revealed. Mini App chat
+already used the same job pipeline, but the UI and estimate/create contracts
+still exposed selectable text model IDs.
+
+Decision: Mini App chat now uses `POST /miniapp/chat/messages`, which verifies
+VK launch params, rate limits by verified user, creates a `text_generate` job
+through `joborchestrator`, and returns the fixed public model name `ChatGPT`.
+The BFF accepts `chatgpt` and legacy DeepSeek text model IDs for compatibility,
+but normalizes all Mini App text jobs to the public alias before persistence
+or DTO output. The frontend no longer exposes a text model selector in chat
+mode and shows only `ChatGPT`.
+
+Mini App chat context is process-local in the BFF, keyed by verified VK user
+and capped to the latest turns. The user prompt remains out of `localStorage`;
+the BFF appends assistant context only after `GET /miniapp/jobs/{id}` observes
+backend terminal success and a moderated text artifact. This mirrors the VK
+text bot's process-local limitation: context can be lost on API restart and is
+not a durable conversation store.
+
+Consequences: Mini App chat uses the same async Job -> Worker -> Provider ->
+Artifact path as the VK text bot and does not add provider logic to the BFF or
+frontend. Public UI/API branding is `ChatGPT`; real provider/model names stay
+behind provider configuration, logs still must not include prompts, launch
+params, PII or private artifact URLs.

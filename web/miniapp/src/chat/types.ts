@@ -34,11 +34,7 @@ export const MODALITIES: ModalityDef[] = [
     id: "text",
     label: "Текст",
     operation: "text_generate",
-    models: [
-      { id: "gpt-4o-mini", label: "GPT-4o mini" },
-      { id: "gpt-4o", label: "GPT-4o" },
-      { id: "llama-3.1", label: "Llama 3.1" },
-    ],
+    models: [{ id: "chatgpt", label: "ChatGPT" }],
   },
   {
     id: "image",

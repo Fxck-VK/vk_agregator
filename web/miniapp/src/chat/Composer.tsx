@@ -1,13 +1,9 @@
 ﻿// src/chat/Composer.tsx
 import { useRef, useState, type ChangeEvent, type KeyboardEvent } from "react";
-import { Button, NativeSelect, Textarea } from "@vkontakte/vkui";
-import { MODALITIES, modalityById, type ModalityId } from "./types";
+import { Button, Textarea } from "@vkontakte/vkui";
 
 export function Composer({
-  modalityId,
-  onModality,
-  modelId,
-  onModel,
+  modelName = "ChatGPT",
   onDraftChange,
   onSend,
   disabled,
@@ -16,10 +12,7 @@ export function Composer({
   estimateLoading,
   estimateError,
 }: {
-  modalityId: ModalityId;
-  onModality: (id: ModalityId) => void;
-  modelId: string;
-  onModel: (id: string) => void;
+  modelName?: string;
   onDraftChange: (text: string) => void;
   onSend: (text: string) => boolean;
   disabled?: boolean;
@@ -30,7 +23,6 @@ export function Composer({
 }) {
   const [text, setText] = useState("");
   const ref = useRef<HTMLTextAreaElement>(null);
-  const modality = modalityById(modalityId);
 
   function grow() {
     const el = ref.current;
@@ -62,45 +54,10 @@ export function Composer({
     }
   }
 
-  function onModelChange(_: ChangeEvent<HTMLSelectElement>, value: unknown) {
-    if (typeof value === "string") {
-      onModel(value);
-    }
-  }
-
   return (
     <div className="composer">
       <div className="composer__controls">
-        <div className="segment" role="tablist">
-          {MODALITIES.map((m) => (
-            <Button
-              key={m.id}
-              type="button"
-              role="tab"
-              aria-selected={m.id === modalityId}
-              className={"segment__btn" + (m.id === modalityId ? " is-active" : "")}
-              mode={m.id === modalityId ? "primary" : "tertiary"}
-              appearance={m.id === modalityId ? "accent" : "neutral"}
-              size="m"
-              onClick={() => onModality(m.id)}
-            >
-              {m.label}
-            </Button>
-          ))}
-        </div>
-        <div className="model-select">
-          <NativeSelect
-            value={modelId}
-            onChange={onModelChange}
-            aria-label="Модель"
-          >
-            {modality.models.map((md) => (
-              <option key={md.id} value={md.id}>
-                {md.label}
-              </option>
-            ))}
-          </NativeSelect>
-        </div>
+        <span className="model-pill" aria-label={`Модель ${modelName}`}>{modelName}</span>
       </div>
       <div className="estimate-line" aria-live="polite">
         {estimateLoading ? (

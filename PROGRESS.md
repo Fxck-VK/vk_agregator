@@ -1080,3 +1080,48 @@ Status: **completed**.
   `+440.69 kB` raw / `+64.04 kB gzip`.
 - `go build ./...` - exit 0.
 - `npm audit` in `web/miniapp` - 0 vulnerabilities.
+
+---
+
+## PR-15 - Mini App chat parity with VK text bot
+
+Status: **completed**.
+
+### STEP 0 contract
+
+- VK text bot routes conversational text through `commandrouter` and
+  `joborchestrator.CreateJob`; VK inbound does not call providers directly.
+- Active GPT mode is process-local by peer and uses the same async worker path
+  with the `GPT думает...` placeholder.
+- DeepInfra/DeepSeek persona and "do not reveal provider/model/backend" rule
+  live inside the provider adapter system prompt, not in Mini App frontend.
+- Mini App already used `/miniapp/jobs` and `joborchestrator`, but chat UI/API
+  exposed selectable text model IDs.
+
+### What changed
+
+- Added `POST /miniapp/chat/messages` for Mini App chat. It verifies launch
+  params, rate-limits the verified user, creates a backend-owned
+  `text_generate` job through `joborchestrator`, and keeps submit async.
+- Mini App text model branding is now the fixed public alias `ChatGPT`.
+  Legacy DeepSeek text model IDs are accepted only for compatibility and are
+  normalized to `chatgpt` before persistence/API output.
+- Added process-local BFF chat context keyed by verified VK user. Context is
+  capped, prompt bodies are not stored in `localStorage`, and assistant
+  context is appended only after backend `succeeded` plus moderated text
+  artifact access.
+- Chat mode frontend now sends text through `/miniapp/chat/messages`, shows
+  only `ChatGPT`, keeps safe React text rendering and preserves polling.
+
+### Checks
+
+- `go test ./internal/adapter/inbound/miniapp` - exit 0.
+- `go test ./...` - exit 0.
+- `go build ./...` - exit 0.
+- `npm run build` in `web/miniapp` - exit 0.
+- Credential-bound DeepInfra smoke through `POST /miniapp/chat/messages`:
+  job reached `succeeded`, response model name was `ChatGPT`, one text artifact
+  was readable through the Mini App artifact route, and the generated text did
+  not contain DeepSeek/DeepInfra/provider/model details. The local smoke
+  wrapper itself returned non-zero after force-stopping temporary `go run`
+  API/worker processes during cleanup; no smoke assertion failed.

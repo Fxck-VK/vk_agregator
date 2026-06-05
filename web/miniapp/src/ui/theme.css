@@ -363,6 +363,7 @@ body {
 .model-select .vkuiInternalNativeSelect { max-width: 170px; min-height: 44px; }
 .model-select select { appearance: none; font: inherit; font-size: 13px; font-weight: 600; color: var(--fg); background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius-pill); min-height: 44px; padding: 7px 28px 7px 12px; cursor: pointer; max-width: 160px; }
 .model-select::after { content: "▾"; position: absolute; right: 12px; top: 50%; transform: translateY(-50%); pointer-events: none; color: var(--fg-muted); font-size: 11px; }
+.model-pill { display: inline-flex; align-items: center; min-height: 44px; padding: 0 14px; border: 1px solid var(--line); border-radius: var(--radius-pill); background: var(--surface-2); color: var(--fg); font-size: 13px; font-weight: 800; }
 .estimate-line { min-height: 18px; display: flex; gap: 8px; align-items: center; justify-content: space-between; margin: 0 2px 8px; color: var(--fg-muted); font-size: 12px; font-weight: 600; }
 .estimate-line__warn { color: var(--fg); }
 .estimate-line__muted { color: var(--fg-muted); font-weight: 500; }

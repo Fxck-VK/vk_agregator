@@ -163,16 +163,22 @@ func newTestHandlerWithLimiter(appSecret string, limiter interface{ Allow(string
 }
 
 type testFixture struct {
-	handler     *miniappinbound.Handler
-	userRepo    *memory.UserRepo
-	jobRepo     *memory.JobRepo
-	billingRepo *memory.BillingRepo
-	billing     *billingservice.Service
+	handler        *miniappinbound.Handler
+	userRepo       *memory.UserRepo
+	jobRepo        *memory.JobRepo
+	artifactRepo   *memory.ArtifactRepo
+	moderationRepo *memory.ModerationRepo
+	objects        *memory.ObjectStore
+	billingRepo    *memory.BillingRepo
+	billing        *billingservice.Service
 }
 
 func newTestFixture(appSecret string, limiter interface{ Allow(string) bool }) *testFixture {
 	userRepo := memory.NewUserRepo()
 	jobRepo := memory.NewJobRepo()
+	artifactRepo := memory.NewArtifactRepo()
+	moderationRepo := memory.NewModerationRepo()
+	objects := memory.NewObjectStore()
 	billingRepo := memory.NewBillingRepo()
 	outboxRepo := memory.NewOutboxRepo()
 	uowMgr := memory.NewUnitOfWork(jobRepo, outboxRepo, billingRepo)
@@ -189,17 +195,23 @@ func newTestFixture(appSecret string, limiter interface{ Allow(string) bool }) *
 		miniappinbound.Deps{
 			Users:        userRepo,
 			Jobs:         jobRepo,
+			Artifacts:    artifactRepo,
+			Moderation:   moderationRepo,
+			Objects:      objects,
 			Billing:      billing,
 			BillingRepo:  billingRepo,
 			Orchestrator: orch,
 		},
 	)
 	return &testFixture{
-		handler:     handler,
-		userRepo:    userRepo,
-		jobRepo:     jobRepo,
-		billingRepo: billingRepo,
-		billing:     billing,
+		handler:        handler,
+		userRepo:       userRepo,
+		jobRepo:        jobRepo,
+		artifactRepo:   artifactRepo,
+		moderationRepo: moderationRepo,
+		objects:        objects,
+		billingRepo:    billingRepo,
+		billing:        billing,
 	}
 }
 
@@ -313,6 +325,169 @@ func TestHandler_CreateJob_OK(t *testing.T) {
 	}
 	if resp["id"] == nil {
 		t.Fatal("expected job id in response")
+	}
+}
+
+func TestHandler_ChatMessage_CreatesTextJobWithPublicAlias(t *testing.T) {
+	fixture := newTestFixture("", nil)
+	routes := fixture.handler.Routes()
+
+	body, _ := json.Marshal(map[string]string{
+		"prompt":          "hello chat",
+		"conversation_id": "chat-1",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/miniapp/chat/messages", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Launch-Params", devLaunchParams(777))
+	req.Header.Set("X-Idempotency-Key", "chat-public-alias")
+
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	if strings.Contains(strings.ToLower(w.Body.String()), "deepseek") || strings.Contains(strings.ToLower(w.Body.String()), "deepinfra") {
+		t.Fatalf("chat response leaked provider/model detail: %s", w.Body.String())
+	}
+	var resp struct {
+		ID        string `json:"id"`
+		Operation string `json:"operation"`
+		ModelName string `json:"model_name"`
+		ModelID   string `json:"model_id"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("invalid response json: %v", err)
+	}
+	if resp.Operation != "text_generate" || resp.ModelName != "ChatGPT" || resp.ModelID != "" {
+		t.Fatalf("unexpected chat response: %+v", resp)
+	}
+
+	jobID, err := uuid.Parse(resp.ID)
+	if err != nil {
+		t.Fatalf("invalid job id: %v", err)
+	}
+	job, err := fixture.jobRepo.GetByID(context.Background(), jobID)
+	if err != nil {
+		t.Fatalf("expected stored job: %v", err)
+	}
+	var params struct {
+		Prompt         string `json:"prompt"`
+		ModelID        string `json:"model_id"`
+		ModelName      string `json:"model_name"`
+		ConversationID string `json:"conversation_id"`
+	}
+	if err := json.Unmarshal(job.Params, &params); err != nil {
+		t.Fatalf("invalid job params: %v", err)
+	}
+	if job.OperationType != domain.OperationTextGenerate || job.Modality != domain.ModalityText {
+		t.Fatalf("unexpected job operation/modality: %s/%s", job.OperationType, job.Modality)
+	}
+	if params.Prompt != "hello chat" || params.ModelID != "chatgpt" || params.ModelName != "ChatGPT" || params.ConversationID != "chat-1" {
+		t.Fatalf("unexpected job params: %+v", params)
+	}
+	if strings.Contains(strings.ToLower(string(job.Params)), "deepseek") || strings.Contains(strings.ToLower(string(job.Params)), "deepinfra") {
+		t.Fatalf("job params leaked provider/model detail: %s", string(job.Params))
+	}
+}
+
+func TestHandler_ChatMessage_ContextCapturesSucceededTextArtifact(t *testing.T) {
+	fixture := newTestFixture("", nil)
+	routes := fixture.handler.Routes()
+	ctx := context.Background()
+
+	createChat := func(prompt, idem string) uuid.UUID {
+		body, _ := json.Marshal(map[string]string{
+			"prompt":          prompt,
+			"conversation_id": "chat-context",
+		})
+		req := httptest.NewRequest(http.MethodPost, "/miniapp/chat/messages", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Launch-Params", devLaunchParams(777))
+		req.Header.Set("X-Idempotency-Key", idem)
+		w := httptest.NewRecorder()
+		routes.ServeHTTP(w, req)
+		if w.Code != http.StatusCreated {
+			t.Fatalf("create chat: expected 201, got %d: %s", w.Code, w.Body.String())
+		}
+		var resp struct {
+			ID string `json:"id"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("invalid response json: %v", err)
+		}
+		id, err := uuid.Parse(resp.ID)
+		if err != nil {
+			t.Fatalf("invalid job id: %v", err)
+		}
+		return id
+	}
+
+	firstJobID := createChat("first question", "chat-context-1")
+	user, err := fixture.userRepo.GetByVKUserID(ctx, 777)
+	if err != nil {
+		t.Fatalf("get user: %v", err)
+	}
+	artifact := &domain.Artifact{
+		OwnerUserID:   user.ID,
+		JobID:         &firstJobID,
+		Kind:          domain.ArtifactKindOutput,
+		MediaType:     domain.MediaTypeText,
+		MimeType:      "text/plain",
+		StorageBucket: "artifacts",
+		StorageKey:    "outputs/" + uuid.NewString() + ".txt",
+		SHA256:        uuid.NewString(),
+		SizeBytes:     int64(len("first answer")),
+		Status:        domain.ArtifactStatusReady,
+	}
+	if err := fixture.artifactRepo.Create(ctx, artifact); err != nil {
+		t.Fatalf("create artifact: %v", err)
+	}
+	if err := fixture.objects.Put(ctx, artifact.StorageBucket, artifact.StorageKey, []byte("first answer"), artifact.MimeType); err != nil {
+		t.Fatalf("put artifact: %v", err)
+	}
+	artID := artifact.ID
+	if err := fixture.moderationRepo.Create(ctx, &domain.ModerationResult{
+		JobID:      firstJobID,
+		ArtifactID: &artID,
+		Stage:      domain.ModerationStageOutput,
+		Decision:   domain.ModerationAllow,
+		Provider:   "test",
+	}); err != nil {
+		t.Fatalf("create moderation result: %v", err)
+	}
+	job, err := fixture.jobRepo.GetByID(ctx, firstJobID)
+	if err != nil {
+		t.Fatalf("get first job: %v", err)
+	}
+	job.OutputArtifactIDs = []uuid.UUID{artifact.ID}
+	if err := fixture.jobRepo.Update(ctx, job); err != nil {
+		t.Fatalf("update job artifact: %v", err)
+	}
+	if err := fixture.jobRepo.UpdateStatus(ctx, firstJobID, job.Status, domain.JobStatusSucceeded, "", ""); err != nil {
+		t.Fatalf("mark job succeeded: %v", err)
+	}
+
+	getReq := httptest.NewRequest(http.MethodGet, "/miniapp/jobs/"+firstJobID.String(), nil)
+	getReq.Header.Set("X-Launch-Params", devLaunchParams(777))
+	getW := httptest.NewRecorder()
+	routes.ServeHTTP(getW, getReq)
+	if getW.Code != http.StatusOK {
+		t.Fatalf("get job: expected 200, got %d: %s", getW.Code, getW.Body.String())
+	}
+
+	secondJobID := createChat("follow up", "chat-context-2")
+	secondJob, err := fixture.jobRepo.GetByID(ctx, secondJobID)
+	if err != nil {
+		t.Fatalf("get second job: %v", err)
+	}
+	var params struct {
+		Prompt string `json:"prompt"`
+	}
+	if err := json.Unmarshal(secondJob.Params, &params); err != nil {
+		t.Fatalf("invalid second job params: %v", err)
+	}
+	if !strings.Contains(params.Prompt, "first question") || !strings.Contains(params.Prompt, "first answer") || !strings.Contains(params.Prompt, "follow up") {
+		t.Fatalf("second prompt missed conversation context: %q", params.Prompt)
 	}
 }
 
@@ -672,6 +847,38 @@ func TestHandler_Estimate_RejectsUnsupportedModelID(t *testing.T) {
 	}
 }
 
+func TestHandler_Estimate_TextUsesPublicModelName(t *testing.T) {
+	routes := newTestHandler("").Routes()
+
+	body, _ := json.Marshal(map[string]string{
+		"operation": "text_generate",
+		"prompt":    "estimate prompt",
+		"model_id":  "deepseek-v4-flash",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/miniapp/estimate", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Launch-Params", devLaunchParams(777))
+
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	if strings.Contains(strings.ToLower(w.Body.String()), "deepseek") || strings.Contains(strings.ToLower(w.Body.String()), "deepinfra") {
+		t.Fatalf("estimate response leaked provider/model detail: %s", w.Body.String())
+	}
+	var resp struct {
+		ModelName string `json:"model_name"`
+		ModelID   string `json:"model_id"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("invalid response json: %v", err)
+	}
+	if resp.ModelName != "ChatGPT" || resp.ModelID != "" {
+		t.Fatalf("unexpected model response: %+v", resp)
+	}
+}
+
 func TestHandler_Estimate_UnauthorizedNoParams(t *testing.T) {
 	routes := newTestHandler("real-secret").Routes()
 
@@ -818,7 +1025,7 @@ func TestHandler_CreateJob_Idempotency(t *testing.T) {
 	}
 }
 
-func TestHandler_CreateJob_AcceptsSupportedModelID(t *testing.T) {
+func TestHandler_CreateJob_NormalizesLegacyTextModelID(t *testing.T) {
 	userRepo := memory.NewUserRepo()
 	jobRepo := memory.NewJobRepo()
 	billingRepo := memory.NewBillingRepo()
@@ -861,6 +1068,9 @@ func TestHandler_CreateJob_AcceptsSupportedModelID(t *testing.T) {
 	if _, ok := resp["model_id"]; ok {
 		t.Fatalf("job response must not expose model_id: %s", w.Body.String())
 	}
+	if strings.Contains(strings.ToLower(w.Body.String()), "deepseek") || strings.Contains(strings.ToLower(w.Body.String()), "deepinfra") {
+		t.Fatalf("job response leaked provider/model detail: %s", w.Body.String())
+	}
 	idRaw, ok := resp["id"].(string)
 	if !ok {
 		t.Fatalf("expected job id in response: %s", w.Body.String())
@@ -880,8 +1090,11 @@ func TestHandler_CreateJob_AcceptsSupportedModelID(t *testing.T) {
 	if err := json.Unmarshal(job.Params, &params); err != nil {
 		t.Fatalf("invalid job params: %v", err)
 	}
-	if params.ModelID != "deepseek-v4-flash" {
-		t.Fatalf("expected model_id persisted in params, got %q", params.ModelID)
+	if params.ModelID != "chatgpt" {
+		t.Fatalf("expected public model alias persisted in params, got %q", params.ModelID)
+	}
+	if strings.Contains(strings.ToLower(string(job.Params)), "deepseek") || strings.Contains(strings.ToLower(string(job.Params)), "deepinfra") {
+		t.Fatalf("job params leaked provider/model detail: %s", string(job.Params))
 	}
 }
 

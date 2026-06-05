@@ -132,7 +132,7 @@
 - [x] Hardening чат-фронта: cleanup для `bridge.subscribe` через `bridge.unsubscribe`, polling без стартовой задержки и без размножения таймеров, `patchMessage` по id мемоизирован.
 - [x] Бэкенд: `GET /miniapp/artifacts/{id}` отдаёт байты артефакта с ownership-проверкой (`art.OwnerUserID == user.ID`), `job.status == succeeded` и passed output moderation guard; `Cache-Control: private`; текст приходит как `text/plain`, фронт читает его через `fetchArtifactText`. Зависит от доступности S3 в `cmd/api` (см. бэклог аудита).
 - [x] Frontend submit hardening: `POST /miniapp/jobs` sends stable per-submit `X-Idempotency-Key`; API/network errors normalize to safe user-facing messages; duplicate in-flight submits are guarded.
-- [x] Mini App API: фронт передаёт выбранный `model_id` в `POST /miniapp/jobs`; BFF валидирует model_id по operation whitelist и не раскрывает его в job API responses.
+- [x] Mini App API: frontend sends supported `model_id` only for backend-validated operations. Text chat is branded as public `ChatGPT`; legacy DeepSeek text IDs are normalized to `chatgpt` before persistence/API output and are not exposed in Mini App UI/DTO.
 - [x] Mini App estimate before submit: `POST /miniapp/estimate` возвращает backend-owned `cost_estimate`, `balance_credits` и `enough_credits` без создания job/резерва/ledger; фронт показывает стоимость и предупреждение до submit.
 - [x] Mini App result UX: результат показывается карточкой «Готовый VK-пост» с plain-text copy, retry action и image/video preview только через backend artifact route.
 - [x] Mini App history reload recovery: running jobs восстанавливаются через `GET /miniapp/jobs`, локальная история хранит только `job_id`, `operation_type`, `status`, `created_at` за 7 дней, есть clear local history и privacy note.
@@ -160,7 +160,7 @@
 - [x] **[Medium] Fail-closed проверка `vk_ts`** (`internal/adapter/inbound/miniapp/sign.go`).
   Реализовано: при `maxAge > 0` пустой, битый, future или expired `vk_ts` отклоняется до job creation; клиент получает безопасный `401`.
 - [x] **[Medium] Проброс выбора модели на бэкенд**.
-  Frontend sends selected `model_id`; backend contract реализован: `POST /miniapp/jobs` принимает optional `model_id`, валидирует по operation whitelist, сохраняет supported value в job params и не раскрывает selector/model_id в job API responses. Worker/provider routing по выбранной модели остаётся отдельным follow-up.
+  Frontend sends supported `model_id`; backend contract реализован: `POST /miniapp/jobs` принимает optional `model_id`, валидирует по operation whitelist, сохраняет only supported/normalized values in job params и не раскрывает selector/model_id в job API responses. Mini App chat uses public `ChatGPT` alias; real DeepSeek provider/model details stay behind worker/provider config. Worker/provider routing по выбранной модели остаётся отдельным follow-up.
 - [ ] **[Medium] Мягкая деградация `getArtifact` при недоступности S3**
   (`cmd/api/main.go:88-92`, `handler.go:369-373`). Сейчас при сбое подключения к
   S3 `objectStore == nil` и роут молча отдаёт `503`, хотя Job успешен. В проде —

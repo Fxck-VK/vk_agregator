@@ -68,7 +68,7 @@ Severity: **critical** (blocks prod / safety / data loss), **high** (must fix be
 
 **S3c — Mini App model_id contract — ✅ FIXED**
 - Description: Mini App had a visible model selector while `POST /miniapp/jobs` ignored model selection, leaving no backend contract for supported models.
-- **Fix:** Mini App frontend now sends selected `model_id` with `POST /miniapp/jobs`. The BFF validates it by operation-specific whitelist before user/billing/job creation, persists only supported values in normalized job params, and does not expose selector/model_id in job API responses. Unsupported model IDs return safe `400` and create no job. Worker/provider routing by selected model remains a separate provider-routing task.
+- **Fix:** Mini App frontend now sends supported `model_id` only through backend-owned BFF paths. The BFF validates it by operation-specific whitelist before user/billing/job creation, persists only supported/normalized values in normalized job params, and does not expose selector/model_id in job API responses. Text chat is publicly branded as `ChatGPT`; legacy DeepSeek text IDs are accepted only for compatibility and normalized to `chatgpt` before persistence/API output. Unsupported model IDs return safe `400` and create no job. Worker/provider routing by selected model remains a separate provider-routing task.
 
 **S3d — Mini App artifact access guard — ✅ FIXED**
 - Description: `GET /miniapp/artifacts/{id}` relied on ownership and frontend request order, so a direct request could fetch an owned output artifact before the backend had independently confirmed terminal success and output moderation.

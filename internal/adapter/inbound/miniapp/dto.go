@@ -34,11 +34,25 @@ type CreateJobRequest struct {
 	ModelID string `json:"model_id,omitempty"`
 }
 
+// ChatMessageRequest is the body accepted by POST /miniapp/chat/messages.
+type ChatMessageRequest struct {
+	Prompt         string `json:"prompt"`
+	ConversationID string `json:"conversation_id,omitempty"`
+}
+
+type miniAppJobParams struct {
+	Prompt         string `json:"prompt"`
+	ModelID        string `json:"model_id,omitempty"`
+	ModelName      string `json:"model_name,omitempty"`
+	ConversationID string `json:"conversation_id,omitempty"`
+}
+
 // EstimateDTO is returned by POST /miniapp/estimate. It exposes only
 // backend-owned cost and balance information, never provider details.
 type EstimateDTO struct {
 	Operation      string `json:"operation"`
-	ModelID        string `json:"model_id"`
+	ModelID        string `json:"model_id,omitempty"`
+	ModelName      string `json:"model_name,omitempty"`
 	CostEstimate   int64  `json:"cost_estimate"`
 	BalanceCredits int64  `json:"balance_credits"`
 	EnoughCredits  bool   `json:"enough_credits"`
@@ -59,6 +73,13 @@ type JobDTO struct {
 	UpdatedAt         time.Time   `json:"updated_at"`
 }
 
+// ChatJobDTO is the Mini App chat response. It keeps the real provider/model
+// private and exposes only the public product alias.
+type ChatJobDTO struct {
+	JobDTO
+	ModelName string `json:"model_name"`
+}
+
 func newJobDTO(j *domain.Job) JobDTO {
 	out := JobDTO{
 		ID:                j.ID,
@@ -76,6 +97,13 @@ func newJobDTO(j *domain.Job) JobDTO {
 		out.OutputArtifactIDs = []uuid.UUID{}
 	}
 	return out
+}
+
+func newChatJobDTO(j *domain.Job) ChatJobDTO {
+	return ChatJobDTO{
+		JobDTO:    newJobDTO(j),
+		ModelName: miniAppChatPublicModelName,
+	}
 }
 
 // BalanceDTO is the miniapp representation of a user's credit balance.

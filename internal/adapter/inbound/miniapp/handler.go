@@ -23,6 +23,11 @@ type contextKey int
 
 const ctxVKUserIDKey contextKey = iota
 
+const (
+	miniAppChatModelID         = "chatgpt"
+	miniAppChatPublicModelName = "ChatGPT"
+)
+
 // JobRateLimiter is the minimal limiter contract used by Mini App write-like
 // endpoints after authentication. Endpoint-specific keys keep job submits and
 // estimate requests from sharing a bucket.
@@ -63,9 +68,10 @@ type Deps struct {
 
 // Handler serves the /miniapp/* routes.
 type Handler struct {
-	cfg    Config
-	deps   Deps
-	logger *slog.Logger
+	cfg           Config
+	deps          Deps
+	logger        *slog.Logger
+	conversations *conversationStore
 }
 
 // NewHandler builds a miniapp Handler.
@@ -74,13 +80,14 @@ func NewHandler(cfg Config, deps Deps) *Handler {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Handler{cfg: cfg, deps: deps, logger: logger}
+	return &Handler{cfg: cfg, deps: deps, logger: logger, conversations: newConversationStore()}
 }
 
 // Routes returns an http.Handler with the miniapp routes registered.
 func (h *Handler) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /miniapp/estimate", h.auth(h.rateLimitMiniApp("miniapp_estimate", h.estimateJob)))
+	mux.HandleFunc("POST /miniapp/chat/messages", h.auth(h.rateLimitMiniApp("miniapp_chat", h.createChatMessage)))
 	mux.HandleFunc("POST /miniapp/jobs", h.auth(h.rateLimitMiniApp("miniapp_job", h.createJob)))
 	mux.HandleFunc("GET /miniapp/jobs", h.auth(h.listJobs))
 	mux.HandleFunc("GET /miniapp/jobs/{id}", h.auth(h.getJob))
@@ -211,11 +218,10 @@ func operationMeta(op string) (domain.OperationType, domain.Modality, bool) {
 
 var miniAppSupportedModels = map[domain.OperationType]map[string]struct{}{
 	domain.OperationTextGenerate: {
-		"deepseek-v4-flash":             {},
-		"deepseek-ai/DeepSeek-V4-Flash": {},
-		"gpt-4o-mini":                   {},
-		"gpt-4o":                        {},
-		"llama-3.1":                     {},
+		miniAppChatModelID:              {},
+		miniAppChatPublicModelName:      {},
+		"deepseek-v4-flash":             {}, // legacy client alias; normalized before persistence/API output.
+		"deepseek-ai/DeepSeek-V4-Flash": {}, // legacy client alias; normalized before persistence/API output.
 	},
 	domain.OperationImageGenerate: {
 		"sdxl":      {},
@@ -226,7 +232,7 @@ var miniAppSupportedModels = map[domain.OperationType]map[string]struct{}{
 	},
 }
 
-func validateMiniAppModelID(op domain.OperationType, raw string) (string, bool) {
+func normalizeMiniAppModelID(op domain.OperationType, raw string) (string, bool) {
 	modelID := strings.TrimSpace(raw)
 	if modelID == "" {
 		return "", true
@@ -236,7 +242,27 @@ func validateMiniAppModelID(op domain.OperationType, raw string) (string, bool) 
 		return "", false
 	}
 	_, ok = models[modelID]
-	return modelID, ok
+	if !ok {
+		return "", false
+	}
+	if op == domain.OperationTextGenerate {
+		return miniAppChatModelID, true
+	}
+	return modelID, true
+}
+
+func miniAppModelName(op domain.OperationType) string {
+	if op == domain.OperationTextGenerate {
+		return miniAppChatPublicModelName
+	}
+	return ""
+}
+
+func miniAppResponseModelID(op domain.OperationType, modelID string) string {
+	if op == domain.OperationTextGenerate {
+		return ""
+	}
+	return modelID
 }
 
 // ---------------------------------------------------------------------------
@@ -264,7 +290,7 @@ func (h *Handler) readJobRequest(w http.ResponseWriter, r *http.Request) (Create
 		writeError(w, http.StatusBadRequest, "unsupported operation; allowed: text_generate, image_generate, video_generate")
 		return CreateJobRequest{}, "", "", "", false
 	}
-	modelID, ok := validateMiniAppModelID(opType, req.ModelID)
+	modelID, ok := normalizeMiniAppModelID(opType, req.ModelID)
 	if !ok {
 		writeError(w, http.StatusBadRequest, "unsupported model")
 		return CreateJobRequest{}, "", "", "", false
@@ -303,7 +329,8 @@ func (h *Handler) estimateJob(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, EstimateDTO{
 		Operation:      string(opType),
-		ModelID:        modelID,
+		ModelID:        miniAppResponseModelID(opType, modelID),
+		ModelName:      miniAppModelName(opType),
 		CostEstimate:   cost,
 		BalanceCredits: balance,
 		EnoughCredits:  balance >= cost,
@@ -349,12 +376,10 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 	idemKey := fmt.Sprintf("miniapp_job:%d:%s", vkUserID, clientKey)
 	correlationID := fmt.Sprintf("miniapp:%d:%s", vkUserID, clientKey)
 
-	params, _ := json.Marshal(struct {
-		Prompt  string `json:"prompt"`
-		ModelID string `json:"model_id,omitempty"`
-	}{
-		Prompt:  req.Prompt,
-		ModelID: modelID,
+	params, _ := json.Marshal(miniAppJobParams{
+		Prompt:    req.Prompt,
+		ModelID:   modelID,
+		ModelName: miniAppModelName(opType),
 	})
 
 	job, err := h.deps.Orchestrator.CreateJob(r.Context(), joborchestrator.CreateJobInput{
@@ -381,6 +406,96 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "job cost exceeds platform limit")
 	default:
 		h.logger.Error("miniapp: create job failed", slog.String("error", err.Error()))
+		writeError(w, http.StatusInternalServerError, "internal error")
+	}
+}
+
+func (h *Handler) readChatMessageRequest(w http.ResponseWriter, r *http.Request) (ChatMessageRequest, string, bool) {
+	body, err := io.ReadAll(io.LimitReader(r.Body, 64<<10))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "cannot read body")
+		return ChatMessageRequest{}, "", false
+	}
+	var req ChatMessageRequest
+	if err := json.Unmarshal(body, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json")
+		return ChatMessageRequest{}, "", false
+	}
+	req.Prompt = strings.TrimSpace(req.Prompt)
+	if req.Prompt == "" {
+		writeError(w, http.StatusBadRequest, "prompt is required")
+		return ChatMessageRequest{}, "", false
+	}
+	conversationID, ok := normalizeConversationID(req.ConversationID)
+	if !ok {
+		writeError(w, http.StatusBadRequest, "invalid conversation id")
+		return ChatMessageRequest{}, "", false
+	}
+	req.ConversationID = conversationID
+	return req, conversationID, true
+}
+
+func (h *Handler) createChatMessage(w http.ResponseWriter, r *http.Request) {
+	vkUserID, ok := vkUserIDFromCtx(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	req, conversationID, ok := h.readChatMessageRequest(w, r)
+	if !ok {
+		return
+	}
+
+	user, err := h.ensureUser(r.Context(), vkUserID)
+	if err != nil {
+		h.logger.Error("miniapp: ensure user failed", slog.String("error", err.Error()))
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	clientKey := r.Header.Get("X-Idempotency-Key")
+	if clientKey == "" {
+		clientKey = uuid.New().String()
+	}
+	idemKey := fmt.Sprintf("miniapp_chat:%d:%s", vkUserID, clientKey)
+	correlationID := fmt.Sprintf("miniapp-chat:%d:%s", vkUserID, clientKey)
+	conversationKey := miniAppConversationKey(vkUserID, conversationID)
+	prompt := h.conversations.promptFor(conversationKey, req.Prompt)
+
+	params, _ := json.Marshal(miniAppJobParams{
+		Prompt:         prompt,
+		ModelID:        miniAppChatModelID,
+		ModelName:      miniAppChatPublicModelName,
+		ConversationID: conversationID,
+	})
+
+	job, err := h.deps.Orchestrator.CreateJob(r.Context(), joborchestrator.CreateJobInput{
+		UserID:         user.ID,
+		VKPeerID:       vkUserID,
+		CommandID:      uuid.Nil,
+		Operation:      domain.OperationTextGenerate,
+		Modality:       domain.ModalityText,
+		IdempotencyKey: idemKey,
+		CorrelationID:  correlationID,
+		Params:         params,
+	})
+	switch {
+	case err == nil:
+		h.conversations.trackUserJob(job.ID, conversationKey, req.Prompt)
+		writeJSON(w, http.StatusCreated, newChatJobDTO(job))
+	case errors.Is(err, domain.ErrInsufficientCredits):
+		writeJSON(w, http.StatusPaymentRequired, map[string]any{
+			"error":         "insufficient_credits",
+			"job_id":        job.ID,
+			"status":        string(job.Status),
+			"cost_estimate": job.CostEstimate,
+			"model_name":    miniAppChatPublicModelName,
+		})
+	case errors.Is(err, domain.ErrCostCapExceeded):
+		writeError(w, http.StatusBadRequest, "job cost exceeds platform limit")
+	default:
+		h.logger.Error("miniapp: create chat job failed", slog.String("error", err.Error()))
 		writeError(w, http.StatusInternalServerError, "internal error")
 	}
 }
@@ -466,7 +581,44 @@ func (h *Handler) getJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.captureChatResult(r.Context(), user.ID, job)
 	writeJSON(w, http.StatusOK, newJobDTO(job))
+}
+
+func (h *Handler) captureChatResult(ctx context.Context, userID uuid.UUID, job *domain.Job) {
+	if h.conversations == nil || job == nil || job.OperationType != domain.OperationTextGenerate || job.Status != domain.JobStatusSucceeded {
+		return
+	}
+	if !h.conversations.hasJob(job.ID) {
+		return
+	}
+	text, ok := h.textOutputForContext(ctx, userID, job)
+	if !ok {
+		return
+	}
+	h.conversations.appendAssistantForJob(job.ID, text)
+}
+
+func (h *Handler) textOutputForContext(ctx context.Context, userID uuid.UUID, job *domain.Job) (string, bool) {
+	if h.deps.Artifacts == nil || h.deps.Objects == nil || len(job.OutputArtifactIDs) == 0 {
+		return "", false
+	}
+	art, err := h.deps.Artifacts.GetByID(ctx, job.OutputArtifactIDs[0])
+	if err != nil || art.OwnerUserID != userID || !h.artifactVisible(ctx, art, userID) {
+		return "", false
+	}
+	if art.MediaType != domain.MediaTypeText && !strings.HasPrefix(strings.ToLower(art.MimeType), "text/") {
+		return "", false
+	}
+	data, err := h.deps.Objects.GetObject(ctx, art.StorageBucket, art.StorageKey)
+	if err != nil {
+		return "", false
+	}
+	text := strings.TrimSpace(string(data))
+	if text == "" {
+		return "", false
+	}
+	return truncateContextText(text), true
 }
 
 func (h *Handler) getBalance(w http.ResponseWriter, r *http.Request) {

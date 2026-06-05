@@ -24,6 +24,11 @@ export interface CreateJobInput {
   model_id?: string;
 }
 
+export interface CreateChatMessageInput {
+  prompt: string;
+  conversation_id?: string;
+}
+
 export interface CreateJobOptions {
   idempotencyKey: string;
 }
@@ -37,7 +42,8 @@ export interface EstimateInput {
 
 export interface EstimateResponse {
   operation: string;
-  model_id: string;
+  model_id?: string;
+  model_name?: string;
   cost_estimate: number;
   balance_credits: number;
   enough_credits: boolean;
@@ -204,6 +210,16 @@ export async function getJob(id: string): Promise<Job> {
 
 export async function createJob(input: CreateJobInput, options: CreateJobOptions): Promise<Job> {
   return request<Job>("/miniapp/jobs", {
+    method: "POST",
+    headers: {
+      "X-Idempotency-Key": options.idempotencyKey,
+    },
+    body: JSON.stringify(input),
+  });
+}
+
+export async function createChatMessage(input: CreateChatMessageInput, options: CreateJobOptions): Promise<Job> {
+  return request<Job>("/miniapp/chat/messages", {
     method: "POST",
     headers: {
       "X-Idempotency-Key": options.idempotencyKey,
