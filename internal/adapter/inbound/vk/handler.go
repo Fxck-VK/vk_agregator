@@ -448,7 +448,6 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 
 	switch {
 	case unroutedText:
-		h.clearActiveMenu(peerID)
 		if err := h.sendUnroutedTextResponse(ctx, idemKey, peerID); err != nil {
 			return fmt.Errorf("send unrouted text response: %w", err)
 		}

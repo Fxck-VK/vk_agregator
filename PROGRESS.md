@@ -452,8 +452,8 @@
   - `vkdelivery.HTTPClient` получил `EditMessage` поверх VK `messages.edit`, а `ControlClient` теперь покрывает и send, и edit для product/control меню;
   - `vkdelivery.KeyboardButton` получил `ActionType`, поэтому inline menu можно рендерить как VK `callback` или legacy `text` без переписывания payload;
   - `VK_MENU_BUTTON_MODE=callback` стал дефолтом для inline menu: нажатия приходят как VK `message_event` и не добавляют пользовательские echo-сообщения в чат; `VK_MENU_BUTTON_MODE=text` возвращает прежнее поведение;
-  - handler хранит process-local active menu и dialog mode по `peer_id`: кнопочные payload-переходы редактируют текущий menu message, обычный пользовательский текст сбрасывает active menu pointer, а другой control-экран сбрасывает GPT mode;
-  - `VK_UNROUTED_TEXT_MODE=reply` стал дефолтом для обычного текста вне GPT mode: handler записывает `unknown` command, не создает Job и отправляет fresh choose-mode menu; `silent` молчит, `gpt` возвращает legacy any-text-to-GPT behavior;
+  - handler хранит process-local active menu и dialog mode по `peer_id`: кнопочные payload-переходы редактируют текущий menu message, обычный пользовательский текст вне GPT mode оставляет предыдущее меню доступным выше, а другой control-экран сбрасывает GPT mode;
+  - `VK_UNROUTED_TEXT_MODE=reply` стал дефолтом для обычного текста вне GPT mode: handler записывает `unknown` command, не создает Job и отправляет text-only hint `Выберите режим в меню выше.` без дублирования inline keyboard; `silent` молчит, `gpt` возвращает legacy any-text-to-GPT behavior;
   - handler обрабатывает `message_event` как control-only inbound event: сохраняет inbound/command, но не создает Job и не дергает provider;
   - каждый `message_event` подтверждается blank `messages.sendMessageEventAnswer` через `vkdelivery.ControlClient`, чтобы VK-клиент снимал loading spinner с callback-кнопки;
   - если VK не разрешает edit текущего menu message, API логирует warn, очищает active menu и делает fallback на обычный `messages.send`;
@@ -468,7 +468,7 @@
 - Added VK menu UX coverage: `EditMessage` request shape, mock edit semantics, active-menu edit, and plain-message reset to new menu send.
 - Added callback menu coverage: callback keyboard JSON, `VK_MENU_BUTTON_MODE` config validation, `message_event` command processing, no-job invariant, and legacy text-button mode.
 - Added callback ack coverage: real `messages.sendMessageEventAnswer` request shape, mock answer recording, and inbound `message_event` acknowledgement.
-- Added unrouted text coverage: default choose-mode reply/no-job, `silent` no-response mode, legacy `gpt` mode, GPT button enabling text jobs, menu transitions clearing GPT mode, and sticker-to-text job only inside GPT mode.
+- Added unrouted text coverage: default text-only choose-mode hint/no-job, `silent` no-response mode, legacy `gpt` mode, GPT button enabling text jobs, menu transitions clearing GPT mode, and sticker-to-text job only inside GPT mode.
 - Full regression checks выполняются после документационного sync.
 - Live VK `/start` smoke: callback returned `ok`, command persisted as `start`,
   zero jobs created, welcome text delivered to VK. After enabling bot features

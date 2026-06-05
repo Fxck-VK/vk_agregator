@@ -52,20 +52,19 @@ Real integrations are implemented at adapter level and remain **opt-in**:
   or when `VK_UNROUTED_TEXT_MODE=gpt` is explicitly configured.
 - VK inline menu navigation uses a hybrid UX: if the last bot message is the
   active menu, button clicks edit it through VK `messages.edit`; after a plain
-  user message, the active menu pointer is cleared. With the default
-  `VK_UNROUTED_TEXT_MODE=reply`, plain text outside GPT mode sends a fresh
-  choose-mode menu instead of creating a job. Edit failure falls back to a normal
-  send. In Beta this active-menu/dialog-mode state is process-local to
-  `cmd/api`.
+  user message outside GPT mode, the default `VK_UNROUTED_TEXT_MODE=reply`
+  sends only the text hint `Выберите режим в меню выше.` and does not duplicate
+  the inline menu. Edit failure falls back to a normal send. In Beta this
+  active-menu/dialog-mode state is process-local to `cmd/api`.
 - Inline menu buttons default to VK `callback` actions
   (`VK_MENU_BUTTON_MODE=callback`), so button clicks arrive as `message_event`
   and do not add user echo messages to the chat. Set
   `VK_MENU_BUTTON_MODE=text` to return to legacy text buttons. The persistent
   lower `Показать меню` button stays a text button.
 - `VK_UNROUTED_TEXT_MODE` controls ordinary text outside GPT mode: `reply`
-  (default) sends a choose-mode menu, `silent` records the command but sends
-  nothing, and `gpt` preserves the old behavior where any text becomes a GPT
-  job.
+  (default) sends the text-only hint `Выберите режим в меню выше.`, `silent`
+  records the command but sends nothing, and `gpt` preserves the old behavior
+  where any text becomes a GPT job.
 - `Студентам и школьникам` opens a study submenu with task solving,
   presentations/reports placeholders, question answering, and back navigation.
 - `MODERATION_PROVIDER=openai` enables OpenAI output moderation.

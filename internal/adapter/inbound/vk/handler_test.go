@@ -346,7 +346,7 @@ func TestCallbackMenuEventEditsActiveMenuNoJob(t *testing.T) {
 	}
 }
 
-func TestPlainMessageSendsFreshChooseModeBeforeNextMenuEdit(t *testing.T) {
+func TestPlainMessageKeepsPreviousActiveMenuAndSendsTextHint(t *testing.T) {
 	control := vkdelivery.NewMockClient()
 	h := newHarnessWithControl(control)
 	start := `{
@@ -356,6 +356,7 @@ func TestPlainMessageSendsFreshChooseModeBeforeNextMenuEdit(t *testing.T) {
 	if rec := h.post(start); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
 		t.Fatalf("unexpected start response: %d %q", rec.Code, rec.Body.String())
 	}
+	activeID := control.Sent()[1].MessageID
 
 	plain := `{
 		"type":"message_new","group_id":1,"event_id":"evt-menu-clear-text","secret":"s3cr3t",
@@ -366,9 +367,11 @@ func TestPlainMessageSendsFreshChooseModeBeforeNextMenuEdit(t *testing.T) {
 	}
 	afterPlain := control.Sent()
 	if len(afterPlain) != 3 {
-		t.Fatalf("plain text should send a fresh choose-mode message, got %+v", afterPlain)
+		t.Fatalf("plain text should send a text-only choose-mode hint, got %+v", afterPlain)
 	}
-	chooseID := afterPlain[2].MessageID
+	if afterPlain[2].Text != "Выберите режим в меню выше." || afterPlain[2].Keyboard != "" {
+		t.Fatalf("unexpected text-only choose-mode hint: %+v", afterPlain[2])
+	}
 
 	menu := `{
 		"type":"message_new","group_id":1,"event_id":"evt-menu-clear-show","secret":"s3cr3t",
@@ -380,13 +383,13 @@ func TestPlainMessageSendsFreshChooseModeBeforeNextMenuEdit(t *testing.T) {
 
 	sent := control.Sent()
 	if len(sent) != 3 {
-		t.Fatalf("plain text should send one fresh choose-mode message before menu edit, got %+v", sent)
+		t.Fatalf("next menu should edit the previous active menu without sending a duplicate menu, got %+v", sent)
 	}
-	if !strings.Contains(sent[2].Text, "Добро пожаловать в Super GPT") {
-		t.Fatalf("next menu should edit the choose-mode message into the welcome menu, got %+v", sent[2])
+	if sent[2].Text != "Выберите режим в меню выше." || sent[2].Keyboard != "" {
+		t.Fatalf("text-only hint should remain unchanged after menu edit, got %+v", sent[2])
 	}
-	if edits := control.Edits(); len(edits) != 1 || edits[0].MessageID != chooseID {
-		t.Fatalf("next menu should edit the fresh choose-mode message, got edits %+v", edits)
+	if edits := control.Edits(); len(edits) != 1 || edits[0].MessageID != activeID {
+		t.Fatalf("next menu should edit the previous active menu, got edits %+v", edits)
 	}
 }
 
@@ -568,7 +571,7 @@ func TestPlainTextOutsideModeRepliesWithChooseModeNoJob(t *testing.T) {
 	if len(sent) != 1 {
 		t.Fatalf("expected one choose-mode response, got %+v", sent)
 	}
-	if !strings.Contains(sent[0].Text, "Выберите режим") || !strings.Contains(sent[0].Keyboard, "Спросить у GPT") {
+	if sent[0].Text != "Выберите режим в меню выше." || sent[0].Keyboard != "" {
 		t.Fatalf("unexpected choose-mode response: %+v", sent)
 	}
 }
@@ -715,6 +718,9 @@ func TestOtherMenuButtonClearsGPTMode(t *testing.T) {
 	sent := control.Sent()
 	if len(sent) != 2 || !strings.Contains(sent[1].Text, "Выберите режим") {
 		t.Fatalf("expected choose-mode response after mode clear, got %+v", sent)
+	}
+	if sent[1].Keyboard != "" {
+		t.Fatalf("choose-mode response after mode clear must not duplicate the menu keyboard: %+v", sent[1])
 	}
 	if answers := control.EventAnswers(); len(answers) != 1 || answers[0].EventID != "vk-button-event-clear" {
 		t.Fatalf("expected callback event answer, got %+v", answers)

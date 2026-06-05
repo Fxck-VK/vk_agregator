@@ -120,7 +120,7 @@ const (
 
 	topUpText = "💰 Пополнить баланс\n\nПополнение будет подключено отдельным платежным потоком. Пока для тестирования доступны стартовые кредиты."
 
-	chooseModeText = "Выберите режим в меню ниже."
+	chooseModeText = "Выберите режим в меню выше."
 )
 
 func controlTypeFromPayload(payload string) (domain.CommandType, bool) {
@@ -259,15 +259,10 @@ func (h *Handler) sendUnroutedTextResponse(ctx context.Context, idemKey string, 
 	}
 
 	msg := vkdelivery.Message{
-		Text:     chooseModeText,
-		Keyboard: welcomeKeyboard(),
+		Text: chooseModeText,
 	}
-	h.applyMenuButtonMode(msg.Keyboard)
 	randomID := vkdelivery.DeterministicRandomID("vk_control_unrouted:" + idemKey)
-	result, err := h.sendControlMessage(ctx, domain.CommandShowMenu, peerID, randomID, msg)
-	if err == nil {
-		h.setActiveMenu(peerID, result.MessageID)
-	}
+	_, err := h.sendControlMessage(ctx, domain.CommandShowMenu, peerID, randomID, msg)
 	return err
 }
 

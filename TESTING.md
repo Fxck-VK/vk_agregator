@@ -178,8 +178,9 @@ instruction screen directly with `Фото по тексту`, `Фото с ре
 `💬 Спросить у GPT` should return `SUPER GPT активен` and wait for the next
 plain user message; that next text or sticker should create a `text.ask` job.
 Plain text outside GPT mode is controlled by `VK_UNROUTED_TEXT_MODE`: `reply`
-(default) sends a choose-mode menu and creates no job, `silent` creates no job
-and sends nothing, `gpt` preserves legacy any-text-to-GPT behavior.
+(default) sends only `Выберите режим в меню выше.` and creates no job, `silent`
+creates no job and sends nothing, `gpt` preserves legacy any-text-to-GPT
+behavior.
 Clicking `🎁 Студентам и школьникам` should return the study submenu with
 `Решальник задач`, `Генерация презентаций (скоро)`,
 `Создание рефератов (скоро)`, `❓ Ответы на вопросы`, and `⬅️ Назад`; these
@@ -187,8 +188,9 @@ button presses must not enqueue jobs.
 For live VK UX, click several inline menu buttons in a row: the bot should edit
 the active menu message instead of posting a new bot message each time. Then
 send plain text outside GPT mode: with the default `reply` setting, the bot
-should post a fresh choose-mode menu at the bottom and still create no job. This
-active-menu/dialog-mode state is process-local to the running API instance.
+should post only `Выберите режим в меню выше.`, should not attach an inline
+keyboard, and should still create no job. This active-menu/dialog-mode state is
+process-local to the running API instance.
 With `VK_MENU_BUTTON_MODE=callback`, inline menu clicks should not appear as
 user messages in the chat. Make sure VK Callback API has callback-button events
 (`message_event`) enabled. To verify legacy fallback, set
