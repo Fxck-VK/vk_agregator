@@ -201,6 +201,79 @@ func TestStartSendsWelcomeMenuNoJob(t *testing.T) {
 	}
 }
 
+func TestMenuFeatureFlagsHideMainMenuButtons(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	h := newHarnessWithConfig(control, vk.Config{
+		ConfirmationToken: "conf-token-123",
+		Secret:            "s3cr3t",
+		MenuFeatures: vk.MenuFeatureFlags{DisabledCommands: map[domain.CommandType]bool{
+			domain.CommandMenuStudents: true,
+			domain.CommandTopUp:        true,
+		}},
+	})
+	body := `{
+		"type":"message_new","group_id":1,"event_id":"evt-start-flags","secret":"s3cr3t",
+		"object":{"message":{"from_id":580,"peer_id":580,"text":"/start"}}
+	}`
+	rec := h.post(body)
+	if rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	sent := control.Sent()
+	if len(sent) != 2 {
+		t.Fatalf("expected persistent keyboard update and welcome message, got %+v", sent)
+	}
+	if strings.Contains(sent[1].Keyboard, "Студентам и школьникам") || strings.Contains(sent[1].Keyboard, "Пополнить баланс") {
+		t.Fatalf("disabled main menu buttons should be hidden: %q", sent[1].Keyboard)
+	}
+	for _, want := range []string{"Создать видео", "Создать фото", "Спросить у GPT", "Мой аккаунт"} {
+		if !strings.Contains(sent[1].Keyboard, want) {
+			t.Fatalf("expected enabled button %q in keyboard: %q", want, sent[1].Keyboard)
+		}
+	}
+}
+
+func TestDisabledMenuPayloadFallsBackToCurrentMenuNoJob(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	h := newHarnessWithConfig(control, vk.Config{
+		ConfirmationToken: "conf-token-123",
+		Secret:            "s3cr3t",
+		MenuFeatures: vk.MenuFeatureFlags{DisabledCommands: map[domain.CommandType]bool{
+			domain.CommandMenuStudents: true,
+		}},
+	})
+	body := `{
+		"type":"message_new","group_id":1,"event_id":"evt-students-disabled","secret":"s3cr3t",
+		"object":{"message":{"from_id":581,"peer_id":581,"text":"🎁 Студентам и школьникам","payload":"{\"command\":\"menu.students\"}"}}
+	}`
+	rec := h.post(body)
+	if rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	ctx := context.Background()
+	user, err := h.users.GetByVKUserID(ctx, 581)
+	if err != nil {
+		t.Fatalf("user not created: %v", err)
+	}
+	cmds, _ := h.cmds.ListByUser(ctx, user.ID, 10, 0)
+	if len(cmds) != 1 || cmds[0].Type != domain.CommandShowMenu {
+		t.Fatalf("disabled payload should be recorded as show_menu fallback, got %+v", cmds)
+	}
+	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
+	if len(jobs) != 0 || h.pub.Len() != 0 {
+		t.Fatalf("disabled payload must not create jobs, jobs=%+v tasks=%d", jobs, h.pub.Len())
+	}
+	sent := control.Sent()
+	if len(sent) != 1 || !strings.Contains(sent[0].Text, "Добро пожаловать в Super GPT") {
+		t.Fatalf("expected current welcome menu fallback, got %+v", sent)
+	}
+	if strings.Contains(sent[0].Keyboard, "Студентам и школьникам") {
+		t.Fatalf("disabled students button should stay hidden in fallback menu: %q", sent[0].Keyboard)
+	}
+}
+
 func TestTextMenuButtonModeKeepsInlineButtonsAsText(t *testing.T) {
 	control := vkdelivery.NewMockClient()
 	h := newHarnessWithConfig(control, vk.Config{
@@ -667,7 +740,7 @@ func TestGPTMenuButtonEnablesPlainTextJobs(t *testing.T) {
 	}
 	cmds, _ := h.cmds.ListByUser(ctx, user.ID, 10, 0)
 	if len(cmds) != 2 || cmds[0].Type != domain.CommandMenuText || cmds[1].Type != domain.CommandTextAsk {
-		t.Fatalf("unexpected commands: %+v", cmds)
+		t.Fatalf("unexpected command types: %+v", commandTypes(cmds))
 	}
 	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
 	if len(jobs) != 1 || jobs[0].OperationType != domain.OperationTextGenerate || h.pub.Len() != 1 {
@@ -710,7 +783,7 @@ func TestOtherMenuButtonClearsGPTMode(t *testing.T) {
 	}
 	cmds, _ := h.cmds.ListByUser(ctx, user.ID, 10, 0)
 	if len(cmds) != 3 || cmds[0].Type != domain.CommandMenuText || cmds[1].Type != domain.CommandMenuVideo || cmds[2].Type != domain.CommandUnknown {
-		t.Fatalf("unexpected commands after gpt mode clear: %+v", cmds)
+		t.Fatalf("unexpected command types after gpt mode clear: %+v", commandTypes(cmds))
 	}
 	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
 	if len(jobs) != 0 || h.pub.Len() != 0 {
@@ -870,6 +943,38 @@ func TestVideoModelButtonIsControlCommandNoJob(t *testing.T) {
 	for _, want := range []string{"😀 Начать генерацию", "ℹ️ Примеры", "⬅️ Назад", "menu.video.sora_2.start", "menu.video.sora_2.examples"} {
 		if !strings.Contains(sent[0].Keyboard, want) {
 			t.Fatalf("expected %q in keyboard: %q", want, sent[0].Keyboard)
+		}
+	}
+}
+
+func TestNestedMenuFeatureFlagsHideVideoButtons(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	h := newHarnessWithConfig(control, vk.Config{
+		ConfirmationToken: "conf-token-123",
+		Secret:            "s3cr3t",
+		MenuFeatures: vk.MenuFeatureFlags{DisabledCommands: map[domain.CommandType]bool{
+			domain.CommandMenuVideoSora2Examples: true,
+		}},
+	})
+	body := `{
+		"type":"message_new","group_id":1,"event_id":"evt-video-nested-flag","secret":"s3cr3t",
+		"object":{"message":{"from_id":582,"peer_id":582,"text":"Sora 2 — видео текст+фото","payload":"{\"command\":\"menu.video.sora_2\"}"}}
+	}`
+	rec := h.post(body)
+	if rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	sent := control.Sent()
+	if len(sent) != 1 {
+		t.Fatalf("expected one Sora response, got %+v", sent)
+	}
+	if strings.Contains(sent[0].Keyboard, "Примеры") || strings.Contains(sent[0].Keyboard, "menu.video.sora_2.examples") {
+		t.Fatalf("disabled nested video button should be hidden: %q", sent[0].Keyboard)
+	}
+	for _, want := range []string{"😀 Начать генерацию", "⬅️ Назад"} {
+		if !strings.Contains(sent[0].Keyboard, want) {
+			t.Fatalf("expected enabled nested button %q in keyboard: %q", want, sent[0].Keyboard)
 		}
 	}
 }
@@ -1046,6 +1151,14 @@ func (c *keyboardFailControl) EditMessage(_ context.Context, _ int64, _ int64, m
 
 func (c *keyboardFailControl) AnswerMessageEvent(_ context.Context, _ string, _, _ int64) error {
 	return nil
+}
+
+func commandTypes(cmds []*domain.Command) []domain.CommandType {
+	types := make([]domain.CommandType, 0, len(cmds))
+	for _, cmd := range cmds {
+		types = append(types, cmd.Type)
+	}
+	return types
 }
 
 func TestMessageNewControlCommandNoJob(t *testing.T) {

@@ -21,6 +21,7 @@ import (
 	vkinbound "vk-ai-aggregator/internal/adapter/inbound/vk"
 	redisqueue "vk-ai-aggregator/internal/adapter/queue/redis"
 	"vk-ai-aggregator/internal/adapter/storage/postgres"
+	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/platform/config"
 	"vk-ai-aggregator/internal/platform/metrics"
 	"vk-ai-aggregator/internal/platform/ratelimit"
@@ -101,6 +102,7 @@ func main() {
 		WelcomeAttachment: cfg.VKWelcomeAttachment,
 		MenuButtonMode:    cfg.VKMenuButtonMode,
 		UnroutedTextMode:  cfg.VKUnroutedTextMode,
+		MenuFeatures:      vkMenuFeatures(cfg),
 	}, vkinbound.Deps{
 		Idempotency:  idem,
 		Inbound:      inbound,
@@ -153,6 +155,45 @@ func main() {
 	defer cancel()
 	_ = srv.Shutdown(shutdownCtx)
 	logger.Info("api stopped")
+}
+
+func vkMenuFeatures(cfg config.Config) vkinbound.MenuFeatureFlags {
+	disabled := map[domain.CommandType]bool{}
+	disableWhenFalse := func(enabled bool, commands ...domain.CommandType) {
+		if enabled {
+			return
+		}
+		for _, command := range commands {
+			disabled[command] = true
+		}
+	}
+
+	disableWhenFalse(cfg.VKMenuVideoEnabled, domain.CommandMenuVideo)
+	disableWhenFalse(cfg.VKMenuImageEnabled, domain.CommandMenuImage)
+	disableWhenFalse(cfg.VKMenuGPTEnabled, domain.CommandMenuText)
+	disableWhenFalse(cfg.VKMenuStudentsEnabled, domain.CommandMenuStudents)
+	disableWhenFalse(cfg.VKMenuAccountEnabled, domain.CommandAccount)
+	disableWhenFalse(cfg.VKMenuTopUpEnabled, domain.CommandTopUp)
+	disableWhenFalse(cfg.VKMenuVideoSora2Enabled, domain.CommandMenuVideoSora2)
+	disableWhenFalse(cfg.VKMenuVideoSora2StartEnabled, domain.CommandMenuVideoSora2Start)
+	disableWhenFalse(cfg.VKMenuVideoSora2ExamplesEnabled, domain.CommandMenuVideoSora2Examples)
+	disableWhenFalse(cfg.VKMenuVideoKling21Enabled, domain.CommandMenuVideoKling21)
+	disableWhenFalse(cfg.VKMenuVideoKling21StartEnabled, domain.CommandMenuVideoKling21Start)
+	disableWhenFalse(cfg.VKMenuVideoKling21ExamplesEnabled, domain.CommandMenuVideoKling21Examples)
+	disableWhenFalse(cfg.VKMenuVideoSeedance1Enabled, domain.CommandMenuVideoSeedance1)
+	disableWhenFalse(cfg.VKMenuVideoSeedance1LiteEnabled, domain.CommandMenuVideoSeedance1Lite)
+	disableWhenFalse(cfg.VKMenuVideoSeedance1ProEnabled, domain.CommandMenuVideoSeedance1Pro)
+	disableWhenFalse(cfg.VKMenuVideoHaiuo02Enabled, domain.CommandMenuVideoHaiuo02)
+	disableWhenFalse(cfg.VKMenuVideoHaiuo02StandardEnabled, domain.CommandMenuVideoHaiuo02Standard)
+	disableWhenFalse(cfg.VKMenuVideoHaiuo02FastEnabled, domain.CommandMenuVideoHaiuo02Fast)
+	disableWhenFalse(cfg.VKMenuImageTextEnabled, domain.CommandMenuImageText)
+	disableWhenFalse(cfg.VKMenuImageReferenceEnabled, domain.CommandMenuImageReference)
+	disableWhenFalse(cfg.VKMenuStudentsSolverEnabled, domain.CommandMenuStudentSolver)
+	disableWhenFalse(cfg.VKMenuStudentsPresentationEnabled, domain.CommandMenuStudentPresentation)
+	disableWhenFalse(cfg.VKMenuStudentsReportEnabled, domain.CommandMenuStudentReport)
+	disableWhenFalse(cfg.VKMenuStudentsQAEnabled, domain.CommandMenuStudentQA)
+
+	return vkinbound.MenuFeatureFlags{DisabledCommands: disabled}
 }
 
 // healthHandler reports 200 only when PostgreSQL and Redis are both reachable.

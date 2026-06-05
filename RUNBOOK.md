@@ -92,6 +92,7 @@ Override these values when needed:
 | `VK_WELCOME_ATTACHMENT` | `` | Optional pre-uploaded VK photo/video attachment sent with `/start` menu |
 | `VK_MENU_BUTTON_MODE` | `callback` | Inline menu buttons: `callback` hides user echo messages; `text` keeps legacy text-button behavior |
 | `VK_UNROUTED_TEXT_MODE` | `reply` | Plain text outside GPT mode: `reply` sends text-only hint to use the menu above, `silent` sends nothing, `gpt` preserves legacy text-to-GPT behavior |
+| `VK_MENU_*_ENABLED` | `true` | Per-button VK product menu flags; set to `false` to hide a button without deleting its screen |
 | `SIGNED_DELIVERY` / `ARTIFACT_URL_TTL` | `false` / `1h` | Deliver media through signed artifact URLs |
 | `ARTIFACT_RETENTION_DAYS` | `0` | Optional S3 lifecycle expiry |
 | `PRICES` | `` | Price overrides, e.g. `text_generate=2,image_generate=12` |
@@ -331,6 +332,23 @@ behavior where button labels are sent as user messages, set
 For every callback-button click, the API sends a blank
 `messages.sendMessageEventAnswer` through `vkdelivery.ControlClient`; this is
 what clears the loading spinner in the VK client.
+Each product-menu button is guarded by a boolean env flag. Defaults are `true`.
+Set a flag to `false` and restart `cmd/api` to hide the button. Main menu flags:
+`VK_MENU_VIDEO_ENABLED`, `VK_MENU_IMAGE_ENABLED`, `VK_MENU_GPT_ENABLED`,
+`VK_MENU_STUDENTS_ENABLED`, `VK_MENU_ACCOUNT_ENABLED`,
+`VK_MENU_TOP_UP_ENABLED`. Nested flags:
+`VK_MENU_VIDEO_SORA2_ENABLED`, `VK_MENU_VIDEO_SORA2_START_ENABLED`,
+`VK_MENU_VIDEO_SORA2_EXAMPLES_ENABLED`, `VK_MENU_VIDEO_KLING21_ENABLED`,
+`VK_MENU_VIDEO_KLING21_START_ENABLED`,
+`VK_MENU_VIDEO_KLING21_EXAMPLES_ENABLED`,
+`VK_MENU_VIDEO_SEEDANCE1_ENABLED`, `VK_MENU_VIDEO_SEEDANCE1_LITE_ENABLED`,
+`VK_MENU_VIDEO_SEEDANCE1_PRO_ENABLED`, `VK_MENU_VIDEO_HAIUO02_ENABLED`,
+`VK_MENU_VIDEO_HAIUO02_STANDARD_ENABLED`, `VK_MENU_VIDEO_HAIUO02_FAST_ENABLED`,
+`VK_MENU_IMAGE_TEXT_ENABLED`, `VK_MENU_IMAGE_REFERENCE_ENABLED`,
+`VK_MENU_STUDENTS_SOLVER_ENABLED`, `VK_MENU_STUDENTS_PRESENTATION_ENABLED`,
+`VK_MENU_STUDENTS_REPORT_ENABLED`, `VK_MENU_STUDENTS_QA_ENABLED`.
+If a user clicks a disabled stale button from an older message, the handler
+falls back to the current main menu and still creates no job.
 
 ### VK message → full pipeline
 ```bash

@@ -15,7 +15,7 @@ integrations are opt-in: OpenAI text/image/video provider, provider
 router/fallback/circuit breaker, VK `messages.send` with raw photo/video upload,
 VK `/start` product menu with callback/text inline keyboard and active-menu `messages.edit`,
 process-local GPT text mode with unrouted-text gating, OpenAI output moderation,
-and OpenAI text/image artifact scanning are
+per-button VK menu feature flags, and OpenAI text/image artifact scanning are
 implemented. Credential-bound live smoke and the full video media pipeline
 (scan/transcode/VK-ready variants) remain follow-up work.
 
@@ -29,6 +29,7 @@ implemented. Credential-bound live smoke and the full video media pipeline
 - VK control/menu responses must use `vkdelivery.ControlClient`; new sends use a deterministic `random_id`, while active-menu edits target a tracked VK `message_id`.
 - VK inline menu buttons may be rendered as `callback` or `text` via `VK_MENU_BUTTON_MODE`; callback clicks must be handled as VK `message_event` control events, acknowledged through `vkdelivery.ControlClient`, and must not create Jobs.
 - VK menu buttons must not create billable Jobs until the user supplies a prompt.
+- New VK product-menu buttons must have a `VK_MENU_*_ENABLED` feature flag and disabled stale payloads must not open hidden sections.
 - VK plain text/stickers outside an active text mode must not create billable Jobs by default; `VK_UNROUTED_TEXT_MODE=reply|silent|gpt` is the only supported switch for that behavior.
 - Billing must use ledger entries and reservations; never mutate balance directly without ledger.
 - Media files must be stored as Artifacts before delivery.

@@ -66,6 +66,7 @@ OS/CI environment variables override `.env` values.
 | `VK_WELCOME_ATTACHMENT` | _(optional VK attachment string for `/start` banner)_                                     |
 | `VK_MENU_BUTTON_MODE`   | `callback`                                                                                |
 | `VK_UNROUTED_TEXT_MODE` | `reply`                                                                                   |
+| `VK_MENU_*_ENABLED`     | `true`                                                                                    |
 | `MAX_ATTEMPTS`          | `3`                                                                                       |
 | `SIGNED_DELIVERY`       | `false`                                                                                   |
 | `STREAM_MAX_LEN`        | `100000`                                                                                  |
@@ -204,6 +205,10 @@ as user messages again.
 The clicked callback button should not keep spinning: `cmd/api` acknowledges
 every `message_event` with blank `messages.sendMessageEventAnswer` before
 editing/sending the menu.
+Feature flag smoke: set `VK_MENU_STUDENTS_ENABLED=false`, restart `cmd/api`,
+open `Показать меню`, and confirm `🎁 Студентам и школьникам` is absent while
+other main buttons remain. Re-enable it with `true`. The same pattern applies
+to all `VK_MENU_*_ENABLED` flags in `.env.example`.
 
 Image / video jobs (slash commands):
 

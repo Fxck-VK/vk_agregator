@@ -234,6 +234,10 @@ func (h *Handler) sendControlResponse(ctx context.Context, t domain.CommandType,
 		Text:     screen.text(balance),
 		Keyboard: screen.keyboard(),
 	}
+	h.filterMenuKeyboard(msg.Keyboard)
+	if msg.Keyboard != nil && len(msg.Keyboard.Buttons) == 0 {
+		msg.Keyboard = nil
+	}
 	h.applyMenuButtonMode(msg.Keyboard)
 	if screen.includeWelcomeAttachment {
 		msg.Attachment = h.cfg.WelcomeAttachment
@@ -312,6 +316,58 @@ func (h *Handler) sendUnroutedTextResponse(ctx context.Context, idemKey string, 
 	randomID := vkdelivery.DeterministicRandomID("vk_control_unrouted:" + idemKey)
 	_, err := h.sendControlMessage(ctx, domain.CommandShowMenu, peerID, randomID, msg)
 	return err
+}
+
+func (h *Handler) filterMenuKeyboard(keyboard *vkdelivery.Keyboard) {
+	if keyboard == nil {
+		return
+	}
+	filteredRows := make([][]vkdelivery.KeyboardButton, 0, len(keyboard.Buttons))
+	for _, row := range keyboard.Buttons {
+		filteredRow := make([]vkdelivery.KeyboardButton, 0, len(row))
+		for _, button := range row {
+			command, ok := controlTypeFromPayload(button.Payload)
+			if ok && !h.menuCommandEnabled(command) {
+				continue
+			}
+			filteredRow = append(filteredRow, button)
+		}
+		if len(filteredRow) > 0 {
+			filteredRows = append(filteredRows, filteredRow)
+		}
+	}
+	keyboard.Buttons = filteredRows
+}
+
+func (h *Handler) menuCommandEnabled(command domain.CommandType) bool {
+	if h.cfg.MenuFeatures.DisabledCommands[command] {
+		return false
+	}
+	switch command {
+	case domain.CommandMenuVideoSora2,
+		domain.CommandMenuVideoSora2Start,
+		domain.CommandMenuVideoSora2Examples,
+		domain.CommandMenuVideoKling21,
+		domain.CommandMenuVideoKling21Start,
+		domain.CommandMenuVideoKling21Examples,
+		domain.CommandMenuVideoSeedance1,
+		domain.CommandMenuVideoSeedance1Lite,
+		domain.CommandMenuVideoSeedance1Pro,
+		domain.CommandMenuVideoHaiuo02,
+		domain.CommandMenuVideoHaiuo02Standard,
+		domain.CommandMenuVideoHaiuo02Fast:
+		return h.menuCommandEnabled(domain.CommandMenuVideo)
+	case domain.CommandMenuImageText,
+		domain.CommandMenuImageReference:
+		return h.menuCommandEnabled(domain.CommandMenuImage)
+	case domain.CommandMenuStudentSolver,
+		domain.CommandMenuStudentPresentation,
+		domain.CommandMenuStudentReport,
+		domain.CommandMenuStudentQA:
+		return h.menuCommandEnabled(domain.CommandMenuStudents)
+	default:
+		return true
+	}
 }
 
 func (h *Handler) getActiveMenu(peerID int64) (activeMenuMessage, bool) {

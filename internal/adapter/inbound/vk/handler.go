@@ -45,6 +45,15 @@ type Config struct {
 	// "reply" asks the user to choose a mode, "silent" does nothing, and
 	// "gpt" preserves the legacy behavior where any text becomes a GPT job.
 	UnroutedTextMode string
+	// MenuFeatures controls which VK product-menu buttons are visible and
+	// reachable. Empty means every known menu command is enabled.
+	MenuFeatures MenuFeatureFlags
+}
+
+// MenuFeatureFlags allows deployments to hide VK menu buttons without deleting
+// the menu screens or changing command parsing.
+type MenuFeatureFlags struct {
+	DisabledCommands map[domain.CommandType]bool
 }
 
 // Deps are the collaborators the handler needs. All are interfaces or services
@@ -416,6 +425,10 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 		controlFromPayload = true
 	} else if controlOnly {
 		parsed = commandrouter.Result{Type: domain.CommandUnknown}
+	}
+	if isMenuCommand(parsed.Type) && !h.menuCommandEnabled(parsed.Type) {
+		parsed = commandrouter.Result{Type: domain.CommandShowMenu}
+		controlFromPayload = true
 	}
 
 	unroutedText := false

@@ -110,6 +110,32 @@ type Config struct {
 	// "reply" asks the user to choose a mode, "silent" ignores it, and "gpt"
 	// preserves the legacy behavior where any text creates a GPT job.
 	VKUnroutedTextMode string
+	// VK menu feature flags hide individual product-menu buttons without
+	// removing the underlying screens. Defaults are all enabled.
+	VKMenuVideoEnabled                bool
+	VKMenuImageEnabled                bool
+	VKMenuGPTEnabled                  bool
+	VKMenuStudentsEnabled             bool
+	VKMenuAccountEnabled              bool
+	VKMenuTopUpEnabled                bool
+	VKMenuVideoSora2Enabled           bool
+	VKMenuVideoSora2StartEnabled      bool
+	VKMenuVideoSora2ExamplesEnabled   bool
+	VKMenuVideoKling21Enabled         bool
+	VKMenuVideoKling21StartEnabled    bool
+	VKMenuVideoKling21ExamplesEnabled bool
+	VKMenuVideoSeedance1Enabled       bool
+	VKMenuVideoSeedance1LiteEnabled   bool
+	VKMenuVideoSeedance1ProEnabled    bool
+	VKMenuVideoHaiuo02Enabled         bool
+	VKMenuVideoHaiuo02StandardEnabled bool
+	VKMenuVideoHaiuo02FastEnabled     bool
+	VKMenuImageTextEnabled            bool
+	VKMenuImageReferenceEnabled       bool
+	VKMenuStudentsSolverEnabled       bool
+	VKMenuStudentsPresentationEnabled bool
+	VKMenuStudentsReportEnabled       bool
+	VKMenuStudentsQAEnabled           bool
 
 	// ArtifactURLTTL is how long signed artifact delivery URLs stay valid.
 	ArtifactURLTTL time.Duration
@@ -244,13 +270,37 @@ func Load() Config {
 		OpenAIModerationModel: env("OPENAI_MODERATION_MODEL", "omni-moderation-latest"),
 		ArtifactScanner:       env("ARTIFACT_SCANNER", "none"),
 
-		VKDeliveryMode:      env("VK_DELIVERY_MODE", "mock"),
-		VKAccessToken:       env("VK_ACCESS_TOKEN", ""),
-		VKAPIVersion:        env("VK_API_VERSION", "5.199"),
-		VKAPIBaseURL:        env("VK_API_BASE_URL", "https://api.vk.com/method"),
-		VKWelcomeAttachment: env("VK_WELCOME_ATTACHMENT", ""),
-		VKMenuButtonMode:    env("VK_MENU_BUTTON_MODE", "callback"),
-		VKUnroutedTextMode:  env("VK_UNROUTED_TEXT_MODE", "reply"),
+		VKDeliveryMode:                    env("VK_DELIVERY_MODE", "mock"),
+		VKAccessToken:                     env("VK_ACCESS_TOKEN", ""),
+		VKAPIVersion:                      env("VK_API_VERSION", "5.199"),
+		VKAPIBaseURL:                      env("VK_API_BASE_URL", "https://api.vk.com/method"),
+		VKWelcomeAttachment:               env("VK_WELCOME_ATTACHMENT", ""),
+		VKMenuButtonMode:                  env("VK_MENU_BUTTON_MODE", "callback"),
+		VKUnroutedTextMode:                env("VK_UNROUTED_TEXT_MODE", "reply"),
+		VKMenuVideoEnabled:                envBool("VK_MENU_VIDEO_ENABLED", true),
+		VKMenuImageEnabled:                envBool("VK_MENU_IMAGE_ENABLED", true),
+		VKMenuGPTEnabled:                  envBool("VK_MENU_GPT_ENABLED", true),
+		VKMenuStudentsEnabled:             envBool("VK_MENU_STUDENTS_ENABLED", true),
+		VKMenuAccountEnabled:              envBool("VK_MENU_ACCOUNT_ENABLED", true),
+		VKMenuTopUpEnabled:                envBool("VK_MENU_TOP_UP_ENABLED", true),
+		VKMenuVideoSora2Enabled:           envBool("VK_MENU_VIDEO_SORA2_ENABLED", true),
+		VKMenuVideoSora2StartEnabled:      envBool("VK_MENU_VIDEO_SORA2_START_ENABLED", true),
+		VKMenuVideoSora2ExamplesEnabled:   envBool("VK_MENU_VIDEO_SORA2_EXAMPLES_ENABLED", true),
+		VKMenuVideoKling21Enabled:         envBool("VK_MENU_VIDEO_KLING21_ENABLED", true),
+		VKMenuVideoKling21StartEnabled:    envBool("VK_MENU_VIDEO_KLING21_START_ENABLED", true),
+		VKMenuVideoKling21ExamplesEnabled: envBool("VK_MENU_VIDEO_KLING21_EXAMPLES_ENABLED", true),
+		VKMenuVideoSeedance1Enabled:       envBool("VK_MENU_VIDEO_SEEDANCE1_ENABLED", true),
+		VKMenuVideoSeedance1LiteEnabled:   envBool("VK_MENU_VIDEO_SEEDANCE1_LITE_ENABLED", true),
+		VKMenuVideoSeedance1ProEnabled:    envBool("VK_MENU_VIDEO_SEEDANCE1_PRO_ENABLED", true),
+		VKMenuVideoHaiuo02Enabled:         envBool("VK_MENU_VIDEO_HAIUO02_ENABLED", true),
+		VKMenuVideoHaiuo02StandardEnabled: envBool("VK_MENU_VIDEO_HAIUO02_STANDARD_ENABLED", true),
+		VKMenuVideoHaiuo02FastEnabled:     envBool("VK_MENU_VIDEO_HAIUO02_FAST_ENABLED", true),
+		VKMenuImageTextEnabled:            envBool("VK_MENU_IMAGE_TEXT_ENABLED", true),
+		VKMenuImageReferenceEnabled:       envBool("VK_MENU_IMAGE_REFERENCE_ENABLED", true),
+		VKMenuStudentsSolverEnabled:       envBool("VK_MENU_STUDENTS_SOLVER_ENABLED", true),
+		VKMenuStudentsPresentationEnabled: envBool("VK_MENU_STUDENTS_PRESENTATION_ENABLED", true),
+		VKMenuStudentsReportEnabled:       envBool("VK_MENU_STUDENTS_REPORT_ENABLED", true),
+		VKMenuStudentsQAEnabled:           envBool("VK_MENU_STUDENTS_QA_ENABLED", true),
 
 		ArtifactURLTTL:        envDuration("ARTIFACT_URL_TTL", time.Hour),
 		SignedDelivery:        envBool("SIGNED_DELIVERY", false),

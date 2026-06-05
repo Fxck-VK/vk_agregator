@@ -72,6 +72,22 @@ func TestLoadVKUnroutedTextMode(t *testing.T) {
 	}
 }
 
+func TestLoadVKMenuFeatureFlags(t *testing.T) {
+	t.Setenv("VK_MENU_STUDENTS_ENABLED", "false")
+	t.Setenv("VK_MENU_VIDEO_SORA2_EXAMPLES_ENABLED", "false")
+
+	cfg := config.Load()
+	if cfg.VKMenuStudentsEnabled {
+		t.Fatal("VKMenuStudentsEnabled = true, want false")
+	}
+	if cfg.VKMenuVideoSora2ExamplesEnabled {
+		t.Fatal("VKMenuVideoSora2ExamplesEnabled = true, want false")
+	}
+	if !cfg.VKMenuVideoEnabled {
+		t.Fatal("VKMenuVideoEnabled = false, want default true")
+	}
+}
+
 func TestValidateVKMenuButtonMode(t *testing.T) {
 	cfg := config.Config{VKMenuButtonMode: "bad"}
 

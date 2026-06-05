@@ -69,6 +69,10 @@ Real integrations are implemented at adapter level and remain **opt-in**:
   (default) sends the text-only hint `Выберите режим в меню выше.`, `silent`
   records the command but sends nothing, and `gpt` preserves the old behavior
   where any text becomes a GPT job.
+- Every VK product-menu button has an env feature flag (`VK_MENU_*_ENABLED`).
+  Disabled buttons are hidden from new keyboards, while stale payload clicks
+  from older messages fall back to the current main menu instead of opening a
+  hidden section.
 - `Студентам и школьникам` opens a study submenu with task solving,
   presentations/reports placeholders, question answering, and back navigation.
 - `MODERATION_PROVIDER=openai` enables OpenAI output moderation.
