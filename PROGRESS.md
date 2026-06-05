@@ -1025,3 +1025,30 @@ Status: **completed**.
 - `go test ./...` - exit 0.
 - `go build ./...` - exit 0.
 - `npm run build` in `web/miniapp` - exit 0.
+
+---
+
+## PR-13.1 - Mini App DeepSeek e2e smoke and fixes
+
+Status: **completed**.
+
+### What changed
+
+- Verified the real Mini App text job flow against DeepSeek through the
+  DeepInfra provider adapter (`PROVIDER=deepinfra`, provider chain forced to
+  `deepinfra` for smoke).
+- Fixed Mini App text `model_id` validation so `deepseek-v4-flash` is accepted
+  and persisted in job params without exposing it in `JobDTO`.
+- Happy path smoke: `POST /miniapp/jobs` returned in 68 ms, job reached
+  `succeeded` in 5.1 s, provider task was `deepinfra` with the DeepSeek model,
+  artifact access was owner-scoped, credits were captured once and idempotent
+  repeat returned the same job.
+- Failure path smoke: unreachable DeepInfra endpoint with one attempt returned
+  a job in 55 ms, reached `failed_terminal` with `provider_timeout` in 1.0 s,
+  released the reservation once and did not capture credits.
+
+### Checks
+
+- `go test ./...` - exit 0.
+- `go build ./...` - exit 0.
+- `npm run build` in `web/miniapp` - exit 0.

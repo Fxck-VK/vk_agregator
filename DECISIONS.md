@@ -173,3 +173,37 @@ Consequences: BFF and VK handlers still never call providers directly.
 Provider stalls are bounded by worker context timeouts plus existing retry
 backoff. Billing remains append-only: failures before capture release the hold
 via the existing reservation releaser instead of mutating balance directly.
+
+---
+
+## ADR-007 - DeepInfra/DeepSeek e2e smoke path
+
+Status: accepted
+
+Date: 2026-06-05
+
+Context: PR-13 added worker-level provider timeouts and terminal reservation
+release. PR-13.1 verified the real Mini App job path with DeepSeek through the
+DeepInfra OpenAI-compatible adapter, not through OpenAI. The local primary
+database had migration checksum drift, so smoke used a separate temporary
+database and Redis DB to avoid mutating existing local data.
+
+Decision: DeepSeek smoke uses `PROVIDER=deepinfra` and
+`PROVIDER_CHAIN=deepinfra` so fallback cannot hide provider-path failures.
+Mini App accepts the text model id `deepseek-v4-flash`; the provider adapter
+continues to use `DEEPINFRA_TEXT_MODEL` as the backend source of truth for the
+actual DeepInfra model code. Failure smoke uses an unreachable DeepInfra base
+URL plus `MAX_ATTEMPTS=1` to verify terminal failure and reservation release.
+
+Results: happy path returned a Mini App job in 68 ms, reached `succeeded` in
+5.1 s, created one DeepInfra provider task for
+`deepseek-ai/DeepSeek-V4-Flash`, captured credits once and kept artifact access
+owner-scoped. Failure path returned a job in 55 ms, reached
+`failed_terminal` with `provider_timeout` in 1.0 s, released the reservation
+once and did not capture. Repeating each submit with the same
+`X-Idempotency-Key` returned the same job and did not create a second charge or
+release.
+
+Consequences: the release smoke now covers the real backend/worker/provider
+path for DeepSeek text jobs. The BFF still only validates and persists
+`model_id`; provider selection and pricing remain backend-owned.

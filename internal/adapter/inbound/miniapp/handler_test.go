@@ -842,7 +842,7 @@ func TestHandler_CreateJob_AcceptsSupportedModelID(t *testing.T) {
 	body, _ := json.Marshal(map[string]string{
 		"operation": "text_generate",
 		"prompt":    "model prompt",
-		"model_id":  "gpt-4o-mini",
+		"model_id":  "deepseek-v4-flash",
 	})
 	req := httptest.NewRequest(http.MethodPost, "/miniapp/jobs", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -880,7 +880,7 @@ func TestHandler_CreateJob_AcceptsSupportedModelID(t *testing.T) {
 	if err := json.Unmarshal(job.Params, &params); err != nil {
 		t.Fatalf("invalid job params: %v", err)
 	}
-	if params.ModelID != "gpt-4o-mini" {
+	if params.ModelID != "deepseek-v4-flash" {
 		t.Fatalf("expected model_id persisted in params, got %q", params.ModelID)
 	}
 }

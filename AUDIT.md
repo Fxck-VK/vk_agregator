@@ -264,3 +264,21 @@ The default runtime remains mock-backed; before external users, run a live smoke
 with real OpenAI/VK credentials, attach a production welcome banner if needed,
 and add the remaining Phase 3 media pipeline for video scan/transcode/VK-ready
 variants. Remaining work is tracked in `TASKS.md` and `ROADMAP.md`.
+
+---
+
+## PR-13.1 live DeepSeek smoke note
+
+Date: 2026-06-05
+
+DeepInfra/DeepSeek text generation is now credential-smoked through the real
+Mini App job path: `POST /miniapp/jobs` -> outbox -> worker -> DeepInfra
+adapter -> artifact -> mock delivery -> billing capture. The happy path reached
+`succeeded`, captured credits once, enforced artifact owner access and preserved
+idempotent submit. The failure path used an unreachable DeepInfra endpoint and
+verified `failed_terminal`, `provider_timeout`, one reservation release and no
+capture. No secrets, launch params, prompts or model output were recorded.
+
+Remaining credential-bound smoke before broad external release: real VK
+delivery/media upload and the full video media pipeline. OpenAI is not the
+primary Mini App text provider for this release path.

@@ -211,9 +211,11 @@ func operationMeta(op string) (domain.OperationType, domain.Modality, bool) {
 
 var miniAppSupportedModels = map[domain.OperationType]map[string]struct{}{
 	domain.OperationTextGenerate: {
-		"gpt-4o-mini": {},
-		"gpt-4o":      {},
-		"llama-3.1":   {},
+		"deepseek-v4-flash":             {},
+		"deepseek-ai/DeepSeek-V4-Flash": {},
+		"gpt-4o-mini":                   {},
+		"gpt-4o":                        {},
+		"llama-3.1":                     {},
 	},
 	domain.OperationImageGenerate: {
 		"sdxl":      {},
