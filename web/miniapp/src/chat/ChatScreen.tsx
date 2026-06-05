@@ -4,6 +4,7 @@ import { Avatar, Spinner } from "../ui/ui";
 import { MessageBubble } from "./MessageBubble";
 import { Composer } from "./Composer";
 import { ChatList } from "./ChatList";
+import { ResultCard } from "../components/ResultCard";
 import { modalityById, uid, type ChatMessage, type ModalityId } from "./types";
 import {
   createJob,
@@ -43,6 +44,14 @@ function jobToMessages(job: Job): ChatMessage[] {
       artifactIds: job.output_artifact_ids,
     },
   ];
+}
+
+function promptForBot(messages: ChatMessage[], index: number): string {
+  for (let i = index - 1; i >= 0; i--) {
+    const msg = messages[i];
+    if (msg.role === "user" && msg.text) return msg.text;
+  }
+  return "";
 }
 
 export function ChatScreen({ user }: { user: VkUser }) {
@@ -193,19 +202,34 @@ export function ChatScreen({ user }: { user: VkUser }) {
     [poll],
   );
 
-  function handleSend(text: string): boolean {
+  function runSubmit(text: string, request?: { operation: string; modelId: string }): boolean {
     if (submittingRef.current) return false;
     submittingRef.current = true;
     setSubmitting(true);
-    void submitJob(text).finally(() => {
+    void submitJob(text, request).finally(() => {
       submittingRef.current = false;
       if (mountedRef.current) setSubmitting(false);
     });
     return true;
   }
 
-  async function submitJob(text: string) {
+  function handleSend(text: string): boolean {
+    return runSubmit(text);
+  }
+
+  function handleRetry(msg: ChatMessage, prompt: string): void {
+    if (!prompt) return;
     const modality = modalityById(modalityId);
+    runSubmit(prompt, {
+      operation: msg.operation ?? modality.operation,
+      modelId: msg.model ?? modelId,
+    });
+  }
+
+  async function submitJob(text: string, request?: { operation: string; modelId: string }) {
+    const modality = modalityById(modalityId);
+    const operation = request?.operation ?? modality.operation;
+    const selectedModel = request?.modelId ?? modelId;
     const chatId = ensureActive();
     const botId = "b-" + uid();
     const idempotencyKey = createIdempotencyKey();
@@ -215,8 +239,8 @@ export function ChatScreen({ user }: { user: VkUser }) {
       {
         id: botId,
         role: "bot",
-        operation: modality.operation,
-        model: modelId,
+        operation,
+        model: selectedModel,
         pending: true,
         status: "received",
       },
@@ -224,7 +248,7 @@ export function ChatScreen({ user }: { user: VkUser }) {
     haptic("light");
     try {
       const job = await createJob(
-        { operation: modality.operation, prompt: text, model_id: modelId },
+        { operation, prompt: text, model_id: selectedModel },
         { idempotencyKey },
       );
       patchInChat(chatId, botId, { jobId: job.id, status: job.status });
@@ -356,9 +380,18 @@ export function ChatScreen({ user }: { user: VkUser }) {
             </p>
           </div>
         )}
-        {messages.map((m) => (
-          <MessageBubble key={m.id} msg={m} userName={user.name} userAvatar={user.avatar} />
-        ))}
+        {messages.map((m, index) =>
+          m.role === "bot" ? (
+            <ResultCard
+              key={m.id}
+              msg={m}
+              prompt={promptForBot(messages, index)}
+              onRetry={() => handleRetry(m, promptForBot(messages, index))}
+            />
+          ) : (
+            <MessageBubble key={m.id} msg={m} userName={user.name} userAvatar={user.avatar} />
+          ),
+        )}
       </div>
 
       <Composer

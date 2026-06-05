@@ -877,3 +877,28 @@ resume hardening.
 - `go test ./internal/adapter/inbound/miniapp ./internal/service/billingservice` — exit 0.
 - `go test ./...` — exit 0.
 - `npm run build` в `web/miniapp` — exit 0.
+
+---
+
+## PR-8 — Mini App: result and artifact UX
+
+Статус: **завершён**.
+
+### Что сделано
+
+- Добавлен frontend `ResultCard` для bot/result сообщений: карточка
+  «Готовый VK-пост» вместо обычного chat bubble.
+- Text result отображается как plain text с `white-space: pre-wrap`; copy button
+  копирует только текст, без HTML.
+- Image/video preview использует только backend artifact route через
+  `artifactUrl(id)` с UUID validation; artifact URL не сохраняется в
+  `localStorage`.
+- Добавлены loading/skeleton state, safe error/fallback state и retry action,
+  который создаёт новый job через существующий `createJob` flow с тем же
+  prompt/operation/model.
+
+### Проверки
+
+- `npm run build` в `web/miniapp` — exit 0.
+- Поиск `dangerouslySetInnerHTML`, `innerHTML`, `eval`, `new Function`,
+  `markdown`, `marked` в `web/miniapp/src` — без совпадений.
