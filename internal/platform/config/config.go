@@ -103,6 +103,9 @@ type Config struct {
 	// VKWelcomeAttachment is an optional pre-uploaded VK attachment sent with
 	// the /start menu, e.g. photo-239332376_123_accesskey.
 	VKWelcomeAttachment string
+	// VKMenuButtonMode controls inline product menu buttons: "callback"
+	// prevents user echo messages; "text" keeps legacy behavior.
+	VKMenuButtonMode string
 
 	// ArtifactURLTTL is how long signed artifact delivery URLs stay valid.
 	ArtifactURLTTL time.Duration
@@ -139,6 +142,9 @@ func (c Config) IsProduction() bool {
 // and the admin API must be set. Returns a descriptive error otherwise.
 func (c Config) Validate() error {
 	var missing []string
+	if mode := strings.ToLower(strings.TrimSpace(c.VKMenuButtonMode)); mode != "" && mode != "callback" && mode != "text" {
+		return fmt.Errorf("config: VK_MENU_BUTTON_MODE must be callback or text")
+	}
 	if c.IsProduction() {
 		if c.VKSecret == "" {
 			missing = append(missing, "VK_SECRET")
@@ -236,6 +242,7 @@ func Load() Config {
 		VKAPIVersion:        env("VK_API_VERSION", "5.199"),
 		VKAPIBaseURL:        env("VK_API_BASE_URL", "https://api.vk.com/method"),
 		VKWelcomeAttachment: env("VK_WELCOME_ATTACHMENT", ""),
+		VKMenuButtonMode:    env("VK_MENU_BUTTON_MODE", "callback"),
 
 		ArtifactURLTTL:        envDuration("ARTIFACT_URL_TTL", time.Hour),
 		SignedDelivery:        envBool("SIGNED_DELIVERY", false),

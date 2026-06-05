@@ -54,6 +54,24 @@ func TestLoadProviderChain(t *testing.T) {
 	}
 }
 
+func TestLoadVKMenuButtonMode(t *testing.T) {
+	t.Setenv("VK_MENU_BUTTON_MODE", "text")
+
+	cfg := config.Load()
+	if cfg.VKMenuButtonMode != "text" {
+		t.Fatalf("VKMenuButtonMode = %q, want text", cfg.VKMenuButtonMode)
+	}
+}
+
+func TestValidateVKMenuButtonMode(t *testing.T) {
+	cfg := config.Config{VKMenuButtonMode: "bad"}
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "VK_MENU_BUTTON_MODE") {
+		t.Fatalf("expected VK_MENU_BUTTON_MODE validation error, got %v", err)
+	}
+}
+
 func TestLoadReadsDotenvWithoutOverridingEnvironment(t *testing.T) {
 	restoreEnv := clearEnv(t, "HTTP_ADDR")
 	defer restoreEnv()

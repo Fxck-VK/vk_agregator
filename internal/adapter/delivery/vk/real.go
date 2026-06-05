@@ -194,9 +194,13 @@ func encodeKeyboard(k *Keyboard) (string, error) {
 	for _, row := range k.Buttons {
 		vkRow := make([]vkKeyboardButton, 0, len(row))
 		for _, button := range row {
+			actionType := button.ActionType
+			if actionType == "" {
+				actionType = "text"
+			}
 			vkRow = append(vkRow, vkKeyboardButton{
 				Action: vkKeyboardAction{
-					Type:    "text",
+					Type:    actionType,
 					Label:   button.Label,
 					Payload: button.Payload,
 				},

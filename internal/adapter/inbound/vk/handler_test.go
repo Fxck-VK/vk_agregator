@@ -33,6 +33,10 @@ func newHarness() *harness {
 }
 
 func newHarnessWithControl(control vkdelivery.ControlClient) *harness {
+	return newHarnessWithConfig(control, vk.Config{ConfirmationToken: "conf-token-123", Secret: "s3cr3t"})
+}
+
+func newHarnessWithConfig(control vkdelivery.ControlClient, cfg vk.Config) *harness {
 	users := memory.NewUserRepo()
 	cmds := memory.NewCommandRepo()
 	jobs := memory.NewJobRepo()
@@ -44,7 +48,7 @@ func newHarnessWithControl(control vkdelivery.ControlClient) *harness {
 	pub := queue.NewMemoryPublisher()
 	uowMgr := memory.NewUnitOfWork(jobs, outbox, bill)
 	orch := joborchestrator.New(jobs, uowMgr, billing, 0)
-	h := vk.NewHandler(vk.Config{ConfirmationToken: "conf-token-123", Secret: "s3cr3t"}, vk.Deps{
+	h := vk.NewHandler(cfg, vk.Deps{
 		Idempotency:  idem,
 		Inbound:      inbound,
 		Users:        users,
@@ -182,11 +186,42 @@ func TestStartSendsWelcomeMenuNoJob(t *testing.T) {
 	if !strings.Contains(sent[0].Keyboard, "Показать меню") || !strings.Contains(sent[0].Keyboard, `"inline":false`) {
 		t.Fatalf("unexpected persistent keyboard: %q", sent[0].Keyboard)
 	}
+	if !strings.Contains(sent[0].Keyboard, `"type":"text"`) || strings.Contains(sent[0].Keyboard, `"type":"callback"`) {
+		t.Fatalf("persistent keyboard must stay text-only: %q", sent[0].Keyboard)
+	}
 	if !strings.Contains(sent[1].Text, "Добро пожаловать в Super GPT") {
 		t.Fatalf("unexpected text: %q", sent[1].Text)
 	}
 	if !strings.Contains(sent[1].Keyboard, `"inline":true`) || !strings.Contains(sent[1].Keyboard, "Создать видео") || !strings.Contains(sent[1].Keyboard, "Пополнить баланс") {
 		t.Fatalf("unexpected keyboard: %q", sent[1].Keyboard)
+	}
+	if !strings.Contains(sent[1].Keyboard, `"type":"callback"`) {
+		t.Fatalf("inline menu must use callback buttons by default: %q", sent[1].Keyboard)
+	}
+}
+
+func TestTextMenuButtonModeKeepsInlineButtonsAsText(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	h := newHarnessWithConfig(control, vk.Config{
+		ConfirmationToken: "conf-token-123",
+		Secret:            "s3cr3t",
+		MenuButtonMode:    "text",
+	})
+	body := `{
+		"type":"message_new","group_id":1,"event_id":"evt-start-text-mode","secret":"s3cr3t",
+		"object":{"message":{"from_id":572,"peer_id":572,"text":"/start"}}
+	}`
+	rec := h.post(body)
+	if rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	sent := control.Sent()
+	if len(sent) != 2 {
+		t.Fatalf("expected persistent keyboard update and welcome message, got %+v", sent)
+	}
+	if strings.Contains(sent[1].Keyboard, `"type":"callback"`) || !strings.Contains(sent[1].Keyboard, `"type":"text"`) {
+		t.Fatalf("inline menu should use legacy text buttons in text mode: %q", sent[1].Keyboard)
 	}
 }
 
@@ -261,6 +296,49 @@ func TestMenuButtonEditsActiveMenuMessage(t *testing.T) {
 	}
 	if sent[1].Text != "Выбери модель для генерации:" {
 		t.Fatalf("active menu was not updated to video picker: %+v", sent[1])
+	}
+}
+
+func TestCallbackMenuEventEditsActiveMenuNoJob(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	h := newHarnessWithControl(control)
+	start := `{
+		"type":"message_new","group_id":1,"event_id":"evt-callback-start","secret":"s3cr3t",
+		"object":{"message":{"from_id":573,"peer_id":573,"text":"/start"}}
+	}`
+	if rec := h.post(start); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected start response: %d %q", rec.Code, rec.Body.String())
+	}
+	activeID := control.Sent()[1].MessageID
+
+	callback := `{
+		"type":"message_event","group_id":1,"event_id":"evt-callback-video","secret":"s3cr3t",
+		"object":{"user_id":573,"peer_id":573,"event_id":"vk-button-event-1","payload":{"command":"menu.video"}}
+	}`
+	rec := h.post(callback)
+	if rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected callback response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	ctx := context.Background()
+	user, err := h.users.GetByVKUserID(ctx, 573)
+	if err != nil {
+		t.Fatalf("user not created: %v", err)
+	}
+	cmds, _ := h.cmds.ListByUser(ctx, user.ID, 10, 0)
+	if len(cmds) != 2 || cmds[1].Type != domain.CommandMenuVideo {
+		t.Fatalf("unexpected commands: %+v", cmds)
+	}
+	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
+	if len(jobs) != 0 {
+		t.Fatalf("callback menu event must not create a job, got %d", len(jobs))
+	}
+	if len(control.Sent()) != 2 {
+		t.Fatalf("callback should edit active menu instead of sending a new message, got %+v", control.Sent())
+	}
+	edits := control.Edits()
+	if len(edits) != 1 || edits[0].MessageID != activeID || !strings.Contains(edits[0].Text, "Выбери модель") {
+		t.Fatalf("expected active menu edit to video picker, got %+v", edits)
 	}
 }
 

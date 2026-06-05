@@ -13,7 +13,7 @@ Current release: `v0.1.3 / Beta integrations foundation`.
 The default runtime uses the mock provider and mock VK delivery. Real
 integrations are opt-in: OpenAI text/image/video provider, provider
 router/fallback/circuit breaker, VK `messages.send` with raw photo/video upload,
-VK `/start` product menu with inline keyboard and active-menu `messages.edit`,
+VK `/start` product menu with callback/text inline keyboard and active-menu `messages.edit`,
 OpenAI output moderation, and OpenAI text/image artifact scanning are
 implemented. Credential-bound live smoke and the full video media pipeline
 (scan/transcode/VK-ready variants) remain follow-up work.
@@ -26,6 +26,7 @@ implemented. Credential-bound live smoke and the full video media pipeline
 - All provider calls must go through `internal/adapter/provider`.
 - All VK API calls must go through `internal/adapter/delivery/vk`.
 - VK control/menu responses must use `vkdelivery.ControlClient`; new sends use a deterministic `random_id`, while active-menu edits target a tracked VK `message_id`.
+- VK inline menu buttons may be rendered as `callback` or `text` via `VK_MENU_BUTTON_MODE`; callback clicks must be handled as VK `message_event` control events and must not create Jobs.
 - VK menu buttons must not create billable Jobs until the user supplies a prompt.
 - Billing must use ledger entries and reservations; never mutate balance directly without ledger.
 - Media files must be stored as Artifacts before delivery.

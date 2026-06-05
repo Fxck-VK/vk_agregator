@@ -450,7 +450,10 @@
   - `Студентам и школьникам` открывает учебное подменю: `Решальник задач`, `Генерация презентаций (скоро)`, `Создание рефератов (скоро)`, `Ответы на вопросы`, `Назад`;
   - `vkdelivery.HTTPClient` получил `SendMessage` с `keyboard` JSON, поэтому VK API по-прежнему вызывается только из `internal/adapter/delivery/vk`;
   - `vkdelivery.HTTPClient` получил `EditMessage` поверх VK `messages.edit`, а `ControlClient` теперь покрывает и send, и edit для product/control меню;
+  - `vkdelivery.KeyboardButton` получил `ActionType`, поэтому inline menu можно рендерить как VK `callback` или legacy `text` без переписывания payload;
+  - `VK_MENU_BUTTON_MODE=callback` стал дефолтом для inline menu: нажатия приходят как VK `message_event` и не добавляют пользовательские echo-сообщения в чат; `VK_MENU_BUTTON_MODE=text` возвращает прежнее поведение;
   - handler хранит process-local active menu по `peer_id`: кнопочные payload-переходы редактируют текущий menu message, обычный пользовательский prompt/text сбрасывает active menu, и следующий вызов меню отправляет новое сообщение внизу чата;
+  - handler обрабатывает `message_event` как control-only inbound event: сохраняет inbound/command, но не создает Job и не дергает provider;
   - если VK не разрешает edit текущего menu message, API логирует warn, очищает active menu и делает fallback на обычный `messages.send`;
   - кнопки `Создать видео`, `Создать фото`, `Спросить у GPT`, `Студентам и школьникам`, `Мой аккаунт`, `Пополнить баланс` классифицируются как control commands и не создают пустые billable jobs;
   - баланс в меню берется через `billingservice.EnsureAccount`, без прямой мутации баланса;
@@ -461,6 +464,7 @@
 
 - Targeted tests: `go test ./internal/adapter/provider/openai ./internal/adapter/delivery/vk ./internal/adapter/inbound/vk ./internal/service/commandrouter ./internal/worker ./internal/platform/config`.
 - Added VK menu UX coverage: `EditMessage` request shape, mock edit semantics, active-menu edit, and plain-message reset to new menu send.
+- Added callback menu coverage: callback keyboard JSON, `VK_MENU_BUTTON_MODE` config validation, `message_event` command processing, no-job invariant, and legacy text-button mode.
 - Full regression checks выполняются после документационного sync.
 - Live VK `/start` smoke: callback returned `ok`, command persisted as `start`,
   zero jobs created, welcome text delivered to VK. After enabling bot features

@@ -53,6 +53,11 @@ Real integrations are implemented at adapter level and remain **opt-in**:
   user message, the next menu action sends a new menu message. Edit failure
   falls back to a normal send. In Beta this active-menu pointer is process-local
   to `cmd/api`.
+- Inline menu buttons default to VK `callback` actions
+  (`VK_MENU_BUTTON_MODE=callback`), so button clicks arrive as `message_event`
+  and do not add user echo messages to the chat. Set
+  `VK_MENU_BUTTON_MODE=text` to return to legacy text buttons. The persistent
+  lower `Показать меню` button stays a text button.
 - `Студентам и школьникам` opens a study submenu with task solving,
   presentations/reports placeholders, question answering, and back navigation.
 - `MODERATION_PROVIDER=openai` enables OpenAI output moderation.

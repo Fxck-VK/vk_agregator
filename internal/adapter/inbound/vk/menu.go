@@ -184,6 +184,7 @@ func (h *Handler) sendControlResponse(ctx context.Context, t domain.CommandType,
 		Text:     screen.text(balance),
 		Keyboard: screen.keyboard(),
 	}
+	h.applyMenuButtonMode(msg.Keyboard)
 	if screen.includeWelcomeAttachment {
 		msg.Attachment = h.cfg.WelcomeAttachment
 	}
@@ -266,6 +267,21 @@ func (h *Handler) clearActiveMenu(peerID int64) {
 	h.menuMu.Lock()
 	defer h.menuMu.Unlock()
 	delete(h.activeMenus, peerID)
+}
+
+func (h *Handler) applyMenuButtonMode(keyboard *vkdelivery.Keyboard) {
+	if keyboard == nil || !keyboard.Inline {
+		return
+	}
+	actionType := "text"
+	if h.cfg.MenuButtonMode == "callback" {
+		actionType = "callback"
+	}
+	for row := range keyboard.Buttons {
+		for col := range keyboard.Buttons[row] {
+			keyboard.Buttons[row][col].ActionType = actionType
+		}
+	}
 }
 
 func (h *Handler) sendPersistentMenuButton(ctx context.Context, idemKey string, peerID int64) error {

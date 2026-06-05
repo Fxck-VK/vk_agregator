@@ -99,6 +99,7 @@ func main() {
 		ConfirmationToken: cfg.VKConfirmationToken,
 		Secret:            cfg.VKSecret,
 		WelcomeAttachment: cfg.VKWelcomeAttachment,
+		MenuButtonMode:    cfg.VKMenuButtonMode,
 	}, vkinbound.Deps{
 		Idempotency:  idem,
 		Inbound:      inbound,

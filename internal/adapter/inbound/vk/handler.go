@@ -38,6 +38,9 @@ type Config struct {
 	// WelcomeAttachment is an optional pre-uploaded VK attachment string
 	// (for example photo-239332376_123_accesskey) sent with the /start menu.
 	WelcomeAttachment string
+	// MenuButtonMode controls inline menu button action type: "callback" or
+	// "text". Callback avoids user echo messages; text preserves legacy VK UX.
+	MenuButtonMode string
 }
 
 // Deps are the collaborators the handler needs. All are interfaces or services
@@ -70,11 +73,21 @@ func NewHandler(cfg Config, deps Deps) *Handler {
 	if logger == nil {
 		logger = slog.Default()
 	}
+	cfg.MenuButtonMode = normalizeMenuButtonMode(cfg.MenuButtonMode)
 	return &Handler{
 		cfg:         cfg,
 		deps:        deps,
 		logger:      logger,
 		activeMenus: map[int64]activeMenuMessage{},
+	}
+}
+
+func normalizeMenuButtonMode(mode string) string {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "text":
+		return "text"
+	default:
+		return "callback"
 	}
 }
 
@@ -110,6 +123,26 @@ type vkMessage struct {
 	Payload               string         `json:"payload"`
 	ConversationMessageID int64          `json:"conversation_message_id"`
 	Attachments           []vkAttachment `json:"attachments"`
+}
+
+type messageEvent struct {
+	UserID                int64           `json:"user_id"`
+	PeerID                int64           `json:"peer_id"`
+	EventID               string          `json:"event_id"`
+	Payload               json.RawMessage `json:"payload"`
+	ConversationMessageID int64           `json:"conversation_message_id"`
+}
+
+func (m messageEvent) payloadString() string {
+	raw := strings.TrimSpace(string(m.Payload))
+	if raw == "" || raw == "null" {
+		return ""
+	}
+	var s string
+	if err := json.Unmarshal(m.Payload, &s); err == nil {
+		return s
+	}
+	return raw
 }
 
 type vkAttachment struct {
@@ -183,6 +216,14 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeText(w, http.StatusOK, "ok")
+	case "message_event":
+		if err := h.handleMessageEvent(r.Context(), cb, body); err != nil {
+			h.logger.Error("vk message_event processing failed",
+				slog.Int64("group_id", cb.GroupID), slog.String("error", err.Error()))
+			http.Error(w, "processing error", http.StatusInternalServerError)
+			return
+		}
+		writeText(w, http.StatusOK, "ok")
 	default:
 		// Acknowledge unhandled event types so VK does not retry them.
 		writeText(w, http.StatusOK, "ok")
@@ -234,7 +275,62 @@ func (h *Handler) handleMessageNew(ctx context.Context, cb callback, rawBody []b
 		return nil
 	}
 
-	if err := h.process(ctx, cb, rawBody, eventID, idemKey, fromID, peerID, text, payload); err != nil {
+	if err := h.process(ctx, cb, rawBody, eventID, idemKey, fromID, peerID, text, payload, false); err != nil {
+		_ = h.deps.Idempotency.MarkFailed(ctx, idemKey)
+		return err
+	}
+	return nil
+}
+
+func (h *Handler) handleMessageEvent(ctx context.Context, cb callback, rawBody []byte) (err error) {
+	var obj messageEvent
+	if len(cb.Object) > 0 {
+		if err := json.Unmarshal(cb.Object, &obj); err != nil {
+			return fmt.Errorf("decode object: %w", err)
+		}
+	}
+	fromID, peerID, payload := obj.UserID, obj.PeerID, obj.payloadString()
+	if fromID == 0 {
+		return errors.New("message_event has no user_id")
+	}
+	if peerID == 0 {
+		return errors.New("message_event has no peer_id")
+	}
+	eventID := cb.EventID
+	if eventID == "" {
+		eventID = obj.EventID
+	}
+	if eventID == "" {
+		eventID = fmt.Sprintf("message_event:%d:%d:%x", peerID, fromID, hashText(payload))
+	}
+
+	idemKey := fmt.Sprintf("vk_event:%d:%s", cb.GroupID, eventID)
+	ctx, span := tracing.Start(ctx, "vk.message_event",
+		attribute.Int64("vk.group_id", cb.GroupID),
+		attribute.String("vk.event_id", eventID),
+		attribute.Int64("vk.peer_id", peerID),
+		attribute.Int64("vk.user_id", fromID),
+		tracing.CorrelationAttr(idemKey),
+	)
+	defer func() {
+		tracing.RecordError(span, err)
+		span.End()
+	}()
+
+	record := &domain.IdempotencyRecord{
+		Key:          idemKey,
+		Scope:        "inbound_event",
+		ResourceType: "command",
+	}
+	existing, created, err := h.deps.Idempotency.GetOrCreate(ctx, record)
+	if err != nil {
+		return fmt.Errorf("idempotency: %w", err)
+	}
+	if !created && existing.Status == domain.IdempotencyCompleted {
+		return nil
+	}
+
+	if err := h.process(ctx, cb, rawBody, eventID, idemKey, fromID, peerID, "", payload, true); err != nil {
 		_ = h.deps.Idempotency.MarkFailed(ctx, idemKey)
 		return err
 	}
@@ -242,7 +338,7 @@ func (h *Handler) handleMessageNew(ctx context.Context, cb callback, rawBody []b
 }
 
 // process runs the InboundEvent -> User -> Command -> Job flow.
-func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, eventID, idemKey string, fromID, peerID int64, text, payload string) error {
+func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, eventID, idemKey string, fromID, peerID int64, text, payload string, controlOnly bool) error {
 	// InboundEvent: persist the raw event for audit and reprocessing.
 	inbound := &domain.InboundEvent{
 		Source:         "vk",
@@ -271,6 +367,8 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 	if controlType, ok := controlTypeFromPayload(payload); ok {
 		parsed = commandrouter.Result{Type: controlType}
 		controlFromPayload = true
+	} else if controlOnly {
+		parsed = commandrouter.Result{Type: domain.CommandUnknown}
 	}
 	cmd := &domain.Command{
 		UserID:         user.ID,

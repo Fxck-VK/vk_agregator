@@ -64,6 +64,7 @@ OS/CI environment variables override `.env` values.
 | `VK_DELIVERY_MODE`      | `mock`                                                                                    |
 | `VK_ACCESS_TOKEN`       | _(required when `VK_DELIVERY_MODE=real`; also enables API-side `/start` menu sends)_       |
 | `VK_WELCOME_ATTACHMENT` | _(optional VK attachment string for `/start` banner)_                                     |
+| `VK_MENU_BUTTON_MODE`   | `callback`                                                                                |
 | `MAX_ATTEMPTS`          | `3`                                                                                       |
 | `SIGNED_DELIVERY`       | `false`                                                                                   |
 | `STREAM_MAX_LEN`        | `100000`                                                                                  |
@@ -179,6 +180,11 @@ the active menu message instead of posting a new bot message each time. Then
 send a plain prompt/text message and press `Показать меню`: the menu should be
 sent as a new bottom message. This active-menu state is process-local to the
 running API instance.
+With `VK_MENU_BUTTON_MODE=callback`, inline menu clicks should not appear as
+user messages in the chat. Make sure VK Callback API has callback-button events
+(`message_event`) enabled. To verify legacy fallback, set
+`VK_MENU_BUTTON_MODE=text`, restart `cmd/api`, and confirm button labels are sent
+as user messages again.
 
 Image / video jobs (slash commands):
 

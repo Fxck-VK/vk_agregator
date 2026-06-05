@@ -190,6 +190,7 @@ Cloudflare / Nginx / Traefik / Envoy
 
 ```text
 - принять Callback API event;
+- принять `message_new` и `message_event` для callback-кнопок меню;
 - проверить group_id / secret / confirmation;
 - сохранить raw event в inbound_events;
 - создать idempotency key;

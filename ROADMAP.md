@@ -12,9 +12,9 @@ Current release: **v0.1.3 / Beta integrations foundation**.
 > graceful drain, maintenance cleanup and billing reconciliation metric.
 > v0.1.3 also landed OpenAI text/image/video adapters, provider
 > routing/fallback/circuit breaker, VK raw photo/video upload, VK `/start`
-> product menu with inline keyboard and active-menu `messages.edit`, OpenAI
-> moderation, and OpenAI text/image artifact scanning. Live smoke with real
-> credentials remains required before external users.
+> product menu with callback/text inline keyboard and active-menu
+> `messages.edit`, OpenAI moderation, and OpenAI text/image artifact scanning.
+> Live smoke with real credentials remains required before external users.
 
 ---
 
@@ -51,7 +51,7 @@ Current release: **v0.1.3 / Beta integrations foundation**.
   router/fallback/circuit breaker (AUDIT P1). ✅ done in v0.1.3
 - [x] Real VK delivery client: `messages.send`, upload servers and VK attachment
   creation for generated photo/video artifacts (AUDIT V1). ✅ done in v0.1.3
-- [x] VK `/start` product menu with inline keyboard, active-menu edit UX and
+- [x] VK `/start` product menu with callback/text inline keyboard, active-menu edit UX and
   safe control buttons (no empty billable jobs). ✅ done after v0.1.3 foundation
 - Production welcome banner attachment for `/start` via `VK_WELCOME_ATTACHMENT`
   or an upload flow.

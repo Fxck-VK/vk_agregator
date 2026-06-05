@@ -105,6 +105,7 @@
 - [x] VK menu registry: control-экраны описаны декларативно; `🖼️ Создать фото` при одной основной модели сразу открывает инструкцию с режимами `Фото по тексту` / `Фото с референсом`, а `💬 Спросить у GPT` открывает active-сообщение без лишнего выбора модели.
 - [x] VK student menu: `🎁 Студентам и школьникам` открывает учебный экран с кнопками `Решальник задач`, `Генерация презентаций (скоро)`, `Создание рефератов (скоро)`, `Ответы на вопросы` и `Назад`; все кнопки пока control-only.
 - [x] VK active menu UX: inline menu navigation edits the current menu message via `messages.edit`; after a plain user prompt/text message the active menu is cleared and the next menu action sends a fresh bottom message. Edit failures fall back to a normal send.
+- [x] VK callback menu buttons: inline menu can run with `VK_MENU_BUTTON_MODE=callback`, processing VK `message_event` without user echo messages; `VK_MENU_BUTTON_MODE=text` keeps the legacy text-button fallback. Persistent lower `Показать меню` remains text.
 
 ---
 
@@ -114,6 +115,7 @@
 - [ ] Live smoke с реальными `OPENAI_API_KEY` и `VK_ACCESS_TOKEN`: text/image/video generation, VK photo/video upload, moderation allow/block.
 - [ ] Подключить production-баннер к `/start` через `VK_WELCOME_ATTACHMENT` или отдельный upload flow.
 - [x] Bot features включены в настройках сообщений VK-сообщества; VK начал принимать keyboard без `error_code=912`.
+- [ ] В VK Callback API включить event type для callback-кнопок (`message_event`) перед live-тестом callback menu mode.
 - [ ] Перевести VK control/menu responses в persisted delivery/outbox, если product/control sends должны строго попадать под invariant `Every delivery attempt is persisted`.
 - [ ] Вынести active-menu tracking из памяти `cmd/api` в persisted conversation state перед multi-instance deploy, чтобы `messages.edit` переживал рестарты и балансировку.
 - [ ] Добавить второго реального provider для fallback не только на mock: Google/Gemini image или Kling/video.

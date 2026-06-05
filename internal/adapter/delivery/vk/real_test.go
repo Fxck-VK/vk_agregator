@@ -70,6 +70,33 @@ func TestHTTPClientSendMessageWithKeyboard(t *testing.T) {
 	}
 }
 
+func TestHTTPClientSendMessageWithCallbackKeyboard(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = r.ParseForm()
+		var keyboard vkKeyboard
+		if err := json.Unmarshal([]byte(r.FormValue("keyboard")), &keyboard); err != nil {
+			t.Fatalf("keyboard json: %v", err)
+		}
+		button := keyboard.Buttons[0][0]
+		if button.Action.Type != "callback" || button.Action.Label != "Open" || button.Action.Payload != `{"command":"menu.video"}` {
+			t.Fatalf("unexpected callback button: %+v", button)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"response":12347}`))
+	}))
+	defer srv.Close()
+
+	c := NewHTTPClient(HTTPConfig{AccessToken: "tok", BaseURL: srv.URL, HTTPClient: srv.Client()})
+	if _, err := c.SendMessage(context.Background(), 42, 12, Message{
+		Text: "menu",
+		Keyboard: &Keyboard{Inline: true, Buttons: [][]KeyboardButton{{
+			{Label: "Open", Payload: `{"command":"menu.video"}`, Color: "primary", ActionType: "callback"},
+		}}},
+	}); err != nil {
+		t.Fatalf("send callback keyboard: %v", err)
+	}
+}
+
 func TestHTTPClientEditMessageWithKeyboard(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/messages.edit" {

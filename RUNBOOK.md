@@ -90,6 +90,7 @@ Override these values when needed:
 | `VK_ACCESS_TOKEN` / `VK_API_VERSION` | `` / `5.199` | Required for real VK send/upload and API-side `/start` control menu responses |
 | `VK_API_BASE_URL` | `https://api.vk.com/method` | VK API method root |
 | `VK_WELCOME_ATTACHMENT` | `` | Optional pre-uploaded VK photo/video attachment sent with `/start` menu |
+| `VK_MENU_BUTTON_MODE` | `callback` | Inline menu buttons: `callback` hides user echo messages; `text` keeps legacy text-button behavior |
 | `SIGNED_DELIVERY` / `ARTIFACT_URL_TTL` | `false` / `1h` | Deliver media through signed artifact URLs |
 | `ARTIFACT_RETENTION_DAYS` | `0` | Optional S3 lifecycle expiry |
 | `PRICES` | `` | Price overrides, e.g. `text_generate=2,image_generate=12` |
@@ -312,6 +313,12 @@ of adding new bot messages. If the user sends a plain prompt/text message, the
 active menu pointer is cleared and the next `Показать меню` or menu button sends
 a fresh menu at the bottom of the chat. If VK rejects an edit, the API falls back
 to sending a new menu message.
+By default, inline menu buttons use VK `callback` actions
+(`VK_MENU_BUTTON_MODE=callback`), so clicking `Создать видео`, `Назад`, etc.
+does not create a user message in the chat. VK Callback API must have the
+`message_event` / callback-button event type enabled. To return to the old
+behavior where button labels are sent as user messages, set
+`VK_MENU_BUTTON_MODE=text` and restart `cmd/api`.
 
 ### VK message → full pipeline
 ```bash
@@ -382,6 +389,10 @@ go test ./internal/worker/ -run TestEndToEnd -v  # full VK→…→Capture
   has sent a plain prompt/text message, after an API restart, or after an edit
   rejection from VK. Active-menu tracking is process-local in the current Beta
   implementation.
+- Callback menu buttons do nothing: enable the VK Callback API event type for
+  callback-button clicks (`message_event`) and confirm `VK_MENU_BUTTON_MODE` is
+  `callback`. If you need a quick fallback, set `VK_MENU_BUTTON_MODE=text` and
+  restart `cmd/api`.
 - Banner is absent: set `VK_WELCOME_ATTACHMENT` to an already uploaded VK
   attachment string (`photo...`, `video...`). The API does not upload the banner
   image itself yet.
