@@ -28,6 +28,21 @@ export interface CreateJobOptions {
   idempotencyKey: string;
 }
 
+/** Mirrors internal/adapter/inbound/miniapp Estimate request/response */
+export interface EstimateInput {
+  operation: string;
+  prompt: string;
+  model_id?: string;
+}
+
+export interface EstimateResponse {
+  operation: string;
+  model_id: string;
+  cost_estimate: number;
+  balance_credits: number;
+  enough_credits: boolean;
+}
+
 /** Mirrors internal/adapter/inbound/miniapp BalanceDTO */
 export interface BalanceResponse {
   balance_credits: number;
@@ -193,6 +208,13 @@ export async function createJob(input: CreateJobInput, options: CreateJobOptions
     headers: {
       "X-Idempotency-Key": options.idempotencyKey,
     },
+    body: JSON.stringify(input),
+  });
+}
+
+export async function estimateJob(input: EstimateInput): Promise<EstimateResponse> {
+  return request<EstimateResponse>("/miniapp/estimate", {
+    method: "POST",
     body: JSON.stringify(input),
   });
 }

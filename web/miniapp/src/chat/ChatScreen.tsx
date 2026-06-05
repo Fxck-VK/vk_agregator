@@ -8,6 +8,7 @@ import { modalityById, uid, type ChatMessage, type ModalityId } from "./types";
 import {
   createJob,
   createIdempotencyKey,
+  estimateJob,
   getJob,
   listJobs,
   getBalance,
@@ -17,12 +18,14 @@ import {
   apiUserMessage,
   resolveBotText,
   type Job,
+  type EstimateResponse,
 } from "../api/client";
 import { haptic, type VkUser } from "../hooks/useBridge";
 import { useChats } from "../hooks/useChats";
 
 const POLL_MS = 2000;
 const POLL_MAX = 90;
+const ESTIMATE_DEBOUNCE_MS = 450;
 
 function jobToMessages(job: Job): ChatMessage[] {
   const terminal = isTerminal(job.status);
@@ -62,6 +65,10 @@ export function ChatScreen({ user }: { user: VkUser }) {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [estimate, setEstimate] = useState<EstimateResponse | null>(null);
+  const [estimateLoading, setEstimateLoading] = useState(false);
+  const [estimateError, setEstimateError] = useState<string | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const mountedRef = useRef(true);
@@ -86,6 +93,45 @@ export function ChatScreen({ user }: { user: VkUser }) {
   const refreshBalance = useCallback(() => {
     getBalance().then(setBalance).catch(() => undefined);
   }, []);
+
+  useEffect(() => {
+    const prompt = draft.trim();
+    setEstimate(null);
+    setEstimateError(null);
+    if (!prompt) {
+      setEstimateLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    const modality = modalityById(modalityId);
+    const timer = window.setTimeout(() => {
+      setEstimateLoading(true);
+      estimateJob({ operation: modality.operation, prompt, model_id: modelId })
+        .then((data) => {
+          if (cancelled) return;
+          setEstimate(data);
+          setBalance(data.balance_credits);
+        })
+        .catch((e) => {
+          if (cancelled) return;
+          const message = apiUserMessage(e);
+          setEstimateError(
+            message === "Выбранная модель недоступна. Выберите другую модель"
+              ? message
+              : "Оценка временно недоступна. Запуск можно продолжить",
+          );
+        })
+        .finally(() => {
+          if (!cancelled) setEstimateLoading(false);
+        });
+    }, ESTIMATE_DEBOUNCE_MS);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [draft, modalityId, modelId]);
 
   const poll = useCallback(
     async (chatId: string, botMsgId: string, jobId: string) => {
@@ -320,8 +366,13 @@ export function ChatScreen({ user }: { user: VkUser }) {
         onModality={changeModality}
         modelId={modelId}
         onModel={setModelId}
+        onDraftChange={setDraft}
         onSend={handleSend}
         disabled={loading || submitting}
+        estimateCost={estimate?.cost_estimate ?? null}
+        estimateEnough={estimate?.enough_credits ?? null}
+        estimateLoading={estimateLoading}
+        estimateError={estimateError}
       />
     </div>
   );

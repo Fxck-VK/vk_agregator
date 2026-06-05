@@ -23,7 +23,9 @@ type contextKey int
 
 const ctxVKUserIDKey contextKey = iota
 
-// JobRateLimiter is the minimal limiter contract used by POST /miniapp/jobs.
+// JobRateLimiter is the minimal limiter contract used by Mini App write-like
+// endpoints after authentication. Endpoint-specific keys keep job submits and
+// estimate requests from sharing a bucket.
 type JobRateLimiter interface {
 	Allow(key string) bool
 }
@@ -36,8 +38,8 @@ type Config struct {
 	// LaunchParamsMaxAge is the maximum allowed age of the vk_ts timestamp.
 	// Zero disables the age check.
 	LaunchParamsMaxAge time.Duration
-	// JobRateLimiter bounds POST /miniapp/jobs after launch params have been
-	// verified, keyed by the verified vk_user_id.
+	// JobRateLimiter bounds POST /miniapp/jobs and POST /miniapp/estimate after
+	// launch params have been verified, keyed by the verified vk_user_id.
 	JobRateLimiter JobRateLimiter
 }
 
@@ -78,7 +80,8 @@ func NewHandler(cfg Config, deps Deps) *Handler {
 // Routes returns an http.Handler with the miniapp routes registered.
 func (h *Handler) Routes() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /miniapp/jobs", h.auth(h.rateLimitJob(h.createJob)))
+	mux.HandleFunc("POST /miniapp/estimate", h.auth(h.rateLimitMiniApp("miniapp_estimate", h.estimateJob)))
+	mux.HandleFunc("POST /miniapp/jobs", h.auth(h.rateLimitMiniApp("miniapp_job", h.createJob)))
 	mux.HandleFunc("GET /miniapp/jobs", h.auth(h.listJobs))
 	mux.HandleFunc("GET /miniapp/jobs/{id}", h.auth(h.getJob))
 	mux.HandleFunc("GET /miniapp/balance", h.auth(h.getBalance))
@@ -142,7 +145,7 @@ func vkUserIDFromCtx(ctx context.Context) (int64, bool) {
 	return v, ok && v > 0
 }
 
-func (h *Handler) rateLimitJob(next http.HandlerFunc) http.HandlerFunc {
+func (h *Handler) rateLimitMiniApp(keyPrefix string, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if h.cfg.JobRateLimiter == nil {
 			next(w, r)
@@ -153,7 +156,7 @@ func (h *Handler) rateLimitJob(next http.HandlerFunc) http.HandlerFunc {
 			writeError(w, http.StatusUnauthorized, "unauthorized")
 			return
 		}
-		if !h.cfg.JobRateLimiter.Allow("miniapp_job:" + strconv.FormatInt(vkUserID, 10)) {
+		if !h.cfg.JobRateLimiter.Allow(keyPrefix + ":" + strconv.FormatInt(vkUserID, 10)) {
 			w.Header().Set("Retry-After", "1")
 			writeError(w, http.StatusTooManyRequests, "rate limit exceeded")
 			return
@@ -238,6 +241,84 @@ func validateMiniAppModelID(op domain.OperationType, raw string) (string, bool) 
 // Handlers
 // ---------------------------------------------------------------------------
 
+func (h *Handler) readJobRequest(w http.ResponseWriter, r *http.Request) (CreateJobRequest, domain.OperationType, domain.Modality, string, bool) {
+	body, err := io.ReadAll(io.LimitReader(r.Body, 64<<10))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "cannot read body")
+		return CreateJobRequest{}, "", "", "", false
+	}
+	var req CreateJobRequest
+	if err := json.Unmarshal(body, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json")
+		return CreateJobRequest{}, "", "", "", false
+	}
+	if req.Prompt == "" {
+		writeError(w, http.StatusBadRequest, "prompt is required")
+		return CreateJobRequest{}, "", "", "", false
+	}
+
+	opType, modality, ok := operationMeta(req.Operation)
+	if !ok {
+		writeError(w, http.StatusBadRequest, "unsupported operation; allowed: text_generate, image_generate, video_generate")
+		return CreateJobRequest{}, "", "", "", false
+	}
+	modelID, ok := validateMiniAppModelID(opType, req.ModelID)
+	if !ok {
+		writeError(w, http.StatusBadRequest, "unsupported model")
+		return CreateJobRequest{}, "", "", "", false
+	}
+	return req, opType, modality, modelID, true
+}
+
+func (h *Handler) estimateJob(w http.ResponseWriter, r *http.Request) {
+	vkUserID, ok := vkUserIDFromCtx(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	_, opType, _, modelID, ok := h.readJobRequest(w, r)
+	if !ok {
+		return
+	}
+
+	cost, err := h.deps.Billing.Estimate(opType)
+	if err != nil {
+		if errors.Is(err, billingservice.ErrUnknownOperation) {
+			writeError(w, http.StatusBadRequest, "unsupported operation; allowed: text_generate, image_generate, video_generate")
+		} else {
+			writeError(w, http.StatusInternalServerError, "internal error")
+		}
+		return
+	}
+
+	balance, err := h.balanceForEstimate(r.Context(), vkUserID)
+	if err != nil {
+		h.logger.Error("miniapp: estimate balance failed", slog.String("error", err.Error()))
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, EstimateDTO{
+		Operation:      string(opType),
+		ModelID:        modelID,
+		CostEstimate:   cost,
+		BalanceCredits: balance,
+		EnoughCredits:  balance >= cost,
+	})
+}
+
+func (h *Handler) balanceForEstimate(ctx context.Context, vkUserID int64) (int64, error) {
+	user, err := h.deps.Users.GetByVKUserID(ctx, vkUserID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return h.deps.Billing.StartingBalance(), nil
+		}
+		return 0, err
+	}
+	return h.deps.Billing.BalanceForEstimate(ctx, user.ID)
+}
+
 func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 	vkUserID, ok := vkUserIDFromCtx(r.Context())
 	if !ok {
@@ -245,33 +326,8 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	body, err := io.ReadAll(io.LimitReader(r.Body, 64<<10))
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "cannot read body")
-		return
-	}
-	var req struct {
-		Operation string `json:"operation"`
-		Prompt    string `json:"prompt"`
-		ModelID   string `json:"model_id,omitempty"`
-	}
-	if err := json.Unmarshal(body, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid json")
-		return
-	}
-	if req.Prompt == "" {
-		writeError(w, http.StatusBadRequest, "prompt is required")
-		return
-	}
-
-	opType, modality, ok := operationMeta(req.Operation)
+	req, opType, modality, modelID, ok := h.readJobRequest(w, r)
 	if !ok {
-		writeError(w, http.StatusBadRequest, "unsupported operation; allowed: text_generate, image_generate, video_generate")
-		return
-	}
-	modelID, ok := validateMiniAppModelID(opType, req.ModelID)
-	if !ok {
-		writeError(w, http.StatusBadRequest, "unsupported model")
 		return
 	}
 

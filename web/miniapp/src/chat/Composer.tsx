@@ -7,15 +7,25 @@ export function Composer({
   onModality,
   modelId,
   onModel,
+  onDraftChange,
   onSend,
   disabled,
+  estimateCost,
+  estimateEnough,
+  estimateLoading,
+  estimateError,
 }: {
   modalityId: ModalityId;
   onModality: (id: ModalityId) => void;
   modelId: string;
   onModel: (id: string) => void;
+  onDraftChange: (text: string) => void;
   onSend: (text: string) => boolean;
   disabled?: boolean;
+  estimateCost?: number | null;
+  estimateEnough?: boolean | null;
+  estimateLoading?: boolean;
+  estimateError?: string | null;
 }) {
   const [text, setText] = useState("");
   const ref = useRef<HTMLTextAreaElement>(null);
@@ -29,7 +39,9 @@ export function Composer({
   }
 
   function onInput(e: ChangeEvent<HTMLTextAreaElement>) {
-    setText(e.target.value);
+    const value = e.target.value;
+    setText(value);
+    onDraftChange(value);
     grow();
   }
 
@@ -38,6 +50,7 @@ export function Composer({
     if (!value || disabled) return;
     if (!onSend(value)) return;
     setText("");
+    onDraftChange("");
     if (ref.current) ref.current.style.height = "auto";
   }
 
@@ -78,6 +91,22 @@ export function Composer({
             ))}
           </select>
         </div>
+      </div>
+      <div className="estimate-line" aria-live="polite">
+        {estimateLoading ? (
+          <span>Оценка...</span>
+        ) : estimateCost !== null && estimateCost !== undefined ? (
+          <>
+            <span>Стоимость: {estimateCost.toLocaleString("ru-RU")} кр.</span>
+            {estimateEnough === false && (
+              <span className="estimate-line__warn">Недостаточно кредитов</span>
+            )}
+          </>
+        ) : estimateError ? (
+          <span className="estimate-line__muted">{estimateError}</span>
+        ) : (
+          <span className="estimate-line__muted">Стоимость появится до запуска</span>
+        )}
       </div>
       <div className="composer__row">
         <textarea

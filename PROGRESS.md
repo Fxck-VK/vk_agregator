@@ -850,3 +850,30 @@ resume hardening.
 ### Проверки
 
 - `go test ./internal/adapter/inbound/miniapp ./internal/platform/config` — exit 0.
+
+---
+
+## PR-7 — Mini App: cost estimate before submit
+
+Статус: **завершён**.
+
+### Что сделано
+
+- Добавлен BFF endpoint `POST /miniapp/estimate` с тем же launch-param auth и
+  per-user rate limiting, что и create-job путь.
+- Endpoint принимает `operation`, `prompt`, optional `model_id`, валидирует
+  operation/model по Mini App whitelist, переиспользует
+  `billingservice.Estimate` и не создаёт job, reservation или ledger entries.
+- Ответ отдаёт только backend-owned данные: `operation`, `model_id`,
+  `cost_estimate`, `balance_credits`, `enough_credits`; provider, prompt и
+  user details не раскрываются.
+- Mini App frontend вызывает estimate с debounce при изменении prompt/model,
+  показывает стоимость до submit и предупреждение при `enough_credits=false`.
+  Если estimate временно недоступен, submit не блокируется; решение
+  зафиксировано в `DECISIONS.md`.
+
+### Проверки
+
+- `go test ./internal/adapter/inbound/miniapp ./internal/service/billingservice` — exit 0.
+- `go test ./...` — exit 0.
+- `npm run build` в `web/miniapp` — exit 0.

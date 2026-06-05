@@ -34,6 +34,16 @@ type CreateJobRequest struct {
 	ModelID string `json:"model_id,omitempty"`
 }
 
+// EstimateDTO is returned by POST /miniapp/estimate. It exposes only
+// backend-owned cost and balance information, never provider details.
+type EstimateDTO struct {
+	Operation      string `json:"operation"`
+	ModelID        string `json:"model_id"`
+	CostEstimate   int64  `json:"cost_estimate"`
+	BalanceCredits int64  `json:"balance_credits"`
+	EnoughCredits  bool   `json:"enough_credits"`
+}
+
 // JobDTO is the miniapp representation of a job.
 type JobDTO struct {
 	ID                uuid.UUID   `json:"id"`

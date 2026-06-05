@@ -139,8 +139,8 @@ func main() {
 		Billing:    billingRepo,
 	})
 
-	// Per-user rate limiting protects billable Mini App job creation after
-	// launch params have been verified by the BFF.
+	// Per-user rate limiting protects Mini App estimate and billable job
+	// creation after launch params have been verified by the BFF.
 	miniappJobLimiter := ratelimit.New(cfg.MiniAppJobRateLimitRPS, cfg.MiniAppJobRateLimitBurst)
 	miniapp := miniappapi.NewHandler(miniappapi.Config{
 		AppSecret:          cfg.VKAppSecret,

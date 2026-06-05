@@ -159,6 +159,18 @@ func newTestHandler(appSecret string) *miniappinbound.Handler {
 }
 
 func newTestHandlerWithLimiter(appSecret string, limiter interface{ Allow(string) bool }) *miniappinbound.Handler {
+	return newTestFixture(appSecret, limiter).handler
+}
+
+type testFixture struct {
+	handler     *miniappinbound.Handler
+	userRepo    *memory.UserRepo
+	jobRepo     *memory.JobRepo
+	billingRepo *memory.BillingRepo
+	billing     *billingservice.Service
+}
+
+func newTestFixture(appSecret string, limiter interface{ Allow(string) bool }) *testFixture {
 	userRepo := memory.NewUserRepo()
 	jobRepo := memory.NewJobRepo()
 	billingRepo := memory.NewBillingRepo()
@@ -168,7 +180,7 @@ func newTestHandlerWithLimiter(appSecret string, limiter interface{ Allow(string
 	billing := billingservice.New(billingRepo)
 	orch := joborchestrator.New(jobRepo, uowMgr, billing, 0)
 
-	return miniappinbound.NewHandler(
+	handler := miniappinbound.NewHandler(
 		miniappinbound.Config{
 			AppSecret:          appSecret,
 			LaunchParamsMaxAge: time.Hour,
@@ -182,6 +194,13 @@ func newTestHandlerWithLimiter(appSecret string, limiter interface{ Allow(string
 			Orchestrator: orch,
 		},
 	)
+	return &testFixture{
+		handler:     handler,
+		userRepo:    userRepo,
+		jobRepo:     jobRepo,
+		billingRepo: billingRepo,
+		billing:     billing,
+	}
 }
 
 type countingLimiter struct {
@@ -551,6 +570,159 @@ func TestHandler_GetBalance(t *testing.T) {
 	// New user gets the default starting balance.
 	if resp.BalanceCredits != billingservice.DefaultStartingBalance {
 		t.Fatalf("expected %d credits, got %d", billingservice.DefaultStartingBalance, resp.BalanceCredits)
+	}
+}
+
+func TestHandler_Estimate_OKNoJobNoReservation(t *testing.T) {
+	fixture := newTestFixture("", nil)
+	routes := fixture.handler.Routes()
+	ctx := context.Background()
+
+	user := &domain.User{VKUserID: 777, Role: domain.RoleUser, Status: domain.StatusActive}
+	if err := fixture.userRepo.Create(ctx, user); err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	acc, err := fixture.billing.EnsureAccount(ctx, user.ID)
+	if err != nil {
+		t.Fatalf("ensure account: %v", err)
+	}
+	beforeEntries, err := fixture.billingRepo.ListEntries(ctx, acc.ID, 100, 0)
+	if err != nil {
+		t.Fatalf("list entries before: %v", err)
+	}
+
+	body, _ := json.Marshal(map[string]string{
+		"operation": "image_generate",
+		"prompt":    "estimate prompt",
+		"model_id":  "sdxl",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/miniapp/estimate", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Launch-Params", devLaunchParams(777))
+
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		Operation      string `json:"operation"`
+		ModelID        string `json:"model_id"`
+		CostEstimate   int64  `json:"cost_estimate"`
+		BalanceCredits int64  `json:"balance_credits"`
+		EnoughCredits  bool   `json:"enough_credits"`
+		Provider       string `json:"provider"`
+		Prompt         string `json:"prompt"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("invalid response json: %v", err)
+	}
+	if resp.Operation != "image_generate" || resp.ModelID != "sdxl" {
+		t.Fatalf("unexpected operation/model response: %+v", resp)
+	}
+	if resp.CostEstimate != 10 {
+		t.Fatalf("cost_estimate = %d, want 10", resp.CostEstimate)
+	}
+	if resp.BalanceCredits != billingservice.DefaultStartingBalance || !resp.EnoughCredits {
+		t.Fatalf("balance/enough = %d/%v, want %d/true", resp.BalanceCredits, resp.EnoughCredits, billingservice.DefaultStartingBalance)
+	}
+	if resp.Provider != "" || resp.Prompt != "" {
+		t.Fatalf("estimate response leaked provider/prompt fields: %s", w.Body.String())
+	}
+
+	jobs, err := fixture.jobRepo.ListByUser(ctx, user.ID, 10, 0)
+	if err != nil {
+		t.Fatalf("list jobs after estimate: %v", err)
+	}
+	if len(jobs) != 0 {
+		t.Fatalf("estimate must not create jobs, got %d", len(jobs))
+	}
+	afterEntries, err := fixture.billingRepo.ListEntries(ctx, acc.ID, 100, 0)
+	if err != nil {
+		t.Fatalf("list entries after: %v", err)
+	}
+	if len(afterEntries) != len(beforeEntries) {
+		t.Fatalf("estimate must not create reservations or ledger entries, before=%d after=%d", len(beforeEntries), len(afterEntries))
+	}
+}
+
+func TestHandler_Estimate_RejectsUnsupportedModelID(t *testing.T) {
+	routes := newTestHandler("").Routes()
+
+	body, _ := json.Marshal(map[string]string{
+		"operation": "text_generate",
+		"prompt":    "estimate prompt",
+		"model_id":  "kling",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/miniapp/estimate", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Launch-Params", devLaunchParams(777))
+
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+	var errResp map[string]string
+	if err := json.Unmarshal(w.Body.Bytes(), &errResp); err != nil {
+		t.Fatalf("invalid error response json: %v", err)
+	}
+	if errResp["error"] != "unsupported model" {
+		t.Fatalf("unexpected error body: %s", w.Body.String())
+	}
+}
+
+func TestHandler_Estimate_UnauthorizedNoParams(t *testing.T) {
+	routes := newTestHandler("real-secret").Routes()
+
+	body, _ := json.Marshal(map[string]string{
+		"operation": "text_generate",
+		"prompt":    "estimate prompt",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/miniapp/estimate", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, req)
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestHandler_Estimate_RateLimitByVerifiedUserID(t *testing.T) {
+	limiter := &countingLimiter{burst: 1}
+	routes := newTestHandlerWithLimiter("", limiter).Routes()
+
+	body, _ := json.Marshal(map[string]string{
+		"operation": "text_generate",
+		"prompt":    "estimate prompt",
+	})
+	makeReq := func(vkUserID int64) *http.Request {
+		req := httptest.NewRequest(http.MethodPost, "/miniapp/estimate", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Launch-Params", devLaunchParams(vkUserID))
+		return req
+	}
+
+	w1 := httptest.NewRecorder()
+	routes.ServeHTTP(w1, makeReq(777))
+	if w1.Code != http.StatusOK {
+		t.Fatalf("first user request: expected 200, got %d: %s", w1.Code, w1.Body.String())
+	}
+
+	w2 := httptest.NewRecorder()
+	routes.ServeHTTP(w2, makeReq(777))
+	if w2.Code != http.StatusTooManyRequests {
+		t.Fatalf("second same-user request: expected 429, got %d: %s", w2.Code, w2.Body.String())
+	}
+
+	w3 := httptest.NewRecorder()
+	routes.ServeHTTP(w3, makeReq(888))
+	if w3.Code != http.StatusOK {
+		t.Fatalf("different user request: expected 200, got %d: %s", w3.Code, w3.Body.String())
+	}
+	if limiter.counts["miniapp_estimate:777"] != 2 || limiter.counts["miniapp_estimate:888"] != 1 {
+		t.Fatalf("limiter keys = %#v, want estimate keys by verified vk_user_id", limiter.counts)
 	}
 }
 

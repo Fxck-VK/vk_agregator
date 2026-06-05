@@ -186,6 +186,9 @@ body {
 .model-select { position: relative; flex: 0 0 auto; }
 .model-select select { appearance: none; font: inherit; font-size: 13px; font-weight: 600; color: var(--fg); background: var(--surface-2); border: 1px solid var(--line); border-radius: 999px; padding: 7px 28px 7px 12px; cursor: pointer; max-width: 160px; }
 .model-select::after { content: "▾"; position: absolute; right: 12px; top: 50%; transform: translateY(-50%); pointer-events: none; color: var(--fg-muted); font-size: 11px; }
+.estimate-line { min-height: 18px; display: flex; gap: 8px; align-items: center; justify-content: space-between; margin: 0 2px 8px; color: var(--fg-muted); font-size: 12px; font-weight: 600; }
+.estimate-line__warn { color: var(--fg); }
+.estimate-line__muted { color: var(--fg-muted); font-weight: 500; }
 
 /* ——— Шторка истории чатов ——— */
 .icon-btn { appearance: none; border: 0; background: transparent; color: var(--fg); cursor: pointer; font-size: 20px; line-height: 1; padding: 4px; }
