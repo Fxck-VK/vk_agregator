@@ -272,6 +272,110 @@ func TestVideoMenuButtonSendsModelPickerNoJob(t *testing.T) {
 	}
 }
 
+func TestPhotoMenuButtonSendsInstructionNoJob(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	h := newHarnessWithControl(control)
+	body := `{
+		"type":"message_new","group_id":1,"event_id":"evt-photo-menu","secret":"s3cr3t",
+		"object":{"message":{"from_id":562,"peer_id":562,"text":"🖼️ Создать фото","payload":"{\"command\":\"menu.image\"}"}}
+	}`
+	rec := h.post(body)
+	if rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	ctx := context.Background()
+	user, err := h.users.GetByVKUserID(ctx, 562)
+	if err != nil {
+		t.Fatalf("user not created: %v", err)
+	}
+	cmds, _ := h.cmds.ListByUser(ctx, user.ID, 10, 0)
+	if len(cmds) != 1 || cmds[0].Type != domain.CommandMenuImage {
+		t.Fatalf("unexpected commands: %+v", cmds)
+	}
+	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
+	if len(jobs) != 0 {
+		t.Fatalf("photo menu must not create a job, got %d", len(jobs))
+	}
+	sent := control.Sent()
+	if len(sent) != 1 {
+		t.Fatalf("expected one photo instruction message, got %+v", sent)
+	}
+	for _, want := range []string{
+		"У вас есть 1 бесплатная попытка",
+		"Генерация фото по тексту",
+		"Фото по тексту",
+		"Фото с референсом",
+		"⬅️ Назад",
+	} {
+		if !strings.Contains(sent[0].Text+sent[0].Keyboard, want) {
+			t.Fatalf("expected %q in photo response: text=%q keyboard=%q", want, sent[0].Text, sent[0].Keyboard)
+		}
+	}
+}
+
+func TestPhotoModeButtonIsControlCommandNoJob(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	h := newHarnessWithControl(control)
+	body := `{
+		"type":"message_new","group_id":1,"event_id":"evt-photo-mode","secret":"s3cr3t",
+		"object":{"message":{"from_id":563,"peer_id":563,"text":"▶️ Фото по тексту","payload":"{\"command\":\"menu.image.text\"}"}}
+	}`
+	rec := h.post(body)
+	if rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	ctx := context.Background()
+	user, err := h.users.GetByVKUserID(ctx, 563)
+	if err != nil {
+		t.Fatalf("user not created: %v", err)
+	}
+	cmds, _ := h.cmds.ListByUser(ctx, user.ID, 10, 0)
+	if len(cmds) != 1 || cmds[0].Type != domain.CommandMenuImageText {
+		t.Fatalf("unexpected commands: %+v", cmds)
+	}
+	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
+	if len(jobs) != 0 {
+		t.Fatalf("photo mode selection must not create a job, got %d", len(jobs))
+	}
+	sent := control.Sent()
+	if len(sent) != 1 || !strings.Contains(sent[0].Text, "Генерация фото по тексту выбрана") {
+		t.Fatalf("unexpected photo mode response: %+v", sent)
+	}
+}
+
+func TestGPTMenuButtonSendsActivePromptNoJob(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	h := newHarnessWithControl(control)
+	body := `{
+		"type":"message_new","group_id":1,"event_id":"evt-gpt-menu","secret":"s3cr3t",
+		"object":{"message":{"from_id":564,"peer_id":564,"text":"💬 Спросить у GPT","payload":"{\"command\":\"menu.text\"}"}}
+	}`
+	rec := h.post(body)
+	if rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	ctx := context.Background()
+	user, err := h.users.GetByVKUserID(ctx, 564)
+	if err != nil {
+		t.Fatalf("user not created: %v", err)
+	}
+	cmds, _ := h.cmds.ListByUser(ctx, user.ID, 10, 0)
+	if len(cmds) != 1 || cmds[0].Type != domain.CommandMenuText {
+		t.Fatalf("unexpected commands: %+v", cmds)
+	}
+	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
+	if len(jobs) != 0 {
+		t.Fatalf("gpt menu must not create a job, got %d", len(jobs))
+	}
+	sent := control.Sent()
+	if len(sent) != 1 || !strings.Contains(sent[0].Text, "SUPER GPT активен") || !strings.Contains(sent[0].Keyboard, "⬅️ Назад") {
+		t.Fatalf("unexpected gpt response: %+v", sent)
+	}
+}
+
 func TestVideoModelButtonIsControlCommandNoJob(t *testing.T) {
 	control := vkdelivery.NewMockClient()
 	h := newHarnessWithControl(control)

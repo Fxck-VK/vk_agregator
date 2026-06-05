@@ -10,6 +10,101 @@ import (
 	"vk-ai-aggregator/internal/domain"
 )
 
+type menuScreen struct {
+	text                     func(balance int64) string
+	keyboard                 func() *vkdelivery.Keyboard
+	includeWelcomeAttachment bool
+	needsBalance             bool
+}
+
+var menuScreens = map[domain.CommandType]menuScreen{
+	domain.CommandStart: {
+		text:                     welcomeText,
+		keyboard:                 welcomeKeyboard,
+		includeWelcomeAttachment: true,
+		needsBalance:             true,
+	},
+	domain.CommandShowMenu: {
+		text:                     welcomeText,
+		keyboard:                 welcomeKeyboard,
+		includeWelcomeAttachment: true,
+		needsBalance:             true,
+	},
+	domain.CommandHelp: {
+		text:                     welcomeText,
+		keyboard:                 welcomeKeyboard,
+		includeWelcomeAttachment: true,
+		needsBalance:             true,
+	},
+	domain.CommandBalance: {
+		text:         accountText,
+		keyboard:     accountKeyboard,
+		needsBalance: true,
+	},
+	domain.CommandAccount: {
+		text:         accountText,
+		keyboard:     accountKeyboard,
+		needsBalance: true,
+	},
+	domain.CommandTopUp: {
+		text:     fixedText(topUpText),
+		keyboard: backKeyboard,
+	},
+	domain.CommandMenuText: {
+		text:     fixedText(gptActiveText),
+		keyboard: backKeyboard,
+	},
+	domain.CommandMenuImage: {
+		text:     fixedText(photoIntroText),
+		keyboard: photoModeKeyboard,
+	},
+	domain.CommandMenuImageText: {
+		text:     fixedText(photoTextModeText),
+		keyboard: photoModeKeyboard,
+	},
+	domain.CommandMenuImageReference: {
+		text:     fixedText(photoReferenceModeText),
+		keyboard: photoModeKeyboard,
+	},
+	domain.CommandMenuVideo: {
+		text:     fixedText("Выбери модель для генерации:"),
+		keyboard: videoModelKeyboard,
+	},
+	domain.CommandMenuVideoSora2: {
+		text:     fixedText("Sora 2 выбрана.\n\nОтправьте описание видео командой /video. Выбор конкретной модели будет подключен в следующем шаге."),
+		keyboard: videoModelKeyboard,
+	},
+	domain.CommandMenuVideoKling21: {
+		text:     fixedText("Kling v2.1 выбрана.\n\nОтправьте описание видео командой /video. Выбор конкретной модели будет подключен в следующем шаге."),
+		keyboard: videoModelKeyboard,
+	},
+	domain.CommandMenuVideoSeedance1: {
+		text:     fixedText("Seedance 1 выбрана.\n\nОтправьте описание видео командой /video. Выбор конкретной модели будет подключен в следующем шаге."),
+		keyboard: videoModelKeyboard,
+	},
+	domain.CommandMenuVideoHaiuo02: {
+		text:     fixedText("Haiuo v0.2 выбрана.\n\nОтправьте описание видео командой /video. Выбор конкретной модели будет подключен в следующем шаге."),
+		keyboard: videoModelKeyboard,
+	},
+	domain.CommandMenuStudents: {
+		text:     fixedText(studentsText),
+		keyboard: backKeyboard,
+	},
+}
+
+const (
+	gptActiveText = "🤖 SUPER GPT активен!\n\nЯ готов ответить на любые вопросы и помочь с идеями\nСпроси что-нибудь прямо сейчас!"
+
+	photoIntroText = "✅ У вас есть 1 бесплатная попытка в сутки на генерацию с текстом.\n\n▶️ Генерация фото по тексту – это когда ты пишешь, что хочешь увидеть (например, \"кот в очках на пляже\"), а ИИ сам «придумывает» и рисует такую картинку. (1 бесплатно)\n\n📸Генерация фото по тексту и фото (с референсом) – ИИ использует твою фотографию как образец — он сохраняет стиль, позу, цвета, но уже с новым содержанием по твоему описанию. (Только платные)"
+
+	photoTextModeText      = "▶️ Генерация фото по тексту выбрана.\n\nОпишите, что хотите увидеть, командой /image.\n\nПример:\n/image кот в очках на пляже"
+	photoReferenceModeText = "📸 Генерация фото с референсом пока будет подключена после входящих фото-артефактов.\n\nСейчас доступна генерация по тексту через /image."
+
+	studentsText = "🎁 Студентам и школьникам\n\nМожно просить объяснить тему, составить план, проверить текст или подготовить конспект. Просто напишите задачу обычным сообщением."
+
+	topUpText = "💰 Пополнить баланс\n\nПополнение будет подключено отдельным платежным потоком. Пока для тестирования доступны стартовые кредиты."
+)
+
 func controlTypeFromPayload(payload string) (domain.CommandType, bool) {
 	if payload == "" {
 		return "", false
@@ -20,44 +115,25 @@ func controlTypeFromPayload(payload string) (domain.CommandType, bool) {
 	if err := json.Unmarshal([]byte(payload), &data); err != nil {
 		return "", false
 	}
-	switch domain.CommandType(data.Command) {
-	case domain.CommandStart,
-		domain.CommandShowMenu,
-		domain.CommandAccount,
-		domain.CommandTopUp,
-		domain.CommandMenuText,
-		domain.CommandMenuImage,
-		domain.CommandMenuVideo,
-		domain.CommandMenuVideoSora2,
-		domain.CommandMenuVideoKling21,
-		domain.CommandMenuVideoSeedance1,
-		domain.CommandMenuVideoHaiuo02,
-		domain.CommandMenuStudents:
-		return domain.CommandType(data.Command), true
-	default:
+	t := domain.CommandType(data.Command)
+	if !isMenuCommand(t) {
 		return "", false
 	}
+	return t, true
 }
 
 func shouldSendControlResponse(t domain.CommandType) bool {
-	switch t {
-	case domain.CommandStart,
-		domain.CommandShowMenu,
-		domain.CommandHelp,
-		domain.CommandBalance,
-		domain.CommandAccount,
-		domain.CommandTopUp,
-		domain.CommandMenuText,
-		domain.CommandMenuImage,
-		domain.CommandMenuVideo,
-		domain.CommandMenuVideoSora2,
-		domain.CommandMenuVideoKling21,
-		domain.CommandMenuVideoSeedance1,
-		domain.CommandMenuVideoHaiuo02,
-		domain.CommandMenuStudents:
-		return true
-	default:
-		return false
+	return isMenuCommand(t)
+}
+
+func isMenuCommand(t domain.CommandType) bool {
+	_, ok := menuScreens[t]
+	return ok
+}
+
+func fixedText(text string) func(int64) string {
+	return func(int64) string {
+		return text
 	}
 }
 
@@ -74,8 +150,13 @@ func (h *Handler) sendControlResponse(ctx context.Context, t domain.CommandType,
 		}
 	}
 
+	screen, ok := menuScreens[t]
+	if !ok {
+		screen = menuScreens[domain.CommandShowMenu]
+	}
+
 	balance := int64(0)
-	if t == domain.CommandStart || t == domain.CommandShowMenu || t == domain.CommandHelp || t == domain.CommandBalance || t == domain.CommandAccount {
+	if screen.needsBalance {
 		acc, err := h.deps.Billing.EnsureAccount(ctx, user.ID)
 		if err != nil {
 			return fmt.Errorf("ensure billing account: %w", err)
@@ -84,10 +165,10 @@ func (h *Handler) sendControlResponse(ctx context.Context, t domain.CommandType,
 	}
 
 	msg := vkdelivery.Message{
-		Text:     controlResponseText(t, balance),
-		Keyboard: controlResponseKeyboard(t),
+		Text:     screen.text(balance),
+		Keyboard: screen.keyboard(),
 	}
-	if t == domain.CommandStart || t == domain.CommandShowMenu || t == domain.CommandHelp {
+	if screen.includeWelcomeAttachment {
 		msg.Attachment = h.cfg.WelcomeAttachment
 	}
 	randomID := vkdelivery.DeterministicRandomID("vk_control:" + idemKey + ":" + string(t))
@@ -125,62 +206,12 @@ func (h *Handler) sendPersistentMenuButton(ctx context.Context, idemKey string, 
 	return err
 }
 
-func controlResponseText(t domain.CommandType, balance int64) string {
-	switch t {
-	case domain.CommandStart, domain.CommandShowMenu, domain.CommandHelp:
-		return welcomeText(balance)
-	case domain.CommandBalance, domain.CommandAccount:
-		return fmt.Sprintf("👤 Мой аккаунт\n\nВаш баланс: %d 💎\n\nВыберите действие:", balance)
-	case domain.CommandMenuVideo:
-		return "Выбери модель для генерации:"
-	case domain.CommandMenuVideoSora2,
-		domain.CommandMenuVideoKling21,
-		domain.CommandMenuVideoSeedance1,
-		domain.CommandMenuVideoHaiuo02:
-		return videoModelSelectedText(t)
-	case domain.CommandMenuImage:
-		return "🖼️ Создать фото\n\nОтправьте описание после команды /image.\n\nПример:\n/image футуристичный аватар для VK, мягкий свет, детально"
-	case domain.CommandMenuText:
-		return "💬 Спросить у GPT\n\nНапишите вопрос обычным сообщением.\n\nПример:\nНапиши короткий пост для VK о запуске нового продукта"
-	case domain.CommandMenuStudents:
-		return "🎁 Студентам и школьникам\n\nМожно просить объяснить тему, составить план, проверить текст или подготовить конспект. Просто напишите задачу обычным сообщением."
-	case domain.CommandTopUp:
-		return "💰 Пополнить баланс\n\nПополнение будет подключено отдельным платежным потоком. Пока для тестирования доступны стартовые кредиты."
-	default:
-		return welcomeText(balance)
-	}
-}
-
-func controlResponseKeyboard(t domain.CommandType) *vkdelivery.Keyboard {
-	switch t {
-	case domain.CommandMenuVideo,
-		domain.CommandMenuVideoSora2,
-		domain.CommandMenuVideoKling21,
-		domain.CommandMenuVideoSeedance1,
-		domain.CommandMenuVideoHaiuo02:
-		return videoModelKeyboard()
-	default:
-		return welcomeKeyboard()
-	}
-}
-
-func videoModelSelectedText(t domain.CommandType) string {
-	switch t {
-	case domain.CommandMenuVideoSora2:
-		return "Sora 2 выбрана.\n\nОтправьте описание видео командой /video. Выбор конкретной модели будет подключен в следующем шаге."
-	case domain.CommandMenuVideoKling21:
-		return "Kling v2.1 выбрана.\n\nОтправьте описание видео командой /video. Выбор конкретной модели будет подключен в следующем шаге."
-	case domain.CommandMenuVideoSeedance1:
-		return "Seedance 1 выбрана.\n\nОтправьте описание видео командой /video. Выбор конкретной модели будет подключен в следующем шаге."
-	case domain.CommandMenuVideoHaiuo02:
-		return "Haiuo v0.2 выбрана.\n\nОтправьте описание видео командой /video. Выбор конкретной модели будет подключен в следующем шаге."
-	default:
-		return "Выбери модель для генерации:"
-	}
-}
-
 func welcomeText(balance int64) string {
 	return fmt.Sprintf("👋 Добро пожаловать в Super GPT!\n\n🤖 Здесь вы можете создавать уникальные тексты, генерировать изображения и видео с помощью нейросетей!\n\nВаш баланс: %d 💎\n🎁 Вам доступна одна бесплатная генерация\n\n📌 Совет: Закрепляй бота и используй промты, которые мы оставили в каждой генеративной модели.", balance)
+}
+
+func accountText(balance int64) string {
+	return fmt.Sprintf("👤 Мой аккаунт\n\nВаш баланс: %d 💎\n\nВыберите действие:", balance)
 }
 
 func welcomeKeyboard() *vkdelivery.Keyboard {
@@ -224,6 +255,51 @@ func videoModelKeyboard() *vkdelivery.Keyboard {
 			},
 			{
 				button("Haiuo v0.2 — видео текст+фото", domain.CommandMenuVideoHaiuo02, "secondary"),
+			},
+			{
+				button("⬅️ Назад", domain.CommandShowMenu, "secondary"),
+			},
+		},
+	}
+}
+
+func photoModeKeyboard() *vkdelivery.Keyboard {
+	return &vkdelivery.Keyboard{
+		OneTime: false,
+		Inline:  true,
+		Buttons: [][]vkdelivery.KeyboardButton{
+			{
+				button("▶️ Фото по тексту", domain.CommandMenuImageText, "primary"),
+			},
+			{
+				button("📸 Фото с референсом", domain.CommandMenuImageReference, "secondary"),
+			},
+			{
+				button("⬅️ Назад", domain.CommandShowMenu, "secondary"),
+			},
+		},
+	}
+}
+
+func backKeyboard() *vkdelivery.Keyboard {
+	return &vkdelivery.Keyboard{
+		OneTime: false,
+		Inline:  true,
+		Buttons: [][]vkdelivery.KeyboardButton{
+			{
+				button("⬅️ Назад", domain.CommandShowMenu, "secondary"),
+			},
+		},
+	}
+}
+
+func accountKeyboard() *vkdelivery.Keyboard {
+	return &vkdelivery.Keyboard{
+		OneTime: false,
+		Inline:  true,
+		Buttons: [][]vkdelivery.KeyboardButton{
+			{
+				button("💰 Пополнить баланс", domain.CommandTopUp, "positive"),
 			},
 			{
 				button("⬅️ Назад", domain.CommandShowMenu, "secondary"),

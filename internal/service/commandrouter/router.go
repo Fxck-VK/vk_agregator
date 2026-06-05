@@ -65,6 +65,10 @@ func (r *Router) Parse(rawText string) Result {
 		return Result{Type: domain.CommandShowMenu}
 	case "🖼️ создать фото", "🖼 создать фото", "создать фото", "создать изображение":
 		return Result{Type: domain.CommandMenuImage}
+	case "▶️ фото по тексту", "▶ фото по тексту", "фото по тексту":
+		return Result{Type: domain.CommandMenuImageText}
+	case "📸 фото с референсом", "фото с референсом", "фото по тексту и фото":
+		return Result{Type: domain.CommandMenuImageReference}
 	case "💬 спросить у gpt", "спросить у gpt", "задать вопрос":
 		return Result{Type: domain.CommandMenuText}
 	case "🎁 студентам и школьникам", "студентам и школьникам":

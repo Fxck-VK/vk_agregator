@@ -44,6 +44,10 @@ Real integrations are implemented at adapter level and remain **opt-in**:
 - The VK `Создать видео` menu button opens a model picker (`Sora 2`,
   `Kling v2.1`, `Seedance 1`, `Haiuo v0.2`) with a `Назад` control; model
   buttons are control-only until model-specific generation state is wired.
+- VK menu screens are described through a small declarative registry. `Создать
+  фото` skips model selection when only one main image model is available and
+  opens the text/reference photo instruction screen directly; `Спросить у GPT`
+  opens the active GPT prompt screen.
 - `MODERATION_PROVIDER=openai` enables OpenAI output moderation.
 - `ARTIFACT_SCANNER=openai` enables OpenAI text/image artifact scanning before
   storage. Video scanning/transcoding is still part of the future media

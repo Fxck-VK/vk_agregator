@@ -438,12 +438,15 @@
   - handler синтезирует text prompt с `sticker_id/product_id`, поэтому стикер проходит через обычный `InboundEvent -> Command -> Job` flow;
   - фото/видео/аудио attachments остаются задачей полноценного input Artifact pipeline.
 - **VK product menu**:
+  - menu flow переведен на декларативный `menuScreen` registry: каждый control-command указывает текст, inline keyboard, необходимость баланса и optional welcome attachment;
   - первичная нижняя VK keyboard содержит только одну кнопку `Старт`;
   - после нажатия `Старт` бот заменяет нижнюю постоянную клавиатуру на одну кнопку `Показать меню`;
   - `Показать меню` хранится как отдельный `show_menu` control-command и открывает VK inline keyboard под welcome-сообщением без повторной переустановки нижней клавиатуры;
   - `Старт`, `/start`, `меню` и `начать` открывают VK inline keyboard под welcome-сообщением в стиле Super GPT;
   - `Создать видео` теперь открывает отдельный inline-экран `Выбери модель для генерации:` с моделями `Sora 2`, `Kling v2.1`, `Seedance 1`, `Haiuo v0.2` и кнопкой `Назад`;
   - кнопки выбора video-модели записываются как control commands и не создают billable jobs до подключения model-specific generation state;
+  - `Создать фото` при одной основной модели пропускает выбор модели и сразу показывает инструкцию по `Фото по тексту` / `Фото с референсом` с кнопками режимов и `Назад`;
+  - `Спросить у GPT` открывает active-сообщение `SUPER GPT активен` без создания job; следующий обычный текст пользователя уже проходит через обычный text.ask flow;
   - `vkdelivery.HTTPClient` получил `SendMessage` с `keyboard` JSON, поэтому VK API по-прежнему вызывается только из `internal/adapter/delivery/vk`;
   - кнопки `Создать видео`, `Создать фото`, `Спросить у GPT`, `Студентам и школьникам`, `Мой аккаунт`, `Пополнить баланс` классифицируются как control commands и не создают пустые billable jobs;
   - баланс в меню берется через `billingservice.EnsureAccount`, без прямой мутации баланса;

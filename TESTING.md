@@ -165,6 +165,11 @@ pre-uploaded VK banner attachment.
 Clicking `🎬 Создать видео` should return `Выбери модель для генерации:` with
 `Sora 2`, `Kling v2.1`, `Seedance 1`, `Haiuo v0.2`, and `⬅️ Назад`; these
 button presses are control commands and should not enqueue jobs.
+Clicking `🖼️ Создать фото` should return the daily-free-attempt photo
+instruction screen directly with `Фото по тексту`, `Фото с референсом`, and
+`⬅️ Назад`; these mode buttons are also control commands. Clicking
+`💬 Спросить у GPT` should return `SUPER GPT активен` and wait for the next
+plain user message.
 
 Image / video jobs (slash commands):
 

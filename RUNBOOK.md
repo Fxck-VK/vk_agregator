@@ -297,6 +297,11 @@ banner image.
 Clicking `🎬 Создать видео` opens the video model picker with `Sora 2`,
 `Kling v2.1`, `Seedance 1`, `Haiuo v0.2`, and `⬅️ Назад`. These model buttons
 are control-only for now and must not create billable jobs.
+Clicking `🖼️ Создать фото` opens the photo instruction screen directly because
+there is one main image model in the VK UX. It shows `Фото по тексту`,
+`Фото с референсом`, and `⬅️ Назад`; those mode buttons are control-only until
+stateful image mode selection is wired. Clicking `💬 Спросить у GPT` sends the
+`SUPER GPT активен` prompt screen and also does not enqueue a job.
 
 ### VK message → full pipeline
 ```bash

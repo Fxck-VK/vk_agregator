@@ -40,6 +40,10 @@ const (
 	CommandMenuText CommandType = "menu.text"
 	// CommandMenuImage explains how to generate an image.
 	CommandMenuImage CommandType = "menu.image"
+	// CommandMenuImageText selects text-to-image mode in the VK image menu.
+	CommandMenuImageText CommandType = "menu.image.text"
+	// CommandMenuImageReference selects image generation with a reference photo.
+	CommandMenuImageReference CommandType = "menu.image.reference"
 	// CommandMenuVideo explains how to generate a video.
 	CommandMenuVideo CommandType = "menu.video"
 	// CommandMenuVideoSora2 selects Sora 2 in the VK video model picker.
@@ -79,6 +83,8 @@ func (c CommandType) Valid() bool {
 		CommandTopUp,
 		CommandMenuText,
 		CommandMenuImage,
+		CommandMenuImageText,
+		CommandMenuImageReference,
 		CommandMenuVideo,
 		CommandMenuVideoSora2,
 		CommandMenuVideoKling21,
