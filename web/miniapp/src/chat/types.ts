@@ -61,6 +61,10 @@ export function modalityById(id: ModalityId): ModalityDef {
   return MODALITIES.find((m) => m.id === id) ?? MODALITIES[0];
 }
 
+export function modalityByOperation(operation: string): ModalityDef {
+  return MODALITIES.find((m) => m.operation === operation) ?? MODALITIES[0];
+}
+
 export interface Chat {
   id: string;
   title: string;

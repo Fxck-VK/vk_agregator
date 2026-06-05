@@ -45,8 +45,8 @@ export function ResultCard({ msg, prompt, onRetry }: ResultCardProps) {
     <article className={"result-card" + (failed ? " result-card--error" : "")}>
       <header className="result-card__head">
         <div>
-          <span className="result-card__eyebrow">Готовый VK-пост</span>
-          <h2 className="result-card__title">Результат генерации</h2>
+          <span className="result-card__eyebrow">VK post preview</span>
+          <h2 className="result-card__title">Готовый VK-пост</h2>
         </div>
         <span className="result-card__status">{safeStatus(msg)}</span>
       </header>
@@ -68,53 +68,50 @@ export function ResultCard({ msg, prompt, onRetry }: ResultCardProps) {
         </div>
       )}
 
-      {showResult && msg.operation === "text_generate" && (
-        text ? (
-          <div className="result-card__text">{text}</div>
-        ) : (
-          <div className="result-card__fallback">
-            <p>Текст результата недоступен.</p>
-            <button type="button" className="result-card__btn" onClick={onRetry} disabled={!prompt}>
-              Повторить
-            </button>
+      {showResult && (
+        <div className="vk-preview">
+          <div className="vk-preview__meta">
+            <span className="vk-preview__avatar">НХ</span>
+            <div>
+              <strong>НейроХаб</strong>
+              <small>сейчас</small>
+            </div>
           </div>
-        )
-      )}
 
-      {showResult && msg.operation === "image_generate" && (
-        mediaSrc && !mediaFailed ? (
-          <img
-            className="result-card__media"
-            src={mediaSrc}
-            alt="Готовый результат"
-            onError={() => setMediaFailed(true)}
-          />
-        ) : (
-          <div className="result-card__fallback">
-            <p>Изображение недоступно.</p>
-            <button type="button" className="result-card__btn" onClick={onRetry} disabled={!prompt}>
-              Повторить
-            </button>
-          </div>
-        )
-      )}
+          {msg.operation === "text_generate" && (
+            text ? (
+              <div className="vk-preview__text">{text}</div>
+            ) : (
+              <UnavailableResult label="Текст результата недоступен." onRetry={onRetry} prompt={prompt} />
+            )
+          )}
 
-      {showResult && msg.operation === "video_generate" && (
-        mediaSrc && !mediaFailed ? (
-          <video
-            className="result-card__media"
-            src={mediaSrc}
-            controls
-            onError={() => setMediaFailed(true)}
-          />
-        ) : (
-          <div className="result-card__fallback">
-            <p>Видео недоступно.</p>
-            <button type="button" className="result-card__btn" onClick={onRetry} disabled={!prompt}>
-              Повторить
-            </button>
-          </div>
-        )
+          {msg.operation === "image_generate" && (
+            mediaSrc && !mediaFailed ? (
+              <img
+                className="vk-preview__media"
+                src={mediaSrc}
+                alt="Готовый результат"
+                onError={() => setMediaFailed(true)}
+              />
+            ) : (
+              <UnavailableResult label="Изображение недоступно." onRetry={onRetry} prompt={prompt} />
+            )
+          )}
+
+          {msg.operation === "video_generate" && (
+            mediaSrc && !mediaFailed ? (
+              <video
+                className="vk-preview__media"
+                src={mediaSrc}
+                controls
+                onError={() => setMediaFailed(true)}
+              />
+            ) : (
+              <UnavailableResult label="Видео недоступно." onRetry={onRetry} prompt={prompt} />
+            )
+          )}
+        </div>
       )}
 
       {showResult && msg.operation !== "text_generate" && msg.operation !== "image_generate" && msg.operation !== "video_generate" && (
@@ -136,5 +133,16 @@ export function ResultCard({ msg, prompt, onRetry }: ResultCardProps) {
         </footer>
       )}
     </article>
+  );
+}
+
+function UnavailableResult({ label, onRetry, prompt }: { label: string; onRetry: () => void; prompt: string }) {
+  return (
+    <div className="result-card__fallback">
+      <p>{label}</p>
+      <button type="button" className="result-card__btn" onClick={onRetry} disabled={!prompt}>
+        Повторить
+      </button>
+    </div>
   );
 }

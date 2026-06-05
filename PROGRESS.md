@@ -932,3 +932,35 @@ resume hardening.
 - Поиск localStorage/sensitive/XSS patterns in Mini App frontend scope reviewed:
   persisted history contains only allowed metadata and no raw HTML rendering was
   added.
+
+---
+
+## PR-10 - Mini App: workflow and chat mode redesign
+
+Статус: **завершён**.
+
+### Что сделано
+
+- Добавлен явный переключатель режимов `Chat` / `Workflow`; выбранный режим
+  хранится как UI preference `vk_miniapp_mode_v1`, не влияет на billing/job
+  semantics и не останавливает polling активных jobs.
+- Chat mode сохраняет текущий chat-like UX: drawer истории, composer,
+  idempotent `createJob`, backend estimate в composer и безопасный render
+  результата через `ResultCard`.
+- Workflow mode реализует экраны `Home`, `Generate`, `Status`, `Result`,
+  `History`: backend balance, быстрые сценарии, model/operation selector,
+  backend estimate перед submit, timeline статусов, VK post preview и история
+  jobs из backend.
+- `ResultCard` переведён в VK-post-preview: аватар/имя сообщества, plain-text
+  текст или media только через backend artifact route, copy/retry и safe
+  fallback без `innerHTML`.
+- Theme CSS получил design tokens для spacing/radius/color/motion, light/dark
+  через переменные, semantic colors, touch targets и reduced-motion fallback.
+- ADR mode switching и ADR design direction зафиксированы в `DECISIONS.md`.
+
+### Проверки
+
+- `npm run build` в `web/miniapp` — exit 0.
+- `go build ./...` — exit 0.
+- Поиск `dangerouslySetInnerHTML`, `innerHTML`, `eval`, `new Function`,
+  sensitive/localStorage patterns в Mini App frontend scope reviewed.

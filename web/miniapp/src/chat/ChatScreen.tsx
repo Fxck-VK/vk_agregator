@@ -5,7 +5,9 @@ import { MessageBubble } from "./MessageBubble";
 import { Composer } from "./Composer";
 import { ChatList } from "./ChatList";
 import { ResultCard } from "../components/ResultCard";
+import { WorkflowMode } from "../workflow/WorkflowMode";
 import { modalityById, uid, type Chat, type ChatMessage, type ModalityId } from "./types";
+import { loadAppMode, saveAppMode, type AppMode } from "../mode";
 import {
   createJob,
   createIdempotencyKey,
@@ -113,6 +115,12 @@ function promptForBot(messages: ChatMessage[], index: number): string {
   return "";
 }
 
+function upsertJob(jobs: Job[], job: Job): Job[] {
+  const exists = jobs.some((item) => item.id === job.id);
+  const next = exists ? jobs.map((item) => (item.id === job.id ? job : item)) : [job, ...jobs];
+  return next.sort((a, b) => b.created_at.localeCompare(a.created_at));
+}
+
 export function ChatScreen({ user }: { user: VkUser }) {
   const {
     chats,
@@ -138,6 +146,8 @@ export function ChatScreen({ user }: { user: VkUser }) {
   const [estimate, setEstimate] = useState<EstimateResponse | null>(null);
   const [estimateLoading, setEstimateLoading] = useState(false);
   const [estimateError, setEstimateError] = useState<string | null>(null);
+  const [mode, setMode] = useState<AppMode>(() => loadAppMode());
+  const [jobs, setJobs] = useState<Job[]>([]);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const mountedRef = useRef(true);
@@ -163,6 +173,12 @@ export function ChatScreen({ user }: { user: VkUser }) {
   const refreshBalance = useCallback(() => {
     getBalance().then(setBalance).catch(() => undefined);
   }, []);
+
+  function changeMode(nextMode: AppMode) {
+    setMode(nextMode);
+    saveAppMode(nextMode);
+    setDrawerOpen(false);
+  }
 
   useEffect(() => {
     mountedRef.current = true;
@@ -229,6 +245,7 @@ export function ChatScreen({ user }: { user: VkUser }) {
         let job: Job;
         try {
           job = await getJob(jobId);
+          setJobs((prev) => upsertJob(prev, job));
         } catch {
           if (i < POLL_MAX - 1) {
             await waitForNextPoll();
@@ -306,7 +323,10 @@ export function ChatScreen({ user }: { user: VkUser }) {
     });
   }
 
-  async function submitJob(text: string, request?: { operation: string; modelId: string }) {
+  async function submitJob(
+    text: string,
+    request?: { operation: string; modelId: string },
+  ): Promise<Job | null> {
     const modality = modalityById(modalityId);
     const operation = request?.operation ?? modality.operation;
     const selectedModel = request?.modelId ?? modelId;
@@ -336,13 +356,17 @@ export function ChatScreen({ user }: { user: VkUser }) {
         status: job.status,
         createdAt: job.created_at,
       });
+      setJobs((prev) => upsertJob(prev, job));
+      refreshBalance();
       startPoll(chatId, botId, job.id);
+      return job;
     } catch (e) {
       patchInChat(chatId, botId, {
         pending: false,
         error: apiUserMessage(e),
       });
       haptic("error");
+      return null;
     }
   }
 
@@ -358,6 +382,7 @@ export function ChatScreen({ user }: { user: VkUser }) {
       .then((jobs) => {
         if (!mountedRef.current) return;
         const sorted = [...jobs].sort((a, b) => b.created_at.localeCompare(a.created_at));
+        setJobs(sorted);
         const localJobIds = jobIdsFromChats(chats);
         const restored = sorted.filter((job) => !isTerminal(job.status) || localJobIds.has(job.id));
         if (restored.length > 0) {
@@ -415,65 +440,103 @@ export function ChatScreen({ user }: { user: VkUser }) {
       <header className="chat__header">
         <button
           type="button"
-          className="icon-btn"
+          className={"icon-btn" + (mode === "workflow" ? " icon-btn--ghost" : "")}
           aria-label="Чаты"
           onClick={() => setDrawerOpen(true)}
+          disabled={mode === "workflow"}
         >
           ☰
         </button>
         <Avatar src={null} fallback="AI" />
         <div className="chat__title">
-          <span className="chat__name">Ассистент</span>
-          <span className="chat__sub">{activeChat?.title ?? "генеративный помощник"}</span>
+          <span className="chat__name">{mode === "workflow" ? "Workflow" : "Ассистент"}</span>
+          <span className="chat__sub">
+            {mode === "workflow" ? "создание VK-контента" : activeChat?.title ?? "генеративный помощник"}
+          </span>
         </div>
         <span className="chat__spacer" />
+        <div className="mode-switch" role="tablist" aria-label="Режим Mini App">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === "chat"}
+            className={mode === "chat" ? "is-active" : ""}
+            onClick={() => changeMode("chat")}
+          >
+            Chat
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === "workflow"}
+            className={mode === "workflow" ? "is-active" : ""}
+            onClick={() => changeMode("workflow")}
+          >
+            Workflow
+          </button>
+        </div>
         {balance !== null && (
           <span className="balance-pill">{balance.toLocaleString("ru-RU")} кр.</span>
         )}
       </header>
 
-      <div className="chat__scroll" ref={scrollRef}>
-        {loading && (
-          <div className="splash">
-            <Spinner />
+      {mode === "chat" ? (
+        <>
+          <div className="chat__scroll" ref={scrollRef}>
+            {loading && (
+              <div className="splash">
+                <Spinner />
+              </div>
+            )}
+            {empty && (
+              <div className="greeting">
+                <span className="greeting__avatar">AI</span>
+                <h1 className="greeting__title">Привет, {user.firstName}!</h1>
+                <p className="greeting__text">
+                  Выберите тип и модель, напишите запрос — я сгенерирую текст, изображение или видео.
+                </p>
+              </div>
+            )}
+            {messages.map((m, index) =>
+              m.role === "bot" ? (
+                <ResultCard
+                  key={m.id}
+                  msg={m}
+                  prompt={promptForBot(messages, index)}
+                  onRetry={() => handleRetry(m, promptForBot(messages, index))}
+                />
+              ) : (
+                <MessageBubble key={m.id} msg={m} userName={user.name} userAvatar={user.avatar} />
+              ),
+            )}
           </div>
-        )}
-        {empty && (
-          <div className="greeting">
-            <span className="greeting__avatar">AI</span>
-            <h1 className="greeting__title">Привет, {user.firstName}!</h1>
-            <p className="greeting__text">
-              Выберите тип и модель, напишите запрос — я сгенерирую текст, изображение или видео.
-            </p>
-          </div>
-        )}
-        {messages.map((m, index) =>
-          m.role === "bot" ? (
-            <ResultCard
-              key={m.id}
-              msg={m}
-              prompt={promptForBot(messages, index)}
-              onRetry={() => handleRetry(m, promptForBot(messages, index))}
-            />
-          ) : (
-            <MessageBubble key={m.id} msg={m} userName={user.name} userAvatar={user.avatar} />
-          ),
-        )}
-      </div>
 
-      <Composer
-        modalityId={modalityId}
-        onModality={changeModality}
-        modelId={modelId}
-        onModel={setModelId}
-        onDraftChange={setDraft}
-        onSend={handleSend}
-        disabled={loading || submitting}
-        estimateCost={estimate?.cost_estimate ?? null}
-        estimateEnough={estimate?.enough_credits ?? null}
-        estimateLoading={estimateLoading}
-        estimateError={estimateError}
-      />
+          <Composer
+            modalityId={modalityId}
+            onModality={changeModality}
+            modelId={modelId}
+            onModel={setModelId}
+            onDraftChange={setDraft}
+            onSend={handleSend}
+            disabled={loading || submitting}
+            estimateCost={estimate?.cost_estimate ?? null}
+            estimateEnough={estimate?.enough_credits ?? null}
+            estimateLoading={estimateLoading}
+            estimateError={estimateError}
+          />
+        </>
+      ) : (
+        <WorkflowMode
+          user={user}
+          balance={balance}
+          jobs={jobs}
+          chats={chats}
+          loading={loading}
+          submitting={submitting}
+          onCreateJob={submitJob}
+          onClearLocalHistory={clearChats}
+        />
+      )}
     </div>
   );
 }
