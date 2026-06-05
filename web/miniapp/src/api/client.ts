@@ -45,6 +45,7 @@ export interface JobListResponse {
 
 export type ApiErrorCode =
   | "validation_error"
+  | "unsupported_model"
   | "auth_error"
   | "insufficient_credits"
   | "rate_limited"
@@ -88,6 +89,9 @@ function safeString(value: unknown): string | undefined {
 
 function apiErrorCode(status: number, backendError?: string): ApiErrorCode {
   const raw = (backendError ?? "").toLowerCase();
+  if (status === 400 && (raw === "unsupported model" || raw === "unsupported_model")) {
+    return "unsupported_model";
+  }
   if (status === 400 || raw === "validation_error") return "validation_error";
   if (status === 401 || raw === "auth_error" || raw === "unauthorized") return "auth_error";
   if (status === 402 || raw === "insufficient_credits") return "insufficient_credits";
@@ -103,6 +107,8 @@ function apiErrorMessageForCode(code: ApiErrorCode): string {
   switch (code) {
     case "validation_error":
       return "Проверьте запрос и попробуйте снова";
+    case "unsupported_model":
+      return "Выбранная модель недоступна. Выберите другую модель";
     case "auth_error":
       return "Не удалось подтвердить вход через VK. Откройте приложение заново";
     case "insufficient_credits":
