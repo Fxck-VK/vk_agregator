@@ -58,7 +58,7 @@ Real integrations are implemented at adapter level and remain **opt-in**:
   wired.
 - VK menu screens are described through a small declarative registry. `Создать
   фото` skips model selection when only one main image model is available and
-  opens the text/reference photo instruction screen directly; `Спросить у GPT`
+  opens the text/reference photo instruction screen directly; `Спросить у НейроХаб`
   opens the active GPT prompt screen and enables text GPT mode for that peer.
   Plain text and stickers create `text.ask` jobs only while GPT mode is active
   or when `VK_UNROUTED_TEXT_MODE=gpt` is explicitly configured. In active GPT

@@ -154,7 +154,7 @@ VK text mode + message (creates user → control command → text job):
 ```bash
 curl -s -X POST localhost:8080/webhooks/vk \
   -H 'Content-Type: application/json' \
-  -d '{"type":"message_new","event_id":"text-mode-1","object":{"message":{"from_id":777,"peer_id":777,"text":"💬 Спросить у GPT","payload":"{\"command\":\"menu.text\"}"}}}'
+  -d '{"type":"message_new","event_id":"text-mode-1","object":{"message":{"from_id":777,"peer_id":777,"text":"💬 Спросить у НейроХаб","payload":"{\"command\":\"menu.text\"}"}}}'
 # ok
 
 curl -s -X POST localhost:8080/webhooks/vk \
@@ -187,7 +187,7 @@ also control commands and should not enqueue jobs.
 Clicking `🖼️ Создать фото` should return the daily-free-attempt photo
 instruction screen directly with `Фото по тексту`, `Фото с референсом`, and
 `⬅️ Назад`; these mode buttons are also control commands. Clicking
-`💬 Спросить у GPT` should return `SUPER GPT активен` and wait for the next
+`💬 Спросить у НейроХаб` should return `SUPER GPT активен` and wait for the next
 plain user message; that next text or sticker should create a `text.ask` job.
 In active GPT mode, the bot should first send `GPT думает...`; after the
 provider result is ready, that same VK message should be edited to the answer

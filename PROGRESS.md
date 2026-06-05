@@ -454,7 +454,7 @@
   - `Seedance 1` открывает выбор `Lite` / `Pro`, а `Haiuo v0.2` открывает выбор `Обычный` / `Fast`;
   - кнопки выбора video-модели и вложенных video submenu записываются как control commands и не создают billable jobs до подключения model-specific generation state;
   - `Создать фото` при одной основной модели пропускает выбор модели и сразу показывает инструкцию по `Фото по тексту` / `Фото с референсом` с кнопками режимов и `Назад`;
-  - `Спросить у GPT` открывает active-сообщение `SUPER GPT активен` без создания job и включает process-local GPT text mode для `peer_id`; следующий обычный текст/стикер пользователя проходит через `text.ask` flow;
+  - `Спросить у НейроХаб` открывает active-сообщение `SUPER GPT активен` без создания job и включает process-local GPT text mode для `peer_id`; следующий обычный текст/стикер пользователя проходит через `text.ask` flow; старый text-label `Спросить у GPT` остается совместимым alias;
   - в активном GPT mode handler сначала отправляет `GPT думает...`, сохраняет `vk_placeholder_message_id` в `job.Params`, а delivery worker при текстовом результате редактирует это сообщение через VK `messages.edit`; длинные ответы режутся на follow-up chunks с детерминированными `random_id`, чтобы VK `error_code=914` не оставлял placeholder зависшим; legacy `VK_UNROUTED_TEXT_MODE=gpt` остается обычной текстовой доставкой без placeholder;
   - `Студентам и школьникам` открывает учебное подменю: `Решальник задач`, `Генерация презентаций (скоро)`, `Создание рефератов (скоро)`, `Ответы на вопросы`, `Назад`;
   - `vkdelivery.HTTPClient` получил `SendMessage` с `keyboard` JSON, поэтому VK API по-прежнему вызывается только из `internal/adapter/delivery/vk`;
@@ -467,7 +467,7 @@
   - handler обрабатывает `message_event` как control-only inbound event: сохраняет inbound/command, но не создает Job и не дергает provider;
   - каждый `message_event` подтверждается blank `messages.sendMessageEventAnswer` через `vkdelivery.ControlClient`, чтобы VK-клиент снимал loading spinner с callback-кнопки;
   - если VK не разрешает edit текущего menu message, API логирует warn, очищает active menu и делает fallback на обычный `messages.send`;
-  - кнопки `Создать видео`, `Создать фото`, `Спросить у GPT`, `Студентам и школьникам`, `Мой аккаунт`, `Пополнить баланс` классифицируются как control commands и не создают пустые billable jobs;
+  - кнопки `Создать видео`, `Создать фото`, `Спросить у НейроХаб`, `Студентам и школьникам`, `Мой аккаунт`, `Пополнить баланс` классифицируются как control commands и не создают пустые billable jobs;
   - баланс в меню берется через `billingservice.EnsureAccount`, без прямой мутации баланса;
   - опциональный баннер подключается через `VK_WELCOME_ATTACHMENT` как уже готовый VK attachment string;
   - если VK возвращает `error_code=912` из-за выключенных bot features, API повторяет отправку без keyboard, чтобы callback не падал.

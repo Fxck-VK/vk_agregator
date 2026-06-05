@@ -475,7 +475,7 @@ func welcomeKeyboard() *vkdelivery.Keyboard {
 				button("🖼️ Создать фото", domain.CommandMenuImage, "primary"),
 			},
 			{
-				button("💬 Спросить у GPT", domain.CommandMenuText, "secondary"),
+				button("💬 Спросить у НейроХаб", domain.CommandMenuText, "secondary"),
 			},
 			{
 				button("🎁 Студентам и школьникам", domain.CommandMenuStudents, "secondary"),

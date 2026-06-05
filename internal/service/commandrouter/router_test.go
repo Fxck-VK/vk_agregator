@@ -130,6 +130,11 @@ func TestRouterParse(t *testing.T) {
 			wantType: domain.CommandMenuImageReference,
 		},
 		{
+			name:     "vk neurohub text menu button",
+			input:    "💬 Спросить у НейроХаб",
+			wantType: domain.CommandMenuText,
+		},
+		{
 			name:     "vk student solver button",
 			input:    "Решальник задач",
 			wantType: domain.CommandMenuStudentSolver,
@@ -207,7 +212,7 @@ func TestResultCreatesJob(t *testing.T) {
 		}
 	}
 
-	controlCommands := []string{"/balance", "/status 1", "/cancel 1", "/help", "/start", "Старт", "Показать меню", "🎬 Создать видео", "Sora 2 — видео текст+фото", "Seedance 1 Lite", "Seedance 1 Pro", "Haiuo v0.2 Обычный", "Haiuo v0.2 Fast", "⬅️ Назад", "👤 Мой аккаунт", "▶️ Фото по тексту", "📸 Фото с референсом", "Решальник задач", "Генерация презентаций (скоро)", "Создание рефератов (скоро)", "❓ Ответы на вопросы"}
+	controlCommands := []string{"/balance", "/status 1", "/cancel 1", "/help", "/start", "Старт", "Показать меню", "🎬 Создать видео", "Sora 2 — видео текст+фото", "Seedance 1 Lite", "Seedance 1 Pro", "Haiuo v0.2 Обычный", "Haiuo v0.2 Fast", "⬅️ Назад", "👤 Мой аккаунт", "▶️ Фото по тексту", "📸 Фото с референсом", "💬 Спросить у НейроХаб", "💬 Спросить у GPT", "Решальник задач", "Генерация презентаций (скоро)", "Создание рефератов (скоро)", "❓ Ответы на вопросы"}
 	for _, in := range controlCommands {
 		if r.Parse(in).CreatesJob() {
 			t.Errorf("expected %q to NOT create a job", in)

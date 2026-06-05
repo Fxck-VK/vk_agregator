@@ -322,7 +322,7 @@ must not create billable jobs.
 Clicking `🖼️ Создать фото` opens the photo instruction screen directly because
 there is one main image model in the VK UX. It shows `Фото по тексту`,
 `Фото с референсом`, and `⬅️ Назад`; those mode buttons are control-only until
-stateful image mode selection is wired. Clicking `💬 Спросить у GPT` sends the
+stateful image mode selection is wired. Clicking `💬 Спросить у НейроХаб` sends the
 `SUPER GPT активен` prompt screen, sets process-local GPT mode for that peer,
 and also does not enqueue a job. The next plain text or sticker from the same
 peer becomes a `text.ask` job; the API sends `GPT думает...`, stores that VK
@@ -377,7 +377,7 @@ falls back to the current main menu and still creates no job.
 ```bash
 # enable text/GPT mode (control command, no job)
 curl -s -X POST localhost:8080/webhooks/vk -H 'Content-Type: application/json' \
-  -d '{"type":"message_new","event_id":"text-mode-1","object":{"message":{"from_id":777,"peer_id":777,"text":"💬 Спросить у GPT","payload":"{\"command\":\"menu.text\"}"}}}'
+  -d '{"type":"message_new","event_id":"text-mode-1","object":{"message":{"from_id":777,"peer_id":777,"text":"💬 Спросить у НейроХаб","payload":"{\"command\":\"menu.text\"}"}}}'
 # text job after GPT mode is active
 curl -s -X POST localhost:8080/webhooks/vk -H 'Content-Type: application/json' \
   -d '{"type":"message_new","event_id":"text-1","object":{"message":{"from_id":777,"peer_id":777,"text":"hello world"}}}'

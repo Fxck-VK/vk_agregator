@@ -228,7 +228,7 @@ func TestMenuFeatureFlagsHideMainMenuButtons(t *testing.T) {
 	if strings.Contains(sent[1].Keyboard, "Студентам и школьникам") || strings.Contains(sent[1].Keyboard, "Пополнить баланс") {
 		t.Fatalf("disabled main menu buttons should be hidden: %q", sent[1].Keyboard)
 	}
-	for _, want := range []string{"Создать видео", "Создать фото", "Спросить у GPT", "Мой аккаунт"} {
+	for _, want := range []string{"Создать видео", "Создать фото", "Спросить у НейроХаб", "Мой аккаунт"} {
 		if !strings.Contains(sent[1].Keyboard, want) {
 			t.Fatalf("expected enabled button %q in keyboard: %q", want, sent[1].Keyboard)
 		}
@@ -604,7 +604,7 @@ func TestGPTMenuButtonSendsActivePromptNoJob(t *testing.T) {
 	h := newHarnessWithControl(control)
 	body := `{
 		"type":"message_new","group_id":1,"event_id":"evt-gpt-menu","secret":"s3cr3t",
-		"object":{"message":{"from_id":564,"peer_id":564,"text":"💬 Спросить у GPT","payload":"{\"command\":\"menu.text\"}"}}
+		"object":{"message":{"from_id":564,"peer_id":564,"text":"💬 Спросить у НейроХаб","payload":"{\"command\":\"menu.text\"}"}}
 	}`
 	rec := h.post(body)
 	if rec.Code != http.StatusOK || rec.Body.String() != "ok" {
@@ -733,7 +733,7 @@ func TestGPTMenuButtonEnablesPlainTextJobs(t *testing.T) {
 	h := newHarnessWithControl(control)
 	gpt := `{
 		"type":"message_new","group_id":1,"event_id":"evt-gpt-mode-on","secret":"s3cr3t",
-		"object":{"message":{"from_id":577,"peer_id":577,"text":"💬 Спросить у GPT","payload":"{\"command\":\"menu.text\"}"}}
+		"object":{"message":{"from_id":577,"peer_id":577,"text":"💬 Спросить у НейроХаб","payload":"{\"command\":\"menu.text\"}"}}
 	}`
 	if rec := h.post(gpt); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
 		t.Fatalf("unexpected gpt response: %d %q", rec.Code, rec.Body.String())
@@ -781,7 +781,7 @@ func TestOtherMenuButtonClearsGPTMode(t *testing.T) {
 	h := newHarnessWithControl(control)
 	gpt := `{
 		"type":"message_new","group_id":1,"event_id":"evt-gpt-mode-clear-on","secret":"s3cr3t",
-		"object":{"message":{"from_id":578,"peer_id":578,"text":"💬 Спросить у GPT","payload":"{\"command\":\"menu.text\"}"}}
+		"object":{"message":{"from_id":578,"peer_id":578,"text":"💬 Спросить у НейроХаб","payload":"{\"command\":\"menu.text\"}"}}
 	}`
 	if rec := h.post(gpt); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
 		t.Fatalf("unexpected gpt response: %d %q", rec.Code, rec.Body.String())
@@ -831,7 +831,7 @@ func TestStickerInGPTModeCreatesTextJob(t *testing.T) {
 	h := newHarnessWithControl(control)
 	gpt := `{
 		"type":"message_new","group_id":1,"event_id":"evt-sticker-gpt-on","secret":"s3cr3t",
-		"object":{"message":{"from_id":579,"peer_id":579,"text":"💬 Спросить у GPT","payload":"{\"command\":\"menu.text\"}"}}
+		"object":{"message":{"from_id":579,"peer_id":579,"text":"💬 Спросить у НейроХаб","payload":"{\"command\":\"menu.text\"}"}}
 	}`
 	if rec := h.post(gpt); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
 		t.Fatalf("unexpected gpt response: %d %q", rec.Code, rec.Body.String())

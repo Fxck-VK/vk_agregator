@@ -146,7 +146,7 @@ Severity: **critical** (blocks prod / safety / data loss), **high** (must fix be
   `VK_MENU_BUTTON_MODE=text` as a legacy fallback. Active-menu tracking is
   currently process-local. Every current product-menu button has a
   `VK_MENU_*_ENABLED` flag for rollout/hiding without deleting screens. Plain
-  text/stickers become `text.ask` jobs only after `Спросить у GPT` enables
+  text/stickers become `text.ask` jobs only after `Спросить у НейроХаб` enables
   process-local GPT mode, unless
   `VK_UNROUTED_TEXT_MODE=gpt` restores legacy behavior. Active GPT mode sends
   `GPT думает...`, stores the placeholder VK `message_id` in `job.Params`, and
