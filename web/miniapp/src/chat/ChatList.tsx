@@ -50,7 +50,7 @@ export function ChatList({
         className={"drawer-overlay" + (open ? " is-open" : "")}
         onClick={onClose}
       />
-      <aside className={"drawer drawer--top" + (open ? " is-open" : "")} aria-label="История диалогов">
+      <aside className={"drawer" + (open ? " is-open" : "")} aria-label="Панель диалогов">
         <div className="drawer__head">
           <div>
             <strong>Диалоги</strong>

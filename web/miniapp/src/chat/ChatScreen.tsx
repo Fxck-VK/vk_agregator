@@ -463,27 +463,21 @@ export function ChatScreen({ user }: { user: VkUser }) {
       <header className="chat__header">
         <Button
           type="button"
-          className="icon-btn icon-btn--ghost"
+          className={"icon-btn" + (activeTab !== "chat" ? " icon-btn--ghost" : "")}
           mode="tertiary"
           appearance="neutral"
           size="l"
-          aria-hidden="true"
-          tabIndex={-1}
-          disabled
+          aria-label="История диалогов"
+          onClick={() => setDrawerOpen(true)}
+          disabled={activeTab !== "chat"}
         >
           ☰
         </Button>
         <Avatar src={null} fallback="AI" />
-        <button
-          type="button"
-          className="chat__title chat__title--button"
-          aria-label="Открыть историю диалогов"
-          onClick={() => setDrawerOpen(true)}
-          disabled={activeTab !== "chat"}
-        >
+        <div className="chat__title">
           <span className="chat__name">{header.name}</span>
           <span className="chat__sub">{header.sub}</span>
-        </button>
+        </div>
         <span className="chat__spacer" />
         {balance !== null && (
           <span className="balance-pill">{balance.toLocaleString("ru-RU")} кр.</span>
@@ -548,7 +542,6 @@ export function ChatScreen({ user }: { user: VkUser }) {
           loading={loading}
           submitting={submitting}
           onCreateJob={submitJob}
-          onClearLocalHistory={clearChats}
         />
       </section>
 

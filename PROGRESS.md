@@ -1228,3 +1228,35 @@ Status: **completed**.
 
 - `npm run build` in `web/miniapp` - exit 0.
 - `go build ./...` - exit 0.
+
+---
+
+## PR-16.3.1 - Mini App Create choice screen and chat history button
+
+Status: **completed**.
+
+### STEP 0 context
+
+- Continued directly after PR-16.3 (`259639c`) on `fastlife_dev`.
+- Reused known PR-16.3 files only: `WorkflowMode`, chat history panel trigger,
+  `ResultCard` and `theme.css`. Backend/BFF contracts were not changed.
+
+### What changed
+
+- Removed the top Create operation segment. Create now opens on three large
+  cards: `Создать фото`, `Создать видео`, `Создать пост`.
+- The cards route into the existing PR-10 Generate -> Status -> Result flow:
+  photo uses `image_generate`, video uses `video_generate`, post uses
+  `text_generate`.
+- Estimate/gating remains backend-owned through `POST /miniapp/estimate`;
+  submit still requires `enough_credits=true`.
+- Create history is scoped to the selected type by filtering backend jobs by
+  operation. The general all-types Create history is deferred to Settings
+  PR-16.4.
+- Chat thread history now opens from an explicit header icon button. Tapping
+  the chat title no longer opens the panel.
+
+### Checks
+
+- `npm run build` in `web/miniapp` - exit 0.
+- `go build ./...` - exit 0.

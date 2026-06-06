@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Button, NativeSelect, SegmentedControl, Textarea } from "@vkontakte/vkui";
+import { Button, NativeSelect, Textarea } from "@vkontakte/vkui";
 import {
   apiUserMessage,
   estimateJob,
@@ -10,7 +10,13 @@ import {
   type Job,
 } from "../api/client";
 import { ResultCard } from "../components/ResultCard";
-import { type Chat, type ChatMessage, MODALITIES, modalityById, modalityByOperation, type ModalityId } from "../chat/types";
+import {
+  type Chat,
+  type ChatMessage,
+  type ModalityId,
+  modalityById,
+  modalityByOperation,
+} from "../chat/types";
 import type { VkUser } from "../hooks/useBridge";
 
 type WorkflowScreen = "home" | "generate" | "status" | "result" | "history";
@@ -23,35 +29,30 @@ type WorkflowModeProps = {
   loading: boolean;
   submitting: boolean;
   onCreateJob: (prompt: string, request: { operation: string; modelId: string }) => Promise<Job | null>;
-  onClearLocalHistory: () => void;
 };
 
 const ESTIMATE_DEBOUNCE_MS = 450;
 const PROMPT_LIMIT = 2000;
 
-const QUICK_SCENARIOS: Array<{
+const CREATE_CHOICES: Array<{
   title: string;
   text: string;
   modality: ModalityId;
-  prompt: string;
 }> = [
   {
-    title: "Пост для сообщества",
-    text: "Короткий текст с понятным CTA",
-    modality: "text",
-    prompt: "Сделай VK-пост для сообщества: новость, польза, короткий призыв к действию.",
-  },
-  {
-    title: "Визуал к анонсу",
-    text: "Изображение для ленты",
+    title: "Создать фото",
+    text: "Изображение для VK-поста через backend image_generate",
     modality: "image",
-    prompt: "Создай промпт для яркого, но минималистичного изображения к VK-посту.",
   },
   {
-    title: "Короткое видео",
-    text: "Сценарий для клипа",
+    title: "Создать видео",
+    text: "Короткий ролик через backend video_generate",
     modality: "video",
-    prompt: "Опиши короткое вертикальное видео для VK: 5-7 секунд, один главный объект, чистый фон.",
+  },
+  {
+    title: "Создать пост",
+    text: "Текстовый VK-пост с итоговым preview; медиа можно создать отдельным типом",
+    modality: "text",
   },
 ];
 
@@ -72,13 +73,13 @@ const TIMELINE = [
   {
     id: "reserving",
     title: "Резерв",
-    text: "Бэкенд проверяет баланс и резервирует кредиты",
+    text: "Backend проверяет баланс и резервирует кредиты",
     statuses: new Set(["credits_reserved", "awaiting_payment"]),
   },
   {
     id: "queued",
     title: "Очередь",
-    text: "Задача ждёт свободного воркера",
+    text: "Задача ждёт свободного worker",
     statuses: new Set(["queued", "dispatching_provider"]),
   },
   {
@@ -100,12 +101,6 @@ const TIMELINE = [
     statuses: new Set(["succeeded"]),
   },
 ];
-
-const OPERATION_OPTIONS = MODALITIES.map((item) => ({
-  label: item.label,
-  value: item.id,
-  "aria-label": item.label,
-}));
 
 function operationLabel(operation: string): string {
   return modalityByOperation(operation).label;
@@ -139,7 +134,10 @@ function messageForJob(job: Job | undefined, chats: Chat[]): ChatMessage | null 
     operation: job.operation,
     status: job.status,
     pending: !isTerminal(job.status),
-    artifactIds: isTerminal(job.status) && statusKind(job.status) === "done" ? job.output_artifact_ids : undefined,
+    artifactIds:
+      isTerminal(job.status) && statusKind(job.status) === "done"
+        ? job.output_artifact_ids
+        : undefined,
     createdAt: job.created_at,
   };
 }
@@ -150,31 +148,6 @@ function timelineIndex(status: string): number {
   return index === -1 ? Math.max(0, TIMELINE.length - 2) : index;
 }
 
-function ModeTabs({ screen, onScreen }: { screen: WorkflowScreen; onScreen: (screen: WorkflowScreen) => void }) {
-  const tabs: Array<{ id: WorkflowScreen; label: string }> = [
-    { id: "home", label: "Home" },
-    { id: "generate", label: "Generate" },
-    { id: "history", label: "History" },
-  ];
-  return (
-    <nav className="workflow-tabs" aria-label="Workflow sections">
-      {tabs.map((tab) => (
-        <Button
-          key={tab.id}
-          type="button"
-          className={"workflow-tabs__btn" + (screen === tab.id ? " is-active" : "")}
-          mode={screen === tab.id ? "primary" : "tertiary"}
-          appearance={screen === tab.id ? "neutral" : "neutral"}
-          size="m"
-          onClick={() => onScreen(tab.id)}
-        >
-          {tab.label}
-        </Button>
-      ))}
-    </nav>
-  );
-}
-
 export function WorkflowMode({
   user,
   balance,
@@ -183,9 +156,8 @@ export function WorkflowMode({
   loading,
   submitting,
   onCreateJob,
-  onClearLocalHistory,
 }: WorkflowModeProps) {
-  const [screen, setScreen] = useState<WorkflowScreen>("generate");
+  const [screen, setScreen] = useState<WorkflowScreen>("home");
   const [modalityId, setModalityId] = useState<ModalityId>("text");
   const [modelId, setModelId] = useState(modalityById("text").models[0].id);
   const [prompt, setPrompt] = useState("");
@@ -194,8 +166,8 @@ export function WorkflowMode({
   const [estimateError, setEstimateError] = useState<string | null>(null);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [modalityFilter, setModalityFilter] = useState<"all" | ModalityId>("all");
-  const [statusFilter, setStatusFilter] = useState<(typeof HISTORY_STATUS_FILTERS)[number]["id"]>("all");
+  const [statusFilter, setStatusFilter] =
+    useState<(typeof HISTORY_STATUS_FILTERS)[number]["id"]>("all");
 
   const recentJobs = useMemo(() => sortedJobs(jobs), [jobs]);
   const activeJob = activeJobId ? jobs.find((job) => job.id === activeJobId) : undefined;
@@ -254,10 +226,22 @@ export function WorkflowMode({
     setModelId(next.models[0]?.id ?? "");
   }
 
-  function openScenario(modality: ModalityId, nextPrompt?: string) {
+  function openCreateType(modality: ModalityId) {
     changeModality(modality);
-    if (nextPrompt) setPrompt(nextPrompt);
+    setPrompt("");
+    setSubmitError(null);
+    setStatusFilter("all");
     setScreen("generate");
+  }
+
+  function backToChoice() {
+    setSubmitError(null);
+    setScreen("home");
+  }
+
+  function openTypeHistory() {
+    setStatusFilter("all");
+    setScreen("history");
   }
 
   async function submitWorkflow() {
@@ -282,33 +266,21 @@ export function WorkflowMode({
     setScreen("generate");
   }
 
-  const filteredJobs = recentJobs.filter((job) => {
+  const typeJobs = recentJobs.filter((job) => modalityByOperation(job.operation).id === modalityId);
+  const filteredJobs = typeJobs.filter((job) => {
     const kind = statusKind(job.status);
-    const modality = modalityByOperation(job.operation).id;
-    return (modalityFilter === "all" || modalityFilter === modality) && (statusFilter === "all" || statusFilter === kind);
+    return statusFilter === "all" || statusFilter === kind;
   });
 
   return (
     <main className="workflow">
-      <OperationSegment modalityId={modalityId} onModality={changeModality} />
-      <ModeTabs screen={screen} onScreen={setScreen} />
-
       {screen === "home" && (
         <section className="workflow-screen">
-          <div className="workflow-hero">
-            <span className="workflow-kicker">Content workflow</span>
-            <h1>{user.firstName}, создайте VK-пост без лишнего шума</h1>
-            <p>Сначала выберите сценарий, затем проверьте стоимость и дождитесь результата в спокойном статус-экране.</p>
-            <Button
-              type="button"
-              className="workflow-primary"
-              mode="primary"
-              size="l"
-              onClick={() => setScreen("generate")}
-            >
-              Создать VK-пост
-            </Button>
-          </div>
+          <ScreenTitle
+            eyebrow="Create"
+            title={`${user.firstName}, что создаём?`}
+            text="Выберите тип результата. Дальше останутся estimate, статус генерации и VK-post preview из workflow."
+          />
 
           <div className="workflow-balance" aria-live="polite">
             <span>Баланс</span>
@@ -316,54 +288,33 @@ export function WorkflowMode({
             {balance !== null && balance <= 0 && <em>Нужны кредиты для запуска</em>}
           </div>
 
-          <section className="workflow-section" aria-labelledby="quick-title">
-            <h2 id="quick-title">Быстрые сценарии</h2>
-            <div className="scenario-grid">
-              {QUICK_SCENARIOS.map((scenario) => (
+          <section className="workflow-section" aria-labelledby="choice-title">
+            <h2 id="choice-title">Выбор формата</h2>
+            <div className="create-choice-grid">
+              {CREATE_CHOICES.map((choice) => (
                 <button
-                  key={scenario.title}
+                  key={choice.title}
                   type="button"
-                  className="scenario-card"
-                  onClick={() => openScenario(scenario.modality, scenario.prompt)}
+                  className="create-choice-card"
+                  onClick={() => openCreateType(choice.modality)}
                 >
-                  <span>{scenario.title}</span>
-                  <small>{scenario.text}</small>
+                  <span>{choice.title}</span>
+                  <small>{choice.text}</small>
                 </button>
               ))}
             </div>
-          </section>
-
-          <section className="workflow-section" aria-labelledby="recent-title">
-            <div className="section-head">
-              <h2 id="recent-title">Последние генерации</h2>
-              <Button
-                type="button"
-                className="quiet-action"
-                mode="secondary"
-                appearance="neutral"
-                size="m"
-                onClick={() => setScreen("history")}
-              >
-                История
-              </Button>
-            </div>
-            {loading ? (
-              <div className="workflow-empty">Загружаем историю</div>
-            ) : recentJobs.length === 0 ? (
-              <div className="workflow-empty">Пока тихо. Первый пост начнётся здесь.</div>
-            ) : (
-              <JobList jobs={recentJobs.slice(0, 3)} onOpen={(job) => {
-                setActiveJobId(job.id);
-                setScreen(isTerminal(job.status) && statusKind(job.status) === "done" ? "result" : "status");
-              }} />
-            )}
           </section>
         </section>
       )}
 
       {screen === "generate" && (
         <section className="workflow-screen">
-          <ScreenTitle eyebrow="Generate" title="Опишите будущий пост" text="Стоимость и доступность модели считает backend до запуска." />
+          <WorkflowNav currentModality={currentModality.label} onBack={backToChoice} onHistory={openTypeHistory} />
+          <ScreenTitle
+            eyebrow="Generate"
+            title={`Опишите: ${currentModality.label.toLowerCase()}`}
+            text="Стоимость и доступность модели считает backend до запуска."
+          />
           <div className="workflow-form">
             <div className="workflow-field">
               <label htmlFor="workflow-model">Модель</label>
@@ -404,7 +355,11 @@ export function WorkflowMode({
                 <>
                   <span>Стоимость</span>
                   <strong>{estimate.cost_estimate.toLocaleString("ru-RU")} кр.</strong>
-                  {estimate.enough_credits ? <em>Кредитов достаточно</em> : <em className="is-warn">Недостаточно кредитов</em>}
+                  {estimate.enough_credits ? (
+                    <em>Кредитов достаточно</em>
+                  ) : (
+                    <em className="is-warn">Недостаточно кредитов</em>
+                  )}
                 </>
               ) : estimateError ? (
                 <em className="is-warn">{estimateError}</em>
@@ -426,16 +381,35 @@ export function WorkflowMode({
               Запустить генерацию
             </Button>
           </div>
+
+          <TypeHistoryPreview
+            loading={loading}
+            jobs={typeJobs}
+            label={currentModality.label}
+            onHistory={openTypeHistory}
+            onOpen={(job) => {
+              setActiveJobId(job.id);
+              setScreen(isTerminal(job.status) && statusKind(job.status) === "done" ? "result" : "status");
+            }}
+          />
         </section>
       )}
 
       {screen === "status" && activeJob && (
-        <StatusScreen job={activeJob} onResult={() => setScreen("result")} />
+        <>
+          <WorkflowNav currentModality={currentModality.label} onBack={backToChoice} onHistory={openTypeHistory} />
+          <StatusScreen job={activeJob} onResult={() => setScreen("result")} />
+        </>
       )}
 
       {screen === "result" && activeJob && activeMessage && (
         <section className="workflow-screen">
-          <ScreenTitle eyebrow="Result" title="Пост готов к проверке" text="Preview показывает контент так, как он будет ощущаться в VK." />
+          <WorkflowNav currentModality={currentModality.label} onBack={backToChoice} onHistory={openTypeHistory} />
+          <ScreenTitle
+            eyebrow="Result"
+            title="Пост готов к проверке"
+            text="Preview показывает контент так, как он будет ощущаться в VK."
+          />
           <div className="workflow-signature-preview">
             <ResultCard msg={activeMessage} prompt={activePrompt} onRetry={submitWorkflow} />
           </div>
@@ -446,26 +420,27 @@ export function WorkflowMode({
             appearance="neutral"
             size="m"
             stretched
-            onClick={() => setScreen("history")}
+            onClick={openTypeHistory}
           >
-            Перейти в историю
+            История этого типа
           </Button>
         </section>
       )}
 
       {screen === "history" && (
         <section className="workflow-screen">
-          <ScreenTitle eyebrow="History" title="История генераций" text="Список приходит с backend; локальная очистка не удаляет jobs." />
-          <div className="filter-row">
-            <NativeSelect value={modalityFilter} onChange={(event) => setModalityFilter(event.target.value as "all" | ModalityId)} aria-label="Фильтр типа">
-              <option value="all">Все типы</option>
-              {MODALITIES.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.label}
-                </option>
-              ))}
-            </NativeSelect>
-            <NativeSelect value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)} aria-label="Фильтр статуса">
+          <WorkflowNav currentModality={currentModality.label} onBack={backToChoice} />
+          <ScreenTitle
+            eyebrow="History"
+            title={`История: ${currentModality.label.toLowerCase()}`}
+            text="Список приходит с backend и отфильтрован по operation_type выбранного формата."
+          />
+          <div className="filter-row filter-row--single">
+            <NativeSelect
+              value={statusFilter}
+              onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}
+              aria-label="Фильтр статуса"
+            >
               {HISTORY_STATUS_FILTERS.map((item) => (
                 <option key={item.id} value={item.id}>
                   {item.label}
@@ -474,7 +449,7 @@ export function WorkflowMode({
             </NativeSelect>
           </div>
           {filteredJobs.length === 0 ? (
-            <div className="workflow-empty">Нет генераций под этот фильтр.</div>
+            <div className="workflow-empty">Нет генераций этого типа под выбранный фильтр.</div>
           ) : (
             <JobList
               jobs={filteredJobs}
@@ -492,9 +467,9 @@ export function WorkflowMode({
             appearance="neutral"
             size="m"
             stretched
-            onClick={onClearLocalHistory}
+            onClick={() => setScreen("generate")}
           >
-            Очистить локальную историю
+            Создать ещё
           </Button>
         </section>
       )}
@@ -502,26 +477,58 @@ export function WorkflowMode({
   );
 }
 
-function OperationSegment({
-  modalityId,
-  onModality,
+function WorkflowNav({
+  currentModality,
+  onBack,
+  onHistory,
 }: {
-  modalityId: ModalityId;
-  onModality: (id: ModalityId) => void;
+  currentModality: string;
+  onBack: () => void;
+  onHistory?: () => void;
 }) {
   return (
-    <section className="workflow-operation-bar" aria-labelledby="workflow-operation-label">
-      <span id="workflow-operation-label" className="workflow-operation-label">
-        Тип генерации
-      </span>
-      <SegmentedControl<ModalityId>
-        className="workflow-operation-segment"
-        size="l"
-        name="workflow-operation"
-        value={modalityId}
-        onChange={onModality}
-        options={OPERATION_OPTIONS}
-      />
+    <nav className="workflow-nav" aria-label="Create flow">
+      <Button type="button" className="quiet-action" mode="secondary" appearance="neutral" size="m" onClick={onBack}>
+        Назад
+      </Button>
+      <span>{currentModality}</span>
+      {onHistory && (
+        <Button type="button" className="quiet-action" mode="secondary" appearance="neutral" size="m" onClick={onHistory}>
+          История
+        </Button>
+      )}
+    </nav>
+  );
+}
+
+function TypeHistoryPreview({
+  loading,
+  jobs,
+  label,
+  onHistory,
+  onOpen,
+}: {
+  loading: boolean;
+  jobs: Job[];
+  label: string;
+  onHistory: () => void;
+  onOpen: (job: Job) => void;
+}) {
+  return (
+    <section className="workflow-section" aria-labelledby="type-history-title">
+      <div className="section-head">
+        <h2 id="type-history-title">История: {label.toLowerCase()}</h2>
+        <Button type="button" className="quiet-action" mode="secondary" appearance="neutral" size="m" onClick={onHistory}>
+          Все
+        </Button>
+      </div>
+      {loading ? (
+        <div className="workflow-empty">Загружаем историю</div>
+      ) : jobs.length === 0 ? (
+        <div className="workflow-empty">Для этого типа пока нет генераций.</div>
+      ) : (
+        <JobList jobs={jobs.slice(0, 3)} onOpen={onOpen} />
+      )}
     </section>
   );
 }
@@ -566,7 +573,7 @@ function JobList({
                 onClick={() => onRepeat(job)}
                 disabled={!job.prompt}
               >
-                Repeat
+                Повторить
               </Button>
             )}
           </article>
@@ -581,10 +588,21 @@ function StatusScreen({ job, onResult }: { job: Job; onResult: () => void }) {
   const failed = statusKind(job.status) === "failed";
   return (
     <section className="workflow-screen">
-      <ScreenTitle eyebrow="Status" title={failed ? "Нужен повторный запуск" : "Генерация идёт"} text={failed ? "Кредиты будут обработаны backend-сценарием." : "Каждый этап обновляется из backend job state."} />
+      <ScreenTitle
+        eyebrow="Status"
+        title={failed ? "Нужен повторный запуск" : "Генерация идёт"}
+        text={failed ? "Кредиты будут обработаны backend-сценарием." : "Каждый этап обновляется из backend job state."}
+      />
       <ol className="status-timeline" aria-live="polite">
         {TIMELINE.map((stage, index) => {
-          const state = failed && index === TIMELINE.length - 1 ? " is-error" : index < active ? " is-done" : index === active ? " is-active" : "";
+          const state =
+            failed && index === TIMELINE.length - 1
+              ? " is-error"
+              : index < active
+                ? " is-done"
+                : index === active
+                  ? " is-active"
+                  : "";
           return (
             <li key={stage.id} className={"status-step" + state}>
               <span className="status-step__dot" />
@@ -597,13 +615,7 @@ function StatusScreen({ job, onResult }: { job: Job; onResult: () => void }) {
         })}
       </ol>
       {isTerminal(job.status) && statusKind(job.status) === "done" && (
-        <Button
-          type="button"
-          className="workflow-primary"
-          mode="primary"
-          size="l"
-          onClick={onResult}
-        >
+        <Button type="button" className="workflow-primary" mode="primary" size="l" onClick={onResult}>
           Смотреть результат
         </Button>
       )}

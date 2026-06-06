@@ -413,3 +413,43 @@ Consequences: Create becomes more direct without new BFF contracts or a
 frontend-side source of truth. The operation allowlist must stay synchronized
 with backend Mini App support until a durable capabilities/discovery endpoint
 exists.
+
+---
+
+## ADR-013 - Mini App Create choice screen and chat history button
+
+Status: accepted
+
+Date: 2026-06-06
+
+Context: PR-16.3 introduced a top operation segment in the Create tab, but
+owner feedback requested a clearer first screen and a less hidden chat history
+entry point. PR-16.3.1 is a frontend-only UX revision.
+
+Decision: remove the top Create `SegmentedControl`. The Create tab starts with
+three large action cards: `Создать фото`, `Создать видео`, `Создать пост`.
+Photo maps to existing `image_generate`, video maps to existing
+`video_generate`, and post maps to existing `text_generate`. No new backend
+operation or BFF contract is added. The post path produces a text VK-post
+preview; media can still be generated through the existing photo/video paths
+and only through backend artifact routes.
+
+The PR-10 Generate -> Status -> Result flow remains reused after a type is
+chosen. Backend estimate/gating stays unchanged: `POST /miniapp/estimate`
+re-runs for the selected operation/model and submit remains enabled only when
+`enough_credits=true`.
+
+Create history is now scoped to the selected type by filtering backend jobs by
+operation type. The general all-types Create history screen is removed from
+the Create tab. A summary history surface belongs in Settings and is deferred
+to PR-16.4.
+
+Chat thread history no longer opens by tapping the chat title. The header uses
+an explicit icon button that opens the existing thread panel with thread list
+and `Новый диалог`. Thread storage and backend process-local context behavior
+from ADR-011 remain unchanged.
+
+Consequences: the Create tab has a clearer product entry point while preserving
+backend-owned pricing, billing, job status and artifact access. Polling remains
+owned by `ChatScreen`; switching type, tab or thread does not create a second
+poller or clear in-flight jobs.

@@ -342,3 +342,24 @@ The VK post preview stays safe-rendered: text is React text and image/video
 sources come only from backend artifact routes derived from job DTO artifact
 ids. PR-16.3 only changes preview structure/prominence; brand palette and
 image-derived color work remains for PR-16.4.
+
+---
+
+## PR-16.3.1 Mini App UX revision note
+
+Date: 2026-06-06
+
+The Create tab no longer exposes a top operation segment. It starts with three
+large cards and then reuses the existing backend-backed workflow for the chosen
+operation: `image_generate`, `video_generate` or `text_generate`. No backend
+contracts, provider calls, billing logic, moderation path or artifact access
+rules changed.
+
+History inside Create is scoped by operation type. The all-types summary
+history is intentionally left for Settings PR-16.4. Create history still reads
+backend jobs; local storage is not used as a billing/job-status source of
+truth.
+
+Chat thread history is opened by an explicit header icon button. The thread
+list and `Новый диалог` action remain the same local metadata surface from
+PR-16.2, without storing prompts, answers, secrets or artifact URLs.
