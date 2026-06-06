@@ -16,24 +16,19 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
-	vkdelivery "vk-ai-aggregator/internal/adapter/delivery/vk"
 	adminapi "vk-ai-aggregator/internal/adapter/inbound/admin"
 	miniappapi "vk-ai-aggregator/internal/adapter/inbound/miniapp"
-	vkinbound "vk-ai-aggregator/internal/adapter/inbound/vk"
 	redisqueue "vk-ai-aggregator/internal/adapter/queue/redis"
 	"vk-ai-aggregator/internal/adapter/storage/postgres"
 	s3store "vk-ai-aggregator/internal/adapter/storage/s3"
-	"vk-ai-aggregator/internal/domain"
+	"vk-ai-aggregator/internal/app/vkbot"
 	"vk-ai-aggregator/internal/platform/config"
 	"vk-ai-aggregator/internal/platform/metrics"
 	"vk-ai-aggregator/internal/platform/ratelimit"
 	"vk-ai-aggregator/internal/platform/tracing"
-	"vk-ai-aggregator/internal/service/antispam"
 	"vk-ai-aggregator/internal/service/billingservice"
 	"vk-ai-aggregator/internal/service/commandrouter"
-	"vk-ai-aggregator/internal/service/dialogstate"
 	"vk-ai-aggregator/internal/service/joborchestrator"
-	"vk-ai-aggregator/internal/service/referralservice"
 )
 
 func main() {
@@ -98,76 +93,23 @@ func main() {
 	}
 
 	billing := billingservice.New(billingRepo, billingservice.WithPriceOverrides(cfg.PriceOverrides))
-	referrals := referralservice.New(referralsRepo, billing, referralservice.Config{
-		CodeLength:                  cfg.ReferralCodeLength,
-		ReferrerSignupRewardCredits: cfg.ReferralReferrerSignupRewardCredits,
-		ReferredSignupRewardCredits: cfg.ReferralReferredSignupRewardCredits,
-	})
 	uowMgr := postgres.NewUnitOfWork(pool)
 	// The orchestrator records a queued outbox event; the worker's outbox relay
 	// publishes it to the queue, so the api process does not enqueue directly
 	// (audit A2).
 	orch := joborchestrator.New(jobs, uowMgr, billing, cfg.MaxJobCost)
 	router := commandrouter.New()
-	vkDialogState := dialogstate.New(redisqueue.NewDialogStateStore(rdb), dialogstate.Config{
-		TTL: cfg.VKDialogModeTTL,
-	})
-	vkAntiSpam := antispam.New(redisqueue.NewAntiSpamStore(rdb), jobs, antispam.Config{
-		Enabled:             cfg.VKAntiSpamEnabled,
-		MessageLimit:        cfg.VKAntiSpamMessageLimit,
-		MessageWindow:       cfg.VKAntiSpamMessageWindow,
-		GPTLimit:            cfg.VKAntiSpamGPTLimit,
-		GPTWindow:           cfg.VKAntiSpamGPTWindow,
-		Cooldown:            cfg.VKAntiSpamCooldown,
-		ViolationLimit:      cfg.VKAntiSpamViolationLimit,
-		ViolationWindow:     cfg.VKAntiSpamViolationWindow,
-		BlockDuration:       cfg.VKAntiSpamBlockDuration,
-		NewUserAge:          cfg.VKAntiSpamNewUserAge,
-		NewUserMessageLimit: cfg.VKAntiSpamNewUserMessageLimit,
-		NewUserGPTLimit:     cfg.VKAntiSpamNewUserGPTLimit,
-		NewUserGPTWindow:    cfg.VKAntiSpamNewUserGPTWindow,
-		ActiveGPTJobLimit:   cfg.VKAntiSpamActiveGPTJobLimit,
-	})
-
-	var vkControl vkdelivery.ControlClient
-	var vkProfile vkdelivery.UserProfileClient
-	if cfg.VKAccessToken != "" {
-		vkClient := vkdelivery.NewHTTPClient(vkdelivery.HTTPConfig{
-			AccessToken: cfg.VKAccessToken,
-			APIVersion:  cfg.VKAPIVersion,
-			BaseURL:     cfg.VKAPIBaseURL,
-		})
-		vkControl = vkClient
-		vkProfile = vkClient
-		logger.Info("using real vk control delivery client")
-	} else {
-		logger.Warn("vk control responses disabled because VK_ACCESS_TOKEN is empty")
-	}
-
-	vkHandler := vkinbound.NewHandler(vkinbound.Config{
-		ConfirmationToken:                   cfg.VKConfirmationToken,
-		Secret:                              cfg.VKSecret,
-		WelcomeAttachment:                   cfg.VKWelcomeAttachment,
-		MenuButtonMode:                      cfg.VKMenuButtonMode,
-		UnroutedTextMode:                    cfg.VKUnroutedTextMode,
-		MenuFeatures:                        vkMenuFeatures(cfg),
-		ReferralLinkBase:                    cfg.VKReferralLinkBase,
-		ReferralShareBase:                   cfg.VKReferralShareBase,
-		ReferralReferrerSignupRewardCredits: cfg.ReferralReferrerSignupRewardCredits,
-	}, vkinbound.Deps{
+	vkHandler := vkbot.NewHandler(cfg, vkbot.Deps{
+		Redis:        rdb,
 		Idempotency:  idem,
 		Inbound:      inbound,
 		Users:        users,
 		Jobs:         jobs,
 		Commands:     commands,
 		Billing:      billing,
-		Referrals:    referrals,
+		Referrals:    referralsRepo,
 		Orchestrator: orch,
 		Router:       router,
-		Control:      vkControl,
-		Profile:      vkProfile,
-		DialogState:  vkDialogState,
-		AntiSpam:     vkAntiSpam,
 		Logger:       logger,
 	})
 
@@ -231,45 +173,6 @@ func main() {
 	defer cancel()
 	_ = srv.Shutdown(shutdownCtx)
 	logger.Info("api stopped")
-}
-
-func vkMenuFeatures(cfg config.Config) vkinbound.MenuFeatureFlags {
-	disabled := map[domain.CommandType]bool{}
-	disableWhenFalse := func(enabled bool, commands ...domain.CommandType) {
-		if enabled {
-			return
-		}
-		for _, command := range commands {
-			disabled[command] = true
-		}
-	}
-
-	disableWhenFalse(cfg.VKMenuVideoEnabled, domain.CommandMenuVideo)
-	disableWhenFalse(cfg.VKMenuImageEnabled, domain.CommandMenuImage)
-	disableWhenFalse(cfg.VKMenuGPTEnabled, domain.CommandMenuText)
-	disableWhenFalse(cfg.VKMenuStudentsEnabled, domain.CommandMenuStudents)
-	disableWhenFalse(cfg.VKMenuAccountEnabled, domain.CommandAccount)
-	disableWhenFalse(cfg.VKMenuTopUpEnabled, domain.CommandTopUp)
-	disableWhenFalse(cfg.VKMenuVideoSora2Enabled, domain.CommandMenuVideoSora2)
-	disableWhenFalse(cfg.VKMenuVideoSora2StartEnabled, domain.CommandMenuVideoSora2Start)
-	disableWhenFalse(cfg.VKMenuVideoSora2ExamplesEnabled, domain.CommandMenuVideoSora2Examples)
-	disableWhenFalse(cfg.VKMenuVideoKling21Enabled, domain.CommandMenuVideoKling21)
-	disableWhenFalse(cfg.VKMenuVideoKling21StartEnabled, domain.CommandMenuVideoKling21Start)
-	disableWhenFalse(cfg.VKMenuVideoKling21ExamplesEnabled, domain.CommandMenuVideoKling21Examples)
-	disableWhenFalse(cfg.VKMenuVideoSeedance1Enabled, domain.CommandMenuVideoSeedance1)
-	disableWhenFalse(cfg.VKMenuVideoSeedance1LiteEnabled, domain.CommandMenuVideoSeedance1Lite)
-	disableWhenFalse(cfg.VKMenuVideoSeedance1ProEnabled, domain.CommandMenuVideoSeedance1Pro)
-	disableWhenFalse(cfg.VKMenuVideoHaiuo02Enabled, domain.CommandMenuVideoHaiuo02)
-	disableWhenFalse(cfg.VKMenuVideoHaiuo02StandardEnabled, domain.CommandMenuVideoHaiuo02Standard)
-	disableWhenFalse(cfg.VKMenuVideoHaiuo02FastEnabled, domain.CommandMenuVideoHaiuo02Fast)
-	disableWhenFalse(cfg.VKMenuImageTextEnabled, domain.CommandMenuImageText)
-	disableWhenFalse(cfg.VKMenuImageReferenceEnabled, domain.CommandMenuImageReference)
-	disableWhenFalse(cfg.VKMenuStudentsSolverEnabled, domain.CommandMenuStudentSolver)
-	disableWhenFalse(cfg.VKMenuStudentsPresentationEnabled, domain.CommandMenuStudentPresentation)
-	disableWhenFalse(cfg.VKMenuStudentsReportEnabled, domain.CommandMenuStudentReport)
-	disableWhenFalse(cfg.VKMenuStudentsQAEnabled, domain.CommandMenuStudentQA)
-
-	return vkinbound.MenuFeatureFlags{DisabledCommands: disabled}
 }
 
 // healthHandler reports 200 only when PostgreSQL and Redis are both reachable.

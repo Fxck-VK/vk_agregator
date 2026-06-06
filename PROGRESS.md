@@ -1529,3 +1529,39 @@ Status: **completed**.
 
 - Docs-only change. Runtime build/test were intentionally not run because no
   Go, frontend, env or migration files changed.
+
+---
+
+## PR-17.2 - Extract VK bot API module
+
+Status: **completed**.
+
+### STEP 0 context
+
+- `cmd/api/main.go` previously owned VK delivery control/profile client setup,
+  Redis-backed dialog mode, Redis-backed anti-spam, referral service wiring,
+  `vkinbound.NewHandler` and `vkMenuFeatures`.
+- Shared backend-core deps remain outside the surface module: repositories,
+  billing service, job orchestrator, command router, Redis client, config and
+  logger.
+
+### What changed
+
+- Added `internal/app/vkbot/module.go` as the VK text bot app-surface wiring
+  module.
+- Moved VK control/profile client setup, dialog state, anti-spam, referral
+  service construction, inbound handler construction and menu feature mapping
+  out of `cmd/api/main.go`.
+- `cmd/api/main.go` now creates shared core deps and mounts the returned VK
+  handler at `/webhooks/vk`; admin, Mini App, metrics and health routes are
+  unchanged.
+- Runtime behavior is intended to stay unchanged: VK inbound still creates
+  Jobs through `joborchestrator`; provider calls remain worker-owned and
+  billing/referral rewards still go through `billingservice` ledger methods.
+
+### Checks
+
+- `go test ./internal/adapter/inbound/vk ./internal/service/antispam ./internal/service/dialogstate ./internal/service/referralservice` - exit 0.
+- `go test ./internal/app/vkbot` - exit 0.
+- `go build ./...` - exit 0.
+- `go test ./...` - exit 0.
