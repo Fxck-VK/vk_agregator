@@ -1532,6 +1532,9 @@ Status: **completed**.
 - `go test ./...` - exit 0.
 - `go build ./...` - exit 0.
 - `npm --prefix web/miniapp run build` - exit 0.
+- `gofmt -l internal/adapter/inbound/miniapp/handler.go internal/adapter/inbound/miniapp/dto.go internal/adapter/inbound/miniapp/conversation_id.go internal/adapter/inbound/miniapp/handler_test.go` - clean.
+- `git grep -nE "^(<<<<<<<|=======|>>>>>>>)"` - clean.
+- `git diff --check` - exit 0; only markdown CRLF normalization warnings.
 
 ---
 
@@ -1644,6 +1647,50 @@ Status: **completed**.
 - `gofmt -l internal/service/dialogcontext/service.go internal/service/dialogcontext/service_test.go internal/worker/worker.go internal/worker/worker_test.go` - clean.
 - `git grep -nE "^(<<<<<<<|=======|>>>>>>>)"` - clean.
 - `git diff --check` - exit 0; only markdown CRLF normalization warnings.
+
+---
+
+## PR-18.3 - Mini App uses durable chat context
+
+Status: **completed**.
+
+### STEP 0 context
+
+- Mini App chat used `internal/adapter/inbound/miniapp/conversation.go` as a
+  process-local prompt-prefix memory store.
+- `createChatMessage` used the store to prepend recent Mini App turns to the
+  prompt before creating a text job.
+- `getJob` used `captureChatResult` to read a completed text artifact and put
+  the assistant answer back into the process-local store.
+
+### What changed
+
+- Removed the process-local Mini App chat memory store.
+- Kept only safe `conversation_id` normalization for the BFF contract.
+- `POST /miniapp/chat/messages` now creates a text job with raw current prompt
+  plus explicit durable chat params:
+  - `conversation_source=miniapp`;
+  - `external_thread_id=<normalized conversation_id>`;
+  - public `model_name=ChatGPT`.
+- Initial `conversation_id` in job params is left empty so the worker can patch
+  the durable backend conversation UUID after `dialogcontext.Prepare`.
+- `conversation_id=""` remains backward compatible as `default`.
+
+### Compatibility and isolation
+
+- Mini App auth, rate limiting, billing reservation and job creation still run
+  through the same BFF/orchestrator path.
+- Mini App BFF does not call providers and no longer stores prompt/answer
+  history in process memory.
+- VK bot context remains unchanged.
+
+### Checks
+
+- `go test ./internal/adapter/inbound/miniapp` - exit 0.
+- `go test ./internal/adapter/inbound/miniapp ./internal/service/dialogcontext ./internal/worker` - exit 0.
+- `go test ./...` - exit 0.
+- `go build ./...` - exit 0.
+- `npm --prefix web/miniapp run build` - exit 0.
 
 ---
 

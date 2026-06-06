@@ -223,7 +223,7 @@
   references from text job params and preserve VK bot fallback. Introduce a
   small shared chat job contract/facade only if it avoids duplication without
   calling providers.
-- [ ] PR-18.3: Switch Mini App `/miniapp/chat/messages` from process-local BFF
+- [x] PR-18.3: Switch Mini App `/miniapp/chat/messages` from process-local BFF
   context to durable shared chat core. Remove prompt-prefix memory from the
   BFF and keep `conversation_id="" -> default` compatibility.
 - [ ] PR-18.4: Add authenticated Mini App conversation list/history endpoints

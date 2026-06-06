@@ -396,10 +396,12 @@ func TestHandler_ChatMessage_CreatesTextJobWithPublicAlias(t *testing.T) {
 		t.Fatalf("expected stored job: %v", err)
 	}
 	var params struct {
-		Prompt         string `json:"prompt"`
-		ModelID        string `json:"model_id"`
-		ModelName      string `json:"model_name"`
-		ConversationID string `json:"conversation_id"`
+		Prompt             string `json:"prompt"`
+		ModelID            string `json:"model_id"`
+		ModelName          string `json:"model_name"`
+		ConversationID     string `json:"conversation_id"`
+		ConversationSource string `json:"conversation_source"`
+		ExternalThreadID   string `json:"external_thread_id"`
 	}
 	if err := json.Unmarshal(job.Params, &params); err != nil {
 		t.Fatalf("invalid job params: %v", err)
@@ -407,23 +409,26 @@ func TestHandler_ChatMessage_CreatesTextJobWithPublicAlias(t *testing.T) {
 	if job.OperationType != domain.OperationTextGenerate || job.Modality != domain.ModalityText {
 		t.Fatalf("unexpected job operation/modality: %s/%s", job.OperationType, job.Modality)
 	}
-	if params.Prompt != "hello chat" || params.ModelID != "chatgpt" || params.ModelName != "ChatGPT" || params.ConversationID != "chat-1" {
+	if params.Prompt != "hello chat" || params.ModelID != "chatgpt" || params.ModelName != "ChatGPT" {
 		t.Fatalf("unexpected job params: %+v", params)
+	}
+	if params.ConversationID != "" || params.ConversationSource != "miniapp" || params.ExternalThreadID != "chat-1" {
+		t.Fatalf("unexpected conversation params: %+v", params)
 	}
 	if strings.Contains(strings.ToLower(string(job.Params)), "deepseek") || strings.Contains(strings.ToLower(string(job.Params)), "deepinfra") {
 		t.Fatalf("job params leaked provider/model detail: %s", string(job.Params))
 	}
 }
 
-func TestHandler_ChatMessage_ContextCapturesSucceededTextArtifact(t *testing.T) {
+func TestHandler_ChatMessage_UsesDurableRefsWithoutPromptPrefix(t *testing.T) {
 	fixture := newTestFixture("", nil)
 	routes := fixture.handler.Routes()
 	ctx := context.Background()
 
-	createChat := func(prompt, idem string) uuid.UUID {
+	createChat := func(prompt, threadID, idem string) uuid.UUID {
 		body, _ := json.Marshal(map[string]string{
 			"prompt":          prompt,
-			"conversation_id": "chat-context",
+			"conversation_id": threadID,
 		})
 		req := httptest.NewRequest(http.MethodPost, "/miniapp/chat/messages", bytes.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
@@ -447,72 +452,112 @@ func TestHandler_ChatMessage_ContextCapturesSucceededTextArtifact(t *testing.T) 
 		return id
 	}
 
-	firstJobID := createChat("first question", "chat-context-1")
-	user, err := fixture.userRepo.GetByVKUserID(ctx, 777)
-	if err != nil {
-		t.Fatalf("get user: %v", err)
-	}
-	artifact := &domain.Artifact{
-		OwnerUserID:   user.ID,
-		JobID:         &firstJobID,
-		Kind:          domain.ArtifactKindOutput,
-		MediaType:     domain.MediaTypeText,
-		MimeType:      "text/plain",
-		StorageBucket: "artifacts",
-		StorageKey:    "outputs/" + uuid.NewString() + ".txt",
-		SHA256:        uuid.NewString(),
-		SizeBytes:     int64(len("first answer")),
-		Status:        domain.ArtifactStatusReady,
-	}
-	if err := fixture.artifactRepo.Create(ctx, artifact); err != nil {
-		t.Fatalf("create artifact: %v", err)
-	}
-	if err := fixture.objects.Put(ctx, artifact.StorageBucket, artifact.StorageKey, []byte("first answer"), artifact.MimeType); err != nil {
-		t.Fatalf("put artifact: %v", err)
-	}
-	artID := artifact.ID
-	if err := fixture.moderationRepo.Create(ctx, &domain.ModerationResult{
-		JobID:      firstJobID,
-		ArtifactID: &artID,
-		Stage:      domain.ModerationStageOutput,
-		Decision:   domain.ModerationAllow,
-		Provider:   "test",
-	}); err != nil {
-		t.Fatalf("create moderation result: %v", err)
-	}
-	job, err := fixture.jobRepo.GetByID(ctx, firstJobID)
+	firstJobID := createChat("first question", "thread-a", "chat-context-1")
+	secondJobID := createChat("follow up", "thread-a", "chat-context-2")
+	thirdJobID := createChat("other thread", "thread-b", "chat-context-3")
+
+	firstJob, err := fixture.jobRepo.GetByID(ctx, firstJobID)
 	if err != nil {
 		t.Fatalf("get first job: %v", err)
 	}
-	job.OutputArtifactIDs = []uuid.UUID{artifact.ID}
-	if err := fixture.jobRepo.Update(ctx, job); err != nil {
-		t.Fatalf("update job artifact: %v", err)
-	}
-	if err := fixture.jobRepo.UpdateStatus(ctx, firstJobID, job.Status, domain.JobStatusSucceeded, "", ""); err != nil {
-		t.Fatalf("mark job succeeded: %v", err)
-	}
-
-	getReq := httptest.NewRequest(http.MethodGet, "/miniapp/jobs/"+firstJobID.String(), nil)
-	getReq.Header.Set("X-Launch-Params", devLaunchParams(777))
-	getW := httptest.NewRecorder()
-	routes.ServeHTTP(getW, getReq)
-	if getW.Code != http.StatusOK {
-		t.Fatalf("get job: expected 200, got %d: %s", getW.Code, getW.Body.String())
-	}
-
-	secondJobID := createChat("follow up", "chat-context-2")
 	secondJob, err := fixture.jobRepo.GetByID(ctx, secondJobID)
 	if err != nil {
 		t.Fatalf("get second job: %v", err)
 	}
-	var params struct {
-		Prompt string `json:"prompt"`
+	thirdJob, err := fixture.jobRepo.GetByID(ctx, thirdJobID)
+	if err != nil {
+		t.Fatalf("get third job: %v", err)
 	}
-	if err := json.Unmarshal(secondJob.Params, &params); err != nil {
+
+	var firstParams, secondParams, thirdParams struct {
+		Prompt             string `json:"prompt"`
+		ConversationSource string `json:"conversation_source"`
+		ExternalThreadID   string `json:"external_thread_id"`
+	}
+	if err := json.Unmarshal(firstJob.Params, &firstParams); err != nil {
+		t.Fatalf("invalid first job params: %v", err)
+	}
+	if err := json.Unmarshal(secondJob.Params, &secondParams); err != nil {
 		t.Fatalf("invalid second job params: %v", err)
 	}
-	if !strings.Contains(params.Prompt, "first question") || !strings.Contains(params.Prompt, "first answer") || !strings.Contains(params.Prompt, "follow up") {
-		t.Fatalf("second prompt missed conversation context: %q", params.Prompt)
+	if err := json.Unmarshal(thirdJob.Params, &thirdParams); err != nil {
+		t.Fatalf("invalid third job params: %v", err)
+	}
+
+	if firstParams.Prompt != "first question" || secondParams.Prompt != "follow up" || thirdParams.Prompt != "other thread" {
+		t.Fatalf("BFF should not prefix prompts with local context: first=%q second=%q third=%q", firstParams.Prompt, secondParams.Prompt, thirdParams.Prompt)
+	}
+	if firstParams.ConversationSource != "miniapp" || secondParams.ConversationSource != "miniapp" || thirdParams.ConversationSource != "miniapp" {
+		t.Fatalf("missing miniapp conversation source: first=%+v second=%+v third=%+v", firstParams, secondParams, thirdParams)
+	}
+	if firstParams.ExternalThreadID != "thread-a" || secondParams.ExternalThreadID != "thread-a" || thirdParams.ExternalThreadID != "thread-b" {
+		t.Fatalf("thread refs not isolated: first=%+v second=%+v third=%+v", firstParams, secondParams, thirdParams)
+	}
+}
+
+func TestHandler_ChatMessage_InvalidConversationID(t *testing.T) {
+	routes := newTestHandler("").Routes()
+
+	body, _ := json.Marshal(map[string]string{
+		"prompt":          "hello chat",
+		"conversation_id": "bad/id",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/miniapp/chat/messages", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Launch-Params", devLaunchParams(777))
+
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "invalid conversation id") {
+		t.Fatalf("expected safe invalid conversation message, got %s", w.Body.String())
+	}
+}
+
+func TestHandler_ChatMessage_EmptyConversationIDUsesDefaultThread(t *testing.T) {
+	fixture := newTestFixture("", nil)
+	routes := fixture.handler.Routes()
+
+	body, _ := json.Marshal(map[string]string{
+		"prompt": "hello default thread",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/miniapp/chat/messages", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Launch-Params", devLaunchParams(777))
+	req.Header.Set("X-Idempotency-Key", "chat-default-thread")
+
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("invalid response json: %v", err)
+	}
+	jobID, err := uuid.Parse(resp.ID)
+	if err != nil {
+		t.Fatalf("invalid job id: %v", err)
+	}
+	job, err := fixture.jobRepo.GetByID(context.Background(), jobID)
+	if err != nil {
+		t.Fatalf("get job: %v", err)
+	}
+	var params struct {
+		Prompt             string `json:"prompt"`
+		ConversationSource string `json:"conversation_source"`
+		ExternalThreadID   string `json:"external_thread_id"`
+	}
+	if err := json.Unmarshal(job.Params, &params); err != nil {
+		t.Fatalf("invalid job params: %v", err)
+	}
+	if params.Prompt != "hello default thread" || params.ConversationSource != "miniapp" || params.ExternalThreadID != "default" {
+		t.Fatalf("unexpected default thread params: %+v", params)
 	}
 }
 

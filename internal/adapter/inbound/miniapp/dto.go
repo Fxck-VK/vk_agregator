@@ -41,10 +41,12 @@ type ChatMessageRequest struct {
 }
 
 type miniAppJobParams struct {
-	Prompt         string `json:"prompt"`
-	ModelID        string `json:"model_id,omitempty"`
-	ModelName      string `json:"model_name,omitempty"`
-	ConversationID string `json:"conversation_id,omitempty"`
+	Prompt             string                    `json:"prompt"`
+	ModelID            string                    `json:"model_id,omitempty"`
+	ModelName          string                    `json:"model_name,omitempty"`
+	ConversationID     string                    `json:"conversation_id,omitempty"`
+	ConversationSource domain.ConversationSource `json:"conversation_source,omitempty"`
+	ExternalThreadID   string                    `json:"external_thread_id,omitempty"`
 }
 
 // EstimateDTO is returned by POST /miniapp/estimate. It exposes only

@@ -68,10 +68,9 @@ type Deps struct {
 
 // Handler serves the /miniapp/* routes.
 type Handler struct {
-	cfg           Config
-	deps          Deps
-	logger        *slog.Logger
-	conversations *conversationStore
+	cfg    Config
+	deps   Deps
+	logger *slog.Logger
 }
 
 // NewHandler builds a miniapp Handler.
@@ -80,7 +79,7 @@ func NewHandler(cfg Config, deps Deps) *Handler {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Handler{cfg: cfg, deps: deps, logger: logger, conversations: newConversationStore()}
+	return &Handler{cfg: cfg, deps: deps, logger: logger}
 }
 
 // Routes returns an http.Handler with the miniapp routes registered.
@@ -460,14 +459,13 @@ func (h *Handler) createChatMessage(w http.ResponseWriter, r *http.Request) {
 	}
 	idemKey := fmt.Sprintf("miniapp_chat:%d:%s", vkUserID, clientKey)
 	correlationID := fmt.Sprintf("miniapp-chat:%d:%s", vkUserID, clientKey)
-	conversationKey := miniAppConversationKey(vkUserID, conversationID)
-	prompt := h.conversations.promptFor(conversationKey, req.Prompt)
 
 	params, _ := json.Marshal(miniAppJobParams{
-		Prompt:         prompt,
-		ModelID:        miniAppChatModelID,
-		ModelName:      miniAppChatPublicModelName,
-		ConversationID: conversationID,
+		Prompt:             req.Prompt,
+		ModelID:            miniAppChatModelID,
+		ModelName:          miniAppChatPublicModelName,
+		ConversationSource: domain.ConversationSourceMiniApp,
+		ExternalThreadID:   conversationID,
 	})
 
 	job, err := h.deps.Orchestrator.CreateJob(r.Context(), joborchestrator.CreateJobInput{
@@ -482,7 +480,6 @@ func (h *Handler) createChatMessage(w http.ResponseWriter, r *http.Request) {
 	})
 	switch {
 	case err == nil:
-		h.conversations.trackUserJob(job.ID, conversationKey, req.Prompt)
 		writeJSON(w, http.StatusCreated, newChatJobDTO(job))
 	case errors.Is(err, domain.ErrInsufficientCredits):
 		writeJSON(w, http.StatusPaymentRequired, map[string]any{
@@ -581,44 +578,7 @@ func (h *Handler) getJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.captureChatResult(r.Context(), user.ID, job)
 	writeJSON(w, http.StatusOK, newJobDTO(job))
-}
-
-func (h *Handler) captureChatResult(ctx context.Context, userID uuid.UUID, job *domain.Job) {
-	if h.conversations == nil || job == nil || job.OperationType != domain.OperationTextGenerate || job.Status != domain.JobStatusSucceeded {
-		return
-	}
-	if !h.conversations.hasJob(job.ID) {
-		return
-	}
-	text, ok := h.textOutputForContext(ctx, userID, job)
-	if !ok {
-		return
-	}
-	h.conversations.appendAssistantForJob(job.ID, text)
-}
-
-func (h *Handler) textOutputForContext(ctx context.Context, userID uuid.UUID, job *domain.Job) (string, bool) {
-	if h.deps.Artifacts == nil || h.deps.Objects == nil || len(job.OutputArtifactIDs) == 0 {
-		return "", false
-	}
-	art, err := h.deps.Artifacts.GetByID(ctx, job.OutputArtifactIDs[0])
-	if err != nil || art.OwnerUserID != userID || !h.artifactVisible(ctx, art, userID) {
-		return "", false
-	}
-	if art.MediaType != domain.MediaTypeText && !strings.HasPrefix(strings.ToLower(art.MimeType), "text/") {
-		return "", false
-	}
-	data, err := h.deps.Objects.GetObject(ctx, art.StorageBucket, art.StorageKey)
-	if err != nil {
-		return "", false
-	}
-	text := strings.TrimSpace(string(data))
-	if text == "" {
-		return "", false
-	}
-	return truncateContextText(text), true
 }
 
 func (h *Handler) getBalance(w http.ResponseWriter, r *http.Request) {

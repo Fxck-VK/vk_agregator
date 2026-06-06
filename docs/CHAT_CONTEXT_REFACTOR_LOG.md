@@ -119,3 +119,38 @@ Tests added:
 Behavior note:
 
 - PR-18.2 does not switch Mini App BFF behavior yet. That remains PR-18.3.
+
+## 2026-06-06 - PR-18.3 Mini App durable context switch implemented
+
+Changes:
+
+- Removed the Mini App process-local prompt-prefix memory store from
+  `internal/adapter/inbound/miniapp`.
+- `POST /miniapp/chat/messages` now creates text jobs with the current user
+  prompt only. It does not prepend prior turns in the BFF.
+- Mini App chat jobs carry explicit durable context refs:
+  - `conversation_source=miniapp`;
+  - `external_thread_id=<normalized conversation_id>`.
+- The user-facing `conversation_id` stays an opaque per-user thread id.
+  Empty `conversation_id` still maps to `default`.
+- The durable backend `conversation_id` is still worker-owned and is patched
+  into `job.Params` after `dialogcontext.Prepare` creates/loads the
+  conversation.
+- Completed assistant messages are saved by worker/dialogcontext, not by
+  Mini App BFF.
+
+Tests added/updated:
+
+- Chat job creation sets Mini App durable conversation refs and keeps public
+  model alias `ChatGPT`.
+- Empty Mini App `conversation_id` maps to `default`.
+- Invalid Mini App `conversation_id` returns a safe 400.
+- Mini App BFF no longer prefixes prompts with local history and keeps thread
+  refs isolated by `external_thread_id`.
+
+Behavior note:
+
+- Mini App chat context now survives API restart after jobs are processed by
+  the worker, because conversation history is stored through the durable
+  conversation repository.
+- Conversation list/history endpoints are still PR-18.4 follow-up work.
