@@ -917,52 +917,6 @@ body {
 .create-choice-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .create-choice-card span { display: block; font-size: 18px; font-weight: 850; }
 .create-choice-card small { color: var(--fg-muted); font-size: 13px; }
-.choice-post-preview {
-  display: grid;
-  gap: var(--space-3);
-  border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--line));
-  border-radius: var(--radius-card);
-  background: color-mix(in srgb, var(--surface) 88%, var(--accent-soft));
-  padding: var(--space-4);
-  box-shadow: var(--shadow-soft);
-}
-.choice-post-preview__head {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-}
-.choice-post-preview__avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  object-fit: cover;
-  background: var(--surface-2);
-}
-.choice-post-preview__avatar--fallback {
-  display: grid;
-  place-items: center;
-  color: var(--on-accent);
-  background: var(--accent);
-  font-size: 12px;
-  font-weight: 900;
-}
-.choice-post-preview__head div {
-  display: grid;
-  gap: 1px;
-}
-.choice-post-preview__head strong {
-  font-size: 14px;
-}
-.choice-post-preview__head small {
-  color: var(--fg-muted);
-  font-size: 12px;
-}
-.choice-post-preview p {
-  margin: 0;
-  color: var(--fg);
-  font-size: 14px;
-  line-height: 1.45;
-}
 .workflow-empty, .workflow-error { border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--surface); color: var(--fg-muted); padding: var(--space-5); text-align: center; }
 .workflow-error { color: var(--error); text-align: left; }
 .screen-title { display: flex; flex-direction: column; gap: var(--space-2); }

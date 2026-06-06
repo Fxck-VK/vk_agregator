@@ -427,12 +427,11 @@ owner feedback requested a clearer first screen and a less hidden chat history
 entry point. PR-16.3.1 is a frontend-only UX revision.
 
 Decision: remove the top Create `SegmentedControl`. The Create tab starts with
-three large action cards: `Создать фото`, `Создать видео`, `Создать пост`.
-Photo maps to existing `image_generate`, video maps to existing
-`video_generate`, and post maps to existing `text_generate`. No new backend
-operation or BFF contract is added. The post path produces a text VK-post
-preview; media can still be generated through the existing photo/video paths
-and only through backend artifact routes.
+large action cards for `Создать фото` and `Создать видео`. Photo maps to
+existing `image_generate`, and video maps to existing `video_generate`. No new
+backend operation or BFF contract is added. The previous `Создать пост` entry is
+temporarily disabled in the Create tab; text generation remains available only
+through the Chat tab / VK bot paths.
 
 The PR-10 Generate -> Status -> Result flow remains reused after a type is
 chosen. Backend estimate/gating stays unchanged: `POST /miniapp/estimate`

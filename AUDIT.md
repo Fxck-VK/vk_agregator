@@ -394,13 +394,12 @@ Date: 2026-06-06
 The Create tab header cleanup and service-list revision are frontend-only. They
 do not change Mini App BFF contracts, provider routing, billing, moderation,
 artifact ownership or job polling. Create choices still route to the existing
-backend-owned operations (`image_generate`, `video_generate`, `text_generate`).
+backend-owned media operations (`image_generate`, `video_generate`).
 
-The VK post preview is now shown inside the post creation flow and the final
-result surface, not inside the initial service selector. Preview author data is
-display-only VK bridge user metadata; it is not persisted and is not used as a
-trusted backend identity source. Generated text remains React text, and media
-still comes only from backend artifact routes.
+The Create-post entry and its local preview are temporarily disabled in the
+Create tab. Text generation still exists only in Chat/VK bot flows and remains
+backend-owned. Generated text remains React text, and media still comes only
+from backend artifact routes.
 
 ---
 

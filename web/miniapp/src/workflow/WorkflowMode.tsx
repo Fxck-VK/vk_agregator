@@ -45,10 +45,6 @@ const CREATE_CHOICES: Array<{
     title: "Создать видео",
     modality: "video",
   },
-  {
-    title: "Создать пост",
-    modality: "text",
-  },
 ];
 
 const HISTORY_STATUS_FILTERS = [
@@ -116,11 +112,6 @@ function sortedJobs(jobs: Job[]): Job[] {
   return [...jobs].sort((a, b) => b.created_at.localeCompare(a.created_at));
 }
 
-function initials(name: string): string {
-  const parts = name.trim().split(/\s+/);
-  return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase() || "Я";
-}
-
 function messageForJob(job: Job | undefined, chats: Chat[]): ChatMessage | null {
   if (!job) return null;
   for (const chat of chats) {
@@ -157,8 +148,8 @@ export function WorkflowMode({
   onCreateJob,
 }: WorkflowModeProps) {
   const [screen, setScreen] = useState<WorkflowScreen>("home");
-  const [modalityId, setModalityId] = useState<ModalityId>("text");
-  const [modelId, setModelId] = useState(modalityById("text").models[0].id);
+  const [modalityId, setModalityId] = useState<ModalityId>("image");
+  const [modelId, setModelId] = useState(modalityById("image").models[0].id);
   const [prompt, setPrompt] = useState("");
   const [estimate, setEstimate] = useState<EstimateResponse | null>(null);
   const [estimateLoading, setEstimateLoading] = useState(false);
@@ -306,7 +297,6 @@ export function WorkflowMode({
             title={`Опишите: ${currentModality.label.toLowerCase()}`}
             text="Мы заранее покажем стоимость и подскажем, можно ли запускать генерацию."
           />
-          {modalityId === "text" && <PostChoicePreview user={user} />}
           <div className="workflow-form">
             <div className="workflow-field">
               <label htmlFor="workflow-model">Модель</label>
@@ -399,8 +389,8 @@ export function WorkflowMode({
           <WorkflowNav currentModality={currentModality.label} onBack={backToChoice} onHistory={openTypeHistory} />
           <ScreenTitle
             eyebrow="Результат"
-            title="Пост готов к проверке"
-            text="Посмотрите, как результат будет выглядеть для подписчиков."
+            title="Результат готов к проверке"
+            text="Посмотрите результат перед дальнейшим использованием."
           />
           <div className="workflow-signature-preview">
             <ResultCard
@@ -538,30 +528,6 @@ function ScreenTitle({ eyebrow, title, text }: { eyebrow: string; title: string;
       <h1>{title}</h1>
       <p>{text}</p>
     </header>
-  );
-}
-
-function PostChoicePreview({ user }: { user: VkUser }) {
-  return (
-    <div className="choice-post-preview" aria-label="Превью поста">
-      <div className="choice-post-preview__head">
-        {user.avatar ? (
-          <img className="choice-post-preview__avatar" src={user.avatar} alt="" />
-        ) : (
-          <span className="choice-post-preview__avatar choice-post-preview__avatar--fallback" aria-hidden="true">
-            {initials(user.name)}
-          </span>
-        )}
-        <div>
-          <strong>{user.name}</strong>
-          <small>сейчас</small>
-        </div>
-      </div>
-      <p>
-        Здесь появится текст будущего поста. Его можно будет проверить и
-        отредактировать перед публикацией.
-      </p>
-    </div>
   );
 }
 

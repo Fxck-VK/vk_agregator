@@ -43,7 +43,7 @@ type SubmitRequest = {
 function tabTitle(tab: AppTab, activeChat?: Chat | null): { name: string; sub: string } {
   switch (tab) {
     case "create":
-      return { name: "Создать", sub: "фото, видео и посты" };
+      return { name: "Создать", sub: "фото и видео" };
     case "settings":
       return { name: "Настройки", sub: "тема, баланс, история" };
     default:

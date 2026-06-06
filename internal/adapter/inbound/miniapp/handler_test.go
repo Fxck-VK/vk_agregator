@@ -101,6 +101,31 @@ func TestVerifyLaunchParams_Expired(t *testing.T) {
 	}
 }
 
+func TestVerifyLaunchParams_AllowsSmallFutureClockSkew(t *testing.T) {
+	const secret = "test-secret"
+	futureTS := time.Now().Add(2 * time.Minute).Unix()
+	raw := buildSignedParams(777, secret, futureTS)
+
+	params, err := miniappinbound.VerifyLaunchParams(raw, secret, time.Hour)
+	if err != nil {
+		t.Fatalf("expected small future skew to pass, got %v", err)
+	}
+	if got := params.Get("vk_user_id"); got != "777" {
+		t.Fatalf("unexpected vk_user_id %q", got)
+	}
+}
+
+func TestVerifyLaunchParams_RejectsLargeFutureTimestamp(t *testing.T) {
+	const secret = "test-secret"
+	futureTS := time.Now().Add(10 * time.Minute).Unix()
+	raw := buildSignedParams(777, secret, futureTS)
+
+	_, err := miniappinbound.VerifyLaunchParams(raw, secret, time.Hour)
+	if !errors.Is(err, miniappinbound.ErrInvalidTimestamp) {
+		t.Fatalf("expected ErrInvalidTimestamp, got %v", err)
+	}
+}
+
 func TestVerifyLaunchParams_MissingTimestampWithMaxAge(t *testing.T) {
 	const secret = "test-secret"
 	params := url.Values{}

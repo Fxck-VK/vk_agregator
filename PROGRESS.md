@@ -1169,18 +1169,18 @@ Status: **completed**.
   Settings tabs no longer show the `AI` avatar/header strip or chat-history
   button.
 - Create starts with a plain vertical service list: `Создать фото`,
-  `Создать видео`, `Создать пост`. The VK post preview is no longer embedded in
-  the service choice card.
-- The post preview now appears inside the `Создать пост` flow and in the final
-  result surface, using the VK user avatar/name for post authorship.
+  `Создать видео`. The `Создать пост` entry is temporarily disabled in this
+  tab; text generation remains available through Chat/VK bot flows.
+- The old Create-post preview was removed from the Create flow. Final result
+  rendering still uses safe React text/media rendering for backend artifacts.
 - Backend contracts, billing, artifact access and polling ownership were not
   changed.
 
 ### Checks
 
 - `npm run build` in `web/miniapp` - exit 0.
-- Browser smoke on the ngrok Mini App - Create tab has no chat header, service
-  choices are clean, and the post preview appears only inside `Создать пост`.
+- Browser smoke on the ngrok Mini App - Create tab has no chat header and
+  service choices are limited to photo/video.
 
 ---
 
@@ -1290,11 +1290,12 @@ Status: **completed**.
 
 ### What changed
 
-- Removed the top Create operation segment. Create now opens on three large
-  cards: `Создать фото`, `Создать видео`, `Создать пост`.
+- Removed the top Create operation segment. Create now opens on two large
+  cards: `Создать фото`, `Создать видео`.
 - The cards route into the existing PR-10 Generate -> Status -> Result flow:
-  photo uses `image_generate`, video uses `video_generate`, post uses
-  `text_generate`.
+  photo uses `image_generate`, video uses `video_generate`. The previous
+  Create-post path is disabled for now; Chat/VK bot text generation remains
+  separate.
 - Estimate/gating remains backend-owned through `POST /miniapp/estimate`;
   submit still requires `enough_credits=true`.
 - Create history is scoped to the selected type by filtering backend jobs by

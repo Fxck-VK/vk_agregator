@@ -52,8 +52,8 @@ export function ResultCard({ msg, prompt, authorName = "НейроХаб", autho
     <article className={"result-card" + (failed ? " result-card--error" : "")}>
       <header className="result-card__head">
         <div>
-          <span className="result-card__eyebrow">Как это будет выглядеть в VK</span>
-          <h2 className="result-card__title">Готовый VK-пост</h2>
+          <span className="result-card__eyebrow">Предпросмотр результата</span>
+          <h2 className="result-card__title">Готовый результат</h2>
         </div>
         <span className="result-card__status">{safeStatus(msg)}</span>
       </header>
