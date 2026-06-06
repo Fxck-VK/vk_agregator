@@ -541,3 +541,53 @@ Consequences: the integrated branch is the new place to validate both product
 entrances together: VK text bot and Mini App. The remaining operational smoke is
 credential/domain-bound and should run after the domain or approved tunnel is
 stable.
+
+---
+
+## ADR-016 - App surfaces over shared backend core
+
+Status: accepted
+
+Date: 2026-06-06
+
+Context: after merging the VK bot integration branch with `fastlife_dev`, the
+repository has two user-facing entrances in the same Go backend: VK text bot
+and VK Mini App. Both currently depend on shared job orchestration, billing,
+provider routing, workers, storage and moderation. Some entrance-specific
+wiring still lives directly in `cmd/api/main.go`, which makes the bootstrap
+harder to read and increases the risk that future feature work mixes surface UX
+with backend source-of-truth logic.
+
+Decision: keep one backend core and split only the application surfaces:
+
+- `internal/app/vkbot` will own VK bot API wiring: VK callback handler setup,
+  control/profile clients, menu feature flags, Redis dialog mode, anti-spam and
+  referral dependencies.
+- `internal/app/miniapp` will own Mini App BFF wiring: launch-param protected
+  handler setup, Mini App rate limiting, object/artifact access deps, estimate,
+  jobs, chat and balance route wiring.
+- `cmd/api/main.go` should become a thin bootstrap that loads config,
+  initializes shared infrastructure, creates shared repositories/services,
+  mounts app modules, admin, health and metrics, then handles graceful shutdown.
+- The backend core remains in `internal/domain`, `internal/service`,
+  `internal/worker`, `internal/adapter/provider`, storage adapters and shared
+  delivery/artifact/moderation components.
+
+Surface modules may wire handlers and dependencies, but they must not own
+business truth. They must not call providers directly, mutate balances, decide
+trusted job status, bypass idempotency, bypass moderation, or become a second
+source of provider pricing/model decisions. VK bot and Mini App should continue
+to create jobs through the shared job/billing path, and provider calls remain
+worker-owned.
+
+Non-goal: this is not a microservice split. The immediate refactor stays inside
+one Go backend so billing ledger consistency, job state transitions,
+idempotency, storage transactions and worker retry semantics remain local and
+testable. A future service split can be considered only after the boundaries are
+clean and the production operational model is stable.
+
+Consequences: PR-17 should be done as small behavior-preserving refactors:
+first extract VK bot wiring, then Mini App wiring, then simplify
+`cmd/api/main.go`, and finally update architecture/runbook docs. Each step must
+run focused tests plus full `go test ./...` / `go build ./...`; Mini App build
+must be included when Mini App wiring or frontend contracts are in scope.

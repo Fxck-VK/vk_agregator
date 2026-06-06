@@ -199,6 +199,21 @@
 
 ## Current Gaps / Known Follow-Ups
 
+### PR-17 app surface refactor
+
+- [ ] PR-17.2: Extract VK bot API wiring into `internal/app/vkbot` without
+  changing VK callback/menu/dialog/anti-spam/referral behavior. Keep
+  `joborchestrator`, `billingservice`, provider adapters, workers, domain and
+  storage in shared backend core.
+- [ ] PR-17.3: Extract Mini App BFF wiring into `internal/app/miniapp` without
+  changing `/miniapp/*` contracts, VK launch-param auth, rate limiting,
+  estimate, jobs, chat, balance or artifact ownership behavior.
+- [ ] PR-17.4: Simplify `cmd/api/main.go` into thin bootstrap: config,
+  tracing, DB/Redis/S3, shared repos/services, app module mounting,
+  admin/health/metrics and graceful shutdown.
+- [ ] PR-17.5: Update architecture and runbook docs so future agents know where
+  to add VK bot commands, Mini App BFF endpoints and shared backend-core logic.
+
 ### Integration validation / next providers
 - [~] Stable local VK Callback URL: `scripts/dev/setup-cloudflare-tunnel.ps1`
   and `start-bot.ps1 -TunnelMode named` are implemented for

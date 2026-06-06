@@ -1506,3 +1506,26 @@ Date: 2026-06-06
   require credential-bound runtime and VK/tunnel/domain setup. The merge keeps
   both runtime paths wired for follow-up smoke on `neiirohub.ru` or an approved
   dev tunnel.
+
+---
+
+## PR-17.1 - App surface refactor ADR
+
+Status: **completed**.
+
+### What changed
+
+- Added ADR-016 to document VK text bot and Mini App as app surfaces above the
+  shared backend core.
+- Defined target modules `internal/app/vkbot` and `internal/app/miniapp`.
+- Kept backend source-of-truth responsibilities in shared core:
+  `internal/domain`, `internal/service`, `internal/worker`, provider adapters,
+  storage, delivery, artifact and moderation components.
+- Added PR-17.2 through PR-17.5 backlog items to `TASKS.md`.
+- Preserved the temporary copy-paste prompt queue in
+  `TEMP_PR17_SURFACE_REFACTOR_PROMPTS.md` for the remaining PR-17 steps.
+
+### Checks
+
+- Docs-only change. Runtime build/test were intentionally not run because no
+  Go, frontend, env or migration files changed.
