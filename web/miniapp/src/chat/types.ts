@@ -12,6 +12,7 @@ export interface ChatMessage {
   pending?: boolean;
   artifactIds?: string[];
   error?: string;
+  createdAt?: string;
 }
 
 export type ModalityId = "text" | "image" | "video";
@@ -33,11 +34,7 @@ export const MODALITIES: ModalityDef[] = [
     id: "text",
     label: "Текст",
     operation: "text_generate",
-    models: [
-      { id: "gpt-4o-mini", label: "GPT-4o mini" },
-      { id: "gpt-4o", label: "GPT-4o" },
-      { id: "llama-3.1", label: "Llama 3.1" },
-    ],
+    models: [{ id: "chatgpt", label: "ChatGPT" }],
   },
   {
     id: "image",
@@ -58,6 +55,10 @@ export const MODALITIES: ModalityDef[] = [
 
 export function modalityById(id: ModalityId): ModalityDef {
   return MODALITIES.find((m) => m.id === id) ?? MODALITIES[0];
+}
+
+export function modalityByOperation(operation: string): ModalityDef {
+  return MODALITIES.find((m) => m.operation === operation) ?? MODALITIES[0];
 }
 
 export interface Chat {

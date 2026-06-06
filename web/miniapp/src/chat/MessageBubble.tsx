@@ -2,6 +2,7 @@
 import { Avatar, TypingDots } from "../ui/ui";
 import { artifactUrl, statusLabel } from "../api/client";
 import type { ChatMessage } from "./types";
+import neuroHubAvatar from "../assets/neurohub-avatar.png";
 
 function initials(name: string): string {
   const p = name.trim().split(/\s+/);
@@ -30,25 +31,37 @@ export function MessageBubble({
   msg,
   userName,
   userAvatar,
+  botName = "НейроХаб",
+  onRetry,
 }: {
   msg: ChatMessage;
   userName: string;
   userAvatar: string | null;
+  botName?: string;
+  onRetry?: () => void;
 }) {
   const isUser = msg.role === "user";
   const showStatus = !isUser && msg.pending && !!msg.status;
+  const author = isUser ? userName : botName;
 
   return (
     <div className={"msg " + (isUser ? "msg--user" : "msg--bot")}>
       <Avatar
-        src={isUser ? userAvatar : null}
-        fallback={isUser ? initials(userName) : "AI"}
+        src={isUser ? userAvatar : neuroHubAvatar}
+        fallback={isUser ? initials(userName) : "НХ"}
+        className={isUser ? "" : "avatar--bot"}
       />
       <div className="bubble-wrap">
+        <div className="message-author">{author}</div>
         <div className={"bubble " + (isUser ? "bubble--user" : "bubble--bot")}>
           {isUser ? <span>{msg.text}</span> : <BotContent msg={msg} />}
         </div>
         {showStatus && <div className="bubble__status">{statusLabel(msg.status!)}</div>}
+        {!isUser && msg.error && onRetry && (
+          <button type="button" className="bubble__retry" onClick={onRetry}>
+            Повторить
+          </button>
+        )}
       </div>
     </div>
   );

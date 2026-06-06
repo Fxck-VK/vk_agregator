@@ -4,9 +4,24 @@ export function Spinner({ size = 22 }: { size?: number }) {
   return <span className="spinner" style={style} />;
 }
 
-export function Avatar({ src, fallback }: { src?: string | null; fallback: string }) {
-  if (src) return <img className="avatar" src={src} alt="" />;
-  return <span className="avatar avatar--fallback">{fallback}</span>;
+export function Avatar({
+  src,
+  fallback,
+  className = "",
+}: {
+  src?: string | null;
+  fallback: string;
+  className?: string;
+}) {
+  const classes = "avatar" + (className ? " " + className : "");
+  if (src) {
+    return (
+      <span className={classes}>
+        <img className="avatar__img" src={src} alt="" />
+      </span>
+    );
+  }
+  return <span className={classes + " avatar--fallback"}>{fallback}</span>;
 }
 
 export function TypingDots() {

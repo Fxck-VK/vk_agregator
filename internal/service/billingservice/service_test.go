@@ -60,6 +60,24 @@ func TestEnsureAccountStartingBalance(t *testing.T) {
 	}
 }
 
+func TestBalanceForEstimateDoesNotCreateAccount(t *testing.T) {
+	repo := memory.NewBillingRepo()
+	svc := billingservice.New(repo)
+	ctx := context.Background()
+	userID := uuid.New()
+
+	balance, err := svc.BalanceForEstimate(ctx, userID)
+	if err != nil {
+		t.Fatalf("balance for estimate: %v", err)
+	}
+	if balance != billingservice.DefaultStartingBalance {
+		t.Fatalf("balance = %d, want %d", balance, billingservice.DefaultStartingBalance)
+	}
+	if _, err := repo.GetAccountByUser(ctx, userID, domain.CurrencyCredits); !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("estimate must not create account or ledger, got %v", err)
+	}
+}
+
 func TestReserveCaptureRefundFlow(t *testing.T) {
 	repo := memory.NewBillingRepo()
 	svc := billingservice.New(repo)

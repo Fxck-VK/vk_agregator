@@ -73,7 +73,8 @@ func (g *GenerationWorker) Process(ctx context.Context, task queue.Task) error {
 	if err != nil {
 		return g.handleFailure(ctx, job, task, domain.ProviderErrUnsupportedCapab, err.Error())
 	}
-	submitCtx, submitSpan := tracing.Start(ctx, "provider.submit",
+	callCtx, cancel := g.providerCallContext(ctx)
+	submitCtx, submitSpan := tracing.Start(callCtx, "provider.submit",
 		attribute.String("job.id", job.ID.String()),
 		attribute.String("provider", string(provider.Name())),
 		attribute.String("operation", string(job.OperationType)),
@@ -83,9 +84,11 @@ func (g *GenerationWorker) Process(ctx context.Context, task queue.Task) error {
 	if err != nil {
 		tracing.RecordError(submitSpan, err)
 		submitSpan.End()
+		cancel()
 		return g.handleFailure(ctx, job, task, classOf(err), err.Error())
 	}
 	submitSpan.End()
+	cancel()
 
 	taskProvider := provider.Name()
 	if submitted.Provider != "" {

@@ -24,8 +24,29 @@ export interface CreateJobInput {
   model_id?: string;
 }
 
+export interface CreateChatMessageInput {
+  prompt: string;
+  conversation_id?: string;
+}
+
 export interface CreateJobOptions {
   idempotencyKey: string;
+}
+
+/** Mirrors internal/adapter/inbound/miniapp Estimate request/response */
+export interface EstimateInput {
+  operation: string;
+  prompt: string;
+  model_id?: string;
+}
+
+export interface EstimateResponse {
+  operation: string;
+  model_id?: string;
+  model_name?: string;
+  cost_estimate: number;
+  balance_credits: number;
+  enough_credits: boolean;
 }
 
 /** Mirrors internal/adapter/inbound/miniapp BalanceDTO */
@@ -45,6 +66,7 @@ export interface JobListResponse {
 
 export type ApiErrorCode =
   | "validation_error"
+  | "unsupported_model"
   | "auth_error"
   | "insufficient_credits"
   | "rate_limited"
@@ -77,7 +99,15 @@ export class ApiError extends Error {
   }
 }
 
-const LAUNCH_PARAMS = window.location.search.replace(/^\?/, "");
+function launchParams(): string {
+  const fromUrl = window.location.search.replace(/^\?/, "");
+  if (fromUrl) return fromUrl;
+
+  const fromDevEnv = import.meta.env.DEV ? import.meta.env.VITE_DEV_LAUNCH_PARAMS : "";
+  return typeof fromDevEnv === "string" ? fromDevEnv : "";
+}
+
+const LAUNCH_PARAMS = launchParams();
 
 const ARTIFACT_ID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -88,6 +118,9 @@ function safeString(value: unknown): string | undefined {
 
 function apiErrorCode(status: number, backendError?: string): ApiErrorCode {
   const raw = (backendError ?? "").toLowerCase();
+  if (status === 400 && (raw === "unsupported model" || raw === "unsupported_model")) {
+    return "unsupported_model";
+  }
   if (status === 400 || raw === "validation_error") return "validation_error";
   if (status === 401 || raw === "auth_error" || raw === "unauthorized") return "auth_error";
   if (status === 402 || raw === "insufficient_credits") return "insufficient_credits";
@@ -103,6 +136,8 @@ function apiErrorMessageForCode(code: ApiErrorCode): string {
   switch (code) {
     case "validation_error":
       return "Проверьте запрос и попробуйте снова";
+    case "unsupported_model":
+      return "Выбранная модель недоступна. Выберите другую модель";
     case "auth_error":
       return "Не удалось подтвердить вход через VK. Откройте приложение заново";
     case "insufficient_credits":
@@ -187,6 +222,23 @@ export async function createJob(input: CreateJobInput, options: CreateJobOptions
     headers: {
       "X-Idempotency-Key": options.idempotencyKey,
     },
+    body: JSON.stringify(input),
+  });
+}
+
+export async function createChatMessage(input: CreateChatMessageInput, options: CreateJobOptions): Promise<Job> {
+  return request<Job>("/miniapp/chat/messages", {
+    method: "POST",
+    headers: {
+      "X-Idempotency-Key": options.idempotencyKey,
+    },
+    body: JSON.stringify(input),
+  });
+}
+
+export async function estimateJob(input: EstimateInput): Promise<EstimateResponse> {
+  return request<EstimateResponse>("/miniapp/estimate", {
+    method: "POST",
     body: JSON.stringify(input),
   });
 }

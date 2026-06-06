@@ -139,7 +139,17 @@
 - [x] Hardening чат-фронта: cleanup для `bridge.subscribe` через `bridge.unsubscribe`, polling без стартовой задержки и без размножения таймеров, `patchMessage` по id мемоизирован.
 - [x] Бэкенд: `GET /miniapp/artifacts/{id}` отдаёт байты артефакта с ownership-проверкой (`art.OwnerUserID == user.ID`), `job.status == succeeded` и passed output moderation guard; `Cache-Control: private`; текст приходит как `text/plain`, фронт читает его через `fetchArtifactText`. Зависит от доступности S3 в `cmd/api` (см. бэклог аудита).
 - [x] Frontend submit hardening: `POST /miniapp/jobs` sends stable per-submit `X-Idempotency-Key`; API/network errors normalize to safe user-facing messages; duplicate in-flight submits are guarded.
-- [x] Mini App API: фронт передаёт выбранный `model_id` в `POST /miniapp/jobs`; BFF валидирует model_id по operation whitelist и не раскрывает его в job API responses.
+- [x] Mini App API: frontend sends supported `model_id` only for backend-validated operations. Text chat is branded as public `ChatGPT`; legacy DeepSeek text IDs are normalized to `chatgpt` before persistence/API output and are not exposed in Mini App UI/DTO.
+- [x] Mini App estimate before submit: `POST /miniapp/estimate` возвращает backend-owned `cost_estimate`, `balance_credits` и `enough_credits` без создания job/резерва/ledger; фронт показывает стоимость и предупреждение до submit.
+- [x] Mini App result UX: результат показывается карточкой «Готовый VK-пост» с plain-text copy, retry action и image/video preview только через backend artifact route.
+- [x] Mini App history reload recovery: running jobs восстанавливаются через `GET /miniapp/jobs`, локальная история хранит только `job_id`, `operation_type`, `status`, `created_at` за 7 дней, есть clear local history и privacy note.
+- [x] Mini App PR-10 redesign: явные `Chat` / `Workflow` режимы, workflow screens `Home -> Generate -> Status -> Result -> History`, status timeline, VK post preview, design tokens и ADR mode/design direction.
+- [x] Mini App PR-14 VKUI hybrid: `@vkontakte/vkui` `8.2.1` added as production dependency; app root uses `ConfigProvider`/`AdaptivityProvider`/`AppRoot`; base controls use VKUI `Button`, `NativeSelect`, `Textarea`, `Panel`, `Tabbar`; custom workflow shell, result preview and status timeline remain custom.
+- [x] Mini App PR-16.1 navigation shell: bottom VKUI `Tabbar` with `Создать` / `Чат` / `Настройки`, default center `Чат`, UI-only active tab preference `vk_miniapp_active_tab_v1`; Chat and Workflow stay mounted as tab panels so polling survives tab switches.
+- [x] Mini App PR-16.2 chat threads: active `conversation_id` is the thread id (`default` for migrated legacy context, UUID for new dialogs), history opens as a top sheet from the chat title, and `localStorage` keeps only `id` / `title` / `last_activity_at` thread metadata.
+- [x] Mini App PR-16.3 Create tab: top VKUI operation segment for supported backend operations (`text_generate`, `image_generate`, `video_generate`), existing estimate/status/result/history workflow preserved, VK post preview made the signature result surface without new URL sources or unsafe rendering.
+- [x] Mini App Create UX revision: Create currently exposes only `Создать фото` / `Создать видео`; `Создать пост` is temporarily disabled in this tab, while text generation remains in Chat/VK bot flows. History is scoped per selected operation type; chat thread history opens from an explicit header icon button.
+- [x] Mini App PR-16.4 Settings and design polish: Settings contains theme preference, backend balance, summary generation history with type filter, local-history privacy/clear controls and a payment-history placeholder; design tokens now use the provided cyan/violet/pink brand palette.
 - [x] Obsolete VK Tunnel tooling removed: `@vkontakte/vk-tunnel`, npm `tunnel` script and `web/miniapp/vk-tunnel-config.json`; dev tunnel path normalized to `cloudflared` / `*.trycloudflare.com`.
 - [x] Dev-туннель через `cloudflared` (VK Tunnel на техработах с 02.10.2025): `vite.config.ts` `server` — `host: true`, `allowedHosts: true`, `hmr.protocol: wss`/`clientPort: 443`, proxy `/miniapp`+`/api` → `:8080`; mixed-content под https устранён, домен туннеля не хардкодится. E2E (mock) через прокси-эндпоинты проверен.
 - [x] Фикс биллинга (AUDIT B1a): стартовый грант 1000 создаётся committed-проводкой в ledger атомарно; миграция `000004` бэкоффилит открывающие проводки; mismatch устранён.
@@ -162,7 +172,7 @@
 - [x] **[Medium] Fail-closed проверка `vk_ts`** (`internal/adapter/inbound/miniapp/sign.go`).
   Реализовано: при `maxAge > 0` пустой, битый, future или expired `vk_ts` отклоняется до job creation; клиент получает безопасный `401`.
 - [x] **[Medium] Проброс выбора модели на бэкенд**.
-  Frontend sends selected `model_id`; backend contract реализован: `POST /miniapp/jobs` принимает optional `model_id`, валидирует по operation whitelist, сохраняет supported value в job params и не раскрывает selector/model_id в job API responses. Worker/provider routing по выбранной модели остаётся отдельным follow-up.
+  Frontend sends supported `model_id`; backend contract реализован: `POST /miniapp/jobs` принимает optional `model_id`, валидирует по operation whitelist, сохраняет only supported/normalized values in job params и не раскрывает selector/model_id в job API responses. Mini App chat uses public `ChatGPT` alias; real DeepSeek provider/model details stay behind worker/provider config. Worker/provider routing по выбранной модели остаётся отдельным follow-up.
 - [ ] **[Medium] Мягкая деградация `getArtifact` при недоступности S3**
   (`cmd/api/main.go:88-92`, `handler.go:369-373`). Сейчас при сбое подключения к
   S3 `objectStore == nil` и роут молча отдаёт `503`, хотя Job успешен. В проде —
@@ -180,9 +190,10 @@
   (сейчас отдельные индексы `user_id` и `status`; сортировка по `created_at`).
 - [ ] **[уточнить] CORS-политика** — зависит от модели развёртывания (same-origin
   proxy vs прямой доступ). Не подтверждается кодом, требует решения.
-- [ ] **[уточнить] Retention/шифрование контента в `localStorage`**
-  (`vk_miniapp_chats_v1` хранит промпты и тексты в plaintext). Решить TTL/очистку
-  или отказ от хранения тел сообщений.
+- [x] **[уточнить] Retention/шифрование контента в `localStorage`**
+  Fixed in PR-9: `vk_miniapp_chats_v1` keeps only `job_id`, `operation_type`,
+  `status`, `created_at` for 7 days; prompt bodies, generated text and artifact
+  URLs are not persisted, and clear local history removes only local UI state.
 
 ---
 
@@ -193,6 +204,9 @@
   and `start-bot.ps1 -TunnelMode named` are implemented for
   `https://vk.neiirohub.ru/webhooks/vk`; manual Cloudflare DNS activation and
   registrar NS switch are still required before the hostname works.
+- [ ] Mini App payment history endpoint: add a read-only `/miniapp/payments` or ledger-history BFF endpoint with auth/rate limiting so Settings can show real payment history instead of the PR-16.4 placeholder.
+- [ ] Mini App/VK bot top-up backend flow: add an authenticated, rate-limited and idempotent payment-intent endpoint for Mini App top-ups, connect VK `Пополнить баланс` to the same intent/link flow, and append committed `topup` ledger entries only after trusted payment confirmation.
+- [ ] Mini App backend conversations: add durable conversation storage plus list/read endpoints for thread history. PR-16.2 currently degrades to safe local metadata only; backend process-local context can be lost on API restart or scale-out.
 - [ ] Live smoke with `DEEPINFRA_API_KEY`: GPT text mode should return DeepSeek-V4-Flash output through the normal Job -> Artifact -> Delivery flow.
 - [ ] Add production retention/archival job for old `conversation_messages` before large-scale rollout; keep compact summaries and recent hot turns only.
 - [ ] Replace local/extractive dialog summary compaction with a dedicated cheap summarizer job/model if semantic summaries become necessary.

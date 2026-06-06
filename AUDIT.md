@@ -68,7 +68,7 @@ Severity: **critical** (blocks prod / safety / data loss), **high** (must fix be
 
 **S3c — Mini App model_id contract — ✅ FIXED**
 - Description: Mini App had a visible model selector while `POST /miniapp/jobs` ignored model selection, leaving no backend contract for supported models.
-- **Fix:** Mini App frontend now sends selected `model_id` with `POST /miniapp/jobs`. The BFF validates it by operation-specific whitelist before user/billing/job creation, persists only supported values in normalized job params, and does not expose selector/model_id in job API responses. Unsupported model IDs return safe `400` and create no job. Worker/provider routing by selected model remains a separate provider-routing task.
+- **Fix:** Mini App frontend now sends supported `model_id` only through backend-owned BFF paths. The BFF validates it by operation-specific whitelist before user/billing/job creation, persists only supported/normalized values in normalized job params, and does not expose selector/model_id in job API responses. Text chat is publicly branded as `ChatGPT`; legacy DeepSeek text IDs are accepted only for compatibility and normalized to `chatgpt` before persistence/API output. Unsupported model IDs return safe `400` and create no job. Worker/provider routing by selected model remains a separate provider-routing task.
 
 **S3d — Mini App artifact access guard — ✅ FIXED**
 - Description: `GET /miniapp/artifacts/{id}` relied on ownership and frontend request order, so a direct request could fetch an owned output artifact before the backend had independently confirmed terminal success and output moderation.
@@ -264,3 +264,156 @@ The default runtime remains mock-backed; before external users, run a live smoke
 with real OpenAI/VK credentials, attach a production welcome banner if needed,
 and add the remaining Phase 3 media pipeline for video scan/transcode/VK-ready
 variants. Remaining work is tracked in `TASKS.md` and `ROADMAP.md`.
+
+---
+
+## PR-13.1 live DeepSeek smoke note
+
+Date: 2026-06-05
+
+DeepInfra/DeepSeek text generation is now credential-smoked through the real
+Mini App job path: `POST /miniapp/jobs` -> outbox -> worker -> DeepInfra
+adapter -> artifact -> mock delivery -> billing capture. The happy path reached
+`succeeded`, captured credits once, enforced artifact owner access and preserved
+idempotent submit. The failure path used an unreachable DeepInfra endpoint and
+verified `failed_terminal`, `provider_timeout`, one reservation release and no
+capture. No secrets, launch params, prompts or model output were recorded.
+
+Remaining credential-bound smoke before broad external release: real VK
+delivery/media upload and the full video media pipeline. OpenAI is not the
+primary Mini App text provider for this release path.
+
+---
+
+## PR-16.1 Mini App navigation shell note
+
+Date: 2026-06-06
+
+The 3-tab navigation shell is frontend-only. It uses VKUI `Tabbar` /
+`TabbarItem` and stores only the active tab as `vk_miniapp_active_tab_v1`.
+No launch params, prompts, balance, artifact URLs, provider details or private
+media URLs are added to localStorage. `ChatScreen` remains mounted across
+`Создать` / `Чат` / `Настройки` switches, preserving active job polling and the
+existing backend-owned job state model. The Settings tab is a placeholder and
+does not add new data access or backend behavior.
+
+---
+
+## PR-16.2 Mini App chat threads note
+
+Date: 2026-06-06
+
+Chat threads are frontend UX metadata only. New dialogs send their client UUID
+as `conversation_id`; the migrated/default dialog keeps `default`, preserving
+the existing backend default context. The Mini App still does not call
+providers directly and does not make billing, moderation, artifact or job-state
+decisions on the client.
+
+`localStorage` now uses `vk_miniapp_threads_v1` and stores only thread
+metadata: `id`, `title`, `last_activity_at`. It does not store prompt bodies,
+assistant answers, last-reply preview text, job ids, launch params, tokens,
+balance, provider details, artifact ids or artifact URLs. Last-reply previews
+exist only in memory for the current session.
+
+Backend context remains process-local from PR-15. If `cmd/api` restarts or is
+scaled horizontally without durable conversation storage, a thread may continue
+with empty backend context. This is a documented graceful degradation and a
+backend follow-up is tracked in `TASKS.md` for durable conversation list/read
+endpoints.
+
+---
+
+## PR-16.3 Mini App Create tab note
+
+Date: 2026-06-06
+
+The Create tab operation selector is a VKUI `SegmentedControl` over the static
+frontend mirror of backend-supported operations only: `text_generate`,
+`image_generate`, `video_generate`. No discovery endpoint or BFF contract was
+added.
+
+Estimate remains backend-owned through `POST /miniapp/estimate`; changing the
+operation/model reuses the existing debounced estimate path and submit remains
+gated by `enough_credits=true`. Segment changes do not clear active jobs,
+backend job lists or the polling owner, so in-flight job recovery/polling stays
+with the existing `GET /miniapp/jobs` / `GET /miniapp/jobs/{id}` flow.
+
+The VK post preview stays safe-rendered: text is React text and image/video
+sources come only from backend artifact routes derived from job DTO artifact
+ids. PR-16.3 only changes preview structure/prominence; brand palette and
+image-derived color work remains for PR-16.4.
+
+---
+
+## PR-16.3.1 Mini App UX revision note
+
+Date: 2026-06-06
+
+The Create tab no longer exposes a top operation segment. It starts with three
+large cards and then reuses the existing backend-backed workflow for the chosen
+operation: `image_generate`, `video_generate` or `text_generate`. No backend
+contracts, provider calls, billing logic, moderation path or artifact access
+rules changed.
+
+History inside Create is scoped by operation type. The all-types summary
+history is intentionally left for Settings PR-16.4. Create history still reads
+backend jobs; local storage is not used as a billing/job-status source of
+truth.
+
+Chat thread history is opened by an explicit header icon button. The thread
+list and `Новый диалог` action remain the same local metadata surface from
+PR-16.2, without storing prompts, answers, secrets or artifact URLs.
+---
+
+## PR-16.4 Mini App Settings / local data note
+
+Date: 2026-06-06
+
+- Settings uses backend-provided balance from `/miniapp/balance`; localStorage is
+  not used as a balance, billing or job-state source of truth.
+- The summary generation history is read from backend jobs already loaded by
+  the Mini App recovery flow and does not persist prompts, generated text or
+  artifact URLs locally.
+- Theme preference is the only new localStorage key (`vk_miniapp_theme_v1`).
+  It stores only `system`, `light` or `dark`.
+- Payment history is intentionally a placeholder because Mini App BFF has no
+  read-only payment/ledger endpoint yet. The backend dependency is tracked in
+  `TASKS.md` and `DECISIONS.md`.
+- The Settings top-up button is UI-only until a backend payment-intent endpoint
+  exists. It does not change balance locally. The planned implementation must
+  share the same payment intent/link flow with the VK text bot `Пополнить
+  баланс` control path and may credit accounts only through committed `topup`
+  ledger entries after trusted payment confirmation.
+
+---
+
+## Mini App Create/chat UX polish note
+
+Date: 2026-06-06
+
+The Create tab header cleanup and service-list revision are frontend-only. They
+do not change Mini App BFF contracts, provider routing, billing, moderation,
+artifact ownership or job polling. Create choices still route to the existing
+backend-owned media operations (`image_generate`, `video_generate`).
+
+The Create-post entry and its local preview are temporarily disabled in the
+Create tab. Text generation still exists only in Chat/VK bot flows and remains
+backend-owned. Generated text remains React text, and media still comes only
+from backend artifact routes.
+
+---
+
+## Mini App status/polling UX fix note
+
+Date: 2026-06-06
+
+The status timeline fix is presentational only. It does not change backend job
+states, provider routing, billing reservations/capture, artifact moderation or
+Mini App auth.
+
+The endless-processing fix is a frontend recovery guard: when Mini App state
+contains any non-terminal job, the polling owner resumes `GET /miniapp/jobs/{id}`
+unless that job is already being polled. The backend remains the source of truth
+for job status; local state only triggers polling and display updates. Aggregate
+runtime checks showed local jobs reaching terminal `succeeded` and outbox queue
+events in `published` state.
