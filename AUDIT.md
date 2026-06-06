@@ -379,3 +379,42 @@ Date: 2026-06-06
 - Payment history is intentionally a placeholder because Mini App BFF has no
   read-only payment/ledger endpoint yet. The backend dependency is tracked in
   `TASKS.md` and `DECISIONS.md`.
+- The Settings top-up button is UI-only until a backend payment-intent endpoint
+  exists. It does not change balance locally. The planned implementation must
+  share the same payment intent/link flow with the VK text bot `Пополнить
+  баланс` control path and may credit accounts only through committed `topup`
+  ledger entries after trusted payment confirmation.
+
+---
+
+## Mini App Create/chat UX polish note
+
+Date: 2026-06-06
+
+The Create tab header cleanup and service-list revision are frontend-only. They
+do not change Mini App BFF contracts, provider routing, billing, moderation,
+artifact ownership or job polling. Create choices still route to the existing
+backend-owned operations (`image_generate`, `video_generate`, `text_generate`).
+
+The VK post preview is now shown inside the post creation flow and the final
+result surface, not inside the initial service selector. Preview author data is
+display-only VK bridge user metadata; it is not persisted and is not used as a
+trusted backend identity source. Generated text remains React text, and media
+still comes only from backend artifact routes.
+
+---
+
+## Mini App status/polling UX fix note
+
+Date: 2026-06-06
+
+The status timeline fix is presentational only. It does not change backend job
+states, provider routing, billing reservations/capture, artifact moderation or
+Mini App auth.
+
+The endless-processing fix is a frontend recovery guard: when Mini App state
+contains any non-terminal job, the polling owner resumes `GET /miniapp/jobs/{id}`
+unless that job is already being polled. The backend remains the source of truth
+for job status; local state only triggers polling and display updates. Aggregate
+runtime checks showed local jobs reaching terminal `succeeded` and outbox queue
+events in `published` state.

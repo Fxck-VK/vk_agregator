@@ -493,6 +493,15 @@ ledger history endpoint. PR-16.4 therefore shows a safe payment-history
 placeholder and tracks a separate backend follow-up for a read-only payment
 history endpoint.
 
+Top-up dependency: the Settings `Пополнить` action must not mutate balance on
+the frontend. The backend follow-up should add an authenticated, rate-limited
+Mini App payment intent endpoint, for example `POST /miniapp/payments/intents`,
+which creates an idempotent payment attempt without changing credits. Only a
+trusted payment confirmation/webhook may append a committed `topup` ledger entry
+and update the cached balance projection. The VK text bot `Пополнить баланс`
+control path should reuse the same payment intent/link flow when payments are
+implemented, so Mini App and VK bot top-ups share one billing source of truth.
+
 Consequences: Settings becomes useful without changing BFF contracts or moving
 job/billing truth to the frontend. Polling remains owned by `ChatScreen`, and
 the Mini App still renders generated content safely as React text or backend

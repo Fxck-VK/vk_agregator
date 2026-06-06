@@ -5,7 +5,7 @@ import type { Chat, ChatMessage } from "./types";
 function lastPreview(messages: ChatMessage[]): string {
   const last = [...messages].reverse().find((msg) => msg.text || msg.error || msg.pending || msg.status);
   if (!last) return "Пока нет сообщений";
-  if (last.pending) return "ChatGPT печатает...";
+  if (last.pending) return "НейроХаб печатает...";
   if (last.error) return last.error;
   if (last.text) return last.text.length > 80 ? last.text.slice(0, 80) + "..." : last.text;
   if (last.status) return last.status;
@@ -54,7 +54,7 @@ export function ChatList({
         <div className="drawer__head">
           <div>
             <strong>Диалоги</strong>
-            <span>Контекст хранит backend; локально только id и метаданные.</span>
+            <span>Локально хранится только список диалогов без текста сообщений.</span>
           </div>
           <Button type="button" mode="tertiary" appearance="neutral" size="m" aria-label="Закрыть" onClick={onClose}>
             ×

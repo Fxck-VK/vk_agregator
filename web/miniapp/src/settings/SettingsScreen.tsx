@@ -15,12 +15,21 @@ type SettingsScreenProps = {
 };
 
 type HistoryFilter = "all" | ModalityId;
+type PaymentHistoryItem = {
+  id: string;
+  title: string;
+  amount: number;
+  created_at: string;
+  status: string;
+};
 
-const THEME_OPTIONS: Array<{ id: ThemeMode; label: string; text: string }> = [
-  { id: "system", label: "Системная", text: "Как в VK или устройстве" },
-  { id: "light", label: "Светлая", text: "Чистый рабочий режим" },
-  { id: "dark", label: "Тёмная", text: "Мягкий контраст вечером" },
+const THEME_OPTIONS: Array<{ id: ThemeMode; label: string }> = [
+  { id: "system", label: "Система" },
+  { id: "light", label: "Светлая" },
+  { id: "dark", label: "Тёмная" },
 ];
+
+const PAYMENT_HISTORY: PaymentHistoryItem[] = [];
 
 function dateLabel(value: string): string {
   const ts = Date.parse(value);
@@ -54,6 +63,7 @@ export function SettingsScreen({
   onRefreshBalance,
 }: SettingsScreenProps) {
   const [historyFilter, setHistoryFilter] = useState<HistoryFilter>("all");
+  const [topUpNotice, setTopUpNotice] = useState("");
   const sortedJobs = useMemo(
     () => [...jobs].sort((a, b) => b.created_at.localeCompare(a.created_at)),
     [jobs],
@@ -65,10 +75,8 @@ export function SettingsScreen({
 
   return (
     <main className="settings-screen">
-      <header className="screen-title">
-        <span>Settings</span>
+      <header className="screen-title settings-title">
         <h1>Настройки</h1>
-        <p>Тема, баланс и локальные данные Mini App в одном месте.</p>
       </header>
 
       <section className="settings-section" aria-labelledby="settings-theme-title">
@@ -86,11 +94,10 @@ export function SettingsScreen({
                 mode={active ? "primary" : "secondary"}
                 appearance={active ? "accent" : "neutral"}
                 size="l"
-                aria-label={`${option.label}: ${option.text}`}
+                aria-label={option.label}
                 onClick={() => onThemeModeChange(option.id)}
               >
                 <span>{option.label}</span>
-                <small>{option.text}</small>
               </Button>
             );
           })}
@@ -98,37 +105,69 @@ export function SettingsScreen({
       </section>
 
       <section className="settings-section" aria-labelledby="settings-balance-title">
-        <div className="section-head">
-          <h2 id="settings-balance-title">Баланс</h2>
-          <Button
-            type="button"
-            className="quiet-action"
-            mode="secondary"
-            appearance="neutral"
-            size="m"
-            onClick={onRefreshBalance}
-          >
-            Обновить
-          </Button>
-        </div>
-        <div className="settings-balance" aria-live="polite">
-          <span>Кредиты</span>
-          <strong>{balance === null ? "..." : creditsLabel(balance)}</strong>
-          <small>Источник истины — backend `/miniapp/balance`, не localStorage.</small>
+        <h2 id="settings-balance-title">Баланс</h2>
+        <div className="settings-balance-card" aria-live="polite">
+          <div className="settings-balance-card__main">
+            <span>Доступно</span>
+            <strong>{balance === null ? "..." : creditsLabel(balance)}</strong>
+          </div>
+          <div className="settings-balance-card__actions">
+            <Button
+              type="button"
+              mode="secondary"
+              appearance="neutral"
+              size="m"
+              onClick={onRefreshBalance}
+            >
+              Обновить
+            </Button>
+            <Button
+              type="button"
+              mode="primary"
+              appearance="accent"
+              size="m"
+              onClick={() => {
+                setTopUpNotice("Пополнение скоро появится. Баланс обновится после подтверждения платежа.");
+              }}
+            >
+              Пополнить
+            </Button>
+          </div>
+          {topUpNotice && <p className="settings-notice">{topUpNotice}</p>}
         </div>
       </section>
 
-      <section className="settings-section" aria-labelledby="settings-payments-title">
-        <h2 id="settings-payments-title">История платежей</h2>
-        <div className="settings-empty">
-          Backend пока не отдаёт список платежей или ledger entries для Mini App.
-          Раздел готов к подключению после отдельного BFF endpoint.
-        </div>
-      </section>
+      <details className="settings-accordion">
+        <summary>
+          <span>История платежей</span>
+          <small>{PAYMENT_HISTORY.length}</small>
+        </summary>
+        {PAYMENT_HISTORY.length === 0 ? (
+          <div className="settings-empty">Платежей пока нет.</div>
+        ) : (
+          <div className="settings-history-list">
+            {PAYMENT_HISTORY.map((item) => (
+              <article key={item.id} className="settings-history-row">
+                <div>
+                  <span>{item.title}</span>
+                  <strong>{creditsLabel(item.amount)}</strong>
+                </div>
+                <div className="settings-history-row__meta">
+                  <time>{dateLabel(item.created_at)}</time>
+                  <span className="history-status">{item.status}</span>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </details>
 
-      <section className="settings-section" aria-labelledby="settings-history-title">
-        <div className="section-head">
-          <h2 id="settings-history-title">Сводная история</h2>
+      <details className="settings-accordion" open>
+        <summary>
+          <span>Сводная история</span>
+          <small>{visibleJobs.length}</small>
+        </summary>
+        <div className="settings-accordion__tools">
           <NativeSelect
             className="settings-history-filter"
             value={historyFilter}
@@ -169,7 +208,7 @@ export function SettingsScreen({
             })}
           </div>
         )}
-      </section>
+      </details>
 
       <section className="settings-section" aria-labelledby="settings-privacy-title">
         <h2 id="settings-privacy-title">Локальные данные</h2>

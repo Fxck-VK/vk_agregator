@@ -5,7 +5,7 @@ const LEGACY_HISTORY_KEY = "vk_miniapp_chats_v1";
 const VERSION = 1;
 const MAX_THREADS = 50;
 const DEFAULT_THREAD_ID = "default";
-const DEFAULT_THREAD_TITLE = "ChatGPT диалог";
+const DEFAULT_THREAD_TITLE = "НейроХаб диалог";
 
 const UNSAFE_FIELD_RE =
   /vk_sign|launch_params|x-launch-params|token|secret|openai|prompt|artifactids|artifact_url|artifacturl|private_url|messages|job_id/i;
@@ -37,7 +37,7 @@ function warnLocalHistory(reason: string): void {
 
 function safeThreadTitle(value: unknown): string {
   if (typeof value !== "string") return DEFAULT_THREAD_TITLE;
-  const title = value.trim();
+  const title = value.trim().replace(/^ChatGPT\b/, "НейроХаб");
   if (!title) return DEFAULT_THREAD_TITLE;
   return title.length > 80 ? title.slice(0, 80) : title;
 }

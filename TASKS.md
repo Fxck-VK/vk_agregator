@@ -194,6 +194,7 @@
 
 ### Integration validation / next providers
 - [ ] Mini App payment history endpoint: add a read-only `/miniapp/payments` or ledger-history BFF endpoint with auth/rate limiting so Settings can show real payment history instead of the PR-16.4 placeholder.
+- [ ] Mini App/VK bot top-up backend flow: add an authenticated, rate-limited and idempotent payment-intent endpoint for Mini App top-ups, connect VK `Пополнить баланс` to the same intent/link flow, and append committed `topup` ledger entries only after trusted payment confirmation.
 - [ ] Mini App backend conversations: add durable conversation storage plus list/read endpoints for thread history. PR-16.2 currently degrades to safe local metadata only; backend process-local context can be lost on API restart or scale-out.
 - [ ] Live smoke with `DEEPINFRA_API_KEY`: GPT text mode should return DeepSeek-V4-Flash output through the normal Job -> Artifact -> Delivery flow.
 - [ ] Live smoke с реальными `OPENAI_API_KEY` и `VK_ACCESS_TOKEN`: text/image/video generation, VK photo/video upload, moderation allow/block.

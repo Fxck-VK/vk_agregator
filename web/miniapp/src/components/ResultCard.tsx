@@ -5,6 +5,8 @@ import type { ChatMessage } from "../chat/types";
 type ResultCardProps = {
   msg: ChatMessage;
   prompt: string;
+  authorName?: string;
+  authorAvatar?: string | null;
   onRetry: () => void;
 };
 
@@ -18,7 +20,12 @@ function safeStatus(msg: ChatMessage): string {
   return "Обработка";
 }
 
-export function ResultCard({ msg, prompt, onRetry }: ResultCardProps) {
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase() || "НХ";
+}
+
+export function ResultCard({ msg, prompt, authorName = "НейроХаб", authorAvatar, onRetry }: ResultCardProps) {
   const [copied, setCopied] = useState(false);
   const [mediaFailed, setMediaFailed] = useState(false);
   const text = msg.text?.trim() ?? "";
@@ -71,9 +78,15 @@ export function ResultCard({ msg, prompt, onRetry }: ResultCardProps) {
       {showResult && (
         <div className="vk-preview">
           <div className="vk-preview__meta">
-            <span className="vk-preview__avatar">НХ</span>
+            {authorAvatar ? (
+              <img className="vk-preview__avatar" src={authorAvatar} alt="" />
+            ) : (
+              <span className="vk-preview__avatar" aria-hidden="true">
+                {initials(authorName)}
+              </span>
+            )}
             <div>
-              <strong>НейроХаб</strong>
+              <strong>{authorName}</strong>
               <small>сейчас</small>
             </div>
           </div>

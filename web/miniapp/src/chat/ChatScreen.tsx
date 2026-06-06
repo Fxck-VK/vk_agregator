@@ -1,11 +1,10 @@
 ﻿// src/chat/ChatScreen.tsx
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button, Panel, Tabbar, TabbarItem } from "@vkontakte/vkui";
-import { Avatar, Spinner, TypingDots } from "../ui/ui";
+import { Avatar, Spinner } from "../ui/ui";
 import { MessageBubble } from "./MessageBubble";
 import { Composer } from "./Composer";
 import { ChatList } from "./ChatList";
-import { ResultCard } from "../components/ResultCard";
 import { WorkflowMode } from "../workflow/WorkflowMode";
 import { SettingsScreen } from "../settings/SettingsScreen";
 import { loadThemeMode, watchThemeMode, type ThemeMode } from "../settings/theme";
@@ -15,7 +14,6 @@ import {
   createChatMessage,
   createJob,
   createIdempotencyKey,
-  estimateJob,
   getJob,
   listJobs,
   getBalance,
@@ -25,17 +23,16 @@ import {
   apiUserMessage,
   resolveBotText,
   type Job,
-  type EstimateResponse,
 } from "../api/client";
 import { haptic, type VkUser } from "../hooks/useBridge";
 import { useChats } from "../hooks/useChats";
+import neuroHubAvatar from "../assets/neurohub-avatar.png";
 
 const POLL_MS = 2000;
 const POLL_MAX = 90;
-const ESTIMATE_DEBOUNCE_MS = 450;
 const CHAT_OPERATION = "text_generate";
 const CHAT_MODEL_ID = "chatgpt";
-const CHAT_MODEL_NAME = "ChatGPT";
+const CHAT_ASSISTANT_NAME = "НейроХаб";
 
 type SubmitRequest = {
   operation: string;
@@ -46,11 +43,11 @@ type SubmitRequest = {
 function tabTitle(tab: AppTab, activeChat?: Chat | null): { name: string; sub: string } {
   switch (tab) {
     case "create":
-      return { name: "Создать", sub: "workflow для VK-контента" };
+      return { name: "Создать", sub: "фото, видео и посты" };
     case "settings":
       return { name: "Настройки", sub: "тема, баланс, история" };
     default:
-      return { name: "Ассистент", sub: activeChat?.title ?? "ChatGPT диалог" };
+      return { name: CHAT_ASSISTANT_NAME, sub: activeChat?.title ?? "НейроХаб диалог" };
   }
 }
 
@@ -145,6 +142,14 @@ function upsertJob(jobs: Job[], job: Job): Job[] {
   return next.sort((a, b) => b.created_at.localeCompare(a.created_at));
 }
 
+function pollTargetForJob(chats: Chat[], job: Job): { chatId: string; botMsgId: string; missing: boolean } {
+  for (const chat of chats) {
+    const msg = chat.messages.find((item) => item.role === "bot" && item.jobId === job.id);
+    if (msg) return { chatId: chat.id, botMsgId: msg.id, missing: false };
+  }
+  return { chatId: chatIdForJob(job.id), botMsgId: "b-" + job.id, missing: true };
+}
+
 export function ChatScreen({ user }: { user: VkUser }) {
   const {
     chats,
@@ -164,10 +169,6 @@ export function ChatScreen({ user }: { user: VkUser }) {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [draft, setDraft] = useState("");
-  const [estimate, setEstimate] = useState<EstimateResponse | null>(null);
-  const [estimateLoading, setEstimateLoading] = useState(false);
-  const [estimateError, setEstimateError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<AppTab>(() => loadAppTab());
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => loadThemeMode());
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -209,44 +210,6 @@ export function ChatScreen({ user }: { user: VkUser }) {
       pollingRef.current.clear();
     };
   }, []);
-
-  useEffect(() => {
-    const prompt = draft.trim();
-    setEstimate(null);
-    setEstimateError(null);
-    if (!prompt) {
-      setEstimateLoading(false);
-      return;
-    }
-
-    let cancelled = false;
-    const timer = window.setTimeout(() => {
-      setEstimateLoading(true);
-      estimateJob({ operation: CHAT_OPERATION, prompt, model_id: CHAT_MODEL_ID })
-        .then((data) => {
-          if (cancelled) return;
-          setEstimate(data);
-          setBalance(data.balance_credits);
-        })
-        .catch((e) => {
-          if (cancelled) return;
-          const message = apiUserMessage(e);
-          setEstimateError(
-            message === "Выбранная модель недоступна. Выберите другую модель"
-              ? message
-              : "Оценка временно недоступна. Запуск можно продолжить",
-          );
-        })
-        .finally(() => {
-          if (!cancelled) setEstimateLoading(false);
-        });
-    }, ESTIMATE_DEBOUNCE_MS);
-
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
-    };
-  }, [draft]);
 
   const poll = useCallback(
     async (chatId: string, botMsgId: string, jobId: string) => {
@@ -418,13 +381,13 @@ export function ChatScreen({ user }: { user: VkUser }) {
           setActiveId((cur) => cur ?? chatIdForJob(restored[0].id));
         }
         for (const job of restored) {
-          const chatId = chatIdForJob(job.id);
+          const target = pollTargetForJob(chats, job);
           if (!isTerminal(job.status)) {
-            startPoll(chatId, "b-" + job.id, job.id);
+            startPoll(target.chatId, target.botMsgId, job.id);
           } else if (statusKind(job.status) === "done" && job.operation === "text_generate") {
             void resolveBotText(job).then((text) => {
               if (text && mountedRef.current) {
-                patchInChat(chatId, "b-" + job.id, { text });
+                patchInChat(target.chatId, target.botMsgId, { text });
               }
             });
           }
@@ -435,6 +398,24 @@ export function ChatScreen({ user }: { user: VkUser }) {
         if (mountedRef.current) setLoading(false);
       });
   }, [chats.length, refreshBalance, setChats, setActiveId, startPoll, patchInChat]);
+
+  useEffect(() => {
+    const pending = jobs.filter((job) => !isTerminal(job.status));
+    if (pending.length === 0) return;
+
+    const missingChats: Job[] = [];
+    for (const job of pending) {
+      const target = pollTargetForJob(chats, job);
+      if (target.missing) missingChats.push(job);
+      startPoll(target.chatId, target.botMsgId, job.id);
+    }
+
+    if (missingChats.length > 0) {
+      setChats((prev) =>
+        missingChats.reduceRight((next, job) => upsertJobChat(next, job), prev),
+      );
+    }
+  }, [jobs, chats, setChats, startPoll]);
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -465,29 +446,27 @@ export function ChatScreen({ user }: { user: VkUser }) {
         onClearHistory={clearChats}
       />
 
-      <header className="chat__header">
-        <Button
-          type="button"
-          className={"icon-btn" + (activeTab !== "chat" ? " icon-btn--ghost" : "")}
-          mode="tertiary"
-          appearance="neutral"
-          size="l"
-          aria-label="История диалогов"
-          onClick={() => setDrawerOpen(true)}
-          disabled={activeTab !== "chat"}
-        >
-          ☰
-        </Button>
-        <Avatar src={null} fallback="AI" />
-        <div className="chat__title">
-          <span className="chat__name">{header.name}</span>
-          <span className="chat__sub">{header.sub}</span>
-        </div>
-        <span className="chat__spacer" />
-        {balance !== null && (
-          <span className="balance-pill">{balance.toLocaleString("ru-RU")} кр.</span>
-        )}
-      </header>
+      {activeTab === "chat" && (
+        <header className="chat__header">
+          <Button
+            type="button"
+            className="icon-btn"
+            mode="tertiary"
+            appearance="neutral"
+            size="l"
+            aria-label="История диалогов"
+            onClick={() => setDrawerOpen(true)}
+          >
+            ☰
+          </Button>
+          <Avatar src={neuroHubAvatar} fallback="НХ" className="avatar--bot" />
+          <div className="chat__title">
+            <span className="chat__name">{header.name}</span>
+            <span className="chat__sub">{header.sub}</span>
+          </div>
+          <span className="chat__spacer" />
+        </header>
+      )}
 
       <section className={"app-tab-panel" + (activeTab === "chat" ? " is-active" : "")} aria-hidden={activeTab !== "chat"}>
           <div className="chat__scroll" ref={scrollRef}>
@@ -498,28 +477,25 @@ export function ChatScreen({ user }: { user: VkUser }) {
             )}
             {empty && (
               <div className="greeting">
-                <span className="greeting__avatar">AI</span>
+                <span className="greeting__avatar avatar--bot" aria-hidden="true">
+                  <img className="avatar__img" src={neuroHubAvatar} alt="" />
+                </span>
                 <h1 className="greeting__title">Привет, {user.firstName}!</h1>
                 <p className="greeting__text">
-                  Напишите сообщение — ChatGPT ответит в этом диалоге с учетом последних реплик.
+                  Напишите сообщение — НейроХаб ответит в этом диалоге с учетом последних реплик.
                 </p>
               </div>
             )}
             {messages.map((m, index) =>
               m.role === "bot" ? (
-                <div key={m.id} className="chat-result-wrap">
-                  {m.pending && (
-                    <div className="typing-line" aria-live="polite">
-                      <span>ChatGPT печатает</span>
-                      <TypingDots />
-                    </div>
-                  )}
-                  <ResultCard
-                    msg={m}
-                    prompt={promptForBot(messages, index)}
-                    onRetry={() => handleRetry(m, promptForBot(messages, index))}
-                  />
-                </div>
+                <MessageBubble
+                  key={m.id}
+                  msg={m}
+                  userName={user.name}
+                  userAvatar={user.avatar}
+                  botName={CHAT_ASSISTANT_NAME}
+                  onRetry={() => handleRetry(m, promptForBot(messages, index))}
+                />
               ) : (
                 <MessageBubble key={m.id} msg={m} userName={user.name} userAvatar={user.avatar} />
               ),
@@ -527,21 +503,15 @@ export function ChatScreen({ user }: { user: VkUser }) {
           </div>
 
           <Composer
-            modelName={CHAT_MODEL_NAME}
-            onDraftChange={setDraft}
+            onDraftChange={() => undefined}
             onSend={handleSend}
             disabled={loading || submitting}
-            estimateCost={estimate?.cost_estimate ?? null}
-            estimateEnough={estimate?.enough_credits ?? null}
-            estimateLoading={estimateLoading}
-            estimateError={estimateError}
           />
       </section>
 
       <section className={"app-tab-panel app-tab-panel--create" + (activeTab === "create" ? " is-active" : "")} aria-hidden={activeTab !== "create"}>
         <WorkflowMode
           user={user}
-          balance={balance}
           jobs={jobs}
           chats={chats}
           loading={loading}
@@ -577,7 +547,9 @@ export function ChatScreen({ user }: { user: VkUser }) {
           aria-label="Чат"
           onClick={() => changeTab("chat")}
         >
-          <span className="app-tabbar__icon app-tabbar__icon--chat" aria-hidden="true" />
+          <span className="app-tabbar__avatar-wrap" aria-hidden="true">
+            <img className="app-tabbar__avatar" src={neuroHubAvatar} alt="" />
+          </span>
         </TabbarItem>
         <TabbarItem
           selected={activeTab === "settings"}

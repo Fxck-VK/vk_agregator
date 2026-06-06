@@ -23,7 +23,6 @@ type WorkflowScreen = "home" | "generate" | "status" | "result" | "history";
 
 type WorkflowModeProps = {
   user: VkUser;
-  balance: number | null;
   jobs: Job[];
   chats: Chat[];
   loading: boolean;
@@ -36,22 +35,18 @@ const PROMPT_LIMIT = 2000;
 
 const CREATE_CHOICES: Array<{
   title: string;
-  text: string;
   modality: ModalityId;
 }> = [
   {
     title: "Создать фото",
-    text: "Изображение для VK-поста через backend image_generate",
     modality: "image",
   },
   {
     title: "Создать видео",
-    text: "Короткий ролик через backend video_generate",
     modality: "video",
   },
   {
     title: "Создать пост",
-    text: "Текстовый VK-пост с итоговым preview; медиа можно создать отдельным типом",
     modality: "text",
   },
 ];
@@ -73,25 +68,25 @@ const TIMELINE = [
   {
     id: "reserving",
     title: "Резерв",
-    text: "Backend проверяет баланс и резервирует кредиты",
+    text: "Проверяем баланс и готовим запуск",
     statuses: new Set(["credits_reserved", "awaiting_payment"]),
   },
   {
     id: "queued",
     title: "Очередь",
-    text: "Задача ждёт свободного worker",
+    text: "Запрос ждёт своей очереди",
     statuses: new Set(["queued", "dispatching_provider"]),
   },
   {
     id: "generating",
     title: "Генерация",
-    text: "Модель создаёт контент через backend job flow",
+    text: "НейроХаб готовит контент",
     statuses: new Set(["provider_submitted", "provider_pending", "provider_processing"]),
   },
   {
     id: "verifying",
     title: "Проверка результата",
-    text: "Артефакт сохраняется и проходит безопасную обработку",
+    text: "Проверяем результат и готовим превью",
     statuses: new Set(["provider_succeeded", "postprocessing", "result_ready", "delivering"]),
   },
   {
@@ -119,6 +114,11 @@ function dateLabel(value: string): string {
 
 function sortedJobs(jobs: Job[]): Job[] {
   return [...jobs].sort((a, b) => b.created_at.localeCompare(a.created_at));
+}
+
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase() || "Я";
 }
 
 function messageForJob(job: Job | undefined, chats: Chat[]): ChatMessage | null {
@@ -150,7 +150,6 @@ function timelineIndex(status: string): number {
 
 export function WorkflowMode({
   user,
-  balance,
   jobs,
   chats,
   loading,
@@ -277,19 +276,12 @@ export function WorkflowMode({
       {screen === "home" && (
         <section className="workflow-screen">
           <ScreenTitle
-            eyebrow="Create"
-            title={`${user.firstName}, что создаём?`}
-            text="Выберите тип результата. Дальше останутся estimate, статус генерации и VK-post preview из workflow."
+            eyebrow="Создать"
+            title={`${user.name}, что создаём?`}
+            text="Выберите услугу, опишите задачу и проверьте результат перед публикацией."
           />
 
-          <div className="workflow-balance" aria-live="polite">
-            <span>Баланс</span>
-            <strong>{balance === null ? "..." : `${balance.toLocaleString("ru-RU")} кр.`}</strong>
-            {balance !== null && balance <= 0 && <em>Нужны кредиты для запуска</em>}
-          </div>
-
-          <section className="workflow-section" aria-labelledby="choice-title">
-            <h2 id="choice-title">Выбор формата</h2>
+          <section className="workflow-section" aria-label="Услуги">
             <div className="create-choice-grid">
               {CREATE_CHOICES.map((choice) => (
                 <button
@@ -299,7 +291,6 @@ export function WorkflowMode({
                   onClick={() => openCreateType(choice.modality)}
                 >
                   <span>{choice.title}</span>
-                  <small>{choice.text}</small>
                 </button>
               ))}
             </div>
@@ -311,10 +302,11 @@ export function WorkflowMode({
         <section className="workflow-screen">
           <WorkflowNav currentModality={currentModality.label} onBack={backToChoice} onHistory={openTypeHistory} />
           <ScreenTitle
-            eyebrow="Generate"
+            eyebrow="Заявка"
             title={`Опишите: ${currentModality.label.toLowerCase()}`}
-            text="Стоимость и доступность модели считает backend до запуска."
+            text="Мы заранее покажем стоимость и подскажем, можно ли запускать генерацию."
           />
+          {modalityId === "text" && <PostChoicePreview user={user} />}
           <div className="workflow-form">
             <div className="workflow-field">
               <label htmlFor="workflow-model">Модель</label>
@@ -333,7 +325,7 @@ export function WorkflowMode({
             </div>
 
             <div className="workflow-field">
-              <label htmlFor="workflow-prompt">Промпт</label>
+              <label htmlFor="workflow-prompt">Описание</label>
               <Textarea
                 id="workflow-prompt"
                 className="workflow-textarea"
@@ -341,7 +333,7 @@ export function WorkflowMode({
                 maxLength={PROMPT_LIMIT + 100}
                 onChange={(event) => setPrompt(event.target.value)}
                 rows={6}
-                placeholder="Что нужно получить для VK?"
+                placeholder="Опишите, что нужно получить"
               />
               <span className={promptTooLong ? "field-note is-warn" : "field-note"}>
                 {prompt.length.toLocaleString("ru-RU")} / {PROMPT_LIMIT.toLocaleString("ru-RU")}
@@ -378,7 +370,7 @@ export function WorkflowMode({
               onClick={submitWorkflow}
               disabled={!canSubmit}
             >
-              Запустить генерацию
+              Создать
             </Button>
           </div>
 
@@ -406,12 +398,18 @@ export function WorkflowMode({
         <section className="workflow-screen">
           <WorkflowNav currentModality={currentModality.label} onBack={backToChoice} onHistory={openTypeHistory} />
           <ScreenTitle
-            eyebrow="Result"
+            eyebrow="Результат"
             title="Пост готов к проверке"
-            text="Preview показывает контент так, как он будет ощущаться в VK."
+            text="Посмотрите, как результат будет выглядеть для подписчиков."
           />
           <div className="workflow-signature-preview">
-            <ResultCard msg={activeMessage} prompt={activePrompt} onRetry={submitWorkflow} />
+            <ResultCard
+              msg={activeMessage}
+              prompt={activePrompt}
+              authorName={user.name}
+              authorAvatar={user.avatar}
+              onRetry={submitWorkflow}
+            />
           </div>
           <Button
             type="button"
@@ -431,9 +429,9 @@ export function WorkflowMode({
         <section className="workflow-screen">
           <WorkflowNav currentModality={currentModality.label} onBack={backToChoice} />
           <ScreenTitle
-            eyebrow="History"
+            eyebrow="История"
             title={`История: ${currentModality.label.toLowerCase()}`}
-            text="Список приходит с backend и отфильтрован по operation_type выбранного формата."
+            text="Последние генерации выбранного формата."
           />
           <div className="filter-row filter-row--single">
             <NativeSelect
@@ -525,7 +523,7 @@ function TypeHistoryPreview({
       {loading ? (
         <div className="workflow-empty">Загружаем историю</div>
       ) : jobs.length === 0 ? (
-        <div className="workflow-empty">Для этого типа пока нет генераций.</div>
+        <div className="workflow-empty">Для этого типа пока нет результатов.</div>
       ) : (
         <JobList jobs={jobs.slice(0, 3)} onOpen={onOpen} />
       )}
@@ -540,6 +538,30 @@ function ScreenTitle({ eyebrow, title, text }: { eyebrow: string; title: string;
       <h1>{title}</h1>
       <p>{text}</p>
     </header>
+  );
+}
+
+function PostChoicePreview({ user }: { user: VkUser }) {
+  return (
+    <div className="choice-post-preview" aria-label="Превью поста">
+      <div className="choice-post-preview__head">
+        {user.avatar ? (
+          <img className="choice-post-preview__avatar" src={user.avatar} alt="" />
+        ) : (
+          <span className="choice-post-preview__avatar choice-post-preview__avatar--fallback" aria-hidden="true">
+            {initials(user.name)}
+          </span>
+        )}
+        <div>
+          <strong>{user.name}</strong>
+          <small>сейчас</small>
+        </div>
+      </div>
+      <p>
+        Здесь появится текст будущего поста. Его можно будет проверить и
+        отредактировать перед публикацией.
+      </p>
+    </div>
   );
 }
 
@@ -587,11 +609,11 @@ function StatusScreen({ job, onResult }: { job: Job; onResult: () => void }) {
   const active = timelineIndex(job.status);
   const failed = statusKind(job.status) === "failed";
   return (
-    <section className="workflow-screen">
+    <section className="workflow-screen workflow-screen--status">
       <ScreenTitle
-        eyebrow="Status"
+        eyebrow="Статус"
         title={failed ? "Нужен повторный запуск" : "Генерация идёт"}
-        text={failed ? "Кредиты будут обработаны backend-сценарием." : "Каждый этап обновляется из backend job state."}
+        text={failed ? "Если списание было, оно будет пересчитано автоматически." : "Статус обновится сам, когда результат будет готов."}
       />
       <ol className="status-timeline" aria-live="polite">
         {TIMELINE.map((stage, index) => {

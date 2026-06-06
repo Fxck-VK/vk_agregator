@@ -99,7 +99,15 @@ export class ApiError extends Error {
   }
 }
 
-const LAUNCH_PARAMS = window.location.search.replace(/^\?/, "");
+function launchParams(): string {
+  const fromUrl = window.location.search.replace(/^\?/, "");
+  if (fromUrl) return fromUrl;
+
+  const fromDevEnv = import.meta.env.DEV ? import.meta.env.VITE_DEV_LAUNCH_PARAMS : "";
+  return typeof fromDevEnv === "string" ? fromDevEnv : "";
+}
+
+const LAUNCH_PARAMS = launchParams();
 
 const ARTIFACT_ID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;

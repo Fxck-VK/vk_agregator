@@ -14,6 +14,20 @@ function applyScheme(scheme?: string) {
   document.documentElement.setAttribute("data-scheme", dark ? "dark" : "light");
 }
 
+function bridgeTimeoutMs(): number {
+  return import.meta.env.DEV ? 1200 : 3000;
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  let timer: number | undefined;
+  const timeout = new Promise<T>((_, reject) => {
+    timer = window.setTimeout(() => reject(new Error("vk bridge timeout")), timeoutMs);
+  });
+  return Promise.race([promise, timeout]).finally(() => {
+    if (timer !== undefined) window.clearTimeout(timer);
+  });
+}
+
 export function useBridge() {
   const [ready, setReady] = useState(false);
   const [user, setUser] = useState<VkUser | null>(null);
@@ -29,13 +43,14 @@ export function useBridge() {
     bridge.subscribe(handleConfigUpdate);
 
     (async () => {
+      const timeoutMs = bridgeTimeoutMs();
       try {
-        await bridge.send("VKWebAppInit");
+        await withTimeout(bridge.send("VKWebAppInit"), timeoutMs);
       } catch {
         /* вне VK */
       }
       try {
-        const cfg = (await bridge.send("VKWebAppGetConfig")) as {
+        const cfg = (await withTimeout(bridge.send("VKWebAppGetConfig"), timeoutMs)) as {
           appearance?: string;
           scheme?: string;
         };
@@ -44,7 +59,7 @@ export function useBridge() {
         /* нет конфига вне VK */
       }
       try {
-        const info = (await bridge.send("VKWebAppGetUserInfo")) as {
+        const info = (await withTimeout(bridge.send("VKWebAppGetUserInfo"), timeoutMs)) as {
           first_name?: string;
           last_name?: string;
           photo_100?: string;
@@ -54,13 +69,13 @@ export function useBridge() {
           const first = info?.first_name ?? "";
           const last = info?.last_name ?? "";
           setUser({
-            firstName: first || "друг",
-            name: [first, last].filter(Boolean).join(" ") || "Гость",
+            firstName: first || "Пользователь",
+            name: [first, last].filter(Boolean).join(" ") || "Пользователь",
             avatar: info?.photo_100 ?? info?.photo_200 ?? null,
           });
         }
       } catch {
-        if (active) setUser({ firstName: "друг", name: "Гость", avatar: null });
+        if (active) setUser({ firstName: "Пользователь", name: "Пользователь", avatar: null });
       }
       if (active) setReady(true);
     })();

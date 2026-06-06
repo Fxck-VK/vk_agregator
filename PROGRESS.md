@@ -1159,6 +1159,53 @@ Status: **completed**.
 
 ---
 
+## Mini App Create/chat UX polish - 2026-06-06
+
+Status: **completed**.
+
+### What changed
+
+- Chat header is now rendered only on the center `Чат` tab. The Create and
+  Settings tabs no longer show the `AI` avatar/header strip or chat-history
+  button.
+- Create starts with a plain vertical service list: `Создать фото`,
+  `Создать видео`, `Создать пост`. The VK post preview is no longer embedded in
+  the service choice card.
+- The post preview now appears inside the `Создать пост` flow and in the final
+  result surface, using the VK user avatar/name for post authorship.
+- Backend contracts, billing, artifact access and polling ownership were not
+  changed.
+
+### Checks
+
+- `npm run build` in `web/miniapp` - exit 0.
+- Browser smoke on the ngrok Mini App - Create tab has no chat header, service
+  choices are clean, and the post preview appears only inside `Создать пост`.
+
+---
+
+## Mini App status/polling UX fix - 2026-06-06
+
+Status: **completed**.
+
+### What changed
+
+- Status timeline was tightened for mobile: smaller aligned markers, compact
+  rows, lighter connector line and reduced title sizing on the status screen.
+- Added frontend auto-resume polling for every non-terminal job already present
+  in Mini App state. This covers HMR/reload/history cases where the backend job
+  has progressed but the active status screen was left showing an old queued
+  state.
+- Checked local runtime aggregates: recent jobs are reaching terminal
+  `succeeded`, and outbox `event.job.created` / `event.job.queued` rows are
+  published. No backend/provider/billing code changed.
+
+### Checks
+
+- `npm run build` in `web/miniapp` - exit 0.
+
+---
+
 ## PR-16.2 - Mini App chat threads and history sheet
 
 Status: **completed**.
@@ -1272,6 +1319,10 @@ Status: **completed**.
 - Settings is now a real tab: theme preference (`system` / `light` / `dark`),
   backend balance display, payment-history placeholder, privacy note and local
   history clear action.
+- Settings polish update: theme choices no longer show explanatory copy, balance
+  is presented as a dedicated account card with refresh and top-up actions, and
+  payment/history sections are collapsible lists to keep the tab within mobile
+  bounds.
 - Added summary generation history in Settings, sourced from backend jobs and
   filterable by all/post/photo/video. Create keeps only operation-scoped
   workflow history.
@@ -1288,6 +1339,10 @@ Status: **completed**.
 - Mini App has `GET /miniapp/balance`, but no read-only payment or ledger
   history endpoint. Settings shows a safe placeholder and tracks this as a
   separate backend follow-up.
+- Mini App has no top-up/payment-intent endpoint yet. The Settings top-up button
+  does not mutate balance locally; the documented backend follow-up is a shared
+  Mini App/VK bot payment-intent flow that appends committed `topup` ledger
+  entries only after trusted payment confirmation.
 
 ### Checks
 
