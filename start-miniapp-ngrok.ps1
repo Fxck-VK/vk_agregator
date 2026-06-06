@@ -131,26 +131,32 @@ function New-LaunchParams($UserID) {
   }) -join "&")
 }
 
-function Public-NgrokUrl($LogPath) {
-  for ($i = 0; $i -lt 90; $i++) {
-    try {
-      $data = Invoke-RestMethod -Uri "http://127.0.0.1:4040/api/tunnels" -TimeoutSec 2
-      $url = ($data.tunnels | Where-Object { $_.proto -eq "https" } | Select-Object -First 1).public_url
-      if ($url) {
-        return $url
-      }
-    } catch {
-      # ngrok's local API appears a moment after the process starts.
+function Stop-DevTunnel() {
+  Stop-Process -Name ngrok -Force -ErrorAction SilentlyContinue
+  Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+    Where-Object {
+      $_.Name -eq "ssh.exe" -and
+      $_.CommandLine -and
+      $_.CommandLine.Contains("localhost.run") -and
+      $_.CommandLine.Contains("127.0.0.1")
+    } |
+    ForEach-Object {
+      Write-Host "Stopping localhost.run tunnel (pid $($_.ProcessId))"
+      Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
     }
+}
+
+function Public-LocalhostRunUrl($LogPath) {
+  for ($i = 0; $i -lt 90; $i++) {
     if (Test-Path $LogPath) {
-      $match = Select-String -Path $LogPath -Pattern "url=https://\S+" | Select-Object -Last 1
+      $match = Select-String -Path $LogPath -Pattern "https://[a-z0-9]+\.lhr\.life" | Select-Object -Last 1
       if ($match -and $match.Matches.Count -gt 0) {
-        return $match.Matches[0].Value.Substring(4)
+        return $match.Matches[0].Value
       }
     }
     Start-Sleep -Milliseconds 500
   }
-  throw "ngrok tunnel URL was not reported on http://127.0.0.1:4040"
+  throw "localhost.run tunnel URL was not reported in $LogPath"
 }
 
 if ($StopOnly) {
@@ -160,7 +166,7 @@ if ($StopOnly) {
   Stop-ViteDevServer $MiniAppPort
   Stop-Port $WorkerMetricsPort
   if (-not $NoNgrok) {
-    Stop-Port 4040
+    Stop-DevTunnel
   }
   exit 0
 }
@@ -191,7 +197,7 @@ if ((Env-State "DEEPINFRA_API_KEY") -ne "present") {
 Require-Command "go"
 Require-Command "npm.cmd"
 if (-not $NoNgrok) {
-  Require-Command "ngrok"
+  Require-Command "ssh"
 }
 
 if ($CheckOnly) {
@@ -205,7 +211,7 @@ Stop-Port $MiniAppPort
 Stop-ViteDevServer $MiniAppPort
 Stop-Port $WorkerMetricsPort
 if (-not $NoNgrok) {
-  Stop-Port 4040
+  Stop-DevTunnel
 }
 
 Write-Step "Database status"
@@ -225,14 +231,14 @@ $WorkerOut = Join-Path $RunDir "worker.out.log"
 $WorkerErr = Join-Path $RunDir "worker.err.log"
 $ViteOut = Join-Path $RunDir "vite.out.log"
 $ViteErr = Join-Path $RunDir "vite.err.log"
-$NgrokOut = Join-Path $RunDir "ngrok.out.log"
-$NgrokErr = Join-Path $RunDir "ngrok.err.log"
-Remove-Item -ErrorAction SilentlyContinue $ApiOut,$ApiErr,$WorkerOut,$WorkerErr,$ViteOut,$ViteErr,$NgrokOut,$NgrokErr
+$TunnelOut = Join-Path $RunDir "localhostrun.out.log"
+$TunnelErr = Join-Path $RunDir "localhostrun.err.log"
+Remove-Item -ErrorAction SilentlyContinue $ApiOut,$ApiErr,$WorkerOut,$WorkerErr,$ViteOut,$ViteErr,$TunnelOut,$TunnelErr
 
 $api = $null
 $worker = $null
 $vite = $null
-$ngrok = $null
+$tunnel = $null
 $keepRunning = $false
 
 try {
@@ -253,9 +259,9 @@ try {
 
   $publicUrl = "http://127.0.0.1:$MiniAppPort"
   if (-not $NoNgrok) {
-    Write-Step "Starting ngrok HTTPS tunnel"
-    $ngrok = Start-Process ngrok -ArgumentList @("http", "http://127.0.0.1:$MiniAppPort", "--log=stdout") -WorkingDirectory $Root -RedirectStandardOutput $NgrokOut -RedirectStandardError $NgrokErr -PassThru -WindowStyle Hidden
-    $publicUrl = Public-NgrokUrl $NgrokOut
+    Write-Step "Starting localhost.run HTTPS tunnel"
+    $tunnel = Start-Process ssh.exe -ArgumentList @("-o", "StrictHostKeyChecking=no", "-o", "ServerAliveInterval=30", "-R", "80:127.0.0.1:$MiniAppPort", "nokey@localhost.run") -WorkingDirectory $Root -RedirectStandardOutput $TunnelOut -RedirectStandardError $TunnelErr -PassThru -WindowStyle Hidden
+    $publicUrl = Public-LocalhostRunUrl $TunnelOut
   }
 
   $launchUrl = "$publicUrl/?$devLaunchParams"
@@ -277,7 +283,7 @@ try {
   Write-Host "  Worker: $WorkerOut / $WorkerErr"
   Write-Host "  Vite:   $ViteOut / $ViteErr"
   if (-not $NoNgrok) {
-    Write-Host "  ngrok:  $NgrokOut / $NgrokErr"
+    Write-Host "  Tunnel: $TunnelOut / $TunnelErr"
   }
   Write-Host ""
 
@@ -290,8 +296,8 @@ try {
     [Console]::Out.WriteLine("  API pid:    $($api.Id)")
     [Console]::Out.WriteLine("  Worker pid: $($worker.Id)")
     [Console]::Out.WriteLine("  Vite pid:   $($vite.Id)")
-    if ($ngrok) {
-      [Console]::Out.WriteLine("  ngrok pid:  $($ngrok.Id)")
+    if ($tunnel) {
+      [Console]::Out.WriteLine("  Tunnel pid: $($tunnel.Id)")
     }
     [Console]::Out.WriteLine("")
     [Console]::Out.WriteLine("Stop them with:")
@@ -301,11 +307,11 @@ try {
     exit 0
   }
 
-  Read-Host "Press Enter to stop API, worker, Vite and ngrok"
+  Read-Host "Press Enter to stop API, worker, Vite and tunnel"
 } finally {
   if (-not $keepRunning) {
     Write-Step "Stopping local processes"
-    foreach ($proc in @($api, $worker, $vite, $ngrok)) {
+    foreach ($proc in @($api, $worker, $vite, $tunnel)) {
       if ($proc -and -not $proc.HasExited) {
         Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
       }
@@ -315,7 +321,7 @@ try {
     Stop-ViteDevServer $MiniAppPort
     Stop-Port $WorkerMetricsPort
     if (-not $NoNgrok) {
-      Stop-Port 4040
+      Stop-DevTunnel
     }
   }
 }
