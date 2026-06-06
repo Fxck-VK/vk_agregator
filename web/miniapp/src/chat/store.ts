@@ -1,186 +1,150 @@
-import type { Chat, ChatMessage } from "./types";
+import type { Chat } from "./types";
 
-const KEY = "vk_miniapp_chats_v1";
-const VERSION = 2;
-const MAX_ENTRIES = 50;
-export const HISTORY_TTL_DAYS = 7;
+const THREAD_KEY = "vk_miniapp_threads_v1";
+const LEGACY_HISTORY_KEY = "vk_miniapp_chats_v1";
+const VERSION = 1;
+const MAX_THREADS = 50;
+const DEFAULT_THREAD_ID = "default";
+const DEFAULT_THREAD_TITLE = "ChatGPT диалог";
 
-const HISTORY_TTL_MS = HISTORY_TTL_DAYS * 24 * 60 * 60 * 1000;
 const UNSAFE_FIELD_RE =
-  /vk_sign|launch_params|x-launch-params|token|secret|openai|prompt|artifactids|artifact_url|artifacturl|private_url|messages/i;
+  /vk_sign|launch_params|x-launch-params|token|secret|openai|prompt|artifactids|artifact_url|artifacturl|private_url|messages|job_id/i;
 
-export interface LocalHistoryEntry {
-  job_id: string;
-  operation_type: string;
-  status: string;
-  created_at: string;
+export interface ThreadMetadata {
+  id: string;
+  title: string;
+  last_activity_at: string;
 }
 
-interface LocalHistoryEnvelope {
+interface ThreadEnvelope {
   version: number;
-  entries: LocalHistoryEntry[];
+  threads: ThreadMetadata[];
 }
 
-function warnLocalHistory(reason: string): void {
-  console.warn(`Mini App local history cleared: ${reason}`);
-}
-
-function isSafeEntry(value: unknown): value is LocalHistoryEntry {
-  if (!value || typeof value !== "object") return false;
-  const item = value as Record<string, unknown>;
-  return (
-    typeof item.job_id === "string" &&
-    typeof item.operation_type === "string" &&
-    typeof item.status === "string" &&
-    typeof item.created_at === "string"
-  );
-}
-
-function withinTTL(createdAt: string, now = Date.now()): boolean {
-  const ts = Date.parse(createdAt);
-  return Number.isFinite(ts) && now - ts <= HISTORY_TTL_MS;
-}
-
-function normalizeEntries(entries: LocalHistoryEntry[]): LocalHistoryEntry[] {
-  const byJob = new Map<string, LocalHistoryEntry>();
-  for (const entry of entries) {
-    if (!withinTTL(entry.created_at)) continue;
-    byJob.set(entry.job_id, {
-      job_id: entry.job_id,
-      operation_type: entry.operation_type,
-      status: entry.status,
-      created_at: entry.created_at,
-    });
-  }
-  return Array.from(byJob.values())
-    .sort((a, b) => b.created_at.localeCompare(a.created_at))
-    .slice(0, MAX_ENTRIES);
-}
-
-function loadHistoryEntries(): LocalHistoryEntry[] {
-  try {
-    const raw = localStorage.getItem(KEY);
-    if (!raw) return [];
-    if (UNSAFE_FIELD_RE.test(raw)) {
-      localStorage.removeItem(KEY);
-      warnLocalHistory("unsafe legacy fields");
-      return [];
-    }
-    const data: unknown = JSON.parse(raw);
-    if (!data || typeof data !== "object" || Array.isArray(data)) {
-      localStorage.removeItem(KEY);
-      warnLocalHistory("legacy schema");
-      return [];
-    }
-    const envelope = data as Partial<LocalHistoryEnvelope>;
-    if (envelope.version !== VERSION || !Array.isArray(envelope.entries)) {
-      localStorage.removeItem(KEY);
-      warnLocalHistory("unknown schema");
-      return [];
-    }
-    const entries = normalizeEntries(envelope.entries.filter(isSafeEntry));
-    if (entries.length !== envelope.entries.length) {
-      saveHistoryEntries(entries);
-    }
-    return entries;
-  } catch {
-    localStorage.removeItem(KEY);
-    warnLocalHistory("unreadable data");
-    return [];
-  }
-}
-
-function saveHistoryEntries(entries: LocalHistoryEntry[]): void {
-  const safe = normalizeEntries(entries);
-  const envelope: LocalHistoryEnvelope = { version: VERSION, entries: safe };
-  try {
-    localStorage.setItem(KEY, JSON.stringify(envelope));
-  } catch {
-    /* quota / приватный режим — игнорируем */
-  }
-}
-
-function operationLabel(operation: string): string {
-  switch (operation) {
-    case "text_generate":
-      return "Текст";
-    case "image_generate":
-      return "Фото";
-    case "video_generate":
-      return "Видео";
-    default:
-      return "Генерация";
-  }
-}
-
-function historyTitle(entry: LocalHistoryEntry): string {
-  return `${operationLabel(entry.operation_type)} · ${entry.status}`;
-}
-
-function historyChat(entry: LocalHistoryEntry): Chat {
+export function defaultThread(now = Date.now()): Chat {
   return {
-    id: "job-" + entry.job_id,
-    title: historyTitle(entry),
-    createdAt: Date.parse(entry.created_at) || Date.now(),
-    updatedAt: Date.parse(entry.created_at) || Date.now(),
-    messages: [
-      {
-        id: "b-" + entry.job_id,
-        role: "bot",
-        jobId: entry.job_id,
-        operation: entry.operation_type,
-        status: entry.status,
-        pending: !isTerminalHistoryStatus(entry.status),
-        createdAt: entry.created_at,
-      },
-    ],
+    id: DEFAULT_THREAD_ID,
+    title: DEFAULT_THREAD_TITLE,
+    createdAt: now,
+    updatedAt: now,
+    messages: [],
   };
 }
 
-function isTerminalHistoryStatus(status: string): boolean {
-  return ["succeeded", "failed_terminal", "rejected", "cancelled", "expired", "refunded"].includes(status);
+function warnLocalHistory(reason: string): void {
+  console.warn(`Mini App thread metadata cleared: ${reason}`);
 }
 
-function chatHistoryEntries(chats: Chat[]): LocalHistoryEntry[] {
-  const entries: LocalHistoryEntry[] = [];
+function safeThreadTitle(value: unknown): string {
+  if (typeof value !== "string") return DEFAULT_THREAD_TITLE;
+  const title = value.trim();
+  if (!title) return DEFAULT_THREAD_TITLE;
+  return title.length > 80 ? title.slice(0, 80) : title;
+}
+
+function isSafeThread(value: unknown): value is ThreadMetadata {
+  if (!value || typeof value !== "object") return false;
+  const item = value as Record<string, unknown>;
+  return (
+    (item.id === undefined || (typeof item.id === "string" && item.id.length > 0)) &&
+    typeof item.title === "string" &&
+    typeof item.last_activity_at === "string" &&
+    Number.isFinite(Date.parse(item.last_activity_at))
+  );
+}
+
+function metadataToChat(thread: ThreadMetadata): Chat {
+  const ts = Date.parse(thread.last_activity_at) || Date.now();
+  return {
+    id: thread.id || DEFAULT_THREAD_ID,
+    title: safeThreadTitle(thread.title),
+    createdAt: ts,
+    updatedAt: ts,
+    messages: [],
+  };
+}
+
+function chatToMetadata(chat: Chat): ThreadMetadata {
+  return {
+    id: chat.id || DEFAULT_THREAD_ID,
+    title: safeThreadTitle(chat.title),
+    last_activity_at: new Date(chat.updatedAt || Date.now()).toISOString(),
+  };
+}
+
+function normalizeThreads(chats: Chat[]): ThreadMetadata[] {
+  const byID = new Map<string, ThreadMetadata>();
   for (const chat of chats) {
-    for (const msg of chat.messages) {
-      if (msg.role !== "bot" || !msg.jobId || !msg.operation || !msg.status) continue;
-      entries.push({
-        job_id: msg.jobId,
-        operation_type: msg.operation,
-        status: msg.status,
-        created_at: msg.createdAt ?? new Date(chat.createdAt).toISOString(),
-      });
-    }
+    if (!chat.id) continue;
+    if (chat.id.startsWith("job-")) continue;
+    byID.set(chat.id, chatToMetadata(chat));
   }
-  return entries;
+  return Array.from(byID.values())
+    .sort((a, b) => b.last_activity_at.localeCompare(a.last_activity_at))
+    .slice(0, MAX_THREADS);
 }
 
 export function loadChats(): Chat[] {
-  return loadHistoryEntries().map(historyChat);
+  try {
+    const legacy = localStorage.getItem(LEGACY_HISTORY_KEY);
+    if (legacy) {
+      localStorage.removeItem(LEGACY_HISTORY_KEY);
+      warnLocalHistory("legacy job history schema");
+      return [defaultThread()];
+    }
+
+    const raw = localStorage.getItem(THREAD_KEY);
+    if (!raw) return [defaultThread()];
+    if (UNSAFE_FIELD_RE.test(raw)) {
+      localStorage.removeItem(THREAD_KEY);
+      warnLocalHistory("unsafe fields");
+      return [defaultThread()];
+    }
+
+    const data: unknown = JSON.parse(raw);
+    if (!data || typeof data !== "object" || Array.isArray(data)) {
+      localStorage.removeItem(THREAD_KEY);
+      warnLocalHistory("legacy schema");
+      return [defaultThread()];
+    }
+
+    const envelope = data as Partial<ThreadEnvelope>;
+    if (envelope.version !== VERSION || !Array.isArray(envelope.threads)) {
+      localStorage.removeItem(THREAD_KEY);
+      warnLocalHistory("unknown schema");
+      return [defaultThread()];
+    }
+
+    const chats = envelope.threads.filter(isSafeThread).map(metadataToChat);
+    return chats.length > 0 ? chats : [defaultThread()];
+  } catch {
+    try {
+      localStorage.removeItem(THREAD_KEY);
+      localStorage.removeItem(LEGACY_HISTORY_KEY);
+    } catch {
+      /* ignore */
+    }
+    warnLocalHistory("unreadable data");
+    return [defaultThread()];
+  }
 }
 
 export function saveChats(chats: Chat[]): void {
-  const entries = chatHistoryEntries(chats);
-  if (entries.length === 0) {
-    clearLocalHistory();
-    return;
+  const threads = normalizeThreads(chats.length > 0 ? chats : [defaultThread()]);
+  const envelope: ThreadEnvelope = { version: VERSION, threads };
+  try {
+    localStorage.setItem(THREAD_KEY, JSON.stringify(envelope));
+    localStorage.removeItem(LEGACY_HISTORY_KEY);
+  } catch {
+    /* quota / private mode */
   }
-  saveHistoryEntries(entries);
 }
 
 export function clearLocalHistory(): void {
   try {
-    localStorage.removeItem(KEY);
+    localStorage.removeItem(THREAD_KEY);
+    localStorage.removeItem(LEGACY_HISTORY_KEY);
   } catch {
     /* ignore */
   }
-}
-
-export function chatTitle(messages: ChatMessage[]): string {
-  const firstUser = messages.find((m) => m.role === "user" && m.text);
-  const t = firstUser?.text?.trim() ?? "";
-  if (!t) return "Новая генерация";
-  return t.length > 40 ? t.slice(0, 40) + "…" : t;
 }

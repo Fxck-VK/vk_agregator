@@ -313,10 +313,62 @@ and `Настройки` is a placeholder for PR-16.4.
 Plan:
 
 - PR-16.1: navigation shell only.
-- PR-16.2: refine/fill the Create tab.
-- PR-16.3: refine/fill the Chat tab.
+- PR-16.2: chat threads and top history sheet.
+- PR-16.3: refine/fill the Create tab.
 - PR-16.4: implement Settings.
 
 Consequences: navigation becomes VK-native without new backend/BFF behavior.
 Billing, auth, moderation, artifact access and provider routing remain
 backend-owned. Future PRs can fill each tab without reworking the shell.
+
+---
+
+## ADR-011 - Mini App chat threads and graceful degradation
+
+Status: accepted
+
+Date: 2026-06-06
+
+Context: PR-15 added `POST /miniapp/chat/messages` and a process-local BFF
+conversation store. The frontend previously had a local chat drawer, but all
+Mini App chat submits used the backend default conversation. PR-16.2 introduces
+multiple frontend-visible dialogs without changing backend contracts.
+
+Decision: `conversation_id` is the active thread id. New dialogs are generated
+client-side as UUID strings. Backend validation treats this as an opaque
+restricted string: empty maps to `default`, values up to 64 characters may use
+letters, digits, `-`, `_`, `.`, and `:`. Therefore UUIDs are accepted, but the
+frontend must not rely on a server-owned UUID format.
+
+Legacy migration is explicit: the first/default dialog keeps id `default`, so
+existing users continue in the backend default conversation after the update.
+A thread without an id is treated as the default dialog during local recovery.
+
+Local storage keeps only safe thread metadata in `vk_miniapp_threads_v1`:
+`id`, `title`, and `last_activity_at`. It does not persist prompts, assistant
+answers, preview text, job ids, launch params, tokens, balance, provider
+details, artifact ids or artifact URLs. Last-message previews are derived only
+from in-memory messages for the current session. Legacy/suspicious local
+history is cleared with value-free warnings.
+
+The history UI reuses the existing chat drawer state and becomes a top sheet
+opened by tapping the chat title. The sheet shows thread titles, in-memory
+last-reply preview, last activity, new-dialog action and local clear action.
+The typing indicator is tied to pending job/poll state, not to a timer, so it
+turns off only when the backend job reaches a terminal state.
+
+Graceful degradation: conversation context still lives only in the process
+running `cmd/api`. API restart, scale-out or process replacement may lose the
+context for any thread. In that case the frontend keeps safe metadata, but the
+backend effectively starts an empty conversation; the UI must not crash or
+treat local metadata as source of truth.
+
+Backend dependency: a separate backend PR should add durable conversation
+storage plus list/read endpoints for Mini App conversations. PR-16.2 does not
+implement that backend surface and does not persist conversation content on
+the client.
+
+Consequences: frontend multi-dialog UX becomes available without weakening
+auth, billing, moderation, artifact access or provider boundaries. The current
+solution is session/local-metadata oriented until backend durable conversation
+history exists.

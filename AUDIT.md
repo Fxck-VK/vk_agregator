@@ -296,3 +296,27 @@ media URLs are added to localStorage. `ChatScreen` remains mounted across
 `Создать` / `Чат` / `Настройки` switches, preserving active job polling and the
 existing backend-owned job state model. The Settings tab is a placeholder and
 does not add new data access or backend behavior.
+
+---
+
+## PR-16.2 Mini App chat threads note
+
+Date: 2026-06-06
+
+Chat threads are frontend UX metadata only. New dialogs send their client UUID
+as `conversation_id`; the migrated/default dialog keeps `default`, preserving
+the existing backend default context. The Mini App still does not call
+providers directly and does not make billing, moderation, artifact or job-state
+decisions on the client.
+
+`localStorage` now uses `vk_miniapp_threads_v1` and stores only thread
+metadata: `id`, `title`, `last_activity_at`. It does not store prompt bodies,
+assistant answers, last-reply preview text, job ids, launch params, tokens,
+balance, provider details, artifact ids or artifact URLs. Last-reply previews
+exist only in memory for the current session.
+
+Backend context remains process-local from PR-15. If `cmd/api` restarts or is
+scaled horizontally without durable conversation storage, a thread may continue
+with empty backend context. This is a documented graceful degradation and a
+backend follow-up is tracked in `TASKS.md` for durable conversation list/read
+endpoints.

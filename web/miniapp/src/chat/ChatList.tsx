@@ -1,6 +1,29 @@
 // src/chat/ChatList.tsx
 import { Button } from "@vkontakte/vkui";
-import type { Chat } from "./types";
+import type { Chat, ChatMessage } from "./types";
+
+function lastPreview(messages: ChatMessage[]): string {
+  const last = [...messages].reverse().find((msg) => msg.text || msg.error || msg.pending || msg.status);
+  if (!last) return "Пока нет сообщений";
+  if (last.pending) return "ChatGPT печатает...";
+  if (last.error) return last.error;
+  if (last.text) return last.text.length > 80 ? last.text.slice(0, 80) + "..." : last.text;
+  if (last.status) return last.status;
+  return "Диалог";
+}
+
+function timeLabel(value: number): string {
+  try {
+    return new Intl.DateTimeFormat("ru-RU", {
+      day: "2-digit",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(new Date(value));
+  } catch {
+    return "";
+  }
+}
 
 export function ChatList({
   chats,
@@ -27,35 +50,54 @@ export function ChatList({
         className={"drawer-overlay" + (open ? " is-open" : "")}
         onClick={onClose}
       />
-      <aside className={"drawer" + (open ? " is-open" : "")}>
+      <aside className={"drawer drawer--top" + (open ? " is-open" : "")} aria-label="История диалогов">
+        <div className="drawer__head">
+          <div>
+            <strong>Диалоги</strong>
+            <span>Контекст хранит backend; локально только id и метаданные.</span>
+          </div>
+          <Button type="button" mode="tertiary" appearance="neutral" size="m" aria-label="Закрыть" onClick={onClose}>
+            ×
+          </Button>
+        </div>
         <Button type="button" className="drawer__new" mode="primary" size="l" stretched onClick={onNew}>
-          + Новый чат
+          Новый диалог
         </Button>
-        <p className="drawer__privacy">
-          Локально хранятся только job ID, тип, статус и дата за 7 дней. Тексты запросов, ссылки и ключи не сохраняются.
-        </p>
         <div className="drawer__list">
-          {chats.length === 0 && <div className="chat-empty">Пока нет локальной истории</div>}
+          {chats.length === 0 && <div className="chat-empty">Пока нет диалогов</div>}
           {chats.map((c) => (
             <div
               key={c.id}
               className={"chat-item" + (c.id === activeId ? " is-active" : "")}
+              role="button"
+              tabIndex={0}
+              aria-current={c.id === activeId ? "true" : undefined}
               onClick={() => onSelect(c.id)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  onSelect(c.id);
+                }
+              }}
             >
-              <span className="chat-item__title">{c.title}</span>
+              <div className="chat-item__body">
+                <span className="chat-item__title">{c.title}</span>
+                <small>{lastPreview(c.messages)}</small>
+              </div>
+              <time className="chat-item__time">{timeLabel(c.updatedAt)}</time>
               <Button
                 type="button"
                 className="chat-item__del"
                 mode="tertiary"
                 appearance="neutral"
                 size="s"
-                aria-label="Удалить чат"
+                aria-label="Удалить диалог"
                 onClick={(e) => {
                   e.stopPropagation();
                   onDelete(c.id);
                 }}
               >
-                ✕
+                ×
               </Button>
             </div>
           ))}
@@ -69,7 +111,7 @@ export function ChatList({
           stretched
           onClick={onClearHistory}
         >
-          Очистить локальную историю
+          Очистить локальные диалоги
         </Button>
       </aside>
     </>

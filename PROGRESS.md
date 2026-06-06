@@ -1156,3 +1156,40 @@ Status: **completed**.
 
 - `npm run build` in `web/miniapp` - exit 0.
 - `go build ./...` - exit 0.
+
+---
+
+## PR-16.2 - Mini App chat threads and history sheet
+
+Status: **completed**.
+
+### STEP 0 context
+
+- PR-16.1 is present on `fastlife_dev`: the Chat tab is a mounted panel inside
+  the bottom 3-tab shell, so polling refs survive tab switches.
+- PR-15 chat submits use `POST /miniapp/chat/messages`; the BFF accepts
+  `conversation_id` as an opaque restricted string. Client UUIDs are accepted,
+  while empty `conversation_id` maps to backend `default`.
+- The backend has no conversation list/read endpoint. Conversation context is
+  still process-local in `cmd/api`, so restart or scale-out can lose context.
+
+### What changed
+
+- Chat threads now have an active id. The migrated/default dialog keeps id
+  `default`; new dialogs use client-generated UUIDs and are sent as
+  `conversation_id`.
+- The old side drawer state is reused as a top history sheet opened by tapping
+  the chat title. It shows thread title, session-only last-message preview,
+  last activity, new-dialog and clear-local-history actions.
+- Local thread persistence moved to `vk_miniapp_threads_v1` and stores only
+  `id`, `title` and `last_activity_at`. Legacy/suspicious chat history is
+  cleared without logging values.
+- The typing indicator is tied to pending job/poll state and disappears only
+  after the backend job reaches a terminal state.
+- ADR-011 documents thread storage, default migration, graceful degradation and
+  the missing durable backend conversation endpoint.
+
+### Checks
+
+- `npm run build` in `web/miniapp` - exit 0.
+- `go build ./...` - exit 0.

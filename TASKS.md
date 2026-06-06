@@ -139,6 +139,7 @@
 - [x] Mini App PR-10 redesign: явные `Chat` / `Workflow` режимы, workflow screens `Home -> Generate -> Status -> Result -> History`, status timeline, VK post preview, design tokens и ADR mode/design direction.
 - [x] Mini App PR-14 VKUI hybrid: `@vkontakte/vkui` `8.2.1` added as production dependency; app root uses `ConfigProvider`/`AdaptivityProvider`/`AppRoot`; base controls use VKUI `Button`, `NativeSelect`, `Textarea`, `Panel`, `Tabbar`; custom workflow shell, result preview and status timeline remain custom.
 - [x] Mini App PR-16.1 navigation shell: bottom VKUI `Tabbar` with `Создать` / `Чат` / `Настройки`, default center `Чат`, UI-only active tab preference `vk_miniapp_active_tab_v1`; Chat and Workflow stay mounted as tab panels so polling survives tab switches.
+- [x] Mini App PR-16.2 chat threads: active `conversation_id` is the thread id (`default` for migrated legacy context, UUID for new dialogs), history opens as a top sheet from the chat title, and `localStorage` keeps only `id` / `title` / `last_activity_at` thread metadata.
 - [x] Obsolete VK Tunnel tooling removed: `@vkontakte/vk-tunnel`, npm `tunnel` script and `web/miniapp/vk-tunnel-config.json`; dev tunnel path normalized to `cloudflared` / `*.trycloudflare.com`.
 - [x] Dev-туннель через `cloudflared` (VK Tunnel на техработах с 02.10.2025): `vite.config.ts` `server` — `host: true`, `allowedHosts: true`, `hmr.protocol: wss`/`clientPort: 443`, proxy `/miniapp`+`/api` → `:8080`; mixed-content под https устранён, домен туннеля не хардкодится. E2E (mock) через прокси-эндпоинты проверен.
 - [x] Фикс биллинга (AUDIT B1a): стартовый грант 1000 создаётся committed-проводкой в ledger атомарно; миграция `000004` бэкоффилит открывающие проводки; mismatch устранён.
@@ -189,6 +190,7 @@
 ## Current Gaps / Known Follow-Ups
 
 ### Integration validation / next providers
+- [ ] Mini App backend conversations: add durable conversation storage plus list/read endpoints for thread history. PR-16.2 currently degrades to safe local metadata only; backend process-local context can be lost on API restart or scale-out.
 - [ ] Live smoke with `DEEPINFRA_API_KEY`: GPT text mode should return DeepSeek-V4-Flash output through the normal Job -> Artifact -> Delivery flow.
 - [ ] Live smoke с реальными `OPENAI_API_KEY` и `VK_ACCESS_TOKEN`: text/image/video generation, VK photo/video upload, moderation allow/block.
 - [ ] Подключить production-баннер к `/start` через `VK_WELCOME_ATTACHMENT` или отдельный upload flow.

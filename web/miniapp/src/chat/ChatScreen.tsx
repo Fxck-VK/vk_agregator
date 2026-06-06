@@ -1,7 +1,7 @@
 ﻿// src/chat/ChatScreen.tsx
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button, Panel, Tabbar, TabbarItem } from "@vkontakte/vkui";
-import { Avatar, Spinner } from "../ui/ui";
+import { Avatar, Spinner, TypingDots } from "../ui/ui";
 import { MessageBubble } from "./MessageBubble";
 import { Composer } from "./Composer";
 import { ChatList } from "./ChatList";
@@ -365,7 +365,7 @@ export function ChatScreen({ user }: { user: VkUser }) {
     try {
       const job = isChat
         ? await createChatMessage(
-            { prompt: text },
+            { prompt: text, conversation_id: chatId },
             { idempotencyKey },
           )
         : await createJob(
@@ -463,21 +463,27 @@ export function ChatScreen({ user }: { user: VkUser }) {
       <header className="chat__header">
         <Button
           type="button"
-          className={"icon-btn" + (activeTab !== "chat" ? " icon-btn--ghost" : "")}
+          className="icon-btn icon-btn--ghost"
           mode="tertiary"
           appearance="neutral"
           size="l"
-          aria-label="Чаты"
-          onClick={() => setDrawerOpen(true)}
-          disabled={activeTab !== "chat"}
+          aria-hidden="true"
+          tabIndex={-1}
+          disabled
         >
           ☰
         </Button>
         <Avatar src={null} fallback="AI" />
-        <div className="chat__title">
+        <button
+          type="button"
+          className="chat__title chat__title--button"
+          aria-label="Открыть историю диалогов"
+          onClick={() => setDrawerOpen(true)}
+          disabled={activeTab !== "chat"}
+        >
           <span className="chat__name">{header.name}</span>
           <span className="chat__sub">{header.sub}</span>
-        </div>
+        </button>
         <span className="chat__spacer" />
         {balance !== null && (
           <span className="balance-pill">{balance.toLocaleString("ru-RU")} кр.</span>
@@ -502,12 +508,19 @@ export function ChatScreen({ user }: { user: VkUser }) {
             )}
             {messages.map((m, index) =>
               m.role === "bot" ? (
-                <ResultCard
-                  key={m.id}
-                  msg={m}
-                  prompt={promptForBot(messages, index)}
-                  onRetry={() => handleRetry(m, promptForBot(messages, index))}
-                />
+                <div key={m.id} className="chat-result-wrap">
+                  {m.pending && (
+                    <div className="typing-line" aria-live="polite">
+                      <span>ChatGPT печатает</span>
+                      <TypingDots />
+                    </div>
+                  )}
+                  <ResultCard
+                    msg={m}
+                    prompt={promptForBot(messages, index)}
+                    onRetry={() => handleRetry(m, promptForBot(messages, index))}
+                  />
+                </div>
               ) : (
                 <MessageBubble key={m.id} msg={m} userName={user.name} userAvatar={user.avatar} />
               ),
