@@ -56,9 +56,10 @@ func NewHTTPClient(cfg HTTPConfig) *HTTPClient {
 }
 
 var (
-	_ Client        = (*HTTPClient)(nil)
-	_ ControlClient = (*HTTPClient)(nil)
-	_ MediaUploader = (*HTTPClient)(nil)
+	_ Client            = (*HTTPClient)(nil)
+	_ ControlClient     = (*HTTPClient)(nil)
+	_ UserProfileClient = (*HTTPClient)(nil)
+	_ MediaUploader     = (*HTTPClient)(nil)
 )
 
 // SendText sends a plain text message via messages.send.
@@ -123,6 +124,32 @@ func (c *HTTPClient) AnswerMessageEvent(ctx context.Context, eventID string, use
 		return err
 	}
 	return nil
+}
+
+// GetUserProfile fetches a VK user's display name for one-time personalization.
+func (c *HTTPClient) GetUserProfile(ctx context.Context, userID int64) (UserProfile, error) {
+	form := url.Values{}
+	form.Set("user_ids", strconv.FormatInt(userID, 10))
+
+	var decoded struct {
+		Response []struct {
+			ID        int64  `json:"id"`
+			FirstName string `json:"first_name"`
+			LastName  string `json:"last_name"`
+		} `json:"response"`
+		Error *struct {
+			Code int    `json:"error_code"`
+			Msg  string `json:"error_msg"`
+		} `json:"error"`
+	}
+	if err := c.api(ctx, "users.get", form, &decoded); err != nil {
+		return UserProfile{}, err
+	}
+	if len(decoded.Response) == 0 {
+		return UserProfile{}, fmt.Errorf("vkdelivery: users.get returned no users")
+	}
+	u := decoded.Response[0]
+	return UserProfile{UserID: u.ID, FirstName: u.FirstName, LastName: u.LastName}, nil
 }
 
 // vkMessageResponse is the VK messages.send envelope. On success response holds

@@ -51,6 +51,7 @@ type Provider struct {
 type taskState struct {
 	status     domain.ProviderTaskStatus
 	outputURLs []string
+	text       string
 	errClass   domain.ProviderErrorClass
 	errMsg     string
 }
@@ -110,13 +111,14 @@ func (p *Provider) Submit(ctx context.Context, req domain.ProviderRequest) (doma
 	if req.ModelCode != "" {
 		model = req.ModelCode
 	}
-	text, err := p.generateText(ctx, model, req.Prompt, req.IdempotencyKey)
+	text, err := p.generateText(ctx, model, req.Prompt, req.MaxOutputTokens, req.IdempotencyKey)
 	if err != nil {
 		return domain.ProviderTask{}, err
 	}
 	p.store(externalID, taskState{
 		status:     domain.ProviderTaskSucceeded,
 		outputURLs: []string{dataURL("text/plain; charset=utf-8", []byte(text))},
+		text:       text,
 	})
 	return domain.ProviderTask{
 		JobID:          req.JobID,
@@ -144,7 +146,7 @@ func (p *Provider) Poll(_ context.Context, ref domain.ProviderTaskRef) (domain.P
 	if state.errClass != "" {
 		return domain.ProviderTaskResult{Status: domain.ProviderTaskFailed, ErrorClass: state.errClass, ErrorMessage: state.errMsg}, nil
 	}
-	return domain.ProviderTaskResult{Status: state.status, OutputURLs: state.outputURLs}, nil
+	return domain.ProviderTaskResult{Status: state.status, OutputURLs: state.outputURLs, Text: state.text}, nil
 }
 
 // Cancel is a no-op because DeepInfra text completions are synchronous.
@@ -157,9 +159,10 @@ func (p *Provider) store(externalID string, state taskState) {
 }
 
 type chatRequest struct {
-	Model    string        `json:"model"`
-	Messages []chatMessage `json:"messages"`
-	Stream   bool          `json:"stream"`
+	Model     string        `json:"model"`
+	Messages  []chatMessage `json:"messages"`
+	Stream    bool          `json:"stream"`
+	MaxTokens int           `json:"max_tokens,omitempty"`
 }
 
 type chatMessage struct {
@@ -176,14 +179,15 @@ type chatResponse struct {
 	Error *apiError `json:"error"`
 }
 
-func (p *Provider) generateText(ctx context.Context, model, prompt, idempotencyKey string) (string, error) {
+func (p *Provider) generateText(ctx context.Context, model, prompt string, maxTokens int, idempotencyKey string) (string, error) {
 	body := chatRequest{
 		Model: model,
 		Messages: []chatMessage{
 			{Role: "system", Content: textGenerationSystemPrompt},
 			{Role: "user", Content: prompt},
 		},
-		Stream: false,
+		Stream:    false,
+		MaxTokens: maxTokens,
 	}
 	var decoded chatResponse
 	if err := p.postJSON(ctx, "/chat/completions", body, &decoded, idempotencyKey); err != nil {

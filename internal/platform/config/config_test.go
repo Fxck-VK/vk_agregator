@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"vk-ai-aggregator/internal/platform/config"
 )
@@ -94,6 +95,36 @@ func TestLoadVKUnroutedTextMode(t *testing.T) {
 	}
 }
 
+func TestLoadVKDialogModeTTL(t *testing.T) {
+	t.Setenv("VK_DIALOG_MODE_TTL", "45m")
+
+	cfg := config.Load()
+	if cfg.VKDialogModeTTL != 45*time.Minute {
+		t.Fatalf("VKDialogModeTTL = %s, want 45m", cfg.VKDialogModeTTL)
+	}
+}
+
+func TestLoadTextContextConfig(t *testing.T) {
+	t.Setenv("TEXT_CONTEXT_ENABLED", "false")
+	t.Setenv("TEXT_CONTEXT_MAX_INPUT_TOKENS", "1700")
+	t.Setenv("TEXT_CONTEXT_MAX_OUTPUT_TOKENS", "700")
+	t.Setenv("TEXT_CONTEXT_SUMMARY_MAX_TOKENS", "350")
+	t.Setenv("TEXT_CONTEXT_RECENT_MESSAGES_LIMIT", "5")
+	t.Setenv("TEXT_CONTEXT_SUMMARIZE_AFTER_MESSAGES", "9")
+	t.Setenv("TEXT_CONTEXT_SUMMARIZE_AFTER_TOKENS", "1400")
+
+	cfg := config.Load()
+	if cfg.TextContextEnabled {
+		t.Fatal("TextContextEnabled = true, want false")
+	}
+	if cfg.TextContextMaxInputTokens != 1700 || cfg.TextContextMaxOutputTokens != 700 || cfg.TextContextSummaryMaxTokens != 350 {
+		t.Fatalf("unexpected context token config: input=%d output=%d summary=%d", cfg.TextContextMaxInputTokens, cfg.TextContextMaxOutputTokens, cfg.TextContextSummaryMaxTokens)
+	}
+	if cfg.TextContextRecentMessagesLimit != 5 || cfg.TextContextSummarizeAfterMessages != 9 || cfg.TextContextSummarizeAfterTokens != 1400 {
+		t.Fatalf("unexpected context history config: recent=%d after_messages=%d after_tokens=%d", cfg.TextContextRecentMessagesLimit, cfg.TextContextSummarizeAfterMessages, cfg.TextContextSummarizeAfterTokens)
+	}
+}
+
 func TestLoadVKMenuFeatureFlags(t *testing.T) {
 	t.Setenv("VK_MENU_STUDENTS_ENABLED", "false")
 	t.Setenv("VK_MENU_VIDEO_SORA2_EXAMPLES_ENABLED", "false")
@@ -179,6 +210,43 @@ func TestLoadMiniAppJobRateLimit(t *testing.T) {
 	}
 	if cfg.MiniAppJobRateLimitBurst != 7 {
 		t.Fatalf("MiniAppJobRateLimitBurst = %v", cfg.MiniAppJobRateLimitBurst)
+	}
+}
+
+func TestLoadVKAntiSpamConfig(t *testing.T) {
+	t.Setenv("VK_ANTISPAM_ENABLED", "false")
+	t.Setenv("VK_ANTISPAM_MESSAGE_LIMIT", "11")
+	t.Setenv("VK_ANTISPAM_MESSAGE_WINDOW", "61s")
+	t.Setenv("VK_ANTISPAM_GPT_LIMIT", "4")
+	t.Setenv("VK_ANTISPAM_GPT_WINDOW", "31s")
+	t.Setenv("VK_ANTISPAM_COOLDOWN", "32s")
+	t.Setenv("VK_ANTISPAM_VIOLATION_LIMIT", "6")
+	t.Setenv("VK_ANTISPAM_VIOLATION_WINDOW", "11m")
+	t.Setenv("VK_ANTISPAM_BLOCK_DURATION", "16m")
+	t.Setenv("VK_ANTISPAM_NEW_USER_AGE", "5h")
+	t.Setenv("VK_ANTISPAM_NEW_USER_MESSAGE_LIMIT", "6")
+	t.Setenv("VK_ANTISPAM_NEW_USER_GPT_LIMIT", "2")
+	t.Setenv("VK_ANTISPAM_NEW_USER_GPT_WINDOW", "16s")
+	t.Setenv("VK_ANTISPAM_ACTIVE_GPT_JOB_LIMIT", "3")
+
+	cfg := config.Load()
+	if cfg.VKAntiSpamEnabled {
+		t.Fatal("VKAntiSpamEnabled = true, want false")
+	}
+	if cfg.VKAntiSpamMessageLimit != 11 || cfg.VKAntiSpamMessageWindow != 61*time.Second {
+		t.Fatalf("unexpected message limit config: %d/%s", cfg.VKAntiSpamMessageLimit, cfg.VKAntiSpamMessageWindow)
+	}
+	if cfg.VKAntiSpamGPTLimit != 4 || cfg.VKAntiSpamGPTWindow != 31*time.Second {
+		t.Fatalf("unexpected gpt limit config: %d/%s", cfg.VKAntiSpamGPTLimit, cfg.VKAntiSpamGPTWindow)
+	}
+	if cfg.VKAntiSpamCooldown != 32*time.Second || cfg.VKAntiSpamViolationLimit != 6 || cfg.VKAntiSpamViolationWindow != 11*time.Minute || cfg.VKAntiSpamBlockDuration != 16*time.Minute {
+		t.Fatalf("unexpected violation config: cooldown=%s limit=%d window=%s block=%s", cfg.VKAntiSpamCooldown, cfg.VKAntiSpamViolationLimit, cfg.VKAntiSpamViolationWindow, cfg.VKAntiSpamBlockDuration)
+	}
+	if cfg.VKAntiSpamNewUserAge != 5*time.Hour || cfg.VKAntiSpamNewUserMessageLimit != 6 || cfg.VKAntiSpamNewUserGPTLimit != 2 || cfg.VKAntiSpamNewUserGPTWindow != 16*time.Second {
+		t.Fatalf("unexpected new-user config: age=%s message=%d gpt=%d/%s", cfg.VKAntiSpamNewUserAge, cfg.VKAntiSpamNewUserMessageLimit, cfg.VKAntiSpamNewUserGPTLimit, cfg.VKAntiSpamNewUserGPTWindow)
+	}
+	if cfg.VKAntiSpamActiveGPTJobLimit != 3 {
+		t.Fatalf("VKAntiSpamActiveGPTJobLimit = %d, want 3", cfg.VKAntiSpamActiveGPTJobLimit)
 	}
 }
 

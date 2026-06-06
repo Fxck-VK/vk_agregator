@@ -55,6 +55,7 @@ type taskState struct {
 	jobID     uuid.UUID
 	operation domain.OperationType
 	modality  domain.Modality
+	text      string
 	errClass  domain.ProviderErrorClass
 	polls     int
 	cancelled bool
@@ -126,6 +127,7 @@ func (p *Provider) Submit(_ context.Context, req domain.ProviderRequest) (domain
 		jobID:     req.JobID,
 		operation: req.Operation,
 		modality:  req.Modality,
+		text:      textOutput(externalID, req.Modality),
 		errClass:  triggerFor(req.Prompt),
 	}
 
@@ -180,6 +182,7 @@ func (p *Provider) Poll(_ context.Context, ref domain.ProviderTaskRef) (domain.P
 	return domain.ProviderTaskResult{
 		Status:     domain.ProviderTaskSucceeded,
 		OutputURLs: []string{outputURL(ref.ExternalID, state.modality)},
+		Text:       state.text,
 	}, nil
 }
 
@@ -216,4 +219,11 @@ func outputURL(externalID string, modality domain.Modality) string {
 		ext = "mp3"
 	}
 	return fmt.Sprintf("mock://%s/output.%s", externalID, ext)
+}
+
+func textOutput(externalID string, modality domain.Modality) string {
+	if modality != domain.ModalityText {
+		return ""
+	}
+	return "Mock generated text result.\nsource=mock://" + externalID + "/output.txt\n"
 }

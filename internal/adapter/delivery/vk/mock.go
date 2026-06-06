@@ -33,18 +33,24 @@ type MockClient struct {
 	edits     []SentMessage
 	answers   []EventAnswer
 	byRandom  map[int64]SentMessage
+	profiles  map[int64]UserProfile
 	nextMsgID int64
 	failNext  error
 }
 
 // NewMockClient builds an empty mock client.
 func NewMockClient() *MockClient {
-	return &MockClient{byRandom: map[int64]SentMessage{}, nextMsgID: 1000}
+	return &MockClient{
+		byRandom:  map[int64]SentMessage{},
+		profiles:  map[int64]UserProfile{},
+		nextMsgID: 1000,
+	}
 }
 
 var (
-	_ Client        = (*MockClient)(nil)
-	_ ControlClient = (*MockClient)(nil)
+	_ Client            = (*MockClient)(nil)
+	_ ControlClient     = (*MockClient)(nil)
+	_ UserProfileClient = (*MockClient)(nil)
 )
 
 // FailNext makes the next send return err (used to test retry safety).
@@ -52,6 +58,13 @@ func (c *MockClient) FailNext(err error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.failNext = err
+}
+
+// SetUserProfile configures the profile returned by GetUserProfile.
+func (c *MockClient) SetUserProfile(profile UserProfile) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.profiles[profile.UserID] = profile
 }
 
 // Sent returns a copy of all recorded sends.
@@ -155,6 +168,23 @@ func (c *MockClient) AnswerMessageEvent(_ context.Context, eventID string, userI
 	}
 	c.answers = append(c.answers, EventAnswer{EventID: eventID, UserID: userID, PeerID: peerID})
 	return nil
+}
+
+// GetUserProfile implements UserProfileClient.
+func (c *MockClient) GetUserProfile(_ context.Context, userID int64) (UserProfile, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.failNext != nil {
+		err := c.failNext
+		c.failNext = nil
+		return UserProfile{}, err
+	}
+	profile, ok := c.profiles[userID]
+	if !ok {
+		return UserProfile{UserID: userID}, nil
+	}
+	return profile, nil
 }
 
 func (c *MockClient) record(peerID, randomID int64, kind, text, attachment, keyboard string) (SendResult, error) {

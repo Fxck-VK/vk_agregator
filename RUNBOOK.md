@@ -78,12 +78,32 @@ Override these values when needed:
 | `RETRY_BASE_DELAY` / `RETRY_MAX_DELAY` | `500ms` / `30s` | Exponential backoff bounds |
 | `MODERATION_EXTRA_TERMS` | `` | Comma-separated extra blocklist terms |
 | `WEBHOOK_RATE_LIMIT_RPS` / `WEBHOOK_RATE_LIMIT_BURST` | `20` / `40` | Per-IP webhook rate limit |
+| `VK_ANTISPAM_ENABLED` | `true` | Redis-backed per-`vk_user_id` VK bot anti-spam switch |
+| `VK_ANTISPAM_MESSAGE_LIMIT` / `VK_ANTISPAM_MESSAGE_WINDOW` | `10` / `60s` | Any VK user events per window: text, stickers and buttons |
+| `VK_ANTISPAM_GPT_LIMIT` / `VK_ANTISPAM_GPT_WINDOW` | `3` / `30s` | Billable GPT/text jobs per user window |
+| `VK_ANTISPAM_COOLDOWN` | `30s` | Temporary pause after a rate-limit violation |
+| `VK_ANTISPAM_VIOLATION_LIMIT` / `VK_ANTISPAM_VIOLATION_WINDOW` | `5` / `10m` | Violations before temporary block |
+| `VK_ANTISPAM_BLOCK_DURATION` | `15m` | Temporary block length after repeated spam |
+| `VK_ANTISPAM_NEW_USER_AGE` | `4h` | Age window for stricter new-user limits |
+| `VK_ANTISPAM_NEW_USER_MESSAGE_LIMIT` | `5` | New-user event limit per message window |
+| `VK_ANTISPAM_NEW_USER_GPT_LIMIT` / `VK_ANTISPAM_NEW_USER_GPT_WINDOW` | `1` / `15s` | New-user GPT/text job limit |
+| `VK_ANTISPAM_ACTIVE_GPT_JOB_LIMIT` | `2` | Max active text-generation jobs per user before queue protection denies new ones |
+| `VK_BOT_TUNNEL_MODE` | `quick` | Local bot tunnel mode for scripts: `quick` or `named` |
+| `VK_BOT_TUNNEL_NAME` | `neiirohub-vk-bot` | Cloudflare named tunnel used by `start-bot.ps1 -TunnelMode named` |
+| `VK_BOT_TUNNEL_HOSTNAME` | `vk.neiirohub.ru` | Stable public hostname for the local VK Callback API |
+| `VK_BOT_TUNNEL_CONFIG` | `.runtime/vk-bot/cloudflared/config.yml` | Optional override for named tunnel config path |
 | `PROVIDER` | `mock` | Primary provider adapter: `mock`, `openai`, or `deepinfra` |
 | `PROVIDER_CHAIN` | value of `PROVIDER` | Comma-separated router/fallback chain, e.g. `openai,mock` or `deepinfra,mock` |
 | `DEEPINFRA_API_KEY` | `` | Required when DeepInfra provider is enabled |
 | `DEEPINFRA_BASE_URL` | `https://api.deepinfra.com/v1/openai` | DeepInfra OpenAI-compatible API root |
 | `DEEPINFRA_TEXT_MODEL` | `deepseek-ai/DeepSeek-V4-Flash` | DeepInfra text model code |
 | `DEEPINFRA_TEXT_PRICE` | `1` | Internal provider-router cost estimate |
+| `TEXT_CONTEXT_ENABLED` | `true` | Persist and render compact VK text dialog context in `cmd/worker` |
+| `TEXT_CONTEXT_MAX_INPUT_TOKENS` | `1600` | Estimated input budget for rendered dialog context |
+| `TEXT_CONTEXT_MAX_OUTPUT_TOKENS` | `800` | Provider max output token cap for text generation when supported |
+| `TEXT_CONTEXT_SUMMARY_MAX_TOKENS` | `400` | Max estimated tokens retained in rolling summary |
+| `TEXT_CONTEXT_RECENT_MESSAGES_LIMIT` | `6` | Recent unsummarized messages included in provider prompt |
+| `TEXT_CONTEXT_SUMMARIZE_AFTER_MESSAGES` / `TEXT_CONTEXT_SUMMARIZE_AFTER_TOKENS` | `10` / `1500` | Thresholds for compacting old turns into summary |
 | `MINIAPP_JOB_RATE_LIMIT_RPS` / `MINIAPP_JOB_RATE_LIMIT_BURST` | `1` / `5` | Per-user Mini App `POST /miniapp/jobs` rate limit |
 | `OPENAI_API_KEY` | `` | Required when OpenAI provider/moderation/scanner is enabled |
 | `OPENAI_BASE_URL` | `https://api.openai.com/v1` | OpenAI API root |
@@ -100,7 +120,8 @@ Override these values when needed:
 | `VK_WELCOME_ATTACHMENT` | `` | Optional pre-uploaded VK photo/video attachment sent with `/start` menu |
 | `VK_MENU_BUTTON_MODE` | `callback` | Inline menu buttons: `callback` hides user echo messages; `text` keeps legacy text-button behavior |
 | `VK_UNROUTED_TEXT_MODE` | `reply` | Plain text outside GPT mode: `reply` sends text-only hint to use the menu above, `silent` sends nothing, `gpt` preserves legacy text-to-GPT behavior |
-| `VK_MENU_*_ENABLED` | `true` | Per-button VK product menu flags; set to `false` to hide a button without deleting its screen |
+| `VK_DIALOG_MODE_TTL` | `1h` | Redis TTL for active VK peer modes such as `Спросить у НейроХаб`; refreshes while the user keeps chatting |
+| `VK_MENU_*_ENABLED` | mixed | Per-button VK product menu flags; current bot profile keeps only NeuroHub text mode visible and hides video/image/students/account/top-up without deleting their screens |
 | `SIGNED_DELIVERY` / `ARTIFACT_URL_TTL` | `false` / `1h` | Deliver media through signed artifact URLs |
 | `ARTIFACT_RETENTION_DAYS` | `0` | Optional S3 lifecycle expiry |
 | `PRICES` | `` | Price overrides, e.g. `text_generate=2,image_generate=12` |
@@ -147,10 +168,76 @@ Override these values when needed:
   non-http(s) schemes; optional host allowlist. Provider data URLs are accepted
   for normalized OpenAI text/image/video outputs.
 - **Rate limit**: per-IP token bucket on `/webhooks/vk` (429 when exceeded).
+- **VK anti-spam**: Redis counters per `vk_user_id` limit all user events
+  (`10/60s`, new users `5/60s`), billable GPT jobs (`3/30s`, new users
+  `1/15s`), repeated violations (`5/10m -> 15m` temporary block), and active
+  GPT jobs (`2` per user). Denied events are acknowledged through the VK control
+  path and do not create commands/jobs.
 
 ---
 
-## 3. Infrastructure Startup
+## 3. VK Bot One-Command Startup
+
+For local hand testing of the VK bot on Windows, prefer the bot-only dev
+scripts:
+
+```powershell
+.\scripts\dev\start-bot.ps1
+.\scripts\dev\status-bot.ps1
+.\scripts\dev\stop-bot.ps1
+```
+
+`start-bot.ps1` performs the VK bot runtime startup sequence:
+
+- starts Docker dependencies: PostgreSQL, Redis and MinIO;
+- applies `cmd/migrate up`;
+- builds and starts `cmd/api` and `cmd/worker`;
+- starts a `cloudflared` quick tunnel to the API;
+- prints the VK Callback URL:
+
+```text
+https://<random>.trycloudflare.com/webhooks/vk
+```
+
+Use that URL in VK Callback API settings and confirm the server. The scripts do
+not start the VK Mini App frontend; Mini App development remains separate.
+Runtime pid/log/url files are stored in `.runtime/vk-bot/` and ignored by Git.
+
+For local development with a stable VK Callback URL, use a named Cloudflare
+Tunnel instead of the quick tunnel:
+
+```powershell
+.\scripts\dev\setup-cloudflare-tunnel.ps1 -Login
+.\scripts\dev\start-bot.ps1 -TunnelMode named
+```
+
+Default stable callback:
+
+```text
+https://vk.neiirohub.ru/webhooks/vk
+```
+
+The setup script creates/reuses the `neiirohub-vk-bot` tunnel, writes its local
+config to `.runtime/vk-bot/cloudflared/config.yml`, and creates the Cloudflare
+DNS route for `vk.neiirohub.ru`. The hostname works only after `neiirohub.ru`
+is added to Cloudflare and the registrar NS records point to Cloudflare.
+
+Useful options:
+
+```powershell
+.\scripts\dev\start-bot.ps1 -NoTunnel       # local API/worker only
+.\scripts\dev\start-bot.ps1 -SkipDocker     # reuse already-running containers
+.\scripts\dev\start-bot.ps1 -SkipMigrate    # skip migration step
+.\scripts\dev\start-bot.ps1 -TunnelMode named  # stable vk.neiirohub.ru callback
+.\scripts\dev\start-bot.ps1 -TunnelProtocol quic  # default is http2
+.\scripts\dev\stop-bot.ps1 -StopDocker      # stop app processes and containers
+```
+
+The manual sections below are still useful for debugging individual steps.
+
+---
+
+## 4. Infrastructure Startup
 
 ```bash
 docker compose up -d
@@ -174,7 +261,7 @@ minio      Up
 
 ---
 
-## 4. Migrations
+## 5. Migrations
 
 ```bash
 go run ./cmd/migrate up        # apply all pending
@@ -199,7 +286,7 @@ docker exec vk-ai-aggregator-postgres psql -U vk_ai_aggregator -d vk_ai_aggregat
 
 ---
 
-## 5. API Startup
+## 6. API Startup
 
 ```bash
 go run ./cmd/api               # listens on :8080
@@ -215,7 +302,7 @@ curl -s localhost:8080/health
 
 ---
 
-## 6. Worker Startup
+## 7. Worker Startup
 
 A single binary runs **all** worker pools; start it once:
 
@@ -274,7 +361,7 @@ Expected log:
 
 ---
 
-## 7. Health Checks
+## 8. Health Checks
 
 | Endpoint | Expected |
 |----------|----------|
@@ -293,7 +380,7 @@ docker exec vk-ai-aggregator-postgres pg_isready -U vk_ai_aggregator
 
 ---
 
-## 8. Local Testing
+## 9. Local Testing
 
 ### VK confirmation
 ```bash
@@ -315,7 +402,11 @@ Expected: inbound event + command are persisted, no billable job is created.
 When `cmd/api` has `VK_ACCESS_TOKEN`, it sends the НейроХаб welcome text with
 a VK inline keyboard under the message. Set `VK_WELCOME_ATTACHMENT` to a
 pre-uploaded VK attachment string if the welcome message should include a
-banner image.
+banner image. On the first `Старт` for a user, the API tries one `users.get`
+lookup through `vkdelivery.UserProfileClient`, caches `vk_first_name` /
+`vk_last_name` on the user row, sends `👋 <name>, добро пожаловать в НейроХаб!`,
+and records `welcome_name_sent_at`; later `Старт` / `Показать меню` responses
+use the regular welcome without the name.
 Clicking `🎬 Создать видео` opens the video model picker with `Sora 2`,
 `Kling v2.1`, `Seedance 1`, `Haiuo v0.2`, and `⬅️ Назад`. `Sora 2` and
 `Kling v2.1` open detail screens with description, prompt example, instruction
@@ -327,7 +418,7 @@ Clicking `🖼️ Создать фото` opens the photo instruction screen di
 there is one main image model in the VK UX. It shows `Фото по тексту`,
 `Фото с референсом`, and `⬅️ Назад`; those mode buttons are control-only until
 stateful image mode selection is wired. Clicking `💬 Спросить у НейроХаб` sends the
-`НейроХаб активен` prompt screen, sets process-local GPT mode for that peer,
+`НейроХаб активен` prompt screen, stores Redis-backed GPT mode for that peer,
 and also does not enqueue a job. The next plain text or sticker from the same
 peer becomes a `text.ask` job; the API sends `НейроХаб думает...`, stores that VK
 message id in `job.Params`, and the delivery worker edits the same message to
@@ -340,6 +431,16 @@ Clicking `🎁 Студентам и школьникам` opens the study subme
 `Решальник задач`, `Генерация презентаций (скоро)`,
 `Создание рефератов (скоро)`, `❓ Ответы на вопросы`, and `⬅️ Назад`.
 Those buttons are control-only until the corresponding scenario state is wired.
+
+Text dialog memory is built in `cmd/worker`, not in the VK webhook. For VK
+`text.ask` jobs with `vk_peer_id`, the worker writes the user prompt and
+assistant answer to Postgres (`conversations`, `conversation_messages`,
+`conversation_summaries`), then renders a bounded provider prompt from bot
+profile, rolling summary, recent messages and the current request. The system
+prompt that says the assistant is NeuroHub remains inside provider adapters and
+stays above dialog history. Summary compaction is local/extractive in this
+beta; no extra billable provider call is made just to summarize old turns.
+
 Inline menu navigation is hybrid: while the last bot message is still the
 active menu, inline button clicks edit that message through VK `messages.edit`
 instead of adding new bot messages. The persistent lower `Показать меню` button
@@ -356,6 +457,10 @@ does not create a user message in the chat. VK Callback API must have the
 `message_event` / callback-button event type enabled. To return to the old
 behavior where button labels are sent as user messages, set
 `VK_MENU_BUTTON_MODE=text` and restart `cmd/api`.
+If a stale inline `show_menu` callback arrives after a GPT answer has cleared
+the active menu, the API only acknowledges it and does not send a new welcome
+menu. The persistent lower `Показать меню` text button remains the explicit way
+to send a fresh menu at the bottom of the chat.
 For every callback-button click, the API sends a blank
 `messages.sendMessageEventAnswer` through `vkdelivery.ControlClient`; this is
 what clears the loading spinner in the VK client.
@@ -420,7 +525,7 @@ go test ./internal/worker/ -run TestEndToEnd -v  # full VK→…→Capture
 
 ---
 
-## 9. Troubleshooting
+## 10. Troubleshooting
 
 **PostgreSQL**
 - `/health` 503 `postgres: down` or `migrate: connect`: container not ready → `docker compose ps`; wait for `(healthy)`; check `DATABASE_URL`.
@@ -450,8 +555,9 @@ go test ./internal/worker/ -run TestEndToEnd -v  # full VK→…→Capture
   has sent plain text after an API restart, after the active menu pointer was
   lost, or after an edit rejection from VK. With `VK_UNROUTED_TEXT_MODE=reply`,
   plain text outside GPT mode should only post `Выберите режим в меню выше.`
-  without duplicating the menu keyboard. Active-menu/dialog-mode tracking is
-  process-local in the current Beta implementation.
+  without duplicating the menu keyboard. Active-menu tracking is process-local
+  in the current Beta implementation, while GPT dialog mode is Redis-backed and
+  survives API restarts for `VK_DIALOG_MODE_TTL`.
 - Callback menu buttons do nothing: enable the VK Callback API event type for
   callback-button clicks (`message_event`) and confirm `VK_MENU_BUTTON_MODE` is
   `callback`. If you need a quick fallback, set `VK_MENU_BUTTON_MODE=text` and
@@ -462,6 +568,13 @@ go test ./internal/worker/ -run TestEndToEnd -v  # full VK→…→Capture
 - Banner is absent: set `VK_WELCOME_ATTACHMENT` to an already uploaded VK
   attachment string (`photo...`, `video...`). The API does not upload the banner
   image itself yet.
+- Bot replies `Слишком много сообщений...`: VK anti-spam denied the event by
+  `vk_user_id`. Check `VK_ANTISPAM_*` settings and Redis keys
+  `rate:vk:user:<id>:messages`, `rate:vk:user:<id>:gpt`,
+  `spam:vk:user:<id>:violations`, `block:vk:user:<id>`.
+- Bot replies `У вас уже есть активный запрос`: the user already has the
+  configured number of active text-generation jobs. Wait for delivery or inspect
+  `/admin/jobs?user_id=<uuid>&operation=text_generate`.
 
 **Migrations**
 - Partial/failed migration: re-run `go run ./cmd/migrate status`. The runner
@@ -480,7 +593,7 @@ go test ./internal/worker/ -run TestEndToEnd -v  # full VK→…→Capture
 
 ---
 
-## 10. Backup & Recovery
+## 11. Backup & Recovery
 
 **PostgreSQL (source of truth)**
 ```bash
@@ -501,7 +614,7 @@ cat backup_YYYY-MM-DD.sql | docker exec -i vk-ai-aggregator-postgres psql -U vk_
 
 ---
 
-## 11. Deployment Order
+## 12. Deployment Order
 
 Start in dependency order; stop in reverse:
 
@@ -515,7 +628,7 @@ Shutdown order: Workers → API → (optionally) Infrastructure.
 
 ---
 
-## 12. Rollback Procedure
+## 13. Rollback Procedure
 
 **Application (api/worker)**
 1. Redeploy the previous image/build (binaries are stateless).
@@ -538,7 +651,7 @@ Shutdown order: Workers → API → (optionally) Infrastructure.
 
 ---
 
-## 12. VK Mini App BFF
+## 14. VK Mini App BFF
 
 The Mini App backend-for-frontend (BFF) is part of `cmd/api`. It listens on the
 `/miniapp/*` path prefix and authenticates every request using VK launch-params

@@ -65,7 +65,10 @@ func (g *GenerationWorker) Process(ctx context.Context, task queue.Task) error {
 	}
 	attempt++
 
-	req := g.buildRequest(job, attempt)
+	req, err := g.buildRequest(ctx, job, attempt)
+	if err != nil {
+		return err
+	}
 	provider, err := g.providers.ForRequest(ctx, req)
 	if err != nil {
 		return g.handleFailure(ctx, job, task, domain.ProviderErrUnsupportedCapab, err.Error())

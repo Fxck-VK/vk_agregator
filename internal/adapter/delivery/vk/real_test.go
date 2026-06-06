@@ -159,6 +159,30 @@ func TestHTTPClientAnswerMessageEvent(t *testing.T) {
 	}
 }
 
+func TestHTTPClientGetUserProfile(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/users.get" {
+			t.Fatalf("unexpected path %s", r.URL.Path)
+		}
+		_ = r.ParseForm()
+		if r.FormValue("user_ids") != "777" {
+			t.Fatalf("user_ids = %q", r.FormValue("user_ids"))
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"response":[{"id":777,"first_name":"Сергей","last_name":"Макаров"}]}`))
+	}))
+	defer srv.Close()
+
+	c := NewHTTPClient(HTTPConfig{AccessToken: "tok", BaseURL: srv.URL, HTTPClient: srv.Client()})
+	profile, err := c.GetUserProfile(context.Background(), 777)
+	if err != nil {
+		t.Fatalf("get user profile: %v", err)
+	}
+	if profile.UserID != 777 || profile.FirstName != "Сергей" || profile.LastName != "Макаров" {
+		t.Fatalf("unexpected profile: %+v", profile)
+	}
+}
+
 func TestHTTPClientVKError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`{"error":{"error_code":5,"error_msg":"User authorization failed"}}`))

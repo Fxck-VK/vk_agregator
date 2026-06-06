@@ -84,6 +84,7 @@
 - [x] `PROGRESS.md` includes Step 8 / v0.1.2 hardening.
 - [x] `AUDIT.md` distinguishes fixed hardening/integrations from credential-bound live-smoke follow-ups.
 - [x] `AGENTS.md` includes current release status and documentation DoD.
+- [x] Bot-only local dev scripts (`scripts/dev/start-bot.ps1`, `status-bot.ps1`, `stop-bot.ps1`) automate VK bot startup without starting the VK Mini App frontend.
 
 ### Production hardening follow-up
 - [x] `cmd/worker` calls `cfg.Validate()` and fails closed for production, real provider and real VK delivery modes.
@@ -110,9 +111,13 @@
 - [x] VK active menu UX: inline menu navigation edits the current menu message via `messages.edit`; plain user text outside GPT mode keeps the previous menu usable and with default `VK_UNROUTED_TEXT_MODE=reply` sends only `Выберите режим в меню выше.` instead of duplicating the menu or creating a billable job. Edit failures fall back to a normal send.
 - [x] VK callback menu buttons: inline menu can run with `VK_MENU_BUTTON_MODE=callback`, processing VK `message_event` without user echo messages; `VK_MENU_BUTTON_MODE=text` keeps the legacy text-button fallback. Persistent lower `Показать меню` remains text.
 - [x] VK callback button ack: every `message_event` is acknowledged through blank `messages.sendMessageEventAnswer`, so VK client button loading spinner stops after a click.
-- [x] VK unrouted text gating: `Спросить у НейроХаб` sets process-local GPT mode for the peer; ordinary text/stickers outside GPT mode are configurable via `VK_UNROUTED_TEXT_MODE=reply|silent|gpt` and do not create jobs by default. Old text label `Спросить у GPT` remains a compatible alias.
+- [x] VK unrouted text gating: `Спросить у НейроХаб` stores Redis-backed GPT mode for the peer; ordinary text/stickers outside GPT mode are configurable via `VK_UNROUTED_TEXT_MODE=reply|silent|gpt` and do not create jobs by default. Old text label `Спросить у GPT` remains a compatible alias.
 - [x] VK GPT pending UX: after `Спросить у НейроХаб`, the next text/sticker sends `НейроХаб думает...`; when the text job is delivered, delivery worker edits that same VK message with the provider answer instead of posting a second bot message. Long text answers are split into deterministic follow-up chunks so VK `error_code=914` does not leave the placeholder stuck. Legacy `VK_UNROUTED_TEXT_MODE=gpt` still uses normal text delivery.
+- [x] VK first-start personalization: the first `Старт` can fetch the VK first name once via `users.get`, cache it on the user row, send `👋 <name>, добро пожаловать в НейроХаб!`, and then use regular non-personalized welcome text for later menus.
 - [x] VK menu feature flags: every main and nested product-menu button has a `VK_MENU_*_ENABLED` env flag; disabled buttons are hidden from new keyboards, stale disabled payload clicks fall back to the current main menu, and no jobs are created.
+- [x] VK bot anti-spam: Redis-backed per-`vk_user_id` limits for all incoming user events (`10/60s`, new users `5/60s`), separate GPT job limits (`3/30s`, new users `1/15s`), cooldown replies, repeated-violation temporary blocks (`5/10m -> 15m`), and max 2 active GPT jobs per user before queue protection denies new requests. Anti-spam denials acknowledge the inbound event and do not create commands/jobs.
+- [x] VK GPT dialog mode persistence: selected `Спросить у НейроХаб` mode is stored in Redis under peer-scoped dialog state with `VK_DIALOG_MODE_TTL`, so ordinary text keeps routing to GPT after `cmd/api` restart or API instance switch.
+- [x] VK text dialog context v1: `cmd/worker` persists user/assistant turns in Postgres (`conversations`, `conversation_messages`, `conversation_summaries`), sends providers a bounded context packet instead of full history, caps text output via provider request when supported, and keeps context assembly out of VK handlers.
 
 ---
 
@@ -182,13 +187,19 @@
 ## Current Gaps / Known Follow-Ups
 
 ### Integration validation / next providers
+- [~] Stable local VK Callback URL: `scripts/dev/setup-cloudflare-tunnel.ps1`
+  and `start-bot.ps1 -TunnelMode named` are implemented for
+  `https://vk.neiirohub.ru/webhooks/vk`; manual Cloudflare DNS activation and
+  registrar NS switch are still required before the hostname works.
 - [ ] Live smoke with `DEEPINFRA_API_KEY`: GPT text mode should return DeepSeek-V4-Flash output through the normal Job -> Artifact -> Delivery flow.
+- [ ] Add production retention/archival job for old `conversation_messages` before large-scale rollout; keep compact summaries and recent hot turns only.
+- [ ] Replace local/extractive dialog summary compaction with a dedicated cheap summarizer job/model if semantic summaries become necessary.
 - [ ] Live smoke с реальными `OPENAI_API_KEY` и `VK_ACCESS_TOKEN`: text/image/video generation, VK photo/video upload, moderation allow/block.
 - [ ] Подключить production-баннер к `/start` через `VK_WELCOME_ATTACHMENT` или отдельный upload flow.
 - [x] Bot features включены в настройках сообщений VK-сообщества; VK начал принимать keyboard без `error_code=912`.
 - [ ] В VK Callback API включить event type для callback-кнопок (`message_event`) перед live-тестом callback menu mode.
 - [ ] Перевести VK control/menu responses в persisted delivery/outbox, если product/control sends должны строго попадать под invariant `Every delivery attempt is persisted`.
-- [ ] Вынести active-menu tracking из памяти `cmd/api` в persisted conversation state перед multi-instance deploy, чтобы `messages.edit` переживал рестарты и балансировку.
+- [ ] Вынести active-menu tracking из памяти `cmd/api` в persisted conversation state перед multi-instance deploy, чтобы `messages.edit` переживал рестарты и балансировку. GPT dialog mode уже вынесен в Redis через `VK_DIALOG_MODE_TTL`.
 - [~] Добавить второго реального provider для fallback не только на mock: DeepInfra text is implemented; Google/Gemini image или Kling/video остаются follow-up.
 - [ ] Расширить VK inbound/media pipeline для photo/video/audio attachments: сохранять входящие вложения как input Artifacts, ffmpeg probe/transcode, malware scan, VK-ready variants.
 

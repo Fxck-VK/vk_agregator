@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -21,6 +22,7 @@ func NewUserRepository(db Querier) *UserRepository {
 var _ domain.UserRepository = (*UserRepository)(nil)
 
 const userColumns = `id, vk_user_id, role, status, locale, timezone, risk_level,
+	vk_first_name, vk_last_name, vk_profile_synced_at, welcome_name_sent_at,
 	first_seen_at, last_seen_at, created_at, updated_at`
 
 // Create inserts a new user, letting the database fill id and timestamps when
@@ -30,11 +32,16 @@ func (r *UserRepository) Create(ctx context.Context, user *domain.User) error {
 		user.ID = uuid.New()
 	}
 	const q = `
-		INSERT INTO users (id, vk_user_id, role, status, locale, timezone, risk_level, first_seen_at, last_seen_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8, now()), COALESCE($9, now()))
+		INSERT INTO users (
+			id, vk_user_id, role, status, locale, timezone, risk_level,
+			vk_first_name, vk_last_name, vk_profile_synced_at, welcome_name_sent_at,
+			first_seen_at, last_seen_at
+		)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, COALESCE($12, now()), COALESCE($13, now()))
 		RETURNING ` + userColumns
 	row := r.db.QueryRow(ctx, q,
 		user.ID, user.VKUserID, user.Role, user.Status, user.Locale, user.Timezone, user.RiskLevel,
+		user.VKFirstName, user.VKLastName, nullableTime(user.VKProfileSyncedAt), nullableTime(user.WelcomeNameSentAt),
 		nullableTime(user.FirstSeenAt), nullableTime(user.LastSeenAt),
 	)
 	return mapError(scanUser(row, user))
@@ -45,11 +52,14 @@ func (r *UserRepository) Update(ctx context.Context, user *domain.User) error {
 	const q = `
 		UPDATE users
 		SET role = $2, status = $3, locale = $4, timezone = $5, risk_level = $6,
-		    last_seen_at = $7, updated_at = now()
+		    vk_first_name = $7, vk_last_name = $8, vk_profile_synced_at = $9,
+		    welcome_name_sent_at = $10, last_seen_at = $11, updated_at = now()
 		WHERE id = $1
 		RETURNING ` + userColumns
 	row := r.db.QueryRow(ctx, q,
-		user.ID, user.Role, user.Status, user.Locale, user.Timezone, user.RiskLevel, user.LastSeenAt,
+		user.ID, user.Role, user.Status, user.Locale, user.Timezone, user.RiskLevel,
+		user.VKFirstName, user.VKLastName, nullableTime(user.VKProfileSyncedAt),
+		nullableTime(user.WelcomeNameSentAt), user.LastSeenAt,
 	)
 	return mapError(scanUser(row, user))
 }
@@ -80,8 +90,19 @@ type rowScanner interface {
 }
 
 func scanUser(row rowScanner, user *domain.User) error {
-	return row.Scan(
+	var vkProfileSyncedAt, welcomeNameSentAt *time.Time
+	if err := row.Scan(
 		&user.ID, &user.VKUserID, &user.Role, &user.Status, &user.Locale, &user.Timezone,
-		&user.RiskLevel, &user.FirstSeenAt, &user.LastSeenAt, &user.CreatedAt, &user.UpdatedAt,
-	)
+		&user.RiskLevel, &user.VKFirstName, &user.VKLastName, &vkProfileSyncedAt,
+		&welcomeNameSentAt, &user.FirstSeenAt, &user.LastSeenAt, &user.CreatedAt, &user.UpdatedAt,
+	); err != nil {
+		return err
+	}
+	if vkProfileSyncedAt != nil {
+		user.VKProfileSyncedAt = *vkProfileSyncedAt
+	}
+	if welcomeNameSentAt != nil {
+		user.WelcomeNameSentAt = *welcomeNameSentAt
+	}
+	return nil
 }

@@ -72,7 +72,14 @@ OS/CI environment variables override `.env` values.
 | `VK_WELCOME_ATTACHMENT` | _(optional VK attachment string for `/start` banner)_                                     |
 | `VK_MENU_BUTTON_MODE`   | `callback`                                                                                |
 | `VK_UNROUTED_TEXT_MODE` | `reply`                                                                                   |
+| `VK_DIALOG_MODE_TTL`    | `1h`                                                                                      |
+| `VK_BOT_TUNNEL_MODE`   | `quick` or `named` for local bot dev scripts                                              |
+| `VK_BOT_TUNNEL_HOSTNAME` | `vk.neiirohub.ru` for the stable named Cloudflare Tunnel                                |
+| `TEXT_CONTEXT_ENABLED` | `true`                                                                                    |
+| `TEXT_CONTEXT_MAX_INPUT_TOKENS` / `TEXT_CONTEXT_MAX_OUTPUT_TOKENS` | `1600` / `800`                                      |
+| `TEXT_CONTEXT_SUMMARY_MAX_TOKENS` / `TEXT_CONTEXT_RECENT_MESSAGES_LIMIT` | `400` / `6`                                  |
 | `VK_MENU_*_ENABLED`     | `true`                                                                                    |
+| `VK_ANTISPAM_*`         | enabled; `10/60s` messages, `3/30s` GPT, stricter new-user limits, `2` active GPT jobs    |
 | `MAX_ATTEMPTS`          | `3`                                                                                       |
 | `SIGNED_DELIVERY`       | `false`                                                                                   |
 | `STREAM_MAX_LEN`        | `100000`                                                                                  |
@@ -177,9 +184,12 @@ curl -s -X POST localhost:8080/webhooks/vk \
 ```
 
 Expected: command type `start`, no queued job, no billing reservation. If
-`cmd/api` is running with `VK_ACCESS_TOKEN`, the peer receives the Super GPT
+`cmd/api` is running with `VK_ACCESS_TOKEN`, the peer receives the НейроХаб
 welcome text and VK inline keyboard. `VK_WELCOME_ATTACHMENT` may point at a
-pre-uploaded VK banner attachment.
+pre-uploaded VK banner attachment. For a user whose `welcome_name_sent_at` is
+empty and whose VK profile can be fetched, the first `Старт` should say
+`<first_name>, добро пожаловать в НейроХаб`; later `Старт` / `Показать меню`
+responses should use the regular welcome without the name.
 Clicking `🎬 Создать видео` should return `Выбери модель для генерации:` with
 `Sora 2`, `Kling v2.1`, `Seedance 1`, `Haiuo v0.2`, and `⬅️ Назад`; these
 button presses are control commands and should not enqueue jobs.
@@ -214,8 +224,9 @@ the persistent lower `Показать меню` button: the bot should send a f
 the bottom instead of editing the old one. Then send plain text outside GPT
 mode: with the default `reply` setting, the bot should post only
 `Выберите режим в меню выше.`, should not attach an inline keyboard, and should
-still create no job. This active-menu/dialog-mode state is process-local to the
-running API instance.
+still create no job. Active-menu state is process-local to the running API
+instance, while GPT dialog mode is Redis-backed and survives API restarts for
+`VK_DIALOG_MODE_TTL`.
 With `VK_MENU_BUTTON_MODE=callback`, inline menu clicks should not appear as
 user messages in the chat. Make sure VK Callback API has callback-button events
 (`message_event`) enabled. To verify legacy fallback, set
@@ -259,6 +270,17 @@ curl -s localhost:8080/admin/deliveries/<delivery_id>
 ## Hardening checks (moderation, DLQ, metrics)
 
 ```bash
+# VK anti-spam: send more than the configured per-user message limit.
+for i in $(seq 1 11); do
+  curl -s -X POST localhost:8080/webhooks/vk -H 'Content-Type: application/json' \
+    -d "{\"type\":\"message_new\",\"event_id\":\"spam-$i\",\"object\":{\"message\":{\"from_id\":9010,\"peer_id\":9010,\"text\":\"menu\"}}}"
+done
+# -> webhook still returns ok; after the limit the VK control path should send
+#    "Слишком много сообщений. Попробуйте через N секунд" and no command/job is created.
+
+docker exec vk-ai-aggregator-redis redis-cli TTL rate:vk:user:9010:messages
+docker exec vk-ai-aggregator-redis redis-cli GET spam:vk:user:9010:violations
+
 # Moderation REJECT: a banned term blocks delivery
 curl -s -X POST localhost:8080/webhooks/vk -H 'Content-Type: application/json' \
   -d '{"type":"message_new","event_id":"mod-1","object":{"message":{"from_id":9001,"peer_id":9001,"text":"please generate nsfw content"}}}'

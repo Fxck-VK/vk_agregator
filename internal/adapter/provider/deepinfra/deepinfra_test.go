@@ -36,11 +36,12 @@ func TestSubmitPollTextSuccess(t *testing.T) {
 
 	p := New(Config{APIKey: "test-key", BaseURL: srv.URL, HTTPClient: srv.Client()})
 	task, err := p.Submit(context.Background(), domain.ProviderRequest{
-		JobID:          uuid.New(),
-		Operation:      domain.OperationTextGenerate,
-		Modality:       domain.ModalityText,
-		Prompt:         "hello",
-		IdempotencyKey: "provider_submit:test:1",
+		JobID:           uuid.New(),
+		Operation:       domain.OperationTextGenerate,
+		Modality:        domain.ModalityText,
+		Prompt:          "hello",
+		MaxOutputTokens: 800,
+		IdempotencyKey:  "provider_submit:test:1",
 	})
 	if err != nil {
 		t.Fatalf("submit: %v", err)
@@ -52,12 +53,19 @@ func TestSubmitPollTextSuccess(t *testing.T) {
 		t.Fatalf("unexpected request body: %+v", seen)
 	}
 
+	if seen.MaxTokens != 800 {
+		t.Fatalf("max_tokens = %d, want 800", seen.MaxTokens)
+	}
+
 	res, err := p.Poll(context.Background(), domain.ProviderTaskRef{Provider: task.Provider, ExternalID: task.ExternalID})
 	if err != nil {
 		t.Fatalf("poll: %v", err)
 	}
 	if res.Status != domain.ProviderTaskSucceeded || len(res.OutputURLs) != 1 {
 		t.Fatalf("unexpected result: %+v", res)
+	}
+	if res.Text != "DeepSeek answer" {
+		t.Fatalf("result text = %q", res.Text)
 	}
 	const prefix = "data:text/plain; charset=utf-8;base64,"
 	if !strings.HasPrefix(res.OutputURLs[0], prefix) {

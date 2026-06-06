@@ -51,7 +51,7 @@ Real integrations are implemented at adapter level and remain **opt-in**:
   unsupported or retryable paths.
 - `VK_DELIVERY_MODE=real` enables VK `messages.send` plus raw photo/video
   artifact upload to VK upload servers before send.
-- `cmd/api` can send the VK `/start` Super GPT menu and inline keyboard through
+- `cmd/api` can send the VK `/start` НейроХаб menu and inline keyboard through
   the VK delivery adapter when `VK_ACCESS_TOKEN` is configured. The optional
   `VK_WELCOME_ATTACHMENT` env attaches a pre-uploaded VK banner.
 - The VK `Создать видео` menu button opens a model picker (`Sora 2`,
@@ -65,32 +65,54 @@ Real integrations are implemented at adapter level and remain **opt-in**:
   фото` skips model selection when only one main image model is available and
   opens the text/reference photo instruction screen directly; `Спросить у НейроХаб`
   opens the active GPT prompt screen and enables text GPT mode for that peer.
+  The first `Старт` welcome is personalized with the cached VK first name when
+  `VK_ACCESS_TOKEN` allows `users.get`; subsequent menu openings use the regular
+  non-personalized welcome.
   Plain text and stickers create `text.ask` jobs only while GPT mode is active
   or when `VK_UNROUTED_TEXT_MODE=gpt` is explicitly configured. In active GPT
   mode, the bot sends `НейроХаб думает...` and the delivery worker edits that same
   VK message to the provider answer; legacy `VK_UNROUTED_TEXT_MODE=gpt` keeps
   normal text delivery.
+- Text-mode dialog context is persisted in Postgres. For each VK peer the
+  worker stores user/assistant turns in `conversations`,
+  `conversation_messages` and `conversation_summaries`, then sends providers a
+  bounded context packet: bot profile, rolling summary, recent messages and the
+  current request. Defaults are `TEXT_CONTEXT_MAX_INPUT_TOKENS=1600`,
+  `TEXT_CONTEXT_MAX_OUTPUT_TOKENS=800`, summary up to 400 estimated tokens and
+  the last 6 messages. The full dialog is never sent to a provider.
 - VK inline menu navigation uses a hybrid UX: if the last bot message is the
   active menu, inline button clicks edit it through VK `messages.edit`; pressing
   the persistent lower `Показать меню` button always sends a fresh menu at the
   bottom of the chat. After a plain user message outside GPT mode, the default
   `VK_UNROUTED_TEXT_MODE=reply` sends only the text hint
   `Выберите режим в меню выше.` and does not duplicate the inline menu. Edit
-  failure falls back to a normal send. In Beta this
-  active-menu/dialog-mode state is process-local to `cmd/api`.
+  failure falls back to a normal send. In Beta the active-menu message pointer
+  is still process-local to `cmd/api`, while GPT dialog mode is persisted in
+  Redis with `VK_DIALOG_MODE_TTL` so it survives API restarts.
 - Inline menu buttons default to VK `callback` actions
   (`VK_MENU_BUTTON_MODE=callback`), so button clicks arrive as `message_event`
   and do not add user echo messages to the chat. Set
   `VK_MENU_BUTTON_MODE=text` to return to legacy text buttons. The persistent
   lower `Показать меню` button stays a text button.
+  Stale inline `show_menu` callbacks after a GPT answer are acknowledged but do
+  not send a fresh welcome/menu message; users reopen the menu through the
+  persistent lower `Показать меню` button.
 - `VK_UNROUTED_TEXT_MODE` controls ordinary text outside GPT mode: `reply`
   (default) sends the text-only hint `Выберите режим в меню выше.`, `silent`
   records the command but sends nothing, and `gpt` preserves the old behavior
   where any text becomes a GPT job.
+- VK bot anti-spam is Redis-backed and enabled by default. It counts any user
+  event (text, stickers and buttons), applies stricter limits for new users,
+  separately limits billable GPT requests, temporarily blocks repeated
+  violators, and prevents one user from enqueueing more than two active GPT
+  jobs. Denied events are acknowledged and do not create commands or jobs.
 - Every VK product-menu button has an env feature flag (`VK_MENU_*_ENABLED`).
   Disabled buttons are hidden from new keyboards, while stale payload clicks
   from older messages fall back to the current main menu instead of opening a
   hidden section.
+  Current bot-facing env profile keeps only `VK_MENU_GPT_ENABLED=true` visible
+  in the main menu; video, image, students, account and top-up sections stay
+  implemented but hidden behind flags.
 - `Студентам и школьникам` opens a study submenu with task solving,
   presentations/reports placeholders, question answering, and back navigation.
 - `MODERATION_PROVIDER=openai` enables OpenAI output moderation.
@@ -170,6 +192,46 @@ notepad .env
 
 The application loads `.env` automatically when started from the repository
 root. The real `.env` is ignored by Git; only `.env.example` is committed.
+
+### VK bot one-command startup
+
+For local hand testing of the VK bot on Windows, use the bot-only dev scripts:
+
+```powershell
+.\scripts\dev\start-bot.ps1
+.\scripts\dev\status-bot.ps1
+.\scripts\dev\stop-bot.ps1
+```
+
+`start-bot.ps1` starts PostgreSQL, Redis and MinIO, applies migrations, builds
+and starts `cmd/api` and `cmd/worker`, starts a `cloudflared` quick tunnel
+using `--protocol http2`, waits for public `/health`, and prints the VK
+Callback URL:
+
+```text
+https://<random>.trycloudflare.com/webhooks/vk
+```
+
+The scripts are intentionally scoped to the VK bot runtime. They do not start
+the VK Mini App frontend. Runtime pid/log/url files are written under
+`.runtime/vk-bot/` and are ignored by Git.
+
+For a stable local VK Callback URL, configure a named Cloudflare Tunnel once:
+
+```powershell
+.\scripts\dev\setup-cloudflare-tunnel.ps1 -Login
+.\scripts\dev\start-bot.ps1 -TunnelMode named
+```
+
+The default named-tunnel hostname is:
+
+```text
+https://vk.neiirohub.ru/webhooks/vk
+```
+
+This requires the `neiirohub.ru` DNS zone to be active in Cloudflare. The
+tunnel config and credentials stay under `.runtime/vk-bot/` and the user's
+Cloudflare profile; they are not committed.
 
 Start the infrastructure (PostgreSQL, Redis, MinIO):
 

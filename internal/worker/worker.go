@@ -16,6 +16,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sort"
 	"sync"
 	"time"
@@ -28,6 +29,7 @@ import (
 	"vk-ai-aggregator/internal/platform/metrics"
 	"vk-ai-aggregator/internal/platform/queue"
 	"vk-ai-aggregator/internal/platform/tracing"
+	"vk-ai-aggregator/internal/service/dialogcontext"
 	"vk-ai-aggregator/internal/service/moderationservice"
 )
 
@@ -397,6 +399,7 @@ type processor struct {
 	artifacts   ArtifactSaver
 	providers   *Registry
 	streams     StreamPublisher
+	textContext TextContext
 	moderator   Moderator
 	modResults  domain.ModerationResultRepository
 	releaser    ReservationReleaser
@@ -419,6 +422,13 @@ type ReservationReleaser interface {
 	ReleaseForJob(ctx context.Context, jobID uuid.UUID) error
 }
 
+// TextContext prepares compact dialog context for text jobs and records
+// assistant answers after provider success.
+type TextContext interface {
+	Prepare(ctx context.Context, job *domain.Job, prompt string) (dialogcontext.Prepared, error)
+	Complete(ctx context.Context, job *domain.Job, conversationID uuid.UUID, answer string) error
+}
+
 // Deps bundles the dependencies shared by the workers.
 type Deps struct {
 	Jobs      domain.JobRepository
@@ -426,6 +436,9 @@ type Deps struct {
 	Artifacts ArtifactSaver
 	Providers *Registry
 	Streams   StreamPublisher
+	// TextContext, when set, stores VK text dialog history and renders compact
+	// provider prompts for text jobs.
+	TextContext TextContext
 	// Moderator, when set, runs an output moderation check before delivery.
 	// When nil, moderation is skipped (allow-all) for local/test wiring.
 	Moderator Moderator
@@ -461,6 +474,7 @@ func newProcessor(d Deps) processor {
 		artifacts:   d.Artifacts,
 		providers:   d.Providers,
 		streams:     d.Streams,
+		textContext: d.TextContext,
 		moderator:   d.Moderator,
 		modResults:  d.ModResults,
 		releaser:    d.Releaser,
@@ -475,25 +489,48 @@ type promptParams struct {
 	Prompt                 string `json:"prompt"`
 	NegativePrompt         string `json:"negative_prompt"`
 	VKPlaceholderMessageID int64  `json:"vk_placeholder_message_id,omitempty"`
+	ConversationID         string `json:"conversation_id,omitempty"`
 }
 
 // buildRequest builds the normalized provider request for a job. The submit
 // idempotency key is scoped to the attempt so a re-delivered task maps to one
 // provider task, while a genuine retry after failure starts a fresh one.
-func (p *processor) buildRequest(job *domain.Job, attempt int) domain.ProviderRequest {
+func (p *processor) buildRequest(ctx context.Context, job *domain.Job, attempt int) (domain.ProviderRequest, error) {
 	var pp promptParams
 	if len(job.Params) > 0 {
 		_ = json.Unmarshal(job.Params, &pp)
 	}
-	return domain.ProviderRequest{
-		JobID:          job.ID,
-		Operation:      job.OperationType,
-		Modality:       job.Modality,
-		Prompt:         pp.Prompt,
-		NegativePrompt: pp.NegativePrompt,
-		Params:         job.Params,
-		IdempotencyKey: fmt.Sprintf("provider_submit:%s:%d", job.ID, attempt),
+	prompt := pp.Prompt
+	maxOutputTokens := 0
+	if p.textContext != nil && job.OperationType == domain.OperationTextGenerate && job.Modality == domain.ModalityText {
+		prepared, err := p.textContext.Prepare(ctx, job, pp.Prompt)
+		if err != nil {
+			return domain.ProviderRequest{}, err
+		}
+		if prepared.Prompt != "" {
+			prompt = prepared.Prompt
+		}
+		maxOutputTokens = prepared.MaxOutputTokens
+		if prepared.ConversationID != uuid.Nil && pp.ConversationID != prepared.ConversationID.String() {
+			pp.ConversationID = prepared.ConversationID.String()
+			if raw, err := json.Marshal(pp); err == nil {
+				job.Params = raw
+				if err := p.jobs.Update(ctx, job); err != nil {
+					return domain.ProviderRequest{}, err
+				}
+			}
+		}
 	}
+	return domain.ProviderRequest{
+		JobID:           job.ID,
+		Operation:       job.OperationType,
+		Modality:        job.Modality,
+		Prompt:          prompt,
+		NegativePrompt:  pp.NegativePrompt,
+		Params:          job.Params,
+		MaxOutputTokens: maxOutputTokens,
+		IdempotencyKey:  fmt.Sprintf("provider_submit:%s:%d", job.ID, attempt),
+	}, nil
 }
 
 // taskOf builds the queue task that represents a job.
@@ -647,6 +684,11 @@ func (p *processor) applyResult(ctx context.Context, job *domain.Job, pt *domain
 		if err := p.setStatus(ctx, job, domain.JobStatusProviderSucceeded, "", ""); err != nil {
 			return err
 		}
+		if err := p.saveDialogAnswer(ctx, job, res.Text); err != nil {
+			slog.WarnContext(ctx, "dialog context answer save failed",
+				slog.String("job_id", job.ID.String()),
+				slog.String("error", err.Error()))
+		}
 		// Output moderation gates delivery (invariant #15). A block stops the
 		// pipeline here: no delivery, no capture.
 		blocked, err := p.moderateOutput(ctx, job)
@@ -682,6 +724,24 @@ func (p *processor) applyResult(ctx context.Context, job *domain.Job, pt *domain
 		return nil
 	}
 	return nil
+}
+
+func (p *processor) saveDialogAnswer(ctx context.Context, job *domain.Job, answer string) error {
+	if p.textContext == nil || answer == "" || job.OperationType != domain.OperationTextGenerate || job.Modality != domain.ModalityText {
+		return nil
+	}
+	var pp promptParams
+	if len(job.Params) > 0 {
+		_ = json.Unmarshal(job.Params, &pp)
+	}
+	if pp.ConversationID == "" {
+		return nil
+	}
+	conversationID, err := uuid.Parse(pp.ConversationID)
+	if err != nil {
+		return nil
+	}
+	return p.textContext.Complete(ctx, job, conversationID, answer)
 }
 
 // saveOutputs stores each provider output URL as an output artifact and records

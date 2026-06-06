@@ -28,8 +28,10 @@ import (
 	"vk-ai-aggregator/internal/platform/metrics"
 	"vk-ai-aggregator/internal/platform/ratelimit"
 	"vk-ai-aggregator/internal/platform/tracing"
+	"vk-ai-aggregator/internal/service/antispam"
 	"vk-ai-aggregator/internal/service/billingservice"
 	"vk-ai-aggregator/internal/service/commandrouter"
+	"vk-ai-aggregator/internal/service/dialogstate"
 	"vk-ai-aggregator/internal/service/joborchestrator"
 )
 
@@ -100,14 +102,36 @@ func main() {
 	// (audit A2).
 	orch := joborchestrator.New(jobs, uowMgr, billing, cfg.MaxJobCost)
 	router := commandrouter.New()
+	vkDialogState := dialogstate.New(redisqueue.NewDialogStateStore(rdb), dialogstate.Config{
+		TTL: cfg.VKDialogModeTTL,
+	})
+	vkAntiSpam := antispam.New(redisqueue.NewAntiSpamStore(rdb), jobs, antispam.Config{
+		Enabled:             cfg.VKAntiSpamEnabled,
+		MessageLimit:        cfg.VKAntiSpamMessageLimit,
+		MessageWindow:       cfg.VKAntiSpamMessageWindow,
+		GPTLimit:            cfg.VKAntiSpamGPTLimit,
+		GPTWindow:           cfg.VKAntiSpamGPTWindow,
+		Cooldown:            cfg.VKAntiSpamCooldown,
+		ViolationLimit:      cfg.VKAntiSpamViolationLimit,
+		ViolationWindow:     cfg.VKAntiSpamViolationWindow,
+		BlockDuration:       cfg.VKAntiSpamBlockDuration,
+		NewUserAge:          cfg.VKAntiSpamNewUserAge,
+		NewUserMessageLimit: cfg.VKAntiSpamNewUserMessageLimit,
+		NewUserGPTLimit:     cfg.VKAntiSpamNewUserGPTLimit,
+		NewUserGPTWindow:    cfg.VKAntiSpamNewUserGPTWindow,
+		ActiveGPTJobLimit:   cfg.VKAntiSpamActiveGPTJobLimit,
+	})
 
 	var vkControl vkdelivery.ControlClient
+	var vkProfile vkdelivery.UserProfileClient
 	if cfg.VKAccessToken != "" {
-		vkControl = vkdelivery.NewHTTPClient(vkdelivery.HTTPConfig{
+		vkClient := vkdelivery.NewHTTPClient(vkdelivery.HTTPConfig{
 			AccessToken: cfg.VKAccessToken,
 			APIVersion:  cfg.VKAPIVersion,
 			BaseURL:     cfg.VKAPIBaseURL,
 		})
+		vkControl = vkClient
+		vkProfile = vkClient
 		logger.Info("using real vk control delivery client")
 	} else {
 		logger.Warn("vk control responses disabled because VK_ACCESS_TOKEN is empty")
@@ -129,6 +153,9 @@ func main() {
 		Orchestrator: orch,
 		Router:       router,
 		Control:      vkControl,
+		Profile:      vkProfile,
+		DialogState:  vkDialogState,
+		AntiSpam:     vkAntiSpam,
 		Logger:       logger,
 	})
 

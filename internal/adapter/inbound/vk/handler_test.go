@@ -14,6 +14,7 @@ import (
 	"vk-ai-aggregator/internal/adapter/storage/memory"
 	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/platform/queue"
+	antispamservice "vk-ai-aggregator/internal/service/antispam"
 	"vk-ai-aggregator/internal/service/billingservice"
 	"vk-ai-aggregator/internal/service/commandrouter"
 	"vk-ai-aggregator/internal/service/joborchestrator"
@@ -39,6 +40,22 @@ func newHarnessWithControl(control vkdelivery.ControlClient) *harness {
 }
 
 func newHarnessWithConfig(control vkdelivery.ControlClient, cfg vk.Config) *harness {
+	return newHarnessWithDeps(control, cfg, nil, nil)
+}
+
+func newHarnessWithConfigAndAntiSpam(control vkdelivery.ControlClient, cfg vk.Config, antiSpam vk.AntiSpam) *harness {
+	return newHarnessWithDeps(control, cfg, antiSpam, nil)
+}
+
+func newHarnessWithConfigAndDialogState(control vkdelivery.ControlClient, cfg vk.Config, dialogState vk.DialogState) *harness {
+	return newHarnessWithDeps(control, cfg, nil, dialogState)
+}
+
+func newHarnessWithDeps(control vkdelivery.ControlClient, cfg vk.Config, antiSpam vk.AntiSpam, dialogState vk.DialogState) *harness {
+	var profile vkdelivery.UserProfileClient
+	if p, ok := control.(vkdelivery.UserProfileClient); ok {
+		profile = p
+	}
 	users := memory.NewUserRepo()
 	cmds := memory.NewCommandRepo()
 	jobs := memory.NewJobRepo()
@@ -59,6 +76,9 @@ func newHarnessWithConfig(control vkdelivery.ControlClient, cfg vk.Config) *harn
 		Orchestrator: orch,
 		Router:       commandrouter.New(),
 		Control:      control,
+		Profile:      profile,
+		DialogState:  dialogState,
+		AntiSpam:     antiSpam,
 	})
 	return &harness{handler: h, users: users, cmds: cmds, jobs: jobs, inbound: inbound, pub: pub, relay: outboxrelay.New(uowMgr, pub)}
 }
@@ -118,6 +138,47 @@ func TestMessageNewCreatesJob(t *testing.T) {
 	}
 	if h.pub.Len() != 1 {
 		t.Fatalf("expected 1 enqueued task, got %d", h.pub.Len())
+	}
+}
+
+func TestAntiSpamDenialSkipsCommandAndJob(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	antiSpam := &fakeAntiSpam{
+		decision: antispamservice.Decision{
+			Allowed: false,
+			Kind:    antispamservice.DecisionCooldown,
+			Message: "Слишком много сообщений. Попробуйте через 30 секунд",
+		},
+	}
+	h := newHarnessWithConfigAndAntiSpam(control, vk.Config{ConfirmationToken: "conf-token-123", Secret: "s3cr3t"}, antiSpam)
+	body := `{
+		"type":"message_new","group_id":1,"event_id":"evt-antispam","secret":"s3cr3t",
+		"object":{"message":{"from_id":559,"peer_id":559,"text":"/image neon cat"}}
+	}`
+	rec := h.post(body)
+	if rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+	}
+	if len(antiSpam.inputs) != 1 || antiSpam.inputs[0].CommandType != domain.CommandImageGenerate {
+		t.Fatalf("unexpected anti-spam inputs: %+v", antiSpam.inputs)
+	}
+
+	ctx := context.Background()
+	user, err := h.users.GetByVKUserID(ctx, 559)
+	if err != nil {
+		t.Fatalf("user not created: %v", err)
+	}
+	cmds, _ := h.cmds.ListByUser(ctx, user.ID, 10, 0)
+	if len(cmds) != 0 {
+		t.Fatalf("anti-spam denial must not create commands, got %+v", cmds)
+	}
+	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
+	if len(jobs) != 0 || h.pub.Len() != 0 {
+		t.Fatalf("anti-spam denial must not create jobs/tasks, jobs=%+v tasks=%d", jobs, h.pub.Len())
+	}
+	sent := control.Sent()
+	if len(sent) != 1 || !strings.Contains(sent[0].Text, "Слишком много сообщений") {
+		t.Fatalf("unexpected anti-spam response: %+v", sent)
 	}
 }
 
@@ -199,6 +260,47 @@ func TestStartSendsWelcomeMenuNoJob(t *testing.T) {
 	}
 	if !strings.Contains(sent[1].Keyboard, `"type":"callback"`) {
 		t.Fatalf("inline menu must use callback buttons by default: %q", sent[1].Keyboard)
+	}
+}
+
+func TestFirstStartUsesVKFirstNameOnce(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	control.SetUserProfile(vkdelivery.UserProfile{UserID: 582, FirstName: "Сергей", LastName: "Макаров"})
+	h := newHarnessWithControl(control)
+	first := `{
+		"type":"message_new","group_id":1,"event_id":"evt-start-name-first","secret":"s3cr3t",
+		"object":{"message":{"from_id":582,"peer_id":582,"text":"Старт"}}
+	}`
+	if rec := h.post(first); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected first response: %d %q", rec.Code, rec.Body.String())
+	}
+	sent := control.Sent()
+	if len(sent) != 2 || !strings.Contains(sent[1].Text, "Сергей, добро пожаловать в НейроХаб") {
+		t.Fatalf("expected personalized first welcome, got %+v", sent)
+	}
+
+	ctx := context.Background()
+	user, err := h.users.GetByVKUserID(ctx, 582)
+	if err != nil {
+		t.Fatalf("user not created: %v", err)
+	}
+	if user.VKFirstName != "Сергей" || user.WelcomeNameSentAt.IsZero() {
+		t.Fatalf("expected cached profile and welcome marker, got %+v", user)
+	}
+
+	second := `{
+		"type":"message_new","group_id":1,"event_id":"evt-start-name-second","secret":"s3cr3t",
+		"object":{"message":{"from_id":582,"peer_id":582,"text":"Старт"}}
+	}`
+	if rec := h.post(second); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected second response: %d %q", rec.Code, rec.Body.String())
+	}
+	sent = control.Sent()
+	if len(sent) != 4 {
+		t.Fatalf("expected second persistent keyboard and welcome, got %+v", sent)
+	}
+	if strings.Contains(sent[3].Text, "Сергей, добро пожаловать") || !strings.Contains(sent[3].Text, "Добро пожаловать в НейроХаб") {
+		t.Fatalf("expected regular follow-up welcome, got %q", sent[3].Text)
 	}
 }
 
@@ -776,6 +878,130 @@ func TestGPTMenuButtonEnablesPlainTextJobs(t *testing.T) {
 	}
 }
 
+func TestPersistedGPTModeSurvivesHandlerRestart(t *testing.T) {
+	dialogState := newFakeDialogState()
+	firstControl := vkdelivery.NewMockClient()
+	first := newHarnessWithConfigAndDialogState(firstControl, vk.Config{
+		ConfirmationToken: "conf-token-123",
+		Secret:            "s3cr3t",
+	}, dialogState)
+	gpt := `{
+		"type":"message_new","group_id":1,"event_id":"evt-gpt-persist-on","secret":"s3cr3t",
+		"object":{"message":{"from_id":590,"peer_id":590,"text":"рџ’¬ РЎРїСЂРѕСЃРёС‚СЊ Сѓ РќРµР№СЂРѕРҐР°Р±","payload":"{\"command\":\"menu.text\"}"}}
+	}`
+	if rec := first.post(gpt); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected gpt response: %d %q", rec.Code, rec.Body.String())
+	}
+	if mode, ok := dialogState.modes[590]; !ok || mode != "gpt" {
+		t.Fatalf("dialog mode was not persisted: %#v", dialogState.modes)
+	}
+
+	// New handler/harness simulates an API process restart: its in-memory mode
+	// map is empty, but Redis-backed dialog state is still available.
+	secondControl := vkdelivery.NewMockClient()
+	second := newHarnessWithConfigAndDialogState(secondControl, vk.Config{
+		ConfirmationToken: "conf-token-123",
+		Secret:            "s3cr3t",
+	}, dialogState)
+	plain := `{
+		"type":"message_new","group_id":1,"event_id":"evt-gpt-persist-text","secret":"s3cr3t",
+		"object":{"message":{"from_id":590,"peer_id":590,"text":"РїСЂРёРґСѓРјР°Р№ РёРґРµСЋ"}}
+	}`
+	if rec := second.post(plain); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected plain response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	ctx := context.Background()
+	user, err := second.users.GetByVKUserID(ctx, 590)
+	if err != nil {
+		t.Fatalf("user not created: %v", err)
+	}
+	cmds, _ := second.cmds.ListByUser(ctx, user.ID, 10, 0)
+	if len(cmds) != 1 || cmds[0].Type != domain.CommandTextAsk {
+		t.Fatalf("persisted mode should route text to GPT, got %+v", cmds)
+	}
+	jobs, _ := second.jobs.ListByUser(ctx, user.ID, 10, 0)
+	if len(jobs) != 1 || jobs[0].OperationType != domain.OperationTextGenerate || second.pub.Len() != 1 {
+		t.Fatalf("persisted mode should create one text job, jobs=%+v tasks=%d", jobs, second.pub.Len())
+	}
+	sent := secondControl.Sent()
+	if len(sent) != 1 || sent[0].Text != "НейроХаб думает..." {
+		t.Fatalf("unexpected persisted-mode response: %+v", sent)
+	}
+}
+
+func TestStaleBackCallbackClearsPersistedGPTModeAfterRestart(t *testing.T) {
+	dialogState := newFakeDialogState()
+	dialogState.modes[591] = "gpt"
+	control := vkdelivery.NewMockClient()
+	h := newHarnessWithConfigAndDialogState(control, vk.Config{
+		ConfirmationToken: "conf-token-123",
+		Secret:            "s3cr3t",
+	}, dialogState)
+	back := `{
+		"type":"message_event","group_id":1,"event_id":"evt-gpt-persist-back","secret":"s3cr3t",
+		"object":{"user_id":591,"peer_id":591,"event_id":"evt-gpt-persist-back-inner","payload":{"command":"show_menu"}}
+	}`
+	if rec := h.post(back); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected back response: %d %q", rec.Code, rec.Body.String())
+	}
+	if _, ok := dialogState.modes[591]; ok {
+		t.Fatalf("stale back callback should clear persisted mode: %#v", dialogState.modes)
+	}
+	if len(control.EventAnswers()) != 1 {
+		t.Fatalf("callback should be acknowledged, got %+v", control.EventAnswers())
+	}
+	if sent := control.Sent(); len(sent) != 0 {
+		t.Fatalf("stale back callback should not send a fresh menu, got %+v", sent)
+	}
+}
+
+func TestStaleCallbackShowMenuAfterGPTTextDoesNotSendMenu(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	h := newHarnessWithControl(control)
+	gpt := `{
+		"type":"message_new","group_id":1,"event_id":"evt-gpt-stale-show-on","secret":"s3cr3t",
+		"object":{"message":{"from_id":580,"peer_id":580,"text":"💬 Спросить у НейроХаб","payload":"{\"command\":\"menu.text\"}"}}
+	}`
+	if rec := h.post(gpt); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected gpt response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	plain := `{
+		"type":"message_new","group_id":1,"event_id":"evt-gpt-stale-show-text","secret":"s3cr3t",
+		"object":{"message":{"from_id":580,"peer_id":580,"text":"кто такой сантиз?"}}
+	}`
+	if rec := h.post(plain); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected plain response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	stale := `{
+		"type":"message_event","group_id":1,"event_id":"evt-gpt-stale-show-callback","secret":"s3cr3t",
+		"object":{"user_id":580,"peer_id":580,"event_id":"vk-button-event-stale-show","payload":{"command":"show_menu"}}
+	}`
+	if rec := h.post(stale); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected stale callback response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	ctx := context.Background()
+	user, err := h.users.GetByVKUserID(ctx, 580)
+	if err != nil {
+		t.Fatalf("user not created: %v", err)
+	}
+	cmds, _ := h.cmds.ListByUser(ctx, user.ID, 10, 0)
+	if !hasCommandTypes(cmds, domain.CommandMenuText, domain.CommandTextAsk, domain.CommandShowMenu) {
+		t.Fatalf("unexpected command types: %+v", commandTypes(cmds))
+	}
+	sent := control.Sent()
+	if len(sent) != 2 || !strings.Contains(sent[0].Text, "НейроХаб активен") || sent[1].Text != "НейроХаб думает..." {
+		t.Fatalf("stale show_menu callback must not send a fresh menu, got %+v", sent)
+	}
+	answers := control.EventAnswers()
+	if len(answers) != 1 || answers[0].EventID != "vk-button-event-stale-show" {
+		t.Fatalf("expected stale callback acknowledgement, got %+v", answers)
+	}
+}
+
 func TestOtherMenuButtonClearsGPTMode(t *testing.T) {
 	control := vkdelivery.NewMockClient()
 	h := newHarnessWithControl(control)
@@ -1211,6 +1437,40 @@ func commandByType(cmds []*domain.Command, t domain.CommandType) (*domain.Comman
 		}
 	}
 	return nil, false
+}
+
+type fakeAntiSpam struct {
+	decision antispamservice.Decision
+	err      error
+	inputs   []antispamservice.CheckInput
+}
+
+func (f *fakeAntiSpam) Check(_ context.Context, input antispamservice.CheckInput) (antispamservice.Decision, error) {
+	f.inputs = append(f.inputs, input)
+	return f.decision, f.err
+}
+
+type fakeDialogState struct {
+	modes map[int64]string
+}
+
+func newFakeDialogState() *fakeDialogState {
+	return &fakeDialogState{modes: map[int64]string{}}
+}
+
+func (f *fakeDialogState) Get(_ context.Context, peerID int64) (string, bool, error) {
+	mode, ok := f.modes[peerID]
+	return mode, ok, nil
+}
+
+func (f *fakeDialogState) Set(_ context.Context, peerID int64, mode string) error {
+	f.modes[peerID] = mode
+	return nil
+}
+
+func (f *fakeDialogState) Clear(_ context.Context, peerID int64) error {
+	delete(f.modes, peerID)
+	return nil
 }
 
 func TestMessageNewControlCommandNoJob(t *testing.T) {

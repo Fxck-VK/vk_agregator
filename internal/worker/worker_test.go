@@ -3,6 +3,7 @@ package worker_test
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -13,6 +14,7 @@ import (
 	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/platform/queue"
 	"vk-ai-aggregator/internal/service/artifactservice"
+	"vk-ai-aggregator/internal/service/dialogcontext"
 	"vk-ai-aggregator/internal/worker"
 )
 
@@ -42,6 +44,11 @@ type harness struct {
 
 func newHarness(t *testing.T, opts ...mock.Option) *harness {
 	t.Helper()
+	return newHarnessWithTextContext(t, nil, opts...)
+}
+
+func newHarnessWithTextContext(t *testing.T, textContext worker.TextContext, opts ...mock.Option) *harness {
+	t.Helper()
 	jobs := memory.NewJobRepo()
 	tasks := memory.NewProviderTaskRepo()
 	artRepo := memory.NewArtifactRepo()
@@ -52,11 +59,12 @@ func newHarness(t *testing.T, opts ...mock.Option) *harness {
 	provider := mock.New(opts...)
 	streams := newFakeStreams()
 	deps := worker.Deps{
-		Jobs:      jobs,
-		Tasks:     tasks,
-		Artifacts: artSvc,
-		Providers: worker.NewRegistry(provider),
-		Streams:   streams,
+		Jobs:        jobs,
+		Tasks:       tasks,
+		Artifacts:   artSvc,
+		Providers:   worker.NewRegistry(provider),
+		Streams:     streams,
+		TextContext: textContext,
 	}
 	return &harness{
 		jobs:     jobs,
@@ -68,6 +76,35 @@ func newHarness(t *testing.T, opts ...mock.Option) *harness {
 		gen:      worker.NewGenerationWorker(deps),
 		poll:     worker.NewPollWorker(deps),
 	}
+}
+
+type fakeTextContext struct {
+	preparedPrompt  string
+	prepareCalls    int
+	completeCalls   int
+	completedAnswer string
+	conversationID  uuid.UUID
+}
+
+func (f *fakeTextContext) Prepare(_ context.Context, _ *domain.Job, prompt string) (dialogcontext.Prepared, error) {
+	f.prepareCalls++
+	if f.conversationID == uuid.Nil {
+		f.conversationID = uuid.New()
+	}
+	return dialogcontext.Prepared{
+		ConversationID:  f.conversationID,
+		Prompt:          f.preparedPrompt + prompt,
+		MaxOutputTokens: 800,
+	}, nil
+}
+
+func (f *fakeTextContext) Complete(_ context.Context, _ *domain.Job, conversationID uuid.UUID, answer string) error {
+	f.completeCalls++
+	if conversationID != f.conversationID {
+		return nil
+	}
+	f.completedAnswer = answer
+	return nil
 }
 
 type stubDownloader struct {
@@ -186,6 +223,37 @@ func TestGenerationIdempotentRedelivery(t *testing.T) {
 	tasks, _ := h.tasks.ListByJob(ctx, job.ID)
 	if len(tasks) != 1 {
 		t.Fatalf("expected exactly one provider task after redelivery, got %d", len(tasks))
+	}
+}
+
+func TestGenerationTextUsesDialogContext(t *testing.T) {
+	textCtx := &fakeTextContext{preparedPrompt: "context packet\n"}
+	h := newHarnessWithTextContext(t, textCtx)
+	ctx := context.Background()
+	job := h.queueJob(t, domain.OperationTextGenerate, domain.ModalityText, "hi")
+	job.VKPeerID = 555
+	if err := h.jobs.Update(ctx, job); err != nil {
+		t.Fatalf("update peer: %v", err)
+	}
+
+	if err := h.gen.Process(ctx, taskFor(job)); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+	if textCtx.prepareCalls != 1 {
+		t.Fatalf("prepare calls = %d, want 1", textCtx.prepareCalls)
+	}
+	if textCtx.completeCalls != 1 || !strings.Contains(textCtx.completedAnswer, "Mock generated text result") {
+		t.Fatalf("complete calls=%d answer=%q", textCtx.completeCalls, textCtx.completedAnswer)
+	}
+	got := h.reload(t, job.ID)
+	var params struct {
+		ConversationID string `json:"conversation_id"`
+	}
+	if err := json.Unmarshal(got.Params, &params); err != nil {
+		t.Fatalf("decode params: %v", err)
+	}
+	if params.ConversationID != textCtx.conversationID.String() {
+		t.Fatalf("conversation id = %q, want %s", params.ConversationID, textCtx.conversationID)
 	}
 }
 

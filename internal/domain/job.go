@@ -157,6 +157,53 @@ func (s JobStatus) IsTerminal() bool {
 	return ok && len(next) == 0
 }
 
+// IsActiveWork reports whether the status still represents work that can
+// consume queue/provider/delivery capacity. Awaiting-payment and terminal-ish
+// business outcomes are intentionally excluded from queue pressure checks.
+func (s JobStatus) IsActiveWork() bool {
+	switch s {
+	case JobStatusReceived,
+		JobStatusValidated,
+		JobStatusCreditsReserved,
+		JobStatusQueued,
+		JobStatusDispatchingProvider,
+		JobStatusProviderSubmitted,
+		JobStatusProviderPending,
+		JobStatusProviderProcessing,
+		JobStatusProviderSucceeded,
+		JobStatusProviderFailed,
+		JobStatusPostprocessing,
+		JobStatusResultReady,
+		JobStatusDelivering,
+		JobStatusFailedRetryable:
+		return true
+	default:
+		return false
+	}
+}
+
+// ActiveWorkJobStatuses returns the statuses counted as queue/provider/delivery
+// pressure. Keep this in sync with IsActiveWork; repositories use it when they
+// need to answer active-work queries without loading every job.
+func ActiveWorkJobStatuses() []JobStatus {
+	return []JobStatus{
+		JobStatusReceived,
+		JobStatusValidated,
+		JobStatusCreditsReserved,
+		JobStatusQueued,
+		JobStatusDispatchingProvider,
+		JobStatusProviderSubmitted,
+		JobStatusProviderPending,
+		JobStatusProviderProcessing,
+		JobStatusProviderSucceeded,
+		JobStatusProviderFailed,
+		JobStatusPostprocessing,
+		JobStatusResultReady,
+		JobStatusDelivering,
+		JobStatusFailedRetryable,
+	}
+}
+
 // CanTransitionTo reports whether moving from the receiver status to the target
 // status is an allowed job state-machine transition.
 func (s JobStatus) CanTransitionTo(target JobStatus) bool {

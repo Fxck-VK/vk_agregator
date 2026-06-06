@@ -1,5 +1,83 @@
 # PROGRESS
 
+## VK text dialog context
+
+Status: **done**.
+
+- Added Postgres-backed dialog memory for VK `text.ask` jobs:
+  `conversations`, `conversation_messages`, `conversation_summaries`.
+- `cmd/worker` now saves the current user prompt before provider submit, renders
+  a bounded context packet from bot profile + rolling summary + recent messages
+  + current request, and saves the assistant answer after provider success.
+- Text context is not assembled in VK handlers; they still only create Jobs.
+- Defaults are env-configurable: input `1600` estimated tokens, output `800`,
+  summary `400`, recent messages `6`, summary thresholds `10` messages or
+  `1500` estimated tokens.
+- OpenAI and DeepInfra adapters now receive provider max-output token caps when
+  configured and return normalized text in `ProviderTaskResult.Text` for dialog
+  history persistence while still saving text outputs as Artifacts.
+- Summary compaction is local/extractive in this beta to avoid extra billable
+  provider calls. Semantic model-based summaries and old-message retention are
+  tracked as follow-up work.
+
+---
+
+## VK GPT dialog mode persistence
+
+Status: **done**.
+
+- `Спросить у НейроХаб` now stores selected GPT mode in Redis-backed dialog
+  state by `peer_id`.
+- Dialog mode survives `cmd/api` restart or switching to another API instance.
+- `VK_DIALOG_MODE_TTL` controls retention; default is `1h` and refreshes while
+  the user keeps chatting in the selected mode.
+- The handler keeps process-local mode only as a cache/fallback. `Назад`,
+  `Показать меню` and other menu transitions clear both local and Redis state.
+- Active-menu message tracking is still process-local and remains a separate
+  follow-up for multi-instance `messages.edit` resilience.
+
+---
+
+## VK bot anti-spam
+
+Status: **done**.
+
+- Added Redis-backed per-`vk_user_id` anti-spam for VK bot intake.
+- Limits implemented:
+  - all incoming user events: `10/60s`;
+  - new users during first `4h`: `5/60s`;
+  - billable GPT/text jobs: `3/30s`;
+  - new-user GPT/text jobs: `1/15s`;
+  - cooldown after violations: `30s`;
+  - repeated violations: `5/10m -> 15m` temporary block;
+  - active GPT/text jobs: max `2` per user.
+- Denied events are acknowledged through the VK control path, the inbound event
+  is marked processed, idempotency is completed, and no command/job is created.
+- Added env knobs in `.env.example`, runtime docs, unit tests and VK handler
+  coverage.
+
+---
+
+## VK bot local operations
+
+Status: **done**.
+
+- Added bot-only PowerShell dev scripts under `scripts/dev/`:
+  - `start-bot.ps1` starts Docker dependencies, applies migrations, builds and starts `cmd/api` + `cmd/worker`, starts `cloudflared`, and prints the VK Callback URL.
+  - `status-bot.ps1` reports tracked process state, API/worker health, Docker dependency status, and the current callback URL.
+  - `stop-bot.ps1` stops API, worker and tunnel processes, with optional `-StopDocker` for local containers.
+- Runtime pid/log/url files go to `.runtime/vk-bot/`, which is ignored by Git.
+- Scope is VK bot hand testing only; the VK Mini App frontend is not started by these scripts.
+- Added optional named Cloudflare Tunnel setup for a stable local VK Callback:
+  `scripts/dev/setup-cloudflare-tunnel.ps1` creates/reuses `neiirohub-vk-bot`,
+  writes local tunnel config under `.runtime/vk-bot/cloudflared/`, and supports
+  `.\scripts\dev\start-bot.ps1 -TunnelMode named` for
+  `https://vk.neiirohub.ru/webhooks/vk`.
+- External prerequisite remains manual: `neiirohub.ru` must be active in
+  Cloudflare DNS and registrar NS records must point to Cloudflare.
+
+---
+
 Журнал прогресса по разработке VK AI Aggregator (Go backend, AI Job Processing Platform).
 Источник истины по архитектуре — `docs/ARCHITECTURE.md`, инварианты — `AGENTS.md`.
 
@@ -457,17 +535,19 @@
   - handler синтезирует text prompt с `sticker_id/product_id`; prompt проходит в `text.ask` job только при активном GPT text mode или legacy `VK_UNROUTED_TEXT_MODE=gpt`, поэтому стикер не теряется и не создает случайный billable job вне режима;
   - фото/видео/аудио attachments остаются задачей полноценного input Artifact pipeline.
 - **VK product menu**:
+  - current bot-facing menu profile is text-only: `VK_MENU_GPT_ENABLED=true`, while video, image, students, account and top-up remain implemented but hidden by `VK_MENU_*_ENABLED=false`;
   - menu flow переведен на декларативный `menuScreen` registry: каждый control-command указывает текст, inline keyboard, необходимость баланса и optional welcome attachment;
   - первичная нижняя VK keyboard содержит только одну кнопку `Старт`;
   - после нажатия `Старт` бот заменяет нижнюю постоянную клавиатуру на одну кнопку `Показать меню`;
   - `Показать меню` хранится как отдельный `show_menu` control-command: нижняя persistent-кнопка всегда отправляет свежий VK inline menu вниз без повторной переустановки нижней клавиатуры, а inline-переходы внутри меню продолжают редактировать active menu message;
+  - первый `Старт` пользователя делает one-time VK `users.get`, кеширует `vk_first_name` / `vk_last_name` в `users` и отправляет именное welcome-сообщение; `welcome_name_sent_at` фиксирует, что последующие `Старт` / `Показать меню` должны идти обычным welcome без имени;
   - `Старт`, `/start`, `меню` и `начать` открывают VK inline keyboard под коротким welcome-сообщением НейроХаб;
   - `Создать видео` теперь открывает отдельный inline-экран `Выбери модель для генерации:` с моделями `Sora 2`, `Kling v2.1`, `Seedance 1`, `Haiuo v0.2` и кнопкой `Назад`;
   - `Sora 2` и `Kling v2.1` открывают detail-экраны с описанием, prompt-примером, ссылкой на инструкцию и кнопками `Начать генерацию`, `Примеры`, `Назад`;
   - `Seedance 1` открывает выбор `Lite` / `Pro`, а `Haiuo v0.2` открывает выбор `Обычный` / `Fast`;
   - кнопки выбора video-модели и вложенных video submenu записываются как control commands и не создают billable jobs до подключения model-specific generation state;
   - `Создать фото` при одной основной модели пропускает выбор модели и сразу показывает инструкцию по `Фото по тексту` / `Фото с референсом` с кнопками режимов и `Назад`;
-  - `Спросить у НейроХаб` открывает active-сообщение `НейроХаб активен` без создания job и включает process-local GPT text mode для `peer_id`; следующий обычный текст/стикер пользователя проходит через `text.ask` flow; старый text-label `Спросить у GPT` остается совместимым alias;
+  - `Спросить у НейроХаб` открывает active-сообщение `НейроХаб активен` без создания job и включает Redis-backed GPT text mode для `peer_id`; следующий обычный текст/стикер пользователя проходит через `text.ask` flow; старый text-label `Спросить у GPT` остается совместимым alias;
   - в активном GPT mode handler сначала отправляет `НейроХаб думает...`, сохраняет `vk_placeholder_message_id` в `job.Params`, а delivery worker при текстовом результате редактирует это сообщение через VK `messages.edit`; длинные ответы режутся на follow-up chunks с детерминированными `random_id`, чтобы VK `error_code=914` не оставлял placeholder зависшим; legacy `VK_UNROUTED_TEXT_MODE=gpt` остается обычной текстовой доставкой без placeholder;
   - `Студентам и школьникам` открывает учебное подменю: `Решальник задач`, `Генерация презентаций (скоро)`, `Создание рефератов (скоро)`, `Ответы на вопросы`, `Назад`;
   - `vkdelivery.HTTPClient` получил `SendMessage` с `keyboard` JSON, поэтому VK API по-прежнему вызывается только из `internal/adapter/delivery/vk`;
@@ -475,7 +555,7 @@
   - `vkdelivery.KeyboardButton` получил `ActionType`, поэтому inline menu можно рендерить как VK `callback` или legacy `text` без переписывания payload;
   - `VK_MENU_BUTTON_MODE=callback` стал дефолтом для inline menu: нажатия приходят как VK `message_event` и не добавляют пользовательские echo-сообщения в чат; `VK_MENU_BUTTON_MODE=text` возвращает прежнее поведение;
   - добавлены `VK_MENU_*_ENABLED` feature flags для каждой основной и вложенной product-menu кнопки: disabled buttons скрываются из новых keyboard, а stale payload от старого сообщения падает обратно в актуальное главное меню без создания job;
-  - handler хранит process-local active menu и dialog mode по `peer_id`: кнопочные payload-переходы редактируют текущий menu message, обычный пользовательский текст вне GPT mode оставляет предыдущее меню доступным выше, а другой control-экран сбрасывает GPT mode;
+  - handler хранит process-local active menu по `peer_id`, а GPT dialog mode хранится в Redis: кнопочные payload-переходы редактируют текущий menu message, обычный пользовательский текст вне GPT mode оставляет предыдущее меню доступным выше, а другой control-экран сбрасывает GPT mode;
   - `VK_UNROUTED_TEXT_MODE=reply` стал дефолтом для обычного текста вне GPT mode: handler записывает `unknown` command, не создает Job и отправляет text-only hint `Выберите режим в меню выше.` без дублирования inline keyboard; `silent` молчит, `gpt` возвращает legacy any-text-to-GPT behavior;
   - handler обрабатывает `message_event` как control-only inbound event: сохраняет inbound/command, но не создает Job и не дергает provider;
   - каждый `message_event` подтверждается blank `messages.sendMessageEventAnswer` через `vkdelivery.ControlClient`, чтобы VK-клиент снимал loading spinner с callback-кнопки;
@@ -505,7 +585,7 @@
 - Реальные OpenAI/DeepInfra/VK вызовы требуют credential-bound live smoke на dev-аккаунтах; unit-тесты используют mock HTTP servers.
 - Второй реальный provider для text fallback добавлен через DeepInfra; реальные image/video fallback providers остаются follow-up.
 - VK control/menu responses пока отправляются напрямую из API через `vkdelivery.ControlClient` с deterministic `random_id`; если на product/control sends распространяем invariant `Every delivery attempt is persisted`, нужен отдельный persisted delivery/outbox flow для таких сообщений.
-- Active-menu tracking и GPT dialog mode пока хранятся в памяти процесса `cmd/api`; после рестарта API или при multi-instance балансировке меню может отправиться новым сообщением, а пользователь может потерять выбранный GPT mode. Перед production-scale нужен persisted conversation/menu state.
+- Active-menu tracking пока хранится в памяти процесса `cmd/api`; после рестарта API или при multi-instance балансировке меню может отправиться новым сообщением. GPT dialog mode уже хранится в Redis и переживает restart/API instance switch.
 - Video artifact scanner пока fail-open; полноценный video scan/probe/transcode остаётся Phase 3 media pipeline.
 - Нужен resume fix для edge-case: `provider_task=succeeded`, но artifact/result_ready ещё не сохранены после crash.
 

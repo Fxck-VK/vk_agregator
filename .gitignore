@@ -22,6 +22,7 @@ web/miniapp/.vite/
 !.env.example
 
 # Docker/local data
+.runtime/
 *.pid
 *.log
 *-live.err

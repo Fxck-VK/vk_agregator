@@ -23,6 +23,7 @@ import (
 	vkdelivery "vk-ai-aggregator/internal/adapter/delivery/vk"
 	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/platform/tracing"
+	"vk-ai-aggregator/internal/service/antispam"
 	"vk-ai-aggregator/internal/service/billingservice"
 	"vk-ai-aggregator/internal/service/commandrouter"
 	"vk-ai-aggregator/internal/service/joborchestrator"
@@ -56,6 +57,19 @@ type MenuFeatureFlags struct {
 	DisabledCommands map[domain.CommandType]bool
 }
 
+// AntiSpam checks per-user VK bot limits after command routing but before
+// command/job persistence.
+type AntiSpam interface {
+	Check(ctx context.Context, input antispam.CheckInput) (antispam.Decision, error)
+}
+
+// DialogState stores per-peer VK mode state outside the API process.
+type DialogState interface {
+	Get(ctx context.Context, peerID int64) (mode string, ok bool, err error)
+	Set(ctx context.Context, peerID int64, mode string) error
+	Clear(ctx context.Context, peerID int64) error
+}
+
 // Deps are the collaborators the handler needs. All are interfaces or services
 // so the handler stays storage- and provider-agnostic.
 type Deps struct {
@@ -67,6 +81,9 @@ type Deps struct {
 	Orchestrator *joborchestrator.Orchestrator
 	Router       *commandrouter.Router
 	Control      vkdelivery.ControlClient
+	Profile      vkdelivery.UserProfileClient
+	DialogState  DialogState
+	AntiSpam     AntiSpam
 	Logger       *slog.Logger
 }
 
@@ -437,10 +454,37 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 	}
 
 	unroutedText := false
-	if parsed.Type == domain.CommandTextAsk && !h.textAskEnabled(peerID) {
+	if parsed.Type == domain.CommandTextAsk && !h.textAskEnabled(ctx, peerID) {
 		unroutedText = true
 		parsed = commandrouter.Result{Type: domain.CommandUnknown}
 	}
+
+	if h.deps.AntiSpam != nil {
+		decision, err := h.deps.AntiSpam.Check(ctx, antispam.CheckInput{
+			User:        user,
+			VKUserID:    fromID,
+			CommandType: parsed.Type,
+			Operation:   parsed.Operation,
+			CreatesJob:  parsed.CreatesJob(),
+		})
+		if err != nil {
+			h.logger.Warn("vk anti-spam check failed; allowing event",
+				slog.Int64("vk_user_id", fromID),
+				slog.String("error", err.Error()))
+		} else if !decision.Allowed {
+			if err := h.sendAntiSpamResponse(ctx, idemKey, peerID, decision); err != nil {
+				return fmt.Errorf("send anti-spam response: %w", err)
+			}
+			if err := h.deps.Inbound.SetStatus(ctx, inbound.ID, domain.InboundProcessed); err != nil {
+				return fmt.Errorf("mark inbound processed: %w", err)
+			}
+			if err := h.deps.Idempotency.MarkCompleted(ctx, idemKey, inbound.ID); err != nil {
+				return fmt.Errorf("mark idempotency completed: %w", err)
+			}
+			return nil
+		}
+	}
+
 	cmd := &domain.Command{
 		UserID:         user.ID,
 		VKPeerID:       peerID,
@@ -465,6 +509,12 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 	resourceID := cmd.ID
 
 	switch {
+	case controlOnly && parsed.Type == domain.CommandShowMenu && controlFromPayload && !h.hasActiveMenu(peerID):
+		// A stale inline "Back/show menu" callback can arrive after a GPT answer
+		// has already cleared the active menu. Acknowledge it, but do not create
+		// a new welcome/menu message; the persistent lower text button remains
+		// the explicit way to open a fresh menu at the bottom of the chat.
+		h.clearDialogMode(ctx, peerID)
 	case unroutedText:
 		if err := h.sendUnroutedTextResponse(ctx, idemKey, peerID); err != nil {
 			return fmt.Errorf("send unrouted text response: %w", err)
@@ -475,14 +525,14 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 			return fmt.Errorf("send control response: %w", err)
 		}
 		if parsed.Type == domain.CommandMenuText {
-			h.setDialogMode(peerID, dialogModeGPT)
+			h.setDialogMode(ctx, peerID, dialogModeGPT)
 		} else {
-			h.clearDialogMode(peerID)
+			h.clearDialogMode(ctx, peerID)
 		}
 	default:
 		h.clearActiveMenu(peerID)
 		if parsed.Type != domain.CommandTextAsk {
-			h.clearDialogMode(peerID)
+			h.clearDialogMode(ctx, peerID)
 		}
 	}
 
@@ -490,7 +540,7 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 	// commands (balance/status/cancel/help) are recorded but produce no job.
 	if parsed.CreatesJob() {
 		placeholderID := int64(0)
-		if parsed.Type == domain.CommandTextAsk && h.gptDialogActive(peerID) {
+		if parsed.Type == domain.CommandTextAsk && h.gptDialogActive(ctx, peerID) {
 			placeholderID = h.sendGPTPendingMessage(ctx, idemKey, peerID)
 		}
 
@@ -532,35 +582,87 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 	return nil
 }
 
-func (h *Handler) textAskEnabled(peerID int64) bool {
+func (h *Handler) textAskEnabled(ctx context.Context, peerID int64) bool {
 	if h.cfg.UnroutedTextMode == unroutedTextModeGPT {
 		return true
 	}
-	return h.gptDialogActive(peerID)
+	return h.gptDialogActive(ctx, peerID)
 }
 
-func (h *Handler) gptDialogActive(peerID int64) bool {
-	mode, ok := h.getDialogMode(peerID)
+func (h *Handler) sendAntiSpamResponse(ctx context.Context, idemKey string, peerID int64, decision antispam.Decision) error {
+	if h.deps.Control == nil {
+		h.logger.Warn("vk anti-spam response skipped because VK_ACCESS_TOKEN is not configured",
+			slog.String("decision", string(decision.Kind)))
+		return nil
+	}
+	if decision.Message == "" {
+		return nil
+	}
+	msg := vkdelivery.Message{Text: decision.Message}
+	randomID := vkdelivery.DeterministicRandomID("vk_control_antispam:" + idemKey)
+	_, err := h.sendControlMessage(ctx, domain.CommandShowMenu, peerID, randomID, msg)
+	return err
+}
+
+func (h *Handler) gptDialogActive(ctx context.Context, peerID int64) bool {
+	mode, ok := h.getDialogMode(ctx, peerID)
 	return ok && mode == dialogModeGPT
 }
 
-func (h *Handler) getDialogMode(peerID int64) (dialogMode, bool) {
+func (h *Handler) getDialogMode(ctx context.Context, peerID int64) (dialogMode, bool) {
 	h.modeMu.Lock()
-	defer h.modeMu.Unlock()
 	mode, ok := h.dialogModes[peerID]
-	return mode, ok
-}
-
-func (h *Handler) setDialogMode(peerID int64, mode dialogMode) {
+	h.modeMu.Unlock()
+	if ok {
+		return mode, true
+	}
+	if h.deps.DialogState == nil {
+		return "", false
+	}
+	persistedMode, ok, err := h.deps.DialogState.Get(ctx, peerID)
+	if err != nil {
+		h.logger.Warn("vk dialog mode lookup failed",
+			slog.Int64("peer_id", peerID),
+			slog.String("error", err.Error()))
+		return "", false
+	}
+	if !ok {
+		return "", false
+	}
+	mode = dialogMode(persistedMode)
 	h.modeMu.Lock()
-	defer h.modeMu.Unlock()
 	h.dialogModes[peerID] = mode
+	h.modeMu.Unlock()
+	return mode, true
 }
 
-func (h *Handler) clearDialogMode(peerID int64) {
+func (h *Handler) setDialogMode(ctx context.Context, peerID int64, mode dialogMode) {
 	h.modeMu.Lock()
-	defer h.modeMu.Unlock()
+	h.dialogModes[peerID] = mode
+	h.modeMu.Unlock()
+	if h.deps.DialogState == nil {
+		return
+	}
+	if err := h.deps.DialogState.Set(ctx, peerID, string(mode)); err != nil {
+		h.logger.Warn("vk dialog mode persist failed",
+			slog.Int64("peer_id", peerID),
+			slog.String("mode", string(mode)),
+			slog.String("error", err.Error()))
+	}
+}
+
+func (h *Handler) clearDialogMode(ctx context.Context, peerID int64) {
+	h.modeMu.Lock()
 	delete(h.dialogModes, peerID)
+	h.modeMu.Unlock()
+	if h.deps.DialogState == nil {
+		return
+	}
+	if err := h.deps.DialogState.Clear(ctx, peerID); err != nil {
+		h.logger.Warn("vk dialog mode clear failed",
+			slog.Int64("peer_id", peerID),
+			slog.String("error", err.Error()))
+	}
 }
 
 func (h *Handler) ensureUser(ctx context.Context, vkUserID int64) (*domain.User, error) {

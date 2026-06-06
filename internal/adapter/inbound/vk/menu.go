@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strings"
+	"time"
 
 	vkdelivery "vk-ai-aggregator/internal/adapter/delivery/vk"
 	"vk-ai-aggregator/internal/domain"
@@ -230,8 +232,17 @@ func (h *Handler) sendControlResponse(ctx context.Context, t domain.CommandType,
 		balance = acc.BalanceCached
 	}
 
+	msgText := screen.text(balance)
+	personalizedWelcome := false
+	if t == domain.CommandStart && user.WelcomeNameSentAt.IsZero() {
+		if name := h.personalizedWelcomeName(ctx, user); name != "" {
+			msgText = welcomeTextWithName(name)
+			personalizedWelcome = true
+		}
+	}
+
 	msg := vkdelivery.Message{
-		Text:     screen.text(balance),
+		Text:     msgText,
 		Keyboard: screen.keyboard(),
 	}
 	h.filterMenuKeyboard(msg.Keyboard)
@@ -246,9 +257,43 @@ func (h *Handler) sendControlResponse(ctx context.Context, t domain.CommandType,
 	result, err := h.deliverControlResponse(ctx, t, peerID, randomID, msg, allowEdit)
 	if err == nil {
 		h.setActiveMenu(peerID, result.MessageID)
+		if personalizedWelcome {
+			user.WelcomeNameSentAt = time.Now()
+			if err := h.deps.Users.Update(ctx, user); err != nil {
+				return fmt.Errorf("mark personalized welcome sent: %w", err)
+			}
+		}
 		return nil
 	}
 	return err
+}
+
+func (h *Handler) personalizedWelcomeName(ctx context.Context, user *domain.User) string {
+	name := strings.TrimSpace(user.VKFirstName)
+	if name != "" {
+		return name
+	}
+	if h.deps.Profile == nil {
+		return ""
+	}
+
+	profile, err := h.deps.Profile.GetUserProfile(ctx, user.VKUserID)
+	if err != nil {
+		h.logger.Warn("vk user profile lookup failed",
+			slog.Int64("vk_user_id", user.VKUserID),
+			slog.String("error", err.Error()))
+		return ""
+	}
+
+	user.VKFirstName = strings.TrimSpace(profile.FirstName)
+	user.VKLastName = strings.TrimSpace(profile.LastName)
+	user.VKProfileSyncedAt = time.Now()
+	if err := h.deps.Users.Update(ctx, user); err != nil {
+		h.logger.Warn("vk user profile cache update failed",
+			slog.Int64("vk_user_id", user.VKUserID),
+			slog.String("error", err.Error()))
+	}
+	return user.VKFirstName
 }
 
 func (h *Handler) deliverControlResponse(ctx context.Context, t domain.CommandType, peerID, randomID int64, msg vkdelivery.Message, allowEdit bool) (vkdelivery.SendResult, error) {
@@ -407,6 +452,13 @@ func (h *Handler) getActiveMenu(peerID int64) (activeMenuMessage, bool) {
 	return msg, ok
 }
 
+func (h *Handler) hasActiveMenu(peerID int64) bool {
+	h.menuMu.Lock()
+	defer h.menuMu.Unlock()
+	_, ok := h.activeMenus[peerID]
+	return ok
+}
+
 func (h *Handler) setActiveMenu(peerID, messageID int64) {
 	if messageID == 0 {
 		return
@@ -457,6 +509,14 @@ func (h *Handler) sendPersistentMenuButton(ctx context.Context, idemKey string, 
 
 func welcomeText(_ int64) string {
 	return "👋 Добро пожаловать в НейроХаб!\n\n🤖 Здесь вы можете создавать уникальные тексты с помощью нейросети!\n\n📌 Совет: Закрепляй бота, чтобы всегда быть на связи"
+}
+
+func welcomeTextWithName(name string) string {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return welcomeText(0)
+	}
+	return fmt.Sprintf("👋 %s, добро пожаловать в НейроХаб!\n\n🤖 Здесь вы можете создавать уникальные тексты с помощью нейросети!\n\n📌 Совет: Закрепляй бота, чтобы всегда быть на связи", name)
 }
 
 func accountText(balance int64) string {
