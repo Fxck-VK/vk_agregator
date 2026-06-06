@@ -28,6 +28,10 @@ export default defineConfig({
         target: 'http://localhost:8080',
         changeOrigin: true,
       },
+      '/webhooks': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+      },
     },
   },
 });
