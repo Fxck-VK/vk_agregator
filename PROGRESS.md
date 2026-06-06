@@ -1532,6 +1532,37 @@ Status: **completed**.
 - `go test ./...` - exit 0.
 - `go build ./...` - exit 0.
 - `npm --prefix web/miniapp run build` - exit 0.
+
+---
+
+## PR-18 planning - Durable shared chat context
+
+Status: **planned**.
+
+### Finding
+
+- VK text bot context is already durable through `internal/service/dialogcontext`,
+  Postgres conversations/messages/summaries and worker-owned prompt rendering.
+- Mini App chat currently passes `conversation_id`, but the BFF also keeps
+  recent turns in a process-local `internal/adapter/inbound/miniapp`
+  conversation store. That state can be lost on API restart or scale-out.
+- The current durable conversation key `user_id + vk_peer_id` is sufficient for
+  VK bot private/group peers but not sufficient for multiple Mini App threads
+  owned by the same VK user.
+
+### Plan
+
+- Added ADR-017 in `DECISIONS.md`: Mini App must not call VK bot, and VK bot
+  context logic must not be copied into Mini App. Both surfaces should use a
+  shared durable chat/conversation core while provider calls stay worker-owned.
+- Added `docs/CHAT_CONTEXT_REFACTOR_LOG.md` as the running log for this fix.
+- Added `TEMP_PR18_DURABLE_CHAT_CORE_PROMPTS.md` with copy/paste prompts for
+  PR-18.1 through PR-18.5.
+- Added PR-18 backlog items to `TASKS.md`.
+
+### Checks
+
+- Docs/planning only. Runtime checks not run at planning time.
 - `git grep -nE "^(<<<<<<<|=======|>>>>>>>)"` - clean.
 - `git diff --check` - clean.
 

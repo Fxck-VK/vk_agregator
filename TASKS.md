@@ -214,6 +214,25 @@
 - [x] PR-17.5: Update architecture and runbook docs so future agents know where
   to add VK bot commands, Mini App BFF endpoints and shared backend-core logic.
 
+### PR-18 durable shared chat context
+
+- [ ] PR-18.1: Add durable conversation identity foundation for shared chat
+  context: `source`, Mini App opaque thread id, repository methods and indexes,
+  while keeping VK bot `user_id + vk_peer_id` behavior backward compatible.
+- [ ] PR-18.2: Teach worker/dialogcontext to prefer explicit conversation
+  references from text job params and preserve VK bot fallback. Introduce a
+  small shared chat job contract/facade only if it avoids duplication without
+  calling providers.
+- [ ] PR-18.3: Switch Mini App `/miniapp/chat/messages` from process-local BFF
+  context to durable shared chat core. Remove prompt-prefix memory from the
+  BFF and keep `conversation_id="" -> default` compatibility.
+- [ ] PR-18.4: Add authenticated Mini App conversation list/history endpoints
+  and make the frontend treat backend history as source of truth while keeping
+  only active thread/UI preferences in localStorage.
+- [ ] PR-18.5: Cleanup and verify shared chat context rollout: no Mini App
+  process-local context, no provider calls outside worker, no prompt/answer text
+  in localStorage, public model alias remains `ChatGPT`.
+
 ### Integration validation / next providers
 - [~] Stable local VK Callback URL: `scripts/dev/setup-cloudflare-tunnel.ps1`
   and `start-bot.ps1 -TunnelMode named` are implemented for
@@ -221,7 +240,9 @@
   registrar NS switch are still required before the hostname works.
 - [ ] Mini App payment history endpoint: add a read-only `/miniapp/payments` or ledger-history BFF endpoint with auth/rate limiting so Settings can show real payment history instead of the PR-16.4 placeholder.
 - [ ] Mini App/VK bot top-up backend flow: add an authenticated, rate-limited and idempotent payment-intent endpoint for Mini App top-ups, connect VK `Пополнить баланс` to the same intent/link flow, and append committed `topup` ledger entries only after trusted payment confirmation.
-- [ ] Mini App backend conversations: add durable conversation storage plus list/read endpoints for thread history. PR-16.2 currently degrades to safe local metadata only; backend process-local context can be lost on API restart or scale-out.
+- [ ] Mini App backend conversations: superseded by the PR-18 durable shared
+  chat context plan above. PR-16.2 currently degrades to safe local metadata
+  only; backend process-local context can be lost on API restart or scale-out.
 - [ ] Live smoke with `DEEPINFRA_API_KEY`: GPT text mode should return DeepSeek-V4-Flash output through the normal Job -> Artifact -> Delivery flow.
 - [ ] Add production retention/archival job for old `conversation_messages` before large-scale rollout; keep compact summaries and recent hot turns only.
 - [ ] Replace local/extractive dialog summary compaction with a dedicated cheap summarizer job/model if semantic summaries become necessary.
