@@ -363,3 +363,19 @@ truth.
 Chat thread history is opened by an explicit header icon button. The thread
 list and `Новый диалог` action remain the same local metadata surface from
 PR-16.2, without storing prompts, answers, secrets or artifact URLs.
+---
+
+## PR-16.4 Mini App Settings / local data note
+
+Date: 2026-06-06
+
+- Settings uses backend-provided balance from `/miniapp/balance`; localStorage is
+  not used as a balance, billing or job-state source of truth.
+- The summary generation history is read from backend jobs already loaded by
+  the Mini App recovery flow and does not persist prompts, generated text or
+  artifact URLs locally.
+- Theme preference is the only new localStorage key (`vk_miniapp_theme_v1`).
+  It stores only `system`, `light` or `dark`.
+- Payment history is intentionally a placeholder because Mini App BFF has no
+  read-only payment/ledger endpoint yet. The backend dependency is tracked in
+  `TASKS.md` and `DECISIONS.md`.

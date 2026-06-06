@@ -142,6 +142,7 @@
 - [x] Mini App PR-16.2 chat threads: active `conversation_id` is the thread id (`default` for migrated legacy context, UUID for new dialogs), history opens as a top sheet from the chat title, and `localStorage` keeps only `id` / `title` / `last_activity_at` thread metadata.
 - [x] Mini App PR-16.3 Create tab: top VKUI operation segment for supported backend operations (`text_generate`, `image_generate`, `video_generate`), existing estimate/status/result/history workflow preserved, VK post preview made the signature result surface without new URL sources or unsafe rendering.
 - [x] Mini App PR-16.3.1 UX revision: Create starts from three large cards (`Создать фото` / `Создать видео` / `Создать пост`) instead of the top segment; history is scoped per selected operation type; chat thread history opens from an explicit header icon button.
+- [x] Mini App PR-16.4 Settings and design polish: Settings contains theme preference, backend balance, summary generation history with type filter, local-history privacy/clear controls and a payment-history placeholder; design tokens now use the provided cyan/violet/pink brand palette.
 - [x] Obsolete VK Tunnel tooling removed: `@vkontakte/vk-tunnel`, npm `tunnel` script and `web/miniapp/vk-tunnel-config.json`; dev tunnel path normalized to `cloudflared` / `*.trycloudflare.com`.
 - [x] Dev-туннель через `cloudflared` (VK Tunnel на техработах с 02.10.2025): `vite.config.ts` `server` — `host: true`, `allowedHosts: true`, `hmr.protocol: wss`/`clientPort: 443`, proxy `/miniapp`+`/api` → `:8080`; mixed-content под https устранён, домен туннеля не хардкодится. E2E (mock) через прокси-эндпоинты проверен.
 - [x] Фикс биллинга (AUDIT B1a): стартовый грант 1000 создаётся committed-проводкой в ledger атомарно; миграция `000004` бэкоффилит открывающие проводки; mismatch устранён.
@@ -192,7 +193,7 @@
 ## Current Gaps / Known Follow-Ups
 
 ### Integration validation / next providers
-- [ ] Mini App Settings PR-16.4: move/show summary history across all generation types outside the Create tab.
+- [ ] Mini App payment history endpoint: add a read-only `/miniapp/payments` or ledger-history BFF endpoint with auth/rate limiting so Settings can show real payment history instead of the PR-16.4 placeholder.
 - [ ] Mini App backend conversations: add durable conversation storage plus list/read endpoints for thread history. PR-16.2 currently degrades to safe local metadata only; backend process-local context can be lost on API restart or scale-out.
 - [ ] Live smoke with `DEEPINFRA_API_KEY`: GPT text mode should return DeepSeek-V4-Flash output through the normal Job -> Artifact -> Delivery flow.
 - [ ] Live smoke с реальными `OPENAI_API_KEY` и `VK_ACCESS_TOKEN`: text/image/video generation, VK photo/video upload, moderation allow/block.

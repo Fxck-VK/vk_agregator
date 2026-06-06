@@ -7,6 +7,8 @@ import { Composer } from "./Composer";
 import { ChatList } from "./ChatList";
 import { ResultCard } from "../components/ResultCard";
 import { WorkflowMode } from "../workflow/WorkflowMode";
+import { SettingsScreen } from "../settings/SettingsScreen";
+import { loadThemeMode, watchThemeMode, type ThemeMode } from "../settings/theme";
 import { modalityByOperation, uid, type Chat, type ChatMessage } from "./types";
 import { loadAppTab, saveAppTab, type AppTab } from "../mode";
 import {
@@ -46,7 +48,7 @@ function tabTitle(tab: AppTab, activeChat?: Chat | null): { name: string; sub: s
     case "create":
       return { name: "Создать", sub: "workflow для VK-контента" };
     case "settings":
-      return { name: "Настройки", sub: "скоро" };
+      return { name: "Настройки", sub: "тема, баланс, история" };
     default:
       return { name: "Ассистент", sub: activeChat?.title ?? "ChatGPT диалог" };
   }
@@ -167,6 +169,7 @@ export function ChatScreen({ user }: { user: VkUser }) {
   const [estimateLoading, setEstimateLoading] = useState(false);
   const [estimateError, setEstimateError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<AppTab>(() => loadAppTab());
+  const [themeMode, setThemeMode] = useState<ThemeMode>(() => loadThemeMode());
   const [jobs, setJobs] = useState<Job[]>([]);
 
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -194,6 +197,8 @@ export function ChatScreen({ user }: { user: VkUser }) {
     saveAppTab(nextTab);
     setDrawerOpen(false);
   }
+
+  useEffect(() => watchThemeMode(themeMode), [themeMode]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -546,11 +551,15 @@ export function ChatScreen({ user }: { user: VkUser }) {
       </section>
 
       <section className={"app-tab-panel app-tab-panel--settings" + (activeTab === "settings" ? " is-active" : "")} aria-hidden={activeTab !== "settings"}>
-        <div className="settings-placeholder">
-          <span className="settings-placeholder__eyebrow">Settings</span>
-          <h1>Настройки</h1>
-          <p>Скоро здесь появятся параметры Mini App.</p>
-        </div>
+        <SettingsScreen
+          themeMode={themeMode}
+          balance={balance}
+          jobs={jobs}
+          loading={loading}
+          onThemeModeChange={setThemeMode}
+          onClearLocalHistory={clearChats}
+          onRefreshBalance={refreshBalance}
+        />
       </section>
 
       <Tabbar className="app-tabbar" mode="horizontal" plain>
@@ -560,7 +569,7 @@ export function ChatScreen({ user }: { user: VkUser }) {
           aria-label="Создать"
           onClick={() => changeTab("create")}
         >
-          <span className="app-tabbar__icon" aria-hidden="true">+</span>
+          <span className="app-tabbar__icon app-tabbar__icon--create" aria-hidden="true" />
         </TabbarItem>
         <TabbarItem
           selected={activeTab === "chat"}
@@ -568,7 +577,7 @@ export function ChatScreen({ user }: { user: VkUser }) {
           aria-label="Чат"
           onClick={() => changeTab("chat")}
         >
-          <span className="app-tabbar__icon" aria-hidden="true">C</span>
+          <span className="app-tabbar__icon app-tabbar__icon--chat" aria-hidden="true" />
         </TabbarItem>
         <TabbarItem
           selected={activeTab === "settings"}
@@ -576,7 +585,7 @@ export function ChatScreen({ user }: { user: VkUser }) {
           aria-label="Настройки"
           onClick={() => changeTab("settings")}
         >
-          <span className="app-tabbar__icon" aria-hidden="true">S</span>
+          <span className="app-tabbar__icon app-tabbar__icon--settings" aria-hidden="true" />
         </TabbarItem>
       </Tabbar>
       </div>

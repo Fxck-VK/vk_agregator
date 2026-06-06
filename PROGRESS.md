@@ -1260,3 +1260,36 @@ Status: **completed**.
 
 - `npm run build` in `web/miniapp` - exit 0.
 - `go build ./...` - exit 0.
+
+---
+
+## PR-16.4 - Mini App Settings tab and brand-driven polish
+
+Status: **completed**.
+
+### What changed
+
+- Settings is now a real tab: theme preference (`system` / `light` / `dark`),
+  backend balance display, payment-history placeholder, privacy note and local
+  history clear action.
+- Added summary generation history in Settings, sourced from backend jobs and
+  filterable by all/post/photo/video. Create keeps only operation-scoped
+  workflow history.
+- Theme preference is stored only as `vk_miniapp_theme_v1`; balance, job state
+  and billing remain backend-owned.
+- Applied brand-driven design tokens from the provided community banner/avatar:
+  accessible cyan action accent, violet and pink secondary accents, light/dark
+  neutral scales and VKUI scheme synchronization.
+- Replaced the lower tabbar letter markers with simple CSS icons; no decorative
+  emoji/sticker controls were added.
+
+### Backend dependency
+
+- Mini App has `GET /miniapp/balance`, but no read-only payment or ledger
+  history endpoint. Settings shows a safe placeholder and tracks this as a
+  separate backend follow-up.
+
+### Checks
+
+- `npm run build` in `web/miniapp` - exit 0.
+- `go build ./...` - exit 0.

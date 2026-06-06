@@ -453,3 +453,47 @@ Consequences: the Create tab has a clearer product entry point while preserving
 backend-owned pricing, billing, job status and artifact access. Polling remains
 owned by `ChatScreen`; switching type, tab or thread does not create a second
 poller or clear in-flight jobs.
+
+---
+
+## ADR-014 - Mini App Settings, theme and brand palette
+
+Status: accepted
+
+Date: 2026-06-06
+
+Context: PR-16.4 completes the 3-tab Mini App shell. Settings must own
+user-facing preferences and cross-generation history while Create stays focused
+on generation flow. The owner provided community banner/avatar images with a
+pastel cyber workspace style: cyan/blue glass, violet and pink light, clean
+retro-pixel accents and a dark ink counterpoint.
+
+Decision: Settings becomes the place for theme preference, backend balance,
+payment-history placeholder/dependency, local-data privacy controls and a
+summary generation history filtered by type. Theme preference is UI-only and is
+stored as `vk_miniapp_theme_v1` with values `system`, `light` or `dark`.
+Explicit light/dark updates `data-scheme` so VKUI and custom tokens stay in
+sync; `system` lets VK/device appearance drive the scheme.
+
+The brand palette is centralized in `web/miniapp/src/ui/theme.css`: accessible
+cyan is the primary action accent, with violet and pink as secondary brand
+colors. Light and dark neutral scales are adjusted around those colors while
+keeping text contrast at AA or better. The palette is intentionally not
+monochrome and can be replaced in one token block if the brand art changes.
+
+The all-types generation history moves to Settings as a read-only summary over
+backend `GET /miniapp/jobs` data, with a type filter for post/photo/video.
+Create keeps only operation-scoped workflow history. Local storage remains a
+UI preference/cache surface only: active tab, theme mode and safe thread
+metadata. It never stores prompts, generated answers, launch params, tokens,
+balance, provider details or artifact URLs.
+
+Backend dependency: Mini App BFF currently exposes balance but no payment or
+ledger history endpoint. PR-16.4 therefore shows a safe payment-history
+placeholder and tracks a separate backend follow-up for a read-only payment
+history endpoint.
+
+Consequences: Settings becomes useful without changing BFF contracts or moving
+job/billing truth to the frontend. Polling remains owned by `ChatScreen`, and
+the Mini App still renders generated content safely as React text or backend
+artifact routes only.

@@ -3,6 +3,7 @@ import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { AdaptivityProvider, AppRoot, ConfigProvider } from "@vkontakte/vkui";
 import App from "./App";
+import { applyInitialThemeMode } from "./settings/theme";
 import "@vkontakte/vkui/dist/vkui.css";
 import "./ui/theme.css";
 
@@ -45,6 +46,8 @@ function RootProviders() {
     </ConfigProvider>
   );
 }
+
+applyInitialThemeMode();
 
 createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
