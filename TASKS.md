@@ -118,6 +118,7 @@
 - [x] VK bot anti-spam: Redis-backed per-`vk_user_id` limits for all incoming user events (`10/60s`, new users `5/60s`), separate GPT job limits (`3/30s`, new users `1/15s`), cooldown replies, repeated-violation temporary blocks (`5/10m -> 15m`), and max 2 active GPT jobs per user before queue protection denies new requests. Anti-spam denials acknowledge the inbound event and do not create commands/jobs.
 - [x] VK GPT dialog mode persistence: selected `Спросить у НейроХаб` mode is stored in Redis under peer-scoped dialog state with `VK_DIALOG_MODE_TTL`, so ordinary text keeps routing to GPT after `cmd/api` restart or API instance switch.
 - [x] VK text dialog context v1: `cmd/worker` persists user/assistant turns in Postgres (`conversations`, `conversation_messages`, `conversation_summaries`), sends providers a bounded context packet instead of full history, caps text output via provider request when supported, and keeps context assembly out of VK handlers.
+- [x] Shared VK referral foundation: Postgres `referral_codes` / `referrals`, one stable public code per internal user, idempotent `/start <code>` / VK `ref` handling in the bot, account screen with invited count/referral link/share button, and signup rewards through billing ledger entries. Mini App code was not changed; backend service/repository are ready for a future Mini App referral endpoint.
 
 ---
 
@@ -194,6 +195,7 @@
 - [ ] Live smoke with `DEEPINFRA_API_KEY`: GPT text mode should return DeepSeek-V4-Flash output through the normal Job -> Artifact -> Delivery flow.
 - [ ] Add production retention/archival job for old `conversation_messages` before large-scale rollout; keep compact summaries and recent hot turns only.
 - [ ] Replace local/extractive dialog summary compaction with a dedicated cheap summarizer job/model if semantic summaries become necessary.
+- [ ] Add full Mini App referral endpoint/UI over the shared `referralservice` so VK Bot and VK Mini App use the same code/link/reward state beyond the current experimental share bridge.
 - [ ] Live smoke с реальными `OPENAI_API_KEY` и `VK_ACCESS_TOKEN`: text/image/video generation, VK photo/video upload, moderation allow/block.
 - [ ] Подключить production-баннер к `/start` через `VK_WELCOME_ATTACHMENT` или отдельный upload flow.
 - [x] Bot features включены в настройках сообщений VK-сообщества; VK начал принимать keyboard без `error_code=912`.

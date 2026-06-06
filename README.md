@@ -80,6 +80,16 @@ Real integrations are implemented at adapter level and remain **opt-in**:
   current request. Defaults are `TEXT_CONTEXT_MAX_INPUT_TOKENS=1600`,
   `TEXT_CONTEXT_MAX_OUTPUT_TOKENS=800`, summary up to 400 estimated tokens and
   the last 6 messages. The full dialog is never sent to a provider.
+- Shared VK referral foundation is implemented in the backend. Each internal
+  user receives one stable public referral code in `referral_codes`; accepted
+  invitations are stored in `referrals` with source `vk_bot` or `vk_miniapp`.
+  The VK bot account screen can show remaining credits, completed generations,
+  invited-user count and a single referral link. The share button defaults to
+  VK `open_link` / `vk.com/share.php`.
+  `/start <code>` / VK `ref` handling records the relation without creating a
+  billable job. Signup rewards are posted through billing ledger entries with
+  idempotency keys. A full Mini App referral account/API screen is still a
+  follow-up over the same backend service/repository.
 - VK inline menu navigation uses a hybrid UX: if the last bot message is the
   active menu, inline button clicks edit it through VK `messages.edit`; pressing
   the persistent lower `Показать меню` button always sends a fresh menu at the
@@ -110,9 +120,9 @@ Real integrations are implemented at adapter level and remain **opt-in**:
   Disabled buttons are hidden from new keyboards, while stale payload clicks
   from older messages fall back to the current main menu instead of opening a
   hidden section.
-  Current bot-facing env profile keeps only `VK_MENU_GPT_ENABLED=true` visible
-  in the main menu; video, image, students, account and top-up sections stay
-  implemented but hidden behind flags.
+  Current bot-facing env profile keeps `VK_MENU_GPT_ENABLED=true` and
+  `VK_MENU_ACCOUNT_ENABLED=true` visible in the main menu; video, image,
+  students and top-up sections stay implemented but hidden behind flags.
 - `Студентам и школьникам` opens a study submenu with task solving,
   presentations/reports placeholders, question answering, and back navigation.
 - `MODERATION_PROVIDER=openai` enables OpenAI output moderation.

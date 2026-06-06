@@ -173,6 +173,17 @@ type Config struct {
 	VKMenuStudentsReportEnabled       bool
 	VKMenuStudentsQAEnabled           bool
 
+	// VKReferralLinkBase is the public VK entry URL used to build a user's
+	// single referral link. If it contains "{code}", the placeholder is replaced;
+	// otherwise the code is appended as ref=<code>.
+	VKReferralLinkBase string
+	// VKReferralShareBase is the URL opened by the bot "share" button.
+	VKReferralShareBase string
+	ReferralCodeLength  int
+	// Referral signup rewards are posted through billing ledger entries.
+	ReferralReferrerSignupRewardCredits int64
+	ReferralReferredSignupRewardCredits int64
+
 	// VKAppID is the VK Mini App application identifier.
 	VKAppID string
 	// VKAppSecret is the VK Mini App protected key used to verify launch-params
@@ -382,6 +393,17 @@ func Load() Config {
 		VKMenuStudentsPresentationEnabled: envBool("VK_MENU_STUDENTS_PRESENTATION_ENABLED", true),
 		VKMenuStudentsReportEnabled:       envBool("VK_MENU_STUDENTS_REPORT_ENABLED", true),
 		VKMenuStudentsQAEnabled:           envBool("VK_MENU_STUDENTS_QA_ENABLED", true),
+		VKReferralLinkBase:                env("VK_REFERRAL_LINK_BASE", ""),
+		VKReferralShareBase:               env("VK_REFERRAL_SHARE_BASE", "https://vk.com/share.php"),
+		ReferralCodeLength:                envInt("REFERRAL_CODE_LENGTH", 10),
+		ReferralReferrerSignupRewardCredits: int64(envInt(
+			"REFERRAL_REFERRER_SIGNUP_REWARD_CREDITS",
+			10,
+		)),
+		ReferralReferredSignupRewardCredits: int64(envInt(
+			"REFERRAL_REFERRED_SIGNUP_REWARD_CREDITS",
+			0,
+		)),
 
 		VKAppID:                   env("VK_APP_ID", ""),
 		VKAppSecret:               env("VK_APP_SECRET", ""),

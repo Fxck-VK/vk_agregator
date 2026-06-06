@@ -138,6 +138,8 @@ type JobRepository interface {
 	// user and operation. It is used by abuse protection before enqueueing more
 	// expensive work for the same user.
 	CountActiveByUserOperation(ctx context.Context, userID uuid.UUID, operation OperationType) (int, error)
+	// CountSucceededByUser returns completed successful jobs for account stats.
+	CountSucceededByUser(ctx context.Context, userID uuid.UUID) (int, error)
 }
 
 // InboundEventRepository persists raw inbound events for audit and idempotent
@@ -261,6 +263,26 @@ type BillingRepository interface {
 	// workers to capture credits without threading the reservation id through
 	// the queue. ErrNotFound if the job has no reservation.
 	GetReservationByJob(ctx context.Context, jobID uuid.UUID) (*CreditReservation, error)
+}
+
+// ReferralRepository persists single-user referral codes and referral
+// relations. It is shared by VK bot and future VK Mini App referral flows.
+type ReferralRepository interface {
+	// GetCodeByUserID fetches the stable referral code for one user.
+	GetCodeByUserID(ctx context.Context, userID uuid.UUID) (*ReferralCode, error)
+	// GetCode fetches a referral code by its public code value.
+	GetCode(ctx context.Context, code string) (*ReferralCode, error)
+	// CreateCode inserts a new public code for one user.
+	CreateCode(ctx context.Context, code *ReferralCode) error
+	// CreateReferral records a referral relation. It returns ErrConflict when
+	// the referred user already has a referrer.
+	CreateReferral(ctx context.Context, referral *Referral) error
+	// GetReferralByReferredUserID fetches the relation for the invited user.
+	GetReferralByReferredUserID(ctx context.Context, userID uuid.UUID) (*Referral, error)
+	// CountByReferrer counts users invited by one referrer.
+	CountByReferrer(ctx context.Context, referrerUserID uuid.UUID) (int, error)
+	// MarkRewardApplied marks signup referral rewards as posted to billing.
+	MarkRewardApplied(ctx context.Context, referralID uuid.UUID, rewardedAt time.Time) error
 }
 
 // OutboxRepository persists and drains domain events using the outbox pattern.

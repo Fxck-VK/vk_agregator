@@ -236,6 +236,37 @@ func (s *Service) Refund(ctx context.Context, userID, jobID uuid.UUID, amount in
 	return s.repo.AppendEntry(ctx, entry)
 }
 
+// Grant appends an idempotent positive top-up entry for non-payment bonuses
+// such as referral rewards. It preserves the append-only ledger invariant and
+// treats duplicate idempotency keys as success.
+func (s *Service) Grant(ctx context.Context, userID uuid.UUID, amount int64, idempotencyKey, reason string) error {
+	if amount <= 0 {
+		return nil
+	}
+	if idempotencyKey == "" {
+		return errors.New("billingservice: grant idempotency key is required")
+	}
+	acc, err := s.EnsureAccount(ctx, userID)
+	if err != nil {
+		return err
+	}
+	entry := &domain.LedgerEntry{
+		AccountID:      acc.ID,
+		Type:           domain.LedgerTopup,
+		Amount:         amount,
+		Status:         domain.LedgerStatusCommitted,
+		IdempotencyKey: idempotencyKey,
+		Reason:         reason,
+	}
+	if err := s.repo.AppendEntry(ctx, entry); err != nil {
+		if errors.Is(err, domain.ErrConflict) {
+			return nil
+		}
+		return err
+	}
+	return nil
+}
+
 func clonePrices(in map[domain.OperationType]int64) map[domain.OperationType]int64 {
 	out := make(map[domain.OperationType]int64, len(in))
 	for k, v := range in {

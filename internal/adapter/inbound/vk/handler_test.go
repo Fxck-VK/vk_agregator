@@ -19,6 +19,7 @@ import (
 	"vk-ai-aggregator/internal/service/commandrouter"
 	"vk-ai-aggregator/internal/service/joborchestrator"
 	"vk-ai-aggregator/internal/service/outboxrelay"
+	"vk-ai-aggregator/internal/service/referralservice"
 )
 
 type harness struct {
@@ -27,6 +28,8 @@ type harness struct {
 	cmds    *memory.CommandRepo
 	jobs    *memory.JobRepo
 	inbound *memory.InboundRepo
+	billing *memory.BillingRepo
+	refs    *memory.ReferralRepo
 	pub     *queue.MemoryPublisher
 	relay   *outboxrelay.Relay
 }
@@ -64,6 +67,8 @@ func newHarnessWithDeps(control vkdelivery.ControlClient, cfg vk.Config, antiSpa
 	idem := memory.NewIdempotencyRepo()
 	bill := memory.NewBillingRepo()
 	billing := billingservice.New(bill)
+	refs := memory.NewReferralRepo()
+	referrals := referralservice.New(refs, billing, referralservice.Config{ReferrerSignupRewardCredits: 10})
 	pub := queue.NewMemoryPublisher()
 	uowMgr := memory.NewUnitOfWork(jobs, outbox, bill)
 	orch := joborchestrator.New(jobs, uowMgr, billing, 0)
@@ -71,8 +76,10 @@ func newHarnessWithDeps(control vkdelivery.ControlClient, cfg vk.Config, antiSpa
 		Idempotency:  idem,
 		Inbound:      inbound,
 		Users:        users,
+		Jobs:         jobs,
 		Commands:     cmds,
 		Billing:      billing,
+		Referrals:    referrals,
 		Orchestrator: orch,
 		Router:       commandrouter.New(),
 		Control:      control,
@@ -80,7 +87,7 @@ func newHarnessWithDeps(control vkdelivery.ControlClient, cfg vk.Config, antiSpa
 		DialogState:  dialogState,
 		AntiSpam:     antiSpam,
 	})
-	return &harness{handler: h, users: users, cmds: cmds, jobs: jobs, inbound: inbound, pub: pub, relay: outboxrelay.New(uowMgr, pub)}
+	return &harness{handler: h, users: users, cmds: cmds, jobs: jobs, inbound: inbound, billing: bill, refs: refs, pub: pub, relay: outboxrelay.New(uowMgr, pub)}
 }
 
 // post serves the webhook and then drains the outbox relay, mirroring the
@@ -260,6 +267,104 @@ func TestStartSendsWelcomeMenuNoJob(t *testing.T) {
 	}
 	if !strings.Contains(sent[1].Keyboard, `"type":"callback"`) {
 		t.Fatalf("inline menu must use callback buttons by default: %q", sent[1].Keyboard)
+	}
+}
+
+func TestStartWithReferralCodeAppliesSharedReferralNoJob(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	h := newHarnessWithControl(control)
+	ctx := context.Background()
+	referrer := &domain.User{
+		VKUserID: 900001,
+		Role:     domain.RoleUser,
+		Status:   domain.StatusActive,
+		Locale:   "ru",
+		Timezone: "Europe/Moscow",
+	}
+	if err := h.users.Create(ctx, referrer); err != nil {
+		t.Fatalf("create referrer: %v", err)
+	}
+	if err := h.refs.CreateCode(ctx, &domain.ReferralCode{UserID: referrer.ID, Code: "ABC23456"}); err != nil {
+		t.Fatalf("create referral code: %v", err)
+	}
+
+	body := `{
+		"type":"message_new","group_id":1,"event_id":"evt-start-ref","secret":"s3cr3t",
+		"object":{"message":{"from_id":900002,"peer_id":900002,"text":"/start ABC23456"}}
+	}`
+	rec := h.post(body)
+	if rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	referred, err := h.users.GetByVKUserID(ctx, 900002)
+	if err != nil {
+		t.Fatalf("referred user not created: %v", err)
+	}
+	referral, err := h.refs.GetReferralByReferredUserID(ctx, referred.ID)
+	if err != nil {
+		t.Fatalf("referral not created: %v", err)
+	}
+	if referral.ReferrerUserID != referrer.ID || referral.ReferralCode != "ABC23456" || referral.Source != domain.ReferralSourceVKBot {
+		t.Fatalf("unexpected referral: %+v", referral)
+	}
+	if referral.RewardStatus != domain.ReferralRewardApplied {
+		t.Fatalf("reward status = %q, want applied", referral.RewardStatus)
+	}
+	acc, err := h.billing.GetAccountByUser(ctx, referrer.ID, domain.CurrencyCredits)
+	if err != nil {
+		t.Fatalf("get referrer account: %v", err)
+	}
+	if acc.BalanceCached != billingservice.DefaultStartingBalance+10 {
+		t.Fatalf("referrer balance = %d, want %d", acc.BalanceCached, billingservice.DefaultStartingBalance+10)
+	}
+	jobs, _ := h.jobs.ListByUser(ctx, referred.ID, 10, 0)
+	if len(jobs) != 0 || h.pub.Len() != 0 {
+		t.Fatalf("referral start must not create jobs, jobs=%+v tasks=%d", jobs, h.pub.Len())
+	}
+}
+
+func TestAccountMenuShowsReferralStatsAndShareLink(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	h := newHarnessWithConfig(control, vk.Config{
+		ConfirmationToken:                   "conf-token-123",
+		Secret:                              "s3cr3t",
+		ReferralLinkBase:                    "https://vk.com/im?sel=-1",
+		ReferralShareBase:                   "https://vk.com/share.php",
+		ReferralReferrerSignupRewardCredits: 10,
+	})
+	body := `{
+		"type":"message_new","group_id":1,"event_id":"evt-account-ref","secret":"s3cr3t",
+		"object":{"message":{"from_id":900003,"peer_id":900003,"text":"Мой аккаунт","payload":"{\"command\":\"account\"}"}}
+	}`
+	rec := h.post(body)
+	if rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	sent := control.Sent()
+	if len(sent) != 1 {
+		t.Fatalf("expected account response, got %+v", sent)
+	}
+	for _, want := range []string{"Мой аккаунт", "Реферальная программа", "Приглашённых: 0", "https://vk.com/im?", "sel=-1"} {
+		if !strings.Contains(sent[0].Text, want) {
+			t.Fatalf("expected %q in account text: %q", want, sent[0].Text)
+		}
+	}
+	if !strings.Contains(sent[0].Keyboard, `"type":"open_link"`) || !strings.Contains(sent[0].Keyboard, "vk.com/share.php") || !strings.Contains(sent[0].Keyboard, "ref%3D") {
+		t.Fatalf("expected open_link share keyboard, got %q", sent[0].Keyboard)
+	}
+	ctx := context.Background()
+	user, err := h.users.GetByVKUserID(ctx, 900003)
+	if err != nil {
+		t.Fatalf("user not created: %v", err)
+	}
+	code, err := h.refs.GetCodeByUserID(ctx, user.ID)
+	if err != nil {
+		t.Fatalf("referral code not created: %v", err)
+	}
+	if !strings.Contains(sent[0].Text, code.Code) {
+		t.Fatalf("account text must include user's referral code %q: %q", code.Code, sent[0].Text)
 	}
 }
 

@@ -33,6 +33,7 @@ import (
 	"vk-ai-aggregator/internal/service/commandrouter"
 	"vk-ai-aggregator/internal/service/dialogstate"
 	"vk-ai-aggregator/internal/service/joborchestrator"
+	"vk-ai-aggregator/internal/service/referralservice"
 )
 
 func main() {
@@ -79,6 +80,7 @@ func main() {
 	idem := postgres.NewIdempotencyRepository(pool)
 	deliveries := postgres.NewDeliveryRepository(pool)
 	billingRepo := postgres.NewBillingRepository(pool)
+	referralsRepo := postgres.NewReferralRepository(pool)
 	artifacts := postgres.NewArtifactRepository(pool)
 	modResults := postgres.NewModerationResultRepository(pool)
 
@@ -96,6 +98,11 @@ func main() {
 	}
 
 	billing := billingservice.New(billingRepo, billingservice.WithPriceOverrides(cfg.PriceOverrides))
+	referrals := referralservice.New(referralsRepo, billing, referralservice.Config{
+		CodeLength:                  cfg.ReferralCodeLength,
+		ReferrerSignupRewardCredits: cfg.ReferralReferrerSignupRewardCredits,
+		ReferredSignupRewardCredits: cfg.ReferralReferredSignupRewardCredits,
+	})
 	uowMgr := postgres.NewUnitOfWork(pool)
 	// The orchestrator records a queued outbox event; the worker's outbox relay
 	// publishes it to the queue, so the api process does not enqueue directly
@@ -138,18 +145,23 @@ func main() {
 	}
 
 	vkHandler := vkinbound.NewHandler(vkinbound.Config{
-		ConfirmationToken: cfg.VKConfirmationToken,
-		Secret:            cfg.VKSecret,
-		WelcomeAttachment: cfg.VKWelcomeAttachment,
-		MenuButtonMode:    cfg.VKMenuButtonMode,
-		UnroutedTextMode:  cfg.VKUnroutedTextMode,
-		MenuFeatures:      vkMenuFeatures(cfg),
+		ConfirmationToken:                   cfg.VKConfirmationToken,
+		Secret:                              cfg.VKSecret,
+		WelcomeAttachment:                   cfg.VKWelcomeAttachment,
+		MenuButtonMode:                      cfg.VKMenuButtonMode,
+		UnroutedTextMode:                    cfg.VKUnroutedTextMode,
+		MenuFeatures:                        vkMenuFeatures(cfg),
+		ReferralLinkBase:                    cfg.VKReferralLinkBase,
+		ReferralShareBase:                   cfg.VKReferralShareBase,
+		ReferralReferrerSignupRewardCredits: cfg.ReferralReferrerSignupRewardCredits,
 	}, vkinbound.Deps{
 		Idempotency:  idem,
 		Inbound:      inbound,
 		Users:        users,
+		Jobs:         jobs,
 		Commands:     commands,
 		Billing:      billing,
+		Referrals:    referrals,
 		Orchestrator: orch,
 		Router:       router,
 		Control:      vkControl,

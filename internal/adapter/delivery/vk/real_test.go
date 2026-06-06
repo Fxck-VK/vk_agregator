@@ -97,6 +97,42 @@ func TestHTTPClientSendMessageWithCallbackKeyboard(t *testing.T) {
 	}
 }
 
+func TestHTTPClientSendMessageWithOpenLinkKeyboard(t *testing.T) {
+	shareURL := "https://vk.com/share.php?url=https%3A%2F%2Fvk.com%2Fim%3Fsel%3D-1%26ref%3DABC23456"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = r.ParseForm()
+		var keyboard vkKeyboard
+		if err := json.Unmarshal([]byte(r.FormValue("keyboard")), &keyboard); err != nil {
+			t.Fatalf("keyboard json: %v", err)
+		}
+		button := keyboard.Buttons[0][0]
+		if button.Action.Type != "open_link" || button.Action.Label != "Share" || button.Action.Link != shareURL {
+			t.Fatalf("unexpected open_link button: %+v", button)
+		}
+		if button.Action.Payload != `{"kind":"referral_share"}` {
+			t.Fatalf("unexpected payload: %+v", button.Action)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"response":12348}`))
+	}))
+	defer srv.Close()
+
+	c := NewHTTPClient(HTTPConfig{AccessToken: "tok", BaseURL: srv.URL, HTTPClient: srv.Client()})
+	if _, err := c.SendMessage(context.Background(), 42, 13, Message{
+		Text: "account",
+		Keyboard: &Keyboard{Inline: true, Buttons: [][]KeyboardButton{{
+			{
+				Label:      "Share",
+				Payload:    `{"kind":"referral_share"}`,
+				ActionType: "open_link",
+				Link:       shareURL,
+			},
+		}}},
+	}); err != nil {
+		t.Fatalf("send open_link keyboard: %v", err)
+	}
+}
+
 func TestHTTPClientEditMessageWithKeyboard(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/messages.edit" {

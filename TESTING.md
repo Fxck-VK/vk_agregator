@@ -240,6 +240,18 @@ open `Показать меню`, and confirm `🎁 Студентам и шко
 other main buttons remain. Re-enable it with `true`. The same pattern applies
 to all `VK_MENU_*_ENABLED` flags in `.env.example`.
 
+Referral smoke: set `VK_MENU_ACCOUNT_ENABLED=true` and configure
+`VK_REFERRAL_LINK_BASE` for the VK community, for example
+`https://vk.com/im?sel=-239332376`. Open `👤 Мой аккаунт`; the response should
+show the invited count, one stable referral link for the current user, an
+`↗️ Поделиться` button, and `⬅️ Назад`. The share button should open the regular
+`vk.com/share.php` repost/share page. Send `/start <code>` from
+a different VK user or deliver a Callback API `ref=<code>` param; the handler
+should persist one `referrals` row with `source=vk_bot`, create no job, and post
+signup bonuses through `ledger_entries` with `reason` containing `referral`.
+Repeating the same referral start must not duplicate the relation or reward.
+A full Mini App referral account/API screen is not part of this smoke yet.
+
 Image / video jobs (slash commands):
 
 ```bash

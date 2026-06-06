@@ -257,11 +257,26 @@ Examples that should not create billable jobs by themselves:
 - “Старт”;
 - “Показать меню”;
 - inline menu clicks that only select a mode or show help;
+- referral link/account/share commands and `/start <referral_code>` handling;
 - balance/status/help/cancel commands unless they trigger a paid operation by design.
 
 If a control command sends a VK message/keyboard, use the VK delivery/control adapter and deterministic `random_id`. If product/control sends must be strictly audited as deliveries, move them into persisted delivery/outbox flow as a separate scoped task.
 
-### 7.3 Idempotency
+### 7.3 Referral control flow
+
+Referral links are shared VK identity state, not a provider or generation flow.
+
+Rules:
+
+- One internal user owns one stable public referral code for all VK surfaces.
+- VK Bot and VK Mini App must reuse the same referral code/relation tables; do not create separate per-surface referral identities.
+- `/start <code>`, VK Callback `ref` params, account screens and share buttons are control paths and must not create billable jobs.
+- Invalid/self-referral codes must be no-ops from the user's perspective and must not leak another user's private data.
+- Referral acceptance must be idempotent per referred user.
+- Referral rewards must be posted through billing ledger entries with idempotency keys.
+- Mini App referral endpoints, when added, must verify VK launch params first and must not trust client-submitted `vk_user_id`.
+
+### 7.4 Idempotency
 
 VK may retry events. Duplicate `event_id` or equivalent must not create duplicate commands/jobs/reservations/deliveries.
 
@@ -366,6 +381,7 @@ Rules:
 - Billing is append-only ledger.
 - `balance_cached` is a projection, not the source of truth.
 - Opening grants must be recorded as committed ledger entries.
+- Referral/signup bonuses must be recorded as committed ledger entries with idempotency keys.
 - Never update balance without corresponding ledger entry.
 - Reserve before provider submission.
 - Capture only after success according to domain policy.

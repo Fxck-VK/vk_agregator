@@ -121,7 +121,12 @@ Override these values when needed:
 | `VK_MENU_BUTTON_MODE` | `callback` | Inline menu buttons: `callback` hides user echo messages; `text` keeps legacy text-button behavior |
 | `VK_UNROUTED_TEXT_MODE` | `reply` | Plain text outside GPT mode: `reply` sends text-only hint to use the menu above, `silent` sends nothing, `gpt` preserves legacy text-to-GPT behavior |
 | `VK_DIALOG_MODE_TTL` | `1h` | Redis TTL for active VK peer modes such as `Спросить у НейроХаб`; refreshes while the user keeps chatting |
-| `VK_MENU_*_ENABLED` | mixed | Per-button VK product menu flags; current bot profile keeps only NeuroHub text mode visible and hides video/image/students/account/top-up without deleting their screens |
+| `VK_REFERRAL_LINK_BASE` | `` | Base link for the user's single VK referral URL. If it contains `{code}`, that placeholder is replaced; otherwise `ref=<code>` is appended |
+| `VK_REFERRAL_SHARE_BASE` | `https://vk.com/share.php` | Base URL opened by the VK bot account-screen share button |
+| `REFERRAL_CODE_LENGTH` | `10` | Length for generated stable public referral codes |
+| `REFERRAL_REFERRER_SIGNUP_REWARD_CREDITS` | `10` | Signup reward posted to the inviter through billing ledger |
+| `REFERRAL_REFERRED_SIGNUP_REWARD_CREDITS` | `0` | Optional signup reward posted to the invited user through billing ledger |
+| `VK_MENU_*_ENABLED` | mixed | Per-button VK product menu flags; current bot profile keeps NeuroHub text mode and account/referral visible, while video/image/students/top-up stay hidden without deleting their screens |
 | `SIGNED_DELIVERY` / `ARTIFACT_URL_TTL` | `false` / `1h` | Deliver media through signed artifact URLs |
 | `ARTIFACT_RETENTION_DAYS` | `0` | Optional S3 lifecycle expiry |
 | `PRICES` | `` | Price overrides, e.g. `text_generate=2,image_generate=12` |
@@ -431,6 +436,19 @@ Clicking `🎁 Студентам и школьникам` opens the study subme
 `Решальник задач`, `Генерация презентаций (скоро)`,
 `Создание рефератов (скоро)`, `❓ Ответы на вопросы`, and `⬅️ Назад`.
 Those buttons are control-only until the corresponding scenario state is wired.
+Clicking `👤 Мой аккаунт` opens the account/referral screen. The handler reads
+the billing projection through `billingservice.EnsureAccount`, counts successful
+jobs for "Выполнено генераций", ensures one stable referral code for the user,
+counts accepted invitations, and renders a VK referral link plus a
+`↗️ Поделиться` button. The link is built from `VK_REFERRAL_LINK_BASE`; use a
+template such as `https://vk.com/im?sel=-239332376&ref={code}` or a base URL
+where the API can append `ref=<code>`. The share button opens
+`VK_REFERRAL_SHARE_BASE` with the referral URL embedded. `/start <code>` and VK
+Callback `ref` params apply the referral as `source=vk_bot`, do not create a
+billable job, and post signup bonuses only through idempotent ledger top-up
+entries. A full Mini App referral account/API screen is still a follow-up, but
+the same `referralservice` and Postgres tables already support
+`source=vk_miniapp`.
 
 Text dialog memory is built in `cmd/worker`, not in the VK webhook. For VK
 `text.ask` jobs with `vk_peer_id`, the worker writes the user prompt and

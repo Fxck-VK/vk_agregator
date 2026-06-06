@@ -226,6 +226,7 @@ type vkKeyboardAction struct {
 	Type    string `json:"type"`
 	Label   string `json:"label"`
 	Payload string `json:"payload,omitempty"`
+	Link    string `json:"link,omitempty"`
 }
 
 func encodeKeyboard(k *Keyboard) (string, error) {
@@ -246,6 +247,7 @@ func encodeKeyboard(k *Keyboard) (string, error) {
 					Type:    actionType,
 					Label:   button.Label,
 					Payload: button.Payload,
+					Link:    button.Link,
 				},
 				Color: button.Color,
 			})

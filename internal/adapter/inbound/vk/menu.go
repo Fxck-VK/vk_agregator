@@ -5,8 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
 
 	vkdelivery "vk-ai-aggregator/internal/adapter/delivery/vk"
 	"vk-ai-aggregator/internal/domain"
@@ -40,12 +43,12 @@ var menuScreens = map[domain.CommandType]menuScreen{
 	},
 	domain.CommandBalance: {
 		text:         accountText,
-		keyboard:     accountKeyboard,
+		keyboard:     emptyAccountKeyboard,
 		needsBalance: true,
 	},
 	domain.CommandAccount: {
 		text:         accountText,
-		keyboard:     accountKeyboard,
+		keyboard:     emptyAccountKeyboard,
 		needsBalance: true,
 	},
 	domain.CommandTopUp: {
@@ -205,7 +208,16 @@ func fixedText(text string) func(int64) string {
 	}
 }
 
-func (h *Handler) sendControlResponse(ctx context.Context, t domain.CommandType, idemKey string, peerID int64, user *domain.User, allowEdit bool) error {
+type accountView struct {
+	Balance               int64
+	CompletedGenerations  int
+	InvitedCount          int
+	ReferralLink          string
+	ShareURL              string
+	ReferrerRewardCredits int64
+}
+
+func (h *Handler) sendControlResponse(ctx context.Context, t domain.CommandType, idemKey string, groupID, peerID int64, user *domain.User, allowEdit bool) error {
 	if h.deps.Control == nil {
 		h.logger.Warn("vk control response skipped because VK_ACCESS_TOKEN is not configured",
 			slog.String("command_type", string(t)))
@@ -233,6 +245,15 @@ func (h *Handler) sendControlResponse(ctx context.Context, t domain.CommandType,
 	}
 
 	msgText := screen.text(balance)
+	keyboard := screen.keyboard()
+	if t == domain.CommandAccount || t == domain.CommandBalance {
+		view, err := h.accountView(ctx, user.ID, balance, groupID)
+		if err != nil {
+			return fmt.Errorf("build account view: %w", err)
+		}
+		msgText = accountDetailsText(view)
+		keyboard = accountKeyboard(view)
+	}
 	personalizedWelcome := false
 	if t == domain.CommandStart && user.WelcomeNameSentAt.IsZero() {
 		if name := h.personalizedWelcomeName(ctx, user); name != "" {
@@ -243,7 +264,7 @@ func (h *Handler) sendControlResponse(ctx context.Context, t domain.CommandType,
 
 	msg := vkdelivery.Message{
 		Text:     msgText,
-		Keyboard: screen.keyboard(),
+		Keyboard: keyboard,
 	}
 	h.filterMenuKeyboard(msg.Keyboard)
 	if msg.Keyboard != nil && len(msg.Keyboard.Buttons) == 0 {
@@ -294,6 +315,28 @@ func (h *Handler) personalizedWelcomeName(ctx context.Context, user *domain.User
 			slog.String("error", err.Error()))
 	}
 	return user.VKFirstName
+}
+
+func (h *Handler) accountView(ctx context.Context, userID uuid.UUID, balance, groupID int64) (accountView, error) {
+	view := accountView{Balance: balance, ReferrerRewardCredits: h.cfg.ReferralReferrerSignupRewardCredits}
+	if h.deps.Jobs != nil {
+		count, err := h.deps.Jobs.CountSucceededByUser(ctx, userID)
+		if err != nil {
+			return view, err
+		}
+		view.CompletedGenerations = count
+	}
+	if h.deps.Referrals == nil {
+		return view, nil
+	}
+	code, invited, err := h.deps.Referrals.Stats(ctx, userID)
+	if err != nil {
+		return view, err
+	}
+	view.InvitedCount = invited
+	view.ReferralLink = buildReferralLink(h.cfg.ReferralLinkBase, groupID, code.Code)
+	view.ShareURL = buildReferralShareURL(h.cfg.ReferralShareBase, view.ReferralLink)
+	return view, nil
 }
 
 func (h *Handler) deliverControlResponse(ctx context.Context, t domain.CommandType, peerID, randomID int64, msg vkdelivery.Message, allowEdit bool) (vkdelivery.SendResult, error) {
@@ -484,6 +527,9 @@ func (h *Handler) applyMenuButtonMode(keyboard *vkdelivery.Keyboard) {
 	}
 	for row := range keyboard.Buttons {
 		for col := range keyboard.Buttons[row] {
+			if keyboard.Buttons[row][col].ActionType == "open_link" {
+				continue
+			}
 			keyboard.Buttons[row][col].ActionType = actionType
 		}
 	}
@@ -521,6 +567,24 @@ func welcomeTextWithName(name string) string {
 
 func accountText(balance int64) string {
 	return fmt.Sprintf("👤 Мой аккаунт\n\nВаш баланс: %d 💎\n\nВыберите действие:", balance)
+}
+
+func accountDetailsText(view accountView) string {
+	referralLink := view.ReferralLink
+	if referralLink == "" {
+		referralLink = "ссылка появится после настройки VK_REFERRAL_LINK_BASE"
+	}
+	rewardLine := "⚡ Получайте бонусы за каждого приглашенного пользователя"
+	if view.ReferrerRewardCredits > 0 {
+		rewardLine = fmt.Sprintf("⚡ Получайте %d 💎 за каждого приглашенного пользователя", view.ReferrerRewardCredits)
+	}
+	return fmt.Sprintf("👤 Мой аккаунт\n\nОсталось генераций: %d 💎\nВыполнено генераций: %d\n\n👥 Реферальная программа\nПриглашайте друзей и зарабатывайте бонусы!\n%s\n⚡ 10%% от пополнений будет подключено вместе с платежами\nИспользуйте реферальную систему и получайте вознаграждение за активность! 🔥\n\n• Приглашённых: %d\n• Ссылка: %s\n\nПоддержка: @supergptsupportbot",
+		view.Balance,
+		view.CompletedGenerations,
+		rewardLine,
+		view.InvitedCount,
+		referralLink,
+	)
 }
 
 func welcomeKeyboard() *vkdelivery.Keyboard {
@@ -716,7 +780,28 @@ func backToKeyboard(command domain.CommandType) *vkdelivery.Keyboard {
 	}
 }
 
-func accountKeyboard() *vkdelivery.Keyboard {
+func emptyAccountKeyboard() *vkdelivery.Keyboard {
+	return accountKeyboard(accountView{})
+}
+
+func accountKeyboard(view accountView) *vkdelivery.Keyboard {
+	rows := [][]vkdelivery.KeyboardButton{}
+	if strings.TrimSpace(view.ShareURL) != "" {
+		rows = append(rows, []vkdelivery.KeyboardButton{
+			openLinkButton("↗️ Поделиться", view.ShareURL),
+		})
+	}
+	rows = append(rows, []vkdelivery.KeyboardButton{
+		button("⬅️ Назад", domain.CommandShowMenu, "secondary"),
+	})
+	return &vkdelivery.Keyboard{
+		OneTime: false,
+		Inline:  true,
+		Buttons: rows,
+	}
+}
+
+func legacyAccountKeyboard() *vkdelivery.Keyboard {
 	return &vkdelivery.Keyboard{
 		OneTime: false,
 		Inline:  true,
@@ -752,4 +837,61 @@ func button(label string, command domain.CommandType, color string) vkdelivery.K
 		Payload: string(payload),
 		Color:   color,
 	}
+}
+
+func openLinkButton(label, link string) vkdelivery.KeyboardButton {
+	payload, _ := json.Marshal(struct {
+		Kind string `json:"kind"`
+	}{Kind: "referral_share"})
+	return vkdelivery.KeyboardButton{
+		Label:      label,
+		Payload:    string(payload),
+		ActionType: "open_link",
+		Link:       link,
+	}
+}
+
+func buildReferralLink(base string, groupID int64, code string) string {
+	code = strings.TrimSpace(code)
+	if code == "" {
+		return ""
+	}
+	base = strings.TrimSpace(base)
+	if base == "" {
+		if groupID == 0 {
+			return ""
+		}
+		base = fmt.Sprintf("https://vk.com/im?sel=-%d", groupID)
+	}
+	if strings.Contains(base, "{code}") {
+		return strings.ReplaceAll(base, "{code}", url.QueryEscape(code))
+	}
+	return appendURLParam(base, "ref", code)
+}
+
+func buildReferralShareURL(base, referralLink string) string {
+	referralLink = strings.TrimSpace(referralLink)
+	if referralLink == "" {
+		return ""
+	}
+	base = strings.TrimSpace(base)
+	if base == "" {
+		return referralLink
+	}
+	if strings.Contains(base, "{url}") {
+		return strings.ReplaceAll(base, "{url}", url.QueryEscape(referralLink))
+	}
+	share := appendURLParam(base, "url", referralLink)
+	return appendURLParam(share, "title", "НейроХаб")
+}
+
+func appendURLParam(raw, key, value string) string {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return raw
+	}
+	q := u.Query()
+	q.Set(key, value)
+	u.RawQuery = q.Encode()
+	return u.String()
 }

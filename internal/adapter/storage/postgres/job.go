@@ -208,6 +208,19 @@ func (r *JobRepository) CountActiveByUserOperation(ctx context.Context, userID u
 	return count, nil
 }
 
+// CountSucceededByUser returns completed successful jobs for one user.
+func (r *JobRepository) CountSucceededByUser(ctx context.Context, userID uuid.UUID) (int, error) {
+	const q = `
+		SELECT count(*)
+		FROM jobs
+		WHERE user_id = $1 AND status = $2`
+	var count int
+	if err := r.db.QueryRow(ctx, q, userID, domain.JobStatusSucceeded).Scan(&count); err != nil {
+		return 0, mapError(err)
+	}
+	return count, nil
+}
+
 func scanJob(row rowScanner, job *domain.Job) error {
 	var commandID *uuid.UUID
 	if err := row.Scan(

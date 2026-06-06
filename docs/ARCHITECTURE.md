@@ -1,4 +1,4 @@
-Ниже — **максимальная production-архитектура** для агрегатора нейросетей во ВКонтакте. Я бы проектировал это не как “бота”, а как **AI Job Processing Platform**: платформа принимает сообщения из VK, превращает их в задачи, выбирает провайдера/модель, контролирует лимиты и деньги, получает артефакты — текст, фото, видео, аудио — и доставляет результат обратно пользователю.
+﻿Ниже — **максимальная production-архитектура** для агрегатора нейросетей во ВКонтакте. Я бы проектировал это не как “бота”, а как **AI Job Processing Platform**: платформа принимает сообщения из VK, превращает их в задачи, выбирает провайдера/модель, контролирует лимиты и деньги, получает артефакты — текст, фото, видео, аудио — и доставляет результат обратно пользователю.
 
 Сразу позиция: **основной backend — Go**. Python можно добавить отдельными worker’ами для локальной обработки медиа, ffmpeg-обвязки, ML-инструментов, но orchestration/backend/provider gateway/job processing лучше держать на Go.
 
@@ -2180,6 +2180,45 @@ VK AI Aggregator =
 ```
 
 Для такого проекта **Go — правильный основной язык**. Python подключать точечно, когда реально понадобится ML/media tooling. Финальная production-архитектура должна строиться вокруг `Job`, `ProviderTask`, `Artifact`, `Delivery`, `LedgerEntry` и `WorkflowRun`.
+
+---
+
+# 39. Implementation Addendum: Shared VK Referral
+
+Реферальная система для VK должна быть общей для VK Bot и VK Mini App, потому что обе поверхности находятся внутри одной социальной сети и используют одну backend-идентичность пользователя.
+
+Базовая модель:
+
+```text
+referral_codes:
+  id
+  user_id
+  code
+  created_at
+  updated_at
+
+referrals:
+  id
+  referrer_user_id
+  referred_user_id
+  referral_code
+  source: vk_bot | vk_miniapp
+  reward_status: pending | applied
+  rewarded_at
+  created_at
+  updated_at
+```
+
+Инварианты:
+
+- один internal user имеет один стабильный публичный referral code;
+- VK Bot и VK Mini App используют одни и те же таблицы и `referralservice`;
+- `/start <code>`, VK Callback `ref` и кнопка share являются control-flow и не создают billable `Job`;
+- self-referral запрещён;
+- один invited user может быть привязан только к одному referrer;
+- бонусы за приглашение начисляются только через append-only billing ledger с idempotency key;
+- referral code не должен раскрывать `vk_user_id` или internal UUID;
+- Mini App referral endpoint, когда будет добавлен, должен сначала проверять VK launch params и только потом применять referral code.
 
 [1]: https://platform.openai.com/docs/api-reference/responses "Responses | OpenAI API Reference"
 [2]: https://platform.openai.com/docs/guides/webhooks "Webhooks | OpenAI API"

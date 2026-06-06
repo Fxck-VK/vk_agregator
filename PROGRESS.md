@@ -1,5 +1,29 @@
 # PROGRESS
 
+## Shared VK referral foundation
+
+Status: **done for VK bot backend; Mini App integration remains follow-up**.
+
+- Added shared referral domain objects, repository interface and Postgres
+  migration `000007_referrals` with `referral_codes` and `referrals`.
+- Each internal user gets one stable public referral code. The code is shared
+  by VK Bot and future VK Mini App flows; it does not expose `vk_user_id` or the
+  internal UUID.
+- VK Bot `/start <code>` and Callback API `ref` values are parsed as control
+  flow: they apply the referral relation idempotently, create no billable Job
+  and call no provider.
+- The VK bot account screen can show balance, completed generations, invited
+  count, referral link and a share button. Default share remains VK
+  `open_link` / `vk.com/share.php`. The referral link is rendered as plain text
+  without markdown code quotes.
+- Referral signup bonuses use `billingservice.Grant`, which writes committed
+  ledger top-up entries with idempotency keys. No direct balance mutation was
+  added.
+- Full Mini App referral account/API screens remain follow-up work over the
+  shared `referralservice`/repository.
+
+---
+
 ## VK text dialog context
 
 Status: **done**.
@@ -535,7 +559,7 @@ Status: **done**.
   - handler синтезирует text prompt с `sticker_id/product_id`; prompt проходит в `text.ask` job только при активном GPT text mode или legacy `VK_UNROUTED_TEXT_MODE=gpt`, поэтому стикер не теряется и не создает случайный billable job вне режима;
   - фото/видео/аудио attachments остаются задачей полноценного input Artifact pipeline.
 - **VK product menu**:
-  - current bot-facing menu profile is text-only: `VK_MENU_GPT_ENABLED=true`, while video, image, students, account and top-up remain implemented but hidden by `VK_MENU_*_ENABLED=false`;
+  - current bot-facing menu profile shows NeuroHub text mode and account/referral: `VK_MENU_GPT_ENABLED=true`, `VK_MENU_ACCOUNT_ENABLED=true`, while video, image, students and top-up remain implemented but hidden by `VK_MENU_*_ENABLED=false`;
   - menu flow переведен на декларативный `menuScreen` registry: каждый control-command указывает текст, inline keyboard, необходимость баланса и optional welcome attachment;
   - первичная нижняя VK keyboard содержит только одну кнопку `Старт`;
   - после нажатия `Старт` бот заменяет нижнюю постоянную клавиатуру на одну кнопку `Показать меню`;

@@ -70,6 +70,12 @@ func TestRouterParse(t *testing.T) {
 			wantType: domain.CommandStart,
 		},
 		{
+			name:     "start menu command with referral code",
+			input:    "/start ABC23456",
+			wantType: domain.CommandStart,
+			wantArg:  "ABC23456",
+		},
+		{
 			name:     "vk start button",
 			input:    "Старт",
 			wantType: domain.CommandStart,

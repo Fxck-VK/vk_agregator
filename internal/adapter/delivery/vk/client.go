@@ -50,6 +50,7 @@ type KeyboardButton struct {
 	Payload    string
 	Color      string
 	ActionType string
+	Link       string
 }
 
 // Client sends messages and media to VK conversations. Implementations must
