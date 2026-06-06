@@ -250,6 +250,12 @@ func TestGenerationTextUsesDialogContext(t *testing.T) {
 	ctx := context.Background()
 	job := h.queueJob(t, domain.OperationTextGenerate, domain.ModalityText, "hi")
 	job.VKPeerID = 555
+	rawParams, _ := json.Marshal(map[string]string{
+		"prompt":              "hi",
+		"conversation_source": "miniapp",
+		"external_thread_id":  "thread-a",
+	})
+	job.Params = rawParams
 	if err := h.jobs.Update(ctx, job); err != nil {
 		t.Fatalf("update peer: %v", err)
 	}
@@ -265,13 +271,18 @@ func TestGenerationTextUsesDialogContext(t *testing.T) {
 	}
 	got := h.reload(t, job.ID)
 	var params struct {
-		ConversationID string `json:"conversation_id"`
+		ConversationID     string `json:"conversation_id"`
+		ConversationSource string `json:"conversation_source"`
+		ExternalThreadID   string `json:"external_thread_id"`
 	}
 	if err := json.Unmarshal(got.Params, &params); err != nil {
 		t.Fatalf("decode params: %v", err)
 	}
 	if params.ConversationID != textCtx.conversationID.String() {
 		t.Fatalf("conversation id = %q, want %s", params.ConversationID, textCtx.conversationID)
+	}
+	if params.ConversationSource != "miniapp" || params.ExternalThreadID != "thread-a" {
+		t.Fatalf("conversation ref was not preserved: %+v", params)
 	}
 }
 

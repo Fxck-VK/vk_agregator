@@ -1601,6 +1601,52 @@ Status: **completed**.
 
 ---
 
+## PR-18.2 - Explicit conversation references in worker/dialogcontext
+
+Status: **completed**.
+
+### STEP 0 context
+
+- `dialogcontext.Prepare` and `dialogcontext.Complete` previously keyed text
+  memory through the VK bot fallback identity `user_id + vk_peer_id`.
+- `worker.buildRequest` already calls `dialogcontext.Prepare` before provider
+  submission and persists a durable `conversation_id` into `job.Params`.
+- `worker.saveDialogAnswer` already calls `dialogcontext.Complete` after text
+  provider success when a durable `conversation_id` is present.
+
+### What changed
+
+- Added explicit text-job conversation params support:
+  `conversation_source`, `external_thread_id` and durable `conversation_id`.
+- `dialogcontext.Prepare` now prefers explicit `source=miniapp` plus
+  `external_thread_id` when present, while VK bot jobs without explicit params
+  still use `user_id + vk_peer_id`.
+- `dialogcontext.Complete` can save assistant answers for explicit durable
+  conversations as well as VK bot fallback conversations.
+- The worker preserves `conversation_source` and `external_thread_id` when it
+  patches `job.Params` with the durable `conversation_id`.
+- Invalid or empty explicit refs degrade to a plain prompt with no conversation
+  context, avoiding accidental cross-thread context mixing.
+
+### Compatibility and isolation
+
+- VK bot behavior remains backward compatible.
+- Mini App BFF behavior is not switched yet; that remains PR-18.3.
+- Added tests for Mini App thread A/B isolation, VK bot vs Mini App isolation
+  for the same backend user, invalid explicit ref degradation, and worker param
+  preservation.
+
+### Checks
+
+- `go test ./internal/service/dialogcontext ./internal/worker` - exit 0.
+- `go test ./...` - exit 0.
+- `go build ./...` - exit 0.
+- `gofmt -l internal/service/dialogcontext/service.go internal/service/dialogcontext/service_test.go internal/worker/worker.go internal/worker/worker_test.go` - clean.
+- `git grep -nE "^(<<<<<<<|=======|>>>>>>>)"` - clean.
+- `git diff --check` - exit 0; only markdown CRLF normalization warnings.
+
+---
+
 ## PR-17.5 - Document app surface architecture
 
 Status: **completed**.

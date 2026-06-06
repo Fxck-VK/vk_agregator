@@ -2,6 +2,7 @@ package dialogcontext_test
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -103,6 +104,130 @@ func TestDisabledContextPassesPromptThrough(t *testing.T) {
 	}
 }
 
+func TestPrepareUsesExplicitMiniAppThreadsWithoutMixing(t *testing.T) {
+	ctx := context.Background()
+	repo := memory.NewConversationRepo()
+	svc := dialogcontext.New(repo, dialogcontext.Config{Enabled: true, RecentMessagesLimit: 4})
+	userID := uuid.New()
+
+	jobA := textJobWithParams(userID, 0, map[string]string{
+		"conversation_source": "miniapp",
+		"external_thread_id":  "thread-a",
+	})
+	preparedA, err := svc.Prepare(ctx, jobA, "thread a first")
+	if err != nil {
+		t.Fatalf("prepare a: %v", err)
+	}
+	if preparedA.ConversationID == uuid.Nil {
+		t.Fatal("prepare a conversation id is nil")
+	}
+	if err := svc.Complete(ctx, jobA, preparedA.ConversationID, "thread a answer"); err != nil {
+		t.Fatalf("complete a: %v", err)
+	}
+
+	jobB := textJobWithParams(userID, 0, map[string]string{
+		"conversation_source": "miniapp",
+		"external_thread_id":  "thread-b",
+	})
+	preparedB, err := svc.Prepare(ctx, jobB, "thread b first")
+	if err != nil {
+		t.Fatalf("prepare b: %v", err)
+	}
+	if preparedB.ConversationID == uuid.Nil {
+		t.Fatal("prepare b conversation id is nil")
+	}
+	if preparedB.ConversationID == preparedA.ConversationID {
+		t.Fatalf("miniapp threads mixed: %s", preparedA.ConversationID)
+	}
+	if err := svc.Complete(ctx, jobB, preparedB.ConversationID, "thread b answer"); err != nil {
+		t.Fatalf("complete b: %v", err)
+	}
+
+	jobA2 := textJobWithParams(userID, 0, map[string]string{
+		"conversation_source": "miniapp",
+		"external_thread_id":  "thread-a",
+	})
+	preparedA2, err := svc.Prepare(ctx, jobA2, "thread a follow up")
+	if err != nil {
+		t.Fatalf("prepare a2: %v", err)
+	}
+	if preparedA2.ConversationID != preparedA.ConversationID {
+		t.Fatalf("thread a id = %s, want %s", preparedA2.ConversationID, preparedA.ConversationID)
+	}
+	if !strings.Contains(preparedA2.Prompt, "thread a first") || !strings.Contains(preparedA2.Prompt, "thread a answer") {
+		t.Fatalf("thread a prompt lost own context:\n%s", preparedA2.Prompt)
+	}
+	if strings.Contains(preparedA2.Prompt, "thread b first") || strings.Contains(preparedA2.Prompt, "thread b answer") {
+		t.Fatalf("thread a prompt contains thread b context:\n%s", preparedA2.Prompt)
+	}
+
+	conversations, err := repo.ListByUserSource(ctx, userID, domain.ConversationSourceMiniApp, 10, 0)
+	if err != nil {
+		t.Fatalf("list miniapp conversations: %v", err)
+	}
+	if len(conversations) != 2 {
+		t.Fatalf("miniapp conversations = %d, want 2", len(conversations))
+	}
+}
+
+func TestPrepareSeparatesVKBotAndMiniAppForSameUser(t *testing.T) {
+	ctx := context.Background()
+	repo := memory.NewConversationRepo()
+	svc := dialogcontext.New(repo, dialogcontext.Config{Enabled: true, RecentMessagesLimit: 4})
+	userID := uuid.New()
+	vkConversation := &domain.Conversation{UserID: userID, VKPeerID: 55, Status: domain.ConversationActive}
+	if err := repo.CreateConversation(ctx, vkConversation); err != nil {
+		t.Fatalf("create vk conversation: %v", err)
+	}
+	_, _ = repo.UpsertMessage(ctx, msg(vkConversation.ID, uuid.New(), domain.ConversationRoleUser, "vk only memory"))
+	_, _ = repo.UpsertMessage(ctx, msg(vkConversation.ID, uuid.New(), domain.ConversationRoleAssistant, "vk only answer"))
+
+	miniJob := textJobWithParams(userID, 55, map[string]string{
+		"conversation_source": "miniapp",
+		"external_thread_id":  "default",
+	})
+	prepared, err := svc.Prepare(ctx, miniJob, "miniapp prompt")
+	if err != nil {
+		t.Fatalf("prepare miniapp: %v", err)
+	}
+	if prepared.ConversationID == uuid.Nil || prepared.ConversationID == vkConversation.ID {
+		t.Fatalf("unexpected miniapp conversation id: %s", prepared.ConversationID)
+	}
+	if strings.Contains(prepared.Prompt, "vk only memory") || strings.Contains(prepared.Prompt, "vk only answer") {
+		t.Fatalf("miniapp prompt contains vk bot context:\n%s", prepared.Prompt)
+	}
+}
+
+func TestPrepareInvalidExplicitReferencePassesPromptThrough(t *testing.T) {
+	ctx := context.Background()
+	svc := dialogcontext.New(memory.NewConversationRepo(), dialogcontext.Config{Enabled: true, MaxOutputTokens: 900})
+	userID := uuid.New()
+
+	for name, params := range map[string]map[string]string{
+		"empty miniapp thread": {
+			"conversation_source": "miniapp",
+		},
+		"unknown source": {
+			"conversation_source": "unknown",
+			"external_thread_id":  "thread",
+		},
+		"missing conversation id": {
+			"conversation_source": "miniapp",
+			"conversation_id":     uuid.NewString(),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			prepared, err := svc.Prepare(ctx, textJobWithParams(userID, 0, params), "raw prompt")
+			if err != nil {
+				t.Fatalf("prepare: %v", err)
+			}
+			if prepared.Prompt != "raw prompt" || prepared.ConversationID != uuid.Nil || prepared.MaxOutputTokens != 900 {
+				t.Fatalf("unexpected prepared: %+v", prepared)
+			}
+		})
+	}
+}
+
 func textJob(userID uuid.UUID, peerID int64) *domain.Job {
 	return &domain.Job{
 		ID:            uuid.New(),
@@ -111,6 +236,16 @@ func textJob(userID uuid.UUID, peerID int64) *domain.Job {
 		OperationType: domain.OperationTextGenerate,
 		Modality:      domain.ModalityText,
 	}
+}
+
+func textJobWithParams(userID uuid.UUID, peerID int64, params map[string]string) *domain.Job {
+	job := textJob(userID, peerID)
+	raw, err := json.Marshal(params)
+	if err != nil {
+		panic(err)
+	}
+	job.Params = raw
+	return job
 }
 
 func msg(conversationID, jobID uuid.UUID, role domain.ConversationMessageRole, text string) *domain.ConversationMessage {

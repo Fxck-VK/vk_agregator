@@ -86,3 +86,36 @@ Behavior note:
 - VK bot durable context remains backward compatible through
   `GetActiveByUserPeer`.
 - Mini App process-local context still exists until PR-18.3.
+
+## 2026-06-06 - PR-18.2 explicit conversation refs implemented
+
+Changes:
+
+- `dialogcontext.Prepare` now supports explicit text-job conversation params:
+  - `conversation_source`;
+  - `external_thread_id`;
+  - durable `conversation_id` after the worker has created/loaded a backend
+    conversation.
+- VK bot jobs without explicit params still fall back to the legacy
+  `user_id + vk_peer_id` conversation lookup.
+- Mini App-style explicit refs use `source=miniapp` plus the opaque
+  `external_thread_id`, scoped by backend `user_id`.
+- `dialogcontext.Complete` can save assistant messages to the durable
+  conversation created from an explicit ref.
+- The worker preserves `conversation_source` and `external_thread_id` when it
+  patches `job.Params` with the durable `conversation_id`.
+- Empty or invalid explicit refs degrade to a plain prompt with no conversation
+  context instead of falling back to a shared/legacy thread.
+
+Tests added:
+
+- VK bot fallback remains covered by existing dialog context tests.
+- Mini App thread A/B contexts do not mix.
+- The same backend user can have VK bot and Mini App conversations without
+  cross-surface context leakage.
+- Invalid explicit refs pass through safely.
+- Worker param patching preserves the explicit conversation ref fields.
+
+Behavior note:
+
+- PR-18.2 does not switch Mini App BFF behavior yet. That remains PR-18.3.
