@@ -17,7 +17,7 @@ type ConversationRepo struct {
 	mu             sync.Mutex
 	nextSeq        int64
 	byID           map[uuid.UUID]domain.Conversation
-	activeByPeer   map[string]uuid.UUID
+	activeByRef    map[string]uuid.UUID
 	messagesByID   map[uuid.UUID]domain.ConversationMessage
 	messageByRole  map[string]uuid.UUID
 	byConversation map[uuid.UUID][]uuid.UUID
@@ -28,7 +28,7 @@ type ConversationRepo struct {
 func NewConversationRepo() *ConversationRepo {
 	return &ConversationRepo{
 		byID:           map[uuid.UUID]domain.Conversation{},
-		activeByPeer:   map[string]uuid.UUID{},
+		activeByRef:    map[string]uuid.UUID{},
 		messagesByID:   map[uuid.UUID]domain.ConversationMessage{},
 		messageByRole:  map[string]uuid.UUID{},
 		byConversation: map[uuid.UUID][]uuid.UUID{},
@@ -39,7 +39,22 @@ func NewConversationRepo() *ConversationRepo {
 var _ domain.ConversationRepository = (*ConversationRepo)(nil)
 
 func activeConversationKey(userID uuid.UUID, peerID int64) string {
-	return userID.String() + "|" + strconv.FormatInt(peerID, 10)
+	return activeConversationRefKey(domain.ConversationRef{
+		UserID:   userID,
+		Source:   domain.ConversationSourceVKBot,
+		VKPeerID: peerID,
+	})
+}
+
+func activeConversationRefKey(ref domain.ConversationRef) string {
+	source := ref.Source
+	if source == "" {
+		source = domain.ConversationSourceVKBot
+	}
+	if source == domain.ConversationSourceVKBot {
+		return ref.UserID.String() + "|" + string(source) + "|" + strconv.FormatInt(ref.VKPeerID, 10)
+	}
+	return ref.UserID.String() + "|" + string(source) + "|" + ref.ExternalThreadID
 }
 
 func messageRoleKey(jobID uuid.UUID, role domain.ConversationMessageRole) string {
@@ -49,12 +64,69 @@ func messageRoleKey(jobID uuid.UUID, role domain.ConversationMessageRole) string
 func (r *ConversationRepo) GetActiveByUserPeer(_ context.Context, userID uuid.UUID, vkPeerID int64) (*domain.Conversation, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	id, ok := r.activeByPeer[activeConversationKey(userID, vkPeerID)]
+	id, ok := r.activeByRef[activeConversationKey(userID, vkPeerID)]
 	if !ok {
 		return nil, domain.ErrNotFound
 	}
 	c := r.byID[id]
 	return &c, nil
+}
+
+func (r *ConversationRepo) GetActiveByReference(_ context.Context, ref domain.ConversationRef) (*domain.Conversation, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	id, ok := r.activeByRef[activeConversationRefKey(ref)]
+	if !ok {
+		return nil, domain.ErrNotFound
+	}
+	c := r.byID[id]
+	return &c, nil
+}
+
+func (r *ConversationRepo) GetByIDForUser(_ context.Context, userID, conversationID uuid.UUID) (*domain.Conversation, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	c, ok := r.byID[conversationID]
+	if !ok || c.UserID != userID {
+		return nil, domain.ErrNotFound
+	}
+	return &c, nil
+}
+
+func (r *ConversationRepo) ListByUserSource(_ context.Context, userID uuid.UUID, source domain.ConversationSource, limit, offset int) ([]*domain.Conversation, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if limit <= 0 {
+		return nil, nil
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	var matched []domain.Conversation
+	for _, c := range r.byID {
+		if c.UserID == userID && c.Source == source {
+			matched = append(matched, c)
+		}
+	}
+	sort.Slice(matched, func(i, j int) bool {
+		if matched[i].UpdatedAt.Equal(matched[j].UpdatedAt) {
+			return matched[i].CreatedAt.After(matched[j].CreatedAt)
+		}
+		return matched[i].UpdatedAt.After(matched[j].UpdatedAt)
+	})
+	if offset > len(matched) {
+		return nil, nil
+	}
+	matched = matched[offset:]
+	if len(matched) > limit {
+		matched = matched[:limit]
+	}
+	out := make([]*domain.Conversation, 0, len(matched))
+	for i := range matched {
+		c := matched[i]
+		out = append(out, &c)
+	}
+	return out, nil
 }
 
 func (r *ConversationRepo) CreateConversation(_ context.Context, c *domain.Conversation) error {
@@ -63,15 +135,23 @@ func (r *ConversationRepo) CreateConversation(_ context.Context, c *domain.Conve
 	if c.ID == uuid.Nil {
 		c.ID = uuid.New()
 	}
+	if c.Source == "" {
+		c.Source = domain.ConversationSourceVKBot
+	}
 	if c.Status == "" {
 		c.Status = domain.ConversationActive
 	}
-	key := activeConversationKey(c.UserID, c.VKPeerID)
+	key := activeConversationRefKey(domain.ConversationRef{
+		UserID:           c.UserID,
+		Source:           c.Source,
+		VKPeerID:         c.VKPeerID,
+		ExternalThreadID: c.ExternalThreadID,
+	})
 	if c.Status == domain.ConversationActive {
-		if _, ok := r.activeByPeer[key]; ok {
+		if _, ok := r.activeByRef[key]; ok {
 			return domain.ErrConflict
 		}
-		r.activeByPeer[key] = c.ID
+		r.activeByRef[key] = c.ID
 	}
 	now := time.Now()
 	c.CreatedAt = now

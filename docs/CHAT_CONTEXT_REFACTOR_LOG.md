@@ -57,3 +57,32 @@ Planned PR chain:
   chat core.
 - PR-18.4: Mini App thread list/history endpoints and frontend integration.
 - PR-18.5: cleanup, docs and regression/security verification.
+
+## 2026-06-06 - PR-18.1 foundation implemented
+
+Changes:
+
+- Added migration `000008_conversation_sources`:
+  - `conversations.source` with allowed values `vk_bot` / `miniapp`;
+  - `conversations.external_thread_id`;
+  - active VK bot unique index on `user_id + vk_peer_id` for
+    `source='vk_bot'`;
+  - active Mini App/source-thread unique index on
+    `user_id + source + external_thread_id` for non-VK-bot sources;
+  - list index on `user_id + source + updated_at DESC`.
+- Extended `domain.Conversation` with `Source` and `ExternalThreadID`.
+- Added `domain.ConversationRef` for future explicit source/thread lookup.
+- Extended `domain.ConversationRepository` with:
+  - `GetActiveByReference`;
+  - `GetByIDForUser`;
+  - `ListByUserSource`.
+- Updated Postgres and memory repositories.
+- Added memory repository tests proving VK bot lookup remains compatible and
+  Mini App thread ids are isolated for the same backend user.
+
+Behavior note:
+
+- PR-18.1 does not switch Mini App runtime behavior yet.
+- VK bot durable context remains backward compatible through
+  `GetActiveByUserPeer`.
+- Mini App process-local context still exists until PR-18.3.

@@ -216,7 +216,7 @@
 
 ### PR-18 durable shared chat context
 
-- [ ] PR-18.1: Add durable conversation identity foundation for shared chat
+- [x] PR-18.1: Add durable conversation identity foundation for shared chat
   context: `source`, Mini App opaque thread id, repository methods and indexes,
   while keeping VK bot `user_id + vk_peer_id` behavior backward compatible.
 - [ ] PR-18.2: Teach worker/dialogcontext to prefer explicit conversation

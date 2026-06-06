@@ -1563,6 +1563,39 @@ Status: **planned**.
 ### Checks
 
 - Docs/planning only. Runtime checks not run at planning time.
+
+---
+
+## PR-18.1 - Durable conversation identity foundation
+
+Status: **completed**.
+
+### STEP 0 context
+
+- Existing `conversations` schema used `user_id + vk_peer_id` as the only
+  active conversation identity. That remains correct for VK bot, but cannot
+  represent multiple Mini App threads for one verified VK user.
+- Mini App runtime behavior is not switched in this PR.
+
+### What changed
+
+- Added migration `000008_conversation_sources` with `source`,
+  `external_thread_id`, VK-bot active unique index, Mini App/source-thread
+  active unique index and source-list index.
+- Extended `domain.Conversation` with `Source` and `ExternalThreadID`.
+- Added `domain.ConversationRef`.
+- Extended `domain.ConversationRepository` with explicit reference lookup,
+  owner lookup and list-by-source methods.
+- Updated Postgres and memory repositories.
+- Added memory repository tests for VK bot backward compatibility and Mini App
+  thread isolation.
+
+### Checks
+
+- `go test ./internal/adapter/storage/memory ./internal/service/dialogcontext` - exit 0.
+- `go test ./internal/adapter/storage/postgres` - exit 0.
+- `go test ./...` - exit 0.
+- `go build ./...` - exit 0.
 - `git grep -nE "^(<<<<<<<|=======|>>>>>>>)"` - clean.
 - `git diff --check` - clean.
 
