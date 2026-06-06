@@ -220,6 +220,30 @@ func (r *JobRepo) List(_ context.Context, filter domain.JobFilter, limit, offset
 	return out, nil
 }
 
+func (r *JobRepo) CountActiveByUserOperation(_ context.Context, userID uuid.UUID, operation domain.OperationType) (int, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	count := 0
+	for _, j := range r.byID {
+		if j.UserID == userID && j.OperationType == operation && j.Status.IsActiveWork() {
+			count++
+		}
+	}
+	return count, nil
+}
+
+func (r *JobRepo) CountSucceededByUser(_ context.Context, userID uuid.UUID) (int, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	count := 0
+	for _, j := range r.byID {
+		if j.UserID == userID && j.Status == domain.JobStatusSucceeded {
+			count++
+		}
+	}
+	return count, nil
+}
+
 // ---------------------------------------------------------------------------
 // Commands
 // ---------------------------------------------------------------------------

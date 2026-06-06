@@ -93,6 +93,8 @@ type ProviderRequest struct {
 	InputURLs []string `json:"input_urls,omitempty"`
 	// Params holds operation-specific tuning (aspect_ratio, duration, seed...).
 	Params json.RawMessage `json:"params,omitempty"`
+	// MaxOutputTokens caps provider text output when the adapter supports it.
+	MaxOutputTokens int `json:"max_output_tokens,omitempty"`
 	// IdempotencyKey makes the submit safe to retry.
 	IdempotencyKey string `json:"idempotency_key"`
 }
@@ -140,6 +142,9 @@ type ProviderTaskResult struct {
 	Status ProviderTaskStatus `json:"status"`
 	// OutputURLs are URLs of produced artifacts to be downloaded and stored.
 	OutputURLs []string `json:"output_urls,omitempty"`
+	// Text is the normalized text output, when available. Text outputs are still
+	// stored as Artifacts; this field lets workers persist dialog context.
+	Text string `json:"text,omitempty"`
 	// ErrorClass is set when Status is failed.
 	ErrorClass ProviderErrorClass `json:"error_class,omitempty"`
 	// ErrorMessage is a human-readable failure description.

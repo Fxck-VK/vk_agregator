@@ -16,21 +16,16 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
-	vkdelivery "vk-ai-aggregator/internal/adapter/delivery/vk"
 	adminapi "vk-ai-aggregator/internal/adapter/inbound/admin"
-	miniappapi "vk-ai-aggregator/internal/adapter/inbound/miniapp"
-	vkinbound "vk-ai-aggregator/internal/adapter/inbound/vk"
 	redisqueue "vk-ai-aggregator/internal/adapter/queue/redis"
 	"vk-ai-aggregator/internal/adapter/storage/postgres"
-	s3store "vk-ai-aggregator/internal/adapter/storage/s3"
-	"vk-ai-aggregator/internal/domain"
+	apiapp "vk-ai-aggregator/internal/app/api"
+	miniappapp "vk-ai-aggregator/internal/app/miniapp"
+	"vk-ai-aggregator/internal/app/vkbot"
 	"vk-ai-aggregator/internal/platform/config"
 	"vk-ai-aggregator/internal/platform/metrics"
 	"vk-ai-aggregator/internal/platform/ratelimit"
 	"vk-ai-aggregator/internal/platform/tracing"
-	"vk-ai-aggregator/internal/service/billingservice"
-	"vk-ai-aggregator/internal/service/commandrouter"
-	"vk-ai-aggregator/internal/service/joborchestrator"
 )
 
 func main() {
@@ -69,92 +64,36 @@ func main() {
 	rdb := redisqueue.NewClientWithPool(cfg.RedisAddr, cfg.RedisPassword, cfg.RedisDB, cfg.RedisPoolSize)
 	defer rdb.Close()
 
-	// Repositories and services.
-	users := postgres.NewUserRepository(pool)
-	jobs := postgres.NewJobRepository(pool)
-	commands := postgres.NewCommandRepository(pool)
-	inbound := postgres.NewInboundEventRepository(pool)
-	idem := postgres.NewIdempotencyRepository(pool)
-	deliveries := postgres.NewDeliveryRepository(pool)
-	billingRepo := postgres.NewBillingRepository(pool)
-	artifacts := postgres.NewArtifactRepository(pool)
-	modResults := postgres.NewModerationResultRepository(pool)
-
-	var objectStore miniappapi.ObjectReader
-	store, err := s3store.New(ctx, s3store.Config{
-		Endpoint:  cfg.S3Endpoint,
-		AccessKey: cfg.S3AccessKey,
-		SecretKey: cfg.S3SecretKey,
-		UseSSL:    cfg.S3UseSSL,
-	})
-	if err != nil {
-		logger.Warn("s3 connect failed; miniapp artifact downloads disabled", "error", err)
-	} else {
-		objectStore = store
-	}
-
-	billing := billingservice.New(billingRepo, billingservice.WithPriceOverrides(cfg.PriceOverrides))
-	uowMgr := postgres.NewUnitOfWork(pool)
-	// The orchestrator records a queued outbox event; the worker's outbox relay
-	// publishes it to the queue, so the api process does not enqueue directly
-	// (audit A2).
-	orch := joborchestrator.New(jobs, uowMgr, billing, cfg.MaxJobCost)
-	router := commandrouter.New()
-
-	var vkControl vkdelivery.ControlClient
-	if cfg.VKAccessToken != "" {
-		vkControl = vkdelivery.NewHTTPClient(vkdelivery.HTTPConfig{
-			AccessToken: cfg.VKAccessToken,
-			APIVersion:  cfg.VKAPIVersion,
-			BaseURL:     cfg.VKAPIBaseURL,
-		})
-		logger.Info("using real vk control delivery client")
-	} else {
-		logger.Warn("vk control responses disabled because VK_ACCESS_TOKEN is empty")
-	}
-
-	vkHandler := vkinbound.NewHandler(vkinbound.Config{
-		ConfirmationToken: cfg.VKConfirmationToken,
-		Secret:            cfg.VKSecret,
-		WelcomeAttachment: cfg.VKWelcomeAttachment,
-		MenuButtonMode:    cfg.VKMenuButtonMode,
-		UnroutedTextMode:  cfg.VKUnroutedTextMode,
-		MenuFeatures:      vkMenuFeatures(cfg),
-	}, vkinbound.Deps{
-		Idempotency:  idem,
-		Inbound:      inbound,
-		Users:        users,
-		Commands:     commands,
-		Billing:      billing,
-		Orchestrator: orch,
-		Router:       router,
-		Control:      vkControl,
+	core := apiapp.NewSharedCore(pool, cfg)
+	vkHandler := vkbot.NewHandler(cfg, vkbot.Deps{
+		Redis:        rdb,
+		Idempotency:  core.Idempotency,
+		Inbound:      core.Inbound,
+		Users:        core.Users,
+		Jobs:         core.Jobs,
+		Commands:     core.Commands,
+		Billing:      core.Billing,
+		Referrals:    core.Referrals,
+		Orchestrator: core.Orchestrator,
+		Router:       core.Router,
 		Logger:       logger,
 	})
 
 	admin := adminapi.NewHandler(adminapi.Config{Token: cfg.AdminToken}, adminapi.Deps{
-		Jobs:       jobs,
-		Users:      users,
-		Deliveries: deliveries,
-		Billing:    billingRepo,
+		Jobs:       core.Jobs,
+		Users:      core.Users,
+		Deliveries: core.Deliveries,
+		Billing:    core.BillingRepo,
 	})
 
-	// Per-user rate limiting protects billable Mini App job creation after
-	// launch params have been verified by the BFF.
-	miniappJobLimiter := ratelimit.New(cfg.MiniAppJobRateLimitRPS, cfg.MiniAppJobRateLimitBurst)
-	miniapp := miniappapi.NewHandler(miniappapi.Config{
-		AppSecret:          cfg.VKAppSecret,
-		LaunchParamsMaxAge: cfg.MiniAppLaunchParamsMaxAge,
-		JobRateLimiter:     miniappJobLimiter,
-	}, miniappapi.Deps{
-		Users:        users,
-		Jobs:         jobs,
-		Artifacts:    artifacts,
-		Moderation:   modResults,
-		Objects:      objectStore,
-		Billing:      billing,
-		BillingRepo:  billingRepo,
-		Orchestrator: orch,
+	miniapp := miniappapp.NewHandler(ctx, cfg, miniappapp.Deps{
+		Users:        core.Users,
+		Jobs:         core.Jobs,
+		Artifacts:    core.Artifacts,
+		Moderation:   core.Moderation,
+		Billing:      core.Billing,
+		BillingRepo:  core.BillingRepo,
+		Orchestrator: core.Orchestrator,
 		Logger:       logger,
 	})
 
@@ -192,45 +131,6 @@ func main() {
 	defer cancel()
 	_ = srv.Shutdown(shutdownCtx)
 	logger.Info("api stopped")
-}
-
-func vkMenuFeatures(cfg config.Config) vkinbound.MenuFeatureFlags {
-	disabled := map[domain.CommandType]bool{}
-	disableWhenFalse := func(enabled bool, commands ...domain.CommandType) {
-		if enabled {
-			return
-		}
-		for _, command := range commands {
-			disabled[command] = true
-		}
-	}
-
-	disableWhenFalse(cfg.VKMenuVideoEnabled, domain.CommandMenuVideo)
-	disableWhenFalse(cfg.VKMenuImageEnabled, domain.CommandMenuImage)
-	disableWhenFalse(cfg.VKMenuGPTEnabled, domain.CommandMenuText)
-	disableWhenFalse(cfg.VKMenuStudentsEnabled, domain.CommandMenuStudents)
-	disableWhenFalse(cfg.VKMenuAccountEnabled, domain.CommandAccount)
-	disableWhenFalse(cfg.VKMenuTopUpEnabled, domain.CommandTopUp)
-	disableWhenFalse(cfg.VKMenuVideoSora2Enabled, domain.CommandMenuVideoSora2)
-	disableWhenFalse(cfg.VKMenuVideoSora2StartEnabled, domain.CommandMenuVideoSora2Start)
-	disableWhenFalse(cfg.VKMenuVideoSora2ExamplesEnabled, domain.CommandMenuVideoSora2Examples)
-	disableWhenFalse(cfg.VKMenuVideoKling21Enabled, domain.CommandMenuVideoKling21)
-	disableWhenFalse(cfg.VKMenuVideoKling21StartEnabled, domain.CommandMenuVideoKling21Start)
-	disableWhenFalse(cfg.VKMenuVideoKling21ExamplesEnabled, domain.CommandMenuVideoKling21Examples)
-	disableWhenFalse(cfg.VKMenuVideoSeedance1Enabled, domain.CommandMenuVideoSeedance1)
-	disableWhenFalse(cfg.VKMenuVideoSeedance1LiteEnabled, domain.CommandMenuVideoSeedance1Lite)
-	disableWhenFalse(cfg.VKMenuVideoSeedance1ProEnabled, domain.CommandMenuVideoSeedance1Pro)
-	disableWhenFalse(cfg.VKMenuVideoHaiuo02Enabled, domain.CommandMenuVideoHaiuo02)
-	disableWhenFalse(cfg.VKMenuVideoHaiuo02StandardEnabled, domain.CommandMenuVideoHaiuo02Standard)
-	disableWhenFalse(cfg.VKMenuVideoHaiuo02FastEnabled, domain.CommandMenuVideoHaiuo02Fast)
-	disableWhenFalse(cfg.VKMenuImageTextEnabled, domain.CommandMenuImageText)
-	disableWhenFalse(cfg.VKMenuImageReferenceEnabled, domain.CommandMenuImageReference)
-	disableWhenFalse(cfg.VKMenuStudentsSolverEnabled, domain.CommandMenuStudentSolver)
-	disableWhenFalse(cfg.VKMenuStudentsPresentationEnabled, domain.CommandMenuStudentPresentation)
-	disableWhenFalse(cfg.VKMenuStudentsReportEnabled, domain.CommandMenuStudentReport)
-	disableWhenFalse(cfg.VKMenuStudentsQAEnabled, domain.CommandMenuStudentQA)
-
-	return vkinbound.MenuFeatureFlags{DisabledCommands: disabled}
 }
 
 // healthHandler reports 200 only when PostgreSQL and Redis are both reachable.

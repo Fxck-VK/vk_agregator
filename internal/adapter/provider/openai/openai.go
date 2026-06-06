@@ -63,6 +63,7 @@ type Provider struct {
 type taskState struct {
 	status     domain.ProviderTaskStatus
 	outputURLs []string
+	text       string
 	errClass   domain.ProviderErrorClass
 	errMsg     string
 }
@@ -152,13 +153,14 @@ func (p *Provider) Submit(ctx context.Context, req domain.ProviderRequest) (doma
 	switch req.Operation {
 	case domain.OperationTextGenerate:
 		externalID := "openai-text-" + uuid.NewString()
-		text, err := p.generateText(ctx, req.Prompt, req.IdempotencyKey)
+		text, err := p.generateText(ctx, req.Prompt, req.MaxOutputTokens, req.IdempotencyKey)
 		if err != nil {
 			return domain.ProviderTask{}, err
 		}
 		p.store(externalID, taskState{
 			status:     domain.ProviderTaskSucceeded,
 			outputURLs: []string{dataURL("text/plain; charset=utf-8", []byte(text))},
+			text:       text,
 		})
 		return p.task(req, p.cfg.TextModel, externalID, domain.ProviderTaskProcessing, now), nil
 
@@ -211,7 +213,7 @@ func (p *Provider) Poll(ctx context.Context, ref domain.ProviderTaskRef) (domain
 		if state.errClass != "" {
 			return domain.ProviderTaskResult{Status: domain.ProviderTaskFailed, ErrorClass: state.errClass, ErrorMessage: state.errMsg}, nil
 		}
-		return domain.ProviderTaskResult{Status: state.status, OutputURLs: state.outputURLs}, nil
+		return domain.ProviderTaskResult{Status: state.status, OutputURLs: state.outputURLs, Text: state.text}, nil
 	}
 
 	if isLocalTaskID(ref.ExternalID) {
@@ -264,10 +266,11 @@ func (p *Provider) store(externalID string, state taskState) {
 }
 
 type responsesRequest struct {
-	Model        string `json:"model"`
-	Input        string `json:"input"`
-	Instructions string `json:"instructions,omitempty"`
-	Store        bool   `json:"store"`
+	Model           string `json:"model"`
+	Input           string `json:"input"`
+	Instructions    string `json:"instructions,omitempty"`
+	MaxOutputTokens int    `json:"max_output_tokens,omitempty"`
+	Store           bool   `json:"store"`
 }
 
 type responsesResponse struct {
@@ -284,9 +287,9 @@ type responsesResponse struct {
 	Error *apiError `json:"error"`
 }
 
-func (p *Provider) generateText(ctx context.Context, prompt, idempotencyKey string) (string, error) {
+func (p *Provider) generateText(ctx context.Context, prompt string, maxTokens int, idempotencyKey string) (string, error) {
 	var decoded responsesResponse
-	if err := p.postJSON(ctx, "/responses", responsesRequest{Model: p.cfg.TextModel, Input: prompt, Instructions: textGenerationInstructions, Store: false}, &decoded, idempotencyKey); err != nil {
+	if err := p.postJSON(ctx, "/responses", responsesRequest{Model: p.cfg.TextModel, Input: prompt, Instructions: textGenerationInstructions, MaxOutputTokens: maxTokens, Store: false}, &decoded, idempotencyKey); err != nil {
 		return "", err
 	}
 	if decoded.OutputText != "" {

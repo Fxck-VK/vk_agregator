@@ -134,6 +134,12 @@ type JobRepository interface {
 	ListByUser(ctx context.Context, userID uuid.UUID, limit, offset int) ([]*Job, error)
 	// List returns jobs matching the filter, newest first, for admin queries.
 	List(ctx context.Context, filter JobFilter, limit, offset int) ([]*Job, error)
+	// CountActiveByUserOperation returns active, capacity-consuming jobs for one
+	// user and operation. It is used by abuse protection before enqueueing more
+	// expensive work for the same user.
+	CountActiveByUserOperation(ctx context.Context, userID uuid.UUID, operation OperationType) (int, error)
+	// CountSucceededByUser returns completed successful jobs for account stats.
+	CountSucceededByUser(ctx context.Context, userID uuid.UUID) (int, error)
 }
 
 // InboundEventRepository persists raw inbound events for audit and idempotent
@@ -159,6 +165,27 @@ type CommandRepository interface {
 	GetByIdempotencyKey(ctx context.Context, key string) (*Command, error)
 	// ListByUser returns the most recent commands for a user, newest first.
 	ListByUser(ctx context.Context, userID uuid.UUID, limit, offset int) ([]*Command, error)
+}
+
+// ConversationRepository persists compact dialog memory for text models.
+type ConversationRepository interface {
+	// GetActiveByUserPeer returns the current active conversation for a VK peer.
+	GetActiveByUserPeer(ctx context.Context, userID uuid.UUID, vkPeerID int64) (*Conversation, error)
+	// CreateConversation inserts a new conversation.
+	CreateConversation(ctx context.Context, conversation *Conversation) error
+	// UpsertMessage inserts a user/assistant message or returns the existing
+	// row for the same job+role, making worker retries idempotent.
+	UpsertMessage(ctx context.Context, message *ConversationMessage) (*ConversationMessage, error)
+	// ListRecentMessagesBefore returns newest messages before beforeSeq and
+	// after minSeq. Results are returned oldest first for prompt rendering.
+	ListRecentMessagesBefore(ctx context.Context, conversationID uuid.UUID, beforeSeq, minSeq int64, limit int) ([]*ConversationMessage, error)
+	// ListMessagesAfter returns messages newer than afterSeq, oldest first.
+	ListMessagesAfter(ctx context.Context, conversationID uuid.UUID, afterSeq int64, limit int) ([]*ConversationMessage, error)
+	// LatestSummary returns the most recent summary for a conversation.
+	LatestSummary(ctx context.Context, conversationID uuid.UUID) (*ConversationSummary, error)
+	// UpsertSummary creates or replaces the latest summary state for a
+	// conversation. Only the newest summary is used for prompt rendering.
+	UpsertSummary(ctx context.Context, summary *ConversationSummary) error
 }
 
 // ProviderTaskRepository persists provider tasks and their lifecycle.
@@ -236,6 +263,26 @@ type BillingRepository interface {
 	// workers to capture credits without threading the reservation id through
 	// the queue. ErrNotFound if the job has no reservation.
 	GetReservationByJob(ctx context.Context, jobID uuid.UUID) (*CreditReservation, error)
+}
+
+// ReferralRepository persists single-user referral codes and referral
+// relations. It is shared by VK bot and future VK Mini App referral flows.
+type ReferralRepository interface {
+	// GetCodeByUserID fetches the stable referral code for one user.
+	GetCodeByUserID(ctx context.Context, userID uuid.UUID) (*ReferralCode, error)
+	// GetCode fetches a referral code by its public code value.
+	GetCode(ctx context.Context, code string) (*ReferralCode, error)
+	// CreateCode inserts a new public code for one user.
+	CreateCode(ctx context.Context, code *ReferralCode) error
+	// CreateReferral records a referral relation. It returns ErrConflict when
+	// the referred user already has a referrer.
+	CreateReferral(ctx context.Context, referral *Referral) error
+	// GetReferralByReferredUserID fetches the relation for the invited user.
+	GetReferralByReferredUserID(ctx context.Context, userID uuid.UUID) (*Referral, error)
+	// CountByReferrer counts users invited by one referrer.
+	CountByReferrer(ctx context.Context, referrerUserID uuid.UUID) (int, error)
+	// MarkRewardApplied marks signup referral rewards as posted to billing.
+	MarkRewardApplied(ctx context.Context, referralID uuid.UUID, rewardedAt time.Time) error
 }
 
 // OutboxRepository persists and drains domain events using the outbox pattern.

@@ -15,7 +15,8 @@ Current release: **v0.1.3 / Beta integrations foundation**.
 > VK raw photo/video upload, VK `/start`
 > product menu with callback/text inline keyboard and active-menu
 > `messages.edit`, GPT pending-message edit UX, OpenAI moderation, and OpenAI
-> text/image artifact scanning.
+> text/image artifact scanning, plus a shared VK referral-code backend
+> foundation for bot and future Mini App referral flows.
 > Live smoke with real credentials remains required before external users.
 
 ---
@@ -65,6 +66,10 @@ Current release: **v0.1.3 / Beta integrations foundation**.
   (AUDIT B1a). ✅
 - [x] Mini App dev tunnel normalized to `cloudflared` / `*.trycloudflare.com`;
   obsolete VK Tunnel tooling removed.
+- [x] Shared VK referral backend foundation: one public code per internal user,
+  bot account/referral screen, `/start <code>` / VK `ref` handling, and ledger
+  signup rewards. Mini App referral UI/API remains a follow-up over the same
+  service.
 - Production welcome banner attachment for `/start` via `VK_WELCOME_ATTACHMENT`
   or an upload flow.
 - Live smoke with real `OPENAI_API_KEY`, `DEEPINFRA_API_KEY` and

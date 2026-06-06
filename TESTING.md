@@ -72,7 +72,14 @@ OS/CI environment variables override `.env` values.
 | `VK_WELCOME_ATTACHMENT` | _(optional VK attachment string for `/start` banner)_                                     |
 | `VK_MENU_BUTTON_MODE`   | `callback`                                                                                |
 | `VK_UNROUTED_TEXT_MODE` | `reply`                                                                                   |
+| `VK_DIALOG_MODE_TTL`    | `1h`                                                                                      |
+| `VK_BOT_TUNNEL_MODE`   | `quick` or `named` for local bot dev scripts                                              |
+| `VK_BOT_TUNNEL_HOSTNAME` | `vk.neiirohub.ru` for the stable named Cloudflare Tunnel                                |
+| `TEXT_CONTEXT_ENABLED` | `true`                                                                                    |
+| `TEXT_CONTEXT_MAX_INPUT_TOKENS` / `TEXT_CONTEXT_MAX_OUTPUT_TOKENS` | `1600` / `800`                                      |
+| `TEXT_CONTEXT_SUMMARY_MAX_TOKENS` / `TEXT_CONTEXT_RECENT_MESSAGES_LIMIT` | `400` / `6`                                  |
 | `VK_MENU_*_ENABLED`     | `true`                                                                                    |
+| `VK_ANTISPAM_*`         | enabled; `10/60s` messages, `3/30s` GPT, stricter new-user limits, `2` active GPT jobs    |
 | `MAX_ATTEMPTS`          | `3`                                                                                       |
 | `SIGNED_DELIVERY`       | `false`                                                                                   |
 | `STREAM_MAX_LEN`        | `100000`                                                                                  |
@@ -177,9 +184,12 @@ curl -s -X POST localhost:8080/webhooks/vk \
 ```
 
 Expected: command type `start`, no queued job, no billing reservation. If
-`cmd/api` is running with `VK_ACCESS_TOKEN`, the peer receives the Super GPT
+`cmd/api` is running with `VK_ACCESS_TOKEN`, the peer receives the НейроХаб
 welcome text and VK inline keyboard. `VK_WELCOME_ATTACHMENT` may point at a
-pre-uploaded VK banner attachment.
+pre-uploaded VK banner attachment. For a user whose `welcome_name_sent_at` is
+empty and whose VK profile can be fetched, the first `Старт` should say
+`<first_name>, добро пожаловать в НейроХаб`; later `Старт` / `Показать меню`
+responses should use the regular welcome without the name.
 Clicking `🎬 Создать видео` should return `Выбери модель для генерации:` with
 `Sora 2`, `Kling v2.1`, `Seedance 1`, `Haiuo v0.2`, and `⬅️ Назад`; these
 button presses are control commands and should not enqueue jobs.
@@ -191,17 +201,19 @@ also control commands and should not enqueue jobs.
 Clicking `🖼️ Создать фото` should return the daily-free-attempt photo
 instruction screen directly with `Фото по тексту`, `Фото с референсом`, and
 `⬅️ Назад`; these mode buttons are also control commands. Clicking
-`💬 Спросить у НейроХаб` should return `SUPER GPT активен` and wait for the next
+`💬 Спросить у НейроХаб` should return `НейроХаб активен` and wait for the next
 plain user message; that next text or sticker should create a `text.ask` job.
-In active GPT mode, the bot should first send `GPT думает...`; after the
+In active GPT mode, the bot should first send `НейроХаб думает...`; after the
 provider result is ready, that same VK message should be edited to the answer
 instead of sending a second bot message. This placeholder/edit UX is only for
 the button-enabled GPT mode, not for legacy `VK_UNROUTED_TEXT_MODE=gpt`. If the
 answer is too long for one VK message, the edited placeholder should contain
 the first chunk and the remaining chunks should be sent as deterministic
-follow-up text messages.
+follow-up text messages. Text answers should be VK plain text: generated
+Markdown markers like `**`, backticks and raw `*` list prefixes should not be
+visible; list items should appear as `•` bullets.
 Plain text outside GPT mode is controlled by `VK_UNROUTED_TEXT_MODE`: `reply`
-(default) sends only `Выберите режим в меню выше.` and creates no job, `silent`
+(default) sends only `Выберите режим в меню выше или нажмите на кнопку показать меню` and creates no job, `silent`
 creates no job and sends nothing, `gpt` preserves legacy any-text-to-GPT
 behavior.
 Clicking `🎁 Студентам и школьникам` should return the study submenu with
@@ -211,11 +223,16 @@ button presses must not enqueue jobs.
 For live VK UX, click several inline menu buttons in a row: the bot should edit
 the active menu message instead of posting a new bot message each time. Press
 the persistent lower `Показать меню` button: the bot should send a fresh menu at
-the bottom instead of editing the old one. Then send plain text outside GPT
-mode: with the default `reply` setting, the bot should post only
-`Выберите режим в меню выше.`, should not attach an inline keyboard, and should
-still create no job. This active-menu/dialog-mode state is process-local to the
-running API instance.
+the bottom instead of editing the old one. For a brand-new user, ordinary first
+non-payload text/sticker/menu-repair input should open onboarding/welcome instead of replying with a hint.
+For an onboarded user, send plain text outside GPT mode: with the default
+`reply` setting, the bot should post `Выберите режим в меню выше или нажмите на кнопку показать меню` with the
+lower `Показать меню` keyboard, should not attach an inline keyboard, and should
+still create no job. Typing `нет меню`, `нет кнопки`, `где меню` or `меню`
+should send a fresh welcome menu and restore the lower keyboard. Active-menu
+state is process-local to the running API
+instance, while GPT dialog mode is Redis-backed and survives API restarts for
+`VK_DIALOG_MODE_TTL`.
 With `VK_MENU_BUTTON_MODE=callback`, inline menu clicks should not appear as
 user messages in the chat. Make sure VK Callback API has callback-button events
 (`message_event`) enabled. To verify legacy fallback, set
@@ -228,6 +245,19 @@ Feature flag smoke: set `VK_MENU_STUDENTS_ENABLED=false`, restart `cmd/api`,
 open `Показать меню`, and confirm `🎁 Студентам и школьникам` is absent while
 other main buttons remain. Re-enable it with `true`. The same pattern applies
 to all `VK_MENU_*_ENABLED` flags in `.env.example`.
+
+Referral smoke: set `VK_MENU_ACCOUNT_ENABLED=true` and configure
+`VK_REFERRAL_LINK_BASE` for the VK community, for example
+`https://vk.com/write-239332376`. Open `👤 Мой аккаунт`; the response should
+show the `безлимитное общение` note, invited count, one stable referral link,
+`Поддержка: @neirohub_help`, and only the `⬅️ Назад` inline button. It should
+not render `↗️ Поделиться` / `open_link`, balance or completed-generation rows
+in the account screen. Send `/start <code>` from a different VK user or
+deliver a Callback API `ref=<code>` param; the handler should persist one
+`referrals` row with `source=vk_bot`, create no job, and post signup bonuses
+through `ledger_entries` with `reason` containing `referral`.
+Repeating the same referral start must not duplicate the relation or reward.
+A full Mini App referral account/API screen is not part of this smoke yet.
 
 Image / video jobs (slash commands):
 
@@ -259,6 +289,17 @@ curl -s localhost:8080/admin/deliveries/<delivery_id>
 ## Hardening checks (moderation, DLQ, metrics)
 
 ```bash
+# VK anti-spam: send more than the configured per-user message limit.
+for i in $(seq 1 11); do
+  curl -s -X POST localhost:8080/webhooks/vk -H 'Content-Type: application/json' \
+    -d "{\"type\":\"message_new\",\"event_id\":\"spam-$i\",\"object\":{\"message\":{\"from_id\":9010,\"peer_id\":9010,\"text\":\"menu\"}}}"
+done
+# -> webhook still returns ok; after the limit the VK control path should send
+#    "Слишком много сообщений. Попробуйте через N секунд" and no command/job is created.
+
+docker exec vk-ai-aggregator-redis redis-cli TTL rate:vk:user:9010:messages
+docker exec vk-ai-aggregator-redis redis-cli GET spam:vk:user:9010:violations
+
 # Moderation REJECT: a banned term blocks delivery
 curl -s -X POST localhost:8080/webhooks/vk -H 'Content-Type: application/json' \
   -d '{"type":"message_new","event_id":"mod-1","object":{"message":{"from_id":9001,"peer_id":9001,"text":"please generate nsfw content"}}}'

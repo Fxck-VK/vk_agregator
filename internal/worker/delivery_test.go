@@ -225,10 +225,31 @@ func TestDeliveryTextSendsBody(t *testing.T) {
 	}
 }
 
+func TestDeliveryTextFormatsMarkdownForVK(t *testing.T) {
+	h := newDeliveryHarness(t)
+	ctx := context.Background()
+	body := "Привет!\n\n**1. Уход за кожей и телом**\n*   Очищение, тонизирование, увлажнение.\n* Защита от солнца (SPF).\n\n### Итог\n`Главное — регулярность.`"
+	job := h.resultReadyJob(t, domain.MediaTypeText, body)
+	job.Modality = domain.ModalityText
+	_ = h.jobs.Update(ctx, job)
+
+	if err := h.worker.Process(ctx, deliveryTask(job)); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+	sent := h.vk.Sent()
+	if len(sent) != 1 || sent[0].Type != "text" {
+		t.Fatalf("unexpected text send: %+v", sent)
+	}
+	want := "Привет!\n\n1. Уход за кожей и телом\n• Очищение, тонизирование, увлажнение.\n• Защита от солнца (SPF).\n\nИтог\nГлавное — регулярность."
+	if sent[0].Text != want {
+		t.Fatalf("formatted text = %q, want %q", sent[0].Text, want)
+	}
+}
+
 func TestDeliveryTextEditsGPTPlaceholder(t *testing.T) {
 	h := newDeliveryHarness(t)
 	ctx := context.Background()
-	pending, err := h.vk.SendMessage(ctx, 555, 9001, vkdelivery.Message{Text: "GPT думает..."})
+	pending, err := h.vk.SendMessage(ctx, 555, 9001, vkdelivery.Message{Text: "НейроХаб думает..."})
 	if err != nil {
 		t.Fatalf("send pending: %v", err)
 	}
@@ -265,7 +286,7 @@ func TestDeliveryTextEditsGPTPlaceholder(t *testing.T) {
 func TestDeliveryTextSplitsLongGPTPlaceholderAnswer(t *testing.T) {
 	h := newDeliveryHarness(t)
 	ctx := context.Background()
-	pending, err := h.vk.SendMessage(ctx, 555, 9001, vkdelivery.Message{Text: "GPT думает..."})
+	pending, err := h.vk.SendMessage(ctx, 555, 9001, vkdelivery.Message{Text: "НейроХаб думает..."})
 	if err != nil {
 		t.Fatalf("send pending: %v", err)
 	}
@@ -291,14 +312,19 @@ func TestDeliveryTextSplitsLongGPTPlaceholderAnswer(t *testing.T) {
 		t.Fatalf("expected one placeholder edit, got %+v", edits)
 	}
 	sent := h.vk.Sent()
-	if len(sent) != 2 || sent[0].MessageID != pending.MessageID || sent[1].Type != "text" {
-		t.Fatalf("expected edited placeholder plus one extra text chunk, got %+v", sent)
+	if len(sent) < 2 || sent[0].MessageID != pending.MessageID {
+		t.Fatalf("expected edited placeholder plus follow-up text chunks, got %+v", sent)
 	}
-	if len([]rune(sent[0].Text)) > 3500 || len([]rune(sent[1].Text)) > 3500 {
-		t.Fatalf("chunks are too long: first=%d second=%d", len([]rune(sent[0].Text)), len([]rune(sent[1].Text)))
-	}
-	if !strings.Contains(sent[0].Text, "answer") || !strings.Contains(sent[1].Text, "answer") {
-		t.Fatalf("unexpected split content: %+v", sent)
+	for i, msg := range sent {
+		if len([]rune(msg.Text)) > 3500 {
+			t.Fatalf("chunk %d is too long: %d", i, len([]rune(msg.Text)))
+		}
+		if i > 0 && msg.Type != "text" {
+			t.Fatalf("follow-up chunk %d should be text, got %+v", i, msg)
+		}
+		if !strings.Contains(msg.Text, "answer") {
+			t.Fatalf("unexpected split content in chunk %d: %+v", i, msg)
+		}
 	}
 }
 

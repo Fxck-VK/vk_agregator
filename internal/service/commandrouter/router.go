@@ -49,7 +49,7 @@ func (r *Router) Parse(rawText string) Result {
 	switch normalized {
 	case "/start", "start", "старт", "🚀 старт", "▶️ старт", "начать":
 		return Result{Type: domain.CommandStart}
-	case "показать меню", "меню", "menu":
+	case "показать меню", "меню", "нет меню", "нет кнопки", "где меню", "menu":
 		return Result{Type: domain.CommandShowMenu}
 	case "🎬 создать видео", "создать видео":
 		return Result{Type: domain.CommandMenuVideo}
@@ -99,6 +99,10 @@ func (r *Router) Parse(rawText string) Result {
 		return Result{Type: domain.CommandTopUp}
 	}
 	token, rest := splitFirstToken(trimmed)
+	if isStartToken(strings.ToLower(token)) {
+		arg, _ := splitFirstToken(rest)
+		return Result{Type: domain.CommandStart, Arg: arg}
+	}
 
 	switch strings.ToLower(token) {
 	case "/image":
@@ -156,4 +160,13 @@ func splitFirstToken(s string) (token, rest string) {
 
 func isSpace(r rune) bool {
 	return r == ' ' || r == '\t' || r == '\n' || r == '\r'
+}
+
+func isStartToken(token string) bool {
+	switch token {
+	case "/start", "start", "\u0441\u0442\u0430\u0440\u0442", "\u043d\u0430\u0447\u0430\u0442\u044c", "СЃС‚Р°СЂС‚", "РЅР°С‡Р°С‚СЊ":
+		return true
+	default:
+		return false
+	}
 }

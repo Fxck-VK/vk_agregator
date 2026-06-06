@@ -1,5 +1,107 @@
 # PROGRESS
 
+## Shared VK referral foundation
+
+Status: **done for VK bot backend; Mini App integration remains follow-up**.
+
+- Added shared referral domain objects, repository interface and Postgres
+  migration `000007_referrals` with `referral_codes` and `referrals`.
+- Each internal user gets one stable public referral code. The code is shared
+  by VK Bot and future VK Mini App flows; it does not expose `vk_user_id` or the
+  internal UUID.
+- VK Bot `/start <code>` and Callback API `ref` values are parsed as control
+  flow: they apply the referral relation idempotently, create no billable Job
+  and call no provider.
+- The VK bot account screen currently shows the "безлимитное общение" note,
+  invited count, a single plain-text referral link and `@neirohub_help`.
+  The account keyboard keeps only `Назад`; the VK share/open-link button is not
+  rendered in the bot UI.
+- Referral signup bonuses use `billingservice.Grant`, which writes committed
+  ledger top-up entries with idempotency keys. No direct balance mutation was
+  added.
+- Full Mini App referral account/API screens remain follow-up work over the
+  shared `referralservice`/repository.
+
+---
+
+## VK text dialog context
+
+Status: **done**.
+
+- Added Postgres-backed dialog memory for VK `text.ask` jobs:
+  `conversations`, `conversation_messages`, `conversation_summaries`.
+- `cmd/worker` now saves the current user prompt before provider submit, renders
+  a bounded context packet from bot profile + rolling summary + recent messages
+  + current request, and saves the assistant answer after provider success.
+- Text context is not assembled in VK handlers; they still only create Jobs.
+- Defaults are env-configurable: input `1600` estimated tokens, output `800`,
+  summary `400`, recent messages `6`, summary thresholds `10` messages or
+  `1500` estimated tokens.
+- OpenAI and DeepInfra adapters now receive provider max-output token caps when
+  configured and return normalized text in `ProviderTaskResult.Text` for dialog
+  history persistence while still saving text outputs as Artifacts.
+- Summary compaction is local/extractive in this beta to avoid extra billable
+  provider calls. Semantic model-based summaries and old-message retention are
+  tracked as follow-up work.
+
+---
+
+## VK GPT dialog mode persistence
+
+Status: **done**.
+
+- `Спросить у НейроХаб` now stores selected GPT mode in Redis-backed dialog
+  state by `peer_id`.
+- Dialog mode survives `cmd/api` restart or switching to another API instance.
+- `VK_DIALOG_MODE_TTL` controls retention; default is `1h` and refreshes while
+  the user keeps chatting in the selected mode.
+- The handler keeps process-local mode only as a cache/fallback. `Назад`,
+  `Показать меню` and other menu transitions clear both local and Redis state.
+- Active-menu message tracking is still process-local and remains a separate
+  follow-up for multi-instance `messages.edit` resilience.
+
+---
+
+## VK bot anti-spam
+
+Status: **done**.
+
+- Added Redis-backed per-`vk_user_id` anti-spam for VK bot intake.
+- Limits implemented:
+  - all incoming user events: `10/60s`;
+  - new users during first `4h`: `5/60s`;
+  - billable GPT/text jobs: `3/30s`;
+  - new-user GPT/text jobs: `1/15s`;
+  - cooldown after violations: `30s`;
+  - repeated violations: `5/10m -> 15m` temporary block;
+  - active GPT/text jobs: max `2` per user.
+- Denied events are acknowledged through the VK control path, the inbound event
+  is marked processed, idempotency is completed, and no command/job is created.
+- Added env knobs in `.env.example`, runtime docs, unit tests and VK handler
+  coverage.
+
+---
+
+## VK bot local operations
+
+Status: **done**.
+
+- Added bot-only PowerShell dev scripts under `scripts/dev/`:
+  - `start-bot.ps1` starts Docker dependencies, applies migrations, builds and starts `cmd/api` + `cmd/worker`, starts `cloudflared`, and prints the VK Callback URL.
+  - `status-bot.ps1` reports tracked process state, API/worker health, Docker dependency status, and the current callback URL.
+  - `stop-bot.ps1` stops API, worker and tunnel processes, with optional `-StopDocker` for local containers.
+- Runtime pid/log/url files go to `.runtime/vk-bot/`, which is ignored by Git.
+- Scope is VK bot hand testing only; the VK Mini App frontend is not started by these scripts.
+- Added optional named Cloudflare Tunnel setup for a stable local VK Callback:
+  `scripts/dev/setup-cloudflare-tunnel.ps1` creates/reuses `neiirohub-vk-bot`,
+  writes local tunnel config under `.runtime/vk-bot/cloudflared/`, and supports
+  `.\scripts\dev\start-bot.ps1 -TunnelMode named` for
+  `https://vk.neiirohub.ru/webhooks/vk`.
+- External prerequisite remains manual: `neiirohub.ru` must be active in
+  Cloudflare DNS and registrar NS records must point to Cloudflare.
+
+---
+
 Журнал прогресса по разработке VK AI Aggregator (Go backend, AI Job Processing Platform).
 Источник истины по архитектуре — `docs/ARCHITECTURE.md`, инварианты — `AGENTS.md`.
 
@@ -457,26 +559,29 @@
   - handler синтезирует text prompt с `sticker_id/product_id`; prompt проходит в `text.ask` job только при активном GPT text mode или legacy `VK_UNROUTED_TEXT_MODE=gpt`, поэтому стикер не теряется и не создает случайный billable job вне режима;
   - фото/видео/аудио attachments остаются задачей полноценного input Artifact pipeline.
 - **VK product menu**:
+  - current bot-facing menu profile shows NeuroHub text mode and account/referral: `VK_MENU_GPT_ENABLED=true`, `VK_MENU_ACCOUNT_ENABLED=true`, while video, image, students and top-up remain implemented but hidden by `VK_MENU_*_ENABLED=false`;
   - menu flow переведен на декларативный `menuScreen` registry: каждый control-command указывает текст, inline keyboard, необходимость баланса и optional welcome attachment;
   - первичная нижняя VK keyboard содержит только одну кнопку `Старт`;
   - после нажатия `Старт` бот заменяет нижнюю постоянную клавиатуру на одну кнопку `Показать меню`;
   - `Показать меню` хранится как отдельный `show_menu` control-command: нижняя persistent-кнопка всегда отправляет свежий VK inline menu вниз без повторной переустановки нижней клавиатуры, а inline-переходы внутри меню продолжают редактировать active menu message;
-  - `Старт`, `/start`, `меню` и `начать` открывают VK inline keyboard под коротким welcome-сообщением НейроХаб;
+  - первый `Старт` пользователя делает one-time VK `users.get`, кеширует `vk_first_name` / `vk_last_name` в `users` и отправляет именное welcome-сообщение; `welcome_name_sent_at` фиксирует, что последующие `Старт` / `Показать меню` должны идти обычным welcome без имени;
+  - первый обычный non-payload текст/стикер/menu-repair контакт пользователя принудительно открывает onboarding `/start`, чтобы новый пользователь не застревал без нижней кнопки; явные slash generation-команды и payload-кнопки не перехватываются;
+  - `Старт`, `/start`, `меню`, `нет меню`, `нет кнопки`, `где меню` и `начать` открывают VK inline keyboard под коротким welcome-сообщением НейроХаб; typed repair-фразы дополнительно восстанавливают нижнюю persistent-кнопку `Показать меню`;
   - `Создать видео` теперь открывает отдельный inline-экран `Выбери модель для генерации:` с моделями `Sora 2`, `Kling v2.1`, `Seedance 1`, `Haiuo v0.2` и кнопкой `Назад`;
   - `Sora 2` и `Kling v2.1` открывают detail-экраны с описанием, prompt-примером, ссылкой на инструкцию и кнопками `Начать генерацию`, `Примеры`, `Назад`;
   - `Seedance 1` открывает выбор `Lite` / `Pro`, а `Haiuo v0.2` открывает выбор `Обычный` / `Fast`;
   - кнопки выбора video-модели и вложенных video submenu записываются как control commands и не создают billable jobs до подключения model-specific generation state;
   - `Создать фото` при одной основной модели пропускает выбор модели и сразу показывает инструкцию по `Фото по тексту` / `Фото с референсом` с кнопками режимов и `Назад`;
-  - `Спросить у НейроХаб` открывает active-сообщение `SUPER GPT активен` без создания job и включает process-local GPT text mode для `peer_id`; следующий обычный текст/стикер пользователя проходит через `text.ask` flow; старый text-label `Спросить у GPT` остается совместимым alias;
-  - в активном GPT mode handler сначала отправляет `GPT думает...`, сохраняет `vk_placeholder_message_id` в `job.Params`, а delivery worker при текстовом результате редактирует это сообщение через VK `messages.edit`; длинные ответы режутся на follow-up chunks с детерминированными `random_id`, чтобы VK `error_code=914` не оставлял placeholder зависшим; legacy `VK_UNROUTED_TEXT_MODE=gpt` остается обычной текстовой доставкой без placeholder;
+  - `Спросить у НейроХаб` открывает active-сообщение `НейроХаб активен` без создания job и включает Redis-backed GPT text mode для `peer_id`; следующий обычный текст/стикер пользователя проходит через `text.ask` flow; старый text-label `Спросить у GPT` остается совместимым alias;
+  - в активном GPT mode handler сначала отправляет `НейроХаб думает...`, сохраняет `vk_placeholder_message_id` в `job.Params`, а delivery worker при текстовом результате редактирует это сообщение через VK `messages.edit`; перед отправкой text delivery приводит простой provider Markdown к VK plain text (`**`, backticks, heading hashes убираются, `*`/`-` списки становятся `•`); длинные ответы режутся на follow-up chunks с детерминированными `random_id`, чтобы VK `error_code=914` не оставлял placeholder зависшим; legacy `VK_UNROUTED_TEXT_MODE=gpt` остается обычной текстовой доставкой без placeholder;
   - `Студентам и школьникам` открывает учебное подменю: `Решальник задач`, `Генерация презентаций (скоро)`, `Создание рефератов (скоро)`, `Ответы на вопросы`, `Назад`;
   - `vkdelivery.HTTPClient` получил `SendMessage` с `keyboard` JSON, поэтому VK API по-прежнему вызывается только из `internal/adapter/delivery/vk`;
   - `vkdelivery.HTTPClient` получил `EditMessage` поверх VK `messages.edit`, а `ControlClient` теперь покрывает и send, и edit для product/control меню;
   - `vkdelivery.KeyboardButton` получил `ActionType`, поэтому inline menu можно рендерить как VK `callback` или legacy `text` без переписывания payload;
   - `VK_MENU_BUTTON_MODE=callback` стал дефолтом для inline menu: нажатия приходят как VK `message_event` и не добавляют пользовательские echo-сообщения в чат; `VK_MENU_BUTTON_MODE=text` возвращает прежнее поведение;
   - добавлены `VK_MENU_*_ENABLED` feature flags для каждой основной и вложенной product-menu кнопки: disabled buttons скрываются из новых keyboard, а stale payload от старого сообщения падает обратно в актуальное главное меню без создания job;
-  - handler хранит process-local active menu и dialog mode по `peer_id`: кнопочные payload-переходы редактируют текущий menu message, обычный пользовательский текст вне GPT mode оставляет предыдущее меню доступным выше, а другой control-экран сбрасывает GPT mode;
-  - `VK_UNROUTED_TEXT_MODE=reply` стал дефолтом для обычного текста вне GPT mode: handler записывает `unknown` command, не создает Job и отправляет text-only hint `Выберите режим в меню выше.` без дублирования inline keyboard; `silent` молчит, `gpt` возвращает legacy any-text-to-GPT behavior;
+  - handler хранит process-local active menu по `peer_id`, а GPT dialog mode хранится в Redis: кнопочные payload-переходы редактируют текущий menu message, обычный пользовательский текст вне GPT mode оставляет предыдущее меню доступным выше, а другой control-экран сбрасывает GPT mode;
+  - `VK_UNROUTED_TEXT_MODE=reply` стал дефолтом для обычного текста вне GPT mode после onboarding: handler записывает `unknown` command, не создает Job и отправляет hint `Выберите режим в меню выше или нажмите на кнопку показать меню` с нижней persistent-кнопкой `Показать меню`, но без дублирования inline keyboard; `silent` молчит, `gpt` возвращает legacy any-text-to-GPT behavior;
   - handler обрабатывает `message_event` как control-only inbound event: сохраняет inbound/command, но не создает Job и не дергает provider;
   - каждый `message_event` подтверждается blank `messages.sendMessageEventAnswer` через `vkdelivery.ControlClient`, чтобы VK-клиент снимал loading spinner с callback-кнопки;
   - если VK не разрешает edit текущего menu message, API логирует warn, очищает active menu и делает fallback на обычный `messages.send`;
@@ -490,11 +595,13 @@
 - Targeted tests: `go test ./internal/adapter/provider/openai ./internal/adapter/delivery/vk ./internal/adapter/inbound/vk ./internal/service/commandrouter ./internal/worker ./internal/platform/config`.
 - DeepInfra targeted tests: `go test ./internal/adapter/provider/deepinfra ./internal/platform/config`.
 - DeepInfra delivery regression: `go test ./internal/adapter/provider/mock ./internal/service/artifactservice ./internal/worker`.
-- Added VK menu UX coverage: `EditMessage` request shape, mock edit semantics, active-menu edit, lower `Показать меню` fresh send, and plain-message text-only hint behavior.
+- Added VK menu UX coverage: `EditMessage` request shape, mock edit semantics, active-menu edit, lower `Показать меню` fresh send, first-contact onboarding, typed menu repair phrases, and plain-message hint behavior with lower keyboard repair.
 - Added callback menu coverage: callback keyboard JSON, `VK_MENU_BUTTON_MODE` config validation, `message_event` command processing, no-job invariant, and legacy text-button mode.
 - Added callback ack coverage: real `messages.sendMessageEventAnswer` request shape, mock answer recording, and inbound `message_event` acknowledgement.
-- Added unrouted text coverage: default text-only choose-mode hint/no-job, `silent` no-response mode, legacy `gpt` mode, GPT button enabling text jobs, menu transitions clearing GPT mode, and sticker-to-text job only inside GPT mode.
+- Added unrouted text coverage: default choose-mode hint with lower keyboard repair/no-job, `silent` no-response mode, legacy `gpt` mode, GPT button enabling text jobs, menu transitions clearing GPT mode, and sticker-to-text job only inside GPT mode.
+- Added VK text delivery formatting coverage: simple provider Markdown markers are stripped and list items are rendered as `•` bullets before VK send/edit.
 - Added menu feature flag coverage: hidden main buttons, hidden nested video buttons, disabled stale payload fallback, and env loading for `VK_MENU_*_ENABLED`.
+- Added VK inbound retry regression: duplicate `inbound_events.idempotency_key` now reloads the saved inbound row before `SetStatus`, so VK retries do not fail with `mark inbound processed: domain: entity not found`.
 - Full regression checks выполняются после документационного sync.
 - Live VK `/start` smoke: callback returned `ok`, command persisted as `start`,
   zero jobs created, welcome text delivered to VK. After enabling bot features
@@ -505,7 +612,7 @@
 - Реальные OpenAI/DeepInfra/VK вызовы требуют credential-bound live smoke на dev-аккаунтах; unit-тесты используют mock HTTP servers.
 - Второй реальный provider для text fallback добавлен через DeepInfra; реальные image/video fallback providers остаются follow-up.
 - VK control/menu responses пока отправляются напрямую из API через `vkdelivery.ControlClient` с deterministic `random_id`; если на product/control sends распространяем invariant `Every delivery attempt is persisted`, нужен отдельный persisted delivery/outbox flow для таких сообщений.
-- Active-menu tracking и GPT dialog mode пока хранятся в памяти процесса `cmd/api`; после рестарта API или при multi-instance балансировке меню может отправиться новым сообщением, а пользователь может потерять выбранный GPT mode. Перед production-scale нужен persisted conversation/menu state.
+- Active-menu tracking пока хранится в памяти процесса `cmd/api`; после рестарта API или при multi-instance балансировке меню может отправиться новым сообщением. GPT dialog mode уже хранится в Redis и переживает restart/API instance switch.
 - Video artifact scanner пока fail-open; полноценный video scan/probe/transcode остаётся Phase 3 media pipeline.
 - Нужен resume fix для edge-case: `provider_task=succeeded`, но artifact/result_ready ещё не сохранены после crash.
 
@@ -850,3 +957,713 @@ resume hardening.
 ### Проверки
 
 - `go test ./internal/adapter/inbound/miniapp ./internal/platform/config` — exit 0.
+
+---
+
+## PR-7 — Mini App: cost estimate before submit
+
+Статус: **завершён**.
+
+### Что сделано
+
+- Добавлен BFF endpoint `POST /miniapp/estimate` с тем же launch-param auth и
+  per-user rate limiting, что и create-job путь.
+- Endpoint принимает `operation`, `prompt`, optional `model_id`, валидирует
+  operation/model по Mini App whitelist, переиспользует
+  `billingservice.Estimate` и не создаёт job, reservation или ledger entries.
+- Ответ отдаёт только backend-owned данные: `operation`, `model_id`,
+  `cost_estimate`, `balance_credits`, `enough_credits`; provider, prompt и
+  user details не раскрываются.
+- Mini App frontend вызывает estimate с debounce при изменении prompt/model,
+  показывает стоимость до submit и предупреждение при `enough_credits=false`.
+  Если estimate временно недоступен, submit не блокируется; решение
+  зафиксировано в `DECISIONS.md`.
+
+### Проверки
+
+- `go test ./internal/adapter/inbound/miniapp ./internal/service/billingservice` — exit 0.
+- `go test ./...` — exit 0.
+- `npm run build` в `web/miniapp` — exit 0.
+
+---
+
+## PR-8 — Mini App: result and artifact UX
+
+Статус: **завершён**.
+
+### Что сделано
+
+- Добавлен frontend `ResultCard` для bot/result сообщений: карточка
+  «Готовый VK-пост» вместо обычного chat bubble.
+- Text result отображается как plain text с `white-space: pre-wrap`; copy button
+  копирует только текст, без HTML.
+- Image/video preview использует только backend artifact route через
+  `artifactUrl(id)` с UUID validation; artifact URL не сохраняется в
+  `localStorage`.
+- Добавлены loading/skeleton state, safe error/fallback state и retry action,
+  который создаёт новый job через существующий `createJob` flow с тем же
+  prompt/operation/model.
+
+### Проверки
+
+- `npm run build` в `web/miniapp` — exit 0.
+- Поиск `dangerouslySetInnerHTML`, `innerHTML`, `eval`, `new Function`,
+  `markdown`, `marked` в `web/miniapp/src` — без совпадений.
+
+---
+
+## PR-9 - Mini App: history reload recovery and local retention
+
+Статус: **завершён**.
+
+### Что сделано
+
+- Mini App on startup calls `GET /miniapp/jobs`, restores non-terminal jobs and
+  resumes polling after reload. Locally remembered terminal jobs are restored as
+  lightweight UI shells and resolved from backend artifacts only when allowed.
+- `localStorage` schema for `vk_miniapp_chats_v1` now stores only
+  `job_id`, `operation_type`, `status` and `created_at`, with a 7-day TTL and
+  max 50 entries. Prompt bodies, generated text, artifact IDs/URLs, balance,
+  launch params and provider details are not persisted.
+- Legacy or suspicious local history containing sensitive-looking keys is
+  cleared on initialization with a warning that does not include field values.
+- Polling keeps one active poller and one timeout per job, clears timers on
+  terminal states and component unmount, and does not create duplicate pollers
+  for the same `job_id`.
+- Added clear local history action and a privacy note explaining that only job
+  metadata is stored locally; backend job history is not deleted.
+
+### Проверки
+
+- `npm run build` в `web/miniapp` — exit 0.
+- Поиск localStorage/sensitive/XSS patterns in Mini App frontend scope reviewed:
+  persisted history contains only allowed metadata and no raw HTML rendering was
+  added.
+
+---
+
+## PR-10 - Mini App: workflow and chat mode redesign
+
+Статус: **завершён**.
+
+### Что сделано
+
+- Добавлен явный переключатель режимов `Chat` / `Workflow`; выбранный режим
+  хранится как UI preference `vk_miniapp_mode_v1`, не влияет на billing/job
+  semantics и не останавливает polling активных jobs.
+- Chat mode сохраняет текущий chat-like UX: drawer истории, composer,
+  idempotent `createJob`, backend estimate в composer и безопасный render
+  результата через `ResultCard`.
+- Workflow mode реализует экраны `Home`, `Generate`, `Status`, `Result`,
+  `History`: backend balance, быстрые сценарии, model/operation selector,
+  backend estimate перед submit, timeline статусов, VK post preview и история
+  jobs из backend.
+- `ResultCard` переведён в VK-post-preview: аватар/имя сообщества, plain-text
+  текст или media только через backend artifact route, copy/retry и safe
+  fallback без `innerHTML`.
+- Theme CSS получил design tokens для spacing/radius/color/motion, light/dark
+  через переменные, semantic colors, touch targets и reduced-motion fallback.
+- ADR mode switching и ADR design direction зафиксированы в `DECISIONS.md`.
+
+### Проверки
+
+- `npm run build` в `web/miniapp` — exit 0.
+- `go build ./...` — exit 0.
+- Поиск `dangerouslySetInnerHTML`, `innerHTML`, `eval`, `new Function`,
+  sensitive/localStorage patterns в Mini App frontend scope reviewed.
+
+---
+
+## PR-11 - Mini App: VKUI compatibility research ADR
+
+Статус: **завершён**.
+
+### Что сделано
+
+- Проверена VKUI совместимость с текущим frontend stack: React `19.2.7`,
+  React DOM `19.2.7`, VKUI `8.2.1`.
+- `npm info @vkontakte/vkui` показал peer dependencies
+  `react: ^18.2.0 || ^19.0.0`, `react-dom: ^18.2.0 || ^19.0.0`; downgrade
+  React до 18 не требуется.
+- Временная установка `@vkontakte/vkui --save-dev` использовалась только для
+  research и не сохранена в репозитории.
+- Изолированный prototype с `Button`, `Input`, `Panel`, `PanelHeader`,
+  `Tabbar`, `TabbarItem` и `vkui.css` собрался, но показал большой bundle
+  impact: baseline `254.06 kB` raw / `77.85 kB gzip`, VKUI prototype
+  `661.27 kB` raw / `132.42 kB gzip`, delta `+407.21 kB` raw /
+  `+54.57 kB gzip`.
+- DX note: `TabbarItem` в VKUI `8.2.1` использует children для label, не старый
+  `text` prop.
+- ADR outcome: `C - hybrid`, без blind migration; VKUI не добавлен в
+  production dependencies.
+
+### Проверки
+
+- `npm run build` baseline — exit 0.
+- `npm run build` после временной devDependency без импортов — exit 0.
+- `npm run build` isolated VKUI prototype — exit 0.
+- `npm audit --json` после временной установки VKUI — 0 vulnerabilities.
+- Финальный `npm run build` текущего кода после удаления VKUI/prototype —
+  exit 0.
+
+---
+
+## PR-13 - Mini App API hang hotfix
+
+Status: **completed**.
+
+### What changed
+
+- Step 0 confirmed that Mini App `POST /miniapp/jobs` is already async:
+  the handler calls `joborchestrator.CreateJob` and returns the DTO without a
+  provider call. VK text bot intake uses the same orchestrator path.
+- Worker provider `Submit` and `Poll` calls now run under a bounded
+  per-call context timeout. Deadline errors are normalized as
+  `provider_timeout` and use the existing retry/backoff policy.
+- Terminal provider failures release reserved credits before the job is moved
+  to `failed_terminal`; billing remains append-only through the existing
+  reservation release path.
+- Regression tests cover terminal provider failure release, exhausted retry
+  release and stuck submit timeout handling.
+
+### Checks
+
+- `go test ./internal/worker` - exit 0.
+- `go test ./...` - exit 0.
+- `go build ./...` - exit 0.
+- `npm run build` in `web/miniapp` - exit 0.
+
+---
+
+## PR-13.1 - Mini App DeepSeek e2e smoke and fixes
+
+Status: **completed**.
+
+### What changed
+
+- Verified the real Mini App text job flow against DeepSeek through the
+  DeepInfra provider adapter (`PROVIDER=deepinfra`, provider chain forced to
+  `deepinfra` for smoke).
+- Fixed Mini App text `model_id` validation so `deepseek-v4-flash` is accepted
+  and persisted in job params without exposing it in `JobDTO`.
+- Happy path smoke: `POST /miniapp/jobs` returned in 68 ms, job reached
+  `succeeded` in 5.1 s, provider task was `deepinfra` with the DeepSeek model,
+  artifact access was owner-scoped, credits were captured once and idempotent
+  repeat returned the same job.
+- Failure path smoke: unreachable DeepInfra endpoint with one attempt returned
+  a job in 55 ms, reached `failed_terminal` with `provider_timeout` in 1.0 s,
+  released the reservation once and did not capture credits.
+
+### Checks
+
+- `go test ./...` - exit 0.
+- `go build ./...` - exit 0.
+- `npm run build` in `web/miniapp` - exit 0.
+
+---
+
+## PR-14 - Mini App VKUI hybrid base primitives
+
+Status: **completed**.
+
+### What changed
+
+- Added `@vkontakte/vkui` `8.2.1` as a production dependency for the Mini App.
+- Wrapped the app root with VKUI `ConfigProvider`, `AdaptivityProvider` and
+  `AppRoot`; VK light/dark appearance is bridged through the existing
+  `data-scheme` token path.
+- Migrated base controls to VKUI: primary/secondary buttons, model/status
+  selects, prompt textareas, root panel and the top-level `Chat` / `Workflow`
+  `Tabbar`.
+- Kept custom signature UX: workflow shell, quick scenario cards, backend job
+  rows, `ResultCard`, VK post preview and status timeline.
+- Preserved backend-owned decisions: no BFF contract changes, no client-side
+  billing/status source of truth, no provider calls from Mini App.
+
+### Checks
+
+- `npm run build` in `web/miniapp` - exit 0. Hybrid bundle:
+  `695.18 kB` raw / `142.18 kB gzip`; delta vs PR-14 baseline:
+  `+440.69 kB` raw / `+64.04 kB gzip`.
+- `go build ./...` - exit 0.
+- `npm audit` in `web/miniapp` - 0 vulnerabilities.
+
+---
+
+## PR-15 - Mini App chat parity with VK text bot
+
+Status: **completed**.
+
+### STEP 0 contract
+
+- VK text bot routes conversational text through `commandrouter` and
+  `joborchestrator.CreateJob`; VK inbound does not call providers directly.
+- Active GPT mode is process-local by peer and uses the same async worker path
+  with the `GPT думает...` placeholder.
+- DeepInfra/DeepSeek persona and "do not reveal provider/model/backend" rule
+  live inside the provider adapter system prompt, not in Mini App frontend.
+- Mini App already used `/miniapp/jobs` and `joborchestrator`, but chat UI/API
+  exposed selectable text model IDs.
+
+### What changed
+
+- Added `POST /miniapp/chat/messages` for Mini App chat. It verifies launch
+  params, rate-limits the verified user, creates a backend-owned
+  `text_generate` job through `joborchestrator`, and keeps submit async.
+- Mini App text model branding is now the fixed public alias `ChatGPT`.
+  Legacy DeepSeek text model IDs are accepted only for compatibility and are
+  normalized to `chatgpt` before persistence/API output.
+- Added process-local BFF chat context keyed by verified VK user. Context is
+  capped, prompt bodies are not stored in `localStorage`, and assistant
+  context is appended only after backend `succeeded` plus moderated text
+  artifact access.
+- Chat mode frontend now sends text through `/miniapp/chat/messages`, shows
+  only `ChatGPT`, keeps safe React text rendering and preserves polling.
+
+### Checks
+
+- `go test ./internal/adapter/inbound/miniapp` - exit 0.
+- `go test ./...` - exit 0.
+- `go build ./...` - exit 0.
+- `npm run build` in `web/miniapp` - exit 0.
+- Credential-bound DeepInfra smoke through `POST /miniapp/chat/messages`:
+  job reached `succeeded`, response model name was `ChatGPT`, one text artifact
+  was readable through the Mini App artifact route, and the generated text did
+  not contain DeepSeek/DeepInfra/provider/model details. The local smoke
+  wrapper itself returned non-zero after force-stopping temporary `go run`
+  API/worker processes during cleanup; no smoke assertion failed.
+
+---
+
+## PR-16.1 - Mini App 3-tab navigation shell
+
+Status: **completed**.
+
+### STEP 0 context
+
+- Branch: `fastlife_dev`, base/merge-base `e1d5c45`; PR-14 `b2b16a9` and
+  PR-15 `2c9bdfa` are present.
+- Reused PR-14 VKUI primitives (`Tabbar`, `TabbarItem`, `Button`, `Textarea`,
+  `Panel`) and PR-15 ChatGPT chat flow.
+- Existing PR-10 Workflow remains the Create surface; no backend/BFF contracts
+  changed.
+
+### What changed
+
+- Replaced the two-tab `Chat` / `Workflow` mode switch with a bottom VKUI
+  `Создать` / `Чат` / `Настройки` tab shell.
+- `Чат` is the default center tab. The selected tab is saved as
+  `vk_miniapp_active_tab_v1`, a UI-only localStorage preference.
+- `ChatScreen` stays mounted and inactive panels are hidden with CSS, so active
+  job polling and UI state survive tab switches.
+- `Настройки` is a placeholder with title and "soon" copy only.
+- ADR-010 documents the 3-tab navigation decision and PR-16.1-16.4 split.
+
+### Checks
+
+- `npm run build` in `web/miniapp` - exit 0.
+- `go build ./...` - exit 0.
+
+---
+
+## Mini App Create/chat UX polish - 2026-06-06
+
+Status: **completed**.
+
+### What changed
+
+- Chat header is now rendered only on the center `Чат` tab. The Create and
+  Settings tabs no longer show the `AI` avatar/header strip or chat-history
+  button.
+- Create starts with a plain vertical service list: `Создать фото`,
+  `Создать видео`. The `Создать пост` entry is temporarily disabled in this
+  tab; text generation remains available through Chat/VK bot flows.
+- The old Create-post preview was removed from the Create flow. Final result
+  rendering still uses safe React text/media rendering for backend artifacts.
+- Backend contracts, billing, artifact access and polling ownership were not
+  changed.
+
+### Checks
+
+- `npm run build` in `web/miniapp` - exit 0.
+- Browser smoke on the ngrok Mini App - Create tab has no chat header and
+  service choices are limited to photo/video.
+
+---
+
+## Mini App status/polling UX fix - 2026-06-06
+
+Status: **completed**.
+
+### What changed
+
+- Status timeline was tightened for mobile: smaller aligned markers, compact
+  rows, lighter connector line and reduced title sizing on the status screen.
+- Added frontend auto-resume polling for every non-terminal job already present
+  in Mini App state. This covers HMR/reload/history cases where the backend job
+  has progressed but the active status screen was left showing an old queued
+  state.
+- Checked local runtime aggregates: recent jobs are reaching terminal
+  `succeeded`, and outbox `event.job.created` / `event.job.queued` rows are
+  published. No backend/provider/billing code changed.
+
+### Checks
+
+- `npm run build` in `web/miniapp` - exit 0.
+
+---
+
+## PR-16.2 - Mini App chat threads and history sheet
+
+Status: **completed**.
+
+### STEP 0 context
+
+- PR-16.1 is present on `fastlife_dev`: the Chat tab is a mounted panel inside
+  the bottom 3-tab shell, so polling refs survive tab switches.
+- PR-15 chat submits use `POST /miniapp/chat/messages`; the BFF accepts
+  `conversation_id` as an opaque restricted string. Client UUIDs are accepted,
+  while empty `conversation_id` maps to backend `default`.
+- The backend has no conversation list/read endpoint. Conversation context is
+  still process-local in `cmd/api`, so restart or scale-out can lose context.
+
+### What changed
+
+- Chat threads now have an active id. The migrated/default dialog keeps id
+  `default`; new dialogs use client-generated UUIDs and are sent as
+  `conversation_id`.
+- The old side drawer state is reused as a top history sheet opened by tapping
+  the chat title. It shows thread title, session-only last-message preview,
+  last activity, new-dialog and clear-local-history actions.
+- Local thread persistence moved to `vk_miniapp_threads_v1` and stores only
+  `id`, `title` and `last_activity_at`. Legacy/suspicious chat history is
+  cleared without logging values.
+- The typing indicator is tied to pending job/poll state and disappears only
+  after the backend job reaches a terminal state.
+- ADR-011 documents thread storage, default migration, graceful degradation and
+  the missing durable backend conversation endpoint.
+
+### Checks
+
+- `npm run build` in `web/miniapp` - exit 0.
+- `go build ./...` - exit 0.
+
+---
+
+## PR-16.3 - Mini App Create tab generation segment
+
+Status: **completed**.
+
+### STEP 0 context
+
+- PR-16.1 is present on `fastlife_dev`: `Создать` reuses the mounted PR-10
+  `WorkflowMode` inside the 3-tab shell.
+- Supported Mini App operations are `text_generate`, `image_generate` and
+  `video_generate` in backend `operationMeta`; frontend `MODALITIES` mirrors
+  only those operations. No BFF discovery endpoint exists.
+- PR-10 workflow already contains estimate, status timeline, result screen,
+  History and `ResultCard` / VK post preview.
+
+### What changed
+
+- Added a top VKUI `SegmentedControl` for generation type selection in the
+  Create tab. It uses only supported backend operations from `MODALITIES`.
+- Kept the existing Generate -> Status -> Result flow, backend estimate
+  debounce and `enough_credits=true` submit gating.
+- History remains available in the Create tab; PR-9 reload recovery still uses
+  `GET /miniapp/jobs` and was not moved into local state.
+- Switching the operation segment changes only draft modality/model state and
+  does not clear `activeJobId`, `jobs` or the `ChatScreen` polling owner.
+- The VK post preview is more prominent on the result screen: `ResultCard` is
+  full-width in Create result and keeps text as React text plus media through
+  backend artifact routes only.
+
+### Checks
+
+- `npm run build` in `web/miniapp` - exit 0.
+- `go build ./...` - exit 0.
+
+---
+
+## PR-16.3.1 - Mini App Create choice screen and chat history button
+
+Status: **completed**.
+
+### STEP 0 context
+
+- Continued directly after PR-16.3 (`259639c`) on `fastlife_dev`.
+- Reused known PR-16.3 files only: `WorkflowMode`, chat history panel trigger,
+  `ResultCard` and `theme.css`. Backend/BFF contracts were not changed.
+
+### What changed
+
+- Removed the top Create operation segment. Create now opens on two large
+  cards: `Создать фото`, `Создать видео`.
+- The cards route into the existing PR-10 Generate -> Status -> Result flow:
+  photo uses `image_generate`, video uses `video_generate`. The previous
+  Create-post path is disabled for now; Chat/VK bot text generation remains
+  separate.
+- Estimate/gating remains backend-owned through `POST /miniapp/estimate`;
+  submit still requires `enough_credits=true`.
+- Create history is scoped to the selected type by filtering backend jobs by
+  operation. The general all-types Create history is deferred to Settings
+  PR-16.4.
+- Chat thread history now opens from an explicit header icon button. Tapping
+  the chat title no longer opens the panel.
+
+### Checks
+
+- `npm run build` in `web/miniapp` - exit 0.
+- `go build ./...` - exit 0.
+
+---
+
+## PR-16.4 - Mini App Settings tab and brand-driven polish
+
+Status: **completed**.
+
+### What changed
+
+- Settings is now a real tab: theme preference (`system` / `light` / `dark`),
+  backend balance display, payment-history placeholder, privacy note and local
+  history clear action.
+- Settings polish update: theme choices no longer show explanatory copy, balance
+  is presented as a dedicated account card with refresh and top-up actions, and
+  payment/history sections are collapsible lists to keep the tab within mobile
+  bounds.
+- Added summary generation history in Settings, sourced from backend jobs and
+  filterable by all/post/photo/video. Create keeps only operation-scoped
+  workflow history.
+- Theme preference is stored only as `vk_miniapp_theme_v1`; balance, job state
+  and billing remain backend-owned.
+- Applied brand-driven design tokens from the provided community banner/avatar:
+  accessible cyan action accent, violet and pink secondary accents, light/dark
+  neutral scales and VKUI scheme synchronization.
+- Replaced the lower tabbar letter markers with simple CSS icons; no decorative
+  emoji/sticker controls were added.
+
+### Backend dependency
+
+- Mini App has `GET /miniapp/balance`, but no read-only payment or ledger
+  history endpoint. Settings shows a safe placeholder and tracks this as a
+  separate backend follow-up.
+- Mini App has no top-up/payment-intent endpoint yet. The Settings top-up button
+  does not mutate balance locally; the documented backend follow-up is a shared
+  Mini App/VK bot payment-intent flow that appends committed `topup` ledger
+  entries only after trusted payment confirmation.
+
+### Checks
+
+- `npm run build` in `web/miniapp` - exit 0.
+- `go build ./...` - exit 0.
+
+---
+
+## Integration merge - fastlife_dev into feature/integration-web-backend
+
+Status: **completed locally, pending push at merge time**.
+
+Date: 2026-06-06
+
+### Branches
+
+- Target before merge: `feature/integration-web-backend` at `44df8d4`.
+- Source before merge: `fastlife_dev` at `f5f4873`.
+- Backup branch: `backup/pre-merge-integration-web-backend`.
+- Merge base: `e1d5c45`.
+
+### Conflict resolution
+
+- `TASKS.md`: combined both follow-up sets instead of choosing a side:
+  colleague VK bot/domain/live-smoke items and Mini App payment/top-up/thread
+  backend dependencies are all retained.
+- `internal/worker/worker_test.go`: merged the test harnesses so worker tests
+  keep both VK text dialog context coverage and Mini App provider timeout /
+  reservation release coverage.
+- Auto-merged files were reviewed manually:
+  - `cmd/api/main.go` keeps `/webhooks/vk`, admin/health/metrics and
+    `/miniapp/*` wiring plus VK control/profile, referral, dialog state,
+    anti-spam and Mini App BFF deps.
+  - `internal/worker/worker.go` and `generation.go` keep text context
+    preparation/completion and provider Submit/Poll timeouts with terminal
+    reservation release.
+  - `internal/service/billingservice/service.go` remains append-only through
+    repository ledger/reservation methods; estimate balance reads do not write.
+  - config and migrations were union-reviewed; migrations `000005`-`000007`
+    are from the VK bot branch and have no Mini App numbering conflict.
+
+### Checks
+
+- conflict marker scan - clean.
+- `gofmt -l .` - exit 0.
+- `go build ./...` - exit 0.
+- `go test ./...` - exit 0.
+- `npm --prefix web/miniapp run build` - exit 0.
+
+---
+
+## PR-17.4 - Simplify API bootstrap wiring
+
+Status: **completed**.
+
+### STEP 0 context
+
+- After PR-17.2 and PR-17.3, `cmd/api/main.go` no longer owned VK bot or
+  Mini App surface internals, but `main()` still mixed repository/service
+  construction with app-surface wiring and route mounting.
+- Safe simplification was limited to bootstrap shape: keep behavior, env keys,
+  health/admin, rate limits and route map unchanged.
+
+### What changed
+
+- Added `internal/app/api/core.go` as a bootstrap-only helper that groups shared
+  backend-core repositories and services for app surfaces.
+- `cmd/api/main.go` now calls `apiapp.NewSharedCore(pool, cfg)`, wires
+  `vkbot` and `miniapp` modules, mounts routes, and keeps health/admin/metrics
+  in the API binary.
+- Final route map is unchanged: `/webhooks/vk`, `/admin/`, `/miniapp/`,
+  `/metrics`, `/health`, `/healthz`.
+- Provider execution remains worker-owned through job flow; billing setup still
+  uses `billingservice` and ledger-backed repositories.
+
+### Checks
+
+- `gofmt -w cmd/api/main.go internal/app/api/core.go` - exit 0.
+- `go test ./...` - exit 0.
+- `go build ./...` - exit 0.
+- `npm --prefix web/miniapp run build` - exit 0.
+- `git grep -nE "^(<<<<<<<|=======|>>>>>>>)"` - clean.
+- `git diff --check` - clean.
+
+---
+
+## PR-17.5 - Document app surface architecture
+
+Status: **completed**.
+
+### What changed
+
+- Updated `docs/ARCHITECTURE.md` with a current implementation addendum for app
+  surfaces over shared backend core: `internal/app/vkbot`,
+  `internal/app/miniapp`, `internal/app/api`, `cmd/api` bootstrap and
+  `cmd/worker` provider/job execution ownership.
+- Updated `RUNBOOK.md` with API wiring locations, where to add VK bot commands
+  and Mini App BFF endpoints, and a smoke checklist for both entrances.
+- Updated `README.md` layout/current-status notes to point future agents at
+  app-surface modules.
+- Marked PR-17.2 through PR-17.5 complete in `TASKS.md`.
+
+### Architecture notes
+
+- VK bot and Mini App remain app surfaces only. They may wire handlers and
+  dependencies, but provider calls, pricing, balance mutation, job status truth,
+  moderation and artifact ownership remain in backend core.
+- `cmd/api/main.go` remains bootstrap plus route mounting; `cmd/worker` remains
+  the provider/artifact/moderation/delivery/billing-capture owner.
+
+### Checks
+
+- `go test ./...` - exit 0.
+- `go build ./...` - exit 0.
+- `npm --prefix web/miniapp run build` - exit 0.
+
+### Notes
+
+- No real VK/DeepInfra live smoke was run during the merge because it would
+  require credential-bound runtime and VK/tunnel/domain setup. The merge keeps
+  both runtime paths wired for follow-up smoke on `neiirohub.ru` or an approved
+  dev tunnel.
+
+---
+
+## PR-17.1 - App surface refactor ADR
+
+Status: **completed**.
+
+### What changed
+
+- Added ADR-016 to document VK text bot and Mini App as app surfaces above the
+  shared backend core.
+- Defined target modules `internal/app/vkbot` and `internal/app/miniapp`.
+- Kept backend source-of-truth responsibilities in shared core:
+  `internal/domain`, `internal/service`, `internal/worker`, provider adapters,
+  storage, delivery, artifact and moderation components.
+- Added PR-17.2 through PR-17.5 backlog items to `TASKS.md`.
+- Preserved the temporary copy-paste prompt queue in
+  `TEMP_PR17_SURFACE_REFACTOR_PROMPTS.md` for the remaining PR-17 steps.
+
+### Checks
+
+- Docs-only change. Runtime build/test were intentionally not run because no
+  Go, frontend, env or migration files changed.
+
+---
+
+## PR-17.2 - Extract VK bot API module
+
+Status: **completed**.
+
+### STEP 0 context
+
+- `cmd/api/main.go` previously owned VK delivery control/profile client setup,
+  Redis-backed dialog mode, Redis-backed anti-spam, referral service wiring,
+  `vkinbound.NewHandler` and `vkMenuFeatures`.
+- Shared backend-core deps remain outside the surface module: repositories,
+  billing service, job orchestrator, command router, Redis client, config and
+  logger.
+
+### What changed
+
+- Added `internal/app/vkbot/module.go` as the VK text bot app-surface wiring
+  module.
+- Moved VK control/profile client setup, dialog state, anti-spam, referral
+  service construction, inbound handler construction and menu feature mapping
+  out of `cmd/api/main.go`.
+- `cmd/api/main.go` now creates shared core deps and mounts the returned VK
+  handler at `/webhooks/vk`; admin, Mini App, metrics and health routes are
+  unchanged.
+- Runtime behavior is intended to stay unchanged: VK inbound still creates
+  Jobs through `joborchestrator`; provider calls remain worker-owned and
+  billing/referral rewards still go through `billingservice` ledger methods.
+
+### Checks
+
+- `go test ./internal/adapter/inbound/vk ./internal/service/antispam ./internal/service/dialogstate ./internal/service/referralservice` - exit 0.
+- `go test ./internal/app/vkbot` - exit 0.
+- `go build ./...` - exit 0.
+- `go test ./...` - exit 0.
+
+---
+
+## PR-17.3 - Extract Mini App API module
+
+Status: **completed**.
+
+### STEP 0 context
+
+- `cmd/api/main.go` previously owned Mini App BFF wiring: S3 object-store setup
+  for artifact reads, Mini App per-user rate limiter, `miniappapi.NewHandler`
+  and deps for users/jobs/artifacts/moderation/billing/orchestrator/logger.
+- Shared backend-core deps remain outside the surface module: repositories,
+  billing service, job orchestrator, config, logger and process lifecycle.
+
+### What changed
+
+- Added `internal/app/miniapp/module.go` as the Mini App app-surface wiring
+  module.
+- Moved Mini App S3 object reader setup, Mini App rate limiter construction and
+  `miniappapi.NewHandler` construction out of `cmd/api/main.go`.
+- `cmd/api/main.go` now creates shared core deps and mounts the returned Mini
+  App handler at `/miniapp/`; VK bot, admin, metrics and health routes are
+  unchanged.
+- BFF contracts are unchanged. The underlying `internal/adapter/inbound/miniapp`
+  route map still exposes estimate, chat messages, jobs, balance and artifact
+  endpoints.
+
+### Checks
+
+- `go test ./internal/adapter/inbound/miniapp` - exit 0.
+- `go test ./internal/app/miniapp` - exit 0.
+- `go build ./...` - exit 0.
+- `go test ./...` - exit 0.
+- `npm --prefix web/miniapp run build` - exit 0.

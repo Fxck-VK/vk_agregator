@@ -76,10 +76,11 @@ func TestSubmitPollTextSuccess(t *testing.T) {
 
 	p := New(Config{APIKey: "test-key", BaseURL: srv.URL, HTTPClient: srv.Client()})
 	task, err := p.Submit(context.Background(), domain.ProviderRequest{
-		JobID:     uuid.New(),
-		Operation: domain.OperationTextGenerate,
-		Modality:  domain.ModalityText,
-		Prompt:    "hello",
+		JobID:           uuid.New(),
+		Operation:       domain.OperationTextGenerate,
+		Modality:        domain.ModalityText,
+		Prompt:          "hello",
+		MaxOutputTokens: 800,
 	})
 	if err != nil {
 		t.Fatalf("submit text: %v", err)
@@ -87,12 +88,19 @@ func TestSubmitPollTextSuccess(t *testing.T) {
 	if seen.Input != "hello" || !strings.Contains(seen.Instructions, "3000 characters") || !strings.Contains(seen.Instructions, "НейроХаб бот") || !strings.Contains(seen.Instructions, "model name") || seen.Store {
 		t.Fatalf("unexpected text request: %+v", seen)
 	}
+	if seen.MaxOutputTokens != 800 {
+		t.Fatalf("max_output_tokens = %d, want 800", seen.MaxOutputTokens)
+	}
+
 	res, err := p.Poll(context.Background(), domain.ProviderTaskRef{Provider: task.Provider, ExternalID: task.ExternalID})
 	if err != nil {
 		t.Fatalf("poll text: %v", err)
 	}
 	if res.Status != domain.ProviderTaskSucceeded || len(res.OutputURLs) != 1 {
 		t.Fatalf("unexpected text result: %+v", res)
+	}
+	if res.Text != "hello from responses" {
+		t.Fatalf("result text = %q", res.Text)
 	}
 	if !strings.HasPrefix(res.OutputURLs[0], "data:text/plain; charset=utf-8;base64,") {
 		t.Fatalf("expected text data url, got %q", res.OutputURLs[0])

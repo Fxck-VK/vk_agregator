@@ -5,6 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net/url"
+	"strings"
+	"time"
+
+	"github.com/google/uuid"
 
 	vkdelivery "vk-ai-aggregator/internal/adapter/delivery/vk"
 	"vk-ai-aggregator/internal/domain"
@@ -38,12 +43,12 @@ var menuScreens = map[domain.CommandType]menuScreen{
 	},
 	domain.CommandBalance: {
 		text:         accountText,
-		keyboard:     accountKeyboard,
+		keyboard:     emptyAccountKeyboard,
 		needsBalance: true,
 	},
 	domain.CommandAccount: {
 		text:         accountText,
-		keyboard:     accountKeyboard,
+		keyboard:     emptyAccountKeyboard,
 		needsBalance: true,
 	},
 	domain.CommandTopUp: {
@@ -141,7 +146,7 @@ var menuScreens = map[domain.CommandType]menuScreen{
 }
 
 const (
-	gptActiveText = "🤖 SUPER GPT активен!\n\nЯ готов ответить на любые вопросы и помочь с идеями\nСпроси что-нибудь прямо сейчас!"
+	gptActiveText = "🤖 НейроХаб активен!\n\nЯ готов ответить на любые вопросы и помочь с идеями\nСпроси что-нибудь прямо сейчас!"
 
 	photoIntroText = "✅ У вас есть 1 бесплатная попытка в сутки на генерацию с текстом.\n\n▶️ Генерация фото по тексту – это когда ты пишешь, что хочешь увидеть (например, \"кот в очках на пляже\"), а ИИ сам «придумывает» и рисует такую картинку. (1 бесплатно)\n\n📸Генерация фото по тексту и фото (с референсом) – ИИ использует твою фотографию как образец — он сохраняет стиль, позу, цвета, но уже с новым содержанием по твоему описанию. (Только платные)"
 
@@ -168,7 +173,7 @@ const (
 
 	topUpText = "💰 Пополнить баланс\n\nПополнение будет подключено отдельным платежным потоком. Пока для тестирования доступны стартовые кредиты."
 
-	chooseModeText = "Выберите режим в меню выше."
+	chooseModeText = "Выберите режим в меню выше или нажмите на кнопку показать меню"
 )
 
 func controlTypeFromPayload(payload string) (domain.CommandType, bool) {
@@ -203,7 +208,15 @@ func fixedText(text string) func(int64) string {
 	}
 }
 
-func (h *Handler) sendControlResponse(ctx context.Context, t domain.CommandType, idemKey string, peerID int64, user *domain.User, allowEdit bool) error {
+type accountView struct {
+	Balance               int64
+	CompletedGenerations  int
+	InvitedCount          int
+	ReferralLink          string
+	ReferrerRewardCredits int64
+}
+
+func (h *Handler) sendControlResponse(ctx context.Context, t domain.CommandType, idemKey string, groupID, peerID int64, user *domain.User, allowEdit bool) error {
 	if h.deps.Control == nil {
 		h.logger.Warn("vk control response skipped because VK_ACCESS_TOKEN is not configured",
 			slog.String("command_type", string(t)))
@@ -230,9 +243,26 @@ func (h *Handler) sendControlResponse(ctx context.Context, t domain.CommandType,
 		balance = acc.BalanceCached
 	}
 
+	msgText := screen.text(balance)
+	keyboard := screen.keyboard()
+	if t == domain.CommandAccount || t == domain.CommandBalance {
+		view, err := h.accountView(ctx, user.ID, balance, groupID)
+		if err != nil {
+			return fmt.Errorf("build account view: %w", err)
+		}
+		msgText = accountDetailsText(view)
+		keyboard = accountKeyboard(view)
+	}
+	markWelcomeSent := user.WelcomeNameSentAt.IsZero() && shouldSendControlResponse(t)
+	if t == domain.CommandStart && user.WelcomeNameSentAt.IsZero() {
+		if name := h.personalizedWelcomeName(ctx, user); name != "" {
+			msgText = welcomeTextWithName(name)
+		}
+	}
+
 	msg := vkdelivery.Message{
-		Text:     screen.text(balance),
-		Keyboard: screen.keyboard(),
+		Text:     msgText,
+		Keyboard: keyboard,
 	}
 	h.filterMenuKeyboard(msg.Keyboard)
 	if msg.Keyboard != nil && len(msg.Keyboard.Buttons) == 0 {
@@ -246,9 +276,64 @@ func (h *Handler) sendControlResponse(ctx context.Context, t domain.CommandType,
 	result, err := h.deliverControlResponse(ctx, t, peerID, randomID, msg, allowEdit)
 	if err == nil {
 		h.setActiveMenu(peerID, result.MessageID)
+		if markWelcomeSent {
+			user.WelcomeNameSentAt = time.Now()
+			if err := h.deps.Users.Update(ctx, user); err != nil {
+				return fmt.Errorf("mark welcome sent: %w", err)
+			}
+		}
 		return nil
 	}
 	return err
+}
+
+func (h *Handler) personalizedWelcomeName(ctx context.Context, user *domain.User) string {
+	name := strings.TrimSpace(user.VKFirstName)
+	if name != "" {
+		return name
+	}
+	if h.deps.Profile == nil {
+		return ""
+	}
+
+	profile, err := h.deps.Profile.GetUserProfile(ctx, user.VKUserID)
+	if err != nil {
+		h.logger.Warn("vk user profile lookup failed",
+			slog.Int64("vk_user_id", user.VKUserID),
+			slog.String("error", err.Error()))
+		return ""
+	}
+
+	user.VKFirstName = strings.TrimSpace(profile.FirstName)
+	user.VKLastName = strings.TrimSpace(profile.LastName)
+	user.VKProfileSyncedAt = time.Now()
+	if err := h.deps.Users.Update(ctx, user); err != nil {
+		h.logger.Warn("vk user profile cache update failed",
+			slog.Int64("vk_user_id", user.VKUserID),
+			slog.String("error", err.Error()))
+	}
+	return user.VKFirstName
+}
+
+func (h *Handler) accountView(ctx context.Context, userID uuid.UUID, balance, groupID int64) (accountView, error) {
+	view := accountView{Balance: balance, ReferrerRewardCredits: h.cfg.ReferralReferrerSignupRewardCredits}
+	if h.deps.Jobs != nil {
+		count, err := h.deps.Jobs.CountSucceededByUser(ctx, userID)
+		if err != nil {
+			return view, err
+		}
+		view.CompletedGenerations = count
+	}
+	if h.deps.Referrals == nil {
+		return view, nil
+	}
+	code, invited, err := h.deps.Referrals.Stats(ctx, userID)
+	if err != nil {
+		return view, err
+	}
+	view.InvitedCount = invited
+	view.ReferralLink = buildReferralLink(h.cfg.ReferralLinkBase, groupID, code.Code)
+	return view, nil
 }
 
 func (h *Handler) deliverControlResponse(ctx context.Context, t domain.CommandType, peerID, randomID int64, msg vkdelivery.Message, allowEdit bool) (vkdelivery.SendResult, error) {
@@ -311,7 +396,8 @@ func (h *Handler) sendUnroutedTextResponse(ctx context.Context, idemKey string, 
 	}
 
 	msg := vkdelivery.Message{
-		Text: chooseModeText,
+		Text:     chooseModeText,
+		Keyboard: menuAccessKeyboard(),
 	}
 	randomID := vkdelivery.DeterministicRandomID("vk_control_unrouted:" + idemKey)
 	_, err := h.sendControlMessage(ctx, domain.CommandShowMenu, peerID, randomID, msg)
@@ -324,7 +410,7 @@ func (h *Handler) sendGPTPendingMessage(ctx context.Context, idemKey string, pee
 		return 0
 	}
 
-	msg := vkdelivery.Message{Text: "GPT думает..."}
+	msg := vkdelivery.Message{Text: "НейроХаб думает..."}
 	randomID := vkdelivery.DeterministicRandomID("vk_control_gpt_pending:" + idemKey)
 	result, err := h.sendControlMessage(ctx, domain.CommandMenuText, peerID, randomID, msg)
 	if err != nil {
@@ -407,6 +493,13 @@ func (h *Handler) getActiveMenu(peerID int64) (activeMenuMessage, bool) {
 	return msg, ok
 }
 
+func (h *Handler) hasActiveMenu(peerID int64) bool {
+	h.menuMu.Lock()
+	defer h.menuMu.Unlock()
+	_, ok := h.activeMenus[peerID]
+	return ok
+}
+
 func (h *Handler) setActiveMenu(peerID, messageID int64) {
 	if messageID == 0 {
 		return
@@ -432,6 +525,9 @@ func (h *Handler) applyMenuButtonMode(keyboard *vkdelivery.Keyboard) {
 	}
 	for row := range keyboard.Buttons {
 		for col := range keyboard.Buttons[row] {
+			if keyboard.Buttons[row][col].ActionType == "open_link" {
+				continue
+			}
 			keyboard.Buttons[row][col].ActionType = actionType
 		}
 	}
@@ -459,8 +555,27 @@ func welcomeText(_ int64) string {
 	return "👋 Добро пожаловать в НейроХаб!\n\n🤖 Здесь вы можете создавать уникальные тексты с помощью нейросети!\n\n📌 Совет: Закрепляй бота, чтобы всегда быть на связи"
 }
 
+func welcomeTextWithName(name string) string {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return welcomeText(0)
+	}
+	return fmt.Sprintf("👋 %s, добро пожаловать в НейроХаб!\n\n🤖 Здесь вы можете создавать уникальные тексты с помощью нейросети!\n\n📌 Совет: Закрепляй бота, чтобы всегда быть на связи", name)
+}
+
 func accountText(balance int64) string {
 	return fmt.Sprintf("👤 Мой аккаунт\n\nВаш баланс: %d 💎\n\nВыберите действие:", balance)
+}
+
+func accountDetailsText(view accountView) string {
+	referralLink := view.ReferralLink
+	if referralLink == "" {
+		referralLink = "ссылка появится после настройки VK_REFERRAL_LINK_BASE"
+	}
+	return fmt.Sprintf("👤 Мой аккаунт\n\n• безлимитное общение с НейроХаб!\n\n👥 Реферальная программа\n\n• Приглашённых: %d\n\n• Ссылка: %s\n\nПоддержка: @neirohub_help",
+		view.InvitedCount,
+		referralLink,
+	)
 }
 
 func welcomeKeyboard() *vkdelivery.Keyboard {
@@ -656,7 +771,23 @@ func backToKeyboard(command domain.CommandType) *vkdelivery.Keyboard {
 	}
 }
 
-func accountKeyboard() *vkdelivery.Keyboard {
+func emptyAccountKeyboard() *vkdelivery.Keyboard {
+	return accountKeyboard(accountView{})
+}
+
+func accountKeyboard(view accountView) *vkdelivery.Keyboard {
+	rows := [][]vkdelivery.KeyboardButton{}
+	rows = append(rows, []vkdelivery.KeyboardButton{
+		button("⬅️ Назад", domain.CommandShowMenu, "secondary"),
+	})
+	return &vkdelivery.Keyboard{
+		OneTime: false,
+		Inline:  true,
+		Buttons: rows,
+	}
+}
+
+func legacyAccountKeyboard() *vkdelivery.Keyboard {
 	return &vkdelivery.Keyboard{
 		OneTime: false,
 		Inline:  true,
@@ -692,4 +823,33 @@ func button(label string, command domain.CommandType, color string) vkdelivery.K
 		Payload: string(payload),
 		Color:   color,
 	}
+}
+
+func buildReferralLink(base string, groupID int64, code string) string {
+	code = strings.TrimSpace(code)
+	if code == "" {
+		return ""
+	}
+	base = strings.TrimSpace(base)
+	if base == "" {
+		if groupID == 0 {
+			return ""
+		}
+		base = fmt.Sprintf("https://vk.com/write-%d", groupID)
+	}
+	if strings.Contains(base, "{code}") {
+		return strings.ReplaceAll(base, "{code}", url.QueryEscape(code))
+	}
+	return appendURLParam(base, "ref", code)
+}
+
+func appendURLParam(raw, key, value string) string {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return raw
+	}
+	q := u.Query()
+	q.Set(key, value)
+	u.RawQuery = q.Encode()
+	return u.String()
 }

@@ -1,4 +1,4 @@
-Ниже — **максимальная production-архитектура** для агрегатора нейросетей во ВКонтакте. Я бы проектировал это не как “бота”, а как **AI Job Processing Platform**: платформа принимает сообщения из VK, превращает их в задачи, выбирает провайдера/модель, контролирует лимиты и деньги, получает артефакты — текст, фото, видео, аудио — и доставляет результат обратно пользователю.
+﻿Ниже — **максимальная production-архитектура** для агрегатора нейросетей во ВКонтакте. Я бы проектировал это не как “бота”, а как **AI Job Processing Platform**: платформа принимает сообщения из VK, превращает их в задачи, выбирает провайдера/модель, контролирует лимиты и деньги, получает артефакты — текст, фото, видео, аудио — и доставляет результат обратно пользователю.
 
 Сразу позиция: **основной backend — Go**. Python можно добавить отдельными worker’ами для локальной обработки медиа, ffmpeg-обвязки, ML-инструментов, но orchestration/backend/provider gateway/job processing лучше держать на Go.
 
@@ -6,6 +6,101 @@
 > и архитектурные инварианты. Актуальное состояние кода, выполненные шаги,
 > ограничения и ближайшие задачи см. в `PROGRESS.md`, `AUDIT.md`,
 > `ROADMAP.md` и `TASKS.md`.
+
+---
+
+# Current implementation addendum: app surfaces and backend core
+
+The current `feature/integration-web-backend` implementation is a
+production-shaped modular monolith. It has one shared backend core and two
+user-facing app surfaces:
+
+```text
+cmd/api
+  -> internal/app/api.NewSharedCore
+       repositories + billingservice + joborchestrator + commandrouter
+  -> internal/app/vkbot.NewHandler
+       mounts POST /webhooks/vk
+  -> internal/app/miniapp.NewHandler
+       mounts /miniapp/*
+  -> admin, health, metrics, graceful shutdown
+
+cmd/worker
+  -> provider submit/poll
+  -> artifact creation
+  -> moderation
+  -> VK delivery
+  -> billing capture/release/refund
+```
+
+Surface modules are intentionally thin wiring layers:
+
+- `internal/app/vkbot` owns VK text bot HTTP wiring: VK callback handler setup,
+  VK control/profile clients, menu feature flags, Redis dialog mode,
+  anti-spam and referral dependencies.
+- `internal/app/miniapp` owns Mini App BFF wiring: launch-param protected
+  handler setup, Mini App rate limiting, S3 artifact read access, and the
+  Mini App inbound handler dependencies.
+- `internal/app/api` is bootstrap-only glue for `cmd/api`: it groups shared
+  repositories and shared services so `cmd/api/main.go` stays readable.
+
+Backend core remains the source of truth:
+
+- `internal/domain` defines entities, statuses and repository contracts.
+- `internal/service/joborchestrator` creates jobs, reserves credits and writes
+  outbox events.
+- `internal/service/billingservice` owns ledger-backed balance changes.
+- `internal/worker` owns provider calls, provider polling, artifact creation,
+  moderation, delivery and capture/release/refund.
+- `internal/adapter/provider` owns provider-specific clients. It must not know
+  about VK delivery or billing.
+- `internal/adapter/storage` persists durable state; Redis is queue/cache
+  support, not billing truth.
+
+Actual request flows:
+
+```text
+VK text bot:
+VK Callback API -> /webhooks/vk -> internal/app/vkbot
+  -> internal/adapter/inbound/vk
+  -> commandrouter/joborchestrator/billingservice
+  -> outbox/Redis Stream
+  -> cmd/worker -> provider/artifact/moderation/delivery/billing capture
+```
+
+```text
+VK Mini App:
+VK launch params -> /miniapp/* -> internal/app/miniapp
+  -> internal/adapter/inbound/miniapp
+  -> joborchestrator/billingservice for jobs
+  -> backend-owned estimate/balance/status/artifact ownership checks
+  -> cmd/worker for provider/artifact/moderation/delivery/billing capture
+```
+
+Where to add features:
+
+- New VK bot command/menu behavior: start in `internal/adapter/inbound/vk` and
+  related command/router/service tests. Only touch `internal/app/vkbot` when the
+  command needs new wiring dependencies or feature flags.
+- New Mini App endpoint: add the BFF handler/DTO/tests in
+  `internal/adapter/inbound/miniapp`; wire only dependency construction in
+  `internal/app/miniapp` if a new shared service/repository is required.
+- New business rule, price, balance, job transition, provider choice or
+  moderation rule: implement it in backend core (`internal/domain`,
+  `internal/service`, `internal/worker`, provider/storage adapters as
+  appropriate), not in a surface module.
+
+Forbidden shortcuts:
+
+- Do not call providers from `internal/app/*`, `cmd/api`, VK inbound handlers or
+  Mini App BFF handlers.
+- Do not mutate balances outside `billingservice` and ledger-backed storage.
+- Do not trust frontend state for balance, pricing, job status, ownership,
+  moderation or identity.
+- Do not expose raw provider/model names to users when public UX requires the
+  `ChatGPT` alias.
+- Do not log launch params, prompt bodies, tokens, secrets, PII or private
+  artifact URLs.
 
 ---
 
@@ -2180,6 +2275,45 @@ VK AI Aggregator =
 ```
 
 Для такого проекта **Go — правильный основной язык**. Python подключать точечно, когда реально понадобится ML/media tooling. Финальная production-архитектура должна строиться вокруг `Job`, `ProviderTask`, `Artifact`, `Delivery`, `LedgerEntry` и `WorkflowRun`.
+
+---
+
+# 39. Implementation Addendum: Shared VK Referral
+
+Реферальная система для VK должна быть общей для VK Bot и VK Mini App, потому что обе поверхности находятся внутри одной социальной сети и используют одну backend-идентичность пользователя.
+
+Базовая модель:
+
+```text
+referral_codes:
+  id
+  user_id
+  code
+  created_at
+  updated_at
+
+referrals:
+  id
+  referrer_user_id
+  referred_user_id
+  referral_code
+  source: vk_bot | vk_miniapp
+  reward_status: pending | applied
+  rewarded_at
+  created_at
+  updated_at
+```
+
+Инварианты:
+
+- один internal user имеет один стабильный публичный referral code;
+- VK Bot и VK Mini App используют одни и те же таблицы и `referralservice`;
+- `/start <code>`, VK Callback `ref` и кнопка share являются control-flow и не создают billable `Job`;
+- self-referral запрещён;
+- один invited user может быть привязан только к одному referrer;
+- бонусы за приглашение начисляются только через append-only billing ledger с idempotency key;
+- referral code не должен раскрывать `vk_user_id` или internal UUID;
+- Mini App referral endpoint, когда будет добавлен, должен сначала проверять VK launch params и только потом применять referral code.
 
 [1]: https://platform.openai.com/docs/api-reference/responses "Responses | OpenAI API Reference"
 [2]: https://platform.openai.com/docs/guides/webhooks "Webhooks | OpenAI API"

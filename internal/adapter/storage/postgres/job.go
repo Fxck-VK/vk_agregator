@@ -189,6 +189,38 @@ func (r *JobRepository) List(ctx context.Context, filter domain.JobFilter, limit
 	return jobs, mapError(rows.Err())
 }
 
+func (r *JobRepository) CountActiveByUserOperation(ctx context.Context, userID uuid.UUID, operation domain.OperationType) (int, error) {
+	statuses := domain.ActiveWorkJobStatuses()
+	statusValues := make([]string, 0, len(statuses))
+	for _, status := range statuses {
+		statusValues = append(statusValues, string(status))
+	}
+	const q = `
+		SELECT count(*)
+		FROM jobs
+		WHERE user_id = $1
+		  AND operation_type = $2
+		  AND status = ANY($3::text[])`
+	var count int
+	if err := r.db.QueryRow(ctx, q, userID, operation, statusValues).Scan(&count); err != nil {
+		return 0, mapError(err)
+	}
+	return count, nil
+}
+
+// CountSucceededByUser returns completed successful jobs for one user.
+func (r *JobRepository) CountSucceededByUser(ctx context.Context, userID uuid.UUID) (int, error) {
+	const q = `
+		SELECT count(*)
+		FROM jobs
+		WHERE user_id = $1 AND status = $2`
+	var count int
+	if err := r.db.QueryRow(ctx, q, userID, domain.JobStatusSucceeded).Scan(&count); err != nil {
+		return 0, mapError(err)
+	}
+	return count, nil
+}
+
 func scanJob(row rowScanner, job *domain.Job) error {
 	var commandID *uuid.UUID
 	if err := row.Scan(

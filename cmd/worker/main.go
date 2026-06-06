@@ -29,6 +29,7 @@ import (
 	"vk-ai-aggregator/internal/platform/tracing"
 	"vk-ai-aggregator/internal/service/artifactservice"
 	"vk-ai-aggregator/internal/service/billingservice"
+	"vk-ai-aggregator/internal/service/dialogcontext"
 	"vk-ai-aggregator/internal/service/maintenance"
 	"vk-ai-aggregator/internal/service/moderationservice"
 	"vk-ai-aggregator/internal/service/outboxrelay"
@@ -103,6 +104,7 @@ func main() {
 	billingRepo := postgres.NewBillingRepository(pool)
 	modResults := postgres.NewModerationResultRepository(pool)
 	maintenanceRepo := postgres.NewMaintenanceRepository(pool)
+	conversations := postgres.NewConversationRepository(pool)
 
 	billing := billingservice.New(billingRepo, billingservice.WithPriceOverrides(cfg.PriceOverrides))
 	publisher := redisqueue.NewPublisher(rdb, cfg.StreamMaxLen)
@@ -197,11 +199,20 @@ func main() {
 	}
 
 	deps := worker.Deps{
-		Jobs:        jobs,
-		Tasks:       tasks,
-		Artifacts:   artSvc,
-		Providers:   providers,
-		Streams:     publisher,
+		Jobs:      jobs,
+		Tasks:     tasks,
+		Artifacts: artSvc,
+		Providers: providers,
+		Streams:   publisher,
+		TextContext: dialogcontext.New(conversations, dialogcontext.Config{
+			Enabled:                cfg.TextContextEnabled,
+			MaxInputTokens:         cfg.TextContextMaxInputTokens,
+			MaxOutputTokens:        cfg.TextContextMaxOutputTokens,
+			SummaryMaxTokens:       cfg.TextContextSummaryMaxTokens,
+			RecentMessagesLimit:    cfg.TextContextRecentMessagesLimit,
+			SummarizeAfterMessages: cfg.TextContextSummarizeAfterMessages,
+			SummarizeAfterTokens:   cfg.TextContextSummarizeAfterTokens,
+		}),
 		Moderator:   moderator,
 		ModResults:  modResults,
 		Releaser:    billing,

@@ -101,6 +101,26 @@ func (s *Service) Estimate(op domain.OperationType) (int64, error) {
 	return price, nil
 }
 
+// StartingBalance returns the configured grant for a new account without
+// creating the account or writing the opening ledger entry.
+func (s *Service) StartingBalance() int64 {
+	return s.startingBalance
+}
+
+// BalanceForEstimate returns the current cached balance for estimate-only
+// reads. If the account does not exist yet, it returns the configured starting
+// balance without creating a ledger entry.
+func (s *Service) BalanceForEstimate(ctx context.Context, userID uuid.UUID) (int64, error) {
+	acc, err := s.repo.GetAccountByUser(ctx, userID, s.currency)
+	if err == nil {
+		return acc.BalanceCached, nil
+	}
+	if errors.Is(err, domain.ErrNotFound) {
+		return s.startingBalance, nil
+	}
+	return 0, err
+}
+
 // EnsureAccount returns the user's credit account, creating it with the
 // starting balance if it does not yet exist.
 func (s *Service) EnsureAccount(ctx context.Context, userID uuid.UUID) (*domain.CreditAccount, error) {
@@ -234,6 +254,37 @@ func (s *Service) Refund(ctx context.Context, userID, jobID uuid.UUID, amount in
 		Reason:         "job refund",
 	}
 	return s.repo.AppendEntry(ctx, entry)
+}
+
+// Grant appends an idempotent positive top-up entry for non-payment bonuses
+// such as referral rewards. It preserves the append-only ledger invariant and
+// treats duplicate idempotency keys as success.
+func (s *Service) Grant(ctx context.Context, userID uuid.UUID, amount int64, idempotencyKey, reason string) error {
+	if amount <= 0 {
+		return nil
+	}
+	if idempotencyKey == "" {
+		return errors.New("billingservice: grant idempotency key is required")
+	}
+	acc, err := s.EnsureAccount(ctx, userID)
+	if err != nil {
+		return err
+	}
+	entry := &domain.LedgerEntry{
+		AccountID:      acc.ID,
+		Type:           domain.LedgerTopup,
+		Amount:         amount,
+		Status:         domain.LedgerStatusCommitted,
+		IdempotencyKey: idempotencyKey,
+		Reason:         reason,
+	}
+	if err := s.repo.AppendEntry(ctx, entry); err != nil {
+		if errors.Is(err, domain.ErrConflict) {
+			return nil
+		}
+		return err
+	}
+	return nil
 }
 
 func clonePrices(in map[domain.OperationType]int64) map[domain.OperationType]int64 {

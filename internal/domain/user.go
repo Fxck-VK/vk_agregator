@@ -72,6 +72,15 @@ type User struct {
 	Timezone string `json:"timezone"`
 	// RiskLevel is an anti-abuse score from 0 (trusted) to 100 (high risk).
 	RiskLevel int `json:"risk_level"`
+	// VKFirstName is the cached first name fetched from VK for personalization.
+	VKFirstName string `json:"vk_first_name"`
+	// VKLastName is the cached last name fetched from VK for personalization.
+	VKLastName string `json:"vk_last_name"`
+	// VKProfileSyncedAt is when VK profile fields were last fetched.
+	VKProfileSyncedAt time.Time `json:"vk_profile_synced_at"`
+	// WelcomeNameSentAt is when onboarding/menu access was first confirmed.
+	// The first welcome can be personalized when VK profile data is available.
+	WelcomeNameSentAt time.Time `json:"welcome_name_sent_at"`
 	// FirstSeenAt is when the platform first observed the user.
 	FirstSeenAt time.Time `json:"first_seen_at"`
 	// LastSeenAt is when the user last interacted with the platform.

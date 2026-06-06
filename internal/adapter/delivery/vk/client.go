@@ -20,6 +20,13 @@ type SendResult struct {
 	Duplicate bool
 }
 
+// UserProfile is the subset of VK user data needed by product/control UX.
+type UserProfile struct {
+	UserID    int64
+	FirstName string
+	LastName  string
+}
+
 // Message is a full VK outbound message. It is used for product/control
 // responses that need a keyboard or a pre-uploaded attachment.
 type Message struct {
@@ -43,6 +50,7 @@ type KeyboardButton struct {
 	Payload    string
 	Color      string
 	ActionType string
+	Link       string
 }
 
 // Client sends messages and media to VK conversations. Implementations must
@@ -63,6 +71,11 @@ type ControlClient interface {
 	SendMessage(ctx context.Context, peerID, randomID int64, msg Message) (SendResult, error)
 	EditMessage(ctx context.Context, peerID, messageID int64, msg Message) (SendResult, error)
 	AnswerMessageEvent(ctx context.Context, eventID string, userID, peerID int64) error
+}
+
+// UserProfileClient fetches VK user profile fields for personalization.
+type UserProfileClient interface {
+	GetUserProfile(ctx context.Context, userID int64) (UserProfile, error)
 }
 
 // MediaUploader uploads raw artifact bytes to VK and returns the canonical

@@ -60,6 +60,21 @@ type Config struct {
 	// vk_user_id.
 	MiniAppJobRateLimitRPS   float64
 	MiniAppJobRateLimitBurst int
+	// VKAntiSpam* bound user-level VK bot messages and billable GPT jobs.
+	VKAntiSpamEnabled             bool
+	VKAntiSpamMessageLimit        int
+	VKAntiSpamMessageWindow       time.Duration
+	VKAntiSpamGPTLimit            int
+	VKAntiSpamGPTWindow           time.Duration
+	VKAntiSpamCooldown            time.Duration
+	VKAntiSpamViolationLimit      int
+	VKAntiSpamViolationWindow     time.Duration
+	VKAntiSpamBlockDuration       time.Duration
+	VKAntiSpamNewUserAge          time.Duration
+	VKAntiSpamNewUserMessageLimit int
+	VKAntiSpamNewUserGPTLimit     int
+	VKAntiSpamNewUserGPTWindow    time.Duration
+	VKAntiSpamActiveGPTJobLimit   int
 
 	// DBMaxConns/DBMinConns size the Postgres pool (audit SC1).
 	DBMaxConns int32
@@ -97,6 +112,14 @@ type Config struct {
 	DeepInfraTextModel string
 	DeepInfraTextPrice int64
 
+	TextContextEnabled                bool
+	TextContextMaxInputTokens         int
+	TextContextMaxOutputTokens        int
+	TextContextSummaryMaxTokens       int
+	TextContextRecentMessagesLimit    int
+	TextContextSummarizeAfterMessages int
+	TextContextSummarizeAfterTokens   int
+
 	// ModerationProvider selects output moderation: "keyword" (default) or
 	// "openai". ArtifactScanner selects artifact byte scanning: "none" or
 	// "openai".
@@ -119,8 +142,12 @@ type Config struct {
 	// "reply" asks the user to choose a mode, "silent" ignores it, and "gpt"
 	// preserves the legacy behavior where any text creates a GPT job.
 	VKUnroutedTextMode string
+	// VKDialogModeTTL controls how long an active VK peer mode (for example
+	// GPT/text mode) survives without activity.
+	VKDialogModeTTL time.Duration
 	// VK menu feature flags hide individual product-menu buttons without
-	// removing the underlying screens. Defaults are all enabled.
+	// removing the underlying screens. Account/top-up are disabled by default;
+	// other menu flags default to enabled.
 	VKMenuVideoEnabled                bool
 	VKMenuImageEnabled                bool
 	VKMenuGPTEnabled                  bool
@@ -145,6 +172,17 @@ type Config struct {
 	VKMenuStudentsPresentationEnabled bool
 	VKMenuStudentsReportEnabled       bool
 	VKMenuStudentsQAEnabled           bool
+
+	// VKReferralLinkBase is the public VK entry URL used to build a user's
+	// single referral link. If it contains "{code}", the placeholder is replaced;
+	// otherwise the code is appended as ref=<code>.
+	VKReferralLinkBase string
+	// VKReferralShareBase is reserved for future VK share/open-link flows.
+	VKReferralShareBase string
+	ReferralCodeLength  int
+	// Referral signup rewards are posted through billing ledger entries.
+	ReferralReferrerSignupRewardCredits int64
+	ReferralReferredSignupRewardCredits int64
 
 	// VKAppID is the VK Mini App application identifier.
 	VKAppID string
@@ -268,10 +306,24 @@ func Load() Config {
 
 		ModerationExtraTerms: envList("MODERATION_EXTRA_TERMS"),
 
-		WebhookRateLimitRPS:      envFloat("WEBHOOK_RATE_LIMIT_RPS", 20),
-		WebhookRateLimitBurst:    envInt("WEBHOOK_RATE_LIMIT_BURST", 40),
-		MiniAppJobRateLimitRPS:   envFloat("MINIAPP_JOB_RATE_LIMIT_RPS", 1),
-		MiniAppJobRateLimitBurst: envInt("MINIAPP_JOB_RATE_LIMIT_BURST", 5),
+		WebhookRateLimitRPS:           envFloat("WEBHOOK_RATE_LIMIT_RPS", 20),
+		WebhookRateLimitBurst:         envInt("WEBHOOK_RATE_LIMIT_BURST", 40),
+		MiniAppJobRateLimitRPS:        envFloat("MINIAPP_JOB_RATE_LIMIT_RPS", 1),
+		MiniAppJobRateLimitBurst:      envInt("MINIAPP_JOB_RATE_LIMIT_BURST", 5),
+		VKAntiSpamEnabled:             envBool("VK_ANTISPAM_ENABLED", true),
+		VKAntiSpamMessageLimit:        envInt("VK_ANTISPAM_MESSAGE_LIMIT", 10),
+		VKAntiSpamMessageWindow:       envDuration("VK_ANTISPAM_MESSAGE_WINDOW", time.Minute),
+		VKAntiSpamGPTLimit:            envInt("VK_ANTISPAM_GPT_LIMIT", 3),
+		VKAntiSpamGPTWindow:           envDuration("VK_ANTISPAM_GPT_WINDOW", 30*time.Second),
+		VKAntiSpamCooldown:            envDuration("VK_ANTISPAM_COOLDOWN", 30*time.Second),
+		VKAntiSpamViolationLimit:      envInt("VK_ANTISPAM_VIOLATION_LIMIT", 5),
+		VKAntiSpamViolationWindow:     envDuration("VK_ANTISPAM_VIOLATION_WINDOW", 10*time.Minute),
+		VKAntiSpamBlockDuration:       envDuration("VK_ANTISPAM_BLOCK_DURATION", 15*time.Minute),
+		VKAntiSpamNewUserAge:          envDuration("VK_ANTISPAM_NEW_USER_AGE", 4*time.Hour),
+		VKAntiSpamNewUserMessageLimit: envInt("VK_ANTISPAM_NEW_USER_MESSAGE_LIMIT", 5),
+		VKAntiSpamNewUserGPTLimit:     envInt("VK_ANTISPAM_NEW_USER_GPT_LIMIT", 1),
+		VKAntiSpamNewUserGPTWindow:    envDuration("VK_ANTISPAM_NEW_USER_GPT_WINDOW", 15*time.Second),
+		VKAntiSpamActiveGPTJobLimit:   envInt("VK_ANTISPAM_ACTIVE_GPT_JOB_LIMIT", 2),
 
 		DBMaxConns:    int32(envInt("DB_MAX_CONNS", 10)),
 		DBMinConns:    int32(envInt("DB_MIN_CONNS", 0)),
@@ -281,26 +333,33 @@ func Load() Config {
 		PriceOverrides: envPriceMap("PRICES"),
 		MaxJobCost:     int64(envInt("MAX_JOB_COST", 0)),
 
-		Provider:              provider,
-		ProviderChain:         providerChain,
-		OpenAIAPIKey:          env("OPENAI_API_KEY", ""),
-		OpenAIBaseURL:         env("OPENAI_BASE_URL", "https://api.openai.com/v1"),
-		OpenAITextModel:       env("OPENAI_TEXT_MODEL", "gpt-4.1-mini"),
-		OpenAIImageModel:      env("OPENAI_IMAGE_MODEL", "gpt-image-1"),
-		OpenAIImageSize:       env("OPENAI_IMAGE_SIZE", "1024x1024"),
-		OpenAIVideoModel:      env("OPENAI_VIDEO_MODEL", "sora-2"),
-		OpenAIVideoSeconds:    env("OPENAI_VIDEO_SECONDS", "4"),
-		OpenAIVideoSize:       env("OPENAI_VIDEO_SIZE", "720x1280"),
-		OpenAITextPrice:       int64(envInt("OPENAI_TEXT_PRICE", 1)),
-		OpenAIImagePrice:      int64(envInt("OPENAI_IMAGE_PRICE", 10)),
-		OpenAIVideoPrice:      int64(envInt("OPENAI_VIDEO_PRICE", 50)),
-		DeepInfraAPIKey:       env("DEEPINFRA_API_KEY", ""),
-		DeepInfraBaseURL:      env("DEEPINFRA_BASE_URL", "https://api.deepinfra.com/v1/openai"),
-		DeepInfraTextModel:    env("DEEPINFRA_TEXT_MODEL", "deepseek-ai/DeepSeek-V4-Flash"),
-		DeepInfraTextPrice:    int64(envInt("DEEPINFRA_TEXT_PRICE", 1)),
-		ModerationProvider:    env("MODERATION_PROVIDER", "keyword"),
-		OpenAIModerationModel: env("OPENAI_MODERATION_MODEL", "omni-moderation-latest"),
-		ArtifactScanner:       env("ARTIFACT_SCANNER", "none"),
+		Provider:                          provider,
+		ProviderChain:                     providerChain,
+		OpenAIAPIKey:                      env("OPENAI_API_KEY", ""),
+		OpenAIBaseURL:                     env("OPENAI_BASE_URL", "https://api.openai.com/v1"),
+		OpenAITextModel:                   env("OPENAI_TEXT_MODEL", "gpt-4.1-mini"),
+		OpenAIImageModel:                  env("OPENAI_IMAGE_MODEL", "gpt-image-1"),
+		OpenAIImageSize:                   env("OPENAI_IMAGE_SIZE", "1024x1024"),
+		OpenAIVideoModel:                  env("OPENAI_VIDEO_MODEL", "sora-2"),
+		OpenAIVideoSeconds:                env("OPENAI_VIDEO_SECONDS", "4"),
+		OpenAIVideoSize:                   env("OPENAI_VIDEO_SIZE", "720x1280"),
+		OpenAITextPrice:                   int64(envInt("OPENAI_TEXT_PRICE", 1)),
+		OpenAIImagePrice:                  int64(envInt("OPENAI_IMAGE_PRICE", 10)),
+		OpenAIVideoPrice:                  int64(envInt("OPENAI_VIDEO_PRICE", 50)),
+		DeepInfraAPIKey:                   env("DEEPINFRA_API_KEY", ""),
+		DeepInfraBaseURL:                  env("DEEPINFRA_BASE_URL", "https://api.deepinfra.com/v1/openai"),
+		DeepInfraTextModel:                env("DEEPINFRA_TEXT_MODEL", "deepseek-ai/DeepSeek-V4-Flash"),
+		DeepInfraTextPrice:                int64(envInt("DEEPINFRA_TEXT_PRICE", 1)),
+		TextContextEnabled:                envBool("TEXT_CONTEXT_ENABLED", true),
+		TextContextMaxInputTokens:         envInt("TEXT_CONTEXT_MAX_INPUT_TOKENS", 1600),
+		TextContextMaxOutputTokens:        envInt("TEXT_CONTEXT_MAX_OUTPUT_TOKENS", 800),
+		TextContextSummaryMaxTokens:       envInt("TEXT_CONTEXT_SUMMARY_MAX_TOKENS", 400),
+		TextContextRecentMessagesLimit:    envInt("TEXT_CONTEXT_RECENT_MESSAGES_LIMIT", 6),
+		TextContextSummarizeAfterMessages: envInt("TEXT_CONTEXT_SUMMARIZE_AFTER_MESSAGES", 10),
+		TextContextSummarizeAfterTokens:   envInt("TEXT_CONTEXT_SUMMARIZE_AFTER_TOKENS", 1500),
+		ModerationProvider:                env("MODERATION_PROVIDER", "keyword"),
+		OpenAIModerationModel:             env("OPENAI_MODERATION_MODEL", "omni-moderation-latest"),
+		ArtifactScanner:                   env("ARTIFACT_SCANNER", "none"),
 
 		VKDeliveryMode:                    env("VK_DELIVERY_MODE", "mock"),
 		VKAccessToken:                     env("VK_ACCESS_TOKEN", ""),
@@ -309,12 +368,13 @@ func Load() Config {
 		VKWelcomeAttachment:               env("VK_WELCOME_ATTACHMENT", ""),
 		VKMenuButtonMode:                  env("VK_MENU_BUTTON_MODE", "callback"),
 		VKUnroutedTextMode:                env("VK_UNROUTED_TEXT_MODE", "reply"),
+		VKDialogModeTTL:                   envDuration("VK_DIALOG_MODE_TTL", time.Hour),
 		VKMenuVideoEnabled:                envBool("VK_MENU_VIDEO_ENABLED", true),
 		VKMenuImageEnabled:                envBool("VK_MENU_IMAGE_ENABLED", true),
 		VKMenuGPTEnabled:                  envBool("VK_MENU_GPT_ENABLED", true),
 		VKMenuStudentsEnabled:             envBool("VK_MENU_STUDENTS_ENABLED", true),
-		VKMenuAccountEnabled:              envBool("VK_MENU_ACCOUNT_ENABLED", true),
-		VKMenuTopUpEnabled:                envBool("VK_MENU_TOP_UP_ENABLED", true),
+		VKMenuAccountEnabled:              envBool("VK_MENU_ACCOUNT_ENABLED", false),
+		VKMenuTopUpEnabled:                envBool("VK_MENU_TOP_UP_ENABLED", false),
 		VKMenuVideoSora2Enabled:           envBool("VK_MENU_VIDEO_SORA2_ENABLED", true),
 		VKMenuVideoSora2StartEnabled:      envBool("VK_MENU_VIDEO_SORA2_START_ENABLED", true),
 		VKMenuVideoSora2ExamplesEnabled:   envBool("VK_MENU_VIDEO_SORA2_EXAMPLES_ENABLED", true),
@@ -333,6 +393,17 @@ func Load() Config {
 		VKMenuStudentsPresentationEnabled: envBool("VK_MENU_STUDENTS_PRESENTATION_ENABLED", true),
 		VKMenuStudentsReportEnabled:       envBool("VK_MENU_STUDENTS_REPORT_ENABLED", true),
 		VKMenuStudentsQAEnabled:           envBool("VK_MENU_STUDENTS_QA_ENABLED", true),
+		VKReferralLinkBase:                env("VK_REFERRAL_LINK_BASE", ""),
+		VKReferralShareBase:               env("VK_REFERRAL_SHARE_BASE", "https://vk.com/share.php"),
+		ReferralCodeLength:                envInt("REFERRAL_CODE_LENGTH", 10),
+		ReferralReferrerSignupRewardCredits: int64(envInt(
+			"REFERRAL_REFERRER_SIGNUP_REWARD_CREDITS",
+			10,
+		)),
+		ReferralReferredSignupRewardCredits: int64(envInt(
+			"REFERRAL_REFERRED_SIGNUP_REWARD_CREDITS",
+			0,
+		)),
 
 		VKAppID:                   env("VK_APP_ID", ""),
 		VKAppSecret:               env("VK_APP_SECRET", ""),

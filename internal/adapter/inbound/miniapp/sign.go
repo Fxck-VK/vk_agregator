@@ -33,6 +33,10 @@ var ErrInvalidTimestamp = errors.New("miniapp: invalid vk_ts")
 // ErrMissingUserID is returned when vk_user_id is absent or zero.
 var ErrMissingUserID = errors.New("miniapp: missing vk_user_id")
 
+// VK and local dev machines can differ by a few minutes; still reject larger
+// future timestamps so replay protection remains bounded by maxAge.
+const launchParamsFutureSkew = 5 * time.Minute
+
 // VerifyLaunchParams validates a VK Mini App launch-params query string.
 //
 // The algorithm (from https://dev.vk.com/mini-apps/development/launch-params-sign):
@@ -88,7 +92,7 @@ func VerifyLaunchParams(rawQuery, appSecret string, maxAge time.Duration) (url.V
 			return nil, ErrInvalidTimestamp
 		}
 		age := time.Since(time.Unix(ts, 0))
-		if age < 0 {
+		if age < -launchParamsFutureSkew {
 			return nil, ErrInvalidTimestamp
 		}
 		if age > maxAge {

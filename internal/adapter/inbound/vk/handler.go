@@ -14,18 +14,22 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
 
+	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/attribute"
 
 	vkdelivery "vk-ai-aggregator/internal/adapter/delivery/vk"
 	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/platform/tracing"
+	"vk-ai-aggregator/internal/service/antispam"
 	"vk-ai-aggregator/internal/service/billingservice"
 	"vk-ai-aggregator/internal/service/commandrouter"
 	"vk-ai-aggregator/internal/service/joborchestrator"
+	"vk-ai-aggregator/internal/service/referralservice"
 )
 
 // Config holds the per-deployment VK callback settings.
@@ -48,6 +52,13 @@ type Config struct {
 	// MenuFeatures controls which VK product-menu buttons are visible and
 	// reachable. Empty means every known menu command is enabled.
 	MenuFeatures MenuFeatureFlags
+	// ReferralLinkBase builds a single VK referral link per user. If empty the
+	// handler falls back to the current callback group id.
+	ReferralLinkBase string
+	// ReferralShareBase is reserved for future share/open-link flows.
+	ReferralShareBase string
+	// ReferralReferrerSignupRewardCredits is shown in the account referral copy.
+	ReferralReferrerSignupRewardCredits int64
 }
 
 // MenuFeatureFlags allows deployments to hide VK menu buttons without deleting
@@ -56,17 +67,42 @@ type MenuFeatureFlags struct {
 	DisabledCommands map[domain.CommandType]bool
 }
 
+// AntiSpam checks per-user VK bot limits after command routing but before
+// command/job persistence.
+type AntiSpam interface {
+	Check(ctx context.Context, input antispam.CheckInput) (antispam.Decision, error)
+}
+
+// DialogState stores per-peer VK mode state outside the API process.
+type DialogState interface {
+	Get(ctx context.Context, peerID int64) (mode string, ok bool, err error)
+	Set(ctx context.Context, peerID int64, mode string) error
+	Clear(ctx context.Context, peerID int64) error
+}
+
+// ReferralService is the shared backend referral service used by VK bot and
+// future VK Mini App flows.
+type ReferralService interface {
+	Stats(ctx context.Context, userID uuid.UUID) (*domain.ReferralCode, int, error)
+	Apply(ctx context.Context, input referralservice.ApplyInput) (referralservice.ApplyResult, error)
+}
+
 // Deps are the collaborators the handler needs. All are interfaces or services
 // so the handler stays storage- and provider-agnostic.
 type Deps struct {
 	Idempotency  domain.IdempotencyRepository
 	Inbound      domain.InboundEventRepository
 	Users        domain.UserRepository
+	Jobs         domain.JobRepository
 	Commands     domain.CommandRepository
 	Billing      *billingservice.Service
+	Referrals    ReferralService
 	Orchestrator *joborchestrator.Orchestrator
 	Router       *commandrouter.Router
 	Control      vkdelivery.ControlClient
+	Profile      vkdelivery.UserProfileClient
+	DialogState  DialogState
+	AntiSpam     AntiSpam
 	Logger       *slog.Logger
 }
 
@@ -157,6 +193,8 @@ type messageNew struct {
 	PeerID      int64          `json:"peer_id"`
 	Text        string         `json:"text"`
 	Payload     string         `json:"payload"`
+	Ref         string         `json:"ref"`
+	RefSource   string         `json:"ref_source"`
 	Attachments []vkAttachment `json:"attachments"`
 }
 
@@ -165,6 +203,8 @@ type vkMessage struct {
 	PeerID                int64          `json:"peer_id"`
 	Text                  string         `json:"text"`
 	Payload               string         `json:"payload"`
+	Ref                   string         `json:"ref"`
+	RefSource             string         `json:"ref_source"`
 	ConversationMessageID int64          `json:"conversation_message_id"`
 	Attachments           []vkAttachment `json:"attachments"`
 }
@@ -200,11 +240,11 @@ type vkSticker struct {
 	Emoji     string `json:"emoji"`
 }
 
-func (m messageNew) resolve() (fromID, peerID int64, text, payload string) {
+func (m messageNew) resolve() (fromID, peerID int64, text, payload, ref string) {
 	if m.Message != nil {
-		return m.Message.FromID, m.Message.PeerID, normalizedMessageText(m.Message.Text, m.Message.Attachments), m.Message.Payload
+		return m.Message.FromID, m.Message.PeerID, normalizedMessageText(m.Message.Text, m.Message.Attachments), m.Message.Payload, m.Message.Ref
 	}
-	return m.FromID, m.PeerID, normalizedMessageText(m.Text, m.Attachments), m.Payload
+	return m.FromID, m.PeerID, normalizedMessageText(m.Text, m.Attachments), m.Payload, m.Ref
 }
 
 func normalizedMessageText(text string, attachments []vkAttachment) string {
@@ -283,7 +323,7 @@ func (h *Handler) handleMessageNew(ctx context.Context, cb callback, rawBody []b
 			return fmt.Errorf("decode object: %w", err)
 		}
 	}
-	fromID, peerID, text, payload := obj.resolve()
+	fromID, peerID, text, payload, ref := obj.resolve()
 	if fromID == 0 {
 		return errors.New("message has no from_id")
 	}
@@ -319,7 +359,7 @@ func (h *Handler) handleMessageNew(ctx context.Context, cb callback, rawBody []b
 		return nil
 	}
 
-	if err := h.process(ctx, cb, rawBody, eventID, idemKey, fromID, peerID, text, payload, false); err != nil {
+	if err := h.process(ctx, cb, rawBody, eventID, idemKey, fromID, peerID, text, payload, ref, false); err != nil {
 		_ = h.deps.Idempotency.MarkFailed(ctx, idemKey)
 		return err
 	}
@@ -380,7 +420,7 @@ func (h *Handler) handleMessageEvent(ctx context.Context, cb callback, rawBody [
 	}
 	h.answerMessageEvent(ctx, answerEventID, fromID, peerID)
 
-	if err := h.process(ctx, cb, rawBody, eventID, idemKey, fromID, peerID, "", payload, true); err != nil {
+	if err := h.process(ctx, cb, rawBody, eventID, idemKey, fromID, peerID, "", payload, "", true); err != nil {
 		_ = h.deps.Idempotency.MarkFailed(ctx, idemKey)
 		return err
 	}
@@ -399,7 +439,7 @@ func (h *Handler) answerMessageEvent(ctx context.Context, eventID string, userID
 }
 
 // process runs the InboundEvent -> User -> Command -> Job flow.
-func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, eventID, idemKey string, fromID, peerID int64, text, payload string, controlOnly bool) error {
+func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, eventID, idemKey string, fromID, peerID int64, text, payload, ref string, controlOnly bool) error {
 	// InboundEvent: persist the raw event for audit and reprocessing.
 	inbound := &domain.InboundEvent{
 		Source:         "vk",
@@ -412,8 +452,15 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 		Status:         domain.InboundReceived,
 		IdempotencyKey: idemKey,
 	}
-	if err := h.deps.Inbound.Create(ctx, inbound); err != nil && !errors.Is(err, domain.ErrConflict) {
-		return fmt.Errorf("save inbound: %w", err)
+	if err := h.deps.Inbound.Create(ctx, inbound); err != nil {
+		if !errors.Is(err, domain.ErrConflict) {
+			return fmt.Errorf("save inbound: %w", err)
+		}
+		existing, getErr := h.deps.Inbound.GetByIdempotencyKey(ctx, idemKey)
+		if getErr != nil {
+			return fmt.Errorf("load existing inbound: %w", getErr)
+		}
+		inbound = existing
 	}
 
 	// User: get or create, granting the starting balance to brand-new users.
@@ -436,11 +483,52 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 		controlFromPayload = true
 	}
 
+	if code := h.referralCodeFromEvent(ref, parsed); code != "" {
+		if err := h.applyReferralCode(ctx, user.ID, code); err != nil {
+			return fmt.Errorf("apply referral code: %w", err)
+		}
+	}
+
+	textAskEnabled := false
+	if parsed.Type == domain.CommandTextAsk {
+		textAskEnabled = h.textAskEnabled(ctx, peerID)
+	}
+	if shouldForceOnboarding(user, parsed, controlFromPayload, controlOnly, textAskEnabled) {
+		parsed = commandrouter.Result{Type: domain.CommandStart}
+	}
+
 	unroutedText := false
-	if parsed.Type == domain.CommandTextAsk && !h.textAskEnabled(peerID) {
+	if parsed.Type == domain.CommandTextAsk && !textAskEnabled {
 		unroutedText = true
 		parsed = commandrouter.Result{Type: domain.CommandUnknown}
 	}
+
+	if h.deps.AntiSpam != nil {
+		decision, err := h.deps.AntiSpam.Check(ctx, antispam.CheckInput{
+			User:        user,
+			VKUserID:    fromID,
+			CommandType: parsed.Type,
+			Operation:   parsed.Operation,
+			CreatesJob:  parsed.CreatesJob(),
+		})
+		if err != nil {
+			h.logger.Warn("vk anti-spam check failed; allowing event",
+				slog.Int64("vk_user_id", fromID),
+				slog.String("error", err.Error()))
+		} else if !decision.Allowed {
+			if err := h.sendAntiSpamResponse(ctx, idemKey, peerID, decision); err != nil {
+				return fmt.Errorf("send anti-spam response: %w", err)
+			}
+			if err := h.deps.Inbound.SetStatus(ctx, inbound.ID, domain.InboundProcessed); err != nil {
+				return fmt.Errorf("mark inbound processed: %w", err)
+			}
+			if err := h.deps.Idempotency.MarkCompleted(ctx, idemKey, inbound.ID); err != nil {
+				return fmt.Errorf("mark idempotency completed: %w", err)
+			}
+			return nil
+		}
+	}
+
 	cmd := &domain.Command{
 		UserID:         user.ID,
 		VKPeerID:       peerID,
@@ -465,24 +553,35 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 	resourceID := cmd.ID
 
 	switch {
+	case controlOnly && parsed.Type == domain.CommandShowMenu && controlFromPayload && !h.hasActiveMenu(peerID):
+		// A stale inline "Back/show menu" callback can arrive after a GPT answer
+		// has already cleared the active menu. Acknowledge it, but do not create
+		// a new welcome/menu message; the persistent lower text button remains
+		// the explicit way to open a fresh menu at the bottom of the chat.
+		h.clearDialogMode(ctx, peerID)
 	case unroutedText:
 		if err := h.sendUnroutedTextResponse(ctx, idemKey, peerID); err != nil {
 			return fmt.Errorf("send unrouted text response: %w", err)
 		}
 	case shouldSendControlResponse(parsed.Type):
+		if shouldRepairPersistentKeyboard(parsed.Type, controlFromPayload, controlOnly) {
+			if err := h.sendPersistentMenuButton(ctx, idemKey, peerID); err != nil {
+				return fmt.Errorf("send persistent menu repair: %w", err)
+			}
+		}
 		allowEdit := controlFromPayload && !(parsed.Type == domain.CommandShowMenu && !controlOnly)
-		if err := h.sendControlResponse(ctx, parsed.Type, idemKey, peerID, user, allowEdit); err != nil {
+		if err := h.sendControlResponse(ctx, parsed.Type, idemKey, cb.GroupID, peerID, user, allowEdit); err != nil {
 			return fmt.Errorf("send control response: %w", err)
 		}
 		if parsed.Type == domain.CommandMenuText {
-			h.setDialogMode(peerID, dialogModeGPT)
+			h.setDialogMode(ctx, peerID, dialogModeGPT)
 		} else {
-			h.clearDialogMode(peerID)
+			h.clearDialogMode(ctx, peerID)
 		}
 	default:
 		h.clearActiveMenu(peerID)
 		if parsed.Type != domain.CommandTextAsk {
-			h.clearDialogMode(peerID)
+			h.clearDialogMode(ctx, peerID)
 		}
 	}
 
@@ -490,7 +589,7 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 	// commands (balance/status/cancel/help) are recorded but produce no job.
 	if parsed.CreatesJob() {
 		placeholderID := int64(0)
-		if parsed.Type == domain.CommandTextAsk && h.gptDialogActive(peerID) {
+		if parsed.Type == domain.CommandTextAsk && h.gptDialogActive(ctx, peerID) {
 			placeholderID = h.sendGPTPendingMessage(ctx, idemKey, peerID)
 		}
 
@@ -532,35 +631,105 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 	return nil
 }
 
-func (h *Handler) textAskEnabled(peerID int64) bool {
+func shouldForceOnboarding(user *domain.User, parsed commandrouter.Result, controlFromPayload, controlOnly, textAskEnabled bool) bool {
+	if user == nil || !user.WelcomeNameSentAt.IsZero() || controlFromPayload || controlOnly {
+		return false
+	}
+	switch parsed.Type {
+	case domain.CommandTextAsk:
+		return !textAskEnabled
+	case domain.CommandUnknown, domain.CommandShowMenu:
+		return true
+	default:
+		return false
+	}
+}
+
+func shouldRepairPersistentKeyboard(t domain.CommandType, controlFromPayload, controlOnly bool) bool {
+	return t == domain.CommandShowMenu && !controlFromPayload && !controlOnly
+}
+
+func (h *Handler) textAskEnabled(ctx context.Context, peerID int64) bool {
 	if h.cfg.UnroutedTextMode == unroutedTextModeGPT {
 		return true
 	}
-	return h.gptDialogActive(peerID)
+	return h.gptDialogActive(ctx, peerID)
 }
 
-func (h *Handler) gptDialogActive(peerID int64) bool {
-	mode, ok := h.getDialogMode(peerID)
+func (h *Handler) sendAntiSpamResponse(ctx context.Context, idemKey string, peerID int64, decision antispam.Decision) error {
+	if h.deps.Control == nil {
+		h.logger.Warn("vk anti-spam response skipped because VK_ACCESS_TOKEN is not configured",
+			slog.String("decision", string(decision.Kind)))
+		return nil
+	}
+	if decision.Message == "" {
+		return nil
+	}
+	msg := vkdelivery.Message{Text: decision.Message}
+	randomID := vkdelivery.DeterministicRandomID("vk_control_antispam:" + idemKey)
+	_, err := h.sendControlMessage(ctx, domain.CommandShowMenu, peerID, randomID, msg)
+	return err
+}
+
+func (h *Handler) gptDialogActive(ctx context.Context, peerID int64) bool {
+	mode, ok := h.getDialogMode(ctx, peerID)
 	return ok && mode == dialogModeGPT
 }
 
-func (h *Handler) getDialogMode(peerID int64) (dialogMode, bool) {
+func (h *Handler) getDialogMode(ctx context.Context, peerID int64) (dialogMode, bool) {
 	h.modeMu.Lock()
-	defer h.modeMu.Unlock()
 	mode, ok := h.dialogModes[peerID]
-	return mode, ok
-}
-
-func (h *Handler) setDialogMode(peerID int64, mode dialogMode) {
+	h.modeMu.Unlock()
+	if ok {
+		return mode, true
+	}
+	if h.deps.DialogState == nil {
+		return "", false
+	}
+	persistedMode, ok, err := h.deps.DialogState.Get(ctx, peerID)
+	if err != nil {
+		h.logger.Warn("vk dialog mode lookup failed",
+			slog.Int64("peer_id", peerID),
+			slog.String("error", err.Error()))
+		return "", false
+	}
+	if !ok {
+		return "", false
+	}
+	mode = dialogMode(persistedMode)
 	h.modeMu.Lock()
-	defer h.modeMu.Unlock()
 	h.dialogModes[peerID] = mode
+	h.modeMu.Unlock()
+	return mode, true
 }
 
-func (h *Handler) clearDialogMode(peerID int64) {
+func (h *Handler) setDialogMode(ctx context.Context, peerID int64, mode dialogMode) {
 	h.modeMu.Lock()
-	defer h.modeMu.Unlock()
+	h.dialogModes[peerID] = mode
+	h.modeMu.Unlock()
+	if h.deps.DialogState == nil {
+		return
+	}
+	if err := h.deps.DialogState.Set(ctx, peerID, string(mode)); err != nil {
+		h.logger.Warn("vk dialog mode persist failed",
+			slog.Int64("peer_id", peerID),
+			slog.String("mode", string(mode)),
+			slog.String("error", err.Error()))
+	}
+}
+
+func (h *Handler) clearDialogMode(ctx context.Context, peerID int64) {
+	h.modeMu.Lock()
 	delete(h.dialogModes, peerID)
+	h.modeMu.Unlock()
+	if h.deps.DialogState == nil {
+		return
+	}
+	if err := h.deps.DialogState.Clear(ctx, peerID); err != nil {
+		h.logger.Warn("vk dialog mode clear failed",
+			slog.Int64("peer_id", peerID),
+			slog.String("error", err.Error()))
+	}
 }
 
 func (h *Handler) ensureUser(ctx context.Context, vkUserID int64) (*domain.User, error) {
@@ -588,6 +757,61 @@ func (h *Handler) ensureUser(ctx context.Context, vkUserID int64) (*domain.User,
 		return nil, fmt.Errorf("ensure account: %w", err)
 	}
 	return user, nil
+}
+
+func (h *Handler) referralCodeFromEvent(ref string, parsed commandrouter.Result) string {
+	if code := referralCodeFromRaw(ref); code != "" {
+		return code
+	}
+	if parsed.Type == domain.CommandStart {
+		return referralCodeFromRaw(parsed.Arg)
+	}
+	return ""
+}
+
+func referralCodeFromRaw(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	if u, err := url.Parse(raw); err == nil {
+		if ref := u.Query().Get("ref"); ref != "" {
+			return referralservice.NormalizeCode(ref)
+		}
+		if ref := u.Query().Get("start"); ref != "" {
+			return referralservice.NormalizeCode(ref)
+		}
+	}
+	if strings.Contains(raw, "=") && !strings.Contains(raw, " ") {
+		if values, err := url.ParseQuery(raw); err == nil {
+			if ref := values.Get("ref"); ref != "" {
+				return referralservice.NormalizeCode(ref)
+			}
+		}
+	}
+	fields := strings.Fields(raw)
+	if len(fields) == 0 {
+		return ""
+	}
+	return referralservice.NormalizeCode(fields[0])
+}
+
+func (h *Handler) applyReferralCode(ctx context.Context, userID uuid.UUID, code string) error {
+	if h.deps.Referrals == nil {
+		return nil
+	}
+	result, err := h.deps.Referrals.Apply(ctx, referralservice.ApplyInput{
+		Code:           code,
+		ReferredUserID: userID,
+		Source:         domain.ReferralSourceVKBot,
+	})
+	if err != nil {
+		return err
+	}
+	if result.Applied {
+		h.logger.Info("vk referral applied")
+	}
+	return nil
 }
 
 func writeText(w http.ResponseWriter, status int, body string) {
