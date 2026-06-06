@@ -19,15 +19,13 @@ import (
 	adminapi "vk-ai-aggregator/internal/adapter/inbound/admin"
 	redisqueue "vk-ai-aggregator/internal/adapter/queue/redis"
 	"vk-ai-aggregator/internal/adapter/storage/postgres"
+	apiapp "vk-ai-aggregator/internal/app/api"
 	miniappapp "vk-ai-aggregator/internal/app/miniapp"
 	"vk-ai-aggregator/internal/app/vkbot"
 	"vk-ai-aggregator/internal/platform/config"
 	"vk-ai-aggregator/internal/platform/metrics"
 	"vk-ai-aggregator/internal/platform/ratelimit"
 	"vk-ai-aggregator/internal/platform/tracing"
-	"vk-ai-aggregator/internal/service/billingservice"
-	"vk-ai-aggregator/internal/service/commandrouter"
-	"vk-ai-aggregator/internal/service/joborchestrator"
 )
 
 func main() {
@@ -66,54 +64,36 @@ func main() {
 	rdb := redisqueue.NewClientWithPool(cfg.RedisAddr, cfg.RedisPassword, cfg.RedisDB, cfg.RedisPoolSize)
 	defer rdb.Close()
 
-	// Repositories and services.
-	users := postgres.NewUserRepository(pool)
-	jobs := postgres.NewJobRepository(pool)
-	commands := postgres.NewCommandRepository(pool)
-	inbound := postgres.NewInboundEventRepository(pool)
-	idem := postgres.NewIdempotencyRepository(pool)
-	deliveries := postgres.NewDeliveryRepository(pool)
-	billingRepo := postgres.NewBillingRepository(pool)
-	referralsRepo := postgres.NewReferralRepository(pool)
-	artifacts := postgres.NewArtifactRepository(pool)
-	modResults := postgres.NewModerationResultRepository(pool)
-
-	billing := billingservice.New(billingRepo, billingservice.WithPriceOverrides(cfg.PriceOverrides))
-	uowMgr := postgres.NewUnitOfWork(pool)
-	// The orchestrator records a queued outbox event; the worker's outbox relay
-	// publishes it to the queue, so the api process does not enqueue directly
-	// (audit A2).
-	orch := joborchestrator.New(jobs, uowMgr, billing, cfg.MaxJobCost)
-	router := commandrouter.New()
+	core := apiapp.NewSharedCore(pool, cfg)
 	vkHandler := vkbot.NewHandler(cfg, vkbot.Deps{
 		Redis:        rdb,
-		Idempotency:  idem,
-		Inbound:      inbound,
-		Users:        users,
-		Jobs:         jobs,
-		Commands:     commands,
-		Billing:      billing,
-		Referrals:    referralsRepo,
-		Orchestrator: orch,
-		Router:       router,
+		Idempotency:  core.Idempotency,
+		Inbound:      core.Inbound,
+		Users:        core.Users,
+		Jobs:         core.Jobs,
+		Commands:     core.Commands,
+		Billing:      core.Billing,
+		Referrals:    core.Referrals,
+		Orchestrator: core.Orchestrator,
+		Router:       core.Router,
 		Logger:       logger,
 	})
 
 	admin := adminapi.NewHandler(adminapi.Config{Token: cfg.AdminToken}, adminapi.Deps{
-		Jobs:       jobs,
-		Users:      users,
-		Deliveries: deliveries,
-		Billing:    billingRepo,
+		Jobs:       core.Jobs,
+		Users:      core.Users,
+		Deliveries: core.Deliveries,
+		Billing:    core.BillingRepo,
 	})
 
 	miniapp := miniappapp.NewHandler(ctx, cfg, miniappapp.Deps{
-		Users:        users,
-		Jobs:         jobs,
-		Artifacts:    artifacts,
-		Moderation:   modResults,
-		Billing:      billing,
-		BillingRepo:  billingRepo,
-		Orchestrator: orch,
+		Users:        core.Users,
+		Jobs:         core.Jobs,
+		Artifacts:    core.Artifacts,
+		Moderation:   core.Moderation,
+		Billing:      core.Billing,
+		BillingRepo:  core.BillingRepo,
+		Orchestrator: core.Orchestrator,
 		Logger:       logger,
 	})
 

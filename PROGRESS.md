@@ -1500,6 +1500,41 @@ Date: 2026-06-06
 - `go test ./...` - exit 0.
 - `npm --prefix web/miniapp run build` - exit 0.
 
+---
+
+## PR-17.4 - Simplify API bootstrap wiring
+
+Status: **completed**.
+
+### STEP 0 context
+
+- After PR-17.2 and PR-17.3, `cmd/api/main.go` no longer owned VK bot or
+  Mini App surface internals, but `main()` still mixed repository/service
+  construction with app-surface wiring and route mounting.
+- Safe simplification was limited to bootstrap shape: keep behavior, env keys,
+  health/admin, rate limits and route map unchanged.
+
+### What changed
+
+- Added `internal/app/api/core.go` as a bootstrap-only helper that groups shared
+  backend-core repositories and services for app surfaces.
+- `cmd/api/main.go` now calls `apiapp.NewSharedCore(pool, cfg)`, wires
+  `vkbot` and `miniapp` modules, mounts routes, and keeps health/admin/metrics
+  in the API binary.
+- Final route map is unchanged: `/webhooks/vk`, `/admin/`, `/miniapp/`,
+  `/metrics`, `/health`, `/healthz`.
+- Provider execution remains worker-owned through job flow; billing setup still
+  uses `billingservice` and ledger-backed repositories.
+
+### Checks
+
+- `gofmt -w cmd/api/main.go internal/app/api/core.go` - exit 0.
+- `go test ./...` - exit 0.
+- `go build ./...` - exit 0.
+- `npm --prefix web/miniapp run build` - exit 0.
+- `git grep -nE "^(<<<<<<<|=======|>>>>>>>)"` - clean.
+- `git diff --check` - clean.
+
 ### Notes
 
 - No real VK/DeepInfra live smoke was run during the merge because it would

@@ -1,0 +1,59 @@
+// Package api contains bootstrap-only helpers for the cmd/api binary.
+package api
+
+import (
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	"vk-ai-aggregator/internal/adapter/storage/postgres"
+	"vk-ai-aggregator/internal/domain"
+	"vk-ai-aggregator/internal/platform/config"
+	"vk-ai-aggregator/internal/service/billingservice"
+	"vk-ai-aggregator/internal/service/commandrouter"
+	"vk-ai-aggregator/internal/service/joborchestrator"
+)
+
+// SharedCore groups backend-core collaborators shared by app surfaces.
+type SharedCore struct {
+	Users        domain.UserRepository
+	Jobs         domain.JobRepository
+	Commands     domain.CommandRepository
+	Inbound      domain.InboundEventRepository
+	Idempotency  domain.IdempotencyRepository
+	Deliveries   domain.DeliveryRepository
+	BillingRepo  domain.BillingRepository
+	Referrals    domain.ReferralRepository
+	Artifacts    domain.ArtifactRepository
+	Moderation   domain.ModerationResultRepository
+	Billing      *billingservice.Service
+	Orchestrator *joborchestrator.Orchestrator
+	Router       *commandrouter.Router
+}
+
+// NewSharedCore wires repositories and services without owning surface behavior.
+func NewSharedCore(pool *pgxpool.Pool, cfg config.Config) SharedCore {
+	users := postgres.NewUserRepository(pool)
+	jobs := postgres.NewJobRepository(pool)
+	billingRepo := postgres.NewBillingRepository(pool)
+	billing := billingservice.New(billingRepo, billingservice.WithPriceOverrides(cfg.PriceOverrides))
+
+	// The orchestrator records a queued outbox event; the worker's outbox relay
+	// publishes it to the queue, so the api process does not enqueue directly
+	// (audit A2).
+	orch := joborchestrator.New(jobs, postgres.NewUnitOfWork(pool), billing, cfg.MaxJobCost)
+
+	return SharedCore{
+		Users:        users,
+		Jobs:         jobs,
+		Commands:     postgres.NewCommandRepository(pool),
+		Inbound:      postgres.NewInboundEventRepository(pool),
+		Idempotency:  postgres.NewIdempotencyRepository(pool),
+		Deliveries:   postgres.NewDeliveryRepository(pool),
+		BillingRepo:  billingRepo,
+		Referrals:    postgres.NewReferralRepository(pool),
+		Artifacts:    postgres.NewArtifactRepository(pool),
+		Moderation:   postgres.NewModerationResultRepository(pool),
+		Billing:      billing,
+		Orchestrator: orch,
+		Router:       commandrouter.New(),
+	}
+}
