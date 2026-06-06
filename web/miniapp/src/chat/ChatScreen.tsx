@@ -18,10 +18,14 @@ import {
   listJobs,
   getBalance,
   isTerminal,
+  listChatConversationMessages,
+  listChatConversations,
   statusKind,
   errorLabel,
   apiUserMessage,
   resolveBotText,
+  type ChatConversation,
+  type ChatConversationMessage,
   type Job,
 } from "../api/client";
 import { haptic, type VkUser } from "../hooks/useBridge";
@@ -142,6 +146,71 @@ function upsertJob(jobs: Job[], job: Job): Job[] {
   return next.sort((a, b) => b.created_at.localeCompare(a.created_at));
 }
 
+function chatFromConversation(conversation: ChatConversation): Chat {
+  const createdAt = Date.parse(conversation.created_at) || Date.now();
+  const updatedAt = Date.parse(conversation.updated_at) || createdAt;
+  return {
+    id: conversation.id || "default",
+    title: conversation.title || "НейроХаб диалог",
+    preview: conversation.last_message_preview,
+    createdAt,
+    updatedAt,
+    messages: [],
+  };
+}
+
+function messageFromHistory(message: ChatConversationMessage): ChatMessage {
+  return {
+    id: message.id,
+    role: message.role === "bot" ? "bot" : "user",
+    text: message.text,
+    jobId: message.job_id,
+    createdAt: message.created_at,
+  };
+}
+
+function mergeBackendChats(prev: Chat[], backend: Chat[]): Chat[] {
+  if (backend.length === 0) {
+    const localOnly = prev.filter((chat) => chat.messages.some((msg) => msg.pending));
+    return localOnly.length > 0 ? localOnly : prev.length > 0 ? prev : [];
+  }
+  const byID = new Map<string, Chat>();
+  for (const chat of backend) {
+    byID.set(chat.id, chat);
+  }
+  for (const chat of prev) {
+    if (!chat.messages.some((msg) => msg.pending)) continue;
+    const existing = byID.get(chat.id);
+    byID.set(chat.id, {
+      ...(existing ?? chat),
+      messages: chat.messages,
+      updatedAt: Math.max(existing?.updatedAt ?? 0, chat.updatedAt),
+    });
+  }
+  return Array.from(byID.values()).sort((a, b) => b.updatedAt - a.updatedAt);
+}
+
+function mergeHistoryMessages(current: ChatMessage[], history: ChatMessage[]): ChatMessage[] {
+  const byID = new Map<string, ChatMessage>();
+  for (const message of history) {
+    byID.set(message.id, message);
+  }
+  for (const message of current) {
+    if (message.pending || message.error) {
+      byID.set(message.id, message);
+      continue;
+    }
+    if (message.jobId && !history.some((item) => item.jobId === message.jobId && item.role === message.role)) {
+      byID.set(message.id, message);
+    }
+  }
+  return Array.from(byID.values()).sort((a, b) => {
+    const at = Date.parse(a.createdAt ?? "") || 0;
+    const bt = Date.parse(b.createdAt ?? "") || 0;
+    return at - bt;
+  });
+}
+
 function pollTargetForJob(chats: Chat[], job: Job): { chatId: string; botMsgId: string; missing: boolean } {
   for (const chat of chats) {
     const msg = chat.messages.find((item) => item.role === "bot" && item.jobId === job.id);
@@ -192,6 +261,53 @@ export function ChatScreen({ user }: { user: VkUser }) {
   const refreshBalance = useCallback(() => {
     getBalance().then(setBalance).catch(() => undefined);
   }, []);
+
+  const loadConversationMessages = useCallback(
+    async (chatId: string) => {
+      if (!chatId || chatId.startsWith("job-")) return;
+      try {
+        const history = await listChatConversationMessages(chatId);
+        if (!mountedRef.current) return;
+        const messages = history.map(messageFromHistory);
+        setChats((prev) =>
+          prev.map((chat) =>
+            chat.id === chatId
+              ? {
+                  ...chat,
+                  messages: mergeHistoryMessages(chat.messages, messages),
+                  preview: messages[messages.length - 1]?.text ?? chat.preview,
+                }
+              : chat,
+          ),
+        );
+      } catch {
+        if (!mountedRef.current) return;
+        setChats((prev) =>
+          prev.map((chat) =>
+            chat.id === chatId && !chat.messages.some((msg) => msg.pending)
+              ? { ...chat, messages: [] }
+              : chat,
+          ),
+        );
+      }
+    },
+    [setChats],
+  );
+
+  const refreshConversations = useCallback(async () => {
+    const conversations = await listChatConversations();
+    if (!mountedRef.current) return;
+    const backendChats = conversations.map(chatFromConversation);
+    setChats((prev) => {
+      const merged = mergeBackendChats(prev, backendChats);
+      return merged.length > 0 ? merged : prev;
+    });
+    const knownIDs = new Set(backendChats.map((chat) => chat.id));
+    setActiveId((cur) => {
+      if (cur && knownIDs.has(cur)) return cur;
+      return backendChats[0]?.id ?? "default";
+    });
+  }, [setActiveId, setChats]);
 
   function changeTab(nextTab: AppTab) {
     setActiveTab(nextTab);
@@ -251,6 +367,11 @@ export function ChatScreen({ user }: { user: VkUser }) {
               artifactIds: job.output_artifact_ids,
             });
             haptic("success");
+            if (job.operation === CHAT_OPERATION) {
+              void refreshConversations()
+                .then(() => loadConversationMessages(chatId))
+                .catch(() => undefined);
+            }
           }
           refreshBalance();
           return;
@@ -267,7 +388,7 @@ export function ChatScreen({ user }: { user: VkUser }) {
         });
       }
     },
-    [patchInChat, refreshBalance],
+    [loadConversationMessages, patchInChat, refreshBalance, refreshConversations],
   );
 
   const startPoll = useCallback(
@@ -362,6 +483,7 @@ export function ChatScreen({ user }: { user: VkUser }) {
   // Первый запуск: баланс + восстановление активных и локально отмеченных задач.
   useEffect(() => {
     refreshBalance();
+    void refreshConversations().catch(() => undefined);
     if (seededRef.current) {
       setLoading(false);
       return;
@@ -397,7 +519,12 @@ export function ChatScreen({ user }: { user: VkUser }) {
       .finally(() => {
         if (mountedRef.current) setLoading(false);
       });
-  }, [chats.length, refreshBalance, setChats, setActiveId, startPoll, patchInChat]);
+  }, [chats.length, refreshBalance, refreshConversations, setChats, setActiveId, startPoll, patchInChat]);
+
+  useEffect(() => {
+    if (activeTab !== "chat" || !activeId) return;
+    void loadConversationMessages(activeId);
+  }, [activeTab, activeId, loadConversationMessages]);
 
   useEffect(() => {
     const pending = jobs.filter((job) => !isTerminal(job.status));

@@ -64,6 +64,7 @@ export function modalityByOperation(operation: string): ModalityDef {
 export interface Chat {
   id: string;
   title: string;
+  preview?: string;
   createdAt: number;
   updatedAt: number;
   messages: ChatMessage[];

@@ -82,6 +82,28 @@ type ChatJobDTO struct {
 	ModelName string `json:"model_name"`
 }
 
+// ChatConversationDTO is a durable Mini App chat thread owned by the verified
+// backend user. ID is the opaque Mini App thread id, not a database id.
+type ChatConversationDTO struct {
+	ID                 string    `json:"id"`
+	Title              string    `json:"title"`
+	LastMessagePreview string    `json:"last_message_preview,omitempty"`
+	LastMessageRole    string    `json:"last_message_role,omitempty"`
+	CreatedAt          time.Time `json:"created_at"`
+	UpdatedAt          time.Time `json:"updated_at"`
+}
+
+// ChatConversationMessageDTO is one persisted user/bot turn. It intentionally
+// exposes only product-level roles and text, never provider metadata.
+type ChatConversationMessageDTO struct {
+	ID        uuid.UUID `json:"id"`
+	JobID     uuid.UUID `json:"job_id"`
+	Seq       int64     `json:"seq"`
+	Role      string    `json:"role"`
+	Text      string    `json:"text"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
 func newJobDTO(j *domain.Job) JobDTO {
 	out := JobDTO{
 		ID:                j.ID,

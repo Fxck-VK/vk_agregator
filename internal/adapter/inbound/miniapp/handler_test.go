@@ -13,6 +13,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -188,19 +189,21 @@ func newTestHandlerWithLimiter(appSecret string, limiter interface{ Allow(string
 }
 
 type testFixture struct {
-	handler        *miniappinbound.Handler
-	userRepo       *memory.UserRepo
-	jobRepo        *memory.JobRepo
-	artifactRepo   *memory.ArtifactRepo
-	moderationRepo *memory.ModerationRepo
-	objects        *memory.ObjectStore
-	billingRepo    *memory.BillingRepo
-	billing        *billingservice.Service
+	handler          *miniappinbound.Handler
+	userRepo         *memory.UserRepo
+	jobRepo          *memory.JobRepo
+	conversationRepo *memory.ConversationRepo
+	artifactRepo     *memory.ArtifactRepo
+	moderationRepo   *memory.ModerationRepo
+	objects          *memory.ObjectStore
+	billingRepo      *memory.BillingRepo
+	billing          *billingservice.Service
 }
 
 func newTestFixture(appSecret string, limiter interface{ Allow(string) bool }) *testFixture {
 	userRepo := memory.NewUserRepo()
 	jobRepo := memory.NewJobRepo()
+	conversationRepo := memory.NewConversationRepo()
 	artifactRepo := memory.NewArtifactRepo()
 	moderationRepo := memory.NewModerationRepo()
 	objects := memory.NewObjectStore()
@@ -218,25 +221,27 @@ func newTestFixture(appSecret string, limiter interface{ Allow(string) bool }) *
 			JobRateLimiter:     limiter,
 		},
 		miniappinbound.Deps{
-			Users:        userRepo,
-			Jobs:         jobRepo,
-			Artifacts:    artifactRepo,
-			Moderation:   moderationRepo,
-			Objects:      objects,
-			Billing:      billing,
-			BillingRepo:  billingRepo,
-			Orchestrator: orch,
+			Users:         userRepo,
+			Jobs:          jobRepo,
+			Conversations: conversationRepo,
+			Artifacts:     artifactRepo,
+			Moderation:    moderationRepo,
+			Objects:       objects,
+			Billing:       billing,
+			BillingRepo:   billingRepo,
+			Orchestrator:  orch,
 		},
 	)
 	return &testFixture{
-		handler:        handler,
-		userRepo:       userRepo,
-		jobRepo:        jobRepo,
-		artifactRepo:   artifactRepo,
-		moderationRepo: moderationRepo,
-		objects:        objects,
-		billingRepo:    billingRepo,
-		billing:        billing,
+		handler:          handler,
+		userRepo:         userRepo,
+		jobRepo:          jobRepo,
+		conversationRepo: conversationRepo,
+		artifactRepo:     artifactRepo,
+		moderationRepo:   moderationRepo,
+		objects:          objects,
+		billingRepo:      billingRepo,
+		billing:          billing,
 	}
 }
 
@@ -558,6 +563,146 @@ func TestHandler_ChatMessage_EmptyConversationIDUsesDefaultThread(t *testing.T) 
 	}
 	if params.Prompt != "hello default thread" || params.ConversationSource != "miniapp" || params.ExternalThreadID != "default" {
 		t.Fatalf("unexpected default thread params: %+v", params)
+	}
+}
+
+func TestHandler_ChatConversations_AuthRequired(t *testing.T) {
+	routes := newTestHandler("real-secret").Routes()
+
+	req := httptest.NewRequest(http.MethodGet, "/miniapp/chat/conversations", nil)
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestHandler_ChatConversations_ListAndMessages(t *testing.T) {
+	fixture := newTestFixture("", nil)
+	routes := fixture.handler.Routes()
+	ctx := context.Background()
+	user := &domain.User{VKUserID: 777, Role: domain.RoleUser, Status: domain.StatusActive, Locale: "ru", Timezone: "UTC"}
+	if err := fixture.userRepo.Create(ctx, user); err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	conversation := &domain.Conversation{
+		UserID:           user.ID,
+		Source:           domain.ConversationSourceMiniApp,
+		ExternalThreadID: "thread-a",
+		Title:            "Support thread",
+	}
+	if err := fixture.conversationRepo.CreateConversation(ctx, conversation); err != nil {
+		t.Fatalf("create conversation: %v", err)
+	}
+	userMessage, err := fixture.conversationRepo.UpsertMessage(ctx, &domain.ConversationMessage{
+		ConversationID: conversation.ID,
+		JobID:          uuid.New(),
+		Role:           domain.ConversationRoleUser,
+		Text:           "hello history",
+		TokenCount:     5,
+	})
+	if err != nil {
+		t.Fatalf("upsert user message: %v", err)
+	}
+	if _, err := fixture.conversationRepo.UpsertMessage(ctx, &domain.ConversationMessage{
+		ConversationID: conversation.ID,
+		JobID:          uuid.New(),
+		Role:           domain.ConversationRoleAssistant,
+		Text:           "history answer",
+		TokenCount:     5,
+	}); err != nil {
+		t.Fatalf("upsert assistant message: %v", err)
+	}
+
+	listReq := httptest.NewRequest(http.MethodGet, "/miniapp/chat/conversations?limit=999", nil)
+	listReq.Header.Set("X-Launch-Params", devLaunchParams(777))
+	listW := httptest.NewRecorder()
+	routes.ServeHTTP(listW, listReq)
+	if listW.Code != http.StatusOK {
+		t.Fatalf("list conversations: expected 200, got %d: %s", listW.Code, listW.Body.String())
+	}
+	var listResp struct {
+		Items []struct {
+			ID                 string `json:"id"`
+			Title              string `json:"title"`
+			LastMessagePreview string `json:"last_message_preview"`
+			LastMessageRole    string `json:"last_message_role"`
+		} `json:"items"`
+		Pagination struct {
+			Limit int `json:"limit"`
+			Count int `json:"count"`
+		} `json:"pagination"`
+	}
+	if err := json.Unmarshal(listW.Body.Bytes(), &listResp); err != nil {
+		t.Fatalf("invalid list response: %v", err)
+	}
+	if listResp.Pagination.Limit != 100 || listResp.Pagination.Count != 1 {
+		t.Fatalf("unexpected pagination: %+v", listResp.Pagination)
+	}
+	if len(listResp.Items) != 1 || listResp.Items[0].ID != "thread-a" || listResp.Items[0].Title != "Support thread" {
+		t.Fatalf("unexpected conversations: %+v", listResp.Items)
+	}
+	if listResp.Items[0].LastMessagePreview != "history answer" || listResp.Items[0].LastMessageRole != "bot" {
+		t.Fatalf("unexpected preview: %+v", listResp.Items[0])
+	}
+
+	msgReq := httptest.NewRequest(http.MethodGet, "/miniapp/chat/conversations/thread-a/messages?after_seq="+strconv.FormatInt(userMessage.Seq-1, 10), nil)
+	msgReq.Header.Set("X-Launch-Params", devLaunchParams(777))
+	msgW := httptest.NewRecorder()
+	routes.ServeHTTP(msgW, msgReq)
+	if msgW.Code != http.StatusOK {
+		t.Fatalf("list messages: expected 200, got %d: %s", msgW.Code, msgW.Body.String())
+	}
+	var msgResp struct {
+		Items []struct {
+			Seq  int64  `json:"seq"`
+			Role string `json:"role"`
+			Text string `json:"text"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(msgW.Body.Bytes(), &msgResp); err != nil {
+		t.Fatalf("invalid message response: %v", err)
+	}
+	if len(msgResp.Items) != 2 || msgResp.Items[0].Role != "user" || msgResp.Items[0].Text != "hello history" || msgResp.Items[1].Role != "bot" {
+		t.Fatalf("unexpected messages: %+v", msgResp.Items)
+	}
+}
+
+func TestHandler_ChatConversationMessages_OwnerOnlyAndInvalidID(t *testing.T) {
+	fixture := newTestFixture("", nil)
+	routes := fixture.handler.Routes()
+	ctx := context.Background()
+	owner := &domain.User{VKUserID: 100, Role: domain.RoleUser, Status: domain.StatusActive, Locale: "ru", Timezone: "UTC"}
+	other := &domain.User{VKUserID: 200, Role: domain.RoleUser, Status: domain.StatusActive, Locale: "ru", Timezone: "UTC"}
+	if err := fixture.userRepo.Create(ctx, owner); err != nil {
+		t.Fatalf("create owner: %v", err)
+	}
+	if err := fixture.userRepo.Create(ctx, other); err != nil {
+		t.Fatalf("create other: %v", err)
+	}
+	if err := fixture.conversationRepo.CreateConversation(ctx, &domain.Conversation{
+		UserID:           owner.ID,
+		Source:           domain.ConversationSourceMiniApp,
+		ExternalThreadID: "owner-thread",
+	}); err != nil {
+		t.Fatalf("create conversation: %v", err)
+	}
+
+	otherReq := httptest.NewRequest(http.MethodGet, "/miniapp/chat/conversations/owner-thread/messages", nil)
+	otherReq.Header.Set("X-Launch-Params", devLaunchParams(200))
+	otherW := httptest.NewRecorder()
+	routes.ServeHTTP(otherW, otherReq)
+	if otherW.Code != http.StatusNotFound {
+		t.Fatalf("owner-only expected 404, got %d: %s", otherW.Code, otherW.Body.String())
+	}
+
+	invalidReq := httptest.NewRequest(http.MethodGet, "/miniapp/chat/conversations/bad%2Fid/messages", nil)
+	invalidReq.Header.Set("X-Launch-Params", devLaunchParams(100))
+	invalidW := httptest.NewRecorder()
+	routes.ServeHTTP(invalidW, invalidReq)
+	if invalidW.Code != http.StatusBadRequest {
+		t.Fatalf("invalid id expected 400, got %d: %s", invalidW.Code, invalidW.Body.String())
 	}
 }
 

@@ -29,6 +29,24 @@ export interface CreateChatMessageInput {
   conversation_id?: string;
 }
 
+export interface ChatConversation {
+  id: string;
+  title: string;
+  last_message_preview?: string;
+  last_message_role?: "user" | "bot";
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ChatConversationMessage {
+  id: string;
+  job_id: string;
+  seq: number;
+  role: "user" | "bot";
+  text: string;
+  created_at: string;
+}
+
 export interface CreateJobOptions {
   idempotencyKey: string;
 }
@@ -56,6 +74,26 @@ export interface BalanceResponse {
 
 export interface JobListResponse {
   items: Job[];
+  pagination: {
+    limit: number;
+    offset: number;
+    count: number;
+    has_more: boolean;
+  };
+}
+
+export interface ChatConversationListResponse {
+  items: ChatConversation[];
+  pagination: {
+    limit: number;
+    offset: number;
+    count: number;
+    has_more: boolean;
+  };
+}
+
+export interface ChatConversationMessageListResponse {
+  items: ChatConversationMessage[];
   pagination: {
     limit: number;
     offset: number;
@@ -234,6 +272,18 @@ export async function createChatMessage(input: CreateChatMessageInput, options: 
     },
     body: JSON.stringify(input),
   });
+}
+
+export async function listChatConversations(): Promise<ChatConversation[]> {
+  const data = await request<ChatConversationListResponse>("/miniapp/chat/conversations");
+  return data.items ?? [];
+}
+
+export async function listChatConversationMessages(conversationId: string): Promise<ChatConversationMessage[]> {
+  const data = await request<ChatConversationMessageListResponse>(
+    `/miniapp/chat/conversations/${encodeURIComponent(conversationId)}/messages`,
+  );
+  return data.items ?? [];
 }
 
 export async function estimateJob(input: EstimateInput): Promise<EstimateResponse> {

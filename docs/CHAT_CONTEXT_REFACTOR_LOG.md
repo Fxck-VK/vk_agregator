@@ -154,3 +154,39 @@ Behavior note:
   the worker, because conversation history is stored through the durable
   conversation repository.
 - Conversation list/history endpoints are still PR-18.4 follow-up work.
+
+## 2026-06-06 - PR-18.4 durable Mini App history endpoints implemented
+
+Changes:
+
+- Added authenticated Mini App BFF read endpoints:
+  - `GET /miniapp/chat/conversations`;
+  - `GET /miniapp/chat/conversations/{id}/messages`.
+- Wired `ConversationRepository` into the Mini App app surface through shared
+  API core.
+- Conversation list uses backend `user_id + source=miniapp` ownership scope.
+- Message history lookup uses verified backend user plus opaque
+  `external_thread_id`.
+- Endpoint DTOs expose only product-level data:
+  - Mini App thread id;
+  - title / timestamps / last message preview;
+  - message role `user` or `bot`;
+  - message text.
+- Provider names, model ids, billing internals and storage/artifact internals
+  are not exposed by these history endpoints.
+- Frontend now fetches thread list and active thread messages from backend.
+- `localStorage` now keeps only `vk_miniapp_active_thread_v1`; old local
+  thread/message keys are removed and prompt/answer text is not persisted.
+
+Tests added:
+
+- Auth is required for conversation list.
+- Conversation list is owner-scoped and bounded by the existing Mini App
+  pagination limit.
+- Message history is owner-only.
+- Invalid thread ids return safe 400.
+
+Behavior note:
+
+- Deleting/clearing local UI state does not delete backend conversation
+  history. Backend delete/archive remains a separate future product decision.

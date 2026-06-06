@@ -1,9 +1,11 @@
 // src/chat/ChatList.tsx
 import { Button } from "@vkontakte/vkui";
-import type { Chat, ChatMessage } from "./types";
+import type { Chat } from "./types";
 
-function lastPreview(messages: ChatMessage[]): string {
+function lastPreview(chat: Chat): string {
+  const messages = chat.messages;
   const last = [...messages].reverse().find((msg) => msg.text || msg.error || msg.pending || msg.status);
+  if (!last && chat.preview) return chat.preview;
   if (!last) return "Пока нет сообщений";
   if (last.pending) return "НейроХаб печатает...";
   if (last.error) return last.error;
@@ -82,7 +84,7 @@ export function ChatList({
             >
               <div className="chat-item__body">
                 <span className="chat-item__title">{c.title}</span>
-                <small>{lastPreview(c.messages)}</small>
+                <small>{lastPreview(c)}</small>
               </div>
               <time className="chat-item__time">{timeLabel(c.updatedAt)}</time>
               <Button

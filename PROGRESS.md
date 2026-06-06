@@ -1694,6 +1694,56 @@ Status: **completed**.
 
 ---
 
+## PR-18.4 - Durable Mini App chat list and history
+
+Status: **completed**.
+
+### STEP 0 context
+
+- Frontend chat state used local `Chat` objects and `localStorage` metadata key
+  `vk_miniapp_threads_v1`; legacy `vk_miniapp_chats_v1` was already cleared on
+  load.
+- Backend durable conversation repo already had owner-scoped Mini App thread
+  lookup and message listing through `ConversationRepository`.
+
+### What changed
+
+- Added authenticated Mini App BFF endpoints:
+  - `GET /miniapp/chat/conversations`;
+  - `GET /miniapp/chat/conversations/{id}/messages`.
+- Wired `ConversationRepository` from shared API core into the Mini App app
+  surface.
+- Endpoint responses are scoped to the verified backend user and expose only
+  product-level thread/message DTOs: opaque thread id, title, timestamps,
+  preview, `user`/`bot` role and message text.
+- Frontend `api/client.ts` now reads conversation list and active-thread
+  messages from the backend.
+- Chat UI now treats backend list/history as source of truth and keeps only the
+  active thread id in `localStorage` under `vk_miniapp_active_thread_v1`.
+- Old local thread/message keys are removed when encountered.
+
+### Security and compatibility
+
+- Both endpoints require existing VK launch-param auth.
+- Invalid thread ids return safe 400; missing/not-owned threads return safe
+  404.
+- `localStorage` no longer stores prompt/answer text or thread metadata.
+- No provider calls were added to Mini App BFF; jobs still go through
+  `joborchestrator` and worker-owned provider execution.
+
+### Checks
+
+- `go test -count=1 ./internal/adapter/inbound/miniapp` - exit 0.
+- `go test ./internal/adapter/inbound/miniapp ./internal/adapter/storage/postgres ./internal/adapter/storage/memory` - exit 0.
+- `go test ./...` - exit 0.
+- `go build ./...` - exit 0.
+- `npm --prefix web/miniapp run build` - exit 0.
+- `gofmt -l cmd/api/main.go internal/app/api/core.go internal/app/miniapp/module.go internal/adapter/inbound/miniapp/handler.go internal/adapter/inbound/miniapp/dto.go internal/adapter/inbound/miniapp/handler_test.go` - clean.
+- `git grep -nE "^(<<<<<<<|=======|>>>>>>>)"` - clean.
+- `git diff --check` - exit 0; only line-ending normalization warnings.
+
+---
+
 ## PR-17.5 - Document app surface architecture
 
 Status: **completed**.

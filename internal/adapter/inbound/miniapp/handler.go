@@ -55,15 +55,16 @@ type ObjectReader interface {
 
 // Deps are the collaborators needed by the miniapp handler.
 type Deps struct {
-	Users        domain.UserRepository
-	Jobs         domain.JobRepository
-	Artifacts    domain.ArtifactRepository
-	Moderation   domain.ModerationResultRepository
-	Objects      ObjectReader
-	Billing      *billingservice.Service
-	BillingRepo  domain.BillingRepository
-	Orchestrator *joborchestrator.Orchestrator
-	Logger       *slog.Logger
+	Users         domain.UserRepository
+	Jobs          domain.JobRepository
+	Conversations domain.ConversationRepository
+	Artifacts     domain.ArtifactRepository
+	Moderation    domain.ModerationResultRepository
+	Objects       ObjectReader
+	Billing       *billingservice.Service
+	BillingRepo   domain.BillingRepository
+	Orchestrator  *joborchestrator.Orchestrator
+	Logger        *slog.Logger
 }
 
 // Handler serves the /miniapp/* routes.
@@ -87,6 +88,8 @@ func (h *Handler) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /miniapp/estimate", h.auth(h.rateLimitMiniApp("miniapp_estimate", h.estimateJob)))
 	mux.HandleFunc("POST /miniapp/chat/messages", h.auth(h.rateLimitMiniApp("miniapp_chat", h.createChatMessage)))
+	mux.HandleFunc("GET /miniapp/chat/conversations", h.auth(h.listChatConversations))
+	mux.HandleFunc("GET /miniapp/chat/conversations/{id}/messages", h.auth(h.listChatConversationMessages))
 	mux.HandleFunc("POST /miniapp/jobs", h.auth(h.rateLimitMiniApp("miniapp_job", h.createJob)))
 	mux.HandleFunc("GET /miniapp/jobs", h.auth(h.listJobs))
 	mux.HandleFunc("GET /miniapp/jobs/{id}", h.auth(h.getJob))
@@ -497,6 +500,114 @@ func (h *Handler) createChatMessage(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (h *Handler) listChatConversations(w http.ResponseWriter, r *http.Request) {
+	vkUserID, ok := vkUserIDFromCtx(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	if h.deps.Conversations == nil {
+		writeError(w, http.StatusServiceUnavailable, "service unavailable")
+		return
+	}
+
+	user, err := h.deps.Users.GetByVKUserID(r.Context(), vkUserID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			writeJSON(w, http.StatusOK, listResponse[ChatConversationDTO]{
+				Items:      []ChatConversationDTO{},
+				Pagination: pagination{Limit: defaultLimit, Offset: 0, Count: 0},
+			})
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	limit, offset := parsePagination(r)
+	conversations, err := h.deps.Conversations.ListByUserSource(r.Context(), user.ID, domain.ConversationSourceMiniApp, limit+1, offset)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	hasMore := len(conversations) > limit
+	if hasMore {
+		conversations = conversations[:limit]
+	}
+
+	items := make([]ChatConversationDTO, 0, len(conversations))
+	for _, conversation := range conversations {
+		items = append(items, h.newChatConversationDTO(r.Context(), conversation))
+	}
+	writeJSON(w, http.StatusOK, listResponse[ChatConversationDTO]{
+		Items:      items,
+		Pagination: pagination{Limit: limit, Offset: offset, Count: len(items), HasMore: hasMore},
+	})
+}
+
+func (h *Handler) listChatConversationMessages(w http.ResponseWriter, r *http.Request) {
+	vkUserID, ok := vkUserIDFromCtx(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	if h.deps.Conversations == nil {
+		writeError(w, http.StatusServiceUnavailable, "service unavailable")
+		return
+	}
+
+	threadID, ok := normalizeConversationID(r.PathValue("id"))
+	if !ok {
+		writeError(w, http.StatusBadRequest, "invalid conversation id")
+		return
+	}
+
+	user, err := h.deps.Users.GetByVKUserID(r.Context(), vkUserID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	conversation, err := h.deps.Conversations.GetActiveByReference(r.Context(), domain.ConversationRef{
+		UserID:           user.ID,
+		Source:           domain.ConversationSourceMiniApp,
+		ExternalThreadID: threadID,
+	})
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	limit, _ := parsePagination(r)
+	afterSeq := parseAfterSeq(r)
+	messages, err := h.deps.Conversations.ListMessagesAfter(r.Context(), conversation.ID, afterSeq, limit+1)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	hasMore := len(messages) > limit
+	if hasMore {
+		messages = messages[:limit]
+	}
+
+	items := make([]ChatConversationMessageDTO, 0, len(messages))
+	for _, message := range messages {
+		items = append(items, newChatConversationMessageDTO(message))
+	}
+	writeJSON(w, http.StatusOK, listResponse[ChatConversationMessageDTO]{
+		Items:      items,
+		Pagination: pagination{Limit: limit, Offset: 0, Count: len(items), HasMore: hasMore},
+	})
+}
+
 func (h *Handler) listJobs(w http.ResponseWriter, r *http.Request) {
 	vkUserID, ok := vkUserIDFromCtx(r.Context())
 	if !ok {
@@ -707,13 +818,77 @@ func uuidInSlice(ids []uuid.UUID, target uuid.UUID) bool {
 	return false
 }
 
+func (h *Handler) newChatConversationDTO(ctx context.Context, conversation *domain.Conversation) ChatConversationDTO {
+	dto := ChatConversationDTO{
+		ID:        conversation.ExternalThreadID,
+		Title:     chatConversationTitle(conversation),
+		CreatedAt: conversation.CreatedAt,
+		UpdatedAt: conversation.UpdatedAt,
+	}
+	if dto.ID == "" {
+		dto.ID = defaultConversationID
+	}
+	if h.deps.Conversations == nil {
+		return dto
+	}
+	recent, err := h.deps.Conversations.ListRecentMessagesBefore(ctx, conversation.ID, 1<<62, 0, 1)
+	if err != nil || len(recent) == 0 {
+		return dto
+	}
+	last := recent[len(recent)-1]
+	dto.LastMessagePreview = truncateChatText(last.Text, maxChatPreviewRunes)
+	dto.LastMessageRole = chatMessageRole(last.Role)
+	return dto
+}
+
+func newChatConversationMessageDTO(message *domain.ConversationMessage) ChatConversationMessageDTO {
+	return ChatConversationMessageDTO{
+		ID:        message.ID,
+		JobID:     message.JobID,
+		Seq:       message.Seq,
+		Role:      chatMessageRole(message.Role),
+		Text:      truncateChatText(message.Text, maxChatMessageRunes),
+		CreatedAt: message.CreatedAt,
+	}
+}
+
+func chatConversationTitle(conversation *domain.Conversation) string {
+	title := strings.TrimSpace(conversation.Title)
+	if title == "" {
+		return "НейроХаб диалог"
+	}
+	return truncateChatText(title, maxChatTitleRunes)
+}
+
+func chatMessageRole(role domain.ConversationMessageRole) string {
+	if role == domain.ConversationRoleAssistant {
+		return "bot"
+	}
+	return "user"
+}
+
+func truncateChatText(text string, maxRunes int) string {
+	text = strings.TrimSpace(text)
+	if maxRunes <= 0 {
+		return ""
+	}
+	runes := []rune(text)
+	if len(runes) <= maxRunes {
+		return text
+	}
+	return string(runes[:maxRunes])
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
 const (
-	defaultLimit = 20
-	maxLimit     = 100
+	defaultLimit        = 20
+	maxLimit            = 100
+	maxChatTitleRunes   = 80
+	maxChatPreviewRunes = 160
+	maxChatMessageRunes = 100_000
 )
 
 func parsePagination(r *http.Request) (limit, offset int) {
@@ -732,6 +907,18 @@ func parsePagination(r *http.Request) (limit, offset int) {
 		}
 	}
 	return limit, offset
+}
+
+func parseAfterSeq(r *http.Request) int64 {
+	raw := r.URL.Query().Get("after_seq")
+	if raw == "" {
+		return 0
+	}
+	value, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || value < 0 {
+		return 0
+	}
+	return value
 }
 
 func writeJSON(w http.ResponseWriter, status int, body any) {

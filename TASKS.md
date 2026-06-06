@@ -226,7 +226,7 @@
 - [x] PR-18.3: Switch Mini App `/miniapp/chat/messages` from process-local BFF
   context to durable shared chat core. Remove prompt-prefix memory from the
   BFF and keep `conversation_id="" -> default` compatibility.
-- [ ] PR-18.4: Add authenticated Mini App conversation list/history endpoints
+- [x] PR-18.4: Add authenticated Mini App conversation list/history endpoints
   and make the frontend treat backend history as source of truth while keeping
   only active thread/UI preferences in localStorage.
 - [ ] PR-18.5: Cleanup and verify shared chat context rollout: no Mini App
