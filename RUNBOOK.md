@@ -297,7 +297,29 @@ docker exec vk-ai-aggregator-postgres psql -U vk_ai_aggregator -d vk_ai_aggregat
 go run ./cmd/api               # listens on :8080
 ```
 
-Serves: `POST /webhooks/vk`, `GET /admin/...`, `GET /health`.
+Serves: `POST /webhooks/vk`, `/miniapp/*`, `GET /admin/...`,
+`GET /metrics`, `GET /health`, and `GET /healthz`.
+
+API wiring map:
+
+- `cmd/api/main.go` is the thin bootstrap: config validation, tracing,
+  Postgres/Redis clients, shared core construction, route mounting, health,
+  metrics and graceful shutdown.
+- `internal/app/api` wires shared backend-core repositories/services used by
+  surfaces.
+- `internal/app/vkbot` wires the VK text bot surface for `/webhooks/vk`.
+- `internal/app/miniapp` wires the Mini App BFF surface for `/miniapp/*`.
+- `internal/adapter/inbound/vk` and `internal/adapter/inbound/miniapp` contain
+  the actual inbound/BFF handlers and DTOs.
+
+To add a VK bot command or menu behavior, start in
+`internal/adapter/inbound/vk` and the related command/router/service tests.
+Only update `internal/app/vkbot` when the command needs a new wiring dependency
+or feature flag.
+
+Do not put provider calls, pricing truth, balance mutation, job state truth or
+moderation decisions in app surfaces. Those stay in `internal/service`,
+`internal/worker`, provider adapters and storage.
 
 Verify (new terminal):
 ```bash
@@ -549,6 +571,32 @@ go test ./internal/worker/ -run TestEndToEnd -v  # full VK→…→Capture
 
 ---
 
+### App surface smoke checklist
+
+Use this checklist after changing app-surface wiring or shared backend core:
+
+- API starts with `go run ./cmd/api`; `/health`, `/healthz` and `/metrics`
+  respond.
+- Worker starts with `go run ./cmd/worker`; provider calls happen only from
+  worker flows, never from `cmd/api` or `internal/app/*`.
+- VK text bot entrance: POST a VK `confirmation` event and one `/start` or
+  GPT-mode message to `/webhooks/vk`; the webhook returns quickly, inbound
+  idempotency prevents duplicate jobs for repeated event ids, and billable text
+  prompts create jobs through `joborchestrator`.
+- Mini App entrance: call `/miniapp/balance`, `/miniapp/estimate` and
+  `/miniapp/jobs` with valid dev launch params or real VK launch params; auth
+  and rate limiting remain enforced, and estimate does not create a job,
+  reserve credits or write ledger entries.
+- Job completion path: a queued job reaches a terminal state through
+  `cmd/worker`; output artifact ownership is checked by
+  `GET /miniapp/artifacts/{id}` and billing capture/release/refund is ledger
+  backed.
+- Public model naming remains product-safe: user-visible Mini App/VK chat copy
+  says `ChatGPT` where applicable and does not reveal DeepInfra/DeepSeek model
+  ids.
+
+---
+
 ## 10. Troubleshooting
 
 **PostgreSQL**
@@ -682,9 +730,15 @@ Shutdown order: Workers → API → (optionally) Infrastructure.
 
 ## 14. VK Mini App BFF
 
-The Mini App backend-for-frontend (BFF) is part of `cmd/api`. It listens on the
-`/miniapp/*` path prefix and authenticates every request using VK launch-params
-signature verification (HMAC-SHA256).
+The Mini App backend-for-frontend (BFF) is mounted by `cmd/api` through
+`internal/app/miniapp`. It listens on the `/miniapp/*` path prefix and
+authenticates every request using VK launch-params signature verification
+(HMAC-SHA256).
+
+To add a Mini App endpoint, edit `internal/adapter/inbound/miniapp` first and
+add tests there. Only update `internal/app/miniapp` when the endpoint needs a
+new shared dependency. Do not calculate prices, trust balance, call providers or
+serve artifact bytes from frontend state.
 
 ### New environment variables
 

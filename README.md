@@ -30,10 +30,13 @@ cleanup and billing reconciliation metrics.
 API metrics are served at `GET /metrics`; worker-local metrics are served at
 `WORKER_METRICS_ADDR` (default `:9090`).
 
-The same `cmd/api` binary also serves the VK Mini App BFF under `/miniapp/*`.
-Mini App requests verify VK launch params server-side, create jobs through the
-shared `joborchestrator`, use backend billing/idempotency, and fetch artifacts
-only through owner-checked backend endpoints.
+The same `cmd/api` binary mounts both user-facing app surfaces: VK text bot at
+`/webhooks/vk` and VK Mini App BFF under `/miniapp/*`. Surface wiring lives in
+`internal/app/vkbot` and `internal/app/miniapp`; `cmd/api/main.go` is now a thin
+bootstrap over shared backend core. Mini App requests verify VK launch params
+server-side, create jobs through the shared `joborchestrator`, use backend
+billing/idempotency, and fetch artifacts only through owner-checked backend
+endpoints.
 
 Real integrations are implemented at adapter level and remain **opt-in**:
 
@@ -172,6 +175,10 @@ VK webhook ─► InboundEvent ─► User ─► Command ─► Job (queued)
 ```
 cmd/                 entrypoints (api, vk-inbound, worker, provider-webhook, admin-api, migrate)
 internal/
+  app/
+    api/             bootstrap helper for shared API core deps
+    vkbot/           VK text bot surface wiring
+    miniapp/         VK Mini App BFF surface wiring
   domain/            entities, state machines, repository interfaces (no infra)
   service/           billing, joborchestrator, commandrouter, artifactservice
   worker/            generation, provider-poll and delivery workers + engine

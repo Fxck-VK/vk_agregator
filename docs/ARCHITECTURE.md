@@ -9,6 +9,101 @@
 
 ---
 
+# Current implementation addendum: app surfaces and backend core
+
+The current `feature/integration-web-backend` implementation is a
+production-shaped modular monolith. It has one shared backend core and two
+user-facing app surfaces:
+
+```text
+cmd/api
+  -> internal/app/api.NewSharedCore
+       repositories + billingservice + joborchestrator + commandrouter
+  -> internal/app/vkbot.NewHandler
+       mounts POST /webhooks/vk
+  -> internal/app/miniapp.NewHandler
+       mounts /miniapp/*
+  -> admin, health, metrics, graceful shutdown
+
+cmd/worker
+  -> provider submit/poll
+  -> artifact creation
+  -> moderation
+  -> VK delivery
+  -> billing capture/release/refund
+```
+
+Surface modules are intentionally thin wiring layers:
+
+- `internal/app/vkbot` owns VK text bot HTTP wiring: VK callback handler setup,
+  VK control/profile clients, menu feature flags, Redis dialog mode,
+  anti-spam and referral dependencies.
+- `internal/app/miniapp` owns Mini App BFF wiring: launch-param protected
+  handler setup, Mini App rate limiting, S3 artifact read access, and the
+  Mini App inbound handler dependencies.
+- `internal/app/api` is bootstrap-only glue for `cmd/api`: it groups shared
+  repositories and shared services so `cmd/api/main.go` stays readable.
+
+Backend core remains the source of truth:
+
+- `internal/domain` defines entities, statuses and repository contracts.
+- `internal/service/joborchestrator` creates jobs, reserves credits and writes
+  outbox events.
+- `internal/service/billingservice` owns ledger-backed balance changes.
+- `internal/worker` owns provider calls, provider polling, artifact creation,
+  moderation, delivery and capture/release/refund.
+- `internal/adapter/provider` owns provider-specific clients. It must not know
+  about VK delivery or billing.
+- `internal/adapter/storage` persists durable state; Redis is queue/cache
+  support, not billing truth.
+
+Actual request flows:
+
+```text
+VK text bot:
+VK Callback API -> /webhooks/vk -> internal/app/vkbot
+  -> internal/adapter/inbound/vk
+  -> commandrouter/joborchestrator/billingservice
+  -> outbox/Redis Stream
+  -> cmd/worker -> provider/artifact/moderation/delivery/billing capture
+```
+
+```text
+VK Mini App:
+VK launch params -> /miniapp/* -> internal/app/miniapp
+  -> internal/adapter/inbound/miniapp
+  -> joborchestrator/billingservice for jobs
+  -> backend-owned estimate/balance/status/artifact ownership checks
+  -> cmd/worker for provider/artifact/moderation/delivery/billing capture
+```
+
+Where to add features:
+
+- New VK bot command/menu behavior: start in `internal/adapter/inbound/vk` and
+  related command/router/service tests. Only touch `internal/app/vkbot` when the
+  command needs new wiring dependencies or feature flags.
+- New Mini App endpoint: add the BFF handler/DTO/tests in
+  `internal/adapter/inbound/miniapp`; wire only dependency construction in
+  `internal/app/miniapp` if a new shared service/repository is required.
+- New business rule, price, balance, job transition, provider choice or
+  moderation rule: implement it in backend core (`internal/domain`,
+  `internal/service`, `internal/worker`, provider/storage adapters as
+  appropriate), not in a surface module.
+
+Forbidden shortcuts:
+
+- Do not call providers from `internal/app/*`, `cmd/api`, VK inbound handlers or
+  Mini App BFF handlers.
+- Do not mutate balances outside `billingservice` and ledger-backed storage.
+- Do not trust frontend state for balance, pricing, job status, ownership,
+  moderation or identity.
+- Do not expose raw provider/model names to users when public UX requires the
+  `ChatGPT` alias.
+- Do not log launch params, prompt bodies, tokens, secrets, PII or private
+  artifact URLs.
+
+---
+
 # 1. Главная идея архитектуры
 
 Не должно быть такого:

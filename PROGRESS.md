@@ -1535,6 +1535,38 @@ Status: **completed**.
 - `git grep -nE "^(<<<<<<<|=======|>>>>>>>)"` - clean.
 - `git diff --check` - clean.
 
+---
+
+## PR-17.5 - Document app surface architecture
+
+Status: **completed**.
+
+### What changed
+
+- Updated `docs/ARCHITECTURE.md` with a current implementation addendum for app
+  surfaces over shared backend core: `internal/app/vkbot`,
+  `internal/app/miniapp`, `internal/app/api`, `cmd/api` bootstrap and
+  `cmd/worker` provider/job execution ownership.
+- Updated `RUNBOOK.md` with API wiring locations, where to add VK bot commands
+  and Mini App BFF endpoints, and a smoke checklist for both entrances.
+- Updated `README.md` layout/current-status notes to point future agents at
+  app-surface modules.
+- Marked PR-17.2 through PR-17.5 complete in `TASKS.md`.
+
+### Architecture notes
+
+- VK bot and Mini App remain app surfaces only. They may wire handlers and
+  dependencies, but provider calls, pricing, balance mutation, job status truth,
+  moderation and artifact ownership remain in backend core.
+- `cmd/api/main.go` remains bootstrap plus route mounting; `cmd/worker` remains
+  the provider/artifact/moderation/delivery/billing-capture owner.
+
+### Checks
+
+- `go test ./...` - exit 0.
+- `go build ./...` - exit 0.
+- `npm --prefix web/miniapp run build` - exit 0.
+
 ### Notes
 
 - No real VK/DeepInfra live smoke was run during the merge because it would
