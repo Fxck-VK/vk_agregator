@@ -625,7 +625,7 @@ func TestGPTMenuButtonSendsActivePromptNoJob(t *testing.T) {
 		t.Fatalf("gpt menu must not create a job, got %d", len(jobs))
 	}
 	sent := control.Sent()
-	if len(sent) != 1 || !strings.Contains(sent[0].Text, "SUPER GPT активен") || !strings.Contains(sent[0].Keyboard, "⬅️ Назад") {
+	if len(sent) != 1 || !strings.Contains(sent[0].Text, "НейроХаб активен") || !strings.Contains(sent[0].Keyboard, "⬅️ Назад") {
 		t.Fatalf("unexpected gpt response: %+v", sent)
 	}
 }
@@ -761,7 +761,7 @@ func TestGPTMenuButtonEnablesPlainTextJobs(t *testing.T) {
 		t.Fatalf("gpt mode should create one text job, jobs=%+v tasks=%d", jobs, h.pub.Len())
 	}
 	sent := control.Sent()
-	if len(sent) != 2 || !strings.Contains(sent[0].Text, "SUPER GPT активен") || sent[1].Text != "GPT думает..." {
+	if len(sent) != 2 || !strings.Contains(sent[0].Text, "НейроХаб активен") || sent[1].Text != "НейроХаб думает..." {
 		t.Fatalf("unexpected control responses: %+v", sent)
 	}
 	var params struct {

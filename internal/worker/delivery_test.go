@@ -228,7 +228,7 @@ func TestDeliveryTextSendsBody(t *testing.T) {
 func TestDeliveryTextEditsGPTPlaceholder(t *testing.T) {
 	h := newDeliveryHarness(t)
 	ctx := context.Background()
-	pending, err := h.vk.SendMessage(ctx, 555, 9001, vkdelivery.Message{Text: "GPT думает..."})
+	pending, err := h.vk.SendMessage(ctx, 555, 9001, vkdelivery.Message{Text: "НейроХаб думает..."})
 	if err != nil {
 		t.Fatalf("send pending: %v", err)
 	}
@@ -265,7 +265,7 @@ func TestDeliveryTextEditsGPTPlaceholder(t *testing.T) {
 func TestDeliveryTextSplitsLongGPTPlaceholderAnswer(t *testing.T) {
 	h := newDeliveryHarness(t)
 	ctx := context.Background()
-	pending, err := h.vk.SendMessage(ctx, 555, 9001, vkdelivery.Message{Text: "GPT думает..."})
+	pending, err := h.vk.SendMessage(ctx, 555, 9001, vkdelivery.Message{Text: "НейроХаб думает..."})
 	if err != nil {
 		t.Fatalf("send pending: %v", err)
 	}

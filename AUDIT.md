@@ -180,7 +180,7 @@ Severity: **critical** (blocks prod / safety / data loss), **high** (must fix be
   text/stickers become `text.ask` jobs only after `Спросить у НейроХаб` enables
   process-local GPT mode, unless
   `VK_UNROUTED_TEXT_MODE=gpt` restores legacy behavior. Active GPT mode sends
-  `GPT думает...`, stores the placeholder VK `message_id` in `job.Params`, and
+  `НейроХаб думает...`, stores the placeholder VK `message_id` in `job.Params`, and
   delivery edits that same message with the text result. Persist active menu and
   dialog mode before multi-instance API scaling.
 

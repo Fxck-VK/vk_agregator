@@ -141,7 +141,7 @@ var menuScreens = map[domain.CommandType]menuScreen{
 }
 
 const (
-	gptActiveText = "🤖 SUPER GPT активен!\n\nЯ готов ответить на любые вопросы и помочь с идеями\nСпроси что-нибудь прямо сейчас!"
+	gptActiveText = "🤖 НейроХаб активен!\n\nЯ готов ответить на любые вопросы и помочь с идеями\nСпроси что-нибудь прямо сейчас!"
 
 	photoIntroText = "✅ У вас есть 1 бесплатная попытка в сутки на генерацию с текстом.\n\n▶️ Генерация фото по тексту – это когда ты пишешь, что хочешь увидеть (например, \"кот в очках на пляже\"), а ИИ сам «придумывает» и рисует такую картинку. (1 бесплатно)\n\n📸Генерация фото по тексту и фото (с референсом) – ИИ использует твою фотографию как образец — он сохраняет стиль, позу, цвета, но уже с новым содержанием по твоему описанию. (Только платные)"
 
@@ -324,7 +324,7 @@ func (h *Handler) sendGPTPendingMessage(ctx context.Context, idemKey string, pee
 		return 0
 	}
 
-	msg := vkdelivery.Message{Text: "GPT думает..."}
+	msg := vkdelivery.Message{Text: "НейроХаб думает..."}
 	randomID := vkdelivery.DeterministicRandomID("vk_control_gpt_pending:" + idemKey)
 	result, err := h.sendControlMessage(ctx, domain.CommandMenuText, peerID, randomID, msg)
 	if err != nil {

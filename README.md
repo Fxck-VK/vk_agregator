@@ -67,7 +67,7 @@ Real integrations are implemented at adapter level and remain **opt-in**:
   opens the active GPT prompt screen and enables text GPT mode for that peer.
   Plain text and stickers create `text.ask` jobs only while GPT mode is active
   or when `VK_UNROUTED_TEXT_MODE=gpt` is explicitly configured. In active GPT
-  mode, the bot sends `GPT думает...` and the delivery worker edits that same
+  mode, the bot sends `НейроХаб думает...` and the delivery worker edits that same
   VK message to the provider answer; legacy `VK_UNROUTED_TEXT_MODE=gpt` keeps
   normal text delivery.
 - VK inline menu navigation uses a hybrid UX: if the last bot message is the

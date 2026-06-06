@@ -108,6 +108,12 @@ func TestLoadVKMenuFeatureFlags(t *testing.T) {
 	if !cfg.VKMenuVideoEnabled {
 		t.Fatal("VKMenuVideoEnabled = false, want default true")
 	}
+	if cfg.VKMenuAccountEnabled {
+		t.Fatal("VKMenuAccountEnabled = true, want default false")
+	}
+	if cfg.VKMenuTopUpEnabled {
+		t.Fatal("VKMenuTopUpEnabled = true, want default false")
+	}
 }
 
 func TestValidateVKMenuButtonMode(t *testing.T) {

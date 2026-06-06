@@ -191,9 +191,9 @@ also control commands and should not enqueue jobs.
 Clicking `🖼️ Создать фото` should return the daily-free-attempt photo
 instruction screen directly with `Фото по тексту`, `Фото с референсом`, and
 `⬅️ Назад`; these mode buttons are also control commands. Clicking
-`💬 Спросить у НейроХаб` should return `SUPER GPT активен` and wait for the next
+`💬 Спросить у НейроХаб` should return `НейроХаб активен` and wait for the next
 plain user message; that next text or sticker should create a `text.ask` job.
-In active GPT mode, the bot should first send `GPT думает...`; after the
+In active GPT mode, the bot should first send `НейроХаб думает...`; after the
 provider result is ready, that same VK message should be edited to the answer
 instead of sending a second bot message. This placeholder/edit UX is only for
 the button-enabled GPT mode, not for legacy `VK_UNROUTED_TEXT_MODE=gpt`. If the

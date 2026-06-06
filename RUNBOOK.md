@@ -327,9 +327,9 @@ Clicking `🖼️ Создать фото` opens the photo instruction screen di
 there is one main image model in the VK UX. It shows `Фото по тексту`,
 `Фото с референсом`, and `⬅️ Назад`; those mode buttons are control-only until
 stateful image mode selection is wired. Clicking `💬 Спросить у НейроХаб` sends the
-`SUPER GPT активен` prompt screen, sets process-local GPT mode for that peer,
+`НейроХаб активен` prompt screen, sets process-local GPT mode for that peer,
 and also does not enqueue a job. The next plain text or sticker from the same
-peer becomes a `text.ask` job; the API sends `GPT думает...`, stores that VK
+peer becomes a `text.ask` job; the API sends `НейроХаб думает...`, stores that VK
 message id in `job.Params`, and the delivery worker edits the same message to
 the final provider answer when the text artifact is delivered. If the answer is
 too long for one VK message, the first chunk replaces the placeholder and the
@@ -359,8 +359,9 @@ behavior where button labels are sent as user messages, set
 For every callback-button click, the API sends a blank
 `messages.sendMessageEventAnswer` through `vkdelivery.ControlClient`; this is
 what clears the loading spinner in the VK client.
-Each product-menu button is guarded by a boolean env flag. Defaults are `true`.
-Set a flag to `false` and restart `cmd/api` to hide the button. Main menu flags:
+Each product-menu button is guarded by a boolean env flag. Account/top-up
+default to `false`; the other menu flags default to `true`. Set a flag to
+`false` and restart `cmd/api` to hide the button. Main menu flags:
 `VK_MENU_VIDEO_ENABLED`, `VK_MENU_IMAGE_ENABLED`, `VK_MENU_GPT_ENABLED`,
 `VK_MENU_STUDENTS_ENABLED`, `VK_MENU_ACCOUNT_ENABLED`,
 `VK_MENU_TOP_UP_ENABLED`. Nested flags:

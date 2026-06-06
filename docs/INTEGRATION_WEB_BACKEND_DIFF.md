@@ -48,7 +48,7 @@ git merge-tree --write-tree --name-only --messages feature/integration-web-backe
 - VK callback inline menu: `VK_MENU_BUTTON_MODE=callback`, `message_event`, `messages.sendMessageEventAnswer`.
 - Active menu edit UX: inline-переходы редактируют текущее menu message, нижняя `Показать меню` отправляет новое меню вниз.
 - GPT mode gating: обычный текст вне режима `Спросить у НейроХаб` не создает text job.
-- GPT pending UX: `GPT думает...` редактируется в итоговый ответ.
+- GPT pending UX: `НейроХаб думает...` редактируется в итоговый ответ.
 - VK delivery long text chunking, чтобы VK `error_code=914` не оставлял placeholder зависшим.
 - VK menu feature flags `VK_MENU_*_ENABLED`.
 - Вложенные VK menu screens: video models, photo mode, students submenu, account/top-up.
@@ -150,7 +150,7 @@ git merge-tree --write-tree --name-only --messages feature/integration-web-backe
 - message_event ack;
 - `VK_UNROUTED_TEXT_MODE`;
 - GPT mode gating;
-- `GPT думает...` placeholder edit;
+- `НейроХаб думает...` placeholder edit;
 - menu feature flags;
 - video/photo/students nested screens;
 - rename `Спросить у НейроХаб`;

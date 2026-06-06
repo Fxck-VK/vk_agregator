@@ -120,7 +120,8 @@ type Config struct {
 	// preserves the legacy behavior where any text creates a GPT job.
 	VKUnroutedTextMode string
 	// VK menu feature flags hide individual product-menu buttons without
-	// removing the underlying screens. Defaults are all enabled.
+	// removing the underlying screens. Account/top-up are disabled by default;
+	// other menu flags default to enabled.
 	VKMenuVideoEnabled                bool
 	VKMenuImageEnabled                bool
 	VKMenuGPTEnabled                  bool
@@ -313,8 +314,8 @@ func Load() Config {
 		VKMenuImageEnabled:                envBool("VK_MENU_IMAGE_ENABLED", true),
 		VKMenuGPTEnabled:                  envBool("VK_MENU_GPT_ENABLED", true),
 		VKMenuStudentsEnabled:             envBool("VK_MENU_STUDENTS_ENABLED", true),
-		VKMenuAccountEnabled:              envBool("VK_MENU_ACCOUNT_ENABLED", true),
-		VKMenuTopUpEnabled:                envBool("VK_MENU_TOP_UP_ENABLED", true),
+		VKMenuAccountEnabled:              envBool("VK_MENU_ACCOUNT_ENABLED", false),
+		VKMenuTopUpEnabled:                envBool("VK_MENU_TOP_UP_ENABLED", false),
 		VKMenuVideoSora2Enabled:           envBool("VK_MENU_VIDEO_SORA2_ENABLED", true),
 		VKMenuVideoSora2StartEnabled:      envBool("VK_MENU_VIDEO_SORA2_START_ENABLED", true),
 		VKMenuVideoSora2ExamplesEnabled:   envBool("VK_MENU_VIDEO_SORA2_EXAMPLES_ENABLED", true),
