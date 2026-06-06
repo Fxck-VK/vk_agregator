@@ -8,7 +8,7 @@ import { ChatList } from "./ChatList";
 import { ResultCard } from "../components/ResultCard";
 import { WorkflowMode } from "../workflow/WorkflowMode";
 import { modalityByOperation, uid, type Chat, type ChatMessage } from "./types";
-import { loadAppMode, saveAppMode, type AppMode } from "../mode";
+import { loadAppTab, saveAppTab, type AppTab } from "../mode";
 import {
   createChatMessage,
   createJob,
@@ -40,6 +40,17 @@ type SubmitRequest = {
   modelId: string;
   chat?: boolean;
 };
+
+function tabTitle(tab: AppTab, activeChat?: Chat | null): { name: string; sub: string } {
+  switch (tab) {
+    case "create":
+      return { name: "Создать", sub: "workflow для VK-контента" };
+    case "settings":
+      return { name: "Настройки", sub: "скоро" };
+    default:
+      return { name: "Ассистент", sub: activeChat?.title ?? "ChatGPT диалог" };
+  }
+}
 
 function chatIdForJob(jobId: string): string {
   return "job-" + jobId;
@@ -155,7 +166,7 @@ export function ChatScreen({ user }: { user: VkUser }) {
   const [estimate, setEstimate] = useState<EstimateResponse | null>(null);
   const [estimateLoading, setEstimateLoading] = useState(false);
   const [estimateError, setEstimateError] = useState<string | null>(null);
-  const [mode, setMode] = useState<AppMode>(() => loadAppMode());
+  const [activeTab, setActiveTab] = useState<AppTab>(() => loadAppTab());
   const [jobs, setJobs] = useState<Job[]>([]);
 
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -178,9 +189,9 @@ export function ChatScreen({ user }: { user: VkUser }) {
     getBalance().then(setBalance).catch(() => undefined);
   }, []);
 
-  function changeMode(nextMode: AppMode) {
-    setMode(nextMode);
-    saveAppMode(nextMode);
+  function changeTab(nextTab: AppTab) {
+    setActiveTab(nextTab);
+    saveAppTab(nextTab);
     setDrawerOpen(false);
   }
 
@@ -427,6 +438,7 @@ export function ChatScreen({ user }: { user: VkUser }) {
 
   const messages = activeChat?.messages ?? [];
   const empty = !loading && messages.length === 0;
+  const header = tabTitle(activeTab, activeChat);
 
   return (
     <Panel id="miniapp-root-panel" className="chat-panel" mode="plain">
@@ -451,22 +463,20 @@ export function ChatScreen({ user }: { user: VkUser }) {
       <header className="chat__header">
         <Button
           type="button"
-          className={"icon-btn" + (mode === "workflow" ? " icon-btn--ghost" : "")}
+          className={"icon-btn" + (activeTab !== "chat" ? " icon-btn--ghost" : "")}
           mode="tertiary"
           appearance="neutral"
           size="l"
           aria-label="Чаты"
           onClick={() => setDrawerOpen(true)}
-          disabled={mode === "workflow"}
+          disabled={activeTab !== "chat"}
         >
           ☰
         </Button>
         <Avatar src={null} fallback="AI" />
         <div className="chat__title">
-          <span className="chat__name">{mode === "workflow" ? "Workflow" : "Ассистент"}</span>
-          <span className="chat__sub">
-            {mode === "workflow" ? "создание VK-контента" : activeChat?.title ?? "ChatGPT диалог"}
-          </span>
+          <span className="chat__name">{header.name}</span>
+          <span className="chat__sub">{header.sub}</span>
         </div>
         <span className="chat__spacer" />
         {balance !== null && (
@@ -474,8 +484,7 @@ export function ChatScreen({ user }: { user: VkUser }) {
         )}
       </header>
 
-      {mode === "chat" ? (
-        <>
+      <section className={"app-tab-panel" + (activeTab === "chat" ? " is-active" : "")} aria-hidden={activeTab !== "chat"}>
           <div className="chat__scroll" ref={scrollRef}>
             {loading && (
               <div className="splash">
@@ -515,8 +524,9 @@ export function ChatScreen({ user }: { user: VkUser }) {
             estimateLoading={estimateLoading}
             estimateError={estimateError}
           />
-        </>
-      ) : (
+      </section>
+
+      <section className={"app-tab-panel app-tab-panel--create" + (activeTab === "create" ? " is-active" : "")} aria-hidden={activeTab !== "create"}>
         <WorkflowMode
           user={user}
           balance={balance}
@@ -527,24 +537,40 @@ export function ChatScreen({ user }: { user: VkUser }) {
           onCreateJob={submitJob}
           onClearLocalHistory={clearChats}
         />
-      )}
+      </section>
 
-      <Tabbar className="mode-tabbar" mode="horizontal" plain>
+      <section className={"app-tab-panel app-tab-panel--settings" + (activeTab === "settings" ? " is-active" : "")} aria-hidden={activeTab !== "settings"}>
+        <div className="settings-placeholder">
+          <span className="settings-placeholder__eyebrow">Settings</span>
+          <h1>Настройки</h1>
+          <p>Скоро здесь появятся параметры Mini App.</p>
+        </div>
+      </section>
+
+      <Tabbar className="app-tabbar" mode="horizontal" plain>
         <TabbarItem
-          selected={mode === "chat"}
-          label="Chat"
-          aria-label="Chat"
-          onClick={() => changeMode("chat")}
+          selected={activeTab === "create"}
+          label="Создать"
+          aria-label="Создать"
+          onClick={() => changeTab("create")}
         >
-          <span className="mode-tabbar__icon" aria-hidden="true">C</span>
+          <span className="app-tabbar__icon" aria-hidden="true">+</span>
         </TabbarItem>
         <TabbarItem
-          selected={mode === "workflow"}
-          label="Workflow"
-          aria-label="Workflow"
-          onClick={() => changeMode("workflow")}
+          selected={activeTab === "chat"}
+          label="Чат"
+          aria-label="Чат"
+          onClick={() => changeTab("chat")}
         >
-          <span className="mode-tabbar__icon" aria-hidden="true">W</span>
+          <span className="app-tabbar__icon" aria-hidden="true">C</span>
+        </TabbarItem>
+        <TabbarItem
+          selected={activeTab === "settings"}
+          label="Настройки"
+          aria-label="Настройки"
+          onClick={() => changeTab("settings")}
+        >
+          <span className="app-tabbar__icon" aria-hidden="true">S</span>
         </TabbarItem>
       </Tabbar>
       </div>

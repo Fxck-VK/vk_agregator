@@ -1,19 +1,20 @@
-export type AppMode = "chat" | "workflow";
+export type AppTab = "create" | "chat" | "settings";
 
-const MODE_KEY = "vk_miniapp_mode_v1";
+const TAB_KEY = "vk_miniapp_active_tab_v1";
 
-export function loadAppMode(): AppMode {
+export function loadAppTab(): AppTab {
   try {
-    const value = localStorage.getItem(MODE_KEY);
-    return value === "workflow" ? "workflow" : "chat";
+    const value = localStorage.getItem(TAB_KEY);
+    if (value === "create" || value === "settings") return value;
+    return "chat";
   } catch {
     return "chat";
   }
 }
 
-export function saveAppMode(mode: AppMode): void {
+export function saveAppTab(tab: AppTab): void {
   try {
-    localStorage.setItem(MODE_KEY, mode);
+    localStorage.setItem(TAB_KEY, tab);
   } catch {
     /* UI preference only */
   }

@@ -282,3 +282,17 @@ capture. No secrets, launch params, prompts or model output were recorded.
 Remaining credential-bound smoke before broad external release: real VK
 delivery/media upload and the full video media pipeline. OpenAI is not the
 primary Mini App text provider for this release path.
+
+---
+
+## PR-16.1 Mini App navigation shell note
+
+Date: 2026-06-06
+
+The 3-tab navigation shell is frontend-only. It uses VKUI `Tabbar` /
+`TabbarItem` and stores only the active tab as `vk_miniapp_active_tab_v1`.
+No launch params, prompts, balance, artifact URLs, provider details or private
+media URLs are added to localStorage. `ChatScreen` remains mounted across
+`Создать` / `Чат` / `Настройки` switches, preserving active job polling and the
+existing backend-owned job state model. The Settings tab is a placeholder and
+does not add new data access or backend behavior.

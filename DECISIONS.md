@@ -285,3 +285,38 @@ Artifact path as the VK text bot and does not add provider logic to the BFF or
 frontend. Public UI/API branding is `ChatGPT`; real provider/model names stay
 behind provider configuration, logs still must not include prompts, launch
 params, PII or private artifact URLs.
+
+---
+
+## ADR-010 - Mini App 3-tab navigation shell
+
+Status: accepted
+
+Date: 2026-06-06
+
+Context: PR-14 introduced VKUI primitives and PR-15 made Chat the default
+conversational surface. The Mini App now needs a product-level navigation shell
+for follow-up work without changing backend contracts or remounting the chat
+polling owner.
+
+Decision: use a bottom VKUI `Tabbar` with three tabs: `Создать`, `Чат` and
+`Настройки`. `Чат` is the default and remains the center tab. The active tab is
+stored as the UI-only preference `vk_miniapp_active_tab_v1`; no launch params,
+prompts, balance, artifact URLs or provider details are stored for navigation.
+
+`ChatScreen` stays mounted and owns polling, chat history, balance and workflow
+state. The tab shell hides inactive tab panels with CSS instead of unmounting
+them, so unfinished job polling and in-progress UI state survive tab switches.
+`Создать` reuses the existing PR-10 `WorkflowMode`, `Чат` reuses the PR-15 chat,
+and `Настройки` is a placeholder for PR-16.4.
+
+Plan:
+
+- PR-16.1: navigation shell only.
+- PR-16.2: refine/fill the Create tab.
+- PR-16.3: refine/fill the Chat tab.
+- PR-16.4: implement Settings.
+
+Consequences: navigation becomes VK-native without new backend/BFF behavior.
+Billing, auth, moderation, artifact access and provider routing remain
+backend-owned. Future PRs can fill each tab without reworking the shell.

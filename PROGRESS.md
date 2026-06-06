@@ -1125,3 +1125,34 @@ Status: **completed**.
   not contain DeepSeek/DeepInfra/provider/model details. The local smoke
   wrapper itself returned non-zero after force-stopping temporary `go run`
   API/worker processes during cleanup; no smoke assertion failed.
+
+---
+
+## PR-16.1 - Mini App 3-tab navigation shell
+
+Status: **completed**.
+
+### STEP 0 context
+
+- Branch: `fastlife_dev`, base/merge-base `e1d5c45`; PR-14 `b2b16a9` and
+  PR-15 `2c9bdfa` are present.
+- Reused PR-14 VKUI primitives (`Tabbar`, `TabbarItem`, `Button`, `Textarea`,
+  `Panel`) and PR-15 ChatGPT chat flow.
+- Existing PR-10 Workflow remains the Create surface; no backend/BFF contracts
+  changed.
+
+### What changed
+
+- Replaced the two-tab `Chat` / `Workflow` mode switch with a bottom VKUI
+  `Создать` / `Чат` / `Настройки` tab shell.
+- `Чат` is the default center tab. The selected tab is saved as
+  `vk_miniapp_active_tab_v1`, a UI-only localStorage preference.
+- `ChatScreen` stays mounted and inactive panels are hidden with CSS, so active
+  job polling and UI state survive tab switches.
+- `Настройки` is a placeholder with title and "soon" copy only.
+- ADR-010 documents the 3-tab navigation decision and PR-16.1-16.4 split.
+
+### Checks
+
+- `npm run build` in `web/miniapp` - exit 0.
+- `go build ./...` - exit 0.
