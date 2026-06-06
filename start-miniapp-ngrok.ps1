@@ -1,3 +1,5 @@
+# Dev launcher for VK Mini App: API + worker + Vite + localhost.run (*.lhr.life).
+# The filename is historical; this script does not use ngrok.
 param(
   [int]$ApiPort = 8080,
   [int]$MiniAppPort = 5173,
@@ -5,7 +7,8 @@ param(
   [int]$VkUserID = 777,
   [string]$EnvFile = ".env",
   [switch]$Migrate,
-  [switch]$NoNgrok,
+  [Alias("NoTunnel")]
+  [switch]$NoNgrok, # skip localhost.run SSH tunnel
   [switch]$CheckOnly,
   [switch]$NoWait,
   [switch]$OpenBrowser,
@@ -35,6 +38,9 @@ function Load-DotEnv($Path) {
     $idx = $trim.IndexOf("=")
     $key = $trim.Substring(0, $idx).Trim()
     $value = $trim.Substring($idx + 1).Trim()
+    if ($key.StartsWith('$env:')) {
+      $key = $key.Substring(5)
+    }
     if ($value.StartsWith('"') -and $value.EndsWith('"') -and $value.Length -ge 2) {
       $value = $value.Substring(1, $value.Length - 2)
     }
@@ -173,6 +179,11 @@ if ($StopOnly) {
 
 Write-Step "Loading env from $EnvFile"
 Load-DotEnv (Join-Path $Root $EnvFile)
+$EnvPs1Overlay = Join-Path $Root ".env.ps1"
+if ((Split-Path -Leaf $EnvFile) -eq ".env" -and (Test-Path $EnvPs1Overlay)) {
+  Write-Step "Overlaying env from .env.ps1"
+  Load-DotEnv $EnvPs1Overlay
+}
 
 $env:APP_ENV = "development"
 $env:HTTP_ADDR = ":$ApiPort"
@@ -272,7 +283,7 @@ try {
   Write-Host "Frontend URL: $publicUrl"
   Write-Host "Local browser test shortcut: $LaunchShortcut"
   Write-Host ""
-  Write-Host "For VK Mini App settings, use the Frontend URL above."
+  Write-Host "For VK Mini App settings, use the Frontend URL above (localhost.run / *.lhr.life)."
   Write-Host "The shortcut includes launch params so /miniapp/estimate passes auth in a plain browser."
   if ($OpenBrowser) {
     Start-Process $launchUrl

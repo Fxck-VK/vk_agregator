@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"strings"
 
 	"github.com/google/uuid"
 
@@ -102,6 +103,20 @@ func (r *ConversationRepository) CreateConversation(ctx context.Context, c *doma
 		RETURNING ` + conversationColumns
 	return mapError(scanConversation(r.db.QueryRow(ctx, q,
 		c.ID, c.UserID, c.Source, c.VKPeerID, c.ExternalThreadID, c.Status, c.Title), c))
+}
+
+func (r *ConversationRepository) SetConversationTitleIfEmpty(ctx context.Context, conversationID uuid.UUID, title string) error {
+	title = strings.TrimSpace(title)
+	if title == "" {
+		return nil
+	}
+	const q = `
+		UPDATE conversations
+		SET title = $2,
+		    updated_at = now()
+		WHERE id = $1 AND btrim(title) = ''`
+	_, err := r.db.Exec(ctx, q, conversationID, title)
+	return mapError(err)
 }
 
 func (r *ConversationRepository) UpsertMessage(ctx context.Context, m *domain.ConversationMessage) (*domain.ConversationMessage, error) {

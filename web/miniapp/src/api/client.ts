@@ -2,6 +2,8 @@
 // Тонкий типизированный клиент к /miniapp/* эндпоинтам.
 // Все пути ОТНОСИТЕЛЬНЫЕ — уходят через Vite-proxy на :8080.
 
+import bridge from "@vkontakte/vk-bridge";
+
 /** Mirrors internal/adapter/inbound/miniapp JobDTO */
 export interface Job {
   id: string;
@@ -137,15 +139,73 @@ export class ApiError extends Error {
   }
 }
 
-function launchParams(): string {
-  const fromUrl = window.location.search.replace(/^\?/, "");
-  if (fromUrl) return fromUrl;
-
-  const fromDevEnv = import.meta.env.DEV ? import.meta.env.VITE_DEV_LAUNCH_PARAMS : "";
-  return typeof fromDevEnv === "string" ? fromDevEnv : "";
+function normalizeRawParams(raw: string): string {
+  return raw.replace(/^[?#]/, "");
 }
 
-const LAUNCH_PARAMS = launchParams();
+function hasLaunchIdentity(raw: string): boolean {
+  const params = new URLSearchParams(normalizeRawParams(raw));
+  return Boolean(params.get("vk_user_id"));
+}
+
+function launchParamsFromLocation(): string {
+  const candidates = [window.location.search, window.location.hash];
+  for (const candidate of candidates) {
+    const raw = normalizeRawParams(candidate);
+    if (hasLaunchIdentity(raw)) return raw;
+
+    const queryIndex = raw.indexOf("?");
+    if (queryIndex >= 0) {
+      const nested = raw.slice(queryIndex + 1);
+      if (hasLaunchIdentity(nested)) return nested;
+    }
+  }
+  return "";
+}
+
+function stringifyBridgeLaunchParams(value: unknown): string {
+  if (!value || typeof value !== "object") return "";
+  const params = new URLSearchParams();
+  for (const [key, raw] of Object.entries(value as Record<string, unknown>)) {
+    if (raw === undefined || raw === null) continue;
+    if (typeof raw === "boolean") {
+      params.set(key, raw ? "1" : "0");
+      continue;
+    }
+    params.set(key, String(raw));
+  }
+  const out = params.toString();
+  return hasLaunchIdentity(out) ? out : "";
+}
+
+let launchParamsCache: string | undefined;
+
+async function launchParams(): Promise<string> {
+  if (launchParamsCache !== undefined) return launchParamsCache;
+
+  const fromUrl = launchParamsFromLocation();
+  if (fromUrl) {
+    launchParamsCache = fromUrl;
+    return fromUrl;
+  }
+
+  try {
+    const fromBridge = stringifyBridgeLaunchParams(await bridge.send("VKWebAppGetLaunchParams"));
+    if (fromBridge) {
+      launchParamsCache = fromBridge;
+      return fromBridge;
+    }
+  } catch {
+    /* outside VK or bridge unavailable */
+  }
+
+  const fromDevEnv = import.meta.env.DEV ? import.meta.env.VITE_DEV_LAUNCH_PARAMS : "";
+  if (typeof fromDevEnv === "string" && fromDevEnv) {
+    launchParamsCache = fromDevEnv;
+    return fromDevEnv;
+  }
+  return "";
+}
 
 const ARTIFACT_ID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -212,11 +272,12 @@ export function createIdempotencyKey(): string {
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let res: Response;
   try {
+    const rawLaunchParams = await launchParams();
     res = await fetch(path, {
       ...init,
       headers: {
         "Content-Type": "application/json",
-        "X-Launch-Params": LAUNCH_PARAMS,
+        "X-Launch-Params": rawLaunchParams,
         ...(init?.headers ?? {}),
       },
     });
@@ -303,8 +364,9 @@ export function artifactUrl(id: string): string | null {
 export async function fetchArtifactText(id: string): Promise<string | null> {
   const url = artifactUrl(id);
   if (!url) return null;
+  const rawLaunchParams = await launchParams();
   const res = await fetch(url, {
-    headers: { "X-Launch-Params": LAUNCH_PARAMS },
+    headers: { "X-Launch-Params": rawLaunchParams },
   });
   if (!res.ok) return null;
   const ct = res.headers.get("content-type") ?? "";

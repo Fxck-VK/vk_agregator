@@ -1,6 +1,29 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
+const apiTarget = 'http://127.0.0.1:8080';
+const tunnelHost = process.env.VITE_TUNNEL_HOST?.trim();
+
+function resolveHmr():
+  | boolean
+  | {
+      host: string;
+      protocol: 'wss';
+      clientPort: number;
+    } {
+  if (process.env.VITE_DISABLE_HMR === '1') {
+    return false;
+  }
+  if (tunnelHost) {
+    return {
+      host: tunnelHost,
+      protocol: 'wss',
+      clientPort: 443,
+    };
+  }
+  return true;
+}
+
 export default defineConfig({
   plugins: [react()],
   base: './',
@@ -11,25 +34,19 @@ export default defineConfig({
   server: {
     host: true,
     port: 5173,
-    // Accept the rotating tunnel domain (e.g. *.trycloudflare.com). Not
-    // hardcoded — the URL changes every run.
     allowedHosts: true,
-    // The page is served over HTTPS through the tunnel; force the HMR client
-    // websocket onto wss:443 so live reload works behind it.
-    hmr: { clientPort: 443, protocol: 'wss' },
-    // Proxy BFF calls to the local API on the same origin so an HTTPS page
-    // never has to call http://localhost (mixed content).
+    hmr: resolveHmr(),
     proxy: {
       '/miniapp': {
-        target: 'http://localhost:8080',
+        target: apiTarget,
         changeOrigin: true,
       },
       '/api': {
-        target: 'http://localhost:8080',
+        target: apiTarget,
         changeOrigin: true,
       },
       '/webhooks': {
-        target: 'http://localhost:8080',
+        target: apiTarget,
         changeOrigin: true,
       },
     },

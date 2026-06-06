@@ -48,21 +48,58 @@ string, so test with:
 http://localhost:5173/?vk_user_id=777
 ```
 
-### Open inside VK via VK Tunnel
+### Open inside VK via HTTPS tunnel (`localhost.run` / `*.lhr.life`)
 
-```bash
-# API + worker running (mock); Vite dev server up via `npm run dev`.
-# Export VK_APP_ID (the project uses .env.ps1 on Windows), then:
-npm run tunnel
+VK WebView needs a public HTTPS URL. For local dev use **`localhost.run`**
+(`https://<random>.lhr.life`) — it works inside VK without the ngrok warning
+page that blocks the iframe.
+
+**One command (Windows, recommended):**
+
+```powershell
+# From repo root. Starts API + worker + Vite and prints the public URL.
+powershell -ExecutionPolicy Bypass -File .\start-miniapp-ngrok.ps1 -NoWait
 ```
 
-`npm run tunnel` runs `@vkontakte/vk-tunnel` against the local dev server
-(`localhost:5173`). It needs a **one-time VK OAuth**: open the printed
-`oauth.vk.ru` link, authorize, press ENTER. The tunnel then prints an HTTPS URL.
+The script name still says `ngrok`, but the tunnel is **`localhost.run` via SSH**.
+Requirements: `go`, `npm`, `ssh` (OpenSSH client), `.env` with `DEEPINFRA_API_KEY`
+and database/redis settings.
 
-Paste that URL into **dev.vk.com → your app → Settings → Mini Apps** as the app
-(iframe) URL, then open the app from VK. The OAuth step is interactive and
-cannot be scripted.
+Paste the printed `https://....lhr.life` URL into **dev.vk.com → your app →
+Версия для vk.com → "URL для разработки"**, save, then open the app from VK.
+
+**Stop everything started by the script:**
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\start-miniapp-ngrok.ps1 -StopOnly
+```
+
+**Manual stack (if you prefer separate terminals):**
+
+```powershell
+# 1. Infrastructure + API + worker (see repo RUNBOOK.md)
+docker compose up -d
+go run ./cmd/migrate up
+go run ./cmd/api
+go run ./cmd/worker
+
+# 2. Vite
+cd web\miniapp
+npm run dev
+
+# 3. Tunnel (prints https://....lhr.life)
+ssh -o StrictHostKeyChecking=no -R 80:127.0.0.1:5173 nokey@localhost.run
+```
+
+**Verify in VK DevTools → Network:** you should see `/src/main.tsx` and
+`/miniapp/balance`. If you see `error.js` / `allerrors.js` instead, VK loaded
+an ngrok warning page — switch to `*.lhr.life`.
+
+**Do not use free ngrok for VK Mini App dev** — the interstitial cannot be
+passed in VK WebView.
+
+**Stable alternative:** Cloudflare named tunnel `app.neiirohub.ru → localhost:5173`
+via `scripts/dev/setup-miniapp-cloudflare-route.ps1` (see `RUNBOOK.md`).
 
 ### Using vk-bridge-mock (optional)
 
@@ -101,7 +138,7 @@ App admin panel as the "Application URL".
 | Variable | Description |
 |---|---|
 | `VK_APP_SECRET` | VK App protected key for sign verification. Set = real check; empty = dev mode (no check); empty in production = fail-closed startup |
-| `VK_APP_ID` | VK Application ID (used by `npm run tunnel`) |
+| `VK_APP_ID` | VK Application ID (informational for the BFF) |
 | `MINIAPP_LAUNCH_PARAMS_MAX_AGE` | Max age of launch params (default `1h`) |
 
 ## Authentication flow

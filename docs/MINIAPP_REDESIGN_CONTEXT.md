@@ -136,10 +136,15 @@ Cloudflare helper:
   `app.neiirohub.ru -> http://localhost:5173` to the local Cloudflare tunnel
   config after the tunnel credentials exist.
 
-Temporary tunnel fallback:
+Default dev tunnel for VK Mini App:
 
-- Free ngrok may show an interstitial warning that VK WebView cannot pass.
-- `localhost.run` can be used for local smoke when ngrok's warning blocks VK.
+- Use `localhost.run` (`https://<random>.lhr.life`) via
+  `start-miniapp-ngrok.ps1` (repo root) or manual SSH:
+  `ssh -R 80:127.0.0.1:5173 nokey@localhost.run`.
+- Do **not** use free ngrok for VK iframe dev — its warning page (`error.js`)
+  blocks WebView.
+- Stable option: Cloudflare named route `app.neiirohub.ru -> localhost:5173`
+  (`scripts/dev/setup-miniapp-cloudflare-route.ps1`).
 
 ## Pre-redesign checklist
 

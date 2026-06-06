@@ -169,23 +169,37 @@ function messageFromHistory(message: ChatConversationMessage): ChatMessage {
   };
 }
 
+function isLocalDraftChat(chat: Chat): boolean {
+  return (
+    chat.messages.length === 0 ||
+    chat.messages.some((msg) => msg.pending || Boolean(msg.error))
+  );
+}
+
 function mergeBackendChats(prev: Chat[], backend: Chat[]): Chat[] {
   if (backend.length === 0) {
-    const localOnly = prev.filter((chat) => chat.messages.some((msg) => msg.pending));
-    return localOnly.length > 0 ? localOnly : prev.length > 0 ? prev : [];
+    return prev.length > 0 ? prev : [];
   }
   const byID = new Map<string, Chat>();
   for (const chat of backend) {
     byID.set(chat.id, chat);
   }
   for (const chat of prev) {
-    if (!chat.messages.some((msg) => msg.pending)) continue;
     const existing = byID.get(chat.id);
-    byID.set(chat.id, {
-      ...(existing ?? chat),
-      messages: chat.messages,
-      updatedAt: Math.max(existing?.updatedAt ?? 0, chat.updatedAt),
-    });
+    if (existing) {
+      const messages = chat.messages.length > 0 ? chat.messages : existing.messages;
+      byID.set(chat.id, {
+        ...existing,
+        title: existing.title || chat.title,
+        preview: existing.preview || chat.preview,
+        messages,
+        updatedAt: Math.max(existing.updatedAt, chat.updatedAt),
+      });
+      continue;
+    }
+    if (isLocalDraftChat(chat)) {
+      byID.set(chat.id, chat);
+    }
   }
   return Array.from(byID.values()).sort((a, b) => b.updatedAt - a.updatedAt);
 }
@@ -236,6 +250,7 @@ export function ChatScreen({ user }: { user: VkUser }) {
 
   const [balance, setBalance] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<AppTab>(() => loadAppTab());
@@ -248,6 +263,11 @@ export function ChatScreen({ user }: { user: VkUser }) {
   const pollTimersRef = useRef(new Map<string, number>());
   const seededRef = useRef(false);
   const submittingRef = useRef(false);
+  const chatsRef = useRef(chats);
+
+  useEffect(() => {
+    chatsRef.current = chats;
+  }, [chats]);
 
   const patchInChat = useCallback(
     (chatId: string, msgId: string, patch: Partial<ChatMessage>) => {
@@ -265,6 +285,9 @@ export function ChatScreen({ user }: { user: VkUser }) {
   const loadConversationMessages = useCallback(
     async (chatId: string) => {
       if (!chatId || chatId.startsWith("job-")) return;
+      const localChat = chatsRef.current.find((chat) => chat.id === chatId);
+      if (localChat && localChat.messages.length === 0 && !localChat.preview) return;
+      setHistoryLoading(true);
       try {
         const history = await listChatConversationMessages(chatId);
         if (!mountedRef.current) return;
@@ -281,14 +304,9 @@ export function ChatScreen({ user }: { user: VkUser }) {
           ),
         );
       } catch {
-        if (!mountedRef.current) return;
-        setChats((prev) =>
-          prev.map((chat) =>
-            chat.id === chatId && !chat.messages.some((msg) => msg.pending)
-              ? { ...chat, messages: [] }
-              : chat,
-          ),
-        );
+        /* keep already rendered messages on transient load errors */
+      } finally {
+        if (mountedRef.current) setHistoryLoading(false);
       }
     },
     [setChats],
@@ -298,14 +316,15 @@ export function ChatScreen({ user }: { user: VkUser }) {
     const conversations = await listChatConversations();
     if (!mountedRef.current) return;
     const backendChats = conversations.map(chatFromConversation);
+    let nextChats: Chat[] = [];
     setChats((prev) => {
       const merged = mergeBackendChats(prev, backendChats);
-      return merged.length > 0 ? merged : prev;
+      nextChats = merged.length > 0 ? merged : prev;
+      return nextChats;
     });
-    const knownIDs = new Set(backendChats.map((chat) => chat.id));
     setActiveId((cur) => {
-      if (cur && knownIDs.has(cur)) return cur;
-      return backendChats[0]?.id ?? "default";
+      if (cur && nextChats.some((chat) => chat.id === cur)) return cur;
+      return nextChats[0]?.id ?? cur ?? null;
     });
   }, [setActiveId, setChats]);
 
@@ -484,10 +503,7 @@ export function ChatScreen({ user }: { user: VkUser }) {
   useEffect(() => {
     refreshBalance();
     void refreshConversations().catch(() => undefined);
-    if (seededRef.current) {
-      setLoading(false);
-      return;
-    }
+    if (seededRef.current) return;
     seededRef.current = true;
     listJobs()
       .then((jobs) => {
@@ -519,7 +535,7 @@ export function ChatScreen({ user }: { user: VkUser }) {
       .finally(() => {
         if (mountedRef.current) setLoading(false);
       });
-  }, [chats.length, refreshBalance, refreshConversations, setChats, setActiveId, startPoll, patchInChat]);
+  }, [refreshBalance, refreshConversations, setChats, setActiveId, startPoll, patchInChat]);
 
   useEffect(() => {
     if (activeTab !== "chat" || !activeId) return;
@@ -550,7 +566,11 @@ export function ChatScreen({ user }: { user: VkUser }) {
   }, [activeChat?.messages]);
 
   const messages = activeChat?.messages ?? [];
-  const empty = !loading && messages.length === 0;
+  const empty =
+    !loading &&
+    !historyLoading &&
+    messages.length === 0 &&
+    !activeChat?.preview;
   const header = tabTitle(activeTab, activeChat);
 
   return (
@@ -597,7 +617,7 @@ export function ChatScreen({ user }: { user: VkUser }) {
 
       <section className={"app-tab-panel" + (activeTab === "chat" ? " is-active" : "")} aria-hidden={activeTab !== "chat"}>
           <div className="chat__scroll" ref={scrollRef}>
-            {loading && (
+            {(loading || (historyLoading && messages.length === 0 && Boolean(activeChat?.preview))) && (
               <div className="splash">
                 <Spinner />
               </div>

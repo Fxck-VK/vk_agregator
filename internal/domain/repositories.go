@@ -180,6 +180,9 @@ type ConversationRepository interface {
 	ListByUserSource(ctx context.Context, userID uuid.UUID, source ConversationSource, limit, offset int) ([]*Conversation, error)
 	// CreateConversation inserts a new conversation.
 	CreateConversation(ctx context.Context, conversation *Conversation) error
+	// SetConversationTitleIfEmpty fills an empty title without overwriting an
+	// existing one. This keeps retrying chat jobs idempotent.
+	SetConversationTitleIfEmpty(ctx context.Context, conversationID uuid.UUID, title string) error
 	// UpsertMessage inserts a user/assistant message or returns the existing
 	// row for the same job+role, making worker retries idempotent.
 	UpsertMessage(ctx context.Context, message *ConversationMessage) (*ConversationMessage, error)

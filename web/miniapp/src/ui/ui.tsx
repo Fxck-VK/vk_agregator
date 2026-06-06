@@ -1,7 +1,7 @@
 // src/ui/ui.tsx
 export function Spinner({ size = 22 }: { size?: number }) {
   const style = { width: size, height: size };
-  return <span className="spinner" style={style} />;
+  return <span className="spinner" style={style} role="status" aria-label="Загрузка" />;
 }
 
 export function Avatar({

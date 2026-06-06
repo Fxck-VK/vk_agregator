@@ -170,6 +170,94 @@ func TestPrepareUsesExplicitMiniAppThreadsWithoutMixing(t *testing.T) {
 	}
 }
 
+func TestPrepareSetsMiniAppConversationTitleFromFirstUserPrompt(t *testing.T) {
+	ctx := context.Background()
+	repo := memory.NewConversationRepo()
+	svc := dialogcontext.New(repo, dialogcontext.Config{Enabled: true})
+	userID := uuid.New()
+
+	job := textJobWithParams(userID, 0, map[string]string{
+		"conversation_source": "miniapp",
+		"external_thread_id":  "title-thread",
+	})
+	if _, err := svc.Prepare(ctx, job, "  Как сделать презентацию?  "); err != nil {
+		t.Fatalf("prepare: %v", err)
+	}
+
+	conversation := mustMiniAppConversation(t, repo, userID, "title-thread")
+	if conversation.Title != "Как сделать презентацию?" {
+		t.Fatalf("title = %q, want %q", conversation.Title, "Как сделать презентацию?")
+	}
+}
+
+func TestPrepareDoesNotOverwriteMiniAppConversationTitle(t *testing.T) {
+	ctx := context.Background()
+	repo := memory.NewConversationRepo()
+	svc := dialogcontext.New(repo, dialogcontext.Config{Enabled: true})
+	userID := uuid.New()
+
+	firstJob := textJobWithParams(userID, 0, map[string]string{
+		"conversation_source": "miniapp",
+		"external_thread_id":  "stable-title-thread",
+	})
+	if _, err := svc.Prepare(ctx, firstJob, "Первый вопрос"); err != nil {
+		t.Fatalf("prepare first: %v", err)
+	}
+	secondJob := textJobWithParams(userID, 0, map[string]string{
+		"conversation_source": "miniapp",
+		"external_thread_id":  "stable-title-thread",
+	})
+	if _, err := svc.Prepare(ctx, secondJob, "Второй вопрос"); err != nil {
+		t.Fatalf("prepare second: %v", err)
+	}
+
+	conversation := mustMiniAppConversation(t, repo, userID, "stable-title-thread")
+	if conversation.Title != "Первый вопрос" {
+		t.Fatalf("title = %q, want first prompt", conversation.Title)
+	}
+}
+
+func TestPrepareLeavesMiniAppConversationTitleEmptyForWhitespacePrompt(t *testing.T) {
+	ctx := context.Background()
+	repo := memory.NewConversationRepo()
+	svc := dialogcontext.New(repo, dialogcontext.Config{Enabled: true})
+	userID := uuid.New()
+
+	job := textJobWithParams(userID, 0, map[string]string{
+		"conversation_source": "miniapp",
+		"external_thread_id":  "empty-title-thread",
+	})
+	if _, err := svc.Prepare(ctx, job, " \n\t "); err != nil {
+		t.Fatalf("prepare: %v", err)
+	}
+
+	conversation := mustMiniAppConversation(t, repo, userID, "empty-title-thread")
+	if conversation.Title != "" {
+		t.Fatalf("title = %q, want empty fallback title in API", conversation.Title)
+	}
+}
+
+func TestPrepareTruncatesMiniAppConversationTitle(t *testing.T) {
+	ctx := context.Background()
+	repo := memory.NewConversationRepo()
+	svc := dialogcontext.New(repo, dialogcontext.Config{Enabled: true})
+	userID := uuid.New()
+
+	job := textJobWithParams(userID, 0, map[string]string{
+		"conversation_source": "miniapp",
+		"external_thread_id":  "long-title-thread",
+	})
+	if _, err := svc.Prepare(ctx, job, strings.Repeat("а", 100)); err != nil {
+		t.Fatalf("prepare: %v", err)
+	}
+
+	conversation := mustMiniAppConversation(t, repo, userID, "long-title-thread")
+	want := strings.Repeat("а", 77) + "..."
+	if conversation.Title != want {
+		t.Fatalf("title runes = %d, title = %q, want %q", len([]rune(conversation.Title)), conversation.Title, want)
+	}
+}
+
 func TestPrepareSeparatesVKBotAndMiniAppForSameUser(t *testing.T) {
 	ctx := context.Background()
 	repo := memory.NewConversationRepo()
@@ -256,4 +344,17 @@ func msg(conversationID, jobID uuid.UUID, role domain.ConversationMessageRole, t
 		Text:           text,
 		TokenCount:     dialogcontext.EstimateTokens(text),
 	}
+}
+
+func mustMiniAppConversation(t *testing.T, repo domain.ConversationRepository, userID uuid.UUID, threadID string) *domain.Conversation {
+	t.Helper()
+	conversation, err := repo.GetActiveByReference(context.Background(), domain.ConversationRef{
+		UserID:           userID,
+		Source:           domain.ConversationSourceMiniApp,
+		ExternalThreadID: threadID,
+	})
+	if err != nil {
+		t.Fatalf("get miniapp conversation: %v", err)
+	}
+	return conversation
 }

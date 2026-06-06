@@ -24,6 +24,7 @@ const (
 	defaultSummarizeAfterTurns  = 10
 	defaultSummarizeAfterTokens = 1500
 	maxSummaryScanMessages      = 200
+	maxConversationTitleRunes   = 80
 )
 
 // Config controls dialog-context prompt budgeting.
@@ -114,6 +115,13 @@ func (s *Service) Prepare(ctx context.Context, job *domain.Job, prompt string) (
 	})
 	if err != nil {
 		return Prepared{}, err
+	}
+	if conversation.Source == domain.ConversationSourceMiniApp {
+		if title := titleFromUserPrompt(prompt); title != "" {
+			if err := s.repo.SetConversationTitleIfEmpty(ctx, conversation.ID, title); err != nil {
+				return Prepared{}, err
+			}
+		}
 	}
 
 	summary, err := s.repo.LatestSummary(ctx, conversation.ID)
@@ -435,6 +443,25 @@ func truncateTokens(text string, maxTokens int) string {
 
 func trimWhitespace(text string) string {
 	return strings.Join(strings.Fields(text), " ")
+}
+
+func titleFromUserPrompt(prompt string) string {
+	return truncateTitle(trimWhitespace(prompt), maxConversationTitleRunes)
+}
+
+func truncateTitle(text string, maxRunes int) string {
+	text = strings.TrimSpace(text)
+	if text == "" || maxRunes <= 0 {
+		return ""
+	}
+	runes := []rune(text)
+	if len(runes) <= maxRunes {
+		return text
+	}
+	if maxRunes <= 3 {
+		return string(runes[:maxRunes])
+	}
+	return strings.TrimSpace(string(runes[:maxRunes-3])) + "..."
 }
 
 // ParamsPatch is embedded into job params so later poll attempts know which

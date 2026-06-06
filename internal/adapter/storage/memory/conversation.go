@@ -4,6 +4,7 @@ import (
 	"context"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -157,6 +158,26 @@ func (r *ConversationRepo) CreateConversation(_ context.Context, c *domain.Conve
 	c.CreatedAt = now
 	c.UpdatedAt = now
 	r.byID[c.ID] = *c
+	return nil
+}
+
+func (r *ConversationRepo) SetConversationTitleIfEmpty(_ context.Context, conversationID uuid.UUID, title string) error {
+	title = strings.TrimSpace(title)
+	if title == "" {
+		return nil
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	c, ok := r.byID[conversationID]
+	if !ok {
+		return domain.ErrNotFound
+	}
+	if strings.TrimSpace(c.Title) != "" {
+		return nil
+	}
+	c.Title = title
+	c.UpdatedAt = time.Now()
+	r.byID[conversationID] = c
 	return nil
 }
 
