@@ -17,10 +17,9 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	adminapi "vk-ai-aggregator/internal/adapter/inbound/admin"
-	miniappapi "vk-ai-aggregator/internal/adapter/inbound/miniapp"
 	redisqueue "vk-ai-aggregator/internal/adapter/queue/redis"
 	"vk-ai-aggregator/internal/adapter/storage/postgres"
-	s3store "vk-ai-aggregator/internal/adapter/storage/s3"
+	miniappapp "vk-ai-aggregator/internal/app/miniapp"
 	"vk-ai-aggregator/internal/app/vkbot"
 	"vk-ai-aggregator/internal/platform/config"
 	"vk-ai-aggregator/internal/platform/metrics"
@@ -79,19 +78,6 @@ func main() {
 	artifacts := postgres.NewArtifactRepository(pool)
 	modResults := postgres.NewModerationResultRepository(pool)
 
-	var objectStore miniappapi.ObjectReader
-	store, err := s3store.New(ctx, s3store.Config{
-		Endpoint:  cfg.S3Endpoint,
-		AccessKey: cfg.S3AccessKey,
-		SecretKey: cfg.S3SecretKey,
-		UseSSL:    cfg.S3UseSSL,
-	})
-	if err != nil {
-		logger.Warn("s3 connect failed; miniapp artifact downloads disabled", "error", err)
-	} else {
-		objectStore = store
-	}
-
 	billing := billingservice.New(billingRepo, billingservice.WithPriceOverrides(cfg.PriceOverrides))
 	uowMgr := postgres.NewUnitOfWork(pool)
 	// The orchestrator records a queued outbox event; the worker's outbox relay
@@ -120,19 +106,11 @@ func main() {
 		Billing:    billingRepo,
 	})
 
-	// Per-user rate limiting protects Mini App estimate and billable job
-	// creation after launch params have been verified by the BFF.
-	miniappJobLimiter := ratelimit.New(cfg.MiniAppJobRateLimitRPS, cfg.MiniAppJobRateLimitBurst)
-	miniapp := miniappapi.NewHandler(miniappapi.Config{
-		AppSecret:          cfg.VKAppSecret,
-		LaunchParamsMaxAge: cfg.MiniAppLaunchParamsMaxAge,
-		JobRateLimiter:     miniappJobLimiter,
-	}, miniappapi.Deps{
+	miniapp := miniappapp.NewHandler(ctx, cfg, miniappapp.Deps{
 		Users:        users,
 		Jobs:         jobs,
 		Artifacts:    artifacts,
 		Moderation:   modResults,
-		Objects:      objectStore,
 		Billing:      billing,
 		BillingRepo:  billingRepo,
 		Orchestrator: orch,

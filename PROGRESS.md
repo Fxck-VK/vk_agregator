@@ -1565,3 +1565,38 @@ Status: **completed**.
 - `go test ./internal/app/vkbot` - exit 0.
 - `go build ./...` - exit 0.
 - `go test ./...` - exit 0.
+
+---
+
+## PR-17.3 - Extract Mini App API module
+
+Status: **completed**.
+
+### STEP 0 context
+
+- `cmd/api/main.go` previously owned Mini App BFF wiring: S3 object-store setup
+  for artifact reads, Mini App per-user rate limiter, `miniappapi.NewHandler`
+  and deps for users/jobs/artifacts/moderation/billing/orchestrator/logger.
+- Shared backend-core deps remain outside the surface module: repositories,
+  billing service, job orchestrator, config, logger and process lifecycle.
+
+### What changed
+
+- Added `internal/app/miniapp/module.go` as the Mini App app-surface wiring
+  module.
+- Moved Mini App S3 object reader setup, Mini App rate limiter construction and
+  `miniappapi.NewHandler` construction out of `cmd/api/main.go`.
+- `cmd/api/main.go` now creates shared core deps and mounts the returned Mini
+  App handler at `/miniapp/`; VK bot, admin, metrics and health routes are
+  unchanged.
+- BFF contracts are unchanged. The underlying `internal/adapter/inbound/miniapp`
+  route map still exposes estimate, chat messages, jobs, balance and artifact
+  endpoints.
+
+### Checks
+
+- `go test ./internal/adapter/inbound/miniapp` - exit 0.
+- `go test ./internal/app/miniapp` - exit 0.
+- `go build ./...` - exit 0.
+- `go test ./...` - exit 0.
+- `npm --prefix web/miniapp run build` - exit 0.
