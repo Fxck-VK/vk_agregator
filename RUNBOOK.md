@@ -790,25 +790,51 @@ npm run dev
 
 The Vite proxy routes `/miniapp/*` to `http://localhost:8080`.
 
-### Open the Mini App inside VK via an HTTPS tunnel (cloudflared)
+### Open the Mini App inside VK via an HTTPS tunnel (`localhost.run`)
 
-VK Tunnel is under maintenance (since 2025-10-02), so the obsolete
-`@vkontakte/vk-tunnel` dev dependency and npm `tunnel` script were removed.
-Expose the local Vite dev server over HTTPS with **cloudflared**. The Vite dev config (`host: true`, `allowedHosts: true`,
-`hmr.protocol: wss`, `/miniapp` + `/api` proxy) already accepts the rotating
-tunnel domain and keeps backend calls same-origin (no mixed content).
+VK WebView requires HTTPS. For local Mini App dev, prefer **`localhost.run`**
+(`https://<random>.lhr.life`). It avoids the free **ngrok** interstitial that
+VK iframe cannot pass (Network shows `error.js` instead of `main.tsx`).
+
+**One command (Windows):**
 
 ```powershell
-# 1. API + worker running (mock) and the Vite dev server up (npm run dev).
-# 2. Tunnel the dev server (prints a fresh https://<random>.trycloudflare.com URL):
-cloudflared tunnel --protocol http2 --url http://localhost:5173
+powershell -ExecutionPolicy Bypass -File .\start-miniapp-ngrok.ps1 -NoWait
 ```
 
-Paste the printed `https://...trycloudflare.com` URL into **dev.vk.com → your
-app → Версия для vk.com → "URL для разработки"**. The URL changes every run —
-do **not** hardcode it anywhere (`allowedHosts: true` handles the domain). Open
-the app from VK; the SPA reads the launch params VK appends to the URL and the
-BFF verifies the signature.
+Starts API + worker + Vite, opens an SSH tunnel to `localhost.run`, prints the
+public URL. Logs: `%TEMP%\vkagg-miniapp-ngrok\`.
+
+Stop:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\start-miniapp-ngrok.ps1 -StopOnly
+```
+
+**Manual tunnel** (API, worker and `npm run dev` already running):
+
+```powershell
+ssh -o StrictHostKeyChecking=no -R 80:127.0.0.1:5173 nokey@localhost.run
+```
+
+Paste `https://....lhr.life` into **dev.vk.com → your app → Версия для vk.com →
+"URL для разработки"**. The URL changes when the SSH session ends — update VK
+settings after each restart.
+
+Vite proxies `/miniapp/*` to `http://127.0.0.1:8080`, so one tunnel URL serves
+both frontend and BFF (same-origin, no mixed content).
+
+**Stable alternative (Cloudflare named tunnel):**
+
+```powershell
+.\scripts\dev\setup-miniapp-cloudflare-route.ps1
+# then run cloudflared with .runtime/vk-bot/cloudflared/config.yml
+# app.neiirohub.ru -> http://localhost:5173
+```
+
+**Legacy / bot-only:** `cloudflared tunnel --protocol http2 --url http://localhost:5173`
+still works for quick smoke, but `*.trycloudflare.com` is less reliable for VK
+WebView than `*.lhr.life` in local practice.
 
 ### Production
 

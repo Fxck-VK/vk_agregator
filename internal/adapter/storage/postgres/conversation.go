@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"strings"
 
 	"github.com/google/uuid"
 
@@ -21,14 +22,14 @@ func NewConversationRepository(db Querier) *ConversationRepository {
 
 var _ domain.ConversationRepository = (*ConversationRepository)(nil)
 
-const conversationColumns = `id, user_id, vk_peer_id, status, title, created_at, updated_at`
+const conversationColumns = `id, user_id, source, vk_peer_id, external_thread_id, status, title, created_at, updated_at`
 const conversationMessageColumns = `id, conversation_id, job_id, seq, role, text, token_count, created_at`
 const conversationSummaryColumns = `id, conversation_id, text, token_count, summarized_until_seq, created_at, updated_at`
 
 func (r *ConversationRepository) GetActiveByUserPeer(ctx context.Context, userID uuid.UUID, vkPeerID int64) (*domain.Conversation, error) {
 	const q = `SELECT ` + conversationColumns + `
 		FROM conversations
-		WHERE user_id = $1 AND vk_peer_id = $2 AND status = 'active'`
+		WHERE user_id = $1 AND source = 'vk_bot' AND vk_peer_id = $2 AND status = 'active'`
 	var c domain.Conversation
 	if err := mapError(scanConversation(r.db.QueryRow(ctx, q, userID, vkPeerID), &c)); err != nil {
 		return nil, err
@@ -36,18 +37,86 @@ func (r *ConversationRepository) GetActiveByUserPeer(ctx context.Context, userID
 	return &c, nil
 }
 
+func (r *ConversationRepository) GetActiveByReference(ctx context.Context, ref domain.ConversationRef) (*domain.Conversation, error) {
+	source := ref.Source
+	if source == "" {
+		source = domain.ConversationSourceVKBot
+	}
+	if source == domain.ConversationSourceVKBot {
+		return r.GetActiveByUserPeer(ctx, ref.UserID, ref.VKPeerID)
+	}
+
+	const q = `SELECT ` + conversationColumns + `
+		FROM conversations
+		WHERE user_id = $1 AND source = $2 AND external_thread_id = $3 AND status = 'active'`
+	var c domain.Conversation
+	if err := mapError(scanConversation(r.db.QueryRow(ctx, q, ref.UserID, source, ref.ExternalThreadID), &c)); err != nil {
+		return nil, err
+	}
+	return &c, nil
+}
+
+func (r *ConversationRepository) GetByIDForUser(ctx context.Context, userID, conversationID uuid.UUID) (*domain.Conversation, error) {
+	const q = `SELECT ` + conversationColumns + `
+		FROM conversations
+		WHERE user_id = $1 AND id = $2`
+	var c domain.Conversation
+	if err := mapError(scanConversation(r.db.QueryRow(ctx, q, userID, conversationID), &c)); err != nil {
+		return nil, err
+	}
+	return &c, nil
+}
+
+func (r *ConversationRepository) ListByUserSource(ctx context.Context, userID uuid.UUID, source domain.ConversationSource, limit, offset int) ([]*domain.Conversation, error) {
+	if limit <= 0 {
+		return nil, nil
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	const q = `SELECT ` + conversationColumns + `
+		FROM conversations
+		WHERE user_id = $1 AND source = $2
+		ORDER BY updated_at DESC, created_at DESC
+		LIMIT $3 OFFSET $4`
+	rows, err := r.db.Query(ctx, q, userID, source, limit, offset)
+	if err != nil {
+		return nil, mapError(err)
+	}
+	defer rows.Close()
+	return scanConversations(rows)
+}
+
 func (r *ConversationRepository) CreateConversation(ctx context.Context, c *domain.Conversation) error {
 	if c.ID == uuid.Nil {
 		c.ID = uuid.New()
+	}
+	if c.Source == "" {
+		c.Source = domain.ConversationSourceVKBot
 	}
 	if c.Status == "" {
 		c.Status = domain.ConversationActive
 	}
 	const q = `
-		INSERT INTO conversations (id, user_id, vk_peer_id, status, title)
-		VALUES ($1, $2, $3, $4, $5)
+		INSERT INTO conversations (id, user_id, source, vk_peer_id, external_thread_id, status, title)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		RETURNING ` + conversationColumns
-	return mapError(scanConversation(r.db.QueryRow(ctx, q, c.ID, c.UserID, c.VKPeerID, c.Status, c.Title), c))
+	return mapError(scanConversation(r.db.QueryRow(ctx, q,
+		c.ID, c.UserID, c.Source, c.VKPeerID, c.ExternalThreadID, c.Status, c.Title), c))
+}
+
+func (r *ConversationRepository) SetConversationTitleIfEmpty(ctx context.Context, conversationID uuid.UUID, title string) error {
+	title = strings.TrimSpace(title)
+	if title == "" {
+		return nil
+	}
+	const q = `
+		UPDATE conversations
+		SET title = $2,
+		    updated_at = now()
+		WHERE id = $1 AND btrim(title) = ''`
+	_, err := r.db.Exec(ctx, q, conversationID, title)
+	return mapError(err)
 }
 
 func (r *ConversationRepository) UpsertMessage(ctx context.Context, m *domain.ConversationMessage) (*domain.ConversationMessage, error) {
@@ -137,7 +206,19 @@ func (r *ConversationRepository) UpsertSummary(ctx context.Context, s *domain.Co
 }
 
 func scanConversation(row rowScanner, c *domain.Conversation) error {
-	return row.Scan(&c.ID, &c.UserID, &c.VKPeerID, &c.Status, &c.Title, &c.CreatedAt, &c.UpdatedAt)
+	return row.Scan(&c.ID, &c.UserID, &c.Source, &c.VKPeerID, &c.ExternalThreadID, &c.Status, &c.Title, &c.CreatedAt, &c.UpdatedAt)
+}
+
+func scanConversations(rows rowScannerRows) ([]*domain.Conversation, error) {
+	var conversations []*domain.Conversation
+	for rows.Next() {
+		var c domain.Conversation
+		if err := scanConversation(rows, &c); err != nil {
+			return nil, mapError(err)
+		}
+		conversations = append(conversations, &c)
+	}
+	return conversations, mapError(rows.Err())
 }
 
 func scanConversationMessage(row rowScanner, m *domain.ConversationMessage) error {

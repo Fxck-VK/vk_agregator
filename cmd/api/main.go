@@ -87,14 +87,15 @@ func main() {
 	})
 
 	miniapp := miniappapp.NewHandler(ctx, cfg, miniappapp.Deps{
-		Users:        core.Users,
-		Jobs:         core.Jobs,
-		Artifacts:    core.Artifacts,
-		Moderation:   core.Moderation,
-		Billing:      core.Billing,
-		BillingRepo:  core.BillingRepo,
-		Orchestrator: core.Orchestrator,
-		Logger:       logger,
+		Users:         core.Users,
+		Jobs:          core.Jobs,
+		Conversations: core.Conversations,
+		Artifacts:     core.Artifacts,
+		Moderation:    core.Moderation,
+		Billing:       core.Billing,
+		BillingRepo:   core.BillingRepo,
+		Orchestrator:  core.Orchestrator,
+		Logger:        logger,
 	})
 
 	// Per-IP rate limiting protects the webhook intake from flooding/abuse

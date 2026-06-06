@@ -41,10 +41,12 @@ type ChatMessageRequest struct {
 }
 
 type miniAppJobParams struct {
-	Prompt         string `json:"prompt"`
-	ModelID        string `json:"model_id,omitempty"`
-	ModelName      string `json:"model_name,omitempty"`
-	ConversationID string `json:"conversation_id,omitempty"`
+	Prompt             string                    `json:"prompt"`
+	ModelID            string                    `json:"model_id,omitempty"`
+	ModelName          string                    `json:"model_name,omitempty"`
+	ConversationID     string                    `json:"conversation_id,omitempty"`
+	ConversationSource domain.ConversationSource `json:"conversation_source,omitempty"`
+	ExternalThreadID   string                    `json:"external_thread_id,omitempty"`
 }
 
 // EstimateDTO is returned by POST /miniapp/estimate. It exposes only
@@ -78,6 +80,28 @@ type JobDTO struct {
 type ChatJobDTO struct {
 	JobDTO
 	ModelName string `json:"model_name"`
+}
+
+// ChatConversationDTO is a durable Mini App chat thread owned by the verified
+// backend user. ID is the opaque Mini App thread id, not a database id.
+type ChatConversationDTO struct {
+	ID                 string    `json:"id"`
+	Title              string    `json:"title"`
+	LastMessagePreview string    `json:"last_message_preview,omitempty"`
+	LastMessageRole    string    `json:"last_message_role,omitempty"`
+	CreatedAt          time.Time `json:"created_at"`
+	UpdatedAt          time.Time `json:"updated_at"`
+}
+
+// ChatConversationMessageDTO is one persisted user/bot turn. It intentionally
+// exposes only product-level roles and text, never provider metadata.
+type ChatConversationMessageDTO struct {
+	ID        uuid.UUID `json:"id"`
+	JobID     uuid.UUID `json:"job_id"`
+	Seq       int64     `json:"seq"`
+	Role      string    `json:"role"`
+	Text      string    `json:"text"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 func newJobDTO(j *domain.Job) JobDTO {

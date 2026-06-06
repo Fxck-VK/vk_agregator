@@ -591,3 +591,65 @@ first extract VK bot wiring, then Mini App wiring, then simplify
 `cmd/api/main.go`, and finally update architecture/runbook docs. Each step must
 run focused tests plus full `go test ./...` / `go build ./...`; Mini App build
 must be included when Mini App wiring or frontend contracts are in scope.
+
+---
+
+## ADR-017 - Durable shared chat context core
+
+Status: proposed
+
+Date: 2026-06-06
+
+Context: VK text bot already has durable text context through
+`internal/service/dialogcontext`, Postgres conversations/messages/summaries and
+worker-owned prompt rendering. Mini App chat has a frontend `conversation_id`,
+but the BFF also keeps recent turns in a process-local
+`internal/adapter/inbound/miniapp/conversation.go` store. That store is lost on
+API restart/scale-out, while the existing durable conversation key
+`user_id + vk_peer_id` is not enough to represent multiple Mini App threads for
+one VK user.
+
+Decision: do not make Mini App call VK bot and do not copy VK bot context logic
+into Mini App. Instead, extend the backend conversation core so both surfaces
+can create text chat jobs with explicit durable conversation identity:
+
+- VK bot remains a surface for VK Callback API, menu/buttons, dialog mode,
+  anti-spam and VK-specific delivery/control details.
+- Mini App remains a surface for launch-param auth, BFF DTOs and frontend
+  thread UX.
+- Shared chat/conversation core owns durable conversation identity, history,
+  summary/recent-message prompt rendering, user/assistant turn persistence and
+  public model alias policy.
+- Worker remains the only place that calls providers.
+
+The target identity model must distinguish at least:
+
+- `source=vk_bot`, scoped by backend `user_id` and `vk_peer_id`;
+- `source=miniapp`, scoped by backend `user_id` and opaque Mini App
+  `external_thread_id` / `conversation_id`.
+
+Backward compatibility: old VK bot jobs without an explicit conversation ref
+must keep resolving through `user_id + vk_peer_id`. Mini App requests without a
+`conversation_id` continue to use the `default` thread.
+
+Security consequences:
+
+- `conversation_id` is opaque UI/thread state, not trusted identity.
+- Ownership is always backend user scoped after VK launch-param verification.
+- VK bot context, Mini App default thread and Mini App custom threads must not
+  mix.
+- Prompt bodies, generated answers, launch params, tokens, secrets, PII and
+  private artifact URLs must not be logged or stored in localStorage.
+- Chat core may create jobs only through `joborchestrator`; it must not call
+  providers or mutate billing state directly.
+
+Planned sequence:
+
+1. PR-18.1: durable conversation identity schema/domain/repository foundation.
+2. PR-18.2: worker/dialogcontext explicit conversation references and shared
+   chat job contract.
+3. PR-18.3: Mini App chat switches from process-local context to durable shared
+   chat core.
+4. PR-18.4: Mini App conversation list/history endpoints and frontend
+   integration.
+5. PR-18.5: cleanup, docs and regression/security verification.

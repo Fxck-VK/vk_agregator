@@ -1532,8 +1532,215 @@ Status: **completed**.
 - `go test ./...` - exit 0.
 - `go build ./...` - exit 0.
 - `npm --prefix web/miniapp run build` - exit 0.
+- `gofmt -l internal/adapter/inbound/miniapp/handler.go internal/adapter/inbound/miniapp/dto.go internal/adapter/inbound/miniapp/conversation_id.go internal/adapter/inbound/miniapp/handler_test.go` - clean.
+- `git grep -nE "^(<<<<<<<|=======|>>>>>>>)"` - clean.
+- `git diff --check` - exit 0; only markdown CRLF normalization warnings.
+
+---
+
+## PR-18 planning - Durable shared chat context
+
+Status: **planned**.
+
+### Finding
+
+- VK text bot context is already durable through `internal/service/dialogcontext`,
+  Postgres conversations/messages/summaries and worker-owned prompt rendering.
+- Mini App chat currently passes `conversation_id`, but the BFF also keeps
+  recent turns in a process-local `internal/adapter/inbound/miniapp`
+  conversation store. That state can be lost on API restart or scale-out.
+- The current durable conversation key `user_id + vk_peer_id` is sufficient for
+  VK bot private/group peers but not sufficient for multiple Mini App threads
+  owned by the same VK user.
+
+### Plan
+
+- Added ADR-017 in `DECISIONS.md`: Mini App must not call VK bot, and VK bot
+  context logic must not be copied into Mini App. Both surfaces should use a
+  shared durable chat/conversation core while provider calls stay worker-owned.
+- Added `docs/CHAT_CONTEXT_REFACTOR_LOG.md` as the running log for this fix.
+- Added `TEMP_PR18_DURABLE_CHAT_CORE_PROMPTS.md` with copy/paste prompts for
+  PR-18.1 through PR-18.5.
+- Added PR-18 backlog items to `TASKS.md`.
+
+### Checks
+
+- Docs/planning only. Runtime checks not run at planning time.
+
+---
+
+## PR-18.1 - Durable conversation identity foundation
+
+Status: **completed**.
+
+### STEP 0 context
+
+- Existing `conversations` schema used `user_id + vk_peer_id` as the only
+  active conversation identity. That remains correct for VK bot, but cannot
+  represent multiple Mini App threads for one verified VK user.
+- Mini App runtime behavior is not switched in this PR.
+
+### What changed
+
+- Added migration `000008_conversation_sources` with `source`,
+  `external_thread_id`, VK-bot active unique index, Mini App/source-thread
+  active unique index and source-list index.
+- Extended `domain.Conversation` with `Source` and `ExternalThreadID`.
+- Added `domain.ConversationRef`.
+- Extended `domain.ConversationRepository` with explicit reference lookup,
+  owner lookup and list-by-source methods.
+- Updated Postgres and memory repositories.
+- Added memory repository tests for VK bot backward compatibility and Mini App
+  thread isolation.
+
+### Checks
+
+- `go test ./internal/adapter/storage/memory ./internal/service/dialogcontext` - exit 0.
+- `go test ./internal/adapter/storage/postgres` - exit 0.
+- `go test ./...` - exit 0.
+- `go build ./...` - exit 0.
 - `git grep -nE "^(<<<<<<<|=======|>>>>>>>)"` - clean.
 - `git diff --check` - clean.
+
+---
+
+## PR-18.2 - Explicit conversation references in worker/dialogcontext
+
+Status: **completed**.
+
+### STEP 0 context
+
+- `dialogcontext.Prepare` and `dialogcontext.Complete` previously keyed text
+  memory through the VK bot fallback identity `user_id + vk_peer_id`.
+- `worker.buildRequest` already calls `dialogcontext.Prepare` before provider
+  submission and persists a durable `conversation_id` into `job.Params`.
+- `worker.saveDialogAnswer` already calls `dialogcontext.Complete` after text
+  provider success when a durable `conversation_id` is present.
+
+### What changed
+
+- Added explicit text-job conversation params support:
+  `conversation_source`, `external_thread_id` and durable `conversation_id`.
+- `dialogcontext.Prepare` now prefers explicit `source=miniapp` plus
+  `external_thread_id` when present, while VK bot jobs without explicit params
+  still use `user_id + vk_peer_id`.
+- `dialogcontext.Complete` can save assistant answers for explicit durable
+  conversations as well as VK bot fallback conversations.
+- The worker preserves `conversation_source` and `external_thread_id` when it
+  patches `job.Params` with the durable `conversation_id`.
+- Invalid or empty explicit refs degrade to a plain prompt with no conversation
+  context, avoiding accidental cross-thread context mixing.
+
+### Compatibility and isolation
+
+- VK bot behavior remains backward compatible.
+- Mini App BFF behavior is not switched yet; that remains PR-18.3.
+- Added tests for Mini App thread A/B isolation, VK bot vs Mini App isolation
+  for the same backend user, invalid explicit ref degradation, and worker param
+  preservation.
+
+### Checks
+
+- `go test ./internal/service/dialogcontext ./internal/worker` - exit 0.
+- `go test ./...` - exit 0.
+- `go build ./...` - exit 0.
+- `gofmt -l internal/service/dialogcontext/service.go internal/service/dialogcontext/service_test.go internal/worker/worker.go internal/worker/worker_test.go` - clean.
+- `git grep -nE "^(<<<<<<<|=======|>>>>>>>)"` - clean.
+- `git diff --check` - exit 0; only markdown CRLF normalization warnings.
+
+---
+
+## PR-18.3 - Mini App uses durable chat context
+
+Status: **completed**.
+
+### STEP 0 context
+
+- Mini App chat used `internal/adapter/inbound/miniapp/conversation.go` as a
+  process-local prompt-prefix memory store.
+- `createChatMessage` used the store to prepend recent Mini App turns to the
+  prompt before creating a text job.
+- `getJob` used `captureChatResult` to read a completed text artifact and put
+  the assistant answer back into the process-local store.
+
+### What changed
+
+- Removed the process-local Mini App chat memory store.
+- Kept only safe `conversation_id` normalization for the BFF contract.
+- `POST /miniapp/chat/messages` now creates a text job with raw current prompt
+  plus explicit durable chat params:
+  - `conversation_source=miniapp`;
+  - `external_thread_id=<normalized conversation_id>`;
+  - public `model_name=ChatGPT`.
+- Initial `conversation_id` in job params is left empty so the worker can patch
+  the durable backend conversation UUID after `dialogcontext.Prepare`.
+- `conversation_id=""` remains backward compatible as `default`.
+
+### Compatibility and isolation
+
+- Mini App auth, rate limiting, billing reservation and job creation still run
+  through the same BFF/orchestrator path.
+- Mini App BFF does not call providers and no longer stores prompt/answer
+  history in process memory.
+- VK bot context remains unchanged.
+
+### Checks
+
+- `go test ./internal/adapter/inbound/miniapp` - exit 0.
+- `go test ./internal/adapter/inbound/miniapp ./internal/service/dialogcontext ./internal/worker` - exit 0.
+- `go test ./...` - exit 0.
+- `go build ./...` - exit 0.
+- `npm --prefix web/miniapp run build` - exit 0.
+
+---
+
+## PR-18.4 - Durable Mini App chat list and history
+
+Status: **completed**.
+
+### STEP 0 context
+
+- Frontend chat state used local `Chat` objects and `localStorage` metadata key
+  `vk_miniapp_threads_v1`; legacy `vk_miniapp_chats_v1` was already cleared on
+  load.
+- Backend durable conversation repo already had owner-scoped Mini App thread
+  lookup and message listing through `ConversationRepository`.
+
+### What changed
+
+- Added authenticated Mini App BFF endpoints:
+  - `GET /miniapp/chat/conversations`;
+  - `GET /miniapp/chat/conversations/{id}/messages`.
+- Wired `ConversationRepository` from shared API core into the Mini App app
+  surface.
+- Endpoint responses are scoped to the verified backend user and expose only
+  product-level thread/message DTOs: opaque thread id, title, timestamps,
+  preview, `user`/`bot` role and message text.
+- Frontend `api/client.ts` now reads conversation list and active-thread
+  messages from the backend.
+- Chat UI now treats backend list/history as source of truth and keeps only the
+  active thread id in `localStorage` under `vk_miniapp_active_thread_v1`.
+- Old local thread/message keys are removed when encountered.
+
+### Security and compatibility
+
+- Both endpoints require existing VK launch-param auth.
+- Invalid thread ids return safe 400; missing/not-owned threads return safe
+  404.
+- `localStorage` no longer stores prompt/answer text or thread metadata.
+- No provider calls were added to Mini App BFF; jobs still go through
+  `joborchestrator` and worker-owned provider execution.
+
+### Checks
+
+- `go test -count=1 ./internal/adapter/inbound/miniapp` - exit 0.
+- `go test ./internal/adapter/inbound/miniapp ./internal/adapter/storage/postgres ./internal/adapter/storage/memory` - exit 0.
+- `go test ./...` - exit 0.
+- `go build ./...` - exit 0.
+- `npm --prefix web/miniapp run build` - exit 0.
+- `gofmt -l cmd/api/main.go internal/app/api/core.go internal/app/miniapp/module.go internal/adapter/inbound/miniapp/handler.go internal/adapter/inbound/miniapp/dto.go internal/adapter/inbound/miniapp/handler_test.go` - clean.
+- `git grep -nE "^(<<<<<<<|=======|>>>>>>>)"` - clean.
+- `git diff --check` - exit 0; only line-ending normalization warnings.
 
 ---
 

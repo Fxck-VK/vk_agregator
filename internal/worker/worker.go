@@ -503,6 +503,8 @@ type promptParams struct {
 	NegativePrompt         string `json:"negative_prompt"`
 	VKPlaceholderMessageID int64  `json:"vk_placeholder_message_id,omitempty"`
 	ConversationID         string `json:"conversation_id,omitempty"`
+	ConversationSource     string `json:"conversation_source,omitempty"`
+	ExternalThreadID       string `json:"external_thread_id,omitempty"`
 }
 
 // buildRequest builds the normalized provider request for a job. The submit

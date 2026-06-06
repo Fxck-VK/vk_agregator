@@ -13,6 +13,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -188,19 +189,21 @@ func newTestHandlerWithLimiter(appSecret string, limiter interface{ Allow(string
 }
 
 type testFixture struct {
-	handler        *miniappinbound.Handler
-	userRepo       *memory.UserRepo
-	jobRepo        *memory.JobRepo
-	artifactRepo   *memory.ArtifactRepo
-	moderationRepo *memory.ModerationRepo
-	objects        *memory.ObjectStore
-	billingRepo    *memory.BillingRepo
-	billing        *billingservice.Service
+	handler          *miniappinbound.Handler
+	userRepo         *memory.UserRepo
+	jobRepo          *memory.JobRepo
+	conversationRepo *memory.ConversationRepo
+	artifactRepo     *memory.ArtifactRepo
+	moderationRepo   *memory.ModerationRepo
+	objects          *memory.ObjectStore
+	billingRepo      *memory.BillingRepo
+	billing          *billingservice.Service
 }
 
 func newTestFixture(appSecret string, limiter interface{ Allow(string) bool }) *testFixture {
 	userRepo := memory.NewUserRepo()
 	jobRepo := memory.NewJobRepo()
+	conversationRepo := memory.NewConversationRepo()
 	artifactRepo := memory.NewArtifactRepo()
 	moderationRepo := memory.NewModerationRepo()
 	objects := memory.NewObjectStore()
@@ -218,25 +221,27 @@ func newTestFixture(appSecret string, limiter interface{ Allow(string) bool }) *
 			JobRateLimiter:     limiter,
 		},
 		miniappinbound.Deps{
-			Users:        userRepo,
-			Jobs:         jobRepo,
-			Artifacts:    artifactRepo,
-			Moderation:   moderationRepo,
-			Objects:      objects,
-			Billing:      billing,
-			BillingRepo:  billingRepo,
-			Orchestrator: orch,
+			Users:         userRepo,
+			Jobs:          jobRepo,
+			Conversations: conversationRepo,
+			Artifacts:     artifactRepo,
+			Moderation:    moderationRepo,
+			Objects:       objects,
+			Billing:       billing,
+			BillingRepo:   billingRepo,
+			Orchestrator:  orch,
 		},
 	)
 	return &testFixture{
-		handler:        handler,
-		userRepo:       userRepo,
-		jobRepo:        jobRepo,
-		artifactRepo:   artifactRepo,
-		moderationRepo: moderationRepo,
-		objects:        objects,
-		billingRepo:    billingRepo,
-		billing:        billing,
+		handler:          handler,
+		userRepo:         userRepo,
+		jobRepo:          jobRepo,
+		conversationRepo: conversationRepo,
+		artifactRepo:     artifactRepo,
+		moderationRepo:   moderationRepo,
+		objects:          objects,
+		billingRepo:      billingRepo,
+		billing:          billing,
 	}
 }
 
@@ -396,10 +401,12 @@ func TestHandler_ChatMessage_CreatesTextJobWithPublicAlias(t *testing.T) {
 		t.Fatalf("expected stored job: %v", err)
 	}
 	var params struct {
-		Prompt         string `json:"prompt"`
-		ModelID        string `json:"model_id"`
-		ModelName      string `json:"model_name"`
-		ConversationID string `json:"conversation_id"`
+		Prompt             string `json:"prompt"`
+		ModelID            string `json:"model_id"`
+		ModelName          string `json:"model_name"`
+		ConversationID     string `json:"conversation_id"`
+		ConversationSource string `json:"conversation_source"`
+		ExternalThreadID   string `json:"external_thread_id"`
 	}
 	if err := json.Unmarshal(job.Params, &params); err != nil {
 		t.Fatalf("invalid job params: %v", err)
@@ -407,23 +414,26 @@ func TestHandler_ChatMessage_CreatesTextJobWithPublicAlias(t *testing.T) {
 	if job.OperationType != domain.OperationTextGenerate || job.Modality != domain.ModalityText {
 		t.Fatalf("unexpected job operation/modality: %s/%s", job.OperationType, job.Modality)
 	}
-	if params.Prompt != "hello chat" || params.ModelID != "chatgpt" || params.ModelName != "ChatGPT" || params.ConversationID != "chat-1" {
+	if params.Prompt != "hello chat" || params.ModelID != "chatgpt" || params.ModelName != "ChatGPT" {
 		t.Fatalf("unexpected job params: %+v", params)
+	}
+	if params.ConversationID != "" || params.ConversationSource != "miniapp" || params.ExternalThreadID != "chat-1" {
+		t.Fatalf("unexpected conversation params: %+v", params)
 	}
 	if strings.Contains(strings.ToLower(string(job.Params)), "deepseek") || strings.Contains(strings.ToLower(string(job.Params)), "deepinfra") {
 		t.Fatalf("job params leaked provider/model detail: %s", string(job.Params))
 	}
 }
 
-func TestHandler_ChatMessage_ContextCapturesSucceededTextArtifact(t *testing.T) {
+func TestHandler_ChatMessage_UsesDurableRefsWithoutPromptPrefix(t *testing.T) {
 	fixture := newTestFixture("", nil)
 	routes := fixture.handler.Routes()
 	ctx := context.Background()
 
-	createChat := func(prompt, idem string) uuid.UUID {
+	createChat := func(prompt, threadID, idem string) uuid.UUID {
 		body, _ := json.Marshal(map[string]string{
 			"prompt":          prompt,
-			"conversation_id": "chat-context",
+			"conversation_id": threadID,
 		})
 		req := httptest.NewRequest(http.MethodPost, "/miniapp/chat/messages", bytes.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
@@ -447,72 +457,252 @@ func TestHandler_ChatMessage_ContextCapturesSucceededTextArtifact(t *testing.T) 
 		return id
 	}
 
-	firstJobID := createChat("first question", "chat-context-1")
-	user, err := fixture.userRepo.GetByVKUserID(ctx, 777)
-	if err != nil {
-		t.Fatalf("get user: %v", err)
-	}
-	artifact := &domain.Artifact{
-		OwnerUserID:   user.ID,
-		JobID:         &firstJobID,
-		Kind:          domain.ArtifactKindOutput,
-		MediaType:     domain.MediaTypeText,
-		MimeType:      "text/plain",
-		StorageBucket: "artifacts",
-		StorageKey:    "outputs/" + uuid.NewString() + ".txt",
-		SHA256:        uuid.NewString(),
-		SizeBytes:     int64(len("first answer")),
-		Status:        domain.ArtifactStatusReady,
-	}
-	if err := fixture.artifactRepo.Create(ctx, artifact); err != nil {
-		t.Fatalf("create artifact: %v", err)
-	}
-	if err := fixture.objects.Put(ctx, artifact.StorageBucket, artifact.StorageKey, []byte("first answer"), artifact.MimeType); err != nil {
-		t.Fatalf("put artifact: %v", err)
-	}
-	artID := artifact.ID
-	if err := fixture.moderationRepo.Create(ctx, &domain.ModerationResult{
-		JobID:      firstJobID,
-		ArtifactID: &artID,
-		Stage:      domain.ModerationStageOutput,
-		Decision:   domain.ModerationAllow,
-		Provider:   "test",
-	}); err != nil {
-		t.Fatalf("create moderation result: %v", err)
-	}
-	job, err := fixture.jobRepo.GetByID(ctx, firstJobID)
+	firstJobID := createChat("first question", "thread-a", "chat-context-1")
+	secondJobID := createChat("follow up", "thread-a", "chat-context-2")
+	thirdJobID := createChat("other thread", "thread-b", "chat-context-3")
+
+	firstJob, err := fixture.jobRepo.GetByID(ctx, firstJobID)
 	if err != nil {
 		t.Fatalf("get first job: %v", err)
 	}
-	job.OutputArtifactIDs = []uuid.UUID{artifact.ID}
-	if err := fixture.jobRepo.Update(ctx, job); err != nil {
-		t.Fatalf("update job artifact: %v", err)
-	}
-	if err := fixture.jobRepo.UpdateStatus(ctx, firstJobID, job.Status, domain.JobStatusSucceeded, "", ""); err != nil {
-		t.Fatalf("mark job succeeded: %v", err)
-	}
-
-	getReq := httptest.NewRequest(http.MethodGet, "/miniapp/jobs/"+firstJobID.String(), nil)
-	getReq.Header.Set("X-Launch-Params", devLaunchParams(777))
-	getW := httptest.NewRecorder()
-	routes.ServeHTTP(getW, getReq)
-	if getW.Code != http.StatusOK {
-		t.Fatalf("get job: expected 200, got %d: %s", getW.Code, getW.Body.String())
-	}
-
-	secondJobID := createChat("follow up", "chat-context-2")
 	secondJob, err := fixture.jobRepo.GetByID(ctx, secondJobID)
 	if err != nil {
 		t.Fatalf("get second job: %v", err)
 	}
-	var params struct {
-		Prompt string `json:"prompt"`
+	thirdJob, err := fixture.jobRepo.GetByID(ctx, thirdJobID)
+	if err != nil {
+		t.Fatalf("get third job: %v", err)
 	}
-	if err := json.Unmarshal(secondJob.Params, &params); err != nil {
+
+	var firstParams, secondParams, thirdParams struct {
+		Prompt             string `json:"prompt"`
+		ConversationSource string `json:"conversation_source"`
+		ExternalThreadID   string `json:"external_thread_id"`
+	}
+	if err := json.Unmarshal(firstJob.Params, &firstParams); err != nil {
+		t.Fatalf("invalid first job params: %v", err)
+	}
+	if err := json.Unmarshal(secondJob.Params, &secondParams); err != nil {
 		t.Fatalf("invalid second job params: %v", err)
 	}
-	if !strings.Contains(params.Prompt, "first question") || !strings.Contains(params.Prompt, "first answer") || !strings.Contains(params.Prompt, "follow up") {
-		t.Fatalf("second prompt missed conversation context: %q", params.Prompt)
+	if err := json.Unmarshal(thirdJob.Params, &thirdParams); err != nil {
+		t.Fatalf("invalid third job params: %v", err)
+	}
+
+	if firstParams.Prompt != "first question" || secondParams.Prompt != "follow up" || thirdParams.Prompt != "other thread" {
+		t.Fatalf("BFF should not prefix prompts with local context: first=%q second=%q third=%q", firstParams.Prompt, secondParams.Prompt, thirdParams.Prompt)
+	}
+	if firstParams.ConversationSource != "miniapp" || secondParams.ConversationSource != "miniapp" || thirdParams.ConversationSource != "miniapp" {
+		t.Fatalf("missing miniapp conversation source: first=%+v second=%+v third=%+v", firstParams, secondParams, thirdParams)
+	}
+	if firstParams.ExternalThreadID != "thread-a" || secondParams.ExternalThreadID != "thread-a" || thirdParams.ExternalThreadID != "thread-b" {
+		t.Fatalf("thread refs not isolated: first=%+v second=%+v third=%+v", firstParams, secondParams, thirdParams)
+	}
+}
+
+func TestHandler_ChatMessage_InvalidConversationID(t *testing.T) {
+	routes := newTestHandler("").Routes()
+
+	body, _ := json.Marshal(map[string]string{
+		"prompt":          "hello chat",
+		"conversation_id": "bad/id",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/miniapp/chat/messages", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Launch-Params", devLaunchParams(777))
+
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "invalid conversation id") {
+		t.Fatalf("expected safe invalid conversation message, got %s", w.Body.String())
+	}
+}
+
+func TestHandler_ChatMessage_EmptyConversationIDUsesDefaultThread(t *testing.T) {
+	fixture := newTestFixture("", nil)
+	routes := fixture.handler.Routes()
+
+	body, _ := json.Marshal(map[string]string{
+		"prompt": "hello default thread",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/miniapp/chat/messages", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Launch-Params", devLaunchParams(777))
+	req.Header.Set("X-Idempotency-Key", "chat-default-thread")
+
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("invalid response json: %v", err)
+	}
+	jobID, err := uuid.Parse(resp.ID)
+	if err != nil {
+		t.Fatalf("invalid job id: %v", err)
+	}
+	job, err := fixture.jobRepo.GetByID(context.Background(), jobID)
+	if err != nil {
+		t.Fatalf("get job: %v", err)
+	}
+	var params struct {
+		Prompt             string `json:"prompt"`
+		ConversationSource string `json:"conversation_source"`
+		ExternalThreadID   string `json:"external_thread_id"`
+	}
+	if err := json.Unmarshal(job.Params, &params); err != nil {
+		t.Fatalf("invalid job params: %v", err)
+	}
+	if params.Prompt != "hello default thread" || params.ConversationSource != "miniapp" || params.ExternalThreadID != "default" {
+		t.Fatalf("unexpected default thread params: %+v", params)
+	}
+}
+
+func TestHandler_ChatConversations_AuthRequired(t *testing.T) {
+	routes := newTestHandler("real-secret").Routes()
+
+	req := httptest.NewRequest(http.MethodGet, "/miniapp/chat/conversations", nil)
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestHandler_ChatConversations_ListAndMessages(t *testing.T) {
+	fixture := newTestFixture("", nil)
+	routes := fixture.handler.Routes()
+	ctx := context.Background()
+	user := &domain.User{VKUserID: 777, Role: domain.RoleUser, Status: domain.StatusActive, Locale: "ru", Timezone: "UTC"}
+	if err := fixture.userRepo.Create(ctx, user); err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	conversation := &domain.Conversation{
+		UserID:           user.ID,
+		Source:           domain.ConversationSourceMiniApp,
+		ExternalThreadID: "thread-a",
+		Title:            "Support thread",
+	}
+	if err := fixture.conversationRepo.CreateConversation(ctx, conversation); err != nil {
+		t.Fatalf("create conversation: %v", err)
+	}
+	userMessage, err := fixture.conversationRepo.UpsertMessage(ctx, &domain.ConversationMessage{
+		ConversationID: conversation.ID,
+		JobID:          uuid.New(),
+		Role:           domain.ConversationRoleUser,
+		Text:           "hello history",
+		TokenCount:     5,
+	})
+	if err != nil {
+		t.Fatalf("upsert user message: %v", err)
+	}
+	if _, err := fixture.conversationRepo.UpsertMessage(ctx, &domain.ConversationMessage{
+		ConversationID: conversation.ID,
+		JobID:          uuid.New(),
+		Role:           domain.ConversationRoleAssistant,
+		Text:           "history answer",
+		TokenCount:     5,
+	}); err != nil {
+		t.Fatalf("upsert assistant message: %v", err)
+	}
+
+	listReq := httptest.NewRequest(http.MethodGet, "/miniapp/chat/conversations?limit=999", nil)
+	listReq.Header.Set("X-Launch-Params", devLaunchParams(777))
+	listW := httptest.NewRecorder()
+	routes.ServeHTTP(listW, listReq)
+	if listW.Code != http.StatusOK {
+		t.Fatalf("list conversations: expected 200, got %d: %s", listW.Code, listW.Body.String())
+	}
+	var listResp struct {
+		Items []struct {
+			ID                 string `json:"id"`
+			Title              string `json:"title"`
+			LastMessagePreview string `json:"last_message_preview"`
+			LastMessageRole    string `json:"last_message_role"`
+		} `json:"items"`
+		Pagination struct {
+			Limit int `json:"limit"`
+			Count int `json:"count"`
+		} `json:"pagination"`
+	}
+	if err := json.Unmarshal(listW.Body.Bytes(), &listResp); err != nil {
+		t.Fatalf("invalid list response: %v", err)
+	}
+	if listResp.Pagination.Limit != 100 || listResp.Pagination.Count != 1 {
+		t.Fatalf("unexpected pagination: %+v", listResp.Pagination)
+	}
+	if len(listResp.Items) != 1 || listResp.Items[0].ID != "thread-a" || listResp.Items[0].Title != "Support thread" {
+		t.Fatalf("unexpected conversations: %+v", listResp.Items)
+	}
+	if listResp.Items[0].LastMessagePreview != "history answer" || listResp.Items[0].LastMessageRole != "bot" {
+		t.Fatalf("unexpected preview: %+v", listResp.Items[0])
+	}
+
+	msgReq := httptest.NewRequest(http.MethodGet, "/miniapp/chat/conversations/thread-a/messages?after_seq="+strconv.FormatInt(userMessage.Seq-1, 10), nil)
+	msgReq.Header.Set("X-Launch-Params", devLaunchParams(777))
+	msgW := httptest.NewRecorder()
+	routes.ServeHTTP(msgW, msgReq)
+	if msgW.Code != http.StatusOK {
+		t.Fatalf("list messages: expected 200, got %d: %s", msgW.Code, msgW.Body.String())
+	}
+	var msgResp struct {
+		Items []struct {
+			Seq  int64  `json:"seq"`
+			Role string `json:"role"`
+			Text string `json:"text"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(msgW.Body.Bytes(), &msgResp); err != nil {
+		t.Fatalf("invalid message response: %v", err)
+	}
+	if len(msgResp.Items) != 2 || msgResp.Items[0].Role != "user" || msgResp.Items[0].Text != "hello history" || msgResp.Items[1].Role != "bot" {
+		t.Fatalf("unexpected messages: %+v", msgResp.Items)
+	}
+}
+
+func TestHandler_ChatConversationMessages_OwnerOnlyAndInvalidID(t *testing.T) {
+	fixture := newTestFixture("", nil)
+	routes := fixture.handler.Routes()
+	ctx := context.Background()
+	owner := &domain.User{VKUserID: 100, Role: domain.RoleUser, Status: domain.StatusActive, Locale: "ru", Timezone: "UTC"}
+	other := &domain.User{VKUserID: 200, Role: domain.RoleUser, Status: domain.StatusActive, Locale: "ru", Timezone: "UTC"}
+	if err := fixture.userRepo.Create(ctx, owner); err != nil {
+		t.Fatalf("create owner: %v", err)
+	}
+	if err := fixture.userRepo.Create(ctx, other); err != nil {
+		t.Fatalf("create other: %v", err)
+	}
+	if err := fixture.conversationRepo.CreateConversation(ctx, &domain.Conversation{
+		UserID:           owner.ID,
+		Source:           domain.ConversationSourceMiniApp,
+		ExternalThreadID: "owner-thread",
+	}); err != nil {
+		t.Fatalf("create conversation: %v", err)
+	}
+
+	otherReq := httptest.NewRequest(http.MethodGet, "/miniapp/chat/conversations/owner-thread/messages", nil)
+	otherReq.Header.Set("X-Launch-Params", devLaunchParams(200))
+	otherW := httptest.NewRecorder()
+	routes.ServeHTTP(otherW, otherReq)
+	if otherW.Code != http.StatusNotFound {
+		t.Fatalf("owner-only expected 404, got %d: %s", otherW.Code, otherW.Body.String())
+	}
+
+	invalidReq := httptest.NewRequest(http.MethodGet, "/miniapp/chat/conversations/bad%2Fid/messages", nil)
+	invalidReq.Header.Set("X-Launch-Params", devLaunchParams(100))
+	invalidW := httptest.NewRecorder()
+	routes.ServeHTTP(invalidW, invalidReq)
+	if invalidW.Code != http.StatusBadRequest {
+		t.Fatalf("invalid id expected 400, got %d: %s", invalidW.Code, invalidW.Body.String())
 	}
 }
 

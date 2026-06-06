@@ -171,8 +171,18 @@ type CommandRepository interface {
 type ConversationRepository interface {
 	// GetActiveByUserPeer returns the current active conversation for a VK peer.
 	GetActiveByUserPeer(ctx context.Context, userID uuid.UUID, vkPeerID int64) (*Conversation, error)
+	// GetActiveByReference returns the current active conversation for a
+	// source-specific reference.
+	GetActiveByReference(ctx context.Context, ref ConversationRef) (*Conversation, error)
+	// GetByIDForUser returns one conversation owned by the user.
+	GetByIDForUser(ctx context.Context, userID, conversationID uuid.UUID) (*Conversation, error)
+	// ListByUserSource returns conversations for a user/source, newest first.
+	ListByUserSource(ctx context.Context, userID uuid.UUID, source ConversationSource, limit, offset int) ([]*Conversation, error)
 	// CreateConversation inserts a new conversation.
 	CreateConversation(ctx context.Context, conversation *Conversation) error
+	// SetConversationTitleIfEmpty fills an empty title without overwriting an
+	// existing one. This keeps retrying chat jobs idempotent.
+	SetConversationTitleIfEmpty(ctx context.Context, conversationID uuid.UUID, title string) error
 	// UpsertMessage inserts a user/assistant message or returns the existing
 	// row for the same job+role, making worker retries idempotent.
 	UpsertMessage(ctx context.Context, message *ConversationMessage) (*ConversationMessage, error)

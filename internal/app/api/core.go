@@ -14,19 +14,20 @@ import (
 
 // SharedCore groups backend-core collaborators shared by app surfaces.
 type SharedCore struct {
-	Users        domain.UserRepository
-	Jobs         domain.JobRepository
-	Commands     domain.CommandRepository
-	Inbound      domain.InboundEventRepository
-	Idempotency  domain.IdempotencyRepository
-	Deliveries   domain.DeliveryRepository
-	BillingRepo  domain.BillingRepository
-	Referrals    domain.ReferralRepository
-	Artifacts    domain.ArtifactRepository
-	Moderation   domain.ModerationResultRepository
-	Billing      *billingservice.Service
-	Orchestrator *joborchestrator.Orchestrator
-	Router       *commandrouter.Router
+	Users         domain.UserRepository
+	Jobs          domain.JobRepository
+	Commands      domain.CommandRepository
+	Inbound       domain.InboundEventRepository
+	Idempotency   domain.IdempotencyRepository
+	Deliveries    domain.DeliveryRepository
+	BillingRepo   domain.BillingRepository
+	Referrals     domain.ReferralRepository
+	Artifacts     domain.ArtifactRepository
+	Moderation    domain.ModerationResultRepository
+	Conversations domain.ConversationRepository
+	Billing       *billingservice.Service
+	Orchestrator  *joborchestrator.Orchestrator
+	Router        *commandrouter.Router
 }
 
 // NewSharedCore wires repositories and services without owning surface behavior.
@@ -42,18 +43,19 @@ func NewSharedCore(pool *pgxpool.Pool, cfg config.Config) SharedCore {
 	orch := joborchestrator.New(jobs, postgres.NewUnitOfWork(pool), billing, cfg.MaxJobCost)
 
 	return SharedCore{
-		Users:        users,
-		Jobs:         jobs,
-		Commands:     postgres.NewCommandRepository(pool),
-		Inbound:      postgres.NewInboundEventRepository(pool),
-		Idempotency:  postgres.NewIdempotencyRepository(pool),
-		Deliveries:   postgres.NewDeliveryRepository(pool),
-		BillingRepo:  billingRepo,
-		Referrals:    postgres.NewReferralRepository(pool),
-		Artifacts:    postgres.NewArtifactRepository(pool),
-		Moderation:   postgres.NewModerationResultRepository(pool),
-		Billing:      billing,
-		Orchestrator: orch,
-		Router:       commandrouter.New(),
+		Users:         users,
+		Jobs:          jobs,
+		Commands:      postgres.NewCommandRepository(pool),
+		Inbound:       postgres.NewInboundEventRepository(pool),
+		Idempotency:   postgres.NewIdempotencyRepository(pool),
+		Deliveries:    postgres.NewDeliveryRepository(pool),
+		BillingRepo:   billingRepo,
+		Referrals:     postgres.NewReferralRepository(pool),
+		Artifacts:     postgres.NewArtifactRepository(pool),
+		Moderation:    postgres.NewModerationResultRepository(pool),
+		Conversations: postgres.NewConversationRepository(pool),
+		Billing:       billing,
+		Orchestrator:  orch,
+		Router:        commandrouter.New(),
 	}
 }
