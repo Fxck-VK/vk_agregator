@@ -209,7 +209,7 @@ func TestMessageNewStickerOutsideGPTDoesNotCreateTextJob(t *testing.T) {
 		t.Fatalf("user not created: %v", err)
 	}
 	cmds, _ := h.cmds.ListByUser(ctx, user.ID, 10, 0)
-	if len(cmds) != 1 || cmds[0].Type != domain.CommandUnknown || !strings.Contains(cmds[0].RawText, "VK-стикер") || !strings.Contains(cmds[0].RawText, "sticker_id=123") {
+	if len(cmds) != 1 || cmds[0].Type != domain.CommandStart {
 		t.Fatalf("unexpected command raw text: %+v", cmds)
 	}
 	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
@@ -329,7 +329,7 @@ func TestAccountMenuShowsReferralStatsAndShareLink(t *testing.T) {
 	h := newHarnessWithConfig(control, vk.Config{
 		ConfirmationToken:                   "conf-token-123",
 		Secret:                              "s3cr3t",
-		ReferralLinkBase:                    "https://vk.com/im?sel=-1",
+		ReferralLinkBase:                    "https://vk.com/write-1",
 		ReferralShareBase:                   "https://vk.com/share.php",
 		ReferralReferrerSignupRewardCredits: 10,
 	})
@@ -346,13 +346,21 @@ func TestAccountMenuShowsReferralStatsAndShareLink(t *testing.T) {
 	if len(sent) != 1 {
 		t.Fatalf("expected account response, got %+v", sent)
 	}
-	for _, want := range []string{"Мой аккаунт", "Реферальная программа", "Приглашённых: 0", "https://vk.com/im?", "sel=-1"} {
+	for _, want := range []string{"Мой аккаунт", "безлимитное общение с НейроХаб", "Реферальная программа", "Приглашённых: 0", "https://vk.com/write-1", "Поддержка: @neirohub_help"} {
 		if !strings.Contains(sent[0].Text, want) {
 			t.Fatalf("expected %q in account text: %q", want, sent[0].Text)
 		}
 	}
-	if !strings.Contains(sent[0].Keyboard, `"type":"open_link"`) || !strings.Contains(sent[0].Keyboard, "vk.com/share.php") || !strings.Contains(sent[0].Keyboard, "ref%3D") {
-		t.Fatalf("expected open_link share keyboard, got %q", sent[0].Keyboard)
+	for _, notWant := range []string{"Осталось генераций", "Выполнено генераций", "@supergptsupportbot"} {
+		if strings.Contains(sent[0].Text, notWant) {
+			t.Fatalf("account text should not contain %q: %q", notWant, sent[0].Text)
+		}
+	}
+	if strings.Contains(sent[0].Keyboard, `"type":"open_link"`) || strings.Contains(sent[0].Keyboard, "Поделиться") || strings.Contains(sent[0].Keyboard, "vk.com/share.php") {
+		t.Fatalf("account keyboard should not include share button, got %q", sent[0].Keyboard)
+	}
+	if !strings.Contains(sent[0].Keyboard, "Назад") {
+		t.Fatalf("account keyboard should keep back button, got %q", sent[0].Keyboard)
 	}
 	ctx := context.Background()
 	user, err := h.users.GetByVKUserID(ctx, 900003)
@@ -555,6 +563,51 @@ func TestShowMenuSendsWelcomeWithoutResettingPersistentKeyboard(t *testing.T) {
 	}
 }
 
+func TestTypedMenuRepairPhraseRestoresPersistentKeyboardAndMenu(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	h := newHarnessWithControl(control)
+	start := `{
+		"type":"message_new","group_id":1,"event_id":"evt-menu-repair-start","secret":"s3cr3t",
+		"object":{"message":{"from_id":571,"peer_id":571,"text":"/start"}}
+	}`
+	if rec := h.post(start); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected start response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	body := `{
+		"type":"message_new","group_id":1,"event_id":"evt-menu-repair-typed","secret":"s3cr3t",
+		"object":{"message":{"from_id":571,"peer_id":571,"text":"нет меню"}}
+	}`
+	rec := h.post(body)
+	if rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	ctx := context.Background()
+	user, err := h.users.GetByVKUserID(ctx, 571)
+	if err != nil {
+		t.Fatalf("user not created: %v", err)
+	}
+	cmds, _ := h.cmds.ListByUser(ctx, user.ID, 10, 0)
+	if !hasCommandTypes(cmds, domain.CommandStart, domain.CommandShowMenu) {
+		t.Fatalf("unexpected commands: %+v", cmds)
+	}
+	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
+	if len(jobs) != 0 || h.pub.Len() != 0 {
+		t.Fatalf("typed menu repair must not create jobs, jobs=%+v tasks=%d", jobs, h.pub.Len())
+	}
+	sent := control.Sent()
+	if len(sent) != 4 {
+		t.Fatalf("expected start keyboard/menu plus repair keyboard/menu, got %+v", sent)
+	}
+	if !strings.Contains(sent[2].Keyboard, "Показать меню") || strings.Contains(sent[2].Keyboard, `"inline":true`) {
+		t.Fatalf("typed menu repair should restore lower keyboard, got %+v", sent[2])
+	}
+	if !strings.Contains(sent[3].Text, "Добро пожаловать в НейроХаб") || !strings.Contains(sent[3].Keyboard, `"inline":true`) {
+		t.Fatalf("typed menu repair should send inline welcome menu, got %+v", sent[3])
+	}
+}
+
 func TestMenuButtonEditsActiveMenuMessage(t *testing.T) {
 	control := vkdelivery.NewMockClient()
 	h := newHarnessWithControl(control)
@@ -659,10 +712,10 @@ func TestPlainMessageKeepsPreviousMenuAndLowerShowMenuSendsFreshMenu(t *testing.
 	}
 	afterPlain := control.Sent()
 	if len(afterPlain) != 3 {
-		t.Fatalf("plain text should send a text-only choose-mode hint, got %+v", afterPlain)
+		t.Fatalf("plain text should send a choose-mode hint, got %+v", afterPlain)
 	}
-	if afterPlain[2].Text != "Выберите режим в меню выше." || afterPlain[2].Keyboard != "" {
-		t.Fatalf("unexpected text-only choose-mode hint: %+v", afterPlain[2])
+	if afterPlain[2].Text != "Выберите режим в меню выше или нажмите на кнопку показать меню" || !strings.Contains(afterPlain[2].Keyboard, "Показать меню") || strings.Contains(afterPlain[2].Keyboard, `"inline":true`) {
+		t.Fatalf("unexpected choose-mode hint: %+v", afterPlain[2])
 	}
 
 	menu := `{
@@ -677,8 +730,8 @@ func TestPlainMessageKeepsPreviousMenuAndLowerShowMenuSendsFreshMenu(t *testing.
 	if len(sent) != 4 {
 		t.Fatalf("lower show-menu should send a fresh menu below the text hint, got %+v", sent)
 	}
-	if sent[2].Text != "Выберите режим в меню выше." || sent[2].Keyboard != "" {
-		t.Fatalf("text-only hint should remain unchanged after lower show-menu, got %+v", sent[2])
+	if sent[2].Text != "Выберите режим в меню выше или нажмите на кнопку показать меню" || !strings.Contains(sent[2].Keyboard, "Показать меню") || strings.Contains(sent[2].Keyboard, `"inline":true`) {
+		t.Fatalf("choose-mode hint should keep lower keyboard after lower show-menu, got %+v", sent[2])
 	}
 	if !strings.Contains(sent[3].Text, "Добро пожаловать в НейроХаб") || !strings.Contains(sent[3].Keyboard, `"inline":true`) {
 		t.Fatalf("expected fresh welcome menu after lower show-menu, got %+v", sent[3])
@@ -837,9 +890,53 @@ func TestGPTMenuButtonSendsActivePromptNoJob(t *testing.T) {
 	}
 }
 
+func TestFirstPlainTextStartsOnboardingNoJob(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	h := newHarnessWithControl(control)
+	body := `{
+		"type":"message_new","group_id":1,"event_id":"evt-first-plain-start","secret":"s3cr3t",
+		"object":{"message":{"from_id":5740,"peer_id":5740,"text":"привет"}}
+	}`
+	rec := h.post(body)
+	if rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	ctx := context.Background()
+	user, err := h.users.GetByVKUserID(ctx, 5740)
+	if err != nil {
+		t.Fatalf("user not created: %v", err)
+	}
+	cmds, _ := h.cmds.ListByUser(ctx, user.ID, 10, 0)
+	if len(cmds) != 1 || cmds[0].Type != domain.CommandStart {
+		t.Fatalf("first plain text should be recorded as onboarding start, got %+v", cmds)
+	}
+	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
+	if len(jobs) != 0 || h.pub.Len() != 0 {
+		t.Fatalf("first onboarding must not create jobs, jobs=%+v tasks=%d", jobs, h.pub.Len())
+	}
+	sent := control.Sent()
+	if len(sent) != 2 {
+		t.Fatalf("expected persistent keyboard and welcome, got %+v", sent)
+	}
+	if !strings.Contains(sent[0].Keyboard, "Показать меню") || !strings.Contains(sent[1].Text, "Добро пожаловать в НейроХаб") {
+		t.Fatalf("unexpected onboarding response: %+v", sent)
+	}
+	if user.WelcomeNameSentAt.IsZero() {
+		t.Fatalf("first onboarding should mark welcome as sent: %+v", user)
+	}
+}
+
 func TestPlainTextOutsideModeRepliesWithChooseModeNoJob(t *testing.T) {
 	control := vkdelivery.NewMockClient()
 	h := newHarnessWithControl(control)
+	start := `{
+		"type":"message_new","group_id":1,"event_id":"evt-unrouted-reply-start","secret":"s3cr3t",
+		"object":{"message":{"from_id":574,"peer_id":574,"text":"/start"}}
+	}`
+	if rec := h.post(start); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected start response: %d %q", rec.Code, rec.Body.String())
+	}
 	body := `{
 		"type":"message_new","group_id":1,"event_id":"evt-unrouted-reply","secret":"s3cr3t",
 		"object":{"message":{"from_id":574,"peer_id":574,"text":"придумай идею"}}
@@ -855,7 +952,7 @@ func TestPlainTextOutsideModeRepliesWithChooseModeNoJob(t *testing.T) {
 		t.Fatalf("user not created: %v", err)
 	}
 	cmds, _ := h.cmds.ListByUser(ctx, user.ID, 10, 0)
-	if len(cmds) != 1 || cmds[0].Type != domain.CommandUnknown {
+	if !hasCommandTypes(cmds, domain.CommandStart, domain.CommandUnknown) {
 		t.Fatalf("plain text outside mode should be recorded as unknown, got %+v", cmds)
 	}
 	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
@@ -863,10 +960,10 @@ func TestPlainTextOutsideModeRepliesWithChooseModeNoJob(t *testing.T) {
 		t.Fatalf("plain text outside mode must not create jobs, jobs=%+v tasks=%d", jobs, h.pub.Len())
 	}
 	sent := control.Sent()
-	if len(sent) != 1 {
+	if len(sent) != 3 {
 		t.Fatalf("expected one choose-mode response, got %+v", sent)
 	}
-	if sent[0].Text != "Выберите режим в меню выше." || sent[0].Keyboard != "" {
+	if sent[2].Text != "Выберите режим в меню выше или нажмите на кнопку показать меню" || !strings.Contains(sent[2].Keyboard, "Показать меню") || strings.Contains(sent[2].Keyboard, `"inline":true`) {
 		t.Fatalf("unexpected choose-mode response: %+v", sent)
 	}
 }
@@ -878,6 +975,13 @@ func TestPlainTextOutsideModeCanBeSilent(t *testing.T) {
 		Secret:            "s3cr3t",
 		UnroutedTextMode:  "silent",
 	})
+	start := `{
+		"type":"message_new","group_id":1,"event_id":"evt-unrouted-silent-start","secret":"s3cr3t",
+		"object":{"message":{"from_id":575,"peer_id":575,"text":"/start"}}
+	}`
+	if rec := h.post(start); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected start response: %d %q", rec.Code, rec.Body.String())
+	}
 	body := `{
 		"type":"message_new","group_id":1,"event_id":"evt-unrouted-silent","secret":"s3cr3t",
 		"object":{"message":{"from_id":575,"peer_id":575,"text":"придумай идею"}}
@@ -893,24 +997,32 @@ func TestPlainTextOutsideModeCanBeSilent(t *testing.T) {
 		t.Fatalf("user not created: %v", err)
 	}
 	cmds, _ := h.cmds.ListByUser(ctx, user.ID, 10, 0)
-	if len(cmds) != 1 || cmds[0].Type != domain.CommandUnknown {
+	if !hasCommandTypes(cmds, domain.CommandStart, domain.CommandUnknown) {
 		t.Fatalf("plain text outside mode should be recorded as unknown, got %+v", cmds)
 	}
 	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
 	if len(jobs) != 0 || h.pub.Len() != 0 {
 		t.Fatalf("plain text outside mode must not create jobs, jobs=%+v tasks=%d", jobs, h.pub.Len())
 	}
-	if sent := control.Sent(); len(sent) != 0 {
+	if sent := control.Sent(); len(sent) != 2 {
 		t.Fatalf("silent mode should not send a choose-mode response, got %+v", sent)
 	}
 }
 
 func TestPlainTextCanKeepLegacyGPTMode(t *testing.T) {
-	h := newHarnessWithConfig(nil, vk.Config{
+	control := vkdelivery.NewMockClient()
+	h := newHarnessWithConfig(control, vk.Config{
 		ConfirmationToken: "conf-token-123",
 		Secret:            "s3cr3t",
 		UnroutedTextMode:  "gpt",
 	})
+	start := `{
+		"type":"message_new","group_id":1,"event_id":"evt-unrouted-gpt-start","secret":"s3cr3t",
+		"object":{"message":{"from_id":576,"peer_id":576,"text":"/start"}}
+	}`
+	if rec := h.post(start); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected start response: %d %q", rec.Code, rec.Body.String())
+	}
 	body := `{
 		"type":"message_new","group_id":1,"event_id":"evt-unrouted-gpt","secret":"s3cr3t",
 		"object":{"message":{"from_id":576,"peer_id":576,"text":"придумай идею"}}
@@ -926,7 +1038,7 @@ func TestPlainTextCanKeepLegacyGPTMode(t *testing.T) {
 		t.Fatalf("user not created: %v", err)
 	}
 	cmds, _ := h.cmds.ListByUser(ctx, user.ID, 10, 0)
-	if len(cmds) != 1 || cmds[0].Type != domain.CommandTextAsk {
+	if !hasCommandTypes(cmds, domain.CommandStart, domain.CommandTextAsk) {
 		t.Fatalf("legacy gpt mode should record text.ask, got %+v", cmds)
 	}
 	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
@@ -1149,8 +1261,8 @@ func TestOtherMenuButtonClearsGPTMode(t *testing.T) {
 	if len(sent) != 2 || !strings.Contains(sent[1].Text, "Выберите режим") {
 		t.Fatalf("expected choose-mode response after mode clear, got %+v", sent)
 	}
-	if sent[1].Keyboard != "" {
-		t.Fatalf("choose-mode response after mode clear must not duplicate the menu keyboard: %+v", sent[1])
+	if !strings.Contains(sent[1].Keyboard, "Показать меню") || strings.Contains(sent[1].Keyboard, `"inline":true`) {
+		t.Fatalf("choose-mode response after mode clear must restore only lower keyboard: %+v", sent[1])
 	}
 	if answers := control.EventAnswers(); len(answers) != 1 || answers[0].EventID != "vk-button-event-clear" {
 		t.Fatalf("expected callback event answer, got %+v", answers)
@@ -1483,6 +1595,48 @@ func TestMessageNewDuplicateIsDeduped(t *testing.T) {
 	}
 	if h.pub.Len() != 1 {
 		t.Fatalf("expected exactly 1 enqueued task, got %d", h.pub.Len())
+	}
+}
+
+func TestMessageNewReusesExistingInboundOnRetry(t *testing.T) {
+	h := newHarness()
+	ctx := context.Background()
+	if err := h.inbound.Create(ctx, &domain.InboundEvent{
+		Source:         "vk",
+		EventType:      "message_new",
+		GroupID:        1,
+		VKEventID:      "evt-inbound-retry",
+		PeerID:         778,
+		VKUserID:       778,
+		Payload:        json.RawMessage(`{}`),
+		Status:         domain.InboundReceived,
+		IdempotencyKey: "vk_event:1:evt-inbound-retry",
+	}); err != nil {
+		t.Fatalf("seed inbound: %v", err)
+	}
+
+	body := `{
+		"type":"message_new","group_id":1,"event_id":"evt-inbound-retry","secret":"s3cr3t",
+		"object":{"message":{"from_id":778,"peer_id":778,"text":"/image retry cat"}}
+	}`
+	if rec := h.post(body); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("retry delivery status = %d body=%q", rec.Code, rec.Body.String())
+	}
+
+	inbound, err := h.inbound.GetByIdempotencyKey(ctx, "vk_event:1:evt-inbound-retry")
+	if err != nil {
+		t.Fatalf("load inbound: %v", err)
+	}
+	if inbound.Status != domain.InboundProcessed {
+		t.Fatalf("inbound status = %q, want processed", inbound.Status)
+	}
+	user, err := h.users.GetByVKUserID(ctx, 778)
+	if err != nil {
+		t.Fatalf("user not created: %v", err)
+	}
+	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
+	if len(jobs) != 1 || jobs[0].OperationType != domain.OperationImageGenerate || h.pub.Len() != 1 {
+		t.Fatalf("retry delivery should create one image job, jobs=%+v tasks=%d", jobs, h.pub.Len())
 	}
 }
 

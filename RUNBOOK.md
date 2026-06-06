@@ -119,10 +119,10 @@ Override these values when needed:
 | `VK_API_BASE_URL` | `https://api.vk.com/method` | VK API method root |
 | `VK_WELCOME_ATTACHMENT` | `` | Optional pre-uploaded VK photo/video attachment sent with `/start` menu |
 | `VK_MENU_BUTTON_MODE` | `callback` | Inline menu buttons: `callback` hides user echo messages; `text` keeps legacy text-button behavior |
-| `VK_UNROUTED_TEXT_MODE` | `reply` | Plain text outside GPT mode: `reply` sends text-only hint to use the menu above, `silent` sends nothing, `gpt` preserves legacy text-to-GPT behavior |
+| `VK_UNROUTED_TEXT_MODE` | `reply` | Plain text outside GPT mode: `reply` sends a choose-mode hint with the lower menu keyboard, `silent` sends nothing, `gpt` preserves legacy text-to-GPT behavior |
 | `VK_DIALOG_MODE_TTL` | `1h` | Redis TTL for active VK peer modes such as `Спросить у НейроХаб`; refreshes while the user keeps chatting |
 | `VK_REFERRAL_LINK_BASE` | `` | Base link for the user's single VK referral URL. If it contains `{code}`, that placeholder is replaced; otherwise `ref=<code>` is appended |
-| `VK_REFERRAL_SHARE_BASE` | `https://vk.com/share.php` | Base URL opened by the VK bot account-screen share button |
+| `VK_REFERRAL_SHARE_BASE` | `https://vk.com/share.php` | Reserved base URL for future VK share/open-link flows; the current account screen does not render a share button |
 | `REFERRAL_CODE_LENGTH` | `10` | Length for generated stable public referral codes |
 | `REFERRAL_REFERRER_SIGNUP_REWARD_CREDITS` | `10` | Signup reward posted to the inviter through billing ledger |
 | `REFERRAL_REFERRED_SIGNUP_REWARD_CREDITS` | `0` | Optional signup reward posted to the invited user through billing ledger |
@@ -430,6 +430,9 @@ message id in `job.Params`, and the delivery worker edits the same message to
 the final provider answer when the text artifact is delivered. If the answer is
 too long for one VK message, the first chunk replaces the placeholder and the
 remaining chunks are sent as follow-up messages with deterministic `random_id`.
+Before sending/editing text in VK, delivery converts simple provider Markdown to
+VK plain text: `**bold**` markers, backticks and heading hashes are stripped,
+while `*` / `-` list items become `•` bullets.
 Opening another menu screen clears GPT mode. Legacy `VK_UNROUTED_TEXT_MODE=gpt`
 keeps normal text delivery without this placeholder/edit UX.
 Clicking `🎁 Студентам и школьникам` opens the study submenu:
@@ -437,17 +440,17 @@ Clicking `🎁 Студентам и школьникам` opens the study subme
 `Создание рефератов (скоро)`, `❓ Ответы на вопросы`, and `⬅️ Назад`.
 Those buttons are control-only until the corresponding scenario state is wired.
 Clicking `👤 Мой аккаунт` opens the account/referral screen. The handler reads
-the billing projection through `billingservice.EnsureAccount`, counts successful
-jobs for "Выполнено генераций", ensures one stable referral code for the user,
-counts accepted invitations, and renders a VK referral link plus a
-`↗️ Поделиться` button. The link is built from `VK_REFERRAL_LINK_BASE`; use a
-template such as `https://vk.com/im?sel=-239332376&ref={code}` or a base URL
-where the API can append `ref=<code>`. The share button opens
-`VK_REFERRAL_SHARE_BASE` with the referral URL embedded. `/start <code>` and VK
-Callback `ref` params apply the referral as `source=vk_bot`, do not create a
-billable job, and post signup bonuses only through idempotent ledger top-up
-entries. A full Mini App referral account/API screen is still a follow-up, but
-the same `referralservice` and Postgres tables already support
+the billing projection through `billingservice.EnsureAccount`, ensures one
+stable referral code for the user, counts accepted invitations, and renders the
+"безлимитное общение" note, invited count, plain-text VK referral link and
+`@neirohub_help`. The account keyboard currently keeps only `⬅️ Назад`; no `↗️ Поделиться` /
+`open_link` button is rendered. The link is built from `VK_REFERRAL_LINK_BASE`;
+use a template such as `https://vk.com/write-239332376?ref={code}` or a base URL
+where the API can append `ref=<code>`. `/start <code>` and VK Callback `ref`
+params apply the referral as `source=vk_bot`, do not create a billable job, and
+post signup bonuses only through idempotent ledger top-up entries. A full Mini
+App referral account/API screen is still a follow-up, but the same
+`referralservice` and Postgres tables already support
 `source=vk_miniapp`.
 
 Text dialog memory is built in `cmd/worker`, not in the VK webhook. For VK
@@ -462,13 +465,16 @@ beta; no extra billable provider call is made just to summarize old turns.
 Inline menu navigation is hybrid: while the last bot message is still the
 active menu, inline button clicks edit that message through VK `messages.edit`
 instead of adding new bot messages. The persistent lower `Показать меню` button
-always sends a fresh menu at the bottom of the chat. With default
-`VK_UNROUTED_TEXT_MODE=reply`, plain text outside GPT mode records an `unknown`
-command and sends only
-`Выберите режим в меню выше.` instead of duplicating the inline menu or creating
-a billable job; `silent` records it without a response, and `gpt` restores the
-legacy any-text-to-GPT behavior. If VK rejects an edit, the API falls back to
-sending a new menu message.
+always sends a fresh menu at the bottom of the chat. An ordinary first
+non-payload text/sticker/menu-repair contact is treated as onboarding and opens
+`/start`. After onboarding, with default `VK_UNROUTED_TEXT_MODE=reply`, plain text outside GPT mode records an
+`unknown` command and sends `Выберите режим в меню выше или нажмите на кнопку показать меню` with the lower
+`Показать меню` keyboard instead of duplicating the inline menu or creating a
+billable job; `silent` records it without a response, and `gpt` restores the
+legacy any-text-to-GPT behavior. Typed repair phrases like `меню`, `нет меню`,
+`нет кнопки` and `где меню` reopen the welcome menu and repair the lower
+keyboard. If VK rejects an edit, the API falls back to sending a new menu
+message.
 By default, inline menu buttons use VK `callback` actions
 (`VK_MENU_BUTTON_MODE=callback`), so clicking `Создать видео`, `Назад`, etc.
 does not create a user message in the chat. VK Callback API must have the
@@ -572,10 +578,15 @@ go test ./internal/worker/ -run TestEndToEnd -v  # full VK→…→Capture
 - Menu clicks keep creating new bot messages: this is expected after the user
   has sent plain text after an API restart, after the active menu pointer was
   lost, or after an edit rejection from VK. With `VK_UNROUTED_TEXT_MODE=reply`,
-  plain text outside GPT mode should only post `Выберите режим в меню выше.`
-  without duplicating the menu keyboard. Active-menu tracking is process-local
-  in the current Beta implementation, while GPT dialog mode is Redis-backed and
-  survives API restarts for `VK_DIALOG_MODE_TTL`.
+  plain text outside GPT mode should only post `Выберите режим в меню выше или нажмите на кнопку показать меню`
+  with the lower `Показать меню` keyboard, without duplicating the inline menu
+  keyboard. Active-menu tracking is process-local in the current Beta
+  implementation, while GPT dialog mode is Redis-backed and survives API
+  restarts for `VK_DIALOG_MODE_TTL`.
+- Same welcome/menu appears again later without a visible user action: check
+  `api-live.log` for `mark inbound processed`. VK retries webhook events when
+  the API returns `500`; duplicate inbound idempotency keys must reload the
+  existing inbound row before status updates.
 - Callback menu buttons do nothing: enable the VK Callback API event type for
   callback-button clicks (`message_event`) and confirm `VK_MENU_BUTTON_MODE` is
   `callback`. If you need a quick fallback, set `VK_MENU_BUTTON_MODE=text` and

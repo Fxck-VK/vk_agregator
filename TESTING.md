@@ -209,9 +209,11 @@ instead of sending a second bot message. This placeholder/edit UX is only for
 the button-enabled GPT mode, not for legacy `VK_UNROUTED_TEXT_MODE=gpt`. If the
 answer is too long for one VK message, the edited placeholder should contain
 the first chunk and the remaining chunks should be sent as deterministic
-follow-up text messages.
+follow-up text messages. Text answers should be VK plain text: generated
+Markdown markers like `**`, backticks and raw `*` list prefixes should not be
+visible; list items should appear as `•` bullets.
 Plain text outside GPT mode is controlled by `VK_UNROUTED_TEXT_MODE`: `reply`
-(default) sends only `Выберите режим в меню выше.` and creates no job, `silent`
+(default) sends only `Выберите режим в меню выше или нажмите на кнопку показать меню` and creates no job, `silent`
 creates no job and sends nothing, `gpt` preserves legacy any-text-to-GPT
 behavior.
 Clicking `🎁 Студентам и школьникам` should return the study submenu with
@@ -221,10 +223,14 @@ button presses must not enqueue jobs.
 For live VK UX, click several inline menu buttons in a row: the bot should edit
 the active menu message instead of posting a new bot message each time. Press
 the persistent lower `Показать меню` button: the bot should send a fresh menu at
-the bottom instead of editing the old one. Then send plain text outside GPT
-mode: with the default `reply` setting, the bot should post only
-`Выберите режим в меню выше.`, should not attach an inline keyboard, and should
-still create no job. Active-menu state is process-local to the running API
+the bottom instead of editing the old one. For a brand-new user, ordinary first
+non-payload text/sticker/menu-repair input should open onboarding/welcome instead of replying with a hint.
+For an onboarded user, send plain text outside GPT mode: with the default
+`reply` setting, the bot should post `Выберите режим в меню выше или нажмите на кнопку показать меню` with the
+lower `Показать меню` keyboard, should not attach an inline keyboard, and should
+still create no job. Typing `нет меню`, `нет кнопки`, `где меню` or `меню`
+should send a fresh welcome menu and restore the lower keyboard. Active-menu
+state is process-local to the running API
 instance, while GPT dialog mode is Redis-backed and survives API restarts for
 `VK_DIALOG_MODE_TTL`.
 With `VK_MENU_BUTTON_MODE=callback`, inline menu clicks should not appear as
@@ -242,13 +248,14 @@ to all `VK_MENU_*_ENABLED` flags in `.env.example`.
 
 Referral smoke: set `VK_MENU_ACCOUNT_ENABLED=true` and configure
 `VK_REFERRAL_LINK_BASE` for the VK community, for example
-`https://vk.com/im?sel=-239332376`. Open `👤 Мой аккаунт`; the response should
-show the invited count, one stable referral link for the current user, an
-`↗️ Поделиться` button, and `⬅️ Назад`. The share button should open the regular
-`vk.com/share.php` repost/share page. Send `/start <code>` from
-a different VK user or deliver a Callback API `ref=<code>` param; the handler
-should persist one `referrals` row with `source=vk_bot`, create no job, and post
-signup bonuses through `ledger_entries` with `reason` containing `referral`.
+`https://vk.com/write-239332376`. Open `👤 Мой аккаунт`; the response should
+show the `безлимитное общение` note, invited count, one stable referral link,
+`Поддержка: @neirohub_help`, and only the `⬅️ Назад` inline button. It should
+not render `↗️ Поделиться` / `open_link`, balance or completed-generation rows
+in the account screen. Send `/start <code>` from a different VK user or
+deliver a Callback API `ref=<code>` param; the handler should persist one
+`referrals` row with `source=vk_bot`, create no job, and post signup bonuses
+through `ledger_entries` with `reason` containing `referral`.
 Repeating the same referral start must not duplicate the relation or reward.
 A full Mini App referral account/API screen is not part of this smoke yet.
 

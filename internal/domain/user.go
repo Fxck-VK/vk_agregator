@@ -78,7 +78,8 @@ type User struct {
 	VKLastName string `json:"vk_last_name"`
 	// VKProfileSyncedAt is when VK profile fields were last fetched.
 	VKProfileSyncedAt time.Time `json:"vk_profile_synced_at"`
-	// WelcomeNameSentAt is when the personalized first-start welcome was sent.
+	// WelcomeNameSentAt is when onboarding/menu access was first confirmed.
+	// The first welcome can be personalized when VK profile data is available.
 	WelcomeNameSentAt time.Time `json:"welcome_name_sent_at"`
 	// FirstSeenAt is when the platform first observed the user.
 	FirstSeenAt time.Time `json:"first_seen_at"`

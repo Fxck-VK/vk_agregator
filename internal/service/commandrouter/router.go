@@ -49,7 +49,7 @@ func (r *Router) Parse(rawText string) Result {
 	switch normalized {
 	case "/start", "start", "старт", "🚀 старт", "▶️ старт", "начать":
 		return Result{Type: domain.CommandStart}
-	case "показать меню", "меню", "menu":
+	case "показать меню", "меню", "нет меню", "нет кнопки", "где меню", "menu":
 		return Result{Type: domain.CommandShowMenu}
 	case "🎬 создать видео", "создать видео":
 		return Result{Type: domain.CommandMenuVideo}

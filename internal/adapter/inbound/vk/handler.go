@@ -55,7 +55,7 @@ type Config struct {
 	// ReferralLinkBase builds a single VK referral link per user. If empty the
 	// handler falls back to the current callback group id.
 	ReferralLinkBase string
-	// ReferralShareBase is opened by the account screen share button.
+	// ReferralShareBase is reserved for future share/open-link flows.
 	ReferralShareBase string
 	// ReferralReferrerSignupRewardCredits is shown in the account referral copy.
 	ReferralReferrerSignupRewardCredits int64
@@ -452,8 +452,15 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 		Status:         domain.InboundReceived,
 		IdempotencyKey: idemKey,
 	}
-	if err := h.deps.Inbound.Create(ctx, inbound); err != nil && !errors.Is(err, domain.ErrConflict) {
-		return fmt.Errorf("save inbound: %w", err)
+	if err := h.deps.Inbound.Create(ctx, inbound); err != nil {
+		if !errors.Is(err, domain.ErrConflict) {
+			return fmt.Errorf("save inbound: %w", err)
+		}
+		existing, getErr := h.deps.Inbound.GetByIdempotencyKey(ctx, idemKey)
+		if getErr != nil {
+			return fmt.Errorf("load existing inbound: %w", getErr)
+		}
+		inbound = existing
 	}
 
 	// User: get or create, granting the starting balance to brand-new users.
@@ -482,8 +489,16 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 		}
 	}
 
+	textAskEnabled := false
+	if parsed.Type == domain.CommandTextAsk {
+		textAskEnabled = h.textAskEnabled(ctx, peerID)
+	}
+	if shouldForceOnboarding(user, parsed, controlFromPayload, controlOnly, textAskEnabled) {
+		parsed = commandrouter.Result{Type: domain.CommandStart}
+	}
+
 	unroutedText := false
-	if parsed.Type == domain.CommandTextAsk && !h.textAskEnabled(ctx, peerID) {
+	if parsed.Type == domain.CommandTextAsk && !textAskEnabled {
 		unroutedText = true
 		parsed = commandrouter.Result{Type: domain.CommandUnknown}
 	}
@@ -549,6 +564,11 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 			return fmt.Errorf("send unrouted text response: %w", err)
 		}
 	case shouldSendControlResponse(parsed.Type):
+		if shouldRepairPersistentKeyboard(parsed.Type, controlFromPayload, controlOnly) {
+			if err := h.sendPersistentMenuButton(ctx, idemKey, peerID); err != nil {
+				return fmt.Errorf("send persistent menu repair: %w", err)
+			}
+		}
 		allowEdit := controlFromPayload && !(parsed.Type == domain.CommandShowMenu && !controlOnly)
 		if err := h.sendControlResponse(ctx, parsed.Type, idemKey, cb.GroupID, peerID, user, allowEdit); err != nil {
 			return fmt.Errorf("send control response: %w", err)
@@ -609,6 +629,24 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 		return fmt.Errorf("mark idempotency completed: %w", err)
 	}
 	return nil
+}
+
+func shouldForceOnboarding(user *domain.User, parsed commandrouter.Result, controlFromPayload, controlOnly, textAskEnabled bool) bool {
+	if user == nil || !user.WelcomeNameSentAt.IsZero() || controlFromPayload || controlOnly {
+		return false
+	}
+	switch parsed.Type {
+	case domain.CommandTextAsk:
+		return !textAskEnabled
+	case domain.CommandUnknown, domain.CommandShowMenu:
+		return true
+	default:
+		return false
+	}
+}
+
+func shouldRepairPersistentKeyboard(t domain.CommandType, controlFromPayload, controlOnly bool) bool {
+	return t == domain.CommandShowMenu && !controlFromPayload && !controlOnly
 }
 
 func (h *Handler) textAskEnabled(ctx context.Context, peerID int64) bool {

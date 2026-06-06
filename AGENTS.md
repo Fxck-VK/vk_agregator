@@ -15,9 +15,9 @@ router/fallback/circuit breaker, VK `messages.send` with raw photo/video upload,
 DeepInfra DeepSeek-V4-Flash text provider,
 Postgres-backed compact text dialog context with bounded token budgets,
 VK `/start` product menu with callback/text inline keyboard and active-menu `messages.edit`,
-Redis-backed GPT text mode with `НейроХаб думает...` placeholder edits and unrouted-text gating, OpenAI output moderation,
+ordinary first-contact onboarding repair, Redis-backed GPT text mode with `НейроХаб думает...` placeholder edits and unrouted-text gating, OpenAI output moderation,
 per-button VK menu feature flags, Redis-backed VK bot anti-spam/rate limits,
-shared VK referral-code foundation with VK bot account/share screen,
+shared VK referral-code foundation with VK bot account/referral screen,
 and OpenAI text/image artifact scanning are
 implemented. Credential-bound live smoke and the full video media pipeline
 (scan/transcode/VK-ready variants) remain follow-up work.
@@ -46,12 +46,13 @@ Current integration guardrails:
 - VK dialog mode state must use Redis-backed storage when configured; process-local mode may only be a fallback/cache.
 - VK inline menu buttons may be rendered as `callback` or `text` via `VK_MENU_BUTTON_MODE`; callback clicks must be handled as VK `message_event` control events, acknowledged through `vkdelivery.ControlClient`, and must not create Jobs.
 - VK menu buttons must not create billable Jobs until the user supplies a prompt.
+- VK first ordinary non-payload text/sticker/menu-repair contact must repair onboarding through `/start`; typed menu-repair phrases must stay control-only and must not create Jobs.
 - New VK product-menu buttons must have a `VK_MENU_*_ENABLED` feature flag and disabled stale payloads must not open hidden sections.
 - VK plain text/stickers outside an active text mode must not create billable Jobs by default; `VK_UNROUTED_TEXT_MODE=reply|silent|gpt` is the only supported switch for that behavior.
 - VK anti-spam denials must acknowledge/process the inbound event without creating commands or jobs; user-level counters must stay Redis-backed for multi-instance API deployments.
 - Referral codes are one stable public code per internal user and are shared by VK Bot and VK Mini App flows; do not create separate per-surface referral identities.
 - Referral rewards must be posted through billing ledger entries with idempotency keys; never mutate balance directly from referral handlers/services.
-- VK referral links, share buttons and `/start <code>` handling are control paths and must not create billable Jobs or call providers.
+- VK referral links, account screens and `/start <code>` handling are control paths and must not create billable Jobs or call providers.
 - Text dialog context must be assembled in `cmd/worker` from Postgres-backed conversation state; VK handlers only create Jobs and must not render context or call text providers.
 - Text context prompts must stay bounded by configured budgets and must not send full unbounded conversation history to providers.
 - Billing must use ledger entries and reservations; never mutate balance directly without ledger.

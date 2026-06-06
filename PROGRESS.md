@@ -12,10 +12,10 @@ Status: **done for VK bot backend; Mini App integration remains follow-up**.
 - VK Bot `/start <code>` and Callback API `ref` values are parsed as control
   flow: they apply the referral relation idempotently, create no billable Job
   and call no provider.
-- The VK bot account screen can show balance, completed generations, invited
-  count, referral link and a share button. Default share remains VK
-  `open_link` / `vk.com/share.php`. The referral link is rendered as plain text
-  without markdown code quotes.
+- The VK bot account screen currently shows the "безлимитное общение" note,
+  invited count, a single plain-text referral link and `@neirohub_help`.
+  The account keyboard keeps only `Назад`; the VK share/open-link button is not
+  rendered in the bot UI.
 - Referral signup bonuses use `billingservice.Grant`, which writes committed
   ledger top-up entries with idempotency keys. No direct balance mutation was
   added.
@@ -565,14 +565,15 @@ Status: **done**.
   - после нажатия `Старт` бот заменяет нижнюю постоянную клавиатуру на одну кнопку `Показать меню`;
   - `Показать меню` хранится как отдельный `show_menu` control-command: нижняя persistent-кнопка всегда отправляет свежий VK inline menu вниз без повторной переустановки нижней клавиатуры, а inline-переходы внутри меню продолжают редактировать active menu message;
   - первый `Старт` пользователя делает one-time VK `users.get`, кеширует `vk_first_name` / `vk_last_name` в `users` и отправляет именное welcome-сообщение; `welcome_name_sent_at` фиксирует, что последующие `Старт` / `Показать меню` должны идти обычным welcome без имени;
-  - `Старт`, `/start`, `меню` и `начать` открывают VK inline keyboard под коротким welcome-сообщением НейроХаб;
+  - первый обычный non-payload текст/стикер/menu-repair контакт пользователя принудительно открывает onboarding `/start`, чтобы новый пользователь не застревал без нижней кнопки; явные slash generation-команды и payload-кнопки не перехватываются;
+  - `Старт`, `/start`, `меню`, `нет меню`, `нет кнопки`, `где меню` и `начать` открывают VK inline keyboard под коротким welcome-сообщением НейроХаб; typed repair-фразы дополнительно восстанавливают нижнюю persistent-кнопку `Показать меню`;
   - `Создать видео` теперь открывает отдельный inline-экран `Выбери модель для генерации:` с моделями `Sora 2`, `Kling v2.1`, `Seedance 1`, `Haiuo v0.2` и кнопкой `Назад`;
   - `Sora 2` и `Kling v2.1` открывают detail-экраны с описанием, prompt-примером, ссылкой на инструкцию и кнопками `Начать генерацию`, `Примеры`, `Назад`;
   - `Seedance 1` открывает выбор `Lite` / `Pro`, а `Haiuo v0.2` открывает выбор `Обычный` / `Fast`;
   - кнопки выбора video-модели и вложенных video submenu записываются как control commands и не создают billable jobs до подключения model-specific generation state;
   - `Создать фото` при одной основной модели пропускает выбор модели и сразу показывает инструкцию по `Фото по тексту` / `Фото с референсом` с кнопками режимов и `Назад`;
   - `Спросить у НейроХаб` открывает active-сообщение `НейроХаб активен` без создания job и включает Redis-backed GPT text mode для `peer_id`; следующий обычный текст/стикер пользователя проходит через `text.ask` flow; старый text-label `Спросить у GPT` остается совместимым alias;
-  - в активном GPT mode handler сначала отправляет `НейроХаб думает...`, сохраняет `vk_placeholder_message_id` в `job.Params`, а delivery worker при текстовом результате редактирует это сообщение через VK `messages.edit`; длинные ответы режутся на follow-up chunks с детерминированными `random_id`, чтобы VK `error_code=914` не оставлял placeholder зависшим; legacy `VK_UNROUTED_TEXT_MODE=gpt` остается обычной текстовой доставкой без placeholder;
+  - в активном GPT mode handler сначала отправляет `НейроХаб думает...`, сохраняет `vk_placeholder_message_id` в `job.Params`, а delivery worker при текстовом результате редактирует это сообщение через VK `messages.edit`; перед отправкой text delivery приводит простой provider Markdown к VK plain text (`**`, backticks, heading hashes убираются, `*`/`-` списки становятся `•`); длинные ответы режутся на follow-up chunks с детерминированными `random_id`, чтобы VK `error_code=914` не оставлял placeholder зависшим; legacy `VK_UNROUTED_TEXT_MODE=gpt` остается обычной текстовой доставкой без placeholder;
   - `Студентам и школьникам` открывает учебное подменю: `Решальник задач`, `Генерация презентаций (скоро)`, `Создание рефератов (скоро)`, `Ответы на вопросы`, `Назад`;
   - `vkdelivery.HTTPClient` получил `SendMessage` с `keyboard` JSON, поэтому VK API по-прежнему вызывается только из `internal/adapter/delivery/vk`;
   - `vkdelivery.HTTPClient` получил `EditMessage` поверх VK `messages.edit`, а `ControlClient` теперь покрывает и send, и edit для product/control меню;
@@ -580,7 +581,7 @@ Status: **done**.
   - `VK_MENU_BUTTON_MODE=callback` стал дефолтом для inline menu: нажатия приходят как VK `message_event` и не добавляют пользовательские echo-сообщения в чат; `VK_MENU_BUTTON_MODE=text` возвращает прежнее поведение;
   - добавлены `VK_MENU_*_ENABLED` feature flags для каждой основной и вложенной product-menu кнопки: disabled buttons скрываются из новых keyboard, а stale payload от старого сообщения падает обратно в актуальное главное меню без создания job;
   - handler хранит process-local active menu по `peer_id`, а GPT dialog mode хранится в Redis: кнопочные payload-переходы редактируют текущий menu message, обычный пользовательский текст вне GPT mode оставляет предыдущее меню доступным выше, а другой control-экран сбрасывает GPT mode;
-  - `VK_UNROUTED_TEXT_MODE=reply` стал дефолтом для обычного текста вне GPT mode: handler записывает `unknown` command, не создает Job и отправляет text-only hint `Выберите режим в меню выше.` без дублирования inline keyboard; `silent` молчит, `gpt` возвращает legacy any-text-to-GPT behavior;
+  - `VK_UNROUTED_TEXT_MODE=reply` стал дефолтом для обычного текста вне GPT mode после onboarding: handler записывает `unknown` command, не создает Job и отправляет hint `Выберите режим в меню выше или нажмите на кнопку показать меню` с нижней persistent-кнопкой `Показать меню`, но без дублирования inline keyboard; `silent` молчит, `gpt` возвращает legacy any-text-to-GPT behavior;
   - handler обрабатывает `message_event` как control-only inbound event: сохраняет inbound/command, но не создает Job и не дергает provider;
   - каждый `message_event` подтверждается blank `messages.sendMessageEventAnswer` через `vkdelivery.ControlClient`, чтобы VK-клиент снимал loading spinner с callback-кнопки;
   - если VK не разрешает edit текущего menu message, API логирует warn, очищает active menu и делает fallback на обычный `messages.send`;
@@ -594,11 +595,13 @@ Status: **done**.
 - Targeted tests: `go test ./internal/adapter/provider/openai ./internal/adapter/delivery/vk ./internal/adapter/inbound/vk ./internal/service/commandrouter ./internal/worker ./internal/platform/config`.
 - DeepInfra targeted tests: `go test ./internal/adapter/provider/deepinfra ./internal/platform/config`.
 - DeepInfra delivery regression: `go test ./internal/adapter/provider/mock ./internal/service/artifactservice ./internal/worker`.
-- Added VK menu UX coverage: `EditMessage` request shape, mock edit semantics, active-menu edit, lower `Показать меню` fresh send, and plain-message text-only hint behavior.
+- Added VK menu UX coverage: `EditMessage` request shape, mock edit semantics, active-menu edit, lower `Показать меню` fresh send, first-contact onboarding, typed menu repair phrases, and plain-message hint behavior with lower keyboard repair.
 - Added callback menu coverage: callback keyboard JSON, `VK_MENU_BUTTON_MODE` config validation, `message_event` command processing, no-job invariant, and legacy text-button mode.
 - Added callback ack coverage: real `messages.sendMessageEventAnswer` request shape, mock answer recording, and inbound `message_event` acknowledgement.
-- Added unrouted text coverage: default text-only choose-mode hint/no-job, `silent` no-response mode, legacy `gpt` mode, GPT button enabling text jobs, menu transitions clearing GPT mode, and sticker-to-text job only inside GPT mode.
+- Added unrouted text coverage: default choose-mode hint with lower keyboard repair/no-job, `silent` no-response mode, legacy `gpt` mode, GPT button enabling text jobs, menu transitions clearing GPT mode, and sticker-to-text job only inside GPT mode.
+- Added VK text delivery formatting coverage: simple provider Markdown markers are stripped and list items are rendered as `•` bullets before VK send/edit.
 - Added menu feature flag coverage: hidden main buttons, hidden nested video buttons, disabled stale payload fallback, and env loading for `VK_MENU_*_ENABLED`.
+- Added VK inbound retry regression: duplicate `inbound_events.idempotency_key` now reloads the saved inbound row before `SetStatus`, so VK retries do not fail with `mark inbound processed: domain: entity not found`.
 - Full regression checks выполняются после документационного sync.
 - Live VK `/start` smoke: callback returned `ok`, command persisted as `start`,
   zero jobs created, welcome text delivered to VK. After enabling bot features

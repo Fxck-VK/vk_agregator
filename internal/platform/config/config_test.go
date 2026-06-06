@@ -148,14 +148,14 @@ func TestLoadVKMenuFeatureFlags(t *testing.T) {
 }
 
 func TestLoadReferralConfig(t *testing.T) {
-	t.Setenv("VK_REFERRAL_LINK_BASE", "https://vk.com/im?sel=-1")
+	t.Setenv("VK_REFERRAL_LINK_BASE", "https://vk.com/write-1")
 	t.Setenv("VK_REFERRAL_SHARE_BASE", "https://vk.com/share.php")
 	t.Setenv("REFERRAL_CODE_LENGTH", "12")
 	t.Setenv("REFERRAL_REFERRER_SIGNUP_REWARD_CREDITS", "15")
 	t.Setenv("REFERRAL_REFERRED_SIGNUP_REWARD_CREDITS", "3")
 
 	cfg := config.Load()
-	if cfg.VKReferralLinkBase != "https://vk.com/im?sel=-1" || cfg.VKReferralShareBase != "https://vk.com/share.php" {
+	if cfg.VKReferralLinkBase != "https://vk.com/write-1" || cfg.VKReferralShareBase != "https://vk.com/share.php" {
 		t.Fatalf("unexpected referral links: base=%q share=%q", cfg.VKReferralLinkBase, cfg.VKReferralShareBase)
 	}
 	if cfg.ReferralCodeLength != 12 {

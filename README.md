@@ -71,7 +71,9 @@ Real integrations are implemented at adapter level and remain **opt-in**:
   Plain text and stickers create `text.ask` jobs only while GPT mode is active
   or when `VK_UNROUTED_TEXT_MODE=gpt` is explicitly configured. In active GPT
   mode, the bot sends `НейроХаб думает...` and the delivery worker edits that same
-  VK message to the provider answer; legacy `VK_UNROUTED_TEXT_MODE=gpt` keeps
+  VK message to the provider answer. Before sending to VK, text delivery strips
+  simple Markdown markers such as `**bold**`, backticks and `*`/`-` list syntax,
+  rendering lists as plain `•` bullets. Legacy `VK_UNROUTED_TEXT_MODE=gpt` keeps
   normal text delivery.
 - Text-mode dialog context is persisted in Postgres. For each VK peer the
   worker stores user/assistant turns in `conversations`,
@@ -83,9 +85,9 @@ Real integrations are implemented at adapter level and remain **opt-in**:
 - Shared VK referral foundation is implemented in the backend. Each internal
   user receives one stable public referral code in `referral_codes`; accepted
   invitations are stored in `referrals` with source `vk_bot` or `vk_miniapp`.
-  The VK bot account screen can show remaining credits, completed generations,
-  invited-user count and a single referral link. The share button defaults to
-  VK `open_link` / `vk.com/share.php`.
+  The VK bot account screen currently shows the "безлимитное общение" note,
+  invited-user count, one plain-text referral link and support handle
+  `@neirohub_help`; it does not render a share button.
   `/start <code>` / VK `ref` handling records the relation without creating a
   billable job. Signup rewards are posted through billing ledger entries with
   idempotency keys. A full Mini App referral account/API screen is still a
@@ -93,10 +95,12 @@ Real integrations are implemented at adapter level and remain **opt-in**:
 - VK inline menu navigation uses a hybrid UX: if the last bot message is the
   active menu, inline button clicks edit it through VK `messages.edit`; pressing
   the persistent lower `Показать меню` button always sends a fresh menu at the
-  bottom of the chat. After a plain user message outside GPT mode, the default
-  `VK_UNROUTED_TEXT_MODE=reply` sends only the text hint
-  `Выберите режим в меню выше.` and does not duplicate the inline menu. Edit
-  failure falls back to a normal send. In Beta the active-menu message pointer
+  bottom of the chat. An ordinary first non-payload text/sticker/menu-repair
+  contact is treated as onboarding and opens `/start`; after onboarding, a plain user message outside GPT mode with
+  the default `VK_UNROUTED_TEXT_MODE=reply` sends the text hint
+  `Выберите режим в меню выше или нажмите на кнопку показать меню` with the persistent lower `Показать меню`
+  keyboard and does not duplicate the inline menu. Edit failure falls back to a
+  normal send. In Beta the active-menu message pointer
   is still process-local to `cmd/api`, while GPT dialog mode is persisted in
   Redis with `VK_DIALOG_MODE_TTL` so it survives API restarts.
 - Inline menu buttons default to VK `callback` actions
@@ -107,10 +111,12 @@ Real integrations are implemented at adapter level and remain **opt-in**:
   Stale inline `show_menu` callbacks after a GPT answer are acknowledged but do
   not send a fresh welcome/menu message; users reopen the menu through the
   persistent lower `Показать меню` button.
-- `VK_UNROUTED_TEXT_MODE` controls ordinary text outside GPT mode: `reply`
-  (default) sends the text-only hint `Выберите режим в меню выше.`, `silent`
-  records the command but sends nothing, and `gpt` preserves the old behavior
-  where any text becomes a GPT job.
+- `VK_UNROUTED_TEXT_MODE` controls ordinary text outside GPT mode after
+  onboarding: `reply` (default) sends `Выберите режим в меню выше или нажмите на кнопку показать меню` with the
+  lower `Показать меню` keyboard, `silent` records the command but sends
+  nothing, and `gpt` preserves the old behavior where any text becomes a GPT
+  job. Typed repair phrases like `меню`, `нет меню`, `нет кнопки` and
+  `где меню` reopen the welcome menu and repair the lower keyboard.
 - VK bot anti-spam is Redis-backed and enabled by default. It counts any user
   event (text, stickers and buttons), applies stricter limits for new users,
   separately limits billable GPT requests, temporarily blocks repeated

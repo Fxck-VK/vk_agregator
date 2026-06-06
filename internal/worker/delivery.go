@@ -321,7 +321,7 @@ func (w *DeliveryWorker) textContent(ctx context.Context, art *domain.Artifact) 
 	if err != nil {
 		return "(result ready)"
 	}
-	return string(data)
+	return formatVKText(string(data))
 }
 
 func (w *DeliveryWorker) send(ctx context.Context, del *domain.Delivery) error {
@@ -413,6 +413,49 @@ func splitVKText(text string) []string {
 		runes = runes[cut:]
 	}
 	return chunks
+}
+
+func formatVKText(text string) string {
+	text = strings.ReplaceAll(text, "\r\n", "\n")
+	text = strings.ReplaceAll(text, "\r", "\n")
+	lines := strings.Split(text, "\n")
+	for i, line := range lines {
+		lines[i] = formatVKLine(line)
+	}
+	return strings.TrimSpace(strings.Join(lines, "\n"))
+}
+
+func formatVKLine(line string) string {
+	trimmed := strings.TrimSpace(line)
+	if trimmed == "" {
+		return ""
+	}
+
+	for strings.HasPrefix(trimmed, "#") {
+		trimmed = strings.TrimSpace(strings.TrimPrefix(trimmed, "#"))
+	}
+
+	if rest, ok := markdownBulletRest(trimmed); ok {
+		return "• " + stripVKMarkdown(rest)
+	}
+
+	return stripVKMarkdown(trimmed)
+}
+
+func markdownBulletRest(line string) (string, bool) {
+	for _, marker := range []string{"* ", "*\t", "- ", "-\t"} {
+		if strings.HasPrefix(line, marker) {
+			return strings.TrimSpace(strings.TrimPrefix(line, marker)), true
+		}
+	}
+	return "", false
+}
+
+func stripVKMarkdown(text string) string {
+	for _, marker := range []string{"**", "__", "`", "*"} {
+		text = strings.ReplaceAll(text, marker, "")
+	}
+	return strings.TrimSpace(text)
 }
 
 // sleepBackoff waits for the configured backoff before the next retry, honoring

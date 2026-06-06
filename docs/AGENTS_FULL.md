@@ -256,8 +256,10 @@ Examples that should not create billable jobs by themselves:
 - `/start`;
 - “Старт”;
 - “Показать меню”;
+- first ordinary non-payload onboarding repair from text/stickers/menu-repair input;
+- typed menu repair phrases such as “меню”, “нет меню”, “нет кнопки” and “где меню”;
 - inline menu clicks that only select a mode or show help;
-- referral link/account/share commands and `/start <referral_code>` handling;
+- referral link/account commands and `/start <referral_code>` handling;
 - balance/status/help/cancel commands unless they trigger a paid operation by design.
 
 If a control command sends a VK message/keyboard, use the VK delivery/control adapter and deterministic `random_id`. If product/control sends must be strictly audited as deliveries, move them into persisted delivery/outbox flow as a separate scoped task.
@@ -270,7 +272,7 @@ Rules:
 
 - One internal user owns one stable public referral code for all VK surfaces.
 - VK Bot and VK Mini App must reuse the same referral code/relation tables; do not create separate per-surface referral identities.
-- `/start <code>`, VK Callback `ref` params, account screens and share buttons are control paths and must not create billable jobs.
+- `/start <code>`, VK Callback `ref` params, referral links and account screens are control paths and must not create billable jobs.
 - Invalid/self-referral codes must be no-ops from the user's perspective and must not leak another user's private data.
 - Referral acceptance must be idempotent per referred user.
 - Referral rewards must be posted through billing ledger entries with idempotency keys.

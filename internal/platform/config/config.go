@@ -177,7 +177,7 @@ type Config struct {
 	// single referral link. If it contains "{code}", the placeholder is replaced;
 	// otherwise the code is appended as ref=<code>.
 	VKReferralLinkBase string
-	// VKReferralShareBase is the URL opened by the bot "share" button.
+	// VKReferralShareBase is reserved for future VK share/open-link flows.
 	VKReferralShareBase string
 	ReferralCodeLength  int
 	// Referral signup rewards are posted through billing ledger entries.
