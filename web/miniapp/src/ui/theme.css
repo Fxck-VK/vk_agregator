@@ -494,6 +494,10 @@ body {
 }
 
 .workflow { flex: 1; overflow-y: auto; width: 100%; max-width: var(--workflow-maxw); margin: 0 auto; padding: var(--space-4) var(--space-4) calc(var(--space-5) + var(--mode-tabbar-height) + env(safe-area-inset-bottom)); }
+.workflow-operation-bar { display: grid; gap: var(--space-2); margin-bottom: var(--space-4); }
+.workflow-operation-label { color: var(--fg-muted); font-size: 12px; font-weight: 900; text-transform: uppercase; }
+.workflow-operation-segment { width: 100%; min-height: 44px; }
+.workflow-operation-segment :where(label) { min-height: 44px; }
 .workflow-tabs { position: sticky; top: 0; z-index: 4; display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-1); margin: 0 0 var(--space-5); padding: var(--space-1); border: 1px solid var(--line); border-radius: var(--radius-pill); background: color-mix(in srgb, var(--surface) 92%, transparent); backdrop-filter: blur(18px); }
 .workflow-tabs__btn { appearance: none; border: 0; border-radius: var(--radius-pill); background: transparent; color: var(--fg-muted); cursor: pointer; font: inherit; font-size: 13px; font-weight: 800; min-height: 44px; transition: background var(--motion-fast) var(--ease-out), color var(--motion-fast) var(--ease-out); }
 .workflow-tabs__btn.is-active { background: var(--fg); color: var(--bg); }
@@ -534,6 +538,9 @@ body {
 .workflow-segment button.is-active { background: var(--accent); color: var(--on-accent); }
 .quiet-action { appearance: none; border: 1px solid var(--line); border-radius: var(--radius-control); background: var(--surface); color: var(--fg); cursor: pointer; font: inherit; font-size: 13px; font-weight: 800; min-height: 44px; padding: 0 var(--space-3); }
 .quiet-action--wide { align-self: stretch; }
+.workflow-signature-preview { width: 100%; display: block; }
+.workflow-signature-preview .result-card { width: 100%; max-width: none; margin: 0; }
+.workflow-signature-preview .vk-preview__media { max-height: 520px; }
 .job-list { display: flex; flex-direction: column; gap: var(--space-2); }
 .job-row { display: flex; align-items: stretch; gap: var(--space-2); }
 .job-row__main { flex: 1; display: grid; grid-template-columns: 1fr auto; gap: 2px var(--space-3); text-align: left; appearance: none; border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--surface); color: var(--fg); cursor: pointer; min-height: 64px; padding: var(--space-3); }

@@ -372,3 +372,44 @@ Consequences: frontend multi-dialog UX becomes available without weakening
 auth, billing, moderation, artifact access or provider boundaries. The current
 solution is session/local-metadata oriented until backend durable conversation
 history exists.
+
+---
+
+## ADR-012 - Mini App Create tab operation segment
+
+Status: accepted
+
+Date: 2026-06-06
+
+Context: PR-16.1 made `Создать` a top-level tab that reuses the PR-10
+workflow. PR-16.3 needs the Create tab to expose supported generation types at
+the top while preserving the existing backend-owned estimate, job polling,
+status timeline, result preview and History.
+
+Decision: the Create tab uses VKUI `SegmentedControl` for generation type
+selection. The options are the frontend mirror of backend-supported Mini App
+operations only: `text_generate`, `image_generate` and `video_generate`.
+There is no discovery endpoint in the current BFF, so this PR does not add one
+and does not change `api/client.ts`.
+
+Changing the operation segment updates only draft generation state
+(`modalityId` and default model) and triggers the existing debounced
+`POST /miniapp/estimate` path when a prompt is present. It does not clear
+`activeJobId`, does not mutate the backend job list, and does not touch the
+polling owner in `ChatScreen`, so in-flight jobs continue to poll. Submit
+remains gated by backend estimate with `enough_credits=true`.
+
+History remains part of the Create workflow. PR-9 reload recovery still comes
+from `GET /miniapp/jobs`; local UI state is not a source of truth for job
+status or billing.
+
+The VK post preview remains the signature Create result surface. Text is
+rendered as React text, and photo/video previews use only the backend artifact
+route from job DTO artifact ids. PR-16.3 changes preview structure and
+prominence only; final brand color extraction/palette work is deferred to
+PR-16.4.
+
+Consequences: Create becomes more direct without new BFF contracts or a
+frontend-side source of truth. The operation allowlist must stay synchronized
+with backend Mini App support until a durable capabilities/discovery endpoint
+exists.

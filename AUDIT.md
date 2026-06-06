@@ -320,3 +320,25 @@ scaled horizontally without durable conversation storage, a thread may continue
 with empty backend context. This is a documented graceful degradation and a
 backend follow-up is tracked in `TASKS.md` for durable conversation list/read
 endpoints.
+
+---
+
+## PR-16.3 Mini App Create tab note
+
+Date: 2026-06-06
+
+The Create tab operation selector is a VKUI `SegmentedControl` over the static
+frontend mirror of backend-supported operations only: `text_generate`,
+`image_generate`, `video_generate`. No discovery endpoint or BFF contract was
+added.
+
+Estimate remains backend-owned through `POST /miniapp/estimate`; changing the
+operation/model reuses the existing debounced estimate path and submit remains
+gated by `enough_credits=true`. Segment changes do not clear active jobs,
+backend job lists or the polling owner, so in-flight job recovery/polling stays
+with the existing `GET /miniapp/jobs` / `GET /miniapp/jobs/{id}` flow.
+
+The VK post preview stays safe-rendered: text is React text and image/video
+sources come only from backend artifact routes derived from job DTO artifact
+ids. PR-16.3 only changes preview structure/prominence; brand palette and
+image-derived color work remains for PR-16.4.

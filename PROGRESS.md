@@ -1193,3 +1193,38 @@ Status: **completed**.
 
 - `npm run build` in `web/miniapp` - exit 0.
 - `go build ./...` - exit 0.
+
+---
+
+## PR-16.3 - Mini App Create tab generation segment
+
+Status: **completed**.
+
+### STEP 0 context
+
+- PR-16.1 is present on `fastlife_dev`: `Создать` reuses the mounted PR-10
+  `WorkflowMode` inside the 3-tab shell.
+- Supported Mini App operations are `text_generate`, `image_generate` and
+  `video_generate` in backend `operationMeta`; frontend `MODALITIES` mirrors
+  only those operations. No BFF discovery endpoint exists.
+- PR-10 workflow already contains estimate, status timeline, result screen,
+  History and `ResultCard` / VK post preview.
+
+### What changed
+
+- Added a top VKUI `SegmentedControl` for generation type selection in the
+  Create tab. It uses only supported backend operations from `MODALITIES`.
+- Kept the existing Generate -> Status -> Result flow, backend estimate
+  debounce and `enough_credits=true` submit gating.
+- History remains available in the Create tab; PR-9 reload recovery still uses
+  `GET /miniapp/jobs` and was not moved into local state.
+- Switching the operation segment changes only draft modality/model state and
+  does not clear `activeJobId`, `jobs` or the `ChatScreen` polling owner.
+- The VK post preview is more prominent on the result screen: `ResultCard` is
+  full-width in Create result and keeps text as React text plus media through
+  backend artifact routes only.
+
+### Checks
+
+- `npm run build` in `web/miniapp` - exit 0.
+- `go build ./...` - exit 0.

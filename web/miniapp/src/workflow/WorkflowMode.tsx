@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Button, NativeSelect, Textarea } from "@vkontakte/vkui";
+import { Button, NativeSelect, SegmentedControl, Textarea } from "@vkontakte/vkui";
 import {
   apiUserMessage,
   estimateJob,
@@ -101,6 +101,12 @@ const TIMELINE = [
   },
 ];
 
+const OPERATION_OPTIONS = MODALITIES.map((item) => ({
+  label: item.label,
+  value: item.id,
+  "aria-label": item.label,
+}));
+
 function operationLabel(operation: string): string {
   return modalityByOperation(operation).label;
 }
@@ -179,7 +185,7 @@ export function WorkflowMode({
   onCreateJob,
   onClearLocalHistory,
 }: WorkflowModeProps) {
-  const [screen, setScreen] = useState<WorkflowScreen>("home");
+  const [screen, setScreen] = useState<WorkflowScreen>("generate");
   const [modalityId, setModalityId] = useState<ModalityId>("text");
   const [modelId, setModelId] = useState(modalityById("text").models[0].id);
   const [prompt, setPrompt] = useState("");
@@ -284,6 +290,7 @@ export function WorkflowMode({
 
   return (
     <main className="workflow">
+      <OperationSegment modalityId={modalityId} onModality={changeModality} />
       <ModeTabs screen={screen} onScreen={setScreen} />
 
       {screen === "home" && (
@@ -359,27 +366,6 @@ export function WorkflowMode({
           <ScreenTitle eyebrow="Generate" title="Опишите будущий пост" text="Стоимость и доступность модели считает backend до запуска." />
           <div className="workflow-form">
             <div className="workflow-field">
-              <label>Тип результата</label>
-              <div className="workflow-segment" role="tablist">
-                {MODALITIES.map((item) => (
-                  <Button
-                    key={item.id}
-                    type="button"
-                    role="tab"
-                    aria-selected={item.id === modalityId}
-                    className={item.id === modalityId ? "is-active" : ""}
-                    mode={item.id === modalityId ? "primary" : "tertiary"}
-                    appearance={item.id === modalityId ? "accent" : "neutral"}
-                    size="m"
-                    onClick={() => changeModality(item.id)}
-                  >
-                    {item.label}
-                  </Button>
-                ))}
-              </div>
-            </div>
-
-            <div className="workflow-field">
               <label htmlFor="workflow-model">Модель</label>
               <NativeSelect
                 id="workflow-model"
@@ -450,7 +436,9 @@ export function WorkflowMode({
       {screen === "result" && activeJob && activeMessage && (
         <section className="workflow-screen">
           <ScreenTitle eyebrow="Result" title="Пост готов к проверке" text="Preview показывает контент так, как он будет ощущаться в VK." />
-          <ResultCard msg={activeMessage} prompt={activePrompt} onRetry={submitWorkflow} />
+          <div className="workflow-signature-preview">
+            <ResultCard msg={activeMessage} prompt={activePrompt} onRetry={submitWorkflow} />
+          </div>
           <Button
             type="button"
             className="quiet-action quiet-action--wide"
@@ -511,6 +499,30 @@ export function WorkflowMode({
         </section>
       )}
     </main>
+  );
+}
+
+function OperationSegment({
+  modalityId,
+  onModality,
+}: {
+  modalityId: ModalityId;
+  onModality: (id: ModalityId) => void;
+}) {
+  return (
+    <section className="workflow-operation-bar" aria-labelledby="workflow-operation-label">
+      <span id="workflow-operation-label" className="workflow-operation-label">
+        Тип генерации
+      </span>
+      <SegmentedControl<ModalityId>
+        className="workflow-operation-segment"
+        size="l"
+        name="workflow-operation"
+        value={modalityId}
+        onChange={onModality}
+        options={OPERATION_OPTIONS}
+      />
+    </section>
   );
 }
 
