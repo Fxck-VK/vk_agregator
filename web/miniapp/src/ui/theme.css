@@ -359,6 +359,11 @@ body {
 }
 
 .bubble__status { font-size: 11px; color: var(--fg-muted); padding: 0 6px; font-weight: 600; }
+
+.bubble__status--responding {
+  letter-spacing: 0.02em;
+  min-height: 1.2em;
+}
 .bubble__err { color: var(--error); }
 .bubble__media { display: block; max-width: 100%; border-radius: 14px; margin: 2px 0; border: 1px solid var(--glass-border); }
 

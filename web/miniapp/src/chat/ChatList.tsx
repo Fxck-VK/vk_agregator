@@ -1,4 +1,5 @@
 // src/chat/ChatList.tsx
+import { displayChatTitle } from "./display";
 import type { Chat } from "./types";
 
 function lastPreview(chat: Chat): string {
@@ -88,7 +89,7 @@ export function ChatList({
                 </svg>
               </span>
               <div className="chat-item__body">
-                <span className="chat-item__title">{c.title}</span>
+                <span className="chat-item__title">{displayChatTitle(c)}</span>
                 <small>{lastPreview(c)}</small>
               </div>
               <time className="chat-item__time">{timeLabel(c.updatedAt)}</time>

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { statusKind, statusLabel } from "../api/client";
+import { hasPreviewableMediaResult, statusKind, statusLabel, type Job } from "../api/client";
 import { useArtifactMediaUrl } from "../hooks/useArtifactMediaUrl";
 import type { ChatMessage } from "../chat/types";
 
@@ -14,7 +14,16 @@ type ResultCardProps = {
 };
 
 function canShowResult(msg: ChatMessage): boolean {
-  return !!msg.status && statusKind(msg.status) === "done" && !msg.pending && !msg.error;
+  if (msg.error || msg.pending || !msg.status) return false;
+  if (statusKind(msg.status) === "done") return true;
+  if (!msg.jobId) return false;
+  const pseudoJob = {
+    id: msg.jobId,
+    operation: msg.operation ?? "",
+    status: msg.status,
+    output_artifact_ids: msg.artifactIds ?? [],
+  } as Job;
+  return hasPreviewableMediaResult(pseudoJob);
 }
 
 function safeStatus(msg: ChatMessage): string {

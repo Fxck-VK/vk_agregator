@@ -31,8 +31,9 @@ import {
 import { haptic, type VkUser } from "../hooks/useBridge";
 import { useChats } from "../hooks/useChats";
 import neuroHubAvatar from "../assets/neurohub-avatar.png";
+import { displayChatTitle, isGenericChatTitleValue } from "./display";
 
-const POLL_MS = 2000;
+const POLL_MS = 1200;
 const POLL_MAX = 90;
 const CHAT_OPERATION = "text_generate";
 const CHAT_MODEL_ID = "chatgpt";
@@ -52,7 +53,10 @@ function tabTitle(tab: AppTab, activeChat?: Chat | null): { name: string; sub: s
     case "settings":
       return { name: "Профиль", sub: "тема, баланс, история" };
     default:
-      return { name: CHAT_ASSISTANT_NAME, sub: activeChat?.title ?? "НейроХаб диалог" };
+      return {
+        name: CHAT_ASSISTANT_NAME,
+        sub: activeChat ? displayChatTitle(activeChat) : "НейроХаб диалог",
+      };
   }
 }
 
@@ -122,6 +126,12 @@ function isLocalDraftChat(chat: Chat): boolean {
   );
 }
 
+function resolveMergedChatTitle(backend: Chat, local: Chat): string {
+  if (!isGenericChatTitleValue(backend.title)) return backend.title.trim();
+  if (!isGenericChatTitleValue(local.title)) return local.title.trim();
+  return displayChatTitle(backend);
+}
+
 function mergeBackendChats(prev: Chat[], backend: Chat[]): Chat[] {
   if (backend.length === 0) {
     return prev.length > 0 ? prev : [];
@@ -136,7 +146,7 @@ function mergeBackendChats(prev: Chat[], backend: Chat[]): Chat[] {
       const messages = chat.messages.length > 0 ? chat.messages : existing.messages;
       byID.set(chat.id, {
         ...existing,
-        title: existing.title || chat.title,
+        title: resolveMergedChatTitle(existing, chat),
         preview: existing.preview || chat.preview,
         messages,
         updatedAt: Math.max(existing.updatedAt, chat.updatedAt),
@@ -169,6 +179,26 @@ function mergeHistoryMessages(current: ChatMessage[], history: ChatMessage[]): C
     const bt = Date.parse(b.createdAt ?? "") || 0;
     return at - bt;
   });
+}
+
+const EARLY_CHAT_TEXT_STATUSES = new Set([
+  "provider_succeeded",
+  "postprocessing",
+  "result_ready",
+  "delivering",
+]);
+
+async function earlyChatBotText(chatId: string, job: Job): Promise<string | undefined> {
+  if (job.operation !== CHAT_OPERATION || isScratchpadChatId(chatId)) return undefined;
+  if (!EARLY_CHAT_TEXT_STATUSES.has(job.status)) return undefined;
+  try {
+    const history = await listChatConversationMessages(chatId);
+    const bot = history.find((item) => item.job_id === job.id && item.role === "bot");
+    const text = bot?.text?.trim();
+    return text || undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function pollTargetForJob(chats: Chat[], job: Job): { chatId: string; botMsgId: string; missing: boolean } {
@@ -371,11 +401,11 @@ export function ChatScreen({ user }: { user: VkUser }) {
             });
             haptic("error");
           } else {
-            const text = await resolveBotText(job);
+            const text = (await resolveBotText(job)) ?? (await earlyChatBotText(chatId, job));
             patchInChat(chatId, botMsgId, {
               pending: false,
               status: job.status,
-              text,
+              ...(text ? { text } : {}),
               artifactIds: job.output_artifact_ids,
             });
             haptic("success");
@@ -388,7 +418,17 @@ export function ChatScreen({ user }: { user: VkUser }) {
           refreshBalance();
           return;
         }
-        patchInChat(chatId, botMsgId, { status: job.status });
+        const earlyText = await earlyChatBotText(chatId, job);
+        if (earlyText) {
+          patchInChat(chatId, botMsgId, {
+            pending: false,
+            status: job.status,
+            text: earlyText,
+            artifactIds: job.output_artifact_ids,
+          });
+        } else {
+          patchInChat(chatId, botMsgId, { status: job.status });
+        }
         if (i < POLL_MAX - 1) {
           await waitForNextPoll();
         }

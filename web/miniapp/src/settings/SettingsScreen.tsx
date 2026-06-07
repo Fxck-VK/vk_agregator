@@ -50,6 +50,18 @@ function historyLabel(job: Job): string {
   return statusLabel(job.status);
 }
 
+function historyRowTitle(job: Job): string {
+  const prompt = job.prompt?.trim();
+  if (prompt) return prompt.length > 48 ? `${prompt.slice(0, 48)}…` : prompt;
+  return modalityByOperation(job.operation).label;
+}
+
+function historyRowMeta(job: Job): string {
+  const modality = modalityByOperation(job.operation);
+  const typeLabel = job.operation === "text_generate" ? "Чат" : modality.label;
+  return `${typeLabel} · ${historyLabel(job)} · ${dateLabel(job.created_at)}`;
+}
+
 function typeColor(operation: string): string {
   const id = modalityByOperation(operation).id;
   if (id === "image") return "#a855f7";
@@ -272,10 +284,10 @@ export function SettingsScreen({
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 14, fontWeight: 600 }}>
-                        {job.prompt?.slice(0, 48) || modality.label}
+                        {historyRowTitle(job)}
                       </div>
                       <div style={{ fontSize: 12, color: "var(--fg-muted)" }}>
-                        {modality.label} · {historyLabel(job)} · {dateLabel(job.created_at)}
+                        {historyRowMeta(job)}
                         {cost > 0 ? ` · ${formatCredits(cost)}` : ""}
                       </div>
                     </div>

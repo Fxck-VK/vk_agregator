@@ -110,7 +110,7 @@ Do not read `docs/AGENTS_FULL.md` wholesale unless the task is broad architectur
 
 Read only these sections depending on scope:
 
-- `web/miniapp/**`: sections Mini App, Auth/Session, Frontend Security, Job/Billing/Idempotency, Safe Rendering, Observability, Anti-vibe Coding.
+- `web/miniapp/**`: sections Mini App, Auth/Session, Frontend Security, Job/Billing/Idempotency, Safe Rendering, Observability, Anti-vibe Coding. After each Mini App bugfix append an entry to `docs/MINIAPP_FIXLOG.md`.
 - `internal/adapter/inbound/vk/**`: sections VK Text Bot / VK Inbound, Inbox/Deduplication, Command Router, Job Orchestrator, Billing/Idempotency, Delivery, Moderation.
 - `internal/adapter/inbound/miniapp/**`: sections Mini App BFF, Auth/Session, Job/Billing/Idempotency, Artifact Access, Security, Known Follow-ups.
 - `internal/service/billingservice/**`: sections Billing Ledger, Idempotency, Reconciliation, Tests, Stop Conditions.
@@ -146,9 +146,17 @@ After changes:
 - List changed files.
 - Explain what changed and why.
 - Explain security and architecture impact.
+- Re-check surfaces touched by the diff (auth/signature, billing/ledger, job
+  boundaries, VK vs Mini App delivery, safe rendering, idempotency).
 - List checks run and skipped checks with reasons.
 - Include final `git status --short`.
 - Do not claim success if checks failed.
+
+When the user asks to commit/push after a step: run relevant checks first; if
+green and invariants hold, commit to `fastlife_dev` with a short rollback-friendly
+message (`miniapp: …` / `worker: …` scope prefix) and push. One logical step per
+commit when possible. Append `docs/MINIAPP_FIXLOG.md` for Mini App bugfixes before
+commit.
 
 ## Safe checks
 

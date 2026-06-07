@@ -441,3 +441,52 @@ unless that job is already being polled. The backend remains the source of truth
 for job status; local state only triggers polling and display updates. Aggregate
 runtime checks showed local jobs reaching terminal `succeeded` and outbox queue
 events in `published` state.
+
+---
+
+## Mini App image preview + dev launcher fix note
+
+Date: 2026-06-07
+
+**Symptom:** After photo generation the Create result screen stayed on
+«Обработка…» / showed no image. In dev, `GET /miniapp/jobs/{id}` could also
+return `503` when the `localhost.run` SSH tunnel died (`no tunnel here :(`).
+
+**Root causes (dev + UI):**
+
+1. **Dev worker env drift:** `scripts/dev/start-miniapp.ps1` initially reused
+   `Start-BotExecutable`, which loaded `.env` and could keep
+   `VK_DELIVERY_MODE=real` from the operator machine. The worker then tried VK
+   photo delivery (`empty photo upload_url`, `Group authorization failed`) and
+   jobs stalled before terminal `succeeded`.
+2. **UI waited only for `succeeded`:** Image artifacts are already available at
+   `result_ready`, but the Create flow treated only `succeeded` as “done”, so
+   preview could spin forever while delivery retried.
+3. **Artifact preview auth:** `<img src="/miniapp/artifacts/{id}">` cannot send
+   `X-Launch-Params`; preview must use authenticated blob URLs
+   (`useArtifactMediaUrl` / `preloadArtifactBlobUrl`).
+4. **Tunnel fragility (dev):** `*.lhr.life` URLs rotate when SSH restarts; stale
+   VK dev URL surfaces as `503`, not an API bug.
+
+**Fixes applied:**
+
+- Added `Start-MiniAppExecutable` in `scripts/dev/_miniapp-common.ps1` to load
+  `.env` + `.env.ps1` and then **force** Mini App dev overrides, including
+  `VK_DELIVERY_MODE=mock`, `PROVIDER=deepinfra`, `ARTIFACT_SCANNER=none`.
+- Frontend: `hasPreviewableMediaResult()` — show image/video preview at
+  `result_ready` (and `succeeded`) in `WorkflowMode` / `ResultCard`.
+- Frontend: authenticated artifact media hook + blob preload before result screen.
+- Chat UX (same pass): remove ghost `job-*` threads from drawer; prefer backend
+  `conversation.title` / preview for list labels; stabilize chat switching loads.
+- Create flow navigation: history/back now returns to the prior status/result
+  screen instead of always resetting to the Create home menu.
+
+**Security / architecture impact:** No provider calls from VK handlers or Mini
+App frontend. Dev-only `VK_DELIVERY_MODE=mock` override is scoped to
+`scripts/dev/start-miniapp.ps1` child processes; production still requires
+explicit env. Preview still uses backend artifact routes with launch-param auth
+and moderation gates.
+
+**Checks:** `npm run build` (miniapp) passed after the UI changes. Dev validation:
+worker log no longer prints `using real vk delivery client`; tunnel must be
+refreshed in dev.vk.com after each `localhost.run` restart.

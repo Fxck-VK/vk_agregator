@@ -527,6 +527,14 @@ export function isTerminal(s: string): boolean {
   return OK.has(s) || FAIL.has(s);
 }
 
+/** Image/video artifacts are ready in Mini App once postprocessing finishes. */
+export function hasPreviewableMediaResult(job: Job): boolean {
+  if (!job.output_artifact_ids?.length) return false;
+  if (job.operation !== "image_generate" && job.operation !== "video_generate") return false;
+  if (statusKind(job.status) === "done") return true;
+  return job.status === "result_ready";
+}
+
 const STATUS_LABELS: Record<string, string> = {
   received: "Принято",
   validated: "Проверка",

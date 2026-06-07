@@ -291,3 +291,66 @@ function Assert-MiniAppDevRequirements {
         throw "DEEPINFRA_API_KEY is required for real Mini App chat responses."
     }
 }
+
+function Start-MiniAppExecutable {
+    param(
+        [Parameter(Mandatory = $true)][string]$Root,
+        [Parameter(Mandatory = $true)][string]$ExePath,
+        [Parameter(Mandatory = $true)][string]$StdoutPath,
+        [Parameter(Mandatory = $true)][string]$StderrPath,
+        [Parameter(Mandatory = $true)][int]$ApiPort,
+        [Parameter(Mandatory = $true)][int]$WorkerMetricsPort
+    )
+
+    $safeRoot = $Root.Replace("'", "''")
+    $safeExe = $ExePath.Replace("'", "''")
+    $runner = @"
+`$ErrorActionPreference = 'Stop'
+Set-Location -LiteralPath '$safeRoot'
+`$envPath = Join-Path (Get-Location) '.env'
+if (Test-Path -LiteralPath `$envPath) {
+    foreach (`$line in Get-Content -LiteralPath `$envPath) {
+        if (`$line -match '^\s*#' -or `$line -match '^\s*$') { continue }
+        if (`$line -match '^\s*([^=]+?)\s*=\s*(.*)\s*$') {
+            `$name = `$matches[1].Trim()
+            `$value = `$matches[2].Trim()
+            if (`$value.Length -ge 2 -and ((([int][char]`$value[0]) -eq 34 -and ([int][char]`$value[`$value.Length - 1]) -eq 34) -or (([int][char]`$value[0]) -eq 39 -and ([int][char]`$value[`$value.Length - 1]) -eq 39))) {
+                `$value = `$value.Substring(1, `$value.Length - 2)
+            }
+            [Environment]::SetEnvironmentVariable(`$name, `$value, 'Process')
+        }
+    }
+}
+`$overlay = Join-Path (Get-Location) '.env.ps1'
+if (Test-Path -LiteralPath `$overlay) {
+    foreach (`$line in Get-Content -LiteralPath `$overlay) {
+        if (`$line -match '^\s*#' -or `$line -match '^\s*$') { continue }
+        if (`$line -match '^\s*([^=]+?)\s*=\s*(.*)\s*$') {
+            `$name = `$matches[1].Trim()
+            `$value = `$matches[2].Trim()
+            if (`$value.Length -ge 2 -and ((([int][char]`$value[0]) -eq 34 -and ([int][char]`$value[`$value.Length - 1]) -eq 34) -or (([int][char]`$value[0]) -eq 39 -and ([int][char]`$value[`$value.Length - 1]) -eq 39))) {
+                `$value = `$value.Substring(1, `$value.Length - 2)
+            }
+            [Environment]::SetEnvironmentVariable(`$name, `$value, 'Process')
+        }
+    }
+}
+[Environment]::SetEnvironmentVariable('APP_ENV', 'development', 'Process')
+[Environment]::SetEnvironmentVariable('HTTP_ADDR', ':$ApiPort', 'Process')
+[Environment]::SetEnvironmentVariable('PROVIDER', 'deepinfra', 'Process')
+[Environment]::SetEnvironmentVariable('PROVIDER_CHAIN', 'deepinfra', 'Process')
+[Environment]::SetEnvironmentVariable('VK_DELIVERY_MODE', 'mock', 'Process')
+[Environment]::SetEnvironmentVariable('MODERATION_PROVIDER', 'keyword', 'Process')
+[Environment]::SetEnvironmentVariable('ARTIFACT_SCANNER', 'none', 'Process')
+[Environment]::SetEnvironmentVariable('WORKER_METRICS_ADDR', ':$WorkerMetricsPort', 'Process')
+& '$safeExe'
+"@
+
+    return Start-Process -FilePath "powershell.exe" `
+        -ArgumentList @("-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", $runner) `
+        -WorkingDirectory $Root `
+        -WindowStyle Hidden `
+        -RedirectStandardOutput $StdoutPath `
+        -RedirectStandardError $StderrPath `
+        -PassThru
+}

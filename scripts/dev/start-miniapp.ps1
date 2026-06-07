@@ -59,18 +59,22 @@ try {
     go build -o $workerExe ./cmd/worker
 
     Write-Host "Starting API, worker and Vite dev server..."
-    $apiProc = Start-BotExecutable `
+    $apiProc = Start-MiniAppExecutable `
         -Root $root `
         -ExePath $apiExe `
         -StdoutPath (Join-Path $runtime "api-live.log") `
-        -StderrPath (Join-Path $runtime "api-live.err")
+        -StderrPath (Join-Path $runtime "api-live.err") `
+        -ApiPort $ApiPort `
+        -WorkerMetricsPort $WorkerMetricsPort
     Set-Content -Path (Join-Path $runtime "api.pid") -Value $apiProc.Id -Encoding ASCII
 
-    $workerProc = Start-BotExecutable `
+    $workerProc = Start-MiniAppExecutable `
         -Root $root `
         -ExePath $workerExe `
         -StdoutPath (Join-Path $runtime "worker-live.log") `
-        -StderrPath (Join-Path $runtime "worker-live.err")
+        -StderrPath (Join-Path $runtime "worker-live.err") `
+        -ApiPort $ApiPort `
+        -WorkerMetricsPort $WorkerMetricsPort
     Set-Content -Path (Join-Path $runtime "worker.pid") -Value $workerProc.Id -Encoding ASCII
 
     $devLaunchParams = New-MiniAppLaunchParams -UserID $VkUserID

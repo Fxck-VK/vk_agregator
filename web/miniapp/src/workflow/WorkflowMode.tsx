@@ -4,6 +4,7 @@ import {
   MAX_REFERENCE_ARTIFACTS,
   apiUserMessage,
   estimateJob,
+  hasPreviewableMediaResult,
   isTerminal,
   preloadArtifactBlobUrl,
   statusKind,
@@ -162,20 +163,24 @@ function sortedJobs(jobs: Job[]): Job[] {
 
 function syntheticMessageForJob(job: Job): ChatMessage {
   const failed = statusKind(job.status) === "failed";
+  const previewable = hasPreviewableMediaResult(job);
+  const done = isTerminal(job.status) && statusKind(job.status) === "done";
   return {
     id: "workflow-" + job.id,
     role: "bot",
     jobId: job.id,
     operation: job.operation,
     status: job.status,
-    pending: !isTerminal(job.status),
+    pending: !done && !previewable,
     error: failed ? "Не удалось выполнить запрос" : undefined,
-    artifactIds:
-      isTerminal(job.status) && statusKind(job.status) === "done"
-        ? job.output_artifact_ids
-        : undefined,
+    artifactIds: done || previewable ? job.output_artifact_ids : undefined,
     createdAt: job.created_at,
   };
+}
+
+function jobReadyForResultScreen(job: Job): boolean {
+  if (statusKind(job.status) === "done") return true;
+  return hasPreviewableMediaResult(job);
 }
 
 function messageForJob(job: Job | undefined, chats: Chat[]): ChatMessage | null {
@@ -234,6 +239,7 @@ export function WorkflowMode({
   const [resultPreparing, setResultPreparing] = useState(false);
   const referenceInputRef = useRef<HTMLInputElement>(null);
   const referenceItemsRef = useRef<ReferenceItem[]>([]);
+  const flowReturnScreenRef = useRef<WorkflowScreen>("home");
 
   const recentJobs = useMemo(() => sortedJobs(jobs), [jobs]);
   const activeJob = activeJobId ? jobs.find((job) => job.id === activeJobId) : undefined;
@@ -313,7 +319,7 @@ export function WorkflowMode({
 
   useEffect(() => {
     if (!activeJob || screen !== "status") return;
-    if (!isTerminal(activeJob.status) || statusKind(activeJob.status) !== "done") return;
+    if (!jobReadyForResultScreen(activeJob)) return;
 
     const artifactId = activeJob.output_artifact_ids[0];
     const needsMedia =
@@ -432,13 +438,31 @@ export function WorkflowMode({
     setSubmitError(null);
   }
 
-  function backToChoice() {
+  function backToHome() {
     setSubmitError(null);
     clearResultMedia();
+    setActiveJobId(null);
+    flowReturnScreenRef.current = "home";
     setScreen("home");
   }
 
+  function backFromFlowScreen() {
+    if (flowReturnScreenRef.current === "history") {
+      setScreen("history");
+      return;
+    }
+    backToHome();
+  }
+
+  function backFromHistory() {
+    const target = flowReturnScreenRef.current;
+    setScreen(target === "history" ? "home" : target);
+  }
+
   function openTypeHistory() {
+    if (screen !== "history") {
+      flowReturnScreenRef.current = screen;
+    }
     setStatusFilter("all");
     setScreen("history");
   }
@@ -456,6 +480,7 @@ export function WorkflowMode({
         setSubmitError("Не удалось запустить генерацию");
         return;
       }
+      flowReturnScreenRef.current = "home";
       setActiveJobId(job.id);
       setScreen("status");
     } catch (error) {
@@ -479,11 +504,11 @@ export function WorkflowMode({
     setActiveJobId(job.id);
     clearResultMedia();
 
-    if (!isTerminal(job.status)) {
+    if (statusKind(job.status) === "failed") {
       setScreen("status");
       return;
     }
-    if (statusKind(job.status) === "failed") {
+    if (!jobReadyForResultScreen(job)) {
       setScreen("status");
       return;
     }
@@ -794,7 +819,7 @@ export function WorkflowMode({
 
       {screen === "status" && activeJob && (
         <>
-          <WorkflowNav currentModality={currentModality.label} onBack={backToChoice} onHistory={openTypeHistory} />
+          <WorkflowNav currentModality={currentModality.label} onBack={backFromFlowScreen} onHistory={openTypeHistory} />
           <StatusScreen
             job={activeJob}
             preparingResult={resultPreparing}
@@ -805,7 +830,7 @@ export function WorkflowMode({
 
       {screen === "result" && activeJob && activeMessage && (
         <section className="workflow-screen">
-          <WorkflowNav currentModality={currentModality.label} onBack={backToChoice} onHistory={openTypeHistory} />
+          <WorkflowNav currentModality={currentModality.label} onBack={backFromFlowScreen} onHistory={openTypeHistory} />
           <ScreenTitle
             eyebrow="Результат"
             title="Результат готов к проверке"
@@ -837,7 +862,7 @@ export function WorkflowMode({
 
       {screen === "history" && (
         <section className="workflow-screen">
-          <WorkflowNav currentModality={currentModality.label} onBack={backToChoice} />
+          <WorkflowNav currentModality={currentModality.label} onBack={backFromHistory} />
           <ScreenTitle
             eyebrow="История"
             title={`История: ${currentModality.label.toLowerCase()}`}
@@ -862,8 +887,8 @@ export function WorkflowMode({
             <JobList
               jobs={filteredJobs}
               onOpen={(job) => {
-                setActiveJobId(job.id);
-                setScreen(isTerminal(job.status) && statusKind(job.status) === "done" ? "result" : "status");
+                flowReturnScreenRef.current = "history";
+                openExistingJob(job);
               }}
               onRepeat={repeatJob}
             />
@@ -970,7 +995,7 @@ function StatusScreen({
 }) {
   const active = timelineIndex(job.status);
   const failed = statusKind(job.status) === "failed";
-  const done = isTerminal(job.status) && statusKind(job.status) === "done";
+  const done = !failed && jobReadyForResultScreen(job);
   return (
     <section className="workflow-screen workflow-screen--status">
       <ScreenTitle
