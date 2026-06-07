@@ -18,7 +18,8 @@ import {
   modalityByOperation,
 } from "../chat/types";
 import type { VkUser } from "../hooks/useBridge";
-import neuroHubAvatar from "../assets/neurohub-avatar.png";
+import { formatCredits } from "../ui/credits";
+import neuroHubBanner from "../assets/neurohub-banner.png";
 
 type WorkflowScreen = "home" | "generate" | "status" | "result" | "history";
 
@@ -268,7 +269,7 @@ export function WorkflowMode({
       {screen === "home" && (
         <section className="workflow-screen nh-scroll">
           <div className="nh-hero" aria-hidden="true">
-            <img className="nh-hero__img" src={neuroHubAvatar} alt="" />
+            <img className="nh-hero__img" src={neuroHubBanner} alt="" />
             <div className="nh-hero__fade" />
           </div>
           <div style={{ padding: "8px 16px 0" }}>
@@ -279,8 +280,10 @@ export function WorkflowMode({
             <section className="workflow-section" aria-label="Услуги">
               <div className="create-model-grid">
                 {CREATE_CHOICES.map((choice) => {
+                  const modality = modalityById(choice.modality);
                   const isImage = choice.modality === "image";
                   const color = isImage ? "#a855f7" : "#ec4899";
+                  const primaryModel = modality.models[0]?.label ?? modality.label;
                   return (
                     <button
                       key={choice.title}
@@ -300,9 +303,7 @@ export function WorkflowMode({
                           )}
                         </svg>
                       </div>
-                      <div style={{ fontSize: "13px", fontWeight: 600, marginBottom: "3px" }}>
-                        {isImage ? "Stable Diffusion" : "Kling"}
-                      </div>
+                      <div style={{ fontSize: "13px", fontWeight: 600, marginBottom: "3px" }}>{primaryModel}</div>
                       <div style={{ fontSize: "11px", color: "var(--fg-muted)" }}>{choice.title}</div>
                     </button>
                   );
@@ -360,11 +361,11 @@ export function WorkflowMode({
               ) : estimate ? (
                 <>
                   <span>Стоимость</span>
-                  <strong>{estimate.cost_estimate.toLocaleString("ru-RU")} кр.</strong>
+                  <strong>{formatCredits(estimate.cost_estimate)}</strong>
                   {estimate.enough_credits ? (
-                    <em>Кредитов достаточно</em>
+                    <em>Баланс покрывает {formatCredits(estimate.cost_estimate)}</em>
                   ) : (
-                    <em className="is-warn">Недостаточно кредитов</em>
+                    <em className="is-warn">Нужно {formatCredits(estimate.cost_estimate)}</em>
                   )}
                 </>
               ) : estimateError ? (

@@ -3,6 +3,7 @@ import { Button } from "@vkontakte/vkui";
 import { statusKind, statusLabel, type Job } from "../api/client";
 import { modalityByOperation, type ModalityId } from "../chat/types";
 import neuroHubAvatar from "../assets/neurohub-avatar.png";
+import { formatCredits } from "../ui/credits";
 import type { ThemeMode } from "./theme";
 
 type SettingsScreenProps = {
@@ -39,10 +40,6 @@ function dateLabel(value: string): string {
     hour: "2-digit",
     minute: "2-digit",
   }).format(ts);
-}
-
-function creditsLabel(value: number): string {
-  return `${value.toLocaleString("ru-RU")} ⭐`;
 }
 
 function historyLabel(job: Job): string {
@@ -132,7 +129,7 @@ export function SettingsScreen({
                 Текущий баланс
               </p>
               <strong style={{ fontSize: "30px", fontWeight: 800, background: "var(--gradient-brand)", WebkitBackgroundClip: "text", backgroundClip: "text", WebkitTextFillColor: "transparent" }}>
-                {balance === null ? "..." : creditsLabel(balance)}
+                {balance === null ? "..." : formatCredits(balance)}
               </strong>
             </div>
             <button
@@ -219,7 +216,7 @@ export function SettingsScreen({
                     </div>
                     <div style={{ fontSize: 12, color: "var(--fg-muted)" }}>
                       {modality.label} · {historyLabel(job)} · {dateLabel(job.created_at)}
-                      {cost > 0 ? ` · ${creditsLabel(cost)}` : ""}
+                      {cost > 0 ? ` · ${formatCredits(cost)}` : ""}
                     </div>
                   </div>
                 </article>

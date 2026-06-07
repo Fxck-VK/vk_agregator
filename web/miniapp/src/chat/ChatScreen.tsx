@@ -132,6 +132,10 @@ function jobIdsFromChats(chats: Chat[]): Set<string> {
   return ids;
 }
 
+function isChatJob(job: Job): boolean {
+  return job.operation === CHAT_OPERATION;
+}
+
 function promptForBot(messages: ChatMessage[], index: number): string {
   for (let i = index - 1; i >= 0; i--) {
     const msg = messages[i];
@@ -454,21 +458,23 @@ export function ChatScreen({ user }: { user: VkUser }) {
     const operation = request?.operation ?? CHAT_OPERATION;
     const selectedModel = request?.modelId ?? CHAT_MODEL_ID;
     const isChat = request?.chat === true;
-    const chatId = ensureActive();
+    const chatId = isChat ? ensureActive() : "";
     const botId = "b-" + uid();
     const idempotencyKey = createIdempotencyKey();
-    setMessages(chatId, (prev) => [
-      ...prev,
-      { id: "u-" + uid(), role: "user", text },
-      {
-        id: botId,
-        role: "bot",
-        operation,
-        model: selectedModel,
-        pending: true,
-        status: "received",
-      },
-    ]);
+    if (isChat) {
+      setMessages(chatId, (prev) => [
+        ...prev,
+        { id: "u-" + uid(), role: "user", text },
+        {
+          id: botId,
+          role: "bot",
+          operation,
+          model: selectedModel,
+          pending: true,
+          status: "received",
+        },
+      ]);
+    }
     haptic("light");
     try {
       const job = isChat
@@ -512,11 +518,12 @@ export function ChatScreen({ user }: { user: VkUser }) {
         setJobs(sorted);
         const localJobIds = jobIdsFromChats(chats);
         const restored = sorted.filter((job) => !isTerminal(job.status) || localJobIds.has(job.id));
-        if (restored.length > 0) {
+        const restoredChatJobs = restored.filter(isChatJob);
+        if (restoredChatJobs.length > 0) {
           setChats((prev) =>
-            restored.reduceRight((next, job) => upsertJobChat(next, job), prev),
+            restoredChatJobs.reduceRight((next, job) => upsertJobChat(next, job), prev),
           );
-          setActiveId((cur) => cur ?? chatIdForJob(restored[0].id));
+          setActiveId((cur) => cur ?? chatIdForJob(restoredChatJobs[0].id));
         }
         for (const job of restored) {
           const target = pollTargetForJob(chats, job);
@@ -549,7 +556,7 @@ export function ChatScreen({ user }: { user: VkUser }) {
     const missingChats: Job[] = [];
     for (const job of pending) {
       const target = pollTargetForJob(chats, job);
-      if (target.missing) missingChats.push(job);
+      if (target.missing && isChatJob(job)) missingChats.push(job);
       startPoll(target.chatId, target.botMsgId, job.id);
     }
 
