@@ -255,8 +255,24 @@ func (h *Handler) estimateJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, opType, _, model, ok := h.readJobRequest(w, r)
+	req, opType, _, model, ok := h.readJobRequest(w, r)
 	if !ok {
+		return
+	}
+	if len(req.ReferenceArtifactIDs) > 0 {
+		user, err := h.deps.Users.GetByVKUserID(r.Context(), vkUserID)
+		if err != nil {
+			if errors.Is(err, domain.ErrNotFound) {
+				writeError(w, http.StatusNotFound, "not found")
+			} else {
+				writeError(w, http.StatusInternalServerError, "internal error")
+			}
+			return
+		}
+		if !h.validateReferenceArtifacts(w, r, user.ID, opType, req.ReferenceArtifactIDs) {
+			return
+		}
+		writeError(w, http.StatusBadRequest, "reference_artifacts_unsupported")
 		return
 	}
 
@@ -316,6 +332,13 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
+	if len(req.ReferenceArtifactIDs) > 0 {
+		if !h.validateReferenceArtifacts(w, r, user.ID, opType, req.ReferenceArtifactIDs) {
+			return
+		}
+		writeError(w, http.StatusBadRequest, "reference_artifacts_unsupported")
+		return
+	}
 
 	// Accept an optional client-supplied idempotency key. The key is scoped to
 	// the user so one user cannot replay another user's key.
@@ -327,21 +350,23 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 	correlationID := fmt.Sprintf("miniapp:%d:%s", vkUserID, clientKey)
 
 	params, _ := json.Marshal(miniAppJobParams{
-		Prompt:    req.Prompt,
-		ModelID:   model.ModelID,
-		ModelName: model.ModelName,
-		ModelCode: model.ModelCode,
+		Prompt:               req.Prompt,
+		ModelID:              model.ModelID,
+		ModelName:            model.ModelName,
+		ModelCode:            model.ModelCode,
+		ReferenceArtifactIDs: req.ReferenceArtifactIDs,
 	})
 
 	job, err := h.deps.Orchestrator.CreateJob(r.Context(), joborchestrator.CreateJobInput{
-		UserID:         user.ID,
-		VKPeerID:       vkUserID, // peer_id = user_id for direct messages
-		CommandID:      uuid.Nil, // no VK command for mini app path
-		Operation:      opType,
-		Modality:       modality,
-		IdempotencyKey: idemKey,
-		CorrelationID:  correlationID,
-		Params:         params,
+		UserID:           user.ID,
+		VKPeerID:         vkUserID, // peer_id = user_id for direct messages
+		CommandID:        uuid.Nil, // no VK command for mini app path
+		Operation:        opType,
+		Modality:         modality,
+		IdempotencyKey:   idemKey,
+		CorrelationID:    correlationID,
+		InputArtifactIDs: req.ReferenceArtifactIDs,
+		Params:           params,
 	})
 	switch {
 	case err == nil:

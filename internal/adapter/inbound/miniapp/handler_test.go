@@ -359,6 +359,28 @@ func pngBytes() []byte {
 	}
 }
 
+func createTestArtifact(t *testing.T, fixture *testFixture, ownerID uuid.UUID, kind domain.ArtifactKind, mediaType domain.MediaType, status domain.ArtifactStatus) *domain.Artifact {
+	t.Helper()
+	artifact := &domain.Artifact{
+		OwnerUserID:   ownerID,
+		Kind:          kind,
+		MediaType:     mediaType,
+		MimeType:      "image/png",
+		StorageBucket: "artifacts",
+		StorageKey:    "inputs/" + uuid.NewString() + ".png",
+		SHA256:        uuid.NewString(),
+		SizeBytes:     int64(len(pngBytes())),
+		Status:        status,
+	}
+	if mediaType != domain.MediaTypeImage {
+		artifact.MimeType = "text/plain"
+	}
+	if err := fixture.artifactRepo.Create(context.Background(), artifact); err != nil {
+		t.Fatalf("create artifact: %v", err)
+	}
+	return artifact
+}
+
 func TestHandler_CreateJob_OK(t *testing.T) {
 	routes := newTestHandler("").Routes()
 
@@ -1304,6 +1326,36 @@ func TestHandler_Estimate_ImageAliasUsesPublicModelOnly(t *testing.T) {
 	}
 }
 
+func TestHandler_Estimate_ReferenceArtifactsFailClosedAfterValidation(t *testing.T) {
+	fixture := newTestFixture("", nil)
+	routes := fixture.handler.Routes()
+	ctx := context.Background()
+	user := &domain.User{VKUserID: 777, Role: domain.RoleUser, Status: domain.StatusActive}
+	if err := fixture.userRepo.Create(ctx, user); err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	artifact := createTestArtifact(t, fixture, user.ID, domain.ArtifactKindInput, domain.MediaTypeImage, domain.ArtifactStatusReady)
+
+	body, _ := json.Marshal(map[string]any{
+		"operation":              "image_generate",
+		"prompt":                 "estimate with reference",
+		"model_id":               "nano_banana_pro",
+		"reference_artifact_ids": []string{artifact.ID.String()},
+	})
+	req := httptest.NewRequest(http.MethodPost, "/miniapp/estimate", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Launch-Params", devLaunchParams(777))
+
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "reference_artifacts_unsupported") {
+		t.Fatalf("expected reference unsupported error, got %s", w.Body.String())
+	}
+}
+
 func TestHandler_Estimate_UnauthorizedNoParams(t *testing.T) {
 	routes := newTestHandler("real-secret").Routes()
 
@@ -1576,6 +1628,184 @@ func TestHandler_CreateJob_ImageAliasPersistsProviderModelCodePrivately(t *testi
 	}
 	if params.ModelID != "nano_banana_pro" || params.ModelName != "Nano Banana Pro" || params.ModelCode != "ByteDance/Seedream-4.5" {
 		t.Fatalf("unexpected stored params: %+v", params)
+	}
+}
+
+func TestHandler_CreateJob_ReferenceArtifactsValidateOwnershipAndFailClosed(t *testing.T) {
+	fixture := newTestFixture("", nil)
+	routes := fixture.handler.Routes()
+	ctx := context.Background()
+	user := &domain.User{VKUserID: 777, Role: domain.RoleUser, Status: domain.StatusActive}
+	if err := fixture.userRepo.Create(ctx, user); err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	artifact := createTestArtifact(t, fixture, user.ID, domain.ArtifactKindInput, domain.MediaTypeImage, domain.ArtifactStatusReady)
+
+	body, _ := json.Marshal(map[string]any{
+		"operation":              "image_generate",
+		"prompt":                 "image with reference",
+		"model_id":               "nano_banana_pro",
+		"reference_artifact_ids": []string{artifact.ID.String()},
+	})
+	req := httptest.NewRequest(http.MethodPost, "/miniapp/jobs", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Launch-Params", devLaunchParams(777))
+	req.Header.Set("X-Idempotency-Key", "reference-fail-closed")
+
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "reference_artifacts_unsupported") {
+		t.Fatalf("expected reference unsupported error, got %s", w.Body.String())
+	}
+	jobs, err := fixture.jobRepo.ListByUser(ctx, user.ID, 10, 0)
+	if err != nil {
+		t.Fatalf("list jobs: %v", err)
+	}
+	if len(jobs) != 0 {
+		t.Fatalf("reference fail-closed must not create a billable job, got %d", len(jobs))
+	}
+}
+
+func TestHandler_CreateJob_ReferenceArtifactsRejectForeignAndNonImage(t *testing.T) {
+	fixture := newTestFixture("", nil)
+	routes := fixture.handler.Routes()
+	ctx := context.Background()
+	owner := &domain.User{VKUserID: 100, Role: domain.RoleUser, Status: domain.StatusActive}
+	requester := &domain.User{VKUserID: 777, Role: domain.RoleUser, Status: domain.StatusActive}
+	if err := fixture.userRepo.Create(ctx, owner); err != nil {
+		t.Fatalf("create owner: %v", err)
+	}
+	if err := fixture.userRepo.Create(ctx, requester); err != nil {
+		t.Fatalf("create requester: %v", err)
+	}
+	foreign := createTestArtifact(t, fixture, owner.ID, domain.ArtifactKindInput, domain.MediaTypeImage, domain.ArtifactStatusReady)
+	nonImage := createTestArtifact(t, fixture, requester.ID, domain.ArtifactKindInput, domain.MediaTypeText, domain.ArtifactStatusReady)
+
+	tests := []struct {
+		name     string
+		id       uuid.UUID
+		wantCode int
+	}{
+		{name: "foreign", id: foreign.ID, wantCode: http.StatusNotFound},
+		{name: "non-image", id: nonImage.ID, wantCode: http.StatusBadRequest},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			body, _ := json.Marshal(map[string]any{
+				"operation":              "image_generate",
+				"prompt":                 "image with reference",
+				"model_id":               "nano_banana_pro",
+				"reference_artifact_ids": []string{tc.id.String()},
+			})
+			req := httptest.NewRequest(http.MethodPost, "/miniapp/jobs", bytes.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("X-Launch-Params", devLaunchParams(777))
+			w := httptest.NewRecorder()
+			routes.ServeHTTP(w, req)
+			if w.Code != tc.wantCode {
+				t.Fatalf("expected %d, got %d: %s", tc.wantCode, w.Code, w.Body.String())
+			}
+		})
+	}
+}
+
+func TestHandler_CreateImageJobDoesNotCreateChatConversationMessages(t *testing.T) {
+	fixture := newTestFixture("", nil)
+	routes := fixture.handler.Routes()
+	ctx := context.Background()
+
+	body, _ := json.Marshal(map[string]string{
+		"operation": "image_generate",
+		"prompt":    "image only",
+		"model_id":  "nano_banana_pro",
+	})
+	createReq := httptest.NewRequest(http.MethodPost, "/miniapp/jobs", bytes.NewReader(body))
+	createReq.Header.Set("Content-Type", "application/json")
+	createReq.Header.Set("X-Launch-Params", devLaunchParams(777))
+	createReq.Header.Set("X-Idempotency-Key", "image-create-not-chat")
+	createW := httptest.NewRecorder()
+	routes.ServeHTTP(createW, createReq)
+	if createW.Code != http.StatusCreated {
+		t.Fatalf("create image expected 201, got %d: %s", createW.Code, createW.Body.String())
+	}
+	var createResp struct {
+		ID uuid.UUID `json:"id"`
+	}
+	if err := json.Unmarshal(createW.Body.Bytes(), &createResp); err != nil {
+		t.Fatalf("invalid create response: %v", err)
+	}
+	user, err := fixture.userRepo.GetByVKUserID(ctx, 777)
+	if err != nil {
+		t.Fatalf("get user: %v", err)
+	}
+	conversation := &domain.Conversation{
+		UserID:           user.ID,
+		Source:           domain.ConversationSourceMiniApp,
+		ExternalThreadID: "thread-a",
+		Title:            "Chat thread",
+	}
+	if err := fixture.conversationRepo.CreateConversation(ctx, conversation); err != nil {
+		t.Fatalf("create conversation: %v", err)
+	}
+	textJobID := uuid.New()
+	if _, err := fixture.conversationRepo.UpsertMessage(ctx, &domain.ConversationMessage{
+		ConversationID: conversation.ID,
+		JobID:          textJobID,
+		Role:           domain.ConversationRoleUser,
+		Text:           "chat prompt",
+		TokenCount:     2,
+	}); err != nil {
+		t.Fatalf("create message: %v", err)
+	}
+
+	msgReq := httptest.NewRequest(http.MethodGet, "/miniapp/chat/conversations/thread-a/messages", nil)
+	msgReq.Header.Set("X-Launch-Params", devLaunchParams(777))
+	msgW := httptest.NewRecorder()
+	routes.ServeHTTP(msgW, msgReq)
+	if msgW.Code != http.StatusOK {
+		t.Fatalf("messages expected 200, got %d: %s", msgW.Code, msgW.Body.String())
+	}
+	var msgResp struct {
+		Items []struct {
+			JobID uuid.UUID `json:"job_id"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(msgW.Body.Bytes(), &msgResp); err != nil {
+		t.Fatalf("invalid message response: %v", err)
+	}
+	for _, item := range msgResp.Items {
+		if item.JobID == createResp.ID {
+			t.Fatalf("image job leaked into chat messages: %+v", msgResp.Items)
+		}
+	}
+
+	jobsReq := httptest.NewRequest(http.MethodGet, "/miniapp/jobs", nil)
+	jobsReq.Header.Set("X-Launch-Params", devLaunchParams(777))
+	jobsW := httptest.NewRecorder()
+	routes.ServeHTTP(jobsW, jobsReq)
+	if jobsW.Code != http.StatusOK {
+		t.Fatalf("jobs expected 200, got %d: %s", jobsW.Code, jobsW.Body.String())
+	}
+	var jobsResp struct {
+		Items []struct {
+			ID        uuid.UUID `json:"id"`
+			Operation string    `json:"operation"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(jobsW.Body.Bytes(), &jobsResp); err != nil {
+		t.Fatalf("invalid jobs response: %v", err)
+	}
+	var foundImage bool
+	for _, item := range jobsResp.Items {
+		if item.ID == createResp.ID && item.Operation == "image_generate" {
+			foundImage = true
+		}
+	}
+	if !foundImage {
+		t.Fatalf("image job not listable through /miniapp/jobs: %+v", jobsResp.Items)
 	}
 }
 
