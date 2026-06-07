@@ -24,6 +24,19 @@ Redesign may change:
   composition in `web/miniapp/src/**`.
 - Visual representation of chat bubbles, create tab, settings tab, history
   lists, balances and status timelines.
+
+### Current tab surfaces (2026-06-07)
+
+- **Create** (`WorkflowMode.tsx`): Figma `CreateTab`-style single page on the
+  default tab panel — banner, two selectable model cards (`nano_banana_pro`,
+  `kling`), image reference dropzone, prompt composer with backend estimate
+  badge, quick-prompt chips. After submit the existing PR-10 Status → Result
+  flow opens; per-type History remains a separate screen.
+- **Profile / Settings** (`SettingsScreen.tsx`): banner hero (no overlapping
+  avatar), theme + balance cards, collapsible request-history panel (closed by
+  default), local-data clear action.
+- **Chat** (`ChatScreen.tsx`): unchanged shell; durable backend conversations,
+  header history drawer, composer for `text_generate` only.
 - Vite dev proxy rules that only route local development traffic to the local
   Go API.
 
@@ -55,6 +68,9 @@ Every request from `web/miniapp/src/api/client.ts` must send:
 
 - `X-Launch-Params` from the current VK launch URL, or dev launch params in
   local development.
+- `VKWebAppGetLaunchParams` must use a bridge timeout (same order of magnitude
+  as `useBridge`) and cache the resolved value (including empty) so F5/reload
+  cannot hang bootstrap on a never-resolving bridge promise.
 - `X-Idempotency-Key` on job/chat creation calls.
 
 Frontend must not send:
@@ -102,7 +118,9 @@ Do not persist:
   `dangerouslySetInnerHTML`.
 - Raw backend errors and stack traces must not be shown to users.
 - Artifact previews must use backend-owned `/miniapp/artifacts/{id}` URLs
-  derived from trusted job DTO artifact ids.
+  derived from trusted job DTO artifact ids. `<img>` / `<video>` cannot send
+  `X-Launch-Params`; use `artifactMediaUrl()` / `useArtifactMediaUrl` which
+  appends `launch_params` query (supported by BFF auth for GET artifacts).
 - Private artifact URLs must not be stored in localStorage.
 
 ## Polling and job state

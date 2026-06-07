@@ -1,5 +1,6 @@
-import { useMemo, useState } from "react";
-import { artifactUrl, statusKind, statusLabel } from "../api/client";
+import { useEffect, useState } from "react";
+import { statusKind, statusLabel } from "../api/client";
+import { useArtifactMediaUrl } from "../hooks/useArtifactMediaUrl";
 import type { ChatMessage } from "../chat/types";
 
 type ResultCardProps = {
@@ -7,6 +8,8 @@ type ResultCardProps = {
   prompt: string;
   authorName?: string;
   authorAvatar?: string | null;
+  /** undefined — грузим сами; string — готовый URL; null — предзагрузка не удалась */
+  mediaSrcOverride?: string | null;
   onRetry: () => void;
 };
 
@@ -25,17 +28,30 @@ function initials(name: string): string {
   return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase() || "НХ";
 }
 
-export function ResultCard({ msg, prompt, authorName = "НейроХаб", authorAvatar, onRetry }: ResultCardProps) {
+export function ResultCard({
+  msg,
+  prompt,
+  authorName = "НейроХаб",
+  authorAvatar,
+  mediaSrcOverride,
+  onRetry,
+}: ResultCardProps) {
   const [copied, setCopied] = useState(false);
   const [mediaFailed, setMediaFailed] = useState(false);
   const text = msg.text?.trim() ?? "";
-  const firstArtifactId = msg.artifactIds?.[0] ?? "";
-  const mediaSrc = useMemo(
-    () => (firstArtifactId ? artifactUrl(firstArtifactId) : null),
-    [firstArtifactId],
-  );
+  const firstArtifactId = msg.artifactIds?.[0];
+  const overrideProvided = mediaSrcOverride !== undefined;
+  const fetchedMediaSrc = useArtifactMediaUrl(overrideProvided ? undefined : firstArtifactId);
+  const mediaSrc = overrideProvided ? (mediaSrcOverride ?? undefined) : fetchedMediaSrc;
+  const preloadFailed = overrideProvided && mediaSrcOverride === null;
   const showResult = canShowResult(msg);
   const failed = !!msg.error || (!!msg.status && statusKind(msg.status) === "failed");
+  const mediaLoading =
+    showResult && Boolean(firstArtifactId) && !mediaSrc && !mediaFailed && !preloadFailed;
+
+  useEffect(() => {
+    setMediaFailed(false);
+  }, [firstArtifactId, mediaSrc]);
 
   async function copyText() {
     if (!text) return;
@@ -100,7 +116,13 @@ export function ResultCard({ msg, prompt, authorName = "НейроХаб", autho
           )}
 
           {msg.operation === "image_generate" && (
-            mediaSrc && !mediaFailed ? (
+            mediaLoading ? (
+              <div className="result-card__skeleton" aria-live="polite">
+                <span />
+                <span />
+                <span />
+              </div>
+            ) : mediaSrc && !mediaFailed ? (
               <img
                 className="vk-preview__media"
                 src={mediaSrc}
@@ -108,12 +130,22 @@ export function ResultCard({ msg, prompt, authorName = "НейроХаб", autho
                 onError={() => setMediaFailed(true)}
               />
             ) : (
-              <UnavailableResult label="Изображение недоступно." onRetry={onRetry} prompt={prompt} />
+              <UnavailableResult
+                label={preloadFailed ? "Не удалось загрузить изображение." : "Изображение недоступно."}
+                onRetry={onRetry}
+                prompt={prompt}
+              />
             )
           )}
 
           {msg.operation === "video_generate" && (
-            mediaSrc && !mediaFailed ? (
+            mediaLoading ? (
+              <div className="result-card__skeleton" aria-live="polite">
+                <span />
+                <span />
+                <span />
+              </div>
+            ) : mediaSrc && !mediaFailed ? (
               <video
                 className="vk-preview__media"
                 src={mediaSrc}
@@ -121,7 +153,11 @@ export function ResultCard({ msg, prompt, authorName = "НейроХаб", autho
                 onError={() => setMediaFailed(true)}
               />
             ) : (
-              <UnavailableResult label="Видео недоступно." onRetry={onRetry} prompt={prompt} />
+              <UnavailableResult
+                label={preloadFailed ? "Не удалось загрузить видео." : "Видео недоступно."}
+                onRetry={onRetry}
+                prompt={prompt}
+              />
             )
           )}
         </div>

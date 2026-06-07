@@ -60,67 +60,12 @@ function chatIdForJob(jobId: string): string {
   return "job-" + jobId;
 }
 
-function titleForJob(job: Job): string {
-  switch (job.operation) {
-    case "text_generate":
-      return "Текст · " + job.status;
-    case "image_generate":
-      return "Фото · " + job.status;
-    case "video_generate":
-      return "Видео · " + job.status;
-    default:
-      return "Генерация · " + job.status;
-  }
+function isScratchpadChatId(chatId: string): boolean {
+  return chatId.startsWith("job-");
 }
 
-function botMessageFromJob(job: Job): ChatMessage {
-  const terminal = isTerminal(job.status);
-  const failed = statusKind(job.status) === "failed";
-  return {
-    id: "b-" + job.id,
-    role: "bot",
-    jobId: job.id,
-    operation: job.operation,
-    status: job.status,
-    pending: !terminal,
-    error: failed ? errorLabel(job) : undefined,
-    artifactIds: terminal && !failed ? job.output_artifact_ids : undefined,
-    createdAt: job.created_at,
-  };
-}
-
-function jobToMessages(job: Job): ChatMessage[] {
-  const messages: ChatMessage[] = [];
-  if (job.prompt) {
-    messages.push({ id: "u-" + job.id, role: "user", text: job.prompt });
-  }
-  messages.push(botMessageFromJob(job));
-  return messages;
-}
-
-function upsertJobChat(chats: Chat[], job: Job): Chat[] {
-  const bot = botMessageFromJob(job);
-  let updated = false;
-  const next = chats.map((chat) => {
-    const index = chat.messages.findIndex((msg) => msg.jobId === job.id);
-    if (index === -1) return chat;
-    updated = true;
-    const messages = chat.messages.map((msg, i) =>
-      i === index ? { ...msg, ...bot, text: msg.text } : msg,
-    );
-    return { ...chat, title: titleForJob(job), messages, updatedAt: Date.now() };
-  });
-  if (updated) return next;
-  return [
-    {
-      id: chatIdForJob(job.id),
-      title: titleForJob(job),
-      createdAt: Date.parse(job.created_at) || Date.now(),
-      updatedAt: Date.parse(job.updated_at) || Date.now(),
-      messages: jobToMessages(job),
-    },
-    ...next,
-  ];
+function visibleChats(chats: Chat[]): Chat[] {
+  return chats.filter((chat) => !isScratchpadChatId(chat.id));
 }
 
 function jobIdsFromChats(chats: Chat[]): Set<string> {
@@ -131,10 +76,6 @@ function jobIdsFromChats(chats: Chat[]): Set<string> {
     }
   }
   return ids;
-}
-
-function isChatJob(job: Job): boolean {
-  return job.operation === CHAT_OPERATION;
 }
 
 function promptForBot(messages: ChatMessage[], index: number): string {
@@ -261,6 +202,7 @@ export function ChatScreen({ user }: { user: VkUser }) {
   const [activeTab, setActiveTab] = useState<AppTab>(() => loadAppTab());
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => loadThemeMode());
   const [jobs, setJobs] = useState<Job[]>([]);
+  const [workflowJobRequest, setWorkflowJobRequest] = useState<Job | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const mountedRef = useRef(true);
@@ -289,9 +231,7 @@ export function ChatScreen({ user }: { user: VkUser }) {
 
   const loadConversationMessages = useCallback(
     async (chatId: string) => {
-      if (!chatId || chatId.startsWith("job-")) return;
-      const localChat = chatsRef.current.find((chat) => chat.id === chatId);
-      if (localChat && localChat.messages.length === 0 && !localChat.preview) return;
+      if (!chatId || isScratchpadChatId(chatId)) return;
       setHistoryLoading(true);
       try {
         const history = await listChatConversationMessages(chatId);
@@ -323,8 +263,9 @@ export function ChatScreen({ user }: { user: VkUser }) {
     const backendChats = conversations.map(chatFromConversation);
     let nextChats: Chat[] = [];
     setChats((prev) => {
-      const merged = mergeBackendChats(prev, backendChats);
-      nextChats = merged.length > 0 ? merged : prev;
+      const withoutScratchpad = prev.filter((chat) => !isScratchpadChatId(chat.id));
+      const merged = mergeBackendChats(withoutScratchpad, backendChats);
+      nextChats = merged.length > 0 ? merged : withoutScratchpad;
       return nextChats;
     });
     setActiveId((cur) => {
@@ -338,6 +279,53 @@ export function ChatScreen({ user }: { user: VkUser }) {
     saveAppTab(nextTab);
     setDrawerOpen(false);
   }
+
+  const findChatIdForJob = useCallback(async (jobId: string): Promise<string | null> => {
+    for (const chat of chatsRef.current) {
+      if (chat.messages.some((msg) => msg.jobId === jobId)) {
+        return chat.id;
+      }
+    }
+    try {
+      const conversations = await listChatConversations();
+      for (const conversation of conversations) {
+        const chatId = conversation.id || "default";
+        const messages = await listChatConversationMessages(chatId);
+        if (messages.some((msg) => msg.job_id === jobId)) {
+          return chatId;
+        }
+      }
+    } catch {
+      return null;
+    }
+    return null;
+  }, []);
+
+  const clearWorkflowJobRequest = useCallback(() => setWorkflowJobRequest(null), []);
+
+  const handleHistoryJobClick = useCallback(
+    (job: Job) => {
+      if (job.operation === CHAT_OPERATION) {
+        void (async () => {
+          const chatId = await findChatIdForJob(job.id);
+          if (chatId) {
+            selectChat(chatId);
+            changeTab("chat");
+            void loadConversationMessages(chatId);
+            return;
+          }
+          changeTab("chat");
+        })();
+        return;
+      }
+      if (job.operation === "image_generate" || job.operation === "video_generate") {
+        const latest = jobs.find((item) => item.id === job.id) ?? job;
+        setWorkflowJobRequest(latest);
+        changeTab("create");
+      }
+    },
+    [findChatIdForJob, jobs, loadConversationMessages, selectChat],
+  );
 
   useEffect(() => watchThemeMode(themeMode), [themeMode]);
 
@@ -513,32 +501,33 @@ export function ChatScreen({ user }: { user: VkUser }) {
         error: apiUserMessage(e),
       });
       haptic("error");
+      if (!isChat) throw e;
       return null;
     }
   }
 
   // Первый запуск: баланс + восстановление активных и локально отмеченных задач.
   useEffect(() => {
+    let cancelled = false;
+
+    const finishLoading = () => {
+      if (!cancelled && mountedRef.current) setLoading(false);
+    };
+
     refreshBalance();
     void refreshConversations().catch(() => undefined);
-    if (seededRef.current) return;
-    seededRef.current = true;
-    listJobs()
+
+    if (!seededRef.current) {
+      seededRef.current = true;
+      listJobs()
       .then((jobs) => {
-        if (!mountedRef.current) return;
+        if (!mountedRef.current || cancelled) return;
         const sorted = [...jobs].sort((a, b) => b.created_at.localeCompare(a.created_at));
         setJobs(sorted);
-        const localJobIds = jobIdsFromChats(chats);
+        const localJobIds = jobIdsFromChats(chatsRef.current);
         const restored = sorted.filter((job) => !isTerminal(job.status) || localJobIds.has(job.id));
-        const restoredChatJobs = restored.filter(isChatJob);
-        if (restoredChatJobs.length > 0) {
-          setChats((prev) =>
-            restoredChatJobs.reduceRight((next, job) => upsertJobChat(next, job), prev),
-          );
-          setActiveId((cur) => cur ?? chatIdForJob(restoredChatJobs[0].id));
-        }
         for (const job of restored) {
-          const target = pollTargetForJob(chats, job);
+          const target = pollTargetForJob(chatsRef.current, job);
           if (!isTerminal(job.status)) {
             startPoll(target.chatId, target.botMsgId, job.id);
           } else if (statusKind(job.status) === "done" && job.operation === "text_generate") {
@@ -551,13 +540,27 @@ export function ChatScreen({ user }: { user: VkUser }) {
         }
       })
       .catch(() => undefined)
-      .finally(() => {
-        if (mountedRef.current) setLoading(false);
-      });
-  }, [refreshBalance, refreshConversations, setChats, setActiveId, startPoll, patchInChat]);
+      .finally(finishLoading);
+    } else {
+      finishLoading();
+    }
+
+    return () => {
+      cancelled = true;
+      seededRef.current = false;
+    };
+    // Bootstrap once per mount; callback identities must not retrigger init.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
-    if (activeTab !== "chat" || !activeId) return;
+    if (!activeId || !isScratchpadChatId(activeId)) return;
+    const first = visibleChats(chats)[0];
+    if (first) setActiveId(first.id);
+  }, [activeId, chats, setActiveId]);
+
+  useEffect(() => {
+    if (activeTab !== "chat" || !activeId || isScratchpadChatId(activeId)) return;
     void loadConversationMessages(activeId);
   }, [activeTab, activeId, loadConversationMessages]);
 
@@ -565,24 +568,25 @@ export function ChatScreen({ user }: { user: VkUser }) {
     const pending = jobs.filter((job) => !isTerminal(job.status));
     if (pending.length === 0) return;
 
-    const missingChats: Job[] = [];
     for (const job of pending) {
       const target = pollTargetForJob(chats, job);
-      if (target.missing && isChatJob(job)) missingChats.push(job);
       startPoll(target.chatId, target.botMsgId, job.id);
     }
+  }, [jobs, chats, startPoll]);
 
-    if (missingChats.length > 0) {
-      setChats((prev) =>
-        missingChats.reduceRight((next, job) => upsertJobChat(next, job), prev),
-      );
-    }
-  }, [jobs, chats, setChats, startPoll]);
-
+  const lastScrollChatIdRef = useRef<string | null>(null);
   useEffect(() => {
     const el = scrollRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [activeChat?.messages]);
+    if (!el || !activeId) return;
+    if (lastScrollChatIdRef.current !== activeId) {
+      lastScrollChatIdRef.current = activeId;
+      if ((activeChat?.messages.length ?? 0) > 0) {
+        el.scrollTop = el.scrollHeight;
+      }
+      return;
+    }
+    el.scrollTop = el.scrollHeight;
+  }, [activeChat?.messages, activeId]);
 
   const messages = activeChat?.messages ?? [];
   const empty =
@@ -596,7 +600,7 @@ export function ChatScreen({ user }: { user: VkUser }) {
     <Panel id="miniapp-root-panel" className="chat-panel" mode="plain">
       <div className="chat">
       <ChatList
-        chats={chats}
+        chats={visibleChats(chats)}
         activeId={activeId}
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
@@ -652,9 +656,15 @@ export function ChatScreen({ user }: { user: VkUser }) {
 
       <section className={"app-tab-panel" + (activeTab === "chat" ? " is-active" : "")} aria-hidden={activeTab !== "chat"}>
           <div className="chat__scroll" ref={scrollRef}>
-            {(loading || (historyLoading && messages.length === 0 && Boolean(activeChat?.preview))) && (
+            {loading && (
               <div className="splash">
                 <Spinner />
+              </div>
+            )}
+            {!loading && historyLoading && messages.length === 0 && (
+              <div className="chat-inline-loader" aria-live="polite">
+                <Spinner size={18} />
+                <span>Загружаем диалог…</span>
               </div>
             )}
             {empty && (
@@ -698,6 +708,8 @@ export function ChatScreen({ user }: { user: VkUser }) {
           chats={chats}
           loading={loading}
           submitting={submitting}
+          openJobRequest={workflowJobRequest}
+          onOpenJobRequestHandled={clearWorkflowJobRequest}
           onCreateJob={submitJob}
         />
       </section>
@@ -711,6 +723,7 @@ export function ChatScreen({ user }: { user: VkUser }) {
           onThemeModeChange={setThemeMode}
           onClearLocalHistory={clearChats}
           onRefreshBalance={refreshBalance}
+          onHistoryJobClick={handleHistoryJobClick}
         />
       </section>
 

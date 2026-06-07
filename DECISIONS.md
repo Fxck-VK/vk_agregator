@@ -453,6 +453,19 @@ backend-owned pricing, billing, job status and artifact access. Polling remains
 owned by `ChatScreen`; switching type, tab or thread does not create a second
 poller or clear in-flight jobs.
 
+### Amendment (2026-06-07) — Figma `CreateTab` single-page layout
+
+Status: accepted
+
+The two-step `home cards -> generate form` flow from PR-16.3.1 is replaced by a
+single Create surface aligned with Figma Make `CreateTab.tsx`: banner, two
+selectable model cards (`Nano Banana Pro` / `Kling`), image reference dropzone,
+inline prompt composer with backend estimate price badge and send control, plus
+quick-prompt chips. PR-10 Status → Result → per-type History screens remain.
+Settings/Profile uses banner-only hero and collapsible request history (closed
+by default). Non-chat `createJob` API errors propagate to the Create composer.
+Backend contracts and submit gating are unchanged.
+
 ---
 
 ## ADR-014 - Mini App Settings, theme and brand palette

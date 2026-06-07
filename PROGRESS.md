@@ -1995,3 +1995,81 @@ Status: **completed**.
 - `go build ./...` - exit 0.
 - `go test ./...` - exit 0.
 - `npm --prefix web/miniapp run build` - exit 0.
+
+---
+
+## Mini App Figma Create/Profile alignment (2026-06-07)
+
+Status: **completed (frontend-only)**.
+
+### What changed
+
+- **Create tab** (`WorkflowMode.tsx`, `theme.css`): replaced the two-step
+  `home -> generate` flow with a single Figma `CreateTab`-style surface on the
+  default tab panel. The page now shows banner, selectable model cards
+  (`Nano Banana Pro` / `Kling`), reference dropzone (image only), inline prompt
+  composer with backend estimate price badge and send button, plus quick-prompt
+  chips. Status / Result / per-type History screens from PR-10 are preserved.
+- **Profile tab** (`SettingsScreen.tsx`): hero uses `neurohub-banner.png`
+  only; overlapping avatar removed. Request history is a collapsible section
+  (closed by default) with filter pills and rows inside the dropdown panel.
+- **Create submit errors** (`ChatScreen.tsx`): non-chat `createJob` failures now
+  rethrow to `WorkflowMode`, so auth/credits/validation errors surface under the
+  composer instead of a generic message.
+
+### Unchanged / preserved
+
+- BFF contracts, launch-param auth, billing/estimate ownership and worker/provider
+  path.
+- Create still uses `POST /miniapp/estimate` debounce and
+  `enough_credits=true` submit gating; prompt remains required by backend.
+- Tab order and polling owner remain in `ChatScreen`; switching tabs does not
+  stop in-flight create jobs.
+
+### Checks
+
+- `npm run build` in `web/miniapp` - exit 0.
+- Dev stack restarted via `start-miniapp-ngrok.ps1 -NoWait` (API `:8080`, worker
+  `:9090`, Vite `:5173`, localhost.run tunnel).
+
+---
+
+## Mini App Create image preview + reload fixes (2026-06-07)
+
+Status: **completed**.
+
+### Symptoms
+
+- Image jobs reached `succeeded`, but Create result showed **«Изображение
+  недоступно»**.
+- After F5 the Mini App could hang on an infinite splash / loading state.
+- Status screen jumped to result while the image still loaded in the background.
+
+### Root causes
+
+1. **Artifact preview auth:** `<img src="/miniapp/artifacts/{id}">` cannot send
+   `X-Launch-Params`. BFF returned `401` (`missing sign parameter` in API logs).
+2. **F5 bootstrap hang:** `launchParams()` called `VKWebAppGetLaunchParams`
+   without a timeout and did not cache an empty fallback, so `listJobs()` could
+   wait forever and `ChatScreen` `loading` never cleared.
+3. **Result UX:** workflow auto-opened the result card before the authenticated
+   media URL/blob was ready.
+
+### Fixes
+
+- `artifactMediaUrl()` + `useArtifactMediaUrl` append `launch_params` query for
+  media tags; `preloadArtifactBlobUrl()` prefetches bytes before opening result.
+- `launchParams()` bridge timeout (1.2s dev / 3s prod) + cache empty string;
+  `ChatScreen` bootstrap runs once per mount and always clears `loading`.
+- `WorkflowMode` stays on status with **«Готовим превью»** until preload
+  completes; `ResultCard` shows skeleton while media loads.
+- **Pricing sync:** `PRICES=text_generate=1,image_generate=0,video_generate=50`
+  in `.env`, `.env.ps1`, `.env.example` (same as VK bot free photo quota);
+  `formatCredits(0)` → `Бесплатно` in Mini App UI.
+
+### Checks
+
+- `npm run build` in `web/miniapp` - exit 0.
+- Manual smoke: image generate in VK Mini App shows cat/result; F5 reload opens
+  app; Create price badge shows **Бесплатно** for photo when `PRICES` override
+  is active (API restart required after env change).

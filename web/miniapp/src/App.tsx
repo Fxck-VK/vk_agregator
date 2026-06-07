@@ -6,7 +6,7 @@ import { Spinner } from "./ui/ui";
 export default function App() {
   const { ready, user } = useBridge();
 
-  if (!ready || !user) {
+  if (!ready) {
     return (
       <div className="splash">
         <Spinner size={26} />
@@ -14,5 +14,5 @@ export default function App() {
     );
   }
 
-  return <ChatScreen user={user} />;
+  return <ChatScreen user={user ?? { firstName: "Пользователь", name: "Пользователь", avatar: null }} />;
 }

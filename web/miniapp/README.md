@@ -57,22 +57,20 @@ page that blocks the iframe.
 **One command (Windows, recommended):**
 
 ```powershell
-# From repo root. Starts API + worker + Vite and prints the public URL.
-powershell -ExecutionPolicy Bypass -File .\start-miniapp-ngrok.ps1 -NoWait
+# From repo root. Starts Docker deps, API + worker + Vite and prints the public URL.
+.\scripts\dev\start-miniapp.ps1 -NoWait
+.\scripts\dev\status-miniapp.ps1
+.\scripts\dev\stop-miniapp.ps1
 ```
 
-The script name still says `ngrok`, but the tunnel is **`localhost.run` via SSH**.
+Backward-compatible wrapper: `.\start-miniapp-ngrok.ps1 -NoWait` / `-StopOnly`.
+
+Tunnel is **`localhost.run` via SSH** (`https://*.lhr.life`), not ngrok.
 Requirements: `go`, `npm`, `ssh` (OpenSSH client), `.env` with `DEEPINFRA_API_KEY`
-and database/redis settings.
+and database/redis settings. Runtime logs: `.runtime/vk-miniapp/`.
 
 Paste the printed `https://....lhr.life` URL into **dev.vk.com → your app →
 Версия для vk.com → "URL для разработки"**, save, then open the app from VK.
-
-**Stop everything started by the script:**
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\start-miniapp-ngrok.ps1 -StopOnly
-```
 
 **Manual stack (if you prefer separate terminals):**
 

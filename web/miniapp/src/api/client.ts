@@ -188,6 +188,23 @@ function stringifyBridgeLaunchParams(value: unknown): string {
 
 let launchParamsCache: string | undefined;
 
+function bridgeCallTimeoutMs(): number {
+  return import.meta.env.DEV ? 1200 : 3000;
+}
+
+async function bridgeLaunchParamsFromBridge(): Promise<unknown> {
+  const timeoutMs = bridgeCallTimeoutMs();
+  let timer: number | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = window.setTimeout(() => reject(new Error("vk bridge timeout")), timeoutMs);
+  });
+  try {
+    return await Promise.race([bridge.send("VKWebAppGetLaunchParams"), timeout]);
+  } finally {
+    if (timer !== undefined) window.clearTimeout(timer);
+  }
+}
+
 async function launchParams(): Promise<string> {
   if (launchParamsCache !== undefined) return launchParamsCache;
 
@@ -198,13 +215,13 @@ async function launchParams(): Promise<string> {
   }
 
   try {
-    const fromBridge = stringifyBridgeLaunchParams(await bridge.send("VKWebAppGetLaunchParams"));
+    const fromBridge = stringifyBridgeLaunchParams(await bridgeLaunchParamsFromBridge());
     if (fromBridge) {
       launchParamsCache = fromBridge;
       return fromBridge;
     }
   } catch {
-    /* outside VK or bridge unavailable */
+    /* outside VK, bridge unavailable or timed out */
   }
 
   const fromDevEnv = import.meta.env.DEV ? import.meta.env.VITE_DEV_LAUNCH_PARAMS : "";
@@ -212,6 +229,8 @@ async function launchParams(): Promise<string> {
     launchParamsCache = fromDevEnv;
     return fromDevEnv;
   }
+
+  launchParamsCache = "";
   return "";
 }
 
@@ -452,6 +471,32 @@ export function artifactUrl(id: string): string | null {
   return `/miniapp/artifacts/${id}`;
 }
 
+/**
+ * Artifact URL safe for <img>/<video> src: appends launch_params query because
+ * media elements cannot send X-Launch-Params. Backend auth accepts this query.
+ */
+export async function artifactMediaUrl(id: string): Promise<string | null> {
+  const base = artifactUrl(id);
+  if (!base) return null;
+  const rawLaunchParams = await launchParams();
+  if (!rawLaunchParams) return base;
+  return `${base}?launch_params=${encodeURIComponent(rawLaunchParams)}`;
+}
+
+/** Fetch artifact bytes and return a blob URL for instant preview on the result screen. */
+export async function preloadArtifactBlobUrl(id: string): Promise<string | null> {
+  const url = await artifactMediaUrl(id);
+  if (!url) return null;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    return URL.createObjectURL(blob);
+  } catch {
+    return null;
+  }
+}
+
 /** Text artifact body (when GET /miniapp/artifacts/{id} is available). */
 export async function fetchArtifactText(id: string): Promise<string | null> {
   const url = artifactUrl(id);
@@ -496,9 +541,11 @@ const STATUS_LABELS: Record<string, string> = {
   postprocessing: "Постобработка",
   result_ready: "Почти готово",
   delivering: "Доставка",
+  succeeded: "Готово",
 };
 
 export function statusLabel(s: string): string {
+  if (statusKind(s) === "done") return STATUS_LABELS.succeeded;
   return STATUS_LABELS[s] ?? "Обработка…";
 }
 

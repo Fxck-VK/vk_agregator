@@ -262,16 +262,19 @@ the VK Mini App frontend. Runtime pid/log/url files are written under
 
 ### VK Mini App local dev (HTTPS via `*.lhr.life`)
 
-For opening the Mini App inside VK during UI work, use the dev launcher
-(tunnel = `localhost.run`, not ngrok):
+For opening the Mini App inside VK during UI work, use the Mini App dev scripts
+(Vite on `:5173`, tunnel = `localhost.run` / `*.lhr.life`, not ngrok):
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\start-miniapp-ngrok.ps1 -NoWait
+.\scripts\dev\start-miniapp.ps1 -NoWait
+.\scripts\dev\status-miniapp.ps1
+.\scripts\dev\stop-miniapp.ps1
 ```
 
+The root `start-miniapp-ngrok.ps1` wrapper remains for backward compatibility.
 Paste the printed `https://....lhr.life` URL into **dev.vk.com → URL для
-разработки**. Stop with `-StopOnly`. Details: `web/miniapp/README.md` and
-`RUNBOOK.md`.
+разработки**. Runtime pid/log/url files live under `.runtime/vk-miniapp/`.
+Details: `web/miniapp/README.md` and `RUNBOOK.md`.
 
 For a stable local VK Callback URL, configure a named Cloudflare Tunnel once:
 

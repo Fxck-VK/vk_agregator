@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Button } from "@vkontakte/vkui";
 import { statusKind, statusLabel, type Job } from "../api/client";
 import { modalityByOperation, type ModalityId } from "../chat/types";
-import neuroHubAvatar from "../assets/neurohub-avatar.png";
+import neuroHubBanner from "../assets/neurohub-banner.png";
 import { formatCredits } from "../ui/credits";
 import type { ThemeMode } from "./theme";
 
@@ -14,6 +14,7 @@ type SettingsScreenProps = {
   onThemeModeChange: (mode: ThemeMode) => void;
   onClearLocalHistory: () => void;
   onRefreshBalance: () => void;
+  onHistoryJobClick: (job: Job) => void;
 };
 
 type HistoryFilter = "all" | ModalityId | "chat";
@@ -64,8 +65,10 @@ export function SettingsScreen({
   onThemeModeChange,
   onClearLocalHistory,
   onRefreshBalance,
+  onHistoryJobClick,
 }: SettingsScreenProps) {
   const [historyFilter, setHistoryFilter] = useState<HistoryFilter>("all");
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [topUpNotice, setTopUpNotice] = useState("");
   const [spinning, setSpinning] = useState(false);
   const sortedJobs = useMemo(
@@ -87,15 +90,12 @@ export function SettingsScreen({
 
   return (
     <main className="settings-screen nh-scroll">
-      <div className="nh-hero nh-hero--profile" aria-hidden="true">
-        <img className="nh-hero__img" src={neuroHubAvatar} alt="" />
+      <div className="nh-hero nh-hero--profile nh-hero--banner-only" aria-hidden="true">
+        <img className="nh-hero__img" src={neuroHubBanner} alt="" />
         <div className="nh-hero__fade" />
-        <div className="nh-hero__avatar">
-          <img src={neuroHubAvatar} alt="" />
-        </div>
       </div>
 
-      <div className="settings-hero-copy">
+      <div className="settings-hero-copy settings-hero-copy--banner">
         <h1 className="nh-page-title">НейроХаб</h1>
         <p className="nh-page-sub">инструменты для нового поколения</p>
       </div>
@@ -128,7 +128,16 @@ export function SettingsScreen({
               <p style={{ margin: "0 0 4px", fontSize: "12px", color: "var(--fg-muted)" }}>
                 Текущий баланс
               </p>
-              <strong style={{ fontSize: "30px", fontWeight: 800, background: "var(--gradient-brand)", WebkitBackgroundClip: "text", backgroundClip: "text", WebkitTextFillColor: "transparent" }}>
+              <strong
+                style={{
+                  fontSize: "30px",
+                  fontWeight: 800,
+                  background: "var(--gradient-brand)",
+                  WebkitBackgroundClip: "text",
+                  backgroundClip: "text",
+                  WebkitTextFillColor: "transparent",
+                }}
+              >
                 {balance === null ? "..." : formatCredits(balance)}
               </strong>
             </div>
@@ -146,7 +155,13 @@ export function SettingsScreen({
                 className={spinning ? "nh-spin" : ""}
                 aria-hidden="true"
               >
-                <path d="M3 12a9 9 0 1 0 3-6.7M3 3v6h6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                <path
+                  d="M3 12a9 9 0 1 0 3-6.7M3 3v6h6"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
               </svg>
             </button>
           </div>
@@ -166,64 +181,119 @@ export function SettingsScreen({
         {topUpNotice && <p className="settings-notice">{topUpNotice}</p>}
       </section>
 
-      <section className="settings-card" aria-labelledby="settings-history-title">
-        <h2 id="settings-history-title" style={{ margin: "0 0 14px", fontSize: "15px" }}>
-          История запросов
-        </h2>
-        <div className="settings-filter-pills" role="group" aria-label="Фильтр истории">
-          {FILTER_OPTIONS.map((option) => (
-            <button
-              key={option.id}
-              type="button"
-              className={"settings-filter-pill" + (historyFilter === option.id ? " is-active" : "")}
-              onClick={() => setHistoryFilter(option.id)}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
-        {loading ? (
-          <div className="settings-empty">Загружаем историю генераций</div>
-        ) : visibleJobs.length === 0 ? (
-          <div className="settings-empty">Нет записей</div>
-        ) : (
-          <div className="settings-history-list" style={{ padding: 0 }}>
-            {visibleJobs.slice(0, 30).map((job) => {
-              const modality = modalityByOperation(job.operation);
-              const color = typeColor(job.operation);
-              const cost = job.cost_captured > 0 ? job.cost_captured : job.cost_estimate;
-              return (
-                <article key={job.id} className="settings-history-row">
-                  <div
-                    style={{
-                      width: 36,
-                      height: 36,
-                      borderRadius: 10,
-                      background: `${color}18`,
-                      border: `1px solid ${color}35`,
-                      display: "grid",
-                      placeItems: "center",
-                      color,
-                      flexShrink: 0,
-                    }}
-                    aria-hidden="true"
-                  >
-                    <span style={{ fontSize: 11, fontWeight: 800 }}>{modality.label[0]}</span>
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 14, fontWeight: 600 }}>
-                      {job.prompt?.slice(0, 48) || modality.label}
-                    </div>
-                    <div style={{ fontSize: 12, color: "var(--fg-muted)" }}>
-                      {modality.label} · {historyLabel(job)} · {dateLabel(job.created_at)}
-                      {cost > 0 ? ` · ${formatCredits(cost)}` : ""}
-                    </div>
-                  </div>
-                </article>
-              );
-            })}
+      <section className="settings-card settings-history-card" aria-labelledby="settings-history-title">
+        <button
+          type="button"
+          className={"settings-history-toggle" + (historyOpen ? " is-open" : "")}
+          aria-expanded={historyOpen}
+          aria-controls="settings-history-panel"
+          onClick={() => setHistoryOpen((open) => !open)}
+        >
+          <span className="settings-history-toggle__main">
+            <span id="settings-history-title" className="settings-history-toggle__title">
+              История запросов
+            </span>
+            <span className="settings-history-toggle__count">
+              {loading ? "..." : `${visibleJobs.length} записей`}
+            </span>
+          </span>
+          <svg
+            className="settings-history-toggle__chevron"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            aria-hidden="true"
+          >
+            <path
+              d="m6 9 6 6 6-6"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </button>
+
+        <div
+          id="settings-history-panel"
+          className={"settings-history-panel" + (historyOpen ? " is-open" : "")}
+          hidden={!historyOpen}
+        >
+          <div className="settings-filter-pills" role="group" aria-label="Фильтр истории">
+            {FILTER_OPTIONS.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                className={"settings-filter-pill" + (historyFilter === option.id ? " is-active" : "")}
+                onClick={() => setHistoryFilter(option.id)}
+              >
+                {option.label}
+              </button>
+            ))}
           </div>
-        )}
+          {loading ? (
+            <div className="settings-empty">Загружаем историю генераций</div>
+          ) : visibleJobs.length === 0 ? (
+            <div className="settings-empty">Нет записей</div>
+          ) : (
+            <div className="settings-history-list">
+              {visibleJobs.slice(0, 30).map((job) => {
+                const modality = modalityByOperation(job.operation);
+                const color = typeColor(job.operation);
+                const cost = job.cost_captured > 0 ? job.cost_captured : job.cost_estimate;
+                const canOpen =
+                  job.operation === "text_generate" ||
+                  job.operation === "image_generate" ||
+                  job.operation === "video_generate";
+                return (
+                  <button
+                    key={job.id}
+                    type="button"
+                    className="settings-history-row"
+                    disabled={!canOpen}
+                    onClick={() => onHistoryJobClick(job)}
+                  >
+                    <div
+                      style={{
+                        width: 36,
+                        height: 36,
+                        borderRadius: 10,
+                        background: `${color}18`,
+                        border: `1px solid ${color}35`,
+                        display: "grid",
+                        placeItems: "center",
+                        color,
+                        flexShrink: 0,
+                      }}
+                      aria-hidden="true"
+                    >
+                      <span style={{ fontSize: 11, fontWeight: 800 }}>{modality.label[0]}</span>
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 600 }}>
+                        {job.prompt?.slice(0, 48) || modality.label}
+                      </div>
+                      <div style={{ fontSize: 12, color: "var(--fg-muted)" }}>
+                        {modality.label} · {historyLabel(job)} · {dateLabel(job.created_at)}
+                        {cost > 0 ? ` · ${formatCredits(cost)}` : ""}
+                      </div>
+                    </div>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path
+                        d="m9 6 6 6-6 6"
+                        stroke="var(--fg-muted)"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </section>
 
       <section className="settings-card" aria-labelledby="settings-privacy-title">

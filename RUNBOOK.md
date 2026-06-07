@@ -859,17 +859,16 @@ VK iframe cannot pass (Network shows `error.js` instead of `main.tsx`).
 **One command (Windows):**
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\start-miniapp-ngrok.ps1 -NoWait
+.\scripts\dev\start-miniapp.ps1 -NoWait
+.\scripts\dev\status-miniapp.ps1
+.\scripts\dev\stop-miniapp.ps1
 ```
 
-Starts API + worker + Vite, opens an SSH tunnel to `localhost.run`, prints the
-public URL. Logs: `%TEMP%\vkagg-miniapp-ngrok\`.
+Backward-compatible wrapper: `.\start-miniapp-ngrok.ps1 -NoWait` / `-StopOnly`.
 
-Stop:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\start-miniapp-ngrok.ps1 -StopOnly
-```
+Starts Docker deps (unless `-SkipDocker`), applies migrations (unless
+`-SkipMigrate`), API + worker + Vite, SSH tunnel to `localhost.run`
+(`https://*.lhr.life`). Logs and pid files: `.runtime/vk-miniapp/`.
 
 **Manual tunnel** (API, worker and `npm run dev` already running):
 

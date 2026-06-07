@@ -1,6 +1,7 @@
 ﻿// src/chat/MessageBubble.tsx
 import { Avatar, TypingDots } from "../ui/ui";
-import { artifactUrl, statusLabel } from "../api/client";
+import { statusLabel } from "../api/client";
+import { useArtifactMediaUrl } from "../hooks/useArtifactMediaUrl";
 import type { ChatMessage } from "./types";
 import neuroHubAvatar from "../assets/neurohub-avatar.png";
 
@@ -10,20 +11,20 @@ function initials(name: string): string {
 }
 
 function BotContent({ msg }: { msg: ChatMessage }) {
+  const mediaId = msg.artifactIds?.[0];
+  const mediaSrc = useArtifactMediaUrl(mediaId);
+
   if (msg.error) return <span className="bubble__err">{msg.error}</span>;
   if (msg.pending) return <TypingDots />;
 
-  const ids = msg.artifactIds ?? [];
-  if (msg.operation === "image_generate" && ids.length > 0) {
-    const src = artifactUrl(ids[0]);
-    if (src) return <img className="bubble__media" src={src} alt="" />;
+  if (msg.operation === "image_generate" && mediaSrc) {
+    return <img className="bubble__media" src={mediaSrc} alt="" />;
   }
-  if (msg.operation === "video_generate" && ids.length > 0) {
-    const src = artifactUrl(ids[0]);
-    if (src) return <video className="bubble__media" src={src} controls />;
+  if (msg.operation === "video_generate" && mediaSrc) {
+    return <video className="bubble__media" src={mediaSrc} controls />;
   }
   if (msg.text) return <span>{msg.text}</span>;
-  if (ids.length > 0) return <span>Готово. Результат во вложении.</span>;
+  if (mediaId) return <span>Готово. Результат во вложении.</span>;
   return <span>Готово</span>;
 }
 
