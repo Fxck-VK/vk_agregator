@@ -511,14 +511,19 @@ allows 100 text-to-image attempts per user per 24h window through
 attempts free jobs without reservations. `Фото с референсом` remains disabled
 until incoming photo artifacts are wired.
 
-Text dialog memory is built in `cmd/worker`, not in the VK webhook. For VK
-`text.ask` jobs with `vk_peer_id`, the worker writes the user prompt and
-assistant answer to Postgres (`conversations`, `conversation_messages`,
-`conversation_summaries`), then renders a bounded provider prompt from bot
-profile, rolling summary, recent messages and the current request. The system
-prompt that says the assistant is NeuroHub remains inside provider adapters and
-stays above dialog history. Summary compaction is local/extractive in this
-beta; no extra billable provider call is made just to summarize old turns.
+Text dialog memory is built in `cmd/worker`, not in the VK webhook or Mini App
+BFF. VK bot `text.ask` jobs use `source=vk_bot` scoped by backend user and
+`vk_peer_id`; Mini App chat jobs use `source=miniapp` scoped by backend user and
+opaque `conversation_id` / `external_thread_id`. The worker writes the user
+prompt and assistant answer to Postgres (`conversations`,
+`conversation_messages`, `conversation_summaries`), then renders a bounded
+provider prompt from bot profile, rolling summary, recent messages and the
+current request. The system prompt that says the assistant is NeuroHub remains
+inside provider adapters and stays above dialog history. Summary compaction is
+local/extractive in this beta; no extra billable provider call is made just to
+summarize old turns. Mini App list/history reads are served through
+authenticated `/miniapp/chat/conversations` endpoints and local storage is only
+active thread/tab/theme UI state.
 
 Inline menu navigation is hybrid: while the last bot message is still the
 active menu, inline button clicks edit that message through VK `messages.edit`
@@ -623,10 +628,19 @@ Use this checklist after changing app-surface wiring or shared backend core:
   `/miniapp/jobs` with valid dev launch params or real VK launch params; auth
   and rate limiting remain enforced, and estimate does not create a job,
   reserve credits or write ledger entries.
+- Mini App chat entrance: call `POST /miniapp/chat/messages`, then
+  `GET /miniapp/chat/conversations` and
+  `GET /miniapp/chat/conversations/{id}/messages`; all requests require valid
+  launch params, are scoped to the verified owner, and expose only product-level
+  conversation DTOs.
 - Job completion path: a queued job reaches a terminal state through
   `cmd/worker`; output artifact ownership is checked by
   `GET /miniapp/artifacts/{id}` and billing capture/release/refund is ledger
   backed.
+- Frontend storage check: Mini App `localStorage` may contain only active
+  thread/tab/theme UI keys. It must not contain prompt bodies, generated
+  answers, job ids, artifact ids/URLs, launch params, tokens, balance or
+  provider details.
 - Public model naming remains product-safe: user-visible Mini App/VK chat copy
   says `ChatGPT` where applicable and does not reveal DeepInfra/DeepSeek/
   Seedream model ids.
@@ -797,6 +811,15 @@ in-memory token bucket; exceeded limits return `429` with `Retry-After`.
 Artifact bytes from `GET /miniapp/artifacts/{id}` are served only for the
 verified owner after the producing job is `succeeded` and output moderation has
 allowed the artifact; otherwise the BFF returns `404`.
+
+Mini App chat uses the same durable conversation core as the VK bot, but with
+Mini App-specific identity. `POST /miniapp/chat/messages` creates a text job
+with `conversation_source=miniapp` and opaque `external_thread_id`; the worker
+creates/loads the durable backend conversation and stores turns in Postgres.
+`GET /miniapp/chat/conversations` lists the verified user's Mini App threads,
+and `GET /miniapp/chat/conversations/{id}/messages` reads that owner's message
+history. These endpoints are BFF reads only: they do not call providers, mutate
+billing or expose raw provider/model ids.
 
 ### Local development without real VK
 

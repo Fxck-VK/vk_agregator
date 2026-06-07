@@ -135,7 +135,7 @@
 - [x] Production fail-closed при пустом `VK_APP_SECRET`.
 - [x] Ownership: задачи доступны только своему `vk_user_id`.
 - [x] Фронт `web/miniapp` (React + VK Bridge, без VKUI): чат-интерфейс (`chat/`), ч/б `theme.css`, слои api/hooks/ui/chat; `X-Launch-Params` из URL; поллинг задач ≥2с с лимитом; медиа только через `artifactUrl` (UUID).
-- [x] История чатов Mini App: `localStorage` ключ `vk_miniapp_chats_v1`, шторка `ChatList`, `useChats`, заголовок активного чата и «Новый чат».
+- [x] История чатов Mini App: backend conversation list/history endpoints are the source of truth; frontend stores only the active thread id in `vk_miniapp_active_thread_v1` and removes legacy local chat/thread caches.
 - [x] Выбор модальности и модели: сегмент `Текст/Фото/Видео` и dropdown модели в `Composer`, связка с `operation` для `/miniapp/jobs`.
 - [x] Графитовая тема Mini App: тёмная палитра `#1A1A1D`, стили `segment`, `model-select`, `drawer`.
 - [x] Composer textarea: скрыт нативный scrollbar при сохранении внутренней прокрутки.
@@ -151,7 +151,7 @@
 - [x] Mini App PR-10 redesign: явные `Chat` / `Workflow` режимы, workflow screens `Home -> Generate -> Status -> Result -> History`, status timeline, VK post preview, design tokens и ADR mode/design direction.
 - [x] Mini App PR-14 VKUI hybrid: `@vkontakte/vkui` `8.2.1` added as production dependency; app root uses `ConfigProvider`/`AdaptivityProvider`/`AppRoot`; base controls use VKUI `Button`, `NativeSelect`, `Textarea`, `Panel`, `Tabbar`; custom workflow shell, result preview and status timeline remain custom.
 - [x] Mini App PR-16.1 navigation shell: bottom VKUI `Tabbar` with `Создать` / `Чат` / `Настройки`, default center `Чат`, UI-only active tab preference `vk_miniapp_active_tab_v1`; Chat and Workflow stay mounted as tab panels so polling survives tab switches.
-- [x] Mini App PR-16.2 chat threads: active `conversation_id` is the thread id (`default` for migrated legacy context, UUID for new dialogs), history opens as a top sheet from the chat title, and `localStorage` keeps only `id` / `title` / `last_activity_at` thread metadata.
+- [x] Mini App PR-16.2 chat threads: active `conversation_id` is the thread id (`default` for migrated legacy context, UUID for new dialogs), history opened as a top sheet from the chat title, and `localStorage` kept only `id` / `title` / `last_activity_at` thread metadata. Superseded by PR-18.4/18.5: backend conversation list/history is now the source of truth and `localStorage` keeps only `vk_miniapp_active_thread_v1` plus UI preferences.
 - [x] Mini App PR-16.3 Create tab: top VKUI operation segment for supported backend operations (`text_generate`, `image_generate`, `video_generate`), existing estimate/status/result/history workflow preserved, VK post preview made the signature result surface without new URL sources or unsafe rendering.
 - [x] Mini App Create UX revision: Create currently exposes only `Создать фото` / `Создать видео`; `Создать пост` is temporarily disabled in this tab, while text generation remains in Chat/VK bot flows. History is scoped per selected operation type; chat thread history opens from an explicit header icon button.
 - [x] Mini App PR-16.4 Settings and design polish: Settings contains theme preference, backend balance, summary generation history with type filter, local-history privacy/clear controls and a payment-history placeholder; design tokens now use the provided cyan/violet/pink brand palette.
@@ -196,9 +196,11 @@
 - [ ] **[уточнить] CORS-политика** — зависит от модели развёртывания (same-origin
   proxy vs прямой доступ). Не подтверждается кодом, требует решения.
 - [x] **[уточнить] Retention/шифрование контента в `localStorage`**
-  Fixed in PR-9: `vk_miniapp_chats_v1` keeps only `job_id`, `operation_type`,
-  `status`, `created_at` for 7 days; prompt bodies, generated text and artifact
-  URLs are not persisted, and clear local history removes only local UI state.
+  Fixed through PR-9 and PR-18.4/18.5: legacy `vk_miniapp_chats_v1` /
+  `vk_miniapp_threads_v1` caches are removed when encountered. Current Mini App
+  chat stores only `vk_miniapp_active_thread_v1` plus UI preferences such as
+  active tab/theme; prompt bodies, generated text, job ids, artifact ids/URLs,
+  launch params, tokens, balance and provider details are not persisted.
 
 ---
 
@@ -242,7 +244,7 @@
 - [x] PR-18.4: Add authenticated Mini App conversation list/history endpoints
   and make the frontend treat backend history as source of truth while keeping
   only active thread/UI preferences in localStorage.
-- [ ] PR-18.5: Cleanup and verify shared chat context rollout: no Mini App
+- [x] PR-18.5: Cleanup and verify shared chat context rollout: no Mini App
   process-local context, no provider calls outside worker, no prompt/answer text
   in localStorage, public model alias remains `ChatGPT`.
 
@@ -253,9 +255,9 @@
   registrar NS switch are still required before the hostname works.
 - [ ] Mini App payment history endpoint: add a read-only `/miniapp/payments` or ledger-history BFF endpoint with auth/rate limiting so Settings can show real payment history instead of the PR-16.4 placeholder.
 - [ ] Mini App/VK bot top-up backend flow: add an authenticated, rate-limited and idempotent payment-intent endpoint for Mini App top-ups, connect VK `Пополнить баланс` to the same intent/link flow, and append committed `topup` ledger entries only after trusted payment confirmation.
-- [ ] Mini App backend conversations: superseded by the PR-18 durable shared
-  chat context plan above. PR-16.2 currently degrades to safe local metadata
-  only; backend process-local context can be lost on API restart or scale-out.
+- [x] Mini App backend conversations: completed by PR-18.3/18.4. Mini App chat
+  uses durable `source=miniapp` conversations in Postgres, exposes authenticated
+  list/history endpoints, and no longer depends on process-local BFF memory.
 - [ ] Live smoke with `DEEPINFRA_API_KEY`: GPT text mode should return DeepSeek-V4-Flash output through the normal Job -> Artifact -> Delivery flow.
 - [ ] Add production retention/archival job for old `conversation_messages` before large-scale rollout; keep compact summaries and recent hot turns only.
 - [ ] Replace local/extractive dialog summary compaction with a dedicated cheap summarizer job/model if semantic summaries become necessary.

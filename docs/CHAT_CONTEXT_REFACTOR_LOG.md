@@ -6,7 +6,7 @@ other surface.
 
 ## 2026-06-06 - Initial finding
 
-Current state:
+Initial state before PR-18:
 
 - VK text bot context is durable and worker-owned:
   - `internal/service/dialogcontext/service.go`
@@ -17,10 +17,10 @@ Current state:
   `dialogcontext.Complete` after text output, so provider calls stay in the
   worker flow.
 - VK bot conversations are keyed by `user_id + vk_peer_id`.
-- Mini App chat sends `conversation_id` to `POST /miniapp/chat/messages`, but
-  the BFF currently keeps recent turns in a process-local
+- Mini App chat sent `conversation_id` to `POST /miniapp/chat/messages`, but
+  the BFF kept recent turns in a process-local
   `internal/adapter/inbound/miniapp/conversation.go` store.
-- Mini App process-local context is not durable and can be lost on API restart
+- Mini App process-local context was not durable and could be lost on API restart
   or scale-out.
 - If Mini App is forced through the existing `user_id + vk_peer_id` lookup,
   different Mini App threads for the same VK user can be mixed.
@@ -190,3 +190,32 @@ Behavior note:
 
 - Deleting/clearing local UI state does not delete backend conversation
   history. Backend delete/archive remains a separate future product decision.
+
+## 2026-06-07 - PR-18.5 cleanup and verification completed
+
+Verified rollout:
+
+- VK bot and Mini App chat both use the durable shared conversation core:
+  `conversations`, `conversation_messages`, `conversation_summaries`,
+  `internal/service/dialogcontext` and worker-owned prompt rendering.
+- Mini App BFF no longer has `internal/adapter/inbound/miniapp/conversation.go`
+  or any process-local prompt/answer memory path.
+- Mini App chat creation sends the current prompt plus
+  `conversation_source=miniapp` and opaque `external_thread_id`; the worker
+  creates/loads the durable backend conversation and saves assistant turns.
+- Mini App conversation list/history endpoints are authenticated and scoped to
+  the verified backend user.
+- Provider calls remain worker-owned and out of `cmd/api`, VK inbound and Mini
+  App BFF handlers.
+- Mini App `localStorage` is limited to active thread/tab/theme UI state and
+  legacy cache cleanup. Prompt bodies, generated answers, job ids, artifact
+  ids/URLs, launch params, tokens, balance and provider details are not
+  persisted there.
+- Public Mini App chat model output remains `ChatGPT`.
+
+Docs cleanup:
+
+- ADR/process notes now mark old Mini App process-local chat memory as
+  historical/superseded.
+- `README.md`, `RUNBOOK.md` and `docs/ARCHITECTURE.md` describe the final shared
+  durable chat context architecture and Mini App list/history smoke checks.

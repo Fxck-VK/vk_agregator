@@ -273,12 +273,11 @@ but normalizes all Mini App text jobs to the public alias before persistence
 or DTO output. The frontend no longer exposes a text model selector in chat
 mode and shows only `ChatGPT`.
 
-Mini App chat context is process-local in the BFF, keyed by verified VK user
-and capped to the latest turns. The user prompt remains out of `localStorage`;
-the BFF appends assistant context only after `GET /miniapp/jobs/{id}` observes
-backend terminal success and a moderated text artifact. This mirrors the VK
-text bot's process-local limitation: context can be lost on API restart and is
-not a durable conversation store.
+Historical PR-15 note: Mini App chat context originally lived in a
+process-local BFF store keyed by verified VK user. That limitation was
+superseded by ADR-017 and PR-18.3/18.4/18.5. Current Mini App chat uses
+durable `source=miniapp` conversations through the shared worker/dialogcontext
+core and stores no prompt/answer history in `localStorage`.
 
 Consequences: Mini App chat uses the same async Job -> Worker -> Provider ->
 Artifact path as the VK text bot and does not add provider logic to the BFF or
@@ -351,27 +350,27 @@ details, artifact ids or artifact URLs. Last-message previews are derived only
 from in-memory messages for the current session. Legacy/suspicious local
 history is cleared with value-free warnings.
 
+Historical storage note: PR-18.4/18.5 superseded `vk_miniapp_threads_v1`.
+Current Mini App chat stores only `vk_miniapp_active_thread_v1` plus UI
+preferences and reads thread list/history from the backend.
+
 The history UI reuses the existing chat drawer state and becomes a top sheet
 opened by tapping the chat title. The sheet shows thread titles, in-memory
 last-reply preview, last activity, new-dialog action and local clear action.
 The typing indicator is tied to pending job/poll state, not to a timer, so it
 turns off only when the backend job reaches a terminal state.
 
-Graceful degradation: conversation context still lives only in the process
-running `cmd/api`. API restart, scale-out or process replacement may lose the
-context for any thread. In that case the frontend keeps safe metadata, but the
-backend effectively starts an empty conversation; the UI must not crash or
-treat local metadata as source of truth.
-
-Backend dependency: a separate backend PR should add durable conversation
-storage plus list/read endpoints for Mini App conversations. PR-16.2 does not
-implement that backend surface and does not persist conversation content on
-the client.
+Historical graceful-degradation note: before PR-18, conversation context still
+lived only in the `cmd/api` process and could be lost on restart or scale-out.
+That backend dependency was completed by PR-18.3/18.4/18.5. Current Mini App
+chat uses durable backend conversation storage plus authenticated list/read
+endpoints, while the frontend stores only the active thread id and UI
+preferences.
 
 Consequences: frontend multi-dialog UX becomes available without weakening
-auth, billing, moderation, artifact access or provider boundaries. The current
-solution is session/local-metadata oriented until backend durable conversation
-history exists.
+auth, billing, moderation, artifact access or provider boundaries. The original
+session/local-metadata limitation is retained here as historical context only;
+the current source of truth is backend durable conversation history.
 
 ---
 
@@ -445,8 +444,9 @@ to PR-16.4.
 
 Chat thread history no longer opens by tapping the chat title. The header uses
 an explicit icon button that opens the existing thread panel with thread list
-and `Новый диалог`. Thread storage and backend process-local context behavior
-from ADR-011 remain unchanged.
+and `Новый диалог`. Thread storage behavior from ADR-011 remains unchanged;
+the backend process-local context limitation was later superseded by
+ADR-017/PR-18.
 
 Consequences: the Create tab has a clearer product entry point while preserving
 backend-owned pricing, billing, job status and artifact access. Polling remains
@@ -596,18 +596,18 @@ must be included when Mini App wiring or frontend contracts are in scope.
 
 ## ADR-017 - Durable shared chat context core
 
-Status: proposed
+Status: accepted
 
 Date: 2026-06-06
 
-Context: VK text bot already has durable text context through
+Context: VK text bot already had durable text context through
 `internal/service/dialogcontext`, Postgres conversations/messages/summaries and
-worker-owned prompt rendering. Mini App chat has a frontend `conversation_id`,
-but the BFF also keeps recent turns in a process-local
-`internal/adapter/inbound/miniapp/conversation.go` store. That store is lost on
-API restart/scale-out, while the existing durable conversation key
-`user_id + vk_peer_id` is not enough to represent multiple Mini App threads for
-one VK user.
+worker-owned prompt rendering. Before PR-18.3, Mini App chat had a frontend
+`conversation_id`, but the BFF also kept recent turns in a process-local
+`internal/adapter/inbound/miniapp/conversation.go` store. That store was lost
+on API restart/scale-out, while the existing durable conversation key
+`user_id + vk_peer_id` was not enough to represent multiple Mini App threads
+for one VK user.
 
 Decision: do not make Mini App call VK bot and do not copy VK bot context logic
 into Mini App. Instead, extend the backend conversation core so both surfaces
@@ -653,3 +653,12 @@ Planned sequence:
 4. PR-18.4: Mini App conversation list/history endpoints and frontend
    integration.
 5. PR-18.5: cleanup, docs and regression/security verification.
+
+Outcome: implemented through PR-18.1-PR-18.5. Mini App BFF no longer has a
+process-local prompt-prefix memory store; it creates text jobs with
+`conversation_source=miniapp` and opaque `external_thread_id`, then the worker
+creates/loads the durable backend conversation and saves assistant turns.
+Authenticated Mini App list/history endpoints expose only owner-scoped
+product-level conversation data. Mini App local storage keeps only active
+thread/tab/theme UI state and legacy cache cleanup. Public model output remains
+`ChatGPT`.

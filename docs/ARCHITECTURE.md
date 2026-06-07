@@ -57,6 +57,27 @@ Backend core remains the source of truth:
 - `internal/adapter/storage` persists durable state; Redis is queue/cache
   support, not billing truth.
 
+Current durable shared chat context:
+
+- VK bot and Mini App text chat both use the same Postgres-backed conversation
+  core: `conversations`, `conversation_messages`, `conversation_summaries` and
+  `internal/service/dialogcontext`.
+- VK bot chat uses `source=vk_bot`, scoped by backend `user_id` and `vk_peer_id`.
+  Mini App chat uses `source=miniapp`, scoped by backend `user_id` and opaque
+  `external_thread_id` / public `conversation_id`.
+- `cmd/worker` is the only flow that prepares bounded prompt context, calls
+  providers and stores assistant turns. `cmd/api`, VK inbound handlers and Mini
+  App BFF handlers only create jobs/control responses and read owner-scoped
+  history.
+- Mini App exposes authenticated conversation list/history endpoints under
+  `/miniapp/chat/conversations`. Responses are product DTOs only: thread ids,
+  titles/timestamps/previews and `user` / `bot` message text. Provider ids,
+  billing internals and artifact storage internals are not exposed.
+- Mini App local storage is only UI state: active thread, active tab, theme and
+  legacy cache cleanup. It must not store prompt bodies, generated answers,
+  launch params, tokens, balance, provider details or artifact URLs.
+- User-visible Mini App chat model output remains the public alias `ChatGPT`.
+
 Current image-generation foundation:
 
 - Image jobs use the same asynchronous Job -> worker -> provider -> Artifact

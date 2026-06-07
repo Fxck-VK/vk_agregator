@@ -1,4 +1,4 @@
-# AGENTS_FULL.md — Full Project Constitution for VK AI Aggregator
+я во# AGENTS_FULL.md — Full Project Constitution for VK AI Aggregator
 
 This is the full reference constitution for AI coding agents working on VK AI Aggregator.
 
@@ -347,7 +347,8 @@ Treat these as known backlog items unless already fixed in code:
 - Decide model contract: either pass and validate selected model server-side or remove UI selector until supported.
 - Decide production behavior for API ↔ S3 dependency in Mini App artifact access: fail/alert or explicit UI degradation.
 - Separate true mount/unmount lifecycle from effect restarts in chat polling code.
-- Decide retention/TTL/encryption policy for plaintext chat content in `localStorage`.
+- Keep Mini App chat `localStorage` UI-only; legacy chat-content caches should
+  be removed when encountered.
 - Decide CORS model: same-origin proxy preferred; direct access requires strict allowed origins.
 
 ## 9. Job orchestrator rules

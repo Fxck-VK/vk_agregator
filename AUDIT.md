@@ -315,11 +315,14 @@ assistant answers, last-reply preview text, job ids, launch params, tokens,
 balance, provider details, artifact ids or artifact URLs. Last-reply previews
 exist only in memory for the current session.
 
-Backend context remains process-local from PR-15. If `cmd/api` restarts or is
-scaled horizontally without durable conversation storage, a thread may continue
-with empty backend context. This is a documented graceful degradation and a
-backend follow-up is tracked in `TASKS.md` for durable conversation list/read
-endpoints.
+Superseded by PR-18.4/18.5: Mini App local storage now keeps only
+`vk_miniapp_active_thread_v1` plus UI preferences, and removes legacy
+`vk_miniapp_threads_v1` / `vk_miniapp_chats_v1` caches when encountered.
+
+Superseded by PR-18.3/18.4/18.5: Mini App chat now uses durable
+`source=miniapp` conversations in Postgres through the shared
+worker/dialogcontext core. The BFF exposes authenticated list/history endpoints
+and no longer keeps process-local prompt/answer memory.
 
 ---
 
@@ -384,6 +387,27 @@ Date: 2026-06-06
   share the same payment intent/link flow with the VK text bot `Пополнить
   баланс` control path and may credit accounts only through committed `topup`
   ledger entries after trusted payment confirmation.
+
+---
+
+## PR-18.5 shared durable chat context verification note
+
+Date: 2026-06-07
+
+- VK bot text mode and Mini App chat both use the durable conversation core:
+  `conversations`, `conversation_messages`, `conversation_summaries`,
+  `internal/service/dialogcontext` and worker-owned prompt rendering.
+- Mini App chat no longer has a process-local prompt/answer store in
+  `internal/adapter/inbound/miniapp`; `POST /miniapp/chat/messages` sends the
+  current prompt plus explicit `source=miniapp` conversation refs.
+- Provider calls remain outside `cmd/api`, VK inbound and Mini App BFF flows;
+  they are still owned by `cmd/worker` / `internal/worker`.
+- Mini App frontend local storage is limited to active thread/tab/theme UI
+  state and legacy cache cleanup. Prompt text, generated answers, job ids,
+  artifact ids/URLs, launch params, tokens, balance and provider details are
+  not persisted there.
+- Public Mini App chat model output remains `ChatGPT`; raw provider/model ids
+  stay backend/provider configuration details.
 
 ---
 

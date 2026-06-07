@@ -1295,6 +1295,9 @@ Status: **completed**.
   capped, prompt bodies are not stored in `localStorage`, and assistant
   context is appended only after backend `succeeded` plus moderated text
   artifact access.
+  Superseded by PR-18.3/18.4/18.5: Mini App chat now uses durable
+  `source=miniapp` conversations in Postgres and the BFF no longer keeps
+  process-local prompt/answer memory.
 - Chat mode frontend now sends text through `/miniapp/chat/messages`, shows
   only `ChatGPT`, keeps safe React text rendering and preserves polling.
 
@@ -1404,6 +1407,8 @@ Status: **completed**.
   while empty `conversation_id` maps to backend `default`.
 - The backend has no conversation list/read endpoint. Conversation context is
   still process-local in `cmd/api`, so restart or scale-out can lose context.
+  Superseded by PR-18.3/18.4/18.5: authenticated conversation list/history
+  endpoints now make backend durable conversation history the source of truth.
 
 ### What changed
 
@@ -1817,6 +1822,44 @@ Status: **completed**.
 - `go build ./...` - exit 0.
 - `npm --prefix web/miniapp run build` - exit 0.
 - `gofmt -l cmd/api/main.go internal/app/api/core.go internal/app/miniapp/module.go internal/adapter/inbound/miniapp/handler.go internal/adapter/inbound/miniapp/dto.go internal/adapter/inbound/miniapp/handler_test.go` - clean.
+- `git grep -nE "^(<<<<<<<|=======|>>>>>>>)"` - clean.
+- `git diff --check` - exit 0; only line-ending normalization warnings.
+
+---
+
+## PR-18.5 - Shared durable chat context cleanup and verification
+
+Status: **completed**.
+
+### What was verified
+
+- VK bot and Mini App chat both use the durable shared conversation core:
+  `conversations`, `conversation_messages`, `conversation_summaries`,
+  `internal/service/dialogcontext` and worker-owned prompt rendering.
+- No process-local Mini App prompt/answer store remains in
+  `internal/adapter/inbound/miniapp`.
+- Provider calls still occur only from the worker flow; `cmd/api`, VK inbound
+  and Mini App BFF handlers remain job/control surfaces.
+- Mini App frontend local storage is limited to active thread/tab/theme UI
+  state plus legacy cache cleanup; prompt bodies, generated answers, job ids,
+  artifact ids/URLs, launch params, tokens, balance and provider details are
+  not persisted.
+- Public Mini App chat model output remains `ChatGPT`.
+
+### Cleanup/docs
+
+- Marked old Mini App process-local chat-memory notes as historical or
+  superseded in audit/progress/ADR/review/integration docs, including the old
+  frontend audit.
+- Updated architecture and runbook docs with the final shared durable chat
+  context contract and Mini App conversation list/history smoke checks.
+- Updated task tracking to mark PR-18.5 complete.
+
+### Checks
+
+- `go test ./...` - exit 0.
+- `go build ./...` - exit 0.
+- `npm --prefix web/miniapp run build` - exit 0.
 - `git grep -nE "^(<<<<<<<|=======|>>>>>>>)"` - clean.
 - `git diff --check` - exit 0; only line-ending normalization warnings.
 

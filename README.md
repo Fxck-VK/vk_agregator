@@ -95,13 +95,17 @@ Real integrations are implemented at adapter level and remain **opt-in**:
   `VK_ANTISPAM_IMAGE_DAILY_LIMIT=100` and `PRICES=image_generate=0`;
   reference-photo generation stays hidden behind
   `VK_MENU_IMAGE_REFERENCE_ENABLED=false` until input photo artifacts are wired.
-- Text-mode dialog context is persisted in Postgres. For each VK peer the
-  worker stores user/assistant turns in `conversations`,
-  `conversation_messages` and `conversation_summaries`, then sends providers a
-  bounded context packet: bot profile, rolling summary, recent messages and the
-  current request. Defaults are `TEXT_CONTEXT_MAX_INPUT_TOKENS=1600`,
+- Text-mode dialog context is persisted in Postgres for both VK bot and Mini
+  App chat. VK bot conversations use `source=vk_bot` scoped by backend user and
+  VK peer; Mini App chat uses `source=miniapp` scoped by backend user and an
+  opaque `conversation_id` / `external_thread_id`. The worker stores
+  user/assistant turns in `conversations`, `conversation_messages` and
+  `conversation_summaries`, then sends providers a bounded context packet: bot
+  profile, rolling summary, recent messages and the current request. Defaults
+  are `TEXT_CONTEXT_MAX_INPUT_TOKENS=1600`,
   `TEXT_CONTEXT_MAX_OUTPUT_TOKENS=800`, summary up to 400 estimated tokens and
-  the last 6 messages. The full dialog is never sent to a provider.
+  the last 6 messages. The full dialog is never sent to a provider, and Mini
+  App local storage keeps only active thread/tab/theme UI state.
 - Shared VK referral foundation is implemented in the backend. Each internal
   user receives one stable public referral code in `referral_codes`; accepted
   invitations are stored in `referrals` with source `vk_bot` or `vk_miniapp`.
