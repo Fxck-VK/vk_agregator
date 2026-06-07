@@ -30,6 +30,7 @@ web/miniapp/.vite/
 # IDEs and editors
 .idea/
 .vscode/
+.cursor/
 *.swp
 *.swo
 *.sublime-project
