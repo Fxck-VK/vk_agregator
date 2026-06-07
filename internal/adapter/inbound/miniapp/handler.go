@@ -248,7 +248,30 @@ func (h *Handler) readJobRequest(w http.ResponseWriter, r *http.Request) (Create
 		writeError(w, http.StatusBadRequest, "unsupported model")
 		return CreateJobRequest{}, "", "", miniAppModelSpec{}, false
 	}
+	if req.DurationSec != 0 && opType != domain.OperationVideoGenerate {
+		writeError(w, http.StatusBadRequest, "duration_sec is only supported for video_generate")
+		return CreateJobRequest{}, "", "", miniAppModelSpec{}, false
+	}
+	if opType == domain.OperationVideoGenerate {
+		duration, ok := normalizeVideoDurationSec(req.DurationSec)
+		if !ok {
+			writeError(w, http.StatusBadRequest, "invalid video duration; allowed: 3, 5, 10")
+			return CreateJobRequest{}, "", "", miniAppModelSpec{}, false
+		}
+		req.DurationSec = duration
+	}
 	return req, opType, modality, model, true
+}
+
+func normalizeVideoDurationSec(sec int) (int, bool) {
+	switch sec {
+	case 0:
+		return 5, true
+	case 3, 5, 10:
+		return sec, true
+	default:
+		return 0, false
+	}
 }
 
 func (h *Handler) estimateJob(w http.ResponseWriter, r *http.Request) {
@@ -360,13 +383,17 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 	idemKey := fmt.Sprintf("miniapp_job:%d:%s", vkUserID, clientKey)
 	correlationID := fmt.Sprintf("miniapp:%d:%s", vkUserID, clientKey)
 
-	params, _ := json.Marshal(miniAppJobParams{
+	jobParams := miniAppJobParams{
 		Prompt:               req.Prompt,
 		ModelID:              model.ModelID,
 		ModelName:            model.ModelName,
 		ModelCode:            model.ModelCode,
 		ReferenceArtifactIDs: req.ReferenceArtifactIDs,
-	})
+	}
+	if opType == domain.OperationVideoGenerate {
+		jobParams.DurationSec = req.DurationSec
+	}
+	params, _ := json.Marshal(jobParams)
 
 	job, err := h.deps.Orchestrator.CreateJob(r.Context(), joborchestrator.CreateJobInput{
 		UserID:           user.ID,

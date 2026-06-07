@@ -4,6 +4,7 @@ import { statusKind, statusLabel, type Job } from "../api/client";
 import { modalityByOperation, type ModalityId } from "../chat/types";
 import neuroHubBanner from "../assets/neurohub-banner.png";
 import { formatCredits } from "../ui/credits";
+import { dedupeHistoryJobs, historyCountLabel, jobDisplayTitle } from "../utils/jobDisplay";
 import type { ThemeMode } from "./theme";
 
 type SettingsScreenProps = {
@@ -50,12 +51,6 @@ function historyLabel(job: Job): string {
   return statusLabel(job.status);
 }
 
-function historyRowTitle(job: Job): string {
-  const prompt = job.prompt?.trim();
-  if (prompt) return prompt.length > 48 ? `${prompt.slice(0, 48)}…` : prompt;
-  return modalityByOperation(job.operation).label;
-}
-
 function historyRowMeta(job: Job): string {
   const modality = modalityByOperation(job.operation);
   const typeLabel = job.operation === "text_generate" ? "Чат" : modality.label;
@@ -83,15 +78,14 @@ export function SettingsScreen({
   const [historyOpen, setHistoryOpen] = useState(false);
   const [topUpNotice, setTopUpNotice] = useState("");
   const [spinning, setSpinning] = useState(false);
-  const sortedJobs = useMemo(
-    () => [...jobs].sort((a, b) => b.created_at.localeCompare(a.created_at)),
-    [jobs],
-  );
-  const visibleJobs = sortedJobs.filter((job) => {
-    if (historyFilter === "all") return true;
-    if (historyFilter === "text") return job.operation === "text_generate";
-    return modalityByOperation(job.operation).id === historyFilter;
-  });
+  const visibleJobs = useMemo(() => {
+    const deduped = dedupeHistoryJobs(jobs);
+    if (historyFilter === "all") return deduped;
+    if (historyFilter === "text") {
+      return deduped.filter((job) => job.operation === "text_generate");
+    }
+    return deduped.filter((job) => modalityByOperation(job.operation).id === historyFilter);
+  }, [jobs, historyFilter]);
 
   const handleRefresh = () => {
     if (spinning) return;
@@ -206,7 +200,7 @@ export function SettingsScreen({
               История запросов
             </span>
             <span className="settings-history-toggle__count">
-              {loading ? "..." : `${visibleJobs.length} записей`}
+              {loading ? "..." : historyCountLabel(visibleJobs.length)}
             </span>
           </span>
           <svg
@@ -284,7 +278,7 @@ export function SettingsScreen({
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 14, fontWeight: 600 }}>
-                        {historyRowTitle(job)}
+                        {jobDisplayTitle(job)}
                       </div>
                       <div style={{ fontSize: 12, color: "var(--fg-muted)" }}>
                         {historyRowMeta(job)}

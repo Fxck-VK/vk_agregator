@@ -484,6 +484,26 @@ func TestSubmitPollVideoSuccess(t *testing.T) {
 		t.Fatalf("unexpected video body: %+v", seen)
 	}
 
+	task, err = p.Submit(context.Background(), domain.ProviderRequest{
+		JobID:          uuid.New(),
+		Operation:      domain.OperationVideoGenerate,
+		Modality:       domain.ModalityVideo,
+		ModelCode:      defaultVideoModel,
+		Prompt:         "short clip",
+		DurationSec:    3,
+		Resolution:     "720p",
+		AspectRatio:    "16:9",
+		Draft:          true,
+		IdempotencyKey: "provider_submit:video:3",
+	})
+	if err != nil {
+		t.Fatalf("submit duration 3: %v", err)
+	}
+	if seen.Duration != 3 {
+		t.Fatalf("duration = %d, want 3", seen.Duration)
+	}
+	_ = task
+
 	res, err := p.Poll(context.Background(), domain.ProviderTaskRef{Provider: task.Provider, ExternalID: task.ExternalID})
 	if err != nil {
 		t.Fatalf("poll: %v", err)

@@ -12,6 +12,8 @@ export interface ChatMessage {
   pending?: boolean;
   artifactIds?: string[];
   error?: string;
+  /** Server conversation_messages.seq when loaded from history. */
+  seq?: number;
   createdAt?: string;
 }
 

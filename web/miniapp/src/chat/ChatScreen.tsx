@@ -44,6 +44,7 @@ type SubmitRequest = {
   modelId: string;
   chat?: boolean;
   referenceArtifactIds?: string[];
+  durationSec?: number;
 };
 
 function tabTitle(tab: AppTab, activeChat?: Chat | null): { name: string; sub: string } {
@@ -115,8 +116,22 @@ function messageFromHistory(message: ChatConversationMessage): ChatMessage {
     role: message.role === "bot" ? "bot" : "user",
     text: message.text,
     jobId: message.job_id,
+    seq: message.seq,
     createdAt: message.created_at,
   };
+}
+
+function compareChatMessages(a: ChatMessage, b: ChatMessage): number {
+  const aSeq = a.seq ?? Number.NaN;
+  const bSeq = b.seq ?? Number.NaN;
+  if (Number.isFinite(aSeq) && Number.isFinite(bSeq) && aSeq !== bSeq) {
+    return aSeq - bSeq;
+  }
+  const at = Date.parse(a.createdAt ?? "") || 0;
+  const bt = Date.parse(b.createdAt ?? "") || 0;
+  if (at !== bt) return at - bt;
+  if (a.role !== b.role) return a.role === "user" ? -1 : 1;
+  return 0;
 }
 
 function isLocalDraftChat(chat: Chat): boolean {
@@ -170,15 +185,17 @@ function mergeHistoryMessages(current: ChatMessage[], history: ChatMessage[]): C
       byID.set(message.id, message);
       continue;
     }
-    if (message.jobId && !history.some((item) => item.jobId === message.jobId && item.role === message.role)) {
+    const hasHistoryTwin = history.some(
+      (item) =>
+        item.jobId === message.jobId &&
+        item.role === message.role &&
+        (message.role !== "user" || item.text === message.text || !message.text),
+    );
+    if (message.jobId && !hasHistoryTwin) {
       byID.set(message.id, message);
     }
   }
-  return Array.from(byID.values()).sort((a, b) => {
-    const at = Date.parse(a.createdAt ?? "") || 0;
-    const bt = Date.parse(b.createdAt ?? "") || 0;
-    return at - bt;
-  });
+  return Array.from(byID.values()).sort(compareChatMessages);
 }
 
 const EARLY_CHAT_TEXT_STATUSES = new Set([
@@ -337,6 +354,13 @@ export function ChatScreen({ user }: { user: VkUser }) {
     (job: Job) => {
       if (job.operation === CHAT_OPERATION) {
         void (async () => {
+          const directChatId = job.conversation_id?.trim();
+          if (directChatId) {
+            selectChat(directChatId);
+            changeTab("chat");
+            void loadConversationMessages(directChatId);
+            return;
+          }
           const chatId = await findChatIdForJob(job.id);
           if (chatId) {
             selectChat(chatId);
@@ -488,12 +512,14 @@ export function ChatScreen({ user }: { user: VkUser }) {
     const selectedModel = request?.modelId ?? CHAT_MODEL_ID;
     const isChat = request?.chat === true;
     const chatId = isChat ? ensureActive() : "";
+    const userMsgId = "u-" + uid();
     const botId = "b-" + uid();
     const idempotencyKey = createIdempotencyKey();
     if (isChat) {
+      const sentAt = new Date().toISOString();
       setMessages(chatId, (prev) => [
         ...prev,
-        { id: "u-" + uid(), role: "user", text },
+        { id: userMsgId, role: "user", text, createdAt: sentAt },
         {
           id: botId,
           role: "bot",
@@ -501,6 +527,7 @@ export function ChatScreen({ user }: { user: VkUser }) {
           model: selectedModel,
           pending: true,
           status: "received",
+          createdAt: sentAt,
         },
       ]);
     }
@@ -523,13 +550,17 @@ export function ChatScreen({ user }: { user: VkUser }) {
                 request.referenceArtifactIds.length > 0
                   ? request.referenceArtifactIds
                   : undefined,
+              duration_sec:
+                !isChat && operation === "video_generate" && request?.durationSec !== undefined
+                  ? request.durationSec
+                  : undefined,
             },
             { idempotencyKey },
           );
+      patchInChat(chatId, userMsgId, { jobId: job.id });
       patchInChat(chatId, botId, {
         jobId: job.id,
         status: job.status,
-        createdAt: job.created_at,
       });
       setJobs((prev) => upsertJob(prev, job));
       refreshBalance();
@@ -567,6 +598,7 @@ export function ChatScreen({ user }: { user: VkUser }) {
         const localJobIds = jobIdsFromChats(chatsRef.current);
         const restored = sorted.filter((job) => !isTerminal(job.status) || localJobIds.has(job.id));
         for (const job of restored) {
+          if (job.operation !== CHAT_OPERATION) continue;
           const target = pollTargetForJob(chatsRef.current, job);
           if (!isTerminal(job.status)) {
             startPoll(target.chatId, target.botMsgId, job.id);
@@ -605,11 +637,14 @@ export function ChatScreen({ user }: { user: VkUser }) {
   }, [activeTab, activeId, loadConversationMessages]);
 
   useEffect(() => {
-    const pending = jobs.filter((job) => !isTerminal(job.status));
+    const pending = jobs.filter(
+      (job) => job.operation === CHAT_OPERATION && !isTerminal(job.status),
+    );
     if (pending.length === 0) return;
 
     for (const job of pending) {
       const target = pollTargetForJob(chats, job);
+      if (target.missing) continue;
       startPoll(target.chatId, target.botMsgId, job.id);
     }
   }, [jobs, chats, startPoll]);

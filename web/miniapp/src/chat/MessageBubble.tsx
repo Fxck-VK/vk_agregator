@@ -1,5 +1,5 @@
 ﻿// src/chat/MessageBubble.tsx
-import { Avatar, RespondingLabel, TypingDots } from "../ui/ui";
+import { Avatar, TypingDots } from "../ui/ui";
 import { useArtifactMediaUrl } from "../hooks/useArtifactMediaUrl";
 import type { ChatMessage } from "./types";
 import neuroHubAvatar from "../assets/neurohub-avatar.png";
@@ -41,7 +41,6 @@ export function MessageBubble({
   onRetry?: () => void;
 }) {
   const isUser = msg.role === "user";
-  const showResponding = !isUser && msg.pending;
   const author = isUser ? "Вы" : botName;
 
   return (
@@ -53,10 +52,15 @@ export function MessageBubble({
       />
       <div className="bubble-wrap">
         <div className="message-author">{author}</div>
-        <div className={"bubble " + (isUser ? "bubble--user" : "bubble--bot")}>
+        <div
+          className={
+            "bubble " +
+            (isUser ? "bubble--user" : "bubble--bot") +
+            (!isUser && msg.pending ? " bubble--pending" : "")
+          }
+        >
           {isUser ? <span>{msg.text}</span> : <BotContent msg={msg} />}
         </div>
-        {showResponding && <RespondingLabel />}
         {!isUser && msg.error && onRetry && (
           <button type="button" className="bubble__retry" onClick={onRetry}>
             Повторить

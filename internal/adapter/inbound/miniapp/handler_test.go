@@ -413,6 +413,107 @@ func TestHandler_CreateJob_OK(t *testing.T) {
 	if resp["id"] == nil {
 		t.Fatal("expected job id in response")
 	}
+	if resp["prompt"] != "hello world" {
+		t.Fatalf("expected prompt in job response, got %#v", resp["prompt"])
+	}
+}
+
+func TestHandler_ListJobs_ExposesPromptForChatAndImageJobs(t *testing.T) {
+	fixture := newTestFixture("", nil)
+	routes := fixture.handler.Routes()
+
+	create := func(operation, prompt, modelID, idem string) {
+		t.Helper()
+		payload := map[string]string{
+			"operation": operation,
+			"prompt":    prompt,
+		}
+		if modelID != "" {
+			payload["model_id"] = modelID
+		}
+		body, _ := json.Marshal(payload)
+		req := httptest.NewRequest(http.MethodPost, "/miniapp/jobs", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Launch-Params", devLaunchParams(777))
+		req.Header.Set("X-Idempotency-Key", idem)
+		w := httptest.NewRecorder()
+		routes.ServeHTTP(w, req)
+		if w.Code != http.StatusCreated {
+			t.Fatalf("create %s: expected 201, got %d: %s", operation, w.Code, w.Body.String())
+		}
+	}
+
+	chatBody, _ := json.Marshal(map[string]string{
+		"prompt":          "КОЗЯВКИ",
+		"conversation_id": "thread-alpha",
+	})
+	chatReq := httptest.NewRequest(http.MethodPost, "/miniapp/chat/messages", bytes.NewReader(chatBody))
+	chatReq.Header.Set("Content-Type", "application/json")
+	chatReq.Header.Set("X-Launch-Params", devLaunchParams(777))
+	chatReq.Header.Set("X-Idempotency-Key", "list-jobs-chat-1")
+	chatW := httptest.NewRecorder()
+	routes.ServeHTTP(chatW, chatReq)
+	if chatW.Code != http.StatusCreated {
+		t.Fatalf("chat message: expected 201, got %d: %s", chatW.Code, chatW.Body.String())
+	}
+
+	secondChatBody, _ := json.Marshal(map[string]string{
+		"prompt":          "второе сообщение",
+		"conversation_id": "thread-alpha",
+	})
+	secondChatReq := httptest.NewRequest(http.MethodPost, "/miniapp/chat/messages", bytes.NewReader(secondChatBody))
+	secondChatReq.Header.Set("Content-Type", "application/json")
+	secondChatReq.Header.Set("X-Launch-Params", devLaunchParams(777))
+	secondChatReq.Header.Set("X-Idempotency-Key", "list-jobs-chat-2")
+	secondChatW := httptest.NewRecorder()
+	routes.ServeHTTP(secondChatW, secondChatReq)
+	if secondChatW.Code != http.StatusCreated {
+		t.Fatalf("second chat message: expected 201, got %d: %s", secondChatW.Code, secondChatW.Body.String())
+	}
+
+	create("image_generate", "Кот в киберпанке", "nano_banana_pro", "list-jobs-image")
+
+	listReq := httptest.NewRequest(http.MethodGet, "/miniapp/jobs", nil)
+	listReq.Header.Set("X-Launch-Params", devLaunchParams(777))
+	listW := httptest.NewRecorder()
+	routes.ServeHTTP(listW, listReq)
+	if listW.Code != http.StatusOK {
+		t.Fatalf("list jobs: expected 200, got %d: %s", listW.Code, listW.Body.String())
+	}
+
+	var listResp struct {
+		Items []struct {
+			Operation      string `json:"operation"`
+			Prompt         string `json:"prompt"`
+			ConversationID string `json:"conversation_id"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(listW.Body.Bytes(), &listResp); err != nil {
+		t.Fatalf("invalid list response: %v", err)
+	}
+	var chatPrompt string
+	var chatConversationID string
+	var imagePrompt string
+	for _, item := range listResp.Items {
+		switch item.Operation {
+		case "text_generate":
+			if chatPrompt == "" || item.Prompt == "КОЗЯВКИ" {
+				chatPrompt = item.Prompt
+				chatConversationID = item.ConversationID
+			}
+		case "image_generate":
+			imagePrompt = item.Prompt
+		}
+	}
+	if chatPrompt != "КОЗЯВКИ" {
+		t.Fatalf("chat prompt = %q, want КОЗЯВКИ", chatPrompt)
+	}
+	if chatConversationID != "thread-alpha" {
+		t.Fatalf("conversation_id = %q, want thread-alpha", chatConversationID)
+	}
+	if imagePrompt != "Кот в киберпанке" {
+		t.Fatalf("image prompt = %q, want Кот в киберпанке", imagePrompt)
+	}
 }
 
 func TestHandler_ChatMessage_CreatesTextJobWithPublicAlias(t *testing.T) {
@@ -1781,6 +1882,73 @@ func TestHandler_CreateJob_VideoPersistsProviderModelCodePrivately(t *testing.T)
 	}
 	if params.ModelID != "kling" || params.ModelName != "Kling" || params.ModelCode != "PrunaAI/p-video" {
 		t.Fatalf("unexpected stored params: %+v", params)
+	}
+}
+
+func TestHandler_CreateJob_VideoDurationValidatedAndPersisted(t *testing.T) {
+	fixture := newTestFixture("", nil)
+	routes := fixture.handler.Routes()
+
+	body, _ := json.Marshal(map[string]any{
+		"operation":    "video_generate",
+		"prompt":       "snow over neon city",
+		"model_id":     "kling",
+		"duration_sec": 10,
+	})
+	req := httptest.NewRequest(http.MethodPost, "/miniapp/jobs", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Launch-Params", devLaunchParams(777))
+	req.Header.Set("X-Idempotency-Key", "video-duration-10")
+
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("invalid response json: %v", err)
+	}
+	jobID, err := uuid.Parse(resp.ID)
+	if err != nil {
+		t.Fatalf("invalid job id: %v", err)
+	}
+	job, err := fixture.jobRepo.GetByID(context.Background(), jobID)
+	if err != nil {
+		t.Fatalf("get job: %v", err)
+	}
+	var params struct {
+		DurationSec int `json:"duration_sec"`
+	}
+	if err := json.Unmarshal(job.Params, &params); err != nil {
+		t.Fatalf("invalid params: %v", err)
+	}
+	if params.DurationSec != 10 {
+		t.Fatalf("duration_sec = %d, want 10", params.DurationSec)
+	}
+}
+
+func TestHandler_CreateJob_VideoDurationRejectsInvalidValue(t *testing.T) {
+	fixture := newTestFixture("", nil)
+	routes := fixture.handler.Routes()
+
+	body, _ := json.Marshal(map[string]any{
+		"operation":    "video_generate",
+		"prompt":       "snow over neon city",
+		"model_id":     "kling",
+		"duration_sec": 7,
+	})
+	req := httptest.NewRequest(http.MethodPost, "/miniapp/jobs", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Launch-Params", devLaunchParams(777))
+
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
 	}
 }
 

@@ -507,6 +507,33 @@ moderation on prompt (keyword). Production must set `DEEPINFRA_VIDEO_DRAFT=false
 **Adapter layout:** `video.go` is split from historical `deepinfra.go` (text/image
 still inline) for smaller review scope — not a different architecture.
 
+### Mini App history titles + artifact download (2026-06-07)
+
+**Symptom:** Profile history «Диалоги» showed modality label «Текст» instead of user
+prompt; image rows lacked contextual titles; no download with branded filename.
+
+**Root cause:** `newJobDTO` omitted `prompt` for `text_generate` jobs (prompt lives in
+`jobs.params` only). Frontend fell back to modality label.
+
+**Fix:** BFF exposes `prompt` for all operations from stored params (user-owned jobs
+only). Frontend `jobDisplayTitle()` for Settings/Workflow history; `ResultCard` download
+as `Neirohub_{slug|jobId8}.{ext}` via existing artifact blob URLs.
+
+**Chat layout:** Pending workflow jobs were polled from `ChatScreen`, causing extra
+state churn; message rows used `align-items: flex-end`. Poll limited to chat jobs with
+existing bot messages; rows top-aligned with stable typing bubble min-height.
+
+### Mini App media ephemeral policy (2026-06-07)
+
+**User ask:** do not persist photo/video in DB. **Current:** bytes live in object
+storage (MinIO); Postgres holds small artifact rows (id, mime, size, job link) required
+by worker preview, auth download and billing capture. **UI:** overlay download + warning
+that preview is temporary. **Follow-up:** scheduled deletion of miniapp output artifacts
+after TTL (not implemented in v0.1.3).
+
+**History:** Profile «Диалоги» dedupes `text_generate` jobs by `conversation_id` — one
+row per thread (first message title), not every chat turn.
+
 ---
 
 **Security / architecture impact:** No provider calls from VK handlers or Mini

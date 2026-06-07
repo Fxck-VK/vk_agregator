@@ -116,6 +116,56 @@ VK-бота, а не обязательная бизнес-логика job.
 - **Исправление:** `flowReturnScreenRef` в `WorkflowMode.tsx`.
 - **Проверка:** `npm run build`
 
+### FIX-2026-06-07-18 — чат: бот не прыгает над сообщением пользователя
+- **Симптом:** в новом чате пузырь бота сначала над «Вы», через секунду опускается вниз.
+- **Причина:** `patchInChat` ставил боту `createdAt=job.created_at`, у user не было timestamp;
+  `mergeHistoryMessages` сортировал по времени → бот оказывался выше.
+- **Исправление:** общий `sentAt` для пары user/bot; `createdAt` job не трогаем; сортировка по
+  `seq` + tie-break user-before-bot; user получает `jobId` для merge с history.
+- **Проверка:** `npm run build`, ручной smoke новый чат → send.
+
+### FIX-2026-06-07-17 — история диалогов, overlay-скачивание, ephemeral media note
+- **Симптом:** в «Диалоги» каждое сообщение чата = отдельная строка; скачивание только
+  текстовой кнопкой; запрос не хранить фото/видео в БД.
+- **Исправление:**
+  - `dedupeHistoryJobs` — одна строка на `conversation_id` (первый промпт диалога);
+  - `JobDTO.conversation_id` + открытие чата по thread id;
+  - `MediaResultPreview` — круглая кнопка на превью + неон-предупреждение о скачивании;
+  - `Neirohub_{context|id}.ext` через overlay.
+- **Хранение медиа:** бинарники в **MinIO**, в Postgres только метаданные artifact/job
+  (нужны для превью/биллинга). **Backlog:** TTL-очистка output artifacts для miniapp.
+- **Проверка:** `go test ./internal/adapter/inbound/miniapp/...`, `npm run build`
+
+### FIX-2026-06-07-16 — история: контекстные названия, скачивание, чат layout
+- **Симптом:** в «Диалоги»/истории заголовок «Текст» вместо промпта; у картинок нет
+  контекстного имени и скачивания; при pending (чат/очередь) сообщения «съезжали».
+- **Причина:** BFF `newJobDTO` не отдавал `prompt` для `text_generate` (только image/video);
+  workflow history показывала тип операции; poll в `ChatScreen` трогал все pending jobs
+  включая image; `.msg { align-items: flex-end }` ломал выравнивание при typing bubble.
+- **Исправление:**
+  - `dto.go` — `prompt` из `jobs.params` для всех операций;
+  - `utils/jobDisplay.ts` — `jobDisplayTitle`, `historyCountLabel`;
+  - `SettingsScreen`, `WorkflowMode` JobList — контекстные заголовки;
+  - `ResultCard` + `utils/artifactDownload.ts` — кнопка «Скачать» `Neirohub_{context|id}.ext`;
+  - `ChatScreen` — poll только `text_generate` с существующим bot-msg;
+  - `theme.css` / `MessageBubble` — `align-items: flex-start`, `bubble--pending`.
+- **Проверка:** `go test ./internal/adapter/inbound/miniapp/...`, `npm run build`
+- **Безопасность:** prompt — только свой job пользователя в BFF; скачивание через
+  существующий authenticated artifact blob URL, без новых секретов.
+
+### FIX-2026-06-07-15 — dev Postgres: полный сброс + миграции
+- **Симптом:** `checksum mismatch for 000008_conversation_sources` при `migrate up`.
+- **Исправление:** удалён volume `vk-ai-aggregator_postgres_data`, Postgres пересоздан,
+  `go run ./cmd/migrate up` — 8/8 applied; Redis `FLUSHALL` (очереди/кэш).
+- **Проверка:** `migrate status`, повторный `migrate up` → `0 migration(s) applied`.
+
+### FIX-2026-06-07-14 — видео: длительность 3/5/10 сек
+- **Симптом:** выбранные 3 сек → ролик 5 сек.
+- **Причина:** Vite подхватил UI, но **api/worker .exe не пересобраны** — `duration_sec` не попадал в `jobs.params` (проверено в Postgres).
+- **Исправление:** `WorkflowMode` сегмент 3/5/10; BFF validate+persist; worker читает из params; после правок — `go build` api/worker + restart dev stack.
+- **Чат typing:** убран только `RespondingLabel` (`отвечает..` под пузырём); точки внутри bubble остаются; статус в шапке «думает...» без изменений.
+- **Проверка:** `go test ./internal/adapter/inbound/miniapp/...`, `npm run build`, SQL `params->duration_sec`
+
 ### FIX-2026-06-07-07 — названия чатов в drawer
 - **Симптом:** в списке диалогов «Текст» / дефолтные заголовки вместо первого сообщения.
 - **Исправление:** `chat/display.ts` (`displayChatTitle`), merge title с бэкенда,

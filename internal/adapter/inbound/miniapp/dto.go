@@ -36,6 +36,9 @@ type CreateJobRequest struct {
 	// ReferenceArtifactIDs are optional input images owned by the user. They are
 	// validated server-side and never expanded into URLs in the BFF response.
 	ReferenceArtifactIDs []uuid.UUID `json:"reference_artifact_ids,omitempty"`
+	// DurationSec is the requested video length in seconds for video_generate.
+	// Allowed values: 3, 5, 10. Omitted defaults to 5.
+	DurationSec int `json:"duration_sec,omitempty"`
 }
 
 // ChatMessageRequest is the body accepted by POST /miniapp/chat/messages.
@@ -53,6 +56,7 @@ type miniAppJobParams struct {
 	ConversationID       string                    `json:"conversation_id,omitempty"`
 	ConversationSource   domain.ConversationSource `json:"conversation_source,omitempty"`
 	ExternalThreadID     string                    `json:"external_thread_id,omitempty"`
+	DurationSec          int                       `json:"duration_sec,omitempty"`
 }
 
 // EstimateDTO is returned by POST /miniapp/estimate. It exposes only
@@ -68,11 +72,13 @@ type EstimateDTO struct {
 
 // JobDTO is the miniapp representation of a job.
 type JobDTO struct {
-	ID                uuid.UUID   `json:"id"`
-	Operation         string      `json:"operation"`
-	Modality          string      `json:"modality"`
-	Status            string      `json:"status"`
-	Prompt            string      `json:"prompt,omitempty"`
+	ID        uuid.UUID `json:"id"`
+	Operation string    `json:"operation"`
+	Modality  string    `json:"modality"`
+	Status    string    `json:"status"`
+	Prompt    string    `json:"prompt,omitempty"`
+	// ConversationID links text_generate jobs to a Mini App chat thread.
+	ConversationID    string      `json:"conversation_id,omitempty"`
 	ModelID           string      `json:"model_id,omitempty"`
 	ModelName         string      `json:"model_name,omitempty"`
 	CostEstimate      int64       `json:"cost_estimate"`
@@ -128,11 +134,22 @@ func newJobDTO(j *domain.Job) JobDTO {
 	if out.OutputArtifactIDs == nil {
 		out.OutputArtifactIDs = []uuid.UUID{}
 	}
-	if j.OperationType != domain.OperationTextGenerate && len(j.Params) > 0 {
+	if len(j.Params) > 0 {
 		var params miniAppJobParams
 		if err := json.Unmarshal(j.Params, &params); err == nil {
-			out.ModelID = params.ModelID
-			out.ModelName = params.ModelName
+			if params.Prompt != "" {
+				out.Prompt = params.Prompt
+			}
+			switch {
+			case params.ConversationID != "":
+				out.ConversationID = params.ConversationID
+			case params.ExternalThreadID != "":
+				out.ConversationID = params.ExternalThreadID
+			}
+			if j.OperationType != domain.OperationTextGenerate {
+				out.ModelID = params.ModelID
+				out.ModelName = params.ModelName
+			}
 		}
 	}
 	return out

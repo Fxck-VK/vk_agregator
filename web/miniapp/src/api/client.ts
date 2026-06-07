@@ -11,6 +11,7 @@ export interface Job {
   modality: string;
   status: string;
   prompt?: string;
+  conversation_id?: string;
   cost_estimate: number;
   cost_captured: number;
   output_artifact_ids: string[];
@@ -25,6 +26,8 @@ export interface CreateJobInput {
   prompt: string;
   model_id?: string;
   reference_artifact_ids?: string[];
+  /** video_generate only: 3, 5 or 10 seconds */
+  duration_sec?: number;
 }
 
 export interface CreateChatMessageInput {
@@ -60,6 +63,7 @@ export interface EstimateInput {
   prompt: string;
   model_id?: string;
   reference_artifact_ids?: string[];
+  duration_sec?: number;
 }
 
 export interface EstimateResponse {

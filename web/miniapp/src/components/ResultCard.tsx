@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { hasPreviewableMediaResult, statusKind, statusLabel, type Job } from "../api/client";
 import { useArtifactMediaUrl } from "../hooks/useArtifactMediaUrl";
 import type { ChatMessage } from "../chat/types";
+import { MediaResultPreview } from "./MediaResultPreview";
 
 type ResultCardProps = {
   msg: ChatMessage;
@@ -116,27 +117,27 @@ export function ResultCard({
             </div>
           </div>
 
-          {msg.operation === "text_generate" && (
-            text ? (
+          {msg.operation === "text_generate" &&
+            (text ? (
               <div className="vk-preview__text">{text}</div>
             ) : (
               <UnavailableResult label="Текст результата недоступен." onRetry={onRetry} prompt={prompt} />
-            )
-          )}
+            ))}
 
-          {msg.operation === "image_generate" && (
-            mediaLoading ? (
+          {msg.operation === "image_generate" &&
+            (mediaLoading ? (
               <div className="result-card__skeleton" aria-live="polite">
                 <span />
                 <span />
                 <span />
               </div>
-            ) : mediaSrc && !mediaFailed ? (
-              <img
-                className="vk-preview__media"
+            ) : mediaSrc && !mediaFailed && msg.jobId ? (
+              <MediaResultPreview
+                kind="image"
                 src={mediaSrc}
-                alt="Готовый результат"
-                onError={() => setMediaFailed(true)}
+                prompt={prompt}
+                jobId={msg.jobId}
+                onMediaError={() => setMediaFailed(true)}
               />
             ) : (
               <UnavailableResult
@@ -144,22 +145,22 @@ export function ResultCard({
                 onRetry={onRetry}
                 prompt={prompt}
               />
-            )
-          )}
+            ))}
 
-          {msg.operation === "video_generate" && (
-            mediaLoading ? (
+          {msg.operation === "video_generate" &&
+            (mediaLoading ? (
               <div className="result-card__skeleton" aria-live="polite">
                 <span />
                 <span />
                 <span />
               </div>
-            ) : mediaSrc && !mediaFailed ? (
-              <video
-                className="vk-preview__media"
+            ) : mediaSrc && !mediaFailed && msg.jobId ? (
+              <MediaResultPreview
+                kind="video"
                 src={mediaSrc}
-                controls
-                onError={() => setMediaFailed(true)}
+                prompt={prompt}
+                jobId={msg.jobId}
+                onMediaError={() => setMediaFailed(true)}
               />
             ) : (
               <UnavailableResult
@@ -167,16 +168,18 @@ export function ResultCard({
                 onRetry={onRetry}
                 prompt={prompt}
               />
-            )
-          )}
+            ))}
         </div>
       )}
 
-      {showResult && msg.operation !== "text_generate" && msg.operation !== "image_generate" && msg.operation !== "video_generate" && (
-        <div className="result-card__fallback">
-          <p>Результат готов.</p>
-        </div>
-      )}
+      {showResult &&
+        msg.operation !== "text_generate" &&
+        msg.operation !== "image_generate" &&
+        msg.operation !== "video_generate" && (
+          <div className="result-card__fallback">
+            <p>Результат готов.</p>
+          </div>
+        )}
 
       {showResult && (
         <footer className="result-card__actions">
@@ -194,7 +197,15 @@ export function ResultCard({
   );
 }
 
-function UnavailableResult({ label, onRetry, prompt }: { label: string; onRetry: () => void; prompt: string }) {
+function UnavailableResult({
+  label,
+  onRetry,
+  prompt,
+}: {
+  label: string;
+  onRetry: () => void;
+  prompt: string;
+}) {
   return (
     <div className="result-card__fallback">
       <p>{label}</p>

@@ -23,6 +23,7 @@ import {
 } from "../chat/types";
 import type { VkUser } from "../hooks/useBridge";
 import { formatCredits } from "../ui/credits";
+import { jobDisplayTitle } from "../utils/jobDisplay";
 import neuroHubBanner from "../assets/neurohub-banner.png";
 
 type WorkflowScreen = "home" | "status" | "result" | "history";
@@ -37,7 +38,12 @@ type WorkflowModeProps = {
   onOpenJobRequestHandled: () => void;
   onCreateJob: (
     prompt: string,
-    request: { operation: string; modelId: string; referenceArtifactIds?: string[] },
+    request: {
+      operation: string;
+      modelId: string;
+      referenceArtifactIds?: string[];
+      durationSec?: number;
+    },
   ) => Promise<Job | null>;
 };
 
@@ -50,6 +56,8 @@ type ReferenceItem = {
 const ESTIMATE_DEBOUNCE_MS = 450;
 const PROMPT_LIMIT = 2000;
 const REFERENCE_ACCEPT = "image/jpeg,image/png,image/webp";
+const VIDEO_DURATION_OPTIONS = [3, 5, 10] as const;
+type VideoDurationSec = (typeof VIDEO_DURATION_OPTIONS)[number];
 
 function createLocalReferenceId(): string {
   if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
@@ -234,6 +242,7 @@ export function WorkflowMode({
   const [referenceItems, setReferenceItems] = useState<ReferenceItem[]>([]);
   const [referenceUploading, setReferenceUploading] = useState(false);
   const [referenceError, setReferenceError] = useState<string | null>(null);
+  const [videoDurationSec, setVideoDurationSec] = useState<VideoDurationSec>(5);
   const [isDragging, setIsDragging] = useState(false);
   const [resultMediaSrc, setResultMediaSrc] = useState<string | null | undefined>(undefined);
   const [resultPreparing, setResultPreparing] = useState(false);
@@ -249,6 +258,7 @@ export function WorkflowMode({
   const activeCreateModel =
     CREATE_MODELS.find((item) => item.modalityId === modalityId) ?? CREATE_MODELS[0];
   const isImageModality = modalityId === "image";
+  const isVideoModality = modalityId === "video";
   const referenceArtifactIds = useMemo(
     () => (isImageModality ? referenceItems.map((item) => item.artifactId) : []),
     [isImageModality, referenceItems],
@@ -290,6 +300,7 @@ export function WorkflowMode({
         prompt: value,
         model_id: modelId,
         reference_artifact_ids: referenceArtifactIds.length > 0 ? referenceArtifactIds : undefined,
+        duration_sec: isVideoModality ? videoDurationSec : undefined,
       })
         .then((data) => {
           if (cancelled) return;
@@ -307,7 +318,16 @@ export function WorkflowMode({
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [currentModality.operation, modelId, modelSelected, prompt, promptTooLong, referenceArtifactIds]);
+  }, [
+    currentModality.operation,
+    isVideoModality,
+    modelId,
+    modelSelected,
+    prompt,
+    promptTooLong,
+    referenceArtifactIds,
+    videoDurationSec,
+  ]);
 
   useEffect(() => {
     return () => {
@@ -475,6 +495,7 @@ export function WorkflowMode({
         operation: currentModality.operation,
         modelId,
         referenceArtifactIds: referenceArtifactIds.length > 0 ? referenceArtifactIds : undefined,
+        durationSec: isVideoModality ? videoDurationSec : undefined,
       });
       if (!job) {
         setSubmitError("Не удалось запустить генерацию");
@@ -633,6 +654,35 @@ export function WorkflowMode({
                 );
               })}
             </div>
+
+            {isVideoModality && (
+              <div className="create-duration" role="group" aria-label="Длительность видео">
+                <span className="create-duration__label">Длительность</span>
+                <div className="segment create-duration__segment">
+                  {VIDEO_DURATION_OPTIONS.map((seconds) => {
+                    const active = videoDurationSec === seconds;
+                    return (
+                      <button
+                        key={seconds}
+                        type="button"
+                        className={"segment__btn" + (active ? " is-active" : "")}
+                        style={
+                          active
+                            ? {
+                                background: `linear-gradient(135deg, ${activeCreateModel.color}, #ec4899)`,
+                                boxShadow: `0 4px 12px ${activeCreateModel.glow}`,
+                              }
+                            : undefined
+                        }
+                        onClick={() => setVideoDurationSec(seconds)}
+                      >
+                        {seconds} сек
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {isImageModality && (
               <div
@@ -961,8 +1011,11 @@ function JobList({
           <article key={job.id} className="job-row">
             <button type="button" className="job-row__main" onClick={() => onOpen(job)}>
               <span>{operationLabel(job.operation)}</span>
-              <strong>{kind === "done" ? "Готово" : kind === "failed" ? "Ошибка" : statusLabel(job.status)}</strong>
-              <small>{dateLabel(job.created_at)}</small>
+              <strong>{jobDisplayTitle(job)}</strong>
+              <small>
+                {kind === "done" ? "Готово" : kind === "failed" ? "Ошибка" : statusLabel(job.status)} ·{" "}
+                {dateLabel(job.created_at)}
+              </small>
             </button>
             {onRepeat && (
               <Button

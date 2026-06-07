@@ -568,6 +568,7 @@ type promptParams struct {
 	ConversationID         string      `json:"conversation_id,omitempty"`
 	ConversationSource     string      `json:"conversation_source,omitempty"`
 	ExternalThreadID       string      `json:"external_thread_id,omitempty"`
+	DurationSec            int         `json:"duration_sec,omitempty"`
 }
 
 // buildRequest builds the normalized provider request for a job. The submit
@@ -598,6 +599,10 @@ func (p *processor) buildRequest(ctx context.Context, job *domain.Job, attempt i
 			modelCode = p.videoModel
 		}
 		durationSec = p.videoDurationSec
+		switch pp.DurationSec {
+		case 3, 5, 10:
+			durationSec = pp.DurationSec
+		}
 		resolution = p.videoResolution
 		if pp.AspectRatio == "" {
 			pp.AspectRatio = p.videoAspectRatio

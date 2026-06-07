@@ -51,7 +51,8 @@ Video jobs use the same tables as text/image:
 ## Security invariants
 
 - Mini App BFF never calls DeepInfra; only `cmd/worker`.
-- `draft` / `duration` come from worker env, **not** from client JSON.
+- `draft` comes from worker env, **not** from client JSON.
+- `duration_sec` is accepted from Mini App only as **3, 5 or 10** (BFF-validated, stored in `jobs.params`); worker falls back to env default if absent.
 - Reference images for `video_generate` are rejected at BFF.
 - `video_url` download uses SSRF-hardened artifact downloader.
 - No VK bot files changed for this feature.
