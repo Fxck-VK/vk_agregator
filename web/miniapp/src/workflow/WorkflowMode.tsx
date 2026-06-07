@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent } from "react";
 import { Button, NativeSelect, Textarea } from "@vkontakte/vkui";
 import {
+  MAX_REFERENCE_ARTIFACTS,
   apiUserMessage,
   estimateJob,
   isTerminal,
@@ -8,6 +9,7 @@ import {
   statusLabel,
   type EstimateResponse,
   type Job,
+  uploadArtifact,
 } from "../api/client";
 import { ResultCard } from "../components/ResultCard";
 import {
@@ -29,11 +31,26 @@ type WorkflowModeProps = {
   chats: Chat[];
   loading: boolean;
   submitting: boolean;
-  onCreateJob: (prompt: string, request: { operation: string; modelId: string }) => Promise<Job | null>;
+  onCreateJob: (
+    prompt: string,
+    request: { operation: string; modelId: string; referenceArtifactIds?: string[] },
+  ) => Promise<Job | null>;
+};
+
+type ReferenceItem = {
+  localId: string;
+  artifactId: string;
+  previewUrl: string;
 };
 
 const ESTIMATE_DEBOUNCE_MS = 450;
 const PROMPT_LIMIT = 2000;
+const REFERENCE_ACCEPT = "image/jpeg,image/png,image/webp";
+
+function createLocalReferenceId(): string {
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  return `ref-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+}
 
 const CREATE_CHOICES: Array<{
   title: string;
@@ -160,12 +177,22 @@ export function WorkflowMode({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] =
     useState<(typeof HISTORY_STATUS_FILTERS)[number]["id"]>("all");
+  const [referenceItems, setReferenceItems] = useState<ReferenceItem[]>([]);
+  const [referenceUploading, setReferenceUploading] = useState(false);
+  const [referenceError, setReferenceError] = useState<string | null>(null);
+  const referenceInputRef = useRef<HTMLInputElement>(null);
+  const referenceItemsRef = useRef<ReferenceItem[]>([]);
 
   const recentJobs = useMemo(() => sortedJobs(jobs), [jobs]);
   const activeJob = activeJobId ? jobs.find((job) => job.id === activeJobId) : undefined;
   const activeMessage = messageForJob(activeJob, chats);
   const activePrompt = prompt.trim();
   const currentModality = modalityById(modalityId);
+  const isImageModality = modalityId === "image";
+  const referenceArtifactIds = useMemo(
+    () => (isImageModality ? referenceItems.map((item) => item.artifactId) : []),
+    [isImageModality, referenceItems],
+  );
   const modelSelected = currentModality.models.some((model) => model.id === modelId);
   const trimmedPrompt = prompt.trim();
   const promptTooLong = prompt.length > PROMPT_LIMIT;
@@ -174,7 +201,18 @@ export function WorkflowMode({
     !promptTooLong &&
     modelSelected &&
     estimate?.enough_credits === true &&
+    !referenceUploading &&
     !submitting;
+
+  useEffect(() => {
+    referenceItemsRef.current = referenceItems;
+  }, [referenceItems]);
+
+  useEffect(() => {
+    return () => {
+      referenceItemsRef.current.forEach((item) => URL.revokeObjectURL(item.previewUrl));
+    };
+  }, []);
 
   useEffect(() => {
     const value = prompt.trim();
@@ -187,7 +225,12 @@ export function WorkflowMode({
     let cancelled = false;
     const timer = window.setTimeout(() => {
       setEstimateLoading(true);
-      estimateJob({ operation: currentModality.operation, prompt: value, model_id: modelId })
+      estimateJob({
+        operation: currentModality.operation,
+        prompt: value,
+        model_id: modelId,
+        reference_artifact_ids: referenceArtifactIds.length > 0 ? referenceArtifactIds : undefined,
+      })
         .then((data) => {
           if (cancelled) return;
           setEstimate(data);
@@ -204,7 +247,7 @@ export function WorkflowMode({
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [currentModality.operation, modelId, modelSelected, prompt, promptTooLong]);
+  }, [currentModality.operation, modelId, modelSelected, prompt, promptTooLong, referenceArtifactIds]);
 
   useEffect(() => {
     if (activeJob && isTerminal(activeJob.status) && statusKind(activeJob.status) === "done" && screen === "status") {
@@ -212,8 +255,69 @@ export function WorkflowMode({
     }
   }, [activeJob, screen]);
 
+  function clearReferenceItems() {
+    setReferenceItems((prev) => {
+      prev.forEach((item) => URL.revokeObjectURL(item.previewUrl));
+      return [];
+    });
+    setReferenceError(null);
+  }
+
+  function removeReference(localId: string) {
+    setReferenceItems((prev) => {
+      const item = prev.find((ref) => ref.localId === localId);
+      if (item) URL.revokeObjectURL(item.previewUrl);
+      return prev.filter((ref) => ref.localId !== localId);
+    });
+  }
+
+  async function addReferenceFiles(files: File[]) {
+    if (!isImageModality || referenceUploading || files.length === 0) return;
+    const remaining = MAX_REFERENCE_ARTIFACTS - referenceItems.length;
+    if (remaining <= 0 || files.length > remaining) {
+      setReferenceError(`Можно добавить не больше ${MAX_REFERENCE_ARTIFACTS} референсов`);
+      return;
+    }
+    setReferenceError(null);
+    setReferenceUploading(true);
+    try {
+      for (const file of files) {
+        const previewUrl = URL.createObjectURL(file);
+        try {
+          const artifactId = await uploadArtifact(file);
+          setReferenceItems((prev) => [
+            ...prev,
+            {
+              localId: createLocalReferenceId(),
+              artifactId,
+              previewUrl,
+            },
+          ]);
+        } catch (error) {
+          URL.revokeObjectURL(previewUrl);
+          setReferenceError(apiUserMessage(error));
+          break;
+        }
+      }
+    } finally {
+      setReferenceUploading(false);
+    }
+  }
+
+  function handleReferenceInput(event: ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(event.currentTarget.files ?? []);
+    event.currentTarget.value = "";
+    void addReferenceFiles(files);
+  }
+
+  function handleReferenceDrop(event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    void addReferenceFiles(Array.from(event.dataTransfer.files));
+  }
+
   function changeModality(id: ModalityId) {
     const next = modalityById(id);
+    clearReferenceItems();
     setModalityId(id);
     setModelId(next.models[0]?.id ?? "");
   }
@@ -242,6 +346,7 @@ export function WorkflowMode({
     const job = await onCreateJob(trimmedPrompt, {
       operation: currentModality.operation,
       modelId,
+      referenceArtifactIds: referenceArtifactIds.length > 0 ? referenceArtifactIds : undefined,
     });
     if (!job) {
       setSubmitError("Не удалось запустить генерацию");
@@ -354,6 +459,53 @@ export function WorkflowMode({
                 {prompt.length.toLocaleString("ru-RU")} / {PROMPT_LIMIT.toLocaleString("ru-RU")}
               </span>
             </div>
+
+            {isImageModality && (
+              <div className="workflow-field">
+                <label htmlFor="workflow-reference-input">Референсы</label>
+                <div
+                  className="reference-dropzone"
+                  onDragOver={(event) => event.preventDefault()}
+                  onDrop={handleReferenceDrop}
+                >
+                  <input
+                    ref={referenceInputRef}
+                    id="workflow-reference-input"
+                    type="file"
+                    accept={REFERENCE_ACCEPT}
+                    multiple
+                    onChange={handleReferenceInput}
+                    hidden
+                  />
+                  <button
+                    type="button"
+                    className="reference-dropzone__button"
+                    onClick={() => referenceInputRef.current?.click()}
+                    disabled={referenceUploading || referenceItems.length >= MAX_REFERENCE_ARTIFACTS}
+                  >
+                    {referenceUploading ? "Загружаем..." : "Добавить изображения"}
+                  </button>
+                  <span>JPEG, PNG или WEBP. До {MAX_REFERENCE_ARTIFACTS} файлов.</span>
+                </div>
+                {referenceItems.length > 0 && (
+                  <div className="reference-strip" aria-label="Загруженные референсы">
+                    {referenceItems.map((item) => (
+                      <div className="reference-chip" key={item.localId}>
+                        <img src={item.previewUrl} alt="" />
+                        <button
+                          type="button"
+                          aria-label="Удалить референс"
+                          onClick={() => removeReference(item.localId)}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {referenceError && <span className="field-note is-warn">{referenceError}</span>}
+              </div>
+            )}
 
             <div className="estimate-card" aria-live="polite">
               {estimateLoading ? (

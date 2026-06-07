@@ -214,13 +214,15 @@ func main() {
 	}
 
 	deps := worker.Deps{
-		Jobs:       jobs,
-		Tasks:      tasks,
-		Artifacts:  artSvc,
-		Providers:  providers,
-		Streams:    publisher,
-		ImageModel: cfg.ImageModel,
-		ImageSize:  cfg.ImageSize,
+		Jobs:         jobs,
+		Tasks:        tasks,
+		Artifacts:    artSvc,
+		ArtifactRepo: artRepo,
+		Objects:      store,
+		Providers:    providers,
+		Streams:      publisher,
+		ImageModel:   cfg.ImageModel,
+		ImageSize:    cfg.ImageSize,
 		TextContext: dialogcontext.New(conversations, dialogcontext.Config{
 			Enabled:                cfg.TextContextEnabled,
 			MaxInputTokens:         cfg.TextContextMaxInputTokens,

@@ -283,6 +283,115 @@ func TestSubmitImageReferenceDisabled(t *testing.T) {
 	}
 }
 
+func TestSubmitImageWithReferenceEnabled(t *testing.T) {
+	png := []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n', 0, 0, 0, 0}
+	inputURL := "data:image/png;base64," + base64.StdEncoding.EncodeToString(png)
+	outputURL := "data:image/png;base64," + base64.StdEncoding.EncodeToString(png)
+	var seen nativeImageRequest
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.URL.EscapedPath(); !strings.Contains(got, "/v1/inference/ByteDance%2FSeedream-4.5") {
+			t.Errorf("path = %q, want DeepInfra native Seedream endpoint", got)
+		}
+		if err := json.NewDecoder(r.Body).Decode(&seen); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"images":["` + outputURL + `"]}`))
+	}))
+	defer srv.Close()
+
+	p := New(Config{
+		APIKey:                "test-key",
+		BaseURL:               srv.URL,
+		ImageReferenceEnabled: true,
+		HTTPClient:            srv.Client(),
+	})
+	task, err := p.Submit(context.Background(), domain.ProviderRequest{
+		JobID:          uuid.New(),
+		Operation:      domain.OperationImageGenerate,
+		Modality:       domain.ModalityImage,
+		Prompt:         "edit this",
+		Size:           "2K",
+		InputURLs:      []string{inputURL},
+		ModelCode:      defaultImageModel,
+		IdempotencyKey: "provider_submit:image-ref:1",
+	})
+	if err != nil {
+		t.Fatalf("submit image reference: %v", err)
+	}
+	if seen.Prompt != "edit this" || seen.Size != "2K" {
+		t.Fatalf("unexpected native request prompt/size: %+v", seen)
+	}
+	if len(seen.Images) != 1 || seen.Images[0] != inputURL {
+		t.Fatalf("native request images = %v, want one input data URL", seen.Images)
+	}
+	if task.Provider != domain.ProviderDeepInfra || task.ModelCode != defaultImageModel {
+		t.Fatalf("unexpected task: %+v", task)
+	}
+	res, err := p.Poll(context.Background(), domain.ProviderTaskRef{Provider: task.Provider, ExternalID: task.ExternalID})
+	if err != nil {
+		t.Fatalf("poll: %v", err)
+	}
+	if res.Status != domain.ProviderTaskSucceeded || len(res.OutputURLs) != 1 || res.OutputURLs[0] != outputURL {
+		t.Fatalf("unexpected poll result: %+v", res)
+	}
+}
+
+func TestSubmitImageWithReferenceNoSDXLFallback(t *testing.T) {
+	var seenPaths []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seenPaths = append(seenPaths, r.URL.EscapedPath())
+		if strings.Contains(r.URL.EscapedPath(), "stabilityai%2Fsdxl-turbo") {
+			t.Fatalf("fallback endpoint must not be called when references are present")
+		}
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"error":{"message":"seedream unavailable"}}`))
+	}))
+	defer srv.Close()
+
+	p := New(Config{
+		APIKey:                "test-key",
+		BaseURL:               srv.URL + "/v1/openai",
+		ImageModel:            defaultImageModel,
+		ImageFallbackModel:    "stabilityai/sdxl-turbo",
+		ImageReferenceEnabled: true,
+		HTTPClient:            srv.Client(),
+	})
+	_, err := p.Submit(context.Background(), domain.ProviderRequest{
+		JobID:     uuid.New(),
+		Operation: domain.OperationImageGenerate,
+		Modality:  domain.ModalityImage,
+		Prompt:    "edit this",
+		InputURLs: []string{"data:image/png;base64,iVBORw0KGgo="},
+		ModelCode: defaultImageModel,
+	})
+	if err == nil {
+		t.Fatal("expected primary reference submit error")
+	}
+	if len(seenPaths) != 1 || !strings.Contains(seenPaths[0], "ByteDance%2FSeedream-4.5") {
+		t.Fatalf("paths = %#v, want one primary Seedream request", seenPaths)
+	}
+}
+
+func TestSubmitImageReferenceRequiresInputURLs(t *testing.T) {
+	p := New(Config{APIKey: "test-key", ImageReferenceEnabled: true})
+	_, err := p.Submit(context.Background(), domain.ProviderRequest{
+		JobID:                uuid.New(),
+		Operation:            domain.OperationImageGenerate,
+		Modality:             domain.ModalityImage,
+		Prompt:               "edit this",
+		ReferenceArtifactIDs: []uuid.UUID{uuid.New()},
+		ModelCode:            defaultImageModel,
+	})
+	perr, ok := err.(*Error)
+	if !ok {
+		t.Fatalf("expected *Error, got %T: %v", err, err)
+	}
+	if perr.ProviderErrorClass() != domain.ProviderErrUnsupportedCapab || !strings.Contains(perr.Error(), "resolved input urls") {
+		t.Fatalf("unexpected error: %v", perr)
+	}
+}
+
 func TestSubmitImageInvalidRequestClass(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)

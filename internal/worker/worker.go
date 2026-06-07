@@ -13,10 +13,12 @@ package worker
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"sort"
 	"sync"
 	"time"
@@ -417,21 +419,23 @@ func (e providerResultError) ProviderErrorClass() domain.ProviderErrorClass { re
 // processor holds the shared dependencies and result-handling logic used by
 // both the generation and poll workers.
 type processor struct {
-	jobs        domain.JobRepository
-	tasks       domain.ProviderTaskRepository
-	artifacts   ArtifactSaver
-	providers   *Registry
-	streams     StreamPublisher
-	imageModel  string
-	imageSize   string
-	textContext TextContext
-	moderator   Moderator
-	modResults  domain.ModerationResultRepository
-	releaser    ReservationReleaser
-	maxAttempts int
-	backoff     func(attempt int) time.Duration
-	callTimeout time.Duration
-	now         func() time.Time
+	jobs         domain.JobRepository
+	tasks        domain.ProviderTaskRepository
+	artifacts    ArtifactSaver
+	artifactRepo domain.ArtifactRepository
+	objects      ObjectStore
+	providers    *Registry
+	streams      StreamPublisher
+	imageModel   string
+	imageSize    string
+	textContext  TextContext
+	moderator    Moderator
+	modResults   domain.ModerationResultRepository
+	releaser     ReservationReleaser
+	maxAttempts  int
+	backoff      func(attempt int) time.Duration
+	callTimeout  time.Duration
+	now          func() time.Time
 }
 
 // Moderator gates delivery: generated output must pass a moderation check
@@ -460,6 +464,10 @@ type Deps struct {
 	Jobs      domain.JobRepository
 	Tasks     domain.ProviderTaskRepository
 	Artifacts ArtifactSaver
+	// ArtifactRepo loads input artifact metadata for provider request assembly.
+	ArtifactRepo domain.ArtifactRepository
+	// Objects loads input artifact bytes for provider request assembly.
+	Objects   ObjectStore
 	Providers *Registry
 	Streams   StreamPublisher
 	// ImageModel/ImageSize are optional product-level defaults for image jobs.
@@ -506,23 +514,30 @@ func newProcessor(d Deps) processor {
 		callTimeout = defaultProviderCallTimeout
 	}
 	return processor{
-		jobs:        d.Jobs,
-		tasks:       d.Tasks,
-		artifacts:   d.Artifacts,
-		providers:   d.Providers,
-		streams:     d.Streams,
-		imageModel:  d.ImageModel,
-		imageSize:   d.ImageSize,
-		textContext: d.TextContext,
-		moderator:   d.Moderator,
-		modResults:  d.ModResults,
-		releaser:    d.Releaser,
-		maxAttempts: maxAttempts,
-		backoff:     backoff,
-		callTimeout: callTimeout,
-		now:         now,
+		jobs:         d.Jobs,
+		tasks:        d.Tasks,
+		artifacts:    d.Artifacts,
+		artifactRepo: d.ArtifactRepo,
+		objects:      d.Objects,
+		providers:    d.Providers,
+		streams:      d.Streams,
+		imageModel:   d.ImageModel,
+		imageSize:    d.ImageSize,
+		textContext:  d.TextContext,
+		moderator:    d.Moderator,
+		modResults:   d.ModResults,
+		releaser:     d.Releaser,
+		maxAttempts:  maxAttempts,
+		backoff:      backoff,
+		callTimeout:  callTimeout,
+		now:          now,
 	}
 }
+
+// maxReferenceArtifacts must match miniapp/references.go limit.
+const maxReferenceArtifacts = 4
+
+const maxReferenceArtifactBytes = 20 << 20
 
 // promptParams is the subset of job params the provider request needs.
 type promptParams struct {
@@ -578,6 +593,14 @@ func (p *processor) buildRequest(ctx context.Context, job *domain.Job, attempt i
 			}
 		}
 	}
+	var inputURLs []string
+	if job.Modality == domain.ModalityImage && len(pp.ReferenceArtifactIDs) > 0 {
+		var err error
+		inputURLs, err = p.resolveReferenceInputURLs(ctx, job, pp.ReferenceArtifactIDs)
+		if err != nil {
+			return domain.ProviderRequest{}, err
+		}
+	}
 	return domain.ProviderRequest{
 		JobID:                job.ID,
 		UserID:               job.UserID,
@@ -589,11 +612,74 @@ func (p *processor) buildRequest(ctx context.Context, job *domain.Job, attempt i
 		Size:                 size,
 		AspectRatio:          pp.AspectRatio,
 		ReferenceArtifactIDs: pp.ReferenceArtifactIDs,
-		InputURLs:            pp.InputURLs,
-		Params:               job.Params,
+		InputURLs:            inputURLs,
+		Params:               stripProviderInputURLs(job.Params),
 		MaxOutputTokens:      maxOutputTokens,
 		IdempotencyKey:       fmt.Sprintf("provider_submit:%s:%d", job.ID, attempt),
 	}, nil
+}
+
+func stripProviderInputURLs(raw json.RawMessage) json.RawMessage {
+	if len(raw) == 0 {
+		return raw
+	}
+	var params map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &params); err != nil {
+		return raw
+	}
+	if _, ok := params["input_urls"]; !ok {
+		return raw
+	}
+	delete(params, "input_urls")
+	out, err := json.Marshal(params)
+	if err != nil {
+		return raw
+	}
+	return out
+}
+
+func (p *processor) resolveReferenceInputURLs(ctx context.Context, job *domain.Job, ids []uuid.UUID) ([]string, error) {
+	if len(ids) > maxReferenceArtifacts {
+		return nil, fmt.Errorf("worker: too many reference artifacts")
+	}
+	if p.artifactRepo == nil {
+		return nil, fmt.Errorf("worker: artifact repository unavailable")
+	}
+	if p.objects == nil {
+		return nil, fmt.Errorf("worker: object store unavailable")
+	}
+	inputURLs := make([]string, 0, len(ids))
+	for _, id := range ids {
+		if id == uuid.Nil {
+			return nil, fmt.Errorf("worker: invalid reference artifact id")
+		}
+		artifact, err := p.artifactRepo.GetByID(ctx, id)
+		if err != nil {
+			return nil, fmt.Errorf("worker: reference artifact not found: %w", err)
+		}
+		if artifact.OwnerUserID != job.UserID {
+			return nil, fmt.Errorf("worker: invalid reference artifact owner")
+		}
+		if artifact.Kind != domain.ArtifactKindInput || artifact.MediaType != domain.MediaTypeImage || artifact.Status != domain.ArtifactStatusReady {
+			return nil, fmt.Errorf("worker: invalid reference artifact")
+		}
+		if artifact.StorageBucket == "" || artifact.StorageKey == "" {
+			return nil, fmt.Errorf("worker: reference artifact storage missing")
+		}
+		data, err := p.objects.GetObject(ctx, artifact.StorageBucket, artifact.StorageKey)
+		if err != nil {
+			return nil, fmt.Errorf("worker: reference artifact object missing: %w", err)
+		}
+		if len(data) > maxReferenceArtifactBytes {
+			return nil, fmt.Errorf("worker: reference artifact too large")
+		}
+		mime := artifact.MimeType
+		if mime == "" {
+			mime = http.DetectContentType(data)
+		}
+		inputURLs = append(inputURLs, "data:"+mime+";base64,"+base64.StdEncoding.EncodeToString(data))
+	}
+	return inputURLs, nil
 }
 
 // taskOf builds the queue task that represents a job.

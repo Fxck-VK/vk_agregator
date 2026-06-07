@@ -72,13 +72,15 @@ func newHarnessCore(t *testing.T, provider domain.Provider, textContext worker.T
 	streams := newFakeStreams()
 	releaser := &fakeReleaser{}
 	deps := worker.Deps{
-		Jobs:        jobs,
-		Tasks:       tasks,
-		Artifacts:   artSvc,
-		Providers:   worker.NewRegistry(provider),
-		Streams:     streams,
-		TextContext: textContext,
-		Releaser:    releaser,
+		Jobs:         jobs,
+		Tasks:        tasks,
+		Artifacts:    artSvc,
+		ArtifactRepo: artRepo,
+		Objects:      store,
+		Providers:    worker.NewRegistry(provider),
+		Streams:      streams,
+		TextContext:  textContext,
+		Releaser:     releaser,
 	}
 	if configure != nil {
 		configure(&deps)
@@ -153,6 +155,31 @@ func (h *harness) queueJob(t *testing.T, op domain.OperationType, mod domain.Mod
 		t.Fatalf("create job: %v", err)
 	}
 	return job
+}
+
+func (h *harness) createInputImageArtifact(t *testing.T, ownerID uuid.UUID, data []byte, mime string) *domain.Artifact {
+	t.Helper()
+	if mime == "" {
+		mime = "image/png"
+	}
+	artifact := &domain.Artifact{
+		OwnerUserID:   ownerID,
+		Kind:          domain.ArtifactKindInput,
+		MediaType:     domain.MediaTypeImage,
+		MimeType:      mime,
+		StorageBucket: "artifacts",
+		StorageKey:    "inputs/" + uuid.NewString() + ".png",
+		SHA256:        uuid.NewString(),
+		SizeBytes:     int64(len(data)),
+		Status:        domain.ArtifactStatusReady,
+	}
+	if err := h.store.Put(context.Background(), artifact.StorageBucket, artifact.StorageKey, data, mime); err != nil {
+		t.Fatalf("put input artifact bytes: %v", err)
+	}
+	if err := h.artRepo.Create(context.Background(), artifact); err != nil {
+		t.Fatalf("create input artifact: %v", err)
+	}
+	return artifact
 }
 
 func (h *harness) reload(t *testing.T, id uuid.UUID) *domain.Job {
@@ -491,15 +518,16 @@ func TestGenerationImageRequestCarriesImageDefaultsAndReferences(t *testing.T) {
 		d.ImageSize = "1024x1024"
 	})
 	ctx := context.Background()
-	refID := uuid.New()
+	userID := uuid.New()
+	reference := h.createInputImageArtifact(t, userID, []byte{0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a}, "image/png")
 	params, _ := json.Marshal(map[string]any{
 		"prompt":                 "a cat",
 		"aspect_ratio":           "1:1",
-		"reference_artifact_ids": []string{refID.String()},
+		"reference_artifact_ids": []string{reference.ID.String()},
 	})
 	job := &domain.Job{
 		ID:             uuid.New(),
-		UserID:         uuid.New(),
+		UserID:         userID,
 		OperationType:  domain.OperationImageGenerate,
 		Modality:       domain.ModalityImage,
 		Status:         domain.JobStatusQueued,
@@ -523,8 +551,131 @@ func TestGenerationImageRequestCarriesImageDefaultsAndReferences(t *testing.T) {
 	if got.ModelCode != "foundation-image" || got.Size != "1024x1024" || got.AspectRatio != "1:1" {
 		t.Fatalf("unexpected image request defaults: model=%q size=%q aspect=%q", got.ModelCode, got.Size, got.AspectRatio)
 	}
-	if len(got.ReferenceArtifactIDs) != 1 || got.ReferenceArtifactIDs[0] != refID {
-		t.Fatalf("reference ids = %v, want %s", got.ReferenceArtifactIDs, refID)
+	if len(got.ReferenceArtifactIDs) != 1 || got.ReferenceArtifactIDs[0] != reference.ID {
+		t.Fatalf("reference ids = %v, want %s", got.ReferenceArtifactIDs, reference.ID)
+	}
+	if len(got.InputURLs) != 1 || !strings.HasPrefix(got.InputURLs[0], "data:image/png;base64,") {
+		t.Fatalf("input urls were not resolved from reference artifact: %v", got.InputURLs)
+	}
+}
+
+func TestBuildRequest_ResolvesReferenceInputURLs(t *testing.T) {
+	provider := &captureImageProvider{}
+	h := newHarnessWithProvider(t, provider, nil)
+	ctx := context.Background()
+	userID := uuid.New()
+	reference := h.createInputImageArtifact(t, userID, []byte{0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a}, "image/png")
+	params, _ := json.Marshal(map[string]any{
+		"prompt":                 "use this reference",
+		"reference_artifact_ids": []string{reference.ID.String()},
+	})
+	job := &domain.Job{
+		ID:             uuid.New(),
+		UserID:         userID,
+		OperationType:  domain.OperationImageGenerate,
+		Modality:       domain.ModalityImage,
+		Status:         domain.JobStatusQueued,
+		IdempotencyKey: "job:" + uuid.NewString(),
+		CorrelationID:  "corr",
+		CostReserved:   10,
+		Params:         params,
+	}
+	if err := h.jobs.Create(ctx, job); err != nil {
+		t.Fatalf("create job: %v", err)
+	}
+
+	if err := h.gen.Process(ctx, taskFor(job)); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+
+	if len(provider.last.InputURLs) != 1 || !strings.HasPrefix(provider.last.InputURLs[0], "data:image/") {
+		t.Fatalf("input urls = %v, want one image data URL", provider.last.InputURLs)
+	}
+	stored, err := h.jobs.GetByID(ctx, job.ID)
+	if err != nil {
+		t.Fatalf("get stored job: %v", err)
+	}
+	if strings.Contains(string(stored.Params), "base64") || strings.Contains(string(stored.Params), "data:") {
+		t.Fatalf("job params must not persist reference bytes: %s", string(stored.Params))
+	}
+	tasks, err := h.tasks.ListByJob(ctx, job.ID)
+	if err != nil {
+		t.Fatalf("list provider tasks: %v", err)
+	}
+	if len(tasks) == 0 {
+		t.Fatal("expected provider task")
+	}
+	if strings.Contains(string(tasks[0].Request), "base64") || strings.Contains(string(tasks[0].Request), "data:") {
+		t.Fatalf("provider task request must not persist reference bytes: %s", string(tasks[0].Request))
+	}
+}
+
+func TestBuildRequest_ResolveReferenceRejectsForeignOwner(t *testing.T) {
+	provider := &captureImageProvider{}
+	h := newHarnessWithProvider(t, provider, nil)
+	ctx := context.Background()
+	reference := h.createInputImageArtifact(t, uuid.New(), []byte("foreign"), "image/png")
+	params, _ := json.Marshal(map[string]any{
+		"prompt":                 "use foreign reference",
+		"reference_artifact_ids": []string{reference.ID.String()},
+	})
+	job := &domain.Job{
+		ID:             uuid.New(),
+		UserID:         uuid.New(),
+		OperationType:  domain.OperationImageGenerate,
+		Modality:       domain.ModalityImage,
+		Status:         domain.JobStatusQueued,
+		IdempotencyKey: "job:" + uuid.NewString(),
+		CorrelationID:  "corr",
+		CostReserved:   10,
+		Params:         params,
+	}
+	if err := h.jobs.Create(ctx, job); err != nil {
+		t.Fatalf("create job: %v", err)
+	}
+
+	err := h.gen.Process(ctx, taskFor(job))
+	if err == nil || !strings.Contains(err.Error(), "invalid reference artifact owner") {
+		t.Fatalf("expected foreign owner error, got %v", err)
+	}
+	if provider.last.JobID != uuid.Nil {
+		t.Fatalf("provider must not be called for invalid reference, got request %+v", provider.last)
+	}
+}
+
+func TestBuildRequest_ResolveReferenceRejectsTooMany(t *testing.T) {
+	provider := &captureImageProvider{}
+	h := newHarnessWithProvider(t, provider, nil)
+	ctx := context.Background()
+	ids := make([]string, 0, 5)
+	for i := 0; i < 5; i++ {
+		ids = append(ids, uuid.NewString())
+	}
+	params, _ := json.Marshal(map[string]any{
+		"prompt":                 "too many references",
+		"reference_artifact_ids": ids,
+	})
+	job := &domain.Job{
+		ID:             uuid.New(),
+		UserID:         uuid.New(),
+		OperationType:  domain.OperationImageGenerate,
+		Modality:       domain.ModalityImage,
+		Status:         domain.JobStatusQueued,
+		IdempotencyKey: "job:" + uuid.NewString(),
+		CorrelationID:  "corr",
+		CostReserved:   10,
+		Params:         params,
+	}
+	if err := h.jobs.Create(ctx, job); err != nil {
+		t.Fatalf("create job: %v", err)
+	}
+
+	err := h.gen.Process(ctx, taskFor(job))
+	if err == nil || !strings.Contains(err.Error(), "too many reference artifacts") {
+		t.Fatalf("expected too many references error, got %v", err)
+	}
+	if provider.last.JobID != uuid.Nil {
+		t.Fatalf("provider must not be called for too many references, got request %+v", provider.last)
 	}
 }
 

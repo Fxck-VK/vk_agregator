@@ -41,6 +41,9 @@ type Config struct {
 	// JobRateLimiter bounds POST /miniapp/jobs and POST /miniapp/estimate after
 	// launch params have been verified, keyed by the verified vk_user_id.
 	JobRateLimiter JobRateLimiter
+	// ImageReferenceEnabled allows validated image reference artifacts to flow
+	// into image jobs. When false, references fail closed before job creation.
+	ImageReferenceEnabled bool
 }
 
 // ObjectReader loads and stores artifact bytes (S3/MinIO).
@@ -272,8 +275,10 @@ func (h *Handler) estimateJob(w http.ResponseWriter, r *http.Request) {
 		if !h.validateReferenceArtifacts(w, r, user.ID, opType, req.ReferenceArtifactIDs) {
 			return
 		}
-		writeError(w, http.StatusBadRequest, "reference_artifacts_unsupported")
-		return
+		if !h.cfg.ImageReferenceEnabled {
+			writeError(w, http.StatusBadRequest, "reference_artifacts_unsupported")
+			return
+		}
 	}
 
 	cost, err := h.deps.Billing.Estimate(opType)
@@ -336,8 +341,10 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 		if !h.validateReferenceArtifacts(w, r, user.ID, opType, req.ReferenceArtifactIDs) {
 			return
 		}
-		writeError(w, http.StatusBadRequest, "reference_artifacts_unsupported")
-		return
+		if !h.cfg.ImageReferenceEnabled {
+			writeError(w, http.StatusBadRequest, "reference_artifacts_unsupported")
+			return
+		}
 	}
 
 	// Accept an optional client-supplied idempotency key. The key is scoped to

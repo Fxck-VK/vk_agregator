@@ -175,7 +175,9 @@ func (p *Provider) submitImage(ctx context.Context, req domain.ProviderRequest) 
 		if !p.cfg.ImageReferenceEnabled {
 			return domain.ProviderTask{}, &Error{Class: domain.ProviderErrUnsupportedCapab, Message: "deepinfra image references are disabled"}
 		}
-		return domain.ProviderTask{}, &Error{Class: domain.ProviderErrUnsupportedCapab, Message: "deepinfra image references are not implemented"}
+		if len(req.InputURLs) == 0 {
+			return domain.ProviderTask{}, &Error{Class: domain.ProviderErrUnsupportedCapab, Message: "deepinfra image references require resolved input urls"}
+		}
 	}
 
 	now := p.now()
@@ -188,6 +190,7 @@ func (p *Provider) submitImage(ctx context.Context, req domain.ProviderRequest) 
 	if req.Size != "" {
 		size = req.Size
 	}
+	hasReferences := len(req.InputURLs) > 0
 
 	imageReq := req
 	imageReq.ModelCode = model
@@ -195,7 +198,7 @@ func (p *Provider) submitImage(ctx context.Context, req domain.ProviderRequest) 
 	result, err := p.generateImage(ctx, imageReq.ImageRequest())
 	if err != nil {
 		fallbackModel := p.imageFallbackModel(req.ModelCode, model)
-		if fallbackModel == "" || !isImageFallbackError(err) {
+		if hasReferences || fallbackModel == "" || !isImageFallbackError(err) {
 			return domain.ProviderTask{}, err
 		}
 		imageReq.ModelCode = fallbackModel
@@ -299,8 +302,9 @@ type imageResponse struct {
 }
 
 type nativeImageRequest struct {
-	Prompt string `json:"prompt"`
-	Size   string `json:"size,omitempty"`
+	Prompt string   `json:"prompt"`
+	Size   string   `json:"size,omitempty"`
+	Images []string `json:"images,omitempty"` // worker supplies data:image/...;base64,... only.
 }
 
 type nativeImageResponse struct {
@@ -340,6 +344,9 @@ func (p *Provider) generateImage(ctx context.Context, req domain.ImageGeneration
 	body := nativeImageRequest{
 		Prompt: req.Prompt,
 		Size:   req.Size,
+	}
+	if len(req.InputURLs) > 0 {
+		body.Images = append([]string(nil), req.InputURLs...)
 	}
 	var decoded nativeImageResponse
 	if err := p.postNativeJSON(ctx, req.ModelCode, body, &decoded, req.IdempotencyKey); err != nil {

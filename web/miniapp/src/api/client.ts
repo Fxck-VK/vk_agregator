@@ -24,6 +24,7 @@ export interface CreateJobInput {
   operation: string;
   prompt: string;
   model_id?: string;
+  reference_artifact_ids?: string[];
 }
 
 export interface CreateChatMessageInput {
@@ -58,6 +59,7 @@ export interface EstimateInput {
   operation: string;
   prompt: string;
   model_id?: string;
+  reference_artifact_ids?: string[];
 }
 
 export interface EstimateResponse {
@@ -72,6 +74,10 @@ export interface EstimateResponse {
 /** Mirrors internal/adapter/inbound/miniapp BalanceDTO */
 export interface BalanceResponse {
   balance_credits: number;
+}
+
+export interface ArtifactUploadResponse {
+  artifact_id: string;
 }
 
 export interface JobListResponse {
@@ -107,6 +113,8 @@ export interface ChatConversationMessageListResponse {
 export type ApiErrorCode =
   | "validation_error"
   | "unsupported_model"
+  | "reference_artifacts_unsupported"
+  | "too_many_reference_artifacts"
   | "auth_error"
   | "insufficient_credits"
   | "rate_limited"
@@ -210,12 +218,23 @@ async function launchParams(): Promise<string> {
 const ARTIFACT_ID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+export const MAX_REFERENCE_ARTIFACTS = 4;
+export const MAX_UPLOAD_BYTES = 20 << 20;
+
+const ALLOWED_UPLOAD_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+
 function safeString(value: unknown): string | undefined {
   return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
 function apiErrorCode(status: number, backendError?: string): ApiErrorCode {
   const raw = (backendError ?? "").toLowerCase();
+  if (raw === "reference_artifacts_unsupported") {
+    return "reference_artifacts_unsupported";
+  }
+  if (raw === "too_many_reference_artifacts" || raw === "too many reference artifacts") {
+    return "too_many_reference_artifacts";
+  }
   if (status === 400 && (raw === "unsupported model" || raw === "unsupported_model")) {
     return "unsupported_model";
   }
@@ -236,6 +255,10 @@ function apiErrorMessageForCode(code: ApiErrorCode): string {
       return "Проверьте запрос и попробуйте снова";
     case "unsupported_model":
       return "Выбранная модель недоступна. Выберите другую модель";
+    case "reference_artifacts_unsupported":
+      return "Генерация с референсом пока недоступна. Попробуйте без фото или позже";
+    case "too_many_reference_artifacts":
+      return "Можно добавить не больше 4 референсов";
     case "auth_error":
       return "Не удалось подтвердить вход через VK. Откройте приложение заново";
     case "insufficient_credits":
@@ -255,6 +278,49 @@ function apiErrorMessageForCode(code: ApiErrorCode): string {
 export function apiUserMessage(error: unknown): string {
   if (error instanceof ApiError) return error.userMessage;
   return "Не удалось выполнить запрос";
+}
+
+async function apiErrorFromResponse(res: Response): Promise<ApiError> {
+  let backendError: string | undefined;
+  try {
+    const data = await res.json();
+    backendError = safeString(data?.error) ?? safeString(data?.message);
+  } catch {
+    /* ignore */
+  }
+  return new ApiError(res.status, apiErrorCode(res.status, backendError), {
+    backendError,
+    retryAfter: res.headers.get("Retry-After") ?? undefined,
+  });
+}
+
+function validateReferenceArtifactIDs(ids?: string[]): void {
+  if (!ids || ids.length === 0) return;
+  if (ids.length > MAX_REFERENCE_ARTIFACTS) {
+    throw new ApiError(400, "too_many_reference_artifacts", {
+      backendError: "too many reference artifacts",
+    });
+  }
+  for (const id of ids) {
+    if (!ARTIFACT_ID_RE.test(id)) {
+      throw new ApiError(400, "validation_error", {
+        backendError: "invalid reference artifact id",
+      });
+    }
+  }
+}
+
+function validateUploadFile(file: File): void {
+  if (!ALLOWED_UPLOAD_MIME_TYPES.has(file.type)) {
+    throw new ApiError(400, "validation_error", {
+      backendError: "unsupported artifact mime type",
+    });
+  }
+  if (file.size > MAX_UPLOAD_BYTES) {
+    throw new ApiError(400, "validation_error", {
+      backendError: "artifact too large",
+    });
+  }
 }
 
 export function createIdempotencyKey(): string {
@@ -285,17 +351,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new ApiError(0, "network_error");
   }
   if (!res.ok) {
-    let backendError: string | undefined;
-    try {
-      const data = await res.json();
-      backendError = safeString(data?.error) ?? safeString(data?.message);
-    } catch {
-      /* ignore */
-    }
-    throw new ApiError(res.status, apiErrorCode(res.status, backendError), {
-      backendError,
-      retryAfter: res.headers.get("Retry-After") ?? undefined,
-    });
+    throw await apiErrorFromResponse(res);
   }
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
@@ -316,6 +372,7 @@ export async function getJob(id: string): Promise<Job> {
 }
 
 export async function createJob(input: CreateJobInput, options: CreateJobOptions): Promise<Job> {
+  validateReferenceArtifactIDs(input.reference_artifact_ids);
   return request<Job>("/miniapp/jobs", {
     method: "POST",
     headers: {
@@ -323,6 +380,40 @@ export async function createJob(input: CreateJobInput, options: CreateJobOptions
     },
     body: JSON.stringify(input),
   });
+}
+
+export async function uploadArtifact(file: File): Promise<string> {
+  validateUploadFile(file);
+
+  const body = new FormData();
+  body.append("file", file);
+
+  let res: Response;
+  try {
+    const rawLaunchParams = await launchParams();
+    res = await fetch("/miniapp/artifacts", {
+      method: "POST",
+      headers: {
+        "X-Launch-Params": rawLaunchParams,
+        "X-Idempotency-Key": createIdempotencyKey(),
+      },
+      body,
+    });
+  } catch {
+    throw new ApiError(0, "network_error");
+  }
+
+  if (!res.ok) {
+    throw await apiErrorFromResponse(res);
+  }
+
+  const data = (await res.json()) as ArtifactUploadResponse;
+  if (!ARTIFACT_ID_RE.test(data.artifact_id)) {
+    throw new ApiError(500, "service_unavailable", {
+      backendError: "invalid artifact response",
+    });
+  }
+  return data.artifact_id;
 }
 
 export async function createChatMessage(input: CreateChatMessageInput, options: CreateJobOptions): Promise<Job> {
@@ -348,6 +439,7 @@ export async function listChatConversationMessages(conversationId: string): Prom
 }
 
 export async function estimateJob(input: EstimateInput): Promise<EstimateResponse> {
+  validateReferenceArtifactIDs(input.reference_artifact_ids);
   return request<EstimateResponse>("/miniapp/estimate", {
     method: "POST",
     body: JSON.stringify(input),

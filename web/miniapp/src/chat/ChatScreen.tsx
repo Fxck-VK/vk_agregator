@@ -42,6 +42,7 @@ type SubmitRequest = {
   operation: string;
   modelId: string;
   chat?: boolean;
+  referenceArtifactIds?: string[];
 };
 
 function tabTitle(tab: AppTab, activeChat?: Chat | null): { name: string; sub: string } {
@@ -483,7 +484,18 @@ export function ChatScreen({ user }: { user: VkUser }) {
             { idempotencyKey },
           )
         : await createJob(
-            { operation, prompt: text, model_id: selectedModel },
+            {
+              operation,
+              prompt: text,
+              model_id: selectedModel,
+              reference_artifact_ids:
+                !isChat &&
+                operation === "image_generate" &&
+                request?.referenceArtifactIds &&
+                request.referenceArtifactIds.length > 0
+                  ? request.referenceArtifactIds
+                  : undefined,
+            },
             { idempotencyKey },
           );
       patchInChat(chatId, botId, {

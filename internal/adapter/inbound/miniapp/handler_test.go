@@ -202,6 +202,10 @@ type testFixture struct {
 }
 
 func newTestFixture(appSecret string, limiter interface{ Allow(string) bool }) *testFixture {
+	return newTestFixtureWithConfig(appSecret, limiter, nil)
+}
+
+func newTestFixtureWithConfig(appSecret string, limiter interface{ Allow(string) bool }, configure func(*miniappinbound.Config)) *testFixture {
 	userRepo := memory.NewUserRepo()
 	jobRepo := memory.NewJobRepo()
 	conversationRepo := memory.NewConversationRepo()
@@ -215,12 +219,16 @@ func newTestFixture(appSecret string, limiter interface{ Allow(string) bool }) *
 	billing := billingservice.New(billingRepo)
 	orch := joborchestrator.New(jobRepo, uowMgr, billing, 0)
 
+	cfg := miniappinbound.Config{
+		AppSecret:          appSecret,
+		LaunchParamsMaxAge: time.Hour,
+		JobRateLimiter:     limiter,
+	}
+	if configure != nil {
+		configure(&cfg)
+	}
 	handler := miniappinbound.NewHandler(
-		miniappinbound.Config{
-			AppSecret:          appSecret,
-			LaunchParamsMaxAge: time.Hour,
-			JobRateLimiter:     limiter,
-		},
+		cfg,
 		miniappinbound.Deps{
 			Users:         userRepo,
 			Jobs:          jobRepo,
@@ -1356,6 +1364,92 @@ func TestHandler_Estimate_ReferenceArtifactsFailClosedAfterValidation(t *testing
 	}
 }
 
+func TestHandler_Estimate_ReferenceArtifactsPassWhenEnabled(t *testing.T) {
+	fixture := newTestFixtureWithConfig("", nil, func(cfg *miniappinbound.Config) {
+		cfg.ImageReferenceEnabled = true
+	})
+	routes := fixture.handler.Routes()
+	ctx := context.Background()
+	user := &domain.User{VKUserID: 777, Role: domain.RoleUser, Status: domain.StatusActive}
+	if err := fixture.userRepo.Create(ctx, user); err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	artifact := createTestArtifact(t, fixture, user.ID, domain.ArtifactKindInput, domain.MediaTypeImage, domain.ArtifactStatusReady)
+
+	body, _ := json.Marshal(map[string]any{
+		"operation":              "image_generate",
+		"prompt":                 "estimate with enabled reference",
+		"model_id":               "nano_banana_pro",
+		"reference_artifact_ids": []string{artifact.ID.String()},
+	})
+	req := httptest.NewRequest(http.MethodPost, "/miniapp/estimate", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Launch-Params", devLaunchParams(777))
+
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	lower := strings.ToLower(w.Body.String())
+	if strings.Contains(lower, "deepinfra") || strings.Contains(lower, "bytedance") || strings.Contains(lower, "seedream") || strings.Contains(lower, "model_code") || strings.Contains(lower, "provider") {
+		t.Fatalf("estimate response leaked provider/model internals: %s", w.Body.String())
+	}
+	var resp struct {
+		Operation      string `json:"operation"`
+		ModelID        string `json:"model_id"`
+		ModelName      string `json:"model_name"`
+		CostEstimate   int64  `json:"cost_estimate"`
+		BalanceCredits int64  `json:"balance_credits"`
+		EnoughCredits  bool   `json:"enough_credits"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("invalid response json: %v", err)
+	}
+	if resp.Operation != "image_generate" || resp.ModelID != "nano_banana_pro" || resp.ModelName != "Nano Banana Pro" {
+		t.Fatalf("unexpected estimate response: %+v", resp)
+	}
+	if resp.CostEstimate <= 0 || resp.BalanceCredits <= 0 || !resp.EnoughCredits {
+		t.Fatalf("unexpected estimate billing fields: %+v", resp)
+	}
+}
+
+func TestHandler_Estimate_ReferenceArtifactsRejectTooMany(t *testing.T) {
+	fixture := newTestFixtureWithConfig("", nil, func(cfg *miniappinbound.Config) {
+		cfg.ImageReferenceEnabled = true
+	})
+	routes := fixture.handler.Routes()
+	ctx := context.Background()
+	user := &domain.User{VKUserID: 777, Role: domain.RoleUser, Status: domain.StatusActive}
+	if err := fixture.userRepo.Create(ctx, user); err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	ids := make([]string, 0, 5)
+	for i := 0; i < 5; i++ {
+		artifact := createTestArtifact(t, fixture, user.ID, domain.ArtifactKindInput, domain.MediaTypeImage, domain.ArtifactStatusReady)
+		ids = append(ids, artifact.ID.String())
+	}
+
+	body, _ := json.Marshal(map[string]any{
+		"operation":              "image_generate",
+		"prompt":                 "estimate with too many references",
+		"model_id":               "nano_banana_pro",
+		"reference_artifact_ids": ids,
+	})
+	req := httptest.NewRequest(http.MethodPost, "/miniapp/estimate", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Launch-Params", devLaunchParams(777))
+
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "too many reference artifacts") {
+		t.Fatalf("expected too-many-references error, got %s", w.Body.String())
+	}
+}
+
 func TestHandler_Estimate_UnauthorizedNoParams(t *testing.T) {
 	routes := newTestHandler("real-secret").Routes()
 
@@ -1666,6 +1760,122 @@ func TestHandler_CreateJob_ReferenceArtifactsValidateOwnershipAndFailClosed(t *t
 	}
 	if len(jobs) != 0 {
 		t.Fatalf("reference fail-closed must not create a billable job, got %d", len(jobs))
+	}
+}
+
+func TestHandler_CreateJob_ReferenceArtifactsPassWhenEnabled(t *testing.T) {
+	fixture := newTestFixtureWithConfig("", nil, func(cfg *miniappinbound.Config) {
+		cfg.ImageReferenceEnabled = true
+	})
+	routes := fixture.handler.Routes()
+	ctx := context.Background()
+	user := &domain.User{VKUserID: 777, Role: domain.RoleUser, Status: domain.StatusActive}
+	if err := fixture.userRepo.Create(ctx, user); err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	artifact := createTestArtifact(t, fixture, user.ID, domain.ArtifactKindInput, domain.MediaTypeImage, domain.ArtifactStatusReady)
+
+	body, _ := json.Marshal(map[string]any{
+		"operation":              "image_generate",
+		"prompt":                 "image with enabled reference",
+		"model_id":               "nano_banana_pro",
+		"reference_artifact_ids": []string{artifact.ID.String()},
+	})
+	req := httptest.NewRequest(http.MethodPost, "/miniapp/jobs", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Launch-Params", devLaunchParams(777))
+	req.Header.Set("X-Idempotency-Key", "reference-enabled")
+
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	lower := strings.ToLower(w.Body.String())
+	if strings.Contains(lower, "deepinfra") || strings.Contains(lower, "bytedance") || strings.Contains(lower, "seedream") || strings.Contains(lower, "model_code") || strings.Contains(lower, "provider") {
+		t.Fatalf("job response leaked provider/model internals: %s", w.Body.String())
+	}
+	var resp struct {
+		ID        string `json:"id"`
+		Operation string `json:"operation"`
+		ModelID   string `json:"model_id"`
+		ModelName string `json:"model_name"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("invalid response json: %v", err)
+	}
+	if resp.Operation != "image_generate" || resp.ModelID != "nano_banana_pro" || resp.ModelName != "Nano Banana Pro" {
+		t.Fatalf("unexpected response: %+v", resp)
+	}
+	jobID, err := uuid.Parse(resp.ID)
+	if err != nil {
+		t.Fatalf("invalid job id: %v", err)
+	}
+	job, err := fixture.jobRepo.GetByID(ctx, jobID)
+	if err != nil {
+		t.Fatalf("get job: %v", err)
+	}
+	if len(job.InputArtifactIDs) != 1 || job.InputArtifactIDs[0] != artifact.ID {
+		t.Fatalf("unexpected job input artifacts: %+v", job.InputArtifactIDs)
+	}
+	var params struct {
+		ModelID              string      `json:"model_id"`
+		ModelName            string      `json:"model_name"`
+		ModelCode            string      `json:"model_code"`
+		ReferenceArtifactIDs []uuid.UUID `json:"reference_artifact_ids"`
+	}
+	if err := json.Unmarshal(job.Params, &params); err != nil {
+		t.Fatalf("invalid params: %v", err)
+	}
+	if params.ModelID != "nano_banana_pro" || params.ModelName != "Nano Banana Pro" || params.ModelCode != "ByteDance/Seedream-4.5" {
+		t.Fatalf("unexpected stored model params: %+v", params)
+	}
+	if len(params.ReferenceArtifactIDs) != 1 || params.ReferenceArtifactIDs[0] != artifact.ID {
+		t.Fatalf("unexpected stored reference params: %+v", params.ReferenceArtifactIDs)
+	}
+}
+
+func TestHandler_CreateJob_ReferenceArtifactsRejectTooMany(t *testing.T) {
+	fixture := newTestFixtureWithConfig("", nil, func(cfg *miniappinbound.Config) {
+		cfg.ImageReferenceEnabled = true
+	})
+	routes := fixture.handler.Routes()
+	ctx := context.Background()
+	user := &domain.User{VKUserID: 777, Role: domain.RoleUser, Status: domain.StatusActive}
+	if err := fixture.userRepo.Create(ctx, user); err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	ids := make([]string, 0, 5)
+	for i := 0; i < 5; i++ {
+		artifact := createTestArtifact(t, fixture, user.ID, domain.ArtifactKindInput, domain.MediaTypeImage, domain.ArtifactStatusReady)
+		ids = append(ids, artifact.ID.String())
+	}
+
+	body, _ := json.Marshal(map[string]any{
+		"operation":              "image_generate",
+		"prompt":                 "image with too many references",
+		"model_id":               "nano_banana_pro",
+		"reference_artifact_ids": ids,
+	})
+	req := httptest.NewRequest(http.MethodPost, "/miniapp/jobs", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Launch-Params", devLaunchParams(777))
+	req.Header.Set("X-Idempotency-Key", "reference-too-many")
+
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "too many reference artifacts") {
+		t.Fatalf("expected too-many-references error, got %s", w.Body.String())
+	}
+	jobs, err := fixture.jobRepo.ListByUser(ctx, user.ID, 10, 0)
+	if err != nil {
+		t.Fatalf("list jobs: %v", err)
+	}
+	if len(jobs) != 0 {
+		t.Fatalf("too many references must not create a job, got %d", len(jobs))
 	}
 }
 

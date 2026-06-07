@@ -8,9 +8,15 @@ import (
 	"vk-ai-aggregator/internal/domain"
 )
 
+const maxReferenceArtifacts = 4
+
 func (h *Handler) validateReferenceArtifacts(w http.ResponseWriter, r *http.Request, userID uuid.UUID, op domain.OperationType, ids []uuid.UUID) bool {
 	if op != domain.OperationImageGenerate {
 		writeError(w, http.StatusBadRequest, "reference_artifacts require image_generate")
+		return false
+	}
+	if len(ids) > maxReferenceArtifacts {
+		writeError(w, http.StatusBadRequest, "too many reference artifacts")
 		return false
 	}
 	if h.deps.Artifacts == nil {

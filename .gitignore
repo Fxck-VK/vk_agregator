@@ -16,7 +16,7 @@ pnpm-debug.log*
 web/miniapp/dist/
 web/miniapp/.vite/
 
-# Environment and secrets
+# Environment and secrets (.env.ps1 is covered by .env.*)
 .env
 .env.*
 !.env.example

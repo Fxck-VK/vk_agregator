@@ -41,8 +41,8 @@ export const MODALITIES: ModalityDef[] = [
     label: "Фото",
     operation: "image_generate",
     models: [
-      { id: "sdxl", label: "Stable Diffusion XL" },
-      { id: "kandinsky", label: "Kandinsky 3" },
+      { id: "nano_banana_pro", label: "Nano Banana Pro" },
+      { id: "nano_banana_flash", label: "Nano Banana Flash" },
     ],
   },
   {

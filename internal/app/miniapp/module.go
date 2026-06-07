@@ -54,9 +54,10 @@ func NewHandler(ctx context.Context, cfg config.Config, deps Deps) *miniappapi.H
 	// creation after launch params have been verified by the BFF.
 	miniappJobLimiter := ratelimit.New(cfg.MiniAppJobRateLimitRPS, cfg.MiniAppJobRateLimitBurst)
 	return miniappapi.NewHandler(miniappapi.Config{
-		AppSecret:          cfg.VKAppSecret,
-		LaunchParamsMaxAge: cfg.MiniAppLaunchParamsMaxAge,
-		JobRateLimiter:     miniappJobLimiter,
+		AppSecret:             cfg.VKAppSecret,
+		LaunchParamsMaxAge:    cfg.MiniAppLaunchParamsMaxAge,
+		JobRateLimiter:        miniappJobLimiter,
+		ImageReferenceEnabled: cfg.DeepInfraImageReferenceEnabled,
 	}, miniappapi.Deps{
 		Users:         deps.Users,
 		Jobs:          deps.Jobs,
