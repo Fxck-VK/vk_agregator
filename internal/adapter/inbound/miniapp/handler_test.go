@@ -1094,6 +1094,39 @@ func TestHandler_Estimate_TextUsesPublicModelName(t *testing.T) {
 	}
 }
 
+func TestHandler_Estimate_ImageAliasUsesPublicModelOnly(t *testing.T) {
+	routes := newTestHandler("").Routes()
+
+	body, _ := json.Marshal(map[string]string{
+		"operation": "image_generate",
+		"prompt":    "estimate image",
+		"model_id":  "nano_banana_pro",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/miniapp/estimate", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Launch-Params", devLaunchParams(777))
+
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	lower := strings.ToLower(w.Body.String())
+	if strings.Contains(lower, "deepinfra") || strings.Contains(lower, "bytedance") || strings.Contains(lower, "seedream") || strings.Contains(lower, "model_code") || strings.Contains(lower, "provider") {
+		t.Fatalf("estimate response leaked provider/model internals: %s", w.Body.String())
+	}
+	var resp struct {
+		ModelID   string `json:"model_id"`
+		ModelName string `json:"model_name"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("invalid response json: %v", err)
+	}
+	if resp.ModelID != "nano_banana_pro" || resp.ModelName != "Nano Banana Pro" {
+		t.Fatalf("unexpected model response: %+v", resp)
+	}
+}
+
 func TestHandler_Estimate_UnauthorizedNoParams(t *testing.T) {
 	routes := newTestHandler("real-secret").Routes()
 
@@ -1310,6 +1343,62 @@ func TestHandler_CreateJob_NormalizesLegacyTextModelID(t *testing.T) {
 	}
 	if strings.Contains(strings.ToLower(string(job.Params)), "deepseek") || strings.Contains(strings.ToLower(string(job.Params)), "deepinfra") {
 		t.Fatalf("job params leaked provider/model detail: %s", string(job.Params))
+	}
+}
+
+func TestHandler_CreateJob_ImageAliasPersistsProviderModelCodePrivately(t *testing.T) {
+	fixture := newTestFixture("", nil)
+	routes := fixture.handler.Routes()
+
+	body, _ := json.Marshal(map[string]string{
+		"operation": "image_generate",
+		"prompt":    "image prompt",
+		"model_id":  "nano_banana_pro",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/miniapp/jobs", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Launch-Params", devLaunchParams(777))
+	req.Header.Set("X-Idempotency-Key", "image-model-alias")
+
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	lower := strings.ToLower(w.Body.String())
+	if strings.Contains(lower, "deepinfra") || strings.Contains(lower, "bytedance") || strings.Contains(lower, "seedream") || strings.Contains(lower, "model_code") || strings.Contains(lower, "provider") {
+		t.Fatalf("job response leaked provider/model internals: %s", w.Body.String())
+	}
+	var resp struct {
+		ID        string `json:"id"`
+		Operation string `json:"operation"`
+		ModelID   string `json:"model_id"`
+		ModelName string `json:"model_name"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("invalid response json: %v", err)
+	}
+	if resp.Operation != "image_generate" || resp.ModelID != "nano_banana_pro" || resp.ModelName != "Nano Banana Pro" {
+		t.Fatalf("unexpected response: %+v", resp)
+	}
+	jobID, err := uuid.Parse(resp.ID)
+	if err != nil {
+		t.Fatalf("invalid job id: %v", err)
+	}
+	job, err := fixture.jobRepo.GetByID(context.Background(), jobID)
+	if err != nil {
+		t.Fatalf("get job: %v", err)
+	}
+	var params struct {
+		ModelID   string `json:"model_id"`
+		ModelName string `json:"model_name"`
+		ModelCode string `json:"model_code"`
+	}
+	if err := json.Unmarshal(job.Params, &params); err != nil {
+		t.Fatalf("invalid params: %v", err)
+	}
+	if params.ModelID != "nano_banana_pro" || params.ModelName != "Nano Banana Pro" || params.ModelCode != "ByteDance/Seedream-4.5" {
+		t.Fatalf("unexpected stored params: %+v", params)
 	}
 }
 

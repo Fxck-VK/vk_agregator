@@ -1,6 +1,7 @@
 package miniapp
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/google/uuid"
@@ -44,6 +45,7 @@ type miniAppJobParams struct {
 	Prompt             string                    `json:"prompt"`
 	ModelID            string                    `json:"model_id,omitempty"`
 	ModelName          string                    `json:"model_name,omitempty"`
+	ModelCode          string                    `json:"model_code,omitempty"`
 	ConversationID     string                    `json:"conversation_id,omitempty"`
 	ConversationSource domain.ConversationSource `json:"conversation_source,omitempty"`
 	ExternalThreadID   string                    `json:"external_thread_id,omitempty"`
@@ -67,6 +69,8 @@ type JobDTO struct {
 	Modality          string      `json:"modality"`
 	Status            string      `json:"status"`
 	Prompt            string      `json:"prompt,omitempty"`
+	ModelID           string      `json:"model_id,omitempty"`
+	ModelName         string      `json:"model_name,omitempty"`
 	CostEstimate      int64       `json:"cost_estimate"`
 	CostCaptured      int64       `json:"cost_captured"`
 	OutputArtifactIDs []uuid.UUID `json:"output_artifact_ids"`
@@ -119,6 +123,13 @@ func newJobDTO(j *domain.Job) JobDTO {
 	}
 	if out.OutputArtifactIDs == nil {
 		out.OutputArtifactIDs = []uuid.UUID{}
+	}
+	if j.OperationType != domain.OperationTextGenerate && len(j.Params) > 0 {
+		var params miniAppJobParams
+		if err := json.Unmarshal(j.Params, &params); err == nil {
+			out.ModelID = params.ModelID
+			out.ModelName = params.ModelName
+		}
 	}
 	return out
 }

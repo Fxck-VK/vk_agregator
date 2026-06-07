@@ -23,11 +23,6 @@ type contextKey int
 
 const ctxVKUserIDKey contextKey = iota
 
-const (
-	miniAppChatModelID         = "chatgpt"
-	miniAppChatPublicModelName = "ChatGPT"
-)
-
 // JobRateLimiter is the minimal limiter contract used by Mini App write-like
 // endpoints after authentication. Endpoint-specific keys keep job submits and
 // estimate requests from sharing a bucket.
@@ -218,86 +213,37 @@ func operationMeta(op string) (domain.OperationType, domain.Modality, bool) {
 	}
 }
 
-var miniAppSupportedModels = map[domain.OperationType]map[string]struct{}{
-	domain.OperationTextGenerate: {
-		miniAppChatModelID:              {},
-		miniAppChatPublicModelName:      {},
-		"deepseek-v4-flash":             {}, // legacy client alias; normalized before persistence/API output.
-		"deepseek-ai/DeepSeek-V4-Flash": {}, // legacy client alias; normalized before persistence/API output.
-	},
-	domain.OperationImageGenerate: {
-		"sdxl":      {},
-		"kandinsky": {},
-	},
-	domain.OperationVideoGenerate: {
-		"kling": {},
-	},
-}
-
-func normalizeMiniAppModelID(op domain.OperationType, raw string) (string, bool) {
-	modelID := strings.TrimSpace(raw)
-	if modelID == "" {
-		return "", true
-	}
-	models, ok := miniAppSupportedModels[op]
-	if !ok {
-		return "", false
-	}
-	_, ok = models[modelID]
-	if !ok {
-		return "", false
-	}
-	if op == domain.OperationTextGenerate {
-		return miniAppChatModelID, true
-	}
-	return modelID, true
-}
-
-func miniAppModelName(op domain.OperationType) string {
-	if op == domain.OperationTextGenerate {
-		return miniAppChatPublicModelName
-	}
-	return ""
-}
-
-func miniAppResponseModelID(op domain.OperationType, modelID string) string {
-	if op == domain.OperationTextGenerate {
-		return ""
-	}
-	return modelID
-}
-
 // ---------------------------------------------------------------------------
 // Handlers
 // ---------------------------------------------------------------------------
 
-func (h *Handler) readJobRequest(w http.ResponseWriter, r *http.Request) (CreateJobRequest, domain.OperationType, domain.Modality, string, bool) {
+func (h *Handler) readJobRequest(w http.ResponseWriter, r *http.Request) (CreateJobRequest, domain.OperationType, domain.Modality, miniAppModelSpec, bool) {
 	body, err := io.ReadAll(io.LimitReader(r.Body, 64<<10))
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "cannot read body")
-		return CreateJobRequest{}, "", "", "", false
+		return CreateJobRequest{}, "", "", miniAppModelSpec{}, false
 	}
 	var req CreateJobRequest
 	if err := json.Unmarshal(body, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid json")
-		return CreateJobRequest{}, "", "", "", false
+		return CreateJobRequest{}, "", "", miniAppModelSpec{}, false
 	}
 	if req.Prompt == "" {
 		writeError(w, http.StatusBadRequest, "prompt is required")
-		return CreateJobRequest{}, "", "", "", false
+		return CreateJobRequest{}, "", "", miniAppModelSpec{}, false
 	}
 
 	opType, modality, ok := operationMeta(req.Operation)
 	if !ok {
 		writeError(w, http.StatusBadRequest, "unsupported operation; allowed: text_generate, image_generate, video_generate")
-		return CreateJobRequest{}, "", "", "", false
+		return CreateJobRequest{}, "", "", miniAppModelSpec{}, false
 	}
-	modelID, ok := normalizeMiniAppModelID(opType, req.ModelID)
+	model, ok := resolveMiniAppModel(opType, req.ModelID)
 	if !ok {
 		writeError(w, http.StatusBadRequest, "unsupported model")
-		return CreateJobRequest{}, "", "", "", false
+		return CreateJobRequest{}, "", "", miniAppModelSpec{}, false
 	}
-	return req, opType, modality, modelID, true
+	return req, opType, modality, model, true
 }
 
 func (h *Handler) estimateJob(w http.ResponseWriter, r *http.Request) {
@@ -307,7 +253,7 @@ func (h *Handler) estimateJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, opType, _, modelID, ok := h.readJobRequest(w, r)
+	_, opType, _, model, ok := h.readJobRequest(w, r)
 	if !ok {
 		return
 	}
@@ -331,8 +277,8 @@ func (h *Handler) estimateJob(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, EstimateDTO{
 		Operation:      string(opType),
-		ModelID:        miniAppResponseModelID(opType, modelID),
-		ModelName:      miniAppModelName(opType),
+		ModelID:        miniAppResponseModelID(model),
+		ModelName:      model.ModelName,
 		CostEstimate:   cost,
 		BalanceCredits: balance,
 		EnoughCredits:  balance >= cost,
@@ -357,7 +303,7 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req, opType, modality, modelID, ok := h.readJobRequest(w, r)
+	req, opType, modality, model, ok := h.readJobRequest(w, r)
 	if !ok {
 		return
 	}
@@ -380,8 +326,9 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 
 	params, _ := json.Marshal(miniAppJobParams{
 		Prompt:    req.Prompt,
-		ModelID:   modelID,
-		ModelName: miniAppModelName(opType),
+		ModelID:   model.ModelID,
+		ModelName: model.ModelName,
+		ModelCode: model.ModelCode,
 	})
 
 	job, err := h.deps.Orchestrator.CreateJob(r.Context(), joborchestrator.CreateJobInput{
