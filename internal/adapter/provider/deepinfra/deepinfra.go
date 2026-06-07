@@ -1,6 +1,7 @@
 // Package deepinfra contains the DeepInfra provider adapter.
-// It uses DeepInfra's OpenAI-compatible chat endpoint and native image endpoint,
-// keeping the rest of the platform isolated from provider-specific shapes.
+// Text and image live in deepinfra.go (OpenAI-compatible chat + native image
+// inference). Video lives in video.go (native text-to-video inference). Split
+// is organizational: same Submit/Poll/Capabilities surface, smaller diffs.
 package deepinfra
 
 import (

@@ -33,6 +33,9 @@ try {
 
     Write-Host "DEEPINFRA_API_KEY: $(Get-MiniAppEnvState -Name 'DEEPINFRA_API_KEY')"
     Write-Host "DEEPINFRA_TEXT_MODEL: $(Get-MiniAppEnvState -Name 'DEEPINFRA_TEXT_MODEL')"
+    Write-Host "VIDEO_PROVIDER: $(Get-MiniAppEnvState -Name 'VIDEO_PROVIDER')"
+    Write-Host "DEEPINFRA_VIDEO_MODEL: $(Get-MiniAppEnvState -Name 'DEEPINFRA_VIDEO_MODEL')"
+    Write-Host "DEEPINFRA_VIDEO_DRAFT: $(Get-MiniAppEnvState -Name 'DEEPINFRA_VIDEO_DRAFT')"
     Write-Host "DATABASE_URL: $(Get-MiniAppEnvState -Name 'DATABASE_URL')"
     Write-Host "REDIS_ADDR: $(Get-MiniAppEnvState -Name 'REDIS_ADDR')"
     Write-Host "S3_ENDPOINT: $(Get-MiniAppEnvState -Name 'S3_ENDPOINT')"

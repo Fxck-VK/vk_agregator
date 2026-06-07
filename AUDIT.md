@@ -481,6 +481,34 @@ return `503` when the `localhost.run` SSH tunnel died (`no tunnel here :(`).
 - Create flow navigation: history/back now returns to the prior status/result
   screen instead of always resetting to the Create home menu.
 
+## Mini App video generation note (DeepInfra p-video)
+
+Date: 2026-06-07
+
+**Scope:** Mini App Create `video_generate` only. VK bot menu/video intake unchanged.
+
+**Pipeline:** `POST /miniapp/jobs` → shared `joborchestrator` → `queue.video.generate`
+→ worker → `internal/adapter/provider/deepinfra/video.go` → artifact in MinIO →
+BFF poll/preview. Same Postgres tables as text/image (`jobs`, `ledger_entries`,
+`artifacts`, `deliveries`); no new migration.
+
+**Model:** `PrunaAI/p-video` via `POST /v1/inference/PrunaAI/p-video`. Dev uses
+`DEEPINFRA_VIDEO_DRAFT=true` (~$0.005/s). Product UI shows «Kling»; `model_code`
+stays in `jobs.params` only.
+
+**Env:** `VIDEO_PROVIDER`, `DEEPINFRA_VIDEO_*`, `WORKER_PROVIDER_CALL_TIMEOUT`,
+`PRICES` (`video_generate`). Single secret: `DEEPINFRA_API_KEY`. Documented in
+`.env.example` and `docs/VIDEO_GENERATION.md`.
+
+**Security:** Worker-owned draft/duration; BFF rejects video reference artifacts;
+no provider calls from Mini App; SSRF-hardened `video_url` download; output
+moderation on prompt (keyword). Production must set `DEEPINFRA_VIDEO_DRAFT=false`.
+
+**Adapter layout:** `video.go` is split from historical `deepinfra.go` (text/image
+still inline) for smaller review scope — not a different architecture.
+
+---
+
 **Security / architecture impact:** No provider calls from VK handlers or Mini
 App frontend. Dev-only `VK_DELIVERY_MODE=mock` override is scoped to
 `scripts/dev/start-miniapp.ps1` child processes; production still requires

@@ -6,6 +6,8 @@ auth, billing, durable chat context, or dev tunnel setup.
 Bugfix and UX regression log: [`docs/MINIAPP_FIXLOG.md`](MINIAPP_FIXLOG.md)
 (append after each fix; `AUDIT.md` stays for production readiness).
 
+Video generation (Mini App Create): [`docs/VIDEO_GENERATION.md`](VIDEO_GENERATION.md).
+
 ## Current runtime shape
 
 - VK text bot and VK Mini App are separate app surfaces over the shared backend

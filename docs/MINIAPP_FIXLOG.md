@@ -6,6 +6,7 @@
 
 Связанные документы:
 - `AUDIT.md` — production readiness, инварианты, крупные архитектурные заметки
+- `docs/VIDEO_GENERATION.md` — env, БД, безопасность, layout `deepinfra` adapter
 - `PROGRESS.md` / `TASKS.md` — релизный прогресс и backlog
 - `docs/MINIAPP_REDESIGN_CONTEXT.md` — контекст редизайна
 
@@ -63,6 +64,15 @@ VK-бота, а не обязательная бизнес-логика job.
 ---
 
 ## Журнал
+
+### FIX-2026-06-07-13 — video: env, .env.example, ops docs
+- **Симптом:** `VIDEO_*` только в dev-скрипте; `.env.example` без video; дубль
+  `PRICES` в локальном `.env` (`video_generate=50`).
+- **Исправление:** `.env.example` + локальный `.env` (video block, `PRICES`
+  `video_generate=10`, `WORKER_PROVIDER_CALL_TIMEOUT=180s`); `docs/VIDEO_GENERATION.md`;
+  `AUDIT.md` § video; ссылка в FIXLOG/REDESIGN_CONTEXT.
+- **Безопасность:** секреты не в репо; production note `DEEPINFRA_VIDEO_DRAFT=false`.
+- **Проверка:** grep env keys present/missing (без вывода значений).
 
 ### FIX-2026-06-07-12 — Mini App video: DeepInfra PrunaAI/p-video (draft $0.005/с)
 - **Симптом:** `video_generate` в Create не доходил до реального провайдера (только mock).
