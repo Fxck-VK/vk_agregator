@@ -18,6 +18,7 @@ import {
   modalityByOperation,
 } from "../chat/types";
 import type { VkUser } from "../hooks/useBridge";
+import neuroHubAvatar from "../assets/neurohub-avatar.png";
 
 type WorkflowScreen = "home" | "generate" | "status" | "result" | "history";
 
@@ -265,27 +266,50 @@ export function WorkflowMode({
   return (
     <main className="workflow">
       {screen === "home" && (
-        <section className="workflow-screen">
-          <ScreenTitle
-            eyebrow="Создать"
-            title={`${user.name}, что создаём?`}
-            text="Выберите услугу, опишите задачу и проверьте результат перед публикацией."
-          />
-
-          <section className="workflow-section" aria-label="Услуги">
-            <div className="create-choice-grid">
-              {CREATE_CHOICES.map((choice) => (
-                <button
-                  key={choice.title}
-                  type="button"
-                  className="create-choice-card"
-                  onClick={() => openCreateType(choice.modality)}
-                >
-                  <span>{choice.title}</span>
-                </button>
-              ))}
+        <section className="workflow-screen nh-scroll">
+          <div className="nh-hero" aria-hidden="true">
+            <img className="nh-hero__img" src={neuroHubAvatar} alt="" />
+            <div className="nh-hero__fade" />
+          </div>
+          <div style={{ padding: "8px 16px 0" }}>
+            <div style={{ marginBottom: "20px" }}>
+              <h1 className="nh-page-title">Создать</h1>
+              <p className="nh-page-sub">AI-генерация изображений и видео</p>
             </div>
-          </section>
+            <section className="workflow-section" aria-label="Услуги">
+              <div className="create-model-grid">
+                {CREATE_CHOICES.map((choice) => {
+                  const isImage = choice.modality === "image";
+                  const color = isImage ? "#a855f7" : "#ec4899";
+                  return (
+                    <button
+                      key={choice.title}
+                      type="button"
+                      className="create-model-card"
+                      onClick={() => openCreateType(choice.modality)}
+                    >
+                      <div
+                        className="create-model-card__icon"
+                        style={{ background: `linear-gradient(135deg, ${color}, ${color}bb)` }}
+                      >
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                          {isImage ? (
+                            <path d="M4 5h16v14H4z M8 11l3 3 5-6" stroke="#fff" strokeWidth="1.8" />
+                          ) : (
+                            <path d="M4 6h16v12H4z M9 10l2 2 4-5" stroke="#fff" strokeWidth="1.8" />
+                          )}
+                        </svg>
+                      </div>
+                      <div style={{ fontSize: "13px", fontWeight: 600, marginBottom: "3px" }}>
+                        {isImage ? "Stable Diffusion" : "Kling"}
+                      </div>
+                      <div style={{ fontSize: "11px", color: "var(--fg-muted)" }}>{choice.title}</div>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+          </div>
         </section>
       )}
 

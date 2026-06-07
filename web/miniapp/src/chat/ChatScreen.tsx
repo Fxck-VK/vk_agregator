@@ -1,7 +1,7 @@
 ﻿// src/chat/ChatScreen.tsx
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Button, Panel, Tabbar, TabbarItem } from "@vkontakte/vkui";
-import { Avatar, Spinner } from "../ui/ui";
+import { Panel } from "@vkontakte/vkui";
+import { Spinner } from "../ui/ui";
 import { MessageBubble } from "./MessageBubble";
 import { Composer } from "./Composer";
 import { ChatList } from "./ChatList";
@@ -49,7 +49,7 @@ function tabTitle(tab: AppTab, activeChat?: Chat | null): { name: string; sub: s
     case "create":
       return { name: "Создать", sub: "фото и видео" };
     case "settings":
-      return { name: "Настройки", sub: "тема, баланс, история" };
+      return { name: "Профиль", sub: "тема, баланс, история" };
     default:
       return { name: CHAT_ASSISTANT_NAME, sub: activeChat?.title ?? "НейроХаб диалог" };
   }
@@ -595,23 +595,39 @@ export function ChatScreen({ user }: { user: VkUser }) {
 
       {activeTab === "chat" && (
         <header className="chat__header">
-          <Button
+          <button
             type="button"
-            className="icon-btn"
-            mode="tertiary"
-            appearance="neutral"
-            size="l"
+            className="chat__history-btn"
             aria-label="История диалогов"
             onClick={() => setDrawerOpen(true)}
           >
-            ☰
-          </Button>
-          <Avatar src={neuroHubAvatar} fallback="НХ" className="avatar--bot" />
-          <div className="chat__title">
-            <span className="chat__name">{header.name}</span>
-            <span className="chat__sub">{header.sub}</span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M3 12a9 9 0 1 0 3-6.7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              <path d="M3 3v6h6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+          <div className="chat__presence">
+            <div className="chat__presence-avatar">
+              <img src={neuroHubAvatar} alt="" />
+              <span className="chat__presence-dot" aria-hidden="true" />
+            </div>
+            <div>
+              <div className="chat__presence-name">{header.name}</div>
+              <div
+                className={
+                  "chat__presence-status " + (submitting ? "is-typing" : "is-online")
+                }
+              >
+                {submitting ? "думает..." : "онлайн"}
+              </div>
+            </div>
           </div>
-          <span className="chat__spacer" />
+          <span className="chat__ai-badge" aria-hidden="true">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2l2.2 6.8H21l-5.5 4 2.1 6.7L12 15.8 6.4 19.5l2.1-6.7L3 8.8h6.8L12 2z" />
+            </svg>
+            AI
+          </span>
         </header>
       )}
 
@@ -679,34 +695,52 @@ export function ChatScreen({ user }: { user: VkUser }) {
         />
       </section>
 
-      <Tabbar className="app-tabbar" mode="horizontal" plain>
-        <TabbarItem
-          selected={activeTab === "create"}
-          label="Создать"
-          aria-label="Создать"
-          onClick={() => changeTab("create")}
-        >
-          <span className="app-tabbar__icon app-tabbar__icon--create" aria-hidden="true" />
-        </TabbarItem>
-        <TabbarItem
-          selected={activeTab === "chat"}
-          label="Чат"
-          aria-label="Чат"
-          onClick={() => changeTab("chat")}
-        >
-          <span className="app-tabbar__avatar-wrap" aria-hidden="true">
-            <img className="app-tabbar__avatar" src={neuroHubAvatar} alt="" />
-          </span>
-        </TabbarItem>
-        <TabbarItem
-          selected={activeTab === "settings"}
-          label="Настройки"
-          aria-label="Настройки"
-          onClick={() => changeTab("settings")}
-        >
-          <span className="app-tabbar__icon app-tabbar__icon--settings" aria-hidden="true" />
-        </TabbarItem>
-      </Tabbar>
+      <nav className="nh-tabbar" aria-label="Навигация">
+        {(
+          [
+            {
+              id: "create" as AppTab,
+              label: "Создать",
+              icon: (
+                <svg className="nh-tabbar__icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M12 2l2.2 6.8H21l-5.5 4 2.1 6.7L12 15.8 6.4 19.5l2.1-6.7L3 8.8h6.8L12 2z" stroke="currentColor" strokeWidth="1.8" />
+                </svg>
+              ),
+            },
+            {
+              id: "chat" as AppTab,
+              label: "Чат",
+              icon: (
+                <svg className="nh-tabbar__icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M4 5h16a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H9l-5 4V7a2 2 0 0 1 2-2z" stroke="currentColor" strokeWidth="1.8" />
+                </svg>
+              ),
+            },
+            {
+              id: "settings" as AppTab,
+              label: "Профиль",
+              icon: (
+                <svg className="nh-tabbar__icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <circle cx="12" cy="8" r="4" stroke="currentColor" strokeWidth="1.8" />
+                  <path d="M5 20c1.5-4 12.5-4 14 0" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                </svg>
+              ),
+            },
+          ] as const
+        ).map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            className={"nh-tabbar__btn" + (activeTab === tab.id ? " is-active" : "")}
+            aria-label={tab.label}
+            aria-current={activeTab === tab.id ? "page" : undefined}
+            onClick={() => changeTab(tab.id)}
+          >
+            <span className="nh-tabbar__icon-wrap">{tab.icon}</span>
+            <span className="nh-tabbar__label">{tab.label}</span>
+          </button>
+        ))}
+      </nav>
       </div>
     </Panel>
   );

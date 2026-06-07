@@ -42,7 +42,7 @@ export function MessageBubble({
 }) {
   const isUser = msg.role === "user";
   const showStatus = !isUser && msg.pending && !!msg.status;
-  const author = isUser ? userName : botName;
+  const author = isUser ? "Вы" : botName;
 
   return (
     <div className={"msg " + (isUser ? "msg--user" : "msg--bot")}>
