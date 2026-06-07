@@ -129,7 +129,7 @@ const (
 // orchestrator before applying a transition.
 var jobTransitions = map[JobStatus][]JobStatus{
 	JobStatusReceived:            {JobStatusValidated, JobStatusRejected, JobStatusCancelled},
-	JobStatusValidated:           {JobStatusAwaitingPayment, JobStatusCreditsReserved, JobStatusRejected, JobStatusCancelled},
+	JobStatusValidated:           {JobStatusAwaitingPayment, JobStatusCreditsReserved, JobStatusQueued, JobStatusRejected, JobStatusCancelled},
 	JobStatusRejected:            {JobStatusRefunded},
 	JobStatusAwaitingPayment:     {JobStatusCreditsReserved, JobStatusCancelled, JobStatusExpired},
 	JobStatusCreditsReserved:     {JobStatusQueued, JobStatusCancelled, JobStatusRefunded},

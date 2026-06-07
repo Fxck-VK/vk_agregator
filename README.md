@@ -43,15 +43,22 @@ Real integrations are implemented at adapter level and remain **opt-in**:
 - `PROVIDER=openai` enables OpenAI text (`Responses`), image (`Images`) and
   async video (`Videos`) generation.
 - `PROVIDER=deepinfra` enables DeepInfra text generation through
-  `deepseek-ai/DeepSeek-V4-Flash` (`/chat/completions` on DeepInfra's
-  OpenAI-compatible API). Text providers receive an internal instruction to
-  answer as `НейроХаб бот`, keep replies concise and under 3000 characters, and
-  avoid exposing provider/model/backend details; VK delivery still chunks longer
-  output as a fallback.
+  `deepseek-ai/DeepSeek-V4-Flash` (`/chat/completions`) and DeepInfra image
+  generation through `ByteDance/Seedream-4.5` (`/v1/inference/{model}`) on
+  DeepInfra's native image API. `DEEPINFRA_IMAGE_FALLBACK_MODEL` can name a
+  second DeepInfra image model for retryable primary-model failures. Text providers receive an internal
+  instruction to answer as `НейроХаб бот`, keep replies concise and under 3000
+  characters, and avoid exposing provider/model/backend details; VK delivery
+  still chunks longer output as a fallback.
 - `PROVIDER_CHAIN=openai,mock` enables the provider router with
   health/circuit-breaker, fallback, cost and observed-latency aware selection.
-  `PROVIDER_CHAIN=deepinfra,mock` uses DeepInfra for text and mock fallback for
-  unsupported or retryable paths.
+  `PROVIDER_CHAIN=deepinfra,mock` uses DeepInfra for text/image and mock
+  fallback for unsupported or retryable paths.
+- `IMAGE_PROVIDER`, `IMAGE_MODEL` and `IMAGE_SIZE` are worker-only image
+  generation defaults. They prefer one provider/model for image jobs while
+  keeping `PROVIDER_CHAIN` as fallback. Current image-capable adapters are
+  mock, OpenAI and DeepInfra Seedream. VK bot and Mini App surfaces still only
+  create Jobs and never call image providers directly.
 - `VK_DELIVERY_MODE=real` enables VK `messages.send` plus raw photo/video
   artifact upload to VK upload servers before send.
 - `cmd/api` can send the VK `/start` НейроХаб menu and inline keyboard through
@@ -66,7 +73,8 @@ Real integrations are implemented at adapter level and remain **opt-in**:
   wired.
 - VK menu screens are described through a small declarative registry. `Создать
   фото` skips model selection when only one main image model is available and
-  opens the text/reference photo instruction screen directly; `Спросить у НейроХаб`
+  opens the text-to-image instruction screen directly; reference-photo generation
+  is hidden by flag until the input artifact flow is ready. `Спросить у НейроХаб`
   opens the active GPT prompt screen and enables text GPT mode for that peer.
   The first `Старт` welcome is personalized with the cached VK first name when
   `VK_ACCESS_TOKEN` allows `users.get`; subsequent menu openings use the regular
@@ -78,6 +86,15 @@ Real integrations are implemented at adapter level and remain **opt-in**:
   simple Markdown markers such as `**bold**`, backticks and `*`/`-` list syntax,
   rendering lists as plain `•` bullets. Legacy `VK_UNROUTED_TEXT_MODE=gpt` keeps
   normal text delivery.
+- VK photo text mode is now wired in the bot: when `VK_MENU_IMAGE_ENABLED=true`,
+  `Создать фото` opens a text-to-image instruction screen and immediately stores
+  `photo_text` mode for the peer. The next plain text creates an
+  `image.generate` Job, and the API sends `НейроХаб рисует...` while workers
+  produce and deliver the image Artifact. The current VK profile gives each
+  user 100 free text-to-image attempts per 24h window through
+  `VK_ANTISPAM_IMAGE_DAILY_LIMIT=100` and `PRICES=image_generate=0`;
+  reference-photo generation stays hidden behind
+  `VK_MENU_IMAGE_REFERENCE_ENABLED=false` until input photo artifacts are wired.
 - Text-mode dialog context is persisted in Postgres. For each VK peer the
   worker stores user/assistant turns in `conversations`,
   `conversation_messages` and `conversation_summaries`, then sends providers a
@@ -187,7 +204,7 @@ internal/
     inbound/admin/   read-only admin HTTP API
     delivery/vk/     outbound VK client (+ mock)
     provider/mock/   mock AI provider
-    provider/deepinfra/ DeepInfra text-generation adapter
+    provider/deepinfra/ DeepInfra text/image-generation adapter
     provider/openai/ OpenAI generation/moderation/scanning adapters
     queue/redis/     Redis Streams publisher/consumer (consumer groups)
     storage/postgres pgx repositories
@@ -268,6 +285,12 @@ https://vk.neiirohub.ru/webhooks/vk
 This requires the `neiirohub.ru` DNS zone to be active in Cloudflare. The
 tunnel config and credentials stay under `.runtime/vk-bot/` and the user's
 Cloudflare profile; they are not committed.
+On named-tunnel startup, `start-bot.ps1` verifies the local VK confirmation
+response and the public `/health` endpoint. If the hostname is attached to a
+stale Cloudflare DNS record, the script repairs the route with
+`cloudflared tunnel route dns --overwrite-dns` and retries before reporting the
+bot as ready. The VK secret is used only against the local callback URL, not in
+public tunnel diagnostics.
 
 Start the infrastructure (PostgreSQL, Redis, MinIO):
 
@@ -318,9 +341,12 @@ PROVIDER=openai OPENAI_API_KEY=... go run ./cmd/worker
 # OpenAI primary with mock fallback through the provider router.
 PROVIDER_CHAIN=openai,mock OPENAI_API_KEY=... go run ./cmd/worker
 
-# DeepInfra DeepSeek-V4-Flash text generation; image/video should keep mock or
-# another capable provider in the fallback chain.
+# DeepInfra DeepSeek-V4-Flash text generation and Seedream image generation.
 PROVIDER_CHAIN=deepinfra,mock DEEPINFRA_API_KEY=... go run ./cmd/worker
+
+# Prefer DeepInfra Seedream for image jobs while preserving provider-chain
+# fallback.
+IMAGE_PROVIDER=deepinfra DEEPINFRA_IMAGE_MODEL=ByteDance/Seedream-4.5 DEEPINFRA_IMAGE_FALLBACK_MODEL=stabilityai/sdxl-turbo IMAGE_SIZE=2K PROVIDER_CHAIN=deepinfra,mock DEEPINFRA_API_KEY=... go run ./cmd/worker
 
 # Real VK messages.send + photo/video upload; requires a real token.
 VK_DELIVERY_MODE=real VK_ACCESS_TOKEN=... go run ./cmd/worker
@@ -335,11 +361,11 @@ MODERATION_PROVIDER=openai ARTIFACT_SCANNER=openai OPENAI_API_KEY=... go run ./c
 For production, set `APP_ENV=production` and configure non-default
 `VK_SECRET`, `ADMIN_TOKEN` and `VK_CONFIRMATION_TOKEN`. Both `cmd/api` and
 `cmd/worker` run fail-closed config validation; `PROVIDER=openai` requires
-`OPENAI_API_KEY`, `PROVIDER=deepinfra` requires `DEEPINFRA_API_KEY`, and
-`VK_DELIVERY_MODE=real` requires `VK_ACCESS_TOKEN` in any environment.
-`PROVIDER_CHAIN`, `MODERATION_PROVIDER=openai` and `ARTIFACT_SCANNER=openai`
-also require the corresponding provider key when they include/enable that
-provider.
+`OPENAI_API_KEY`, `PROVIDER=deepinfra` or `IMAGE_PROVIDER=deepinfra` requires
+`DEEPINFRA_API_KEY`, and `VK_DELIVERY_MODE=real` requires `VK_ACCESS_TOKEN` in
+any environment. `PROVIDER_CHAIN`, `IMAGE_PROVIDER`,
+`MODERATION_PROVIDER=openai` and `ARTIFACT_SCANNER=openai` also require the
+corresponding provider key when they include/enable that provider.
 For a VK welcome banner, set `VK_WELCOME_ATTACHMENT` to a pre-uploaded
 attachment string such as `photo-239332376_123_accesskey`.
 

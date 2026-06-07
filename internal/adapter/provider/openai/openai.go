@@ -166,7 +166,9 @@ func (p *Provider) Submit(ctx context.Context, req domain.ProviderRequest) (doma
 
 	case domain.OperationImageGenerate:
 		externalID := "openai-image-" + uuid.NewString()
-		url, err := p.generateImage(ctx, req.Prompt, req.IdempotencyKey)
+		model := defaultStr(req.ModelCode, p.cfg.ImageModel)
+		size := defaultStr(req.Size, p.cfg.ImageSize)
+		url, err := p.generateImage(ctx, model, req.Prompt, size, req.IdempotencyKey)
 		if err != nil {
 			return domain.ProviderTask{}, err
 		}
@@ -174,7 +176,7 @@ func (p *Provider) Submit(ctx context.Context, req domain.ProviderRequest) (doma
 			status:     domain.ProviderTaskSucceeded,
 			outputURLs: []string{url},
 		})
-		return p.task(req, p.cfg.ImageModel, externalID, domain.ProviderTaskProcessing, now), nil
+		return p.task(req, model, externalID, domain.ProviderTaskProcessing, now), nil
 
 	case domain.OperationVideoGenerate:
 		video, err := p.createVideo(ctx, req.Prompt, req.IdempotencyKey)
@@ -320,9 +322,9 @@ type imageResponse struct {
 	Error *apiError `json:"error"`
 }
 
-func (p *Provider) generateImage(ctx context.Context, prompt, idempotencyKey string) (string, error) {
+func (p *Provider) generateImage(ctx context.Context, model, prompt, size, idempotencyKey string) (string, error) {
 	var decoded imageResponse
-	if err := p.postJSON(ctx, "/images/generations", imageRequest{Model: p.cfg.ImageModel, Prompt: prompt, N: 1, Size: p.cfg.ImageSize}, &decoded, idempotencyKey); err != nil {
+	if err := p.postJSON(ctx, "/images/generations", imageRequest{Model: model, Prompt: prompt, N: 1, Size: size}, &decoded, idempotencyKey); err != nil {
 		return "", err
 	}
 	if len(decoded.Data) == 0 {
@@ -518,6 +520,13 @@ func isLocalTaskID(id string) bool {
 func parseInt(v string) int {
 	n, _ := strconv.Atoi(v)
 	return n
+}
+
+func defaultStr(v, def string) string {
+	if v != "" {
+		return v
+	}
+	return def
 }
 
 // classifyStatus maps an HTTP status onto the normalized provider error class

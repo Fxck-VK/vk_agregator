@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"vk-ai-aggregator/internal/adapter/provider/deepinfra"
 	"vk-ai-aggregator/internal/adapter/provider/mock"
 	redisqueue "vk-ai-aggregator/internal/adapter/queue/redis"
 	"vk-ai-aggregator/internal/adapter/storage/memory"
@@ -292,6 +293,10 @@ func TestTerminalProviderError(t *testing.T) {
 	ctx := context.Background()
 	// Unsupported operation -> unsupported_capability (terminal) on Submit.
 	job := h.queueJob(t, domain.OperationImageEdit, domain.ModalityImage, "edit this")
+	job.VKPeerID = 555
+	if err := h.jobs.Update(ctx, job); err != nil {
+		t.Fatalf("update job peer: %v", err)
+	}
 
 	if err := h.gen.Process(ctx, taskFor(job)); err != nil {
 		t.Fatalf("process: %v", err)
@@ -305,6 +310,9 @@ func TestTerminalProviderError(t *testing.T) {
 	}
 	if len(h.releaser.released) != 1 || h.releaser.released[0] != job.ID {
 		t.Fatalf("expected reservation release for terminal failure, got %v", h.releaser.released)
+	}
+	if len(h.streams.byStream[redisqueue.StreamDelivery]) != 1 {
+		t.Fatalf("expected one failure delivery enqueue, got %v", h.streams.byStream)
 	}
 }
 
@@ -415,17 +423,137 @@ func TestProviderRegistryFallbackOnRetryableSubmit(t *testing.T) {
 	}
 }
 
+func TestProviderRegistryPrefersImageProvider(t *testing.T) {
+	defaultProvider := &routingProvider{
+		name:      domain.ProviderName("default"),
+		cost:      1,
+		operation: domain.OperationImageGenerate,
+		modality:  domain.ModalityImage,
+		model:     "default-image",
+	}
+	imageProvider := &routingProvider{
+		name:      domain.ProviderName("image"),
+		cost:      100,
+		operation: domain.OperationImageGenerate,
+		modality:  domain.ModalityImage,
+		model:     "preferred-image",
+	}
+	reg := worker.NewRegistry(defaultProvider, imageProvider)
+	reg.PreferProvider(domain.ModalityImage, imageProvider.name)
+	req := domain.ProviderRequest{
+		JobID:     uuid.New(),
+		Operation: domain.OperationImageGenerate,
+		Modality:  domain.ModalityImage,
+		Prompt:    "cat",
+	}
+
+	provider, err := reg.ForRequest(context.Background(), req)
+	if err != nil {
+		t.Fatalf("for request: %v", err)
+	}
+	task, err := provider.Submit(context.Background(), req)
+	if err != nil {
+		t.Fatalf("submit through router: %v", err)
+	}
+	if task.Provider != imageProvider.name {
+		t.Fatalf("task provider = %q, want %q", task.Provider, imageProvider.name)
+	}
+}
+
+func TestProviderRegistryPrefersDeepInfraImageProvider(t *testing.T) {
+	deepInfraProvider := deepinfra.New(deepinfra.Config{
+		APIKey:     "test-key",
+		ImageModel: "ByteDance/Seedream-4.5",
+		ImagePrice: 99,
+	})
+	reg := worker.NewRegistry(mock.New(), deepInfraProvider)
+	reg.PreferProvider(domain.ModalityImage, domain.ProviderDeepInfra)
+
+	provider, err := reg.ForRequest(context.Background(), domain.ProviderRequest{
+		JobID:     uuid.New(),
+		Operation: domain.OperationImageGenerate,
+		Modality:  domain.ModalityImage,
+		ModelCode: "ByteDance/Seedream-4.5",
+		Prompt:    "a cat",
+	})
+	if err != nil {
+		t.Fatalf("for request: %v", err)
+	}
+	if provider.Name() != domain.ProviderDeepInfra {
+		t.Fatalf("provider = %q, want deepinfra", provider.Name())
+	}
+}
+
+func TestGenerationImageRequestCarriesImageDefaultsAndReferences(t *testing.T) {
+	provider := &captureImageProvider{}
+	h := newHarnessWithProvider(t, provider, func(d *worker.Deps) {
+		d.ImageModel = "foundation-image"
+		d.ImageSize = "1024x1024"
+	})
+	ctx := context.Background()
+	refID := uuid.New()
+	params, _ := json.Marshal(map[string]any{
+		"prompt":                 "a cat",
+		"aspect_ratio":           "1:1",
+		"reference_artifact_ids": []string{refID.String()},
+	})
+	job := &domain.Job{
+		ID:             uuid.New(),
+		UserID:         uuid.New(),
+		OperationType:  domain.OperationImageGenerate,
+		Modality:       domain.ModalityImage,
+		Status:         domain.JobStatusQueued,
+		IdempotencyKey: "job:" + uuid.NewString(),
+		CorrelationID:  "corr",
+		CostReserved:   10,
+		Params:         params,
+	}
+	if err := h.jobs.Create(ctx, job); err != nil {
+		t.Fatalf("create job: %v", err)
+	}
+
+	if err := h.gen.Process(ctx, taskFor(job)); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+
+	got := provider.last
+	if got.UserID != job.UserID {
+		t.Fatalf("provider request user id = %s, want %s", got.UserID, job.UserID)
+	}
+	if got.ModelCode != "foundation-image" || got.Size != "1024x1024" || got.AspectRatio != "1:1" {
+		t.Fatalf("unexpected image request defaults: model=%q size=%q aspect=%q", got.ModelCode, got.Size, got.AspectRatio)
+	}
+	if len(got.ReferenceArtifactIDs) != 1 || got.ReferenceArtifactIDs[0] != refID {
+		t.Fatalf("reference ids = %v, want %s", got.ReferenceArtifactIDs, refID)
+	}
+}
+
 type routingProvider struct {
-	name    domain.ProviderName
-	cost    int64
-	fail    error
-	submits int
+	name      domain.ProviderName
+	cost      int64
+	fail      error
+	submits   int
+	operation domain.OperationType
+	modality  domain.Modality
+	model     string
 }
 
 func (p *routingProvider) Name() domain.ProviderName { return p.name }
 
 func (p *routingProvider) Capabilities(context.Context) ([]domain.Capability, error) {
-	return []domain.Capability{{Operation: domain.OperationTextGenerate, Modality: domain.ModalityText, ModelCode: string(p.name) + "-model"}}, nil
+	op := p.operation
+	if op == "" {
+		op = domain.OperationTextGenerate
+	}
+	mod := p.modality
+	if mod == "" {
+		mod = domain.ModalityText
+	}
+	model := p.model
+	if model == "" {
+		model = string(p.name) + "-model"
+	}
+	return []domain.Capability{{Operation: op, Modality: mod, ModelCode: model}}, nil
 }
 
 func (p *routingProvider) Estimate(context.Context, domain.ProviderRequest) (domain.CostEstimate, error) {
@@ -440,7 +568,7 @@ func (p *routingProvider) Submit(_ context.Context, req domain.ProviderRequest) 
 	return domain.ProviderTask{
 		JobID:      req.JobID,
 		Provider:   p.name,
-		ModelCode:  string(p.name) + "-model",
+		ModelCode:  p.model,
 		ExternalID: string(p.name) + "-task",
 		Status:     domain.ProviderTaskSucceeded,
 	}, nil
@@ -451,6 +579,40 @@ func (p *routingProvider) Poll(context.Context, domain.ProviderTaskRef) (domain.
 }
 
 func (p *routingProvider) Cancel(context.Context, domain.ProviderTaskRef) error { return nil }
+
+type captureImageProvider struct {
+	last domain.ProviderRequest
+}
+
+func (p *captureImageProvider) Name() domain.ProviderName {
+	return domain.ProviderName("capture-image")
+}
+
+func (p *captureImageProvider) Capabilities(context.Context) ([]domain.Capability, error) {
+	return []domain.Capability{{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, SupportsPolling: true}}, nil
+}
+
+func (p *captureImageProvider) Estimate(context.Context, domain.ProviderRequest) (domain.CostEstimate, error) {
+	return domain.CostEstimate{AmountCredits: 10, Currency: "credits"}, nil
+}
+
+func (p *captureImageProvider) Submit(_ context.Context, req domain.ProviderRequest) (domain.ProviderTask, error) {
+	p.last = req
+	return domain.ProviderTask{
+		JobID:          req.JobID,
+		Provider:       p.Name(),
+		ModelCode:      req.ModelCode,
+		ExternalID:     "capture-image-task",
+		Status:         domain.ProviderTaskSucceeded,
+		IdempotencyKey: req.IdempotencyKey,
+	}, nil
+}
+
+func (p *captureImageProvider) Poll(context.Context, domain.ProviderTaskRef) (domain.ProviderTaskResult, error) {
+	return domain.ProviderTaskResult{Status: domain.ProviderTaskSucceeded, OutputURLs: []string{"data:image/png;base64,b2s="}}, nil
+}
+
+func (p *captureImageProvider) Cancel(context.Context, domain.ProviderTaskRef) error { return nil }
 
 type routingError struct{ class domain.ProviderErrorClass }
 

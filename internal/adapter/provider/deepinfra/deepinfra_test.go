@@ -107,6 +107,205 @@ func TestSubmitUsesExplicitModelCode(t *testing.T) {
 	}
 }
 
+func TestCapabilitiesIncludeSeedreamImage(t *testing.T) {
+	p := New(Config{APIKey: "test-key"})
+	caps, err := p.Capabilities(context.Background())
+	if err != nil {
+		t.Fatalf("capabilities: %v", err)
+	}
+	var found bool
+	for _, cap := range caps {
+		if cap.Operation == domain.OperationImageGenerate &&
+			cap.Modality == domain.ModalityImage &&
+			cap.ModelCode == defaultImageModel &&
+			cap.SupportsPolling {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("seedream image capability not found: %+v", caps)
+	}
+}
+
+func TestSubmitPollImageSuccess(t *testing.T) {
+	png := []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n', 0, 0, 0, 0}
+	encoded := base64.StdEncoding.EncodeToString(png)
+	var seen nativeImageRequest
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.URL.EscapedPath(); !strings.Contains(got, "/v1/inference/ByteDance%2FSeedream-4.5") {
+			t.Errorf("path = %q, want DeepInfra native Seedream endpoint", got)
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer test-key" {
+			t.Errorf("auth header = %q", got)
+		}
+		if got := r.Header.Get("Idempotency-Key"); got != "provider_submit:image:1" {
+			t.Errorf("idempotency header = %q", got)
+		}
+		if err := json.NewDecoder(r.Body).Decode(&seen); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"images":["data:image/png;base64,` + encoded + `"],"nsfw_content_detected":[false],"seed":42}`))
+	}))
+	defer srv.Close()
+
+	p := New(Config{APIKey: "test-key", BaseURL: srv.URL, HTTPClient: srv.Client()})
+	task, err := p.Submit(context.Background(), domain.ProviderRequest{
+		JobID:          uuid.New(),
+		Operation:      domain.OperationImageGenerate,
+		Modality:       domain.ModalityImage,
+		Prompt:         "a cat",
+		Size:           "1024x1024",
+		IdempotencyKey: "provider_submit:image:1",
+	})
+	if err != nil {
+		t.Fatalf("submit image: %v", err)
+	}
+	if seen.Prompt != "a cat" || seen.Size != "1024x1024" {
+		t.Fatalf("unexpected image request: %+v", seen)
+	}
+	if task.Provider != domain.ProviderDeepInfra || task.ModelCode != defaultImageModel {
+		t.Fatalf("unexpected task: %+v", task)
+	}
+
+	res, err := p.Poll(context.Background(), domain.ProviderTaskRef{Provider: task.Provider, ExternalID: task.ExternalID})
+	if err != nil {
+		t.Fatalf("poll image: %v", err)
+	}
+	if res.Status != domain.ProviderTaskSucceeded || len(res.OutputURLs) != 1 {
+		t.Fatalf("unexpected result: %+v", res)
+	}
+	const prefix = "data:image/png;base64,"
+	if !strings.HasPrefix(res.OutputURLs[0], prefix) {
+		t.Fatalf("expected png data URL, got %q", res.OutputURLs[0])
+	}
+}
+
+func TestSubmitImageUsesExplicitModelAndSize(t *testing.T) {
+	var seen nativeImageRequest
+	var seenPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seenPath = r.URL.EscapedPath()
+		if err := json.NewDecoder(r.Body).Decode(&seen); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"images":["data:image/png;base64,iVBORw0KGgo="]}`))
+	}))
+	defer srv.Close()
+
+	p := New(Config{APIKey: "test-key", BaseURL: srv.URL, ImageModel: "default-image", ImageSize: "1024x1024", HTTPClient: srv.Client()})
+	task, err := p.Submit(context.Background(), domain.ProviderRequest{
+		JobID:     uuid.New(),
+		Operation: domain.OperationImageGenerate,
+		Modality:  domain.ModalityImage,
+		ModelCode: "ByteDance/Seedream-4.5",
+		Size:      "2048x2048",
+		Prompt:    "a neon city",
+	})
+	if err != nil {
+		t.Fatalf("submit image: %v", err)
+	}
+	if !strings.Contains(seenPath, "/v1/inference/ByteDance%2FSeedream-4.5") || seen.Size != "2048x2048" {
+		t.Fatalf("model/size mismatch: path=%q request=%+v", seenPath, seen)
+	}
+	if task.ModelCode != "ByteDance/Seedream-4.5" {
+		t.Fatalf("task model = %q", task.ModelCode)
+	}
+}
+
+func TestSubmitImageFallsBackAfterRetryablePrimaryError(t *testing.T) {
+	var seenPaths []string
+	var seenBodies []nativeImageRequest
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seenPaths = append(seenPaths, r.URL.EscapedPath())
+		var body nativeImageRequest
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		seenBodies = append(seenBodies, body)
+		if strings.Contains(r.URL.EscapedPath(), "ByteDance%2FSeedream-4.5") {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"images":["data:image/png;base64,iVBORw0KGgo="]}`))
+	}))
+	defer srv.Close()
+
+	p := New(Config{
+		APIKey:             "test-key",
+		BaseURL:            srv.URL + "/v1/openai",
+		ImageModel:         "ByteDance/Seedream-4.5",
+		ImageFallbackModel: "stabilityai/sdxl-turbo",
+		ImageSize:          "2K",
+		HTTPClient:         srv.Client(),
+	})
+	task, err := p.Submit(context.Background(), domain.ProviderRequest{
+		JobID:     uuid.New(),
+		Operation: domain.OperationImageGenerate,
+		Modality:  domain.ModalityImage,
+		Prompt:    "a cat",
+	})
+	if err != nil {
+		t.Fatalf("submit image: %v", err)
+	}
+	if task.ModelCode != "stabilityai/sdxl-turbo" {
+		t.Fatalf("task model = %q, want fallback", task.ModelCode)
+	}
+	if len(seenPaths) != 2 {
+		t.Fatalf("requests = %d, want 2: %#v", len(seenPaths), seenPaths)
+	}
+	if !strings.Contains(seenPaths[0], "ByteDance%2FSeedream-4.5") || !strings.Contains(seenPaths[1], "stabilityai%2Fsdxl-turbo") {
+		t.Fatalf("unexpected paths: %#v", seenPaths)
+	}
+	if seenBodies[0].Size != "2K" || seenBodies[1].Size != "" {
+		t.Fatalf("unexpected fallback sizes: %#v", seenBodies)
+	}
+}
+
+func TestSubmitImageReferenceDisabled(t *testing.T) {
+	p := New(Config{APIKey: "test-key"})
+	_, err := p.Submit(context.Background(), domain.ProviderRequest{
+		JobID:     uuid.New(),
+		Operation: domain.OperationImageGenerate,
+		Modality:  domain.ModalityImage,
+		Prompt:    "edit this",
+		InputURLs: []string{"https://example.com/ref.png"},
+		ModelCode: defaultImageModel,
+	})
+	perr, ok := err.(*Error)
+	if !ok {
+		t.Fatalf("expected *Error, got %T: %v", err, err)
+	}
+	if perr.ProviderErrorClass() != domain.ProviderErrUnsupportedCapab {
+		t.Fatalf("class = %q, want unsupported_capability", perr.ProviderErrorClass())
+	}
+}
+
+func TestSubmitImageInvalidRequestClass(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"error":{"message":"bad image request"}}`))
+	}))
+	defer srv.Close()
+
+	p := New(Config{APIKey: "test-key", BaseURL: srv.URL, HTTPClient: srv.Client()})
+	_, err := p.Submit(context.Background(), domain.ProviderRequest{
+		JobID:     uuid.New(),
+		Operation: domain.OperationImageGenerate,
+		Modality:  domain.ModalityImage,
+		Prompt:    "hello",
+	})
+	perr, ok := err.(*Error)
+	if !ok {
+		t.Fatalf("expected *Error, got %T: %v", err, err)
+	}
+	if perr.ProviderErrorClass() != domain.ProviderErrInvalidRequest {
+		t.Fatalf("class = %q, want invalid_request", perr.ProviderErrorClass())
+	}
+}
+
 func TestSubmitRateLimitedClass(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusTooManyRequests)
@@ -132,7 +331,7 @@ func TestSubmitRateLimitedClass(t *testing.T) {
 
 func TestUnsupportedOperation(t *testing.T) {
 	p := New(Config{APIKey: "test-key"})
-	_, err := p.Submit(context.Background(), domain.ProviderRequest{Operation: domain.OperationImageGenerate})
+	_, err := p.Submit(context.Background(), domain.ProviderRequest{Operation: domain.OperationImageEdit, Modality: domain.ModalityImage})
 	if perr, ok := err.(*Error); !ok || perr.Class != domain.ProviderErrUnsupportedCapab {
 		t.Fatalf("expected unsupported_capability error, got %v", err)
 	}

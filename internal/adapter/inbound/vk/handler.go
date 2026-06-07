@@ -168,7 +168,10 @@ type activeMenuMessage struct {
 
 type dialogMode string
 
-const dialogModeGPT dialogMode = "gpt"
+const (
+	dialogModeGPT       dialogMode = "gpt"
+	dialogModePhotoText dialogMode = "photo_text"
+)
 
 type jobParams struct {
 	Prompt                 string `json:"prompt"`
@@ -489,6 +492,15 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 		}
 	}
 
+	if h.shouldRoutePhotoText(ctx, peerID, parsed, controlFromPayload, controlOnly) {
+		parsed = commandrouter.Result{
+			Type:      domain.CommandImageGenerate,
+			Operation: domain.OperationImageGenerate,
+			Modality:  domain.ModalityImage,
+			Prompt:    strings.TrimSpace(text),
+		}
+	}
+
 	textAskEnabled := false
 	if parsed.Type == domain.CommandTextAsk {
 		textAskEnabled = h.textAskEnabled(ctx, peerID)
@@ -528,6 +540,8 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 			return nil
 		}
 	}
+
+	photoTextJob := parsed.Type == domain.CommandImageGenerate && h.photoTextDialogActive(ctx, peerID)
 
 	cmd := &domain.Command{
 		UserID:         user.ID,
@@ -575,12 +589,14 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 		}
 		if parsed.Type == domain.CommandMenuText {
 			h.setDialogMode(ctx, peerID, dialogModeGPT)
+		} else if parsed.Type == domain.CommandMenuImage || parsed.Type == domain.CommandMenuImageText {
+			h.setDialogMode(ctx, peerID, dialogModePhotoText)
 		} else {
 			h.clearDialogMode(ctx, peerID)
 		}
 	default:
 		h.clearActiveMenu(peerID)
-		if parsed.Type != domain.CommandTextAsk {
+		if parsed.Type != domain.CommandTextAsk && !photoTextJob {
 			h.clearDialogMode(ctx, peerID)
 		}
 	}
@@ -591,6 +607,8 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 		placeholderID := int64(0)
 		if parsed.Type == domain.CommandTextAsk && h.gptDialogActive(ctx, peerID) {
 			placeholderID = h.sendGPTPendingMessage(ctx, idemKey, peerID)
+		} else if photoTextJob {
+			placeholderID = h.sendPhotoPendingMessage(ctx, idemKey, peerID)
 		}
 
 		// Carry the user's prompt on the job so workers can render it and the
@@ -629,6 +647,16 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 		return fmt.Errorf("mark idempotency completed: %w", err)
 	}
 	return nil
+}
+
+func (h *Handler) shouldRoutePhotoText(ctx context.Context, peerID int64, parsed commandrouter.Result, controlFromPayload, controlOnly bool) bool {
+	if controlFromPayload || controlOnly || parsed.Type != domain.CommandTextAsk {
+		return false
+	}
+	if strings.TrimSpace(parsed.Prompt) == "" {
+		return false
+	}
+	return h.photoTextDialogActive(ctx, peerID)
 }
 
 func shouldForceOnboarding(user *domain.User, parsed commandrouter.Result, controlFromPayload, controlOnly, textAskEnabled bool) bool {
@@ -674,6 +702,11 @@ func (h *Handler) sendAntiSpamResponse(ctx context.Context, idemKey string, peer
 func (h *Handler) gptDialogActive(ctx context.Context, peerID int64) bool {
 	mode, ok := h.getDialogMode(ctx, peerID)
 	return ok && mode == dialogModeGPT
+}
+
+func (h *Handler) photoTextDialogActive(ctx context.Context, peerID int64) bool {
+	mode, ok := h.getDialogMode(ctx, peerID)
+	return ok && mode == dialogModePhotoText
 }
 
 func (h *Handler) getDialogMode(ctx context.Context, peerID int64) (dialogMode, bool) {

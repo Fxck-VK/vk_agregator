@@ -126,6 +126,39 @@ func TestCreateJobIdempotent(t *testing.T) {
 	}
 }
 
+func TestCreateJobZeroCostQueuesWithoutReservation(t *testing.T) {
+	f := newFixture(billingservice.WithPriceOverrides(map[string]int64{
+		string(domain.OperationImageGenerate): 0,
+	}))
+	ctx := context.Background()
+	userID := uuid.New()
+
+	job, err := f.orch.CreateJob(ctx, joborchestrator.CreateJobInput{
+		UserID:         userID,
+		VKPeerID:       42,
+		CommandID:      uuid.New(),
+		Operation:      domain.OperationImageGenerate,
+		Modality:       domain.ModalityImage,
+		IdempotencyKey: "vk_job:1:free-image",
+		CorrelationID:  "corr-free-image",
+	})
+	if err != nil {
+		t.Fatalf("create job: %v", err)
+	}
+	if job.Status != domain.JobStatusQueued {
+		t.Fatalf("status = %q, want queued", job.Status)
+	}
+	if job.CostEstimate != 0 || job.CostReserved != 0 {
+		t.Fatalf("cost estimate/reserved = %d/%d, want 0/0", job.CostEstimate, job.CostReserved)
+	}
+
+	f.drain(t)
+	tasks := f.pub.Tasks("queue.image.generate")
+	if len(tasks) != 1 || tasks[0].JobID != job.ID {
+		t.Fatalf("expected task for free image job, got %+v", tasks)
+	}
+}
+
 func TestCreateJobInsufficientCredits(t *testing.T) {
 	// Start accounts with only 5 credits so a 50-credit video job cannot be
 	// reserved.

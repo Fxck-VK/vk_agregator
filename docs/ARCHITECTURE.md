@@ -57,6 +57,37 @@ Backend core remains the source of truth:
 - `internal/adapter/storage` persists durable state; Redis is queue/cache
   support, not billing truth.
 
+Current image-generation foundation:
+
+- Image jobs use the same asynchronous Job -> worker -> provider -> Artifact
+  flow as text and video jobs.
+- `internal/domain` exposes provider-agnostic `ImageGenerationRequest` and
+  `ImageGenerationResult` shapes for image adapters. Surface modules must not
+  depend on provider-native request/response JSON.
+- `cmd/worker` may prefer an image provider through `IMAGE_PROVIDER` and attach
+  worker-only `IMAGE_MODEL` / `IMAGE_SIZE` defaults. `PROVIDER_CHAIN` remains
+  the fallback mechanism.
+- DeepInfra `ByteDance/Seedream-4.5` is wired as a text-to-image adapter through
+  the native `/v1/inference/{model}` endpoint. Optional
+  `DEEPINFRA_IMAGE_FALLBACK_MODEL` stays inside the provider adapter and is only
+  tried after retryable primary-model failures. Reference-image generation
+  remains fail-closed until provider-safe artifact URL preparation is
+  implemented.
+- VK bot text-to-image UX is wired as a surface state, not a provider shortcut:
+  `Создать фото` stores peer-scoped `photo_text` mode immediately, the next
+  plain text creates an `image.generate` Job, and the API sends `НейроХаб
+  рисует...` as a VK control placeholder. The extra `Фото по тексту` selection
+  button is hidden while there is only one text-to-image mode.
+- The current VK bot profile hides reference-photo generation by default and
+  allows 100 free text-to-image attempts per user per 24h window through
+  Redis-backed anti-spam quota (`VK_ANTISPAM_IMAGE_DAILY_LIMIT=100`) and a free
+  `image_generate` price override.
+- Image provider failures that reach terminal state release reserved credits
+  before delivery and can produce a short VK failure notice; they must not be
+  captured as successful billable delivery.
+- VK bot and Mini App handlers still only create jobs or control responses; they
+  do not call OpenAI, DeepInfra, Gemini, Seedream or any other provider.
+
 Actual request flows:
 
 ```text

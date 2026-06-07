@@ -66,6 +66,8 @@ type Config struct {
 	VKAntiSpamMessageWindow       time.Duration
 	VKAntiSpamGPTLimit            int
 	VKAntiSpamGPTWindow           time.Duration
+	VKAntiSpamImageDailyLimit     int
+	VKAntiSpamImageDailyWindow    time.Duration
 	VKAntiSpamCooldown            time.Duration
 	VKAntiSpamViolationLimit      int
 	VKAntiSpamViolationWindow     time.Duration
@@ -94,6 +96,12 @@ type Config struct {
 	// enables router/fallback selection across multiple providers.
 	Provider      string
 	ProviderChain []string
+	// ImageProvider, when set, makes one provider the preferred route for image
+	// jobs while preserving the configured provider chain as fallback.
+	ImageProvider string
+	// ImageModel/ImageSize are provider-agnostic defaults attached to image jobs.
+	ImageModel string
+	ImageSize  string
 
 	OpenAIAPIKey       string
 	OpenAIBaseURL      string
@@ -107,10 +115,14 @@ type Config struct {
 	OpenAIImagePrice   int64
 	OpenAIVideoPrice   int64
 
-	DeepInfraAPIKey    string
-	DeepInfraBaseURL   string
-	DeepInfraTextModel string
-	DeepInfraTextPrice int64
+	DeepInfraAPIKey                string
+	DeepInfraBaseURL               string
+	DeepInfraTextModel             string
+	DeepInfraTextPrice             int64
+	DeepInfraImageModel            string
+	DeepInfraImageFallbackModel    string
+	DeepInfraImagePrice            int64
+	DeepInfraImageReferenceEnabled bool
 
 	TextContextEnabled                bool
 	TextContextMaxInputTokens         int
@@ -234,6 +246,9 @@ func (c Config) Validate() error {
 	if mode := strings.ToLower(strings.TrimSpace(c.VKUnroutedTextMode)); mode != "" && mode != "reply" && mode != "silent" && mode != "gpt" {
 		return fmt.Errorf("config: VK_UNROUTED_TEXT_MODE must be reply, silent, or gpt")
 	}
+	if provider := strings.ToLower(strings.TrimSpace(c.ImageProvider)); provider != "" && !knownProvider(provider) {
+		return fmt.Errorf("config: IMAGE_PROVIDER must be one of mock, openai, deepinfra")
+	}
 	if c.IsProduction() {
 		if c.VKSecret == "" {
 			missing = append(missing, "VK_SECRET")
@@ -311,16 +326,18 @@ func Load() Config {
 		MiniAppJobRateLimitRPS:        envFloat("MINIAPP_JOB_RATE_LIMIT_RPS", 1),
 		MiniAppJobRateLimitBurst:      envInt("MINIAPP_JOB_RATE_LIMIT_BURST", 5),
 		VKAntiSpamEnabled:             envBool("VK_ANTISPAM_ENABLED", true),
-		VKAntiSpamMessageLimit:        envInt("VK_ANTISPAM_MESSAGE_LIMIT", 10),
+		VKAntiSpamMessageLimit:        envInt("VK_ANTISPAM_MESSAGE_LIMIT", 40),
 		VKAntiSpamMessageWindow:       envDuration("VK_ANTISPAM_MESSAGE_WINDOW", time.Minute),
 		VKAntiSpamGPTLimit:            envInt("VK_ANTISPAM_GPT_LIMIT", 3),
 		VKAntiSpamGPTWindow:           envDuration("VK_ANTISPAM_GPT_WINDOW", 30*time.Second),
+		VKAntiSpamImageDailyLimit:     envInt("VK_ANTISPAM_IMAGE_DAILY_LIMIT", 100),
+		VKAntiSpamImageDailyWindow:    envDuration("VK_ANTISPAM_IMAGE_DAILY_WINDOW", 24*time.Hour),
 		VKAntiSpamCooldown:            envDuration("VK_ANTISPAM_COOLDOWN", 30*time.Second),
 		VKAntiSpamViolationLimit:      envInt("VK_ANTISPAM_VIOLATION_LIMIT", 5),
 		VKAntiSpamViolationWindow:     envDuration("VK_ANTISPAM_VIOLATION_WINDOW", 10*time.Minute),
 		VKAntiSpamBlockDuration:       envDuration("VK_ANTISPAM_BLOCK_DURATION", 15*time.Minute),
 		VKAntiSpamNewUserAge:          envDuration("VK_ANTISPAM_NEW_USER_AGE", 4*time.Hour),
-		VKAntiSpamNewUserMessageLimit: envInt("VK_ANTISPAM_NEW_USER_MESSAGE_LIMIT", 5),
+		VKAntiSpamNewUserMessageLimit: envInt("VK_ANTISPAM_NEW_USER_MESSAGE_LIMIT", 30),
 		VKAntiSpamNewUserGPTLimit:     envInt("VK_ANTISPAM_NEW_USER_GPT_LIMIT", 1),
 		VKAntiSpamNewUserGPTWindow:    envDuration("VK_ANTISPAM_NEW_USER_GPT_WINDOW", 15*time.Second),
 		VKAntiSpamActiveGPTJobLimit:   envInt("VK_ANTISPAM_ACTIVE_GPT_JOB_LIMIT", 2),
@@ -335,6 +352,9 @@ func Load() Config {
 
 		Provider:                          provider,
 		ProviderChain:                     providerChain,
+		ImageProvider:                     env("IMAGE_PROVIDER", ""),
+		ImageModel:                        env("IMAGE_MODEL", ""),
+		ImageSize:                         env("IMAGE_SIZE", ""),
 		OpenAIAPIKey:                      env("OPENAI_API_KEY", ""),
 		OpenAIBaseURL:                     env("OPENAI_BASE_URL", "https://api.openai.com/v1"),
 		OpenAITextModel:                   env("OPENAI_TEXT_MODEL", "gpt-4.1-mini"),
@@ -350,6 +370,10 @@ func Load() Config {
 		DeepInfraBaseURL:                  env("DEEPINFRA_BASE_URL", "https://api.deepinfra.com/v1/openai"),
 		DeepInfraTextModel:                env("DEEPINFRA_TEXT_MODEL", "deepseek-ai/DeepSeek-V4-Flash"),
 		DeepInfraTextPrice:                int64(envInt("DEEPINFRA_TEXT_PRICE", 1)),
+		DeepInfraImageModel:               env("DEEPINFRA_IMAGE_MODEL", "ByteDance/Seedream-4.5"),
+		DeepInfraImageFallbackModel:       env("DEEPINFRA_IMAGE_FALLBACK_MODEL", ""),
+		DeepInfraImagePrice:               int64(envInt("DEEPINFRA_IMAGE_PRICE", 10)),
+		DeepInfraImageReferenceEnabled:    envBool("DEEPINFRA_IMAGE_REFERENCE_ENABLED", false),
 		TextContextEnabled:                envBool("TEXT_CONTEXT_ENABLED", true),
 		TextContextMaxInputTokens:         envInt("TEXT_CONTEXT_MAX_INPUT_TOKENS", 1600),
 		TextContextMaxOutputTokens:        envInt("TEXT_CONTEXT_MAX_OUTPUT_TOKENS", 800),
@@ -387,8 +411,8 @@ func Load() Config {
 		VKMenuVideoHaiuo02Enabled:         envBool("VK_MENU_VIDEO_HAIUO02_ENABLED", true),
 		VKMenuVideoHaiuo02StandardEnabled: envBool("VK_MENU_VIDEO_HAIUO02_STANDARD_ENABLED", true),
 		VKMenuVideoHaiuo02FastEnabled:     envBool("VK_MENU_VIDEO_HAIUO02_FAST_ENABLED", true),
-		VKMenuImageTextEnabled:            envBool("VK_MENU_IMAGE_TEXT_ENABLED", true),
-		VKMenuImageReferenceEnabled:       envBool("VK_MENU_IMAGE_REFERENCE_ENABLED", true),
+		VKMenuImageTextEnabled:            envBool("VK_MENU_IMAGE_TEXT_ENABLED", false),
+		VKMenuImageReferenceEnabled:       envBool("VK_MENU_IMAGE_REFERENCE_ENABLED", false),
 		VKMenuStudentsSolverEnabled:       envBool("VK_MENU_STUDENTS_SOLVER_ENABLED", true),
 		VKMenuStudentsPresentationEnabled: envBool("VK_MENU_STUDENTS_PRESENTATION_ENABLED", true),
 		VKMenuStudentsReportEnabled:       envBool("VK_MENU_STUDENTS_REPORT_ENABLED", true),
@@ -426,6 +450,7 @@ func Load() Config {
 
 func (c Config) usesOpenAI() bool {
 	if strings.EqualFold(c.Provider, "openai") ||
+		strings.EqualFold(c.ImageProvider, "openai") ||
 		strings.EqualFold(c.ModerationProvider, "openai") ||
 		strings.EqualFold(c.ArtifactScanner, "openai") {
 		return true
@@ -439,7 +464,8 @@ func (c Config) usesOpenAI() bool {
 }
 
 func (c Config) usesDeepInfra() bool {
-	if strings.EqualFold(c.Provider, "deepinfra") {
+	if strings.EqualFold(c.Provider, "deepinfra") ||
+		strings.EqualFold(c.ImageProvider, "deepinfra") {
 		return true
 	}
 	for _, provider := range c.ProviderChain {
@@ -448,6 +474,15 @@ func (c Config) usesDeepInfra() bool {
 		}
 	}
 	return false
+}
+
+func knownProvider(name string) bool {
+	switch strings.ToLower(strings.TrimSpace(name)) {
+	case "", "mock", "openai", "deepinfra":
+		return true
+	default:
+		return false
+	}
 }
 
 func loadDotenv() {

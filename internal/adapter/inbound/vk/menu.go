@@ -60,15 +60,15 @@ var menuScreens = map[domain.CommandType]menuScreen{
 		keyboard: backKeyboard,
 	},
 	domain.CommandMenuImage: {
-		text:     fixedText(photoIntroText),
+		text:     fixedText(photoTextPromptInstruction),
 		keyboard: photoModeKeyboard,
 	},
 	domain.CommandMenuImageText: {
-		text:     fixedText(photoTextModeText),
+		text:     fixedText(photoTextModeInstruction),
 		keyboard: photoModeKeyboard,
 	},
 	domain.CommandMenuImageReference: {
-		text:     fixedText(photoReferenceModeText),
+		text:     fixedText(photoReferenceModeInstruction),
 		keyboard: photoModeKeyboard,
 	},
 	domain.CommandMenuVideo: {
@@ -148,7 +148,7 @@ var menuScreens = map[domain.CommandType]menuScreen{
 const (
 	gptActiveText = "🤖 НейроХаб активен!\n\nЯ готов ответить на любые вопросы и помочь с идеями\nСпроси что-нибудь прямо сейчас!"
 
-	photoIntroText = "✅ У вас есть 1 бесплатная попытка в сутки на генерацию с текстом.\n\n▶️ Генерация фото по тексту – это когда ты пишешь, что хочешь увидеть (например, \"кот в очках на пляже\"), а ИИ сам «придумывает» и рисует такую картинку. (1 бесплатно)\n\n📸Генерация фото по тексту и фото (с референсом) – ИИ использует твою фотографию как образец — он сохраняет стиль, позу, цвета, но уже с новым содержанием по твоему описанию. (Только платные)"
+	photoIntroText = "✅ У вас есть 100 бесплатных попыток в сутки на генерацию с текстом.\n\n▶️ Генерация фото по тексту - это когда вы пишете, что хотите увидеть, а ИИ рисует такую картинку.\n\nНапишите описание обычным сообщением, например: кот в очках на пляже."
 
 	photoTextModeText      = "▶️ Генерация фото по тексту выбрана.\n\nОпишите, что хотите увидеть, командой /image.\n\nПример:\n/image кот в очках на пляже"
 	photoReferenceModeText = "📸 Генерация фото с референсом пока будет подключена после входящих фото-артефактов.\n\nСейчас доступна генерация по тексту через /image."
@@ -174,6 +174,12 @@ const (
 	topUpText = "💰 Пополнить баланс\n\nПополнение будет подключено отдельным платежным потоком. Пока для тестирования доступны стартовые кредиты."
 
 	chooseModeText = "Выберите режим в меню выше или нажмите на кнопку показать меню"
+)
+
+const (
+	photoTextPromptInstruction    = "✅ У вас есть 100 бесплатных попыток в сутки на генерацию с текстом.\n\n▶️ Генерация фото по тексту - это когда вы пишете, что хотите увидеть, а ИИ рисует такую картинку.\n\nНапишите описание обычным сообщением, например: кот в очках на пляже."
+	photoTextModeInstruction      = "▶️ Генерация фото по тексту выбрана.\n\nНапишите обычным сообщением, что хотите увидеть.\n\nПример: кот в очках на пляже, кинематографичный свет, высокая детализация"
+	photoReferenceModeInstruction = "📸 Генерация фото с референсом пока будет подключена после входящих фото-артефактов.\n\nСейчас доступна генерация фото по тексту."
 )
 
 func controlTypeFromPayload(payload string) (domain.CommandType, bool) {
@@ -415,6 +421,24 @@ func (h *Handler) sendGPTPendingMessage(ctx context.Context, idemKey string, pee
 	result, err := h.sendControlMessage(ctx, domain.CommandMenuText, peerID, randomID, msg)
 	if err != nil {
 		h.logger.Warn("vk gpt pending message send failed",
+			slog.Int64("peer_id", peerID),
+			slog.String("error", err.Error()))
+		return 0
+	}
+	return result.MessageID
+}
+
+func (h *Handler) sendPhotoPendingMessage(ctx context.Context, idemKey string, peerID int64) int64 {
+	if h.deps.Control == nil {
+		h.logger.Warn("vk image pending message skipped because VK_ACCESS_TOKEN is not configured")
+		return 0
+	}
+
+	msg := vkdelivery.Message{Text: "НейроХаб рисует..."}
+	randomID := vkdelivery.DeterministicRandomID("vk_control_image_pending:" + idemKey)
+	result, err := h.sendControlMessage(ctx, domain.CommandMenuImage, peerID, randomID, msg)
+	if err != nil {
+		h.logger.Warn("vk image pending message send failed",
 			slog.Int64("peer_id", peerID),
 			slog.String("error", err.Error()))
 		return 0
@@ -710,12 +734,6 @@ func photoModeKeyboard() *vkdelivery.Keyboard {
 		OneTime: false,
 		Inline:  true,
 		Buttons: [][]vkdelivery.KeyboardButton{
-			{
-				button("▶️ Фото по тексту", domain.CommandMenuImageText, "primary"),
-			},
-			{
-				button("📸 Фото с референсом", domain.CommandMenuImageReference, "secondary"),
-			},
 			{
 				button("⬅️ Назад", domain.CommandShowMenu, "secondary"),
 			},

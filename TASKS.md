@@ -84,7 +84,7 @@
 - [x] `PROGRESS.md` includes Step 8 / v0.1.2 hardening.
 - [x] `AUDIT.md` distinguishes fixed hardening/integrations from credential-bound live-smoke follow-ups.
 - [x] `AGENTS.md` includes current release status and documentation DoD.
-- [x] Bot-only local dev scripts (`scripts/dev/start-bot.ps1`, `status-bot.ps1`, `stop-bot.ps1`) automate VK bot startup without starting the VK Mini App frontend.
+- [x] Bot-only local dev scripts (`scripts/dev/start-bot.ps1`, `status-bot.ps1`, `stop-bot.ps1`) automate VK bot startup without starting the VK Mini App frontend; named Cloudflare startup validates local VK confirmation + public health and auto-repairs stale DNS routes with `cloudflared tunnel route dns --overwrite-dns` without sending `VK_SECRET` in public diagnostics.
 
 ### Production hardening follow-up
 - [x] `cmd/worker` calls `cfg.Validate()` and fails closed for production, real provider and real VK delivery modes.
@@ -96,17 +96,20 @@
 
 ### Real integrations
 - [x] DeepInfra provider supports `deepseek-ai/DeepSeek-V4-Flash` text generation through the OpenAI-compatible `/chat/completions` endpoint behind `PROVIDER=deepinfra` / `PROVIDER_CHAIN=deepinfra,mock`.
+- [x] DeepInfra provider supports `ByteDance/Seedream-4.5` text-to-image generation through the native `/v1/inference/{model}` endpoint behind `IMAGE_PROVIDER=deepinfra` / `PROVIDER_CHAIN=deepinfra,mock`; responses normalize to `ImageGenerationResult` and artifact-compatible `data:image/...` outputs.
+- [x] DeepInfra image adapter supports optional `DEEPINFRA_IMAGE_FALLBACK_MODEL` for retryable primary image-model failures; this stays inside `cmd/worker` provider flow and is hidden from VK/Mini App surfaces.
 - [x] Text providers receive an internal instruction in addition to the user's prompt: answer as `НейроХаб бот`, keep replies concise (`<= 3000 characters`), and do not reveal provider/model/backend details; VK delivery still splits long answers as a fallback.
 - [x] Mock-aware downloader supports provider `data:` URLs, so `PROVIDER_CHAIN=deepinfra,mock` can store DeepInfra text outputs before VK delivery.
 - [x] Реальный OpenAI provider покрывает text (`/responses`), image (`/images/generations`) и async video (`/videos`, poll, content download) behind `PROVIDER=openai`.
 - [x] Provider router выбирает capable provider по health/circuit breaker, fallback chain, estimated cost и observed latency; `PROVIDER_CHAIN=openai,mock` включает fallback.
+- [x] Image generation backend foundation: provider-agnostic `ImageGenerationRequest` / `ImageGenerationResult`, worker-only `IMAGE_PROVIDER` / `IMAGE_MODEL` / `IMAGE_SIZE` defaults, image-provider preference in the worker registry, mock fallback compatibility, and artifact-only output flow.
 - [x] Реальный VK delivery покрывает `messages.send` и upload pipeline для raw photo/video artifacts в VK upload servers (`photos.getMessagesUploadServer` -> upload -> `photos.saveMessagesPhoto`, `video.save` -> upload).
 - [x] Реальный output moderation provider включается через `MODERATION_PROVIDER=openai` и пишет verdict в существующий `moderation_results` flow.
 - [x] Реальный artifact scanner включается через `ARTIFACT_SCANNER=openai`; scanner проверяет text/image bytes до storage, video остается задачей полноценного media pipeline.
 - [x] VK inbound распознает sticker-only сообщения и превращает их в text prompt; prompt становится `text.ask` job только когда включен GPT text mode или legacy `VK_UNROUTED_TEXT_MODE=gpt`, поэтому стикеры не теряются как пустой текст и не создают случайные jobs вне режима.
 - [x] VK onboarding keyboard: первичная нижняя кнопка `Старт` запускает welcome flow; первый обычный non-payload текст/стикер/menu-repair контакт пользователя также открывает onboarding `/start`, а явные slash generation-команды и payload-кнопки не перехватываются; после `Старт` нижняя постоянная клавиатура заменяется на одну кнопку `Показать меню`; нижняя `Показать меню` использует отдельный `show_menu` control-command и всегда отправляет свежее НейроХаб inline menu вниз без повторной переустановки нижней клавиатуры. Кнопки меню не создают пустые billable jobs без промпта; при VK `error_code=912` есть fallback на текст без keyboard.
 - [x] VK video menu: кнопка `🎬 Создать видео` открывает inline-экран `Выбери модель для генерации:` с кнопками `Sora 2`, `Kling v2.1`, `Seedance 1`, `Haiuo v0.2` и `⬅️ Назад`; `Sora 2`/`Kling v2.1` открывают detail-экраны с описанием, примером prompt, ссылкой на инструкцию, `Начать генерацию`, `Примеры`, `Назад`; `Seedance 1` открывает `Lite`/`Pro`, `Haiuo v0.2` открывает `Обычный`/`Fast`; все video submenu кнопки пока control-only и не создают billable job.
-- [x] VK menu registry: control-экраны описаны декларативно; `🖼️ Создать фото` при одной основной модели сразу открывает инструкцию с режимами `Фото по тексту` / `Фото с референсом`, а `💬 Спросить у НейроХаб` открывает active-сообщение без лишнего выбора модели.
+- [x] VK menu registry: control-экраны описаны декларативно; `🖼️ Создать фото` при одной основной модели сразу открывает text-to-image инструкцию, включает `photo_text` mode и показывает только `Назад`, кнопка `Фото по тексту` скрыта флагом, reference-photo скрыт флагом до готовности входящих фото-артефактов, а `💬 Спросить у НейроХаб` открывает active-сообщение без лишнего выбора модели.
 - [x] VK student menu: `🎁 Студентам и школьникам` открывает учебный экран с кнопками `Решальник задач`, `Генерация презентаций (скоро)`, `Создание рефератов (скоро)`, `Ответы на вопросы` и `Назад`; все кнопки пока control-only.
 - [x] VK active menu UX: inline menu navigation edits the current menu message via `messages.edit`; plain user text outside GPT mode keeps the previous menu usable and with default `VK_UNROUTED_TEXT_MODE=reply` sends `Выберите режим в меню выше или нажмите на кнопку показать меню` plus the lower `Показать меню` keyboard instead of duplicating the inline menu or creating a billable job. Typed repair phrases `меню`, `нет меню`, `нет кнопки`, `где меню` restore the lower keyboard and reopen the welcome menu. Edit failures fall back to a normal send.
 - [x] VK callback menu buttons: inline menu can run with `VK_MENU_BUTTON_MODE=callback`, processing VK `message_event` without user echo messages; `VK_MENU_BUTTON_MODE=text` keeps the legacy text-button fallback. Persistent lower `Показать меню` remains text.
@@ -115,13 +118,15 @@
 - [x] VK GPT pending UX: after `Спросить у НейроХаб`, the next text/sticker sends `НейроХаб думает...`; when the text job is delivered, delivery worker edits that same VK message with the provider answer instead of posting a second bot message. Text delivery formats simple provider Markdown into VK plain text (`**`/backticks/headings stripped, `*`/`-` lists rendered as `•`). Long text answers are split into deterministic follow-up chunks so VK `error_code=914` does not leave the placeholder stuck. Legacy `VK_UNROUTED_TEXT_MODE=gpt` still uses normal text delivery.
 - [x] VK first-start personalization: the first `Старт` can fetch the VK first name once via `users.get`, cache it on the user row, send `👋 <name>, добро пожаловать в НейроХаб!`, and then use regular non-personalized welcome text for later menus.
 - [x] VK menu feature flags: every main and nested product-menu button has a `VK_MENU_*_ENABLED` env flag; disabled buttons are hidden from new keyboards, stale disabled payload clicks fall back to the current main menu, and no jobs are created.
-- [x] VK bot anti-spam: Redis-backed per-`vk_user_id` limits for all incoming user events (`10/60s`, new users `5/60s`), separate GPT job limits (`3/30s`, new users `1/15s`), cooldown replies, repeated-violation temporary blocks (`5/10m -> 15m`), and max 2 active GPT jobs per user before queue protection denies new requests. Anti-spam denials acknowledge the inbound event and do not create commands/jobs.
+- [x] VK bot anti-spam: Redis-backed per-`vk_user_id` limits for all incoming user events (`40/60s`, new users `30/60s`), separate GPT job limits (`3/30s`, new users `1/15s`), cooldown replies, repeated-violation temporary blocks (`5/10m -> 15m`), and max 2 active GPT jobs per user before queue protection denies new requests. Anti-spam denials acknowledge the inbound event and do not create commands/jobs.
 - [x] VK GPT dialog mode persistence: selected `Спросить у НейроХаб` mode is stored in Redis under peer-scoped dialog state with `VK_DIALOG_MODE_TTL`, so ordinary text keeps routing to GPT after `cmd/api` restart or API instance switch.
 - [x] VK text dialog context v1: `cmd/worker` persists user/assistant turns in Postgres (`conversations`, `conversation_messages`, `conversation_summaries`), sends providers a bounded context packet instead of full history, caps text output via provider request when supported, and keeps context assembly out of VK handlers.
 - [x] Shared VK referral foundation: Postgres `referral_codes` / `referrals`, one stable public code per internal user, idempotent `/start <code>` / VK `ref` handling in the bot, account screen with `безлимитное общение`, invited count/plain referral link, `@neirohub_help` and `Назад` only, and signup rewards through billing ledger entries. Mini App code was not changed; backend service/repository are ready for a future Mini App referral endpoint.
 - [x] VK inbound retry hardening: duplicate `inbound_events.idempotency_key` loads the existing inbound row before status updates, preventing `mark inbound processed: domain: entity not found` and repeated VK retries after partial processing.
 
 ---
+
+- [x] VK photo text mode: `Создать фото` stores Redis-backed `photo_text` mode; the next plain text creates an `image.generate` job through `joborchestrator`, sends `НейроХаб рисует...`, keeps image provider calls in workers, and terminal provider failures release reservation before sending/editing a "funds were not charged" notice. Current VK bot profile allows 100 free text-to-image attempts per user per 24h window through `VK_ANTISPAM_IMAGE_DAILY_LIMIT=100` and `PRICES=image_generate=0`; `Фото по тексту` and `Фото с референсом` are hidden by feature flags until those extra selection paths are needed.
 
 ## VK Mini App (Step 10)
 
@@ -198,6 +203,14 @@
 ---
 
 ## Current Gaps / Known Follow-Ups
+
+### Image generation providers
+
+- [ ] Wire reference-image artifact preparation for image edit/reference-photo
+  flows: ownership check, signed/provider-safe URL creation, MIME validation
+  and artifact scanner pass before provider submit.
+- [ ] Add live smoke for real image generation with credential-bound provider
+  keys and VK photo delivery.
 
 ### PR-17 app surface refactor
 
