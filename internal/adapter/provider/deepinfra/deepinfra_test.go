@@ -438,6 +438,76 @@ func TestSubmitRateLimitedClass(t *testing.T) {
 	}
 }
 
+func TestSubmitPollVideoSuccess(t *testing.T) {
+	const videoURL = "https://cdn.example.test/output.mp4"
+	var seen nativeVideoRequest
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.URL.EscapedPath(); !strings.Contains(got, "/v1/inference/PrunaAI%2Fp-video") {
+			t.Fatalf("path = %q", got)
+		}
+		if err := json.NewDecoder(r.Body).Decode(&seen); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"video_url":"` + videoURL + `"}`))
+	}))
+	defer srv.Close()
+
+	p := New(Config{
+		APIKey:           "test-key",
+		BaseURL:          srv.URL,
+		HTTPClient:       srv.Client(),
+		VideoDraft:       true,
+		VideoDurationSec: 5,
+		VideoResolution:  "720p",
+		VideoAspectRatio: "16:9",
+	})
+	task, err := p.Submit(context.Background(), domain.ProviderRequest{
+		JobID:          uuid.New(),
+		Operation:      domain.OperationVideoGenerate,
+		Modality:       domain.ModalityVideo,
+		ModelCode:      defaultVideoModel,
+		Prompt:         "snow in neon city",
+		DurationSec:    5,
+		Resolution:     "720p",
+		AspectRatio:    "16:9",
+		Draft:          true,
+		IdempotencyKey: "provider_submit:video:1",
+	})
+	if err != nil {
+		t.Fatalf("submit: %v", err)
+	}
+	if task.ModelCode != defaultVideoModel {
+		t.Fatalf("model = %q, want %q", task.ModelCode, defaultVideoModel)
+	}
+	if !seen.Draft || seen.Duration != 5 || seen.Resolution != "720p" || seen.AspectRatio != "16:9" || seen.Prompt != "snow in neon city" {
+		t.Fatalf("unexpected video body: %+v", seen)
+	}
+
+	res, err := p.Poll(context.Background(), domain.ProviderTaskRef{Provider: task.Provider, ExternalID: task.ExternalID})
+	if err != nil {
+		t.Fatalf("poll: %v", err)
+	}
+	if res.Status != domain.ProviderTaskSucceeded || len(res.OutputURLs) != 1 || res.OutputURLs[0] != videoURL {
+		t.Fatalf("unexpected result: %+v", res)
+	}
+}
+
+func TestSubmitVideoRejectsInvalidDuration(t *testing.T) {
+	p := New(Config{APIKey: "test-key"})
+	_, err := p.Submit(context.Background(), domain.ProviderRequest{
+		JobID:       uuid.New(),
+		Operation:   domain.OperationVideoGenerate,
+		Modality:    domain.ModalityVideo,
+		Prompt:      "clip",
+		DurationSec: 15,
+	})
+	perr, ok := err.(*Error)
+	if !ok || perr.Class != domain.ProviderErrInvalidRequest {
+		t.Fatalf("expected invalid_request, got %v", err)
+	}
+}
+
 func TestUnsupportedOperation(t *testing.T) {
 	p := New(Config{APIKey: "test-key"})
 	_, err := p.Submit(context.Background(), domain.ProviderRequest{Operation: domain.OperationImageEdit, Modality: domain.ModalityImage})

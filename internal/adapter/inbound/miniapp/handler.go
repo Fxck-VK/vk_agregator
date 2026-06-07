@@ -338,6 +338,10 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(req.ReferenceArtifactIDs) > 0 {
+		if opType == domain.OperationVideoGenerate {
+			writeError(w, http.StatusBadRequest, "reference_artifacts_unsupported")
+			return
+		}
 		if !h.validateReferenceArtifacts(w, r, user.ID, opType, req.ReferenceArtifactIDs) {
 			return
 		}

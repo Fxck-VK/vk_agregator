@@ -105,6 +105,12 @@ type ProviderRequest struct {
 	Params json.RawMessage `json:"params,omitempty"`
 	// MaxOutputTokens caps provider text output when the adapter supports it.
 	MaxOutputTokens int `json:"max_output_tokens,omitempty"`
+	// DurationSec is the requested video length when supported by the adapter.
+	DurationSec int `json:"duration_sec,omitempty"`
+	// Resolution is a provider-specific resolution token (e.g. "720p").
+	Resolution string `json:"resolution,omitempty"`
+	// Draft requests a cheaper/faster preview render when the adapter supports it.
+	Draft bool `json:"draft,omitempty"`
 	// IdempotencyKey makes the submit safe to retry.
 	IdempotencyKey string `json:"idempotency_key"`
 }
@@ -155,6 +161,46 @@ func (r ProviderRequest) ImageRequest() ImageGenerationRequest {
 		InputURLs:            append([]string(nil), r.InputURLs...),
 		Params:               append(json.RawMessage(nil), r.Params...),
 		IdempotencyKey:       r.IdempotencyKey,
+	}
+}
+
+// VideoGenerationRequest is the provider-agnostic contract for text-to-video
+// generation. Adapters translate it into native API shapes; intake surfaces
+// must not depend on provider-specific bodies.
+type VideoGenerationRequest struct {
+	JobID          uuid.UUID     `json:"job_id"`
+	UserID         uuid.UUID     `json:"user_id"`
+	Operation      OperationType `json:"operation"`
+	Prompt         string        `json:"prompt"`
+	ModelCode      string        `json:"model_code,omitempty"`
+	DurationSec    int           `json:"duration_sec,omitempty"`
+	Resolution     string        `json:"resolution,omitempty"`
+	AspectRatio    string        `json:"aspect_ratio,omitempty"`
+	Draft          bool          `json:"draft,omitempty"`
+	IdempotencyKey string        `json:"idempotency_key"`
+}
+
+// VideoGenerationResult is the normalized result of a video provider call.
+type VideoGenerationResult struct {
+	Provider  ProviderName    `json:"provider"`
+	ModelCode string          `json:"model_code,omitempty"`
+	OutputURL string          `json:"output_url,omitempty"`
+	Metadata  json.RawMessage `json:"metadata,omitempty"`
+}
+
+// VideoRequest extracts the typed video contract from a generic ProviderRequest.
+func (r ProviderRequest) VideoRequest() VideoGenerationRequest {
+	return VideoGenerationRequest{
+		JobID:          r.JobID,
+		UserID:         r.UserID,
+		Operation:      r.Operation,
+		Prompt:         r.Prompt,
+		ModelCode:      r.ModelCode,
+		DurationSec:    r.DurationSec,
+		Resolution:     r.Resolution,
+		AspectRatio:    r.AspectRatio,
+		Draft:          r.Draft,
+		IdempotencyKey: r.IdempotencyKey,
 	}
 }
 

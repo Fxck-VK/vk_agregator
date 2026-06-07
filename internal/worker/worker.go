@@ -419,23 +419,28 @@ func (e providerResultError) ProviderErrorClass() domain.ProviderErrorClass { re
 // processor holds the shared dependencies and result-handling logic used by
 // both the generation and poll workers.
 type processor struct {
-	jobs         domain.JobRepository
-	tasks        domain.ProviderTaskRepository
-	artifacts    ArtifactSaver
-	artifactRepo domain.ArtifactRepository
-	objects      ObjectStore
-	providers    *Registry
-	streams      StreamPublisher
-	imageModel   string
-	imageSize    string
-	textContext  TextContext
-	moderator    Moderator
-	modResults   domain.ModerationResultRepository
-	releaser     ReservationReleaser
-	maxAttempts  int
-	backoff      func(attempt int) time.Duration
-	callTimeout  time.Duration
-	now          func() time.Time
+	jobs             domain.JobRepository
+	tasks            domain.ProviderTaskRepository
+	artifacts        ArtifactSaver
+	artifactRepo     domain.ArtifactRepository
+	objects          ObjectStore
+	providers        *Registry
+	streams          StreamPublisher
+	imageModel       string
+	imageSize        string
+	videoModel       string
+	videoDurationSec int
+	videoResolution  string
+	videoAspectRatio string
+	videoDraft       bool
+	textContext      TextContext
+	moderator        Moderator
+	modResults       domain.ModerationResultRepository
+	releaser         ReservationReleaser
+	maxAttempts      int
+	backoff          func(attempt int) time.Duration
+	callTimeout      time.Duration
+	now              func() time.Time
 }
 
 // Moderator gates delivery: generated output must pass a moderation check
@@ -474,6 +479,12 @@ type Deps struct {
 	// They are translated into the provider request only inside workers.
 	ImageModel string
 	ImageSize  string
+	// VideoModel and related fields are worker-owned defaults for video jobs.
+	VideoModel       string
+	VideoDurationSec int
+	VideoResolution  string
+	VideoAspectRatio string
+	VideoDraft       bool
 	// TextContext, when set, stores VK text dialog history and renders compact
 	// provider prompts for text jobs.
 	TextContext TextContext
@@ -514,23 +525,28 @@ func newProcessor(d Deps) processor {
 		callTimeout = defaultProviderCallTimeout
 	}
 	return processor{
-		jobs:         d.Jobs,
-		tasks:        d.Tasks,
-		artifacts:    d.Artifacts,
-		artifactRepo: d.ArtifactRepo,
-		objects:      d.Objects,
-		providers:    d.Providers,
-		streams:      d.Streams,
-		imageModel:   d.ImageModel,
-		imageSize:    d.ImageSize,
-		textContext:  d.TextContext,
-		moderator:    d.Moderator,
-		modResults:   d.ModResults,
-		releaser:     d.Releaser,
-		maxAttempts:  maxAttempts,
-		backoff:      backoff,
-		callTimeout:  callTimeout,
-		now:          now,
+		jobs:             d.Jobs,
+		tasks:            d.Tasks,
+		artifacts:        d.Artifacts,
+		artifactRepo:     d.ArtifactRepo,
+		objects:          d.Objects,
+		providers:        d.Providers,
+		streams:          d.Streams,
+		imageModel:       d.ImageModel,
+		imageSize:        d.ImageSize,
+		videoModel:       d.VideoModel,
+		videoDurationSec: d.VideoDurationSec,
+		videoResolution:  d.VideoResolution,
+		videoAspectRatio: d.VideoAspectRatio,
+		videoDraft:       d.VideoDraft,
+		textContext:      d.TextContext,
+		moderator:        d.Moderator,
+		modResults:       d.ModResults,
+		releaser:         d.Releaser,
+		maxAttempts:      maxAttempts,
+		backoff:          backoff,
+		callTimeout:      callTimeout,
+		now:              now,
 	}
 }
 
@@ -566,6 +582,9 @@ func (p *processor) buildRequest(ctx context.Context, job *domain.Job, attempt i
 	modelCode := pp.ModelCode
 	size := pp.Size
 	maxOutputTokens := 0
+	durationSec := 0
+	resolution := ""
+	draft := false
 	if job.Modality == domain.ModalityImage {
 		if modelCode == "" {
 			modelCode = p.imageModel
@@ -573,6 +592,17 @@ func (p *processor) buildRequest(ctx context.Context, job *domain.Job, attempt i
 		if size == "" {
 			size = p.imageSize
 		}
+	}
+	if job.Modality == domain.ModalityVideo {
+		if modelCode == "" {
+			modelCode = p.videoModel
+		}
+		durationSec = p.videoDurationSec
+		resolution = p.videoResolution
+		if pp.AspectRatio == "" {
+			pp.AspectRatio = p.videoAspectRatio
+		}
+		draft = p.videoDraft
 	}
 	if p.textContext != nil && job.OperationType == domain.OperationTextGenerate && job.Modality == domain.ModalityText {
 		prepared, err := p.textContext.Prepare(ctx, job, pp.Prompt)
@@ -611,6 +641,9 @@ func (p *processor) buildRequest(ctx context.Context, job *domain.Job, attempt i
 		NegativePrompt:       pp.NegativePrompt,
 		Size:                 size,
 		AspectRatio:          pp.AspectRatio,
+		DurationSec:          durationSec,
+		Resolution:           resolution,
+		Draft:                draft,
 		ReferenceArtifactIDs: pp.ReferenceArtifactIDs,
 		InputURLs:            inputURLs,
 		Params:               stripProviderInputURLs(job.Params),

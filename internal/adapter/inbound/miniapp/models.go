@@ -15,6 +15,7 @@ const (
 
 	miniAppModelCodeSeedream45 = "ByteDance/Seedream-4.5"
 	miniAppModelCodeSDXLTurbo  = "stabilityai/sdxl-turbo"
+	miniAppModelCodePVideo     = "PrunaAI/p-video"
 )
 
 type miniAppModelSpec struct {
@@ -74,6 +75,7 @@ var miniAppModels = map[domain.OperationType]map[string]miniAppModelSpec{
 		"kling": {
 			ModelID:   "kling",
 			ModelName: "Kling",
+			ModelCode: miniAppModelCodePVideo,
 			ExposeID:  true,
 		},
 	},

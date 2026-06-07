@@ -64,6 +64,16 @@ VK-бота, а не обязательная бизнес-логика job.
 
 ## Журнал
 
+### FIX-2026-06-07-12 — Mini App video: DeepInfra PrunaAI/p-video (draft $0.005/с)
+- **Симптом:** `video_generate` в Create не доходил до реального провайдера (только mock).
+- **Исправление:** `deepinfra/video.go`, `VIDEO_PROVIDER`, worker video defaults,
+  `miniapp/models.go` (`kling` → `PrunaAI/p-video` в job params only), dev env draft mode.
+- **Scope:** Mini App BFF + worker provider only; **VK bot не трогали**.
+- **Безопасность:** draft/duration из worker env (не из клиента); ref-фото для video rejected;
+  idempotency + SSRF downloader для `video_url`.
+- **Проверка:** `go test` deepinfra + miniapp handler; `npm run build`.
+- **Осталось:** live smoke с `DEEPINFRA_API_KEY`; VK bot intake — коллега.
+
 ### FIX-2026-06-07-11 — процесс: verify → commit → push `fastlife_dev`
 - **Симптом:** накопились незакоммиченные Mini App UX-фиксы; нужен откатываемый push.
 - **Проверка:** `npm run build`; `go test ./internal/adapter/inbound/miniapp/...`;

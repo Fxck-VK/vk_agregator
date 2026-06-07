@@ -119,7 +119,10 @@ func main() {
 	if cfg.ImageProvider != "" && !containsProvider(providerNames, cfg.ImageProvider) {
 		providerNames = append(providerNames, cfg.ImageProvider)
 	}
-	if cfg.ImageProvider != "" && !cfg.IsProduction() && !containsProvider(providerNames, string(domain.ProviderMock)) {
+	if cfg.VideoProvider != "" && !containsProvider(providerNames, cfg.VideoProvider) {
+		providerNames = append(providerNames, cfg.VideoProvider)
+	}
+	if (cfg.ImageProvider != "" || cfg.VideoProvider != "") && !cfg.IsProduction() && !containsProvider(providerNames, string(domain.ProviderMock)) {
 		providerNames = append(providerNames, string(domain.ProviderMock))
 	}
 	for _, name := range providerNames {
@@ -135,6 +138,13 @@ func main() {
 				ImageSize:             cfg.ImageSize,
 				ImagePrice:            cfg.DeepInfraImagePrice,
 				ImageReferenceEnabled: cfg.DeepInfraImageReferenceEnabled,
+				VideoModel:            defaultForVideoProvider(cfg, domain.ProviderDeepInfra, cfg.DeepInfraVideoModel, cfg.VideoModel),
+				VideoDurationSec:      cfg.DeepInfraVideoDurationSec,
+				VideoResolution:       cfg.DeepInfraVideoResolution,
+				VideoAspectRatio:      cfg.DeepInfraVideoAspectRatio,
+				VideoDraft:            cfg.DeepInfraVideoDraft,
+				VideoPrice:            cfg.DeepInfraVideoPrice,
+				VideoHTTPTimeout:      cfg.DeepInfraVideoHTTPTimeout,
 			}))
 			logger.Info("registered deepinfra provider")
 		case "openai":
@@ -190,6 +200,9 @@ func main() {
 	if cfg.ImageProvider != "" {
 		providers.PreferProvider(domain.ModalityImage, domain.ProviderName(strings.ToLower(strings.TrimSpace(cfg.ImageProvider))))
 	}
+	if cfg.VideoProvider != "" {
+		providers.PreferProvider(domain.ModalityVideo, domain.ProviderName(strings.ToLower(strings.TrimSpace(cfg.VideoProvider))))
+	}
 
 	// Delivery client selection: mock by default, real VK API when configured
 	// (audit V1).
@@ -214,15 +227,21 @@ func main() {
 	}
 
 	deps := worker.Deps{
-		Jobs:         jobs,
-		Tasks:        tasks,
-		Artifacts:    artSvc,
-		ArtifactRepo: artRepo,
-		Objects:      store,
-		Providers:    providers,
-		Streams:      publisher,
-		ImageModel:   cfg.ImageModel,
-		ImageSize:    cfg.ImageSize,
+		Jobs:                jobs,
+		Tasks:               tasks,
+		Artifacts:           artSvc,
+		ArtifactRepo:        artRepo,
+		Objects:             store,
+		Providers:           providers,
+		Streams:             publisher,
+		ImageModel:          cfg.ImageModel,
+		ImageSize:           cfg.ImageSize,
+		VideoModel:          defaultForVideoProvider(cfg, domain.ProviderDeepInfra, cfg.DeepInfraVideoModel, cfg.VideoModel),
+		VideoDurationSec:    cfg.VideoDurationSec,
+		VideoResolution:     cfg.VideoResolution,
+		VideoAspectRatio:    cfg.VideoAspectRatio,
+		VideoDraft:          cfg.VideoDraft,
+		ProviderCallTimeout: cfg.WorkerProviderCallTimeout,
 		TextContext: dialogcontext.New(conversations, dialogcontext.Config{
 			Enabled:                cfg.TextContextEnabled,
 			MaxInputTokens:         cfg.TextContextMaxInputTokens,
@@ -371,6 +390,13 @@ func containsProvider(names []string, want string) bool {
 
 func defaultForImageProvider(cfg config.Config, provider domain.ProviderName, providerValue, genericValue string) string {
 	if genericValue != "" && strings.EqualFold(cfg.ImageProvider, string(provider)) {
+		return genericValue
+	}
+	return providerValue
+}
+
+func defaultForVideoProvider(cfg config.Config, provider domain.ProviderName, providerValue, genericValue string) string {
+	if genericValue != "" && strings.EqualFold(cfg.VideoProvider, string(provider)) {
 		return genericValue
 	}
 	return providerValue

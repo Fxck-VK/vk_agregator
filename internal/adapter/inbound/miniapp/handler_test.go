@@ -1725,6 +1725,65 @@ func TestHandler_CreateJob_ImageAliasPersistsProviderModelCodePrivately(t *testi
 	}
 }
 
+func TestHandler_CreateJob_VideoPersistsProviderModelCodePrivately(t *testing.T) {
+	fixture := newTestFixture("", nil)
+	routes := fixture.handler.Routes()
+
+	body, _ := json.Marshal(map[string]string{
+		"operation": "video_generate",
+		"prompt":    "snow over neon city",
+		"model_id":  "kling",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/miniapp/jobs", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Launch-Params", devLaunchParams(777))
+	req.Header.Set("X-Idempotency-Key", "video-model-alias")
+
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	lower := strings.ToLower(w.Body.String())
+	if strings.Contains(lower, "pruna") || strings.Contains(lower, "p-video") || strings.Contains(lower, "model_code") || strings.Contains(lower, "provider") {
+		t.Fatalf("job response leaked provider/model internals: %s", w.Body.String())
+	}
+	var resp struct {
+		ID        string `json:"id"`
+		Operation string `json:"operation"`
+		ModelID   string `json:"model_id"`
+		ModelName string `json:"model_name"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("invalid response json: %v", err)
+	}
+	if resp.Operation != "video_generate" || resp.ModelID != "kling" || resp.ModelName != "Kling" {
+		t.Fatalf("unexpected response: %+v", resp)
+	}
+	jobID, err := uuid.Parse(resp.ID)
+	if err != nil {
+		t.Fatalf("invalid job id: %v", err)
+	}
+	job, err := fixture.jobRepo.GetByID(context.Background(), jobID)
+	if err != nil {
+		t.Fatalf("get job: %v", err)
+	}
+	if job.OperationType != domain.OperationVideoGenerate || job.Modality != domain.ModalityVideo {
+		t.Fatalf("unexpected job: %+v", job)
+	}
+	var params struct {
+		ModelID   string `json:"model_id"`
+		ModelName string `json:"model_name"`
+		ModelCode string `json:"model_code"`
+	}
+	if err := json.Unmarshal(job.Params, &params); err != nil {
+		t.Fatalf("invalid params: %v", err)
+	}
+	if params.ModelID != "kling" || params.ModelName != "Kling" || params.ModelCode != "PrunaAI/p-video" {
+		t.Fatalf("unexpected stored params: %+v", params)
+	}
+}
+
 func TestHandler_CreateJob_ReferenceArtifactsValidateOwnershipAndFailClosed(t *testing.T) {
 	fixture := newTestFixture("", nil)
 	routes := fixture.handler.Routes()

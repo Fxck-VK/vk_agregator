@@ -49,6 +49,20 @@ type Config struct {
 	ImagePrice int64
 	// ImageReferenceEnabled is reserved for DeepInfra reference-image flows.
 	ImageReferenceEnabled bool
+	// VideoModel is the model used for text-to-video generation.
+	VideoModel string
+	// VideoDurationSec is the default clip length (1–10 seconds).
+	VideoDurationSec int
+	// VideoResolution is the default resolution token (e.g. "720p").
+	VideoResolution string
+	// VideoAspectRatio is the default aspect ratio (e.g. "16:9").
+	VideoAspectRatio string
+	// VideoDraft enables cheaper preview renders when supported by the model.
+	VideoDraft bool
+	// VideoPrice is the internal credit cost used for provider routing.
+	VideoPrice int64
+	// VideoHTTPTimeout bounds a single video inference call.
+	VideoHTTPTimeout time.Duration
 	// HTTPClient overrides the HTTP client, mainly for tests.
 	HTTPClient *http.Client
 }
@@ -92,9 +106,30 @@ func New(cfg Config) *Provider {
 	if cfg.ImagePrice == 0 {
 		cfg.ImagePrice = 10
 	}
+	if cfg.VideoModel == "" {
+		cfg.VideoModel = defaultVideoModel
+	}
+	if cfg.VideoDurationSec <= 0 {
+		cfg.VideoDurationSec = defaultVideoDuration
+	}
+	if cfg.VideoResolution == "" {
+		cfg.VideoResolution = defaultVideoResolution
+	}
+	if cfg.VideoAspectRatio == "" {
+		cfg.VideoAspectRatio = defaultVideoAspect
+	}
+	if cfg.VideoPrice == 0 {
+		cfg.VideoPrice = 10
+	}
+	httpTimeout := 120 * time.Second
+	if cfg.VideoHTTPTimeout > 0 {
+		httpTimeout = cfg.VideoHTTPTimeout
+	} else if cfg.VideoModel != "" {
+		httpTimeout = 180 * time.Second
+	}
 	httpClient := cfg.HTTPClient
 	if httpClient == nil {
-		httpClient = &http.Client{Timeout: 120 * time.Second}
+		httpClient = &http.Client{Timeout: httpTimeout}
 	}
 	return &Provider{
 		cfg:   cfg,
@@ -111,10 +146,20 @@ func (p *Provider) Name() domain.ProviderName { return domain.ProviderDeepInfra 
 
 // Capabilities reports the operations this adapter supports.
 func (p *Provider) Capabilities(_ context.Context) ([]domain.Capability, error) {
-	return []domain.Capability{
+	caps := []domain.Capability{
 		{Operation: domain.OperationTextGenerate, Modality: domain.ModalityText, ModelCode: p.cfg.TextModel, SupportsPolling: true},
 		{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ModelCode: p.cfg.ImageModel, SupportsPolling: true},
-	}, nil
+	}
+	if p.cfg.VideoModel != "" {
+		caps = append(caps, domain.Capability{
+			Operation:       domain.OperationVideoGenerate,
+			Modality:        domain.ModalityVideo,
+			ModelCode:       p.cfg.VideoModel,
+			SupportsPolling: true,
+			MaxDurationSec:  p.cfg.VideoDurationSec,
+		})
+	}
+	return caps, nil
 }
 
 // Estimate returns the configured credit cost.
@@ -124,6 +169,9 @@ func (p *Provider) Estimate(_ context.Context, req domain.ProviderRequest) (doma
 	}
 	if req.Operation == domain.OperationImageGenerate && req.Modality == domain.ModalityImage {
 		return domain.CostEstimate{AmountCredits: p.cfg.ImagePrice, Currency: "credits", Estimated: false}, nil
+	}
+	if req.Operation == domain.OperationVideoGenerate && req.Modality == domain.ModalityVideo {
+		return domain.CostEstimate{AmountCredits: p.cfg.VideoPrice, Currency: "credits", Estimated: false}, nil
 	}
 	return domain.CostEstimate{}, &Error{Class: domain.ProviderErrUnsupportedCapab, Message: string(req.Operation)}
 }
@@ -135,6 +183,9 @@ func (p *Provider) Submit(ctx context.Context, req domain.ProviderRequest) (doma
 	}
 	if req.Operation == domain.OperationImageGenerate && req.Modality == domain.ModalityImage {
 		return p.submitImage(ctx, req)
+	}
+	if req.Operation == domain.OperationVideoGenerate && req.Modality == domain.ModalityVideo {
+		return p.submitVideo(ctx, req)
 	}
 	return domain.ProviderTask{}, &Error{Class: domain.ProviderErrUnsupportedCapab, Message: string(req.Operation)}
 }

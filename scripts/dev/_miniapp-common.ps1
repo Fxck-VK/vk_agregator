@@ -74,6 +74,16 @@ function Set-MiniAppDevDefaults {
     $env:HTTP_ADDR = ":$ApiPort"
     $env:PROVIDER = "deepinfra"
     $env:PROVIDER_CHAIN = "deepinfra"
+    $env:IMAGE_PROVIDER = "deepinfra"
+    $env:VIDEO_PROVIDER = "deepinfra"
+    $env:DEEPINFRA_VIDEO_MODEL = "PrunaAI/p-video"
+    $env:DEEPINFRA_VIDEO_DRAFT = "true"
+    $env:DEEPINFRA_VIDEO_DURATION_SEC = "5"
+    $env:DEEPINFRA_VIDEO_RESOLUTION = "720p"
+    $env:WORKER_PROVIDER_CALL_TIMEOUT = "180s"
+    if (-not $env:PRICES) {
+        $env:PRICES = "video_generate=10"
+    }
     $env:VK_DELIVERY_MODE = "mock"
     $env:MODERATION_PROVIDER = "keyword"
     $env:ARTIFACT_SCANNER = "none"

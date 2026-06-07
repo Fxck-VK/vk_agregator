@@ -99,9 +99,18 @@ type Config struct {
 	// ImageProvider, when set, makes one provider the preferred route for image
 	// jobs while preserving the configured provider chain as fallback.
 	ImageProvider string
+	// VideoProvider optionally overrides the provider used for video jobs.
+	VideoProvider string
 	// ImageModel/ImageSize are provider-agnostic defaults attached to image jobs.
 	ImageModel string
 	ImageSize  string
+	// VideoModel/VideoDurationSec/VideoResolution/VideoAspectRatio/VideoDraft are
+	// worker-owned defaults for video jobs (not trusted from clients).
+	VideoModel       string
+	VideoDurationSec int
+	VideoResolution  string
+	VideoAspectRatio string
+	VideoDraft       bool
 
 	OpenAIAPIKey       string
 	OpenAIBaseURL      string
@@ -123,6 +132,13 @@ type Config struct {
 	DeepInfraImageFallbackModel    string
 	DeepInfraImagePrice            int64
 	DeepInfraImageReferenceEnabled bool
+	DeepInfraVideoModel            string
+	DeepInfraVideoDurationSec      int
+	DeepInfraVideoResolution       string
+	DeepInfraVideoAspectRatio      string
+	DeepInfraVideoDraft            bool
+	DeepInfraVideoPrice            int64
+	DeepInfraVideoHTTPTimeout      time.Duration
 
 	TextContextEnabled                bool
 	TextContextMaxInputTokens         int
@@ -212,6 +228,9 @@ type Config struct {
 	// ArtifactRetentionDays configures object lifecycle expiry (0 = keep) (ST1).
 	ArtifactRetentionDays int
 
+	// WorkerProviderCallTimeout bounds one provider Submit/Poll call in workers.
+	WorkerProviderCallTimeout time.Duration
+
 	// WorkerShutdownGrace is how long workers may drain in-flight work after a
 	// shutdown signal before their processing context is cancelled.
 	WorkerShutdownGrace time.Duration
@@ -248,6 +267,9 @@ func (c Config) Validate() error {
 	}
 	if provider := strings.ToLower(strings.TrimSpace(c.ImageProvider)); provider != "" && !knownProvider(provider) {
 		return fmt.Errorf("config: IMAGE_PROVIDER must be one of mock, openai, deepinfra")
+	}
+	if provider := strings.ToLower(strings.TrimSpace(c.VideoProvider)); provider != "" && !knownProvider(provider) {
+		return fmt.Errorf("config: VIDEO_PROVIDER must be one of mock, openai, deepinfra")
 	}
 	if c.IsProduction() {
 		if c.VKSecret == "" {
@@ -353,8 +375,14 @@ func Load() Config {
 		Provider:                          provider,
 		ProviderChain:                     providerChain,
 		ImageProvider:                     env("IMAGE_PROVIDER", ""),
+		VideoProvider:                     env("VIDEO_PROVIDER", ""),
 		ImageModel:                        env("IMAGE_MODEL", ""),
 		ImageSize:                         env("IMAGE_SIZE", ""),
+		VideoModel:                        env("VIDEO_MODEL", ""),
+		VideoDurationSec:                  envInt("VIDEO_DURATION_SEC", 5),
+		VideoResolution:                   env("VIDEO_RESOLUTION", "720p"),
+		VideoAspectRatio:                  env("VIDEO_ASPECT_RATIO", "16:9"),
+		VideoDraft:                        envBool("VIDEO_DRAFT", true),
 		OpenAIAPIKey:                      env("OPENAI_API_KEY", ""),
 		OpenAIBaseURL:                     env("OPENAI_BASE_URL", "https://api.openai.com/v1"),
 		OpenAITextModel:                   env("OPENAI_TEXT_MODEL", "gpt-4.1-mini"),
@@ -374,6 +402,13 @@ func Load() Config {
 		DeepInfraImageFallbackModel:       env("DEEPINFRA_IMAGE_FALLBACK_MODEL", ""),
 		DeepInfraImagePrice:               int64(envInt("DEEPINFRA_IMAGE_PRICE", 10)),
 		DeepInfraImageReferenceEnabled:    envBool("DEEPINFRA_IMAGE_REFERENCE_ENABLED", false),
+		DeepInfraVideoModel:               env("DEEPINFRA_VIDEO_MODEL", "PrunaAI/p-video"),
+		DeepInfraVideoDurationSec:         envInt("DEEPINFRA_VIDEO_DURATION_SEC", 5),
+		DeepInfraVideoResolution:          env("DEEPINFRA_VIDEO_RESOLUTION", "720p"),
+		DeepInfraVideoAspectRatio:         env("DEEPINFRA_VIDEO_ASPECT_RATIO", "16:9"),
+		DeepInfraVideoDraft:               envBool("DEEPINFRA_VIDEO_DRAFT", true),
+		DeepInfraVideoPrice:               int64(envInt("DEEPINFRA_VIDEO_PRICE", 10)),
+		DeepInfraVideoHTTPTimeout:         envDuration("DEEPINFRA_VIDEO_HTTP_TIMEOUT", 180*time.Second),
 		TextContextEnabled:                envBool("TEXT_CONTEXT_ENABLED", true),
 		TextContextMaxInputTokens:         envInt("TEXT_CONTEXT_MAX_INPUT_TOKENS", 1600),
 		TextContextMaxOutputTokens:        envInt("TEXT_CONTEXT_MAX_OUTPUT_TOKENS", 800),
@@ -437,6 +472,7 @@ func Load() Config {
 		SignedDelivery:        envBool("SIGNED_DELIVERY", false),
 		ArtifactRetentionDays: envInt("ARTIFACT_RETENTION_DAYS", 0),
 
+		WorkerProviderCallTimeout:     envDuration("WORKER_PROVIDER_CALL_TIMEOUT", 180*time.Second),
 		WorkerShutdownGrace:           envDuration("WORKER_SHUTDOWN_GRACE", 30*time.Second),
 		MaintenanceInterval:           envDuration("MAINTENANCE_INTERVAL", time.Hour),
 		OutboxRetention:               envDuration("OUTBOX_RETENTION", 7*24*time.Hour),
@@ -451,6 +487,7 @@ func Load() Config {
 func (c Config) usesOpenAI() bool {
 	if strings.EqualFold(c.Provider, "openai") ||
 		strings.EqualFold(c.ImageProvider, "openai") ||
+		strings.EqualFold(c.VideoProvider, "openai") ||
 		strings.EqualFold(c.ModerationProvider, "openai") ||
 		strings.EqualFold(c.ArtifactScanner, "openai") {
 		return true
@@ -465,7 +502,8 @@ func (c Config) usesOpenAI() bool {
 
 func (c Config) usesDeepInfra() bool {
 	if strings.EqualFold(c.Provider, "deepinfra") ||
-		strings.EqualFold(c.ImageProvider, "deepinfra") {
+		strings.EqualFold(c.ImageProvider, "deepinfra") ||
+		strings.EqualFold(c.VideoProvider, "deepinfra") {
 		return true
 	}
 	for _, provider := range c.ProviderChain {
