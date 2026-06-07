@@ -115,14 +115,26 @@ func main() {
 	var providerList []domain.Provider
 	var artOpts []artifactservice.Option
 	hasMockProvider := false
-	for _, name := range cfg.ProviderChain {
+	providerNames := append([]string(nil), cfg.ProviderChain...)
+	if cfg.ImageProvider != "" && !containsProvider(providerNames, cfg.ImageProvider) {
+		providerNames = append(providerNames, cfg.ImageProvider)
+	}
+	if cfg.ImageProvider != "" && !cfg.IsProduction() && !containsProvider(providerNames, string(domain.ProviderMock)) {
+		providerNames = append(providerNames, string(domain.ProviderMock))
+	}
+	for _, name := range providerNames {
 		switch strings.ToLower(strings.TrimSpace(name)) {
 		case "deepinfra":
 			providerList = append(providerList, deepinfra.New(deepinfra.Config{
-				APIKey:    cfg.DeepInfraAPIKey,
-				BaseURL:   cfg.DeepInfraBaseURL,
-				TextModel: cfg.DeepInfraTextModel,
-				TextPrice: cfg.DeepInfraTextPrice,
+				APIKey:                cfg.DeepInfraAPIKey,
+				BaseURL:               cfg.DeepInfraBaseURL,
+				TextModel:             cfg.DeepInfraTextModel,
+				TextPrice:             cfg.DeepInfraTextPrice,
+				ImageModel:            defaultForImageProvider(cfg, domain.ProviderDeepInfra, cfg.DeepInfraImageModel, cfg.ImageModel),
+				ImageFallbackModel:    cfg.DeepInfraImageFallbackModel,
+				ImageSize:             cfg.ImageSize,
+				ImagePrice:            cfg.DeepInfraImagePrice,
+				ImageReferenceEnabled: cfg.DeepInfraImageReferenceEnabled,
 			}))
 			logger.Info("registered deepinfra provider")
 		case "openai":
@@ -130,8 +142,8 @@ func main() {
 				APIKey:       cfg.OpenAIAPIKey,
 				BaseURL:      cfg.OpenAIBaseURL,
 				TextModel:    cfg.OpenAITextModel,
-				ImageModel:   cfg.OpenAIImageModel,
-				ImageSize:    cfg.OpenAIImageSize,
+				ImageModel:   defaultForImageProvider(cfg, domain.ProviderOpenAI, cfg.OpenAIImageModel, cfg.ImageModel),
+				ImageSize:    defaultForImageProvider(cfg, domain.ProviderOpenAI, cfg.OpenAIImageSize, cfg.ImageSize),
 				VideoModel:   cfg.OpenAIVideoModel,
 				VideoSeconds: cfg.OpenAIVideoSeconds,
 				VideoSize:    cfg.OpenAIVideoSize,
@@ -175,6 +187,9 @@ func main() {
 	}
 	artSvc := artifactservice.New(artRepo, store, cfg.S3Bucket, artOpts...)
 	providers := worker.NewRegistry(providerList[0], providerList[1:]...)
+	if cfg.ImageProvider != "" {
+		providers.PreferProvider(domain.ModalityImage, domain.ProviderName(strings.ToLower(strings.TrimSpace(cfg.ImageProvider))))
+	}
 
 	// Delivery client selection: mock by default, real VK API when configured
 	// (audit V1).
@@ -199,11 +214,13 @@ func main() {
 	}
 
 	deps := worker.Deps{
-		Jobs:      jobs,
-		Tasks:     tasks,
-		Artifacts: artSvc,
-		Providers: providers,
-		Streams:   publisher,
+		Jobs:       jobs,
+		Tasks:      tasks,
+		Artifacts:  artSvc,
+		Providers:  providers,
+		Streams:    publisher,
+		ImageModel: cfg.ImageModel,
+		ImageSize:  cfg.ImageSize,
 		TextContext: dialogcontext.New(conversations, dialogcontext.Config{
 			Enabled:                cfg.TextContextEnabled,
 			MaxInputTokens:         cfg.TextContextMaxInputTokens,
@@ -339,4 +356,20 @@ func main() {
 		<-done
 	}
 	logger.Info("workers stopped")
+}
+
+func containsProvider(names []string, want string) bool {
+	for _, name := range names {
+		if strings.EqualFold(strings.TrimSpace(name), strings.TrimSpace(want)) {
+			return true
+		}
+	}
+	return false
+}
+
+func defaultForImageProvider(cfg config.Config, provider domain.ProviderName, providerValue, genericValue string) string {
+	if genericValue != "" && strings.EqualFold(cfg.ImageProvider, string(provider)) {
+		return genericValue
+	}
+	return providerValue
 }

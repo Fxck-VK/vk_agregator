@@ -94,6 +94,44 @@ func TestGPTLimitIsSeparateFromMessageLimit(t *testing.T) {
 	}
 }
 
+func TestImageDailyLimit(t *testing.T) {
+	now := fixedNow()
+	cfg := DefaultConfig()
+	cfg.MessageLimit = 100
+	cfg.ImageDailyLimit = 2
+	cfg.ImageDailyWindow = 24 * time.Hour
+	svc := newTestService(t, cfg, now, nil)
+	user := existingUser(now)
+	in := CheckInput{
+		User:        user,
+		VKUserID:    user.VKUserID,
+		CommandType: domain.CommandImageGenerate,
+		Operation:   domain.OperationImageGenerate,
+		CreatesJob:  true,
+	}
+
+	for i := 0; i < 2; i++ {
+		decision, err := svc.Check(context.Background(), in)
+		if err != nil {
+			t.Fatalf("check %d: %v", i, err)
+		}
+		if !decision.Allowed {
+			t.Fatalf("check %d denied: %+v", i, decision)
+		}
+	}
+
+	decision, err := svc.Check(context.Background(), in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if decision.Allowed || decision.Kind != DecisionImageDaily {
+		t.Fatalf("decision = %+v, want image daily limit", decision)
+	}
+	if decision.Message == "" || decision.RetryAfter <= 0 {
+		t.Fatalf("image daily decision should include user message and retry-after: %+v", decision)
+	}
+}
+
 func TestRepeatedViolationsBecomeTemporaryBlock(t *testing.T) {
 	now := fixedNow()
 	cfg := DefaultConfig()

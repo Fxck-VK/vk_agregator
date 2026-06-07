@@ -328,6 +328,62 @@ func TestDeliveryTextSplitsLongGPTPlaceholderAnswer(t *testing.T) {
 	}
 }
 
+func TestDeliverySendsImageProviderFailureNoticeWithoutCapture(t *testing.T) {
+	h := newDeliveryHarness(t)
+	ctx := context.Background()
+	userID := uuid.New()
+	if _, err := h.billing.EnsureAccount(ctx, userID); err != nil {
+		t.Fatalf("ensure account: %v", err)
+	}
+	pending, err := h.vk.SendMessage(ctx, 555, 9001, vkdelivery.Message{Text: "НейроХаб рисует..."})
+	if err != nil {
+		t.Fatalf("send pending: %v", err)
+	}
+	job := &domain.Job{
+		ID:             uuid.New(),
+		UserID:         userID,
+		VKPeerID:       555,
+		OperationType:  domain.OperationImageGenerate,
+		Modality:       domain.ModalityImage,
+		Status:         domain.JobStatusFailedTerminal,
+		IdempotencyKey: "job:" + uuid.NewString(),
+		CostReserved:   10,
+		ErrorCode:      string(domain.ProviderErrInternal),
+		ErrorMessage:   "provider failed",
+	}
+	params, _ := json.Marshal(struct {
+		Prompt                 string `json:"prompt"`
+		VKPlaceholderMessageID int64  `json:"vk_placeholder_message_id"`
+	}{
+		Prompt:                 "кот",
+		VKPlaceholderMessageID: pending.MessageID,
+	})
+	job.Params = params
+	if err := h.jobs.Create(ctx, job); err != nil {
+		t.Fatalf("create job: %v", err)
+	}
+
+	if err := h.worker.Process(ctx, deliveryTask(job)); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+
+	got, err := h.jobs.GetByID(ctx, job.ID)
+	if err != nil {
+		t.Fatalf("reload job: %v", err)
+	}
+	if got.Status != domain.JobStatusFailedTerminal || got.CostCaptured != 0 {
+		t.Fatalf("failure notice must not mark success or capture credits: %+v", got)
+	}
+	edits := h.vk.Edits()
+	if len(edits) != 1 || edits[0].MessageID != pending.MessageID || !strings.Contains(edits[0].Text, "Средства не списаны") {
+		t.Fatalf("unexpected failure notice edit: %+v", edits)
+	}
+	dels, _ := h.deliveries.ListByJob(ctx, job.ID)
+	if len(dels) != 1 || dels[0].Status != domain.DeliveryStatusSent || dels[0].VKMessageID == nil || *dels[0].VKMessageID != pending.MessageID {
+		t.Fatalf("failure delivery should be persisted as sent edit: %+v", dels)
+	}
+}
+
 func TestDeliverySendFailureRetries(t *testing.T) {
 	h := newDeliveryHarness(t)
 	ctx := context.Background()

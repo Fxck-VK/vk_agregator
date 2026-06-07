@@ -816,21 +816,79 @@ func TestPhotoMenuButtonSendsInstructionNoJob(t *testing.T) {
 		t.Fatalf("expected one photo instruction message, got %+v", sent)
 	}
 	for _, want := range []string{
-		"У вас есть 1 бесплатная попытка",
+		"У вас есть 100 бесплатных попыток",
 		"Генерация фото по тексту",
-		"Фото по тексту",
-		"Фото с референсом",
 		"⬅️ Назад",
 	} {
 		if !strings.Contains(sent[0].Text+sent[0].Keyboard, want) {
 			t.Fatalf("expected %q in photo response: text=%q keyboard=%q", want, sent[0].Text, sent[0].Keyboard)
 		}
 	}
+	if strings.Contains(sent[0].Keyboard, "Фото по тексту") {
+		t.Fatalf("photo text button should be hidden because photo menu already enables text-to-image mode: keyboard=%q", sent[0].Keyboard)
+	}
+	if strings.Contains(sent[0].Keyboard, "Фото с референсом") {
+		t.Fatalf("photo reference button should be hidden: keyboard=%q", sent[0].Keyboard)
+	}
 }
 
-func TestPhotoModeButtonIsControlCommandNoJob(t *testing.T) {
+func TestPhotoMenuButtonEnablesPlainTextImageJobs(t *testing.T) {
 	control := vkdelivery.NewMockClient()
 	h := newHarnessWithControl(control)
+	menu := `{
+		"type":"message_new","group_id":1,"event_id":"evt-photo-text-on","secret":"s3cr3t",
+		"object":{"message":{"from_id":5631,"peer_id":5631,"text":"рџ–јпёЏ РЎРѕР·РґР°С‚СЊ С„РѕС‚Рѕ","payload":"{\"command\":\"menu.image\"}"}}
+	}`
+	if rec := h.post(menu); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected menu response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	prompt := `{
+		"type":"message_new","group_id":1,"event_id":"evt-photo-text-prompt","secret":"s3cr3t",
+		"object":{"message":{"from_id":5631,"peer_id":5631,"text":"кот в очках на пляже"}}
+	}`
+	if rec := h.post(prompt); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected prompt response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	ctx := context.Background()
+	user, err := h.users.GetByVKUserID(ctx, 5631)
+	if err != nil {
+		t.Fatalf("user not created: %v", err)
+	}
+	cmds, _ := h.cmds.ListByUser(ctx, user.ID, 10, 0)
+	if !hasCommandTypes(cmds, domain.CommandMenuImage, domain.CommandImageGenerate) {
+		t.Fatalf("unexpected command types: %+v", commandTypes(cmds))
+	}
+	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
+	if len(jobs) != 1 || jobs[0].OperationType != domain.OperationImageGenerate || jobs[0].Modality != domain.ModalityImage || h.pub.Len() != 1 {
+		t.Fatalf("photo text mode should create one image job, jobs=%+v tasks=%d", jobs, h.pub.Len())
+	}
+	sent := control.Sent()
+	if len(sent) != 2 || !strings.Contains(sent[0].Text, "Генерация фото по тексту") || sent[1].Text != "НейроХаб рисует..." {
+		t.Fatalf("unexpected photo mode responses: %+v", sent)
+	}
+	var params struct {
+		Prompt                 string `json:"prompt"`
+		VKPlaceholderMessageID int64  `json:"vk_placeholder_message_id"`
+	}
+	if err := json.Unmarshal(jobs[0].Params, &params); err != nil {
+		t.Fatalf("decode job params: %v", err)
+	}
+	if params.Prompt != "кот в очках на пляже" || params.VKPlaceholderMessageID != sent[1].MessageID {
+		t.Fatalf("unexpected image job params: %+v, pending=%+v", params, sent[1])
+	}
+}
+
+func TestDisabledPhotoModeButtonFallsBackToMainMenu(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	h := newHarnessWithConfig(control, vk.Config{
+		ConfirmationToken: "conf-token-123",
+		Secret:            "s3cr3t",
+		MenuFeatures: vk.MenuFeatureFlags{DisabledCommands: map[domain.CommandType]bool{
+			domain.CommandMenuImageText: true,
+		}},
+	})
 	body := `{
 		"type":"message_new","group_id":1,"event_id":"evt-photo-mode","secret":"s3cr3t",
 		"object":{"message":{"from_id":563,"peer_id":563,"text":"▶️ Фото по тексту","payload":"{\"command\":\"menu.image.text\"}"}}
@@ -846,16 +904,16 @@ func TestPhotoModeButtonIsControlCommandNoJob(t *testing.T) {
 		t.Fatalf("user not created: %v", err)
 	}
 	cmds, _ := h.cmds.ListByUser(ctx, user.ID, 10, 0)
-	if len(cmds) != 1 || cmds[0].Type != domain.CommandMenuImageText {
+	if len(cmds) != 1 || cmds[0].Type != domain.CommandShowMenu {
 		t.Fatalf("unexpected commands: %+v", cmds)
 	}
 	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
 	if len(jobs) != 0 {
-		t.Fatalf("photo mode selection must not create a job, got %d", len(jobs))
+		t.Fatalf("disabled photo mode selection must not create a job, got %d", len(jobs))
 	}
 	sent := control.Sent()
-	if len(sent) != 1 || !strings.Contains(sent[0].Text, "Генерация фото по тексту выбрана") {
-		t.Fatalf("unexpected photo mode response: %+v", sent)
+	if len(sent) != 1 || !strings.Contains(sent[0].Text, "Добро пожаловать в НейроХаб") || strings.Contains(sent[0].Keyboard, "Фото по тексту") {
+		t.Fatalf("disabled photo mode should fall back to main menu without photo text button: %+v", sent)
 	}
 }
 

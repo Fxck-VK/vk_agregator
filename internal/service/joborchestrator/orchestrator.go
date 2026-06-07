@@ -138,6 +138,15 @@ func (o *Orchestrator) CreateJob(ctx context.Context, in CreateJobInput) (*domai
 			return err
 		}
 
+		if estimate == 0 {
+			if err := repos.Jobs.UpdateStatus(ctx, job.ID, domain.JobStatusValidated, domain.JobStatusQueued, "", ""); err != nil {
+				return err
+			}
+			queuedJob := *job
+			queuedJob.Status = domain.JobStatusQueued
+			return repos.Outbox.Add(ctx, jobEvent(ctx, "event.job.queued", &queuedJob))
+		}
+
 		if _, err := o.billing.ReserveWith(ctx, repos.Billing, in.UserID, job.ID, estimate); err != nil {
 			if errors.Is(err, domain.ErrInsufficientCredits) {
 				if err := repos.Jobs.UpdateStatus(ctx, job.ID, domain.JobStatusValidated, domain.JobStatusAwaitingPayment, "insufficient_credits", "not enough credits to reserve"); err != nil {
@@ -159,7 +168,9 @@ func (o *Orchestrator) CreateJob(ctx context.Context, in CreateJobInput) (*domai
 		if err := repos.Jobs.UpdateStatus(ctx, job.ID, domain.JobStatusCreditsReserved, domain.JobStatusQueued, "", ""); err != nil {
 			return err
 		}
-		return repos.Outbox.Add(ctx, jobEvent(ctx, "event.job.queued", job))
+		queuedJob := *job
+		queuedJob.Status = domain.JobStatusQueued
+		return repos.Outbox.Add(ctx, jobEvent(ctx, "event.job.queued", &queuedJob))
 	}); err != nil {
 		tracing.RecordError(span, err)
 		return nil, fmt.Errorf("joborchestrator: create job: %w", err)

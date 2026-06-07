@@ -101,7 +101,9 @@ func (p *Provider) Name() domain.ProviderName { return domain.ProviderMock }
 func (p *Provider) Capabilities(_ context.Context) ([]domain.Capability, error) {
 	return []domain.Capability{
 		{Operation: domain.OperationTextGenerate, Modality: domain.ModalityText, ModelCode: "mock-text", SupportsPolling: true},
-		{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ModelCode: "mock-image", SupportsPolling: true},
+		// Image model is intentionally wildcarded so local/dev image jobs can
+		// carry a future real model code while still falling back to mock.
+		{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, SupportsPolling: true},
 		{Operation: domain.OperationVideoGenerate, Modality: domain.ModalityVideo, ModelCode: "mock-video", SupportsPolling: true, MaxDurationSec: 10},
 	}, nil
 }

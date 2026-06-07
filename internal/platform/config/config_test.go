@@ -55,12 +55,39 @@ func TestLoadProviderChain(t *testing.T) {
 	}
 }
 
+func TestLoadImageProviderConfig(t *testing.T) {
+	t.Setenv("IMAGE_PROVIDER", "openai")
+	t.Setenv("IMAGE_MODEL", "gpt-image-2")
+	t.Setenv("IMAGE_SIZE", "1024x1024")
+
+	cfg := config.Load()
+	if cfg.ImageProvider != "openai" {
+		t.Fatalf("ImageProvider = %q, want openai", cfg.ImageProvider)
+	}
+	if cfg.ImageModel != "gpt-image-2" || cfg.ImageSize != "1024x1024" {
+		t.Fatalf("unexpected image config: model=%q size=%q", cfg.ImageModel, cfg.ImageSize)
+	}
+}
+
+func TestValidateImageProvider(t *testing.T) {
+	cfg := config.Config{ImageProvider: "unknown"}
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "IMAGE_PROVIDER") {
+		t.Fatalf("expected IMAGE_PROVIDER validation error, got %v", err)
+	}
+}
+
 func TestLoadDeepInfraConfig(t *testing.T) {
 	t.Setenv("PROVIDER", "deepinfra")
 	t.Setenv("DEEPINFRA_API_KEY", "test-key")
 	t.Setenv("DEEPINFRA_BASE_URL", "https://example.com/v1/openai")
 	t.Setenv("DEEPINFRA_TEXT_MODEL", "deepseek-ai/DeepSeek-V4-Flash")
 	t.Setenv("DEEPINFRA_TEXT_PRICE", "2")
+	t.Setenv("DEEPINFRA_IMAGE_MODEL", "ByteDance/Seedream-4.5")
+	t.Setenv("DEEPINFRA_IMAGE_FALLBACK_MODEL", "stabilityai/sdxl-turbo")
+	t.Setenv("DEEPINFRA_IMAGE_PRICE", "11")
+	t.Setenv("DEEPINFRA_IMAGE_REFERENCE_ENABLED", "true")
 
 	cfg := config.Load()
 	if cfg.DeepInfraAPIKey != "test-key" {
@@ -74,6 +101,18 @@ func TestLoadDeepInfraConfig(t *testing.T) {
 	}
 	if cfg.DeepInfraTextPrice != 2 {
 		t.Fatalf("DeepInfraTextPrice = %d, want 2", cfg.DeepInfraTextPrice)
+	}
+	if cfg.DeepInfraImageModel != "ByteDance/Seedream-4.5" {
+		t.Fatalf("DeepInfraImageModel = %q", cfg.DeepInfraImageModel)
+	}
+	if cfg.DeepInfraImageFallbackModel != "stabilityai/sdxl-turbo" {
+		t.Fatalf("DeepInfraImageFallbackModel = %q", cfg.DeepInfraImageFallbackModel)
+	}
+	if cfg.DeepInfraImagePrice != 11 {
+		t.Fatalf("DeepInfraImagePrice = %d, want 11", cfg.DeepInfraImagePrice)
+	}
+	if !cfg.DeepInfraImageReferenceEnabled {
+		t.Fatal("DeepInfraImageReferenceEnabled was not loaded")
 	}
 }
 
@@ -144,6 +183,12 @@ func TestLoadVKMenuFeatureFlags(t *testing.T) {
 	}
 	if cfg.VKMenuTopUpEnabled {
 		t.Fatal("VKMenuTopUpEnabled = true, want default false")
+	}
+	if cfg.VKMenuImageTextEnabled {
+		t.Fatal("VKMenuImageTextEnabled = true, want default false")
+	}
+	if cfg.VKMenuImageReferenceEnabled {
+		t.Fatal("VKMenuImageReferenceEnabled = true, want default false")
 	}
 }
 
@@ -234,16 +279,18 @@ func TestLoadMiniAppJobRateLimit(t *testing.T) {
 
 func TestLoadVKAntiSpamConfig(t *testing.T) {
 	t.Setenv("VK_ANTISPAM_ENABLED", "false")
-	t.Setenv("VK_ANTISPAM_MESSAGE_LIMIT", "11")
+	t.Setenv("VK_ANTISPAM_MESSAGE_LIMIT", "41")
 	t.Setenv("VK_ANTISPAM_MESSAGE_WINDOW", "61s")
 	t.Setenv("VK_ANTISPAM_GPT_LIMIT", "4")
 	t.Setenv("VK_ANTISPAM_GPT_WINDOW", "31s")
+	t.Setenv("VK_ANTISPAM_IMAGE_DAILY_LIMIT", "101")
+	t.Setenv("VK_ANTISPAM_IMAGE_DAILY_WINDOW", "25h")
 	t.Setenv("VK_ANTISPAM_COOLDOWN", "32s")
 	t.Setenv("VK_ANTISPAM_VIOLATION_LIMIT", "6")
 	t.Setenv("VK_ANTISPAM_VIOLATION_WINDOW", "11m")
 	t.Setenv("VK_ANTISPAM_BLOCK_DURATION", "16m")
 	t.Setenv("VK_ANTISPAM_NEW_USER_AGE", "5h")
-	t.Setenv("VK_ANTISPAM_NEW_USER_MESSAGE_LIMIT", "6")
+	t.Setenv("VK_ANTISPAM_NEW_USER_MESSAGE_LIMIT", "31")
 	t.Setenv("VK_ANTISPAM_NEW_USER_GPT_LIMIT", "2")
 	t.Setenv("VK_ANTISPAM_NEW_USER_GPT_WINDOW", "16s")
 	t.Setenv("VK_ANTISPAM_ACTIVE_GPT_JOB_LIMIT", "3")
@@ -252,16 +299,19 @@ func TestLoadVKAntiSpamConfig(t *testing.T) {
 	if cfg.VKAntiSpamEnabled {
 		t.Fatal("VKAntiSpamEnabled = true, want false")
 	}
-	if cfg.VKAntiSpamMessageLimit != 11 || cfg.VKAntiSpamMessageWindow != 61*time.Second {
+	if cfg.VKAntiSpamMessageLimit != 41 || cfg.VKAntiSpamMessageWindow != 61*time.Second {
 		t.Fatalf("unexpected message limit config: %d/%s", cfg.VKAntiSpamMessageLimit, cfg.VKAntiSpamMessageWindow)
 	}
 	if cfg.VKAntiSpamGPTLimit != 4 || cfg.VKAntiSpamGPTWindow != 31*time.Second {
 		t.Fatalf("unexpected gpt limit config: %d/%s", cfg.VKAntiSpamGPTLimit, cfg.VKAntiSpamGPTWindow)
 	}
+	if cfg.VKAntiSpamImageDailyLimit != 101 || cfg.VKAntiSpamImageDailyWindow != 25*time.Hour {
+		t.Fatalf("unexpected image daily limit config: %d/%s", cfg.VKAntiSpamImageDailyLimit, cfg.VKAntiSpamImageDailyWindow)
+	}
 	if cfg.VKAntiSpamCooldown != 32*time.Second || cfg.VKAntiSpamViolationLimit != 6 || cfg.VKAntiSpamViolationWindow != 11*time.Minute || cfg.VKAntiSpamBlockDuration != 16*time.Minute {
 		t.Fatalf("unexpected violation config: cooldown=%s limit=%d window=%s block=%s", cfg.VKAntiSpamCooldown, cfg.VKAntiSpamViolationLimit, cfg.VKAntiSpamViolationWindow, cfg.VKAntiSpamBlockDuration)
 	}
-	if cfg.VKAntiSpamNewUserAge != 5*time.Hour || cfg.VKAntiSpamNewUserMessageLimit != 6 || cfg.VKAntiSpamNewUserGPTLimit != 2 || cfg.VKAntiSpamNewUserGPTWindow != 16*time.Second {
+	if cfg.VKAntiSpamNewUserAge != 5*time.Hour || cfg.VKAntiSpamNewUserMessageLimit != 31 || cfg.VKAntiSpamNewUserGPTLimit != 2 || cfg.VKAntiSpamNewUserGPTWindow != 16*time.Second {
 		t.Fatalf("unexpected new-user config: age=%s message=%d gpt=%d/%s", cfg.VKAntiSpamNewUserAge, cfg.VKAntiSpamNewUserMessageLimit, cfg.VKAntiSpamNewUserGPTLimit, cfg.VKAntiSpamNewUserGPTWindow)
 	}
 	if cfg.VKAntiSpamActiveGPTJobLimit != 3 {
@@ -283,11 +333,39 @@ func TestValidateOpenAIModerationRequiresKey(t *testing.T) {
 	}
 }
 
+func TestValidateImageProviderRequiresKey(t *testing.T) {
+	cfg := config.Config{
+		Env:           "development",
+		Provider:      "mock",
+		ProviderChain: []string{"mock"},
+		ImageProvider: "openai",
+	}
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "OPENAI_API_KEY") {
+		t.Fatalf("expected OPENAI_API_KEY validation error, got %v", err)
+	}
+}
+
 func TestValidateDeepInfraRequiresKey(t *testing.T) {
 	cfg := config.Config{
 		Env:           "development",
 		Provider:      "mock",
 		ProviderChain: []string{"deepinfra", "mock"},
+	}
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "DEEPINFRA_API_KEY") {
+		t.Fatalf("expected DEEPINFRA_API_KEY validation error, got %v", err)
+	}
+}
+
+func TestValidateDeepInfraImageProviderRequiresKey(t *testing.T) {
+	cfg := config.Config{
+		Env:           "development",
+		Provider:      "mock",
+		ProviderChain: []string{"mock"},
+		ImageProvider: "deepinfra",
 	}
 
 	err := cfg.Validate()

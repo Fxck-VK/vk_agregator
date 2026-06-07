@@ -63,19 +63,21 @@ type classedError interface {
 // capable providers with lower configured cost and observed latency, then falls
 // back across the chain when retryable submit failures occur.
 type Registry struct {
-	mu       sync.Mutex
-	byName   map[domain.ProviderName]domain.Provider
-	order    []domain.ProviderName
-	breakers map[domain.ProviderName]*breakerState
-	now      func() time.Time
+	mu                  sync.Mutex
+	byName              map[domain.ProviderName]domain.Provider
+	order               []domain.ProviderName
+	preferredByModality map[domain.Modality]domain.ProviderName
+	breakers            map[domain.ProviderName]*breakerState
+	now                 func() time.Time
 }
 
 // NewRegistry builds a registry with a default provider and optional extras.
 func NewRegistry(def domain.Provider, more ...domain.Provider) *Registry {
 	r := &Registry{
-		byName:   map[domain.ProviderName]domain.Provider{},
-		breakers: map[domain.ProviderName]*breakerState{},
-		now:      time.Now,
+		byName:              map[domain.ProviderName]domain.Provider{},
+		preferredByModality: map[domain.Modality]domain.ProviderName{},
+		breakers:            map[domain.ProviderName]*breakerState{},
+		now:                 time.Now,
 	}
 	if def != nil {
 		r.add(def)
@@ -84,6 +86,17 @@ func NewRegistry(def domain.Provider, more ...domain.Provider) *Registry {
 		r.add(p)
 	}
 	return r
+}
+
+// PreferProvider makes a provider the first candidate for a modality when it
+// supports the request. Other capable providers remain explicit fallbacks.
+func (r *Registry) PreferProvider(modality domain.Modality, name domain.ProviderName) {
+	if modality == "" || name == "" {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.preferredByModality[modality] = name
 }
 
 func (r *Registry) add(p domain.Provider) {
@@ -138,12 +151,13 @@ func (r *Registry) rawForName(name domain.ProviderName) (domain.Provider, error)
 }
 
 type providerCandidate struct {
-	provider domain.Provider
-	name     domain.ProviderName
-	cost     int64
-	latency  time.Duration
-	open     bool
-	order    int
+	provider  domain.Provider
+	name      domain.ProviderName
+	cost      int64
+	latency   time.Duration
+	open      bool
+	preferred bool
+	order     int
 }
 
 type breakerState struct {
@@ -157,6 +171,7 @@ func (r *Registry) candidates(ctx context.Context, req domain.ProviderRequest) (
 	order := append([]domain.ProviderName(nil), r.order...)
 	providers := make(map[domain.ProviderName]domain.Provider, len(r.byName))
 	states := make(map[domain.ProviderName]breakerState, len(r.breakers))
+	preferred := r.preferredByModality[req.Modality]
 	now := r.now()
 	for name, provider := range r.byName {
 		providers[name] = provider
@@ -185,12 +200,13 @@ func (r *Registry) candidates(ctx context.Context, req domain.ProviderRequest) (
 		}
 		st := states[name]
 		candidate := providerCandidate{
-			provider: provider,
-			name:     name,
-			cost:     estimate.AmountCredits,
-			latency:  st.latency,
-			open:     !st.openedUntil.IsZero() && now.Before(st.openedUntil),
-			order:    idx,
+			provider:  provider,
+			name:      name,
+			cost:      estimate.AmountCredits,
+			latency:   st.latency,
+			open:      !st.openedUntil.IsZero() && now.Before(st.openedUntil),
+			preferred: preferred != "" && name == preferred,
+			order:     idx,
 		}
 		if candidate.open {
 			open = append(open, candidate)
@@ -213,6 +229,9 @@ func (r *Registry) candidates(ctx context.Context, req domain.ProviderRequest) (
 
 func sortCandidates(c []providerCandidate) {
 	sort.SliceStable(c, func(i, j int) bool {
+		if c[i].preferred != c[j].preferred {
+			return c[i].preferred
+		}
 		if c[i].cost != c[j].cost {
 			return c[i].cost < c[j].cost
 		}
@@ -403,6 +422,8 @@ type processor struct {
 	artifacts   ArtifactSaver
 	providers   *Registry
 	streams     StreamPublisher
+	imageModel  string
+	imageSize   string
 	textContext TextContext
 	moderator   Moderator
 	modResults  domain.ModerationResultRepository
@@ -441,6 +462,10 @@ type Deps struct {
 	Artifacts ArtifactSaver
 	Providers *Registry
 	Streams   StreamPublisher
+	// ImageModel/ImageSize are optional product-level defaults for image jobs.
+	// They are translated into the provider request only inside workers.
+	ImageModel string
+	ImageSize  string
 	// TextContext, when set, stores VK text dialog history and renders compact
 	// provider prompts for text jobs.
 	TextContext TextContext
@@ -486,6 +511,8 @@ func newProcessor(d Deps) processor {
 		artifacts:   d.Artifacts,
 		providers:   d.Providers,
 		streams:     d.Streams,
+		imageModel:  d.ImageModel,
+		imageSize:   d.ImageSize,
 		textContext: d.TextContext,
 		moderator:   d.Moderator,
 		modResults:  d.ModResults,
@@ -499,12 +526,17 @@ func newProcessor(d Deps) processor {
 
 // promptParams is the subset of job params the provider request needs.
 type promptParams struct {
-	Prompt                 string `json:"prompt"`
-	NegativePrompt         string `json:"negative_prompt"`
-	VKPlaceholderMessageID int64  `json:"vk_placeholder_message_id,omitempty"`
-	ConversationID         string `json:"conversation_id,omitempty"`
-	ConversationSource     string `json:"conversation_source,omitempty"`
-	ExternalThreadID       string `json:"external_thread_id,omitempty"`
+	Prompt                 string      `json:"prompt"`
+	NegativePrompt         string      `json:"negative_prompt"`
+	ModelCode              string      `json:"model_code,omitempty"`
+	Size                   string      `json:"size,omitempty"`
+	AspectRatio            string      `json:"aspect_ratio,omitempty"`
+	ReferenceArtifactIDs   []uuid.UUID `json:"reference_artifact_ids,omitempty"`
+	InputURLs              []string    `json:"input_urls,omitempty"`
+	VKPlaceholderMessageID int64       `json:"vk_placeholder_message_id,omitempty"`
+	ConversationID         string      `json:"conversation_id,omitempty"`
+	ConversationSource     string      `json:"conversation_source,omitempty"`
+	ExternalThreadID       string      `json:"external_thread_id,omitempty"`
 }
 
 // buildRequest builds the normalized provider request for a job. The submit
@@ -516,7 +548,17 @@ func (p *processor) buildRequest(ctx context.Context, job *domain.Job, attempt i
 		_ = json.Unmarshal(job.Params, &pp)
 	}
 	prompt := pp.Prompt
+	modelCode := pp.ModelCode
+	size := pp.Size
 	maxOutputTokens := 0
+	if job.Modality == domain.ModalityImage {
+		if modelCode == "" {
+			modelCode = p.imageModel
+		}
+		if size == "" {
+			size = p.imageSize
+		}
+	}
 	if p.textContext != nil && job.OperationType == domain.OperationTextGenerate && job.Modality == domain.ModalityText {
 		prepared, err := p.textContext.Prepare(ctx, job, pp.Prompt)
 		if err != nil {
@@ -537,14 +579,20 @@ func (p *processor) buildRequest(ctx context.Context, job *domain.Job, attempt i
 		}
 	}
 	return domain.ProviderRequest{
-		JobID:           job.ID,
-		Operation:       job.OperationType,
-		Modality:        job.Modality,
-		Prompt:          prompt,
-		NegativePrompt:  pp.NegativePrompt,
-		Params:          job.Params,
-		MaxOutputTokens: maxOutputTokens,
-		IdempotencyKey:  fmt.Sprintf("provider_submit:%s:%d", job.ID, attempt),
+		JobID:                job.ID,
+		UserID:               job.UserID,
+		Operation:            job.OperationType,
+		Modality:             job.Modality,
+		ModelCode:            modelCode,
+		Prompt:               prompt,
+		NegativePrompt:       pp.NegativePrompt,
+		Size:                 size,
+		AspectRatio:          pp.AspectRatio,
+		ReferenceArtifactIDs: pp.ReferenceArtifactIDs,
+		InputURLs:            pp.InputURLs,
+		Params:               job.Params,
+		MaxOutputTokens:      maxOutputTokens,
+		IdempotencyKey:       fmt.Sprintf("provider_submit:%s:%d", job.ID, attempt),
 	}, nil
 }
 
@@ -848,7 +896,13 @@ func (p *processor) handleFailure(ctx context.Context, job *domain.Job, task que
 		p.toDLQ(ctx, task, code, msg)
 	}
 	metrics.JobsTerminal.WithLabelValues(string(domain.JobStatusFailedTerminal)).Inc()
-	return p.setStatus(ctx, job, domain.JobStatusFailedTerminal, code, msg)
+	if err := p.setStatus(ctx, job, domain.JobStatusFailedTerminal, code, msg); err != nil {
+		return err
+	}
+	if p.shouldNotifyTerminalProviderFailure(job) {
+		return p.streams.PublishTo(ctx, redisqueue.StreamDelivery, taskOf(job))
+	}
+	return nil
 }
 
 func (p *processor) releaseReserved(ctx context.Context, job *domain.Job) error {
@@ -856,6 +910,10 @@ func (p *processor) releaseReserved(ctx context.Context, job *domain.Job) error 
 		return nil
 	}
 	return p.releaser.ReleaseForJob(ctx, job.ID)
+}
+
+func (p *processor) shouldNotifyTerminalProviderFailure(job *domain.Job) bool {
+	return p.streams != nil && job.VKPeerID != 0 && job.Modality == domain.ModalityImage
 }
 
 // moderateOutput runs the output moderation check and, on a block, rejects the

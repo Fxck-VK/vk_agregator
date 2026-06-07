@@ -105,10 +105,8 @@ try {
             $cloudflaredProc = Start-CloudflaredNamedTunnel -RuntimeDir $runtime -ConfigPath $TunnelConfigPath -TunnelName $TunnelName
             Set-Content -Path (Join-Path $runtime "cloudflared.pid") -Value $cloudflaredProc.Id -Encoding ASCII
 
-            $publicHealthUrl = "https://$TunnelHostname/health"
-            Write-Host "Waiting for public named tunnel health: $publicHealthUrl"
-            Wait-Http -Url $publicHealthUrl -TimeoutSeconds $TimeoutSeconds | Out-Null
             $callbackUrl = Get-NamedTunnelCallbackUrl -Hostname $TunnelHostname
+            Wait-NamedTunnelPublicReady -Root $root -TunnelName $TunnelName -TunnelHostname $TunnelHostname -TimeoutSeconds $TimeoutSeconds | Out-Null
         } else {
             throw "Unsupported TunnelMode '$TunnelMode'. Use 'quick' or 'named'."
         }

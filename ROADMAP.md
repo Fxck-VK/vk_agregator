@@ -11,7 +11,8 @@ Current release: **v0.1.3 / Beta integrations foundation**.
 > (C1), OpenTelemetry trace propagation, worker fail-closed validation,
 > graceful drain, maintenance cleanup and billing reconciliation metric.
 > v0.1.3 also landed OpenAI text/image/video adapters, DeepInfra
-> DeepSeek-V4-Flash text adapter, provider routing/fallback/circuit breaker,
+> DeepSeek-V4-Flash text adapter, DeepInfra Seedream-4.5 text-to-image adapter,
+> provider routing/fallback/circuit breaker,
 > VK raw photo/video upload, VK `/start`
 > product menu with callback/text inline keyboard and active-menu
 > `messages.edit`, GPT pending-message edit UX, OpenAI moderation, and OpenAI
@@ -54,6 +55,8 @@ Current release: **v0.1.3 / Beta integrations foundation**.
   router/fallback/circuit breaker (AUDIT P1). ✅ done in v0.1.3
 - [x] DeepInfra `deepseek-ai/DeepSeek-V4-Flash` text provider adapter behind
   `PROVIDER=deepinfra` / `PROVIDER_CHAIN=deepinfra,mock`.
+- [x] DeepInfra `ByteDance/Seedream-4.5` text-to-image provider adapter behind
+  `IMAGE_PROVIDER=deepinfra` / `PROVIDER_CHAIN=deepinfra,mock`.
 - [x] Real VK delivery client: `messages.send`, upload servers and VK attachment
   creation for generated photo/video artifacts (AUDIT V1). ✅ done in v0.1.3
 - [x] VK `/start` product menu with callback/text inline keyboard, active-menu edit UX,

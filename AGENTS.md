@@ -12,8 +12,11 @@ Current release: `v0.1.3 / Beta integrations foundation`.
 The default runtime uses the mock provider and mock VK delivery. Real
 integrations are opt-in: OpenAI text/image/video provider, provider
 router/fallback/circuit breaker, VK `messages.send` with raw photo/video upload,
-DeepInfra DeepSeek-V4-Flash text provider,
+DeepInfra DeepSeek-V4-Flash text provider and ByteDance/Seedream-4.5
+text-to-image provider,
 Postgres-backed compact text dialog context with bounded token budgets,
+provider-agnostic image generation request/result contracts with worker-only
+image provider/model defaults,
 VK `/start` product menu with callback/text inline keyboard and active-menu `messages.edit`,
 ordinary first-contact onboarding repair, Redis-backed GPT text mode with `НейроХаб думает...` placeholder edits and unrouted-text gating, OpenAI output moderation,
 per-button VK menu feature flags, Redis-backed VK bot anti-spam/rate limits,
@@ -46,6 +49,7 @@ Current integration guardrails:
 - VK dialog mode state must use Redis-backed storage when configured; process-local mode may only be a fallback/cache.
 - VK inline menu buttons may be rendered as `callback` or `text` via `VK_MENU_BUTTON_MODE`; callback clicks must be handled as VK `message_event` control events, acknowledged through `vkdelivery.ControlClient`, and must not create Jobs.
 - VK menu buttons must not create billable Jobs until the user supplies a prompt.
+- VK photo text mode may create only `image.generate` Jobs after the user sends a prompt; it must not call image providers from the VK handler or bypass Artifact delivery.
 - VK first ordinary non-payload text/sticker/menu-repair contact must repair onboarding through `/start`; typed menu-repair phrases must stay control-only and must not create Jobs.
 - New VK product-menu buttons must have a `VK_MENU_*_ENABLED` feature flag and disabled stale payloads must not open hidden sections.
 - VK plain text/stickers outside an active text mode must not create billable Jobs by default; `VK_UNROUTED_TEXT_MODE=reply|silent|gpt` is the only supported switch for that behavior.
@@ -55,6 +59,7 @@ Current integration guardrails:
 - VK referral links, account screens and `/start <code>` handling are control paths and must not create billable Jobs or call providers.
 - Text dialog context must be assembled in `cmd/worker` from Postgres-backed conversation state; VK handlers only create Jobs and must not render context or call text providers.
 - Text context prompts must stay bounded by configured budgets and must not send full unbounded conversation history to providers.
+- Image provider/model selection must stay in `cmd/worker` / `internal/adapter/provider`; VK bot and Mini App surfaces may pass product-level job params but must not depend on provider-native image API shapes.
 - Billing must use ledger entries and reservations; never mutate balance directly without ledger.
 - Media files must be stored as Artifacts before delivery.
 - Workers must be safe to retry.

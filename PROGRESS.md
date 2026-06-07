@@ -1,5 +1,78 @@
 # PROGRESS
 
+## VK welcome banner
+
+Status: **configured locally for the main VK bot panel**.
+
+- The provided НейроХаб PNG banner was uploaded to VK as a message photo and
+  wired through local `.env` `VK_WELCOME_ATTACHMENT`.
+- The existing menu contract already scopes the attachment to the main
+  welcome/menu screens only: `Старт`, `Показать меню` and menu repair.
+- Photo/GPT/account/student/video submenu screens do not receive this banner.
+- `.env.example` intentionally keeps `VK_WELCOME_ATTACHMENT` empty; each
+  environment should use its own pre-uploaded VK attachment string.
+
+---
+
+## VK bot photo UX and delivery
+
+Status: **done for text-to-image prompt mode; manual VK smoke remains user-run**.
+
+- `VK_MENU_IMAGE_ENABLED=true` in `.env.example` exposes the `Создать фото`
+  button while preserving per-button feature flags.
+- Clicking `Создать фото` stores Redis-backed `photo_text` mode for the VK peer.
+  The next plain text creates an `image.generate` Job
+  through `joborchestrator`; VK handlers still do not call image providers.
+- The API sends `НейроХаб рисует...` as a control placeholder and stores its VK
+  `message_id` in `job.Params`.
+- Successful image jobs continue through worker -> provider -> Artifact ->
+  delivery, and the delivery worker sends the ready image as VK photo media.
+- Terminal image provider failures release the reservation before delivery and
+  send/edit a short "funds were not charged" notice instead of capturing
+  credits.
+- `Фото с референсом` is hidden by `VK_MENU_IMAGE_REFERENCE_ENABLED=false`
+  until incoming VK photo attachments are saved as owned input Artifacts.
+- The current VK bot profile allows 100 free text-to-image attempts per user per
+  24h window through `VK_ANTISPAM_IMAGE_DAILY_LIMIT=100` and
+  `PRICES=image_generate=0`.
+- Mini App code was not changed.
+
+---
+
+## DeepInfra Seedream image adapter
+
+Status: **done for text-to-image; reference-image flow remains follow-up**.
+
+- Added provider-agnostic image request/result contracts in `internal/domain`:
+  `ImageGenerationRequest` and `ImageGenerationResult`.
+- Image jobs now carry worker-side fields for model, size, aspect ratio,
+  reference artifact ids and provider-safe input URLs through the generic
+  `ProviderRequest`.
+- `cmd/worker` can prefer an image provider with `IMAGE_PROVIDER` and attach
+  worker-only `IMAGE_MODEL` / `IMAGE_SIZE` defaults while preserving
+  `PROVIDER_CHAIN` fallback.
+- OpenAI image generation now respects per-job `model_code` and `size` when
+  they are provided by the worker request; mock image routing is wildcarded for
+  local/dev fallback.
+- DeepInfra now supports text-to-image through the native
+  `/v1/inference/{model}` endpoint with `DEEPINFRA_IMAGE_MODEL` defaulting to
+  `ByteDance/Seedream-4.5`; the Seedream default size is provider-native `2K`.
+- `DEEPINFRA_IMAGE_FALLBACK_MODEL` can name a second DeepInfra image model for
+  retryable primary-model submit failures; this fallback is handled only inside
+  the worker/provider adapter and is not exposed to VK or Mini App surfaces.
+- DeepInfra image responses are normalized into `ImageGenerationResult` and
+  then into provider `data:image/...` output URLs so the existing artifact
+  storage flow remains unchanged.
+- DeepInfra image HTTP failures map to the existing provider error classes
+  through the same adapter error taxonomy as text generation.
+- VK bot and Mini App surfaces were not changed to call providers directly:
+  image generation still goes through Job -> worker -> provider -> Artifact.
+- DeepInfra reference-image generation is intentionally fail-closed behind
+  `DEEPINFRA_IMAGE_REFERENCE_ENABLED=false` until the provider reference-image
+  API contract is verified and wired with artifact ownership/signed URL checks.
+
+---
+
 ## Shared VK referral foundation
 
 Status: **done for VK bot backend; Mini App integration remains follow-up**.
@@ -68,8 +141,8 @@ Status: **done**.
 
 - Added Redis-backed per-`vk_user_id` anti-spam for VK bot intake.
 - Limits implemented:
-  - all incoming user events: `10/60s`;
-  - new users during first `4h`: `5/60s`;
+  - all incoming user events: `40/60s`;
+  - new users during first `4h`: `30/60s`;
   - billable GPT/text jobs: `3/30s`;
   - new-user GPT/text jobs: `1/15s`;
   - cooldown after violations: `30s`;
@@ -97,6 +170,10 @@ Status: **done**.
   writes local tunnel config under `.runtime/vk-bot/cloudflared/`, and supports
   `.\scripts\dev\start-bot.ps1 -TunnelMode named` for
   `https://vk.neiirohub.ru/webhooks/vk`.
+- `start-bot.ps1 -TunnelMode named` now validates local VK confirmation plus
+  public `/health`, and repairs stale Cloudflare DNS routes with
+  `cloudflared tunnel route dns --overwrite-dns` before declaring the bot ready.
+  Public tunnel diagnostics do not send `VK_SECRET`.
 - External prerequisite remains manual: `neiirohub.ru` must be active in
   Cloudflare DNS and registrar NS records must point to Cloudflare.
 
@@ -531,8 +608,9 @@ Status: **done**.
   - output нормализуется в Artifact-compatible URLs, включая `data:` URLs для inline bytes.
 - **DeepInfra provider**:
   - `deepseek-ai/DeepSeek-V4-Flash` text generation is wired through DeepInfra's OpenAI-compatible `/chat/completions` endpoint;
-  - `PROVIDER=deepinfra` or `PROVIDER_CHAIN=deepinfra,mock` enables it;
-  - the adapter is text-only, returns normalized `data:text/plain` outputs, and maps DeepInfra HTTP failures into internal provider error classes.
+  - `ByteDance/Seedream-4.5` text-to-image generation is wired through DeepInfra's native `/v1/inference/{model}` endpoint;
+  - `PROVIDER=deepinfra`, `IMAGE_PROVIDER=deepinfra` or `PROVIDER_CHAIN=deepinfra,mock` enables DeepInfra where the selected modality is supported;
+  - the adapter returns normalized `data:text/plain` / `data:image/...` outputs and maps DeepInfra HTTP failures into internal provider error classes.
   - text providers now receive an internal instruction alongside the user prompt: answer as `НейроХаб бот`, stay concise (`<= 3000 characters`) and do not reveal provider/model/backend details; VK delivery still chunks longer outputs as a fallback.
   - follow-up fix: the mock-aware downloader now decodes provider `data:` URLs, so `PROVIDER_CHAIN=deepinfra,mock` can store DeepInfra text outputs before VK delivery.
 - **Provider router**:
@@ -571,7 +649,7 @@ Status: **done**.
   - `Sora 2` и `Kling v2.1` открывают detail-экраны с описанием, prompt-примером, ссылкой на инструкцию и кнопками `Начать генерацию`, `Примеры`, `Назад`;
   - `Seedance 1` открывает выбор `Lite` / `Pro`, а `Haiuo v0.2` открывает выбор `Обычный` / `Fast`;
   - кнопки выбора video-модели и вложенных video submenu записываются как control commands и не создают billable jobs до подключения model-specific generation state;
-  - `Создать фото` при одной основной модели пропускает выбор модели и сразу показывает инструкцию по `Фото по тексту` / `Фото с референсом` с кнопками режимов и `Назад`;
+  - `Создать фото` при одной основной модели пропускает выбор модели, сразу включает `photo_text` mode и показывает text-to-image инструкцию только с кнопкой `Назад`; `Фото по тексту` и `Фото с референсом` скрыты флагами до необходимости отдельных selection paths;
   - `Спросить у НейроХаб` открывает active-сообщение `НейроХаб активен` без создания job и включает Redis-backed GPT text mode для `peer_id`; следующий обычный текст/стикер пользователя проходит через `text.ask` flow; старый text-label `Спросить у GPT` остается совместимым alias;
   - в активном GPT mode handler сначала отправляет `НейроХаб думает...`, сохраняет `vk_placeholder_message_id` в `job.Params`, а delivery worker при текстовом результате редактирует это сообщение через VK `messages.edit`; перед отправкой text delivery приводит простой provider Markdown к VK plain text (`**`, backticks, heading hashes убираются, `*`/`-` списки становятся `•`); длинные ответы режутся на follow-up chunks с детерминированными `random_id`, чтобы VK `error_code=914` не оставлял placeholder зависшим; legacy `VK_UNROUTED_TEXT_MODE=gpt` остается обычной текстовой доставкой без placeholder;
   - `Студентам и школьникам` открывает учебное подменю: `Решальник задач`, `Генерация презентаций (скоро)`, `Создание рефератов (скоро)`, `Ответы на вопросы`, `Назад`;

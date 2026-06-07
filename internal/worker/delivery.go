@@ -161,19 +161,26 @@ func (w *DeliveryWorker) Process(ctx context.Context, task queue.Task) error {
 		return err
 	}
 	span.SetAttributes(attribute.String("job.status", string(job.Status)))
+	failureNotice := isTerminalImageFailureNotice(job)
 	switch job.Status {
 	case domain.JobStatusSucceeded:
 		return nil
 	case domain.JobStatusResultReady, domain.JobStatusDelivering:
 		// deliverable
+	case domain.JobStatusFailedTerminal:
+		if !failureNotice {
+			return nil
+		}
 	default:
 		// Not ready to deliver yet (or in a failed/terminal state): ack and drop.
 		return nil
 	}
 
-	if err := w.setStatus(ctx, job, domain.JobStatusDelivering, "", ""); err != nil {
-		tracing.RecordError(span, err)
-		return err
+	if !failureNotice {
+		if err := w.setStatus(ctx, job, domain.JobStatusDelivering, "", ""); err != nil {
+			tracing.RecordError(span, err)
+			return err
+		}
 	}
 
 	del, err := w.ensureDelivery(ctx, job)
@@ -202,6 +209,11 @@ func (w *DeliveryWorker) Process(ctx context.Context, task queue.Task) error {
 			w.sleepBackoff(ctx, del.AttemptNo)
 			return fmt.Errorf("worker: vk send: %w", err)
 		}
+	}
+
+	if failureNotice {
+		metrics.DeliveriesSent.Inc()
+		return nil
 	}
 
 	// Billing capture: charge the reserved credits now that delivery succeeded.
@@ -273,6 +285,15 @@ func (w *DeliveryWorker) buildDelivery(ctx context.Context, job *domain.Job, key
 		AttemptNo:      1,
 	}
 
+	if isTerminalImageFailureNotice(job) {
+		del.Text = "Не удалось сгенерировать изображение. Средства не списаны. Попробуйте позже или измените описание."
+		if params.VKPlaceholderMessageID > 0 {
+			msgID := params.VKPlaceholderMessageID
+			del.VKMessageID = &msgID
+		}
+		return del, nil
+	}
+
 	if len(job.OutputArtifactIDs) == 0 {
 		del.Text = "(no result produced)"
 		return del, nil
@@ -309,6 +330,12 @@ func (w *DeliveryWorker) buildDelivery(ctx context.Context, job *domain.Job, key
 		}
 	}
 	return del, nil
+}
+
+func isTerminalImageFailureNotice(job *domain.Job) bool {
+	return job.Status == domain.JobStatusFailedTerminal &&
+		job.VKPeerID != 0 &&
+		job.Modality == domain.ModalityImage
 }
 
 // textContent loads the stored text bytes for a text artifact, falling back to

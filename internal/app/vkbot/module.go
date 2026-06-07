@@ -53,6 +53,8 @@ func NewHandler(cfg config.Config, deps Deps) http.Handler {
 		MessageWindow:       cfg.VKAntiSpamMessageWindow,
 		GPTLimit:            cfg.VKAntiSpamGPTLimit,
 		GPTWindow:           cfg.VKAntiSpamGPTWindow,
+		ImageDailyLimit:     cfg.VKAntiSpamImageDailyLimit,
+		ImageDailyWindow:    cfg.VKAntiSpamImageDailyWindow,
 		Cooldown:            cfg.VKAntiSpamCooldown,
 		ViolationLimit:      cfg.VKAntiSpamViolationLimit,
 		ViolationWindow:     cfg.VKAntiSpamViolationWindow,

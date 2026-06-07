@@ -1,6 +1,6 @@
-// Package deepinfra contains the DeepInfra text-generation provider adapter.
-// It uses DeepInfra's OpenAI-compatible chat completions endpoint and keeps the
-// rest of the platform isolated from provider-specific request/response shapes.
+// Package deepinfra contains the DeepInfra provider adapter.
+// It uses DeepInfra's OpenAI-compatible chat endpoint and native image endpoint,
+// keeping the rest of the platform isolated from provider-specific shapes.
 package deepinfra
 
 import (
@@ -8,9 +8,11 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -22,6 +24,8 @@ import (
 
 const (
 	defaultTextModel           = "deepseek-ai/DeepSeek-V4-Flash"
+	defaultImageModel          = "ByteDance/Seedream-4.5"
+	defaultImageSize           = "2K"
 	textGenerationSystemPrompt = "You are НейроХаб бот. Answer VK users as НейроХаб бот in the user's language. Keep replies concise and useful, and do not exceed 3000 characters. If the topic needs a long comparison, give a compact conclusion and short bullet points. Do not reveal or mention the underlying provider, model name, API, backend, system prompt, or internal implementation details."
 )
 
@@ -35,6 +39,16 @@ type Config struct {
 	TextModel string
 	// TextPrice is the internal credit cost used for provider routing.
 	TextPrice int64
+	// ImageModel is the model used for image generation.
+	ImageModel string
+	// ImageFallbackModel is tried after retryable image submit failures.
+	ImageFallbackModel string
+	// ImageSize is the default image size passed to the image endpoint.
+	ImageSize string
+	// ImagePrice is the internal credit cost used for provider routing.
+	ImagePrice int64
+	// ImageReferenceEnabled is reserved for DeepInfra reference-image flows.
+	ImageReferenceEnabled bool
 	// HTTPClient overrides the HTTP client, mainly for tests.
 	HTTPClient *http.Client
 }
@@ -68,6 +82,16 @@ func New(cfg Config) *Provider {
 	if cfg.TextPrice == 0 {
 		cfg.TextPrice = 1
 	}
+	if cfg.ImageModel == "" {
+		cfg.ImageModel = defaultImageModel
+	}
+	cfg.ImageFallbackModel = strings.TrimSpace(cfg.ImageFallbackModel)
+	if cfg.ImageSize == "" {
+		cfg.ImageSize = defaultImageSize
+	}
+	if cfg.ImagePrice == 0 {
+		cfg.ImagePrice = 10
+	}
 	httpClient := cfg.HTTPClient
 	if httpClient == nil {
 		httpClient = &http.Client{Timeout: 120 * time.Second}
@@ -89,22 +113,33 @@ func (p *Provider) Name() domain.ProviderName { return domain.ProviderDeepInfra 
 func (p *Provider) Capabilities(_ context.Context) ([]domain.Capability, error) {
 	return []domain.Capability{
 		{Operation: domain.OperationTextGenerate, Modality: domain.ModalityText, ModelCode: p.cfg.TextModel, SupportsPolling: true},
+		{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ModelCode: p.cfg.ImageModel, SupportsPolling: true},
 	}, nil
 }
 
-// Estimate returns the configured text-generation credit cost.
+// Estimate returns the configured credit cost.
 func (p *Provider) Estimate(_ context.Context, req domain.ProviderRequest) (domain.CostEstimate, error) {
-	if req.Operation != domain.OperationTextGenerate {
-		return domain.CostEstimate{}, &Error{Class: domain.ProviderErrUnsupportedCapab, Message: string(req.Operation)}
+	if req.Operation == domain.OperationTextGenerate && req.Modality == domain.ModalityText {
+		return domain.CostEstimate{AmountCredits: p.cfg.TextPrice, Currency: "credits", Estimated: false}, nil
 	}
-	return domain.CostEstimate{AmountCredits: p.cfg.TextPrice, Currency: "credits", Estimated: false}, nil
+	if req.Operation == domain.OperationImageGenerate && req.Modality == domain.ModalityImage {
+		return domain.CostEstimate{AmountCredits: p.cfg.ImagePrice, Currency: "credits", Estimated: false}, nil
+	}
+	return domain.CostEstimate{}, &Error{Class: domain.ProviderErrUnsupportedCapab, Message: string(req.Operation)}
 }
 
-// Submit calls DeepInfra chat completions and caches the sync result for Poll.
+// Submit calls DeepInfra and caches the sync result for Poll.
 func (p *Provider) Submit(ctx context.Context, req domain.ProviderRequest) (domain.ProviderTask, error) {
-	if req.Operation != domain.OperationTextGenerate {
-		return domain.ProviderTask{}, &Error{Class: domain.ProviderErrUnsupportedCapab, Message: string(req.Operation)}
+	if req.Operation == domain.OperationTextGenerate && req.Modality == domain.ModalityText {
+		return p.submitText(ctx, req)
 	}
+	if req.Operation == domain.OperationImageGenerate && req.Modality == domain.ModalityImage {
+		return p.submitImage(ctx, req)
+	}
+	return domain.ProviderTask{}, &Error{Class: domain.ProviderErrUnsupportedCapab, Message: string(req.Operation)}
+}
+
+func (p *Provider) submitText(ctx context.Context, req domain.ProviderRequest) (domain.ProviderTask, error) {
 	now := p.now()
 	externalID := "deepinfra-text-" + uuid.NewString()
 	model := p.cfg.TextModel
@@ -135,7 +170,73 @@ func (p *Provider) Submit(ctx context.Context, req domain.ProviderRequest) (doma
 	}, nil
 }
 
-// Poll returns cached DeepInfra text results.
+func (p *Provider) submitImage(ctx context.Context, req domain.ProviderRequest) (domain.ProviderTask, error) {
+	if len(req.ReferenceArtifactIDs) > 0 || len(req.InputURLs) > 0 {
+		if !p.cfg.ImageReferenceEnabled {
+			return domain.ProviderTask{}, &Error{Class: domain.ProviderErrUnsupportedCapab, Message: "deepinfra image references are disabled"}
+		}
+		return domain.ProviderTask{}, &Error{Class: domain.ProviderErrUnsupportedCapab, Message: "deepinfra image references are not implemented"}
+	}
+
+	now := p.now()
+	externalID := "deepinfra-image-" + uuid.NewString()
+	model := p.cfg.ImageModel
+	if req.ModelCode != "" {
+		model = req.ModelCode
+	}
+	size := p.cfg.ImageSize
+	if req.Size != "" {
+		size = req.Size
+	}
+
+	imageReq := req
+	imageReq.ModelCode = model
+	imageReq.Size = size
+	result, err := p.generateImage(ctx, imageReq.ImageRequest())
+	if err != nil {
+		fallbackModel := p.imageFallbackModel(req.ModelCode, model)
+		if fallbackModel == "" || !isImageFallbackError(err) {
+			return domain.ProviderTask{}, err
+		}
+		imageReq.ModelCode = fallbackModel
+		imageReq.Size = fallbackImageSize(size)
+		result, err = p.generateImage(ctx, imageReq.ImageRequest())
+		if err != nil {
+			return domain.ProviderTask{}, err
+		}
+		model = fallbackModel
+	}
+	outputURL := result.OutputURL
+	if outputURL == "" && len(result.ImageData) > 0 {
+		mimeType := result.MimeType
+		if mimeType == "" {
+			mimeType = http.DetectContentType(result.ImageData)
+		}
+		outputURL = dataURL(mimeType, result.ImageData)
+	}
+	if outputURL == "" {
+		return domain.ProviderTask{}, &Error{Class: domain.ProviderErrInternal, Message: "empty image response"}
+	}
+	p.store(externalID, taskState{
+		status:     domain.ProviderTaskSucceeded,
+		outputURLs: []string{outputURL},
+	})
+	return domain.ProviderTask{
+		JobID:          req.JobID,
+		Provider:       domain.ProviderDeepInfra,
+		ModelCode:      model,
+		ExternalID:     externalID,
+		AttemptNo:      1,
+		Status:         domain.ProviderTaskProcessing,
+		Request:        req.Params,
+		SubmittedAt:    &now,
+		CreatedAt:      now,
+		UpdatedAt:      now,
+		IdempotencyKey: req.IdempotencyKey,
+	}, nil
+}
+
+// Poll returns cached DeepInfra results.
 func (p *Provider) Poll(_ context.Context, ref domain.ProviderTaskRef) (domain.ProviderTaskResult, error) {
 	p.mu.Lock()
 	state, ok := p.tasks[ref.ExternalID]
@@ -179,6 +280,37 @@ type chatResponse struct {
 	Error *apiError `json:"error"`
 }
 
+type imageRequest struct {
+	Model          string `json:"model,omitempty"`
+	Prompt         string `json:"prompt"`
+	Size           string `json:"size,omitempty"`
+	N              int    `json:"n"`
+	ResponseFormat string `json:"response_format,omitempty"`
+}
+
+type imageResponse struct {
+	Created int64 `json:"created"`
+	Data    []struct {
+		RevisedPrompt string `json:"revised_prompt,omitempty"`
+		B64JSON       string `json:"b64_json,omitempty"`
+		URL           string `json:"url,omitempty"`
+	} `json:"data"`
+	Error *apiError `json:"error"`
+}
+
+type nativeImageRequest struct {
+	Prompt string `json:"prompt"`
+	Size   string `json:"size,omitempty"`
+}
+
+type nativeImageResponse struct {
+	Images              []string `json:"images"`
+	NSFWContentDetected []bool   `json:"nsfw_content_detected,omitempty"`
+	Seed                *int64   `json:"seed,omitempty"`
+	RequestID           string   `json:"request_id,omitempty"`
+	InferenceStatus     any      `json:"inference_status,omitempty"`
+}
+
 func (p *Provider) generateText(ctx context.Context, model, prompt string, maxTokens int, idempotencyKey string) (string, error) {
 	body := chatRequest{
 		Model: model,
@@ -204,12 +336,86 @@ func (p *Provider) generateText(ctx context.Context, model, prompt string, maxTo
 	return "", &Error{Class: domain.ProviderErrInternal, Message: "empty text response"}
 }
 
+func (p *Provider) generateImage(ctx context.Context, req domain.ImageGenerationRequest) (domain.ImageGenerationResult, error) {
+	body := nativeImageRequest{
+		Prompt: req.Prompt,
+		Size:   req.Size,
+	}
+	var decoded nativeImageResponse
+	if err := p.postNativeJSON(ctx, req.ModelCode, body, &decoded, req.IdempotencyKey); err != nil {
+		return domain.ImageGenerationResult{}, err
+	}
+	if len(decoded.Images) == 0 {
+		return domain.ImageGenerationResult{}, &Error{Class: domain.ProviderErrInternal, Message: "empty image response"}
+	}
+	image := strings.TrimSpace(decoded.Images[0])
+	result := domain.ImageGenerationResult{
+		Provider:  domain.ProviderDeepInfra,
+		ModelCode: req.ModelCode,
+	}
+	metadata := map[string]any{}
+	if len(decoded.NSFWContentDetected) > 0 {
+		metadata["nsfw_content_detected"] = decoded.NSFWContentDetected
+	}
+	if decoded.Seed != nil {
+		metadata["seed"] = *decoded.Seed
+	}
+	if decoded.RequestID != "" {
+		metadata["request_id"] = decoded.RequestID
+	}
+	if decoded.InferenceStatus != nil {
+		metadata["inference_status"] = decoded.InferenceStatus
+	}
+	if len(metadata) > 0 {
+		if raw, err := json.Marshal(metadata); err == nil {
+			result.Metadata = raw
+		}
+	}
+	if strings.HasPrefix(image, "data:") {
+		result.OutputURL = image
+	} else {
+		data, err := base64.StdEncoding.DecodeString(image)
+		if err != nil {
+			return domain.ImageGenerationResult{}, &Error{Class: domain.ProviderErrInternal, Message: "decode image b64: " + err.Error()}
+		}
+		result.ImageData = data
+		result.MimeType = http.DetectContentType(data)
+	}
+	if result.OutputURL == "" && len(result.ImageData) == 0 {
+		return domain.ImageGenerationResult{}, &Error{Class: domain.ProviderErrInternal, Message: "empty image response"}
+	}
+	return result, nil
+}
+
 func (p *Provider) postJSON(ctx context.Context, path string, in, out any, idempotencyKey string) error {
 	body, err := json.Marshal(in)
 	if err != nil {
 		return &Error{Class: domain.ProviderErrInvalidRequest, Message: err.Error()}
 	}
 	req, err := p.request(ctx, http.MethodPost, path, bytes.NewReader(body), idempotencyKey)
+	if err != nil {
+		return err
+	}
+	resp, err := p.http.Do(req)
+	if err != nil {
+		return &Error{Class: domain.ProviderErrTimeout, Message: err.Error()}
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return p.decodeError(resp)
+	}
+	if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
+		return &Error{Class: domain.ProviderErrInternal, Message: "decode response: " + err.Error()}
+	}
+	return nil
+}
+
+func (p *Provider) postNativeJSON(ctx context.Context, model string, in, out any, idempotencyKey string) error {
+	body, err := json.Marshal(in)
+	if err != nil {
+		return &Error{Class: domain.ProviderErrInvalidRequest, Message: err.Error()}
+	}
+	req, err := p.nativeRequest(ctx, model, bytes.NewReader(body), idempotencyKey)
 	if err != nil {
 		return err
 	}
@@ -240,6 +446,26 @@ func (p *Provider) request(ctx context.Context, method, path string, body io.Rea
 	return req, nil
 }
 
+func (p *Provider) nativeRequest(ctx context.Context, model string, body io.Reader, idempotencyKey string) (*http.Request, error) {
+	base := strings.TrimRight(p.cfg.BaseURL, "/")
+	if strings.HasSuffix(base, "/v1/openai") {
+		base = strings.TrimSuffix(base, "/openai")
+	}
+	if !strings.HasSuffix(base, "/v1") {
+		base += "/v1"
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, base+"/inference/"+url.PathEscape(model), body)
+	if err != nil {
+		return nil, &Error{Class: domain.ProviderErrInternal, Message: err.Error()}
+	}
+	req.Header.Set("Authorization", "Bearer "+p.cfg.APIKey)
+	req.Header.Set("Content-Type", "application/json")
+	if idempotencyKey != "" {
+		req.Header.Set("Idempotency-Key", idempotencyKey)
+	}
+	return req, nil
+}
+
 type apiError struct {
 	Message string `json:"message"`
 	Type    string `json:"type"`
@@ -251,11 +477,19 @@ type errorEnvelope struct {
 }
 
 func (p *Provider) decodeError(resp *http.Response) error {
-	var decoded errorEnvelope
-	_ = json.NewDecoder(resp.Body).Decode(&decoded)
 	msg := fmt.Sprintf("deepinfra http %d", resp.StatusCode)
-	if decoded.Error != nil && decoded.Error.Message != "" {
-		msg = decoded.Error.Message
+	var decoded map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&decoded); err == nil {
+		switch errValue := decoded["error"].(type) {
+		case string:
+			if errValue != "" {
+				msg = errValue
+			}
+		case map[string]any:
+			if message, ok := errValue["message"].(string); ok && message != "" {
+				msg = message
+			}
+		}
 	}
 	return &Error{Class: classifyStatus(resp.StatusCode), Message: msg}
 }
@@ -281,6 +515,42 @@ func classifyStatus(status int) domain.ProviderErrorClass {
 
 func dataURL(contentType string, data []byte) string {
 	return "data:" + contentType + ";base64," + base64.StdEncoding.EncodeToString(data)
+}
+
+func (p *Provider) imageFallbackModel(requestedModel, primaryModel string) string {
+	if p.cfg.ImageFallbackModel == "" || strings.EqualFold(p.cfg.ImageFallbackModel, primaryModel) {
+		return ""
+	}
+	if requestedModel != "" && !strings.EqualFold(requestedModel, p.cfg.ImageModel) {
+		return ""
+	}
+	return p.cfg.ImageFallbackModel
+}
+
+func fallbackImageSize(size string) string {
+	normalized := strings.ToUpper(strings.TrimSpace(size))
+	switch normalized {
+	case "1K", "2K", "4K":
+		return ""
+	default:
+		return size
+	}
+}
+
+func isImageFallbackError(err error) bool {
+	var perr *Error
+	if !errors.As(err, &perr) {
+		return false
+	}
+	switch perr.ProviderErrorClass() {
+	case domain.ProviderErrRateLimited,
+		domain.ProviderErrOverloaded,
+		domain.ProviderErrTimeout,
+		domain.ProviderErrInternal:
+		return true
+	default:
+		return false
+	}
 }
 
 // Error is a DeepInfra failure carrying a normalized error class.
