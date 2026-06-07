@@ -145,3 +145,9 @@ func newChatJobDTO(j *domain.Job) ChatJobDTO {
 type BalanceDTO struct {
 	BalanceCredits int64 `json:"balance_credits"`
 }
+
+// ArtifactUploadDTO is returned by POST /miniapp/artifacts. It exposes only the
+// backend-owned artifact id; URLs and storage paths stay private.
+type ArtifactUploadDTO struct {
+	ArtifactID uuid.UUID `json:"artifact_id"`
+}

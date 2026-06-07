@@ -43,9 +43,10 @@ type Config struct {
 	JobRateLimiter JobRateLimiter
 }
 
-// ObjectReader loads stored artifact bytes (S3/MinIO).
+// ObjectReader loads and stores artifact bytes (S3/MinIO).
 type ObjectReader interface {
 	GetObject(ctx context.Context, bucket, key string) ([]byte, error)
+	Put(ctx context.Context, bucket, key string, data []byte, contentType string) error
 }
 
 // Deps are the collaborators needed by the miniapp handler.
@@ -89,6 +90,7 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /miniapp/jobs", h.auth(h.listJobs))
 	mux.HandleFunc("GET /miniapp/jobs/{id}", h.auth(h.getJob))
 	mux.HandleFunc("GET /miniapp/balance", h.auth(h.getBalance))
+	mux.HandleFunc("POST /miniapp/artifacts", h.auth(h.rateLimitMiniApp("miniapp_artifact", h.createArtifact)))
 	mux.HandleFunc("GET /miniapp/artifacts/{id}", h.auth(h.getArtifact))
 	return mux
 }

@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -330,6 +331,32 @@ func newArtifactHandler(t *testing.T, jobStatus domain.JobStatus, decision *doma
 // devLaunchParams returns a minimal dev-mode launch-params string (no secret).
 func devLaunchParams(vkUserID int64) string {
 	return fmt.Sprintf("vk_user_id=%d&vk_ts=%d", vkUserID, time.Now().Unix())
+}
+
+func multipartUploadBody(t *testing.T, data []byte) (*bytes.Buffer, string) {
+	t.Helper()
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	part, err := writer.CreateFormFile("file", "input.png")
+	if err != nil {
+		t.Fatalf("create form file: %v", err)
+	}
+	if _, err := part.Write(data); err != nil {
+		t.Fatalf("write form file: %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("close multipart writer: %v", err)
+	}
+	return &body, writer.FormDataContentType()
+}
+
+func pngBytes() []byte {
+	return []byte{
+		0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n',
+		0x00, 0x00, 0x00, 0x0d, 'I', 'H', 'D', 'R',
+		0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+		0x08, 0x06, 0x00, 0x00, 0x00,
+	}
 }
 
 func TestHandler_CreateJob_OK(t *testing.T) {
@@ -936,6 +963,156 @@ func TestHandler_GetArtifact_GuardsSucceededAndModerationPassed(t *testing.T) {
 				t.Fatalf("body = %q, want %q", w.Body.String(), tc.wantBody)
 			}
 		})
+	}
+}
+
+func TestHandler_UploadArtifact_HappyPath(t *testing.T) {
+	fixture := newTestFixture("", nil)
+	routes := fixture.handler.Routes()
+	body, contentType := multipartUploadBody(t, pngBytes())
+
+	req := httptest.NewRequest(http.MethodPost, "/miniapp/artifacts", body)
+	req.Header.Set("Content-Type", contentType)
+	req.Header.Set("X-Launch-Params", devLaunchParams(777))
+	req.Header.Set("X-Idempotency-Key", "upload-happy")
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	if strings.Contains(strings.ToLower(w.Body.String()), "url") || strings.Contains(strings.ToLower(w.Body.String()), "storage") || strings.Contains(strings.ToLower(w.Body.String()), "provider") {
+		t.Fatalf("upload response leaked private details: %s", w.Body.String())
+	}
+	var resp struct {
+		ArtifactID uuid.UUID `json:"artifact_id"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("invalid response json: %v", err)
+	}
+	artifact, err := fixture.artifactRepo.GetByID(context.Background(), resp.ArtifactID)
+	if err != nil {
+		t.Fatalf("get artifact: %v", err)
+	}
+	user, err := fixture.userRepo.GetByVKUserID(context.Background(), 777)
+	if err != nil {
+		t.Fatalf("get user: %v", err)
+	}
+	if artifact.OwnerUserID != user.ID || artifact.Kind != domain.ArtifactKindInput || artifact.MediaType != domain.MediaTypeImage || artifact.Status != domain.ArtifactStatusReady {
+		t.Fatalf("unexpected artifact: %+v", artifact)
+	}
+	if _, err := fixture.objects.GetObject(context.Background(), artifact.StorageBucket, artifact.StorageKey); err != nil {
+		t.Fatalf("stored object missing: %v", err)
+	}
+}
+
+func TestHandler_UploadArtifact_RejectsWrongMime(t *testing.T) {
+	routes := newTestHandler("").Routes()
+	body, contentType := multipartUploadBody(t, []byte("not an image"))
+
+	req := httptest.NewRequest(http.MethodPost, "/miniapp/artifacts", body)
+	req.Header.Set("Content-Type", contentType)
+	req.Header.Set("X-Launch-Params", devLaunchParams(777))
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestHandler_UploadArtifact_RejectsOversize(t *testing.T) {
+	routes := newTestHandler("").Routes()
+	oversize := append(pngBytes(), bytes.Repeat([]byte{0}, 21<<20)...)
+	body, contentType := multipartUploadBody(t, oversize)
+
+	req := httptest.NewRequest(http.MethodPost, "/miniapp/artifacts", body)
+	req.Header.Set("Content-Type", contentType)
+	req.Header.Set("X-Launch-Params", devLaunchParams(777))
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, req)
+
+	if w.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("expected 413, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestHandler_UploadArtifact_AuthRequired(t *testing.T) {
+	routes := newTestHandler("real-secret").Routes()
+	body, contentType := multipartUploadBody(t, pngBytes())
+
+	req := httptest.NewRequest(http.MethodPost, "/miniapp/artifacts", body)
+	req.Header.Set("Content-Type", contentType)
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestHandler_UploadArtifact_IdempotentReplaySameArtifact(t *testing.T) {
+	fixture := newTestFixture("", nil)
+	routes := fixture.handler.Routes()
+
+	makeReq := func() *http.Request {
+		body, contentType := multipartUploadBody(t, pngBytes())
+		req := httptest.NewRequest(http.MethodPost, "/miniapp/artifacts", body)
+		req.Header.Set("Content-Type", contentType)
+		req.Header.Set("X-Launch-Params", devLaunchParams(777))
+		req.Header.Set("X-Idempotency-Key", "upload-replay")
+		return req
+	}
+
+	w1 := httptest.NewRecorder()
+	routes.ServeHTTP(w1, makeReq())
+	if w1.Code != http.StatusCreated {
+		t.Fatalf("first upload expected 201, got %d: %s", w1.Code, w1.Body.String())
+	}
+	w2 := httptest.NewRecorder()
+	routes.ServeHTTP(w2, makeReq())
+	if w2.Code != http.StatusCreated {
+		t.Fatalf("second upload expected 201, got %d: %s", w2.Code, w2.Body.String())
+	}
+	var r1, r2 struct {
+		ArtifactID uuid.UUID `json:"artifact_id"`
+	}
+	_ = json.Unmarshal(w1.Body.Bytes(), &r1)
+	_ = json.Unmarshal(w2.Body.Bytes(), &r2)
+	if r1.ArtifactID == uuid.Nil || r1.ArtifactID != r2.ArtifactID {
+		t.Fatalf("expected same artifact id on replay, got %s and %s", r1.ArtifactID, r2.ArtifactID)
+	}
+}
+
+func TestHandler_UploadArtifact_RateLimitByVerifiedUserID(t *testing.T) {
+	limiter := &countingLimiter{burst: 1}
+	routes := newTestHandlerWithLimiter("", limiter).Routes()
+
+	makeReq := func(vkUserID int64) *http.Request {
+		body, contentType := multipartUploadBody(t, pngBytes())
+		req := httptest.NewRequest(http.MethodPost, "/miniapp/artifacts", body)
+		req.Header.Set("Content-Type", contentType)
+		req.Header.Set("X-Launch-Params", devLaunchParams(vkUserID))
+		return req
+	}
+
+	w1 := httptest.NewRecorder()
+	routes.ServeHTTP(w1, makeReq(777))
+	if w1.Code != http.StatusCreated {
+		t.Fatalf("first upload expected 201, got %d: %s", w1.Code, w1.Body.String())
+	}
+	w2 := httptest.NewRecorder()
+	routes.ServeHTTP(w2, makeReq(777))
+	if w2.Code != http.StatusTooManyRequests {
+		t.Fatalf("second upload expected 429, got %d: %s", w2.Code, w2.Body.String())
+	}
+	w3 := httptest.NewRecorder()
+	routes.ServeHTTP(w3, makeReq(888))
+	if w3.Code != http.StatusCreated {
+		t.Fatalf("different user upload expected 201, got %d: %s", w3.Code, w3.Body.String())
+	}
+	if limiter.counts["miniapp_artifact:777"] != 2 || limiter.counts["miniapp_artifact:888"] != 1 {
+		t.Fatalf("limiter keys = %#v, want upload keys by verified vk_user_id", limiter.counts)
 	}
 }
 
