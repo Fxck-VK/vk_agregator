@@ -4,8 +4,8 @@
 
 > **Статус реализации:** этот документ описывает целевую production-архитектуру
 > и архитектурные инварианты. Актуальное состояние кода, выполненные шаги,
-> ограничения и ближайшие задачи см. в `docs/MANIFEST.json`,
-> `.agents/current/state.json`, `AUDIT.md`, `TASKS.md` и `RUNBOOK.md`.
+> ограничения и ближайшие задачи см. в `.agents/state.json`, `TASKS.md` и
+> `RUNBOOK.md`.
 > Historical logs and completed PR context are archived under `docs/archive/**`
 > and are not current context by default.
 

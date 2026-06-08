@@ -3,8 +3,8 @@
 Бэклог и трекинг работ по VK AI Aggregator.
 
 Источник истины по архитектуре — `docs/ARCHITECTURE.md`, строгие инварианты —
-`AGENTS.md`, маршрутизация актуального контекста — `docs/MANIFEST.json` и
-`.agents/current/*.json`. Исторические журналы и аудиты лежат в
+`AGENTS.md`, актуальный machine context/progress/routing — `.agents/state.json`.
+Исторические журналы и аудиты лежат в
 `docs/archive/**` и не являются текущим контекстом по умолчанию.
 
 Текущий релиз: **v0.1.3 / Beta integrations foundation**.
@@ -82,8 +82,8 @@
 - [x] `RUNBOOK.md` reflects 3 migrations, DLQ/retry budget, migration checksums and real adapter modes.
 - [x] `TESTING.md` no longer calls real adapters stubs and documents current limitations.
 - [x] `ROADMAP.md` aligns Phase 2 with actual remaining Beta work.
-- [x] Historical `PROGRESS.md` includes Step 8 / v0.1.2 hardening and is archived under `docs/archive/**`; current progress is routed through `.agents/current/*.json`.
-- [x] Historical `AUDIT.md` distinguishes fixed hardening/integrations from credential-bound live-smoke follow-ups and is archived under `docs/archive/**`; current audit routing is in `AUDIT.md` and `docs/MANIFEST.json`.
+- [x] Historical progress log includes Step 8 / v0.1.2 hardening and is archived under `docs/archive/**`; current progress is in `.agents/state.json`.
+- [x] Historical audit distinguishes fixed hardening/integrations from credential-bound live-smoke follow-ups and is archived under `docs/archive/**`; current routing is in `.agents/state.json`.
 - [x] `AGENTS.md` includes current release status and documentation DoD.
 - [x] Bot-only local dev scripts (`scripts/dev/start-bot.ps1`, `status-bot.ps1`, `stop-bot.ps1`) automate VK bot startup without starting the VK Mini App frontend; named Cloudflare startup validates local VK confirmation + public health and auto-repairs stale DNS routes with `cloudflared tunnel route dns --overwrite-dns` without sending `VK_SECRET` in public diagnostics.
 
@@ -147,7 +147,7 @@
 - [x] Выбор модальности и модели: сегмент `Текст/Фото/Видео` и dropdown модели в `Composer`, связка с `operation` для `/miniapp/jobs`.
 - [x] Графитовая тема Mini App: тёмная палитра `#1A1A1D`, стили `segment`, `model-select`, `drawer`.
 - [x] Composer textarea: скрыт нативный scrollbar при сохранении внутренней прокрутки.
-- [x] Frontend audit: historical Mini App audit is archived under `docs/archive/**`; current audit routing is in `AUDIT.md` and `docs/MANIFEST.json`.
+- [x] Frontend audit: historical Mini App audit is archived under `docs/archive/**`; current routing is in `.agents/state.json`.
 - [x] Восстановление `web/miniapp/src/**` из `HEAD` после ручной чистки: целевая чат-структура на месте, legacy `panels`/`screens` не импортируются, `tsc` и `build` зелёные.
 - [x] Hardening чат-фронта: cleanup для `bridge.subscribe` через `bridge.unsubscribe`, polling без стартовой задержки и без размножения таймеров, `patchMessage` по id мемоизирован.
 - [x] Бэкенд: `GET /miniapp/artifacts/{id}` отдаёт байты артефакта с ownership-проверкой (`art.OwnerUserID == user.ID`), `job.status == succeeded` и passed output moderation guard; `Cache-Control: private`; текст приходит как `text/plain`, фронт читает его через `fetchArtifactText`. Зависит от доступности S3 в `cmd/api` (см. бэклог аудита).

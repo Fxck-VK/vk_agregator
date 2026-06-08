@@ -65,13 +65,10 @@ Important docs and their roles:
 
 - `README.md`: current release status, runtime summary and integration modes.
 - `AGENTS.md`: short mandatory agent router and core invariants.
-- `docs/MANIFEST.json`: active-vs-historical documentation routing.
-- `.agents/current/state.json`: short current machine-readable repository state.
-- `.agents/current/context.json`: short current machine-readable agent context.
+- `.agents/state.json`: single current machine-readable repository state,
+  progress, routing and log policy.
 - `docs/ARCHITECTURE.md`: target production architecture and deep invariants.
-- `PROGRESS.md`: pointer to current machine-readable state and archived history.
 - `TASKS.md`: active backlog and known follow-ups.
-- `AUDIT.md`: pointer to current audit sources and archived audit artifacts.
 - `ROADMAP.md`: phase plan and future production/scale work.
 - `RUNBOOK.md`: operations, env, startup and real adapter modes.
 - `TESTING.md`: local test and smoke verification.
@@ -82,8 +79,8 @@ Important docs and their roles:
 When docs disagree, prefer:
 
 1. current code behavior;
-2. `docs/MANIFEST.json` and `.agents/current/*.json` for current context;
-3. `README.md`, `RUNBOOK.md`, `TASKS.md`, `DECISIONS.md` and `AUDIT.md` for current status;
+2. `.agents/state.json` for current context/progress/routing;
+3. `README.md`, `RUNBOOK.md`, `TASKS.md` and `DECISIONS.md` for scoped current status;
 4. `docs/ARCHITECTURE.md` for target architecture and invariants.
 
 Do not silently “fix” docs or code because of a perceived mismatch. Report the mismatch and propose a focused task.
@@ -984,7 +981,7 @@ Do not remove historical warnings unless the code fix is verified.
 
 Separate current docs from history:
 
-- current state belongs in `.agents/current/*.json` and active docs;
+- current state/progress/routing belongs in `.agents/state.json`;
 - errors/actions/context belong in `.agents/logs/*.jsonl`;
 - completed PR logs, old audits, old review notes and merge handoffs belong in
   `docs/archive/**`;

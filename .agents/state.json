@@ -1,0 +1,75 @@
+{
+  "schema_version": 2,
+  "updated_at": "2026-06-08T00:00:00+03:00",
+  "branch": "fastlife_dev",
+  "current_main_commit": "a780aa0",
+  "purpose": "Single machine-readable current context, progress, routing and log policy for agents.",
+  "read_policy": {
+    "read_by_default": [
+      "AGENTS.md",
+      ".agents/state.json"
+    ],
+    "read_when_scope_requires": [
+      "README.md",
+      "RUNBOOK.md",
+      "TASKS.md",
+      "DECISIONS.md",
+      "docs/ARCHITECTURE.md",
+      "docs/AGENTS_FULL.md",
+      "docs/DOMAIN_DEPLOYMENT_PLAN.md",
+      "docs/VIDEO_GENERATION.md",
+      "docs/VK_BOT_AGENT_GUIDE.md"
+    ],
+    "do_not_read_by_default": [
+      "docs/archive/**",
+      ".agents/logs/**"
+    ],
+    "history_read_condition": "Only read archive/logs when explicitly asked for history, debugging a repeated known error, regression archaeology, or old audit details."
+  },
+  "progress": {
+    "current_focus": "machine-first agent context cleanup",
+    "current_priorities": [
+      "safe Cloudflare Mini App tunnel without disturbing VK bot tunnel",
+      "single JSON current context for agents",
+      "append-only machine logs for errors/actions/context"
+    ],
+    "latest_local_commits": [
+      {
+        "sha": "37aae9f",
+        "message": "docs: separate active context and machine logs",
+        "status": "local_not_pushed"
+      },
+      {
+        "sha": "a780aa0",
+        "message": "feat: add payment top-up foundation",
+        "status": "merged_from_origin_main"
+      }
+    ],
+    "active_runtime": {
+      "api_port": 8080,
+      "miniapp_port": 5173,
+      "tunnel": "pending_cloudflare"
+    }
+  },
+  "logs": {
+    "errors": ".agents/logs/errors.jsonl",
+    "actions": ".agents/logs/actions.jsonl",
+    "context": ".agents/logs/context.jsonl",
+    "policy": "Append sanitized JSONL only. Do not create rolling markdown logs."
+  },
+  "schemas": {
+    "error": ".agents/schemas/error.schema.json",
+    "action": ".agents/schemas/action.schema.json",
+    "context": ".agents/schemas/context.schema.json"
+  },
+  "archive": {
+    "root": "docs/archive",
+    "policy": "Historical evidence only, not current instruction."
+  },
+  "security_invariants": [
+    "no secrets, full launch params, prompt bodies, private artifact URLs, raw PII or provider credentials in docs/logs",
+    "no provider calls from VK handlers or Mini App BFF",
+    "billing remains ledger based",
+    "do not weaken auth, signature checks, moderation, billing or idempotency"
+  ]
+}

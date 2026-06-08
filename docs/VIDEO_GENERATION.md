@@ -70,7 +70,6 @@ all use `postNativeJSON` / `Capabilities` / `Submit` / `Poll`.
 
 ## Related docs
 
-- `docs/MANIFEST.json` and `.agents/current/*.json` — current context routing
+- `.agents/state.json` — current context/progress/routing
 - `.agents/logs/actions.jsonl` / `.agents/logs/errors.jsonl` — machine-readable
   fix and error logs
-- `AUDIT.md` — current audit routing

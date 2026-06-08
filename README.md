@@ -8,9 +8,8 @@ idempotency and retry-safe workers throughout.
 This is **not** a chatbot: every user request becomes a persisted `Job` that
 moves through an explicit state machine. The architecture source of truth is
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md); invariants live in
-[`AGENTS.md`](AGENTS.md); active context routing is in
-[`docs/MANIFEST.json`](docs/MANIFEST.json) and `.agents/current/*.json`; the
-backlog is in [`TASKS.md`](TASKS.md). Historical build logs are archived under
+[`AGENTS.md`](AGENTS.md); active machine context/progress/routing is in
+`.agents/state.json`; the backlog is in [`TASKS.md`](TASKS.md). Historical build logs are archived under
 `docs/archive/**` and are not current context by default.
 
 ## Current status
