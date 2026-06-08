@@ -1,0 +1,547 @@
+# Production Readiness Audit — v0.1.3
+
+Scope: current code, `docs/ARCHITECTURE.md`, `PROGRESS.md`, `TASKS.md`.
+Status: MVP+ (modular monolith; mock provider + mock VK delivery by default).
+OpenAI text/image/video generation, provider routing/fallback/circuit breaker,
+VK `messages.send` plus raw photo/video upload, OpenAI moderation and OpenAI
+text/image artifact scanning are available behind config. VK `/start` product
+menu with callback/text inline keyboard and active-menu `messages.edit` is
+implemented through the VK delivery adapter. Real calls remain credential-bound
+and need live smoke before external users.
+
+> **Final integration update (v0.1.3):** P1 (provider) and V1 (VK delivery) are
+> now **FIXED in code** with unit tests. Full beta still needs live smoke with
+> real OpenAI/VK credentials, a production welcome banner attachment, a second
+> real provider for non-mock fallback, and the Phase 3 video media pipeline.
+> Earlier hardening fixed both criticals
+> (A1, R1), all no-credential high items (S1, S2, S3, O1, Q1, A2, B1), and all
+> medium items (E1, SC1, D1, ST1, C1).
+
+Severity: **critical** (blocks prod / safety / data loss), **high** (must fix before real traffic), **medium** (fix during beta), **low** (hardening / hygiene).
+
+---
+
+## 1. Architecture Invariants
+
+**A1 — No output moderation before delivery — severity: critical — ✅ FIXED**
+- Description: Invariant #15 ("No user output before moderation passes") is not enforced; `moderationservice` is empty and the delivery worker sends provider output directly.
+- Impact: Unsafe/illegal content can be delivered to VK users; platform/legal risk for a public AI service.
+- Recommendation: Add an output-moderation stage between `result_ready` and `delivering`; block/sanitize before send; persist `moderation_results`.
+- **Fix:** Added `moderationservice` with a provider-ready `Moderator` interface (default keyword classifier). The generation/poll worker now runs `provider_succeeded → moderate → result_ready → delivery`; a block sets the job to `rejected`, releases the reservation (no capture, no delivery) and persists a `moderation_results` audit row (migration `000003`). Validated: allowed prompt delivered+captured; blocked prompt rejected with no charge.
+
+**A2 — Outbox written but never relayed — severity: high — ✅ FIXED**
+- Description: `outbox_events` are written transactionally, but no relay publishes them; queueing is done by a direct Redis publish instead.
+- Impact: The "no lost events / exactly-once handoff" guarantee (pattern #19) is not realized; outbox is dead weight.
+- Recommendation: Implement an outbox relay (drain → publish → mark published) and route job enqueue through it.
+- **Fix:** Added `service/outboxrelay`. The orchestrator no longer publishes directly; it records an `event.job.queued` row (with operation/modality/correlation) in the same transaction as the job, and the relay (running in `cmd/worker`) drains pending events with `FOR UPDATE SKIP LOCKED`, publishes to the worker stream, and marks them published — at-least-once, deduped by job. Validated end-to-end: all outbox events reached `published` and jobs were processed only via the relay.
+
+**A3 — Other invariants hold** — severity: low
+- VK handlers never call providers; providers never call VK; billing is append-only ledger; provider errors normalized; statuses explicit. Good.
+
+## 2. Security
+
+**S1 — Auth optional by default — severity: high — ✅ FIXED**
+- Description: `VK_SECRET` and `ADMIN_TOKEN` default to empty → webhook secret check and admin auth are disabled unless configured.
+- Impact: Open admin API and unauthenticated webhook intake in a misconfigured deploy.
+- Recommendation: Fail-closed in non-dev (require secret/token); add startup guard refusing empty secrets when `ENV=production`.
+- **Fix:** Added `APP_ENV` and `Config.Validate()`; `cmd/api` refuses to start when `APP_ENV=production` and `VK_SECRET`, `ADMIN_TOKEN`, or a non-default `VK_CONFIRMATION_TOKEN` are missing. Development keeps zero-config defaults.
+
+**S2 — No SSRF allowlist on artifact downloader — severity: high — ✅ FIXED**
+- Description: `artifactservice` HTTP downloader fetches any provider-supplied URL (only a size cap exists).
+- Impact: SSRF to internal services when real providers return attacker-influenced URLs.
+- Recommendation: Egress allowlist of provider domains; block private/link-local IPs; enforce scheme/port.
+- **Fix:** The default downloader now enforces http/https only, resolves and blocks loopback/private/link-local/CGNAT addresses, re-validates redirect targets, and supports an optional host allowlist (`WithAllowedHosts`).
+
+**S3 — No edge protection / rate limiting — severity: high — ✅ FIXED**
+- Description: No WAF, IP rate limit, or request throttling; `platform/ratelimit` empty.
+- Impact: Webhook flooding, abuse, cost amplification.
+- Recommendation: Add per-IP/per-user rate limits and body-size limits at the edge/ingress.
+- **Fix:** Added `platform/ratelimit` (per-IP token bucket) wired as middleware on `/webhooks/vk` (configurable RPS/burst, returns 429). A shared/Redis limiter or WAF is still recommended for multi-instance deploys (noted in Beta).
+
+**S3a — Mini App job intake rate limiting — severity: high — ✅ FIXED**
+- Description: Webhook rate limiting already covered `/webhooks/vk`, but Mini App `POST /miniapp/jobs` created billable jobs without a separate intake throttle.
+- **Fix:** `POST /miniapp/jobs` is now rate-limited after launch-param verification with key `miniapp_job:<verified vk_user_id>`, separate `MINIAPP_JOB_RATE_LIMIT_RPS` / `MINIAPP_JOB_RATE_LIMIT_BURST`, safe `429` response and `Retry-After`. This is an in-memory per-instance limiter; Redis/shared limiter or WAF remains future multi-instance hardening.
+
+**S3b — Mini App submit idempotency and safe API errors — ✅ FIXED**
+- Description: Frontend create-job submits relied on UI disabled state and surfaced raw API error messages.
+- **Fix:** Mini App now sends stable per-submit `X-Idempotency-Key`, blocks duplicate in-flight submit attempts, preserves HTTP status/retry metadata in typed API errors, and maps API/network failures to safe user-facing messages.
+
+**S3c — Mini App model_id contract — ✅ FIXED**
+- Description: Mini App had a visible model selector while `POST /miniapp/jobs` ignored model selection, leaving no backend contract for supported models.
+- **Fix:** Mini App frontend now sends supported `model_id` only through backend-owned BFF paths. The BFF validates it by operation-specific whitelist before user/billing/job creation, persists only supported/normalized values in normalized job params, and does not expose selector/model_id in job API responses. Text chat is publicly branded as `ChatGPT`; legacy DeepSeek text IDs are accepted only for compatibility and normalized to `chatgpt` before persistence/API output. Unsupported model IDs return safe `400` and create no job. Worker/provider routing by selected model remains a separate provider-routing task.
+
+**S3d — Mini App artifact access guard — ✅ FIXED**
+- Description: `GET /miniapp/artifacts/{id}` relied on ownership and frontend request order, so a direct request could fetch an owned output artifact before the backend had independently confirmed terminal success and output moderation.
+- **Fix:** The BFF now returns artifact bytes only when the artifact belongs to the verified user, is an output artifact for a job with `status=succeeded`, is listed on that job, and has an output moderation verdict whose decision is allowed. Otherwise it returns safe `404`.
+
+**S4 — Potential PII in logs — severity: low**
+- Description: Inbound logs use `group_id`; confirm `vk_user_id`/`peer_id` are hashed, not raw.
+- Impact: PII exposure in logs (invariant #13).
+- Recommendation: Hash user identifiers in structured logs; add a logging lint/check.
+
+## 3. Scalability
+
+**SC1 — Single Postgres/Redis, no HA — severity: medium — ✅ FIXED (tuning; HA is infra)**
+- Description: docker-compose runs single instances; no replicas/clustering; pool sizing not configurable via env.
+- Impact: Single point of failure; limited throughput headroom.
+- Recommendation: Managed/replicated Postgres + Redis; expose pool/connection tuning in config.
+- **Fix:** Connection sizing is now configurable: `DB_MAX_CONNS`/`DB_MIN_CONNS` (via `postgres.NewPoolConfigured`) and `REDIS_POOL_SIZE` (via `redisqueue.NewClientWithPool`), applied in both `cmd/api` and `cmd/worker`. HA/replication is a deployment-infrastructure concern (managed Postgres/Redis) and is tracked in `ROADMAP.md`.
+
+**SC2 — Stateless services scale, but workers share one binary — severity: low**
+- Description: `cmd/worker` runs all pools in one process; per-pool scaling requires separate deploys.
+- Impact: Cannot independently autoscale text vs video pools.
+- Recommendation: Allow selecting pools via flag/env (e.g. `WORKER_POOLS=text,delivery`) for independent scaling.
+
+## 4. Reliability
+
+**R1 — Unbounded retry / no DLQ — severity: critical — ✅ FIXED**
+- Description: `maxProviderAttempts` is derived from provider-task count, but poll/download-phase failures (`output_download_failed`) re-enqueue without creating a new provider task, so the counter never grows → infinite re-enqueue (observed: text stream grew to ~18k entries during validation).
+- Impact: Resource exhaustion, queue bloat, cost runaway, stuck jobs.
+- Recommendation: Track attempts on the job (or per stream entry), enforce a hard cap across all failure phases, and route exhausted entries to a dead-letter stream.
+- **Fix:** Tasks now carry an `Attempt` counter; the retry budget spans every phase as `max(provider-task count, task.Attempt+1)`. Re-enqueues apply exponential backoff; once the budget is exhausted (or the error is non-retryable) the task is routed to `stream:jobs:dlq` and the job goes `failed_terminal`. Delivery uses the same budget on `delivery.attempt_no`. Validated: `mock_provider_error` → `failed_terminal`, 1 DLQ entry, no charge, no loop.
+
+**R2 — No graceful drain on shutdown — severity: low — ✅ FIXED**
+- Description: Worker shutdown cancels context; in-flight tasks rely on at-least-once redelivery rather than draining.
+- Impact: More redeliveries/duplicate work on deploys (idempotency mitigates correctness).
+- Recommendation: Add a drain phase (stop reading, finish in-flight, then exit).
+- **Fix:** `cmd/worker` now uses separate read and handler contexts. Shutdown stops Redis reads/outbox/maintenance first, waits for in-flight handlers to finish, and only cancels handlers after `WORKER_SHUTDOWN_GRACE`.
+
+## 5. Observability
+
+**O1 — No metrics or tracing — severity: high — ✅ FIXED**
+- Description: `platform/metrics` and `platform/tracing` are empty; only structured logs exist.
+- Impact: No queue-depth/latency/error-rate/spend visibility; blind operation; no alerting.
+- Recommendation: Add Prometheus metrics (queue depth, job latency by modality, provider error rate, delivery failures, billing mismatches) and OpenTelemetry tracing across VK→job→provider→delivery.
+- **Fix:** Added `platform/metrics` (Prometheus) with counters for webhooks, terminal jobs by status, moderation decisions, DLQ routes (by phase), deliveries, HTTP request count/latency, maintenance cleanup, stream trimming and billing mismatches, exposed at `GET /metrics` plus Go/process collectors. Added `platform/tracing` with OpenTelemetry trace context propagation: VK intake starts the trace, outbox/Redis carries `traceparent`, and worker/provider/artifact/moderation/delivery phases add child spans.
+
+## 6. Billing Correctness
+
+**B1 — Reserve/Job/Outbox not atomic — severity: high — ✅ FIXED**
+- Description: `BillingRepository` is not on the shared `Querier`; job creation, reservation, and outbox span separate transactions with compensation (documented in `PROGRESS.md`).
+- Impact: Crash windows can leave a reservation without a job (or vice versa) until compensation; reconciliation needed.
+- Recommendation: Refactor `BillingRepository` onto `Querier` and perform reserve+job+outbox in one transaction.
+- **Fix:** `BillingRepository` now runs either standalone (own tx) or transaction-bound (`NewBillingRepositoryTx`) over the shared `Querier`. `uow.Repositories` exposes `Billing`, and the orchestrator performs job create + credit reserve + `created`/`queued` outbox events in a single transaction (`billingservice.ReserveWith`). Insufficient credits park the job in `awaiting_payment` within the same transaction. No compensation path remains. Validated: happy-path reserve+capture, insufficient-credits parking, and rejection release all correct.
+
+**B1a — Opening grant not recorded in ledger — severity: high — ✅ FIXED**
+- Description: New accounts were created with `balance_cached` seeded directly to the 1000-credit starting grant, with **no** corresponding committed ledger entry. This violated invariant #14 ("no balance change without a ledger entry"): `balance_cached` exceeded the committed ledger sum by exactly 1000, and the worker's balance reconciliation logged a recurring `billing balance mismatch` for every account.
+- Impact: Reconciliation false positives, masked real drift, and a broken append-only-ledger invariant on the very first balance of every user.
+- Recommendation: Grant the starting balance through a committed opening ledger entry in the same transaction as account creation; backfill existing accounts.
+- **Fix:** `BillingRepository.CreateAccount` (and the in-memory mirror) now insert the account at `balance_cached = 0` and, when a starting grant is requested, append a committed `topup` ledger entry (`grant:open:<account_id>`) and adjust the balance in the same transaction. Migration `000004_backfill_opening_grants` backfills a committed opening grant for every pre-existing account whose cached balance exceeds its committed ledger sum, using the exact positive difference so already-spent (negative) movements are never touched. Validated live: post-migration reconciliation reports **0** mismatches, a fresh account creates its `opening balance grant` entry, the create→worker→capture pipeline charges correctly (1000→999), and the worker logs **no** mismatch warnings.
+
+**S-sign — Mini App launch-params signature verification — ✅ IMPLEMENTED**
+- Description: The Mini App BFF (`/miniapp/*`) authenticates every request by verifying the VK launch-params HMAC-SHA256 signature (`internal/adapter/inbound/miniapp/sign.go`) per the VK spec.
+- Behavior: When `VK_APP_SECRET` is set the signature is verified for real — invalid, missing, expired (`vk_ts` older than `MINIAPP_LAUNCH_PARAMS_MAX_AGE`), missing `vk_ts`, or invalid/future `vk_ts` params return `401` with no detail before job creation, and the dev `X-VK-User-ID` bypass is disabled. `vk_user_id` is taken only from verified params. Empty `VK_APP_SECRET` is a dev/mock convenience and is rejected fail-closed in production startup. Validated live: with the real secret set, invalid/missing/dev-bypass all returned `401`; the valid-signature accept path is covered by `TestHandler_ValidSign`.
+
+**S-iframe — Mini App HTTPS tunnel / mixed-content in VK webview — ✅ FIXED (dev)**
+- Description: When the SPA is opened inside the VK webview over HTTPS (via a tunnel), an HTTPS page calling `http://localhost:8080` is blocked as mixed content, and the dev server rejected the rotating tunnel host. VK Tunnel is under maintenance (since 2025-10-02), so cloudflared is used as the VK-recommended workaround.
+- **Fix:** `web/miniapp/vite.config.ts` `server` now sets `host: true`, `allowedHosts: true` (accepts the rotating `*.trycloudflare.com` domain — never hardcoded), `hmr: { clientPort: 443, protocol: 'wss' }`, and proxies `/miniapp` + `/api` to `http://localhost:8080` so all backend calls stay same-origin. The frontend API client already uses relative paths (`BASE_URL` empty in dev). Validated live: through the proxy in mock mode, `GET /miniapp/balance` (1000), `POST /miniapp/jobs` (queued→succeeded with artifact), `GET /miniapp/jobs`, and detail all returned data; balance reconciled 1000→999. Tunnel URL is pasted into dev.vk.com → "URL для разработки" by the operator; see `RUNBOOK.md`.
+- **Follow-up:** Obsolete `@vkontakte/vk-tunnel` tooling, npm script and local config were removed; cloudflared/trycloudflare is the documented dev tunnel path.
+
+**B2 — Capture is idempotent, ledger append-only — severity: low — ✅ FIXED**
+- Description: `CaptureForJob` is idempotent; reservations and entries are append-only. Good.
+- Recommendation: Add a periodic balance-vs-ledger reconciliation job + `billing_mismatch` metric.
+- **Fix:** Added worker-side maintenance reconciliation. It compares `credit_accounts.balance_cached` with committed `ledger_entries` projection, logs mismatches without mutating balances, and exports `vkagg_billing_mismatches`.
+
+## 7. Queue Reliability
+
+**Q1 — No dead-letter handling — severity: high — ✅ FIXED** (related to R1)
+- Description: Failed entries stay pending and are reclaimed forever via `XAUTOCLAIM`; no DLQ, no max-deliveries.
+- Impact: Poison messages loop indefinitely.
+- Recommendation: Add max-delivery count → dead-letter stream + alert; admin tooling to inspect/replay.
+- **Fix:** Added the `stream:jobs:dlq` dead-letter stream (excluded from worker consumption). Generation/poll/delivery all route exhausted tasks there with a `vkagg_dlq_routed_total{phase}` metric. Admin inspect/replay tooling remains a Beta item.
+
+**Q2 — Consumer-group recovery works — severity: low**
+- Description: Streams + consumer groups + `XAUTOCLAIM` provide at-least-once + restart recovery. Good.
+
+## 8. Provider Abstraction
+
+**P1 — Real provider coverage incomplete — severity: high — ✅ FIXED (credential-bound live smoke pending)**
+- Description: default runtime still uses the mock provider, but real OpenAI text/image/video adapters, DeepInfra text/image adapters and provider routing now exist behind opt-in config.
+- Impact: The code path can run real OpenAI text/image/video jobs, real DeepInfra DeepSeek-V4-Flash text jobs, real DeepInfra Seedream text-to-image jobs and route/fallback across configured providers. Real calls require credentials and may incur provider cost, so live validation remains an operational step.
+- Recommendation: Run live smoke with `OPENAI_API_KEY` and `DEEPINFRA_API_KEY`; add real image/video fallback providers later.
+- **Fix:** `adapter/provider/openai` now implements text via `/responses`, image via `/images/generations`, async video via `/videos` + poll/content download, and normalized provider errors. `worker.Registry` now routes by capabilities, estimated cost, observed latency and circuit-breaker health, and `PROVIDER_CHAIN=openai,mock` enables explicit fallback. Unit tests cover OpenAI text/image/video and router fallback.
+- **Fix:** `adapter/provider/deepinfra` implements text generation through DeepInfra's OpenAI-compatible `/chat/completions` endpoint for `deepseek-ai/DeepSeek-V4-Flash` and text-to-image through `/images/generations` for `ByteDance/Seedream-4.5`, with normalized artifacts and provider error classes. `PROVIDER_CHAIN=deepinfra,mock` enables DeepInfra text/image with mock fallback.
+- **Remaining:** Google/Gemini/Kling image/video provider adapters and live credential smoke remain Beta/Phase 3 work.
+
+## 9. VK Integration
+
+**V1 — Real VK media delivery incomplete — severity: high — ✅ FIXED (credential-bound live smoke pending)**
+- Description: default runtime still uses `vkdelivery.MockClient`, but the real VK client now supports both `messages.send` and raw photo/video upload flows.
+- Impact: Generated media artifacts can be loaded from object storage, uploaded to VK upload servers and delivered as canonical VK `photo...` / `video...` attachments.
+- Recommendation: Run a live smoke with `VK_ACCESS_TOKEN` against a dev group/conversation.
+- **Fix:** `vkdelivery.HTTPClient` implements `MediaUploader`: photo uses `photos.getMessagesUploadServer` → upload → `photos.saveMessagesPhoto`; video uses `video.save` → upload. Delivery worker now uploads raw artifact bytes before sending media. Deterministic `random_id` remains the delivery dedup key. Unit tests cover photo/video upload flows and worker-level upload-to-send behavior.
+- **Remaining:** Video transcode/probe/VK-ready variants remain Phase 3 media-pipeline work.
+- **Menu note:** VK product/control menu navigation uses `vkdelivery.ControlClient`
+  for both `messages.send` and `messages.edit`; inline buttons default to
+  `callback` and are processed through VK `message_event`, with
+  `VK_MENU_BUTTON_MODE=text` as a legacy fallback. Active-menu tracking is
+  currently process-local. Every current product-menu button has a
+  `VK_MENU_*_ENABLED` flag for rollout/hiding without deleting screens. Plain
+  text/stickers become `text.ask` jobs only after `Спросить у НейроХаб` enables
+  process-local GPT mode, unless
+  `VK_UNROUTED_TEXT_MODE=gpt` restores legacy behavior. Active GPT mode sends
+  `НейроХаб думает...`, stores the placeholder VK `message_id` in `job.Params`, and
+  delivery edits that same message with the text result. Persist active menu and
+  dialog mode before multi-instance API scaling.
+
+**V1a — VK control/menu sends are a known delivery-persistence exception — severity: medium — OPEN**
+- Description: Product/control menu responses use `vkdelivery.ControlClient` directly from the API path for fast UX (`messages.send`, `messages.edit`, and `messages.sendMessageEventAnswer`) and are not persisted as `deliveries` rows.
+- Decision: Keep current behavior during this integration; it is an explicitly documented control-path exception, not a generated-output delivery path. Move these sends into persisted delivery/outbox if product/control messages must satisfy the strict "every delivery attempt is persisted" invariant in a future hardening PR.
+
+**V2 — Confirmation/secret handled — severity: low**
+- Description: Confirmation token + optional secret validated; fast `ok` response. Good (see S1 for default).
+
+## 10. Recovery After Restart
+
+**RC1 — Persisted lifecycle resumes — severity: low**
+- Description: Provider task `external_id` persisted; poll resumes after restart; pending stream entries reclaimed.
+- Note: Mock provider keeps task state in memory, so restarts mid-flight orphan mock jobs (acceptable for mock; real providers are server-side).
+- Recommendation: None for real providers; document mock limitation.
+
+## 11. Idempotency
+
+**I1 — Broad coverage — severity: low — ✅ FIXED**
+- Description: Idempotency keys for inbound events, commands, jobs, deliveries (deterministic random_id), and captures. Verified no duplicate job/charge/send in validation.
+- Recommendation: Add TTL/cleanup for `idempotency_keys`; document key scopes.
+- **Fix:** Worker maintenance deletes expired `idempotency_keys` on `MAINTENANCE_INTERVAL`.
+
+## 12. Database Design
+
+**D1 — Migration runner not per-file transactional — severity: medium — ✅ FIXED**
+- Description: `cmd/migrate` executes each file in one `Exec` and records version separately; a mid-file failure leaves partial DDL and no recorded version.
+- Impact: Manual cleanup on failed migration; no checksum/integrity tracking.
+- Recommendation: Wrap each migration in a transaction; record checksum; consider a vetted migration library.
+- **Fix:** Each migration's DDL and its `schema_migrations` row now apply in a single transaction (apply and `down` both use `runTx`), so a failed migration rolls back cleanly. `schema_migrations` gained a `checksum` column; `up` records the SHA-256 of each file and refuses to proceed on drift (a changed, already-applied file). Validated against the live database.
+
+**D2 — Solid baseline — severity: low**
+- Description: UUID PKs, JSONB payloads, append-only ledger, unique idempotency constraints, indexes; UUID[] NOT NULL defaults fixed.
+- Recommendation: Plan partitioning/archival for `jobs`, `ledger_entries`, `inbound_events` at scale.
+
+## 13. Storage Design
+
+**ST1 — No retention / signed URLs / malware scan — severity: medium — ✅ FIXED**
+- Description: Artifacts stored with sha256 dedup, but no lifecycle/retention, no signed URL issuance (`public_url` unused), no input malware scan.
+- Impact: Unbounded storage growth; no controlled access; unscanned uploads.
+- Recommendation: Add bucket lifecycle, signed-URL delivery, and a media scan stage.
+- **Fix:** (1) Retention — `s3.Store.SetRetention` configures a bucket expiry lifecycle rule, applied on startup when `ARTIFACT_RETENTION_DAYS>0`. (2) Signed URLs — the delivery worker issues time-limited presigned media URLs when `SIGNED_DELIVERY=true` (`ARTIFACT_URL_TTL`) instead of exposing raw bucket/key. (3) Scan stage — `artifactservice` exposes a `Scanner` interface (`WithScanner`) run on new bytes before storage; the default is no-op and a real antivirus/content-safety scanner can be injected.
+
+## 14. Error Handling
+
+**E1 — Normalized but retry-accounting gap — severity: medium — ✅ FIXED** (root of R1)
+- Description: Domain errors + `mapError` + normalized provider error classes are good, but retryable classification combined with non-incrementing attempt count enables loops.
+- Recommendation: Centralize retry budget per job; map terminal vs retryable consistently across submit/poll/download/delivery.
+- **Fix:** Retry budget centralized in the worker (`handleFailure`) and delivery worker using the task `Attempt` / `delivery.attempt_no`, applied uniformly across submit/poll/download/delivery (see R1).
+
+## 15. Cost Optimization
+
+**C1 — Hardcoded pricing / no spend caps — severity: medium — ✅ FIXED**
+- Description: Prices and 1000 starting balance are hardcoded in `billingservice`; no pricing rules table, no daily/provider spend caps.
+- Impact: No cost control; can't change pricing without redeploy; runaway spend with real providers (compounded by R1).
+- Recommendation: Add pricing rules + per-user/provider/global spend caps and budget alerts.
+- **Fix:** Per-operation prices are now overridable without a redeploy via `PRICES` (e.g. `text_generate=2,image_generate=12`, `billingservice.WithPriceOverrides`), and a per-job spend cap (`MAX_JOB_COST`) rejects jobs whose estimate exceeds the cap (`domain.ErrCostCapExceeded`) before any reservation. Per-user/global daily caps and budget alerts remain a Beta enhancement.
+
+---
+
+## Summary
+
+| Severity | Total | Fixed | Partial | Remaining | Remaining IDs |
+|----------|-------|-------|---------|-----------|---------------|
+| Critical | 2  | 2 | 0 | 0 | — |
+| High     | 9  | 9 | 0 | 0 | — |
+| Medium   | 5  | 5 | 0 | 0 | — |
+| Low      | 10 | 3 | 0 | 7 | A3, S4, SC2, Q2, V2, RC1, D2 |
+
+Fixed across hardening/integration phases: **A1, R1** (critical); **S1, S2,
+S3, O1, Q1, A2, B1, P1, V1** (high); **E1, SC1, D1, ST1, C1** (medium);
+**R2, B2, I1** (low).
+
+**Verdict:** All critical, high and medium audit items are addressed in code.
+No-credential hardening is validated end-to-end. Credential-bound integrations
+now have unit-tested adapters and worker wiring for OpenAI text/image/video,
+provider routing/fallback/circuit breaker, VK `messages.send` plus media upload,
+VK `/start` product menu, OpenAI moderation and text/image artifact scanning.
+The default runtime remains mock-backed; before external users, run a live smoke
+with real OpenAI/VK credentials, attach a production welcome banner if needed,
+and add the remaining Phase 3 media pipeline for video scan/transcode/VK-ready
+variants. Remaining work is tracked in `TASKS.md` and `ROADMAP.md`.
+
+---
+
+## PR-13.1 live DeepSeek smoke note
+
+Date: 2026-06-05
+
+DeepInfra/DeepSeek text generation is now credential-smoked through the real
+Mini App job path: `POST /miniapp/jobs` -> outbox -> worker -> DeepInfra
+adapter -> artifact -> mock delivery -> billing capture. The happy path reached
+`succeeded`, captured credits once, enforced artifact owner access and preserved
+idempotent submit. The failure path used an unreachable DeepInfra endpoint and
+verified `failed_terminal`, `provider_timeout`, one reservation release and no
+capture. No secrets, launch params, prompts or model output were recorded.
+
+Remaining credential-bound smoke before broad external release: real VK
+delivery/media upload and the full video media pipeline. OpenAI is not the
+primary Mini App text provider for this release path.
+
+---
+
+## PR-16.1 Mini App navigation shell note
+
+Date: 2026-06-06
+
+The 3-tab navigation shell is frontend-only. It uses VKUI `Tabbar` /
+`TabbarItem` and stores only the active tab as `vk_miniapp_active_tab_v1`.
+No launch params, prompts, balance, artifact URLs, provider details or private
+media URLs are added to localStorage. `ChatScreen` remains mounted across
+`Создать` / `Чат` / `Настройки` switches, preserving active job polling and the
+existing backend-owned job state model. The Settings tab is a placeholder and
+does not add new data access or backend behavior.
+
+---
+
+## PR-16.2 Mini App chat threads note
+
+Date: 2026-06-06
+
+Chat threads are frontend UX metadata only. New dialogs send their client UUID
+as `conversation_id`; the migrated/default dialog keeps `default`, preserving
+the existing backend default context. The Mini App still does not call
+providers directly and does not make billing, moderation, artifact or job-state
+decisions on the client.
+
+`localStorage` now uses `vk_miniapp_threads_v1` and stores only thread
+metadata: `id`, `title`, `last_activity_at`. It does not store prompt bodies,
+assistant answers, last-reply preview text, job ids, launch params, tokens,
+balance, provider details, artifact ids or artifact URLs. Last-reply previews
+exist only in memory for the current session.
+
+Superseded by PR-18.4/18.5: Mini App local storage now keeps only
+`vk_miniapp_active_thread_v1` plus UI preferences, and removes legacy
+`vk_miniapp_threads_v1` / `vk_miniapp_chats_v1` caches when encountered.
+
+Superseded by PR-18.3/18.4/18.5: Mini App chat now uses durable
+`source=miniapp` conversations in Postgres through the shared
+worker/dialogcontext core. The BFF exposes authenticated list/history endpoints
+and no longer keeps process-local prompt/answer memory.
+
+---
+
+## PR-16.3 Mini App Create tab note
+
+Date: 2026-06-06
+
+The Create tab operation selector is a VKUI `SegmentedControl` over the static
+frontend mirror of backend-supported operations only: `text_generate`,
+`image_generate`, `video_generate`. No discovery endpoint or BFF contract was
+added.
+
+Estimate remains backend-owned through `POST /miniapp/estimate`; changing the
+operation/model reuses the existing debounced estimate path and submit remains
+gated by `enough_credits=true`. Segment changes do not clear active jobs,
+backend job lists or the polling owner, so in-flight job recovery/polling stays
+with the existing `GET /miniapp/jobs` / `GET /miniapp/jobs/{id}` flow.
+
+The VK post preview stays safe-rendered: text is React text and image/video
+sources come only from backend artifact routes derived from job DTO artifact
+ids. PR-16.3 only changes preview structure/prominence; brand palette and
+image-derived color work remains for PR-16.4.
+
+---
+
+## PR-16.3.1 Mini App UX revision note
+
+Date: 2026-06-06
+
+The Create tab no longer exposes a top operation segment. It starts with three
+large cards and then reuses the existing backend-backed workflow for the chosen
+operation: `image_generate`, `video_generate` or `text_generate`. No backend
+contracts, provider calls, billing logic, moderation path or artifact access
+rules changed.
+
+History inside Create is scoped by operation type. The all-types summary
+history is intentionally left for Settings PR-16.4. Create history still reads
+backend jobs; local storage is not used as a billing/job-status source of
+truth.
+
+Chat thread history is opened by an explicit header icon button. The thread
+list and `Новый диалог` action remain the same local metadata surface from
+PR-16.2, without storing prompts, answers, secrets or artifact URLs.
+---
+
+## PR-16.4 Mini App Settings / local data note
+
+Date: 2026-06-06
+
+- Settings uses backend-provided balance from `/miniapp/balance`; localStorage is
+  not used as a balance, billing or job-state source of truth.
+- The summary generation history is read from backend jobs already loaded by
+  the Mini App recovery flow and does not persist prompts, generated text or
+  artifact URLs locally.
+- Theme preference is the only new localStorage key (`vk_miniapp_theme_v1`).
+  It stores only `system`, `light` or `dark`.
+- Payment history is intentionally a placeholder because Mini App BFF has no
+  read-only payment/ledger endpoint yet. The backend dependency is tracked in
+  `TASKS.md` and `DECISIONS.md`.
+- The Settings top-up button is UI-only until a backend payment-intent endpoint
+  exists. It does not change balance locally. The planned implementation must
+  share the same payment intent/link flow with the VK text bot `Пополнить
+  баланс` control path and may credit accounts only through committed `topup`
+  ledger entries after trusted payment confirmation.
+
+---
+
+## PR-18.5 shared durable chat context verification note
+
+Date: 2026-06-07
+
+- VK bot text mode and Mini App chat both use the durable conversation core:
+  `conversations`, `conversation_messages`, `conversation_summaries`,
+  `internal/service/dialogcontext` and worker-owned prompt rendering.
+- Mini App chat no longer has a process-local prompt/answer store in
+  `internal/adapter/inbound/miniapp`; `POST /miniapp/chat/messages` sends the
+  current prompt plus explicit `source=miniapp` conversation refs.
+- Provider calls remain outside `cmd/api`, VK inbound and Mini App BFF flows;
+  they are still owned by `cmd/worker` / `internal/worker`.
+- Mini App frontend local storage is limited to active thread/tab/theme UI
+  state and legacy cache cleanup. Prompt text, generated answers, job ids,
+  artifact ids/URLs, launch params, tokens, balance and provider details are
+  not persisted there.
+- Public Mini App chat model output remains `ChatGPT`; raw provider/model ids
+  stay backend/provider configuration details.
+
+---
+
+## Mini App Create/chat UX polish note
+
+Date: 2026-06-06
+
+The Create tab header cleanup and service-list revision are frontend-only. They
+do not change Mini App BFF contracts, provider routing, billing, moderation,
+artifact ownership or job polling. Create choices still route to the existing
+backend-owned media operations (`image_generate`, `video_generate`).
+
+The Create-post entry and its local preview are temporarily disabled in the
+Create tab. Text generation still exists only in Chat/VK bot flows and remains
+backend-owned. Generated text remains React text, and media still comes only
+from backend artifact routes.
+
+---
+
+## Mini App status/polling UX fix note
+
+Date: 2026-06-06
+
+The status timeline fix is presentational only. It does not change backend job
+states, provider routing, billing reservations/capture, artifact moderation or
+Mini App auth.
+
+The endless-processing fix is a frontend recovery guard: when Mini App state
+contains any non-terminal job, the polling owner resumes `GET /miniapp/jobs/{id}`
+unless that job is already being polled. The backend remains the source of truth
+for job status; local state only triggers polling and display updates. Aggregate
+runtime checks showed local jobs reaching terminal `succeeded` and outbox queue
+events in `published` state.
+
+---
+
+## Mini App image preview + dev launcher fix note
+
+Date: 2026-06-07
+
+**Symptom:** After photo generation the Create result screen stayed on
+«Обработка…» / showed no image. In dev, `GET /miniapp/jobs/{id}` could also
+return `503` when the `localhost.run` SSH tunnel died (`no tunnel here :(`).
+
+**Root causes (dev + UI):**
+
+1. **Dev worker env drift:** `scripts/dev/start-miniapp.ps1` initially reused
+   `Start-BotExecutable`, which loaded `.env` and could keep
+   `VK_DELIVERY_MODE=real` from the operator machine. The worker then tried VK
+   photo delivery (`empty photo upload_url`, `Group authorization failed`) and
+   jobs stalled before terminal `succeeded`.
+2. **UI waited only for `succeeded`:** Image artifacts are already available at
+   `result_ready`, but the Create flow treated only `succeeded` as “done”, so
+   preview could spin forever while delivery retried.
+3. **Artifact preview auth:** `<img src="/miniapp/artifacts/{id}">` cannot send
+   `X-Launch-Params`; preview must use authenticated blob URLs
+   (`useArtifactMediaUrl` / `preloadArtifactBlobUrl`).
+4. **Tunnel fragility (dev):** `*.lhr.life` URLs rotate when SSH restarts; stale
+   VK dev URL surfaces as `503`, not an API bug.
+
+**Fixes applied:**
+
+- Added `Start-MiniAppExecutable` in `scripts/dev/_miniapp-common.ps1` to load
+  `.env` + `.env.ps1` and then **force** Mini App dev overrides, including
+  `VK_DELIVERY_MODE=mock`, `PROVIDER=deepinfra`, `ARTIFACT_SCANNER=none`.
+- Frontend: `hasPreviewableMediaResult()` — show image/video preview at
+  `result_ready` (and `succeeded`) in `WorkflowMode` / `ResultCard`.
+- Frontend: authenticated artifact media hook + blob preload before result screen.
+- Chat UX (same pass): remove ghost `job-*` threads from drawer; prefer backend
+  `conversation.title` / preview for list labels; stabilize chat switching loads.
+- Create flow navigation: history/back now returns to the prior status/result
+  screen instead of always resetting to the Create home menu.
+
+## Mini App video generation note (DeepInfra p-video)
+
+Date: 2026-06-07
+
+**Scope:** Mini App Create `video_generate` only. VK bot menu/video intake unchanged.
+
+**Pipeline:** `POST /miniapp/jobs` → shared `joborchestrator` → `queue.video.generate`
+→ worker → `internal/adapter/provider/deepinfra/video.go` → artifact in MinIO →
+BFF poll/preview. Same Postgres tables as text/image (`jobs`, `ledger_entries`,
+`artifacts`, `deliveries`); no new migration.
+
+**Model:** `PrunaAI/p-video` via `POST /v1/inference/PrunaAI/p-video`. Dev uses
+`DEEPINFRA_VIDEO_DRAFT=true` (~$0.005/s). Product UI shows «Kling»; `model_code`
+stays in `jobs.params` only.
+
+**Env:** `VIDEO_PROVIDER`, `DEEPINFRA_VIDEO_*`, `WORKER_PROVIDER_CALL_TIMEOUT`,
+`PRICES` (`video_generate`). Single secret: `DEEPINFRA_API_KEY`. Documented in
+`.env.example` and `docs/VIDEO_GENERATION.md`.
+
+**Security:** Worker-owned draft/duration; BFF rejects video reference artifacts;
+no provider calls from Mini App; SSRF-hardened `video_url` download; output
+moderation on prompt (keyword). Production must set `DEEPINFRA_VIDEO_DRAFT=false`.
+
+**Adapter layout:** `video.go` is split from historical `deepinfra.go` (text/image
+still inline) for smaller review scope — not a different architecture.
+
+### Mini App history titles + artifact download (2026-06-07)
+
+**Symptom:** Profile history «Диалоги» showed modality label «Текст» instead of user
+prompt; image rows lacked contextual titles; no download with branded filename.
+
+**Root cause:** `newJobDTO` omitted `prompt` for `text_generate` jobs (prompt lives in
+`jobs.params` only). Frontend fell back to modality label.
+
+**Fix:** BFF exposes `prompt` for all operations from stored params (user-owned jobs
+only). Frontend `jobDisplayTitle()` for Settings/Workflow history; `ResultCard` download
+as `Neirohub_{slug|jobId8}.{ext}` via existing artifact blob URLs.
+
+**Chat layout:** Pending workflow jobs were polled from `ChatScreen`, causing extra
+state churn; message rows used `align-items: flex-end`. Poll limited to chat jobs with
+existing bot messages; rows top-aligned with stable typing bubble min-height.
+
+### Mini App media ephemeral policy (2026-06-07)
+
+**User ask:** do not persist photo/video in DB. **Current:** bytes live in object
+storage (MinIO); Postgres holds small artifact rows (id, mime, size, job link) required
+by worker preview, auth download and billing capture. **UI:** overlay download + warning
+that preview is temporary. **Follow-up:** scheduled deletion of miniapp output artifacts
+after TTL (not implemented in v0.1.3).
+
+**History:** Profile «Диалоги» dedupes `text_generate` jobs by `conversation_id` — one
+row per thread (first message title), not every chat turn.
+
+---
+
+**Security / architecture impact:** No provider calls from VK handlers or Mini
+App frontend. Dev-only `VK_DELIVERY_MODE=mock` override is scoped to
+`scripts/dev/start-miniapp.ps1` child processes; production still requires
+explicit env. Preview still uses backend artifact routes with launch-param auth
+and moderation gates.
+
+**Checks:** `npm run build` (miniapp) passed after the UI changes. Dev validation:
+worker log no longer prints `using real vk delivery client`; tunnel must be
+refreshed in dev.vk.com after each `localhost.run` restart.

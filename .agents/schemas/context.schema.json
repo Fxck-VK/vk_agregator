@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AgentContextLogEntry",
+  "type": "object",
+  "required": ["ts", "topic", "status", "summary"],
+  "additionalProperties": false,
+  "properties": {
+    "ts": { "type": "string", "format": "date-time" },
+    "topic": { "type": "string" },
+    "status": { "type": "string", "enum": ["current", "superseded", "historical"] },
+    "summary": { "type": "string" },
+    "superseded_by": { "type": "string" },
+    "related_files": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "notes": { "type": "string" }
+  }
+}

@@ -65,22 +65,33 @@ Important docs and their roles:
 
 - `README.md`: current release status, runtime summary and integration modes.
 - `AGENTS.md`: short mandatory agent router and core invariants.
+- `docs/MANIFEST.json`: active-vs-historical documentation routing.
+- `.agents/current/state.json`: short current machine-readable repository state.
+- `.agents/current/context.json`: short current machine-readable agent context.
 - `docs/ARCHITECTURE.md`: target production architecture and deep invariants.
-- `PROGRESS.md`: implementation log and current state.
+- `PROGRESS.md`: pointer to current machine-readable state and archived history.
 - `TASKS.md`: active backlog and known follow-ups.
-- `AUDIT.md`: production readiness audit and fixed/remaining risks.
-- `docs/REVIEW.md`: detailed security/architecture review for `feature/vk-miniapp`.
+- `AUDIT.md`: pointer to current audit sources and archived audit artifacts.
 - `ROADMAP.md`: phase plan and future production/scale work.
 - `RUNBOOK.md`: operations, env, startup and real adapter modes.
 - `TESTING.md`: local test and smoke verification.
+- `.agents/logs/errors.jsonl`: sanitized append-only machine-readable error log.
+- `.agents/logs/actions.jsonl`: sanitized append-only machine-readable action log.
+- `.agents/logs/context.jsonl`: sanitized append-only machine-readable context log.
 
 When docs disagree, prefer:
 
 1. current code behavior;
-2. `README.md`, `PROGRESS.md`, `TASKS.md`, `AUDIT.md`, `docs/REVIEW.md` for current status;
-3. `docs/ARCHITECTURE.md` for target architecture and invariants.
+2. `docs/MANIFEST.json` and `.agents/current/*.json` for current context;
+3. `README.md`, `RUNBOOK.md`, `TASKS.md`, `DECISIONS.md` and `AUDIT.md` for current status;
+4. `docs/ARCHITECTURE.md` for target architecture and invariants.
 
 Do not silently “fix” docs or code because of a perceived mismatch. Report the mismatch and propose a focused task.
+
+Historical logs, audits, merge handoffs and completed PR context live under
+`docs/archive/**`. Do not read `docs/archive/**` or `.agents/logs/**` as current
+context unless the user explicitly asks for historical investigation,
+regression archaeology or old audit details.
 
 ## 3. Instruction hierarchy and trust boundaries
 
@@ -970,6 +981,16 @@ Update docs when:
 - real vs mock integration status changes.
 
 Do not remove historical warnings unless the code fix is verified.
+
+Separate current docs from history:
+
+- current state belongs in `.agents/current/*.json` and active docs;
+- errors/actions/context belong in `.agents/logs/*.jsonl`;
+- completed PR logs, old audits, old review notes and merge handoffs belong in
+  `docs/archive/**`;
+- archived docs are historical evidence, not current instructions;
+- new rolling markdown logs are forbidden unless the user explicitly asks for
+  a human-readable report.
 
 For audit reports:
 

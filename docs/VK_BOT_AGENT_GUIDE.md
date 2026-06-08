@@ -107,7 +107,7 @@ Provider output перед отправкой в VK нормализуется: 
 - `internal/platform/config/config_test.go`
 - `RUNBOOK.md`
 - `TASKS.md`
-- `PROGRESS.md`
+- `.agents/logs/actions.jsonl` for a sanitized machine-readable action entry
 
 ## Referral
 

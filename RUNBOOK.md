@@ -164,7 +164,7 @@ Override these values when needed:
 
 > Production note: set `APP_ENV=production`; the API then **refuses to start**
 > unless `VK_SECRET`, `ADMIN_TOKEN`, `VK_APP_SECRET`, and a non-default `VK_CONFIRMATION_TOKEN`
-> are set (fail-closed, `AUDIT.md` S1). `cmd/api`, `cmd/worker` and
+> are set (fail-closed; see `AUDIT.md` for current audit routing). `cmd/api`, `cmd/worker` and
 > `cmd/provider-webhook` run the same validation. `PROVIDER=openai`, `IMAGE_PROVIDER=openai`,
 > `PROVIDER_CHAIN` containing `openai`, `MODERATION_PROVIDER=openai`, or
 > `ARTIFACT_SCANNER=openai` require `OPENAI_API_KEY`; `PROVIDER=deepinfra`,
@@ -415,7 +415,7 @@ It runs these pools over Redis Streams (one consumer group, recovery via `XAUTOC
 
 > Scaling note: run multiple `cmd/worker` instances (each joins the same group)
 > for more throughput. Per-pool isolation via `WORKER_POOLS` is still a Beta
-> follow-up (`AUDIT.md` SC2). The worker auto-creates the MinIO bucket and
+> follow-up (see `TASKS.md` and `AUDIT.md` for current routing). The worker auto-creates the MinIO bucket and
 > consumer groups on start.
 
 Real adapter modes are opt-in:

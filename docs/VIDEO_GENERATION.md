@@ -70,6 +70,7 @@ all use `postNativeJSON` / `Capabilities` / `Submit` / `Poll`.
 
 ## Related docs
 
-- `docs/MINIAPP_FIXLOG.md` — fix journal
-- `AUDIT.md` — § Mini App video generation note
-- `docs/MINIAPP_REDESIGN_CONTEXT.md` — UI boundaries
+- `docs/MANIFEST.json` and `.agents/current/*.json` — current context routing
+- `.agents/logs/actions.jsonl` / `.agents/logs/errors.jsonl` — machine-readable
+  fix and error logs
+- `AUDIT.md` — current audit routing
