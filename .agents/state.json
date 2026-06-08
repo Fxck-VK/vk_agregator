@@ -1,9 +1,9 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "updated_at": "2026-06-08T00:00:00+03:00",
   "branch": "fastlife_dev",
   "current_main_commit": "a780aa0",
-  "purpose": "Single machine-readable current context, progress, routing and log policy for agents.",
+  "purpose": "Minimal machine-readable current context and routing for agents.",
   "read_policy": {
     "read_by_default": [
       "AGENTS.md",
@@ -27,23 +27,11 @@
     "history_read_condition": "Only read archive/logs when explicitly asked for history, debugging a repeated known error, regression archaeology, or old audit details."
   },
   "progress": {
-    "current_focus": "machine-first agent context cleanup",
+    "current_focus": "reduce agent documentation overhead",
     "current_priorities": [
       "safe Cloudflare Mini App tunnel without disturbing VK bot tunnel",
-      "single JSON current context for agents",
-      "append-only machine logs for errors/actions/context"
-    ],
-    "latest_local_commits": [
-      {
-        "sha": "37aae9f",
-        "message": "docs: separate active context and machine logs",
-        "status": "local_not_pushed"
-      },
-      {
-        "sha": "a780aa0",
-        "message": "feat: add payment top-up foundation",
-        "status": "merged_from_origin_main"
-      }
+      "minimal JSON current context for agents",
+      "no routine documentation or action logging"
     ],
     "active_runtime": {
       "api_port": 8080,
@@ -51,16 +39,30 @@
       "tunnel": "pending_cloudflare"
     }
   },
+  "doc_update_policy": {
+    "routine_task": "Do not update docs or logs.",
+    "update_state_when": [
+      "default context routing changes",
+      "current priorities change",
+      "runtime/tunnel state changes"
+    ],
+    "update_reference_docs_when": [
+      "architecture contract changes",
+      "runbook/startup/env behavior changes",
+      "ADR/decision changes",
+      "active backlog changes"
+    ],
+    "update_error_log_when": [
+      "a non-obvious error has a reusable root cause and fix",
+      "a repeated incident needs machine-readable prevention data"
+    ]
+  },
   "logs": {
     "errors": ".agents/logs/errors.jsonl",
-    "actions": ".agents/logs/actions.jsonl",
-    "context": ".agents/logs/context.jsonl",
-    "policy": "Append sanitized JSONL only. Do not create rolling markdown logs."
+    "policy": "Only append sanitized error entries for reusable incidents. Do not log routine actions or context changes."
   },
   "schemas": {
-    "error": ".agents/schemas/error.schema.json",
-    "action": ".agents/schemas/action.schema.json",
-    "context": ".agents/schemas/context.schema.json"
+    "error": ".agents/schemas/error.schema.json"
   },
   "archive": {
     "root": "docs/archive",

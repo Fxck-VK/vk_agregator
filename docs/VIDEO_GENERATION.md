@@ -71,5 +71,5 @@ all use `postNativeJSON` / `Capabilities` / `Submit` / `Poll`.
 ## Related docs
 
 - `.agents/state.json` — current context/progress/routing
-- `.agents/logs/actions.jsonl` / `.agents/logs/errors.jsonl` — machine-readable
-  fix and error logs
+- `.agents/logs/errors.jsonl` — machine-readable reusable error log when a
+  non-obvious repeatable issue is found

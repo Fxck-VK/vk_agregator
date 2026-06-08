@@ -105,21 +105,20 @@ Read these only when the task scope requires them:
 - `DECISIONS.md`
 - `docs/ARCHITECTURE.md`
 
-Machine-readable append-only logs live in:
+Machine-readable reusable error log:
 
 - `.agents/logs/errors.jsonl`
-- `.agents/logs/actions.jsonl`
-- `.agents/logs/context.jsonl`
 
 Historical logs, audits, merge handoffs and completed PR context live under
 `docs/archive/**`. Agents must not read `docs/archive/**` or `.agents/logs/**`
 as current context by default. Read them only when the user explicitly asks for
 historical investigation, regression archaeology or old audit details.
 
-Do not add new rolling markdown logs for errors/actions/context. Append
-sanitized JSONL entries to `.agents/logs/*.jsonl` instead. Never put secrets,
-full launch params, prompt bodies, private artifact URLs, raw PII or provider
-credentials into docs or logs.
+Do not update docs or logs for routine tasks. Only update docs when behavior,
+architecture, runbook/env, ADRs or active backlog materially changes. Only
+append to `.agents/logs/errors.jsonl` for non-obvious repeated errors with a
+reusable root cause/fix. Never put secrets, full launch params, prompt bodies,
+private artifact URLs, raw PII or provider credentials into docs or logs.
 
 ## Current implementation frame
 
@@ -164,7 +163,7 @@ Do not read `docs/AGENTS_FULL.md` wholesale unless the task is broad architectur
 
 Read only these sections depending on scope:
 
-- `web/miniapp/**`: sections Mini App, Auth/Session, Frontend Security, Job/Billing/Idempotency, Safe Rendering, Observability, Anti-vibe Coding. For Mini App bugfixes append sanitized machine-readable entries to `.agents/logs/actions.jsonl` and `.agents/logs/errors.jsonl` when relevant.
+- `web/miniapp/**`: sections Mini App, Auth/Session, Frontend Security, Job/Billing/Idempotency, Safe Rendering, Observability, Anti-vibe Coding.
 - `internal/adapter/inbound/vk/**`: sections VK Text Bot / VK Inbound, Inbox/Deduplication, Command Router, Job Orchestrator, Billing/Idempotency, Delivery, Moderation.
 - `internal/adapter/inbound/miniapp/**`: sections Mini App BFF, Auth/Session, Job/Billing/Idempotency, Artifact Access, Security, Known Follow-ups.
 - `internal/service/billingservice/**`: sections Billing Ledger, Idempotency, Reconciliation, Tests, Stop Conditions.
@@ -209,8 +208,8 @@ After changes:
 When the user asks to commit/push after a step: run relevant checks first; if
 green and invariants hold, commit to `fastlife_dev` with a short rollback-friendly
 message (`miniapp: …` / `worker: …` scope prefix) and push. One logical step per
-commit when possible. For bugfixes, update `.agents/logs/*.jsonl` with sanitized
-machine-readable entries instead of adding rolling markdown logs.
+commit when possible. Do not add routine documentation/log entries just because
+a task completed.
 
 ## Safe checks
 

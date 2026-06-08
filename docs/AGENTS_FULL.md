@@ -72,9 +72,8 @@ Important docs and their roles:
 - `ROADMAP.md`: phase plan and future production/scale work.
 - `RUNBOOK.md`: operations, env, startup and real adapter modes.
 - `TESTING.md`: local test and smoke verification.
-- `.agents/logs/errors.jsonl`: sanitized append-only machine-readable error log.
-- `.agents/logs/actions.jsonl`: sanitized append-only machine-readable action log.
-- `.agents/logs/context.jsonl`: sanitized append-only machine-readable context log.
+- `.agents/logs/errors.jsonl`: sanitized machine-readable error log for
+  reusable incidents only.
 
 When docs disagree, prefer:
 
@@ -982,7 +981,8 @@ Do not remove historical warnings unless the code fix is verified.
 Separate current docs from history:
 
 - current state/progress/routing belongs in `.agents/state.json`;
-- errors/actions/context belong in `.agents/logs/*.jsonl`;
+- reusable non-obvious errors belong in `.agents/logs/errors.jsonl`;
+- routine actions/context changes should not be logged;
 - completed PR logs, old audits, old review notes and merge handoffs belong in
   `docs/archive/**`;
 - archived docs are historical evidence, not current instructions;
