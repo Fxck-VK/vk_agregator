@@ -167,6 +167,48 @@ type BalanceDTO struct {
 	BalanceCredits int64 `json:"balance_credits"`
 }
 
+// CreatePaymentIntentRequest is accepted by POST /miniapp/payments/intents.
+// User identity is never accepted in the body; it comes from verified launch
+// params in the handler.
+type CreatePaymentIntentRequest struct {
+	ProductCode  string `json:"product_code"`
+	ReceiptEmail string `json:"receipt_email,omitempty"`
+	ReceiptPhone string `json:"receipt_phone,omitempty"`
+	ReturnURL    string `json:"return_url,omitempty"`
+}
+
+// PaymentIntentDTO is the Mini App-safe representation of a top-up intent.
+type PaymentIntentDTO struct {
+	ID              uuid.UUID `json:"id"`
+	ProductID       uuid.UUID `json:"product_id,omitempty"`
+	Status          string    `json:"status"`
+	Amount          int64     `json:"amount"`
+	Currency        string    `json:"currency"`
+	Credits         int64     `json:"credits"`
+	PriceVersion    int       `json:"price_version"`
+	ConfirmationURL string    `json:"confirmation_url,omitempty"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
+}
+
+func newPaymentIntentDTO(intent *domain.PaymentIntent) PaymentIntentDTO {
+	dto := PaymentIntentDTO{
+		ID:              intent.ID,
+		Status:          string(intent.Status),
+		Amount:          intent.Amount,
+		Currency:        string(intent.Currency),
+		Credits:         intent.Credits,
+		PriceVersion:    intent.PriceVersion,
+		ConfirmationURL: intent.ConfirmationURL,
+		CreatedAt:       intent.CreatedAt,
+		UpdatedAt:       intent.UpdatedAt,
+	}
+	if intent.ProductID != nil {
+		dto.ProductID = *intent.ProductID
+	}
+	return dto
+}
+
 // ArtifactUploadDTO is returned by POST /miniapp/artifacts. It exposes only the
 // backend-owned artifact id; URLs and storage paths stay private.
 type ArtifactUploadDTO struct {

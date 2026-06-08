@@ -256,17 +256,25 @@ func (s *Service) Refund(ctx context.Context, userID, jobID uuid.UUID, amount in
 	return s.repo.AppendEntry(ctx, entry)
 }
 
-// Grant appends an idempotent positive top-up entry for non-payment bonuses
-// such as referral rewards. It preserves the append-only ledger invariant and
-// treats duplicate idempotency keys as success.
+// Grant appends an idempotent positive top-up entry using the service's
+// repository. It is used for non-payment bonuses such as referral rewards and
+// delegates to GrantWith for the actual ledger write.
 func (s *Service) Grant(ctx context.Context, userID uuid.UUID, amount int64, idempotencyKey, reason string) error {
+	return s.GrantWith(ctx, s.repo, userID, amount, idempotencyKey, reason)
+}
+
+// GrantWith appends an idempotent positive top-up entry using the supplied
+// repository. Passing a transaction-bound billing repository lets payment
+// webhook processing commit payment event processing, intent status and the
+// ledger top-up atomically in one caller-owned transaction.
+func (s *Service) GrantWith(ctx context.Context, repo domain.BillingRepository, userID uuid.UUID, amount int64, idempotencyKey, reason string) error {
 	if amount <= 0 {
 		return nil
 	}
 	if idempotencyKey == "" {
 		return errors.New("billingservice: grant idempotency key is required")
 	}
-	acc, err := s.EnsureAccount(ctx, userID)
+	acc, err := s.ensureAccountWith(ctx, repo, userID)
 	if err != nil {
 		return err
 	}
@@ -278,7 +286,7 @@ func (s *Service) Grant(ctx context.Context, userID uuid.UUID, amount int64, ide
 		IdempotencyKey: idempotencyKey,
 		Reason:         reason,
 	}
-	if err := s.repo.AppendEntry(ctx, entry); err != nil {
+	if err := repo.AppendEntry(ctx, entry); err != nil {
 		if errors.Is(err, domain.ErrConflict) {
 			return nil
 		}

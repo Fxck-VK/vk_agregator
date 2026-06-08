@@ -116,6 +116,36 @@ Real integrations are implemented at adapter level and remain **opt-in**:
   billable job. Signup rewards are posted through billing ledger entries with
   idempotency keys. A full Mini App referral account/API screen is still a
   follow-up over the same backend service/repository.
+- Payment top-up foundation has backend lifecycle coverage for intent creation,
+  provider-verified completion, reconciliation and manual operator refunds.
+  The domain defines `PaymentProduct`, `PaymentIntent`, `PaymentEvent`,
+  `PaymentRefund`, payment-provider codes and an explicit payment intent state
+  machine. Migration `000009_payments` adds `payment_products`,
+  `payment_intents`, `payment_events` and `payment_refunds` with price
+  snapshots, 54-FZ receipt contact fields, webhook inbox dedup and
+  reconciliation indexes. Runtime config exposes `PAYMENT_PROVIDER`, YooKassa
+  env placeholders and payment reconciliation intervals. `billingservice.GrantWith(ctx, repo, ...)`
+  exists so webhook/reconciliation processors can commit
+  `payment_events.processed_at`, `payment_intents.status=succeeded` and the
+  committed `topup` ledger entry in one caller-owned transaction. The payment
+  provider port, mock adapter and YooKassa adapter isolate services from
+  provider-native API shapes. `internal/service/paymentservice` now creates
+  idempotent payment intents, calls the selected provider, stores
+  `provider_payment_id` / `confirmation_url`, and returns safe DTOs. Protected
+  operator routes exist under `/billing/payment-intents`,
+  `/billing/payment-history`, `/billing/payment-intents/{id}/sync` and
+  `/billing/payment-intents/{id}/refund`; authenticated Mini App routes exist under
+  `/miniapp/payments*`. `cmd/provider-webhook` exposes
+  `POST /billing/webhooks/yookassa`, stores raw provider events in the
+  `payment_events` inbox, returns 200 quickly, then asynchronously verifies the
+  provider payment through `GetPayment`, applies the intent state machine and
+  posts idempotent ledger `topup` entries through `GrantWith`. It also
+  reconciles stale provider-backed intents. Manual refunds are admin-only,
+  full-refund MVP actions: they require an idempotency key, refuse when the
+  current credit balance cannot cover the top-up credits, and use ledger
+  adjustment entries instead of direct balance mutation. Product catalog
+  management/seed data, partial refund attribution, automatic refund webhook
+  reversal and live YooKassa smoke remain follow-up work.
 - VK inline menu navigation uses a hybrid UX: if the last bot message is the
   active menu, inline button clicks edit it through VK `messages.edit`; pressing
   the persistent lower `Показать меню` button always sends a fresh menu at the

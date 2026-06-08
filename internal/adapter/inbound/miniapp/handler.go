@@ -17,6 +17,7 @@ import (
 	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/service/billingservice"
 	"vk-ai-aggregator/internal/service/joborchestrator"
+	"vk-ai-aggregator/internal/service/paymentservice"
 )
 
 type contextKey int
@@ -62,6 +63,7 @@ type Deps struct {
 	Objects       ObjectReader
 	Billing       *billingservice.Service
 	BillingRepo   domain.BillingRepository
+	Payment       *paymentservice.Service
 	Orchestrator  *joborchestrator.Orchestrator
 	Logger        *slog.Logger
 }
@@ -93,6 +95,9 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /miniapp/jobs", h.auth(h.listJobs))
 	mux.HandleFunc("GET /miniapp/jobs/{id}", h.auth(h.getJob))
 	mux.HandleFunc("GET /miniapp/balance", h.auth(h.getBalance))
+	mux.HandleFunc("POST /miniapp/payments/intents", h.auth(h.rateLimitMiniApp("miniapp_payment", h.createPaymentIntent)))
+	mux.HandleFunc("GET /miniapp/payments", h.auth(h.listPayments))
+	mux.HandleFunc("GET /miniapp/payments/{id}", h.auth(h.getPaymentIntent))
 	mux.HandleFunc("POST /miniapp/artifacts", h.auth(h.rateLimitMiniApp("miniapp_artifact", h.createArtifact)))
 	mux.HandleFunc("GET /miniapp/artifacts/{id}", h.auth(h.getArtifact))
 	return mux
@@ -728,6 +733,152 @@ func (h *Handler) getBalance(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, BalanceDTO{BalanceCredits: acc.BalanceCached})
+}
+
+func (h *Handler) createPaymentIntent(w http.ResponseWriter, r *http.Request) {
+	vkUserID, ok := vkUserIDFromCtx(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	if h.deps.Payment == nil {
+		writeError(w, http.StatusServiceUnavailable, "service unavailable")
+		return
+	}
+	clientKey := strings.TrimSpace(r.Header.Get("X-Idempotency-Key"))
+	if clientKey == "" {
+		writeError(w, http.StatusBadRequest, "X-Idempotency-Key is required")
+		return
+	}
+
+	body, err := io.ReadAll(io.LimitReader(r.Body, 16<<10))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "cannot read body")
+		return
+	}
+	var req CreatePaymentIntentRequest
+	if err := json.Unmarshal(body, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+
+	user, err := h.ensureUser(r.Context(), vkUserID)
+	if err != nil {
+		h.logger.Error("miniapp: ensure user failed", slog.String("error", err.Error()))
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	result, err := h.deps.Payment.CreateIntent(r.Context(), paymentservice.CreateIntentInput{
+		UserID:         user.ID,
+		ProductCode:    req.ProductCode,
+		ReceiptEmail:   req.ReceiptEmail,
+		ReceiptPhone:   req.ReceiptPhone,
+		IdempotencyKey: "miniapp_payment:" + strconv.FormatInt(vkUserID, 10) + ":" + clientKey,
+		ReturnURL:      req.ReturnURL,
+		Source:         "vk_miniapp",
+	})
+	if err != nil {
+		h.writePaymentError(w, err)
+		return
+	}
+	status := http.StatusCreated
+	if !result.Created {
+		status = http.StatusOK
+	}
+	writeJSON(w, status, newPaymentIntentDTO(result.Intent))
+}
+
+func (h *Handler) listPayments(w http.ResponseWriter, r *http.Request) {
+	vkUserID, ok := vkUserIDFromCtx(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	if h.deps.Payment == nil {
+		writeError(w, http.StatusServiceUnavailable, "service unavailable")
+		return
+	}
+	user, err := h.deps.Users.GetByVKUserID(r.Context(), vkUserID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			writeJSON(w, http.StatusOK, listResponse[PaymentIntentDTO]{
+				Items:      []PaymentIntentDTO{},
+				Pagination: pagination{Limit: defaultLimit, Offset: 0, Count: 0},
+			})
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	limit, offset := parsePagination(r)
+	intents, err := h.deps.Payment.ListIntentsByUser(r.Context(), user.ID, limit+1, offset)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	hasMore := len(intents) > limit
+	if hasMore {
+		intents = intents[:limit]
+	}
+	items := make([]PaymentIntentDTO, 0, len(intents))
+	for _, intent := range intents {
+		items = append(items, newPaymentIntentDTO(intent))
+	}
+	writeJSON(w, http.StatusOK, listResponse[PaymentIntentDTO]{
+		Items:      items,
+		Pagination: pagination{Limit: limit, Offset: offset, Count: len(items), HasMore: hasMore},
+	})
+}
+
+func (h *Handler) getPaymentIntent(w http.ResponseWriter, r *http.Request) {
+	vkUserID, ok := vkUserIDFromCtx(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	if h.deps.Payment == nil {
+		writeError(w, http.StatusServiceUnavailable, "service unavailable")
+		return
+	}
+	intentID, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid payment id")
+		return
+	}
+	user, err := h.deps.Users.GetByVKUserID(r.Context(), vkUserID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	intent, err := h.deps.Payment.GetIntent(r.Context(), user.ID, intentID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	writeJSON(w, http.StatusOK, newPaymentIntentDTO(intent))
+}
+
+func (h *Handler) writePaymentError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, paymentservice.ErrInvalidInput),
+		errors.Is(err, paymentservice.ErrReceiptContactRequired):
+		writeError(w, http.StatusBadRequest, "invalid payment request")
+	case errors.Is(err, domain.ErrNotFound):
+		writeError(w, http.StatusNotFound, "not found")
+	case errors.Is(err, paymentservice.ErrForbidden):
+		writeError(w, http.StatusForbidden, "forbidden")
+	default:
+		h.logger.Error("miniapp: payment provider failed", slog.String("error", err.Error()))
+		writeError(w, http.StatusBadGateway, "payment provider error")
+	}
 }
 
 func (h *Handler) getArtifact(w http.ResponseWriter, r *http.Request) {

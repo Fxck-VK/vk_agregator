@@ -12,6 +12,7 @@ import (
 	"vk-ai-aggregator/internal/platform/ratelimit"
 	"vk-ai-aggregator/internal/service/billingservice"
 	"vk-ai-aggregator/internal/service/joborchestrator"
+	"vk-ai-aggregator/internal/service/paymentservice"
 )
 
 // Deps are shared backend-core collaborators required by the Mini App surface.
@@ -23,6 +24,7 @@ type Deps struct {
 	Moderation    domain.ModerationResultRepository
 	Billing       *billingservice.Service
 	BillingRepo   domain.BillingRepository
+	Payment       *paymentservice.Service
 	Orchestrator  *joborchestrator.Orchestrator
 	Logger        *slog.Logger
 }
@@ -67,6 +69,7 @@ func NewHandler(ctx context.Context, cfg config.Config, deps Deps) *miniappapi.H
 		Objects:       objectStore,
 		Billing:       deps.Billing,
 		BillingRepo:   deps.BillingRepo,
+		Payment:       deps.Payment,
 		Orchestrator:  deps.Orchestrator,
 		Logger:        logger,
 	})

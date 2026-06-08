@@ -139,3 +139,57 @@ func TestReserveRelease(t *testing.T) {
 		t.Fatalf("reserve after release: %v", err)
 	}
 }
+
+func TestGrantWithTopupIsIdempotent(t *testing.T) {
+	repo := memory.NewBillingRepo()
+	svc := billingservice.New(repo)
+	ctx := context.Background()
+	userID := uuid.New()
+	key := "topup:yookassa:pay_123"
+
+	if err := svc.GrantWith(ctx, repo, userID, 150, key, "yookassa top-up"); err != nil {
+		t.Fatalf("grant with: %v", err)
+	}
+	acc, err := svc.EnsureAccount(ctx, userID)
+	if err != nil {
+		t.Fatalf("ensure account: %v", err)
+	}
+	if acc.BalanceCached != billingservice.DefaultStartingBalance+150 {
+		t.Fatalf("balance after grant = %d, want %d", acc.BalanceCached, billingservice.DefaultStartingBalance+150)
+	}
+
+	if err := svc.GrantWith(ctx, repo, userID, 150, key, "duplicate yookassa top-up"); err != nil {
+		t.Fatalf("duplicate grant should be a no-op: %v", err)
+	}
+	acc, err = svc.EnsureAccount(ctx, userID)
+	if err != nil {
+		t.Fatalf("ensure account after duplicate: %v", err)
+	}
+	if acc.BalanceCached != billingservice.DefaultStartingBalance+150 {
+		t.Fatalf("balance after duplicate = %d, want %d", acc.BalanceCached, billingservice.DefaultStartingBalance+150)
+	}
+
+	entries, err := repo.ListEntries(ctx, acc.ID, 10, 0)
+	if err != nil {
+		t.Fatalf("list entries: %v", err)
+	}
+	var topups int
+	for _, entry := range entries {
+		if entry.IdempotencyKey == key && entry.Type == domain.LedgerTopup {
+			topups++
+		}
+	}
+	if topups != 1 {
+		t.Fatalf("topup entries with key %q = %d, want 1", key, topups)
+	}
+}
+
+func TestGrantWithRequiresIdempotencyKey(t *testing.T) {
+	repo := memory.NewBillingRepo()
+	svc := billingservice.New(repo)
+
+	err := svc.GrantWith(context.Background(), repo, uuid.New(), 10, "", "missing key")
+	if err == nil {
+		t.Fatal("expected missing idempotency key error")
+	}
+}

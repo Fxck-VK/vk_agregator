@@ -49,9 +49,10 @@ Copy-Item .env.example .env
 notepad .env
 ```
 
-`cmd/api`, `cmd/worker`, and `cmd/migrate` load `.env` automatically when
-started from the repository root. OS/CI environment variables override values
-from `.env`. The real `.env` is ignored by Git; commit only `.env.example`.
+`cmd/api`, `cmd/worker`, `cmd/provider-webhook`, and `cmd/migrate` load `.env`
+automatically when started from the repository root. OS/CI environment
+variables override values from `.env`. The real `.env` is ignored by Git;
+commit only `.env.example`.
 
 Override these values when needed:
 
@@ -93,6 +94,18 @@ Override these values when needed:
 | `VK_BOT_TUNNEL_NAME` | `neiirohub-vk-bot` | Cloudflare named tunnel used by `start-bot.ps1 -TunnelMode named` |
 | `VK_BOT_TUNNEL_HOSTNAME` | `vk.neiirohub.ru` | Stable public hostname for the local VK Callback API |
 | `VK_BOT_TUNNEL_CONFIG` | `.runtime/vk-bot/cloudflared/config.yml` | Optional override for named tunnel config path |
+| `PAYMENT_PROVIDER` | `mock` | Money provider for payment intent creation: `mock` or `yookassa`; `mock` uses the local in-memory adapter, `yookassa` uses the real YooKassa HTTP adapter |
+| `YOOKASSA_SHOP_ID` | `` | YooKassa shop id; required when `PAYMENT_PROVIDER=yookassa` |
+| `YOOKASSA_SECRET_KEY` | `` | YooKassa API secret; required when `PAYMENT_PROVIDER=yookassa`; never commit/log it |
+| `YOOKASSA_BASE_URL` | `https://api.yookassa.ru/v3` | YooKassa API root |
+| `YOOKASSA_RETURN_URL` | `https://neiirohub.ru/payments/return` | User return URL after provider redirect; redirect is not payment proof |
+| `YOOKASSA_WEBHOOK_IP_ALLOWLIST_ENABLED` | `true` | Operational guard for YooKassa webhook ingress; webhook processing still verifies provider state through `GetPayment` |
+| `PAYMENT_WEBHOOK_ADDR` | `:8082` | Dedicated `cmd/provider-webhook` listen address for payment provider webhooks |
+| `PAYMENT_WEBHOOK_POLL_INTERVAL` | `5s` | Async payment webhook inbox processor interval |
+| `PAYMENT_WEBHOOK_BATCH_LIMIT` | `20` | Max unprocessed payment webhook events handled per processor tick |
+| `PAYMENT_RECONCILIATION_INTERVAL` | `1m` | Stale provider-backed payment-intent reconciliation cadence in `cmd/provider-webhook` |
+| `PAYMENT_RECONCILIATION_LIMIT` | `100` | Max stale intents checked per reconciliation tick |
+| `PAYMENT_RECONCILIATION_STALE_AFTER` | `30s` | Minimum intent age before reconciliation checks provider state |
 | `PROVIDER` | `mock` | Primary provider adapter: `mock`, `openai`, or `deepinfra` |
 | `PROVIDER_CHAIN` | value of `PROVIDER` | Comma-separated router/fallback chain, e.g. `openai,mock` or `deepinfra,mock` |
 | `IMAGE_PROVIDER` | `` | Preferred provider for image jobs: current image-capable adapters are `mock`, `openai` and `deepinfra`; keeps `PROVIDER_CHAIN` as fallback |
@@ -151,13 +164,20 @@ Override these values when needed:
 
 > Production note: set `APP_ENV=production`; the API then **refuses to start**
 > unless `VK_SECRET`, `ADMIN_TOKEN`, `VK_APP_SECRET`, and a non-default `VK_CONFIRMATION_TOKEN`
-> are set (fail-closed, `AUDIT.md` S1). Both `cmd/api` and `cmd/worker` run the
-> same validation. `PROVIDER=openai`, `IMAGE_PROVIDER=openai`,
+> are set (fail-closed, `AUDIT.md` S1). `cmd/api`, `cmd/worker` and
+> `cmd/provider-webhook` run the same validation. `PROVIDER=openai`, `IMAGE_PROVIDER=openai`,
 > `PROVIDER_CHAIN` containing `openai`, `MODERATION_PROVIDER=openai`, or
 > `ARTIFACT_SCANNER=openai` require `OPENAI_API_KEY`; `PROVIDER=deepinfra`,
 > `IMAGE_PROVIDER=deepinfra`, or `PROVIDER_CHAIN` containing `deepinfra`
 > requires `DEEPINFRA_API_KEY`; `VK_DELIVERY_MODE=real` requires
-> `VK_ACCESS_TOKEN` in any environment.
+> `VK_ACCESS_TOKEN` in any environment. `PAYMENT_PROVIDER=yookassa` requires
+> `YOOKASSA_SHOP_ID`, `YOOKASSA_SECRET_KEY` and `YOOKASSA_RETURN_URL`. The
+> provider factory supports `mock` and `yookassa`; real YooKassa requests can
+> create payment intents and `cmd/provider-webhook` can process trusted payment
+> success into ledger top-ups and reconcile stale provider-backed intents.
+> User-facing top-up should still stay hidden until product catalog
+> seed/management, partial refund attribution and live YooKassa smoke are
+> complete.
 
 ### Hardening features (post-release)
 
@@ -176,6 +196,36 @@ Override these values when needed:
 - **Maintenance**: worker runs cleanup for expired `idempotency_keys`, old
   terminal `outbox_events`, Redis Stream trimming, and billing reconciliation.
   Billing mismatch count is exported as `vkagg_billing_mismatches`.
+- **Payment foundation**: migration `000009_payments` adds payment products,
+  intents, webhook inbox events and refunds for VK Bot / Mini App top-up flows.
+  `billingservice.GrantWith(ctx, repo, ...)` provides the tx-aware top-up grant
+  primitive for payment webhook/reconciliation processing. `domain.PaymentProvider`,
+  `internal/adapter/payment/mock`, `internal/adapter/payment/yookassa` and the
+  `PAYMENT_PROVIDER` factory provide a testable provider boundary. YooKassa
+  adapter support covers Basic Auth, short HTTP idempotency headers, amount
+  conversion, redirect payments with `capture: true`, 54-FZ receipt data,
+  refunds and webhook normalization. `internal/service/paymentservice` creates
+  idempotent payment intents, stores provider payment state and returns safe
+  DTOs. Operator routes under `/billing/payment-intents`,
+  `/billing/payment-history`, `/billing/payment-intents/{id}/sync` and
+  `/billing/payment-intents/{id}/refund` are protected by `ADMIN_TOKEN` and
+  fail closed if auth is missing. Mini App routes under `/miniapp/payments*` use verified VK
+  launch params as the trusted user context and require `X-Idempotency-Key` for
+  creation. `cmd/provider-webhook` exposes
+  `POST /billing/webhooks/yookassa`, stores raw provider events in
+  `payment_events`, returns 200 quickly, then asynchronously verifies current
+  provider state through `GetPayment` before applying the payment intent state
+  machine and `billingservice.GrantWith`. It also reconciles stale
+  `provider_pending` / `waiting_for_user` intents through the same verified
+  path. Manual refunds are admin-only full-refund MVP actions: require
+  `X-Idempotency-Key`, refuse if the current credit balance cannot cover the
+  top-up credits, and post ledger adjustments instead of direct balance
+  mutation. Refund webhook events are deduped and verified, but automatic
+  balance reversal and partial refund attribution remain future policy work.
+  Payment metrics include `payments_created_total`,
+  `payments_succeeded_total`, `payments_canceled_total`,
+  `payment_webhooks_total`, `payment_topups_total` and
+  `payment_reconciliation_mismatches`.
 - **Artifact scanning**: `ARTIFACT_SCANNER=openai` scans text/image artifact
   bytes before storage; video scan/transcode remains a media-pipeline follow-up.
 - **SSRF**: artifact downloader blocks private/loopback/link-local hosts and
@@ -392,6 +442,26 @@ VK_DELIVERY_MODE=real VK_ACCESS_TOKEN=... go run ./cmd/worker
 
 # Real output moderation and text/image artifact scanning.
 MODERATION_PROVIDER=openai ARTIFACT_SCANNER=openai OPENAI_API_KEY=... go run ./cmd/worker
+
+# YooKassa payment webhook intake and async payment_events processing.
+PAYMENT_PROVIDER=yookassa go run ./cmd/provider-webhook
+```
+
+Protected operator payment actions:
+
+```bash
+# Sync one intent with the provider state. This may post a top-up ledger entry
+# only after provider GetPayment verifies paid/captured success.
+curl -X POST http://localhost:8080/billing/payment-intents/<intent_id>/sync \
+  -H "X-Admin-Token: $ADMIN_TOKEN"
+
+# Manual full refund MVP. Requires a caller idempotency key and refuses when the
+# current credit balance cannot cover the purchased credits.
+curl -X POST http://localhost:8080/billing/payment-intents/<intent_id>/refund \
+  -H "X-Admin-Token: $ADMIN_TOKEN" \
+  -H "X-Idempotency-Key: operator-ticket-123" \
+  -H "Content-Type: application/json" \
+  -d '{"reason":"manual operator refund"}'
 ```
 
 Text provider adapters add an internal instruction to the user's prompt: answer

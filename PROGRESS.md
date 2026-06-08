@@ -1,5 +1,275 @@
 # PROGRESS
 
+## Payment top-up foundation chapter 7 (2026-06-08)
+
+Status: **completed (reconciliation, manual operator actions and metrics)**.
+
+What changed:
+
+- Extended the payment repository contract with stale-intent reconciliation and
+  refund persistence methods, implemented in Postgres and memory repositories.
+- Added payment reconciliation in `paymentservice.WebhookProcessor` and
+  `cmd/provider-webhook`: stale `provider_pending` / `waiting_for_user`
+  provider-backed intents are checked through `domain.PaymentProvider.GetPayment`
+  and applied through the same state-machine / ledger path as webhooks.
+- Added protected operator actions under `/billing/*`:
+  `POST /billing/payment-intents/{id}/sync` and
+  `POST /billing/payment-intents/{id}/refund`.
+- Added manual full-refund MVP behavior: refunds require `X-Idempotency-Key`,
+  operate only on `succeeded` intents, refuse when current credit balance cannot
+  cover the top-up credits, create refund rows, post ledger debits and use
+  provider refunds without direct balance mutation.
+- Added payment metrics:
+  `payments_created_total`, `payments_succeeded_total`,
+  `payments_canceled_total`, `payment_webhooks_total`,
+  `payment_topups_total` and `payment_reconciliation_mismatches`.
+- Added reconciliation env knobs:
+  `PAYMENT_RECONCILIATION_INTERVAL`, `PAYMENT_RECONCILIATION_LIMIT` and
+  `PAYMENT_RECONCILIATION_STALE_AFTER`.
+
+Security / architecture:
+
+- Reconciliation does not trust local status. It verifies provider state through
+  `GetPayment` before applying success/cancel state.
+- Manual refunds are admin-only and conservative. The MVP does not refund money
+  for credits that appear already spent and does not implement partial/automatic
+  refund attribution until lot/FIFO tracking exists.
+- Provider HTTP idempotency keys remain separate from internal ledger
+  idempotency keys.
+- Mini App and VK bot surfaces still do not call payment providers and still do
+  not mutate balances.
+
+Checks:
+
+- `go test ./internal/service/paymentservice ./internal/adapter/inbound/billing
+  ./internal/adapter/storage/memory ./internal/adapter/storage/postgres
+  ./internal/platform/config ./cmd/provider-webhook ./cmd/api
+  ./internal/app/api` - exit 0.
+- `go test ./...` - exit 0.
+- `go build ./...` - exit 0.
+- `go vet ./...` - exit 0.
+- `gofmt -l .` - clean.
+- `git grep -nE "^(<<<<<<<|=======|>>>>>>>)"` - clean.
+- `git diff --check` - exit 0; only Windows LF/CRLF normalization warnings.
+
+## Payment top-up foundation chapter 6 (2026-06-08)
+
+Status: **completed (YooKassa webhook inbox and async top-up processing)**.
+
+What changed:
+
+- Added `cmd/provider-webhook`, a dedicated HTTP entrypoint for payment
+  provider webhooks. It mounts `POST /billing/webhooks/yookassa`, `/health`,
+  `/healthz` and `/metrics`.
+- The webhook endpoint parses the raw provider body through
+  `domain.PaymentProvider.ParseWebhook`, computes/stores the provider dedup key
+  in `payment_events`, accepts duplicate retries as no-op and returns `200`
+  quickly without running payment business logic inline.
+- Added payment inbox repository methods for Postgres and memory:
+  `CreateEvent`, `GetEventByID`, `ListUnprocessedEvents`,
+  `MarkEventProcessed`, `GetIntentByProviderPaymentID` and
+  optimistic `UpdateIntentStatus`.
+- Added `paymentservice.WebhookProcessor`, which asynchronously reads
+  unprocessed inbox events, verifies current provider state through
+  `GetPayment`, applies the payment intent state machine, writes idempotent
+  `topup:<provider>:<provider_payment_id>` ledger entries through
+  `billingservice.GrantWith` and marks `processed_at`.
+- Added `PAYMENT_WEBHOOK_ADDR`, `PAYMENT_WEBHOOK_POLL_INTERVAL` and
+  `PAYMENT_WEBHOOK_BATCH_LIMIT` runtime config.
+
+Security / architecture:
+
+- The webhook endpoint is not protected by VK launch auth or Mini App auth.
+  It is a provider callback surface and is rate-limited separately.
+- The processor does not trust webhook body success. It verifies payment state,
+  amount and currency through provider `GetPayment` before posting a ledger
+  top-up.
+- Duplicate and retried webhooks are safe: inbox dedup prevents duplicate raw
+  rows, and `GrantWith` makes ledger top-up idempotent even if a second
+  verified provider event reaches processing.
+- Refund webhook dedup keys include `provider_refund_id`, so multiple refunds
+  for the same payment do not collapse into one event.
+- A late `payment.canceled` / failed provider state cannot roll back a
+  `succeeded` intent; the stale verified event is marked processed as no-op.
+- Refund events are inboxed, deduped and provider-verified, but automatic
+  balance reversal is intentionally not implemented until refund policy for
+  spent credits exists.
+
+Checks:
+
+- Focused payment webhook tests were added; see the task final report for
+  commands run.
+
+## Payment top-up foundation chapter 5 (2026-06-08)
+
+Status: **completed (payment lifecycle service and safe APIs only)**.
+
+What changed:
+
+- Added `internal/service/paymentservice`, which creates idempotent payment
+  intents from an active `payment_products` catalog row, calls the configured
+  `domain.PaymentProvider`, stores `provider_payment_id` / `confirmation_url`
+  and returns safe payment DTOs.
+- Added Postgres and memory implementations of `domain.PaymentRepository` for
+  payment products and payment intents.
+- Added protected operator endpoints:
+  `POST /billing/payment-intents`, `GET /billing/payment-intents/{id}` and
+  `GET /billing/payment-history`.
+- Added authenticated Mini App endpoints:
+  `POST /miniapp/payments/intents`, `GET /miniapp/payments` and
+  `GET /miniapp/payments/{id}`.
+- Wired the payment service through `internal/app/api`, `cmd/api` and
+  `internal/app/miniapp`.
+
+Security / architecture:
+
+- `/billing/*` payment routes fail closed when `ADMIN_TOKEN` is empty or the
+  `X-Admin-Token` header does not match.
+- Mini App payment routes derive `user_id` from verified VK launch params /
+  trusted dev auth, never from public JSON body input.
+- Intent creation requires `X-Idempotency-Key`; replay returns the existing
+  intent instead of creating a duplicate provider payment.
+- User-facing Mini App DTOs do not expose provider-native payloads,
+  `provider_payment_id`, auth details or YooKassa raw response bodies.
+- This chapter does not process provider webhooks, does not reconcile payments
+  and does not append committed `topup` ledger entries. Payment success still
+  must come from trusted provider confirmation in a later chapter.
+
+Checks:
+
+- Focused payment service / API tests were added; see the task final report for
+  commands run.
+
+## Payment top-up foundation chapter 4 (2026-06-08)
+
+Status: **completed (YooKassa adapter only)**.
+
+### What changed
+
+- Added `internal/adapter/payment/yookassa`, a real YooKassa implementation of
+  `domain.PaymentProvider`.
+- `CreatePayment` sends YooKassa redirect payments with Basic Auth,
+  `Idempotence-Key`, `capture: true`, kopeck-to-`"100.00"` amount conversion,
+  54-FZ receipt customer contact and one receipt item.
+- `GetPayment`, `CancelPayment`, `CreateRefund` and `ParseWebhook` normalize
+  YooKassa payment/refund/webhook shapes back into domain DTOs.
+- `internal/adapter/payment.NewProvider(cfg)` now returns the YooKassa adapter
+  when `PAYMENT_PROVIDER=yookassa`.
+- `CreatePaymentInput` now carries optional receipt item hints:
+  `VATCode`, `PaymentSubject` and `PaymentMode`.
+
+### Guardrails
+
+- YooKassa HTTP `Idempotence-Key` remains separate from internal ledger
+  idempotency keys and is validated at <=64 characters.
+- Adapter tests use `httptest.Server`; no real YooKassa credentials or network
+  calls are required.
+- This chapter still does not expose payment APIs, process YooKassa webhooks,
+  run reconciliation or commit ledger top-ups. User-facing top-up must stay
+  disabled until the trusted webhook-to-`GrantWith` transaction exists.
+
+### Checks
+
+- YooKassa adapter/factory tests were added; see the task final report for
+  commands run.
+
+## Payment top-up foundation chapter 3 (2026-06-08)
+
+Status: **completed (provider port, mock adapter and factory foundation)**.
+
+### What changed
+
+- Added `domain.PaymentProvider` with normalized methods:
+  `CreatePayment`, `GetPayment`, `CancelPayment`, `CreateRefund` and
+  `ParseWebhook`.
+- Added provider-agnostic DTOs for payment creation, provider payment state,
+  refund creation/result and normalized webhook events.
+- Added `internal/adapter/payment/mock`, an in-memory adapter for local
+  development and tests. It supports idempotent payment creation, payment status
+  simulation, cancellation, idempotent refunds and mock webhook parsing.
+- Added `internal/adapter/payment.NewProvider(cfg)` factory keyed by
+  `PAYMENT_PROVIDER`.
+
+### Guardrails
+
+- Payment services can now depend on `domain.PaymentProvider` instead of
+  provider-native YooKassa HTTP/JSON shapes.
+- Chapter 3 only added the port, mock adapter and factory foundation; Chapter 4
+  later wired the real YooKassa HTTP adapter.
+- No payment service, payment API, webhook processing or ledger top-up
+  integration was added in this chapter.
+
+### Checks
+
+- Mock/factory tests were added; see the task final report for commands run.
+
+## Payment top-up foundation chapter 2 (2026-06-08)
+
+Status: **completed (tx-aware billing grant primitive only)**.
+
+### What changed
+
+- Added `billingservice.GrantWith(ctx, repo, userID, amount, idempotencyKey,
+  reason)`.
+- Existing `Grant` now delegates to `GrantWith(ctx, s.repo, ...)`, preserving
+  referral/signup reward behavior and public call compatibility.
+- `GrantWith` uses `ensureAccountWith(ctx, repo, ...)`, so future payment
+  webhook processing can use a transaction-bound `BillingRepository`.
+- Duplicate idempotency keys still return success/no-op. This is the required
+  behavior for keys such as `topup:yookassa:<provider_payment_id>` when
+  YooKassa retries a webhook.
+
+### Guardrails
+
+- This chapter does not implement payment event/status repositories or webhook
+  processing yet.
+- The intended future transaction boundary is:
+  `payment_events.processed_at` + `payment_intents.status=succeeded` +
+  committed `ledger_entries` `topup` through `GrantWith`.
+- Balance remains append-only ledger based; no direct mutation path was added.
+
+### Checks
+
+- Focused billing tests were added; see the task final report for commands run.
+
+## Payment top-up foundation chapter 1 (2026-06-08)
+
+Status: **completed (domain/migration/config only)**.
+
+### What changed
+
+- Added payment domain types in `internal/domain/payment.go`:
+  `PaymentProduct`, `PaymentIntent`, `PaymentEvent`, `PaymentRefund`,
+  `PaymentProviderCode`, refund statuses and an explicit
+  `PaymentIntentStatus` state machine.
+- Added migration `000009_payments` with `payment_products`,
+  `payment_intents`, `payment_events` and `payment_refunds`.
+- Payment intent rows snapshot `amount`, `credits`, `product_id` and
+  `price_version`; later webhook processing must not recalculate old intents
+  from the current product catalog.
+- Receipt contacts are first-class columns (`receipt_email`, `receipt_phone`)
+  with a DB constraint requiring at least one contact for 54-FZ receipt support.
+- Webhook inbox rows have a unique `dedup_key` plus `provider_payment_id` and
+  `provider_refund_id`, so refund events can deduplicate by refund id rather
+  than collapsing multiple refunds for one payment.
+- Added payment env config: `PAYMENT_PROVIDER`, `YOOKASSA_SHOP_ID`,
+  `YOOKASSA_SECRET_KEY`, `YOOKASSA_BASE_URL`, `YOOKASSA_RETURN_URL`,
+  `YOOKASSA_WEBHOOK_IP_ALLOWLIST_ENABLED`.
+
+### Guardrails
+
+- No balance mutation, no payment API, no YooKassa HTTP adapter and no webhook
+  processing were added in this chapter.
+- `PAYMENT_PROVIDER=yookassa` fails validation without shop id, secret key and
+  return URL. The committed `.env.example` contains placeholders only.
+- The future webhook processor must use `billingservice.GrantWith(ctx, txRepo,
+  ...)` to append committed `topup` ledger entries after trusted provider
+  confirmation.
+
+### Checks
+
+- Domain/config tests were added; see the task final report for commands run.
+
 ## VK welcome banner
 
 Status: **configured locally for the main VK bot panel**.
@@ -1527,13 +1797,15 @@ Status: **completed**.
 
 ### Backend dependency
 
-- Mini App has `GET /miniapp/balance`, but no read-only payment or ledger
-  history endpoint. Settings shows a safe placeholder and tracks this as a
-  separate backend follow-up.
-- Mini App has no top-up/payment-intent endpoint yet. The Settings top-up button
-  does not mutate balance locally; the documented backend follow-up is a shared
-  Mini App/VK bot payment-intent flow that appends committed `topup` ledger
-  entries only after trusted payment confirmation.
+- At the time of PR-16.4, Mini App had only `GET /miniapp/balance` and Settings
+  used a safe payment-history placeholder.
+- Payment foundation chapter 5 later added authenticated
+  `POST /miniapp/payments/intents`, `GET /miniapp/payments` and
+  `GET /miniapp/payments/{id}` backend routes. Settings/Profile UI wiring can
+  now target these endpoints when top-up UX is enabled.
+- The Settings top-up button must still not mutate balance locally. Committed
+  `topup` ledger entries remain blocked on trusted provider webhook processing
+  and reconciliation.
 
 ### Checks
 

@@ -92,6 +92,20 @@ type Config struct {
 	// MaxJobCost rejects any job whose estimate exceeds this cap (0 = no cap).
 	MaxJobCost int64
 
+	// PaymentProvider selects the money provider for balance top-ups.
+	PaymentProvider                   string
+	YooKassaShopID                    string
+	YooKassaSecretKey                 string
+	YooKassaBaseURL                   string
+	YooKassaReturnURL                 string
+	YooKassaWebhookIPAllowlistEnabled bool
+	PaymentWebhookAddr                string
+	PaymentWebhookPollInterval        time.Duration
+	PaymentWebhookBatchLimit          int
+	PaymentReconciliationInterval     time.Duration
+	PaymentReconciliationLimit        int
+	PaymentReconciliationStaleAfter   time.Duration
+
 	// Provider selects the primary generation provider. ProviderChain, when set,
 	// enables router/fallback selection across multiple providers.
 	Provider      string
@@ -271,6 +285,9 @@ func (c Config) Validate() error {
 	if provider := strings.ToLower(strings.TrimSpace(c.VideoProvider)); provider != "" && !knownProvider(provider) {
 		return fmt.Errorf("config: VIDEO_PROVIDER must be one of mock, openai, deepinfra")
 	}
+	if provider := strings.ToLower(strings.TrimSpace(c.PaymentProvider)); provider != "" && !knownPaymentProvider(provider) {
+		return fmt.Errorf("config: PAYMENT_PROVIDER must be one of mock, yookassa")
+	}
 	if c.IsProduction() {
 		if c.VKSecret == "" {
 			missing = append(missing, "VK_SECRET")
@@ -295,6 +312,17 @@ func (c Config) Validate() error {
 	}
 	if c.VKDeliveryMode == "real" && c.VKAccessToken == "" {
 		missing = append(missing, "VK_ACCESS_TOKEN")
+	}
+	if strings.EqualFold(strings.TrimSpace(c.PaymentProvider), "yookassa") {
+		if c.YooKassaShopID == "" {
+			missing = append(missing, "YOOKASSA_SHOP_ID")
+		}
+		if c.YooKassaSecretKey == "" {
+			missing = append(missing, "YOOKASSA_SECRET_KEY")
+		}
+		if c.YooKassaReturnURL == "" {
+			missing = append(missing, "YOOKASSA_RETURN_URL")
+		}
 	}
 	if len(missing) > 0 {
 		return fmt.Errorf("config: missing required production secrets: %s", strings.Join(missing, ", "))
@@ -372,6 +400,18 @@ func Load() Config {
 		PriceOverrides: envPriceMap("PRICES"),
 		MaxJobCost:     int64(envInt("MAX_JOB_COST", 0)),
 
+		PaymentProvider:                   env("PAYMENT_PROVIDER", "mock"),
+		YooKassaShopID:                    env("YOOKASSA_SHOP_ID", ""),
+		YooKassaSecretKey:                 env("YOOKASSA_SECRET_KEY", ""),
+		YooKassaBaseURL:                   env("YOOKASSA_BASE_URL", "https://api.yookassa.ru/v3"),
+		YooKassaReturnURL:                 env("YOOKASSA_RETURN_URL", ""),
+		YooKassaWebhookIPAllowlistEnabled: envBool("YOOKASSA_WEBHOOK_IP_ALLOWLIST_ENABLED", true),
+		PaymentWebhookAddr:                env("PAYMENT_WEBHOOK_ADDR", ":8082"),
+		PaymentWebhookPollInterval:        envDuration("PAYMENT_WEBHOOK_POLL_INTERVAL", 5*time.Second),
+		PaymentWebhookBatchLimit:          envInt("PAYMENT_WEBHOOK_BATCH_LIMIT", 20),
+		PaymentReconciliationInterval:     envDuration("PAYMENT_RECONCILIATION_INTERVAL", time.Minute),
+		PaymentReconciliationLimit:        envInt("PAYMENT_RECONCILIATION_LIMIT", 100),
+		PaymentReconciliationStaleAfter:   envDuration("PAYMENT_RECONCILIATION_STALE_AFTER", 30*time.Second),
 		Provider:                          provider,
 		ProviderChain:                     providerChain,
 		ImageProvider:                     env("IMAGE_PROVIDER", ""),
@@ -517,6 +557,15 @@ func (c Config) usesDeepInfra() bool {
 func knownProvider(name string) bool {
 	switch strings.ToLower(strings.TrimSpace(name)) {
 	case "", "mock", "openai", "deepinfra":
+		return true
+	default:
+		return false
+	}
+}
+
+func knownPaymentProvider(name string) bool {
+	switch strings.ToLower(strings.TrimSpace(name)) {
+	case "", "mock", "yookassa":
 		return true
 	default:
 		return false

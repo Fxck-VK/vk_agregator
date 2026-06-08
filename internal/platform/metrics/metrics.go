@@ -78,6 +78,42 @@ var (
 		Name: "vkagg_billing_mismatches",
 		Help: "Number of credit accounts whose cached balance differs from the committed ledger projection.",
 	})
+
+	// PaymentsCreated counts newly created payment intents.
+	PaymentsCreated = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "payments_created_total",
+		Help: "Payment intents created locally, labeled by provider and source.",
+	}, []string{"provider", "source"})
+
+	// PaymentsSucceeded counts intents newly moved to succeeded.
+	PaymentsSucceeded = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "payments_succeeded_total",
+		Help: "Payment intents moved to succeeded, labeled by provider and source.",
+	}, []string{"provider", "source"})
+
+	// PaymentsCanceled counts intents newly moved to canceled.
+	PaymentsCanceled = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "payments_canceled_total",
+		Help: "Payment intents moved to canceled, labeled by provider.",
+	}, []string{"provider"})
+
+	// PaymentWebhooks counts provider webhook ingestion results.
+	PaymentWebhooks = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "payment_webhooks_total",
+		Help: "Payment provider webhooks by provider, event type and ingestion result.",
+	}, []string{"provider", "event_type", "result"})
+
+	// PaymentTopups counts committed ledger top-ups from provider-confirmed payments.
+	PaymentTopups = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "payment_topups_total",
+		Help: "Committed payment top-up ledger entries by provider.",
+	}, []string{"provider"})
+
+	// PaymentReconciliationMismatches tracks latest payment reconciliation mismatches.
+	PaymentReconciliationMismatches = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "payment_reconciliation_mismatches",
+		Help: "Latest count of payment reconciliation mismatches by provider.",
+	}, []string{"provider"})
 )
 
 func init() {
@@ -86,7 +122,9 @@ func init() {
 		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
 		WebhookReceived, JobsTerminal, ModerationDecisions, DLQRouted,
 		DeliveriesSent, HTTPRequests, HTTPDuration, MaintenanceDeleted,
-		StreamTrimmed, BillingMismatches,
+		StreamTrimmed, BillingMismatches, PaymentsCreated, PaymentsSucceeded,
+		PaymentsCanceled, PaymentWebhooks, PaymentTopups,
+		PaymentReconciliationMismatches,
 	)
 }
 

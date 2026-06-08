@@ -211,6 +211,65 @@ func TestLoadReferralConfig(t *testing.T) {
 	}
 }
 
+func TestLoadPaymentConfig(t *testing.T) {
+	t.Setenv("PAYMENT_PROVIDER", "yookassa")
+	t.Setenv("YOOKASSA_SHOP_ID", "shop-1")
+	t.Setenv("YOOKASSA_SECRET_KEY", "secret")
+	t.Setenv("YOOKASSA_BASE_URL", "https://example.com/v3")
+	t.Setenv("YOOKASSA_RETURN_URL", "https://neiirohub.ru/payments/return")
+	t.Setenv("YOOKASSA_WEBHOOK_IP_ALLOWLIST_ENABLED", "false")
+	t.Setenv("PAYMENT_WEBHOOK_ADDR", ":18082")
+	t.Setenv("PAYMENT_WEBHOOK_POLL_INTERVAL", "2s")
+	t.Setenv("PAYMENT_WEBHOOK_BATCH_LIMIT", "7")
+	t.Setenv("PAYMENT_RECONCILIATION_INTERVAL", "3s")
+	t.Setenv("PAYMENT_RECONCILIATION_LIMIT", "9")
+	t.Setenv("PAYMENT_RECONCILIATION_STALE_AFTER", "4s")
+
+	cfg := config.Load()
+	if cfg.PaymentProvider != "yookassa" {
+		t.Fatalf("PaymentProvider = %q, want yookassa", cfg.PaymentProvider)
+	}
+	if cfg.YooKassaShopID != "shop-1" || cfg.YooKassaSecretKey != "secret" {
+		t.Fatalf("unexpected YooKassa credentials: shop=%q secret=%q", cfg.YooKassaShopID, cfg.YooKassaSecretKey)
+	}
+	if cfg.YooKassaBaseURL != "https://example.com/v3" || cfg.YooKassaReturnURL != "https://neiirohub.ru/payments/return" {
+		t.Fatalf("unexpected YooKassa URLs: base=%q return=%q", cfg.YooKassaBaseURL, cfg.YooKassaReturnURL)
+	}
+	if cfg.YooKassaWebhookIPAllowlistEnabled {
+		t.Fatal("YooKassaWebhookIPAllowlistEnabled = true, want false")
+	}
+	if cfg.PaymentWebhookAddr != ":18082" || cfg.PaymentWebhookPollInterval.String() != "2s" || cfg.PaymentWebhookBatchLimit != 7 {
+		t.Fatalf("unexpected webhook config: addr=%q interval=%s batch=%d", cfg.PaymentWebhookAddr, cfg.PaymentWebhookPollInterval, cfg.PaymentWebhookBatchLimit)
+	}
+	if cfg.PaymentReconciliationInterval.String() != "3s" || cfg.PaymentReconciliationLimit != 9 || cfg.PaymentReconciliationStaleAfter.String() != "4s" {
+		t.Fatalf("unexpected payment reconciliation config: interval=%s limit=%d stale_after=%s", cfg.PaymentReconciliationInterval, cfg.PaymentReconciliationLimit, cfg.PaymentReconciliationStaleAfter)
+	}
+}
+
+func TestValidatePaymentProvider(t *testing.T) {
+	cfg := config.Config{PaymentProvider: "stripe"}
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "PAYMENT_PROVIDER") {
+		t.Fatalf("expected PAYMENT_PROVIDER validation error, got %v", err)
+	}
+}
+
+func TestValidateYooKassaRequiresConfig(t *testing.T) {
+	cfg := config.Config{Env: "development", PaymentProvider: "yookassa"}
+
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("expected validation error")
+	}
+	msg := err.Error()
+	for _, want := range []string{"YOOKASSA_SHOP_ID", "YOOKASSA_SECRET_KEY", "YOOKASSA_RETURN_URL"} {
+		if !strings.Contains(msg, want) {
+			t.Fatalf("expected %s in validation error, got %q", want, msg)
+		}
+	}
+}
+
 func TestValidateVKMenuButtonMode(t *testing.T) {
 	cfg := config.Config{VKMenuButtonMode: "bad"}
 

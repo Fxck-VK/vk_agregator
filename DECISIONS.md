@@ -675,3 +675,85 @@ Authenticated Mini App list/history endpoints expose only owner-scoped
 product-level conversation data. Mini App local storage keeps only active
 thread/tab/theme UI state and legacy cache cleanup. Public model output remains
 `ChatGPT`.
+
+---
+
+## ADR-018 - Payment top-up foundation over append-only billing ledger
+
+Status: accepted
+
+Date: 2026-06-08
+
+Context: VK Bot and VK Mini App both need one shared balance top-up mechanism.
+The existing billing system is ledger based: balance is a projection of
+`ledger_entries`, and credits must not be granted directly from frontend state,
+VK handlers or Mini App handlers. YooKassa integration also requires explicit
+idempotency, receipt contacts for 54-FZ, webhook deduplication and protection
+against late/repeated provider events.
+
+Decision: introduce payment top-ups as backend-core domain state before wiring
+any user-facing payment UX:
+
+- `internal/domain/payment.go` owns payment products, intents, webhook inbox
+  events, refunds, payment provider codes and intent status transitions.
+- Migration `000009_payments` owns durable payment tables:
+  `payment_products`, `payment_intents`, `payment_events`, `payment_refunds`.
+- Payment intents snapshot product amount, credit amount and `price_version` at
+  creation time. Webhook processing must never recalculate old intents from the
+  current catalog.
+- Receipt contact data is stored as first-class intent columns
+  (`receipt_email`, `receipt_phone`) and at least one contact is required.
+- Provider webhook inbox idempotency is separate from billing ledger
+  idempotency. Provider refund ids are stored explicitly so partial refunds do
+  not collapse into one payment-level dedup key.
+- Config separates money providers from AI providers through
+  `PAYMENT_PROVIDER=mock|yookassa`; `PAYMENT_PROVIDER=yookassa` requires shop
+  id, secret key and return URL.
+- Payment services and processors depend on `domain.PaymentProvider` and
+  normalized DTOs. Provider-native YooKassa HTTP/auth/JSON details stay in
+  `internal/adapter/payment/yookassa`.
+- `internal/service/paymentservice` owns payment-intent lifecycle creation:
+  validate trusted user/product/contact input, create a local intent, call the
+  selected provider, persist provider payment id / confirmation URL, and return
+  safe DTOs without raw provider payloads.
+- Operator payment routes live under protected `/billing/*` endpoints and fail
+  closed without admin auth. Mini App payment routes live under authenticated
+  `/miniapp/payments*` endpoints and derive `user_id` from verified launch
+  params, never from public request JSON.
+- `cmd/provider-webhook` is the dedicated provider callback entrypoint. It
+  exposes `POST /billing/webhooks/yookassa`, stores raw normalized provider
+  events in `payment_events`, accepts duplicate provider retries as no-op and
+  returns `200` before async business processing.
+- Async webhook processing verifies the current payment state through
+  `domain.PaymentProvider.GetPayment`, checks amount/currency against the
+  intent snapshot, applies the payment intent state machine, calls
+  `billingservice.GrantWith(ctx, txBillingRepo, ...)` with
+  `topup:<provider>:<provider_payment_id>`, and marks
+  `payment_events.processed_at` in the same transaction.
+- Stale `provider_pending` and `waiting_for_user` provider-backed intents are
+  reconciled by `cmd/provider-webhook` through the same verified
+  `GetPayment` / state-machine / ledger path as webhook processing.
+- Protected operator actions may manually sync an intent or start a full refund
+  under `/billing/payment-intents/{id}/sync` and
+  `/billing/payment-intents/{id}/refund`. Refund requests require a caller
+  idempotency key, operate only on `succeeded` intents, refuse when the current
+  credit balance cannot cover the purchased credits and use ledger adjustment
+  entries rather than direct balance mutation.
+- Refund webhook deduplication includes `provider_refund_id`; refund balance
+  reversal remains separate from top-up grants until product policy defines
+  partial/automatic refunds and lot/FIFO attribution for already spent credits.
+- `internal/adapter/payment/mock` is the default local/test provider.
+  `internal/adapter/payment/yookassa` is the real HTTP adapter: it uses Basic
+  Auth, short provider HTTP `Idempotence-Key` headers, kopeck/string amount
+  conversion, redirect payments with `capture: true`, 54-FZ receipt data,
+  refunds and webhook normalization. Internal ledger idempotency keys remain
+  separate from YooKassa HTTP idempotency headers.
+
+Consequences: product catalog management/seed data, partial refund attribution,
+automatic refund webhook balance reversal and live YooKassa smoke remain future
+chapters. Payment intent APIs may create provider payment links, but redirects
+themselves do not prove payment success and must not grant credits.
+`billingservice.GrantWith(ctx, txRepo, ...)` is the tx-aware primitive for
+appending a committed `topup` ledger entry atomically with processed payment
+event/status updates. `VK_MENU_TOP_UP_ENABLED` should stay off until product
+catalog and live payment smoke are approved.

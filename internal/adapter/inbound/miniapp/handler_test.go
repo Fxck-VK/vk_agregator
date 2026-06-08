@@ -22,10 +22,12 @@ import (
 	"github.com/google/uuid"
 
 	miniappinbound "vk-ai-aggregator/internal/adapter/inbound/miniapp"
+	paymentmock "vk-ai-aggregator/internal/adapter/payment/mock"
 	"vk-ai-aggregator/internal/adapter/storage/memory"
 	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/service/billingservice"
 	"vk-ai-aggregator/internal/service/joborchestrator"
+	"vk-ai-aggregator/internal/service/paymentservice"
 )
 
 // ---------------------------------------------------------------------------
@@ -199,6 +201,8 @@ type testFixture struct {
 	objects          *memory.ObjectStore
 	billingRepo      *memory.BillingRepo
 	billing          *billingservice.Service
+	paymentRepo      *memory.PaymentRepo
+	payment          *paymentservice.Service
 }
 
 func newTestFixture(appSecret string, limiter interface{ Allow(string) bool }) *testFixture {
@@ -213,10 +217,14 @@ func newTestFixtureWithConfig(appSecret string, limiter interface{ Allow(string)
 	moderationRepo := memory.NewModerationRepo()
 	objects := memory.NewObjectStore()
 	billingRepo := memory.NewBillingRepo()
+	paymentRepo := memory.NewPaymentRepo()
 	outboxRepo := memory.NewOutboxRepo()
 	uowMgr := memory.NewUnitOfWork(jobRepo, outboxRepo, billingRepo)
 
 	billing := billingservice.New(billingRepo)
+	payment := paymentservice.New(paymentRepo, paymentmock.New(), paymentservice.Config{
+		ReturnURL: "https://neiirohub.ru/payments/return",
+	})
 	orch := joborchestrator.New(jobRepo, uowMgr, billing, 0)
 
 	cfg := miniappinbound.Config{
@@ -238,6 +246,7 @@ func newTestFixtureWithConfig(appSecret string, limiter interface{ Allow(string)
 			Objects:       objects,
 			Billing:       billing,
 			BillingRepo:   billingRepo,
+			Payment:       payment,
 			Orchestrator:  orch,
 		},
 	)
@@ -251,6 +260,8 @@ func newTestFixtureWithConfig(appSecret string, limiter interface{ Allow(string)
 		objects:          objects,
 		billingRepo:      billingRepo,
 		billing:          billing,
+		paymentRepo:      paymentRepo,
+		payment:          payment,
 	}
 }
 
@@ -1268,6 +1279,100 @@ func TestHandler_GetBalance(t *testing.T) {
 	// New user gets the default starting balance.
 	if resp.BalanceCredits != billingservice.DefaultStartingBalance {
 		t.Fatalf("expected %d credits, got %d", billingservice.DefaultStartingBalance, resp.BalanceCredits)
+	}
+}
+
+func TestHandler_CreatePaymentIntent_IdempotentAndSafeDTO(t *testing.T) {
+	fixture := newTestFixture("", nil)
+	product := &domain.PaymentProduct{
+		Code:         "credits_100",
+		Title:        "100 credits",
+		Amount:       9900,
+		Currency:     domain.CurrencyRUB,
+		Credits:      100,
+		PriceVersion: 1,
+		IsActive:     true,
+	}
+	fixture.paymentRepo.PutProduct(product)
+	routes := fixture.handler.Routes()
+
+	body := []byte(`{"product_code":"credits_100","receipt_email":"user@example.com"}`)
+	req := httptest.NewRequest(http.MethodPost, "/miniapp/payments/intents", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Launch-Params", devLaunchParams(777))
+	req.Header.Set("X-Idempotency-Key", "pay-client-1")
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	if strings.Contains(w.Body.String(), "provider_payment_id") || strings.Contains(w.Body.String(), "user_id") {
+		t.Fatalf("miniapp payment dto leaked operator fields: %s", w.Body.String())
+	}
+	var first miniappinbound.PaymentIntentDTO
+	if err := json.Unmarshal(w.Body.Bytes(), &first); err != nil {
+		t.Fatalf("decode payment dto: %v", err)
+	}
+	if first.Status != string(domain.PaymentIntentWaitingForUser) || first.ConfirmationURL == "" || first.Credits != 100 {
+		t.Fatalf("unexpected payment dto: %+v", first)
+	}
+
+	replay := httptest.NewRequest(http.MethodPost, "/miniapp/payments/intents", bytes.NewReader(body))
+	replay.Header.Set("Content-Type", "application/json")
+	replay.Header.Set("X-Launch-Params", devLaunchParams(777))
+	replay.Header.Set("X-Idempotency-Key", "pay-client-1")
+	replayRec := httptest.NewRecorder()
+	routes.ServeHTTP(replayRec, replay)
+	if replayRec.Code != http.StatusOK {
+		t.Fatalf("expected replay 200, got %d: %s", replayRec.Code, replayRec.Body.String())
+	}
+	var second miniappinbound.PaymentIntentDTO
+	if err := json.Unmarshal(replayRec.Body.Bytes(), &second); err != nil {
+		t.Fatalf("decode replay dto: %v", err)
+	}
+	if second.ID != first.ID {
+		t.Fatalf("replay created a different intent: %s != %s", second.ID, first.ID)
+	}
+
+	listReq := httptest.NewRequest(http.MethodGet, "/miniapp/payments", nil)
+	listReq.Header.Set("X-Launch-Params", devLaunchParams(777))
+	listRec := httptest.NewRecorder()
+	routes.ServeHTTP(listRec, listReq)
+	if listRec.Code != http.StatusOK {
+		t.Fatalf("expected list 200, got %d: %s", listRec.Code, listRec.Body.String())
+	}
+	var listResp struct {
+		Items []miniappinbound.PaymentIntentDTO `json:"items"`
+	}
+	if err := json.Unmarshal(listRec.Body.Bytes(), &listResp); err != nil {
+		t.Fatalf("decode list: %v", err)
+	}
+	if len(listResp.Items) != 1 || listResp.Items[0].ID != first.ID {
+		t.Fatalf("unexpected payment list: %+v", listResp.Items)
+	}
+
+	otherReq := httptest.NewRequest(http.MethodGet, "/miniapp/payments/"+first.ID.String(), nil)
+	otherReq.Header.Set("X-Launch-Params", devLaunchParams(888))
+	otherRec := httptest.NewRecorder()
+	routes.ServeHTTP(otherRec, otherReq)
+	if otherRec.Code != http.StatusNotFound {
+		t.Fatalf("expected other user 404, got %d: %s", otherRec.Code, otherRec.Body.String())
+	}
+}
+
+func TestHandler_CreatePaymentIntentRequiresClientIdempotencyKey(t *testing.T) {
+	fixture := newTestFixture("", nil)
+	fixture.paymentRepo.PutProduct(&domain.PaymentProduct{
+		Code: "credits_100", Title: "100 credits", Amount: 9900,
+		Currency: domain.CurrencyRUB, Credits: 100, PriceVersion: 1, IsActive: true,
+	})
+	req := httptest.NewRequest(http.MethodPost, "/miniapp/payments/intents", bytes.NewReader([]byte(`{"product_code":"credits_100","receipt_email":"user@example.com"}`)))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Launch-Params", devLaunchParams(777))
+	rec := httptest.NewRecorder()
+	fixture.handler.Routes().ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 without idempotency key, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 

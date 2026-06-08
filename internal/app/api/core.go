@@ -2,14 +2,19 @@
 package api
 
 import (
+	"context"
+
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	paymentadapter "vk-ai-aggregator/internal/adapter/payment"
 	"vk-ai-aggregator/internal/adapter/storage/postgres"
 	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/platform/config"
 	"vk-ai-aggregator/internal/service/billingservice"
 	"vk-ai-aggregator/internal/service/commandrouter"
 	"vk-ai-aggregator/internal/service/joborchestrator"
+	"vk-ai-aggregator/internal/service/paymentservice"
 )
 
 // SharedCore groups backend-core collaborators shared by app surfaces.
@@ -21,21 +26,38 @@ type SharedCore struct {
 	Idempotency   domain.IdempotencyRepository
 	Deliveries    domain.DeliveryRepository
 	BillingRepo   domain.BillingRepository
+	Payments      domain.PaymentRepository
 	Referrals     domain.ReferralRepository
 	Artifacts     domain.ArtifactRepository
 	Moderation    domain.ModerationResultRepository
 	Conversations domain.ConversationRepository
 	Billing       *billingservice.Service
+	Payment       *paymentservice.Service
+	PaymentOps    *paymentservice.WebhookProcessor
 	Orchestrator  *joborchestrator.Orchestrator
 	Router        *commandrouter.Router
 }
 
 // NewSharedCore wires repositories and services without owning surface behavior.
-func NewSharedCore(pool *pgxpool.Pool, cfg config.Config) SharedCore {
+func NewSharedCore(pool *pgxpool.Pool, cfg config.Config) (SharedCore, error) {
 	users := postgres.NewUserRepository(pool)
 	jobs := postgres.NewJobRepository(pool)
 	billingRepo := postgres.NewBillingRepository(pool)
+	payments := postgres.NewPaymentRepository(pool)
 	billing := billingservice.New(billingRepo, billingservice.WithPriceOverrides(cfg.PriceOverrides))
+	paymentProvider, err := paymentadapter.NewProvider(cfg)
+	if err != nil {
+		return SharedCore{}, err
+	}
+	paymentSvc := paymentservice.New(payments, paymentProvider, paymentservice.Config{
+		ReturnURL: cfg.YooKassaReturnURL,
+	})
+	txRunner := paymentservice.TxRunnerFunc(func(ctx context.Context, fn func(context.Context, domain.PaymentRepository, domain.BillingRepository) error) error {
+		return postgres.RunInTx(ctx, pool, func(ctx context.Context, tx pgx.Tx) error {
+			return fn(ctx, postgres.NewPaymentRepository(tx), postgres.NewBillingRepositoryTx(tx))
+		})
+	})
+	paymentOps := paymentservice.NewWebhookProcessor(payments, paymentProvider, billing, txRunner)
 
 	// The orchestrator records a queued outbox event; the worker's outbox relay
 	// publishes it to the queue, so the api process does not enqueue directly
@@ -50,12 +72,15 @@ func NewSharedCore(pool *pgxpool.Pool, cfg config.Config) SharedCore {
 		Idempotency:   postgres.NewIdempotencyRepository(pool),
 		Deliveries:    postgres.NewDeliveryRepository(pool),
 		BillingRepo:   billingRepo,
+		Payments:      payments,
 		Referrals:     postgres.NewReferralRepository(pool),
 		Artifacts:     postgres.NewArtifactRepository(pool),
 		Moderation:    postgres.NewModerationResultRepository(pool),
 		Conversations: postgres.NewConversationRepository(pool),
 		Billing:       billing,
+		Payment:       paymentSvc,
+		PaymentOps:    paymentOps,
 		Orchestrator:  orch,
 		Router:        commandrouter.New(),
-	}
+	}, nil
 }

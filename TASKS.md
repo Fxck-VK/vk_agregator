@@ -122,6 +122,13 @@
 - [x] VK GPT dialog mode persistence: selected `Спросить у НейроХаб` mode is stored in Redis under peer-scoped dialog state with `VK_DIALOG_MODE_TTL`, so ordinary text keeps routing to GPT after `cmd/api` restart or API instance switch.
 - [x] VK text dialog context v1: `cmd/worker` persists user/assistant turns in Postgres (`conversations`, `conversation_messages`, `conversation_summaries`), sends providers a bounded context packet instead of full history, caps text output via provider request when supported, and keeps context assembly out of VK handlers.
 - [x] Shared VK referral foundation: Postgres `referral_codes` / `referrals`, one stable public code per internal user, idempotent `/start <code>` / VK `ref` handling in the bot, account screen with `безлимитное общение`, invited count/plain referral link, `@neirohub_help` and `Назад` only, and signup rewards through billing ledger entries. Mini App code was not changed; backend service/repository are ready for a future Mini App referral endpoint.
+- [x] Payment top-up foundation chapter 1: `internal/domain/payment.go`, explicit payment intent state machine, migration `000009_payments` (`payment_products`, `payment_intents`, `payment_events`, `payment_refunds`), YooKassa/mock env config placeholders, price snapshots, receipt contact fields and reconciliation indexes. No payment API, provider adapter or webhook processing is exposed yet.
+- [x] Payment top-up foundation chapter 2: `billingservice.GrantWith(ctx, repo, ...)` appends idempotent committed `topup` ledger entries through a supplied transaction-bound `BillingRepository`, preserving `Grant` compatibility and duplicate-key no-op behavior.
+- [x] Payment top-up foundation chapter 3: `domain.PaymentProvider` port, normalized payment/refund/webhook DTOs, in-memory `internal/adapter/payment/mock` provider and `internal/adapter/payment.NewProvider` factory keyed by `PAYMENT_PROVIDER`.
+- [x] Payment top-up foundation chapter 4: real `internal/adapter/payment/yookassa` adapter with Basic Auth, short HTTP `Idempotence-Key`, kopeck/string amount conversion, redirect payments with `capture: true`, 54-FZ receipt data, refunds, webhook normalization and factory wiring for `PAYMENT_PROVIDER=yookassa`.
+- [x] Payment top-up foundation chapter 5: `internal/service/paymentservice`, Postgres/memory payment repositories, protected operator `/billing/payment-intents` / `/billing/payment-history` routes, authenticated Mini App `/miniapp/payments*` routes, idempotent intent creation and safe DTOs without raw YooKassa payloads.
+- [x] Payment top-up foundation chapter 6: `cmd/provider-webhook`, `POST /billing/webhooks/yookassa`, raw webhook inbox writes to `payment_events`, async processor that verifies through `GetPayment`, applies payment intent state machine, posts idempotent `topup:<provider>:<provider_payment_id>` ledger entries through `GrantWith`, marks `processed_at`, dedups refund events by `provider_refund_id` and ignores late rollback events.
+- [x] Payment top-up foundation chapter 7: stale `provider_pending` / `waiting_for_user` intent reconciliation in `cmd/provider-webhook`, protected operator `sync` and full-refund MVP actions under `/billing/payment-intents/{id}`, conservative no-spent-credit refund guard, payment metrics (`payments_created_total`, `payments_succeeded_total`, `payments_canceled_total`, `payment_webhooks_total`, `payment_topups_total`, `payment_reconciliation_mismatches`) and docs/env updates.
 - [x] VK inbound retry hardening: duplicate `inbound_events.idempotency_key` loads the existing inbound row before status updates, preventing `mark inbound processed: domain: entity not found` and repeated VK retries after partial processing.
 
 ---
@@ -257,8 +264,8 @@
   and `start-bot.ps1 -TunnelMode named` are implemented for
   `https://vk.neiirohub.ru/webhooks/vk`; manual Cloudflare DNS activation and
   registrar NS switch are still required before the hostname works.
-- [ ] Mini App payment history endpoint: add a read-only `/miniapp/payments` or ledger-history BFF endpoint with auth/rate limiting so Settings can show real payment history instead of the PR-16.4 placeholder.
-- [ ] Mini App/VK bot top-up backend flow: add an authenticated, rate-limited and idempotent payment-intent endpoint for Mini App top-ups, connect VK `Пополнить баланс` to the same intent/link flow, and append committed `topup` ledger entries only after trusted payment confirmation.
+- [ ] Mini App payment history UI wiring: connect Settings/Profile payment-history placeholder to authenticated `/miniapp/payments` once product/top-up UX is enabled.
+- [~] Mini App/VK bot top-up backend flow: payment domain/migration/config foundation, tx-aware `billingservice.GrantWith`, provider port, mock/YooKassa adapters, payment service, authenticated payment-intent/history endpoints, async YooKassa webhook-to-ledger top-up processing, stale-intent reconciliation and manual full-refund MVP exist; still add product catalog seed/management, partial/automatic refund lot/FIFO policy, live YooKassa smoke and UI enablement.
 - [x] Mini App backend conversations: completed by PR-18.3/18.4. Mini App chat
   uses durable `source=miniapp` conversations in Postgres, exposes authenticated
   list/history endpoints, and no longer depends on process-local BFF memory.
@@ -281,7 +288,9 @@
 - [ ] Добавить выбор worker pools через env/flag (`WORKER_POOLS=text,image,delivery`) для независимого масштабирования.
 
 ### Product / Phase 3+
-- [ ] Kling/video provider + async webhook receiver (`cmd/provider-webhook`).
+- [ ] Kling/video provider + async video-provider callback receiver. Do not mix
+  video callbacks with the payment-owned `cmd/provider-webhook` unless a future
+  ADR explicitly widens that entrypoint.
 - [ ] Media pipeline: download, scan, ffmpeg transcode, VK-ready variants.
 - [ ] Pricing rules table, daily/user/provider/global spend caps, budget alerts.
 - [ ] Backups/restore drills, staging, CI/CD, deployment manifests.
