@@ -252,6 +252,18 @@ curl -X POST "http://localhost:8080/billing/payment-products/<product_id>/disabl
 
 Цель: доказать, что тестовый магазин YooKassa работает end-to-end.
 
+Текущий статус на 2026-06-10: частичный live smoke пройден на локальном
+`_env` с тестовым магазином YooKassa. Успешный test-card checkout завершился,
+публичный webhook в локальный `cmd/provider-webhook` не пришел и был
+подхвачен provider-verified reconciliation без повторного top-up. Replay
+`payment.succeeded` дедуплицировался, manual full refund через защищенный
+operator endpoint дважды с одним `X-Idempotency-Key` вернул один refund и один
+ledger debit, replay `refund.succeeded` дедуплицировался по
+`provider_refund_id`. Mini App history отдает safe DTO без provider-native
+payload. Не считать smoke полностью закрытым до проверки публичного HTTPS
+webhook из кабинета YooKassa и сценария, где provider действительно переводит
+payment в `canceled`, а не оставляет checkout в `pending` retry-state.
+
 Перед smoke:
 
 - реальные/test credentials только в local `.env`;

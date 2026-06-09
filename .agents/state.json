@@ -1,6 +1,6 @@
 {
   "schema_version": 3,
-  "updated_at": "2026-06-10T00:50:31+03:00",
+  "updated_at": "2026-06-10T01:29:23+03:00",
   "branch": "fastlife_dev",
   "current_main_commit": "98645c6",
   "purpose": "Minimal machine-readable current context and routing for agents.",
@@ -34,9 +34,34 @@
       "keep payment credits granted only by provider-verified webhook/reconciliation ledger top-ups",
       "keep 54-FZ receipt fields snapshotted on payment_intents for payment retries and manual refunds",
       "keep production YooKassa webhooks HTTPS/proxy guarded and monitor webhook/refund rollback metrics",
-      "finish live YooKassa smoke with local _env test credentials",
+      "finish remaining YooKassa live-smoke follow-ups: public HTTPS webhook delivery and explicit provider canceled state",
       "add lot/FIFO refund attribution later"
     ],
+    "last_yookassa_smoke": {
+      "date": "2026-06-10",
+      "status": "partial_pass_with_followups",
+      "environment": "local _env test credentials against YooKassa test shop",
+      "passed": [
+        "local postgres and redis healthy",
+        "migrations applied through current head",
+        "cmd/api and cmd/provider-webhook health checks passed",
+        "miniapp signed launch params accepted without trusting user_id body",
+        "test card payment created through Mini App BFF",
+        "successful YooKassa checkout completed with test=true",
+        "missed public webhook was recovered by provider-verified reconciliation",
+        "topup ledger entry was posted once",
+        "payment.succeeded webhook replay was deduplicated",
+        "manual full refund through protected operator route was idempotent with repeated X-Idempotency-Key",
+        "refund.succeeded webhook replay was deduplicated by provider_refund_id",
+        "safe Mini App payment history returned no provider-native payload"
+      ],
+      "followups": [
+        "configure a public HTTPS route so YooKassa dashboard webhooks reach cmd/provider-webhook directly",
+        "retest payment.canceled with a provider state that actually leaves YooKassa pending/retry state",
+        "leave pending failed checkout intents unpaid until provider success/cancel/expiration is verified"
+      ],
+      "secret_policy": "No YooKassa secrets, ADMIN_TOKEN, launch params, auth headers or raw provider payloads were recorded."
+    },
     "active_runtime": {
       "api_port": 8080,
       "miniapp_port": 5173,
