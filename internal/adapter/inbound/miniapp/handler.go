@@ -95,6 +95,7 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /miniapp/jobs", h.auth(h.listJobs))
 	mux.HandleFunc("GET /miniapp/jobs/{id}", h.auth(h.getJob))
 	mux.HandleFunc("GET /miniapp/balance", h.auth(h.getBalance))
+	mux.HandleFunc("GET /miniapp/payment-products", h.auth(h.listPaymentProducts))
 	mux.HandleFunc("POST /miniapp/payments/intents", h.auth(h.rateLimitMiniApp("miniapp_payment", h.createPaymentIntent)))
 	mux.HandleFunc("GET /miniapp/payments", h.auth(h.listPayments))
 	mux.HandleFunc("GET /miniapp/payments/{id}", h.auth(h.getPaymentIntent))
@@ -776,6 +777,7 @@ func (h *Handler) createPaymentIntent(w http.ResponseWriter, r *http.Request) {
 		IdempotencyKey: "miniapp_payment:" + strconv.FormatInt(vkUserID, 10) + ":" + clientKey,
 		ReturnURL:      req.ReturnURL,
 		Source:         "vk_miniapp",
+		ForceNew:       req.ForceNew,
 	})
 	if err != nil {
 		h.writePaymentError(w, err)
@@ -785,7 +787,32 @@ func (h *Handler) createPaymentIntent(w http.ResponseWriter, r *http.Request) {
 	if !result.Created {
 		status = http.StatusOK
 	}
-	writeJSON(w, status, newPaymentIntentDTO(result.Intent))
+	dto := newPaymentIntentDTO(result.Intent)
+	if result.ReusedActive {
+		dto.ReusedActivePayment = true
+		dto.Notice = "У вас уже есть незавершенный платеж. После оплаты баланс обновится автоматически."
+	}
+	writeJSON(w, status, dto)
+}
+
+func (h *Handler) listPaymentProducts(w http.ResponseWriter, r *http.Request) {
+	if h.deps.Payment == nil {
+		writeError(w, http.StatusServiceUnavailable, "service unavailable")
+		return
+	}
+	products, err := h.deps.Payment.ListActiveProducts(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	items := make([]PaymentProductDTO, 0, len(products))
+	for _, product := range products {
+		items = append(items, newPaymentProductDTO(product))
+	}
+	writeJSON(w, http.StatusOK, listResponse[PaymentProductDTO]{
+		Items:      items,
+		Pagination: pagination{Limit: len(items), Offset: 0, Count: len(items), HasMore: false},
+	})
 }
 
 func (h *Handler) listPayments(w http.ResponseWriter, r *http.Request) {

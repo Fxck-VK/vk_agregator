@@ -3,6 +3,7 @@ package vk
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/url"
@@ -182,20 +183,33 @@ const (
 	photoReferenceModeInstruction = "📸 Генерация фото с референсом пока будет подключена после входящих фото-артефактов.\n\nСейчас доступна генерация фото по тексту."
 )
 
-func controlTypeFromPayload(payload string) (domain.CommandType, bool) {
+type controlPayload struct {
+	Command     string `json:"command"`
+	ProductCode string `json:"product_code,omitempty"`
+	Action      string `json:"action,omitempty"`
+}
+
+func controlPayloadFromPayload(payload string) (controlPayload, bool) {
 	if payload == "" {
-		return "", false
+		return controlPayload{}, false
 	}
-	var data struct {
-		Command string `json:"command"`
-	}
+	var data controlPayload
 	if err := json.Unmarshal([]byte(payload), &data); err != nil {
-		return "", false
+		return controlPayload{}, false
 	}
 	t := domain.CommandType(data.Command)
 	if !isMenuCommand(t) {
+		return controlPayload{}, false
+	}
+	return data, true
+}
+
+func controlTypeFromPayload(payload string) (domain.CommandType, bool) {
+	data, ok := controlPayloadFromPayload(payload)
+	if !ok {
 		return "", false
 	}
+	t := domain.CommandType(data.Command)
 	return t, true
 }
 
@@ -258,6 +272,20 @@ func (h *Handler) sendControlResponse(ctx context.Context, t domain.CommandType,
 		}
 		msgText = accountDetailsText(view)
 		keyboard = accountKeyboard(view)
+	} else if t == domain.CommandTopUp {
+		if pending, ok, err := h.activeTopUpIntent(ctx, user.ID); err != nil {
+			return fmt.Errorf("load active top-up intent: %w", err)
+		} else if ok {
+			msgText = topUpPendingText(pending)
+			keyboard = topUpPendingKeyboard(pending.ConfirmationURL)
+		} else {
+			products, err := h.topUpProducts(ctx)
+			if err != nil {
+				return fmt.Errorf("load top-up products: %w", err)
+			}
+			msgText = topUpCatalogText(products)
+			keyboard = topUpCatalogKeyboard(products, false)
+		}
 	}
 	markWelcomeSent := user.WelcomeNameSentAt.IsZero() && shouldSendControlResponse(t)
 	if t == domain.CommandStart && user.WelcomeNameSentAt.IsZero() {
@@ -407,6 +435,78 @@ func (h *Handler) sendUnroutedTextResponse(ctx context.Context, idemKey string, 
 	}
 	randomID := vkdelivery.DeterministicRandomID("vk_control_unrouted:" + idemKey)
 	_, err := h.sendControlMessage(ctx, domain.CommandShowMenu, peerID, randomID, msg)
+	return err
+}
+
+func (h *Handler) sendTopUpCatalog(ctx context.Context, idemKey string, peerID int64, forceNew, allowEdit bool) error {
+	if h.deps.Control == nil {
+		h.logger.Warn("vk top-up catalog skipped because VK_ACCESS_TOKEN is not configured")
+		return nil
+	}
+	products, err := h.topUpProducts(ctx)
+	if err != nil {
+		return fmt.Errorf("load top-up products: %w", err)
+	}
+	msg := vkdelivery.Message{
+		Text:     topUpCatalogText(products),
+		Keyboard: topUpCatalogKeyboard(products, forceNew),
+	}
+	h.applyMenuButtonMode(msg.Keyboard)
+	randomID := vkdelivery.DeterministicRandomID(fmt.Sprintf("vk_control_topup_catalog:%s:%t", idemKey, forceNew))
+	result, err := h.deliverControlResponse(ctx, domain.CommandTopUp, peerID, randomID, msg, allowEdit)
+	if err == nil {
+		h.setActiveMenu(peerID, result.MessageID)
+	}
+	return err
+}
+
+func (h *Handler) sendTopUpContactRequest(ctx context.Context, idemKey string, peerID int64, productCode string, forceNew, allowEdit bool) error {
+	if h.deps.Control == nil {
+		h.logger.Warn("vk top-up contact request skipped because VK_ACCESS_TOKEN is not configured")
+		return nil
+	}
+	msg := vkdelivery.Message{
+		Text:     "Пришлите email или телефон для чека обычным сообщением.\n\nПосле этого я создам ссылку на оплату.",
+		Keyboard: backKeyboard(),
+	}
+	h.applyMenuButtonMode(msg.Keyboard)
+	randomID := vkdelivery.DeterministicRandomID(fmt.Sprintf("vk_control_topup_contact:%s:%s:%t", idemKey, productCode, forceNew))
+	result, err := h.deliverControlResponse(ctx, domain.CommandTopUp, peerID, randomID, msg, allowEdit)
+	if err == nil {
+		h.setActiveMenu(peerID, result.MessageID)
+	}
+	return err
+}
+
+func (h *Handler) sendTopUpPaymentLink(ctx context.Context, idemKey string, peerID int64, link string) error {
+	if h.deps.Control == nil {
+		h.logger.Warn("vk top-up payment link skipped because VK_ACCESS_TOKEN is not configured")
+		return nil
+	}
+	msg := vkdelivery.Message{
+		Text:     "Платеж создан. Нажмите «Оплатить», чтобы перейти к YooKassa.\n\nВозврат в бот после оплаты сам по себе баланс не начисляет. Зачисление произойдет после подтверждения платежа YooKassa.",
+		Keyboard: paymentLinkKeyboard(link),
+	}
+	randomID := vkdelivery.DeterministicRandomID("vk_control_topup_payment:" + idemKey)
+	result, err := h.sendControlMessage(ctx, domain.CommandTopUp, peerID, randomID, msg)
+	if err == nil {
+		h.setActiveMenu(peerID, result.MessageID)
+	}
+	return err
+}
+
+func (h *Handler) sendTopUpNotice(ctx context.Context, idemKey string, peerID int64, text string) error {
+	if h.deps.Control == nil {
+		h.logger.Warn("vk top-up notice skipped because VK_ACCESS_TOKEN is not configured")
+		return nil
+	}
+	msg := vkdelivery.Message{
+		Text:     text,
+		Keyboard: backKeyboard(),
+	}
+	h.applyMenuButtonMode(msg.Keyboard)
+	randomID := vkdelivery.DeterministicRandomID(fmt.Sprintf("vk_control_topup_notice:%s:%x", idemKey, hashText(text)))
+	_, err := h.sendControlMessage(ctx, domain.CommandTopUp, peerID, randomID, msg)
 	return err
 }
 
@@ -602,6 +702,87 @@ func accountDetailsText(view accountView) string {
 	)
 }
 
+func (h *Handler) topUpProducts(ctx context.Context) ([]*domain.PaymentProduct, error) {
+	if h.deps.Payment == nil {
+		return nil, nil
+	}
+	return h.deps.Payment.ListActiveProducts(ctx)
+}
+
+func (h *Handler) activeTopUpIntent(ctx context.Context, userID uuid.UUID) (*domain.PaymentIntent, bool, error) {
+	if h.deps.Payment == nil {
+		return nil, false, nil
+	}
+	intent, err := h.deps.Payment.ActiveWaitingIntent(ctx, userID)
+	if err == nil {
+		return intent, intent != nil, nil
+	}
+	if errors.Is(err, domain.ErrNotFound) {
+		return nil, false, nil
+	}
+	return nil, false, err
+}
+
+func topUpCatalogText(products []*domain.PaymentProduct) string {
+	if len(products) == 0 {
+		return "💰 Пополнить баланс\n\nТарифы пока недоступны. Попробуйте позже."
+	}
+	return "💰 Пополнить баланс\n\nВыберите пакет пополнения.\n\nПосле выбора бот попросит email или телефон для чека и даст ссылку на оплату."
+}
+
+func topUpPendingText(intent *domain.PaymentIntent) string {
+	return fmt.Sprintf("💰 У вас есть незавершенный платеж\n\nПакет: %d 💎\nСумма: %s\n\nПосле оплаты баланс обновится автоматически.", intent.Credits, formatRubAmount(intent.Amount))
+}
+
+func topUpCatalogKeyboard(products []*domain.PaymentProduct, forceNew bool) *vkdelivery.Keyboard {
+	rows := make([][]vkdelivery.KeyboardButton, 0, len(products)+1)
+	for _, product := range products {
+		if product == nil {
+			continue
+		}
+		rows = append(rows, []vkdelivery.KeyboardButton{
+			productButton(topUpProductLabel(product), product.Code, forceNew),
+		})
+	}
+	rows = append(rows, []vkdelivery.KeyboardButton{
+		button("⬅️ Назад", domain.CommandShowMenu, "secondary"),
+	})
+	return &vkdelivery.Keyboard{
+		OneTime: false,
+		Inline:  true,
+		Buttons: rows,
+	}
+}
+
+func topUpPendingKeyboard(link string) *vkdelivery.Keyboard {
+	return &vkdelivery.Keyboard{
+		OneTime: false,
+		Inline:  true,
+		Buttons: [][]vkdelivery.KeyboardButton{
+			{
+				openLinkButton("Продолжить оплату", link),
+			},
+			{
+				buttonWithAction("Создать новый платеж", domain.CommandTopUp, topUpActionNewPayment, "secondary"),
+			},
+			{
+				button("⬅️ Назад", domain.CommandShowMenu, "secondary"),
+			},
+		},
+	}
+}
+
+func topUpProductLabel(product *domain.PaymentProduct) string {
+	return fmt.Sprintf("%d 💎 — %s", product.Credits, formatRubAmount(product.Amount))
+}
+
+func formatRubAmount(amount int64) string {
+	if amount%100 == 0 {
+		return fmt.Sprintf("%d ₽", amount/100)
+	}
+	return fmt.Sprintf("%d.%02d ₽", amount/100, amount%100)
+}
+
 func welcomeKeyboard() *vkdelivery.Keyboard {
 	return &vkdelivery.Keyboard{
 		OneTime: false,
@@ -777,6 +958,21 @@ func backKeyboard() *vkdelivery.Keyboard {
 	}
 }
 
+func paymentLinkKeyboard(link string) *vkdelivery.Keyboard {
+	return &vkdelivery.Keyboard{
+		OneTime: false,
+		Inline:  true,
+		Buttons: [][]vkdelivery.KeyboardButton{
+			{
+				openLinkButton("Оплатить", link),
+			},
+			{
+				button("⬅️ Назад", domain.CommandShowMenu, "secondary"),
+			},
+		},
+	}
+}
+
 func backToKeyboard(command domain.CommandType) *vkdelivery.Keyboard {
 	return &vkdelivery.Keyboard{
 		OneTime: false,
@@ -833,13 +1029,48 @@ func menuAccessKeyboard() *vkdelivery.Keyboard {
 }
 
 func button(label string, command domain.CommandType, color string) vkdelivery.KeyboardButton {
-	payload, _ := json.Marshal(struct {
-		Command string `json:"command"`
-	}{Command: string(command)})
+	payload, _ := json.Marshal(controlPayload{Command: string(command)})
 	return vkdelivery.KeyboardButton{
 		Label:   label,
 		Payload: string(payload),
 		Color:   color,
+	}
+}
+
+func buttonWithAction(label string, command domain.CommandType, action, color string) vkdelivery.KeyboardButton {
+	payload, _ := json.Marshal(controlPayload{
+		Command: string(command),
+		Action:  action,
+	})
+	return vkdelivery.KeyboardButton{
+		Label:   label,
+		Payload: string(payload),
+		Color:   color,
+	}
+}
+
+func productButton(label, productCode string, forceNew bool) vkdelivery.KeyboardButton {
+	action := ""
+	if forceNew {
+		action = topUpActionNewPayment
+	}
+	payload, _ := json.Marshal(controlPayload{
+		Command:     string(domain.CommandTopUp),
+		ProductCode: productCode,
+		Action:      action,
+	})
+	return vkdelivery.KeyboardButton{
+		Label:   label,
+		Payload: string(payload),
+		Color:   "primary",
+	}
+}
+
+func openLinkButton(label, link string) vkdelivery.KeyboardButton {
+	return vkdelivery.KeyboardButton{
+		Label:      label,
+		ActionType: "open_link",
+		Link:       link,
 	}
 }
 

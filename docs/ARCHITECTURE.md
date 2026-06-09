@@ -123,6 +123,14 @@ Current payment/top-up foundation:
   `payment_events` and `payment_refunds`. Intents snapshot `amount`, `credits`,
   `product_id` and `price_version`; webhook handling must not recalculate old
   payments from the current product catalog.
+- Migration `000010_payment_product_catalog` seeds the initial active credit
+  packages. VK Bot and VK Mini App must read top-up choices from this shared
+  catalog instead of hardcoding separate per-surface packages.
+- Migration `000011_payment_intent_receipt_snapshot` adds intent-level fiscal
+  receipt snapshots: `receipt_description`, `vat_code`, `payment_subject` and
+  `payment_mode`. YooKassa payment creation retries and manual refunds must use
+  these intent fields so 54-FZ receipt items remain tied to the original product
+  position even if `payment_products` later changes.
 - Receipt contact fields (`receipt_email`, `receipt_phone`) are first-class
   columns for 54-FZ support. At least one contact is required before an intent
   can be stored.
@@ -145,7 +153,8 @@ Current payment/top-up foundation:
   from `PAYMENT_PROVIDER`.
 - `internal/service/paymentservice` owns payment-intent lifecycle creation. It
   validates the trusted user, active product, receipt contact and caller
-  idempotency key; creates a local intent with price snapshot; calls
+  idempotency key; creates a local intent with price and 54-FZ receipt
+  snapshot; calls
   `domain.PaymentProvider.CreatePayment`; persists `provider_payment_id`,
   provider status and `confirmation_url`; and returns safe DTOs without raw
   YooKassa/provider payloads.
@@ -158,23 +167,41 @@ Current payment/top-up foundation:
   internal `user_id` from operator context but must not trust a public JSON
   body as identity.
 - The Mini App BFF exposes authenticated user payment routes:
-  `POST /miniapp/payments/intents`, `GET /miniapp/payments` and
-  `GET /miniapp/payments/{id}`. These routes derive the backend user from
-  verified VK launch params / trusted dev auth, require `X-Idempotency-Key` for
-  creation, owner-check reads and never expose `provider_payment_id`, raw
-  YooKassa payloads or credentials.
+  `GET /miniapp/payment-products`, `POST /miniapp/payments/intents`,
+  `GET /miniapp/payments` and `GET /miniapp/payments/{id}`. These routes derive
+  the backend user from verified VK launch params / trusted dev auth, require
+  `X-Idempotency-Key` for creation, owner-check reads and never expose
+  `provider_payment_id`, raw YooKassa payloads or credentials. Mini App UI may
+  redirect the user to a returned `confirmation_url`, but the return URL is
+  only navigation and must not grant credits.
+- VK Bot top-up is a control path: it lists the same active products, asks for
+  a receipt email or phone, creates a payment intent through
+  `internal/service/paymentservice` and sends a payment link. It must not call
+  YooKassa directly and must not mutate balance from a button click, contact
+  message or provider redirect.
 - `cmd/provider-webhook` owns payment provider webhook intake. It exposes
   `POST /billing/webhooks/yookassa` without VK launch auth, stores normalized
-  raw provider events in `payment_events`, accepts duplicate retries as no-op
-  and returns `200` quickly. Async processing then fetches unprocessed events,
+  raw YooKassa events (`payment.succeeded`, `payment.canceled`,
+  `refund.succeeded`) in `payment_events`, accepts duplicate retries as no-op
+  and returns `200` quickly. In production it rejects non-HTTPS requests before
+  parsing provider JSON. Direct TLS, `X-Forwarded-Proto: https`,
+  `Forwarded: proto=https` and Cloudflare `CF-Visitor` HTTPS scheme are accepted
+  so TLS termination can live at the reverse proxy, but the raw HTTP origin
+  must not be publicly reachable. Async processing then fetches unprocessed events,
   verifies current provider state through `domain.PaymentProvider.GetPayment`,
   checks amount/currency against the intent snapshot, applies the intent state
-  machine and posts idempotent ledger top-ups through
+  machine and posts idempotent ledger top-ups only for verified successful
+  captured payments through
   `billingservice.GrantWith(ctx, txBillingRepo, ...)` in the same transaction
   that marks `payment_events.processed_at`. The same process also runs a
   reconciliation loop for stale `provider_pending` / `waiting_for_user`
   provider-backed intents and applies the same verified state-machine/ledger
-  path as webhooks.
+  path as webhooks. Reconciliation is the recovery path when a success/cancel
+  webhook is lost; late or repeated webhooks become idempotent no-ops after the
+  same ledger key has already been applied. If the user closes the provider
+  payment page and YooKassa still reports `waiting_for_user`, the intent stays
+  unpaid and no credits are granted until a later verified provider status
+  changes it.
 - Payment success must use an internal ledger idempotency key shaped like
   `topup:<provider>:<provider_payment_id>`. Provider webhook dedup keys stay
   separate and refund webhook dedup keys must include `provider_refund_id`.
@@ -184,19 +211,30 @@ Current payment/top-up foundation:
 - Manual refunds are MVP full-refund operator actions. They require an
   `X-Idempotency-Key`, only operate on `succeeded` intents and refuse to call
   the money provider when the user's current credit balance cannot cover the
-  purchased credits. Refund debits and provider-failure compensation are ledger
-  entries; balance is never mutated directly. Partial/automatic refunds remain
-  blocked until lot/FIFO attribution can prove which top-up credits were spent.
+  purchased credits. They also scan the ledger from newest entries back to the
+  exact `topup:<provider>:<provider_payment_id>` entry and refuse when any
+  committed or pending negative movement exists after that top-up. This is a
+  conservative MVP substitute for lot/FIFO attribution: if credits may have
+  been used, the money refund is blocked. Refund debits and provider-failure
+  compensation are ledger entries; balance is never mutated directly. If the
+  provider refund call fails after the internal debit was recorded, the service
+  posts an explicit compensating ledger adjustment, marks the refund failed, and
+  emits refund rollback metrics. If compensation itself fails, the operator
+  action returns an error and `payment_refunds_total{result="rollback_failed"}`
+  is the alert path.
+  Partial/automatic refunds remain blocked until lot/FIFO attribution can prove
+  which top-up credits were spent.
 - Payment metrics include `payments_created_total`,
   `payments_succeeded_total`, `payments_canceled_total`,
-  `payment_webhooks_total`, `payment_topups_total` and
-  `payment_reconciliation_mismatches`.
+  `payment_webhooks_total`, `payment_webhook_security_denials_total`,
+  `payment_webhook_processing_errors_total`, `payment_topups_total`,
+  `payment_refunds_total` and `payment_reconciliation_mismatches`.
 - Runtime config exposes `PAYMENT_PROVIDER=mock|yookassa` and YooKassa env
   placeholders. `PAYMENT_PROVIDER=yookassa` must fail closed without shop id,
   secret key and return URL.
-- Product catalog management/seed data, partial refund attribution, automatic
-  refund webhook balance reversal and live YooKassa smoke are follow-up work.
-  Payment redirects themselves still must not grant credits.
+- Product catalog admin management, partial refund attribution, automatic refund
+  webhook balance reversal and live YooKassa smoke are follow-up work. Payment
+  redirects themselves still must not grant credits.
 
 Actual request flows:
 

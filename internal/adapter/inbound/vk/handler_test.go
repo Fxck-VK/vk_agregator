@@ -11,6 +11,7 @@ import (
 
 	vkdelivery "vk-ai-aggregator/internal/adapter/delivery/vk"
 	"vk-ai-aggregator/internal/adapter/inbound/vk"
+	paymentmock "vk-ai-aggregator/internal/adapter/payment/mock"
 	"vk-ai-aggregator/internal/adapter/storage/memory"
 	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/platform/queue"
@@ -19,6 +20,7 @@ import (
 	"vk-ai-aggregator/internal/service/commandrouter"
 	"vk-ai-aggregator/internal/service/joborchestrator"
 	"vk-ai-aggregator/internal/service/outboxrelay"
+	"vk-ai-aggregator/internal/service/paymentservice"
 	"vk-ai-aggregator/internal/service/referralservice"
 )
 
@@ -29,6 +31,7 @@ type harness struct {
 	jobs    *memory.JobRepo
 	inbound *memory.InboundRepo
 	billing *memory.BillingRepo
+	payment *memory.PaymentRepo
 	refs    *memory.ReferralRepo
 	pub     *queue.MemoryPublisher
 	relay   *outboxrelay.Relay
@@ -67,6 +70,23 @@ func newHarnessWithDeps(control vkdelivery.ControlClient, cfg vk.Config, antiSpa
 	idem := memory.NewIdempotencyRepo()
 	bill := memory.NewBillingRepo()
 	billing := billingservice.New(bill)
+	payments := memory.NewPaymentRepo()
+	vatCode := int16(1)
+	payments.PutProduct(&domain.PaymentProduct{
+		Code:           "credits_100",
+		Title:          "100 credits",
+		Amount:         9900,
+		Currency:       domain.CurrencyRUB,
+		Credits:        100,
+		PriceVersion:   1,
+		IsActive:       true,
+		VATCode:        &vatCode,
+		PaymentSubject: "service",
+		PaymentMode:    "full_prepayment",
+	})
+	payment := paymentservice.New(payments, paymentmock.New(), paymentservice.Config{
+		ReturnURL: "https://neiirohub.ru/payments/return",
+	})
 	refs := memory.NewReferralRepo()
 	referrals := referralservice.New(refs, billing, referralservice.Config{ReferrerSignupRewardCredits: 10})
 	pub := queue.NewMemoryPublisher()
@@ -79,6 +99,7 @@ func newHarnessWithDeps(control vkdelivery.ControlClient, cfg vk.Config, antiSpa
 		Jobs:         jobs,
 		Commands:     cmds,
 		Billing:      billing,
+		Payment:      payment,
 		Referrals:    referrals,
 		Orchestrator: orch,
 		Router:       commandrouter.New(),
@@ -87,7 +108,7 @@ func newHarnessWithDeps(control vkdelivery.ControlClient, cfg vk.Config, antiSpa
 		DialogState:  dialogState,
 		AntiSpam:     antiSpam,
 	})
-	return &harness{handler: h, users: users, cmds: cmds, jobs: jobs, inbound: inbound, billing: bill, refs: refs, pub: pub, relay: outboxrelay.New(uowMgr, pub)}
+	return &harness{handler: h, users: users, cmds: cmds, jobs: jobs, inbound: inbound, billing: bill, payment: payments, refs: refs, pub: pub, relay: outboxrelay.New(uowMgr, pub)}
 }
 
 // post serves the webhook and then drains the outbox relay, mirroring the
@@ -447,6 +468,84 @@ func TestMenuFeatureFlagsHideMainMenuButtons(t *testing.T) {
 		if !strings.Contains(sent[1].Keyboard, want) {
 			t.Fatalf("expected enabled button %q in keyboard: %q", want, sent[1].Keyboard)
 		}
+	}
+}
+
+func TestTopUpMenuCreatesPaymentIntentAfterReceiptContact(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	h := newHarnessWithControl(control)
+
+	menuBody := `{
+		"type":"message_new","group_id":1,"event_id":"evt-topup-menu","secret":"s3cr3t",
+		"object":{"message":{"from_id":590,"peer_id":590,"text":"topup","payload":"{\"command\":\"top_up\"}"}}
+	}`
+	if rec := h.post(menuBody); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected menu response: %d %q", rec.Code, rec.Body.String())
+	}
+	if sent := control.Sent(); len(sent) != 1 || !strings.Contains(sent[0].Keyboard, "credits_100") {
+		t.Fatalf("expected top-up product keyboard, got %+v", sent)
+	}
+
+	productBody := `{
+		"type":"message_new","group_id":1,"event_id":"evt-topup-product","secret":"s3cr3t",
+		"object":{"message":{"from_id":590,"peer_id":590,"text":"100 credits","payload":"{\"command\":\"top_up\",\"product_code\":\"credits_100\"}"}}
+	}`
+	if rec := h.post(productBody); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected product response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	contactBody := `{
+		"type":"message_new","group_id":1,"event_id":"evt-topup-contact","secret":"s3cr3t",
+		"object":{"message":{"from_id":590,"peer_id":590,"text":"user@example.com"}}
+	}`
+	if rec := h.post(contactBody); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected contact response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	ctx := context.Background()
+	user, err := h.users.GetByVKUserID(ctx, 590)
+	if err != nil {
+		t.Fatalf("user not created: %v", err)
+	}
+	intents, err := h.payment.ListIntentsByUser(ctx, user.ID, 10, 0)
+	if err != nil {
+		t.Fatalf("list payment intents: %v", err)
+	}
+	if len(intents) != 1 {
+		t.Fatalf("expected one payment intent, got %d", len(intents))
+	}
+	if intents[0].Credits != 100 || intents[0].ReceiptEmail != "user@example.com" || !strings.Contains(intents[0].ConfirmationURL, "mock.payments.local") {
+		t.Fatalf("unexpected payment intent: %+v", intents[0])
+	}
+	if jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0); len(jobs) != 0 || h.pub.Len() != 0 {
+		t.Fatalf("top-up flow must not create AI jobs, jobs=%+v tasks=%d", jobs, h.pub.Len())
+	}
+	sent := control.Sent()
+	if len(sent) < 2 || !strings.Contains(sent[len(sent)-1].Keyboard, `"type":"open_link"`) ||
+		!strings.Contains(sent[len(sent)-1].Keyboard, "mock.payments.local") {
+		t.Fatalf("expected final payment open_link keyboard, got %+v", sent)
+	}
+
+	reopenBody := `{
+		"type":"message_new","group_id":1,"event_id":"evt-topup-reopen","secret":"s3cr3t",
+		"object":{"message":{"from_id":590,"peer_id":590,"text":"topup","payload":"{\"command\":\"top_up\"}"}}
+	}`
+	if rec := h.post(reopenBody); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected reopen response: %d %q", rec.Code, rec.Body.String())
+	}
+	sent = control.Sent()
+	last := sent[len(sent)-1]
+	if !strings.Contains(last.Keyboard, `"type":"open_link"`) ||
+		!strings.Contains(last.Keyboard, "mock.payments.local") ||
+		!strings.Contains(last.Keyboard, "new_payment") {
+		t.Fatalf("expected pending payment keyboard with continue/new actions, got %+v", sent)
+	}
+	intents, err = h.payment.ListIntentsByUser(ctx, user.ID, 10, 0)
+	if err != nil {
+		t.Fatalf("list payment intents after reopen: %v", err)
+	}
+	if len(intents) != 1 {
+		t.Fatalf("reopening top-up must not create another intent, got %d", len(intents))
 	}
 }
 

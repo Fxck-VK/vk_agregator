@@ -167,6 +167,30 @@ type BalanceDTO struct {
 	BalanceCredits int64 `json:"balance_credits"`
 }
 
+// PaymentProductDTO is the Mini App-safe representation of an active top-up
+// catalog entry.
+type PaymentProductDTO struct {
+	ID           uuid.UUID `json:"id"`
+	Code         string    `json:"code"`
+	Title        string    `json:"title"`
+	Amount       int64     `json:"amount"`
+	Currency     string    `json:"currency"`
+	Credits      int64     `json:"credits"`
+	PriceVersion int       `json:"price_version"`
+}
+
+func newPaymentProductDTO(product *domain.PaymentProduct) PaymentProductDTO {
+	return PaymentProductDTO{
+		ID:           product.ID,
+		Code:         product.Code,
+		Title:        product.Title,
+		Amount:       product.Amount,
+		Currency:     string(product.Currency),
+		Credits:      product.Credits,
+		PriceVersion: product.PriceVersion,
+	}
+}
+
 // CreatePaymentIntentRequest is accepted by POST /miniapp/payments/intents.
 // User identity is never accepted in the body; it comes from verified launch
 // params in the handler.
@@ -175,20 +199,23 @@ type CreatePaymentIntentRequest struct {
 	ReceiptEmail string `json:"receipt_email,omitempty"`
 	ReceiptPhone string `json:"receipt_phone,omitempty"`
 	ReturnURL    string `json:"return_url,omitempty"`
+	ForceNew     bool   `json:"force_new,omitempty"`
 }
 
 // PaymentIntentDTO is the Mini App-safe representation of a top-up intent.
 type PaymentIntentDTO struct {
-	ID              uuid.UUID `json:"id"`
-	ProductID       uuid.UUID `json:"product_id,omitempty"`
-	Status          string    `json:"status"`
-	Amount          int64     `json:"amount"`
-	Currency        string    `json:"currency"`
-	Credits         int64     `json:"credits"`
-	PriceVersion    int       `json:"price_version"`
-	ConfirmationURL string    `json:"confirmation_url,omitempty"`
-	CreatedAt       time.Time `json:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at"`
+	ID                  uuid.UUID `json:"id"`
+	ProductID           uuid.UUID `json:"product_id,omitempty"`
+	Status              string    `json:"status"`
+	Amount              int64     `json:"amount"`
+	Currency            string    `json:"currency"`
+	Credits             int64     `json:"credits"`
+	PriceVersion        int       `json:"price_version"`
+	ConfirmationURL     string    `json:"confirmation_url,omitempty"`
+	ReusedActivePayment bool      `json:"reused_active_payment,omitempty"`
+	Notice              string    `json:"notice,omitempty"`
+	CreatedAt           time.Time `json:"created_at"`
+	UpdatedAt           time.Time `json:"updated_at"`
 }
 
 func newPaymentIntentDTO(intent *domain.PaymentIntent) PaymentIntentDTO {

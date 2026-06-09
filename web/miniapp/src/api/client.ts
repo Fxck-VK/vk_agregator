@@ -80,6 +80,59 @@ export interface BalanceResponse {
   balance_credits: number;
 }
 
+export interface PaymentProduct {
+  id: string;
+  code: string;
+  title: string;
+  amount: number;
+  currency: string;
+  credits: number;
+  price_version: number;
+}
+
+export interface PaymentIntent {
+  id: string;
+  product_id?: string;
+  status: string;
+  amount: number;
+  currency: string;
+  credits: number;
+  price_version: number;
+  confirmation_url?: string;
+  reused_active_payment?: boolean;
+  notice?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreatePaymentIntentInput {
+  product_code: string;
+  receipt_email?: string;
+  receipt_phone?: string;
+  return_url?: string;
+  force_new?: boolean;
+}
+
+export interface PaymentProductListResponse {
+  items: PaymentProduct[];
+  pagination: {
+    limit: number;
+    offset: number;
+    count: number;
+    has_more: boolean;
+  };
+}
+
+export interface PaymentIntentListResponse {
+  items: PaymentIntent[];
+  pagination: {
+    limit: number;
+    offset: number;
+    count: number;
+    has_more: boolean;
+  };
+}
+
 export interface ArtifactUploadResponse {
   artifact_id: string;
 }
@@ -383,6 +436,29 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export async function getBalance(): Promise<number> {
   const data = await request<BalanceResponse>("/miniapp/balance");
   return data.balance_credits ?? 0;
+}
+
+export async function listPaymentProducts(): Promise<PaymentProduct[]> {
+  const data = await request<PaymentProductListResponse>("/miniapp/payment-products");
+  return data.items ?? [];
+}
+
+export async function createPaymentIntent(
+  input: CreatePaymentIntentInput,
+  options: CreateJobOptions,
+): Promise<PaymentIntent> {
+  return request<PaymentIntent>("/miniapp/payments/intents", {
+    method: "POST",
+    headers: {
+      "X-Idempotency-Key": options.idempotencyKey,
+    },
+    body: JSON.stringify(input),
+  });
+}
+
+export async function listPaymentIntents(): Promise<PaymentIntent[]> {
+  const data = await request<PaymentIntentListResponse>("/miniapp/payments");
+  return data.items ?? [];
 }
 
 export async function listJobs(): Promise<Job[]> {

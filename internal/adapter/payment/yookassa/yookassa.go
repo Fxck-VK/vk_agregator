@@ -502,7 +502,7 @@ func newRefundReceipt(in domain.CreateRefundInput) (receipt, error) {
 			Phone: phone,
 		},
 		Items: []receiptItem{{
-			Description:    defaultString(in.Reason, "NeiroHub balance refund"),
+			Description:    defaultString(in.Description, defaultString(in.Reason, "NeiroHub balance refund")),
 			Quantity:       1,
 			Amount:         amountValue{Value: value, Currency: yooCurrency(in.Currency)},
 			VATCode:        vatCode,

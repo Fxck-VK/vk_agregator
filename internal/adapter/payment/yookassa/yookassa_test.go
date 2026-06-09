@@ -17,6 +17,7 @@ import (
 func TestCreatePaymentSendsYooKassaContract(t *testing.T) {
 	intentID := uuid.New()
 	userID := uuid.New()
+	vatCode := int16(2)
 	var seen struct {
 		Auth           string
 		IdempotencyKey string
@@ -53,6 +54,9 @@ func TestCreatePaymentSendsYooKassaContract(t *testing.T) {
 		Description:    "NeiroHub credits",
 		ReturnURL:      "https://neiirohub.ru/return/custom",
 		ReceiptEmail:   "user@example.com",
+		VATCode:        &vatCode,
+		PaymentSubject: "service",
+		PaymentMode:    "full_prepayment",
 		IdempotencyKey: "pay:" + intentID.String(),
 	})
 	if err != nil {
@@ -86,7 +90,11 @@ func TestCreatePaymentSendsYooKassaContract(t *testing.T) {
 		t.Fatalf("receipt item count = %d, want 1", len(seen.Body.Receipt.Items))
 	}
 	item := seen.Body.Receipt.Items[0]
-	if item.Amount.Value != "100.00" || item.VATCode != defaultVATCode || item.PaymentSubject != defaultPaymentSubject || item.PaymentMode != defaultPaymentMode {
+	if item.Description != "NeiroHub credits" ||
+		item.Amount.Value != "100.00" ||
+		item.VATCode != vatCode ||
+		item.PaymentSubject != "service" ||
+		item.PaymentMode != "full_prepayment" {
 		t.Fatalf("unexpected receipt item: %#v", item)
 	}
 	if seen.Body.Metadata["intent_id"] != intentID.String() || seen.Body.Metadata["user_id"] != userID.String() {
@@ -154,6 +162,7 @@ func TestGetPaymentParsesAmountAndStatus(t *testing.T) {
 
 func TestCreateRefundSendsYooKassaContract(t *testing.T) {
 	refundID := uuid.New()
+	vatCode := int16(2)
 	var seen struct {
 		IdempotencyKey string
 		Body           createRefundRequest
@@ -183,8 +192,12 @@ func TestCreateRefundSendsYooKassaContract(t *testing.T) {
 		ProviderPaymentID: "pay-1",
 		Amount:            1050,
 		Currency:          domain.CurrencyRUB,
+		Description:       "NeiroHub 100 credits",
 		Reason:            "manual refund",
 		ReceiptEmail:      "user@example.com",
+		VATCode:           &vatCode,
+		PaymentSubject:    "service",
+		PaymentMode:       "full_prepayment",
 		IdempotencyKey:    "payrefund:" + refundID.String(),
 	})
 	if err != nil {
@@ -201,7 +214,11 @@ func TestCreateRefundSendsYooKassaContract(t *testing.T) {
 	}
 	if seen.Body.Receipt.Customer.Email != "user@example.com" ||
 		len(seen.Body.Receipt.Items) != 1 ||
-		seen.Body.Receipt.Items[0].Amount.Value != "10.50" {
+		seen.Body.Receipt.Items[0].Description != "NeiroHub 100 credits" ||
+		seen.Body.Receipt.Items[0].Amount.Value != "10.50" ||
+		seen.Body.Receipt.Items[0].VATCode != vatCode ||
+		seen.Body.Receipt.Items[0].PaymentSubject != "service" ||
+		seen.Body.Receipt.Items[0].PaymentMode != "full_prepayment" {
 		t.Fatalf("unexpected refund receipt: %#v", seen.Body.Receipt)
 	}
 }

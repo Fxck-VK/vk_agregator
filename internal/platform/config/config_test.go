@@ -218,6 +218,7 @@ func TestLoadPaymentConfig(t *testing.T) {
 	t.Setenv("YOOKASSA_BASE_URL", "https://example.com/v3")
 	t.Setenv("YOOKASSA_RETURN_URL", "https://neiirohub.ru/payments/return")
 	t.Setenv("YOOKASSA_WEBHOOK_IP_ALLOWLIST_ENABLED", "false")
+	t.Setenv("PAYMENT_WEBHOOK_REQUIRE_HTTPS", "true")
 	t.Setenv("PAYMENT_WEBHOOK_ADDR", ":18082")
 	t.Setenv("PAYMENT_WEBHOOK_POLL_INTERVAL", "2s")
 	t.Setenv("PAYMENT_WEBHOOK_BATCH_LIMIT", "7")
@@ -238,11 +239,21 @@ func TestLoadPaymentConfig(t *testing.T) {
 	if cfg.YooKassaWebhookIPAllowlistEnabled {
 		t.Fatal("YooKassaWebhookIPAllowlistEnabled = true, want false")
 	}
+	if !cfg.PaymentWebhookRequireHTTPS || !cfg.PaymentWebhookHTTPSRequired() {
+		t.Fatal("payment webhook HTTPS requirement was not loaded")
+	}
 	if cfg.PaymentWebhookAddr != ":18082" || cfg.PaymentWebhookPollInterval.String() != "2s" || cfg.PaymentWebhookBatchLimit != 7 {
 		t.Fatalf("unexpected webhook config: addr=%q interval=%s batch=%d", cfg.PaymentWebhookAddr, cfg.PaymentWebhookPollInterval, cfg.PaymentWebhookBatchLimit)
 	}
 	if cfg.PaymentReconciliationInterval.String() != "3s" || cfg.PaymentReconciliationLimit != 9 || cfg.PaymentReconciliationStaleAfter.String() != "4s" {
 		t.Fatalf("unexpected payment reconciliation config: interval=%s limit=%d stale_after=%s", cfg.PaymentReconciliationInterval, cfg.PaymentReconciliationLimit, cfg.PaymentReconciliationStaleAfter)
+	}
+}
+
+func TestPaymentWebhookHTTPSRequiredInProduction(t *testing.T) {
+	cfg := config.Config{Env: "production"}
+	if !cfg.PaymentWebhookHTTPSRequired() {
+		t.Fatal("production payment webhooks must require HTTPS")
 	}
 }
 

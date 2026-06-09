@@ -51,6 +51,8 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /billing/payment-intents/{id}", h.auth(h.getIntent))
 	mux.HandleFunc("POST /billing/payment-intents/{id}/sync", h.auth(h.syncIntent))
 	mux.HandleFunc("POST /billing/payment-intents/{id}/refund", h.auth(h.refundIntent))
+	mux.HandleFunc("GET /billing/payment-intents/pending", h.auth(h.listPendingIntents))
+	mux.HandleFunc("GET /billing/payment-events/unprocessed", h.auth(h.listUnprocessedEvents))
 	mux.HandleFunc("GET /billing/payment-history", h.auth(h.listHistory))
 	return mux
 }
@@ -232,6 +234,83 @@ func (h *Handler) listHistory(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (h *Handler) listPendingIntents(w http.ResponseWriter, r *http.Request) {
+	if h.deps.Payment == nil {
+		writeError(w, http.StatusServiceUnavailable, "service unavailable")
+		return
+	}
+	limit, offset := parsePagination(r)
+	staleAfter := parseDurationQuery(r, "stale_after", 30*time.Second, 24*time.Hour)
+	staleCutoff := time.Now().Add(-staleAfter)
+	staleOnly := parseBoolQuery(r, "stale_only", false)
+	filter := domain.PaymentIntentFilter{
+		Statuses: []domain.PaymentIntentStatus{
+			domain.PaymentIntentProviderPending,
+			domain.PaymentIntentWaitingForUser,
+		},
+	}
+	if provider := strings.TrimSpace(r.URL.Query().Get("provider")); provider != "" {
+		filter.Provider = domain.PaymentProviderCode(provider)
+	}
+	if staleOnly {
+		filter.UpdatedBefore = &staleCutoff
+	}
+	intents, err := h.deps.Payment.ListIntents(r.Context(), filter, limit+1, offset)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "list pending payment intents failed")
+		return
+	}
+	hasMore := len(intents) > limit
+	if hasMore {
+		intents = intents[:limit]
+	}
+	items := make([]PaymentIntentDTO, 0, len(intents))
+	for _, intent := range intents {
+		dto := newIntentDTO(intent, true)
+		dto.Stale = !intent.UpdatedAt.After(staleCutoff)
+		if dto.Stale {
+			dto.StaleSeconds = int64(time.Since(intent.UpdatedAt).Seconds())
+		}
+		items = append(items, dto)
+	}
+	writeJSON(w, http.StatusOK, pendingIntentsResponse{
+		Items:             items,
+		Pagination:        pagination{Limit: limit, Offset: offset, Count: len(items), HasMore: hasMore},
+		StaleAfterSeconds: int64(staleAfter.Seconds()),
+		StaleOnly:         staleOnly,
+	})
+}
+
+func (h *Handler) listUnprocessedEvents(w http.ResponseWriter, r *http.Request) {
+	if h.deps.Payment == nil {
+		writeError(w, http.StatusServiceUnavailable, "service unavailable")
+		return
+	}
+	limit, offset := parsePagination(r)
+	unprocessed := false
+	filter := domain.PaymentEventFilter{Processed: &unprocessed}
+	if provider := strings.TrimSpace(r.URL.Query().Get("provider")); provider != "" {
+		filter.Provider = domain.PaymentProviderCode(provider)
+	}
+	events, err := h.deps.Payment.ListEvents(r.Context(), filter, limit+1, offset)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "list payment events failed")
+		return
+	}
+	hasMore := len(events) > limit
+	if hasMore {
+		events = events[:limit]
+	}
+	items := make([]PaymentEventDTO, 0, len(events))
+	for _, event := range events {
+		items = append(items, newEventDTO(event))
+	}
+	writeJSON(w, http.StatusOK, listResponse[PaymentEventDTO]{
+		Items:      items,
+		Pagination: pagination{Limit: limit, Offset: offset, Count: len(items), HasMore: hasMore},
+	})
+}
+
 func (h *Handler) userIDFromTrustedRequest(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
 	raw := strings.TrimSpace(r.Header.Get("X-User-ID"))
 	if raw == "" {
@@ -289,8 +368,22 @@ type PaymentIntentDTO struct {
 	Provider          string    `json:"provider,omitempty"`
 	ProviderPaymentID string    `json:"provider_payment_id,omitempty"`
 	ConfirmationURL   string    `json:"confirmation_url,omitempty"`
+	Stale             bool      `json:"stale,omitempty"`
+	StaleSeconds      int64     `json:"stale_seconds,omitempty"`
 	CreatedAt         time.Time `json:"created_at"`
 	UpdatedAt         time.Time `json:"updated_at"`
+}
+
+type PaymentEventDTO struct {
+	ID                uuid.UUID  `json:"id"`
+	Provider          string     `json:"provider"`
+	EventType         string     `json:"event_type"`
+	ProviderPaymentID string     `json:"provider_payment_id,omitempty"`
+	ProviderRefundID  string     `json:"provider_refund_id,omitempty"`
+	DedupKey          string     `json:"dedup_key,omitempty"`
+	ProcessedAt       *time.Time `json:"processed_at,omitempty"`
+	ReceivedAt        time.Time  `json:"received_at"`
+	UpdatedAt         time.Time  `json:"updated_at"`
 }
 
 type PaymentRefundDTO struct {
@@ -307,6 +400,13 @@ type PaymentRefundDTO struct {
 type refundResponse struct {
 	Intent PaymentIntentDTO `json:"intent"`
 	Refund PaymentRefundDTO `json:"refund"`
+}
+
+type pendingIntentsResponse struct {
+	Items             []PaymentIntentDTO `json:"items"`
+	Pagination        pagination         `json:"pagination"`
+	StaleAfterSeconds int64              `json:"stale_after_seconds"`
+	StaleOnly         bool               `json:"stale_only"`
 }
 
 type pagination struct {
@@ -360,6 +460,23 @@ func newRefundDTO(refund *domain.PaymentRefund) PaymentRefundDTO {
 	}
 }
 
+func newEventDTO(event *domain.PaymentEvent) PaymentEventDTO {
+	if event == nil {
+		return PaymentEventDTO{}
+	}
+	return PaymentEventDTO{
+		ID:                event.ID,
+		Provider:          string(event.Provider),
+		EventType:         event.EventType,
+		ProviderPaymentID: event.ProviderPaymentID,
+		ProviderRefundID:  event.ProviderRefundID,
+		DedupKey:          event.DedupKey,
+		ProcessedAt:       event.ProcessedAt,
+		ReceivedAt:        event.ReceivedAt,
+		UpdatedAt:         event.UpdatedAt,
+	}
+}
+
 func parsePagination(r *http.Request) (limit, offset int) {
 	limit = defaultLimit
 	if raw := r.URL.Query().Get("limit"); raw != "" {
@@ -376,6 +493,40 @@ func parsePagination(r *http.Request) (limit, offset int) {
 		}
 	}
 	return limit, offset
+}
+
+func parseBoolQuery(r *http.Request, key string, fallback bool) bool {
+	raw := strings.TrimSpace(r.URL.Query().Get(key))
+	if raw == "" {
+		return fallback
+	}
+	value, err := strconv.ParseBool(raw)
+	if err != nil {
+		return fallback
+	}
+	return value
+}
+
+func parseDurationQuery(r *http.Request, key string, fallback, max time.Duration) time.Duration {
+	raw := strings.TrimSpace(r.URL.Query().Get(key))
+	if raw == "" {
+		return fallback
+	}
+	duration, err := time.ParseDuration(raw)
+	if err != nil {
+		if seconds, parseErr := strconv.Atoi(raw); parseErr == nil && seconds > 0 {
+			duration = time.Duration(seconds) * time.Second
+		} else {
+			return fallback
+		}
+	}
+	if duration <= 0 {
+		return fallback
+	}
+	if max > 0 && duration > max {
+		return max
+	}
+	return duration
 }
 
 func writeNotFoundOr500(w http.ResponseWriter, err error, msg string) {

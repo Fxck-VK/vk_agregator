@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -82,19 +83,16 @@ func main() {
 
 	mux := http.NewServeMux()
 	limiter := ratelimit.New(cfg.WebhookRateLimitRPS, cfg.WebhookRateLimitBurst)
-	mux.Handle("POST /billing/webhooks/yookassa", limiter.Middleware(metrics.Middleware("billing_webhook", webhookHandler(processor, logger))))
+	httpsRequired := cfg.PaymentWebhookHTTPSRequired()
+	mux.Handle("POST /billing/webhooks/yookassa", limiter.Middleware(metrics.Middleware("billing_webhook", webhookHandler(processor, logger, provider.Code(), httpsRequired))))
 	mux.Handle("GET /metrics", metrics.Handler())
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 	})
-	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
-		if err := pool.Ping(r.Context()); err != nil {
-			http.Error(w, "postgres unavailable", http.StatusServiceUnavailable)
-			return
-		}
-		w.WriteHeader(http.StatusNoContent)
-	})
+	readyHandler := readinessHandler(pool, processor, provider.Code(), logger)
+	mux.Handle("GET /readyz", metrics.Middleware("payment_readyz", readyHandler))
+	mux.Handle("GET /healthz", readyHandler)
 
 	srv := &http.Server{
 		Addr:              cfg.PaymentWebhookAddr,
@@ -105,7 +103,7 @@ func main() {
 	go runProcessorLoop(ctx, processor, cfg, logger)
 
 	go func() {
-		logger.Info("provider webhook server listening", "addr", cfg.PaymentWebhookAddr, "provider", provider.Code())
+		logger.Info("provider webhook server listening", "addr", cfg.PaymentWebhookAddr, "provider", provider.Code(), "https_required", httpsRequired)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			logger.Error("provider webhook server failed", "error", err)
 			stop()
@@ -119,8 +117,13 @@ func main() {
 	logger.Info("provider webhook server stopped")
 }
 
-func webhookHandler(processor *paymentservice.WebhookProcessor, logger *slog.Logger) http.Handler {
+func webhookHandler(processor *paymentservice.WebhookProcessor, logger *slog.Logger, provider domain.PaymentProviderCode, requireHTTPS bool) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if requireHTTPS && !isSecureWebhookRequest(r) {
+			metrics.PaymentWebhookSecurityDenials.WithLabelValues(string(provider), "insecure_transport").Inc()
+			http.Error(w, "https required", http.StatusUpgradeRequired)
+			return
+		}
 		defer r.Body.Close()
 		raw, err := readWebhookBody(w, r)
 		if err != nil {
@@ -155,6 +158,42 @@ func readWebhookBody(w http.ResponseWriter, r *http.Request) ([]byte, error) {
 	return io.ReadAll(r.Body)
 }
 
+func isSecureWebhookRequest(r *http.Request) bool {
+	if r == nil {
+		return false
+	}
+	if r.TLS != nil {
+		return true
+	}
+	if firstHeaderValue(r.Header.Get("X-Forwarded-Proto")) == "https" {
+		return true
+	}
+	for _, value := range r.Header.Values("Forwarded") {
+		if forwardedProto(value) == "https" {
+			return true
+		}
+	}
+	return strings.Contains(strings.ToLower(r.Header.Get("CF-Visitor")), `"scheme":"https"`)
+}
+
+func firstHeaderValue(value string) string {
+	if i := strings.IndexByte(value, ','); i >= 0 {
+		value = value[:i]
+	}
+	return strings.ToLower(strings.TrimSpace(value))
+}
+
+func forwardedProto(value string) string {
+	for _, part := range strings.Split(value, ";") {
+		key, raw, ok := strings.Cut(strings.TrimSpace(part), "=")
+		if !ok || !strings.EqualFold(strings.TrimSpace(key), "proto") {
+			continue
+		}
+		return strings.ToLower(strings.Trim(strings.TrimSpace(raw), `"`))
+	}
+	return ""
+}
+
 func runProcessorLoop(ctx context.Context, processor *paymentservice.WebhookProcessor, cfg config.Config, logger *slog.Logger) {
 	interval := cfg.PaymentWebhookPollInterval
 	if interval <= 0 {
@@ -178,6 +217,9 @@ func runProcessorLoop(ctx context.Context, processor *paymentservice.WebhookProc
 	}
 	process := func() {
 		processed, err := processor.ProcessBatch(ctx, batchLimit)
+		if _, statsErr := processor.InboxStats(ctx); statsErr != nil {
+			logger.Error("payment webhook inbox stats failed", "error", statsErr)
+		}
 		if err != nil {
 			logger.Error("payment webhook batch processing failed", "error", err, "processed", processed)
 			return
@@ -212,4 +254,69 @@ func runProcessorLoop(ctx context.Context, processor *paymentservice.WebhookProc
 			reconcile()
 		}
 	}
+}
+
+type postgresPinger interface {
+	Ping(context.Context) error
+}
+
+type readinessResponse struct {
+	Status         string                  `json:"status"`
+	Checks         map[string]string       `json:"checks"`
+	PaymentWebhook paymentWebhookReadiness `json:"payment_webhook"`
+}
+
+type paymentWebhookReadiness struct {
+	Provider                    string  `json:"provider"`
+	UnprocessedEvents           int64   `json:"unprocessed_events"`
+	OldestUnprocessedAgeSeconds float64 `json:"oldest_unprocessed_age_seconds"`
+	OldestUnprocessedReceivedAt string  `json:"oldest_unprocessed_received_at,omitempty"`
+}
+
+func readinessHandler(db postgresPinger, processor *paymentservice.WebhookProcessor, provider domain.PaymentProviderCode, logger *slog.Logger) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		resp := readinessResponse{
+			Status: "ok",
+			Checks: map[string]string{
+				"postgres":      "ok",
+				"webhook_inbox": "ok",
+			},
+			PaymentWebhook: paymentWebhookReadiness{
+				Provider: string(provider),
+			},
+		}
+		status := http.StatusOK
+		if err := db.Ping(r.Context()); err != nil {
+			resp.Status = "degraded"
+			resp.Checks["postgres"] = "unavailable"
+			status = http.StatusServiceUnavailable
+			logger.Error("provider webhook readiness postgres failed", "error", err)
+		}
+		if processor == nil {
+			resp.Status = "degraded"
+			resp.Checks["webhook_inbox"] = "unavailable"
+			status = http.StatusServiceUnavailable
+		} else {
+			stats, err := processor.InboxStats(r.Context())
+			if err != nil {
+				resp.Status = "degraded"
+				resp.Checks["webhook_inbox"] = "unavailable"
+				status = http.StatusServiceUnavailable
+				logger.Error("provider webhook readiness inbox stats failed", "error", err)
+			} else {
+				resp.PaymentWebhook.Provider = string(stats.Provider)
+				resp.PaymentWebhook.UnprocessedEvents = stats.UnprocessedEvents
+				if stats.OldestUnprocessedReceivedAt != nil {
+					resp.PaymentWebhook.OldestUnprocessedReceivedAt = stats.OldestUnprocessedReceivedAt.UTC().Format(time.RFC3339)
+					age := time.Since(*stats.OldestUnprocessedReceivedAt)
+					if age > 0 {
+						resp.PaymentWebhook.OldestUnprocessedAgeSeconds = age.Seconds()
+					}
+				}
+			}
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(status)
+		_ = json.NewEncoder(w).Encode(resp)
+	})
 }

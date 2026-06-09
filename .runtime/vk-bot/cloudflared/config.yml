@@ -4,5 +4,8 @@ protocol: http2
 
 ingress:
   - hostname: vk.neiirohub.ru
+    path: /billing/webhooks/yookassa
+    service: http://127.0.0.1:8082
+  - hostname: vk.neiirohub.ru
     service: http://127.0.0.1:8080
   - service: http_status:404

@@ -1282,6 +1282,57 @@ func TestHandler_GetBalance(t *testing.T) {
 	}
 }
 
+func TestHandler_ListPaymentProductsReturnsActiveCatalog(t *testing.T) {
+	fixture := newTestFixture("", nil)
+	fixture.paymentRepo.PutProduct(&domain.PaymentProduct{
+		Code:         "credits_500",
+		Title:        "500 credits",
+		Amount:       45000,
+		Currency:     domain.CurrencyRUB,
+		Credits:      500,
+		PriceVersion: 1,
+		IsActive:     true,
+	})
+	fixture.paymentRepo.PutProduct(&domain.PaymentProduct{
+		Code:         "credits_100",
+		Title:        "100 credits",
+		Amount:       9900,
+		Currency:     domain.CurrencyRUB,
+		Credits:      100,
+		PriceVersion: 1,
+		IsActive:     true,
+	})
+	fixture.paymentRepo.PutProduct(&domain.PaymentProduct{
+		Code:         "hidden",
+		Title:        "Hidden",
+		Amount:       1,
+		Currency:     domain.CurrencyRUB,
+		Credits:      1,
+		PriceVersion: 1,
+		IsActive:     false,
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/miniapp/payment-products", nil)
+	req.Header.Set("X-Launch-Params", devLaunchParams(777))
+	rec := httptest.NewRecorder()
+	fixture.handler.Routes().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var resp struct {
+		Items []miniappinbound.PaymentProductDTO `json:"items"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode products response: %v", err)
+	}
+	if len(resp.Items) != 2 {
+		t.Fatalf("expected 2 active products, got %+v", resp.Items)
+	}
+	if resp.Items[0].Code != "credits_100" || resp.Items[1].Code != "credits_500" {
+		t.Fatalf("unexpected product ordering: %+v", resp.Items)
+	}
+}
+
 func TestHandler_CreatePaymentIntent_IdempotentAndSafeDTO(t *testing.T) {
 	fixture := newTestFixture("", nil)
 	product := &domain.PaymentProduct{
@@ -1334,6 +1385,41 @@ func TestHandler_CreatePaymentIntent_IdempotentAndSafeDTO(t *testing.T) {
 		t.Fatalf("replay created a different intent: %s != %s", second.ID, first.ID)
 	}
 
+	another := httptest.NewRequest(http.MethodPost, "/miniapp/payments/intents", bytes.NewReader(body))
+	another.Header.Set("Content-Type", "application/json")
+	another.Header.Set("X-Launch-Params", devLaunchParams(777))
+	another.Header.Set("X-Idempotency-Key", "pay-client-2")
+	anotherRec := httptest.NewRecorder()
+	routes.ServeHTTP(anotherRec, another)
+	if anotherRec.Code != http.StatusOK {
+		t.Fatalf("expected active pending reuse 200, got %d: %s", anotherRec.Code, anotherRec.Body.String())
+	}
+	var reused miniappinbound.PaymentIntentDTO
+	if err := json.Unmarshal(anotherRec.Body.Bytes(), &reused); err != nil {
+		t.Fatalf("decode active reuse dto: %v", err)
+	}
+	if reused.ID != first.ID || !reused.ReusedActivePayment || reused.Notice == "" {
+		t.Fatalf("expected active payment reuse, got %+v", reused)
+	}
+
+	forceBody := []byte(`{"product_code":"credits_100","receipt_email":"user@example.com","force_new":true}`)
+	forcedReq := httptest.NewRequest(http.MethodPost, "/miniapp/payments/intents", bytes.NewReader(forceBody))
+	forcedReq.Header.Set("Content-Type", "application/json")
+	forcedReq.Header.Set("X-Launch-Params", devLaunchParams(777))
+	forcedReq.Header.Set("X-Idempotency-Key", "pay-client-3")
+	forcedRec := httptest.NewRecorder()
+	routes.ServeHTTP(forcedRec, forcedReq)
+	if forcedRec.Code != http.StatusCreated {
+		t.Fatalf("expected force_new 201, got %d: %s", forcedRec.Code, forcedRec.Body.String())
+	}
+	var forced miniappinbound.PaymentIntentDTO
+	if err := json.Unmarshal(forcedRec.Body.Bytes(), &forced); err != nil {
+		t.Fatalf("decode forced dto: %v", err)
+	}
+	if forced.ID == first.ID || forced.ReusedActivePayment {
+		t.Fatalf("expected new forced payment intent, got %+v first=%+v", forced, first)
+	}
+
 	listReq := httptest.NewRequest(http.MethodGet, "/miniapp/payments", nil)
 	listReq.Header.Set("X-Launch-Params", devLaunchParams(777))
 	listRec := httptest.NewRecorder()
@@ -1347,7 +1433,7 @@ func TestHandler_CreatePaymentIntent_IdempotentAndSafeDTO(t *testing.T) {
 	if err := json.Unmarshal(listRec.Body.Bytes(), &listResp); err != nil {
 		t.Fatalf("decode list: %v", err)
 	}
-	if len(listResp.Items) != 1 || listResp.Items[0].ID != first.ID {
+	if len(listResp.Items) != 2 || listResp.Items[0].ID != forced.ID || listResp.Items[1].ID != first.ID {
 		t.Fatalf("unexpected payment list: %+v", listResp.Items)
 	}
 

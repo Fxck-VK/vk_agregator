@@ -99,6 +99,7 @@ type Config struct {
 	YooKassaBaseURL                   string
 	YooKassaReturnURL                 string
 	YooKassaWebhookIPAllowlistEnabled bool
+	PaymentWebhookRequireHTTPS        bool
 	PaymentWebhookAddr                string
 	PaymentWebhookPollInterval        time.Duration
 	PaymentWebhookBatchLimit          int
@@ -269,6 +270,13 @@ func (c Config) IsProduction() bool {
 	return strings.EqualFold(c.Env, "production") || strings.EqualFold(c.Env, "prod")
 }
 
+// PaymentWebhookHTTPSRequired reports whether the payment webhook receiver must
+// reject requests that did not arrive over HTTPS or through a trusted HTTPS
+// reverse proxy.
+func (c Config) PaymentWebhookHTTPSRequired() bool {
+	return c.PaymentWebhookRequireHTTPS || c.IsProduction()
+}
+
 // Validate fails closed: in production, secrets that protect inbound webhooks
 // and the admin API must be set. Returns a descriptive error otherwise.
 func (c Config) Validate() error {
@@ -406,6 +414,7 @@ func Load() Config {
 		YooKassaBaseURL:                   env("YOOKASSA_BASE_URL", "https://api.yookassa.ru/v3"),
 		YooKassaReturnURL:                 env("YOOKASSA_RETURN_URL", ""),
 		YooKassaWebhookIPAllowlistEnabled: envBool("YOOKASSA_WEBHOOK_IP_ALLOWLIST_ENABLED", true),
+		PaymentWebhookRequireHTTPS:        envBool("PAYMENT_WEBHOOK_REQUIRE_HTTPS", false),
 		PaymentWebhookAddr:                env("PAYMENT_WEBHOOK_ADDR", ":8082"),
 		PaymentWebhookPollInterval:        envDuration("PAYMENT_WEBHOOK_POLL_INTERVAL", 5*time.Second),
 		PaymentWebhookBatchLimit:          envInt("PAYMENT_WEBHOOK_BATCH_LIMIT", 20),

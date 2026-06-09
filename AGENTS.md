@@ -28,7 +28,9 @@ top-up transactions, payment provider port with mock/YooKassa adapters and facto
 routes and authenticated Mini App `/miniapp/payments*` safe DTO routes,
 deduplicated YooKassa webhook inbox and async provider-verified
 webhook-to-ledger top-up processing, stale payment-intent reconciliation,
-protected operator payment sync/refund actions and payment Prometheus metrics,
+protected operator payment sync/refund actions, production HTTPS webhook guard
+and payment Prometheus metrics,
+intent-level 54-FZ receipt snapshots for YooKassa payment retries/refunds,
 and OpenAI text/image artifact scanning are
 implemented. Credential-bound live smoke and the full video media pipeline
 (scan/transcode/VK-ready variants) remain follow-up work.
@@ -68,8 +70,10 @@ Current integration guardrails:
 - VK referral links, account screens and `/start <code>` handling are control paths and must not create billable Jobs or call providers.
 - Payment top-ups must use payment intents, provider webhook inbox/dedup and committed `topup` ledger entries; never grant credits from a surface handler or frontend-confirmed redirect.
 - Payment intent creation APIs must require a trusted authenticated user context plus caller idempotency key; never trust `user_id` from a public JSON body.
+- Payment intents must snapshot 54-FZ fiscal receipt fields (`receipt_description`, `vat_code`, `payment_subject`, `payment_mode`) at creation time; payment retries and manual refunds must use the intent snapshot, not mutable current `payment_products` values.
 - `/billing/*` payment/operator APIs must fail closed without admin auth and must not expose provider-native YooKassa payloads.
 - Payment provider webhooks must be accepted only through provider webhook intake, written to `payment_events`, verified through provider `GetPayment` before ledger mutation, and processed idempotently.
+- Production payment provider webhooks must arrive over HTTPS or through a trusted reverse proxy that forwards HTTPS scheme headers; do not expose a raw HTTP provider-webhook origin publicly.
 - Payment reconciliation must verify stale provider-backed intents through `GetPayment` and must use the same state-machine/ledger path as webhook processing.
 - Manual payment refunds are protected operator actions only. MVP refunds are full refunds and must refuse when the current credit balance cannot cover the top-up credits; do not refund already spent credits until lot/FIFO attribution exists.
 - YooKassa refund webhook dedup must include `provider_refund_id`; automatic refund balance reversal must not be guessed without an explicit spent-credit refund policy.

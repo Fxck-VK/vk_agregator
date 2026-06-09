@@ -278,9 +278,18 @@ type BillingRepository interface {
 // PaymentIntentFilter narrows admin payment-intent listings. Zero-valued
 // fields are ignored.
 type PaymentIntentFilter struct {
-	UserID   *uuid.UUID
-	Status   PaymentIntentStatus
-	Provider PaymentProviderCode
+	UserID        *uuid.UUID
+	Status        PaymentIntentStatus
+	Statuses      []PaymentIntentStatus
+	Provider      PaymentProviderCode
+	UpdatedBefore *time.Time
+}
+
+// PaymentEventFilter narrows protected operator payment-event listings. It
+// must never be used to expose raw provider payloads to public surfaces.
+type PaymentEventFilter struct {
+	Provider  PaymentProviderCode
+	Processed *bool
 }
 
 // PaymentReconciliationFilter narrows payment intents that should be synced
@@ -294,6 +303,8 @@ type PaymentReconciliationFilter struct {
 // PaymentRepository persists products, payment intents and provider webhook
 // inbox rows. It does not mutate billing balances directly.
 type PaymentRepository interface {
+	// ListActiveProducts lists active product catalog entries in display order.
+	ListActiveProducts(ctx context.Context) ([]*PaymentProduct, error)
 	// GetActiveProductByCode fetches an active product catalog entry by code.
 	GetActiveProductByCode(ctx context.Context, code string) (*PaymentProduct, error)
 	// GetProductByID fetches a product by id, active or inactive.
@@ -330,6 +341,12 @@ type PaymentRepository interface {
 	// ListUnprocessedEvents lists unprocessed provider webhook inbox events in
 	// receive order.
 	ListUnprocessedEvents(ctx context.Context, provider PaymentProviderCode, limit int) ([]*PaymentEvent, error)
+	// ListEvents lists provider webhook inbox events for protected operator
+	// endpoints. Callers must map results to DTOs that omit Payload.
+	ListEvents(ctx context.Context, filter PaymentEventFilter, limit, offset int) ([]*PaymentEvent, error)
+	// WebhookInboxStats returns current unprocessed provider webhook backlog
+	// without exposing raw provider payloads.
+	WebhookInboxStats(ctx context.Context, provider PaymentProviderCode) (PaymentWebhookInboxStats, error)
 	// MarkEventProcessed marks a provider webhook inbox event as processed.
 	MarkEventProcessed(ctx context.Context, id uuid.UUID, processedAt time.Time) error
 

@@ -124,7 +124,13 @@ Real integrations are implemented at adapter level and remain **opt-in**:
   machine. Migration `000009_payments` adds `payment_products`,
   `payment_intents`, `payment_events` and `payment_refunds` with price
   snapshots, 54-FZ receipt contact fields, webhook inbox dedup and
-  reconciliation indexes. Runtime config exposes `PAYMENT_PROVIDER`, YooKassa
+  reconciliation indexes. Migration `000010_payment_product_catalog` seeds the
+  initial active credit packages consumed by both VK Bot and VK Mini App.
+  Migration `000011_payment_intent_receipt_snapshot` snapshots
+  `receipt_description`, `vat_code`, `payment_subject` and `payment_mode` onto
+  each intent, so YooKassa payment retries and refunds use the original fiscal
+  position instead of the current product catalog row.
+  Runtime config exposes `PAYMENT_PROVIDER`, YooKassa
   env placeholders and payment reconciliation intervals. `billingservice.GrantWith(ctx, repo, ...)`
   exists so webhook/reconciliation processors can commit
   `payment_events.processed_at`, `payment_intents.status=succeeded` and the
@@ -132,21 +138,31 @@ Real integrations are implemented at adapter level and remain **opt-in**:
   provider port, mock adapter and YooKassa adapter isolate services from
   provider-native API shapes. `internal/service/paymentservice` now creates
   idempotent payment intents, calls the selected provider, stores
-  `provider_payment_id` / `confirmation_url`, and returns safe DTOs. Protected
+  `provider_payment_id` / `confirmation_url`, stores the 54-FZ receipt snapshot
+  from the selected product, and returns safe DTOs. Protected
   operator routes exist under `/billing/payment-intents`,
   `/billing/payment-history`, `/billing/payment-intents/{id}/sync` and
   `/billing/payment-intents/{id}/refund`; authenticated Mini App routes exist under
-  `/miniapp/payments*`. `cmd/provider-webhook` exposes
+  `/miniapp/payment-products` and `/miniapp/payments*`. The Mini App Settings
+  payment UI loads active backend products, requires a receipt email or phone,
+  creates an intent with `X-Idempotency-Key` and redirects the user to the safe
+  `confirmation_url`. The VK Bot top-up control path uses the same product
+  catalog, asks for receipt contact, creates a payment intent through
+  `paymentservice` and sends a payment link; it does not grant credits from the
+  bot handler. `cmd/provider-webhook` exposes
   `POST /billing/webhooks/yookassa`, stores raw provider events in the
   `payment_events` inbox, returns 200 quickly, then asynchronously verifies the
   provider payment through `GetPayment`, applies the intent state machine and
   posts idempotent ledger `topup` entries through `GrantWith`. It also
   reconciles stale provider-backed intents. Manual refunds are admin-only,
-  full-refund MVP actions: they require an idempotency key, refuse when the
-  current credit balance cannot cover the top-up credits, and use ledger
-  adjustment entries instead of direct balance mutation. Product catalog
-  management/seed data, partial refund attribution, automatic refund webhook
-  reversal and live YooKassa smoke remain follow-up work.
+  full-refund MVP actions: they require an idempotency key, only operate on
+  successful intents, refuse when the current credit balance cannot cover the
+  top-up credits, and also refuse if the ledger shows committed or pending
+  negative movements after that exact top-up. Refund debits use ledger
+  adjustment entries instead of direct balance mutation. Product catalog admin
+  management, partial refund attribution, automatic refund webhook reversal and
+  live YooKassa smoke remain follow-up work. User return/redirect after payment
+  is navigation only and never grants credits by itself.
 - VK inline menu navigation uses a hybrid UX: if the last bot message is the
   active menu, inline button clicks edit it through VK `messages.edit`; pressing
   the persistent lower `Показать меню` button always sends a fresh menu at the

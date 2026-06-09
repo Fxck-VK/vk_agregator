@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"strconv"
 	"strings"
@@ -29,7 +30,8 @@ const paymentProductColumns = `id, code, title, amount, currency, credits,
 	created_at, updated_at`
 
 const paymentIntentColumns = `id, user_id, product_id, status, amount, currency,
-	credits, price_version, provider, provider_payment_id, confirmation_url,
+	credits, price_version, receipt_description, vat_code, payment_subject,
+	payment_mode, provider, provider_payment_id, confirmation_url,
 	idempotency_key, receipt_email, receipt_phone, metadata, created_at,
 	updated_at, expires_at`
 
@@ -39,6 +41,28 @@ const paymentEventColumns = `id, provider, event_type, provider_payment_id,
 
 const paymentRefundColumns = `id, intent_id, provider_refund_id, amount, status,
 	idempotency_key, reason, created_at, updated_at`
+
+// ListActiveProducts lists active product catalog entries by amount.
+func (r *PaymentRepository) ListActiveProducts(ctx context.Context) ([]*domain.PaymentProduct, error) {
+	const q = `SELECT ` + paymentProductColumns + `
+		FROM payment_products
+		WHERE is_active = true
+		ORDER BY amount ASC, code ASC`
+	rows, err := r.db.Query(ctx, q)
+	if err != nil {
+		return nil, mapError(err)
+	}
+	defer rows.Close()
+	products := []*domain.PaymentProduct{}
+	for rows.Next() {
+		var product domain.PaymentProduct
+		if err := scanPaymentProduct(rows, &product); err != nil {
+			return nil, mapError(err)
+		}
+		products = append(products, &product)
+	}
+	return products, mapError(rows.Err())
+}
 
 // GetActiveProductByCode fetches an active product by code.
 func (r *PaymentRepository) GetActiveProductByCode(ctx context.Context, code string) (*domain.PaymentProduct, error) {
@@ -79,10 +103,11 @@ func (r *PaymentRepository) CreateIntent(ctx context.Context, intent *domain.Pay
 	const q = `
 		INSERT INTO payment_intents (
 			id, user_id, product_id, status, amount, currency, credits,
-			price_version, provider, provider_payment_id, confirmation_url,
+			price_version, receipt_description, vat_code, payment_subject,
+			payment_mode, provider, provider_payment_id, confirmation_url,
 			idempotency_key, receipt_email, receipt_phone, metadata, expires_at
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, COALESCE($15::jsonb, '{}'::jsonb), $16)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, COALESCE($19::jsonb, '{}'::jsonb), $20)
 		RETURNING ` + paymentIntentColumns
 	return mapError(scanPaymentIntent(r.db.QueryRow(ctx, q,
 		intent.ID,
@@ -93,6 +118,10 @@ func (r *PaymentRepository) CreateIntent(ctx context.Context, intent *domain.Pay
 		intent.Currency,
 		intent.Credits,
 		intent.PriceVersion,
+		strings.TrimSpace(intent.ReceiptDescription),
+		intent.VATCode,
+		strings.TrimSpace(intent.PaymentSubject),
+		strings.TrimSpace(intent.PaymentMode),
 		intent.Provider,
 		nullEmptyString(intent.ProviderPaymentID),
 		intent.ConfirmationURL,
@@ -196,13 +225,18 @@ func (r *PaymentRepository) ListIntents(ctx context.Context, filter domain.Payme
 		args = append(args, *filter.UserID)
 		where = append(where, "user_id = $"+strconv.Itoa(len(args)))
 	}
-	if filter.Status != "" {
-		args = append(args, filter.Status)
-		where = append(where, "status = $"+strconv.Itoa(len(args)))
+	statuses := paymentIntentStatuses(filter)
+	if len(statuses) > 0 {
+		args = append(args, statuses)
+		where = append(where, "status = ANY($"+strconv.Itoa(len(args))+")")
 	}
 	if filter.Provider != "" {
 		args = append(args, filter.Provider)
 		where = append(where, "provider = $"+strconv.Itoa(len(args)))
+	}
+	if filter.UpdatedBefore != nil && !filter.UpdatedBefore.IsZero() {
+		args = append(args, *filter.UpdatedBefore)
+		where = append(where, "updated_at <= $"+strconv.Itoa(len(args)))
 	}
 	args = append(args, limit, offset)
 	query := `SELECT ` + paymentIntentColumns + `
@@ -216,6 +250,28 @@ func (r *PaymentRepository) ListIntents(ctx context.Context, filter domain.Payme
 	}
 	defer rows.Close()
 	return scanPaymentIntents(rows)
+}
+
+func paymentIntentStatuses(filter domain.PaymentIntentFilter) []string {
+	seen := map[string]bool{}
+	statuses := []string{}
+	if filter.Status != "" {
+		value := string(filter.Status)
+		seen[value] = true
+		statuses = append(statuses, value)
+	}
+	for _, status := range filter.Statuses {
+		if status == "" {
+			continue
+		}
+		value := string(status)
+		if seen[value] {
+			continue
+		}
+		seen[value] = true
+		statuses = append(statuses, value)
+	}
+	return statuses
 }
 
 // ListIntentsForReconciliation lists stale provider-backed intents.
@@ -305,6 +361,56 @@ func (r *PaymentRepository) ListUnprocessedEvents(ctx context.Context, provider 
 	}
 	defer rows.Close()
 	return scanPaymentEvents(rows)
+}
+
+func (r *PaymentRepository) ListEvents(ctx context.Context, filter domain.PaymentEventFilter, limit, offset int) ([]*domain.PaymentEvent, error) {
+	args := []any{}
+	where := []string{"1=1"}
+	if filter.Provider != "" {
+		args = append(args, filter.Provider)
+		where = append(where, "provider = $"+strconv.Itoa(len(args)))
+	}
+	if filter.Processed != nil {
+		if *filter.Processed {
+			where = append(where, "processed_at IS NOT NULL")
+		} else {
+			where = append(where, "processed_at IS NULL")
+		}
+	}
+	args = append(args, limit, offset)
+	query := `SELECT ` + paymentEventColumns + `
+		FROM payment_events
+		WHERE ` + strings.Join(where, " AND ") + `
+		ORDER BY received_at ASC
+		LIMIT $` + strconv.Itoa(len(args)-1) + ` OFFSET $` + strconv.Itoa(len(args))
+	rows, err := r.db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, mapError(err)
+	}
+	defer rows.Close()
+	return scanPaymentEvents(rows)
+}
+
+// WebhookInboxStats returns current unprocessed provider webhook backlog.
+func (r *PaymentRepository) WebhookInboxStats(ctx context.Context, provider domain.PaymentProviderCode) (domain.PaymentWebhookInboxStats, error) {
+	const q = `
+		SELECT count(*)::bigint, min(received_at)
+		FROM payment_events
+		WHERE provider = $1 AND processed_at IS NULL`
+	var count int64
+	var oldest sql.NullTime
+	if err := r.db.QueryRow(ctx, q, provider).Scan(&count, &oldest); err != nil {
+		return domain.PaymentWebhookInboxStats{}, mapError(err)
+	}
+	stats := domain.PaymentWebhookInboxStats{
+		Provider:          provider,
+		UnprocessedEvents: count,
+	}
+	if oldest.Valid {
+		t := oldest.Time
+		stats.OldestUnprocessedReceivedAt = &t
+	}
+	return stats, nil
 }
 
 // MarkEventProcessed marks a provider webhook event as processed.
@@ -399,6 +505,10 @@ func scanPaymentIntent(row rowScanner, intent *domain.PaymentIntent) error {
 		&intent.Currency,
 		&intent.Credits,
 		&intent.PriceVersion,
+		&intent.ReceiptDescription,
+		&intent.VATCode,
+		&intent.PaymentSubject,
+		&intent.PaymentMode,
 		&intent.Provider,
 		&providerPaymentID,
 		&intent.ConfirmationURL,

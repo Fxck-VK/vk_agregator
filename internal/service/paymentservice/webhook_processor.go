@@ -129,6 +129,7 @@ func (p *WebhookProcessor) ProcessBatch(ctx context.Context, limit int) (int, er
 	var firstErr error
 	for _, event := range events {
 		if err := p.ProcessEvent(ctx, event); err != nil {
+			metrics.PaymentWebhookProcessingErrors.WithLabelValues(string(p.provider.Code()), webhookProcessingStage(err)).Inc()
 			if firstErr == nil {
 				firstErr = err
 			}
@@ -137,6 +138,23 @@ func (p *WebhookProcessor) ProcessBatch(ctx context.Context, limit int) (int, er
 		processed++
 	}
 	return processed, firstErr
+}
+
+// InboxStats returns and observes the current unprocessed webhook inbox backlog
+// for this processor's provider.
+func (p *WebhookProcessor) InboxStats(ctx context.Context) (domain.PaymentWebhookInboxStats, error) {
+	if p == nil || p.repo == nil || p.provider == nil {
+		return domain.PaymentWebhookInboxStats{}, errors.New("paymentservice: webhook processor is not configured")
+	}
+	stats, err := p.repo.WebhookInboxStats(ctx, p.provider.Code())
+	if err != nil {
+		return domain.PaymentWebhookInboxStats{}, err
+	}
+	if stats.Provider == "" {
+		stats.Provider = p.provider.Code()
+	}
+	p.observeInboxStats(stats)
+	return stats, nil
 }
 
 // ProcessEvent verifies and applies one stored webhook event.
@@ -157,15 +175,9 @@ func (p *WebhookProcessor) ProcessEvent(ctx context.Context, event *domain.Payme
 		return ErrWebhookUnsupported
 	}
 
-	providerPayment, err := p.provider.GetPayment(ctx, event.ProviderPaymentID)
+	providerPayment, err := p.verifiedProviderPayment(ctx, event.ProviderPaymentID)
 	if err != nil {
-		return fmt.Errorf("%w: get provider payment: %v", ErrWebhookUnverified, err)
-	}
-	if strings.TrimSpace(providerPayment.ProviderPaymentID) != strings.TrimSpace(event.ProviderPaymentID) {
-		return fmt.Errorf("%w: provider payment id", ErrWebhookMismatch)
-	}
-	if providerPayment.Status == "" || !providerPayment.Status.Valid() {
-		return fmt.Errorf("%w: provider status %q", ErrWebhookMismatch, providerPayment.Status)
+		return err
 	}
 
 	return p.tx.RunPaymentTx(ctx, func(ctx context.Context, payments domain.PaymentRepository, billingRepo domain.BillingRepository) error {
@@ -294,6 +306,11 @@ type RefundIntentResult struct {
 	Refund *domain.PaymentRefund
 }
 
+const (
+	refundLedgerScanPageSize   = 200
+	refundLedgerScanMaxEntries = 5000
+)
+
 // RefundIntent performs a manual full refund. It refuses to request money back
 // when the user's current balance cannot cover the purchased credits.
 func (p *WebhookProcessor) RefundIntent(ctx context.Context, in RefundIntentInput) (RefundIntentResult, error) {
@@ -306,6 +323,9 @@ func (p *WebhookProcessor) RefundIntent(ctx context.Context, in RefundIntentInpu
 		return RefundIntentResult{}, ErrInvalidInput
 	}
 	if existing, err := p.repo.GetRefundByIdempotencyKey(ctx, in.IdempotencyKey); err == nil {
+		if existing.IntentID != in.IntentID {
+			return RefundIntentResult{}, ErrForbidden
+		}
 		intent, getErr := p.repo.GetIntentByID(ctx, existing.IntentID)
 		if getErr != nil {
 			return RefundIntentResult{}, getErr
@@ -333,6 +353,9 @@ func (p *WebhookProcessor) RefundIntent(ctx context.Context, in RefundIntentInpu
 		}
 		if account.BalanceCached < intent.Credits {
 			return ErrRefundCreditsSpent
+		}
+		if err := ensureTopupCreditsRefundable(ctx, billingRepo, account.ID, intent); err != nil {
+			return err
 		}
 		refund = &domain.PaymentRefund{
 			IntentID:       intent.ID,
@@ -366,13 +389,23 @@ func (p *WebhookProcessor) RefundIntent(ctx context.Context, in RefundIntentInpu
 		ProviderPaymentID: intent.ProviderPaymentID,
 		Amount:            intent.Amount,
 		Currency:          intent.Currency,
+		Description:       paymentIntentDescription(intent, nil),
 		Reason:            in.Reason,
 		ReceiptEmail:      intent.ReceiptEmail,
 		ReceiptPhone:      intent.ReceiptPhone,
+		VATCode:           paymentIntentVATCode(intent, nil),
+		PaymentSubject:    paymentIntentSubject(intent, nil),
+		PaymentMode:       paymentIntentMode(intent, nil),
 		IdempotencyKey:    "payrefund:" + refund.ID.String(),
 	})
 	if err != nil {
-		_ = p.compensateFailedRefund(ctx, intent, refund)
+		recordPaymentProviderError(p.provider.Code(), "create_refund", err)
+		metrics.PaymentRefunds.WithLabelValues(string(p.provider.Code()), "provider_error").Inc()
+		if compErr := p.compensateFailedRefund(ctx, intent, refund); compErr != nil {
+			metrics.PaymentRefunds.WithLabelValues(string(p.provider.Code()), "rollback_failed").Inc()
+			return RefundIntentResult{}, fmt.Errorf("paymentservice: refund provider failed and rollback failed: %w: %v", err, compErr)
+		}
+		metrics.PaymentRefunds.WithLabelValues(string(p.provider.Code()), "rollback_succeeded").Inc()
 		return RefundIntentResult{}, err
 	}
 	if err := p.tx.RunPaymentTx(ctx, func(ctx context.Context, payments domain.PaymentRepository, billingRepo domain.BillingRepository) error {
@@ -402,7 +435,23 @@ func (p *WebhookProcessor) RefundIntent(ctx context.Context, in RefundIntentInpu
 	if err != nil {
 		return RefundIntentResult{}, err
 	}
+	metrics.PaymentRefunds.WithLabelValues(string(p.provider.Code()), string(updatedRefund.Status)).Inc()
 	return RefundIntentResult{Intent: updatedIntent, Refund: updatedRefund}, nil
+}
+
+func webhookProcessingStage(err error) string {
+	switch {
+	case errors.Is(err, ErrWebhookInvalid):
+		return "invalid"
+	case errors.Is(err, ErrWebhookUnsupported):
+		return "unsupported"
+	case errors.Is(err, ErrWebhookUnverified):
+		return "provider_unverified"
+	case errors.Is(err, ErrWebhookMismatch):
+		return "provider_mismatch"
+	default:
+		return "processing"
+	}
 }
 
 func (p *WebhookProcessor) compensateFailedRefund(ctx context.Context, intent *domain.PaymentIntent, refund *domain.PaymentRefund) error {
@@ -425,9 +474,52 @@ func (p *WebhookProcessor) compensateFailedRefund(ctx context.Context, intent *d
 	})
 }
 
+func ensureTopupCreditsRefundable(ctx context.Context, repo domain.BillingRepository, accountID uuid.UUID, intent *domain.PaymentIntent) error {
+	if intent == nil || strings.TrimSpace(intent.ProviderPaymentID) == "" || intent.Credits <= 0 {
+		return ErrRefundNotAllowed
+	}
+	topupKey := topUpLedgerKey(intent.Provider, intent.ProviderPaymentID)
+	scanned := 0
+	for offset := 0; scanned < refundLedgerScanMaxEntries; offset += refundLedgerScanPageSize {
+		limit := refundLedgerScanPageSize
+		if remaining := refundLedgerScanMaxEntries - scanned; remaining < limit {
+			limit = remaining
+		}
+		entries, err := repo.ListEntries(ctx, accountID, limit, offset)
+		if err != nil {
+			return err
+		}
+		if len(entries) == 0 {
+			return ErrRefundNotAllowed
+		}
+		for _, entry := range entries {
+			if entry == nil {
+				continue
+			}
+			if entry.IdempotencyKey == topupKey {
+				if entry.Type != domain.LedgerTopup ||
+					entry.Status != domain.LedgerStatusCommitted ||
+					entry.Amount != intent.Credits {
+					return ErrRefundNotAllowed
+				}
+				return nil
+			}
+			if entry.Amount < 0 && (entry.Status == domain.LedgerStatusCommitted || entry.Status == domain.LedgerStatusPending) {
+				return ErrRefundCreditsSpent
+			}
+		}
+		scanned += len(entries)
+		if len(entries) < limit {
+			return ErrRefundNotAllowed
+		}
+	}
+	return ErrRefundNotAllowed
+}
+
 func (p *WebhookProcessor) verifiedProviderPayment(ctx context.Context, providerPaymentID string) (domain.ProviderPayment, error) {
 	providerPayment, err := p.provider.GetPayment(ctx, providerPaymentID)
 	if err != nil {
+		recordPaymentProviderError(p.provider.Code(), "get_payment", err)
 		return domain.ProviderPayment{}, fmt.Errorf("%w: get provider payment: %v", ErrWebhookUnverified, err)
 	}
 	if strings.TrimSpace(providerPayment.ProviderPaymentID) != strings.TrimSpace(providerPaymentID) {
@@ -437,6 +529,25 @@ func (p *WebhookProcessor) verifiedProviderPayment(ctx context.Context, provider
 		return domain.ProviderPayment{}, fmt.Errorf("%w: provider status %q", ErrWebhookMismatch, providerPayment.Status)
 	}
 	return providerPayment, nil
+}
+
+func (p *WebhookProcessor) observeInboxStats(stats domain.PaymentWebhookInboxStats) {
+	provider := stats.Provider
+	if provider == "" && p != nil && p.provider != nil {
+		provider = p.provider.Code()
+	}
+	if provider == "" {
+		provider = "unknown"
+	}
+	metrics.PaymentWebhookUnprocessedEvents.WithLabelValues(string(provider)).Set(float64(stats.UnprocessedEvents))
+	ageSeconds := 0.0
+	if stats.UnprocessedEvents > 0 && stats.OldestUnprocessedReceivedAt != nil {
+		age := p.now().Sub(*stats.OldestUnprocessedReceivedAt)
+		if age > 0 {
+			ageSeconds = age.Seconds()
+		}
+	}
+	metrics.PaymentWebhookOldestUnprocessedAgeSeconds.WithLabelValues(string(provider)).Set(ageSeconds)
 }
 
 type applyResult struct {
@@ -517,4 +628,27 @@ func paymentSource(intent *domain.PaymentIntent) string {
 		return "unknown"
 	}
 	return metricLabel(metadata.Source)
+}
+
+func recordPaymentProviderError(provider domain.PaymentProviderCode, operation string, err error) {
+	if provider == "" {
+		provider = "unknown"
+	}
+	if strings.TrimSpace(operation) == "" {
+		operation = "unknown"
+	}
+	metrics.PaymentProviderErrors.WithLabelValues(string(provider), operation, paymentProviderErrorClass(err)).Inc()
+}
+
+func paymentProviderErrorClass(err error) string {
+	switch {
+	case errors.Is(err, context.DeadlineExceeded):
+		return "timeout"
+	case errors.Is(err, context.Canceled):
+		return "canceled"
+	case errors.Is(err, domain.ErrNotFound):
+		return "not_found"
+	default:
+		return "provider_error"
+	}
 }

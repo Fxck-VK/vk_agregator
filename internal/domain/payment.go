@@ -142,24 +142,28 @@ type TopUpPackage = PaymentProduct
 // PaymentIntent is an idempotent attempt to purchase credits. Amount, credits
 // and price version are snapshots from PaymentProduct at creation time.
 type PaymentIntent struct {
-	ID                uuid.UUID           `json:"id"`
-	UserID            uuid.UUID           `json:"user_id"`
-	ProductID         *uuid.UUID          `json:"product_id,omitempty"`
-	Status            PaymentIntentStatus `json:"status"`
-	Amount            int64               `json:"amount"`
-	Currency          Currency            `json:"currency"`
-	Credits           int64               `json:"credits"`
-	PriceVersion      int                 `json:"price_version"`
-	Provider          PaymentProviderCode `json:"provider"`
-	ProviderPaymentID string              `json:"provider_payment_id,omitempty"`
-	ConfirmationURL   string              `json:"confirmation_url,omitempty"`
-	IdempotencyKey    string              `json:"idempotency_key"`
-	ReceiptEmail      string              `json:"receipt_email,omitempty"`
-	ReceiptPhone      string              `json:"receipt_phone,omitempty"`
-	Metadata          json.RawMessage     `json:"metadata,omitempty"`
-	CreatedAt         time.Time           `json:"created_at"`
-	UpdatedAt         time.Time           `json:"updated_at"`
-	ExpiresAt         *time.Time          `json:"expires_at,omitempty"`
+	ID                 uuid.UUID           `json:"id"`
+	UserID             uuid.UUID           `json:"user_id"`
+	ProductID          *uuid.UUID          `json:"product_id,omitempty"`
+	Status             PaymentIntentStatus `json:"status"`
+	Amount             int64               `json:"amount"`
+	Currency           Currency            `json:"currency"`
+	Credits            int64               `json:"credits"`
+	PriceVersion       int                 `json:"price_version"`
+	ReceiptDescription string              `json:"receipt_description,omitempty"`
+	VATCode            *int16              `json:"vat_code,omitempty"`
+	PaymentSubject     string              `json:"payment_subject,omitempty"`
+	PaymentMode        string              `json:"payment_mode,omitempty"`
+	Provider           PaymentProviderCode `json:"provider"`
+	ProviderPaymentID  string              `json:"provider_payment_id,omitempty"`
+	ConfirmationURL    string              `json:"confirmation_url,omitempty"`
+	IdempotencyKey     string              `json:"idempotency_key"`
+	ReceiptEmail       string              `json:"receipt_email,omitempty"`
+	ReceiptPhone       string              `json:"receipt_phone,omitempty"`
+	Metadata           json.RawMessage     `json:"metadata,omitempty"`
+	CreatedAt          time.Time           `json:"created_at"`
+	UpdatedAt          time.Time           `json:"updated_at"`
+	ExpiresAt          *time.Time          `json:"expires_at,omitempty"`
 }
 
 // PaymentEvent is the provider webhook inbox row. It stores raw provider data
@@ -176,6 +180,14 @@ type PaymentEvent struct {
 	ProcessedAt       *time.Time          `json:"processed_at,omitempty"`
 	ReceivedAt        time.Time           `json:"received_at"`
 	UpdatedAt         time.Time           `json:"updated_at"`
+}
+
+// PaymentWebhookInboxStats summarizes unprocessed provider webhook events for
+// health checks and monitoring. It contains no raw provider payload.
+type PaymentWebhookInboxStats struct {
+	Provider                    PaymentProviderCode `json:"provider"`
+	UnprocessedEvents           int64               `json:"unprocessed_events"`
+	OldestUnprocessedReceivedAt *time.Time          `json:"oldest_unprocessed_received_at,omitempty"`
 }
 
 // PaymentRefund records a manual/provider refund for a successful payment
@@ -240,6 +252,7 @@ type CreateRefundInput struct {
 	ProviderPaymentID string          `json:"provider_payment_id"`
 	Amount            int64           `json:"amount"`
 	Currency          Currency        `json:"currency"`
+	Description       string          `json:"description,omitempty"`
 	Reason            string          `json:"reason,omitempty"`
 	ReceiptEmail      string          `json:"receipt_email,omitempty"`
 	ReceiptPhone      string          `json:"receipt_phone,omitempty"`

@@ -100,6 +100,7 @@ Override these values when needed:
 | `YOOKASSA_BASE_URL` | `https://api.yookassa.ru/v3` | YooKassa API root |
 | `YOOKASSA_RETURN_URL` | `https://neiirohub.ru/payments/return` | User return URL after provider redirect; redirect is not payment proof |
 | `YOOKASSA_WEBHOOK_IP_ALLOWLIST_ENABLED` | `true` | Operational guard for YooKassa webhook ingress; webhook processing still verifies provider state through `GetPayment` |
+| `PAYMENT_WEBHOOK_REQUIRE_HTTPS` | `false` | Local override for `cmd/provider-webhook` HTTPS guard. `APP_ENV=production` forces this guard on; behind Cloudflare/nginx pass `X-Forwarded-Proto: https` or `Forwarded: proto=https` |
 | `PAYMENT_WEBHOOK_ADDR` | `:8082` | Dedicated `cmd/provider-webhook` listen address for payment provider webhooks |
 | `PAYMENT_WEBHOOK_POLL_INTERVAL` | `5s` | Async payment webhook inbox processor interval |
 | `PAYMENT_WEBHOOK_BATCH_LIMIT` | `20` | Max unprocessed payment webhook events handled per processor tick |
@@ -175,6 +176,11 @@ Override these values when needed:
 > provider factory supports `mock` and `yookassa`; real YooKassa requests can
 > create payment intents and `cmd/provider-webhook` can process trusted payment
 > success into ledger top-ups and reconcile stale provider-backed intents.
+> In production, `cmd/provider-webhook` rejects non-HTTPS webhook requests. If
+> TLS terminates at Cloudflare/nginx, the proxy must forward
+> `X-Forwarded-Proto: https`, `Forwarded: proto=https`, or Cloudflare's
+> `CF-Visitor` scheme header, and the raw HTTP origin must not be publicly
+> reachable.
 > User-facing top-up should still stay hidden until product catalog
 > seed/management, partial refund attribution and live YooKassa smoke are
 > complete.
@@ -198,6 +204,13 @@ Override these values when needed:
   Billing mismatch count is exported as `vkagg_billing_mismatches`.
 - **Payment foundation**: migration `000009_payments` adds payment products,
   intents, webhook inbox events and refunds for VK Bot / Mini App top-up flows.
+  Migration `000010_payment_product_catalog` seeds the initial active credit
+  packages shared by both surfaces.
+  Migration `000011_payment_intent_receipt_snapshot` adds the intent-level
+  54-FZ fiscal snapshot: `receipt_description`, `vat_code`,
+  `payment_subject` and `payment_mode`. Payment retries and manual refunds use
+  these intent fields instead of rereading mutable catalog values for fiscal
+  receipt items.
   `billingservice.GrantWith(ctx, repo, ...)` provides the tx-aware top-up grant
   primitive for payment webhook/reconciliation processing. `domain.PaymentProvider`,
   `internal/adapter/payment/mock`, `internal/adapter/payment/yookassa` and the
@@ -206,26 +219,49 @@ Override these values when needed:
   conversion, redirect payments with `capture: true`, 54-FZ receipt data,
   refunds and webhook normalization. `internal/service/paymentservice` creates
   idempotent payment intents, stores provider payment state and returns safe
-  DTOs. Operator routes under `/billing/payment-intents`,
+  DTOs. It snapshots receipt item description, VAT code, payment subject and
+  payment mode from the selected product when the intent is created. Operator
+  routes under `/billing/payment-intents`,
   `/billing/payment-history`, `/billing/payment-intents/{id}/sync` and
   `/billing/payment-intents/{id}/refund` are protected by `ADMIN_TOKEN` and
   fail closed if auth is missing. Mini App routes under `/miniapp/payments*` use verified VK
   launch params as the trusted user context and require `X-Idempotency-Key` for
-  creation. `cmd/provider-webhook` exposes
+  creation; `GET /miniapp/payment-products` returns the safe active product
+  catalog. Mini App Settings creates payment intents from selected products and
+  redirects to the returned `confirmation_url`. If a user already has an active
+  `waiting_for_user` payment intent, Mini App and VK Bot show that payment with
+  "continue payment" and require an explicit "create new payment" action before
+  creating another intent. VK Bot top-up creates intents from the same catalog
+  after the user supplies a receipt email or phone, then sends a payment link. A
+  user return from YooKassa is not payment proof and must not grant credits.
+  `cmd/provider-webhook` exposes
   `POST /billing/webhooks/yookassa`, stores raw provider events in
   `payment_events`, returns 200 quickly, then asynchronously verifies current
   provider state through `GetPayment` before applying the payment intent state
   machine and `billingservice.GrantWith`. It also reconciles stale
   `provider_pending` / `waiting_for_user` intents through the same verified
-  path. Manual refunds are admin-only full-refund MVP actions: require
-  `X-Idempotency-Key`, refuse if the current credit balance cannot cover the
-  top-up credits, and post ledger adjustments instead of direct balance
-  mutation. Refund webhook events are deduped and verified, but automatic
-  balance reversal and partial refund attribution remain future policy work.
+  path. Reconciliation handles missed webhooks, late webhooks, duplicate
+  webhooks and provider-side cancellations idempotently. If the user closes the
+  YooKassa payment page and the provider still reports `waiting_for_user`, the
+  intent stays unpaid and no ledger top-up is posted; a later YooKassa
+  cancellation/expiration or success is picked up by the next reconciliation
+  pass. Manual refunds are admin-only full-refund MVP actions: require
+  `X-Idempotency-Key`, only operate on `succeeded` intents, refuse if the
+  current credit balance cannot cover the top-up credits, and refuse if the
+  ledger shows committed or pending negative movements after that exact top-up.
+  This conservative check prevents refunding already-used credits while
+  lot/FIFO attribution is not implemented. Successful refund debits are posted
+  as ledger adjustments instead of direct balance mutation. Refund webhook
+  events are deduped and verified, but automatic balance reversal and partial
+  refund attribution remain future policy work.
   Payment metrics include `payments_created_total`,
   `payments_succeeded_total`, `payments_canceled_total`,
-  `payment_webhooks_total`, `payment_topups_total` and
-  `payment_reconciliation_mismatches`.
+  `payment_webhooks_total`, `payment_webhook_security_denials_total`,
+  `payment_webhook_processing_errors_total`,
+  `payment_webhook_unprocessed_events`,
+  `payment_webhook_oldest_unprocessed_age_seconds`,
+  `payment_provider_errors_total`, `payment_topups_total`,
+  `payment_refunds_total` and `payment_reconciliation_mismatches`.
 - **Artifact scanning**: `ARTIFACT_SCANNER=openai` scans text/image artifact
   bytes before storage; video scan/transcode remains a media-pipeline follow-up.
 - **SSRF**: artifact downloader blocks private/loopback/link-local hosts and
@@ -447,16 +483,149 @@ MODERATION_PROVIDER=openai ARTIFACT_SCANNER=openai OPENAI_API_KEY=... go run ./c
 PAYMENT_PROVIDER=yookassa go run ./cmd/provider-webhook
 ```
 
+Local payment webhook runtime can be managed without restarting the VK bot or
+Mini App stacks:
+
+```powershell
+scripts\dev\start-payments.ps1
+scripts\dev\status-payments.ps1
+scripts\dev\stop-payments.ps1
+```
+
+`start-payments.ps1` builds `cmd/provider-webhook`, starts it under
+`.runtime/payments`, checks `PAYMENT_WEBHOOK_ADDR` health and verifies the
+public YooKassa route with an intentionally invalid webhook body. A `400`
+response means the route reaches `cmd/provider-webhook`; a `404`/timeout means
+Cloudflare/nginx routing is wrong or the tunnel is down. Use `-SkipDocker`,
+`-SkipMigrate` or `-SkipPublicCheck` only for local debugging.
+
+YooKassa dashboard webhook setup:
+
+- Webhook URL: `https://<public-provider-webhook-host>/billing/webhooks/yookassa`.
+- The public URL must use HTTPS. YooKassa requires a secure endpoint; keep TLS
+  termination at Cloudflare/nginx or on the Go process. If the Go process is
+  behind a reverse proxy, forward `X-Forwarded-Proto: https` or
+  `Forwarded: proto=https`; otherwise production `cmd/provider-webhook` rejects
+  the request before parsing provider JSON.
+- Events: `payment.succeeded`, `payment.canceled`, `refund.succeeded`.
+- The endpoint only ingests the raw event into `payment_events` and returns
+  `200` quickly. Credit top-up happens later in the async processor after
+  `GetPayment` verifies the provider payment state, amount and currency.
+- Do not point this URL at `cmd/api`; it belongs to the dedicated
+  `cmd/provider-webhook` process or to a reverse proxy route that forwards to
+  `PAYMENT_WEBHOOK_ADDR`.
+- Do not log webhook request bodies, `Authorization`, YooKassa shop id/secret,
+  or raw provider payloads. Store the raw provider event only in the
+  `payment_events.payload` inbox row for audit/replay.
+
+YooKassa operational alerts:
+
+```text
+payment_webhook_security_denials_total > 0 for 5m
+  -> Check public webhook URL scheme, reverse-proxy forwarded proto headers and
+     whether somebody is hitting the origin over plain HTTP.
+
+increase(payment_webhook_processing_errors_total[10m]) > 0
+  -> Check provider GetPayment availability, status/amount mismatch, and
+     payment_events rows stuck without processed_at.
+
+payment_webhook_unprocessed_events > 0 for 10m
+  -> Webhooks are accepted but async processing is not draining the inbox.
+     Check cmd/provider-webhook logs, DB connectivity and provider GetPayment.
+
+payment_webhook_oldest_unprocessed_age_seconds > 300
+  -> Oldest unprocessed webhook is older than 5 minutes. Treat as stuck inbox
+     even if the count is low.
+
+increase(payment_provider_errors_total[10m]) > 0
+  -> Payment provider API calls are failing. Check labels operation/error_class,
+     YooKassa availability, credentials and network egress.
+
+payment_reconciliation_mismatches > 0
+  -> Stop automatic top-up rollout, inspect mismatched provider_payment_id,
+     amount/currency and intent status before retrying.
+
+increase(payment_refunds_total{result="rollback_failed"}[5m]) > 0
+  -> Treat as urgent: provider refund failed and internal compensation also
+     failed. Freeze manual refunds and reconcile ledger/payment_refunds by hand.
+```
+
+YooKassa idempotency/rollback checks:
+
+- Replay the same webhook body twice. Expected: one `payment_events` row by
+  dedup key, one committed `topup:<provider>:<provider_payment_id>` ledger row,
+  second ingest counted as duplicate/no-op.
+- Replay operator refund with the same `X-Idempotency-Key`. Expected: same
+     `payment_refunds` row, no second ledger debit.
+- Simulate provider refund failure. Expected: refund marked `failed`, internal
+  refund debit compensated by a ledger adjustment, user balance restored, and
+  `payment_refunds_total{result="rollback_succeeded"}` increments.
+
+YooKassa SQL checks:
+
+```sql
+-- Current unprocessed webhook backlog and oldest waiting event.
+SELECT
+  provider,
+  count(*) AS unprocessed_events,
+  min(received_at) AS oldest_received_at,
+  now() - min(received_at) AS oldest_age
+FROM payment_events
+WHERE processed_at IS NULL
+GROUP BY provider;
+
+-- Oldest unprocessed events to inspect without exposing payloads.
+SELECT
+  id,
+  provider,
+  event_type,
+  provider_payment_id,
+  provider_refund_id,
+  received_at,
+  now() - received_at AS age
+FROM payment_events
+WHERE processed_at IS NULL
+ORDER BY received_at ASC
+LIMIT 20;
+
+-- Stale provider-backed intents that reconciliation should pick up.
+SELECT
+  id,
+  user_id,
+  provider,
+  status,
+  provider_payment_id,
+  updated_at,
+  now() - updated_at AS age
+FROM payment_intents
+WHERE status IN ('provider_pending', 'waiting_for_user')
+  AND provider_payment_id IS NOT NULL
+  AND btrim(provider_payment_id) <> ''
+ORDER BY updated_at ASC
+LIMIT 20;
+```
+
 Protected operator payment actions:
 
 ```bash
+# List pending/waiting intents. Add stale_only=true for intents old enough for
+# manual sync/reconciliation triage.
+curl "http://localhost:8080/billing/payment-intents/pending?stale_after=30s&stale_only=true" \
+  -H "X-Admin-Token: $ADMIN_TOKEN"
+
+# List unprocessed provider webhook inbox rows. Response DTOs intentionally omit
+# raw provider payloads.
+curl "http://localhost:8080/billing/payment-events/unprocessed?provider=yookassa" \
+  -H "X-Admin-Token: $ADMIN_TOKEN"
+
 # Sync one intent with the provider state. This may post a top-up ledger entry
 # only after provider GetPayment verifies paid/captured success.
 curl -X POST http://localhost:8080/billing/payment-intents/<intent_id>/sync \
   -H "X-Admin-Token: $ADMIN_TOKEN"
 
 # Manual full refund MVP. Requires a caller idempotency key and refuses when the
-# current credit balance cannot cover the purchased credits.
+# current credit balance cannot cover the purchased credits or when ledger
+# movements after the top-up show that those credits may have been used.
 curl -X POST http://localhost:8080/billing/payment-intents/<intent_id>/refund \
   -H "X-Admin-Token: $ADMIN_TOKEN" \
   -H "X-Idempotency-Key: operator-ticket-123" \
@@ -484,6 +653,19 @@ Expected log:
 | `GET /health` | `200` `{"status":"ok","checks":{"postgres":"ok","redis":"ok"}}` |
 | `GET /healthz` | same (alias) |
 | `GET /metrics` | `200` Prometheus exposition (`vkagg_*` + Go/process) |
+
+Payment webhook runtime (`PAYMENT_WEBHOOK_ADDR`, default `:8082`):
+
+| Endpoint | Expected |
+|----------|----------|
+| `GET /health` | `200` `{"status":"ok"}` liveness only |
+| `GET /readyz` | `200` JSON with `postgres`, `webhook_inbox`, `payment_webhook.unprocessed_events` and oldest unprocessed age |
+| `GET /healthz` | same readiness JSON as `/readyz` |
+| `GET /metrics` | `200` Prometheus exposition including `payment_webhook_unprocessed_events`, `payment_webhook_oldest_unprocessed_age_seconds`, `payment_provider_errors_total` and reconciliation/payment counters |
+
+`/readyz` fails closed with `503` only when Postgres or webhook-inbox stats are
+unavailable. A non-zero webhook backlog is reported in JSON and Prometheus but
+does not by itself make readiness fail; alert on age/count instead.
 
 `503 {"status":"degraded",...}` means Postgres or Redis is unreachable — see Troubleshooting.
 

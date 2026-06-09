@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"errors"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -107,8 +108,12 @@ func (r *BillingRepository) CreateAccount(ctx context.Context, a *domain.CreditA
 			IdempotencyKey: "grant:open:" + a.ID.String(),
 			Reason:         "opening balance grant",
 		}
-		if err := insertLedgerEntry(ctx, q, entry); err != nil {
+		inserted, err := insertLedgerEntry(ctx, q, entry)
+		if err != nil {
 			return err
+		}
+		if !inserted {
+			return nil
 		}
 		if err := adjustBalance(ctx, q, a.ID, grant); err != nil {
 			return err
@@ -142,10 +147,11 @@ func (r *BillingRepository) GetAccountByUser(ctx context.Context, userID uuid.UU
 // the entry amount when the entry is committed.
 func (r *BillingRepository) AppendEntry(ctx context.Context, entry *domain.LedgerEntry) error {
 	return r.inTx(ctx, func(q Querier) error {
-		if err := insertLedgerEntry(ctx, q, entry); err != nil {
+		inserted, err := insertLedgerEntry(ctx, q, entry)
+		if err != nil {
 			return err
 		}
-		if entry.Status == domain.LedgerStatusCommitted && entry.Amount != 0 {
+		if inserted && entry.Status == domain.LedgerStatusCommitted && entry.Amount != 0 {
 			return adjustBalance(ctx, q, entry.AccountID, entry.Amount)
 		}
 		return nil
@@ -212,7 +218,8 @@ func (r *BillingRepository) Reserve(ctx context.Context, res *domain.CreditReser
 			IdempotencyKey: "reserve:" + res.IdempotencyKey,
 			Reason:         "credit reservation",
 		}
-		return insertLedgerEntry(ctx, q, entry)
+		_, err = insertLedgerEntry(ctx, q, entry)
+		return err
 	})
 }
 
@@ -242,7 +249,7 @@ func (r *BillingRepository) Capture(ctx context.Context, reservationID uuid.UUID
 			IdempotencyKey: idempotencyKey,
 			Reason:         "credit capture",
 		}
-		if err := insertLedgerEntry(ctx, q, entry); err != nil {
+		if _, err := insertLedgerEntry(ctx, q, entry); err != nil {
 			return err
 		}
 		return adjustBalance(ctx, q, res.AccountID, -amount)
@@ -275,7 +282,8 @@ func (r *BillingRepository) Release(ctx context.Context, reservationID uuid.UUID
 			IdempotencyKey: idempotencyKey,
 			Reason:         "credit release",
 		}
-		return insertLedgerEntry(ctx, q, entry)
+		_, err = insertLedgerEntry(ctx, q, entry)
+		return err
 	})
 }
 
@@ -328,7 +336,7 @@ func lockReservation(ctx context.Context, q Querier, id uuid.UUID) (*domain.Cred
 	return &res, nil
 }
 
-func insertLedgerEntry(ctx context.Context, q Querier, e *domain.LedgerEntry) error {
+func insertLedgerEntry(ctx context.Context, q Querier, e *domain.LedgerEntry) (bool, error) {
 	if e.ID == uuid.Nil {
 		e.ID = uuid.New()
 	}
@@ -338,11 +346,18 @@ func insertLedgerEntry(ctx context.Context, q Querier, e *domain.LedgerEntry) er
 	const sql = `
 		INSERT INTO ledger_entries (id, account_id, job_id, reservation_id, type, amount, status, idempotency_key, reason)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		ON CONFLICT (idempotency_key) DO NOTHING
 		RETURNING ` + ledgerColumns
 	row := q.QueryRow(ctx, sql,
 		e.ID, e.AccountID, e.JobID, e.ReservationID, e.Type, e.Amount, e.Status, e.IdempotencyKey, e.Reason,
 	)
-	return mapError(scanLedgerEntry(row, e))
+	if err := scanLedgerEntry(row, e); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return false, nil
+		}
+		return false, mapError(err)
+	}
+	return true, nil
 }
 
 func adjustBalance(ctx context.Context, q Querier, accountID uuid.UUID, delta int64) error {

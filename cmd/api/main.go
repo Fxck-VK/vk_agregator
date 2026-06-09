@@ -78,6 +78,7 @@ func main() {
 		Jobs:         core.Jobs,
 		Commands:     core.Commands,
 		Billing:      core.Billing,
+		Payment:      core.Payment,
 		Referrals:    core.Referrals,
 		Orchestrator: core.Orchestrator,
 		Router:       core.Router,

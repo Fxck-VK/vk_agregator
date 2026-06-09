@@ -2125,6 +2125,143 @@ body {
   margin-bottom: 14px;
 }
 
+.payment-contact {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.payment-contact label {
+  color: var(--fg-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.payment-contact input {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-control);
+  background: var(--surface-2);
+  color: var(--fg);
+  font: inherit;
+  padding: 0 12px;
+  outline: none;
+}
+
+.payment-contact input:focus {
+  border-color: color-mix(in srgb, var(--brand-cyan) 44%, var(--glass-border));
+  box-shadow: var(--glow-ring);
+}
+
+.payment-pending {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--brand-cyan) 34%, var(--glass-border));
+  border-radius: var(--radius-control);
+  background: color-mix(in srgb, var(--brand-cyan) 10%, var(--surface-2));
+}
+
+.payment-pending strong {
+  font-size: 14px;
+}
+
+.payment-pending span {
+  color: var(--fg-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.payment-pending p {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.payment-pending__actions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
+.payment-pending__actions button {
+  min-height: 42px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-control);
+  background: var(--surface-2);
+  color: var(--fg);
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.payment-pending__actions button:first-child {
+  border-color: transparent;
+  background: var(--gradient-brand);
+  color: #fff;
+}
+
+.payment-products {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.payment-product {
+  appearance: none;
+  width: 100%;
+  min-height: 54px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-control);
+  background: var(--surface-2);
+  color: var(--fg);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 12px;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.payment-product:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.payment-product span {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.payment-product strong,
+.payment-product small {
+  overflow-wrap: anywhere;
+}
+
+.payment-product strong {
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.payment-product small {
+  color: var(--fg-muted);
+  font-size: 12px;
+}
+
+.payment-product em {
+  flex-shrink: 0;
+  color: var(--brand-cyan);
+  font-style: normal;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
 .settings-filter-pills {
   display: flex;
   gap: 6px;

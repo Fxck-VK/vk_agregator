@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"vk-ai-aggregator/internal/adapter/inbound/billing"
 	paymentmock "vk-ai-aggregator/internal/adapter/payment/mock"
@@ -145,6 +146,80 @@ func TestPaymentHistoryListsIntents(t *testing.T) {
 	}
 }
 
+func TestOperatorListsPendingIntents(t *testing.T) {
+	handler, users, _, _, _ := setup(t)
+	ctx := context.Background()
+	user := &domain.User{VKUserID: 777, Role: domain.RoleUser, Status: domain.StatusActive}
+	if err := users.Create(ctx, user); err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	body := []byte(`{"product_code":"credits_100","receipt_email":"user@example.com"}`)
+	req := httptest.NewRequest(http.MethodPost, "/billing/payment-intents", bytes.NewReader(body))
+	req.Header.Set("X-Admin-Token", "secret")
+	req.Header.Set("X-User-ID", user.ID.String())
+	req.Header.Set("X-Idempotency-Key", "pending-key")
+	rec := httptest.NewRecorder()
+	handler.Routes().ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create intent: %d %s", rec.Code, rec.Body.String())
+	}
+
+	time.Sleep(2 * time.Millisecond)
+	listReq := httptest.NewRequest(http.MethodGet, "/billing/payment-intents/pending?stale_after=1ms&stale_only=true", nil)
+	listReq.Header.Set("X-Admin-Token", "secret")
+	listRec := httptest.NewRecorder()
+	handler.Routes().ServeHTTP(listRec, listReq)
+	if listRec.Code != http.StatusOK {
+		t.Fatalf("list pending intents: %d %s", listRec.Code, listRec.Body.String())
+	}
+	var list struct {
+		Items []billing.PaymentIntentDTO `json:"items"`
+	}
+	if err := json.Unmarshal(listRec.Body.Bytes(), &list); err != nil {
+		t.Fatalf("decode pending list: %v", err)
+	}
+	if len(list.Items) != 1 {
+		t.Fatalf("expected one pending intent, got %+v", list.Items)
+	}
+	if list.Items[0].Status != string(domain.PaymentIntentWaitingForUser) || !list.Items[0].Stale {
+		t.Fatalf("unexpected pending intent dto: %+v", list.Items[0])
+	}
+}
+
+func TestOperatorListsUnprocessedPaymentEventsWithoutRawPayload(t *testing.T) {
+	handler, _, payments, _, _ := setup(t)
+	created, err := payments.CreateEvent(context.Background(), &domain.PaymentEvent{
+		Provider:          domain.PaymentProviderMock,
+		EventType:         "payment.succeeded",
+		ProviderPaymentID: "mock-pay-operator-list",
+		DedupKey:          "webhook:mock:payment.succeeded:mock-pay-operator-list",
+		Payload:           json.RawMessage(`{"secret":"do-not-return","provider_payment_id":"mock-pay-operator-list"}`),
+	})
+	if err != nil || !created {
+		t.Fatalf("create event created=%v err=%v", created, err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/billing/payment-events/unprocessed?provider=mock", nil)
+	req.Header.Set("X-Admin-Token", "secret")
+	rec := httptest.NewRecorder()
+	handler.Routes().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("list events: %d %s", rec.Code, rec.Body.String())
+	}
+	if bytes.Contains(rec.Body.Bytes(), []byte("payload")) || bytes.Contains(rec.Body.Bytes(), []byte("do-not-return")) {
+		t.Fatalf("operator event list leaked raw payload: %s", rec.Body.String())
+	}
+	var list struct {
+		Items []billing.PaymentEventDTO `json:"items"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &list); err != nil {
+		t.Fatalf("decode event list: %v", err)
+	}
+	if len(list.Items) != 1 || list.Items[0].ProviderPaymentID != "mock-pay-operator-list" || list.Items[0].EventType != "payment.succeeded" {
+		t.Fatalf("unexpected event dto: %+v", list.Items)
+	}
+}
+
 func TestSyncAndRefundPaymentIntent(t *testing.T) {
 	handler, users, payments, provider, billingRepo := setup(t)
 	ctx := context.Background()
@@ -219,5 +294,104 @@ func TestSyncAndRefundPaymentIntent(t *testing.T) {
 	}
 	if _, err := payments.GetRefundByIdempotencyKey(ctx, "billing_refund:"+intent.ID.String()+":refund-key"); err != nil {
 		t.Fatalf("refund row not stored: %v", err)
+	}
+
+	replayReq := httptest.NewRequest(http.MethodPost, "/billing/payment-intents/"+intent.ID.String()+"/refund", bytes.NewReader([]byte(`{"reason":"operator replay"}`)))
+	replayReq.Header.Set("X-Admin-Token", "secret")
+	replayReq.Header.Set("X-Idempotency-Key", "refund-key")
+	replayRec := httptest.NewRecorder()
+	handler.Routes().ServeHTTP(replayRec, replayReq)
+	if replayRec.Code != http.StatusOK {
+		t.Fatalf("refund replay: %d %s", replayRec.Code, replayRec.Body.String())
+	}
+	var replay struct {
+		Intent billing.PaymentIntentDTO `json:"intent"`
+		Refund billing.PaymentRefundDTO `json:"refund"`
+	}
+	if err := json.Unmarshal(replayRec.Body.Bytes(), &replay); err != nil {
+		t.Fatalf("decode refund replay: %v", err)
+	}
+	if replay.Refund.ID != refund.Refund.ID {
+		t.Fatalf("replay refund id = %s, want %s", replay.Refund.ID, refund.Refund.ID)
+	}
+	acc, err = billingRepo.GetAccountByUser(ctx, user.ID, domain.CurrencyCredits)
+	if err != nil {
+		t.Fatalf("get account after refund replay: %v", err)
+	}
+	if acc.BalanceCached != 0 {
+		t.Fatalf("balance after refund replay = %d, want 0", acc.BalanceCached)
+	}
+}
+
+func TestRefundPaymentIntentRejectsSpentCredits(t *testing.T) {
+	handler, users, _, provider, billingRepo := setup(t)
+	ctx := context.Background()
+	user := &domain.User{VKUserID: 777, Role: domain.RoleUser, Status: domain.StatusActive}
+	if err := users.Create(ctx, user); err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	body := []byte(`{"product_code":"credits_100","receipt_email":"user@example.com"}`)
+	req := httptest.NewRequest(http.MethodPost, "/billing/payment-intents", bytes.NewReader(body))
+	req.Header.Set("X-Admin-Token", "secret")
+	req.Header.Set("X-User-ID", user.ID.String())
+	req.Header.Set("X-Idempotency-Key", "spent-refund-key")
+	rec := httptest.NewRecorder()
+	handler.Routes().ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create intent: %d %s", rec.Code, rec.Body.String())
+	}
+	var intent billing.PaymentIntentDTO
+	if err := json.Unmarshal(rec.Body.Bytes(), &intent); err != nil {
+		t.Fatalf("decode intent: %v", err)
+	}
+	if err := provider.SetPaymentStatus(intent.ProviderPaymentID, domain.PaymentIntentSucceeded); err != nil {
+		t.Fatalf("set provider success: %v", err)
+	}
+	syncReq := httptest.NewRequest(http.MethodPost, "/billing/payment-intents/"+intent.ID.String()+"/sync", nil)
+	syncReq.Header.Set("X-Admin-Token", "secret")
+	syncRec := httptest.NewRecorder()
+	handler.Routes().ServeHTTP(syncRec, syncReq)
+	if syncRec.Code != http.StatusOK {
+		t.Fatalf("sync intent: %d %s", syncRec.Code, syncRec.Body.String())
+	}
+	acc, err := billingRepo.GetAccountByUser(ctx, user.ID, domain.CurrencyCredits)
+	if err != nil {
+		t.Fatalf("get account: %v", err)
+	}
+	if err := billingRepo.AppendEntry(ctx, &domain.LedgerEntry{
+		AccountID:      acc.ID,
+		Type:           domain.LedgerAdjustment,
+		Amount:         -10,
+		Status:         domain.LedgerStatusCommitted,
+		IdempotencyKey: "operator-test-spend",
+		Reason:         "test spend after top-up",
+	}); err != nil {
+		t.Fatalf("append spend: %v", err)
+	}
+	if err := billingRepo.AppendEntry(ctx, &domain.LedgerEntry{
+		AccountID:      acc.ID,
+		Type:           domain.LedgerAdjustment,
+		Amount:         10,
+		Status:         domain.LedgerStatusCommitted,
+		IdempotencyKey: "operator-test-later-grant",
+		Reason:         "test later grant",
+	}); err != nil {
+		t.Fatalf("append later grant: %v", err)
+	}
+
+	refundReq := httptest.NewRequest(http.MethodPost, "/billing/payment-intents/"+intent.ID.String()+"/refund", bytes.NewReader([]byte(`{"reason":"operator test"}`)))
+	refundReq.Header.Set("X-Admin-Token", "secret")
+	refundReq.Header.Set("X-Idempotency-Key", "spent-refund-key")
+	refundRec := httptest.NewRecorder()
+	handler.Routes().ServeHTTP(refundRec, refundReq)
+	if refundRec.Code != http.StatusConflict {
+		t.Fatalf("refund spent credits: %d %s", refundRec.Code, refundRec.Body.String())
+	}
+	acc, err = billingRepo.GetAccountByUser(ctx, user.ID, domain.CurrencyCredits)
+	if err != nil {
+		t.Fatalf("get account after rejected refund: %v", err)
+	}
+	if acc.BalanceCached != 100 {
+		t.Fatalf("balance after rejected refund = %d, want unchanged 100", acc.BalanceCached)
 	}
 }

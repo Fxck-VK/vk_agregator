@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"vk-ai-aggregator/internal/adapter/storage/postgres"
@@ -366,6 +367,63 @@ func TestBillingRepository(t *testing.T) {
 	}
 	if len(entries) < 2 {
 		t.Fatalf("expected at least reserve + capture entries, got %d", len(entries))
+	}
+}
+
+func TestBillingRepositoryDuplicateAppendEntryDoesNotAbortTransaction(t *testing.T) {
+	ctx := context.Background()
+	pool := testPool(t)
+	users := postgres.NewUserRepository(pool)
+	billing := postgres.NewBillingRepository(pool)
+
+	u := newTestUser(t, ctx, users)
+	acc := &domain.CreditAccount{UserID: u.ID, Currency: domain.CurrencyCredits}
+	if err := billing.CreateAccount(ctx, acc); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+
+	duplicateKey := "topup:" + uuid.NewString()
+	if err := billing.AppendEntry(ctx, &domain.LedgerEntry{
+		AccountID:      acc.ID,
+		Type:           domain.LedgerTopup,
+		Amount:         100,
+		Status:         domain.LedgerStatusCommitted,
+		IdempotencyKey: duplicateKey,
+		Reason:         "initial topup",
+	}); err != nil {
+		t.Fatalf("append initial topup: %v", err)
+	}
+
+	if err := postgres.RunInTx(ctx, pool, func(ctx context.Context, tx pgx.Tx) error {
+		txBilling := postgres.NewBillingRepositoryTx(tx)
+		if err := txBilling.AppendEntry(ctx, &domain.LedgerEntry{
+			AccountID:      acc.ID,
+			Type:           domain.LedgerTopup,
+			Amount:         100,
+			Status:         domain.LedgerStatusCommitted,
+			IdempotencyKey: duplicateKey,
+			Reason:         "duplicate topup",
+		}); err != nil {
+			return err
+		}
+		return txBilling.AppendEntry(ctx, &domain.LedgerEntry{
+			AccountID:      acc.ID,
+			Type:           domain.LedgerAdjustment,
+			Amount:         1,
+			Status:         domain.LedgerStatusCommitted,
+			IdempotencyKey: "adjust:" + uuid.NewString(),
+			Reason:         "post-duplicate write",
+		})
+	}); err != nil {
+		t.Fatalf("duplicate append in transaction: %v", err)
+	}
+
+	after, err := billing.GetAccount(ctx, acc.ID)
+	if err != nil {
+		t.Fatalf("get account: %v", err)
+	}
+	if after.BalanceCached != 101 {
+		t.Fatalf("balance = %d, want 101", after.BalanceCached)
 	}
 }
 

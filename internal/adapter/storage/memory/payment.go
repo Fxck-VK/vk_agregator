@@ -70,6 +70,29 @@ func (r *PaymentRepo) PutProduct(product *domain.PaymentProduct) {
 	r.productIDByCode[product.Code] = product.ID
 }
 
+func (r *PaymentRepo) ListActiveProducts(_ context.Context) ([]*domain.PaymentProduct, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	products := make([]domain.PaymentProduct, 0, len(r.productsByID))
+	for _, product := range r.productsByID {
+		if product.IsActive {
+			products = append(products, product)
+		}
+	}
+	sort.Slice(products, func(i, j int) bool {
+		if products[i].Amount != products[j].Amount {
+			return products[i].Amount < products[j].Amount
+		}
+		return products[i].Code < products[j].Code
+	})
+	out := make([]*domain.PaymentProduct, 0, len(products))
+	for i := range products {
+		product := products[i]
+		out = append(out, &product)
+	}
+	return out, nil
+}
+
 func (r *PaymentRepo) GetActiveProductByCode(_ context.Context, code string) (*domain.PaymentProduct, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -220,15 +243,19 @@ func (r *PaymentRepo) ListIntentsByUser(_ context.Context, userID uuid.UUID, lim
 func (r *PaymentRepo) ListIntents(_ context.Context, filter domain.PaymentIntentFilter, limit, offset int) ([]*domain.PaymentIntent, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	statuses := paymentIntentStatusSet(filter)
 	matched := make([]domain.PaymentIntent, 0, len(r.intentsByID))
 	for _, intent := range r.intentsByID {
 		if filter.UserID != nil && intent.UserID != *filter.UserID {
 			continue
 		}
-		if filter.Status != "" && intent.Status != filter.Status {
+		if len(statuses) > 0 && !statuses[intent.Status] {
 			continue
 		}
 		if filter.Provider != "" && intent.Provider != filter.Provider {
+			continue
+		}
+		if filter.UpdatedBefore != nil && intent.UpdatedAt.After(*filter.UpdatedBefore) {
 			continue
 		}
 		matched = append(matched, intent)
@@ -241,6 +268,22 @@ func (r *PaymentRepo) ListIntents(_ context.Context, filter domain.PaymentIntent
 		out = append(out, copyPaymentIntentPtr(matched[i]))
 	}
 	return out, nil
+}
+
+func paymentIntentStatusSet(filter domain.PaymentIntentFilter) map[domain.PaymentIntentStatus]bool {
+	statuses := map[domain.PaymentIntentStatus]bool{}
+	if filter.Status != "" {
+		statuses[filter.Status] = true
+	}
+	for _, status := range filter.Statuses {
+		if status != "" {
+			statuses[status] = true
+		}
+	}
+	if len(statuses) == 0 {
+		return nil
+	}
+	return statuses
 }
 
 func (r *PaymentRepo) ListIntentsForReconciliation(_ context.Context, filter domain.PaymentReconciliationFilter, limit int) ([]*domain.PaymentIntent, error) {
@@ -326,6 +369,51 @@ func (r *PaymentRepo) ListUnprocessedEvents(_ context.Context, provider domain.P
 	return out, nil
 }
 
+func (r *PaymentRepo) ListEvents(_ context.Context, filter domain.PaymentEventFilter, limit, offset int) ([]*domain.PaymentEvent, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	matched := make([]domain.PaymentEvent, 0, len(r.eventIDs))
+	for _, id := range r.eventIDs {
+		event := r.eventsByID[id]
+		if filter.Provider != "" && event.Provider != filter.Provider {
+			continue
+		}
+		if filter.Processed != nil {
+			processed := event.ProcessedAt != nil
+			if processed != *filter.Processed {
+				continue
+			}
+		}
+		matched = append(matched, event)
+	}
+	sort.Slice(matched, func(i, j int) bool {
+		return matched[i].ReceivedAt.Before(matched[j].ReceivedAt)
+	})
+	var out []*domain.PaymentEvent
+	for i := offset; i < len(matched) && len(out) < limit; i++ {
+		out = append(out, copyPaymentEventPtr(matched[i]))
+	}
+	return out, nil
+}
+
+func (r *PaymentRepo) WebhookInboxStats(_ context.Context, provider domain.PaymentProviderCode) (domain.PaymentWebhookInboxStats, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	stats := domain.PaymentWebhookInboxStats{Provider: provider}
+	for _, id := range r.eventIDs {
+		event := r.eventsByID[id]
+		if event.Provider != provider || event.ProcessedAt != nil {
+			continue
+		}
+		stats.UnprocessedEvents++
+		if stats.OldestUnprocessedReceivedAt == nil || event.ReceivedAt.Before(*stats.OldestUnprocessedReceivedAt) {
+			receivedAt := event.ReceivedAt
+			stats.OldestUnprocessedReceivedAt = &receivedAt
+		}
+	}
+	return stats, nil
+}
+
 func (r *PaymentRepo) MarkEventProcessed(_ context.Context, id uuid.UUID, processedAt time.Time) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -409,6 +497,10 @@ func copyPaymentIntent(intent *domain.PaymentIntent) domain.PaymentIntent {
 		productID := *intent.ProductID
 		out.ProductID = &productID
 	}
+	if intent.VATCode != nil {
+		vatCode := *intent.VATCode
+		out.VATCode = &vatCode
+	}
 	if len(intent.Metadata) > 0 {
 		out.Metadata = append(json.RawMessage(nil), intent.Metadata...)
 	}
@@ -453,6 +545,10 @@ func copyPaymentIntentPtr(intent domain.PaymentIntent) *domain.PaymentIntent {
 	if intent.ProductID != nil {
 		productID := *intent.ProductID
 		out.ProductID = &productID
+	}
+	if intent.VATCode != nil {
+		vatCode := *intent.VATCode
+		out.VATCode = &vatCode
 	}
 	if len(intent.Metadata) > 0 {
 		out.Metadata = append(json.RawMessage(nil), intent.Metadata...)

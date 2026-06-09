@@ -29,6 +29,7 @@ import (
 	"vk-ai-aggregator/internal/service/billingservice"
 	"vk-ai-aggregator/internal/service/commandrouter"
 	"vk-ai-aggregator/internal/service/joborchestrator"
+	"vk-ai-aggregator/internal/service/paymentservice"
 	"vk-ai-aggregator/internal/service/referralservice"
 )
 
@@ -96,6 +97,7 @@ type Deps struct {
 	Jobs         domain.JobRepository
 	Commands     domain.CommandRepository
 	Billing      *billingservice.Service
+	Payment      *paymentservice.Service
 	Referrals    ReferralService
 	Orchestrator *joborchestrator.Orchestrator
 	Router       *commandrouter.Router
@@ -169,9 +171,13 @@ type activeMenuMessage struct {
 type dialogMode string
 
 const (
-	dialogModeGPT       dialogMode = "gpt"
-	dialogModePhotoText dialogMode = "photo_text"
+	dialogModeGPT            dialogMode = "gpt"
+	dialogModePhotoText      dialogMode = "photo_text"
+	dialogModeTopUpPrefix               = "top_up:"
+	dialogModeTopUpNewPrefix            = "top_up_new:"
 )
+
+const topUpActionNewPayment = "new_payment"
 
 type jobParams struct {
 	Prompt                 string `json:"prompt"`
@@ -475,14 +481,20 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 	// Command: classify the message into a normalized command.
 	parsed := h.deps.Router.Parse(text)
 	controlFromPayload := false
-	if controlType, ok := controlTypeFromPayload(payload); ok {
-		parsed = commandrouter.Result{Type: controlType}
+	topUpProductCode := ""
+	topUpAction := ""
+	if control, ok := controlPayloadFromPayload(payload); ok {
+		parsed = commandrouter.Result{Type: domain.CommandType(control.Command)}
+		topUpProductCode = strings.TrimSpace(control.ProductCode)
+		topUpAction = strings.TrimSpace(control.Action)
 		controlFromPayload = true
 	} else if controlOnly {
 		parsed = commandrouter.Result{Type: domain.CommandUnknown}
 	}
 	if isMenuCommand(parsed.Type) && !h.menuCommandEnabled(parsed.Type) {
 		parsed = commandrouter.Result{Type: domain.CommandShowMenu}
+		topUpProductCode = ""
+		topUpAction = ""
 		controlFromPayload = true
 	}
 
@@ -498,6 +510,16 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 			Operation: domain.OperationImageGenerate,
 			Modality:  domain.ModalityImage,
 			Prompt:    strings.TrimSpace(text),
+		}
+	}
+
+	topUpContactProduct := ""
+	topUpContactForceNew := false
+	if !controlFromPayload && !controlOnly && parsed.Type == domain.CommandTextAsk && strings.TrimSpace(text) != "" {
+		if code, forceNew, ok := h.topUpProductFromDialog(ctx, peerID); ok {
+			topUpContactProduct = code
+			topUpContactForceNew = forceNew
+			parsed = commandrouter.Result{Type: domain.CommandTopUp}
 		}
 	}
 
@@ -576,6 +598,21 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 	case unroutedText:
 		if err := h.sendUnroutedTextResponse(ctx, idemKey, peerID); err != nil {
 			return fmt.Errorf("send unrouted text response: %w", err)
+		}
+	case parsed.Type == domain.CommandTopUp && topUpAction == topUpActionNewPayment:
+		if err := h.sendTopUpCatalog(ctx, idemKey, peerID, true, controlFromPayload); err != nil {
+			return fmt.Errorf("send top-up catalog: %w", err)
+		}
+		h.clearDialogMode(ctx, peerID)
+	case topUpProductCode != "":
+		topUpForceNew := topUpAction == topUpActionNewPayment
+		if err := h.sendTopUpContactRequest(ctx, idemKey, peerID, topUpProductCode, topUpForceNew, controlFromPayload); err != nil {
+			return fmt.Errorf("send top-up contact request: %w", err)
+		}
+		h.setDialogMode(ctx, peerID, topUpDialogMode(topUpProductCode, topUpForceNew))
+	case topUpContactProduct != "":
+		if err := h.createAndSendTopUpPayment(ctx, cb.GroupID, eventID, idemKey, peerID, user, topUpContactProduct, topUpContactForceNew, text); err != nil {
+			return fmt.Errorf("create top-up payment: %w", err)
 		}
 	case shouldSendControlResponse(parsed.Type):
 		if shouldRepairPersistentKeyboard(parsed.Type, controlFromPayload, controlOnly) {
@@ -657,6 +694,92 @@ func (h *Handler) shouldRoutePhotoText(ctx context.Context, peerID int64, parsed
 		return false
 	}
 	return h.photoTextDialogActive(ctx, peerID)
+}
+
+func topUpDialogMode(productCode string, forceNew bool) dialogMode {
+	prefix := dialogModeTopUpPrefix
+	if forceNew {
+		prefix = dialogModeTopUpNewPrefix
+	}
+	return dialogMode(prefix + productCode)
+}
+
+func (h *Handler) topUpProductFromDialog(ctx context.Context, peerID int64) (string, bool, bool) {
+	mode, ok := h.getDialogMode(ctx, peerID)
+	if !ok {
+		return "", false, false
+	}
+	value := string(mode)
+	forceNew := false
+	if strings.HasPrefix(value, dialogModeTopUpNewPrefix) {
+		forceNew = true
+		value = strings.TrimPrefix(value, dialogModeTopUpNewPrefix)
+	} else if strings.HasPrefix(value, dialogModeTopUpPrefix) {
+		value = strings.TrimPrefix(value, dialogModeTopUpPrefix)
+	} else {
+		return "", false, false
+	}
+	code := strings.TrimSpace(value)
+	return code, forceNew, code != ""
+}
+
+func (h *Handler) createAndSendTopUpPayment(ctx context.Context, groupID int64, eventID, idemKey string, peerID int64, user *domain.User, productCode string, forceNew bool, contactText string) error {
+	email, phone, ok := receiptContactFromText(contactText)
+	if !ok {
+		return h.sendTopUpNotice(ctx, idemKey, peerID, "Укажите email или телефон для чека. Например: user@example.com или +79991234567.")
+	}
+	if h.deps.Payment == nil {
+		return h.sendTopUpNotice(ctx, idemKey, peerID, "Платежи пока недоступны. Попробуйте позже.")
+	}
+	result, err := h.deps.Payment.CreateIntent(ctx, paymentservice.CreateIntentInput{
+		UserID:         user.ID,
+		ProductCode:    productCode,
+		ReceiptEmail:   email,
+		ReceiptPhone:   phone,
+		IdempotencyKey: "vk_payment:" + strconv.FormatInt(groupID, 10) + ":" + eventID,
+		Source:         "vk_bot",
+		ForceNew:       forceNew,
+	})
+	if err != nil {
+		if errors.Is(err, paymentservice.ErrReceiptContactRequired) || errors.Is(err, paymentservice.ErrInvalidInput) {
+			return h.sendTopUpNotice(ctx, idemKey, peerID, "Не удалось создать платеж. Проверьте email или телефон и попробуйте снова.")
+		}
+		if errors.Is(err, domain.ErrNotFound) {
+			h.clearDialogMode(ctx, peerID)
+			return h.sendTopUpNotice(ctx, idemKey, peerID, "Этот пакет пополнения уже недоступен. Откройте меню пополнения заново.")
+		}
+		return err
+	}
+	if result.Intent == nil || strings.TrimSpace(result.Intent.ConfirmationURL) == "" {
+		return h.sendTopUpNotice(ctx, idemKey, peerID, "Платеж создан, но ссылка на оплату пока недоступна. Попробуйте позже.")
+	}
+	h.clearDialogMode(ctx, peerID)
+	return h.sendTopUpPaymentLink(ctx, idemKey, peerID, result.Intent.ConfirmationURL)
+}
+
+func receiptContactFromText(text string) (email, phone string, ok bool) {
+	value := strings.TrimSpace(text)
+	if value == "" {
+		return "", "", false
+	}
+	if strings.Contains(value, "@") {
+		return value, "", true
+	}
+	var b strings.Builder
+	digits := 0
+	for _, r := range value {
+		switch {
+		case r >= '0' && r <= '9':
+			_ = b.WriteByte(byte(r))
+			digits++
+		case r == '+' && b.Len() == 0:
+			b.WriteRune(r)
+		}
+	}
+	if digits >= 10 {
+		return "", b.String(), true
+	}
+	return "", "", false
 }
 
 func shouldForceOnboarding(user *domain.User, parsed commandrouter.Result, controlFromPayload, controlOnly, textAskEnabled bool) bool {

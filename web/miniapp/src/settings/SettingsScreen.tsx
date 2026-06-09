@@ -1,6 +1,17 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@vkontakte/vkui";
-import { statusKind, statusLabel, type Job } from "../api/client";
+import {
+  apiUserMessage,
+  createIdempotencyKey,
+  createPaymentIntent,
+  listPaymentIntents,
+  listPaymentProducts,
+  statusKind,
+  statusLabel,
+  type Job,
+  type PaymentIntent,
+  type PaymentProduct,
+} from "../api/client";
 import { modalityByOperation, type ModalityId } from "../chat/types";
 import neuroHubBanner from "../assets/neurohub-banner.png";
 import { formatCredits } from "../ui/credits";
@@ -33,6 +44,27 @@ const FILTER_OPTIONS: Array<{ id: HistoryFilter; label: string }> = [
   { id: "text", label: "Диалоги" },
 ];
 
+function formatRub(kopecks: number): string {
+  return new Intl.NumberFormat("ru-RU", {
+    style: "currency",
+    currency: "RUB",
+    maximumFractionDigits: 0,
+  }).format(kopecks / 100);
+}
+
+function receiptContactPayload(value: string): { receipt_email?: string; receipt_phone?: string } | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (trimmed.includes("@")) {
+    return { receipt_email: trimmed };
+  }
+  const digits = trimmed.replace(/[^\d+]/g, "");
+  if (digits.length >= 10) {
+    return { receipt_phone: digits };
+  }
+  return null;
+}
+
 function dateLabel(value: string): string {
   const ts = Date.parse(value);
   if (!Number.isFinite(ts)) return "";
@@ -64,6 +96,14 @@ function typeColor(operation: string): string {
   return "#22d3ee";
 }
 
+function isActivePaymentIntent(intent: PaymentIntent): boolean {
+  return intent.status === "waiting_for_user" && Boolean(intent.confirmation_url);
+}
+
+function findActivePaymentIntent(intents: PaymentIntent[]): PaymentIntent | null {
+  return intents.find(isActivePaymentIntent) ?? null;
+}
+
 export function SettingsScreen({
   themeMode,
   balance,
@@ -77,6 +117,12 @@ export function SettingsScreen({
   const [historyFilter, setHistoryFilter] = useState<HistoryFilter>("all");
   const [historyOpen, setHistoryOpen] = useState(false);
   const [topUpNotice, setTopUpNotice] = useState("");
+  const [receiptContact, setReceiptContact] = useState("");
+  const [paymentProducts, setPaymentProducts] = useState<PaymentProduct[]>([]);
+  const [activePaymentIntent, setActivePaymentIntent] = useState<PaymentIntent | null>(null);
+  const [creatingNewPayment, setCreatingNewPayment] = useState(false);
+  const [productsLoading, setProductsLoading] = useState(false);
+  const [paymentPendingCode, setPaymentPendingCode] = useState("");
   const [spinning, setSpinning] = useState(false);
   const visibleJobs = useMemo(() => {
     const deduped = dedupeHistoryJobs(jobs);
@@ -93,6 +139,73 @@ export function SettingsScreen({
     onRefreshBalance();
     window.setTimeout(() => setSpinning(false), 900);
   };
+
+  useEffect(() => {
+    let cancelled = false;
+    setProductsLoading(true);
+    Promise.all([listPaymentProducts(), listPaymentIntents().catch(() => [])])
+      .then(([products, intents]) => {
+        if (cancelled) return;
+        setPaymentProducts(products);
+        setActivePaymentIntent(findActivePaymentIntent(intents));
+      })
+      .catch(() => {
+        if (!cancelled) setTopUpNotice("Не удалось загрузить тарифы. Попробуйте позже.");
+      })
+      .finally(() => {
+        if (!cancelled) setProductsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function handleTopUp(product: PaymentProduct) {
+    if (paymentPendingCode) return;
+    if (activePaymentIntent && !creatingNewPayment) {
+      setTopUpNotice("У вас уже есть незавершенный платеж. Продолжите оплату или создайте новый платеж.");
+      return;
+    }
+    const contact = receiptContactPayload(receiptContact);
+    if (!contact) {
+      setTopUpNotice("Укажите email или телефон для чека.");
+      return;
+    }
+    setTopUpNotice("");
+    setPaymentPendingCode(product.code);
+    try {
+      const intent = await createPaymentIntent(
+        { product_code: product.code, ...contact, force_new: creatingNewPayment },
+        { idempotencyKey: createIdempotencyKey() },
+      );
+      if (intent.reused_active_payment && intent.confirmation_url) {
+        setActivePaymentIntent(intent);
+        setCreatingNewPayment(false);
+        setTopUpNotice(intent.notice || "У вас уже есть незавершенный платеж. После оплаты баланс обновится автоматически.");
+        return;
+      }
+      if (!intent.confirmation_url) {
+        setTopUpNotice("Платеж создан, но ссылка на оплату пока недоступна. Попробуйте обновить страницу.");
+        return;
+      }
+      setActivePaymentIntent(intent);
+      window.location.assign(intent.confirmation_url);
+    } catch (error) {
+      setTopUpNotice(apiUserMessage(error));
+    } finally {
+      setPaymentPendingCode("");
+    }
+  }
+
+  function handleContinuePayment() {
+    if (!activePaymentIntent?.confirmation_url) return;
+    window.location.assign(activePaymentIntent.confirmation_url);
+  }
+
+  function handleCreateNewPayment() {
+    setCreatingNewPayment(true);
+    setTopUpNotice("Создайте новый платеж. После оплаты баланс обновится автоматически.");
+  }
 
   return (
     <main className="settings-screen nh-scroll">
@@ -172,18 +285,62 @@ export function SettingsScreen({
             </button>
           </div>
         </div>
-        <Button
-          type="button"
-          mode="primary"
-          appearance="accent"
-          size="l"
-          stretched
-          onClick={() => {
-            setTopUpNotice("Пополнение скоро появится. Баланс обновится после подтверждения платежа.");
-          }}
-        >
-          Пополнить баланс
-        </Button>
+        {activePaymentIntent && !creatingNewPayment ? (
+          <div className="payment-pending" role="status">
+            <strong>У вас есть незавершенный платеж</strong>
+            <span>
+              {formatCredits(activePaymentIntent.credits)} · {formatRub(activePaymentIntent.amount)}
+            </span>
+            <p>После оплаты баланс обновится автоматически.</p>
+            <div className="payment-pending__actions">
+              <button type="button" onClick={handleContinuePayment}>
+                Продолжить оплату
+              </button>
+              <button type="button" onClick={handleCreateNewPayment}>
+                Создать новый платеж
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
+            <p className="settings-notice">После оплаты баланс обновится автоматически.</p>
+            <div className="payment-contact">
+          <label htmlFor="payment-contact-input">Email или телефон для чека</label>
+          <input
+            id="payment-contact-input"
+            type="text"
+            inputMode="email"
+            autoComplete="email"
+            placeholder="user@example.com"
+            value={receiptContact}
+            onChange={(event) => setReceiptContact(event.target.value)}
+          />
+        </div>
+        <div className="payment-products" aria-label="Тарифы пополнения">
+          {productsLoading ? (
+            <p className="settings-notice">Загружаем тарифы...</p>
+          ) : paymentProducts.length === 0 ? (
+            <p className="settings-notice">Тарифы пока недоступны.</p>
+          ) : (
+            paymentProducts.map((product) => (
+              <button
+                key={product.code}
+                type="button"
+                className="payment-product"
+                disabled={Boolean(paymentPendingCode)}
+                onClick={() => void handleTopUp(product)}
+              >
+                <span>
+                  <strong>{formatCredits(product.credits)}</strong>
+                  <small>{product.title}</small>
+                </span>
+                <em>{paymentPendingCode === product.code ? "Создаем..." : formatRub(product.amount)}</em>
+              </button>
+            ))
+          )}
+            </div>
+          </>
+        )}
         {topUpNotice && <p className="settings-notice">{topUpNotice}</p>}
       </section>
 

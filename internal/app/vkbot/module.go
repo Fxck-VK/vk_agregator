@@ -17,6 +17,7 @@ import (
 	"vk-ai-aggregator/internal/service/commandrouter"
 	"vk-ai-aggregator/internal/service/dialogstate"
 	"vk-ai-aggregator/internal/service/joborchestrator"
+	"vk-ai-aggregator/internal/service/paymentservice"
 	"vk-ai-aggregator/internal/service/referralservice"
 )
 
@@ -29,6 +30,7 @@ type Deps struct {
 	Jobs         domain.JobRepository
 	Commands     domain.CommandRepository
 	Billing      *billingservice.Service
+	Payment      *paymentservice.Service
 	Referrals    domain.ReferralRepository
 	Orchestrator *joborchestrator.Orchestrator
 	Router       *commandrouter.Router
@@ -104,6 +106,7 @@ func NewHandler(cfg config.Config, deps Deps) http.Handler {
 		Jobs:         deps.Jobs,
 		Commands:     deps.Commands,
 		Billing:      deps.Billing,
+		Payment:      deps.Payment,
 		Referrals:    referrals,
 		Orchestrator: deps.Orchestrator,
 		Router:       deps.Router,
