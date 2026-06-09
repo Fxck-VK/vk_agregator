@@ -119,6 +119,11 @@ Dev scripts:
 Protected operator routes under `cmd/api`:
 
 ```text
+GET  /billing/payment-products
+POST /billing/payment-products
+GET  /billing/payment-products/{id}
+PATCH /billing/payment-products/{id}
+POST /billing/payment-products/{id}/disable
 POST /billing/payment-intents
 GET  /billing/payment-intents/{id}
 GET  /billing/payment-history
@@ -184,47 +189,64 @@ curl -X POST "http://localhost:8080/billing/payment-intents/<intent_id>/refund" 
   -d '{"reason":"manual operator refund"}'
 ```
 
+## Недавняя глава 5: Product Catalog Admin
+
+Уже добавлено:
+
+- protected operator endpoints для `payment_products`:
+  - `GET /billing/payment-products`
+  - `POST /billing/payment-products`
+  - `GET /billing/payment-products/{id}`
+  - `PATCH /billing/payment-products/{id}`
+  - `POST /billing/payment-products/{id}/disable`
+- repository/service methods for list/create/update/disable catalog rows;
+- safe operator DTO без provider payloads/secrets;
+- validation for positive RUB packages, product code format and 54-FZ receipt
+  fields;
+- default 54-FZ values for new products: `vat_code=1`,
+  `payment_subject=service`, `payment_mode=full_prepayment`;
+- automatic `price_version` bump for future snapshots when title, amount,
+  credits, currency, VAT, payment subject or payment mode changes;
+- old `payment_intents` remain immutable because they already snapshot amount,
+  credits, price version and receipt fields;
+- constant-time `X-Admin-Token` comparison on operator/admin surfaces;
+- tests for CRUD, active/inactive lists and snapshot behavior.
+
+Useful examples:
+
+```bash
+curl "http://localhost:8080/billing/payment-products?active=true" \
+  -H "X-Admin-Token: $ADMIN_TOKEN"
+
+curl -X POST "http://localhost:8080/billing/payment-products" \
+  -H "X-Admin-Token: $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"code":"credits_250","title":"NeiroHub 250 credits","amount":20000,"currency":"rub","credits":250,"vat_code":1,"payment_subject":"service","payment_mode":"full_prepayment"}'
+
+curl -X PATCH "http://localhost:8080/billing/payment-products/<product_id>" \
+  -H "X-Admin-Token: $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"amount":21000,"credits":260}'
+
+curl -X POST "http://localhost:8080/billing/payment-products/<product_id>/disable" \
+  -H "X-Admin-Token: $ADMIN_TOKEN"
+```
+
+## Недавняя глава 6: Mini App Payment History UI
+
+Уже добавлено:
+
+- Mini App Settings/Profile loads authenticated `GET /miniapp/payments`;
+- safe payment history UI shows status, amount, credits and creation date;
+- active `waiting_for_user` intents show a continuation action using only the
+  safe `confirmation_url`;
+- pending-payment UX keeps "continue payment" and explicit "create new payment"
+  paths;
+- user-facing copy says the balance updates after payment through backend state;
+- provider raw payloads, provider payment IDs and user IDs are not rendered;
+- redirects remain navigation-only and do not grant balance.
+
 ## Что осталось доделать
-
-### Глава 5. Product Catalog Admin
-
-Цель: управлять тарифами без ручного SQL.
-
-Сделать:
-
-- protected operator endpoints для `payment_products`;
-- list/create/update/disable product;
-- safe DTO без внутренних/сырых provider данных;
-- price changes через новую версию продукта или `price_version`, не через переписывание истории;
-- старые `payment_intents` должны оставаться интерпретируемыми;
-- tests для active/inactive products и snapshot behavior.
-
-Не делать:
-
-- не менять старые paid intents при изменении продукта;
-- не доверять данным из Mini App;
-- не открывать catalog admin наружу без `ADMIN_TOKEN`.
-
-### Глава 6. Mini App Payment History UI
-
-Цель: подключить UI к уже существующим backend routes.
-
-Сделать:
-
-- в Mini App Settings/Profile подключить `GET /miniapp/payments`;
-- показать историю платежей безопасно: статус, сумма, кредиты, дата, confirmation link для active waiting intent;
-- добавить UX для pending payment:
-  - продолжить оплату;
-  - создать новый платеж;
-  - текст: после оплаты баланс обновится автоматически;
-- не показывать provider raw payload;
-- не начислять баланс по redirect.
-
-Важно:
-
-- Mini App уже имеет authenticated BFF routes.
-- Вся логика оплаты должна идти через backend.
-- VK launch params auth не ослаблять.
 
 ### Глава 7. Live YooKassa Smoke
 
@@ -239,7 +261,7 @@ curl -X POST "http://localhost:8080/billing/payment-intents/<intent_id>/refund" 
 - проверить webhook в кабинете YooKassa:
 
 ```text
-https://vk.neiirohub.ru/billing/webhooks/yookassa
+https://neiirohub.ru/billing/webhooks/yookassa
 ```
 
 events:

@@ -146,6 +146,137 @@ func TestPaymentHistoryListsIntents(t *testing.T) {
 	}
 }
 
+func TestProductCatalogAdminCRUDAndIntentSnapshots(t *testing.T) {
+	handler, users, payments, _, _ := setup(t)
+	ctx := context.Background()
+
+	createBody := []byte(`{"code":"credits_250","title":"NeiroHub 250 credits","amount":20000,"currency":"rub","credits":250,"vat_code":1,"payment_subject":"service","payment_mode":"full_prepayment"}`)
+	createReq := httptest.NewRequest(http.MethodPost, "/billing/payment-products", bytes.NewReader(createBody))
+	createReq.Header.Set("X-Admin-Token", "secret")
+	createRec := httptest.NewRecorder()
+	handler.Routes().ServeHTTP(createRec, createReq)
+	if createRec.Code != http.StatusCreated {
+		t.Fatalf("create product: %d %s", createRec.Code, createRec.Body.String())
+	}
+	var product billing.PaymentProductDTO
+	if err := json.Unmarshal(createRec.Body.Bytes(), &product); err != nil {
+		t.Fatalf("decode product: %v", err)
+	}
+	if product.Code != "credits_250" || !product.IsActive || product.PriceVersion != 1 {
+		t.Fatalf("unexpected product: %+v", product)
+	}
+
+	patchBody := []byte(`{"title":"NeiroHub 260 credits","amount":21000,"credits":260}`)
+	patchReq := httptest.NewRequest(http.MethodPatch, "/billing/payment-products/"+product.ID.String(), bytes.NewReader(patchBody))
+	patchReq.Header.Set("X-Admin-Token", "secret")
+	patchRec := httptest.NewRecorder()
+	handler.Routes().ServeHTTP(patchRec, patchReq)
+	if patchRec.Code != http.StatusOK {
+		t.Fatalf("patch product: %d %s", patchRec.Code, patchRec.Body.String())
+	}
+	var patched billing.PaymentProductDTO
+	if err := json.Unmarshal(patchRec.Body.Bytes(), &patched); err != nil {
+		t.Fatalf("decode patched product: %v", err)
+	}
+	if patched.PriceVersion != 2 || patched.Amount != 21000 || patched.Credits != 260 {
+		t.Fatalf("patch did not bump snapshot version: %+v", patched)
+	}
+
+	user := &domain.User{VKUserID: 777, Role: domain.RoleUser, Status: domain.StatusActive}
+	if err := users.Create(ctx, user); err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	intentBody := []byte(`{"product_code":"credits_250","receipt_email":"user@example.com"}`)
+	intentReq := httptest.NewRequest(http.MethodPost, "/billing/payment-intents", bytes.NewReader(intentBody))
+	intentReq.Header.Set("X-Admin-Token", "secret")
+	intentReq.Header.Set("X-User-ID", user.ID.String())
+	intentReq.Header.Set("X-Idempotency-Key", "catalog-snapshot-key")
+	intentRec := httptest.NewRecorder()
+	handler.Routes().ServeHTTP(intentRec, intentReq)
+	if intentRec.Code != http.StatusCreated {
+		t.Fatalf("create intent: %d %s", intentRec.Code, intentRec.Body.String())
+	}
+	var intent billing.PaymentIntentDTO
+	if err := json.Unmarshal(intentRec.Body.Bytes(), &intent); err != nil {
+		t.Fatalf("decode intent: %v", err)
+	}
+	if intent.Amount != 21000 || intent.Credits != 260 || intent.PriceVersion != 2 {
+		t.Fatalf("intent did not snapshot patched product: %+v", intent)
+	}
+
+	secondPatchReq := httptest.NewRequest(http.MethodPatch, "/billing/payment-products/"+product.ID.String(), bytes.NewReader([]byte(`{"amount":22000}`)))
+	secondPatchReq.Header.Set("X-Admin-Token", "secret")
+	secondPatchRec := httptest.NewRecorder()
+	handler.Routes().ServeHTTP(secondPatchRec, secondPatchReq)
+	if secondPatchRec.Code != http.StatusOK {
+		t.Fatalf("second patch product: %d %s", secondPatchRec.Code, secondPatchRec.Body.String())
+	}
+	storedIntent, err := payments.GetIntentByID(ctx, intent.ID)
+	if err != nil {
+		t.Fatalf("get stored intent: %v", err)
+	}
+	if storedIntent.Amount != 21000 || storedIntent.Credits != 260 || storedIntent.PriceVersion != 2 {
+		t.Fatalf("existing intent was mutated by catalog update: %+v", storedIntent)
+	}
+
+	disableReq := httptest.NewRequest(http.MethodPost, "/billing/payment-products/"+product.ID.String()+"/disable", nil)
+	disableReq.Header.Set("X-Admin-Token", "secret")
+	disableRec := httptest.NewRecorder()
+	handler.Routes().ServeHTTP(disableRec, disableReq)
+	if disableRec.Code != http.StatusOK {
+		t.Fatalf("disable product: %d %s", disableRec.Code, disableRec.Body.String())
+	}
+	var disabled billing.PaymentProductDTO
+	if err := json.Unmarshal(disableRec.Body.Bytes(), &disabled); err != nil {
+		t.Fatalf("decode disabled product: %v", err)
+	}
+	if disabled.IsActive || disabled.PriceVersion != 3 {
+		t.Fatalf("disable should hide product without changing snapshot version: %+v", disabled)
+	}
+
+	activeReq := httptest.NewRequest(http.MethodGet, "/billing/payment-products?active=true", nil)
+	activeReq.Header.Set("X-Admin-Token", "secret")
+	activeRec := httptest.NewRecorder()
+	handler.Routes().ServeHTTP(activeRec, activeReq)
+	if activeRec.Code != http.StatusOK {
+		t.Fatalf("list active products: %d %s", activeRec.Code, activeRec.Body.String())
+	}
+	if bytes.Contains(activeRec.Body.Bytes(), []byte("credits_250")) {
+		t.Fatalf("disabled product leaked into active list: %s", activeRec.Body.String())
+	}
+
+	inactiveReq := httptest.NewRequest(http.MethodGet, "/billing/payment-products?active=false", nil)
+	inactiveReq.Header.Set("X-Admin-Token", "secret")
+	inactiveRec := httptest.NewRecorder()
+	handler.Routes().ServeHTTP(inactiveRec, inactiveReq)
+	if inactiveRec.Code != http.StatusOK {
+		t.Fatalf("list inactive products: %d %s", inactiveRec.Code, inactiveRec.Body.String())
+	}
+	if !bytes.Contains(inactiveRec.Body.Bytes(), []byte("credits_250")) {
+		t.Fatalf("inactive list missed disabled product: %s", inactiveRec.Body.String())
+	}
+}
+
+func TestProductCatalogAdminRejectsInvalidAndDuplicateProducts(t *testing.T) {
+	handler, _, _, _, _ := setup(t)
+
+	invalidReq := httptest.NewRequest(http.MethodPost, "/billing/payment-products", bytes.NewReader([]byte(`{"code":"Bad Code","title":"Bad","amount":100,"currency":"rub","credits":1}`)))
+	invalidReq.Header.Set("X-Admin-Token", "secret")
+	invalidRec := httptest.NewRecorder()
+	handler.Routes().ServeHTTP(invalidRec, invalidReq)
+	if invalidRec.Code != http.StatusBadRequest {
+		t.Fatalf("invalid product: %d %s", invalidRec.Code, invalidRec.Body.String())
+	}
+
+	duplicateReq := httptest.NewRequest(http.MethodPost, "/billing/payment-products", bytes.NewReader([]byte(`{"code":"credits_100","title":"Duplicate","amount":100,"currency":"rub","credits":1}`)))
+	duplicateReq.Header.Set("X-Admin-Token", "secret")
+	duplicateRec := httptest.NewRecorder()
+	handler.Routes().ServeHTTP(duplicateRec, duplicateReq)
+	if duplicateRec.Code != http.StatusConflict {
+		t.Fatalf("duplicate product: %d %s", duplicateRec.Code, duplicateRec.Body.String())
+	}
+}
+
 func TestOperatorListsPendingIntents(t *testing.T) {
 	handler, users, _, _, _ := setup(t)
 	ctx := context.Background()

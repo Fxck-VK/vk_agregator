@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -55,6 +56,8 @@ func (r *PaymentRepo) PutProduct(product *domain.PaymentProduct) {
 	if product.ID == uuid.Nil {
 		product.ID = uuid.New()
 	}
+	product.Code = strings.TrimSpace(product.Code)
+	product.Title = strings.TrimSpace(product.Title)
 	if product.Currency == "" {
 		product.Currency = domain.CurrencyRUB
 	}
@@ -66,7 +69,7 @@ func (r *PaymentRepo) PutProduct(product *domain.PaymentProduct) {
 		product.CreatedAt = now
 	}
 	product.UpdatedAt = now
-	r.productsByID[product.ID] = *product
+	r.productsByID[product.ID] = copyPaymentProduct(product)
 	r.productIDByCode[product.Code] = product.ID
 }
 
@@ -88,7 +91,31 @@ func (r *PaymentRepo) ListActiveProducts(_ context.Context) ([]*domain.PaymentPr
 	out := make([]*domain.PaymentProduct, 0, len(products))
 	for i := range products {
 		product := products[i]
-		out = append(out, &product)
+		out = append(out, copyPaymentProductPtr(product))
+	}
+	return out, nil
+}
+
+func (r *PaymentRepo) ListProducts(_ context.Context, filter domain.PaymentProductFilter, limit, offset int) ([]*domain.PaymentProduct, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	products := make([]domain.PaymentProduct, 0, len(r.productsByID))
+	for _, product := range r.productsByID {
+		if filter.Active != nil && product.IsActive != *filter.Active {
+			continue
+		}
+		products = append(products, copyPaymentProduct(&product))
+	}
+	sort.Slice(products, func(i, j int) bool {
+		if products[i].CreatedAt.Equal(products[j].CreatedAt) {
+			return products[i].Code < products[j].Code
+		}
+		return products[i].CreatedAt.After(products[j].CreatedAt)
+	})
+	out := make([]*domain.PaymentProduct, 0, len(products))
+	for i := offset; i < len(products) && len(out) < limit; i++ {
+		product := products[i]
+		out = append(out, copyPaymentProductPtr(product))
 	}
 	return out, nil
 }
@@ -96,7 +123,7 @@ func (r *PaymentRepo) ListActiveProducts(_ context.Context) ([]*domain.PaymentPr
 func (r *PaymentRepo) GetActiveProductByCode(_ context.Context, code string) (*domain.PaymentProduct, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	id, ok := r.productIDByCode[code]
+	id, ok := r.productIDByCode[strings.TrimSpace(code)]
 	if !ok {
 		return nil, domain.ErrNotFound
 	}
@@ -104,7 +131,7 @@ func (r *PaymentRepo) GetActiveProductByCode(_ context.Context, code string) (*d
 	if !product.IsActive {
 		return nil, domain.ErrNotFound
 	}
-	return &product, nil
+	return copyPaymentProductPtr(product), nil
 }
 
 func (r *PaymentRepo) GetProductByID(_ context.Context, id uuid.UUID) (*domain.PaymentProduct, error) {
@@ -114,7 +141,59 @@ func (r *PaymentRepo) GetProductByID(_ context.Context, id uuid.UUID) (*domain.P
 	if !ok {
 		return nil, domain.ErrNotFound
 	}
-	return &product, nil
+	return copyPaymentProductPtr(product), nil
+}
+
+func (r *PaymentRepo) CreateProduct(_ context.Context, product *domain.PaymentProduct) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	product.Code = strings.TrimSpace(product.Code)
+	product.Title = strings.TrimSpace(product.Title)
+	if _, ok := r.productIDByCode[product.Code]; ok {
+		return domain.ErrConflict
+	}
+	if product.ID == uuid.Nil {
+		product.ID = uuid.New()
+	}
+	if product.Currency == "" {
+		product.Currency = domain.CurrencyRUB
+	}
+	if product.PriceVersion == 0 {
+		product.PriceVersion = 1
+	}
+	now := time.Now()
+	product.CreatedAt, product.UpdatedAt = now, now
+	r.productsByID[product.ID] = copyPaymentProduct(product)
+	r.productIDByCode[product.Code] = product.ID
+	return nil
+}
+
+func (r *PaymentRepo) UpdateProduct(_ context.Context, product *domain.PaymentProduct) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	existing, ok := r.productsByID[product.ID]
+	if !ok {
+		return domain.ErrNotFound
+	}
+	product.Code = strings.TrimSpace(product.Code)
+	product.Title = strings.TrimSpace(product.Title)
+	if product.Code == "" {
+		product.Code = existing.Code
+	}
+	if existingID, ok := r.productIDByCode[product.Code]; ok && existingID != product.ID {
+		return domain.ErrConflict
+	}
+	if product.Currency == "" {
+		product.Currency = domain.CurrencyRUB
+	}
+	product.CreatedAt = existing.CreatedAt
+	product.UpdatedAt = time.Now()
+	if existing.Code != product.Code {
+		delete(r.productIDByCode, existing.Code)
+	}
+	r.productsByID[product.ID] = copyPaymentProduct(product)
+	r.productIDByCode[product.Code] = product.ID
+	return nil
 }
 
 func (r *PaymentRepo) CreateIntent(_ context.Context, intent *domain.PaymentIntent) error {
@@ -505,6 +584,20 @@ func copyPaymentIntent(intent *domain.PaymentIntent) domain.PaymentIntent {
 		out.Metadata = append(json.RawMessage(nil), intent.Metadata...)
 	}
 	return out
+}
+
+func copyPaymentProduct(product *domain.PaymentProduct) domain.PaymentProduct {
+	out := *product
+	if product.VATCode != nil {
+		vatCode := *product.VATCode
+		out.VATCode = &vatCode
+	}
+	return out
+}
+
+func copyPaymentProductPtr(product domain.PaymentProduct) *domain.PaymentProduct {
+	out := copyPaymentProduct(&product)
+	return &out
 }
 
 func copyPaymentRefund(refund *domain.PaymentRefund) domain.PaymentRefund {

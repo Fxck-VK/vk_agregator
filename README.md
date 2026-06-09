@@ -140,14 +140,21 @@ Real integrations are implemented at adapter level and remain **opt-in**:
   idempotent payment intents, calls the selected provider, stores
   `provider_payment_id` / `confirmation_url`, stores the 54-FZ receipt snapshot
   from the selected product, and returns safe DTOs. Protected
-  operator routes exist under `/billing/payment-intents`,
-  `/billing/payment-history`, `/billing/payment-intents/{id}/sync` and
-  `/billing/payment-intents/{id}/refund`; authenticated Mini App routes exist under
+  operator routes exist under `/billing/payment-products*`,
+  `/billing/payment-intents`, `/billing/payment-history`,
+  `/billing/payment-intents/{id}/sync` and
+  `/billing/payment-intents/{id}/refund`. Product catalog admin create/update
+  and disable actions are operator-only, return safe DTOs, and increment
+  `price_version` for future intents when price, credits or 54-FZ receipt
+  fields change. Existing payment intents keep their snapshotted amount,
+  credits, price version and fiscal fields. Authenticated Mini App routes exist under
   `/miniapp/payment-products` and `/miniapp/payments*`. The Mini App Settings
   payment UI loads active backend products, requires a receipt email or phone,
   creates an intent with `X-Idempotency-Key` and redirects the user to the safe
-  `confirmation_url`. The VK Bot top-up control path uses the same product
-  catalog, asks for receipt contact, creates a payment intent through
+  `confirmation_url`. It also shows safe payment history from
+  `GET /miniapp/payments`, including active payment continuation links without
+  treating provider redirects as balance proof. The VK Bot top-up control path
+  uses the same product catalog, asks for receipt contact, creates a payment intent through
   `paymentservice` and sends a payment link; it does not grant credits from the
   bot handler. `cmd/provider-webhook` exposes
   `POST /billing/webhooks/yookassa`, stores raw provider events in the
@@ -159,9 +166,9 @@ Real integrations are implemented at adapter level and remain **opt-in**:
   successful intents, refuse when the current credit balance cannot cover the
   top-up credits, and also refuse if the ledger shows committed or pending
   negative movements after that exact top-up. Refund debits use ledger
-  adjustment entries instead of direct balance mutation. Product catalog admin
-  management, partial refund attribution, automatic refund webhook reversal and
-  live YooKassa smoke remain follow-up work. User return/redirect after payment
+  adjustment entries instead of direct balance mutation. Partial refund
+  attribution, automatic refund webhook reversal and live YooKassa smoke remain
+  follow-up work. User return/redirect after payment
   is navigation only and never grants credits by itself.
 - VK inline menu navigation uses a hybrid UX: if the last bot message is the
   active menu, inline button clicks edit it through VK `messages.edit`; pressing
@@ -272,6 +279,8 @@ Create a local environment file from the committed template:
 ```bash
 cp .env.example .env
 # edit .env and fill VK_ACCESS_TOKEN / VK_SECRET / VK_CONFIRMATION_TOKEN if needed
+# macOS local fallback used in this workspace is also supported:
+# cp .env.example _env
 ```
 
 On Windows PowerShell:
@@ -281,8 +290,9 @@ Copy-Item .env.example .env
 notepad .env
 ```
 
-The application loads `.env` automatically when started from the repository
-root. The real `.env` is ignored by Git; only `.env.example` is committed.
+The application loads `.env` first and `_env` as a local fallback when started
+from the repository root. Real env files are ignored by Git; only
+`.env.example` is committed.
 
 ### VK bot one-command startup
 

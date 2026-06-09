@@ -334,6 +334,35 @@ func TestLoadReadsDotenvWithoutOverridingEnvironment(t *testing.T) {
 	}
 }
 
+func TestLoadReadsUnderscoreEnvFallback(t *testing.T) {
+	restoreEnv := clearEnv(t, "VK_API_VERSION")
+	defer restoreEnv()
+
+	tmp := t.TempDir()
+	if err := os.WriteFile(tmp+"/_env", []byte("VK_API_VERSION=5.201\n"), 0600); err != nil {
+		t.Fatalf("write _env: %v", err)
+	}
+
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("get cwd: %v", err)
+	}
+	if err := os.Chdir(tmp); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	defer func() {
+		if err := os.Chdir(wd); err != nil {
+			t.Fatalf("restore cwd: %v", err)
+		}
+	}()
+
+	cfg := config.Load()
+
+	if cfg.VKAPIVersion != "5.201" {
+		t.Fatalf("VKAPIVersion = %q, want value from _env", cfg.VKAPIVersion)
+	}
+}
+
 func TestLoadMiniAppJobRateLimit(t *testing.T) {
 	t.Setenv("MINIAPP_JOB_RATE_LIMIT_RPS", "2.5")
 	t.Setenv("MINIAPP_JOB_RATE_LIMIT_BURST", "7")

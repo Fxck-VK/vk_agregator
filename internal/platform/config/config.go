@@ -338,7 +338,7 @@ func (c Config) Validate() error {
 	return nil
 }
 
-// Load reads configuration from .env and the process environment.
+// Load reads configuration from .env/_env and the process environment.
 func Load() Config {
 	loadDotenv()
 
@@ -582,7 +582,8 @@ func knownPaymentProvider(name string) bool {
 }
 
 func loadDotenv() {
-	_ = godotenv.Load()
+	_ = godotenv.Load(".env")
+	_ = godotenv.Load("_env")
 }
 
 func env(key, def string) string {

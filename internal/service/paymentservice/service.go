@@ -21,6 +21,14 @@ var (
 	ErrForbidden              = errors.New("paymentservice: forbidden")
 )
 
+const (
+	defaultReceiptVATCode        = int16(1)
+	defaultReceiptPaymentSubject = "service"
+	defaultReceiptPaymentMode    = "full_prepayment"
+	maxProductCodeLen            = 64
+	maxProductTitleLen           = 160
+)
+
 // Config controls payment lifecycle behavior.
 type Config struct {
 	ReturnURL string
@@ -45,6 +53,182 @@ func (s *Service) ListActiveProducts(ctx context.Context) ([]*domain.PaymentProd
 		return nil, errors.New("paymentservice: service is not configured")
 	}
 	return s.repo.ListActiveProducts(ctx)
+}
+
+// ListProducts returns product catalog entries for protected operator surfaces.
+func (s *Service) ListProducts(ctx context.Context, active *bool, limit, offset int) ([]*domain.PaymentProduct, error) {
+	if s == nil || s.repo == nil {
+		return nil, errors.New("paymentservice: service is not configured")
+	}
+	return s.repo.ListProducts(ctx, domain.PaymentProductFilter{Active: active}, normalizeLimit(limit), normalizeOffset(offset))
+}
+
+// GetProductAdmin fetches one product for protected operator surfaces.
+func (s *Service) GetProductAdmin(ctx context.Context, productID uuid.UUID) (*domain.PaymentProduct, error) {
+	if s == nil || s.repo == nil {
+		return nil, errors.New("paymentservice: service is not configured")
+	}
+	if productID == uuid.Nil {
+		return nil, ErrInvalidInput
+	}
+	return s.repo.GetProductByID(ctx, productID)
+}
+
+// CreateProductInput describes a protected operator product-catalog create.
+type CreateProductInput struct {
+	Code           string
+	Title          string
+	Amount         int64
+	Currency       domain.Currency
+	Credits        int64
+	VATCode        *int16
+	PaymentSubject string
+	PaymentMode    string
+	IsActive       bool
+}
+
+// UpdateProductInput describes a protected operator product-catalog update.
+// Code is intentionally immutable through this path; create a new product code
+// for a different public package identity.
+type UpdateProductInput struct {
+	ID             uuid.UUID
+	Title          *string
+	Amount         *int64
+	Currency       *domain.Currency
+	Credits        *int64
+	VATCodeSet     bool
+	VATCode        *int16
+	PaymentSubject *string
+	PaymentMode    *string
+	IsActive       *bool
+}
+
+// CreateProduct inserts one active or hidden top-up product. It does not touch
+// existing intents or balances.
+func (s *Service) CreateProduct(ctx context.Context, in CreateProductInput) (*domain.PaymentProduct, error) {
+	if s == nil || s.repo == nil {
+		return nil, errors.New("paymentservice: service is not configured")
+	}
+	product := &domain.PaymentProduct{
+		Code:           strings.TrimSpace(in.Code),
+		Title:          strings.TrimSpace(in.Title),
+		Amount:         in.Amount,
+		Currency:       in.Currency,
+		Credits:        in.Credits,
+		PriceVersion:   1,
+		VATCode:        cloneInt16(in.VATCode),
+		PaymentSubject: strings.TrimSpace(in.PaymentSubject),
+		PaymentMode:    strings.TrimSpace(in.PaymentMode),
+		IsActive:       in.IsActive,
+	}
+	if product.Currency == "" {
+		product.Currency = domain.CurrencyRUB
+	}
+	if product.VATCode == nil {
+		product.VATCode = cloneInt16(ptrInt16(defaultReceiptVATCode))
+	}
+	if product.PaymentSubject == "" {
+		product.PaymentSubject = defaultReceiptPaymentSubject
+	}
+	if product.PaymentMode == "" {
+		product.PaymentMode = defaultReceiptPaymentMode
+	}
+	if err := validateProduct(product); err != nil {
+		return nil, err
+	}
+	if err := s.repo.CreateProduct(ctx, product); err != nil {
+		return nil, err
+	}
+	return product, nil
+}
+
+// UpdateProduct applies protected operator catalog changes. Snapshot-sensitive
+// changes increment PriceVersion so future intents can be audited against the
+// catalog version they copied from. Existing intents remain untouched.
+func (s *Service) UpdateProduct(ctx context.Context, in UpdateProductInput) (*domain.PaymentProduct, error) {
+	if s == nil || s.repo == nil {
+		return nil, errors.New("paymentservice: service is not configured")
+	}
+	if in.ID == uuid.Nil {
+		return nil, ErrInvalidInput
+	}
+	product, err := s.repo.GetProductByID(ctx, in.ID)
+	if err != nil {
+		return nil, err
+	}
+	next := *product
+	next.VATCode = cloneInt16(product.VATCode)
+
+	snapshotChanged := false
+	if in.Title != nil {
+		value := strings.TrimSpace(*in.Title)
+		if value != next.Title {
+			next.Title = value
+			snapshotChanged = true
+		}
+	}
+	if in.Amount != nil && *in.Amount != next.Amount {
+		next.Amount = *in.Amount
+		snapshotChanged = true
+	}
+	if in.Currency != nil {
+		value := *in.Currency
+		if value == "" {
+			value = domain.CurrencyRUB
+		}
+		if value != next.Currency {
+			next.Currency = value
+			snapshotChanged = true
+		}
+	}
+	if in.Credits != nil && *in.Credits != next.Credits {
+		next.Credits = *in.Credits
+		snapshotChanged = true
+	}
+	if in.VATCodeSet && !sameInt16(in.VATCode, next.VATCode) {
+		next.VATCode = cloneInt16(in.VATCode)
+		snapshotChanged = true
+	}
+	if in.PaymentSubject != nil {
+		value := strings.TrimSpace(*in.PaymentSubject)
+		if value == "" {
+			value = defaultReceiptPaymentSubject
+		}
+		if value != next.PaymentSubject {
+			next.PaymentSubject = value
+			snapshotChanged = true
+		}
+	}
+	if in.PaymentMode != nil {
+		value := strings.TrimSpace(*in.PaymentMode)
+		if value == "" {
+			value = defaultReceiptPaymentMode
+		}
+		if value != next.PaymentMode {
+			next.PaymentMode = value
+			snapshotChanged = true
+		}
+	}
+	if in.IsActive != nil {
+		next.IsActive = *in.IsActive
+	}
+	if snapshotChanged {
+		next.PriceVersion++
+	}
+	if err := validateProduct(&next); err != nil {
+		return nil, err
+	}
+	if err := s.repo.UpdateProduct(ctx, &next); err != nil {
+		return nil, err
+	}
+	return &next, nil
+}
+
+// DisableProduct hides one product from user-facing product lists without
+// mutating existing payment intents.
+func (s *Service) DisableProduct(ctx context.Context, productID uuid.UUID) (*domain.PaymentProduct, error) {
+	active := false
+	return s.UpdateProduct(ctx, UpdateProductInput{ID: productID, IsActive: &active})
 }
 
 // CreateIntentInput describes a user-owned top-up intent creation request.
@@ -321,6 +505,115 @@ func cloneInt16(value *int16) *int16 {
 	}
 	out := *value
 	return &out
+}
+
+func ptrInt16(value int16) *int16 {
+	out := value
+	return &out
+}
+
+func sameInt16(a, b *int16) bool {
+	if a == nil || b == nil {
+		return a == nil && b == nil
+	}
+	return *a == *b
+}
+
+func validateProduct(product *domain.PaymentProduct) error {
+	if product == nil {
+		return ErrInvalidInput
+	}
+	product.Code = strings.TrimSpace(product.Code)
+	product.Title = strings.TrimSpace(product.Title)
+	product.PaymentSubject = strings.TrimSpace(product.PaymentSubject)
+	product.PaymentMode = strings.TrimSpace(product.PaymentMode)
+	if !validProductCode(product.Code) {
+		return ErrInvalidInput
+	}
+	if product.Title == "" || len(product.Title) > maxProductTitleLen {
+		return ErrInvalidInput
+	}
+	if product.Amount <= 0 || product.Credits <= 0 || product.PriceVersion <= 0 {
+		return ErrInvalidInput
+	}
+	if product.Currency == "" {
+		product.Currency = domain.CurrencyRUB
+	}
+	if product.Currency != domain.CurrencyRUB {
+		return ErrInvalidInput
+	}
+	if product.VATCode != nil && !validVATCode(*product.VATCode) {
+		return ErrInvalidInput
+	}
+	if !validPaymentSubject(product.PaymentSubject) || !validPaymentMode(product.PaymentMode) {
+		return ErrInvalidInput
+	}
+	return nil
+}
+
+func validProductCode(code string) bool {
+	if len(code) < 3 || len(code) > maxProductCodeLen {
+		return false
+	}
+	for i, r := range code {
+		ok := r >= 'a' && r <= 'z' ||
+			r >= '0' && r <= '9' ||
+			r == '_' ||
+			r == '-'
+		if !ok {
+			return false
+		}
+		if i == 0 && !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9') {
+			return false
+		}
+	}
+	return true
+}
+
+func validVATCode(code int16) bool {
+	return code >= 1 && code <= 6
+}
+
+func validPaymentSubject(value string) bool {
+	if value == "" {
+		return true
+	}
+	switch value {
+	case "commodity",
+		"excise",
+		"job",
+		"service",
+		"gambling_bet",
+		"gambling_prize",
+		"lottery",
+		"lottery_prize",
+		"intellectual_activity",
+		"payment",
+		"agent_commission",
+		"composite",
+		"another":
+		return true
+	default:
+		return false
+	}
+}
+
+func validPaymentMode(value string) bool {
+	if value == "" {
+		return true
+	}
+	switch value {
+	case "full_prepayment",
+		"partial_prepayment",
+		"advance",
+		"full_payment",
+		"partial_payment",
+		"credit",
+		"credit_payment":
+		return true
+	default:
+		return false
+	}
 }
 
 func defaultString(value, fallback string) string {

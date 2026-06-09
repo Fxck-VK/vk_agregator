@@ -1412,6 +1412,9 @@ body {
   .settings-balance-card__actions { grid-template-columns: 1fr; }
   .settings-history-row { grid-template-columns: 1fr; }
   .settings-history-row__meta { justify-items: start; }
+  .payment-history-row { grid-template-columns: 1fr; }
+  .payment-history-row__meta { justify-items: start; }
+  .payment-history-row__meta time { white-space: normal; }
 }
 
 /* ——— Workflow ——— */
@@ -2204,6 +2207,20 @@ body {
   color: #fff;
 }
 
+.payment-current-link {
+  width: 100%;
+  min-height: 38px;
+  margin: 0 0 10px;
+  border: 1px solid color-mix(in srgb, var(--brand-cyan) 36%, var(--glass-border));
+  border-radius: var(--radius-control);
+  background: color-mix(in srgb, var(--brand-cyan) 9%, transparent);
+  color: var(--brand-cyan);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
 .payment-products {
   display: grid;
   gap: 8px;
@@ -2260,6 +2277,109 @@ body {
   font-style: normal;
   font-weight: 800;
   white-space: nowrap;
+}
+
+.payment-history-card {
+  display: grid;
+  gap: 12px;
+}
+
+.payment-history-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.payment-history-head h2 {
+  margin: 0 0 4px;
+  font-size: 15px;
+}
+
+.payment-history-head p {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.payment-history-list {
+  display: grid;
+  gap: 8px;
+}
+
+.payment-history-row {
+  position: relative;
+  min-height: 58px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0 10px 14px;
+  border-top: 1px solid var(--glass-border);
+}
+
+.payment-history-row::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 14px;
+  bottom: 14px;
+  width: 4px;
+  border-radius: 999px;
+  background: var(--brand-cyan);
+}
+
+.payment-history-row--done::before { background: #22c55e; }
+.payment-history-row--failed::before { background: #ef4444; }
+.payment-history-row--refund::before { background: #f59e0b; }
+
+.payment-history-row__main {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.payment-history-row__main strong,
+.payment-history-row__main span {
+  overflow-wrap: anywhere;
+}
+
+.payment-history-row__main strong {
+  color: var(--fg);
+  font-size: 14px;
+  font-weight: 850;
+}
+
+.payment-history-row__main span {
+  color: var(--fg-muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.payment-history-row__meta {
+  display: grid;
+  justify-items: end;
+  gap: 6px;
+}
+
+.payment-history-row__meta time {
+  color: var(--fg-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.payment-history-row__meta button {
+  min-height: 32px;
+  padding: 0 11px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: var(--gradient-brand);
+  color: #fff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 850;
+  cursor: pointer;
 }
 
 .settings-filter-pills {

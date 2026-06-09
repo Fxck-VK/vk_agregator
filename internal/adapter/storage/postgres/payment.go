@@ -64,6 +64,28 @@ func (r *PaymentRepository) ListActiveProducts(ctx context.Context) ([]*domain.P
 	return products, mapError(rows.Err())
 }
 
+// ListProducts lists product catalog entries for protected operator endpoints.
+func (r *PaymentRepository) ListProducts(ctx context.Context, filter domain.PaymentProductFilter, limit, offset int) ([]*domain.PaymentProduct, error) {
+	args := []any{}
+	where := []string{"1=1"}
+	if filter.Active != nil {
+		args = append(args, *filter.Active)
+		where = append(where, "is_active = $"+strconv.Itoa(len(args)))
+	}
+	args = append(args, limit, offset)
+	query := `SELECT ` + paymentProductColumns + `
+		FROM payment_products
+		WHERE ` + strings.Join(where, " AND ") + `
+		ORDER BY created_at DESC, code ASC
+		LIMIT $` + strconv.Itoa(len(args)-1) + ` OFFSET $` + strconv.Itoa(len(args))
+	rows, err := r.db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, mapError(err)
+	}
+	defer rows.Close()
+	return scanPaymentProducts(rows)
+}
+
 // GetActiveProductByCode fetches an active product by code.
 func (r *PaymentRepository) GetActiveProductByCode(ctx context.Context, code string) (*domain.PaymentProduct, error) {
 	const q = `SELECT ` + paymentProductColumns + `
@@ -84,6 +106,74 @@ func (r *PaymentRepository) GetProductByID(ctx context.Context, id uuid.UUID) (*
 		return nil, err
 	}
 	return &product, nil
+}
+
+// CreateProduct inserts one product catalog entry.
+func (r *PaymentRepository) CreateProduct(ctx context.Context, product *domain.PaymentProduct) error {
+	if product.ID == uuid.Nil {
+		product.ID = uuid.New()
+	}
+	if product.Currency == "" {
+		product.Currency = domain.CurrencyRUB
+	}
+	if product.PriceVersion == 0 {
+		product.PriceVersion = 1
+	}
+	const q = `
+		INSERT INTO payment_products (
+			id, code, title, amount, currency, credits, price_version,
+			vat_code, payment_subject, payment_mode, is_active
+		)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+		RETURNING ` + paymentProductColumns
+	return mapError(scanPaymentProduct(r.db.QueryRow(ctx, q,
+		product.ID,
+		strings.TrimSpace(product.Code),
+		strings.TrimSpace(product.Title),
+		product.Amount,
+		product.Currency,
+		product.Credits,
+		product.PriceVersion,
+		product.VATCode,
+		strings.TrimSpace(product.PaymentSubject),
+		strings.TrimSpace(product.PaymentMode),
+		product.IsActive,
+	), product))
+}
+
+// UpdateProduct persists an existing product catalog entry.
+func (r *PaymentRepository) UpdateProduct(ctx context.Context, product *domain.PaymentProduct) error {
+	const q = `
+		UPDATE payment_products
+		SET code = $2,
+		    title = $3,
+		    amount = $4,
+		    currency = $5,
+		    credits = $6,
+		    price_version = $7,
+		    vat_code = $8,
+		    payment_subject = $9,
+		    payment_mode = $10,
+		    is_active = $11,
+		    updated_at = now()
+		WHERE id = $1
+		RETURNING ` + paymentProductColumns
+	if product.Currency == "" {
+		product.Currency = domain.CurrencyRUB
+	}
+	return mapError(scanPaymentProduct(r.db.QueryRow(ctx, q,
+		product.ID,
+		strings.TrimSpace(product.Code),
+		strings.TrimSpace(product.Title),
+		product.Amount,
+		product.Currency,
+		product.Credits,
+		product.PriceVersion,
+		product.VATCode,
+		strings.TrimSpace(product.PaymentSubject),
+		strings.TrimSpace(product.PaymentMode),
+		product.IsActive,
+	), product))
 }
 
 // CreateIntent inserts a new local payment intent.
@@ -614,6 +704,18 @@ func scanPaymentIntents(rows rowScannerRows) ([]*domain.PaymentIntent, error) {
 		intents = append(intents, &intent)
 	}
 	return intents, mapError(rows.Err())
+}
+
+func scanPaymentProducts(rows rowScannerRows) ([]*domain.PaymentProduct, error) {
+	var products []*domain.PaymentProduct
+	for rows.Next() {
+		var product domain.PaymentProduct
+		if err := scanPaymentProduct(rows, &product); err != nil {
+			return nil, mapError(err)
+		}
+		products = append(products, &product)
+	}
+	return products, mapError(rows.Err())
 }
 
 func nullEmptyString(value string) *string {

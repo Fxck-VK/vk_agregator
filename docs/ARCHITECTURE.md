@@ -157,8 +157,15 @@ Current payment/top-up foundation:
   snapshot; calls
   `domain.PaymentProvider.CreatePayment`; persists `provider_payment_id`,
   provider status and `confirmation_url`; and returns safe DTOs without raw
-  YooKassa/provider payloads.
+  YooKassa/provider payloads. It also owns protected product-catalog lifecycle
+  rules: product create/update/disable operations validate RUB-only positive
+  packages, normalize 54-FZ receipt defaults, and increment `price_version`
+  when future intent snapshots would change. Existing payment intents are never
+  recalculated from the mutable product catalog row.
 - `cmd/api` exposes protected operator payment routes under `/billing/*`:
+  `GET /billing/payment-products`, `POST /billing/payment-products`,
+  `GET /billing/payment-products/{id}`, `PATCH /billing/payment-products/{id}`,
+  `POST /billing/payment-products/{id}/disable`,
   `POST /billing/payment-intents`, `GET /billing/payment-intents/{id}` and
   `GET /billing/payment-history`. It also exposes protected manual operator
   actions `POST /billing/payment-intents/{id}/sync` and
@@ -171,8 +178,9 @@ Current payment/top-up foundation:
   `GET /miniapp/payments` and `GET /miniapp/payments/{id}`. These routes derive
   the backend user from verified VK launch params / trusted dev auth, require
   `X-Idempotency-Key` for creation, owner-check reads and never expose
-  `provider_payment_id`, raw YooKassa payloads or credentials. Mini App UI may
-  redirect the user to a returned `confirmation_url`, but the return URL is
+  `provider_payment_id`, raw YooKassa payloads or credentials. Mini App Settings
+  renders the safe payment history DTOs and may redirect the user to a returned
+  `confirmation_url`, including active waiting-intent continuation links, but the return URL is
   only navigation and must not grant credits.
 - VK Bot top-up is a control path: it lists the same active products, asks for
   a receipt email or phone, creates a payment intent through
@@ -232,9 +240,9 @@ Current payment/top-up foundation:
 - Runtime config exposes `PAYMENT_PROVIDER=mock|yookassa` and YooKassa env
   placeholders. `PAYMENT_PROVIDER=yookassa` must fail closed without shop id,
   secret key and return URL.
-- Product catalog admin management, partial refund attribution, automatic refund
-  webhook balance reversal and live YooKassa smoke are follow-up work. Payment
-  redirects themselves still must not grant credits.
+- Partial refund attribution, automatic refund webhook balance reversal and live
+  YooKassa smoke are follow-up work. Payment redirects themselves still must not
+  grant credits.
 
 Actual request flows:
 

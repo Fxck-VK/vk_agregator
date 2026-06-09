@@ -3,6 +3,7 @@
 package billing
 
 import (
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -47,6 +48,11 @@ func NewHandler(cfg Config, deps Deps) *Handler {
 // Routes returns the protected billing routes.
 func (h *Handler) Routes() http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /billing/payment-products", h.auth(h.listProducts))
+	mux.HandleFunc("POST /billing/payment-products", h.auth(h.createProduct))
+	mux.HandleFunc("GET /billing/payment-products/{id}", h.auth(h.getProduct))
+	mux.HandleFunc("PATCH /billing/payment-products/{id}", h.auth(h.updateProduct))
+	mux.HandleFunc("POST /billing/payment-products/{id}/disable", h.auth(h.disableProduct))
 	mux.HandleFunc("POST /billing/payment-intents", h.auth(h.createIntent))
 	mux.HandleFunc("GET /billing/payment-intents/{id}", h.auth(h.getIntent))
 	mux.HandleFunc("POST /billing/payment-intents/{id}/sync", h.auth(h.syncIntent))
@@ -59,12 +65,195 @@ func (h *Handler) Routes() http.Handler {
 
 func (h *Handler) auth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if h.cfg.Token == "" || r.Header.Get("X-Admin-Token") != h.cfg.Token {
+		if !adminTokenEqual(r.Header.Get("X-Admin-Token"), h.cfg.Token) {
 			writeError(w, http.StatusUnauthorized, "unauthorized")
 			return
 		}
 		next(w, r)
 	}
+}
+
+func adminTokenEqual(got, want string) bool {
+	if want == "" || got == "" || len(got) != len(want) {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(got), []byte(want)) == 1
+}
+
+type optionalInt16 struct {
+	Set   bool
+	Value *int16
+}
+
+func (o *optionalInt16) UnmarshalJSON(data []byte) error {
+	o.Set = true
+	raw := strings.TrimSpace(string(data))
+	if raw == "null" {
+		o.Value = nil
+		return nil
+	}
+	var value int16
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	o.Value = &value
+	return nil
+}
+
+type createProductRequest struct {
+	Code           string `json:"code"`
+	Title          string `json:"title"`
+	Amount         int64  `json:"amount"`
+	Currency       string `json:"currency,omitempty"`
+	Credits        int64  `json:"credits"`
+	VATCode        *int16 `json:"vat_code,omitempty"`
+	PaymentSubject string `json:"payment_subject,omitempty"`
+	PaymentMode    string `json:"payment_mode,omitempty"`
+	IsActive       *bool  `json:"is_active,omitempty"`
+}
+
+type updateProductRequest struct {
+	Title          *string       `json:"title,omitempty"`
+	Amount         *int64        `json:"amount,omitempty"`
+	Currency       *string       `json:"currency,omitempty"`
+	Credits        *int64        `json:"credits,omitempty"`
+	VATCode        optionalInt16 `json:"vat_code,omitempty"`
+	PaymentSubject *string       `json:"payment_subject,omitempty"`
+	PaymentMode    *string       `json:"payment_mode,omitempty"`
+	IsActive       *bool         `json:"is_active,omitempty"`
+}
+
+func (h *Handler) listProducts(w http.ResponseWriter, r *http.Request) {
+	if h.deps.Payment == nil {
+		writeError(w, http.StatusServiceUnavailable, "service unavailable")
+		return
+	}
+	limit, offset := parsePagination(r)
+	active := parseOptionalBoolQuery(r, "active")
+	products, err := h.deps.Payment.ListProducts(r.Context(), active, limit+1, offset)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "list payment products failed")
+		return
+	}
+	hasMore := len(products) > limit
+	if hasMore {
+		products = products[:limit]
+	}
+	items := make([]PaymentProductDTO, 0, len(products))
+	for _, product := range products {
+		items = append(items, newProductDTO(product))
+	}
+	writeJSON(w, http.StatusOK, listResponse[PaymentProductDTO]{
+		Items:      items,
+		Pagination: pagination{Limit: limit, Offset: offset, Count: len(items), HasMore: hasMore},
+	})
+}
+
+func (h *Handler) getProduct(w http.ResponseWriter, r *http.Request) {
+	if h.deps.Payment == nil {
+		writeError(w, http.StatusServiceUnavailable, "service unavailable")
+		return
+	}
+	id, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	product, err := h.deps.Payment.GetProductAdmin(r.Context(), id)
+	if err != nil {
+		writeNotFoundOr500(w, err, "get payment product failed")
+		return
+	}
+	writeJSON(w, http.StatusOK, newProductDTO(product))
+}
+
+func (h *Handler) createProduct(w http.ResponseWriter, r *http.Request) {
+	if h.deps.Payment == nil {
+		writeError(w, http.StatusServiceUnavailable, "service unavailable")
+		return
+	}
+	var req createProductRequest
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<10)).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+	active := true
+	if req.IsActive != nil {
+		active = *req.IsActive
+	}
+	product, err := h.deps.Payment.CreateProduct(r.Context(), paymentservice.CreateProductInput{
+		Code:           req.Code,
+		Title:          req.Title,
+		Amount:         req.Amount,
+		Currency:       domain.Currency(req.Currency),
+		Credits:        req.Credits,
+		VATCode:        req.VATCode,
+		PaymentSubject: req.PaymentSubject,
+		PaymentMode:    req.PaymentMode,
+		IsActive:       active,
+	})
+	if err != nil {
+		h.writeProductError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, newProductDTO(product))
+}
+
+func (h *Handler) updateProduct(w http.ResponseWriter, r *http.Request) {
+	if h.deps.Payment == nil {
+		writeError(w, http.StatusServiceUnavailable, "service unavailable")
+		return
+	}
+	id, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	var req updateProductRequest
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<10)).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+	var currency *domain.Currency
+	if req.Currency != nil {
+		value := domain.Currency(strings.TrimSpace(*req.Currency))
+		currency = &value
+	}
+	product, err := h.deps.Payment.UpdateProduct(r.Context(), paymentservice.UpdateProductInput{
+		ID:             id,
+		Title:          req.Title,
+		Amount:         req.Amount,
+		Currency:       currency,
+		Credits:        req.Credits,
+		VATCodeSet:     req.VATCode.Set,
+		VATCode:        req.VATCode.Value,
+		PaymentSubject: req.PaymentSubject,
+		PaymentMode:    req.PaymentMode,
+		IsActive:       req.IsActive,
+	})
+	if err != nil {
+		h.writeProductError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, newProductDTO(product))
+}
+
+func (h *Handler) disableProduct(w http.ResponseWriter, r *http.Request) {
+	if h.deps.Payment == nil {
+		writeError(w, http.StatusServiceUnavailable, "service unavailable")
+		return
+	}
+	id, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	product, err := h.deps.Payment.DisableProduct(r.Context(), id)
+	if err != nil {
+		h.writeProductError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, newProductDTO(product))
 }
 
 type createIntentRequest struct {
@@ -356,6 +545,35 @@ func (h *Handler) writePaymentActionError(w http.ResponseWriter, err error) {
 	}
 }
 
+func (h *Handler) writeProductError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, paymentservice.ErrInvalidInput):
+		writeError(w, http.StatusBadRequest, "invalid product")
+	case errors.Is(err, domain.ErrConflict):
+		writeError(w, http.StatusConflict, "product conflict")
+	case errors.Is(err, domain.ErrNotFound):
+		writeError(w, http.StatusNotFound, "not found")
+	default:
+		writeError(w, http.StatusInternalServerError, "product action failed")
+	}
+}
+
+type PaymentProductDTO struct {
+	ID             uuid.UUID `json:"id"`
+	Code           string    `json:"code"`
+	Title          string    `json:"title"`
+	Amount         int64     `json:"amount"`
+	Currency       string    `json:"currency"`
+	Credits        int64     `json:"credits"`
+	PriceVersion   int       `json:"price_version"`
+	VATCode        *int16    `json:"vat_code,omitempty"`
+	PaymentSubject string    `json:"payment_subject"`
+	PaymentMode    string    `json:"payment_mode"`
+	IsActive       bool      `json:"is_active"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+}
+
 type PaymentIntentDTO struct {
 	ID                uuid.UUID `json:"id"`
 	UserID            uuid.UUID `json:"user_id,omitempty"`
@@ -444,6 +662,27 @@ func newIntentDTO(intent *domain.PaymentIntent, includeOperatorFields bool) Paym
 	return dto
 }
 
+func newProductDTO(product *domain.PaymentProduct) PaymentProductDTO {
+	if product == nil {
+		return PaymentProductDTO{}
+	}
+	return PaymentProductDTO{
+		ID:             product.ID,
+		Code:           product.Code,
+		Title:          product.Title,
+		Amount:         product.Amount,
+		Currency:       string(product.Currency),
+		Credits:        product.Credits,
+		PriceVersion:   product.PriceVersion,
+		VATCode:        product.VATCode,
+		PaymentSubject: product.PaymentSubject,
+		PaymentMode:    product.PaymentMode,
+		IsActive:       product.IsActive,
+		CreatedAt:      product.CreatedAt,
+		UpdatedAt:      product.UpdatedAt,
+	}
+}
+
 func newRefundDTO(refund *domain.PaymentRefund) PaymentRefundDTO {
 	if refund == nil {
 		return PaymentRefundDTO{}
@@ -505,6 +744,18 @@ func parseBoolQuery(r *http.Request, key string, fallback bool) bool {
 		return fallback
 	}
 	return value
+}
+
+func parseOptionalBoolQuery(r *http.Request, key string) *bool {
+	raw := strings.TrimSpace(r.URL.Query().Get(key))
+	if raw == "" {
+		return nil
+	}
+	value, err := strconv.ParseBool(raw)
+	if err != nil {
+		return nil
+	}
+	return &value
 }
 
 func parseDurationQuery(r *http.Request, key string, fallback, max time.Duration) time.Duration {

@@ -1,7 +1,7 @@
 {
   "schema_version": 3,
-  "updated_at": "2026-06-09T00:00:00+03:00",
-  "branch": "serega",
+  "updated_at": "2026-06-10T00:50:31+03:00",
+  "branch": "fastlife_dev",
   "current_main_commit": "98645c6",
   "purpose": "Minimal machine-readable current context and routing for agents.",
   "read_policy": {
@@ -27,18 +27,25 @@
     "history_read_condition": "Only read archive/logs when explicitly asked for history, debugging a repeated known error, regression archaeology, or old audit details."
   },
   "progress": {
-    "current_focus": "YooKassa billing and shared VK Bot/Mini App top-up foundation",
+    "current_focus": "YooKassa billing and shared VK Bot/Mini App top-up rollout",
     "current_priorities": [
-      "finish live YooKassa smoke with real shop credentials",
+      "keep protected Product Catalog Admin routes operator-only with safe DTOs and immutable payment intent snapshots",
+      "use https://neiirohub.ru/billing/webhooks/yookassa as the canonical payment webhook route unless superseded",
       "keep payment credits granted only by provider-verified webhook/reconciliation ledger top-ups",
       "keep 54-FZ receipt fields snapshotted on payment_intents for payment retries and manual refunds",
       "keep production YooKassa webhooks HTTPS/proxy guarded and monitor webhook/refund rollback metrics",
-      "add product catalog admin management and lot/FIFO refund attribution later"
+      "finish live YooKassa smoke with local _env test credentials",
+      "add lot/FIFO refund attribution later"
     ],
     "active_runtime": {
       "api_port": 8080,
       "miniapp_port": 5173,
-      "tunnel": "pending_cloudflare"
+      "tunnel": "pending_cloudflare",
+      "local_env_files": [
+        ".env",
+        "_env"
+      ],
+      "local_env_note": "_env is the supported macOS workspace fallback for local secrets; it is ignored by Git and must not be logged."
     }
   },
   "doc_update_policy": {

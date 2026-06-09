@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@vkontakte/vkui";
 import {
   apiUserMessage,
@@ -104,6 +104,42 @@ function findActivePaymentIntent(intents: PaymentIntent[]): PaymentIntent | null
   return intents.find(isActivePaymentIntent) ?? null;
 }
 
+function upsertPaymentIntent(items: PaymentIntent[], intent: PaymentIntent): PaymentIntent[] {
+  return [intent, ...items.filter((item) => item.id !== intent.id)];
+}
+
+function paymentStatusLabel(status: string): string {
+  switch (status) {
+    case "created":
+      return "Создан";
+    case "provider_pending":
+      return "Проверяется";
+    case "waiting_for_user":
+      return "Ожидает оплаты";
+    case "succeeded":
+      return "Оплачен";
+    case "canceled":
+      return "Отменен";
+    case "expired":
+      return "Истек";
+    case "failed":
+      return "Ошибка оплаты";
+    case "refunded":
+      return "Возврат";
+    case "partially_refunded":
+      return "Частичный возврат";
+    default:
+      return "Обработка";
+  }
+}
+
+function paymentStatusTone(status: string): "done" | "failed" | "progress" | "refund" {
+  if (status === "succeeded") return "done";
+  if (status === "failed" || status === "canceled" || status === "expired") return "failed";
+  if (status === "refunded" || status === "partially_refunded") return "refund";
+  return "progress";
+}
+
 export function SettingsScreen({
   themeMode,
   balance,
@@ -119,11 +155,15 @@ export function SettingsScreen({
   const [topUpNotice, setTopUpNotice] = useState("");
   const [receiptContact, setReceiptContact] = useState("");
   const [paymentProducts, setPaymentProducts] = useState<PaymentProduct[]>([]);
-  const [activePaymentIntent, setActivePaymentIntent] = useState<PaymentIntent | null>(null);
+  const [paymentIntents, setPaymentIntents] = useState<PaymentIntent[]>([]);
   const [creatingNewPayment, setCreatingNewPayment] = useState(false);
   const [productsLoading, setProductsLoading] = useState(false);
+  const [paymentsLoading, setPaymentsLoading] = useState(false);
+  const [paymentsNotice, setPaymentsNotice] = useState("");
   const [paymentPendingCode, setPaymentPendingCode] = useState("");
   const [spinning, setSpinning] = useState(false);
+  const activePaymentIntent = useMemo(() => findActivePaymentIntent(paymentIntents), [paymentIntents]);
+  const visiblePayments = useMemo(() => paymentIntents.slice(0, 8), [paymentIntents]);
   const visibleJobs = useMemo(() => {
     const deduped = dedupeHistoryJobs(jobs);
     if (historyFilter === "all") return deduped;
@@ -133,27 +173,51 @@ export function SettingsScreen({
     return deduped.filter((job) => modalityByOperation(job.operation).id === historyFilter);
   }, [jobs, historyFilter]);
 
+  const refreshPaymentIntents = useCallback(async () => {
+    setPaymentsLoading(true);
+    try {
+      const intents = await listPaymentIntents();
+      setPaymentIntents(intents);
+      setPaymentsNotice("");
+    } catch (error) {
+      setPaymentsNotice(apiUserMessage(error));
+    } finally {
+      setPaymentsLoading(false);
+    }
+  }, []);
+
   const handleRefresh = () => {
     if (spinning) return;
     setSpinning(true);
     onRefreshBalance();
+    void refreshPaymentIntents();
     window.setTimeout(() => setSpinning(false), 900);
   };
 
   useEffect(() => {
     let cancelled = false;
     setProductsLoading(true);
-    Promise.all([listPaymentProducts(), listPaymentIntents().catch(() => [])])
+    setPaymentsLoading(true);
+    Promise.allSettled([listPaymentProducts(), listPaymentIntents()])
       .then(([products, intents]) => {
         if (cancelled) return;
-        setPaymentProducts(products);
-        setActivePaymentIntent(findActivePaymentIntent(intents));
-      })
-      .catch(() => {
-        if (!cancelled) setTopUpNotice("Не удалось загрузить тарифы. Попробуйте позже.");
+        if (products.status === "fulfilled") {
+          setPaymentProducts(products.value);
+        } else {
+          setTopUpNotice("Не удалось загрузить тарифы. Попробуйте позже.");
+        }
+        if (intents.status === "fulfilled") {
+          setPaymentIntents(intents.value);
+          setPaymentsNotice("");
+        } else {
+          setPaymentsNotice("Не удалось загрузить историю платежей.");
+        }
       })
       .finally(() => {
-        if (!cancelled) setProductsLoading(false);
+        if (!cancelled) {
+          setProductsLoading(false);
+          setPaymentsLoading(false);
+        }
       });
     return () => {
       cancelled = true;
@@ -178,17 +242,19 @@ export function SettingsScreen({
         { product_code: product.code, ...contact, force_new: creatingNewPayment },
         { idempotencyKey: createIdempotencyKey() },
       );
+      setPaymentIntents((items) => upsertPaymentIntent(items, intent));
+      setPaymentsNotice("");
       if (intent.reused_active_payment && intent.confirmation_url) {
-        setActivePaymentIntent(intent);
         setCreatingNewPayment(false);
         setTopUpNotice(intent.notice || "У вас уже есть незавершенный платеж. После оплаты баланс обновится автоматически.");
+        void refreshPaymentIntents();
         return;
       }
       if (!intent.confirmation_url) {
         setTopUpNotice("Платеж создан, но ссылка на оплату пока недоступна. Попробуйте обновить страницу.");
+        void refreshPaymentIntents();
         return;
       }
-      setActivePaymentIntent(intent);
       window.location.assign(intent.confirmation_url);
     } catch (error) {
       setTopUpNotice(apiUserMessage(error));
@@ -305,43 +371,111 @@ export function SettingsScreen({
           <>
             <p className="settings-notice">После оплаты баланс обновится автоматически.</p>
             <div className="payment-contact">
-          <label htmlFor="payment-contact-input">Email или телефон для чека</label>
-          <input
-            id="payment-contact-input"
-            type="text"
-            inputMode="email"
-            autoComplete="email"
-            placeholder="user@example.com"
-            value={receiptContact}
-            onChange={(event) => setReceiptContact(event.target.value)}
-          />
-        </div>
-        <div className="payment-products" aria-label="Тарифы пополнения">
-          {productsLoading ? (
-            <p className="settings-notice">Загружаем тарифы...</p>
-          ) : paymentProducts.length === 0 ? (
-            <p className="settings-notice">Тарифы пока недоступны.</p>
-          ) : (
-            paymentProducts.map((product) => (
-              <button
-                key={product.code}
-                type="button"
-                className="payment-product"
-                disabled={Boolean(paymentPendingCode)}
-                onClick={() => void handleTopUp(product)}
-              >
-                <span>
-                  <strong>{formatCredits(product.credits)}</strong>
-                  <small>{product.title}</small>
-                </span>
-                <em>{paymentPendingCode === product.code ? "Создаем..." : formatRub(product.amount)}</em>
+              <label htmlFor="payment-contact-input">Email или телефон для чека</label>
+              <input
+                id="payment-contact-input"
+                type="text"
+                inputMode="email"
+                autoComplete="email"
+                placeholder="user@example.com"
+                value={receiptContact}
+                onChange={(event) => setReceiptContact(event.target.value)}
+              />
+            </div>
+            {creatingNewPayment && activePaymentIntent ? (
+              <button type="button" className="payment-current-link" onClick={handleContinuePayment}>
+                Продолжить текущий платеж
               </button>
-            ))
-          )}
+            ) : null}
+            <div className="payment-products" aria-label="Тарифы пополнения">
+              {productsLoading ? (
+                <p className="settings-notice">Загружаем тарифы...</p>
+              ) : paymentProducts.length === 0 ? (
+                <p className="settings-notice">Тарифы пока недоступны.</p>
+              ) : (
+                paymentProducts.map((product) => (
+                  <button
+                    key={product.code}
+                    type="button"
+                    className="payment-product"
+                    disabled={Boolean(paymentPendingCode)}
+                    onClick={() => void handleTopUp(product)}
+                  >
+                    <span>
+                      <strong>{formatCredits(product.credits)}</strong>
+                      <small>{product.title}</small>
+                    </span>
+                    <em>{paymentPendingCode === product.code ? "Создаем..." : formatRub(product.amount)}</em>
+                  </button>
+                ))
+              )}
             </div>
           </>
         )}
         {topUpNotice && <p className="settings-notice">{topUpNotice}</p>}
+      </section>
+
+      <section className="settings-card payment-history-card" aria-labelledby="settings-payment-history-title">
+        <div className="payment-history-head">
+          <div>
+            <h2 id="settings-payment-history-title">История платежей</h2>
+            <p>После оплаты баланс обновится автоматически.</p>
+          </div>
+          <button
+            type="button"
+            className="chat__history-btn"
+            aria-label="Обновить историю платежей"
+            onClick={() => void refreshPaymentIntents()}
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              className={paymentsLoading ? "nh-spin" : ""}
+              aria-hidden="true"
+            >
+              <path
+                d="M3 12a9 9 0 1 0 3-6.7M3 3v6h6"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
+        </div>
+        {paymentsLoading && visiblePayments.length === 0 ? (
+          <div className="settings-empty">Загружаем платежи</div>
+        ) : visiblePayments.length === 0 ? (
+          <div className="settings-empty">Платежей пока нет</div>
+        ) : (
+          <div className="payment-history-list" aria-label="Платежи">
+            {visiblePayments.map((intent) => {
+              const active = isActivePaymentIntent(intent);
+              const tone = paymentStatusTone(intent.status);
+              return (
+                <div key={intent.id} className={`payment-history-row payment-history-row--${tone}`}>
+                  <div className="payment-history-row__main">
+                    <strong>{formatCredits(intent.credits)}</strong>
+                    <span>
+                      {formatRub(intent.amount)} · {paymentStatusLabel(intent.status)}
+                    </span>
+                  </div>
+                  <div className="payment-history-row__meta">
+                    <time dateTime={intent.created_at}>{dateLabel(intent.created_at)}</time>
+                    {active ? (
+                      <button type="button" onClick={() => window.location.assign(intent.confirmation_url || "")}>
+                        Продолжить
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        {paymentsNotice && <p className="settings-notice">{paymentsNotice}</p>}
       </section>
 
       <section className="settings-card settings-history-card" aria-labelledby="settings-history-title">

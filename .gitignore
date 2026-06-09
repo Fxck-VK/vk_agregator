@@ -19,6 +19,8 @@ web/miniapp/.vite/
 # Environment and secrets (.env.ps1 is covered by .env.*)
 .env
 .env.*
+_env
+_env.*
 !.env.example
 
 # Docker/local data

@@ -292,6 +292,12 @@ type PaymentEventFilter struct {
 	Processed *bool
 }
 
+// PaymentProductFilter narrows protected operator product-catalog listings.
+// Zero-valued fields are ignored.
+type PaymentProductFilter struct {
+	Active *bool
+}
+
 // PaymentReconciliationFilter narrows payment intents that should be synced
 // against the provider during reconciliation.
 type PaymentReconciliationFilter struct {
@@ -305,10 +311,17 @@ type PaymentReconciliationFilter struct {
 type PaymentRepository interface {
 	// ListActiveProducts lists active product catalog entries in display order.
 	ListActiveProducts(ctx context.Context) ([]*PaymentProduct, error)
+	// ListProducts lists product catalog entries for protected operator
+	// endpoints, newest first unless the storage has a stable display order.
+	ListProducts(ctx context.Context, filter PaymentProductFilter, limit, offset int) ([]*PaymentProduct, error)
 	// GetActiveProductByCode fetches an active product catalog entry by code.
 	GetActiveProductByCode(ctx context.Context, code string) (*PaymentProduct, error)
 	// GetProductByID fetches a product by id, active or inactive.
 	GetProductByID(ctx context.Context, id uuid.UUID) (*PaymentProduct, error)
+	// CreateProduct inserts one product catalog entry.
+	CreateProduct(ctx context.Context, product *PaymentProduct) error
+	// UpdateProduct persists an existing product catalog entry.
+	UpdateProduct(ctx context.Context, product *PaymentProduct) error
 
 	// CreateIntent inserts a local payment intent snapshot.
 	CreateIntent(ctx context.Context, intent *PaymentIntent) error

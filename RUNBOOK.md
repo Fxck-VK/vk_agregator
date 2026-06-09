@@ -40,6 +40,8 @@ testing, create a real local `.env` next to `.env.example`:
 
 ```bash
 cp .env.example .env
+# macOS local fallback used in this workspace:
+# cp .env.example _env
 ```
 
 Windows PowerShell:
@@ -50,9 +52,9 @@ notepad .env
 ```
 
 `cmd/api`, `cmd/worker`, `cmd/provider-webhook`, and `cmd/migrate` load `.env`
-automatically when started from the repository root. OS/CI environment
-variables override values from `.env`. The real `.env` is ignored by Git;
-commit only `.env.example`.
+first and `_env` as a local fallback when started from the repository root.
+OS/CI environment variables override values from local env files. Real env
+files are ignored by Git; commit only `.env.example`.
 
 Override these values when needed:
 
@@ -181,9 +183,8 @@ Override these values when needed:
 > `X-Forwarded-Proto: https`, `Forwarded: proto=https`, or Cloudflare's
 > `CF-Visitor` scheme header, and the raw HTTP origin must not be publicly
 > reachable.
-> User-facing top-up should still stay hidden until product catalog
-> seed/management, partial refund attribution and live YooKassa smoke are
-> complete.
+> User-facing top-up should still stay hidden until live YooKassa smoke is
+> complete and the chosen refund/partial-refund rollout policy is approved.
 
 ### Hardening features (post-release)
 
@@ -221,14 +222,20 @@ Override these values when needed:
   idempotent payment intents, stores provider payment state and returns safe
   DTOs. It snapshots receipt item description, VAT code, payment subject and
   payment mode from the selected product when the intent is created. Operator
-  routes under `/billing/payment-intents`,
+  routes under `/billing/payment-products*`, `/billing/payment-intents`,
   `/billing/payment-history`, `/billing/payment-intents/{id}/sync` and
   `/billing/payment-intents/{id}/refund` are protected by `ADMIN_TOKEN` and
-  fail closed if auth is missing. Mini App routes under `/miniapp/payments*` use verified VK
+  fail closed if auth is missing. Product catalog admin create/update/disable
+  actions validate positive RUB packages and 54-FZ receipt fields, never expose
+  provider payloads, and bump `price_version` only for future payment-intent
+  snapshots; old intents keep their original snapshot. Mini App routes under `/miniapp/payments*` use verified VK
   launch params as the trusted user context and require `X-Idempotency-Key` for
   creation; `GET /miniapp/payment-products` returns the safe active product
   catalog. Mini App Settings creates payment intents from selected products and
-  redirects to the returned `confirmation_url`. If a user already has an active
+  redirects to the returned `confirmation_url`. It also renders safe payment
+  history from `GET /miniapp/payments` with status, amount, credits, creation
+  time and active payment continuation links. Redirects remain navigation-only;
+  balance changes still come only from webhook/reconciliation ledger top-ups. If a user already has an active
   `waiting_for_user` payment intent, Mini App and VK Bot show that payment with
   "continue payment" and require an explicit "create new payment" action before
   creating another intent. VK Bot top-up creates intents from the same catalog
@@ -608,6 +615,29 @@ LIMIT 20;
 Protected operator payment actions:
 
 ```bash
+# List product catalog entries. Add active=true or active=false to narrow the
+# operator list. Response DTOs contain catalog fields only, no provider payloads.
+curl "http://localhost:8080/billing/payment-products?active=true" \
+  -H "X-Admin-Token: $ADMIN_TOKEN"
+
+# Create a top-up product. The code is a stable product identifier; future
+# price/receipt changes on the same product bump price_version for new intents.
+curl -X POST http://localhost:8080/billing/payment-products \
+  -H "X-Admin-Token: $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"code":"credits_250","title":"NeiroHub 250 credits","amount":20000,"currency":"rub","credits":250,"vat_code":1,"payment_subject":"service","payment_mode":"full_prepayment"}'
+
+# Update future catalog values. Existing payment_intents keep their snapshotted
+# amount, credits, price_version and receipt fields.
+curl -X PATCH http://localhost:8080/billing/payment-products/<product_id> \
+  -H "X-Admin-Token: $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"amount":21000,"credits":260}'
+
+# Hide a product from user-facing Mini App / VK Bot product lists.
+curl -X POST http://localhost:8080/billing/payment-products/<product_id>/disable \
+  -H "X-Admin-Token: $ADMIN_TOKEN"
+
 # List pending/waiting intents. Add stale_only=true for intents old enough for
 # manual sync/reconciliation triage.
 curl "http://localhost:8080/billing/payment-intents/pending?stale_after=30s&stale_only=true" \
