@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react';
 
 const apiTarget = 'http://127.0.0.1:8080';
 const tunnelHost = process.env.VITE_TUNNEL_HOST?.trim();
+const devHost = process.env.VITE_DEV_HOST?.trim() || '127.0.0.1';
 
 function resolveHmr():
   | boolean
@@ -32,9 +33,9 @@ export default defineConfig({
     sourcemap: false,
   },
   server: {
-    host: true,
+    host: devHost,
     port: 5173,
-    allowedHosts: true,
+    allowedHosts: tunnelHost ? [tunnelHost] : undefined,
     hmr: resolveHmr(),
     proxy: {
       '/miniapp': {
