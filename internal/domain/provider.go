@@ -79,6 +79,9 @@ const (
 type ProviderRequest struct {
 	// JobID is the originating job, used for correlation and idempotency.
 	JobID uuid.UUID `json:"job_id"`
+	// UserID is the owner of the originating job. It is used for provider-side
+	// correlation only; adapters must not make billing or delivery decisions.
+	UserID uuid.UUID `json:"user_id"`
 	// Operation is the operation the provider must perform.
 	Operation OperationType `json:"operation"`
 	// Modality is the content kind of the request.
@@ -89,14 +92,116 @@ type ProviderRequest struct {
 	Prompt string `json:"prompt"`
 	// NegativePrompt is the optional negative prompt for image/video models.
 	NegativePrompt string `json:"negative_prompt,omitempty"`
+	// Size is the requested image/video size when supported by the adapter.
+	Size string `json:"size,omitempty"`
+	// AspectRatio is the requested output aspect ratio for image/video models.
+	AspectRatio string `json:"aspect_ratio,omitempty"`
+	// ReferenceArtifactIDs identifies input artifacts used as image references.
+	// Workers may turn these into provider-safe InputURLs before submission.
+	ReferenceArtifactIDs []uuid.UUID `json:"reference_artifact_ids,omitempty"`
 	// InputURLs are signed URLs of input artifacts the provider may fetch.
 	InputURLs []string `json:"input_urls,omitempty"`
 	// Params holds operation-specific tuning (aspect_ratio, duration, seed...).
 	Params json.RawMessage `json:"params,omitempty"`
 	// MaxOutputTokens caps provider text output when the adapter supports it.
 	MaxOutputTokens int `json:"max_output_tokens,omitempty"`
+	// DurationSec is the requested video length when supported by the adapter.
+	DurationSec int `json:"duration_sec,omitempty"`
+	// Resolution is a provider-specific resolution token (e.g. "720p").
+	Resolution string `json:"resolution,omitempty"`
+	// Draft requests a cheaper/faster preview render when the adapter supports it.
+	Draft bool `json:"draft,omitempty"`
 	// IdempotencyKey makes the submit safe to retry.
 	IdempotencyKey string `json:"idempotency_key"`
+}
+
+// ImageGenerationRequest is the provider-agnostic contract for still-image
+// generation/editing. Concrete adapters translate this shape into their native
+// API and return ImageGenerationResult; VK, Mini App and billing code must not
+// depend on provider-specific request bodies.
+type ImageGenerationRequest struct {
+	JobID                uuid.UUID       `json:"job_id"`
+	UserID               uuid.UUID       `json:"user_id"`
+	Operation            OperationType   `json:"operation"`
+	Prompt               string          `json:"prompt"`
+	NegativePrompt       string          `json:"negative_prompt,omitempty"`
+	ModelCode            string          `json:"model_code,omitempty"`
+	Size                 string          `json:"size,omitempty"`
+	AspectRatio          string          `json:"aspect_ratio,omitempty"`
+	ReferenceArtifactIDs []uuid.UUID     `json:"reference_artifact_ids,omitempty"`
+	InputURLs            []string        `json:"input_urls,omitempty"`
+	Params               json.RawMessage `json:"params,omitempty"`
+	IdempotencyKey       string          `json:"idempotency_key"`
+}
+
+// ImageGenerationResult is the normalized result of an image provider call.
+// Results are still persisted as Artifacts before delivery; this type describes
+// the adapter boundary, not a user-visible response.
+type ImageGenerationResult struct {
+	Provider  ProviderName    `json:"provider"`
+	ModelCode string          `json:"model_code,omitempty"`
+	OutputURL string          `json:"output_url,omitempty"`
+	ImageData []byte          `json:"-"`
+	MimeType  string          `json:"mime_type,omitempty"`
+	Metadata  json.RawMessage `json:"metadata,omitempty"`
+}
+
+// ImageRequest extracts the typed image contract from a generic ProviderRequest.
+func (r ProviderRequest) ImageRequest() ImageGenerationRequest {
+	return ImageGenerationRequest{
+		JobID:                r.JobID,
+		UserID:               r.UserID,
+		Operation:            r.Operation,
+		Prompt:               r.Prompt,
+		NegativePrompt:       r.NegativePrompt,
+		ModelCode:            r.ModelCode,
+		Size:                 r.Size,
+		AspectRatio:          r.AspectRatio,
+		ReferenceArtifactIDs: append([]uuid.UUID(nil), r.ReferenceArtifactIDs...),
+		InputURLs:            append([]string(nil), r.InputURLs...),
+		Params:               append(json.RawMessage(nil), r.Params...),
+		IdempotencyKey:       r.IdempotencyKey,
+	}
+}
+
+// VideoGenerationRequest is the provider-agnostic contract for text-to-video
+// generation. Adapters translate it into native API shapes; intake surfaces
+// must not depend on provider-specific bodies.
+type VideoGenerationRequest struct {
+	JobID          uuid.UUID     `json:"job_id"`
+	UserID         uuid.UUID     `json:"user_id"`
+	Operation      OperationType `json:"operation"`
+	Prompt         string        `json:"prompt"`
+	ModelCode      string        `json:"model_code,omitempty"`
+	DurationSec    int           `json:"duration_sec,omitempty"`
+	Resolution     string        `json:"resolution,omitempty"`
+	AspectRatio    string        `json:"aspect_ratio,omitempty"`
+	Draft          bool          `json:"draft,omitempty"`
+	IdempotencyKey string        `json:"idempotency_key"`
+}
+
+// VideoGenerationResult is the normalized result of a video provider call.
+type VideoGenerationResult struct {
+	Provider  ProviderName    `json:"provider"`
+	ModelCode string          `json:"model_code,omitempty"`
+	OutputURL string          `json:"output_url,omitempty"`
+	Metadata  json.RawMessage `json:"metadata,omitempty"`
+}
+
+// VideoRequest extracts the typed video contract from a generic ProviderRequest.
+func (r ProviderRequest) VideoRequest() VideoGenerationRequest {
+	return VideoGenerationRequest{
+		JobID:          r.JobID,
+		UserID:         r.UserID,
+		Operation:      r.Operation,
+		Prompt:         r.Prompt,
+		ModelCode:      r.ModelCode,
+		DurationSec:    r.DurationSec,
+		Resolution:     r.Resolution,
+		AspectRatio:    r.AspectRatio,
+		Draft:          r.Draft,
+		IdempotencyKey: r.IdempotencyKey,
+	}
 }
 
 // ProviderTaskRef is the minimal reference needed to poll or cancel a task on a

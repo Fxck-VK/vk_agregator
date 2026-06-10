@@ -78,6 +78,83 @@ var (
 		Name: "vkagg_billing_mismatches",
 		Help: "Number of credit accounts whose cached balance differs from the committed ledger projection.",
 	})
+
+	// PaymentsCreated counts newly created payment intents.
+	PaymentsCreated = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "payments_created_total",
+		Help: "Payment intents created locally, labeled by provider and source.",
+	}, []string{"provider", "source"})
+
+	// PaymentsSucceeded counts intents newly moved to succeeded.
+	PaymentsSucceeded = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "payments_succeeded_total",
+		Help: "Payment intents moved to succeeded, labeled by provider and source.",
+	}, []string{"provider", "source"})
+
+	// PaymentsCanceled counts intents newly moved to canceled.
+	PaymentsCanceled = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "payments_canceled_total",
+		Help: "Payment intents moved to canceled, labeled by provider.",
+	}, []string{"provider"})
+
+	// PaymentWebhooks counts provider webhook ingestion results.
+	PaymentWebhooks = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "payment_webhooks_total",
+		Help: "Payment provider webhooks by provider, event type and ingestion result.",
+	}, []string{"provider", "event_type", "result"})
+
+	// PaymentWebhookSecurityDenials counts webhook requests rejected before
+	// provider payload parsing.
+	PaymentWebhookSecurityDenials = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "payment_webhook_security_denials_total",
+		Help: "Payment provider webhook requests rejected by security checks.",
+	}, []string{"provider", "reason"})
+
+	// PaymentWebhookProcessingErrors counts async webhook inbox processing
+	// failures by coarse stage without logging raw provider payloads.
+	PaymentWebhookProcessingErrors = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "payment_webhook_processing_errors_total",
+		Help: "Payment provider webhook inbox processing errors by provider and stage.",
+	}, []string{"provider", "stage"})
+
+	// PaymentWebhookUnprocessedEvents tracks the current payment webhook inbox
+	// backlog. It is updated by cmd/provider-webhook after processing ticks and
+	// readiness probes.
+	PaymentWebhookUnprocessedEvents = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "payment_webhook_unprocessed_events",
+		Help: "Current count of unprocessed payment provider webhook inbox events by provider.",
+	}, []string{"provider"})
+
+	// PaymentWebhookOldestUnprocessedAgeSeconds tracks how long the oldest
+	// unprocessed webhook has been waiting in the inbox.
+	PaymentWebhookOldestUnprocessedAgeSeconds = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "payment_webhook_oldest_unprocessed_age_seconds",
+		Help: "Age in seconds of the oldest unprocessed payment provider webhook inbox event by provider.",
+	}, []string{"provider"})
+
+	// PaymentProviderErrors counts payment provider API operation failures.
+	PaymentProviderErrors = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "payment_provider_errors_total",
+		Help: "Payment provider API operation errors by provider, operation and coarse error class.",
+	}, []string{"provider", "operation", "error_class"})
+
+	// PaymentTopups counts committed ledger top-ups from provider-confirmed payments.
+	PaymentTopups = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "payment_topups_total",
+		Help: "Committed payment top-up ledger entries by provider.",
+	}, []string{"provider"})
+
+	// PaymentRefunds counts protected manual refund attempts/results.
+	PaymentRefunds = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "payment_refunds_total",
+		Help: "Manual payment refunds by provider and result.",
+	}, []string{"provider", "result"})
+
+	// PaymentReconciliationMismatches tracks latest payment reconciliation mismatches.
+	PaymentReconciliationMismatches = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "payment_reconciliation_mismatches",
+		Help: "Latest count of payment reconciliation mismatches by provider.",
+	}, []string{"provider"})
 )
 
 func init() {
@@ -86,7 +163,11 @@ func init() {
 		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
 		WebhookReceived, JobsTerminal, ModerationDecisions, DLQRouted,
 		DeliveriesSent, HTTPRequests, HTTPDuration, MaintenanceDeleted,
-		StreamTrimmed, BillingMismatches,
+		StreamTrimmed, BillingMismatches, PaymentsCreated, PaymentsSucceeded,
+		PaymentsCanceled, PaymentWebhooks, PaymentWebhookSecurityDenials,
+		PaymentWebhookProcessingErrors, PaymentWebhookUnprocessedEvents,
+		PaymentWebhookOldestUnprocessedAgeSeconds, PaymentProviderErrors,
+		PaymentTopups, PaymentRefunds, PaymentReconciliationMismatches,
 	)
 }
 

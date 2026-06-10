@@ -1,0 +1,667 @@
+// Package paymentservice owns payment-intent lifecycle rules shared by VK Bot,
+// VK Mini App and protected operator endpoints.
+package paymentservice
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"strings"
+
+	"github.com/google/uuid"
+
+	"vk-ai-aggregator/internal/domain"
+	"vk-ai-aggregator/internal/platform/metrics"
+)
+
+var (
+	ErrInvalidInput           = errors.New("paymentservice: invalid input")
+	ErrReceiptContactRequired = errors.New("paymentservice: receipt email or phone is required")
+	ErrForbidden              = errors.New("paymentservice: forbidden")
+)
+
+const (
+	defaultReceiptVATCode        = int16(1)
+	defaultReceiptPaymentSubject = "service"
+	defaultReceiptPaymentMode    = "full_prepayment"
+	maxProductCodeLen            = 64
+	maxProductTitleLen           = 160
+)
+
+// Config controls payment lifecycle behavior.
+type Config struct {
+	ReturnURL string
+}
+
+// Service creates and reads payment intents without mutating credit balances.
+type Service struct {
+	repo     domain.PaymentRepository
+	provider domain.PaymentProvider
+	cfg      Config
+}
+
+// New builds a payment Service.
+func New(repo domain.PaymentRepository, provider domain.PaymentProvider, cfg Config) *Service {
+	return &Service{repo: repo, provider: provider, cfg: cfg}
+}
+
+// ListActiveProducts returns active top-up catalog entries for user-facing
+// surfaces. It does not create payment intents or mutate billing state.
+func (s *Service) ListActiveProducts(ctx context.Context) ([]*domain.PaymentProduct, error) {
+	if s == nil || s.repo == nil {
+		return nil, errors.New("paymentservice: service is not configured")
+	}
+	return s.repo.ListActiveProducts(ctx)
+}
+
+// ListProducts returns product catalog entries for protected operator surfaces.
+func (s *Service) ListProducts(ctx context.Context, active *bool, limit, offset int) ([]*domain.PaymentProduct, error) {
+	if s == nil || s.repo == nil {
+		return nil, errors.New("paymentservice: service is not configured")
+	}
+	return s.repo.ListProducts(ctx, domain.PaymentProductFilter{Active: active}, normalizeLimit(limit), normalizeOffset(offset))
+}
+
+// GetProductAdmin fetches one product for protected operator surfaces.
+func (s *Service) GetProductAdmin(ctx context.Context, productID uuid.UUID) (*domain.PaymentProduct, error) {
+	if s == nil || s.repo == nil {
+		return nil, errors.New("paymentservice: service is not configured")
+	}
+	if productID == uuid.Nil {
+		return nil, ErrInvalidInput
+	}
+	return s.repo.GetProductByID(ctx, productID)
+}
+
+// CreateProductInput describes a protected operator product-catalog create.
+type CreateProductInput struct {
+	Code           string
+	Title          string
+	Amount         int64
+	Currency       domain.Currency
+	Credits        int64
+	VATCode        *int16
+	PaymentSubject string
+	PaymentMode    string
+	IsActive       bool
+}
+
+// UpdateProductInput describes a protected operator product-catalog update.
+// Code is intentionally immutable through this path; create a new product code
+// for a different public package identity.
+type UpdateProductInput struct {
+	ID             uuid.UUID
+	Title          *string
+	Amount         *int64
+	Currency       *domain.Currency
+	Credits        *int64
+	VATCodeSet     bool
+	VATCode        *int16
+	PaymentSubject *string
+	PaymentMode    *string
+	IsActive       *bool
+}
+
+// CreateProduct inserts one active or hidden top-up product. It does not touch
+// existing intents or balances.
+func (s *Service) CreateProduct(ctx context.Context, in CreateProductInput) (*domain.PaymentProduct, error) {
+	if s == nil || s.repo == nil {
+		return nil, errors.New("paymentservice: service is not configured")
+	}
+	product := &domain.PaymentProduct{
+		Code:           strings.TrimSpace(in.Code),
+		Title:          strings.TrimSpace(in.Title),
+		Amount:         in.Amount,
+		Currency:       in.Currency,
+		Credits:        in.Credits,
+		PriceVersion:   1,
+		VATCode:        cloneInt16(in.VATCode),
+		PaymentSubject: strings.TrimSpace(in.PaymentSubject),
+		PaymentMode:    strings.TrimSpace(in.PaymentMode),
+		IsActive:       in.IsActive,
+	}
+	if product.Currency == "" {
+		product.Currency = domain.CurrencyRUB
+	}
+	if product.VATCode == nil {
+		product.VATCode = cloneInt16(ptrInt16(defaultReceiptVATCode))
+	}
+	if product.PaymentSubject == "" {
+		product.PaymentSubject = defaultReceiptPaymentSubject
+	}
+	if product.PaymentMode == "" {
+		product.PaymentMode = defaultReceiptPaymentMode
+	}
+	if err := validateProduct(product); err != nil {
+		return nil, err
+	}
+	if err := s.repo.CreateProduct(ctx, product); err != nil {
+		return nil, err
+	}
+	return product, nil
+}
+
+// UpdateProduct applies protected operator catalog changes. Snapshot-sensitive
+// changes increment PriceVersion so future intents can be audited against the
+// catalog version they copied from. Existing intents remain untouched.
+func (s *Service) UpdateProduct(ctx context.Context, in UpdateProductInput) (*domain.PaymentProduct, error) {
+	if s == nil || s.repo == nil {
+		return nil, errors.New("paymentservice: service is not configured")
+	}
+	if in.ID == uuid.Nil {
+		return nil, ErrInvalidInput
+	}
+	product, err := s.repo.GetProductByID(ctx, in.ID)
+	if err != nil {
+		return nil, err
+	}
+	next := *product
+	next.VATCode = cloneInt16(product.VATCode)
+
+	snapshotChanged := false
+	if in.Title != nil {
+		value := strings.TrimSpace(*in.Title)
+		if value != next.Title {
+			next.Title = value
+			snapshotChanged = true
+		}
+	}
+	if in.Amount != nil && *in.Amount != next.Amount {
+		next.Amount = *in.Amount
+		snapshotChanged = true
+	}
+	if in.Currency != nil {
+		value := *in.Currency
+		if value == "" {
+			value = domain.CurrencyRUB
+		}
+		if value != next.Currency {
+			next.Currency = value
+			snapshotChanged = true
+		}
+	}
+	if in.Credits != nil && *in.Credits != next.Credits {
+		next.Credits = *in.Credits
+		snapshotChanged = true
+	}
+	if in.VATCodeSet && !sameInt16(in.VATCode, next.VATCode) {
+		next.VATCode = cloneInt16(in.VATCode)
+		snapshotChanged = true
+	}
+	if in.PaymentSubject != nil {
+		value := strings.TrimSpace(*in.PaymentSubject)
+		if value == "" {
+			value = defaultReceiptPaymentSubject
+		}
+		if value != next.PaymentSubject {
+			next.PaymentSubject = value
+			snapshotChanged = true
+		}
+	}
+	if in.PaymentMode != nil {
+		value := strings.TrimSpace(*in.PaymentMode)
+		if value == "" {
+			value = defaultReceiptPaymentMode
+		}
+		if value != next.PaymentMode {
+			next.PaymentMode = value
+			snapshotChanged = true
+		}
+	}
+	if in.IsActive != nil {
+		next.IsActive = *in.IsActive
+	}
+	if snapshotChanged {
+		next.PriceVersion++
+	}
+	if err := validateProduct(&next); err != nil {
+		return nil, err
+	}
+	if err := s.repo.UpdateProduct(ctx, &next); err != nil {
+		return nil, err
+	}
+	return &next, nil
+}
+
+// DisableProduct hides one product from user-facing product lists without
+// mutating existing payment intents.
+func (s *Service) DisableProduct(ctx context.Context, productID uuid.UUID) (*domain.PaymentProduct, error) {
+	active := false
+	return s.UpdateProduct(ctx, UpdateProductInput{ID: productID, IsActive: &active})
+}
+
+// CreateIntentInput describes a user-owned top-up intent creation request.
+type CreateIntentInput struct {
+	UserID         uuid.UUID
+	ProductCode    string
+	ReceiptEmail   string
+	ReceiptPhone   string
+	IdempotencyKey string
+	ReturnURL      string
+	Source         string
+	ForceNew       bool
+	Capture        *bool
+}
+
+// CreateIntentResult reports the intent and whether this call inserted the
+// local row. Provider creation may still be retried for an existing local row
+// that lacks provider fields.
+type CreateIntentResult struct {
+	Intent       *domain.PaymentIntent
+	Created      bool
+	ReusedActive bool
+}
+
+// CreateIntent creates or resumes an idempotent payment intent. It never grants
+// credits; only trusted webhook processing may later post a top-up ledger entry.
+func (s *Service) CreateIntent(ctx context.Context, in CreateIntentInput) (CreateIntentResult, error) {
+	if s == nil || s.repo == nil || s.provider == nil {
+		return CreateIntentResult{}, errors.New("paymentservice: service is not configured")
+	}
+	in.ProductCode = strings.TrimSpace(in.ProductCode)
+	in.ReceiptEmail = strings.TrimSpace(in.ReceiptEmail)
+	in.ReceiptPhone = strings.TrimSpace(in.ReceiptPhone)
+	in.IdempotencyKey = strings.TrimSpace(in.IdempotencyKey)
+	in.ReturnURL = strings.TrimSpace(in.ReturnURL)
+	in.Source = strings.TrimSpace(in.Source)
+	if in.UserID == uuid.Nil || in.ProductCode == "" || in.IdempotencyKey == "" {
+		return CreateIntentResult{}, ErrInvalidInput
+	}
+
+	if existing, err := s.repo.GetIntentByIdempotencyKey(ctx, in.IdempotencyKey); err == nil {
+		if existing.UserID != in.UserID {
+			return CreateIntentResult{}, ErrForbidden
+		}
+		intent, err := s.ensureProviderPayment(ctx, existing, nil, in.ReturnURL)
+		if err != nil {
+			return CreateIntentResult{}, err
+		}
+		return CreateIntentResult{Intent: intent, Created: false}, nil
+	} else if !errors.Is(err, domain.ErrNotFound) {
+		return CreateIntentResult{}, err
+	}
+
+	if !in.ForceNew {
+		active, err := s.ActiveWaitingIntent(ctx, in.UserID)
+		if err == nil {
+			return CreateIntentResult{Intent: active, Created: false, ReusedActive: true}, nil
+		}
+		if !errors.Is(err, domain.ErrNotFound) {
+			return CreateIntentResult{}, err
+		}
+	}
+
+	if in.ReceiptEmail == "" && in.ReceiptPhone == "" {
+		return CreateIntentResult{}, ErrReceiptContactRequired
+	}
+
+	product, err := s.repo.GetActiveProductByCode(ctx, in.ProductCode)
+	if err != nil {
+		return CreateIntentResult{}, err
+	}
+	metadataFields := map[string]any{
+		"product_code":  product.Code,
+		"price_version": product.PriceVersion,
+		"source":        in.Source,
+	}
+	if in.Capture != nil {
+		metadataFields["capture"] = *in.Capture
+	}
+	metadata, err := json.Marshal(metadataFields)
+	if err != nil {
+		return CreateIntentResult{}, err
+	}
+	intent := &domain.PaymentIntent{
+		UserID:             in.UserID,
+		ProductID:          &product.ID,
+		Status:             domain.PaymentIntentCreated,
+		Amount:             product.Amount,
+		Currency:           product.Currency,
+		Credits:            product.Credits,
+		PriceVersion:       product.PriceVersion,
+		ReceiptDescription: paymentDescription(product),
+		VATCode:            cloneInt16(product.VATCode),
+		PaymentSubject:     strings.TrimSpace(product.PaymentSubject),
+		PaymentMode:        strings.TrimSpace(product.PaymentMode),
+		Provider:           s.provider.Code(),
+		IdempotencyKey:     in.IdempotencyKey,
+		ReceiptEmail:       in.ReceiptEmail,
+		ReceiptPhone:       in.ReceiptPhone,
+		Metadata:           metadata,
+	}
+	if err := s.repo.CreateIntent(ctx, intent); err != nil {
+		if !errors.Is(err, domain.ErrConflict) {
+			return CreateIntentResult{}, err
+		}
+		existing, getErr := s.repo.GetIntentByIdempotencyKey(ctx, in.IdempotencyKey)
+		if getErr != nil {
+			return CreateIntentResult{}, getErr
+		}
+		if existing.UserID != in.UserID {
+			return CreateIntentResult{}, ErrForbidden
+		}
+		intent, err := s.ensureProviderPayment(ctx, existing, nil, in.ReturnURL)
+		if err != nil {
+			return CreateIntentResult{}, err
+		}
+		return CreateIntentResult{Intent: intent, Created: false}, nil
+	}
+
+	intent, err = s.ensureProviderPayment(ctx, intent, product, in.ReturnURL)
+	if err != nil {
+		return CreateIntentResult{}, err
+	}
+	metrics.PaymentsCreated.WithLabelValues(string(intent.Provider), metricLabel(in.Source)).Inc()
+	return CreateIntentResult{Intent: intent, Created: true}, nil
+}
+
+// ActiveWaitingIntent returns the newest user-owned payment that still needs
+// user confirmation. It does not grant credits and does not query the provider.
+func (s *Service) ActiveWaitingIntent(ctx context.Context, userID uuid.UUID) (*domain.PaymentIntent, error) {
+	if s == nil || s.repo == nil || s.provider == nil {
+		return nil, errors.New("paymentservice: service is not configured")
+	}
+	if userID == uuid.Nil {
+		return nil, ErrInvalidInput
+	}
+	intents, err := s.repo.ListIntents(ctx, domain.PaymentIntentFilter{
+		UserID:   &userID,
+		Status:   domain.PaymentIntentWaitingForUser,
+		Provider: s.provider.Code(),
+	}, 20, 0)
+	if err != nil {
+		return nil, err
+	}
+	for _, intent := range intents {
+		if intent != nil && strings.TrimSpace(intent.ConfirmationURL) != "" {
+			return intent, nil
+		}
+	}
+	return nil, domain.ErrNotFound
+}
+
+// GetIntent fetches one user-owned intent.
+func (s *Service) GetIntent(ctx context.Context, userID, intentID uuid.UUID) (*domain.PaymentIntent, error) {
+	intent, err := s.repo.GetIntentByID(ctx, intentID)
+	if err != nil {
+		return nil, err
+	}
+	if intent.UserID != userID {
+		return nil, domain.ErrNotFound
+	}
+	return intent, nil
+}
+
+// GetIntentAdmin fetches one intent for a protected operator endpoint.
+func (s *Service) GetIntentAdmin(ctx context.Context, intentID uuid.UUID) (*domain.PaymentIntent, error) {
+	return s.repo.GetIntentByID(ctx, intentID)
+}
+
+// ListIntentsByUser returns user-owned payment history.
+func (s *Service) ListIntentsByUser(ctx context.Context, userID uuid.UUID, limit, offset int) ([]*domain.PaymentIntent, error) {
+	return s.repo.ListIntentsByUser(ctx, userID, normalizeLimit(limit), normalizeOffset(offset))
+}
+
+// ListIntents returns protected operator payment history.
+func (s *Service) ListIntents(ctx context.Context, filter domain.PaymentIntentFilter, limit, offset int) ([]*domain.PaymentIntent, error) {
+	return s.repo.ListIntents(ctx, filter, normalizeLimit(limit), normalizeOffset(offset))
+}
+
+// ListEvents returns provider webhook inbox events for protected operator
+// surfaces. Callers must not expose PaymentEvent.Payload.
+func (s *Service) ListEvents(ctx context.Context, filter domain.PaymentEventFilter, limit, offset int) ([]*domain.PaymentEvent, error) {
+	if s == nil || s.repo == nil {
+		return nil, errors.New("paymentservice: service is not configured")
+	}
+	return s.repo.ListEvents(ctx, filter, normalizeLimit(limit), normalizeOffset(offset))
+}
+
+func (s *Service) ensureProviderPayment(ctx context.Context, intent *domain.PaymentIntent, product *domain.PaymentProduct, returnURL string) (*domain.PaymentIntent, error) {
+	if intent == nil {
+		return nil, domain.ErrNotFound
+	}
+	if intent.ProviderPaymentID != "" || intent.ConfirmationURL != "" || intent.Status != domain.PaymentIntentCreated {
+		return intent, nil
+	}
+	if product == nil && intent.ProductID != nil {
+		if existingProduct, err := s.repo.GetProductByID(ctx, *intent.ProductID); err == nil {
+			product = existingProduct
+		}
+	}
+	createInput := domain.CreatePaymentInput{
+		IntentID:       intent.ID,
+		UserID:         intent.UserID,
+		Amount:         intent.Amount,
+		Currency:       intent.Currency,
+		Credits:        intent.Credits,
+		Description:    paymentIntentDescription(intent, product),
+		ReturnURL:      defaultString(returnURL, s.cfg.ReturnURL),
+		ReceiptEmail:   intent.ReceiptEmail,
+		ReceiptPhone:   intent.ReceiptPhone,
+		VATCode:        paymentIntentVATCode(intent, product),
+		PaymentSubject: paymentIntentSubject(intent, product),
+		PaymentMode:    paymentIntentMode(intent, product),
+		Metadata:       intent.Metadata,
+		IdempotencyKey: "pay:" + intent.ID.String(),
+		Capture:        paymentIntentCapture(intent),
+	}
+	result, err := s.provider.CreatePayment(ctx, createInput)
+	if err != nil {
+		recordPaymentProviderError(s.provider.Code(), "create_payment", err)
+		return nil, fmt.Errorf("paymentservice: create provider payment: %w", err)
+	}
+	if err := s.repo.SetIntentProviderState(ctx, intent.ID, result.Status, result.ProviderPaymentID, result.ConfirmationURL); err != nil {
+		return nil, err
+	}
+	updated, err := s.repo.GetIntentByID(ctx, intent.ID)
+	if err != nil {
+		return nil, err
+	}
+	return updated, nil
+}
+
+func paymentDescription(product *domain.PaymentProduct) string {
+	if product != nil && strings.TrimSpace(product.Title) != "" {
+		return product.Title
+	}
+	return "NeiroHub balance top-up"
+}
+
+func paymentIntentDescription(intent *domain.PaymentIntent, product *domain.PaymentProduct) string {
+	if intent != nil && strings.TrimSpace(intent.ReceiptDescription) != "" {
+		return intent.ReceiptDescription
+	}
+	return paymentDescription(product)
+}
+
+func paymentIntentVATCode(intent *domain.PaymentIntent, product *domain.PaymentProduct) *int16 {
+	if intent != nil && intent.VATCode != nil {
+		return cloneInt16(intent.VATCode)
+	}
+	if product != nil {
+		return cloneInt16(product.VATCode)
+	}
+	return nil
+}
+
+func paymentIntentSubject(intent *domain.PaymentIntent, product *domain.PaymentProduct) string {
+	if intent != nil && strings.TrimSpace(intent.PaymentSubject) != "" {
+		return intent.PaymentSubject
+	}
+	if product != nil {
+		return product.PaymentSubject
+	}
+	return ""
+}
+
+func paymentIntentMode(intent *domain.PaymentIntent, product *domain.PaymentProduct) string {
+	if intent != nil && strings.TrimSpace(intent.PaymentMode) != "" {
+		return intent.PaymentMode
+	}
+	if product != nil {
+		return product.PaymentMode
+	}
+	return ""
+}
+
+func paymentIntentCapture(intent *domain.PaymentIntent) *bool {
+	if intent == nil || len(intent.Metadata) == 0 {
+		return nil
+	}
+	var metadata struct {
+		Capture *bool `json:"capture"`
+	}
+	if err := json.Unmarshal(intent.Metadata, &metadata); err != nil {
+		return nil
+	}
+	return metadata.Capture
+}
+
+func cloneInt16(value *int16) *int16 {
+	if value == nil {
+		return nil
+	}
+	out := *value
+	return &out
+}
+
+func ptrInt16(value int16) *int16 {
+	out := value
+	return &out
+}
+
+func sameInt16(a, b *int16) bool {
+	if a == nil || b == nil {
+		return a == nil && b == nil
+	}
+	return *a == *b
+}
+
+func validateProduct(product *domain.PaymentProduct) error {
+	if product == nil {
+		return ErrInvalidInput
+	}
+	product.Code = strings.TrimSpace(product.Code)
+	product.Title = strings.TrimSpace(product.Title)
+	product.PaymentSubject = strings.TrimSpace(product.PaymentSubject)
+	product.PaymentMode = strings.TrimSpace(product.PaymentMode)
+	if !validProductCode(product.Code) {
+		return ErrInvalidInput
+	}
+	if product.Title == "" || len(product.Title) > maxProductTitleLen {
+		return ErrInvalidInput
+	}
+	if product.Amount <= 0 || product.Credits <= 0 || product.PriceVersion <= 0 {
+		return ErrInvalidInput
+	}
+	if product.Currency == "" {
+		product.Currency = domain.CurrencyRUB
+	}
+	if product.Currency != domain.CurrencyRUB {
+		return ErrInvalidInput
+	}
+	if product.VATCode != nil && !validVATCode(*product.VATCode) {
+		return ErrInvalidInput
+	}
+	if !validPaymentSubject(product.PaymentSubject) || !validPaymentMode(product.PaymentMode) {
+		return ErrInvalidInput
+	}
+	return nil
+}
+
+func validProductCode(code string) bool {
+	if len(code) < 3 || len(code) > maxProductCodeLen {
+		return false
+	}
+	for i, r := range code {
+		ok := r >= 'a' && r <= 'z' ||
+			r >= '0' && r <= '9' ||
+			r == '_' ||
+			r == '-'
+		if !ok {
+			return false
+		}
+		if i == 0 && !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9') {
+			return false
+		}
+	}
+	return true
+}
+
+func validVATCode(code int16) bool {
+	return code >= 1 && code <= 6
+}
+
+func validPaymentSubject(value string) bool {
+	if value == "" {
+		return true
+	}
+	switch value {
+	case "commodity",
+		"excise",
+		"job",
+		"service",
+		"gambling_bet",
+		"gambling_prize",
+		"lottery",
+		"lottery_prize",
+		"intellectual_activity",
+		"payment",
+		"agent_commission",
+		"composite",
+		"another":
+		return true
+	default:
+		return false
+	}
+}
+
+func validPaymentMode(value string) bool {
+	if value == "" {
+		return true
+	}
+	switch value {
+	case "full_prepayment",
+		"partial_prepayment",
+		"advance",
+		"full_payment",
+		"partial_payment",
+		"credit",
+		"credit_payment":
+		return true
+	default:
+		return false
+	}
+}
+
+func defaultString(value, fallback string) string {
+	if value = strings.TrimSpace(value); value != "" {
+		return value
+	}
+	return fallback
+}
+
+func normalizeLimit(limit int) int {
+	if limit <= 0 {
+		return 20
+	}
+	if limit > 100 {
+		return 100
+	}
+	return limit
+}
+
+func normalizeOffset(offset int) int {
+	if offset < 0 {
+		return 0
+	}
+	return offset
+}
+
+func metricLabel(value string) string {
+	if value = strings.TrimSpace(value); value != "" {
+		return value
+	}
+	return "unknown"
+}

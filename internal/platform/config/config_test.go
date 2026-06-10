@@ -55,12 +55,65 @@ func TestLoadProviderChain(t *testing.T) {
 	}
 }
 
+func TestLoadImageProviderConfig(t *testing.T) {
+	t.Setenv("IMAGE_PROVIDER", "openai")
+	t.Setenv("IMAGE_MODEL", "gpt-image-2")
+	t.Setenv("IMAGE_SIZE", "1024x1024")
+
+	cfg := config.Load()
+	if cfg.ImageProvider != "openai" {
+		t.Fatalf("ImageProvider = %q, want openai", cfg.ImageProvider)
+	}
+	if cfg.ImageModel != "gpt-image-2" || cfg.ImageSize != "1024x1024" {
+		t.Fatalf("unexpected image config: model=%q size=%q", cfg.ImageModel, cfg.ImageSize)
+	}
+}
+
+func TestLoadVKVideoUploadConfig(t *testing.T) {
+	t.Setenv("VK_VIDEO_ACCESS_TOKEN", "video-token")
+	t.Setenv("VK_VIDEO_UPLOAD_GROUP_ID", "239332376")
+	t.Setenv("VK_VIDEO_DELIVERY_MODE", "video")
+
+	cfg := config.Load()
+	if cfg.VKVideoAccessToken != "video-token" {
+		t.Fatalf("VKVideoAccessToken = %q", cfg.VKVideoAccessToken)
+	}
+	if cfg.VKVideoUploadGroupID != 239332376 {
+		t.Fatalf("VKVideoUploadGroupID = %d", cfg.VKVideoUploadGroupID)
+	}
+	if cfg.VKVideoDeliveryMode != "video" {
+		t.Fatalf("VKVideoDeliveryMode = %q", cfg.VKVideoDeliveryMode)
+	}
+}
+
+func TestValidateVKVideoDeliveryMode(t *testing.T) {
+	cfg := config.Config{VKVideoDeliveryMode: "bad"}
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "VK_VIDEO_DELIVERY_MODE") {
+		t.Fatalf("expected VK_VIDEO_DELIVERY_MODE validation error, got %v", err)
+	}
+}
+
+func TestValidateImageProvider(t *testing.T) {
+	cfg := config.Config{ImageProvider: "unknown"}
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "IMAGE_PROVIDER") {
+		t.Fatalf("expected IMAGE_PROVIDER validation error, got %v", err)
+	}
+}
+
 func TestLoadDeepInfraConfig(t *testing.T) {
 	t.Setenv("PROVIDER", "deepinfra")
 	t.Setenv("DEEPINFRA_API_KEY", "test-key")
 	t.Setenv("DEEPINFRA_BASE_URL", "https://example.com/v1/openai")
 	t.Setenv("DEEPINFRA_TEXT_MODEL", "deepseek-ai/DeepSeek-V4-Flash")
 	t.Setenv("DEEPINFRA_TEXT_PRICE", "2")
+	t.Setenv("DEEPINFRA_IMAGE_MODEL", "ByteDance/Seedream-4.5")
+	t.Setenv("DEEPINFRA_IMAGE_FALLBACK_MODEL", "stabilityai/sdxl-turbo")
+	t.Setenv("DEEPINFRA_IMAGE_PRICE", "11")
+	t.Setenv("DEEPINFRA_IMAGE_REFERENCE_ENABLED", "true")
 
 	cfg := config.Load()
 	if cfg.DeepInfraAPIKey != "test-key" {
@@ -74,6 +127,18 @@ func TestLoadDeepInfraConfig(t *testing.T) {
 	}
 	if cfg.DeepInfraTextPrice != 2 {
 		t.Fatalf("DeepInfraTextPrice = %d, want 2", cfg.DeepInfraTextPrice)
+	}
+	if cfg.DeepInfraImageModel != "ByteDance/Seedream-4.5" {
+		t.Fatalf("DeepInfraImageModel = %q", cfg.DeepInfraImageModel)
+	}
+	if cfg.DeepInfraImageFallbackModel != "stabilityai/sdxl-turbo" {
+		t.Fatalf("DeepInfraImageFallbackModel = %q", cfg.DeepInfraImageFallbackModel)
+	}
+	if cfg.DeepInfraImagePrice != 11 {
+		t.Fatalf("DeepInfraImagePrice = %d, want 11", cfg.DeepInfraImagePrice)
+	}
+	if !cfg.DeepInfraImageReferenceEnabled {
+		t.Fatal("DeepInfraImageReferenceEnabled was not loaded")
 	}
 }
 
@@ -128,6 +193,8 @@ func TestLoadTextContextConfig(t *testing.T) {
 func TestLoadVKMenuFeatureFlags(t *testing.T) {
 	t.Setenv("VK_MENU_STUDENTS_ENABLED", "false")
 	t.Setenv("VK_MENU_VIDEO_SORA2_EXAMPLES_ENABLED", "false")
+	t.Setenv("VK_TOP_UP_RECEIPT_EMAIL", "payments@example.com")
+	t.Setenv("VK_TOP_UP_RECEIPT_PHONE", "+79991234567")
 
 	cfg := config.Load()
 	if cfg.VKMenuStudentsEnabled {
@@ -144,6 +211,15 @@ func TestLoadVKMenuFeatureFlags(t *testing.T) {
 	}
 	if cfg.VKMenuTopUpEnabled {
 		t.Fatal("VKMenuTopUpEnabled = true, want default false")
+	}
+	if cfg.VKMenuImageTextEnabled {
+		t.Fatal("VKMenuImageTextEnabled = true, want default false")
+	}
+	if cfg.VKMenuImageReferenceEnabled {
+		t.Fatal("VKMenuImageReferenceEnabled = true, want default false")
+	}
+	if cfg.VKTopUpReceiptEmail != "payments@example.com" || cfg.VKTopUpReceiptPhone != "+79991234567" {
+		t.Fatalf("unexpected VK top-up receipt contact: email=%q phone=%q", cfg.VKTopUpReceiptEmail, cfg.VKTopUpReceiptPhone)
 	}
 }
 
@@ -163,6 +239,76 @@ func TestLoadReferralConfig(t *testing.T) {
 	}
 	if cfg.ReferralReferrerSignupRewardCredits != 15 || cfg.ReferralReferredSignupRewardCredits != 3 {
 		t.Fatalf("unexpected referral rewards: referrer=%d referred=%d", cfg.ReferralReferrerSignupRewardCredits, cfg.ReferralReferredSignupRewardCredits)
+	}
+}
+
+func TestLoadPaymentConfig(t *testing.T) {
+	t.Setenv("PAYMENT_PROVIDER", "yookassa")
+	t.Setenv("YOOKASSA_SHOP_ID", "shop-1")
+	t.Setenv("YOOKASSA_SECRET_KEY", "secret")
+	t.Setenv("YOOKASSA_BASE_URL", "https://example.com/v3")
+	t.Setenv("YOOKASSA_RETURN_URL", "https://neiirohub.ru/payments/return")
+	t.Setenv("YOOKASSA_WEBHOOK_IP_ALLOWLIST_ENABLED", "false")
+	t.Setenv("PAYMENT_WEBHOOK_REQUIRE_HTTPS", "true")
+	t.Setenv("PAYMENT_WEBHOOK_ADDR", ":18082")
+	t.Setenv("PAYMENT_WEBHOOK_POLL_INTERVAL", "2s")
+	t.Setenv("PAYMENT_WEBHOOK_BATCH_LIMIT", "7")
+	t.Setenv("PAYMENT_RECONCILIATION_INTERVAL", "3s")
+	t.Setenv("PAYMENT_RECONCILIATION_LIMIT", "9")
+	t.Setenv("PAYMENT_RECONCILIATION_STALE_AFTER", "4s")
+
+	cfg := config.Load()
+	if cfg.PaymentProvider != "yookassa" {
+		t.Fatalf("PaymentProvider = %q, want yookassa", cfg.PaymentProvider)
+	}
+	if cfg.YooKassaShopID != "shop-1" || cfg.YooKassaSecretKey != "secret" {
+		t.Fatalf("unexpected YooKassa credentials: shop=%q secret=%q", cfg.YooKassaShopID, cfg.YooKassaSecretKey)
+	}
+	if cfg.YooKassaBaseURL != "https://example.com/v3" || cfg.YooKassaReturnURL != "https://neiirohub.ru/payments/return" {
+		t.Fatalf("unexpected YooKassa URLs: base=%q return=%q", cfg.YooKassaBaseURL, cfg.YooKassaReturnURL)
+	}
+	if cfg.YooKassaWebhookIPAllowlistEnabled {
+		t.Fatal("YooKassaWebhookIPAllowlistEnabled = true, want false")
+	}
+	if !cfg.PaymentWebhookRequireHTTPS || !cfg.PaymentWebhookHTTPSRequired() {
+		t.Fatal("payment webhook HTTPS requirement was not loaded")
+	}
+	if cfg.PaymentWebhookAddr != ":18082" || cfg.PaymentWebhookPollInterval.String() != "2s" || cfg.PaymentWebhookBatchLimit != 7 {
+		t.Fatalf("unexpected webhook config: addr=%q interval=%s batch=%d", cfg.PaymentWebhookAddr, cfg.PaymentWebhookPollInterval, cfg.PaymentWebhookBatchLimit)
+	}
+	if cfg.PaymentReconciliationInterval.String() != "3s" || cfg.PaymentReconciliationLimit != 9 || cfg.PaymentReconciliationStaleAfter.String() != "4s" {
+		t.Fatalf("unexpected payment reconciliation config: interval=%s limit=%d stale_after=%s", cfg.PaymentReconciliationInterval, cfg.PaymentReconciliationLimit, cfg.PaymentReconciliationStaleAfter)
+	}
+}
+
+func TestPaymentWebhookHTTPSRequiredInProduction(t *testing.T) {
+	cfg := config.Config{Env: "production"}
+	if !cfg.PaymentWebhookHTTPSRequired() {
+		t.Fatal("production payment webhooks must require HTTPS")
+	}
+}
+
+func TestValidatePaymentProvider(t *testing.T) {
+	cfg := config.Config{PaymentProvider: "stripe"}
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "PAYMENT_PROVIDER") {
+		t.Fatalf("expected PAYMENT_PROVIDER validation error, got %v", err)
+	}
+}
+
+func TestValidateYooKassaRequiresConfig(t *testing.T) {
+	cfg := config.Config{Env: "development", PaymentProvider: "yookassa"}
+
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("expected validation error")
+	}
+	msg := err.Error()
+	for _, want := range []string{"YOOKASSA_SHOP_ID", "YOOKASSA_SECRET_KEY", "YOOKASSA_RETURN_URL"} {
+		if !strings.Contains(msg, want) {
+			t.Fatalf("expected %s in validation error, got %q", want, msg)
+		}
 	}
 }
 
@@ -219,6 +365,35 @@ func TestLoadReadsDotenvWithoutOverridingEnvironment(t *testing.T) {
 	}
 }
 
+func TestLoadReadsUnderscoreEnvFallback(t *testing.T) {
+	restoreEnv := clearEnv(t, "VK_API_VERSION")
+	defer restoreEnv()
+
+	tmp := t.TempDir()
+	if err := os.WriteFile(tmp+"/_env", []byte("VK_API_VERSION=5.201\n"), 0600); err != nil {
+		t.Fatalf("write _env: %v", err)
+	}
+
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("get cwd: %v", err)
+	}
+	if err := os.Chdir(tmp); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	defer func() {
+		if err := os.Chdir(wd); err != nil {
+			t.Fatalf("restore cwd: %v", err)
+		}
+	}()
+
+	cfg := config.Load()
+
+	if cfg.VKAPIVersion != "5.201" {
+		t.Fatalf("VKAPIVersion = %q, want value from _env", cfg.VKAPIVersion)
+	}
+}
+
 func TestLoadMiniAppJobRateLimit(t *testing.T) {
 	t.Setenv("MINIAPP_JOB_RATE_LIMIT_RPS", "2.5")
 	t.Setenv("MINIAPP_JOB_RATE_LIMIT_BURST", "7")
@@ -234,16 +409,18 @@ func TestLoadMiniAppJobRateLimit(t *testing.T) {
 
 func TestLoadVKAntiSpamConfig(t *testing.T) {
 	t.Setenv("VK_ANTISPAM_ENABLED", "false")
-	t.Setenv("VK_ANTISPAM_MESSAGE_LIMIT", "11")
+	t.Setenv("VK_ANTISPAM_MESSAGE_LIMIT", "41")
 	t.Setenv("VK_ANTISPAM_MESSAGE_WINDOW", "61s")
 	t.Setenv("VK_ANTISPAM_GPT_LIMIT", "4")
 	t.Setenv("VK_ANTISPAM_GPT_WINDOW", "31s")
+	t.Setenv("VK_ANTISPAM_IMAGE_DAILY_LIMIT", "101")
+	t.Setenv("VK_ANTISPAM_IMAGE_DAILY_WINDOW", "25h")
 	t.Setenv("VK_ANTISPAM_COOLDOWN", "32s")
 	t.Setenv("VK_ANTISPAM_VIOLATION_LIMIT", "6")
 	t.Setenv("VK_ANTISPAM_VIOLATION_WINDOW", "11m")
 	t.Setenv("VK_ANTISPAM_BLOCK_DURATION", "16m")
 	t.Setenv("VK_ANTISPAM_NEW_USER_AGE", "5h")
-	t.Setenv("VK_ANTISPAM_NEW_USER_MESSAGE_LIMIT", "6")
+	t.Setenv("VK_ANTISPAM_NEW_USER_MESSAGE_LIMIT", "31")
 	t.Setenv("VK_ANTISPAM_NEW_USER_GPT_LIMIT", "2")
 	t.Setenv("VK_ANTISPAM_NEW_USER_GPT_WINDOW", "16s")
 	t.Setenv("VK_ANTISPAM_ACTIVE_GPT_JOB_LIMIT", "3")
@@ -252,16 +429,19 @@ func TestLoadVKAntiSpamConfig(t *testing.T) {
 	if cfg.VKAntiSpamEnabled {
 		t.Fatal("VKAntiSpamEnabled = true, want false")
 	}
-	if cfg.VKAntiSpamMessageLimit != 11 || cfg.VKAntiSpamMessageWindow != 61*time.Second {
+	if cfg.VKAntiSpamMessageLimit != 41 || cfg.VKAntiSpamMessageWindow != 61*time.Second {
 		t.Fatalf("unexpected message limit config: %d/%s", cfg.VKAntiSpamMessageLimit, cfg.VKAntiSpamMessageWindow)
 	}
 	if cfg.VKAntiSpamGPTLimit != 4 || cfg.VKAntiSpamGPTWindow != 31*time.Second {
 		t.Fatalf("unexpected gpt limit config: %d/%s", cfg.VKAntiSpamGPTLimit, cfg.VKAntiSpamGPTWindow)
 	}
+	if cfg.VKAntiSpamImageDailyLimit != 101 || cfg.VKAntiSpamImageDailyWindow != 25*time.Hour {
+		t.Fatalf("unexpected image daily limit config: %d/%s", cfg.VKAntiSpamImageDailyLimit, cfg.VKAntiSpamImageDailyWindow)
+	}
 	if cfg.VKAntiSpamCooldown != 32*time.Second || cfg.VKAntiSpamViolationLimit != 6 || cfg.VKAntiSpamViolationWindow != 11*time.Minute || cfg.VKAntiSpamBlockDuration != 16*time.Minute {
 		t.Fatalf("unexpected violation config: cooldown=%s limit=%d window=%s block=%s", cfg.VKAntiSpamCooldown, cfg.VKAntiSpamViolationLimit, cfg.VKAntiSpamViolationWindow, cfg.VKAntiSpamBlockDuration)
 	}
-	if cfg.VKAntiSpamNewUserAge != 5*time.Hour || cfg.VKAntiSpamNewUserMessageLimit != 6 || cfg.VKAntiSpamNewUserGPTLimit != 2 || cfg.VKAntiSpamNewUserGPTWindow != 16*time.Second {
+	if cfg.VKAntiSpamNewUserAge != 5*time.Hour || cfg.VKAntiSpamNewUserMessageLimit != 31 || cfg.VKAntiSpamNewUserGPTLimit != 2 || cfg.VKAntiSpamNewUserGPTWindow != 16*time.Second {
 		t.Fatalf("unexpected new-user config: age=%s message=%d gpt=%d/%s", cfg.VKAntiSpamNewUserAge, cfg.VKAntiSpamNewUserMessageLimit, cfg.VKAntiSpamNewUserGPTLimit, cfg.VKAntiSpamNewUserGPTWindow)
 	}
 	if cfg.VKAntiSpamActiveGPTJobLimit != 3 {
@@ -283,11 +463,39 @@ func TestValidateOpenAIModerationRequiresKey(t *testing.T) {
 	}
 }
 
+func TestValidateImageProviderRequiresKey(t *testing.T) {
+	cfg := config.Config{
+		Env:           "development",
+		Provider:      "mock",
+		ProviderChain: []string{"mock"},
+		ImageProvider: "openai",
+	}
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "OPENAI_API_KEY") {
+		t.Fatalf("expected OPENAI_API_KEY validation error, got %v", err)
+	}
+}
+
 func TestValidateDeepInfraRequiresKey(t *testing.T) {
 	cfg := config.Config{
 		Env:           "development",
 		Provider:      "mock",
 		ProviderChain: []string{"deepinfra", "mock"},
+	}
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "DEEPINFRA_API_KEY") {
+		t.Fatalf("expected DEEPINFRA_API_KEY validation error, got %v", err)
+	}
+}
+
+func TestValidateDeepInfraImageProviderRequiresKey(t *testing.T) {
+	cfg := config.Config{
+		Env:           "development",
+		Provider:      "mock",
+		ProviderChain: []string{"mock"},
+		ImageProvider: "deepinfra",
 	}
 
 	err := cfg.Validate()

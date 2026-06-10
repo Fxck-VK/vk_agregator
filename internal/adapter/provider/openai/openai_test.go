@@ -109,7 +109,11 @@ func TestSubmitPollTextSuccess(t *testing.T) {
 
 func TestSubmitPollImageB64Success(t *testing.T) {
 	encoded := base64.StdEncoding.EncodeToString([]byte("png bytes"))
+	var seen imageRequest
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&seen); err != nil {
+			t.Fatalf("decode image request: %v", err)
+		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"data":[{"b64_json":"` + encoded + `"}]}`))
 	}))
@@ -120,10 +124,18 @@ func TestSubmitPollImageB64Success(t *testing.T) {
 		JobID:     uuid.New(),
 		Operation: domain.OperationImageGenerate,
 		Modality:  domain.ModalityImage,
+		ModelCode: "gpt-image-2",
+		Size:      "1536x1024",
 		Prompt:    "a red apple",
 	})
 	if err != nil {
 		t.Fatalf("submit image b64: %v", err)
+	}
+	if seen.Model != "gpt-image-2" || seen.Size != "1536x1024" {
+		t.Fatalf("unexpected image request: %+v", seen)
+	}
+	if task.ModelCode != "gpt-image-2" {
+		t.Fatalf("task model = %q, want gpt-image-2", task.ModelCode)
 	}
 	res, err := p.Poll(context.Background(), domain.ProviderTaskRef{Provider: task.Provider, ExternalID: task.ExternalID})
 	if err != nil {

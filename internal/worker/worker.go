@@ -13,10 +13,12 @@ package worker
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"sort"
 	"sync"
 	"time"
@@ -63,19 +65,21 @@ type classedError interface {
 // capable providers with lower configured cost and observed latency, then falls
 // back across the chain when retryable submit failures occur.
 type Registry struct {
-	mu       sync.Mutex
-	byName   map[domain.ProviderName]domain.Provider
-	order    []domain.ProviderName
-	breakers map[domain.ProviderName]*breakerState
-	now      func() time.Time
+	mu                  sync.Mutex
+	byName              map[domain.ProviderName]domain.Provider
+	order               []domain.ProviderName
+	preferredByModality map[domain.Modality]domain.ProviderName
+	breakers            map[domain.ProviderName]*breakerState
+	now                 func() time.Time
 }
 
 // NewRegistry builds a registry with a default provider and optional extras.
 func NewRegistry(def domain.Provider, more ...domain.Provider) *Registry {
 	r := &Registry{
-		byName:   map[domain.ProviderName]domain.Provider{},
-		breakers: map[domain.ProviderName]*breakerState{},
-		now:      time.Now,
+		byName:              map[domain.ProviderName]domain.Provider{},
+		preferredByModality: map[domain.Modality]domain.ProviderName{},
+		breakers:            map[domain.ProviderName]*breakerState{},
+		now:                 time.Now,
 	}
 	if def != nil {
 		r.add(def)
@@ -84,6 +88,17 @@ func NewRegistry(def domain.Provider, more ...domain.Provider) *Registry {
 		r.add(p)
 	}
 	return r
+}
+
+// PreferProvider makes a provider the first candidate for a modality when it
+// supports the request. Other capable providers remain explicit fallbacks.
+func (r *Registry) PreferProvider(modality domain.Modality, name domain.ProviderName) {
+	if modality == "" || name == "" {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.preferredByModality[modality] = name
 }
 
 func (r *Registry) add(p domain.Provider) {
@@ -138,12 +153,13 @@ func (r *Registry) rawForName(name domain.ProviderName) (domain.Provider, error)
 }
 
 type providerCandidate struct {
-	provider domain.Provider
-	name     domain.ProviderName
-	cost     int64
-	latency  time.Duration
-	open     bool
-	order    int
+	provider  domain.Provider
+	name      domain.ProviderName
+	cost      int64
+	latency   time.Duration
+	open      bool
+	preferred bool
+	order     int
 }
 
 type breakerState struct {
@@ -157,6 +173,7 @@ func (r *Registry) candidates(ctx context.Context, req domain.ProviderRequest) (
 	order := append([]domain.ProviderName(nil), r.order...)
 	providers := make(map[domain.ProviderName]domain.Provider, len(r.byName))
 	states := make(map[domain.ProviderName]breakerState, len(r.breakers))
+	preferred := r.preferredByModality[req.Modality]
 	now := r.now()
 	for name, provider := range r.byName {
 		providers[name] = provider
@@ -185,12 +202,13 @@ func (r *Registry) candidates(ctx context.Context, req domain.ProviderRequest) (
 		}
 		st := states[name]
 		candidate := providerCandidate{
-			provider: provider,
-			name:     name,
-			cost:     estimate.AmountCredits,
-			latency:  st.latency,
-			open:     !st.openedUntil.IsZero() && now.Before(st.openedUntil),
-			order:    idx,
+			provider:  provider,
+			name:      name,
+			cost:      estimate.AmountCredits,
+			latency:   st.latency,
+			open:      !st.openedUntil.IsZero() && now.Before(st.openedUntil),
+			preferred: preferred != "" && name == preferred,
+			order:     idx,
 		}
 		if candidate.open {
 			open = append(open, candidate)
@@ -213,6 +231,9 @@ func (r *Registry) candidates(ctx context.Context, req domain.ProviderRequest) (
 
 func sortCandidates(c []providerCandidate) {
 	sort.SliceStable(c, func(i, j int) bool {
+		if c[i].preferred != c[j].preferred {
+			return c[i].preferred
+		}
 		if c[i].cost != c[j].cost {
 			return c[i].cost < c[j].cost
 		}
@@ -398,19 +419,28 @@ func (e providerResultError) ProviderErrorClass() domain.ProviderErrorClass { re
 // processor holds the shared dependencies and result-handling logic used by
 // both the generation and poll workers.
 type processor struct {
-	jobs        domain.JobRepository
-	tasks       domain.ProviderTaskRepository
-	artifacts   ArtifactSaver
-	providers   *Registry
-	streams     StreamPublisher
-	textContext TextContext
-	moderator   Moderator
-	modResults  domain.ModerationResultRepository
-	releaser    ReservationReleaser
-	maxAttempts int
-	backoff     func(attempt int) time.Duration
-	callTimeout time.Duration
-	now         func() time.Time
+	jobs             domain.JobRepository
+	tasks            domain.ProviderTaskRepository
+	artifacts        ArtifactSaver
+	artifactRepo     domain.ArtifactRepository
+	objects          ObjectStore
+	providers        *Registry
+	streams          StreamPublisher
+	imageModel       string
+	imageSize        string
+	videoModel       string
+	videoDurationSec int
+	videoResolution  string
+	videoAspectRatio string
+	videoDraft       bool
+	textContext      TextContext
+	moderator        Moderator
+	modResults       domain.ModerationResultRepository
+	releaser         ReservationReleaser
+	maxAttempts      int
+	backoff          func(attempt int) time.Duration
+	callTimeout      time.Duration
+	now              func() time.Time
 }
 
 // Moderator gates delivery: generated output must pass a moderation check
@@ -439,8 +469,22 @@ type Deps struct {
 	Jobs      domain.JobRepository
 	Tasks     domain.ProviderTaskRepository
 	Artifacts ArtifactSaver
+	// ArtifactRepo loads input artifact metadata for provider request assembly.
+	ArtifactRepo domain.ArtifactRepository
+	// Objects loads input artifact bytes for provider request assembly.
+	Objects   ObjectStore
 	Providers *Registry
 	Streams   StreamPublisher
+	// ImageModel/ImageSize are optional product-level defaults for image jobs.
+	// They are translated into the provider request only inside workers.
+	ImageModel string
+	ImageSize  string
+	// VideoModel and related fields are worker-owned defaults for video jobs.
+	VideoModel       string
+	VideoDurationSec int
+	VideoResolution  string
+	VideoAspectRatio string
+	VideoDraft       bool
 	// TextContext, when set, stores VK text dialog history and renders compact
 	// provider prompts for text jobs.
 	TextContext TextContext
@@ -481,28 +525,50 @@ func newProcessor(d Deps) processor {
 		callTimeout = defaultProviderCallTimeout
 	}
 	return processor{
-		jobs:        d.Jobs,
-		tasks:       d.Tasks,
-		artifacts:   d.Artifacts,
-		providers:   d.Providers,
-		streams:     d.Streams,
-		textContext: d.TextContext,
-		moderator:   d.Moderator,
-		modResults:  d.ModResults,
-		releaser:    d.Releaser,
-		maxAttempts: maxAttempts,
-		backoff:     backoff,
-		callTimeout: callTimeout,
-		now:         now,
+		jobs:             d.Jobs,
+		tasks:            d.Tasks,
+		artifacts:        d.Artifacts,
+		artifactRepo:     d.ArtifactRepo,
+		objects:          d.Objects,
+		providers:        d.Providers,
+		streams:          d.Streams,
+		imageModel:       d.ImageModel,
+		imageSize:        d.ImageSize,
+		videoModel:       d.VideoModel,
+		videoDurationSec: d.VideoDurationSec,
+		videoResolution:  d.VideoResolution,
+		videoAspectRatio: d.VideoAspectRatio,
+		videoDraft:       d.VideoDraft,
+		textContext:      d.TextContext,
+		moderator:        d.Moderator,
+		modResults:       d.ModResults,
+		releaser:         d.Releaser,
+		maxAttempts:      maxAttempts,
+		backoff:          backoff,
+		callTimeout:      callTimeout,
+		now:              now,
 	}
 }
 
+// maxReferenceArtifacts must match miniapp/references.go limit.
+const maxReferenceArtifacts = 4
+
+const maxReferenceArtifactBytes = 20 << 20
+
 // promptParams is the subset of job params the provider request needs.
 type promptParams struct {
-	Prompt                 string `json:"prompt"`
-	NegativePrompt         string `json:"negative_prompt"`
-	VKPlaceholderMessageID int64  `json:"vk_placeholder_message_id,omitempty"`
-	ConversationID         string `json:"conversation_id,omitempty"`
+	Prompt                 string      `json:"prompt"`
+	NegativePrompt         string      `json:"negative_prompt"`
+	ModelCode              string      `json:"model_code,omitempty"`
+	Size                   string      `json:"size,omitempty"`
+	AspectRatio            string      `json:"aspect_ratio,omitempty"`
+	ReferenceArtifactIDs   []uuid.UUID `json:"reference_artifact_ids,omitempty"`
+	InputURLs              []string    `json:"input_urls,omitempty"`
+	VKPlaceholderMessageID int64       `json:"vk_placeholder_message_id,omitempty"`
+	ConversationID         string      `json:"conversation_id,omitempty"`
+	ConversationSource     string      `json:"conversation_source,omitempty"`
+	ExternalThreadID       string      `json:"external_thread_id,omitempty"`
+	DurationSec            int         `json:"duration_sec,omitempty"`
 }
 
 // buildRequest builds the normalized provider request for a job. The submit
@@ -514,7 +580,35 @@ func (p *processor) buildRequest(ctx context.Context, job *domain.Job, attempt i
 		_ = json.Unmarshal(job.Params, &pp)
 	}
 	prompt := pp.Prompt
+	modelCode := pp.ModelCode
+	size := pp.Size
 	maxOutputTokens := 0
+	durationSec := 0
+	resolution := ""
+	draft := false
+	if job.Modality == domain.ModalityImage {
+		if modelCode == "" {
+			modelCode = p.imageModel
+		}
+		if size == "" {
+			size = p.imageSize
+		}
+	}
+	if job.Modality == domain.ModalityVideo {
+		if modelCode == "" {
+			modelCode = p.videoModel
+		}
+		durationSec = p.videoDurationSec
+		switch pp.DurationSec {
+		case 3, 5, 10:
+			durationSec = pp.DurationSec
+		}
+		resolution = p.videoResolution
+		if pp.AspectRatio == "" {
+			pp.AspectRatio = p.videoAspectRatio
+		}
+		draft = p.videoDraft
+	}
 	if p.textContext != nil && job.OperationType == domain.OperationTextGenerate && job.Modality == domain.ModalityText {
 		prepared, err := p.textContext.Prepare(ctx, job, pp.Prompt)
 		if err != nil {
@@ -534,16 +628,96 @@ func (p *processor) buildRequest(ctx context.Context, job *domain.Job, attempt i
 			}
 		}
 	}
+	var inputURLs []string
+	if job.Modality == domain.ModalityImage && len(pp.ReferenceArtifactIDs) > 0 {
+		var err error
+		inputURLs, err = p.resolveReferenceInputURLs(ctx, job, pp.ReferenceArtifactIDs)
+		if err != nil {
+			return domain.ProviderRequest{}, err
+		}
+	}
 	return domain.ProviderRequest{
-		JobID:           job.ID,
-		Operation:       job.OperationType,
-		Modality:        job.Modality,
-		Prompt:          prompt,
-		NegativePrompt:  pp.NegativePrompt,
-		Params:          job.Params,
-		MaxOutputTokens: maxOutputTokens,
-		IdempotencyKey:  fmt.Sprintf("provider_submit:%s:%d", job.ID, attempt),
+		JobID:                job.ID,
+		UserID:               job.UserID,
+		Operation:            job.OperationType,
+		Modality:             job.Modality,
+		ModelCode:            modelCode,
+		Prompt:               prompt,
+		NegativePrompt:       pp.NegativePrompt,
+		Size:                 size,
+		AspectRatio:          pp.AspectRatio,
+		DurationSec:          durationSec,
+		Resolution:           resolution,
+		Draft:                draft,
+		ReferenceArtifactIDs: pp.ReferenceArtifactIDs,
+		InputURLs:            inputURLs,
+		Params:               stripProviderInputURLs(job.Params),
+		MaxOutputTokens:      maxOutputTokens,
+		IdempotencyKey:       fmt.Sprintf("provider_submit:%s:%d", job.ID, attempt),
 	}, nil
+}
+
+func stripProviderInputURLs(raw json.RawMessage) json.RawMessage {
+	if len(raw) == 0 {
+		return raw
+	}
+	var params map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &params); err != nil {
+		return raw
+	}
+	if _, ok := params["input_urls"]; !ok {
+		return raw
+	}
+	delete(params, "input_urls")
+	out, err := json.Marshal(params)
+	if err != nil {
+		return raw
+	}
+	return out
+}
+
+func (p *processor) resolveReferenceInputURLs(ctx context.Context, job *domain.Job, ids []uuid.UUID) ([]string, error) {
+	if len(ids) > maxReferenceArtifacts {
+		return nil, fmt.Errorf("worker: too many reference artifacts")
+	}
+	if p.artifactRepo == nil {
+		return nil, fmt.Errorf("worker: artifact repository unavailable")
+	}
+	if p.objects == nil {
+		return nil, fmt.Errorf("worker: object store unavailable")
+	}
+	inputURLs := make([]string, 0, len(ids))
+	for _, id := range ids {
+		if id == uuid.Nil {
+			return nil, fmt.Errorf("worker: invalid reference artifact id")
+		}
+		artifact, err := p.artifactRepo.GetByID(ctx, id)
+		if err != nil {
+			return nil, fmt.Errorf("worker: reference artifact not found: %w", err)
+		}
+		if artifact.OwnerUserID != job.UserID {
+			return nil, fmt.Errorf("worker: invalid reference artifact owner")
+		}
+		if artifact.Kind != domain.ArtifactKindInput || artifact.MediaType != domain.MediaTypeImage || artifact.Status != domain.ArtifactStatusReady {
+			return nil, fmt.Errorf("worker: invalid reference artifact")
+		}
+		if artifact.StorageBucket == "" || artifact.StorageKey == "" {
+			return nil, fmt.Errorf("worker: reference artifact storage missing")
+		}
+		data, err := p.objects.GetObject(ctx, artifact.StorageBucket, artifact.StorageKey)
+		if err != nil {
+			return nil, fmt.Errorf("worker: reference artifact object missing: %w", err)
+		}
+		if len(data) > maxReferenceArtifactBytes {
+			return nil, fmt.Errorf("worker: reference artifact too large")
+		}
+		mime := artifact.MimeType
+		if mime == "" {
+			mime = http.DetectContentType(data)
+		}
+		inputURLs = append(inputURLs, "data:"+mime+";base64,"+base64.StdEncoding.EncodeToString(data))
+	}
+	return inputURLs, nil
 }
 
 // taskOf builds the queue task that represents a job.
@@ -846,7 +1020,13 @@ func (p *processor) handleFailure(ctx context.Context, job *domain.Job, task que
 		p.toDLQ(ctx, task, code, msg)
 	}
 	metrics.JobsTerminal.WithLabelValues(string(domain.JobStatusFailedTerminal)).Inc()
-	return p.setStatus(ctx, job, domain.JobStatusFailedTerminal, code, msg)
+	if err := p.setStatus(ctx, job, domain.JobStatusFailedTerminal, code, msg); err != nil {
+		return err
+	}
+	if p.shouldNotifyTerminalProviderFailure(job) {
+		return p.streams.PublishTo(ctx, redisqueue.StreamDelivery, taskOf(job))
+	}
+	return nil
 }
 
 func (p *processor) releaseReserved(ctx context.Context, job *domain.Job) error {
@@ -854,6 +1034,10 @@ func (p *processor) releaseReserved(ctx context.Context, job *domain.Job) error 
 		return nil
 	}
 	return p.releaser.ReleaseForJob(ctx, job.ID)
+}
+
+func (p *processor) shouldNotifyTerminalProviderFailure(job *domain.Job) bool {
+	return p.streams != nil && job.VKPeerID != 0 && job.Modality == domain.ModalityImage
 }
 
 // moderateOutput runs the output moderation check and, on a block, rejects the

@@ -46,6 +46,8 @@ const (
 	CommandMenuImageReference CommandType = "menu.image.reference"
 	// CommandMenuVideo explains how to generate a video.
 	CommandMenuVideo CommandType = "menu.video"
+	// CommandMenuVideoPrunaAI selects the currently wired PrunaAI video model.
+	CommandMenuVideoPrunaAI CommandType = "menu.video.prunaai"
 	// CommandMenuVideoSora2 selects Sora 2 in the VK video model picker.
 	CommandMenuVideoSora2 CommandType = "menu.video.sora_2"
 	// CommandMenuVideoSora2Start opens the Sora 2 generation placeholder.
@@ -110,6 +112,7 @@ func (c CommandType) Valid() bool {
 		CommandMenuImageText,
 		CommandMenuImageReference,
 		CommandMenuVideo,
+		CommandMenuVideoPrunaAI,
 		CommandMenuVideoSora2,
 		CommandMenuVideoSora2Start,
 		CommandMenuVideoSora2Examples,

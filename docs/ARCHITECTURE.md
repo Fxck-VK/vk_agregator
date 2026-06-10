@@ -4,16 +4,17 @@
 
 > **Статус реализации:** этот документ описывает целевую production-архитектуру
 > и архитектурные инварианты. Актуальное состояние кода, выполненные шаги,
-> ограничения и ближайшие задачи см. в `PROGRESS.md`, `AUDIT.md`,
-> `ROADMAP.md` и `TASKS.md`.
+> ограничения и ближайшие задачи см. в `.agents/state.json`, `TASKS.md` и
+> `RUNBOOK.md`.
+> Historical logs and completed PR context are archived under `docs/archive/**`
+> and are not current context by default.
 
 ---
 
 # Current implementation addendum: app surfaces and backend core
 
-The current `feature/integration-web-backend` implementation is a
-production-shaped modular monolith. It has one shared backend core and two
-user-facing app surfaces:
+The current implementation is a production-shaped modular monolith. It has one
+shared backend core and two user-facing app surfaces:
 
 ```text
 cmd/api
@@ -56,6 +57,203 @@ Backend core remains the source of truth:
   about VK delivery or billing.
 - `internal/adapter/storage` persists durable state; Redis is queue/cache
   support, not billing truth.
+
+Current durable shared chat context:
+
+- VK bot and Mini App text chat both use the same Postgres-backed conversation
+  core: `conversations`, `conversation_messages`, `conversation_summaries` and
+  `internal/service/dialogcontext`.
+- VK bot chat uses `source=vk_bot`, scoped by backend `user_id` and `vk_peer_id`.
+  Mini App chat uses `source=miniapp`, scoped by backend `user_id` and opaque
+  `external_thread_id` / public `conversation_id`.
+- `cmd/worker` is the only flow that prepares bounded prompt context, calls
+  providers and stores assistant turns. `cmd/api`, VK inbound handlers and Mini
+  App BFF handlers only create jobs/control responses and read owner-scoped
+  history.
+- Mini App exposes authenticated conversation list/history endpoints under
+  `/miniapp/chat/conversations`. Responses are product DTOs only: thread ids,
+  titles/timestamps/previews and `user` / `bot` message text. Provider ids,
+  billing internals and artifact storage internals are not exposed.
+- Mini App local storage is only UI state: active thread, active tab, theme and
+  legacy cache cleanup. It must not store prompt bodies, generated answers,
+  launch params, tokens, balance, provider details or artifact URLs.
+- User-visible Mini App chat model output remains the public alias `ChatGPT`.
+
+Current image-generation foundation:
+
+- Image jobs use the same asynchronous Job -> worker -> provider -> Artifact
+  flow as text and video jobs.
+- `internal/domain` exposes provider-agnostic `ImageGenerationRequest` and
+  `ImageGenerationResult` shapes for image adapters. Surface modules must not
+  depend on provider-native request/response JSON.
+- `cmd/worker` may prefer an image provider through `IMAGE_PROVIDER` and attach
+  worker-only `IMAGE_MODEL` / `IMAGE_SIZE` defaults. `PROVIDER_CHAIN` remains
+  the fallback mechanism.
+- DeepInfra `ByteDance/Seedream-4.5` is wired as a text-to-image adapter through
+  the native `/v1/inference/{model}` endpoint. Optional
+  `DEEPINFRA_IMAGE_FALLBACK_MODEL` stays inside the provider adapter and is only
+  tried after retryable primary-model failures. Reference-image generation
+  remains fail-closed until provider-safe artifact URL preparation is
+  implemented.
+- VK bot text-to-image UX is wired as a surface state, not a provider shortcut:
+  `Создать фото` stores peer-scoped `photo_text` mode immediately, the next
+  plain text creates an `image.generate` Job, and the API sends `НейроХаб
+  рисует...` as a VK control placeholder. The extra `Фото по тексту` selection
+  button is hidden while there is only one text-to-image mode.
+- VK bot text-to-video UX follows the same surface-state pattern: the active
+  `PrunaAI` video button stores peer-scoped `video:*` dialog mode, the next
+  plain text creates a `video_generate` Job, and the API sends `НейроХаб готовит
+  видео...` as a control placeholder. Model/provider execution still belongs to
+  `cmd/worker` and `internal/adapter/provider`; stale Sora/Kling/Seedance/Haiuo
+  payloads are hidden and fall back to the main menu without Jobs.
+- The current VK bot profile hides reference-photo generation by default and
+  allows 100 free text-to-image attempts per user per 24h window through
+  Redis-backed anti-spam quota (`VK_ANTISPAM_IMAGE_DAILY_LIMIT=100`) and a free
+  `image_generate` price override.
+- Image provider failures that reach terminal state release reserved credits
+  before delivery and can produce a short VK failure notice; they must not be
+  captured as successful billable delivery.
+- VK bot and Mini App handlers still only create jobs or control responses; they
+  do not call OpenAI, DeepInfra, Gemini, Seedream or any other provider.
+
+Current payment/top-up foundation:
+
+- Payment top-ups are being added as backend-owned billing flows shared by VK
+  Bot and VK Mini App, not as frontend-confirmed balance changes.
+- `internal/domain/payment.go` defines payment-provider codes, payment products,
+  payment intents, webhook inbox events, refunds and an explicit intent state
+  machine. Late provider events must not roll a successful payment back to a
+  canceled/failed state.
+- Migration `000009_payments` adds `payment_products`, `payment_intents`,
+  `payment_events` and `payment_refunds`. Intents snapshot `amount`, `credits`,
+  `product_id` and `price_version`; webhook handling must not recalculate old
+  payments from the current product catalog.
+- Migration `000010_payment_product_catalog` seeds the initial active credit
+  packages. VK Bot and VK Mini App must read top-up choices from this shared
+  catalog instead of hardcoding separate per-surface packages.
+- Migration `000011_payment_intent_receipt_snapshot` adds intent-level fiscal
+  receipt snapshots: `receipt_description`, `vat_code`, `payment_subject` and
+  `payment_mode`. YooKassa payment creation retries and manual refunds must use
+  these intent fields so 54-FZ receipt items remain tied to the original product
+  position even if `payment_products` later changes.
+- Receipt contact fields (`receipt_email`, `receipt_phone`) are first-class
+  columns for 54-FZ support. At least one contact is required before an intent
+  can be stored.
+- Payment webhook inbox deduplication is separate from ledger idempotency.
+  Refund events carry `provider_refund_id` so multiple partial refunds for one
+  provider payment do not collapse into one dedup key.
+- `billingservice.GrantWith(ctx, repo, ...)` appends committed `topup` ledger
+  entries through a supplied `BillingRepository`. Payment webhook processing
+  must use a transaction-bound billing repository so marking the payment event
+  processed, moving the intent to `succeeded` and posting the top-up commit
+  atomically.
+- `domain.PaymentProvider` is the payment-provider port. Payment services and
+  processors must depend on this interface and normalized DTOs, not YooKassa
+  HTTP request/response shapes. `internal/adapter/payment/mock` implements the
+  port for tests/local development. `internal/adapter/payment/yookassa`
+  implements real YooKassa HTTP calls with Basic Auth, short provider
+  `Idempotence-Key` headers, kopeck/string amount conversion, redirect
+  payments with `capture: true` by default, a protected operator-only
+  `capture: false` smoke path for `waiting_for_capture -> canceled`,
+  54-FZ receipt data, refunds and webhook normalization.
+  `internal/adapter/payment.NewProvider` selects the adapter from
+  `PAYMENT_PROVIDER`.
+- `internal/service/paymentservice` owns payment-intent lifecycle creation. It
+  validates the trusted user, active product, receipt contact and caller
+  idempotency key; creates a local intent with price and 54-FZ receipt
+  snapshot; calls
+  `domain.PaymentProvider.CreatePayment`; persists `provider_payment_id`,
+  provider status and `confirmation_url`; and returns safe DTOs without raw
+  YooKassa/provider payloads. It also owns protected product-catalog lifecycle
+  rules: product create/update/disable operations validate RUB-only positive
+  packages, normalize 54-FZ receipt defaults, and increment `price_version`
+  when future intent snapshots would change. Existing payment intents are never
+  recalculated from the mutable product catalog row.
+- `cmd/api` exposes protected operator payment routes under `/billing/*`:
+  `GET /billing/payment-products`, `POST /billing/payment-products`,
+  `GET /billing/payment-products/{id}`, `PATCH /billing/payment-products/{id}`,
+  `POST /billing/payment-products/{id}/disable`,
+  `POST /billing/payment-intents`, `GET /billing/payment-intents/{id}` and
+  `GET /billing/payment-history`. It also exposes protected manual operator
+  actions `POST /billing/payment-intents/{id}/sync`,
+  `POST /billing/payment-intents/{id}/cancel` and
+  `POST /billing/payment-intents/{id}/refund`. These routes require
+  `ADMIN_TOKEN` and fail closed when auth is missing. They may accept a trusted
+  internal `user_id` from operator context but must not trust a public JSON
+  body as identity. Only this protected operator create path may pass
+  `capture: false` to create a two-stage YooKassa smoke intent; user-facing
+  Mini App and VK Bot top-ups remain immediate-capture payments.
+- The Mini App BFF exposes authenticated user payment routes:
+  `GET /miniapp/payment-products`, `POST /miniapp/payments/intents`,
+  `GET /miniapp/payments` and `GET /miniapp/payments/{id}`. These routes derive
+  the backend user from verified VK launch params / trusted dev auth, require
+  `X-Idempotency-Key` for creation, owner-check reads and never expose
+  `provider_payment_id`, raw YooKassa payloads or credentials. Mini App Settings
+  renders the safe payment history DTOs and may redirect the user to a returned
+  `confirmation_url`, including active waiting-intent continuation links, but the return URL is
+  only navigation and must not grant credits.
+- VK Bot top-up is a control path: it lists the same active products, creates a
+  payment intent through `internal/service/paymentservice` immediately after
+  product selection with the server-side `VK_TOP_UP_RECEIPT_EMAIL` /
+  `VK_TOP_UP_RECEIPT_PHONE` receipt contact and sends a payment link. It must
+  not call YooKassa directly and must not mutate balance from a button click or
+  provider redirect.
+- `cmd/provider-webhook` owns payment provider webhook intake. It exposes
+  `POST /billing/webhooks/yookassa` without VK launch auth, stores normalized
+  raw YooKassa events (`payment.succeeded`, `payment.canceled`,
+  `refund.succeeded`) in `payment_events`, accepts duplicate retries as no-op
+  and returns `200` quickly. In production it rejects non-HTTPS requests before
+  parsing provider JSON. Direct TLS, `X-Forwarded-Proto: https`,
+  `Forwarded: proto=https` and Cloudflare `CF-Visitor` HTTPS scheme are accepted
+  so TLS termination can live at the reverse proxy, but the raw HTTP origin
+  must not be publicly reachable. Async processing then fetches unprocessed events,
+  verifies current provider state through `domain.PaymentProvider.GetPayment`,
+  checks amount/currency against the intent snapshot, applies the intent state
+  machine and posts idempotent ledger top-ups only for verified successful
+  captured payments through
+  `billingservice.GrantWith(ctx, txBillingRepo, ...)` in the same transaction
+  that marks `payment_events.processed_at`. The same process also runs a
+  reconciliation loop for stale `provider_pending` / `waiting_for_user`
+  provider-backed intents and applies the same verified state-machine/ledger
+  path as webhooks. Reconciliation is the recovery path when a success/cancel
+  webhook is lost; late or repeated webhooks become idempotent no-ops after the
+  same ledger key has already been applied. If the user closes the provider
+  payment page and YooKassa still reports `waiting_for_user`, the intent stays
+  unpaid and no credits are granted until a later verified provider status
+  changes it.
+- Payment success must use an internal ledger idempotency key shaped like
+  `topup:<provider>:<provider_payment_id>`. Provider webhook dedup keys stay
+  separate and refund webhook dedup keys must include `provider_refund_id`.
+- Late provider states such as `payment.canceled` must not roll a succeeded
+  intent back to canceled/failed. Verified stale events are marked processed as
+  no-op.
+- Manual refunds are MVP full-refund operator actions. They require an
+  `X-Idempotency-Key`, only operate on `succeeded` intents and refuse to call
+  the money provider when the user's current credit balance cannot cover the
+  purchased credits. They also scan the ledger from newest entries back to the
+  exact `topup:<provider>:<provider_payment_id>` entry and refuse when any
+  committed or pending negative movement exists after that top-up. This is a
+  conservative MVP substitute for lot/FIFO attribution: if credits may have
+  been used, the money refund is blocked. Refund debits and provider-failure
+  compensation are ledger entries; balance is never mutated directly. If the
+  provider refund call fails after the internal debit was recorded, the service
+  posts an explicit compensating ledger adjustment, marks the refund failed, and
+  emits refund rollback metrics. If compensation itself fails, the operator
+  action returns an error and `payment_refunds_total{result="rollback_failed"}`
+  is the alert path.
+  Partial/automatic refunds remain blocked until lot/FIFO attribution can prove
+  which top-up credits were spent.
+- Payment metrics include `payments_created_total`,
+  `payments_succeeded_total`, `payments_canceled_total`,
+  `payment_webhooks_total`, `payment_webhook_security_denials_total`,
+  `payment_webhook_processing_errors_total`, `payment_topups_total`,
+  `payment_refunds_total` and `payment_reconciliation_mismatches`.
+- Runtime config exposes `PAYMENT_PROVIDER=mock|yookassa` and YooKassa env
+  placeholders. `PAYMENT_PROVIDER=yookassa` must fail closed without shop id,
+  secret key and return URL.
+- Partial refund attribution, automatic refund webhook balance reversal and live
+  YooKassa smoke are follow-up work. Payment redirects themselves still must not
+  grant credits.
 
 Actual request flows:
 
@@ -818,7 +1016,7 @@ artifact_variants:
 
 Это отдельный сервис, который знает, как правильно доставить результат во ВКонтакте.
 
-VK `messages.send` имеет `random_id`, который используется как уникальный идентификатор, чтобы избежать повторной отправки сообщения; также VK attachment передаётся отдельным параметром. Для фото в личное сообщение VK использует цепочку `photos.getMessagesUploadServer` → upload → `photos.saveMessagesPhoto`; для документов есть `docs.getMessagesUploadServer`; для видео SDK VK указывает, что `video.save` возвращает адрес сервера для загрузки. ([GitHub][7])
+VK `messages.send` имеет `random_id`, который используется как уникальный идентификатор, чтобы избежать повторной отправки сообщения; также VK attachment передаётся отдельным параметром. Для фото в личное сообщение VK использует цепочку `photos.getMessagesUploadServer` → upload → `photos.saveMessagesPhoto`. Для доставки сгенерированного mp4 есть два режима. `VK_VIDEO_DELIVERY_MODE=doc` использует цепочку `docs.getMessagesUploadServer` → upload `file` → `docs.save` и отправляет результат как `doc...` attachment через community token (`VK_ACCESS_TOKEN`). `VK_VIDEO_DELIVERY_MODE=video` использует `video.save` через отдельный user token (`VK_VIDEO_ACCESS_TOKEN`) и отправляет `video...` attachment, который VK отображает в диалоге встроенным плеером. Group-token не подходит для `video.save`, поэтому режим `video` требует user token с правом `video`; если задан `VK_VIDEO_UPLOAD_GROUP_ID`, владелец user token должен иметь права загрузки видео в этом сообществе. ([GitHub][7])
 
 Delivery Service делает:
 

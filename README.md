@@ -8,8 +8,10 @@ idempotency and retry-safe workers throughout.
 This is **not** a chatbot: every user request becomes a persisted `Job` that
 moves through an explicit state machine. The architecture source of truth is
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md); invariants live in
-[`AGENTS.md`](AGENTS.md); the build log is in [`PROGRESS.md`](PROGRESS.md) and
-the backlog in [`TASKS.md`](TASKS.md).
+[`AGENTS.md`](AGENTS.md); active machine context/progress/routing is in
+`.agents/state.json`; the short human backlog is in [`TASKS.md`](TASKS.md).
+Historical build logs, old roadmaps, long task history and handoffs are archived
+under `docs/archive/**` and are not current context by default.
 
 ## Current status
 
@@ -43,30 +45,41 @@ Real integrations are implemented at adapter level and remain **opt-in**:
 - `PROVIDER=openai` enables OpenAI text (`Responses`), image (`Images`) and
   async video (`Videos`) generation.
 - `PROVIDER=deepinfra` enables DeepInfra text generation through
-  `deepseek-ai/DeepSeek-V4-Flash` (`/chat/completions` on DeepInfra's
-  OpenAI-compatible API). Text providers receive an internal instruction to
-  answer as `НейроХаб бот`, keep replies concise and under 3000 characters, and
-  avoid exposing provider/model/backend details; VK delivery still chunks longer
-  output as a fallback.
+  `deepseek-ai/DeepSeek-V4-Flash` (`/chat/completions`) and DeepInfra image
+  generation through `ByteDance/Seedream-4.5` (`/v1/inference/{model}`) on
+  DeepInfra's native image API. `DEEPINFRA_IMAGE_FALLBACK_MODEL` can name a
+  second DeepInfra image model for retryable primary-model failures. Text providers receive an internal
+  instruction to answer as `НейроХаб бот`, keep replies concise and under 3000
+  characters, and avoid exposing provider/model/backend details; VK delivery
+  still chunks longer output as a fallback.
 - `PROVIDER_CHAIN=openai,mock` enables the provider router with
   health/circuit-breaker, fallback, cost and observed-latency aware selection.
-  `PROVIDER_CHAIN=deepinfra,mock` uses DeepInfra for text and mock fallback for
-  unsupported or retryable paths.
-- `VK_DELIVERY_MODE=real` enables VK `messages.send` plus raw photo/video
-  artifact upload to VK upload servers before send.
+  `PROVIDER_CHAIN=deepinfra,mock` uses DeepInfra for text/image and mock
+  fallback for unsupported or retryable paths.
+- `IMAGE_PROVIDER`, `IMAGE_MODEL` and `IMAGE_SIZE` are worker-only image
+  generation defaults. They prefer one provider/model for image jobs while
+  keeping `PROVIDER_CHAIN` as fallback. Current image-capable adapters are
+  mock, OpenAI and DeepInfra Seedream. VK bot and Mini App surfaces still only
+  create Jobs and never call image providers directly.
+- `VK_DELIVERY_MODE=real` enables VK `messages.send` plus raw photo upload and
+  generated-video delivery. `VK_VIDEO_DELIVERY_MODE=doc` uploads mp4 as a VK
+  message document through `docs.getMessagesUploadServer`/`docs.save` using the
+  community `VK_ACCESS_TOKEN`. `VK_VIDEO_DELIVERY_MODE=video` uploads through
+  `video.save` with `VK_VIDEO_ACCESS_TOKEN` and sends a native `video...`
+  attachment, which renders as an inline VK player in the dialog.
 - `cmd/api` can send the VK `/start` НейроХаб menu and inline keyboard through
   the VK delivery adapter when `VK_ACCESS_TOKEN` is configured. The optional
   `VK_WELCOME_ATTACHMENT` env attaches a pre-uploaded VK banner.
-- The VK `Создать видео` menu button opens a model picker (`Sora 2`,
-  `Kling v2.1`, `Seedance 1`, `Haiuo v0.2`) with a `Назад` control. `Sora 2`
-  and `Kling v2.1` open detail screens with description, prompt example,
-  instruction link, `Начать генерацию`, `Примеры`, and `Назад`; `Seedance 1`
-  opens `Lite` / `Pro`; `Haiuo v0.2` opens `Обычный` / `Fast`. These video
-  submenu buttons are control-only until model-specific generation state is
-  wired.
+- The VK `Создать видео` menu button opens a model picker with `PrunaAI` and
+  `Назад`. Clicking `PrunaAI` stores peer-scoped video dialog state, and the
+  next plain text creates a `video_generate` Job through the worker/provider
+  flow. VK handlers do not call video providers directly. Older
+  Sora/Kling/Seedance/Haiuo payloads are treated as hidden/stale controls and
+  fall back to the main menu without creating Jobs.
 - VK menu screens are described through a small declarative registry. `Создать
   фото` skips model selection when only one main image model is available and
-  opens the text/reference photo instruction screen directly; `Спросить у НейроХаб`
+  opens the text-to-image instruction screen directly; reference-photo generation
+  is hidden by flag until the input artifact flow is ready. `Спросить у НейроХаб`
   opens the active GPT prompt screen and enables text GPT mode for that peer.
   The first `Старт` welcome is personalized with the cached VK first name when
   `VK_ACCESS_TOKEN` allows `users.get`; subsequent menu openings use the regular
@@ -78,13 +91,26 @@ Real integrations are implemented at adapter level and remain **opt-in**:
   simple Markdown markers such as `**bold**`, backticks and `*`/`-` list syntax,
   rendering lists as plain `•` bullets. Legacy `VK_UNROUTED_TEXT_MODE=gpt` keeps
   normal text delivery.
-- Text-mode dialog context is persisted in Postgres. For each VK peer the
-  worker stores user/assistant turns in `conversations`,
-  `conversation_messages` and `conversation_summaries`, then sends providers a
-  bounded context packet: bot profile, rolling summary, recent messages and the
-  current request. Defaults are `TEXT_CONTEXT_MAX_INPUT_TOKENS=1600`,
+- VK photo text mode is now wired in the bot: when `VK_MENU_IMAGE_ENABLED=true`,
+  `Создать фото` opens a text-to-image instruction screen and immediately stores
+  `photo_text` mode for the peer. The next plain text creates an
+  `image.generate` Job, and the API sends `НейроХаб рисует...` while workers
+  produce and deliver the image Artifact. The current VK profile gives each
+  user 100 free text-to-image attempts per 24h window through
+  `VK_ANTISPAM_IMAGE_DAILY_LIMIT=100` and `PRICES=image_generate=0`;
+  reference-photo generation stays hidden behind
+  `VK_MENU_IMAGE_REFERENCE_ENABLED=false` until input photo artifacts are wired.
+- Text-mode dialog context is persisted in Postgres for both VK bot and Mini
+  App chat. VK bot conversations use `source=vk_bot` scoped by backend user and
+  VK peer; Mini App chat uses `source=miniapp` scoped by backend user and an
+  opaque `conversation_id` / `external_thread_id`. The worker stores
+  user/assistant turns in `conversations`, `conversation_messages` and
+  `conversation_summaries`, then sends providers a bounded context packet: bot
+  profile, rolling summary, recent messages and the current request. Defaults
+  are `TEXT_CONTEXT_MAX_INPUT_TOKENS=1600`,
   `TEXT_CONTEXT_MAX_OUTPUT_TOKENS=800`, summary up to 400 estimated tokens and
-  the last 6 messages. The full dialog is never sent to a provider.
+  the last 6 messages. The full dialog is never sent to a provider, and Mini
+  App local storage keeps only active thread/tab/theme UI state.
 - Shared VK referral foundation is implemented in the backend. Each internal
   user receives one stable public referral code in `referral_codes`; accepted
   invitations are stored in `referrals` with source `vk_bot` or `vk_miniapp`.
@@ -95,6 +121,70 @@ Real integrations are implemented at adapter level and remain **opt-in**:
   billable job. Signup rewards are posted through billing ledger entries with
   idempotency keys. A full Mini App referral account/API screen is still a
   follow-up over the same backend service/repository.
+- Payment top-up foundation has backend lifecycle coverage for intent creation,
+  provider-verified completion, reconciliation and manual operator refunds.
+  The domain defines `PaymentProduct`, `PaymentIntent`, `PaymentEvent`,
+  `PaymentRefund`, payment-provider codes and an explicit payment intent state
+  machine. Migration `000009_payments` adds `payment_products`,
+  `payment_intents`, `payment_events` and `payment_refunds` with price
+  snapshots, 54-FZ receipt contact fields, webhook inbox dedup and
+  reconciliation indexes. Migration `000010_payment_product_catalog` seeds the
+  initial active credit packages consumed by both VK Bot and VK Mini App.
+  Migration `000011_payment_intent_receipt_snapshot` snapshots
+  `receipt_description`, `vat_code`, `payment_subject` and `payment_mode` onto
+  each intent, so YooKassa payment retries and refunds use the original fiscal
+  position instead of the current product catalog row. Migration
+  `000012_neirohub_crystal_catalog` switches the active public catalog to
+  99/150/250/400/700 crystal packages and hides the original seed packages
+  without breaking existing intent snapshots.
+  Runtime config exposes `PAYMENT_PROVIDER`, YooKassa
+  env placeholders and payment reconciliation intervals. `billingservice.GrantWith(ctx, repo, ...)`
+  exists so webhook/reconciliation processors can commit
+  `payment_events.processed_at`, `payment_intents.status=succeeded` and the
+  committed `topup` ledger entry in one caller-owned transaction. The payment
+  provider port, mock adapter and YooKassa adapter isolate services from
+  provider-native API shapes. `internal/service/paymentservice` now creates
+  idempotent payment intents, calls the selected provider, stores
+  `provider_payment_id` / `confirmation_url`, stores the 54-FZ receipt snapshot
+  from the selected product, and returns safe DTOs. Protected
+  operator routes exist under `/billing/payment-products*`,
+  `/billing/payment-intents`, `/billing/payment-history`,
+  `/billing/payment-intents/{id}/sync` and
+  `/billing/payment-intents/{id}/cancel` and
+  `/billing/payment-intents/{id}/refund`. Product catalog admin create/update
+  and disable actions are operator-only, return safe DTOs, and increment
+  `price_version` for future intents when price, credits or 54-FZ receipt
+  fields change. The protected operator create route may pass `capture:false`
+  for YooKassa `waiting_for_capture -> canceled` smoke tests; user-facing
+  Mini App and VK Bot top-ups still use immediate capture. Existing payment
+  intents keep their snapshotted amount, credits, price version and fiscal fields. Authenticated Mini App routes exist under
+  `/miniapp/payment-products` and `/miniapp/payments*`. The Mini App Settings
+  payment UI loads active backend products, requires a receipt email or phone,
+  creates an intent with `X-Idempotency-Key` and redirects the user to the safe
+  `confirmation_url`. It also shows safe payment history from
+  `GET /miniapp/payments`, including active payment continuation links without
+  treating provider redirects as balance proof. The VK Bot top-up control path
+  uses the same product catalog, creates a payment intent through
+  `paymentservice` immediately after product selection with the server-side
+  `VK_TOP_UP_RECEIPT_EMAIL` / `VK_TOP_UP_RECEIPT_PHONE` receipt contact, and
+  sends a payment link; it does not grant credits from the bot handler.
+  `cmd/provider-webhook` exposes
+  `POST /billing/webhooks/yookassa`, stores raw provider events in the
+  `payment_events` inbox, returns 200 quickly, then asynchronously verifies the
+  provider payment through `GetPayment`, applies the intent state machine and
+  posts idempotent ledger `topup` entries through `GrantWith`. It also
+  reconciles stale provider-backed intents. Manual refunds are admin-only,
+  full-refund MVP actions: they require an idempotency key, only operate on
+  successful intents, refuse when the current credit balance cannot cover the
+  top-up credits, and also refuse if the ledger shows committed or pending
+  negative movements after that exact top-up. Refund debits use ledger
+  adjustment entries instead of direct balance mutation. Partial refund
+  attribution and automatic refund webhook reversal remain follow-up work. A
+  local YooKassa smoke passed successful checkout through reconciliation,
+  webhook replay dedup, idempotent manual refund and safe Mini App history; the
+  remaining payment rollout checks are public HTTPS YooKassa dashboard webhook
+  delivery and an explicit provider `payment.canceled` smoke. User return/redirect after payment
+  is navigation only and never grants credits by itself.
 - VK inline menu navigation uses a hybrid UX: if the last bot message is the
   active menu, inline button clicks edit it through VK `messages.edit`; pressing
   the persistent lower `Показать меню` button always sends a fresh menu at the
@@ -173,7 +263,7 @@ VK webhook ─► InboundEvent ─► User ─► Command ─► Job (queued)
 ## Layout
 
 ```
-cmd/                 entrypoints (api, vk-inbound, worker, provider-webhook, admin-api, migrate)
+cmd/                 entrypoints (api, worker, provider-webhook, migrate)
 internal/
   app/
     api/             bootstrap helper for shared API core deps
@@ -187,7 +277,7 @@ internal/
     inbound/admin/   read-only admin HTTP API
     delivery/vk/     outbound VK client (+ mock)
     provider/mock/   mock AI provider
-    provider/deepinfra/ DeepInfra text-generation adapter
+    provider/deepinfra/ DeepInfra text/image-generation adapter
     provider/openai/ OpenAI generation/moderation/scanning adapters
     queue/redis/     Redis Streams publisher/consumer (consumer groups)
     storage/postgres pgx repositories
@@ -204,6 +294,8 @@ Create a local environment file from the committed template:
 ```bash
 cp .env.example .env
 # edit .env and fill VK_ACCESS_TOKEN / VK_SECRET / VK_CONFIRMATION_TOKEN if needed
+# macOS local fallback used in this workspace is also supported:
+# cp .env.example _env
 ```
 
 On Windows PowerShell:
@@ -213,8 +305,9 @@ Copy-Item .env.example .env
 notepad .env
 ```
 
-The application loads `.env` automatically when started from the repository
-root. The real `.env` is ignored by Git; only `.env.example` is committed.
+The application loads `.env` first and `_env` as a local fallback when started
+from the repository root. Real env files are ignored by Git; only
+`.env.example` is committed.
 
 ### VK bot one-command startup
 
@@ -239,6 +332,22 @@ The scripts are intentionally scoped to the VK bot runtime. They do not start
 the VK Mini App frontend. Runtime pid/log/url files are written under
 `.runtime/vk-bot/` and are ignored by Git.
 
+### VK Mini App local dev (HTTPS via `*.lhr.life`)
+
+For opening the Mini App inside VK during UI work, use the Mini App dev scripts
+(Vite on `:5173`, tunnel = `localhost.run` / `*.lhr.life`, not ngrok):
+
+```powershell
+.\scripts\dev\start-miniapp.ps1 -NoWait
+.\scripts\dev\status-miniapp.ps1
+.\scripts\dev\stop-miniapp.ps1
+```
+
+The root `start-miniapp-ngrok.ps1` wrapper remains for backward compatibility.
+Paste the printed `https://....lhr.life` URL into **dev.vk.com → URL для
+разработки**. Runtime pid/log/url files live under `.runtime/vk-miniapp/`.
+Details: `web/miniapp/README.md` and `RUNBOOK.md`.
+
 For a stable local VK Callback URL, configure a named Cloudflare Tunnel once:
 
 ```powershell
@@ -255,6 +364,12 @@ https://vk.neiirohub.ru/webhooks/vk
 This requires the `neiirohub.ru` DNS zone to be active in Cloudflare. The
 tunnel config and credentials stay under `.runtime/vk-bot/` and the user's
 Cloudflare profile; they are not committed.
+On named-tunnel startup, `start-bot.ps1` verifies the local VK confirmation
+response and the public `/health` endpoint. If the hostname is attached to a
+stale Cloudflare DNS record, the script repairs the route with
+`cloudflared tunnel route dns --overwrite-dns` and retries before reporting the
+bot as ready. The VK secret is used only against the local callback URL, not in
+public tunnel diagnostics.
 
 Start the infrastructure (PostgreSQL, Redis, MinIO):
 
@@ -293,8 +408,8 @@ Check health:
 curl localhost:8080/health   # {"status":"ok","checks":{"postgres":"ok","redis":"ok"}}
 ```
 
-See `TESTING.md` for full runtime validation, curl examples and expected
-results.
+See [`RUNBOOK.md`](RUNBOOK.md) for full runtime validation, curl examples and
+expected results.
 
 Real adapter modes are opt-in:
 
@@ -305,9 +420,12 @@ PROVIDER=openai OPENAI_API_KEY=... go run ./cmd/worker
 # OpenAI primary with mock fallback through the provider router.
 PROVIDER_CHAIN=openai,mock OPENAI_API_KEY=... go run ./cmd/worker
 
-# DeepInfra DeepSeek-V4-Flash text generation; image/video should keep mock or
-# another capable provider in the fallback chain.
+# DeepInfra DeepSeek-V4-Flash text generation and Seedream image generation.
 PROVIDER_CHAIN=deepinfra,mock DEEPINFRA_API_KEY=... go run ./cmd/worker
+
+# Prefer DeepInfra Seedream for image jobs while preserving provider-chain
+# fallback.
+IMAGE_PROVIDER=deepinfra DEEPINFRA_IMAGE_MODEL=ByteDance/Seedream-4.5 DEEPINFRA_IMAGE_FALLBACK_MODEL=stabilityai/sdxl-turbo IMAGE_SIZE=2K PROVIDER_CHAIN=deepinfra,mock DEEPINFRA_API_KEY=... go run ./cmd/worker
 
 # Real VK messages.send + photo/video upload; requires a real token.
 VK_DELIVERY_MODE=real VK_ACCESS_TOKEN=... go run ./cmd/worker
@@ -322,11 +440,11 @@ MODERATION_PROVIDER=openai ARTIFACT_SCANNER=openai OPENAI_API_KEY=... go run ./c
 For production, set `APP_ENV=production` and configure non-default
 `VK_SECRET`, `ADMIN_TOKEN` and `VK_CONFIRMATION_TOKEN`. Both `cmd/api` and
 `cmd/worker` run fail-closed config validation; `PROVIDER=openai` requires
-`OPENAI_API_KEY`, `PROVIDER=deepinfra` requires `DEEPINFRA_API_KEY`, and
-`VK_DELIVERY_MODE=real` requires `VK_ACCESS_TOKEN` in any environment.
-`PROVIDER_CHAIN`, `MODERATION_PROVIDER=openai` and `ARTIFACT_SCANNER=openai`
-also require the corresponding provider key when they include/enable that
-provider.
+`OPENAI_API_KEY`, `PROVIDER=deepinfra` or `IMAGE_PROVIDER=deepinfra` requires
+`DEEPINFRA_API_KEY`, and `VK_DELIVERY_MODE=real` requires `VK_ACCESS_TOKEN` in
+any environment. `PROVIDER_CHAIN`, `IMAGE_PROVIDER`,
+`MODERATION_PROVIDER=openai` and `ARTIFACT_SCANNER=openai` also require the
+corresponding provider key when they include/enable that provider.
 For a VK welcome banner, set `VK_WELCOME_ATTACHMENT` to a pre-uploaded
 attachment string such as `photo-239332376_123_accesskey`.
 

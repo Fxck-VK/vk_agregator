@@ -156,11 +156,11 @@ Severity: **critical** (blocks prod / safety / data loss), **high** (must fix be
 ## 8. Provider Abstraction
 
 **P1 — Real provider coverage incomplete — severity: high — ✅ FIXED (credential-bound live smoke pending)**
-- Description: default runtime still uses the mock provider, but real OpenAI text/image/video adapters, DeepInfra text adapter and provider routing now exist behind opt-in config.
-- Impact: The code path can run real OpenAI text/image/video jobs, real DeepInfra DeepSeek-V4-Flash text jobs and route/fallback across configured providers. Real calls require credentials and may incur provider cost, so live validation remains an operational step.
+- Description: default runtime still uses the mock provider, but real OpenAI text/image/video adapters, DeepInfra text/image adapters and provider routing now exist behind opt-in config.
+- Impact: The code path can run real OpenAI text/image/video jobs, real DeepInfra DeepSeek-V4-Flash text jobs, real DeepInfra Seedream text-to-image jobs and route/fallback across configured providers. Real calls require credentials and may incur provider cost, so live validation remains an operational step.
 - Recommendation: Run live smoke with `OPENAI_API_KEY` and `DEEPINFRA_API_KEY`; add real image/video fallback providers later.
 - **Fix:** `adapter/provider/openai` now implements text via `/responses`, image via `/images/generations`, async video via `/videos` + poll/content download, and normalized provider errors. `worker.Registry` now routes by capabilities, estimated cost, observed latency and circuit-breaker health, and `PROVIDER_CHAIN=openai,mock` enables explicit fallback. Unit tests cover OpenAI text/image/video and router fallback.
-- **Fix:** `adapter/provider/deepinfra` implements text generation through DeepInfra's OpenAI-compatible `/chat/completions` endpoint for `deepseek-ai/DeepSeek-V4-Flash`, with normalized text artifacts and provider error classes. `PROVIDER_CHAIN=deepinfra,mock` enables DeepInfra text with mock fallback.
+- **Fix:** `adapter/provider/deepinfra` implements text generation through DeepInfra's OpenAI-compatible `/chat/completions` endpoint for `deepseek-ai/DeepSeek-V4-Flash` and text-to-image through `/images/generations` for `ByteDance/Seedream-4.5`, with normalized artifacts and provider error classes. `PROVIDER_CHAIN=deepinfra,mock` enables DeepInfra text/image with mock fallback.
 - **Remaining:** Google/Gemini/Kling image/video provider adapters and live credential smoke remain Beta/Phase 3 work.
 
 ## 9. VK Integration
@@ -315,11 +315,14 @@ assistant answers, last-reply preview text, job ids, launch params, tokens,
 balance, provider details, artifact ids or artifact URLs. Last-reply previews
 exist only in memory for the current session.
 
-Backend context remains process-local from PR-15. If `cmd/api` restarts or is
-scaled horizontally without durable conversation storage, a thread may continue
-with empty backend context. This is a documented graceful degradation and a
-backend follow-up is tracked in `TASKS.md` for durable conversation list/read
-endpoints.
+Superseded by PR-18.4/18.5: Mini App local storage now keeps only
+`vk_miniapp_active_thread_v1` plus UI preferences, and removes legacy
+`vk_miniapp_threads_v1` / `vk_miniapp_chats_v1` caches when encountered.
+
+Superseded by PR-18.3/18.4/18.5: Mini App chat now uses durable
+`source=miniapp` conversations in Postgres through the shared
+worker/dialogcontext core. The BFF exposes authenticated list/history endpoints
+and no longer keeps process-local prompt/answer memory.
 
 ---
 
@@ -387,6 +390,27 @@ Date: 2026-06-06
 
 ---
 
+## PR-18.5 shared durable chat context verification note
+
+Date: 2026-06-07
+
+- VK bot text mode and Mini App chat both use the durable conversation core:
+  `conversations`, `conversation_messages`, `conversation_summaries`,
+  `internal/service/dialogcontext` and worker-owned prompt rendering.
+- Mini App chat no longer has a process-local prompt/answer store in
+  `internal/adapter/inbound/miniapp`; `POST /miniapp/chat/messages` sends the
+  current prompt plus explicit `source=miniapp` conversation refs.
+- Provider calls remain outside `cmd/api`, VK inbound and Mini App BFF flows;
+  they are still owned by `cmd/worker` / `internal/worker`.
+- Mini App frontend local storage is limited to active thread/tab/theme UI
+  state and legacy cache cleanup. Prompt text, generated answers, job ids,
+  artifact ids/URLs, launch params, tokens, balance and provider details are
+  not persisted there.
+- Public Mini App chat model output remains `ChatGPT`; raw provider/model ids
+  stay backend/provider configuration details.
+
+---
+
 ## Mini App Create/chat UX polish note
 
 Date: 2026-06-06
@@ -417,3 +441,107 @@ unless that job is already being polled. The backend remains the source of truth
 for job status; local state only triggers polling and display updates. Aggregate
 runtime checks showed local jobs reaching terminal `succeeded` and outbox queue
 events in `published` state.
+
+---
+
+## Mini App image preview + dev launcher fix note
+
+Date: 2026-06-07
+
+**Symptom:** After photo generation the Create result screen stayed on
+«Обработка…» / showed no image. In dev, `GET /miniapp/jobs/{id}` could also
+return `503` when the `localhost.run` SSH tunnel died (`no tunnel here :(`).
+
+**Root causes (dev + UI):**
+
+1. **Dev worker env drift:** `scripts/dev/start-miniapp.ps1` initially reused
+   `Start-BotExecutable`, which loaded `.env` and could keep
+   `VK_DELIVERY_MODE=real` from the operator machine. The worker then tried VK
+   photo delivery (`empty photo upload_url`, `Group authorization failed`) and
+   jobs stalled before terminal `succeeded`.
+2. **UI waited only for `succeeded`:** Image artifacts are already available at
+   `result_ready`, but the Create flow treated only `succeeded` as “done”, so
+   preview could spin forever while delivery retried.
+3. **Artifact preview auth:** `<img src="/miniapp/artifacts/{id}">` cannot send
+   `X-Launch-Params`; preview must use authenticated blob URLs
+   (`useArtifactMediaUrl` / `preloadArtifactBlobUrl`).
+4. **Tunnel fragility (dev):** `*.lhr.life` URLs rotate when SSH restarts; stale
+   VK dev URL surfaces as `503`, not an API bug.
+
+**Fixes applied:**
+
+- Added `Start-MiniAppExecutable` in `scripts/dev/_miniapp-common.ps1` to load
+  `.env` + `.env.ps1` and then **force** Mini App dev overrides, including
+  `VK_DELIVERY_MODE=mock`, `PROVIDER=deepinfra`, `ARTIFACT_SCANNER=none`.
+- Frontend: `hasPreviewableMediaResult()` — show image/video preview at
+  `result_ready` (and `succeeded`) in `WorkflowMode` / `ResultCard`.
+- Frontend: authenticated artifact media hook + blob preload before result screen.
+- Chat UX (same pass): remove ghost `job-*` threads from drawer; prefer backend
+  `conversation.title` / preview for list labels; stabilize chat switching loads.
+- Create flow navigation: history/back now returns to the prior status/result
+  screen instead of always resetting to the Create home menu.
+
+## Mini App video generation note (DeepInfra p-video)
+
+Date: 2026-06-07
+
+**Scope:** Mini App Create `video_generate` only. VK bot menu/video intake unchanged.
+
+**Pipeline:** `POST /miniapp/jobs` → shared `joborchestrator` → `queue.video.generate`
+→ worker → `internal/adapter/provider/deepinfra/video.go` → artifact in MinIO →
+BFF poll/preview. Same Postgres tables as text/image (`jobs`, `ledger_entries`,
+`artifacts`, `deliveries`); no new migration.
+
+**Model:** `PrunaAI/p-video` via `POST /v1/inference/PrunaAI/p-video`. Dev uses
+`DEEPINFRA_VIDEO_DRAFT=true` (~$0.005/s). Product UI shows «Kling»; `model_code`
+stays in `jobs.params` only.
+
+**Env:** `VIDEO_PROVIDER`, `DEEPINFRA_VIDEO_*`, `WORKER_PROVIDER_CALL_TIMEOUT`,
+`PRICES` (`video_generate`). Single secret: `DEEPINFRA_API_KEY`. Documented in
+`.env.example` and `docs/VIDEO_GENERATION.md`.
+
+**Security:** Worker-owned draft/duration; BFF rejects video reference artifacts;
+no provider calls from Mini App; SSRF-hardened `video_url` download; output
+moderation on prompt (keyword). Production must set `DEEPINFRA_VIDEO_DRAFT=false`.
+
+**Adapter layout:** `video.go` is split from historical `deepinfra.go` (text/image
+still inline) for smaller review scope — not a different architecture.
+
+### Mini App history titles + artifact download (2026-06-07)
+
+**Symptom:** Profile history «Диалоги» showed modality label «Текст» instead of user
+prompt; image rows lacked contextual titles; no download with branded filename.
+
+**Root cause:** `newJobDTO` omitted `prompt` for `text_generate` jobs (prompt lives in
+`jobs.params` only). Frontend fell back to modality label.
+
+**Fix:** BFF exposes `prompt` for all operations from stored params (user-owned jobs
+only). Frontend `jobDisplayTitle()` for Settings/Workflow history; `ResultCard` download
+as `Neirohub_{slug|jobId8}.{ext}` via existing artifact blob URLs.
+
+**Chat layout:** Pending workflow jobs were polled from `ChatScreen`, causing extra
+state churn; message rows used `align-items: flex-end`. Poll limited to chat jobs with
+existing bot messages; rows top-aligned with stable typing bubble min-height.
+
+### Mini App media ephemeral policy (2026-06-07)
+
+**User ask:** do not persist photo/video in DB. **Current:** bytes live in object
+storage (MinIO); Postgres holds small artifact rows (id, mime, size, job link) required
+by worker preview, auth download and billing capture. **UI:** overlay download + warning
+that preview is temporary. **Follow-up:** scheduled deletion of miniapp output artifacts
+after TTL (not implemented in v0.1.3).
+
+**History:** Profile «Диалоги» dedupes `text_generate` jobs by `conversation_id` — one
+row per thread (first message title), not every chat turn.
+
+---
+
+**Security / architecture impact:** No provider calls from VK handlers or Mini
+App frontend. Dev-only `VK_DELIVERY_MODE=mock` override is scoped to
+`scripts/dev/start-miniapp.ps1` child processes; production still requires
+explicit env. Preview still uses backend artifact routes with launch-param auth
+and moderation gates.
+
+**Checks:** `npm run build` (miniapp) passed after the UI changes. Dev validation:
+worker log no longer prints `using real vk delivery client`; tunnel must be
+refreshed in dev.vk.com after each `localhost.run` restart.

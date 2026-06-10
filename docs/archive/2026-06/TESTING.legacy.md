@@ -61,6 +61,7 @@ OS/CI environment variables override `.env` values.
 | `PROVIDER_CHAIN`        | value of `PROVIDER`                                                                        |
 | `DEEPINFRA_API_KEY`     | _(required when DeepInfra provider is enabled)_                                           |
 | `DEEPINFRA_TEXT_MODEL`  | `deepseek-ai/DeepSeek-V4-Flash`                                                           |
+| `DEEPINFRA_IMAGE_MODEL` | `ByteDance/Seedream-4.5`                                                                  |
 | `OPENAI_API_KEY`        | _(required when OpenAI provider/moderation/scanner is enabled)_                           |
 | `OPENAI_TEXT_MODEL`     | `gpt-4.1-mini`                                                                             |
 | `OPENAI_IMAGE_MODEL`    | `gpt-image-1`                                                                              |
@@ -120,8 +121,7 @@ PROVIDER=openai OPENAI_API_KEY=... go run ./cmd/worker
 # Provider router: OpenAI primary, mock fallback.
 PROVIDER_CHAIN=openai,mock OPENAI_API_KEY=... go run ./cmd/worker
 
-# DeepInfra DeepSeek-V4-Flash text provider with mock fallback for unsupported
-# modalities.
+# DeepInfra DeepSeek-V4-Flash text provider and Seedream image provider.
 PROVIDER_CHAIN=deepinfra,mock DEEPINFRA_API_KEY=... go run ./cmd/worker
 
 # API-side VK /start menu responses with keyboard.
@@ -379,15 +379,16 @@ TEST_REDIS_ADDR="localhost:6379" go test ./internal/adapter/queue/redis/...
 - `PROVIDER=openai` enables real OpenAI text/image/video adapters. Live tests
   require a real key and may incur provider cost.
 - `PROVIDER=deepinfra` enables real DeepInfra text generation through
-  `deepseek-ai/DeepSeek-V4-Flash`; live tests require a real key and may incur
-  provider cost. DeepInfra is text-only in this codebase, so keep `mock` or
-  another capable provider in `PROVIDER_CHAIN` for image/video jobs. The
-  mock-aware downloader also accepts provider `data:` URLs used by DeepInfra
-  text outputs.
+  `deepseek-ai/DeepSeek-V4-Flash` and text-to-image through
+  `ByteDance/Seedream-4.5`; live tests require a real key and may incur
+  provider cost. DeepInfra reference-image generation is still disabled by
+  `DEEPINFRA_IMAGE_REFERENCE_ENABLED=false`; keep `mock` or another capable
+  provider in `PROVIDER_CHAIN` for video jobs. The mock-aware downloader also
+  accepts provider `data:` URLs used by DeepInfra text and image outputs.
 - `PROVIDER_CHAIN=openai,mock` exercises router/fallback/circuit breaker logic
   with OpenAI primary and mock fallback.
-  `PROVIDER_CHAIN=deepinfra,mock` uses DeepInfra for text and mock fallback for
-  unsupported/retryable paths.
+  `PROVIDER_CHAIN=deepinfra,mock` uses DeepInfra for text/image and mock
+  fallback for unsupported/retryable paths.
 - `VK_DELIVERY_MODE=real` enables real VK `messages.send` plus generated
   photo/video upload into VK attachment ids.
 - VK `/start` menu replies are sent by `cmd/api` through

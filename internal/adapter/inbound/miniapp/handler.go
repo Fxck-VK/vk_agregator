@@ -17,16 +17,12 @@ import (
 	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/service/billingservice"
 	"vk-ai-aggregator/internal/service/joborchestrator"
+	"vk-ai-aggregator/internal/service/paymentservice"
 )
 
 type contextKey int
 
 const ctxVKUserIDKey contextKey = iota
-
-const (
-	miniAppChatModelID         = "chatgpt"
-	miniAppChatPublicModelName = "ChatGPT"
-)
 
 // JobRateLimiter is the minimal limiter contract used by Mini App write-like
 // endpoints after authentication. Endpoint-specific keys keep job submits and
@@ -46,32 +42,37 @@ type Config struct {
 	// JobRateLimiter bounds POST /miniapp/jobs and POST /miniapp/estimate after
 	// launch params have been verified, keyed by the verified vk_user_id.
 	JobRateLimiter JobRateLimiter
+	// ImageReferenceEnabled allows validated image reference artifacts to flow
+	// into image jobs. When false, references fail closed before job creation.
+	ImageReferenceEnabled bool
 }
 
-// ObjectReader loads stored artifact bytes (S3/MinIO).
+// ObjectReader loads and stores artifact bytes (S3/MinIO).
 type ObjectReader interface {
 	GetObject(ctx context.Context, bucket, key string) ([]byte, error)
+	Put(ctx context.Context, bucket, key string, data []byte, contentType string) error
 }
 
 // Deps are the collaborators needed by the miniapp handler.
 type Deps struct {
-	Users        domain.UserRepository
-	Jobs         domain.JobRepository
-	Artifacts    domain.ArtifactRepository
-	Moderation   domain.ModerationResultRepository
-	Objects      ObjectReader
-	Billing      *billingservice.Service
-	BillingRepo  domain.BillingRepository
-	Orchestrator *joborchestrator.Orchestrator
-	Logger       *slog.Logger
+	Users         domain.UserRepository
+	Jobs          domain.JobRepository
+	Conversations domain.ConversationRepository
+	Artifacts     domain.ArtifactRepository
+	Moderation    domain.ModerationResultRepository
+	Objects       ObjectReader
+	Billing       *billingservice.Service
+	BillingRepo   domain.BillingRepository
+	Payment       *paymentservice.Service
+	Orchestrator  *joborchestrator.Orchestrator
+	Logger        *slog.Logger
 }
 
 // Handler serves the /miniapp/* routes.
 type Handler struct {
-	cfg           Config
-	deps          Deps
-	logger        *slog.Logger
-	conversations *conversationStore
+	cfg    Config
+	deps   Deps
+	logger *slog.Logger
 }
 
 // NewHandler builds a miniapp Handler.
@@ -80,7 +81,7 @@ func NewHandler(cfg Config, deps Deps) *Handler {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Handler{cfg: cfg, deps: deps, logger: logger, conversations: newConversationStore()}
+	return &Handler{cfg: cfg, deps: deps, logger: logger}
 }
 
 // Routes returns an http.Handler with the miniapp routes registered.
@@ -88,10 +89,17 @@ func (h *Handler) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /miniapp/estimate", h.auth(h.rateLimitMiniApp("miniapp_estimate", h.estimateJob)))
 	mux.HandleFunc("POST /miniapp/chat/messages", h.auth(h.rateLimitMiniApp("miniapp_chat", h.createChatMessage)))
+	mux.HandleFunc("GET /miniapp/chat/conversations", h.auth(h.listChatConversations))
+	mux.HandleFunc("GET /miniapp/chat/conversations/{id}/messages", h.auth(h.listChatConversationMessages))
 	mux.HandleFunc("POST /miniapp/jobs", h.auth(h.rateLimitMiniApp("miniapp_job", h.createJob)))
 	mux.HandleFunc("GET /miniapp/jobs", h.auth(h.listJobs))
 	mux.HandleFunc("GET /miniapp/jobs/{id}", h.auth(h.getJob))
 	mux.HandleFunc("GET /miniapp/balance", h.auth(h.getBalance))
+	mux.HandleFunc("GET /miniapp/payment-products", h.auth(h.listPaymentProducts))
+	mux.HandleFunc("POST /miniapp/payments/intents", h.auth(h.rateLimitMiniApp("miniapp_payment", h.createPaymentIntent)))
+	mux.HandleFunc("GET /miniapp/payments", h.auth(h.listPayments))
+	mux.HandleFunc("GET /miniapp/payments/{id}", h.auth(h.getPaymentIntent))
+	mux.HandleFunc("POST /miniapp/artifacts", h.auth(h.rateLimitMiniApp("miniapp_artifact", h.createArtifact)))
 	mux.HandleFunc("GET /miniapp/artifacts/{id}", h.auth(h.getArtifact))
 	return mux
 }
@@ -216,86 +224,60 @@ func operationMeta(op string) (domain.OperationType, domain.Modality, bool) {
 	}
 }
 
-var miniAppSupportedModels = map[domain.OperationType]map[string]struct{}{
-	domain.OperationTextGenerate: {
-		miniAppChatModelID:              {},
-		miniAppChatPublicModelName:      {},
-		"deepseek-v4-flash":             {}, // legacy client alias; normalized before persistence/API output.
-		"deepseek-ai/DeepSeek-V4-Flash": {}, // legacy client alias; normalized before persistence/API output.
-	},
-	domain.OperationImageGenerate: {
-		"sdxl":      {},
-		"kandinsky": {},
-	},
-	domain.OperationVideoGenerate: {
-		"kling": {},
-	},
-}
-
-func normalizeMiniAppModelID(op domain.OperationType, raw string) (string, bool) {
-	modelID := strings.TrimSpace(raw)
-	if modelID == "" {
-		return "", true
-	}
-	models, ok := miniAppSupportedModels[op]
-	if !ok {
-		return "", false
-	}
-	_, ok = models[modelID]
-	if !ok {
-		return "", false
-	}
-	if op == domain.OperationTextGenerate {
-		return miniAppChatModelID, true
-	}
-	return modelID, true
-}
-
-func miniAppModelName(op domain.OperationType) string {
-	if op == domain.OperationTextGenerate {
-		return miniAppChatPublicModelName
-	}
-	return ""
-}
-
-func miniAppResponseModelID(op domain.OperationType, modelID string) string {
-	if op == domain.OperationTextGenerate {
-		return ""
-	}
-	return modelID
-}
-
 // ---------------------------------------------------------------------------
 // Handlers
 // ---------------------------------------------------------------------------
 
-func (h *Handler) readJobRequest(w http.ResponseWriter, r *http.Request) (CreateJobRequest, domain.OperationType, domain.Modality, string, bool) {
+func (h *Handler) readJobRequest(w http.ResponseWriter, r *http.Request) (CreateJobRequest, domain.OperationType, domain.Modality, miniAppModelSpec, bool) {
 	body, err := io.ReadAll(io.LimitReader(r.Body, 64<<10))
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "cannot read body")
-		return CreateJobRequest{}, "", "", "", false
+		return CreateJobRequest{}, "", "", miniAppModelSpec{}, false
 	}
 	var req CreateJobRequest
 	if err := json.Unmarshal(body, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid json")
-		return CreateJobRequest{}, "", "", "", false
+		return CreateJobRequest{}, "", "", miniAppModelSpec{}, false
 	}
 	if req.Prompt == "" {
 		writeError(w, http.StatusBadRequest, "prompt is required")
-		return CreateJobRequest{}, "", "", "", false
+		return CreateJobRequest{}, "", "", miniAppModelSpec{}, false
 	}
 
 	opType, modality, ok := operationMeta(req.Operation)
 	if !ok {
 		writeError(w, http.StatusBadRequest, "unsupported operation; allowed: text_generate, image_generate, video_generate")
-		return CreateJobRequest{}, "", "", "", false
+		return CreateJobRequest{}, "", "", miniAppModelSpec{}, false
 	}
-	modelID, ok := normalizeMiniAppModelID(opType, req.ModelID)
+	model, ok := resolveMiniAppModel(opType, req.ModelID)
 	if !ok {
 		writeError(w, http.StatusBadRequest, "unsupported model")
-		return CreateJobRequest{}, "", "", "", false
+		return CreateJobRequest{}, "", "", miniAppModelSpec{}, false
 	}
-	return req, opType, modality, modelID, true
+	if req.DurationSec != 0 && opType != domain.OperationVideoGenerate {
+		writeError(w, http.StatusBadRequest, "duration_sec is only supported for video_generate")
+		return CreateJobRequest{}, "", "", miniAppModelSpec{}, false
+	}
+	if opType == domain.OperationVideoGenerate {
+		duration, ok := normalizeVideoDurationSec(req.DurationSec)
+		if !ok {
+			writeError(w, http.StatusBadRequest, "invalid video duration; allowed: 3, 5, 10")
+			return CreateJobRequest{}, "", "", miniAppModelSpec{}, false
+		}
+		req.DurationSec = duration
+	}
+	return req, opType, modality, model, true
+}
+
+func normalizeVideoDurationSec(sec int) (int, bool) {
+	switch sec {
+	case 0:
+		return 5, true
+	case 3, 5, 10:
+		return sec, true
+	default:
+		return 0, false
+	}
 }
 
 func (h *Handler) estimateJob(w http.ResponseWriter, r *http.Request) {
@@ -305,9 +287,27 @@ func (h *Handler) estimateJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, opType, _, modelID, ok := h.readJobRequest(w, r)
+	req, opType, _, model, ok := h.readJobRequest(w, r)
 	if !ok {
 		return
+	}
+	if len(req.ReferenceArtifactIDs) > 0 {
+		user, err := h.deps.Users.GetByVKUserID(r.Context(), vkUserID)
+		if err != nil {
+			if errors.Is(err, domain.ErrNotFound) {
+				writeError(w, http.StatusNotFound, "not found")
+			} else {
+				writeError(w, http.StatusInternalServerError, "internal error")
+			}
+			return
+		}
+		if !h.validateReferenceArtifacts(w, r, user.ID, opType, req.ReferenceArtifactIDs) {
+			return
+		}
+		if !h.cfg.ImageReferenceEnabled {
+			writeError(w, http.StatusBadRequest, "reference_artifacts_unsupported")
+			return
+		}
 	}
 
 	cost, err := h.deps.Billing.Estimate(opType)
@@ -329,8 +329,8 @@ func (h *Handler) estimateJob(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, EstimateDTO{
 		Operation:      string(opType),
-		ModelID:        miniAppResponseModelID(opType, modelID),
-		ModelName:      miniAppModelName(opType),
+		ModelID:        miniAppResponseModelID(model),
+		ModelName:      model.ModelName,
 		CostEstimate:   cost,
 		BalanceCredits: balance,
 		EnoughCredits:  balance >= cost,
@@ -355,7 +355,7 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req, opType, modality, modelID, ok := h.readJobRequest(w, r)
+	req, opType, modality, model, ok := h.readJobRequest(w, r)
 	if !ok {
 		return
 	}
@@ -365,6 +365,19 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 		h.logger.Error("miniapp: ensure user failed", slog.String("error", err.Error()))
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
+	}
+	if len(req.ReferenceArtifactIDs) > 0 {
+		if opType == domain.OperationVideoGenerate {
+			writeError(w, http.StatusBadRequest, "reference_artifacts_unsupported")
+			return
+		}
+		if !h.validateReferenceArtifacts(w, r, user.ID, opType, req.ReferenceArtifactIDs) {
+			return
+		}
+		if !h.cfg.ImageReferenceEnabled {
+			writeError(w, http.StatusBadRequest, "reference_artifacts_unsupported")
+			return
+		}
 	}
 
 	// Accept an optional client-supplied idempotency key. The key is scoped to
@@ -376,21 +389,28 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 	idemKey := fmt.Sprintf("miniapp_job:%d:%s", vkUserID, clientKey)
 	correlationID := fmt.Sprintf("miniapp:%d:%s", vkUserID, clientKey)
 
-	params, _ := json.Marshal(miniAppJobParams{
-		Prompt:    req.Prompt,
-		ModelID:   modelID,
-		ModelName: miniAppModelName(opType),
-	})
+	jobParams := miniAppJobParams{
+		Prompt:               req.Prompt,
+		ModelID:              model.ModelID,
+		ModelName:            model.ModelName,
+		ModelCode:            model.ModelCode,
+		ReferenceArtifactIDs: req.ReferenceArtifactIDs,
+	}
+	if opType == domain.OperationVideoGenerate {
+		jobParams.DurationSec = req.DurationSec
+	}
+	params, _ := json.Marshal(jobParams)
 
 	job, err := h.deps.Orchestrator.CreateJob(r.Context(), joborchestrator.CreateJobInput{
-		UserID:         user.ID,
-		VKPeerID:       vkUserID, // peer_id = user_id for direct messages
-		CommandID:      uuid.Nil, // no VK command for mini app path
-		Operation:      opType,
-		Modality:       modality,
-		IdempotencyKey: idemKey,
-		CorrelationID:  correlationID,
-		Params:         params,
+		UserID:           user.ID,
+		VKPeerID:         vkUserID, // peer_id = user_id for direct messages
+		CommandID:        uuid.Nil, // no VK command for mini app path
+		Operation:        opType,
+		Modality:         modality,
+		IdempotencyKey:   idemKey,
+		CorrelationID:    correlationID,
+		InputArtifactIDs: req.ReferenceArtifactIDs,
+		Params:           params,
 	})
 	switch {
 	case err == nil:
@@ -460,14 +480,13 @@ func (h *Handler) createChatMessage(w http.ResponseWriter, r *http.Request) {
 	}
 	idemKey := fmt.Sprintf("miniapp_chat:%d:%s", vkUserID, clientKey)
 	correlationID := fmt.Sprintf("miniapp-chat:%d:%s", vkUserID, clientKey)
-	conversationKey := miniAppConversationKey(vkUserID, conversationID)
-	prompt := h.conversations.promptFor(conversationKey, req.Prompt)
 
 	params, _ := json.Marshal(miniAppJobParams{
-		Prompt:         prompt,
-		ModelID:        miniAppChatModelID,
-		ModelName:      miniAppChatPublicModelName,
-		ConversationID: conversationID,
+		Prompt:             req.Prompt,
+		ModelID:            miniAppChatModelID,
+		ModelName:          miniAppChatPublicModelName,
+		ConversationSource: domain.ConversationSourceMiniApp,
+		ExternalThreadID:   conversationID,
 	})
 
 	job, err := h.deps.Orchestrator.CreateJob(r.Context(), joborchestrator.CreateJobInput{
@@ -482,7 +501,6 @@ func (h *Handler) createChatMessage(w http.ResponseWriter, r *http.Request) {
 	})
 	switch {
 	case err == nil:
-		h.conversations.trackUserJob(job.ID, conversationKey, req.Prompt)
 		writeJSON(w, http.StatusCreated, newChatJobDTO(job))
 	case errors.Is(err, domain.ErrInsufficientCredits):
 		writeJSON(w, http.StatusPaymentRequired, map[string]any{
@@ -498,6 +516,114 @@ func (h *Handler) createChatMessage(w http.ResponseWriter, r *http.Request) {
 		h.logger.Error("miniapp: create chat job failed", slog.String("error", err.Error()))
 		writeError(w, http.StatusInternalServerError, "internal error")
 	}
+}
+
+func (h *Handler) listChatConversations(w http.ResponseWriter, r *http.Request) {
+	vkUserID, ok := vkUserIDFromCtx(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	if h.deps.Conversations == nil {
+		writeError(w, http.StatusServiceUnavailable, "service unavailable")
+		return
+	}
+
+	user, err := h.deps.Users.GetByVKUserID(r.Context(), vkUserID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			writeJSON(w, http.StatusOK, listResponse[ChatConversationDTO]{
+				Items:      []ChatConversationDTO{},
+				Pagination: pagination{Limit: defaultLimit, Offset: 0, Count: 0},
+			})
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	limit, offset := parsePagination(r)
+	conversations, err := h.deps.Conversations.ListByUserSource(r.Context(), user.ID, domain.ConversationSourceMiniApp, limit+1, offset)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	hasMore := len(conversations) > limit
+	if hasMore {
+		conversations = conversations[:limit]
+	}
+
+	items := make([]ChatConversationDTO, 0, len(conversations))
+	for _, conversation := range conversations {
+		items = append(items, h.newChatConversationDTO(r.Context(), conversation))
+	}
+	writeJSON(w, http.StatusOK, listResponse[ChatConversationDTO]{
+		Items:      items,
+		Pagination: pagination{Limit: limit, Offset: offset, Count: len(items), HasMore: hasMore},
+	})
+}
+
+func (h *Handler) listChatConversationMessages(w http.ResponseWriter, r *http.Request) {
+	vkUserID, ok := vkUserIDFromCtx(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	if h.deps.Conversations == nil {
+		writeError(w, http.StatusServiceUnavailable, "service unavailable")
+		return
+	}
+
+	threadID, ok := normalizeConversationID(r.PathValue("id"))
+	if !ok {
+		writeError(w, http.StatusBadRequest, "invalid conversation id")
+		return
+	}
+
+	user, err := h.deps.Users.GetByVKUserID(r.Context(), vkUserID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	conversation, err := h.deps.Conversations.GetActiveByReference(r.Context(), domain.ConversationRef{
+		UserID:           user.ID,
+		Source:           domain.ConversationSourceMiniApp,
+		ExternalThreadID: threadID,
+	})
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	limit, _ := parsePagination(r)
+	afterSeq := parseAfterSeq(r)
+	messages, err := h.deps.Conversations.ListMessagesAfter(r.Context(), conversation.ID, afterSeq, limit+1)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	hasMore := len(messages) > limit
+	if hasMore {
+		messages = messages[:limit]
+	}
+
+	items := make([]ChatConversationMessageDTO, 0, len(messages))
+	for _, message := range messages {
+		items = append(items, newChatConversationMessageDTO(message))
+	}
+	writeJSON(w, http.StatusOK, listResponse[ChatConversationMessageDTO]{
+		Items:      items,
+		Pagination: pagination{Limit: limit, Offset: 0, Count: len(items), HasMore: hasMore},
+	})
 }
 
 func (h *Handler) listJobs(w http.ResponseWriter, r *http.Request) {
@@ -581,44 +707,7 @@ func (h *Handler) getJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.captureChatResult(r.Context(), user.ID, job)
 	writeJSON(w, http.StatusOK, newJobDTO(job))
-}
-
-func (h *Handler) captureChatResult(ctx context.Context, userID uuid.UUID, job *domain.Job) {
-	if h.conversations == nil || job == nil || job.OperationType != domain.OperationTextGenerate || job.Status != domain.JobStatusSucceeded {
-		return
-	}
-	if !h.conversations.hasJob(job.ID) {
-		return
-	}
-	text, ok := h.textOutputForContext(ctx, userID, job)
-	if !ok {
-		return
-	}
-	h.conversations.appendAssistantForJob(job.ID, text)
-}
-
-func (h *Handler) textOutputForContext(ctx context.Context, userID uuid.UUID, job *domain.Job) (string, bool) {
-	if h.deps.Artifacts == nil || h.deps.Objects == nil || len(job.OutputArtifactIDs) == 0 {
-		return "", false
-	}
-	art, err := h.deps.Artifacts.GetByID(ctx, job.OutputArtifactIDs[0])
-	if err != nil || art.OwnerUserID != userID || !h.artifactVisible(ctx, art, userID) {
-		return "", false
-	}
-	if art.MediaType != domain.MediaTypeText && !strings.HasPrefix(strings.ToLower(art.MimeType), "text/") {
-		return "", false
-	}
-	data, err := h.deps.Objects.GetObject(ctx, art.StorageBucket, art.StorageKey)
-	if err != nil {
-		return "", false
-	}
-	text := strings.TrimSpace(string(data))
-	if text == "" {
-		return "", false
-	}
-	return truncateContextText(text), true
 }
 
 func (h *Handler) getBalance(w http.ResponseWriter, r *http.Request) {
@@ -645,6 +734,178 @@ func (h *Handler) getBalance(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, BalanceDTO{BalanceCredits: acc.BalanceCached})
+}
+
+func (h *Handler) createPaymentIntent(w http.ResponseWriter, r *http.Request) {
+	vkUserID, ok := vkUserIDFromCtx(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	if h.deps.Payment == nil {
+		writeError(w, http.StatusServiceUnavailable, "service unavailable")
+		return
+	}
+	clientKey := strings.TrimSpace(r.Header.Get("X-Idempotency-Key"))
+	if clientKey == "" {
+		writeError(w, http.StatusBadRequest, "X-Idempotency-Key is required")
+		return
+	}
+
+	body, err := io.ReadAll(io.LimitReader(r.Body, 16<<10))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "cannot read body")
+		return
+	}
+	var req CreatePaymentIntentRequest
+	if err := json.Unmarshal(body, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+
+	user, err := h.ensureUser(r.Context(), vkUserID)
+	if err != nil {
+		h.logger.Error("miniapp: ensure user failed", slog.String("error", err.Error()))
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	result, err := h.deps.Payment.CreateIntent(r.Context(), paymentservice.CreateIntentInput{
+		UserID:         user.ID,
+		ProductCode:    req.ProductCode,
+		ReceiptEmail:   req.ReceiptEmail,
+		ReceiptPhone:   req.ReceiptPhone,
+		IdempotencyKey: "miniapp_payment:" + strconv.FormatInt(vkUserID, 10) + ":" + clientKey,
+		ReturnURL:      req.ReturnURL,
+		Source:         "vk_miniapp",
+		ForceNew:       req.ForceNew,
+	})
+	if err != nil {
+		h.writePaymentError(w, err)
+		return
+	}
+	status := http.StatusCreated
+	if !result.Created {
+		status = http.StatusOK
+	}
+	dto := newPaymentIntentDTO(result.Intent)
+	if result.ReusedActive {
+		dto.ReusedActivePayment = true
+		dto.Notice = "У вас уже есть незавершенный платеж. После оплаты баланс обновится автоматически."
+	}
+	writeJSON(w, status, dto)
+}
+
+func (h *Handler) listPaymentProducts(w http.ResponseWriter, r *http.Request) {
+	if h.deps.Payment == nil {
+		writeError(w, http.StatusServiceUnavailable, "service unavailable")
+		return
+	}
+	products, err := h.deps.Payment.ListActiveProducts(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	items := make([]PaymentProductDTO, 0, len(products))
+	for _, product := range products {
+		items = append(items, newPaymentProductDTO(product))
+	}
+	writeJSON(w, http.StatusOK, listResponse[PaymentProductDTO]{
+		Items:      items,
+		Pagination: pagination{Limit: len(items), Offset: 0, Count: len(items), HasMore: false},
+	})
+}
+
+func (h *Handler) listPayments(w http.ResponseWriter, r *http.Request) {
+	vkUserID, ok := vkUserIDFromCtx(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	if h.deps.Payment == nil {
+		writeError(w, http.StatusServiceUnavailable, "service unavailable")
+		return
+	}
+	user, err := h.deps.Users.GetByVKUserID(r.Context(), vkUserID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			writeJSON(w, http.StatusOK, listResponse[PaymentIntentDTO]{
+				Items:      []PaymentIntentDTO{},
+				Pagination: pagination{Limit: defaultLimit, Offset: 0, Count: 0},
+			})
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	limit, offset := parsePagination(r)
+	intents, err := h.deps.Payment.ListIntentsByUser(r.Context(), user.ID, limit+1, offset)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	hasMore := len(intents) > limit
+	if hasMore {
+		intents = intents[:limit]
+	}
+	items := make([]PaymentIntentDTO, 0, len(intents))
+	for _, intent := range intents {
+		items = append(items, newPaymentIntentDTO(intent))
+	}
+	writeJSON(w, http.StatusOK, listResponse[PaymentIntentDTO]{
+		Items:      items,
+		Pagination: pagination{Limit: limit, Offset: offset, Count: len(items), HasMore: hasMore},
+	})
+}
+
+func (h *Handler) getPaymentIntent(w http.ResponseWriter, r *http.Request) {
+	vkUserID, ok := vkUserIDFromCtx(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	if h.deps.Payment == nil {
+		writeError(w, http.StatusServiceUnavailable, "service unavailable")
+		return
+	}
+	intentID, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid payment id")
+		return
+	}
+	user, err := h.deps.Users.GetByVKUserID(r.Context(), vkUserID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	intent, err := h.deps.Payment.GetIntent(r.Context(), user.ID, intentID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	writeJSON(w, http.StatusOK, newPaymentIntentDTO(intent))
+}
+
+func (h *Handler) writePaymentError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, paymentservice.ErrInvalidInput),
+		errors.Is(err, paymentservice.ErrReceiptContactRequired):
+		writeError(w, http.StatusBadRequest, "invalid payment request")
+	case errors.Is(err, domain.ErrNotFound):
+		writeError(w, http.StatusNotFound, "not found")
+	case errors.Is(err, paymentservice.ErrForbidden):
+		writeError(w, http.StatusForbidden, "forbidden")
+	default:
+		h.logger.Error("miniapp: payment provider failed", slog.String("error", err.Error()))
+		writeError(w, http.StatusBadGateway, "payment provider error")
+	}
 }
 
 func (h *Handler) getArtifact(w http.ResponseWriter, r *http.Request) {
@@ -747,13 +1008,77 @@ func uuidInSlice(ids []uuid.UUID, target uuid.UUID) bool {
 	return false
 }
 
+func (h *Handler) newChatConversationDTO(ctx context.Context, conversation *domain.Conversation) ChatConversationDTO {
+	dto := ChatConversationDTO{
+		ID:        conversation.ExternalThreadID,
+		Title:     chatConversationTitle(conversation),
+		CreatedAt: conversation.CreatedAt,
+		UpdatedAt: conversation.UpdatedAt,
+	}
+	if dto.ID == "" {
+		dto.ID = defaultConversationID
+	}
+	if h.deps.Conversations == nil {
+		return dto
+	}
+	recent, err := h.deps.Conversations.ListRecentMessagesBefore(ctx, conversation.ID, 1<<62, 0, 1)
+	if err != nil || len(recent) == 0 {
+		return dto
+	}
+	last := recent[len(recent)-1]
+	dto.LastMessagePreview = truncateChatText(last.Text, maxChatPreviewRunes)
+	dto.LastMessageRole = chatMessageRole(last.Role)
+	return dto
+}
+
+func newChatConversationMessageDTO(message *domain.ConversationMessage) ChatConversationMessageDTO {
+	return ChatConversationMessageDTO{
+		ID:        message.ID,
+		JobID:     message.JobID,
+		Seq:       message.Seq,
+		Role:      chatMessageRole(message.Role),
+		Text:      truncateChatText(message.Text, maxChatMessageRunes),
+		CreatedAt: message.CreatedAt,
+	}
+}
+
+func chatConversationTitle(conversation *domain.Conversation) string {
+	title := strings.TrimSpace(conversation.Title)
+	if title == "" {
+		return "НейроХаб диалог"
+	}
+	return truncateChatText(title, maxChatTitleRunes)
+}
+
+func chatMessageRole(role domain.ConversationMessageRole) string {
+	if role == domain.ConversationRoleAssistant {
+		return "bot"
+	}
+	return "user"
+}
+
+func truncateChatText(text string, maxRunes int) string {
+	text = strings.TrimSpace(text)
+	if maxRunes <= 0 {
+		return ""
+	}
+	runes := []rune(text)
+	if len(runes) <= maxRunes {
+		return text
+	}
+	return string(runes[:maxRunes])
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
 const (
-	defaultLimit = 20
-	maxLimit     = 100
+	defaultLimit        = 20
+	maxLimit            = 100
+	maxChatTitleRunes   = 80
+	maxChatPreviewRunes = 160
+	maxChatMessageRunes = 100_000
 )
 
 func parsePagination(r *http.Request) (limit, offset int) {
@@ -772,6 +1097,18 @@ func parsePagination(r *http.Request) (limit, offset int) {
 		}
 	}
 	return limit, offset
+}
+
+func parseAfterSeq(r *http.Request) int64 {
+	raw := r.URL.Query().Get("after_seq")
+	if raw == "" {
+		return 0
+	}
+	value, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || value < 0 {
+		return 0
+	}
+	return value
 }
 
 func writeJSON(w http.ResponseWriter, status int, body any) {

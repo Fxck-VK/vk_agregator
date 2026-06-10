@@ -12,6 +12,8 @@ export interface ChatMessage {
   pending?: boolean;
   artifactIds?: string[];
   error?: string;
+  /** Server conversation_messages.seq when loaded from history. */
+  seq?: number;
   createdAt?: string;
 }
 
@@ -41,8 +43,8 @@ export const MODALITIES: ModalityDef[] = [
     label: "Фото",
     operation: "image_generate",
     models: [
-      { id: "sdxl", label: "Stable Diffusion XL" },
-      { id: "kandinsky", label: "Kandinsky 3" },
+      { id: "nano_banana_pro", label: "Nano Banana Pro" },
+      { id: "nano_banana_flash", label: "Nano Banana Flash" },
     ],
   },
   {
@@ -64,6 +66,7 @@ export function modalityByOperation(operation: string): ModalityDef {
 export interface Chat {
   id: string;
   title: string;
+  preview?: string;
   createdAt: number;
   updatedAt: number;
   messages: ChatMessage[];

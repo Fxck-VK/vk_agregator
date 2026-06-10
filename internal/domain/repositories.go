@@ -171,8 +171,18 @@ type CommandRepository interface {
 type ConversationRepository interface {
 	// GetActiveByUserPeer returns the current active conversation for a VK peer.
 	GetActiveByUserPeer(ctx context.Context, userID uuid.UUID, vkPeerID int64) (*Conversation, error)
+	// GetActiveByReference returns the current active conversation for a
+	// source-specific reference.
+	GetActiveByReference(ctx context.Context, ref ConversationRef) (*Conversation, error)
+	// GetByIDForUser returns one conversation owned by the user.
+	GetByIDForUser(ctx context.Context, userID, conversationID uuid.UUID) (*Conversation, error)
+	// ListByUserSource returns conversations for a user/source, newest first.
+	ListByUserSource(ctx context.Context, userID uuid.UUID, source ConversationSource, limit, offset int) ([]*Conversation, error)
 	// CreateConversation inserts a new conversation.
 	CreateConversation(ctx context.Context, conversation *Conversation) error
+	// SetConversationTitleIfEmpty fills an empty title without overwriting an
+	// existing one. This keeps retrying chat jobs idempotent.
+	SetConversationTitleIfEmpty(ctx context.Context, conversationID uuid.UUID, title string) error
 	// UpsertMessage inserts a user/assistant message or returns the existing
 	// row for the same job+role, making worker retries idempotent.
 	UpsertMessage(ctx context.Context, message *ConversationMessage) (*ConversationMessage, error)
@@ -263,6 +273,102 @@ type BillingRepository interface {
 	// workers to capture credits without threading the reservation id through
 	// the queue. ErrNotFound if the job has no reservation.
 	GetReservationByJob(ctx context.Context, jobID uuid.UUID) (*CreditReservation, error)
+}
+
+// PaymentIntentFilter narrows admin payment-intent listings. Zero-valued
+// fields are ignored.
+type PaymentIntentFilter struct {
+	UserID        *uuid.UUID
+	Status        PaymentIntentStatus
+	Statuses      []PaymentIntentStatus
+	Provider      PaymentProviderCode
+	UpdatedBefore *time.Time
+}
+
+// PaymentEventFilter narrows protected operator payment-event listings. It
+// must never be used to expose raw provider payloads to public surfaces.
+type PaymentEventFilter struct {
+	Provider  PaymentProviderCode
+	Processed *bool
+}
+
+// PaymentProductFilter narrows protected operator product-catalog listings.
+// Zero-valued fields are ignored.
+type PaymentProductFilter struct {
+	Active *bool
+}
+
+// PaymentReconciliationFilter narrows payment intents that should be synced
+// against the provider during reconciliation.
+type PaymentReconciliationFilter struct {
+	Provider      PaymentProviderCode
+	Statuses      []PaymentIntentStatus
+	UpdatedBefore time.Time
+}
+
+// PaymentRepository persists products, payment intents and provider webhook
+// inbox rows. It does not mutate billing balances directly.
+type PaymentRepository interface {
+	// ListActiveProducts lists active product catalog entries in display order.
+	ListActiveProducts(ctx context.Context) ([]*PaymentProduct, error)
+	// ListProducts lists product catalog entries for protected operator
+	// endpoints, newest first unless the storage has a stable display order.
+	ListProducts(ctx context.Context, filter PaymentProductFilter, limit, offset int) ([]*PaymentProduct, error)
+	// GetActiveProductByCode fetches an active product catalog entry by code.
+	GetActiveProductByCode(ctx context.Context, code string) (*PaymentProduct, error)
+	// GetProductByID fetches a product by id, active or inactive.
+	GetProductByID(ctx context.Context, id uuid.UUID) (*PaymentProduct, error)
+	// CreateProduct inserts one product catalog entry.
+	CreateProduct(ctx context.Context, product *PaymentProduct) error
+	// UpdateProduct persists an existing product catalog entry.
+	UpdateProduct(ctx context.Context, product *PaymentProduct) error
+
+	// CreateIntent inserts a local payment intent snapshot.
+	CreateIntent(ctx context.Context, intent *PaymentIntent) error
+	// GetIntentByID fetches one payment intent by id.
+	GetIntentByID(ctx context.Context, id uuid.UUID) (*PaymentIntent, error)
+	// GetIntentByIdempotencyKey fetches one payment intent by idempotency key.
+	GetIntentByIdempotencyKey(ctx context.Context, key string) (*PaymentIntent, error)
+	// SetIntentProviderState stores the provider-created payment id,
+	// confirmation URL and normalized provider status.
+	SetIntentProviderState(ctx context.Context, id uuid.UUID, status PaymentIntentStatus, providerPaymentID, confirmationURL string) error
+	// GetIntentByProviderPaymentID fetches one intent by normalized provider
+	// payment id.
+	GetIntentByProviderPaymentID(ctx context.Context, provider PaymentProviderCode, providerPaymentID string) (*PaymentIntent, error)
+	// UpdateIntentStatus updates an intent status using optimistic state
+	// matching. It returns ErrConflict when the current state changed.
+	UpdateIntentStatus(ctx context.Context, id uuid.UUID, from, to PaymentIntentStatus) error
+	// ListIntentsByUser lists intents for one user, newest first.
+	ListIntentsByUser(ctx context.Context, userID uuid.UUID, limit, offset int) ([]*PaymentIntent, error)
+	// ListIntents lists intents for protected operator endpoints, newest first.
+	ListIntents(ctx context.Context, filter PaymentIntentFilter, limit, offset int) ([]*PaymentIntent, error)
+	// ListIntentsForReconciliation lists stale provider-backed intents that
+	// should be synced against the payment provider.
+	ListIntentsForReconciliation(ctx context.Context, filter PaymentReconciliationFilter, limit int) ([]*PaymentIntent, error)
+
+	// CreateEvent stores a raw provider webhook inbox event. It returns false
+	// with nil error when the dedup key already exists.
+	CreateEvent(ctx context.Context, event *PaymentEvent) (bool, error)
+	// GetEventByID fetches a provider webhook inbox event by id.
+	GetEventByID(ctx context.Context, id uuid.UUID) (*PaymentEvent, error)
+	// ListUnprocessedEvents lists unprocessed provider webhook inbox events in
+	// receive order.
+	ListUnprocessedEvents(ctx context.Context, provider PaymentProviderCode, limit int) ([]*PaymentEvent, error)
+	// ListEvents lists provider webhook inbox events for protected operator
+	// endpoints. Callers must map results to DTOs that omit Payload.
+	ListEvents(ctx context.Context, filter PaymentEventFilter, limit, offset int) ([]*PaymentEvent, error)
+	// WebhookInboxStats returns current unprocessed provider webhook backlog
+	// without exposing raw provider payloads.
+	WebhookInboxStats(ctx context.Context, provider PaymentProviderCode) (PaymentWebhookInboxStats, error)
+	// MarkEventProcessed marks a provider webhook inbox event as processed.
+	MarkEventProcessed(ctx context.Context, id uuid.UUID, processedAt time.Time) error
+
+	// CreateRefund inserts a local manual/provider refund row.
+	CreateRefund(ctx context.Context, refund *PaymentRefund) error
+	// GetRefundByIdempotencyKey fetches a refund by internal idempotency key.
+	GetRefundByIdempotencyKey(ctx context.Context, key string) (*PaymentRefund, error)
+	// SetRefundProviderState stores provider refund id and normalized refund status.
+	SetRefundProviderState(ctx context.Context, id uuid.UUID, providerRefundID string, status PaymentRefundStatus) error
 }
 
 // ReferralRepository persists single-user referral codes and referral

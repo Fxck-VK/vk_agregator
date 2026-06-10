@@ -24,6 +24,7 @@ const (
 	defaultSummarizeAfterTurns  = 10
 	defaultSummarizeAfterTokens = 1500
 	maxSummaryScanMessages      = 200
+	maxConversationTitleRunes   = 80
 )
 
 // Config controls dialog-context prompt budgeting.
@@ -50,6 +51,19 @@ type Prepared struct {
 	MaxOutputTokens int
 }
 
+type conversationParams struct {
+	ConversationID     string `json:"conversation_id,omitempty"`
+	ConversationSource string `json:"conversation_source,omitempty"`
+	ExternalThreadID   string `json:"external_thread_id,omitempty"`
+}
+
+type conversationTarget struct {
+	explicit       bool
+	invalid        bool
+	conversationID uuid.UUID
+	ref            domain.ConversationRef
+}
+
 // New builds a dialog context service.
 func New(repo domain.ConversationRepository, cfg Config) *Service {
 	if cfg.MaxInputTokens <= 0 {
@@ -74,14 +88,23 @@ func New(repo domain.ConversationRepository, cfg Config) *Service {
 }
 
 // Prepare stores the current user prompt and returns the compact prompt to send
-// to the text provider. Non-VK or non-text jobs pass through unchanged.
+// to the text provider. Non-text jobs pass through unchanged. Text jobs with an
+// explicit source/thread ref use that ref; legacy VK bot jobs fall back to
+// user_id + vk_peer_id.
 func (s *Service) Prepare(ctx context.Context, job *domain.Job, prompt string) (Prepared, error) {
-	if s == nil || !s.cfg.Enabled || s.repo == nil || !eligible(job) {
+	if s == nil || !s.cfg.Enabled || s.repo == nil || !eligibleText(job) {
 		return Prepared{Prompt: prompt, MaxOutputTokens: s.maxOutputTokens()}, nil
 	}
-	conversation, err := s.getOrCreateConversation(ctx, job)
+	target := resolveConversationTarget(job)
+	if target.invalid {
+		return Prepared{Prompt: prompt, MaxOutputTokens: s.maxOutputTokens()}, nil
+	}
+	conversation, ok, err := s.getOrCreateConversation(ctx, job, target)
 	if err != nil {
 		return Prepared{}, err
+	}
+	if !ok {
+		return Prepared{Prompt: prompt, MaxOutputTokens: s.maxOutputTokens()}, nil
 	}
 	userMessage, err := s.repo.UpsertMessage(ctx, &domain.ConversationMessage{
 		ConversationID: conversation.ID,
@@ -92,6 +115,13 @@ func (s *Service) Prepare(ctx context.Context, job *domain.Job, prompt string) (
 	})
 	if err != nil {
 		return Prepared{}, err
+	}
+	if conversation.Source == domain.ConversationSourceMiniApp {
+		if title := titleFromUserPrompt(prompt); title != "" {
+			if err := s.repo.SetConversationTitleIfEmpty(ctx, conversation.ID, title); err != nil {
+				return Prepared{}, err
+			}
+		}
 	}
 
 	summary, err := s.repo.LatestSummary(ctx, conversation.ID)
@@ -119,7 +149,7 @@ func (s *Service) Prepare(ctx context.Context, job *domain.Job, prompt string) (
 // Complete stores an assistant answer and updates the rolling summary if the
 // unsummarized history has grown beyond configured thresholds.
 func (s *Service) Complete(ctx context.Context, job *domain.Job, conversationID uuid.UUID, answer string) error {
-	if s == nil || !s.cfg.Enabled || s.repo == nil || !eligible(job) || conversationID == uuid.Nil || strings.TrimSpace(answer) == "" {
+	if s == nil || !s.cfg.Enabled || s.repo == nil || !eligibleText(job) || conversationID == uuid.Nil || strings.TrimSpace(answer) == "" {
 		return nil
 	}
 	if _, err := s.repo.UpsertMessage(ctx, &domain.ConversationMessage{
@@ -141,30 +171,117 @@ func (s *Service) maxOutputTokens() int {
 	return s.cfg.MaxOutputTokens
 }
 
-func eligible(job *domain.Job) bool {
-	return job != nil && job.OperationType == domain.OperationTextGenerate && job.Modality == domain.ModalityText && job.VKPeerID != 0
+func eligibleText(job *domain.Job) bool {
+	return job != nil && job.OperationType == domain.OperationTextGenerate && job.Modality == domain.ModalityText
 }
 
-func (s *Service) getOrCreateConversation(ctx context.Context, job *domain.Job) (*domain.Conversation, error) {
-	conversation, err := s.repo.GetActiveByUserPeer(ctx, job.UserID, job.VKPeerID)
+func resolveConversationTarget(job *domain.Job) conversationTarget {
+	if job == nil {
+		return conversationTarget{invalid: true}
+	}
+	var params conversationParams
+	if len(job.Params) > 0 {
+		_ = json.Unmarshal(job.Params, &params)
+	}
+	sourceRaw := strings.TrimSpace(params.ConversationSource)
+	if sourceRaw == "" {
+		if job.VKPeerID == 0 {
+			return conversationTarget{invalid: true}
+		}
+		return conversationTarget{ref: domain.ConversationRef{
+			UserID:   job.UserID,
+			Source:   domain.ConversationSourceVKBot,
+			VKPeerID: job.VKPeerID,
+		}}
+	}
+
+	source := domain.ConversationSource(sourceRaw)
+	switch source {
+	case domain.ConversationSourceVKBot:
+		if job.VKPeerID == 0 {
+			return conversationTarget{explicit: true, invalid: true}
+		}
+		return conversationTarget{explicit: true, ref: domain.ConversationRef{
+			UserID:   job.UserID,
+			Source:   domain.ConversationSourceVKBot,
+			VKPeerID: job.VKPeerID,
+		}}
+	case domain.ConversationSourceMiniApp:
+		threadID := strings.TrimSpace(params.ExternalThreadID)
+		conversationIDRaw := strings.TrimSpace(params.ConversationID)
+		if conversationIDRaw != "" {
+			if parsed, err := uuid.Parse(conversationIDRaw); err == nil {
+				return conversationTarget{
+					explicit:       true,
+					conversationID: parsed,
+					ref: domain.ConversationRef{
+						UserID:           job.UserID,
+						Source:           domain.ConversationSourceMiniApp,
+						ExternalThreadID: threadID,
+					},
+				}
+			}
+			if threadID == "" {
+				threadID = conversationIDRaw
+			}
+		}
+		if threadID == "" {
+			return conversationTarget{explicit: true, invalid: true}
+		}
+		return conversationTarget{explicit: true, ref: domain.ConversationRef{
+			UserID:           job.UserID,
+			Source:           domain.ConversationSourceMiniApp,
+			ExternalThreadID: threadID,
+		}}
+	default:
+		return conversationTarget{explicit: true, invalid: true}
+	}
+}
+
+func (s *Service) getOrCreateConversation(ctx context.Context, job *domain.Job, target conversationTarget) (*domain.Conversation, bool, error) {
+	if target.conversationID != uuid.Nil {
+		conversation, err := s.repo.GetByIDForUser(ctx, job.UserID, target.conversationID)
+		if err != nil {
+			if errors.Is(err, domain.ErrNotFound) {
+				return nil, false, nil
+			}
+			return nil, false, err
+		}
+		if conversation.Status != domain.ConversationActive || (target.ref.Source != "" && conversation.Source != target.ref.Source) {
+			return nil, false, nil
+		}
+		return conversation, true, nil
+	}
+
+	if target.ref.Source == "" {
+		target.ref.Source = domain.ConversationSourceVKBot
+	}
+
+	conversation, err := s.repo.GetActiveByReference(ctx, target.ref)
 	if err == nil {
-		return conversation, nil
+		return conversation, true, nil
 	}
 	if !errors.Is(err, domain.ErrNotFound) {
-		return nil, err
+		return nil, false, err
 	}
 	conversation = &domain.Conversation{
-		UserID:   job.UserID,
-		VKPeerID: job.VKPeerID,
-		Status:   domain.ConversationActive,
+		UserID:           job.UserID,
+		Source:           target.ref.Source,
+		VKPeerID:         target.ref.VKPeerID,
+		ExternalThreadID: target.ref.ExternalThreadID,
+		Status:           domain.ConversationActive,
 	}
 	if err := s.repo.CreateConversation(ctx, conversation); err != nil {
 		if errors.Is(err, domain.ErrConflict) {
-			return s.repo.GetActiveByUserPeer(ctx, job.UserID, job.VKPeerID)
+			conversation, err := s.repo.GetActiveByReference(ctx, target.ref)
+			if err != nil {
+				return nil, false, err
+			}
+			return conversation, true, nil
 		}
-		return nil, err
+		return nil, false, err
 	}
-	return conversation, nil
+	return conversation, true, nil
 }
 
 func (s *Service) renderPrompt(summary string, recent []*domain.ConversationMessage, current string) string {
@@ -328,10 +445,31 @@ func trimWhitespace(text string) string {
 	return strings.Join(strings.Fields(text), " ")
 }
 
+func titleFromUserPrompt(prompt string) string {
+	return truncateTitle(trimWhitespace(prompt), maxConversationTitleRunes)
+}
+
+func truncateTitle(text string, maxRunes int) string {
+	text = strings.TrimSpace(text)
+	if text == "" || maxRunes <= 0 {
+		return ""
+	}
+	runes := []rune(text)
+	if len(runes) <= maxRunes {
+		return text
+	}
+	if maxRunes <= 3 {
+		return string(runes[:maxRunes])
+	}
+	return strings.TrimSpace(string(runes[:maxRunes-3])) + "..."
+}
+
 // ParamsPatch is embedded into job params so later poll attempts know which
 // conversation should receive the assistant answer.
 type ParamsPatch struct {
-	ConversationID string `json:"conversation_id,omitempty"`
+	ConversationID     string `json:"conversation_id,omitempty"`
+	ConversationSource string `json:"conversation_source,omitempty"`
+	ExternalThreadID   string `json:"external_thread_id,omitempty"`
 }
 
 // PutConversationID returns params with conversation_id set.

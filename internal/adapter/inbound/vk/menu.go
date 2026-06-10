@@ -3,6 +3,7 @@ package vk
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/url"
@@ -60,20 +61,24 @@ var menuScreens = map[domain.CommandType]menuScreen{
 		keyboard: backKeyboard,
 	},
 	domain.CommandMenuImage: {
-		text:     fixedText(photoIntroText),
+		text:     fixedText(photoTextPromptInstruction),
 		keyboard: photoModeKeyboard,
 	},
 	domain.CommandMenuImageText: {
-		text:     fixedText(photoTextModeText),
+		text:     fixedText(photoTextModeInstruction),
 		keyboard: photoModeKeyboard,
 	},
 	domain.CommandMenuImageReference: {
-		text:     fixedText(photoReferenceModeText),
+		text:     fixedText(photoReferenceModeInstruction),
 		keyboard: photoModeKeyboard,
 	},
 	domain.CommandMenuVideo: {
 		text:     fixedText("Выбери модель для генерации:"),
 		keyboard: videoModelKeyboard,
+	},
+	domain.CommandMenuVideoPrunaAI: {
+		text:     fixedText(prunaAIText),
+		keyboard: prunaAIBackKeyboard,
 	},
 	domain.CommandMenuVideoSora2: {
 		text:     fixedText(sora2Text),
@@ -148,26 +153,28 @@ var menuScreens = map[domain.CommandType]menuScreen{
 const (
 	gptActiveText = "🤖 НейроХаб активен!\n\nЯ готов ответить на любые вопросы и помочь с идеями\nСпроси что-нибудь прямо сейчас!"
 
-	photoIntroText = "✅ У вас есть 1 бесплатная попытка в сутки на генерацию с текстом.\n\n▶️ Генерация фото по тексту – это когда ты пишешь, что хочешь увидеть (например, \"кот в очках на пляже\"), а ИИ сам «придумывает» и рисует такую картинку. (1 бесплатно)\n\n📸Генерация фото по тексту и фото (с референсом) – ИИ использует твою фотографию как образец — он сохраняет стиль, позу, цвета, но уже с новым содержанием по твоему описанию. (Только платные)"
+	photoIntroText = "✅ У вас есть 100 бесплатных попыток в сутки на генерацию с текстом.\n\n▶️ Генерация фото по тексту - это когда вы пишете, что хотите увидеть, а ИИ рисует такую картинку.\n\nНапишите описание обычным сообщением, например: кот в очках на пляже."
 
 	photoTextModeText      = "▶️ Генерация фото по тексту выбрана.\n\nОпишите, что хотите увидеть, командой /image.\n\nПример:\n/image кот в очках на пляже"
 	photoReferenceModeText = "📸 Генерация фото с референсом пока будет подключена после входящих фото-артефактов.\n\nСейчас доступна генерация по тексту через /image."
 
+	prunaAIText = "PrunaAI активен.\n\nНапишите описание видео обычным сообщением.\n\nПример: кот в очках едет на жирафе."
+
 	sora2Text         = "sora-2\nОписание: Генерирует видео по тексту или фото.\n\n“ A hyper-realistic police bodycam video of a kangaroo making punching feints toward a police officer on a dusty rural road in Australia. The kangaroo stands ”\n\n🔗Инструкция: https://t.me/sora_video_1"
-	sora2StartText    = "sora-2\n\nВвод промпта для этой модели будет подключен следующим шагом.\n\nПока можно вернуться назад и выбрать другой режим."
+	sora2StartText    = "sora-2 активен.\n\nНапишите описание видео обычным сообщением.\n\nПример: cinematic drone shot over a neon city at night, rain reflections, realistic camera movement."
 	sora2ExamplesText = "ℹ️ Примеры sora-2\n\n1. A cinematic drone shot over a neon city at night, rain reflections on the street, realistic camera movement.\n\n2. A close-up handheld video of a chef cutting fruit in a bright kitchen, natural motion, realistic details."
 
 	kling21Text         = "Kling v2.1 master\nОписание: Генерирует видео по тексту или фото.\n\n“ The setting has warm lighting from streetlights or soft party lights. A little boy around 2 to 3 years old, with light skin tone, brown hair, and big green ”\n\n🔗Инструкция: https://t.me/pakrnet"
-	kling21StartText    = "Kling v2.1 master\n\nВвод промпта для этой модели будет подключен следующим шагом.\n\nПока можно вернуться назад и выбрать другой режим."
+	kling21StartText    = "Kling v2.1 master активен.\n\nНапишите описание видео обычным сообщением.\n\nПример: warm cinematic scene, friends walking under streetlights, realistic motion."
 	kling21ExamplesText = "ℹ️ Примеры Kling v2.1\n\n1. A warm cinematic scene of friends walking under streetlights, soft party lights, realistic skin and motion.\n\n2. A product video of a glass bottle rotating on a table, studio lighting, smooth camera movement."
 
 	seedance1Text     = "🔹 Seedance\n\nLite — это как «лайт-версия» приложения: самое простое, чтобы попробовать.\n\nPro — это как «премиум»: больше функций, настроек и возможностей для крутого результата.\n\n☝️ Если хочешь быстро и просто — бери Lite. Если любишь «по максимуму» — тогда Pro."
-	seedance1LiteText = "Seedance 1 Lite выбран.\n\nВвод промпта для этого варианта будет подключен следующим шагом."
-	seedance1ProText  = "Seedance 1 Pro выбран.\n\nВвод промпта для этого варианта будет подключен следующим шагом."
+	seedance1LiteText = "Seedance 1 Lite активен.\n\nНапишите описание видео обычным сообщением."
+	seedance1ProText  = "Seedance 1 Pro активен.\n\nНапишите описание видео обычным сообщением."
 
 	haiuo02Text         = "🔹 Haiuo 02\n\nHaiuo 02 — картинка суперчёткая, реалистичная, прям как в фильме.\n\nHaiuo 02 Fast — версия «на скорость»: делает видео быстрее, но качество чуть ниже.\n\n☝️ Если нужен «вау-визуал» — бери Haiuo. Если важнее быстро и удобно — Fast."
-	haiuo02StandardText = "Haiuo v0.2 Обычный выбран.\n\nВвод промпта для этого варианта будет подключен следующим шагом."
-	haiuo02FastText     = "Haiuo v0.2 Fast выбран.\n\nВвод промпта для этого варианта будет подключен следующим шагом."
+	haiuo02StandardText = "Haiuo v0.2 Обычный активен.\n\nНапишите описание видео обычным сообщением."
+	haiuo02FastText     = "Haiuo v0.2 Fast активен.\n\nНапишите описание видео обычным сообщением."
 
 	studentsText = "🎁Данные нейронные сети помогут вам во время учебы"
 
@@ -176,20 +183,39 @@ const (
 	chooseModeText = "Выберите режим в меню выше или нажмите на кнопку показать меню"
 )
 
-func controlTypeFromPayload(payload string) (domain.CommandType, bool) {
+const (
+	photoTextPromptInstruction    = "✅ У вас есть 100 бесплатных попыток в сутки на генерацию с текстом.\n\n▶️ Генерация фото по тексту - это когда вы пишете, что хотите увидеть, а ИИ рисует такую картинку.\n\nНапишите описание обычным сообщением, например: кот в очках на пляже."
+	photoTextModeInstruction      = "▶️ Генерация фото по тексту выбрана.\n\nНапишите обычным сообщением, что хотите увидеть.\n\nПример: кот в очках на пляже, кинематографичный свет, высокая детализация"
+	photoReferenceModeInstruction = "📸 Генерация фото с референсом пока будет подключена после входящих фото-артефактов.\n\nСейчас доступна генерация фото по тексту."
+)
+
+type controlPayload struct {
+	Command     string `json:"command"`
+	ProductCode string `json:"product_code,omitempty"`
+	Action      string `json:"action,omitempty"`
+}
+
+func controlPayloadFromPayload(payload string) (controlPayload, bool) {
 	if payload == "" {
-		return "", false
+		return controlPayload{}, false
 	}
-	var data struct {
-		Command string `json:"command"`
-	}
+	var data controlPayload
 	if err := json.Unmarshal([]byte(payload), &data); err != nil {
-		return "", false
+		return controlPayload{}, false
 	}
 	t := domain.CommandType(data.Command)
 	if !isMenuCommand(t) {
+		return controlPayload{}, false
+	}
+	return data, true
+}
+
+func controlTypeFromPayload(payload string) (domain.CommandType, bool) {
+	data, ok := controlPayloadFromPayload(payload)
+	if !ok {
 		return "", false
 	}
+	t := domain.CommandType(data.Command)
 	return t, true
 }
 
@@ -252,6 +278,20 @@ func (h *Handler) sendControlResponse(ctx context.Context, t domain.CommandType,
 		}
 		msgText = accountDetailsText(view)
 		keyboard = accountKeyboard(view)
+	} else if t == domain.CommandTopUp {
+		if pending, ok, err := h.activeTopUpIntent(ctx, user.ID); err != nil {
+			return fmt.Errorf("load active top-up intent: %w", err)
+		} else if ok {
+			msgText = topUpPendingText(pending)
+			keyboard = topUpPendingKeyboard(pending.ConfirmationURL)
+		} else {
+			products, err := h.topUpProducts(ctx)
+			if err != nil {
+				return fmt.Errorf("load top-up products: %w", err)
+			}
+			msgText = topUpCatalogText(products)
+			keyboard = topUpCatalogKeyboard(products, false)
+		}
 	}
 	markWelcomeSent := user.WelcomeNameSentAt.IsZero() && shouldSendControlResponse(t)
 	if t == domain.CommandStart && user.WelcomeNameSentAt.IsZero() {
@@ -404,6 +444,61 @@ func (h *Handler) sendUnroutedTextResponse(ctx context.Context, idemKey string, 
 	return err
 }
 
+func (h *Handler) sendTopUpCatalog(ctx context.Context, idemKey string, peerID int64, forceNew, allowEdit bool) error {
+	if h.deps.Control == nil {
+		h.logger.Warn("vk top-up catalog skipped because VK_ACCESS_TOKEN is not configured")
+		return nil
+	}
+	products, err := h.topUpProducts(ctx)
+	if err != nil {
+		return fmt.Errorf("load top-up products: %w", err)
+	}
+	msg := vkdelivery.Message{
+		Text:     topUpCatalogText(products),
+		Keyboard: topUpCatalogKeyboard(products, forceNew),
+	}
+	h.applyMenuButtonMode(msg.Keyboard)
+	randomID := vkdelivery.DeterministicRandomID(fmt.Sprintf("vk_control_topup_catalog:%s:%t", idemKey, forceNew))
+	result, err := h.deliverControlResponse(ctx, domain.CommandTopUp, peerID, randomID, msg, allowEdit)
+	if err == nil {
+		h.setActiveMenu(peerID, result.MessageID)
+	}
+	return err
+}
+
+func (h *Handler) sendTopUpPaymentLink(ctx context.Context, idemKey string, peerID int64, intent *domain.PaymentIntent) error {
+	if h.deps.Control == nil {
+		h.logger.Warn("vk top-up payment link skipped because VK_ACCESS_TOKEN is not configured")
+		return nil
+	}
+	link := strings.TrimSpace(intent.ConfirmationURL)
+	msg := vkdelivery.Message{
+		Text:     fmt.Sprintf("%s СЧЁТ\nПокупка %d генераций\n\nДанная ссылка действительна в течение 10 минут", formatRubAmount(intent.Amount), intent.Credits),
+		Keyboard: paymentLinkKeyboard(link),
+	}
+	randomID := vkdelivery.DeterministicRandomID("vk_control_topup_payment:" + idemKey)
+	result, err := h.sendControlMessage(ctx, domain.CommandTopUp, peerID, randomID, msg)
+	if err == nil {
+		h.setActiveMenu(peerID, result.MessageID)
+	}
+	return err
+}
+
+func (h *Handler) sendTopUpNotice(ctx context.Context, idemKey string, peerID int64, text string) error {
+	if h.deps.Control == nil {
+		h.logger.Warn("vk top-up notice skipped because VK_ACCESS_TOKEN is not configured")
+		return nil
+	}
+	msg := vkdelivery.Message{
+		Text:     text,
+		Keyboard: backKeyboard(),
+	}
+	h.applyMenuButtonMode(msg.Keyboard)
+	randomID := vkdelivery.DeterministicRandomID(fmt.Sprintf("vk_control_topup_notice:%s:%x", idemKey, hashText(text)))
+	_, err := h.sendControlMessage(ctx, domain.CommandTopUp, peerID, randomID, msg)
+	return err
+}
+
 func (h *Handler) sendGPTPendingMessage(ctx context.Context, idemKey string, peerID int64) int64 {
 	if h.deps.Control == nil {
 		h.logger.Warn("vk gpt pending message skipped because VK_ACCESS_TOKEN is not configured")
@@ -415,6 +510,42 @@ func (h *Handler) sendGPTPendingMessage(ctx context.Context, idemKey string, pee
 	result, err := h.sendControlMessage(ctx, domain.CommandMenuText, peerID, randomID, msg)
 	if err != nil {
 		h.logger.Warn("vk gpt pending message send failed",
+			slog.Int64("peer_id", peerID),
+			slog.String("error", err.Error()))
+		return 0
+	}
+	return result.MessageID
+}
+
+func (h *Handler) sendPhotoPendingMessage(ctx context.Context, idemKey string, peerID int64) int64 {
+	if h.deps.Control == nil {
+		h.logger.Warn("vk image pending message skipped because VK_ACCESS_TOKEN is not configured")
+		return 0
+	}
+
+	msg := vkdelivery.Message{Text: "НейроХаб рисует..."}
+	randomID := vkdelivery.DeterministicRandomID("vk_control_image_pending:" + idemKey)
+	result, err := h.sendControlMessage(ctx, domain.CommandMenuImage, peerID, randomID, msg)
+	if err != nil {
+		h.logger.Warn("vk image pending message send failed",
+			slog.Int64("peer_id", peerID),
+			slog.String("error", err.Error()))
+		return 0
+	}
+	return result.MessageID
+}
+
+func (h *Handler) sendVideoPendingMessage(ctx context.Context, idemKey string, peerID int64) int64 {
+	if h.deps.Control == nil {
+		h.logger.Warn("vk video pending message skipped because VK_ACCESS_TOKEN is not configured")
+		return 0
+	}
+
+	msg := vkdelivery.Message{Text: "НейроХаб готовит видео..."}
+	randomID := vkdelivery.DeterministicRandomID("vk_control_video_pending:" + idemKey)
+	result, err := h.sendControlMessage(ctx, domain.CommandMenuVideo, peerID, randomID, msg)
+	if err != nil {
+		h.logger.Warn("vk video pending message send failed",
 			slog.Int64("peer_id", peerID),
 			slog.String("error", err.Error()))
 		return 0
@@ -460,6 +591,8 @@ func (h *Handler) menuCommandEnabled(command domain.CommandType) bool {
 		return false
 	}
 	switch command {
+	case domain.CommandMenuVideoPrunaAI:
+		return h.menuCommandEnabled(domain.CommandMenuVideo)
 	case domain.CommandMenuVideoSora2,
 		domain.CommandMenuVideoSora2Start,
 		domain.CommandMenuVideoSora2Examples,
@@ -472,7 +605,7 @@ func (h *Handler) menuCommandEnabled(command domain.CommandType) bool {
 		domain.CommandMenuVideoHaiuo02,
 		domain.CommandMenuVideoHaiuo02Standard,
 		domain.CommandMenuVideoHaiuo02Fast:
-		return h.menuCommandEnabled(domain.CommandMenuVideo)
+		return false
 	case domain.CommandMenuImageText,
 		domain.CommandMenuImageReference:
 		return h.menuCommandEnabled(domain.CommandMenuImage)
@@ -578,6 +711,87 @@ func accountDetailsText(view accountView) string {
 	)
 }
 
+func (h *Handler) topUpProducts(ctx context.Context) ([]*domain.PaymentProduct, error) {
+	if h.deps.Payment == nil {
+		return nil, nil
+	}
+	return h.deps.Payment.ListActiveProducts(ctx)
+}
+
+func (h *Handler) activeTopUpIntent(ctx context.Context, userID uuid.UUID) (*domain.PaymentIntent, bool, error) {
+	if h.deps.Payment == nil {
+		return nil, false, nil
+	}
+	intent, err := h.deps.Payment.ActiveWaitingIntent(ctx, userID)
+	if err == nil {
+		return intent, intent != nil, nil
+	}
+	if errors.Is(err, domain.ErrNotFound) {
+		return nil, false, nil
+	}
+	return nil, false, err
+}
+
+func topUpCatalogText(products []*domain.PaymentProduct) string {
+	if len(products) == 0 {
+		return "💰 Пополнить баланс\n\nТарифы пока недоступны. Попробуйте позже."
+	}
+	return "Выберите пакет для пополнения баланса:"
+}
+
+func topUpPendingText(intent *domain.PaymentIntent) string {
+	return fmt.Sprintf("💰 У вас есть незавершенный платеж\n\nПакет: %d кристаллов\nСумма: %s\n\nПосле оплаты баланс обновится автоматически.", intent.Credits, formatRubAmount(intent.Amount))
+}
+
+func topUpCatalogKeyboard(products []*domain.PaymentProduct, forceNew bool) *vkdelivery.Keyboard {
+	rows := make([][]vkdelivery.KeyboardButton, 0, len(products)+1)
+	for _, product := range products {
+		if product == nil {
+			continue
+		}
+		rows = append(rows, []vkdelivery.KeyboardButton{
+			productButton(topUpProductLabel(product), product.Code, forceNew),
+		})
+	}
+	rows = append(rows, []vkdelivery.KeyboardButton{
+		button("⬅️ Назад", domain.CommandShowMenu, "secondary"),
+	})
+	return &vkdelivery.Keyboard{
+		OneTime: false,
+		Inline:  true,
+		Buttons: rows,
+	}
+}
+
+func topUpPendingKeyboard(link string) *vkdelivery.Keyboard {
+	return &vkdelivery.Keyboard{
+		OneTime: false,
+		Inline:  true,
+		Buttons: [][]vkdelivery.KeyboardButton{
+			{
+				openLinkButton("Продолжить оплату", link),
+			},
+			{
+				buttonWithAction("Создать новый платеж", domain.CommandTopUp, topUpActionNewPayment, "secondary"),
+			},
+			{
+				button("⬅️ Назад", domain.CommandShowMenu, "secondary"),
+			},
+		},
+	}
+}
+
+func topUpProductLabel(product *domain.PaymentProduct) string {
+	return fmt.Sprintf("💎 %d кристаллов — %s", product.Credits, formatRubAmount(product.Amount))
+}
+
+func formatRubAmount(amount int64) string {
+	if amount%100 == 0 {
+		return fmt.Sprintf("%d₽", amount/100)
+	}
+	return fmt.Sprintf("%d.%02d₽", amount/100, amount%100)
+}
+
 func welcomeKeyboard() *vkdelivery.Keyboard {
 	return &vkdelivery.Keyboard{
 		OneTime: false,
@@ -609,22 +823,17 @@ func videoModelKeyboard() *vkdelivery.Keyboard {
 		Inline:  true,
 		Buttons: [][]vkdelivery.KeyboardButton{
 			{
-				button("Sora 2 — видео текст+фото", domain.CommandMenuVideoSora2, "secondary"),
-			},
-			{
-				button("Kling v2.1 — видео текст+фото", domain.CommandMenuVideoKling21, "secondary"),
-			},
-			{
-				button("Seedance 1 — видео по тексту", domain.CommandMenuVideoSeedance1, "secondary"),
-			},
-			{
-				button("Haiuo v0.2 — видео текст+фото", domain.CommandMenuVideoHaiuo02, "secondary"),
+				button("PrunaAI", domain.CommandMenuVideoPrunaAI, "secondary"),
 			},
 			{
 				button("⬅️ Назад", domain.CommandShowMenu, "secondary"),
 			},
 		},
 	}
+}
+
+func prunaAIBackKeyboard() *vkdelivery.Keyboard {
+	return backToKeyboard(domain.CommandMenuVideo)
 }
 
 func sora2Keyboard() *vkdelivery.Keyboard {
@@ -711,12 +920,6 @@ func photoModeKeyboard() *vkdelivery.Keyboard {
 		Inline:  true,
 		Buttons: [][]vkdelivery.KeyboardButton{
 			{
-				button("▶️ Фото по тексту", domain.CommandMenuImageText, "primary"),
-			},
-			{
-				button("📸 Фото с референсом", domain.CommandMenuImageReference, "secondary"),
-			},
-			{
 				button("⬅️ Назад", domain.CommandShowMenu, "secondary"),
 			},
 		},
@@ -754,6 +957,18 @@ func backKeyboard() *vkdelivery.Keyboard {
 		Buttons: [][]vkdelivery.KeyboardButton{
 			{
 				button("⬅️ Назад", domain.CommandShowMenu, "secondary"),
+			},
+		},
+	}
+}
+
+func paymentLinkKeyboard(link string) *vkdelivery.Keyboard {
+	return &vkdelivery.Keyboard{
+		OneTime: false,
+		Inline:  true,
+		Buttons: [][]vkdelivery.KeyboardButton{
+			{
+				openLinkButton("Оплатить", link),
 			},
 		},
 	}
@@ -815,13 +1030,48 @@ func menuAccessKeyboard() *vkdelivery.Keyboard {
 }
 
 func button(label string, command domain.CommandType, color string) vkdelivery.KeyboardButton {
-	payload, _ := json.Marshal(struct {
-		Command string `json:"command"`
-	}{Command: string(command)})
+	payload, _ := json.Marshal(controlPayload{Command: string(command)})
 	return vkdelivery.KeyboardButton{
 		Label:   label,
 		Payload: string(payload),
 		Color:   color,
+	}
+}
+
+func buttonWithAction(label string, command domain.CommandType, action, color string) vkdelivery.KeyboardButton {
+	payload, _ := json.Marshal(controlPayload{
+		Command: string(command),
+		Action:  action,
+	})
+	return vkdelivery.KeyboardButton{
+		Label:   label,
+		Payload: string(payload),
+		Color:   color,
+	}
+}
+
+func productButton(label, productCode string, forceNew bool) vkdelivery.KeyboardButton {
+	action := ""
+	if forceNew {
+		action = topUpActionNewPayment
+	}
+	payload, _ := json.Marshal(controlPayload{
+		Command:     string(domain.CommandTopUp),
+		ProductCode: productCode,
+		Action:      action,
+	})
+	return vkdelivery.KeyboardButton{
+		Label:   label,
+		Payload: string(payload),
+		Color:   "primary",
+	}
+}
+
+func openLinkButton(label, link string) vkdelivery.KeyboardButton {
+	return vkdelivery.KeyboardButton{
+		Label:      label,
+		ActionType: "open_link",
+		Link:       link,
 	}
 }
 

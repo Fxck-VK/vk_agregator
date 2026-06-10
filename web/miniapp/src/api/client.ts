@@ -2,6 +2,8 @@
 // Тонкий типизированный клиент к /miniapp/* эндпоинтам.
 // Все пути ОТНОСИТЕЛЬНЫЕ — уходят через Vite-proxy на :8080.
 
+import bridge from "@vkontakte/vk-bridge";
+
 /** Mirrors internal/adapter/inbound/miniapp JobDTO */
 export interface Job {
   id: string;
@@ -9,6 +11,7 @@ export interface Job {
   modality: string;
   status: string;
   prompt?: string;
+  conversation_id?: string;
   cost_estimate: number;
   cost_captured: number;
   output_artifact_ids: string[];
@@ -22,11 +25,32 @@ export interface CreateJobInput {
   operation: string;
   prompt: string;
   model_id?: string;
+  reference_artifact_ids?: string[];
+  /** video_generate only: 3, 5 or 10 seconds */
+  duration_sec?: number;
 }
 
 export interface CreateChatMessageInput {
   prompt: string;
   conversation_id?: string;
+}
+
+export interface ChatConversation {
+  id: string;
+  title: string;
+  last_message_preview?: string;
+  last_message_role?: "user" | "bot";
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ChatConversationMessage {
+  id: string;
+  job_id: string;
+  seq: number;
+  role: "user" | "bot";
+  text: string;
+  created_at: string;
 }
 
 export interface CreateJobOptions {
@@ -38,6 +62,8 @@ export interface EstimateInput {
   operation: string;
   prompt: string;
   model_id?: string;
+  reference_artifact_ids?: string[];
+  duration_sec?: number;
 }
 
 export interface EstimateResponse {
@@ -54,8 +80,85 @@ export interface BalanceResponse {
   balance_credits: number;
 }
 
+export interface PaymentProduct {
+  id: string;
+  code: string;
+  title: string;
+  amount: number;
+  currency: string;
+  credits: number;
+  price_version: number;
+}
+
+export interface PaymentIntent {
+  id: string;
+  product_id?: string;
+  status: string;
+  amount: number;
+  currency: string;
+  credits: number;
+  price_version: number;
+  confirmation_url?: string;
+  reused_active_payment?: boolean;
+  notice?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreatePaymentIntentInput {
+  product_code: string;
+  receipt_email?: string;
+  receipt_phone?: string;
+  return_url?: string;
+  force_new?: boolean;
+}
+
+export interface PaymentProductListResponse {
+  items: PaymentProduct[];
+  pagination: {
+    limit: number;
+    offset: number;
+    count: number;
+    has_more: boolean;
+  };
+}
+
+export interface PaymentIntentListResponse {
+  items: PaymentIntent[];
+  pagination: {
+    limit: number;
+    offset: number;
+    count: number;
+    has_more: boolean;
+  };
+}
+
+export interface ArtifactUploadResponse {
+  artifact_id: string;
+}
+
 export interface JobListResponse {
   items: Job[];
+  pagination: {
+    limit: number;
+    offset: number;
+    count: number;
+    has_more: boolean;
+  };
+}
+
+export interface ChatConversationListResponse {
+  items: ChatConversation[];
+  pagination: {
+    limit: number;
+    offset: number;
+    count: number;
+    has_more: boolean;
+  };
+}
+
+export interface ChatConversationMessageListResponse {
+  items: ChatConversationMessage[];
   pagination: {
     limit: number;
     offset: number;
@@ -67,6 +170,8 @@ export interface JobListResponse {
 export type ApiErrorCode =
   | "validation_error"
   | "unsupported_model"
+  | "reference_artifacts_unsupported"
+  | "too_many_reference_artifacts"
   | "auth_error"
   | "insufficient_credits"
   | "rate_limited"
@@ -99,18 +204,100 @@ export class ApiError extends Error {
   }
 }
 
-function launchParams(): string {
-  const fromUrl = window.location.search.replace(/^\?/, "");
-  if (fromUrl) return fromUrl;
-
-  const fromDevEnv = import.meta.env.DEV ? import.meta.env.VITE_DEV_LAUNCH_PARAMS : "";
-  return typeof fromDevEnv === "string" ? fromDevEnv : "";
+function normalizeRawParams(raw: string): string {
+  return raw.replace(/^[?#]/, "");
 }
 
-const LAUNCH_PARAMS = launchParams();
+function hasLaunchIdentity(raw: string): boolean {
+  const params = new URLSearchParams(normalizeRawParams(raw));
+  return Boolean(params.get("vk_user_id"));
+}
+
+function launchParamsFromLocation(): string {
+  const candidates = [window.location.search, window.location.hash];
+  for (const candidate of candidates) {
+    const raw = normalizeRawParams(candidate);
+    if (hasLaunchIdentity(raw)) return raw;
+
+    const queryIndex = raw.indexOf("?");
+    if (queryIndex >= 0) {
+      const nested = raw.slice(queryIndex + 1);
+      if (hasLaunchIdentity(nested)) return nested;
+    }
+  }
+  return "";
+}
+
+function stringifyBridgeLaunchParams(value: unknown): string {
+  if (!value || typeof value !== "object") return "";
+  const params = new URLSearchParams();
+  for (const [key, raw] of Object.entries(value as Record<string, unknown>)) {
+    if (raw === undefined || raw === null) continue;
+    if (typeof raw === "boolean") {
+      params.set(key, raw ? "1" : "0");
+      continue;
+    }
+    params.set(key, String(raw));
+  }
+  const out = params.toString();
+  return hasLaunchIdentity(out) ? out : "";
+}
+
+let launchParamsCache: string | undefined;
+
+function bridgeCallTimeoutMs(): number {
+  return import.meta.env.DEV ? 1200 : 3000;
+}
+
+async function bridgeLaunchParamsFromBridge(): Promise<unknown> {
+  const timeoutMs = bridgeCallTimeoutMs();
+  let timer: number | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = window.setTimeout(() => reject(new Error("vk bridge timeout")), timeoutMs);
+  });
+  try {
+    return await Promise.race([bridge.send("VKWebAppGetLaunchParams"), timeout]);
+  } finally {
+    if (timer !== undefined) window.clearTimeout(timer);
+  }
+}
+
+async function launchParams(): Promise<string> {
+  if (launchParamsCache !== undefined) return launchParamsCache;
+
+  const fromUrl = launchParamsFromLocation();
+  if (fromUrl) {
+    launchParamsCache = fromUrl;
+    return fromUrl;
+  }
+
+  try {
+    const fromBridge = stringifyBridgeLaunchParams(await bridgeLaunchParamsFromBridge());
+    if (fromBridge) {
+      launchParamsCache = fromBridge;
+      return fromBridge;
+    }
+  } catch {
+    /* outside VK, bridge unavailable or timed out */
+  }
+
+  const fromDevEnv = import.meta.env.DEV ? import.meta.env.VITE_DEV_LAUNCH_PARAMS : "";
+  if (typeof fromDevEnv === "string" && fromDevEnv) {
+    launchParamsCache = fromDevEnv;
+    return fromDevEnv;
+  }
+
+  launchParamsCache = "";
+  return "";
+}
 
 const ARTIFACT_ID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export const MAX_REFERENCE_ARTIFACTS = 4;
+export const MAX_UPLOAD_BYTES = 20 << 20;
+
+const ALLOWED_UPLOAD_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 function safeString(value: unknown): string | undefined {
   return typeof value === "string" && value.length > 0 ? value : undefined;
@@ -118,6 +305,12 @@ function safeString(value: unknown): string | undefined {
 
 function apiErrorCode(status: number, backendError?: string): ApiErrorCode {
   const raw = (backendError ?? "").toLowerCase();
+  if (raw === "reference_artifacts_unsupported") {
+    return "reference_artifacts_unsupported";
+  }
+  if (raw === "too_many_reference_artifacts" || raw === "too many reference artifacts") {
+    return "too_many_reference_artifacts";
+  }
   if (status === 400 && (raw === "unsupported model" || raw === "unsupported_model")) {
     return "unsupported_model";
   }
@@ -138,6 +331,10 @@ function apiErrorMessageForCode(code: ApiErrorCode): string {
       return "Проверьте запрос и попробуйте снова";
     case "unsupported_model":
       return "Выбранная модель недоступна. Выберите другую модель";
+    case "reference_artifacts_unsupported":
+      return "Генерация с референсом пока недоступна. Попробуйте без фото или позже";
+    case "too_many_reference_artifacts":
+      return "Можно добавить не больше 4 референсов";
     case "auth_error":
       return "Не удалось подтвердить вход через VK. Откройте приложение заново";
     case "insufficient_credits":
@@ -159,6 +356,49 @@ export function apiUserMessage(error: unknown): string {
   return "Не удалось выполнить запрос";
 }
 
+async function apiErrorFromResponse(res: Response): Promise<ApiError> {
+  let backendError: string | undefined;
+  try {
+    const data = await res.json();
+    backendError = safeString(data?.error) ?? safeString(data?.message);
+  } catch {
+    /* ignore */
+  }
+  return new ApiError(res.status, apiErrorCode(res.status, backendError), {
+    backendError,
+    retryAfter: res.headers.get("Retry-After") ?? undefined,
+  });
+}
+
+function validateReferenceArtifactIDs(ids?: string[]): void {
+  if (!ids || ids.length === 0) return;
+  if (ids.length > MAX_REFERENCE_ARTIFACTS) {
+    throw new ApiError(400, "too_many_reference_artifacts", {
+      backendError: "too many reference artifacts",
+    });
+  }
+  for (const id of ids) {
+    if (!ARTIFACT_ID_RE.test(id)) {
+      throw new ApiError(400, "validation_error", {
+        backendError: "invalid reference artifact id",
+      });
+    }
+  }
+}
+
+function validateUploadFile(file: File): void {
+  if (!ALLOWED_UPLOAD_MIME_TYPES.has(file.type)) {
+    throw new ApiError(400, "validation_error", {
+      backendError: "unsupported artifact mime type",
+    });
+  }
+  if (file.size > MAX_UPLOAD_BYTES) {
+    throw new ApiError(400, "validation_error", {
+      backendError: "artifact too large",
+    });
+  }
+}
+
 export function createIdempotencyKey(): string {
   if (globalThis.crypto?.randomUUID) {
     return globalThis.crypto.randomUUID();
@@ -174,11 +414,12 @@ export function createIdempotencyKey(): string {
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let res: Response;
   try {
+    const rawLaunchParams = await launchParams();
     res = await fetch(path, {
       ...init,
       headers: {
         "Content-Type": "application/json",
-        "X-Launch-Params": LAUNCH_PARAMS,
+        "X-Launch-Params": rawLaunchParams,
         ...(init?.headers ?? {}),
       },
     });
@@ -186,17 +427,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new ApiError(0, "network_error");
   }
   if (!res.ok) {
-    let backendError: string | undefined;
-    try {
-      const data = await res.json();
-      backendError = safeString(data?.error) ?? safeString(data?.message);
-    } catch {
-      /* ignore */
-    }
-    throw new ApiError(res.status, apiErrorCode(res.status, backendError), {
-      backendError,
-      retryAfter: res.headers.get("Retry-After") ?? undefined,
-    });
+    throw await apiErrorFromResponse(res);
   }
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
@@ -205,6 +436,29 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export async function getBalance(): Promise<number> {
   const data = await request<BalanceResponse>("/miniapp/balance");
   return data.balance_credits ?? 0;
+}
+
+export async function listPaymentProducts(): Promise<PaymentProduct[]> {
+  const data = await request<PaymentProductListResponse>("/miniapp/payment-products");
+  return data.items ?? [];
+}
+
+export async function createPaymentIntent(
+  input: CreatePaymentIntentInput,
+  options: CreateJobOptions,
+): Promise<PaymentIntent> {
+  return request<PaymentIntent>("/miniapp/payments/intents", {
+    method: "POST",
+    headers: {
+      "X-Idempotency-Key": options.idempotencyKey,
+    },
+    body: JSON.stringify(input),
+  });
+}
+
+export async function listPaymentIntents(): Promise<PaymentIntent[]> {
+  const data = await request<PaymentIntentListResponse>("/miniapp/payments");
+  return data.items ?? [];
 }
 
 export async function listJobs(): Promise<Job[]> {
@@ -217,6 +471,7 @@ export async function getJob(id: string): Promise<Job> {
 }
 
 export async function createJob(input: CreateJobInput, options: CreateJobOptions): Promise<Job> {
+  validateReferenceArtifactIDs(input.reference_artifact_ids);
   return request<Job>("/miniapp/jobs", {
     method: "POST",
     headers: {
@@ -224,6 +479,40 @@ export async function createJob(input: CreateJobInput, options: CreateJobOptions
     },
     body: JSON.stringify(input),
   });
+}
+
+export async function uploadArtifact(file: File): Promise<string> {
+  validateUploadFile(file);
+
+  const body = new FormData();
+  body.append("file", file);
+
+  let res: Response;
+  try {
+    const rawLaunchParams = await launchParams();
+    res = await fetch("/miniapp/artifacts", {
+      method: "POST",
+      headers: {
+        "X-Launch-Params": rawLaunchParams,
+        "X-Idempotency-Key": createIdempotencyKey(),
+      },
+      body,
+    });
+  } catch {
+    throw new ApiError(0, "network_error");
+  }
+
+  if (!res.ok) {
+    throw await apiErrorFromResponse(res);
+  }
+
+  const data = (await res.json()) as ArtifactUploadResponse;
+  if (!ARTIFACT_ID_RE.test(data.artifact_id)) {
+    throw new ApiError(500, "service_unavailable", {
+      backendError: "invalid artifact response",
+    });
+  }
+  return data.artifact_id;
 }
 
 export async function createChatMessage(input: CreateChatMessageInput, options: CreateJobOptions): Promise<Job> {
@@ -236,7 +525,20 @@ export async function createChatMessage(input: CreateChatMessageInput, options: 
   });
 }
 
+export async function listChatConversations(): Promise<ChatConversation[]> {
+  const data = await request<ChatConversationListResponse>("/miniapp/chat/conversations");
+  return data.items ?? [];
+}
+
+export async function listChatConversationMessages(conversationId: string): Promise<ChatConversationMessage[]> {
+  const data = await request<ChatConversationMessageListResponse>(
+    `/miniapp/chat/conversations/${encodeURIComponent(conversationId)}/messages`,
+  );
+  return data.items ?? [];
+}
+
 export async function estimateJob(input: EstimateInput): Promise<EstimateResponse> {
+  validateReferenceArtifactIDs(input.reference_artifact_ids);
   return request<EstimateResponse>("/miniapp/estimate", {
     method: "POST",
     body: JSON.stringify(input),
@@ -249,12 +551,39 @@ export function artifactUrl(id: string): string | null {
   return `/miniapp/artifacts/${id}`;
 }
 
+/**
+ * Artifact URL safe for <img>/<video> src: appends launch_params query because
+ * media elements cannot send X-Launch-Params. Backend auth accepts this query.
+ */
+export async function artifactMediaUrl(id: string): Promise<string | null> {
+  const base = artifactUrl(id);
+  if (!base) return null;
+  const rawLaunchParams = await launchParams();
+  if (!rawLaunchParams) return base;
+  return `${base}?launch_params=${encodeURIComponent(rawLaunchParams)}`;
+}
+
+/** Fetch artifact bytes and return a blob URL for instant preview on the result screen. */
+export async function preloadArtifactBlobUrl(id: string): Promise<string | null> {
+  const url = await artifactMediaUrl(id);
+  if (!url) return null;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    return URL.createObjectURL(blob);
+  } catch {
+    return null;
+  }
+}
+
 /** Text artifact body (when GET /miniapp/artifacts/{id} is available). */
 export async function fetchArtifactText(id: string): Promise<string | null> {
   const url = artifactUrl(id);
   if (!url) return null;
+  const rawLaunchParams = await launchParams();
   const res = await fetch(url, {
-    headers: { "X-Launch-Params": LAUNCH_PARAMS },
+    headers: { "X-Launch-Params": rawLaunchParams },
   });
   if (!res.ok) return null;
   const ct = res.headers.get("content-type") ?? "";
@@ -278,6 +607,14 @@ export function isTerminal(s: string): boolean {
   return OK.has(s) || FAIL.has(s);
 }
 
+/** Image/video artifacts are ready in Mini App once postprocessing finishes. */
+export function hasPreviewableMediaResult(job: Job): boolean {
+  if (!job.output_artifact_ids?.length) return false;
+  if (job.operation !== "image_generate" && job.operation !== "video_generate") return false;
+  if (statusKind(job.status) === "done") return true;
+  return job.status === "result_ready";
+}
+
 const STATUS_LABELS: Record<string, string> = {
   received: "Принято",
   validated: "Проверка",
@@ -292,9 +629,11 @@ const STATUS_LABELS: Record<string, string> = {
   postprocessing: "Постобработка",
   result_ready: "Почти готово",
   delivering: "Доставка",
+  succeeded: "Готово",
 };
 
 export function statusLabel(s: string): string {
+  if (statusKind(s) === "done") return STATUS_LABELS.succeeded;
   return STATUS_LABELS[s] ?? "Обработка…";
 }
 

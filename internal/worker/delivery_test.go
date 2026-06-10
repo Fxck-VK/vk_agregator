@@ -58,17 +58,28 @@ func newDeliveryHarness(t *testing.T) *deliveryHarness {
 }
 
 type fakeVKUploader struct {
-	photoBytes []byte
-	videoBytes []byte
+	photoBytes    []byte
+	photoFilename string
+	videoBytes    []byte
+	videoFilename string
+	err           error
 }
 
 func (u *fakeVKUploader) UploadPhoto(_ context.Context, peerID int64, filename string, data []byte, _ string) (string, error) {
+	if u.err != nil {
+		return "", u.err
+	}
 	u.photoBytes = append([]byte(nil), data...)
+	u.photoFilename = filename
 	return "photo123_456_key", nil
 }
 
 func (u *fakeVKUploader) UploadVideo(_ context.Context, peerID int64, filename string, data []byte, _ string) (string, error) {
+	if u.err != nil {
+		return "", u.err
+	}
 	u.videoBytes = append([]byte(nil), data...)
+	u.videoFilename = filename
 	return "video123_456_key", nil
 }
 
@@ -179,6 +190,79 @@ func TestDeliveryUploadsRawPhotoArtifactToVK(t *testing.T) {
 	sent := h.vk.Sent()
 	if len(sent) != 1 || sent[0].Attachment != "photo123_456_key" {
 		t.Fatalf("expected uploaded VK attachment send, got %+v", sent)
+	}
+}
+
+func TestDeliveryNamesRawVideoArtifactFromPrompt(t *testing.T) {
+	h := newDeliveryHarness(t)
+	uploader := &fakeVKUploader{}
+	h.worker = worker.NewDeliveryWorker(worker.DeliveryDeps{
+		Jobs:       h.jobs,
+		Deliveries: h.deliveries,
+		Artifacts:  h.artifacts,
+		Objects:    h.objects,
+		VK:         h.vk,
+		VKUploader: uploader,
+		Billing:    h.billing,
+	})
+	ctx := context.Background()
+	job := h.resultReadyJob(t, domain.MediaTypeVideo, "raw mp4 bytes")
+	job.OperationType = domain.OperationVideoGenerate
+	job.Modality = domain.ModalityVideo
+	params, _ := json.Marshal(struct {
+		Prompt string `json:"prompt"`
+	}{
+		Prompt: "кот в очках едет на жирафе по городу",
+	})
+	job.Params = params
+	if err := h.jobs.Update(ctx, job); err != nil {
+		t.Fatalf("update job: %v", err)
+	}
+
+	if err := h.worker.Process(ctx, deliveryTask(job)); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+	if string(uploader.videoBytes) != "raw mp4 bytes" {
+		t.Fatalf("uploaded bytes = %q", string(uploader.videoBytes))
+	}
+	if uploader.videoFilename != "кот в очках едет на жираф.mp4" {
+		t.Fatalf("video filename = %q", uploader.videoFilename)
+	}
+}
+
+func TestDeliveryMediaUploadFailureUsesRetryBudget(t *testing.T) {
+	h := newDeliveryHarness(t)
+	uploader := &fakeVKUploader{err: errors.New("vk video.save denied")}
+	h.worker = worker.NewDeliveryWorker(worker.DeliveryDeps{
+		Jobs:        h.jobs,
+		Deliveries:  h.deliveries,
+		Artifacts:   h.artifacts,
+		Objects:     h.objects,
+		VK:          h.vk,
+		VKUploader:  uploader,
+		Billing:     h.billing,
+		MaxAttempts: 2,
+	})
+	ctx := context.Background()
+	job := h.resultReadyJob(t, domain.MediaTypeVideo, "raw mp4 bytes")
+	job.OperationType = domain.OperationVideoGenerate
+	job.Modality = domain.ModalityVideo
+	_ = h.jobs.Update(ctx, job)
+
+	if err := h.worker.Process(ctx, deliveryTask(job)); err == nil {
+		t.Fatalf("expected upload error so the task stays pending for retry")
+	}
+	dels, _ := h.deliveries.ListByJob(ctx, job.ID)
+	if len(dels) != 1 || dels[0].Status != domain.DeliveryStatusRetrying || dels[0].AttemptNo != 2 {
+		t.Fatalf("expected persisted retrying delivery after upload failure, got %+v", dels)
+	}
+
+	if err := h.worker.Process(ctx, deliveryTask(job)); err != nil {
+		t.Fatalf("terminal retry should be acknowledged after DLQ routing: %v", err)
+	}
+	got, _ := h.jobs.GetByID(ctx, job.ID)
+	if got.Status != domain.JobStatusFailedTerminal || got.ErrorCode != "delivery_failed" {
+		t.Fatalf("expected terminal delivery failure, got %+v", got)
 	}
 }
 
@@ -325,6 +409,62 @@ func TestDeliveryTextSplitsLongGPTPlaceholderAnswer(t *testing.T) {
 		if !strings.Contains(msg.Text, "answer") {
 			t.Fatalf("unexpected split content in chunk %d: %+v", i, msg)
 		}
+	}
+}
+
+func TestDeliverySendsImageProviderFailureNoticeWithoutCapture(t *testing.T) {
+	h := newDeliveryHarness(t)
+	ctx := context.Background()
+	userID := uuid.New()
+	if _, err := h.billing.EnsureAccount(ctx, userID); err != nil {
+		t.Fatalf("ensure account: %v", err)
+	}
+	pending, err := h.vk.SendMessage(ctx, 555, 9001, vkdelivery.Message{Text: "НейроХаб рисует..."})
+	if err != nil {
+		t.Fatalf("send pending: %v", err)
+	}
+	job := &domain.Job{
+		ID:             uuid.New(),
+		UserID:         userID,
+		VKPeerID:       555,
+		OperationType:  domain.OperationImageGenerate,
+		Modality:       domain.ModalityImage,
+		Status:         domain.JobStatusFailedTerminal,
+		IdempotencyKey: "job:" + uuid.NewString(),
+		CostReserved:   10,
+		ErrorCode:      string(domain.ProviderErrInternal),
+		ErrorMessage:   "provider failed",
+	}
+	params, _ := json.Marshal(struct {
+		Prompt                 string `json:"prompt"`
+		VKPlaceholderMessageID int64  `json:"vk_placeholder_message_id"`
+	}{
+		Prompt:                 "кот",
+		VKPlaceholderMessageID: pending.MessageID,
+	})
+	job.Params = params
+	if err := h.jobs.Create(ctx, job); err != nil {
+		t.Fatalf("create job: %v", err)
+	}
+
+	if err := h.worker.Process(ctx, deliveryTask(job)); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+
+	got, err := h.jobs.GetByID(ctx, job.ID)
+	if err != nil {
+		t.Fatalf("reload job: %v", err)
+	}
+	if got.Status != domain.JobStatusFailedTerminal || got.CostCaptured != 0 {
+		t.Fatalf("failure notice must not mark success or capture credits: %+v", got)
+	}
+	edits := h.vk.Edits()
+	if len(edits) != 1 || edits[0].MessageID != pending.MessageID || !strings.Contains(edits[0].Text, "Средства не списаны") {
+		t.Fatalf("unexpected failure notice edit: %+v", edits)
+	}
+	dels, _ := h.deliveries.ListByJob(ctx, job.ID)
+	if len(dels) != 1 || dels[0].Status != domain.DeliveryStatusSent || dels[0].VKMessageID == nil || *dels[0].VKMessageID != pending.MessageID {
+		t.Fatalf("failure delivery should be persisted as sent edit: %+v", dels)
 	}
 }
 

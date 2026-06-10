@@ -1,9 +1,11 @@
 // src/chat/ChatList.tsx
-import { Button } from "@vkontakte/vkui";
-import type { Chat, ChatMessage } from "./types";
+import { displayChatTitle } from "./display";
+import type { Chat } from "./types";
 
-function lastPreview(messages: ChatMessage[]): string {
+function lastPreview(chat: Chat): string {
+  const messages = chat.messages;
   const last = [...messages].reverse().find((msg) => msg.text || msg.error || msg.pending || msg.status);
+  if (!last && chat.preview) return chat.preview;
   if (!last) return "Пока нет сообщений";
   if (last.pending) return "НейроХаб печатает...";
   if (last.error) return last.error;
@@ -50,20 +52,21 @@ export function ChatList({
         className={"drawer-overlay" + (open ? " is-open" : "")}
         onClick={onClose}
       />
-      <aside className={"drawer" + (open ? " is-open" : "")} aria-label="Панель диалогов">
+      <aside className={"drawer" + (open ? " is-open" : "")} aria-label="История чатов">
         <div className="drawer__head">
           <div>
-            <strong>Диалоги</strong>
-            <span>Локально хранится только список диалогов без текста сообщений.</span>
+            <strong>История чатов</strong>
+            <span>{chats.length} диалогов</span>
           </div>
-          <Button type="button" mode="tertiary" appearance="neutral" size="m" aria-label="Закрыть" onClick={onClose}>
+          <button type="button" className="chat__history-btn" aria-label="Закрыть" onClick={onClose}>
             ×
-          </Button>
+          </button>
         </div>
-        <Button type="button" className="drawer__new" mode="primary" size="l" stretched onClick={onNew}>
+        <button type="button" className="drawer__new" onClick={onNew}>
+          <span aria-hidden="true">+</span>
           Новый диалог
-        </Button>
-        <div className="drawer__list">
+        </button>
+        <div className="drawer__list nh-scroll">
           {chats.length === 0 && <div className="chat-empty">Пока нет диалогов</div>}
           {chats.map((c) => (
             <div
@@ -80,17 +83,19 @@ export function ChatList({
                 }
               }}
             >
+              <span className="chat-item__icon" aria-hidden="true">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                  <path d="M4 5h16a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H9l-5 4V7a2 2 0 0 1 2-2z" stroke="currentColor" strokeWidth="1.8" />
+                </svg>
+              </span>
               <div className="chat-item__body">
-                <span className="chat-item__title">{c.title}</span>
-                <small>{lastPreview(c.messages)}</small>
+                <span className="chat-item__title">{displayChatTitle(c)}</span>
+                <small>{lastPreview(c)}</small>
               </div>
               <time className="chat-item__time">{timeLabel(c.updatedAt)}</time>
-              <Button
+              <button
                 type="button"
                 className="chat-item__del"
-                mode="tertiary"
-                appearance="neutral"
-                size="s"
                 aria-label="Удалить диалог"
                 onClick={(e) => {
                   e.stopPropagation();
@@ -98,21 +103,13 @@ export function ChatList({
                 }}
               >
                 ×
-              </Button>
+              </button>
             </div>
           ))}
         </div>
-        <Button
-          type="button"
-          className="drawer__clear"
-          mode="secondary"
-          appearance="neutral"
-          size="m"
-          stretched
-          onClick={onClearHistory}
-        >
+        <button type="button" className="drawer__clear" onClick={onClearHistory}>
           Очистить локальные диалоги
-        </Button>
+        </button>
       </aside>
     </>
   );

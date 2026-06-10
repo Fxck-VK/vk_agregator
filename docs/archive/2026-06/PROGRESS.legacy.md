@@ -1,5 +1,348 @@
 # PROGRESS
 
+## Payment top-up foundation chapter 7 (2026-06-08)
+
+Status: **completed (reconciliation, manual operator actions and metrics)**.
+
+What changed:
+
+- Extended the payment repository contract with stale-intent reconciliation and
+  refund persistence methods, implemented in Postgres and memory repositories.
+- Added payment reconciliation in `paymentservice.WebhookProcessor` and
+  `cmd/provider-webhook`: stale `provider_pending` / `waiting_for_user`
+  provider-backed intents are checked through `domain.PaymentProvider.GetPayment`
+  and applied through the same state-machine / ledger path as webhooks.
+- Added protected operator actions under `/billing/*`:
+  `POST /billing/payment-intents/{id}/sync` and
+  `POST /billing/payment-intents/{id}/refund`.
+- Added manual full-refund MVP behavior: refunds require `X-Idempotency-Key`,
+  operate only on `succeeded` intents, refuse when current credit balance cannot
+  cover the top-up credits, create refund rows, post ledger debits and use
+  provider refunds without direct balance mutation.
+- Added payment metrics:
+  `payments_created_total`, `payments_succeeded_total`,
+  `payments_canceled_total`, `payment_webhooks_total`,
+  `payment_topups_total` and `payment_reconciliation_mismatches`.
+- Added reconciliation env knobs:
+  `PAYMENT_RECONCILIATION_INTERVAL`, `PAYMENT_RECONCILIATION_LIMIT` and
+  `PAYMENT_RECONCILIATION_STALE_AFTER`.
+
+Security / architecture:
+
+- Reconciliation does not trust local status. It verifies provider state through
+  `GetPayment` before applying success/cancel state.
+- Manual refunds are admin-only and conservative. The MVP does not refund money
+  for credits that appear already spent and does not implement partial/automatic
+  refund attribution until lot/FIFO tracking exists.
+- Provider HTTP idempotency keys remain separate from internal ledger
+  idempotency keys.
+- Mini App and VK bot surfaces still do not call payment providers and still do
+  not mutate balances.
+
+Checks:
+
+- `go test ./internal/service/paymentservice ./internal/adapter/inbound/billing
+  ./internal/adapter/storage/memory ./internal/adapter/storage/postgres
+  ./internal/platform/config ./cmd/provider-webhook ./cmd/api
+  ./internal/app/api` - exit 0.
+- `go test ./...` - exit 0.
+- `go build ./...` - exit 0.
+- `go vet ./...` - exit 0.
+- `gofmt -l .` - clean.
+- `git grep -nE "^(<<<<<<<|=======|>>>>>>>)"` - clean.
+- `git diff --check` - exit 0; only Windows LF/CRLF normalization warnings.
+
+## Payment top-up foundation chapter 6 (2026-06-08)
+
+Status: **completed (YooKassa webhook inbox and async top-up processing)**.
+
+What changed:
+
+- Added `cmd/provider-webhook`, a dedicated HTTP entrypoint for payment
+  provider webhooks. It mounts `POST /billing/webhooks/yookassa`, `/health`,
+  `/healthz` and `/metrics`.
+- The webhook endpoint parses the raw provider body through
+  `domain.PaymentProvider.ParseWebhook`, computes/stores the provider dedup key
+  in `payment_events`, accepts duplicate retries as no-op and returns `200`
+  quickly without running payment business logic inline.
+- Added payment inbox repository methods for Postgres and memory:
+  `CreateEvent`, `GetEventByID`, `ListUnprocessedEvents`,
+  `MarkEventProcessed`, `GetIntentByProviderPaymentID` and
+  optimistic `UpdateIntentStatus`.
+- Added `paymentservice.WebhookProcessor`, which asynchronously reads
+  unprocessed inbox events, verifies current provider state through
+  `GetPayment`, applies the payment intent state machine, writes idempotent
+  `topup:<provider>:<provider_payment_id>` ledger entries through
+  `billingservice.GrantWith` and marks `processed_at`.
+- Added `PAYMENT_WEBHOOK_ADDR`, `PAYMENT_WEBHOOK_POLL_INTERVAL` and
+  `PAYMENT_WEBHOOK_BATCH_LIMIT` runtime config.
+
+Security / architecture:
+
+- The webhook endpoint is not protected by VK launch auth or Mini App auth.
+  It is a provider callback surface and is rate-limited separately.
+- The processor does not trust webhook body success. It verifies payment state,
+  amount and currency through provider `GetPayment` before posting a ledger
+  top-up.
+- Duplicate and retried webhooks are safe: inbox dedup prevents duplicate raw
+  rows, and `GrantWith` makes ledger top-up idempotent even if a second
+  verified provider event reaches processing.
+- Refund webhook dedup keys include `provider_refund_id`, so multiple refunds
+  for the same payment do not collapse into one event.
+- A late `payment.canceled` / failed provider state cannot roll back a
+  `succeeded` intent; the stale verified event is marked processed as no-op.
+- Refund events are inboxed, deduped and provider-verified, but automatic
+  balance reversal is intentionally not implemented until refund policy for
+  spent credits exists.
+
+Checks:
+
+- Focused payment webhook tests were added; see the task final report for
+  commands run.
+
+## Payment top-up foundation chapter 5 (2026-06-08)
+
+Status: **completed (payment lifecycle service and safe APIs only)**.
+
+What changed:
+
+- Added `internal/service/paymentservice`, which creates idempotent payment
+  intents from an active `payment_products` catalog row, calls the configured
+  `domain.PaymentProvider`, stores `provider_payment_id` / `confirmation_url`
+  and returns safe payment DTOs.
+- Added Postgres and memory implementations of `domain.PaymentRepository` for
+  payment products and payment intents.
+- Added protected operator endpoints:
+  `POST /billing/payment-intents`, `GET /billing/payment-intents/{id}` and
+  `GET /billing/payment-history`.
+- Added authenticated Mini App endpoints:
+  `POST /miniapp/payments/intents`, `GET /miniapp/payments` and
+  `GET /miniapp/payments/{id}`.
+- Wired the payment service through `internal/app/api`, `cmd/api` and
+  `internal/app/miniapp`.
+
+Security / architecture:
+
+- `/billing/*` payment routes fail closed when `ADMIN_TOKEN` is empty or the
+  `X-Admin-Token` header does not match.
+- Mini App payment routes derive `user_id` from verified VK launch params /
+  trusted dev auth, never from public JSON body input.
+- Intent creation requires `X-Idempotency-Key`; replay returns the existing
+  intent instead of creating a duplicate provider payment.
+- User-facing Mini App DTOs do not expose provider-native payloads,
+  `provider_payment_id`, auth details or YooKassa raw response bodies.
+- This chapter does not process provider webhooks, does not reconcile payments
+  and does not append committed `topup` ledger entries. Payment success still
+  must come from trusted provider confirmation in a later chapter.
+
+Checks:
+
+- Focused payment service / API tests were added; see the task final report for
+  commands run.
+
+## Payment top-up foundation chapter 4 (2026-06-08)
+
+Status: **completed (YooKassa adapter only)**.
+
+### What changed
+
+- Added `internal/adapter/payment/yookassa`, a real YooKassa implementation of
+  `domain.PaymentProvider`.
+- `CreatePayment` sends YooKassa redirect payments with Basic Auth,
+  `Idempotence-Key`, `capture: true`, kopeck-to-`"100.00"` amount conversion,
+  54-FZ receipt customer contact and one receipt item.
+- `GetPayment`, `CancelPayment`, `CreateRefund` and `ParseWebhook` normalize
+  YooKassa payment/refund/webhook shapes back into domain DTOs.
+- `internal/adapter/payment.NewProvider(cfg)` now returns the YooKassa adapter
+  when `PAYMENT_PROVIDER=yookassa`.
+- `CreatePaymentInput` now carries optional receipt item hints:
+  `VATCode`, `PaymentSubject` and `PaymentMode`.
+
+### Guardrails
+
+- YooKassa HTTP `Idempotence-Key` remains separate from internal ledger
+  idempotency keys and is validated at <=64 characters.
+- Adapter tests use `httptest.Server`; no real YooKassa credentials or network
+  calls are required.
+- This chapter still does not expose payment APIs, process YooKassa webhooks,
+  run reconciliation or commit ledger top-ups. User-facing top-up must stay
+  disabled until the trusted webhook-to-`GrantWith` transaction exists.
+
+### Checks
+
+- YooKassa adapter/factory tests were added; see the task final report for
+  commands run.
+
+## Payment top-up foundation chapter 3 (2026-06-08)
+
+Status: **completed (provider port, mock adapter and factory foundation)**.
+
+### What changed
+
+- Added `domain.PaymentProvider` with normalized methods:
+  `CreatePayment`, `GetPayment`, `CancelPayment`, `CreateRefund` and
+  `ParseWebhook`.
+- Added provider-agnostic DTOs for payment creation, provider payment state,
+  refund creation/result and normalized webhook events.
+- Added `internal/adapter/payment/mock`, an in-memory adapter for local
+  development and tests. It supports idempotent payment creation, payment status
+  simulation, cancellation, idempotent refunds and mock webhook parsing.
+- Added `internal/adapter/payment.NewProvider(cfg)` factory keyed by
+  `PAYMENT_PROVIDER`.
+
+### Guardrails
+
+- Payment services can now depend on `domain.PaymentProvider` instead of
+  provider-native YooKassa HTTP/JSON shapes.
+- Chapter 3 only added the port, mock adapter and factory foundation; Chapter 4
+  later wired the real YooKassa HTTP adapter.
+- No payment service, payment API, webhook processing or ledger top-up
+  integration was added in this chapter.
+
+### Checks
+
+- Mock/factory tests were added; see the task final report for commands run.
+
+## Payment top-up foundation chapter 2 (2026-06-08)
+
+Status: **completed (tx-aware billing grant primitive only)**.
+
+### What changed
+
+- Added `billingservice.GrantWith(ctx, repo, userID, amount, idempotencyKey,
+  reason)`.
+- Existing `Grant` now delegates to `GrantWith(ctx, s.repo, ...)`, preserving
+  referral/signup reward behavior and public call compatibility.
+- `GrantWith` uses `ensureAccountWith(ctx, repo, ...)`, so future payment
+  webhook processing can use a transaction-bound `BillingRepository`.
+- Duplicate idempotency keys still return success/no-op. This is the required
+  behavior for keys such as `topup:yookassa:<provider_payment_id>` when
+  YooKassa retries a webhook.
+
+### Guardrails
+
+- This chapter does not implement payment event/status repositories or webhook
+  processing yet.
+- The intended future transaction boundary is:
+  `payment_events.processed_at` + `payment_intents.status=succeeded` +
+  committed `ledger_entries` `topup` through `GrantWith`.
+- Balance remains append-only ledger based; no direct mutation path was added.
+
+### Checks
+
+- Focused billing tests were added; see the task final report for commands run.
+
+## Payment top-up foundation chapter 1 (2026-06-08)
+
+Status: **completed (domain/migration/config only)**.
+
+### What changed
+
+- Added payment domain types in `internal/domain/payment.go`:
+  `PaymentProduct`, `PaymentIntent`, `PaymentEvent`, `PaymentRefund`,
+  `PaymentProviderCode`, refund statuses and an explicit
+  `PaymentIntentStatus` state machine.
+- Added migration `000009_payments` with `payment_products`,
+  `payment_intents`, `payment_events` and `payment_refunds`.
+- Payment intent rows snapshot `amount`, `credits`, `product_id` and
+  `price_version`; later webhook processing must not recalculate old intents
+  from the current product catalog.
+- Receipt contacts are first-class columns (`receipt_email`, `receipt_phone`)
+  with a DB constraint requiring at least one contact for 54-FZ receipt support.
+- Webhook inbox rows have a unique `dedup_key` plus `provider_payment_id` and
+  `provider_refund_id`, so refund events can deduplicate by refund id rather
+  than collapsing multiple refunds for one payment.
+- Added payment env config: `PAYMENT_PROVIDER`, `YOOKASSA_SHOP_ID`,
+  `YOOKASSA_SECRET_KEY`, `YOOKASSA_BASE_URL`, `YOOKASSA_RETURN_URL`,
+  `YOOKASSA_WEBHOOK_IP_ALLOWLIST_ENABLED`.
+
+### Guardrails
+
+- No balance mutation, no payment API, no YooKassa HTTP adapter and no webhook
+  processing were added in this chapter.
+- `PAYMENT_PROVIDER=yookassa` fails validation without shop id, secret key and
+  return URL. The committed `.env.example` contains placeholders only.
+- The future webhook processor must use `billingservice.GrantWith(ctx, txRepo,
+  ...)` to append committed `topup` ledger entries after trusted provider
+  confirmation.
+
+### Checks
+
+- Domain/config tests were added; see the task final report for commands run.
+
+## VK welcome banner
+
+Status: **configured locally for the main VK bot panel**.
+
+- The provided НейроХаб PNG banner was uploaded to VK as a message photo and
+  wired through local `.env` `VK_WELCOME_ATTACHMENT`.
+- The existing menu contract already scopes the attachment to the main
+  welcome/menu screens only: `Старт`, `Показать меню` and menu repair.
+- Photo/GPT/account/student/video submenu screens do not receive this banner.
+- `.env.example` intentionally keeps `VK_WELCOME_ATTACHMENT` empty; each
+  environment should use its own pre-uploaded VK attachment string.
+
+---
+
+## VK bot photo UX and delivery
+
+Status: **done for text-to-image prompt mode; manual VK smoke remains user-run**.
+
+- `VK_MENU_IMAGE_ENABLED=true` in `.env.example` exposes the `Создать фото`
+  button while preserving per-button feature flags.
+- Clicking `Создать фото` stores Redis-backed `photo_text` mode for the VK peer.
+  The next plain text creates an `image.generate` Job
+  through `joborchestrator`; VK handlers still do not call image providers.
+- The API sends `НейроХаб рисует...` as a control placeholder and stores its VK
+  `message_id` in `job.Params`.
+- Successful image jobs continue through worker -> provider -> Artifact ->
+  delivery, and the delivery worker sends the ready image as VK photo media.
+- Terminal image provider failures release the reservation before delivery and
+  send/edit a short "funds were not charged" notice instead of capturing
+  credits.
+- `Фото с референсом` is hidden by `VK_MENU_IMAGE_REFERENCE_ENABLED=false`
+  until incoming VK photo attachments are saved as owned input Artifacts.
+- The current VK bot profile allows 100 free text-to-image attempts per user per
+  24h window through `VK_ANTISPAM_IMAGE_DAILY_LIMIT=100` and
+  `PRICES=image_generate=0`.
+- Mini App code was not changed.
+
+---
+
+## DeepInfra Seedream image adapter
+
+Status: **done for text-to-image; reference-image flow remains follow-up**.
+
+- Added provider-agnostic image request/result contracts in `internal/domain`:
+  `ImageGenerationRequest` and `ImageGenerationResult`.
+- Image jobs now carry worker-side fields for model, size, aspect ratio,
+  reference artifact ids and provider-safe input URLs through the generic
+  `ProviderRequest`.
+- `cmd/worker` can prefer an image provider with `IMAGE_PROVIDER` and attach
+  worker-only `IMAGE_MODEL` / `IMAGE_SIZE` defaults while preserving
+  `PROVIDER_CHAIN` fallback.
+- OpenAI image generation now respects per-job `model_code` and `size` when
+  they are provided by the worker request; mock image routing is wildcarded for
+  local/dev fallback.
+- DeepInfra now supports text-to-image through the native
+  `/v1/inference/{model}` endpoint with `DEEPINFRA_IMAGE_MODEL` defaulting to
+  `ByteDance/Seedream-4.5`; the Seedream default size is provider-native `2K`.
+- `DEEPINFRA_IMAGE_FALLBACK_MODEL` can name a second DeepInfra image model for
+  retryable primary-model submit failures; this fallback is handled only inside
+  the worker/provider adapter and is not exposed to VK or Mini App surfaces.
+- DeepInfra image responses are normalized into `ImageGenerationResult` and
+  then into provider `data:image/...` output URLs so the existing artifact
+  storage flow remains unchanged.
+- DeepInfra image HTTP failures map to the existing provider error classes
+  through the same adapter error taxonomy as text generation.
+- VK bot and Mini App surfaces were not changed to call providers directly:
+  image generation still goes through Job -> worker -> provider -> Artifact.
+- DeepInfra reference-image generation is intentionally fail-closed behind
+  `DEEPINFRA_IMAGE_REFERENCE_ENABLED=false` until the provider reference-image
+  API contract is verified and wired with artifact ownership/signed URL checks.
+
+---
+
 ## Shared VK referral foundation
 
 Status: **done for VK bot backend; Mini App integration remains follow-up**.
@@ -68,8 +411,8 @@ Status: **done**.
 
 - Added Redis-backed per-`vk_user_id` anti-spam for VK bot intake.
 - Limits implemented:
-  - all incoming user events: `10/60s`;
-  - new users during first `4h`: `5/60s`;
+  - all incoming user events: `40/60s`;
+  - new users during first `4h`: `30/60s`;
   - billable GPT/text jobs: `3/30s`;
   - new-user GPT/text jobs: `1/15s`;
   - cooldown after violations: `30s`;
@@ -97,6 +440,10 @@ Status: **done**.
   writes local tunnel config under `.runtime/vk-bot/cloudflared/`, and supports
   `.\scripts\dev\start-bot.ps1 -TunnelMode named` for
   `https://vk.neiirohub.ru/webhooks/vk`.
+- `start-bot.ps1 -TunnelMode named` now validates local VK confirmation plus
+  public `/health`, and repairs stale Cloudflare DNS routes with
+  `cloudflared tunnel route dns --overwrite-dns` before declaring the bot ready.
+  Public tunnel diagnostics do not send `VK_SECRET`.
 - External prerequisite remains manual: `neiirohub.ru` must be active in
   Cloudflare DNS and registrar NS records must point to Cloudflare.
 
@@ -531,8 +878,9 @@ Status: **done**.
   - output нормализуется в Artifact-compatible URLs, включая `data:` URLs для inline bytes.
 - **DeepInfra provider**:
   - `deepseek-ai/DeepSeek-V4-Flash` text generation is wired through DeepInfra's OpenAI-compatible `/chat/completions` endpoint;
-  - `PROVIDER=deepinfra` or `PROVIDER_CHAIN=deepinfra,mock` enables it;
-  - the adapter is text-only, returns normalized `data:text/plain` outputs, and maps DeepInfra HTTP failures into internal provider error classes.
+  - `ByteDance/Seedream-4.5` text-to-image generation is wired through DeepInfra's native `/v1/inference/{model}` endpoint;
+  - `PROVIDER=deepinfra`, `IMAGE_PROVIDER=deepinfra` or `PROVIDER_CHAIN=deepinfra,mock` enables DeepInfra where the selected modality is supported;
+  - the adapter returns normalized `data:text/plain` / `data:image/...` outputs and maps DeepInfra HTTP failures into internal provider error classes.
   - text providers now receive an internal instruction alongside the user prompt: answer as `НейроХаб бот`, stay concise (`<= 3000 characters`) and do not reveal provider/model/backend details; VK delivery still chunks longer outputs as a fallback.
   - follow-up fix: the mock-aware downloader now decodes provider `data:` URLs, so `PROVIDER_CHAIN=deepinfra,mock` can store DeepInfra text outputs before VK delivery.
 - **Provider router**:
@@ -571,7 +919,7 @@ Status: **done**.
   - `Sora 2` и `Kling v2.1` открывают detail-экраны с описанием, prompt-примером, ссылкой на инструкцию и кнопками `Начать генерацию`, `Примеры`, `Назад`;
   - `Seedance 1` открывает выбор `Lite` / `Pro`, а `Haiuo v0.2` открывает выбор `Обычный` / `Fast`;
   - кнопки выбора video-модели и вложенных video submenu записываются как control commands и не создают billable jobs до подключения model-specific generation state;
-  - `Создать фото` при одной основной модели пропускает выбор модели и сразу показывает инструкцию по `Фото по тексту` / `Фото с референсом` с кнопками режимов и `Назад`;
+  - `Создать фото` при одной основной модели пропускает выбор модели, сразу включает `photo_text` mode и показывает text-to-image инструкцию только с кнопкой `Назад`; `Фото по тексту` и `Фото с референсом` скрыты флагами до необходимости отдельных selection paths;
   - `Спросить у НейроХаб` открывает active-сообщение `НейроХаб активен` без создания job и включает Redis-backed GPT text mode для `peer_id`; следующий обычный текст/стикер пользователя проходит через `text.ask` flow; старый text-label `Спросить у GPT` остается совместимым alias;
   - в активном GPT mode handler сначала отправляет `НейроХаб думает...`, сохраняет `vk_placeholder_message_id` в `job.Params`, а delivery worker при текстовом результате редактирует это сообщение через VK `messages.edit`; перед отправкой text delivery приводит простой provider Markdown к VK plain text (`**`, backticks, heading hashes убираются, `*`/`-` списки становятся `•`); длинные ответы режутся на follow-up chunks с детерминированными `random_id`, чтобы VK `error_code=914` не оставлял placeholder зависшим; legacy `VK_UNROUTED_TEXT_MODE=gpt` остается обычной текстовой доставкой без placeholder;
   - `Студентам и школьникам` открывает учебное подменю: `Решальник задач`, `Генерация презентаций (скоро)`, `Создание рефератов (скоро)`, `Ответы на вопросы`, `Назад`;
@@ -1217,6 +1565,9 @@ Status: **completed**.
   capped, prompt bodies are not stored in `localStorage`, and assistant
   context is appended only after backend `succeeded` plus moderated text
   artifact access.
+  Superseded by PR-18.3/18.4/18.5: Mini App chat now uses durable
+  `source=miniapp` conversations in Postgres and the BFF no longer keeps
+  process-local prompt/answer memory.
 - Chat mode frontend now sends text through `/miniapp/chat/messages`, shows
   only `ChatGPT`, keeps safe React text rendering and preserves polling.
 
@@ -1326,6 +1677,8 @@ Status: **completed**.
   while empty `conversation_id` maps to backend `default`.
 - The backend has no conversation list/read endpoint. Conversation context is
   still process-local in `cmd/api`, so restart or scale-out can lose context.
+  Superseded by PR-18.3/18.4/18.5: authenticated conversation list/history
+  endpoints now make backend durable conversation history the source of truth.
 
 ### What changed
 
@@ -1444,13 +1797,15 @@ Status: **completed**.
 
 ### Backend dependency
 
-- Mini App has `GET /miniapp/balance`, but no read-only payment or ledger
-  history endpoint. Settings shows a safe placeholder and tracks this as a
-  separate backend follow-up.
-- Mini App has no top-up/payment-intent endpoint yet. The Settings top-up button
-  does not mutate balance locally; the documented backend follow-up is a shared
-  Mini App/VK bot payment-intent flow that appends committed `topup` ledger
-  entries only after trusted payment confirmation.
+- At the time of PR-16.4, Mini App had only `GET /miniapp/balance` and Settings
+  used a safe payment-history placeholder.
+- Payment foundation chapter 5 later added authenticated
+  `POST /miniapp/payments/intents`, `GET /miniapp/payments` and
+  `GET /miniapp/payments/{id}` backend routes. Settings/Profile UI wiring can
+  now target these endpoints when top-up UX is enabled.
+- The Settings top-up button must still not mutate balance locally. Committed
+  `topup` ledger entries remain blocked on trusted provider webhook processing
+  and reconciliation.
 
 ### Checks
 
@@ -1532,8 +1887,253 @@ Status: **completed**.
 - `go test ./...` - exit 0.
 - `go build ./...` - exit 0.
 - `npm --prefix web/miniapp run build` - exit 0.
+- `gofmt -l internal/adapter/inbound/miniapp/handler.go internal/adapter/inbound/miniapp/dto.go internal/adapter/inbound/miniapp/conversation_id.go internal/adapter/inbound/miniapp/handler_test.go` - clean.
+- `git grep -nE "^(<<<<<<<|=======|>>>>>>>)"` - clean.
+- `git diff --check` - exit 0; only markdown CRLF normalization warnings.
+
+---
+
+## PR-18 planning - Durable shared chat context
+
+Status: **planned**.
+
+### Finding
+
+- VK text bot context is already durable through `internal/service/dialogcontext`,
+  Postgres conversations/messages/summaries and worker-owned prompt rendering.
+- Mini App chat currently passes `conversation_id`, but the BFF also keeps
+  recent turns in a process-local `internal/adapter/inbound/miniapp`
+  conversation store. That state can be lost on API restart or scale-out.
+- The current durable conversation key `user_id + vk_peer_id` is sufficient for
+  VK bot private/group peers but not sufficient for multiple Mini App threads
+  owned by the same VK user.
+
+### Plan
+
+- Added ADR-017 in `DECISIONS.md`: Mini App must not call VK bot, and VK bot
+  context logic must not be copied into Mini App. Both surfaces should use a
+  shared durable chat/conversation core while provider calls stay worker-owned.
+- Added `docs/CHAT_CONTEXT_REFACTOR_LOG.md` as the running log for this fix.
+- Added `TEMP_PR18_DURABLE_CHAT_CORE_PROMPTS.md` with copy/paste prompts for
+  PR-18.1 through PR-18.5.
+- Added PR-18 backlog items to `TASKS.md`.
+
+### Checks
+
+- Docs/planning only. Runtime checks not run at planning time.
+
+---
+
+## PR-18.1 - Durable conversation identity foundation
+
+Status: **completed**.
+
+### STEP 0 context
+
+- Existing `conversations` schema used `user_id + vk_peer_id` as the only
+  active conversation identity. That remains correct for VK bot, but cannot
+  represent multiple Mini App threads for one verified VK user.
+- Mini App runtime behavior is not switched in this PR.
+
+### What changed
+
+- Added migration `000008_conversation_sources` with `source`,
+  `external_thread_id`, VK-bot active unique index, Mini App/source-thread
+  active unique index and source-list index.
+- Extended `domain.Conversation` with `Source` and `ExternalThreadID`.
+- Added `domain.ConversationRef`.
+- Extended `domain.ConversationRepository` with explicit reference lookup,
+  owner lookup and list-by-source methods.
+- Updated Postgres and memory repositories.
+- Added memory repository tests for VK bot backward compatibility and Mini App
+  thread isolation.
+
+### Checks
+
+- `go test ./internal/adapter/storage/memory ./internal/service/dialogcontext` - exit 0.
+- `go test ./internal/adapter/storage/postgres` - exit 0.
+- `go test ./...` - exit 0.
+- `go build ./...` - exit 0.
 - `git grep -nE "^(<<<<<<<|=======|>>>>>>>)"` - clean.
 - `git diff --check` - clean.
+
+---
+
+## PR-18.2 - Explicit conversation references in worker/dialogcontext
+
+Status: **completed**.
+
+### STEP 0 context
+
+- `dialogcontext.Prepare` and `dialogcontext.Complete` previously keyed text
+  memory through the VK bot fallback identity `user_id + vk_peer_id`.
+- `worker.buildRequest` already calls `dialogcontext.Prepare` before provider
+  submission and persists a durable `conversation_id` into `job.Params`.
+- `worker.saveDialogAnswer` already calls `dialogcontext.Complete` after text
+  provider success when a durable `conversation_id` is present.
+
+### What changed
+
+- Added explicit text-job conversation params support:
+  `conversation_source`, `external_thread_id` and durable `conversation_id`.
+- `dialogcontext.Prepare` now prefers explicit `source=miniapp` plus
+  `external_thread_id` when present, while VK bot jobs without explicit params
+  still use `user_id + vk_peer_id`.
+- `dialogcontext.Complete` can save assistant answers for explicit durable
+  conversations as well as VK bot fallback conversations.
+- The worker preserves `conversation_source` and `external_thread_id` when it
+  patches `job.Params` with the durable `conversation_id`.
+- Invalid or empty explicit refs degrade to a plain prompt with no conversation
+  context, avoiding accidental cross-thread context mixing.
+
+### Compatibility and isolation
+
+- VK bot behavior remains backward compatible.
+- Mini App BFF behavior is not switched yet; that remains PR-18.3.
+- Added tests for Mini App thread A/B isolation, VK bot vs Mini App isolation
+  for the same backend user, invalid explicit ref degradation, and worker param
+  preservation.
+
+### Checks
+
+- `go test ./internal/service/dialogcontext ./internal/worker` - exit 0.
+- `go test ./...` - exit 0.
+- `go build ./...` - exit 0.
+- `gofmt -l internal/service/dialogcontext/service.go internal/service/dialogcontext/service_test.go internal/worker/worker.go internal/worker/worker_test.go` - clean.
+- `git grep -nE "^(<<<<<<<|=======|>>>>>>>)"` - clean.
+- `git diff --check` - exit 0; only markdown CRLF normalization warnings.
+
+---
+
+## PR-18.3 - Mini App uses durable chat context
+
+Status: **completed**.
+
+### STEP 0 context
+
+- Mini App chat used `internal/adapter/inbound/miniapp/conversation.go` as a
+  process-local prompt-prefix memory store.
+- `createChatMessage` used the store to prepend recent Mini App turns to the
+  prompt before creating a text job.
+- `getJob` used `captureChatResult` to read a completed text artifact and put
+  the assistant answer back into the process-local store.
+
+### What changed
+
+- Removed the process-local Mini App chat memory store.
+- Kept only safe `conversation_id` normalization for the BFF contract.
+- `POST /miniapp/chat/messages` now creates a text job with raw current prompt
+  plus explicit durable chat params:
+  - `conversation_source=miniapp`;
+  - `external_thread_id=<normalized conversation_id>`;
+  - public `model_name=ChatGPT`.
+- Initial `conversation_id` in job params is left empty so the worker can patch
+  the durable backend conversation UUID after `dialogcontext.Prepare`.
+- `conversation_id=""` remains backward compatible as `default`.
+
+### Compatibility and isolation
+
+- Mini App auth, rate limiting, billing reservation and job creation still run
+  through the same BFF/orchestrator path.
+- Mini App BFF does not call providers and no longer stores prompt/answer
+  history in process memory.
+- VK bot context remains unchanged.
+
+### Checks
+
+- `go test ./internal/adapter/inbound/miniapp` - exit 0.
+- `go test ./internal/adapter/inbound/miniapp ./internal/service/dialogcontext ./internal/worker` - exit 0.
+- `go test ./...` - exit 0.
+- `go build ./...` - exit 0.
+- `npm --prefix web/miniapp run build` - exit 0.
+
+---
+
+## PR-18.4 - Durable Mini App chat list and history
+
+Status: **completed**.
+
+### STEP 0 context
+
+- Frontend chat state used local `Chat` objects and `localStorage` metadata key
+  `vk_miniapp_threads_v1`; legacy `vk_miniapp_chats_v1` was already cleared on
+  load.
+- Backend durable conversation repo already had owner-scoped Mini App thread
+  lookup and message listing through `ConversationRepository`.
+
+### What changed
+
+- Added authenticated Mini App BFF endpoints:
+  - `GET /miniapp/chat/conversations`;
+  - `GET /miniapp/chat/conversations/{id}/messages`.
+- Wired `ConversationRepository` from shared API core into the Mini App app
+  surface.
+- Endpoint responses are scoped to the verified backend user and expose only
+  product-level thread/message DTOs: opaque thread id, title, timestamps,
+  preview, `user`/`bot` role and message text.
+- Frontend `api/client.ts` now reads conversation list and active-thread
+  messages from the backend.
+- Chat UI now treats backend list/history as source of truth and keeps only the
+  active thread id in `localStorage` under `vk_miniapp_active_thread_v1`.
+- Old local thread/message keys are removed when encountered.
+
+### Security and compatibility
+
+- Both endpoints require existing VK launch-param auth.
+- Invalid thread ids return safe 400; missing/not-owned threads return safe
+  404.
+- `localStorage` no longer stores prompt/answer text or thread metadata.
+- No provider calls were added to Mini App BFF; jobs still go through
+  `joborchestrator` and worker-owned provider execution.
+
+### Checks
+
+- `go test -count=1 ./internal/adapter/inbound/miniapp` - exit 0.
+- `go test ./internal/adapter/inbound/miniapp ./internal/adapter/storage/postgres ./internal/adapter/storage/memory` - exit 0.
+- `go test ./...` - exit 0.
+- `go build ./...` - exit 0.
+- `npm --prefix web/miniapp run build` - exit 0.
+- `gofmt -l cmd/api/main.go internal/app/api/core.go internal/app/miniapp/module.go internal/adapter/inbound/miniapp/handler.go internal/adapter/inbound/miniapp/dto.go internal/adapter/inbound/miniapp/handler_test.go` - clean.
+- `git grep -nE "^(<<<<<<<|=======|>>>>>>>)"` - clean.
+- `git diff --check` - exit 0; only line-ending normalization warnings.
+
+---
+
+## PR-18.5 - Shared durable chat context cleanup and verification
+
+Status: **completed**.
+
+### What was verified
+
+- VK bot and Mini App chat both use the durable shared conversation core:
+  `conversations`, `conversation_messages`, `conversation_summaries`,
+  `internal/service/dialogcontext` and worker-owned prompt rendering.
+- No process-local Mini App prompt/answer store remains in
+  `internal/adapter/inbound/miniapp`.
+- Provider calls still occur only from the worker flow; `cmd/api`, VK inbound
+  and Mini App BFF handlers remain job/control surfaces.
+- Mini App frontend local storage is limited to active thread/tab/theme UI
+  state plus legacy cache cleanup; prompt bodies, generated answers, job ids,
+  artifact ids/URLs, launch params, tokens, balance and provider details are
+  not persisted.
+- Public Mini App chat model output remains `ChatGPT`.
+
+### Cleanup/docs
+
+- Marked old Mini App process-local chat-memory notes as historical or
+  superseded in audit/progress/ADR/review/integration docs, including the old
+  frontend audit.
+- Updated architecture and runbook docs with the final shared durable chat
+  context contract and Mini App conversation list/history smoke checks.
+- Updated task tracking to mark PR-18.5 complete.
+
+### Checks
+
+- `go test ./...` - exit 0.
+- `go build ./...` - exit 0.
+- `npm --prefix web/miniapp run build` - exit 0.
+- `git grep -nE "^(<<<<<<<|=======|>>>>>>>)"` - clean.
+- `git diff --check` - exit 0; only line-ending normalization warnings.
 
 ---
 
@@ -1667,3 +2267,81 @@ Status: **completed**.
 - `go build ./...` - exit 0.
 - `go test ./...` - exit 0.
 - `npm --prefix web/miniapp run build` - exit 0.
+
+---
+
+## Mini App Figma Create/Profile alignment (2026-06-07)
+
+Status: **completed (frontend-only)**.
+
+### What changed
+
+- **Create tab** (`WorkflowMode.tsx`, `theme.css`): replaced the two-step
+  `home -> generate` flow with a single Figma `CreateTab`-style surface on the
+  default tab panel. The page now shows banner, selectable model cards
+  (`Nano Banana Pro` / `Kling`), reference dropzone (image only), inline prompt
+  composer with backend estimate price badge and send button, plus quick-prompt
+  chips. Status / Result / per-type History screens from PR-10 are preserved.
+- **Profile tab** (`SettingsScreen.tsx`): hero uses `neurohub-banner.png`
+  only; overlapping avatar removed. Request history is a collapsible section
+  (closed by default) with filter pills and rows inside the dropdown panel.
+- **Create submit errors** (`ChatScreen.tsx`): non-chat `createJob` failures now
+  rethrow to `WorkflowMode`, so auth/credits/validation errors surface under the
+  composer instead of a generic message.
+
+### Unchanged / preserved
+
+- BFF contracts, launch-param auth, billing/estimate ownership and worker/provider
+  path.
+- Create still uses `POST /miniapp/estimate` debounce and
+  `enough_credits=true` submit gating; prompt remains required by backend.
+- Tab order and polling owner remain in `ChatScreen`; switching tabs does not
+  stop in-flight create jobs.
+
+### Checks
+
+- `npm run build` in `web/miniapp` - exit 0.
+- Dev stack restarted via `start-miniapp-ngrok.ps1 -NoWait` (API `:8080`, worker
+  `:9090`, Vite `:5173`, localhost.run tunnel).
+
+---
+
+## Mini App Create image preview + reload fixes (2026-06-07)
+
+Status: **completed**.
+
+### Symptoms
+
+- Image jobs reached `succeeded`, but Create result showed **«Изображение
+  недоступно»**.
+- After F5 the Mini App could hang on an infinite splash / loading state.
+- Status screen jumped to result while the image still loaded in the background.
+
+### Root causes
+
+1. **Artifact preview auth:** `<img src="/miniapp/artifacts/{id}">` cannot send
+   `X-Launch-Params`. BFF returned `401` (`missing sign parameter` in API logs).
+2. **F5 bootstrap hang:** `launchParams()` called `VKWebAppGetLaunchParams`
+   without a timeout and did not cache an empty fallback, so `listJobs()` could
+   wait forever and `ChatScreen` `loading` never cleared.
+3. **Result UX:** workflow auto-opened the result card before the authenticated
+   media URL/blob was ready.
+
+### Fixes
+
+- `artifactMediaUrl()` + `useArtifactMediaUrl` append `launch_params` query for
+  media tags; `preloadArtifactBlobUrl()` prefetches bytes before opening result.
+- `launchParams()` bridge timeout (1.2s dev / 3s prod) + cache empty string;
+  `ChatScreen` bootstrap runs once per mount and always clears `loading`.
+- `WorkflowMode` stays on status with **«Готовим превью»** until preload
+  completes; `ResultCard` shows skeleton while media loads.
+- **Pricing sync:** `PRICES=text_generate=1,image_generate=0,video_generate=50`
+  in `.env`, `.env.ps1`, `.env.example` (same as VK bot free photo quota);
+  `formatCredits(0)` → `Бесплатно` in Mini App UI.
+
+### Checks
+
+- `npm run build` in `web/miniapp` - exit 0.
+- Manual smoke: image generate in VK Mini App shows cat/result; F5 reload opens
+  app; Create price badge shows **Бесплатно** for photo when `PRICES` override
+  is active (API restart required after env change).

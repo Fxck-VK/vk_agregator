@@ -1,0 +1,11 @@
+tunnel: 223c6c74-807f-4752-8f5d-702b5da8cab7
+credentials-file: C:/Users/Lenovo/.cloudflared/223c6c74-807f-4752-8f5d-702b5da8cab7.json
+protocol: http2
+
+ingress:
+  - hostname: vk.neiirohub.ru
+    path: /billing/webhooks/yookassa
+    service: http://127.0.0.1:8082
+  - hostname: vk.neiirohub.ru
+    service: http://127.0.0.1:8080
+  - service: http_status:404

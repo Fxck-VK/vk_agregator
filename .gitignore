@@ -16,9 +16,11 @@ pnpm-debug.log*
 web/miniapp/dist/
 web/miniapp/.vite/
 
-# Environment and secrets
+# Environment and secrets (.env.ps1 is covered by .env.*)
 .env
 .env.*
+_env
+_env.*
 !.env.example
 
 # Docker/local data
@@ -30,6 +32,8 @@ web/miniapp/.vite/
 # IDEs and editors
 .idea/
 .vscode/
+.cursor/
+.codex/
 *.swp
 *.swo
 *.sublime-project

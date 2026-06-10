@@ -4,6 +4,7 @@
 package admin
 
 import (
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -58,12 +59,19 @@ func (h *Handler) Routes() http.Handler {
 // auth wraps a handler with the optional admin-token check.
 func (h *Handler) auth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if h.cfg.Token != "" && r.Header.Get("X-Admin-Token") != h.cfg.Token {
+		if h.cfg.Token != "" && !adminTokenEqual(r.Header.Get("X-Admin-Token"), h.cfg.Token) {
 			writeError(w, http.StatusUnauthorized, "unauthorized")
 			return
 		}
 		next(w, r)
 	}
+}
+
+func adminTokenEqual(got, want string) bool {
+	if want == "" || got == "" || len(got) != len(want) {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(got), []byte(want)) == 1
 }
 
 // ---------------------------------------------------------------------------

@@ -2,6 +2,11 @@
 
 Дата: 2026-06-04.
 
+Status: historical audit. Mini App chat local persistence was superseded by
+PR-18.4/18.5: backend conversation list/history endpoints are now the source
+of truth, and frontend `localStorage` keeps only active thread/tab/theme UI
+state plus legacy cache cleanup.
+
 Область: `web/miniapp/src` после UI-итерации с историей чатов, выбором
 модальности/модели, графитовой темой `#1A1A1D` и фиксом scrollbar в composer.
 

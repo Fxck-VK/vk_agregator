@@ -40,6 +40,8 @@ testing, create a real local `.env` next to `.env.example`:
 
 ```bash
 cp .env.example .env
+# macOS local fallback used in this workspace:
+# cp .env.example _env
 ```
 
 Windows PowerShell:
@@ -49,9 +51,10 @@ Copy-Item .env.example .env
 notepad .env
 ```
 
-`cmd/api`, `cmd/worker`, and `cmd/migrate` load `.env` automatically when
-started from the repository root. OS/CI environment variables override values
-from `.env`. The real `.env` is ignored by Git; commit only `.env.example`.
+`cmd/api`, `cmd/worker`, `cmd/provider-webhook`, and `cmd/migrate` load `.env`
+first and `_env` as a local fallback when started from the repository root.
+OS/CI environment variables override values from local env files. Real env
+files are ignored by Git; commit only `.env.example`.
 
 Override these values when needed:
 
@@ -79,25 +82,46 @@ Override these values when needed:
 | `MODERATION_EXTRA_TERMS` | `` | Comma-separated extra blocklist terms |
 | `WEBHOOK_RATE_LIMIT_RPS` / `WEBHOOK_RATE_LIMIT_BURST` | `20` / `40` | Per-IP webhook rate limit |
 | `VK_ANTISPAM_ENABLED` | `true` | Redis-backed per-`vk_user_id` VK bot anti-spam switch |
-| `VK_ANTISPAM_MESSAGE_LIMIT` / `VK_ANTISPAM_MESSAGE_WINDOW` | `10` / `60s` | Any VK user events per window: text, stickers and buttons |
+| `VK_ANTISPAM_MESSAGE_LIMIT` / `VK_ANTISPAM_MESSAGE_WINDOW` | `40` / `60s` | Any VK user events per window: text, stickers and buttons |
 | `VK_ANTISPAM_GPT_LIMIT` / `VK_ANTISPAM_GPT_WINDOW` | `3` / `30s` | Billable GPT/text jobs per user window |
 | `VK_ANTISPAM_COOLDOWN` | `30s` | Temporary pause after a rate-limit violation |
 | `VK_ANTISPAM_VIOLATION_LIMIT` / `VK_ANTISPAM_VIOLATION_WINDOW` | `5` / `10m` | Violations before temporary block |
 | `VK_ANTISPAM_BLOCK_DURATION` | `15m` | Temporary block length after repeated spam |
 | `VK_ANTISPAM_NEW_USER_AGE` | `4h` | Age window for stricter new-user limits |
-| `VK_ANTISPAM_NEW_USER_MESSAGE_LIMIT` | `5` | New-user event limit per message window |
+| `VK_ANTISPAM_NEW_USER_MESSAGE_LIMIT` | `30` | New-user event limit per message window |
 | `VK_ANTISPAM_NEW_USER_GPT_LIMIT` / `VK_ANTISPAM_NEW_USER_GPT_WINDOW` | `1` / `15s` | New-user GPT/text job limit |
 | `VK_ANTISPAM_ACTIVE_GPT_JOB_LIMIT` | `2` | Max active text-generation jobs per user before queue protection denies new ones |
+| `VK_ANTISPAM_IMAGE_DAILY_LIMIT` / `VK_ANTISPAM_IMAGE_DAILY_WINDOW` | `100` / `24h` | VK bot text-to-image attempts per user before image jobs are denied |
 | `VK_BOT_TUNNEL_MODE` | `quick` | Local bot tunnel mode for scripts: `quick` or `named` |
 | `VK_BOT_TUNNEL_NAME` | `neiirohub-vk-bot` | Cloudflare named tunnel used by `start-bot.ps1 -TunnelMode named` |
 | `VK_BOT_TUNNEL_HOSTNAME` | `vk.neiirohub.ru` | Stable public hostname for the local VK Callback API |
 | `VK_BOT_TUNNEL_CONFIG` | `.runtime/vk-bot/cloudflared/config.yml` | Optional override for named tunnel config path |
+| `PAYMENT_PROVIDER` | `mock` | Money provider for payment intent creation: `mock` or `yookassa`; `mock` uses the local in-memory adapter, `yookassa` uses the real YooKassa HTTP adapter |
+| `YOOKASSA_SHOP_ID` | `` | YooKassa shop id; required when `PAYMENT_PROVIDER=yookassa` |
+| `YOOKASSA_SECRET_KEY` | `` | YooKassa API secret; required when `PAYMENT_PROVIDER=yookassa`; never commit/log it |
+| `YOOKASSA_BASE_URL` | `https://api.yookassa.ru/v3` | YooKassa API root |
+| `YOOKASSA_RETURN_URL` | `https://neiirohub.ru/payments/return` | User return URL after provider redirect; redirect is not payment proof |
+| `YOOKASSA_WEBHOOK_IP_ALLOWLIST_ENABLED` | `true` | Operational guard for YooKassa webhook ingress; webhook processing still verifies provider state through `GetPayment` |
+| `PAYMENT_WEBHOOK_REQUIRE_HTTPS` | `false` | Local override for `cmd/provider-webhook` HTTPS guard. `APP_ENV=production` forces this guard on; behind Cloudflare/nginx pass `X-Forwarded-Proto: https` or `Forwarded: proto=https` |
+| `PAYMENT_WEBHOOK_ADDR` | `:8082` | Dedicated `cmd/provider-webhook` listen address for payment provider webhooks |
+| `PAYMENT_WEBHOOK_POLL_INTERVAL` | `5s` | Async payment webhook inbox processor interval |
+| `PAYMENT_WEBHOOK_BATCH_LIMIT` | `20` | Max unprocessed payment webhook events handled per processor tick |
+| `PAYMENT_RECONCILIATION_INTERVAL` | `1m` | Stale provider-backed payment-intent reconciliation cadence in `cmd/provider-webhook` |
+| `PAYMENT_RECONCILIATION_LIMIT` | `100` | Max stale intents checked per reconciliation tick |
+| `PAYMENT_RECONCILIATION_STALE_AFTER` | `30s` | Minimum intent age before reconciliation checks provider state |
 | `PROVIDER` | `mock` | Primary provider adapter: `mock`, `openai`, or `deepinfra` |
 | `PROVIDER_CHAIN` | value of `PROVIDER` | Comma-separated router/fallback chain, e.g. `openai,mock` or `deepinfra,mock` |
+| `IMAGE_PROVIDER` | `` | Preferred provider for image jobs: current image-capable adapters are `mock`, `openai` and `deepinfra`; keeps `PROVIDER_CHAIN` as fallback |
+| `IMAGE_MODEL` | `` | Worker-only default image model code attached to image jobs when job params do not provide `model_code` |
+| `IMAGE_SIZE` | `` | Worker-only default image size attached to image jobs when job params do not provide `size`; DeepInfra Seedream expects provider-native values such as `2K` |
 | `DEEPINFRA_API_KEY` | `` | Required when DeepInfra provider is enabled |
-| `DEEPINFRA_BASE_URL` | `https://api.deepinfra.com/v1/openai` | DeepInfra OpenAI-compatible API root |
+| `DEEPINFRA_BASE_URL` | `https://api.deepinfra.com/v1/openai` | DeepInfra OpenAI-compatible API root for text; image inference derives the native `/v1/inference/{model}` root from it |
 | `DEEPINFRA_TEXT_MODEL` | `deepseek-ai/DeepSeek-V4-Flash` | DeepInfra text model code |
 | `DEEPINFRA_TEXT_PRICE` | `1` | Internal provider-router cost estimate |
+| `DEEPINFRA_IMAGE_MODEL` | `ByteDance/Seedream-4.5` | DeepInfra text-to-image model code |
+| `DEEPINFRA_IMAGE_FALLBACK_MODEL` | `` | Optional DeepInfra image model tried after retryable primary image failures, e.g. `stabilityai/sdxl-turbo` while a partner model is unavailable |
+| `DEEPINFRA_IMAGE_PRICE` | `10` | Internal provider-router image cost estimate |
+| `DEEPINFRA_IMAGE_REFERENCE_ENABLED` | `false` | Reserved guard for future DeepInfra reference-image flow; current adapter supports text-to-image only |
 | `TEXT_CONTEXT_ENABLED` | `true` | Persist and render compact VK text dialog context in `cmd/worker` |
 | `TEXT_CONTEXT_MAX_INPUT_TOKENS` | `1600` | Estimated input budget for rendered dialog context |
 | `TEXT_CONTEXT_MAX_OUTPUT_TOKENS` | `800` | Provider max output token cap for text generation when supported |
@@ -115,7 +139,10 @@ Override these values when needed:
 | `OPENAI_MODERATION_MODEL` | `omni-moderation-latest` | OpenAI moderation model |
 | `ARTIFACT_SCANNER` | `none` | Artifact scanner: `none` or `openai` |
 | `VK_DELIVERY_MODE` | `mock` | VK delivery adapter: `mock` or `real` |
-| `VK_ACCESS_TOKEN` / `VK_API_VERSION` | `` / `5.199` | Required for real VK send/upload and API-side `/start` control menu responses |
+| `VK_ACCESS_TOKEN` / `VK_API_VERSION` | `` / `5.199` | Required for real VK `messages.send`, photo upload, mp4-as-document upload and API-side `/start` control menu responses |
+| `VK_VIDEO_DELIVERY_MODE` | `doc` | Generated video delivery: `doc` sends mp4 as a file attachment; `video` sends a native VK video attachment with inline player |
+| `VK_VIDEO_ACCESS_TOKEN` | `` | User token with VK `video` rights, required when `VK_VIDEO_DELIVERY_MODE=video` |
+| `VK_VIDEO_UPLOAD_GROUP_ID` | `0` | Optional positive community id for `video.save group_id`; token owner must have upload rights there |
 | `VK_API_BASE_URL` | `https://api.vk.com/method` | VK API method root |
 | `VK_WELCOME_ATTACHMENT` | `` | Optional pre-uploaded VK photo/video attachment sent with `/start` menu |
 | `VK_MENU_BUTTON_MODE` | `callback` | Inline menu buttons: `callback` hides user echo messages; `text` keeps legacy text-button behavior |
@@ -127,9 +154,10 @@ Override these values when needed:
 | `REFERRAL_REFERRER_SIGNUP_REWARD_CREDITS` | `10` | Signup reward posted to the inviter through billing ledger |
 | `REFERRAL_REFERRED_SIGNUP_REWARD_CREDITS` | `0` | Optional signup reward posted to the invited user through billing ledger |
 | `VK_MENU_*_ENABLED` | mixed | Per-button VK product menu flags; current bot profile keeps NeuroHub text mode and account/referral visible, while video/image/students/top-up stay hidden without deleting their screens |
+| `VK_TOP_UP_RECEIPT_EMAIL` / `VK_TOP_UP_RECEIPT_PHONE` | `` / `` | Server-side receipt contact for the VK Bot quick top-up flow; set at least one when `VK_MENU_TOP_UP_ENABLED=true` |
 | `SIGNED_DELIVERY` / `ARTIFACT_URL_TTL` | `false` / `1h` | Deliver media through signed artifact URLs |
 | `ARTIFACT_RETENTION_DAYS` | `0` | Optional S3 lifecycle expiry |
-| `PRICES` | `` | Price overrides, e.g. `text_generate=2,image_generate=12` |
+| `PRICES` | `image_generate=0` | Price overrides, e.g. `text_generate=2,image_generate=12`; current VK photo quota uses free image jobs plus `VK_ANTISPAM_IMAGE_DAILY_LIMIT` |
 | `MAX_JOB_COST` | `0` | Per-job cost cap; `0` disables the cap |
 | `STREAM_MAX_LEN` | `100000` | Redis stream max length; `0` disables trimming |
 | `WORKER_SHUTDOWN_GRACE` | `30s` | Time allowed to drain in-flight worker handlers |
@@ -143,12 +171,28 @@ Override these values when needed:
 
 > Production note: set `APP_ENV=production`; the API then **refuses to start**
 > unless `VK_SECRET`, `ADMIN_TOKEN`, `VK_APP_SECRET`, and a non-default `VK_CONFIRMATION_TOKEN`
-> are set (fail-closed, `AUDIT.md` S1). Both `cmd/api` and `cmd/worker` run the
-> same validation. `PROVIDER=openai`, `PROVIDER_CHAIN` containing `openai`,
-> `MODERATION_PROVIDER=openai`, or `ARTIFACT_SCANNER=openai` require
-> `OPENAI_API_KEY`; `PROVIDER=deepinfra` or `PROVIDER_CHAIN` containing
-> `deepinfra` requires `DEEPINFRA_API_KEY`; `VK_DELIVERY_MODE=real` requires
-> `VK_ACCESS_TOKEN` in any environment.
+> are set (fail-closed; see `.agents/state.json` for current routing). `cmd/api`, `cmd/worker` and
+> `cmd/provider-webhook` run the same validation. `PROVIDER=openai`, `IMAGE_PROVIDER=openai`,
+> `PROVIDER_CHAIN` containing `openai`, `MODERATION_PROVIDER=openai`, or
+> `ARTIFACT_SCANNER=openai` require `OPENAI_API_KEY`; `PROVIDER=deepinfra`,
+> `IMAGE_PROVIDER=deepinfra`, or `PROVIDER_CHAIN` containing `deepinfra`
+> requires `DEEPINFRA_API_KEY`; `VK_DELIVERY_MODE=real` requires
+> `VK_ACCESS_TOKEN` in any environment. `VK_VIDEO_DELIVERY_MODE=doc` also
+> requires document upload access on that community token.
+> `VK_VIDEO_DELIVERY_MODE=video` requires `VK_VIDEO_ACCESS_TOKEN` with VK
+> `video` rights and optional `VK_VIDEO_UPLOAD_GROUP_ID` rights. `PAYMENT_PROVIDER=yookassa` requires
+> `YOOKASSA_SHOP_ID`, `YOOKASSA_SECRET_KEY` and `YOOKASSA_RETURN_URL`. The
+> provider factory supports `mock` and `yookassa`; real YooKassa requests can
+> create payment intents and `cmd/provider-webhook` can process trusted payment
+> success into ledger top-ups and reconcile stale provider-backed intents.
+> In production, `cmd/provider-webhook` rejects non-HTTPS webhook requests. If
+> TLS terminates at Cloudflare/nginx, the proxy must forward
+> `X-Forwarded-Proto: https`, `Forwarded: proto=https`, or Cloudflare's
+> `CF-Visitor` scheme header, and the raw HTTP origin must not be publicly
+> reachable.
+> User-facing top-up should stay limited to controlled testing until public
+> HTTPS YooKassa dashboard webhook delivery, explicit provider `payment.canceled`
+> smoke and the chosen refund/partial-refund rollout policy are approved.
 
 ### Hardening features (post-release)
 
@@ -167,6 +211,77 @@ Override these values when needed:
 - **Maintenance**: worker runs cleanup for expired `idempotency_keys`, old
   terminal `outbox_events`, Redis Stream trimming, and billing reconciliation.
   Billing mismatch count is exported as `vkagg_billing_mismatches`.
+- **Payment foundation**: migration `000009_payments` adds payment products,
+  intents, webhook inbox events and refunds for VK Bot / Mini App top-up flows.
+  Migration `000010_payment_product_catalog` seeds the initial active credit
+  packages shared by both surfaces.
+  Migration `000011_payment_intent_receipt_snapshot` adds the intent-level
+  54-FZ fiscal snapshot: `receipt_description`, `vat_code`,
+  `payment_subject` and `payment_mode`. Payment retries and manual refunds use
+  these intent fields instead of rereading mutable catalog values for fiscal
+  receipt items.
+  `billingservice.GrantWith(ctx, repo, ...)` provides the tx-aware top-up grant
+  primitive for payment webhook/reconciliation processing. `domain.PaymentProvider`,
+  `internal/adapter/payment/mock`, `internal/adapter/payment/yookassa` and the
+  `PAYMENT_PROVIDER` factory provide a testable provider boundary. YooKassa
+  adapter support covers Basic Auth, short HTTP idempotency headers, amount
+  conversion, redirect payments with `capture: true` by default, a protected
+  operator-only `capture: false` smoke path for YooKassa
+  `waiting_for_capture -> canceled`, 54-FZ receipt data, refunds and webhook
+  normalization. `internal/service/paymentservice` creates
+  idempotent payment intents, stores provider payment state and returns safe
+  DTOs. It snapshots receipt item description, VAT code, payment subject and
+  payment mode from the selected product when the intent is created. Operator
+  routes under `/billing/payment-products*`, `/billing/payment-intents`,
+  `/billing/payment-history`, `/billing/payment-intents/{id}/sync`,
+  `/billing/payment-intents/{id}/cancel` and
+  `/billing/payment-intents/{id}/refund` are protected by `ADMIN_TOKEN` and
+  fail closed if auth is missing. Product catalog admin create/update/disable
+  actions validate positive RUB packages and 54-FZ receipt fields, never expose
+  provider payloads, and bump `price_version` only for future payment-intent
+  snapshots; old intents keep their original snapshot. Mini App routes under `/miniapp/payments*` use verified VK
+  launch params as the trusted user context and require `X-Idempotency-Key` for
+  creation; `GET /miniapp/payment-products` returns the safe active product
+  catalog. Mini App Settings creates payment intents from selected products and
+  redirects to the returned `confirmation_url`. It also renders safe payment
+  history from `GET /miniapp/payments` with status, amount, credits, creation
+  time and active payment continuation links. Redirects remain navigation-only;
+  balance changes still come only from webhook/reconciliation ledger top-ups. If a user already has an active
+  `waiting_for_user` payment intent, Mini App and VK Bot show that payment with
+  "continue payment" and require an explicit "create new payment" action before
+  creating another intent. VK Bot top-up creates intents from the same catalog
+  immediately after product selection, using the server-side
+  `VK_TOP_UP_RECEIPT_EMAIL` / `VK_TOP_UP_RECEIPT_PHONE` receipt contact, then
+  sends a payment link. A user return from YooKassa is not payment proof and
+  must not grant credits.
+  `cmd/provider-webhook` exposes
+  `POST /billing/webhooks/yookassa`, stores raw provider events in
+  `payment_events`, returns 200 quickly, then asynchronously verifies current
+  provider state through `GetPayment` before applying the payment intent state
+  machine and `billingservice.GrantWith`. It also reconciles stale
+  `provider_pending` / `waiting_for_user` intents through the same verified
+  path. Reconciliation handles missed webhooks, late webhooks, duplicate
+  webhooks and provider-side cancellations idempotently. If the user closes the
+  YooKassa payment page and the provider still reports `waiting_for_user`, the
+  intent stays unpaid and no ledger top-up is posted; a later YooKassa
+  cancellation/expiration or success is picked up by the next reconciliation
+  pass. Manual refunds are admin-only full-refund MVP actions: require
+  `X-Idempotency-Key`, only operate on `succeeded` intents, refuse if the
+  current credit balance cannot cover the top-up credits, and refuse if the
+  ledger shows committed or pending negative movements after that exact top-up.
+  This conservative check prevents refunding already-used credits while
+  lot/FIFO attribution is not implemented. Successful refund debits are posted
+  as ledger adjustments instead of direct balance mutation. Refund webhook
+  events are deduped and verified, but automatic balance reversal and partial
+  refund attribution remain future policy work.
+  Payment metrics include `payments_created_total`,
+  `payments_succeeded_total`, `payments_canceled_total`,
+  `payment_webhooks_total`, `payment_webhook_security_denials_total`,
+  `payment_webhook_processing_errors_total`,
+  `payment_webhook_unprocessed_events`,
+  `payment_webhook_oldest_unprocessed_age_seconds`,
+  `payment_provider_errors_total`, `payment_topups_total`,
+  `payment_refunds_total` and `payment_reconciliation_mismatches`.
 - **Artifact scanning**: `ARTIFACT_SCANNER=openai` scans text/image artifact
   bytes before storage; video scan/transcode remains a media-pipeline follow-up.
 - **SSRF**: artifact downloader blocks private/loopback/link-local hosts and
@@ -174,7 +289,7 @@ Override these values when needed:
   for normalized OpenAI text/image/video outputs.
 - **Rate limit**: per-IP token bucket on `/webhooks/vk` (429 when exceeded).
 - **VK anti-spam**: Redis counters per `vk_user_id` limit all user events
-  (`10/60s`, new users `5/60s`), billable GPT jobs (`3/30s`, new users
+  (`40/60s`, new users `30/60s`), billable GPT jobs (`3/30s`, new users
   `1/15s`), repeated violations (`5/10m -> 15m` temporary block), and active
   GPT jobs (`2` per user). Denied events are acknowledged through the VK control
   path and do not create commands/jobs.
@@ -226,6 +341,13 @@ The setup script creates/reuses the `neiirohub-vk-bot` tunnel, writes its local
 config to `.runtime/vk-bot/cloudflared/config.yml`, and creates the Cloudflare
 DNS route for `vk.neiirohub.ru`. The hostname works only after `neiirohub.ru`
 is added to Cloudflare and the registrar NS records point to Cloudflare.
+On every named-tunnel startup, `start-bot.ps1` validates the local VK
+`confirmation` response and `https://vk.neiirohub.ru/health`. If Cloudflare
+returns a stale DNS/tunnel error such as `530`, the script runs
+`cloudflared tunnel route dns --overwrite-dns neiirohub-vk-bot vk.neiirohub.ru`
+and retries the checks before reporting the bot as ready. The diagnostic public
+route check does not send `VK_SECRET`; the secret is used only against the local
+callback URL.
 
 Useful options:
 
@@ -349,7 +471,7 @@ It runs these pools over Redis Streams (one consumer group, recovery via `XAUTOC
 
 > Scaling note: run multiple `cmd/worker` instances (each joins the same group)
 > for more throughput. Per-pool isolation via `WORKER_POOLS` is still a Beta
-> follow-up (`AUDIT.md` SC2). The worker auto-creates the MinIO bucket and
+> follow-up (see `TASKS.md` and `.agents/state.json` for current routing). The worker auto-creates the MinIO bucket and
 > consumer groups on start.
 
 Real adapter modes are opt-in:
@@ -361,18 +483,279 @@ PROVIDER=openai OPENAI_API_KEY=... go run ./cmd/worker
 # OpenAI primary with mock fallback through router/circuit breaker.
 PROVIDER_CHAIN=openai,mock OPENAI_API_KEY=... go run ./cmd/worker
 
-# DeepInfra DeepSeek-V4-Flash text generation with mock fallback for other
-# modalities.
+# DeepInfra DeepSeek-V4-Flash text generation and Seedream image generation.
 PROVIDER_CHAIN=deepinfra,mock DEEPINFRA_API_KEY=... go run ./cmd/worker
+
+# Prefer DeepInfra Seedream for image jobs while keeping the fallback chain.
+# VK bot and Mini App still submit only Jobs; provider calls stay in cmd/worker.
+IMAGE_PROVIDER=deepinfra DEEPINFRA_IMAGE_MODEL=ByteDance/Seedream-4.5 DEEPINFRA_IMAGE_FALLBACK_MODEL=stabilityai/sdxl-turbo IMAGE_SIZE=2K PROVIDER_CHAIN=deepinfra,mock DEEPINFRA_API_KEY=... go run ./cmd/worker
 
 # API-side VK /start menu responses with keyboard.
 VK_ACCESS_TOKEN=... go run ./cmd/api
 
-# Real VK messages.send plus raw photo/video upload to VK upload servers.
+# Real VK messages.send plus raw photo upload and mp4-as-document delivery.
 VK_DELIVERY_MODE=real VK_ACCESS_TOKEN=... go run ./cmd/worker
 
 # Real output moderation and text/image artifact scanning.
 MODERATION_PROVIDER=openai ARTIFACT_SCANNER=openai OPENAI_API_KEY=... go run ./cmd/worker
+
+# YooKassa payment webhook intake and async payment_events processing.
+PAYMENT_PROVIDER=yookassa go run ./cmd/provider-webhook
+```
+
+Local payment webhook runtime can be managed without restarting the VK bot or
+Mini App stacks:
+
+```powershell
+scripts\dev\start-payments.ps1
+scripts\dev\status-payments.ps1
+scripts\dev\stop-payments.ps1
+```
+
+`start-payments.ps1` builds `cmd/provider-webhook`, starts it under
+`.runtime/payments`, checks `PAYMENT_WEBHOOK_ADDR` health and verifies the
+public YooKassa route with an intentionally invalid webhook body. A `400`
+response means the route reaches `cmd/provider-webhook`; a `404`/timeout means
+Cloudflare/nginx routing is wrong or the tunnel is down. Use `-SkipDocker`,
+`-SkipMigrate` or `-SkipPublicCheck` only for local debugging.
+
+YooKassa dashboard webhook setup:
+
+- Webhook URL: `https://<public-provider-webhook-host>/billing/webhooks/yookassa`.
+- The public URL must use HTTPS. YooKassa requires a secure endpoint; keep TLS
+  termination at Cloudflare/nginx or on the Go process. If the Go process is
+  behind a reverse proxy, forward `X-Forwarded-Proto: https` or
+  `Forwarded: proto=https`; otherwise production `cmd/provider-webhook` rejects
+  the request before parsing provider JSON.
+- Events: `payment.succeeded`, `payment.canceled`, `refund.succeeded`.
+- The endpoint only ingests the raw event into `payment_events` and returns
+  `200` quickly. Credit top-up happens later in the async processor after
+  `GetPayment` verifies the provider payment state, amount and currency.
+- Do not point this URL at `cmd/api`; it belongs to the dedicated
+  `cmd/provider-webhook` process or to a reverse proxy route that forwards to
+  `PAYMENT_WEBHOOK_ADDR`.
+- Do not log webhook request bodies, `Authorization`, YooKassa shop id/secret,
+  or raw provider payloads. Store the raw provider event only in the
+  `payment_events.payload` inbox row for audit/replay.
+
+YooKassa operational alerts:
+
+```text
+payment_webhook_security_denials_total > 0 for 5m
+  -> Check public webhook URL scheme, reverse-proxy forwarded proto headers and
+     whether somebody is hitting the origin over plain HTTP.
+
+increase(payment_webhook_processing_errors_total[10m]) > 0
+  -> Check provider GetPayment availability, status/amount mismatch, and
+     payment_events rows stuck without processed_at.
+
+payment_webhook_unprocessed_events > 0 for 10m
+  -> Webhooks are accepted but async processing is not draining the inbox.
+     Check cmd/provider-webhook logs, DB connectivity and provider GetPayment.
+
+payment_webhook_oldest_unprocessed_age_seconds > 300
+  -> Oldest unprocessed webhook is older than 5 minutes. Treat as stuck inbox
+     even if the count is low.
+
+increase(payment_provider_errors_total[10m]) > 0
+  -> Payment provider API calls are failing. Check labels operation/error_class,
+     YooKassa availability, credentials and network egress.
+
+payment_reconciliation_mismatches > 0
+  -> Stop automatic top-up rollout, inspect mismatched provider_payment_id,
+     amount/currency and intent status before retrying.
+
+increase(payment_refunds_total{result="rollback_failed"}[5m]) > 0
+  -> Treat as urgent: provider refund failed and internal compensation also
+     failed. Freeze manual refunds and reconcile ledger/payment_refunds by hand.
+```
+
+YooKassa idempotency/rollback checks:
+
+- Replay the same webhook body twice. Expected: one `payment_events` row by
+  dedup key, one committed `topup:<provider>:<provider_payment_id>` ledger row,
+  second ingest counted as duplicate/no-op.
+- Replay operator refund with the same `X-Idempotency-Key`. Expected: same
+     `payment_refunds` row, no second ledger debit.
+- Simulate provider refund failure. Expected: refund marked `failed`, internal
+  refund debit compensated by a ledger adjustment, user balance restored, and
+  `payment_refunds_total{result="rollback_succeeded"}` increments.
+
+YooKassa smoke checklist:
+
+- Webhook success:
+  create a normal `capture:true` payment intent, complete YooKassa test
+  checkout, wait for dashboard-delivered `payment.succeeded`, then verify the
+  event is processed, the intent is `succeeded`, exactly one
+  `topup:<provider>:<provider_payment_id>` ledger entry exists and Mini App
+  history returns a safe DTO without provider-native payload.
+- Missed webhook through reconciliation:
+  complete a YooKassa test checkout while the public webhook route is
+  intentionally unavailable or before dashboard delivery is observed, then run
+  operator `sync` or wait for reconciliation. Expected: provider `GetPayment`
+  verifies paid/captured success and posts the same single top-up ledger entry.
+- Duplicate webhook:
+  replay the same `payment.succeeded` webhook body. Expected: one
+  `payment_events` row by dedup key and no second top-up ledger entry.
+- Canceled payment:
+  create a protected operator `capture:false` intent, complete checkout until
+  YooKassa reports `waiting_for_capture`, call operator `cancel`, then verify
+  `payment.canceled` is processed, the intent is `canceled`, no top-up ledger
+  entry exists and the balance is unchanged.
+- Refund:
+  create and complete a normal paid intent, then call operator `refund`.
+  Expected: one `payment_refunds` row, provider refund succeeds, refund debit is
+  posted through ledger and the balance returns to the pre-top-up value.
+- Duplicate refund:
+  replay operator `refund` with the same `X-Idempotency-Key` and replay
+  `refund.succeeded`. Expected: the same refund row is returned, no second
+  ledger debit is posted and refund webhook dedup uses `provider_refund_id`.
+- Safe DTO:
+  call Mini App payment history and protected operator list endpoints after the
+  smoke. Expected: DTOs expose status, amount, credits, ids needed for operator
+  work and timestamps only; they do not expose raw YooKassa payloads, auth
+  headers, shop secrets or receipt contact beyond explicitly safe fields.
+
+YooKassa smoke completion gate:
+
+Treat billing smoke as closed only when all of these are true for the same test
+shop/runtime setup:
+
+- YooKassa delivered a real public HTTPS webhook to
+  `/billing/webhooks/yookassa`; local/manual replay is not enough.
+- `payment.succeeded` was processed from the public webhook path without
+  reconciliation being required for the success top-up.
+- Reconciliation still successfully covers the separate missed-webhook scenario.
+- YooKassa produced a terminal `payment.canceled` provider state for a
+  `capture:false` smoke payment and the system processed it without posting a
+  top-up ledger entry.
+- Replaying `payment.succeeded` and `payment.canceled` does not create duplicate
+  events, duplicate ledger entries or invalid status rollbacks.
+- Manual refund is idempotent: repeating the same operator refund key returns
+  the same refund and does not post a second ledger debit.
+- Replaying `refund.succeeded` is deduplicated by `provider_refund_id`.
+- Final balance, `ledger_entries`, `payment_intents`, `payment_events` and
+  `payment_refunds` reconcile for every provider payment/refund used in the
+  smoke.
+- Mini App and operator DTOs remain safe and do not expose raw provider payloads
+  or credentials.
+
+YooKassa SQL checks:
+
+```sql
+-- Current unprocessed webhook backlog and oldest waiting event.
+SELECT
+  provider,
+  count(*) AS unprocessed_events,
+  min(received_at) AS oldest_received_at,
+  now() - min(received_at) AS oldest_age
+FROM payment_events
+WHERE processed_at IS NULL
+GROUP BY provider;
+
+-- Oldest unprocessed events to inspect without exposing payloads.
+SELECT
+  id,
+  provider,
+  event_type,
+  provider_payment_id,
+  provider_refund_id,
+  received_at,
+  now() - received_at AS age
+FROM payment_events
+WHERE processed_at IS NULL
+ORDER BY received_at ASC
+LIMIT 20;
+
+-- Stale provider-backed intents that reconciliation should pick up.
+SELECT
+  id,
+  user_id,
+  provider,
+  status,
+  provider_payment_id,
+  updated_at,
+  now() - updated_at AS age
+FROM payment_intents
+WHERE status IN ('provider_pending', 'waiting_for_user')
+  AND provider_payment_id IS NOT NULL
+  AND btrim(provider_payment_id) <> ''
+ORDER BY updated_at ASC
+LIMIT 20;
+```
+
+Protected operator payment actions:
+
+```bash
+# List product catalog entries. Add active=true or active=false to narrow the
+# operator list. Response DTOs contain catalog fields only, no provider payloads.
+curl "http://localhost:8080/billing/payment-products?active=true" \
+  -H "X-Admin-Token: $ADMIN_TOKEN"
+
+# Create a top-up product. The code is a stable product identifier; future
+# price/receipt changes on the same product bump price_version for new intents.
+curl -X POST http://localhost:8080/billing/payment-products \
+  -H "X-Admin-Token: $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"code":"crystals_250","title":"NeiroHub 250 crystals","amount":25000,"currency":"rub","credits":250,"vat_code":1,"payment_subject":"service","payment_mode":"full_prepayment"}'
+
+# Update future catalog values. Existing payment_intents keep their snapshotted
+# amount, credits, price_version and receipt fields.
+curl -X PATCH http://localhost:8080/billing/payment-products/<product_id> \
+  -H "X-Admin-Token: $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"amount":21000,"credits":260}'
+
+# Hide a product from user-facing Mini App / VK Bot product lists.
+curl -X POST http://localhost:8080/billing/payment-products/<product_id>/disable \
+  -H "X-Admin-Token: $ADMIN_TOKEN"
+
+# List pending/waiting intents. Add stale_only=true for intents old enough for
+# manual sync/reconciliation triage.
+curl "http://localhost:8080/billing/payment-intents/pending?stale_after=30s&stale_only=true" \
+  -H "X-Admin-Token: $ADMIN_TOKEN"
+
+# Minimal stale-only check requested by operator smoke. Use this before manual
+# sync to see what reconciliation should pick up.
+curl "http://localhost:8080/billing/payment-intents/pending?stale_only=true" \
+  -H "X-Admin-Token: $ADMIN_TOKEN"
+
+# Create a two-stage YooKassa smoke intent. This is protected operator-only and
+# must not be used by Mini App / VK Bot user-facing top-ups.
+curl -X POST http://localhost:8080/billing/payment-intents \
+  -H "X-Admin-Token: $ADMIN_TOKEN" \
+  -H "X-User-ID: <internal_user_id>" \
+  -H "X-Idempotency-Key: canceled-smoke-001" \
+  -H "Content-Type: application/json" \
+  -d '{"product_code":"crystals_99","receipt_email":"smoke@example.com","capture":false}'
+
+# List unprocessed provider webhook inbox rows. Response DTOs intentionally omit
+# raw provider payloads.
+curl "http://localhost:8080/billing/payment-events/unprocessed?provider=yookassa" \
+  -H "X-Admin-Token: $ADMIN_TOKEN"
+
+# Minimal unprocessed inbox check requested by operator smoke.
+curl "http://localhost:8080/billing/payment-events/unprocessed" \
+  -H "X-Admin-Token: $ADMIN_TOKEN"
+
+# Sync one intent with the provider state. This may post a top-up ledger entry
+# only after provider GetPayment verifies paid/captured success.
+curl -X POST http://localhost:8080/billing/payment-intents/<intent_id>/sync \
+  -H "X-Admin-Token: $ADMIN_TOKEN"
+
+# Cancel a provider-backed intent. This calls provider CancelPayment and then
+# verifies the resulting state through the same GetPayment/sync path.
+curl -X POST http://localhost:8080/billing/payment-intents/<intent_id>/cancel \
+  -H "X-Admin-Token: $ADMIN_TOKEN"
+
+# Manual full refund MVP. Requires a caller idempotency key and refuses when the
+# current credit balance cannot cover the purchased credits or when ledger
+# movements after the top-up show that those credits may have been used.
+curl -X POST http://localhost:8080/billing/payment-intents/<intent_id>/refund \
+  -H "X-Admin-Token: $ADMIN_TOKEN" \
+  -H "X-Idempotency-Key: operator-ticket-123" \
+  -H "Content-Type: application/json" \
+  -d '{"reason":"manual operator refund"}'
 ```
 
 Text provider adapters add an internal instruction to the user's prompt: answer
@@ -395,6 +778,19 @@ Expected log:
 | `GET /health` | `200` `{"status":"ok","checks":{"postgres":"ok","redis":"ok"}}` |
 | `GET /healthz` | same (alias) |
 | `GET /metrics` | `200` Prometheus exposition (`vkagg_*` + Go/process) |
+
+Payment webhook runtime (`PAYMENT_WEBHOOK_ADDR`, default `:8082`):
+
+| Endpoint | Expected |
+|----------|----------|
+| `GET /health` | `200` `{"status":"ok"}` liveness only |
+| `GET /readyz` | `200` JSON with `postgres`, `webhook_inbox`, `payment_webhook.unprocessed_events` and oldest unprocessed age |
+| `GET /healthz` | same readiness JSON as `/readyz` |
+| `GET /metrics` | `200` Prometheus exposition including `payment_webhook_unprocessed_events`, `payment_webhook_oldest_unprocessed_age_seconds`, `payment_provider_errors_total` and reconciliation/payment counters |
+
+`/readyz` fails closed with `503` only when Postgres or webhook-inbox stats are
+unavailable. A non-zero webhook backlog is reported in JSON and Prometheus but
+does not by itself make readiness fail; alert on age/count instead.
 
 `503 {"status":"degraded",...}` means Postgres or Redis is unreachable — see Troubleshooting.
 
@@ -429,22 +825,24 @@ Expected: inbound event + command are persisted, no billable job is created.
 When `cmd/api` has `VK_ACCESS_TOKEN`, it sends the НейроХаб welcome text with
 a VK inline keyboard under the message. Set `VK_WELCOME_ATTACHMENT` to a
 pre-uploaded VK attachment string if the welcome message should include a
-banner image. On the first `Старт` for a user, the API tries one `users.get`
+banner image. This attachment is intentionally used only for the main
+welcome/menu screens (`Старт`, `Показать меню`, menu repair); submenu screens
+must not inherit it. On the first `Старт` for a user, the API tries one `users.get`
 lookup through `vkdelivery.UserProfileClient`, caches `vk_first_name` /
 `vk_last_name` on the user row, sends `👋 <name>, добро пожаловать в НейроХаб!`,
 and records `welcome_name_sent_at`; later `Старт` / `Показать меню` responses
 use the regular welcome without the name.
-Clicking `🎬 Создать видео` opens the video model picker with `Sora 2`,
-`Kling v2.1`, `Seedance 1`, `Haiuo v0.2`, and `⬅️ Назад`. `Sora 2` and
-`Kling v2.1` open detail screens with description, prompt example, instruction
-link, `😀 Начать генерацию`, `ℹ️ Примеры`, and `⬅️ Назад`. `Seedance 1` opens
-`Seedance 1 Lite` / `Seedance 1 Pro`; `Haiuo v0.2` opens `Haiuo v0.2 Обычный`
-/ `Haiuo v0.2 Fast`. These video submenu buttons are control-only for now and
-must not create billable jobs.
+Clicking `🎬 Создать видео` opens the video model picker with `PrunaAI` and
+`⬅️ Назад`. Clicking `PrunaAI` stores peer-scoped video dialog mode. The next
+plain user text creates one `video_generate` Job with private video params and a
+`НейроХаб готовит видео...` placeholder; the VK handler still never calls the
+provider directly. Older Sora/Kling/Seedance/Haiuo payloads are hidden/stale and
+fall back to the main menu without creating Jobs.
 Clicking `🖼️ Создать фото` opens the photo instruction screen directly because
-there is one main image model in the VK UX. It shows `Фото по тексту`,
-`Фото с референсом`, and `⬅️ Назад`; those mode buttons are control-only until
-stateful image mode selection is wired. Clicking `💬 Спросить у НейроХаб` sends the
+there is one main image model in the VK UX. It immediately stores `photo_text`
+mode and shows only `⬅️ Назад`; the extra `Фото по тексту` confirmation button
+is hidden behind `VK_MENU_IMAGE_TEXT_ENABLED=false`, and the reference-photo
+button is hidden behind `VK_MENU_IMAGE_REFERENCE_ENABLED=false` until that flow is wired. Clicking `💬 Спросить у НейроХаб` sends the
 `НейроХаб активен` prompt screen, stores Redis-backed GPT mode for that peer,
 and also does not enqueue a job. The next plain text or sticker from the same
 peer becomes a `text.ask` job; the API sends `НейроХаб думает...`, stores that VK
@@ -461,6 +859,8 @@ Clicking `🎁 Студентам и школьникам` opens the study subme
 `Решальник задач`, `Генерация презентаций (скоро)`,
 `Создание рефератов (скоро)`, `❓ Ответы на вопросы`, and `⬅️ Назад`.
 Those buttons are control-only until the corresponding scenario state is wired.
+Video generation is the exception: the active `PrunaAI` video button wires
+peer-scoped video mode and the next plain text becomes a `video_generate` Job.
 Clicking `👤 Мой аккаунт` opens the account/referral screen. The handler reads
 the billing projection through `billingservice.EnsureAccount`, ensures one
 stable referral code for the user, counts accepted invitations, and renders the
@@ -475,14 +875,33 @@ App referral account/API screen is still a follow-up, but the same
 `referralservice` and Postgres tables already support
 `source=vk_miniapp`.
 
-Text dialog memory is built in `cmd/worker`, not in the VK webhook. For VK
-`text.ask` jobs with `vk_peer_id`, the worker writes the user prompt and
-assistant answer to Postgres (`conversations`, `conversation_messages`,
-`conversation_summaries`), then renders a bounded provider prompt from bot
-profile, rolling summary, recent messages and the current request. The system
-prompt that says the assistant is NeuroHub remains inside provider adapters and
-stays above dialog history. Summary compaction is local/extractive in this
-beta; no extra billable provider call is made just to summarize old turns.
+Current VK photo-mode implementation: `VK_MENU_IMAGE_ENABLED=true` shows the
+`Создать фото` button. Clicking `Создать фото` stores Redis-backed `photo_text`
+mode for that peer. The next plain text is converted
+by the VK handler into an `image.generate` Job through the orchestrator; the
+handler does not call image providers. The API sends `НейроХаб рисует...`,
+stores that VK message id in `job.Params`, and the worker/provider/artifact
+pipeline produces the image. Delivery sends the ready Artifact as a VK photo.
+If the image provider fails terminally, the reservation is released and delivery
+sends/edits a short "funds were not charged" notice. The current bot profile
+allows 100 text-to-image attempts per user per 24h window through
+`VK_ANTISPAM_IMAGE_DAILY_LIMIT=100`; `PRICES=image_generate=0` makes those
+attempts free jobs without reservations. `Фото с референсом` remains disabled
+until incoming photo artifacts are wired.
+
+Text dialog memory is built in `cmd/worker`, not in the VK webhook or Mini App
+BFF. VK bot `text.ask` jobs use `source=vk_bot` scoped by backend user and
+`vk_peer_id`; Mini App chat jobs use `source=miniapp` scoped by backend user and
+opaque `conversation_id` / `external_thread_id`. The worker writes the user
+prompt and assistant answer to Postgres (`conversations`,
+`conversation_messages`, `conversation_summaries`), then renders a bounded
+provider prompt from bot profile, rolling summary, recent messages and the
+current request. The system prompt that says the assistant is NeuroHub remains
+inside provider adapters and stays above dialog history. Summary compaction is
+local/extractive in this beta; no extra billable provider call is made just to
+summarize old turns. Mini App list/history reads are served through
+authenticated `/miniapp/chat/conversations` endpoints and local storage is only
+active thread/tab/theme UI state.
 
 Inline menu navigation is hybrid: while the last bot message is still the
 active menu, inline button clicks edit that message through VK `messages.edit`
@@ -587,13 +1006,22 @@ Use this checklist after changing app-surface wiring or shared backend core:
   `/miniapp/jobs` with valid dev launch params or real VK launch params; auth
   and rate limiting remain enforced, and estimate does not create a job,
   reserve credits or write ledger entries.
+- Mini App chat entrance: call `POST /miniapp/chat/messages`, then
+  `GET /miniapp/chat/conversations` and
+  `GET /miniapp/chat/conversations/{id}/messages`; all requests require valid
+  launch params, are scoped to the verified owner, and expose only product-level
+  conversation DTOs.
 - Job completion path: a queued job reaches a terminal state through
   `cmd/worker`; output artifact ownership is checked by
   `GET /miniapp/artifacts/{id}` and billing capture/release/refund is ledger
   backed.
+- Frontend storage check: Mini App `localStorage` may contain only active
+  thread/tab/theme UI keys. It must not contain prompt bodies, generated
+  answers, job ids, artifact ids/URLs, launch params, tokens, balance or
+  provider details.
 - Public model naming remains product-safe: user-visible Mini App/VK chat copy
-  says `ChatGPT` where applicable and does not reveal DeepInfra/DeepSeek model
-  ids.
+  says `ChatGPT` where applicable and does not reveal DeepInfra/DeepSeek/
+  Seedream model ids.
 
 ---
 
@@ -642,9 +1070,10 @@ Use this checklist after changing app-surface wiring or shared backend core:
 - Callback button keeps spinning: check `api-live.log` for
   `vk message_event answer failed`. VK requires `messages.sendMessageEventAnswer`
   for every callback click; menu edit/send alone is not enough.
-- Banner is absent: set `VK_WELCOME_ATTACHMENT` to an already uploaded VK
-  attachment string (`photo...`, `video...`). The API does not upload the banner
-  image itself yet.
+- Banner is absent: set local `.env` `VK_WELCOME_ATTACHMENT` to an already
+  uploaded VK attachment string (`photo...`, `video...`) and restart `cmd/api`.
+  Keep real attachment strings out of `.env.example`; the API does not upload
+  the banner image itself yet.
 - Bot replies `Слишком много сообщений...`: VK anti-spam denied the event by
   `vk_user_id`. Check `VK_ANTISPAM_*` settings and Redis keys
   `rate:vk:user:<id>:messages`, `rate:vk:user:<id>:gpt`,
@@ -761,6 +1190,15 @@ Artifact bytes from `GET /miniapp/artifacts/{id}` are served only for the
 verified owner after the producing job is `succeeded` and output moderation has
 allowed the artifact; otherwise the BFF returns `404`.
 
+Mini App chat uses the same durable conversation core as the VK bot, but with
+Mini App-specific identity. `POST /miniapp/chat/messages` creates a text job
+with `conversation_source=miniapp` and opaque `external_thread_id`; the worker
+creates/loads the durable backend conversation and stores turns in Postgres.
+`GET /miniapp/chat/conversations` lists the verified user's Mini App threads,
+and `GET /miniapp/chat/conversations/{id}/messages` reads that owner's message
+history. These endpoints are BFF reads only: they do not call providers, mutate
+billing or expose raw provider/model ids.
+
 ### Local development without real VK
 
 ```powershell
@@ -790,25 +1228,50 @@ npm run dev
 
 The Vite proxy routes `/miniapp/*` to `http://localhost:8080`.
 
-### Open the Mini App inside VK via an HTTPS tunnel (cloudflared)
+### Open the Mini App inside VK via an HTTPS tunnel (`localhost.run`)
 
-VK Tunnel is under maintenance (since 2025-10-02), so the obsolete
-`@vkontakte/vk-tunnel` dev dependency and npm `tunnel` script were removed.
-Expose the local Vite dev server over HTTPS with **cloudflared**. The Vite dev config (`host: true`, `allowedHosts: true`,
-`hmr.protocol: wss`, `/miniapp` + `/api` proxy) already accepts the rotating
-tunnel domain and keeps backend calls same-origin (no mixed content).
+VK WebView requires HTTPS. For local Mini App dev, prefer **`localhost.run`**
+(`https://<random>.lhr.life`). It avoids the free **ngrok** interstitial that
+VK iframe cannot pass (Network shows `error.js` instead of `main.tsx`).
+
+**One command (Windows):**
 
 ```powershell
-# 1. API + worker running (mock) and the Vite dev server up (npm run dev).
-# 2. Tunnel the dev server (prints a fresh https://<random>.trycloudflare.com URL):
-cloudflared tunnel --protocol http2 --url http://localhost:5173
+.\scripts\dev\start-miniapp.ps1 -NoWait
+.\scripts\dev\status-miniapp.ps1
+.\scripts\dev\stop-miniapp.ps1
 ```
 
-Paste the printed `https://...trycloudflare.com` URL into **dev.vk.com → your
-app → Версия для vk.com → "URL для разработки"**. The URL changes every run —
-do **not** hardcode it anywhere (`allowedHosts: true` handles the domain). Open
-the app from VK; the SPA reads the launch params VK appends to the URL and the
-BFF verifies the signature.
+Backward-compatible wrapper: `.\start-miniapp-ngrok.ps1 -NoWait` / `-StopOnly`.
+
+Starts Docker deps (unless `-SkipDocker`), applies migrations (unless
+`-SkipMigrate`), API + worker + Vite, SSH tunnel to `localhost.run`
+(`https://*.lhr.life`). Logs and pid files: `.runtime/vk-miniapp/`.
+
+**Manual tunnel** (API, worker and `npm run dev` already running):
+
+```powershell
+ssh -o StrictHostKeyChecking=no -R 80:127.0.0.1:5173 nokey@localhost.run
+```
+
+Paste `https://....lhr.life` into **dev.vk.com → your app → Версия для vk.com →
+"URL для разработки"**. The URL changes when the SSH session ends — update VK
+settings after each restart.
+
+Vite proxies `/miniapp/*` to `http://127.0.0.1:8080`, so one tunnel URL serves
+both frontend and BFF (same-origin, no mixed content).
+
+**Stable alternative (Cloudflare named tunnel):**
+
+```powershell
+.\scripts\dev\setup-miniapp-cloudflare-route.ps1
+# then run cloudflared with .runtime/vk-bot/cloudflared/config.yml
+# app.neiirohub.ru -> http://localhost:5173
+```
+
+**Legacy / bot-only:** `cloudflared tunnel --protocol http2 --url http://localhost:5173`
+still works for quick smoke, but `*.trycloudflare.com` is less reliable for VK
+WebView than `*.lhr.life` in local practice.
 
 ### Production
 

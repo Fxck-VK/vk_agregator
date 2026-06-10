@@ -1,6 +1,6 @@
 // src/hooks/useChats.ts
 import { useCallback, useEffect, useState } from "react";
-import { clearLocalHistory, defaultThread, loadChats, saveChats } from "../chat/store";
+import { clearLocalHistory, defaultThread, loadActiveThreadID, saveActiveThreadID } from "../chat/store";
 import { type Chat, type ChatMessage } from "../chat/types";
 
 function threadID(): string {
@@ -17,15 +17,15 @@ function threadID(): string {
 
 export function useChats() {
   const [initial] = useState(() => {
-    const loaded = loadChats();
-    return { chats: loaded, activeId: loaded[0]?.id ?? null };
+    const chat = defaultThread();
+    return { chats: [chat], activeId: loadActiveThreadID() ?? chat.id };
   });
   const [chats, setChats] = useState<Chat[]>(initial.chats);
   const [activeId, setActiveId] = useState<string | null>(initial.activeId);
 
   useEffect(() => {
-    saveChats(chats);
-  }, [chats]);
+    saveActiveThreadID(activeId);
+  }, [activeId]);
 
   const activeChat = chats.find((c) => c.id === activeId) ?? null;
 

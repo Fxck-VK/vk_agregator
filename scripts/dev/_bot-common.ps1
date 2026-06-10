@@ -53,7 +53,7 @@ function Get-ConfigValue {
     param(
         [Parameter(Mandatory = $true)][string]$Root,
         [Parameter(Mandatory = $true)][string]$Name,
-        [Parameter(Mandatory = $true)][string]$Default
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string]$Default
     )
 
     $processValue = [Environment]::GetEnvironmentVariable($Name, "Process")
@@ -117,6 +117,94 @@ function Wait-Http {
     } while ((Get-Date) -lt $deadline)
 
     throw "Timed out waiting for $Url"
+}
+
+function Invoke-VKConfirmationCheck {
+    param(
+        [Parameter(Mandatory = $true)][string]$Root,
+        [Parameter(Mandatory = $true)][string]$CallbackUrl,
+        [int]$TimeoutSeconds = 60,
+        [switch]$IncludeSecret
+    )
+
+    $confirmation = Get-ConfigValue -Root $Root -Name "VK_CONFIRMATION_TOKEN" -Default ""
+    if ([string]::IsNullOrWhiteSpace($confirmation)) {
+        Write-Host "Skipping VK confirmation check because VK_CONFIRMATION_TOKEN is empty."
+        return $true
+    }
+
+    $groupID = Get-ConfigValue -Root $Root -Name "VK_GROUP_ID" -Default "239332376"
+    $payload = @{
+        type     = "confirmation"
+        group_id = [int64]$groupID
+    }
+    if ($IncludeSecret) {
+        $secret = Get-ConfigValue -Root $Root -Name "VK_SECRET" -Default ""
+        if (-not [string]::IsNullOrWhiteSpace($secret)) {
+            $payload["secret"] = $secret
+        }
+    }
+    $body = $payload | ConvertTo-Json -Compress
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+
+    do {
+        try {
+            $response = Invoke-WebRequest -Uri $CallbackUrl -Method POST -ContentType "application/json" -Body $body -UseBasicParsing -TimeoutSec 5
+            $content = ([string]$response.Content).Trim()
+            if ($response.StatusCode -ge 200 -and $response.StatusCode -lt 300 -and $content -eq $confirmation) {
+                return $true
+            }
+        } catch {}
+        Start-Sleep -Seconds 1
+    } while ((Get-Date) -lt $deadline)
+
+    throw "Timed out waiting for VK confirmation response from $CallbackUrl"
+}
+
+function Repair-CloudflareTunnelDNSRoute {
+    param(
+        [Parameter(Mandatory = $true)][string]$TunnelName,
+        [Parameter(Mandatory = $true)][string]$TunnelHostname
+    )
+
+    $cmd = Get-Command cloudflared -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($null -eq $cmd) {
+        throw "cloudflared is not installed or not available in PATH."
+    }
+
+    Write-Host "Repairing Cloudflare DNS route: $TunnelHostname -> $TunnelName"
+    cloudflared tunnel route dns --overwrite-dns $TunnelName $TunnelHostname | Out-Host
+}
+
+function Wait-NamedTunnelPublicReady {
+    param(
+        [Parameter(Mandatory = $true)][string]$Root,
+        [Parameter(Mandatory = $true)][string]$TunnelName,
+        [Parameter(Mandatory = $true)][string]$TunnelHostname,
+        [int]$TimeoutSeconds = 60
+    )
+
+    $publicHealthUrl = "https://$TunnelHostname/health"
+    $httpAddr = Get-ConfigValue -Root $Root -Name "HTTP_ADDR" -Default ":8080"
+    $localCallbackUrl = Convert-ListenAddrToLocalUrl -Addr $httpAddr -Path "/webhooks/vk"
+
+    Write-Host "Checking local VK callback confirmation: $localCallbackUrl"
+    Invoke-VKConfirmationCheck -Root $Root -CallbackUrl $localCallbackUrl -TimeoutSeconds $TimeoutSeconds -IncludeSecret | Out-Null
+
+    try {
+        Write-Host "Waiting for public named tunnel health: $publicHealthUrl"
+        Wait-Http -Url $publicHealthUrl -TimeoutSeconds $TimeoutSeconds | Out-Null
+        return $true
+    } catch {
+        Write-Host "Public named tunnel check failed: $($_.Exception.Message)"
+    }
+
+    Repair-CloudflareTunnelDNSRoute -TunnelName $TunnelName -TunnelHostname $TunnelHostname
+    Start-Sleep -Seconds 3
+
+    Write-Host "Rechecking public named tunnel health: $publicHealthUrl"
+    Wait-Http -Url $publicHealthUrl -TimeoutSeconds $TimeoutSeconds | Out-Null
+    return $true
 }
 
 function Wait-TcpPort {

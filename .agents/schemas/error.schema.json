@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AgentErrorLogEntry",
+  "type": "object",
+  "required": ["ts", "id", "status", "severity", "surface", "summary"],
+  "additionalProperties": false,
+  "properties": {
+    "ts": { "type": "string", "format": "date-time" },
+    "id": { "type": "string" },
+    "status": { "type": "string", "enum": ["open", "resolved", "superseded"] },
+    "severity": { "type": "string", "enum": ["low", "medium", "high", "critical"] },
+    "surface": { "type": "string" },
+    "summary": { "type": "string" },
+    "root_cause": { "type": "string" },
+    "resolution": { "type": "string" },
+    "related_files": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "checks": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "commit": { "type": "string" },
+    "notes": { "type": "string" }
+  }
+}

@@ -273,12 +273,11 @@ but normalizes all Mini App text jobs to the public alias before persistence
 or DTO output. The frontend no longer exposes a text model selector in chat
 mode and shows only `ChatGPT`.
 
-Mini App chat context is process-local in the BFF, keyed by verified VK user
-and capped to the latest turns. The user prompt remains out of `localStorage`;
-the BFF appends assistant context only after `GET /miniapp/jobs/{id}` observes
-backend terminal success and a moderated text artifact. This mirrors the VK
-text bot's process-local limitation: context can be lost on API restart and is
-not a durable conversation store.
+Historical PR-15 note: Mini App chat context originally lived in a
+process-local BFF store keyed by verified VK user. That limitation was
+superseded by ADR-017 and PR-18.3/18.4/18.5. Current Mini App chat uses
+durable `source=miniapp` conversations through the shared worker/dialogcontext
+core and stores no prompt/answer history in `localStorage`.
 
 Consequences: Mini App chat uses the same async Job -> Worker -> Provider ->
 Artifact path as the VK text bot and does not add provider logic to the BFF or
@@ -351,27 +350,27 @@ details, artifact ids or artifact URLs. Last-message previews are derived only
 from in-memory messages for the current session. Legacy/suspicious local
 history is cleared with value-free warnings.
 
+Historical storage note: PR-18.4/18.5 superseded `vk_miniapp_threads_v1`.
+Current Mini App chat stores only `vk_miniapp_active_thread_v1` plus UI
+preferences and reads thread list/history from the backend.
+
 The history UI reuses the existing chat drawer state and becomes a top sheet
 opened by tapping the chat title. The sheet shows thread titles, in-memory
 last-reply preview, last activity, new-dialog action and local clear action.
 The typing indicator is tied to pending job/poll state, not to a timer, so it
 turns off only when the backend job reaches a terminal state.
 
-Graceful degradation: conversation context still lives only in the process
-running `cmd/api`. API restart, scale-out or process replacement may lose the
-context for any thread. In that case the frontend keeps safe metadata, but the
-backend effectively starts an empty conversation; the UI must not crash or
-treat local metadata as source of truth.
-
-Backend dependency: a separate backend PR should add durable conversation
-storage plus list/read endpoints for Mini App conversations. PR-16.2 does not
-implement that backend surface and does not persist conversation content on
-the client.
+Historical graceful-degradation note: before PR-18, conversation context still
+lived only in the `cmd/api` process and could be lost on restart or scale-out.
+That backend dependency was completed by PR-18.3/18.4/18.5. Current Mini App
+chat uses durable backend conversation storage plus authenticated list/read
+endpoints, while the frontend stores only the active thread id and UI
+preferences.
 
 Consequences: frontend multi-dialog UX becomes available without weakening
-auth, billing, moderation, artifact access or provider boundaries. The current
-solution is session/local-metadata oriented until backend durable conversation
-history exists.
+auth, billing, moderation, artifact access or provider boundaries. The original
+session/local-metadata limitation is retained here as historical context only;
+the current source of truth is backend durable conversation history.
 
 ---
 
@@ -445,13 +444,27 @@ to PR-16.4.
 
 Chat thread history no longer opens by tapping the chat title. The header uses
 an explicit icon button that opens the existing thread panel with thread list
-and `Новый диалог`. Thread storage and backend process-local context behavior
-from ADR-011 remain unchanged.
+and `Новый диалог`. Thread storage behavior from ADR-011 remains unchanged;
+the backend process-local context limitation was later superseded by
+ADR-017/PR-18.
 
 Consequences: the Create tab has a clearer product entry point while preserving
 backend-owned pricing, billing, job status and artifact access. Polling remains
 owned by `ChatScreen`; switching type, tab or thread does not create a second
 poller or clear in-flight jobs.
+
+### Amendment (2026-06-07) — Figma `CreateTab` single-page layout
+
+Status: accepted
+
+The two-step `home cards -> generate form` flow from PR-16.3.1 is replaced by a
+single Create surface aligned with Figma Make `CreateTab.tsx`: banner, two
+selectable model cards (`Nano Banana Pro` / `Kling`), image reference dropzone,
+inline prompt composer with backend estimate price badge and send control, plus
+quick-prompt chips. PR-10 Status → Result → per-type History screens remain.
+Settings/Profile uses banner-only hero and collapsible request history (closed
+by default). Non-chat `createJob` API errors propagate to the Create composer.
+Backend contracts and submit gating are unchanged.
 
 ---
 
@@ -591,3 +604,156 @@ first extract VK bot wiring, then Mini App wiring, then simplify
 `cmd/api/main.go`, and finally update architecture/runbook docs. Each step must
 run focused tests plus full `go test ./...` / `go build ./...`; Mini App build
 must be included when Mini App wiring or frontend contracts are in scope.
+
+---
+
+## ADR-017 - Durable shared chat context core
+
+Status: accepted
+
+Date: 2026-06-06
+
+Context: VK text bot already had durable text context through
+`internal/service/dialogcontext`, Postgres conversations/messages/summaries and
+worker-owned prompt rendering. Before PR-18.3, Mini App chat had a frontend
+`conversation_id`, but the BFF also kept recent turns in a process-local
+`internal/adapter/inbound/miniapp/conversation.go` store. That store was lost
+on API restart/scale-out, while the existing durable conversation key
+`user_id + vk_peer_id` was not enough to represent multiple Mini App threads
+for one VK user.
+
+Decision: do not make Mini App call VK bot and do not copy VK bot context logic
+into Mini App. Instead, extend the backend conversation core so both surfaces
+can create text chat jobs with explicit durable conversation identity:
+
+- VK bot remains a surface for VK Callback API, menu/buttons, dialog mode,
+  anti-spam and VK-specific delivery/control details.
+- Mini App remains a surface for launch-param auth, BFF DTOs and frontend
+  thread UX.
+- Shared chat/conversation core owns durable conversation identity, history,
+  summary/recent-message prompt rendering, user/assistant turn persistence and
+  public model alias policy.
+- Worker remains the only place that calls providers.
+
+The target identity model must distinguish at least:
+
+- `source=vk_bot`, scoped by backend `user_id` and `vk_peer_id`;
+- `source=miniapp`, scoped by backend `user_id` and opaque Mini App
+  `external_thread_id` / `conversation_id`.
+
+Backward compatibility: old VK bot jobs without an explicit conversation ref
+must keep resolving through `user_id + vk_peer_id`. Mini App requests without a
+`conversation_id` continue to use the `default` thread.
+
+Security consequences:
+
+- `conversation_id` is opaque UI/thread state, not trusted identity.
+- Ownership is always backend user scoped after VK launch-param verification.
+- VK bot context, Mini App default thread and Mini App custom threads must not
+  mix.
+- Prompt bodies, generated answers, launch params, tokens, secrets, PII and
+  private artifact URLs must not be logged or stored in localStorage.
+- Chat core may create jobs only through `joborchestrator`; it must not call
+  providers or mutate billing state directly.
+
+Planned sequence:
+
+1. PR-18.1: durable conversation identity schema/domain/repository foundation.
+2. PR-18.2: worker/dialogcontext explicit conversation references and shared
+   chat job contract.
+3. PR-18.3: Mini App chat switches from process-local context to durable shared
+   chat core.
+4. PR-18.4: Mini App conversation list/history endpoints and frontend
+   integration.
+5. PR-18.5: cleanup, docs and regression/security verification.
+
+Outcome: implemented through PR-18.1-PR-18.5. Mini App BFF no longer has a
+process-local prompt-prefix memory store; it creates text jobs with
+`conversation_source=miniapp` and opaque `external_thread_id`, then the worker
+creates/loads the durable backend conversation and saves assistant turns.
+Authenticated Mini App list/history endpoints expose only owner-scoped
+product-level conversation data. Mini App local storage keeps only active
+thread/tab/theme UI state and legacy cache cleanup. Public model output remains
+`ChatGPT`.
+
+---
+
+## ADR-018 - Payment top-up foundation over append-only billing ledger
+
+Status: accepted
+
+Date: 2026-06-08
+
+Context: VK Bot and VK Mini App both need one shared balance top-up mechanism.
+The existing billing system is ledger based: balance is a projection of
+`ledger_entries`, and credits must not be granted directly from frontend state,
+VK handlers or Mini App handlers. YooKassa integration also requires explicit
+idempotency, receipt contacts for 54-FZ, webhook deduplication and protection
+against late/repeated provider events.
+
+Decision: introduce payment top-ups as backend-core domain state before wiring
+any user-facing payment UX:
+
+- `internal/domain/payment.go` owns payment products, intents, webhook inbox
+  events, refunds, payment provider codes and intent status transitions.
+- Migration `000009_payments` owns durable payment tables:
+  `payment_products`, `payment_intents`, `payment_events`, `payment_refunds`.
+- Payment intents snapshot product amount, credit amount and `price_version` at
+  creation time. Webhook processing must never recalculate old intents from the
+  current catalog.
+- Receipt contact data is stored as first-class intent columns
+  (`receipt_email`, `receipt_phone`) and at least one contact is required.
+- Provider webhook inbox idempotency is separate from billing ledger
+  idempotency. Provider refund ids are stored explicitly so partial refunds do
+  not collapse into one payment-level dedup key.
+- Config separates money providers from AI providers through
+  `PAYMENT_PROVIDER=mock|yookassa`; `PAYMENT_PROVIDER=yookassa` requires shop
+  id, secret key and return URL.
+- Payment services and processors depend on `domain.PaymentProvider` and
+  normalized DTOs. Provider-native YooKassa HTTP/auth/JSON details stay in
+  `internal/adapter/payment/yookassa`.
+- `internal/service/paymentservice` owns payment-intent lifecycle creation:
+  validate trusted user/product/contact input, create a local intent, call the
+  selected provider, persist provider payment id / confirmation URL, and return
+  safe DTOs without raw provider payloads.
+- Operator payment routes live under protected `/billing/*` endpoints and fail
+  closed without admin auth. Mini App payment routes live under authenticated
+  `/miniapp/payments*` endpoints and derive `user_id` from verified launch
+  params, never from public request JSON.
+- `cmd/provider-webhook` is the dedicated provider callback entrypoint. It
+  exposes `POST /billing/webhooks/yookassa`, stores raw normalized provider
+  events in `payment_events`, accepts duplicate provider retries as no-op and
+  returns `200` before async business processing.
+- Async webhook processing verifies the current payment state through
+  `domain.PaymentProvider.GetPayment`, checks amount/currency against the
+  intent snapshot, applies the payment intent state machine, calls
+  `billingservice.GrantWith(ctx, txBillingRepo, ...)` with
+  `topup:<provider>:<provider_payment_id>`, and marks
+  `payment_events.processed_at` in the same transaction.
+- Stale `provider_pending` and `waiting_for_user` provider-backed intents are
+  reconciled by `cmd/provider-webhook` through the same verified
+  `GetPayment` / state-machine / ledger path as webhook processing.
+- Protected operator actions may manually sync an intent or start a full refund
+  under `/billing/payment-intents/{id}/sync` and
+  `/billing/payment-intents/{id}/refund`. Refund requests require a caller
+  idempotency key, operate only on `succeeded` intents, refuse when the current
+  credit balance cannot cover the purchased credits and use ledger adjustment
+  entries rather than direct balance mutation.
+- Refund webhook deduplication includes `provider_refund_id`; refund balance
+  reversal remains separate from top-up grants until product policy defines
+  partial/automatic refunds and lot/FIFO attribution for already spent credits.
+- `internal/adapter/payment/mock` is the default local/test provider.
+  `internal/adapter/payment/yookassa` is the real HTTP adapter: it uses Basic
+  Auth, short provider HTTP `Idempotence-Key` headers, kopeck/string amount
+  conversion, redirect payments with `capture: true`, 54-FZ receipt data,
+  refunds and webhook normalization. Internal ledger idempotency keys remain
+  separate from YooKassa HTTP idempotency headers.
+
+Consequences: product catalog management/seed data, partial refund attribution,
+automatic refund webhook balance reversal and live YooKassa smoke remain future
+chapters. Payment intent APIs may create provider payment links, but redirects
+themselves do not prove payment success and must not grant credits.
+`billingservice.GrantWith(ctx, txRepo, ...)` is the tx-aware primitive for
+appending a committed `topup` ledger entry atomically with processed payment
+event/status updates. `VK_MENU_TOP_UP_ENABLED` should stay off until product
+catalog and live payment smoke are approved.

@@ -1,103 +1,183 @@
-# Merge Handoff - fastlife_dev
+# MERGE_HANDOFF — `serega` Branch
 
-Last updated: 2026-06-06
+Дата подготовки: 2026-06-10.
 
-## Current branch state
+Цель файла: дать агенту коллеги короткий актуальный контекст перед слиянием веток. Этот файл не заменяет `AGENTS.md` и `.agents/state.json`; сначала нужно соблюдать их, затем использовать этот handoff как merge-карту по изменениям ветки `serega`.
 
-- Active branch: `fastlife_dev`
-- Current pushed head: `3b26d43` (`miniapp: disable create post flow`)
-- Remote: `origin/fastlife_dev` was pushed at `3b26d43`
-- Historical context: `fastlife_dev` was created from the integrated `main`
-  after the Mini App and VK backend integration. Earlier branch
-  `feature/vk-miniapp` must not be used for new work.
-- Important local state: `start-miniapp-ngrok.ps1` has an uncommitted local
-  experiment that switches the tunnel from ngrok to `localhost.run`. Treat it
-  as a merge decision item, not as committed product state.
+## Текущий Контекст
 
-## What is already in fastlife_dev
+- Текущая ветка: `serega`.
+- Последний HEAD на момент подготовки файла: `4244cbe docs: compact active context`.
+- В рабочем дереве есть незакоммиченные изменения. Не считать их мусором: это текущая работа по VK bot, видео-доставке, YooKassa billing smoke/cancel и конфигам.
+- Секреты, `.env`, реальные токены и локальные runtime credentials не должны попадать в merge/commit.
+- Последняя проверка после правки video delivery filename: `go test ./...` — green.
 
-- PR-6: Mini App sends optional `model_id` to `POST /miniapp/jobs`; backend
-  validates supported models. Unsupported model errors are shown safely.
-- PR-7: `POST /miniapp/estimate` exists. Backend remains the price source of
-  truth, estimate does not create jobs, reserve credits or mutate billing.
-- PR-8: Result/artifact UX added with safe text rendering and backend artifact
-  routes.
-- PR-9: Mini App reload recovery and local retention added. Local storage is
-  limited to UI-safe metadata and preferences, not prompts, launch params,
-  tokens, balances or artifact URLs.
-- PR-11: VKUI research ADR accepted Outcome C: hybrid usage.
-- PR-14: VKUI hybrid base primitives added. VKUI providers wrap the app; base
-  controls use VKUI while signature UX remains custom.
-- PR-15: Chat mode aligned with VK text bot behavior and DeepSeek provider
-  flow. Public model label is user-facing, provider details stay hidden.
-- PR-16.1: Three-tab shell added: Create, Chat, Settings. Chat is default.
-- PR-16.2: Chat threads added on frontend with local metadata only. Backend
-  process-local context remains a known limitation.
-- PR-16.3 and PR-16.3.1: Create tab was revised into a choice screen. Current
-  committed product state removes the Create Post path and keeps only Create
-  Photo / Create Video.
-- PR-16.4: Settings tab added with theme preference, backend balance display,
-  payment-history placeholder, local-history privacy controls and summary
-  generation history.
-- Latest backend safety fix: Mini App launch-param auth allows small future
-  timestamp skew and still rejects large future timestamps.
+## Что Мы Меняли В `serega`
 
-## Current known runtime breakage
+### VK Bot UX
 
-- VK Mini App loading over the ngrok domain was unreliable. The observed ngrok
-  endpoint returned an ngrok warning/interstitial (`ERR_NGROK_6024`) instead of
-  the Vite app, which can make VK WebView load forever.
-- Local Vite/API were healthy during the last smoke: Vite served HTML, API
-  `/health` returned 200, and authenticated Mini App balance/estimate requests
-  worked when valid `X-Launch-Params` were supplied.
-- A `localhost.run` tunnel worked during troubleshooting, but it is only a dev
-  workaround. Prefer the owned domain path in `docs/DOMAIN_DEPLOYMENT_PLAN.md`.
-- If the Mini App is opened outside VK without valid launch params, auth-bound
-  calls are expected to fail. Do not weaken VK launch-param verification to make
-  plain-browser testing pass.
-- Payment history and top-up are UI placeholders/dependencies. There is no
-  committed backend payment-intent or ledger-history endpoint yet.
-- Backend chat thread listing/history endpoint is missing. Frontend stores only
-  thread metadata locally and degrades if backend process-local context is lost.
+- Главное меню VK bot сейчас включает управляемые feature flags для кнопок.
+- Активные пользовательские сценарии:
+  - `Создать фото`;
+  - `Спросить у НейроХаб`;
+  - `Мой аккаунт`;
+  - `Пополнить баланс`;
+  - `Создать видео`.
+- Раздел `Создать видео` сейчас показывает только `PrunaAI` и `Назад`. Остальные видео-модели оставлены в command/domain/router как задел, но не должны внезапно появиться в UX без отдельного включения.
+- После выбора `PrunaAI` бот ставит dialog mode `video:prunaai`; следующий обычный текст пользователя становится `video.generate` job.
+- Пример для видео в VK bot переведен на русский: `кот в очках едет на жирафе`.
+- Placeholder для видео: `НейроХаб готовит видео...`.
+- После генерации видео файл больше не должен называться UUID-only. Worker берет первые 25 символов prompt, очищает небезопасные символы и использует это как имя `.mp4`. Если prompt пустой, остается fallback UUID.
 
-## Merge hotspots
+### VK Bot Payments
 
-- `web/miniapp/src/chat/ChatScreen.tsx`
-- `web/miniapp/src/chat/MessageBubble.tsx`
-- `web/miniapp/src/chat/Composer.tsx`
-- `web/miniapp/src/workflow/WorkflowMode.tsx`
-- `web/miniapp/src/settings/SettingsScreen.tsx`
-- `web/miniapp/src/components/ResultCard.tsx`
-- `web/miniapp/src/api/client.ts`
-- `web/miniapp/src/ui/theme.css`
-- `internal/adapter/inbound/miniapp/handler.go`
-- `internal/adapter/inbound/miniapp/handler_test.go`
-- `internal/adapter/inbound/miniapp/sign.go`
-- `DECISIONS.md`, `PROGRESS.md`, `TASKS.md`, `AUDIT.md`
-- `start-miniapp-ngrok.ps1`
+- Кнопка `Пополнить баланс` ведет в выбор пакетов:
+  - `99 кристаллов — 99Р`;
+  - `150 кристаллов — 150Р`;
+  - `250 кристаллов — 250Р`;
+  - `400 кристаллов — 400Р`;
+  - `700 кристаллов — 700Р`.
+- VK bot quick top-up больше не спрашивает email/phone в чате.
+- Для YooKassa receipt в VK bot используются серверные env:
+  - `VK_TOP_UP_RECEIPT_EMAIL`;
+  - `VK_TOP_UP_RECEIPT_PHONE`.
+- Если у пользователя уже есть активный intent, бот должен корректно показывать/переиспользовать активный payment link или создавать новый только по явному сценарию.
+- Нельзя начислять баланс по redirect/клику пользователя. Начисление только через webhook/reconciliation -> payment service -> ledger topup.
 
-## Architecture invariants for the merge
+### YooKassa / Billing
 
-- Mini App never calls AI providers directly.
-- VK inbound handlers never call AI providers directly.
-- Provider calls stay under `internal/adapter/provider` and worker paths.
-- Billing remains append-only ledger based; frontend never mutates balance.
-- Client-side estimate display is not a source of truth.
-- Auth through VK launch params must stay backend-verified.
-- No raw launch params, tokens, prompts, PII, provider keys or private artifact
-  URLs in logs or local storage.
-- AI output must be rendered as React text or through a safe renderer, never
-  raw `innerHTML` / `dangerouslySetInnerHTML`.
+- Добавлен/расширен protected operator path для payment lifecycle smoke:
+  - `POST /billing/payment-intents/{id}/sync`;
+  - `POST /billing/payment-intents/{id}/cancel`;
+  - `POST /billing/payment-intents/{id}/refund`;
+  - `GET /billing/payment-intents/pending`;
+  - `GET /billing/payment-events/unprocessed`.
+- Для теста `payment.canceled` добавлен путь создания intent с `capture=false` через protected billing/admin API. Обычные пользовательские платежи остаются `capture=true`.
+- `CancelIntent` вызывает provider cancel, затем проверяет состояние через тот же sync/reconciliation path.
+- Поздний `payment.canceled` не должен откатывать `succeeded`.
+- Refund остается operator-only. Автоматически возвращать потраченные кредиты нельзя, пока нет lot/FIFO attribution.
+- YooKassa adapter должен держать Basic Auth и provider details внутри adapter. Наружу только safe DTO.
 
-## Immediate recommendation
+### VK Delivery / Video
 
-Before merging more branches, decide the fate of the local
-`start-miniapp-ngrok.ps1` tunnel experiment:
+- Default для видео-доставки: `VK_VIDEO_DELIVERY_MODE=doc`.
+- В `doc` mode mp4 отправляется как VK document attachment через community token. Это стабильный путь для бота.
+- Опциональный native video path оставлен через:
+  - `VK_VIDEO_DELIVERY_MODE=video`;
+  - `VK_VIDEO_ACCESS_TOKEN`;
+  - `VK_VIDEO_UPLOAD_GROUP_ID`.
+- Native `video.save` требует user token с video rights. Не включать этот путь без явного решения: это хуже по операционным рискам.
+- Worker не должен загружать media attachment слишком рано: attachment готовится при send, чтобы использовать prompt-derived filename и корректно ретраить upload.
 
-1. Keep it as a dev-only `localhost.run` fallback and commit it in a focused
-   operational commit.
-2. Revert it and keep the old ngrok script.
-3. Replace both with a production-domain runbook based on `neiirohub.ru`.
+## Затронутые Зоны
 
-For product testing in VK, prefer moving to the owned domain instead of chasing
-temporary tunnel URLs.
+Ожидаемые файлы/зоны конфликтов:
+
+- `internal/adapter/inbound/vk/handler.go`
+  - dialog modes GPT/photo/video;
+  - top-up flow без запроса контакта в чате;
+  - создание `video.generate` jobs через orchestrator.
+- `internal/adapter/inbound/vk/menu.go`
+  - главное меню;
+  - video model menu только с `PrunaAI`;
+  - top-up package menu;
+  - account/referral copy.
+- `internal/service/commandrouter/router.go`
+  - текстовые payloads/commands для меню и video flow.
+- `internal/domain/command.go`
+  - command types для video menu.
+- `internal/adapter/delivery/vk/real.go`
+  - raw photo upload;
+  - mp4-as-doc upload;
+  - optional native video upload.
+- `internal/worker/delivery.go`
+  - lazy media attachment;
+  - prompt-based media filename;
+  - delivery retry semantics.
+- `internal/service/paymentservice/**`
+  - active intent handling;
+  - `capture=false` metadata;
+  - provider sync/cancel/refund.
+- `internal/adapter/inbound/billing/handler.go`
+  - protected operator endpoints.
+- `internal/adapter/payment/yookassa/**`
+  - capture flag;
+  - idempotency;
+  - receipt handling.
+- `internal/platform/config/config.go`, `.env.example`, `cmd/worker/main.go`
+  - `VK_VIDEO_*`;
+  - `VK_TOP_UP_RECEIPT_*`;
+  - payment/video config validation.
+- `migrations/000012_neirohub_crystal_catalog.*`
+  - product catalog for current crystal packages.
+
+## Что Нельзя Сломать При Слиянии
+
+- VK bot handler не должен напрямую вызывать AI provider.
+- Mini App не должен напрямую вызывать AI provider.
+- Video/photo/text prompts должны становиться Jobs через orchestrator.
+- Worker остается единственным местом provider calls и media artifact delivery.
+- Balance/top-up/referral rewards только через billing ledger. Никаких прямых `balance +=`.
+- YooKassa webhook/reconciliation должны верифицировать provider state через adapter before ledger mutation.
+- `/billing/*` operator endpoints должны оставаться protected admin-only.
+- Public user-facing DTO не должен отдавать raw YooKassa payload.
+- `.env`, токены, cloudflared token, YooKassa secret, VK access token не коммитить.
+- `VK_VIDEO_DELIVERY_MODE=doc` должен оставаться безопасным default.
+- Mini App routes и BFF auth не ослаблять при разрешении конфликтов.
+
+## Рекомендованный Merge-Порядок
+
+1. Перед merge прочитать `AGENTS.md` и `.agents/state.json`.
+2. Не читать `docs/archive/**` как active context, если не расследуется старая регрессия.
+3. Сделать `git fetch --all --prune`.
+4. Посмотреть diff между ветками:
+   - `git diff --stat main...serega`;
+   - `git diff --stat <miniapp-branch>...serega`.
+5. Сначала руками разобрать конфликты в shared backend:
+   - config;
+   - paymentservice;
+   - billing handler;
+   - command/domain router.
+6. Потом разбирать VK-specific файлы:
+   - `internal/adapter/inbound/vk/**`;
+   - `internal/adapter/delivery/vk/**`;
+   - `internal/worker/delivery.go`.
+7. Mini App изменения коллеги сохранять, но не позволять им обходить shared payment/job/provider boundaries.
+
+## Проверки После Merge
+
+Минимум:
+
+```powershell
+gofmt -l .
+go test ./...
+git diff --check
+git grep -nE "^(<<<<<<<|=======|>>>>>>>)"
+```
+
+Если Mini App затронут merge:
+
+```powershell
+npm --prefix web/miniapp run build
+```
+
+Ручной smoke после запуска:
+
+- VK bot: `Показать меню`;
+- `Спросить у НейроХаб` -> текстовый ответ;
+- `Создать фото` -> prompt -> image job;
+- `Создать видео` -> `PrunaAI` -> prompt -> mp4 document с понятным filename;
+- `Пополнить баланс` -> выбор разных пакетов должен создавать payment link нужной суммы, не переиспользовать старый пакет молча;
+- YooKassa test: `payment.succeeded`, duplicate webhook, `capture=false -> cancel`, refund.
+
+## Известные Операционные Детали
+
+- Бот локально запускается через `scripts/dev/start-bot.ps1`.
+- Статус бота проверяется через `scripts/dev/status-bot.ps1`.
+- Для VK callback используется `https://vk.neiirohub.ru/webhooks/vk`.
+- Для Mini App у коллеги может быть отдельный tunnel/hostname. Не менять `vk.neiirohub.ru` без согласования.
+- YooKassa webhook должен идти на HTTPS endpoint provider-webhook runtime, а не в обычный VK callback.
+
+## Финальный Вердикт Для Агента Коллеги
+
+Сохранять обе стороны. Ветка `serega` добавляет рабочий VK bot слой поверх shared backend: меню, GPT/photo/video modes, top-up UX, YooKassa smoke/cancel support и видео-доставку. Это не должно быть заменено Mini App-логикой. Если конфликт между Mini App и VK Bot возникает в shared сервисах, правильное решение — общий сервис/порт + surface-specific adapter, а не копирование бизнес-логики в surface.

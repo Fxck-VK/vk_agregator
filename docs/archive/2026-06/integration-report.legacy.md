@@ -146,10 +146,14 @@ Production validation:
 ## 11. Remaining risks or decisions
 
 - VK control/menu sends are not persisted as `deliveries`; documented as a known control-path exception.
-- VK active-menu and GPT dialog state are process-local; persist before multi-instance API scaling.
+- VK active-menu tracking is still process-local; GPT dialog mode is
+  Redis-backed and text dialog context is durable in Postgres. Persist the
+  active-menu pointer before multi-instance API scaling.
 - Mini App `model_id` is validated/stored, but provider routing by selected model is still a separate provider-routing task.
 - Mini App artifact access still depends on API connectivity to S3/MinIO; production behavior should be fail/alert or explicit UI degradation.
-- Frontend chat content in `localStorage` still needs TTL/retention/privacy decision.
+- Mini App chat content is no longer stored in `localStorage`; PR-18.4/18.5
+  moved conversation list/history to backend durable storage and keeps only
+  active thread/tab/theme UI state locally.
 - Live smoke with real OpenAI/DeepInfra/VK credentials remains operational follow-up before external users.
 - Worker resume edge case for provider task succeeded before artifact/result restore remains open.
 

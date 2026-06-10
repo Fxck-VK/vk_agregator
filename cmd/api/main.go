@@ -17,6 +17,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	adminapi "vk-ai-aggregator/internal/adapter/inbound/admin"
+	billingapi "vk-ai-aggregator/internal/adapter/inbound/billing"
 	redisqueue "vk-ai-aggregator/internal/adapter/queue/redis"
 	"vk-ai-aggregator/internal/adapter/storage/postgres"
 	apiapp "vk-ai-aggregator/internal/app/api"
@@ -64,7 +65,11 @@ func main() {
 	rdb := redisqueue.NewClientWithPool(cfg.RedisAddr, cfg.RedisPassword, cfg.RedisDB, cfg.RedisPoolSize)
 	defer rdb.Close()
 
-	core := apiapp.NewSharedCore(pool, cfg)
+	core, err := apiapp.NewSharedCore(pool, cfg)
+	if err != nil {
+		logger.Error("api core wiring failed", "error", err)
+		os.Exit(1)
+	}
 	vkHandler := vkbot.NewHandler(cfg, vkbot.Deps{
 		Redis:        rdb,
 		Idempotency:  core.Idempotency,
@@ -73,6 +78,7 @@ func main() {
 		Jobs:         core.Jobs,
 		Commands:     core.Commands,
 		Billing:      core.Billing,
+		Payment:      core.Payment,
 		Referrals:    core.Referrals,
 		Orchestrator: core.Orchestrator,
 		Router:       core.Router,
@@ -85,16 +91,23 @@ func main() {
 		Deliveries: core.Deliveries,
 		Billing:    core.BillingRepo,
 	})
+	billing := billingapi.NewHandler(billingapi.Config{Token: cfg.AdminToken}, billingapi.Deps{
+		Users:      core.Users,
+		Payment:    core.Payment,
+		PaymentOps: core.PaymentOps,
+	})
 
 	miniapp := miniappapp.NewHandler(ctx, cfg, miniappapp.Deps{
-		Users:        core.Users,
-		Jobs:         core.Jobs,
-		Artifacts:    core.Artifacts,
-		Moderation:   core.Moderation,
-		Billing:      core.Billing,
-		BillingRepo:  core.BillingRepo,
-		Orchestrator: core.Orchestrator,
-		Logger:       logger,
+		Users:         core.Users,
+		Jobs:          core.Jobs,
+		Conversations: core.Conversations,
+		Artifacts:     core.Artifacts,
+		Moderation:    core.Moderation,
+		Billing:       core.Billing,
+		BillingRepo:   core.BillingRepo,
+		Payment:       core.Payment,
+		Orchestrator:  core.Orchestrator,
+		Logger:        logger,
 	})
 
 	// Per-IP rate limiting protects the webhook intake from flooding/abuse
@@ -104,6 +117,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.Handle("/webhooks/vk", webhookLimiter.Middleware(metrics.Middleware("webhook", vkHandler)))
 	mux.Handle("/admin/", metrics.Middleware("admin", admin.Routes()))
+	mux.Handle("/billing/", metrics.Middleware("billing", billing.Routes()))
 	mux.Handle("/miniapp/", metrics.Middleware("miniapp", miniapp.Routes()))
 	mux.Handle("GET /metrics", metrics.Handler())
 	mux.HandleFunc("GET /health", healthHandler(pool, rdb))

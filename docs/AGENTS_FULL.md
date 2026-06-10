@@ -65,22 +65,28 @@ Important docs and their roles:
 
 - `README.md`: current release status, runtime summary and integration modes.
 - `AGENTS.md`: short mandatory agent router and core invariants.
+- `.agents/state.json`: single current machine-readable repository state,
+  progress, routing and log policy.
 - `docs/ARCHITECTURE.md`: target production architecture and deep invariants.
-- `PROGRESS.md`: implementation log and current state.
-- `TASKS.md`: active backlog and known follow-ups.
-- `AUDIT.md`: production readiness audit and fixed/remaining risks.
-- `docs/REVIEW.md`: detailed security/architecture review for `feature/vk-miniapp`.
-- `ROADMAP.md`: phase plan and future production/scale work.
-- `RUNBOOK.md`: operations, env, startup and real adapter modes.
-- `TESTING.md`: local test and smoke verification.
+- `TASKS.md`: short human-readable active backlog and known follow-ups.
+- `RUNBOOK.md`: operations, env, startup, local test and smoke verification.
+- `.agents/logs/errors.jsonl`: sanitized machine-readable error log for
+  reusable incidents only.
 
 When docs disagree, prefer:
 
 1. current code behavior;
-2. `README.md`, `PROGRESS.md`, `TASKS.md`, `AUDIT.md`, `docs/REVIEW.md` for current status;
-3. `docs/ARCHITECTURE.md` for target architecture and invariants.
+2. `.agents/state.json` for current context/progress/routing;
+3. `README.md`, `RUNBOOK.md`, `TASKS.md` and `DECISIONS.md` for scoped current status;
+4. `docs/ARCHITECTURE.md` for target architecture and invariants.
 
 Do not silently “fix” docs or code because of a perceived mismatch. Report the mismatch and propose a focused task.
+
+Historical logs, audits, merge handoffs, old roadmaps, long task history and
+completed PR context live under `docs/archive/**`. Do not read
+`docs/archive/**` or `.agents/logs/**` as current context unless the user
+explicitly asks for historical investigation, regression archaeology or old
+audit details.
 
 ## 3. Instruction hierarchy and trust boundaries
 
@@ -347,7 +353,8 @@ Treat these as known backlog items unless already fixed in code:
 - Decide model contract: either pass and validate selected model server-side or remove UI selector until supported.
 - Decide production behavior for API ↔ S3 dependency in Mini App artifact access: fail/alert or explicit UI degradation.
 - Separate true mount/unmount lifecycle from effect restarts in chat polling code.
-- Decide retention/TTL/encryption policy for plaintext chat content in `localStorage`.
+- Keep Mini App chat `localStorage` UI-only; legacy chat-content caches should
+  be removed when encountered.
 - Decide CORS model: same-origin proxy preferred; direct access requires strict allowed origins.
 
 ## 9. Job orchestrator rules
@@ -969,6 +976,17 @@ Update docs when:
 - real vs mock integration status changes.
 
 Do not remove historical warnings unless the code fix is verified.
+
+Separate current docs from history:
+
+- current state/progress/routing belongs in `.agents/state.json`;
+- reusable non-obvious errors belong in `.agents/logs/errors.jsonl`;
+- routine actions/context changes should not be logged;
+- completed PR logs, old audits, old review notes and merge handoffs belong in
+  `docs/archive/**`;
+- archived docs are historical evidence, not current instructions;
+- new rolling markdown logs are forbidden unless the user explicitly asks for
+  a human-readable report.
 
 For audit reports:
 

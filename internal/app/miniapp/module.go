@@ -12,18 +12,21 @@ import (
 	"vk-ai-aggregator/internal/platform/ratelimit"
 	"vk-ai-aggregator/internal/service/billingservice"
 	"vk-ai-aggregator/internal/service/joborchestrator"
+	"vk-ai-aggregator/internal/service/paymentservice"
 )
 
 // Deps are shared backend-core collaborators required by the Mini App surface.
 type Deps struct {
-	Users        domain.UserRepository
-	Jobs         domain.JobRepository
-	Artifacts    domain.ArtifactRepository
-	Moderation   domain.ModerationResultRepository
-	Billing      *billingservice.Service
-	BillingRepo  domain.BillingRepository
-	Orchestrator *joborchestrator.Orchestrator
-	Logger       *slog.Logger
+	Users         domain.UserRepository
+	Jobs          domain.JobRepository
+	Conversations domain.ConversationRepository
+	Artifacts     domain.ArtifactRepository
+	Moderation    domain.ModerationResultRepository
+	Billing       *billingservice.Service
+	BillingRepo   domain.BillingRepository
+	Payment       *paymentservice.Service
+	Orchestrator  *joborchestrator.Orchestrator
+	Logger        *slog.Logger
 }
 
 // NewHandler builds the Mini App BFF HTTP handler. The surface owns only
@@ -53,18 +56,21 @@ func NewHandler(ctx context.Context, cfg config.Config, deps Deps) *miniappapi.H
 	// creation after launch params have been verified by the BFF.
 	miniappJobLimiter := ratelimit.New(cfg.MiniAppJobRateLimitRPS, cfg.MiniAppJobRateLimitBurst)
 	return miniappapi.NewHandler(miniappapi.Config{
-		AppSecret:          cfg.VKAppSecret,
-		LaunchParamsMaxAge: cfg.MiniAppLaunchParamsMaxAge,
-		JobRateLimiter:     miniappJobLimiter,
+		AppSecret:             cfg.VKAppSecret,
+		LaunchParamsMaxAge:    cfg.MiniAppLaunchParamsMaxAge,
+		JobRateLimiter:        miniappJobLimiter,
+		ImageReferenceEnabled: cfg.DeepInfraImageReferenceEnabled,
 	}, miniappapi.Deps{
-		Users:        deps.Users,
-		Jobs:         deps.Jobs,
-		Artifacts:    deps.Artifacts,
-		Moderation:   deps.Moderation,
-		Objects:      objectStore,
-		Billing:      deps.Billing,
-		BillingRepo:  deps.BillingRepo,
-		Orchestrator: deps.Orchestrator,
-		Logger:       logger,
+		Users:         deps.Users,
+		Jobs:          deps.Jobs,
+		Conversations: deps.Conversations,
+		Artifacts:     deps.Artifacts,
+		Moderation:    deps.Moderation,
+		Objects:       objectStore,
+		Billing:       deps.Billing,
+		BillingRepo:   deps.BillingRepo,
+		Payment:       deps.Payment,
+		Orchestrator:  deps.Orchestrator,
+		Logger:        logger,
 	})
 }

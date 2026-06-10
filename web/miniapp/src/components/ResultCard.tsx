@@ -1,17 +1,30 @@
-import { useMemo, useState } from "react";
-import { artifactUrl, statusKind, statusLabel } from "../api/client";
+import { useEffect, useState } from "react";
+import { hasPreviewableMediaResult, statusKind, statusLabel, type Job } from "../api/client";
+import { useArtifactMediaUrl } from "../hooks/useArtifactMediaUrl";
 import type { ChatMessage } from "../chat/types";
+import { MediaResultPreview } from "./MediaResultPreview";
 
 type ResultCardProps = {
   msg: ChatMessage;
   prompt: string;
   authorName?: string;
   authorAvatar?: string | null;
+  /** undefined — грузим сами; string — готовый URL; null — предзагрузка не удалась */
+  mediaSrcOverride?: string | null;
   onRetry: () => void;
 };
 
 function canShowResult(msg: ChatMessage): boolean {
-  return !!msg.status && statusKind(msg.status) === "done" && !msg.pending && !msg.error;
+  if (msg.error || msg.pending || !msg.status) return false;
+  if (statusKind(msg.status) === "done") return true;
+  if (!msg.jobId) return false;
+  const pseudoJob = {
+    id: msg.jobId,
+    operation: msg.operation ?? "",
+    status: msg.status,
+    output_artifact_ids: msg.artifactIds ?? [],
+  } as Job;
+  return hasPreviewableMediaResult(pseudoJob);
 }
 
 function safeStatus(msg: ChatMessage): string {
@@ -25,17 +38,30 @@ function initials(name: string): string {
   return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase() || "НХ";
 }
 
-export function ResultCard({ msg, prompt, authorName = "НейроХаб", authorAvatar, onRetry }: ResultCardProps) {
+export function ResultCard({
+  msg,
+  prompt,
+  authorName = "НейроХаб",
+  authorAvatar,
+  mediaSrcOverride,
+  onRetry,
+}: ResultCardProps) {
   const [copied, setCopied] = useState(false);
   const [mediaFailed, setMediaFailed] = useState(false);
   const text = msg.text?.trim() ?? "";
-  const firstArtifactId = msg.artifactIds?.[0] ?? "";
-  const mediaSrc = useMemo(
-    () => (firstArtifactId ? artifactUrl(firstArtifactId) : null),
-    [firstArtifactId],
-  );
+  const firstArtifactId = msg.artifactIds?.[0];
+  const overrideProvided = mediaSrcOverride !== undefined;
+  const fetchedMediaSrc = useArtifactMediaUrl(overrideProvided ? undefined : firstArtifactId);
+  const mediaSrc = overrideProvided ? (mediaSrcOverride ?? undefined) : fetchedMediaSrc;
+  const preloadFailed = overrideProvided && mediaSrcOverride === null;
   const showResult = canShowResult(msg);
   const failed = !!msg.error || (!!msg.status && statusKind(msg.status) === "failed");
+  const mediaLoading =
+    showResult && Boolean(firstArtifactId) && !mediaSrc && !mediaFailed && !preloadFailed;
+
+  useEffect(() => {
+    setMediaFailed(false);
+  }, [firstArtifactId, mediaSrc]);
 
   async function copyText() {
     if (!text) return;
@@ -91,47 +117,69 @@ export function ResultCard({ msg, prompt, authorName = "НейроХаб", autho
             </div>
           </div>
 
-          {msg.operation === "text_generate" && (
-            text ? (
+          {msg.operation === "text_generate" &&
+            (text ? (
               <div className="vk-preview__text">{text}</div>
             ) : (
               <UnavailableResult label="Текст результата недоступен." onRetry={onRetry} prompt={prompt} />
-            )
-          )}
+            ))}
 
-          {msg.operation === "image_generate" && (
-            mediaSrc && !mediaFailed ? (
-              <img
-                className="vk-preview__media"
+          {msg.operation === "image_generate" &&
+            (mediaLoading ? (
+              <div className="result-card__skeleton" aria-live="polite">
+                <span />
+                <span />
+                <span />
+              </div>
+            ) : mediaSrc && !mediaFailed && msg.jobId ? (
+              <MediaResultPreview
+                kind="image"
                 src={mediaSrc}
-                alt="Готовый результат"
-                onError={() => setMediaFailed(true)}
+                prompt={prompt}
+                jobId={msg.jobId}
+                onMediaError={() => setMediaFailed(true)}
               />
             ) : (
-              <UnavailableResult label="Изображение недоступно." onRetry={onRetry} prompt={prompt} />
-            )
-          )}
+              <UnavailableResult
+                label={preloadFailed ? "Не удалось загрузить изображение." : "Изображение недоступно."}
+                onRetry={onRetry}
+                prompt={prompt}
+              />
+            ))}
 
-          {msg.operation === "video_generate" && (
-            mediaSrc && !mediaFailed ? (
-              <video
-                className="vk-preview__media"
+          {msg.operation === "video_generate" &&
+            (mediaLoading ? (
+              <div className="result-card__skeleton" aria-live="polite">
+                <span />
+                <span />
+                <span />
+              </div>
+            ) : mediaSrc && !mediaFailed && msg.jobId ? (
+              <MediaResultPreview
+                kind="video"
                 src={mediaSrc}
-                controls
-                onError={() => setMediaFailed(true)}
+                prompt={prompt}
+                jobId={msg.jobId}
+                onMediaError={() => setMediaFailed(true)}
               />
             ) : (
-              <UnavailableResult label="Видео недоступно." onRetry={onRetry} prompt={prompt} />
-            )
-          )}
+              <UnavailableResult
+                label={preloadFailed ? "Не удалось загрузить видео." : "Видео недоступно."}
+                onRetry={onRetry}
+                prompt={prompt}
+              />
+            ))}
         </div>
       )}
 
-      {showResult && msg.operation !== "text_generate" && msg.operation !== "image_generate" && msg.operation !== "video_generate" && (
-        <div className="result-card__fallback">
-          <p>Результат готов.</p>
-        </div>
-      )}
+      {showResult &&
+        msg.operation !== "text_generate" &&
+        msg.operation !== "image_generate" &&
+        msg.operation !== "video_generate" && (
+          <div className="result-card__fallback">
+            <p>Результат готов.</p>
+          </div>
+        )}
 
       {showResult && (
         <footer className="result-card__actions">
@@ -149,7 +197,15 @@ export function ResultCard({ msg, prompt, authorName = "НейроХаб", autho
   );
 }
 
-function UnavailableResult({ label, onRetry, prompt }: { label: string; onRetry: () => void; prompt: string }) {
+function UnavailableResult({
+  label,
+  onRetry,
+  prompt,
+}: {
+  label: string;
+  onRetry: () => void;
+  prompt: string;
+}) {
   return (
     <div className="result-card__fallback">
       <p>{label}</p>

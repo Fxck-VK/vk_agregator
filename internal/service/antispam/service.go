@@ -17,6 +17,7 @@ import (
 const (
 	keyMessages   = "messages"
 	keyGPT        = "gpt"
+	keyImageDaily = "image_daily"
 	keyViolations = "violations"
 	keyBlock      = "block"
 	keyCooldown   = "cooldown"
@@ -38,10 +39,12 @@ type ActiveJobCounter interface {
 type Config struct {
 	Enabled bool
 
-	MessageLimit  int
-	MessageWindow time.Duration
-	GPTLimit      int
-	GPTWindow     time.Duration
+	MessageLimit     int
+	MessageWindow    time.Duration
+	GPTLimit         int
+	GPTWindow        time.Duration
+	ImageDailyLimit  int
+	ImageDailyWindow time.Duration
 
 	Cooldown        time.Duration
 	ViolationLimit  int
@@ -64,6 +67,8 @@ func DefaultConfig() Config {
 		MessageWindow:       time.Minute,
 		GPTLimit:            3,
 		GPTWindow:           30 * time.Second,
+		ImageDailyLimit:     100,
+		ImageDailyWindow:    24 * time.Hour,
 		Cooldown:            30 * time.Second,
 		ViolationLimit:      5,
 		ViolationWindow:     10 * time.Minute,
@@ -94,6 +99,7 @@ const (
 	DecisionCooldown       DecisionKind = "cooldown"
 	DecisionTemporaryBlock DecisionKind = "temporary_block"
 	DecisionActiveJobs     DecisionKind = "active_jobs"
+	DecisionImageDaily     DecisionKind = "image_daily_limit"
 )
 
 // Decision is the result of an anti-spam check.
@@ -180,23 +186,36 @@ func (s *Service) Check(ctx context.Context, in CheckInput) (Decision, error) {
 			return s.registerViolation(ctx, keys, minPositiveDuration(s.cfg.Cooldown, gptTTL), true)
 		}
 	}
+	if in.CreatesJob && in.Operation == domain.OperationImageGenerate && profile.imageDailyLimit > 0 {
+		imageCount, imageTTL, err := s.store.Increment(ctx, keys[keyImageDaily], profile.imageDailyWindow)
+		if err != nil {
+			return allow(), fmt.Errorf("antispam image daily increment: %w", err)
+		}
+		if imageCount > int64(profile.imageDailyLimit) {
+			return imageDailyLimit(imageTTL), nil
+		}
+	}
 
 	return allow(), nil
 }
 
 type limitProfile struct {
-	messageLimit  int
-	messageWindow time.Duration
-	gptLimit      int
-	gptWindow     time.Duration
+	messageLimit     int
+	messageWindow    time.Duration
+	gptLimit         int
+	gptWindow        time.Duration
+	imageDailyLimit  int
+	imageDailyWindow time.Duration
 }
 
 func (s *Service) profileFor(user *domain.User) limitProfile {
 	profile := limitProfile{
-		messageLimit:  s.cfg.MessageLimit,
-		messageWindow: s.cfg.MessageWindow,
-		gptLimit:      s.cfg.GPTLimit,
-		gptWindow:     s.cfg.GPTWindow,
+		messageLimit:     s.cfg.MessageLimit,
+		messageWindow:    s.cfg.MessageWindow,
+		gptLimit:         s.cfg.GPTLimit,
+		gptWindow:        s.cfg.GPTWindow,
+		imageDailyLimit:  s.cfg.ImageDailyLimit,
+		imageDailyWindow: s.cfg.ImageDailyWindow,
 	}
 	if s.isNewUser(user) {
 		profile.messageLimit = s.cfg.NewUserMessageLimit
@@ -243,6 +262,7 @@ func keysForUser(vkUserID int64) map[string]string {
 	return map[string]string{
 		keyMessages:   fmt.Sprintf("rate:vk:user:%d:messages", vkUserID),
 		keyGPT:        fmt.Sprintf("rate:vk:user:%d:gpt", vkUserID),
+		keyImageDaily: fmt.Sprintf("rate:vk:user:%d:image_daily", vkUserID),
 		keyViolations: fmt.Sprintf("spam:vk:user:%d:violations", vkUserID),
 		keyBlock:      fmt.Sprintf("block:vk:user:%d", vkUserID),
 		keyCooldown:   fmt.Sprintf("cooldown:vk:user:%d", vkUserID),
@@ -262,6 +282,12 @@ func normalizeConfig(cfg Config) Config {
 	}
 	if cfg.GPTWindow <= 0 {
 		cfg.GPTWindow = def.GPTWindow
+	}
+	if cfg.ImageDailyLimit < 0 {
+		cfg.ImageDailyLimit = def.ImageDailyLimit
+	}
+	if cfg.ImageDailyWindow <= 0 {
+		cfg.ImageDailyWindow = def.ImageDailyWindow
 	}
 	if cfg.Cooldown <= 0 {
 		cfg.Cooldown = def.Cooldown
@@ -322,6 +348,16 @@ func activeJobs() Decision {
 		Allowed: false,
 		Kind:    DecisionActiveJobs,
 		Message: "У вас уже есть активный запрос\n\nПожалуйста, дождитесь ответа",
+	}
+}
+
+func imageDailyLimit(ttl time.Duration) Decision {
+	hours := ceilDuration(ttl, time.Hour)
+	return Decision{
+		Allowed:    false,
+		Kind:       DecisionImageDaily,
+		RetryAfter: time.Duration(hours) * time.Hour,
+		Message:    fmt.Sprintf("Лимит генерации фото на сегодня исчерпан. Попробуйте через %d ч.", hours),
 	}
 }
 

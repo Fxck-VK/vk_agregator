@@ -66,6 +66,8 @@ type Config struct {
 	VKAntiSpamMessageWindow       time.Duration
 	VKAntiSpamGPTLimit            int
 	VKAntiSpamGPTWindow           time.Duration
+	VKAntiSpamImageDailyLimit     int
+	VKAntiSpamImageDailyWindow    time.Duration
 	VKAntiSpamCooldown            time.Duration
 	VKAntiSpamViolationLimit      int
 	VKAntiSpamViolationWindow     time.Duration
@@ -90,10 +92,40 @@ type Config struct {
 	// MaxJobCost rejects any job whose estimate exceeds this cap (0 = no cap).
 	MaxJobCost int64
 
+	// PaymentProvider selects the money provider for balance top-ups.
+	PaymentProvider                   string
+	YooKassaShopID                    string
+	YooKassaSecretKey                 string
+	YooKassaBaseURL                   string
+	YooKassaReturnURL                 string
+	YooKassaWebhookIPAllowlistEnabled bool
+	PaymentWebhookRequireHTTPS        bool
+	PaymentWebhookAddr                string
+	PaymentWebhookPollInterval        time.Duration
+	PaymentWebhookBatchLimit          int
+	PaymentReconciliationInterval     time.Duration
+	PaymentReconciliationLimit        int
+	PaymentReconciliationStaleAfter   time.Duration
+
 	// Provider selects the primary generation provider. ProviderChain, when set,
 	// enables router/fallback selection across multiple providers.
 	Provider      string
 	ProviderChain []string
+	// ImageProvider, when set, makes one provider the preferred route for image
+	// jobs while preserving the configured provider chain as fallback.
+	ImageProvider string
+	// VideoProvider optionally overrides the provider used for video jobs.
+	VideoProvider string
+	// ImageModel/ImageSize are provider-agnostic defaults attached to image jobs.
+	ImageModel string
+	ImageSize  string
+	// VideoModel/VideoDurationSec/VideoResolution/VideoAspectRatio/VideoDraft are
+	// worker-owned defaults for video jobs (not trusted from clients).
+	VideoModel       string
+	VideoDurationSec int
+	VideoResolution  string
+	VideoAspectRatio string
+	VideoDraft       bool
 
 	OpenAIAPIKey       string
 	OpenAIBaseURL      string
@@ -107,10 +139,21 @@ type Config struct {
 	OpenAIImagePrice   int64
 	OpenAIVideoPrice   int64
 
-	DeepInfraAPIKey    string
-	DeepInfraBaseURL   string
-	DeepInfraTextModel string
-	DeepInfraTextPrice int64
+	DeepInfraAPIKey                string
+	DeepInfraBaseURL               string
+	DeepInfraTextModel             string
+	DeepInfraTextPrice             int64
+	DeepInfraImageModel            string
+	DeepInfraImageFallbackModel    string
+	DeepInfraImagePrice            int64
+	DeepInfraImageReferenceEnabled bool
+	DeepInfraVideoModel            string
+	DeepInfraVideoDurationSec      int
+	DeepInfraVideoResolution       string
+	DeepInfraVideoAspectRatio      string
+	DeepInfraVideoDraft            bool
+	DeepInfraVideoPrice            int64
+	DeepInfraVideoHTTPTimeout      time.Duration
 
 	TextContextEnabled                bool
 	TextContextMaxInputTokens         int
@@ -128,10 +171,13 @@ type Config struct {
 	ArtifactScanner       string
 
 	// VKDeliveryMode selects the delivery client: "mock" (default) or "real".
-	VKDeliveryMode string
-	VKAccessToken  string
-	VKAPIVersion   string
-	VKAPIBaseURL   string
+	VKDeliveryMode       string
+	VKAccessToken        string
+	VKVideoAccessToken   string
+	VKVideoUploadGroupID int64
+	VKVideoDeliveryMode  string
+	VKAPIVersion         string
+	VKAPIBaseURL         string
 	// VKWelcomeAttachment is an optional pre-uploaded VK attachment sent with
 	// the /start menu, e.g. photo-239332376_123_accesskey.
 	VKWelcomeAttachment string
@@ -172,6 +218,11 @@ type Config struct {
 	VKMenuStudentsPresentationEnabled bool
 	VKMenuStudentsReportEnabled       bool
 	VKMenuStudentsQAEnabled           bool
+	// VKTopUpReceiptEmail/VKTopUpReceiptPhone are server-side receipt contacts
+	// used by the VK Bot quick top-up flow. Mini App may still collect a user
+	// receipt contact explicitly.
+	VKTopUpReceiptEmail string
+	VKTopUpReceiptPhone string
 
 	// VKReferralLinkBase is the public VK entry URL used to build a user's
 	// single referral link. If it contains "{code}", the placeholder is replaced;
@@ -200,6 +251,9 @@ type Config struct {
 	// ArtifactRetentionDays configures object lifecycle expiry (0 = keep) (ST1).
 	ArtifactRetentionDays int
 
+	// WorkerProviderCallTimeout bounds one provider Submit/Poll call in workers.
+	WorkerProviderCallTimeout time.Duration
+
 	// WorkerShutdownGrace is how long workers may drain in-flight work after a
 	// shutdown signal before their processing context is cancelled.
 	WorkerShutdownGrace time.Duration
@@ -224,6 +278,13 @@ func (c Config) IsProduction() bool {
 	return strings.EqualFold(c.Env, "production") || strings.EqualFold(c.Env, "prod")
 }
 
+// PaymentWebhookHTTPSRequired reports whether the payment webhook receiver must
+// reject requests that did not arrive over HTTPS or through a trusted HTTPS
+// reverse proxy.
+func (c Config) PaymentWebhookHTTPSRequired() bool {
+	return c.PaymentWebhookRequireHTTPS || c.IsProduction()
+}
+
 // Validate fails closed: in production, secrets that protect inbound webhooks
 // and the admin API must be set. Returns a descriptive error otherwise.
 func (c Config) Validate() error {
@@ -233,6 +294,18 @@ func (c Config) Validate() error {
 	}
 	if mode := strings.ToLower(strings.TrimSpace(c.VKUnroutedTextMode)); mode != "" && mode != "reply" && mode != "silent" && mode != "gpt" {
 		return fmt.Errorf("config: VK_UNROUTED_TEXT_MODE must be reply, silent, or gpt")
+	}
+	if mode := strings.ToLower(strings.TrimSpace(c.VKVideoDeliveryMode)); mode != "" && mode != "doc" && mode != "video" {
+		return fmt.Errorf("config: VK_VIDEO_DELIVERY_MODE must be doc or video")
+	}
+	if provider := strings.ToLower(strings.TrimSpace(c.ImageProvider)); provider != "" && !knownProvider(provider) {
+		return fmt.Errorf("config: IMAGE_PROVIDER must be one of mock, openai, deepinfra")
+	}
+	if provider := strings.ToLower(strings.TrimSpace(c.VideoProvider)); provider != "" && !knownProvider(provider) {
+		return fmt.Errorf("config: VIDEO_PROVIDER must be one of mock, openai, deepinfra")
+	}
+	if provider := strings.ToLower(strings.TrimSpace(c.PaymentProvider)); provider != "" && !knownPaymentProvider(provider) {
+		return fmt.Errorf("config: PAYMENT_PROVIDER must be one of mock, yookassa")
 	}
 	if c.IsProduction() {
 		if c.VKSecret == "" {
@@ -259,13 +332,24 @@ func (c Config) Validate() error {
 	if c.VKDeliveryMode == "real" && c.VKAccessToken == "" {
 		missing = append(missing, "VK_ACCESS_TOKEN")
 	}
+	if strings.EqualFold(strings.TrimSpace(c.PaymentProvider), "yookassa") {
+		if c.YooKassaShopID == "" {
+			missing = append(missing, "YOOKASSA_SHOP_ID")
+		}
+		if c.YooKassaSecretKey == "" {
+			missing = append(missing, "YOOKASSA_SECRET_KEY")
+		}
+		if c.YooKassaReturnURL == "" {
+			missing = append(missing, "YOOKASSA_RETURN_URL")
+		}
+	}
 	if len(missing) > 0 {
 		return fmt.Errorf("config: missing required production secrets: %s", strings.Join(missing, ", "))
 	}
 	return nil
 }
 
-// Load reads configuration from .env and the process environment.
+// Load reads configuration from .env/_env and the process environment.
 func Load() Config {
 	loadDotenv()
 
@@ -311,16 +395,18 @@ func Load() Config {
 		MiniAppJobRateLimitRPS:        envFloat("MINIAPP_JOB_RATE_LIMIT_RPS", 1),
 		MiniAppJobRateLimitBurst:      envInt("MINIAPP_JOB_RATE_LIMIT_BURST", 5),
 		VKAntiSpamEnabled:             envBool("VK_ANTISPAM_ENABLED", true),
-		VKAntiSpamMessageLimit:        envInt("VK_ANTISPAM_MESSAGE_LIMIT", 10),
+		VKAntiSpamMessageLimit:        envInt("VK_ANTISPAM_MESSAGE_LIMIT", 40),
 		VKAntiSpamMessageWindow:       envDuration("VK_ANTISPAM_MESSAGE_WINDOW", time.Minute),
 		VKAntiSpamGPTLimit:            envInt("VK_ANTISPAM_GPT_LIMIT", 3),
 		VKAntiSpamGPTWindow:           envDuration("VK_ANTISPAM_GPT_WINDOW", 30*time.Second),
+		VKAntiSpamImageDailyLimit:     envInt("VK_ANTISPAM_IMAGE_DAILY_LIMIT", 100),
+		VKAntiSpamImageDailyWindow:    envDuration("VK_ANTISPAM_IMAGE_DAILY_WINDOW", 24*time.Hour),
 		VKAntiSpamCooldown:            envDuration("VK_ANTISPAM_COOLDOWN", 30*time.Second),
 		VKAntiSpamViolationLimit:      envInt("VK_ANTISPAM_VIOLATION_LIMIT", 5),
 		VKAntiSpamViolationWindow:     envDuration("VK_ANTISPAM_VIOLATION_WINDOW", 10*time.Minute),
 		VKAntiSpamBlockDuration:       envDuration("VK_ANTISPAM_BLOCK_DURATION", 15*time.Minute),
 		VKAntiSpamNewUserAge:          envDuration("VK_ANTISPAM_NEW_USER_AGE", 4*time.Hour),
-		VKAntiSpamNewUserMessageLimit: envInt("VK_ANTISPAM_NEW_USER_MESSAGE_LIMIT", 5),
+		VKAntiSpamNewUserMessageLimit: envInt("VK_ANTISPAM_NEW_USER_MESSAGE_LIMIT", 30),
 		VKAntiSpamNewUserGPTLimit:     envInt("VK_ANTISPAM_NEW_USER_GPT_LIMIT", 1),
 		VKAntiSpamNewUserGPTWindow:    envDuration("VK_ANTISPAM_NEW_USER_GPT_WINDOW", 15*time.Second),
 		VKAntiSpamActiveGPTJobLimit:   envInt("VK_ANTISPAM_ACTIVE_GPT_JOB_LIMIT", 2),
@@ -333,8 +419,30 @@ func Load() Config {
 		PriceOverrides: envPriceMap("PRICES"),
 		MaxJobCost:     int64(envInt("MAX_JOB_COST", 0)),
 
+		PaymentProvider:                   env("PAYMENT_PROVIDER", "mock"),
+		YooKassaShopID:                    env("YOOKASSA_SHOP_ID", ""),
+		YooKassaSecretKey:                 env("YOOKASSA_SECRET_KEY", ""),
+		YooKassaBaseURL:                   env("YOOKASSA_BASE_URL", "https://api.yookassa.ru/v3"),
+		YooKassaReturnURL:                 env("YOOKASSA_RETURN_URL", ""),
+		YooKassaWebhookIPAllowlistEnabled: envBool("YOOKASSA_WEBHOOK_IP_ALLOWLIST_ENABLED", true),
+		PaymentWebhookRequireHTTPS:        envBool("PAYMENT_WEBHOOK_REQUIRE_HTTPS", false),
+		PaymentWebhookAddr:                env("PAYMENT_WEBHOOK_ADDR", ":8082"),
+		PaymentWebhookPollInterval:        envDuration("PAYMENT_WEBHOOK_POLL_INTERVAL", 5*time.Second),
+		PaymentWebhookBatchLimit:          envInt("PAYMENT_WEBHOOK_BATCH_LIMIT", 20),
+		PaymentReconciliationInterval:     envDuration("PAYMENT_RECONCILIATION_INTERVAL", time.Minute),
+		PaymentReconciliationLimit:        envInt("PAYMENT_RECONCILIATION_LIMIT", 100),
+		PaymentReconciliationStaleAfter:   envDuration("PAYMENT_RECONCILIATION_STALE_AFTER", 30*time.Second),
 		Provider:                          provider,
 		ProviderChain:                     providerChain,
+		ImageProvider:                     env("IMAGE_PROVIDER", ""),
+		VideoProvider:                     env("VIDEO_PROVIDER", ""),
+		ImageModel:                        env("IMAGE_MODEL", ""),
+		ImageSize:                         env("IMAGE_SIZE", ""),
+		VideoModel:                        env("VIDEO_MODEL", ""),
+		VideoDurationSec:                  envInt("VIDEO_DURATION_SEC", 5),
+		VideoResolution:                   env("VIDEO_RESOLUTION", "720p"),
+		VideoAspectRatio:                  env("VIDEO_ASPECT_RATIO", "16:9"),
+		VideoDraft:                        envBool("VIDEO_DRAFT", true),
 		OpenAIAPIKey:                      env("OPENAI_API_KEY", ""),
 		OpenAIBaseURL:                     env("OPENAI_BASE_URL", "https://api.openai.com/v1"),
 		OpenAITextModel:                   env("OPENAI_TEXT_MODEL", "gpt-4.1-mini"),
@@ -350,6 +458,17 @@ func Load() Config {
 		DeepInfraBaseURL:                  env("DEEPINFRA_BASE_URL", "https://api.deepinfra.com/v1/openai"),
 		DeepInfraTextModel:                env("DEEPINFRA_TEXT_MODEL", "deepseek-ai/DeepSeek-V4-Flash"),
 		DeepInfraTextPrice:                int64(envInt("DEEPINFRA_TEXT_PRICE", 1)),
+		DeepInfraImageModel:               env("DEEPINFRA_IMAGE_MODEL", "ByteDance/Seedream-4.5"),
+		DeepInfraImageFallbackModel:       env("DEEPINFRA_IMAGE_FALLBACK_MODEL", ""),
+		DeepInfraImagePrice:               int64(envInt("DEEPINFRA_IMAGE_PRICE", 10)),
+		DeepInfraImageReferenceEnabled:    envBool("DEEPINFRA_IMAGE_REFERENCE_ENABLED", false),
+		DeepInfraVideoModel:               env("DEEPINFRA_VIDEO_MODEL", "PrunaAI/p-video"),
+		DeepInfraVideoDurationSec:         envInt("DEEPINFRA_VIDEO_DURATION_SEC", 5),
+		DeepInfraVideoResolution:          env("DEEPINFRA_VIDEO_RESOLUTION", "720p"),
+		DeepInfraVideoAspectRatio:         env("DEEPINFRA_VIDEO_ASPECT_RATIO", "16:9"),
+		DeepInfraVideoDraft:               envBool("DEEPINFRA_VIDEO_DRAFT", true),
+		DeepInfraVideoPrice:               int64(envInt("DEEPINFRA_VIDEO_PRICE", 10)),
+		DeepInfraVideoHTTPTimeout:         envDuration("DEEPINFRA_VIDEO_HTTP_TIMEOUT", 180*time.Second),
 		TextContextEnabled:                envBool("TEXT_CONTEXT_ENABLED", true),
 		TextContextMaxInputTokens:         envInt("TEXT_CONTEXT_MAX_INPUT_TOKENS", 1600),
 		TextContextMaxOutputTokens:        envInt("TEXT_CONTEXT_MAX_OUTPUT_TOKENS", 800),
@@ -363,6 +482,9 @@ func Load() Config {
 
 		VKDeliveryMode:                    env("VK_DELIVERY_MODE", "mock"),
 		VKAccessToken:                     env("VK_ACCESS_TOKEN", ""),
+		VKVideoAccessToken:                env("VK_VIDEO_ACCESS_TOKEN", ""),
+		VKVideoUploadGroupID:              int64(envInt("VK_VIDEO_UPLOAD_GROUP_ID", 0)),
+		VKVideoDeliveryMode:               env("VK_VIDEO_DELIVERY_MODE", "doc"),
 		VKAPIVersion:                      env("VK_API_VERSION", "5.199"),
 		VKAPIBaseURL:                      env("VK_API_BASE_URL", "https://api.vk.com/method"),
 		VKWelcomeAttachment:               env("VK_WELCOME_ATTACHMENT", ""),
@@ -387,12 +509,14 @@ func Load() Config {
 		VKMenuVideoHaiuo02Enabled:         envBool("VK_MENU_VIDEO_HAIUO02_ENABLED", true),
 		VKMenuVideoHaiuo02StandardEnabled: envBool("VK_MENU_VIDEO_HAIUO02_STANDARD_ENABLED", true),
 		VKMenuVideoHaiuo02FastEnabled:     envBool("VK_MENU_VIDEO_HAIUO02_FAST_ENABLED", true),
-		VKMenuImageTextEnabled:            envBool("VK_MENU_IMAGE_TEXT_ENABLED", true),
-		VKMenuImageReferenceEnabled:       envBool("VK_MENU_IMAGE_REFERENCE_ENABLED", true),
+		VKMenuImageTextEnabled:            envBool("VK_MENU_IMAGE_TEXT_ENABLED", false),
+		VKMenuImageReferenceEnabled:       envBool("VK_MENU_IMAGE_REFERENCE_ENABLED", false),
 		VKMenuStudentsSolverEnabled:       envBool("VK_MENU_STUDENTS_SOLVER_ENABLED", true),
 		VKMenuStudentsPresentationEnabled: envBool("VK_MENU_STUDENTS_PRESENTATION_ENABLED", true),
 		VKMenuStudentsReportEnabled:       envBool("VK_MENU_STUDENTS_REPORT_ENABLED", true),
 		VKMenuStudentsQAEnabled:           envBool("VK_MENU_STUDENTS_QA_ENABLED", true),
+		VKTopUpReceiptEmail:               env("VK_TOP_UP_RECEIPT_EMAIL", ""),
+		VKTopUpReceiptPhone:               env("VK_TOP_UP_RECEIPT_PHONE", ""),
 		VKReferralLinkBase:                env("VK_REFERRAL_LINK_BASE", ""),
 		VKReferralShareBase:               env("VK_REFERRAL_SHARE_BASE", "https://vk.com/share.php"),
 		ReferralCodeLength:                envInt("REFERRAL_CODE_LENGTH", 10),
@@ -413,6 +537,7 @@ func Load() Config {
 		SignedDelivery:        envBool("SIGNED_DELIVERY", false),
 		ArtifactRetentionDays: envInt("ARTIFACT_RETENTION_DAYS", 0),
 
+		WorkerProviderCallTimeout:     envDuration("WORKER_PROVIDER_CALL_TIMEOUT", 180*time.Second),
 		WorkerShutdownGrace:           envDuration("WORKER_SHUTDOWN_GRACE", 30*time.Second),
 		MaintenanceInterval:           envDuration("MAINTENANCE_INTERVAL", time.Hour),
 		OutboxRetention:               envDuration("OUTBOX_RETENTION", 7*24*time.Hour),
@@ -426,6 +551,8 @@ func Load() Config {
 
 func (c Config) usesOpenAI() bool {
 	if strings.EqualFold(c.Provider, "openai") ||
+		strings.EqualFold(c.ImageProvider, "openai") ||
+		strings.EqualFold(c.VideoProvider, "openai") ||
 		strings.EqualFold(c.ModerationProvider, "openai") ||
 		strings.EqualFold(c.ArtifactScanner, "openai") {
 		return true
@@ -439,7 +566,9 @@ func (c Config) usesOpenAI() bool {
 }
 
 func (c Config) usesDeepInfra() bool {
-	if strings.EqualFold(c.Provider, "deepinfra") {
+	if strings.EqualFold(c.Provider, "deepinfra") ||
+		strings.EqualFold(c.ImageProvider, "deepinfra") ||
+		strings.EqualFold(c.VideoProvider, "deepinfra") {
 		return true
 	}
 	for _, provider := range c.ProviderChain {
@@ -450,8 +579,27 @@ func (c Config) usesDeepInfra() bool {
 	return false
 }
 
+func knownProvider(name string) bool {
+	switch strings.ToLower(strings.TrimSpace(name)) {
+	case "", "mock", "openai", "deepinfra":
+		return true
+	default:
+		return false
+	}
+}
+
+func knownPaymentProvider(name string) bool {
+	switch strings.ToLower(strings.TrimSpace(name)) {
+	case "", "mock", "yookassa":
+		return true
+	default:
+		return false
+	}
+}
+
 func loadDotenv() {
-	_ = godotenv.Load()
+	_ = godotenv.Load(".env")
+	_ = godotenv.Load("_env")
 }
 
 func env(key, def string) string {
