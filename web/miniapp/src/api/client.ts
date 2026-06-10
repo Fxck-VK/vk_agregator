@@ -608,30 +608,34 @@ export function artifactUrl(id: string): string | null {
   return `/miniapp/artifacts/${id}`;
 }
 
+async function fetchArtifactBlob(id: string): Promise<Blob | null> {
+  const url = artifactUrl(id);
+  if (!url) return null;
+  try {
+    const rawLaunchParams = await launchParams();
+    const res = await fetch(url, {
+      headers: { "X-Launch-Params": rawLaunchParams },
+    });
+    if (!res.ok) return null;
+    return await res.blob();
+  } catch {
+    return null;
+  }
+}
+
 /**
- * Artifact URL safe for <img>/<video> src: appends launch_params query because
- * media elements cannot send X-Launch-Params. Backend auth accepts this query.
+ * Authenticated artifact source for <img>/<video>. Browser media tags cannot
+ * send headers, so the frontend fetches with X-Launch-Params and exposes only
+ * a temporary blob URL. Never put raw launch params into media src/query URLs.
  */
 export async function artifactMediaUrl(id: string): Promise<string | null> {
-  const base = artifactUrl(id);
-  if (!base) return null;
-  const rawLaunchParams = await launchParams();
-  if (!rawLaunchParams) return base;
-  return `${base}?launch_params=${encodeURIComponent(rawLaunchParams)}`;
+  const blob = await fetchArtifactBlob(id);
+  return blob ? URL.createObjectURL(blob) : null;
 }
 
 /** Fetch artifact bytes and return a blob URL for instant preview on the result screen. */
 export async function preloadArtifactBlobUrl(id: string): Promise<string | null> {
-  const url = await artifactMediaUrl(id);
-  if (!url) return null;
-  try {
-    const res = await fetch(url);
-    if (!res.ok) return null;
-    const blob = await res.blob();
-    return URL.createObjectURL(blob);
-  } catch {
-    return null;
-  }
+  return artifactMediaUrl(id);
 }
 
 /** Text artifact body (when GET /miniapp/artifacts/{id} is available). */
@@ -664,12 +668,11 @@ export function isTerminal(s: string): boolean {
   return OK.has(s) || FAIL.has(s);
 }
 
-/** Image/video artifacts are ready in Mini App once postprocessing finishes. */
+/** Image/video artifacts are previewable only after backend marks them fully visible. */
 export function hasPreviewableMediaResult(job: Job): boolean {
   if (!job.output_artifact_ids?.length) return false;
   if (job.operation !== "image_generate" && job.operation !== "video_generate") return false;
-  if (statusKind(job.status) === "done") return true;
-  return job.status === "result_ready";
+  return statusKind(job.status) === "done";
 }
 
 const STATUS_LABELS: Record<string, string> = {
