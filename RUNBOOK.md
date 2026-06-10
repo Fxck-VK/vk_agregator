@@ -9,7 +9,7 @@ able to follow this top to bottom without extra help.
 
 | Tool | Version | Check |
 |------|---------|-------|
-| Go | **1.25+** (module targets `go 1.25.0`) | `go version` |
+| Go | **1.25.11+** (module targets `go 1.25.11`) | `go version` |
 | Docker Engine | **24+** | `docker version` |
 | Docker Compose | **v2+** (`docker compose`, not `docker-compose`) | `docker compose version` |
 | Git | any recent | `git --version` |
@@ -616,50 +616,54 @@ LIMIT 20;
 Protected operator payment actions:
 
 ```bash
+# Prepare local-only curl headers in your shell before running these examples.
+# ADMIN_AUTH_HEADER carries X-Admin-Token; OPERATOR_IDEMPOTENCY_HEADER carries
+# a unique X-Idempotency-Key for the refund command.
+
 # List product catalog entries. Add active=true or active=false to narrow the
 # operator list. Response DTOs contain catalog fields only, no provider payloads.
 curl "http://localhost:8080/billing/payment-products?active=true" \
-  -H "X-Admin-Token: $ADMIN_TOKEN"
+  -H "$ADMIN_AUTH_HEADER"
 
 # Create a top-up product. The code is a stable product identifier; future
 # price/receipt changes on the same product bump price_version for new intents.
 curl -X POST http://localhost:8080/billing/payment-products \
-  -H "X-Admin-Token: $ADMIN_TOKEN" \
+  -H "$ADMIN_AUTH_HEADER" \
   -H "Content-Type: application/json" \
   -d '{"code":"credits_250","title":"NeiroHub 250 credits","amount":20000,"currency":"rub","credits":250,"vat_code":1,"payment_subject":"service","payment_mode":"full_prepayment"}'
 
 # Update future catalog values. Existing payment_intents keep their snapshotted
 # amount, credits, price_version and receipt fields.
 curl -X PATCH http://localhost:8080/billing/payment-products/<product_id> \
-  -H "X-Admin-Token: $ADMIN_TOKEN" \
+  -H "$ADMIN_AUTH_HEADER" \
   -H "Content-Type: application/json" \
   -d '{"amount":21000,"credits":260}'
 
 # Hide a product from user-facing Mini App / VK Bot product lists.
 curl -X POST http://localhost:8080/billing/payment-products/<product_id>/disable \
-  -H "X-Admin-Token: $ADMIN_TOKEN"
+  -H "$ADMIN_AUTH_HEADER"
 
 # List pending/waiting intents. Add stale_only=true for intents old enough for
 # manual sync/reconciliation triage.
 curl "http://localhost:8080/billing/payment-intents/pending?stale_after=30s&stale_only=true" \
-  -H "X-Admin-Token: $ADMIN_TOKEN"
+  -H "$ADMIN_AUTH_HEADER"
 
 # List unprocessed provider webhook inbox rows. Response DTOs intentionally omit
 # raw provider payloads.
 curl "http://localhost:8080/billing/payment-events/unprocessed?provider=yookassa" \
-  -H "X-Admin-Token: $ADMIN_TOKEN"
+  -H "$ADMIN_AUTH_HEADER"
 
 # Sync one intent with the provider state. This may post a top-up ledger entry
 # only after provider GetPayment verifies paid/captured success.
 curl -X POST http://localhost:8080/billing/payment-intents/<intent_id>/sync \
-  -H "X-Admin-Token: $ADMIN_TOKEN"
+  -H "$ADMIN_AUTH_HEADER"
 
 # Manual full refund MVP. Requires a caller idempotency key and refuses when the
 # current credit balance cannot cover the purchased credits or when ledger
 # movements after the top-up show that those credits may have been used.
 curl -X POST http://localhost:8080/billing/payment-intents/<intent_id>/refund \
-  -H "X-Admin-Token: $ADMIN_TOKEN" \
-  -H "X-Idempotency-Key: operator-ticket-123" \
+  -H "$ADMIN_AUTH_HEADER" \
+  -H "$OPERATOR_IDEMPOTENCY_HEADER" \
   -H "Content-Type: application/json" \
   -d '{"reason":"manual operator refund"}'
 ```
