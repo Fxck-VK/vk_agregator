@@ -59,7 +59,7 @@ const (
 var paymentIntentTransitions = map[PaymentIntentStatus][]PaymentIntentStatus{
 	PaymentIntentCreated:           {PaymentIntentProviderPending, PaymentIntentWaitingForUser, PaymentIntentCanceled, PaymentIntentExpired, PaymentIntentFailed},
 	PaymentIntentProviderPending:   {PaymentIntentWaitingForUser, PaymentIntentSucceeded, PaymentIntentCanceled, PaymentIntentExpired, PaymentIntentFailed},
-	PaymentIntentWaitingForUser:    {PaymentIntentSucceeded, PaymentIntentCanceled, PaymentIntentExpired, PaymentIntentFailed},
+	PaymentIntentWaitingForUser:    {PaymentIntentProviderPending, PaymentIntentSucceeded, PaymentIntentCanceled, PaymentIntentExpired, PaymentIntentFailed},
 	PaymentIntentSucceeded:         {PaymentIntentPartiallyRefunded, PaymentIntentRefunded},
 	PaymentIntentCanceled:          {},
 	PaymentIntentExpired:           {},
@@ -222,6 +222,7 @@ type CreatePaymentInput struct {
 	PaymentMode    string          `json:"payment_mode,omitempty"`
 	Metadata       json.RawMessage `json:"metadata,omitempty"`
 	IdempotencyKey string          `json:"idempotency_key"`
+	Capture        *bool           `json:"capture,omitempty"`
 }
 
 // CreatePaymentResult is a normalized provider response for a newly created

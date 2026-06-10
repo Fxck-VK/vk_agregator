@@ -86,7 +86,9 @@ func (p *Provider) Code() domain.PaymentProviderCode {
 	return domain.PaymentProviderYooKassa
 }
 
-// CreatePayment creates a captured redirect payment in YooKassa.
+// CreatePayment creates a redirect payment in YooKassa. Payments are captured
+// immediately by default; protected operator smoke flows may explicitly request
+// capture=false to exercise waiting_for_capture -> canceled lifecycle.
 func (p *Provider) CreatePayment(ctx context.Context, in domain.CreatePaymentInput) (domain.CreatePaymentResult, error) {
 	if in.Amount <= 0 {
 		return domain.CreatePaymentResult{}, errors.New("yookassa payment: amount must be positive")
@@ -107,13 +109,17 @@ func (p *Provider) CreatePayment(ctx context.Context, in domain.CreatePaymentInp
 	if returnURL == "" {
 		returnURL = p.returnURL
 	}
+	capture := true
+	if in.Capture != nil {
+		capture = *in.Capture
+	}
 
 	request := createPaymentRequest{
 		Amount: amountValue{
 			Value:    value,
 			Currency: currency,
 		},
-		Capture: true,
+		Capture: capture,
 		Confirmation: confirmationRequest{
 			Type:      "redirect",
 			ReturnURL: returnURL,

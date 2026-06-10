@@ -102,6 +102,47 @@ func TestCreatePaymentSendsYooKassaContract(t *testing.T) {
 	}
 }
 
+func TestCreatePaymentCanDisableCaptureForOperatorSmoke(t *testing.T) {
+	intentID := uuid.New()
+	var seen createPaymentRequest
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/payments" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		if err := json.NewDecoder(r.Body).Decode(&seen); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"id":"pay-1",
+			"status":"pending",
+			"paid":false,
+			"amount":{"value":"100.00","currency":"RUB"},
+			"confirmation":{"type":"redirect","confirmation_url":"https://yookassa.example/confirm/pay-1"},
+			"refundable":false
+		}`))
+	}))
+	defer server.Close()
+
+	capture := false
+	provider := newTestProvider(t, server.URL)
+	if _, err := provider.CreatePayment(context.Background(), domain.CreatePaymentInput{
+		IntentID:       intentID,
+		UserID:         uuid.New(),
+		Amount:         10000,
+		Currency:       domain.CurrencyRUB,
+		Credits:        100,
+		ReceiptEmail:   "user@example.com",
+		IdempotencyKey: "pay:" + intentID.String(),
+		Capture:        &capture,
+	}); err != nil {
+		t.Fatalf("create payment: %v", err)
+	}
+	if seen.Capture {
+		t.Fatal("capture = true, want false")
+	}
+}
+
 func TestCreatePaymentRequiresReceiptContact(t *testing.T) {
 	provider := newTestProvider(t, "https://example.com")
 	_, err := provider.CreatePayment(context.Background(), domain.CreatePaymentInput{

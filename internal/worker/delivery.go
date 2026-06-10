@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/attribute"
@@ -190,7 +191,7 @@ func (w *DeliveryWorker) Process(ctx context.Context, task queue.Task) error {
 	}
 
 	if del.Status != domain.DeliveryStatusSent {
-		if err := w.send(ctx, del); err != nil {
+		if err := w.send(ctx, del, job); err != nil {
 			tracing.RecordError(span, err)
 			del.Status = domain.DeliveryStatusRetrying
 			del.ErrorMessage = err.Error()
@@ -309,18 +310,8 @@ func (w *DeliveryWorker) buildDelivery(ctx context.Context, job *domain.Job, key
 	switch art.MediaType {
 	case domain.MediaTypeImage:
 		del.Type = domain.DeliveryTypePhoto
-		attachment, err := w.mediaAttachment(ctx, job.VKPeerID, art)
-		if err != nil {
-			return nil, err
-		}
-		del.Attachment = attachment
 	case domain.MediaTypeVideo:
 		del.Type = domain.DeliveryTypeVideo
-		attachment, err := w.mediaAttachment(ctx, job.VKPeerID, art)
-		if err != nil {
-			return nil, err
-		}
-		del.Attachment = attachment
 	default:
 		del.Type = domain.DeliveryTypeMessage
 		del.Text = w.textContent(ctx, art)
@@ -351,7 +342,7 @@ func (w *DeliveryWorker) textContent(ctx context.Context, art *domain.Artifact) 
 	return formatVKText(string(data))
 }
 
-func (w *DeliveryWorker) send(ctx context.Context, del *domain.Delivery) error {
+func (w *DeliveryWorker) send(ctx context.Context, del *domain.Delivery, job *domain.Job) error {
 	ctx, span := tracing.Start(ctx, "vk.delivery.send",
 		attribute.String("delivery.id", del.ID.String()),
 		attribute.String("delivery.type", string(del.Type)),
@@ -365,8 +356,14 @@ func (w *DeliveryWorker) send(ctx context.Context, del *domain.Delivery) error {
 	)
 	switch del.Type {
 	case domain.DeliveryTypePhoto:
+		if err := w.ensureMediaAttachment(ctx, del, job); err != nil {
+			return err
+		}
 		res, err = w.vk.SendPhoto(ctx, del.VKPeerID, del.VKRandomID, del.Attachment, del.Text)
 	case domain.DeliveryTypeVideo:
+		if err := w.ensureMediaAttachment(ctx, del, job); err != nil {
+			return err
+		}
 		res, err = w.vk.SendVideo(ctx, del.VKPeerID, del.VKRandomID, del.Attachment, del.Text)
 	default:
 		res, err = w.sendTextDelivery(ctx, del)
@@ -408,6 +405,25 @@ func (w *DeliveryWorker) sendTextDelivery(ctx context.Context, del *domain.Deliv
 		}
 	}
 	return first, nil
+}
+
+func (w *DeliveryWorker) ensureMediaAttachment(ctx context.Context, del *domain.Delivery, job *domain.Job) error {
+	if del.Attachment != "" {
+		return nil
+	}
+	if del.ArtifactID == nil {
+		return fmt.Errorf("worker: media delivery has no artifact")
+	}
+	art, err := w.artifacts.GetByID(ctx, *del.ArtifactID)
+	if err != nil {
+		return err
+	}
+	attachment, err := w.mediaAttachment(ctx, del.VKPeerID, art, promptFromJob(job))
+	if err != nil {
+		return err
+	}
+	del.Attachment = attachment
+	return w.deliveries.Update(ctx, del)
 }
 
 func splitVKText(text string) []string {
@@ -516,7 +532,7 @@ func (w *DeliveryWorker) setStatus(ctx context.Context, job *domain.Job, to doma
 // and returns the VK attachment string. Otherwise, when signed delivery is
 // enabled it issues a time-limited signed URL; finally it falls back to the
 // artifact's public URL or storage location.
-func (w *DeliveryWorker) mediaAttachment(ctx context.Context, peerID int64, art *domain.Artifact) (string, error) {
+func (w *DeliveryWorker) mediaAttachment(ctx context.Context, peerID int64, art *domain.Artifact, filenamePrompt string) (string, error) {
 	if ref := attachmentRef(art); isVKAttachment(ref) {
 		return ref, nil
 	}
@@ -525,7 +541,7 @@ func (w *DeliveryWorker) mediaAttachment(ctx context.Context, peerID int64, art 
 		if err != nil {
 			return "", fmt.Errorf("worker: load artifact for vk upload: %w", err)
 		}
-		name := artifactFilename(art)
+		name := artifactFilename(art, filenamePrompt)
 		switch art.MediaType {
 		case domain.MediaTypeImage:
 			return w.vkUploader.UploadPhoto(ctx, peerID, name, data, art.MimeType)
@@ -554,7 +570,18 @@ func isVKAttachment(ref string) bool {
 	return strings.HasPrefix(ref, "photo") || strings.HasPrefix(ref, "video") || strings.HasPrefix(ref, "doc")
 }
 
-func artifactFilename(art *domain.Artifact) string {
+func promptFromJob(job *domain.Job) string {
+	if job == nil || len(job.Params) == 0 {
+		return ""
+	}
+	var params promptParams
+	if err := json.Unmarshal(job.Params, &params); err != nil {
+		return ""
+	}
+	return params.Prompt
+}
+
+func artifactFilename(art *domain.Artifact, prompt string) string {
 	ext := "bin"
 	switch art.MediaType {
 	case domain.MediaTypeImage:
@@ -562,5 +589,34 @@ func artifactFilename(art *domain.Artifact) string {
 	case domain.MediaTypeVideo:
 		ext = "mp4"
 	}
+	if base := promptFilenameBase(prompt, 25); base != "" {
+		return base + "." + ext
+	}
 	return art.ID.String() + "." + ext
+}
+
+func promptFilenameBase(prompt string, maxRunes int) string {
+	if maxRunes <= 0 {
+		return ""
+	}
+	normalized := strings.Join(strings.Fields(prompt), " ")
+	if normalized == "" {
+		return ""
+	}
+	out := make([]rune, 0, maxRunes)
+	for _, r := range normalized {
+		if len(out) >= maxRunes {
+			break
+		}
+		if unicode.IsControl(r) {
+			continue
+		}
+		switch r {
+		case '\\', '/', ':', '*', '?', '"', '<', '>', '|':
+			continue
+		default:
+			out = append(out, r)
+		}
+	}
+	return strings.Trim(strings.TrimSpace(string(out)), ".")
 }

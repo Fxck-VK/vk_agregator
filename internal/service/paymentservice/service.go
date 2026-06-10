@@ -241,6 +241,7 @@ type CreateIntentInput struct {
 	ReturnURL      string
 	Source         string
 	ForceNew       bool
+	Capture        *bool
 }
 
 // CreateIntentResult reports the intent and whether this call inserted the
@@ -299,11 +300,15 @@ func (s *Service) CreateIntent(ctx context.Context, in CreateIntentInput) (Creat
 	if err != nil {
 		return CreateIntentResult{}, err
 	}
-	metadata, err := json.Marshal(map[string]any{
+	metadataFields := map[string]any{
 		"product_code":  product.Code,
 		"price_version": product.PriceVersion,
 		"source":        in.Source,
-	})
+	}
+	if in.Capture != nil {
+		metadataFields["capture"] = *in.Capture
+	}
+	metadata, err := json.Marshal(metadataFields)
 	if err != nil {
 		return CreateIntentResult{}, err
 	}
@@ -439,6 +444,7 @@ func (s *Service) ensureProviderPayment(ctx context.Context, intent *domain.Paym
 		PaymentMode:    paymentIntentMode(intent, product),
 		Metadata:       intent.Metadata,
 		IdempotencyKey: "pay:" + intent.ID.String(),
+		Capture:        paymentIntentCapture(intent),
 	}
 	result, err := s.provider.CreatePayment(ctx, createInput)
 	if err != nil {
@@ -497,6 +503,19 @@ func paymentIntentMode(intent *domain.PaymentIntent, product *domain.PaymentProd
 		return product.PaymentMode
 	}
 	return ""
+}
+
+func paymentIntentCapture(intent *domain.PaymentIntent) *bool {
+	if intent == nil || len(intent.Metadata) == 0 {
+		return nil
+	}
+	var metadata struct {
+		Capture *bool `json:"capture"`
+	}
+	if err := json.Unmarshal(intent.Metadata, &metadata); err != nil {
+		return nil
+	}
+	return metadata.Capture
 }
 
 func cloneInt16(value *int16) *int16 {

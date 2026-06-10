@@ -11,7 +11,8 @@ The full project constitution is in `docs/AGENTS_FULL.md`. Do not load the full 
 Current release: `v0.1.3 / Beta integrations foundation`.
 The default runtime uses the mock provider and mock VK delivery. Real
 integrations are opt-in: OpenAI text/image/video provider, provider
-router/fallback/circuit breaker, VK `messages.send` with raw photo/video upload,
+router/fallback/circuit breaker, VK `messages.send` with raw photo upload,
+mp4-as-document delivery and optional native VK video attachment delivery,
 DeepInfra DeepSeek-V4-Flash text provider and ByteDance/Seedream-4.5
 text-to-image provider,
 Postgres-backed compact text dialog context with bounded token budgets,
@@ -19,6 +20,9 @@ provider-agnostic image generation request/result contracts with worker-only
 image provider/model defaults,
 VK `/start` product menu with callback/text inline keyboard and active-menu `messages.edit`,
 ordinary first-contact onboarding repair, Redis-backed GPT text mode with `НейроХаб думает...` placeholder edits and unrouted-text gating, OpenAI output moderation,
+Redis-backed VK video dialog mode where the active `PrunaAI` video button turns
+the next plain text into a `video_generate` Job with a `НейроХаб готовит
+видео...` placeholder while stale video-model payloads stay hidden,
 per-button VK menu feature flags, Redis-backed VK bot anti-spam/rate limits,
 shared VK referral-code foundation with VK bot account/referral screen,
 shared payment intent domain/migration/config foundation for VK Bot and
@@ -28,8 +32,9 @@ top-up transactions, payment provider port with mock/YooKassa adapters and facto
 routes and authenticated Mini App `/miniapp/payments*` safe DTO routes,
 deduplicated YooKassa webhook inbox and async provider-verified
 webhook-to-ledger top-up processing, stale payment-intent reconciliation,
-protected operator payment sync/refund actions, production HTTPS webhook guard
-and payment Prometheus metrics,
+protected operator payment sync/cancel/refund actions with an operator-only
+YooKassa `capture:false` smoke path, production HTTPS webhook guard and payment
+Prometheus metrics,
 intent-level 54-FZ receipt snapshots for YooKassa payment retries/refunds,
 and OpenAI text/image artifact scanning are
 implemented. Credential-bound live smoke and the full video media pipeline
@@ -61,6 +66,7 @@ Current integration guardrails:
 - VK inline menu buttons may be rendered as `callback` or `text` via `VK_MENU_BUTTON_MODE`; callback clicks must be handled as VK `message_event` control events, acknowledged through `vkdelivery.ControlClient`, and must not create Jobs.
 - VK menu buttons must not create billable Jobs until the user supplies a prompt.
 - VK photo text mode may create only `image.generate` Jobs after the user sends a prompt; it must not call image providers from the VK handler or bypass Artifact delivery.
+- VK video dialog mode may create only `video_generate` Jobs after the user sends a prompt; it must not call video providers from the VK handler or bypass worker/provider/Artifact delivery.
 - VK first ordinary non-payload text/sticker/menu-repair contact must repair onboarding through `/start`; typed menu-repair phrases must stay control-only and must not create Jobs.
 - New VK product-menu buttons must have a `VK_MENU_*_ENABLED` feature flag and disabled stale payloads must not open hidden sections.
 - VK plain text/stickers outside an active text mode must not create billable Jobs by default; `VK_UNROUTED_TEXT_MODE=reply|silent|gpt` is the only supported switch for that behavior.

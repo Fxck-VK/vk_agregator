@@ -100,6 +100,12 @@ Current image-generation foundation:
   plain text creates an `image.generate` Job, and the API sends `НейроХаб
   рисует...` as a VK control placeholder. The extra `Фото по тексту` selection
   button is hidden while there is only one text-to-image mode.
+- VK bot text-to-video UX follows the same surface-state pattern: the active
+  `PrunaAI` video button stores peer-scoped `video:*` dialog mode, the next
+  plain text creates a `video_generate` Job, and the API sends `НейроХаб готовит
+  видео...` as a control placeholder. Model/provider execution still belongs to
+  `cmd/worker` and `internal/adapter/provider`; stale Sora/Kling/Seedance/Haiuo
+  payloads are hidden and fall back to the main menu without Jobs.
 - The current VK bot profile hides reference-photo generation by default and
   allows 100 free text-to-image attempts per user per 24h window through
   Redis-backed anti-spam quota (`VK_ANTISPAM_IMAGE_DAILY_LIMIT=100`) and a free
@@ -147,9 +153,11 @@ Current payment/top-up foundation:
   port for tests/local development. `internal/adapter/payment/yookassa`
   implements real YooKassa HTTP calls with Basic Auth, short provider
   `Idempotence-Key` headers, kopeck/string amount conversion, redirect
-  payments with `capture: true`, 54-FZ receipt data, refunds and webhook
-  normalization. `internal/adapter/payment.NewProvider` selects the adapter
-  from `PAYMENT_PROVIDER`.
+  payments with `capture: true` by default, a protected operator-only
+  `capture: false` smoke path for `waiting_for_capture -> canceled`,
+  54-FZ receipt data, refunds and webhook normalization.
+  `internal/adapter/payment.NewProvider` selects the adapter from
+  `PAYMENT_PROVIDER`.
 - `internal/service/paymentservice` owns payment-intent lifecycle creation. It
   validates the trusted user, active product, receipt contact and caller
   idempotency key; creates a local intent with price and 54-FZ receipt
@@ -167,11 +175,14 @@ Current payment/top-up foundation:
   `POST /billing/payment-products/{id}/disable`,
   `POST /billing/payment-intents`, `GET /billing/payment-intents/{id}` and
   `GET /billing/payment-history`. It also exposes protected manual operator
-  actions `POST /billing/payment-intents/{id}/sync` and
+  actions `POST /billing/payment-intents/{id}/sync`,
+  `POST /billing/payment-intents/{id}/cancel` and
   `POST /billing/payment-intents/{id}/refund`. These routes require
   `ADMIN_TOKEN` and fail closed when auth is missing. They may accept a trusted
   internal `user_id` from operator context but must not trust a public JSON
-  body as identity.
+  body as identity. Only this protected operator create path may pass
+  `capture: false` to create a two-stage YooKassa smoke intent; user-facing
+  Mini App and VK Bot top-ups remain immediate-capture payments.
 - The Mini App BFF exposes authenticated user payment routes:
   `GET /miniapp/payment-products`, `POST /miniapp/payments/intents`,
   `GET /miniapp/payments` and `GET /miniapp/payments/{id}`. These routes derive
@@ -181,11 +192,12 @@ Current payment/top-up foundation:
   renders the safe payment history DTOs and may redirect the user to a returned
   `confirmation_url`, including active waiting-intent continuation links, but the return URL is
   only navigation and must not grant credits.
-- VK Bot top-up is a control path: it lists the same active products, asks for
-  a receipt email or phone, creates a payment intent through
-  `internal/service/paymentservice` and sends a payment link. It must not call
-  YooKassa directly and must not mutate balance from a button click, contact
-  message or provider redirect.
+- VK Bot top-up is a control path: it lists the same active products, creates a
+  payment intent through `internal/service/paymentservice` immediately after
+  product selection with the server-side `VK_TOP_UP_RECEIPT_EMAIL` /
+  `VK_TOP_UP_RECEIPT_PHONE` receipt contact and sends a payment link. It must
+  not call YooKassa directly and must not mutate balance from a button click or
+  provider redirect.
 - `cmd/provider-webhook` owns payment provider webhook intake. It exposes
   `POST /billing/webhooks/yookassa` without VK launch auth, stores normalized
   raw YooKassa events (`payment.succeeded`, `payment.canceled`,
@@ -1004,7 +1016,7 @@ artifact_variants:
 
 Это отдельный сервис, который знает, как правильно доставить результат во ВКонтакте.
 
-VK `messages.send` имеет `random_id`, который используется как уникальный идентификатор, чтобы избежать повторной отправки сообщения; также VK attachment передаётся отдельным параметром. Для фото в личное сообщение VK использует цепочку `photos.getMessagesUploadServer` → upload → `photos.saveMessagesPhoto`; для документов есть `docs.getMessagesUploadServer`; для видео SDK VK указывает, что `video.save` возвращает адрес сервера для загрузки. ([GitHub][7])
+VK `messages.send` имеет `random_id`, который используется как уникальный идентификатор, чтобы избежать повторной отправки сообщения; также VK attachment передаётся отдельным параметром. Для фото в личное сообщение VK использует цепочку `photos.getMessagesUploadServer` → upload → `photos.saveMessagesPhoto`. Для доставки сгенерированного mp4 есть два режима. `VK_VIDEO_DELIVERY_MODE=doc` использует цепочку `docs.getMessagesUploadServer` → upload `file` → `docs.save` и отправляет результат как `doc...` attachment через community token (`VK_ACCESS_TOKEN`). `VK_VIDEO_DELIVERY_MODE=video` использует `video.save` через отдельный user token (`VK_VIDEO_ACCESS_TOKEN`) и отправляет `video...` attachment, который VK отображает в диалоге встроенным плеером. Group-token не подходит для `video.save`, поэтому режим `video` требует user token с правом `video`; если задан `VK_VIDEO_UPLOAD_GROUP_ID`, владелец user token должен иметь права загрузки видео в этом сообществе. ([GitHub][7])
 
 Delivery Service делает:
 

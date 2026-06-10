@@ -61,18 +61,21 @@ Real integrations are implemented at adapter level and remain **opt-in**:
   keeping `PROVIDER_CHAIN` as fallback. Current image-capable adapters are
   mock, OpenAI and DeepInfra Seedream. VK bot and Mini App surfaces still only
   create Jobs and never call image providers directly.
-- `VK_DELIVERY_MODE=real` enables VK `messages.send` plus raw photo/video
-  artifact upload to VK upload servers before send.
+- `VK_DELIVERY_MODE=real` enables VK `messages.send` plus raw photo upload and
+  generated-video delivery. `VK_VIDEO_DELIVERY_MODE=doc` uploads mp4 as a VK
+  message document through `docs.getMessagesUploadServer`/`docs.save` using the
+  community `VK_ACCESS_TOKEN`. `VK_VIDEO_DELIVERY_MODE=video` uploads through
+  `video.save` with `VK_VIDEO_ACCESS_TOKEN` and sends a native `video...`
+  attachment, which renders as an inline VK player in the dialog.
 - `cmd/api` can send the VK `/start` НейроХаб menu and inline keyboard through
   the VK delivery adapter when `VK_ACCESS_TOKEN` is configured. The optional
   `VK_WELCOME_ATTACHMENT` env attaches a pre-uploaded VK banner.
-- The VK `Создать видео` menu button opens a model picker (`Sora 2`,
-  `Kling v2.1`, `Seedance 1`, `Haiuo v0.2`) with a `Назад` control. `Sora 2`
-  and `Kling v2.1` open detail screens with description, prompt example,
-  instruction link, `Начать генерацию`, `Примеры`, and `Назад`; `Seedance 1`
-  opens `Lite` / `Pro`; `Haiuo v0.2` opens `Обычный` / `Fast`. These video
-  submenu buttons are control-only until model-specific generation state is
-  wired.
+- The VK `Создать видео` menu button opens a model picker with `PrunaAI` and
+  `Назад`. Clicking `PrunaAI` stores peer-scoped video dialog state, and the
+  next plain text creates a `video_generate` Job through the worker/provider
+  flow. VK handlers do not call video providers directly. Older
+  Sora/Kling/Seedance/Haiuo payloads are treated as hidden/stale controls and
+  fall back to the main menu without creating Jobs.
 - VK menu screens are described through a small declarative registry. `Создать
   фото` skips model selection when only one main image model is available and
   opens the text-to-image instruction screen directly; reference-photo generation
@@ -130,7 +133,10 @@ Real integrations are implemented at adapter level and remain **opt-in**:
   Migration `000011_payment_intent_receipt_snapshot` snapshots
   `receipt_description`, `vat_code`, `payment_subject` and `payment_mode` onto
   each intent, so YooKassa payment retries and refunds use the original fiscal
-  position instead of the current product catalog row.
+  position instead of the current product catalog row. Migration
+  `000012_neirohub_crystal_catalog` switches the active public catalog to
+  99/150/250/400/700 crystal packages and hides the original seed packages
+  without breaking existing intent snapshots.
   Runtime config exposes `PAYMENT_PROVIDER`, YooKassa
   env placeholders and payment reconciliation intervals. `billingservice.GrantWith(ctx, repo, ...)`
   exists so webhook/reconciliation processors can commit
@@ -144,20 +150,25 @@ Real integrations are implemented at adapter level and remain **opt-in**:
   operator routes exist under `/billing/payment-products*`,
   `/billing/payment-intents`, `/billing/payment-history`,
   `/billing/payment-intents/{id}/sync` and
+  `/billing/payment-intents/{id}/cancel` and
   `/billing/payment-intents/{id}/refund`. Product catalog admin create/update
   and disable actions are operator-only, return safe DTOs, and increment
   `price_version` for future intents when price, credits or 54-FZ receipt
-  fields change. Existing payment intents keep their snapshotted amount,
-  credits, price version and fiscal fields. Authenticated Mini App routes exist under
+  fields change. The protected operator create route may pass `capture:false`
+  for YooKassa `waiting_for_capture -> canceled` smoke tests; user-facing
+  Mini App and VK Bot top-ups still use immediate capture. Existing payment
+  intents keep their snapshotted amount, credits, price version and fiscal fields. Authenticated Mini App routes exist under
   `/miniapp/payment-products` and `/miniapp/payments*`. The Mini App Settings
   payment UI loads active backend products, requires a receipt email or phone,
   creates an intent with `X-Idempotency-Key` and redirects the user to the safe
   `confirmation_url`. It also shows safe payment history from
   `GET /miniapp/payments`, including active payment continuation links without
   treating provider redirects as balance proof. The VK Bot top-up control path
-  uses the same product catalog, asks for receipt contact, creates a payment intent through
-  `paymentservice` and sends a payment link; it does not grant credits from the
-  bot handler. `cmd/provider-webhook` exposes
+  uses the same product catalog, creates a payment intent through
+  `paymentservice` immediately after product selection with the server-side
+  `VK_TOP_UP_RECEIPT_EMAIL` / `VK_TOP_UP_RECEIPT_PHONE` receipt contact, and
+  sends a payment link; it does not grant credits from the bot handler.
+  `cmd/provider-webhook` exposes
   `POST /billing/webhooks/yookassa`, stores raw provider events in the
   `payment_events` inbox, returns 200 quickly, then asynchronously verifies the
   provider payment through `GetPayment`, applies the intent state machine and

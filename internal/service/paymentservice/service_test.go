@@ -2,6 +2,7 @@ package paymentservice_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"testing"
@@ -146,6 +147,53 @@ func TestCreateIntentUsesReceiptSnapshotWhenProviderCreationIsRetried(t *testing
 		input.PaymentSubject != "service" ||
 		input.PaymentMode != "full_prepayment" {
 		t.Fatalf("provider input used current catalog instead of snapshot: %+v", input)
+	}
+}
+
+func TestCreateIntentCanDisableProviderCaptureForOperatorSmoke(t *testing.T) {
+	ctx := context.Background()
+	repo := memory.NewPaymentRepo()
+	repo.PutProduct(&domain.PaymentProduct{
+		Code:         "credits_100",
+		Title:        "100 credits",
+		Amount:       9900,
+		Currency:     domain.CurrencyRUB,
+		Credits:      100,
+		PriceVersion: 1,
+		IsActive:     true,
+	})
+	provider := &recordingPaymentProvider{code: domain.PaymentProviderMock}
+	svc := paymentservice.New(repo, provider, paymentservice.Config{})
+	capture := false
+
+	result, err := svc.CreateIntent(ctx, paymentservice.CreateIntentInput{
+		UserID:         uuid.New(),
+		ProductCode:    "credits_100",
+		ReceiptEmail:   "user@example.com",
+		IdempotencyKey: "billing_payment:capture-false",
+		Source:         "billing_admin",
+		Capture:        &capture,
+	})
+	if err != nil {
+		t.Fatalf("create intent: %v", err)
+	}
+	if !result.Created {
+		t.Fatal("intent should be created")
+	}
+	if len(provider.createInputs) != 1 {
+		t.Fatalf("create provider calls = %d, want 1", len(provider.createInputs))
+	}
+	if provider.createInputs[0].Capture == nil || *provider.createInputs[0].Capture {
+		t.Fatalf("provider capture = %#v, want false", provider.createInputs[0].Capture)
+	}
+	var metadata struct {
+		Capture *bool `json:"capture"`
+	}
+	if err := json.Unmarshal(result.Intent.Metadata, &metadata); err != nil {
+		t.Fatalf("decode metadata: %v", err)
+	}
+	if metadata.Capture == nil || *metadata.Capture {
+		t.Fatalf("metadata capture = %#v, want false", metadata.Capture)
 	}
 }
 

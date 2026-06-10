@@ -25,6 +25,18 @@ import (
 type HTTPConfig struct {
 	// AccessToken is the community/user token authorizing messages.send.
 	AccessToken string
+	// VideoAccessToken is a user token with video upload rights. VK video.save
+	// is unavailable with group auth, so bot message sending must keep using the
+	// community AccessToken while raw video uploads use this token.
+	VideoAccessToken string
+	// VideoUploadGroupID, when set, saves uploaded videos into that community
+	// using VideoAccessToken. The token owner must have sufficient rights in the
+	// group. Leave 0 to save as the token owner.
+	VideoUploadGroupID int64
+	// VideoDeliveryMode selects generated video delivery: "doc" uploads mp4 as
+	// a message document, "video" uses video.save and sends a native video
+	// attachment with an inline VK player.
+	VideoDeliveryMode string
 	// APIVersion is the VK API version (e.g. "5.199").
 	APIVersion string
 	// BaseURL is the API method root (default https://api.vk.com/method).
@@ -47,6 +59,10 @@ func NewHTTPClient(cfg HTTPConfig) *HTTPClient {
 	cfg.BaseURL = strings.TrimRight(cfg.BaseURL, "/")
 	if cfg.APIVersion == "" {
 		cfg.APIVersion = "5.199"
+	}
+	cfg.VideoDeliveryMode = strings.ToLower(strings.TrimSpace(cfg.VideoDeliveryMode))
+	if cfg.VideoDeliveryMode == "" {
+		cfg.VideoDeliveryMode = "doc"
 	}
 	httpClient := cfg.HTTPClient
 	if httpClient == nil {
@@ -307,13 +323,81 @@ func (c *HTTPClient) UploadPhoto(ctx context.Context, peerID int64, filename str
 	return attachment("photo", photo.OwnerID, photo.ID, photo.AccessKey), nil
 }
 
-// UploadVideo uploads a stored video artifact and returns a VK video attachment.
+// UploadVideo uploads a stored video artifact as a message document and returns
+// a VK doc attachment. VK video.save is unavailable with group auth, while the
+// message document upload flow works with the community token already used for
+// messages.send.
 func (c *HTTPClient) UploadVideo(ctx context.Context, peerID int64, filename string, data []byte, mimeType string) (string, error) {
+	if strings.EqualFold(c.cfg.VideoDeliveryMode, "video") {
+		return c.UploadVideoFile(ctx, peerID, filename, data, mimeType)
+	}
+	if filename == "" {
+		filename = "video.mp4"
+	}
+	form := url.Values{}
+	form.Set("peer_id", strconv.FormatInt(peerID, 10))
+	form.Set("type", "doc")
+	var server struct {
+		Response struct {
+			UploadURL string `json:"upload_url"`
+		} `json:"response"`
+	}
+	if err := c.api(ctx, "docs.getMessagesUploadServer", form, &server); err != nil {
+		return "", err
+	}
+	if server.Response.UploadURL == "" {
+		return "", fmt.Errorf("vkdelivery: empty document upload_url")
+	}
+
+	var uploaded struct {
+		File string `json:"file"`
+	}
+	if err := c.uploadMultipart(ctx, server.Response.UploadURL, "file", filename, mimeType, data, &uploaded); err != nil {
+		return "", err
+	}
+	if uploaded.File == "" {
+		return "", fmt.Errorf("vkdelivery: empty uploaded document file")
+	}
+
+	save := url.Values{}
+	save.Set("file", uploaded.File)
+	save.Set("title", filename)
+	var saved struct {
+		Response struct {
+			Type string `json:"type"`
+			Doc  struct {
+				ID        int64  `json:"id"`
+				OwnerID   int64  `json:"owner_id"`
+				AccessKey string `json:"access_key"`
+			} `json:"doc"`
+		} `json:"response"`
+	}
+	if err := c.api(ctx, "docs.save", save, &saved); err != nil {
+		return "", err
+	}
+	if saved.Response.Doc.ID == 0 {
+		return "", fmt.Errorf("vkdelivery: empty saved document response")
+	}
+	return attachment("doc", saved.Response.Doc.OwnerID, saved.Response.Doc.ID, saved.Response.Doc.AccessKey), nil
+}
+
+// UploadVideoFile uploads a stored video artifact through video.save and returns
+// a VK video attachment. It is retained for environments that can provide a user
+// token with VK video rights, but regular bot delivery should prefer
+// UploadVideo's message-document flow.
+func (c *HTTPClient) UploadVideoFile(ctx context.Context, peerID int64, filename string, data []byte, mimeType string) (string, error) {
+	token := strings.TrimSpace(c.cfg.VideoAccessToken)
+	if token == "" {
+		return "", fmt.Errorf("vkdelivery: VK_VIDEO_ACCESS_TOKEN is required for video.save uploads")
+	}
 	form := url.Values{}
 	form.Set("name", filename)
 	form.Set("description", "VK AI Aggregator generated video")
 	form.Set("is_private", "1")
 	form.Set("peer_id", strconv.FormatInt(peerID, 10))
+	if c.cfg.VideoUploadGroupID > 0 {
+		form.Set("group_id", strconv.FormatInt(c.cfg.VideoUploadGroupID, 10))
+	}
 	var saved struct {
 		Response struct {
 			UploadURL string `json:"upload_url"`
@@ -322,7 +406,7 @@ func (c *HTTPClient) UploadVideo(ctx context.Context, peerID int64, filename str
 			AccessKey string `json:"access_key"`
 		} `json:"response"`
 	}
-	if err := c.api(ctx, "video.save", form, &saved); err != nil {
+	if err := c.apiWithToken(ctx, token, "video.save", form, &saved); err != nil {
 		return "", err
 	}
 	if saved.Response.UploadURL == "" {
@@ -343,10 +427,14 @@ type vkErrorEnvelope struct {
 }
 
 func (c *HTTPClient) api(ctx context.Context, method string, form url.Values, out any) error {
+	return c.apiWithToken(ctx, c.cfg.AccessToken, method, form, out)
+}
+
+func (c *HTTPClient) apiWithToken(ctx context.Context, token, method string, form url.Values, out any) error {
 	if form == nil {
 		form = url.Values{}
 	}
-	form.Set("access_token", c.cfg.AccessToken)
+	form.Set("access_token", token)
 	form.Set("v", c.cfg.APIVersion)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.cfg.BaseURL+"/"+method, strings.NewReader(form.Encode()))
 	if err != nil {
@@ -360,11 +448,15 @@ func (c *HTTPClient) api(ctx context.Context, method string, form url.Values, ou
 	}
 	defer resp.Body.Close()
 
-	if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
-		return fmt.Errorf("vkdelivery: decode %s response: %w", method, err)
+	data, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+	if err != nil {
+		return fmt.Errorf("vkdelivery: read %s response: %w", method, err)
 	}
-	if err := vkEnvelopeError(out); err != nil {
+	if err := vkEnvelopeErrorBytes(data); err != nil {
 		return err
+	}
+	if err := json.Unmarshal(data, out); err != nil {
+		return fmt.Errorf("vkdelivery: decode %s response: %w", method, err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("vkdelivery: %s http %d", method, resp.StatusCode)
@@ -372,11 +464,7 @@ func (c *HTTPClient) api(ctx context.Context, method string, form url.Values, ou
 	return nil
 }
 
-func vkEnvelopeError(out any) error {
-	raw, err := json.Marshal(out)
-	if err != nil {
-		return nil
-	}
+func vkEnvelopeErrorBytes(raw []byte) error {
 	var env vkErrorEnvelope
 	if err := json.Unmarshal(raw, &env); err != nil {
 		return nil
