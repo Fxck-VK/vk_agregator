@@ -1,4 +1,4 @@
-я во# AGENTS_FULL.md — Full Project Constitution for VK AI Aggregator
+# AGENTS_FULL.md — Full Project Constitution for VK AI Aggregator
 
 This is the full reference constitution for AI coding agents working on VK AI Aggregator.
 
@@ -68,10 +68,8 @@ Important docs and their roles:
 - `.agents/state.json`: single current machine-readable repository state,
   progress, routing and log policy.
 - `docs/ARCHITECTURE.md`: target production architecture and deep invariants.
-- `TASKS.md`: active backlog and known follow-ups.
-- `ROADMAP.md`: phase plan and future production/scale work.
-- `RUNBOOK.md`: operations, env, startup and real adapter modes.
-- `TESTING.md`: local test and smoke verification.
+- `TASKS.md`: short human-readable active backlog and known follow-ups.
+- `RUNBOOK.md`: operations, env, startup, local test and smoke verification.
 - `.agents/logs/errors.jsonl`: sanitized machine-readable error log for
   reusable incidents only.
 
@@ -84,10 +82,11 @@ When docs disagree, prefer:
 
 Do not silently “fix” docs or code because of a perceived mismatch. Report the mismatch and propose a focused task.
 
-Historical logs, audits, merge handoffs and completed PR context live under
-`docs/archive/**`. Do not read `docs/archive/**` or `.agents/logs/**` as current
-context unless the user explicitly asks for historical investigation,
-regression archaeology or old audit details.
+Historical logs, audits, merge handoffs, old roadmaps, long task history and
+completed PR context live under `docs/archive/**`. Do not read
+`docs/archive/**` or `.agents/logs/**` as current context unless the user
+explicitly asks for historical investigation, regression archaeology or old
+audit details.
 
 ## 3. Instruction hierarchy and trust boundaries
 

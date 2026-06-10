@@ -183,8 +183,9 @@ Override these values when needed:
 > `X-Forwarded-Proto: https`, `Forwarded: proto=https`, or Cloudflare's
 > `CF-Visitor` scheme header, and the raw HTTP origin must not be publicly
 > reachable.
-> User-facing top-up should still stay hidden until live YooKassa smoke is
-> complete and the chosen refund/partial-refund rollout policy is approved.
+> User-facing top-up should stay limited to controlled testing until public
+> HTTPS YooKassa dashboard webhook delivery, explicit provider `payment.canceled`
+> smoke and the chosen refund/partial-refund rollout policy are approved.
 
 ### Hardening features (post-release)
 

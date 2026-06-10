@@ -9,8 +9,9 @@ This is **not** a chatbot: every user request becomes a persisted `Job` that
 moves through an explicit state machine. The architecture source of truth is
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md); invariants live in
 [`AGENTS.md`](AGENTS.md); active machine context/progress/routing is in
-`.agents/state.json`; the backlog is in [`TASKS.md`](TASKS.md). Historical build logs are archived under
-`docs/archive/**` and are not current context by default.
+`.agents/state.json`; the short human backlog is in [`TASKS.md`](TASKS.md).
+Historical build logs, old roadmaps, long task history and handoffs are archived
+under `docs/archive/**` and are not current context by default.
 
 ## Current status
 
@@ -167,8 +168,11 @@ Real integrations are implemented at adapter level and remain **opt-in**:
   top-up credits, and also refuse if the ledger shows committed or pending
   negative movements after that exact top-up. Refund debits use ledger
   adjustment entries instead of direct balance mutation. Partial refund
-  attribution, automatic refund webhook reversal and live YooKassa smoke remain
-  follow-up work. User return/redirect after payment
+  attribution and automatic refund webhook reversal remain follow-up work. A
+  local YooKassa smoke passed successful checkout through reconciliation,
+  webhook replay dedup, idempotent manual refund and safe Mini App history; the
+  remaining payment rollout checks are public HTTPS YooKassa dashboard webhook
+  delivery and an explicit provider `payment.canceled` smoke. User return/redirect after payment
   is navigation only and never grants credits by itself.
 - VK inline menu navigation uses a hybrid UX: if the last bot message is the
   active menu, inline button clicks edit it through VK `messages.edit`; pressing
@@ -248,7 +252,7 @@ VK webhook ─► InboundEvent ─► User ─► Command ─► Job (queued)
 ## Layout
 
 ```
-cmd/                 entrypoints (api, vk-inbound, worker, provider-webhook, admin-api, migrate)
+cmd/                 entrypoints (api, worker, provider-webhook, migrate)
 internal/
   app/
     api/             bootstrap helper for shared API core deps
@@ -393,8 +397,8 @@ Check health:
 curl localhost:8080/health   # {"status":"ok","checks":{"postgres":"ok","redis":"ok"}}
 ```
 
-See `TESTING.md` for full runtime validation, curl examples and expected
-results.
+See [`RUNBOOK.md`](RUNBOOK.md) for full runtime validation, curl examples and
+expected results.
 
 Real adapter modes are opt-in:
 

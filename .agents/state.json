@@ -1,8 +1,8 @@
 {
   "schema_version": 3,
-  "updated_at": "2026-06-10T01:29:23+03:00",
+  "updated_at": "2026-06-10T12:02:05+03:00",
   "branch": "fastlife_dev",
-  "current_main_commit": "98645c6",
+  "git_ref_policy": "Use git rev-parse HEAD/origin/main for moving SHAs; this file does not track branch head commits.",
   "purpose": "Minimal machine-readable current context and routing for agents.",
   "read_policy": {
     "read_by_default": [
@@ -71,6 +71,17 @@
         "_env"
       ],
       "local_env_note": "_env is the supported macOS workspace fallback for local secrets; it is ignored by Git and must not be logged."
+    },
+    "docs_compaction": {
+      "date": "2026-06-10",
+      "active_human_backlog": "TASKS.md",
+      "archived_legacy_docs": [
+        "docs/archive/2026-06/TASKS.legacy.md",
+        "docs/archive/2026-06/ROADMAP.legacy.md",
+        "docs/archive/2026-06/TESTING.legacy.md",
+        "docs/archive/2026-06/BILLING_AGENT_HANDOFF.legacy.md"
+      ],
+      "policy": "Keep active docs short and current; use docs/archive/** only for historical investigation or explicitly requested archaeology."
     }
   },
   "doc_update_policy": {

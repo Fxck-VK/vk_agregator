@@ -18,6 +18,7 @@ BFF routes:
 - Mini App URL: `https://neiirohub.ru/`
 - Mini App BFF routes: `https://neiirohub.ru/miniapp/*`
 - VK callback route: `https://neiirohub.ru/webhooks/vk`
+- YooKassa webhook route: `https://neiirohub.ru/billing/webhooks/yookassa`
 - Health route: `https://neiirohub.ru/health`
 
 Same-origin frontend/API avoids fragile tunnel domains and reduces VK WebView
@@ -48,9 +49,13 @@ One simple deployment option:
   - `go run ./cmd/api` or a service binary
 - Run worker:
   - `go run ./cmd/worker` or a service binary
+- Run payment provider webhook runtime:
+  - `go run ./cmd/provider-webhook` or a service binary
 - Use Caddy or nginx:
   - `/` serves Mini App static files.
   - `/miniapp/*`, `/webhooks/*`, `/health`, `/metrics` proxy to Go API.
+  - `/billing/webhooks/yookassa` proxies to `cmd/provider-webhook`
+    (`PAYMENT_WEBHOOK_ADDR`, default `:8082`).
 
 ## Example Caddy shape
 
@@ -72,6 +77,10 @@ neiirohub.ru {
     reverse_proxy 127.0.0.1:8080
   }
 
+  handle /billing/webhooks/yookassa {
+    reverse_proxy 127.0.0.1:8082
+  }
+
   handle /health {
     reverse_proxy 127.0.0.1:8080
   }
@@ -89,6 +98,7 @@ Values live in the server environment or secret manager, not in git:
 - VK Mini App secret / service token values
 - VK bot group token / confirmation settings
 - Provider keys such as DeepInfra
+- YooKassa shop id/secret and payment webhook runtime settings
 - Public app URL set to `https://neiirohub.ru`
 - CORS/allowed origin set narrowly to `https://neiirohub.ru`
 
@@ -114,11 +124,12 @@ After deployment:
 5. Verify chat request creates a backend job and polls to terminal state.
 6. Verify Create Photo/Video flows still use backend estimate and job polling.
 7. Verify VK callback confirmation / message handling still works.
+8. Verify YooKassa dashboard webhooks reach
+   `https://neiirohub.ru/billing/webhooks/yookassa` and are processed by
+   `cmd/provider-webhook`, not `cmd/api`.
 
 ## Known follow-ups
 
 - Add a production service unit or container deployment manifest.
-- Add a read-only payment history endpoint for Settings.
-- Add a top-up/payment-intent endpoint shared by Mini App and VK bot.
-- Decide whether `start-miniapp-ngrok.ps1` should remain a dev tunnel helper or
-  be replaced by a domain-first run script.
+- Add explicit production service wiring for `cmd/provider-webhook` and its
+  health/metrics checks.

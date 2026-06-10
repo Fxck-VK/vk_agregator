@@ -13,9 +13,8 @@
 
 # Current implementation addendum: app surfaces and backend core
 
-The current `feature/integration-web-backend` implementation is a
-production-shaped modular monolith. It has one shared backend core and two
-user-facing app surfaces:
+The current implementation is a production-shaped modular monolith. It has one
+shared backend core and two user-facing app surfaces:
 
 ```text
 cmd/api

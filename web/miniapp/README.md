@@ -28,8 +28,8 @@ npm install
 ## Dev mode (local, without real VK)
 
 ```powershell
-# 1. Start the Go API in another terminal (mock mode):
-. .\.env.ps1
+# 1. From the repository root, start the Go API in another terminal.
+#    Local .env / _env files are loaded automatically when present.
 go run ./cmd/api
 
 # 2. Start the frontend dev server:
@@ -150,9 +150,8 @@ App admin panel as the "Application URL".
 
 ## Screens
 
-| Screen | Route trigger |
+| Screen | Purpose |
 |---|---|
-| **Задачи** (job list) | Default tab |
-| **Новая задача** | "Создать" button |
-| **Детали задачи** | Tap on a job row; auto-refreshes until terminal |
-| **Баланс** | Second tab |
+| **Чат** | Durable Mini App conversations backed by `/miniapp/conversations*` and normal Job creation |
+| **Создать** | Photo/video entry surface that creates backend Jobs and never calls providers directly |
+| **Настройки / Профиль** | Balance, theme, payment products, payment intent creation and safe payment history from `/miniapp/payments` |
