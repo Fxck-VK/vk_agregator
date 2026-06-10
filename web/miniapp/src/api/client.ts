@@ -80,6 +80,21 @@ export interface BalanceResponse {
   balance_credits: number;
 }
 
+export interface ReferralInfo {
+  code: string;
+  invite_url: string;
+  invited_count: number;
+  referrer_signup_reward_credits: number;
+  referred_signup_reward_credits: number;
+}
+
+export interface ApplyReferralResponse {
+  applied: boolean;
+  already_applied: boolean;
+  invalid_code: boolean;
+  self_referral: boolean;
+}
+
 export interface PaymentProduct {
   id: string;
   code: string;
@@ -206,6 +221,37 @@ export class ApiError extends Error {
 
 function normalizeRawParams(raw: string): string {
   return raw.replace(/^[?#]/, "");
+}
+
+function normalizeReferralCode(raw: string | null): string {
+  const value = (raw ?? "").trim().toUpperCase();
+  if (value.length < 4 || value.length > 64) return "";
+  return /^[23456789ABCDEFGHJKLMNPQRSTUVWXYZ_-]+$/.test(value) ? value : "";
+}
+
+function referralCodeFromRaw(raw: string): string {
+  const normalized = normalizeRawParams(raw.trim());
+  if (!normalized) return "";
+  try {
+    const params = new URLSearchParams(normalized);
+    const direct = normalizeReferralCode(params.get("ref") || params.get("start"));
+    if (direct) return direct;
+  } catch {
+    /* not a query string */
+  }
+  const queryIndex = normalized.indexOf("?");
+  if (queryIndex >= 0) {
+    return referralCodeFromRaw(normalized.slice(queryIndex + 1));
+  }
+  return "";
+}
+
+export function referralCodeFromLocation(): string {
+  for (const candidate of [window.location.search, window.location.hash]) {
+    const code = referralCodeFromRaw(candidate);
+    if (code) return code;
+  }
+  return "";
 }
 
 function hasLaunchIdentity(raw: string): boolean {
@@ -436,6 +482,17 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export async function getBalance(): Promise<number> {
   const data = await request<BalanceResponse>("/miniapp/balance");
   return data.balance_credits ?? 0;
+}
+
+export async function getReferral(): Promise<ReferralInfo> {
+  return request<ReferralInfo>("/miniapp/referral");
+}
+
+export async function acceptReferral(code: string): Promise<ApplyReferralResponse> {
+  return request<ApplyReferralResponse>("/miniapp/referral/accept", {
+    method: "POST",
+    body: JSON.stringify({ code }),
+  });
 }
 
 export async function listPaymentProducts(): Promise<PaymentProduct[]> {

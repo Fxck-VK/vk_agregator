@@ -775,10 +775,10 @@ stable referral code for the user, counts accepted invitations, and renders the
 use a template such as `https://vk.com/write-239332376?ref={code}` or a base URL
 where the API can append `ref=<code>`. `/start <code>` and VK Callback `ref`
 params apply the referral as `source=vk_bot`, do not create a billable job, and
-post signup bonuses only through idempotent ledger top-up entries. A full Mini
-App referral account/API screen is still a follow-up, but the same
-`referralservice` and Postgres tables already support
-`source=vk_miniapp`.
+post signup bonuses only through idempotent ledger top-up entries. The Mini App
+account screen reads `/miniapp/referral` over the same `referralservice`, renders
+the same bot-style link, and may apply an opened `ref` through
+`/miniapp/referral/accept` as `source=vk_miniapp` after launch-param auth.
 
 Current VK photo-mode implementation: `VK_MENU_IMAGE_ENABLED=true` shows the
 `Создать фото` button. Clicking `Создать фото` stores Redis-backed `photo_text`

@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -18,6 +19,7 @@ import (
 	"vk-ai-aggregator/internal/service/billingservice"
 	"vk-ai-aggregator/internal/service/joborchestrator"
 	"vk-ai-aggregator/internal/service/paymentservice"
+	"vk-ai-aggregator/internal/service/referralservice"
 )
 
 type contextKey int
@@ -29,6 +31,13 @@ const ctxVKUserIDKey contextKey = iota
 // estimate requests from sharing a bucket.
 type JobRateLimiter interface {
 	Allow(key string) bool
+}
+
+// ReferralService is the shared backend referral service used by VK bot and
+// the Mini App BFF. It must keep all rewards ledger-backed and idempotent.
+type ReferralService interface {
+	Stats(ctx context.Context, userID uuid.UUID) (*domain.ReferralCode, int, error)
+	Apply(ctx context.Context, input referralservice.ApplyInput) (referralservice.ApplyResult, error)
 }
 
 // Config holds per-deployment miniapp settings.
@@ -45,6 +54,13 @@ type Config struct {
 	// ImageReferenceEnabled allows validated image reference artifacts to flow
 	// into image jobs. When false, references fail closed before job creation.
 	ImageReferenceEnabled bool
+	// ReferralLinkBase builds the user's public VK referral URL. If it contains
+	// "{code}", the placeholder is replaced; otherwise ref=<code> is appended.
+	ReferralLinkBase string
+	// Referral signup reward amounts are exposed for UI copy only; the service
+	// posts actual rewards through billing ledger entries.
+	ReferralReferrerSignupRewardCredits int64
+	ReferralReferredSignupRewardCredits int64
 }
 
 // ObjectReader loads and stores artifact bytes (S3/MinIO).
@@ -64,6 +80,7 @@ type Deps struct {
 	Billing       *billingservice.Service
 	BillingRepo   domain.BillingRepository
 	Payment       *paymentservice.Service
+	Referrals     ReferralService
 	Orchestrator  *joborchestrator.Orchestrator
 	Logger        *slog.Logger
 }
@@ -95,6 +112,8 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /miniapp/jobs", h.auth(h.listJobs))
 	mux.HandleFunc("GET /miniapp/jobs/{id}", h.auth(h.getJob))
 	mux.HandleFunc("GET /miniapp/balance", h.auth(h.getBalance))
+	mux.HandleFunc("GET /miniapp/referral", h.auth(h.getReferral))
+	mux.HandleFunc("POST /miniapp/referral/accept", h.auth(h.rateLimitMiniApp("miniapp_referral", h.acceptReferral)))
 	mux.HandleFunc("GET /miniapp/payment-products", h.auth(h.listPaymentProducts))
 	mux.HandleFunc("POST /miniapp/payments/intents", h.auth(h.rateLimitMiniApp("miniapp_payment", h.createPaymentIntent)))
 	mux.HandleFunc("GET /miniapp/payments", h.auth(h.listPayments))
@@ -734,6 +753,113 @@ func (h *Handler) getBalance(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, BalanceDTO{BalanceCredits: acc.BalanceCached})
+}
+
+func (h *Handler) getReferral(w http.ResponseWriter, r *http.Request) {
+	vkUserID, ok := vkUserIDFromCtx(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	if h.deps.Referrals == nil {
+		writeError(w, http.StatusServiceUnavailable, "service unavailable")
+		return
+	}
+
+	user, err := h.ensureUser(r.Context(), vkUserID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	code, invited, err := h.deps.Referrals.Stats(r.Context(), user.ID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, ReferralDTO{
+		Code:                        code.Code,
+		InviteURL:                   buildReferralLink(h.cfg.ReferralLinkBase, code.Code),
+		InvitedCount:                invited,
+		ReferrerSignupRewardCredits: h.cfg.ReferralReferrerSignupRewardCredits,
+		ReferredSignupRewardCredits: h.cfg.ReferralReferredSignupRewardCredits,
+	})
+}
+
+func (h *Handler) acceptReferral(w http.ResponseWriter, r *http.Request) {
+	vkUserID, ok := vkUserIDFromCtx(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	if h.deps.Referrals == nil {
+		writeError(w, http.StatusServiceUnavailable, "service unavailable")
+		return
+	}
+
+	body, err := io.ReadAll(io.LimitReader(r.Body, 16<<10))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "cannot read body")
+		return
+	}
+	var req ApplyReferralRequest
+	if err := json.Unmarshal(body, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+	code := referralservice.NormalizeCode(req.Code)
+	if code == "" {
+		writeJSON(w, http.StatusOK, ApplyReferralDTO{InvalidCode: true})
+		return
+	}
+
+	user, err := h.ensureUser(r.Context(), vkUserID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	result, err := h.deps.Referrals.Apply(r.Context(), referralservice.ApplyInput{
+		Code:           code,
+		ReferredUserID: user.ID,
+		Source:         domain.ReferralSourceVKMiniApp,
+	})
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, ApplyReferralDTO{
+		Applied:        result.Applied,
+		AlreadyApplied: result.AlreadyApplied,
+		InvalidCode:    result.InvalidCode,
+		SelfReferral:   result.SelfReferral,
+	})
+}
+
+func buildReferralLink(base string, code string) string {
+	code = strings.TrimSpace(code)
+	if code == "" {
+		return ""
+	}
+	base = strings.TrimSpace(base)
+	if base == "" {
+		return ""
+	}
+	if strings.Contains(base, "{code}") {
+		return strings.ReplaceAll(base, "{code}", url.QueryEscape(code))
+	}
+	return appendURLParam(base, "ref", code)
+}
+
+func appendURLParam(raw, key, value string) string {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return raw
+	}
+	q := u.Query()
+	q.Set(key, value)
+	u.RawQuery = q.Encode()
+	return u.String()
 }
 
 func (h *Handler) createPaymentIntent(w http.ResponseWriter, r *http.Request) {

@@ -13,6 +13,7 @@ import (
 	"vk-ai-aggregator/internal/service/billingservice"
 	"vk-ai-aggregator/internal/service/joborchestrator"
 	"vk-ai-aggregator/internal/service/paymentservice"
+	"vk-ai-aggregator/internal/service/referralservice"
 )
 
 // Deps are shared backend-core collaborators required by the Mini App surface.
@@ -25,6 +26,7 @@ type Deps struct {
 	Billing       *billingservice.Service
 	BillingRepo   domain.BillingRepository
 	Payment       *paymentservice.Service
+	Referrals     domain.ReferralRepository
 	Orchestrator  *joborchestrator.Orchestrator
 	Logger        *slog.Logger
 }
@@ -55,11 +57,19 @@ func NewHandler(ctx context.Context, cfg config.Config, deps Deps) *miniappapi.H
 	// Per-user rate limiting protects Mini App estimate and billable job
 	// creation after launch params have been verified by the BFF.
 	miniappJobLimiter := ratelimit.New(cfg.MiniAppJobRateLimitRPS, cfg.MiniAppJobRateLimitBurst)
+	referrals := referralservice.New(deps.Referrals, deps.Billing, referralservice.Config{
+		CodeLength:                  cfg.ReferralCodeLength,
+		ReferrerSignupRewardCredits: cfg.ReferralReferrerSignupRewardCredits,
+		ReferredSignupRewardCredits: cfg.ReferralReferredSignupRewardCredits,
+	})
 	return miniappapi.NewHandler(miniappapi.Config{
-		AppSecret:             cfg.VKAppSecret,
-		LaunchParamsMaxAge:    cfg.MiniAppLaunchParamsMaxAge,
-		JobRateLimiter:        miniappJobLimiter,
-		ImageReferenceEnabled: cfg.DeepInfraImageReferenceEnabled,
+		AppSecret:                           cfg.VKAppSecret,
+		LaunchParamsMaxAge:                  cfg.MiniAppLaunchParamsMaxAge,
+		JobRateLimiter:                      miniappJobLimiter,
+		ImageReferenceEnabled:               cfg.DeepInfraImageReferenceEnabled,
+		ReferralLinkBase:                    cfg.VKReferralLinkBase,
+		ReferralReferrerSignupRewardCredits: cfg.ReferralReferrerSignupRewardCredits,
+		ReferralReferredSignupRewardCredits: cfg.ReferralReferredSignupRewardCredits,
 	}, miniappapi.Deps{
 		Users:         deps.Users,
 		Jobs:          deps.Jobs,
@@ -70,6 +80,7 @@ func NewHandler(ctx context.Context, cfg config.Config, deps Deps) *miniappapi.H
 		Billing:       deps.Billing,
 		BillingRepo:   deps.BillingRepo,
 		Payment:       deps.Payment,
+		Referrals:     referrals,
 		Orchestrator:  deps.Orchestrator,
 		Logger:        logger,
 	})

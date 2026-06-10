@@ -28,6 +28,7 @@ import (
 	"vk-ai-aggregator/internal/service/billingservice"
 	"vk-ai-aggregator/internal/service/joborchestrator"
 	"vk-ai-aggregator/internal/service/paymentservice"
+	"vk-ai-aggregator/internal/service/referralservice"
 )
 
 // ---------------------------------------------------------------------------
@@ -203,6 +204,8 @@ type testFixture struct {
 	billing          *billingservice.Service
 	paymentRepo      *memory.PaymentRepo
 	payment          *paymentservice.Service
+	referralRepo     *memory.ReferralRepo
+	referrals        *referralservice.Service
 }
 
 func newTestFixture(appSecret string, limiter interface{ Allow(string) bool }) *testFixture {
@@ -218,6 +221,7 @@ func newTestFixtureWithConfig(appSecret string, limiter interface{ Allow(string)
 	objects := memory.NewObjectStore()
 	billingRepo := memory.NewBillingRepo()
 	paymentRepo := memory.NewPaymentRepo()
+	referralRepo := memory.NewReferralRepo()
 	outboxRepo := memory.NewOutboxRepo()
 	uowMgr := memory.NewUnitOfWork(jobRepo, outboxRepo, billingRepo)
 
@@ -225,12 +229,15 @@ func newTestFixtureWithConfig(appSecret string, limiter interface{ Allow(string)
 	payment := paymentservice.New(paymentRepo, paymentmock.New(), paymentservice.Config{
 		ReturnURL: "https://neiirohub.ru/payments/return",
 	})
+	referrals := referralservice.New(referralRepo, billing, referralservice.Config{ReferrerSignupRewardCredits: 10})
 	orch := joborchestrator.New(jobRepo, uowMgr, billing, 0)
 
 	cfg := miniappinbound.Config{
-		AppSecret:          appSecret,
-		LaunchParamsMaxAge: time.Hour,
-		JobRateLimiter:     limiter,
+		AppSecret:                           appSecret,
+		LaunchParamsMaxAge:                  time.Hour,
+		JobRateLimiter:                      limiter,
+		ReferralLinkBase:                    "https://vk.com/write-239332376",
+		ReferralReferrerSignupRewardCredits: 10,
 	}
 	if configure != nil {
 		configure(&cfg)
@@ -247,6 +254,7 @@ func newTestFixtureWithConfig(appSecret string, limiter interface{ Allow(string)
 			Billing:       billing,
 			BillingRepo:   billingRepo,
 			Payment:       payment,
+			Referrals:     referrals,
 			Orchestrator:  orch,
 		},
 	)
@@ -262,6 +270,8 @@ func newTestFixtureWithConfig(appSecret string, limiter interface{ Allow(string)
 		billing:          billing,
 		paymentRepo:      paymentRepo,
 		payment:          payment,
+		referralRepo:     referralRepo,
+		referrals:        referrals,
 	}
 }
 
@@ -1279,6 +1289,191 @@ func TestHandler_GetBalance(t *testing.T) {
 	// New user gets the default starting balance.
 	if resp.BalanceCredits != billingservice.DefaultStartingBalance {
 		t.Fatalf("expected %d credits, got %d", billingservice.DefaultStartingBalance, resp.BalanceCredits)
+	}
+}
+
+func TestHandler_GetReferralReturnsStableCodeAndBotStyleLink(t *testing.T) {
+	fixture := newTestFixture("", nil)
+	routes := fixture.handler.Routes()
+
+	req := httptest.NewRequest(http.MethodGet, "/miniapp/referral", nil)
+	req.Header.Set("X-Launch-Params", devLaunchParams(778))
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var resp miniappinbound.ReferralDTO
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("invalid response: %v", err)
+	}
+	if resp.Code == "" || resp.InviteURL == "" || resp.InvitedCount != 0 {
+		t.Fatalf("unexpected referral dto: %+v", resp)
+	}
+	if !strings.HasPrefix(resp.InviteURL, "https://vk.com/write-239332376?") ||
+		!strings.Contains(resp.InviteURL, "ref="+url.QueryEscape(resp.Code)) {
+		t.Fatalf("invite url must use bot-style ref link, got %+v", resp)
+	}
+	if resp.ReferrerSignupRewardCredits != 10 || resp.ReferredSignupRewardCredits != 0 {
+		t.Fatalf("unexpected reward copy: %+v", resp)
+	}
+
+	secondReq := httptest.NewRequest(http.MethodGet, "/miniapp/referral", nil)
+	secondReq.Header.Set("X-Launch-Params", devLaunchParams(778))
+	second := httptest.NewRecorder()
+	routes.ServeHTTP(second, secondReq)
+	if second.Code != http.StatusOK {
+		t.Fatalf("expected second 200, got %d: %s", second.Code, second.Body.String())
+	}
+	var secondResp miniappinbound.ReferralDTO
+	if err := json.Unmarshal(second.Body.Bytes(), &secondResp); err != nil {
+		t.Fatalf("invalid second response: %v", err)
+	}
+	if secondResp.Code != resp.Code || secondResp.InviteURL != resp.InviteURL {
+		t.Fatalf("referral code/link must be stable, first=%+v second=%+v", resp, secondResp)
+	}
+}
+
+func TestHandler_AcceptReferralUsesMiniAppSourceAndLedgerNoJob(t *testing.T) {
+	fixture := newTestFixture("", nil)
+	routes := fixture.handler.Routes()
+	ctx := context.Background()
+	referrer := &domain.User{
+		VKUserID: 900101,
+		Role:     domain.RoleUser,
+		Status:   domain.StatusActive,
+		Locale:   "ru",
+		Timezone: "Europe/Moscow",
+	}
+	if err := fixture.userRepo.Create(ctx, referrer); err != nil {
+		t.Fatalf("create referrer: %v", err)
+	}
+	if err := fixture.referralRepo.CreateCode(ctx, &domain.ReferralCode{UserID: referrer.ID, Code: "MNN2345A"}); err != nil {
+		t.Fatalf("create referral code: %v", err)
+	}
+
+	body := strings.NewReader(`{"code":"MNN2345A"}`)
+	req := httptest.NewRequest(http.MethodPost, "/miniapp/referral/accept", body)
+	req.Header.Set("X-Launch-Params", devLaunchParams(900102))
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var resp miniappinbound.ApplyReferralDTO
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("invalid response: %v", err)
+	}
+	if !resp.Applied || resp.AlreadyApplied || resp.InvalidCode || resp.SelfReferral {
+		t.Fatalf("unexpected apply response: %+v", resp)
+	}
+	referred, err := fixture.userRepo.GetByVKUserID(ctx, 900102)
+	if err != nil {
+		t.Fatalf("referred user not created: %v", err)
+	}
+	referral, err := fixture.referralRepo.GetReferralByReferredUserID(ctx, referred.ID)
+	if err != nil {
+		t.Fatalf("referral not created: %v", err)
+	}
+	if referral.ReferrerUserID != referrer.ID ||
+		referral.ReferralCode != "MNN2345A" ||
+		referral.Source != domain.ReferralSourceVKMiniApp ||
+		referral.RewardStatus != domain.ReferralRewardApplied {
+		t.Fatalf("unexpected referral: %+v", referral)
+	}
+	acc, err := fixture.billingRepo.GetAccountByUser(ctx, referrer.ID, domain.CurrencyCredits)
+	if err != nil {
+		t.Fatalf("get referrer account: %v", err)
+	}
+	if acc.BalanceCached != billingservice.DefaultStartingBalance+10 {
+		t.Fatalf("referrer balance = %d, want %d", acc.BalanceCached, billingservice.DefaultStartingBalance+10)
+	}
+	jobs, _ := fixture.jobRepo.ListByUser(ctx, referred.ID, 10, 0)
+	if len(jobs) != 0 {
+		t.Fatalf("referral accept must not create jobs, got %+v", jobs)
+	}
+
+	replay := httptest.NewRecorder()
+	replayReq := httptest.NewRequest(http.MethodPost, "/miniapp/referral/accept", strings.NewReader(`{"code":"MNN2345A"}`))
+	replayReq.Header.Set("X-Launch-Params", devLaunchParams(900102))
+	routes.ServeHTTP(replay, replayReq)
+	if replay.Code != http.StatusOK {
+		t.Fatalf("expected replay 200, got %d: %s", replay.Code, replay.Body.String())
+	}
+	var replayResp miniappinbound.ApplyReferralDTO
+	if err := json.Unmarshal(replay.Body.Bytes(), &replayResp); err != nil {
+		t.Fatalf("invalid replay response: %v", err)
+	}
+	if !replayResp.AlreadyApplied || replayResp.Applied {
+		t.Fatalf("expected idempotent already-applied response, got %+v", replayResp)
+	}
+	count, err := fixture.referralRepo.CountByReferrer(ctx, referrer.ID)
+	if err != nil {
+		t.Fatalf("count referrals: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("referral count = %d, want 1", count)
+	}
+	entries, err := fixture.billingRepo.ListEntries(ctx, acc.ID, 10, 0)
+	if err != nil {
+		t.Fatalf("list billing entries: %v", err)
+	}
+	rewardEntries := 0
+	for _, entry := range entries {
+		if entry.Reason == "referral signup reward" {
+			rewardEntries++
+		}
+	}
+	if rewardEntries != 1 {
+		t.Fatalf("reward entries = %d, want 1", rewardEntries)
+	}
+}
+
+func TestHandler_AcceptReferralRejectsInvalidAndSelfReferral(t *testing.T) {
+	fixture := newTestFixture("", nil)
+	routes := fixture.handler.Routes()
+
+	invalidReq := httptest.NewRequest(http.MethodPost, "/miniapp/referral/accept", strings.NewReader(`{"code":"bad code!"}`))
+	invalidReq.Header.Set("X-Launch-Params", devLaunchParams(900201))
+	invalid := httptest.NewRecorder()
+	routes.ServeHTTP(invalid, invalidReq)
+	if invalid.Code != http.StatusOK {
+		t.Fatalf("expected invalid 200, got %d: %s", invalid.Code, invalid.Body.String())
+	}
+	var invalidResp miniappinbound.ApplyReferralDTO
+	if err := json.Unmarshal(invalid.Body.Bytes(), &invalidResp); err != nil {
+		t.Fatalf("invalid response body: %v", err)
+	}
+	if !invalidResp.InvalidCode || invalidResp.Applied {
+		t.Fatalf("expected invalid-code no-op, got %+v", invalidResp)
+	}
+
+	selfStats := httptest.NewRecorder()
+	selfStatsReq := httptest.NewRequest(http.MethodGet, "/miniapp/referral", nil)
+	selfStatsReq.Header.Set("X-Launch-Params", devLaunchParams(900202))
+	routes.ServeHTTP(selfStats, selfStatsReq)
+	if selfStats.Code != http.StatusOK {
+		t.Fatalf("expected stats 200, got %d: %s", selfStats.Code, selfStats.Body.String())
+	}
+	var stats miniappinbound.ReferralDTO
+	if err := json.Unmarshal(selfStats.Body.Bytes(), &stats); err != nil {
+		t.Fatalf("invalid stats response: %v", err)
+	}
+	selfReq := httptest.NewRequest(http.MethodPost, "/miniapp/referral/accept", strings.NewReader(fmt.Sprintf(`{"code":%q}`, stats.Code)))
+	selfReq.Header.Set("X-Launch-Params", devLaunchParams(900202))
+	self := httptest.NewRecorder()
+	routes.ServeHTTP(self, selfReq)
+	if self.Code != http.StatusOK {
+		t.Fatalf("expected self 200, got %d: %s", self.Code, self.Body.String())
+	}
+	var selfResp miniappinbound.ApplyReferralDTO
+	if err := json.Unmarshal(self.Body.Bytes(), &selfResp); err != nil {
+		t.Fatalf("invalid self response: %v", err)
+	}
+	if !selfResp.SelfReferral || selfResp.Applied {
+		t.Fatalf("expected self-referral no-op, got %+v", selfResp)
 	}
 }
 

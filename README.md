@@ -111,13 +111,15 @@ Real integrations are implemented at adapter level and remain **opt-in**:
 - Shared VK referral foundation is implemented in the backend. Each internal
   user receives one stable public referral code in `referral_codes`; accepted
   invitations are stored in `referrals` with source `vk_bot` or `vk_miniapp`.
-  The VK bot account screen currently shows the "безлимитное общение" note,
+  The VK bot account screen shows the "безлимитное общение" note,
   invited-user count, one plain-text referral link and support handle
-  `@neirohub_help`; it does not render a share button.
+  `@neirohub_help`; it does not render a share button. The Mini App account
+  screen uses the same backend service/repository through `/miniapp/referral`,
+  renders the same bot-style invite URL, and can idempotently apply referral
+  codes through `/miniapp/referral/accept` as `source=vk_miniapp`.
   `/start <code>` / VK `ref` handling records the relation without creating a
   billable job. Signup rewards are posted through billing ledger entries with
-  idempotency keys. A full Mini App referral account/API screen is still a
-  follow-up over the same backend service/repository.
+  idempotency keys.
 - Payment top-up foundation has backend lifecycle coverage for intent creation,
   provider-verified completion, reconciliation and manual operator refunds.
   The domain defines `PaymentProduct`, `PaymentIntent`, `PaymentEvent`,

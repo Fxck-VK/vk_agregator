@@ -2499,7 +2499,7 @@ referrals:
 - один invited user может быть привязан только к одному referrer;
 - бонусы за приглашение начисляются только через append-only billing ledger с idempotency key;
 - referral code не должен раскрывать `vk_user_id` или internal UUID;
-- Mini App referral endpoint, когда будет добавлен, должен сначала проверять VK launch params и только потом применять referral code.
+- Mini App referral endpoint сначала проверяет VK launch params и только потом применяет referral code.
 
 [1]: https://platform.openai.com/docs/api-reference/responses "Responses | OpenAI API Reference"
 [2]: https://platform.openai.com/docs/guides/webhooks "Webhooks | OpenAI API"
