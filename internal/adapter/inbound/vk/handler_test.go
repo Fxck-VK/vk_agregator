@@ -73,11 +73,23 @@ func newHarnessWithDeps(control vkdelivery.ControlClient, cfg vk.Config, antiSpa
 	payments := memory.NewPaymentRepo()
 	vatCode := int16(1)
 	payments.PutProduct(&domain.PaymentProduct{
-		Code:           "credits_100",
-		Title:          "100 credits",
+		Code:           "crystals_99",
+		Title:          "NeiroHub 99 crystals",
 		Amount:         9900,
 		Currency:       domain.CurrencyRUB,
-		Credits:        100,
+		Credits:        99,
+		PriceVersion:   1,
+		IsActive:       true,
+		VATCode:        &vatCode,
+		PaymentSubject: "service",
+		PaymentMode:    "full_prepayment",
+	})
+	payments.PutProduct(&domain.PaymentProduct{
+		Code:           "crystals_700",
+		Title:          "NeiroHub 700 crystals",
+		Amount:         70000,
+		Currency:       domain.CurrencyRUB,
+		Credits:        700,
 		PriceVersion:   1,
 		IsActive:       true,
 		VATCode:        &vatCode,
@@ -471,9 +483,13 @@ func TestMenuFeatureFlagsHideMainMenuButtons(t *testing.T) {
 	}
 }
 
-func TestTopUpMenuCreatesPaymentIntentAfterReceiptContact(t *testing.T) {
+func TestTopUpMenuCreatesPaymentIntentAfterProductSelection(t *testing.T) {
 	control := vkdelivery.NewMockClient()
-	h := newHarnessWithControl(control)
+	h := newHarnessWithConfig(control, vk.Config{
+		ConfirmationToken: "conf-token-123",
+		Secret:            "s3cr3t",
+		TopUpReceiptEmail: "bot-payments@example.com",
+	})
 
 	menuBody := `{
 		"type":"message_new","group_id":1,"event_id":"evt-topup-menu","secret":"s3cr3t",
@@ -482,24 +498,19 @@ func TestTopUpMenuCreatesPaymentIntentAfterReceiptContact(t *testing.T) {
 	if rec := h.post(menuBody); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
 		t.Fatalf("unexpected menu response: %d %q", rec.Code, rec.Body.String())
 	}
-	if sent := control.Sent(); len(sent) != 1 || !strings.Contains(sent[0].Keyboard, "credits_100") {
+	if sent := control.Sent(); len(sent) != 1 ||
+		!strings.Contains(sent[0].Text, "Выберите пакет для пополнения баланса") ||
+		!strings.Contains(sent[0].Keyboard, "crystals_99") ||
+		!strings.Contains(sent[0].Keyboard, "99 кристаллов") {
 		t.Fatalf("expected top-up product keyboard, got %+v", sent)
 	}
 
 	productBody := `{
 		"type":"message_new","group_id":1,"event_id":"evt-topup-product","secret":"s3cr3t",
-		"object":{"message":{"from_id":590,"peer_id":590,"text":"100 credits","payload":"{\"command\":\"top_up\",\"product_code\":\"credits_100\"}"}}
+		"object":{"message":{"from_id":590,"peer_id":590,"text":"99 crystals","payload":"{\"command\":\"top_up\",\"product_code\":\"crystals_99\"}"}}
 	}`
 	if rec := h.post(productBody); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
 		t.Fatalf("unexpected product response: %d %q", rec.Code, rec.Body.String())
-	}
-
-	contactBody := `{
-		"type":"message_new","group_id":1,"event_id":"evt-topup-contact","secret":"s3cr3t",
-		"object":{"message":{"from_id":590,"peer_id":590,"text":"user@example.com"}}
-	}`
-	if rec := h.post(contactBody); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
-		t.Fatalf("unexpected contact response: %d %q", rec.Code, rec.Body.String())
 	}
 
 	ctx := context.Background()
@@ -514,7 +525,7 @@ func TestTopUpMenuCreatesPaymentIntentAfterReceiptContact(t *testing.T) {
 	if len(intents) != 1 {
 		t.Fatalf("expected one payment intent, got %d", len(intents))
 	}
-	if intents[0].Credits != 100 || intents[0].ReceiptEmail != "user@example.com" || !strings.Contains(intents[0].ConfirmationURL, "mock.payments.local") {
+	if intents[0].Credits != 99 || intents[0].ReceiptEmail != "bot-payments@example.com" || !strings.Contains(intents[0].ConfirmationURL, "mock.payments.local") {
 		t.Fatalf("unexpected payment intent: %+v", intents[0])
 	}
 	if jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0); len(jobs) != 0 || h.pub.Len() != 0 {
@@ -546,6 +557,91 @@ func TestTopUpMenuCreatesPaymentIntentAfterReceiptContact(t *testing.T) {
 	}
 	if len(intents) != 1 {
 		t.Fatalf("reopening top-up must not create another intent, got %d", len(intents))
+	}
+}
+
+func TestTopUpStaleCatalogDifferentProductCreatesSelectedIntent(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	h := newHarnessWithConfig(control, vk.Config{
+		ConfirmationToken: "conf-token-123",
+		Secret:            "s3cr3t",
+		TopUpReceiptEmail: "bot-payments@example.com",
+	})
+
+	firstProductBody := `{
+		"type":"message_new","group_id":1,"event_id":"evt-topup-99","secret":"s3cr3t",
+		"object":{"message":{"from_id":592,"peer_id":592,"text":"99 crystals","payload":"{\"command\":\"top_up\",\"product_code\":\"crystals_99\"}"}}
+	}`
+	if rec := h.post(firstProductBody); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected first product response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	staleCatalogProductBody := `{
+		"type":"message_new","group_id":1,"event_id":"evt-topup-700-stale","secret":"s3cr3t",
+		"object":{"message":{"from_id":592,"peer_id":592,"text":"700 crystals","payload":"{\"command\":\"top_up\",\"product_code\":\"crystals_700\"}"}}
+	}`
+	if rec := h.post(staleCatalogProductBody); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected stale catalog product response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	ctx := context.Background()
+	user, err := h.users.GetByVKUserID(ctx, 592)
+	if err != nil {
+		t.Fatalf("user not created: %v", err)
+	}
+	intents, err := h.payment.ListIntentsByUser(ctx, user.ID, 10, 0)
+	if err != nil {
+		t.Fatalf("list payment intents: %v", err)
+	}
+	if len(intents) != 2 {
+		t.Fatalf("expected two payment intents for different products, got %d", len(intents))
+	}
+	byCredits := map[int64]*domain.PaymentIntent{}
+	for _, intent := range intents {
+		byCredits[intent.Credits] = intent
+	}
+	if byCredits[99] == nil {
+		t.Fatalf("expected original 99-credit intent, got %+v", intents)
+	}
+	if byCredits[700] == nil || byCredits[700].Amount != 70000 {
+		t.Fatalf("expected selected 700-credit intent, got %+v", intents)
+	}
+	sent := control.Sent()
+	if len(sent) < 2 || !strings.Contains(sent[len(sent)-1].Text, "700") || strings.Contains(sent[len(sent)-1].Text, "99") {
+		t.Fatalf("expected final payment message for 700 package, got %+v", sent[len(sent)-1])
+	}
+	if jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0); len(jobs) != 0 || h.pub.Len() != 0 {
+		t.Fatalf("top-up flow must not create AI jobs, jobs=%+v tasks=%d", jobs, h.pub.Len())
+	}
+}
+
+func TestTopUpMenuWithoutServerReceiptContactDoesNotCreateIntent(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	h := newHarnessWithControl(control)
+
+	body := `{
+		"type":"message_new","group_id":1,"event_id":"evt-topup-no-contact","secret":"s3cr3t",
+		"object":{"message":{"from_id":591,"peer_id":591,"text":"99 crystals","payload":"{\"command\":\"top_up\",\"product_code\":\"crystals_99\"}"}}
+	}`
+	if rec := h.post(body); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	ctx := context.Background()
+	user, err := h.users.GetByVKUserID(ctx, 591)
+	if err != nil {
+		t.Fatalf("user not created: %v", err)
+	}
+	intents, err := h.payment.ListIntentsByUser(ctx, user.ID, 10, 0)
+	if err != nil {
+		t.Fatalf("list payment intents: %v", err)
+	}
+	if len(intents) != 0 {
+		t.Fatalf("expected no payment intents without server receipt contact, got %d", len(intents))
+	}
+	sent := control.Sent()
+	if len(sent) != 1 || strings.Contains(sent[0].Text, "email") || !strings.Contains(sent[0].Text, "не настроены данные для чека") {
+		t.Fatalf("expected safe configuration notice without user contact prompt, got %+v", sent)
 	}
 }
 
@@ -872,16 +968,76 @@ func TestVideoMenuButtonSendsModelPickerNoJob(t *testing.T) {
 	if sent[0].Text != "Выбери модель для генерации:" {
 		t.Fatalf("unexpected text: %q", sent[0].Text)
 	}
-	for _, want := range []string{
-		"Sora 2 — видео текст+фото",
-		"Kling v2.1 — видео текст+фото",
-		"Seedance 1 — видео по тексту",
-		"Haiuo v0.2 — видео текст+фото",
-		"⬅️ Назад",
+	if !strings.Contains(sent[0].Keyboard, "PrunaAI") || !strings.Contains(sent[0].Keyboard, string(domain.CommandMenuVideoPrunaAI)) {
+		t.Fatalf("expected PrunaAI button in keyboard: %q", sent[0].Keyboard)
+	}
+	if !strings.Contains(sent[0].Keyboard, "⬅️ Назад") || !strings.Contains(sent[0].Keyboard, string(domain.CommandShowMenu)) {
+		t.Fatalf("expected back button in keyboard: %q", sent[0].Keyboard)
+	}
+	for _, hidden := range []string{
+		"Sora 2",
+		"Kling v2.1",
+		"Seedance 1",
+		"Haiuo v0.2",
 	} {
-		if !strings.Contains(sent[0].Keyboard, want) {
-			t.Fatalf("expected %q in keyboard: %q", want, sent[0].Keyboard)
+		if strings.Contains(sent[0].Keyboard, hidden) {
+			t.Fatalf("expected video model button %q to be hidden: %q", hidden, sent[0].Keyboard)
 		}
+	}
+}
+
+func TestPrunaAIVideoButtonEnablesPlainTextVideoJobs(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	h := newHarnessWithControl(control)
+	start := `{
+		"type":"message_new","group_id":1,"event_id":"evt-video-prunaai-on","secret":"s3cr3t",
+		"object":{"message":{"from_id":5622,"peer_id":5622,"text":"PrunaAI","payload":"{\"command\":\"menu.video.prunaai\"}"}}
+	}`
+	if rec := h.post(start); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected PrunaAI response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	prompt := `{
+		"type":"message_new","group_id":1,"event_id":"evt-video-prunaai-prompt","secret":"s3cr3t",
+		"object":{"message":{"from_id":5622,"peer_id":5622,"text":"cinematic neon city at night, rain reflections, slow drone movement"}}
+	}`
+	if rec := h.post(prompt); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected prompt response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	ctx := context.Background()
+	user, err := h.users.GetByVKUserID(ctx, 5622)
+	if err != nil {
+		t.Fatalf("user not created: %v", err)
+	}
+	cmds, _ := h.cmds.ListByUser(ctx, user.ID, 10, 0)
+	if !hasCommandTypes(cmds, domain.CommandMenuVideoPrunaAI, domain.CommandVideoGenerate) {
+		t.Fatalf("unexpected command types: %+v", commandTypes(cmds))
+	}
+	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
+	if len(jobs) != 1 || jobs[0].OperationType != domain.OperationVideoGenerate || jobs[0].Modality != domain.ModalityVideo || h.pub.Len() != 1 {
+		t.Fatalf("PrunaAI mode should create one video job, jobs=%+v tasks=%d", jobs, h.pub.Len())
+	}
+	sent := control.Sent()
+	if len(sent) != 2 || !strings.Contains(sent[0].Text, "PrunaAI активен") || sent[1].Text != "НейроХаб готовит видео..." {
+		t.Fatalf("unexpected PrunaAI mode responses: %+v", sent)
+	}
+	var params struct {
+		Prompt                 string `json:"prompt"`
+		ModelID                string `json:"model_id"`
+		ModelName              string `json:"model_name"`
+		DurationSec            int    `json:"duration_sec"`
+		VKPlaceholderMessageID int64  `json:"vk_placeholder_message_id"`
+	}
+	if err := json.Unmarshal(jobs[0].Params, &params); err != nil {
+		t.Fatalf("decode job params: %v", err)
+	}
+	if params.Prompt != "cinematic neon city at night, rain reflections, slow drone movement" ||
+		params.ModelID != "prunaai" ||
+		params.ModelName != "PrunaAI" ||
+		params.DurationSec != 5 ||
+		params.VKPlaceholderMessageID != sent[1].MessageID {
+		t.Fatalf("unexpected PrunaAI video job params: %+v, pending=%+v", params, sent[1])
 	}
 }
 
@@ -1537,7 +1693,7 @@ func TestStudentsScenarioButtonIsControlCommandNoJob(t *testing.T) {
 	}
 }
 
-func TestVideoModelButtonIsControlCommandNoJob(t *testing.T) {
+func TestDisabledVideoModelPayloadFallsBackToCurrentMenuNoJob(t *testing.T) {
 	control := vkdelivery.NewMockClient()
 	h := newHarnessWithControl(control)
 	body := `{
@@ -1555,33 +1711,93 @@ func TestVideoModelButtonIsControlCommandNoJob(t *testing.T) {
 		t.Fatalf("user not created: %v", err)
 	}
 	cmds, _ := h.cmds.ListByUser(ctx, user.ID, 10, 0)
-	if len(cmds) != 1 || cmds[0].Type != domain.CommandMenuVideoSora2 {
-		t.Fatalf("unexpected commands: %+v", cmds)
+	if len(cmds) != 1 || cmds[0].Type != domain.CommandShowMenu {
+		t.Fatalf("disabled video model payload should be recorded as show_menu fallback, got %+v", cmds)
 	}
 	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
-	if len(jobs) != 0 {
-		t.Fatalf("video model selection must not create a job, got %d", len(jobs))
+	if len(jobs) != 0 || h.pub.Len() != 0 {
+		t.Fatalf("disabled video model payload must not create jobs, jobs=%+v tasks=%d", jobs, h.pub.Len())
 	}
 	sent := control.Sent()
-	if len(sent) != 1 || !strings.Contains(sent[0].Text, "sora-2") || !strings.Contains(sent[0].Text, "Генерирует видео по тексту или фото") || !strings.Contains(sent[0].Text, "https://t.me/sora_video_1") {
-		t.Fatalf("unexpected model response: %+v", sent)
+	if len(sent) != 1 || !strings.Contains(sent[0].Text, "Добро пожаловать в НейроХаб") {
+		t.Fatalf("expected current welcome menu fallback, got %+v", sent)
 	}
-	for _, want := range []string{"😀 Начать генерацию", "ℹ️ Примеры", "⬅️ Назад", "menu.video.sora_2.start", "menu.video.sora_2.examples"} {
-		if !strings.Contains(sent[0].Keyboard, want) {
-			t.Fatalf("expected %q in keyboard: %q", want, sent[0].Keyboard)
+	for _, hidden := range []string{"Sora 2 — видео текст+фото", "menu.video.sora_2.start", "menu.video.sora_2.examples"} {
+		if strings.Contains(sent[0].Keyboard, hidden) {
+			t.Fatalf("disabled video nested button should stay hidden: %q", sent[0].Keyboard)
 		}
 	}
 }
 
-func TestNestedMenuFeatureFlagsHideVideoButtons(t *testing.T) {
+func TestDisabledVideoStartPayloadDoesNotEnablePlainTextVideoJobs(t *testing.T) {
 	control := vkdelivery.NewMockClient()
-	h := newHarnessWithConfig(control, vk.Config{
+	h := newHarnessWithControl(control)
+	start := `{
+		"type":"message_new","group_id":1,"event_id":"evt-video-start-on","secret":"s3cr3t",
+		"object":{"message":{"from_id":5621,"peer_id":5621,"text":"😀 Начать генерацию","payload":"{\"command\":\"menu.video.sora_2.start\"}"}}
+	}`
+	if rec := h.post(start); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected start response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	prompt := `{
+		"type":"message_new","group_id":1,"event_id":"evt-video-prompt","secret":"s3cr3t",
+		"object":{"message":{"from_id":5621,"peer_id":5621,"text":"cinematic neon city at night, rain reflections, slow drone movement"}}
+	}`
+	if rec := h.post(prompt); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected prompt response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	ctx := context.Background()
+	user, err := h.users.GetByVKUserID(ctx, 5621)
+	if err != nil {
+		t.Fatalf("user not created: %v", err)
+	}
+	cmds, _ := h.cmds.ListByUser(ctx, user.ID, 10, 0)
+	if hasCommandTypes(cmds, domain.CommandMenuVideoSora2Start, domain.CommandVideoGenerate) {
+		t.Fatalf("disabled video start payload must not create video commands, got %+v", commandTypes(cmds))
+	}
+	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
+	if len(jobs) != 0 || h.pub.Len() != 0 {
+		t.Fatalf("disabled video start payload must not create video jobs, jobs=%+v tasks=%d", jobs, h.pub.Len())
+	}
+	sent := control.Sent()
+	if len(sent) != 2 || strings.Contains(sent[0].Text, "sora-2 активен") || sent[1].Text == "НейроХаб готовит видео..." {
+		t.Fatalf("disabled video start payload must fall back without pending video message, got %+v", sent)
+	}
+}
+
+func TestPersistedVideoModeSurvivesHandlerRestart(t *testing.T) {
+	dialogState := newFakeDialogState()
+	dialogState.modes[5931] = "video:sora_2"
+
+	secondControl := vkdelivery.NewMockClient()
+	second := newHarnessWithConfigAndDialogState(secondControl, vk.Config{
 		ConfirmationToken: "conf-token-123",
 		Secret:            "s3cr3t",
-		MenuFeatures: vk.MenuFeatureFlags{DisabledCommands: map[domain.CommandType]bool{
-			domain.CommandMenuVideoSora2Examples: true,
-		}},
-	})
+	}, dialogState)
+	prompt := `{
+		"type":"message_new","group_id":1,"event_id":"evt-video-persist-prompt","secret":"s3cr3t",
+		"object":{"message":{"from_id":5931,"peer_id":5931,"text":"cinematic ocean waves at sunset"}}
+	}`
+	if rec := second.post(prompt); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected persisted prompt response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	ctx := context.Background()
+	user, err := second.users.GetByVKUserID(ctx, 5931)
+	if err != nil {
+		t.Fatalf("user not created after restart: %v", err)
+	}
+	jobs, _ := second.jobs.ListByUser(ctx, user.ID, 10, 0)
+	if len(jobs) != 1 || jobs[0].OperationType != domain.OperationVideoGenerate || jobs[0].Modality != domain.ModalityVideo || second.pub.Len() != 1 {
+		t.Fatalf("persisted video mode should create one video job, jobs=%+v tasks=%d", jobs, second.pub.Len())
+	}
+}
+
+func TestDisabledNestedVideoPayloadFallsBackToCurrentMenu(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	h := newHarnessWithControl(control)
 	body := `{
 		"type":"message_new","group_id":1,"event_id":"evt-video-nested-flag","secret":"s3cr3t",
 		"object":{"message":{"from_id":582,"peer_id":582,"text":"Sora 2 — видео текст+фото","payload":"{\"command\":\"menu.video.sora_2\"}"}}
@@ -1593,14 +1809,14 @@ func TestNestedMenuFeatureFlagsHideVideoButtons(t *testing.T) {
 
 	sent := control.Sent()
 	if len(sent) != 1 {
-		t.Fatalf("expected one Sora response, got %+v", sent)
+		t.Fatalf("expected one fallback response, got %+v", sent)
 	}
-	if strings.Contains(sent[0].Keyboard, "Примеры") || strings.Contains(sent[0].Keyboard, "menu.video.sora_2.examples") {
-		t.Fatalf("disabled nested video button should be hidden: %q", sent[0].Keyboard)
+	if !strings.Contains(sent[0].Text, "Добро пожаловать в НейроХаб") {
+		t.Fatalf("expected current welcome menu fallback, got %+v", sent)
 	}
-	for _, want := range []string{"😀 Начать генерацию", "⬅️ Назад"} {
-		if !strings.Contains(sent[0].Keyboard, want) {
-			t.Fatalf("expected enabled nested button %q in keyboard: %q", want, sent[0].Keyboard)
+	for _, hidden := range []string{"Начать генерацию", "Примеры", "menu.video.sora_2.start", "menu.video.sora_2.examples"} {
+		if strings.Contains(sent[0].Keyboard, hidden) {
+			t.Fatalf("disabled nested video button should stay hidden: %q", sent[0].Keyboard)
 		}
 	}
 }
@@ -1627,7 +1843,7 @@ func TestVideoNestedButtonsAreControlCommandsNoJob(t *testing.T) {
 			eventID:  "evt-video-sora-start",
 			text:     "😀 Начать генерацию",
 			command:  domain.CommandMenuVideoSora2Start,
-			wantText: "Ввод промпта для этой модели",
+			wantText: "sora-2 активен",
 			wantKeys: []string{"⬅️ Назад", "menu.video.sora_2"},
 		},
 		{
@@ -1643,7 +1859,7 @@ func TestVideoNestedButtonsAreControlCommandsNoJob(t *testing.T) {
 			eventID:  "evt-video-seedance-lite",
 			text:     "Seedance 1 Lite",
 			command:  domain.CommandMenuVideoSeedance1Lite,
-			wantText: "Seedance 1 Lite выбран",
+			wantText: "Seedance 1 Lite активен",
 			wantKeys: []string{"⬅️ Назад", "menu.video.seedance_1"},
 		},
 		{
@@ -1659,7 +1875,7 @@ func TestVideoNestedButtonsAreControlCommandsNoJob(t *testing.T) {
 			eventID:  "evt-video-haiuo-fast",
 			text:     "Haiuo v0.2 Fast",
 			command:  domain.CommandMenuVideoHaiuo02Fast,
-			wantText: "Haiuo v0.2 Fast выбран",
+			wantText: "Haiuo v0.2 Fast активен",
 			wantKeys: []string{"⬅️ Назад", "menu.video.haiuo_v0_2"},
 		},
 	}
@@ -1683,20 +1899,20 @@ func TestVideoNestedButtonsAreControlCommandsNoJob(t *testing.T) {
 				t.Fatalf("user not created: %v", err)
 			}
 			cmds, _ := h.cmds.ListByUser(ctx, user.ID, 10, 0)
-			if len(cmds) != 1 || cmds[0].Type != tt.command {
-				t.Fatalf("unexpected commands: %+v", cmds)
+			if len(cmds) != 1 || cmds[0].Type != domain.CommandShowMenu {
+				t.Fatalf("disabled nested video payload should be recorded as show_menu fallback, got %+v", cmds)
 			}
 			jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
 			if len(jobs) != 0 {
 				t.Fatalf("nested video control must not create a job, got %d", len(jobs))
 			}
 			sent := control.Sent()
-			if len(sent) != 1 || !strings.Contains(sent[0].Text, tt.wantText) {
-				t.Fatalf("unexpected nested video response: %+v", sent)
+			if len(sent) != 1 || !strings.Contains(sent[0].Text, "Добро пожаловать в НейроХаб") {
+				t.Fatalf("expected current welcome menu fallback, got %+v", sent)
 			}
-			for _, want := range tt.wantKeys {
-				if !strings.Contains(sent[0].Keyboard, want) {
-					t.Fatalf("expected %q in keyboard: %q", want, sent[0].Keyboard)
+			for _, hidden := range []string{"Начать генерацию", "Примеры", "Seedance 1 Lite", "Seedance 1 Pro", "Haiuo v0.2 Обычный", "Haiuo v0.2 Fast"} {
+				if strings.Contains(sent[0].Keyboard, hidden) {
+					t.Fatalf("disabled nested video button should stay hidden: %q", sent[0].Keyboard)
 				}
 			}
 		})

@@ -238,6 +238,38 @@ func (p *WebhookProcessor) SyncIntent(ctx context.Context, intentID uuid.UUID) (
 	return p.repo.GetIntentByID(ctx, intentID)
 }
 
+// CancelIntent requests provider-side cancellation and then verifies the
+// resulting state through the same sync path used by webhook/reconciliation.
+// This is a protected operator action; it must not be exposed to user-facing
+// surfaces.
+func (p *WebhookProcessor) CancelIntent(ctx context.Context, intentID uuid.UUID) (*domain.PaymentIntent, error) {
+	if p == nil || p.repo == nil || p.provider == nil || p.tx == nil {
+		return nil, errors.New("paymentservice: webhook processor is not configured")
+	}
+	intent, err := p.repo.GetIntentByID(ctx, intentID)
+	if err != nil {
+		return nil, err
+	}
+	if intent.Status == domain.PaymentIntentCanceled ||
+		intent.Status == domain.PaymentIntentExpired ||
+		intent.Status == domain.PaymentIntentFailed {
+		return intent, nil
+	}
+	if intent.Status == domain.PaymentIntentSucceeded ||
+		intent.Status == domain.PaymentIntentRefunded ||
+		intent.Status == domain.PaymentIntentPartiallyRefunded {
+		return nil, domain.ErrConflict
+	}
+	if strings.TrimSpace(intent.ProviderPaymentID) == "" {
+		return nil, ErrWebhookUnsupported
+	}
+	if err := p.provider.CancelPayment(ctx, intent.ProviderPaymentID); err != nil {
+		recordPaymentProviderError(p.provider.Code(), "cancel_payment", err)
+		return nil, fmt.Errorf("%w: cancel provider payment: %v", ErrWebhookUnverified, err)
+	}
+	return p.SyncIntent(ctx, intentID)
+}
+
 // ReconciliationResult summarizes one payment reconciliation pass.
 type ReconciliationResult struct {
 	Checked    int

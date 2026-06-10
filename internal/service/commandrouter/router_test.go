@@ -96,6 +96,11 @@ func TestRouterParse(t *testing.T) {
 			wantType: domain.CommandMenuVideo,
 		},
 		{
+			name:     "vk video prunaai button",
+			input:    "PrunaAI",
+			wantType: domain.CommandMenuVideoPrunaAI,
+		},
+		{
 			name:     "vk video sora model button",
 			input:    "Sora 2 — видео текст+фото",
 			wantType: domain.CommandMenuVideoSora2,

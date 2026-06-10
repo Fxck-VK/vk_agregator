@@ -76,6 +76,10 @@ var menuScreens = map[domain.CommandType]menuScreen{
 		text:     fixedText("Выбери модель для генерации:"),
 		keyboard: videoModelKeyboard,
 	},
+	domain.CommandMenuVideoPrunaAI: {
+		text:     fixedText(prunaAIText),
+		keyboard: prunaAIBackKeyboard,
+	},
 	domain.CommandMenuVideoSora2: {
 		text:     fixedText(sora2Text),
 		keyboard: sora2Keyboard,
@@ -154,21 +158,23 @@ const (
 	photoTextModeText      = "▶️ Генерация фото по тексту выбрана.\n\nОпишите, что хотите увидеть, командой /image.\n\nПример:\n/image кот в очках на пляже"
 	photoReferenceModeText = "📸 Генерация фото с референсом пока будет подключена после входящих фото-артефактов.\n\nСейчас доступна генерация по тексту через /image."
 
+	prunaAIText = "PrunaAI активен.\n\nНапишите описание видео обычным сообщением.\n\nПример: кот в очках едет на жирафе."
+
 	sora2Text         = "sora-2\nОписание: Генерирует видео по тексту или фото.\n\n“ A hyper-realistic police bodycam video of a kangaroo making punching feints toward a police officer on a dusty rural road in Australia. The kangaroo stands ”\n\n🔗Инструкция: https://t.me/sora_video_1"
-	sora2StartText    = "sora-2\n\nВвод промпта для этой модели будет подключен следующим шагом.\n\nПока можно вернуться назад и выбрать другой режим."
+	sora2StartText    = "sora-2 активен.\n\nНапишите описание видео обычным сообщением.\n\nПример: cinematic drone shot over a neon city at night, rain reflections, realistic camera movement."
 	sora2ExamplesText = "ℹ️ Примеры sora-2\n\n1. A cinematic drone shot over a neon city at night, rain reflections on the street, realistic camera movement.\n\n2. A close-up handheld video of a chef cutting fruit in a bright kitchen, natural motion, realistic details."
 
 	kling21Text         = "Kling v2.1 master\nОписание: Генерирует видео по тексту или фото.\n\n“ The setting has warm lighting from streetlights or soft party lights. A little boy around 2 to 3 years old, with light skin tone, brown hair, and big green ”\n\n🔗Инструкция: https://t.me/pakrnet"
-	kling21StartText    = "Kling v2.1 master\n\nВвод промпта для этой модели будет подключен следующим шагом.\n\nПока можно вернуться назад и выбрать другой режим."
+	kling21StartText    = "Kling v2.1 master активен.\n\nНапишите описание видео обычным сообщением.\n\nПример: warm cinematic scene, friends walking under streetlights, realistic motion."
 	kling21ExamplesText = "ℹ️ Примеры Kling v2.1\n\n1. A warm cinematic scene of friends walking under streetlights, soft party lights, realistic skin and motion.\n\n2. A product video of a glass bottle rotating on a table, studio lighting, smooth camera movement."
 
 	seedance1Text     = "🔹 Seedance\n\nLite — это как «лайт-версия» приложения: самое простое, чтобы попробовать.\n\nPro — это как «премиум»: больше функций, настроек и возможностей для крутого результата.\n\n☝️ Если хочешь быстро и просто — бери Lite. Если любишь «по максимуму» — тогда Pro."
-	seedance1LiteText = "Seedance 1 Lite выбран.\n\nВвод промпта для этого варианта будет подключен следующим шагом."
-	seedance1ProText  = "Seedance 1 Pro выбран.\n\nВвод промпта для этого варианта будет подключен следующим шагом."
+	seedance1LiteText = "Seedance 1 Lite активен.\n\nНапишите описание видео обычным сообщением."
+	seedance1ProText  = "Seedance 1 Pro активен.\n\nНапишите описание видео обычным сообщением."
 
 	haiuo02Text         = "🔹 Haiuo 02\n\nHaiuo 02 — картинка суперчёткая, реалистичная, прям как в фильме.\n\nHaiuo 02 Fast — версия «на скорость»: делает видео быстрее, но качество чуть ниже.\n\n☝️ Если нужен «вау-визуал» — бери Haiuo. Если важнее быстро и удобно — Fast."
-	haiuo02StandardText = "Haiuo v0.2 Обычный выбран.\n\nВвод промпта для этого варианта будет подключен следующим шагом."
-	haiuo02FastText     = "Haiuo v0.2 Fast выбран.\n\nВвод промпта для этого варианта будет подключен следующим шагом."
+	haiuo02StandardText = "Haiuo v0.2 Обычный активен.\n\nНапишите описание видео обычным сообщением."
+	haiuo02FastText     = "Haiuo v0.2 Fast активен.\n\nНапишите описание видео обычным сообщением."
 
 	studentsText = "🎁Данные нейронные сети помогут вам во время учебы"
 
@@ -460,31 +466,14 @@ func (h *Handler) sendTopUpCatalog(ctx context.Context, idemKey string, peerID i
 	return err
 }
 
-func (h *Handler) sendTopUpContactRequest(ctx context.Context, idemKey string, peerID int64, productCode string, forceNew, allowEdit bool) error {
-	if h.deps.Control == nil {
-		h.logger.Warn("vk top-up contact request skipped because VK_ACCESS_TOKEN is not configured")
-		return nil
-	}
-	msg := vkdelivery.Message{
-		Text:     "Пришлите email или телефон для чека обычным сообщением.\n\nПосле этого я создам ссылку на оплату.",
-		Keyboard: backKeyboard(),
-	}
-	h.applyMenuButtonMode(msg.Keyboard)
-	randomID := vkdelivery.DeterministicRandomID(fmt.Sprintf("vk_control_topup_contact:%s:%s:%t", idemKey, productCode, forceNew))
-	result, err := h.deliverControlResponse(ctx, domain.CommandTopUp, peerID, randomID, msg, allowEdit)
-	if err == nil {
-		h.setActiveMenu(peerID, result.MessageID)
-	}
-	return err
-}
-
-func (h *Handler) sendTopUpPaymentLink(ctx context.Context, idemKey string, peerID int64, link string) error {
+func (h *Handler) sendTopUpPaymentLink(ctx context.Context, idemKey string, peerID int64, intent *domain.PaymentIntent) error {
 	if h.deps.Control == nil {
 		h.logger.Warn("vk top-up payment link skipped because VK_ACCESS_TOKEN is not configured")
 		return nil
 	}
+	link := strings.TrimSpace(intent.ConfirmationURL)
 	msg := vkdelivery.Message{
-		Text:     "Платеж создан. Нажмите «Оплатить», чтобы перейти к YooKassa.\n\nВозврат в бот после оплаты сам по себе баланс не начисляет. Зачисление произойдет после подтверждения платежа YooKassa.",
+		Text:     fmt.Sprintf("%s СЧЁТ\nПокупка %d генераций\n\nДанная ссылка действительна в течение 10 минут", formatRubAmount(intent.Amount), intent.Credits),
 		Keyboard: paymentLinkKeyboard(link),
 	}
 	randomID := vkdelivery.DeterministicRandomID("vk_control_topup_payment:" + idemKey)
@@ -546,6 +535,24 @@ func (h *Handler) sendPhotoPendingMessage(ctx context.Context, idemKey string, p
 	return result.MessageID
 }
 
+func (h *Handler) sendVideoPendingMessage(ctx context.Context, idemKey string, peerID int64) int64 {
+	if h.deps.Control == nil {
+		h.logger.Warn("vk video pending message skipped because VK_ACCESS_TOKEN is not configured")
+		return 0
+	}
+
+	msg := vkdelivery.Message{Text: "НейроХаб готовит видео..."}
+	randomID := vkdelivery.DeterministicRandomID("vk_control_video_pending:" + idemKey)
+	result, err := h.sendControlMessage(ctx, domain.CommandMenuVideo, peerID, randomID, msg)
+	if err != nil {
+		h.logger.Warn("vk video pending message send failed",
+			slog.Int64("peer_id", peerID),
+			slog.String("error", err.Error()))
+		return 0
+	}
+	return result.MessageID
+}
+
 func (h *Handler) editGPTPendingMessage(ctx context.Context, peerID, messageID int64, text string) {
 	if h.deps.Control == nil || messageID == 0 {
 		return
@@ -584,6 +591,8 @@ func (h *Handler) menuCommandEnabled(command domain.CommandType) bool {
 		return false
 	}
 	switch command {
+	case domain.CommandMenuVideoPrunaAI:
+		return h.menuCommandEnabled(domain.CommandMenuVideo)
 	case domain.CommandMenuVideoSora2,
 		domain.CommandMenuVideoSora2Start,
 		domain.CommandMenuVideoSora2Examples,
@@ -596,7 +605,7 @@ func (h *Handler) menuCommandEnabled(command domain.CommandType) bool {
 		domain.CommandMenuVideoHaiuo02,
 		domain.CommandMenuVideoHaiuo02Standard,
 		domain.CommandMenuVideoHaiuo02Fast:
-		return h.menuCommandEnabled(domain.CommandMenuVideo)
+		return false
 	case domain.CommandMenuImageText,
 		domain.CommandMenuImageReference:
 		return h.menuCommandEnabled(domain.CommandMenuImage)
@@ -727,11 +736,11 @@ func topUpCatalogText(products []*domain.PaymentProduct) string {
 	if len(products) == 0 {
 		return "💰 Пополнить баланс\n\nТарифы пока недоступны. Попробуйте позже."
 	}
-	return "💰 Пополнить баланс\n\nВыберите пакет пополнения.\n\nПосле выбора бот попросит email или телефон для чека и даст ссылку на оплату."
+	return "Выберите пакет для пополнения баланса:"
 }
 
 func topUpPendingText(intent *domain.PaymentIntent) string {
-	return fmt.Sprintf("💰 У вас есть незавершенный платеж\n\nПакет: %d 💎\nСумма: %s\n\nПосле оплаты баланс обновится автоматически.", intent.Credits, formatRubAmount(intent.Amount))
+	return fmt.Sprintf("💰 У вас есть незавершенный платеж\n\nПакет: %d кристаллов\nСумма: %s\n\nПосле оплаты баланс обновится автоматически.", intent.Credits, formatRubAmount(intent.Amount))
 }
 
 func topUpCatalogKeyboard(products []*domain.PaymentProduct, forceNew bool) *vkdelivery.Keyboard {
@@ -773,14 +782,14 @@ func topUpPendingKeyboard(link string) *vkdelivery.Keyboard {
 }
 
 func topUpProductLabel(product *domain.PaymentProduct) string {
-	return fmt.Sprintf("%d 💎 — %s", product.Credits, formatRubAmount(product.Amount))
+	return fmt.Sprintf("💎 %d кристаллов — %s", product.Credits, formatRubAmount(product.Amount))
 }
 
 func formatRubAmount(amount int64) string {
 	if amount%100 == 0 {
-		return fmt.Sprintf("%d ₽", amount/100)
+		return fmt.Sprintf("%d₽", amount/100)
 	}
-	return fmt.Sprintf("%d.%02d ₽", amount/100, amount%100)
+	return fmt.Sprintf("%d.%02d₽", amount/100, amount%100)
 }
 
 func welcomeKeyboard() *vkdelivery.Keyboard {
@@ -814,22 +823,17 @@ func videoModelKeyboard() *vkdelivery.Keyboard {
 		Inline:  true,
 		Buttons: [][]vkdelivery.KeyboardButton{
 			{
-				button("Sora 2 — видео текст+фото", domain.CommandMenuVideoSora2, "secondary"),
-			},
-			{
-				button("Kling v2.1 — видео текст+фото", domain.CommandMenuVideoKling21, "secondary"),
-			},
-			{
-				button("Seedance 1 — видео по тексту", domain.CommandMenuVideoSeedance1, "secondary"),
-			},
-			{
-				button("Haiuo v0.2 — видео текст+фото", domain.CommandMenuVideoHaiuo02, "secondary"),
+				button("PrunaAI", domain.CommandMenuVideoPrunaAI, "secondary"),
 			},
 			{
 				button("⬅️ Назад", domain.CommandShowMenu, "secondary"),
 			},
 		},
 	}
+}
+
+func prunaAIBackKeyboard() *vkdelivery.Keyboard {
+	return backToKeyboard(domain.CommandMenuVideo)
 }
 
 func sora2Keyboard() *vkdelivery.Keyboard {
@@ -965,9 +969,6 @@ func paymentLinkKeyboard(link string) *vkdelivery.Keyboard {
 		Buttons: [][]vkdelivery.KeyboardButton{
 			{
 				openLinkButton("Оплатить", link),
-			},
-			{
-				button("⬅️ Назад", domain.CommandShowMenu, "secondary"),
 			},
 		},
 	}

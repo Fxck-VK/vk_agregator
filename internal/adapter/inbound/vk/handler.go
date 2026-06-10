@@ -60,6 +60,11 @@ type Config struct {
 	ReferralShareBase string
 	// ReferralReferrerSignupRewardCredits is shown in the account referral copy.
 	ReferralReferrerSignupRewardCredits int64
+	// TopUpReceiptEmail/TopUpReceiptPhone are server-side receipt contacts used
+	// by the VK bot quick top-up flow. They keep receipt collection out of chat
+	// while preserving paymentservice/YooKassa receipt requirements.
+	TopUpReceiptEmail string
+	TopUpReceiptPhone string
 }
 
 // MenuFeatureFlags allows deployments to hide VK menu buttons without deleting
@@ -171,17 +176,99 @@ type activeMenuMessage struct {
 type dialogMode string
 
 const (
-	dialogModeGPT            dialogMode = "gpt"
-	dialogModePhotoText      dialogMode = "photo_text"
-	dialogModeTopUpPrefix               = "top_up:"
-	dialogModeTopUpNewPrefix            = "top_up_new:"
+	dialogModeGPT       dialogMode = "gpt"
+	dialogModePhotoText dialogMode = "photo_text"
 )
 
 const topUpActionNewPayment = "new_payment"
 
 type jobParams struct {
 	Prompt                 string `json:"prompt"`
+	ModelID                string `json:"model_id,omitempty"`
+	ModelName              string `json:"model_name,omitempty"`
+	DurationSec            int    `json:"duration_sec,omitempty"`
 	VKPlaceholderMessageID int64  `json:"vk_placeholder_message_id,omitempty"`
+}
+
+type videoModeSpec struct {
+	Mode        dialogMode
+	ModelID     string
+	ModelName   string
+	DurationSec int
+}
+
+func videoModeForCommand(t domain.CommandType) (videoModeSpec, bool) {
+	switch t {
+	case domain.CommandMenuVideoPrunaAI:
+		return videoModeSpec{
+			Mode:        "video:prunaai",
+			ModelID:     "prunaai",
+			ModelName:   "PrunaAI",
+			DurationSec: 5,
+		}, true
+	case domain.CommandMenuVideoSora2Start:
+		return videoModeSpec{
+			Mode:        "video:sora_2",
+			ModelID:     "sora_2",
+			ModelName:   "Sora 2",
+			DurationSec: 5,
+		}, true
+	case domain.CommandMenuVideoKling21Start:
+		return videoModeSpec{
+			Mode:        "video:kling_v2_1",
+			ModelID:     "kling_v2_1",
+			ModelName:   "Kling v2.1",
+			DurationSec: 5,
+		}, true
+	case domain.CommandMenuVideoSeedance1Lite:
+		return videoModeSpec{
+			Mode:        "video:seedance_1_lite",
+			ModelID:     "seedance_1_lite",
+			ModelName:   "Seedance 1 Lite",
+			DurationSec: 5,
+		}, true
+	case domain.CommandMenuVideoSeedance1Pro:
+		return videoModeSpec{
+			Mode:        "video:seedance_1_pro",
+			ModelID:     "seedance_1_pro",
+			ModelName:   "Seedance 1 Pro",
+			DurationSec: 5,
+		}, true
+	case domain.CommandMenuVideoHaiuo02Standard:
+		return videoModeSpec{
+			Mode:        "video:haiuo_v0_2_standard",
+			ModelID:     "haiuo_v0_2_standard",
+			ModelName:   "Haiuo v0.2",
+			DurationSec: 5,
+		}, true
+	case domain.CommandMenuVideoHaiuo02Fast:
+		return videoModeSpec{
+			Mode:        "video:haiuo_v0_2_fast",
+			ModelID:     "haiuo_v0_2_fast",
+			ModelName:   "Haiuo v0.2 Fast",
+			DurationSec: 5,
+		}, true
+	default:
+		return videoModeSpec{}, false
+	}
+}
+
+func videoModeFromDialogMode(mode dialogMode) (videoModeSpec, bool) {
+	for _, command := range []domain.CommandType{
+		domain.CommandMenuVideoPrunaAI,
+		domain.CommandMenuVideoSora2Start,
+		domain.CommandMenuVideoKling21Start,
+		domain.CommandMenuVideoSeedance1Lite,
+		domain.CommandMenuVideoSeedance1Pro,
+		domain.CommandMenuVideoHaiuo02Standard,
+		domain.CommandMenuVideoHaiuo02Fast,
+	} {
+		spec, ok := videoModeForCommand(command)
+		if ok && spec.Mode == mode {
+			return spec, true
+		}
+	}
+	return videoModeSpec{}, false
 }
 
 // callback is the common VK Callback API envelope.
@@ -512,14 +599,16 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 			Prompt:    strings.TrimSpace(text),
 		}
 	}
-
-	topUpContactProduct := ""
-	topUpContactForceNew := false
-	if !controlFromPayload && !controlOnly && parsed.Type == domain.CommandTextAsk && strings.TrimSpace(text) != "" {
-		if code, forceNew, ok := h.topUpProductFromDialog(ctx, peerID); ok {
-			topUpContactProduct = code
-			topUpContactForceNew = forceNew
-			parsed = commandrouter.Result{Type: domain.CommandTopUp}
+	videoSpec := videoModeSpec{}
+	videoTextJob := false
+	if spec, ok := h.shouldRouteVideoText(ctx, peerID, parsed, controlFromPayload, controlOnly); ok {
+		videoSpec = spec
+		videoTextJob = true
+		parsed = commandrouter.Result{
+			Type:      domain.CommandVideoGenerate,
+			Operation: domain.OperationVideoGenerate,
+			Modality:  domain.ModalityVideo,
+			Prompt:    strings.TrimSpace(text),
 		}
 	}
 
@@ -606,12 +695,7 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 		h.clearDialogMode(ctx, peerID)
 	case topUpProductCode != "":
 		topUpForceNew := topUpAction == topUpActionNewPayment
-		if err := h.sendTopUpContactRequest(ctx, idemKey, peerID, topUpProductCode, topUpForceNew, controlFromPayload); err != nil {
-			return fmt.Errorf("send top-up contact request: %w", err)
-		}
-		h.setDialogMode(ctx, peerID, topUpDialogMode(topUpProductCode, topUpForceNew))
-	case topUpContactProduct != "":
-		if err := h.createAndSendTopUpPayment(ctx, cb.GroupID, eventID, idemKey, peerID, user, topUpContactProduct, topUpContactForceNew, text); err != nil {
+		if err := h.createAndSendTopUpPayment(ctx, cb.GroupID, eventID, idemKey, peerID, user, topUpProductCode, topUpForceNew); err != nil {
 			return fmt.Errorf("create top-up payment: %w", err)
 		}
 	case shouldSendControlResponse(parsed.Type):
@@ -628,12 +712,14 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 			h.setDialogMode(ctx, peerID, dialogModeGPT)
 		} else if parsed.Type == domain.CommandMenuImage || parsed.Type == domain.CommandMenuImageText {
 			h.setDialogMode(ctx, peerID, dialogModePhotoText)
+		} else if spec, ok := videoModeForCommand(parsed.Type); ok {
+			h.setDialogMode(ctx, peerID, spec.Mode)
 		} else {
 			h.clearDialogMode(ctx, peerID)
 		}
 	default:
 		h.clearActiveMenu(peerID)
-		if parsed.Type != domain.CommandTextAsk && !photoTextJob {
+		if parsed.Type != domain.CommandTextAsk && !photoTextJob && !videoTextJob {
 			h.clearDialogMode(ctx, peerID)
 		}
 	}
@@ -646,14 +732,22 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 			placeholderID = h.sendGPTPendingMessage(ctx, idemKey, peerID)
 		} else if photoTextJob {
 			placeholderID = h.sendPhotoPendingMessage(ctx, idemKey, peerID)
+		} else if videoTextJob {
+			placeholderID = h.sendVideoPendingMessage(ctx, idemKey, peerID)
 		}
 
 		// Carry the user's prompt on the job so workers can render it and the
 		// output-moderation stage has the request text to evaluate.
-		params, _ := json.Marshal(jobParams{
+		jp := jobParams{
 			Prompt:                 parsed.Prompt,
 			VKPlaceholderMessageID: placeholderID,
-		})
+		}
+		if videoTextJob {
+			jp.ModelID = videoSpec.ModelID
+			jp.ModelName = videoSpec.ModelName
+			jp.DurationSec = videoSpec.DurationSec
+		}
+		params, _ := json.Marshal(jp)
 		job, err := h.deps.Orchestrator.CreateJob(ctx, joborchestrator.CreateJobInput{
 			UserID:         user.ID,
 			VKPeerID:       peerID,
@@ -696,40 +790,38 @@ func (h *Handler) shouldRoutePhotoText(ctx context.Context, peerID int64, parsed
 	return h.photoTextDialogActive(ctx, peerID)
 }
 
-func topUpDialogMode(productCode string, forceNew bool) dialogMode {
-	prefix := dialogModeTopUpPrefix
-	if forceNew {
-		prefix = dialogModeTopUpNewPrefix
+func (h *Handler) shouldRouteVideoText(ctx context.Context, peerID int64, parsed commandrouter.Result, controlFromPayload, controlOnly bool) (videoModeSpec, bool) {
+	if controlFromPayload || controlOnly || parsed.Type != domain.CommandTextAsk {
+		return videoModeSpec{}, false
 	}
-	return dialogMode(prefix + productCode)
-}
-
-func (h *Handler) topUpProductFromDialog(ctx context.Context, peerID int64) (string, bool, bool) {
+	if strings.TrimSpace(parsed.Prompt) == "" {
+		return videoModeSpec{}, false
+	}
 	mode, ok := h.getDialogMode(ctx, peerID)
 	if !ok {
-		return "", false, false
+		return videoModeSpec{}, false
 	}
-	value := string(mode)
-	forceNew := false
-	if strings.HasPrefix(value, dialogModeTopUpNewPrefix) {
-		forceNew = true
-		value = strings.TrimPrefix(value, dialogModeTopUpNewPrefix)
-	} else if strings.HasPrefix(value, dialogModeTopUpPrefix) {
-		value = strings.TrimPrefix(value, dialogModeTopUpPrefix)
-	} else {
-		return "", false, false
-	}
-	code := strings.TrimSpace(value)
-	return code, forceNew, code != ""
+	return videoModeFromDialogMode(mode)
 }
 
-func (h *Handler) createAndSendTopUpPayment(ctx context.Context, groupID int64, eventID, idemKey string, peerID int64, user *domain.User, productCode string, forceNew bool, contactText string) error {
-	email, phone, ok := receiptContactFromText(contactText)
-	if !ok {
-		return h.sendTopUpNotice(ctx, idemKey, peerID, "Укажите email или телефон для чека. Например: user@example.com или +79991234567.")
+func (h *Handler) createAndSendTopUpPayment(ctx context.Context, groupID int64, eventID, idemKey string, peerID int64, user *domain.User, productCode string, forceNew bool) error {
+	email := strings.TrimSpace(h.cfg.TopUpReceiptEmail)
+	phone := strings.TrimSpace(h.cfg.TopUpReceiptPhone)
+	if email == "" && phone == "" {
+		return h.sendTopUpNotice(ctx, idemKey, peerID, "Платежи временно недоступны: не настроены данные для чека.")
 	}
 	if h.deps.Payment == nil {
 		return h.sendTopUpNotice(ctx, idemKey, peerID, "Платежи пока недоступны. Попробуйте позже.")
+	}
+	if !forceNew {
+		if active, ok, err := h.activeTopUpIntent(ctx, user.ID); err != nil {
+			return fmt.Errorf("load active top-up intent: %w", err)
+		} else if ok {
+			activeProductCode := paymentIntentProductCode(active)
+			if activeProductCode != "" && activeProductCode != productCode {
+				forceNew = true
+			}
+		}
 	}
 	result, err := h.deps.Payment.CreateIntent(ctx, paymentservice.CreateIntentInput{
 		UserID:         user.ID,
@@ -742,7 +834,7 @@ func (h *Handler) createAndSendTopUpPayment(ctx context.Context, groupID int64, 
 	})
 	if err != nil {
 		if errors.Is(err, paymentservice.ErrReceiptContactRequired) || errors.Is(err, paymentservice.ErrInvalidInput) {
-			return h.sendTopUpNotice(ctx, idemKey, peerID, "Не удалось создать платеж. Проверьте email или телефон и попробуйте снова.")
+			return h.sendTopUpNotice(ctx, idemKey, peerID, "Не удалось создать платеж. Попробуйте позже.")
 		}
 		if errors.Is(err, domain.ErrNotFound) {
 			h.clearDialogMode(ctx, peerID)
@@ -754,32 +846,20 @@ func (h *Handler) createAndSendTopUpPayment(ctx context.Context, groupID int64, 
 		return h.sendTopUpNotice(ctx, idemKey, peerID, "Платеж создан, но ссылка на оплату пока недоступна. Попробуйте позже.")
 	}
 	h.clearDialogMode(ctx, peerID)
-	return h.sendTopUpPaymentLink(ctx, idemKey, peerID, result.Intent.ConfirmationURL)
+	return h.sendTopUpPaymentLink(ctx, idemKey, peerID, result.Intent)
 }
 
-func receiptContactFromText(text string) (email, phone string, ok bool) {
-	value := strings.TrimSpace(text)
-	if value == "" {
-		return "", "", false
+func paymentIntentProductCode(intent *domain.PaymentIntent) string {
+	if intent == nil || len(intent.Metadata) == 0 {
+		return ""
 	}
-	if strings.Contains(value, "@") {
-		return value, "", true
+	var metadata struct {
+		ProductCode string `json:"product_code"`
 	}
-	var b strings.Builder
-	digits := 0
-	for _, r := range value {
-		switch {
-		case r >= '0' && r <= '9':
-			_ = b.WriteByte(byte(r))
-			digits++
-		case r == '+' && b.Len() == 0:
-			b.WriteRune(r)
-		}
+	if err := json.Unmarshal(intent.Metadata, &metadata); err != nil {
+		return ""
 	}
-	if digits >= 10 {
-		return "", b.String(), true
-	}
-	return "", "", false
+	return strings.TrimSpace(metadata.ProductCode)
 }
 
 func shouldForceOnboarding(user *domain.User, parsed commandrouter.Result, controlFromPayload, controlOnly, textAskEnabled bool) bool {

@@ -110,6 +110,45 @@ func TestCreatePaymentIntentUsesTrustedUserIDAndIsIdempotent(t *testing.T) {
 	}
 }
 
+func TestCreatePaymentIntentCanBeCanceledByOperator(t *testing.T) {
+	handler, users, _, _, _ := setup(t)
+	ctx := context.Background()
+	user := &domain.User{VKUserID: 778, Role: domain.RoleUser, Status: domain.StatusActive}
+	if err := users.Create(ctx, user); err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+
+	body := []byte(`{"product_code":"credits_100","receipt_email":"user@example.com","capture":false}`)
+	req := httptest.NewRequest(http.MethodPost, "/billing/payment-intents", bytes.NewReader(body))
+	req.Header.Set("X-Admin-Token", "secret")
+	req.Header.Set("X-User-ID", user.ID.String())
+	req.Header.Set("X-Idempotency-Key", "capture-false-key")
+	rec := httptest.NewRecorder()
+	handler.Routes().ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected create 201, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var created billing.PaymentIntentDTO
+	if err := json.Unmarshal(rec.Body.Bytes(), &created); err != nil {
+		t.Fatalf("decode create response: %v", err)
+	}
+
+	cancelReq := httptest.NewRequest(http.MethodPost, "/billing/payment-intents/"+created.ID.String()+"/cancel", nil)
+	cancelReq.Header.Set("X-Admin-Token", "secret")
+	cancelRec := httptest.NewRecorder()
+	handler.Routes().ServeHTTP(cancelRec, cancelReq)
+	if cancelRec.Code != http.StatusOK {
+		t.Fatalf("expected cancel 200, got %d: %s", cancelRec.Code, cancelRec.Body.String())
+	}
+	var canceled billing.PaymentIntentDTO
+	if err := json.Unmarshal(cancelRec.Body.Bytes(), &canceled); err != nil {
+		t.Fatalf("decode cancel response: %v", err)
+	}
+	if canceled.ID != created.ID || canceled.Status != string(domain.PaymentIntentCanceled) {
+		t.Fatalf("unexpected canceled intent: %+v", canceled)
+	}
+}
+
 func TestPaymentHistoryListsIntents(t *testing.T) {
 	handler, users, _, _, _ := setup(t)
 	ctx := context.Background()

@@ -1,6 +1,6 @@
 {
   "schema_version": 3,
-  "updated_at": "2026-06-10T12:02:05+03:00",
+  "updated_at": "2026-06-10T22:58:20+03:00",
   "branch": "fastlife_dev",
   "git_ref_policy": "Use git rev-parse HEAD/origin/main for moving SHAs; this file does not track branch head commits.",
   "purpose": "Minimal machine-readable current context and routing for agents.",
@@ -28,13 +28,19 @@
   },
   "progress": {
     "current_focus": "YooKassa billing and shared VK Bot/Mini App top-up rollout",
+    "vk_bot_video_mode": {
+      "status": "prunaai_button_enabled",
+      "summary": "VK video model picker exposes PrunaAI and Back. PrunaAI stores peer-scoped video mode; the next plain text creates a video_generate Job through worker/provider flow. Stale Sora/Kling/Seedance/Haiuo payloads fall back to Show Menu and do not create Jobs. VK video delivery supports VK_VIDEO_DELIVERY_MODE=doc for mp4 file attachments and VK_VIDEO_DELIVERY_MODE=video for native VK video attachments through VK_VIDEO_ACCESS_TOKEN.",
+      "provider_boundary": "VK handler creates Jobs only; video providers are called by cmd/worker through internal/adapter/provider.",
+      "placeholder": "НейроХаб готовит видео..."
+    },
     "current_priorities": [
       "keep protected Product Catalog Admin routes operator-only with safe DTOs and immutable payment intent snapshots",
       "use https://neiirohub.ru/billing/webhooks/yookassa as the canonical payment webhook route unless superseded",
       "keep payment credits granted only by provider-verified webhook/reconciliation ledger top-ups",
       "keep 54-FZ receipt fields snapshotted on payment_intents for payment retries and manual refunds",
       "keep production YooKassa webhooks HTTPS/proxy guarded and monitor webhook/refund rollback metrics",
-      "finish remaining YooKassa live-smoke follow-ups: public HTTPS webhook delivery and explicit provider canceled state",
+      "finish remaining YooKassa live-smoke follow-ups: public HTTPS webhook delivery and protected capture:false local-intent canceled smoke",
       "add lot/FIFO refund attribution later"
     ],
     "last_yookassa_smoke": {
@@ -57,7 +63,7 @@
       ],
       "followups": [
         "configure a public HTTPS route so YooKassa dashboard webhooks reach cmd/provider-webhook directly",
-        "retest payment.canceled with a provider state that actually leaves YooKassa pending/retry state",
+        "retest payment.canceled through the protected operator capture:false local-intent path",
         "leave pending failed checkout intents unpaid until provider success/cancel/expiration is verified"
       ],
       "secret_policy": "No YooKassa secrets, ADMIN_TOKEN, launch params, auth headers or raw provider payloads were recorded."
@@ -79,7 +85,8 @@
         "docs/archive/2026-06/TASKS.legacy.md",
         "docs/archive/2026-06/ROADMAP.legacy.md",
         "docs/archive/2026-06/TESTING.legacy.md",
-        "docs/archive/2026-06/BILLING_AGENT_HANDOFF.legacy.md"
+        "docs/archive/2026-06/BILLING_AGENT_HANDOFF.legacy.md",
+        "docs/archive/2026-06/MERGE_HANDOFF.integration-web-backend.legacy.md"
       ],
       "policy": "Keep active docs short and current; use docs/archive/** only for historical investigation or explicitly requested archaeology."
     }

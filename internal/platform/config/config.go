@@ -171,10 +171,13 @@ type Config struct {
 	ArtifactScanner       string
 
 	// VKDeliveryMode selects the delivery client: "mock" (default) or "real".
-	VKDeliveryMode string
-	VKAccessToken  string
-	VKAPIVersion   string
-	VKAPIBaseURL   string
+	VKDeliveryMode       string
+	VKAccessToken        string
+	VKVideoAccessToken   string
+	VKVideoUploadGroupID int64
+	VKVideoDeliveryMode  string
+	VKAPIVersion         string
+	VKAPIBaseURL         string
 	// VKWelcomeAttachment is an optional pre-uploaded VK attachment sent with
 	// the /start menu, e.g. photo-239332376_123_accesskey.
 	VKWelcomeAttachment string
@@ -215,6 +218,11 @@ type Config struct {
 	VKMenuStudentsPresentationEnabled bool
 	VKMenuStudentsReportEnabled       bool
 	VKMenuStudentsQAEnabled           bool
+	// VKTopUpReceiptEmail/VKTopUpReceiptPhone are server-side receipt contacts
+	// used by the VK Bot quick top-up flow. Mini App may still collect a user
+	// receipt contact explicitly.
+	VKTopUpReceiptEmail string
+	VKTopUpReceiptPhone string
 
 	// VKReferralLinkBase is the public VK entry URL used to build a user's
 	// single referral link. If it contains "{code}", the placeholder is replaced;
@@ -286,6 +294,9 @@ func (c Config) Validate() error {
 	}
 	if mode := strings.ToLower(strings.TrimSpace(c.VKUnroutedTextMode)); mode != "" && mode != "reply" && mode != "silent" && mode != "gpt" {
 		return fmt.Errorf("config: VK_UNROUTED_TEXT_MODE must be reply, silent, or gpt")
+	}
+	if mode := strings.ToLower(strings.TrimSpace(c.VKVideoDeliveryMode)); mode != "" && mode != "doc" && mode != "video" {
+		return fmt.Errorf("config: VK_VIDEO_DELIVERY_MODE must be doc or video")
 	}
 	if provider := strings.ToLower(strings.TrimSpace(c.ImageProvider)); provider != "" && !knownProvider(provider) {
 		return fmt.Errorf("config: IMAGE_PROVIDER must be one of mock, openai, deepinfra")
@@ -471,6 +482,9 @@ func Load() Config {
 
 		VKDeliveryMode:                    env("VK_DELIVERY_MODE", "mock"),
 		VKAccessToken:                     env("VK_ACCESS_TOKEN", ""),
+		VKVideoAccessToken:                env("VK_VIDEO_ACCESS_TOKEN", ""),
+		VKVideoUploadGroupID:              int64(envInt("VK_VIDEO_UPLOAD_GROUP_ID", 0)),
+		VKVideoDeliveryMode:               env("VK_VIDEO_DELIVERY_MODE", "doc"),
 		VKAPIVersion:                      env("VK_API_VERSION", "5.199"),
 		VKAPIBaseURL:                      env("VK_API_BASE_URL", "https://api.vk.com/method"),
 		VKWelcomeAttachment:               env("VK_WELCOME_ATTACHMENT", ""),
@@ -501,6 +515,8 @@ func Load() Config {
 		VKMenuStudentsPresentationEnabled: envBool("VK_MENU_STUDENTS_PRESENTATION_ENABLED", true),
 		VKMenuStudentsReportEnabled:       envBool("VK_MENU_STUDENTS_REPORT_ENABLED", true),
 		VKMenuStudentsQAEnabled:           envBool("VK_MENU_STUDENTS_QA_ENABLED", true),
+		VKTopUpReceiptEmail:               env("VK_TOP_UP_RECEIPT_EMAIL", ""),
+		VKTopUpReceiptPhone:               env("VK_TOP_UP_RECEIPT_PHONE", ""),
 		VKReferralLinkBase:                env("VK_REFERRAL_LINK_BASE", ""),
 		VKReferralShareBase:               env("VK_REFERRAL_SHARE_BASE", "https://vk.com/share.php"),
 		ReferralCodeLength:                envInt("REFERRAL_CODE_LENGTH", 10),

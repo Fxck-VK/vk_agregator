@@ -53,6 +53,8 @@ func (r *Router) Parse(rawText string) Result {
 		return Result{Type: domain.CommandShowMenu}
 	case "🎬 создать видео", "создать видео":
 		return Result{Type: domain.CommandMenuVideo}
+	case "prunaai", "pruna ai":
+		return Result{Type: domain.CommandMenuVideoPrunaAI}
 	case "sora 2 — видео текст+фото", "sora 2 - видео текст+фото":
 		return Result{Type: domain.CommandMenuVideoSora2}
 	case "sora 2 начать генерацию", "sora 2 examples", "sora 2 примеры":

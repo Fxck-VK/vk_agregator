@@ -56,6 +56,7 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("POST /billing/payment-intents", h.auth(h.createIntent))
 	mux.HandleFunc("GET /billing/payment-intents/{id}", h.auth(h.getIntent))
 	mux.HandleFunc("POST /billing/payment-intents/{id}/sync", h.auth(h.syncIntent))
+	mux.HandleFunc("POST /billing/payment-intents/{id}/cancel", h.auth(h.cancelIntent))
 	mux.HandleFunc("POST /billing/payment-intents/{id}/refund", h.auth(h.refundIntent))
 	mux.HandleFunc("GET /billing/payment-intents/pending", h.auth(h.listPendingIntents))
 	mux.HandleFunc("GET /billing/payment-events/unprocessed", h.auth(h.listUnprocessedEvents))
@@ -261,6 +262,7 @@ type createIntentRequest struct {
 	ReceiptEmail string `json:"receipt_email,omitempty"`
 	ReceiptPhone string `json:"receipt_phone,omitempty"`
 	ReturnURL    string `json:"return_url,omitempty"`
+	Capture      *bool  `json:"capture,omitempty"`
 }
 
 func (h *Handler) createIntent(w http.ResponseWriter, r *http.Request) {
@@ -294,6 +296,7 @@ func (h *Handler) createIntent(w http.ResponseWriter, r *http.Request) {
 		IdempotencyKey: "billing_payment:" + userID.String() + ":" + clientKey,
 		ReturnURL:      req.ReturnURL,
 		Source:         "billing_admin",
+		Capture:        req.Capture,
 	})
 	if err != nil {
 		h.writePaymentError(w, err)
@@ -335,6 +338,24 @@ func (h *Handler) syncIntent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	intent, err := h.deps.PaymentOps.SyncIntent(r.Context(), id)
+	if err != nil {
+		h.writePaymentActionError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, newIntentDTO(intent, true))
+}
+
+func (h *Handler) cancelIntent(w http.ResponseWriter, r *http.Request) {
+	if h.deps.PaymentOps == nil {
+		writeError(w, http.StatusServiceUnavailable, "service unavailable")
+		return
+	}
+	id, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	intent, err := h.deps.PaymentOps.CancelIntent(r.Context(), id)
 	if err != nil {
 		h.writePaymentActionError(w, err)
 		return
@@ -536,7 +557,8 @@ func (h *Handler) writePaymentActionError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusNotFound, "not found")
 	case errors.Is(err, paymentservice.ErrRefundCreditsSpent),
 		errors.Is(err, paymentservice.ErrRefundNotAllowed),
-		errors.Is(err, paymentservice.ErrWebhookMismatch):
+		errors.Is(err, paymentservice.ErrWebhookMismatch),
+		errors.Is(err, domain.ErrConflict):
 		writeError(w, http.StatusConflict, "payment action conflict")
 	case errors.Is(err, paymentservice.ErrWebhookUnverified):
 		writeError(w, http.StatusBadGateway, "payment provider verification failed")

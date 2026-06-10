@@ -9,6 +9,9 @@ func TestPaymentIntentStatusTransitions(t *testing.T) {
 	if !PaymentIntentWaitingForUser.CanTransitionTo(PaymentIntentSucceeded) {
 		t.Fatal("waiting_for_user should transition to succeeded")
 	}
+	if !PaymentIntentWaitingForUser.CanTransitionTo(PaymentIntentProviderPending) {
+		t.Fatal("waiting_for_user should transition to provider_pending")
+	}
 	if !PaymentIntentSucceeded.CanTransitionTo(PaymentIntentPartiallyRefunded) {
 		t.Fatal("succeeded should transition to partially_refunded")
 	}

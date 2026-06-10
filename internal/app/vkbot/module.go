@@ -99,6 +99,8 @@ func NewHandler(cfg config.Config, deps Deps) http.Handler {
 		ReferralLinkBase:                    cfg.VKReferralLinkBase,
 		ReferralShareBase:                   cfg.VKReferralShareBase,
 		ReferralReferrerSignupRewardCredits: cfg.ReferralReferrerSignupRewardCredits,
+		TopUpReceiptEmail:                   cfg.VKTopUpReceiptEmail,
+		TopUpReceiptPhone:                   cfg.VKTopUpReceiptPhone,
 	}, vkinbound.Deps{
 		Idempotency:  deps.Idempotency,
 		Inbound:      deps.Inbound,

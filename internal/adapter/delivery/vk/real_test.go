@@ -33,6 +33,20 @@ func TestHTTPClientSendText(t *testing.T) {
 	}
 }
 
+func TestHTTPClientReturnsVKErrorEnvelopeForTypedResponse(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"error":{"error_code":15,"error_msg":"Access denied"}}`))
+	}))
+	defer srv.Close()
+
+	c := NewHTTPClient(HTTPConfig{AccessToken: "tok", BaseURL: srv.URL, HTTPClient: srv.Client()})
+	_, err := c.SendText(context.Background(), 42, 1, "hello")
+	if !IsAPIErrorCode(err, 15) {
+		t.Fatalf("expected VK API error 15, got %v", err)
+	}
+}
+
 func TestHTTPClientSendMessageWithKeyboard(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_ = r.ParseForm()
@@ -280,10 +294,67 @@ func TestHTTPClientUploadVideo(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
+		case "/docs.getMessagesUploadServer":
+			_ = r.ParseForm()
+			if r.FormValue("access_token") != "group-token" {
+				t.Errorf("docs.getMessagesUploadServer access_token = %q", r.FormValue("access_token"))
+			}
+			if r.FormValue("peer_id") != "42" || r.FormValue("type") != "doc" {
+				t.Errorf("unexpected upload server form: %v", r.Form)
+			}
+			_, _ = w.Write([]byte(`{"response":{"upload_url":"` + "http://" + r.Host + `/upload_doc"}}`))
+		case "/upload_doc":
+			uploadHit = true
+			if err := r.ParseMultipartForm(1 << 20); err != nil {
+				t.Fatalf("parse multipart: %v", err)
+			}
+			if r.MultipartForm.File["file"] == nil {
+				t.Fatalf("missing document upload field")
+			}
+			_, _ = w.Write([]byte(`{"file":"uploaded-file-token"}`))
+		case "/docs.save":
+			_ = r.ParseForm()
+			if r.FormValue("file") != "uploaded-file-token" || !strings.Contains(r.FormValue("title"), ".mp4") {
+				t.Errorf("unexpected docs.save form: %v", r.Form)
+			}
+			_, _ = w.Write([]byte(`{"response":{"type":"doc","doc":{"id":99,"owner_id":-10,"access_key":"vk"}}}`))
+		default:
+			t.Fatalf("unexpected path %s", r.URL.Path)
+		}
+	}))
+	defer srv.Close()
+
+	c := NewHTTPClient(HTTPConfig{AccessToken: "group-token", BaseURL: srv.URL, HTTPClient: srv.Client()})
+	attachment, err := c.UploadVideo(context.Background(), 42, "out.mp4", []byte("mp4"), "video/mp4")
+	if err != nil {
+		t.Fatalf("upload video: %v", err)
+	}
+	if !uploadHit || attachment != "doc-10_99_vk" {
+		t.Fatalf("attachment = %q uploadHit=%v", attachment, uploadHit)
+	}
+}
+
+func TestHTTPClientUploadVideoFileRequiresDedicatedToken(t *testing.T) {
+	c := NewHTTPClient(HTTPConfig{AccessToken: "group-token"})
+
+	_, err := c.UploadVideoFile(context.Background(), 42, "out.mp4", []byte("mp4"), "video/mp4")
+	if err == nil || !strings.Contains(err.Error(), "VK_VIDEO_ACCESS_TOKEN") {
+		t.Fatalf("expected VK_VIDEO_ACCESS_TOKEN error, got %v", err)
+	}
+}
+
+func TestHTTPClientUploadVideoModeUsesDedicatedToken(t *testing.T) {
+	var uploadHit bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
 		case "/video.save":
 			_ = r.ParseForm()
-			if !strings.Contains(r.FormValue("name"), ".mp4") {
-				t.Errorf("name = %q", r.FormValue("name"))
+			if r.FormValue("access_token") != "video-token" {
+				t.Errorf("video.save access_token = %q", r.FormValue("access_token"))
+			}
+			if r.FormValue("group_id") != "239332376" {
+				t.Errorf("group_id = %q", r.FormValue("group_id"))
 			}
 			_, _ = w.Write([]byte(`{"response":{"upload_url":"` + "http://" + r.Host + `/upload_video","owner_id":-10,"video_id":99,"access_key":"vk"}}`))
 		case "/upload_video":
@@ -301,10 +372,58 @@ func TestHTTPClientUploadVideo(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewHTTPClient(HTTPConfig{AccessToken: "tok", BaseURL: srv.URL, HTTPClient: srv.Client()})
+	c := NewHTTPClient(HTTPConfig{
+		AccessToken:        "group-token",
+		VideoAccessToken:   "video-token",
+		VideoUploadGroupID: 239332376,
+		VideoDeliveryMode:  "video",
+		BaseURL:            srv.URL,
+		HTTPClient:         srv.Client(),
+	})
 	attachment, err := c.UploadVideo(context.Background(), 42, "out.mp4", []byte("mp4"), "video/mp4")
 	if err != nil {
 		t.Fatalf("upload video: %v", err)
+	}
+	if !uploadHit || attachment != "video-10_99_vk" {
+		t.Fatalf("attachment = %q uploadHit=%v", attachment, uploadHit)
+	}
+}
+
+func TestHTTPClientUploadVideoFileUsesDedicatedToken(t *testing.T) {
+	var uploadHit bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/video.save":
+			_ = r.ParseForm()
+			if r.FormValue("access_token") != "video-token" {
+				t.Errorf("video.save access_token = %q", r.FormValue("access_token"))
+			}
+			_, _ = w.Write([]byte(`{"response":{"upload_url":"` + "http://" + r.Host + `/upload_video","owner_id":-10,"video_id":99,"access_key":"vk"}}`))
+		case "/upload_video":
+			uploadHit = true
+			if err := r.ParseMultipartForm(1 << 20); err != nil {
+				t.Fatalf("parse multipart: %v", err)
+			}
+			if r.MultipartForm.File["video_file"] == nil {
+				t.Fatalf("missing video upload field")
+			}
+			_, _ = w.Write([]byte(`{"size":9}`))
+		default:
+			t.Fatalf("unexpected path %s", r.URL.Path)
+		}
+	}))
+	defer srv.Close()
+
+	c := NewHTTPClient(HTTPConfig{
+		AccessToken:      "group-token",
+		VideoAccessToken: "video-token",
+		BaseURL:          srv.URL,
+		HTTPClient:       srv.Client(),
+	})
+	attachment, err := c.UploadVideoFile(context.Background(), 42, "out.mp4", []byte("mp4"), "video/mp4")
+	if err != nil {
+		t.Fatalf("upload video file: %v", err)
 	}
 	if !uploadHit || attachment != "video-10_99_vk" {
 		t.Fatalf("attachment = %q uploadHit=%v", attachment, uploadHit)

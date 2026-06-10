@@ -210,9 +210,12 @@ func main() {
 	switch cfg.VKDeliveryMode {
 	case "real":
 		vkClient = vkdelivery.NewHTTPClient(vkdelivery.HTTPConfig{
-			AccessToken: cfg.VKAccessToken,
-			APIVersion:  cfg.VKAPIVersion,
-			BaseURL:     cfg.VKAPIBaseURL,
+			AccessToken:        cfg.VKAccessToken,
+			VideoAccessToken:   cfg.VKVideoAccessToken,
+			VideoUploadGroupID: cfg.VKVideoUploadGroupID,
+			VideoDeliveryMode:  cfg.VKVideoDeliveryMode,
+			APIVersion:         cfg.VKAPIVersion,
+			BaseURL:            cfg.VKAPIBaseURL,
 		})
 		logger.Info("using real vk delivery client")
 	default:

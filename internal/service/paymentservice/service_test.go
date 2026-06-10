@@ -2,6 +2,7 @@ package paymentservice_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"testing"
@@ -149,6 +150,53 @@ func TestCreateIntentUsesReceiptSnapshotWhenProviderCreationIsRetried(t *testing
 	}
 }
 
+func TestCreateIntentCanDisableProviderCaptureForOperatorSmoke(t *testing.T) {
+	ctx := context.Background()
+	repo := memory.NewPaymentRepo()
+	repo.PutProduct(&domain.PaymentProduct{
+		Code:         "credits_100",
+		Title:        "100 credits",
+		Amount:       9900,
+		Currency:     domain.CurrencyRUB,
+		Credits:      100,
+		PriceVersion: 1,
+		IsActive:     true,
+	})
+	provider := &recordingPaymentProvider{code: domain.PaymentProviderMock}
+	svc := paymentservice.New(repo, provider, paymentservice.Config{})
+	capture := false
+
+	result, err := svc.CreateIntent(ctx, paymentservice.CreateIntentInput{
+		UserID:         uuid.New(),
+		ProductCode:    "credits_100",
+		ReceiptEmail:   "user@example.com",
+		IdempotencyKey: "billing_payment:capture-false",
+		Source:         "billing_admin",
+		Capture:        &capture,
+	})
+	if err != nil {
+		t.Fatalf("create intent: %v", err)
+	}
+	if !result.Created {
+		t.Fatal("intent should be created")
+	}
+	if len(provider.createInputs) != 1 {
+		t.Fatalf("create provider calls = %d, want 1", len(provider.createInputs))
+	}
+	if provider.createInputs[0].Capture == nil || *provider.createInputs[0].Capture {
+		t.Fatalf("provider capture = %#v, want false", provider.createInputs[0].Capture)
+	}
+	var metadata struct {
+		Capture *bool `json:"capture"`
+	}
+	if err := json.Unmarshal(result.Intent.Metadata, &metadata); err != nil {
+		t.Fatalf("decode metadata: %v", err)
+	}
+	if metadata.Capture == nil || *metadata.Capture {
+		t.Fatalf("metadata capture = %#v, want false", metadata.Capture)
+	}
+}
+
 func TestCreateIntentRequiresReceiptContact(t *testing.T) {
 	repo := memory.NewPaymentRepo()
 	repo.PutProduct(&domain.PaymentProduct{
@@ -201,6 +249,10 @@ func TestCreateIntentReusesActiveWaitingIntentUnlessForceNew(t *testing.T) {
 		Code: "credits_100", Title: "100 credits", Amount: 9900,
 		Currency: domain.CurrencyRUB, Credits: 100, PriceVersion: 1, IsActive: true,
 	})
+	repo.PutProduct(&domain.PaymentProduct{
+		Code: "credits_500", Title: "500 credits", Amount: 39900,
+		Currency: domain.CurrencyRUB, Credits: 500, PriceVersion: 1, IsActive: true,
+	})
 	provider := paymentmock.New()
 	svc := paymentservice.New(repo, provider, paymentservice.Config{})
 	userID := uuid.New()
@@ -228,6 +280,20 @@ func TestCreateIntentReusesActiveWaitingIntentUnlessForceNew(t *testing.T) {
 	}
 	if reused.Created || !reused.ReusedActive || reused.Intent.ID != first.Intent.ID {
 		t.Fatalf("expected active intent reuse, got %+v first=%+v", reused, first)
+	}
+
+	differentProduct, err := svc.CreateIntent(ctx, paymentservice.CreateIntentInput{
+		UserID:         userID,
+		ProductCode:    "credits_500",
+		ReceiptEmail:   "new@example.com",
+		IdempotencyKey: "payment:different-product",
+		Source:         "vk_miniapp",
+	})
+	if err != nil {
+		t.Fatalf("create different product intent: %v", err)
+	}
+	if !differentProduct.Created || differentProduct.ReusedActive || differentProduct.Intent.ID == first.Intent.ID || differentProduct.Intent.Credits != 500 {
+		t.Fatalf("expected new intent for different product, got %+v first=%+v", differentProduct, first)
 	}
 
 	forced, err := svc.CreateIntent(ctx, paymentservice.CreateIntentInput{

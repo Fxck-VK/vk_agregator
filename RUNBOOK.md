@@ -139,7 +139,10 @@ Override these values when needed:
 | `OPENAI_MODERATION_MODEL` | `omni-moderation-latest` | OpenAI moderation model |
 | `ARTIFACT_SCANNER` | `none` | Artifact scanner: `none` or `openai` |
 | `VK_DELIVERY_MODE` | `mock` | VK delivery adapter: `mock` or `real` |
-| `VK_ACCESS_TOKEN` / `VK_API_VERSION` | `` / `5.199` | Required for real VK send/upload and API-side `/start` control menu responses |
+| `VK_ACCESS_TOKEN` / `VK_API_VERSION` | `` / `5.199` | Required for real VK `messages.send`, photo upload, mp4-as-document upload and API-side `/start` control menu responses |
+| `VK_VIDEO_DELIVERY_MODE` | `doc` | Generated video delivery: `doc` sends mp4 as a file attachment; `video` sends a native VK video attachment with inline player |
+| `VK_VIDEO_ACCESS_TOKEN` | `` | User token with VK `video` rights, required when `VK_VIDEO_DELIVERY_MODE=video` |
+| `VK_VIDEO_UPLOAD_GROUP_ID` | `0` | Optional positive community id for `video.save group_id`; token owner must have upload rights there |
 | `VK_API_BASE_URL` | `https://api.vk.com/method` | VK API method root |
 | `VK_WELCOME_ATTACHMENT` | `` | Optional pre-uploaded VK photo/video attachment sent with `/start` menu |
 | `VK_MENU_BUTTON_MODE` | `callback` | Inline menu buttons: `callback` hides user echo messages; `text` keeps legacy text-button behavior |
@@ -151,6 +154,7 @@ Override these values when needed:
 | `REFERRAL_REFERRER_SIGNUP_REWARD_CREDITS` | `10` | Signup reward posted to the inviter through billing ledger |
 | `REFERRAL_REFERRED_SIGNUP_REWARD_CREDITS` | `0` | Optional signup reward posted to the invited user through billing ledger |
 | `VK_MENU_*_ENABLED` | mixed | Per-button VK product menu flags; current bot profile keeps NeuroHub text mode and account/referral visible, while video/image/students/top-up stay hidden without deleting their screens |
+| `VK_TOP_UP_RECEIPT_EMAIL` / `VK_TOP_UP_RECEIPT_PHONE` | `` / `` | Server-side receipt contact for the VK Bot quick top-up flow; set at least one when `VK_MENU_TOP_UP_ENABLED=true` |
 | `SIGNED_DELIVERY` / `ARTIFACT_URL_TTL` | `false` / `1h` | Deliver media through signed artifact URLs |
 | `ARTIFACT_RETENTION_DAYS` | `0` | Optional S3 lifecycle expiry |
 | `PRICES` | `image_generate=0` | Price overrides, e.g. `text_generate=2,image_generate=12`; current VK photo quota uses free image jobs plus `VK_ANTISPAM_IMAGE_DAILY_LIMIT` |
@@ -173,7 +177,10 @@ Override these values when needed:
 > `ARTIFACT_SCANNER=openai` require `OPENAI_API_KEY`; `PROVIDER=deepinfra`,
 > `IMAGE_PROVIDER=deepinfra`, or `PROVIDER_CHAIN` containing `deepinfra`
 > requires `DEEPINFRA_API_KEY`; `VK_DELIVERY_MODE=real` requires
-> `VK_ACCESS_TOKEN` in any environment. `PAYMENT_PROVIDER=yookassa` requires
+> `VK_ACCESS_TOKEN` in any environment. `VK_VIDEO_DELIVERY_MODE=doc` also
+> requires document upload access on that community token.
+> `VK_VIDEO_DELIVERY_MODE=video` requires `VK_VIDEO_ACCESS_TOKEN` with VK
+> `video` rights and optional `VK_VIDEO_UPLOAD_GROUP_ID` rights. `PAYMENT_PROVIDER=yookassa` requires
 > `YOOKASSA_SHOP_ID`, `YOOKASSA_SECRET_KEY` and `YOOKASSA_RETURN_URL`. The
 > provider factory supports `mock` and `yookassa`; real YooKassa requests can
 > create payment intents and `cmd/provider-webhook` can process trusted payment
@@ -218,13 +225,16 @@ Override these values when needed:
   `internal/adapter/payment/mock`, `internal/adapter/payment/yookassa` and the
   `PAYMENT_PROVIDER` factory provide a testable provider boundary. YooKassa
   adapter support covers Basic Auth, short HTTP idempotency headers, amount
-  conversion, redirect payments with `capture: true`, 54-FZ receipt data,
-  refunds and webhook normalization. `internal/service/paymentservice` creates
+  conversion, redirect payments with `capture: true` by default, a protected
+  operator-only `capture: false` smoke path for YooKassa
+  `waiting_for_capture -> canceled`, 54-FZ receipt data, refunds and webhook
+  normalization. `internal/service/paymentservice` creates
   idempotent payment intents, stores provider payment state and returns safe
   DTOs. It snapshots receipt item description, VAT code, payment subject and
   payment mode from the selected product when the intent is created. Operator
   routes under `/billing/payment-products*`, `/billing/payment-intents`,
-  `/billing/payment-history`, `/billing/payment-intents/{id}/sync` and
+  `/billing/payment-history`, `/billing/payment-intents/{id}/sync`,
+  `/billing/payment-intents/{id}/cancel` and
   `/billing/payment-intents/{id}/refund` are protected by `ADMIN_TOKEN` and
   fail closed if auth is missing. Product catalog admin create/update/disable
   actions validate positive RUB packages and 54-FZ receipt fields, never expose
@@ -240,8 +250,10 @@ Override these values when needed:
   `waiting_for_user` payment intent, Mini App and VK Bot show that payment with
   "continue payment" and require an explicit "create new payment" action before
   creating another intent. VK Bot top-up creates intents from the same catalog
-  after the user supplies a receipt email or phone, then sends a payment link. A
-  user return from YooKassa is not payment proof and must not grant credits.
+  immediately after product selection, using the server-side
+  `VK_TOP_UP_RECEIPT_EMAIL` / `VK_TOP_UP_RECEIPT_PHONE` receipt contact, then
+  sends a payment link. A user return from YooKassa is not payment proof and
+  must not grant credits.
   `cmd/provider-webhook` exposes
   `POST /billing/webhooks/yookassa`, stores raw provider events in
   `payment_events`, returns 200 quickly, then asynchronously verifies current
@@ -481,7 +493,7 @@ IMAGE_PROVIDER=deepinfra DEEPINFRA_IMAGE_MODEL=ByteDance/Seedream-4.5 DEEPINFRA_
 # API-side VK /start menu responses with keyboard.
 VK_ACCESS_TOKEN=... go run ./cmd/api
 
-# Real VK messages.send plus raw photo/video upload to VK upload servers.
+# Real VK messages.send plus raw photo upload and mp4-as-document delivery.
 VK_DELIVERY_MODE=real VK_ACCESS_TOKEN=... go run ./cmd/worker
 
 # Real output moderation and text/image artifact scanning.
@@ -569,6 +581,65 @@ YooKassa idempotency/rollback checks:
   refund debit compensated by a ledger adjustment, user balance restored, and
   `payment_refunds_total{result="rollback_succeeded"}` increments.
 
+YooKassa smoke checklist:
+
+- Webhook success:
+  create a normal `capture:true` payment intent, complete YooKassa test
+  checkout, wait for dashboard-delivered `payment.succeeded`, then verify the
+  event is processed, the intent is `succeeded`, exactly one
+  `topup:<provider>:<provider_payment_id>` ledger entry exists and Mini App
+  history returns a safe DTO without provider-native payload.
+- Missed webhook through reconciliation:
+  complete a YooKassa test checkout while the public webhook route is
+  intentionally unavailable or before dashboard delivery is observed, then run
+  operator `sync` or wait for reconciliation. Expected: provider `GetPayment`
+  verifies paid/captured success and posts the same single top-up ledger entry.
+- Duplicate webhook:
+  replay the same `payment.succeeded` webhook body. Expected: one
+  `payment_events` row by dedup key and no second top-up ledger entry.
+- Canceled payment:
+  create a protected operator `capture:false` intent, complete checkout until
+  YooKassa reports `waiting_for_capture`, call operator `cancel`, then verify
+  `payment.canceled` is processed, the intent is `canceled`, no top-up ledger
+  entry exists and the balance is unchanged.
+- Refund:
+  create and complete a normal paid intent, then call operator `refund`.
+  Expected: one `payment_refunds` row, provider refund succeeds, refund debit is
+  posted through ledger and the balance returns to the pre-top-up value.
+- Duplicate refund:
+  replay operator `refund` with the same `X-Idempotency-Key` and replay
+  `refund.succeeded`. Expected: the same refund row is returned, no second
+  ledger debit is posted and refund webhook dedup uses `provider_refund_id`.
+- Safe DTO:
+  call Mini App payment history and protected operator list endpoints after the
+  smoke. Expected: DTOs expose status, amount, credits, ids needed for operator
+  work and timestamps only; they do not expose raw YooKassa payloads, auth
+  headers, shop secrets or receipt contact beyond explicitly safe fields.
+
+YooKassa smoke completion gate:
+
+Treat billing smoke as closed only when all of these are true for the same test
+shop/runtime setup:
+
+- YooKassa delivered a real public HTTPS webhook to
+  `/billing/webhooks/yookassa`; local/manual replay is not enough.
+- `payment.succeeded` was processed from the public webhook path without
+  reconciliation being required for the success top-up.
+- Reconciliation still successfully covers the separate missed-webhook scenario.
+- YooKassa produced a terminal `payment.canceled` provider state for a
+  `capture:false` smoke payment and the system processed it without posting a
+  top-up ledger entry.
+- Replaying `payment.succeeded` and `payment.canceled` does not create duplicate
+  events, duplicate ledger entries or invalid status rollbacks.
+- Manual refund is idempotent: repeating the same operator refund key returns
+  the same refund and does not post a second ledger debit.
+- Replaying `refund.succeeded` is deduplicated by `provider_refund_id`.
+- Final balance, `ledger_entries`, `payment_intents`, `payment_events` and
+  `payment_refunds` reconcile for every provider payment/refund used in the
+  smoke.
+- Mini App and operator DTOs remain safe and do not expose raw provider payloads
+  or credentials.
+
 YooKassa SQL checks:
 
 ```sql
@@ -617,8 +688,10 @@ Protected operator payment actions:
 
 ```bash
 # Prepare local-only curl headers in your shell before running these examples.
-# ADMIN_AUTH_HEADER carries X-Admin-Token; OPERATOR_IDEMPOTENCY_HEADER carries
-# a unique X-Idempotency-Key for the refund command.
+# ADMIN_AUTH_HEADER carries X-Admin-Token; OPERATOR_USER_HEADER carries the
+# internal smoke user id; OPERATOR_IDEMPOTENCY_HEADER carries a unique
+# X-Idempotency-Key for the refund command. SMOKE_IDEMPOTENCY_HEADER carries a
+# one-off idempotency key for the canceled-payment smoke.
 
 # List product catalog entries. Add active=true or active=false to narrow the
 # operator list. Response DTOs contain catalog fields only, no provider payloads.
@@ -630,7 +703,7 @@ curl "http://localhost:8080/billing/payment-products?active=true" \
 curl -X POST http://localhost:8080/billing/payment-products \
   -H "$ADMIN_AUTH_HEADER" \
   -H "Content-Type: application/json" \
-  -d '{"code":"credits_250","title":"NeiroHub 250 credits","amount":20000,"currency":"rub","credits":250,"vat_code":1,"payment_subject":"service","payment_mode":"full_prepayment"}'
+  -d '{"code":"crystals_250","title":"NeiroHub 250 crystals","amount":25000,"currency":"rub","credits":250,"vat_code":1,"payment_subject":"service","payment_mode":"full_prepayment"}'
 
 # Update future catalog values. Existing payment_intents keep their snapshotted
 # amount, credits, price_version and receipt fields.
@@ -648,14 +721,37 @@ curl -X POST http://localhost:8080/billing/payment-products/<product_id>/disable
 curl "http://localhost:8080/billing/payment-intents/pending?stale_after=30s&stale_only=true" \
   -H "$ADMIN_AUTH_HEADER"
 
+# Minimal stale-only check requested by operator smoke. Use this before manual
+# sync to see what reconciliation should pick up.
+curl "http://localhost:8080/billing/payment-intents/pending?stale_only=true" \
+  -H "$ADMIN_AUTH_HEADER"
+
+# Create a two-stage YooKassa smoke intent. This is protected operator-only and
+# must not be used by Mini App / VK Bot user-facing top-ups.
+curl -X POST http://localhost:8080/billing/payment-intents \
+  -H "$ADMIN_AUTH_HEADER" \
+  -H "$OPERATOR_USER_HEADER" \
+  -H "$SMOKE_IDEMPOTENCY_HEADER" \
+  -H "Content-Type: application/json" \
+  -d '{"product_code":"crystals_99","receipt_email":"smoke@example.com","capture":false}'
+
 # List unprocessed provider webhook inbox rows. Response DTOs intentionally omit
 # raw provider payloads.
 curl "http://localhost:8080/billing/payment-events/unprocessed?provider=yookassa" \
   -H "$ADMIN_AUTH_HEADER"
 
+# Minimal unprocessed inbox check requested by operator smoke.
+curl "http://localhost:8080/billing/payment-events/unprocessed" \
+  -H "$ADMIN_AUTH_HEADER"
+
 # Sync one intent with the provider state. This may post a top-up ledger entry
 # only after provider GetPayment verifies paid/captured success.
 curl -X POST http://localhost:8080/billing/payment-intents/<intent_id>/sync \
+  -H "$ADMIN_AUTH_HEADER"
+
+# Cancel a provider-backed intent. This calls provider CancelPayment and then
+# verifies the resulting state through the same GetPayment/sync path.
+curl -X POST http://localhost:8080/billing/payment-intents/<intent_id>/cancel \
   -H "$ADMIN_AUTH_HEADER"
 
 # Manual full refund MVP. Requires a caller idempotency key and refuses when the
@@ -742,13 +838,12 @@ lookup through `vkdelivery.UserProfileClient`, caches `vk_first_name` /
 `vk_last_name` on the user row, sends `👋 <name>, добро пожаловать в НейроХаб!`,
 and records `welcome_name_sent_at`; later `Старт` / `Показать меню` responses
 use the regular welcome without the name.
-Clicking `🎬 Создать видео` opens the video model picker with `Sora 2`,
-`Kling v2.1`, `Seedance 1`, `Haiuo v0.2`, and `⬅️ Назад`. `Sora 2` and
-`Kling v2.1` open detail screens with description, prompt example, instruction
-link, `😀 Начать генерацию`, `ℹ️ Примеры`, and `⬅️ Назад`. `Seedance 1` opens
-`Seedance 1 Lite` / `Seedance 1 Pro`; `Haiuo v0.2` opens `Haiuo v0.2 Обычный`
-/ `Haiuo v0.2 Fast`. These video submenu buttons are control-only for now and
-must not create billable jobs.
+Clicking `🎬 Создать видео` opens the video model picker with `PrunaAI` and
+`⬅️ Назад`. Clicking `PrunaAI` stores peer-scoped video dialog mode. The next
+plain user text creates one `video_generate` Job with private video params and a
+`НейроХаб готовит видео...` placeholder; the VK handler still never calls the
+provider directly. Older Sora/Kling/Seedance/Haiuo payloads are hidden/stale and
+fall back to the main menu without creating Jobs.
 Clicking `🖼️ Создать фото` opens the photo instruction screen directly because
 there is one main image model in the VK UX. It immediately stores `photo_text`
 mode and shows only `⬅️ Назад`; the extra `Фото по тексту` confirmation button
@@ -770,6 +865,8 @@ Clicking `🎁 Студентам и школьникам` opens the study subme
 `Решальник задач`, `Генерация презентаций (скоро)`,
 `Создание рефератов (скоро)`, `❓ Ответы на вопросы`, and `⬅️ Назад`.
 Those buttons are control-only until the corresponding scenario state is wired.
+Video generation is the exception: the active `PrunaAI` video button wires
+peer-scoped video mode and the next plain text becomes a `video_generate` Job.
 Clicking `👤 Мой аккаунт` opens the account/referral screen. The handler reads
 the billing projection through `billingservice.EnsureAccount`, ensures one
 stable referral code for the user, counts accepted invitations, and renders the

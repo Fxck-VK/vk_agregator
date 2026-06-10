@@ -19,8 +19,9 @@ phase plans live under `docs/archive/**` and are not active context by default.
   `cmd/provider-webhook` / `PAYMENT_WEBHOOK_ADDR` rather than `cmd/api`.
 - Repeat YooKassa live smoke with dashboard-delivered webhooks for
   `payment.succeeded`, `payment.canceled` and `refund.succeeded`.
-- Retest an explicit provider `payment.canceled` state; the last failure-card
-  smoke left the payment in YooKassa `pending` retry state.
+- Retest `payment.canceled` through the protected operator `capture:false`
+  local-intent smoke path: create intent, pay to `waiting_for_capture`, cancel,
+  verify webhook/reconciliation moves the intent to `canceled` with no top-up.
 - Implement lot/FIFO attribution before automatic, partial or already-spent
   credit refunds.
 - Finish production deployment shape for `neiirohub.ru`: static Mini App,

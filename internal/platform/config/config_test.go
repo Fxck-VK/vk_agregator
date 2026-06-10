@@ -69,6 +69,32 @@ func TestLoadImageProviderConfig(t *testing.T) {
 	}
 }
 
+func TestLoadVKVideoUploadConfig(t *testing.T) {
+	t.Setenv("VK_VIDEO_ACCESS_TOKEN", "video-token")
+	t.Setenv("VK_VIDEO_UPLOAD_GROUP_ID", "239332376")
+	t.Setenv("VK_VIDEO_DELIVERY_MODE", "video")
+
+	cfg := config.Load()
+	if cfg.VKVideoAccessToken != "video-token" {
+		t.Fatalf("VKVideoAccessToken = %q", cfg.VKVideoAccessToken)
+	}
+	if cfg.VKVideoUploadGroupID != 239332376 {
+		t.Fatalf("VKVideoUploadGroupID = %d", cfg.VKVideoUploadGroupID)
+	}
+	if cfg.VKVideoDeliveryMode != "video" {
+		t.Fatalf("VKVideoDeliveryMode = %q", cfg.VKVideoDeliveryMode)
+	}
+}
+
+func TestValidateVKVideoDeliveryMode(t *testing.T) {
+	cfg := config.Config{VKVideoDeliveryMode: "bad"}
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "VK_VIDEO_DELIVERY_MODE") {
+		t.Fatalf("expected VK_VIDEO_DELIVERY_MODE validation error, got %v", err)
+	}
+}
+
 func TestValidateImageProvider(t *testing.T) {
 	cfg := config.Config{ImageProvider: "unknown"}
 
@@ -167,6 +193,8 @@ func TestLoadTextContextConfig(t *testing.T) {
 func TestLoadVKMenuFeatureFlags(t *testing.T) {
 	t.Setenv("VK_MENU_STUDENTS_ENABLED", "false")
 	t.Setenv("VK_MENU_VIDEO_SORA2_EXAMPLES_ENABLED", "false")
+	t.Setenv("VK_TOP_UP_RECEIPT_EMAIL", "payments@example.com")
+	t.Setenv("VK_TOP_UP_RECEIPT_PHONE", "+79991234567")
 
 	cfg := config.Load()
 	if cfg.VKMenuStudentsEnabled {
@@ -189,6 +217,9 @@ func TestLoadVKMenuFeatureFlags(t *testing.T) {
 	}
 	if cfg.VKMenuImageReferenceEnabled {
 		t.Fatal("VKMenuImageReferenceEnabled = true, want default false")
+	}
+	if cfg.VKTopUpReceiptEmail != "payments@example.com" || cfg.VKTopUpReceiptPhone != "+79991234567" {
+		t.Fatalf("unexpected VK top-up receipt contact: email=%q phone=%q", cfg.VKTopUpReceiptEmail, cfg.VKTopUpReceiptPhone)
 	}
 }
 
