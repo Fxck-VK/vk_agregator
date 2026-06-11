@@ -19,6 +19,7 @@ import { modalityByOperation, type ModalityId } from "../chat/types";
 import neuroHubBanner from "../assets/neurohub-banner.png";
 import { formatCredits } from "../ui/credits";
 import { dedupeHistoryJobs, historyCountLabel, jobDisplayTitle } from "../utils/jobDisplay";
+import { openExternalUrl } from "../utils/openExternalUrl";
 import type { ThemeMode } from "./theme";
 
 type SettingsScreenProps = {
@@ -309,17 +310,18 @@ export function SettingsScreen({
         void refreshPaymentIntents();
         return;
       }
-      window.location.assign(intent.confirmation_url);
+      void refreshPaymentIntents();
+      const opened = await openExternalUrl(intent.confirmation_url);
+      setTopUpNotice(
+        opened
+          ? "Оплата открыта во внешнем окне. После оплаты баланс обновится автоматически."
+          : "Платеж создан. Нажмите «Продолжить оплату», чтобы открыть оплату во внешнем окне.",
+      );
     } catch (error) {
       setTopUpNotice(apiUserMessage(error));
     } finally {
       setPaymentPendingCode("");
     }
-  }
-
-  function handleContinuePayment() {
-    if (!activePaymentIntent?.confirmation_url) return;
-    window.location.assign(activePaymentIntent.confirmation_url);
   }
 
   function handleCreateNewPayment() {
@@ -413,9 +415,9 @@ export function SettingsScreen({
             </span>
             <p>После оплаты баланс обновится автоматически.</p>
             <div className="payment-pending__actions">
-              <button type="button" onClick={handleContinuePayment}>
+              <a href={activePaymentIntent.confirmation_url} target="_blank" rel="noopener noreferrer">
                 Продолжить оплату
-              </button>
+              </a>
               <button type="button" onClick={handleCreateNewPayment}>
                 Создать новый платеж
               </button>
@@ -437,9 +439,14 @@ export function SettingsScreen({
               />
             </div>
             {creatingNewPayment && activePaymentIntent ? (
-              <button type="button" className="payment-current-link" onClick={handleContinuePayment}>
+              <a
+                className="payment-current-link"
+                href={activePaymentIntent.confirmation_url}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
                 Продолжить текущий платеж
-              </button>
+              </a>
             ) : null}
             <div className="payment-products" aria-label="Тарифы пополнения">
               {productsLoading ? (
@@ -508,6 +515,18 @@ export function SettingsScreen({
               <div>
                 <span>Приглашённых</span>
                 <strong>{referralInfo.invited_count}</strong>
+              </div>
+              <div>
+                <span>Зарегистрировано</span>
+                <strong>{referralInfo.registered_count}</strong>
+              </div>
+              <div>
+                <span>Активировано</span>
+                <strong>{referralInfo.activated_count}</strong>
+              </div>
+              <div>
+                <span>Бонус начислен</span>
+                <strong>{referralInfo.rewarded_count}</strong>
               </div>
               <div>
                 <span>Бонус другу</span>
@@ -584,9 +603,9 @@ export function SettingsScreen({
                   <div className="payment-history-row__meta">
                     <time dateTime={intent.created_at}>{dateLabel(intent.created_at)}</time>
                     {active ? (
-                      <button type="button" onClick={() => window.location.assign(intent.confirmation_url || "")}>
+                      <a href={intent.confirmation_url} target="_blank" rel="noopener noreferrer">
                         Продолжить
-                      </button>
+                      </a>
                     ) : null}
                   </div>
                 </div>

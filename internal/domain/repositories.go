@@ -387,6 +387,15 @@ type ReferralRepository interface {
 	GetReferralByReferredUserID(ctx context.Context, userID uuid.UUID) (*Referral, error)
 	// CountByReferrer counts users invited by one referrer.
 	CountByReferrer(ctx context.Context, referrerUserID uuid.UUID) (int, error)
+	// CountByReferrerStatus returns no-PII funnel counters for one referrer.
+	CountByReferrerStatus(ctx context.Context, referrerUserID uuid.UUID) (ReferralStats, error)
+	// StatsByReferralCode returns no-PII funnel counters for one public code.
+	StatsByReferralCode(ctx context.Context, code string) (ReferralCodeStats, error)
+	// ListSuspiciousReferralCodes returns aggregate suspicious referral-code
+	// patterns without exposing invited-user identities.
+	ListSuspiciousReferralCodes(ctx context.Context, filter ReferralSuspiciousFilter) ([]ReferralCodeStats, error)
+	// MarkActivated marks a registered referral as activated by product usage.
+	MarkActivated(ctx context.Context, referralID uuid.UUID, activatedAt time.Time) error
 	// MarkRewardApplied marks signup referral rewards as posted to billing.
 	MarkRewardApplied(ctx context.Context, referralID uuid.UUID, rewardedAt time.Time) error
 }

@@ -173,6 +173,9 @@ type ReferralDTO struct {
 	Code                        string `json:"code"`
 	InviteURL                   string `json:"invite_url"`
 	InvitedCount                int    `json:"invited_count"`
+	RegisteredCount             int    `json:"registered_count"`
+	ActivatedCount              int    `json:"activated_count"`
+	RewardedCount               int    `json:"rewarded_count"`
 	ReferrerSignupRewardCredits int64  `json:"referrer_signup_reward_credits"`
 	ReferredSignupRewardCredits int64  `json:"referred_signup_reward_credits"`
 }

@@ -234,6 +234,8 @@ type Config struct {
 	// Referral signup rewards are posted through billing ledger entries.
 	ReferralReferrerSignupRewardCredits int64
 	ReferralReferredSignupRewardCredits int64
+	// ReferralRewardOnActivation gates reward ledger writes during rollout.
+	ReferralRewardOnActivation bool
 
 	// VKAppID is the VK Mini App application identifier.
 	VKAppID string
@@ -528,6 +530,7 @@ func Load() Config {
 			"REFERRAL_REFERRED_SIGNUP_REWARD_CREDITS",
 			0,
 		)),
+		ReferralRewardOnActivation: envBool("REFERRAL_REWARD_ON_ACTIVATION", true),
 
 		VKAppID:                   env("VK_APP_ID", ""),
 		VKAppSecret:               env("VK_APP_SECRET", ""),

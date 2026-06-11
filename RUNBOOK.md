@@ -153,6 +153,7 @@ Override these values when needed:
 | `REFERRAL_CODE_LENGTH` | `10` | Length for generated stable public referral codes |
 | `REFERRAL_REFERRER_SIGNUP_REWARD_CREDITS` | `10` | Signup reward posted to the inviter through billing ledger |
 | `REFERRAL_REFERRED_SIGNUP_REWARD_CREDITS` | `0` | Optional signup reward posted to the invited user through billing ledger |
+| `REFERRAL_REWARD_ON_ACTIVATION` | `true` | Rollout flag: when `false`, referral activation is recorded but signup reward ledger entries are not posted until a later activation with the flag enabled |
 | `VK_MENU_*_ENABLED` | mixed | Per-button VK product menu flags; current bot profile keeps NeuroHub text mode and account/referral visible, while video/image/students/top-up stay hidden without deleting their screens |
 | `VK_TOP_UP_RECEIPT_EMAIL` / `VK_TOP_UP_RECEIPT_PHONE` | `` / `` | Server-side receipt contact for the VK Bot quick top-up flow; set at least one when `VK_MENU_TOP_UP_ENABLED=true` |
 | `SIGNED_DELIVERY` / `ARTIFACT_URL_TTL` | `false` / `1h` | Deliver media through signed artifact URLs |

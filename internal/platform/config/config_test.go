@@ -229,6 +229,7 @@ func TestLoadReferralConfig(t *testing.T) {
 	t.Setenv("REFERRAL_CODE_LENGTH", "12")
 	t.Setenv("REFERRAL_REFERRER_SIGNUP_REWARD_CREDITS", "15")
 	t.Setenv("REFERRAL_REFERRED_SIGNUP_REWARD_CREDITS", "3")
+	t.Setenv("REFERRAL_REWARD_ON_ACTIVATION", "false")
 
 	cfg := config.Load()
 	if cfg.VKReferralLinkBase != "https://vk.com/write-1" || cfg.VKReferralShareBase != "https://vk.com/share.php" {
@@ -239,6 +240,19 @@ func TestLoadReferralConfig(t *testing.T) {
 	}
 	if cfg.ReferralReferrerSignupRewardCredits != 15 || cfg.ReferralReferredSignupRewardCredits != 3 {
 		t.Fatalf("unexpected referral rewards: referrer=%d referred=%d", cfg.ReferralReferrerSignupRewardCredits, cfg.ReferralReferredSignupRewardCredits)
+	}
+	if cfg.ReferralRewardOnActivation {
+		t.Fatal("ReferralRewardOnActivation = true, want false")
+	}
+}
+
+func TestReferralRewardOnActivationDefaultEnabled(t *testing.T) {
+	restore := clearEnv(t, "REFERRAL_REWARD_ON_ACTIVATION")
+	defer restore()
+
+	cfg := config.Load()
+	if !cfg.ReferralRewardOnActivation {
+		t.Fatal("ReferralRewardOnActivation = false, want default true")
 	}
 }
 

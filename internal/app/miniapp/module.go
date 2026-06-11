@@ -61,6 +61,7 @@ func NewHandler(ctx context.Context, cfg config.Config, deps Deps) *miniappapi.H
 		CodeLength:                  cfg.ReferralCodeLength,
 		ReferrerSignupRewardCredits: cfg.ReferralReferrerSignupRewardCredits,
 		ReferredSignupRewardCredits: cfg.ReferralReferredSignupRewardCredits,
+		RewardOnActivation:          cfg.ReferralRewardOnActivation,
 	})
 	return miniappapi.NewHandler(miniappapi.Config{
 		AppSecret:                           cfg.VKAppSecret,

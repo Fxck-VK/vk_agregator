@@ -89,6 +89,7 @@ func main() {
 		Jobs:       core.Jobs,
 		Users:      core.Users,
 		Deliveries: core.Deliveries,
+		Referrals:  core.Referrals,
 		Billing:    core.BillingRepo,
 	})
 	billing := billingapi.NewHandler(billingapi.Config{Token: cfg.AdminToken}, billingapi.Deps{

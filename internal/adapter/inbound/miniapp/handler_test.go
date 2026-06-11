@@ -229,7 +229,10 @@ func newTestFixtureWithConfig(appSecret string, limiter interface{ Allow(string)
 	payment := paymentservice.New(paymentRepo, paymentmock.New(), paymentservice.Config{
 		ReturnURL: "https://neiirohub.ru/payments/return",
 	})
-	referrals := referralservice.New(referralRepo, billing, referralservice.Config{ReferrerSignupRewardCredits: 10})
+	referrals := referralservice.New(referralRepo, billing, referralservice.Config{
+		ReferrerSignupRewardCredits: 10,
+		RewardOnActivation:          true,
+	})
 	orch := joborchestrator.New(jobRepo, uowMgr, billing, 0)
 
 	cfg := miniappinbound.Config{
@@ -1308,7 +1311,8 @@ func TestHandler_GetReferralReturnsStableCodeAndBotStyleLink(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("invalid response: %v", err)
 	}
-	if resp.Code == "" || resp.InviteURL == "" || resp.InvitedCount != 0 {
+	if resp.Code == "" || resp.InviteURL == "" || resp.InvitedCount != 0 ||
+		resp.RegisteredCount != 0 || resp.ActivatedCount != 0 || resp.RewardedCount != 0 {
 		t.Fatalf("unexpected referral dto: %+v", resp)
 	}
 	if !strings.HasPrefix(resp.InviteURL, "https://vk.com/write-239332376?") ||
@@ -1380,15 +1384,18 @@ func TestHandler_AcceptReferralUsesMiniAppSourceAndLedgerNoJob(t *testing.T) {
 	if referral.ReferrerUserID != referrer.ID ||
 		referral.ReferralCode != "MNN2345A" ||
 		referral.Source != domain.ReferralSourceVKMiniApp ||
-		referral.RewardStatus != domain.ReferralRewardApplied {
+		referral.Status != domain.ReferralStatusRewarded ||
+		referral.RewardStatus != domain.ReferralRewardApplied ||
+		referral.ActivatedAt == nil ||
+		referral.RewardedAt == nil {
 		t.Fatalf("unexpected referral: %+v", referral)
 	}
-	acc, err := fixture.billingRepo.GetAccountByUser(ctx, referrer.ID, domain.CurrencyCredits)
+	referrerAccount, err := fixture.billingRepo.GetAccountByUser(ctx, referrer.ID, domain.CurrencyCredits)
 	if err != nil {
-		t.Fatalf("get referrer account: %v", err)
+		t.Fatalf("referrer account not rewarded: %v", err)
 	}
-	if acc.BalanceCached != billingservice.DefaultStartingBalance+10 {
-		t.Fatalf("referrer balance = %d, want %d", acc.BalanceCached, billingservice.DefaultStartingBalance+10)
+	if referrerAccount.BalanceCached != billingservice.DefaultStartingBalance+10 {
+		t.Fatalf("referrer balance = %d, want %d", referrerAccount.BalanceCached, billingservice.DefaultStartingBalance+10)
 	}
 	jobs, _ := fixture.jobRepo.ListByUser(ctx, referred.ID, 10, 0)
 	if len(jobs) != 0 {
@@ -1409,6 +1416,13 @@ func TestHandler_AcceptReferralUsesMiniAppSourceAndLedgerNoJob(t *testing.T) {
 	if !replayResp.AlreadyApplied || replayResp.Applied {
 		t.Fatalf("expected idempotent already-applied response, got %+v", replayResp)
 	}
+	referrerAccount, err = fixture.billingRepo.GetAccountByUser(ctx, referrer.ID, domain.CurrencyCredits)
+	if err != nil {
+		t.Fatalf("get referrer account after replay: %v", err)
+	}
+	if referrerAccount.BalanceCached != billingservice.DefaultStartingBalance+10 {
+		t.Fatalf("referrer balance after replay = %d, want %d", referrerAccount.BalanceCached, billingservice.DefaultStartingBalance+10)
+	}
 	count, err := fixture.referralRepo.CountByReferrer(ctx, referrer.ID)
 	if err != nil {
 		t.Fatalf("count referrals: %v", err)
@@ -1416,7 +1430,7 @@ func TestHandler_AcceptReferralUsesMiniAppSourceAndLedgerNoJob(t *testing.T) {
 	if count != 1 {
 		t.Fatalf("referral count = %d, want 1", count)
 	}
-	entries, err := fixture.billingRepo.ListEntries(ctx, acc.ID, 10, 0)
+	entries, err := fixture.billingRepo.ListEntries(ctx, referrerAccount.ID, 10, 0)
 	if err != nil {
 		t.Fatalf("list billing entries: %v", err)
 	}
@@ -1427,7 +1441,21 @@ func TestHandler_AcceptReferralUsesMiniAppSourceAndLedgerNoJob(t *testing.T) {
 		}
 	}
 	if rewardEntries != 1 {
-		t.Fatalf("reward entries = %d, want 1", rewardEntries)
+		t.Fatalf("reward entries after replay = %d, want 1", rewardEntries)
+	}
+	statsReq := httptest.NewRequest(http.MethodGet, "/miniapp/referral", nil)
+	statsReq.Header.Set("X-Launch-Params", devLaunchParams(900101))
+	statsResp := httptest.NewRecorder()
+	routes.ServeHTTP(statsResp, statsReq)
+	if statsResp.Code != http.StatusOK {
+		t.Fatalf("expected stats 200, got %d: %s", statsResp.Code, statsResp.Body.String())
+	}
+	var statsDTO miniappinbound.ReferralDTO
+	if err := json.Unmarshal(statsResp.Body.Bytes(), &statsDTO); err != nil {
+		t.Fatalf("invalid stats response: %v", err)
+	}
+	if statsDTO.InvitedCount != 1 || statsDTO.RegisteredCount != 0 || statsDTO.ActivatedCount != 0 || statsDTO.RewardedCount != 1 {
+		t.Fatalf("unexpected referral funnel stats: %+v", statsDTO)
 	}
 }
 

@@ -84,6 +84,9 @@ export interface ReferralInfo {
   code: string;
   invite_url: string;
   invited_count: number;
+  registered_count: number;
+  activated_count: number;
+  rewarded_count: number;
   referrer_signup_reward_credits: number;
   referred_signup_reward_credits: number;
 }

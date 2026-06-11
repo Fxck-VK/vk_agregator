@@ -37,7 +37,9 @@ type JobRateLimiter interface {
 // the Mini App BFF. It must keep all rewards ledger-backed and idempotent.
 type ReferralService interface {
 	Stats(ctx context.Context, userID uuid.UUID) (*domain.ReferralCode, int, error)
+	StatsDetailed(ctx context.Context, userID uuid.UUID) (*domain.ReferralCode, domain.ReferralStats, error)
 	Apply(ctx context.Context, input referralservice.ApplyInput) (referralservice.ApplyResult, error)
+	Activate(ctx context.Context, input referralservice.ActivateInput) (referralservice.ActivateResult, error)
 }
 
 // Config holds per-deployment miniapp settings.
@@ -771,7 +773,7 @@ func (h *Handler) getReferral(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	code, invited, err := h.deps.Referrals.Stats(r.Context(), user.ID)
+	code, stats, err := h.deps.Referrals.StatsDetailed(r.Context(), user.ID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
@@ -780,7 +782,10 @@ func (h *Handler) getReferral(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, ReferralDTO{
 		Code:                        code.Code,
 		InviteURL:                   buildReferralLink(h.cfg.ReferralLinkBase, code.Code),
-		InvitedCount:                invited,
+		InvitedCount:                stats.Total(),
+		RegisteredCount:             stats.RegisteredCount,
+		ActivatedCount:              stats.ActivatedCount,
+		RewardedCount:               stats.RewardedCount,
 		ReferrerSignupRewardCredits: h.cfg.ReferralReferrerSignupRewardCredits,
 		ReferredSignupRewardCredits: h.cfg.ReferralReferredSignupRewardCredits,
 	})
@@ -826,6 +831,15 @@ func (h *Handler) acceptReferral(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
+	}
+	if !result.InvalidCode && !result.SelfReferral {
+		if _, err := h.deps.Referrals.Activate(r.Context(), referralservice.ActivateInput{
+			ReferredUserID: user.ID,
+			Source:         domain.ReferralSourceVKMiniApp,
+		}); err != nil {
+			writeError(w, http.StatusInternalServerError, "internal error")
+			return
+		}
 	}
 
 	writeJSON(w, http.StatusOK, ApplyReferralDTO{

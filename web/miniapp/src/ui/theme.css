@@ -2190,18 +2190,24 @@ body {
   gap: 8px;
 }
 
-.payment-pending__actions button {
+.payment-pending__actions button,
+.payment-pending__actions a {
   min-height: 42px;
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-control);
   background: var(--surface-2);
   color: var(--fg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   font: inherit;
   font-weight: 800;
+  text-decoration: none;
   cursor: pointer;
 }
 
-.payment-pending__actions button:first-child {
+.payment-pending__actions button:first-child,
+.payment-pending__actions a:first-child {
   border-color: transparent;
   background: var(--gradient-brand);
   color: #fff;
@@ -2215,9 +2221,13 @@ body {
   border-radius: var(--radius-control);
   background: color-mix(in srgb, var(--brand-cyan) 9%, transparent);
   color: var(--brand-cyan);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   font: inherit;
   font-size: 13px;
   font-weight: 800;
+  text-decoration: none;
   cursor: pointer;
 }
 
@@ -2481,16 +2491,21 @@ body {
   white-space: nowrap;
 }
 
-.payment-history-row__meta button {
+.payment-history-row__meta button,
+.payment-history-row__meta a {
   min-height: 32px;
   padding: 0 11px;
   border: 1px solid transparent;
   border-radius: var(--radius-control);
   background: var(--gradient-brand);
   color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   font: inherit;
   font-size: 12px;
   font-weight: 850;
+  text-decoration: none;
   cursor: pointer;
 }
 

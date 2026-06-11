@@ -125,3 +125,36 @@ func newDeliveryDTO(d *domain.Delivery) DeliveryDTO {
 		UpdatedAt:    d.UpdatedAt,
 	}
 }
+
+// ReferralStatsDTO is a safe operator view of one public referral code.
+type ReferralStatsDTO struct {
+	Code            string `json:"code"`
+	InvitedCount    int    `json:"invited_count"`
+	RegisteredCount int    `json:"registered_count"`
+	ActivatedCount  int    `json:"activated_count"`
+	RewardedCount   int    `json:"rewarded_count"`
+}
+
+func newReferralStatsDTO(stats domain.ReferralCodeStats) ReferralStatsDTO {
+	return ReferralStatsDTO{
+		Code:            stats.Code,
+		InvitedCount:    stats.Stats.Total(),
+		RegisteredCount: stats.Stats.RegisteredCount,
+		ActivatedCount:  stats.Stats.ActivatedCount,
+		RewardedCount:   stats.Stats.RewardedCount,
+	}
+}
+
+// SuspiciousReferralDTO explains aggregate referral-code patterns without
+// exposing invited-user identities.
+type SuspiciousReferralDTO struct {
+	ReferralStatsDTO
+	Reasons []string `json:"reasons"`
+}
+
+type referralFutureFlagDTO struct {
+	Code    string `json:"code"`
+	Enabled bool   `json:"enabled"`
+	Status  string `json:"status"`
+	Message string `json:"message"`
+}
