@@ -309,6 +309,14 @@ func (c Config) Validate() error {
 	if mode := strings.ToLower(strings.TrimSpace(c.VKVideoDeliveryMode)); mode != "" && mode != "doc" && mode != "video" {
 		return fmt.Errorf("config: VK_VIDEO_DELIVERY_MODE must be doc or video")
 	}
+	if provider := strings.ToLower(strings.TrimSpace(c.Provider)); provider != "" && !knownProvider(provider) {
+		return fmt.Errorf("config: PROVIDER must be one of mock, openai, deepinfra")
+	}
+	for _, provider := range c.ProviderChain {
+		if provider = strings.ToLower(strings.TrimSpace(provider)); provider != "" && !knownProvider(provider) {
+			return fmt.Errorf("config: PROVIDER_CHAIN contains unknown provider %q; allowed: mock, openai, deepinfra", provider)
+		}
+	}
 	if provider := strings.ToLower(strings.TrimSpace(c.ImageProvider)); provider != "" && !knownProvider(provider) {
 		return fmt.Errorf("config: IMAGE_PROVIDER must be one of mock, openai, deepinfra")
 	}
@@ -319,6 +327,12 @@ func (c Config) Validate() error {
 		return fmt.Errorf("config: PAYMENT_PROVIDER must be one of mock, yookassa")
 	}
 	if c.IsProduction() {
+		if c.usesMockProvider() {
+			return fmt.Errorf("config: mock provider is not allowed in production")
+		}
+		if strings.EqualFold(strings.TrimSpace(c.PaymentProvider), "mock") {
+			return fmt.Errorf("config: PAYMENT_PROVIDER=mock is not allowed in production")
+		}
 		if c.VKSecret == "" {
 			missing = append(missing, "VK_SECRET")
 		}
@@ -589,6 +603,20 @@ func (c Config) usesDeepInfra() bool {
 	}
 	for _, provider := range c.ProviderChain {
 		if strings.EqualFold(provider, "deepinfra") {
+			return true
+		}
+	}
+	return false
+}
+
+func (c Config) usesMockProvider() bool {
+	if strings.EqualFold(c.Provider, "mock") ||
+		strings.EqualFold(c.ImageProvider, "mock") ||
+		strings.EqualFold(c.VideoProvider, "mock") {
+		return true
+	}
+	for _, provider := range c.ProviderChain {
+		if strings.EqualFold(provider, "mock") {
 			return true
 		}
 	}

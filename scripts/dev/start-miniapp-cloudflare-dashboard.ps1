@@ -68,6 +68,41 @@ function Wait-CloudflaredLog {
     return $false
 }
 
+function Test-PublicMetricsExposure {
+    param([Parameter(Mandatory = $true)][string]$ProbeHostname)
+
+    $url = "https://$ProbeHostname/metrics"
+    $status = 0
+    $contentType = ""
+    $exposed = $false
+    try {
+        $resp = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 10 -MaximumRedirection 3
+        $status = [int]$resp.StatusCode
+        $contentType = [string]$resp.Headers["Content-Type"]
+        $body = [string]$resp.Content
+        $exposed = ($status -ge 200 -and $status -lt 300 -and $body -match "(?m)^# HELP (vkagg_|payment_|go_|process_)")
+    } catch [System.Net.WebException] {
+        if ($_.Exception.Response -ne $null) {
+            $status = [int]$_.Exception.Response.StatusCode
+            $contentType = [string]$_.Exception.Response.Headers["Content-Type"]
+        }
+    } catch {
+        return [pscustomobject]@{
+            Url = $url
+            Status = "check_failed"
+            ContentType = ""
+            Exposed = $false
+        }
+    }
+
+    return [pscustomobject]@{
+        Url = $url
+        Status = $status
+        ContentType = $contentType
+        Exposed = $exposed
+    }
+}
+
 $root = Get-RepoRoot
 $runtime = Get-MiniAppRuntimeDir -Root $root
 Ensure-Directory -Path $runtime
@@ -165,6 +200,12 @@ try {
         Write-Host "Tunnel status: connected or registering"
     } else {
         Write-Host "Tunnel status: not confirmed; inspect tunnel logs and Cloudflare Dashboard"
+    }
+    $metricsProbe = Test-PublicMetricsExposure -ProbeHostname $Hostname
+    if ($metricsProbe.Exposed) {
+        Write-Warning "Security check failed: public /metrics is exposed at $($metricsProbe.Url) (status $($metricsProbe.Status)). Close it in Cloudflare Public Hostname/WAF before sharing the Mini App."
+    } else {
+        Write-Host "Public /metrics: not exposed (status $($metricsProbe.Status))"
     }
 
     if ($OpenBrowser) {

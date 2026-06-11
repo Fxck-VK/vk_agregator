@@ -4,32 +4,41 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	"io"
-	"net/http"
 	"net/url"
 	"strings"
 )
 
 const maxDataURLBytes = 256 << 20
 
+// FallbackDownloader is the minimal contract used to delegate real provider
+// URLs back to the platform downloader without coupling this package to the
+// artifact service.
+type FallbackDownloader interface {
+	Download(ctx context.Context, url string) (data []byte, contentType string, err error)
+}
+
 // Downloader resolves the mock provider's "mock://" output URLs into concrete
 // bytes so the artifact service can store them, accepts provider-normalized
-// data: URLs, and falls back to plain HTTP for any other public provider URL.
+// data: URLs, and delegates any other provider URL to the configured fallback.
 // The mock provider returns synthetic output URLs (it has no real backend), so a
 // matching synthetic downloader is required to run the full pipeline against
 // real storage.
 type Downloader struct {
-	client *http.Client
+	fallback FallbackDownloader
 }
 
 // NewDownloader builds a mock-aware Downloader.
-func NewDownloader() *Downloader {
-	return &Downloader{client: http.DefaultClient}
+func NewDownloader(fallback ...FallbackDownloader) *Downloader {
+	d := &Downloader{}
+	if len(fallback) > 0 {
+		d.fallback = fallback[0]
+	}
+	return d
 }
 
 // Download returns deterministic synthetic content for mock:// URLs, keyed off
 // the file extension the mock provider encodes; decodes data: URLs from real
-// providers; or performs a real HTTP GET otherwise.
+// providers; or delegates other URLs to the hardened fallback downloader.
 func (d *Downloader) Download(ctx context.Context, rawURL string) ([]byte, string, error) {
 	if strings.HasPrefix(rawURL, "mock://") {
 		return mockContent(rawURL)
@@ -37,23 +46,10 @@ func (d *Downloader) Download(ctx context.Context, rawURL string) ([]byte, strin
 	if strings.HasPrefix(rawURL, "data:") {
 		return decodeDataURL(rawURL)
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
-	if err != nil {
-		return nil, "", err
+	if d.fallback != nil {
+		return d.fallback.Download(ctx, rawURL)
 	}
-	resp, err := d.client.Do(req)
-	if err != nil {
-		return nil, "", err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, "", fmt.Errorf("unexpected status %d", resp.StatusCode)
-	}
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, "", err
-	}
-	return data, resp.Header.Get("Content-Type"), nil
+	return nil, "", fmt.Errorf("mock downloader: unsupported non-mock url")
 }
 
 func decodeDataURL(raw string) ([]byte, string, error) {

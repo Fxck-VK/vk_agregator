@@ -2,6 +2,7 @@ package mock_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -9,6 +10,20 @@ import (
 	"vk-ai-aggregator/internal/adapter/provider/mock"
 	"vk-ai-aggregator/internal/domain"
 )
+
+type fallbackDownloader struct {
+	data        []byte
+	contentType string
+	err         error
+	called      bool
+	seenURL     string
+}
+
+func (d *fallbackDownloader) Download(_ context.Context, rawURL string) ([]byte, string, error) {
+	d.called = true
+	d.seenURL = rawURL
+	return d.data, d.contentType, d.err
+}
 
 func req(op domain.OperationType, mod domain.Modality, prompt string) domain.ProviderRequest {
 	return domain.ProviderRequest{
@@ -134,6 +149,34 @@ func TestDownloaderDecodesDataURL(t *testing.T) {
 	}
 	if contentType != "text/plain" {
 		t.Fatalf("contentType = %q, want text/plain", contentType)
+	}
+}
+
+func TestDownloaderDelegatesNonMockURLsToFallback(t *testing.T) {
+	fallback := &fallbackDownloader{data: []byte("ok"), contentType: "image/png"}
+	d := mock.NewDownloader(fallback)
+
+	data, contentType, err := d.Download(context.Background(), "https://provider.example/output.png")
+	if err != nil {
+		t.Fatalf("download via fallback: %v", err)
+	}
+	if !fallback.called || fallback.seenURL != "https://provider.example/output.png" {
+		t.Fatalf("fallback called=%v seenURL=%q", fallback.called, fallback.seenURL)
+	}
+	if string(data) != "ok" || contentType != "image/png" {
+		t.Fatalf("data=%q contentType=%q", data, contentType)
+	}
+}
+
+func TestDownloaderRejectsNonMockURLWithoutFallback(t *testing.T) {
+	d := mock.NewDownloader()
+
+	_, _, err := d.Download(context.Background(), "https://provider.example/output.png")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !strings.Contains(err.Error(), "unsupported non-mock url") {
+		t.Fatalf("error = %q", err.Error())
 	}
 }
 

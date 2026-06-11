@@ -11,52 +11,52 @@
   "queries": [
     {
       "id": "jobs_created",
-      "title": "Jobs created by surface/operation/modality",
+      "title": "Созданные задачи по surface/operation/modality",
       "promql": "sum by (surface, operation, modality) (increase(vkagg_jobs_created_total[24h]))"
     },
     {
       "id": "job_terminal",
-      "title": "Terminal jobs by status",
+      "title": "Завершенные задачи по статусу",
       "promql": "sum by (status) (increase(vkagg_jobs_terminal_total[24h]))"
     },
     {
       "id": "provider_errors",
-      "title": "Provider errors by provider/model/operation/class",
+      "title": "Ошибки AI-провайдеров по provider/model/operation/class",
       "promql": "sum by (provider, model, operation, error_class) (increase(vkagg_provider_errors_total[24h]))"
     },
     {
       "id": "provider_estimated_cost",
-      "title": "Estimated provider cost",
+      "title": "Оценочная стоимость использования провайдеров",
       "promql": "sum by (provider, model, operation, currency) (increase(vkagg_provider_estimated_cost_total[24h]))"
     },
     {
       "id": "payments_succeeded",
-      "title": "Succeeded payments by provider/source",
+      "title": "Успешные платежи по provider/source",
       "promql": "sum by (provider, source) (increase(payments_succeeded_total[24h]))"
     },
     {
       "id": "payment_topups",
-      "title": "Ledger top-ups by provider",
+      "title": "Пополнения ledger по provider",
       "promql": "sum by (provider) (increase(payment_topups_total[24h]))"
     },
     {
       "id": "billing_mismatches",
-      "title": "Current billing mismatches",
+      "title": "Текущие расхождения billing",
       "promql": "max(vkagg_billing_mismatches)"
     },
     {
       "id": "payment_webhook_backlog",
-      "title": "Payment webhook backlog",
+      "title": "Очередь необработанных payment webhooks",
       "promql": "max by (provider) (payment_webhook_unprocessed_events)"
     },
     {
       "id": "dlq",
-      "title": "Dead-lettered tasks",
+      "title": "Задачи, ушедшие в DLQ",
       "promql": "sum by (phase) (increase(vkagg_dlq_routed_total[24h]))"
     },
     {
       "id": "backup_last_success",
-      "title": "Backup last success",
+      "title": "Последний успешный backup",
       "promql": "max by (target) (vkagg_backup_last_success_timestamp)"
     }
   ]

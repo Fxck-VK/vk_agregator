@@ -75,6 +75,69 @@ function Add-OrUpdate-IngressRoute {
     Set-Content -LiteralPath $ConfigPath -Value $lines -Encoding ASCII
 }
 
+function Add-OrUpdate-MetricsDenyRoute {
+    param(
+        [Parameter(Mandatory = $true)][string]$ConfigPath,
+        [Parameter(Mandatory = $true)][string]$RouteHostname
+    )
+
+    if (-not (Test-Path -LiteralPath $ConfigPath)) {
+        throw "Cloudflare tunnel config was not found: $ConfigPath. Run .\scripts\dev\setup-cloudflare-tunnel.ps1 -Login first."
+    }
+
+    $original = [System.Collections.Generic.List[string]]::new()
+    foreach ($line in Get-Content -LiteralPath $ConfigPath) {
+        $original.Add($line)
+    }
+
+    $lines = [System.Collections.Generic.List[string]]::new()
+    for ($i = 0; $i -lt $original.Count; ) {
+        if ($original[$i].Trim() -eq "- hostname: $RouteHostname") {
+            $end = $i + 1
+            $isMetricsDeny = $false
+            while ($end -lt $original.Count -and -not $original[$end].TrimStart().StartsWith("- ")) {
+                if ($original[$end].Trim().StartsWith("path: ^/metrics")) {
+                    $isMetricsDeny = $true
+                }
+                $end++
+            }
+            if ($isMetricsDeny) {
+                $i = $end
+                continue
+            }
+        }
+        $lines.Add($original[$i])
+        $i++
+    }
+
+    $insertIndex = -1
+    for ($i = 0; $i -lt $lines.Count; $i++) {
+        if ($lines[$i].Trim() -eq "- hostname: $RouteHostname") {
+            $insertIndex = $i
+            break
+        }
+    }
+    if ($insertIndex -lt 0) {
+        for ($i = 0; $i -lt $lines.Count; $i++) {
+            if ($lines[$i].Trim() -eq "- service: http_status:404") {
+                $insertIndex = $i
+                break
+            }
+        }
+    }
+    if ($insertIndex -lt 0) {
+        throw "Could not find Cloudflare tunnel route insertion point."
+    }
+
+    $routeLines = [string[]]@(
+        "  - hostname: $RouteHostname",
+        '    path: ^/metrics(?:$|/)',
+        "    service: http_status:404"
+    )
+    $lines.InsertRange($insertIndex, $routeLines)
+    Set-Content -LiteralPath $ConfigPath -Value $lines -Encoding ASCII
+}
+
 $root = Get-RepoRoot
 $runtime = Get-BotRuntimeDir -Root $root
 if ([string]::IsNullOrWhiteSpace($TunnelConfigPath)) {
@@ -82,6 +145,7 @@ if ([string]::IsNullOrWhiteSpace($TunnelConfigPath)) {
 }
 
 Add-OrUpdate-IngressRoute -ConfigPath $TunnelConfigPath -RouteHostname $Hostname -RouteService $LocalUrl
+Add-OrUpdate-MetricsDenyRoute -ConfigPath $TunnelConfigPath -RouteHostname $Hostname
 
 if (-not $SkipDnsRoute) {
     Write-Host "Creating/updating DNS route: $Hostname -> $TunnelName"

@@ -487,7 +487,64 @@ func metricsRequestAllowed(r *http.Request) bool {
 	if r == nil {
 		return false
 	}
+	if publicProxyHeadersPresent(r) {
+		return false
+	}
 	return privateRemoteAddr(r.RemoteAddr) && privateHost(r.Host)
+}
+
+func publicProxyHeadersPresent(r *http.Request) bool {
+	for _, header := range []string{"X-Forwarded-Host", "X-Original-Host"} {
+		for _, host := range splitHeaderValues(r.Header.Values(header)) {
+			if host != "" && !privateHost(host) {
+				return true
+			}
+		}
+	}
+	for _, header := range []string{"X-Forwarded-For", "X-Real-IP", "CF-Connecting-IP", "True-Client-IP"} {
+		for _, remote := range splitHeaderValues(r.Header.Values(header)) {
+			if remote != "" && !privateRemoteAddr(remote) {
+				return true
+			}
+		}
+	}
+	for _, forwarded := range splitHeaderValues(r.Header.Values("Forwarded")) {
+		if forwardedPublic(forwarded) {
+			return true
+		}
+	}
+	return false
+}
+
+func forwardedPublic(value string) bool {
+	for _, part := range strings.Split(value, ";") {
+		key, raw, ok := strings.Cut(strings.TrimSpace(part), "=")
+		if !ok {
+			continue
+		}
+		raw = strings.Trim(strings.TrimSpace(raw), `"`)
+		switch strings.ToLower(strings.TrimSpace(key)) {
+		case "for":
+			if raw != "" && !privateRemoteAddr(raw) {
+				return true
+			}
+		case "host":
+			if raw != "" && !privateHost(raw) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func splitHeaderValues(values []string) []string {
+	var out []string
+	for _, value := range values {
+		for _, part := range strings.Split(value, ",") {
+			out = append(out, strings.TrimSpace(part))
+		}
+	}
+	return out
 }
 
 func privateRemoteAddr(remote string) bool {

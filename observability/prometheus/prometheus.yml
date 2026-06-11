@@ -122,7 +122,7 @@ scrape_configs:
     metrics_path: /probe
     params:
       module:
-        - http_2xx
+        - public_prometheus_metrics
     static_configs:
       - targets:
           - https://app.neiirohub.ru/metrics

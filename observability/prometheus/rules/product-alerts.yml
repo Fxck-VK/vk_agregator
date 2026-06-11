@@ -8,8 +8,12 @@ groups:
           severity: critical
           surface: api
         annotations:
-          summary: API metrics endpoint is down
-          description: Prometheus cannot scrape the API /metrics endpoint.
+          summary: API не отдает метрики
+          description: Prometheus не может прочитать API /metrics.
+          impact: VK Bot, Mini App BFF, admin/operator API и health checks могут быть недоступны или не наблюдаться.
+          dashboard: Grafana -> Product Observability / Product Health, API
+          action: Проверь, запущен ли cmd/api; открой http://127.0.0.1:8080/healthz и http://127.0.0.1:8080/metrics; смотри .runtime/observability-dev/api-live.err.
+          safe_logs: В чат отправляй только статус health, код ошибки и имя сервиса; не отправляй токены, headers, launch params, prompts или raw user data.
 
       - alert: WorkerDown
         expr: up{job="worker"} == 0
@@ -18,8 +22,12 @@ groups:
           severity: critical
           surface: worker
         annotations:
-          summary: Worker metrics endpoint is down
-          description: Prometheus cannot scrape WORKER_METRICS_ADDR /metrics.
+          summary: Worker не отдает метрики
+          description: Prometheus не может прочитать WORKER_METRICS_ADDR /metrics.
+          impact: Очереди jobs могут перестать обрабатываться, генерации и delivery могут зависнуть.
+          dashboard: Grafana -> Product Observability / Jobs Worker
+          action: Проверь, запущен ли cmd/worker; открой http://127.0.0.1:9090/healthz и http://127.0.0.1:9090/metrics; смотри .runtime/observability-dev/worker-live.err.
+          safe_logs: В чат отправляй только статус worker, queue age и error class; не отправляй prompts, provider payloads, artifact URLs или ключи провайдеров.
 
       - alert: ProviderWebhookDown
         expr: up{job="provider-webhook"} == 0
@@ -28,8 +36,12 @@ groups:
           severity: critical
           surface: payments
         annotations:
-          summary: Provider webhook service metrics endpoint is down
-          description: Prometheus cannot scrape provider-webhook /metrics.
+          summary: Payment webhook service не отдает метрики
+          description: Prometheus не может прочитать provider-webhook /metrics.
+          impact: YooKassa webhook inbox и reconciliation могут не обрабатываться, пополнения могут зависнуть до восстановления сервиса.
+          dashboard: Grafana -> Product Observability / Payments Billing
+          action: Проверь cmd/provider-webhook; открой http://127.0.0.1:8082/readyz и /metrics; смотри .runtime/observability-dev/provider-webhook-live.err.
+          safe_logs: Не отправляй raw YooKassa payload, Authorization, shop id, secret key, payment metadata или user identifiers.
 
       - alert: MiniAppLocalProbeDown
         expr: probe_success{job="blackbox-local-health", instance="http://host.docker.internal:5173/"} == 0
@@ -38,8 +50,12 @@ groups:
           severity: warning
           surface: miniapp
         annotations:
-          summary: Mini App local probe failed
-          description: Vite/Mini App local URL did not return a 2xx response.
+          summary: Локальная Mini App не отвечает
+          description: Vite/Mini App local URL не вернул 2xx.
+          impact: Локальная проверка Mini App и VK iframe могут не открываться.
+          dashboard: Grafana -> Product Observability / Mini App Frontend
+          action: Открой http://127.0.0.1:5173; проверь Vite process и .runtime/observability-dev/vite-live.err; затем проверь API proxy /miniapp/*.
+          safe_logs: Можно отправить HTTP status и browser console error class; не отправляй full launch params, VK_APP_SECRET, user ids или cookies.
 
       - alert: PublicMetricsExposed
         expr: probe_success{job="blackbox-public-metrics"} == 1
@@ -48,8 +64,12 @@ groups:
           severity: critical
           surface: security
         annotations:
-          summary: Public /metrics endpoint appears reachable
-          description: A public metrics probe returned 2xx. Metrics endpoints must stay private.
+          summary: Публичный /metrics доступен снаружи
+          description: Blackbox probe получил 2xx от публичного /metrics. Метрики должны оставаться приватными.
+          impact: Внешний пользователь может увидеть внутренние labels, названия сервисов, счетчики ошибок и структуру продукта.
+          dashboard: Grafana -> Product Observability / Security Config
+          action: Срочно закрой публичный /metrics на Cloudflare/nginx/tunnel; оставь доступ только localhost/VPN/SSH tunnel; перепроверь https://app.neiirohub.ru/metrics и https://vk.neiirohub.ru/metrics.
+          safe_logs: В чат отправляй только URL и HTTP status; не отправляй полный metrics output.
 
       - alert: HighApiErrorRate
         expr: |
@@ -61,8 +81,12 @@ groups:
           severity: warning
           surface: api
         annotations:
-          summary: API 5xx rate is above 5%
-          description: More than 5% of instrumented HTTP requests returned 5xx for 10 minutes.
+          summary: Доля API 5xx выше 5 процентов
+          description: Больше 5 процентов instrumented HTTP requests возвращают 5xx в течение 10 минут.
+          impact: Пользовательские сценарии VK Bot, Mini App, admin/operator API могут падать или деградировать.
+          dashboard: Grafana -> Product Observability / Product Health, API
+          action: Найди route с 5xx в Grafana; проверь api-live.err и зависимости Postgres/Redis/MinIO; начни с последних deploy/config изменений.
+          safe_logs: Отправляй route, status code и sanitized error class; не отправляй request body, auth headers, prompts или launch params.
 
       - alert: ApiLatencyDegraded
         expr: |
@@ -75,8 +99,12 @@ groups:
           severity: warning
           surface: api
         annotations:
-          summary: API p95 latency degraded
-          description: p95 HTTP latency exceeded 500ms for an instrumented route.
+          summary: API p95 latency выше 500ms
+          description: p95 latency instrumented HTTP route выше 500ms.
+          impact: Mini App и bot control paths могут ощущаться медленными, часть клиентов может повторять запросы.
+          dashboard: Grafana -> Product Observability / Product Health, API
+          action: Найди медленный route; проверь Postgres/Redis latency, очередь jobs, внешние зависимости и recent logs.
+          safe_logs: Отправляй route и latency bucket; не отправляй payload, PII, prompts или private artifact URLs.
 
   - name: jobs-workers
     rules:
@@ -87,8 +115,12 @@ groups:
           severity: critical
           surface: jobs
         annotations:
-          summary: Task was routed to DLQ
-          description: A worker task exhausted retries and was routed to the dead-letter queue.
+          summary: Задача ушла в DLQ
+          description: Worker task исчерпал retries и был отправлен в dead-letter queue.
+          impact: Конкретная генерация или delivery не завершились автоматически; пользователю может не прийти результат.
+          dashboard: Grafana -> Product Observability / Jobs Worker
+          action: Проверь phase в DLQ dashboard, worker-live.err и соответствующий error class; исправь причину и реши, можно ли безопасно переобработать задачу.
+          safe_logs: Отправляй phase, operation, modality, error class; не отправляй prompt, raw provider response, artifact URL или user id.
 
       - alert: QueueOldestAgeHigh
         expr: vkagg_queue_oldest_age_seconds > 120
@@ -97,8 +129,12 @@ groups:
           severity: warning
           surface: jobs
         annotations:
-          summary: Queue oldest task age is high
-          description: A Redis stream has work older than 2 minutes.
+          summary: Самая старая задача в очереди старше 2 минут
+          description: В Redis stream есть работа старше 2 минут.
+          impact: Пользователи дольше ждут генерации или доставки результата.
+          dashboard: Grafana -> Product Observability / Jobs Worker
+          action: Проверь, жив ли worker; смотри queue depth/oldest age, provider latency/rate limits и Redis health; при необходимости подними дополнительный worker.
+          safe_logs: Отправляй stream/phase, age, worker status; не отправляй prompt bodies или provider payloads.
 
       - alert: StuckJobsDetected
         expr: vkagg_stuck_jobs > 0
@@ -107,8 +143,12 @@ groups:
           severity: critical
           surface: jobs
         annotations:
-          summary: Stuck jobs detected
-          description: Jobs appear stuck in a non-terminal state.
+          summary: Найдены зависшие jobs
+          description: Jobs находятся в non-terminal state слишком долго.
+          impact: Деньги могли быть зарезервированы, а результат не дошел до пользователя.
+          dashboard: Grafana -> Product Observability / Jobs Worker, Payments Billing
+          action: Проверь stuck job count, worker logs, reservation/capture/release path; не меняй balance вручную, используй ledger-safe путь.
+          safe_logs: Отправляй job status, operation, modality и error class; не отправляй job id вместе с user data, prompts или private URLs.
 
   - name: payments-billing
     rules:
@@ -119,8 +159,12 @@ groups:
           severity: critical
           surface: billing
         annotations:
-          summary: Billing ledger mismatch detected
-          description: Cached balance differs from committed ledger projection.
+          summary: Найдено расхождение billing ledger
+          description: Cached balance отличается от committed ledger projection.
+          impact: Баланс пользователя может отображаться или списываться неверно.
+          dashboard: Grafana -> Product Observability / Payments Billing
+          action: Останови ручные billing changes; проверь ledger projection, recent topups/captures/refunds; исправляй только через ledger/reconciliation, не прямым UPDATE balance.
+          safe_logs: Не отправляй user ids, payment ids, raw ledger rows или provider payloads; используй агрегаты и sanitized mismatch count.
 
       - alert: PaymentWebhookBacklog
         expr: payment_webhook_oldest_unprocessed_age_seconds > 300
@@ -129,8 +173,12 @@ groups:
           severity: critical
           surface: payments
         annotations:
-          summary: Payment webhook inbox is stuck
-          description: The oldest unprocessed payment webhook is older than 5 minutes.
+          summary: Payment webhook inbox не разбирается
+          description: Самый старый необработанный payment webhook старше 5 минут.
+          impact: Успешные платежи могут не превратиться в ledger top-up вовремя.
+          dashboard: Grafana -> Product Observability / Payments Billing
+          action: Проверь cmd/provider-webhook readyz, payment_events backlog, доступ к provider GetPayment и DB; не начисляй кредиты по frontend redirect.
+          safe_logs: Не отправляй raw webhook body, payment metadata, auth headers, shop id или secret key.
 
       - alert: PaymentReconciliationMismatch
         expr: payment_reconciliation_mismatches > 0
@@ -139,8 +187,12 @@ groups:
           severity: critical
           surface: payments
         annotations:
-          summary: Payment reconciliation mismatch
-          description: Provider state and local payment intent state do not match.
+          summary: Reconciliation платежей нашел mismatch
+          description: Provider state и local payment intent state не совпадают.
+          impact: Платеж может быть зависшим, неверно отмененным или не зачисленным.
+          dashboard: Grafana -> Product Observability / Payments Billing
+          action: Проверь reconciliation logs и state machine; сверяй provider state через adapter, не через frontend; исправляй idempotent ledger-safe путем.
+          safe_logs: Отправляй только counts/state names; не отправляй provider-native payload, payment id, user id или credentials.
 
       - alert: PaymentProviderErrors
         expr: increase(payment_provider_errors_total[10m]) > 0
@@ -149,8 +201,12 @@ groups:
           severity: critical
           surface: payments
         annotations:
-          summary: Payment provider API errors detected
-          description: Payment provider API calls are failing.
+          summary: Ошибки API платежного провайдера
+          description: Payment provider API calls завершаются ошибкой.
+          impact: Создание платежей, проверка webhook или reconciliation могут не работать.
+          dashboard: Grafana -> Product Observability / Payments Billing
+          action: Проверь provider-webhook logs, YooKassa/base URL доступность, rate limits и credentials presence; не печатай credential values.
+          safe_logs: Отправляй provider name, operation и sanitized error class; не отправляй Basic Auth, shop id, secret key или raw provider response.
 
       - alert: RefundRollbackFailed
         expr: increase(payment_refunds_total{result="rollback_failed"}[5m]) > 0
@@ -159,8 +215,12 @@ groups:
           severity: critical
           surface: payments
         annotations:
-          summary: Refund rollback failed
-          description: Provider refund and internal compensation both failed. Freeze manual refunds.
+          summary: Не удалось откатить refund
+          description: Provider refund и internal compensation оба завершились ошибкой.
+          impact: Деньги и внутренний баланс могут разойтись; ручные refunds опасны до разбора.
+          dashboard: Grafana -> Product Observability / Payments Billing
+          action: Заморозь ручные refunds; проверь refund operation, ledger compensation path и provider state; восстановление делай только через операторский idempotent flow.
+          safe_logs: Не отправляй provider refund payload, payment id, user id, receipt data или credentials.
 
   - name: providers
     rules:
@@ -174,8 +234,12 @@ groups:
           severity: warning
           surface: providers
         annotations:
-          summary: Provider error rate is high
-          description: Provider non-success rate exceeded 5% for 10 minutes.
+          summary: Ошибки AI provider выше 5 процентов
+          description: Provider non-success rate выше 5 процентов в течение 10 минут.
+          impact: Генерации текста, изображений или видео могут падать или уходить во fallback.
+          dashboard: Grafana -> Product Observability / Providers
+          action: Проверь provider/model/operation/error_class; смотри rate limits, latency, circuit breaker и fallback; при необходимости переключи provider chain.
+          safe_logs: Отправляй provider, model, operation, error class; не отправляй prompt, raw provider request/response, API key или private media URL.
 
       - alert: ProviderRateLimitDetected
         expr: increase(vkagg_provider_rate_limits_total[5m]) > 0
@@ -184,8 +248,12 @@ groups:
           severity: warning
           surface: providers
         annotations:
-          summary: Provider rate limit detected
-          description: A provider returned a rate-limit error.
+          summary: AI provider вернул rate limit
+          description: Provider вернул rate-limit error.
+          impact: Часть jobs может ждать retry, уйти во fallback или завершиться ошибкой при исчерпании retries.
+          dashboard: Grafana -> Product Observability / Providers, Jobs Worker
+          action: Проверь текущий provider quota/rate, fallback health и retry volume; при частом повторе снизь нагрузку или добавь provider в chain.
+          safe_logs: Отправляй provider/model/error class; не отправляй prompt, API key, raw response или account details.
 
       - alert: ProviderFallbackExhausted
         expr: increase(vkagg_provider_fallback_total{reason="exhausted"}[5m]) > 0
@@ -194,8 +262,12 @@ groups:
           severity: critical
           surface: providers
         annotations:
-          summary: Provider fallback exhausted
-          description: All configured providers failed for at least one request.
+          summary: Все AI provider fallback исчерпаны
+          description: Все настроенные providers failed минимум для одного request.
+          impact: Jobs могут становиться failed_terminal, пользователи не получают результат.
+          dashboard: Grafana -> Product Observability / Providers, Jobs Worker
+          action: Проверь provider chain, ключи, quota/rate limits и последние provider error classes; включи рабочий fallback перед повторной обработкой jobs.
+          safe_logs: Отправляй provider list names и error classes; не отправляй keys, prompts или raw provider payloads.
 
   - name: infra-backups
     rules:
@@ -206,8 +278,12 @@ groups:
           severity: critical
           surface: infra
         annotations:
-          summary: Postgres exporter is down
-          description: Prometheus cannot scrape Postgres exporter.
+          summary: Postgres exporter недоступен
+          description: Prometheus не может прочитать Postgres exporter.
+          impact: Мы теряем видимость состояния Postgres, но сама база может продолжать работать.
+          dashboard: Grafana -> Product Observability / Infrastructure
+          action: Проверь контейнер vk-ai-aggregator-postgres-exporter, DATA_SOURCE_NAME presence и доступ к postgres:5432; затем проверь Prometheus target.
+          safe_logs: Не отправляй DSN целиком, DB password или connection string; отправляй только статус target и sanitized error.
 
       - alert: RedisExporterDown
         expr: up{job="redis-exporter"} == 0
@@ -216,8 +292,12 @@ groups:
           severity: critical
           surface: infra
         annotations:
-          summary: Redis exporter is down
-          description: Prometheus cannot scrape Redis exporter.
+          summary: Redis exporter недоступен
+          description: Prometheus не может прочитать Redis exporter.
+          impact: Мы теряем видимость Redis queues/rate limits, но Redis может продолжать работать.
+          dashboard: Grafana -> Product Observability / Infrastructure, Jobs Worker
+          action: Проверь контейнер vk-ai-aggregator-redis-exporter, REDIS_ADDR presence и доступ к redis:6379; затем проверь Prometheus target.
+          safe_logs: Не отправляй Redis password/DSN; отправляй только target status и sanitized error.
 
       - alert: DiskSpaceWarning
         expr: |
@@ -231,8 +311,12 @@ groups:
           severity: warning
           surface: infra
         annotations:
-          summary: Disk usage above 80%
-          description: Host disk usage is above warning threshold.
+          summary: Диск заполнен больше чем на 80 процентов
+          description: Host disk usage выше warning threshold.
+          impact: Docker volumes, Postgres, MinIO artifacts, logs или backups могут начать деградировать.
+          dashboard: Grafana -> Product Observability / Infrastructure
+          action: Найди mount/device в Grafana; проверь Docker volumes, logs, artifacts и backups; чистку делай только после понимания, что удаляешь.
+          safe_logs: Отправляй mount/device и проценты; не отправляй paths с пользовательскими файлами или private artifact URLs.
 
       - alert: DiskSpaceCritical
         expr: |
@@ -246,8 +330,15 @@ groups:
           severity: critical
           surface: infra
         annotations:
-          summary: Disk usage above 90%
-          description: Host disk usage is above critical threshold.
+          summary: Диск заполнен больше чем на 90 процентов
+          description: Host disk usage выше critical threshold.
+          impact: Запись в Postgres/MinIO/logs может падать; jobs, payments и backups могут ломаться.
+          dashboard: Grafana -> Product Observability / Infrastructure
+          action: >
+            Срочно освободи место: проверь logs, old artifacts,
+            Docker images/containers и backup retention; не удаляй volumes
+            с данными без отдельного подтверждения.
+          safe_logs: Отправляй mount/device и проценты; не отправляй private paths, artifact URLs или содержимое пользовательских файлов.
 
       - alert: BackupStale
         expr: time() - vkagg_backup_last_success_timestamp > 86400
@@ -256,5 +347,9 @@ groups:
           severity: critical
           surface: backups
         annotations:
-          summary: Latest backup is older than 24 hours
-          description: Backup metrics report no successful backup in the last day.
+          summary: Последний успешный backup старше 24 часов
+          description: Backup metrics не видит успешного backup за последние сутки.
+          impact: При сбое данных может не быть свежей точки восстановления.
+          dashboard: Grafana -> Product Observability / Infrastructure, Product Health
+          action: Проверь backup job/script logs, место на диске, доступ к target storage и textfile metrics; не запускай destructive restore без отдельного подтверждения.
+          safe_logs: Отправляй target name, timestamp и exit class; не отправляй backup credentials, full paths с приватными данными или dumps.

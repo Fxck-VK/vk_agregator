@@ -138,6 +138,35 @@ func TestValidateImageProvider(t *testing.T) {
 	}
 }
 
+func TestValidateProviderChainRejectsUnknownProvider(t *testing.T) {
+	cfg := config.Config{ProviderChain: []string{"deepinfra", "unknown"}}
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "PROVIDER_CHAIN") {
+		t.Fatalf("expected PROVIDER_CHAIN validation error, got %v", err)
+	}
+}
+
+func TestValidateProductionRejectsMockProvider(t *testing.T) {
+	cfg := validProductionConfig()
+	cfg.ProviderChain = []string{"deepinfra", "mock"}
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "mock provider") {
+		t.Fatalf("expected mock provider validation error, got %v", err)
+	}
+}
+
+func TestValidateProductionRejectsMockPaymentProvider(t *testing.T) {
+	cfg := validProductionConfig()
+	cfg.PaymentProvider = "mock"
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "PAYMENT_PROVIDER=mock") {
+		t.Fatalf("expected mock payment provider validation error, got %v", err)
+	}
+}
+
 func TestLoadDeepInfraConfig(t *testing.T) {
 	t.Setenv("PROVIDER", "deepinfra")
 	t.Setenv("DEEPINFRA_API_KEY", "test-key")
@@ -173,6 +202,23 @@ func TestLoadDeepInfraConfig(t *testing.T) {
 	}
 	if !cfg.DeepInfraImageReferenceEnabled {
 		t.Fatal("DeepInfraImageReferenceEnabled was not loaded")
+	}
+}
+
+func validProductionConfig() config.Config {
+	return config.Config{
+		Env:                 "production",
+		Provider:            "deepinfra",
+		ProviderChain:       []string{"deepinfra"},
+		DeepInfraAPIKey:     "test-deepinfra-key",
+		VKSecret:            "test-vk-secret",
+		AdminToken:          "test-admin-token",
+		VKConfirmationToken: "test-confirmation-token",
+		VKAppSecret:         "test-vk-app-secret",
+		PaymentProvider:     "yookassa",
+		YooKassaShopID:      "test-shop",
+		YooKassaSecretKey:   "test-yookassa-secret",
+		YooKassaReturnURL:   "https://example.com",
 	}
 }
 

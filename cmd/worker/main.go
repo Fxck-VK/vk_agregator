@@ -184,8 +184,9 @@ func main() {
 	}
 	if hasMockProvider {
 		// The mock provider emits synthetic mock:// output URLs, so use a matching
-		// downloader to resolve them into real bytes for storage.
-		artOpts = append(artOpts, artifactservice.WithDownloader(mock.NewDownloader()))
+		// downloader to resolve them into real bytes for storage while delegating
+		// real provider URLs to the SSRF-hardened platform downloader.
+		artOpts = append(artOpts, artifactservice.WithDownloader(mock.NewDownloader(artifactservice.NewHTTPDownloader())))
 	}
 
 	var openAIModerator *openai.Moderator

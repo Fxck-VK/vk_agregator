@@ -14,6 +14,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"time"
 
@@ -26,6 +27,8 @@ import (
 
 // maxRemoteBytes caps how much a remote download may pull, guarding memory.
 const maxRemoteBytes = 256 << 20 // 256 MiB
+
+var sensitiveURLPattern = regexp.MustCompile(`(?i)(https?|mock)://[^\s"'<>]+|data:[^\s"'<>]+`)
 
 // ObjectStore is the minimal blob storage contract the service needs. It is
 // satisfied by the S3/MinIO adapter and by in-memory test doubles.
@@ -64,6 +67,13 @@ type Option func(*Service)
 // HTTP client).
 func WithDownloader(d Downloader) Option {
 	return func(s *Service) { s.downloader = d }
+}
+
+// NewHTTPDownloader returns the default SSRF-hardened remote downloader. It is
+// exposed for wrappers that need to handle synthetic URLs while preserving the
+// same HTTP egress policy for real provider URLs.
+func NewHTTPDownloader() Downloader {
+	return newHTTPDownloader()
 }
 
 // WithAllowedHosts restricts the default downloader to an egress allowlist of
@@ -121,9 +131,10 @@ func (s *Service) SaveRemoteArtifact(ctx context.Context, ownerID uuid.UUID, job
 	}
 	data, contentType, err := s.downloader.Download(ctx, url)
 	if err != nil {
+		err = safeDownloadError(err)
 		tracing.RecordError(span, err)
 		span.End()
-		return nil, fmt.Errorf("artifactservice: download %s: %w", url, err)
+		return nil, err
 	}
 	span.SetAttributes(attribute.Int("artifact.download_bytes", len(data)))
 	span.End()
@@ -131,6 +142,17 @@ func (s *Service) SaveRemoteArtifact(ctx context.Context, ownerID uuid.UUID, job
 		contentType = "application/octet-stream"
 	}
 	return s.saveBytes(ctx, ownerID, jobID, kind, mediaType, contentType, data)
+}
+
+func safeDownloadError(err error) error {
+	if err == nil {
+		return nil
+	}
+	msg := sensitiveURLPattern.ReplaceAllString(err.Error(), "[redacted-url]")
+	if strings.TrimSpace(msg) == "" {
+		msg = "download failed"
+	}
+	return fmt.Errorf("artifactservice: download remote artifact: %s", msg)
 }
 
 // saveBytes computes the content hash, deduplicates by (owner, sha256), uploads
