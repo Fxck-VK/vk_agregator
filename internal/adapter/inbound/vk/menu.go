@@ -238,6 +238,9 @@ type accountView struct {
 	Balance               int64
 	CompletedGenerations  int
 	InvitedCount          int
+	RegisteredCount       int
+	ActivatedCount        int
+	RewardedCount         int
 	ReferralLink          string
 	ReferrerRewardCredits int64
 }
@@ -367,11 +370,14 @@ func (h *Handler) accountView(ctx context.Context, userID uuid.UUID, balance, gr
 	if h.deps.Referrals == nil {
 		return view, nil
 	}
-	code, invited, err := h.deps.Referrals.Stats(ctx, userID)
+	code, stats, err := h.deps.Referrals.StatsDetailed(ctx, userID)
 	if err != nil {
 		return view, err
 	}
-	view.InvitedCount = invited
+	view.InvitedCount = stats.Total()
+	view.RegisteredCount = stats.RegisteredCount
+	view.ActivatedCount = stats.ActivatedCount
+	view.RewardedCount = stats.RewardedCount
 	view.ReferralLink = buildReferralLink(h.cfg.ReferralLinkBase, groupID, code.Code)
 	return view, nil
 }
@@ -705,8 +711,11 @@ func accountDetailsText(view accountView) string {
 	if referralLink == "" {
 		referralLink = "ссылка появится после настройки VK_REFERRAL_LINK_BASE"
 	}
-	return fmt.Sprintf("👤 Мой аккаунт\n\n• безлимитное общение с НейроХаб!\n\n👥 Реферальная программа\n\n• Приглашённых: %d\n\n• Ссылка: %s\n\nПоддержка: @neirohub_help",
+	return fmt.Sprintf("👤 Мой аккаунт\n\n• безлимитное общение с НейроХаб!\n\n👥 Реферальная программа\n\n• Приглашённых: %d\n• Зарегистрировано: %d\n• Активировано: %d\n• Бонус начислен: %d\n\n• Ссылка: %s\n\nПоддержка: @neirohub_help",
 		view.InvitedCount,
+		view.RegisteredCount,
+		view.ActivatedCount,
+		view.RewardedCount,
 		referralLink,
 	)
 }

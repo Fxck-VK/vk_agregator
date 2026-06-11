@@ -173,18 +173,21 @@ Production webhook must be HTTPS or behind trusted reverse proxy headers.
 Useful examples:
 
 ```bash
+# ADMIN_AUTH_HEADER carries X-Admin-Token; OPERATOR_IDEMPOTENCY_HEADER carries
+# a unique X-Idempotency-Key for the refund command.
+
 curl "http://localhost:8080/billing/payment-intents/pending?stale_after=30s&stale_only=true" \
-  -H "X-Admin-Token: $ADMIN_TOKEN"
+  -H "$ADMIN_AUTH_HEADER"
 
 curl "http://localhost:8080/billing/payment-events/unprocessed?provider=yookassa" \
-  -H "X-Admin-Token: $ADMIN_TOKEN"
+  -H "$ADMIN_AUTH_HEADER"
 
 curl -X POST "http://localhost:8080/billing/payment-intents/<intent_id>/sync" \
-  -H "X-Admin-Token: $ADMIN_TOKEN"
+  -H "$ADMIN_AUTH_HEADER"
 
 curl -X POST "http://localhost:8080/billing/payment-intents/<intent_id>/refund" \
-  -H "X-Admin-Token: $ADMIN_TOKEN" \
-  -H "X-Idempotency-Key: operator-ticket-123" \
+  -H "$ADMIN_AUTH_HEADER" \
+  -H "$OPERATOR_IDEMPOTENCY_HEADER" \
   -H "Content-Type: application/json" \
   -d '{"reason":"manual operator refund"}'
 ```
@@ -215,21 +218,23 @@ curl -X POST "http://localhost:8080/billing/payment-intents/<intent_id>/refund" 
 Useful examples:
 
 ```bash
+# ADMIN_AUTH_HEADER carries X-Admin-Token for local operator examples.
+
 curl "http://localhost:8080/billing/payment-products?active=true" \
-  -H "X-Admin-Token: $ADMIN_TOKEN"
+  -H "$ADMIN_AUTH_HEADER"
 
 curl -X POST "http://localhost:8080/billing/payment-products" \
-  -H "X-Admin-Token: $ADMIN_TOKEN" \
+  -H "$ADMIN_AUTH_HEADER" \
   -H "Content-Type: application/json" \
   -d '{"code":"credits_250","title":"NeiroHub 250 credits","amount":20000,"currency":"rub","credits":250,"vat_code":1,"payment_subject":"service","payment_mode":"full_prepayment"}'
 
 curl -X PATCH "http://localhost:8080/billing/payment-products/<product_id>" \
-  -H "X-Admin-Token: $ADMIN_TOKEN" \
+  -H "$ADMIN_AUTH_HEADER" \
   -H "Content-Type: application/json" \
   -d '{"amount":21000,"credits":260}'
 
 curl -X POST "http://localhost:8080/billing/payment-products/<product_id>/disable" \
-  -H "X-Admin-Token: $ADMIN_TOKEN"
+  -H "$ADMIN_AUTH_HEADER"
 ```
 
 ## Недавняя глава 6: Mini App Payment History UI

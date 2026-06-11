@@ -117,8 +117,8 @@ Referral-система общая для VK bot и VK Mini App:
 - Не создавай отдельную referral identity для Mini App.
 - Rewards только через billing ledger entries с idempotency keys.
 - `/start <code>` и VK `ref` - control path, не billable Job.
-- Mini App referral endpoint в будущем должен использовать тот же
-  `referralservice`.
+- Mini App referral endpoint использует тот же `referralservice` и должен
+  проверять launch params перед применением кода.
 
 ## Cloudflare Tunnel
 

@@ -1,7 +1,7 @@
 {
   "schema_version": 3,
-  "updated_at": "2026-06-10T20:39:00+03:00",
-  "branch": "serega",
+  "updated_at": "2026-06-10T22:58:20+03:00",
+  "branch": "fastlife_dev",
   "git_ref_policy": "Use git rev-parse HEAD/origin/main for moving SHAs; this file does not track branch head commits.",
   "purpose": "Minimal machine-readable current context and routing for agents.",
   "read_policy": {
@@ -85,7 +85,8 @@
         "docs/archive/2026-06/TASKS.legacy.md",
         "docs/archive/2026-06/ROADMAP.legacy.md",
         "docs/archive/2026-06/TESTING.legacy.md",
-        "docs/archive/2026-06/BILLING_AGENT_HANDOFF.legacy.md"
+        "docs/archive/2026-06/BILLING_AGENT_HANDOFF.legacy.md",
+        "docs/archive/2026-06/MERGE_HANDOFF.integration-web-backend.legacy.md"
       ],
       "policy": "Keep active docs short and current; use docs/archive/** only for historical investigation or explicitly requested archaeology."
     }

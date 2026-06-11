@@ -87,6 +87,7 @@ func NewHandler(cfg config.Config, deps Deps) http.Handler {
 		CodeLength:                  cfg.ReferralCodeLength,
 		ReferrerSignupRewardCredits: cfg.ReferralReferrerSignupRewardCredits,
 		ReferredSignupRewardCredits: cfg.ReferralReferredSignupRewardCredits,
+		RewardOnActivation:          cfg.ReferralRewardOnActivation,
 	})
 
 	return vkinbound.NewHandler(vkinbound.Config{

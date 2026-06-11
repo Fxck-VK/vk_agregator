@@ -2190,18 +2190,24 @@ body {
   gap: 8px;
 }
 
-.payment-pending__actions button {
+.payment-pending__actions button,
+.payment-pending__actions a {
   min-height: 42px;
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-control);
   background: var(--surface-2);
   color: var(--fg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   font: inherit;
   font-weight: 800;
+  text-decoration: none;
   cursor: pointer;
 }
 
-.payment-pending__actions button:first-child {
+.payment-pending__actions button:first-child,
+.payment-pending__actions a:first-child {
   border-color: transparent;
   background: var(--gradient-brand);
   color: #fff;
@@ -2215,10 +2221,126 @@ body {
   border-radius: var(--radius-control);
   background: color-mix(in srgb, var(--brand-cyan) 9%, transparent);
   color: var(--brand-cyan);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   font: inherit;
   font-size: 13px;
   font-weight: 800;
+  text-decoration: none;
   cursor: pointer;
+}
+
+.referral-card {
+  display: grid;
+  gap: 12px;
+}
+
+.referral-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.referral-card__head h2 {
+  margin: 0 0 4px;
+  font-size: 15px;
+}
+
+.referral-card__head p {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.referral-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.referral-stats > div {
+  min-width: 0;
+  min-height: 66px;
+  display: grid;
+  align-content: center;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-control);
+  background: var(--surface-2);
+}
+
+.referral-stats span {
+  color: var(--fg-muted);
+  font-size: 12px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.referral-stats strong {
+  color: var(--fg);
+  font-size: 20px;
+  font-weight: 850;
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+
+.referral-link-box {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--brand-cyan) 30%, var(--glass-border));
+  border-radius: var(--radius-control);
+  background: color-mix(in srgb, var(--brand-cyan) 8%, var(--surface-2));
+}
+
+.referral-link-box span {
+  color: var(--brand-cyan);
+  font-size: 12px;
+  font-weight: 850;
+  letter-spacing: 0;
+  overflow-wrap: anywhere;
+}
+
+.referral-link-box p {
+  margin: 0;
+  color: var(--fg);
+  font-size: 13px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.referral-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.referral-actions button {
+  min-height: 42px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-control);
+  background: var(--surface-2);
+  color: var(--fg);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.referral-actions button:first-child {
+  border-color: transparent;
+  background: var(--gradient-brand);
+  color: #fff;
+}
+
+.referral-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .payment-products {
@@ -2369,16 +2491,21 @@ body {
   white-space: nowrap;
 }
 
-.payment-history-row__meta button {
+.payment-history-row__meta button,
+.payment-history-row__meta a {
   min-height: 32px;
   padding: 0 11px;
   border: 1px solid transparent;
   border-radius: var(--radius-control);
   background: var(--gradient-brand);
   color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   font: inherit;
   font-size: 12px;
   font-weight: 850;
+  text-decoration: none;
   cursor: pointer;
 }
 

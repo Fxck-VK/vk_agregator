@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@vkontakte/vkui";
+import bridge from "@vkontakte/vk-bridge";
 import {
   apiUserMessage,
   createIdempotencyKey,
   createPaymentIntent,
+  getReferral,
   listPaymentIntents,
   listPaymentProducts,
   statusKind,
@@ -11,11 +13,13 @@ import {
   type Job,
   type PaymentIntent,
   type PaymentProduct,
+  type ReferralInfo,
 } from "../api/client";
 import { modalityByOperation, type ModalityId } from "../chat/types";
 import neuroHubBanner from "../assets/neurohub-banner.png";
 import { formatCredits } from "../ui/credits";
 import { dedupeHistoryJobs, historyCountLabel, jobDisplayTitle } from "../utils/jobDisplay";
+import { openExternalUrl } from "../utils/openExternalUrl";
 import type { ThemeMode } from "./theme";
 
 type SettingsScreenProps = {
@@ -161,6 +165,10 @@ export function SettingsScreen({
   const [paymentsLoading, setPaymentsLoading] = useState(false);
   const [paymentsNotice, setPaymentsNotice] = useState("");
   const [paymentPendingCode, setPaymentPendingCode] = useState("");
+  const [referralInfo, setReferralInfo] = useState<ReferralInfo | null>(null);
+  const [referralLoading, setReferralLoading] = useState(false);
+  const [referralNotice, setReferralNotice] = useState("");
+  const [referralCopied, setReferralCopied] = useState(false);
   const [spinning, setSpinning] = useState(false);
   const activePaymentIntent = useMemo(() => findActivePaymentIntent(paymentIntents), [paymentIntents]);
   const visiblePayments = useMemo(() => paymentIntents.slice(0, 8), [paymentIntents]);
@@ -172,6 +180,19 @@ export function SettingsScreen({
     }
     return deduped.filter((job) => modalityByOperation(job.operation).id === historyFilter);
   }, [jobs, historyFilter]);
+
+  const refreshReferral = useCallback(async () => {
+    setReferralLoading(true);
+    try {
+      const referral = await getReferral();
+      setReferralInfo(referral);
+      setReferralNotice("");
+    } catch (error) {
+      setReferralNotice(apiUserMessage(error));
+    } finally {
+      setReferralLoading(false);
+    }
+  }, []);
 
   const refreshPaymentIntents = useCallback(async () => {
     setPaymentsLoading(true);
@@ -191,6 +212,7 @@ export function SettingsScreen({
     setSpinning(true);
     onRefreshBalance();
     void refreshPaymentIntents();
+    void refreshReferral();
     window.setTimeout(() => setSpinning(false), 900);
   };
 
@@ -224,6 +246,39 @@ export function SettingsScreen({
     };
   }, []);
 
+  useEffect(() => {
+    void refreshReferral();
+  }, [refreshReferral]);
+
+  async function copyReferralLink() {
+    const link = referralInfo?.invite_url;
+    if (!link) return;
+    try {
+      await bridge.send("VKWebAppCopyText", { text: link });
+    } catch {
+      try {
+        await navigator.clipboard.writeText(link);
+      } catch {
+        setReferralNotice("Не удалось скопировать ссылку");
+        return;
+      }
+    }
+    setReferralCopied(true);
+    setReferralNotice("Ссылка скопирована");
+    window.setTimeout(() => setReferralCopied(false), 1400);
+  }
+
+  async function shareReferralLink() {
+    const link = referralInfo?.invite_url;
+    if (!link) return;
+    try {
+      await bridge.send("VKWebAppShare", { link });
+      setReferralNotice("");
+    } catch {
+      await copyReferralLink();
+    }
+  }
+
   async function handleTopUp(product: PaymentProduct) {
     if (paymentPendingCode) return;
     if (activePaymentIntent && !creatingNewPayment) {
@@ -255,17 +310,18 @@ export function SettingsScreen({
         void refreshPaymentIntents();
         return;
       }
-      window.location.assign(intent.confirmation_url);
+      void refreshPaymentIntents();
+      const opened = await openExternalUrl(intent.confirmation_url);
+      setTopUpNotice(
+        opened
+          ? "Оплата открыта во внешнем окне. После оплаты баланс обновится автоматически."
+          : "Платеж создан. Нажмите «Продолжить оплату», чтобы открыть оплату во внешнем окне.",
+      );
     } catch (error) {
       setTopUpNotice(apiUserMessage(error));
     } finally {
       setPaymentPendingCode("");
     }
-  }
-
-  function handleContinuePayment() {
-    if (!activePaymentIntent?.confirmation_url) return;
-    window.location.assign(activePaymentIntent.confirmation_url);
   }
 
   function handleCreateNewPayment() {
@@ -359,9 +415,9 @@ export function SettingsScreen({
             </span>
             <p>После оплаты баланс обновится автоматически.</p>
             <div className="payment-pending__actions">
-              <button type="button" onClick={handleContinuePayment}>
+              <a href={activePaymentIntent.confirmation_url} target="_blank" rel="noopener noreferrer">
                 Продолжить оплату
-              </button>
+              </a>
               <button type="button" onClick={handleCreateNewPayment}>
                 Создать новый платеж
               </button>
@@ -383,9 +439,14 @@ export function SettingsScreen({
               />
             </div>
             {creatingNewPayment && activePaymentIntent ? (
-              <button type="button" className="payment-current-link" onClick={handleContinuePayment}>
+              <a
+                className="payment-current-link"
+                href={activePaymentIntent.confirmation_url}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
                 Продолжить текущий платеж
-              </button>
+              </a>
             ) : null}
             <div className="payment-products" aria-label="Тарифы пополнения">
               {productsLoading ? (
@@ -413,6 +474,83 @@ export function SettingsScreen({
           </>
         )}
         {topUpNotice && <p className="settings-notice">{topUpNotice}</p>}
+      </section>
+
+      <section className="settings-card referral-card" aria-labelledby="settings-referral-title">
+        <div className="referral-card__head">
+          <div>
+            <h2 id="settings-referral-title">Реферальная программа</h2>
+            <p>безлимитное общение с НейроХаб</p>
+          </div>
+          <button
+            type="button"
+            className="chat__history-btn"
+            aria-label="Обновить реферальную статистику"
+            onClick={() => void refreshReferral()}
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              className={referralLoading ? "nh-spin" : ""}
+              aria-hidden="true"
+            >
+              <path
+                d="M3 12a9 9 0 1 0 3-6.7M3 3v6h6"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
+        </div>
+
+        {referralLoading && !referralInfo ? (
+          <div className="settings-empty">Загружаем ссылку</div>
+        ) : referralInfo ? (
+          <>
+            <div className="referral-stats" aria-label="Реферальная статистика">
+              <div>
+                <span>Приглашённых</span>
+                <strong>{referralInfo.invited_count}</strong>
+              </div>
+              <div>
+                <span>Зарегистрировано</span>
+                <strong>{referralInfo.registered_count}</strong>
+              </div>
+              <div>
+                <span>Активировано</span>
+                <strong>{referralInfo.activated_count}</strong>
+              </div>
+              <div>
+                <span>Бонус начислен</span>
+                <strong>{referralInfo.rewarded_count}</strong>
+              </div>
+              <div>
+                <span>Бонус другу</span>
+                <strong>+{formatCredits(referralInfo.referrer_signup_reward_credits)}</strong>
+              </div>
+            </div>
+            <div className="referral-link-box">
+              <span>{referralInfo.code}</span>
+              <p>{referralInfo.invite_url || "Ссылка появится после настройки VK_REFERRAL_LINK_BASE"}</p>
+            </div>
+            <div className="referral-actions">
+              <button type="button" disabled={!referralInfo.invite_url} onClick={() => void shareReferralLink()}>
+                Поделиться
+              </button>
+              <button type="button" disabled={!referralInfo.invite_url} onClick={() => void copyReferralLink()}>
+                {referralCopied ? "Скопировано" : "Скопировать"}
+              </button>
+            </div>
+            <p className="settings-notice">Поддержка: @neirohub_help</p>
+          </>
+        ) : (
+          <div className="settings-empty">Реферальная ссылка пока недоступна</div>
+        )}
+        {referralNotice && <p className="settings-notice">{referralNotice}</p>}
       </section>
 
       <section className="settings-card payment-history-card" aria-labelledby="settings-payment-history-title">
@@ -465,9 +603,9 @@ export function SettingsScreen({
                   <div className="payment-history-row__meta">
                     <time dateTime={intent.created_at}>{dateLabel(intent.created_at)}</time>
                     {active ? (
-                      <button type="button" onClick={() => window.location.assign(intent.confirmation_url || "")}>
+                      <a href={intent.confirmation_url} target="_blank" rel="noopener noreferrer">
                         Продолжить
-                      </button>
+                      </a>
                     ) : null}
                   </div>
                 </div>

@@ -167,6 +167,33 @@ type BalanceDTO struct {
 	BalanceCredits int64 `json:"balance_credits"`
 }
 
+// ReferralDTO is the Mini App-safe representation of the shared referral state.
+// It never exposes internal user IDs or another user's profile data.
+type ReferralDTO struct {
+	Code                        string `json:"code"`
+	InviteURL                   string `json:"invite_url"`
+	InvitedCount                int    `json:"invited_count"`
+	RegisteredCount             int    `json:"registered_count"`
+	ActivatedCount              int    `json:"activated_count"`
+	RewardedCount               int    `json:"rewarded_count"`
+	ReferrerSignupRewardCredits int64  `json:"referrer_signup_reward_credits"`
+	ReferredSignupRewardCredits int64  `json:"referred_signup_reward_credits"`
+}
+
+// ApplyReferralRequest accepts only the public referral code. User identity is
+// derived from verified Mini App launch params in the handler.
+type ApplyReferralRequest struct {
+	Code string `json:"code"`
+}
+
+// ApplyReferralDTO reports a safe, no-PII referral acceptance result.
+type ApplyReferralDTO struct {
+	Applied        bool `json:"applied"`
+	AlreadyApplied bool `json:"already_applied"`
+	InvalidCode    bool `json:"invalid_code"`
+	SelfReferral   bool `json:"self_referral"`
+}
+
 // PaymentProductDTO is the Mini App-safe representation of an active top-up
 // catalog entry.
 type PaymentProductDTO struct {

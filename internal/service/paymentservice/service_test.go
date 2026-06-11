@@ -249,6 +249,10 @@ func TestCreateIntentReusesActiveWaitingIntentUnlessForceNew(t *testing.T) {
 		Code: "credits_100", Title: "100 credits", Amount: 9900,
 		Currency: domain.CurrencyRUB, Credits: 100, PriceVersion: 1, IsActive: true,
 	})
+	repo.PutProduct(&domain.PaymentProduct{
+		Code: "credits_500", Title: "500 credits", Amount: 39900,
+		Currency: domain.CurrencyRUB, Credits: 500, PriceVersion: 1, IsActive: true,
+	})
 	provider := paymentmock.New()
 	svc := paymentservice.New(repo, provider, paymentservice.Config{})
 	userID := uuid.New()
@@ -276,6 +280,20 @@ func TestCreateIntentReusesActiveWaitingIntentUnlessForceNew(t *testing.T) {
 	}
 	if reused.Created || !reused.ReusedActive || reused.Intent.ID != first.Intent.ID {
 		t.Fatalf("expected active intent reuse, got %+v first=%+v", reused, first)
+	}
+
+	differentProduct, err := svc.CreateIntent(ctx, paymentservice.CreateIntentInput{
+		UserID:         userID,
+		ProductCode:    "credits_500",
+		ReceiptEmail:   "new@example.com",
+		IdempotencyKey: "payment:different-product",
+		Source:         "vk_miniapp",
+	})
+	if err != nil {
+		t.Fatalf("create different product intent: %v", err)
+	}
+	if !differentProduct.Created || differentProduct.ReusedActive || differentProduct.Intent.ID == first.Intent.ID || differentProduct.Intent.Credits != 500 {
+		t.Fatalf("expected new intent for different product, got %+v first=%+v", differentProduct, first)
 	}
 
 	forced, err := svc.CreateIntent(ctx, paymentservice.CreateIntentInput{

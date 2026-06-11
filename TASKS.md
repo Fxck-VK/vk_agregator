@@ -35,7 +35,6 @@ phase plans live under `docs/archive/**` and are not active context by default.
   compact summaries and recent hot turns only.
 - Replace local/extractive dialog summary compaction with a dedicated cheap
   summarizer job/model if semantic summaries become necessary.
-- Add Mini App referral/account UI over the shared referral backend.
 - Add admin DLQ inspection/replay tooling and worker per-pool isolation when
   traffic requires it.
 
@@ -50,6 +49,7 @@ phase plans live under `docs/archive/**` and are not active context by default.
   replay dedup, idempotent manual refund and safe Mini App payment history.
 - Merge/document routing cleanup: stale merge handoff docs archived and the
   current merge checklist shortened.
+- Mini App referral/account UI over the shared referral backend.
 
 ## Archived History
 

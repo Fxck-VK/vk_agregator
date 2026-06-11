@@ -145,8 +145,8 @@ func webhookHandler(processor *paymentservice.WebhookProcessor, logger *slog.Log
 			"provider", event.Provider,
 			"event_type", event.EventType,
 			"created", created,
-			"provider_payment_id", event.ProviderPaymentID,
-			"provider_refund_id", event.ProviderRefundID,
+			"has_provider_payment_id", event.ProviderPaymentID != "",
+			"has_provider_refund_id", event.ProviderRefundID != "",
 		)
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))

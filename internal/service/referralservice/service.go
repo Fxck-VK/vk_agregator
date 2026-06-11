@@ -27,6 +27,10 @@ type Config struct {
 	CodeLength                  int
 	ReferrerSignupRewardCredits int64
 	ReferredSignupRewardCredits int64
+	// RewardOnActivation gates rollout of signup rewards. When false, Activate
+	// only marks the referral as activated; a later Activate with this flag
+	// enabled can safely post the ledger reward once.
+	RewardOnActivation bool
 }
 
 // Service provides shared referral operations.
@@ -117,7 +121,8 @@ type ApplyResult struct {
 }
 
 // Apply records a referral relation if the code is valid and the user has not
-// already been referred. It is idempotent per referred user.
+// already been referred. It is idempotent per referred user and does not grant
+// signup rewards; rewards are posted only by Activate.
 func (s *Service) Apply(ctx context.Context, input ApplyInput) (ApplyResult, error) {
 	if s == nil || s.repo == nil {
 		return ApplyResult{}, nil
@@ -144,6 +149,7 @@ func (s *Service) Apply(ctx context.Context, input ApplyInput) (ApplyResult, err
 		ReferredUserID: input.ReferredUserID,
 		ReferralCode:   code.Code,
 		Source:         input.Source,
+		Status:         domain.ReferralStatusRegistered,
 		RewardStatus:   domain.ReferralRewardPending,
 	}
 	if err := s.repo.CreateReferral(ctx, referral); err != nil {
@@ -159,30 +165,84 @@ func (s *Service) Apply(ctx context.Context, input ApplyInput) (ApplyResult, err
 		}
 		referral = existing
 	} else {
-		if err := s.applySignupRewards(ctx, referral); err != nil {
-			return ApplyResult{}, err
-		}
 		return ApplyResult{Applied: true, Referral: referral}, nil
-	}
-	if referral.RewardStatus != domain.ReferralRewardApplied {
-		if err := s.applySignupRewards(ctx, referral); err != nil {
-			return ApplyResult{}, err
-		}
 	}
 	return ApplyResult{AlreadyApplied: true, Referral: referral}, nil
 }
 
+// ActivateInput describes a product activation event for the referred user.
+type ActivateInput struct {
+	ReferredUserID uuid.UUID
+	Source         domain.ReferralSource
+}
+
+// ActivateResult reports whether a referral was activated and rewarded.
+type ActivateResult struct {
+	Activated       bool
+	Rewarded        bool
+	AlreadyRewarded bool
+	NotFound        bool
+	Referral        *domain.Referral
+}
+
+// Activate marks the referred user's relation as activated and posts configured
+// signup rewards through the billing ledger exactly once.
+func (s *Service) Activate(ctx context.Context, input ActivateInput) (ActivateResult, error) {
+	if s == nil || s.repo == nil || input.ReferredUserID == uuid.Nil {
+		return ActivateResult{NotFound: true}, nil
+	}
+	referral, err := s.repo.GetReferralByReferredUserID(ctx, input.ReferredUserID)
+	if errors.Is(err, domain.ErrNotFound) {
+		return ActivateResult{NotFound: true}, nil
+	}
+	if err != nil {
+		return ActivateResult{}, err
+	}
+	if referral.Status == domain.ReferralStatusRewarded || referral.RewardStatus == domain.ReferralRewardApplied {
+		return ActivateResult{AlreadyRewarded: true, Referral: referral}, nil
+	}
+	activatedAt := s.now()
+	newlyActivated := false
+	if referral.Status != domain.ReferralStatusActivated {
+		if err := s.repo.MarkActivated(ctx, referral.ID, activatedAt); err != nil {
+			return ActivateResult{}, err
+		}
+		referral.Status = domain.ReferralStatusActivated
+		if referral.ActivatedAt == nil {
+			referral.ActivatedAt = &activatedAt
+		}
+		newlyActivated = true
+	}
+	if !s.cfg.RewardOnActivation {
+		return ActivateResult{Activated: newlyActivated, Referral: referral}, nil
+	}
+	if err := s.applySignupRewards(ctx, referral); err != nil {
+		return ActivateResult{}, err
+	}
+	return ActivateResult{Activated: newlyActivated, Rewarded: true, Referral: referral}, nil
+}
+
 // Stats returns the user's referral code and invited-user count.
 func (s *Service) Stats(ctx context.Context, userID uuid.UUID) (*domain.ReferralCode, int, error) {
+	code, stats, err := s.StatsDetailed(ctx, userID)
+	if err != nil {
+		return nil, 0, err
+	}
+	return code, stats.Total(), nil
+}
+
+// StatsDetailed returns the user's referral code and aggregate no-PII funnel
+// counters for accepted invitations.
+func (s *Service) StatsDetailed(ctx context.Context, userID uuid.UUID) (*domain.ReferralCode, domain.ReferralStats, error) {
 	code, err := s.EnsureCode(ctx, userID)
 	if err != nil {
-		return nil, 0, err
+		return nil, domain.ReferralStats{}, err
 	}
-	count, err := s.repo.CountByReferrer(ctx, userID)
+	stats, err := s.repo.CountByReferrerStatus(ctx, userID)
 	if err != nil {
-		return nil, 0, err
+		return nil, domain.ReferralStats{}, err
 	}
-	return code, count, nil
+	return code, stats, nil
 }
 
 func (s *Service) applySignupRewards(ctx context.Context, referral *domain.Referral) error {
@@ -219,7 +279,11 @@ func (s *Service) applySignupRewards(ctx context.Context, referral *domain.Refer
 	if err := s.repo.MarkRewardApplied(ctx, referral.ID, rewardedAt); err != nil {
 		return err
 	}
+	referral.Status = domain.ReferralStatusRewarded
 	referral.RewardStatus = domain.ReferralRewardApplied
+	if referral.ActivatedAt == nil {
+		referral.ActivatedAt = &rewardedAt
+	}
 	referral.RewardedAt = &rewardedAt
 	return nil
 }

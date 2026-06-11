@@ -2496,11 +2496,56 @@ referrals:
   referred_user_id
   referral_code
   source: vk_bot | vk_miniapp
+  status: registered | activated | rewarded
   reward_status: pending | applied
+  first_seen_at
+  activated_at
   rewarded_at
   created_at
   updated_at
 ```
+
+`referral_events`:
+
+```text
+id
+referral_id
+referrer_user_id
+referred_user_id
+referral_code
+event_type: link_opened | registered | activated | rewarded | first_generation | first_payment
+source: vk_bot | vk_miniapp | null
+idempotency_key
+metadata
+created_at
+```
+
+`status` — основной funnel-state для нового referral lifecycle. `reward_status`
+временно сохраняется как совместимое legacy-поле для staged rollout billing
+reward flow; старые `reward_status=applied` мигрируются в `status=rewarded`.
+`referralservice.Apply` только регистрирует связь (`registered`) и не
+начисляет бонус. `referralservice.Activate` переводит приглашённого пользователя
+в активированное состояние и начисляет signup rewards через billing ledger
+idempotency keys; повторный `Activate` является no-op после `rewarded`.
+Rollout-флаг `REFERRAL_REWARD_ON_ACTIVATION=false` временно отключает только
+ledger reward, сохраняя переход в `activated`; после включения флага повторный
+`Activate` безопасно доначисляет pending reward один раз.
+VK Bot вызывает `Apply`, а затем `Activate` только на явных start/menu control
+paths (`/start <code>`, `старт`, кнопка `Начать`, `Показать меню`). Первый
+случайный текст может починить onboarding, но не активирует referral reward.
+Mini App вызывает `Apply`, а затем `Activate` из authenticated
+`/miniapp/referral/accept` после успешной загрузки приложения с `ref`; источник
+остаётся `vk_miniapp`, повторные открытия не создают повторных ledger entries.
+MVP referral analytics считает `registered_count`, `activated_count`,
+`rewarded_count` из `referrals.status`; `referral_events` зарезервирован для
+следующих шагов воронки (`link_opened`, `first_generation`, `first_payment`) и
+не должен использоваться для раскрытия списка приглашённых.
+
+Operator/admin referral view живёт только под защищённым `/admin/referrals/*`.
+Он отдаёт safe DTO с агрегатами по публичному referral code и списком
+подозрительных кодов по порогам, но не раскрывает `vk_user_id`, internal UUID
+или список приглашённых пользователей. Ручная отмена/заморозка бонусов пока
+зарезервирована как future flag и не выполняет мутаций.
 
 Инварианты:
 
@@ -2511,7 +2556,8 @@ referrals:
 - один invited user может быть привязан только к одному referrer;
 - бонусы за приглашение начисляются только через append-only billing ledger с idempotency key;
 - referral code не должен раскрывать `vk_user_id` или internal UUID;
-- Mini App referral endpoint, когда будет добавлен, должен сначала проверять VK launch params и только потом применять referral code.
+- Mini App referral endpoint сначала проверяет VK launch params и только потом применяет и активирует referral code.
+- VK Bot и Mini App referral analytics показывают только агрегированные счётчики, без PII приглашённых пользователей.
 
 [1]: https://platform.openai.com/docs/api-reference/responses "Responses | OpenAI API Reference"
 [2]: https://platform.openai.com/docs/guides/webhooks "Webhooks | OpenAI API"

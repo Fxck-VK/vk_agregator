@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -26,6 +27,7 @@ func setup(t *testing.T) (*admin.Handler, *memory.JobRepo, *memory.UserRepo, *me
 		Jobs:       jobs,
 		Users:      users,
 		Deliveries: deliveries,
+		Referrals:  memory.NewReferralRepo(),
 		Billing:    billingRepo,
 	})
 	return h, jobs, users, deliveries, billing
@@ -163,5 +165,113 @@ func TestAuthTokenRequired(t *testing.T) {
 	h.Routes().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200 with token, got %d", rec.Code)
+	}
+}
+
+func TestReferralStatsByCodeSafeDTO(t *testing.T) {
+	ctx := context.Background()
+	refs := memory.NewReferralRepo()
+	h := admin.NewHandler(admin.Config{}, admin.Deps{
+		Jobs:       memory.NewJobRepo(),
+		Users:      memory.NewUserRepo(),
+		Deliveries: memory.NewDeliveryRepo(),
+		Referrals:  refs,
+	})
+	referrerID := uuid.New()
+	if err := refs.CreateCode(ctx, &domain.ReferralCode{UserID: referrerID, Code: "SAFE2345"}); err != nil {
+		t.Fatalf("create code: %v", err)
+	}
+	for _, referral := range []domain.Referral{
+		{ReferrerUserID: referrerID, ReferredUserID: uuid.New(), ReferralCode: "SAFE2345", Source: domain.ReferralSourceVKBot, Status: domain.ReferralStatusRegistered, RewardStatus: domain.ReferralRewardPending},
+		{ReferrerUserID: referrerID, ReferredUserID: uuid.New(), ReferralCode: "SAFE2345", Source: domain.ReferralSourceVKMiniApp, Status: domain.ReferralStatusActivated, RewardStatus: domain.ReferralRewardPending},
+		{ReferrerUserID: referrerID, ReferredUserID: uuid.New(), ReferralCode: "SAFE2345", Source: domain.ReferralSourceVKBot, Status: domain.ReferralStatusRewarded, RewardStatus: domain.ReferralRewardApplied},
+	} {
+		referral := referral
+		if err := refs.CreateReferral(ctx, &referral); err != nil {
+			t.Fatalf("create referral: %v", err)
+		}
+	}
+
+	rec, body := do(t, h, "/admin/referrals/codes/safe2345/stats")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if body["code"] != "SAFE2345" ||
+		body["invited_count"].(float64) != 3 ||
+		body["registered_count"].(float64) != 1 ||
+		body["activated_count"].(float64) != 1 ||
+		body["rewarded_count"].(float64) != 1 {
+		t.Fatalf("unexpected referral stats dto: %#v", body)
+	}
+	raw := rec.Body.String()
+	if strings.Contains(raw, "vk_user_id") || strings.Contains(raw, "user_id") {
+		t.Fatalf("referral stats DTO must not expose user ids: %s", raw)
+	}
+
+	rec, _ = do(t, h, "/admin/referrals/codes/MISSING1/stats")
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for missing code, got %d", rec.Code)
+	}
+}
+
+func TestSuspiciousReferralListAndFreezeFutureFlag(t *testing.T) {
+	ctx := context.Background()
+	refs := memory.NewReferralRepo()
+	h := admin.NewHandler(admin.Config{Token: "secret"}, admin.Deps{
+		Jobs:       memory.NewJobRepo(),
+		Users:      memory.NewUserRepo(),
+		Deliveries: memory.NewDeliveryRepo(),
+		Referrals:  refs,
+	})
+	referrerID := uuid.New()
+	if err := refs.CreateCode(ctx, &domain.ReferralCode{UserID: referrerID, Code: "SPAM2345"}); err != nil {
+		t.Fatalf("create code: %v", err)
+	}
+	for i := 0; i < 2; i++ {
+		referral := &domain.Referral{
+			ReferrerUserID: referrerID,
+			ReferredUserID: uuid.New(),
+			ReferralCode:   "SPAM2345",
+			Source:         domain.ReferralSourceVKBot,
+			Status:         domain.ReferralStatusRegistered,
+			RewardStatus:   domain.ReferralRewardPending,
+		}
+		if err := refs.CreateReferral(ctx, referral); err != nil {
+			t.Fatalf("create suspicious referral: %v", err)
+		}
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/referrals/suspicious?min_registered=2&min_total=99", nil)
+	req.Header.Set("X-Admin-Token", "secret")
+	rec := httptest.NewRecorder()
+	h.Routes().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var list struct {
+		Items []admin.SuspiciousReferralDTO `json:"items"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &list); err != nil {
+		t.Fatalf("decode suspicious list: %v", err)
+	}
+	if len(list.Items) != 1 || list.Items[0].Code != "SPAM2345" || list.Items[0].RegisteredCount != 2 {
+		t.Fatalf("unexpected suspicious list: %+v", list.Items)
+	}
+	if len(list.Items[0].Reasons) != 1 || list.Items[0].Reasons[0] != "many_registered_not_activated" {
+		t.Fatalf("unexpected suspicious reasons: %+v", list.Items[0].Reasons)
+	}
+	if strings.Contains(rec.Body.String(), "vk_user_id") || strings.Contains(rec.Body.String(), "user_id") {
+		t.Fatalf("suspicious referral DTO must not expose user ids: %s", rec.Body.String())
+	}
+
+	freezeReq := httptest.NewRequest(http.MethodPost, "/admin/referrals/codes/SPAM2345/freeze", nil)
+	freezeReq.Header.Set("X-Admin-Token", "secret")
+	freezeRec := httptest.NewRecorder()
+	h.Routes().ServeHTTP(freezeRec, freezeReq)
+	if freezeRec.Code != http.StatusNotImplemented {
+		t.Fatalf("expected 501 future flag, got %d: %s", freezeRec.Code, freezeRec.Body.String())
+	}
+	if !strings.Contains(freezeRec.Body.String(), `"enabled":false`) || !strings.Contains(freezeRec.Body.String(), "future_flag") {
+		t.Fatalf("unexpected freeze future flag response: %s", freezeRec.Body.String())
 	}
 }

@@ -3,6 +3,7 @@ package vk_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -100,7 +101,10 @@ func newHarnessWithDeps(control vkdelivery.ControlClient, cfg vk.Config, antiSpa
 		ReturnURL: "https://neiirohub.ru/payments/return",
 	})
 	refs := memory.NewReferralRepo()
-	referrals := referralservice.New(refs, billing, referralservice.Config{ReferrerSignupRewardCredits: 10})
+	referrals := referralservice.New(refs, billing, referralservice.Config{
+		ReferrerSignupRewardCredits: 10,
+		RewardOnActivation:          true,
+	})
 	pub := queue.NewMemoryPublisher()
 	uowMgr := memory.NewUnitOfWork(jobs, outbox, bill)
 	orch := joborchestrator.New(jobs, uowMgr, billing, 0)
@@ -303,7 +307,7 @@ func TestStartSendsWelcomeMenuNoJob(t *testing.T) {
 	}
 }
 
-func TestStartWithReferralCodeAppliesSharedReferralNoJob(t *testing.T) {
+func TestStartWithReferralCodeAppliesAndActivatesSharedReferralNoJob(t *testing.T) {
 	control := vkdelivery.NewMockClient()
 	h := newHarnessWithControl(control)
 	ctx := context.Background()
@@ -341,19 +345,79 @@ func TestStartWithReferralCodeAppliesSharedReferralNoJob(t *testing.T) {
 	if referral.ReferrerUserID != referrer.ID || referral.ReferralCode != "ABC23456" || referral.Source != domain.ReferralSourceVKBot {
 		t.Fatalf("unexpected referral: %+v", referral)
 	}
-	if referral.RewardStatus != domain.ReferralRewardApplied {
-		t.Fatalf("reward status = %q, want applied", referral.RewardStatus)
+	if referral.Status != domain.ReferralStatusRewarded || referral.RewardStatus != domain.ReferralRewardApplied || referral.ActivatedAt == nil || referral.RewardedAt == nil {
+		t.Fatalf("unexpected referral status: status=%q reward=%q", referral.Status, referral.RewardStatus)
 	}
-	acc, err := h.billing.GetAccountByUser(ctx, referrer.ID, domain.CurrencyCredits)
+	referrerAccount, err := h.billing.GetAccountByUser(ctx, referrer.ID, domain.CurrencyCredits)
 	if err != nil {
-		t.Fatalf("get referrer account: %v", err)
+		t.Fatalf("referrer account not rewarded: %v", err)
 	}
-	if acc.BalanceCached != billingservice.DefaultStartingBalance+10 {
-		t.Fatalf("referrer balance = %d, want %d", acc.BalanceCached, billingservice.DefaultStartingBalance+10)
+	if referrerAccount.BalanceCached != billingservice.DefaultStartingBalance+10 {
+		t.Fatalf("referrer balance = %d, want %d", referrerAccount.BalanceCached, billingservice.DefaultStartingBalance+10)
 	}
 	jobs, _ := h.jobs.ListByUser(ctx, referred.ID, 10, 0)
 	if len(jobs) != 0 || h.pub.Len() != 0 {
 		t.Fatalf("referral start must not create jobs, jobs=%+v tasks=%d", jobs, h.pub.Len())
+	}
+}
+
+func TestFirstPlainTextDoesNotActivateRegisteredReferral(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	h := newHarnessWithControl(control)
+	ctx := context.Background()
+	referrer := &domain.User{
+		VKUserID: 900011,
+		Role:     domain.RoleUser,
+		Status:   domain.StatusActive,
+		Locale:   "ru",
+		Timezone: "Europe/Moscow",
+	}
+	referred := &domain.User{
+		VKUserID: 900012,
+		Role:     domain.RoleUser,
+		Status:   domain.StatusActive,
+		Locale:   "ru",
+		Timezone: "Europe/Moscow",
+	}
+	if err := h.users.Create(ctx, referrer); err != nil {
+		t.Fatalf("create referrer: %v", err)
+	}
+	if err := h.users.Create(ctx, referred); err != nil {
+		t.Fatalf("create referred: %v", err)
+	}
+	if err := h.refs.CreateReferral(ctx, &domain.Referral{
+		ReferrerUserID: referrer.ID,
+		ReferredUserID: referred.ID,
+		ReferralCode:   "ABC23456",
+		Source:         domain.ReferralSourceVKBot,
+		Status:         domain.ReferralStatusRegistered,
+		RewardStatus:   domain.ReferralRewardPending,
+	}); err != nil {
+		t.Fatalf("create referral: %v", err)
+	}
+
+	body := `{
+		"type":"message_new","group_id":1,"event_id":"evt-ref-random-text","secret":"s3cr3t",
+		"object":{"message":{"from_id":900012,"peer_id":900012,"text":"random text outside start"}}
+	}`
+	rec := h.post(body)
+	if rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	referral, err := h.refs.GetReferralByReferredUserID(ctx, referred.ID)
+	if err != nil {
+		t.Fatalf("referral not found: %v", err)
+	}
+	if referral.Status != domain.ReferralStatusRegistered || referral.RewardStatus != domain.ReferralRewardPending || referral.ActivatedAt != nil || referral.RewardedAt != nil {
+		t.Fatalf("random text must not activate referral, got %+v", referral)
+	}
+	if _, err := h.billing.GetAccountByUser(ctx, referrer.ID, domain.CurrencyCredits); !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("referrer balance must not be rewarded by random text, err=%v", err)
+	}
+	jobs, _ := h.jobs.ListByUser(ctx, referred.ID, 10, 0)
+	if len(jobs) != 0 || h.pub.Len() != 0 {
+		t.Fatalf("random onboarding must not create jobs, jobs=%+v tasks=%d", jobs, h.pub.Len())
 	}
 }
 
@@ -379,7 +443,7 @@ func TestAccountMenuShowsReferralStatsAndShareLink(t *testing.T) {
 	if len(sent) != 1 {
 		t.Fatalf("expected account response, got %+v", sent)
 	}
-	for _, want := range []string{"Мой аккаунт", "безлимитное общение с НейроХаб", "Реферальная программа", "Приглашённых: 0", "https://vk.com/write-1", "Поддержка: @neirohub_help"} {
+	for _, want := range []string{"Мой аккаунт", "безлимитное общение с НейроХаб", "Реферальная программа", "Приглашённых: 0", "Зарегистрировано: 0", "Активировано: 0", "Бонус начислен: 0", "https://vk.com/write-1", "Поддержка: @neirohub_help"} {
 		if !strings.Contains(sent[0].Text, want) {
 			t.Fatalf("expected %q in account text: %q", want, sent[0].Text)
 		}

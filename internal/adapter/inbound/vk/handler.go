@@ -90,7 +90,9 @@ type DialogState interface {
 // future VK Mini App flows.
 type ReferralService interface {
 	Stats(ctx context.Context, userID uuid.UUID) (*domain.ReferralCode, int, error)
+	StatsDetailed(ctx context.Context, userID uuid.UUID) (*domain.ReferralCode, domain.ReferralStats, error)
 	Apply(ctx context.Context, input referralservice.ApplyInput) (referralservice.ApplyResult, error)
+	Activate(ctx context.Context, input referralservice.ActivateInput) (referralservice.ActivateResult, error)
 }
 
 // Deps are the collaborators the handler needs. All are interfaces or services
@@ -578,6 +580,7 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 	} else if controlOnly {
 		parsed = commandrouter.Result{Type: domain.CommandUnknown}
 	}
+	activateReferral := shouldActivateReferralOnVKCommand(parsed.Type)
 	if isMenuCommand(parsed.Type) && !h.menuCommandEnabled(parsed.Type) {
 		parsed = commandrouter.Result{Type: domain.CommandShowMenu}
 		topUpProductCode = ""
@@ -588,6 +591,11 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 	if code := h.referralCodeFromEvent(ref, parsed); code != "" {
 		if err := h.applyReferralCode(ctx, user.ID, code); err != nil {
 			return fmt.Errorf("apply referral code: %w", err)
+		}
+	}
+	if activateReferral {
+		if err := h.activateReferral(ctx, user.ID); err != nil {
+			return fmt.Errorf("activate referral: %w", err)
 		}
 	}
 
@@ -880,6 +888,15 @@ func shouldRepairPersistentKeyboard(t domain.CommandType, controlFromPayload, co
 	return t == domain.CommandShowMenu && !controlFromPayload && !controlOnly
 }
 
+func shouldActivateReferralOnVKCommand(t domain.CommandType) bool {
+	switch t {
+	case domain.CommandStart, domain.CommandShowMenu:
+		return true
+	default:
+		return false
+	}
+}
+
 func (h *Handler) textAskEnabled(ctx context.Context, peerID int64) bool {
 	if h.cfg.UnroutedTextMode == unroutedTextModeGPT {
 		return true
@@ -1046,6 +1063,23 @@ func (h *Handler) applyReferralCode(ctx context.Context, userID uuid.UUID, code 
 	}
 	if result.Applied {
 		h.logger.Info("vk referral applied")
+	}
+	return nil
+}
+
+func (h *Handler) activateReferral(ctx context.Context, userID uuid.UUID) error {
+	if h.deps.Referrals == nil {
+		return nil
+	}
+	result, err := h.deps.Referrals.Activate(ctx, referralservice.ActivateInput{
+		ReferredUserID: userID,
+		Source:         domain.ReferralSourceVKBot,
+	})
+	if err != nil {
+		return err
+	}
+	if result.Rewarded {
+		h.logger.Info("vk referral activated")
 	}
 	return nil
 }

@@ -80,6 +80,24 @@ export interface BalanceResponse {
   balance_credits: number;
 }
 
+export interface ReferralInfo {
+  code: string;
+  invite_url: string;
+  invited_count: number;
+  registered_count: number;
+  activated_count: number;
+  rewarded_count: number;
+  referrer_signup_reward_credits: number;
+  referred_signup_reward_credits: number;
+}
+
+export interface ApplyReferralResponse {
+  applied: boolean;
+  already_applied: boolean;
+  invalid_code: boolean;
+  self_referral: boolean;
+}
+
 export interface PaymentProduct {
   id: string;
   code: string;
@@ -206,6 +224,37 @@ export class ApiError extends Error {
 
 function normalizeRawParams(raw: string): string {
   return raw.replace(/^[?#]/, "");
+}
+
+function normalizeReferralCode(raw: string | null): string {
+  const value = (raw ?? "").trim().toUpperCase();
+  if (value.length < 4 || value.length > 64) return "";
+  return /^[23456789ABCDEFGHJKLMNPQRSTUVWXYZ_-]+$/.test(value) ? value : "";
+}
+
+function referralCodeFromRaw(raw: string): string {
+  const normalized = normalizeRawParams(raw.trim());
+  if (!normalized) return "";
+  try {
+    const params = new URLSearchParams(normalized);
+    const direct = normalizeReferralCode(params.get("ref") || params.get("start"));
+    if (direct) return direct;
+  } catch {
+    /* not a query string */
+  }
+  const queryIndex = normalized.indexOf("?");
+  if (queryIndex >= 0) {
+    return referralCodeFromRaw(normalized.slice(queryIndex + 1));
+  }
+  return "";
+}
+
+export function referralCodeFromLocation(): string {
+  for (const candidate of [window.location.search, window.location.hash]) {
+    const code = referralCodeFromRaw(candidate);
+    if (code) return code;
+  }
+  return "";
 }
 
 function hasLaunchIdentity(raw: string): boolean {
@@ -438,6 +487,17 @@ export async function getBalance(): Promise<number> {
   return data.balance_credits ?? 0;
 }
 
+export async function getReferral(): Promise<ReferralInfo> {
+  return request<ReferralInfo>("/miniapp/referral");
+}
+
+export async function acceptReferral(code: string): Promise<ApplyReferralResponse> {
+  return request<ApplyReferralResponse>("/miniapp/referral/accept", {
+    method: "POST",
+    body: JSON.stringify({ code }),
+  });
+}
+
 export async function listPaymentProducts(): Promise<PaymentProduct[]> {
   const data = await request<PaymentProductListResponse>("/miniapp/payment-products");
   return data.items ?? [];
@@ -551,30 +611,34 @@ export function artifactUrl(id: string): string | null {
   return `/miniapp/artifacts/${id}`;
 }
 
+async function fetchArtifactBlob(id: string): Promise<Blob | null> {
+  const url = artifactUrl(id);
+  if (!url) return null;
+  try {
+    const rawLaunchParams = await launchParams();
+    const res = await fetch(url, {
+      headers: { "X-Launch-Params": rawLaunchParams },
+    });
+    if (!res.ok) return null;
+    return await res.blob();
+  } catch {
+    return null;
+  }
+}
+
 /**
- * Artifact URL safe for <img>/<video> src: appends launch_params query because
- * media elements cannot send X-Launch-Params. Backend auth accepts this query.
+ * Authenticated artifact source for <img>/<video>. Browser media tags cannot
+ * send headers, so the frontend fetches with X-Launch-Params and exposes only
+ * a temporary blob URL. Never put raw launch params into media src/query URLs.
  */
 export async function artifactMediaUrl(id: string): Promise<string | null> {
-  const base = artifactUrl(id);
-  if (!base) return null;
-  const rawLaunchParams = await launchParams();
-  if (!rawLaunchParams) return base;
-  return `${base}?launch_params=${encodeURIComponent(rawLaunchParams)}`;
+  const blob = await fetchArtifactBlob(id);
+  return blob ? URL.createObjectURL(blob) : null;
 }
 
 /** Fetch artifact bytes and return a blob URL for instant preview on the result screen. */
 export async function preloadArtifactBlobUrl(id: string): Promise<string | null> {
-  const url = await artifactMediaUrl(id);
-  if (!url) return null;
-  try {
-    const res = await fetch(url);
-    if (!res.ok) return null;
-    const blob = await res.blob();
-    return URL.createObjectURL(blob);
-  } catch {
-    return null;
-  }
+  return artifactMediaUrl(id);
 }
 
 /** Text artifact body (when GET /miniapp/artifacts/{id} is available). */
@@ -607,12 +671,11 @@ export function isTerminal(s: string): boolean {
   return OK.has(s) || FAIL.has(s);
 }
 
-/** Image/video artifacts are ready in Mini App once postprocessing finishes. */
+/** Image/video artifacts are previewable only after backend marks them fully visible. */
 export function hasPreviewableMediaResult(job: Job): boolean {
   if (!job.output_artifact_ids?.length) return false;
   if (job.operation !== "image_generate" && job.operation !== "video_generate") return false;
-  if (statusKind(job.status) === "done") return true;
-  return job.status === "result_ready";
+  return statusKind(job.status) === "done";
 }
 
 const STATUS_LABELS: Record<string, string> = {

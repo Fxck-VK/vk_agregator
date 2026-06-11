@@ -9,7 +9,7 @@ able to follow this top to bottom without extra help.
 
 | Tool | Version | Check |
 |------|---------|-------|
-| Go | **1.25+** (module targets `go 1.25.0`) | `go version` |
+| Go | **1.25.11+** (module targets `go 1.25.11`) | `go version` |
 | Docker Engine | **24+** | `docker version` |
 | Docker Compose | **v2+** (`docker compose`, not `docker-compose`) | `docker compose version` |
 | Git | any recent | `git --version` |
@@ -153,6 +153,7 @@ Override these values when needed:
 | `REFERRAL_CODE_LENGTH` | `10` | Length for generated stable public referral codes |
 | `REFERRAL_REFERRER_SIGNUP_REWARD_CREDITS` | `10` | Signup reward posted to the inviter through billing ledger |
 | `REFERRAL_REFERRED_SIGNUP_REWARD_CREDITS` | `0` | Optional signup reward posted to the invited user through billing ledger |
+| `REFERRAL_REWARD_ON_ACTIVATION` | `true` | Rollout flag: when `false`, referral activation is recorded but signup reward ledger entries are not posted until a later activation with the flag enabled |
 | `VK_MENU_*_ENABLED` | mixed | Per-button VK product menu flags; current bot profile keeps NeuroHub text mode and account/referral visible, while video/image/students/top-up stay hidden without deleting their screens |
 | `VK_TOP_UP_RECEIPT_EMAIL` / `VK_TOP_UP_RECEIPT_PHONE` | `` / `` | Server-side receipt contact for the VK Bot quick top-up flow; set at least one when `VK_MENU_TOP_UP_ENABLED=true` |
 | `SIGNED_DELIVERY` / `ARTIFACT_URL_TTL` | `false` / `1h` | Deliver media through signed artifact URLs |
@@ -687,73 +688,79 @@ LIMIT 20;
 Protected operator payment actions:
 
 ```bash
+# Prepare local-only curl headers in your shell before running these examples.
+# ADMIN_AUTH_HEADER carries X-Admin-Token; OPERATOR_USER_HEADER carries the
+# internal smoke user id; OPERATOR_IDEMPOTENCY_HEADER carries a unique
+# X-Idempotency-Key for the refund command. SMOKE_IDEMPOTENCY_HEADER carries a
+# one-off idempotency key for the canceled-payment smoke.
+
 # List product catalog entries. Add active=true or active=false to narrow the
 # operator list. Response DTOs contain catalog fields only, no provider payloads.
 curl "http://localhost:8080/billing/payment-products?active=true" \
-  -H "X-Admin-Token: $ADMIN_TOKEN"
+  -H "$ADMIN_AUTH_HEADER"
 
 # Create a top-up product. The code is a stable product identifier; future
 # price/receipt changes on the same product bump price_version for new intents.
 curl -X POST http://localhost:8080/billing/payment-products \
-  -H "X-Admin-Token: $ADMIN_TOKEN" \
+  -H "$ADMIN_AUTH_HEADER" \
   -H "Content-Type: application/json" \
   -d '{"code":"crystals_250","title":"NeiroHub 250 crystals","amount":25000,"currency":"rub","credits":250,"vat_code":1,"payment_subject":"service","payment_mode":"full_prepayment"}'
 
 # Update future catalog values. Existing payment_intents keep their snapshotted
 # amount, credits, price_version and receipt fields.
 curl -X PATCH http://localhost:8080/billing/payment-products/<product_id> \
-  -H "X-Admin-Token: $ADMIN_TOKEN" \
+  -H "$ADMIN_AUTH_HEADER" \
   -H "Content-Type: application/json" \
   -d '{"amount":21000,"credits":260}'
 
 # Hide a product from user-facing Mini App / VK Bot product lists.
 curl -X POST http://localhost:8080/billing/payment-products/<product_id>/disable \
-  -H "X-Admin-Token: $ADMIN_TOKEN"
+  -H "$ADMIN_AUTH_HEADER"
 
 # List pending/waiting intents. Add stale_only=true for intents old enough for
 # manual sync/reconciliation triage.
 curl "http://localhost:8080/billing/payment-intents/pending?stale_after=30s&stale_only=true" \
-  -H "X-Admin-Token: $ADMIN_TOKEN"
+  -H "$ADMIN_AUTH_HEADER"
 
 # Minimal stale-only check requested by operator smoke. Use this before manual
 # sync to see what reconciliation should pick up.
 curl "http://localhost:8080/billing/payment-intents/pending?stale_only=true" \
-  -H "X-Admin-Token: $ADMIN_TOKEN"
+  -H "$ADMIN_AUTH_HEADER"
 
 # Create a two-stage YooKassa smoke intent. This is protected operator-only and
 # must not be used by Mini App / VK Bot user-facing top-ups.
 curl -X POST http://localhost:8080/billing/payment-intents \
-  -H "X-Admin-Token: $ADMIN_TOKEN" \
-  -H "X-User-ID: <internal_user_id>" \
-  -H "X-Idempotency-Key: canceled-smoke-001" \
+  -H "$ADMIN_AUTH_HEADER" \
+  -H "$OPERATOR_USER_HEADER" \
+  -H "$SMOKE_IDEMPOTENCY_HEADER" \
   -H "Content-Type: application/json" \
   -d '{"product_code":"crystals_99","receipt_email":"smoke@example.com","capture":false}'
 
 # List unprocessed provider webhook inbox rows. Response DTOs intentionally omit
 # raw provider payloads.
 curl "http://localhost:8080/billing/payment-events/unprocessed?provider=yookassa" \
-  -H "X-Admin-Token: $ADMIN_TOKEN"
+  -H "$ADMIN_AUTH_HEADER"
 
 # Minimal unprocessed inbox check requested by operator smoke.
 curl "http://localhost:8080/billing/payment-events/unprocessed" \
-  -H "X-Admin-Token: $ADMIN_TOKEN"
+  -H "$ADMIN_AUTH_HEADER"
 
 # Sync one intent with the provider state. This may post a top-up ledger entry
 # only after provider GetPayment verifies paid/captured success.
 curl -X POST http://localhost:8080/billing/payment-intents/<intent_id>/sync \
-  -H "X-Admin-Token: $ADMIN_TOKEN"
+  -H "$ADMIN_AUTH_HEADER"
 
 # Cancel a provider-backed intent. This calls provider CancelPayment and then
 # verifies the resulting state through the same GetPayment/sync path.
 curl -X POST http://localhost:8080/billing/payment-intents/<intent_id>/cancel \
-  -H "X-Admin-Token: $ADMIN_TOKEN"
+  -H "$ADMIN_AUTH_HEADER"
 
 # Manual full refund MVP. Requires a caller idempotency key and refuses when the
 # current credit balance cannot cover the purchased credits or when ledger
 # movements after the top-up show that those credits may have been used.
 curl -X POST http://localhost:8080/billing/payment-intents/<intent_id>/refund \
-  -H "X-Admin-Token: $ADMIN_TOKEN" \
-  -H "X-Idempotency-Key: operator-ticket-123" \
+  -H "$ADMIN_AUTH_HEADER" \
+  -H "$OPERATOR_IDEMPOTENCY_HEADER" \
   -H "Content-Type: application/json" \
   -d '{"reason":"manual operator refund"}'
 ```
@@ -870,10 +877,10 @@ stable referral code for the user, counts accepted invitations, and renders the
 use a template such as `https://vk.com/write-239332376?ref={code}` or a base URL
 where the API can append `ref=<code>`. `/start <code>` and VK Callback `ref`
 params apply the referral as `source=vk_bot`, do not create a billable job, and
-post signup bonuses only through idempotent ledger top-up entries. A full Mini
-App referral account/API screen is still a follow-up, but the same
-`referralservice` and Postgres tables already support
-`source=vk_miniapp`.
+post signup bonuses only through idempotent ledger top-up entries. The Mini App
+account screen reads `/miniapp/referral` over the same `referralservice`, renders
+the same bot-style link, and may apply an opened `ref` through
+`/miniapp/referral/accept` as `source=vk_miniapp` after launch-param auth.
 
 Current VK photo-mode implementation: `VK_MENU_IMAGE_ENABLED=true` shows the
 `Создать фото` button. Clicking `Создать фото` stores Redis-backed `photo_text`

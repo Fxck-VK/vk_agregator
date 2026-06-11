@@ -9,6 +9,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/google/uuid"
 
@@ -18,6 +19,9 @@ import (
 const (
 	defaultLimit = 20
 	maxLimit     = 100
+
+	defaultReferralSuspiciousMinRegistered = 10
+	defaultReferralSuspiciousMinTotal      = 50
 )
 
 // Config holds admin API settings.
@@ -31,6 +35,7 @@ type Deps struct {
 	Jobs       domain.JobRepository
 	Users      domain.UserRepository
 	Deliveries domain.DeliveryRepository
+	Referrals  domain.ReferralRepository
 	// Billing is optional; when set, user responses include the credit balance.
 	Billing domain.BillingRepository
 }
@@ -53,6 +58,9 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /admin/jobs/{id}", h.auth(h.getJob))
 	mux.HandleFunc("GET /admin/users/{id}", h.auth(h.getUser))
 	mux.HandleFunc("GET /admin/deliveries/{id}", h.auth(h.getDelivery))
+	mux.HandleFunc("GET /admin/referrals/codes/{code}/stats", h.auth(h.getReferralCodeStats))
+	mux.HandleFunc("GET /admin/referrals/suspicious", h.auth(h.listSuspiciousReferrals))
+	mux.HandleFunc("POST /admin/referrals/codes/{code}/freeze", h.auth(h.freezeReferralBonusFutureFlag))
 	return mux
 }
 
@@ -163,6 +171,79 @@ func (h *Handler) getDelivery(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, newDeliveryDTO(del))
 }
 
+func (h *Handler) getReferralCodeStats(w http.ResponseWriter, r *http.Request) {
+	if h.deps.Referrals == nil {
+		writeError(w, http.StatusServiceUnavailable, "service unavailable")
+		return
+	}
+	code, ok := referralCodePathValue(w, r)
+	if !ok {
+		return
+	}
+	stats, err := h.deps.Referrals.StatsByReferralCode(r.Context(), code)
+	if err != nil {
+		writeNotFoundOr500(w, err, "get referral stats failed")
+		return
+	}
+	writeJSON(w, http.StatusOK, newReferralStatsDTO(stats))
+}
+
+func (h *Handler) listSuspiciousReferrals(w http.ResponseWriter, r *http.Request) {
+	if h.deps.Referrals == nil {
+		writeError(w, http.StatusServiceUnavailable, "service unavailable")
+		return
+	}
+	limit, _ := parsePagination(r)
+	filter := domain.ReferralSuspiciousFilter{
+		Limit:         limit,
+		MinRegistered: parsePositiveQueryInt(r, "min_registered", defaultReferralSuspiciousMinRegistered),
+		MinTotal:      parsePositiveQueryInt(r, "min_total", defaultReferralSuspiciousMinTotal),
+	}
+	items, err := h.deps.Referrals.ListSuspiciousReferralCodes(r.Context(), filter)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "list suspicious referrals failed")
+		return
+	}
+	dtos := make([]SuspiciousReferralDTO, 0, len(items))
+	for _, item := range items {
+		base := newReferralStatsDTO(item)
+		dtos = append(dtos, SuspiciousReferralDTO{
+			ReferralStatsDTO: base,
+			Reasons:          suspiciousReferralReasons(base, filter),
+		})
+	}
+	writeJSON(w, http.StatusOK, listResponse[SuspiciousReferralDTO]{
+		Items: dtos,
+		Pagination: pagination{
+			Limit:   filter.Limit,
+			Offset:  0,
+			Count:   len(dtos),
+			HasMore: len(dtos) == filter.Limit,
+		},
+	})
+}
+
+func (h *Handler) freezeReferralBonusFutureFlag(w http.ResponseWriter, r *http.Request) {
+	if h.deps.Referrals == nil {
+		writeError(w, http.StatusServiceUnavailable, "service unavailable")
+		return
+	}
+	code, ok := referralCodePathValue(w, r)
+	if !ok {
+		return
+	}
+	if _, err := h.deps.Referrals.StatsByReferralCode(r.Context(), code); err != nil {
+		writeNotFoundOr500(w, err, "get referral stats failed")
+		return
+	}
+	writeJSON(w, http.StatusNotImplemented, referralFutureFlagDTO{
+		Code:    code,
+		Enabled: false,
+		Status:  "future_flag",
+		Message: "manual referral bonus freeze/cancel is reserved for a future workflow and performs no mutation",
+	})
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -183,6 +264,38 @@ func parsePagination(r *http.Request) (limit, offset int) {
 		}
 	}
 	return limit, offset
+}
+
+func parsePositiveQueryInt(r *http.Request, key string, fallback int) int {
+	if raw := r.URL.Query().Get(key); raw != "" {
+		if v, err := strconv.Atoi(raw); err == nil && v > 0 {
+			return v
+		}
+	}
+	return fallback
+}
+
+func referralCodePathValue(w http.ResponseWriter, r *http.Request) (string, bool) {
+	code := strings.ToUpper(strings.TrimSpace(r.PathValue("code")))
+	if code == "" {
+		writeError(w, http.StatusBadRequest, "invalid code")
+		return "", false
+	}
+	return code, true
+}
+
+func suspiciousReferralReasons(stats ReferralStatsDTO, filter domain.ReferralSuspiciousFilter) []string {
+	var reasons []string
+	if filter.MinRegistered > 0 && stats.RegisteredCount >= filter.MinRegistered {
+		reasons = append(reasons, "many_registered_not_activated")
+	}
+	if filter.MinTotal > 0 && stats.InvitedCount >= filter.MinTotal {
+		reasons = append(reasons, "high_referral_volume")
+	}
+	if len(reasons) == 0 {
+		reasons = append(reasons, "aggregate_threshold")
+	}
+	return reasons
 }
 
 func parseID(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {

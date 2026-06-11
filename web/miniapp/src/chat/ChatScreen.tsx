@@ -226,6 +226,10 @@ function pollTargetForJob(chats: Chat[], job: Job): { chatId: string; botMsgId: 
   return { chatId: chatIdForJob(job.id), botMsgId: "b-" + job.id, missing: true };
 }
 
+function canPollWithTarget(job: Job, target: { missing: boolean }): boolean {
+  return !target.missing || job.operation !== CHAT_OPERATION;
+}
+
 export function ChatScreen({ user }: { user: VkUser }) {
   const {
     chats,
@@ -598,10 +602,11 @@ export function ChatScreen({ user }: { user: VkUser }) {
         const localJobIds = jobIdsFromChats(chatsRef.current);
         const restored = sorted.filter((job) => !isTerminal(job.status) || localJobIds.has(job.id));
         for (const job of restored) {
-          if (job.operation !== CHAT_OPERATION) continue;
           const target = pollTargetForJob(chatsRef.current, job);
           if (!isTerminal(job.status)) {
-            startPoll(target.chatId, target.botMsgId, job.id);
+            if (canPollWithTarget(job, target)) {
+              startPoll(target.chatId, target.botMsgId, job.id);
+            }
           } else if (statusKind(job.status) === "done" && job.operation === "text_generate") {
             void resolveBotText(job).then((text) => {
               if (text && mountedRef.current) {
@@ -637,14 +642,12 @@ export function ChatScreen({ user }: { user: VkUser }) {
   }, [activeTab, activeId, loadConversationMessages]);
 
   useEffect(() => {
-    const pending = jobs.filter(
-      (job) => job.operation === CHAT_OPERATION && !isTerminal(job.status),
-    );
+    const pending = jobs.filter((job) => !isTerminal(job.status));
     if (pending.length === 0) return;
 
     for (const job of pending) {
       const target = pollTargetForJob(chats, job);
-      if (target.missing) continue;
+      if (!canPollWithTarget(job, target)) continue;
       startPoll(target.chatId, target.botMsgId, job.id);
     }
   }, [jobs, chats, startPoll]);

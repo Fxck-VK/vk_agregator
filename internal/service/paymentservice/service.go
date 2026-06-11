@@ -282,12 +282,19 @@ func (s *Service) CreateIntent(ctx context.Context, in CreateIntentInput) (Creat
 		return CreateIntentResult{}, err
 	}
 
+	var product *domain.PaymentProduct
 	if !in.ForceNew {
+		var err error
+		product, err = s.repo.GetActiveProductByCode(ctx, in.ProductCode)
+		if err != nil {
+			return CreateIntentResult{}, err
+		}
 		active, err := s.ActiveWaitingIntent(ctx, in.UserID)
 		if err == nil {
-			return CreateIntentResult{Intent: active, Created: false, ReusedActive: true}, nil
-		}
-		if !errors.Is(err, domain.ErrNotFound) {
+			if paymentIntentMatchesProduct(active, product) {
+				return CreateIntentResult{Intent: active, Created: false, ReusedActive: true}, nil
+			}
+		} else if !errors.Is(err, domain.ErrNotFound) {
 			return CreateIntentResult{}, err
 		}
 	}
@@ -296,9 +303,12 @@ func (s *Service) CreateIntent(ctx context.Context, in CreateIntentInput) (Creat
 		return CreateIntentResult{}, ErrReceiptContactRequired
 	}
 
-	product, err := s.repo.GetActiveProductByCode(ctx, in.ProductCode)
-	if err != nil {
-		return CreateIntentResult{}, err
+	if product == nil {
+		var err error
+		product, err = s.repo.GetActiveProductByCode(ctx, in.ProductCode)
+		if err != nil {
+			return CreateIntentResult{}, err
+		}
 	}
 	metadataFields := map[string]any{
 		"product_code":  product.Code,
@@ -516,6 +526,13 @@ func paymentIntentCapture(intent *domain.PaymentIntent) *bool {
 		return nil
 	}
 	return metadata.Capture
+}
+
+func paymentIntentMatchesProduct(intent *domain.PaymentIntent, product *domain.PaymentProduct) bool {
+	if intent == nil || product == nil || intent.ProductID == nil {
+		return false
+	}
+	return *intent.ProductID == product.ID
 }
 
 func cloneInt16(value *int16) *int16 {

@@ -2,6 +2,7 @@ package memory
 
 import (
 	"context"
+	"sort"
 	"sync"
 	"time"
 
@@ -91,8 +92,14 @@ func (r *ReferralRepo) CreateReferral(_ context.Context, referral *domain.Referr
 	if referral.RewardStatus == "" {
 		referral.RewardStatus = domain.ReferralRewardPending
 	}
+	if referral.Status == "" {
+		referral.Status = domain.ReferralStatusRegistered
+	}
 	now := time.Now()
 	referral.CreatedAt, referral.UpdatedAt = now, now
+	if referral.FirstSeenAt.IsZero() {
+		referral.FirstSeenAt = now
+	}
 	r.referralsByID[referral.ID] = *referral
 	r.referredToID[referral.ReferredUserID] = referral.ID
 	r.referrerToRefs[referral.ReferrerUserID] = append(r.referrerToRefs[referral.ReferrerUserID], referral.ID)
@@ -116,6 +123,107 @@ func (r *ReferralRepo) CountByReferrer(_ context.Context, referrerUserID uuid.UU
 	return len(r.referrerToRefs[referrerUserID]), nil
 }
 
+func (r *ReferralRepo) CountByReferrerStatus(_ context.Context, referrerUserID uuid.UUID) (domain.ReferralStats, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var stats domain.ReferralStats
+	for _, id := range r.referrerToRefs[referrerUserID] {
+		referral := r.referralsByID[id]
+		addReferralStatus(&stats, referral)
+	}
+	return stats, nil
+}
+
+func (r *ReferralRepo) StatsByReferralCode(_ context.Context, code string) (domain.ReferralCodeStats, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if _, ok := r.codesByValue[code]; !ok {
+		return domain.ReferralCodeStats{}, domain.ErrNotFound
+	}
+	stats := r.statsByCodeLocked(code)
+	return domain.ReferralCodeStats{Code: code, Stats: stats}, nil
+}
+
+func (r *ReferralRepo) ListSuspiciousReferralCodes(_ context.Context, filter domain.ReferralSuspiciousFilter) ([]domain.ReferralCodeStats, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if filter.Limit <= 0 {
+		filter.Limit = 20
+	}
+	var out []domain.ReferralCodeStats
+	for code := range r.codesByValue {
+		stats := r.statsByCodeLocked(code)
+		if stats.Total() == 0 {
+			continue
+		}
+		if filter.MinRegistered > 0 && stats.RegisteredCount >= filter.MinRegistered ||
+			filter.MinTotal > 0 && stats.Total() >= filter.MinTotal {
+			out = append(out, domain.ReferralCodeStats{Code: code, Stats: stats})
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		left, right := out[i].Stats, out[j].Stats
+		if left.Total() != right.Total() {
+			return left.Total() > right.Total()
+		}
+		if left.RegisteredCount != right.RegisteredCount {
+			return left.RegisteredCount > right.RegisteredCount
+		}
+		return out[i].Code < out[j].Code
+	})
+	if len(out) > filter.Limit {
+		out = out[:filter.Limit]
+	}
+	return out, nil
+}
+
+func (r *ReferralRepo) statsByCodeLocked(code string) domain.ReferralStats {
+	var stats domain.ReferralStats
+	for _, referral := range r.referralsByID {
+		if referral.ReferralCode != code {
+			continue
+		}
+		addReferralStatus(&stats, referral)
+	}
+	return stats
+}
+
+func addReferralStatus(stats *domain.ReferralStats, referral domain.Referral) {
+	switch referral.Status {
+	case domain.ReferralStatusRewarded:
+		stats.RewardedCount++
+	case domain.ReferralStatusActivated:
+		stats.ActivatedCount++
+	default:
+		if referral.RewardStatus == domain.ReferralRewardApplied {
+			stats.RewardedCount++
+		} else {
+			stats.RegisteredCount++
+		}
+	}
+}
+
+func (r *ReferralRepo) MarkActivated(_ context.Context, referralID uuid.UUID, activatedAt time.Time) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	referral, ok := r.referralsByID[referralID]
+	if !ok {
+		return domain.ErrNotFound
+	}
+	if referral.Status == domain.ReferralStatusRewarded {
+		return domain.ErrNotFound
+	}
+	if referral.Status == "" || referral.Status == domain.ReferralStatusRegistered {
+		referral.Status = domain.ReferralStatusActivated
+	}
+	if referral.ActivatedAt == nil {
+		referral.ActivatedAt = &activatedAt
+	}
+	referral.UpdatedAt = time.Now()
+	r.referralsByID[referralID] = referral
+	return nil
+}
+
 func (r *ReferralRepo) MarkRewardApplied(_ context.Context, referralID uuid.UUID, rewardedAt time.Time) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -123,7 +231,11 @@ func (r *ReferralRepo) MarkRewardApplied(_ context.Context, referralID uuid.UUID
 	if !ok {
 		return domain.ErrNotFound
 	}
+	referral.Status = domain.ReferralStatusRewarded
 	referral.RewardStatus = domain.ReferralRewardApplied
+	if referral.ActivatedAt == nil {
+		referral.ActivatedAt = &rewardedAt
+	}
 	referral.RewardedAt = &rewardedAt
 	referral.UpdatedAt = time.Now()
 	r.referralsByID[referralID] = referral
