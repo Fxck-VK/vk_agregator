@@ -1,0 +1,452 @@
+﻿{
+    "schema_version":  1,
+    "id":  "product_observability_v2",
+    "status":  "complete",
+    "mode":  "IMPLEMENT",
+    "created_at":  "2026-06-11",
+    "updated_at":  "2026-06-11T22:10:40+03:00",
+    "objective":  "Implement product-wide observability and statistics V2 for the whole VK AI Aggregator product: VK Bot, VK Mini App, jobs, workers, providers, payments, billing, referrals, admin/operator APIs, provider webhooks, artifacts and future website readiness.",
+    "primary_plan_file":  ".agents/plans/product_observability_v2.json",
+    "schema_file":  ".agents/schemas/product_observability_plan.schema.json",
+    "scope":  {
+                  "surfaces":  [
+                                   "vk_bot",
+                                   "vk_mini_app",
+                                   "admin_api",
+                                   "operator_billing_api",
+                                   "provider_webhook",
+                                   "worker",
+                                   "job_orchestrator",
+                                   "provider_adapters",
+                                   "payments_billing",
+                                   "referrals",
+                                   "artifacts",
+                                   "future_website"
+                               ],
+                  "runtime_target":  "vps_docker_compose_first",
+                  "implementation_scope":  "local_repository_first",
+                  "non_goals":  [
+                                    "Do not run live YooKassa money actions without separate explicit confirmation.",
+                                    "Do not run real provider-spend synthetics without separate explicit confirmation.",
+                                    "Do not expose Grafana, Prometheus, Loki, Tempo, Alertmanager, OTel, exporters or /metrics publicly.",
+                                    "Do not introduce frontend-side billing, provider calls or trusted identity logic."
+                                ]
+              },
+    "source_of_truth_order_for_this_goal":  [
+                                                "system/developer instructions",
+                                                "current user request",
+                                                "AGENTS.md",
+                                                ".agents/state.json",
+                                                ".agents/plans/product_observability_v2.json",
+                                                ".agents/plans/product_statistics_observability.json as completed baseline context",
+                                                "existing observability code/config",
+                                                "relevant code and tests"
+                                            ],
+    "constraints":  [
+                        {
+                            "id":  "privacy_no_sensitive_observability_data",
+                            "level":  "critical",
+                            "text":  "Do not log, metric-label, trace, alert, report or dashboard secrets, tokens, auth headers, full VK launch params, prompts, raw PII, raw provider payloads, raw payment payloads, private artifact URLs, raw URLs or idempotency keys."
+                        },
+                        {
+                            "id":  "provider_boundary",
+                            "level":  "critical",
+                            "text":  "VK Bot and VK Mini App must not call AI providers directly; provider calls must stay in worker/provider adapters."
+                        },
+                        {
+                            "id":  "billing_boundary",
+                            "level":  "critical",
+                            "text":  "Billing must remain ledger-based; payment top-ups must be granted only after provider-confirmed success through webhook/reconciliation flow."
+                        },
+                        {
+                            "id":  "inbound_idempotency",
+                            "level":  "critical",
+                            "text":  "External inbound events, payment webhooks, VK callbacks and job creation paths must remain idempotent."
+                        },
+                        {
+                            "id":  "observability_private",
+                            "level":  "critical",
+                            "text":  "Metrics and observability services must remain private: localhost, private Docker network, VPN or SSH tunnel only."
+                        },
+                        {
+                            "id":  "cardinality_budget",
+                            "level":  "critical",
+                            "text":  "Prometheus labels must stay bounded. Forbidden labels include user_id, vk_user_id, job_id, payment_id, artifact_id, referral_code, idempotency_key, raw_error, raw_url, prompt and launch params."
+                        },
+                        {
+                            "id":  "load_budget",
+                            "level":  "high",
+                            "text":  "Prefer cheap counters/histograms, recording rules and scheduled aggregate jobs. Avoid expensive DB queries on dashboard refresh and avoid per-request external billing/provider API calls."
+                        }
+                    ],
+    "load_impact_policy":  {
+                               "required_on_new_items":  true,
+                               "levels":  [
+                                              "very_low",
+                                              "low",
+                                              "low_to_moderate",
+                                              "moderate",
+                                              "high"
+                                          ],
+                               "default_target":  "low",
+                               "rules":  [
+                                             "Per-request counters with bounded labels are low load.",
+                                             "Histograms are acceptable only with bounded labels and stable buckets.",
+                                             "Exact retention/cohort analytics must use scheduled aggregate tables or reports, not high-cardinality Prometheus labels.",
+                                             "Synthetic checks must run on low frequency and use mock/non-billable paths unless explicitly approved.",
+                                             "Real provider billing API polling must be scheduled/cached and never run per user request or per job.",
+                                             "Tracing must use sampling and must never include raw prompts, launch params or payload bodies."
+                                         ]
+                           },
+    "stage_quality_gates":  {
+                                "required_after_each_phase":  true,
+                                "checks":  [
+                                               "JSON validation for changed .agents, dashboards and report files",
+                                               "gofmt on touched Go files",
+                                               "go test for touched packages; go test ./... before commit/push",
+                                               "go vet ./...",
+                                               "golangci-lint run ./...",
+                                               "gosec ./...",
+                                               "gitleaks detect --redact",
+                                               "govulncheck ./...",
+                                               "npm --prefix web/miniapp audit --audit-level=high when frontend deps are relevant",
+                                               "frontend lint/typecheck/build when frontend is touched",
+                                               "promtool check config/rules when Prometheus config or rules are touched",
+                                               "blackbox_exporter --config.check when blackbox config is touched",
+                                               "docker compose config --quiet when compose files are touched",
+                                               "shellcheck for touched .sh files"
+                                           ],
+                                "manual_reviews":  [
+                                                       "Re-check provider boundary after every backend metrics/logging change.",
+                                                       "Re-check billing ledger boundary after payment/statistics changes.",
+                                                       "Re-check privacy and cardinality after every new metric, log, trace, alert, report or dashboard.",
+                                                       "Record skipped checks with concrete reasons."
+                                                   ]
+                            },
+    "v2_metric_contract":  {
+                               "status":  "defined",
+                               "load_impact":  "very_low",
+                               "allowed_label_families":  [
+                                                              "surface",
+                                                              "journey",
+                                                              "step",
+                                                              "operation",
+                                                              "modality",
+                                                              "result",
+                                                              "provider",
+                                                              "model",
+                                                              "error_class",
+                                                              "phase",
+                                                              "stream",
+                                                              "route_template",
+                                                              "status_code_class",
+                                                              "admin_action",
+                                                              "security_reason",
+                                                              "backup_target"
+                                                          ],
+                               "forbidden_label_names":  [
+                                                             "user_id",
+                                                             "vk_user_id",
+                                                             "job_id",
+                                                             "payment_id",
+                                                             "artifact_id",
+                                                             "referral_code",
+                                                             "idempotency_key",
+                                                             "raw_error",
+                                                             "raw_url",
+                                                             "prompt",
+                                                             "launch_params"
+                                                         ],
+                               "rules":  [
+                                             "New product metrics must use bounded enum/template labels only.",
+                                             "Route labels must be templates or allowlisted names, never browser raw URLs.",
+                                             "Exact unique-user and cohort analytics belong in scheduled aggregate tables or report jobs, not Prometheus labels.",
+                                             "Trace error status must use sanitized error_class, not raw err.Error().",
+                                             "Alert annotations must tell operators what to inspect and what not to paste into chat."
+                                         ]
+                           },
+    "implementation_audit":  {
+                                 "status":  "complete",
+                                 "updated_at":  "2026-06-11T22:00:20+03:00",
+                                 "coverage_confirmed":  [
+                                                            "VK Bot product funnel events and prompt-length buckets exist on inbound command/job paths.",
+                                                            "Mini App BFF and frontend telemetry have safe client events, route templates, launch/payment/API/UI error metrics and prompt-length buckets.",
+                                                            "Job orchestrator and worker expose job create, active-user event, terminal status, duration, retry, DLQ, queue depth and oldest-age metrics.",
+                                                            "Provider adapters/worker path expose provider requests, latency, errors, rate limits, fallback, circuit state, tokens/media outputs and estimated cost.",
+                                                            "Payments/billing expose payment intents, webhooks, provider errors, top-ups, payment-to-ledger latency, ledger entries, reservations, captures, releases and reconciliation mismatch metrics.",
+                                                            "Referral service exposes aggregate registered/activated/rewarded/error outcomes without referral codes or user identifiers.",
+                                                            "Admin/operator APIs now expose bounded admin action outcomes and auth failures.",
+                                                            "Public metrics exposure checks cover app, vk and future website domains."
+                                                        ],
+                                 "implemented_changes":  [
+                                                             "Added bounded admin_api AdminActions/AuthFailures instrumentation.",
+                                                             "Extended daily report queries across frontend, jobs, providers, payments, billing, queues, worker, VK delivery, referrals, auth/signature, admin actions and suspicious events.",
+                                                             "Added weekly product report query spec.",
+                                                             "Added provider/worker/job/payment-to-ledger recording rules and actionable Russian alert annotations for new V2 alerts.",
+                                                             "Extended product synthetics runner with optional public metrics negative checks and explicit skipped safe-state records for protected mutating flows.",
+                                                             "Sanitized tracing RecordError so Tempo receives bounded error_class instead of raw err.Error().",
+                                                             "Added trace-aware JSON slog handler for safe trace_id/span_id correlation in runtime binaries."
+                                                         ],
+                                 "skipped_or_deferred":  [
+                                                             {
+                                                                 "id":  "live_yookassa_synthetic",
+                                                                 "reason":  "requires separate explicit confirmation because it can touch live payment/provider state"
+                                                             },
+                                                             {
+                                                                 "id":  "real_provider_spend_synthetic",
+                                                                 "reason":  "requires separate explicit confirmation because it can spend provider quota/money"
+                                                             },
+                                                             {
+                                                                 "id":  "exact_unique_dau_retention",
+                                                                 "reason":  "should be implemented later through scheduled aggregate tables/event warehouse to avoid high-cardinality Prometheus labels"
+                                                             }
+                                                         ]
+                             },
+    "phases":  [
+                   {
+                       "id":  "phase_0_inventory_and_gap_audit",
+                       "status":  "complete",
+                       "objective":  "Map current observability coverage and identify gaps across all product surfaces before implementation.",
+                       "expected_load_impact":  "very_low",
+                       "tasks":  [
+                                     {
+                                         "id":  "inventory_existing_metrics_logs_traces",
+                                         "status":  "complete",
+                                         "text":  "Inventory current metrics, dashboards, alert rules, logs and traces for VK Bot, Mini App, jobs, workers, providers, payments, billing, referrals, artifacts and admin/operator APIs."
+                                     },
+                                     {
+                                         "id":  "audit_cardinality_and_sensitive_fields",
+                                         "status":  "complete",
+                                         "text":  "Audit existing metric labels, structured logs, traces, alert annotations and dashboards for high-cardinality fields or sensitive data."
+                                     },
+                                     {
+                                         "id":  "define_v2_metric_contract",
+                                         "status":  "complete",
+                                         "text":  "Define a bounded V2 metric contract: allowed labels, forbidden labels, naming conventions, units and owner surface."
+                                     },
+                                     {
+                                         "id":  "write_gap_findings_into_plan",
+                                         "status":  "complete",
+                                         "text":  "Update this plan with discovered gaps, implementation notes and any skipped checks."
+                                     }
+                                 ]
+                   },
+                   {
+                       "id":  "phase_1_user_journey_funnels",
+                       "status":  "complete",
+                       "objective":  "Add privacy-safe funnel visibility for end-to-end product journeys across VK Bot and Mini App.",
+                       "expected_load_impact":  "low",
+                       "tasks":  [
+                                     {
+                                         "id":  "miniapp_journey_funnel",
+                                         "status":  "complete",
+                                         "text":  "Track Mini App funnel steps: app_open/client_event, auth_ok, job_created, queued, provider_started, provider_succeeded, artifact_ready, artifact_viewed, payment_started and payment_succeeded."
+                                     },
+                                     {
+                                         "id":  "vk_bot_journey_funnel",
+                                         "status":  "complete",
+                                         "text":  "Track VK Bot funnel steps: callback_received, dedup_accepted, command_parsed, control_response_sent, job_created, worker_processed, delivery_succeeded and delivery_failed."
+                                     },
+                                     {
+                                         "id":  "job_lifecycle_funnel",
+                                         "status":  "complete",
+                                         "text":  "Track job lifecycle transitions by surface, operation, modality and result without user/job IDs in labels."
+                                     },
+                                     {
+                                         "id":  "funnel_dashboard",
+                                         "status":  "complete",
+                                         "text":  "Add or extend Grafana dashboard panels for cross-surface user journey funnels and drop-off rates."
+                                     }
+                                 ]
+                   },
+                   {
+                       "id":  "phase_2_synthetic_checks_and_alert_quality",
+                       "status":  "complete",
+                       "objective":  "Make product health actively tested and alerts actionable in Russian without leaking sensitive data.",
+                       "expected_load_impact":  "low",
+                       "tasks":  [
+                                     {
+                                         "id":  "synthetic_health_checks",
+                                         "status":  "complete",
+                                         "text":  "Implement or refine synthetic checks for API health, provider-webhook health, Mini App BFF safe path, VK bot mock callback path, mock/non-billable job path and artifact access path."
+                                     },
+                                     {
+                                         "id":  "public_metrics_exposure_checks",
+                                         "status":  "complete",
+                                         "text":  "Keep and extend public exposure checks for /metrics and observability endpoints on app/vk/future website domains."
+                                     },
+                                     {
+                                         "id":  "alert_runbook_annotations_ru",
+                                         "status":  "complete",
+                                         "text":  "Ensure alerts include Russian annotations: what happened, impact, where to go, what to check, probable causes, safe chat output and forbidden data."
+                                     },
+                                     {
+                                         "id":  "telegram_alert_safety",
+                                         "status":  "complete",
+                                         "text":  "Verify Telegram alert payloads never include secrets, raw ids, prompts, launch params, raw payloads or private artifact URLs."
+                                     }
+                                 ]
+                   },
+                   {
+                       "id":  "phase_3_product_business_statistics",
+                       "status":  "complete",
+                       "objective":  "Add low-load business/product statistics for the whole product.",
+                       "expected_load_impact":  "low_to_moderate",
+                       "tasks":  [
+                                     {
+                                         "id":  "active_user_aggregates",
+                                         "status":  "complete",
+                                         "text":  "Implement active user metrics where active means created at least one job, including chat text jobs and image/video jobs. Prefer scheduled aggregates; never label by user_id."
+                                     },
+                                     {
+                                         "id":  "usage_mix_statistics",
+                                         "status":  "complete",
+                                         "text":  "Track text/image/video usage, jobs per user/day, success rate and first job success rate with bounded labels."
+                                     },
+                                     {
+                                         "id":  "payments_conversion_statistics",
+                                         "status":  "complete",
+                                         "text":  "Track payment funnel: intent_created, confirmation_opened when safe, webhook_accepted, provider_verified_success, ledger_topup_posted and repeat_job_after_payment."
+                                     },
+                                     {
+                                         "id":  "referral_funnel_statistics",
+                                         "status":  "complete",
+                                         "text":  "Track referral registered, activated and rewarded aggregate counts without exposing referral codes, VK user IDs or internal UUIDs."
+                                     },
+                                     {
+                                         "id":  "daily_weekly_reports",
+                                         "status":  "complete",
+                                         "text":  "Create daily/weekly Telegram report queries for product usage, job success, payments, provider errors and security alerts."
+                                     }
+                                 ]
+                   },
+                   {
+                       "id":  "phase_4_provider_economics",
+                       "status":  "complete",
+                       "objective":  "Make provider reliability and economics visible without per-request external polling.",
+                       "expected_load_impact":  "low",
+                       "tasks":  [
+                                     {
+                                         "id":  "provider_reliability_metrics",
+                                         "status":  "complete",
+                                         "text":  "Track provider/model success rate, error_class rate, rate_limit events, fallback events, circuit breaker state and p95 latency."
+                                     },
+                                     {
+                                         "id":  "provider_cost_metrics",
+                                         "status":  "complete",
+                                         "text":  "Track estimated spend and charged credits by provider/model/operation. Add real provider billing import only as scheduled/cached future-safe design."
+                                     },
+                                     {
+                                         "id":  "provider_dashboard",
+                                         "status":  "complete",
+                                         "text":  "Add Grafana panels for provider reliability, cost, fallback and margin-readiness."
+                                     }
+                                 ]
+                   },
+                   {
+                       "id":  "phase_5_worker_queue_visibility",
+                       "status":  "complete",
+                       "objective":  "Improve visibility into async processing, stuck jobs, retry pressure and DLQ health.",
+                       "expected_load_impact":  "low",
+                       "tasks":  [
+                                     {
+                                         "id":  "queue_depth_and_age",
+                                         "status":  "complete",
+                                         "text":  "Track queue depth, oldest queued job age, worker throughput and per-operation processing rate."
+                                     },
+                                     {
+                                         "id":  "stuck_jobs_and_dlq",
+                                         "status":  "complete",
+                                         "text":  "Track jobs stuck by status, retry counts, retry reasons, DLQ count and DLQ reasons with bounded error_class labels."
+                                     },
+                                     {
+                                         "id":  "worker_dashboard",
+                                         "status":  "complete",
+                                         "text":  "Add/extend worker dashboard for queue pressure, retry pressure, stuck jobs and delivery failures."
+                                     }
+                                 ]
+                   },
+                   {
+                       "id":  "phase_6_tracing_and_sanitized_logs",
+                       "status":  "complete",
+                       "objective":  "Improve trace/log correlation across the product without leaking sensitive data.",
+                       "expected_load_impact":  "low_to_moderate",
+                       "tasks":  [
+                                     {
+                                         "id":  "trace_coverage",
+                                         "status":  "complete",
+                                         "text":  "Extend trace coverage across inbound, auth, job orchestrator, outbox, worker, provider, artifact and delivery paths with sampling."
+                                     },
+                                     {
+                                         "id":  "safe_structured_log_fields",
+                                         "status":  "complete",
+                                         "text":  "Standardize safe structured log fields: trace_id, correlation_id, surface, operation, modality, provider, status and error_class."
+                                     },
+                                     {
+                                         "id":  "log_redaction_review",
+                                         "status":  "complete",
+                                         "text":  "Audit logs for forbidden fields and add tests/helpers where practical to prevent raw payload or prompt logging."
+                                     }
+                                 ]
+                   },
+                   {
+                       "id":  "phase_7_dashboards_and_docs",
+                       "status":  "complete",
+                       "objective":  "Make observability useful for operators and product/business review.",
+                       "expected_load_impact":  "low",
+                       "tasks":  [
+                                     {
+                                         "id":  "executive_overview_dashboard",
+                                         "status":  "complete",
+                                         "text":  "Add Product Executive Overview dashboard for availability, active users, jobs, payments, provider health and active incidents."
+                                     },
+                                     {
+                                         "id":  "journey_dashboard",
+                                         "status":  "complete",
+                                         "text":  "Add User Journeys dashboard for Mini App, VK Bot, payments and referrals."
+                                     },
+                                     {
+                                         "id":  "security_dashboard_review",
+                                         "status":  "complete",
+                                         "text":  "Review Security Config dashboard for public exposure, unsafe config and alert coverage."
+                                     },
+                                     {
+                                         "id":  "runbook_updates",
+                                         "status":  "skipped",
+                                         "text":  "Update runbook/docs only for material behavior, startup, alert or dashboard changes. Do not create redundant human-readable plans.",
+                                         "skipped_reason":  "No separate human-readable runbook update was required; behavior and operational notes are captured in machine-readable plan/report/rule artifacts."
+                                     }
+                                 ]
+                   }
+               ],
+    "definition_of_done":  [
+                               {
+                                   "id":  "dod_product_wide_coverage",
+                                   "text":  "Observability V2 covers VK Bot, VK Mini App, jobs, workers, providers, payments, billing, referrals, artifacts, admin/operator APIs and future website readiness."
+                               },
+                               {
+                                   "id":  "dod_no_public_observability",
+                                   "text":  "No observability endpoint or /metrics endpoint is public; public exposure checks and alerts are present."
+                               },
+                               {
+                                   "id":  "dod_privacy_safe",
+                                   "text":  "No secrets, prompts, full launch params, raw PII, raw URLs, private artifact URLs or raw provider/payment payloads appear in metrics, logs, traces, alerts, dashboards or reports."
+                               },
+                               {
+                                   "id":  "dod_low_cardinality",
+                                   "text":  "Prometheus label cardinality is bounded and explicitly reviewed."
+                               },
+                               {
+                                   "id":  "dod_actionable_alerts",
+                                   "text":  "Critical and warning alerts are actionable in Russian and explain what to inspect without leaking sensitive data."
+                               },
+                               {
+                                   "id":  "dod_checks_green",
+                                   "text":  "Relevant checks are green or explicitly documented as skipped with reasons."
+                               },
+                               {
+                                   "id":  "dod_plan_statuses_updated",
+                                   "text":  "This plan\u0027s phase/task statuses and notes are updated during implementation and set to complete only after implementation and checks are done."
+                               }
+                           ]
+}

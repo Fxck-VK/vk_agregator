@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "report_id": "product_weekly_observability",
+  "default_range": "7d",
+  "prometheus_base_url": "http://127.0.0.1:9091",
+  "delivery_initial": {
+    "telegram_enabled_env": "ALERT_TELEGRAM_ENABLED",
+    "email_enabled_env": "ALERT_EMAIL_ENABLED",
+    "status": "query_spec_only"
+  },
+  "queries": [
+    {
+      "id": "weekly_active_user_events",
+      "title": "Weekly active-user definition events",
+      "promql": "sum by (surface, operation, modality, result) (increase(vkagg_product_active_user_events_total[7d]))"
+    },
+    {
+      "id": "weekly_active_users_exact",
+      "title": "Exact active users with at least one job in 7d",
+      "promql": "max by (surface, operation, modality) (vkagg_product_active_users{window=\"7d\"})"
+    },
+    {
+      "id": "weekly_product_funnel",
+      "title": "Weekly product funnel by surface/journey/step/result",
+      "promql": "sum by (surface, journey, step, result) (increase(vkagg_product_events_total[7d]))"
+    },
+    {
+      "id": "weekly_job_success_ratio",
+      "title": "Weekly job success ratio",
+      "promql": "sum(increase(vkagg_product_events_total{journey=\"job\",step=\"terminal\",result=\"succeeded\"}[7d])) / clamp_min(sum(increase(vkagg_product_events_total{journey=\"job\",step=\"terminal\"}[7d])), 1)"
+    },
+    {
+      "id": "weekly_job_duration_p95",
+      "title": "Weekly job duration p95",
+      "promql": "histogram_quantile(0.95, sum(rate(vkagg_job_duration_seconds_bucket[7d])) by (le, operation, modality, status))"
+    },
+    {
+      "id": "weekly_provider_errors",
+      "title": "Weekly provider errors by safe class",
+      "promql": "sum by (provider, model, operation, error_class) (increase(vkagg_provider_errors_total[7d]))"
+    },
+    {
+      "id": "weekly_provider_cost",
+      "title": "Weekly estimated provider cost",
+      "promql": "sum by (provider, model, operation, currency) (increase(vkagg_provider_estimated_cost_total[7d]))"
+    },
+    {
+      "id": "weekly_payments_succeeded",
+      "title": "Weekly successful payments",
+      "promql": "sum by (provider, source) (increase(payments_succeeded_total[7d]))"
+    },
+    {
+      "id": "weekly_payment_to_ledger_p95",
+      "title": "Weekly payment to ledger top-up p95",
+      "promql": "histogram_quantile(0.95, sum(rate(vkagg_payment_to_ledger_duration_seconds_bucket[7d])) by (le, provider))"
+    },
+    {
+      "id": "weekly_referral_rewards",
+      "title": "Weekly referral aggregate outcomes",
+      "promql": "sum by (result) (increase(vkagg_referral_rewards_total[7d]))"
+    },
+    {
+      "id": "weekly_security_failures",
+      "title": "Weekly auth/signature failures",
+      "promql": "sum by (surface, reason) (increase(vkagg_auth_failures_total[7d])) or sum by (surface, reason) (increase(vkagg_signature_failures_total[7d]))"
+    },
+    {
+      "id": "weekly_public_metrics_exposure",
+      "title": "Weekly public metrics exposure probe",
+      "promql": "max by (instance) (max_over_time(probe_success{job=\"blackbox-public-metrics\"}[7d]))"
+    },
+    {
+      "id": "weekly_dlq",
+      "title": "Weekly DLQ routed tasks",
+      "promql": "sum by (phase) (increase(vkagg_dlq_routed_total[7d]))"
+    }
+  ]
+}

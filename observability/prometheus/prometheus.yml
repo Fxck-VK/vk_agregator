@@ -125,6 +125,7 @@ scrape_configs:
         - public_prometheus_metrics
     static_configs:
       - targets:
+          - https://neiirohub.ru/metrics
           - https://app.neiirohub.ru/metrics
           - https://vk.neiirohub.ru/metrics
     relabel_configs:

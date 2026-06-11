@@ -21,6 +21,7 @@ import (
 	"vk-ai-aggregator/internal/adapter/storage/postgres"
 	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/platform/config"
+	"vk-ai-aggregator/internal/platform/logging"
 	"vk-ai-aggregator/internal/platform/metrics"
 	"vk-ai-aggregator/internal/platform/ratelimit"
 	"vk-ai-aggregator/internal/platform/tracing"
@@ -31,7 +32,7 @@ import (
 const maxWebhookBodyBytes = 1 << 20
 
 func main() {
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	logger := slog.New(logging.NewJSONHandler(os.Stdout, nil))
 	cfg := config.Load()
 	if err := cfg.Validate(); err != nil {
 		logger.Error("invalid configuration", "error", err)

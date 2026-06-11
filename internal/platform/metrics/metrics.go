@@ -219,6 +219,14 @@ var (
 		Help: "Job creation events for the MVP active-user definition, by bounded product dimensions.",
 	}, []string{"surface", "operation", "modality", "result"})
 
+	// ProductActiveUsers tracks exact unique users with at least one job inside
+	// a coarse window. It is updated by a scheduled aggregate query and never
+	// labels by user_id.
+	ProductActiveUsers = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "vkagg_product_active_users",
+		Help: "Unique users with at least one job in the given window, by bounded product dimensions.",
+	}, []string{"window", "surface", "operation", "modality"})
+
 	// ProductPromptLength tracks prompt character-count buckets without
 	// exporting prompt text.
 	ProductPromptLength = prometheus.NewHistogramVec(prometheus.HistogramOpts{
@@ -497,7 +505,7 @@ func init() {
 		PaymentTopups, PaymentRefunds, PaymentReconciliationMismatches,
 		QueueDepth, QueueOldestAgeSeconds, QueueConsumerLag, StuckJobs,
 		WorkerTaskDuration, WorkerRetries, JobsCreated, JobDuration,
-		ProductEvents, ProductActiveUserEvents, ProductPromptLength,
+		ProductEvents, ProductActiveUserEvents, ProductActiveUsers, ProductPromptLength,
 		JobStatusCurrent, JobRejected, ProviderRequests, ProviderRequestDuration,
 		ProviderErrors, ProviderRateLimits, ProviderFallback, ProviderCircuitState,
 		ProviderTokens, ProviderImages, ProviderVideos, ProviderEstimatedCost,

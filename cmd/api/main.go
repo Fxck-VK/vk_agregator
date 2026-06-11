@@ -24,13 +24,14 @@ import (
 	miniappapp "vk-ai-aggregator/internal/app/miniapp"
 	"vk-ai-aggregator/internal/app/vkbot"
 	"vk-ai-aggregator/internal/platform/config"
+	"vk-ai-aggregator/internal/platform/logging"
 	"vk-ai-aggregator/internal/platform/metrics"
 	"vk-ai-aggregator/internal/platform/ratelimit"
 	"vk-ai-aggregator/internal/platform/tracing"
 )
 
 func main() {
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	logger := slog.New(logging.NewJSONHandler(os.Stdout, nil))
 	cfg := config.Load()
 
 	// Fail closed: refuse to start in production without the secrets that

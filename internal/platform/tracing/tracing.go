@@ -3,6 +3,7 @@ package tracing
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/url"
@@ -130,8 +131,52 @@ func RecordError(span trace.Span, err error) {
 	if err == nil || span == nil {
 		return
 	}
-	span.RecordError(err)
-	span.SetStatus(codes.Error, err.Error())
+	class := SafeErrorClass(err)
+	span.RecordError(safeTraceError(class), trace.WithAttributes(attribute.String("error.class", class)))
+	span.SetStatus(codes.Error, class)
+}
+
+type safeTraceError string
+
+func (e safeTraceError) Error() string {
+	if e == "" {
+		return "error"
+	}
+	return string(e)
+}
+
+// SafeErrorClass maps an error to a bounded class for traces. It deliberately
+// avoids recording raw error text because provider/payment errors can contain
+// payload fragments, URLs or credentials.
+func SafeErrorClass(err error) string {
+	if err == nil {
+		return "none"
+	}
+	switch {
+	case errors.Is(err, context.Canceled):
+		return "context_canceled"
+	case errors.Is(err, context.DeadlineExceeded):
+		return "deadline_exceeded"
+	}
+	msg := strings.ToLower(err.Error())
+	switch {
+	case strings.Contains(msg, "timeout"):
+		return "timeout"
+	case strings.Contains(msg, "rate limit") || strings.Contains(msg, "too many requests"):
+		return "rate_limit"
+	case strings.Contains(msg, "unauthorized") || strings.Contains(msg, "forbidden"):
+		return "auth"
+	case strings.Contains(msg, "not found"):
+		return "not_found"
+	case strings.Contains(msg, "conflict") || strings.Contains(msg, "duplicate"):
+		return "conflict"
+	case strings.Contains(msg, "invalid") || strings.Contains(msg, "validation"):
+		return "invalid_input"
+	case strings.Contains(msg, "unavailable") || strings.Contains(msg, "connection refused") || strings.Contains(msg, "no such host"):
+		return "unavailable"
+	default:
+		return "error"
+	}
 }
 
 // Traceparent injects the current trace context into a W3C traceparent string.

@@ -27,6 +27,7 @@ import (
 	"vk-ai-aggregator/internal/adapter/storage/s3"
 	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/platform/config"
+	"vk-ai-aggregator/internal/platform/logging"
 	"vk-ai-aggregator/internal/platform/metrics"
 	"vk-ai-aggregator/internal/platform/tracing"
 	"vk-ai-aggregator/internal/service/artifactservice"
@@ -39,7 +40,7 @@ import (
 )
 
 func main() {
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	logger := slog.New(logging.NewJSONHandler(os.Stdout, nil))
 	cfg := config.Load()
 
 	if err := cfg.Validate(); err != nil {

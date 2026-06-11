@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 
 	"vk-ai-aggregator/internal/domain"
+	"vk-ai-aggregator/internal/platform/metrics"
 )
 
 const (
@@ -54,13 +55,13 @@ func NewHandler(cfg Config, deps Deps) *Handler {
 // Routes returns an http.Handler with the admin routes registered.
 func (h *Handler) Routes() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /admin/jobs", h.auth(h.listJobs))
-	mux.HandleFunc("GET /admin/jobs/{id}", h.auth(h.getJob))
-	mux.HandleFunc("GET /admin/users/{id}", h.auth(h.getUser))
-	mux.HandleFunc("GET /admin/deliveries/{id}", h.auth(h.getDelivery))
-	mux.HandleFunc("GET /admin/referrals/codes/{code}/stats", h.auth(h.getReferralCodeStats))
-	mux.HandleFunc("GET /admin/referrals/suspicious", h.auth(h.listSuspiciousReferrals))
-	mux.HandleFunc("POST /admin/referrals/codes/{code}/freeze", h.auth(h.freezeReferralBonusFutureFlag))
+	mux.HandleFunc("GET /admin/jobs", h.auth(h.operatorAction("admin_jobs_list", h.listJobs)))
+	mux.HandleFunc("GET /admin/jobs/{id}", h.auth(h.operatorAction("admin_job_get", h.getJob)))
+	mux.HandleFunc("GET /admin/users/{id}", h.auth(h.operatorAction("admin_user_get", h.getUser)))
+	mux.HandleFunc("GET /admin/deliveries/{id}", h.auth(h.operatorAction("admin_delivery_get", h.getDelivery)))
+	mux.HandleFunc("GET /admin/referrals/codes/{code}/stats", h.auth(h.operatorAction("admin_referral_stats_get", h.getReferralCodeStats)))
+	mux.HandleFunc("GET /admin/referrals/suspicious", h.auth(h.operatorAction("admin_referral_suspicious_list", h.listSuspiciousReferrals)))
+	mux.HandleFunc("POST /admin/referrals/codes/{code}/freeze", h.auth(h.operatorAction("admin_referral_freeze_future_flag", h.freezeReferralBonusFutureFlag)))
 	return mux
 }
 
@@ -68,10 +69,33 @@ func (h *Handler) Routes() http.Handler {
 func (h *Handler) auth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if h.cfg.Token != "" && !adminTokenEqual(r.Header.Get("X-Admin-Token"), h.cfg.Token) {
+			metrics.AuthFailures.WithLabelValues("admin_api", "invalid_admin_token").Inc()
 			writeError(w, http.StatusUnauthorized, "unauthorized")
 			return
 		}
 		next(w, r)
+	}
+}
+
+type actionStatusRecorder struct {
+	http.ResponseWriter
+	code int
+}
+
+func (r *actionStatusRecorder) WriteHeader(code int) {
+	r.code = code
+	r.ResponseWriter.WriteHeader(code)
+}
+
+func (h *Handler) operatorAction(action string, next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		rec := &actionStatusRecorder{ResponseWriter: w, code: http.StatusOK}
+		next(rec, r)
+		result := "success"
+		if rec.code >= 400 {
+			result = "error"
+		}
+		metrics.AdminActions.WithLabelValues(action, result).Inc()
 	}
 }
 

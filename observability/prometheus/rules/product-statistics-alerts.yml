@@ -21,6 +21,34 @@ groups:
             sum(rate(vkagg_product_prompt_length_chars_bucket[15m])) by (le)
           )
 
+      - record: product:provider_latency_p95:5m
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum(rate(vkagg_provider_request_duration_seconds_bucket[5m])) by (le, provider, model, operation)
+          )
+
+      - record: product:worker_task_duration_p95:5m
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum(rate(vkagg_worker_task_duration_seconds_bucket[5m])) by (le, phase, operation, modality, result)
+          )
+
+      - record: product:job_duration_p95:30m
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum(rate(vkagg_job_duration_seconds_bucket[30m])) by (le, operation, modality, status)
+          )
+
+      - record: product:payment_to_ledger_p95:30m
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum(rate(vkagg_payment_to_ledger_duration_seconds_bucket[30m])) by (le, provider)
+          )
+
       - alert: ProductJobSuccessRateLow
         expr: |
           product:job_success_ratio:30m < 0.95
@@ -98,3 +126,92 @@ groups:
           dashboard: Grafana -> Product Observability / Product Statistics, Providers
           action: Проверь, не идет ли abuse/автоматический спам; при необходимости ужесточи лимиты длины prompt или rate limits по surface/modality.
           safe_logs: Отправляй только buckets/counts и surface/operation/modality. Не отправляй prompt text, launch params, user ids или provider request body.
+      - alert: ProductProviderLatencyHigh
+        expr: product:provider_latency_p95:5m > 60
+        for: 10m
+        labels:
+          severity: warning
+          surface: providers
+        annotations:
+          summary: AI provider отвечает медленно
+          description: p95 latency provider call выше 60 секунд по provider/model/operation.
+          impact: Jobs могут дольше ждать в worker queues, копить очередь и уходить в retry/fallback.
+          dashboard: Grafana -> Product Observability / Providers, Jobs Worker
+          action: Проверь provider latency по provider/model/operation, rate limits, fallback chain, circuit breaker и queue oldest age. Provider calls должны оставаться только в worker/provider adapters.
+          safe_logs: В чат отправляй только provider, model, operation, latency bucket и error_class. Не отправляй prompts, raw provider payloads, API keys или private media URLs.
+
+      - alert: ProductWorkerRetriesSpike
+        expr: sum(increase(vkagg_worker_retries_total[10m])) > 5
+        for: 5m
+        labels:
+          severity: warning
+          surface: worker
+        annotations:
+          summary: Worker retries заметно выросли
+          description: За 10 минут worker принял больше 5 retry decisions.
+          impact: Jobs могут выполняться медленнее, queues могут расти, exhausted tasks могут доходить до DLQ.
+          dashboard: Grafana -> Product Observability / Jobs Worker, Providers
+          action: Проверь retries by phase/operation/modality, provider errors/rate limits, scanner/moderation errors, Redis health и последние config/deploy changes.
+          safe_logs: В чат отправляй только phase, operation, modality, counts и sanitized error_class. Не отправляй job_id, user_id, prompts, provider payloads или private artifact URLs.
+
+      - alert: ProductVKDeliveryErrors
+        expr: sum(increase(vkagg_vk_delivery_attempts_total{result="error"}[10m])) > 3
+        for: 5m
+        labels:
+          severity: warning
+          surface: vk_bot
+        annotations:
+          summary: Ошибки VK delivery выросли
+          description: За 10 минут несколько VK delivery attempts завершились error.
+          impact: Пользователи VK Bot могут не получать результаты, даже если job/provider path успешно завершился.
+          dashboard: Grafana -> Product Observability / VK Bot, Jobs Worker
+          action: Проверь kind/result/error_class, VK API availability, delivery token presence, media upload path и artifact access. Не переотправляй без проверки idempotent delivery.
+          safe_logs: В чат отправляй только kind, result, error_class и counts. Не отправляй VK access token, peer/user id, private artifact URL или raw VK response.
+
+      - alert: ProductPaymentToLedgerSlow
+        expr: |
+          product:payment_to_ledger_p95:30m > 300
+            and on(provider)
+          sum(rate(vkagg_payment_to_ledger_duration_seconds_count[30m])) by (provider) > 0
+        for: 10m
+        labels:
+          severity: critical
+          surface: payments
+        annotations:
+          summary: Payment success медленно доходит до ledger top-up
+          description: p95 от payment intent creation до committed ledger top-up выше 5 минут.
+          impact: Пользователь мог успешно оплатить, но credits еще не доступны на балансе.
+          dashboard: Grafana -> Product Observability / Payments Billing
+          action: Проверь provider-webhook readyz, payment_events backlog, reconciliation, provider GetPayment errors и DB latency. Credits начисляй только через provider-verified ledger top-up path.
+          safe_logs: В чат отправляй только provider, duration bucket и backlog count. Не отправляй payment_id, user_id, YooKassa payload, auth headers, receipt contacts или credentials.
+
+      - alert: ProductSecurityFailuresSpike
+        expr: |
+          sum(increase(vkagg_auth_failures_total[10m]))
+            +
+          sum(increase(vkagg_signature_failures_total[10m])) > 10
+        for: 5m
+        labels:
+          severity: critical
+          surface: security
+        annotations:
+          summary: Auth/signature failures выросли
+          description: За 10 минут на protected surfaces много auth или signature failures.
+          impact: Это может быть сломанный env/config, атакующий трафик, сломанный VK launch signature flow или неверное использование admin token.
+          dashboard: Grafana -> Product Observability / Security Config
+          action: Проверь failures by surface/reason, VK_APP_SECRET/config presence, admin token usage, forwarding headers и recent deploy. Не ослабляй auth или signature checks.
+          safe_logs: В чат отправляй только surface, reason и counts. Не отправляй admin token, launch params, cookies, auth headers или user ids.
+
+      - alert: ProductReferralRewardErrors
+        expr: sum(increase(vkagg_referral_rewards_total{result=~"service_unavailable|error"}[10m])) > 0
+        for: 5m
+        labels:
+          severity: warning
+          surface: referrals
+        annotations:
+          summary: Referral flow возвращает service/error outcomes
+          description: Referral registration/activation/reward path вернул service_unavailable или error.
+          impact: Приглашения могут не активироваться или rewards могут не записаться через billing ledger.
+          dashboard: Grafana -> Product Observability / Product Statistics, Security Config
+          action: Проверь referral result counts, referral repository health, ledger reward path и idempotency. Не начисляй bonus вручную мимо billing ledger.
+          safe_logs: В чат отправляй только result и counts. Не отправляй referral_code, vk_user_id, internal UUID или списки invited users.

@@ -50,12 +50,12 @@
       },
       "targets": [
         {
-          "expr": "sum(increase(vkagg_product_active_user_events_total[$__range]))",
-          "legendFormat": "active job events",
+          "expr": "sum(vkagg_product_active_users{window=\"24h\"})",
+          "legendFormat": "active users 24h",
           "refId": "A"
         }
       ],
-      "title": "Active User Events",
+      "title": "Active Users 24h",
       "type": "stat"
     },
     {

@@ -40,6 +40,36 @@ func (r *MaintenanceRepository) CleanupOutboxEvents(ctx context.Context, cutoff 
 	return tag.RowsAffected(), nil
 }
 
+// ProductActiveUserCounts returns distinct users with at least one job since
+// the cutoff, grouped by bounded product dimensions.
+func (r *MaintenanceRepository) ProductActiveUserCounts(ctx context.Context, since time.Time) ([]domain.ProductActiveUserCount, error) {
+	const q = `
+		SELECT
+			CASE WHEN command_id IS NULL THEN 'miniapp_or_api' ELSE 'vk_bot' END AS surface,
+			operation_type,
+			modality,
+			COUNT(DISTINCT user_id)::bigint
+		FROM jobs
+		WHERE created_at >= $1
+		GROUP BY 1, 2, 3
+		ORDER BY 1, 2, 3`
+	rows, err := r.db.Query(ctx, q, since)
+	if err != nil {
+		return nil, mapError(err)
+	}
+	defer rows.Close()
+
+	var out []domain.ProductActiveUserCount
+	for rows.Next() {
+		var item domain.ProductActiveUserCount
+		if err := rows.Scan(&item.Surface, &item.Operation, &item.Modality, &item.Count); err != nil {
+			return nil, mapError(err)
+		}
+		out = append(out, item)
+	}
+	return out, mapError(rows.Err())
+}
+
 // BalanceMismatches returns accounts whose cached balance differs from the sum
 // of committed ledger entries.
 func (r *MaintenanceRepository) BalanceMismatches(ctx context.Context, limit int) ([]domain.BalanceMismatch, error) {

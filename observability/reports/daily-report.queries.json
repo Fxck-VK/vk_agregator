@@ -25,6 +25,11 @@
       "promql": "sum by (surface, operation, modality, result) (increase(vkagg_product_active_user_events_total[24h]))"
     },
     {
+      "id": "active_users_exact_24h",
+      "title": "Exact active users with at least one job in 24h",
+      "promql": "max by (surface, operation, modality) (vkagg_product_active_users{window=\"24h\"})"
+    },
+    {
       "id": "prompt_length_p95",
       "title": "Prompt length p95 without prompt text",
       "promql": "histogram_quantile(0.95, sum(rate(vkagg_product_prompt_length_chars_bucket[24h])) by (le, surface, operation, modality))"
@@ -40,14 +45,49 @@
       "promql": "histogram_quantile(0.95, sum(rate(vkagg_product_frontend_ui_duration_seconds_bucket[24h])) by (le, step, result))"
     },
     {
+      "id": "frontend_launch_failures",
+      "title": "Mini App launch failures by safe reason",
+      "promql": "sum by (surface, reason) (increase(vkagg_frontend_launch_failures_total[24h]))"
+    },
+    {
+      "id": "frontend_payment_flow_errors",
+      "title": "Frontend payment flow errors by safe step/class",
+      "promql": "sum by (step, error_class) (increase(vkagg_frontend_payment_flow_errors_total[24h]))"
+    },
+    {
       "id": "job_terminal",
       "title": "Завершенные задачи по статусу",
       "promql": "sum by (status) (increase(vkagg_jobs_terminal_total[24h]))"
     },
     {
+      "id": "job_duration_p95",
+      "title": "Job duration p95 by operation/modality/status",
+      "promql": "histogram_quantile(0.95, sum(rate(vkagg_job_duration_seconds_bucket[24h])) by (le, operation, modality, status))"
+    },
+    {
+      "id": "job_rejections",
+      "title": "Rejected jobs by safe reason class",
+      "promql": "sum by (reason_class, modality) (increase(vkagg_job_rejected_total[24h]))"
+    },
+    {
       "id": "provider_errors",
       "title": "Ошибки AI-провайдеров по provider/model/operation/class",
       "promql": "sum by (provider, model, operation, error_class) (increase(vkagg_provider_errors_total[24h]))"
+    },
+    {
+      "id": "provider_latency_p95",
+      "title": "Provider call latency p95 by provider/model/operation",
+      "promql": "histogram_quantile(0.95, sum(rate(vkagg_provider_request_duration_seconds_bucket[24h])) by (le, provider, model, operation))"
+    },
+    {
+      "id": "provider_rate_limits",
+      "title": "Provider rate limits by provider/model/operation",
+      "promql": "sum by (provider, model, operation) (increase(vkagg_provider_rate_limits_total[24h]))"
+    },
+    {
+      "id": "provider_fallbacks",
+      "title": "Provider fallback transitions",
+      "promql": "sum by (from_provider, to_provider, operation, reason) (increase(vkagg_provider_fallback_total[24h]))"
     },
     {
       "id": "provider_estimated_cost",
@@ -65,9 +105,29 @@
       "promql": "sum by (provider) (increase(payment_topups_total[24h]))"
     },
     {
+      "id": "payment_to_ledger_p95",
+      "title": "Payment creation to ledger top-up p95",
+      "promql": "histogram_quantile(0.95, sum(rate(vkagg_payment_to_ledger_duration_seconds_bucket[24h])) by (le, provider))"
+    },
+    {
       "id": "product_credits_flow",
       "title": "Product credits flow by source/flow/result",
       "promql": "sum by (source, flow, result) (increase(vkagg_product_credits_flow_total[24h]))"
+    },
+    {
+      "id": "billing_reservations",
+      "title": "Billing reservations by operation/result",
+      "promql": "sum by (operation, result) (increase(vkagg_billing_reservations_total[24h]))"
+    },
+    {
+      "id": "billing_captures",
+      "title": "Billing captures by operation/result",
+      "promql": "sum by (operation, result) (increase(vkagg_billing_captures_total[24h]))"
+    },
+    {
+      "id": "billing_releases",
+      "title": "Billing releases by operation/result",
+      "promql": "sum by (operation, result) (increase(vkagg_billing_releases_total[24h]))"
     },
     {
       "id": "payment_intent_outcomes",
@@ -88,6 +148,56 @@
       "id": "dlq",
       "title": "Задачи, ушедшие в DLQ",
       "promql": "sum by (phase) (increase(vkagg_dlq_routed_total[24h]))"
+    },
+    {
+      "id": "queue_depth",
+      "title": "Queue depth by stream",
+      "promql": "max by (stream) (vkagg_queue_depth)"
+    },
+    {
+      "id": "queue_oldest_age",
+      "title": "Oldest queued task age by stream",
+      "promql": "max by (stream) (vkagg_queue_oldest_age_seconds)"
+    },
+    {
+      "id": "worker_retries",
+      "title": "Worker retry pressure by phase/operation/modality",
+      "promql": "sum by (phase, operation, modality) (increase(vkagg_worker_retries_total[24h]))"
+    },
+    {
+      "id": "worker_duration_p95",
+      "title": "Worker task duration p95",
+      "promql": "histogram_quantile(0.95, sum(rate(vkagg_worker_task_duration_seconds_bucket[24h])) by (le, phase, operation, modality, result))"
+    },
+    {
+      "id": "vk_delivery_attempts",
+      "title": "VK delivery attempts by kind/result/error_class",
+      "promql": "sum by (kind, result, error_class) (increase(vkagg_vk_delivery_attempts_total[24h]))"
+    },
+    {
+      "id": "referral_rewards",
+      "title": "Referral registered/activated/rewarded aggregate outcomes",
+      "promql": "sum by (result) (increase(vkagg_referral_rewards_total[24h]))"
+    },
+    {
+      "id": "auth_failures",
+      "title": "Authentication failures by surface/reason",
+      "promql": "sum by (surface, reason) (increase(vkagg_auth_failures_total[24h]))"
+    },
+    {
+      "id": "signature_failures",
+      "title": "Signature verification failures by surface/reason",
+      "promql": "sum by (surface, reason) (increase(vkagg_signature_failures_total[24h]))"
+    },
+    {
+      "id": "admin_actions",
+      "title": "Admin/operator actions by action/result",
+      "promql": "sum by (action, result) (increase(vkagg_admin_actions_total[24h]))"
+    },
+    {
+      "id": "suspicious_events",
+      "title": "Suspicious events by surface/type",
+      "promql": "sum by (surface, type) (increase(vkagg_suspicious_events_total[24h]))"
     },
     {
       "id": "synthetic_local_health",

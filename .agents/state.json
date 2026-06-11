@@ -1,145 +1,161 @@
-{
-  "schema_version": 3,
-  "updated_at": "2026-06-11T20:24:00+03:00",
-  "branch": "feature/integration-web-backend",
-  "git_ref_policy": "Use git rev-parse HEAD/origin/main for moving SHAs; this file does not track branch head commits.",
-  "purpose": "Minimal machine-readable current context and routing for agents.",
-  "read_policy": {
-    "read_by_default": [
-      "AGENTS.md",
-      ".agents/state.json"
-    ],
-    "read_when_scope_requires": [
-      "README.md",
-      "RUNBOOK.md",
-      "TASKS.md",
-      "DECISIONS.md",
-      "docs/ARCHITECTURE.md",
-      "docs/AGENTS_FULL.md",
-      "docs/DOMAIN_DEPLOYMENT_PLAN.md",
-      "docs/VIDEO_GENERATION.md",
-      "docs/VK_BOT_AGENT_GUIDE.md"
-    ],
-    "do_not_read_by_default": [
-      "docs/archive/**",
-      ".agents/logs/**"
-    ],
-    "history_read_condition": "Only read archive/logs when explicitly asked for history, debugging a repeated known error, regression archaeology, or old audit details."
-  },
-  "progress": {
-    "current_focus": "Shared referral activation rollout and product statistics observability merged in feature/integration-web-backend",
-    "vk_bot_video_mode": {
-      "status": "prunaai_button_enabled",
-      "summary": "VK video model picker exposes PrunaAI and Back. PrunaAI stores peer-scoped video mode; the next plain text creates a video_generate Job through worker/provider flow. Stale Sora/Kling/Seedance/Haiuo payloads fall back to Show Menu and do not create Jobs. VK video delivery supports VK_VIDEO_DELIVERY_MODE=doc for mp4 file attachments and VK_VIDEO_DELIVERY_MODE=video for native VK video attachments through VK_VIDEO_ACCESS_TOKEN.",
-      "provider_boundary": "VK handler creates Jobs only; video providers are called by cmd/worker through internal/adapter/provider.",
-      "placeholder": "НейроХаб готовит видео..."
-    },
-    "current_priorities": [
-      "keep protected Product Catalog Admin routes operator-only with safe DTOs and immutable payment intent snapshots",
-      "use https://neiirohub.ru/billing/webhooks/yookassa as the canonical payment webhook route unless superseded",
-      "keep payment credits granted only by provider-verified webhook/reconciliation ledger top-ups",
-      "keep 54-FZ receipt fields snapshotted on payment_intents for payment retries and manual refunds",
-      "keep production YooKassa webhooks HTTPS/proxy guarded and monitor webhook/refund rollback metrics",
-      "finish remaining YooKassa live-smoke follow-ups: public HTTPS webhook delivery and protected capture:false local-intent canceled smoke",
-      "add lot/FIFO refund attribution later"
-    ],
-    "last_yookassa_smoke": {
-      "date": "2026-06-10",
-      "status": "partial_pass_with_followups",
-      "environment": "local _env test credentials against YooKassa test shop",
-      "passed": [
-        "local postgres and redis healthy",
-        "migrations applied through current head",
-        "cmd/api and cmd/provider-webhook health checks passed",
-        "miniapp signed launch params accepted without trusting user_id body",
-        "test card payment created through Mini App BFF",
-        "successful YooKassa checkout completed with test=true",
-        "missed public webhook was recovered by provider-verified reconciliation",
-        "topup ledger entry was posted once",
-        "payment.succeeded webhook replay was deduplicated",
-        "manual full refund through protected operator route was idempotent with repeated X-Idempotency-Key",
-        "refund.succeeded webhook replay was deduplicated by provider_refund_id",
-        "safe Mini App payment history returned no provider-native payload"
-      ],
-      "followups": [
-        "configure a public HTTPS route so YooKassa dashboard webhooks reach cmd/provider-webhook directly",
-        "retest payment.canceled through the protected operator capture:false local-intent path",
-        "leave pending failed checkout intents unpaid until provider success/cancel/expiration is verified"
-      ],
-      "secret_policy": "No YooKassa secrets, ADMIN_TOKEN, launch params, auth headers or raw provider payloads were recorded."
-    },
-    "active_runtime": {
-      "api_port": 8080,
-      "miniapp_port": 5173,
-      "tunnel": "pending_cloudflare",
-      "local_env_files": [
-        ".env",
-        "_env"
-      ],
-      "local_env_note": "_env is the supported macOS workspace fallback for local secrets; it is ignored by Git and must not be logged."
-    },
-    "docs_compaction": {
-      "date": "2026-06-10",
-      "active_human_backlog": "TASKS.md",
-      "archived_legacy_docs": [
-        "docs/archive/2026-06/TASKS.legacy.md",
-        "docs/archive/2026-06/ROADMAP.legacy.md",
-        "docs/archive/2026-06/TESTING.legacy.md",
-        "docs/archive/2026-06/BILLING_AGENT_HANDOFF.legacy.md",
-        "docs/archive/2026-06/MERGE_HANDOFF.integration-web-backend.legacy.md"
-      ],
-      "policy": "Keep active docs short and current; use docs/archive/** only for historical investigation or explicitly requested archaeology."
-    }
-  },
-  "doc_update_policy": {
-    "routine_task": "Do not update docs or logs.",
-    "update_state_when": [
-      "default context routing changes",
-      "current priorities change",
-      "runtime/tunnel state changes"
-    ],
-    "update_reference_docs_when": [
-      "architecture contract changes",
-      "runbook/startup/env behavior changes",
-      "ADR/decision changes",
-      "active backlog changes"
-    ],
-    "update_error_log_when": [
-      "a non-obvious error has a reusable root cause and fix",
-      "a repeated incident needs machine-readable prevention data"
-    ]
-  },
-  "logs": {
-    "errors": ".agents/logs/errors.jsonl",
-    "policy": "Only append sanitized error entries for reusable incidents. Do not log routine actions or context changes."
-  },
-  "schemas": {
-    "error": ".agents/schemas/error.schema.json"
-  },
-  "active_plans": {
-    "product_statistics_observability": {
-      "status": "complete",
-      "plan": ".agents/plans/product_statistics_observability.json",
-      "schema": ".agents/schemas/product_observability_plan.schema.json",
-      "mode": "IMPLEMENT",
-      "runtime_target": "vps_docker_compose",
-      "notes": [
-        "Product statistics observability implementation is complete in the local repository and should be treated as current context.",
-        "The previous product_observability plan was complete and removed from .agents/plans to avoid stale active context.",
-        "Keep implementation local-repository first unless a later task explicitly asks for VPS or Cloudflare changes.",
-        "Do not expose metrics/Grafana/Prometheus/Loki/Tempo publicly.",
-        "Do not log or commit secrets, prompts, full launch params, raw PII, raw provider payloads or raw payment payloads."
-      ]
-    }
-  },
-  "archive": {
-    "root": "docs/archive",
-    "policy": "Historical evidence only, not current instruction."
-  },
-  "security_invariants": [
-    "no secrets, full launch params, prompt bodies, private artifact URLs, raw PII or provider credentials in docs/logs",
-    "no provider calls from VK handlers or Mini App BFF",
-    "billing remains ledger based",
-    "do not weaken auth, signature checks, moderation, billing or idempotency"
-  ]
+﻿{
+    "schema_version":  3,
+    "updated_at":  "2026-06-11T22:10:40+03:00",
+    "branch":  "fastlife_dev",
+    "git_ref_policy":  "Use git rev-parse HEAD/origin/main for moving SHAs; this file does not track branch head commits.",
+    "purpose":  "Minimal machine-readable current context and routing for agents.",
+    "read_policy":  {
+                        "read_by_default":  [
+                                                "AGENTS.md",
+                                                ".agents/state.json"
+                                            ],
+                        "read_when_scope_requires":  [
+                                                         "README.md",
+                                                         "RUNBOOK.md",
+                                                         "TASKS.md",
+                                                         "DECISIONS.md",
+                                                         "docs/ARCHITECTURE.md",
+                                                         "docs/AGENTS_FULL.md",
+                                                         "docs/DOMAIN_DEPLOYMENT_PLAN.md",
+                                                         "docs/VIDEO_GENERATION.md",
+                                                         "docs/VK_BOT_AGENT_GUIDE.md"
+                                                     ],
+                        "do_not_read_by_default":  [
+                                                       "docs/archive/**",
+                                                       ".agents/logs/**"
+                                                   ],
+                        "history_read_condition":  "Only read archive/logs when explicitly asked for history, debugging a repeated known error, regression archaeology, or old audit details."
+                    },
+    "progress":  {
+                     "current_focus":  "Product-wide observability/statistics V2 implementation is complete locally: product-wide metrics, reports, alerts, synthetics, exact scheduled active-user aggregates, sanitized traces and trace-aware logging are in place.",
+                     "vk_bot_video_mode":  {
+                                               "status":  "prunaai_button_enabled",
+                                               "summary":  "VK video model picker exposes PrunaAI and Back. PrunaAI stores peer-scoped video mode; the next plain text creates a video_generate Job through worker/provider flow. Stale Sora/Kling/Seedance/Haiuo payloads fall back to Show Menu and do not create Jobs. VK video delivery supports VK_VIDEO_DELIVERY_MODE=doc for mp4 file attachments and VK_VIDEO_DELIVERY_MODE=video for native VK video attachments through VK_VIDEO_ACCESS_TOKEN.",
+                                               "provider_boundary":  "VK handler creates Jobs only; video providers are called by cmd/worker through internal/adapter/provider.",
+                                               "placeholder":  "РќРµР№СЂРѕРҐР°Р± РіРѕС‚РѕРІРёС‚ РІРёРґРµРѕ..."
+                                           },
+                     "current_priorities":  [
+                                                "keep protected Product Catalog Admin routes operator-only with safe DTOs and immutable payment intent snapshots",
+                                                "use https://neiirohub.ru/billing/webhooks/yookassa as the canonical payment webhook route unless superseded",
+                                                "keep payment credits granted only by provider-verified webhook/reconciliation ledger top-ups",
+                                                "keep 54-FZ receipt fields snapshotted on payment_intents for payment retries and manual refunds",
+                                                "keep production YooKassa webhooks HTTPS/proxy guarded and monitor webhook/refund rollback metrics",
+                                                "finish remaining YooKassa live-smoke follow-ups: public HTTPS webhook delivery and protected capture:false local-intent canceled smoke",
+                                                "add lot/FIFO refund attribution later"
+                                            ],
+                     "last_yookassa_smoke":  {
+                                                 "date":  "2026-06-10",
+                                                 "status":  "partial_pass_with_followups",
+                                                 "environment":  "local _env test credentials against YooKassa test shop",
+                                                 "passed":  [
+                                                                "local postgres and redis healthy",
+                                                                "migrations applied through current head",
+                                                                "cmd/api and cmd/provider-webhook health checks passed",
+                                                                "miniapp signed launch params accepted without trusting user_id body",
+                                                                "test card payment created through Mini App BFF",
+                                                                "successful YooKassa checkout completed with test=true",
+                                                                "missed public webhook was recovered by provider-verified reconciliation",
+                                                                "topup ledger entry was posted once",
+                                                                "payment.succeeded webhook replay was deduplicated",
+                                                                "manual full refund through protected operator route was idempotent with repeated X-Idempotency-Key",
+                                                                "refund.succeeded webhook replay was deduplicated by provider_refund_id",
+                                                                "safe Mini App payment history returned no provider-native payload"
+                                                            ],
+                                                 "followups":  [
+                                                                   "configure a public HTTPS route so YooKassa dashboard webhooks reach cmd/provider-webhook directly",
+                                                                   "retest payment.canceled through the protected operator capture:false local-intent path",
+                                                                   "leave pending failed checkout intents unpaid until provider success/cancel/expiration is verified"
+                                                               ],
+                                                 "secret_policy":  "No YooKassa secrets, ADMIN_TOKEN, launch params, auth headers or raw provider payloads were recorded."
+                                             },
+                     "active_runtime":  {
+                                            "api_port":  8080,
+                                            "miniapp_port":  5173,
+                                            "tunnel":  "pending_cloudflare",
+                                            "local_env_files":  [
+                                                                    ".env",
+                                                                    "_env"
+                                                                ],
+                                            "local_env_note":  "_env is the supported macOS workspace fallback for local secrets; it is ignored by Git and must not be logged."
+                                        },
+                     "docs_compaction":  {
+                                             "date":  "2026-06-10",
+                                             "active_human_backlog":  "TASKS.md",
+                                             "archived_legacy_docs":  [
+                                                                          "docs/archive/2026-06/TASKS.legacy.md",
+                                                                          "docs/archive/2026-06/ROADMAP.legacy.md",
+                                                                          "docs/archive/2026-06/TESTING.legacy.md",
+                                                                          "docs/archive/2026-06/BILLING_AGENT_HANDOFF.legacy.md",
+                                                                          "docs/archive/2026-06/MERGE_HANDOFF.integration-web-backend.legacy.md"
+                                                                      ],
+                                             "policy":  "Keep active docs short and current; use docs/archive/** only for historical investigation or explicitly requested archaeology."
+                                         }
+                 },
+    "doc_update_policy":  {
+                              "routine_task":  "Do not update docs or logs.",
+                              "update_state_when":  [
+                                                        "default context routing changes",
+                                                        "current priorities change",
+                                                        "runtime/tunnel state changes"
+                                                    ],
+                              "update_reference_docs_when":  [
+                                                                 "architecture contract changes",
+                                                                 "runbook/startup/env behavior changes",
+                                                                 "ADR/decision changes",
+                                                                 "active backlog changes"
+                                                             ],
+                              "update_error_log_when":  [
+                                                            "a non-obvious error has a reusable root cause and fix",
+                                                            "a repeated incident needs machine-readable prevention data"
+                                                        ]
+                          },
+    "logs":  {
+                 "errors":  ".agents/logs/errors.jsonl",
+                 "policy":  "Only append sanitized error entries for reusable incidents. Do not log routine actions or context changes."
+             },
+    "schemas":  {
+                    "error":  ".agents/schemas/error.schema.json"
+                },
+    "active_plans":  {
+                         "product_statistics_observability":  {
+                                                                  "status":  "complete",
+                                                                  "plan":  ".agents/plans/product_statistics_observability.json",
+                                                                  "schema":  ".agents/schemas/product_observability_plan.schema.json",
+                                                                  "mode":  "IMPLEMENT",
+                                                                  "runtime_target":  "vps_docker_compose",
+                                                                  "notes":  [
+                                                                                "Product statistics observability implementation is complete in the local repository and should be treated as current context.",
+                                                                                "The previous product_observability plan was complete and removed from .agents/plans to avoid stale active context.",
+                                                                                "Keep implementation local-repository first unless a later task explicitly asks for VPS or Cloudflare changes.",
+                                                                                "Do not expose metrics/Grafana/Prometheus/Loki/Tempo publicly.",
+                                                                                "Do not log or commit secrets, prompts, full launch params, raw PII, raw provider payloads or raw payment payloads."
+                                                                            ]
+                                                              },
+                         "product_observability_v2":  {
+                                                          "status":  "complete",
+                                                          "plan":  ".agents/plans/product_observability_v2.json",
+                                                          "schema":  ".agents/schemas/product_observability_plan.schema.json",
+                                                          "mode":  "IMPLEMENT",
+                                                          "runtime_target":  "vps_docker_compose_first",
+                                                          "notes":  [
+                                                                        "This is the next product-wide observability/statistics plan and covers VK Bot, VK Mini App, jobs, workers, providers, payments, billing, referrals, artifacts, admin/operator APIs and future website readiness.",
+                                                                        "Treat .agents/plans/product_statistics_observability.json as completed baseline context, not as the active implementation target.",
+                                                                        "Keep all observability endpoints private and never expose /metrics publicly.",
+                                                                        "Do not add high-cardinality metric labels such as user_id, vk_user_id, job_id, payment_id, artifact_id, referral_code, raw_error, raw_url, prompt or idempotency_key.",
+                                                                        "Do not log, trace, alert, report or dashboard secrets, prompts, full launch params, raw PII, raw provider payloads, raw payment payloads or private artifact URLs.",
+                                                                        "Do not run live YooKassa money actions or real provider-spend synthetics without separate explicit confirmation.",
+                                                                        "V2 implementation added bounded admin action metrics, exact scheduled active-user aggregate gauge, daily/weekly report specs, provider/worker/payment/security/referral alerts, synthetic runner refinements, sanitized trace error classes and trace-aware runtime logging."
+                                                                    ]
+                                                      }
+                     },
+    "archive":  {
+                    "root":  "docs/archive",
+                    "policy":  "Historical evidence only, not current instruction."
+                },
+    "security_invariants":  [
+                                "no secrets, full launch params, prompt bodies, private artifact URLs, raw PII or provider credentials in docs/logs",
+                                "no provider calls from VK handlers or Mini App BFF",
+                                "billing remains ledger based",
+                                "do not weaken auth, signature checks, moderation, billing or idempotency"
+                            ]
 }

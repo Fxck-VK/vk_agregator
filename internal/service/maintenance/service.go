@@ -14,6 +14,7 @@ import (
 type Store interface {
 	CleanupExpiredIdempotencyKeys(ctx context.Context, now time.Time) (int64, error)
 	CleanupOutboxEvents(ctx context.Context, cutoff time.Time) (int64, error)
+	ProductActiveUserCounts(ctx context.Context, since time.Time) ([]domain.ProductActiveUserCount, error)
 	BalanceMismatches(ctx context.Context, limit int) ([]domain.BalanceMismatch, error)
 }
 
@@ -145,10 +146,41 @@ func (s *Service) Cleanup(ctx context.Context) error {
 			metrics.StreamTrimmed.WithLabelValues(stream).Add(float64(n))
 		}
 	}
+	if err := s.ObserveProductStats(ctx); err != nil {
+		s.log.WarnContext(ctx, "product stats observation failed", "error", err)
+	}
 	if idemDeleted > 0 || outboxDeleted > 0 {
 		s.log.InfoContext(ctx, "maintenance cleanup completed",
 			"idempotency_keys_deleted", idemDeleted,
 			"outbox_events_deleted", outboxDeleted)
+	}
+	return nil
+}
+
+// ObserveProductStats updates low-cardinality product aggregate gauges.
+func (s *Service) ObserveProductStats(ctx context.Context) error {
+	now := s.now()
+	windows := []struct {
+		label    string
+		duration time.Duration
+	}{
+		{label: "24h", duration: 24 * time.Hour},
+		{label: "7d", duration: 7 * 24 * time.Hour},
+	}
+	metrics.ProductActiveUsers.Reset()
+	for _, window := range windows {
+		counts, err := s.store.ProductActiveUserCounts(ctx, now.Add(-window.duration))
+		if err != nil {
+			return err
+		}
+		for _, item := range counts {
+			metrics.ProductActiveUsers.WithLabelValues(
+				window.label,
+				metrics.ProductLabel(item.Surface, "unknown"),
+				metrics.ProductLabel(string(item.Operation), "unknown"),
+				metrics.ProductLabel(string(item.Modality), "unknown"),
+			).Set(float64(item.Count))
+		}
 	}
 	return nil
 }
