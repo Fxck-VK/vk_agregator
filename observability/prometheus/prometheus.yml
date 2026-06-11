@@ -1,0 +1,138 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    product: vk-ai-aggregator
+    environment: local
+
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - alertmanager:9093
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets:
+          - prometheus:9090
+        labels:
+          service: prometheus
+          surface: observability
+
+  - job_name: api
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - host.docker.internal:8080
+        labels:
+          service: api
+          surface: api
+
+  - job_name: worker
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - host.docker.internal:9090
+        labels:
+          service: worker
+          surface: worker
+
+  - job_name: provider-webhook
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - host.docker.internal:8082
+        labels:
+          service: provider-webhook
+          surface: payments
+
+  - job_name: postgres-exporter
+    static_configs:
+      - targets:
+          - postgres-exporter:9187
+        labels:
+          service: postgres
+          surface: infra
+
+  - job_name: redis-exporter
+    static_configs:
+      - targets:
+          - redis-exporter:9121
+        labels:
+          service: redis
+          surface: infra
+
+  - job_name: node-exporter
+    static_configs:
+      - targets:
+          - node-exporter:9100
+        labels:
+          service: host
+          surface: infra
+
+  - job_name: cadvisor
+    static_configs:
+      - targets:
+          - cadvisor:8080
+        labels:
+          service: containers
+          surface: infra
+
+  - job_name: loki
+    static_configs:
+      - targets:
+          - loki:3100
+        labels:
+          service: loki
+          surface: observability
+
+  - job_name: tempo
+    static_configs:
+      - targets:
+          - tempo:3200
+        labels:
+          service: tempo
+          surface: observability
+
+  - job_name: blackbox-local-health
+    metrics_path: /probe
+    params:
+      module:
+        - http_2xx
+    static_configs:
+      - targets:
+          - http://host.docker.internal:8080/healthz
+          - http://host.docker.internal:8082/readyz
+          - http://host.docker.internal:5173/
+    relabel_configs:
+      - source_labels:
+          - __address__
+        target_label: __param_target
+      - source_labels:
+          - __param_target
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+
+  - job_name: blackbox-public-metrics
+    metrics_path: /probe
+    params:
+      module:
+        - http_2xx
+    static_configs:
+      - targets:
+          - https://app.neiirohub.ru/metrics
+          - https://vk.neiirohub.ru/metrics
+    relabel_configs:
+      - source_labels:
+          - __address__
+        target_label: __param_target
+      - source_labels:
+          - __param_target
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115

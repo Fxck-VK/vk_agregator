@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "report_id": "product_daily_observability",
+  "default_range": "24h",
+  "prometheus_base_url": "http://127.0.0.1:9091",
+  "delivery_initial": {
+    "telegram_enabled_env": "ALERT_TELEGRAM_ENABLED",
+    "email_enabled_env": "ALERT_EMAIL_ENABLED",
+    "status": "query_spec_only"
+  },
+  "queries": [
+    {
+      "id": "jobs_created",
+      "title": "Jobs created by surface/operation/modality",
+      "promql": "sum by (surface, operation, modality) (increase(vkagg_jobs_created_total[24h]))"
+    },
+    {
+      "id": "job_terminal",
+      "title": "Terminal jobs by status",
+      "promql": "sum by (status) (increase(vkagg_jobs_terminal_total[24h]))"
+    },
+    {
+      "id": "provider_errors",
+      "title": "Provider errors by provider/model/operation/class",
+      "promql": "sum by (provider, model, operation, error_class) (increase(vkagg_provider_errors_total[24h]))"
+    },
+    {
+      "id": "provider_estimated_cost",
+      "title": "Estimated provider cost",
+      "promql": "sum by (provider, model, operation, currency) (increase(vkagg_provider_estimated_cost_total[24h]))"
+    },
+    {
+      "id": "payments_succeeded",
+      "title": "Succeeded payments by provider/source",
+      "promql": "sum by (provider, source) (increase(payments_succeeded_total[24h]))"
+    },
+    {
+      "id": "payment_topups",
+      "title": "Ledger top-ups by provider",
+      "promql": "sum by (provider) (increase(payment_topups_total[24h]))"
+    },
+    {
+      "id": "billing_mismatches",
+      "title": "Current billing mismatches",
+      "promql": "max(vkagg_billing_mismatches)"
+    },
+    {
+      "id": "payment_webhook_backlog",
+      "title": "Payment webhook backlog",
+      "promql": "max by (provider) (payment_webhook_unprocessed_events)"
+    },
+    {
+      "id": "dlq",
+      "title": "Dead-lettered tasks",
+      "promql": "sum by (phase) (increase(vkagg_dlq_routed_total[24h]))"
+    },
+    {
+      "id": "backup_last_success",
+      "title": "Backup last success",
+      "promql": "max by (target) (vkagg_backup_last_success_timestamp)"
+    }
+  ]
+}

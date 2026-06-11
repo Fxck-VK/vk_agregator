@@ -243,6 +243,11 @@ type Config struct {
 	// MiniAppLaunchParamsMaxAge is the maximum age of VK launch params before
 	// they are rejected. Zero disables the age check.
 	MiniAppLaunchParamsMaxAge time.Duration
+	// FrontendTelemetryEnabled accepts safe Mini App client telemetry events.
+	FrontendTelemetryEnabled bool
+	// FrontendTelemetryUserHashSecret enables anonymized client user hashing
+	// later; raw user identifiers must never be emitted in telemetry labels.
+	FrontendTelemetryUserHashSecret string
 
 	// ArtifactURLTTL is how long signed artifact delivery URLs stay valid.
 	ArtifactURLTTL time.Duration
@@ -269,8 +274,14 @@ type Config struct {
 
 	// TracingServiceName is reported in OpenTelemetry resource attributes.
 	TracingServiceName string
-	// TracingExporter selects the trace exporter: "none" (default) or "stdout".
+	// TracingExporter selects the trace exporter: "none" (default), "stdout" or "otlp".
 	TracingExporter string
+	// TracingOTLPEndpoint is the OTLP gRPC collector endpoint.
+	TracingOTLPEndpoint string
+	// TracingSampleRatio is the default parent-based trace sampling ratio.
+	TracingSampleRatio float64
+	// TracingCriticalSampleRatio is reserved for critical path sampling policy.
+	TracingCriticalSampleRatio float64
 }
 
 // IsProduction reports whether the service runs in a production environment.
@@ -529,9 +540,11 @@ func Load() Config {
 			0,
 		)),
 
-		VKAppID:                   env("VK_APP_ID", ""),
-		VKAppSecret:               env("VK_APP_SECRET", ""),
-		MiniAppLaunchParamsMaxAge: envDuration("MINIAPP_LAUNCH_PARAMS_MAX_AGE", time.Hour),
+		VKAppID:                         env("VK_APP_ID", ""),
+		VKAppSecret:                     env("VK_APP_SECRET", ""),
+		MiniAppLaunchParamsMaxAge:       envDuration("MINIAPP_LAUNCH_PARAMS_MAX_AGE", time.Hour),
+		FrontendTelemetryEnabled:        envBool("FRONTEND_TELEMETRY_ENABLED", false),
+		FrontendTelemetryUserHashSecret: env("FRONTEND_TELEMETRY_USER_HASH_SECRET", ""),
 
 		ArtifactURLTTL:        envDuration("ARTIFACT_URL_TTL", time.Hour),
 		SignedDelivery:        envBool("SIGNED_DELIVERY", false),
@@ -544,8 +557,11 @@ func Load() Config {
 		BillingReconciliationInterval: envDuration("BILLING_RECONCILIATION_INTERVAL", 5*time.Minute),
 		BillingReconciliationLimit:    envInt("BILLING_RECONCILIATION_LIMIT", 100),
 
-		TracingServiceName: env("OTEL_SERVICE_NAME", "vk-ai-aggregator"),
-		TracingExporter:    env("OTEL_TRACES_EXPORTER", "none"),
+		TracingServiceName:         env("OTEL_SERVICE_NAME", "vk-ai-aggregator"),
+		TracingExporter:            env("OTEL_TRACES_EXPORTER", "none"),
+		TracingOTLPEndpoint:        env("OTEL_EXPORTER_OTLP_ENDPOINT", "127.0.0.1:4317"),
+		TracingSampleRatio:         envFloat("OTEL_TRACES_SAMPLE_RATIO", 0.1),
+		TracingCriticalSampleRatio: envFloat("OTEL_TRACES_CRITICAL_SAMPLE_RATIO", 1),
 	}
 }
 

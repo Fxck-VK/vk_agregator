@@ -12,12 +12,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/attribute"
 
 	"vk-ai-aggregator/internal/domain"
+	"vk-ai-aggregator/internal/platform/metrics"
 	"vk-ai-aggregator/internal/platform/tracing"
 	"vk-ai-aggregator/internal/platform/uow"
 )
@@ -34,6 +36,8 @@ type Biller interface {
 type CreateJobInput struct {
 	// UserID is the owner of the job.
 	UserID uuid.UUID
+	// Source is the trusted product surface that requested the job.
+	Source string
 	// VKPeerID is the conversation the job belongs to.
 	VKPeerID int64
 	// CommandID is the command that produced the job.
@@ -88,6 +92,11 @@ func (o *Orchestrator) CreateJob(ctx context.Context, in CreateJobInput) (*domai
 		tracing.CorrelationAttr(in.CorrelationID),
 	)
 	defer span.End()
+
+	source := strings.TrimSpace(in.Source)
+	if source == "" {
+		source = "unknown"
+	}
 
 	if existing, err := o.jobs.GetByIdempotencyKey(ctx, in.IdempotencyKey); err == nil {
 		span.SetAttributes(attribute.String("job.id", existing.ID.String()), attribute.Bool("job.idempotent", true))
@@ -149,14 +158,17 @@ func (o *Orchestrator) CreateJob(ctx context.Context, in CreateJobInput) (*domai
 
 		if _, err := o.billing.ReserveWith(ctx, repos.Billing, in.UserID, job.ID, estimate); err != nil {
 			if errors.Is(err, domain.ErrInsufficientCredits) {
+				metrics.BillingReservations.WithLabelValues(string(in.Operation), "insufficient_credits").Inc()
 				if err := repos.Jobs.UpdateStatus(ctx, job.ID, domain.JobStatusValidated, domain.JobStatusAwaitingPayment, "insufficient_credits", "not enough credits to reserve"); err != nil {
 					return err
 				}
 				insufficient = true
 				return nil
 			}
+			metrics.BillingReservations.WithLabelValues(string(in.Operation), "error").Inc()
 			return err
 		}
+		metrics.BillingReservations.WithLabelValues(string(in.Operation), "success").Inc()
 
 		if err := repos.Jobs.UpdateStatus(ctx, job.ID, domain.JobStatusValidated, domain.JobStatusCreditsReserved, "", ""); err != nil {
 			return err
@@ -178,10 +190,14 @@ func (o *Orchestrator) CreateJob(ctx context.Context, in CreateJobInput) (*domai
 
 	if insufficient {
 		job.Status = domain.JobStatusAwaitingPayment
+		metrics.JobsCreated.WithLabelValues(source, string(job.OperationType), string(job.Modality)).Inc()
+		metrics.JobStatusCurrent.WithLabelValues(string(job.Status), string(job.OperationType), string(job.Modality)).Inc()
 		return job, domain.ErrInsufficientCredits
 	}
 
 	job.Status = domain.JobStatusQueued
+	metrics.JobsCreated.WithLabelValues(source, string(job.OperationType), string(job.Modality)).Inc()
+	metrics.JobStatusCurrent.WithLabelValues(string(job.Status), string(job.OperationType), string(job.Modality)).Inc()
 	return job, nil
 }
 

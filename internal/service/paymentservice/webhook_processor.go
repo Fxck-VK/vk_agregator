@@ -628,6 +628,13 @@ func (p *WebhookProcessor) applyProviderPayment(ctx context.Context, payments do
 		if result.StatusChanged {
 			result.TopupGranted = true
 			metrics.PaymentTopups.WithLabelValues(string(intent.Provider)).Inc()
+			metrics.LedgerEntries.WithLabelValues(string(domain.LedgerTopup), paymentSource(intent)).Inc()
+			if !intent.CreatedAt.IsZero() {
+				duration := p.now().Sub(intent.CreatedAt)
+				if duration > 0 {
+					metrics.PaymentToLedgerDuration.WithLabelValues(string(intent.Provider)).Observe(duration.Seconds())
+				}
+			}
 		}
 	}
 	return result, nil

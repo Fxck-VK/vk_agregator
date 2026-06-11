@@ -219,6 +219,98 @@ export class ApiError extends Error {
   }
 }
 
+type ClientEventType = "api_failure" | "js_error" | "launch_failure" | "payment_flow_error" | "ui_event";
+
+interface ClientTelemetryEvent {
+  event_type: ClientEventType;
+  surface?: "vk_mini_app";
+  screen?: string;
+  route?: string;
+  status?: string;
+  error_class?: string;
+  step?: string;
+  reason?: string;
+}
+
+const TELEMETRY_ENABLED = import.meta.env.VITE_FRONTEND_TELEMETRY_ENABLED === "true";
+
+let telemetryInstalled = false;
+
+function telemetryRoute(path: string): string {
+  const [withoutQuery] = path.split(/[?#]/, 1);
+  return withoutQuery
+    .split("/")
+    .map((part) => (ARTIFACT_ID_RE.test(part) ? ":id" : /^\d+$/.test(part) ? ":id" : part))
+    .join("/");
+}
+
+function telemetryLabel(value: string | undefined, fallback: string): string {
+  const normalized = (value ?? "").trim().toLowerCase();
+  if (!normalized) return fallback;
+  return normalized.replace(/[^a-z0-9_./:-]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 96) || fallback;
+}
+
+function telemetryErrorClass(error: unknown): string {
+  if (error instanceof ApiError) return error.code;
+  if (error instanceof Error && error.name) return telemetryLabel(error.name, "error");
+  return "error";
+}
+
+async function sendClientEvent(event: ClientTelemetryEvent): Promise<void> {
+  if (!TELEMETRY_ENABLED) return;
+  try {
+    const rawLaunchParams = await launchParams();
+    if (!rawLaunchParams) return;
+    await fetch("/miniapp/client-events", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Launch-Params": rawLaunchParams,
+      },
+      body: JSON.stringify({
+        surface: "vk_mini_app",
+        event_type: event.event_type,
+        screen: telemetryLabel(event.screen, "unknown"),
+        route: telemetryRoute(event.route ?? ""),
+        status: telemetryLabel(event.status, "unknown"),
+        error_class: telemetryLabel(event.error_class, "unknown"),
+        step: telemetryLabel(event.step, "unknown"),
+        reason: telemetryLabel(event.reason, "unknown"),
+      }),
+      keepalive: true,
+    });
+  } catch {
+    /* telemetry must never affect UX */
+  }
+}
+
+export function installFrontendTelemetry(): void {
+  if (!TELEMETRY_ENABLED || telemetryInstalled) return;
+  telemetryInstalled = true;
+  window.addEventListener("error", (event) => {
+    void sendClientEvent({
+      event_type: "js_error",
+      screen: "global",
+      error_class: event.error?.name ?? "error",
+    });
+  });
+  window.addEventListener("unhandledrejection", (event) => {
+    void sendClientEvent({
+      event_type: "js_error",
+      screen: "global",
+      error_class: telemetryErrorClass(event.reason),
+    });
+  });
+}
+
+export function trackPaymentFlowError(step: string, error: unknown): void {
+  void sendClientEvent({
+    event_type: "payment_flow_error",
+    step,
+    error_class: telemetryErrorClass(error),
+  });
+}
+
 function normalizeRawParams(raw: string): string {
   return raw.replace(/^[?#]/, "");
 }
@@ -470,10 +562,23 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       },
     });
   } catch {
+    void sendClientEvent({
+      event_type: "api_failure",
+      route: path,
+      status: "network",
+      error_class: "network_error",
+    });
     throw new ApiError(0, "network_error");
   }
   if (!res.ok) {
-    throw await apiErrorFromResponse(res);
+    const err = await apiErrorFromResponse(res);
+    void sendClientEvent({
+      event_type: "api_failure",
+      route: path,
+      status: String(res.status),
+      error_class: err.code,
+    });
+    throw err;
   }
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
@@ -504,13 +609,18 @@ export async function createPaymentIntent(
   input: CreatePaymentIntentInput,
   options: CreateJobOptions,
 ): Promise<PaymentIntent> {
-  return request<PaymentIntent>("/miniapp/payments/intents", {
-    method: "POST",
-    headers: {
-      "X-Idempotency-Key": options.idempotencyKey,
-    },
-    body: JSON.stringify(input),
-  });
+  try {
+    return await request<PaymentIntent>("/miniapp/payments/intents", {
+      method: "POST",
+      headers: {
+        "X-Idempotency-Key": options.idempotencyKey,
+      },
+      body: JSON.stringify(input),
+    });
+  } catch (error) {
+    trackPaymentFlowError("create_intent", error);
+    throw error;
+  }
 }
 
 export async function listPaymentIntents(): Promise<PaymentIntent[]> {

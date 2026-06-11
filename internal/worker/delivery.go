@@ -225,11 +225,13 @@ func (w *DeliveryWorker) Process(ctx context.Context, task queue.Task) error {
 			tracing.CorrelationAttr(job.CorrelationID),
 		)
 		if err := w.billing.CaptureForJob(captureCtx, job.ID, job.CostReserved); err != nil {
+			metrics.BillingCaptures.WithLabelValues(deliveryOperationLabel(job), "error").Inc()
 			tracing.RecordError(captureSpan, err)
 			captureSpan.End()
 			tracing.RecordError(span, err)
 			return fmt.Errorf("worker: capture: %w", err)
 		}
+		metrics.BillingCaptures.WithLabelValues(deliveryOperationLabel(job), "success").Inc()
 		captureSpan.End()
 		if job.CostCaptured != job.CostReserved {
 			job.CostCaptured = job.CostReserved
@@ -350,6 +352,8 @@ func (w *DeliveryWorker) send(ctx context.Context, del *domain.Delivery, job *do
 	)
 	defer span.End()
 
+	started := time.Now()
+	kind := deliveryKind(del.Type)
 	var (
 		res vkdelivery.SendResult
 		err error
@@ -357,11 +361,19 @@ func (w *DeliveryWorker) send(ctx context.Context, del *domain.Delivery, job *do
 	switch del.Type {
 	case domain.DeliveryTypePhoto:
 		if err := w.ensureMediaAttachment(ctx, del, job); err != nil {
+			class := deliveryErrorClass(err)
+			metrics.VKUploadFailures.WithLabelValues("image", class).Inc()
+			metrics.VKDeliveryAttempts.WithLabelValues(kind, "error", class).Inc()
+			metrics.VKDeliveryDuration.WithLabelValues(kind).Observe(time.Since(started).Seconds())
 			return err
 		}
 		res, err = w.vk.SendPhoto(ctx, del.VKPeerID, del.VKRandomID, del.Attachment, del.Text)
 	case domain.DeliveryTypeVideo:
 		if err := w.ensureMediaAttachment(ctx, del, job); err != nil {
+			class := deliveryErrorClass(err)
+			metrics.VKUploadFailures.WithLabelValues("video", class).Inc()
+			metrics.VKDeliveryAttempts.WithLabelValues(kind, "error", class).Inc()
+			metrics.VKDeliveryDuration.WithLabelValues(kind).Observe(time.Since(started).Seconds())
 			return err
 		}
 		res, err = w.vk.SendVideo(ctx, del.VKPeerID, del.VKRandomID, del.Attachment, del.Text)
@@ -370,8 +382,13 @@ func (w *DeliveryWorker) send(ctx context.Context, del *domain.Delivery, job *do
 	}
 	if err != nil {
 		tracing.RecordError(span, err)
+		class := deliveryErrorClass(err)
+		metrics.VKDeliveryAttempts.WithLabelValues(kind, "error", class).Inc()
+		metrics.VKDeliveryDuration.WithLabelValues(kind).Observe(time.Since(started).Seconds())
 		return err
 	}
+	metrics.VKDeliveryAttempts.WithLabelValues(kind, "success", "").Inc()
+	metrics.VKDeliveryDuration.WithLabelValues(kind).Observe(time.Since(started).Seconds())
 	msgID := res.MessageID
 	span.SetAttributes(attribute.Int64("vk.message_id", msgID))
 	del.Status = domain.DeliveryStatusSent
@@ -520,10 +537,19 @@ func (w *DeliveryWorker) setStatus(ctx context.Context, job *domain.Job, to doma
 	if job.Status == to {
 		return nil
 	}
+	from := job.Status
 	if err := w.jobs.UpdateStatus(ctx, job.ID, job.Status, to, code, msg); err != nil {
 		return err
 	}
 	job.Status = to
+	metrics.JobStatusCurrent.WithLabelValues(string(from), deliveryOperationLabel(job), deliveryModalityLabel(job)).Dec()
+	metrics.JobStatusCurrent.WithLabelValues(string(to), deliveryOperationLabel(job), deliveryModalityLabel(job)).Inc()
+	if to.IsTerminal() && !job.CreatedAt.IsZero() {
+		duration := time.Since(job.CreatedAt)
+		if duration > 0 {
+			metrics.JobDuration.WithLabelValues(deliveryOperationLabel(job), deliveryModalityLabel(job), string(to)).Observe(duration.Seconds())
+		}
+	}
 	return nil
 }
 
@@ -568,6 +594,85 @@ func attachmentRef(art *domain.Artifact) string {
 
 func isVKAttachment(ref string) bool {
 	return strings.HasPrefix(ref, "photo") || strings.HasPrefix(ref, "video") || strings.HasPrefix(ref, "doc")
+}
+
+func deliveryKind(t domain.DeliveryType) string {
+	switch t {
+	case domain.DeliveryTypePhoto:
+		return "photo"
+	case domain.DeliveryTypeVideo:
+		return "video"
+	default:
+		return "text"
+	}
+}
+
+func deliveryErrorClass(err error) string {
+	switch {
+	case err == nil:
+		return ""
+	case errors.Is(err, context.DeadlineExceeded):
+		return "timeout"
+	case errors.Is(err, context.Canceled):
+		return "canceled"
+	}
+	value := strings.ToLower(err.Error())
+	switch {
+	case strings.Contains(value, "rate"):
+		return "rate_limited"
+	case strings.Contains(value, "http 4"), strings.Contains(value, "vk error"):
+		return "vk_error"
+	case strings.Contains(value, "http 5"):
+		return "upstream_error"
+	case strings.Contains(value, "upload"):
+		return "upload_error"
+	case strings.Contains(value, "storage"), strings.Contains(value, "artifact"):
+		return "artifact_error"
+	default:
+		return "internal_error"
+	}
+}
+
+func deliveryOperationLabel(job *domain.Job) string {
+	if job == nil || job.OperationType == "" {
+		return "unknown"
+	}
+	return deliveryMetricLabel(string(job.OperationType))
+}
+
+func deliveryModalityLabel(job *domain.Job) string {
+	if job == nil || job.Modality == "" {
+		return "unknown"
+	}
+	return deliveryMetricLabel(string(job.Modality))
+}
+
+func deliveryMetricLabel(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	if value == "" {
+		return "unknown"
+	}
+	var b strings.Builder
+	for _, r := range value {
+		switch {
+		case r >= 'a' && r <= 'z':
+			b.WriteRune(r)
+		case r >= '0' && r <= '9':
+			b.WriteRune(r)
+		case r == '_' || r == '-' || r == '.' || r == ':' || r == '/':
+			b.WriteRune(r)
+		default:
+			b.WriteByte('_')
+		}
+		if b.Len() >= 96 {
+			break
+		}
+	}
+	out := strings.Trim(b.String(), "_")
+	if out == "" {
+		return "unknown"
+	}
+	return out
 }
 
 func promptFromJob(job *domain.Job) string {

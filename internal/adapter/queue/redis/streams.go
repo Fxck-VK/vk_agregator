@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 
 	"vk-ai-aggregator/internal/domain"
+	"vk-ai-aggregator/internal/platform/metrics"
 	"vk-ai-aggregator/internal/platform/queue"
 	"vk-ai-aggregator/internal/platform/tracing"
 )
@@ -286,6 +288,81 @@ func TrimStreams(ctx context.Context, client redis.Cmdable, maxLen int64, stream
 	return trimmed, nil
 }
 
+// CollectMetrics observes stream depth, oldest-entry age and consumer-group
+// pending counts. It uses only low-cardinality stream/group labels and never
+// reads or exports task payloads.
+func CollectMetrics(ctx context.Context, client redis.Cmdable, group string, streams ...string) error {
+	if client == nil {
+		return nil
+	}
+	if len(streams) == 0 {
+		streams = AllStreamsWithDLQ
+	}
+	now := time.Now()
+	var firstErr error
+	for _, stream := range streams {
+		length, err := client.XLen(ctx, stream).Result()
+		if err != nil {
+			if errors.Is(err, redis.Nil) {
+				length = 0
+			} else {
+				firstErr = joinFirstErr(firstErr, fmt.Errorf("redisqueue: xlen %s: %w", stream, err))
+				continue
+			}
+		}
+		metrics.QueueDepth.WithLabelValues(stream).Set(float64(length))
+		if length <= 0 {
+			metrics.QueueOldestAgeSeconds.WithLabelValues(stream).Set(0)
+		} else {
+			msgs, err := client.XRangeN(ctx, stream, "-", "+", 1).Result()
+			if err != nil && !errors.Is(err, redis.Nil) {
+				firstErr = joinFirstErr(firstErr, fmt.Errorf("redisqueue: xrange %s: %w", stream, err))
+			} else if len(msgs) == 0 {
+				metrics.QueueOldestAgeSeconds.WithLabelValues(stream).Set(0)
+			} else {
+				metrics.QueueOldestAgeSeconds.WithLabelValues(stream).Set(streamIDAgeSeconds(now, msgs[0].ID))
+			}
+		}
+		if strings.TrimSpace(group) == "" {
+			continue
+		}
+		pending, err := client.XPending(ctx, stream, group).Result()
+		if err != nil {
+			if isNoGroup(err) || errors.Is(err, redis.Nil) {
+				metrics.QueueConsumerLag.WithLabelValues(stream, group).Set(0)
+				continue
+			}
+			firstErr = joinFirstErr(firstErr, fmt.Errorf("redisqueue: xpending %s/%s: %w", stream, group, err))
+			continue
+		}
+		metrics.QueueConsumerLag.WithLabelValues(stream, group).Set(float64(pending.Count))
+	}
+	return firstErr
+}
+
+func streamIDAgeSeconds(now time.Time, id string) float64 {
+	raw, _, ok := strings.Cut(id, "-")
+	if !ok {
+		raw = id
+	}
+	ms, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || ms <= 0 {
+		return 0
+	}
+	age := now.Sub(time.UnixMilli(ms))
+	if age <= 0 {
+		return 0
+	}
+	return age.Seconds()
+}
+
+func joinFirstErr(first error, next error) error {
+	if first != nil {
+		return first
+	}
+	return next
+}
+
 // Trimmer performs stream retention cleanup for maintenance jobs.
 type Trimmer struct {
 	client  redis.Cmdable
@@ -321,4 +398,8 @@ func decodeTask(msg redis.XMessage) (queue.Task, error) {
 
 func isBusyGroup(err error) bool {
 	return err != nil && strings.Contains(err.Error(), "BUSYGROUP")
+}
+
+func isNoGroup(err error) bool {
+	return err != nil && strings.Contains(strings.ToUpper(err.Error()), "NOGROUP")
 }

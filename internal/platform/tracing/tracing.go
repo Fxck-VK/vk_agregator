@@ -5,11 +5,14 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net/url"
+	"strconv"
 	"strings"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -21,8 +24,11 @@ const tracerName = "vk-ai-aggregator"
 
 // Config controls trace initialization.
 type Config struct {
-	ServiceName string
-	Exporter    string
+	ServiceName         string
+	Exporter            string
+	OTLPEndpoint        string
+	SampleRatio         float64
+	CriticalSampleRatio float64
 }
 
 // Init configures OpenTelemetry trace context propagation and an optional trace
@@ -39,13 +45,13 @@ func Init(ctx context.Context, cfg Config, logger *slog.Logger) (func(context.Co
 	if exporter == "" || exporter == "none" {
 		return func(context.Context) error { return nil }, nil
 	}
-	if exporter != "stdout" {
+	if exporter != "stdout" && exporter != "otlp" {
 		return nil, fmt.Errorf("tracing: unsupported OTEL_TRACES_EXPORTER %q", cfg.Exporter)
 	}
 
-	exp, err := stdouttrace.New(stdouttrace.WithPrettyPrint())
+	exp, err := newExporter(ctx, exporter, cfg)
 	if err != nil {
-		return nil, fmt.Errorf("tracing: stdout exporter: %w", err)
+		return nil, err
 	}
 	res, err := resource.New(ctx, resource.WithAttributes(attribute.String("service.name", serviceName)))
 	if err != nil {
@@ -54,12 +60,64 @@ func Init(ctx context.Context, cfg Config, logger *slog.Logger) (func(context.Co
 	provider := sdktrace.NewTracerProvider(
 		sdktrace.WithBatcher(exp),
 		sdktrace.WithResource(res),
+		sdktrace.WithSampler(sdktrace.ParentBased(sdktrace.TraceIDRatioBased(sampleRatio(cfg.SampleRatio)))),
 	)
 	otel.SetTracerProvider(provider)
 	if logger != nil {
 		logger.Info("tracing enabled", "exporter", exporter, "service", serviceName)
 	}
 	return provider.Shutdown, nil
+}
+
+func newExporter(ctx context.Context, exporter string, cfg Config) (sdktrace.SpanExporter, error) {
+	switch exporter {
+	case "stdout":
+		exp, err := stdouttrace.New(stdouttrace.WithPrettyPrint())
+		if err != nil {
+			return nil, fmt.Errorf("tracing: stdout exporter: %w", err)
+		}
+		return exp, nil
+	case "otlp":
+		endpoint := otlpEndpoint(cfg.OTLPEndpoint)
+		exp, err := otlptracegrpc.New(ctx,
+			otlptracegrpc.WithEndpoint(endpoint),
+			otlptracegrpc.WithInsecure(),
+		)
+		if err != nil {
+			return nil, fmt.Errorf("tracing: otlp exporter: %w", err)
+		}
+		return exp, nil
+	default:
+		return nil, fmt.Errorf("tracing: unsupported exporter %q", exporter)
+	}
+}
+
+func otlpEndpoint(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "127.0.0.1:4317"
+	}
+	if strings.Contains(raw, "://") {
+		u, err := url.Parse(raw)
+		if err == nil && u.Host != "" {
+			return u.Host
+		}
+	}
+	return strings.TrimPrefix(raw, "//")
+}
+
+func sampleRatio(v float64) float64 {
+	if v <= 0 {
+		return 0
+	}
+	if v >= 1 {
+		return 1
+	}
+	rounded, err := strconv.ParseFloat(strconv.FormatFloat(v, 'f', 6, 64), 64)
+	if err != nil {
+		return v
+	}
+	return rounded
 }
 
 // Start starts a span using the project tracer.

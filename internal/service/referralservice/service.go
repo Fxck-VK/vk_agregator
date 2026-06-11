@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 
 	"vk-ai-aggregator/internal/domain"
+	"vk-ai-aggregator/internal/platform/metrics"
 	"vk-ai-aggregator/internal/service/billingservice"
 )
 
@@ -120,20 +121,24 @@ type ApplyResult struct {
 // already been referred. It is idempotent per referred user.
 func (s *Service) Apply(ctx context.Context, input ApplyInput) (ApplyResult, error) {
 	if s == nil || s.repo == nil {
+		metrics.ReferralRewards.WithLabelValues("service_unavailable").Inc()
 		return ApplyResult{}, nil
 	}
 	codeValue := NormalizeCode(input.Code)
 	if codeValue == "" || input.ReferredUserID == uuid.Nil {
+		metrics.ReferralRewards.WithLabelValues("invalid_code").Inc()
 		return ApplyResult{InvalidCode: true}, nil
 	}
 	code, err := s.repo.GetCode(ctx, codeValue)
 	if errors.Is(err, domain.ErrNotFound) {
+		metrics.ReferralRewards.WithLabelValues("invalid_code").Inc()
 		return ApplyResult{InvalidCode: true}, nil
 	}
 	if err != nil {
 		return ApplyResult{}, err
 	}
 	if code.UserID == input.ReferredUserID {
+		metrics.ReferralRewards.WithLabelValues("self_referral").Inc()
 		return ApplyResult{SelfReferral: true}, nil
 	}
 	if input.Source == "" {
@@ -155,19 +160,26 @@ func (s *Service) Apply(ctx context.Context, input ApplyInput) (ApplyResult, err
 			return ApplyResult{}, getErr
 		}
 		if existing.ReferrerUserID != code.UserID {
+			metrics.ReferralRewards.WithLabelValues("already_applied_other_referrer").Inc()
 			return ApplyResult{AlreadyApplied: true, Referral: existing}, nil
 		}
 		referral = existing
 	} else {
 		if err := s.applySignupRewards(ctx, referral); err != nil {
+			metrics.ReferralRewards.WithLabelValues("error").Inc()
 			return ApplyResult{}, err
 		}
+		metrics.ReferralRewards.WithLabelValues("applied").Inc()
 		return ApplyResult{Applied: true, Referral: referral}, nil
 	}
 	if referral.RewardStatus != domain.ReferralRewardApplied {
 		if err := s.applySignupRewards(ctx, referral); err != nil {
+			metrics.ReferralRewards.WithLabelValues("error").Inc()
 			return ApplyResult{}, err
 		}
+		metrics.ReferralRewards.WithLabelValues("applied").Inc()
+	} else {
+		metrics.ReferralRewards.WithLabelValues("already_applied").Inc()
 	}
 	return ApplyResult{AlreadyApplied: true, Referral: referral}, nil
 }

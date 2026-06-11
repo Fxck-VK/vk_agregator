@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 
 	"vk-ai-aggregator/internal/domain"
+	"vk-ai-aggregator/internal/platform/metrics"
 	"vk-ai-aggregator/internal/service/paymentservice"
 )
 
@@ -49,15 +50,15 @@ func NewHandler(cfg Config, deps Deps) *Handler {
 func (h *Handler) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /billing/payment-products", h.auth(h.listProducts))
-	mux.HandleFunc("POST /billing/payment-products", h.auth(h.createProduct))
+	mux.HandleFunc("POST /billing/payment-products", h.auth(h.operatorAction("payment_product_create", h.createProduct)))
 	mux.HandleFunc("GET /billing/payment-products/{id}", h.auth(h.getProduct))
-	mux.HandleFunc("PATCH /billing/payment-products/{id}", h.auth(h.updateProduct))
-	mux.HandleFunc("POST /billing/payment-products/{id}/disable", h.auth(h.disableProduct))
-	mux.HandleFunc("POST /billing/payment-intents", h.auth(h.createIntent))
+	mux.HandleFunc("PATCH /billing/payment-products/{id}", h.auth(h.operatorAction("payment_product_update", h.updateProduct)))
+	mux.HandleFunc("POST /billing/payment-products/{id}/disable", h.auth(h.operatorAction("payment_product_disable", h.disableProduct)))
+	mux.HandleFunc("POST /billing/payment-intents", h.auth(h.operatorAction("payment_intent_create", h.createIntent)))
 	mux.HandleFunc("GET /billing/payment-intents/{id}", h.auth(h.getIntent))
-	mux.HandleFunc("POST /billing/payment-intents/{id}/sync", h.auth(h.syncIntent))
-	mux.HandleFunc("POST /billing/payment-intents/{id}/cancel", h.auth(h.cancelIntent))
-	mux.HandleFunc("POST /billing/payment-intents/{id}/refund", h.auth(h.refundIntent))
+	mux.HandleFunc("POST /billing/payment-intents/{id}/sync", h.auth(h.operatorAction("payment_intent_sync", h.syncIntent)))
+	mux.HandleFunc("POST /billing/payment-intents/{id}/cancel", h.auth(h.operatorAction("payment_intent_cancel", h.cancelIntent)))
+	mux.HandleFunc("POST /billing/payment-intents/{id}/refund", h.auth(h.operatorAction("payment_intent_refund", h.refundIntent)))
 	mux.HandleFunc("GET /billing/payment-intents/pending", h.auth(h.listPendingIntents))
 	mux.HandleFunc("GET /billing/payment-events/unprocessed", h.auth(h.listUnprocessedEvents))
 	mux.HandleFunc("GET /billing/payment-history", h.auth(h.listHistory))
@@ -67,10 +68,33 @@ func (h *Handler) Routes() http.Handler {
 func (h *Handler) auth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !adminTokenEqual(r.Header.Get("X-Admin-Token"), h.cfg.Token) {
+			metrics.AuthFailures.WithLabelValues("billing_admin", "invalid_admin_token").Inc()
 			writeError(w, http.StatusUnauthorized, "unauthorized")
 			return
 		}
 		next(w, r)
+	}
+}
+
+type actionStatusRecorder struct {
+	http.ResponseWriter
+	code int
+}
+
+func (r *actionStatusRecorder) WriteHeader(code int) {
+	r.code = code
+	r.ResponseWriter.WriteHeader(code)
+}
+
+func (h *Handler) operatorAction(action string, next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		rec := &actionStatusRecorder{ResponseWriter: w, code: http.StatusOK}
+		next(rec, r)
+		result := "success"
+		if rec.code >= 400 {
+			result = "error"
+		}
+		metrics.AdminActions.WithLabelValues(action, result).Inc()
 	}
 }
 

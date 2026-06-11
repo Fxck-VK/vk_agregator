@@ -1,6 +1,6 @@
 {
   "schema_version": 3,
-  "updated_at": "2026-06-10T22:58:20+03:00",
+  "updated_at": "2026-06-11T13:35:00+03:00",
   "branch": "fastlife_dev",
   "git_ref_policy": "Use git rev-parse HEAD/origin/main for moving SHAs; this file does not track branch head commits.",
   "purpose": "Minimal machine-readable current context and routing for agents.",
@@ -115,6 +115,21 @@
   },
   "schemas": {
     "error": ".agents/schemas/error.schema.json"
+  },
+  "active_plans": {
+    "product_observability": {
+      "status": "complete",
+      "plan": ".agents/plans/product_observability.json",
+      "schema": ".agents/schemas/product_observability_plan.schema.json",
+      "mode": "IMPLEMENT",
+      "runtime_target": "vps_docker_compose",
+      "notes": [
+        "Use this machine-readable plan for product-wide observability implementation.",
+        "Do not require VPS access for local repository implementation.",
+        "Do not expose metrics/Grafana/Prometheus/Loki/Tempo publicly.",
+        "Do not log or commit secrets, prompts, full launch params, raw PII, raw provider payloads or raw payment payloads."
+      ]
+    }
   },
   "archive": {
     "root": "docs/archive",

@@ -750,6 +750,7 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 		params, _ := json.Marshal(jp)
 		job, err := h.deps.Orchestrator.CreateJob(ctx, joborchestrator.CreateJobInput{
 			UserID:         user.ID,
+			Source:         "vk_bot",
 			VKPeerID:       peerID,
 			CommandID:      cmd.ID,
 			Operation:      parsed.Operation,

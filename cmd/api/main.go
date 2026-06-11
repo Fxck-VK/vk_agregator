@@ -42,8 +42,11 @@ func main() {
 
 	ctx := context.Background()
 	shutdownTracing, err := tracing.Init(ctx, tracing.Config{
-		ServiceName: cfg.TracingServiceName + "-api",
-		Exporter:    cfg.TracingExporter,
+		ServiceName:         cfg.TracingServiceName + "-api",
+		Exporter:            cfg.TracingExporter,
+		OTLPEndpoint:        cfg.TracingOTLPEndpoint,
+		SampleRatio:         cfg.TracingSampleRatio,
+		CriticalSampleRatio: cfg.TracingCriticalSampleRatio,
 	}, logger)
 	if err != nil {
 		logger.Error("tracing init failed", "error", err)
@@ -120,7 +123,7 @@ func main() {
 	mux.Handle("/admin/", metrics.Middleware("admin", admin.Routes()))
 	mux.Handle("/billing/", metrics.Middleware("billing", billing.Routes()))
 	mux.Handle("/miniapp/", metrics.Middleware("miniapp", miniapp.Routes()))
-	mux.Handle("GET /metrics", metrics.Handler())
+	mux.Handle("GET /metrics", metrics.PrivateHandler())
 	mux.HandleFunc("GET /health", healthHandler(pool, rdb))
 	mux.HandleFunc("GET /healthz", healthHandler(pool, rdb))
 

@@ -70,6 +70,8 @@ func NewHandler(ctx context.Context, cfg config.Config, deps Deps) *miniappapi.H
 		ReferralLinkBase:                    cfg.VKReferralLinkBase,
 		ReferralReferrerSignupRewardCredits: cfg.ReferralReferrerSignupRewardCredits,
 		ReferralReferredSignupRewardCredits: cfg.ReferralReferredSignupRewardCredits,
+		FrontendTelemetryEnabled:            cfg.FrontendTelemetryEnabled,
+		FrontendTelemetryUserHashSecret:     cfg.FrontendTelemetryUserHashSecret,
 	}, miniappapi.Deps{
 		Users:         deps.Users,
 		Jobs:          deps.Jobs,

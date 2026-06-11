@@ -1,0 +1,12 @@
+{{ define "telegram.default.message" -}}
+<b>{{ .Status | toUpper }}</b> {{ len .Alerts }} alert(s)
+{{ range .Alerts -}}
+
+<b>{{ .Labels.alertname }}</b>
+severity={{ .Labels.severity }} surface={{ .Labels.surface }}
+{{ with .Annotations.summary }}{{ . }}{{ end }}
+{{ with .Annotations.description }}
+{{ . }}
+{{ end }}
+{{ end -}}
+{{ end }}

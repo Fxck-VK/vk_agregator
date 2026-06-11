@@ -55,6 +55,40 @@ func TestLoadProviderChain(t *testing.T) {
 	}
 }
 
+func TestLoadTracingOTLPConfig(t *testing.T) {
+	t.Setenv("OTEL_TRACES_EXPORTER", "otlp")
+	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "otel-collector:4317")
+	t.Setenv("OTEL_TRACES_SAMPLE_RATIO", "0.25")
+	t.Setenv("OTEL_TRACES_CRITICAL_SAMPLE_RATIO", "1")
+
+	cfg := config.Load()
+	if cfg.TracingExporter != "otlp" {
+		t.Fatalf("TracingExporter = %q, want otlp", cfg.TracingExporter)
+	}
+	if cfg.TracingOTLPEndpoint != "otel-collector:4317" {
+		t.Fatalf("TracingOTLPEndpoint = %q", cfg.TracingOTLPEndpoint)
+	}
+	if cfg.TracingSampleRatio != 0.25 {
+		t.Fatalf("TracingSampleRatio = %v, want 0.25", cfg.TracingSampleRatio)
+	}
+	if cfg.TracingCriticalSampleRatio != 1 {
+		t.Fatalf("TracingCriticalSampleRatio = %v, want 1", cfg.TracingCriticalSampleRatio)
+	}
+}
+
+func TestLoadFrontendTelemetryConfig(t *testing.T) {
+	t.Setenv("FRONTEND_TELEMETRY_ENABLED", "true")
+	t.Setenv("FRONTEND_TELEMETRY_USER_HASH_SECRET", "test-hash-secret")
+
+	cfg := config.Load()
+	if !cfg.FrontendTelemetryEnabled {
+		t.Fatal("FrontendTelemetryEnabled = false, want true")
+	}
+	if cfg.FrontendTelemetryUserHashSecret != "test-hash-secret" {
+		t.Fatalf("FrontendTelemetryUserHashSecret = %q", cfg.FrontendTelemetryUserHashSecret)
+	}
+}
+
 func TestLoadImageProviderConfig(t *testing.T) {
 	t.Setenv("IMAGE_PROVIDER", "openai")
 	t.Setenv("IMAGE_MODEL", "gpt-image-2")

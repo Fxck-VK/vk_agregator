@@ -288,6 +288,50 @@ func (l *countingLimiter) Allow(key string) bool {
 	return l.counts[key] <= l.burst
 }
 
+func TestHandler_ClientEvent_DisabledNoops(t *testing.T) {
+	fixture := newTestFixture("", nil)
+	req := httptest.NewRequest(http.MethodPost, "/miniapp/client-events", bytes.NewReader([]byte(`{"event_type":"api_failure","route":"/miniapp/jobs","status":"500"}`)))
+	req.Header.Set("X-VK-User-ID", "777")
+
+	w := httptest.NewRecorder()
+	fixture.handler.Routes().ServeHTTP(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestHandler_ClientEvent_AcceptsSafeTelemetry(t *testing.T) {
+	fixture := newTestFixtureWithConfig("", nil, func(cfg *miniappinbound.Config) {
+		cfg.FrontendTelemetryEnabled = true
+		cfg.FrontendTelemetryUserHashSecret = "test-secret"
+	})
+	req := httptest.NewRequest(http.MethodPost, "/miniapp/client-events", bytes.NewReader([]byte(`{"event_type":"js_error","screen":"global","error_class":"TypeError"}`)))
+	req.Header.Set("X-VK-User-ID", "777")
+
+	w := httptest.NewRecorder()
+	fixture.handler.Routes().ServeHTTP(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestHandler_ClientEvent_RejectsPromptField(t *testing.T) {
+	fixture := newTestFixtureWithConfig("", nil, func(cfg *miniappinbound.Config) {
+		cfg.FrontendTelemetryEnabled = true
+	})
+	req := httptest.NewRequest(http.MethodPost, "/miniapp/client-events", bytes.NewReader([]byte(`{"event_type":"api_failure","prompt":"do not collect"}`)))
+	req.Header.Set("X-VK-User-ID", "777")
+
+	w := httptest.NewRecorder()
+	fixture.handler.Routes().ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
 func newArtifactHandler(t *testing.T, jobStatus domain.JobStatus, decision *domain.ModerationDecision) (http.Handler, uuid.UUID) {
 	t.Helper()
 	ctx := context.Background()
