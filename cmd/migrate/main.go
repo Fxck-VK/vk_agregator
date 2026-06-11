@@ -14,7 +14,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -92,7 +91,7 @@ func up(ctx context.Context, pool *pgxpool.Pool, dir string) error {
 	}
 	count := 0
 	for _, v := range versions {
-		sqlText, err := os.ReadFile(filepath.Join(dir, v+".up.sql"))
+		sqlText, err := readMigrationFile(dir, v, "up")
 		if err != nil {
 			return err
 		}
@@ -157,7 +156,7 @@ func down(ctx context.Context, pool *pgxpool.Pool, dir string) error {
 		if _, ok := applied[v]; !ok {
 			continue
 		}
-		sqlText, err := os.ReadFile(filepath.Join(dir, v+".down.sql"))
+		sqlText, err := readMigrationFile(dir, v, "down")
 		if err != nil {
 			return err
 		}
@@ -239,6 +238,34 @@ func migrationVersions(dir string) ([]string, error) {
 	}
 	sort.Strings(versions)
 	return versions, nil
+}
+
+func readMigrationFile(dir, version, direction string) ([]byte, error) {
+	if !validMigrationVersion(version) {
+		return nil, fmt.Errorf("invalid migration version %q", version)
+	}
+	if direction != "up" && direction != "down" {
+		return nil, fmt.Errorf("invalid migration direction %q", direction)
+	}
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return nil, err
+	}
+	defer root.Close()
+	return root.ReadFile(version + "." + direction + ".sql")
+}
+
+func validMigrationVersion(version string) bool {
+	if version == "" || strings.Contains(version, ".") || strings.ContainsAny(version, `/\`) {
+		return false
+	}
+	for _, r := range version {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' || r == '-' {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 func fatal(format string, args ...any) {

@@ -89,6 +89,19 @@ func TestLoadFrontendTelemetryConfig(t *testing.T) {
 	}
 }
 
+func TestLoadDBPoolConfigBoundsInt32Values(t *testing.T) {
+	t.Setenv("DB_MAX_CONNS", "2147483648")
+	t.Setenv("DB_MIN_CONNS", "7")
+
+	cfg := config.Load()
+	if cfg.DBMaxConns != 10 {
+		t.Fatalf("DBMaxConns = %d, want default 10 for int32 overflow", cfg.DBMaxConns)
+	}
+	if cfg.DBMinConns != 7 {
+		t.Fatalf("DBMinConns = %d, want 7", cfg.DBMinConns)
+	}
+}
+
 func TestLoadImageProviderConfig(t *testing.T) {
 	t.Setenv("IMAGE_PROVIDER", "openai")
 	t.Setenv("IMAGE_MODEL", "gpt-image-2")

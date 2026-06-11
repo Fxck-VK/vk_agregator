@@ -438,8 +438,8 @@ func Load() Config {
 		VKAntiSpamNewUserGPTWindow:    envDuration("VK_ANTISPAM_NEW_USER_GPT_WINDOW", 15*time.Second),
 		VKAntiSpamActiveGPTJobLimit:   envInt("VK_ANTISPAM_ACTIVE_GPT_JOB_LIMIT", 2),
 
-		DBMaxConns:    int32(envInt("DB_MAX_CONNS", 10)),
-		DBMinConns:    int32(envInt("DB_MIN_CONNS", 0)),
+		DBMaxConns:    envInt32("DB_MAX_CONNS", 10),
+		DBMinConns:    envInt32("DB_MIN_CONNS", 0),
 		RedisPoolSize: envInt("REDIS_POOL_SIZE", 10),
 		StreamMaxLen:  int64(envInt("STREAM_MAX_LEN", 100000)),
 
@@ -660,6 +660,15 @@ func envInt(key string, def int) int {
 	if v := os.Getenv(key); v != "" {
 		if n, err := strconv.Atoi(v); err == nil {
 			return n
+		}
+	}
+	return def
+}
+
+func envInt32(key string, def int32) int32 {
+	if v := os.Getenv(key); v != "" {
+		if n, err := strconv.ParseInt(v, 10, 32); err == nil {
+			return int32(n)
 		}
 	}
 	return def
