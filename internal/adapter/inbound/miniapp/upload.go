@@ -74,7 +74,9 @@ func readMiniAppUpload(w http.ResponseWriter, r *http.Request) ([]byte, string, 
 	if err != nil {
 		return nil, "", http.StatusBadRequest, false
 	}
-	defer file.Close()
+	defer func() {
+		_ = file.Close()
+	}()
 
 	data, err := io.ReadAll(io.LimitReader(file, maxMiniAppUploadBytes+1))
 	if err != nil {

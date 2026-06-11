@@ -254,7 +254,9 @@ func (p *Provider) Cancel(ctx context.Context, ref domain.ProviderTaskRef) error
 	if err != nil {
 		return &Error{Class: domain.ProviderErrTimeout, Message: err.Error()}
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return p.decodeError(resp)
 	}
@@ -370,7 +372,9 @@ func (p *Provider) createVideo(ctx context.Context, prompt, idempotencyKey strin
 	if err != nil {
 		return videoResponse{}, &Error{Class: domain.ProviderErrTimeout, Message: err.Error()}
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return videoResponse{}, p.decodeError(resp)
 	}
@@ -401,7 +405,9 @@ func (p *Provider) downloadVideo(ctx context.Context, id string) ([]byte, error)
 	if err != nil {
 		return nil, &Error{Class: domain.ProviderErrTimeout, Message: err.Error()}
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, p.decodeError(resp)
 	}
@@ -428,7 +434,9 @@ func (p *Provider) postJSON(ctx context.Context, path string, in, out any, idemp
 	if err != nil {
 		return &Error{Class: domain.ProviderErrTimeout, Message: err.Error()}
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return p.decodeError(resp)
 	}
@@ -447,7 +455,9 @@ func (p *Provider) getJSON(ctx context.Context, path string, out any) error {
 	if err != nil {
 		return &Error{Class: domain.ProviderErrTimeout, Message: err.Error()}
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return p.decodeError(resp)
 	}

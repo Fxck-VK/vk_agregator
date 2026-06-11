@@ -153,11 +153,6 @@ var menuScreens = map[domain.CommandType]menuScreen{
 const (
 	gptActiveText = "🤖 НейроХаб активен!\n\nЯ готов ответить на любые вопросы и помочь с идеями\nСпроси что-нибудь прямо сейчас!"
 
-	photoIntroText = "✅ У вас есть 100 бесплатных попыток в сутки на генерацию с текстом.\n\n▶️ Генерация фото по тексту - это когда вы пишете, что хотите увидеть, а ИИ рисует такую картинку.\n\nНапишите описание обычным сообщением, например: кот в очках на пляже."
-
-	photoTextModeText      = "▶️ Генерация фото по тексту выбрана.\n\nОпишите, что хотите увидеть, командой /image.\n\nПример:\n/image кот в очках на пляже"
-	photoReferenceModeText = "📸 Генерация фото с референсом пока будет подключена после входящих фото-артефактов.\n\nСейчас доступна генерация по тексту через /image."
-
 	prunaAIText = "PrunaAI активен.\n\nНапишите описание видео обычным сообщением.\n\nПример: кот в очках едет на жирафе."
 
 	sora2Text         = "sora-2\nОписание: Генерирует видео по тексту или фото.\n\n“ A hyper-realistic police bodycam video of a kangaroo making punching feints toward a police officer on a dusty rural road in Australia. The kangaroo stands ”\n\n🔗Инструкция: https://t.me/sora_video_1"
@@ -274,14 +269,15 @@ func (h *Handler) sendControlResponse(ctx context.Context, t domain.CommandType,
 
 	msgText := screen.text(balance)
 	keyboard := screen.keyboard()
-	if t == domain.CommandAccount || t == domain.CommandBalance {
+	switch t {
+	case domain.CommandAccount, domain.CommandBalance:
 		view, err := h.accountView(ctx, user.ID, balance, groupID)
 		if err != nil {
 			return fmt.Errorf("build account view: %w", err)
 		}
 		msgText = accountDetailsText(view)
 		keyboard = accountKeyboard(view)
-	} else if t == domain.CommandTopUp {
+	case domain.CommandTopUp:
 		if pending, ok, err := h.activeTopUpIntent(ctx, user.ID); err != nil {
 			return fmt.Errorf("load active top-up intent: %w", err)
 		} else if ok {
@@ -1008,21 +1004,6 @@ func accountKeyboard(view accountView) *vkdelivery.Keyboard {
 		OneTime: false,
 		Inline:  true,
 		Buttons: rows,
-	}
-}
-
-func legacyAccountKeyboard() *vkdelivery.Keyboard {
-	return &vkdelivery.Keyboard{
-		OneTime: false,
-		Inline:  true,
-		Buttons: [][]vkdelivery.KeyboardButton{
-			{
-				button("💰 Пополнить баланс", domain.CommandTopUp, "positive"),
-			},
-			{
-				button("⬅️ Назад", domain.CommandShowMenu, "secondary"),
-			},
-		},
 	}
 }
 

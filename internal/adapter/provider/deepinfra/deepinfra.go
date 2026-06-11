@@ -335,24 +335,6 @@ type chatResponse struct {
 	Error *apiError `json:"error"`
 }
 
-type imageRequest struct {
-	Model          string `json:"model,omitempty"`
-	Prompt         string `json:"prompt"`
-	Size           string `json:"size,omitempty"`
-	N              int    `json:"n"`
-	ResponseFormat string `json:"response_format,omitempty"`
-}
-
-type imageResponse struct {
-	Created int64 `json:"created"`
-	Data    []struct {
-		RevisedPrompt string `json:"revised_prompt,omitempty"`
-		B64JSON       string `json:"b64_json,omitempty"`
-		URL           string `json:"url,omitempty"`
-	} `json:"data"`
-	Error *apiError `json:"error"`
-}
-
 type nativeImageRequest struct {
 	Prompt string   `json:"prompt"`
 	Size   string   `json:"size,omitempty"`
@@ -459,7 +441,9 @@ func (p *Provider) postJSON(ctx context.Context, path string, in, out any, idemp
 	if err != nil {
 		return &Error{Class: domain.ProviderErrTimeout, Message: err.Error()}
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return p.decodeError(resp)
 	}
@@ -482,7 +466,9 @@ func (p *Provider) postNativeJSON(ctx context.Context, model string, in, out any
 	if err != nil {
 		return &Error{Class: domain.ProviderErrTimeout, Message: err.Error()}
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return p.decodeError(resp)
 	}
@@ -529,10 +515,6 @@ type apiError struct {
 	Message string `json:"message"`
 	Type    string `json:"type"`
 	Code    string `json:"code"`
-}
-
-type errorEnvelope struct {
-	Error *apiError `json:"error"`
 }
 
 func (p *Provider) decodeError(resp *http.Response) error {

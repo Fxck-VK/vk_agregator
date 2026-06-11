@@ -127,7 +127,9 @@ func webhookHandler(processor *paymentservice.WebhookProcessor, logger *slog.Log
 			http.Error(w, "https required", http.StatusUpgradeRequired)
 			return
 		}
-		defer r.Body.Close()
+		defer func() {
+			_ = r.Body.Close()
+		}()
 		raw, err := readWebhookBody(w, r)
 		if err != nil {
 			http.Error(w, "invalid body", http.StatusBadRequest)

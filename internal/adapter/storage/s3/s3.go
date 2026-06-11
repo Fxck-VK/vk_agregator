@@ -100,7 +100,9 @@ func (s *Store) GetObject(ctx context.Context, bucket, key string) ([]byte, erro
 	if err != nil {
 		return nil, fmt.Errorf("s3: get %s/%s: %w", bucket, key, err)
 	}
-	defer obj.Close()
+	defer func() {
+		_ = obj.Close()
+	}()
 	data, err := io.ReadAll(obj)
 	if err != nil {
 		return nil, fmt.Errorf("s3: read %s/%s: %w", bucket, key, err)

@@ -446,7 +446,9 @@ func (c *HTTPClient) apiWithToken(ctx context.Context, token, method string, for
 	if err != nil {
 		return fmt.Errorf("vkdelivery: %s: %w", method, err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	data, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
 	if err != nil {
@@ -503,7 +505,9 @@ func (c *HTTPClient) uploadMultipart(ctx context.Context, uploadURL, field, file
 	if err != nil {
 		return fmt.Errorf("vkdelivery: upload media: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		data, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
 		return fmt.Errorf("vkdelivery: upload http %d: %s", resp.StatusCode, strings.TrimSpace(string(data)))

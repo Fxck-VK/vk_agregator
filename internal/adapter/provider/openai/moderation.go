@@ -118,7 +118,9 @@ func (m *Moderator) moderate(ctx context.Context, input any) (moderationservice.
 	if err != nil {
 		return moderationservice.Outcome{}, &Error{Class: domain.ProviderErrTimeout, Message: err.Error()}
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	var decoded moderationResponse
 	if err := json.NewDecoder(resp.Body).Decode(&decoded); err != nil {

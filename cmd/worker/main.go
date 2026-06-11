@@ -77,7 +77,9 @@ func main() {
 	defer pool.Close()
 
 	rdb := redisqueue.NewClientWithPool(cfg.RedisAddr, cfg.RedisPassword, cfg.RedisDB, cfg.RedisPoolSize)
-	defer rdb.Close()
+	defer func() {
+		_ = rdb.Close()
+	}()
 
 	store, err := s3.New(readCtx, s3.Config{
 		Endpoint:  cfg.S3Endpoint,

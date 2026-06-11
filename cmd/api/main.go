@@ -66,7 +66,9 @@ func main() {
 	defer pool.Close()
 
 	rdb := redisqueue.NewClientWithPool(cfg.RedisAddr, cfg.RedisPassword, cfg.RedisDB, cfg.RedisPoolSize)
-	defer rdb.Close()
+	defer func() {
+		_ = rdb.Close()
+	}()
 
 	core, err := apiapp.NewSharedCore(pool, cfg)
 	if err != nil {

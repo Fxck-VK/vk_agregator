@@ -321,7 +321,9 @@ func (p *Provider) doJSON(ctx context.Context, method, path, idempotencyKey stri
 	if err != nil {
 		return nil, fmt.Errorf("yookassa payment: request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes+1))
 	if err != nil {
