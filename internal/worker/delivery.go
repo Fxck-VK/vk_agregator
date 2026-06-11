@@ -232,6 +232,7 @@ func (w *DeliveryWorker) Process(ctx context.Context, task queue.Task) error {
 			return fmt.Errorf("worker: capture: %w", err)
 		}
 		metrics.BillingCaptures.WithLabelValues(deliveryOperationLabel(job), "success").Inc()
+		metrics.AddProductCreditsFlow("job_delivery", "capture", "success", job.CostReserved)
 		captureSpan.End()
 		if job.CostCaptured != job.CostReserved {
 			job.CostCaptured = job.CostReserved
@@ -549,6 +550,9 @@ func (w *DeliveryWorker) setStatus(ctx context.Context, job *domain.Job, to doma
 		if duration > 0 {
 			metrics.JobDuration.WithLabelValues(deliveryOperationLabel(job), deliveryModalityLabel(job), string(to)).Observe(duration.Seconds())
 		}
+	}
+	if to.IsTerminal() {
+		metrics.ObserveProductEvent("worker", "job", "terminal", deliveryOperationLabel(job), deliveryModalityLabel(job), string(to))
 	}
 	return nil
 }

@@ -629,6 +629,8 @@ func (p *WebhookProcessor) applyProviderPayment(ctx context.Context, payments do
 			result.TopupGranted = true
 			metrics.PaymentTopups.WithLabelValues(string(intent.Provider)).Inc()
 			metrics.LedgerEntries.WithLabelValues(string(domain.LedgerTopup), paymentSource(intent)).Inc()
+			metrics.ObserveProductEvent(paymentSource(intent), "payment", "ledger_topup", "top_up", "credits", "success")
+			metrics.AddProductCreditsFlow(paymentSource(intent), "topup", "success", intent.Credits)
 			if !intent.CreatedAt.IsZero() {
 				duration := p.now().Sub(intent.CreatedAt)
 				if duration > 0 {

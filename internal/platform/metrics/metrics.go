@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
@@ -201,6 +202,31 @@ var (
 		Help: "Jobs created by source surface, operation and modality.",
 	}, []string{"surface", "operation", "modality"})
 
+	// ProductEvents counts privacy-safe product funnel events. Labels are
+	// intentionally bounded and must never contain user/job/payment ids, raw
+	// URLs, prompts, launch params, provider payloads or raw errors.
+	ProductEvents = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "vkagg_product_events_total",
+		Help: "Privacy-safe product funnel events by surface, journey, step, operation, modality and result.",
+	}, []string{"surface", "journey", "step", "operation", "modality", "result"})
+
+	// ProductActiveUserEvents counts job-creation events that satisfy the MVP
+	// active-user definition. It is not a unique-user counter; exact DAU/D1/D7
+	// retention belongs in a scheduled aggregate/event warehouse to avoid
+	// high-cardinality Prometheus labels.
+	ProductActiveUserEvents = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "vkagg_product_active_user_events_total",
+		Help: "Job creation events for the MVP active-user definition, by bounded product dimensions.",
+	}, []string{"surface", "operation", "modality", "result"})
+
+	// ProductPromptLength tracks prompt character-count buckets without
+	// exporting prompt text.
+	ProductPromptLength = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "vkagg_product_prompt_length_chars",
+		Help:    "Prompt length in characters by surface, operation and modality. Prompt text is never exported.",
+		Buckets: []float64{1, 25, 50, 100, 250, 500, 1000, 2000, 4000, 8000, 16000},
+	}, []string{"surface", "operation", "modality"})
+
 	// JobDuration tracks time from job creation to terminal status.
 	JobDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "vkagg_job_duration_seconds",
@@ -348,6 +374,29 @@ var (
 		Help: "Frontend payment flow errors by step and error class.",
 	}, []string{"step", "error_class"})
 
+	// ProductFrontendAPIDuration tracks safe client-observed API latency. Route
+	// labels must come from an allowlist/template mapper, not raw browser URLs.
+	ProductFrontendAPIDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "vkagg_product_frontend_api_duration_seconds",
+		Help:    "Client-observed API latency by safe route template and status.",
+		Buckets: []float64{0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10, 30},
+	}, []string{"surface", "route", "status"})
+
+	// ProductFrontendUIDuration tracks coarse UI milestones such as first
+	// render. It must not include screen content or user identifiers.
+	ProductFrontendUIDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "vkagg_product_frontend_ui_duration_seconds",
+		Help:    "Client-observed UI milestone duration by safe step and result.",
+		Buckets: []float64{0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10, 30},
+	}, []string{"surface", "step", "result"})
+
+	// ProductCreditsFlow counts aggregate credit units through ledger-backed
+	// product flows. Amounts are credits, not money, and labels are bounded.
+	ProductCreditsFlow = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "vkagg_product_credits_flow_total",
+		Help: "Aggregate credit units flowing through ledger-backed product paths.",
+	}, []string{"source", "flow", "result"})
+
 	// VKDeliveryAttempts counts VK delivery attempts by type and result.
 	VKDeliveryAttempts = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "vkagg_vk_delivery_attempts_total",
@@ -448,18 +497,135 @@ func init() {
 		PaymentTopups, PaymentRefunds, PaymentReconciliationMismatches,
 		QueueDepth, QueueOldestAgeSeconds, QueueConsumerLag, StuckJobs,
 		WorkerTaskDuration, WorkerRetries, JobsCreated, JobDuration,
+		ProductEvents, ProductActiveUserEvents, ProductPromptLength,
 		JobStatusCurrent, JobRejected, ProviderRequests, ProviderRequestDuration,
 		ProviderErrors, ProviderRateLimits, ProviderFallback, ProviderCircuitState,
 		ProviderTokens, ProviderImages, ProviderVideos, ProviderEstimatedCost,
 		BillingReservations, BillingCaptures, BillingReleases, LedgerEntries,
 		PaymentToLedgerDuration, ReferralRewards, FrontendEvents, FrontendJSErrors,
 		FrontendAPIFailures, FrontendLaunchFailures, FrontendPaymentFlowErrors,
+		ProductFrontendAPIDuration, ProductFrontendUIDuration, ProductCreditsFlow,
 		VKDeliveryAttempts, VKDeliveryDuration, VKUploadFailures,
 		VKMenuControlErrors, AuthFailures, SignatureFailures, AdminActions,
 		SuspiciousEvents, ConfigValidationFailures, BackupLastSuccessTimestamp,
 		BackupDuration, BackupSizeBytes, BackupFailures,
 		RestoreTestLastSuccessTimestamp,
 	)
+}
+
+// ProductLabel sanitizes bounded product-observability labels. It is for
+// trusted product dimensions only; never pass prompt text, full URLs, raw
+// errors, ids, launch params or provider/payment payloads.
+func ProductLabel(value string, fallback string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	if value == "" {
+		if fallback == "" {
+			return "unknown"
+		}
+		return fallback
+	}
+	var b strings.Builder
+	for _, r := range value {
+		switch {
+		case r >= 'a' && r <= 'z':
+			b.WriteRune(r)
+		case r >= '0' && r <= '9':
+			b.WriteRune(r)
+		case r == '_' || r == '-' || r == '.' || r == ':' || r == '/':
+			b.WriteRune(r)
+		default:
+			b.WriteByte('_')
+		}
+		if b.Len() >= 96 {
+			break
+		}
+	}
+	out := strings.Trim(b.String(), "_")
+	if out == "" {
+		if fallback == "" {
+			return "unknown"
+		}
+		return fallback
+	}
+	return out
+}
+
+// ObserveProductEvent records one bounded product funnel event.
+func ObserveProductEvent(surface, journey, step, operation, modality, result string) {
+	ProductEvents.WithLabelValues(
+		ProductLabel(surface, "unknown"),
+		ProductLabel(journey, "unknown"),
+		ProductLabel(step, "unknown"),
+		ProductLabel(operation, "unknown"),
+		ProductLabel(modality, "unknown"),
+		ProductLabel(result, "unknown"),
+	).Inc()
+}
+
+// ObserveProductActiveUserEvent records a job-creation event matching the MVP
+// active-user definition. It intentionally does not try to count unique users.
+func ObserveProductActiveUserEvent(surface, operation, modality, result string) {
+	ProductActiveUserEvents.WithLabelValues(
+		ProductLabel(surface, "unknown"),
+		ProductLabel(operation, "unknown"),
+		ProductLabel(modality, "unknown"),
+		ProductLabel(result, "unknown"),
+	).Inc()
+}
+
+// ObserveProductPromptLength records only the prompt length bucket, never the
+// prompt content.
+func ObserveProductPromptLength(surface, operation, modality, prompt string) {
+	ProductPromptLength.WithLabelValues(
+		ProductLabel(surface, "unknown"),
+		ProductLabel(operation, "unknown"),
+		ProductLabel(modality, "unknown"),
+	).Observe(float64(utf8.RuneCountInString(prompt)))
+}
+
+// ObserveProductFrontendAPIDuration records safe client-observed API latency.
+func ObserveProductFrontendAPIDuration(surface, route, status string, durationMS int64) {
+	if durationMS <= 0 {
+		return
+	}
+	const maxClientDurationMS = int64(10 * 60 * 1000)
+	if durationMS > maxClientDurationMS {
+		durationMS = maxClientDurationMS
+	}
+	ProductFrontendAPIDuration.WithLabelValues(
+		ProductLabel(surface, "unknown"),
+		ProductLabel(route, "unknown"),
+		ProductLabel(status, "unknown"),
+	).Observe(float64(durationMS) / 1000)
+}
+
+// ObserveProductFrontendUIDuration records safe client-observed UI milestone
+// latency.
+func ObserveProductFrontendUIDuration(surface, step, result string, durationMS int64) {
+	if durationMS <= 0 {
+		return
+	}
+	const maxClientDurationMS = int64(10 * 60 * 1000)
+	if durationMS > maxClientDurationMS {
+		durationMS = maxClientDurationMS
+	}
+	ProductFrontendUIDuration.WithLabelValues(
+		ProductLabel(surface, "unknown"),
+		ProductLabel(step, "unknown"),
+		ProductLabel(result, "unknown"),
+	).Observe(float64(durationMS) / 1000)
+}
+
+// AddProductCreditsFlow records aggregate credit units for ledger-backed flows.
+func AddProductCreditsFlow(source, flow, result string, credits int64) {
+	if credits <= 0 {
+		return
+	}
+	ProductCreditsFlow.WithLabelValues(
+		ProductLabel(source, "unknown"),
+		ProductLabel(flow, "unknown"),
+		ProductLabel(result, "unknown"),
+	).Add(float64(credits))
 }
 
 // Handler returns the Prometheus metrics HTTP handler.

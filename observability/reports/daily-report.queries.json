@@ -15,6 +15,31 @@
       "promql": "sum by (surface, operation, modality) (increase(vkagg_jobs_created_total[24h]))"
     },
     {
+      "id": "product_funnel_events",
+      "title": "Product funnel events by surface/journey/step/result",
+      "promql": "sum by (surface, journey, step, result) (increase(vkagg_product_events_total[24h]))"
+    },
+    {
+      "id": "active_user_events",
+      "title": "Active-user definition events by surface/operation/modality",
+      "promql": "sum by (surface, operation, modality, result) (increase(vkagg_product_active_user_events_total[24h]))"
+    },
+    {
+      "id": "prompt_length_p95",
+      "title": "Prompt length p95 without prompt text",
+      "promql": "histogram_quantile(0.95, sum(rate(vkagg_product_prompt_length_chars_bucket[24h])) by (le, surface, operation, modality))"
+    },
+    {
+      "id": "frontend_api_latency_p95",
+      "title": "Mini App client-observed API latency p95",
+      "promql": "histogram_quantile(0.95, sum(rate(vkagg_product_frontend_api_duration_seconds_bucket[24h])) by (le, route, status))"
+    },
+    {
+      "id": "frontend_ui_latency_p95",
+      "title": "Mini App client-observed UI milestone latency p95",
+      "promql": "histogram_quantile(0.95, sum(rate(vkagg_product_frontend_ui_duration_seconds_bucket[24h])) by (le, step, result))"
+    },
+    {
       "id": "job_terminal",
       "title": "Завершенные задачи по статусу",
       "promql": "sum by (status) (increase(vkagg_jobs_terminal_total[24h]))"
@@ -40,6 +65,16 @@
       "promql": "sum by (provider) (increase(payment_topups_total[24h]))"
     },
     {
+      "id": "product_credits_flow",
+      "title": "Product credits flow by source/flow/result",
+      "promql": "sum by (source, flow, result) (increase(vkagg_product_credits_flow_total[24h]))"
+    },
+    {
+      "id": "payment_intent_outcomes",
+      "title": "Payment intent outcomes by source/result",
+      "promql": "sum by (surface, result) (increase(vkagg_product_events_total{journey=\"payment\",step=\"intent_create\"}[24h]))"
+    },
+    {
       "id": "billing_mismatches",
       "title": "Текущие расхождения billing",
       "promql": "max(vkagg_billing_mismatches)"
@@ -53,6 +88,16 @@
       "id": "dlq",
       "title": "Задачи, ушедшие в DLQ",
       "promql": "sum by (phase) (increase(vkagg_dlq_routed_total[24h]))"
+    },
+    {
+      "id": "synthetic_local_health",
+      "title": "Local synthetic probe status",
+      "promql": "min by (instance) (probe_success{job=\"blackbox-local-health\"})"
+    },
+    {
+      "id": "public_metrics_exposure",
+      "title": "Public metrics exposure probe",
+      "promql": "max by (instance) (probe_success{job=\"blackbox-public-metrics\"})"
     },
     {
       "id": "backup_last_success",

@@ -282,6 +282,7 @@ func (h *Handler) clientEvent(w http.ResponseWriter, r *http.Request) {
 	reason := safeClientLabel(req.Reason, "unknown")
 
 	metrics.FrontendEvents.WithLabelValues(surface, eventType).Inc()
+	metrics.ObserveProductEvent(surface, "frontend", eventType, "unknown", "unknown", "observed")
 	switch eventType {
 	case "js_error":
 		metrics.FrontendJSErrors.WithLabelValues(surface, screen, errorClass).Inc()
@@ -291,6 +292,11 @@ func (h *Handler) clientEvent(w http.ResponseWriter, r *http.Request) {
 		metrics.FrontendLaunchFailures.WithLabelValues(surface, reason).Inc()
 	case "payment_flow_error":
 		metrics.FrontendPaymentFlowErrors.WithLabelValues(step, errorClass).Inc()
+	case "ui_event":
+		metrics.ObserveProductFrontendUIDuration(surface, step, reason, req.DurationMS)
+	}
+	if eventType == "api_latency" || (eventType == "api_failure" && req.DurationMS > 0) {
+		metrics.ObserveProductFrontendAPIDuration(surface, route, status, req.DurationMS)
 	}
 	if hash := h.clientUserHash(vkUserID); hash != "" {
 		h.logger.Debug("miniapp client event",
@@ -319,6 +325,8 @@ func safeClientEventType(value string) (string, bool) {
 		return "js_error", true
 	case "api_failure":
 		return "api_failure", true
+	case "api_latency":
+		return "api_latency", true
 	case "launch_failure":
 		return "launch_failure", true
 	case "payment_flow_error":
@@ -359,7 +367,29 @@ func safeClientRoute(value string) string {
 			parts[i] = ":id"
 		}
 	}
-	return safeClientLabel(strings.Join(parts, "/"), "unknown")
+	route := strings.Join(parts, "/")
+	switch route {
+	case "/miniapp/estimate",
+		"/miniapp/chat/messages",
+		"/miniapp/chat/conversations",
+		"/miniapp/jobs",
+		"/miniapp/balance",
+		"/miniapp/referral",
+		"/miniapp/referral/accept",
+		"/miniapp/payment-products",
+		"/miniapp/payments/intents",
+		"/miniapp/payments",
+		"/miniapp/artifacts",
+		"/miniapp/client-events":
+		return route
+	case "/miniapp/jobs/:id",
+		"/miniapp/payments/:id",
+		"/miniapp/artifacts/:id",
+		"/miniapp/chat/conversations/:id/messages":
+		return route
+	default:
+		return "other"
+	}
 }
 
 func safeClientStatus(value string) string {
@@ -497,7 +527,7 @@ func (h *Handler) estimateJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req, opType, _, model, ok := h.readJobRequest(w, r)
+	req, opType, modality, model, ok := h.readJobRequest(w, r)
 	if !ok {
 		return
 	}
@@ -523,8 +553,10 @@ func (h *Handler) estimateJob(w http.ResponseWriter, r *http.Request) {
 	cost, err := h.deps.Billing.Estimate(opType)
 	if err != nil {
 		if errors.Is(err, billingservice.ErrUnknownOperation) {
+			metrics.ObserveProductEvent("miniapp", "job", "estimate", string(opType), string(modality), "unsupported_operation")
 			writeError(w, http.StatusBadRequest, "unsupported operation; allowed: text_generate, image_generate, video_generate")
 		} else {
+			metrics.ObserveProductEvent("miniapp", "job", "estimate", string(opType), string(modality), "error")
 			writeError(w, http.StatusInternalServerError, "internal error")
 		}
 		return
@@ -533,10 +565,12 @@ func (h *Handler) estimateJob(w http.ResponseWriter, r *http.Request) {
 	balance, err := h.balanceForEstimate(r.Context(), vkUserID)
 	if err != nil {
 		h.logger.Error("miniapp: estimate balance failed", slog.String("error", err.Error()))
+		metrics.ObserveProductEvent("miniapp", "job", "estimate", string(opType), string(modality), "error")
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
+	metrics.ObserveProductEvent("miniapp", "job", "estimate", string(opType), string(modality), "success")
 	writeJSON(w, http.StatusOK, EstimateDTO{
 		Operation:      string(opType),
 		ModelID:        miniAppResponseModelID(model),
@@ -610,6 +644,7 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 		jobParams.DurationSec = req.DurationSec
 	}
 	params, _ := json.Marshal(jobParams)
+	metrics.ObserveProductPromptLength("miniapp", string(opType), string(modality), req.Prompt)
 
 	job, err := h.deps.Orchestrator.CreateJob(r.Context(), joborchestrator.CreateJobInput{
 		UserID:           user.ID,
@@ -699,6 +734,7 @@ func (h *Handler) createChatMessage(w http.ResponseWriter, r *http.Request) {
 		ConversationSource: domain.ConversationSourceMiniApp,
 		ExternalThreadID:   conversationID,
 	})
+	metrics.ObserveProductPromptLength("miniapp", string(domain.OperationTextGenerate), string(domain.ModalityText), req.Prompt)
 
 	job, err := h.deps.Orchestrator.CreateJob(r.Context(), joborchestrator.CreateJobInput{
 		UserID:         user.ID,
@@ -1062,6 +1098,7 @@ func (h *Handler) createPaymentIntent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if h.deps.Payment == nil {
+		metrics.ObserveProductEvent("miniapp", "payment", "intent_create", "top_up", "credits", "service_unavailable")
 		writeError(w, http.StatusServiceUnavailable, "service unavailable")
 		return
 	}
@@ -1228,19 +1265,26 @@ func (h *Handler) writePaymentError(w http.ResponseWriter, err error) {
 }
 
 func (h *Handler) getArtifact(w http.ResponseWriter, r *http.Request) {
+	resultLabel := "success"
+	defer func() {
+		metrics.ObserveProductEvent("miniapp", "artifact", "access", "artifact_access", "artifact", resultLabel)
+	}()
 	if h.deps.Artifacts == nil || h.deps.Objects == nil {
+		resultLabel = "service_unavailable"
 		writeError(w, http.StatusServiceUnavailable, "artifact storage unavailable")
 		return
 	}
 
 	vkUserID, ok := vkUserIDFromCtx(r.Context())
 	if !ok {
+		resultLabel = "unauthorized"
 		writeError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
 
 	artID, err := uuid.Parse(r.PathValue("id"))
 	if err != nil {
+		resultLabel = "invalid_id"
 		writeError(w, http.StatusBadRequest, "invalid artifact id")
 		return
 	}
@@ -1248,8 +1292,10 @@ func (h *Handler) getArtifact(w http.ResponseWriter, r *http.Request) {
 	user, err := h.deps.Users.GetByVKUserID(r.Context(), vkUserID)
 	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
+			resultLabel = "not_found"
 			writeError(w, http.StatusNotFound, "not found")
 		} else {
+			resultLabel = "error"
 			writeError(w, http.StatusInternalServerError, "internal error")
 		}
 		return
@@ -1258,18 +1304,22 @@ func (h *Handler) getArtifact(w http.ResponseWriter, r *http.Request) {
 	art, err := h.deps.Artifacts.GetByID(r.Context(), artID)
 	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
+			resultLabel = "not_found"
 			writeError(w, http.StatusNotFound, "not found")
 		} else {
+			resultLabel = "error"
 			writeError(w, http.StatusInternalServerError, "internal error")
 		}
 		return
 	}
 
 	if art.OwnerUserID != user.ID {
+		resultLabel = "not_found"
 		writeError(w, http.StatusNotFound, "not found")
 		return
 	}
 	if !h.artifactVisible(r.Context(), art, user.ID) {
+		resultLabel = "not_visible"
 		writeError(w, http.StatusNotFound, "not found")
 		return
 	}
@@ -1277,6 +1327,7 @@ func (h *Handler) getArtifact(w http.ResponseWriter, r *http.Request) {
 	data, err := h.deps.Objects.GetObject(r.Context(), art.StorageBucket, art.StorageKey)
 	if err != nil {
 		h.logger.Error("miniapp: get artifact object failed", slog.String("error", err.Error()))
+		resultLabel = "error"
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}

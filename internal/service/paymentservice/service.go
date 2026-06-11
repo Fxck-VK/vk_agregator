@@ -265,20 +265,26 @@ func (s *Service) CreateIntent(ctx context.Context, in CreateIntentInput) (Creat
 	in.IdempotencyKey = strings.TrimSpace(in.IdempotencyKey)
 	in.ReturnURL = strings.TrimSpace(in.ReturnURL)
 	in.Source = strings.TrimSpace(in.Source)
+	sourceLabel := metricLabel(in.Source)
 	if in.UserID == uuid.Nil || in.ProductCode == "" || in.IdempotencyKey == "" {
+		metrics.ObserveProductEvent(sourceLabel, "payment", "intent_create", "top_up", "credits", "invalid_input")
 		return CreateIntentResult{}, ErrInvalidInput
 	}
 
 	if existing, err := s.repo.GetIntentByIdempotencyKey(ctx, in.IdempotencyKey); err == nil {
 		if existing.UserID != in.UserID {
+			metrics.ObserveProductEvent(sourceLabel, "payment", "intent_create", "top_up", "credits", "forbidden")
 			return CreateIntentResult{}, ErrForbidden
 		}
 		intent, err := s.ensureProviderPayment(ctx, existing, nil, in.ReturnURL)
 		if err != nil {
+			metrics.ObserveProductEvent(sourceLabel, "payment", "intent_create", "top_up", "credits", "provider_error")
 			return CreateIntentResult{}, err
 		}
+		metrics.ObserveProductEvent(sourceLabel, "payment", "intent_create", "top_up", "credits", "idempotent")
 		return CreateIntentResult{Intent: intent, Created: false}, nil
 	} else if !errors.Is(err, domain.ErrNotFound) {
+		metrics.ObserveProductEvent(sourceLabel, "payment", "intent_create", "top_up", "credits", "error")
 		return CreateIntentResult{}, err
 	}
 
@@ -287,19 +293,23 @@ func (s *Service) CreateIntent(ctx context.Context, in CreateIntentInput) (Creat
 		var err error
 		product, err = s.repo.GetActiveProductByCode(ctx, in.ProductCode)
 		if err != nil {
+			metrics.ObserveProductEvent(sourceLabel, "payment", "intent_create", "top_up", "credits", "invalid_product")
 			return CreateIntentResult{}, err
 		}
 		active, err := s.ActiveWaitingIntent(ctx, in.UserID)
 		if err == nil {
 			if paymentIntentMatchesProduct(active, product) {
+				metrics.ObserveProductEvent(sourceLabel, "payment", "intent_create", "top_up", "credits", "reused_active")
 				return CreateIntentResult{Intent: active, Created: false, ReusedActive: true}, nil
 			}
 		} else if !errors.Is(err, domain.ErrNotFound) {
+			metrics.ObserveProductEvent(sourceLabel, "payment", "intent_create", "top_up", "credits", "error")
 			return CreateIntentResult{}, err
 		}
 	}
 
 	if in.ReceiptEmail == "" && in.ReceiptPhone == "" {
+		metrics.ObserveProductEvent(sourceLabel, "payment", "intent_create", "top_up", "credits", "receipt_contact_required")
 		return CreateIntentResult{}, ErrReceiptContactRequired
 	}
 
@@ -307,6 +317,7 @@ func (s *Service) CreateIntent(ctx context.Context, in CreateIntentInput) (Creat
 		var err error
 		product, err = s.repo.GetActiveProductByCode(ctx, in.ProductCode)
 		if err != nil {
+			metrics.ObserveProductEvent(sourceLabel, "payment", "intent_create", "top_up", "credits", "invalid_product")
 			return CreateIntentResult{}, err
 		}
 	}
@@ -320,6 +331,7 @@ func (s *Service) CreateIntent(ctx context.Context, in CreateIntentInput) (Creat
 	}
 	metadata, err := json.Marshal(metadataFields)
 	if err != nil {
+		metrics.ObserveProductEvent(sourceLabel, "payment", "intent_create", "top_up", "credits", "error")
 		return CreateIntentResult{}, err
 	}
 	intent := &domain.PaymentIntent{
@@ -342,27 +354,34 @@ func (s *Service) CreateIntent(ctx context.Context, in CreateIntentInput) (Creat
 	}
 	if err := s.repo.CreateIntent(ctx, intent); err != nil {
 		if !errors.Is(err, domain.ErrConflict) {
+			metrics.ObserveProductEvent(sourceLabel, "payment", "intent_create", "top_up", "credits", "error")
 			return CreateIntentResult{}, err
 		}
 		existing, getErr := s.repo.GetIntentByIdempotencyKey(ctx, in.IdempotencyKey)
 		if getErr != nil {
+			metrics.ObserveProductEvent(sourceLabel, "payment", "intent_create", "top_up", "credits", "error")
 			return CreateIntentResult{}, getErr
 		}
 		if existing.UserID != in.UserID {
+			metrics.ObserveProductEvent(sourceLabel, "payment", "intent_create", "top_up", "credits", "forbidden")
 			return CreateIntentResult{}, ErrForbidden
 		}
 		intent, err := s.ensureProviderPayment(ctx, existing, nil, in.ReturnURL)
 		if err != nil {
+			metrics.ObserveProductEvent(sourceLabel, "payment", "intent_create", "top_up", "credits", "provider_error")
 			return CreateIntentResult{}, err
 		}
+		metrics.ObserveProductEvent(sourceLabel, "payment", "intent_create", "top_up", "credits", "idempotent")
 		return CreateIntentResult{Intent: intent, Created: false}, nil
 	}
 
 	intent, err = s.ensureProviderPayment(ctx, intent, product, in.ReturnURL)
 	if err != nil {
+		metrics.ObserveProductEvent(sourceLabel, "payment", "intent_create", "top_up", "credits", "provider_error")
 		return CreateIntentResult{}, err
 	}
-	metrics.PaymentsCreated.WithLabelValues(string(intent.Provider), metricLabel(in.Source)).Inc()
+	metrics.PaymentsCreated.WithLabelValues(string(intent.Provider), sourceLabel).Inc()
+	metrics.ObserveProductEvent(sourceLabel, "payment", "intent_create", "top_up", "credits", "created")
 	return CreateIntentResult{Intent: intent, Created: true}, nil
 }
 

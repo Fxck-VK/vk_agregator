@@ -967,6 +967,12 @@ func (p *processor) setStatus(ctx context.Context, job *domain.Job, to domain.Jo
 			metrics.JobDuration.WithLabelValues(operationMetricLabel(job.OperationType), modalityMetricLabel(job.Modality), string(to)).Observe(duration.Seconds())
 		}
 	}
+	if to == domain.JobStatusResultReady {
+		metrics.ObserveProductEvent("worker", "job", "result_ready", operationMetricLabel(job.OperationType), modalityMetricLabel(job.Modality), "success")
+	}
+	if to.IsTerminal() {
+		metrics.ObserveProductEvent("worker", "job", "terminal", operationMetricLabel(job.OperationType), modalityMetricLabel(job.Modality), string(to))
+	}
 	if to == domain.JobStatusRejected {
 		reason := errCode
 		if reason == "" {

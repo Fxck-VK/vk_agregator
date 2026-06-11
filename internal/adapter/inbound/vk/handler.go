@@ -24,6 +24,7 @@ import (
 
 	vkdelivery "vk-ai-aggregator/internal/adapter/delivery/vk"
 	"vk-ai-aggregator/internal/domain"
+	"vk-ai-aggregator/internal/platform/metrics"
 	"vk-ai-aggregator/internal/platform/tracing"
 	"vk-ai-aggregator/internal/service/antispam"
 	"vk-ai-aggregator/internal/service/billingservice"
@@ -536,6 +537,8 @@ func (h *Handler) answerMessageEvent(ctx context.Context, eventID string, userID
 
 // process runs the InboundEvent -> User -> Command -> Job flow.
 func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, eventID, idemKey string, fromID, peerID int64, text, payload, ref string, controlOnly bool) error {
+	metrics.ObserveProductEvent("vk_bot", "inbound", "received", "unknown", "unknown", cb.Type)
+
 	// InboundEvent: persist the raw event for audit and reprocessing.
 	inbound := &domain.InboundEvent{
 		Source:         "vk",
@@ -639,6 +642,7 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 				slog.Int64("vk_user_id", fromID),
 				slog.String("error", err.Error()))
 		} else if !decision.Allowed {
+			metrics.ObserveProductEvent("vk_bot", "command", "antispam", productCommandOperation(parsed), productCommandModality(parsed), "denied")
 			if err := h.sendAntiSpamResponse(ctx, idemKey, peerID, decision); err != nil {
 				return fmt.Errorf("send anti-spam response: %w", err)
 			}
@@ -651,6 +655,7 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 			return nil
 		}
 	}
+	metrics.ObserveProductEvent("vk_bot", "command", "parsed", productCommandOperation(parsed), productCommandModality(parsed), productCommandResult(parsed, controlOnly, controlFromPayload))
 
 	photoTextJob := parsed.Type == domain.CommandImageGenerate && h.photoTextDialogActive(ctx, peerID)
 
@@ -748,6 +753,7 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 			jp.DurationSec = videoSpec.DurationSec
 		}
 		params, _ := json.Marshal(jp)
+		metrics.ObserveProductPromptLength("vk_bot", string(parsed.Operation), string(parsed.Modality), parsed.Prompt)
 		job, err := h.deps.Orchestrator.CreateJob(ctx, joborchestrator.CreateJobInput{
 			UserID:         user.ID,
 			Source:         "vk_bot",
@@ -779,6 +785,42 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 		return fmt.Errorf("mark idempotency completed: %w", err)
 	}
 	return nil
+}
+
+func productCommandOperation(parsed commandrouter.Result) string {
+	if parsed.Operation != "" {
+		return string(parsed.Operation)
+	}
+	if parsed.Type != "" {
+		return string(parsed.Type)
+	}
+	return "unknown"
+}
+
+func productCommandModality(parsed commandrouter.Result) string {
+	if parsed.Modality != "" {
+		return string(parsed.Modality)
+	}
+	if parsed.CreatesJob() {
+		return "unknown"
+	}
+	return "control"
+}
+
+func productCommandResult(parsed commandrouter.Result, controlOnly, controlFromPayload bool) string {
+	if parsed.CreatesJob() {
+		return "job_candidate"
+	}
+	if controlOnly {
+		return "control_callback"
+	}
+	if controlFromPayload {
+		return "control_payload"
+	}
+	if parsed.Type == domain.CommandUnknown {
+		return "unknown"
+	}
+	return "control"
 }
 
 func (h *Handler) shouldRoutePhotoText(ctx context.Context, peerID int64, parsed commandrouter.Result, controlFromPayload, controlOnly bool) bool {

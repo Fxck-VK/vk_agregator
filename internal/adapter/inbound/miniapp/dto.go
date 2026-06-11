@@ -58,6 +58,9 @@ type ClientEventRequest struct {
 	ErrorClass string `json:"error_class,omitempty"`
 	Step       string `json:"step,omitempty"`
 	Reason     string `json:"reason,omitempty"`
+	// DurationMS is a bounded client-side duration bucket source. It is never
+	// paired with raw URLs, prompts, launch params or user identifiers.
+	DurationMS int64 `json:"duration_ms,omitempty"`
 }
 
 type miniAppJobParams struct {

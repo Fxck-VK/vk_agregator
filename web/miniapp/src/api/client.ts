@@ -219,7 +219,7 @@ export class ApiError extends Error {
   }
 }
 
-type ClientEventType = "api_failure" | "js_error" | "launch_failure" | "payment_flow_error" | "ui_event";
+type ClientEventType = "api_failure" | "api_latency" | "js_error" | "launch_failure" | "payment_flow_error" | "ui_event";
 
 interface ClientTelemetryEvent {
   event_type: ClientEventType;
@@ -230,11 +230,13 @@ interface ClientTelemetryEvent {
   error_class?: string;
   step?: string;
   reason?: string;
+  duration_ms?: number;
 }
 
 const TELEMETRY_ENABLED = import.meta.env.VITE_FRONTEND_TELEMETRY_ENABLED === "true";
 
 let telemetryInstalled = false;
+const appStartedAt = performance.now();
 
 function telemetryRoute(path: string): string {
   const [withoutQuery] = path.split(/[?#]/, 1);
@@ -276,6 +278,10 @@ async function sendClientEvent(event: ClientTelemetryEvent): Promise<void> {
         error_class: telemetryLabel(event.error_class, "unknown"),
         step: telemetryLabel(event.step, "unknown"),
         reason: telemetryLabel(event.reason, "unknown"),
+        duration_ms:
+          typeof event.duration_ms === "number" && Number.isFinite(event.duration_ms)
+            ? Math.max(0, Math.min(600_000, Math.round(event.duration_ms)))
+            : undefined,
       }),
       keepalive: true,
     });
@@ -287,6 +293,17 @@ async function sendClientEvent(event: ClientTelemetryEvent): Promise<void> {
 export function installFrontendTelemetry(): void {
   if (!TELEMETRY_ENABLED || telemetryInstalled) return;
   telemetryInstalled = true;
+  window.requestAnimationFrame(() => {
+    window.setTimeout(() => {
+      void sendClientEvent({
+        event_type: "ui_event",
+        screen: "app",
+        step: "launch_rendered",
+        reason: "success",
+        duration_ms: performance.now() - appStartedAt,
+      });
+    }, 0);
+  });
   window.addEventListener("error", (event) => {
     void sendClientEvent({
       event_type: "js_error",
@@ -551,6 +568,7 @@ export function createIdempotencyKey(): string {
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let res: Response;
+  const started = performance.now();
   try {
     const rawLaunchParams = await launchParams();
     res = await fetch(path, {
@@ -562,14 +580,23 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       },
     });
   } catch {
+    const durationMs = performance.now() - started;
     void sendClientEvent({
       event_type: "api_failure",
       route: path,
       status: "network",
       error_class: "network_error",
+      duration_ms: durationMs,
     });
     throw new ApiError(0, "network_error");
   }
+  const durationMs = performance.now() - started;
+  void sendClientEvent({
+    event_type: "api_latency",
+    route: path,
+    status: String(res.status),
+    duration_ms: durationMs,
+  });
   if (!res.ok) {
     const err = await apiErrorFromResponse(res);
     void sendClientEvent({
@@ -577,6 +604,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       route: path,
       status: String(res.status),
       error_class: err.code,
+      duration_ms: durationMs,
     });
     throw err;
   }

@@ -97,12 +97,16 @@ func (o *Orchestrator) CreateJob(ctx context.Context, in CreateJobInput) (*domai
 	if source == "" {
 		source = "unknown"
 	}
+	operationLabel := string(in.Operation)
+	modalityLabel := string(in.Modality)
 
 	if existing, err := o.jobs.GetByIdempotencyKey(ctx, in.IdempotencyKey); err == nil {
 		span.SetAttributes(attribute.String("job.id", existing.ID.String()), attribute.Bool("job.idempotent", true))
+		metrics.ObserveProductEvent(source, "job", "create", operationLabel, modalityLabel, "idempotent")
 		return existing, nil
 	} else if !errors.Is(err, domain.ErrNotFound) {
 		tracing.RecordError(span, err)
+		metrics.ObserveProductEvent(source, "job", "create", operationLabel, modalityLabel, "idempotency_error")
 		return nil, fmt.Errorf("joborchestrator: idempotency lookup: %w", err)
 	}
 
@@ -110,11 +114,13 @@ func (o *Orchestrator) CreateJob(ctx context.Context, in CreateJobInput) (*domai
 	estimate, err := o.billing.Estimate(in.Operation)
 	if err != nil {
 		tracing.RecordError(span, err)
+		metrics.ObserveProductEvent(source, "job", "estimate", operationLabel, modalityLabel, "error")
 		return nil, fmt.Errorf("joborchestrator: estimate: %w", err)
 	}
 	if o.maxCost > 0 && estimate > o.maxCost {
 		err := fmt.Errorf("joborchestrator: %w: estimate %d exceeds cap %d", domain.ErrCostCapExceeded, estimate, o.maxCost)
 		tracing.RecordError(span, err)
+		metrics.ObserveProductEvent(source, "job", "create", operationLabel, modalityLabel, "rejected_cost_cap")
 		return nil, err
 	}
 
@@ -185,6 +191,7 @@ func (o *Orchestrator) CreateJob(ctx context.Context, in CreateJobInput) (*domai
 		return repos.Outbox.Add(ctx, jobEvent(ctx, "event.job.queued", &queuedJob))
 	}); err != nil {
 		tracing.RecordError(span, err)
+		metrics.ObserveProductEvent(source, "job", "create", operationLabel, modalityLabel, "error")
 		return nil, fmt.Errorf("joborchestrator: create job: %w", err)
 	}
 
@@ -192,12 +199,16 @@ func (o *Orchestrator) CreateJob(ctx context.Context, in CreateJobInput) (*domai
 		job.Status = domain.JobStatusAwaitingPayment
 		metrics.JobsCreated.WithLabelValues(source, string(job.OperationType), string(job.Modality)).Inc()
 		metrics.JobStatusCurrent.WithLabelValues(string(job.Status), string(job.OperationType), string(job.Modality)).Inc()
+		metrics.ObserveProductEvent(source, "job", "create", operationLabel, modalityLabel, "awaiting_payment")
+		metrics.ObserveProductActiveUserEvent(source, operationLabel, modalityLabel, "created")
 		return job, domain.ErrInsufficientCredits
 	}
 
 	job.Status = domain.JobStatusQueued
 	metrics.JobsCreated.WithLabelValues(source, string(job.OperationType), string(job.Modality)).Inc()
 	metrics.JobStatusCurrent.WithLabelValues(string(job.Status), string(job.OperationType), string(job.Modality)).Inc()
+	metrics.ObserveProductEvent(source, "job", "create", operationLabel, modalityLabel, "queued")
+	metrics.ObserveProductActiveUserEvent(source, operationLabel, modalityLabel, "created")
 	return job, nil
 }
 
