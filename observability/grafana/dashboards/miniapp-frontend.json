@@ -1,0 +1,109 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": false,
+  "panels": [
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "targets": [
+        {
+          "expr": "sum(rate(vkagg_frontend_events_total[5m])) by (surface,event_type)",
+          "legendFormat": "{{surface}} {{event_type}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Frontend Events",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "id": 2,
+      "targets": [
+        {
+          "expr": "sum(rate(vkagg_frontend_js_errors_total[5m])) by (surface,screen,error_class)",
+          "legendFormat": "{{surface}} {{screen}} {{error_class}}",
+          "refId": "A"
+        }
+      ],
+      "title": "JS Errors",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "id": 3,
+      "targets": [
+        {
+          "expr": "sum(rate(vkagg_frontend_api_failures_total[5m])) by (surface,route,status)",
+          "legendFormat": "{{surface}} {{route}} {{status}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Frontend API Failures",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "id": 4,
+      "targets": [
+        {
+          "expr": "sum(rate(vkagg_frontend_launch_failures_total[5m])) by (surface,reason)",
+          "legendFormat": "{{surface}} {{reason}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Launch Failures",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": [
+    "miniapp",
+    "frontend"
+  ],
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "title": "Mini App and Frontend",
+  "uid": "miniapp-frontend",
+  "version": 1
+}

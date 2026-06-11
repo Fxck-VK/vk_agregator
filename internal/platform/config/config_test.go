@@ -55,6 +55,40 @@ func TestLoadProviderChain(t *testing.T) {
 	}
 }
 
+func TestLoadTracingOTLPConfig(t *testing.T) {
+	t.Setenv("OTEL_TRACES_EXPORTER", "otlp")
+	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "otel-collector:4317")
+	t.Setenv("OTEL_TRACES_SAMPLE_RATIO", "0.25")
+	t.Setenv("OTEL_TRACES_CRITICAL_SAMPLE_RATIO", "1")
+
+	cfg := config.Load()
+	if cfg.TracingExporter != "otlp" {
+		t.Fatalf("TracingExporter = %q, want otlp", cfg.TracingExporter)
+	}
+	if cfg.TracingOTLPEndpoint != "otel-collector:4317" {
+		t.Fatalf("TracingOTLPEndpoint = %q", cfg.TracingOTLPEndpoint)
+	}
+	if cfg.TracingSampleRatio != 0.25 {
+		t.Fatalf("TracingSampleRatio = %v, want 0.25", cfg.TracingSampleRatio)
+	}
+	if cfg.TracingCriticalSampleRatio != 1 {
+		t.Fatalf("TracingCriticalSampleRatio = %v, want 1", cfg.TracingCriticalSampleRatio)
+	}
+}
+
+func TestLoadFrontendTelemetryConfig(t *testing.T) {
+	t.Setenv("FRONTEND_TELEMETRY_ENABLED", "true")
+	t.Setenv("FRONTEND_TELEMETRY_USER_HASH_SECRET", "test-hash-secret")
+
+	cfg := config.Load()
+	if !cfg.FrontendTelemetryEnabled {
+		t.Fatal("FrontendTelemetryEnabled = false, want true")
+	}
+	if cfg.FrontendTelemetryUserHashSecret != "test-hash-secret" {
+		t.Fatalf("FrontendTelemetryUserHashSecret = %q", cfg.FrontendTelemetryUserHashSecret)
+	}
+}
+
 func TestLoadImageProviderConfig(t *testing.T) {
 	t.Setenv("IMAGE_PROVIDER", "openai")
 	t.Setenv("IMAGE_MODEL", "gpt-image-2")
@@ -104,6 +138,35 @@ func TestValidateImageProvider(t *testing.T) {
 	}
 }
 
+func TestValidateProviderChainRejectsUnknownProvider(t *testing.T) {
+	cfg := config.Config{ProviderChain: []string{"deepinfra", "unknown"}}
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "PROVIDER_CHAIN") {
+		t.Fatalf("expected PROVIDER_CHAIN validation error, got %v", err)
+	}
+}
+
+func TestValidateProductionRejectsMockProvider(t *testing.T) {
+	cfg := validProductionConfig()
+	cfg.ProviderChain = []string{"deepinfra", "mock"}
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "mock provider") {
+		t.Fatalf("expected mock provider validation error, got %v", err)
+	}
+}
+
+func TestValidateProductionRejectsMockPaymentProvider(t *testing.T) {
+	cfg := validProductionConfig()
+	cfg.PaymentProvider = "mock"
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "PAYMENT_PROVIDER=mock") {
+		t.Fatalf("expected mock payment provider validation error, got %v", err)
+	}
+}
+
 func TestLoadDeepInfraConfig(t *testing.T) {
 	t.Setenv("PROVIDER", "deepinfra")
 	t.Setenv("DEEPINFRA_API_KEY", "test-key")
@@ -139,6 +202,23 @@ func TestLoadDeepInfraConfig(t *testing.T) {
 	}
 	if !cfg.DeepInfraImageReferenceEnabled {
 		t.Fatal("DeepInfraImageReferenceEnabled was not loaded")
+	}
+}
+
+func validProductionConfig() config.Config {
+	return config.Config{
+		Env:                 "production",
+		Provider:            "deepinfra",
+		ProviderChain:       []string{"deepinfra"},
+		DeepInfraAPIKey:     "test-deepinfra-key",
+		VKSecret:            "test-vk-secret",
+		AdminToken:          "test-admin-token",
+		VKConfirmationToken: "test-confirmation-token",
+		VKAppSecret:         "test-vk-app-secret",
+		PaymentProvider:     "yookassa",
+		YooKassaShopID:      "test-shop",
+		YooKassaSecretKey:   "test-yookassa-secret",
+		YooKassaReturnURL:   "https://example.com",
 	}
 }
 

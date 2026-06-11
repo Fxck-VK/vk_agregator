@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"vk-ai-aggregator/internal/domain"
+	"vk-ai-aggregator/internal/platform/metrics"
 	"vk-ai-aggregator/internal/service/artifactservice"
 )
 
@@ -17,24 +18,35 @@ const (
 )
 
 func (h *Handler) createArtifact(w http.ResponseWriter, r *http.Request) {
+	resultLabel := "success"
+	defer func() {
+		metrics.ObserveProductEvent("miniapp", "artifact", "upload", "artifact_upload", "image", resultLabel)
+	}()
 	if h.deps.Artifacts == nil || h.deps.Objects == nil {
+		resultLabel = "service_unavailable"
 		writeError(w, http.StatusServiceUnavailable, "artifact storage unavailable")
 		return
 	}
 	vkUserID, ok := vkUserIDFromCtx(r.Context())
 	if !ok {
+		resultLabel = "unauthorized"
 		writeError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
 	user, err := h.ensureUser(r.Context(), vkUserID)
 	if err != nil {
 		h.logger.Error("miniapp: ensure user failed", "error", err.Error())
+		resultLabel = "error"
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
 	data, mimeType, status, ok := readMiniAppUpload(w, r)
 	if !ok {
+		resultLabel = "invalid_upload"
+		if status == http.StatusRequestEntityTooLarge {
+			resultLabel = "too_large"
+		}
 		writeError(w, status, uploadErrorMessage(status))
 		return
 	}
@@ -43,6 +55,7 @@ func (h *Handler) createArtifact(w http.ResponseWriter, r *http.Request) {
 	artifact, err := saver.SaveBytesArtifact(r.Context(), user.ID, nil, domain.ArtifactKindInput, domain.MediaTypeImage, mimeType, data)
 	if err != nil {
 		h.logger.Error("miniapp: upload artifact failed", "error", err.Error())
+		resultLabel = "error"
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}

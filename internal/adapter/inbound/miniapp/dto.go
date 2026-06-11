@@ -47,6 +47,22 @@ type ChatMessageRequest struct {
 	ConversationID string `json:"conversation_id,omitempty"`
 }
 
+// ClientEventRequest accepts only coarse, safe frontend telemetry fields. It
+// intentionally has no prompt, launch params, raw URL, user id or payload field.
+type ClientEventRequest struct {
+	Surface    string `json:"surface,omitempty"`
+	EventType  string `json:"event_type"`
+	Screen     string `json:"screen,omitempty"`
+	Route      string `json:"route,omitempty"`
+	Status     string `json:"status,omitempty"`
+	ErrorClass string `json:"error_class,omitempty"`
+	Step       string `json:"step,omitempty"`
+	Reason     string `json:"reason,omitempty"`
+	// DurationMS is a bounded client-side duration bucket source. It is never
+	// paired with raw URLs, prompts, launch params or user identifiers.
+	DurationMS int64 `json:"duration_ms,omitempty"`
+}
+
 type miniAppJobParams struct {
 	Prompt               string                    `json:"prompt"`
 	ModelID              string                    `json:"model_id,omitempty"`

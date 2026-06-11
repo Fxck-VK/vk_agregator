@@ -42,8 +42,11 @@ func main() {
 	defer stop()
 
 	shutdownTracing, err := tracing.Init(ctx, tracing.Config{
-		ServiceName: cfg.TracingServiceName + "-provider-webhook",
-		Exporter:    cfg.TracingExporter,
+		ServiceName:         cfg.TracingServiceName + "-provider-webhook",
+		Exporter:            cfg.TracingExporter,
+		OTLPEndpoint:        cfg.TracingOTLPEndpoint,
+		SampleRatio:         cfg.TracingSampleRatio,
+		CriticalSampleRatio: cfg.TracingCriticalSampleRatio,
 	}, logger)
 	if err != nil {
 		logger.Error("tracing init failed", "error", err)
@@ -85,7 +88,7 @@ func main() {
 	limiter := ratelimit.New(cfg.WebhookRateLimitRPS, cfg.WebhookRateLimitBurst)
 	httpsRequired := cfg.PaymentWebhookHTTPSRequired()
 	mux.Handle("POST /billing/webhooks/yookassa", limiter.Middleware(metrics.Middleware("billing_webhook", webhookHandler(processor, logger, provider.Code(), httpsRequired))))
-	mux.Handle("GET /metrics", metrics.Handler())
+	mux.Handle("GET /metrics", metrics.PrivateHandler())
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok"})

@@ -8,6 +8,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 
 	redisqueue "vk-ai-aggregator/internal/adapter/queue/redis"
+	"vk-ai-aggregator/internal/platform/metrics"
 	"vk-ai-aggregator/internal/platform/queue"
 	"vk-ai-aggregator/internal/platform/tracing"
 )
@@ -170,6 +171,10 @@ func (e *Engine) PollWithHandlerContext(readCtx, handlerCtx context.Context) (in
 func (e *Engine) dispatch(ctx context.Context, deliveries []redisqueue.Delivery) int {
 	handled := 0
 	for _, d := range deliveries {
+		started := time.Now()
+		phase := streamPhase(d.Stream)
+		operation := string(d.Task.Operation)
+		modality := string(d.Task.Modality)
 		taskCtx := tracing.ContextWithTraceparent(ctx, d.Task.Traceparent)
 		taskCtx, span := tracing.Start(taskCtx, "worker.task",
 			attribute.String("messaging.system", "redis"),
@@ -182,6 +187,8 @@ func (e *Engine) dispatch(ctx context.Context, deliveries []redisqueue.Delivery)
 		if err := e.handle(taskCtx, d.Task); err != nil {
 			tracing.RecordError(span, err)
 			span.End()
+			metrics.WorkerTaskDuration.WithLabelValues(phase, operation, modality, "error").Observe(time.Since(started).Seconds())
+			metrics.WorkerRetries.WithLabelValues(phase, operation, modality).Inc()
 			e.logger.WarnContext(taskCtx, "worker handler failed; leaving entry pending",
 				"stream", d.Stream, "job_id", d.Task.JobID, "error", err)
 			continue
@@ -189,11 +196,26 @@ func (e *Engine) dispatch(ctx context.Context, deliveries []redisqueue.Delivery)
 		if err := e.reader.Ack(taskCtx, d.Stream, d.ID); err != nil {
 			tracing.RecordError(span, err)
 			span.End()
+			metrics.WorkerTaskDuration.WithLabelValues(phase, operation, modality, "ack_error").Observe(time.Since(started).Seconds())
 			e.logger.WarnContext(taskCtx, "worker ack failed", "stream", d.Stream, "error", err)
 			continue
 		}
 		span.End()
+		metrics.WorkerTaskDuration.WithLabelValues(phase, operation, modality, "success").Observe(time.Since(started).Seconds())
 		handled++
 	}
 	return handled
+}
+
+func streamPhase(stream string) string {
+	switch stream {
+	case redisqueue.StreamText, redisqueue.StreamImage, redisqueue.StreamVideo:
+		return "generation"
+	case redisqueue.StreamProviderPoll:
+		return "provider_poll"
+	case redisqueue.StreamDelivery:
+		return "delivery"
+	default:
+		return "unknown"
+	}
 }

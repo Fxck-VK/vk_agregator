@@ -1,0 +1,50 @@
+{{ define "telegram.default.message" -}}
+{{- if eq .Status "firing" -}}
+<b>СТАТУС: ГОРИТ</b>
+{{- else -}}
+<b>СТАТУС: ВОССТАНОВЛЕНО</b>
+{{- end }}
+Алертов: {{ len .Alerts }}
+
+{{ range .Alerts -}}
+<b>{{ .Labels.alertname }}</b>
+Критичность: {{ .Labels.severity }}
+Зона: {{ .Labels.surface }}
+{{ with .Labels.instance -}}
+Цель: {{ . }}
+{{ end -}}
+{{ with .Labels.job -}}
+Источник: {{ . }}
+{{ end }}
+
+{{ with .Annotations.summary -}}
+<b>Что случилось:</b>
+{{ . }}
+{{ end -}}
+{{ with .Annotations.description -}}
+<b>Детали:</b>
+{{ . }}
+{{ end -}}
+{{ with .Annotations.impact -}}
+<b>Влияние:</b>
+{{ . }}
+{{ end -}}
+{{ with .Annotations.dashboard -}}
+<b>Куда зайти:</b>
+{{ . }}
+Grafana: http://127.0.0.1:3000
+Prometheus: http://127.0.0.1:9091
+{{ end -}}
+{{ with .Annotations.action -}}
+<b>Что проверить:</b>
+{{ . }}
+{{ end -}}
+{{ with .Annotations.safe_logs -}}
+<b>Что можно писать в чат:</b>
+{{ . }}
+{{ end -}}
+<b>Что нельзя отправлять:</b>
+токены, API keys, auth headers, raw payment/provider payloads, prompts, full VK launch params, private artifact URLs, raw PII.
+
+{{ end -}}
+{{ end }}

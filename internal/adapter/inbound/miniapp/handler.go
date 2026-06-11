@@ -2,6 +2,9 @@ package miniapp
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,6 +19,7 @@ import (
 	"github.com/google/uuid"
 
 	"vk-ai-aggregator/internal/domain"
+	"vk-ai-aggregator/internal/platform/metrics"
 	"vk-ai-aggregator/internal/service/billingservice"
 	"vk-ai-aggregator/internal/service/joborchestrator"
 	"vk-ai-aggregator/internal/service/paymentservice"
@@ -63,6 +67,11 @@ type Config struct {
 	// posts actual rewards through billing ledger entries.
 	ReferralReferrerSignupRewardCredits int64
 	ReferralReferredSignupRewardCredits int64
+	// FrontendTelemetryEnabled accepts safe client-side telemetry events.
+	FrontendTelemetryEnabled bool
+	// FrontendTelemetryUserHashSecret hashes verified VK user ids for optional
+	// debug logs without storing raw user identifiers.
+	FrontendTelemetryUserHashSecret string
 }
 
 // ObjectReader loads and stores artifact bytes (S3/MinIO).
@@ -122,6 +131,7 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /miniapp/payments/{id}", h.auth(h.getPaymentIntent))
 	mux.HandleFunc("POST /miniapp/artifacts", h.auth(h.rateLimitMiniApp("miniapp_artifact", h.createArtifact)))
 	mux.HandleFunc("GET /miniapp/artifacts/{id}", h.auth(h.getArtifact))
+	mux.HandleFunc("POST /miniapp/client-events", h.auth(h.rateLimitMiniApp("miniapp_client_events", h.clientEvent)))
 	return mux
 }
 
@@ -140,11 +150,13 @@ func (h *Handler) auth(next http.HandlerFunc) http.HandlerFunc {
 			// Dev/mock mode without params: require explicit vk_user_id header.
 			raw := r.Header.Get("X-VK-User-ID")
 			if raw == "" {
+				metrics.AuthFailures.WithLabelValues("miniapp", "missing_dev_user").Inc()
 				writeError(w, http.StatusUnauthorized, "unauthorized")
 				return
 			}
 			uid, err := strconv.ParseInt(raw, 10, 64)
 			if err != nil || uid <= 0 {
+				metrics.AuthFailures.WithLabelValues("miniapp", "invalid_dev_user").Inc()
 				writeError(w, http.StatusUnauthorized, "unauthorized")
 				return
 			}
@@ -155,6 +167,8 @@ func (h *Handler) auth(next http.HandlerFunc) http.HandlerFunc {
 
 		params, err := VerifyLaunchParams(rawParams, h.cfg.AppSecret, h.cfg.LaunchParamsMaxAge)
 		if err != nil {
+			metrics.AuthFailures.WithLabelValues("miniapp", "launch_params_rejected").Inc()
+			metrics.SignatureFailures.WithLabelValues("miniapp", "launch_params_rejected").Inc()
 			// Do not expose the reason to the client (audit S1).
 			if h.cfg.AppSecret != "" {
 				h.logger.Warn("miniapp: launch params rejected",
@@ -166,6 +180,7 @@ func (h *Handler) auth(next http.HandlerFunc) http.HandlerFunc {
 
 		vkUserID, err := VKUserIDFromParams(params)
 		if err != nil {
+			metrics.AuthFailures.WithLabelValues("miniapp", "missing_vk_user_id").Inc()
 			writeError(w, http.StatusUnauthorized, "unauthorized")
 			return
 		}
@@ -189,6 +204,7 @@ func (h *Handler) rateLimitMiniApp(keyPrefix string, next http.HandlerFunc) http
 		}
 		vkUserID, ok := vkUserIDFromCtx(r.Context())
 		if !ok {
+			metrics.AuthFailures.WithLabelValues("miniapp", "missing_context_user").Inc()
 			writeError(w, http.StatusUnauthorized, "unauthorized")
 			return
 		}
@@ -228,6 +244,211 @@ func (h *Handler) ensureUser(ctx context.Context, vkUserID int64) (*domain.User,
 		return nil, fmt.Errorf("ensure account: %w", err)
 	}
 	return user, nil
+}
+
+func (h *Handler) clientEvent(w http.ResponseWriter, r *http.Request) {
+	vkUserID, ok := vkUserIDFromCtx(r.Context())
+	if !ok {
+		metrics.AuthFailures.WithLabelValues("miniapp", "missing_context_user").Inc()
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	if !h.cfg.FrontendTelemetryEnabled {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	defer r.Body.Close()
+	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8<<10))
+	dec.DisallowUnknownFields()
+	var req ClientEventRequest
+	if err := dec.Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid client event")
+		return
+	}
+	eventType, ok := safeClientEventType(req.EventType)
+	if !ok {
+		writeError(w, http.StatusBadRequest, "invalid client event")
+		return
+	}
+	surface := safeClientLabel(req.Surface, "vk_mini_app")
+	screen := safeClientLabel(req.Screen, "unknown")
+	route := safeClientRoute(req.Route)
+	if route == "rejected" {
+		metrics.SuspiciousEvents.WithLabelValues("miniapp", "unsafe_client_event").Inc()
+		writeError(w, http.StatusBadRequest, "invalid client event")
+		return
+	}
+	status := safeClientStatus(req.Status)
+	errorClass := safeClientLabel(req.ErrorClass, "unknown")
+	step := safeClientLabel(req.Step, "unknown")
+	reason := safeClientLabel(req.Reason, "unknown")
+
+	metrics.FrontendEvents.WithLabelValues(surface, eventType).Inc()
+	metrics.ObserveProductEvent(surface, "frontend", eventType, "unknown", "unknown", "observed")
+	switch eventType {
+	case "js_error":
+		metrics.FrontendJSErrors.WithLabelValues(surface, screen, errorClass).Inc()
+	case "api_failure":
+		metrics.FrontendAPIFailures.WithLabelValues(surface, route, status).Inc()
+	case "launch_failure":
+		metrics.FrontendLaunchFailures.WithLabelValues(surface, reason).Inc()
+	case "payment_flow_error":
+		metrics.FrontendPaymentFlowErrors.WithLabelValues(step, errorClass).Inc()
+	case "ui_event":
+		metrics.ObserveProductFrontendUIDuration(surface, step, reason, req.DurationMS)
+	}
+	if eventType == "api_latency" || (eventType == "api_failure" && req.DurationMS > 0) {
+		metrics.ObserveProductFrontendAPIDuration(surface, route, status, req.DurationMS)
+	}
+	if hash := h.clientUserHash(vkUserID); hash != "" {
+		h.logger.Debug("miniapp client event",
+			slog.String("event_type", eventType),
+			slog.String("screen", screen),
+			slog.String("route", route),
+			slog.String("status", status),
+			slog.String("user_hash", hash))
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handler) clientUserHash(vkUserID int64) string {
+	secret := strings.TrimSpace(h.cfg.FrontendTelemetryUserHashSecret)
+	if secret == "" || vkUserID <= 0 {
+		return ""
+	}
+	mac := hmac.New(sha256.New, []byte(secret))
+	_, _ = mac.Write([]byte(strconv.FormatInt(vkUserID, 10)))
+	return hex.EncodeToString(mac.Sum(nil))[:16]
+}
+
+func safeClientEventType(value string) (string, bool) {
+	switch safeClientLabel(value, "") {
+	case "js_error":
+		return "js_error", true
+	case "api_failure":
+		return "api_failure", true
+	case "api_latency":
+		return "api_latency", true
+	case "launch_failure":
+		return "launch_failure", true
+	case "payment_flow_error":
+		return "payment_flow_error", true
+	case "ui_event":
+		return "ui_event", true
+	default:
+		return "", false
+	}
+}
+
+func safeClientRoute(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "unknown"
+	}
+	if i := strings.IndexAny(value, "?#"); i >= 0 {
+		value = value[:i]
+	}
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "unknown"
+	}
+	lower := strings.ToLower(value)
+	if strings.Contains(lower, "launch") || strings.Contains(lower, "vk_user") || strings.Contains(lower, "sign") {
+		return "rejected"
+	}
+	parts := strings.Split(value, "/")
+	for i, part := range parts {
+		if part == "" {
+			continue
+		}
+		if _, err := uuid.Parse(part); err == nil {
+			parts[i] = ":id"
+			continue
+		}
+		if allDigits(part) {
+			parts[i] = ":id"
+		}
+	}
+	route := strings.Join(parts, "/")
+	switch route {
+	case "/miniapp/estimate",
+		"/miniapp/chat/messages",
+		"/miniapp/chat/conversations",
+		"/miniapp/jobs",
+		"/miniapp/balance",
+		"/miniapp/referral",
+		"/miniapp/referral/accept",
+		"/miniapp/payment-products",
+		"/miniapp/payments/intents",
+		"/miniapp/payments",
+		"/miniapp/artifacts",
+		"/miniapp/client-events":
+		return route
+	case "/miniapp/jobs/:id",
+		"/miniapp/payments/:id",
+		"/miniapp/artifacts/:id",
+		"/miniapp/chat/conversations/:id/messages":
+		return route
+	default:
+		return "other"
+	}
+}
+
+func safeClientStatus(value string) string {
+	value = strings.TrimSpace(strings.ToLower(value))
+	if value == "" {
+		return "unknown"
+	}
+	if value == "network" || value == "timeout" {
+		return value
+	}
+	if len(value) == 3 && allDigits(value) {
+		return value
+	}
+	return "unknown"
+}
+
+func safeClientLabel(value string, fallback string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	if value == "" {
+		if fallback == "" {
+			return ""
+		}
+		return fallback
+	}
+	var b strings.Builder
+	for _, r := range value {
+		switch {
+		case r >= 'a' && r <= 'z':
+			b.WriteRune(r)
+		case r >= '0' && r <= '9':
+			b.WriteRune(r)
+		case r == '_' || r == '-' || r == '/' || r == ':' || r == '.':
+			b.WriteRune(r)
+		default:
+			b.WriteByte('_')
+		}
+		if b.Len() >= 96 {
+			break
+		}
+	}
+	out := strings.Trim(b.String(), "_")
+	if out == "" {
+		return fallback
+	}
+	return out
+}
+
+func allDigits(value string) bool {
+	if value == "" {
+		return false
+	}
+	for _, r := range value {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // operationMeta maps an operation string to (OperationType, Modality). Returns
@@ -308,7 +529,7 @@ func (h *Handler) estimateJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req, opType, _, model, ok := h.readJobRequest(w, r)
+	req, opType, modality, model, ok := h.readJobRequest(w, r)
 	if !ok {
 		return
 	}
@@ -334,8 +555,10 @@ func (h *Handler) estimateJob(w http.ResponseWriter, r *http.Request) {
 	cost, err := h.deps.Billing.Estimate(opType)
 	if err != nil {
 		if errors.Is(err, billingservice.ErrUnknownOperation) {
+			metrics.ObserveProductEvent("miniapp", "job", "estimate", string(opType), string(modality), "unsupported_operation")
 			writeError(w, http.StatusBadRequest, "unsupported operation; allowed: text_generate, image_generate, video_generate")
 		} else {
+			metrics.ObserveProductEvent("miniapp", "job", "estimate", string(opType), string(modality), "error")
 			writeError(w, http.StatusInternalServerError, "internal error")
 		}
 		return
@@ -344,10 +567,12 @@ func (h *Handler) estimateJob(w http.ResponseWriter, r *http.Request) {
 	balance, err := h.balanceForEstimate(r.Context(), vkUserID)
 	if err != nil {
 		h.logger.Error("miniapp: estimate balance failed", slog.String("error", err.Error()))
+		metrics.ObserveProductEvent("miniapp", "job", "estimate", string(opType), string(modality), "error")
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
+	metrics.ObserveProductEvent("miniapp", "job", "estimate", string(opType), string(modality), "success")
 	writeJSON(w, http.StatusOK, EstimateDTO{
 		Operation:      string(opType),
 		ModelID:        miniAppResponseModelID(model),
@@ -421,9 +646,11 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 		jobParams.DurationSec = req.DurationSec
 	}
 	params, _ := json.Marshal(jobParams)
+	metrics.ObserveProductPromptLength("miniapp", string(opType), string(modality), req.Prompt)
 
 	job, err := h.deps.Orchestrator.CreateJob(r.Context(), joborchestrator.CreateJobInput{
 		UserID:           user.ID,
+		Source:           "miniapp",
 		VKPeerID:         vkUserID, // peer_id = user_id for direct messages
 		CommandID:        uuid.Nil, // no VK command for mini app path
 		Operation:        opType,
@@ -509,9 +736,11 @@ func (h *Handler) createChatMessage(w http.ResponseWriter, r *http.Request) {
 		ConversationSource: domain.ConversationSourceMiniApp,
 		ExternalThreadID:   conversationID,
 	})
+	metrics.ObserveProductPromptLength("miniapp", string(domain.OperationTextGenerate), string(domain.ModalityText), req.Prompt)
 
 	job, err := h.deps.Orchestrator.CreateJob(r.Context(), joborchestrator.CreateJobInput{
 		UserID:         user.ID,
+		Source:         "miniapp",
 		VKPeerID:       vkUserID,
 		CommandID:      uuid.Nil,
 		Operation:      domain.OperationTextGenerate,
@@ -883,6 +1112,7 @@ func (h *Handler) createPaymentIntent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if h.deps.Payment == nil {
+		metrics.ObserveProductEvent("miniapp", "payment", "intent_create", "top_up", "credits", "service_unavailable")
 		writeError(w, http.StatusServiceUnavailable, "service unavailable")
 		return
 	}
@@ -1049,19 +1279,26 @@ func (h *Handler) writePaymentError(w http.ResponseWriter, err error) {
 }
 
 func (h *Handler) getArtifact(w http.ResponseWriter, r *http.Request) {
+	resultLabel := "success"
+	defer func() {
+		metrics.ObserveProductEvent("miniapp", "artifact", "access", "artifact_access", "artifact", resultLabel)
+	}()
 	if h.deps.Artifacts == nil || h.deps.Objects == nil {
+		resultLabel = "service_unavailable"
 		writeError(w, http.StatusServiceUnavailable, "artifact storage unavailable")
 		return
 	}
 
 	vkUserID, ok := vkUserIDFromCtx(r.Context())
 	if !ok {
+		resultLabel = "unauthorized"
 		writeError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
 
 	artID, err := uuid.Parse(r.PathValue("id"))
 	if err != nil {
+		resultLabel = "invalid_id"
 		writeError(w, http.StatusBadRequest, "invalid artifact id")
 		return
 	}
@@ -1069,8 +1306,10 @@ func (h *Handler) getArtifact(w http.ResponseWriter, r *http.Request) {
 	user, err := h.deps.Users.GetByVKUserID(r.Context(), vkUserID)
 	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
+			resultLabel = "not_found"
 			writeError(w, http.StatusNotFound, "not found")
 		} else {
+			resultLabel = "error"
 			writeError(w, http.StatusInternalServerError, "internal error")
 		}
 		return
@@ -1079,18 +1318,22 @@ func (h *Handler) getArtifact(w http.ResponseWriter, r *http.Request) {
 	art, err := h.deps.Artifacts.GetByID(r.Context(), artID)
 	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
+			resultLabel = "not_found"
 			writeError(w, http.StatusNotFound, "not found")
 		} else {
+			resultLabel = "error"
 			writeError(w, http.StatusInternalServerError, "internal error")
 		}
 		return
 	}
 
 	if art.OwnerUserID != user.ID {
+		resultLabel = "not_found"
 		writeError(w, http.StatusNotFound, "not found")
 		return
 	}
 	if !h.artifactVisible(r.Context(), art, user.ID) {
+		resultLabel = "not_visible"
 		writeError(w, http.StatusNotFound, "not found")
 		return
 	}
@@ -1098,6 +1341,7 @@ func (h *Handler) getArtifact(w http.ResponseWriter, r *http.Request) {
 	data, err := h.deps.Objects.GetObject(r.Context(), art.StorageBucket, art.StorageKey)
 	if err != nil {
 		h.logger.Error("miniapp: get artifact object failed", slog.String("error", err.Error()))
+		resultLabel = "error"
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}

@@ -1,0 +1,100 @@
+groups:
+  - name: product-statistics
+    rules:
+      - record: product:job_success_ratio:30m
+        expr: |
+          sum(increase(vkagg_product_events_total{journey="job",step="terminal",result="succeeded"}[30m]))
+            /
+          clamp_min(sum(increase(vkagg_product_events_total{journey="job",step="terminal"}[30m])), 1)
+
+      - record: product:frontend_api_latency_p95:5m
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum(rate(vkagg_product_frontend_api_duration_seconds_bucket[5m])) by (le)
+          )
+
+      - record: product:prompt_length_p95:15m
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum(rate(vkagg_product_prompt_length_chars_bucket[15m])) by (le)
+          )
+
+      - alert: ProductJobSuccessRateLow
+        expr: |
+          product:job_success_ratio:30m < 0.95
+            and
+          sum(increase(vkagg_product_events_total{journey="job",step="terminal"}[30m])) > 10
+        for: 10m
+        labels:
+          severity: critical
+          surface: product
+        annotations:
+          summary: Низкая доля успешных генераций
+          description: За последние 30 минут больше 10 jobs дошли до terminal state, но доля succeeded ниже 95%.
+          impact: Пользователи VK Bot или Mini App создают jobs, но заметная часть не получает успешный результат.
+          dashboard: Grafana -> Product Observability / Product Statistics, Jobs Worker, Providers
+          action: Проверь Product Statistics success ratio, затем Jobs Worker DLQ/retry, Providers error/rate-limit и delivery failures. Не меняй баланс вручную; billing исправляй только ledger-safe путем.
+          safe_logs: В чат отправляй только surface, operation, modality, result, error_class и counts. Не отправляй prompts, job_id, user_id, raw provider payloads или private artifact URLs.
+
+      - alert: ProductTrafficWithoutSuccessfulJobs
+        expr: |
+          sum(increase(vkagg_product_active_user_events_total[2h])) > 5
+            and
+          sum(increase(vkagg_product_events_total{journey="job",step="terminal",result="succeeded"}[2h])) == 0
+        for: 10m
+        labels:
+          severity: critical
+          surface: product
+        annotations:
+          summary: Есть создание jobs, но нет успешных результатов
+          description: За 2 часа появились active-user job events, но не было ни одного terminal succeeded.
+          impact: >
+            Основной пользовательский путь может быть сломан: пользователи запускают генерации, но не получают результат.
+          dashboard: Grafana -> Product Observability / Product Statistics, Jobs Worker
+          action: Проверь worker, queue age, DLQ, provider availability, moderation rejects и delivery. Начинай с последнего deploy/config change и состояния Redis/Postgres.
+          safe_logs: Можно отправлять только aggregate counts, statuses и sanitized error_class. Нельзя отправлять prompts, launch params, job/user ids, provider responses, artifact URLs.
+
+      - alert: ProductFrontendApiLatencyHigh
+        expr: product:frontend_api_latency_p95:5m > 2
+        for: 10m
+        labels:
+          severity: warning
+          surface: miniapp
+        annotations:
+          summary: Mini App видит медленные API ответы
+          description: Клиентская p95 latency по безопасным route templates выше 2 секунд.
+          impact: Пользовательский путь в Mini App ощущается медленным; пользователи могут повторять действия и создавать лишнюю нагрузку.
+          dashboard: Grafana -> Product Observability / Product Statistics, Mini App Frontend, Product Health
+          action: Найди route/status в Product Statistics, затем проверь API latency, Postgres/Redis, queue pressure и browser console error class.
+          safe_logs: Отправляй route template, status и latency bucket. Не отправляй full URL, launch params, request body, prompts, cookies или user ids.
+
+      - alert: ProductPaymentIntentErrorSpike
+        expr: |
+          sum(increase(vkagg_product_events_total{journey="payment",step="intent_create",result=~"error|provider_error|invalid_product|forbidden"}[10m])) > 3
+        for: 5m
+        labels:
+          severity: critical
+          surface: payments
+        annotations:
+          summary: Ошибки создания платежных intent выросли
+          description: За 10 минут несколько payment intent create завершились ошибкой.
+          impact: Пользователи могут не пополнить баланс, а jobs могут оставаться в awaiting_payment.
+          dashboard: Grafana -> Product Observability / Product Statistics, Payments Billing
+          action: Проверь active payment products, provider-webhook/API health, YooKassa adapter errors и receipt contact validation. Не начисляй кредиты по frontend redirect.
+          safe_logs: В чат можно отправлять source/result counts и provider operation error_class. Нельзя отправлять YooKassa payload, Basic Auth, shop secret, payment_id, user_id или receipt contacts.
+
+      - alert: ProductPromptLengthVeryHigh
+        expr: product:prompt_length_p95:15m > 8000
+        for: 15m
+        labels:
+          severity: warning
+          surface: product
+        annotations:
+          summary: p95 длины prompt слишком высокий
+          description: Агрегированный p95 prompt length выше 8000 символов без сохранения самих prompt text.
+          impact: Длинные запросы могут повышать стоимость, latency, rate-limit риск и нагрузку на moderation/provider path.
+          dashboard: Grafana -> Product Observability / Product Statistics, Providers
+          action: Проверь, не идет ли abuse/автоматический спам; при необходимости ужесточи лимиты длины prompt или rate limits по surface/modality.
+          safe_logs: Отправляй только buckets/counts и surface/operation/modality. Не отправляй prompt text, launch params, user ids или provider request body.

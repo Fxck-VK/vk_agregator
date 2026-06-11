@@ -1,7 +1,7 @@
 {
   "schema_version": 3,
-  "updated_at": "2026-06-10T22:58:20+03:00",
-  "branch": "fastlife_dev",
+  "updated_at": "2026-06-11T20:24:00+03:00",
+  "branch": "feature/integration-web-backend",
   "git_ref_policy": "Use git rev-parse HEAD/origin/main for moving SHAs; this file does not track branch head commits.",
   "purpose": "Minimal machine-readable current context and routing for agents.",
   "read_policy": {
@@ -27,7 +27,7 @@
     "history_read_condition": "Only read archive/logs when explicitly asked for history, debugging a repeated known error, regression archaeology, or old audit details."
   },
   "progress": {
-    "current_focus": "YooKassa billing and shared VK Bot/Mini App top-up rollout",
+    "current_focus": "Shared referral activation rollout and product statistics observability merged in feature/integration-web-backend",
     "vk_bot_video_mode": {
       "status": "prunaai_button_enabled",
       "summary": "VK video model picker exposes PrunaAI and Back. PrunaAI stores peer-scoped video mode; the next plain text creates a video_generate Job through worker/provider flow. Stale Sora/Kling/Seedance/Haiuo payloads fall back to Show Menu and do not create Jobs. VK video delivery supports VK_VIDEO_DELIVERY_MODE=doc for mp4 file attachments and VK_VIDEO_DELIVERY_MODE=video for native VK video attachments through VK_VIDEO_ACCESS_TOKEN.",
@@ -115,6 +115,22 @@
   },
   "schemas": {
     "error": ".agents/schemas/error.schema.json"
+  },
+  "active_plans": {
+    "product_statistics_observability": {
+      "status": "complete",
+      "plan": ".agents/plans/product_statistics_observability.json",
+      "schema": ".agents/schemas/product_observability_plan.schema.json",
+      "mode": "IMPLEMENT",
+      "runtime_target": "vps_docker_compose",
+      "notes": [
+        "Product statistics observability implementation is complete in the local repository and should be treated as current context.",
+        "The previous product_observability plan was complete and removed from .agents/plans to avoid stale active context.",
+        "Keep implementation local-repository first unless a later task explicitly asks for VPS or Cloudflare changes.",
+        "Do not expose metrics/Grafana/Prometheus/Loki/Tempo publicly.",
+        "Do not log or commit secrets, prompts, full launch params, raw PII, raw provider payloads or raw payment payloads."
+      ]
+    }
   },
   "archive": {
     "root": "docs/archive",

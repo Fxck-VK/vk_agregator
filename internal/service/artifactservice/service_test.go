@@ -4,6 +4,8 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -86,5 +88,27 @@ func TestSaveRemoteArtifact(t *testing.T) {
 	}
 	if _, ok := store.Get(art.StorageBucket, art.StorageKey); !ok {
 		t.Fatalf("remote bytes not stored")
+	}
+}
+
+func TestSaveRemoteArtifactRedactsURLFromDownloadError(t *testing.T) {
+	repo := memory.NewArtifactRepo()
+	store := memory.NewObjectStore()
+	dl := stubDownloader{err: errors.New("provider fetch failed for https://provider.example/private/output.png?token=secret")}
+	svc := artifactservice.New(repo, store, testBucket, artifactservice.WithDownloader(dl))
+	owner := uuid.New()
+
+	_, err := svc.SaveRemoteArtifact(context.Background(), owner, nil, domain.ArtifactKindOutput, domain.MediaTypeImage, "https://provider.example/private/output.png?token=secret")
+	if err == nil {
+		t.Fatal("expected download error")
+	}
+	msg := err.Error()
+	for _, forbidden := range []string{"provider.example", "private/output.png", "token=secret"} {
+		if strings.Contains(msg, forbidden) {
+			t.Fatalf("error leaked %q in %q", forbidden, msg)
+		}
+	}
+	if !strings.Contains(msg, "[redacted-url]") {
+		t.Fatalf("error was not redacted: %q", msg)
 	}
 }

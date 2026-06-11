@@ -126,6 +126,9 @@ protocol: $TunnelProtocol
 
 ingress:
   - hostname: $Hostname
+    path: ^/metrics(?:$|/)
+    service: http_status:404
+  - hostname: $Hostname
     service: $LocalUrl
   - service: http_status:404
 "@

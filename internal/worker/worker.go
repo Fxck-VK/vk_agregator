@@ -20,6 +20,7 @@ import (
 	"log/slog"
 	"net/http"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -291,15 +292,22 @@ func (r *Registry) record(name domain.ProviderName, started time.Time, err error
 	if err == nil {
 		state.failures = 0
 		state.openedUntil = time.Time{}
+		metrics.ProviderCircuitState.WithLabelValues(string(name), "all").Set(0)
 		return
 	}
 	if !isRetryable(classOf(err)) {
+		metrics.ProviderCircuitState.WithLabelValues(string(name), "all").Set(0)
 		return
 	}
 	state.failures++
 	if state.failures >= 2 {
 		state.openedUntil = r.now().Add(time.Duration(state.failures) * 30 * time.Second)
 	}
+	open := 0.0
+	if !state.openedUntil.IsZero() && r.now().Before(state.openedUntil) {
+		open = 1
+	}
+	metrics.ProviderCircuitState.WithLabelValues(string(name), "all").Set(open)
 }
 
 type observedProvider struct {
@@ -318,6 +326,7 @@ func (p *observedProvider) Submit(ctx context.Context, req domain.ProviderReques
 	started := p.registry.now()
 	task, err := p.provider.Submit(ctx, req)
 	p.registry.record(p.provider.Name(), started, err)
+	recordProviderCall(p.provider.Name(), req.ModelCode, req.Operation, started, err, "")
 	return task, err
 }
 func (p *observedProvider) Poll(ctx context.Context, ref domain.ProviderTaskRef) (domain.ProviderTaskResult, error) {
@@ -362,19 +371,39 @@ func (p *routedProvider) Estimate(ctx context.Context, req domain.ProviderReques
 }
 func (p *routedProvider) Submit(ctx context.Context, req domain.ProviderRequest) (domain.ProviderTask, error) {
 	var last error
-	for _, candidate := range p.candidates {
+	for idx, candidate := range p.candidates {
 		started := p.registry.now()
 		task, err := candidate.provider.Submit(ctx, req)
 		p.registry.record(candidate.name, started, err)
+		recordProviderCall(candidate.name, req.ModelCode, req.Operation, started, err, "")
 		if err == nil {
 			if task.Provider == "" {
 				task.Provider = candidate.name
+			}
+			if candidate.cost > 0 {
+				model := providerMetricModel(task.ModelCode, req.ModelCode)
+				metrics.ProviderEstimatedCost.WithLabelValues(string(candidate.name), model, operationMetricLabel(req.Operation), "credits").Add(float64(candidate.cost))
 			}
 			return task, nil
 		}
 		last = err
 		if !isFallbackError(err) {
 			break
+		}
+		if idx+1 < len(p.candidates) {
+			metrics.ProviderFallback.WithLabelValues(
+				string(candidate.name),
+				string(p.candidates[idx+1].name),
+				operationMetricLabel(req.Operation),
+				string(classOf(err)),
+			).Inc()
+		} else {
+			metrics.ProviderFallback.WithLabelValues(
+				string(candidate.name),
+				"none",
+				operationMetricLabel(req.Operation),
+				"exhausted",
+			).Inc()
 		}
 	}
 	if last == nil {
@@ -788,6 +817,130 @@ func classOf(err error) domain.ProviderErrorClass {
 	return domain.ProviderErrInternal
 }
 
+func recordProviderCall(provider domain.ProviderName, model string, operation domain.OperationType, started time.Time, err error, result string) {
+	if result == "" {
+		if err == nil {
+			result = "success"
+		} else {
+			result = "error"
+		}
+	}
+	providerLabel := providerMetricProvider(provider)
+	modelLabel := providerMetricModel(model)
+	operationLabel := operationMetricLabel(operation)
+	metrics.ProviderRequests.WithLabelValues(providerLabel, modelLabel, operationLabel, result).Inc()
+	if !started.IsZero() {
+		duration := time.Since(started)
+		if duration > 0 {
+			metrics.ProviderRequestDuration.WithLabelValues(providerLabel, modelLabel, operationLabel).Observe(duration.Seconds())
+		}
+	}
+	if err == nil {
+		return
+	}
+	class := classOf(err)
+	metrics.ProviderErrors.WithLabelValues(providerLabel, modelLabel, operationLabel, string(class)).Inc()
+	if class == domain.ProviderErrRateLimited {
+		metrics.ProviderRateLimits.WithLabelValues(providerLabel, modelLabel, operationLabel).Inc()
+	}
+}
+
+func recordProviderPoll(provider domain.ProviderName, model string, operation domain.OperationType, started time.Time, res domain.ProviderTaskResult, err error) {
+	result := "success"
+	if err != nil {
+		result = "error"
+	} else if res.Status != "" {
+		result = string(res.Status)
+	}
+	recordProviderCall(provider, model, operation, started, err, result)
+	if err == nil && res.Status == domain.ProviderTaskFailed && res.ErrorClass != "" {
+		providerLabel := providerMetricProvider(provider)
+		modelLabel := providerMetricModel(model)
+		operationLabel := operationMetricLabel(operation)
+		metrics.ProviderErrors.WithLabelValues(providerLabel, modelLabel, operationLabel, string(res.ErrorClass)).Inc()
+		if res.ErrorClass == domain.ProviderErrRateLimited {
+			metrics.ProviderRateLimits.WithLabelValues(providerLabel, modelLabel, operationLabel).Inc()
+		}
+	}
+}
+
+func recordProviderOutputs(pt *domain.ProviderTask, job *domain.Job, res domain.ProviderTaskResult) {
+	if pt == nil || job == nil {
+		return
+	}
+	count := float64(len(res.OutputURLs))
+	if count <= 0 {
+		return
+	}
+	providerLabel := providerMetricProvider(pt.Provider)
+	modelLabel := providerMetricModel(pt.ModelCode)
+	operationLabel := operationMetricLabel(job.OperationType)
+	switch job.Modality {
+	case domain.ModalityImage:
+		metrics.ProviderImages.WithLabelValues(providerLabel, modelLabel, operationLabel).Add(count)
+	case domain.ModalityVideo:
+		metrics.ProviderVideos.WithLabelValues(providerLabel, modelLabel, operationLabel).Add(count)
+	}
+}
+
+func providerMetricProvider(provider domain.ProviderName) string {
+	if provider == "" {
+		return "unknown"
+	}
+	return metricLabel(string(provider))
+}
+
+func providerMetricModel(models ...string) string {
+	for _, model := range models {
+		if trimmed := strings.TrimSpace(model); trimmed != "" {
+			return metricLabel(trimmed)
+		}
+	}
+	return "default"
+}
+
+func operationMetricLabel(operation domain.OperationType) string {
+	if operation == "" {
+		return "unknown"
+	}
+	return metricLabel(string(operation))
+}
+
+func modalityMetricLabel(modality domain.Modality) string {
+	if modality == "" {
+		return "unknown"
+	}
+	return metricLabel(string(modality))
+}
+
+func metricLabel(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	if value == "" {
+		return "unknown"
+	}
+	var b strings.Builder
+	for _, r := range value {
+		switch {
+		case r >= 'a' && r <= 'z':
+			b.WriteRune(r)
+		case r >= '0' && r <= '9':
+			b.WriteRune(r)
+		case r == '_' || r == '-' || r == '.' || r == ':' || r == '/':
+			b.WriteRune(r)
+		default:
+			b.WriteByte('_')
+		}
+		if b.Len() >= 96 {
+			break
+		}
+	}
+	out := strings.Trim(b.String(), "_")
+	if out == "" {
+		return "unknown"
+	}
+	return out
+}
+
 func (p *processor) providerCallContext(ctx context.Context) (context.Context, context.CancelFunc) {
 	if p.callTimeout <= 0 {
 		return ctx, func() {}
@@ -801,10 +954,32 @@ func (p *processor) setStatus(ctx context.Context, job *domain.Job, to domain.Jo
 	if job.Status == to {
 		return nil
 	}
+	from := job.Status
 	if err := p.jobs.UpdateStatus(ctx, job.ID, job.Status, to, errCode, errMsg); err != nil {
 		return err
 	}
 	job.Status = to
+	metrics.JobStatusCurrent.WithLabelValues(string(from), operationMetricLabel(job.OperationType), modalityMetricLabel(job.Modality)).Dec()
+	metrics.JobStatusCurrent.WithLabelValues(string(to), operationMetricLabel(job.OperationType), modalityMetricLabel(job.Modality)).Inc()
+	if to.IsTerminal() && !job.CreatedAt.IsZero() {
+		duration := time.Since(job.CreatedAt)
+		if duration > 0 {
+			metrics.JobDuration.WithLabelValues(operationMetricLabel(job.OperationType), modalityMetricLabel(job.Modality), string(to)).Observe(duration.Seconds())
+		}
+	}
+	if to == domain.JobStatusResultReady {
+		metrics.ObserveProductEvent("worker", "job", "result_ready", operationMetricLabel(job.OperationType), modalityMetricLabel(job.Modality), "success")
+	}
+	if to.IsTerminal() {
+		metrics.ObserveProductEvent("worker", "job", "terminal", operationMetricLabel(job.OperationType), modalityMetricLabel(job.Modality), string(to))
+	}
+	if to == domain.JobStatusRejected {
+		reason := errCode
+		if reason == "" {
+			reason = "rejected"
+		}
+		metrics.JobRejected.WithLabelValues(metricLabel(reason), modalityMetricLabel(job.Modality)).Inc()
+	}
 	return nil
 }
 
@@ -843,7 +1018,9 @@ func (p *processor) pollOnce(ctx context.Context, job *domain.Job, pt *domain.Pr
 		attribute.String("provider.external_id", pt.ExternalID),
 		tracing.CorrelationAttr(job.CorrelationID),
 	)
+	started := time.Now()
 	res, err := provider.Poll(pollCtx, domain.ProviderTaskRef{Provider: pt.Provider, ExternalID: pt.ExternalID})
+	recordProviderPoll(pt.Provider, pt.ModelCode, job.OperationType, started, res, err)
 	if err != nil {
 		tracing.RecordError(span, err)
 		span.End()
@@ -877,6 +1054,7 @@ func (p *processor) applyResult(ctx context.Context, job *domain.Job, pt *domain
 
 	switch res.Status {
 	case domain.ProviderTaskSucceeded:
+		recordProviderOutputs(pt, job, res)
 		if err := p.saveOutputs(ctx, job, res.OutputURLs); err != nil {
 			// A download failure is retryable provider-side.
 			return p.handleFailure(ctx, job, task, domain.ProviderErrOutputDownloadFailed, err.Error())
@@ -1033,7 +1211,12 @@ func (p *processor) releaseReserved(ctx context.Context, job *domain.Job) error 
 	if p.releaser == nil || job.CostReserved <= 0 || job.CostCaptured > 0 {
 		return nil
 	}
-	return p.releaser.ReleaseForJob(ctx, job.ID)
+	if err := p.releaser.ReleaseForJob(ctx, job.ID); err != nil {
+		metrics.BillingReleases.WithLabelValues(operationMetricLabel(job.OperationType), "error").Inc()
+		return err
+	}
+	metrics.BillingReleases.WithLabelValues(operationMetricLabel(job.OperationType), "success").Inc()
+	return nil
 }
 
 func (p *processor) shouldNotifyTerminalProviderFailure(job *domain.Job) bool {
@@ -1098,9 +1281,11 @@ func (p *processor) moderateOutput(ctx context.Context, job *domain.Job) (bool, 
 	metrics.JobsTerminal.WithLabelValues(string(domain.JobStatusRejected)).Inc()
 	if p.releaser != nil {
 		if err := p.releaser.ReleaseForJob(ctx, job.ID); err != nil {
+			metrics.BillingReleases.WithLabelValues(operationMetricLabel(job.OperationType), "error").Inc()
 			tracing.RecordError(span, err)
 			return false, err
 		}
+		metrics.BillingReleases.WithLabelValues(operationMetricLabel(job.OperationType), "success").Inc()
 	}
 	return true, nil
 }

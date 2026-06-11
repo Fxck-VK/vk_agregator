@@ -1,0 +1,119 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": false,
+  "panels": [
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "targets": [
+        {
+          "expr": "sum(rate(payments_created_total[5m])) by (provider,source)",
+          "legendFormat": "created {{provider}} {{source}}",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(payments_succeeded_total[5m])) by (provider,source)",
+          "legendFormat": "succeeded {{provider}} {{source}}",
+          "refId": "B"
+        }
+      ],
+      "title": "Payment Intents",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "id": 2,
+      "targets": [
+        {
+          "expr": "payment_webhook_oldest_unprocessed_age_seconds",
+          "legendFormat": "{{provider}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Oldest Payment Webhook Age",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "id": 3,
+      "targets": [
+        {
+          "expr": "vkagg_billing_mismatches",
+          "legendFormat": "billing",
+          "refId": "A"
+        },
+        {
+          "expr": "payment_reconciliation_mismatches",
+          "legendFormat": "payment {{provider}}",
+          "refId": "B"
+        }
+      ],
+      "title": "Mismatch Gauges",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "id": 4,
+      "targets": [
+        {
+          "expr": "sum(rate(payment_refunds_total[5m])) by (provider,result)",
+          "legendFormat": "{{provider}} {{result}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Refunds",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": [
+    "payments",
+    "billing"
+  ],
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "title": "Payments and Billing",
+  "uid": "payments-billing",
+  "version": 1
+}

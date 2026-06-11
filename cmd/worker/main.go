@@ -16,6 +16,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/redis/go-redis/v9"
+
 	vkdelivery "vk-ai-aggregator/internal/adapter/delivery/vk"
 	"vk-ai-aggregator/internal/adapter/provider/deepinfra"
 	"vk-ai-aggregator/internal/adapter/provider/mock"
@@ -47,8 +49,11 @@ func main() {
 
 	rootCtx := context.Background()
 	shutdownTracing, err := tracing.Init(rootCtx, tracing.Config{
-		ServiceName: cfg.TracingServiceName + "-worker",
-		Exporter:    cfg.TracingExporter,
+		ServiceName:         cfg.TracingServiceName + "-worker",
+		Exporter:            cfg.TracingExporter,
+		OTLPEndpoint:        cfg.TracingOTLPEndpoint,
+		SampleRatio:         cfg.TracingSampleRatio,
+		CriticalSampleRatio: cfg.TracingCriticalSampleRatio,
 	}, logger)
 	if err != nil {
 		logger.Error("tracing init failed", "error", err)
@@ -179,8 +184,9 @@ func main() {
 	}
 	if hasMockProvider {
 		// The mock provider emits synthetic mock:// output URLs, so use a matching
-		// downloader to resolve them into real bytes for storage.
-		artOpts = append(artOpts, artifactservice.WithDownloader(mock.NewDownloader()))
+		// downloader to resolve them into real bytes for storage while delegating
+		// real provider URLs to the SSRF-hardened platform downloader.
+		artOpts = append(artOpts, artifactservice.WithDownloader(mock.NewDownloader(artifactservice.NewHTTPDownloader())))
 	}
 
 	var openAIModerator *openai.Moderator
@@ -296,6 +302,11 @@ func main() {
 	}
 
 	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		runQueueMetrics(readCtx, rdb, cfg.WorkerGroup, 15*time.Second, logger)
+	}()
 	for _, e := range engines {
 		wg.Add(1)
 		go func(eng *worker.Engine) {
@@ -329,7 +340,7 @@ func main() {
 	var metricsSrv *http.Server
 	if cfg.WorkerMetricsAddr != "" {
 		mux := http.NewServeMux()
-		mux.Handle("GET /metrics", metrics.Handler())
+		mux.Handle("GET /metrics", metrics.PrivateHandler())
 		mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte("ok"))
@@ -389,6 +400,28 @@ func containsProvider(names []string, want string) bool {
 		}
 	}
 	return false
+}
+
+func runQueueMetrics(ctx context.Context, rdb redis.Cmdable, group string, interval time.Duration, logger *slog.Logger) {
+	if interval <= 0 {
+		interval = 15 * time.Second
+	}
+	collect := func() {
+		if err := redisqueue.CollectMetrics(ctx, rdb, group, redisqueue.AllStreamsWithDLQ...); err != nil && logger != nil {
+			logger.Warn("queue metrics collection failed", "error", err)
+		}
+	}
+	collect()
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			collect()
+		}
+	}
 }
 
 func defaultForImageProvider(cfg config.Config, provider domain.ProviderName, providerValue, genericValue string) string {
