@@ -1,6 +1,6 @@
 set -eu
 
-receiver="null"
+receiver="noop"
 if [ "${ALERT_TELEGRAM_ENABLED:-false}" = "true" ] || [ "${ALERT_EMAIL_ENABLED:-false}" = "true" ]; then
   receiver="ops"
 fi
@@ -10,14 +10,14 @@ global:
   resolve_timeout: 5m
 
 route:
-  receiver: ${receiver}
+  receiver: "${receiver}"
   group_by: ["alertname", "surface", "severity"]
   group_wait: 15s
   group_interval: 2m
   repeat_interval: 2h
 
 receivers:
-  - name: null
+  - name: noop
 EOF
 
 if [ "${receiver}" = "ops" ]; then

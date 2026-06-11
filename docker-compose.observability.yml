@@ -1,5 +1,3 @@
-name: vk-ai-aggregator-observability
-
 services:
   prometheus:
     image: ${PROMETHEUS_IMAGE:-prom/prometheus:latest}
@@ -105,6 +103,7 @@ services:
   tempo:
     image: ${TEMPO_IMAGE:-grafana/tempo:latest}
     container_name: vk-ai-aggregator-tempo
+    user: "0:0"
     command:
       - -config.file=/etc/tempo/tempo.yml
     volumes:
@@ -159,7 +158,7 @@ services:
       - --collector.textfile.directory=/textfile
     pid: host
     volumes:
-      - /:/host:ro,rslave
+      - /:/host:ro
       - ./.runtime/observability/textfile:/textfile:ro
     restart: unless-stopped
 
