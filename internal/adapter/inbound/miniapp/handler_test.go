@@ -16,6 +16,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -1277,6 +1278,55 @@ func TestHandler_UploadArtifact_HappyPath(t *testing.T) {
 	}
 }
 
+func TestHandler_UploadArtifact_ConcurrentSmallUploadReadinessDrill(t *testing.T) {
+	fixture := newTestFixture("", nil)
+	routes := fixture.handler.Routes()
+	const requests = 16
+
+	start := make(chan struct{})
+	errs := make(chan error, requests)
+	var wg sync.WaitGroup
+	for i := 0; i < requests; i++ {
+		i := i
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			body, contentType := multipartUploadBody(t, pngBytes())
+			req := httptest.NewRequest(http.MethodPost, "/miniapp/artifacts", body)
+			req.Header.Set("Content-Type", contentType)
+			req.Header.Set("X-Launch-Params", devLaunchParams(10_000+int64(i)))
+			req.Header.Set("X-Idempotency-Key", fmt.Sprintf("upload-readiness-concurrent-%d", i))
+			w := httptest.NewRecorder()
+			routes.ServeHTTP(w, req)
+			if w.Code != http.StatusCreated {
+				errs <- fmt.Errorf("request %d status = %d body = %s", i, w.Code, w.Body.String())
+				return
+			}
+			bodyText := strings.ToLower(w.Body.String())
+			for _, forbidden := range []string{"storage", "provider", "launch", "vk_user", "url"} {
+				if strings.Contains(bodyText, forbidden) {
+					errs <- fmt.Errorf("request %d response leaked %q in %s", i, forbidden, w.Body.String())
+					return
+				}
+			}
+			errs <- nil
+		}()
+	}
+	close(start)
+	wg.Wait()
+	close(errs)
+
+	for err := range errs {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := fixture.objects.Len(); got != requests {
+		t.Fatalf("stored objects = %d, want %d owner-isolated uploads", got, requests)
+	}
+}
+
 func TestHandler_UploadArtifact_RejectsWrongMime(t *testing.T) {
 	routes := newTestHandler("").Routes()
 	body, contentType := multipartUploadBody(t, []byte("not an image"))
@@ -1292,6 +1342,32 @@ func TestHandler_UploadArtifact_RejectsWrongMime(t *testing.T) {
 	}
 	if !strings.Contains(w.Body.String(), domain.JobErrMediaUploadUnsupported) {
 		t.Fatalf("expected safe unsupported upload error, got %s", w.Body.String())
+	}
+}
+
+func TestHandler_UploadArtifact_InvalidFloodDoesNotStoreObjects(t *testing.T) {
+	fixture := newTestFixture("", nil)
+	routes := fixture.handler.Routes()
+	const requests = 24
+
+	for i := 0; i < requests; i++ {
+		body, contentType := multipartUploadBody(t, []byte("not an image"))
+		req := httptest.NewRequest(http.MethodPost, "/miniapp/artifacts", body)
+		req.Header.Set("Content-Type", contentType)
+		req.Header.Set("X-Launch-Params", devLaunchParams(20_000+int64(i)))
+		req.Header.Set("X-Idempotency-Key", fmt.Sprintf("upload-readiness-invalid-%d", i))
+		w := httptest.NewRecorder()
+		routes.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("request %d expected 400, got %d: %s", i, w.Code, w.Body.String())
+		}
+		if !strings.Contains(w.Body.String(), domain.JobErrMediaUploadUnsupported) {
+			t.Fatalf("request %d expected safe unsupported upload error, got %s", i, w.Body.String())
+		}
+	}
+	if got := fixture.objects.Len(); got != 0 {
+		t.Fatalf("invalid upload flood stored %d objects, want 0", got)
 	}
 }
 
@@ -1311,6 +1387,46 @@ func TestHandler_UploadArtifact_RejectsOversize(t *testing.T) {
 	}
 	if !strings.Contains(w.Body.String(), domain.JobErrMediaUploadTooLarge) {
 		t.Fatalf("expected safe too-large upload error, got %s", w.Body.String())
+	}
+}
+
+func TestHandler_UploadArtifact_DuplicateReferenceBurstReusesArtifact(t *testing.T) {
+	fixture := newTestFixture("", nil)
+	routes := fixture.handler.Routes()
+	const requests = 8
+	var first uuid.UUID
+
+	for i := 0; i < requests; i++ {
+		body, contentType := multipartUploadBody(t, pngBytes())
+		req := httptest.NewRequest(http.MethodPost, "/miniapp/artifacts", body)
+		req.Header.Set("Content-Type", contentType)
+		req.Header.Set("X-Launch-Params", devLaunchParams(30_000))
+		req.Header.Set("X-Idempotency-Key", fmt.Sprintf("upload-readiness-duplicate-%d", i))
+		w := httptest.NewRecorder()
+		routes.ServeHTTP(w, req)
+
+		if w.Code != http.StatusCreated {
+			t.Fatalf("request %d expected 201, got %d: %s", i, w.Code, w.Body.String())
+		}
+		var resp struct {
+			ArtifactID uuid.UUID `json:"artifact_id"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("request %d invalid response json: %v", i, err)
+		}
+		if resp.ArtifactID == uuid.Nil {
+			t.Fatalf("request %d returned nil artifact id", i)
+		}
+		if i == 0 {
+			first = resp.ArtifactID
+			continue
+		}
+		if resp.ArtifactID != first {
+			t.Fatalf("request %d got artifact %s, want reused %s", i, resp.ArtifactID, first)
+		}
+	}
+	if got := fixture.objects.Len(); got != 1 {
+		t.Fatalf("duplicate upload burst stored %d objects, want 1", got)
 	}
 }
 

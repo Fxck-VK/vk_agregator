@@ -969,6 +969,99 @@ Commit:
 - Push only if explicitly allowed.
 ```
 
+### Stage 10 Readiness Drill Coverage And Rollout Checklist
+
+Decision date: 2026-06-12.
+
+Scope: test-only and operational documentation. No live VK, YooKassa or paid
+provider calls are part of this stage.
+
+#### Bounded Local Synthetic Coverage
+
+The local readiness drill uses in-memory repositories, mock providers and mock
+object storage only:
+
+- `internal/adapter/inbound/miniapp` covers:
+  - concurrent small reference-image uploads;
+  - invalid upload floods that must not store objects;
+  - duplicate reference upload bursts that reuse the same-user artifact;
+  - oversized upload rejection with a safe public error.
+- `internal/service/joborchestrator` covers:
+  - capacity/backpressure rejection before job persistence, reservation and
+    outbox enqueue;
+  - active video job limit rejection before reservation;
+  - idempotent existing job replay bypassing transient capacity pressure.
+- `internal/worker` covers:
+  - provider invalid video output fails closed before delivery;
+  - provider timeout/rate-limit behavior remains bounded;
+  - required probe missing or failed probe does not enqueue delivery;
+  - transcode policy disabled fails closed;
+  - transcode concurrency pressure returns a safe retry-later class;
+  - provider calls receive only safe product-level params;
+  - reservations are released on terminal media failure.
+- `internal/worker/delivery` covers:
+  - delivery retry failures do not capture credits early;
+  - terminal delivery failure releases without duplicate capture;
+  - raw provider video is not delivered unless policy and probe allow it.
+- `internal/service/maintenance` covers:
+  - cleanup deletes only repository-selected inactive media candidates;
+  - cleanup is disabled when retention policy is disabled.
+
+#### Expected Safe Outcomes
+
+- API upload memory remains bounded by request body limits and concurrency
+  guards.
+- Invalid uploads are rejected before storage, job creation, reservation or
+  provider submission.
+- Duplicate same-user reference uploads reuse policy-compatible artifacts
+  without exposing hashes or storage keys.
+- Backpressure/capacity rejection returns a safe retry-later path before paid
+  work.
+- Provider, probe, transcode and delivery failures do not capture credits before
+  safe delivery.
+- Metrics are emitted only with bounded labels; no user ids, artifact ids, job
+  ids, prompts, raw URLs, object keys or raw errors are label values.
+
+#### Production Rollout Checklist
+
+1. Dark-launch metrics first:
+   - deploy dashboards and alerts;
+   - verify `/metrics`, Grafana, Prometheus, Alertmanager and exporters stay
+     private;
+   - watch upload validation, media policy decisions, queue backlog, provider
+     waste and delivery/capture gap.
+2. Enable upload validation before provider rollout:
+   - keep user uploads image-only;
+   - keep edge/proxy body limits at or below backend limits;
+   - monitor upload rejection reasons and MIME classes.
+3. Enable provider contracts:
+   - allow only explicit provider/model/duration/aspect/resolution contracts;
+   - keep provider attempts and fallback attempts conservative;
+   - reject unsupported video specs before provider submit.
+4. Enable probe:
+   - set `MEDIA_VIDEO_PROBE_POLICY=probe_required` for production;
+   - verify ffprobe path, timeout and probe concurrency;
+   - monitor `media_probe_total` and probe failure alerts.
+5. Keep transcode disabled by default:
+   - set `MEDIA_VIDEO_TRANSCODE_POLICY=never` for default production rollout;
+   - use raw provider output only when contract + probe prove delivery-ready
+     media and policy allows it.
+6. Enable fallback transcode only for one model if needed:
+   - switch one curated model class to fallback;
+   - set strict concurrency and backlog limits;
+   - watch ffmpeg usage, CPU, queue backlog and provider waste.
+7. Monitor business safety:
+   - provider waste must stay near zero;
+   - delivery/capture gap must stay zero;
+   - reservations must release on fail-closed terminal media errors.
+8. Rollback and kill switches:
+   - stop new risky media jobs with queue/capacity degradation;
+   - set `MEDIA_VIDEO_TRANSCODE_POLICY=never`;
+   - set raw provider delivery to the strictest safe policy;
+   - disable or degrade a bad provider/model class through provider quality
+     guard;
+   - keep billing repair ledger-safe and never mutate balances manually.
+
 ## Stage 11 - Final Production Audit
 
 Load impact: none. Audit only.

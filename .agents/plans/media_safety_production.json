@@ -2,7 +2,7 @@
   "schema_version": 1,
   "plan_id": "media_safety_production",
   "source_plan": "docs/MEDIA_SAFETY_PRODUCTION_PLAN.md",
-  "updated_at": "2026-06-12T22:06:00+03:00",
+  "updated_at": "2026-06-12T22:18:30+03:00",
   "mode": "IMPLEMENT",
   "security_invariants": [
     "vk_bot_and_miniapp_do_not_call_providers_or_media_tools_directly",
@@ -633,6 +633,87 @@
         }
       ],
       "push_allowed": false,
+      "errors": []
+    },
+    {
+      "id": "stage_10",
+      "name": "Load, Chaos And Rollout Drill",
+      "status": "completed",
+      "load_impact": "test_only_bounded_local",
+      "scope": [
+        "internal/adapter/inbound/miniapp/upload_readiness_drills",
+        "docs/MEDIA_SAFETY_PRODUCTION_PLAN.md/rollout_checklist",
+        "machine_readable_plan"
+      ],
+      "policy_decisions": [
+        "readiness drills use in-memory repositories, mock storage and mock providers only",
+        "concurrent small uploads stay bounded and expose only safe artifact DTOs",
+        "invalid upload floods reject before storage, job creation, reservation or provider work",
+        "duplicate same-user reference upload bursts reuse a policy-compatible artifact",
+        "rollout starts with dark-launch metrics and upload validation before provider contracts/probe/transcode",
+        "transcode remains disabled by default and fallback transcode must be one-model scoped if enabled",
+        "rollback relies on capacity degradation, transcode/raw-delivery kill switches and provider quality guard"
+      ],
+      "required_checks": [
+        "gofmt -l .",
+        "go test ./...",
+        "go vet ./...",
+        "npm --prefix web/miniapp run lint",
+        "npm --prefix web/miniapp run test",
+        "npm --prefix web/miniapp run build",
+        "git diff --check",
+        "git status --short --branch"
+      ],
+      "checks_run": [
+        {
+          "command": "go test ./internal/adapter/inbound/miniapp ./internal/service/joborchestrator ./internal/worker ./internal/service/maintenance",
+          "status": "passed",
+          "note": "initial sandbox run could not access Go build cache for miniapp; rerun with approval passed"
+        },
+        {
+          "command": "gofmt -l .",
+          "status": "replaced",
+          "note": "literal directory argument failed in this Windows environment with 'read .: Incorrect function'; all Go files were checked with rg --files -g '*.go' piped to gofmt -l"
+        },
+        {
+          "command": "$files = rg --files -g '*.go'; gofmt -l $files",
+          "status": "passed"
+        },
+        {
+          "command": "go test ./...",
+          "status": "passed",
+          "note": "ran with approval because sandbox blocks Go build cache in AppData"
+        },
+        {
+          "command": "go vet ./...",
+          "status": "passed",
+          "note": "ran with approval because sandbox blocks Go build cache in AppData"
+        },
+        {
+          "command": "npm --prefix web/miniapp run lint",
+          "status": "passed"
+        },
+        {
+          "command": "npm --prefix web/miniapp run test",
+          "status": "passed"
+        },
+        {
+          "command": "npm --prefix web/miniapp run build",
+          "status": "passed"
+        },
+        {
+          "command": "git diff --check",
+          "status": "passed",
+          "note": "line-ending warning only for docs/MEDIA_SAFETY_PRODUCTION_PLAN.md"
+        },
+        {
+          "command": "git status --short --branch",
+          "status": "passed",
+          "note": "unrelated pre-existing dirty docs/prompt files remain unstaged"
+        }
+      ],
+      "push_allowed": true,
+      "push_note": "stage prompt ended with Pushвйц, interpreted as explicit push approval",
       "errors": []
     }
   ]
