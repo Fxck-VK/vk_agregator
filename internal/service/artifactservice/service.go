@@ -110,17 +110,29 @@ func New(repo domain.ArtifactRepository, store ObjectStore, bucket string, opts 
 
 // SaveTextArtifact stores a text payload as an artifact.
 func (s *Service) SaveTextArtifact(ctx context.Context, ownerID uuid.UUID, jobID *uuid.UUID, kind domain.ArtifactKind, text string) (*domain.Artifact, error) {
-	return s.saveBytes(ctx, ownerID, jobID, kind, domain.MediaTypeText, "text/plain; charset=utf-8", []byte(text))
+	return s.saveBytes(ctx, ownerID, jobID, kind, domain.MediaTypeText, "text/plain; charset=utf-8", []byte(text), domain.ArtifactMediaMetadata{})
 }
 
 // SaveBytesArtifact stores raw bytes as an artifact of the given media type.
 func (s *Service) SaveBytesArtifact(ctx context.Context, ownerID uuid.UUID, jobID *uuid.UUID, kind domain.ArtifactKind, mediaType domain.MediaType, mimeType string, data []byte) (*domain.Artifact, error) {
-	return s.saveBytes(ctx, ownerID, jobID, kind, mediaType, mimeType, data)
+	return s.saveBytes(ctx, ownerID, jobID, kind, mediaType, mimeType, data, domain.ArtifactMediaMetadata{})
+}
+
+// SaveBytesArtifactWithMetadata stores raw bytes with safe media facts already
+// extracted by a worker-owned media pipeline.
+func (s *Service) SaveBytesArtifactWithMetadata(ctx context.Context, ownerID uuid.UUID, jobID *uuid.UUID, kind domain.ArtifactKind, mediaType domain.MediaType, mimeType string, data []byte, metadata domain.ArtifactMediaMetadata) (*domain.Artifact, error) {
+	return s.saveBytes(ctx, ownerID, jobID, kind, mediaType, mimeType, data, metadata)
 }
 
 // SaveRemoteArtifact downloads a remote URL (e.g. a provider output) and stores
 // it as an artifact. The content type from the response fills in an empty mime.
 func (s *Service) SaveRemoteArtifact(ctx context.Context, ownerID uuid.UUID, jobID *uuid.UUID, kind domain.ArtifactKind, mediaType domain.MediaType, url string) (*domain.Artifact, error) {
+	return s.SaveRemoteArtifactWithMetadata(ctx, ownerID, jobID, kind, mediaType, url, domain.ArtifactMediaMetadata{})
+}
+
+// SaveRemoteArtifactWithMetadata downloads a provider output and stores it with
+// safe metadata produced by the worker-owned media pipeline.
+func (s *Service) SaveRemoteArtifactWithMetadata(ctx context.Context, ownerID uuid.UUID, jobID *uuid.UUID, kind domain.ArtifactKind, mediaType domain.MediaType, url string, metadata domain.ArtifactMediaMetadata) (*domain.Artifact, error) {
 	ctx, span := tracing.Start(ctx, "artifact.download",
 		attribute.String("owner.id", ownerID.String()),
 		attribute.String("artifact.kind", string(kind)),
@@ -141,7 +153,7 @@ func (s *Service) SaveRemoteArtifact(ctx context.Context, ownerID uuid.UUID, job
 	if contentType == "" {
 		contentType = "application/octet-stream"
 	}
-	return s.saveBytes(ctx, ownerID, jobID, kind, mediaType, contentType, data)
+	return s.saveBytes(ctx, ownerID, jobID, kind, mediaType, contentType, data, metadata)
 }
 
 func safeDownloadError(err error) error {
@@ -157,7 +169,7 @@ func safeDownloadError(err error) error {
 
 // saveBytes computes the content hash, deduplicates by (owner, sha256), uploads
 // the bytes and records the artifact metadata.
-func (s *Service) saveBytes(ctx context.Context, ownerID uuid.UUID, jobID *uuid.UUID, kind domain.ArtifactKind, mediaType domain.MediaType, mimeType string, data []byte) (*domain.Artifact, error) {
+func (s *Service) saveBytes(ctx context.Context, ownerID uuid.UUID, jobID *uuid.UUID, kind domain.ArtifactKind, mediaType domain.MediaType, mimeType string, data []byte, metadata domain.ArtifactMediaMetadata) (*domain.Artifact, error) {
 	ctx, span := tracing.Start(ctx, "artifact.store",
 		attribute.String("owner.id", ownerID.String()),
 		attribute.String("artifact.kind", string(kind)),
@@ -205,6 +217,7 @@ func (s *Service) saveBytes(ctx context.Context, ownerID uuid.UUID, jobID *uuid.
 		SizeBytes:     int64(len(data)),
 		Status:        domain.ArtifactStatusReady,
 	}
+	artifact.ApplyMediaMetadata(metadata)
 	if err := s.repo.Create(ctx, artifact); err != nil {
 		tracing.RecordError(span, err)
 		return nil, fmt.Errorf("artifactservice: record artifact: %w", err)

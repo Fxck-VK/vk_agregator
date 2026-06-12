@@ -91,6 +91,56 @@ func TestSaveRemoteArtifact(t *testing.T) {
 	}
 }
 
+func TestSaveBytesArtifactWithMetadata(t *testing.T) {
+	repo := memory.NewArtifactRepo()
+	store := memory.NewObjectStore()
+	svc := artifactservice.New(repo, store, testBucket)
+	owner := uuid.New()
+
+	art, err := svc.SaveBytesArtifactWithMetadata(
+		context.Background(),
+		owner,
+		nil,
+		domain.ArtifactKindOutput,
+		domain.MediaTypeVideo,
+		"video/mp4",
+		[]byte("video-bytes-with-metadata"),
+		domain.ArtifactMediaMetadata{
+			Width:       1920,
+			Height:      1080,
+			DurationMS:  5000,
+			Codec:       " H.264 ",
+			Container:   "MP4",
+			BitrateBPS:  4500000,
+			ProbeStatus: domain.MediaProbePassed,
+		},
+	)
+	if err != nil {
+		t.Fatalf("save with metadata: %v", err)
+	}
+	if art.Width != 1920 || art.Height != 1080 || art.DurationMS != 5000 || art.BitrateBPS != 4500000 {
+		t.Fatalf("metadata numeric fields not stored: %+v", art)
+	}
+	if art.Codec != "h.264" || art.Container != "mp4" || art.ProbeStatus != domain.MediaProbePassed {
+		t.Fatalf("metadata tokens not normalized: %+v", art)
+	}
+}
+
+func TestSaveBytesArtifactDefaultsProbeStatus(t *testing.T) {
+	repo := memory.NewArtifactRepo()
+	store := memory.NewObjectStore()
+	svc := artifactservice.New(repo, store, testBucket)
+	owner := uuid.New()
+
+	art, err := svc.SaveBytesArtifact(context.Background(), owner, nil, domain.ArtifactKindOutput, domain.MediaTypeVideo, "video/mp4", []byte("video-bytes"))
+	if err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	if art.ProbeStatus != domain.MediaProbeUnknown {
+		t.Fatalf("ProbeStatus = %q, want unknown", art.ProbeStatus)
+	}
+}
+
 func TestSaveRemoteArtifactRedactsURLFromDownloadError(t *testing.T) {
 	repo := memory.NewArtifactRepo()
 	store := memory.NewObjectStore()

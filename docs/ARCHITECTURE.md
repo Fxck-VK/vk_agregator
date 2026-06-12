@@ -977,6 +977,11 @@ Media Pipeline
 - сохранить artifact metadata.
 ```
 
+Текущий backend foundation хранит только безопасные media facts:
+`size_bytes`, `duration_ms`, `width`, `height`, `codec`, `container`,
+`bitrate_bps`, `probe_status`. Нельзя сохранять raw ffprobe output, private
+storage paths, provider payloads, prompts или PII в artifact metadata.
+
 Таблицы:
 
 ```text
@@ -995,6 +1000,10 @@ artifacts:
   width
   height
   duration_ms
+  codec
+  container
+  bitrate_bps
+  probe_status        -- unknown, pending, passed, failed, skipped
   status
   created_at
 
@@ -1008,6 +1017,10 @@ artifact_variants:
   width
   height
   duration_ms
+  codec
+  container
+  bitrate_bps
+  probe_status
 ```
 
 ---

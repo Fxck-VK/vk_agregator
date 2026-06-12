@@ -37,6 +37,7 @@ func (r *ArtifactRepo) Create(_ context.Context, a *domain.Artifact) error {
 	if a.ID == uuid.Nil {
 		a.ID = uuid.New()
 	}
+	normalizeArtifactMetadata(a)
 	now := time.Now()
 	a.CreatedAt, a.UpdatedAt = now, now
 	r.byID[a.ID] = *a
@@ -53,6 +54,7 @@ func (r *ArtifactRepo) Update(_ context.Context, a *domain.Artifact) error {
 	if !ok {
 		return domain.ErrNotFound
 	}
+	normalizeArtifactMetadata(a)
 	a.CreatedAt = cur.CreatedAt
 	a.UpdatedAt = time.Now()
 	r.byID[a.ID] = *a
@@ -86,6 +88,7 @@ func (r *ArtifactRepo) AddVariant(_ context.Context, v *domain.ArtifactVariant) 
 	if v.ID == uuid.Nil {
 		v.ID = uuid.New()
 	}
+	normalizeArtifactVariantMetadata(v)
 	now := time.Now()
 	v.CreatedAt, v.UpdatedAt = now, now
 	r.variants[v.ArtifactID] = append(r.variants[v.ArtifactID], *v)
@@ -101,6 +104,44 @@ func (r *ArtifactRepo) ListVariants(_ context.Context, artifactID uuid.UUID) ([]
 		out = append(out, &v)
 	}
 	return out, nil
+}
+
+func normalizeArtifactMetadata(a *domain.Artifact) {
+	m := domain.ArtifactMediaMetadata{
+		Width:       a.Width,
+		Height:      a.Height,
+		DurationMS:  a.DurationMS,
+		Codec:       a.Codec,
+		Container:   a.Container,
+		BitrateBPS:  a.BitrateBPS,
+		ProbeStatus: a.ProbeStatus,
+	}.Normalize()
+	a.Width = m.Width
+	a.Height = m.Height
+	a.DurationMS = m.DurationMS
+	a.Codec = m.Codec
+	a.Container = m.Container
+	a.BitrateBPS = m.BitrateBPS
+	a.ProbeStatus = m.ProbeStatus
+}
+
+func normalizeArtifactVariantMetadata(v *domain.ArtifactVariant) {
+	m := domain.ArtifactMediaMetadata{
+		Width:       v.Width,
+		Height:      v.Height,
+		DurationMS:  v.DurationMS,
+		Codec:       v.Codec,
+		Container:   v.Container,
+		BitrateBPS:  v.BitrateBPS,
+		ProbeStatus: v.ProbeStatus,
+	}.Normalize()
+	v.Width = m.Width
+	v.Height = m.Height
+	v.DurationMS = m.DurationMS
+	v.Codec = m.Codec
+	v.Container = m.Container
+	v.BitrateBPS = m.BitrateBPS
+	v.ProbeStatus = m.ProbeStatus
 }
 
 // ObjectStore is an in-memory object store satisfying the artifact service's

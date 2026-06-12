@@ -138,6 +138,12 @@ Override these values when needed:
 | `MODERATION_PROVIDER` | `keyword` | Output moderation provider: `keyword` or `openai` |
 | `OPENAI_MODERATION_MODEL` | `omni-moderation-latest` | OpenAI moderation model |
 | `ARTIFACT_SCANNER` | `none` | Artifact scanner: `none` or `openai` |
+| `MEDIA_PIPELINE_ENABLED` | `false` | Worker-owned video/media probe/transcode pipeline switch; when false, local dev does not need ffmpeg/ffprobe |
+| `FFPROBE_PATH` / `FFMPEG_PATH` | `ffprobe` / `ffmpeg` | Tool paths used only after `MEDIA_PIPELINE_ENABLED=true`; VK Bot and Mini App must not call these directly |
+| `MEDIA_MAX_VIDEO_SIZE_BYTES` / `MEDIA_MAX_VIDEO_DURATION_SEC` | `268435456` / `60` | Hard video input/output limits for future probe/transcode stages |
+| `MEDIA_MAX_VIDEO_WIDTH` / `MEDIA_MAX_VIDEO_HEIGHT` / `MEDIA_MAX_VIDEO_BITRATE` | `1920` / `1080` / `12000000` | Video dimension and bitrate ceilings for future VK-ready variants |
+| `MEDIA_ALLOWED_VIDEO_CONTAINERS` / `MEDIA_ALLOWED_VIDEO_CODECS` | `mp4,mov,webm` / `h264,h265,hevc,vp8,vp9,av1` | Allowlist used by worker-owned media validation; values are normalized before use |
+| `MEDIA_PROBE_TIMEOUT` / `MEDIA_TRANSCODE_TIMEOUT` | `10s` / `10m` | Time bounds for future probe/transcode subprocesses |
 | `VK_DELIVERY_MODE` | `mock` | VK delivery adapter: `mock` or `real` |
 | `VK_ACCESS_TOKEN` / `VK_API_VERSION` | `` / `5.199` | Required for real VK `messages.send`, photo upload, mp4-as-document upload and API-side `/start` control menu responses |
 | `VK_VIDEO_DELIVERY_MODE` | `doc` | Generated video delivery: `doc` sends mp4 as a file attachment; `video` sends a native VK video attachment with inline player |

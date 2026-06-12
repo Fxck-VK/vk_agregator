@@ -133,6 +133,84 @@ func TestLoadVKVideoUploadConfig(t *testing.T) {
 	}
 }
 
+func TestLoadMediaPipelineConfig(t *testing.T) {
+	t.Setenv("MEDIA_PIPELINE_ENABLED", "true")
+	t.Setenv("FFPROBE_PATH", "/opt/bin/ffprobe")
+	t.Setenv("FFMPEG_PATH", "/opt/bin/ffmpeg")
+	t.Setenv("MEDIA_MAX_VIDEO_SIZE_BYTES", "1048576")
+	t.Setenv("MEDIA_MAX_VIDEO_DURATION_SEC", "45")
+	t.Setenv("MEDIA_MAX_VIDEO_WIDTH", "1280")
+	t.Setenv("MEDIA_MAX_VIDEO_HEIGHT", "720")
+	t.Setenv("MEDIA_MAX_VIDEO_BITRATE", "6000000")
+	t.Setenv("MEDIA_ALLOWED_VIDEO_CONTAINERS", "MP4, webm, mp4, !!!")
+	t.Setenv("MEDIA_ALLOWED_VIDEO_CODECS", "H.264, VP9, vp9")
+	t.Setenv("MEDIA_PROBE_TIMEOUT", "3s")
+	t.Setenv("MEDIA_TRANSCODE_TIMEOUT", "4m")
+
+	cfg := config.Load()
+	if !cfg.MediaPipelineEnabled {
+		t.Fatal("MediaPipelineEnabled = false, want true")
+	}
+	if cfg.FFProbePath != "/opt/bin/ffprobe" || cfg.FFmpegPath != "/opt/bin/ffmpeg" {
+		t.Fatalf("unexpected tool paths: probe=%q ffmpeg=%q", cfg.FFProbePath, cfg.FFmpegPath)
+	}
+	if cfg.MediaMaxVideoSizeBytes != 1048576 || cfg.MediaMaxVideoDurationSec != 45 {
+		t.Fatalf("unexpected media size/duration limits: size=%d duration=%d", cfg.MediaMaxVideoSizeBytes, cfg.MediaMaxVideoDurationSec)
+	}
+	if cfg.MediaMaxVideoWidth != 1280 || cfg.MediaMaxVideoHeight != 720 || cfg.MediaMaxVideoBitrate != 6000000 {
+		t.Fatalf("unexpected media dimension/bitrate limits: %dx%d bitrate=%d", cfg.MediaMaxVideoWidth, cfg.MediaMaxVideoHeight, cfg.MediaMaxVideoBitrate)
+	}
+	if !reflect.DeepEqual(cfg.MediaAllowedVideoContainers, []string{"mp4", "webm"}) {
+		t.Fatalf("containers = %#v", cfg.MediaAllowedVideoContainers)
+	}
+	if !reflect.DeepEqual(cfg.MediaAllowedVideoCodecs, []string{"h.264", "vp9"}) {
+		t.Fatalf("codecs = %#v", cfg.MediaAllowedVideoCodecs)
+	}
+	if cfg.MediaProbeTimeout != 3*time.Second || cfg.MediaTranscodeTimeout != 4*time.Minute {
+		t.Fatalf("unexpected media timeouts: probe=%s transcode=%s", cfg.MediaProbeTimeout, cfg.MediaTranscodeTimeout)
+	}
+}
+
+func TestValidateMediaPipelineDisabledAllowsMissingTools(t *testing.T) {
+	cfg := config.Config{MediaPipelineEnabled: false}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("disabled media pipeline should not require tools: %v", err)
+	}
+}
+
+func TestValidateMediaPipelineEnabledRequiresSafeBounds(t *testing.T) {
+	cfg := config.Config{
+		MediaPipelineEnabled:        true,
+		FFProbePath:                 "ffprobe",
+		FFmpegPath:                  "ffmpeg",
+		MediaMaxVideoSizeBytes:      1,
+		MediaMaxVideoDurationSec:    1,
+		MediaMaxVideoWidth:          1,
+		MediaMaxVideoHeight:         1,
+		MediaMaxVideoBitrate:        1,
+		MediaAllowedVideoContainers: []string{"mp4"},
+		MediaAllowedVideoCodecs:     []string{"h264"},
+		MediaProbeTimeout:           time.Second,
+		MediaTranscodeTimeout:       time.Second,
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("valid media pipeline config rejected: %v", err)
+	}
+
+	cfg.MediaMaxVideoBitrate = 0
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "MEDIA_MAX_VIDEO_BITRATE") {
+		t.Fatalf("expected bitrate validation error, got %v", err)
+	}
+
+	cfg.MediaMaxVideoBitrate = 1
+	cfg.MediaAllowedVideoCodecs = []string{"H264"}
+	err = cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "MEDIA_ALLOWED_VIDEO_CODECS") {
+		t.Fatalf("expected codec allowlist validation error, got %v", err)
+	}
+}
+
 func TestValidateVKVideoDeliveryMode(t *testing.T) {
 	cfg := config.Config{VKVideoDeliveryMode: "bad"}
 
