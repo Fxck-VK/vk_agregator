@@ -99,6 +99,52 @@ Carry-forward tasks:
 - Do not enable `recommendedTypeChecked` or stricter TS flags until Stage 3/4
   tests are in place; the current gate is intentionally practical, not maximal.
 
+## Stage 3 Implementation Notes
+
+Status: implemented locally on 2026-06-12.
+
+What was added:
+
+- `web/miniapp/package.json` now has `test`.
+- `web/miniapp/vitest.config.ts` was added with jsdom environment.
+- Dev dependencies were added for `vitest` and `jsdom`.
+- Four focused test files were added under `web/miniapp/src/**`.
+
+Tests now cover:
+
+- `src/api/client.ts` telemetry route sanitization: query/hash stripping,
+  UUID redaction and no prompt/launch/private fragments in telemetry route
+  labels.
+- `src/api/client.ts` launch/referral helper behavior: query/hash normalization,
+  launch params only when VK identity exists, bridge launch-param serialization
+  and public referral-code shape.
+- `src/api/client.ts` artifact URL guard: UUID-only URLs, rejecting raw URLs and
+  launch-param-bearing strings.
+- `src/chat/store.ts` localStorage safety: safe active thread ids, unsafe value
+  rejection, legacy chat content cleanup and full local cleanup.
+- `src/utils/artifactDownload.ts` filename slugging, mime extension mapping and
+  job-id fallback.
+- `src/utils/jobDisplay.ts` title truncation, prompt title selection, history
+  dedupe and count label stability.
+
+Small source changes made for testability:
+
+- Exported pure helper functions from `src/api/client.ts`:
+  `telemetryRoute`, `telemetryLabel`, `normalizeRawParams`,
+  `referralCodeFromRaw`, `launchParamsFromLocation` and
+  `stringifyBridgeLaunchParams`.
+- These exports do not change runtime behavior and do not expose secrets or
+  backend authority; they only make existing pure frontend logic testable.
+
+Carry-forward tasks:
+
+- Stage 4 should cover runtime UI behavior that unit tests do not prove:
+  VK WebView-like launch, mocked `/miniapp/*` API flows, payment unavailable
+  states, media blob `src` checks, chat polling lifecycle/reload behavior and
+  mobile overflow.
+- Consider testing `openExternalUrl` later only if bridge/window behavior can be
+  mocked without flaky browser assumptions.
+
 ## Common Rules To Include In Every Stage
 
 ```text

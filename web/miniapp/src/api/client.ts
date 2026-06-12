@@ -241,7 +241,7 @@ const TELEMETRY_ENABLED = import.meta.env.VITE_FRONTEND_TELEMETRY_ENABLED === "t
 let telemetryInstalled = false;
 const appStartedAt = performance.now();
 
-function telemetryRoute(path: string): string {
+export function telemetryRoute(path: string): string {
   const [withoutQuery] = path.split(/[?#]/, 1);
   return withoutQuery
     .split("/")
@@ -249,7 +249,7 @@ function telemetryRoute(path: string): string {
     .join("/");
 }
 
-function telemetryLabel(value: string | undefined, fallback: string): string {
+export function telemetryLabel(value: string | undefined, fallback: string): string {
   const normalized = (value ?? "").trim().toLowerCase();
   if (!normalized) return fallback;
   return normalized.replace(/[^a-z0-9_./:-]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 96) || fallback;
@@ -331,7 +331,7 @@ export function trackPaymentFlowError(step: string, error: unknown): void {
   });
 }
 
-function normalizeRawParams(raw: string): string {
+export function normalizeRawParams(raw: string): string {
   return raw.replace(/^[?#]/, "");
 }
 
@@ -341,7 +341,7 @@ function normalizeReferralCode(raw: string | null): string {
   return /^[23456789ABCDEFGHJKLMNPQRSTUVWXYZ_-]+$/.test(value) ? value : "";
 }
 
-function referralCodeFromRaw(raw: string): string {
+export function referralCodeFromRaw(raw: string): string {
   const normalized = normalizeRawParams(raw.trim());
   if (!normalized) return "";
   try {
@@ -371,7 +371,7 @@ function hasLaunchIdentity(raw: string): boolean {
   return Boolean(params.get("vk_user_id"));
 }
 
-function launchParamsFromLocation(): string {
+export function launchParamsFromLocation(): string {
   const candidates = [window.location.search, window.location.hash];
   for (const candidate of candidates) {
     const raw = normalizeRawParams(candidate);
@@ -386,7 +386,7 @@ function launchParamsFromLocation(): string {
   return "";
 }
 
-function stringifyBridgeLaunchParams(value: unknown): string {
+export function stringifyBridgeLaunchParams(value: unknown): string {
   if (!value || typeof value !== "object") return "";
   const params = new URLSearchParams();
   for (const [key, raw] of Object.entries(value as Record<string, unknown>)) {
