@@ -2,6 +2,7 @@ package worker
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"vk-ai-aggregator/internal/domain"
@@ -75,6 +76,10 @@ func (r mediaContractRegistry) modelClass(provider domain.ProviderName, model st
 	return ""
 }
 
+func (r mediaContractRegistry) videoContract(provider domain.ProviderName, model string) (*domain.ProviderMediaContract, bool) {
+	return r.find(provider, model, domain.ModalityVideo)
+}
+
 func (r mediaContractRegistry) find(provider domain.ProviderName, model string, modality domain.Modality) (*domain.ProviderMediaContract, bool) {
 	model = strings.TrimSpace(model)
 	for i := len(r.contracts) - 1; i >= 0; i-- {
@@ -114,6 +119,115 @@ func allowedToken(value string, allowed []string) bool {
 		if value == strings.ToLower(strings.TrimSpace(candidate)) {
 			return true
 		}
+	}
+	return false
+}
+
+func deliveryReadyVideoOutput(contract *domain.ProviderMediaContract, metadata domain.ArtifactMediaMetadata, sizeBytes int64) bool {
+	if contract == nil || !contract.DeliveryReadyOutput {
+		return false
+	}
+	metadata = metadata.Normalize()
+	if metadata.ProbeStatus != domain.MediaProbePassed {
+		return false
+	}
+	if !matchesMediaToken(metadata.Container, contract.ExpectedContainer) {
+		return false
+	}
+	if !matchesMediaToken(metadata.Codec, contract.ExpectedCodec) {
+		return false
+	}
+	if contract.ExpectedMaxBytes > 0 && sizeBytes > contract.ExpectedMaxBytes {
+		return false
+	}
+	if !allowedDuration(durationSeconds(metadata.DurationMS), contract.AllowedDurationsSec) {
+		return false
+	}
+	if !allowedOutputAspect(metadata.Width, metadata.Height, contract.AllowedAspectRatios) {
+		return false
+	}
+	if !allowedOutputResolution(metadata.Width, metadata.Height, contract.AllowedResolutions) {
+		return false
+	}
+	return true
+}
+
+func matchesMediaToken(value, expected string) bool {
+	expected = strings.ToLower(strings.TrimSpace(expected))
+	if expected == "" {
+		return true
+	}
+	return strings.ToLower(strings.TrimSpace(value)) == expected
+}
+
+func durationSeconds(durationMS int64) int {
+	if durationMS <= 0 {
+		return 0
+	}
+	return int((durationMS + 999) / 1000)
+}
+
+func allowedOutputAspect(width, height int, allowed []string) bool {
+	if len(allowed) == 0 {
+		return true
+	}
+	if width <= 0 || height <= 0 {
+		return false
+	}
+	actual := reducedAspect(width, height)
+	return allowedToken(actual, allowed)
+}
+
+func reducedAspect(width, height int) string {
+	divisor := gcd(width, height)
+	if divisor <= 0 {
+		return ""
+	}
+	return strconv.Itoa(width/divisor) + ":" + strconv.Itoa(height/divisor)
+}
+
+func gcd(a, b int) int {
+	if a < 0 {
+		a = -a
+	}
+	if b < 0 {
+		b = -b
+	}
+	for b != 0 {
+		a, b = b, a%b
+	}
+	return a
+}
+
+func allowedOutputResolution(width, height int, allowed []string) bool {
+	if len(allowed) == 0 {
+		return true
+	}
+	if width <= 0 || height <= 0 {
+		return false
+	}
+	for _, token := range allowed {
+		if outputResolutionMatches(width, height, token) {
+			return true
+		}
+	}
+	return false
+}
+
+func outputResolutionMatches(width, height int, token string) bool {
+	token = strings.ToLower(strings.TrimSpace(token))
+	if token == "" {
+		return false
+	}
+	if strings.HasSuffix(token, "p") {
+		maxHeight, err := strconv.Atoi(strings.TrimSuffix(token, "p"))
+		return err == nil && maxHeight > 0 && height <= maxHeight
+	}
+	if strings.Contains(token, "x") {
+		parts := strings.SplitN(token, "x", 2)
+		maxWidth, werr := strconv.Atoi(strings.TrimSpace(parts[0]))
+		maxHeight, herr := strconv.Atoi(strings.TrimSpace(parts[1]))
+		return werr == nil && herr == nil && maxWidth > 0 && maxHeight > 0 && width <= maxWidth && height <= maxHeight
 	}
 	return false
 }

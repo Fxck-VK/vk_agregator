@@ -147,12 +147,24 @@ func (d stubDownloader) Download(_ context.Context, _ string) ([]byte, string, e
 
 type fakeVideoProber struct {
 	metadata domain.ArtifactMediaMetadata
+	sequence []domain.ArtifactMediaMetadata
 	err      error
 	calls    int
 }
 
 func (p *fakeVideoProber) ProbeVideo(_ context.Context, _ []byte, _ int64) (domain.ArtifactMediaMetadata, error) {
 	p.calls++
+	if len(p.sequence) > 0 {
+		metadata := p.sequence[0]
+		p.sequence = p.sequence[1:]
+		if p.err != nil {
+			return metadata, p.err
+		}
+		if metadata.ProbeStatus == "" {
+			metadata.ProbeStatus = domain.MediaProbePassed
+		}
+		return metadata, nil
+	}
 	if p.err != nil {
 		return p.metadata, p.err
 	}
@@ -501,6 +513,156 @@ func TestVideoTranscodeCreatesVKReadyVariantBeforeDelivery(t *testing.T) {
 	}
 	if len(h.streams.byStream[redisqueue.StreamDelivery]) != 1 {
 		t.Fatalf("expected delivery enqueue after variant creation, got %v", h.streams.byStream)
+	}
+}
+
+func TestVideoFastPathSkipsTranscodeForSafeProviderOutput(t *testing.T) {
+	prober := &fakeVideoProber{metadata: safeVideoMetadata("h264")}
+	transcoder := &fakeVideoTranscoder{out: []byte("should-not-run")}
+	contract := validVideoContract(domain.ProviderMock, "mock-video")
+	h := newHarnessWithProvider(t, mock.New(), func(d *worker.Deps) {
+		d.VideoModel = "mock-video"
+		d.VideoDurationSec = 5
+		d.VideoResolution = "720p"
+		d.VideoAspectRatio = "16:9"
+		d.VideoProber = prober
+		d.VideoTranscoder = transcoder
+		d.RequireVideoProbe = true
+		d.VideoTranscodeEnabled = true
+		d.VideoTranscodePolicy = "fallback"
+		d.RawVideoDeliveryPolicy = "if_probe_passed"
+		d.ProviderMediaContracts = []domain.ProviderMediaContract{contract}
+	})
+	ctx := context.Background()
+	job := h.queueJob(t, domain.OperationVideoGenerate, domain.ModalityVideo, "safe provider mp4")
+
+	if err := h.gen.Process(ctx, taskFor(job)); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+
+	got := h.reload(t, job.ID)
+	if got.Status != domain.JobStatusResultReady {
+		t.Fatalf("status = %q, want result_ready", got.Status)
+	}
+	if prober.calls != 1 {
+		t.Fatalf("probe calls = %d, want 1", prober.calls)
+	}
+	if transcoder.calls != 0 {
+		t.Fatalf("transcoder calls = %d, want 0", transcoder.calls)
+	}
+	variants, err := h.artRepo.ListVariants(ctx, got.OutputArtifactIDs[0])
+	if err != nil {
+		t.Fatalf("list variants: %v", err)
+	}
+	if len(variants) != 0 {
+		t.Fatalf("safe fast path must not create variants, got %+v", variants)
+	}
+	if len(h.streams.byStream[redisqueue.StreamDelivery]) != 1 {
+		t.Fatalf("expected delivery enqueue after safe fast path, got %v", h.streams.byStream)
+	}
+}
+
+func TestVideoFastPathUnsafeCodecWithoutFallbackFailsClosed(t *testing.T) {
+	prober := &fakeVideoProber{metadata: safeVideoMetadata("hevc")}
+	contract := validVideoContract(domain.ProviderMock, "mock-video")
+	h := newHarnessWithProvider(t, mock.New(), func(d *worker.Deps) {
+		d.VideoModel = "mock-video"
+		d.VideoDurationSec = 5
+		d.VideoResolution = "720p"
+		d.VideoAspectRatio = "16:9"
+		d.VideoProber = prober
+		d.RequireVideoProbe = true
+		d.VideoTranscodePolicy = "never"
+		d.RawVideoDeliveryPolicy = "if_probe_passed"
+		d.ProviderMediaContracts = []domain.ProviderMediaContract{contract}
+	})
+	ctx := context.Background()
+	job := h.queueJob(t, domain.OperationVideoGenerate, domain.ModalityVideo, "unsafe codec")
+
+	if err := h.gen.Process(ctx, taskFor(job)); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+
+	got := h.reload(t, job.ID)
+	if got.Status != domain.JobStatusFailedTerminal {
+		t.Fatalf("status = %q, want failed_terminal", got.Status)
+	}
+	if got.ErrorCode != string(domain.ProviderErrMediaProbeFailed) {
+		t.Fatalf("error code = %q, want %q", got.ErrorCode, domain.ProviderErrMediaProbeFailed)
+	}
+	if len(h.streams.byStream[redisqueue.StreamDelivery]) != 0 {
+		t.Fatalf("unsafe codec must not enqueue delivery: %v", h.streams.byStream)
+	}
+	if len(h.releaser.released) != 1 || h.releaser.released[0] != job.ID {
+		t.Fatalf("expected reservation release for unsafe codec, got %v", h.releaser.released)
+	}
+}
+
+func TestVideoFastPathUnsafeCodecWithFallbackTranscodes(t *testing.T) {
+	prober := &fakeVideoProber{sequence: []domain.ArtifactMediaMetadata{
+		safeVideoMetadata("hevc"),
+		safeVideoMetadata("h264"),
+	}}
+	transcoder := &fakeVideoTranscoder{
+		out:      []byte("vk-ready-video"),
+		metadata: safeVideoMetadata("h264"),
+	}
+	contract := validVideoContract(domain.ProviderMock, "mock-video")
+	contract.TranscodeAllowed = true
+	h := newHarnessWithProvider(t, mock.New(), func(d *worker.Deps) {
+		d.VideoModel = "mock-video"
+		d.VideoDurationSec = 5
+		d.VideoResolution = "720p"
+		d.VideoAspectRatio = "16:9"
+		d.VideoProber = prober
+		d.VideoTranscoder = transcoder
+		d.RequireVideoProbe = true
+		d.VideoTranscodeEnabled = true
+		d.VideoTranscodePolicy = "fallback"
+		d.RawVideoDeliveryPolicy = "if_probe_passed"
+		d.ProviderMediaContracts = []domain.ProviderMediaContract{contract}
+	})
+	ctx := context.Background()
+	job := h.queueJob(t, domain.OperationVideoGenerate, domain.ModalityVideo, "unsafe codec fallback")
+
+	if err := h.gen.Process(ctx, taskFor(job)); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+
+	got := h.reload(t, job.ID)
+	if got.Status != domain.JobStatusResultReady {
+		t.Fatalf("status = %q, want result_ready", got.Status)
+	}
+	if prober.calls != 2 {
+		t.Fatalf("probe calls = %d, want original plus variant", prober.calls)
+	}
+	if transcoder.calls != 1 {
+		t.Fatalf("transcoder calls = %d, want 1", transcoder.calls)
+	}
+	variants, err := h.artRepo.ListVariants(ctx, got.OutputArtifactIDs[0])
+	if err != nil {
+		t.Fatalf("list variants: %v", err)
+	}
+	if len(variants) != 1 || variants[0].VariantType != domain.VariantVKVideo {
+		t.Fatalf("expected one VK-ready variant, got %+v", variants)
+	}
+}
+
+func TestVideoProbeDisabledDevMockStaysSimple(t *testing.T) {
+	h := newHarness(t)
+	ctx := context.Background()
+	job := h.queueJob(t, domain.OperationVideoGenerate, domain.ModalityVideo, "dev video")
+
+	if err := h.gen.Process(ctx, taskFor(job)); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+
+	got := h.reload(t, job.ID)
+	if got.Status != domain.JobStatusResultReady {
+		t.Fatalf("status = %q, want result_ready", got.Status)
+	}
+	if len(h.streams.byStream[redisqueue.StreamDelivery]) != 1 {
+		t.Fatalf("expected delivery enqueue in dev/mock disabled policy, got %v", h.streams.byStream)
 	}
 }
 
@@ -1396,7 +1558,19 @@ func validVideoContract(provider domain.ProviderName, model string) domain.Provi
 		TranscodeAllowed:       false,
 		MaxProviderAttempts:    1,
 		MaxFallbackAttempts:    0,
-		MaxProviderCostCredits: 20,
+		MaxProviderCostCredits: 100,
+	}
+}
+
+func safeVideoMetadata(codec string) domain.ArtifactMediaMetadata {
+	return domain.ArtifactMediaMetadata{
+		Width:       1280,
+		Height:      720,
+		DurationMS:  5000,
+		Codec:       codec,
+		Container:   "mp4",
+		BitrateBPS:  2400000,
+		ProbeStatus: domain.MediaProbePassed,
 	}
 }
 

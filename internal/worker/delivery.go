@@ -67,6 +67,10 @@ type DeliveryDeps struct {
 	// SignedURLs delivers media via time-limited signed URLs instead of raw
 	// bucket/key references.
 	SignedURLs bool
+	// RawVideoDeliveryPolicy controls when an original provider video may be
+	// delivered without a VK-ready variant. Production should use
+	// if_probe_passed or never.
+	RawVideoDeliveryPolicy string
 	// URLTTL is the validity window of signed media URLs (default 1h).
 	URLTTL time.Duration
 	Now    func() time.Time
@@ -77,21 +81,22 @@ type DeliveryDeps struct {
 // idempotent (one delivery row per job, deduped by key), uses a deterministic
 // random_id so VK suppresses duplicate sends, and is safe to retry/recover.
 type DeliveryWorker struct {
-	jobs        domain.JobRepository
-	deliveries  domain.DeliveryRepository
-	artifacts   domain.ArtifactRepository
-	objects     ObjectStore
-	vk          vkdelivery.Client
-	vkControl   vkdelivery.ControlClient
-	vkUploader  vkdelivery.MediaUploader
-	billing     DeliveryBiller
-	streams     StreamPublisher
-	maxAttempts int
-	backoff     func(attempt int) time.Duration
-	signer      URLSigner
-	signURLs    bool
-	urlTTL      time.Duration
-	now         func() time.Time
+	jobs           domain.JobRepository
+	deliveries     domain.DeliveryRepository
+	artifacts      domain.ArtifactRepository
+	objects        ObjectStore
+	vk             vkdelivery.Client
+	vkControl      vkdelivery.ControlClient
+	vkUploader     vkdelivery.MediaUploader
+	billing        DeliveryBiller
+	streams        StreamPublisher
+	maxAttempts    int
+	backoff        func(attempt int) time.Duration
+	signer         URLSigner
+	signURLs       bool
+	rawVideoPolicy string
+	urlTTL         time.Duration
+	now            func() time.Time
 }
 
 // NewDeliveryWorker builds a DeliveryWorker.
@@ -125,22 +130,31 @@ func NewDeliveryWorker(d DeliveryDeps) *DeliveryWorker {
 		}
 	}
 	return &DeliveryWorker{
-		jobs:        d.Jobs,
-		deliveries:  d.Deliveries,
-		artifacts:   d.Artifacts,
-		objects:     d.Objects,
-		vk:          d.VK,
-		vkControl:   control,
-		vkUploader:  uploader,
-		billing:     d.Billing,
-		streams:     d.Streams,
-		maxAttempts: maxAttempts,
-		backoff:     backoff,
-		signer:      d.Signer,
-		signURLs:    d.SignedURLs,
-		urlTTL:      urlTTL,
-		now:         now,
+		jobs:           d.Jobs,
+		deliveries:     d.Deliveries,
+		artifacts:      d.Artifacts,
+		objects:        d.Objects,
+		vk:             d.VK,
+		vkControl:      control,
+		vkUploader:     uploader,
+		billing:        d.Billing,
+		streams:        d.Streams,
+		maxAttempts:    maxAttempts,
+		backoff:        backoff,
+		signer:         d.Signer,
+		signURLs:       d.SignedURLs,
+		rawVideoPolicy: rawVideoDeliveryPolicyOrDefault(d.RawVideoDeliveryPolicy),
+		urlTTL:         urlTTL,
+		now:            now,
 	}
+}
+
+func rawVideoDeliveryPolicyOrDefault(policy string) string {
+	policy = normalizeWorkerPolicy(policy)
+	if policy == "" {
+		return rawProviderVideoPolicyAlwaysDevOnly
+	}
+	return policy
 }
 
 // Process delivers one job's result. Returning nil acknowledges the task;
@@ -633,7 +647,26 @@ func (w *DeliveryWorker) mediaObjectForDelivery(ctx context.Context, art *domain
 			}, nil
 		}
 	}
-	return obj, nil
+	if readyOriginalVideo(art, w.rawVideoPolicy) {
+		return obj, nil
+	}
+	return obj, fmt.Errorf("worker: video original is not allowed for delivery without ready variant")
+}
+
+func readyOriginalVideo(art *domain.Artifact, policy string) bool {
+	if art == nil || art.MediaType != domain.MediaTypeVideo || art.StorageBucket == "" || art.StorageKey == "" {
+		return false
+	}
+	switch normalizeWorkerPolicy(policy) {
+	case rawProviderVideoPolicyAlwaysDevOnly:
+		return true
+	case rawProviderVideoPolicyIfProbePassed:
+		return art.ProbeStatus == domain.MediaProbePassed &&
+			strings.EqualFold(art.Container, "mp4") &&
+			strings.EqualFold(art.Codec, "h264")
+	default:
+		return false
+	}
 }
 
 func readyVideoVariant(variant *domain.ArtifactVariant, variantType domain.VariantType) bool {

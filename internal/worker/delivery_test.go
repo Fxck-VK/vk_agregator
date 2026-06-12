@@ -159,6 +159,20 @@ func (h *deliveryHarness) addVideoVariant(t *testing.T, job *domain.Job, variant
 	return variant
 }
 
+func (h *deliveryHarness) markVideoOriginal(t *testing.T, job *domain.Job, metadata domain.ArtifactMediaMetadata) {
+	t.Helper()
+	ctx := context.Background()
+	art, err := h.artifacts.GetByID(ctx, job.OutputArtifactIDs[0])
+	if err != nil {
+		t.Fatalf("get artifact: %v", err)
+	}
+	art.MimeType = "video/mp4"
+	art.ApplyMediaMetadata(metadata)
+	if err := h.artifacts.Update(ctx, art); err != nil {
+		t.Fatalf("update artifact metadata: %v", err)
+	}
+}
+
 func (h *deliveryHarness) captureEntryCount(t *testing.T, userID uuid.UUID) int {
 	t.Helper()
 	ctx := context.Background()
@@ -274,6 +288,96 @@ func TestDeliveryNamesRawVideoArtifactFromPrompt(t *testing.T) {
 	}
 	if uploader.videoFilename != "кот в очках едет на жираф.mp4" {
 		t.Fatalf("video filename = %q", uploader.videoFilename)
+	}
+}
+
+func TestDeliveryAllowsProbePassedRawVideoOriginalByPolicy(t *testing.T) {
+	h := newDeliveryHarness(t)
+	uploader := &fakeVKUploader{}
+	h.worker = worker.NewDeliveryWorker(worker.DeliveryDeps{
+		Jobs:                   h.jobs,
+		Deliveries:             h.deliveries,
+		Artifacts:              h.artifacts,
+		Objects:                h.objects,
+		VK:                     h.vk,
+		VKUploader:             uploader,
+		Billing:                h.billing,
+		RawVideoDeliveryPolicy: "if_probe_passed",
+	})
+	ctx := context.Background()
+	job := h.resultReadyJob(t, domain.MediaTypeVideo, "safe original mp4")
+	job.OperationType = domain.OperationVideoGenerate
+	job.Modality = domain.ModalityVideo
+	if err := h.jobs.Update(ctx, job); err != nil {
+		t.Fatalf("update job: %v", err)
+	}
+	h.markVideoOriginal(t, job, domain.ArtifactMediaMetadata{
+		Width:       1280,
+		Height:      720,
+		DurationMS:  5000,
+		Codec:       "h264",
+		Container:   "mp4",
+		BitrateBPS:  2400000,
+		ProbeStatus: domain.MediaProbePassed,
+	})
+
+	if err := h.worker.Process(ctx, deliveryTask(job)); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+	if string(uploader.videoBytes) != "safe original mp4" {
+		t.Fatalf("uploaded bytes = %q", string(uploader.videoBytes))
+	}
+	got, _ := h.jobs.GetByID(ctx, job.ID)
+	if got.Status != domain.JobStatusSucceeded || got.CostCaptured != 10 {
+		t.Fatalf("expected succeeded job with capture after safe delivery, got %+v", got)
+	}
+	if h.captureEntryCount(t, job.UserID) != 1 {
+		t.Fatalf("expected exactly one capture ledger entry")
+	}
+}
+
+func TestDeliveryRejectsRawVideoOriginalWhenPolicyNever(t *testing.T) {
+	h := newDeliveryHarness(t)
+	uploader := &fakeVKUploader{}
+	h.worker = worker.NewDeliveryWorker(worker.DeliveryDeps{
+		Jobs:                   h.jobs,
+		Deliveries:             h.deliveries,
+		Artifacts:              h.artifacts,
+		Objects:                h.objects,
+		VK:                     h.vk,
+		VKUploader:             uploader,
+		Billing:                h.billing,
+		MaxAttempts:            1,
+		RawVideoDeliveryPolicy: "never",
+	})
+	ctx := context.Background()
+	job := h.resultReadyJob(t, domain.MediaTypeVideo, "safe original mp4")
+	job.OperationType = domain.OperationVideoGenerate
+	job.Modality = domain.ModalityVideo
+	if err := h.jobs.Update(ctx, job); err != nil {
+		t.Fatalf("update job: %v", err)
+	}
+	h.markVideoOriginal(t, job, domain.ArtifactMediaMetadata{
+		Width:       1280,
+		Height:      720,
+		DurationMS:  5000,
+		Codec:       "h264",
+		Container:   "mp4",
+		ProbeStatus: domain.MediaProbePassed,
+	})
+
+	if err := h.worker.Process(ctx, deliveryTask(job)); err != nil {
+		t.Fatalf("terminal delivery failure should be acknowledged: %v", err)
+	}
+	got, _ := h.jobs.GetByID(ctx, job.ID)
+	if got.Status != domain.JobStatusFailedTerminal || got.CostCaptured != 0 {
+		t.Fatalf("raw original without policy must fail without capture, got %+v", got)
+	}
+	if len(uploader.videoBytes) != 0 {
+		t.Fatalf("uploader received raw video bytes despite policy=never")
+	}
+	if h.captureEntryCount(t, job.UserID) != 0 {
+		t.Fatalf("raw original rejection must not capture credits")
 	}
 }
 

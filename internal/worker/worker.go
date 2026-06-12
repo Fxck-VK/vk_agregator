@@ -42,6 +42,16 @@ const maxProviderAttempts = 3
 // worker so a stuck provider cannot keep a job generating forever.
 const defaultProviderCallTimeout = 60 * time.Second
 
+const (
+	videoTranscodePolicyNever    = "never"
+	videoTranscodePolicyFallback = "fallback"
+	videoTranscodePolicyAlways   = "always"
+
+	rawProviderVideoPolicyNever         = "never"
+	rawProviderVideoPolicyIfProbePassed = "if_probe_passed"
+	rawProviderVideoPolicyAlwaysDevOnly = "always_dev_only"
+)
+
 // ArtifactSaver stores provider outputs as artifacts. Implemented by
 // artifactservice.Service.
 type ArtifactSaver interface {
@@ -213,6 +223,16 @@ func (r *Registry) metricModelForTask(provider domain.ProviderName, model string
 		return providerMetricModel(class)
 	}
 	return providerMetricModel(model)
+}
+
+func (r *Registry) videoContractForTask(provider domain.ProviderName, model string) (*domain.ProviderMediaContract, bool) {
+	if r == nil {
+		return nil, false
+	}
+	r.mu.Lock()
+	contracts := r.mediaContracts
+	r.mu.Unlock()
+	return contracts.videoContract(provider, model)
 }
 
 type providerCandidate struct {
@@ -530,31 +550,33 @@ func (e providerResultError) ProviderErrorClass() domain.ProviderErrorClass { re
 // processor holds the shared dependencies and result-handling logic used by
 // both the generation and poll workers.
 type processor struct {
-	jobs              domain.JobRepository
-	tasks             domain.ProviderTaskRepository
-	artifacts         ArtifactSaver
-	artifactRepo      domain.ArtifactRepository
-	objects           ObjectStore
-	providers         *Registry
-	streams           StreamPublisher
-	imageModel        string
-	imageSize         string
-	videoModel        string
-	videoDurationSec  int
-	videoResolution   string
-	videoAspectRatio  string
-	videoDraft        bool
-	videoProber       VideoProber
-	videoTranscoder   VideoTranscoder
-	requireVideoProbe bool
-	textContext       TextContext
-	moderator         Moderator
-	modResults        domain.ModerationResultRepository
-	releaser          ReservationReleaser
-	maxAttempts       int
-	backoff           func(attempt int) time.Duration
-	callTimeout       time.Duration
-	now               func() time.Time
+	jobs                 domain.JobRepository
+	tasks                domain.ProviderTaskRepository
+	artifacts            ArtifactSaver
+	artifactRepo         domain.ArtifactRepository
+	objects              ObjectStore
+	providers            *Registry
+	streams              StreamPublisher
+	imageModel           string
+	imageSize            string
+	videoModel           string
+	videoDurationSec     int
+	videoResolution      string
+	videoAspectRatio     string
+	videoDraft           bool
+	videoProber          VideoProber
+	videoTranscoder      VideoTranscoder
+	requireVideoProbe    bool
+	videoTranscodePolicy string
+	rawVideoPolicy       string
+	textContext          TextContext
+	moderator            Moderator
+	modResults           domain.ModerationResultRepository
+	releaser             ReservationReleaser
+	maxAttempts          int
+	backoff              func(attempt int) time.Duration
+	callTimeout          time.Duration
+	now                  func() time.Time
 }
 
 // Moderator gates delivery: generated output must pass a moderation check
@@ -608,6 +630,12 @@ type Deps struct {
 	// VideoTranscodeEnabled reports whether worker policy allows expensive video
 	// transcode work. Provider media contracts use it before Submit.
 	VideoTranscodeEnabled bool
+	// VideoTranscodePolicy controls whether ffmpeg is allowed for unsafe video
+	// outputs. Values mirror config: never, fallback, always.
+	VideoTranscodePolicy string
+	// RawVideoDeliveryPolicy controls whether a probed delivery-ready original
+	// may be delivered without a VK-specific variant.
+	RawVideoDeliveryPolicy string
 	// ProviderMediaContracts is the product-level allowlist for risky video
 	// provider/model combinations.
 	ProviderMediaContracts []domain.ProviderMediaContract
@@ -650,36 +678,54 @@ func newProcessor(d Deps) processor {
 	if callTimeout <= 0 {
 		callTimeout = defaultProviderCallTimeout
 	}
+	videoTranscodePolicy := normalizeWorkerPolicy(d.VideoTranscodePolicy)
+	if videoTranscodePolicy == "" {
+		if d.VideoTranscodeEnabled || d.VideoTranscoder != nil {
+			videoTranscodePolicy = videoTranscodePolicyFallback
+		} else {
+			videoTranscodePolicy = videoTranscodePolicyNever
+		}
+	}
+	rawVideoPolicy := normalizeWorkerPolicy(d.RawVideoDeliveryPolicy)
+	if rawVideoPolicy == "" {
+		rawVideoPolicy = rawProviderVideoPolicyAlwaysDevOnly
+	}
 	if d.Providers != nil {
 		d.Providers.ConfigureProviderMediaContracts(d.ProviderMediaContracts, d.RequireVideoProbe, d.VideoTranscodeEnabled)
 	}
 	return processor{
-		jobs:              d.Jobs,
-		tasks:             d.Tasks,
-		artifacts:         d.Artifacts,
-		artifactRepo:      d.ArtifactRepo,
-		objects:           d.Objects,
-		providers:         d.Providers,
-		streams:           d.Streams,
-		imageModel:        d.ImageModel,
-		imageSize:         d.ImageSize,
-		videoModel:        d.VideoModel,
-		videoDurationSec:  d.VideoDurationSec,
-		videoResolution:   d.VideoResolution,
-		videoAspectRatio:  d.VideoAspectRatio,
-		videoDraft:        d.VideoDraft,
-		videoProber:       d.VideoProber,
-		videoTranscoder:   d.VideoTranscoder,
-		requireVideoProbe: d.RequireVideoProbe,
-		textContext:       d.TextContext,
-		moderator:         d.Moderator,
-		modResults:        d.ModResults,
-		releaser:          d.Releaser,
-		maxAttempts:       maxAttempts,
-		backoff:           backoff,
-		callTimeout:       callTimeout,
-		now:               now,
+		jobs:                 d.Jobs,
+		tasks:                d.Tasks,
+		artifacts:            d.Artifacts,
+		artifactRepo:         d.ArtifactRepo,
+		objects:              d.Objects,
+		providers:            d.Providers,
+		streams:              d.Streams,
+		imageModel:           d.ImageModel,
+		imageSize:            d.ImageSize,
+		videoModel:           d.VideoModel,
+		videoDurationSec:     d.VideoDurationSec,
+		videoResolution:      d.VideoResolution,
+		videoAspectRatio:     d.VideoAspectRatio,
+		videoDraft:           d.VideoDraft,
+		videoProber:          d.VideoProber,
+		videoTranscoder:      d.VideoTranscoder,
+		requireVideoProbe:    d.RequireVideoProbe,
+		videoTranscodePolicy: videoTranscodePolicy,
+		rawVideoPolicy:       rawVideoPolicy,
+		textContext:          d.TextContext,
+		moderator:            d.Moderator,
+		modResults:           d.ModResults,
+		releaser:             d.Releaser,
+		maxAttempts:          maxAttempts,
+		backoff:              backoff,
+		callTimeout:          callTimeout,
+		now:                  now,
 	}
+}
+
+func normalizeWorkerPolicy(value string) string {
+	return strings.ToLower(strings.TrimSpace(value))
 }
 
 // maxReferenceArtifacts must match miniapp/references.go limit.
@@ -1280,6 +1326,11 @@ func (p *processor) probeVideoOutputs(ctx context.Context, job *domain.Job) erro
 		metrics.ObserveMediaProbe("error", operationLabel, modalityLabel, "media_probe_storage_unavailable")
 		return mediaProbeError("media_probe_storage_unavailable")
 	}
+	providerName, modelClass, contract, err := p.videoOutputContract(ctx, job)
+	if err != nil {
+		metrics.ObserveMediaProbe("error", operationLabel, modalityLabel, "media_contract_unavailable")
+		return mediaProbeError("media_contract_unavailable")
+	}
 
 	for _, artID := range job.OutputArtifactIDs {
 		art, err := p.artifactRepo.GetByID(ctx, artID)
@@ -1325,13 +1376,79 @@ func (p *processor) probeVideoOutputs(ctx context.Context, job *domain.Job) erro
 			return err
 		}
 		metrics.ObserveMediaProbe("success", operationLabel, modalityLabel, "none")
-		if p.videoTranscoder != nil {
+		if p.videoFastPathAllowed(contract, metadata, originalSize) {
+			metrics.ObserveMediaVideoFastPath("used", operationLabel, modalityLabel, string(providerName), modelClass)
+			continue
+		}
+		if p.videoTranscodeAllowed(contract) {
+			metrics.ObserveMediaVideoFastPath("fallback_transcode", operationLabel, modalityLabel, string(providerName), modelClass)
 			if err := p.transcodeVideoVariant(ctx, job, art, data, metadata); err != nil {
 				return err
 			}
+			continue
 		}
+		if p.localDevRawVideoAllowedWithoutContract(contract) {
+			metrics.ObserveMediaVideoFastPath("dev_raw", operationLabel, modalityLabel, string(providerName), modelClass)
+			continue
+		}
+		if err := p.markArtifactProbeFailed(ctx, art); err != nil {
+			return err
+		}
+		metrics.ObserveMediaVideoFastPath("blocked", operationLabel, modalityLabel, string(providerName), modelClass)
+		return mediaProbeError("media_contract_output_not_delivery_ready")
 	}
 	return nil
+}
+
+func (p *processor) videoOutputContract(ctx context.Context, job *domain.Job) (domain.ProviderName, string, *domain.ProviderMediaContract, error) {
+	if p.providers == nil {
+		return "", "unknown", nil, nil
+	}
+	task, err := p.latestTask(ctx, job.ID)
+	if err != nil {
+		return "", "unknown", nil, err
+	}
+	if task == nil {
+		return "", "unknown", nil, nil
+	}
+	modelClass := p.providers.metricModelForTask(task.Provider, task.ModelCode, job.Modality)
+	contract, _ := p.providers.videoContractForTask(task.Provider, task.ModelCode)
+	if contract != nil && strings.TrimSpace(contract.ModelClass) != "" {
+		modelClass = providerMetricModel(contract.ModelClass)
+	}
+	return task.Provider, modelClass, contract, nil
+}
+
+func (p *processor) videoFastPathAllowed(contract *domain.ProviderMediaContract, metadata domain.ArtifactMediaMetadata, sizeBytes int64) bool {
+	if !rawVideoPolicyAllowsProbePassed(p.rawVideoPolicy) {
+		return false
+	}
+	return deliveryReadyVideoOutput(contract, metadata, sizeBytes)
+}
+
+func (p *processor) videoTranscodeAllowed(contract *domain.ProviderMediaContract) bool {
+	if p.videoTranscoder == nil {
+		return false
+	}
+	switch p.videoTranscodePolicy {
+	case videoTranscodePolicyFallback, videoTranscodePolicyAlways:
+	default:
+		return false
+	}
+	return contract == nil || contract.TranscodeAllowed || contract.RequiresTranscode
+}
+
+func (p *processor) localDevRawVideoAllowedWithoutContract(contract *domain.ProviderMediaContract) bool {
+	return contract == nil && p.rawVideoPolicy == rawProviderVideoPolicyAlwaysDevOnly
+}
+
+func rawVideoPolicyAllowsProbePassed(policy string) bool {
+	switch normalizeWorkerPolicy(policy) {
+	case rawProviderVideoPolicyIfProbePassed, rawProviderVideoPolicyAlwaysDevOnly:
+		return true
+	default:
+		return false
+	}
 }
 
 func (p *processor) transcodeVideoVariant(ctx context.Context, job *domain.Job, art *domain.Artifact, data []byte, originalMetadata domain.ArtifactMediaMetadata) error {

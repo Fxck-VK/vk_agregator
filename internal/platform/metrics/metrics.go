@@ -230,6 +230,13 @@ var (
 		Help: "Current in-process media variant backlog by operation, modality and variant type.",
 	}, []string{"operation", "modality", "variant_type"})
 
+	// MediaVideoFastPath counts worker video postprocessing decisions. Labels are
+	// bounded; model_class must come from product policy, not raw model ids.
+	MediaVideoFastPath = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "vkagg_media_video_fast_path_total",
+		Help: "Video fast-path decisions by result, operation, modality, provider and curated model class.",
+	}, []string{"result", "operation", "modality", "provider", "model_class"})
+
 	// MediaCleanupDeleted counts media cleanup deletion outcomes for inactive
 	// artifacts and variants only.
 	MediaCleanupDeleted = prometheus.NewCounterVec(prometheus.CounterOpts{
@@ -547,7 +554,7 @@ func init() {
 		QueueDepth, QueueOldestAgeSeconds, QueueConsumerLag, StuckJobs,
 		WorkerTaskDuration, WorkerRetries, MediaProbeResults,
 		MediaTranscodeResults, MediaTranscodeDuration, MediaBytes,
-		MediaVariantBacklog, MediaCleanupDeleted, JobsCreated, JobDuration,
+		MediaVariantBacklog, MediaVideoFastPath, MediaCleanupDeleted, JobsCreated, JobDuration,
 		ProductEvents, ProductActiveUserEvents, ProductActiveUsers, ProductPromptLength,
 		JobStatusCurrent, JobRejected, ProviderRequests, ProviderRequestDuration,
 		ProviderErrors, ProviderRateLimits, ProviderFallback, ProviderCircuitState,
@@ -735,6 +742,17 @@ func AddMediaVariantBacklog(operation, modality, variantType string, delta float
 		ProductLabel(modality, "unknown"),
 		ProductLabel(variantType, "unknown"),
 	).Add(delta)
+}
+
+// ObserveMediaVideoFastPath records one bounded video postprocessing decision.
+func ObserveMediaVideoFastPath(result, operation, modality, provider, modelClass string) {
+	MediaVideoFastPath.WithLabelValues(
+		ProductLabel(result, "unknown"),
+		ProductLabel(operation, "unknown"),
+		ProductLabel(modality, "unknown"),
+		ProductLabel(provider, "unknown"),
+		ProductLabel(modelClass, "unknown"),
+	).Inc()
 }
 
 // ObserveMediaCleanupDeleted records one media cleanup outcome.

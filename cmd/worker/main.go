@@ -299,6 +299,8 @@ func main() {
 		VideoTranscoder:        videoTranscoder,
 		RequireVideoProbe:      cfg.MediaVideoProbeRequired(),
 		VideoTranscodeEnabled:  cfg.MediaVideoTranscodeEnabled(),
+		VideoTranscodePolicy:   cfg.EffectiveMediaVideoTranscodePolicy(),
+		RawVideoDeliveryPolicy: cfg.EffectiveMediaDeliverRawProviderVideo(),
 		ProviderMediaContracts: effectiveProviderMediaContracts(cfg),
 		ProviderCallTimeout:    cfg.WorkerProviderCallTimeout,
 		TextContext: dialogcontext.New(conversations, dialogcontext.Config{
@@ -319,18 +321,19 @@ func main() {
 	gen := worker.NewGenerationWorker(deps)
 	poll := worker.NewPollWorker(deps)
 	delivery := worker.NewDeliveryWorker(worker.DeliveryDeps{
-		Jobs:        jobs,
-		Deliveries:  deliveries,
-		Artifacts:   artRepo,
-		Objects:     store,
-		VK:          vkClient,
-		Billing:     billing,
-		Streams:     publisher,
-		MaxAttempts: cfg.MaxAttempts,
-		Backoff:     worker.ExponentialBackoff(cfg.RetryBaseDelay, cfg.RetryMaxDelay),
-		Signer:      store,
-		SignedURLs:  cfg.SignedDelivery,
-		URLTTL:      cfg.ArtifactURLTTL,
+		Jobs:                   jobs,
+		Deliveries:             deliveries,
+		Artifacts:              artRepo,
+		Objects:                store,
+		VK:                     vkClient,
+		Billing:                billing,
+		Streams:                publisher,
+		MaxAttempts:            cfg.MaxAttempts,
+		Backoff:                worker.ExponentialBackoff(cfg.RetryBaseDelay, cfg.RetryMaxDelay),
+		Signer:                 store,
+		SignedURLs:             cfg.SignedDelivery,
+		RawVideoDeliveryPolicy: cfg.EffectiveMediaDeliverRawProviderVideo(),
+		URLTTL:                 cfg.ArtifactURLTTL,
 	})
 
 	// The outbox relay publishes queued jobs from the transactional outbox to the

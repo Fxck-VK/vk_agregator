@@ -2,7 +2,7 @@
   "schema_version": 1,
   "plan_id": "media_safety_production",
   "source_plan": "docs/MEDIA_SAFETY_PRODUCTION_PLAN.md",
-  "updated_at": "2026-06-12T19:58:25+03:00",
+  "updated_at": "2026-06-12T20:12:52+03:00",
   "mode": "IMPLEMENT",
   "security_invariants": [
     "vk_bot_and_miniapp_do_not_call_providers_or_media_tools_directly",
@@ -182,6 +182,67 @@
         }
       ],
       "push_allowed": false,
+      "errors": []
+    },
+    {
+      "id": "stage_4",
+      "name": "CPU-Safe Worker Fast Path",
+      "status": "completed",
+      "load_impact": "high_positive",
+      "scope": [
+        "cmd/worker/policy_wiring",
+        "internal/worker/video_fast_path",
+        "internal/worker/video_delivery_policy",
+        "internal/worker/provider_contract_output_validation",
+        "internal/platform/metrics",
+        "worker_tests"
+      ],
+      "policy_decisions": [
+        "provider video output is stored as a private original artifact before validation",
+        "ffprobe metadata is used as the cheap validation path when probe policy requires it",
+        "ffmpeg is skipped when provider contract, probe metadata, size limits and raw delivery policy prove the original video is delivery-ready",
+        "fallback transcode runs only when transcode policy allows it and the provider contract allows or requires transcode",
+        "unsafe provider video fails closed when neither fast path nor fallback transcode is allowed",
+        "delivery may use a raw provider original only when policy allows it and probe metadata marks it as safe mp4/h264",
+        "video fast-path metrics use bounded labels and curated model_class"
+      ],
+      "required_checks": [
+        "gofmt -l .",
+        "go test ./internal/worker ./internal/service/mediaprobe ./internal/service/mediatranscode ./internal/service/artifactservice",
+        "go vet ./internal/worker ./internal/service/mediaprobe ./internal/service/mediatranscode ./internal/service/artifactservice",
+        "git diff --check",
+        "git status --short --branch"
+      ],
+      "checks_run": [
+        {
+          "command": "go test ./internal/worker ./internal/service/mediaprobe ./internal/service/mediatranscode ./internal/service/artifactservice ./internal/platform/metrics",
+          "status": "passed",
+          "note": "initial sandbox run could not access Go build cache; rerun with approval passed"
+        },
+        {
+          "command": "go vet ./internal/worker ./internal/service/mediaprobe ./internal/service/mediatranscode ./internal/service/artifactservice ./internal/platform/metrics",
+          "status": "passed"
+        },
+        {
+          "command": "gofmt -l .",
+          "status": "passed"
+        },
+        {
+          "command": "git diff --check",
+          "status": "passed",
+          "note": "line-ending warning only for working-copy normalization"
+        },
+        {
+          "command": "git status --short --branch",
+          "status": "passed",
+          "note": "unrelated pre-existing dirty docs/prompt files must remain unstaged"
+        },
+        {
+          "command": "Get-Content .agents/plans/media_safety_production.json | ConvertFrom-Json",
+          "status": "passed"
+        }
+      ],
+      "push_allowed": true,
       "errors": []
     }
   ]
