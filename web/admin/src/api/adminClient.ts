@@ -112,6 +112,8 @@ export function createAdminClient(options: AdminClientOptions) {
   return { request };
 }
 
+export type AdminClient = ReturnType<typeof createAdminClient>;
+
 export function createIdempotencyKey(scope: string): string {
   const normalizedScope = scope.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 32) || "admin";
   if (crypto.randomUUID) {

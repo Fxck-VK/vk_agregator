@@ -151,6 +151,12 @@ var jobTransitions = map[JobStatus][]JobStatus{
 	JobStatusRefunded:            {},
 }
 
+// Valid reports whether the status is one of the known state-machine states.
+func (s JobStatus) Valid() bool {
+	_, ok := jobTransitions[s]
+	return ok
+}
+
 // IsTerminal reports whether the status admits no further transitions.
 func (s JobStatus) IsTerminal() bool {
 	next, ok := jobTransitions[s]
@@ -213,6 +219,15 @@ func (s JobStatus) CanTransitionTo(target JobStatus) bool {
 		}
 	}
 	return false
+}
+
+// AllowedNextStatuses returns a copy of the explicit state-machine transitions
+// allowed from the receiver status.
+func (s JobStatus) AllowedNextStatuses() []JobStatus {
+	next := jobTransitions[s]
+	out := make([]JobStatus, len(next))
+	copy(out, next)
+	return out
 }
 
 // Job is the central unit of work in the platform. Every user request becomes a

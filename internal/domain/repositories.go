@@ -122,6 +122,17 @@ type JobFilter struct {
 	Status JobStatus
 	// Operation, when non-empty, restricts results to one operation type.
 	Operation OperationType
+	// Modality, when non-empty, restricts results to one modality.
+	Modality Modality
+	// ErrorCode, when non-empty, restricts results to one bounded error class.
+	ErrorCode string
+	// CorrelationID, when non-empty, restricts results to one exact request
+	// correlation id. Callers must not expose raw values in public DTOs.
+	CorrelationID string
+	// CreatedFrom, when set, restricts results to jobs created at or after it.
+	CreatedFrom *time.Time
+	// CreatedTo, when set, restricts results to jobs created before it.
+	CreatedTo *time.Time
 }
 
 // JobRepository persists jobs.

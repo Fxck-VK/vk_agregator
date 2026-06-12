@@ -418,6 +418,9 @@ What to do:
 - Audit:
   Admin UI does not call DB/VK/YooKassa/providers/S3/Redis directly.
   All data comes through protected backend endpoints.
+  Detail views use display-safe ids by default; if protected lookup ids remain
+  in frontend state, confirm they are not rendered/logged and decide whether a
+  dedicated public job ref/index is needed before broad operator rollout.
   Auth fails closed.
   No secrets/raw payloads/prompts/private URLs/raw PII in UI/logs/tests.
   Billing actions use ledger/service paths.

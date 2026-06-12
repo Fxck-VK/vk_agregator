@@ -1,6 +1,7 @@
 import { Component, FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import { AdminApiError, createAdminClient, toSafeAdminError } from "./api/adminClient";
 import type { OverviewCardDTO, OverviewDTO } from "./api/overview";
+import { JobsScreen } from "./screens/JobsScreen";
 
 type ScreenId =
   | "overview"
@@ -287,6 +288,8 @@ export function App() {
 
             {screen.id === "overview" ? (
               <OverviewPanel adminTokenSet={Boolean(adminToken)} overview={overview} />
+            ) : screen.id === "jobs" ? (
+              <JobsScreen adminTokenSet={Boolean(adminToken)} client={adminClient} />
             ) : (
               <div className="panel-grid">
                 {screen.panels.map((panel) => (

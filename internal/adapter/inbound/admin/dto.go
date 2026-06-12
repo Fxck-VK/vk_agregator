@@ -46,6 +46,111 @@ type OverviewMetricDTO struct {
 	Status string `json:"status,omitempty"`
 }
 
+// OperatorJobsDTO is the safe read-only Jobs screen payload. LookupID is an
+// opaque protected-admin lookup value used by the UI to request details; display
+// should prefer DisplayID and safe refs.
+type OperatorJobsDTO struct {
+	GeneratedAt time.Time               `json:"generated_at"`
+	Items       []OperatorJobListItem   `json:"items"`
+	Pagination  pagination              `json:"pagination"`
+	Queue       OperatorQueueSummaryDTO `json:"queue"`
+}
+
+// OperatorJobListItem is a bounded job row without raw user/VK identifiers,
+// prompts, params, provider payloads or private artifact URLs.
+type OperatorJobListItem struct {
+	LookupID       string    `json:"lookup_id"`
+	DisplayID      string    `json:"display_id"`
+	CorrelationRef string    `json:"correlation_ref,omitempty"`
+	Operation      string    `json:"operation"`
+	Modality       string    `json:"modality"`
+	Status         string    `json:"status"`
+	ErrorClass     string    `json:"error_class,omitempty"`
+	CostEstimate   int64     `json:"cost_estimate"`
+	CostReserved   int64     `json:"cost_reserved"`
+	CostCaptured   int64     `json:"cost_captured"`
+	InputCount     int       `json:"input_count"`
+	OutputCount    int       `json:"output_count"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+	AgeSeconds     int64     `json:"age_seconds"`
+}
+
+// OperatorJobDetailDTO is a safe job detail view for operator triage.
+type OperatorJobDetailDTO struct {
+	Job            OperatorJobListItem       `json:"job"`
+	AllowedNext    []string                  `json:"allowed_next_statuses"`
+	Artifacts      OperatorJobArtifactsDTO   `json:"artifacts"`
+	Reservation    *OperatorReservationDTO   `json:"reservation,omitempty"`
+	Delivery       OperatorDeliverySummary   `json:"delivery"`
+	DeliveryEvents []OperatorDeliveryAttempt `json:"delivery_events"`
+}
+
+// OperatorJobArtifactsDTO exposes safe artifact references only.
+type OperatorJobArtifactsDTO struct {
+	InputRefs  []string `json:"input_refs"`
+	OutputRefs []string `json:"output_refs"`
+}
+
+// OperatorReservationDTO shows ledger-backed reservation state without account
+// ids or idempotency keys.
+type OperatorReservationDTO struct {
+	Status    string    `json:"status"`
+	Amount    int64     `json:"amount"`
+	ExpiresAt time.Time `json:"expires_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// OperatorDeliverySummary summarizes persisted delivery attempts.
+type OperatorDeliverySummary struct {
+	Status             string `json:"status"`
+	Attempts           int    `json:"attempts"`
+	RetryCount         int    `json:"retry_count"`
+	LastErrorClass     string `json:"last_error_class,omitempty"`
+	LastArtifactRef    string `json:"last_artifact_ref,omitempty"`
+	LastDeliveryType   string `json:"last_delivery_type,omitempty"`
+	LastDeliveryStatus string `json:"last_delivery_status,omitempty"`
+}
+
+// OperatorDeliveryAttempt is a safe delivery attempt row.
+type OperatorDeliveryAttempt struct {
+	Type        string    `json:"type"`
+	Status      string    `json:"status"`
+	AttemptNo   int       `json:"attempt_no"`
+	ErrorClass  string    `json:"error_class,omitempty"`
+	ArtifactRef string    `json:"artifact_ref,omitempty"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+// OperatorQueueSummaryDTO is a safe worker/queue pressure snapshot. It is
+// derived from persisted job state and explicitly marks missing DLQ/Redis stream
+// sources as not_wired instead of pretending they are healthy.
+type OperatorQueueSummaryDTO struct {
+	GeneratedAt            time.Time                `json:"generated_at"`
+	DegradationState       string                   `json:"degradation_state"`
+	Backlog                []OperatorQueueMetricDTO `json:"backlog"`
+	OldestQueuedAgeSeconds *int64                   `json:"oldest_queued_age_seconds,omitempty"`
+	RetryCount             int                      `json:"retry_count"`
+	DLQ                    OperatorQueueNotWiredDTO `json:"dlq"`
+	ProviderCircuit        OperatorQueueNotWiredDTO `json:"provider_circuit"`
+	Notes                  []string                 `json:"notes,omitempty"`
+}
+
+// OperatorQueueMetricDTO is a bounded queue metric row.
+type OperatorQueueMetricDTO struct {
+	Label  string `json:"label"`
+	Value  string `json:"value"`
+	Status string `json:"status"`
+}
+
+// OperatorQueueNotWiredDTO marks data that needs a dedicated source before the
+// UI can render it as healthy.
+type OperatorQueueNotWiredDTO struct {
+	Status string `json:"status"`
+	Reason string `json:"reason"`
+}
+
 // JobDTO is the admin representation of a job.
 type JobDTO struct {
 	ID                uuid.UUID   `json:"id"`

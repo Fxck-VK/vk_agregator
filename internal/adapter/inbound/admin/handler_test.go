@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -150,6 +151,143 @@ func TestOverviewReadOnlySafeDTO(t *testing.T) {
 			t.Fatalf("overview DTO leaked forbidden field/value %q: %s", forbidden, raw)
 		}
 	}
+}
+
+func TestOperatorJobsListDetailAndQueueSafeDTO(t *testing.T) {
+	h, jobs, _, deliveries, billing := setup(t)
+	ctx := context.Background()
+	userID := uuid.New()
+	inputArtifactID := uuid.New()
+	outputArtifactID := uuid.New()
+	job := &domain.Job{
+		ID:                uuid.New(),
+		UserID:            userID,
+		VKPeerID:          2000000042,
+		OperationType:     domain.OperationVideoGenerate,
+		Modality:          domain.ModalityVideo,
+		Status:            domain.JobStatusFailedRetryable,
+		CorrelationID:     "idem:vk:private-correlation",
+		InputArtifactIDs:  []uuid.UUID{inputArtifactID},
+		OutputArtifactIDs: []uuid.UUID{outputArtifactID},
+		CostEstimate:      50,
+		CostReserved:      50,
+		ErrorCode:         "provider_timeout",
+		ErrorMessage:      "raw provider timeout https://private.example/output.mp4 prompt text",
+		IdempotencyKey:    "idem:job:secret",
+	}
+	if err := jobs.Create(ctx, job); err != nil {
+		t.Fatalf("create job: %v", err)
+	}
+	if _, err := billing.Reserve(ctx, userID, job.ID, 50); err != nil {
+		t.Fatalf("reserve: %v", err)
+	}
+	if err := deliveries.Create(ctx, &domain.Delivery{
+		ID:             uuid.New(),
+		JobID:          job.ID,
+		UserID:         userID,
+		VKPeerID:       2000000042,
+		ArtifactID:     &outputArtifactID,
+		Type:           domain.DeliveryTypeVideo,
+		Status:         domain.DeliveryStatusRetrying,
+		VKRandomID:     999,
+		Attachment:     "video123_456",
+		Text:           "private prompt text",
+		AttemptNo:      2,
+		IdempotencyKey: "delivery:secret",
+		ErrorCode:      "vk_rate_limited",
+		ErrorMessage:   "raw vk error with token",
+	}); err != nil {
+		t.Fatalf("create delivery: %v", err)
+	}
+	createdFrom := url.QueryEscape(time.Now().Add(-time.Hour).UTC().Format(time.RFC3339))
+	rec, _ := do(t, h, "/admin/jobs/operator?status=failed_retryable&kind=video_generate&error_class=provider_timeout&created_from="+createdFrom)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var list admin.OperatorJobsDTO
+	if err := json.Unmarshal(rec.Body.Bytes(), &list); err != nil {
+		t.Fatalf("decode operator jobs: %v", err)
+	}
+	if len(list.Items) != 1 {
+		t.Fatalf("expected one filtered job, got %+v", list.Items)
+	}
+	item := list.Items[0]
+	if !strings.HasPrefix(item.DisplayID, "job_") || !strings.HasPrefix(item.CorrelationRef, "corr_") {
+		t.Fatalf("expected safe display refs, got %+v", item)
+	}
+	if item.LookupID == "" || item.ErrorClass != "provider_timeout" || item.InputCount != 1 || item.OutputCount != 1 {
+		t.Fatalf("unexpected operator job item: %+v", item)
+	}
+	assertNoOperatorJobLeak(t, rec.Body.String(), userID, inputArtifactID, outputArtifactID)
+
+	rec, _ = do(t, h, "/admin/jobs/"+job.ID.String()+"/operator")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected detail 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var detail admin.OperatorJobDetailDTO
+	if err := json.Unmarshal(rec.Body.Bytes(), &detail); err != nil {
+		t.Fatalf("decode operator detail: %v", err)
+	}
+	if detail.Reservation == nil || detail.Reservation.Status != string(domain.ReservationReserved) || detail.Reservation.Amount != 50 {
+		t.Fatalf("expected safe reservation summary, got %+v", detail.Reservation)
+	}
+	if len(detail.Artifacts.InputRefs) != 1 || len(detail.Artifacts.OutputRefs) != 1 ||
+		strings.Contains(detail.Artifacts.InputRefs[0], inputArtifactID.String()) ||
+		strings.Contains(detail.Artifacts.OutputRefs[0], outputArtifactID.String()) {
+		t.Fatalf("expected safe artifact refs, got %+v", detail.Artifacts)
+	}
+	if detail.Delivery.Attempts != 1 || detail.Delivery.RetryCount != 1 || detail.Delivery.LastErrorClass != "vk_rate_limited" {
+		t.Fatalf("unexpected delivery summary: %+v", detail.Delivery)
+	}
+	if !containsString(detail.AllowedNext, string(domain.JobStatusQueued)) {
+		t.Fatalf("expected allowed next statuses, got %+v", detail.AllowedNext)
+	}
+	assertNoOperatorJobLeak(t, rec.Body.String(), userID, inputArtifactID, outputArtifactID)
+
+	rec, _ = do(t, h, "/admin/jobs/queue")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected queue 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var queue admin.OperatorQueueSummaryDTO
+	if err := json.Unmarshal(rec.Body.Bytes(), &queue); err != nil {
+		t.Fatalf("decode queue: %v", err)
+	}
+	if queue.RetryCount != 1 || queue.DLQ.Status != "not_wired" || queue.ProviderCircuit.Status != "not_wired" {
+		t.Fatalf("unexpected queue summary: %+v", queue)
+	}
+	assertNoOperatorJobLeak(t, rec.Body.String(), userID, inputArtifactID, outputArtifactID)
+}
+
+func assertNoOperatorJobLeak(t *testing.T, raw string, userID, inputArtifactID, outputArtifactID uuid.UUID) {
+	t.Helper()
+	for _, forbidden := range []string{
+		"user_id",
+		"vk_peer_id",
+		"error_message",
+		"idempotency",
+		"params",
+		"attachment",
+		"private-correlation",
+		"private.example",
+		"prompt text",
+		"token",
+		userID.String(),
+		inputArtifactID.String(),
+		outputArtifactID.String(),
+	} {
+		if strings.Contains(raw, forbidden) {
+			t.Fatalf("operator job DTO leaked forbidden field/value %q: %s", forbidden, raw)
+		}
+	}
+}
+
+func containsString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
 }
 
 func TestListJobsPaginationAndFilter(t *testing.T) {
