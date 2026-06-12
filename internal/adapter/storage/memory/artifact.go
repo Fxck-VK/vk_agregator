@@ -88,6 +88,11 @@ func (r *ArtifactRepo) AddVariant(_ context.Context, v *domain.ArtifactVariant) 
 	if v.ID == uuid.Nil {
 		v.ID = uuid.New()
 	}
+	for i := range r.variants[v.ArtifactID] {
+		if r.variants[v.ArtifactID][i].VariantType == v.VariantType {
+			return domain.ErrConflict
+		}
+	}
 	normalizeArtifactVariantMetadata(v)
 	now := time.Now()
 	v.CreatedAt, v.UpdatedAt = now, now

@@ -154,6 +154,24 @@ func (p *fakeVideoProber) ProbeVideo(_ context.Context, _ []byte, _ int64) (doma
 	return p.metadata, nil
 }
 
+type fakeVideoTranscoder struct {
+	out      []byte
+	metadata domain.ArtifactMediaMetadata
+	err      error
+	calls    int
+}
+
+func (t *fakeVideoTranscoder) TranscodeVKVideo(_ context.Context, _ []byte, _ domain.ArtifactMediaMetadata) ([]byte, domain.ArtifactMediaMetadata, error) {
+	t.calls++
+	if t.err != nil {
+		return nil, t.metadata, t.err
+	}
+	if t.metadata.ProbeStatus == "" {
+		t.metadata.ProbeStatus = domain.MediaProbePending
+	}
+	return append([]byte(nil), t.out...), t.metadata, nil
+}
+
 // queueJob inserts a queued job and returns it.
 func (h *harness) queueJob(t *testing.T, op domain.OperationType, mod domain.Modality, prompt string) *domain.Job {
 	t.Helper()
@@ -317,6 +335,68 @@ func TestVideoProbeSuccessBeforeDelivery(t *testing.T) {
 	}
 }
 
+func TestVideoTranscodeCreatesVKReadyVariantBeforeDelivery(t *testing.T) {
+	prober := &fakeVideoProber{metadata: domain.ArtifactMediaMetadata{
+		Width:       1280,
+		Height:      720,
+		DurationMS:  5000,
+		Codec:       "H264",
+		Container:   "MP4",
+		BitrateBPS:  2400000,
+		ProbeStatus: domain.MediaProbePassed,
+	}}
+	transcoder := &fakeVideoTranscoder{
+		out: []byte("vk-ready-video"),
+		metadata: domain.ArtifactMediaMetadata{
+			Codec:       "h264",
+			Container:   "mp4",
+			ProbeStatus: domain.MediaProbePending,
+		},
+	}
+	h := newHarnessWithProvider(t, mock.New(), func(d *worker.Deps) {
+		d.VideoProber = prober
+		d.VideoTranscoder = transcoder
+		d.RequireVideoProbe = true
+	})
+	ctx := context.Background()
+	job := h.queueJob(t, domain.OperationVideoGenerate, domain.ModalityVideo, "a safe clip")
+
+	if err := h.gen.Process(ctx, taskFor(job)); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+
+	got := h.reload(t, job.ID)
+	if got.Status != domain.JobStatusResultReady {
+		t.Fatalf("status = %q, want result_ready", got.Status)
+	}
+	if prober.calls != 2 {
+		t.Fatalf("probe calls = %d, want original plus variant probes", prober.calls)
+	}
+	if transcoder.calls != 1 {
+		t.Fatalf("transcode calls = %d, want 1", transcoder.calls)
+	}
+	variants, err := h.artRepo.ListVariants(ctx, got.OutputArtifactIDs[0])
+	if err != nil {
+		t.Fatalf("list variants: %v", err)
+	}
+	if len(variants) != 1 || variants[0].VariantType != domain.VariantVKVideo {
+		t.Fatalf("expected one vk_video variant, got %+v", variants)
+	}
+	if variants[0].Codec != "h264" || variants[0].Container != "mp4" || variants[0].ProbeStatus != domain.MediaProbePassed {
+		t.Fatalf("variant metadata not stored safely: %+v", variants[0])
+	}
+	data, err := h.store.GetObject(ctx, variants[0].StorageBucket, variants[0].StorageKey)
+	if err != nil {
+		t.Fatalf("get variant object: %v", err)
+	}
+	if string(data) != "vk-ready-video" {
+		t.Fatalf("variant bytes = %q", string(data))
+	}
+	if len(h.streams.byStream[redisqueue.StreamDelivery]) != 1 {
+		t.Fatalf("expected delivery enqueue after variant creation, got %v", h.streams.byStream)
+	}
+}
+
 func TestVideoProbeFailureStopsDeliveryAndReleasesReservation(t *testing.T) {
 	prober := &fakeVideoProber{
 		metadata: domain.ArtifactMediaMetadata{ProbeStatus: domain.MediaProbeFailed},
@@ -357,6 +437,65 @@ func TestVideoProbeFailureStopsDeliveryAndReleasesReservation(t *testing.T) {
 	}
 	if art.ProbeStatus != domain.MediaProbeFailed || art.Status != domain.ArtifactStatusFailed {
 		t.Fatalf("artifact should be marked failed after probe failure: %+v", art)
+	}
+}
+
+func TestVideoTranscodeFailureStopsDeliveryAndReleasesReservation(t *testing.T) {
+	prober := &fakeVideoProber{metadata: domain.ArtifactMediaMetadata{
+		Width:       1280,
+		Height:      720,
+		DurationMS:  5000,
+		Codec:       "H264",
+		Container:   "MP4",
+		BitrateBPS:  2400000,
+		ProbeStatus: domain.MediaProbePassed,
+	}}
+	transcoder := &fakeVideoTranscoder{
+		err: errors.New("LEAK_PATH_MARKER LEAK_AUTH_MARKER LEAK_STDERR_MARKER"),
+	}
+	h := newHarnessWithProvider(t, mock.New(), func(d *worker.Deps) {
+		d.VideoProber = prober
+		d.VideoTranscoder = transcoder
+		d.RequireVideoProbe = true
+	})
+	ctx := context.Background()
+	job := h.queueJob(t, domain.OperationVideoGenerate, domain.ModalityVideo, "unsafe transcode")
+
+	if err := h.gen.Process(ctx, taskFor(job)); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+
+	got := h.reload(t, job.ID)
+	if got.Status != domain.JobStatusFailedTerminal {
+		t.Fatalf("status = %q, want failed_terminal", got.Status)
+	}
+	if got.ErrorCode != string(domain.ProviderErrMediaTranscodeFailed) {
+		t.Fatalf("error code = %q, want %q", got.ErrorCode, domain.ProviderErrMediaTranscodeFailed)
+	}
+	for _, forbidden := range []string{"LEAK_PATH_MARKER", "LEAK_AUTH_MARKER", "LEAK_STDERR_MARKER"} {
+		if strings.Contains(got.ErrorMessage, forbidden) {
+			t.Fatalf("job error leaked %q in %q", forbidden, got.ErrorMessage)
+		}
+	}
+	if len(h.streams.byStream[redisqueue.StreamDelivery]) != 0 {
+		t.Fatalf("transcode failure must not enqueue delivery: %v", h.streams.byStream)
+	}
+	if len(h.releaser.released) != 1 || h.releaser.released[0] != job.ID {
+		t.Fatalf("expected reservation release for failed transcode, got %v", h.releaser.released)
+	}
+	variants, err := h.artRepo.ListVariants(ctx, got.OutputArtifactIDs[0])
+	if err != nil {
+		t.Fatalf("list variants: %v", err)
+	}
+	if len(variants) != 0 {
+		t.Fatalf("transcode failure must not store variants: %+v", variants)
+	}
+	art, err := h.artRepo.GetByID(ctx, got.OutputArtifactIDs[0])
+	if err != nil {
+		t.Fatalf("get artifact: %v", err)
+	}
+	if art.ProbeStatus != domain.MediaProbeFailed || art.Status != domain.ArtifactStatusFailed {
+		t.Fatalf("artifact should be marked failed after transcode failure: %+v", art)
 	}
 }
 

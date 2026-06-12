@@ -35,6 +35,7 @@ import (
 	"vk-ai-aggregator/internal/service/dialogcontext"
 	"vk-ai-aggregator/internal/service/maintenance"
 	"vk-ai-aggregator/internal/service/mediaprobe"
+	"vk-ai-aggregator/internal/service/mediatranscode"
 	"vk-ai-aggregator/internal/service/moderationservice"
 	"vk-ai-aggregator/internal/service/outboxrelay"
 	"vk-ai-aggregator/internal/worker"
@@ -207,6 +208,7 @@ func main() {
 	}
 	artSvc := artifactservice.New(artRepo, store, cfg.S3Bucket, artOpts...)
 	var videoProber worker.VideoProber
+	var videoTranscoder worker.VideoTranscoder
 	if cfg.MediaPipelineEnabled {
 		videoProber = mediaprobe.NewFFProbe(mediaprobe.Config{
 			FFProbePath:            cfg.FFProbePath,
@@ -219,9 +221,17 @@ func main() {
 			AllowedVideoCodecs:     cfg.MediaAllowedVideoCodecs,
 			Timeout:                cfg.MediaProbeTimeout,
 		})
-		logger.Info("using media video probe")
+		videoTranscoder = mediatranscode.NewFFmpeg(mediatranscode.Config{
+			FFmpegPath:        cfg.FFmpegPath,
+			MaxVideoSizeBytes: cfg.MediaMaxVideoSizeBytes,
+			MaxVideoWidth:     cfg.MediaMaxVideoWidth,
+			MaxVideoHeight:    cfg.MediaMaxVideoHeight,
+			MaxVideoBitrate:   cfg.MediaMaxVideoBitrate,
+			TranscodeTimeout:  cfg.MediaTranscodeTimeout,
+		})
+		logger.Info("using media video pipeline")
 	} else if cfg.IsProduction() {
-		logger.Warn("media video probe disabled; production video jobs will fail closed")
+		logger.Warn("media video pipeline disabled; production video jobs will fail closed")
 	}
 	providers := worker.NewRegistry(providerList[0], providerList[1:]...)
 	if cfg.ImageProvider != "" {
@@ -272,6 +282,7 @@ func main() {
 		VideoAspectRatio:    cfg.VideoAspectRatio,
 		VideoDraft:          cfg.VideoDraft,
 		VideoProber:         videoProber,
+		VideoTranscoder:     videoTranscoder,
 		RequireVideoProbe:   cfg.IsProduction(),
 		ProviderCallTimeout: cfg.WorkerProviderCallTimeout,
 		TextContext: dialogcontext.New(conversations, dialogcontext.Config{

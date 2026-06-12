@@ -230,6 +230,59 @@ func TestDeliveryNamesRawVideoArtifactFromPrompt(t *testing.T) {
 	}
 }
 
+func TestDeliveryUploadsVKReadyVideoVariantWhenPresent(t *testing.T) {
+	h := newDeliveryHarness(t)
+	uploader := &fakeVKUploader{}
+	h.worker = worker.NewDeliveryWorker(worker.DeliveryDeps{
+		Jobs:       h.jobs,
+		Deliveries: h.deliveries,
+		Artifacts:  h.artifacts,
+		Objects:    h.objects,
+		VK:         h.vk,
+		VKUploader: uploader,
+		Billing:    h.billing,
+	})
+	ctx := context.Background()
+	job := h.resultReadyJob(t, domain.MediaTypeVideo, "raw provider video")
+	job.OperationType = domain.OperationVideoGenerate
+	job.Modality = domain.ModalityVideo
+	if err := h.jobs.Update(ctx, job); err != nil {
+		t.Fatalf("update job: %v", err)
+	}
+	art, err := h.artifacts.GetByID(ctx, job.OutputArtifactIDs[0])
+	if err != nil {
+		t.Fatalf("get artifact: %v", err)
+	}
+	variant := &domain.ArtifactVariant{
+		ArtifactID:    art.ID,
+		VariantType:   domain.VariantVKVideo,
+		StorageBucket: "artifacts",
+		StorageKey:    "variants/" + art.ID.String() + ".mp4",
+		MimeType:      "video/mp4",
+		SizeBytes:     int64(len("vk-ready mp4 bytes")),
+		Codec:         "h264",
+		Container:     "mp4",
+		ProbeStatus:   domain.MediaProbePassed,
+	}
+	if err := h.artifacts.AddVariant(ctx, variant); err != nil {
+		t.Fatalf("add variant: %v", err)
+	}
+	if err := h.objects.Put(ctx, variant.StorageBucket, variant.StorageKey, []byte("vk-ready mp4 bytes"), variant.MimeType); err != nil {
+		t.Fatalf("put variant bytes: %v", err)
+	}
+
+	if err := h.worker.Process(ctx, deliveryTask(job)); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+	if string(uploader.videoBytes) != "vk-ready mp4 bytes" {
+		t.Fatalf("uploaded bytes = %q", string(uploader.videoBytes))
+	}
+	sent := h.vk.Sent()
+	if len(sent) != 1 || sent[0].Attachment != "video123_456_key" {
+		t.Fatalf("expected uploaded VK video attachment send, got %+v", sent)
+	}
+}
+
 func TestDeliveryMediaUploadFailureUsesRetryBudget(t *testing.T) {
 	h := newDeliveryHarness(t)
 	uploader := &fakeVKUploader{err: errors.New("vk video.save denied")}

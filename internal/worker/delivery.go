@@ -566,25 +566,71 @@ func (w *DeliveryWorker) mediaAttachment(ctx context.Context, peerID int64, art 
 	if ref := attachmentRef(art); isVKAttachment(ref) {
 		return ref, nil
 	}
-	if w.vkUploader != nil && w.objects != nil && art.StorageKey != "" {
-		data, err := w.objects.GetObject(ctx, art.StorageBucket, art.StorageKey)
+	obj, err := w.mediaObjectForDelivery(ctx, art)
+	if err != nil {
+		return "", err
+	}
+	if w.vkUploader != nil && w.objects != nil && obj.storageKey != "" {
+		data, err := w.objects.GetObject(ctx, obj.storageBucket, obj.storageKey)
 		if err != nil {
 			return "", fmt.Errorf("worker: load artifact for vk upload: %w", err)
 		}
 		name := artifactFilename(art, filenamePrompt)
 		switch art.MediaType {
 		case domain.MediaTypeImage:
-			return w.vkUploader.UploadPhoto(ctx, peerID, name, data, art.MimeType)
+			return w.vkUploader.UploadPhoto(ctx, peerID, name, data, obj.mimeType)
 		case domain.MediaTypeVideo:
-			return w.vkUploader.UploadVideo(ctx, peerID, name, data, art.MimeType)
+			return w.vkUploader.UploadVideo(ctx, peerID, name, data, obj.mimeType)
 		}
 	}
-	if w.signURLs && w.signer != nil && art.StorageKey != "" {
-		if signed, err := w.signer.PresignedGetURL(ctx, art.StorageBucket, art.StorageKey, w.urlTTL); err == nil && signed != "" {
+	if w.signURLs && w.signer != nil && obj.storageKey != "" {
+		if signed, err := w.signer.PresignedGetURL(ctx, obj.storageBucket, obj.storageKey, w.urlTTL); err == nil && signed != "" {
 			return signed, nil
 		}
 	}
+	if obj.fallbackRef != "" {
+		return obj.fallbackRef, nil
+	}
 	return attachmentRef(art), nil
+}
+
+type mediaDeliveryObject struct {
+	storageBucket string
+	storageKey    string
+	mimeType      string
+	fallbackRef   string
+}
+
+func (w *DeliveryWorker) mediaObjectForDelivery(ctx context.Context, art *domain.Artifact) (mediaDeliveryObject, error) {
+	obj := mediaDeliveryObject{
+		storageBucket: art.StorageBucket,
+		storageKey:    art.StorageKey,
+		mimeType:      art.MimeType,
+		fallbackRef:   attachmentRef(art),
+	}
+	if art.MediaType != domain.MediaTypeVideo {
+		return obj, nil
+	}
+	variants, err := w.artifacts.ListVariants(ctx, art.ID)
+	if err != nil {
+		return obj, fmt.Errorf("worker: list artifact variants: %w", err)
+	}
+	for _, variant := range variants {
+		if variant == nil || variant.VariantType != domain.VariantVKVideo || variant.StorageKey == "" {
+			continue
+		}
+		mimeType := variant.MimeType
+		if mimeType == "" {
+			mimeType = "video/mp4"
+		}
+		return mediaDeliveryObject{
+			storageBucket: variant.StorageBucket,
+			storageKey:    variant.StorageKey,
+			mimeType:      mimeType,
+			fallbackRef:   variant.StorageBucket + "/" + variant.StorageKey,
+		}, nil
+	}
+	return obj, nil
 }
 
 // attachmentRef returns the VK attachment reference for a media artifact,

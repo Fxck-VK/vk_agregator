@@ -140,8 +140,8 @@ Override these values when needed:
 | `ARTIFACT_SCANNER` | `none` | Artifact scanner: `none` or `openai` |
 | `MEDIA_PIPELINE_ENABLED` | `false` | Worker-owned video/media probe/transcode pipeline switch; when false, local dev does not need ffmpeg/ffprobe |
 | `FFPROBE_PATH` / `FFMPEG_PATH` | `ffprobe` / `ffmpeg` | Tool paths used only after `MEDIA_PIPELINE_ENABLED=true`; VK Bot and Mini App must not call these directly |
-| `MEDIA_MAX_VIDEO_SIZE_BYTES` / `MEDIA_MAX_VIDEO_DURATION_SEC` | `268435456` / `60` | Hard video input/output limits for future probe/transcode stages |
-| `MEDIA_MAX_VIDEO_WIDTH` / `MEDIA_MAX_VIDEO_HEIGHT` / `MEDIA_MAX_VIDEO_BITRATE` | `1920` / `1080` / `12000000` | Video dimension and bitrate ceilings for future VK-ready variants |
+| `MEDIA_MAX_VIDEO_SIZE_BYTES` / `MEDIA_MAX_VIDEO_DURATION_SEC` | `268435456` / `60` | Hard video input/output limits for probe/transcode stages |
+| `MEDIA_MAX_VIDEO_WIDTH` / `MEDIA_MAX_VIDEO_HEIGHT` / `MEDIA_MAX_VIDEO_BITRATE` | `1920` / `1080` / `12000000` | Video dimension and bitrate ceilings for VK-ready variants |
 | `MEDIA_ALLOWED_VIDEO_CONTAINERS` / `MEDIA_ALLOWED_VIDEO_CODECS` | `mp4,mov,webm` / `h264,h265,hevc,vp8,vp9,av1` | Allowlist used by worker-owned media validation; values are normalized before use |
 | `MEDIA_PROBE_TIMEOUT` / `MEDIA_TRANSCODE_TIMEOUT` | `10s` / `10m` | Time bounds for future probe/transcode subprocesses |
 | `VK_DELIVERY_MODE` | `mock` | VK delivery adapter: `mock` or `real` |
@@ -289,14 +289,15 @@ Override these values when needed:
   `payment_webhook_oldest_unprocessed_age_seconds`,
   `payment_provider_errors_total`, `payment_topups_total`,
   `payment_refunds_total` and `payment_reconciliation_mismatches`.
-- **Artifact scanning / media probe**: `ARTIFACT_SCANNER=openai` scans
+- **Artifact scanning / media pipeline**: `ARTIFACT_SCANNER=openai` scans
   text/image artifact bytes before storage. When `MEDIA_PIPELINE_ENABLED=true`,
-  `cmd/worker` runs ffprobe on generated video artifacts before delivery and
-  billing capture. Unsafe/probe-failed video jobs fail terminally and release
-  reserved credits. With the pipeline disabled, local/dev video artifacts are
+  `cmd/worker` runs ffprobe on generated video artifacts, transcodes a bounded
+  MP4/H.264 `vk_video` variant through ffmpeg, probes that variant, and delivery
+  uploads the variant instead of raw provider output. Unsafe/probe/transcode
+  failures end the video job terminally and release reserved credits before
+  delivery/capture. With the pipeline disabled, local/dev video artifacts are
   marked `probe_status=skipped`; production video jobs fail closed instead of
-  delivering unprobed video. Video transcode/VK-ready variants remain a
-  media-pipeline follow-up.
+  delivering unprobed video.
 - **SSRF**: artifact downloader blocks private/loopback/link-local hosts and
   non-http(s) schemes; optional host allowlist. Provider data URLs are accepted
   for normalized OpenAI text/image/video outputs.
@@ -478,7 +479,7 @@ It runs these pools over Redis Streams (one consumer group, recovery via `XAUTOC
 |----------------|-----------------|------|
 | text worker | `stream:jobs:text` | text_generate |
 | image worker | `stream:jobs:image` | image_generate / edit |
-| video worker | `stream:jobs:video` | video_generate; generated video is probed before delivery when media pipeline is enabled |
+| video worker | `stream:jobs:video` | video_generate; generated video is probed/transcoded to a VK-ready variant before delivery when media pipeline is enabled |
 | polling worker | `stream:jobs:provider_poll` | poll async provider tasks |
 | delivery worker | `stream:jobs:delivery` | Artifact → Delivery → Capture → succeeded |
 

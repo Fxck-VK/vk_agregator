@@ -982,8 +982,11 @@ Media Pipeline
 `bitrate_bps`, `probe_status`. Нельзя сохранять raw ffprobe output, private
 storage paths, provider payloads, prompts или PII в artifact metadata.
 `cmd/worker` выполняет ffprobe-проверку generated video artifacts перед
-delivery/capture, если `MEDIA_PIPELINE_ENABLED=true`; в production без prober
-video jobs fail-closed. Transcode/VK-ready variants остаются следующим этапом.
+delivery/capture, если `MEDIA_PIPELINE_ENABLED=true`, затем создает bounded
+MP4/H.264 `vk_video` variant через ffmpeg, повторно probes variant и delivery
+загружает в VK именно этот variant. В production без media pipeline video jobs
+fail-closed; в local/dev при выключенном pipeline video artifacts помечаются
+`probe_status=skipped`.
 
 Таблицы:
 
