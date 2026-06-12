@@ -981,6 +981,9 @@ Media Pipeline
 `size_bytes`, `duration_ms`, `width`, `height`, `codec`, `container`,
 `bitrate_bps`, `probe_status`. Нельзя сохранять raw ffprobe output, private
 storage paths, provider payloads, prompts или PII в artifact metadata.
+`cmd/worker` выполняет ffprobe-проверку generated video artifacts перед
+delivery/capture, если `MEDIA_PIPELINE_ENABLED=true`; в production без prober
+video jobs fail-closed. Transcode/VK-ready variants остаются следующим этапом.
 
 Таблицы:
 

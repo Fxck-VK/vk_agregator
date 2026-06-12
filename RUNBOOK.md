@@ -289,8 +289,14 @@ Override these values when needed:
   `payment_webhook_oldest_unprocessed_age_seconds`,
   `payment_provider_errors_total`, `payment_topups_total`,
   `payment_refunds_total` and `payment_reconciliation_mismatches`.
-- **Artifact scanning**: `ARTIFACT_SCANNER=openai` scans text/image artifact
-  bytes before storage; video scan/transcode remains a media-pipeline follow-up.
+- **Artifact scanning / media probe**: `ARTIFACT_SCANNER=openai` scans
+  text/image artifact bytes before storage. When `MEDIA_PIPELINE_ENABLED=true`,
+  `cmd/worker` runs ffprobe on generated video artifacts before delivery and
+  billing capture. Unsafe/probe-failed video jobs fail terminally and release
+  reserved credits. With the pipeline disabled, local/dev video artifacts are
+  marked `probe_status=skipped`; production video jobs fail closed instead of
+  delivering unprobed video. Video transcode/VK-ready variants remain a
+  media-pipeline follow-up.
 - **SSRF**: artifact downloader blocks private/loopback/link-local hosts and
   non-http(s) schemes; optional host allowlist. Provider data URLs are accepted
   for normalized OpenAI text/image/video outputs.
@@ -472,7 +478,7 @@ It runs these pools over Redis Streams (one consumer group, recovery via `XAUTOC
 |----------------|-----------------|------|
 | text worker | `stream:jobs:text` | text_generate |
 | image worker | `stream:jobs:image` | image_generate / edit |
-| video worker | `stream:jobs:video` | video_generate |
+| video worker | `stream:jobs:video` | video_generate; generated video is probed before delivery when media pipeline is enabled |
 | polling worker | `stream:jobs:provider_poll` | poll async provider tasks |
 | delivery worker | `stream:jobs:delivery` | Artifact → Delivery → Capture → succeeded |
 

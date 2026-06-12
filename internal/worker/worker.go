@@ -50,6 +50,11 @@ type ArtifactSaver interface {
 	SaveRemoteArtifact(ctx context.Context, ownerID uuid.UUID, jobID *uuid.UUID, kind domain.ArtifactKind, mediaType domain.MediaType, url string) (*domain.Artifact, error)
 }
 
+// VideoProber validates generated video bytes before delivery/capture.
+type VideoProber interface {
+	ProbeVideo(ctx context.Context, data []byte, sizeBytes int64) (domain.ArtifactMediaMetadata, error)
+}
+
 // StreamPublisher publishes a task to a specific stream. Implemented by
 // redisqueue.Publisher.
 type StreamPublisher interface {
@@ -448,28 +453,30 @@ func (e providerResultError) ProviderErrorClass() domain.ProviderErrorClass { re
 // processor holds the shared dependencies and result-handling logic used by
 // both the generation and poll workers.
 type processor struct {
-	jobs             domain.JobRepository
-	tasks            domain.ProviderTaskRepository
-	artifacts        ArtifactSaver
-	artifactRepo     domain.ArtifactRepository
-	objects          ObjectStore
-	providers        *Registry
-	streams          StreamPublisher
-	imageModel       string
-	imageSize        string
-	videoModel       string
-	videoDurationSec int
-	videoResolution  string
-	videoAspectRatio string
-	videoDraft       bool
-	textContext      TextContext
-	moderator        Moderator
-	modResults       domain.ModerationResultRepository
-	releaser         ReservationReleaser
-	maxAttempts      int
-	backoff          func(attempt int) time.Duration
-	callTimeout      time.Duration
-	now              func() time.Time
+	jobs              domain.JobRepository
+	tasks             domain.ProviderTaskRepository
+	artifacts         ArtifactSaver
+	artifactRepo      domain.ArtifactRepository
+	objects           ObjectStore
+	providers         *Registry
+	streams           StreamPublisher
+	imageModel        string
+	imageSize         string
+	videoModel        string
+	videoDurationSec  int
+	videoResolution   string
+	videoAspectRatio  string
+	videoDraft        bool
+	videoProber       VideoProber
+	requireVideoProbe bool
+	textContext       TextContext
+	moderator         Moderator
+	modResults        domain.ModerationResultRepository
+	releaser          ReservationReleaser
+	maxAttempts       int
+	backoff           func(attempt int) time.Duration
+	callTimeout       time.Duration
+	now               func() time.Time
 }
 
 // Moderator gates delivery: generated output must pass a moderation check
@@ -514,6 +521,10 @@ type Deps struct {
 	VideoResolution  string
 	VideoAspectRatio string
 	VideoDraft       bool
+	// VideoProber, when set, validates generated videos before delivery/capture.
+	VideoProber VideoProber
+	// RequireVideoProbe makes video jobs fail closed when no prober is configured.
+	RequireVideoProbe bool
 	// TextContext, when set, stores VK text dialog history and renders compact
 	// provider prompts for text jobs.
 	TextContext TextContext
@@ -554,28 +565,30 @@ func newProcessor(d Deps) processor {
 		callTimeout = defaultProviderCallTimeout
 	}
 	return processor{
-		jobs:             d.Jobs,
-		tasks:            d.Tasks,
-		artifacts:        d.Artifacts,
-		artifactRepo:     d.ArtifactRepo,
-		objects:          d.Objects,
-		providers:        d.Providers,
-		streams:          d.Streams,
-		imageModel:       d.ImageModel,
-		imageSize:        d.ImageSize,
-		videoModel:       d.VideoModel,
-		videoDurationSec: d.VideoDurationSec,
-		videoResolution:  d.VideoResolution,
-		videoAspectRatio: d.VideoAspectRatio,
-		videoDraft:       d.VideoDraft,
-		textContext:      d.TextContext,
-		moderator:        d.Moderator,
-		modResults:       d.ModResults,
-		releaser:         d.Releaser,
-		maxAttempts:      maxAttempts,
-		backoff:          backoff,
-		callTimeout:      callTimeout,
-		now:              now,
+		jobs:              d.Jobs,
+		tasks:             d.Tasks,
+		artifacts:         d.Artifacts,
+		artifactRepo:      d.ArtifactRepo,
+		objects:           d.Objects,
+		providers:         d.Providers,
+		streams:           d.Streams,
+		imageModel:        d.ImageModel,
+		imageSize:         d.ImageSize,
+		videoModel:        d.VideoModel,
+		videoDurationSec:  d.VideoDurationSec,
+		videoResolution:   d.VideoResolution,
+		videoAspectRatio:  d.VideoAspectRatio,
+		videoDraft:        d.VideoDraft,
+		videoProber:       d.VideoProber,
+		requireVideoProbe: d.RequireVideoProbe,
+		textContext:       d.TextContext,
+		moderator:         d.Moderator,
+		modResults:        d.ModResults,
+		releaser:          d.Releaser,
+		maxAttempts:       maxAttempts,
+		backoff:           backoff,
+		callTimeout:       callTimeout,
+		now:               now,
 	}
 }
 
@@ -1062,6 +1075,13 @@ func (p *processor) applyResult(ctx context.Context, job *domain.Job, pt *domain
 		if err := p.setStatus(ctx, job, domain.JobStatusProviderSucceeded, "", ""); err != nil {
 			return err
 		}
+		if err := p.probeVideoOutputs(ctx, job); err != nil {
+			var probeErr mediaProbeError
+			if !errors.As(err, &probeErr) {
+				return err
+			}
+			return p.handleMediaProbeFailure(ctx, job, err)
+		}
 		if err := p.saveDialogAnswer(ctx, job, res.Text); err != nil {
 			slog.WarnContext(ctx, "dialog context answer save failed",
 				slog.String("job_id", job.ID.String()),
@@ -1102,6 +1122,131 @@ func (p *processor) applyResult(ctx context.Context, job *domain.Job, pt *domain
 		return nil
 	}
 	return nil
+}
+
+func (p *processor) probeVideoOutputs(ctx context.Context, job *domain.Job) error {
+	if job.Modality != domain.ModalityVideo {
+		return nil
+	}
+	if err := p.setStatus(ctx, job, domain.JobStatusPostprocessing, "", ""); err != nil {
+		return err
+	}
+	if len(job.OutputArtifactIDs) == 0 {
+		return mediaProbeError("video_output_missing")
+	}
+	if p.videoProber == nil {
+		if p.requireVideoProbe {
+			if err := p.markVideoProbeFailed(ctx, job); err != nil {
+				return err
+			}
+			return mediaProbeError("media_probe_unavailable")
+		}
+		return p.markVideoProbeSkipped(ctx, job)
+	}
+	if p.objects == nil {
+		if err := p.markVideoProbeFailed(ctx, job); err != nil {
+			return err
+		}
+		return mediaProbeError("media_probe_storage_unavailable")
+	}
+
+	for _, artID := range job.OutputArtifactIDs {
+		art, err := p.artifactRepo.GetByID(ctx, artID)
+		if err != nil {
+			return mediaProbeError("artifact_metadata_unavailable")
+		}
+		if art.MediaType != domain.MediaTypeVideo {
+			if err := p.markArtifactProbeFailed(ctx, art); err != nil {
+				return err
+			}
+			return mediaProbeError("video_artifact_missing")
+		}
+		data, err := p.objects.GetObject(ctx, art.StorageBucket, art.StorageKey)
+		if err != nil {
+			if markErr := p.markArtifactProbeFailed(ctx, art); markErr != nil {
+				return markErr
+			}
+			return mediaProbeError("artifact_bytes_unavailable")
+		}
+		metadata, err := p.videoProber.ProbeVideo(ctx, data, art.SizeBytes)
+		if err != nil {
+			art.ApplyMediaMetadata(metadata)
+			art.ProbeStatus = domain.MediaProbeFailed
+			art.Status = domain.ArtifactStatusFailed
+			if updateErr := p.artifactRepo.Update(ctx, art); updateErr != nil {
+				return updateErr
+			}
+			return mediaProbeError("media_probe_failed")
+		}
+		art.ApplyMediaMetadata(metadata)
+		art.ProbeStatus = domain.MediaProbePassed
+		art.Status = domain.ArtifactStatusReady
+		if err := p.artifactRepo.Update(ctx, art); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (p *processor) markVideoProbeSkipped(ctx context.Context, job *domain.Job) error {
+	for _, artID := range job.OutputArtifactIDs {
+		art, err := p.artifactRepo.GetByID(ctx, artID)
+		if err != nil {
+			return err
+		}
+		if art.MediaType != domain.MediaTypeVideo {
+			continue
+		}
+		art.ApplyMediaMetadata(domain.ArtifactMediaMetadata{ProbeStatus: domain.MediaProbeSkipped})
+		art.Status = domain.ArtifactStatusReady
+		if err := p.artifactRepo.Update(ctx, art); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (p *processor) markVideoProbeFailed(ctx context.Context, job *domain.Job) error {
+	for _, artID := range job.OutputArtifactIDs {
+		art, err := p.artifactRepo.GetByID(ctx, artID)
+		if err != nil {
+			return err
+		}
+		if err := p.markArtifactProbeFailed(ctx, art); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (p *processor) markArtifactProbeFailed(ctx context.Context, art *domain.Artifact) error {
+	art.ApplyMediaMetadata(domain.ArtifactMediaMetadata{ProbeStatus: domain.MediaProbeFailed})
+	art.Status = domain.ArtifactStatusFailed
+	return p.artifactRepo.Update(ctx, art)
+}
+
+func (p *processor) handleMediaProbeFailure(ctx context.Context, job *domain.Job, err error) error {
+	if err == nil {
+		err = mediaProbeError("media_probe_failed")
+	}
+	if releaseErr := p.releaseReserved(ctx, job); releaseErr != nil {
+		return releaseErr
+	}
+	metrics.JobsTerminal.WithLabelValues(string(domain.JobStatusFailedTerminal)).Inc()
+	return p.setStatus(ctx, job, domain.JobStatusFailedTerminal, string(domain.ProviderErrMediaProbeFailed), safeMediaProbeMessage(err))
+}
+
+type mediaProbeError string
+
+func (e mediaProbeError) Error() string {
+	if e == "" {
+		return "media_probe_failed"
+	}
+	return string(e)
+}
+
+func safeMediaProbeMessage(_ error) string {
+	return "video media probe failed"
 }
 
 func (p *processor) saveDialogAnswer(ctx context.Context, job *domain.Job, answer string) error {

@@ -3,6 +3,7 @@ package worker_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -136,6 +137,23 @@ func (d stubDownloader) Download(_ context.Context, _ string) ([]byte, string, e
 	return d.data, d.contentType, nil
 }
 
+type fakeVideoProber struct {
+	metadata domain.ArtifactMediaMetadata
+	err      error
+	calls    int
+}
+
+func (p *fakeVideoProber) ProbeVideo(_ context.Context, _ []byte, _ int64) (domain.ArtifactMediaMetadata, error) {
+	p.calls++
+	if p.err != nil {
+		return p.metadata, p.err
+	}
+	if p.metadata.ProbeStatus == "" {
+		p.metadata.ProbeStatus = domain.MediaProbePassed
+	}
+	return p.metadata, nil
+}
+
 // queueJob inserts a queued job and returns it.
 func (h *harness) queueJob(t *testing.T, op domain.OperationType, mod domain.Modality, prompt string) *domain.Job {
 	t.Helper()
@@ -250,6 +268,118 @@ func TestAsyncFlowViaPollWorker(t *testing.T) {
 	}
 	if len(h.streams.byStream[redisqueue.StreamDelivery]) != 1 {
 		t.Fatalf("expected delivery enqueue after poll")
+	}
+}
+
+func TestVideoProbeSuccessBeforeDelivery(t *testing.T) {
+	prober := &fakeVideoProber{metadata: domain.ArtifactMediaMetadata{
+		Width:       1280,
+		Height:      720,
+		DurationMS:  5000,
+		Codec:       "H264",
+		Container:   "MP4",
+		BitrateBPS:  2400000,
+		ProbeStatus: domain.MediaProbePassed,
+	}}
+	h := newHarnessWithProvider(t, mock.New(), func(d *worker.Deps) {
+		d.VideoProber = prober
+		d.RequireVideoProbe = true
+	})
+	ctx := context.Background()
+	job := h.queueJob(t, domain.OperationVideoGenerate, domain.ModalityVideo, "a safe clip")
+
+	if err := h.gen.Process(ctx, taskFor(job)); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+
+	got := h.reload(t, job.ID)
+	if got.Status != domain.JobStatusResultReady {
+		t.Fatalf("status = %q, want result_ready", got.Status)
+	}
+	if prober.calls != 1 {
+		t.Fatalf("probe calls = %d, want 1", prober.calls)
+	}
+	if len(h.streams.byStream[redisqueue.StreamDelivery]) != 1 {
+		t.Fatalf("expected delivery enqueue, got %v", h.streams.byStream)
+	}
+	if len(got.OutputArtifactIDs) != 1 {
+		t.Fatalf("expected one output artifact, got %d", len(got.OutputArtifactIDs))
+	}
+	art, err := h.artRepo.GetByID(ctx, got.OutputArtifactIDs[0])
+	if err != nil {
+		t.Fatalf("get artifact: %v", err)
+	}
+	if art.ProbeStatus != domain.MediaProbePassed || art.Codec != "h264" || art.Container != "mp4" {
+		t.Fatalf("probe metadata not stored safely: %+v", art)
+	}
+	if art.Width != 1280 || art.Height != 720 || art.DurationMS != 5000 || art.BitrateBPS != 2400000 {
+		t.Fatalf("probe numeric metadata not stored: %+v", art)
+	}
+}
+
+func TestVideoProbeFailureStopsDeliveryAndReleasesReservation(t *testing.T) {
+	prober := &fakeVideoProber{
+		metadata: domain.ArtifactMediaMetadata{ProbeStatus: domain.MediaProbeFailed},
+		err:      errors.New("LEAK_PATH_MARKER LEAK_AUTH_MARKER LEAK_STDERR_MARKER"),
+	}
+	h := newHarnessWithProvider(t, mock.New(), func(d *worker.Deps) {
+		d.VideoProber = prober
+		d.RequireVideoProbe = true
+	})
+	ctx := context.Background()
+	job := h.queueJob(t, domain.OperationVideoGenerate, domain.ModalityVideo, "unsafe clip")
+
+	if err := h.gen.Process(ctx, taskFor(job)); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+
+	got := h.reload(t, job.ID)
+	if got.Status != domain.JobStatusFailedTerminal {
+		t.Fatalf("status = %q, want failed_terminal", got.Status)
+	}
+	if got.ErrorCode != string(domain.ProviderErrMediaProbeFailed) {
+		t.Fatalf("error code = %q, want %q", got.ErrorCode, domain.ProviderErrMediaProbeFailed)
+	}
+	for _, forbidden := range []string{"LEAK_PATH_MARKER", "LEAK_AUTH_MARKER", "LEAK_STDERR_MARKER"} {
+		if strings.Contains(got.ErrorMessage, forbidden) {
+			t.Fatalf("job error leaked %q in %q", forbidden, got.ErrorMessage)
+		}
+	}
+	if len(h.streams.byStream[redisqueue.StreamDelivery]) != 0 {
+		t.Fatalf("probe failure must not enqueue delivery: %v", h.streams.byStream)
+	}
+	if len(h.releaser.released) != 1 || h.releaser.released[0] != job.ID {
+		t.Fatalf("expected reservation release for failed probe, got %v", h.releaser.released)
+	}
+	art, err := h.artRepo.GetByID(ctx, got.OutputArtifactIDs[0])
+	if err != nil {
+		t.Fatalf("get artifact: %v", err)
+	}
+	if art.ProbeStatus != domain.MediaProbeFailed || art.Status != domain.ArtifactStatusFailed {
+		t.Fatalf("artifact should be marked failed after probe failure: %+v", art)
+	}
+}
+
+func TestVideoProbeRequiredWithoutProberFailsClosed(t *testing.T) {
+	h := newHarnessWithProvider(t, mock.New(), func(d *worker.Deps) {
+		d.RequireVideoProbe = true
+	})
+	ctx := context.Background()
+	job := h.queueJob(t, domain.OperationVideoGenerate, domain.ModalityVideo, "needs probe")
+
+	if err := h.gen.Process(ctx, taskFor(job)); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+
+	got := h.reload(t, job.ID)
+	if got.Status != domain.JobStatusFailedTerminal {
+		t.Fatalf("status = %q, want failed_terminal", got.Status)
+	}
+	if len(h.streams.byStream[redisqueue.StreamDelivery]) != 0 {
+		t.Fatalf("missing required prober must not enqueue delivery: %v", h.streams.byStream)
+	}
+	if got.ErrorCode != string(domain.ProviderErrMediaProbeFailed) {
+		t.Fatalf("error code = %q", got.ErrorCode)
 	}
 }
 
