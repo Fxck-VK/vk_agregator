@@ -201,6 +201,29 @@ func (h *harness) queueJob(t *testing.T, op domain.OperationType, mod domain.Mod
 	return job
 }
 
+func (h *harness) queueVideoJob(t *testing.T, params map[string]any) *domain.Job {
+	t.Helper()
+	raw, err := json.Marshal(params)
+	if err != nil {
+		t.Fatalf("marshal params: %v", err)
+	}
+	job := &domain.Job{
+		ID:             uuid.New(),
+		UserID:         uuid.New(),
+		OperationType:  domain.OperationVideoGenerate,
+		Modality:       domain.ModalityVideo,
+		Status:         domain.JobStatusQueued,
+		IdempotencyKey: "job:" + uuid.NewString(),
+		CorrelationID:  "corr",
+		CostReserved:   10,
+		Params:         raw,
+	}
+	if err := h.jobs.Create(context.Background(), job); err != nil {
+		t.Fatalf("create video job: %v", err)
+	}
+	return job
+}
+
 func (h *harness) createInputImageArtifact(t *testing.T, ownerID uuid.UUID, data []byte, mime string) *domain.Artifact {
 	t.Helper()
 	if mime == "" {
@@ -1152,6 +1175,251 @@ func TestBuildRequest_ResolveReferenceRejectsTooMany(t *testing.T) {
 	}
 }
 
+func TestProviderMediaContractAllowsValidVideoSpec(t *testing.T) {
+	provider := &captureVideoProvider{name: "capture-video", model: "safe-video", cost: 10}
+	h := newHarnessWithProvider(t, provider, func(d *worker.Deps) {
+		d.VideoModel = "safe-video"
+		d.VideoDurationSec = 5
+		d.VideoResolution = "720p"
+		d.VideoAspectRatio = "16:9"
+		d.RequireVideoProbe = true
+		d.ProviderMediaContracts = []domain.ProviderMediaContract{validVideoContract(provider.name, provider.model)}
+	})
+	ctx := context.Background()
+	job := h.queueVideoJob(t, map[string]any{
+		"prompt":       "safe clip",
+		"duration_sec": 5,
+		"aspect_ratio": "16:9",
+	})
+
+	if err := h.gen.Process(ctx, taskFor(job)); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+
+	if provider.submits != 1 {
+		t.Fatalf("provider submits = %d, want 1", provider.submits)
+	}
+	if provider.last.DurationSec != 5 || provider.last.AspectRatio != "16:9" || provider.last.Resolution != "720p" {
+		t.Fatalf("unexpected provider request: %+v", provider.last)
+	}
+	got := h.reload(t, job.ID)
+	if got.Status != domain.JobStatusProviderProcessing {
+		t.Fatalf("status = %q, want provider_processing", got.Status)
+	}
+}
+
+func TestProviderMediaContractRejectsUnsupportedDurationBeforeProvider(t *testing.T) {
+	provider := &captureVideoProvider{name: "capture-video", model: "safe-video", cost: 10}
+	h := newHarnessWithProvider(t, provider, func(d *worker.Deps) {
+		d.VideoModel = "safe-video"
+		d.VideoDurationSec = 5
+		d.VideoResolution = "720p"
+		d.VideoAspectRatio = "16:9"
+		d.RequireVideoProbe = true
+		d.ProviderMediaContracts = []domain.ProviderMediaContract{validVideoContract(provider.name, provider.model)}
+	})
+	ctx := context.Background()
+	job := h.queueVideoJob(t, map[string]any{
+		"prompt":       "unsafe duration",
+		"duration_sec": 7,
+		"aspect_ratio": "16:9",
+	})
+
+	if err := h.gen.Process(ctx, taskFor(job)); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+
+	assertRejectedBeforeProvider(t, h, provider, job, "unsupported_capability")
+}
+
+func TestProviderMediaContractRejectsUnsupportedAspectBeforeProvider(t *testing.T) {
+	provider := &captureVideoProvider{name: "capture-video", model: "safe-video", cost: 10}
+	h := newHarnessWithProvider(t, provider, func(d *worker.Deps) {
+		d.VideoModel = "safe-video"
+		d.VideoDurationSec = 5
+		d.VideoResolution = "720p"
+		d.VideoAspectRatio = "16:9"
+		d.RequireVideoProbe = true
+		d.ProviderMediaContracts = []domain.ProviderMediaContract{validVideoContract(provider.name, provider.model)}
+	})
+	ctx := context.Background()
+	job := h.queueVideoJob(t, map[string]any{
+		"prompt":       "unsafe aspect",
+		"duration_sec": 5,
+		"aspect_ratio": "4:3",
+	})
+
+	if err := h.gen.Process(ctx, taskFor(job)); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+
+	assertRejectedBeforeProvider(t, h, provider, job, "unsupported_capability")
+}
+
+func TestProviderMediaContractRejectsUnsupportedModelBeforeProvider(t *testing.T) {
+	provider := &captureVideoProvider{name: "capture-video", model: "safe-video", cost: 10}
+	h := newHarnessWithProvider(t, provider, func(d *worker.Deps) {
+		d.VideoModel = "safe-video"
+		d.VideoDurationSec = 5
+		d.VideoResolution = "720p"
+		d.VideoAspectRatio = "16:9"
+		d.RequireVideoProbe = true
+		d.ProviderMediaContracts = []domain.ProviderMediaContract{validVideoContract(provider.name, provider.model)}
+	})
+	ctx := context.Background()
+	job := h.queueVideoJob(t, map[string]any{
+		"prompt":       "unsafe model",
+		"model_code":   "unapproved-video-model",
+		"duration_sec": 5,
+		"aspect_ratio": "16:9",
+	})
+
+	if err := h.gen.Process(ctx, taskFor(job)); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+
+	assertRejectedBeforeProvider(t, h, provider, job, "unsupported_capability")
+}
+
+func TestProviderMediaContractRejectsRequiredTranscodeWhenDisabled(t *testing.T) {
+	provider := &captureVideoProvider{name: "capture-video", model: "safe-video", cost: 10}
+	contract := validVideoContract(provider.name, provider.model)
+	contract.DeliveryReadyOutput = false
+	contract.RequiresTranscode = true
+	contract.TranscodeAllowed = true
+	h := newHarnessWithProvider(t, provider, func(d *worker.Deps) {
+		d.VideoModel = "safe-video"
+		d.VideoDurationSec = 5
+		d.VideoResolution = "720p"
+		d.VideoAspectRatio = "16:9"
+		d.RequireVideoProbe = true
+		d.VideoTranscodeEnabled = false
+		d.ProviderMediaContracts = []domain.ProviderMediaContract{contract}
+	})
+	ctx := context.Background()
+	job := h.queueVideoJob(t, map[string]any{
+		"prompt":       "needs transcode",
+		"duration_sec": 5,
+		"aspect_ratio": "16:9",
+	})
+
+	if err := h.gen.Process(ctx, taskFor(job)); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+
+	assertRejectedBeforeProvider(t, h, provider, job, "unsupported_capability")
+}
+
+func TestProviderMediaContractDeliveryReadyProbePathAllowsSubmit(t *testing.T) {
+	provider := &captureVideoProvider{name: "capture-video", model: "safe-video", cost: 10}
+	contract := validVideoContract(provider.name, provider.model)
+	contract.DeliveryReadyOutput = true
+	contract.RequiresProbe = true
+	contract.RequiresTranscode = false
+	h := newHarnessWithProvider(t, provider, func(d *worker.Deps) {
+		d.VideoModel = "safe-video"
+		d.VideoDurationSec = 5
+		d.VideoResolution = "720p"
+		d.VideoAspectRatio = "16:9"
+		d.RequireVideoProbe = true
+		d.VideoTranscodeEnabled = false
+		d.ProviderMediaContracts = []domain.ProviderMediaContract{contract}
+	})
+	ctx := context.Background()
+	job := h.queueVideoJob(t, map[string]any{
+		"prompt":       "cheap probe path",
+		"duration_sec": 5,
+		"aspect_ratio": "16:9",
+	})
+
+	if err := h.gen.Process(ctx, taskFor(job)); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+
+	if provider.submits != 1 {
+		t.Fatalf("provider submits = %d, want 1", provider.submits)
+	}
+	if len(h.streams.byStream[redisqueue.StreamProviderPoll]) != 1 {
+		t.Fatalf("expected provider poll enqueue, got %v", h.streams.byStream)
+	}
+}
+
+func TestProviderMediaContractStripsUnsafeNativeParams(t *testing.T) {
+	provider := &captureVideoProvider{name: "capture-video", model: "safe-video", cost: 10}
+	h := newHarnessWithProvider(t, provider, func(d *worker.Deps) {
+		d.VideoModel = "safe-video"
+		d.VideoDurationSec = 5
+		d.VideoResolution = "720p"
+		d.VideoAspectRatio = "16:9"
+		d.RequireVideoProbe = true
+		d.ProviderMediaContracts = []domain.ProviderMediaContract{validVideoContract(provider.name, provider.model)}
+	})
+	ctx := context.Background()
+	job := h.queueVideoJob(t, map[string]any{
+		"prompt":                  "safe clip",
+		"duration_sec":            5,
+		"aspect_ratio":            "16:9",
+		"provider_native_payload": "must-not-reach-adapter",
+		"input_urls":              []string{"INPUT_REFERENCE_SENTINEL"},
+	})
+
+	if err := h.gen.Process(ctx, taskFor(job)); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+	params := string(provider.last.Params)
+	for _, forbidden := range []string{"provider_native_payload", "input_urls", "must-not-reach-adapter", "INPUT_REFERENCE_SENTINEL"} {
+		if strings.Contains(params, forbidden) {
+			t.Fatalf("provider params leaked unsafe value %q in %s", forbidden, params)
+		}
+	}
+	for _, want := range []string{"duration_sec", "resolution", "aspect_ratio"} {
+		if !strings.Contains(params, want) {
+			t.Fatalf("provider params missing safe product field %q in %s", want, params)
+		}
+	}
+}
+
+func validVideoContract(provider domain.ProviderName, model string) domain.ProviderMediaContract {
+	return domain.ProviderMediaContract{
+		Provider:               provider,
+		Model:                  model,
+		ModelClass:             "safe_video",
+		Modality:               domain.ModalityVideo,
+		AllowedDurationsSec:    []int{5},
+		AllowedAspectRatios:    []string{"16:9"},
+		AllowedResolutions:     []string{"720p"},
+		ExpectedContainer:      "mp4",
+		ExpectedCodec:          "h264",
+		ExpectedMaxBytes:       128 << 20,
+		DeliveryReadyOutput:    true,
+		RequiresProbe:          true,
+		TranscodeAllowed:       false,
+		MaxProviderAttempts:    1,
+		MaxFallbackAttempts:    0,
+		MaxProviderCostCredits: 20,
+	}
+}
+
+func assertRejectedBeforeProvider(t *testing.T, h *harness, provider *captureVideoProvider, job *domain.Job, code string) {
+	t.Helper()
+	if provider.submits != 0 {
+		t.Fatalf("provider submits = %d, want 0; last=%+v", provider.submits, provider.last)
+	}
+	got := h.reload(t, job.ID)
+	if got.Status != domain.JobStatusFailedTerminal {
+		t.Fatalf("status = %q, want failed_terminal", got.Status)
+	}
+	if got.ErrorCode != code {
+		t.Fatalf("error code = %q, want %q", got.ErrorCode, code)
+	}
+	if len(h.streams.byStream[redisqueue.StreamProviderPoll]) != 0 || len(h.streams.byStream[redisqueue.StreamDelivery]) != 0 {
+		t.Fatalf("rejected request must not enqueue follow-up streams: %v", h.streams.byStream)
+	}
+	if len(h.releaser.released) != 1 || h.releaser.released[0] != job.ID {
+		t.Fatalf("expected reservation release for rejected job, got %v", h.releaser.released)
+	}
+}
+
 type routingProvider struct {
 	name      domain.ProviderName
 	cost      int64
@@ -1237,6 +1505,62 @@ func (p *captureImageProvider) Poll(context.Context, domain.ProviderTaskRef) (do
 }
 
 func (p *captureImageProvider) Cancel(context.Context, domain.ProviderTaskRef) error { return nil }
+
+type captureVideoProvider struct {
+	name    domain.ProviderName
+	model   string
+	cost    int64
+	last    domain.ProviderRequest
+	submits int
+}
+
+func (p *captureVideoProvider) Name() domain.ProviderName {
+	if p.name == "" {
+		return domain.ProviderName("capture-video")
+	}
+	return p.name
+}
+
+func (p *captureVideoProvider) Capabilities(context.Context) ([]domain.Capability, error) {
+	model := p.model
+	if model == "" {
+		model = "safe-video"
+	}
+	return []domain.Capability{{
+		Operation:       domain.OperationVideoGenerate,
+		Modality:        domain.ModalityVideo,
+		ModelCode:       model,
+		SupportsPolling: true,
+		MaxDurationSec:  10,
+	}}, nil
+}
+
+func (p *captureVideoProvider) Estimate(context.Context, domain.ProviderRequest) (domain.CostEstimate, error) {
+	cost := p.cost
+	if cost <= 0 {
+		cost = 10
+	}
+	return domain.CostEstimate{AmountCredits: cost, Currency: "credits"}, nil
+}
+
+func (p *captureVideoProvider) Submit(_ context.Context, req domain.ProviderRequest) (domain.ProviderTask, error) {
+	p.submits++
+	p.last = req
+	return domain.ProviderTask{
+		JobID:          req.JobID,
+		Provider:       p.Name(),
+		ModelCode:      req.ModelCode,
+		ExternalID:     "capture-video-task",
+		Status:         domain.ProviderTaskPending,
+		IdempotencyKey: req.IdempotencyKey,
+	}, nil
+}
+
+func (p *captureVideoProvider) Poll(context.Context, domain.ProviderTaskRef) (domain.ProviderTaskResult, error) {
+	return domain.ProviderTaskResult{Status: domain.ProviderTaskProcessing}, nil
+}
+
+func (p *captureVideoProvider) Cancel(context.Context, domain.ProviderTaskRef) error { return nil }
 
 type routingError struct{ class domain.ProviderErrorClass }
 

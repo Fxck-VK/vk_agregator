@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/platform/config"
 )
 
@@ -180,6 +181,72 @@ func TestLoadMediaPipelineConfig(t *testing.T) {
 	}
 	if cfg.MediaProbeTimeout != 3*time.Second || cfg.MediaTranscodeTimeout != 4*time.Minute {
 		t.Fatalf("unexpected media timeouts: probe=%s transcode=%s", cfg.MediaProbeTimeout, cfg.MediaTranscodeTimeout)
+	}
+}
+
+func TestLoadMediaProviderContractsJSON(t *testing.T) {
+	t.Setenv("MEDIA_PROVIDER_CONTRACTS_JSON", `[{
+		"provider":"deepinfra",
+		"model":"PrunaAI/p-video",
+		"model_class":"deepinfra_video",
+		"modality":"video",
+		"allowed_durations_sec":[5],
+		"allowed_aspect_ratios":["16:9","16:9"],
+		"allowed_resolutions":["720P"],
+		"expected_container":"MP4",
+		"expected_codec":"H264",
+		"expected_max_bytes":134217728,
+		"delivery_ready_output":true,
+		"requires_probe":true,
+		"requires_transcode":false,
+		"transcode_allowed":false,
+		"supports_provider_idempotency":false,
+		"provider_idempotency_guarantee":"none",
+		"max_provider_attempts":1,
+		"max_fallback_attempts":0,
+		"max_provider_cost_credits":10
+	}]`)
+
+	cfg := config.Load()
+	if len(cfg.MediaProviderContracts) != 1 {
+		t.Fatalf("contracts = %d, want 1", len(cfg.MediaProviderContracts))
+	}
+	contract := cfg.MediaProviderContracts[0]
+	if contract.Provider != domain.ProviderDeepInfra || contract.Model != "PrunaAI/p-video" || contract.Modality != domain.ModalityVideo {
+		t.Fatalf("unexpected contract identity: %+v", contract)
+	}
+	if contract.ModelClass != "deepinfra_video" || contract.ExpectedContainer != "mp4" || contract.ExpectedCodec != "h264" {
+		t.Fatalf("contract was not normalized safely: %+v", contract)
+	}
+	if !reflect.DeepEqual(contract.AllowedAspectRatios, []string{"16:9"}) || !reflect.DeepEqual(contract.AllowedResolutions, []string{"720p"}) {
+		t.Fatalf("contract lists were not normalized: %+v", contract)
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("valid media provider contract rejected: %v", err)
+	}
+}
+
+func TestValidateMediaProviderContractsFailClosed(t *testing.T) {
+	cfg := config.Config{MediaProviderContractsRaw: `[{"provider":"deepinfra","unknown":true}]`}
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "MEDIA_PROVIDER_CONTRACTS_JSON") {
+		t.Fatalf("expected JSON validation error, got %v", err)
+	}
+
+	cfg = config.Config{MediaProviderContracts: []domain.ProviderMediaContract{{
+		Provider:            domain.ProviderDeepInfra,
+		Model:               "PrunaAI/p-video",
+		ModelClass:          "deepinfra_video",
+		Modality:            domain.ModalityVideo,
+		ExpectedContainer:   "mp4",
+		ExpectedCodec:       "h264",
+		ExpectedMaxBytes:    1,
+		DeliveryReadyOutput: true,
+		MaxProviderAttempts: 2,
+	}}}
+	err = cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "provider idempotency") {
+		t.Fatalf("expected retry-risk validation error, got %v", err)
 	}
 }
 

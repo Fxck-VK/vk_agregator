@@ -147,6 +147,7 @@ Override these values when needed:
 | `MEDIA_MAX_VIDEO_WIDTH` / `MEDIA_MAX_VIDEO_HEIGHT` / `MEDIA_MAX_VIDEO_BITRATE` | `1920` / `1080` / `12000000` | Video dimension and bitrate ceilings for VK-ready variants |
 | `MEDIA_ALLOWED_VIDEO_CONTAINERS` / `MEDIA_ALLOWED_VIDEO_CODECS` | `mp4,mov,webm` / `h264,h265,hevc,vp8,vp9,av1` | Allowlist used by worker-owned media validation; values are normalized before use |
 | `MEDIA_PROBE_TIMEOUT` / `MEDIA_TRANSCODE_TIMEOUT` | `10s` / `10m` | Time bounds for future probe/transcode subprocesses |
+| `MEDIA_PROVIDER_CONTRACTS_JSON` | `` | Optional JSON array of product-level provider/model media contracts. Contracts reject unsupported video duration/aspect/resolution/model/cost before provider submit; metrics must use bounded `model_class`, not raw model ids |
 | `VK_DELIVERY_MODE` | `mock` | VK delivery adapter: `mock` or `real` |
 | `VK_ACCESS_TOKEN` / `VK_API_VERSION` | `` / `5.199` | Required for real VK `messages.send`, photo upload, mp4-as-document upload and API-side `/start` control menu responses |
 | `VK_VIDEO_DELIVERY_MODE` | `doc` | Generated video delivery: `doc` sends mp4 as a file attachment; `video` sends a native VK video attachment with inline player |
@@ -303,6 +304,10 @@ Override these values when needed:
   is rejected in production. Unsafe probe/transcode failures end the video job
   terminally and release reserved credits before delivery/capture. With probe
   disabled in local/dev, video artifacts are marked `probe_status=skipped`.
+  Before submit, the worker also checks product-level provider media contracts:
+  unsupported video model, duration, aspect ratio, resolution or estimated cost
+  is rejected before paid provider work; raw model ids may live in config, but
+  provider metrics should use curated bounded `model_class` labels.
   Maintenance cleanup also uses
   `ARTIFACT_RETENTION_DAYS` to delete only old inactive `failed/deleted`
   original media objects and variants/thumbnails, then clears their private

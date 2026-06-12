@@ -3,13 +3,17 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/joho/godotenv"
+
+	"vk-ai-aggregator/internal/domain"
 )
 
 const (
@@ -158,6 +162,13 @@ type Config struct {
 	MediaAllowedVideoCodecs      []string
 	MediaProbeTimeout            time.Duration
 	MediaTranscodeTimeout        time.Duration
+	// MediaProviderContractsRaw is the original env string used to fail closed
+	// on malformed JSON during Validate.
+	MediaProviderContractsRaw string
+	// MediaProviderContracts is an optional product-level media allowlist. It
+	// augments built-in safe defaults in cmd/worker and never belongs in the
+	// frontend.
+	MediaProviderContracts []domain.ProviderMediaContract
 
 	OpenAIAPIKey       string
 	OpenAIBaseURL      string
@@ -468,6 +479,23 @@ func (c Config) Validate() error {
 			return fmt.Errorf("config: MEDIA_TRANSCODE_TIMEOUT must be positive when MEDIA_VIDEO_TRANSCODE_POLICY=%s", transcodePolicy)
 		}
 	}
+	if strings.TrimSpace(c.MediaProviderContractsRaw) != "" {
+		contracts, err := parseMediaProviderContracts(c.MediaProviderContractsRaw)
+		if err != nil {
+			return fmt.Errorf("config: MEDIA_PROVIDER_CONTRACTS_JSON is invalid: %w", err)
+		}
+		for _, contract := range contracts {
+			if err := contract.Validate(); err != nil {
+				return fmt.Errorf("config: MEDIA_PROVIDER_CONTRACTS_JSON: %w", err)
+			}
+		}
+	} else {
+		for _, contract := range c.MediaProviderContracts {
+			if err := contract.Validate(); err != nil {
+				return fmt.Errorf("config: MEDIA_PROVIDER_CONTRACTS_JSON: %w", err)
+			}
+		}
+	}
 	if c.IsProduction() {
 		if c.usesMockProvider() {
 			return fmt.Errorf("config: mock provider is not allowed in production")
@@ -528,6 +556,8 @@ func Load() Config {
 		providerChain = []string{provider}
 	}
 	mediaPipelineEnabled := envBool("MEDIA_PIPELINE_ENABLED", false)
+	mediaProviderContractsRaw := env("MEDIA_PROVIDER_CONTRACTS_JSON", "")
+	mediaProviderContracts, _ := parseMediaProviderContracts(mediaProviderContractsRaw)
 	return Config{
 		Env:           appEnv,
 		HTTPAddr:      env("HTTP_ADDR", ":8080"),
@@ -627,6 +657,8 @@ func Load() Config {
 		MediaAllowedVideoCodecs:           envNormalizedList("MEDIA_ALLOWED_VIDEO_CODECS", []string{"h264", "h265", "hevc", "vp8", "vp9", "av1"}),
 		MediaProbeTimeout:                 envDuration("MEDIA_PROBE_TIMEOUT", 10*time.Second),
 		MediaTranscodeTimeout:             envDuration("MEDIA_TRANSCODE_TIMEOUT", 10*time.Minute),
+		MediaProviderContractsRaw:         mediaProviderContractsRaw,
+		MediaProviderContracts:            mediaProviderContracts,
 		OpenAIAPIKey:                      env("OPENAI_API_KEY", ""),
 		OpenAIBaseURL:                     env("OPENAI_BASE_URL", "https://api.openai.com/v1"),
 		OpenAITextModel:                   env("OPENAI_TEXT_MODEL", "gpt-4.1-mini"),
@@ -992,6 +1024,59 @@ func envNormalizedList(key string, def []string) []string {
 		}
 		seen[item] = struct{}{}
 		out = append(out, item)
+	}
+	return out
+}
+
+func parseMediaProviderContracts(raw string) ([]domain.ProviderMediaContract, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil, nil
+	}
+	dec := json.NewDecoder(strings.NewReader(raw))
+	dec.DisallowUnknownFields()
+	var contracts []domain.ProviderMediaContract
+	if err := dec.Decode(&contracts); err != nil {
+		return nil, err
+	}
+	if err := dec.Decode(&struct{}{}); err != io.EOF {
+		if err == nil {
+			return nil, fmt.Errorf("unexpected trailing JSON value")
+		}
+		return nil, err
+	}
+	if len(contracts) == 0 {
+		return nil, nil
+	}
+	for i := range contracts {
+		contracts[i].AllowedAspectRatios = normalizeLooseList(contracts[i].AllowedAspectRatios)
+		contracts[i].AllowedResolutions = normalizeLooseList(contracts[i].AllowedResolutions)
+		contracts[i].ExpectedContainer = normalizeConfigToken(contracts[i].ExpectedContainer)
+		contracts[i].ExpectedCodec = normalizeConfigToken(contracts[i].ExpectedCodec)
+		contracts[i].ModelClass = normalizeConfigToken(contracts[i].ModelClass)
+		if contracts[i].ProviderIdempotencyGuarantee == "" {
+			contracts[i].ProviderIdempotencyGuarantee = domain.ProviderIdempotencyNone
+		}
+	}
+	return contracts, nil
+}
+
+func normalizeLooseList(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(values))
+	seen := map[string]struct{}{}
+	for _, value := range values {
+		value = strings.ToLower(strings.TrimSpace(value))
+		if value == "" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		out = append(out, value)
 	}
 	return out
 }

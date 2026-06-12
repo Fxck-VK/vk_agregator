@@ -115,6 +115,10 @@ type ProviderRequest struct {
 	Draft bool `json:"draft,omitempty"`
 	// IdempotencyKey makes the submit safe to retry.
 	IdempotencyKey string `json:"idempotency_key"`
+	// AttemptNo is the worker-side submit attempt number. Adapters should not
+	// rely on it for native API shape; provider media policy uses it to prevent
+	// duplicate paid video submissions.
+	AttemptNo int `json:"attempt_no,omitempty"`
 }
 
 // ImageGenerationRequest is the provider-agnostic contract for still-image

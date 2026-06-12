@@ -80,6 +80,7 @@ type Registry struct {
 	order               []domain.ProviderName
 	preferredByModality map[domain.Modality]domain.ProviderName
 	breakers            map[domain.ProviderName]*breakerState
+	mediaContracts      mediaContractRegistry
 	now                 func() time.Time
 }
 
@@ -98,6 +99,17 @@ func NewRegistry(def domain.Provider, more ...domain.Provider) *Registry {
 		r.add(p)
 	}
 	return r
+}
+
+// ConfigureProviderMediaContracts installs the worker-owned product allowlist
+// used to reject risky video provider/model combinations before Submit.
+func (r *Registry) ConfigureProviderMediaContracts(contracts []domain.ProviderMediaContract, requireVideoProbe, videoTranscodeEnabled bool) {
+	if r == nil {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.mediaContracts = newMediaContractRegistry(contracts, requireVideoProbe, videoTranscodeEnabled)
 }
 
 // PreferProvider makes a provider the first candidate for a modality when it
@@ -160,6 +172,47 @@ func (r *Registry) rawForName(name domain.ProviderName) (domain.Provider, error)
 		return nil, fmt.Errorf("worker: unknown provider %q", name)
 	}
 	return p, nil
+}
+
+func (r *Registry) validateProviderMediaContract(provider domain.ProviderName, req domain.ProviderRequest, estimate domain.CostEstimate) (*domain.ProviderMediaContract, error) {
+	if r == nil {
+		return nil, nil
+	}
+	r.mu.Lock()
+	contracts := r.mediaContracts
+	r.mu.Unlock()
+	return contracts.validateProviderSubmit(provider, req, estimate)
+}
+
+func (r *Registry) metricModelForRequest(provider domain.ProviderName, req domain.ProviderRequest, models ...string) string {
+	if r == nil {
+		return providerMetricModel(append(models, req.ModelCode)...)
+	}
+	r.mu.Lock()
+	contracts := r.mediaContracts
+	r.mu.Unlock()
+	if class := contracts.modelClass(provider, req.ModelCode, req.Modality); class != "" {
+		return providerMetricModel(class)
+	}
+	for _, model := range models {
+		if class := contracts.modelClass(provider, model, req.Modality); class != "" {
+			return providerMetricModel(class)
+		}
+	}
+	return providerMetricModel(append(models, req.ModelCode)...)
+}
+
+func (r *Registry) metricModelForTask(provider domain.ProviderName, model string, modality domain.Modality) string {
+	if r == nil {
+		return providerMetricModel(model)
+	}
+	r.mu.Lock()
+	contracts := r.mediaContracts
+	r.mu.Unlock()
+	if class := contracts.modelClass(provider, model, modality); class != "" {
+		return providerMetricModel(class)
+	}
+	return providerMetricModel(model)
 }
 
 type providerCandidate struct {
@@ -332,10 +385,14 @@ func (p *observedProvider) Estimate(ctx context.Context, req domain.ProviderRequ
 	return p.provider.Estimate(ctx, req)
 }
 func (p *observedProvider) Submit(ctx context.Context, req domain.ProviderRequest) (domain.ProviderTask, error) {
+	estimate, _ := p.provider.Estimate(ctx, req)
+	if _, err := p.registry.validateProviderMediaContract(p.provider.Name(), req, estimate); err != nil {
+		return domain.ProviderTask{}, err
+	}
 	started := p.registry.now()
 	task, err := p.provider.Submit(ctx, req)
 	p.registry.record(p.provider.Name(), started, err)
-	recordProviderCall(p.provider.Name(), req.ModelCode, req.Operation, started, err, "")
+	recordProviderCall(p.provider.Name(), p.registry.metricModelForRequest(p.provider.Name(), req, task.ModelCode), req.Operation, started, err, "")
 	return task, err
 }
 func (p *observedProvider) Poll(ctx context.Context, ref domain.ProviderTaskRef) (domain.ProviderTaskResult, error) {
@@ -380,23 +437,39 @@ func (p *routedProvider) Estimate(ctx context.Context, req domain.ProviderReques
 }
 func (p *routedProvider) Submit(ctx context.Context, req domain.ProviderRequest) (domain.ProviderTask, error) {
 	var last error
+	submittedAttempts := 0
 	for idx, candidate := range p.candidates {
+		contract, err := p.registry.validateProviderMediaContract(candidate.name, req, domain.CostEstimate{AmountCredits: candidate.cost, Currency: "credits"})
+		if err != nil {
+			last = err
+			continue
+		}
 		started := p.registry.now()
 		task, err := candidate.provider.Submit(ctx, req)
 		p.registry.record(candidate.name, started, err)
-		recordProviderCall(candidate.name, req.ModelCode, req.Operation, started, err, "")
+		recordProviderCall(candidate.name, p.registry.metricModelForRequest(candidate.name, req, task.ModelCode), req.Operation, started, err, "")
+		submittedAttempts++
 		if err == nil {
 			if task.Provider == "" {
 				task.Provider = candidate.name
 			}
 			if candidate.cost > 0 {
-				model := providerMetricModel(task.ModelCode, req.ModelCode)
+				model := p.registry.metricModelForRequest(candidate.name, req, task.ModelCode)
 				metrics.ProviderEstimatedCost.WithLabelValues(string(candidate.name), model, operationMetricLabel(req.Operation), "credits").Add(float64(candidate.cost))
 			}
 			return task, nil
 		}
 		last = err
 		if !isFallbackError(err) {
+			break
+		}
+		if contract != nil && submittedAttempts > contract.MaxFallbackAttempts {
+			metrics.ProviderFallback.WithLabelValues(
+				string(candidate.name),
+				"none",
+				operationMetricLabel(req.Operation),
+				"contract_budget_exhausted",
+			).Inc()
 			break
 		}
 		if idx+1 < len(p.candidates) {
@@ -532,6 +605,12 @@ type Deps struct {
 	VideoTranscoder VideoTranscoder
 	// RequireVideoProbe makes video jobs fail closed when no prober is configured.
 	RequireVideoProbe bool
+	// VideoTranscodeEnabled reports whether worker policy allows expensive video
+	// transcode work. Provider media contracts use it before Submit.
+	VideoTranscodeEnabled bool
+	// ProviderMediaContracts is the product-level allowlist for risky video
+	// provider/model combinations.
+	ProviderMediaContracts []domain.ProviderMediaContract
 	// TextContext, when set, stores VK text dialog history and renders compact
 	// provider prompts for text jobs.
 	TextContext TextContext
@@ -570,6 +649,9 @@ func newProcessor(d Deps) processor {
 	callTimeout := d.ProviderCallTimeout
 	if callTimeout <= 0 {
 		callTimeout = defaultProviderCallTimeout
+	}
+	if d.Providers != nil {
+		d.Providers.ConfigureProviderMediaContracts(d.ProviderMediaContracts, d.RequireVideoProbe, d.VideoTranscodeEnabled)
 	}
 	return processor{
 		jobs:              d.Jobs,
@@ -649,8 +731,7 @@ func (p *processor) buildRequest(ctx context.Context, job *domain.Job, attempt i
 			modelCode = p.videoModel
 		}
 		durationSec = p.videoDurationSec
-		switch pp.DurationSec {
-		case 3, 5, 10:
+		if pp.DurationSec > 0 {
 			durationSec = pp.DurationSec
 		}
 		resolution = p.videoResolution
@@ -686,6 +767,10 @@ func (p *processor) buildRequest(ctx context.Context, job *domain.Job, attempt i
 			return domain.ProviderRequest{}, err
 		}
 	}
+	providerParams := stripProviderInputURLs(job.Params)
+	if job.Modality == domain.ModalityVideo {
+		providerParams = safeVideoProviderParams(durationSec, resolution, pp.AspectRatio, draft)
+	}
 	return domain.ProviderRequest{
 		JobID:                job.ID,
 		UserID:               job.UserID,
@@ -701,10 +786,32 @@ func (p *processor) buildRequest(ctx context.Context, job *domain.Job, attempt i
 		Draft:                draft,
 		ReferenceArtifactIDs: pp.ReferenceArtifactIDs,
 		InputURLs:            inputURLs,
-		Params:               stripProviderInputURLs(job.Params),
+		Params:               providerParams,
 		MaxOutputTokens:      maxOutputTokens,
 		IdempotencyKey:       fmt.Sprintf("provider_submit:%s:%d", job.ID, attempt),
+		AttemptNo:            attempt,
 	}, nil
+}
+
+func safeVideoProviderParams(durationSec int, resolution, aspectRatio string, draft bool) json.RawMessage {
+	params := map[string]any{}
+	if durationSec > 0 {
+		params["duration_sec"] = durationSec
+	}
+	if strings.TrimSpace(resolution) != "" {
+		params["resolution"] = strings.TrimSpace(resolution)
+	}
+	if strings.TrimSpace(aspectRatio) != "" {
+		params["aspect_ratio"] = strings.TrimSpace(aspectRatio)
+	}
+	if draft {
+		params["draft"] = true
+	}
+	raw, err := json.Marshal(params)
+	if err != nil {
+		return nil
+	}
+	return raw
 }
 
 func stripProviderInputURLs(raw json.RawMessage) json.RawMessage {
@@ -866,17 +973,20 @@ func recordProviderCall(provider domain.ProviderName, model string, operation do
 	}
 }
 
-func recordProviderPoll(provider domain.ProviderName, model string, operation domain.OperationType, started time.Time, res domain.ProviderTaskResult, err error) {
+func (p *processor) recordProviderPoll(provider domain.ProviderName, model string, modality domain.Modality, operation domain.OperationType, started time.Time, res domain.ProviderTaskResult, err error) {
 	result := "success"
 	if err != nil {
 		result = "error"
 	} else if res.Status != "" {
 		result = string(res.Status)
 	}
-	recordProviderCall(provider, model, operation, started, err, result)
+	modelLabel := providerMetricModel(model)
+	if p.providers != nil {
+		modelLabel = p.providers.metricModelForTask(provider, model, modality)
+	}
+	recordProviderCall(provider, modelLabel, operation, started, err, result)
 	if err == nil && res.Status == domain.ProviderTaskFailed && res.ErrorClass != "" {
 		providerLabel := providerMetricProvider(provider)
-		modelLabel := providerMetricModel(model)
 		operationLabel := operationMetricLabel(operation)
 		metrics.ProviderErrors.WithLabelValues(providerLabel, modelLabel, operationLabel, string(res.ErrorClass)).Inc()
 		if res.ErrorClass == domain.ProviderErrRateLimited {
@@ -885,7 +995,7 @@ func recordProviderPoll(provider domain.ProviderName, model string, operation do
 	}
 }
 
-func recordProviderOutputs(pt *domain.ProviderTask, job *domain.Job, res domain.ProviderTaskResult) {
+func (p *processor) recordProviderOutputs(pt *domain.ProviderTask, job *domain.Job, res domain.ProviderTaskResult) {
 	if pt == nil || job == nil {
 		return
 	}
@@ -895,6 +1005,9 @@ func recordProviderOutputs(pt *domain.ProviderTask, job *domain.Job, res domain.
 	}
 	providerLabel := providerMetricProvider(pt.Provider)
 	modelLabel := providerMetricModel(pt.ModelCode)
+	if p.providers != nil {
+		modelLabel = p.providers.metricModelForTask(pt.Provider, pt.ModelCode, job.Modality)
+	}
 	operationLabel := operationMetricLabel(job.OperationType)
 	switch job.Modality {
 	case domain.ModalityImage:
@@ -1041,7 +1154,7 @@ func (p *processor) pollOnce(ctx context.Context, job *domain.Job, pt *domain.Pr
 	)
 	started := time.Now()
 	res, err := provider.Poll(pollCtx, domain.ProviderTaskRef{Provider: pt.Provider, ExternalID: pt.ExternalID})
-	recordProviderPoll(pt.Provider, pt.ModelCode, job.OperationType, started, res, err)
+	p.recordProviderPoll(pt.Provider, pt.ModelCode, job.Modality, job.OperationType, started, res, err)
 	if err != nil {
 		tracing.RecordError(span, err)
 		span.End()
@@ -1075,7 +1188,7 @@ func (p *processor) applyResult(ctx context.Context, job *domain.Job, pt *domain
 
 	switch res.Status {
 	case domain.ProviderTaskSucceeded:
-		recordProviderOutputs(pt, job, res)
+		p.recordProviderOutputs(pt, job, res)
 		if err := p.saveOutputs(ctx, job, res.OutputURLs); err != nil {
 			// A download failure is retryable provider-side.
 			return p.handleFailure(ctx, job, task, domain.ProviderErrOutputDownloadFailed, err.Error())

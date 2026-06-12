@@ -104,7 +104,9 @@ func (p *Provider) Capabilities(_ context.Context) ([]domain.Capability, error) 
 		// Image model is intentionally wildcarded so local/dev image jobs can
 		// carry a future real model code while still falling back to mock.
 		{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, SupportsPolling: true},
-		{Operation: domain.OperationVideoGenerate, Modality: domain.ModalityVideo, ModelCode: "mock-video", SupportsPolling: true, MaxDurationSec: 10},
+		// Video is wildcarded for the same reason: local/dev may carry a real
+		// product model code while using the mock provider.
+		{Operation: domain.OperationVideoGenerate, Modality: domain.ModalityVideo, SupportsPolling: true, MaxDurationSec: 10},
 	}, nil
 }
 

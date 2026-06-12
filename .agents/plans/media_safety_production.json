@@ -2,7 +2,7 @@
   "schema_version": 1,
   "plan_id": "media_safety_production",
   "source_plan": "docs/MEDIA_SAFETY_PRODUCTION_PLAN.md",
-  "updated_at": "2026-06-12T20:15:00+03:00",
+  "updated_at": "2026-06-12T19:58:25+03:00",
   "mode": "IMPLEMENT",
   "security_invariants": [
     "vk_bot_and_miniapp_do_not_call_providers_or_media_tools_directly",
@@ -118,6 +118,67 @@
         {
           "command": "git status --short --branch",
           "status": "passed"
+        }
+      ],
+      "push_allowed": false,
+      "errors": []
+    },
+    {
+      "id": "stage_3",
+      "name": "Provider Media Contract Registry",
+      "status": "completed",
+      "load_impact": "low",
+      "scope": [
+        "internal/domain/provider_media_contract",
+        "internal/platform/config/media_provider_contracts",
+        "cmd/worker/provider_contract_defaults",
+        "internal/worker/pre_submit_contract_guard",
+        "internal/adapter/provider/mock_dev_video_wildcard",
+        "runbook",
+        "env_example"
+      ],
+      "policy_decisions": [
+        "video provider/model combinations are constrained by product-level media contracts before provider submit",
+        "real or unknown video providers without a contract fail closed before paid work",
+        "mock local development remains allowed and supports real-looking model codes through a wildcard mock capability",
+        "default video contracts allow one provider attempt and zero fallback attempts unless an explicit contract proves provider-side idempotency",
+        "video provider params are reduced to a safe product subset before adapter submit",
+        "provider metrics use bounded contract model_class when a video contract matches"
+      ],
+      "required_checks": [
+        "gofmt -l .",
+        "go test ./internal/domain ./internal/worker ./internal/adapter/provider/...",
+        "go vet ./internal/domain ./internal/worker ./internal/adapter/provider/...",
+        "git diff --check",
+        "git status --short --branch"
+      ],
+      "checks_run": [
+        {
+          "command": "go test ./internal/domain ./internal/worker ./internal/adapter/provider/... ./internal/platform/config",
+          "status": "passed",
+          "note": "initial sandbox run could not access Go build cache; rerun with approval passed"
+        },
+        {
+          "command": "go vet ./internal/domain ./internal/worker ./internal/adapter/provider/... ./internal/platform/config",
+          "status": "passed"
+        },
+        {
+          "command": "gofmt -l .",
+          "status": "passed"
+        },
+        {
+          "command": "git diff --check",
+          "status": "passed",
+          "note": "line-ending warnings only for existing working-copy normalization"
+        },
+        {
+          "command": "Get-Content .agents/plans/media_safety_production.json | ConvertFrom-Json",
+          "status": "passed"
+        },
+        {
+          "command": "git status --short --branch",
+          "status": "passed",
+          "note": "unrelated pre-existing dirty docs/prompt files remain unstaged"
         }
       ],
       "push_allowed": false,
