@@ -17,7 +17,7 @@ const defaultMediaCleanupLimit = 100
 type Store interface {
 	CleanupExpiredIdempotencyKeys(ctx context.Context, now time.Time) (int64, error)
 	CleanupOutboxEvents(ctx context.Context, cutoff time.Time) (int64, error)
-	MediaCleanupCandidates(ctx context.Context, cutoff time.Time, limit int) ([]domain.MediaCleanupCandidate, error)
+	MediaCleanupCandidates(ctx context.Context, policy domain.MediaCleanupPolicy, limit int) ([]domain.MediaCleanupCandidate, error)
 	MarkMediaCleanupDeleted(ctx context.Context, candidate domain.MediaCleanupCandidate) error
 	ProductActiveUserCounts(ctx context.Context, since time.Time) ([]domain.ProductActiveUserCount, error)
 	BalanceMismatches(ctx context.Context, limit int) ([]domain.BalanceMismatch, error)
@@ -39,7 +39,11 @@ type Config struct {
 	OutboxRetention               time.Duration
 	BillingReconciliationInterval time.Duration
 	BillingReconciliationLimit    int
-	MediaRetention                time.Duration
+	MediaTempUploadRetention      time.Duration
+	MediaInputRetention           time.Duration
+	MediaFailedRetention          time.Duration
+	MediaOriginalRetention        time.Duration
+	MediaVariantRetention         time.Duration
 	MediaCleanupLimit             int
 }
 
@@ -186,11 +190,14 @@ func (s *Service) Cleanup(ctx context.Context) error {
 }
 
 func (s *Service) cleanupMedia(ctx context.Context, now time.Time) (int64, error) {
-	if s.cfg.MediaRetention <= 0 || s.mediaObjects == nil {
+	if s.mediaObjects == nil {
 		return 0, nil
 	}
-	cutoff := now.Add(-s.cfg.MediaRetention)
-	candidates, err := s.store.MediaCleanupCandidates(ctx, cutoff, s.cfg.MediaCleanupLimit)
+	policy := s.mediaCleanupPolicy(now)
+	if !policy.Enabled() {
+		return 0, nil
+	}
+	candidates, err := s.store.MediaCleanupCandidates(ctx, policy, s.cfg.MediaCleanupLimit)
 	if err != nil {
 		return 0, err
 	}
@@ -222,6 +229,26 @@ func (s *Service) cleanupMedia(ctx context.Context, now time.Time) (int64, error
 		metrics.ObserveMediaCleanupDeleted("success", variantType, "none")
 	}
 	return deleted, nil
+}
+
+func (s *Service) mediaCleanupPolicy(now time.Time) domain.MediaCleanupPolicy {
+	var policy domain.MediaCleanupPolicy
+	if s.cfg.MediaTempUploadRetention > 0 {
+		policy.TempUploadCutoff = now.Add(-s.cfg.MediaTempUploadRetention)
+	}
+	if s.cfg.MediaInputRetention > 0 {
+		policy.InputReferenceCutoff = now.Add(-s.cfg.MediaInputRetention)
+	}
+	if s.cfg.MediaOriginalRetention > 0 {
+		policy.ProviderOriginalCutoff = now.Add(-s.cfg.MediaOriginalRetention)
+	}
+	if s.cfg.MediaVariantRetention > 0 {
+		policy.DeliveryVariantCutoff = now.Add(-s.cfg.MediaVariantRetention)
+	}
+	if s.cfg.MediaFailedRetention > 0 {
+		policy.FailedDeletedCutoff = now.Add(-s.cfg.MediaFailedRetention)
+	}
+	return policy
 }
 
 func mediaCleanupVariantType(candidate domain.MediaCleanupCandidate) string {

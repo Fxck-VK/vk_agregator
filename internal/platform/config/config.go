@@ -311,6 +311,12 @@ type Config struct {
 	SignedDelivery bool
 	// ArtifactRetentionDays configures object lifecycle expiry (0 = keep) (ST1).
 	ArtifactRetentionDays int
+	// Media*RetentionDays split artifact cleanup by lifecycle class. Zero means
+	// keep that class; failed/deleted defaults to ARTIFACT_RETENTION_DAYS.
+	MediaInputRetentionDays    int
+	MediaFailedRetentionDays   int
+	MediaOriginalRetentionDays int
+	MediaVariantRetentionDays  int
 
 	// WorkerProviderCallTimeout bounds one provider Submit/Poll call in workers.
 	WorkerProviderCallTimeout time.Duration
@@ -514,6 +520,18 @@ func (c Config) Validate() error {
 	if c.MediaMaxConcurrentUploads < 0 {
 		return fmt.Errorf("config: MEDIA_MAX_CONCURRENT_UPLOADS must be non-negative")
 	}
+	if c.MediaInputRetentionDays < 0 {
+		return fmt.Errorf("config: MEDIA_INPUT_RETENTION_DAYS must be non-negative")
+	}
+	if c.MediaFailedRetentionDays < 0 {
+		return fmt.Errorf("config: MEDIA_FAILED_RETENTION_DAYS must be non-negative")
+	}
+	if c.MediaOriginalRetentionDays < 0 {
+		return fmt.Errorf("config: MEDIA_ORIGINAL_RETENTION_DAYS must be non-negative")
+	}
+	if c.MediaVariantRetentionDays < 0 {
+		return fmt.Errorf("config: MEDIA_VARIANT_RETENTION_DAYS must be non-negative")
+	}
 	if c.MediaPipelineEnabled && probePolicy == MediaVideoProbePolicyProbeRequired && c.MediaMaxConcurrentProbes == 0 {
 		return fmt.Errorf("config: MEDIA_MAX_CONCURRENT_PROBES must be positive when MEDIA_VIDEO_PROBE_POLICY=probe_required")
 	}
@@ -599,6 +617,7 @@ func Load() Config {
 	mediaPipelineEnabled := envBool("MEDIA_PIPELINE_ENABLED", false)
 	mediaProviderContractsRaw := env("MEDIA_PROVIDER_CONTRACTS_JSON", "")
 	mediaProviderContracts, _ := parseMediaProviderContracts(mediaProviderContractsRaw)
+	artifactRetentionDays := envInt("ARTIFACT_RETENTION_DAYS", 0)
 	return Config{
 		Env:           appEnv,
 		HTTPAddr:      env("HTTP_ADDR", ":8080"),
@@ -801,9 +820,13 @@ func Load() Config {
 		FrontendTelemetryEnabled:        envBool("FRONTEND_TELEMETRY_ENABLED", false),
 		FrontendTelemetryUserHashSecret: env("FRONTEND_TELEMETRY_USER_HASH_SECRET", ""),
 
-		ArtifactURLTTL:        envDuration("ARTIFACT_URL_TTL", time.Hour),
-		SignedDelivery:        envBool("SIGNED_DELIVERY", false),
-		ArtifactRetentionDays: envInt("ARTIFACT_RETENTION_DAYS", 0),
+		ArtifactURLTTL:             envDuration("ARTIFACT_URL_TTL", time.Hour),
+		SignedDelivery:             envBool("SIGNED_DELIVERY", false),
+		ArtifactRetentionDays:      artifactRetentionDays,
+		MediaInputRetentionDays:    envInt("MEDIA_INPUT_RETENTION_DAYS", 0),
+		MediaFailedRetentionDays:   envInt("MEDIA_FAILED_RETENTION_DAYS", artifactRetentionDays),
+		MediaOriginalRetentionDays: envInt("MEDIA_ORIGINAL_RETENTION_DAYS", 0),
+		MediaVariantRetentionDays:  envInt("MEDIA_VARIANT_RETENTION_DAYS", artifactRetentionDays),
 
 		WorkerProviderCallTimeout:     envDuration("WORKER_PROVIDER_CALL_TIMEOUT", 180*time.Second),
 		WorkerShutdownGrace:           envDuration("WORKER_SHUTDOWN_GRACE", 30*time.Second),

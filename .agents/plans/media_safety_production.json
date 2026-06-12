@@ -2,7 +2,7 @@
   "schema_version": 1,
   "plan_id": "media_safety_production",
   "source_plan": "docs/MEDIA_SAFETY_PRODUCTION_PLAN.md",
-  "updated_at": "2026-06-12T20:49:12+03:00",
+  "updated_at": "2026-06-12T21:06:40+03:00",
   "mode": "IMPLEMENT",
   "security_invariants": [
     "vk_bot_and_miniapp_do_not_call_providers_or_media_tools_directly",
@@ -322,6 +322,84 @@
           "command": "git diff --cached -U0 | Select-String sensitive-pattern sanity check",
           "status": "passed",
           "note": "gitleaks executable was not available in PATH or D:\\delete_potom"
+        },
+        {
+          "command": "git status --short --branch",
+          "status": "passed",
+          "note": "unrelated pre-existing dirty docs/prompt files remain unstaged"
+        }
+      ],
+      "push_allowed": true,
+      "errors": []
+    },
+    {
+      "id": "stage_6",
+      "name": "Image Reference Dedupe And Storage Lifecycle",
+      "status": "completed",
+      "load_impact": "medium_hashing_lifecycle_storage_savings",
+      "scope": [
+        "artifact_domain_lifecycle_metadata",
+        "artifact_repository_policy_scoped_dedupe",
+        "artifactservice_reference_image_reuse",
+        "postgres_additive_media_lifecycle_migration",
+        "maintenance_lifecycle_retention_policy",
+        "worker_maintenance_config_wiring",
+        "runbook",
+        "env_example",
+        "machine_readable_plan"
+      ],
+      "policy_decisions": [
+        "content hashes remain internal and are not used as public artifact identities",
+        "dedupe is allowed only for ready input reference images with same owner, same hash, same MIME type and same validation policy version",
+        "provider originals and output artifacts keep separate artifact ids and artifact-scoped storage keys",
+        "existing artifacts keep empty validation_policy_version so old uploads are not reused under new validation policy",
+        "cleanup is batched and backed by additive indexes for input references, lifecycle classes, job artifact arrays and deliveries",
+        "ready artifacts referenced by jobs or deliveries are not cleanup candidates"
+      ],
+      "required_checks": [
+        "gofmt -l .",
+        "go test ./internal/service/artifactservice ./internal/service/maintenance ./internal/adapter/storage/...",
+        "go vet ./internal/service/artifactservice ./internal/service/maintenance ./internal/adapter/storage/...",
+        "git diff --check",
+        "git status --short --branch"
+      ],
+      "checks_run": [
+        {
+          "command": "go test ./internal/service/artifactservice ./internal/service/maintenance ./internal/adapter/storage/...",
+          "status": "passed",
+          "note": "initial sandbox run could not access Go build cache; rerun with approval passed"
+        },
+        {
+          "command": "go test ./internal/platform/config",
+          "status": "passed",
+          "note": "config retention checks added for the new env variables"
+        },
+        {
+          "command": "go vet ./internal/service/artifactservice ./internal/service/maintenance ./internal/adapter/storage/...",
+          "status": "passed"
+        },
+        {
+          "command": "go vet ./internal/platform/config",
+          "status": "passed"
+        },
+        {
+          "command": "go test ./...",
+          "status": "passed",
+          "note": "extra broad check because ArtifactRepository interface changed"
+        },
+        {
+          "command": "go vet ./...",
+          "status": "passed",
+          "note": "extra broad check because ArtifactRepository interface changed"
+        },
+        {
+          "command": "gofmt -l .",
+          "status": "passed"
+        },
+        {
+          "command": "git diff --check",
+          "status": "passed",
+          "note": "line-ending warnings only for working-copy normalization"
         },
         {
           "command": "git status --short --branch",

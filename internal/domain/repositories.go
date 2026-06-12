@@ -231,6 +231,10 @@ type ArtifactRepository interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*Artifact, error)
 	// GetBySHA256 fetches an artifact by content hash for deduplication.
 	GetBySHA256(ctx context.Context, ownerID uuid.UUID, sha256 string) (*Artifact, error)
+	// FindReusableInputReference fetches a ready input reference image scoped by
+	// owner, content hash and validation policy. It must not return provider
+	// originals, delivery variants or artifacts validated under older policies.
+	FindReusableInputReference(ctx context.Context, ownerID uuid.UUID, sha256, validationPolicyVersion, mimeType string) (*Artifact, error)
 
 	// AddVariant inserts a derived variant of an artifact.
 	AddVariant(ctx context.Context, variant *ArtifactVariant) error

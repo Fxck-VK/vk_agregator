@@ -173,6 +173,10 @@ Override these values when needed:
 | `VK_TOP_UP_RECEIPT_EMAIL` / `VK_TOP_UP_RECEIPT_PHONE` | `` / `` | Server-side receipt contact for the VK Bot quick top-up flow; set at least one when `VK_MENU_TOP_UP_ENABLED=true` |
 | `SIGNED_DELIVERY` / `ARTIFACT_URL_TTL` | `false` / `1h` | Deliver media through signed artifact URLs |
 | `ARTIFACT_RETENTION_DAYS` | `0` | Optional S3 lifecycle expiry and worker maintenance cleanup window for inactive `failed/deleted` media objects; `0` disables cleanup |
+| `MEDIA_INPUT_RETENTION_DAYS` | `0` | Optional cleanup window for unused uploaded reference images; ready references still used by jobs are kept |
+| `MEDIA_FAILED_RETENTION_DAYS` | `ARTIFACT_RETENTION_DAYS` | Cleanup window for failed/deleted media originals and variants |
+| `MEDIA_ORIGINAL_RETENTION_DAYS` | `0` | Optional cleanup window for unreferenced provider originals; active job/delivery history is kept |
+| `MEDIA_VARIANT_RETENTION_DAYS` | `ARTIFACT_RETENTION_DAYS` | Cleanup window for delivery variants whose parent artifact is failed/deleted or no longer referenced |
 | `PRICES` | `image_generate=0` | Price overrides, e.g. `text_generate=2,image_generate=12`; current VK photo quota uses free image jobs plus `VK_ANTISPAM_IMAGE_DAILY_LIMIT` |
 | `MAX_JOB_COST` | `0` | Per-job cost cap; `0` disables the cap |
 | `STREAM_MAX_LEN` | `100000` | Redis stream max length; `0` disables trimming |
@@ -317,11 +321,16 @@ Override these values when needed:
   stream lag/pending crosses `MEDIA_QUEUE_DEGRADE_THRESHOLD`, cap active video
   jobs per user through the job repository, bound per-worker probe/transcode
   concurrency, and keep paid media fallback attempts conservative by default.
-  Maintenance cleanup also uses
-  `ARTIFACT_RETENTION_DAYS` to delete only old inactive `failed/deleted`
-  original media objects and variants/thumbnails, then clears their private
-  storage coordinates; active `ready/stored` artifacts remain available to
-  owners and delivery retries.
+  Maintenance cleanup uses lifecycle-specific retention:
+  `MEDIA_INPUT_RETENTION_DAYS` for unused reference uploads,
+  `MEDIA_FAILED_RETENTION_DAYS` for failed/deleted media,
+  `MEDIA_ORIGINAL_RETENTION_DAYS` for unreferenced provider originals and
+  `MEDIA_VARIANT_RETENTION_DAYS` for safe delivery variants. The legacy
+  `ARTIFACT_RETENTION_DAYS` remains the default for failed/deleted and variant
+  cleanup when the split variables are unset. Cleanup is batched and clears
+  private storage coordinates only after object deletion; active `ready/stored`
+  artifacts referenced by jobs or deliveries remain available to owners and
+  delivery retries.
 - **SSRF**: artifact downloader blocks private/loopback/link-local hosts and
   non-http(s) schemes; optional host allowlist. Provider data URLs are accepted
   for normalized OpenAI text/image/video outputs.

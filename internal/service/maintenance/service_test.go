@@ -14,7 +14,7 @@ import (
 
 type fakeStore struct {
 	calls           []time.Time
-	mediaCutoffs    []time.Time
+	mediaPolicies   []domain.MediaCleanupPolicy
 	mediaCandidates []domain.MediaCleanupCandidate
 	markedMedia     []domain.MediaCleanupCandidate
 }
@@ -27,8 +27,8 @@ func (s *fakeStore) CleanupOutboxEvents(context.Context, time.Time) (int64, erro
 	return 0, nil
 }
 
-func (s *fakeStore) MediaCleanupCandidates(_ context.Context, cutoff time.Time, _ int) ([]domain.MediaCleanupCandidate, error) {
-	s.mediaCutoffs = append(s.mediaCutoffs, cutoff)
+func (s *fakeStore) MediaCleanupCandidates(_ context.Context, policy domain.MediaCleanupPolicy, _ int) ([]domain.MediaCleanupCandidate, error) {
+	s.mediaPolicies = append(s.mediaPolicies, policy)
 	return s.mediaCandidates, nil
 }
 
@@ -103,18 +103,18 @@ func TestCleanupDeletesOnlyConfiguredMediaCandidates(t *testing.T) {
 	objects := &fakeMediaObjectStore{}
 	now := time.Date(2026, 6, 11, 12, 0, 0, 0, time.UTC)
 	svc := New(store, nil, Config{
-		MediaRetention:    24 * time.Hour,
-		MediaCleanupLimit: 10,
+		MediaFailedRetention: 24 * time.Hour,
+		MediaCleanupLimit:    10,
 	}, WithClock(func() time.Time { return now }), WithMediaObjectStore(objects))
 
 	if err := svc.Cleanup(context.Background()); err != nil {
 		t.Fatalf("Cleanup() error = %v", err)
 	}
 
-	if len(store.mediaCutoffs) != 1 {
-		t.Fatalf("MediaCleanupCandidates calls = %d, want 1", len(store.mediaCutoffs))
+	if len(store.mediaPolicies) != 1 {
+		t.Fatalf("MediaCleanupCandidates calls = %d, want 1", len(store.mediaPolicies))
 	}
-	if got := now.Sub(store.mediaCutoffs[0]); got != 24*time.Hour {
+	if got := now.Sub(store.mediaPolicies[0].FailedDeletedCutoff); got != 24*time.Hour {
 		t.Fatalf("media cleanup cutoff = %s, want 24h", got)
 	}
 	if len(objects.deleted) != 1 {
@@ -125,6 +125,23 @@ func TestCleanupDeletesOnlyConfiguredMediaCandidates(t *testing.T) {
 	}
 	if len(store.markedMedia) != 1 || store.markedMedia[0].VariantID != candidate.VariantID {
 		t.Fatalf("marked candidates = %+v, want variant %s", store.markedMedia, candidate.VariantID)
+	}
+}
+
+func TestCleanupSkipsMediaWhenRetentionDisabled(t *testing.T) {
+	store := &fakeStore{}
+	objects := &fakeMediaObjectStore{}
+	svc := New(store, nil, Config{}, WithMediaObjectStore(objects))
+
+	if err := svc.Cleanup(context.Background()); err != nil {
+		t.Fatalf("Cleanup() error = %v", err)
+	}
+
+	if len(store.mediaPolicies) != 0 {
+		t.Fatalf("MediaCleanupCandidates calls = %d, want 0", len(store.mediaPolicies))
+	}
+	if len(objects.deleted) != 0 {
+		t.Fatalf("deleted objects = %d, want 0", len(objects.deleted))
 	}
 }
 

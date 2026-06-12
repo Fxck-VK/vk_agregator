@@ -29,6 +29,10 @@ import (
 // maxRemoteBytes caps how much a remote download may pull, guarding memory.
 const maxRemoteBytes = 256 << 20 // 256 MiB
 
+// ReferenceImageValidationPolicyVersion scopes safe reuse of uploaded
+// reference images. Bump it when validation/sanitization rules become stricter.
+const ReferenceImageValidationPolicyVersion = "image_reference_v1"
+
 var sensitiveURLPattern = regexp.MustCompile(`(?i)(https?|mock)://[^\s"'<>]+|data:[^\s"'<>]+`)
 
 // ObjectStore is the minimal blob storage contract the service needs. It is
@@ -152,13 +156,14 @@ func (s *Service) SaveVariantWithMetadata(ctx context.Context, artifact *domain.
 	}
 
 	variant := &domain.ArtifactVariant{
-		ID:            uuid.New(),
-		ArtifactID:    artifact.ID,
-		VariantType:   variantType,
-		StorageBucket: s.bucket,
-		StorageKey:    key,
-		MimeType:      mimeType,
-		SizeBytes:     int64(len(data)),
+		ID:             uuid.New(),
+		ArtifactID:     artifact.ID,
+		VariantType:    variantType,
+		StorageBucket:  s.bucket,
+		StorageKey:     key,
+		MimeType:       mimeType,
+		SizeBytes:      int64(len(data)),
+		LifecycleClass: domain.ArtifactLifecycleDeliveryVariant,
 	}
 	variant.ApplyMediaMetadata(metadata)
 	if err := s.repo.AddVariant(ctx, variant); err != nil {
@@ -226,8 +231,8 @@ func safeDownloadError(err error) error {
 	return fmt.Errorf("artifactservice: download remote artifact: %s", msg)
 }
 
-// saveBytes computes the content hash, deduplicates by (owner, sha256), uploads
-// the bytes and records the artifact metadata.
+// saveBytes computes the content hash, reuses only policy-compatible input
+// reference images, uploads new bytes and records artifact metadata.
 func (s *Service) saveBytes(ctx context.Context, ownerID uuid.UUID, jobID *uuid.UUID, kind domain.ArtifactKind, mediaType domain.MediaType, mimeType string, data []byte, metadata domain.ArtifactMediaMetadata) (*domain.Artifact, error) {
 	ctx, span := tracing.Start(ctx, "artifact.store",
 		attribute.String("owner.id", ownerID.String()),
@@ -243,10 +248,16 @@ func (s *Service) saveBytes(ctx context.Context, ownerID uuid.UUID, jobID *uuid.
 
 	sum := sha256.Sum256(data)
 	sha := hex.EncodeToString(sum[:])
+	lifecycleClass, validationPolicyVersion := classifyArtifact(kind, mediaType, domain.ArtifactStatusReady)
 
-	if existing, err := s.repo.GetBySHA256(ctx, ownerID, sha); err == nil {
-		span.SetAttributes(attribute.Bool("artifact.dedup_hit", true))
-		return existing, nil
+	if validationPolicyVersion != "" {
+		if existing, err := s.repo.FindReusableInputReference(ctx, ownerID, sha, validationPolicyVersion, mimeType); err == nil {
+			span.SetAttributes(attribute.Bool("artifact.dedup_hit", true))
+			return existing, nil
+		} else if !errors.Is(err, domain.ErrNotFound) {
+			tracing.RecordError(span, err)
+			return nil, err
+		}
 	}
 
 	// Scan new content before it is persisted or delivered (audit ST1).
@@ -257,24 +268,27 @@ func (s *Service) saveBytes(ctx context.Context, ownerID uuid.UUID, jobID *uuid.
 		}
 	}
 
-	key := fmt.Sprintf("artifacts/%s/%s.%s", ownerID, sha, extFor(mediaType))
+	artifactID := uuid.New()
+	key := fmt.Sprintf("artifacts/%s/%s-%s.%s", ownerID, artifactID, sha, extFor(mediaType))
 	if err := s.store.Put(ctx, s.bucket, key, data, mimeType); err != nil {
 		tracing.RecordError(span, err)
 		return nil, fmt.Errorf("artifactservice: store object: %w", err)
 	}
 
 	artifact := &domain.Artifact{
-		ID:            uuid.New(),
-		OwnerUserID:   ownerID,
-		JobID:         jobID,
-		Kind:          kind,
-		MediaType:     mediaType,
-		MimeType:      mimeType,
-		StorageBucket: s.bucket,
-		StorageKey:    key,
-		SHA256:        sha,
-		SizeBytes:     int64(len(data)),
-		Status:        domain.ArtifactStatusReady,
+		ID:                      artifactID,
+		OwnerUserID:             ownerID,
+		JobID:                   jobID,
+		Kind:                    kind,
+		MediaType:               mediaType,
+		MimeType:                mimeType,
+		StorageBucket:           s.bucket,
+		StorageKey:              key,
+		SHA256:                  sha,
+		ValidationPolicyVersion: validationPolicyVersion,
+		LifecycleClass:          lifecycleClass,
+		SizeBytes:               int64(len(data)),
+		Status:                  domain.ArtifactStatusReady,
 	}
 	artifact.ApplyMediaMetadata(metadata)
 	if err := s.repo.Create(ctx, artifact); err != nil {
@@ -283,6 +297,14 @@ func (s *Service) saveBytes(ctx context.Context, ownerID uuid.UUID, jobID *uuid.
 	}
 	span.SetAttributes(attribute.String("artifact.id", artifact.ID.String()))
 	return artifact, nil
+}
+
+func classifyArtifact(kind domain.ArtifactKind, mediaType domain.MediaType, status domain.ArtifactStatus) (domain.ArtifactLifecycleClass, string) {
+	class := domain.NormalizeArtifactLifecycleClass("", kind, mediaType, status)
+	if class == domain.ArtifactLifecycleInputReference {
+		return class, ReferenceImageValidationPolicyVersion
+	}
+	return class, ""
 }
 
 func extFor(mediaType domain.MediaType) string {

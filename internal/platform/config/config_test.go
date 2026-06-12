@@ -158,6 +158,11 @@ func TestLoadMediaPipelineConfig(t *testing.T) {
 	t.Setenv("MEDIA_PROVIDER_FALLBACK_BUDGET_PER_JOB", "0")
 	t.Setenv("MEDIA_QUEUE_DEGRADE_THRESHOLD", "2500")
 	t.Setenv("MEDIA_MAX_CONCURRENT_UPLOADS", "12")
+	t.Setenv("ARTIFACT_RETENTION_DAYS", "7")
+	t.Setenv("MEDIA_INPUT_RETENTION_DAYS", "14")
+	t.Setenv("MEDIA_FAILED_RETENTION_DAYS", "3")
+	t.Setenv("MEDIA_ORIGINAL_RETENTION_DAYS", "30")
+	t.Setenv("MEDIA_VARIANT_RETENTION_DAYS", "21")
 
 	cfg := config.Load()
 	if !cfg.MediaPipelineEnabled {
@@ -198,6 +203,18 @@ func TestLoadMediaPipelineConfig(t *testing.T) {
 	}
 	if cfg.MediaQueueDegradeThreshold != 2500 || cfg.MediaMaxConcurrentUploads != 12 {
 		t.Fatalf("unexpected media queue/upload limits: queue=%d uploads=%d", cfg.MediaQueueDegradeThreshold, cfg.MediaMaxConcurrentUploads)
+	}
+	if cfg.ArtifactRetentionDays != 7 ||
+		cfg.MediaInputRetentionDays != 14 ||
+		cfg.MediaFailedRetentionDays != 3 ||
+		cfg.MediaOriginalRetentionDays != 30 ||
+		cfg.MediaVariantRetentionDays != 21 {
+		t.Fatalf("unexpected media retention config: artifact=%d input=%d failed=%d original=%d variant=%d",
+			cfg.ArtifactRetentionDays,
+			cfg.MediaInputRetentionDays,
+			cfg.MediaFailedRetentionDays,
+			cfg.MediaOriginalRetentionDays,
+			cfg.MediaVariantRetentionDays)
 	}
 }
 
@@ -438,6 +455,13 @@ func TestValidateMediaScaleGuards(t *testing.T) {
 	err = cfg.Validate()
 	if err == nil || !strings.Contains(err.Error(), "MEDIA_QUEUE_DEGRADE_THRESHOLD") {
 		t.Fatalf("expected queue threshold validation error, got %v", err)
+	}
+
+	cfg = validMediaPipelineConfig()
+	cfg.MediaFailedRetentionDays = -1
+	err = cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "MEDIA_FAILED_RETENTION_DAYS") {
+		t.Fatalf("expected retention validation error, got %v", err)
 	}
 }
 
