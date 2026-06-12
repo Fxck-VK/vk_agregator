@@ -2,7 +2,7 @@
   "schema_version": 1,
   "plan_id": "media_safety_production",
   "source_plan": "docs/MEDIA_SAFETY_PRODUCTION_PLAN.md",
-  "updated_at": "2026-06-12T21:28:00+03:00",
+  "updated_at": "2026-06-12T21:39:30+03:00",
   "mode": "IMPLEMENT",
   "security_invariants": [
     "vk_bot_and_miniapp_do_not_call_providers_or_media_tools_directly",
@@ -476,6 +476,85 @@
         }
       ],
       "push_allowed": true,
+      "errors": []
+    },
+    {
+      "id": "stage_8",
+      "name": "Moderation And Safe User UX",
+      "status": "completed",
+      "load_impact": "configurable_worker_owned_scanning_unchanged",
+      "scope": [
+        "domain_safe_media_error_classes",
+        "miniapp_upload_error_codes",
+        "miniapp_job_error_projection",
+        "miniapp_frontend_safe_error_labels",
+        "worker_terminal_media_failure_mapping",
+        "vk_media_failure_notice",
+        "delivery_failure_reservation_release",
+        "worker_delivery_tests",
+        "miniapp_backend_tests",
+        "miniapp_frontend_tests",
+        "machine_readable_plan"
+      ],
+      "policy_decisions": [
+        "public media job error codes are provider-agnostic and bounded",
+        "Mini App upload failures return media_upload_invalid, media_upload_too_large or media_upload_unsupported",
+        "Mini App DTO maps legacy/internal media error codes to safe public classes before exposing jobs",
+        "worker stores safe terminal media failure codes while keeping detailed bounded product-failure reasons in metrics",
+        "terminal delivery failure releases the reservation and does not capture credits",
+        "VK media failure notices cover image and video placeholders and never include prompts, provider details or raw errors",
+        "frontend safe labels explicitly say credits were not charged for media failures without inferring provider/payment truth"
+      ],
+      "required_checks": [
+        "gofmt -l .",
+        "go test ./internal/worker ./internal/adapter/inbound/miniapp ./internal/adapter/inbound/vk",
+        "go vet ./internal/worker ./internal/adapter/inbound/miniapp ./internal/adapter/inbound/vk",
+        "npm --prefix web/miniapp run lint",
+        "npm --prefix web/miniapp run test",
+        "npm --prefix web/miniapp run build",
+        "git diff --check",
+        "git status --short --branch"
+      ],
+      "checks_run": [
+        {
+          "command": "go test ./internal/worker ./internal/adapter/inbound/miniapp ./internal/adapter/inbound/vk",
+          "status": "passed",
+          "note": "initial sandbox run could not access Go build cache; rerun with approval passed"
+        },
+        {
+          "command": "go vet ./internal/worker ./internal/adapter/inbound/miniapp ./internal/adapter/inbound/vk",
+          "status": "passed",
+          "note": "initial sandbox run could not access Go build cache; rerun with approval passed"
+        },
+        {
+          "command": "npm --prefix web/miniapp run lint",
+          "status": "passed"
+        },
+        {
+          "command": "npm --prefix web/miniapp run test",
+          "status": "passed"
+        },
+        {
+          "command": "npm --prefix web/miniapp run build",
+          "status": "passed",
+          "note": "local node_modules was missing esbuild; npm install restored dependencies, package-lock churn was reverted"
+        },
+        {
+          "command": "gofmt -l .",
+          "status": "passed"
+        },
+        {
+          "command": "git diff --check",
+          "status": "passed",
+          "note": "line-ending warnings only for working-copy normalization"
+        },
+        {
+          "command": "git status --short --branch",
+          "status": "passed",
+          "note": "unrelated pre-existing dirty docs/prompt files remain unstaged"
+        }
+      ],
+      "push_allowed": false,
       "errors": []
     }
   ]

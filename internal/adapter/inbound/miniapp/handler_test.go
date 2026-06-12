@@ -1290,6 +1290,9 @@ func TestHandler_UploadArtifact_RejectsWrongMime(t *testing.T) {
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
 	}
+	if !strings.Contains(w.Body.String(), domain.JobErrMediaUploadUnsupported) {
+		t.Fatalf("expected safe unsupported upload error, got %s", w.Body.String())
+	}
 }
 
 func TestHandler_UploadArtifact_RejectsOversize(t *testing.T) {
@@ -1305,6 +1308,9 @@ func TestHandler_UploadArtifact_RejectsOversize(t *testing.T) {
 
 	if w.Code != http.StatusRequestEntityTooLarge {
 		t.Fatalf("expected 413, got %d: %s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), domain.JobErrMediaUploadTooLarge) {
+		t.Fatalf("expected safe too-large upload error, got %s", w.Body.String())
 	}
 }
 

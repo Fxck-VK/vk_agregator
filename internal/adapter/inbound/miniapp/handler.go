@@ -704,7 +704,7 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusTooManyRequests, "active video job limit exceeded")
 	case errors.Is(err, domain.ErrCapacityDegraded):
 		w.Header().Set("Retry-After", "30")
-		writeError(w, http.StatusServiceUnavailable, "media capacity temporarily unavailable")
+		writeError(w, http.StatusServiceUnavailable, domain.JobErrMediaOverloadedRetryLater)
 	default:
 		h.logger.Error("miniapp: create job failed", slog.String("error", err.Error()))
 		writeError(w, http.StatusInternalServerError, "internal error")

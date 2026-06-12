@@ -38,6 +38,7 @@ type URLSigner interface {
 // DeliveryBiller captures a job's reserved credits once it is delivered.
 type DeliveryBiller interface {
 	CaptureForJob(ctx context.Context, jobID uuid.UUID, amount int64) error
+	ReleaseForJob(ctx context.Context, jobID uuid.UUID) error
 }
 
 // DeliveryDeps bundles the delivery worker's collaborators.
@@ -176,7 +177,7 @@ func (w *DeliveryWorker) Process(ctx context.Context, task queue.Task) error {
 		return err
 	}
 	span.SetAttributes(attribute.String("job.status", string(job.Status)))
-	failureNotice := isTerminalImageFailureNotice(job)
+	failureNotice := isTerminalMediaFailureNotice(job)
 	switch job.Status {
 	case domain.JobStatusSucceeded:
 		return nil
@@ -208,7 +209,8 @@ func (w *DeliveryWorker) Process(ctx context.Context, task queue.Task) error {
 		if err := w.send(ctx, del, job); err != nil {
 			tracing.RecordError(span, err)
 			del.Status = domain.DeliveryStatusRetrying
-			del.ErrorMessage = err.Error()
+			del.ErrorCode = domain.JobErrMediaDeliveryFailed
+			del.ErrorMessage = safeDeliveryFailureMessage()
 			del.AttemptNo++
 			_ = w.deliveries.Update(ctx, del)
 			// Retry budget: dead-letter once exhausted so a permanently failing
@@ -219,8 +221,12 @@ func (w *DeliveryWorker) Process(ctx context.Context, task queue.Task) error {
 				if w.streams != nil {
 					_ = w.streams.PublishTo(ctx, redisqueue.StreamDLQ, task)
 				}
+				if releaseErr := w.releaseReserved(ctx, job); releaseErr != nil {
+					tracing.RecordError(span, releaseErr)
+					return releaseErr
+				}
 				metrics.JobsTerminal.WithLabelValues(string(domain.JobStatusFailedTerminal)).Inc()
-				return w.setStatus(ctx, job, domain.JobStatusFailedTerminal, "delivery_failed", err.Error())
+				return w.setStatus(ctx, job, domain.JobStatusFailedTerminal, domain.JobErrMediaDeliveryFailed, safeDeliveryFailureMessage())
 			}
 			w.sleepBackoff(ctx, del.AttemptNo)
 			return fmt.Errorf("worker: vk send: %w", err)
@@ -264,6 +270,18 @@ func (w *DeliveryWorker) Process(ctx context.Context, task queue.Task) error {
 	return w.setStatus(ctx, job, domain.JobStatusSucceeded, "", "")
 }
 
+func (w *DeliveryWorker) releaseReserved(ctx context.Context, job *domain.Job) error {
+	if w.billing == nil || job.CostReserved <= 0 || job.CostCaptured > 0 {
+		return nil
+	}
+	if err := w.billing.ReleaseForJob(ctx, job.ID); err != nil {
+		metrics.BillingReleases.WithLabelValues(deliveryOperationLabel(job), "error").Inc()
+		return err
+	}
+	metrics.BillingReleases.WithLabelValues(deliveryOperationLabel(job), "success").Inc()
+	return nil
+}
+
 // ensureDelivery returns the job's delivery row, creating it on first run. The
 // delivery is keyed by job so a retry reuses the same row and random_id.
 func (w *DeliveryWorker) ensureDelivery(ctx context.Context, job *domain.Job) (*domain.Delivery, error) {
@@ -305,8 +323,8 @@ func (w *DeliveryWorker) buildDelivery(ctx context.Context, job *domain.Job, key
 		AttemptNo:      1,
 	}
 
-	if isTerminalImageFailureNotice(job) {
-		del.Text = "Не удалось сгенерировать изображение. Средства не списаны. Попробуйте позже или измените описание."
+	if isTerminalMediaFailureNotice(job) {
+		del.Text = safeVKMediaFailureNotice(job.ErrorCode)
 		if params.VKPlaceholderMessageID > 0 {
 			msgID := params.VKPlaceholderMessageID
 			del.VKMessageID = &msgID
@@ -342,10 +360,27 @@ func (w *DeliveryWorker) buildDelivery(ctx context.Context, job *domain.Job, key
 	return del, nil
 }
 
-func isTerminalImageFailureNotice(job *domain.Job) bool {
+func isTerminalMediaFailureNotice(job *domain.Job) bool {
 	return job.Status == domain.JobStatusFailedTerminal &&
 		job.VKPeerID != 0 &&
-		job.Modality == domain.ModalityImage
+		(job.Modality == domain.ModalityImage || job.Modality == domain.ModalityVideo)
+}
+
+func safeVKMediaFailureNotice(errorCode string) string {
+	switch errorCode {
+	case domain.JobErrMediaProviderOutputInvalid:
+		return "Не удалось безопасно подготовить медиафайл. Кредиты не списаны. Попробуйте изменить описание или повторить позже."
+	case domain.JobErrMediaOverloadedRetryLater:
+		return "Сейчас высокая нагрузка на медиаобработку. Кредиты не списаны. Попробуйте позже."
+	case domain.JobErrMediaDeliveryFailed:
+		return "Не удалось доставить готовый медиафайл. Кредиты не списаны. Попробуйте позже."
+	default:
+		return "Медиаобработка временно недоступна. Кредиты не списаны. Попробуйте позже."
+	}
+}
+
+func safeDeliveryFailureMessage() string {
+	return "media delivery failed; credits were not charged"
 }
 
 // textContent loads the stored text bytes for a text artifact, falling back to

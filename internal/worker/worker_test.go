@@ -638,8 +638,8 @@ func TestVideoFastPathUnsafeCodecWithoutFallbackFailsClosed(t *testing.T) {
 	if got.Status != domain.JobStatusFailedTerminal {
 		t.Fatalf("status = %q, want failed_terminal", got.Status)
 	}
-	if got.ErrorCode != string(domain.ProviderErrMediaProbeFailed) {
-		t.Fatalf("error code = %q, want %q", got.ErrorCode, domain.ProviderErrMediaProbeFailed)
+	if got.ErrorCode != domain.JobErrMediaProviderOutputInvalid {
+		t.Fatalf("error code = %q, want %q", got.ErrorCode, domain.JobErrMediaProviderOutputInvalid)
 	}
 	if len(h.streams.byStream[redisqueue.StreamDelivery]) != 0 {
 		t.Fatalf("unsafe codec must not enqueue delivery: %v", h.streams.byStream)
@@ -747,8 +747,8 @@ func TestVideoTranscodeConcurrencyLimiterFailsClosed(t *testing.T) {
 	if secondReloaded.Status != domain.JobStatusFailedTerminal {
 		t.Fatalf("second status = %q, want failed_terminal", secondReloaded.Status)
 	}
-	if secondReloaded.ErrorCode != string(domain.ProviderErrMediaTranscodeFailed) {
-		t.Fatalf("second error = %q, want %q", secondReloaded.ErrorCode, domain.ProviderErrMediaTranscodeFailed)
+	if secondReloaded.ErrorCode != domain.JobErrMediaOverloadedRetryLater {
+		t.Fatalf("second error = %q, want %q", secondReloaded.ErrorCode, domain.JobErrMediaOverloadedRetryLater)
 	}
 	close(transcoder.release)
 	select {
@@ -806,8 +806,8 @@ func TestVideoProbeFailureStopsDeliveryAndReleasesReservation(t *testing.T) {
 	if got.Status != domain.JobStatusFailedTerminal {
 		t.Fatalf("status = %q, want failed_terminal", got.Status)
 	}
-	if got.ErrorCode != string(domain.ProviderErrMediaProbeFailed) {
-		t.Fatalf("error code = %q, want %q", got.ErrorCode, domain.ProviderErrMediaProbeFailed)
+	if got.ErrorCode != domain.JobErrMediaProviderOutputInvalid {
+		t.Fatalf("error code = %q, want %q", got.ErrorCode, domain.JobErrMediaProviderOutputInvalid)
 	}
 	for _, forbidden := range []string{"LEAK_PATH_MARKER", "LEAK_AUTH_MARKER", "LEAK_STDERR_MARKER"} {
 		if strings.Contains(got.ErrorMessage, forbidden) {
@@ -858,8 +858,8 @@ func TestVideoTranscodeFailureStopsDeliveryAndReleasesReservation(t *testing.T) 
 	if got.Status != domain.JobStatusFailedTerminal {
 		t.Fatalf("status = %q, want failed_terminal", got.Status)
 	}
-	if got.ErrorCode != string(domain.ProviderErrMediaTranscodeFailed) {
-		t.Fatalf("error code = %q, want %q", got.ErrorCode, domain.ProviderErrMediaTranscodeFailed)
+	if got.ErrorCode != domain.JobErrMediaProcessingUnavailable {
+		t.Fatalf("error code = %q, want %q", got.ErrorCode, domain.JobErrMediaProcessingUnavailable)
 	}
 	for _, forbidden := range []string{"LEAK_PATH_MARKER", "LEAK_AUTH_MARKER", "LEAK_STDERR_MARKER"} {
 		if strings.Contains(got.ErrorMessage, forbidden) {
@@ -906,7 +906,7 @@ func TestVideoProbeRequiredWithoutProberFailsClosed(t *testing.T) {
 	if len(h.streams.byStream[redisqueue.StreamDelivery]) != 0 {
 		t.Fatalf("missing required prober must not enqueue delivery: %v", h.streams.byStream)
 	}
-	if got.ErrorCode != string(domain.ProviderErrMediaProbeFailed) {
+	if got.ErrorCode != domain.JobErrMediaProcessingUnavailable {
 		t.Fatalf("error code = %q", got.ErrorCode)
 	}
 }

@@ -1620,10 +1620,10 @@ func (p *processor) applyResult(ctx context.Context, job *domain.Job, pt *domain
 			switch {
 			case errors.As(err, &probeErr):
 				p.recordProviderProductFailure(ctx, job, string(probeErr))
-				return p.handleMediaFailure(ctx, job, domain.ProviderErrMediaProbeFailed, safeMediaProbeMessage(err))
+				return p.handleMediaFailure(ctx, job, safeMediaFailureCode(err), safeMediaFailureMessage(err))
 			case errors.As(err, &transcodeErr):
 				p.recordProviderProductFailure(ctx, job, string(transcodeErr))
-				return p.handleMediaFailure(ctx, job, domain.ProviderErrMediaTranscodeFailed, safeMediaTranscodeMessage(err))
+				return p.handleMediaFailure(ctx, job, safeMediaFailureCode(err), safeMediaFailureMessage(err))
 			default:
 				return err
 			}
@@ -1973,12 +1973,12 @@ func (p *processor) markArtifactProbeFailed(ctx context.Context, art *domain.Art
 	return p.artifactRepo.Update(ctx, art)
 }
 
-func (p *processor) handleMediaFailure(ctx context.Context, job *domain.Job, class domain.ProviderErrorClass, message string) error {
+func (p *processor) handleMediaFailure(ctx context.Context, job *domain.Job, errorCode, message string) error {
 	if releaseErr := p.releaseReserved(ctx, job); releaseErr != nil {
 		return releaseErr
 	}
 	metrics.JobsTerminal.WithLabelValues(string(domain.JobStatusFailedTerminal)).Inc()
-	return p.setStatus(ctx, job, domain.JobStatusFailedTerminal, string(class), message)
+	return p.setStatus(ctx, job, domain.JobStatusFailedTerminal, errorCode, message)
 }
 
 type mediaProbeError string
@@ -1990,10 +1990,6 @@ func (e mediaProbeError) Error() string {
 	return string(e)
 }
 
-func safeMediaProbeMessage(_ error) string {
-	return "video media probe failed"
-}
-
 type mediaTranscodeError string
 
 func (e mediaTranscodeError) Error() string {
@@ -2003,8 +1999,45 @@ func (e mediaTranscodeError) Error() string {
 	return string(e)
 }
 
-func safeMediaTranscodeMessage(_ error) string {
-	return "video media transcode failed"
+func safeMediaFailureCode(err error) string {
+	var probeErr mediaProbeError
+	if errors.As(err, &probeErr) {
+		switch string(probeErr) {
+		case "media_probe_overloaded":
+			return domain.JobErrMediaOverloadedRetryLater
+		case "media_probe_unavailable",
+			"media_probe_storage_unavailable",
+			"media_contract_unavailable",
+			"artifact_metadata_unavailable",
+			"artifact_bytes_unavailable":
+			return domain.JobErrMediaProcessingUnavailable
+		default:
+			return domain.JobErrMediaProviderOutputInvalid
+		}
+	}
+	var transcodeErr mediaTranscodeError
+	if errors.As(err, &transcodeErr) {
+		switch string(transcodeErr) {
+		case "media_transcode_overloaded",
+			"variant_probe_overloaded",
+			"media_variant_backlog_full":
+			return domain.JobErrMediaOverloadedRetryLater
+		default:
+			return domain.JobErrMediaProcessingUnavailable
+		}
+	}
+	return domain.JobErrMediaProcessingUnavailable
+}
+
+func safeMediaFailureMessage(err error) string {
+	switch safeMediaFailureCode(err) {
+	case domain.JobErrMediaProviderOutputInvalid:
+		return "generated media failed safety checks; credits were not charged"
+	case domain.JobErrMediaOverloadedRetryLater:
+		return "media processing is overloaded; credits were not charged"
+	default:
+		return "media processing is unavailable; credits were not charged"
+	}
 }
 
 func (p *processor) saveDialogAnswer(ctx context.Context, job *domain.Job, answer string) error {
@@ -2101,13 +2134,45 @@ func (p *processor) handleFailure(ctx context.Context, job *domain.Job, task que
 		p.toDLQ(ctx, task, code, msg)
 	}
 	metrics.JobsTerminal.WithLabelValues(string(domain.JobStatusFailedTerminal)).Inc()
-	if err := p.setStatus(ctx, job, domain.JobStatusFailedTerminal, code, msg); err != nil {
+	terminalCode, terminalMessage := safeTerminalFailure(job, class)
+	if err := p.setStatus(ctx, job, domain.JobStatusFailedTerminal, terminalCode, terminalMessage); err != nil {
 		return err
 	}
 	if p.shouldNotifyTerminalProviderFailure(job) {
 		return p.streams.PublishTo(ctx, redisqueue.StreamDelivery, taskOf(job))
 	}
 	return nil
+}
+
+func safeTerminalFailure(job *domain.Job, class domain.ProviderErrorClass) (string, string) {
+	if job != nil && (job.Modality == domain.ModalityImage || job.Modality == domain.ModalityVideo) {
+		switch class {
+		case domain.ProviderErrRateLimited, domain.ProviderErrOverloaded, domain.ProviderErrTimeout:
+			return domain.JobErrMediaOverloadedRetryLater, "media generation is temporarily overloaded; credits were not charged"
+		case domain.ProviderErrOutputDownloadFailed:
+			return domain.JobErrMediaProcessingUnavailable, "media output could not be loaded safely; credits were not charged"
+		case domain.ProviderErrMediaProbeFailed:
+			return domain.JobErrMediaProviderOutputInvalid, "generated media failed safety checks; credits were not charged"
+		case domain.ProviderErrMediaTranscodeFailed:
+			return domain.JobErrMediaProcessingUnavailable, "media processing is unavailable; credits were not charged"
+		}
+	}
+	return string(class), safeProviderFailureMessage(class)
+}
+
+func safeProviderFailureMessage(class domain.ProviderErrorClass) string {
+	switch class {
+	case domain.ProviderErrRateLimited, domain.ProviderErrOverloaded, domain.ProviderErrTimeout:
+		return "provider is temporarily unavailable; credits were not charged"
+	case domain.ProviderErrContentRejected:
+		return "content was rejected by safety policy; credits were not charged"
+	case domain.ProviderErrInvalidRequest, domain.ProviderErrUnsupportedCapab:
+		return "request is not supported; credits were not charged"
+	case domain.ProviderErrAuthFailed, domain.ProviderErrInsufficientBalance:
+		return "provider configuration is unavailable; credits were not charged"
+	default:
+		return "generation failed; credits were not charged"
+	}
 }
 
 func (p *processor) releaseReserved(ctx context.Context, job *domain.Job) error {
@@ -2123,7 +2188,7 @@ func (p *processor) releaseReserved(ctx context.Context, job *domain.Job) error 
 }
 
 func (p *processor) shouldNotifyTerminalProviderFailure(job *domain.Job) bool {
-	return p.streams != nil && job.VKPeerID != 0 && job.Modality == domain.ModalityImage
+	return p.streams != nil && job.VKPeerID != 0 && (job.Modality == domain.ModalityImage || job.Modality == domain.ModalityVideo)
 }
 
 // moderateOutput runs the output moderation check and, on a block, rejects the

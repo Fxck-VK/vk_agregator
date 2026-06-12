@@ -190,6 +190,13 @@ export type ApiErrorCode =
   | "unsupported_model"
   | "reference_artifacts_unsupported"
   | "too_many_reference_artifacts"
+  | "media_upload_invalid"
+  | "media_upload_too_large"
+  | "media_upload_unsupported"
+  | "media_provider_output_invalid"
+  | "media_processing_unavailable"
+  | "media_delivery_failed"
+  | "media_overloaded_retry_later"
   | "auth_error"
   | "insufficient_credits"
   | "rate_limited"
@@ -469,6 +476,17 @@ function apiErrorCode(status: number, backendError?: string): ApiErrorCode {
   if (raw === "too_many_reference_artifacts" || raw === "too many reference artifacts") {
     return "too_many_reference_artifacts";
   }
+  if (raw === "media_upload_invalid") return "media_upload_invalid";
+  if (raw === "media_upload_too_large" || raw === "file too large") return "media_upload_too_large";
+  if (raw === "media_upload_unsupported" || raw === "unsupported artifact mime type") {
+    return "media_upload_unsupported";
+  }
+  if (raw === "media_provider_output_invalid") return "media_provider_output_invalid";
+  if (raw === "media_processing_unavailable") return "media_processing_unavailable";
+  if (raw === "media_delivery_failed") return "media_delivery_failed";
+  if (raw === "media_overloaded_retry_later" || raw === "media capacity temporarily unavailable") {
+    return "media_overloaded_retry_later";
+  }
   if (status === 400 && (raw === "unsupported model" || raw === "unsupported_model")) {
     return "unsupported_model";
   }
@@ -493,6 +511,20 @@ function apiErrorMessageForCode(code: ApiErrorCode): string {
       return "Генерация с референсом пока недоступна. Попробуйте без фото или позже";
     case "too_many_reference_artifacts":
       return "Можно добавить не больше 4 референсов";
+    case "media_upload_invalid":
+      return "Не удалось прочитать файл. Загрузите JPG, PNG или WebP";
+    case "media_upload_too_large":
+      return "Файл слишком большой. Выберите изображение меньшего размера";
+    case "media_upload_unsupported":
+      return "Формат не поддерживается. Загрузите JPG, PNG или WebP";
+    case "media_provider_output_invalid":
+      return "Медиафайл не прошёл безопасную проверку. Кредиты не списаны";
+    case "media_processing_unavailable":
+      return "Медиаобработка временно недоступна. Кредиты не списаны";
+    case "media_delivery_failed":
+      return "Не удалось доставить готовый медиафайл. Кредиты не списаны";
+    case "media_overloaded_retry_later":
+      return "Сейчас высокая нагрузка на медиаобработку. Кредиты не списаны, попробуйте позже";
     case "auth_error":
       return "Не удалось подтвердить вход через VK. Откройте приложение заново";
     case "insufficient_credits":
@@ -840,9 +872,16 @@ export function statusLabel(s: string): string {
 
 const ERROR_LABELS: Record<string, string> = {
   insufficient_credits: "Недостаточно кредитов",
-  provider_error: "Ошибка провайдера",
+  provider_error: "Временная ошибка генерации",
   timeout: "Превышено время ожидания",
   rate_limited: "Слишком много запросов",
+  media_upload_invalid: "Не удалось прочитать файл",
+  media_upload_too_large: "Файл слишком большой",
+  media_upload_unsupported: "Формат файла не поддерживается",
+  media_provider_output_invalid: "Медиафайл не прошёл безопасную проверку. Кредиты не списаны",
+  media_processing_unavailable: "Медиаобработка временно недоступна. Кредиты не списаны",
+  media_delivery_failed: "Не удалось доставить готовый медиафайл. Кредиты не списаны",
+  media_overloaded_retry_later: "Высокая нагрузка на медиаобработку. Кредиты не списаны",
 };
 
 export function errorLabel(job: Job): string {

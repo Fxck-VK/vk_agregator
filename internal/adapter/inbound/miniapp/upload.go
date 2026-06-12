@@ -41,13 +41,10 @@ func (h *Handler) createArtifact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data, mimeType, status, ok := readMiniAppUpload(w, r)
+	data, mimeType, status, errorCode, ok := readMiniAppUpload(w, r)
 	if !ok {
-		resultLabel = "invalid_upload"
-		if status == http.StatusRequestEntityTooLarge {
-			resultLabel = "too_large"
-		}
-		writeError(w, status, uploadErrorMessage(status))
+		resultLabel = uploadResultLabel(errorCode)
+		writeError(w, status, errorCode)
 		return
 	}
 
@@ -62,17 +59,17 @@ func (h *Handler) createArtifact(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, ArtifactUploadDTO{ArtifactID: artifact.ID})
 }
 
-func readMiniAppUpload(w http.ResponseWriter, r *http.Request) ([]byte, string, int, bool) {
+func readMiniAppUpload(w http.ResponseWriter, r *http.Request) ([]byte, string, int, string, bool) {
 	r.Body = http.MaxBytesReader(w, r.Body, maxMiniAppUploadBytes+miniAppMultipartOverage)
 	if err := r.ParseMultipartForm(maxMiniAppUploadBytes); err != nil {
 		if strings.Contains(strings.ToLower(err.Error()), "too large") {
-			return nil, "", http.StatusRequestEntityTooLarge, false
+			return nil, "", http.StatusRequestEntityTooLarge, domain.JobErrMediaUploadTooLarge, false
 		}
-		return nil, "", http.StatusBadRequest, false
+		return nil, "", http.StatusBadRequest, domain.JobErrMediaUploadInvalid, false
 	}
 	file, _, err := r.FormFile(miniAppUploadFieldName)
 	if err != nil {
-		return nil, "", http.StatusBadRequest, false
+		return nil, "", http.StatusBadRequest, domain.JobErrMediaUploadInvalid, false
 	}
 	defer func() {
 		_ = file.Close()
@@ -80,19 +77,19 @@ func readMiniAppUpload(w http.ResponseWriter, r *http.Request) ([]byte, string, 
 
 	data, err := io.ReadAll(io.LimitReader(file, maxMiniAppUploadBytes+1))
 	if err != nil {
-		return nil, "", http.StatusBadRequest, false
+		return nil, "", http.StatusBadRequest, domain.JobErrMediaUploadInvalid, false
 	}
 	if len(data) == 0 {
-		return nil, "", http.StatusBadRequest, false
+		return nil, "", http.StatusBadRequest, domain.JobErrMediaUploadInvalid, false
 	}
 	if len(data) > maxMiniAppUploadBytes {
-		return nil, "", http.StatusRequestEntityTooLarge, false
+		return nil, "", http.StatusRequestEntityTooLarge, domain.JobErrMediaUploadTooLarge, false
 	}
 	mimeType, ok := miniAppImageMime(data)
 	if !ok {
-		return nil, "", http.StatusBadRequest, false
+		return nil, "", http.StatusBadRequest, domain.JobErrMediaUploadUnsupported, false
 	}
-	return data, mimeType, http.StatusOK, true
+	return data, mimeType, http.StatusOK, "", true
 }
 
 func miniAppImageMime(data []byte) (string, bool) {
@@ -107,13 +104,13 @@ func miniAppImageMime(data []byte) (string, bool) {
 	}
 }
 
-func uploadErrorMessage(status int) string {
-	switch status {
-	case http.StatusRequestEntityTooLarge:
-		return "file too large"
-	case http.StatusBadRequest:
-		return "invalid image upload"
+func uploadResultLabel(errorCode string) string {
+	switch errorCode {
+	case domain.JobErrMediaUploadTooLarge:
+		return "too_large"
+	case domain.JobErrMediaUploadUnsupported:
+		return "unsupported"
 	default:
-		return "invalid image upload"
+		return "invalid_upload"
 	}
 }
