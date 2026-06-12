@@ -1,9 +1,17 @@
 package worker_test
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"hash/crc32"
+	"image"
+	"image/color"
+	"image/jpeg"
+	"image/png"
 	"strings"
 	"testing"
 	"time"
@@ -216,6 +224,82 @@ func (h *harness) createInputImageArtifact(t *testing.T, ownerID uuid.UUID, data
 		t.Fatalf("create input artifact: %v", err)
 	}
 	return artifact
+}
+
+func validPNGBytes(t *testing.T) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	img := image.NewNRGBA(image.Rect(0, 0, 1, 1))
+	img.Set(0, 0, color.NRGBA{R: 120, G: 80, B: 40, A: 255})
+	if err := png.Encode(&buf, img); err != nil {
+		t.Fatalf("encode png: %v", err)
+	}
+	return buf.Bytes()
+}
+
+func jpegWithAPP1(t *testing.T, marker string) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	img := image.NewRGBA(image.Rect(0, 0, 1, 1))
+	img.Set(0, 0, color.RGBA{R: 12, G: 34, B: 56, A: 255})
+	if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: 90}); err != nil {
+		t.Fatalf("encode jpeg: %v", err)
+	}
+	raw := buf.Bytes()
+	if len(raw) < 2 || raw[0] != 0xff || raw[1] != 0xd8 {
+		t.Fatal("test jpeg missing SOI")
+	}
+	payload := append([]byte("Exif\x00\x00"), []byte(marker)...)
+	segment := []byte{0xff, 0xe1, byte((len(payload) + 2) >> 8), byte(len(payload) + 2)}
+	segment = append(segment, payload...)
+	out := make([]byte, 0, len(raw)+len(segment))
+	out = append(out, raw[:2]...)
+	out = append(out, segment...)
+	out = append(out, raw[2:]...)
+	return out
+}
+
+func pngWithTextChunk(t *testing.T, keyword, text string) []byte {
+	t.Helper()
+	raw := validPNGBytes(t)
+	const afterIHDR = 8 + 4 + 4 + 13 + 4
+	if len(raw) <= afterIHDR {
+		t.Fatal("test png too short")
+	}
+	payload := append([]byte(keyword), 0)
+	payload = append(payload, []byte(text)...)
+	var chunk bytes.Buffer
+	if err := binary.Write(&chunk, binary.BigEndian, uint32(len(payload))); err != nil {
+		t.Fatalf("write png chunk length: %v", err)
+	}
+	chunk.WriteString("tEXt")
+	chunk.Write(payload)
+	crc := crc32.ChecksumIEEE(append([]byte("tEXt"), payload...))
+	if err := binary.Write(&chunk, binary.BigEndian, crc); err != nil {
+		t.Fatalf("write png chunk crc: %v", err)
+	}
+	out := make([]byte, 0, len(raw)+chunk.Len())
+	out = append(out, raw[:afterIHDR]...)
+	out = append(out, chunk.Bytes()...)
+	out = append(out, raw[afterIHDR:]...)
+	return out
+}
+
+func minimalWebPBytes() []byte {
+	return []byte("RIFF\x10\x00\x00\x00WEBPVP8 \x04\x00\x00\x00\x00\x00\x00\x00")
+}
+
+func dataURLBytes(t *testing.T, rawURL, expectedMIME string) []byte {
+	t.Helper()
+	prefix := "data:" + expectedMIME + ";base64,"
+	if !strings.HasPrefix(rawURL, prefix) {
+		t.Fatalf("data url prefix = %q, want %q", rawURL, prefix)
+	}
+	data, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(rawURL, prefix))
+	if err != nil {
+		t.Fatalf("decode data url: %v", err)
+	}
+	return data
 }
 
 func (h *harness) reload(t *testing.T, id uuid.UUID) *domain.Job {
@@ -788,7 +872,7 @@ func TestGenerationImageRequestCarriesImageDefaultsAndReferences(t *testing.T) {
 	})
 	ctx := context.Background()
 	userID := uuid.New()
-	reference := h.createInputImageArtifact(t, userID, []byte{0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a}, "image/png")
+	reference := h.createInputImageArtifact(t, userID, validPNGBytes(t), "image/png")
 	params, _ := json.Marshal(map[string]any{
 		"prompt":                 "a cat",
 		"aspect_ratio":           "1:1",
@@ -833,7 +917,7 @@ func TestBuildRequest_ResolvesReferenceInputURLs(t *testing.T) {
 	h := newHarnessWithProvider(t, provider, nil)
 	ctx := context.Background()
 	userID := uuid.New()
-	reference := h.createInputImageArtifact(t, userID, []byte{0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a}, "image/png")
+	reference := h.createInputImageArtifact(t, userID, validPNGBytes(t), "image/png")
 	params, _ := json.Marshal(map[string]any{
 		"prompt":                 "use this reference",
 		"reference_artifact_ids": []string{reference.ID.String()},
@@ -876,6 +960,126 @@ func TestBuildRequest_ResolvesReferenceInputURLs(t *testing.T) {
 	}
 	if strings.Contains(string(tasks[0].Request), "base64") || strings.Contains(string(tasks[0].Request), "data:") {
 		t.Fatalf("provider task request must not persist reference bytes: %s", string(tasks[0].Request))
+	}
+}
+
+func TestBuildRequest_SanitizesJPEGReferenceMetadata(t *testing.T) {
+	provider := &captureImageProvider{}
+	h := newHarnessWithProvider(t, provider, nil)
+	ctx := context.Background()
+	userID := uuid.New()
+	secret := "GPS_METADATA_SECRET"
+	raw := jpegWithAPP1(t, secret)
+	reference := h.createInputImageArtifact(t, userID, raw, "image/jpeg")
+	params, _ := json.Marshal(map[string]any{
+		"prompt":                 "use private jpeg metadata",
+		"reference_artifact_ids": []string{reference.ID.String()},
+	})
+	job := &domain.Job{
+		ID:             uuid.New(),
+		UserID:         userID,
+		OperationType:  domain.OperationImageGenerate,
+		Modality:       domain.ModalityImage,
+		Status:         domain.JobStatusQueued,
+		IdempotencyKey: "job:" + uuid.NewString(),
+		CorrelationID:  "corr",
+		CostReserved:   10,
+		Params:         params,
+	}
+	if err := h.jobs.Create(ctx, job); err != nil {
+		t.Fatalf("create job: %v", err)
+	}
+
+	if err := h.gen.Process(ctx, taskFor(job)); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+
+	storedRaw, err := h.store.GetObject(ctx, reference.StorageBucket, reference.StorageKey)
+	if err != nil {
+		t.Fatalf("get raw reference: %v", err)
+	}
+	if !bytes.Contains(storedRaw, []byte(secret)) {
+		t.Fatal("raw private artifact should remain unchanged for owner access/debugging policy")
+	}
+	sanitized := dataURLBytes(t, provider.last.InputURLs[0], "image/jpeg")
+	if bytes.Contains(sanitized, []byte(secret)) {
+		t.Fatalf("provider input leaked JPEG metadata marker %q", secret)
+	}
+	for _, forbidden := range []string{reference.StorageBucket, reference.StorageKey, reference.SHA256} {
+		if forbidden != "" && strings.Contains(provider.last.InputURLs[0], forbidden) {
+			t.Fatalf("provider input leaked private artifact detail %q", forbidden)
+		}
+	}
+}
+
+func TestBuildRequest_SanitizesPNGTextMetadata(t *testing.T) {
+	provider := &captureImageProvider{}
+	h := newHarnessWithProvider(t, provider, nil)
+	ctx := context.Background()
+	userID := uuid.New()
+	secret := "PNG_COMMENT_SECRET"
+	raw := pngWithTextChunk(t, "Comment", secret)
+	reference := h.createInputImageArtifact(t, userID, raw, "image/png")
+	params, _ := json.Marshal(map[string]any{
+		"prompt":                 "use private png metadata",
+		"reference_artifact_ids": []string{reference.ID.String()},
+	})
+	job := &domain.Job{
+		ID:             uuid.New(),
+		UserID:         userID,
+		OperationType:  domain.OperationImageGenerate,
+		Modality:       domain.ModalityImage,
+		Status:         domain.JobStatusQueued,
+		IdempotencyKey: "job:" + uuid.NewString(),
+		CorrelationID:  "corr",
+		CostReserved:   10,
+		Params:         params,
+	}
+	if err := h.jobs.Create(ctx, job); err != nil {
+		t.Fatalf("create job: %v", err)
+	}
+
+	if err := h.gen.Process(ctx, taskFor(job)); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+
+	sanitized := dataURLBytes(t, provider.last.InputURLs[0], "image/png")
+	if bytes.Contains(sanitized, []byte(secret)) {
+		t.Fatalf("provider input leaked PNG metadata marker %q", secret)
+	}
+}
+
+func TestBuildRequest_RejectsUnsupportedWebPReferenceBeforeProvider(t *testing.T) {
+	provider := &captureImageProvider{}
+	h := newHarnessWithProvider(t, provider, nil)
+	ctx := context.Background()
+	userID := uuid.New()
+	reference := h.createInputImageArtifact(t, userID, minimalWebPBytes(), "image/webp")
+	params, _ := json.Marshal(map[string]any{
+		"prompt":                 "use webp reference",
+		"reference_artifact_ids": []string{reference.ID.String()},
+	})
+	job := &domain.Job{
+		ID:             uuid.New(),
+		UserID:         userID,
+		OperationType:  domain.OperationImageGenerate,
+		Modality:       domain.ModalityImage,
+		Status:         domain.JobStatusQueued,
+		IdempotencyKey: "job:" + uuid.NewString(),
+		CorrelationID:  "corr",
+		CostReserved:   10,
+		Params:         params,
+	}
+	if err := h.jobs.Create(ctx, job); err != nil {
+		t.Fatalf("create job: %v", err)
+	}
+
+	err := h.gen.Process(ctx, taskFor(job))
+	if err == nil || !strings.Contains(err.Error(), "unsupported reference image format") {
+		t.Fatalf("expected unsupported reference image error, got %v", err)
+	}
+	if provider.last.JobID != uuid.Nil {
+		t.Fatalf("provider must not be called for unsupported reference image, got request %+v", provider.last)
 	}
 }
 

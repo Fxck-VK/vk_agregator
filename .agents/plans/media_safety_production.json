@@ -2,7 +2,7 @@
   "schema_version": 1,
   "plan_id": "media_safety_production",
   "source_plan": "docs/MEDIA_SAFETY_PRODUCTION_PLAN.md",
-  "updated_at": "2026-06-12T19:45:00+03:00",
+  "updated_at": "2026-06-12T20:15:00+03:00",
   "mode": "IMPLEMENT",
   "security_invariants": [
     "vk_bot_and_miniapp_do_not_call_providers_or_media_tools_directly",
@@ -68,6 +68,59 @@
         }
       ],
       "push_allowed": true,
+      "errors": []
+    },
+    {
+      "id": "stage_2a",
+      "name": "Reference Image Privacy Sanitization",
+      "status": "completed",
+      "load_impact": "low_to_medium_worker_only",
+      "scope": [
+        "internal/worker/reference_input_resolution",
+        "internal/worker/tests",
+        "machine_readable_plan"
+      ],
+      "policy_decisions": [
+        "raw uploaded reference bytes stay private in artifact storage",
+        "JPEG and PNG references are decoded and re-encoded in worker before provider forwarding",
+        "WebP references fail closed before provider forwarding until safe metadata stripping is implemented",
+        "Mini App API upload path does not perform metadata re-encoding"
+      ],
+      "required_checks": [
+        "gofmt -l .",
+        "go test ./internal/adapter/inbound/miniapp ./internal/worker ./internal/service/artifactservice",
+        "go vet ./internal/adapter/inbound/miniapp ./internal/worker ./internal/service/artifactservice",
+        "git diff --check",
+        "git status --short --branch"
+      ],
+      "checks_run": [
+        {
+          "command": "Get-Content .agents/plans/media_safety_production.json | ConvertFrom-Json",
+          "status": "passed"
+        },
+        {
+          "command": "go test ./internal/adapter/inbound/miniapp ./internal/worker ./internal/service/artifactservice",
+          "status": "passed",
+          "note": "initial sandbox run could not access Go build cache; rerun with approval passed"
+        },
+        {
+          "command": "gofmt -l .",
+          "status": "passed"
+        },
+        {
+          "command": "go vet ./internal/adapter/inbound/miniapp ./internal/worker ./internal/service/artifactservice",
+          "status": "passed"
+        },
+        {
+          "command": "git diff --check",
+          "status": "passed"
+        },
+        {
+          "command": "git status --short --branch",
+          "status": "passed"
+        }
+      ],
+      "push_allowed": false,
       "errors": []
     }
   ]

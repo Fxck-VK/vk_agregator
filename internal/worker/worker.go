@@ -13,12 +13,10 @@ package worker
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
-	"net/http"
 	"sort"
 	"strings"
 	"sync"
@@ -763,11 +761,11 @@ func (p *processor) resolveReferenceInputURLs(ctx context.Context, job *domain.J
 		if len(data) > maxReferenceArtifactBytes {
 			return nil, fmt.Errorf("worker: reference artifact too large")
 		}
-		mime := artifact.MimeType
-		if mime == "" {
-			mime = http.DetectContentType(data)
+		inputURL, err := sanitizedReferenceImageDataURL(data, artifact.MimeType)
+		if err != nil {
+			return nil, err
 		}
-		inputURLs = append(inputURLs, "data:"+mime+";base64,"+base64.StdEncoding.EncodeToString(data))
+		inputURLs = append(inputURLs, inputURL)
 	}
 	return inputURLs, nil
 }
