@@ -1,0 +1,120 @@
+name: Nightly Quality
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 2 * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  go-security:
+    name: Go Security
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run gosec
+        uses: securego/gosec@v2
+        with:
+          args: -conf .gosec.json ./...
+
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+
+      - name: Run govulncheck
+        run: "$(go env GOPATH)/bin/govulncheck" ./...
+
+  frontend-security:
+    name: Frontend Security
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/miniapp/package-lock.json
+
+      - name: Install dependencies
+        run: npm --prefix web/miniapp ci
+
+      - name: Audit dependencies
+        run: npm --prefix web/miniapp audit --audit-level=moderate
+
+  k6-smoke-load:
+    name: k6 Smoke/Load
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run k6 scripts when present
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t scripts < <(find . -type f \( -path "./k6/*.js" -o -path "./tests/k6/*.js" -o -path "./load-tests/*.js" \) | sort)
+          if [ "${#scripts[@]}" -eq 0 ]; then
+            echo "No k6 scripts found; skipping."
+            exit 0
+          fi
+
+          for script in "${scripts[@]}"; do
+            echo "Running k6: ${script}"
+            docker run --rm -i \
+              -v "${PWD}:/src:ro" \
+              grafana/k6:latest run "/src/${script#./}"
+          done
+
+  container-scan:
+    name: Container Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Trivy filesystem scan
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            -v "${PWD}:/src:ro" \
+            aquasec/trivy:latest fs \
+              --scanners vuln,misconfig \
+              --severity HIGH,CRITICAL \
+              --exit-code 1 \
+              --no-progress \
+              /src
+
+      - name: Trivy container image scan when Dockerfiles exist
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t dockerfiles < <(find . -type f \( -name Dockerfile -o -name "*.Dockerfile" \) | sort)
+          if [ "${#dockerfiles[@]}" -eq 0 ]; then
+            echo "No Dockerfiles found; skipping container image scan."
+            exit 0
+          fi
+
+          for dockerfile in "${dockerfiles[@]}"; do
+            context_dir="$(dirname "$dockerfile")"
+            image_name="vk-ai-aggregator-ci-$(echo "$dockerfile" | tr '/.' '--' | tr -cd '[:alnum:]-')"
+            echo "Building ${image_name} from ${dockerfile}"
+            docker build -f "$dockerfile" -t "$image_name" "$context_dir"
+            docker run --rm aquasec/trivy:latest image \
+              --severity HIGH,CRITICAL \
+              --exit-code 1 \
+              --no-progress \
+              "$image_name"
+          done
