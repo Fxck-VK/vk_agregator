@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent } from "react";
 import { Button, NativeSelect } from "@vkontakte/vkui";
 import {
   MAX_REFERENCE_ARTIFACTS,
@@ -380,13 +380,13 @@ export function WorkflowMode({
     };
   }, [activeJob, screen]);
 
-  function clearReferenceItems() {
+  const clearReferenceItems = useCallback(() => {
     setReferenceItems((prev) => {
       prev.forEach((item) => URL.revokeObjectURL(item.previewUrl));
       return [];
     });
     setReferenceError(null);
-  }
+  }, []);
 
   function removeReference(localId: string) {
     setReferenceItems((prev) => {
@@ -441,7 +441,7 @@ export function WorkflowMode({
     void addReferenceFiles(Array.from(event.dataTransfer.files));
   }
 
-  function changeModality(id: ModalityId) {
+  const changeModality = useCallback((id: ModalityId) => {
     const next = modalityById(id);
     const createModel = CREATE_MODELS.find((item) => item.modalityId === id);
     if (id !== "image") {
@@ -451,7 +451,7 @@ export function WorkflowMode({
     setModelId(createModel?.modelId ?? next.models[0]?.id ?? "");
     setEstimate(null);
     setEstimateError(null);
-  }
+  }, [clearReferenceItems]);
 
   function selectCreateModel(modality: ModalityId) {
     changeModality(modality);
@@ -509,15 +509,15 @@ export function WorkflowMode({
     }
   }
 
-  function clearResultMedia() {
+  const clearResultMedia = useCallback(() => {
     setResultPreparing(false);
     setResultMediaSrc((prev) => {
       if (prev?.startsWith("blob:")) URL.revokeObjectURL(prev);
       return undefined;
     });
-  }
+  }, []);
 
-  function openExistingJob(job: Job) {
+  const openExistingJob = useCallback((job: Job) => {
     const modality = modalityByOperation(job.operation);
     changeModality(modality.id);
     setPrompt(job.prompt ?? "");
@@ -560,7 +560,7 @@ export function WorkflowMode({
         setResultPreparing(false);
         setScreen("result");
       });
-  }
+  }, [changeModality, clearResultMedia]);
 
   function repeatJob(job: Job) {
     const modality = modalityByOperation(job.operation);
@@ -573,7 +573,7 @@ export function WorkflowMode({
     if (!openJobRequest) return;
     openExistingJob(openJobRequest);
     onOpenJobRequestHandled();
-  }, [openJobRequest, onOpenJobRequestHandled]);
+  }, [openExistingJob, openJobRequest, onOpenJobRequestHandled]);
 
   const typeJobs = recentJobs.filter((job) => modalityByOperation(job.operation).id === modalityId);
   const filteredJobs = typeJobs.filter((job) => {
