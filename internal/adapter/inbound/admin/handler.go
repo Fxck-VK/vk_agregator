@@ -4,12 +4,14 @@
 package admin
 
 import (
+	"context"
 	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -23,7 +25,18 @@ const (
 
 	defaultReferralSuspiciousMinRegistered = 10
 	defaultReferralSuspiciousMinTotal      = 50
+
+	overviewCountLimit      = maxLimit + 1
+	overviewStalePaymentAge = 5 * time.Minute
+	overviewStatusOK        = "ok"
+	overviewStatusWarning   = "warning"
+	overviewStatusNotWired  = "not_wired"
 )
+
+type paymentOverviewReader interface {
+	ListIntents(ctx context.Context, filter domain.PaymentIntentFilter, limit, offset int) ([]*domain.PaymentIntent, error)
+	ListEvents(ctx context.Context, filter domain.PaymentEventFilter, limit, offset int) ([]*domain.PaymentEvent, error)
+}
 
 // Config holds admin API settings.
 type Config struct {
@@ -39,6 +52,9 @@ type Deps struct {
 	Referrals  domain.ReferralRepository
 	// Billing is optional; when set, user responses include the credit balance.
 	Billing domain.BillingRepository
+	// Payment is optional; when set, overview can report safe payment/webhook
+	// backlog counters without exposing raw provider payloads.
+	Payment paymentOverviewReader
 }
 
 // Handler serves the admin endpoints.
@@ -55,6 +71,7 @@ func NewHandler(cfg Config, deps Deps) *Handler {
 // Routes returns an http.Handler with the admin routes registered.
 func (h *Handler) Routes() http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /admin/overview", h.auth(h.operatorAction("admin_overview_get", h.getOverview)))
 	mux.HandleFunc("GET /admin/jobs", h.auth(h.operatorAction("admin_jobs_list", h.listJobs)))
 	mux.HandleFunc("GET /admin/jobs/{id}", h.auth(h.operatorAction("admin_job_get", h.getJob)))
 	mux.HandleFunc("GET /admin/users/{id}", h.auth(h.operatorAction("admin_user_get", h.getUser)))
@@ -109,6 +126,49 @@ func adminTokenEqual(got, want string) bool {
 // ---------------------------------------------------------------------------
 // Handlers
 // ---------------------------------------------------------------------------
+
+func (h *Handler) getOverview(w http.ResponseWriter, r *http.Request) {
+	now := time.Now().UTC()
+	cards := []OverviewCardDTO{
+		{
+			ID:      "api",
+			Title:   "API",
+			Status:  overviewStatusOK,
+			Summary: "Protected admin API is responding with a bounded read-only overview.",
+			Metrics: []OverviewMetricDTO{{Label: "auth", Value: "admin token gate"}},
+		},
+		{
+			ID:      "vk_bot",
+			Title:   "VK Bot",
+			Status:  overviewStatusNotWired,
+			Summary: "Live VK control and delivery health needs a dedicated read-only source.",
+		},
+		{
+			ID:      "miniapp",
+			Title:   "Mini App",
+			Status:  overviewStatusNotWired,
+			Summary: "Mini App BFF health is mounted, but per-surface operator health is not wired yet.",
+		},
+		h.workerOverviewCard(r.Context()),
+		h.paymentProcessingOverviewCard(r.Context(), now),
+		h.queueBacklogOverviewCard(r.Context()),
+		{
+			ID:      "active_alerts",
+			Title:   "Active alerts",
+			Status:  overviewStatusNotWired,
+			Summary: "Prometheus and Alertmanager stay private; an aggregated alert-status endpoint is pending.",
+		},
+		h.providerHealthOverviewCard(r.Context()),
+		{
+			ID:      "media_safety",
+			Title:   "Media safety",
+			Status:  overviewStatusNotWired,
+			Summary: "Media policy metrics exist outside this UI; safe admin aggregation is a follow-up stage.",
+		},
+		h.paymentReconciliationOverviewCard(r.Context(), now),
+	}
+	writeJSON(w, http.StatusOK, OverviewDTO{GeneratedAt: now, Cards: cards})
+}
 
 func (h *Handler) listJobs(w http.ResponseWriter, r *http.Request) {
 	limit, offset := parsePagination(r)
@@ -320,6 +380,204 @@ func suspiciousReferralReasons(stats ReferralStatsDTO, filter domain.ReferralSus
 		reasons = append(reasons, "aggregate_threshold")
 	}
 	return reasons
+}
+
+func (h *Handler) workerOverviewCard(ctx context.Context) OverviewCardDTO {
+	if h.deps.Jobs == nil {
+		return notWiredOverviewCard("workers", "Workers", "Job repository is not configured for worker health summary.")
+	}
+	queued := h.countJobs(ctx, domain.JobStatusQueued)
+	processing := h.countJobsMany(ctx,
+		domain.JobStatusDispatchingProvider,
+		domain.JobStatusProviderSubmitted,
+		domain.JobStatusProviderPending,
+		domain.JobStatusProviderProcessing,
+		domain.JobStatusPostprocessing,
+		domain.JobStatusDelivering,
+	)
+	retryable := h.countJobs(ctx, domain.JobStatusFailedRetryable)
+	terminalFailed := h.countJobs(ctx, domain.JobStatusFailedTerminal)
+	status := overviewStatusOK
+	if retryable.err || terminalFailed.err || queued.err || processing.err || retryable.count > 0 || terminalFailed.count > 0 {
+		status = overviewStatusWarning
+	}
+	return OverviewCardDTO{
+		ID:      "workers",
+		Title:   "Workers",
+		Status:  status,
+		Summary: "Worker state is derived from bounded job-status snapshots.",
+		Metrics: []OverviewMetricDTO{
+			{Label: "queued jobs", Value: queued.display()},
+			{Label: "processing jobs", Value: processing.display()},
+			{Label: "retryable failures", Value: retryable.display(), Status: metricWarningWhenPositive(retryable)},
+			{Label: "terminal failures", Value: terminalFailed.display(), Status: metricWarningWhenPositive(terminalFailed)},
+		},
+	}
+}
+
+func (h *Handler) queueBacklogOverviewCard(ctx context.Context) OverviewCardDTO {
+	if h.deps.Jobs == nil {
+		return notWiredOverviewCard("queue_backlog", "Queue backlog", "Job repository is not configured for queue summary.")
+	}
+	queued := h.countJobs(ctx, domain.JobStatusQueued)
+	status := overviewStatusOK
+	if queued.err || queued.count > 0 {
+		status = overviewStatusWarning
+	}
+	return OverviewCardDTO{
+		ID:      "queue_backlog",
+		Title:   "Queue backlog",
+		Status:  status,
+		Summary: "Shows queued jobs only; Redis stream and DLQ counters need a dedicated queue endpoint.",
+		Metrics: []OverviewMetricDTO{{Label: "queued jobs", Value: queued.display(), Status: metricWarningWhenPositive(queued)}},
+	}
+}
+
+func (h *Handler) providerHealthOverviewCard(ctx context.Context) OverviewCardDTO {
+	if h.deps.Jobs == nil {
+		return notWiredOverviewCard("provider_health", "Provider health", "Provider health source is not configured.")
+	}
+	providerFailed := h.countJobs(ctx, domain.JobStatusProviderFailed)
+	status := overviewStatusNotWired
+	if providerFailed.err || providerFailed.count > 0 {
+		status = overviewStatusWarning
+	}
+	return OverviewCardDTO{
+		ID:      "provider_health",
+		Title:   "Provider health",
+		Status:  status,
+		Summary: "Provider-specific circuit state is pending; current card only shows bounded provider-failed jobs.",
+		Metrics: []OverviewMetricDTO{{Label: "provider failed jobs", Value: providerFailed.display(), Status: metricWarningWhenPositive(providerFailed)}},
+	}
+}
+
+func (h *Handler) paymentProcessingOverviewCard(ctx context.Context, now time.Time) OverviewCardDTO {
+	if h.deps.Payment == nil {
+		return notWiredOverviewCard("provider_webhook", "Provider webhook", "Payment provider webhook reader is not configured.")
+	}
+	unprocessed := h.countPaymentEvents(ctx, false)
+	pending := h.countPaymentIntents(ctx, domain.PaymentIntentFilter{
+		Statuses: []domain.PaymentIntentStatus{domain.PaymentIntentProviderPending, domain.PaymentIntentWaitingForUser},
+	})
+	staleBefore := now.Add(-overviewStalePaymentAge)
+	stale := h.countPaymentIntents(ctx, domain.PaymentIntentFilter{
+		Statuses:      []domain.PaymentIntentStatus{domain.PaymentIntentProviderPending, domain.PaymentIntentWaitingForUser},
+		UpdatedBefore: &staleBefore,
+	})
+	status := overviewStatusOK
+	if unprocessed.err || pending.err || stale.err || unprocessed.count > 0 || stale.count > 0 {
+		status = overviewStatusWarning
+	}
+	return OverviewCardDTO{
+		ID:      "provider_webhook",
+		Title:   "Provider webhook/payment processing",
+		Status:  status,
+		Summary: "Payment processing health uses safe counts only and never exposes raw provider bodies.",
+		Metrics: []OverviewMetricDTO{
+			{Label: "unprocessed webhooks", Value: unprocessed.display(), Status: metricWarningWhenPositive(unprocessed)},
+			{Label: "pending payment intents", Value: pending.display()},
+			{Label: "stale payment intents", Value: stale.display(), Status: metricWarningWhenPositive(stale)},
+		},
+	}
+}
+
+func (h *Handler) paymentReconciliationOverviewCard(ctx context.Context, now time.Time) OverviewCardDTO {
+	if h.deps.Payment == nil {
+		return notWiredOverviewCard("payment_reconciliation", "Payment reconciliation", "Payment service is not configured for reconciliation summary.")
+	}
+	staleBefore := now.Add(-overviewStalePaymentAge)
+	stale := h.countPaymentIntents(ctx, domain.PaymentIntentFilter{
+		Statuses:      []domain.PaymentIntentStatus{domain.PaymentIntentProviderPending, domain.PaymentIntentWaitingForUser},
+		UpdatedBefore: &staleBefore,
+	})
+	status := overviewStatusOK
+	if stale.err || stale.count > 0 {
+		status = overviewStatusWarning
+	}
+	return OverviewCardDTO{
+		ID:      "payment_reconciliation",
+		Title:   "Payment reconciliation",
+		Status:  status,
+		Summary: "Flags stale provider-backed payment intents that should be reconciled by the backend path.",
+		Metrics: []OverviewMetricDTO{{Label: "stale payment intents", Value: stale.display(), Status: metricWarningWhenPositive(stale)}},
+	}
+}
+
+func notWiredOverviewCard(id, title, summary string) OverviewCardDTO {
+	return OverviewCardDTO{
+		ID:      id,
+		Title:   title,
+		Status:  overviewStatusNotWired,
+		Summary: summary,
+	}
+}
+
+type overviewCount struct {
+	count int
+	err   bool
+}
+
+func (c overviewCount) display() string {
+	if c.err {
+		return "unavailable"
+	}
+	if c.count >= maxLimit {
+		return strconv.Itoa(maxLimit) + "+"
+	}
+	return strconv.Itoa(c.count)
+}
+
+func (h *Handler) countJobs(ctx context.Context, status domain.JobStatus) overviewCount {
+	jobs, err := h.deps.Jobs.List(ctx, domain.JobFilter{Status: status}, overviewCountLimit, 0)
+	if err != nil {
+		return overviewCount{err: true}
+	}
+	return overviewCount{count: boundedOverviewCount(len(jobs))}
+}
+
+func (h *Handler) countJobsMany(ctx context.Context, statuses ...domain.JobStatus) overviewCount {
+	var total int
+	for _, status := range statuses {
+		c := h.countJobs(ctx, status)
+		if c.err {
+			return c
+		}
+		total += c.count
+		if total >= maxLimit {
+			return overviewCount{count: maxLimit}
+		}
+	}
+	return overviewCount{count: total}
+}
+
+func (h *Handler) countPaymentIntents(ctx context.Context, filter domain.PaymentIntentFilter) overviewCount {
+	intents, err := h.deps.Payment.ListIntents(ctx, filter, overviewCountLimit, 0)
+	if err != nil {
+		return overviewCount{err: true}
+	}
+	return overviewCount{count: boundedOverviewCount(len(intents))}
+}
+
+func (h *Handler) countPaymentEvents(ctx context.Context, processed bool) overviewCount {
+	events, err := h.deps.Payment.ListEvents(ctx, domain.PaymentEventFilter{Processed: &processed}, overviewCountLimit, 0)
+	if err != nil {
+		return overviewCount{err: true}
+	}
+	return overviewCount{count: boundedOverviewCount(len(events))}
+}
+
+func boundedOverviewCount(count int) int {
+	if count >= overviewCountLimit {
+		return maxLimit
+	}
+	return count
+}
+
+func metricWarningWhenPositive(count overviewCount) string {
+	if count.err || count.count > 0 {
+		return overviewStatusWarning
+	}
+	return overviewStatusOK
 }
 
 func parseID(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {

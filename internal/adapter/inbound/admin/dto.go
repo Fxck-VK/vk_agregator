@@ -22,6 +22,30 @@ type listResponse[T any] struct {
 	Pagination pagination `json:"pagination"`
 }
 
+// OverviewDTO is a bounded, secret-free operational summary for the first
+// read-only operator dashboard.
+type OverviewDTO struct {
+	GeneratedAt time.Time         `json:"generated_at"`
+	Cards       []OverviewCardDTO `json:"cards"`
+}
+
+// OverviewCardDTO summarizes one product area without raw entity identifiers,
+// payment/provider payloads or private URLs.
+type OverviewCardDTO struct {
+	ID      string              `json:"id"`
+	Title   string              `json:"title"`
+	Status  string              `json:"status"`
+	Summary string              `json:"summary"`
+	Metrics []OverviewMetricDTO `json:"metrics,omitempty"`
+}
+
+// OverviewMetricDTO contains bounded display metrics only.
+type OverviewMetricDTO struct {
+	Label  string `json:"label"`
+	Value  string `json:"value"`
+	Status string `json:"status,omitempty"`
+}
+
 // JobDTO is the admin representation of a job.
 type JobDTO struct {
 	ID                uuid.UUID   `json:"id"`

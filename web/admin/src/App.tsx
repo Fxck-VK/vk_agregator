@@ -1,4 +1,6 @@
-import { Component, FormEvent, ReactNode, useMemo, useState } from "react";
+import { Component, FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
+import { AdminApiError, createAdminClient, toSafeAdminError } from "./api/adminClient";
+import type { OverviewCardDTO, OverviewDTO } from "./api/overview";
 
 type ScreenId =
   | "overview"
@@ -97,6 +99,12 @@ type ErrorBoundaryState = {
   hasError: boolean;
 };
 
+type OverviewState = {
+  data?: OverviewDTO;
+  error?: AdminApiError;
+  loading: boolean;
+};
+
 class ErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryState> {
   state: ErrorBoundaryState = { hasError: false };
 
@@ -124,22 +132,72 @@ function findScreen(id: ScreenId): Screen {
   return screens.find((screen) => screen.id === id) ?? screens[0];
 }
 
+function statusLabel(status: OverviewCardDTO["status"]): string {
+  if (status === "ok") {
+    return "OK";
+  }
+  if (status === "warning") {
+    return "Warning";
+  }
+  if (status === "critical") {
+    return "Critical";
+  }
+  return "Not wired";
+}
+
+function formatGeneratedAt(value?: string): string {
+  if (!value) {
+    return "not loaded";
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "not loaded";
+  }
+  return date.toLocaleString(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+}
+
 export function App() {
   const [activeScreen, setActiveScreen] = useState<ScreenId>("overview");
   const [tokenDraft, setTokenDraft] = useState("");
   const [adminToken, setAdminToken] = useState("");
+  const [overview, setOverview] = useState<OverviewState>({ loading: false });
   const screen = findScreen(activeScreen);
   const sessionState = adminToken ? "Protected session" : "Token required";
   const tokenState = adminToken ? "in memory" : "not set";
+  const adminClient = useMemo(() => createAdminClient({ tokenProvider: () => adminToken }), [adminToken]);
   const riskSummary = useMemo(
     () => [
-      "read-only skeleton",
+      "read-only dashboard",
       "no direct provider calls",
       "no localStorage token",
       "no mutation actions",
     ],
     [],
   );
+
+  useEffect(() => {
+    if (activeScreen !== "overview") {
+      return;
+    }
+    if (!adminToken) {
+      setOverview({ loading: false });
+      return;
+    }
+    const controller = new AbortController();
+    setOverview((current) => ({ data: current.data, loading: true }));
+    adminClient
+      .request<OverviewDTO>("/admin/overview", { signal: controller.signal })
+      .then((data) => setOverview({ data, loading: false }))
+      .catch((error: unknown) => {
+        if (!controller.signal.aborted) {
+          setOverview({ error: toSafeAdminError(error), loading: false });
+        }
+      });
+    return () => controller.abort();
+  }, [activeScreen, adminClient, adminToken]);
 
   function handleTokenSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -150,6 +208,7 @@ export function App() {
   function clearSession() {
     setAdminToken("");
     setTokenDraft("");
+    setOverview({ loading: false });
   }
 
   return (
@@ -226,18 +285,97 @@ export function App() {
               </div>
             </article>
 
-            <div className="panel-grid">
-              {screen.panels.map((panel) => (
-                <article className="surface panel" key={panel}>
-                  <p className="eyebrow">Pending backend contract</p>
-                  <h3>{panel}</h3>
-                  <p>Read-only placeholder</p>
-                </article>
-              ))}
-            </div>
+            {screen.id === "overview" ? (
+              <OverviewPanel adminTokenSet={Boolean(adminToken)} overview={overview} />
+            ) : (
+              <div className="panel-grid">
+                {screen.panels.map((panel) => (
+                  <article className="surface panel" key={panel}>
+                    <p className="eyebrow">Pending backend contract</p>
+                    <h3>{panel}</h3>
+                    <p>Read-only placeholder</p>
+                  </article>
+                ))}
+              </div>
+            )}
           </section>
         </main>
       </div>
     </ErrorBoundary>
+  );
+}
+
+function OverviewPanel({ adminTokenSet, overview }: { adminTokenSet: boolean; overview: OverviewState }) {
+  if (!adminTokenSet) {
+    return (
+      <article className="surface panel panel--wide" role="status">
+        <p className="eyebrow">Auth required</p>
+        <h3>Overview is locked</h3>
+        <p>Enter an admin token to load the read-only operational summary.</p>
+      </article>
+    );
+  }
+
+  if (overview.loading && !overview.data) {
+    return (
+      <article className="surface panel panel--wide" role="status">
+        <p className="eyebrow">Loading</p>
+        <h3>Loading overview</h3>
+        <p>Requesting safe bounded summaries from the admin API.</p>
+      </article>
+    );
+  }
+
+  if (overview.error) {
+    return (
+      <article className="surface panel panel--wide" role="alert">
+        <p className="eyebrow">Safe error</p>
+        <h3>{overview.error.message}</h3>
+        <p>Code: {overview.error.code}</p>
+      </article>
+    );
+  }
+
+  if (!overview.data) {
+    return (
+      <article className="surface panel panel--wide" role="status">
+        <p className="eyebrow">No data</p>
+        <h3>Overview is not loaded</h3>
+        <p>The admin API has not returned an overview yet.</p>
+      </article>
+    );
+  }
+
+  return (
+    <div className="overview-stack">
+      <div className="overview-meta" aria-live="polite">
+        <span>Generated: {formatGeneratedAt(overview.data.generated_at)}</span>
+        {overview.loading ? <span>Refreshing</span> : null}
+      </div>
+      <div className="overview-grid">
+        {overview.data.cards.map((card) => (
+          <article className={`surface panel overview-card overview-card--${card.status}`} key={card.id}>
+            <div className="overview-card__header">
+              <p className="eyebrow">{statusLabel(card.status)}</p>
+              <span className={`status-pill status-pill--${card.status}`}>{statusLabel(card.status)}</span>
+            </div>
+            <h3>{card.title}</h3>
+            <p>{card.summary}</p>
+            {card.metrics && card.metrics.length > 0 ? (
+              <dl className="metric-list">
+                {card.metrics.map((metric) => (
+                  <div key={`${card.id}:${metric.label}`}>
+                    <dt>{metric.label}</dt>
+                    <dd className={metric.status ? `metric-value metric-value--${metric.status}` : "metric-value"}>
+                      {metric.value}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            ) : null}
+          </article>
+        ))}
+      </div>
+    </div>
   );
 }

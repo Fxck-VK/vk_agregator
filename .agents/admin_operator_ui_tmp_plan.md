@@ -218,6 +218,10 @@ What to do:
   ids, bounded error class, retry counters.
 - Add worker/queue section:
   backlog, oldest age, DLQ count, retry count, degradation state.
+- Carry Stage Admin 3 finding forward: Overview currently marks queue/DLQ,
+  provider circuit health, alert status and media policy health as `not_wired`
+  unless they can be derived from bounded job/payment snapshots. Add dedicated
+  read-only backend aggregation before rendering those areas as healthy.
 - Do not add requeue/retry buttons yet.
 
 Checks:

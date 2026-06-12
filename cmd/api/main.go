@@ -104,6 +104,7 @@ func main() {
 		Deliveries: core.Deliveries,
 		Referrals:  core.Referrals,
 		Billing:    core.BillingRepo,
+		Payment:    core.Payment,
 	})
 	billing := billingapi.NewHandler(billingapi.Config{Token: cfg.AdminToken}, billingapi.Deps{
 		Users:      core.Users,

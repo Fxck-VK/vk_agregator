@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -43,6 +44,112 @@ func do(t *testing.T, h *admin.Handler, path string) (*httptest.ResponseRecorder
 		_ = json.Unmarshal(rec.Body.Bytes(), &body)
 	}
 	return rec, body
+}
+
+func TestOverviewReadOnlySafeDTO(t *testing.T) {
+	ctx := context.Background()
+	jobs := memory.NewJobRepo()
+	payments := memory.NewPaymentRepo()
+	h := admin.NewHandler(admin.Config{}, admin.Deps{
+		Jobs:       jobs,
+		Users:      memory.NewUserRepo(),
+		Deliveries: memory.NewDeliveryRepo(),
+		Referrals:  memory.NewReferralRepo(),
+		Payment:    payments,
+	})
+	userID := uuid.New()
+	for _, status := range []domain.JobStatus{
+		domain.JobStatusQueued,
+		domain.JobStatusProviderProcessing,
+		domain.JobStatusFailedRetryable,
+	} {
+		if err := jobs.Create(ctx, &domain.Job{
+			ID:             uuid.New(),
+			UserID:         userID,
+			OperationType:  domain.OperationVideoGenerate,
+			Modality:       domain.ModalityVideo,
+			Status:         status,
+			IdempotencyKey: uuid.NewString(),
+		}); err != nil {
+			t.Fatalf("create job: %v", err)
+		}
+	}
+	staleAt := time.Now().Add(-10 * time.Minute)
+	if err := payments.CreateIntent(ctx, &domain.PaymentIntent{
+		ID:             uuid.New(),
+		UserID:         userID,
+		Status:         domain.PaymentIntentProviderPending,
+		Amount:         100,
+		Currency:       domain.CurrencyRUB,
+		Credits:        10,
+		Provider:       domain.PaymentProviderYooKassa,
+		IdempotencyKey: "test-payment-key",
+		CreatedAt:      staleAt,
+		UpdatedAt:      staleAt,
+	}); err != nil {
+		t.Fatalf("create intent: %v", err)
+	}
+	if _, err := payments.CreateEvent(ctx, &domain.PaymentEvent{
+		ID:                uuid.New(),
+		Provider:          domain.PaymentProviderYooKassa,
+		EventType:         "payment.succeeded",
+		ProviderPaymentID: "provider-payment-id",
+		DedupKey:          "dedup-key",
+		Payload:           json.RawMessage(`{"secret":"raw-payload"}`),
+	}); err != nil {
+		t.Fatalf("create payment event: %v", err)
+	}
+
+	rec, _ := do(t, h, "/admin/overview")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var overview admin.OverviewDTO
+	if err := json.Unmarshal(rec.Body.Bytes(), &overview); err != nil {
+		t.Fatalf("decode overview: %v", err)
+	}
+	required := map[string]bool{
+		"api":                    false,
+		"vk_bot":                 false,
+		"miniapp":                false,
+		"workers":                false,
+		"provider_webhook":       false,
+		"queue_backlog":          false,
+		"active_alerts":          false,
+		"provider_health":        false,
+		"media_safety":           false,
+		"payment_reconciliation": false,
+	}
+	for _, card := range overview.Cards {
+		if _, ok := required[card.ID]; ok {
+			required[card.ID] = true
+		}
+		if card.Status == "" || card.Title == "" || card.Summary == "" {
+			t.Fatalf("overview card must be bounded and displayable: %+v", card)
+		}
+	}
+	for id, seen := range required {
+		if !seen {
+			t.Fatalf("missing overview card %q in %+v", id, overview.Cards)
+		}
+	}
+	raw := rec.Body.String()
+	for _, forbidden := range []string{
+		"user_id",
+		"vk_user_id",
+		"provider_payment_id",
+		"confirmation_url",
+		"idempotency",
+		"dedup",
+		"payload",
+		"raw-payload",
+		"test-payment-key",
+		"provider-payment-id",
+	} {
+		if strings.Contains(raw, forbidden) {
+			t.Fatalf("overview DTO leaked forbidden field/value %q: %s", forbidden, raw)
+		}
+	}
 }
 
 func TestListJobsPaginationAndFilter(t *testing.T) {
