@@ -66,6 +66,17 @@ type Config struct {
 	// UploadConcurrencyLimiter bounds POST /miniapp/artifacts before multipart
 	// parsing so concurrent large uploads cannot exhaust one API instance.
 	UploadConcurrencyLimiter UploadConcurrencyLimiter
+	// ReferenceUploadsDisabled is an operator kill switch for the artifact
+	// upload endpoint used by reference images.
+	ReferenceUploadsDisabled bool
+	// ReferenceWebPEnabled allows WebP bytes through the upload endpoint. Keep
+	// false until product policy accepts WebP privacy/validation handling.
+	ReferenceWebPEnabled bool
+	// Upload limits are enforced before private artifact storage.
+	MaxUploadBytes       int64
+	MaxUploadImageWidth  int
+	MaxUploadImageHeight int
+	MaxUploadImagePixels int64
 	// ImageReferenceEnabled allows validated image reference artifacts to flow
 	// into image jobs. When false, references fail closed before job creation.
 	ImageReferenceEnabled bool
@@ -118,7 +129,24 @@ func NewHandler(cfg Config, deps Deps) *Handler {
 	if logger == nil {
 		logger = slog.Default()
 	}
+	cfg = normalizeConfig(cfg)
 	return &Handler{cfg: cfg, deps: deps, logger: logger}
+}
+
+func normalizeConfig(cfg Config) Config {
+	if cfg.MaxUploadBytes <= 0 {
+		cfg.MaxUploadBytes = defaultMaxMiniAppUploadBytes
+	}
+	if cfg.MaxUploadImageWidth <= 0 {
+		cfg.MaxUploadImageWidth = defaultMaxMiniAppImageDimension
+	}
+	if cfg.MaxUploadImageHeight <= 0 {
+		cfg.MaxUploadImageHeight = defaultMaxMiniAppImageDimension
+	}
+	if cfg.MaxUploadImagePixels <= 0 {
+		cfg.MaxUploadImagePixels = defaultMaxMiniAppImagePixels
+	}
+	return cfg
 }
 
 // Routes returns an http.Handler with the miniapp routes registered.

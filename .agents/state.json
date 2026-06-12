@@ -1,6 +1,6 @@
 ﻿{
     "schema_version":  3,
-    "updated_at":  "2026-06-11T22:10:40+03:00",
+    "updated_at":  "2026-06-13T00:10:00+03:00",
     "branch":  "fastlife_dev",
     "git_ref_policy":  "Use git rev-parse HEAD/origin/main for moving SHAs; this file does not track branch head commits.",
     "purpose":  "Minimal machine-readable current context and routing for agents.",
@@ -118,13 +118,14 @@
                 },
     "active_plans":  {
                          "media_safety_production":  {
-                                                         "status":  "in_progress",
+                                                         "status":  "complete",
                                                          "plan":  ".agents/plans/media_safety_production.json",
                                                          "mode":  "IMPLEMENT",
                                                          "runtime_target":  "worker_owned_media_processing",
                                                          "notes":  [
                                                                        "Stage 0 capacity budget is complete.",
                                                                        "Stage 1 splits video probe, transcode and raw-provider-video policies at config/bootstrap level.",
+                                                                       "Stage 11 final production audit is complete: reference uploads are gated, JPG/PNG-only by default, size/dimension/pixel validated before storage, and frontend allowlist is aligned.",
                                                                        "Do not make VK Bot or Mini App call providers, ffprobe or ffmpeg directly.",
                                                                        "Keep ffmpeg out of the default production path.",
                                                                        "Do not log or commit secrets, prompts, full launch params, raw PII, raw provider payloads or private artifact URLs."

@@ -9,6 +9,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"image"
+	"image/color"
+	"image/png"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -428,12 +431,21 @@ func multipartUploadBody(t *testing.T, data []byte) (*bytes.Buffer, string) {
 }
 
 func pngBytes() []byte {
-	return []byte{
-		0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n',
-		0x00, 0x00, 0x00, 0x0d, 'I', 'H', 'D', 'R',
-		0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
-		0x08, 0x06, 0x00, 0x00, 0x00,
+	return pngSizedBytes(1, 1)
+}
+
+func pngSizedBytes(width, height int) []byte {
+	img := image.NewNRGBA(image.Rect(0, 0, width, height))
+	img.Set(0, 0, color.NRGBA{R: 255, A: 255})
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		panic(err)
 	}
+	return buf.Bytes()
+}
+
+func minimalWebPBytes() []byte {
+	return []byte{'R', 'I', 'F', 'F', 4, 0, 0, 0, 'W', 'E', 'B', 'P', 'V', 'P', '8', ' '}
 }
 
 func createTestArtifact(t *testing.T, fixture *testFixture, ownerID uuid.UUID, kind domain.ArtifactKind, mediaType domain.MediaType, status domain.ArtifactStatus) *domain.Artifact {
@@ -1387,6 +1399,72 @@ func TestHandler_UploadArtifact_RejectsOversize(t *testing.T) {
 	}
 	if !strings.Contains(w.Body.String(), domain.JobErrMediaUploadTooLarge) {
 		t.Fatalf("expected safe too-large upload error, got %s", w.Body.String())
+	}
+}
+
+func TestHandler_UploadArtifact_DisabledKillSwitch(t *testing.T) {
+	fixture := newTestFixtureWithConfig("", nil, func(cfg *miniappinbound.Config) {
+		cfg.ReferenceUploadsDisabled = true
+	})
+	routes := fixture.handler.Routes()
+	body, contentType := multipartUploadBody(t, pngBytes())
+
+	req := httptest.NewRequest(http.MethodPost, "/miniapp/artifacts", body)
+	req.Header.Set("Content-Type", contentType)
+	req.Header.Set("X-Launch-Params", devLaunchParams(777))
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, req)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d: %s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "reference_artifacts_unsupported") {
+		t.Fatalf("expected safe disabled upload error, got %s", w.Body.String())
+	}
+	if got := fixture.objects.Len(); got != 0 {
+		t.Fatalf("disabled upload stored %d objects, want 0", got)
+	}
+}
+
+func TestHandler_UploadArtifact_RejectsWebPWhenDisabled(t *testing.T) {
+	routes := newTestHandler("").Routes()
+	body, contentType := multipartUploadBody(t, minimalWebPBytes())
+
+	req := httptest.NewRequest(http.MethodPost, "/miniapp/artifacts", body)
+	req.Header.Set("Content-Type", contentType)
+	req.Header.Set("X-Launch-Params", devLaunchParams(777))
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), domain.JobErrMediaUploadUnsupported) {
+		t.Fatalf("expected safe unsupported WebP error, got %s", w.Body.String())
+	}
+}
+
+func TestHandler_UploadArtifact_RejectsImagePixelLimit(t *testing.T) {
+	fixture := newTestFixtureWithConfig("", nil, func(cfg *miniappinbound.Config) {
+		cfg.MaxUploadImagePixels = 1
+	})
+	routes := fixture.handler.Routes()
+	body, contentType := multipartUploadBody(t, pngSizedBytes(2, 1))
+
+	req := httptest.NewRequest(http.MethodPost, "/miniapp/artifacts", body)
+	req.Header.Set("Content-Type", contentType)
+	req.Header.Set("X-Launch-Params", devLaunchParams(777))
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, req)
+
+	if w.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("expected 413, got %d: %s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), domain.JobErrMediaUploadTooLarge) {
+		t.Fatalf("expected safe pixel-limit error, got %s", w.Body.String())
+	}
+	if got := fixture.objects.Len(); got != 0 {
+		t.Fatalf("pixel rejected upload stored %d objects, want 0", got)
 	}
 }
 

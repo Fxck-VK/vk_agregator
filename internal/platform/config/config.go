@@ -173,6 +173,12 @@ type Config struct {
 	MediaProviderFallbackBudget           int
 	MediaQueueDegradeThreshold            int64
 	MediaMaxConcurrentUploads             int
+	MediaReferenceUploadsEnabled          bool
+	MediaReferenceWebPEnabled             bool
+	MediaMaxImageUploadBytes              int64
+	MediaMaxImageWidth                    int
+	MediaMaxImageHeight                   int
+	MediaMaxImagePixels                   int64
 	MediaProviderQualityGuardEnabled      bool
 	MediaProviderQualityDegradedFailures  int
 	MediaProviderQualityDisabledFailures  int
@@ -524,6 +530,18 @@ func (c Config) Validate() error {
 	if c.MediaMaxConcurrentUploads < 0 {
 		return fmt.Errorf("config: MEDIA_MAX_CONCURRENT_UPLOADS must be non-negative")
 	}
+	if c.MediaMaxImageUploadBytes < 0 {
+		return fmt.Errorf("config: MEDIA_MAX_IMAGE_UPLOAD_BYTES must be non-negative")
+	}
+	if c.MediaMaxImageWidth < 0 {
+		return fmt.Errorf("config: MEDIA_MAX_IMAGE_WIDTH must be non-negative")
+	}
+	if c.MediaMaxImageHeight < 0 {
+		return fmt.Errorf("config: MEDIA_MAX_IMAGE_HEIGHT must be non-negative")
+	}
+	if c.MediaMaxImagePixels < 0 {
+		return fmt.Errorf("config: MEDIA_MAX_IMAGE_PIXELS must be non-negative")
+	}
 	if c.MediaProviderQualityDegradedFailures < 0 {
 		return fmt.Errorf("config: MEDIA_PROVIDER_QUALITY_DEGRADED_FAILURES must be non-negative")
 	}
@@ -752,6 +770,12 @@ func Load() Config {
 		MediaProviderFallbackBudget:           envInt("MEDIA_PROVIDER_FALLBACK_BUDGET_PER_JOB", 0),
 		MediaQueueDegradeThreshold:            envInt64("MEDIA_QUEUE_DEGRADE_THRESHOLD", 1000),
 		MediaMaxConcurrentUploads:             envInt("MEDIA_MAX_CONCURRENT_UPLOADS", 8),
+		MediaReferenceUploadsEnabled:          envBool("MEDIA_REFERENCE_UPLOADS_ENABLED", defaultMediaReferenceUploadsEnabled(appEnv)),
+		MediaReferenceWebPEnabled:             envBool("MEDIA_REFERENCE_WEBP_ENABLED", false),
+		MediaMaxImageUploadBytes:              envInt64("MEDIA_MAX_IMAGE_UPLOAD_BYTES", 20<<20),
+		MediaMaxImageWidth:                    envInt("MEDIA_MAX_IMAGE_WIDTH", 4096),
+		MediaMaxImageHeight:                   envInt("MEDIA_MAX_IMAGE_HEIGHT", 4096),
+		MediaMaxImagePixels:                   envInt64("MEDIA_MAX_IMAGE_PIXELS", 4096*4096),
 		MediaProviderQualityGuardEnabled:      envBool("MEDIA_PROVIDER_QUALITY_GUARD_ENABLED", false),
 		MediaProviderQualityDegradedFailures:  envInt("MEDIA_PROVIDER_QUALITY_DEGRADED_FAILURES", 3),
 		MediaProviderQualityDisabledFailures:  envInt("MEDIA_PROVIDER_QUALITY_DISABLED_FAILURES", 5),
@@ -955,6 +979,10 @@ func defaultMediaVideoProbePolicy(env string, mediaPipelineEnabled bool) string 
 		return MediaVideoProbePolicyProbeRequired
 	}
 	return MediaVideoProbePolicyDisabled
+}
+
+func defaultMediaReferenceUploadsEnabled(env string) bool {
+	return !isProductionEnv(env)
 }
 
 func defaultMediaDeliverRawProviderVideo(env string, mediaPipelineEnabled bool) string {

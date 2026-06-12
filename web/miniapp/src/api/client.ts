@@ -462,7 +462,7 @@ const ARTIFACT_ID_RE =
 export const MAX_REFERENCE_ARTIFACTS = 4;
 export const MAX_UPLOAD_BYTES = 20 << 20;
 
-const ALLOWED_UPLOAD_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+const ALLOWED_UPLOAD_MIME_TYPES = new Set(["image/jpeg", "image/png"]);
 
 function safeString(value: unknown): string | undefined {
   return typeof value === "string" && value.length > 0 ? value : undefined;
@@ -512,11 +512,11 @@ function apiErrorMessageForCode(code: ApiErrorCode): string {
     case "too_many_reference_artifacts":
       return "Можно добавить не больше 4 референсов";
     case "media_upload_invalid":
-      return "Не удалось прочитать файл. Загрузите JPG, PNG или WebP";
+      return "Не удалось прочитать файл. Загрузите JPG или PNG";
     case "media_upload_too_large":
       return "Файл слишком большой. Выберите изображение меньшего размера";
     case "media_upload_unsupported":
-      return "Формат не поддерживается. Загрузите JPG, PNG или WebP";
+      return "Формат не поддерживается. Загрузите JPG или PNG";
     case "media_provider_output_invalid":
       return "Медиафайл не прошёл безопасную проверку. Кредиты не списаны";
     case "media_processing_unavailable":

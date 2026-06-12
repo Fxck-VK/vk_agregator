@@ -1130,15 +1130,67 @@ Commit/push:
 - Если хоть одна релевантная проверка падает, не пушь; дай failures и next fix step.
 ```
 
+### Stage 11 Audit Verdict
+
+Decision date: 2026-06-12.
+
+Verdict: repository-level media safety is production-ready for a gated rollout
+after the external edge/proxy upload body limit is configured and verified. Do
+not enable public reference-image uploads without that edge control.
+
+Evidence:
+
+- VK Bot, Mini App frontend and Mini App BFF do not call providers, ffprobe or
+  ffmpeg directly. Provider and media processing remain worker-owned.
+- User uploads are image-only. User video uploads are not accepted.
+- Mini App reference uploads are protected by:
+  - `MEDIA_REFERENCE_UPLOADS_ENABLED` kill switch;
+  - per-API-instance `MEDIA_MAX_CONCURRENT_UPLOADS`;
+  - backend byte, width, height and pixel limits;
+  - backend JPEG/PNG-only default with WebP behind `MEDIA_REFERENCE_WEBP_ENABLED`.
+- API upload handling performs cheap validation and private artifact storage
+  only. It does not run providers, ffprobe or ffmpeg.
+- Reference image privacy is handled by worker-owned policy: raw uploaded bytes
+  remain private, JPEG/PNG references are sanitized before provider forwarding,
+  and unsupported metadata-bearing formats fail closed before provider submit.
+- Provider media contracts guard video model, duration, aspect, resolution and
+  cost before provider submit.
+- `ffmpeg` is not the default path. `MEDIA_VIDEO_TRANSCODE_POLICY=never` is the
+  CPU-safe default; fallback transcode is explicit and concurrency-limited.
+- Probe policy is explicit. Production defaults to `probe_required`; local/dev
+  can stay disabled for mock-backed runs.
+- Raw provider video delivery is allowed only when raw delivery policy, probe
+  metadata and provider contract prove a delivery-ready output.
+- Backpressure rejects expensive media jobs before persistence, reservation,
+  outbox enqueue and provider submit when queue pressure is degraded.
+- Billing capture remains after safe delivery/access. Unsafe media, moderation,
+  provider, probe, transcode and terminal delivery failures release reservation
+  without capture.
+- Retry, fallback, probe and transcode attempts are bounded by config and tests.
+- Cleanup is lifecycle-specific, batched by repository predicates and must not
+  delete active artifacts referenced by jobs or deliveries.
+- Metrics and alerts use bounded labels only and explicitly forbid user ids,
+  job ids, artifact ids, prompts, raw URLs, private storage keys and raw errors.
+
+Accepted rollout condition:
+
+- The repository cannot enforce Cloudflare/nginx/tunnel body limits by itself.
+  Production rollout must configure an external request body limit at or below
+  `MEDIA_MAX_IMAGE_UPLOAD_BYTES`, then verify oversized uploads are rejected at
+  the edge before enabling `MEDIA_REFERENCE_UPLOADS_ENABLED=true`.
+
 ## Default Product Policy Decisions
 
 Use these defaults unless the owner explicitly changes them:
 
 - User videos: not accepted.
-- User image uploads: JPEG/PNG by default; WebP only behind config/product flag.
+- User image uploads: JPEG/PNG by default; WebP only behind
+  `MEDIA_REFERENCE_WEBP_ENABLED` and product policy.
 - SVG/GIF/PDF/archive/audio/video: rejected.
 - Upload validation: cheap, bounded, no full decode/re-encode in API.
 - Upload limits must exist at browser, API and edge/proxy layers.
+- Public reference-image uploads must stay behind
+  `MEDIA_REFERENCE_UPLOADS_ENABLED` until edge/proxy body limits are verified.
 - For large-scale/high-size uploads, prefer private staged direct-to-object
   upload over API-proxied buffering.
 - Reference image metadata must not be forwarded to providers unless sanitized

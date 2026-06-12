@@ -2,7 +2,7 @@
   "schema_version": 1,
   "plan_id": "media_safety_production",
   "source_plan": "docs/MEDIA_SAFETY_PRODUCTION_PLAN.md",
-  "updated_at": "2026-06-12T22:18:30+03:00",
+  "updated_at": "2026-06-13T00:10:00+03:00",
   "mode": "IMPLEMENT",
   "security_invariants": [
     "vk_bot_and_miniapp_do_not_call_providers_or_media_tools_directly",
@@ -714,6 +714,114 @@
       ],
       "push_allowed": true,
       "push_note": "stage prompt ended with Pushвйц, interpreted as explicit push approval",
+      "errors": []
+    },
+    {
+      "id": "stage_11",
+      "name": "Final Production Audit",
+      "status": "completed",
+      "load_impact": "none_audit_and_guardrails_only",
+      "scope": [
+        "miniapp_reference_upload_policy",
+        "api_upload_size_dimension_pixel_validation",
+        "frontend_reference_upload_allowlist",
+        "runbook_env_docs",
+        "machine_readable_plan"
+      ],
+      "policy_decisions": [
+        "reference uploads are behind MEDIA_REFERENCE_UPLOADS_ENABLED and default off in production",
+        "Mini App reference uploads accept only JPEG and PNG by default; WebP is disabled unless MEDIA_REFERENCE_WEBP_ENABLED is explicitly enabled",
+        "API rejects unsupported, invalid, oversized or excessive-pixel reference images before storage",
+        "frontend upload allowlist is aligned to JPG and PNG and remains UX-only, not a trust boundary",
+        "edge/proxy request body limits remain an operational rollout requirement outside this repository",
+        "VK Bot and Mini App still do not call providers, ffprobe or ffmpeg directly",
+        "billing capture and provider/media processing remain worker-owned and ledger-based"
+      ],
+      "required_checks": [
+        "gofmt -l .",
+        "go test ./...",
+        "go vet ./...",
+        "golangci-lint run ./... if available",
+        "gosec ./... if available",
+        "govulncheck ./... if available",
+        "gitleaks detect --redact if available",
+        "npm --prefix web/miniapp run lint",
+        "npm --prefix web/miniapp run typecheck",
+        "npm --prefix web/miniapp run test",
+        "npm --prefix web/miniapp run build",
+        "npm --prefix web/miniapp run e2e:smoke",
+        "promtool check rules observability/prometheus/rules/*.yml",
+        "promtool check config observability/prometheus/prometheus.yml",
+        "docker compose config if compose changed",
+        "git diff --check",
+        "git status --short --branch"
+      ],
+      "checks_run": [
+        {
+          "command": "$files = rg --files -g '*.go'; gofmt -l $files",
+          "status": "passed",
+          "note": "used explicit Go file list because literal gofmt -l . is not reliable in this Windows environment"
+        },
+        {
+          "command": "go test ./...",
+          "status": "passed",
+          "note": "ran with approval because sandbox blocks Go build cache in AppData"
+        },
+        {
+          "command": "go vet ./...",
+          "status": "passed",
+          "note": "ran with approval because sandbox blocks Go build cache in AppData"
+        },
+        {
+          "command": "npm --prefix web/miniapp run lint",
+          "status": "passed"
+        },
+        {
+          "command": "npm --prefix web/miniapp run typecheck",
+          "status": "passed"
+        },
+        {
+          "command": "npm --prefix web/miniapp run test",
+          "status": "passed"
+        },
+        {
+          "command": "npm --prefix web/miniapp run build",
+          "status": "passed"
+        },
+        {
+          "command": "npm --prefix web/miniapp run e2e:smoke",
+          "status": "passed"
+        },
+        {
+          "command": ".runtime/tools/prometheus/promtool.exe check rules observability/prometheus/rules/*.yml",
+          "status": "passed",
+          "note": "Windows wildcard was expanded to explicit rule file paths"
+        },
+        {
+          "command": ".runtime/tools/prometheus/promtool.exe check config observability/prometheus/prometheus.yml",
+          "status": "passed"
+        },
+        {
+          "command": "golangci-lint/gosec/govulncheck/gitleaks availability check",
+          "status": "skipped",
+          "note": "executables were not available in PATH in this environment"
+        },
+        {
+          "command": "docker compose config",
+          "status": "skipped",
+          "note": "compose files were not changed in stage 11"
+        },
+        {
+          "command": "git diff --check",
+          "status": "passed",
+          "note": "line-ending warnings only for working-copy normalization"
+        },
+        {
+          "command": "Get-Content .agents/plans/media_safety_production.json | ConvertFrom-Json",
+          "status": "passed"
+        }
+      ],
+      "push_allowed": true,
       "errors": []
     }
   ]

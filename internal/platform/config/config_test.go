@@ -158,6 +158,12 @@ func TestLoadMediaPipelineConfig(t *testing.T) {
 	t.Setenv("MEDIA_PROVIDER_FALLBACK_BUDGET_PER_JOB", "0")
 	t.Setenv("MEDIA_QUEUE_DEGRADE_THRESHOLD", "2500")
 	t.Setenv("MEDIA_MAX_CONCURRENT_UPLOADS", "12")
+	t.Setenv("MEDIA_REFERENCE_UPLOADS_ENABLED", "false")
+	t.Setenv("MEDIA_REFERENCE_WEBP_ENABLED", "true")
+	t.Setenv("MEDIA_MAX_IMAGE_UPLOAD_BYTES", "10485760")
+	t.Setenv("MEDIA_MAX_IMAGE_WIDTH", "2048")
+	t.Setenv("MEDIA_MAX_IMAGE_HEIGHT", "2048")
+	t.Setenv("MEDIA_MAX_IMAGE_PIXELS", "4194304")
 	t.Setenv("MEDIA_PROVIDER_QUALITY_GUARD_ENABLED", "true")
 	t.Setenv("MEDIA_PROVIDER_QUALITY_DEGRADED_FAILURES", "4")
 	t.Setenv("MEDIA_PROVIDER_QUALITY_DISABLED_FAILURES", "7")
@@ -207,6 +213,19 @@ func TestLoadMediaPipelineConfig(t *testing.T) {
 	}
 	if cfg.MediaQueueDegradeThreshold != 2500 || cfg.MediaMaxConcurrentUploads != 12 {
 		t.Fatalf("unexpected media queue/upload limits: queue=%d uploads=%d", cfg.MediaQueueDegradeThreshold, cfg.MediaMaxConcurrentUploads)
+	}
+	if cfg.MediaReferenceUploadsEnabled || !cfg.MediaReferenceWebPEnabled ||
+		cfg.MediaMaxImageUploadBytes != 10485760 ||
+		cfg.MediaMaxImageWidth != 2048 ||
+		cfg.MediaMaxImageHeight != 2048 ||
+		cfg.MediaMaxImagePixels != 4194304 {
+		t.Fatalf("unexpected media image upload config: enabled=%v webp=%v bytes=%d size=%dx%d pixels=%d",
+			cfg.MediaReferenceUploadsEnabled,
+			cfg.MediaReferenceWebPEnabled,
+			cfg.MediaMaxImageUploadBytes,
+			cfg.MediaMaxImageWidth,
+			cfg.MediaMaxImageHeight,
+			cfg.MediaMaxImagePixels)
 	}
 	if !cfg.MediaProviderQualityGuardEnabled ||
 		cfg.MediaProviderQualityDegradedFailures != 4 ||
@@ -486,6 +505,13 @@ func TestValidateMediaScaleGuards(t *testing.T) {
 	err = cfg.Validate()
 	if err == nil || !strings.Contains(err.Error(), "MEDIA_PROVIDER_QUALITY_DISABLED_FAILURES") {
 		t.Fatalf("expected provider quality threshold validation error, got %v", err)
+	}
+
+	cfg = validMediaPipelineConfig()
+	cfg.MediaMaxImagePixels = -1
+	err = cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "MEDIA_MAX_IMAGE_PIXELS") {
+		t.Fatalf("expected image pixel validation error, got %v", err)
 	}
 }
 

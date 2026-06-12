@@ -56,7 +56,7 @@ type ReferenceItem = {
 
 const ESTIMATE_DEBOUNCE_MS = 450;
 const PROMPT_LIMIT = 2000;
-const REFERENCE_ACCEPT = "image/jpeg,image/png,image/webp";
+const REFERENCE_ACCEPT = "image/jpeg,image/png";
 const VIDEO_DURATION_OPTIONS = [3, 5, 10] as const;
 type VideoDurationSec = (typeof VIDEO_DURATION_OPTIONS)[number];
 

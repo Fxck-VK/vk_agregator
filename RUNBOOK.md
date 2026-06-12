@@ -152,6 +152,9 @@ Override these values when needed:
 | `MEDIA_PROVIDER_MAX_ATTEMPTS_PER_JOB` / `MEDIA_PROVIDER_FALLBACK_BUDGET_PER_JOB` | `1` / `0` | Worker-side paid media submit budget; keep fallback conservative unless provider-side idempotency is proven |
 | `MEDIA_QUEUE_DEGRADE_THRESHOLD` | `1000` | Redis Streams consumer-group lag+pending threshold; expensive media jobs are rejected before reservation when exceeded |
 | `MEDIA_MAX_CONCURRENT_UPLOADS` | `8` | Per-API-instance multipart upload memory guard before large request bodies are parsed; not a global user quota |
+| `MEDIA_REFERENCE_UPLOADS_ENABLED` | dev: `true`, production: `false` | Kill switch for Mini App reference-image uploads. Production must explicitly enable it only after edge/proxy body limits are configured |
+| `MEDIA_REFERENCE_WEBP_ENABLED` | `false` | Allows WebP reference uploads. Keep false until product policy accepts WebP validation/privacy handling |
+| `MEDIA_MAX_IMAGE_UPLOAD_BYTES` / `MEDIA_MAX_IMAGE_WIDTH` / `MEDIA_MAX_IMAGE_HEIGHT` / `MEDIA_MAX_IMAGE_PIXELS` | `20971520` / `4096` / `4096` / `16777216` | Cheap API-side reference-image limits before private artifact storage; frontend and edge/proxy limits must stay at or below the byte cap |
 | `MEDIA_PROVIDER_QUALITY_GUARD_ENABLED` | `false` | Enables runtime provider/model_class/modality quality routing; disabled by default so alerts can be reviewed before automatic disable |
 | `MEDIA_PROVIDER_QUALITY_DEGRADED_FAILURES` / `MEDIA_PROVIDER_QUALITY_DISABLED_FAILURES` / `MEDIA_PROVIDER_QUALITY_RECOVERY_SUCCESSES` | `3` / `5` / `2` | Consecutive local quality samples for degraded, disabled and recovery state; the router never drops all capable providers at once |
 | `MEDIA_PROVIDER_CONTRACTS_JSON` | `` | Optional JSON array of product-level provider/model media contracts. Contracts reject unsupported video duration/aspect/resolution/model/cost before provider submit; metrics must use bounded `model_class`, not raw model ids |
@@ -333,6 +336,14 @@ Override these values when needed:
   private storage coordinates only after object deletion; active `ready/stored`
   artifacts referenced by jobs or deliveries remain available to owners and
   delivery retries.
+- **Reference-image upload rollout gate**: do not expose public reference-image
+  uploads until the external edge/proxy/tunnel request body limit is configured
+  at or below `MEDIA_MAX_IMAGE_UPLOAD_BYTES`. The backend also enforces
+  `MEDIA_REFERENCE_UPLOADS_ENABLED`, byte, width, height, pixel and WebP policy
+  limits before private artifact storage, but edge/proxy limits are still
+  required so large bodies are rejected before they consume API bandwidth and
+  memory. Frontend limits are advisory only and must not be treated as security
+  controls.
 - **SSRF**: artifact downloader blocks private/loopback/link-local hosts and
   non-http(s) schemes; optional host allowlist. Provider data URLs are accepted
   for normalized OpenAI text/image/video outputs.
