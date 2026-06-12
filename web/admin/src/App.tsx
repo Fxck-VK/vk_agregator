@@ -111,7 +111,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryStat
           <section className="surface surface--alert">
             <p className="eyebrow">Safe fallback</p>
             <h1>Operator console error</h1>
-            <p>Экран остановлен без вывода внутренних деталей.</p>
+            <p>The screen stopped without rendering internal details.</p>
           </section>
         </main>
       );

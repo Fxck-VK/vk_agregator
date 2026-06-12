@@ -150,6 +150,8 @@ Goal: make all admin UI backend communication safe and typed.
 What to do:
 - Add typed API client for admin/operator endpoints.
 - Add timeout/abort handling.
+- Timeout/abort helpers must work in browser and Node test environments; avoid
+  browser-only globals when `globalThis` is enough.
 - Normalize errors into safe UI errors.
 - Ensure token/auth headers never appear in logs, telemetry, UI, test snapshots
   or thrown display text.
