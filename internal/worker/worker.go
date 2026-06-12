@@ -29,6 +29,7 @@ import (
 	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/platform/metrics"
 	"vk-ai-aggregator/internal/platform/queue"
+	"vk-ai-aggregator/internal/platform/ratelimit"
 	"vk-ai-aggregator/internal/platform/tracing"
 	"vk-ai-aggregator/internal/service/dialogcontext"
 	"vk-ai-aggregator/internal/service/moderationservice"
@@ -91,7 +92,14 @@ type Registry struct {
 	preferredByModality map[domain.Modality]domain.ProviderName
 	breakers            map[domain.ProviderName]*breakerState
 	mediaContracts      mediaContractRegistry
+	mediaProviderBudget providerSubmitBudget
 	now                 func() time.Time
+}
+
+type providerSubmitBudget struct {
+	configured          bool
+	maxProviderAttempts int
+	maxFallbackAttempts int
 }
 
 // NewRegistry builds a registry with a default provider and optional extras.
@@ -120,6 +128,28 @@ func (r *Registry) ConfigureProviderMediaContracts(contracts []domain.ProviderMe
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.mediaContracts = newMediaContractRegistry(contracts, requireVideoProbe, videoTranscodeEnabled)
+}
+
+// ConfigureMediaProviderBudget installs a global media submit budget. It is a
+// second guard alongside per-model contracts and keeps paid media retries
+// bounded even when future provider chains are configured.
+func (r *Registry) ConfigureMediaProviderBudget(maxProviderAttempts, maxFallbackAttempts int) {
+	if r == nil {
+		return
+	}
+	if maxProviderAttempts < 0 {
+		maxProviderAttempts = 0
+	}
+	if maxFallbackAttempts < 0 {
+		maxFallbackAttempts = 0
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.mediaProviderBudget = providerSubmitBudget{
+		configured:          true,
+		maxProviderAttempts: maxProviderAttempts,
+		maxFallbackAttempts: maxFallbackAttempts,
+	}
 }
 
 // PreferProvider makes a provider the first candidate for a modality when it
@@ -233,6 +263,20 @@ func (r *Registry) videoContractForTask(provider domain.ProviderName, model stri
 	contracts := r.mediaContracts
 	r.mu.Unlock()
 	return contracts.videoContract(provider, model)
+}
+
+func (r *Registry) mediaProviderBudgetFor(req domain.ProviderRequest) (providerSubmitBudget, bool) {
+	if r == nil || !isMediaProviderBudgetedRequest(req) {
+		return providerSubmitBudget{}, false
+	}
+	r.mu.Lock()
+	budget := r.mediaProviderBudget
+	r.mu.Unlock()
+	return budget, budget.configured
+}
+
+func isMediaProviderBudgetedRequest(req domain.ProviderRequest) bool {
+	return req.Operation == domain.OperationVideoGenerate || req.Modality == domain.ModalityVideo
 }
 
 type providerCandidate struct {
@@ -458,6 +502,8 @@ func (p *routedProvider) Estimate(ctx context.Context, req domain.ProviderReques
 func (p *routedProvider) Submit(ctx context.Context, req domain.ProviderRequest) (domain.ProviderTask, error) {
 	var last error
 	submittedAttempts := 0
+	fallbackAttempts := 0
+	budget, budgeted := p.registry.mediaProviderBudgetFor(req)
 	for idx, candidate := range p.candidates {
 		contract, err := p.registry.validateProviderMediaContract(candidate.name, req, domain.CostEstimate{AmountCredits: candidate.cost, Currency: "credits"})
 		if err != nil {
@@ -483,7 +529,35 @@ func (p *routedProvider) Submit(ctx context.Context, req domain.ProviderRequest)
 		if !isFallbackError(err) {
 			break
 		}
-		if contract != nil && submittedAttempts > contract.MaxFallbackAttempts {
+		if budgeted && budget.maxProviderAttempts > 0 && submittedAttempts >= budget.maxProviderAttempts {
+			metrics.ProviderFallback.WithLabelValues(
+				string(candidate.name),
+				"none",
+				operationMetricLabel(req.Operation),
+				"media_attempt_budget_exhausted",
+			).Inc()
+			break
+		}
+		if contract != nil && contract.MaxProviderAttempts > 0 && submittedAttempts >= contract.MaxProviderAttempts {
+			metrics.ProviderFallback.WithLabelValues(
+				string(candidate.name),
+				"none",
+				operationMetricLabel(req.Operation),
+				"contract_attempt_budget_exhausted",
+			).Inc()
+			break
+		}
+		hasNext := idx+1 < len(p.candidates)
+		if hasNext && budgeted && fallbackAttempts >= budget.maxFallbackAttempts {
+			metrics.ProviderFallback.WithLabelValues(
+				string(candidate.name),
+				"none",
+				operationMetricLabel(req.Operation),
+				"media_fallback_budget_exhausted",
+			).Inc()
+			break
+		}
+		if hasNext && contract != nil && fallbackAttempts >= contract.MaxFallbackAttempts {
 			metrics.ProviderFallback.WithLabelValues(
 				string(candidate.name),
 				"none",
@@ -492,7 +566,8 @@ func (p *routedProvider) Submit(ctx context.Context, req domain.ProviderRequest)
 			).Inc()
 			break
 		}
-		if idx+1 < len(p.candidates) {
+		if hasNext {
+			fallbackAttempts++
 			metrics.ProviderFallback.WithLabelValues(
 				string(candidate.name),
 				string(p.candidates[idx+1].name),
@@ -569,6 +644,9 @@ type processor struct {
 	requireVideoProbe    bool
 	videoTranscodePolicy string
 	rawVideoPolicy       string
+	probeLimiter         *ratelimit.ConcurrencyLimiter
+	transcodeLimiter     *ratelimit.ConcurrencyLimiter
+	variantLimiter       *ratelimit.ConcurrencyLimiter
 	textContext          TextContext
 	moderator            Moderator
 	modResults           domain.ModerationResultRepository
@@ -639,6 +717,14 @@ type Deps struct {
 	// ProviderMediaContracts is the product-level allowlist for risky video
 	// provider/model combinations.
 	ProviderMediaContracts []domain.ProviderMediaContract
+	// MediaMaxConcurrentProbes and MediaMaxConcurrentTranscodes bound CPU-heavy
+	// media work per worker process. Shared queue/user capacity is handled
+	// before job creation by the API/orchestrator.
+	MediaMaxConcurrentProbes     int
+	MediaMaxConcurrentTranscodes int
+	MediaMaxPendingVariants      int
+	MediaProviderMaxAttempts     int
+	MediaProviderFallbackBudget  int
 	// TextContext, when set, stores VK text dialog history and renders compact
 	// provider prompts for text jobs.
 	TextContext TextContext
@@ -692,6 +778,9 @@ func newProcessor(d Deps) processor {
 	}
 	if d.Providers != nil {
 		d.Providers.ConfigureProviderMediaContracts(d.ProviderMediaContracts, d.RequireVideoProbe, d.VideoTranscodeEnabled)
+		if d.MediaProviderMaxAttempts > 0 || d.MediaProviderFallbackBudget > 0 {
+			d.Providers.ConfigureMediaProviderBudget(d.MediaProviderMaxAttempts, d.MediaProviderFallbackBudget)
+		}
 	}
 	return processor{
 		jobs:                 d.Jobs,
@@ -713,6 +802,9 @@ func newProcessor(d Deps) processor {
 		requireVideoProbe:    d.RequireVideoProbe,
 		videoTranscodePolicy: videoTranscodePolicy,
 		rawVideoPolicy:       rawVideoPolicy,
+		probeLimiter:         optionalConcurrencyLimiter(d.MediaMaxConcurrentProbes),
+		transcodeLimiter:     optionalConcurrencyLimiter(d.MediaMaxConcurrentTranscodes),
+		variantLimiter:       optionalConcurrencyLimiter(d.MediaMaxPendingVariants),
 		textContext:          d.TextContext,
 		moderator:            d.Moderator,
 		modResults:           d.ModResults,
@@ -722,6 +814,20 @@ func newProcessor(d Deps) processor {
 		callTimeout:          callTimeout,
 		now:                  now,
 	}
+}
+
+func optionalConcurrencyLimiter(limit int) *ratelimit.ConcurrencyLimiter {
+	if limit <= 0 {
+		return nil
+	}
+	return ratelimit.NewConcurrencyLimiter(limit)
+}
+
+func acquireOptionalLimiter(limiter *ratelimit.ConcurrencyLimiter) (func(), bool) {
+	if limiter == nil {
+		return func() {}, true
+	}
+	return limiter.TryAcquire()
 }
 
 func normalizeWorkerPolicy(value string) string {
@@ -1358,7 +1464,16 @@ func (p *processor) probeVideoOutputs(ctx context.Context, job *domain.Job) erro
 			originalSize = int64(len(data))
 		}
 		metrics.ObserveMediaBytes(operationLabel, modalityLabel, string(domain.VariantOriginal), originalSize)
+		releaseProbe, ok := acquireOptionalLimiter(p.probeLimiter)
+		if !ok {
+			if markErr := p.markArtifactProbeFailed(ctx, art); markErr != nil {
+				return markErr
+			}
+			metrics.ObserveMediaProbe("error", operationLabel, modalityLabel, "media_probe_overloaded")
+			return mediaProbeError("media_probe_overloaded")
+		}
 		metadata, err := p.videoProber.ProbeVideo(ctx, data, art.SizeBytes)
+		releaseProbe()
 		if err != nil {
 			art.ApplyMediaMetadata(metadata)
 			art.ProbeStatus = domain.MediaProbeFailed
@@ -1461,6 +1576,16 @@ func (p *processor) transcodeVideoVariant(ctx context.Context, job *domain.Job, 
 	started := time.Now()
 	result := "success"
 	errorClass := "none"
+	releaseVariant, ok := acquireOptionalLimiter(p.variantLimiter)
+	if !ok {
+		metrics.ObserveMediaTranscode("error", operationLabel, modalityLabel, variantType, "media_variant_backlog_full")
+		metrics.ObserveMediaTranscodeDuration("error", operationLabel, modalityLabel, variantType, time.Since(started))
+		if err := p.markArtifactProbeFailed(ctx, art); err != nil {
+			return err
+		}
+		return mediaTranscodeError("media_variant_backlog_full")
+	}
+	defer releaseVariant()
 	metrics.AddMediaVariantBacklog(operationLabel, modalityLabel, variantType, 1)
 	defer func() {
 		metrics.AddMediaVariantBacklog(operationLabel, modalityLabel, variantType, -1)
@@ -1475,7 +1600,17 @@ func (p *processor) transcodeVideoVariant(ctx context.Context, job *domain.Job, 
 		}
 		return mediaTranscodeError("variant_probe_unavailable")
 	}
+	releaseTranscode, ok := acquireOptionalLimiter(p.transcodeLimiter)
+	if !ok {
+		result = "error"
+		errorClass = "media_transcode_overloaded"
+		if err := p.markArtifactProbeFailed(ctx, art); err != nil {
+			return err
+		}
+		return mediaTranscodeError("media_transcode_overloaded")
+	}
 	variantBytes, expectedMetadata, err := p.videoTranscoder.TranscodeVKVideo(ctx, data, originalMetadata)
+	releaseTranscode()
 	if err != nil {
 		result = "error"
 		errorClass = "media_transcode_failed"
@@ -1485,7 +1620,18 @@ func (p *processor) transcodeVideoVariant(ctx context.Context, job *domain.Job, 
 		return mediaTranscodeError("media_transcode_failed")
 	}
 	metrics.ObserveMediaBytes(operationLabel, modalityLabel, variantType, int64(len(variantBytes)))
+	releaseProbe, ok := acquireOptionalLimiter(p.probeLimiter)
+	if !ok {
+		result = "error"
+		errorClass = "variant_probe_overloaded"
+		metrics.ObserveMediaProbe("error", operationLabel, modalityLabel, "variant_probe_overloaded")
+		if markErr := p.markArtifactProbeFailed(ctx, art); markErr != nil {
+			return markErr
+		}
+		return mediaTranscodeError("variant_probe_overloaded")
+	}
 	variantMetadata, err := p.videoProber.ProbeVideo(ctx, variantBytes, int64(len(variantBytes)))
+	releaseProbe()
 	if err != nil {
 		result = "error"
 		errorClass = "variant_probe_failed"

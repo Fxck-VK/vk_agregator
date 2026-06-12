@@ -38,8 +38,28 @@ type SharedCore struct {
 	Router        *commandrouter.Router
 }
 
+type sharedCoreOptions struct {
+	orchestratorOptions []joborchestrator.Option
+}
+
+// SharedCoreOption customizes backend-core wiring.
+type SharedCoreOption func(*sharedCoreOptions)
+
+// WithOrchestratorOptions forwards safety-policy options into job creation.
+func WithOrchestratorOptions(opts ...joborchestrator.Option) SharedCoreOption {
+	return func(o *sharedCoreOptions) {
+		o.orchestratorOptions = append(o.orchestratorOptions, opts...)
+	}
+}
+
 // NewSharedCore wires repositories and services without owning surface behavior.
-func NewSharedCore(pool *pgxpool.Pool, cfg config.Config) (SharedCore, error) {
+func NewSharedCore(pool *pgxpool.Pool, cfg config.Config, opts ...SharedCoreOption) (SharedCore, error) {
+	var options sharedCoreOptions
+	for _, opt := range opts {
+		if opt != nil {
+			opt(&options)
+		}
+	}
 	users := postgres.NewUserRepository(pool)
 	jobs := postgres.NewJobRepository(pool)
 	billingRepo := postgres.NewBillingRepository(pool)
@@ -62,7 +82,7 @@ func NewSharedCore(pool *pgxpool.Pool, cfg config.Config) (SharedCore, error) {
 	// The orchestrator records a queued outbox event; the worker's outbox relay
 	// publishes it to the queue, so the api process does not enqueue directly
 	// (audit A2).
-	orch := joborchestrator.New(jobs, postgres.NewUnitOfWork(pool), billing, cfg.MaxJobCost)
+	orch := joborchestrator.New(jobs, postgres.NewUnitOfWork(pool), billing, cfg.MaxJobCost, options.orchestratorOptions...)
 
 	return SharedCore{
 		Users:         users,

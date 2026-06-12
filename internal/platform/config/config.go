@@ -162,6 +162,17 @@ type Config struct {
 	MediaAllowedVideoCodecs      []string
 	MediaProbeTimeout            time.Duration
 	MediaTranscodeTimeout        time.Duration
+	// Media scale guards keep expensive media work bounded under production
+	// traffic. Queue/backpressure guards are shared via Redis/Postgres wiring;
+	// concurrent probe/transcode limits are per worker process.
+	MediaMaxConcurrentProbes       int
+	MediaMaxConcurrentTranscodes   int
+	MediaMaxPendingVariants        int
+	MediaMaxActiveVideoJobsPerUser int
+	MediaProviderMaxAttemptsPerJob int
+	MediaProviderFallbackBudget    int
+	MediaQueueDegradeThreshold     int64
+	MediaMaxConcurrentUploads      int
 	// MediaProviderContractsRaw is the original env string used to fail closed
 	// on malformed JSON during Validate.
 	MediaProviderContractsRaw string
@@ -479,6 +490,36 @@ func (c Config) Validate() error {
 			return fmt.Errorf("config: MEDIA_TRANSCODE_TIMEOUT must be positive when MEDIA_VIDEO_TRANSCODE_POLICY=%s", transcodePolicy)
 		}
 	}
+	if c.MediaMaxConcurrentProbes < 0 {
+		return fmt.Errorf("config: MEDIA_MAX_CONCURRENT_PROBES must be non-negative")
+	}
+	if c.MediaMaxConcurrentTranscodes < 0 {
+		return fmt.Errorf("config: MEDIA_MAX_CONCURRENT_TRANSCODES must be non-negative")
+	}
+	if c.MediaMaxPendingVariants < 0 {
+		return fmt.Errorf("config: MEDIA_MAX_PENDING_VARIANTS must be non-negative")
+	}
+	if c.MediaMaxActiveVideoJobsPerUser < 0 {
+		return fmt.Errorf("config: MEDIA_MAX_ACTIVE_VIDEO_JOBS_PER_USER must be non-negative")
+	}
+	if c.MediaProviderMaxAttemptsPerJob < 0 {
+		return fmt.Errorf("config: MEDIA_PROVIDER_MAX_ATTEMPTS_PER_JOB must be non-negative")
+	}
+	if c.MediaProviderFallbackBudget < 0 {
+		return fmt.Errorf("config: MEDIA_PROVIDER_FALLBACK_BUDGET_PER_JOB must be non-negative")
+	}
+	if c.MediaQueueDegradeThreshold < 0 {
+		return fmt.Errorf("config: MEDIA_QUEUE_DEGRADE_THRESHOLD must be non-negative")
+	}
+	if c.MediaMaxConcurrentUploads < 0 {
+		return fmt.Errorf("config: MEDIA_MAX_CONCURRENT_UPLOADS must be non-negative")
+	}
+	if c.MediaPipelineEnabled && probePolicy == MediaVideoProbePolicyProbeRequired && c.MediaMaxConcurrentProbes == 0 {
+		return fmt.Errorf("config: MEDIA_MAX_CONCURRENT_PROBES must be positive when MEDIA_VIDEO_PROBE_POLICY=probe_required")
+	}
+	if c.MediaPipelineEnabled && c.MediaVideoTranscodeEnabled() && c.MediaMaxConcurrentTranscodes == 0 {
+		return fmt.Errorf("config: MEDIA_MAX_CONCURRENT_TRANSCODES must be positive when MEDIA_VIDEO_TRANSCODE_POLICY=%s", transcodePolicy)
+	}
 	if strings.TrimSpace(c.MediaProviderContractsRaw) != "" {
 		contracts, err := parseMediaProviderContracts(c.MediaProviderContractsRaw)
 		if err != nil {
@@ -657,6 +698,14 @@ func Load() Config {
 		MediaAllowedVideoCodecs:           envNormalizedList("MEDIA_ALLOWED_VIDEO_CODECS", []string{"h264", "h265", "hevc", "vp8", "vp9", "av1"}),
 		MediaProbeTimeout:                 envDuration("MEDIA_PROBE_TIMEOUT", 10*time.Second),
 		MediaTranscodeTimeout:             envDuration("MEDIA_TRANSCODE_TIMEOUT", 10*time.Minute),
+		MediaMaxConcurrentProbes:          envInt("MEDIA_MAX_CONCURRENT_PROBES", 2),
+		MediaMaxConcurrentTranscodes:      envInt("MEDIA_MAX_CONCURRENT_TRANSCODES", 1),
+		MediaMaxPendingVariants:           envInt("MEDIA_MAX_PENDING_VARIANTS", 16),
+		MediaMaxActiveVideoJobsPerUser:    envInt("MEDIA_MAX_ACTIVE_VIDEO_JOBS_PER_USER", 1),
+		MediaProviderMaxAttemptsPerJob:    envInt("MEDIA_PROVIDER_MAX_ATTEMPTS_PER_JOB", 1),
+		MediaProviderFallbackBudget:       envInt("MEDIA_PROVIDER_FALLBACK_BUDGET_PER_JOB", 0),
+		MediaQueueDegradeThreshold:        envInt64("MEDIA_QUEUE_DEGRADE_THRESHOLD", 1000),
+		MediaMaxConcurrentUploads:         envInt("MEDIA_MAX_CONCURRENT_UPLOADS", 8),
 		MediaProviderContractsRaw:         mediaProviderContractsRaw,
 		MediaProviderContracts:            mediaProviderContracts,
 		OpenAIAPIKey:                      env("OPENAI_API_KEY", ""),

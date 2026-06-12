@@ -28,6 +28,12 @@ type Limiter struct {
 	now     func() time.Time
 }
 
+// ConcurrencyLimiter bounds simultaneous in-flight work in one process. It is
+// intended for per-instance memory protection, not as a global quota.
+type ConcurrencyLimiter struct {
+	sem chan struct{}
+}
+
 // New builds a Limiter allowing `rate` requests/second with a `burst` ceiling.
 func New(rate float64, burst int) *Limiter {
 	if rate <= 0 {
@@ -41,6 +47,29 @@ func New(rate float64, burst int) *Limiter {
 		rate:    rate,
 		burst:   float64(burst),
 		now:     time.Now,
+	}
+}
+
+// NewConcurrencyLimiter builds a limiter for simultaneous work. n <= 0 disables
+// limiting and returns nil.
+func NewConcurrencyLimiter(n int) *ConcurrencyLimiter {
+	if n <= 0 {
+		return nil
+	}
+	return &ConcurrencyLimiter{sem: make(chan struct{}, n)}
+}
+
+// TryAcquire attempts to reserve one in-flight slot. The returned release
+// function must be called when ok is true.
+func (l *ConcurrencyLimiter) TryAcquire() (release func(), ok bool) {
+	if l == nil {
+		return func() {}, true
+	}
+	select {
+	case l.sem <- struct{}{}:
+		return func() { <-l.sem }, true
+	default:
+		return nil, false
 	}
 }
 

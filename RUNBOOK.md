@@ -147,6 +147,11 @@ Override these values when needed:
 | `MEDIA_MAX_VIDEO_WIDTH` / `MEDIA_MAX_VIDEO_HEIGHT` / `MEDIA_MAX_VIDEO_BITRATE` | `1920` / `1080` / `12000000` | Video dimension and bitrate ceilings for VK-ready variants |
 | `MEDIA_ALLOWED_VIDEO_CONTAINERS` / `MEDIA_ALLOWED_VIDEO_CODECS` | `mp4,mov,webm` / `h264,h265,hevc,vp8,vp9,av1` | Allowlist used by worker-owned media validation; values are normalized before use |
 | `MEDIA_PROBE_TIMEOUT` / `MEDIA_TRANSCODE_TIMEOUT` | `10s` / `10m` | Time bounds for future probe/transcode subprocesses |
+| `MEDIA_MAX_CONCURRENT_PROBES` / `MEDIA_MAX_CONCURRENT_TRANSCODES` / `MEDIA_MAX_PENDING_VARIANTS` | `2` / `1` / `16` | Per-worker CPU/IO guards for video probe, transcode and variant creation; production queue/user guards remain Redis/Postgres-backed |
+| `MEDIA_MAX_ACTIVE_VIDEO_JOBS_PER_USER` | `1` | Postgres-backed active video job limit per user before reservation/provider submit |
+| `MEDIA_PROVIDER_MAX_ATTEMPTS_PER_JOB` / `MEDIA_PROVIDER_FALLBACK_BUDGET_PER_JOB` | `1` / `0` | Worker-side paid media submit budget; keep fallback conservative unless provider-side idempotency is proven |
+| `MEDIA_QUEUE_DEGRADE_THRESHOLD` | `1000` | Redis Streams consumer-group lag+pending threshold; expensive media jobs are rejected before reservation when exceeded |
+| `MEDIA_MAX_CONCURRENT_UPLOADS` | `8` | Per-API-instance multipart upload memory guard before large request bodies are parsed; not a global user quota |
 | `MEDIA_PROVIDER_CONTRACTS_JSON` | `` | Optional JSON array of product-level provider/model media contracts. Contracts reject unsupported video duration/aspect/resolution/model/cost before provider submit; metrics must use bounded `model_class`, not raw model ids |
 | `VK_DELIVERY_MODE` | `mock` | VK delivery adapter: `mock` or `real` |
 | `VK_ACCESS_TOKEN` / `VK_API_VERSION` | `` / `5.199` | Required for real VK `messages.send`, photo upload, mp4-as-document upload and API-side `/start` control menu responses |
@@ -307,7 +312,11 @@ Override these values when needed:
   Before submit, the worker also checks product-level provider media contracts:
   unsupported video model, duration, aspect ratio, resolution or estimated cost
   is rejected before paid provider work; raw model ids may live in config, but
-  provider metrics should use curated bounded `model_class` labels.
+  provider metrics should use curated bounded `model_class` labels. Stage 5
+  scale guards reject expensive media creation before reservation when Redis
+  stream lag/pending crosses `MEDIA_QUEUE_DEGRADE_THRESHOLD`, cap active video
+  jobs per user through the job repository, bound per-worker probe/transcode
+  concurrency, and keep paid media fallback attempts conservative by default.
   Maintenance cleanup also uses
   `ARTIFACT_RETENTION_DAYS` to delete only old inactive `failed/deleted`
   original media objects and variants/thumbnails, then clears their private

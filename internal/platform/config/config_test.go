@@ -150,6 +150,14 @@ func TestLoadMediaPipelineConfig(t *testing.T) {
 	t.Setenv("MEDIA_ALLOWED_VIDEO_CODECS", "H.264, VP9, vp9")
 	t.Setenv("MEDIA_PROBE_TIMEOUT", "3s")
 	t.Setenv("MEDIA_TRANSCODE_TIMEOUT", "4m")
+	t.Setenv("MEDIA_MAX_CONCURRENT_PROBES", "3")
+	t.Setenv("MEDIA_MAX_CONCURRENT_TRANSCODES", "2")
+	t.Setenv("MEDIA_MAX_PENDING_VARIANTS", "24")
+	t.Setenv("MEDIA_MAX_ACTIVE_VIDEO_JOBS_PER_USER", "2")
+	t.Setenv("MEDIA_PROVIDER_MAX_ATTEMPTS_PER_JOB", "1")
+	t.Setenv("MEDIA_PROVIDER_FALLBACK_BUDGET_PER_JOB", "0")
+	t.Setenv("MEDIA_QUEUE_DEGRADE_THRESHOLD", "2500")
+	t.Setenv("MEDIA_MAX_CONCURRENT_UPLOADS", "12")
 
 	cfg := config.Load()
 	if !cfg.MediaPipelineEnabled {
@@ -181,6 +189,15 @@ func TestLoadMediaPipelineConfig(t *testing.T) {
 	}
 	if cfg.MediaProbeTimeout != 3*time.Second || cfg.MediaTranscodeTimeout != 4*time.Minute {
 		t.Fatalf("unexpected media timeouts: probe=%s transcode=%s", cfg.MediaProbeTimeout, cfg.MediaTranscodeTimeout)
+	}
+	if cfg.MediaMaxConcurrentProbes != 3 || cfg.MediaMaxConcurrentTranscodes != 2 || cfg.MediaMaxPendingVariants != 24 {
+		t.Fatalf("unexpected media concurrency limits: probes=%d transcodes=%d variants=%d", cfg.MediaMaxConcurrentProbes, cfg.MediaMaxConcurrentTranscodes, cfg.MediaMaxPendingVariants)
+	}
+	if cfg.MediaMaxActiveVideoJobsPerUser != 2 || cfg.MediaProviderMaxAttemptsPerJob != 1 || cfg.MediaProviderFallbackBudget != 0 {
+		t.Fatalf("unexpected media job/provider limits: active=%d attempts=%d fallback=%d", cfg.MediaMaxActiveVideoJobsPerUser, cfg.MediaProviderMaxAttemptsPerJob, cfg.MediaProviderFallbackBudget)
+	}
+	if cfg.MediaQueueDegradeThreshold != 2500 || cfg.MediaMaxConcurrentUploads != 12 {
+		t.Fatalf("unexpected media queue/upload limits: queue=%d uploads=%d", cfg.MediaQueueDegradeThreshold, cfg.MediaMaxConcurrentUploads)
 	}
 }
 
@@ -367,18 +384,20 @@ func TestValidateTrustedProviderProbePolicyRequiresMockOnly(t *testing.T) {
 
 func TestValidateMediaPipelineEnabledRequiresSafeBounds(t *testing.T) {
 	cfg := config.Config{
-		MediaPipelineEnabled:        true,
-		FFProbePath:                 "ffprobe",
-		FFmpegPath:                  "ffmpeg",
-		MediaMaxVideoSizeBytes:      1,
-		MediaMaxVideoDurationSec:    1,
-		MediaMaxVideoWidth:          1,
-		MediaMaxVideoHeight:         1,
-		MediaMaxVideoBitrate:        1,
-		MediaAllowedVideoContainers: []string{"mp4"},
-		MediaAllowedVideoCodecs:     []string{"h264"},
-		MediaProbeTimeout:           time.Second,
-		MediaTranscodeTimeout:       time.Second,
+		MediaPipelineEnabled:         true,
+		FFProbePath:                  "ffprobe",
+		FFmpegPath:                   "ffmpeg",
+		MediaMaxVideoSizeBytes:       1,
+		MediaMaxVideoDurationSec:     1,
+		MediaMaxVideoWidth:           1,
+		MediaMaxVideoHeight:          1,
+		MediaMaxVideoBitrate:         1,
+		MediaAllowedVideoContainers:  []string{"mp4"},
+		MediaAllowedVideoCodecs:      []string{"h264"},
+		MediaProbeTimeout:            time.Second,
+		MediaTranscodeTimeout:        time.Second,
+		MediaMaxConcurrentProbes:     1,
+		MediaMaxConcurrentTranscodes: 1,
 	}
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("valid media pipeline config rejected: %v", err)
@@ -395,6 +414,30 @@ func TestValidateMediaPipelineEnabledRequiresSafeBounds(t *testing.T) {
 	err = cfg.Validate()
 	if err == nil || !strings.Contains(err.Error(), "MEDIA_ALLOWED_VIDEO_CODECS") {
 		t.Fatalf("expected codec allowlist validation error, got %v", err)
+	}
+}
+
+func TestValidateMediaScaleGuards(t *testing.T) {
+	cfg := validMediaPipelineConfig()
+	cfg.MediaMaxConcurrentProbes = 0
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "MEDIA_MAX_CONCURRENT_PROBES") {
+		t.Fatalf("expected probe concurrency validation error, got %v", err)
+	}
+
+	cfg = validMediaPipelineConfig()
+	cfg.MediaVideoTranscodePolicy = config.MediaVideoTranscodePolicyFallback
+	cfg.MediaMaxConcurrentTranscodes = 0
+	err = cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "MEDIA_MAX_CONCURRENT_TRANSCODES") {
+		t.Fatalf("expected transcode concurrency validation error, got %v", err)
+	}
+
+	cfg = validMediaPipelineConfig()
+	cfg.MediaQueueDegradeThreshold = -1
+	err = cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "MEDIA_QUEUE_DEGRADE_THRESHOLD") {
+		t.Fatalf("expected queue threshold validation error, got %v", err)
 	}
 }
 
@@ -415,6 +458,8 @@ func validMediaPipelineConfig() config.Config {
 		MediaAllowedVideoCodecs:      []string{"h264"},
 		MediaProbeTimeout:            time.Second,
 		MediaTranscodeTimeout:        time.Second,
+		MediaMaxConcurrentProbes:     1,
+		MediaMaxConcurrentTranscodes: 1,
 	}
 }
 

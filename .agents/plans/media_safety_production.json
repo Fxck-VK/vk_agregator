@@ -2,7 +2,7 @@
   "schema_version": 1,
   "plan_id": "media_safety_production",
   "source_plan": "docs/MEDIA_SAFETY_PRODUCTION_PLAN.md",
-  "updated_at": "2026-06-12T20:12:52+03:00",
+  "updated_at": "2026-06-12T20:49:12+03:00",
   "mode": "IMPLEMENT",
   "security_invariants": [
     "vk_bot_and_miniapp_do_not_call_providers_or_media_tools_directly",
@@ -240,6 +240,93 @@
         {
           "command": "Get-Content .agents/plans/media_safety_production.json | ConvertFrom-Json",
           "status": "passed"
+        }
+      ],
+      "push_allowed": true,
+      "errors": []
+    },
+    {
+      "id": "stage_5",
+      "name": "Backpressure, Concurrency And Cost Guard",
+      "status": "completed",
+      "load_impact": "medium_implementation_high_scale_protection",
+      "scope": [
+        "cmd/api/media_capacity_guard",
+        "cmd/worker/media_limit_wiring",
+        "internal/service/joborchestrator/capacity_guard",
+        "internal/adapter/queue/redis/backpressure_guard",
+        "internal/adapter/inbound/miniapp/upload_concurrency_guard",
+        "internal/worker/media_probe_transcode_limiters",
+        "internal/worker/provider_submit_budget",
+        "internal/platform/config",
+        "runbook",
+        "env_example",
+        "machine_readable_plan"
+      ],
+      "policy_decisions": [
+        "media queue backpressure uses Redis Streams consumer-group lag plus pending counts and never reads task payloads",
+        "new expensive media jobs are rejected before job persistence, reservation, outbox enqueue or provider submit when capacity is degraded",
+        "video active-job limits are repository-backed and checked before reservation",
+        "artifact upload concurrency is bounded before multipart parsing to protect API instance memory",
+        "probe, transcode and variant creation concurrency are per worker process resource guards",
+        "paid video provider fallback is conservative by default: one submit attempt and zero fallback submits unless config/contracts explicitly allow more",
+        "idempotent create retry returns the existing job before capacity guards run"
+      ],
+      "required_checks": [
+        "gofmt -l .",
+        "go test ./internal/worker ./internal/service/joborchestrator ./internal/platform/config",
+        "go vet ./internal/worker ./internal/service/joborchestrator ./internal/platform/config",
+        "git diff --check",
+        "git status --short --branch"
+      ],
+      "checks_run": [
+        {
+          "command": "go test ./internal/worker ./internal/service/joborchestrator ./internal/platform/config",
+          "status": "passed",
+          "note": "initial sandbox run could not access Go build cache; rerun with approval passed"
+        },
+        {
+          "command": "go vet ./internal/worker ./internal/service/joborchestrator ./internal/platform/config",
+          "status": "passed"
+        },
+        {
+          "command": "go test ./cmd/api ./cmd/worker ./internal/app/api ./internal/app/miniapp ./internal/adapter/inbound/miniapp ./internal/adapter/queue/redis ./internal/platform/ratelimit",
+          "status": "passed"
+        },
+        {
+          "command": "go vet ./cmd/api ./cmd/worker ./internal/app/api ./internal/app/miniapp ./internal/adapter/inbound/miniapp ./internal/adapter/queue/redis ./internal/platform/ratelimit",
+          "status": "passed"
+        },
+        {
+          "command": "go test ./...",
+          "status": "passed"
+        },
+        {
+          "command": "go vet ./...",
+          "status": "passed"
+        },
+        {
+          "command": "gofmt -l .",
+          "status": "passed"
+        },
+        {
+          "command": "git diff --check",
+          "status": "passed",
+          "note": "line-ending warnings only for working-copy normalization"
+        },
+        {
+          "command": "Get-Content .agents/state.json | ConvertFrom-Json; Get-Content .agents/plans/media_safety_production.json | ConvertFrom-Json",
+          "status": "passed"
+        },
+        {
+          "command": "git diff --cached -U0 | Select-String sensitive-pattern sanity check",
+          "status": "passed",
+          "note": "gitleaks executable was not available in PATH or D:\\delete_potom"
+        },
+        {
+          "command": "git status --short --branch",
+          "status": "passed",
+          "note": "unrelated pre-existing dirty docs/prompt files remain unstaged"
         }
       ],
       "push_allowed": true,

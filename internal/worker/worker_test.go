@@ -13,6 +13,7 @@ import (
 	"image/jpeg"
 	"image/png"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -146,6 +147,7 @@ func (d stubDownloader) Download(_ context.Context, _ string) ([]byte, string, e
 }
 
 type fakeVideoProber struct {
+	mu       sync.Mutex
 	metadata domain.ArtifactMediaMetadata
 	sequence []domain.ArtifactMediaMetadata
 	err      error
@@ -153,6 +155,8 @@ type fakeVideoProber struct {
 }
 
 func (p *fakeVideoProber) ProbeVideo(_ context.Context, _ []byte, _ int64) (domain.ArtifactMediaMetadata, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	p.calls++
 	if len(p.sequence) > 0 {
 		metadata := p.sequence[0]
@@ -175,6 +179,7 @@ func (p *fakeVideoProber) ProbeVideo(_ context.Context, _ []byte, _ int64) (doma
 }
 
 type fakeVideoTranscoder struct {
+	mu       sync.Mutex
 	out      []byte
 	metadata domain.ArtifactMediaMetadata
 	err      error
@@ -182,6 +187,8 @@ type fakeVideoTranscoder struct {
 }
 
 func (t *fakeVideoTranscoder) TranscodeVKVideo(_ context.Context, _ []byte, _ domain.ArtifactMediaMetadata) ([]byte, domain.ArtifactMediaMetadata, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
 	t.calls++
 	if t.err != nil {
 		return nil, t.metadata, t.err
@@ -190,6 +197,50 @@ func (t *fakeVideoTranscoder) TranscodeVKVideo(_ context.Context, _ []byte, _ do
 		t.metadata.ProbeStatus = domain.MediaProbePending
 	}
 	return append([]byte(nil), t.out...), t.metadata, nil
+}
+
+type blockingVideoTranscoder struct {
+	mu       sync.Mutex
+	entered  chan struct{}
+	release  chan struct{}
+	out      []byte
+	metadata domain.ArtifactMediaMetadata
+	calls    int
+}
+
+func newBlockingVideoTranscoder(out []byte, metadata domain.ArtifactMediaMetadata) *blockingVideoTranscoder {
+	return &blockingVideoTranscoder{
+		entered:  make(chan struct{}),
+		release:  make(chan struct{}),
+		out:      out,
+		metadata: metadata,
+	}
+}
+
+func (t *blockingVideoTranscoder) TranscodeVKVideo(ctx context.Context, _ []byte, _ domain.ArtifactMediaMetadata) ([]byte, domain.ArtifactMediaMetadata, error) {
+	t.mu.Lock()
+	t.calls++
+	call := t.calls
+	t.mu.Unlock()
+	if call == 1 {
+		close(t.entered)
+		select {
+		case <-t.release:
+		case <-ctx.Done():
+			return nil, t.metadata, ctx.Err()
+		}
+	}
+	metadata := t.metadata
+	if metadata.ProbeStatus == "" {
+		metadata.ProbeStatus = domain.MediaProbePending
+	}
+	return append([]byte(nil), t.out...), metadata, nil
+}
+
+func (t *blockingVideoTranscoder) Calls() int {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.calls
 }
 
 // queueJob inserts a queued job and returns it.
@@ -648,6 +699,75 @@ func TestVideoFastPathUnsafeCodecWithFallbackTranscodes(t *testing.T) {
 	}
 }
 
+func TestVideoTranscodeConcurrencyLimiterFailsClosed(t *testing.T) {
+	prober := &fakeVideoProber{sequence: []domain.ArtifactMediaMetadata{
+		safeVideoMetadata("hevc"),
+		safeVideoMetadata("hevc"),
+		safeVideoMetadata("h264"),
+	}}
+	transcoder := newBlockingVideoTranscoder([]byte("vk-ready-video"), safeVideoMetadata("h264"))
+	contract := validVideoContract(domain.ProviderMock, "mock-video")
+	contract.TranscodeAllowed = true
+	h := newHarnessWithProvider(t, mock.New(), func(d *worker.Deps) {
+		d.VideoModel = "mock-video"
+		d.VideoDurationSec = 5
+		d.VideoResolution = "720p"
+		d.VideoAspectRatio = "16:9"
+		d.VideoProber = prober
+		d.VideoTranscoder = transcoder
+		d.RequireVideoProbe = true
+		d.VideoTranscodeEnabled = true
+		d.VideoTranscodePolicy = "fallback"
+		d.RawVideoDeliveryPolicy = "if_probe_passed"
+		d.ProviderMediaContracts = []domain.ProviderMediaContract{contract}
+		d.MediaMaxConcurrentProbes = 4
+		d.MediaMaxConcurrentTranscodes = 1
+		d.MediaMaxPendingVariants = 4
+	})
+	ctx := context.Background()
+	first := h.queueJob(t, domain.OperationVideoGenerate, domain.ModalityVideo, "first unsafe codec")
+	second := h.queueJob(t, domain.OperationVideoGenerate, domain.ModalityVideo, "second unsafe codec")
+	firstDone := make(chan error, 1)
+	go func() {
+		firstDone <- h.gen.Process(ctx, taskFor(first))
+	}()
+
+	select {
+	case <-transcoder.entered:
+	case <-time.After(2 * time.Second):
+		t.Fatal("first transcode did not start")
+	}
+	if err := h.gen.Process(ctx, taskFor(second)); err != nil {
+		t.Fatalf("second process: %v", err)
+	}
+	if calls := transcoder.Calls(); calls != 1 {
+		t.Fatalf("transcode limiter must prevent second ffmpeg call, got %d calls", calls)
+	}
+	secondReloaded := h.reload(t, second.ID)
+	if secondReloaded.Status != domain.JobStatusFailedTerminal {
+		t.Fatalf("second status = %q, want failed_terminal", secondReloaded.Status)
+	}
+	if secondReloaded.ErrorCode != string(domain.ProviderErrMediaTranscodeFailed) {
+		t.Fatalf("second error = %q, want %q", secondReloaded.ErrorCode, domain.ProviderErrMediaTranscodeFailed)
+	}
+	close(transcoder.release)
+	select {
+	case err := <-firstDone:
+		if err != nil {
+			t.Fatalf("first process: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("first transcode did not finish")
+	}
+	firstReloaded := h.reload(t, first.ID)
+	if firstReloaded.Status != domain.JobStatusResultReady {
+		t.Fatalf("first status = %q, want result_ready", firstReloaded.Status)
+	}
+	if len(h.releaser.released) != 1 || h.releaser.released[0] != second.ID {
+		t.Fatalf("expected reservation release only for overloaded second job, got %v", h.releaser.released)
+	}
+}
+
 func TestVideoProbeDisabledDevMockStaysSimple(t *testing.T) {
 	h := newHarness(t)
 	ctx := context.Background()
@@ -985,6 +1105,51 @@ func TestProviderRegistryFallbackOnRetryableSubmit(t *testing.T) {
 	}
 	if primary.submits != 1 || fallback.submits != 1 {
 		t.Fatalf("submits primary=%d fallback=%d", primary.submits, fallback.submits)
+	}
+}
+
+func TestProviderRegistryMediaFallbackBudgetStopsExtraPaidSubmit(t *testing.T) {
+	primary := &routingProvider{
+		name:      domain.ProviderName("primary"),
+		cost:      1,
+		fail:      routingError{class: domain.ProviderErrRateLimited},
+		operation: domain.OperationVideoGenerate,
+		modality:  domain.ModalityVideo,
+		model:     "safe-video",
+	}
+	fallback := &routingProvider{
+		name:      domain.ProviderName("fallback"),
+		cost:      10,
+		operation: domain.OperationVideoGenerate,
+		modality:  domain.ModalityVideo,
+		model:     "safe-video",
+	}
+	reg := worker.NewRegistry(primary, fallback)
+	primaryContract := validVideoContract(primary.name, "safe-video")
+	fallbackContract := validVideoContract(fallback.name, "safe-video")
+	reg.ConfigureProviderMediaContracts([]domain.ProviderMediaContract{primaryContract, fallbackContract}, true, false)
+	reg.ConfigureMediaProviderBudget(1, 0)
+	req := domain.ProviderRequest{
+		JobID:       uuid.New(),
+		Operation:   domain.OperationVideoGenerate,
+		Modality:    domain.ModalityVideo,
+		ModelCode:   "safe-video",
+		Prompt:      "safe video",
+		DurationSec: 5,
+		Resolution:  "720p",
+		AspectRatio: "16:9",
+		AttemptNo:   1,
+	}
+
+	provider, err := reg.ForRequest(context.Background(), req)
+	if err != nil {
+		t.Fatalf("for request: %v", err)
+	}
+	if _, err := provider.Submit(context.Background(), req); err == nil {
+		t.Fatal("expected primary failure after fallback budget exhaustion")
+	}
+	if primary.submits != 1 || fallback.submits != 0 {
+		t.Fatalf("fallback budget must stop extra paid submits, primary=%d fallback=%d", primary.submits, fallback.submits)
 	}
 }
 

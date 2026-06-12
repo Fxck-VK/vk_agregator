@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -23,11 +24,13 @@ import (
 	apiapp "vk-ai-aggregator/internal/app/api"
 	miniappapp "vk-ai-aggregator/internal/app/miniapp"
 	"vk-ai-aggregator/internal/app/vkbot"
+	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/platform/config"
 	"vk-ai-aggregator/internal/platform/logging"
 	"vk-ai-aggregator/internal/platform/metrics"
 	"vk-ai-aggregator/internal/platform/ratelimit"
 	"vk-ai-aggregator/internal/platform/tracing"
+	"vk-ai-aggregator/internal/service/joborchestrator"
 )
 
 func main() {
@@ -71,7 +74,11 @@ func main() {
 		_ = rdb.Close()
 	}()
 
-	core, err := apiapp.NewSharedCore(pool, cfg)
+	mediaQueueGuard := redisqueue.NewBackpressureGuard(rdb, cfg.WorkerGroup, cfg.MediaQueueDegradeThreshold)
+	core, err := apiapp.NewSharedCore(pool, cfg, apiapp.WithOrchestratorOptions(
+		joborchestrator.WithMaxActiveVideoJobsPerUser(cfg.MediaMaxActiveVideoJobsPerUser),
+		joborchestrator.WithCapacityGuard(mediaCapacityGuard(mediaQueueGuard)),
+	))
 	if err != nil {
 		logger.Error("api core wiring failed", "error", err)
 		os.Exit(1)
@@ -153,6 +160,50 @@ func main() {
 	defer cancel()
 	_ = srv.Shutdown(shutdownCtx)
 	logger.Info("api stopped")
+}
+
+func mediaCapacityGuard(queueGuard *redisqueue.BackpressureGuard) joborchestrator.CapacityGuard {
+	return joborchestrator.CapacityGuardFunc(func(ctx context.Context, in joborchestrator.CapacityCheckInput) error {
+		if !isMediaCapacityOperation(in.Operation, in.Modality) {
+			return nil
+		}
+		if err := queueGuard.Check(ctx, mediaBackpressureStreams(in.Operation)...); err != nil {
+			var bp redisqueue.BackpressureError
+			if errors.As(err, &bp) {
+				return fmt.Errorf("%w: queue %s degraded", domain.ErrCapacityDegraded, bp.Pressure.Stream)
+			}
+			return fmt.Errorf("%w: queue pressure unavailable", domain.ErrCapacityDegraded)
+		}
+		return nil
+	})
+}
+
+func isMediaCapacityOperation(op domain.OperationType, modality domain.Modality) bool {
+	switch modality {
+	case domain.ModalityImage, domain.ModalityVideo:
+		return true
+	}
+	switch op {
+	case domain.OperationImageGenerate, domain.OperationImageEdit, domain.OperationImageUpscale,
+		domain.OperationVideoGenerate, domain.OperationVideoImageToVideo, domain.OperationVideoExtend:
+		return true
+	default:
+		return false
+	}
+}
+
+func mediaBackpressureStreams(op domain.OperationType) []string {
+	streams := []string{redisqueue.StreamForOperation(op), redisqueue.StreamProviderPoll, redisqueue.StreamDelivery}
+	seen := make(map[string]struct{}, len(streams))
+	out := make([]string, 0, len(streams))
+	for _, stream := range streams {
+		if _, ok := seen[stream]; ok {
+			continue
+		}
+		seen[stream] = struct{}{}
+		out = append(out, stream)
+	}
+	return out
 }
 
 // healthHandler reports 200 only when PostgreSQL and Redis are both reachable.

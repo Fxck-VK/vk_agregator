@@ -25,6 +25,14 @@ var ErrInsufficientCredits = errors.New("domain: insufficient credits")
 // configured per-job spend cap.
 var ErrCostCapExceeded = errors.New("domain: cost cap exceeded")
 
+// ErrCapacityDegraded is returned when a shared queue/capacity guard refuses
+// new expensive work before reservation/provider submission.
+var ErrCapacityDegraded = errors.New("domain: capacity degraded")
+
+// ErrActiveJobLimitExceeded is returned when one user already has too many
+// active jobs for an expensive operation.
+var ErrActiveJobLimitExceeded = errors.New("domain: active job limit exceeded")
+
 // OutboxStatus is the publishing state of an outbox event.
 type OutboxStatus string
 

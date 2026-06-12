@@ -57,6 +57,7 @@ func NewHandler(ctx context.Context, cfg config.Config, deps Deps) *miniappapi.H
 	// Per-user rate limiting protects Mini App estimate and billable job
 	// creation after launch params have been verified by the BFF.
 	miniappJobLimiter := ratelimit.New(cfg.MiniAppJobRateLimitRPS, cfg.MiniAppJobRateLimitBurst)
+	uploadLimiter := ratelimit.NewConcurrencyLimiter(cfg.MediaMaxConcurrentUploads)
 	referrals := referralservice.New(deps.Referrals, deps.Billing, referralservice.Config{
 		CodeLength:                  cfg.ReferralCodeLength,
 		ReferrerSignupRewardCredits: cfg.ReferralReferrerSignupRewardCredits,
@@ -67,6 +68,7 @@ func NewHandler(ctx context.Context, cfg config.Config, deps Deps) *miniappapi.H
 		AppSecret:                           cfg.VKAppSecret,
 		LaunchParamsMaxAge:                  cfg.MiniAppLaunchParamsMaxAge,
 		JobRateLimiter:                      miniappJobLimiter,
+		UploadConcurrencyLimiter:            uploadLimiter,
 		ImageReferenceEnabled:               cfg.DeepInfraImageReferenceEnabled,
 		ReferralLinkBase:                    cfg.VKReferralLinkBase,
 		ReferralReferrerSignupRewardCredits: cfg.ReferralReferrerSignupRewardCredits,
