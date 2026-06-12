@@ -31,6 +31,7 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: false,
+    cssMinify: 'esbuild',
   },
   server: {
     host: devHost,
