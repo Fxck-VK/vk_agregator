@@ -557,11 +557,12 @@ func (w *DeliveryWorker) setStatus(ctx context.Context, job *domain.Job, to doma
 	return nil
 }
 
-// mediaAttachment resolves the attachment reference for a media artifact. With a
-// real VK uploader and stored bytes, it uploads raw photo/video artifacts to VK
-// and returns the VK attachment string. Otherwise, when signed delivery is
+// mediaAttachment resolves the attachment reference for a media artifact. With
+// a real VK uploader and stored bytes, it uploads the selected media object to VK
+// and returns the VK attachment string. For videos, a ready VK-specific variant
+// is preferred over raw provider output. Otherwise, when signed delivery is
 // enabled it issues a time-limited signed URL; finally it falls back to the
-// artifact's public URL or storage location.
+// selected object's public URL or storage location.
 func (w *DeliveryWorker) mediaAttachment(ctx context.Context, peerID int64, art *domain.Artifact, filenamePrompt string) (string, error) {
 	if ref := attachmentRef(art); isVKAttachment(ref) {
 		return ref, nil
@@ -615,22 +616,32 @@ func (w *DeliveryWorker) mediaObjectForDelivery(ctx context.Context, art *domain
 	if err != nil {
 		return obj, fmt.Errorf("worker: list artifact variants: %w", err)
 	}
-	for _, variant := range variants {
-		if variant == nil || variant.VariantType != domain.VariantVKVideo || variant.StorageKey == "" {
-			continue
+	for _, variantType := range []domain.VariantType{domain.VariantVKDoc, domain.VariantVKVideo} {
+		for _, variant := range variants {
+			if !readyVideoVariant(variant, variantType) {
+				continue
+			}
+			mimeType := variant.MimeType
+			if mimeType == "" {
+				mimeType = "video/mp4"
+			}
+			return mediaDeliveryObject{
+				storageBucket: variant.StorageBucket,
+				storageKey:    variant.StorageKey,
+				mimeType:      mimeType,
+				fallbackRef:   variant.StorageBucket + "/" + variant.StorageKey,
+			}, nil
 		}
-		mimeType := variant.MimeType
-		if mimeType == "" {
-			mimeType = "video/mp4"
-		}
-		return mediaDeliveryObject{
-			storageBucket: variant.StorageBucket,
-			storageKey:    variant.StorageKey,
-			mimeType:      mimeType,
-			fallbackRef:   variant.StorageBucket + "/" + variant.StorageKey,
-		}, nil
 	}
 	return obj, nil
+}
+
+func readyVideoVariant(variant *domain.ArtifactVariant, variantType domain.VariantType) bool {
+	return variant != nil &&
+		variant.VariantType == variantType &&
+		variant.StorageBucket != "" &&
+		variant.StorageKey != "" &&
+		variant.ProbeStatus == domain.MediaProbePassed
 }
 
 // attachmentRef returns the VK attachment reference for a media artifact,

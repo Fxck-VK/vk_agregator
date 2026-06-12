@@ -132,6 +132,53 @@ func (h *deliveryHarness) resultReadyJob(t *testing.T, mediaType domain.MediaTyp
 	return job
 }
 
+func (h *deliveryHarness) addVideoVariant(t *testing.T, job *domain.Job, variantType domain.VariantType, body string) *domain.ArtifactVariant {
+	t.Helper()
+	ctx := context.Background()
+	art, err := h.artifacts.GetByID(ctx, job.OutputArtifactIDs[0])
+	if err != nil {
+		t.Fatalf("get artifact: %v", err)
+	}
+	variant := &domain.ArtifactVariant{
+		ArtifactID:    art.ID,
+		VariantType:   variantType,
+		StorageBucket: "artifacts",
+		StorageKey:    "variants/" + string(variantType) + "/" + art.ID.String() + ".mp4",
+		MimeType:      "video/mp4",
+		SizeBytes:     int64(len(body)),
+		Codec:         "h264",
+		Container:     "mp4",
+		ProbeStatus:   domain.MediaProbePassed,
+	}
+	if err := h.artifacts.AddVariant(ctx, variant); err != nil {
+		t.Fatalf("add variant: %v", err)
+	}
+	if err := h.objects.Put(ctx, variant.StorageBucket, variant.StorageKey, []byte(body), variant.MimeType); err != nil {
+		t.Fatalf("put variant bytes: %v", err)
+	}
+	return variant
+}
+
+func (h *deliveryHarness) captureEntryCount(t *testing.T, userID uuid.UUID) int {
+	t.Helper()
+	ctx := context.Background()
+	acc, err := h.billingRpo.GetAccountByUser(ctx, userID, domain.CurrencyCredits)
+	if err != nil {
+		t.Fatalf("get account: %v", err)
+	}
+	entries, err := h.billingRpo.ListEntries(ctx, acc.ID, 100, 0)
+	if err != nil {
+		t.Fatalf("list ledger entries: %v", err)
+	}
+	var captures int
+	for _, entry := range entries {
+		if entry.Type == domain.LedgerCapture {
+			captures++
+		}
+	}
+	return captures
+}
+
 func deliveryTask(job *domain.Job) queue.Task {
 	return queue.Task{JobID: job.ID, Operation: job.OperationType, Modality: job.Modality}
 }
@@ -231,6 +278,50 @@ func TestDeliveryNamesRawVideoArtifactFromPrompt(t *testing.T) {
 }
 
 func TestDeliveryUploadsVKReadyVideoVariantWhenPresent(t *testing.T) {
+	for _, variantType := range []domain.VariantType{domain.VariantVKDoc, domain.VariantVKVideo} {
+		t.Run(string(variantType), func(t *testing.T) {
+			h := newDeliveryHarness(t)
+			uploader := &fakeVKUploader{}
+			h.worker = worker.NewDeliveryWorker(worker.DeliveryDeps{
+				Jobs:       h.jobs,
+				Deliveries: h.deliveries,
+				Artifacts:  h.artifacts,
+				Objects:    h.objects,
+				VK:         h.vk,
+				VKUploader: uploader,
+				Billing:    h.billing,
+			})
+			ctx := context.Background()
+			job := h.resultReadyJob(t, domain.MediaTypeVideo, "raw provider video")
+			job.OperationType = domain.OperationVideoGenerate
+			job.Modality = domain.ModalityVideo
+			if err := h.jobs.Update(ctx, job); err != nil {
+				t.Fatalf("update job: %v", err)
+			}
+			h.addVideoVariant(t, job, variantType, "vk-ready mp4 bytes")
+
+			if err := h.worker.Process(ctx, deliveryTask(job)); err != nil {
+				t.Fatalf("process: %v", err)
+			}
+			if string(uploader.videoBytes) != "vk-ready mp4 bytes" {
+				t.Fatalf("uploaded bytes = %q", string(uploader.videoBytes))
+			}
+			got, _ := h.jobs.GetByID(ctx, job.ID)
+			if got.Status != domain.JobStatusSucceeded || got.CostCaptured != 10 {
+				t.Fatalf("expected succeeded job with captured credits, got %+v", got)
+			}
+			if h.captureEntryCount(t, job.UserID) != 1 {
+				t.Fatalf("expected exactly one capture ledger entry")
+			}
+			sent := h.vk.Sent()
+			if len(sent) != 1 || sent[0].Attachment != "video123_456_key" {
+				t.Fatalf("expected uploaded VK video attachment send, got %+v", sent)
+			}
+		})
+	}
+}
+
+func TestDeliveryPrefersVKDocVariantWhenBothVideoVariantsAreReady(t *testing.T) {
 	h := newDeliveryHarness(t)
 	uploader := &fakeVKUploader{}
 	h.worker = worker.NewDeliveryWorker(worker.DeliveryDeps{
@@ -249,37 +340,14 @@ func TestDeliveryUploadsVKReadyVideoVariantWhenPresent(t *testing.T) {
 	if err := h.jobs.Update(ctx, job); err != nil {
 		t.Fatalf("update job: %v", err)
 	}
-	art, err := h.artifacts.GetByID(ctx, job.OutputArtifactIDs[0])
-	if err != nil {
-		t.Fatalf("get artifact: %v", err)
-	}
-	variant := &domain.ArtifactVariant{
-		ArtifactID:    art.ID,
-		VariantType:   domain.VariantVKVideo,
-		StorageBucket: "artifacts",
-		StorageKey:    "variants/" + art.ID.String() + ".mp4",
-		MimeType:      "video/mp4",
-		SizeBytes:     int64(len("vk-ready mp4 bytes")),
-		Codec:         "h264",
-		Container:     "mp4",
-		ProbeStatus:   domain.MediaProbePassed,
-	}
-	if err := h.artifacts.AddVariant(ctx, variant); err != nil {
-		t.Fatalf("add variant: %v", err)
-	}
-	if err := h.objects.Put(ctx, variant.StorageBucket, variant.StorageKey, []byte("vk-ready mp4 bytes"), variant.MimeType); err != nil {
-		t.Fatalf("put variant bytes: %v", err)
-	}
+	h.addVideoVariant(t, job, domain.VariantVKVideo, "vk-video bytes")
+	h.addVideoVariant(t, job, domain.VariantVKDoc, "vk-doc bytes")
 
 	if err := h.worker.Process(ctx, deliveryTask(job)); err != nil {
 		t.Fatalf("process: %v", err)
 	}
-	if string(uploader.videoBytes) != "vk-ready mp4 bytes" {
-		t.Fatalf("uploaded bytes = %q", string(uploader.videoBytes))
-	}
-	sent := h.vk.Sent()
-	if len(sent) != 1 || sent[0].Attachment != "video123_456_key" {
-		t.Fatalf("expected uploaded VK video attachment send, got %+v", sent)
+	if string(uploader.videoBytes) != "vk-doc bytes" {
+		t.Fatalf("uploaded bytes = %q, want vk-doc variant", string(uploader.videoBytes))
 	}
 }
 
@@ -301,9 +369,14 @@ func TestDeliveryMediaUploadFailureUsesRetryBudget(t *testing.T) {
 	job.OperationType = domain.OperationVideoGenerate
 	job.Modality = domain.ModalityVideo
 	_ = h.jobs.Update(ctx, job)
+	h.addVideoVariant(t, job, domain.VariantVKVideo, "vk-ready mp4 bytes")
 
 	if err := h.worker.Process(ctx, deliveryTask(job)); err == nil {
 		t.Fatalf("expected upload error so the task stays pending for retry")
+	}
+	got, _ := h.jobs.GetByID(ctx, job.ID)
+	if got.CostCaptured != 0 || h.captureEntryCount(t, job.UserID) != 0 {
+		t.Fatalf("failed upload must not capture credits, job=%+v", got)
 	}
 	dels, _ := h.deliveries.ListByJob(ctx, job.ID)
 	if len(dels) != 1 || dels[0].Status != domain.DeliveryStatusRetrying || dels[0].AttemptNo != 2 {
@@ -313,9 +386,12 @@ func TestDeliveryMediaUploadFailureUsesRetryBudget(t *testing.T) {
 	if err := h.worker.Process(ctx, deliveryTask(job)); err != nil {
 		t.Fatalf("terminal retry should be acknowledged after DLQ routing: %v", err)
 	}
-	got, _ := h.jobs.GetByID(ctx, job.ID)
+	got, _ = h.jobs.GetByID(ctx, job.ID)
 	if got.Status != domain.JobStatusFailedTerminal || got.ErrorCode != "delivery_failed" {
 		t.Fatalf("expected terminal delivery failure, got %+v", got)
+	}
+	if got.CostCaptured != 0 || h.captureEntryCount(t, job.UserID) != 0 {
+		t.Fatalf("terminal delivery failure must not capture credits, job=%+v", got)
 	}
 }
 
@@ -343,6 +419,54 @@ func TestDeliveryIdempotentNoDuplicateSendOrCharge(t *testing.T) {
 	dels, _ := h.deliveries.ListByJob(ctx, job.ID)
 	if len(dels) != 1 {
 		t.Fatalf("expected one delivery row, got %d", len(dels))
+	}
+}
+
+func TestDeliveryVideoVariantIdempotentNoDuplicateSendOrCharge(t *testing.T) {
+	h := newDeliveryHarness(t)
+	uploader := &fakeVKUploader{}
+	h.worker = worker.NewDeliveryWorker(worker.DeliveryDeps{
+		Jobs:       h.jobs,
+		Deliveries: h.deliveries,
+		Artifacts:  h.artifacts,
+		Objects:    h.objects,
+		VK:         h.vk,
+		VKUploader: uploader,
+		Billing:    h.billing,
+	})
+	ctx := context.Background()
+	job := h.resultReadyJob(t, domain.MediaTypeVideo, "raw provider video")
+	job.OperationType = domain.OperationVideoGenerate
+	job.Modality = domain.ModalityVideo
+	if err := h.jobs.Update(ctx, job); err != nil {
+		t.Fatalf("update job: %v", err)
+	}
+	h.addVideoVariant(t, job, domain.VariantVKVideo, "vk-ready mp4 bytes")
+
+	if err := h.worker.Process(ctx, deliveryTask(job)); err != nil {
+		t.Fatalf("process 1: %v", err)
+	}
+	_ = h.jobs.UpdateStatus(ctx, job.ID, domain.JobStatusSucceeded, domain.JobStatusDelivering, "", "")
+	if err := h.worker.Process(ctx, deliveryTask(job)); err != nil {
+		t.Fatalf("process 2: %v", err)
+	}
+
+	if n := len(h.vk.Sent()); n != 1 {
+		t.Fatalf("expected exactly one send across redeliveries, got %d", n)
+	}
+	if string(uploader.videoBytes) != "vk-ready mp4 bytes" {
+		t.Fatalf("uploaded bytes = %q", string(uploader.videoBytes))
+	}
+	if h.captureEntryCount(t, job.UserID) != 1 {
+		t.Fatalf("expected exactly one capture ledger entry")
+	}
+	acc, _ := h.billingRpo.GetAccountByUser(ctx, job.UserID, domain.CurrencyCredits)
+	if acc.BalanceCached != 990 {
+		t.Fatalf("balance = %d, want 990 (no double charge)", acc.BalanceCached)
+	}
+	dels, _ := h.deliveries.ListByJob(ctx, job.ID)
+	if len(dels) != 1 || dels[0].VKRandomID == 0 || dels[0].Status != domain.DeliveryStatusSent {
+		t.Fatalf("expected one sent delivery with deterministic random id, got %+v", dels)
 	}
 }
 
