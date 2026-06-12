@@ -183,7 +183,7 @@ function Invoke-Promtool {
     } else {
         $env:PROMETHEUS_IMAGE
     }
-    & $docker.Source run --rm -v $mount $prometheusImage @Arguments
+    & $docker.Source run --rm -v $mount --entrypoint=promtool $prometheusImage @Arguments
 }
 
 function Assert-PrometheusConfig {
