@@ -1,0 +1,10 @@
+version: "2"
+
+run:
+  tests: true
+  timeout: 5m
+
+linters:
+  exclusions:
+    paths:
+      - web/miniapp/node_modules

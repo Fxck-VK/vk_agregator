@@ -302,7 +302,7 @@ func normalizeToken(value string) string {
 type execRunner struct{}
 
 func (execRunner) Run(ctx context.Context, path string, args []string, stdin []byte) ([]byte, error) {
-	cmd := exec.CommandContext(ctx, path, args...)
+	cmd := exec.CommandContext(ctx, path, args...) // #nosec G204 -- operator-configured ffprobe path; fixed args; no shell; input is stdin bytes.
 	cmd.Stdin = bytes.NewReader(stdin)
 	out, err := cmd.Output()
 	if err != nil {
