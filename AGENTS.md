@@ -119,10 +119,11 @@ Machine-readable reusable error log:
 
 - `.agents/logs/errors.jsonl`
 
-Historical logs, audits, merge handoffs and completed PR context live under
-`docs/archive/**`. Agents must not read `docs/archive/**` or `.agents/logs/**`
-as current context by default. Read them only when the user explicitly asks for
-historical investigation, regression archaeology or old audit details.
+Completed logs, audits, merge handoffs and generated execution plans should be
+summarized in `TASKS.md` and removed from the active repo surface. Agents must
+not read `.agents/logs/**` as current context by default. Read logs only when
+the user explicitly asks for historical investigation, regression archaeology or
+old audit details.
 
 Do not update docs or logs for routine tasks. Only update docs when behavior,
 architecture, runbook/env, ADRs or active backlog materially changes. Only
