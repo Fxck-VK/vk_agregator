@@ -977,6 +977,17 @@ Media Pipeline
 - сохранить artifact metadata.
 ```
 
+Текущий backend foundation хранит только безопасные media facts:
+`size_bytes`, `duration_ms`, `width`, `height`, `codec`, `container`,
+`bitrate_bps`, `probe_status`. Нельзя сохранять raw ffprobe output, private
+storage paths, provider payloads, prompts или PII в artifact metadata.
+`cmd/worker` выполняет ffprobe-проверку generated video artifacts перед
+delivery/capture, если `MEDIA_PIPELINE_ENABLED=true`, затем создает bounded
+MP4/H.264 `vk_video` variant через ffmpeg, повторно probes variant и delivery
+загружает в VK именно этот variant. В production без media pipeline video jobs
+fail-closed; в local/dev при выключенном pipeline video artifacts помечаются
+`probe_status=skipped`.
+
 Таблицы:
 
 ```text
@@ -995,6 +1006,10 @@ artifacts:
   width
   height
   duration_ms
+  codec
+  container
+  bitrate_bps
+  probe_status        -- unknown, pending, passed, failed, skipped
   status
   created_at
 
@@ -1008,6 +1023,10 @@ artifact_variants:
   width
   height
   duration_ms
+  codec
+  container
+  bitrate_bps
+  probe_status
 ```
 
 ---

@@ -42,7 +42,7 @@ export function useBridge() {
     };
     bridge.subscribe(handleConfigUpdate);
 
-    (async () => {
+    void (async () => {
       const timeoutMs = bridgeTimeoutMs();
       try {
         await withTimeout(bridge.send("VKWebAppInit"), timeoutMs);

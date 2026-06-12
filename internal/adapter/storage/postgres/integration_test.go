@@ -65,6 +65,7 @@ func applySchema(ctx context.Context, pool *pgxpool.Pool) error {
 		"000001_init_schema.down.sql",
 		"000001_init_schema.up.sql",
 		"000002_inbound_events.up.sql",
+		"000016_video_media_metadata.up.sql",
 	}
 	for _, name := range scripts {
 		raw, err := os.ReadFile(filepath.Join(root, "migrations", name))
@@ -536,6 +537,10 @@ func TestArtifactAndDeliveryRepository(t *testing.T) {
 		SizeBytes:     2048,
 		Width:         1024,
 		Height:        1024,
+		Codec:         " H.264 ",
+		Container:     "PNG ",
+		BitrateBPS:    1200000,
+		ProbeStatus:   domain.MediaProbePassed,
 		Status:        domain.ArtifactStatusReady,
 	}
 	if err := artifacts.Create(ctx, art); err != nil {
@@ -548,6 +553,9 @@ func TestArtifactAndDeliveryRepository(t *testing.T) {
 		StorageKey:  "u/vk_" + uuid.NewString() + ".jpg",
 		MimeType:    "image/jpeg",
 		SizeBytes:   1024,
+		Codec:       "MJPEG",
+		Container:   "JPG",
+		ProbeStatus: domain.MediaProbeSkipped,
 	}
 	if err := artifacts.AddVariant(ctx, variant); err != nil {
 		t.Fatalf("add variant: %v", err)
@@ -559,6 +567,9 @@ func TestArtifactAndDeliveryRepository(t *testing.T) {
 	if len(vlist) != 1 {
 		t.Fatalf("expected 1 variant, got %d", len(vlist))
 	}
+	if vlist[0].Codec != "mjpeg" || vlist[0].Container != "jpg" || vlist[0].ProbeStatus != domain.MediaProbeSkipped {
+		t.Fatalf("variant metadata not stored: %+v", vlist[0])
+	}
 
 	bySHA, err := artifacts.GetBySHA256(ctx, u.ID, art.SHA256)
 	if err != nil {
@@ -566,6 +577,9 @@ func TestArtifactAndDeliveryRepository(t *testing.T) {
 	}
 	if bySHA.ID != art.ID {
 		t.Fatal("artifact id mismatch on sha lookup")
+	}
+	if bySHA.Codec != "h.264" || bySHA.Container != "png" || bySHA.BitrateBPS != 1200000 || bySHA.ProbeStatus != domain.MediaProbePassed {
+		t.Fatalf("artifact metadata not stored: %+v", bySHA)
 	}
 
 	del := &domain.Delivery{

@@ -389,11 +389,13 @@ export function ChatScreen({ user }: { user: VkUser }) {
 
   useEffect(() => {
     mountedRef.current = true;
+    const pollTimers = pollTimersRef.current;
+    const polling = pollingRef.current;
     return () => {
       mountedRef.current = false;
-      pollTimersRef.current.forEach((timer) => window.clearTimeout(timer));
-      pollTimersRef.current.clear();
-      pollingRef.current.clear();
+      pollTimers.forEach((timer) => window.clearTimeout(timer));
+      pollTimers.clear();
+      polling.clear();
     };
   }, []);
 

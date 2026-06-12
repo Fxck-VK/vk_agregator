@@ -5,6 +5,9 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
+
+	dto "github.com/prometheus/client_model/go"
 )
 
 func TestPrivateHandlerRejectsPublicHost(t *testing.T) {
@@ -96,4 +99,35 @@ func TestProductLabelSanitizesAndBoundsValue(t *testing.T) {
 	if got == "" || got == "fallback" {
 		t.Fatalf("ProductLabel() = %q, want sanitized non-fallback label", got)
 	}
+}
+
+func TestMediaMetricsHelpersUseSanitizedLabels(t *testing.T) {
+	ObserveMediaProbe(" Failed ", "Video Generate", "Video", "Probe Failed@example.com")
+	counter := mediaProbeCounterValue(t, "failed", "video_generate", "video", "probe_failed_example.com")
+	if counter <= 0 {
+		t.Fatalf("media probe counter = %v, want > 0", counter)
+	}
+
+	ObserveMediaTranscode(" Success ", "Video Generate", "Video", "VK Video", "None")
+	ObserveMediaTranscodeDuration(" Success ", "Video Generate", "Video", "VK Video", time.Second)
+	ObserveMediaBytes("Cleanup", "Video", "VK Video", 4096)
+	AddMediaVariantBacklog("Video Generate", "Video", "VK Video", 1)
+	AddMediaVariantBacklog("Video Generate", "Video", "VK Video", -1)
+	ObserveMediaCleanupDeleted("Success", "VK Video", "None")
+}
+
+func mediaProbeCounterValue(t *testing.T, labels ...string) float64 {
+	t.Helper()
+	counter, err := MediaProbeResults.GetMetricWithLabelValues(labels...)
+	if err != nil {
+		t.Fatalf("GetMetricWithLabelValues() error = %v", err)
+	}
+	var metric dto.Metric
+	if err := counter.Write(&metric); err != nil {
+		t.Fatalf("counter.Write() error = %v", err)
+	}
+	if metric.Counter == nil {
+		t.Fatal("metric counter is nil")
+	}
+	return metric.Counter.GetValue()
 }

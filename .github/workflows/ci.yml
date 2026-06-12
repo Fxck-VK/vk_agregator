@@ -1,0 +1,114 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - main
+      - serega
+      - feature/integration-web-backend
+  push:
+    branches:
+      - main
+      - serega
+      - feature/integration-web-backend
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Check formatting
+        run: |
+          set -euo pipefail
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: Lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.12
+          args: --config=.golangci.yml ./...
+
+      - name: Test
+        run: go test ./...
+
+      - name: Vet
+        run: go vet ./...
+
+  secret-scan:
+    name: Secret Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install Gitleaks
+        run: go install github.com/zricethezav/gitleaks/v8@latest
+
+      - name: Run Gitleaks
+        run: |
+          "$(go env GOPATH)/bin/gitleaks" dir \
+            --config .gitleaks.toml \
+            --redact \
+            --no-banner \
+            --no-color \
+            --max-target-megabytes 5 \
+            .
+
+  miniapp:
+    name: Mini App
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/miniapp/package-lock.json
+
+      - name: Install dependencies
+        run: npm --prefix web/miniapp ci
+
+      - name: Lint
+        run: npm --prefix web/miniapp run lint
+
+      - name: Typecheck
+        run: npm --prefix web/miniapp run typecheck
+
+      - name: Build
+        run: npm --prefix web/miniapp run build
+
+  infrastructure:
+    name: Infrastructure
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate infrastructure
+        shell: pwsh
+        run: ./scripts/ci/validate-infra.ps1

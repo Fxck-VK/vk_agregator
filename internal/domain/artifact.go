@@ -1,7 +1,9 @@
 package domain
 
 import (
+	"strings"
 	"time"
+	"unicode"
 
 	"github.com/google/uuid"
 )
@@ -81,6 +83,126 @@ const (
 	VariantVKVideo VariantType = "vk_video"
 )
 
+// MediaCleanupKind identifies which stored media object a maintenance cleanup
+// candidate points at. It is bounded and safe for internal branching only.
+type MediaCleanupKind string
+
+const (
+	MediaCleanupOriginal MediaCleanupKind = "original"
+	MediaCleanupVariant  MediaCleanupKind = "variant"
+)
+
+// MediaCleanupCandidate is a storage object that maintenance may delete. It
+// intentionally carries only internal ids and storage coordinates; callers must
+// never expose it through public DTOs or logs.
+type MediaCleanupCandidate struct {
+	Kind          MediaCleanupKind
+	ArtifactID    uuid.UUID
+	VariantID     uuid.UUID
+	VariantType   VariantType
+	MediaType     MediaType
+	StorageBucket string
+	StorageKey    string
+	SizeBytes     int64
+}
+
+// MediaProbeStatus is the sanitized state of media technical metadata
+// extraction. It intentionally stores only bounded status, not raw ffprobe
+// output or private storage paths.
+type MediaProbeStatus string
+
+const (
+	// MediaProbeUnknown means no probe decision has been recorded yet.
+	MediaProbeUnknown MediaProbeStatus = "unknown"
+	// MediaProbePending means a probe task is planned or running.
+	MediaProbePending MediaProbeStatus = "pending"
+	// MediaProbePassed means safe media facts were extracted and accepted.
+	MediaProbePassed MediaProbeStatus = "passed"
+	// MediaProbeFailed means probing failed or media facts were rejected.
+	MediaProbeFailed MediaProbeStatus = "failed"
+	// MediaProbeSkipped means probing was intentionally skipped, usually
+	// because the media pipeline is disabled for this environment.
+	MediaProbeSkipped MediaProbeStatus = "skipped"
+)
+
+// Valid reports whether the probe status is one of the known safe values.
+func (s MediaProbeStatus) Valid() bool {
+	switch s {
+	case MediaProbeUnknown, MediaProbePending, MediaProbePassed, MediaProbeFailed, MediaProbeSkipped:
+		return true
+	default:
+		return false
+	}
+}
+
+// NormalizeMediaProbeStatus coerces an empty or unknown probe status to
+// MediaProbeUnknown so storage layers never persist arbitrary status strings.
+func NormalizeMediaProbeStatus(status MediaProbeStatus) MediaProbeStatus {
+	if status.Valid() {
+		return status
+	}
+	return MediaProbeUnknown
+}
+
+// ArtifactMediaMetadata contains safe, normalized media facts. It must not
+// contain private storage paths, raw probe output, provider payloads or prompts.
+type ArtifactMediaMetadata struct {
+	Width       int
+	Height      int
+	DurationMS  int64
+	Codec       string
+	Container   string
+	BitrateBPS  int64
+	ProbeStatus MediaProbeStatus
+}
+
+// Normalize returns a bounded copy safe to store and expose only through
+// internal metadata paths.
+func (m ArtifactMediaMetadata) Normalize() ArtifactMediaMetadata {
+	out := ArtifactMediaMetadata{
+		Codec:       normalizeMediaToken(m.Codec),
+		Container:   normalizeMediaToken(m.Container),
+		ProbeStatus: NormalizeMediaProbeStatus(m.ProbeStatus),
+	}
+	if m.Width > 0 {
+		out.Width = m.Width
+	}
+	if m.Height > 0 {
+		out.Height = m.Height
+	}
+	if m.DurationMS > 0 {
+		out.DurationMS = m.DurationMS
+	}
+	if m.BitrateBPS > 0 {
+		out.BitrateBPS = m.BitrateBPS
+	}
+	return out
+}
+
+func normalizeMediaToken(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	if value == "" {
+		return ""
+	}
+	var b strings.Builder
+	for _, r := range value {
+		switch {
+		case r >= 'a' && r <= 'z':
+			b.WriteRune(r)
+		case r >= '0' && r <= '9':
+			b.WriteRune(r)
+		case r == '_' || r == '-' || r == '.' || r == '+' || r == ',':
+			b.WriteRune(r)
+		case unicode.IsSpace(r):
+			b.WriteByte('_')
+		}
+		if b.Len() >= 96 {
+			break
+		}
+	}
+	return strings.Trim(b.String(), "_.,+-")
+}
+
 // Artifact is the canonical record of a media file. Every media file is an
 // Artifact (invariant #7) and must be stored before delivery.
 type Artifact struct {
@@ -112,12 +234,44 @@ type Artifact struct {
 	Height int `json:"height,omitempty"`
 	// DurationMS is the duration in milliseconds for video/audio.
 	DurationMS int64 `json:"duration_ms,omitempty"`
+	// Codec is the sanitized primary codec name from media probing.
+	Codec string `json:"codec,omitempty"`
+	// Container is the sanitized container/format name from media probing.
+	Container string `json:"container,omitempty"`
+	// BitrateBPS is the probed aggregate bitrate in bits per second.
+	BitrateBPS int64 `json:"bitrate_bps,omitempty"`
+	// ProbeStatus is the sanitized media-probe lifecycle status.
+	ProbeStatus MediaProbeStatus `json:"probe_status,omitempty"`
 	// Status is the artifact lifecycle state.
 	Status ArtifactStatus `json:"status"`
 	// CreatedAt is the row creation timestamp.
 	CreatedAt time.Time `json:"created_at"`
 	// UpdatedAt is the last mutation timestamp.
 	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// ApplyMediaMetadata overlays safe media facts on the artifact.
+func (a *Artifact) ApplyMediaMetadata(metadata ArtifactMediaMetadata) {
+	m := metadata.Normalize()
+	if m.Width > 0 {
+		a.Width = m.Width
+	}
+	if m.Height > 0 {
+		a.Height = m.Height
+	}
+	if m.DurationMS > 0 {
+		a.DurationMS = m.DurationMS
+	}
+	if m.Codec != "" {
+		a.Codec = m.Codec
+	}
+	if m.Container != "" {
+		a.Container = m.Container
+	}
+	if m.BitrateBPS > 0 {
+		a.BitrateBPS = m.BitrateBPS
+	}
+	a.ProbeStatus = m.ProbeStatus
 }
 
 // ArtifactVariant is a derived rendition of an Artifact stored separately, used
@@ -143,8 +297,40 @@ type ArtifactVariant struct {
 	Height int `json:"height,omitempty"`
 	// DurationMS is the variant duration in milliseconds, 0 if not applicable.
 	DurationMS int64 `json:"duration_ms,omitempty"`
+	// Codec is the sanitized primary codec name from media probing.
+	Codec string `json:"codec,omitempty"`
+	// Container is the sanitized container/format name from media probing.
+	Container string `json:"container,omitempty"`
+	// BitrateBPS is the probed aggregate bitrate in bits per second.
+	BitrateBPS int64 `json:"bitrate_bps,omitempty"`
+	// ProbeStatus is the sanitized media-probe lifecycle status.
+	ProbeStatus MediaProbeStatus `json:"probe_status,omitempty"`
 	// CreatedAt is the row creation timestamp.
 	CreatedAt time.Time `json:"created_at"`
 	// UpdatedAt is the last mutation timestamp.
 	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// ApplyMediaMetadata overlays safe media facts on the variant.
+func (v *ArtifactVariant) ApplyMediaMetadata(metadata ArtifactMediaMetadata) {
+	m := metadata.Normalize()
+	if m.Width > 0 {
+		v.Width = m.Width
+	}
+	if m.Height > 0 {
+		v.Height = m.Height
+	}
+	if m.DurationMS > 0 {
+		v.DurationMS = m.DurationMS
+	}
+	if m.Codec != "" {
+		v.Codec = m.Codec
+	}
+	if m.Container != "" {
+		v.Container = m.Container
+	}
+	if m.BitrateBPS > 0 {
+		v.BitrateBPS = m.BitrateBPS
+	}
+	v.ProbeStatus = m.ProbeStatus
 }

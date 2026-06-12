@@ -1,0 +1,62 @@
+title = "VK AI Aggregator Gitleaks configuration"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Git internals are not source files for current-tree secret scanning"
+paths = [
+  '''(^|/)\.git/''',
+]
+
+[[rules]]
+id = "vk-access-token"
+description = "VK API access token"
+regex = '''vk1\.[A-Za-z]\.[A-Za-z0-9_-]{80,}'''
+keywords = [
+  "vk1.",
+]
+
+[[rules]]
+id = "yookassa-secret-key"
+description = "YooKassa API secret key"
+regex = '''(?:test|live)__[A-Za-z0-9_-]{20,}'''
+keywords = [
+  "test__",
+  "live__",
+]
+
+[[rules]]
+id = "telegram-bot-token"
+description = "Telegram bot token"
+regex = '''[0-9]{8,12}:[A-Za-z0-9_-]{30,}'''
+keywords = [
+  ":",
+]
+
+[[rules]]
+id = "project-secret-assignment"
+description = "Project secret assigned to an environment-like key"
+regex = '''(?i)(?:VK_ACCESS_TOKEN|VK_SECRET|VK_CONFIRMATION_TOKEN|OPENAI_API_KEY|DEEPINFRA_API_KEY|YOOKASSA_SECRET_KEY|TELEGRAM_BOT_TOKEN|GRAFANA_ADMIN_PASSWORD|ADMIN_TOKEN)[ \t]*[:=][ \t]*['"]?([A-Za-z0-9._~:/+=-]{16,})['"]?'''
+secretGroup = 1
+keywords = [
+  "VK_ACCESS_TOKEN",
+  "VK_SECRET",
+  "VK_CONFIRMATION_TOKEN",
+  "OPENAI_API_KEY",
+  "DEEPINFRA_API_KEY",
+  "YOOKASSA_SECRET_KEY",
+  "TELEGRAM_BOT_TOKEN",
+  "GRAFANA_ADMIN_PASSWORD",
+  "ADMIN_TOKEN",
+]
+
+[[rules.allowlists]]
+description = "Documented non-secret placeholders"
+regexTarget = "line"
+regexes = [
+  '''dev-confirmation''',
+  '''change-me''',
+  '''example''',
+  '''placeholder''',
+]

@@ -127,6 +127,21 @@ type Config struct {
 	VideoAspectRatio string
 	VideoDraft       bool
 
+	// Media pipeline config is worker-owned. VK Bot and Mini App surfaces must
+	// not call ffmpeg/ffprobe directly.
+	MediaPipelineEnabled        bool
+	FFProbePath                 string
+	FFmpegPath                  string
+	MediaMaxVideoSizeBytes      int64
+	MediaMaxVideoDurationSec    int
+	MediaMaxVideoWidth          int
+	MediaMaxVideoHeight         int
+	MediaMaxVideoBitrate        int64
+	MediaAllowedVideoContainers []string
+	MediaAllowedVideoCodecs     []string
+	MediaProbeTimeout           time.Duration
+	MediaTranscodeTimeout       time.Duration
+
 	OpenAIAPIKey       string
 	OpenAIBaseURL      string
 	OpenAITextModel    string
@@ -328,6 +343,47 @@ func (c Config) Validate() error {
 	if provider := strings.ToLower(strings.TrimSpace(c.PaymentProvider)); provider != "" && !knownPaymentProvider(provider) {
 		return fmt.Errorf("config: PAYMENT_PROVIDER must be one of mock, yookassa")
 	}
+	if c.MediaPipelineEnabled {
+		if strings.TrimSpace(c.FFProbePath) == "" {
+			return fmt.Errorf("config: FFPROBE_PATH must be set when MEDIA_PIPELINE_ENABLED=true")
+		}
+		if strings.TrimSpace(c.FFmpegPath) == "" {
+			return fmt.Errorf("config: FFMPEG_PATH must be set when MEDIA_PIPELINE_ENABLED=true")
+		}
+		if c.MediaMaxVideoSizeBytes <= 0 {
+			return fmt.Errorf("config: MEDIA_MAX_VIDEO_SIZE_BYTES must be positive when MEDIA_PIPELINE_ENABLED=true")
+		}
+		if c.MediaMaxVideoDurationSec <= 0 {
+			return fmt.Errorf("config: MEDIA_MAX_VIDEO_DURATION_SEC must be positive when MEDIA_PIPELINE_ENABLED=true")
+		}
+		if c.MediaMaxVideoWidth <= 0 {
+			return fmt.Errorf("config: MEDIA_MAX_VIDEO_WIDTH must be positive when MEDIA_PIPELINE_ENABLED=true")
+		}
+		if c.MediaMaxVideoHeight <= 0 {
+			return fmt.Errorf("config: MEDIA_MAX_VIDEO_HEIGHT must be positive when MEDIA_PIPELINE_ENABLED=true")
+		}
+		if c.MediaMaxVideoBitrate <= 0 {
+			return fmt.Errorf("config: MEDIA_MAX_VIDEO_BITRATE must be positive when MEDIA_PIPELINE_ENABLED=true")
+		}
+		if len(c.MediaAllowedVideoContainers) == 0 {
+			return fmt.Errorf("config: MEDIA_ALLOWED_VIDEO_CONTAINERS must not be empty when MEDIA_PIPELINE_ENABLED=true")
+		}
+		if err := validateNormalizedList("MEDIA_ALLOWED_VIDEO_CONTAINERS", c.MediaAllowedVideoContainers); err != nil {
+			return err
+		}
+		if len(c.MediaAllowedVideoCodecs) == 0 {
+			return fmt.Errorf("config: MEDIA_ALLOWED_VIDEO_CODECS must not be empty when MEDIA_PIPELINE_ENABLED=true")
+		}
+		if err := validateNormalizedList("MEDIA_ALLOWED_VIDEO_CODECS", c.MediaAllowedVideoCodecs); err != nil {
+			return err
+		}
+		if c.MediaProbeTimeout <= 0 {
+			return fmt.Errorf("config: MEDIA_PROBE_TIMEOUT must be positive when MEDIA_PIPELINE_ENABLED=true")
+		}
+		if c.MediaTranscodeTimeout <= 0 {
+			return fmt.Errorf("config: MEDIA_TRANSCODE_TIMEOUT must be positive when MEDIA_PIPELINE_ENABLED=true")
+		}
+	}
 	if c.IsProduction() {
 		if c.usesMockProvider() {
 			return fmt.Errorf("config: mock provider is not allowed in production")
@@ -470,6 +526,18 @@ func Load() Config {
 		VideoResolution:                   env("VIDEO_RESOLUTION", "720p"),
 		VideoAspectRatio:                  env("VIDEO_ASPECT_RATIO", "16:9"),
 		VideoDraft:                        envBool("VIDEO_DRAFT", true),
+		MediaPipelineEnabled:              envBool("MEDIA_PIPELINE_ENABLED", false),
+		FFProbePath:                       env("FFPROBE_PATH", "ffprobe"),
+		FFmpegPath:                        env("FFMPEG_PATH", "ffmpeg"),
+		MediaMaxVideoSizeBytes:            envInt64("MEDIA_MAX_VIDEO_SIZE_BYTES", 256<<20),
+		MediaMaxVideoDurationSec:          envInt("MEDIA_MAX_VIDEO_DURATION_SEC", 60),
+		MediaMaxVideoWidth:                envInt("MEDIA_MAX_VIDEO_WIDTH", 1920),
+		MediaMaxVideoHeight:               envInt("MEDIA_MAX_VIDEO_HEIGHT", 1080),
+		MediaMaxVideoBitrate:              envInt64("MEDIA_MAX_VIDEO_BITRATE", 12000000),
+		MediaAllowedVideoContainers:       envNormalizedList("MEDIA_ALLOWED_VIDEO_CONTAINERS", []string{"mp4", "mov", "webm"}),
+		MediaAllowedVideoCodecs:           envNormalizedList("MEDIA_ALLOWED_VIDEO_CODECS", []string{"h264", "h265", "hevc", "vp8", "vp9", "av1"}),
+		MediaProbeTimeout:                 envDuration("MEDIA_PROBE_TIMEOUT", 10*time.Second),
+		MediaTranscodeTimeout:             envDuration("MEDIA_TRANSCODE_TIMEOUT", 10*time.Minute),
 		OpenAIAPIKey:                      env("OPENAI_API_KEY", ""),
 		OpenAIBaseURL:                     env("OPENAI_BASE_URL", "https://api.openai.com/v1"),
 		OpenAITextModel:                   env("OPENAI_TEXT_MODEL", "gpt-4.1-mini"),
@@ -674,6 +742,15 @@ func envInt32(key string, def int32) int32 {
 	return def
 }
 
+func envInt64(key string, def int64) int64 {
+	if v := os.Getenv(key); v != "" {
+		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
+			return n
+		}
+	}
+	return def
+}
+
 func envBool(key string, def bool) bool {
 	if v := os.Getenv(key); v != "" {
 		if b, err := strconv.ParseBool(v); err == nil {
@@ -739,6 +816,58 @@ func envList(key string) []string {
 		}
 	}
 	return out
+}
+
+func envNormalizedList(key string, def []string) []string {
+	raw := envList(key)
+	if len(raw) == 0 {
+		raw = def
+	}
+	out := make([]string, 0, len(raw))
+	seen := map[string]struct{}{}
+	for _, item := range raw {
+		item = normalizeConfigToken(item)
+		if item == "" {
+			continue
+		}
+		if _, ok := seen[item]; ok {
+			continue
+		}
+		seen[item] = struct{}{}
+		out = append(out, item)
+	}
+	return out
+}
+
+func normalizeConfigToken(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	if value == "" {
+		return ""
+	}
+	var b strings.Builder
+	for _, r := range value {
+		switch {
+		case r >= 'a' && r <= 'z':
+			b.WriteRune(r)
+		case r >= '0' && r <= '9':
+			b.WriteRune(r)
+		case r == '_' || r == '-' || r == '.' || r == '+':
+			b.WriteRune(r)
+		}
+		if b.Len() >= 64 {
+			break
+		}
+	}
+	return strings.Trim(b.String(), "_.+-")
+}
+
+func validateNormalizedList(name string, values []string) error {
+	for _, value := range values {
+		if value == "" || normalizeConfigToken(value) != value {
+			return fmt.Errorf("config: %s contains unsafe value %q", name, value)
+		}
+	}
+	return nil
 }
 
 func defaultStr(v, def string) string {

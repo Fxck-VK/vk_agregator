@@ -474,9 +474,15 @@ curl "http://localhost:8080/admin/jobs?status=succeeded&limit=20" \
 ## Testing
 
 ```bash
+gofmt -l .             # formatting check; should print nothing
 go test ./...          # unit + in-memory E2E; external infra is skipped
-gofmt -l .             # formatting check (should print nothing)
 go vet ./...
+npm --prefix web/miniapp ci
+npm --prefix web/miniapp run lint
+npm --prefix web/miniapp run typecheck
+npm --prefix web/miniapp run build
+docker compose config
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/ci/validate-infra.ps1
 ```
 
 Integration tests are environment-guarded so the default run is green without
@@ -494,7 +500,44 @@ The full pipeline is covered by an in-memory end-to-end test:
 `internal/worker/e2e_test.go` (`TestEndToEnd`) drives VK → Job → Provider →
 Artifact → Delivery → Capture without any external services.
 
+## CI/CD
+
+GitHub Actions is the merge gate for `main`. The protected `main` branch must
+be updated through pull requests and requires these checks from `.github/workflows/ci.yml`:
+
+- `Backend`: `gofmt -l .`, `golangci-lint run`, `go test ./...`, `go vet ./...`.
+- `Secret Scan`: Gitleaks with `.gitleaks.toml`.
+- `Mini App`: `npm ci`, `npm run lint`, `npm run typecheck`, `npm run build`.
+- `Infrastructure`: `scripts/ci/validate-infra.ps1`, including compose,
+  migration naming/order, tracked `.env` guard and Cloudflare config secret
+  guard.
+
+`Nightly Quality` is advisory at this stage. It runs heavier checks such as
+`gosec`, `govulncheck`, `npm audit`, optional k6 scripts and Trivy scans.
+Treat failures seriously, but do not bypass the required PR gate to "fix later".
+
+CI must run on mock/default configuration. It must not use real VK, YooKassa,
+DeepInfra, OpenAI or Cloudflare secrets and must not call external providers.
+
 ## Troubleshooting
+
+**GitHub required checks are missing in branch protection.**
+Push the workflow to a branch and let Actions run once. Then edit the `main`
+branch protection rule and add `Backend`, `Secret Scan`, `Mini App` and
+`Infrastructure` as required checks.
+
+**Secret Scan fails.**
+Do not add the finding to `.gitleaksignore` unless it is a confirmed
+placeholder/false positive. Remove the secret from the commit, rotate the
+credential if it was real, and keep `.env`, tunnel tokens, launch params,
+provider keys and raw webhook payloads out of Git.
+
+**A payment, VK or Mini App test fails in CI.**
+Keep the architecture boundary intact while debugging: VK/Mini App handlers
+must create jobs or payment intents only, providers stay in workers, payment
+credit changes stay in ledger/webhook/reconciliation flows, and tests should
+use mock/default config unless they are explicitly environment-gated smoke
+tests.
 
 **`go test ./...` shows packages as `[no test files]`.**
 Expected for `domain`, `platform/*`, `storage/memory` and `storage/s3` — they

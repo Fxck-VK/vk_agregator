@@ -196,6 +196,47 @@ var (
 		Help: "Worker retry decisions by phase, operation and modality.",
 	}, []string{"phase", "operation", "modality"})
 
+	// MediaProbeResults counts worker-owned media probe outcomes. Labels are
+	// bounded; never add ids, raw errors, paths, URLs or prompts here.
+	MediaProbeResults = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "vkagg_media_probe_results_total",
+		Help: "Media probe outcomes by operation, modality, result and coarse error class.",
+	}, []string{"result", "operation", "modality", "error_class"})
+
+	// MediaTranscodeResults counts worker-owned media transcode outcomes.
+	MediaTranscodeResults = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "vkagg_media_transcode_results_total",
+		Help: "Media transcode outcomes by operation, modality, variant type, result and coarse error class.",
+	}, []string{"result", "operation", "modality", "variant_type", "error_class"})
+
+	// MediaTranscodeDuration tracks media transcode duration.
+	MediaTranscodeDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "vkagg_media_transcode_duration_seconds",
+		Help:    "Media transcode duration by operation, modality, variant type and result.",
+		Buckets: []float64{0.1, 0.25, 0.5, 1, 2, 5, 10, 30, 60, 120, 300},
+	}, []string{"result", "operation", "modality", "variant_type"})
+
+	// MediaBytes tracks bounded media byte distributions without exposing
+	// object keys or URLs.
+	MediaBytes = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "vkagg_media_bytes",
+		Help:    "Media object sizes by operation, modality and variant type.",
+		Buckets: []float64{1024, 16 * 1024, 64 * 1024, 256 * 1024, 1 << 20, 5 << 20, 20 << 20, 100 << 20, 256 << 20},
+	}, []string{"operation", "modality", "variant_type"})
+
+	// MediaVariantBacklog tracks in-process variant work without job/artifact ids.
+	MediaVariantBacklog = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "vkagg_media_variant_backlog",
+		Help: "Current in-process media variant backlog by operation, modality and variant type.",
+	}, []string{"operation", "modality", "variant_type"})
+
+	// MediaCleanupDeleted counts media cleanup deletion outcomes for inactive
+	// artifacts and variants only.
+	MediaCleanupDeleted = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "vkagg_media_cleanup_deleted_total",
+		Help: "Media cleanup deletion outcomes by variant type and coarse error class.",
+	}, []string{"result", "variant_type", "error_class"})
+
 	// JobsCreated counts newly-created jobs by source surface and operation.
 	JobsCreated = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "vkagg_jobs_created_total",
@@ -504,7 +545,9 @@ func init() {
 		PaymentWebhookOldestUnprocessedAgeSeconds, PaymentProviderErrors,
 		PaymentTopups, PaymentRefunds, PaymentReconciliationMismatches,
 		QueueDepth, QueueOldestAgeSeconds, QueueConsumerLag, StuckJobs,
-		WorkerTaskDuration, WorkerRetries, JobsCreated, JobDuration,
+		WorkerTaskDuration, WorkerRetries, MediaProbeResults,
+		MediaTranscodeResults, MediaTranscodeDuration, MediaBytes,
+		MediaVariantBacklog, MediaCleanupDeleted, JobsCreated, JobDuration,
 		ProductEvents, ProductActiveUserEvents, ProductActiveUsers, ProductPromptLength,
 		JobStatusCurrent, JobRejected, ProviderRequests, ProviderRequestDuration,
 		ProviderErrors, ProviderRateLimits, ProviderFallback, ProviderCircuitState,
@@ -634,6 +677,73 @@ func AddProductCreditsFlow(source, flow, result string, credits int64) {
 		ProductLabel(flow, "unknown"),
 		ProductLabel(result, "unknown"),
 	).Add(float64(credits))
+}
+
+// ObserveMediaProbe records one worker-owned media probe outcome.
+func ObserveMediaProbe(result, operation, modality, errorClass string) {
+	MediaProbeResults.WithLabelValues(
+		ProductLabel(result, "unknown"),
+		ProductLabel(operation, "unknown"),
+		ProductLabel(modality, "unknown"),
+		ProductLabel(errorClass, "none"),
+	).Inc()
+}
+
+// ObserveMediaTranscode records one worker-owned media transcode outcome.
+func ObserveMediaTranscode(result, operation, modality, variantType, errorClass string) {
+	MediaTranscodeResults.WithLabelValues(
+		ProductLabel(result, "unknown"),
+		ProductLabel(operation, "unknown"),
+		ProductLabel(modality, "unknown"),
+		ProductLabel(variantType, "unknown"),
+		ProductLabel(errorClass, "none"),
+	).Inc()
+}
+
+// ObserveMediaTranscodeDuration records positive transcode durations only.
+func ObserveMediaTranscodeDuration(result, operation, modality, variantType string, duration time.Duration) {
+	if duration <= 0 {
+		return
+	}
+	MediaTranscodeDuration.WithLabelValues(
+		ProductLabel(result, "unknown"),
+		ProductLabel(operation, "unknown"),
+		ProductLabel(modality, "unknown"),
+		ProductLabel(variantType, "unknown"),
+	).Observe(duration.Seconds())
+}
+
+// ObserveMediaBytes records positive media object sizes only.
+func ObserveMediaBytes(operation, modality, variantType string, sizeBytes int64) {
+	if sizeBytes <= 0 {
+		return
+	}
+	MediaBytes.WithLabelValues(
+		ProductLabel(operation, "unknown"),
+		ProductLabel(modality, "unknown"),
+		ProductLabel(variantType, "unknown"),
+	).Observe(float64(sizeBytes))
+}
+
+// AddMediaVariantBacklog updates the in-process media variant backlog.
+func AddMediaVariantBacklog(operation, modality, variantType string, delta float64) {
+	if delta == 0 {
+		return
+	}
+	MediaVariantBacklog.WithLabelValues(
+		ProductLabel(operation, "unknown"),
+		ProductLabel(modality, "unknown"),
+		ProductLabel(variantType, "unknown"),
+	).Add(delta)
+}
+
+// ObserveMediaCleanupDeleted records one media cleanup outcome.
+func ObserveMediaCleanupDeleted(result, variantType, errorClass string) {
+	MediaCleanupDeleted.WithLabelValues(
+		ProductLabel(result, "unknown"),
+		ProductLabel(variantType, "unknown"),
+		ProductLabel(errorClass, "none"),
+	).Inc()
 }
 
 // Handler returns the Prometheus metrics HTTP handler.
