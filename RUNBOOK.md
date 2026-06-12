@@ -163,7 +163,7 @@ Override these values when needed:
 | `VK_MENU_*_ENABLED` | mixed | Per-button VK product menu flags; current bot profile keeps NeuroHub text mode and account/referral visible, while video/image/students/top-up stay hidden without deleting their screens |
 | `VK_TOP_UP_RECEIPT_EMAIL` / `VK_TOP_UP_RECEIPT_PHONE` | `` / `` | Server-side receipt contact for the VK Bot quick top-up flow; set at least one when `VK_MENU_TOP_UP_ENABLED=true` |
 | `SIGNED_DELIVERY` / `ARTIFACT_URL_TTL` | `false` / `1h` | Deliver media through signed artifact URLs |
-| `ARTIFACT_RETENTION_DAYS` | `0` | Optional S3 lifecycle expiry |
+| `ARTIFACT_RETENTION_DAYS` | `0` | Optional S3 lifecycle expiry and worker maintenance cleanup window for inactive `failed/deleted` media objects; `0` disables cleanup |
 | `PRICES` | `image_generate=0` | Price overrides, e.g. `text_generate=2,image_generate=12`; current VK photo quota uses free image jobs plus `VK_ANTISPAM_IMAGE_DAILY_LIMIT` |
 | `MAX_JOB_COST` | `0` | Per-job cost cap; `0` disables the cap |
 | `STREAM_MAX_LEN` | `100000` | Redis stream max length; `0` disables trimming |
@@ -297,7 +297,11 @@ Override these values when needed:
   failures end the video job terminally and release reserved credits before
   delivery/capture. With the pipeline disabled, local/dev video artifacts are
   marked `probe_status=skipped`; production video jobs fail closed instead of
-  delivering unprobed video.
+  delivering unprobed video. Maintenance cleanup also uses
+  `ARTIFACT_RETENTION_DAYS` to delete only old inactive `failed/deleted`
+  original media objects and variants/thumbnails, then clears their private
+  storage coordinates; active `ready/stored` artifacts remain available to
+  owners and delivery retries.
 - **SSRF**: artifact downloader blocks private/loopback/link-local hosts and
   non-http(s) schemes; optional host allowlist. Provider data URLs are accepted
   for normalized OpenAI text/image/video outputs.

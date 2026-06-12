@@ -198,6 +198,15 @@ func (s *ObjectStore) GetObject(_ context.Context, bucket, key string) ([]byte, 
 	return cp, nil
 }
 
+// DeleteObject removes a stored object. Missing objects are treated as already
+// deleted so cleanup remains idempotent.
+func (s *ObjectStore) DeleteObject(_ context.Context, bucket, key string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.objects, bucket+"/"+key)
+	return nil
+}
+
 // Len returns the number of stored objects.
 func (s *ObjectStore) Len() int {
 	s.mu.Lock()

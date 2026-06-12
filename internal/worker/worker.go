@@ -1143,10 +1143,13 @@ func (p *processor) probeVideoOutputs(ctx context.Context, job *domain.Job) erro
 	if job.Modality != domain.ModalityVideo {
 		return nil
 	}
+	operationLabel := operationMetricLabel(job.OperationType)
+	modalityLabel := modalityMetricLabel(job.Modality)
 	if err := p.setStatus(ctx, job, domain.JobStatusPostprocessing, "", ""); err != nil {
 		return err
 	}
 	if len(job.OutputArtifactIDs) == 0 {
+		metrics.ObserveMediaProbe("error", operationLabel, modalityLabel, "video_output_missing")
 		return mediaProbeError("video_output_missing")
 	}
 	if p.videoProber == nil {
@@ -1154,6 +1157,7 @@ func (p *processor) probeVideoOutputs(ctx context.Context, job *domain.Job) erro
 			if err := p.markVideoProbeFailed(ctx, job); err != nil {
 				return err
 			}
+			metrics.ObserveMediaProbe("error", operationLabel, modalityLabel, "media_probe_unavailable")
 			return mediaProbeError("media_probe_unavailable")
 		}
 		return p.markVideoProbeSkipped(ctx, job)
@@ -1162,18 +1166,21 @@ func (p *processor) probeVideoOutputs(ctx context.Context, job *domain.Job) erro
 		if err := p.markVideoProbeFailed(ctx, job); err != nil {
 			return err
 		}
+		metrics.ObserveMediaProbe("error", operationLabel, modalityLabel, "media_probe_storage_unavailable")
 		return mediaProbeError("media_probe_storage_unavailable")
 	}
 
 	for _, artID := range job.OutputArtifactIDs {
 		art, err := p.artifactRepo.GetByID(ctx, artID)
 		if err != nil {
+			metrics.ObserveMediaProbe("error", operationLabel, modalityLabel, "artifact_metadata_unavailable")
 			return mediaProbeError("artifact_metadata_unavailable")
 		}
 		if art.MediaType != domain.MediaTypeVideo {
 			if err := p.markArtifactProbeFailed(ctx, art); err != nil {
 				return err
 			}
+			metrics.ObserveMediaProbe("error", operationLabel, modalityLabel, "video_artifact_missing")
 			return mediaProbeError("video_artifact_missing")
 		}
 		data, err := p.objects.GetObject(ctx, art.StorageBucket, art.StorageKey)
@@ -1181,8 +1188,14 @@ func (p *processor) probeVideoOutputs(ctx context.Context, job *domain.Job) erro
 			if markErr := p.markArtifactProbeFailed(ctx, art); markErr != nil {
 				return markErr
 			}
+			metrics.ObserveMediaProbe("error", operationLabel, modalityLabel, "artifact_bytes_unavailable")
 			return mediaProbeError("artifact_bytes_unavailable")
 		}
+		originalSize := art.SizeBytes
+		if originalSize <= 0 {
+			originalSize = int64(len(data))
+		}
+		metrics.ObserveMediaBytes(operationLabel, modalityLabel, string(domain.VariantOriginal), originalSize)
 		metadata, err := p.videoProber.ProbeVideo(ctx, data, art.SizeBytes)
 		if err != nil {
 			art.ApplyMediaMetadata(metadata)
@@ -1191,6 +1204,7 @@ func (p *processor) probeVideoOutputs(ctx context.Context, job *domain.Job) erro
 			if updateErr := p.artifactRepo.Update(ctx, art); updateErr != nil {
 				return updateErr
 			}
+			metrics.ObserveMediaProbe("error", operationLabel, modalityLabel, "media_probe_failed")
 			return mediaProbeError("media_probe_failed")
 		}
 		art.ApplyMediaMetadata(metadata)
@@ -1199,8 +1213,9 @@ func (p *processor) probeVideoOutputs(ctx context.Context, job *domain.Job) erro
 		if err := p.artifactRepo.Update(ctx, art); err != nil {
 			return err
 		}
+		metrics.ObserveMediaProbe("success", operationLabel, modalityLabel, "none")
 		if p.videoTranscoder != nil {
-			if err := p.transcodeVideoVariant(ctx, art, data, metadata); err != nil {
+			if err := p.transcodeVideoVariant(ctx, job, art, data, metadata); err != nil {
 				return err
 			}
 		}
@@ -1208,11 +1223,25 @@ func (p *processor) probeVideoOutputs(ctx context.Context, job *domain.Job) erro
 	return nil
 }
 
-func (p *processor) transcodeVideoVariant(ctx context.Context, art *domain.Artifact, data []byte, originalMetadata domain.ArtifactMediaMetadata) error {
+func (p *processor) transcodeVideoVariant(ctx context.Context, job *domain.Job, art *domain.Artifact, data []byte, originalMetadata domain.ArtifactMediaMetadata) error {
 	if p.videoTranscoder == nil {
 		return nil
 	}
+	operationLabel := operationMetricLabel(job.OperationType)
+	modalityLabel := modalityMetricLabel(job.Modality)
+	variantType := string(domain.VariantVKVideo)
+	started := time.Now()
+	result := "success"
+	errorClass := "none"
+	metrics.AddMediaVariantBacklog(operationLabel, modalityLabel, variantType, 1)
+	defer func() {
+		metrics.AddMediaVariantBacklog(operationLabel, modalityLabel, variantType, -1)
+		metrics.ObserveMediaTranscode(result, operationLabel, modalityLabel, variantType, errorClass)
+		metrics.ObserveMediaTranscodeDuration(result, operationLabel, modalityLabel, variantType, time.Since(started))
+	}()
 	if p.videoProber == nil {
+		result = "error"
+		errorClass = "variant_probe_unavailable"
 		if err := p.markArtifactProbeFailed(ctx, art); err != nil {
 			return err
 		}
@@ -1220,18 +1249,25 @@ func (p *processor) transcodeVideoVariant(ctx context.Context, art *domain.Artif
 	}
 	variantBytes, expectedMetadata, err := p.videoTranscoder.TranscodeVKVideo(ctx, data, originalMetadata)
 	if err != nil {
+		result = "error"
+		errorClass = "media_transcode_failed"
 		if markErr := p.markArtifactProbeFailed(ctx, art); markErr != nil {
 			return markErr
 		}
 		return mediaTranscodeError("media_transcode_failed")
 	}
+	metrics.ObserveMediaBytes(operationLabel, modalityLabel, variantType, int64(len(variantBytes)))
 	variantMetadata, err := p.videoProber.ProbeVideo(ctx, variantBytes, int64(len(variantBytes)))
 	if err != nil {
+		result = "error"
+		errorClass = "variant_probe_failed"
+		metrics.ObserveMediaProbe("error", operationLabel, modalityLabel, "variant_probe_failed")
 		if markErr := p.markArtifactProbeFailed(ctx, art); markErr != nil {
 			return markErr
 		}
 		return mediaTranscodeError("variant_probe_failed")
 	}
+	metrics.ObserveMediaProbe("success", operationLabel, modalityLabel, "none")
 	if variantMetadata.ProbeStatus == domain.MediaProbeUnknown || variantMetadata.ProbeStatus == "" {
 		variantMetadata.ProbeStatus = domain.MediaProbePassed
 	}
@@ -1245,6 +1281,8 @@ func (p *processor) transcodeVideoVariant(ctx context.Context, art *domain.Artif
 		}
 	}
 	if _, err := p.artifacts.SaveVariantWithMetadata(ctx, art, domain.VariantVKVideo, "video/mp4", variantBytes, variantMetadata); err != nil {
+		result = "error"
+		errorClass = "variant_store_failed"
 		if markErr := p.markArtifactProbeFailed(ctx, art); markErr != nil {
 			return markErr
 		}
@@ -1254,6 +1292,8 @@ func (p *processor) transcodeVideoVariant(ctx context.Context, art *domain.Artif
 }
 
 func (p *processor) markVideoProbeSkipped(ctx context.Context, job *domain.Job) error {
+	operationLabel := operationMetricLabel(job.OperationType)
+	modalityLabel := modalityMetricLabel(job.Modality)
 	for _, artID := range job.OutputArtifactIDs {
 		art, err := p.artifactRepo.GetByID(ctx, artID)
 		if err != nil {
@@ -1267,6 +1307,7 @@ func (p *processor) markVideoProbeSkipped(ctx context.Context, job *domain.Job) 
 		if err := p.artifactRepo.Update(ctx, art); err != nil {
 			return err
 		}
+		metrics.ObserveMediaProbe("skipped", operationLabel, modalityLabel, "none")
 	}
 	return nil
 }

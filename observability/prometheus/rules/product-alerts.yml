@@ -150,6 +150,62 @@ groups:
           action: Проверь stuck job count, worker logs, reservation/capture/release path; не меняй balance вручную, используй ledger-safe путь.
           safe_logs: Отправляй job status, operation, modality и error class; не отправляй job id вместе с user data, prompts или private URLs.
 
+      - alert: MediaProbeFailures
+        expr: increase(vkagg_media_probe_results_total{result="error"}[10m]) > 0
+        for: 0s
+        labels:
+          severity: critical
+          surface: media
+        annotations:
+          summary: Media probe отклонил видео
+          description: Worker получил ошибку probe при проверке provider video output или VK-ready variant.
+          impact: "Видео job fail-closed: результат не доставляется и billing capture не должен происходить."
+          dashboard: Grafana -> Product Observability / Jobs Worker
+          action: Проверь Jobs Worker dashboard, labels operation/modality/error_class, наличие ffprobe и media config; не открывай raw provider payload или private artifact URL.
+          safe_logs: Отправляй только operation, modality, result и error_class; не отправляй job_id, artifact_id, prompt, raw URL или storage key.
+
+      - alert: MediaTranscodeFailures
+        expr: increase(vkagg_media_transcode_results_total{result="error"}[10m]) > 0
+        for: 0s
+        labels:
+          severity: critical
+          surface: media
+        annotations:
+          summary: Media transcode не создал VK-ready variant
+          description: Worker не смог подготовить безопасный video variant для VK delivery.
+          impact: Raw provider video не должен доставляться; job завершается безопасной ошибкой без capture.
+          dashboard: Grafana -> Product Observability / Jobs Worker
+          action: Проверь ffmpeg path, timeout, CPU/disk pressure, media constraints и labels variant_type/error_class.
+          safe_logs: Отправляй variant_type, operation, modality и error_class; не отправляй raw ffmpeg output с путями, private URLs, prompts или provider payloads.
+
+      - alert: MediaVariantBacklogHigh
+        expr: sum(vkagg_media_variant_backlog) > 5
+        for: 10m
+        labels:
+          severity: warning
+          surface: media
+        annotations:
+          summary: Media variant backlog высокий
+          description: В worker долго остаются in-process video variant операции.
+          impact: Видео delivery может задерживаться, CPU/IO могут быть перегружены.
+          dashboard: Grafana -> Product Observability / Jobs Worker
+          action: Проверь worker CPU/disk, очередь video jobs, ffmpeg timeouts и количество worker процессов; не запускай бесконтрольный параллельный transcode.
+          safe_logs: Отправляй только aggregate backlog и bounded labels; не отправляй job/artifact ids, storage paths или prompts.
+
+      - alert: MediaCleanupFailures
+        expr: increase(vkagg_media_cleanup_deleted_total{result="error"}[30m]) > 0
+        for: 0s
+        labels:
+          severity: warning
+          surface: media
+        annotations:
+          summary: Media cleanup не смог удалить inactive object
+          description: Maintenance cleanup получил ошибку удаления storage object или mark-deleted metadata.
+          impact: Старые failed/deleted media могут занимать место дольше retention policy.
+          dashboard: Grafana -> Product Observability / Jobs Worker, Infrastructure
+          action: Проверь MinIO/S3 доступность, disk usage, ARTIFACT_RETENTION_DAYS и maintenance logs по error_class; не удаляй volumes без отдельного подтверждения.
+          safe_logs: Отправляй result, variant_type и error_class; не отправляй bucket/key, private artifact URL, raw path или user data.
+
   - name: payments-billing
     rules:
       - alert: BillingMismatch

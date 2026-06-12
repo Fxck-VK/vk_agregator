@@ -362,8 +362,10 @@ func main() {
 			OutboxRetention:               cfg.OutboxRetention,
 			BillingReconciliationInterval: cfg.BillingReconciliationInterval,
 			BillingReconciliationLimit:    cfg.BillingReconciliationLimit,
+			MediaRetention:                time.Duration(cfg.ArtifactRetentionDays) * 24 * time.Hour,
 		},
 		maintenance.WithLogger(logger),
+		maintenance.WithMediaObjectStore(store),
 	)
 	wg.Add(1)
 	go func() {

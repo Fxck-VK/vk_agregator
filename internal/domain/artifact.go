@@ -83,6 +83,29 @@ const (
 	VariantVKVideo VariantType = "vk_video"
 )
 
+// MediaCleanupKind identifies which stored media object a maintenance cleanup
+// candidate points at. It is bounded and safe for internal branching only.
+type MediaCleanupKind string
+
+const (
+	MediaCleanupOriginal MediaCleanupKind = "original"
+	MediaCleanupVariant  MediaCleanupKind = "variant"
+)
+
+// MediaCleanupCandidate is a storage object that maintenance may delete. It
+// intentionally carries only internal ids and storage coordinates; callers must
+// never expose it through public DTOs or logs.
+type MediaCleanupCandidate struct {
+	Kind          MediaCleanupKind
+	ArtifactID    uuid.UUID
+	VariantID     uuid.UUID
+	VariantType   VariantType
+	MediaType     MediaType
+	StorageBucket string
+	StorageKey    string
+	SizeBytes     int64
+}
+
 // MediaProbeStatus is the sanitized state of media technical metadata
 // extraction. It intentionally stores only bounded status, not raw ffprobe
 // output or private storage paths.
