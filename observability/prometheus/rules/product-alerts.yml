@@ -44,7 +44,7 @@ groups:
           safe_logs: Не отправляй raw YooKassa payload, Authorization, shop id, secret key, payment metadata или user identifiers.
 
       - alert: MiniAppLocalProbeDown
-        expr: probe_success{job="blackbox-local-health", instance="http://host.docker.internal:5173/"} == 0
+        expr: probe_success{job="blackbox-local-health", instance="http://miniapp:80/"} == 0
         for: 1m
         labels:
           severity: warning
@@ -70,6 +70,62 @@ groups:
           dashboard: Grafana -> Product Observability / Security Config
           action: Срочно закрой публичный /metrics на Cloudflare/nginx/tunnel; оставь доступ только localhost/VPN/SSH tunnel; перепроверь https://app.neiirohub.ru/metrics и https://vk.neiirohub.ru/metrics.
           safe_logs: В чат отправляй только URL и HTTP status; не отправляй полный metrics output.
+
+      - alert: ApiReadinessDegraded
+        expr: probe_success{job="blackbox-local-health", instance="http://api:8080/healthz"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          surface: api
+        annotations:
+          summary: API readiness check is failing
+          description: API /healthz did not return 2xx from the private Docker network. This usually means Postgres or Redis is unavailable, or cmd/api is degraded.
+          impact: VK webhook intake, Mini App BFF and operator APIs can fail even if the container is still running.
+          dashboard: Grafana -> Product Observability / Product Health
+          action: Check docker compose ps, docker compose logs --tail=100 api, Postgres health and Redis health. Do not expose /metrics publicly while debugging.
+          safe_logs: Share only service name, HTTP status and sanitized error class. Do not share tokens, launch params, prompts or PII.
+
+      - alert: WorkerReadinessDegraded
+        expr: probe_success{job="blackbox-local-health", instance="http://worker:9090/healthz"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          surface: worker
+        annotations:
+          summary: Worker health endpoint is failing
+          description: Worker /healthz did not return 2xx from the private Docker network.
+          impact: Jobs can accumulate in Redis Streams and users may stop receiving generated artifacts.
+          dashboard: Grafana -> Product Observability / Jobs Worker
+          action: Check worker container status, queue depth/oldest age metrics, DLQ counters and worker logs.
+          safe_logs: Share only aggregate queue metrics and sanitized error classes. Do not share prompts, provider payloads or artifact URLs.
+
+      - alert: ProviderWebhookReadinessDegraded
+        expr: probe_success{job="blackbox-local-health", instance="http://provider-webhook:8082/readyz"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          surface: payments
+        annotations:
+          summary: Payment webhook readiness check is failing
+          description: Provider-webhook /readyz did not return 2xx from the private Docker network.
+          impact: YooKassa events may not be processed into ledger top-ups or refunds on time.
+          dashboard: Grafana -> Product Observability / Payments Billing
+          action: Check provider-webhook logs, Postgres readiness, payment_events backlog and YooKassa provider connectivity.
+          safe_logs: Do not share raw webhook payloads, provider-native payment payloads, shop id, secret key or Authorization headers.
+
+      - alert: ReverseProxyHealthDown
+        expr: probe_success{job="blackbox-local-health", instance="http://reverse-proxy/proxy-health"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          surface: edge
+        annotations:
+          summary: Reverse proxy health check is failing
+          description: The private reverse proxy health endpoint did not return 2xx.
+          impact: Cloudflare routes for VK, Mini App and YooKassa can be unavailable even if app containers are healthy.
+          dashboard: Grafana -> Product Observability / Product Health
+          action: Check reverse-proxy container status, nginx config, upstream health and Cloudflare tunnel connector logs.
+          safe_logs: Share route names and HTTP status only. Do not share query strings, launch params or payment identifiers.
 
       - alert: HighApiErrorRate
         expr: |

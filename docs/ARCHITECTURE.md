@@ -58,6 +58,96 @@ Backend core remains the source of truth:
 - `internal/adapter/storage` persists durable state; Redis is queue/cache
   support, not billing truth.
 
+Current production runtime map for VPS:
+
+| Runtime | Public surface | Responsibility | Durable dependencies |
+|---------|----------------|----------------|----------------------|
+| `cmd/api` | Yes, behind Cloudflare/reverse proxy | VK Callback API `/webhooks/vk`, Mini App BFF `/miniapp/*`, protected admin/operator routes, `/health`, `/healthz`, private `/metrics` | Postgres, Redis, S3/MinIO for owner-checked artifact reads |
+| `cmd/worker` | No | Consumes job streams, calls AI providers through adapters, polls async provider tasks, creates artifacts, runs moderation/scanning/media processing, performs delivery and billing capture/release | Postgres, Redis, S3/MinIO, provider credentials, VK delivery credentials |
+| `cmd/provider-webhook` | Yes, HTTPS only behind Cloudflare/reverse proxy | YooKassa webhook intake `/billing/webhooks/yookassa`, webhook inbox dedup, async provider-verified payment processing and reconciliation | Postgres, payment provider credentials |
+| `web/miniapp/dist` | Yes, static frontend | VK Mini App static UI. It calls backend `/miniapp/*`; it must not call AI/payment providers or own trusted balance/job state | Static file hosting only |
+| Postgres | No | Source of truth for users, jobs, billing ledger, payment intents/events/refunds, artifacts metadata, conversations, referrals, inbox/outbox/dedup | Persistent disk, backups, migrations |
+| Redis | No | Queues/streams, rate limits, VK dialog state, transient locks/cache | Persistent volume recommended; rebuildable from Postgres where possible |
+| S3/MinIO | No public bucket | Binary artifacts: generated photos, videos, files, provider outputs and safe media variants. Ownership metadata stays in Postgres | Durable object storage and lifecycle policy |
+
+Current VPS data contract:
+
+- Postgres is the durable source of truth. In Docker production it uses the
+  `postgres_data` named volume; managed Postgres can replace it by changing
+  `DATABASE_URL`.
+- Redis is a queue/cache/state accelerator. In Docker production it uses the
+  `redis_data` named volume with AOF enabled, but billing/job truth must remain
+  recoverable from Postgres.
+- S3/MinIO stores binary artifacts only. In Docker production MinIO uses the
+  `minio_data` named volume; managed S3-compatible storage can replace it via
+  `S3_*` env. Buckets stay private.
+- Migrations are a separate startup step through `cmd/migrate` / the production
+  `migrate` compose service. Runtime services must start only after migrations
+  complete successfully.
+- Backups cover Postgres and S3/MinIO first. Redis backups are optional and are
+  not a substitute for Postgres/job-state recovery.
+- Production runtime images are taggable through `IMAGE_TAG`; backup tooling is
+  tagged separately through `BACKUP_IMAGE_TAG`, so a runtime rollback can still
+  take fresh backups before switching app containers.
+- Rollback policy is backup-first and schema-conservative: runtime rollback may
+  switch stateless containers to a previous image tag, but migration rollback is
+  a separate reviewed operation. Never run schema rollback blindly, especially
+  around billing, payments, referrals or artifacts.
+
+Production routing must keep process boundaries explicit:
+
+```text
+vk.neiirohub.ru/webhooks/vk                    -> cmd/api
+vk.neiirohub.ru/health                         -> cmd/api
+vk.neiirohub.ru/billing/webhooks/yookassa       -> cmd/provider-webhook
+neiirohub.ru/billing/webhooks/yookassa          -> cmd/provider-webhook (compat exact route)
+app.neiirohub.ru/                              -> web/miniapp/dist
+app.neiirohub.ru/miniapp/*                     -> cmd/api
+```
+
+`/metrics`, Grafana, Prometheus, Loki, Tempo, Alertmanager, storage consoles and
+database ports must stay private. `/admin/*`, `/debug/*`, broad `/billing/*`
+operator routes and internal health endpoints must not be exposed through public
+hostnames. TLS may terminate at Cloudflare/nginx, but payment webhooks must
+arrive at `cmd/provider-webhook` with HTTPS scheme headers preserved.
+
+Cloudflare is the public HTTPS edge for the production VPS. Public DNS records
+for `vk.neiirohub.ru`, `app.neiirohub.ru` and the optional root-domain YooKassa
+compatibility route must be proxied and routed through Cloudflare Tunnel to the
+reverse proxy. Cloudflare Access must stay disabled on VK callback, Mini App and
+YooKassa webhook routes. The exact YooKassa webhook location must forward
+`X-Forwarded-Proto: https` / `Forwarded: proto=https` to
+`cmd/provider-webhook`; broad `/billing/*` routes remain private/operator-only.
+
+Production observability runs as a private sidecar stack, not as a public
+surface. `docker-compose.prod.yml` and `docker-compose.observability.yml` share
+the explicit Docker network `COMPOSE_NETWORK_NAME` (`vk-ai-aggregator-prod` by
+default). Prometheus scrapes private service names:
+
+```text
+api:8080/metrics
+worker:9090/metrics
+provider-webhook:8082/metrics
+postgres-exporter:9187
+redis-exporter:9121
+```
+
+Blackbox probes check private readiness routes for `api`, `worker`,
+`provider-webhook`, `miniapp` and `reverse-proxy`; separate public probes assert
+that `/metrics` is not exposed through public domains. Grafana, Prometheus,
+Loki, Tempo, Alertmanager and raw `/metrics` endpoints must remain loopback,
+VPN, SSH-tunnel or private-network only.
+
+Production smoke is an operator workflow, not an application bypass. Safe smoke
+scripts may only check public routing, health, Mini App auth rejection, exact
+YooKassa webhook reachability with an invalid body, and blocked public
+`/admin/*` / `/metrics` routes. Live smoke for VK `/start`, text/photo/video
+jobs, Mini App authenticated balance, YooKassa `payment.succeeded`, worker
+completion and artifact delivery must use the normal product flows. A payment
+redirect or confirmation URL is never treated as payment proof; only
+provider-verified webhook/reconciliation plus ledger top-up can complete a
+payment.
+
 Current durable shared chat context:
 
 - VK bot and Mini App text chat both use the same Postgres-backed conversation
@@ -1483,6 +1573,28 @@ Alerts:
   - artifact download failed;
   - DLQ not empty;
   - daily spend cap near limit.
+```
+
+Current production observability minimum:
+
+```text
+Health/readiness:
+  - cmd/api: /health, /healthz, private /metrics;
+  - cmd/worker: /healthz, private /metrics;
+  - cmd/provider-webhook: /health, /readyz, /healthz, private /metrics.
+
+Visible failures:
+  - worker down -> WorkerDown / WorkerReadinessDegraded;
+  - YooKassa webhook not processed -> ProviderWebhookDown,
+    ProviderWebhookReadinessDegraded, PaymentWebhookBacklog;
+  - Postgres/Redis unavailable -> API readiness degraded, exporter alerts;
+  - jobs accumulating -> queue depth/oldest age metrics and DLQ alerts.
+
+Security:
+  - public /metrics is blocked by reverse proxy;
+  - PublicMetricsExposed alerts if a public metrics route returns 2xx;
+  - logs and dashboards must not expose secrets, prompts, raw provider payloads,
+    private artifact URLs or raw payment payloads.
 ```
 
 OpenTelemetry — vendor-neutral observability framework для traces/metrics/logs, Prometheus хранит метрики как time series с labels, а Kubernetes HPA может масштабировать workload по CPU/memory/custom metrics. Это хорошо ложится на твою задачу: worker’ы можно масштабировать по queue depth и provider backpressure, а не только по CPU. ([OpenTelemetry][9])

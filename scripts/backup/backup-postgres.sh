@@ -56,7 +56,7 @@ if ! command -v pg_dump >/dev/null 2>&1; then
   exit 1
 fi
 
-if PGDATABASE="${DATABASE_URL}" pg_dump --format=custom --file="${out_file}" >/dev/null; then
+if pg_dump --dbname="${DATABASE_URL}" --format=custom --file="${out_file}" >/dev/null; then
   size_bytes="$(wc -c < "${out_file}" | tr -d ' ')"
   find "${out_dir}" -type f -name 'postgres-*.dump' -mtime +"${retention_days}" -delete
   write_metrics "success" "none" "${size_bytes}"

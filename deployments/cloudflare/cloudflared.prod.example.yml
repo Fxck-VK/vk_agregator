@@ -1,0 +1,16 @@
+# Local-managed Cloudflare Tunnel example.
+# Prefer dashboard-managed tunnels for shared team operations. Use this file
+# only when cloudflared is installed on the VPS host, not in docker-compose.
+# Never commit the real credentials JSON or tunnel token.
+
+tunnel: CHANGE_ME_TUNNEL_ID
+credentials-file: /etc/cloudflared/CHANGE_ME_TUNNEL_ID.json
+
+ingress:
+  - hostname: vk.neiirohub.ru
+    service: http://127.0.0.1:8088
+  - hostname: app.neiirohub.ru
+    service: http://127.0.0.1:8088
+  - hostname: neiirohub.ru
+    service: http://127.0.0.1:8088
+  - service: http_status:404

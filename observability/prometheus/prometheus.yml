@@ -27,7 +27,7 @@ scrape_configs:
     metrics_path: /metrics
     static_configs:
       - targets:
-          - host.docker.internal:8080
+          - api:8080
         labels:
           service: api
           surface: api
@@ -36,7 +36,7 @@ scrape_configs:
     metrics_path: /metrics
     static_configs:
       - targets:
-          - host.docker.internal:9090
+          - worker:9090
         labels:
           service: worker
           surface: worker
@@ -45,7 +45,7 @@ scrape_configs:
     metrics_path: /metrics
     static_configs:
       - targets:
-          - host.docker.internal:8082
+          - provider-webhook:8082
         labels:
           service: provider-webhook
           surface: payments
@@ -105,9 +105,11 @@ scrape_configs:
         - http_2xx
     static_configs:
       - targets:
-          - http://host.docker.internal:8080/healthz
-          - http://host.docker.internal:8082/readyz
-          - http://host.docker.internal:5173/
+          - http://api:8080/healthz
+          - http://worker:9090/healthz
+          - http://provider-webhook:8082/readyz
+          - http://miniapp:80/
+          - http://reverse-proxy/proxy-health
     relabel_configs:
       - source_labels:
           - __address__

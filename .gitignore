@@ -25,6 +25,7 @@ web/miniapp/playwright-report/
 _env
 _env.*
 !.env.example
+!.env.prod.example
 
 # Docker/local data
 .runtime/
