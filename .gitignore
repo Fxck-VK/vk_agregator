@@ -16,6 +16,8 @@ yarn-error.log*
 pnpm-debug.log*
 web/miniapp/dist/
 web/miniapp/.vite/
+web/miniapp/test-results/
+web/miniapp/playwright-report/
 
 # Environment and secrets (.env.ps1 is covered by .env.*)
 .env

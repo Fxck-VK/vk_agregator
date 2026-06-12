@@ -145,6 +145,50 @@ Carry-forward tasks:
 - Consider testing `openExternalUrl` later only if bridge/window behavior can be
   mocked without flaky browser assumptions.
 
+## Stage 4 Implementation Notes
+
+Status: implemented locally on 2026-06-12.
+
+What was added:
+
+- `web/miniapp/package.json` now has `e2e:smoke`.
+- `web/miniapp/playwright.config.ts` was added with a Pixel 5-like viewport,
+  `127.0.0.1:5174` base URL and failure-only traces/screenshots.
+- `web/miniapp/scripts/e2e-smoke.mjs` was added as a Windows-safe runner that
+  starts Vite, runs Playwright with mocked backend routes and stops the owned
+  dev server.
+- `web/miniapp/e2e/miniapp.smoke.spec.ts` was added.
+- Dev dependency `@playwright/test` was added.
+
+Smoke now covers:
+
+- VK WebView-like mobile launch with fake launch params.
+- App renders without blank screen.
+- Narrow mobile viewport has no document/body horizontal overflow.
+- Mocked balance loads in happy path and safe UI survives auth/API failures.
+- Chat prompt submit creates a mocked job and polling moves it to a terminal
+  safe text result.
+- Create screen opens image and video modes; image generation moves through
+  mocked job polling to a blob media result.
+- Payment screen renders active payment continuation and payment history
+  without treating redirect as balance proof.
+- API auth/rate-limit/service errors keep the screen usable.
+- Full launch markers/private storage URLs do not appear in UI text, media
+  `src`, telemetry bodies or captured console output.
+
+Tooling note:
+
+- The first Playwright webServer approach passed tests but the npm command did
+  not exit cleanly on local Windows. This was recorded in
+  `.agents/logs/errors.jsonl` and resolved by the dedicated Node runner.
+
+Carry-forward tasks:
+
+- If frontend UI grows, add more smoke for active payment creation without
+  navigating to YooKassa and for reload recovery from persisted pending jobs.
+- Consider adding accessibility assertions once stable labels/text encoding are
+  normalized across Windows console output.
+
 ## Common Rules To Include In Every Stage
 
 ```text
