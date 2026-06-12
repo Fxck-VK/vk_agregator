@@ -997,6 +997,74 @@ go test ./internal/worker/ -run TestEndToEnd -v  # full VK→…→Capture
 
 ---
 
+### GitHub Actions CI gate
+
+`main` is protected in GitHub. Merge through pull requests only. The required
+PR checks come from `.github/workflows/ci.yml`:
+
+| Required check | What it runs | Notes |
+|----------------|--------------|-------|
+| `Backend` | `gofmt -l .`, `golangci-lint run`, `go test ./...`, `go vet ./...` | Uses mock/default config; must not need real provider/VK/payment secrets |
+| `Secret Scan` | Gitleaks with `.gitleaks.toml` | Blocks `.env`, provider keys, tunnel tokens, launch params and similar leaks |
+| `Mini App` | `npm ci`, `npm run lint`, `npm run typecheck`, `npm run build` in `web/miniapp` | No VK WebView or external APIs required |
+| `Infrastructure` | `scripts/ci/validate-infra.ps1` | Validates compose config, migration order, tracked env files, Cloudflare config secret patterns and Prometheus config/rules |
+
+Run the same fast gate locally before opening or updating a PR:
+
+```powershell
+gofmt -l .
+go test ./...
+go vet ./...
+npm --prefix web/miniapp ci
+npm --prefix web/miniapp run lint
+npm --prefix web/miniapp run typecheck
+npm --prefix web/miniapp run build
+docker compose config
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\ci\validate-infra.ps1
+gitleaks detect --no-banner --redact --source .
+```
+
+If `golangci-lint` or `gitleaks` is not installed locally, install it or rely on
+GitHub Actions for the final check. Do not replace the CI result with a manual
+claim that it "should pass".
+
+`Nightly Quality` is advisory while the project is still moving quickly. It runs
+heavier checks from `.github/workflows/nightly-quality.yml`:
+
+- `Go Security`: `gosec` and `govulncheck`;
+- `Frontend Security`: `npm audit --audit-level=moderate`;
+- `k6 Smoke/Load`: runs k6 scripts when they exist;
+- `Container Scan`: Trivy filesystem scan and Dockerfile image scans when
+  Dockerfiles exist.
+
+Treat advisory failures as real work items. Promote a check to required only
+after recurring false positives are understood and documented.
+
+CI failure handling:
+
+- `Secret Scan` failed:
+  remove the secret from the commit, rotate it if it was real, and re-run the
+  scan. Add to `.gitleaksignore` only for reviewed false positives; never ignore
+  real `.env`, VK, YooKassa, DeepInfra, OpenAI, Cloudflare, launch-param or
+  webhook payload secrets.
+- `Backend` failed:
+  fix formatting, tests, vet or lint without bypassing service boundaries. VK
+  and Mini App code must not call providers directly; billing changes must stay
+  ledger-backed; payment tests must not grant credits from redirects.
+- `Mini App` failed:
+  fix TypeScript, lint or build issues without storing prompt bodies, tokens,
+  launch params, balances or provider details in frontend storage.
+- `Infrastructure` failed:
+  fix compose syntax, migration naming/order, tracked env files or tunnel config
+  leaks. Do not commit local `.env`, cloudflared dashboard tokens, tunnel
+  credentials or runtime files to make the check green.
+- Payment/VK/Mini App smoke failed:
+  keep smoke tests environment-gated. Required CI should stay mock-backed and
+  deterministic; live YooKassa/VK/provider checks belong in local/operator
+  smoke with explicit credentials, not in the default PR gate.
+
+---
+
 ### App surface smoke checklist
 
 Use this checklist after changing app-surface wiring or shared backend core:

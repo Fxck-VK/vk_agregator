@@ -244,6 +244,14 @@ Infrastructure:
 - Do not run real migrations against production.
 - Do not rotate secrets or delete data without explicit human confirmation.
 
+GitHub CI:
+
+- `main` is protected and must be updated through pull requests.
+- Required checks are `Backend`, `Secret Scan`, `Mini App` and
+  `Infrastructure` from `.github/workflows/ci.yml`.
+- `Nightly Quality` is advisory until explicitly promoted.
+- Do not bypass, disable or weaken branch protection/status checks to merge.
+
 ## Stop conditions
 
 Stop and report if the task requires or seems to require:
