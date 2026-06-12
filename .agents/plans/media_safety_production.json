@@ -2,7 +2,7 @@
   "schema_version": 1,
   "plan_id": "media_safety_production",
   "source_plan": "docs/MEDIA_SAFETY_PRODUCTION_PLAN.md",
-  "updated_at": "2026-06-12T21:06:40+03:00",
+  "updated_at": "2026-06-12T21:28:00+03:00",
   "mode": "IMPLEMENT",
   "security_invariants": [
     "vk_bot_and_miniapp_do_not_call_providers_or_media_tools_directly",
@@ -395,6 +395,74 @@
         {
           "command": "gofmt -l .",
           "status": "passed"
+        },
+        {
+          "command": "git diff --check",
+          "status": "passed",
+          "note": "line-ending warnings only for working-copy normalization"
+        },
+        {
+          "command": "git status --short --branch",
+          "status": "passed",
+          "note": "unrelated pre-existing dirty docs/prompt files remain unstaged"
+        }
+      ],
+      "push_allowed": true,
+      "errors": []
+    },
+    {
+      "id": "stage_7",
+      "name": "Circuit Breakers And Provider Quality Scoring",
+      "status": "completed",
+      "load_impact": "low_runtime_overhead_high_business_protection",
+      "scope": [
+        "worker_provider_quality_guard",
+        "provider_router_candidate_ordering",
+        "provider_model_class_quality_metrics",
+        "media_product_failure_metrics",
+        "delivery_capture_gap_metrics",
+        "prometheus_provider_quality_alerts",
+        "worker_config_wiring",
+        "runbook",
+        "env_example",
+        "machine_readable_plan"
+      ],
+      "policy_decisions": [
+        "provider quality state is tracked per provider, curated model_class and modality",
+        "automatic provider/model disabling is config-gated and disabled by default",
+        "disabled providers are skipped only when another fallback candidate exists",
+        "if all candidates are disabled, worker keeps a degraded path instead of disabling the product completely",
+        "provider rate limits, provider errors, invalid media output, probe/transcode failures and provider success with product failure feed quality scoring",
+        "new metrics use bounded labels and never use raw prompts, raw user ids, job ids, artifact ids, private urls or raw provider payloads",
+        "delivery/capture gap is observed without provider/model labels because delivery workers do not own provider context"
+      ],
+      "required_checks": [
+        "gofmt -l .",
+        "go test ./internal/worker ./internal/adapter/provider/... ./internal/platform/metrics",
+        "go vet ./internal/worker ./internal/adapter/provider/... ./internal/platform/metrics",
+        "promtool check rules observability/prometheus/rules/*.yml",
+        "git diff --check",
+        "git status --short --branch"
+      ],
+      "checks_run": [
+        {
+          "command": "go test ./internal/worker ./internal/adapter/provider/... ./internal/platform/metrics ./internal/platform/config",
+          "status": "passed",
+          "note": "initial sandbox run could not access Go build cache; rerun with approval passed"
+        },
+        {
+          "command": "go vet ./internal/worker ./internal/adapter/provider/... ./internal/platform/metrics ./internal/platform/config",
+          "status": "passed",
+          "note": "initial sandbox run could not access Go build cache; rerun with approval passed"
+        },
+        {
+          "command": "gofmt -l .",
+          "status": "passed"
+        },
+        {
+          "command": ".runtime/tools/prometheus/promtool.exe check rules observability/prometheus/rules/*.yml",
+          "status": "passed",
+          "note": "Windows wildcard was expanded to explicit rule file paths"
         },
         {
           "command": "git diff --check",

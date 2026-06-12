@@ -237,6 +237,43 @@ var (
 		Help: "Video fast-path decisions by result, operation, modality, provider and curated model class.",
 	}, []string{"result", "operation", "modality", "provider", "model_class"})
 
+	// ProviderQualityState exposes the current bounded quality state for a
+	// provider/model_class/modality tuple. model_class must be curated product
+	// policy, not raw provider-native model ids.
+	ProviderQualityState = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "vkagg_provider_quality_state",
+		Help: "Provider quality state by provider, curated model class, modality and state. Exactly one state should be 1 per observed tuple.",
+	}, []string{"provider", "model_class", "modality", "state"})
+
+	// ProviderQualitySamples counts quality samples used by Prometheus recording
+	// rules. Labels are bounded and intentionally exclude job/user/artifact ids.
+	ProviderQualitySamples = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "vkagg_provider_quality_samples_total",
+		Help: "Provider quality samples by provider, curated model class, modality and result.",
+	}, []string{"provider", "model_class", "modality", "result"})
+
+	// ProviderOutputInvalid counts provider successes that later produced
+	// invalid or unusable output in product-owned media processing.
+	ProviderOutputInvalid = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "vkagg_provider_output_invalid_total",
+		Help: "Provider output invalid events by provider, curated model class, modality and bounded reason.",
+	}, []string{"provider", "model_class", "modality", "reason"})
+
+	// ProductMediaWaste counts internal credit units at risk after provider
+	// success but before product delivery/capture. It is not money and must not
+	// include high-cardinality labels.
+	ProductMediaWaste = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "vkagg_product_media_waste_total",
+		Help: "Estimated internal credits wasted or at risk by provider, curated model class, modality and bounded reason.",
+	}, []string{"provider", "model_class", "modality", "reason"})
+
+	// MediaDeliveryCaptureGap counts cases where media reached delivery/capture
+	// boundary but could not safely complete the product flow.
+	MediaDeliveryCaptureGap = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "vkagg_media_delivery_capture_gap_total",
+		Help: "Media delivery/capture gap events by operation, modality and bounded reason.",
+	}, []string{"operation", "modality", "reason"})
+
 	// MediaCleanupDeleted counts media cleanup deletion outcomes for inactive
 	// artifacts and variants only.
 	MediaCleanupDeleted = prometheus.NewCounterVec(prometheus.CounterOpts{
@@ -554,7 +591,9 @@ func init() {
 		QueueDepth, QueueOldestAgeSeconds, QueueConsumerLag, StuckJobs,
 		WorkerTaskDuration, WorkerRetries, MediaProbeResults,
 		MediaTranscodeResults, MediaTranscodeDuration, MediaBytes,
-		MediaVariantBacklog, MediaVideoFastPath, MediaCleanupDeleted, JobsCreated, JobDuration,
+		MediaVariantBacklog, MediaVideoFastPath, ProviderQualityState,
+		ProviderQualitySamples, ProviderOutputInvalid, ProductMediaWaste,
+		MediaDeliveryCaptureGap, MediaCleanupDeleted, JobsCreated, JobDuration,
 		ProductEvents, ProductActiveUserEvents, ProductActiveUsers, ProductPromptLength,
 		JobStatusCurrent, JobRejected, ProviderRequests, ProviderRequestDuration,
 		ProviderErrors, ProviderRateLimits, ProviderFallback, ProviderCircuitState,
@@ -752,6 +791,69 @@ func ObserveMediaVideoFastPath(result, operation, modality, provider, modelClass
 		ProductLabel(modality, "unknown"),
 		ProductLabel(provider, "unknown"),
 		ProductLabel(modelClass, "unknown"),
+	).Inc()
+}
+
+// ObserveProviderQualityState sets a one-hot quality state gauge. State values
+// are bounded to healthy/degraded/disabled.
+func ObserveProviderQualityState(provider, modelClass, modality, state string) {
+	state = ProductLabel(state, "healthy")
+	switch state {
+	case "healthy", "degraded", "disabled":
+	default:
+		state = "healthy"
+	}
+	provider = ProductLabel(provider, "unknown")
+	modelClass = ProductLabel(modelClass, "unknown")
+	modality = ProductLabel(modality, "unknown")
+	for _, candidate := range []string{"healthy", "degraded", "disabled"} {
+		value := 0.0
+		if candidate == state {
+			value = 1
+		}
+		ProviderQualityState.WithLabelValues(provider, modelClass, modality, candidate).Set(value)
+	}
+}
+
+// ObserveProviderQualitySample records a bounded quality sample.
+func ObserveProviderQualitySample(provider, modelClass, modality, result string) {
+	ProviderQualitySamples.WithLabelValues(
+		ProductLabel(provider, "unknown"),
+		ProductLabel(modelClass, "unknown"),
+		ProductLabel(modality, "unknown"),
+		ProductLabel(result, "unknown"),
+	).Inc()
+}
+
+// ObserveProviderOutputInvalid records unusable provider media output.
+func ObserveProviderOutputInvalid(provider, modelClass, modality, reason string) {
+	ProviderOutputInvalid.WithLabelValues(
+		ProductLabel(provider, "unknown"),
+		ProductLabel(modelClass, "unknown"),
+		ProductLabel(modality, "unknown"),
+		ProductLabel(reason, "unknown"),
+	).Inc()
+}
+
+// AddProductMediaWaste records bounded internal credit waste/risk units.
+func AddProductMediaWaste(provider, modelClass, modality, reason string, credits int64) {
+	if credits <= 0 {
+		credits = 1
+	}
+	ProductMediaWaste.WithLabelValues(
+		ProductLabel(provider, "unknown"),
+		ProductLabel(modelClass, "unknown"),
+		ProductLabel(modality, "unknown"),
+		ProductLabel(reason, "unknown"),
+	).Add(float64(credits))
+}
+
+// ObserveMediaDeliveryCaptureGap records delivery/capture boundary failures.
+func ObserveMediaDeliveryCaptureGap(operation, modality, reason string) {
+	MediaDeliveryCaptureGap.WithLabelValues(
+		ProductLabel(operation, "unknown"),
+		ProductLabel(modality, "unknown"),
+		ProductLabel(reason, "unknown"),
 	).Inc()
 }
 

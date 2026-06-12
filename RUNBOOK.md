@@ -152,6 +152,8 @@ Override these values when needed:
 | `MEDIA_PROVIDER_MAX_ATTEMPTS_PER_JOB` / `MEDIA_PROVIDER_FALLBACK_BUDGET_PER_JOB` | `1` / `0` | Worker-side paid media submit budget; keep fallback conservative unless provider-side idempotency is proven |
 | `MEDIA_QUEUE_DEGRADE_THRESHOLD` | `1000` | Redis Streams consumer-group lag+pending threshold; expensive media jobs are rejected before reservation when exceeded |
 | `MEDIA_MAX_CONCURRENT_UPLOADS` | `8` | Per-API-instance multipart upload memory guard before large request bodies are parsed; not a global user quota |
+| `MEDIA_PROVIDER_QUALITY_GUARD_ENABLED` | `false` | Enables runtime provider/model_class/modality quality routing; disabled by default so alerts can be reviewed before automatic disable |
+| `MEDIA_PROVIDER_QUALITY_DEGRADED_FAILURES` / `MEDIA_PROVIDER_QUALITY_DISABLED_FAILURES` / `MEDIA_PROVIDER_QUALITY_RECOVERY_SUCCESSES` | `3` / `5` / `2` | Consecutive local quality samples for degraded, disabled and recovery state; the router never drops all capable providers at once |
 | `MEDIA_PROVIDER_CONTRACTS_JSON` | `` | Optional JSON array of product-level provider/model media contracts. Contracts reject unsupported video duration/aspect/resolution/model/cost before provider submit; metrics must use bounded `model_class`, not raw model ids |
 | `VK_DELIVERY_MODE` | `mock` | VK delivery adapter: `mock` or `real` |
 | `VK_ACCESS_TOKEN` / `VK_API_VERSION` | `` / `5.199` | Required for real VK `messages.send`, photo upload, mp4-as-document upload and API-side `/start` control menu responses |

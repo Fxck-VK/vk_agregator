@@ -280,6 +280,16 @@ groups:
 
   - name: providers
     rules:
+      - record: provider_output_invalid_ratio
+        expr: |
+          sum(increase(vkagg_provider_output_invalid_total[10m])) by (provider, model_class, modality)
+          /
+          clamp_min(sum(increase(vkagg_provider_quality_samples_total[10m])) by (provider, model_class, modality), 1)
+
+      - record: media_delivery_capture_gap
+        expr: |
+          sum(increase(vkagg_media_delivery_capture_gap_total[10m])) by (operation, modality, reason)
+
       - alert: ProviderErrorRateHigh
         expr: |
           sum(rate(vkagg_provider_errors_total[10m])) by (provider)
@@ -324,6 +334,65 @@ groups:
           dashboard: Grafana -> Product Observability / Providers, Jobs Worker
           action: Проверь provider chain, ключи, quota/rate limits и последние provider error classes; включи рабочий fallback перед повторной обработкой jobs.
           safe_logs: Отправляй provider list names и error classes; не отправляй keys, prompts или raw provider payloads.
+
+      - alert: ProviderOutputInvalidRatioHigh
+        expr: |
+          provider_output_invalid_ratio > 0.2
+          and on(provider, model_class, modality)
+          sum(increase(vkagg_provider_quality_samples_total[10m])) by (provider, model_class, modality) >= 5
+        for: 5m
+        labels:
+          severity: warning
+          surface: providers
+        annotations:
+          summary: Provider/model часто возвращает непригодный media output
+          description: Доля provider outputs, которые не прошли product media processing, выше 20% за 10 минут.
+          impact: Продукт может сжигать provider cost без безопасной доставки пользователю; jobs могут завершаться failed_terminal без capture.
+          dashboard: Grafana -> Product Observability / Providers, Media Pipeline
+          action: Проверь provider={{ $labels.provider }}, model_class={{ $labels.model_class }}, modality={{ $labels.modality }}; смотри probe/transcode/delivery errors, provider contract и fallback chain. Если повторяется, переведи provider/model в disabled/degraded policy или снизь traffic.
+          safe_logs: В чат отправляй provider, model_class, modality, ratio и error_class; не отправляй raw model id, prompt, provider request/response, private media URL или API key.
+
+      - alert: ProviderQualityDisabled
+        expr: vkagg_provider_quality_state{state="disabled"} == 1
+        for: 2m
+        labels:
+          severity: critical
+          surface: providers
+        annotations:
+          summary: Provider/model quality guard отключил маршрут
+          description: Runtime quality guard пометил provider/model_class/modality как disabled.
+          impact: Новые jobs уйдут во fallback, если он есть; если fallback нет, маршрут будет пробоваться только чтобы не устроить полный outage.
+          dashboard: Grafana -> Product Observability / Providers, Media Pipeline
+          action: Проверь provider={{ $labels.provider }}, model_class={{ $labels.model_class }}, modality={{ $labels.modality }}; найди последние причины в provider_output_invalid_total, media probe/transcode metrics и delivery/capture gap. Не включай обратно без проверки fallback и лимитов.
+          safe_logs: В чат отправляй только bounded labels и counts; не отправляй prompts, raw provider payloads, auth headers, private URLs или user ids.
+
+      - alert: ProductMediaWasteDetected
+        expr: sum(increase(vkagg_product_media_waste_total[10m])) by (provider, model_class, modality, reason) > 0
+        for: 5m
+        labels:
+          severity: warning
+          surface: providers
+        annotations:
+          summary: Есть provider cost burn без безопасной доставки
+          description: После provider success продукт не дошел до безопасной delivery/capture boundary.
+          impact: Возможна потеря provider spend или резервов без успешного результата для пользователя.
+          dashboard: Grafana -> Product Observability / Providers, Media Pipeline, Billing
+          action: Проверь reason={{ $labels.reason }}, provider={{ $labels.provider }}, model_class={{ $labels.model_class }}; смотри output download, media probe/transcode, moderation, delivery и release/capture flow. Убедись, что reservation released и capture не произошел.
+          safe_logs: Отправляй reason/provider/model_class/modality и aggregate credits; не отправляй job_id, user_id, prompt, raw URL, storage key или provider payload.
+
+      - alert: MediaDeliveryCaptureGapDetected
+        expr: media_delivery_capture_gap > 0
+        for: 5m
+        labels:
+          severity: critical
+          surface: delivery
+        annotations:
+          summary: Разрыв между delivery и billing capture
+          description: Media job дошел до delivery/capture boundary, но безопасно завершить flow не удалось.
+          impact: Пользователь может не получить результат или capture может не пройти после delivery; нужен ручной разбор без повторного списания.
+          dashboard: Grafana -> Product Observability / Media Pipeline, Payments Billing
+          action: Проверь operation={{ $labels.operation }}, modality={{ $labels.modality }}, reason={{ $labels.reason }}; смотри VK delivery attempts, billing capture errors, reservation release и DLQ. Повторяй delivery только через idempotent worker flow.
+          safe_logs: В чат отправляй только operation, modality, reason и counts; не отправляй VK peer/user id, private artifact URL, storage key, prompt или payment/provider payload.
 
   - name: infra-backups
     rules:

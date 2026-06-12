@@ -114,6 +114,11 @@ func TestMediaMetricsHelpersUseSanitizedLabels(t *testing.T) {
 	AddMediaVariantBacklog("Video Generate", "Video", "VK Video", 1)
 	AddMediaVariantBacklog("Video Generate", "Video", "VK Video", -1)
 	ObserveMediaCleanupDeleted("Success", "VK Video", "None")
+	ObserveProviderQualityState(" DeepInfra ", "Video Class@example.com", "Video", "Disabled")
+	ObserveProviderQualitySample(" DeepInfra ", "Video Class@example.com", "Video", "Failure")
+	ObserveProviderOutputInvalid(" DeepInfra ", "Video Class@example.com", "Video", "Probe Failed@example.com")
+	AddProductMediaWaste(" DeepInfra ", "Video Class@example.com", "Video", "No Capture@example.com", 10)
+	ObserveMediaDeliveryCaptureGap("Video Generate", "Video", "Capture Failed@example.com")
 }
 
 func mediaProbeCounterValue(t *testing.T, labels ...string) float64 {

@@ -158,6 +158,10 @@ func TestLoadMediaPipelineConfig(t *testing.T) {
 	t.Setenv("MEDIA_PROVIDER_FALLBACK_BUDGET_PER_JOB", "0")
 	t.Setenv("MEDIA_QUEUE_DEGRADE_THRESHOLD", "2500")
 	t.Setenv("MEDIA_MAX_CONCURRENT_UPLOADS", "12")
+	t.Setenv("MEDIA_PROVIDER_QUALITY_GUARD_ENABLED", "true")
+	t.Setenv("MEDIA_PROVIDER_QUALITY_DEGRADED_FAILURES", "4")
+	t.Setenv("MEDIA_PROVIDER_QUALITY_DISABLED_FAILURES", "7")
+	t.Setenv("MEDIA_PROVIDER_QUALITY_RECOVERY_SUCCESSES", "3")
 	t.Setenv("ARTIFACT_RETENTION_DAYS", "7")
 	t.Setenv("MEDIA_INPUT_RETENTION_DAYS", "14")
 	t.Setenv("MEDIA_FAILED_RETENTION_DAYS", "3")
@@ -203,6 +207,16 @@ func TestLoadMediaPipelineConfig(t *testing.T) {
 	}
 	if cfg.MediaQueueDegradeThreshold != 2500 || cfg.MediaMaxConcurrentUploads != 12 {
 		t.Fatalf("unexpected media queue/upload limits: queue=%d uploads=%d", cfg.MediaQueueDegradeThreshold, cfg.MediaMaxConcurrentUploads)
+	}
+	if !cfg.MediaProviderQualityGuardEnabled ||
+		cfg.MediaProviderQualityDegradedFailures != 4 ||
+		cfg.MediaProviderQualityDisabledFailures != 7 ||
+		cfg.MediaProviderQualityRecoverySuccesses != 3 {
+		t.Fatalf("unexpected provider quality config: enabled=%v degraded=%d disabled=%d recovery=%d",
+			cfg.MediaProviderQualityGuardEnabled,
+			cfg.MediaProviderQualityDegradedFailures,
+			cfg.MediaProviderQualityDisabledFailures,
+			cfg.MediaProviderQualityRecoverySuccesses)
 	}
 	if cfg.ArtifactRetentionDays != 7 ||
 		cfg.MediaInputRetentionDays != 14 ||
@@ -462,6 +476,16 @@ func TestValidateMediaScaleGuards(t *testing.T) {
 	err = cfg.Validate()
 	if err == nil || !strings.Contains(err.Error(), "MEDIA_FAILED_RETENTION_DAYS") {
 		t.Fatalf("expected retention validation error, got %v", err)
+	}
+
+	cfg = validMediaPipelineConfig()
+	cfg.MediaProviderQualityGuardEnabled = true
+	cfg.MediaProviderQualityDegradedFailures = 5
+	cfg.MediaProviderQualityDisabledFailures = 4
+	cfg.MediaProviderQualityRecoverySuccesses = 1
+	err = cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "MEDIA_PROVIDER_QUALITY_DISABLED_FAILURES") {
+		t.Fatalf("expected provider quality threshold validation error, got %v", err)
 	}
 }
 

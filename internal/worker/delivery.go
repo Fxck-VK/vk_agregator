@@ -215,6 +215,7 @@ func (w *DeliveryWorker) Process(ctx context.Context, task queue.Task) error {
 			// VK send can no longer be retried forever.
 			if del.AttemptNo > w.maxAttempts {
 				metrics.DLQRouted.WithLabelValues("delivery").Inc()
+				metrics.ObserveMediaDeliveryCaptureGap(deliveryOperationLabel(job), deliveryModalityLabel(job), "delivery_failed")
 				if w.streams != nil {
 					_ = w.streams.PublishTo(ctx, redisqueue.StreamDLQ, task)
 				}
@@ -240,6 +241,7 @@ func (w *DeliveryWorker) Process(ctx context.Context, task queue.Task) error {
 		)
 		if err := w.billing.CaptureForJob(captureCtx, job.ID, job.CostReserved); err != nil {
 			metrics.BillingCaptures.WithLabelValues(deliveryOperationLabel(job), "error").Inc()
+			metrics.ObserveMediaDeliveryCaptureGap(deliveryOperationLabel(job), deliveryModalityLabel(job), "capture_failed")
 			tracing.RecordError(captureSpan, err)
 			captureSpan.End()
 			tracing.RecordError(span, err)

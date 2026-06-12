@@ -93,6 +93,8 @@ type Registry struct {
 	breakers            map[domain.ProviderName]*breakerState
 	mediaContracts      mediaContractRegistry
 	mediaProviderBudget providerSubmitBudget
+	quality             map[qualityKey]*qualityState
+	qualityPolicy       providerQualityPolicy
 	now                 func() time.Time
 }
 
@@ -102,12 +104,42 @@ type providerSubmitBudget struct {
 	maxFallbackAttempts int
 }
 
+type providerQualityPolicy struct {
+	enabled           bool
+	degradedFailures  int
+	disabledFailures  int
+	recoverySuccesses int
+}
+
+type providerQualityStatus string
+
+const (
+	providerQualityHealthy  providerQualityStatus = "healthy"
+	providerQualityDegraded providerQualityStatus = "degraded"
+	providerQualityDisabled providerQualityStatus = "disabled"
+)
+
+type qualityKey struct {
+	provider   domain.ProviderName
+	modelClass string
+	modality   domain.Modality
+}
+
+type qualityState struct {
+	status              providerQualityStatus
+	consecutiveFailures int
+	consecutiveSuccess  int
+	lastReason          string
+	updatedAt           time.Time
+}
+
 // NewRegistry builds a registry with a default provider and optional extras.
 func NewRegistry(def domain.Provider, more ...domain.Provider) *Registry {
 	r := &Registry{
 		byName:              map[domain.ProviderName]domain.Provider{},
 		preferredByModality: map[domain.Modality]domain.ProviderName{},
 		breakers:            map[domain.ProviderName]*breakerState{},
+		quality:             map[qualityKey]*qualityState{},
 		now:                 time.Now,
 	}
 	if def != nil {
@@ -149,6 +181,32 @@ func (r *Registry) ConfigureMediaProviderBudget(maxProviderAttempts, maxFallback
 		configured:          true,
 		maxProviderAttempts: maxProviderAttempts,
 		maxFallbackAttempts: maxFallbackAttempts,
+	}
+}
+
+// ConfigureProviderQualityGuard enables runtime routing decisions based on
+// bounded provider/model_class/modality quality state. Disabled by default; even
+// when enabled, the router will not drop all candidates at once.
+func (r *Registry) ConfigureProviderQualityGuard(enabled bool, degradedFailures, disabledFailures, recoverySuccesses int) {
+	if r == nil {
+		return
+	}
+	if degradedFailures <= 0 {
+		degradedFailures = 3
+	}
+	if disabledFailures < degradedFailures {
+		disabledFailures = degradedFailures
+	}
+	if recoverySuccesses <= 0 {
+		recoverySuccesses = 2
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.qualityPolicy = providerQualityPolicy{
+		enabled:           enabled,
+		degradedFailures:  degradedFailures,
+		disabledFailures:  disabledFailures,
+		recoverySuccesses: recoverySuccesses,
 	}
 }
 
@@ -242,6 +300,24 @@ func (r *Registry) metricModelForRequest(provider domain.ProviderName, req domai
 	return providerMetricModel(append(models, req.ModelCode)...)
 }
 
+func (r *Registry) qualityModelClassForRequest(provider domain.ProviderName, req domain.ProviderRequest, models ...string) string {
+	if r == nil {
+		return "default"
+	}
+	r.mu.Lock()
+	contracts := r.mediaContracts
+	r.mu.Unlock()
+	if class := contracts.modelClass(provider, req.ModelCode, req.Modality); class != "" {
+		return providerMetricModel(class)
+	}
+	for _, model := range models {
+		if class := contracts.modelClass(provider, model, req.Modality); class != "" {
+			return providerMetricModel(class)
+		}
+	}
+	return "default"
+}
+
 func (r *Registry) metricModelForTask(provider domain.ProviderName, model string, modality domain.Modality) string {
 	if r == nil {
 		return providerMetricModel(model)
@@ -255,6 +331,19 @@ func (r *Registry) metricModelForTask(provider domain.ProviderName, model string
 	return providerMetricModel(model)
 }
 
+func (r *Registry) qualityModelClassForTask(provider domain.ProviderName, model string, modality domain.Modality) string {
+	if r == nil {
+		return "default"
+	}
+	r.mu.Lock()
+	contracts := r.mediaContracts
+	r.mu.Unlock()
+	if class := contracts.modelClass(provider, model, modality); class != "" {
+		return providerMetricModel(class)
+	}
+	return "default"
+}
+
 func (r *Registry) videoContractForTask(provider domain.ProviderName, model string) (*domain.ProviderMediaContract, bool) {
 	if r == nil {
 		return nil, false
@@ -263,6 +352,13 @@ func (r *Registry) videoContractForTask(provider domain.ProviderName, model stri
 	contracts := r.mediaContracts
 	r.mu.Unlock()
 	return contracts.videoContract(provider, model)
+}
+
+func qualityModelClassForRequest(contracts mediaContractRegistry, provider domain.ProviderName, req domain.ProviderRequest) string {
+	if class := contracts.modelClass(provider, req.ModelCode, req.Modality); class != "" {
+		return providerMetricModel(class)
+	}
+	return "default"
 }
 
 func (r *Registry) mediaProviderBudgetFor(req domain.ProviderRequest) (providerSubmitBudget, bool) {
@@ -280,13 +376,15 @@ func isMediaProviderBudgetedRequest(req domain.ProviderRequest) bool {
 }
 
 type providerCandidate struct {
-	provider  domain.Provider
-	name      domain.ProviderName
-	cost      int64
-	latency   time.Duration
-	open      bool
-	preferred bool
-	order     int
+	provider   domain.Provider
+	name       domain.ProviderName
+	modelClass string
+	cost       int64
+	latency    time.Duration
+	open       bool
+	quality    providerQualityStatus
+	preferred  bool
+	order      int
 }
 
 type breakerState struct {
@@ -300,6 +398,9 @@ func (r *Registry) candidates(ctx context.Context, req domain.ProviderRequest) (
 	order := append([]domain.ProviderName(nil), r.order...)
 	providers := make(map[domain.ProviderName]domain.Provider, len(r.byName))
 	states := make(map[domain.ProviderName]breakerState, len(r.breakers))
+	qualityStates := make(map[qualityKey]qualityState, len(r.quality))
+	qualityPolicy := r.qualityPolicy
+	contracts := r.mediaContracts
 	preferred := r.preferredByModality[req.Modality]
 	now := r.now()
 	for name, provider := range r.byName {
@@ -308,9 +409,14 @@ func (r *Registry) candidates(ctx context.Context, req domain.ProviderRequest) (
 	for name, state := range r.breakers {
 		states[name] = *state
 	}
+	for key, state := range r.quality {
+		qualityStates[key] = *state
+	}
 	r.mu.Unlock()
 
 	var healthy []providerCandidate
+	var degraded []providerCandidate
+	var disabled []providerCandidate
 	var open []providerCandidate
 	for idx, name := range order {
 		provider := providers[name]
@@ -327,18 +433,33 @@ func (r *Registry) candidates(ctx context.Context, req domain.ProviderRequest) (
 			}
 			estimate.AmountCredits = int64(idx + 1)
 		}
+		modelClass := qualityModelClassForRequest(contracts, name, req)
+		quality := providerQualityHealthy
+		if state, ok := qualityStates[qualityKey{provider: name, modelClass: modelClass, modality: req.Modality}]; ok && state.status != "" {
+			quality = state.status
+		}
 		st := states[name]
 		candidate := providerCandidate{
-			provider:  provider,
-			name:      name,
-			cost:      estimate.AmountCredits,
-			latency:   st.latency,
-			open:      !st.openedUntil.IsZero() && now.Before(st.openedUntil),
-			preferred: preferred != "" && name == preferred,
-			order:     idx,
+			provider:   provider,
+			name:       name,
+			modelClass: modelClass,
+			cost:       estimate.AmountCredits,
+			latency:    st.latency,
+			open:       !st.openedUntil.IsZero() && now.Before(st.openedUntil),
+			quality:    quality,
+			preferred:  preferred != "" && name == preferred,
+			order:      idx,
+		}
+		if qualityPolicy.enabled && candidate.quality == providerQualityDisabled {
+			disabled = append(disabled, candidate)
+			continue
 		}
 		if candidate.open {
 			open = append(open, candidate)
+			continue
+		}
+		if qualityPolicy.enabled && candidate.quality == providerQualityDegraded {
+			degraded = append(degraded, candidate)
 			continue
 		}
 		healthy = append(healthy, candidate)
@@ -347,11 +468,22 @@ func (r *Registry) candidates(ctx context.Context, req domain.ProviderRequest) (
 	if len(healthy) > 0 {
 		return healthy, nil
 	}
+	sortCandidates(degraded)
+	if len(degraded) > 0 {
+		return degraded, nil
+	}
 	sortCandidates(open)
 	if len(open) > 0 {
 		// All capable providers are open. Try them anyway so a temporary breaker
 		// window cannot make the platform permanently unavailable.
 		return open, nil
+	}
+	sortCandidates(disabled)
+	if len(disabled) > 0 {
+		// Do not auto-disable the whole product path. If every capable provider
+		// is disabled, try the least risky candidate so the job can fail through
+		// normal retry/release paths instead of a permanent routing outage.
+		return disabled, nil
 	}
 	return nil, fmt.Errorf("worker: no provider supports %s/%s", req.Operation, req.Modality)
 }
@@ -436,6 +568,92 @@ func (r *Registry) record(name domain.ProviderName, started time.Time, err error
 	metrics.ProviderCircuitState.WithLabelValues(string(name), "all").Set(open)
 }
 
+func (r *Registry) recordProviderQualitySuccess(provider domain.ProviderName, model string, modality domain.Modality) {
+	if r == nil {
+		return
+	}
+	r.updateProviderQuality(provider, r.qualityModelClassForTask(provider, model, modality), modality, "", true)
+}
+
+func (r *Registry) recordProviderQualityFailure(provider domain.ProviderName, model string, modality domain.Modality, reason string) {
+	if r == nil {
+		return
+	}
+	r.updateProviderQuality(provider, r.qualityModelClassForTask(provider, model, modality), modality, reason, false)
+}
+
+func (r *Registry) recordProviderQualityForRequest(provider domain.ProviderName, req domain.ProviderRequest, model string, err error) {
+	if r == nil {
+		return
+	}
+	modelClass := r.qualityModelClassForRequest(provider, req, model)
+	if err == nil {
+		r.updateProviderQuality(provider, modelClass, req.Modality, "", true)
+		return
+	}
+	reason := "provider_error"
+	if class := classOf(err); class != "" {
+		reason = string(class)
+	}
+	r.updateProviderQuality(provider, modelClass, req.Modality, reason, false)
+}
+
+func (r *Registry) updateProviderQuality(provider domain.ProviderName, modelClass string, modality domain.Modality, reason string, success bool) {
+	if r == nil {
+		return
+	}
+	if modelClass == "" {
+		modelClass = "default"
+	}
+	if reason == "" {
+		reason = "none"
+	}
+	now := r.now()
+	r.mu.Lock()
+	if r.quality == nil {
+		r.quality = map[qualityKey]*qualityState{}
+	}
+	policy := r.qualityPolicy
+	key := qualityKey{provider: provider, modelClass: providerMetricModel(modelClass), modality: modality}
+	state := r.quality[key]
+	if state == nil {
+		state = &qualityState{status: providerQualityHealthy}
+		r.quality[key] = state
+	}
+	if success {
+		state.consecutiveFailures = 0
+		state.consecutiveSuccess++
+		state.lastReason = "none"
+		if state.status != providerQualityHealthy && (!policy.enabled || state.consecutiveSuccess >= policy.recoverySuccesses) {
+			state.status = providerQualityHealthy
+		}
+	} else {
+		state.consecutiveSuccess = 0
+		state.consecutiveFailures++
+		state.lastReason = reason
+		if policy.enabled {
+			switch {
+			case state.consecutiveFailures >= policy.disabledFailures:
+				state.status = providerQualityDisabled
+			case state.consecutiveFailures >= policy.degradedFailures:
+				state.status = providerQualityDegraded
+			}
+		} else if state.consecutiveFailures >= 1 {
+			state.status = providerQualityDegraded
+		}
+	}
+	state.updatedAt = now
+	status := state.status
+	r.mu.Unlock()
+
+	result := "failure"
+	if success {
+		result = "success"
+	}
+	metrics.ObserveProviderQualitySample(string(provider), key.modelClass, string(modality), result)
+	metrics.ObserveProviderQualityState(string(provider), key.modelClass, string(modality), string(status))
+}
+
 type observedProvider struct {
 	registry *Registry
 	provider domain.Provider
@@ -457,6 +675,7 @@ func (p *observedProvider) Submit(ctx context.Context, req domain.ProviderReques
 	task, err := p.provider.Submit(ctx, req)
 	p.registry.record(p.provider.Name(), started, err)
 	recordProviderCall(p.provider.Name(), p.registry.metricModelForRequest(p.provider.Name(), req, task.ModelCode), req.Operation, started, err, "")
+	p.registry.recordProviderQualityForRequest(p.provider.Name(), req, task.ModelCode, err)
 	return task, err
 }
 func (p *observedProvider) Poll(ctx context.Context, ref domain.ProviderTaskRef) (domain.ProviderTaskResult, error) {
@@ -514,6 +733,7 @@ func (p *routedProvider) Submit(ctx context.Context, req domain.ProviderRequest)
 		task, err := candidate.provider.Submit(ctx, req)
 		p.registry.record(candidate.name, started, err)
 		recordProviderCall(candidate.name, p.registry.metricModelForRequest(candidate.name, req, task.ModelCode), req.Operation, started, err, "")
+		p.registry.recordProviderQualityForRequest(candidate.name, req, task.ModelCode, err)
 		submittedAttempts++
 		if err == nil {
 			if task.Provider == "" {
@@ -720,11 +940,15 @@ type Deps struct {
 	// MediaMaxConcurrentProbes and MediaMaxConcurrentTranscodes bound CPU-heavy
 	// media work per worker process. Shared queue/user capacity is handled
 	// before job creation by the API/orchestrator.
-	MediaMaxConcurrentProbes     int
-	MediaMaxConcurrentTranscodes int
-	MediaMaxPendingVariants      int
-	MediaProviderMaxAttempts     int
-	MediaProviderFallbackBudget  int
+	MediaMaxConcurrentProbes              int
+	MediaMaxConcurrentTranscodes          int
+	MediaMaxPendingVariants               int
+	MediaProviderMaxAttempts              int
+	MediaProviderFallbackBudget           int
+	MediaProviderQualityGuardEnabled      bool
+	MediaProviderQualityDegradedFailures  int
+	MediaProviderQualityDisabledFailures  int
+	MediaProviderQualityRecoverySuccesses int
 	// TextContext, when set, stores VK text dialog history and renders compact
 	// provider prompts for text jobs.
 	TextContext TextContext
@@ -781,6 +1005,12 @@ func newProcessor(d Deps) processor {
 		if d.MediaProviderMaxAttempts > 0 || d.MediaProviderFallbackBudget > 0 {
 			d.Providers.ConfigureMediaProviderBudget(d.MediaProviderMaxAttempts, d.MediaProviderFallbackBudget)
 		}
+		d.Providers.ConfigureProviderQualityGuard(
+			d.MediaProviderQualityGuardEnabled,
+			d.MediaProviderQualityDegradedFailures,
+			d.MediaProviderQualityDisabledFailures,
+			d.MediaProviderQualityRecoverySuccesses,
+		)
 	}
 	return processor{
 		jobs:                 d.Jobs,
@@ -1145,6 +1375,17 @@ func (p *processor) recordProviderPoll(provider domain.ProviderName, model strin
 			metrics.ProviderRateLimits.WithLabelValues(providerLabel, modelLabel, operationLabel).Inc()
 		}
 	}
+	if p.providers == nil {
+		return
+	}
+	switch {
+	case err != nil:
+		p.providers.recordProviderQualityFailure(provider, model, modality, string(classOf(err)))
+	case res.Status == domain.ProviderTaskFailed && res.ErrorClass != "":
+		p.providers.recordProviderQualityFailure(provider, model, modality, string(res.ErrorClass))
+	case res.Status == domain.ProviderTaskSucceeded:
+		p.providers.recordProviderQualitySuccess(provider, model, modality)
+	}
 }
 
 func (p *processor) recordProviderOutputs(pt *domain.ProviderTask, job *domain.Job, res domain.ProviderTaskResult) {
@@ -1167,6 +1408,30 @@ func (p *processor) recordProviderOutputs(pt *domain.ProviderTask, job *domain.J
 	case domain.ModalityVideo:
 		metrics.ProviderVideos.WithLabelValues(providerLabel, modelLabel, operationLabel).Add(count)
 	}
+}
+
+func (p *processor) recordProviderProductFailure(ctx context.Context, job *domain.Job, reason string) {
+	if job == nil {
+		return
+	}
+	task, err := p.latestTask(ctx, job.ID)
+	if err != nil || task == nil {
+		return
+	}
+	p.recordProviderProductFailureForTask(job, task, reason)
+}
+
+func (p *processor) recordProviderProductFailureForTask(job *domain.Job, task *domain.ProviderTask, reason string) {
+	if p == nil || job == nil || task == nil {
+		return
+	}
+	modelClass := "default"
+	if p.providers != nil {
+		modelClass = p.providers.qualityModelClassForTask(task.Provider, task.ModelCode, job.Modality)
+		p.providers.recordProviderQualityFailure(task.Provider, task.ModelCode, job.Modality, reason)
+	}
+	metrics.ObserveProviderOutputInvalid(string(task.Provider), modelClass, string(job.Modality), reason)
+	metrics.AddProductMediaWaste(string(task.Provider), modelClass, string(job.Modality), reason, job.CostReserved)
 }
 
 func providerMetricProvider(provider domain.ProviderName) string {
@@ -1342,6 +1607,7 @@ func (p *processor) applyResult(ctx context.Context, job *domain.Job, pt *domain
 	case domain.ProviderTaskSucceeded:
 		p.recordProviderOutputs(pt, job, res)
 		if err := p.saveOutputs(ctx, job, res.OutputURLs); err != nil {
+			p.recordProviderProductFailureForTask(job, pt, "output_download_failed")
 			// A download failure is retryable provider-side.
 			return p.handleFailure(ctx, job, task, domain.ProviderErrOutputDownloadFailed, err.Error())
 		}
@@ -1353,8 +1619,10 @@ func (p *processor) applyResult(ctx context.Context, job *domain.Job, pt *domain
 			var transcodeErr mediaTranscodeError
 			switch {
 			case errors.As(err, &probeErr):
+				p.recordProviderProductFailure(ctx, job, string(probeErr))
 				return p.handleMediaFailure(ctx, job, domain.ProviderErrMediaProbeFailed, safeMediaProbeMessage(err))
 			case errors.As(err, &transcodeErr):
+				p.recordProviderProductFailure(ctx, job, string(transcodeErr))
 				return p.handleMediaFailure(ctx, job, domain.ProviderErrMediaTranscodeFailed, safeMediaTranscodeMessage(err))
 			default:
 				return err

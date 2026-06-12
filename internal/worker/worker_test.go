@@ -1153,6 +1153,84 @@ func TestProviderRegistryMediaFallbackBudgetStopsExtraPaidSubmit(t *testing.T) {
 	}
 }
 
+func TestProviderQualityGuardSkipsDisabledProviderWhenFallbackExists(t *testing.T) {
+	primary := &routingProvider{
+		name: domain.ProviderName("primary"),
+		cost: 1,
+		fail: routingError{class: domain.ProviderErrRateLimited},
+	}
+	fallback := &routingProvider{name: domain.ProviderName("fallback"), cost: 10}
+	reg := worker.NewRegistry(primary, fallback)
+	reg.ConfigureProviderQualityGuard(true, 1, 1, 1)
+	req := domain.ProviderRequest{
+		JobID:     uuid.New(),
+		Operation: domain.OperationTextGenerate,
+		Modality:  domain.ModalityText,
+		Prompt:    "hello",
+	}
+
+	provider, err := reg.ForRequest(context.Background(), req)
+	if err != nil {
+		t.Fatalf("for request: %v", err)
+	}
+	if _, err := provider.Submit(context.Background(), req); err != nil {
+		t.Fatalf("first submit should use fallback after primary failure: %v", err)
+	}
+	if primary.submits != 1 || fallback.submits != 1 {
+		t.Fatalf("first route submits primary=%d fallback=%d", primary.submits, fallback.submits)
+	}
+
+	provider, err = reg.ForRequest(context.Background(), req)
+	if err != nil {
+		t.Fatalf("second for request: %v", err)
+	}
+	if _, err := provider.Submit(context.Background(), req); err != nil {
+		t.Fatalf("second submit: %v", err)
+	}
+	if primary.submits != 1 {
+		t.Fatalf("disabled primary should be skipped while fallback is available, submits=%d", primary.submits)
+	}
+	if fallback.submits != 2 {
+		t.Fatalf("fallback submits = %d, want 2", fallback.submits)
+	}
+}
+
+func TestProviderQualityGuardDoesNotDropOnlyProvider(t *testing.T) {
+	primary := &routingProvider{
+		name: domain.ProviderName("primary"),
+		cost: 1,
+		fail: routingError{class: domain.ProviderErrRateLimited},
+	}
+	reg := worker.NewRegistry(primary)
+	reg.ConfigureProviderQualityGuard(true, 1, 1, 1)
+	req := domain.ProviderRequest{
+		JobID:     uuid.New(),
+		Operation: domain.OperationTextGenerate,
+		Modality:  domain.ModalityText,
+		Prompt:    "hello",
+	}
+
+	provider, err := reg.ForRequest(context.Background(), req)
+	if err != nil {
+		t.Fatalf("for request: %v", err)
+	}
+	if _, err := provider.Submit(context.Background(), req); err == nil {
+		t.Fatal("expected first provider failure")
+	}
+	primary.fail = nil
+	provider, err = reg.ForRequest(context.Background(), req)
+	if err != nil {
+		t.Fatalf("second for request should keep only disabled provider as fallback: %v", err)
+	}
+	task, err := provider.Submit(context.Background(), req)
+	if err != nil {
+		t.Fatalf("second submit should still try only provider: %v", err)
+	}
+	if task.Provider != primary.name || primary.submits != 2 {
+		t.Fatalf("unexpected only-provider retry: task=%+v submits=%d", task, primary.submits)
+	}
+}
+
 func TestProviderRegistryPrefersImageProvider(t *testing.T) {
 	defaultProvider := &routingProvider{
 		name:      domain.ProviderName("default"),

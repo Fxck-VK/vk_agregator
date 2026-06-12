@@ -165,14 +165,18 @@ type Config struct {
 	// Media scale guards keep expensive media work bounded under production
 	// traffic. Queue/backpressure guards are shared via Redis/Postgres wiring;
 	// concurrent probe/transcode limits are per worker process.
-	MediaMaxConcurrentProbes       int
-	MediaMaxConcurrentTranscodes   int
-	MediaMaxPendingVariants        int
-	MediaMaxActiveVideoJobsPerUser int
-	MediaProviderMaxAttemptsPerJob int
-	MediaProviderFallbackBudget    int
-	MediaQueueDegradeThreshold     int64
-	MediaMaxConcurrentUploads      int
+	MediaMaxConcurrentProbes              int
+	MediaMaxConcurrentTranscodes          int
+	MediaMaxPendingVariants               int
+	MediaMaxActiveVideoJobsPerUser        int
+	MediaProviderMaxAttemptsPerJob        int
+	MediaProviderFallbackBudget           int
+	MediaQueueDegradeThreshold            int64
+	MediaMaxConcurrentUploads             int
+	MediaProviderQualityGuardEnabled      bool
+	MediaProviderQualityDegradedFailures  int
+	MediaProviderQualityDisabledFailures  int
+	MediaProviderQualityRecoverySuccesses int
 	// MediaProviderContractsRaw is the original env string used to fail closed
 	// on malformed JSON during Validate.
 	MediaProviderContractsRaw string
@@ -520,6 +524,29 @@ func (c Config) Validate() error {
 	if c.MediaMaxConcurrentUploads < 0 {
 		return fmt.Errorf("config: MEDIA_MAX_CONCURRENT_UPLOADS must be non-negative")
 	}
+	if c.MediaProviderQualityDegradedFailures < 0 {
+		return fmt.Errorf("config: MEDIA_PROVIDER_QUALITY_DEGRADED_FAILURES must be non-negative")
+	}
+	if c.MediaProviderQualityDisabledFailures < 0 {
+		return fmt.Errorf("config: MEDIA_PROVIDER_QUALITY_DISABLED_FAILURES must be non-negative")
+	}
+	if c.MediaProviderQualityRecoverySuccesses < 0 {
+		return fmt.Errorf("config: MEDIA_PROVIDER_QUALITY_RECOVERY_SUCCESSES must be non-negative")
+	}
+	if c.MediaProviderQualityGuardEnabled {
+		if c.MediaProviderQualityDegradedFailures <= 0 {
+			return fmt.Errorf("config: MEDIA_PROVIDER_QUALITY_DEGRADED_FAILURES must be positive when MEDIA_PROVIDER_QUALITY_GUARD_ENABLED=true")
+		}
+		if c.MediaProviderQualityDisabledFailures <= 0 {
+			return fmt.Errorf("config: MEDIA_PROVIDER_QUALITY_DISABLED_FAILURES must be positive when MEDIA_PROVIDER_QUALITY_GUARD_ENABLED=true")
+		}
+		if c.MediaProviderQualityDisabledFailures < c.MediaProviderQualityDegradedFailures {
+			return fmt.Errorf("config: MEDIA_PROVIDER_QUALITY_DISABLED_FAILURES must be >= MEDIA_PROVIDER_QUALITY_DEGRADED_FAILURES")
+		}
+		if c.MediaProviderQualityRecoverySuccesses <= 0 {
+			return fmt.Errorf("config: MEDIA_PROVIDER_QUALITY_RECOVERY_SUCCESSES must be positive when MEDIA_PROVIDER_QUALITY_GUARD_ENABLED=true")
+		}
+	}
 	if c.MediaInputRetentionDays < 0 {
 		return fmt.Errorf("config: MEDIA_INPUT_RETENTION_DAYS must be non-negative")
 	}
@@ -678,91 +705,95 @@ func Load() Config {
 		PriceOverrides: envPriceMap("PRICES"),
 		MaxJobCost:     int64(envInt("MAX_JOB_COST", 0)),
 
-		PaymentProvider:                   env("PAYMENT_PROVIDER", "mock"),
-		YooKassaShopID:                    env("YOOKASSA_SHOP_ID", ""),
-		YooKassaSecretKey:                 env("YOOKASSA_SECRET_KEY", ""),
-		YooKassaBaseURL:                   env("YOOKASSA_BASE_URL", "https://api.yookassa.ru/v3"),
-		YooKassaReturnURL:                 env("YOOKASSA_RETURN_URL", ""),
-		YooKassaWebhookIPAllowlistEnabled: envBool("YOOKASSA_WEBHOOK_IP_ALLOWLIST_ENABLED", true),
-		PaymentWebhookRequireHTTPS:        envBool("PAYMENT_WEBHOOK_REQUIRE_HTTPS", false),
-		PaymentWebhookAddr:                env("PAYMENT_WEBHOOK_ADDR", ":8082"),
-		PaymentWebhookPollInterval:        envDuration("PAYMENT_WEBHOOK_POLL_INTERVAL", 5*time.Second),
-		PaymentWebhookBatchLimit:          envInt("PAYMENT_WEBHOOK_BATCH_LIMIT", 20),
-		PaymentReconciliationInterval:     envDuration("PAYMENT_RECONCILIATION_INTERVAL", time.Minute),
-		PaymentReconciliationLimit:        envInt("PAYMENT_RECONCILIATION_LIMIT", 100),
-		PaymentReconciliationStaleAfter:   envDuration("PAYMENT_RECONCILIATION_STALE_AFTER", 30*time.Second),
-		Provider:                          provider,
-		ProviderChain:                     providerChain,
-		ImageProvider:                     env("IMAGE_PROVIDER", ""),
-		VideoProvider:                     env("VIDEO_PROVIDER", ""),
-		ImageModel:                        env("IMAGE_MODEL", ""),
-		ImageSize:                         env("IMAGE_SIZE", ""),
-		VideoModel:                        env("VIDEO_MODEL", ""),
-		VideoDurationSec:                  envInt("VIDEO_DURATION_SEC", 5),
-		VideoResolution:                   env("VIDEO_RESOLUTION", "720p"),
-		VideoAspectRatio:                  env("VIDEO_ASPECT_RATIO", "16:9"),
-		VideoDraft:                        envBool("VIDEO_DRAFT", true),
-		MediaPipelineEnabled:              mediaPipelineEnabled,
-		MediaVideoProbePolicy:             envConfigToken("MEDIA_VIDEO_PROBE_POLICY", defaultMediaVideoProbePolicy(appEnv, mediaPipelineEnabled)),
-		MediaVideoTranscodePolicy:         envConfigToken("MEDIA_VIDEO_TRANSCODE_POLICY", MediaVideoTranscodePolicyNever),
-		MediaDeliverRawProviderVideo:      envConfigToken("MEDIA_DELIVER_RAW_PROVIDER_VIDEO", defaultMediaDeliverRawProviderVideo(appEnv, mediaPipelineEnabled)),
-		FFProbePath:                       env("FFPROBE_PATH", "ffprobe"),
-		FFmpegPath:                        env("FFMPEG_PATH", "ffmpeg"),
-		MediaMaxVideoSizeBytes:            envInt64("MEDIA_MAX_VIDEO_SIZE_BYTES", 256<<20),
-		MediaMaxVideoDurationSec:          envInt("MEDIA_MAX_VIDEO_DURATION_SEC", 60),
-		MediaMaxVideoWidth:                envInt("MEDIA_MAX_VIDEO_WIDTH", 1920),
-		MediaMaxVideoHeight:               envInt("MEDIA_MAX_VIDEO_HEIGHT", 1080),
-		MediaMaxVideoBitrate:              envInt64("MEDIA_MAX_VIDEO_BITRATE", 12000000),
-		MediaAllowedVideoContainers:       envNormalizedList("MEDIA_ALLOWED_VIDEO_CONTAINERS", []string{"mp4", "mov", "webm"}),
-		MediaAllowedVideoCodecs:           envNormalizedList("MEDIA_ALLOWED_VIDEO_CODECS", []string{"h264", "h265", "hevc", "vp8", "vp9", "av1"}),
-		MediaProbeTimeout:                 envDuration("MEDIA_PROBE_TIMEOUT", 10*time.Second),
-		MediaTranscodeTimeout:             envDuration("MEDIA_TRANSCODE_TIMEOUT", 10*time.Minute),
-		MediaMaxConcurrentProbes:          envInt("MEDIA_MAX_CONCURRENT_PROBES", 2),
-		MediaMaxConcurrentTranscodes:      envInt("MEDIA_MAX_CONCURRENT_TRANSCODES", 1),
-		MediaMaxPendingVariants:           envInt("MEDIA_MAX_PENDING_VARIANTS", 16),
-		MediaMaxActiveVideoJobsPerUser:    envInt("MEDIA_MAX_ACTIVE_VIDEO_JOBS_PER_USER", 1),
-		MediaProviderMaxAttemptsPerJob:    envInt("MEDIA_PROVIDER_MAX_ATTEMPTS_PER_JOB", 1),
-		MediaProviderFallbackBudget:       envInt("MEDIA_PROVIDER_FALLBACK_BUDGET_PER_JOB", 0),
-		MediaQueueDegradeThreshold:        envInt64("MEDIA_QUEUE_DEGRADE_THRESHOLD", 1000),
-		MediaMaxConcurrentUploads:         envInt("MEDIA_MAX_CONCURRENT_UPLOADS", 8),
-		MediaProviderContractsRaw:         mediaProviderContractsRaw,
-		MediaProviderContracts:            mediaProviderContracts,
-		OpenAIAPIKey:                      env("OPENAI_API_KEY", ""),
-		OpenAIBaseURL:                     env("OPENAI_BASE_URL", "https://api.openai.com/v1"),
-		OpenAITextModel:                   env("OPENAI_TEXT_MODEL", "gpt-4.1-mini"),
-		OpenAIImageModel:                  env("OPENAI_IMAGE_MODEL", "gpt-image-1"),
-		OpenAIImageSize:                   env("OPENAI_IMAGE_SIZE", "1024x1024"),
-		OpenAIVideoModel:                  env("OPENAI_VIDEO_MODEL", "sora-2"),
-		OpenAIVideoSeconds:                env("OPENAI_VIDEO_SECONDS", "4"),
-		OpenAIVideoSize:                   env("OPENAI_VIDEO_SIZE", "720x1280"),
-		OpenAITextPrice:                   int64(envInt("OPENAI_TEXT_PRICE", 1)),
-		OpenAIImagePrice:                  int64(envInt("OPENAI_IMAGE_PRICE", 10)),
-		OpenAIVideoPrice:                  int64(envInt("OPENAI_VIDEO_PRICE", 50)),
-		DeepInfraAPIKey:                   env("DEEPINFRA_API_KEY", ""),
-		DeepInfraBaseURL:                  env("DEEPINFRA_BASE_URL", "https://api.deepinfra.com/v1/openai"),
-		DeepInfraTextModel:                env("DEEPINFRA_TEXT_MODEL", "deepseek-ai/DeepSeek-V4-Flash"),
-		DeepInfraTextPrice:                int64(envInt("DEEPINFRA_TEXT_PRICE", 1)),
-		DeepInfraImageModel:               env("DEEPINFRA_IMAGE_MODEL", "ByteDance/Seedream-4.5"),
-		DeepInfraImageFallbackModel:       env("DEEPINFRA_IMAGE_FALLBACK_MODEL", ""),
-		DeepInfraImagePrice:               int64(envInt("DEEPINFRA_IMAGE_PRICE", 10)),
-		DeepInfraImageReferenceEnabled:    envBool("DEEPINFRA_IMAGE_REFERENCE_ENABLED", false),
-		DeepInfraVideoModel:               env("DEEPINFRA_VIDEO_MODEL", "PrunaAI/p-video"),
-		DeepInfraVideoDurationSec:         envInt("DEEPINFRA_VIDEO_DURATION_SEC", 5),
-		DeepInfraVideoResolution:          env("DEEPINFRA_VIDEO_RESOLUTION", "720p"),
-		DeepInfraVideoAspectRatio:         env("DEEPINFRA_VIDEO_ASPECT_RATIO", "16:9"),
-		DeepInfraVideoDraft:               envBool("DEEPINFRA_VIDEO_DRAFT", true),
-		DeepInfraVideoPrice:               int64(envInt("DEEPINFRA_VIDEO_PRICE", 10)),
-		DeepInfraVideoHTTPTimeout:         envDuration("DEEPINFRA_VIDEO_HTTP_TIMEOUT", 180*time.Second),
-		TextContextEnabled:                envBool("TEXT_CONTEXT_ENABLED", true),
-		TextContextMaxInputTokens:         envInt("TEXT_CONTEXT_MAX_INPUT_TOKENS", 1600),
-		TextContextMaxOutputTokens:        envInt("TEXT_CONTEXT_MAX_OUTPUT_TOKENS", 800),
-		TextContextSummaryMaxTokens:       envInt("TEXT_CONTEXT_SUMMARY_MAX_TOKENS", 400),
-		TextContextRecentMessagesLimit:    envInt("TEXT_CONTEXT_RECENT_MESSAGES_LIMIT", 6),
-		TextContextSummarizeAfterMessages: envInt("TEXT_CONTEXT_SUMMARIZE_AFTER_MESSAGES", 10),
-		TextContextSummarizeAfterTokens:   envInt("TEXT_CONTEXT_SUMMARIZE_AFTER_TOKENS", 1500),
-		ModerationProvider:                env("MODERATION_PROVIDER", "keyword"),
-		OpenAIModerationModel:             env("OPENAI_MODERATION_MODEL", "omni-moderation-latest"),
-		ArtifactScanner:                   env("ARTIFACT_SCANNER", "none"),
+		PaymentProvider:                       env("PAYMENT_PROVIDER", "mock"),
+		YooKassaShopID:                        env("YOOKASSA_SHOP_ID", ""),
+		YooKassaSecretKey:                     env("YOOKASSA_SECRET_KEY", ""),
+		YooKassaBaseURL:                       env("YOOKASSA_BASE_URL", "https://api.yookassa.ru/v3"),
+		YooKassaReturnURL:                     env("YOOKASSA_RETURN_URL", ""),
+		YooKassaWebhookIPAllowlistEnabled:     envBool("YOOKASSA_WEBHOOK_IP_ALLOWLIST_ENABLED", true),
+		PaymentWebhookRequireHTTPS:            envBool("PAYMENT_WEBHOOK_REQUIRE_HTTPS", false),
+		PaymentWebhookAddr:                    env("PAYMENT_WEBHOOK_ADDR", ":8082"),
+		PaymentWebhookPollInterval:            envDuration("PAYMENT_WEBHOOK_POLL_INTERVAL", 5*time.Second),
+		PaymentWebhookBatchLimit:              envInt("PAYMENT_WEBHOOK_BATCH_LIMIT", 20),
+		PaymentReconciliationInterval:         envDuration("PAYMENT_RECONCILIATION_INTERVAL", time.Minute),
+		PaymentReconciliationLimit:            envInt("PAYMENT_RECONCILIATION_LIMIT", 100),
+		PaymentReconciliationStaleAfter:       envDuration("PAYMENT_RECONCILIATION_STALE_AFTER", 30*time.Second),
+		Provider:                              provider,
+		ProviderChain:                         providerChain,
+		ImageProvider:                         env("IMAGE_PROVIDER", ""),
+		VideoProvider:                         env("VIDEO_PROVIDER", ""),
+		ImageModel:                            env("IMAGE_MODEL", ""),
+		ImageSize:                             env("IMAGE_SIZE", ""),
+		VideoModel:                            env("VIDEO_MODEL", ""),
+		VideoDurationSec:                      envInt("VIDEO_DURATION_SEC", 5),
+		VideoResolution:                       env("VIDEO_RESOLUTION", "720p"),
+		VideoAspectRatio:                      env("VIDEO_ASPECT_RATIO", "16:9"),
+		VideoDraft:                            envBool("VIDEO_DRAFT", true),
+		MediaPipelineEnabled:                  mediaPipelineEnabled,
+		MediaVideoProbePolicy:                 envConfigToken("MEDIA_VIDEO_PROBE_POLICY", defaultMediaVideoProbePolicy(appEnv, mediaPipelineEnabled)),
+		MediaVideoTranscodePolicy:             envConfigToken("MEDIA_VIDEO_TRANSCODE_POLICY", MediaVideoTranscodePolicyNever),
+		MediaDeliverRawProviderVideo:          envConfigToken("MEDIA_DELIVER_RAW_PROVIDER_VIDEO", defaultMediaDeliverRawProviderVideo(appEnv, mediaPipelineEnabled)),
+		FFProbePath:                           env("FFPROBE_PATH", "ffprobe"),
+		FFmpegPath:                            env("FFMPEG_PATH", "ffmpeg"),
+		MediaMaxVideoSizeBytes:                envInt64("MEDIA_MAX_VIDEO_SIZE_BYTES", 256<<20),
+		MediaMaxVideoDurationSec:              envInt("MEDIA_MAX_VIDEO_DURATION_SEC", 60),
+		MediaMaxVideoWidth:                    envInt("MEDIA_MAX_VIDEO_WIDTH", 1920),
+		MediaMaxVideoHeight:                   envInt("MEDIA_MAX_VIDEO_HEIGHT", 1080),
+		MediaMaxVideoBitrate:                  envInt64("MEDIA_MAX_VIDEO_BITRATE", 12000000),
+		MediaAllowedVideoContainers:           envNormalizedList("MEDIA_ALLOWED_VIDEO_CONTAINERS", []string{"mp4", "mov", "webm"}),
+		MediaAllowedVideoCodecs:               envNormalizedList("MEDIA_ALLOWED_VIDEO_CODECS", []string{"h264", "h265", "hevc", "vp8", "vp9", "av1"}),
+		MediaProbeTimeout:                     envDuration("MEDIA_PROBE_TIMEOUT", 10*time.Second),
+		MediaTranscodeTimeout:                 envDuration("MEDIA_TRANSCODE_TIMEOUT", 10*time.Minute),
+		MediaMaxConcurrentProbes:              envInt("MEDIA_MAX_CONCURRENT_PROBES", 2),
+		MediaMaxConcurrentTranscodes:          envInt("MEDIA_MAX_CONCURRENT_TRANSCODES", 1),
+		MediaMaxPendingVariants:               envInt("MEDIA_MAX_PENDING_VARIANTS", 16),
+		MediaMaxActiveVideoJobsPerUser:        envInt("MEDIA_MAX_ACTIVE_VIDEO_JOBS_PER_USER", 1),
+		MediaProviderMaxAttemptsPerJob:        envInt("MEDIA_PROVIDER_MAX_ATTEMPTS_PER_JOB", 1),
+		MediaProviderFallbackBudget:           envInt("MEDIA_PROVIDER_FALLBACK_BUDGET_PER_JOB", 0),
+		MediaQueueDegradeThreshold:            envInt64("MEDIA_QUEUE_DEGRADE_THRESHOLD", 1000),
+		MediaMaxConcurrentUploads:             envInt("MEDIA_MAX_CONCURRENT_UPLOADS", 8),
+		MediaProviderQualityGuardEnabled:      envBool("MEDIA_PROVIDER_QUALITY_GUARD_ENABLED", false),
+		MediaProviderQualityDegradedFailures:  envInt("MEDIA_PROVIDER_QUALITY_DEGRADED_FAILURES", 3),
+		MediaProviderQualityDisabledFailures:  envInt("MEDIA_PROVIDER_QUALITY_DISABLED_FAILURES", 5),
+		MediaProviderQualityRecoverySuccesses: envInt("MEDIA_PROVIDER_QUALITY_RECOVERY_SUCCESSES", 2),
+		MediaProviderContractsRaw:             mediaProviderContractsRaw,
+		MediaProviderContracts:                mediaProviderContracts,
+		OpenAIAPIKey:                          env("OPENAI_API_KEY", ""),
+		OpenAIBaseURL:                         env("OPENAI_BASE_URL", "https://api.openai.com/v1"),
+		OpenAITextModel:                       env("OPENAI_TEXT_MODEL", "gpt-4.1-mini"),
+		OpenAIImageModel:                      env("OPENAI_IMAGE_MODEL", "gpt-image-1"),
+		OpenAIImageSize:                       env("OPENAI_IMAGE_SIZE", "1024x1024"),
+		OpenAIVideoModel:                      env("OPENAI_VIDEO_MODEL", "sora-2"),
+		OpenAIVideoSeconds:                    env("OPENAI_VIDEO_SECONDS", "4"),
+		OpenAIVideoSize:                       env("OPENAI_VIDEO_SIZE", "720x1280"),
+		OpenAITextPrice:                       int64(envInt("OPENAI_TEXT_PRICE", 1)),
+		OpenAIImagePrice:                      int64(envInt("OPENAI_IMAGE_PRICE", 10)),
+		OpenAIVideoPrice:                      int64(envInt("OPENAI_VIDEO_PRICE", 50)),
+		DeepInfraAPIKey:                       env("DEEPINFRA_API_KEY", ""),
+		DeepInfraBaseURL:                      env("DEEPINFRA_BASE_URL", "https://api.deepinfra.com/v1/openai"),
+		DeepInfraTextModel:                    env("DEEPINFRA_TEXT_MODEL", "deepseek-ai/DeepSeek-V4-Flash"),
+		DeepInfraTextPrice:                    int64(envInt("DEEPINFRA_TEXT_PRICE", 1)),
+		DeepInfraImageModel:                   env("DEEPINFRA_IMAGE_MODEL", "ByteDance/Seedream-4.5"),
+		DeepInfraImageFallbackModel:           env("DEEPINFRA_IMAGE_FALLBACK_MODEL", ""),
+		DeepInfraImagePrice:                   int64(envInt("DEEPINFRA_IMAGE_PRICE", 10)),
+		DeepInfraImageReferenceEnabled:        envBool("DEEPINFRA_IMAGE_REFERENCE_ENABLED", false),
+		DeepInfraVideoModel:                   env("DEEPINFRA_VIDEO_MODEL", "PrunaAI/p-video"),
+		DeepInfraVideoDurationSec:             envInt("DEEPINFRA_VIDEO_DURATION_SEC", 5),
+		DeepInfraVideoResolution:              env("DEEPINFRA_VIDEO_RESOLUTION", "720p"),
+		DeepInfraVideoAspectRatio:             env("DEEPINFRA_VIDEO_ASPECT_RATIO", "16:9"),
+		DeepInfraVideoDraft:                   envBool("DEEPINFRA_VIDEO_DRAFT", true),
+		DeepInfraVideoPrice:                   int64(envInt("DEEPINFRA_VIDEO_PRICE", 10)),
+		DeepInfraVideoHTTPTimeout:             envDuration("DEEPINFRA_VIDEO_HTTP_TIMEOUT", 180*time.Second),
+		TextContextEnabled:                    envBool("TEXT_CONTEXT_ENABLED", true),
+		TextContextMaxInputTokens:             envInt("TEXT_CONTEXT_MAX_INPUT_TOKENS", 1600),
+		TextContextMaxOutputTokens:            envInt("TEXT_CONTEXT_MAX_OUTPUT_TOKENS", 800),
+		TextContextSummaryMaxTokens:           envInt("TEXT_CONTEXT_SUMMARY_MAX_TOKENS", 400),
+		TextContextRecentMessagesLimit:        envInt("TEXT_CONTEXT_RECENT_MESSAGES_LIMIT", 6),
+		TextContextSummarizeAfterMessages:     envInt("TEXT_CONTEXT_SUMMARIZE_AFTER_MESSAGES", 10),
+		TextContextSummarizeAfterTokens:       envInt("TEXT_CONTEXT_SUMMARIZE_AFTER_TOKENS", 1500),
+		ModerationProvider:                    env("MODERATION_PROVIDER", "keyword"),
+		OpenAIModerationModel:                 env("OPENAI_MODERATION_MODEL", "omni-moderation-latest"),
+		ArtifactScanner:                       env("ARTIFACT_SCANNER", "none"),
 
 		VKDeliveryMode:                    env("VK_DELIVERY_MODE", "mock"),
 		VKAccessToken:                     env("VK_ACCESS_TOKEN", ""),
