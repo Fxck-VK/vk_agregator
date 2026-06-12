@@ -160,6 +160,8 @@ groups:
           summary: Media probe отклонил видео
           description: Worker получил ошибку probe при проверке provider video output или VK-ready variant.
           impact: "Видео job fail-closed: результат не доставляется и billing capture не должен происходить."
+          kill_switch: Проверь MEDIA_VIDEO_PROBE_POLICY, MEDIA_PIPELINE_ENABLED и наличие ffprobe; если policy=probe_required без рабочего ffprobe, это активный fail-closed kill switch.
+          money_risk: "Средний риск provider spend: provider мог уже вернуть success, но capture не должен происходить; проверь reservation release и media_provider_waste."
           dashboard: Grafana -> Product Observability / Jobs Worker
           action: Проверь Jobs Worker dashboard, labels operation/modality/error_class, наличие ffprobe и media config; не открывай raw provider payload или private artifact URL.
           safe_logs: Отправляй только operation, modality, result и error_class; не отправляй job_id, artifact_id, prompt, raw URL или storage key.
@@ -174,6 +176,8 @@ groups:
           summary: Media transcode не создал VK-ready variant
           description: Worker не смог подготовить безопасный video variant для VK delivery.
           impact: Raw provider video не должен доставляться; job завершается безопасной ошибкой без capture.
+          kill_switch: Проверь MEDIA_VIDEO_TRANSCODE_POLICY и MEDIA_DELIVER_RAW_PROVIDER_VIDEO; если transcode запрещен и raw delivery не разрешен после probe, job должен fail-closed.
+          money_risk: Средний риск provider spend и CPU waste; capture не должен происходить до safe delivery.
           dashboard: Grafana -> Product Observability / Jobs Worker
           action: Проверь ffmpeg path, timeout, CPU/disk pressure, media constraints и labels variant_type/error_class.
           safe_logs: Отправляй variant_type, operation, modality и error_class; не отправляй raw ffmpeg output с путями, private URLs, prompts или provider payloads.
@@ -188,9 +192,62 @@ groups:
           summary: Media variant backlog высокий
           description: В worker долго остаются in-process video variant операции.
           impact: Видео delivery может задерживаться, CPU/IO могут быть перегружены.
+          kill_switch: Проверь MEDIA_VIDEO_TRANSCODE_POLICY и MEDIA_QUEUE_DEGRADE_THRESHOLD; при overload новые дорогие jobs должны безопасно отклоняться до provider call.
+          money_risk: Есть риск задержанных reservations; provider spend риск растет, если backlog появился после provider success.
           dashboard: Grafana -> Product Observability / Jobs Worker
           action: Проверь worker CPU/disk, очередь video jobs, ffmpeg timeouts и количество worker процессов; не запускай бесконтрольный параллельный transcode.
           safe_logs: Отправляй только aggregate backlog и bounded labels; не отправляй job/artifact ids, storage paths или prompts.
+
+      - alert: MediaFfmpegUnexpectedlyHigh
+        expr: sum(increase(vkagg_media_transcode_total[10m])) > 3
+        for: 5m
+        labels:
+          severity: warning
+          surface: media
+        annotations:
+          summary: ffmpeg используется чаще ожидаемого
+          description: Количество media transcode операций выросло за 10 минут.
+          impact: Worker CPU/IO может стать bottleneck, а video jobs начнут ждать дольше.
+          kill_switch: Проверь MEDIA_VIDEO_TRANSCODE_POLICY; для production default ffmpeg должен быть never/fallback, не always.
+          money_risk: "Косвенный риск provider spend: если transcode перегружен после provider success, результат может не дойти до capture."
+          dashboard: Grafana -> Product Observability / Jobs Worker, Media Pipeline
+          action: Проверь policy/result/error_class в vkagg_media_transcode_total и p95 в vkagg_media_transcode_cpu_seconds_bucket; если это не planned rollout, снизь traffic или отключи transcode fallback.
+          safe_logs: Отправляй policy/result/error_class и aggregate count; не отправляй raw ffmpeg output, storage paths, artifact ids или prompts.
+
+      - alert: MediaQueueBackpressureActive
+        expr: |
+          sum(vkagg_media_queue_backlog{queue_class=~"video|provider_poll|delivery"}) > 100
+          or
+          sum(increase(vkagg_media_policy_decisions_total{decision="degraded"}[10m])) > 0
+        for: 5m
+        labels:
+          severity: warning
+          surface: media
+        annotations:
+          summary: Media queue pressure или degradation активны
+          description: Очереди media/provider/delivery растут или worker начал принимать degraded media decisions.
+          impact: Новые дорогие jobs должны отклоняться до provider call, иначе будут расти ожидание, retries и provider waste.
+          kill_switch: Проверь MEDIA_QUEUE_DEGRADE_THRESHOLD, MEDIA_MAX_CONCURRENT_PROBES, MEDIA_MAX_CONCURRENT_TRANSCODES и MEDIA_MAX_PENDING_VARIANTS.
+          money_risk: Высокий риск, если provider success уже был, а delivery/capture очередь перегружена; проверь capture gap.
+          dashboard: Grafana -> Product Observability / Jobs Worker, Media Pipeline
+          action: Проверь queue_class, degraded reason, worker count, Redis lag и provider_poll/delivery backlog; масштабируй worker pools или временно отключи дорогие video jobs.
+          safe_logs: Отправляй queue_class, aggregate backlog и reason; не отправляй task payload, job ids, user ids, prompts или private URLs.
+
+      - alert: MediaUploadRejectionSpike
+        expr: sum(increase(vkagg_upload_validation_total{result="rejected"}[10m])) by (surface, reason, mime_class) > 10
+        for: 5m
+        labels:
+          severity: warning
+          surface: media
+        annotations:
+          summary: Резкий рост отклоненных uploads
+          description: API upload validation часто отклоняет файлы по одной причине.
+          impact: Пользователи не смогут использовать reference images; возможна abuse-атака или несовместимый клиент.
+          kill_switch: Проверь upload/body limits и MIME policy; user video uploads должны оставаться заблокированы.
+          money_risk: Низкий риск денег, если rejection происходит до job reservation/provider call.
+          dashboard: Grafana -> Product Observability / Mini App Frontend, Jobs Worker
+          action: Проверь surface={{ $labels.surface }}, reason={{ $labels.reason }}, mime_class={{ $labels.mime_class }}; смотри request size limits и frontend upload guard.
+          safe_logs: Отправляй только surface/reason/mime_class/count; не отправляй filenames, user ids, object keys, raw file bytes или private URLs.
 
       - alert: MediaCleanupFailures
         expr: increase(vkagg_media_cleanup_deleted_total{result="error"}[30m]) > 0
@@ -290,6 +347,10 @@ groups:
         expr: |
           sum(increase(vkagg_media_delivery_capture_gap_total[10m])) by (operation, modality, reason)
 
+      - record: media_provider_waste
+        expr: |
+          sum(increase(vkagg_media_provider_waste_total[10m])) by (provider_class, model_class, reason)
+
       - alert: ProviderErrorRateHigh
         expr: |
           sum(rate(vkagg_provider_errors_total[10m])) by (provider)
@@ -348,6 +409,8 @@ groups:
           summary: Provider/model часто возвращает непригодный media output
           description: Доля provider outputs, которые не прошли product media processing, выше 20% за 10 минут.
           impact: Продукт может сжигать provider cost без безопасной доставки пользователю; jobs могут завершаться failed_terminal без capture.
+          kill_switch: Проверь MEDIA_PROVIDER_QUALITY_GUARD_ENABLED и provider/model quality state; если guard включен, маршрут должен уйти в degraded/disabled без полного outage.
+          money_risk: Высокий риск provider spend без продукта; проверь media_provider_waste и reservation release.
           dashboard: Grafana -> Product Observability / Providers, Media Pipeline
           action: Проверь provider={{ $labels.provider }}, model_class={{ $labels.model_class }}, modality={{ $labels.modality }}; смотри probe/transcode/delivery errors, provider contract и fallback chain. Если повторяется, переведи provider/model в disabled/degraded policy или снизь traffic.
           safe_logs: В чат отправляй provider, model_class, modality, ratio и error_class; не отправляй raw model id, prompt, provider request/response, private media URL или API key.
@@ -362,9 +425,27 @@ groups:
           summary: Provider/model quality guard отключил маршрут
           description: Runtime quality guard пометил provider/model_class/modality как disabled.
           impact: Новые jobs уйдут во fallback, если он есть; если fallback нет, маршрут будет пробоваться только чтобы не устроить полный outage.
+          kill_switch: "Quality guard active: проверь флаг MEDIA_PROVIDER_QUALITY_GUARD_ENABLED и не включай маршрут обратно без проверки fallback."
+          money_risk: Риск денег снижен для новых jobs, но уже начатые provider tasks могут потребовать release/capture audit.
           dashboard: Grafana -> Product Observability / Providers, Media Pipeline
           action: Проверь provider={{ $labels.provider }}, model_class={{ $labels.model_class }}, modality={{ $labels.modality }}; найди последние причины в provider_output_invalid_total, media probe/transcode metrics и delivery/capture gap. Не включай обратно без проверки fallback и лимитов.
           safe_logs: В чат отправляй только bounded labels и counts; не отправляй prompts, raw provider payloads, auth headers, private URLs или user ids.
+
+      - alert: MediaProviderWasteSpike
+        expr: media_provider_waste > 0
+        for: 5m
+        labels:
+          severity: warning
+          surface: providers
+        annotations:
+          summary: Media provider waste растет
+          description: Provider/model уже дал успешный или платный media output, но продукт не дошел до safe delivery/capture.
+          impact: Возможна потеря provider spend без результата для пользователя; пользовательский capture не должен происходить до safe delivery.
+          kill_switch: Проверь MEDIA_PROVIDER_QUALITY_GUARD_ENABLED, provider quality state, MEDIA_VIDEO_PROBE_POLICY и MEDIA_VIDEO_TRANSCODE_POLICY.
+          money_risk: Высокий риск provider spend; проверь, что reservation released и нет duplicate provider attempts.
+          dashboard: Grafana -> Product Observability / Providers, Media Pipeline, Payments Billing
+          action: Проверь provider_class={{ $labels.provider_class }}, model_class={{ $labels.model_class }}, reason={{ $labels.reason }}; смотри output download, probe/transcode, delivery gap и billing release path.
+          safe_logs: Отправляй provider_class/model_class/reason и aggregate count; не отправляй raw model id, job_id, user_id, prompt, raw URL, storage key или provider payload.
 
       - alert: ProductMediaWasteDetected
         expr: sum(increase(vkagg_product_media_waste_total[10m])) by (provider, model_class, modality, reason) > 0
@@ -376,6 +457,8 @@ groups:
           summary: Есть provider cost burn без безопасной доставки
           description: После provider success продукт не дошел до безопасной delivery/capture boundary.
           impact: Возможна потеря provider spend или резервов без успешного результата для пользователя.
+          kill_switch: Проверь MEDIA_PROVIDER_QUALITY_GUARD_ENABLED, media probe/transcode policy и fallback; повторяющийся reason должен переводить provider/model в degraded/disabled.
+          money_risk: "Высокий риск provider spend; capture должен оставаться заблокирован до safe delivery."
           dashboard: Grafana -> Product Observability / Providers, Media Pipeline, Billing
           action: Проверь reason={{ $labels.reason }}, provider={{ $labels.provider }}, model_class={{ $labels.model_class }}; смотри output download, media probe/transcode, moderation, delivery и release/capture flow. Убедись, что reservation released и capture не произошел.
           safe_logs: Отправляй reason/provider/model_class/modality и aggregate credits; не отправляй job_id, user_id, prompt, raw URL, storage key или provider payload.
@@ -390,6 +473,8 @@ groups:
           summary: Разрыв между delivery и billing capture
           description: Media job дошел до delivery/capture boundary, но безопасно завершить flow не удалось.
           impact: Пользователь может не получить результат или capture может не пройти после delivery; нужен ручной разбор без повторного списания.
+          kill_switch: Проверь delivery retry/DLQ и не отключай idempotency/random_id; временно ограничь новые video jobs, если gap растет.
+          money_risk: "Критичный риск: delivery/capture boundary требует ручного ledger-safe разбора без повторного списания."
           dashboard: Grafana -> Product Observability / Media Pipeline, Payments Billing
           action: Проверь operation={{ $labels.operation }}, modality={{ $labels.modality }}, reason={{ $labels.reason }}; смотри VK delivery attempts, billing capture errors, reservation release и DLQ. Повторяй delivery только через idempotent worker flow.
           safe_logs: В чат отправляй только operation, modality, reason и counts; не отправляй VK peer/user id, private artifact URL, storage key, prompt или payment/provider payload.

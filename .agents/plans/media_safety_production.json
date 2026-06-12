@@ -2,7 +2,7 @@
   "schema_version": 1,
   "plan_id": "media_safety_production",
   "source_plan": "docs/MEDIA_SAFETY_PRODUCTION_PLAN.md",
-  "updated_at": "2026-06-12T21:39:30+03:00",
+  "updated_at": "2026-06-12T22:06:00+03:00",
   "mode": "IMPLEMENT",
   "security_invariants": [
     "vk_bot_and_miniapp_do_not_call_providers_or_media_tools_directly",
@@ -541,6 +541,84 @@
         },
         {
           "command": "gofmt -l .",
+          "status": "passed"
+        },
+        {
+          "command": "git diff --check",
+          "status": "passed",
+          "note": "line-ending warnings only for working-copy normalization"
+        },
+        {
+          "command": "git status --short --branch",
+          "status": "passed",
+          "note": "unrelated pre-existing dirty docs/prompt files remain unstaged"
+        }
+      ],
+      "push_allowed": false,
+      "errors": []
+    },
+    {
+      "id": "stage_9",
+      "name": "Production Observability And Load Readiness",
+      "status": "completed",
+      "load_impact": "low_bounded_labels",
+      "scope": [
+        "internal/platform/metrics/media_upload_policy_queue_provider_waste_metrics",
+        "internal/adapter/inbound/miniapp/upload_validation_metrics",
+        "internal/adapter/queue/redis/media_queue_backlog_classification",
+        "internal/worker/media_policy_probe_transcode_waste_hooks",
+        "observability/prometheus/media_alerts",
+        "observability/grafana/media_provider_panels",
+        "observability/alertmanager/telegram_template"
+      ],
+      "policy_decisions": [
+        "upload observability records only surface, result, reason, mime_class, bytes and cheap decoded pixel buckets",
+        "media queue backlog uses curated queue_class rather than raw payload data",
+        "worker policy decisions track accepted, rejected, degraded, skipped, fallback and kill_switch states without ids or prompts",
+        "provider waste has a media-specific bounded metric keyed by provider_class, model_class and reason",
+        "alerts include kill switch state guidance and money-risk guidance without exposing secrets or raw payloads",
+        "Grafana dashboards remain private and use bounded labels only"
+      ],
+      "required_checks": [
+        "gofmt -l .",
+        "go test ./internal/platform/metrics ./internal/worker ./internal/adapter/inbound/miniapp",
+        "go vet ./internal/platform/metrics ./internal/worker ./internal/adapter/inbound/miniapp",
+        "promtool check rules observability/prometheus/rules/*.yml",
+        "promtool check config observability/prometheus/prometheus.yml",
+        "git diff --check",
+        "git status --short --branch"
+      ],
+      "checks_run": [
+        {
+          "command": "gofmt -l .",
+          "status": "replaced",
+          "note": "literal directory argument failed in this Windows environment with 'read .: Incorrect function'; all Go files were checked with rg --files -g '*.go' piped to gofmt -l"
+        },
+        {
+          "command": "$files = rg --files -g '*.go'; gofmt -l $files",
+          "status": "passed"
+        },
+        {
+          "command": "go test ./internal/platform/metrics ./internal/worker ./internal/adapter/inbound/miniapp",
+          "status": "passed",
+          "note": "initial sandbox run could not access Go build cache; rerun with approval passed"
+        },
+        {
+          "command": "go vet ./internal/platform/metrics ./internal/worker ./internal/adapter/inbound/miniapp",
+          "status": "passed",
+          "note": "initial sandbox run could not access Go build cache; rerun with approval passed"
+        },
+        {
+          "command": ".runtime/tools/prometheus/promtool.exe check rules observability/prometheus/rules/*.yml",
+          "status": "passed",
+          "note": "Windows wildcard was expanded to explicit rule file paths"
+        },
+        {
+          "command": ".runtime/tools/prometheus/promtool.exe check config observability/prometheus/prometheus.yml",
+          "status": "passed"
+        },
+        {
+          "command": "Get-Content observability/grafana/dashboards/jobs-worker.json | ConvertFrom-Json; Get-Content observability/grafana/dashboards/providers.json | ConvertFrom-Json; Get-Content .agents/plans/media_safety_production.json | ConvertFrom-Json",
           "status": "passed"
         },
         {

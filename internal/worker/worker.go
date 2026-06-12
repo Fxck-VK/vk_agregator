@@ -1432,6 +1432,7 @@ func (p *processor) recordProviderProductFailureForTask(job *domain.Job, task *d
 	}
 	metrics.ObserveProviderOutputInvalid(string(task.Provider), modelClass, string(job.Modality), reason)
 	metrics.AddProductMediaWaste(string(task.Provider), modelClass, string(job.Modality), reason, job.CostReserved)
+	metrics.AddMediaProviderWaste(string(task.Provider), modelClass, reason, job.CostReserved)
 }
 
 func providerMetricProvider(provider domain.ProviderName) string {
@@ -1676,11 +1677,19 @@ func (p *processor) probeVideoOutputs(ctx context.Context, job *domain.Job) erro
 	}
 	operationLabel := operationMetricLabel(job.OperationType)
 	modalityLabel := modalityMetricLabel(job.Modality)
+	observeProviderProbe := func(result, errorClass string, providerName domain.ProviderName, modelClass string) {
+		metrics.ObserveMediaProbeByProvider(result, errorClass, string(providerName), modelClass)
+	}
+	observePolicy := func(decision, reason string) {
+		metrics.ObserveMediaPolicyDecision("worker", operationLabel, modalityLabel, decision, reason)
+	}
 	if err := p.setStatus(ctx, job, domain.JobStatusPostprocessing, "", ""); err != nil {
 		return err
 	}
 	if len(job.OutputArtifactIDs) == 0 {
 		metrics.ObserveMediaProbe("error", operationLabel, modalityLabel, "video_output_missing")
+		observeProviderProbe("error", "video_output_missing", "", "unknown")
+		observePolicy("rejected", "video_output_missing")
 		return mediaProbeError("video_output_missing")
 	}
 	if p.videoProber == nil {
@@ -1689,8 +1698,11 @@ func (p *processor) probeVideoOutputs(ctx context.Context, job *domain.Job) erro
 				return err
 			}
 			metrics.ObserveMediaProbe("error", operationLabel, modalityLabel, "media_probe_unavailable")
+			observeProviderProbe("error", "media_probe_unavailable", "", "unknown")
+			observePolicy("kill_switch", "probe_required_without_prober")
 			return mediaProbeError("media_probe_unavailable")
 		}
+		observePolicy("skipped", "probe_disabled")
 		return p.markVideoProbeSkipped(ctx, job)
 	}
 	if p.objects == nil {
@@ -1698,11 +1710,15 @@ func (p *processor) probeVideoOutputs(ctx context.Context, job *domain.Job) erro
 			return err
 		}
 		metrics.ObserveMediaProbe("error", operationLabel, modalityLabel, "media_probe_storage_unavailable")
+		observeProviderProbe("error", "media_probe_storage_unavailable", "", "unknown")
+		observePolicy("rejected", "media_probe_storage_unavailable")
 		return mediaProbeError("media_probe_storage_unavailable")
 	}
 	providerName, modelClass, contract, err := p.videoOutputContract(ctx, job)
 	if err != nil {
 		metrics.ObserveMediaProbe("error", operationLabel, modalityLabel, "media_contract_unavailable")
+		observeProviderProbe("error", "media_contract_unavailable", providerName, modelClass)
+		observePolicy("rejected", "media_contract_unavailable")
 		return mediaProbeError("media_contract_unavailable")
 	}
 
@@ -1710,6 +1726,8 @@ func (p *processor) probeVideoOutputs(ctx context.Context, job *domain.Job) erro
 		art, err := p.artifactRepo.GetByID(ctx, artID)
 		if err != nil {
 			metrics.ObserveMediaProbe("error", operationLabel, modalityLabel, "artifact_metadata_unavailable")
+			observeProviderProbe("error", "artifact_metadata_unavailable", providerName, modelClass)
+			observePolicy("rejected", "artifact_metadata_unavailable")
 			return mediaProbeError("artifact_metadata_unavailable")
 		}
 		if art.MediaType != domain.MediaTypeVideo {
@@ -1717,6 +1735,8 @@ func (p *processor) probeVideoOutputs(ctx context.Context, job *domain.Job) erro
 				return err
 			}
 			metrics.ObserveMediaProbe("error", operationLabel, modalityLabel, "video_artifact_missing")
+			observeProviderProbe("error", "video_artifact_missing", providerName, modelClass)
+			observePolicy("rejected", "video_artifact_missing")
 			return mediaProbeError("video_artifact_missing")
 		}
 		data, err := p.objects.GetObject(ctx, art.StorageBucket, art.StorageKey)
@@ -1725,6 +1745,8 @@ func (p *processor) probeVideoOutputs(ctx context.Context, job *domain.Job) erro
 				return markErr
 			}
 			metrics.ObserveMediaProbe("error", operationLabel, modalityLabel, "artifact_bytes_unavailable")
+			observeProviderProbe("error", "artifact_bytes_unavailable", providerName, modelClass)
+			observePolicy("rejected", "artifact_bytes_unavailable")
 			return mediaProbeError("artifact_bytes_unavailable")
 		}
 		originalSize := art.SizeBytes
@@ -1738,6 +1760,8 @@ func (p *processor) probeVideoOutputs(ctx context.Context, job *domain.Job) erro
 				return markErr
 			}
 			metrics.ObserveMediaProbe("error", operationLabel, modalityLabel, "media_probe_overloaded")
+			observeProviderProbe("error", "media_probe_overloaded", providerName, modelClass)
+			observePolicy("degraded", "media_probe_overloaded")
 			return mediaProbeError("media_probe_overloaded")
 		}
 		metadata, err := p.videoProber.ProbeVideo(ctx, data, art.SizeBytes)
@@ -1750,6 +1774,8 @@ func (p *processor) probeVideoOutputs(ctx context.Context, job *domain.Job) erro
 				return updateErr
 			}
 			metrics.ObserveMediaProbe("error", operationLabel, modalityLabel, "media_probe_failed")
+			observeProviderProbe("error", "media_probe_failed", providerName, modelClass)
+			observePolicy("rejected", "media_probe_failed")
 			return mediaProbeError("media_probe_failed")
 		}
 		art.ApplyMediaMetadata(metadata)
@@ -1759,25 +1785,34 @@ func (p *processor) probeVideoOutputs(ctx context.Context, job *domain.Job) erro
 			return err
 		}
 		metrics.ObserveMediaProbe("success", operationLabel, modalityLabel, "none")
+		observeProviderProbe("success", "none", providerName, modelClass)
 		if p.videoFastPathAllowed(contract, metadata, originalSize) {
+			metrics.ObserveMediaFastPath("used")
 			metrics.ObserveMediaVideoFastPath("used", operationLabel, modalityLabel, string(providerName), modelClass)
+			observePolicy("accepted", "fast_path")
 			continue
 		}
 		if p.videoTranscodeAllowed(contract) {
+			metrics.ObserveMediaFastPath("fallback_transcode")
 			metrics.ObserveMediaVideoFastPath("fallback_transcode", operationLabel, modalityLabel, string(providerName), modelClass)
+			observePolicy("fallback", "transcode")
 			if err := p.transcodeVideoVariant(ctx, job, art, data, metadata); err != nil {
 				return err
 			}
 			continue
 		}
 		if p.localDevRawVideoAllowedWithoutContract(contract) {
+			metrics.ObserveMediaFastPath("dev_raw")
 			metrics.ObserveMediaVideoFastPath("dev_raw", operationLabel, modalityLabel, string(providerName), modelClass)
+			observePolicy("accepted", "dev_raw")
 			continue
 		}
 		if err := p.markArtifactProbeFailed(ctx, art); err != nil {
 			return err
 		}
+		metrics.ObserveMediaFastPath("blocked")
 		metrics.ObserveMediaVideoFastPath("blocked", operationLabel, modalityLabel, string(providerName), modelClass)
+		observePolicy("rejected", "media_contract_output_not_delivery_ready")
 		return mediaProbeError("media_contract_output_not_delivery_ready")
 	}
 	return nil
@@ -1848,6 +1883,9 @@ func (p *processor) transcodeVideoVariant(ctx context.Context, job *domain.Job, 
 	if !ok {
 		metrics.ObserveMediaTranscode("error", operationLabel, modalityLabel, variantType, "media_variant_backlog_full")
 		metrics.ObserveMediaTranscodeDuration("error", operationLabel, modalityLabel, variantType, time.Since(started))
+		metrics.ObserveMediaTranscodeByPolicy(p.videoTranscodePolicy, "error", "media_variant_backlog_full")
+		metrics.ObserveMediaTranscodeCPUSeconds(p.videoTranscodePolicy, "error", "media_variant_backlog_full", time.Since(started))
+		metrics.ObserveMediaPolicyDecision("worker", operationLabel, modalityLabel, "degraded", "media_variant_backlog_full")
 		if err := p.markArtifactProbeFailed(ctx, art); err != nil {
 			return err
 		}
@@ -1859,10 +1897,13 @@ func (p *processor) transcodeVideoVariant(ctx context.Context, job *domain.Job, 
 		metrics.AddMediaVariantBacklog(operationLabel, modalityLabel, variantType, -1)
 		metrics.ObserveMediaTranscode(result, operationLabel, modalityLabel, variantType, errorClass)
 		metrics.ObserveMediaTranscodeDuration(result, operationLabel, modalityLabel, variantType, time.Since(started))
+		metrics.ObserveMediaTranscodeByPolicy(p.videoTranscodePolicy, result, errorClass)
+		metrics.ObserveMediaTranscodeCPUSeconds(p.videoTranscodePolicy, result, errorClass, time.Since(started))
 	}()
 	if p.videoProber == nil {
 		result = "error"
 		errorClass = "variant_probe_unavailable"
+		metrics.ObserveMediaPolicyDecision("worker", operationLabel, modalityLabel, "kill_switch", "variant_probe_unavailable")
 		if err := p.markArtifactProbeFailed(ctx, art); err != nil {
 			return err
 		}
@@ -1872,6 +1913,7 @@ func (p *processor) transcodeVideoVariant(ctx context.Context, job *domain.Job, 
 	if !ok {
 		result = "error"
 		errorClass = "media_transcode_overloaded"
+		metrics.ObserveMediaPolicyDecision("worker", operationLabel, modalityLabel, "degraded", "media_transcode_overloaded")
 		if err := p.markArtifactProbeFailed(ctx, art); err != nil {
 			return err
 		}
@@ -1882,6 +1924,7 @@ func (p *processor) transcodeVideoVariant(ctx context.Context, job *domain.Job, 
 	if err != nil {
 		result = "error"
 		errorClass = "media_transcode_failed"
+		metrics.ObserveMediaPolicyDecision("worker", operationLabel, modalityLabel, "rejected", "media_transcode_failed")
 		if markErr := p.markArtifactProbeFailed(ctx, art); markErr != nil {
 			return markErr
 		}
@@ -1893,6 +1936,7 @@ func (p *processor) transcodeVideoVariant(ctx context.Context, job *domain.Job, 
 		result = "error"
 		errorClass = "variant_probe_overloaded"
 		metrics.ObserveMediaProbe("error", operationLabel, modalityLabel, "variant_probe_overloaded")
+		metrics.ObserveMediaPolicyDecision("worker", operationLabel, modalityLabel, "degraded", "variant_probe_overloaded")
 		if markErr := p.markArtifactProbeFailed(ctx, art); markErr != nil {
 			return markErr
 		}
@@ -1904,6 +1948,7 @@ func (p *processor) transcodeVideoVariant(ctx context.Context, job *domain.Job, 
 		result = "error"
 		errorClass = "variant_probe_failed"
 		metrics.ObserveMediaProbe("error", operationLabel, modalityLabel, "variant_probe_failed")
+		metrics.ObserveMediaPolicyDecision("worker", operationLabel, modalityLabel, "rejected", "variant_probe_failed")
 		if markErr := p.markArtifactProbeFailed(ctx, art); markErr != nil {
 			return markErr
 		}
@@ -1925,11 +1970,13 @@ func (p *processor) transcodeVideoVariant(ctx context.Context, job *domain.Job, 
 	if _, err := p.artifacts.SaveVariantWithMetadata(ctx, art, domain.VariantVKVideo, "video/mp4", variantBytes, variantMetadata); err != nil {
 		result = "error"
 		errorClass = "variant_store_failed"
+		metrics.ObserveMediaPolicyDecision("worker", operationLabel, modalityLabel, "rejected", "variant_store_failed")
 		if markErr := p.markArtifactProbeFailed(ctx, art); markErr != nil {
 			return markErr
 		}
 		return mediaTranscodeError("variant_store_failed")
 	}
+	metrics.ObserveMediaPolicyDecision("worker", operationLabel, modalityLabel, "accepted", "transcode_variant")
 	return nil
 }
 
@@ -1950,6 +1997,7 @@ func (p *processor) markVideoProbeSkipped(ctx context.Context, job *domain.Job) 
 			return err
 		}
 		metrics.ObserveMediaProbe("skipped", operationLabel, modalityLabel, "none")
+		metrics.ObserveMediaProbeByProvider("skipped", "none", "unknown", "unknown")
 	}
 	return nil
 }

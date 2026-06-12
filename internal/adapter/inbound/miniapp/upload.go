@@ -1,6 +1,10 @@
 package miniapp
 
 import (
+	"bytes"
+	"image"
+	_ "image/jpeg"
+	_ "image/png"
 	"io"
 	"net/http"
 	"strings"
@@ -63,12 +67,15 @@ func readMiniAppUpload(w http.ResponseWriter, r *http.Request) ([]byte, string, 
 	r.Body = http.MaxBytesReader(w, r.Body, maxMiniAppUploadBytes+miniAppMultipartOverage)
 	if err := r.ParseMultipartForm(maxMiniAppUploadBytes); err != nil {
 		if strings.Contains(strings.ToLower(err.Error()), "too large") {
+			observeMiniAppUploadRejected(domain.JobErrMediaUploadTooLarge, "unknown", 0)
 			return nil, "", http.StatusRequestEntityTooLarge, domain.JobErrMediaUploadTooLarge, false
 		}
+		observeMiniAppUploadRejected(domain.JobErrMediaUploadInvalid, "unknown", 0)
 		return nil, "", http.StatusBadRequest, domain.JobErrMediaUploadInvalid, false
 	}
 	file, _, err := r.FormFile(miniAppUploadFieldName)
 	if err != nil {
+		observeMiniAppUploadRejected(domain.JobErrMediaUploadInvalid, "unknown", 0)
 		return nil, "", http.StatusBadRequest, domain.JobErrMediaUploadInvalid, false
 	}
 	defer func() {
@@ -77,17 +84,28 @@ func readMiniAppUpload(w http.ResponseWriter, r *http.Request) ([]byte, string, 
 
 	data, err := io.ReadAll(io.LimitReader(file, maxMiniAppUploadBytes+1))
 	if err != nil {
+		observeMiniAppUploadRejected(domain.JobErrMediaUploadInvalid, "unknown", 0)
 		return nil, "", http.StatusBadRequest, domain.JobErrMediaUploadInvalid, false
 	}
 	if len(data) == 0 {
+		observeMiniAppUploadRejected(domain.JobErrMediaUploadInvalid, "unknown", 0)
 		return nil, "", http.StatusBadRequest, domain.JobErrMediaUploadInvalid, false
 	}
+	mimeClass := miniAppDetectedMimeClass(data)
 	if len(data) > maxMiniAppUploadBytes {
+		observeMiniAppUploadRejected(domain.JobErrMediaUploadTooLarge, mimeClass, int64(len(data)))
 		return nil, "", http.StatusRequestEntityTooLarge, domain.JobErrMediaUploadTooLarge, false
 	}
 	mimeType, ok := miniAppImageMime(data)
 	if !ok {
+		observeMiniAppUploadRejected(domain.JobErrMediaUploadUnsupported, mimeClass, int64(len(data)))
 		return nil, "", http.StatusBadRequest, domain.JobErrMediaUploadUnsupported, false
+	}
+	mimeClass = miniAppMimeClass(mimeType)
+	metrics.ObserveMediaUploadValidation("miniapp", "accepted", "none", mimeClass)
+	metrics.ObserveMediaUploadBytes("miniapp", mimeClass, int64(len(data)))
+	if pixels := miniAppDecodedPixels(data, mimeType); pixels > 0 {
+		metrics.ObserveMediaUploadPixels("miniapp", mimeClass, pixels)
 	}
 	return data, mimeType, http.StatusOK, "", true
 }
@@ -102,6 +120,54 @@ func miniAppImageMime(data []byte) (string, bool) {
 	default:
 		return "", false
 	}
+}
+
+func observeMiniAppUploadRejected(reason, mimeClass string, sizeBytes int64) {
+	if mimeClass == "" {
+		mimeClass = "unknown"
+	}
+	metrics.ObserveMediaUploadValidation("miniapp", "rejected", reason, mimeClass)
+	if sizeBytes > 0 {
+		metrics.ObserveMediaUploadBytes("miniapp", mimeClass, sizeBytes)
+	}
+}
+
+func miniAppDetectedMimeClass(data []byte) string {
+	if len(data) == 0 {
+		return "unknown"
+	}
+	if len(data) >= 12 && string(data[:4]) == "RIFF" && string(data[8:12]) == "WEBP" {
+		return "webp"
+	}
+	return miniAppMimeClass(http.DetectContentType(data))
+}
+
+func miniAppMimeClass(mimeType string) string {
+	switch strings.ToLower(strings.TrimSpace(mimeType)) {
+	case "image/jpeg":
+		return "jpeg"
+	case "image/png":
+		return "png"
+	case "image/webp":
+		return "webp"
+	case "":
+		return "unknown"
+	default:
+		return "other"
+	}
+}
+
+func miniAppDecodedPixels(data []byte, mimeType string) int64 {
+	switch mimeType {
+	case "image/jpeg", "image/png":
+	default:
+		return 0
+	}
+	cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
+	if err != nil || cfg.Width <= 0 || cfg.Height <= 0 {
+		return 0
+	}
+	return int64(cfg.Width) * int64(cfg.Height)
 }
 
 func uploadResultLabel(errorCode string) string {

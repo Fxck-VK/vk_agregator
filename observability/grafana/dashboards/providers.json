@@ -91,6 +91,94 @@
       ],
       "title": "Estimated Provider Cost 24h",
       "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
+      "id": 5,
+      "targets": [
+        {
+          "expr": "provider_output_invalid_ratio",
+          "legendFormat": "{{provider}} {{model_class}} {{modality}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Provider Output Invalid Ratio",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 16
+      },
+      "id": 6,
+      "targets": [
+        {
+          "expr": "vkagg_provider_quality_state",
+          "legendFormat": "{{provider}} {{model_class}} {{modality}} {{state}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Provider Quality State",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 24
+      },
+      "id": 7,
+      "targets": [
+        {
+          "expr": "sum(rate(vkagg_media_provider_waste_total[5m])) by (provider_class,model_class,reason)",
+          "legendFormat": "{{provider_class}} {{model_class}} {{reason}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Media Provider Waste",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 24
+      },
+      "id": 8,
+      "targets": [
+        {
+          "expr": "sum(rate(vkagg_media_probe_total[5m])) by (provider_class,model_class,result,error_class)",
+          "legendFormat": "{{provider_class}} {{model_class}} {{result}} {{error_class}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Media Probe By Provider",
+      "type": "timeseries"
     }
   ],
   "refresh": "30s",

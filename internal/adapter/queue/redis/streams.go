@@ -401,6 +401,7 @@ func CollectMetrics(ctx context.Context, client redis.Cmdable, group string, str
 			}
 		}
 		metrics.QueueDepth.WithLabelValues(stream).Set(float64(length))
+		metrics.SetMediaQueueBacklog(queueClassForStream(stream), length)
 		if length <= 0 {
 			metrics.QueueOldestAgeSeconds.WithLabelValues(stream).Set(0)
 		} else {
@@ -428,6 +429,25 @@ func CollectMetrics(ctx context.Context, client redis.Cmdable, group string, str
 		metrics.QueueConsumerLag.WithLabelValues(stream, group).Set(float64(pending.Count))
 	}
 	return firstErr
+}
+
+func queueClassForStream(stream string) string {
+	switch strings.TrimSpace(stream) {
+	case StreamText:
+		return "text"
+	case StreamImage:
+		return "image"
+	case StreamVideo:
+		return "video"
+	case StreamDelivery:
+		return "delivery"
+	case StreamProviderPoll:
+		return "provider_poll"
+	case StreamDLQ:
+		return "dlq"
+	default:
+		return "unknown"
+	}
 }
 
 func streamIDAgeSeconds(now time.Time, id string) float64 {

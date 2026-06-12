@@ -201,6 +201,121 @@
       ],
       "title": "Media Cleanup",
       "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 32
+      },
+      "id": 10,
+      "targets": [
+        {
+          "expr": "sum(rate(vkagg_upload_validation_total[5m])) by (surface,result,reason,mime_class)",
+          "legendFormat": "{{surface}} {{result}} {{reason}} {{mime_class}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Upload Validation",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 40
+      },
+      "id": 11,
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(vkagg_upload_bytes_bucket[5m])) by (le,surface,mime_class))",
+          "legendFormat": "p95 {{surface}} {{mime_class}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Upload Bytes p95",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 40
+      },
+      "id": 12,
+      "targets": [
+        {
+          "expr": "sum(vkagg_media_queue_backlog) by (queue_class)",
+          "legendFormat": "{{queue_class}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Media Queue Backlog",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 48
+      },
+      "id": 13,
+      "targets": [
+        {
+          "expr": "sum(rate(vkagg_media_policy_decisions_total[5m])) by (surface,operation,modality,decision,reason)",
+          "legendFormat": "{{surface}} {{operation}} {{modality}} {{decision}} {{reason}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Media Policy Decisions",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 48
+      },
+      "id": 14,
+      "targets": [
+        {
+          "expr": "sum(rate(vkagg_media_transcode_total[5m])) by (policy,result,error_class)",
+          "legendFormat": "{{policy}} {{result}} {{error_class}}",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(vkagg_media_transcode_cpu_seconds_bucket[5m])) by (le,policy,result,error_class))",
+          "legendFormat": "cpu proxy p95 {{policy}} {{result}} {{error_class}}",
+          "refId": "B"
+        }
+      ],
+      "title": "Transcode Policy and CPU Proxy",
+      "type": "timeseries"
     }
   ],
   "refresh": "30s",
