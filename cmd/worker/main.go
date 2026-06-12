@@ -209,7 +209,14 @@ func main() {
 	artSvc := artifactservice.New(artRepo, store, cfg.S3Bucket, artOpts...)
 	var videoProber worker.VideoProber
 	var videoTranscoder worker.VideoTranscoder
-	if cfg.MediaPipelineEnabled {
+	probePolicy := cfg.EffectiveMediaVideoProbePolicy()
+	transcodePolicy := cfg.EffectiveMediaVideoTranscodePolicy()
+	rawProviderVideoPolicy := cfg.EffectiveMediaDeliverRawProviderVideo()
+	logger.Info("media video policy loaded",
+		"probe_policy", probePolicy,
+		"transcode_policy", transcodePolicy,
+		"raw_provider_video_policy", rawProviderVideoPolicy)
+	if cfg.MediaPipelineEnabled && probePolicy == config.MediaVideoProbePolicyProbeRequired {
 		videoProber = mediaprobe.NewFFProbe(mediaprobe.Config{
 			FFProbePath:            cfg.FFProbePath,
 			MaxVideoSizeBytes:      cfg.MediaMaxVideoSizeBytes,
@@ -221,6 +228,9 @@ func main() {
 			AllowedVideoCodecs:     cfg.MediaAllowedVideoCodecs,
 			Timeout:                cfg.MediaProbeTimeout,
 		})
+		logger.Info("using media video probe", "policy", probePolicy)
+	}
+	if cfg.MediaPipelineEnabled && cfg.MediaVideoTranscodeEnabled() {
 		videoTranscoder = mediatranscode.NewFFmpeg(mediatranscode.Config{
 			FFmpegPath:        cfg.FFmpegPath,
 			MaxVideoSizeBytes: cfg.MediaMaxVideoSizeBytes,
@@ -229,9 +239,12 @@ func main() {
 			MaxVideoBitrate:   cfg.MediaMaxVideoBitrate,
 			TranscodeTimeout:  cfg.MediaTranscodeTimeout,
 		})
-		logger.Info("using media video pipeline")
-	} else if cfg.IsProduction() {
-		logger.Warn("media video pipeline disabled; production video jobs will fail closed")
+		logger.Info("using media video transcode", "policy", transcodePolicy)
+	} else if cfg.MediaPipelineEnabled {
+		logger.Info("media video transcode disabled", "policy", transcodePolicy)
+	}
+	if cfg.MediaVideoProbeRequired() && videoProber == nil {
+		logger.Warn("media video probe unavailable; video jobs that require probing will fail closed", "policy", probePolicy)
 	}
 	providers := worker.NewRegistry(providerList[0], providerList[1:]...)
 	if cfg.ImageProvider != "" {
@@ -283,7 +296,7 @@ func main() {
 		VideoDraft:          cfg.VideoDraft,
 		VideoProber:         videoProber,
 		VideoTranscoder:     videoTranscoder,
-		RequireVideoProbe:   cfg.IsProduction(),
+		RequireVideoProbe:   cfg.MediaVideoProbeRequired(),
 		ProviderCallTimeout: cfg.WorkerProviderCallTimeout,
 		TextContext: dialogcontext.New(conversations, dialogcontext.Config{
 			Enabled:                cfg.TextContextEnabled,

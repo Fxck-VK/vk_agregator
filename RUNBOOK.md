@@ -138,8 +138,11 @@ Override these values when needed:
 | `MODERATION_PROVIDER` | `keyword` | Output moderation provider: `keyword` or `openai` |
 | `OPENAI_MODERATION_MODEL` | `omni-moderation-latest` | OpenAI moderation model |
 | `ARTIFACT_SCANNER` | `none` | Artifact scanner: `none` or `openai` |
-| `MEDIA_PIPELINE_ENABLED` | `false` | Worker-owned video/media probe/transcode pipeline switch; when false, local dev does not need ffmpeg/ffprobe |
-| `FFPROBE_PATH` / `FFMPEG_PATH` | `ffprobe` / `ffmpeg` | Tool paths used only after `MEDIA_PIPELINE_ENABLED=true`; VK Bot and Mini App must not call these directly |
+| `MEDIA_PIPELINE_ENABLED` | `false` | Worker-owned video/media processing switch; when false, local dev does not need ffmpeg/ffprobe |
+| `MEDIA_VIDEO_PROBE_POLICY` | dev: `disabled`, production: `probe_required` | `disabled`, `trusted_provider`, or `probe_required`; production must fail closed with `probe_required` |
+| `MEDIA_VIDEO_TRANSCODE_POLICY` | `never` | `never`, `fallback`, or `always`; `always` is rejected in production, and `FFMPEG_PATH` is required only when this is not `never` |
+| `MEDIA_DELIVER_RAW_PROVIDER_VIDEO` | dev: `always_dev_only`, production: `if_probe_passed` | Raw provider video delivery policy reserved for media safety enforcement; production must not use `always_dev_only` |
+| `FFPROBE_PATH` / `FFMPEG_PATH` | `ffprobe` / `ffmpeg` | Worker-only tool paths; `FFPROBE_PATH` is required only when probe policy is `probe_required` and media pipeline is enabled, `FFMPEG_PATH` only when transcode policy allows ffmpeg |
 | `MEDIA_MAX_VIDEO_SIZE_BYTES` / `MEDIA_MAX_VIDEO_DURATION_SEC` | `268435456` / `60` | Hard video input/output limits for probe/transcode stages |
 | `MEDIA_MAX_VIDEO_WIDTH` / `MEDIA_MAX_VIDEO_HEIGHT` / `MEDIA_MAX_VIDEO_BITRATE` | `1920` / `1080` / `12000000` | Video dimension and bitrate ceilings for VK-ready variants |
 | `MEDIA_ALLOWED_VIDEO_CONTAINERS` / `MEDIA_ALLOWED_VIDEO_CODECS` | `mp4,mov,webm` / `h264,h265,hevc,vp8,vp9,av1` | Allowlist used by worker-owned media validation; values are normalized before use |
@@ -290,14 +293,17 @@ Override these values when needed:
   `payment_provider_errors_total`, `payment_topups_total`,
   `payment_refunds_total` and `payment_reconciliation_mismatches`.
 - **Artifact scanning / media pipeline**: `ARTIFACT_SCANNER=openai` scans
-  text/image artifact bytes before storage. When `MEDIA_PIPELINE_ENABLED=true`,
-  `cmd/worker` runs ffprobe on generated video artifacts, transcodes a bounded
-  MP4/H.264 `vk_video` variant through ffmpeg, probes that variant, and delivery
-  uploads the variant instead of raw provider output. Unsafe/probe/transcode
-  failures end the video job terminally and release reserved credits before
-  delivery/capture. With the pipeline disabled, local/dev video artifacts are
-  marked `probe_status=skipped`; production video jobs fail closed instead of
-  delivering unprobed video. Maintenance cleanup also uses
+  text/image artifact bytes before storage. `cmd/worker` owns video media
+  processing; VK Bot and Mini App must not call ffprobe/ffmpeg directly.
+  `MEDIA_VIDEO_PROBE_POLICY=probe_required` runs ffprobe when
+  `MEDIA_PIPELINE_ENABLED=true`; in production this policy is required, and if
+  the pipeline is disabled video jobs fail closed instead of delivering
+  unprobed video. `MEDIA_VIDEO_TRANSCODE_POLICY=never` is the CPU-safe default;
+  ffmpeg is wired only when the policy is `fallback` or `always`, and `always`
+  is rejected in production. Unsafe probe/transcode failures end the video job
+  terminally and release reserved credits before delivery/capture. With probe
+  disabled in local/dev, video artifacts are marked `probe_status=skipped`.
+  Maintenance cleanup also uses
   `ARTIFACT_RETENTION_DAYS` to delete only old inactive `failed/deleted`
   original media objects and variants/thumbnails, then clears their private
   storage coordinates; active `ready/stored` artifacts remain available to

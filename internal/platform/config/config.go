@@ -12,6 +12,20 @@ import (
 	"github.com/joho/godotenv"
 )
 
+const (
+	MediaVideoProbePolicyDisabled        = "disabled"
+	MediaVideoProbePolicyTrustedProvider = "trusted_provider"
+	MediaVideoProbePolicyProbeRequired   = "probe_required"
+
+	MediaVideoTranscodePolicyNever    = "never"
+	MediaVideoTranscodePolicyFallback = "fallback"
+	MediaVideoTranscodePolicyAlways   = "always"
+
+	MediaDeliverRawProviderVideoNever         = "never"
+	MediaDeliverRawProviderVideoIfProbePassed = "if_probe_passed"
+	MediaDeliverRawProviderVideoAlwaysDevOnly = "always_dev_only"
+)
+
 // Config is the full application configuration shared by the entrypoints.
 type Config struct {
 	// Env is the deployment environment ("development" or "production"). In
@@ -129,18 +143,21 @@ type Config struct {
 
 	// Media pipeline config is worker-owned. VK Bot and Mini App surfaces must
 	// not call ffmpeg/ffprobe directly.
-	MediaPipelineEnabled        bool
-	FFProbePath                 string
-	FFmpegPath                  string
-	MediaMaxVideoSizeBytes      int64
-	MediaMaxVideoDurationSec    int
-	MediaMaxVideoWidth          int
-	MediaMaxVideoHeight         int
-	MediaMaxVideoBitrate        int64
-	MediaAllowedVideoContainers []string
-	MediaAllowedVideoCodecs     []string
-	MediaProbeTimeout           time.Duration
-	MediaTranscodeTimeout       time.Duration
+	MediaPipelineEnabled         bool
+	MediaVideoProbePolicy        string
+	MediaVideoTranscodePolicy    string
+	MediaDeliverRawProviderVideo string
+	FFProbePath                  string
+	FFmpegPath                   string
+	MediaMaxVideoSizeBytes       int64
+	MediaMaxVideoDurationSec     int
+	MediaMaxVideoWidth           int
+	MediaMaxVideoHeight          int
+	MediaMaxVideoBitrate         int64
+	MediaAllowedVideoContainers  []string
+	MediaAllowedVideoCodecs      []string
+	MediaProbeTimeout            time.Duration
+	MediaTranscodeTimeout        time.Duration
 
 	OpenAIAPIKey       string
 	OpenAIBaseURL      string
@@ -303,7 +320,42 @@ type Config struct {
 
 // IsProduction reports whether the service runs in a production environment.
 func (c Config) IsProduction() bool {
-	return strings.EqualFold(c.Env, "production") || strings.EqualFold(c.Env, "prod")
+	return isProductionEnv(c.Env)
+}
+
+// EffectiveMediaVideoProbePolicy returns the normalized worker probe policy.
+func (c Config) EffectiveMediaVideoProbePolicy() string {
+	if policy := normalizeConfigToken(c.MediaVideoProbePolicy); policy != "" {
+		return policy
+	}
+	return defaultMediaVideoProbePolicy(c.Env, c.MediaPipelineEnabled)
+}
+
+// EffectiveMediaVideoTranscodePolicy returns the normalized worker transcode policy.
+func (c Config) EffectiveMediaVideoTranscodePolicy() string {
+	if policy := normalizeConfigToken(c.MediaVideoTranscodePolicy); policy != "" {
+		return policy
+	}
+	return MediaVideoTranscodePolicyNever
+}
+
+// EffectiveMediaDeliverRawProviderVideo returns the normalized raw-video delivery policy.
+func (c Config) EffectiveMediaDeliverRawProviderVideo() string {
+	if policy := normalizeConfigToken(c.MediaDeliverRawProviderVideo); policy != "" {
+		return policy
+	}
+	return defaultMediaDeliverRawProviderVideo(c.Env, c.MediaPipelineEnabled)
+}
+
+// MediaVideoProbeRequired reports whether generated video must be probed before delivery.
+func (c Config) MediaVideoProbeRequired() bool {
+	return c.EffectiveMediaVideoProbePolicy() == MediaVideoProbePolicyProbeRequired
+}
+
+// MediaVideoTranscodeEnabled reports whether ffmpeg may be used by the worker.
+func (c Config) MediaVideoTranscodeEnabled() bool {
+	policy := c.EffectiveMediaVideoTranscodePolicy()
+	return policy == MediaVideoTranscodePolicyFallback || policy == MediaVideoTranscodePolicyAlways
 }
 
 // PaymentWebhookHTTPSRequired reports whether the payment webhook receiver must
@@ -343,45 +395,77 @@ func (c Config) Validate() error {
 	if provider := strings.ToLower(strings.TrimSpace(c.PaymentProvider)); provider != "" && !knownPaymentProvider(provider) {
 		return fmt.Errorf("config: PAYMENT_PROVIDER must be one of mock, yookassa")
 	}
-	if c.MediaPipelineEnabled {
+	probePolicy := c.EffectiveMediaVideoProbePolicy()
+	if err := validateMediaVideoProbePolicy(probePolicy); err != nil {
+		return err
+	}
+	transcodePolicy := c.EffectiveMediaVideoTranscodePolicy()
+	if err := validateMediaVideoTranscodePolicy(transcodePolicy); err != nil {
+		return err
+	}
+	rawProviderVideoPolicy := c.EffectiveMediaDeliverRawProviderVideo()
+	if err := validateMediaDeliverRawProviderVideo(rawProviderVideoPolicy); err != nil {
+		return err
+	}
+	if c.IsProduction() && probePolicy != MediaVideoProbePolicyProbeRequired {
+		return fmt.Errorf("config: MEDIA_VIDEO_PROBE_POLICY must be %s in production", MediaVideoProbePolicyProbeRequired)
+	}
+	if probePolicy == MediaVideoProbePolicyTrustedProvider && !c.usesOnlyMockProviders() {
+		return fmt.Errorf("config: MEDIA_VIDEO_PROBE_POLICY=trusted_provider is only allowed for mock-only provider config")
+	}
+	if c.IsProduction() && transcodePolicy == MediaVideoTranscodePolicyAlways {
+		return fmt.Errorf("config: MEDIA_VIDEO_TRANSCODE_POLICY=always is not allowed in production")
+	}
+	if transcodePolicy != MediaVideoTranscodePolicyNever && !c.MediaPipelineEnabled {
+		return fmt.Errorf("config: MEDIA_VIDEO_TRANSCODE_POLICY=%s requires MEDIA_PIPELINE_ENABLED=true", transcodePolicy)
+	}
+	if transcodePolicy != MediaVideoTranscodePolicyNever && probePolicy != MediaVideoProbePolicyProbeRequired {
+		return fmt.Errorf("config: MEDIA_VIDEO_TRANSCODE_POLICY=%s requires MEDIA_VIDEO_PROBE_POLICY=probe_required", transcodePolicy)
+	}
+	if c.IsProduction() && rawProviderVideoPolicy == MediaDeliverRawProviderVideoAlwaysDevOnly {
+		return fmt.Errorf("config: MEDIA_DELIVER_RAW_PROVIDER_VIDEO=always_dev_only is not allowed in production")
+	}
+	if c.MediaPipelineEnabled && probePolicy == MediaVideoProbePolicyProbeRequired {
 		if strings.TrimSpace(c.FFProbePath) == "" {
-			return fmt.Errorf("config: FFPROBE_PATH must be set when MEDIA_PIPELINE_ENABLED=true")
-		}
-		if strings.TrimSpace(c.FFmpegPath) == "" {
-			return fmt.Errorf("config: FFMPEG_PATH must be set when MEDIA_PIPELINE_ENABLED=true")
+			return fmt.Errorf("config: FFPROBE_PATH must be set when MEDIA_VIDEO_PROBE_POLICY=probe_required and MEDIA_PIPELINE_ENABLED=true")
 		}
 		if c.MediaMaxVideoSizeBytes <= 0 {
-			return fmt.Errorf("config: MEDIA_MAX_VIDEO_SIZE_BYTES must be positive when MEDIA_PIPELINE_ENABLED=true")
+			return fmt.Errorf("config: MEDIA_MAX_VIDEO_SIZE_BYTES must be positive when MEDIA_VIDEO_PROBE_POLICY=probe_required")
 		}
 		if c.MediaMaxVideoDurationSec <= 0 {
-			return fmt.Errorf("config: MEDIA_MAX_VIDEO_DURATION_SEC must be positive when MEDIA_PIPELINE_ENABLED=true")
+			return fmt.Errorf("config: MEDIA_MAX_VIDEO_DURATION_SEC must be positive when MEDIA_VIDEO_PROBE_POLICY=probe_required")
 		}
 		if c.MediaMaxVideoWidth <= 0 {
-			return fmt.Errorf("config: MEDIA_MAX_VIDEO_WIDTH must be positive when MEDIA_PIPELINE_ENABLED=true")
+			return fmt.Errorf("config: MEDIA_MAX_VIDEO_WIDTH must be positive when MEDIA_VIDEO_PROBE_POLICY=probe_required")
 		}
 		if c.MediaMaxVideoHeight <= 0 {
-			return fmt.Errorf("config: MEDIA_MAX_VIDEO_HEIGHT must be positive when MEDIA_PIPELINE_ENABLED=true")
+			return fmt.Errorf("config: MEDIA_MAX_VIDEO_HEIGHT must be positive when MEDIA_VIDEO_PROBE_POLICY=probe_required")
 		}
 		if c.MediaMaxVideoBitrate <= 0 {
-			return fmt.Errorf("config: MEDIA_MAX_VIDEO_BITRATE must be positive when MEDIA_PIPELINE_ENABLED=true")
+			return fmt.Errorf("config: MEDIA_MAX_VIDEO_BITRATE must be positive when MEDIA_VIDEO_PROBE_POLICY=probe_required")
 		}
 		if len(c.MediaAllowedVideoContainers) == 0 {
-			return fmt.Errorf("config: MEDIA_ALLOWED_VIDEO_CONTAINERS must not be empty when MEDIA_PIPELINE_ENABLED=true")
+			return fmt.Errorf("config: MEDIA_ALLOWED_VIDEO_CONTAINERS must not be empty when MEDIA_VIDEO_PROBE_POLICY=probe_required")
 		}
 		if err := validateNormalizedList("MEDIA_ALLOWED_VIDEO_CONTAINERS", c.MediaAllowedVideoContainers); err != nil {
 			return err
 		}
 		if len(c.MediaAllowedVideoCodecs) == 0 {
-			return fmt.Errorf("config: MEDIA_ALLOWED_VIDEO_CODECS must not be empty when MEDIA_PIPELINE_ENABLED=true")
+			return fmt.Errorf("config: MEDIA_ALLOWED_VIDEO_CODECS must not be empty when MEDIA_VIDEO_PROBE_POLICY=probe_required")
 		}
 		if err := validateNormalizedList("MEDIA_ALLOWED_VIDEO_CODECS", c.MediaAllowedVideoCodecs); err != nil {
 			return err
 		}
 		if c.MediaProbeTimeout <= 0 {
-			return fmt.Errorf("config: MEDIA_PROBE_TIMEOUT must be positive when MEDIA_PIPELINE_ENABLED=true")
+			return fmt.Errorf("config: MEDIA_PROBE_TIMEOUT must be positive when MEDIA_VIDEO_PROBE_POLICY=probe_required")
+		}
+	}
+	if c.MediaPipelineEnabled && c.MediaVideoTranscodeEnabled() {
+		if strings.TrimSpace(c.FFmpegPath) == "" {
+			return fmt.Errorf("config: FFMPEG_PATH must be set when MEDIA_VIDEO_TRANSCODE_POLICY=%s", transcodePolicy)
 		}
 		if c.MediaTranscodeTimeout <= 0 {
-			return fmt.Errorf("config: MEDIA_TRANSCODE_TIMEOUT must be positive when MEDIA_PIPELINE_ENABLED=true")
+			return fmt.Errorf("config: MEDIA_TRANSCODE_TIMEOUT must be positive when MEDIA_VIDEO_TRANSCODE_POLICY=%s", transcodePolicy)
 		}
 	}
 	if c.IsProduction() {
@@ -437,13 +521,15 @@ func Load() Config {
 	loadDotenv()
 
 	host, _ := os.Hostname()
+	appEnv := env("APP_ENV", "development")
 	provider := env("PROVIDER", "mock")
 	providerChain := envList("PROVIDER_CHAIN")
 	if len(providerChain) == 0 {
 		providerChain = []string{provider}
 	}
+	mediaPipelineEnabled := envBool("MEDIA_PIPELINE_ENABLED", false)
 	return Config{
-		Env:           env("APP_ENV", "development"),
+		Env:           appEnv,
 		HTTPAddr:      env("HTTP_ADDR", ":8080"),
 		DatabaseURL:   env("DATABASE_URL", "postgres://vk_ai_aggregator:vk_ai_aggregator@localhost:5432/vk_ai_aggregator?sslmode=disable"),
 		MigrationsDir: env("MIGRATIONS_DIR", "migrations"),
@@ -526,7 +612,10 @@ func Load() Config {
 		VideoResolution:                   env("VIDEO_RESOLUTION", "720p"),
 		VideoAspectRatio:                  env("VIDEO_ASPECT_RATIO", "16:9"),
 		VideoDraft:                        envBool("VIDEO_DRAFT", true),
-		MediaPipelineEnabled:              envBool("MEDIA_PIPELINE_ENABLED", false),
+		MediaPipelineEnabled:              mediaPipelineEnabled,
+		MediaVideoProbePolicy:             envConfigToken("MEDIA_VIDEO_PROBE_POLICY", defaultMediaVideoProbePolicy(appEnv, mediaPipelineEnabled)),
+		MediaVideoTranscodePolicy:         envConfigToken("MEDIA_VIDEO_TRANSCODE_POLICY", MediaVideoTranscodePolicyNever),
+		MediaDeliverRawProviderVideo:      envConfigToken("MEDIA_DELIVER_RAW_PROVIDER_VIDEO", defaultMediaDeliverRawProviderVideo(appEnv, mediaPipelineEnabled)),
 		FFProbePath:                       env("FFPROBE_PATH", "ffprobe"),
 		FFmpegPath:                        env("FFMPEG_PATH", "ffmpeg"),
 		MediaMaxVideoSizeBytes:            envInt64("MEDIA_MAX_VIDEO_SIZE_BYTES", 256<<20),
@@ -694,12 +783,76 @@ func (c Config) usesMockProvider() bool {
 	return false
 }
 
+func (c Config) usesOnlyMockProviders() bool {
+	providers := make([]string, 0, len(c.ProviderChain)+3)
+	providers = append(providers, c.Provider)
+	providers = append(providers, c.ProviderChain...)
+	providers = append(providers, c.ImageProvider, c.VideoProvider)
+	seenProvider := false
+	for _, provider := range providers {
+		provider = strings.ToLower(strings.TrimSpace(provider))
+		if provider == "" {
+			continue
+		}
+		seenProvider = true
+		if provider != "mock" {
+			return false
+		}
+	}
+	return seenProvider
+}
+
 func knownProvider(name string) bool {
 	switch strings.ToLower(strings.TrimSpace(name)) {
 	case "", "mock", "openai", "deepinfra":
 		return true
 	default:
 		return false
+	}
+}
+
+func isProductionEnv(env string) bool {
+	return strings.EqualFold(env, "production") || strings.EqualFold(env, "prod")
+}
+
+func defaultMediaVideoProbePolicy(env string, mediaPipelineEnabled bool) string {
+	if isProductionEnv(env) || mediaPipelineEnabled {
+		return MediaVideoProbePolicyProbeRequired
+	}
+	return MediaVideoProbePolicyDisabled
+}
+
+func defaultMediaDeliverRawProviderVideo(env string, mediaPipelineEnabled bool) string {
+	if isProductionEnv(env) || mediaPipelineEnabled {
+		return MediaDeliverRawProviderVideoIfProbePassed
+	}
+	return MediaDeliverRawProviderVideoAlwaysDevOnly
+}
+
+func validateMediaVideoProbePolicy(policy string) error {
+	switch policy {
+	case MediaVideoProbePolicyDisabled, MediaVideoProbePolicyTrustedProvider, MediaVideoProbePolicyProbeRequired:
+		return nil
+	default:
+		return fmt.Errorf("config: MEDIA_VIDEO_PROBE_POLICY must be disabled, trusted_provider, or probe_required")
+	}
+}
+
+func validateMediaVideoTranscodePolicy(policy string) error {
+	switch policy {
+	case MediaVideoTranscodePolicyNever, MediaVideoTranscodePolicyFallback, MediaVideoTranscodePolicyAlways:
+		return nil
+	default:
+		return fmt.Errorf("config: MEDIA_VIDEO_TRANSCODE_POLICY must be never, fallback, or always")
+	}
+}
+
+func validateMediaDeliverRawProviderVideo(policy string) error {
+	switch policy {
+	case MediaDeliverRawProviderVideoNever, MediaDeliverRawProviderVideoIfProbePassed, MediaDeliverRawProviderVideoAlwaysDevOnly:
+		return nil
+	default:
+		return fmt.Errorf("config: MEDIA_DELIVER_RAW_PROVIDER_VIDEO must be never, if_probe_passed, or always_dev_only")
 	}
 }
 
@@ -776,6 +929,10 @@ func envDuration(key string, def time.Duration) time.Duration {
 		}
 	}
 	return def
+}
+
+func envConfigToken(key, def string) string {
+	return normalizeConfigToken(env(key, def))
 }
 
 // envPriceMap parses a comma-separated "op=amount" list into a price map.

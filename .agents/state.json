@@ -117,6 +117,19 @@
                     "error":  ".agents/schemas/error.schema.json"
                 },
     "active_plans":  {
+                         "media_safety_production":  {
+                                                         "status":  "in_progress",
+                                                         "plan":  ".agents/plans/media_safety_production.json",
+                                                         "mode":  "IMPLEMENT",
+                                                         "runtime_target":  "worker_owned_media_processing",
+                                                         "notes":  [
+                                                                       "Stage 0 capacity budget is complete.",
+                                                                       "Stage 1 splits video probe, transcode and raw-provider-video policies at config/bootstrap level.",
+                                                                       "Do not make VK Bot or Mini App call providers, ffprobe or ffmpeg directly.",
+                                                                       "Keep ffmpeg out of the default production path.",
+                                                                       "Do not log or commit secrets, prompts, full launch params, raw PII, raw provider payloads or private artifact URLs."
+                                                                   ]
+                                                     },
                          "product_statistics_observability":  {
                                                                   "status":  "complete",
                                                                   "plan":  ".agents/plans/product_statistics_observability.json",

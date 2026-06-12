@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "plan_id": "media_safety_production",
+  "source_plan": "docs/MEDIA_SAFETY_PRODUCTION_PLAN.md",
+  "updated_at": "2026-06-12T19:45:00+03:00",
+  "mode": "IMPLEMENT",
+  "security_invariants": [
+    "vk_bot_and_miniapp_do_not_call_providers_or_media_tools_directly",
+    "provider_and_media_processing_stays_worker_owned",
+    "billing_capture_happens_only_after_safe_delivery_or_access",
+    "no_secrets_prompts_raw_payloads_private_urls_or_raw_pii_in_logs_docs_metrics"
+  ],
+  "stages": [
+    {
+      "id": "stage_0",
+      "name": "Threat Model And Capacity Budget",
+      "status": "completed",
+      "commit": "493bba9",
+      "notes": [
+        "documented current media behavior",
+        "defined initial production capacity budgets",
+        "kept runtime behavior unchanged"
+      ]
+    },
+    {
+      "id": "stage_1",
+      "name": "Media Policy Config Split",
+      "status": "completed",
+      "load_impact": "low",
+      "scope": [
+        "internal/platform/config",
+        "cmd/worker/bootstrap",
+        "runbook",
+        "env_example"
+      ],
+      "required_checks": [
+        "gofmt -l .",
+        "go test ./internal/platform/config",
+        "go vet ./internal/platform/config",
+        "git diff --check",
+        "git status --short --branch"
+      ],
+      "checks_run": [
+        {
+          "command": "go test ./internal/platform/config",
+          "status": "passed",
+          "note": "initial sandbox run could not access Go build cache; rerun with approval passed"
+        },
+        {
+          "command": "Get-Content .agents/state.json | ConvertFrom-Json; Get-Content .agents/plans/media_safety_production.json | ConvertFrom-Json",
+          "status": "passed"
+        },
+        {
+          "command": "gofmt -l .",
+          "status": "passed"
+        },
+        {
+          "command": "go vet ./internal/platform/config",
+          "status": "passed"
+        },
+        {
+          "command": "git diff --check",
+          "status": "passed"
+        },
+        {
+          "command": "git status --short --branch",
+          "status": "passed"
+        }
+      ],
+      "push_allowed": true,
+      "errors": []
+    }
+  ]
+}

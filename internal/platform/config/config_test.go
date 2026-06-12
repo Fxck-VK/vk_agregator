@@ -135,6 +135,9 @@ func TestLoadVKVideoUploadConfig(t *testing.T) {
 
 func TestLoadMediaPipelineConfig(t *testing.T) {
 	t.Setenv("MEDIA_PIPELINE_ENABLED", "true")
+	t.Setenv("MEDIA_VIDEO_PROBE_POLICY", "probe_required")
+	t.Setenv("MEDIA_VIDEO_TRANSCODE_POLICY", "fallback")
+	t.Setenv("MEDIA_DELIVER_RAW_PROVIDER_VIDEO", "if_probe_passed")
 	t.Setenv("FFPROBE_PATH", "/opt/bin/ffprobe")
 	t.Setenv("FFMPEG_PATH", "/opt/bin/ffmpeg")
 	t.Setenv("MEDIA_MAX_VIDEO_SIZE_BYTES", "1048576")
@@ -150,6 +153,15 @@ func TestLoadMediaPipelineConfig(t *testing.T) {
 	cfg := config.Load()
 	if !cfg.MediaPipelineEnabled {
 		t.Fatal("MediaPipelineEnabled = false, want true")
+	}
+	if cfg.MediaVideoProbePolicy != config.MediaVideoProbePolicyProbeRequired {
+		t.Fatalf("MediaVideoProbePolicy = %q", cfg.MediaVideoProbePolicy)
+	}
+	if cfg.MediaVideoTranscodePolicy != config.MediaVideoTranscodePolicyFallback {
+		t.Fatalf("MediaVideoTranscodePolicy = %q", cfg.MediaVideoTranscodePolicy)
+	}
+	if cfg.MediaDeliverRawProviderVideo != config.MediaDeliverRawProviderVideoIfProbePassed {
+		t.Fatalf("MediaDeliverRawProviderVideo = %q", cfg.MediaDeliverRawProviderVideo)
 	}
 	if cfg.FFProbePath != "/opt/bin/ffprobe" || cfg.FFmpegPath != "/opt/bin/ffmpeg" {
 		t.Fatalf("unexpected tool paths: probe=%q ffmpeg=%q", cfg.FFProbePath, cfg.FFmpegPath)
@@ -171,10 +183,118 @@ func TestLoadMediaPipelineConfig(t *testing.T) {
 	}
 }
 
+func TestLoadMediaPolicyDefaults(t *testing.T) {
+	t.Setenv("APP_ENV", "development")
+	t.Setenv("MEDIA_PIPELINE_ENABLED", "false")
+
+	cfg := config.Load()
+	if cfg.MediaVideoProbePolicy != config.MediaVideoProbePolicyDisabled {
+		t.Fatalf("dev disabled probe policy = %q", cfg.MediaVideoProbePolicy)
+	}
+	if cfg.MediaVideoTranscodePolicy != config.MediaVideoTranscodePolicyNever {
+		t.Fatalf("default transcode policy = %q", cfg.MediaVideoTranscodePolicy)
+	}
+	if cfg.MediaDeliverRawProviderVideo != config.MediaDeliverRawProviderVideoAlwaysDevOnly {
+		t.Fatalf("dev raw provider video policy = %q", cfg.MediaDeliverRawProviderVideo)
+	}
+
+	t.Setenv("APP_ENV", "production")
+	cfg = config.Load()
+	if cfg.MediaVideoProbePolicy != config.MediaVideoProbePolicyProbeRequired {
+		t.Fatalf("production probe policy = %q", cfg.MediaVideoProbePolicy)
+	}
+	if cfg.MediaDeliverRawProviderVideo != config.MediaDeliverRawProviderVideoIfProbePassed {
+		t.Fatalf("production raw provider video policy = %q", cfg.MediaDeliverRawProviderVideo)
+	}
+}
+
 func TestValidateMediaPipelineDisabledAllowsMissingTools(t *testing.T) {
 	cfg := config.Config{MediaPipelineEnabled: false}
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("disabled media pipeline should not require tools: %v", err)
+	}
+}
+
+func TestValidateMediaTranscodeNeverDoesNotRequireFFmpeg(t *testing.T) {
+	cfg := validMediaPipelineConfig()
+	cfg.FFmpegPath = ""
+	cfg.MediaTranscodeTimeout = 0
+
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("transcode=never should not require ffmpeg: %v", err)
+	}
+}
+
+func TestValidateMediaTranscodeFallbackRequiresFFmpegAndProbe(t *testing.T) {
+	cfg := validMediaPipelineConfig()
+	cfg.MediaVideoTranscodePolicy = config.MediaVideoTranscodePolicyFallback
+	cfg.FFmpegPath = ""
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "FFMPEG_PATH") {
+		t.Fatalf("expected FFMPEG_PATH validation error, got %v", err)
+	}
+
+	cfg.FFmpegPath = "ffmpeg"
+	cfg.MediaTranscodeTimeout = 0
+	err = cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "MEDIA_TRANSCODE_TIMEOUT") {
+		t.Fatalf("expected MEDIA_TRANSCODE_TIMEOUT validation error, got %v", err)
+	}
+
+	cfg.MediaTranscodeTimeout = time.Second
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("valid fallback transcode config rejected: %v", err)
+	}
+
+	cfg.MediaVideoProbePolicy = config.MediaVideoProbePolicyDisabled
+	err = cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "MEDIA_VIDEO_TRANSCODE_POLICY") {
+		t.Fatalf("expected transcode/probe validation error, got %v", err)
+	}
+}
+
+func TestValidateProductionMediaPoliciesFailClosed(t *testing.T) {
+	cfg := validProductionConfig()
+	cfg.MediaVideoProbePolicy = config.MediaVideoProbePolicyDisabled
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "MEDIA_VIDEO_PROBE_POLICY") {
+		t.Fatalf("expected production probe policy validation error, got %v", err)
+	}
+
+	cfg = validProductionConfig()
+	cfg.MediaVideoTranscodePolicy = config.MediaVideoTranscodePolicyAlways
+	err = cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "MEDIA_VIDEO_TRANSCODE_POLICY=always") {
+		t.Fatalf("expected production transcode policy validation error, got %v", err)
+	}
+
+	cfg = validProductionConfig()
+	cfg.MediaDeliverRawProviderVideo = config.MediaDeliverRawProviderVideoAlwaysDevOnly
+	err = cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "MEDIA_DELIVER_RAW_PROVIDER_VIDEO=always_dev_only") {
+		t.Fatalf("expected production raw provider video validation error, got %v", err)
+	}
+}
+
+func TestValidateTrustedProviderProbePolicyRequiresMockOnly(t *testing.T) {
+	cfg := config.Config{
+		Provider:              "deepinfra",
+		ProviderChain:         []string{"deepinfra"},
+		MediaVideoProbePolicy: config.MediaVideoProbePolicyTrustedProvider,
+	}
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "trusted_provider") {
+		t.Fatalf("expected trusted_provider validation error, got %v", err)
+	}
+
+	cfg = config.Config{
+		Provider:              "mock",
+		ProviderChain:         []string{"mock"},
+		MediaVideoProbePolicy: config.MediaVideoProbePolicyTrustedProvider,
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("mock-only trusted_provider config rejected: %v", err)
 	}
 }
 
@@ -208,6 +328,26 @@ func TestValidateMediaPipelineEnabledRequiresSafeBounds(t *testing.T) {
 	err = cfg.Validate()
 	if err == nil || !strings.Contains(err.Error(), "MEDIA_ALLOWED_VIDEO_CODECS") {
 		t.Fatalf("expected codec allowlist validation error, got %v", err)
+	}
+}
+
+func validMediaPipelineConfig() config.Config {
+	return config.Config{
+		MediaPipelineEnabled:         true,
+		MediaVideoProbePolicy:        config.MediaVideoProbePolicyProbeRequired,
+		MediaVideoTranscodePolicy:    config.MediaVideoTranscodePolicyNever,
+		MediaDeliverRawProviderVideo: config.MediaDeliverRawProviderVideoIfProbePassed,
+		FFProbePath:                  "ffprobe",
+		FFmpegPath:                   "ffmpeg",
+		MediaMaxVideoSizeBytes:       1,
+		MediaMaxVideoDurationSec:     1,
+		MediaMaxVideoWidth:           1,
+		MediaMaxVideoHeight:          1,
+		MediaMaxVideoBitrate:         1,
+		MediaAllowedVideoContainers:  []string{"mp4"},
+		MediaAllowedVideoCodecs:      []string{"h264"},
+		MediaProbeTimeout:            time.Second,
+		MediaTranscodeTimeout:        time.Second,
 	}
 }
 
