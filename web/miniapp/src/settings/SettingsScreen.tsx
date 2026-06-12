@@ -220,7 +220,7 @@ export function SettingsScreen({
     let cancelled = false;
     setProductsLoading(true);
     setPaymentsLoading(true);
-    Promise.allSettled([listPaymentProducts(), listPaymentIntents()])
+    void Promise.allSettled([listPaymentProducts(), listPaymentIntents()])
       .then(([products, intents]) => {
         if (cancelled) return;
         if (products.status === "fulfilled") {

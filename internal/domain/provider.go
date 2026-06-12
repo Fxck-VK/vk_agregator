@@ -70,6 +70,8 @@ const (
 	ProviderErrInternal             ProviderErrorClass = "provider_internal_error"
 	ProviderErrTaskNotFound         ProviderErrorClass = "task_not_found"
 	ProviderErrOutputDownloadFailed ProviderErrorClass = "output_download_failed"
+	ProviderErrMediaProbeFailed     ProviderErrorClass = "media_probe_failed"
+	ProviderErrMediaTranscodeFailed ProviderErrorClass = "media_transcode_failed"
 	ProviderErrUnsupportedCapab     ProviderErrorClass = "unsupported_capability"
 )
 

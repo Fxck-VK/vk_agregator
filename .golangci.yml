@@ -11,6 +11,9 @@ linters:
     - govet
     - ineffassign
     - unused
+  exclusions:
+    paths:
+      - web/miniapp/node_modules
 
 issues:
   max-issues-per-linter: 0

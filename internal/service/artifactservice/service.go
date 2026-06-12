@@ -9,6 +9,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -110,17 +111,87 @@ func New(repo domain.ArtifactRepository, store ObjectStore, bucket string, opts 
 
 // SaveTextArtifact stores a text payload as an artifact.
 func (s *Service) SaveTextArtifact(ctx context.Context, ownerID uuid.UUID, jobID *uuid.UUID, kind domain.ArtifactKind, text string) (*domain.Artifact, error) {
-	return s.saveBytes(ctx, ownerID, jobID, kind, domain.MediaTypeText, "text/plain; charset=utf-8", []byte(text))
+	return s.saveBytes(ctx, ownerID, jobID, kind, domain.MediaTypeText, "text/plain; charset=utf-8", []byte(text), domain.ArtifactMediaMetadata{})
 }
 
 // SaveBytesArtifact stores raw bytes as an artifact of the given media type.
 func (s *Service) SaveBytesArtifact(ctx context.Context, ownerID uuid.UUID, jobID *uuid.UUID, kind domain.ArtifactKind, mediaType domain.MediaType, mimeType string, data []byte) (*domain.Artifact, error) {
-	return s.saveBytes(ctx, ownerID, jobID, kind, mediaType, mimeType, data)
+	return s.saveBytes(ctx, ownerID, jobID, kind, mediaType, mimeType, data, domain.ArtifactMediaMetadata{})
+}
+
+// SaveBytesArtifactWithMetadata stores raw bytes with safe media facts already
+// extracted by a worker-owned media pipeline.
+func (s *Service) SaveBytesArtifactWithMetadata(ctx context.Context, ownerID uuid.UUID, jobID *uuid.UUID, kind domain.ArtifactKind, mediaType domain.MediaType, mimeType string, data []byte, metadata domain.ArtifactMediaMetadata) (*domain.Artifact, error) {
+	return s.saveBytes(ctx, ownerID, jobID, kind, mediaType, mimeType, data, metadata)
+}
+
+// SaveVariantWithMetadata stores a derived rendition of an existing artifact.
+// The variant row is idempotent by (artifact_id, variant_type): retrying the
+// same worker step returns the existing row instead of creating duplicates.
+func (s *Service) SaveVariantWithMetadata(ctx context.Context, artifact *domain.Artifact, variantType domain.VariantType, mimeType string, data []byte, metadata domain.ArtifactMediaMetadata) (*domain.ArtifactVariant, error) {
+	if artifact == nil || artifact.ID == uuid.Nil {
+		return nil, fmt.Errorf("artifactservice: variant parent missing")
+	}
+	if existing, err := s.findVariant(ctx, artifact.ID, variantType); err == nil {
+		return existing, nil
+	} else if !errors.Is(err, domain.ErrNotFound) {
+		return nil, err
+	}
+
+	if s.scanner != nil {
+		if err := s.scanner.Scan(ctx, artifact.MediaType, mimeType, data); err != nil {
+			return nil, fmt.Errorf("artifactservice: content scan rejected: %w", err)
+		}
+	}
+
+	sum := sha256.Sum256(data)
+	sha := hex.EncodeToString(sum[:])
+	key := fmt.Sprintf("artifacts/%s/%s/%s-%s.%s", artifact.OwnerUserID, artifact.ID, variantType, sha, extFor(artifact.MediaType))
+	if err := s.store.Put(ctx, s.bucket, key, data, mimeType); err != nil {
+		return nil, fmt.Errorf("artifactservice: store variant object: %w", err)
+	}
+
+	variant := &domain.ArtifactVariant{
+		ID:            uuid.New(),
+		ArtifactID:    artifact.ID,
+		VariantType:   variantType,
+		StorageBucket: s.bucket,
+		StorageKey:    key,
+		MimeType:      mimeType,
+		SizeBytes:     int64(len(data)),
+	}
+	variant.ApplyMediaMetadata(metadata)
+	if err := s.repo.AddVariant(ctx, variant); err != nil {
+		if errors.Is(err, domain.ErrConflict) {
+			return s.findVariant(ctx, artifact.ID, variantType)
+		}
+		return nil, fmt.Errorf("artifactservice: record variant: %w", err)
+	}
+	return variant, nil
+}
+
+func (s *Service) findVariant(ctx context.Context, artifactID uuid.UUID, variantType domain.VariantType) (*domain.ArtifactVariant, error) {
+	variants, err := s.repo.ListVariants(ctx, artifactID)
+	if err != nil {
+		return nil, err
+	}
+	for _, variant := range variants {
+		if variant != nil && variant.VariantType == variantType {
+			return variant, nil
+		}
+	}
+	return nil, domain.ErrNotFound
 }
 
 // SaveRemoteArtifact downloads a remote URL (e.g. a provider output) and stores
 // it as an artifact. The content type from the response fills in an empty mime.
 func (s *Service) SaveRemoteArtifact(ctx context.Context, ownerID uuid.UUID, jobID *uuid.UUID, kind domain.ArtifactKind, mediaType domain.MediaType, url string) (*domain.Artifact, error) {
+	return s.SaveRemoteArtifactWithMetadata(ctx, ownerID, jobID, kind, mediaType, url, domain.ArtifactMediaMetadata{})
+}
+
+// SaveRemoteArtifactWithMetadata downloads a provider output and stores it with
+// safe metadata produced by the worker-owned media pipeline.
+func (s *Service) SaveRemoteArtifactWithMetadata(ctx context.Context, ownerID uuid.UUID, jobID *uuid.UUID, kind domain.ArtifactKind, mediaType domain.MediaType, url string, metadata domain.ArtifactMediaMetadata) (*domain.Artifact, error) {
 	ctx, span := tracing.Start(ctx, "artifact.download",
 		attribute.String("owner.id", ownerID.String()),
 		attribute.String("artifact.kind", string(kind)),
@@ -141,7 +212,7 @@ func (s *Service) SaveRemoteArtifact(ctx context.Context, ownerID uuid.UUID, job
 	if contentType == "" {
 		contentType = "application/octet-stream"
 	}
-	return s.saveBytes(ctx, ownerID, jobID, kind, mediaType, contentType, data)
+	return s.saveBytes(ctx, ownerID, jobID, kind, mediaType, contentType, data, metadata)
 }
 
 func safeDownloadError(err error) error {
@@ -157,7 +228,7 @@ func safeDownloadError(err error) error {
 
 // saveBytes computes the content hash, deduplicates by (owner, sha256), uploads
 // the bytes and records the artifact metadata.
-func (s *Service) saveBytes(ctx context.Context, ownerID uuid.UUID, jobID *uuid.UUID, kind domain.ArtifactKind, mediaType domain.MediaType, mimeType string, data []byte) (*domain.Artifact, error) {
+func (s *Service) saveBytes(ctx context.Context, ownerID uuid.UUID, jobID *uuid.UUID, kind domain.ArtifactKind, mediaType domain.MediaType, mimeType string, data []byte, metadata domain.ArtifactMediaMetadata) (*domain.Artifact, error) {
 	ctx, span := tracing.Start(ctx, "artifact.store",
 		attribute.String("owner.id", ownerID.String()),
 		attribute.String("artifact.kind", string(kind)),
@@ -205,6 +276,7 @@ func (s *Service) saveBytes(ctx context.Context, ownerID uuid.UUID, jobID *uuid.
 		SizeBytes:     int64(len(data)),
 		Status:        domain.ArtifactStatusReady,
 	}
+	artifact.ApplyMediaMetadata(metadata)
 	if err := s.repo.Create(ctx, artifact); err != nil {
 		tracing.RecordError(span, err)
 		return nil, fmt.Errorf("artifactservice: record artifact: %w", err)

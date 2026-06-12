@@ -138,6 +138,12 @@ Override these values when needed:
 | `MODERATION_PROVIDER` | `keyword` | Output moderation provider: `keyword` or `openai` |
 | `OPENAI_MODERATION_MODEL` | `omni-moderation-latest` | OpenAI moderation model |
 | `ARTIFACT_SCANNER` | `none` | Artifact scanner: `none` or `openai` |
+| `MEDIA_PIPELINE_ENABLED` | `false` | Worker-owned video/media probe/transcode pipeline switch; when false, local dev does not need ffmpeg/ffprobe |
+| `FFPROBE_PATH` / `FFMPEG_PATH` | `ffprobe` / `ffmpeg` | Tool paths used only after `MEDIA_PIPELINE_ENABLED=true`; VK Bot and Mini App must not call these directly |
+| `MEDIA_MAX_VIDEO_SIZE_BYTES` / `MEDIA_MAX_VIDEO_DURATION_SEC` | `268435456` / `60` | Hard video input/output limits for probe/transcode stages |
+| `MEDIA_MAX_VIDEO_WIDTH` / `MEDIA_MAX_VIDEO_HEIGHT` / `MEDIA_MAX_VIDEO_BITRATE` | `1920` / `1080` / `12000000` | Video dimension and bitrate ceilings for VK-ready variants |
+| `MEDIA_ALLOWED_VIDEO_CONTAINERS` / `MEDIA_ALLOWED_VIDEO_CODECS` | `mp4,mov,webm` / `h264,h265,hevc,vp8,vp9,av1` | Allowlist used by worker-owned media validation; values are normalized before use |
+| `MEDIA_PROBE_TIMEOUT` / `MEDIA_TRANSCODE_TIMEOUT` | `10s` / `10m` | Time bounds for future probe/transcode subprocesses |
 | `VK_DELIVERY_MODE` | `mock` | VK delivery adapter: `mock` or `real` |
 | `VK_ACCESS_TOKEN` / `VK_API_VERSION` | `` / `5.199` | Required for real VK `messages.send`, photo upload, mp4-as-document upload and API-side `/start` control menu responses |
 | `VK_VIDEO_DELIVERY_MODE` | `doc` | Generated video delivery: `doc` sends mp4 as a file attachment; `video` sends a native VK video attachment with inline player |
@@ -157,7 +163,7 @@ Override these values when needed:
 | `VK_MENU_*_ENABLED` | mixed | Per-button VK product menu flags; current bot profile keeps NeuroHub text mode and account/referral visible, while video/image/students/top-up stay hidden without deleting their screens |
 | `VK_TOP_UP_RECEIPT_EMAIL` / `VK_TOP_UP_RECEIPT_PHONE` | `` / `` | Server-side receipt contact for the VK Bot quick top-up flow; set at least one when `VK_MENU_TOP_UP_ENABLED=true` |
 | `SIGNED_DELIVERY` / `ARTIFACT_URL_TTL` | `false` / `1h` | Deliver media through signed artifact URLs |
-| `ARTIFACT_RETENTION_DAYS` | `0` | Optional S3 lifecycle expiry |
+| `ARTIFACT_RETENTION_DAYS` | `0` | Optional S3 lifecycle expiry and worker maintenance cleanup window for inactive `failed/deleted` media objects; `0` disables cleanup |
 | `PRICES` | `image_generate=0` | Price overrides, e.g. `text_generate=2,image_generate=12`; current VK photo quota uses free image jobs plus `VK_ANTISPAM_IMAGE_DAILY_LIMIT` |
 | `MAX_JOB_COST` | `0` | Per-job cost cap; `0` disables the cap |
 | `STREAM_MAX_LEN` | `100000` | Redis stream max length; `0` disables trimming |
@@ -283,8 +289,19 @@ Override these values when needed:
   `payment_webhook_oldest_unprocessed_age_seconds`,
   `payment_provider_errors_total`, `payment_topups_total`,
   `payment_refunds_total` and `payment_reconciliation_mismatches`.
-- **Artifact scanning**: `ARTIFACT_SCANNER=openai` scans text/image artifact
-  bytes before storage; video scan/transcode remains a media-pipeline follow-up.
+- **Artifact scanning / media pipeline**: `ARTIFACT_SCANNER=openai` scans
+  text/image artifact bytes before storage. When `MEDIA_PIPELINE_ENABLED=true`,
+  `cmd/worker` runs ffprobe on generated video artifacts, transcodes a bounded
+  MP4/H.264 `vk_video` variant through ffmpeg, probes that variant, and delivery
+  uploads the variant instead of raw provider output. Unsafe/probe/transcode
+  failures end the video job terminally and release reserved credits before
+  delivery/capture. With the pipeline disabled, local/dev video artifacts are
+  marked `probe_status=skipped`; production video jobs fail closed instead of
+  delivering unprobed video. Maintenance cleanup also uses
+  `ARTIFACT_RETENTION_DAYS` to delete only old inactive `failed/deleted`
+  original media objects and variants/thumbnails, then clears their private
+  storage coordinates; active `ready/stored` artifacts remain available to
+  owners and delivery retries.
 - **SSRF**: artifact downloader blocks private/loopback/link-local hosts and
   non-http(s) schemes; optional host allowlist. Provider data URLs are accepted
   for normalized OpenAI text/image/video outputs.
@@ -466,7 +483,7 @@ It runs these pools over Redis Streams (one consumer group, recovery via `XAUTOC
 |----------------|-----------------|------|
 | text worker | `stream:jobs:text` | text_generate |
 | image worker | `stream:jobs:image` | image_generate / edit |
-| video worker | `stream:jobs:video` | video_generate |
+| video worker | `stream:jobs:video` | video_generate; generated video is probed/transcoded to a VK-ready variant before delivery when media pipeline is enabled |
 | polling worker | `stream:jobs:provider_poll` | poll async provider tasks |
 | delivery worker | `stream:jobs:delivery` | Artifact → Delivery → Capture → succeeded |
 

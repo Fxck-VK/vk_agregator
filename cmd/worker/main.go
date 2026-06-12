@@ -34,6 +34,8 @@ import (
 	"vk-ai-aggregator/internal/service/billingservice"
 	"vk-ai-aggregator/internal/service/dialogcontext"
 	"vk-ai-aggregator/internal/service/maintenance"
+	"vk-ai-aggregator/internal/service/mediaprobe"
+	"vk-ai-aggregator/internal/service/mediatranscode"
 	"vk-ai-aggregator/internal/service/moderationservice"
 	"vk-ai-aggregator/internal/service/outboxrelay"
 	"vk-ai-aggregator/internal/worker"
@@ -205,6 +207,32 @@ func main() {
 		logger.Info("using openai artifact scanner")
 	}
 	artSvc := artifactservice.New(artRepo, store, cfg.S3Bucket, artOpts...)
+	var videoProber worker.VideoProber
+	var videoTranscoder worker.VideoTranscoder
+	if cfg.MediaPipelineEnabled {
+		videoProber = mediaprobe.NewFFProbe(mediaprobe.Config{
+			FFProbePath:            cfg.FFProbePath,
+			MaxVideoSizeBytes:      cfg.MediaMaxVideoSizeBytes,
+			MaxVideoDurationSec:    cfg.MediaMaxVideoDurationSec,
+			MaxVideoWidth:          cfg.MediaMaxVideoWidth,
+			MaxVideoHeight:         cfg.MediaMaxVideoHeight,
+			MaxVideoBitrate:        cfg.MediaMaxVideoBitrate,
+			AllowedVideoContainers: cfg.MediaAllowedVideoContainers,
+			AllowedVideoCodecs:     cfg.MediaAllowedVideoCodecs,
+			Timeout:                cfg.MediaProbeTimeout,
+		})
+		videoTranscoder = mediatranscode.NewFFmpeg(mediatranscode.Config{
+			FFmpegPath:        cfg.FFmpegPath,
+			MaxVideoSizeBytes: cfg.MediaMaxVideoSizeBytes,
+			MaxVideoWidth:     cfg.MediaMaxVideoWidth,
+			MaxVideoHeight:    cfg.MediaMaxVideoHeight,
+			MaxVideoBitrate:   cfg.MediaMaxVideoBitrate,
+			TranscodeTimeout:  cfg.MediaTranscodeTimeout,
+		})
+		logger.Info("using media video pipeline")
+	} else if cfg.IsProduction() {
+		logger.Warn("media video pipeline disabled; production video jobs will fail closed")
+	}
 	providers := worker.NewRegistry(providerList[0], providerList[1:]...)
 	if cfg.ImageProvider != "" {
 		providers.PreferProvider(domain.ModalityImage, domain.ProviderName(strings.ToLower(strings.TrimSpace(cfg.ImageProvider))))
@@ -253,6 +281,9 @@ func main() {
 		VideoResolution:     cfg.VideoResolution,
 		VideoAspectRatio:    cfg.VideoAspectRatio,
 		VideoDraft:          cfg.VideoDraft,
+		VideoProber:         videoProber,
+		VideoTranscoder:     videoTranscoder,
+		RequireVideoProbe:   cfg.IsProduction(),
 		ProviderCallTimeout: cfg.WorkerProviderCallTimeout,
 		TextContext: dialogcontext.New(conversations, dialogcontext.Config{
 			Enabled:                cfg.TextContextEnabled,
@@ -331,8 +362,10 @@ func main() {
 			OutboxRetention:               cfg.OutboxRetention,
 			BillingReconciliationInterval: cfg.BillingReconciliationInterval,
 			BillingReconciliationLimit:    cfg.BillingReconciliationLimit,
+			MediaRetention:                time.Duration(cfg.ArtifactRetentionDays) * 24 * time.Hour,
 		},
 		maintenance.WithLogger(logger),
+		maintenance.WithMediaObjectStore(store),
 	)
 	wg.Add(1)
 	go func() {

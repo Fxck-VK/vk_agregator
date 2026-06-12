@@ -110,6 +110,15 @@ func (s *Store) GetObject(ctx context.Context, bucket, key string) ([]byte, erro
 	return data, nil
 }
 
+// DeleteObject removes an object from storage. Error messages intentionally do
+// not include bucket/key because maintenance errors may be logged.
+func (s *Store) DeleteObject(ctx context.Context, bucket, key string) error {
+	if err := s.client.RemoveObject(ctx, bucket, key, minio.RemoveObjectOptions{}); err != nil {
+		return fmt.Errorf("s3: delete object: %w", err)
+	}
+	return nil
+}
+
 // PresignedGetURL returns a time-limited URL to download the object.
 func (s *Store) PresignedGetURL(ctx context.Context, bucket, key string, expiry time.Duration) (string, error) {
 	u, err := s.client.PresignedGetObject(ctx, bucket, key, expiry, nil)

@@ -3,6 +3,7 @@ package maintenance
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -10,10 +11,14 @@ import (
 	"vk-ai-aggregator/internal/platform/metrics"
 )
 
+const defaultMediaCleanupLimit = 100
+
 // Store is the database-side maintenance contract.
 type Store interface {
 	CleanupExpiredIdempotencyKeys(ctx context.Context, now time.Time) (int64, error)
 	CleanupOutboxEvents(ctx context.Context, cutoff time.Time) (int64, error)
+	MediaCleanupCandidates(ctx context.Context, cutoff time.Time, limit int) ([]domain.MediaCleanupCandidate, error)
+	MarkMediaCleanupDeleted(ctx context.Context, candidate domain.MediaCleanupCandidate) error
 	ProductActiveUserCounts(ctx context.Context, since time.Time) ([]domain.ProductActiveUserCount, error)
 	BalanceMismatches(ctx context.Context, limit int) ([]domain.BalanceMismatch, error)
 }
@@ -23,22 +28,30 @@ type StreamTrimmer interface {
 	Trim(ctx context.Context) (map[string]int64, error)
 }
 
+// MediaObjectStore is the object-storage side of inactive media cleanup.
+type MediaObjectStore interface {
+	DeleteObject(ctx context.Context, bucket, key string) error
+}
+
 // Config controls operational maintenance jobs.
 type Config struct {
 	Interval                      time.Duration
 	OutboxRetention               time.Duration
 	BillingReconciliationInterval time.Duration
 	BillingReconciliationLimit    int
+	MediaRetention                time.Duration
+	MediaCleanupLimit             int
 }
 
 // Service runs cleanup and consistency jobs. It never mutates balances during
 // reconciliation; it only emits metrics/logs so operators can investigate.
 type Service struct {
-	store   Store
-	streams StreamTrimmer
-	cfg     Config
-	log     *slog.Logger
-	now     func() time.Time
+	store        Store
+	streams      StreamTrimmer
+	mediaObjects MediaObjectStore
+	cfg          Config
+	log          *slog.Logger
+	now          func() time.Time
 }
 
 // Option customizes Service.
@@ -62,6 +75,13 @@ func WithClock(now func() time.Time) Option {
 	}
 }
 
+// WithMediaObjectStore enables inactive media-object cleanup.
+func WithMediaObjectStore(store MediaObjectStore) Option {
+	return func(s *Service) {
+		s.mediaObjects = store
+	}
+}
+
 // New builds a maintenance service.
 func New(store Store, streams StreamTrimmer, cfg Config, opts ...Option) *Service {
 	if cfg.Interval <= 0 {
@@ -75,6 +95,9 @@ func New(store Store, streams StreamTrimmer, cfg Config, opts ...Option) *Servic
 	}
 	if cfg.BillingReconciliationLimit <= 0 {
 		cfg.BillingReconciliationLimit = 100
+	}
+	if cfg.MediaCleanupLimit <= 0 {
+		cfg.MediaCleanupLimit = defaultMediaCleanupLimit
 	}
 	s := &Service{
 		store:   store,
@@ -146,15 +169,69 @@ func (s *Service) Cleanup(ctx context.Context) error {
 			metrics.StreamTrimmed.WithLabelValues(stream).Add(float64(n))
 		}
 	}
+	mediaDeleted, err := s.cleanupMedia(ctx, now)
+	if err != nil {
+		return err
+	}
 	if err := s.ObserveProductStats(ctx); err != nil {
 		s.log.WarnContext(ctx, "product stats observation failed", "error", err)
 	}
-	if idemDeleted > 0 || outboxDeleted > 0 {
+	if idemDeleted > 0 || outboxDeleted > 0 || mediaDeleted > 0 {
 		s.log.InfoContext(ctx, "maintenance cleanup completed",
 			"idempotency_keys_deleted", idemDeleted,
-			"outbox_events_deleted", outboxDeleted)
+			"outbox_events_deleted", outboxDeleted,
+			"media_objects_deleted", mediaDeleted)
 	}
 	return nil
+}
+
+func (s *Service) cleanupMedia(ctx context.Context, now time.Time) (int64, error) {
+	if s.cfg.MediaRetention <= 0 || s.mediaObjects == nil {
+		return 0, nil
+	}
+	cutoff := now.Add(-s.cfg.MediaRetention)
+	candidates, err := s.store.MediaCleanupCandidates(ctx, cutoff, s.cfg.MediaCleanupLimit)
+	if err != nil {
+		return 0, err
+	}
+
+	var deleted int64
+	for _, candidate := range candidates {
+		if candidate.StorageBucket == "" || candidate.StorageKey == "" {
+			continue
+		}
+		variantType := mediaCleanupVariantType(candidate)
+		modality := metrics.ProductLabel(string(candidate.MediaType), "unknown")
+		metrics.ObserveMediaBytes("cleanup", modality, variantType, candidate.SizeBytes)
+
+		if err := s.mediaObjects.DeleteObject(ctx, candidate.StorageBucket, candidate.StorageKey); err != nil {
+			metrics.ObserveMediaCleanupDeleted("error", variantType, "object_delete_failed")
+			s.log.WarnContext(ctx, "media cleanup object delete failed",
+				"kind", metrics.ProductLabel(string(candidate.Kind), "unknown"),
+				"variant_type", variantType,
+				"error_class", "object_delete_failed",
+				"error", err)
+			continue
+		}
+		if err := s.store.MarkMediaCleanupDeleted(ctx, candidate); err != nil {
+			metrics.ObserveMediaCleanupDeleted("error", variantType, "db_mark_failed")
+			return deleted, fmt.Errorf("maintenance: media cleanup mark deleted failed: %w", err)
+		}
+		deleted++
+		metrics.MaintenanceDeleted.WithLabelValues("media_objects").Inc()
+		metrics.ObserveMediaCleanupDeleted("success", variantType, "none")
+	}
+	return deleted, nil
+}
+
+func mediaCleanupVariantType(candidate domain.MediaCleanupCandidate) string {
+	if candidate.Kind == domain.MediaCleanupOriginal {
+		return string(domain.VariantOriginal)
+	}
+	if candidate.VariantType != "" {
+		return string(candidate.VariantType)
+	}
+	return "unknown"
 }
 
 // ObserveProductStats updates low-cardinality product aggregate gauges.

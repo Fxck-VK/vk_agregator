@@ -1165,6 +1165,78 @@ func TestHandler_GetArtifact_GuardsSucceededAndModerationPassed(t *testing.T) {
 	}
 }
 
+func TestHandler_GetArtifactRejectsForeignOwnerWithoutStorageLeak(t *testing.T) {
+	fixture := newTestFixture("", nil)
+	routes := fixture.handler.Routes()
+	ctx := context.Background()
+	owner := &domain.User{VKUserID: 100, Role: domain.RoleUser, Status: domain.StatusActive}
+	requester := &domain.User{VKUserID: 777, Role: domain.RoleUser, Status: domain.StatusActive}
+	if err := fixture.userRepo.Create(ctx, owner); err != nil {
+		t.Fatalf("create owner: %v", err)
+	}
+	if err := fixture.userRepo.Create(ctx, requester); err != nil {
+		t.Fatalf("create requester: %v", err)
+	}
+	job := &domain.Job{
+		UserID:         owner.ID,
+		VKPeerID:       owner.VKUserID,
+		OperationType:  domain.OperationTextGenerate,
+		Modality:       domain.ModalityText,
+		Status:         domain.JobStatusSucceeded,
+		IdempotencyKey: "artifact-foreign:" + uuid.NewString(),
+	}
+	if err := fixture.jobRepo.Create(ctx, job); err != nil {
+		t.Fatalf("create job: %v", err)
+	}
+	artifact := &domain.Artifact{
+		OwnerUserID:   owner.ID,
+		JobID:         &job.ID,
+		Kind:          domain.ArtifactKindOutput,
+		MediaType:     domain.MediaTypeText,
+		MimeType:      "text/plain",
+		StorageBucket: "artifacts",
+		StorageKey:    "outputs/private-" + uuid.NewString() + ".txt",
+		SHA256:        uuid.NewString(),
+		SizeBytes:     int64(len("foreign safe result")),
+		Status:        domain.ArtifactStatusReady,
+	}
+	if err := fixture.artifactRepo.Create(ctx, artifact); err != nil {
+		t.Fatalf("create artifact: %v", err)
+	}
+	job.OutputArtifactIDs = []uuid.UUID{artifact.ID}
+	if err := fixture.jobRepo.Update(ctx, job); err != nil {
+		t.Fatalf("update job outputs: %v", err)
+	}
+	if err := fixture.objects.Put(ctx, artifact.StorageBucket, artifact.StorageKey, []byte("foreign safe result"), artifact.MimeType); err != nil {
+		t.Fatalf("put object: %v", err)
+	}
+	artID := artifact.ID
+	if err := fixture.moderationRepo.Create(ctx, &domain.ModerationResult{
+		JobID:      job.ID,
+		ArtifactID: &artID,
+		Stage:      domain.ModerationStageOutput,
+		Decision:   domain.ModerationAllow,
+		Provider:   "test",
+	}); err != nil {
+		t.Fatalf("create moderation result: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/miniapp/artifacts/"+artifact.ID.String(), nil)
+	req.Header.Set("X-Launch-Params", devLaunchParams(requester.VKUserID))
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d: %s", w.Code, w.Body.String())
+	}
+	body := w.Body.String()
+	for _, forbidden := range []string{artifact.ID.String(), artifact.StorageBucket, artifact.StorageKey, "private-"} {
+		if strings.Contains(body, forbidden) {
+			t.Fatalf("foreign artifact response leaked %q in %s", forbidden, body)
+		}
+	}
+}
+
 func TestHandler_UploadArtifact_HappyPath(t *testing.T) {
 	fixture := newTestFixture("", nil)
 	routes := fixture.handler.Routes()
