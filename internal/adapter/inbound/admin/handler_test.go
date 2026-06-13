@@ -19,6 +19,8 @@ import (
 	"vk-ai-aggregator/internal/service/billingservice"
 )
 
+const testAdminToken = "test-admin-token"
+
 func setup(t *testing.T) (*admin.Handler, *memory.JobRepo, *memory.UserRepo, *memory.DeliveryRepo, *billingservice.Service) {
 	t.Helper()
 	jobs := memory.NewJobRepo()
@@ -26,7 +28,7 @@ func setup(t *testing.T) (*admin.Handler, *memory.JobRepo, *memory.UserRepo, *me
 	deliveries := memory.NewDeliveryRepo()
 	billingRepo := memory.NewBillingRepo()
 	billing := billingservice.New(billingRepo)
-	h := admin.NewHandler(admin.Config{}, admin.Deps{
+	h := admin.NewHandler(admin.Config{Token: testAdminToken}, admin.Deps{
 		Jobs:       jobs,
 		Users:      users,
 		Deliveries: deliveries,
@@ -39,6 +41,7 @@ func setup(t *testing.T) (*admin.Handler, *memory.JobRepo, *memory.UserRepo, *me
 func do(t *testing.T, h *admin.Handler, path string) (*httptest.ResponseRecorder, map[string]any) {
 	t.Helper()
 	req := httptest.NewRequest(http.MethodGet, path, nil)
+	req.Header.Set("X-Admin-Token", testAdminToken)
 	rec := httptest.NewRecorder()
 	h.Routes().ServeHTTP(rec, req)
 	var body map[string]any
@@ -52,7 +55,7 @@ func TestOverviewReadOnlySafeDTO(t *testing.T) {
 	ctx := context.Background()
 	jobs := memory.NewJobRepo()
 	payments := memory.NewPaymentRepo()
-	h := admin.NewHandler(admin.Config{}, admin.Deps{
+	h := admin.NewHandler(admin.Config{Token: testAdminToken}, admin.Deps{
 		Jobs:       jobs,
 		Users:      memory.NewUserRepo(),
 		Deliveries: memory.NewDeliveryRepo(),
@@ -293,7 +296,7 @@ func TestProviderMediaAndConfigOperatorDTOsAreSafe(t *testing.T) {
 		MediaProviderQualityDegradedFailures: 3,
 		MediaProviderQualityDisabledFailures: 5,
 	}
-	h := admin.NewHandler(admin.Config{Runtime: admin.NewRuntimeSnapshot(cfg)}, admin.Deps{
+	h := admin.NewHandler(admin.Config{Token: testAdminToken, Runtime: admin.NewRuntimeSnapshot(cfg)}, admin.Deps{
 		Jobs:       jobs,
 		Users:      memory.NewUserRepo(),
 		Deliveries: memory.NewDeliveryRepo(),
@@ -695,10 +698,18 @@ func TestGetDelivery(t *testing.T) {
 
 func TestAuthTokenRequired(t *testing.T) {
 	jobs := memory.NewJobRepo()
-	h := admin.NewHandler(admin.Config{Token: "secret"}, admin.Deps{Jobs: jobs, Users: memory.NewUserRepo(), Deliveries: memory.NewDeliveryRepo()})
-
+	failClosed := admin.NewHandler(admin.Config{}, admin.Deps{Jobs: jobs, Users: memory.NewUserRepo(), Deliveries: memory.NewDeliveryRepo()})
 	req := httptest.NewRequest(http.MethodGet, "/admin/jobs", nil)
 	rec := httptest.NewRecorder()
+	failClosed.Routes().ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 when token is not configured, got %d", rec.Code)
+	}
+
+	h := admin.NewHandler(admin.Config{Token: "secret"}, admin.Deps{Jobs: jobs, Users: memory.NewUserRepo(), Deliveries: memory.NewDeliveryRepo()})
+
+	req = httptest.NewRequest(http.MethodGet, "/admin/jobs", nil)
+	rec = httptest.NewRecorder()
 	h.Routes().ServeHTTP(rec, req)
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401 without token, got %d", rec.Code)
@@ -716,7 +727,7 @@ func TestAuthTokenRequired(t *testing.T) {
 func TestReferralStatsByCodeSafeDTO(t *testing.T) {
 	ctx := context.Background()
 	refs := memory.NewReferralRepo()
-	h := admin.NewHandler(admin.Config{}, admin.Deps{
+	h := admin.NewHandler(admin.Config{Token: testAdminToken}, admin.Deps{
 		Jobs:       memory.NewJobRepo(),
 		Users:      memory.NewUserRepo(),
 		Deliveries: memory.NewDeliveryRepo(),

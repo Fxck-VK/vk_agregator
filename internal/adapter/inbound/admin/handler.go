@@ -46,7 +46,8 @@ type paymentOverviewReader interface {
 
 // Config holds admin API settings.
 type Config struct {
-	// Token, when non-empty, must be presented in the X-Admin-Token header.
+	// Token must be presented in the X-Admin-Token header. Empty tokens fail
+	// closed; local/dev callers should set an explicit admin token too.
 	Token string
 	// Runtime is a sanitized non-secret snapshot of runtime policy/config used
 	// by read-only operator views. It must never contain raw secrets or model IDs.
@@ -101,10 +102,10 @@ func (h *Handler) Routes() http.Handler {
 	return mux
 }
 
-// auth wraps a handler with the optional admin-token check.
+// auth wraps a handler with the admin-token check.
 func (h *Handler) auth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if h.cfg.Token != "" && !adminTokenEqual(r.Header.Get("X-Admin-Token"), h.cfg.Token) {
+		if !adminTokenEqual(r.Header.Get("X-Admin-Token"), h.cfg.Token) {
 			metrics.AuthFailures.WithLabelValues("admin_api", "invalid_admin_token").Inc()
 			writeError(w, http.StatusUnauthorized, "unauthorized")
 			return

@@ -74,7 +74,7 @@ Override these values when needed:
 | `VK_APP_ID` | `` | VK Mini App id (informational for BFF/dev setup) |
 | `VK_APP_SECRET` | `` | VK Mini App protected key; required in production |
 | `MINIAPP_LAUNCH_PARAMS_MAX_AGE` | `1h` | Maximum accepted VK Mini App launch-param age |
-| `ADMIN_TOKEN` | `` (empty = open) | Admin API `X-Admin-Token` |
+| `ADMIN_TOKEN` | `` (empty = closed) | Admin API and operator console `X-Admin-Token`; set an explicit local value to use `/admin/*` and `/billing/*` |
 | `WORKER_GROUP` / `WORKER_CONSUMER` | `workers` / hostname | Consumer group identity |
 | `APP_ENV` | `development` | `production` enforces fail-closed secrets |
 | `MAX_ATTEMPTS` | `3` | Retry budget before dead-lettering |
@@ -481,6 +481,18 @@ go run ./cmd/api               # listens on :8080
 
 Serves: `POST /webhooks/vk`, `/miniapp/*`, `GET /admin/...`,
 `GET /metrics`, `GET /health`, and `GET /healthz`.
+
+Admin/operator console frontend:
+
+```bash
+npm --prefix web/admin install
+npm --prefix web/admin run dev
+```
+
+Open the Vite URL locally and enter `ADMIN_TOKEN` in the UI. The token is kept
+in memory by default; do not expose the console publicly. The UI calls only
+protected backend `/admin/*` and `/billing/*` endpoints and does not persist the
+token in `localStorage`.
 
 API wiring map:
 

@@ -62,3 +62,7 @@ surface.
   default, byte/dimension/pixel validation before storage, provider media
   contracts, backpressure/cost guards, dedupe/lifecycle, provider quality
   scoring, safe failure UX, media observability and rollout drills.
+- Admin/operator console: protected internal `web/admin` UI with safe DTOs for
+  overview, jobs/queues, payments/billing, providers/media safety, users,
+  referrals, audit log and limited idempotent payment actions with confirmation,
+  reason and sanitized audit records.
