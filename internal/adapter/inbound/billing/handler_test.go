@@ -437,6 +437,22 @@ func TestSyncAndRefundPaymentIntent(t *testing.T) {
 		t.Fatalf("balance after sync = %d, want 100", acc.BalanceCached)
 	}
 
+	partialRefundReq := httptest.NewRequest(http.MethodPost, "/billing/payment-intents/"+intent.ID.String()+"/refund", bytes.NewReader([]byte(`{"reason":"operator partial attempt","amount":5000,"automatic":true}`)))
+	partialRefundReq.Header.Set("X-Admin-Token", "secret")
+	partialRefundReq.Header.Set("X-Idempotency-Key", "refund-partial-key")
+	partialRefundRec := httptest.NewRecorder()
+	handler.Routes().ServeHTTP(partialRefundRec, partialRefundReq)
+	if partialRefundRec.Code != http.StatusBadRequest {
+		t.Fatalf("partial refund body: %d %s", partialRefundRec.Code, partialRefundRec.Body.String())
+	}
+	acc, err = billingRepo.GetAccountByUser(ctx, user.ID, domain.CurrencyCredits)
+	if err != nil {
+		t.Fatalf("get account after partial refund reject: %v", err)
+	}
+	if acc.BalanceCached != 100 {
+		t.Fatalf("balance after partial refund reject = %d, want unchanged 100", acc.BalanceCached)
+	}
+
 	refundReq := httptest.NewRequest(http.MethodPost, "/billing/payment-intents/"+intent.ID.String()+"/refund", bytes.NewReader([]byte(`{"reason":"operator test"}`)))
 	refundReq.Header.Set("X-Admin-Token", "secret")
 	refundReq.Header.Set("X-Idempotency-Key", "refund-key")

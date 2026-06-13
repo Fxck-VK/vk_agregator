@@ -116,6 +116,25 @@ func TestMediaMetricsHelpersUseSanitizedLabels(t *testing.T) {
 	ObserveMediaCleanupDeleted("Success", "VK Video", "None")
 }
 
+func TestInitPaymentProviderMetricsCreatesZeroProviderErrorSeries(t *testing.T) {
+	InitPaymentProviderMetrics("YooKassa")
+
+	counter, err := PaymentProviderErrors.GetMetricWithLabelValues("yookassa", "get_payment", "provider_error")
+	if err != nil {
+		t.Fatalf("GetMetricWithLabelValues() error = %v", err)
+	}
+	var metric dto.Metric
+	if err := counter.Write(&metric); err != nil {
+		t.Fatalf("counter.Write() error = %v", err)
+	}
+	if metric.Counter == nil {
+		t.Fatal("metric counter is nil")
+	}
+	if got := metric.Counter.GetValue(); got != 0 {
+		t.Fatalf("provider error counter = %v, want 0", got)
+	}
+}
+
 func mediaProbeCounterValue(t *testing.T, labels ...string) float64 {
 	t.Helper()
 	counter, err := MediaProbeResults.GetMetricWithLabelValues(labels...)

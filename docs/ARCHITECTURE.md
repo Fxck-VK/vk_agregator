@@ -141,12 +141,13 @@ VPN, SSH-tunnel or private-network only.
 Production smoke is an operator workflow, not an application bypass. Safe smoke
 scripts may only check public routing, health, Mini App auth rejection, exact
 YooKassa webhook reachability with an invalid body, and blocked public
-`/admin/*` / `/metrics` routes. Live smoke for VK `/start`, text/photo/video
-jobs, Mini App authenticated balance, YooKassa `payment.succeeded`, worker
-completion and artifact delivery must use the normal product flows. A payment
-redirect or confirmation URL is never treated as payment proof; only
-provider-verified webhook/reconciliation plus ledger top-up can complete a
-payment.
+`/admin/*` / `/metrics` / broad `/billing/*` routes. Production smoke scripts
+must use HTTPS public URLs by default; plain HTTP is only acceptable for local
+reverse-proxy checks. Live smoke for VK `/start`, text/photo/video jobs, Mini
+App authenticated balance, YooKassa `payment.succeeded`, worker completion and
+artifact delivery must use the normal product flows. A payment redirect or
+confirmation URL is never treated as payment proof; only provider-verified
+webhook/reconciliation plus ledger top-up can complete a payment.
 
 Current durable shared chat context:
 
@@ -331,6 +332,10 @@ Current payment/top-up foundation:
   emits refund rollback metrics. If compensation itself fails, the operator
   action returns an error and `payment_refunds_total{result="rollback_failed"}`
   is the alert path.
+  Operator refund request bodies accept only `reason`; amount/partial/automatic
+  fields are rejected instead of being ignored. Provider refund responses must
+  match the full intent amount and currency, otherwise the internal refund debit
+  is compensated and the refund is marked failed.
   Partial/automatic refunds remain blocked until lot/FIFO attribution can prove
   which top-up credits were spent.
 - Payment metrics include `payments_created_total`,

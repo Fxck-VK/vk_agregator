@@ -74,6 +74,7 @@ func main() {
 	if provider.Code() != domain.PaymentProviderYooKassa {
 		logger.Warn("provider-webhook started with non-yookassa payment provider", "provider", provider.Code())
 	}
+	metrics.InitPaymentProviderMetrics(string(provider.Code()))
 
 	payments := postgres.NewPaymentRepository(pool)
 	billingRepo := postgres.NewBillingRepository(pool)

@@ -241,8 +241,8 @@ Override these values when needed:
 > `CF-Visitor` scheme header, and the raw HTTP origin must not be publicly
 > reachable.
 > User-facing top-up should stay limited to controlled testing until public
-> HTTPS YooKassa dashboard webhook delivery, explicit provider `payment.canceled`
-> smoke and the chosen refund/partial-refund rollout policy are approved.
+> HTTPS YooKassa dashboard webhook delivery and the chosen refund/partial-refund
+> rollout policy are approved.
 
 ### Hardening features (post-release)
 
@@ -321,9 +321,13 @@ Override these values when needed:
   ledger shows committed or pending negative movements after that exact top-up.
   This conservative check prevents refunding already-used credits while
   lot/FIFO attribution is not implemented. Successful refund debits are posted
-  as ledger adjustments instead of direct balance mutation. Refund webhook
-  events are deduped and verified, but automatic balance reversal and partial
-  refund attribution remain future policy work.
+  as ledger adjustments instead of direct balance mutation. Operator refund
+  request bodies accept only `reason`; `amount`, `partial`, `automatic` and
+  other unknown fields are rejected. Provider refund responses must match the
+  full intent amount/currency; mismatches mark the refund failed and compensate
+  the internal debit. Refund webhook events are deduped and verified, but
+  automatic balance reversal and partial refund attribution remain future
+  policy work.
   Payment metrics include `payments_created_total`,
   `payments_succeeded_total`, `payments_canceled_total`,
   `payment_webhooks_total`, `payment_webhook_security_denials_total`,
@@ -702,6 +706,66 @@ shop/runtime setup:
   smoke.
 - Mini App and operator DTOs remain safe and do not expose raw provider payloads
   or credentials.
+
+Latest sanitized YooKassa smoke status:
+
+- `2026-06-13`: public HTTPS `payment.succeeded` passed on the local
+  Cloudflare/reverse-proxy/provider-webhook runtime. A Mini App BFF-created
+  `capture:true` test checkout reached YooKassa, YooKassa delivered the
+  dashboard webhook to `cmd/provider-webhook`, `payment_events.processed_at`
+  was set, the payment intent became `succeeded`, exactly one committed
+  `topup:yookassa:<provider_payment_id>` ledger entry was posted, and Mini App
+  `/miniapp/balance` reflected the expected credit increase. Replaying the same
+  `payment.succeeded` webhook returned `200` and did not create a second top-up.
+- `2026-06-13`: protected operator `capture:false` `payment.canceled` smoke
+  passed on the same runtime. The checkout reached provider-pending state with
+  no top-up, operator cancel produced terminal `canceled`, YooKassa delivered
+  public HTTPS `payment.canceled` to `cmd/provider-webhook`,
+  `payment_events.processed_at` was set, no top-up ledger entry was created and
+  the credit balance stayed unchanged. Replaying the same `payment.canceled`
+  webhook returned `200` and stayed a no-op.
+- `2026-06-13`: late `payment.canceled` protection passed. A public HTTPS
+  `payment.canceled` event for an already `succeeded` payment was processed,
+  but the intent remained `succeeded`, the existing top-up ledger entry stayed
+  single and the credit balance did not change.
+- `2026-06-13`: manual `refund.succeeded` smoke passed. A protected operator
+  full refund for a successful test payment moved the intent to `refunded`,
+  posted exactly one committed refund debit through ledger, returned the credit
+  balance to the pre-top-up value, and YooKassa delivered public HTTPS
+  `refund.succeeded` to `cmd/provider-webhook`. Repeating the same operator
+  refund idempotency key returned the existing refund without a second debit,
+  and replaying `refund.succeeded` with the same `provider_refund_id` stayed a
+  no-op. Operator refund DTOs exposed safe fields only, not raw provider
+  payloads.
+- `2026-06-13`: consolidated replay/idempotency smoke passed. Replaying
+  `payment.succeeded`, `payment.canceled` and `refund.succeeded` stayed
+  deduplicated; repeated operator `sync` kept terminal `refunded` and `canceled`
+  intents in their terminal states; repeating the operator refund request with
+  the same `X-Idempotency-Key` returned the existing refund. Final ledger checks
+  showed one top-up, one refund debit, no top-up for the canceled payment and no
+  forbidden state-machine rollback.
+- `2026-06-13`: missed-webhook reconciliation smoke passed. A `capture:true`
+  test checkout was completed while `cmd/provider-webhook` was intentionally
+  unavailable. Before reconciliation the payment intent stayed
+  `waiting_for_user`, the operator pending list showed the unresolved intent and
+  no top-up was posted. Protected operator `sync` verified the provider state
+  through YooKassa `GetPayment`, moved the intent to `succeeded` and posted
+  exactly one ledger top-up. Repeating `sync` stayed a no-op. After
+  `cmd/provider-webhook` was restored, the retried YooKassa webhook was
+  processed without creating a duplicate top-up.
+- `2026-06-13`: operator tools and monitoring smoke passed. Protected operator
+  endpoints for unprocessed payment events, pending/stale intents, manual sync
+  and manual refund were verified behind `X-Admin-Token`; unauthenticated
+  requests failed closed. Operator DTO key checks confirmed the lists do not
+  expose raw provider payloads, auth headers or secrets. `cmd/provider-webhook`
+  readiness and Prometheus metrics expose webhook backlog count/age, webhook
+  processing errors and payment provider error counters, and alert rules cover
+  stale webhook backlog, provider errors and provider-webhook readiness.
+- `2026-06-13`: refund policy before lot/FIFO was hardened. Manual refunds stay
+  full-only and operator-only; refund request bodies now reject unknown
+  `amount`/`partial`/`automatic` style fields, and provider refund responses
+  must match the full payment amount/currency or the internal refund debit is
+  compensated and the refund is marked failed.
 
 YooKassa SQL checks:
 
@@ -1466,6 +1530,28 @@ bash scripts/deploy/smoke-prod.sh \
   --payment-webhook-url https://vk.neiirohub.ru/billing/webhooks/yookassa
 ```
 
+YooKassa webhook-only hardening check:
+
+```powershell
+.\scripts\deploy\smoke-prod.ps1 `
+  -PaymentWebhookOnly `
+  -VkBaseUrl https://vk.neiirohub.ru `
+  -AppBaseUrl https://app.neiirohub.ru `
+  -PaymentWebhookUrl https://vk.neiirohub.ru/billing/webhooks/yookassa
+```
+
+```bash
+bash scripts/deploy/smoke-prod.sh \
+  --payment-webhook-only \
+  --vk-base-url https://vk.neiirohub.ru \
+  --app-base-url https://app.neiirohub.ru \
+  --payment-webhook-url https://vk.neiirohub.ru/billing/webhooks/yookassa
+```
+
+Production smoke scripts reject non-HTTPS public URLs by default. Use
+`-AllowInsecureHttp` / `--allow-insecure-http` only for local reverse-proxy
+checks against `127.0.0.1`.
+
 The script checks:
 
 | Check | Expected result |
@@ -1474,8 +1560,22 @@ The script checks:
 | `GET https://app.neiirohub.ru/` | `2xx` Mini App static frontend |
 | `GET https://app.neiirohub.ru/miniapp/balance` without launch auth | controlled `4xx`, not `2xx`, not `404`, not `5xx` |
 | `POST /billing/webhooks/yookassa` with invalid `{}` body | controlled `4xx` from `cmd/provider-webhook`, not `2xx`, not `404`, not `5xx` |
+| Public broad `/billing/*` such as `/billing/payment-intents` | blocked non-2xx; only the exact YooKassa webhook route may be public |
 | Public `/admin/jobs` | blocked non-2xx |
 | Public `/metrics` | blocked non-2xx |
+
+If the YooKassa webhook-only smoke returns Cloudflare/origin `530`, `521`,
+`522` or `523`, the request did not reach `cmd/provider-webhook`. Check in this
+order:
+
+1. Cloudflare Tunnel connector is running on the VPS/host.
+2. `reverse-proxy` is running and reachable from the tunnel service.
+3. `cmd/provider-webhook` is listening on `:8082` and `GET /health` works
+   privately.
+4. The Cloudflare public hostname route points to the production reverse proxy,
+   not to an old local-managed tunnel.
+5. The exact `/billing/webhooks/yookassa` location forwards
+   `X-Forwarded-Proto: https` / `Forwarded: proto=https`.
 
 Manual live smoke checklist:
 

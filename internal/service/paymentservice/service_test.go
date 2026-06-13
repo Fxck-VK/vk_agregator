@@ -1015,6 +1015,72 @@ func TestRefundIntentProviderFailureCompensatesDebit(t *testing.T) {
 	}
 }
 
+func TestRefundIntentProviderPartialResponseCompensatesDebit(t *testing.T) {
+	ctx := context.Background()
+	repo := memory.NewPaymentRepo()
+	repo.PutProduct(&domain.PaymentProduct{
+		Code: "credits_100", Title: "100 credits", Amount: 9900,
+		Currency: domain.CurrencyRUB, Credits: 100, PriceVersion: 1, IsActive: true,
+	})
+	provider := paymentmock.New()
+	intentSvc := paymentservice.New(repo, provider, paymentservice.Config{})
+	userID := uuid.New()
+	created, err := intentSvc.CreateIntent(ctx, paymentservice.CreateIntentInput{
+		UserID:         userID,
+		ProductCode:    "credits_100",
+		ReceiptEmail:   "user@example.com",
+		IdempotencyKey: "provider-partial-refund-intent-key",
+	})
+	if err != nil {
+		t.Fatalf("create intent: %v", err)
+	}
+	if err := provider.SetPaymentStatus(created.Intent.ProviderPaymentID, domain.PaymentIntentSucceeded); err != nil {
+		t.Fatalf("set provider status: %v", err)
+	}
+
+	billingRepo := memory.NewBillingRepo()
+	processor := newTestWebhookProcessor(repo, provider, billingRepo)
+	if _, err := processor.ReconcilePendingOlderThan(ctx, 10, -time.Nanosecond); err != nil {
+		t.Fatalf("reconcile pending: %v", err)
+	}
+	acc, err := billingRepo.GetAccountByUser(ctx, userID, domain.CurrencyCredits)
+	if err != nil {
+		t.Fatalf("get account: %v", err)
+	}
+	if acc.BalanceCached != 100 {
+		t.Fatalf("balance before refund = %d, want 100", acc.BalanceCached)
+	}
+
+	partialAmount := int64(5000)
+	partialProvider := &recordingPaymentProvider{
+		code:         domain.PaymentProviderMock,
+		refundAmount: &partialAmount,
+	}
+	partialProcessor := newTestWebhookProcessorWithProvider(repo, partialProvider, billingRepo)
+	_, err = partialProcessor.RefundIntent(ctx, paymentservice.RefundIntentInput{
+		IntentID:       created.Intent.ID,
+		IdempotencyKey: "refund-provider-partial-key",
+		Reason:         "operator refund",
+	})
+	if !errors.Is(err, paymentservice.ErrRefundMismatch) {
+		t.Fatalf("refund err = %v, want ErrRefundMismatch", err)
+	}
+	acc, err = billingRepo.GetAccountByUser(ctx, userID, domain.CurrencyCredits)
+	if err != nil {
+		t.Fatalf("get account after provider mismatch: %v", err)
+	}
+	if acc.BalanceCached != 100 {
+		t.Fatalf("balance after provider mismatch = %d, want compensated 100", acc.BalanceCached)
+	}
+	refund, err := repo.GetRefundByIdempotencyKey(ctx, "refund-provider-partial-key")
+	if err != nil {
+		t.Fatalf("get refund: %v", err)
+	}
+	if refund.Status != domain.PaymentRefundFailed {
+		t.Fatalf("refund status = %s, want failed", refund.Status)
+	}
+}
+
 func newTestWebhookProcessor(repo *memory.PaymentRepo, provider *paymentmock.Provider, billingRepo *memory.BillingRepo) *paymentservice.WebhookProcessor {
 	return newTestWebhookProcessorWithProvider(repo, provider, billingRepo)
 }
@@ -1028,10 +1094,12 @@ func newTestWebhookProcessorWithProvider(repo *memory.PaymentRepo, provider doma
 }
 
 type recordingPaymentProvider struct {
-	code         domain.PaymentProviderCode
-	createInputs []domain.CreatePaymentInput
-	refundInputs []domain.CreateRefundInput
-	refundErr    error
+	code           domain.PaymentProviderCode
+	createInputs   []domain.CreatePaymentInput
+	refundInputs   []domain.CreateRefundInput
+	refundAmount   *int64
+	refundCurrency domain.Currency
+	refundErr      error
 }
 
 func (p *recordingPaymentProvider) Code() domain.PaymentProviderCode {
@@ -1063,11 +1131,19 @@ func (p *recordingPaymentProvider) CreateRefund(_ context.Context, in domain.Cre
 	if p.refundErr != nil {
 		return domain.RefundResult{}, p.refundErr
 	}
+	amount := in.Amount
+	if p.refundAmount != nil {
+		amount = *p.refundAmount
+	}
+	currency := in.Currency
+	if p.refundCurrency != "" {
+		currency = p.refundCurrency
+	}
 	return domain.RefundResult{
 		ProviderRefundID: "recording-refund-" + in.RefundID.String(),
 		Status:           domain.PaymentRefundSucceeded,
-		Amount:           in.Amount,
-		Currency:         in.Currency,
+		Amount:           amount,
+		Currency:         currency,
 	}, nil
 }
 

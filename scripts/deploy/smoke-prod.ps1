@@ -2,7 +2,9 @@ param(
     [string]$VkBaseUrl = "https://vk.neiirohub.ru",
     [string]$AppBaseUrl = "https://app.neiirohub.ru",
     [string]$PaymentWebhookUrl = "https://vk.neiirohub.ru/billing/webhooks/yookassa",
-    [int]$TimeoutSeconds = 10
+    [int]$TimeoutSeconds = 10,
+    [switch]$PaymentWebhookOnly,
+    [switch]$AllowInsecureHttp
 )
 
 $ErrorActionPreference = "Stop"
@@ -10,6 +12,24 @@ $ErrorActionPreference = "Stop"
 function Normalize-BaseUrl {
     param([Parameter(Mandatory = $true)][string]$Value)
     return $Value.TrimEnd("/")
+}
+
+function Assert-HttpsUrl {
+    param(
+        [Parameter(Mandatory = $true)][string]$Name,
+        [Parameter(Mandatory = $true)][string]$Url
+    )
+    if ($AllowInsecureHttp) {
+        return
+    }
+    try {
+        $uri = [Uri]$Url
+    } catch {
+        throw "$Name is not a valid URL: $Url"
+    }
+    if ($uri.Scheme -ne "https") {
+        throw "$Name must use https in production smoke checks: $Url"
+    }
 }
 
 function Invoke-SmokeRequest {
@@ -78,6 +98,9 @@ function Assert-ControlledWebhookReject {
     if ($Status -ge 200 -and $Status -lt 300) {
         throw "$Name accepted an invalid webhook body with $Status"
     }
+    if ($Status -eq 530 -or $Status -eq 521 -or $Status -eq 522 -or $Status -eq 523) {
+        throw "$Name hit Cloudflare/origin error $Status; check tunnel connector, reverse proxy and provider-webhook origin"
+    }
     if ($Status -eq 404 -or $Status -eq 405 -or $Status -ge 500 -or $Status -eq 0) {
         throw "$Name did not reach provider-webhook cleanly, got $Status"
     }
@@ -86,30 +109,46 @@ function Assert-ControlledWebhookReject {
 
 $VkBaseUrl = Normalize-BaseUrl $VkBaseUrl
 $AppBaseUrl = Normalize-BaseUrl $AppBaseUrl
+Assert-HttpsUrl -Name "VK base URL" -Url $VkBaseUrl
+Assert-HttpsUrl -Name "Mini App base URL" -Url $AppBaseUrl
+Assert-HttpsUrl -Name "YooKassa webhook URL" -Url $PaymentWebhookUrl
 
 Write-Host "Running safe production smoke checks"
 Write-Host "VK base: $VkBaseUrl"
 Write-Host "Mini App base: $AppBaseUrl"
 Write-Host "Payment webhook: $PaymentWebhookUrl"
 
-$status = Invoke-SmokeRequest -Name "VK health" -Method "GET" -Url "$VkBaseUrl/health"
-Assert-2xx -Name "VK health" -Status $status
+if (-not $PaymentWebhookOnly) {
+    $status = Invoke-SmokeRequest -Name "VK health" -Method "GET" -Url "$VkBaseUrl/health"
+    Assert-2xx -Name "VK health" -Status $status
 
-$status = Invoke-SmokeRequest -Name "Mini App open" -Method "GET" -Url "$AppBaseUrl/"
-Assert-2xx -Name "Mini App open" -Status $status
+    $status = Invoke-SmokeRequest -Name "Mini App open" -Method "GET" -Url "$AppBaseUrl/"
+    Assert-2xx -Name "Mini App open" -Status $status
 
-$status = Invoke-SmokeRequest -Name "Mini App /miniapp/balance" -Method "GET" -Url "$AppBaseUrl/miniapp/balance"
-Assert-AuthRequired -Name "Mini App /miniapp/balance" -Status $status
+    $status = Invoke-SmokeRequest -Name "Mini App /miniapp/balance" -Method "GET" -Url "$AppBaseUrl/miniapp/balance"
+    Assert-AuthRequired -Name "Mini App /miniapp/balance" -Status $status
+}
 
 $status = Invoke-SmokeRequest -Name "YooKassa payment.succeeded webhook route" -Method "POST" -Url $PaymentWebhookUrl -Body "{}"
 Assert-ControlledWebhookReject -Name "YooKassa payment.succeeded webhook route" -Status $status
 
-foreach ($blockedUrl in @(
+$blockedUrls = @(
     "$VkBaseUrl/admin/jobs",
     "$VkBaseUrl/metrics",
-    "$AppBaseUrl/admin/jobs",
-    "$AppBaseUrl/metrics"
-)) {
+    "$VkBaseUrl/billing/payment-intents",
+    "$VkBaseUrl/billing/payment-events/unprocessed"
+)
+
+if (-not $PaymentWebhookOnly) {
+    $blockedUrls += @(
+        "$AppBaseUrl/admin/jobs",
+        "$AppBaseUrl/metrics",
+        "$AppBaseUrl/billing/payment-intents",
+        "$AppBaseUrl/billing/webhooks/yookassa"
+    )
+}
+
+foreach ($blockedUrl in $blockedUrls) {
     $status = Invoke-SmokeRequest -Name $blockedUrl -Method "GET" -Url $blockedUrl
     Assert-Blocked -Name $blockedUrl -Status $status
 }

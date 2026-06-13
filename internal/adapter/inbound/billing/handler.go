@@ -408,7 +408,9 @@ func (h *Handler) refundIntent(w http.ResponseWriter, r *http.Request) {
 	}
 	var req refundIntentRequest
 	if r.Body != nil && r.ContentLength != 0 {
-		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<10)).Decode(&req); err != nil {
+		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<10))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&req); err != nil {
 			writeError(w, http.StatusBadRequest, "invalid json")
 			return
 		}

@@ -564,6 +564,27 @@ func init() {
 	)
 }
 
+// InitPaymentProviderMetrics pre-creates bounded payment metric series for a
+// configured provider so monitoring can distinguish "zero errors" from a
+// missing or unscheduled scrape.
+func InitPaymentProviderMetrics(provider string) {
+	provider = ProductLabel(provider, "unknown")
+	PaymentWebhookUnprocessedEvents.WithLabelValues(provider).Set(0)
+	PaymentWebhookOldestUnprocessedAgeSeconds.WithLabelValues(provider).Set(0)
+
+	for _, stage := range []string{"processing", "invalid", "unsupported", "provider_unverified", "provider_mismatch"} {
+		PaymentWebhookProcessingErrors.WithLabelValues(provider, stage).Add(0)
+	}
+	for _, operation := range []string{"get_payment", "cancel_payment", "create_refund"} {
+		for _, class := range []string{"provider_error", "timeout", "canceled", "not_found", "provider_mismatch"} {
+			PaymentProviderErrors.WithLabelValues(provider, operation, class).Add(0)
+		}
+	}
+	for _, result := range []string{"provider_error", "provider_mismatch", "rollback_failed", "rollback_succeeded"} {
+		PaymentRefunds.WithLabelValues(provider, result).Add(0)
+	}
+}
+
 // ProductLabel sanitizes bounded product-observability labels. It is for
 // trusted product dimensions only; never pass prompt text, full URLs, raw
 // errors, ids, launch params or provider/payment payloads.
