@@ -6,8 +6,11 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/google/uuid"
 
 	"vk-ai-aggregator/internal/adapter/inbound/billing"
 	paymentmock "vk-ai-aggregator/internal/adapter/payment/mock"
@@ -42,6 +45,7 @@ func setup(t *testing.T) (*billing.Handler, *memory.UserRepo, *memory.PaymentRep
 	ops := paymentservice.NewWebhookProcessor(payments, provider, billingSvc, tx)
 	handler := billing.NewHandler(billing.Config{Token: "secret"}, billing.Deps{
 		Users:      users,
+		Billing:    billingRepo,
 		Payment:    service,
 		PaymentOps: ops,
 	})
@@ -387,6 +391,128 @@ func TestOperatorListsUnprocessedPaymentEventsWithoutRawPayload(t *testing.T) {
 	}
 	if len(list.Items) != 1 || list.Items[0].ProviderPaymentID != "mock-pay-operator-list" || list.Items[0].EventType != "payment.succeeded" {
 		t.Fatalf("unexpected event dto: %+v", list.Items)
+	}
+}
+
+func TestOperatorConsoleMasksPaymentAndBillingSecrets(t *testing.T) {
+	handler, users, payments, _, billingRepo := setup(t)
+	ctx := context.Background()
+	user := &domain.User{VKUserID: 779, Role: domain.RoleUser, Status: domain.StatusActive}
+	if err := users.Create(ctx, user); err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+
+	body := []byte(`{"product_code":"credits_100","receipt_email":"user@example.com"}`)
+	req := httptest.NewRequest(http.MethodPost, "/billing/payment-intents", bytes.NewReader(body))
+	req.Header.Set("X-Admin-Token", "secret")
+	req.Header.Set("X-User-ID", user.ID.String())
+	req.Header.Set("X-Idempotency-Key", "console-intent-secret-key")
+	rec := httptest.NewRecorder()
+	handler.Routes().ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create intent: %d %s", rec.Code, rec.Body.String())
+	}
+	var created billing.PaymentIntentDTO
+	if err := json.Unmarshal(rec.Body.Bytes(), &created); err != nil {
+		t.Fatalf("decode intent: %v", err)
+	}
+
+	if inserted, err := payments.CreateEvent(ctx, &domain.PaymentEvent{
+		Provider:          domain.PaymentProviderMock,
+		EventType:         "payment.succeeded",
+		ProviderPaymentID: created.ProviderPaymentID,
+		DedupKey:          "webhook:mock:payment.succeeded:" + created.ProviderPaymentID,
+		Payload:           json.RawMessage(`{"secret":"console-do-not-return","payment_method":"private-card"}`),
+	}); err != nil || !inserted {
+		t.Fatalf("create event inserted=%v err=%v", inserted, err)
+	}
+	if err := payments.CreateRefund(ctx, &domain.PaymentRefund{
+		IntentID:         created.ID,
+		ProviderRefundID: "mock-refund-console-do-not-leak",
+		Amount:           9900,
+		Status:           domain.PaymentRefundSucceeded,
+		IdempotencyKey:   "refund-console-secret-key",
+		Reason:           "raw refund reason do not render",
+	}); err != nil {
+		t.Fatalf("create refund: %v", err)
+	}
+	if err := billingRepo.CreateAccount(ctx, &domain.CreditAccount{
+		UserID:        user.ID,
+		Currency:      domain.CurrencyCredits,
+		BalanceCached: 200,
+	}); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+	account, err := billingRepo.GetAccountByUser(ctx, user.ID, domain.CurrencyCredits)
+	if err != nil {
+		t.Fatalf("get account: %v", err)
+	}
+	if err := billingRepo.AppendEntry(ctx, &domain.LedgerEntry{
+		AccountID:      account.ID,
+		Type:           domain.LedgerAdjustment,
+		Amount:         1,
+		Status:         domain.LedgerStatusCommitted,
+		IdempotencyKey: "ledger-console-secret-key",
+		Reason:         "raw operator reason do not render",
+	}); err != nil {
+		t.Fatalf("append ledger: %v", err)
+	}
+	if err := billingRepo.Reserve(ctx, &domain.CreditReservation{
+		AccountID:      account.ID,
+		JobID:          uuid.New(),
+		Amount:         10,
+		IdempotencyKey: "reservation-console-secret-key",
+		ExpiresAt:      time.Now().Add(time.Hour),
+	}); err != nil {
+		t.Fatalf("reserve credits: %v", err)
+	}
+
+	consoleReq := httptest.NewRequest(http.MethodGet, "/billing/operator/console?user_id="+user.ID.String()+"&limit=10&stale_after=1ms", nil)
+	consoleReq.Header.Set("X-Admin-Token", "secret")
+	consoleRec := httptest.NewRecorder()
+	handler.Routes().ServeHTTP(consoleRec, consoleReq)
+	if consoleRec.Code != http.StatusOK {
+		t.Fatalf("console: %d %s", consoleRec.Code, consoleRec.Body.String())
+	}
+	raw := consoleRec.Body.String()
+	for _, forbidden := range []string{
+		user.ID.String(),
+		created.ID.String(),
+		created.ProviderPaymentID,
+		created.ConfirmationURL,
+		"mock.payments.local",
+		"console-intent-secret-key",
+		"webhook:mock",
+		"dedup",
+		"payload",
+		"private-card",
+		"console-do-not-return",
+		"mock-refund-console-do-not-leak",
+		"refund-console-secret-key",
+		"raw refund reason",
+		"ledger-console-secret-key",
+		"reservation-console-secret-key",
+		"raw operator reason",
+	} {
+		if strings.Contains(raw, forbidden) {
+			t.Fatalf("operator console leaked %q: %s", forbidden, raw)
+		}
+	}
+	var console billing.OperatorConsoleDTO
+	if err := json.Unmarshal(consoleRec.Body.Bytes(), &console); err != nil {
+		t.Fatalf("decode console: %v", err)
+	}
+	if len(console.Intents) != 1 || console.Intents[0].ProviderPaymentRef == "" || console.Intents[0].ConfirmationState != "available" {
+		t.Fatalf("unexpected console intents: %+v", console.Intents)
+	}
+	if len(console.Events) != 1 || console.Events[0].ProviderPaymentRef == "" || console.Events[0].Processed {
+		t.Fatalf("unexpected console events: %+v", console.Events)
+	}
+	if len(console.Refunds) != 1 || console.Refunds[0].ProviderRefundRef == "" || !console.Refunds[0].ReasonPresent {
+		t.Fatalf("unexpected console refunds: %+v", console.Refunds)
+	}
+	if console.Billing == nil || console.Billing.UserRef == "" || len(console.Billing.Ledger) < 2 || len(console.Billing.Reservations) != 1 {
+		t.Fatalf("unexpected billing snapshot: %+v", console.Billing)
 	}
 }
 

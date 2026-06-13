@@ -315,6 +315,13 @@ type PaymentEventFilter struct {
 	Processed *bool
 }
 
+// PaymentRefundFilter narrows protected operator refund listings. It must not
+// be mapped to DTOs that expose idempotency keys or provider-native payloads.
+type PaymentRefundFilter struct {
+	IntentID *uuid.UUID
+	Status   PaymentRefundStatus
+}
+
 // PaymentProductFilter narrows protected operator product-catalog listings.
 // Zero-valued fields are ignored.
 type PaymentProductFilter struct {
@@ -390,6 +397,8 @@ type PaymentRepository interface {
 	CreateRefund(ctx context.Context, refund *PaymentRefund) error
 	// GetRefundByIdempotencyKey fetches a refund by internal idempotency key.
 	GetRefundByIdempotencyKey(ctx context.Context, key string) (*PaymentRefund, error)
+	// ListRefunds lists protected operator refund rows, newest first.
+	ListRefunds(ctx context.Context, filter PaymentRefundFilter, limit, offset int) ([]*PaymentRefund, error)
 	// SetRefundProviderState stores provider refund id and normalized refund status.
 	SetRefundProviderState(ctx context.Context, id uuid.UUID, providerRefundID string, status PaymentRefundStatus) error
 }

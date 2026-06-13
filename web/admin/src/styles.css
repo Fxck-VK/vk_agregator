@@ -514,6 +514,13 @@ button {
   align-items: start;
 }
 
+.payments-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
+  gap: 14px;
+  align-items: start;
+}
+
 .jobs-list,
 .detail-panel {
   display: grid;
@@ -559,6 +566,48 @@ button {
 }
 
 .jobs-row span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.payments-table {
+  display: grid;
+  gap: 6px;
+  overflow-x: auto;
+}
+
+.payments-row {
+  display: grid;
+  grid-template-columns:
+    minmax(126px, 1fr) minmax(120px, 0.85fr) minmax(96px, 0.7fr)
+    minmax(90px, 0.6fr) minmax(130px, 0.85fr) minmax(150px, 1fr);
+  gap: 10px;
+  min-width: 780px;
+  align-items: center;
+  border: 1px solid #e5dccb;
+  border-radius: 8px;
+  background: #fffef9;
+  color: #24262a;
+  padding: 10px;
+}
+
+.payments-row--head {
+  border-color: transparent;
+  background: transparent;
+  color: #6d665d;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.payments-row--warning {
+  border-color: #d8a455;
+  background: #fff7df;
+}
+
+.payments-row span {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -641,6 +690,7 @@ button {
   }
 
   .jobs-layout,
+  .payments-layout,
   .filters-panel {
     grid-template-columns: 1fr;
   }

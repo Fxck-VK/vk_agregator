@@ -446,6 +446,15 @@ func (s *Service) ListEvents(ctx context.Context, filter domain.PaymentEventFilt
 	return s.repo.ListEvents(ctx, filter, normalizeLimit(limit), normalizeOffset(offset))
 }
 
+// ListRefunds returns protected operator refund history. Callers must not expose
+// internal idempotency keys or raw provider identifiers without masking.
+func (s *Service) ListRefunds(ctx context.Context, filter domain.PaymentRefundFilter, limit, offset int) ([]*domain.PaymentRefund, error) {
+	if s == nil || s.repo == nil {
+		return nil, errors.New("paymentservice: service is not configured")
+	}
+	return s.repo.ListRefunds(ctx, filter, normalizeLimit(limit), normalizeOffset(offset))
+}
+
 func (s *Service) ensureProviderPayment(ctx context.Context, intent *domain.PaymentIntent, product *domain.PaymentProduct, returnURL string) (*domain.PaymentIntent, error) {
 	if intent == nil {
 		return nil, domain.ErrNotFound

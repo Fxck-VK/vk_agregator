@@ -31,6 +31,7 @@ type Config struct {
 // Deps are the services/repositories used by billing endpoints.
 type Deps struct {
 	Users      domain.UserRepository
+	Billing    domain.BillingRepository
 	Payment    *paymentservice.Service
 	PaymentOps *paymentservice.WebhookProcessor
 }
@@ -59,6 +60,7 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("POST /billing/payment-intents/{id}/sync", h.auth(h.operatorAction("payment_intent_sync", h.syncIntent)))
 	mux.HandleFunc("POST /billing/payment-intents/{id}/cancel", h.auth(h.operatorAction("payment_intent_cancel", h.cancelIntent)))
 	mux.HandleFunc("POST /billing/payment-intents/{id}/refund", h.auth(h.operatorAction("payment_intent_refund", h.refundIntent)))
+	mux.HandleFunc("GET /billing/operator/console", h.auth(h.operatorConsole))
 	mux.HandleFunc("GET /billing/payment-intents/pending", h.auth(h.listPendingIntents))
 	mux.HandleFunc("GET /billing/payment-events/unprocessed", h.auth(h.listUnprocessedEvents))
 	mux.HandleFunc("GET /billing/payment-history", h.auth(h.listHistory))
