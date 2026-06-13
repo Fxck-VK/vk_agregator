@@ -251,10 +251,17 @@ func TestOpenAIScannerRejectsFlaggedImage(t *testing.T) {
 	}
 }
 
-func TestOpenAIScannerFailsClosedForUnsupportedVideo(t *testing.T) {
+func TestOpenAIScannerSkipsVideoArtifactScan(t *testing.T) {
 	m := NewModerator(ModerationConfig{APIKey: "test-key"})
-	if err := m.Scan(context.Background(), domain.MediaTypeVideo, "video/mp4", []byte("mp4")); err == nil {
-		t.Fatal("expected unsupported video scanner error")
+	if err := m.Scan(context.Background(), domain.MediaTypeVideo, "video/mp4", []byte("mp4")); err != nil {
+		t.Fatalf("expected video scan to be skipped, got: %v", err)
+	}
+}
+
+func TestOpenAIScannerFailsClosedForUnknownMediaType(t *testing.T) {
+	m := NewModerator(ModerationConfig{APIKey: "test-key"})
+	if err := m.Scan(context.Background(), domain.MediaType("unknown"), "application/octet-stream", []byte("x")); err == nil {
+		t.Fatal("expected unsupported media type scanner error")
 	}
 }
 

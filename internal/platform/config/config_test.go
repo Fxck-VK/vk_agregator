@@ -901,6 +901,31 @@ func TestValidateYooKassaRequiresConfig(t *testing.T) {
 	}
 }
 
+func TestValidateProductionYooKassaRequiresTrustedProxies(t *testing.T) {
+	cfg := config.Config{
+		Env:                 "production",
+		PaymentProvider:     "yookassa",
+		YooKassaShopID:      "shop",
+		YooKassaSecretKey:   "secret",
+		YooKassaReturnURL:   "https://app.example.com",
+		VKSecret:            "vk",
+		AdminToken:          "admin",
+		VKConfirmationToken: "confirm",
+		VKAppSecret:         "app",
+	}
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "PAYMENT_WEBHOOK_TRUSTED_PROXIES") {
+		t.Fatalf("expected trusted proxy production validation error, got %v", err)
+	}
+
+	cfg.PaymentWebhookTrustedProxies = []string{"127.0.0.1"}
+	err = cfg.Validate()
+	if err != nil && strings.Contains(err.Error(), "PAYMENT_WEBHOOK_TRUSTED_PROXIES") {
+		t.Fatalf("expected trusted proxy check to pass, got %v", err)
+	}
+}
+
 func TestValidateVKMenuButtonMode(t *testing.T) {
 	cfg := config.Config{VKMenuButtonMode: "bad"}
 

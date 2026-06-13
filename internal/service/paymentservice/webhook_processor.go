@@ -173,10 +173,10 @@ func (p *WebhookProcessor) ProcessEvent(ctx context.Context, event *domain.Payme
 		return fmt.Errorf("%w: event provider %s", ErrWebhookInvalid, event.Provider)
 	}
 	if isRefundWebhookEvent(event.EventType) {
-		return fmt.Errorf("%w: refund event requires manual reconciliation", ErrWebhookUnsupported)
+		return p.ackInboxEvent(ctx, event.ID)
 	}
 	if strings.TrimSpace(event.ProviderPaymentID) == "" {
-		return ErrWebhookUnsupported
+		return p.ackInboxEvent(ctx, event.ID)
 	}
 
 	providerPayment, err := p.verifiedProviderPayment(ctx, event.ProviderPaymentID)
@@ -690,6 +690,19 @@ func (p *WebhookProcessor) applyProviderPayment(ctx context.Context, payments do
 		}
 	}
 	return result, nil
+}
+
+func (p *WebhookProcessor) ackInboxEvent(ctx context.Context, eventID uuid.UUID) error {
+	return p.tx.RunPaymentTx(ctx, func(ctx context.Context, payments domain.PaymentRepository, _ domain.BillingRepository) error {
+		currentEvent, err := payments.GetEventByID(ctx, eventID)
+		if err != nil {
+			return err
+		}
+		if currentEvent.ProcessedAt != nil {
+			return nil
+		}
+		return payments.MarkEventProcessed(ctx, eventID, p.now())
+	})
 }
 
 func isRefundWebhookEvent(eventType string) bool {

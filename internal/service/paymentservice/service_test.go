@@ -749,7 +749,7 @@ func TestWebhookProcessorCanceledMarksIntentWithoutTopup(t *testing.T) {
 	}
 }
 
-func TestWebhookProcessorRefundSucceededStaysUnprocessedForManualReconciliation(t *testing.T) {
+func TestWebhookProcessorRefundSucceededAcksInboxWithoutLedgerChange(t *testing.T) {
 	ctx := context.Background()
 	repo := memory.NewPaymentRepo()
 	repo.PutProduct(&domain.PaymentProduct{
@@ -795,11 +795,11 @@ func TestWebhookProcessorRefundSucceededStaysUnprocessedForManualReconciliation(
 		t.Fatalf("ingest refund: %v", err)
 	}
 	processed, err := processor.ProcessBatch(ctx, 10)
-	if !errors.Is(err, paymentservice.ErrWebhookUnsupported) {
-		t.Fatalf("process refund err = %v, want ErrWebhookUnsupported", err)
+	if err != nil {
+		t.Fatalf("process refund err = %v, want nil", err)
 	}
-	if processed != 0 {
-		t.Fatalf("processed refund = %d, want 0", processed)
+	if processed != 1 {
+		t.Fatalf("processed refund = %d, want 1", processed)
 	}
 	acc, err = billingRepo.GetAccountByUser(ctx, userID, domain.CurrencyCredits)
 	if err != nil {
@@ -819,8 +819,62 @@ func TestWebhookProcessorRefundSucceededStaysUnprocessedForManualReconciliation(
 	if err != nil {
 		t.Fatalf("list events: %v", err)
 	}
-	if len(events) != 1 || events[0].EventType != "refund.succeeded" {
-		t.Fatalf("unprocessed refund events = %+v, want refund.succeeded pending manual reconciliation", events)
+	if len(events) != 0 {
+		t.Fatalf("unprocessed events = %+v, want empty inbox", events)
+	}
+}
+
+func TestWebhookProcessorRefundDoesNotBlockPaymentSucceeded(t *testing.T) {
+	ctx := context.Background()
+	repo := memory.NewPaymentRepo()
+	repo.PutProduct(&domain.PaymentProduct{
+		Code: "credits_100", Title: "100 credits", Amount: 9900,
+		Currency: domain.CurrencyRUB, Credits: 100, PriceVersion: 1, IsActive: true,
+	})
+	provider := paymentmock.New()
+	intentSvc := paymentservice.New(repo, provider, paymentservice.Config{})
+	userID := uuid.New()
+	created, err := intentSvc.CreateIntent(ctx, paymentservice.CreateIntentInput{
+		UserID:         userID,
+		ProductCode:    "credits_100",
+		ReceiptEmail:   "user@example.com",
+		IdempotencyKey: "refund-blocks-payment-key",
+	})
+	if err != nil {
+		t.Fatalf("create intent: %v", err)
+	}
+	if err := provider.SetPaymentStatus(created.Intent.ProviderPaymentID, domain.PaymentIntentSucceeded); err != nil {
+		t.Fatalf("set succeeded: %v", err)
+	}
+
+	billingRepo := memory.NewBillingRepo()
+	processor := newTestWebhookProcessor(repo, provider, billingRepo)
+	if _, _, err := processor.IngestWebhook(ctx, []byte(`{"event_type":"refund.succeeded","provider_payment_id":"`+created.Intent.ProviderPaymentID+`","provider_refund_id":"refund-first"}`), nil); err != nil {
+		t.Fatalf("ingest refund: %v", err)
+	}
+	if _, _, err := processor.IngestWebhook(ctx, []byte(`{"event_type":"payment.succeeded","provider_payment_id":"`+created.Intent.ProviderPaymentID+`"}`), nil); err != nil {
+		t.Fatalf("ingest succeeded: %v", err)
+	}
+	processed, err := processor.ProcessBatch(ctx, 10)
+	if err != nil {
+		t.Fatalf("process batch err = %v, want nil", err)
+	}
+	if processed != 2 {
+		t.Fatalf("processed = %d, want 2", processed)
+	}
+	acc, err := billingRepo.GetAccountByUser(ctx, userID, domain.CurrencyCredits)
+	if err != nil {
+		t.Fatalf("get account: %v", err)
+	}
+	if acc.BalanceCached != 100 {
+		t.Fatalf("balance = %d, want 100", acc.BalanceCached)
+	}
+	events, err := repo.ListUnprocessedEvents(ctx, domain.PaymentProviderMock, 10)
+	if err != nil {
+		t.Fatalf("list events: %v", err)
+	}
+	if len(events) != 0 {
+		t.Fatalf("unprocessed events = %d, want 0", len(events))
 	}
 }
 

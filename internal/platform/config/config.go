@@ -645,6 +645,9 @@ func (c Config) Validate() error {
 		if c.VKAppSecret == "" {
 			missing = append(missing, "VK_APP_SECRET")
 		}
+		if strings.EqualFold(strings.TrimSpace(c.PaymentProvider), "yookassa") && len(c.PaymentWebhookTrustedProxies) == 0 {
+			missing = append(missing, "PAYMENT_WEBHOOK_TRUSTED_PROXIES")
+		}
 	}
 	if c.usesOpenAI() && c.OpenAIAPIKey == "" {
 		missing = append(missing, "OPENAI_API_KEY")

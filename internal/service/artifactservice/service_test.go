@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"vk-ai-aggregator/internal/adapter/provider/openai"
 	"vk-ai-aggregator/internal/adapter/storage/memory"
 	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/service/artifactservice"
@@ -261,6 +262,22 @@ func TestSaveVariantWithMetadataIsIdempotent(t *testing.T) {
 	}
 	if len(variants) != 1 || variants[0].VariantType != domain.VariantVKVideo {
 		t.Fatalf("expected one vk_video variant, got %+v", variants)
+	}
+}
+
+func TestSaveBytesArtifactVideoWithOpenAIScanner(t *testing.T) {
+	repo := memory.NewArtifactRepo()
+	store := memory.NewObjectStore()
+	scanner := openai.NewModerator(openai.ModerationConfig{APIKey: "test-key"})
+	svc := artifactservice.New(repo, store, testBucket, artifactservice.WithScanner(scanner))
+	owner := uuid.New()
+
+	art, err := svc.SaveBytesArtifact(context.Background(), owner, nil, domain.ArtifactKindOutput, domain.MediaTypeVideo, "video/mp4", []byte("video-bytes"))
+	if err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	if art.MediaType != domain.MediaTypeVideo || art.Status != domain.ArtifactStatusReady {
+		t.Fatalf("unexpected artifact: %+v", art)
 	}
 }
 
