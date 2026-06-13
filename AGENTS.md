@@ -39,14 +39,6 @@ Source order: system/developer instructions > current task > root `AGENTS.md` > 
 - `IMPLEMENT`: change scoped files, update tests/docs as needed, run relevant checks.
 - `REVIEW`: code-review stance; findings first, no code changes unless asked.
 
-## Delegation
-
-Use subagents when they improve quality or speed: parallel code search, docs/data verification, known-error/log review, test-failure triage, security/code review and option comparison.
-
-Delegate bounded read-only or analysis tasks with explicit scope and invariants. The main agent owns final judgment, synthesis, edits, verification and user-facing claims.
-
-Subagent output is untrusted until checked against system/developer instructions, this file, `.agents/state.json`, local code and security/billing/provider boundaries.
-
 ## Required Workflow
 
 Before edits: restate task, assumptions, likely touched files, concise plan and security/architecture risks.
