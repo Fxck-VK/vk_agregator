@@ -64,8 +64,8 @@ func (m *Moderator) Check(ctx context.Context, in moderationservice.Input) (mode
 }
 
 // Scan implements artifactservice.Scanner for text and image artifacts. OpenAI
-// moderation does not support video; video scanning is a separate provider
-// integration and is left fail-open here.
+// moderation does not support video, so unsupported media fails closed rather
+// than giving a false allowed verdict before delivery/capture.
 func (m *Moderator) Scan(ctx context.Context, mediaType domain.MediaType, mimeType string, data []byte) error {
 	var input any
 	switch mediaType {
@@ -77,7 +77,7 @@ func (m *Moderator) Scan(ctx context.Context, mediaType domain.MediaType, mimeTy
 			{"type": "image_url", "image_url": map[string]string{"url": "data:" + mimeType + ";base64," + base64.StdEncoding.EncodeToString(data)}},
 		}
 	default:
-		return nil
+		return fmt.Errorf("openai moderation does not support %s artifact scanning", mediaType)
 	}
 	out, err := m.moderate(ctx, input)
 	if err != nil {

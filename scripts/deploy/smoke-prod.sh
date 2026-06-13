@@ -3,7 +3,7 @@ set -euo pipefail
 
 vk_base_url="${VK_BASE_URL:-https://vk.neiirohub.ru}"
 app_base_url="${APP_BASE_URL:-https://app.neiirohub.ru}"
-payment_webhook_url="${PAYMENT_WEBHOOK_URL:-https://vk.neiirohub.ru/billing/webhooks/yookassa}"
+payment_webhook_url="${PAYMENT_WEBHOOK_URL:-https://neiirohub.ru/billing/webhooks/yookassa}"
 timeout_seconds="${TIMEOUT_SECONDS:-10}"
 payment_webhook_only="false"
 allow_insecure_http="false"

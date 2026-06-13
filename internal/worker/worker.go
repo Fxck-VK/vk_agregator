@@ -1563,6 +1563,9 @@ func (p *processor) latestTask(ctx context.Context, jobID uuid.UUID) (*domain.Pr
 
 // pollOnce polls the provider once and applies the normalized result.
 func (p *processor) pollOnce(ctx context.Context, job *domain.Job, pt *domain.ProviderTask, provider domain.Provider, task queue.Task) error {
+	if res, ok := durableProviderTaskResult(pt); ok {
+		return p.applyResult(ctx, job, pt, res, task)
+	}
 	callCtx, cancel := p.providerCallContext(ctx)
 	pollCtx, span := tracing.Start(callCtx, "provider.poll",
 		attribute.String("job.id", job.ID.String()),
@@ -1583,6 +1586,20 @@ func (p *processor) pollOnce(ctx context.Context, job *domain.Job, pt *domain.Pr
 	span.End()
 	cancel()
 	return p.applyResult(ctx, job, pt, res, task)
+}
+
+func durableProviderTaskResult(pt *domain.ProviderTask) (domain.ProviderTaskResult, bool) {
+	if pt == nil || !pt.Status.IsTerminal() || len(pt.Result) == 0 {
+		return domain.ProviderTaskResult{}, false
+	}
+	var res domain.ProviderTaskResult
+	if err := json.Unmarshal(pt.Result, &res); err != nil || res.Status == "" {
+		return domain.ProviderTaskResult{}, false
+	}
+	if res.Status != pt.Status {
+		res.Status = pt.Status
+	}
+	return res, true
 }
 
 // applyResult persists the task result and advances the job: success stores
@@ -1629,19 +1646,19 @@ func (p *processor) applyResult(ctx context.Context, job *domain.Job, pt *domain
 				return err
 			}
 		}
-		if err := p.saveDialogAnswer(ctx, job, res.Text); err != nil {
-			slog.WarnContext(ctx, "dialog context answer save failed",
-				slog.String("job_id", job.ID.String()),
-				slog.String("error", err.Error()))
-		}
 		// Output moderation gates delivery (invariant #15). A block stops the
-		// pipeline here: no delivery, no capture.
-		blocked, err := p.moderateOutput(ctx, job)
+		// pipeline here: no dialog answer persistence, no delivery, no capture.
+		blocked, err := p.moderateOutput(ctx, job, res.Text)
 		if err != nil {
 			return err
 		}
 		if blocked {
 			return nil
+		}
+		if err := p.saveDialogAnswer(ctx, job, res.Text); err != nil {
+			slog.WarnContext(ctx, "dialog context answer save failed",
+				slog.String("job_id", job.ID.String()),
+				slog.String("error", err.Error()))
 		}
 		if err := p.setStatus(ctx, job, domain.JobStatusResultReady, "", ""); err != nil {
 			return err
@@ -2243,7 +2260,7 @@ func (p *processor) shouldNotifyTerminalProviderFailure(job *domain.Job) bool {
 // job (no delivery, no capture), releases the reservation and records an audit
 // verdict. It returns blocked=true when delivery must be stopped. When no
 // moderator is configured it is a no-op (allow).
-func (p *processor) moderateOutput(ctx context.Context, job *domain.Job) (bool, error) {
+func (p *processor) moderateOutput(ctx context.Context, job *domain.Job, outputText string) (bool, error) {
 	if p.moderator == nil {
 		return false, nil
 	}
@@ -2262,6 +2279,7 @@ func (p *processor) moderateOutput(ctx context.Context, job *domain.Job) (bool, 
 		Stage:    domain.ModerationStageOutput,
 		Modality: job.Modality,
 		Prompt:   pp.Prompt,
+		Text:     outputText,
 	})
 	if err != nil {
 		tracing.RecordError(span, err)

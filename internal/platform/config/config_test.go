@@ -628,6 +628,8 @@ func validProductionConfig() config.Config {
 		Provider:            "deepinfra",
 		ProviderChain:       []string{"deepinfra"},
 		DeepInfraAPIKey:     "test-deepinfra-key",
+		OpenAIAPIKey:        "test-openai-key",
+		ArtifactScanner:     "openai",
 		VKSecret:            "test-vk-secret",
 		AdminToken:          "test-admin-token",
 		VKConfirmationToken: "test-confirmation-token",
@@ -759,8 +761,10 @@ func TestLoadPaymentConfig(t *testing.T) {
 	t.Setenv("YOOKASSA_SECRET_KEY", "secret")
 	t.Setenv("YOOKASSA_BASE_URL", "https://example.com/v3")
 	t.Setenv("YOOKASSA_RETURN_URL", "https://neiirohub.ru/payments/return")
-	t.Setenv("YOOKASSA_WEBHOOK_IP_ALLOWLIST_ENABLED", "false")
+	t.Setenv("YOOKASSA_WEBHOOK_IP_ALLOWLIST_ENABLED", "true")
+	t.Setenv("YOOKASSA_WEBHOOK_IP_ALLOWLIST", "203.0.113.0/24,198.51.100.10")
 	t.Setenv("PAYMENT_WEBHOOK_REQUIRE_HTTPS", "true")
+	t.Setenv("PAYMENT_WEBHOOK_TRUSTED_PROXIES", "10.0.0.0/8,127.0.0.1")
 	t.Setenv("PAYMENT_WEBHOOK_ADDR", ":18082")
 	t.Setenv("PAYMENT_WEBHOOK_POLL_INTERVAL", "2s")
 	t.Setenv("PAYMENT_WEBHOOK_BATCH_LIMIT", "7")
@@ -778,11 +782,17 @@ func TestLoadPaymentConfig(t *testing.T) {
 	if cfg.YooKassaBaseURL != "https://example.com/v3" || cfg.YooKassaReturnURL != "https://neiirohub.ru/payments/return" {
 		t.Fatalf("unexpected YooKassa URLs: base=%q return=%q", cfg.YooKassaBaseURL, cfg.YooKassaReturnURL)
 	}
-	if cfg.YooKassaWebhookIPAllowlistEnabled {
-		t.Fatal("YooKassaWebhookIPAllowlistEnabled = true, want false")
+	if !cfg.YooKassaWebhookIPAllowlistEnabled {
+		t.Fatal("YooKassaWebhookIPAllowlistEnabled = false, want true")
+	}
+	if got := strings.Join(cfg.YooKassaWebhookIPAllowlist, ","); got != "203.0.113.0/24,198.51.100.10" {
+		t.Fatalf("YooKassaWebhookIPAllowlist = %q", got)
 	}
 	if !cfg.PaymentWebhookRequireHTTPS || !cfg.PaymentWebhookHTTPSRequired() {
 		t.Fatal("payment webhook HTTPS requirement was not loaded")
+	}
+	if got := strings.Join(cfg.PaymentWebhookTrustedProxies, ","); got != "10.0.0.0/8,127.0.0.1" {
+		t.Fatalf("PaymentWebhookTrustedProxies = %q", got)
 	}
 	if cfg.PaymentWebhookAddr != ":18082" || cfg.PaymentWebhookPollInterval.String() != "2s" || cfg.PaymentWebhookBatchLimit != 7 {
 		t.Fatalf("unexpected webhook config: addr=%q interval=%s batch=%d", cfg.PaymentWebhookAddr, cfg.PaymentWebhookPollInterval, cfg.PaymentWebhookBatchLimit)
@@ -799,12 +809,80 @@ func TestPaymentWebhookHTTPSRequiredInProduction(t *testing.T) {
 	}
 }
 
+func TestValidatePaymentWebhookAllowlistRequiresConfiguredRanges(t *testing.T) {
+	cfg := config.Config{YooKassaWebhookIPAllowlistEnabled: true}
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "YOOKASSA_WEBHOOK_IP_ALLOWLIST") {
+		t.Fatalf("expected allowlist validation error, got %v", err)
+	}
+
+	cfg.YooKassaWebhookIPAllowlist = []string{"not-an-ip"}
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "invalid IP/CIDR") {
+		t.Fatalf("expected invalid IP/CIDR validation error, got %v", err)
+	}
+
+	cfg.YooKassaWebhookIPAllowlist = []string{"203.0.113.0/24"}
+	cfg.PaymentWebhookTrustedProxies = []string{"10.0.0.0/8"}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("valid webhook ingress config rejected: %v", err)
+	}
+}
+
 func TestValidatePaymentProvider(t *testing.T) {
 	cfg := config.Config{PaymentProvider: "stripe"}
 
 	err := cfg.Validate()
 	if err == nil || !strings.Contains(err.Error(), "PAYMENT_PROVIDER") {
 		t.Fatalf("expected PAYMENT_PROVIDER validation error, got %v", err)
+	}
+}
+
+func TestValidatePriceOverridesRejectNonPositiveAmounts(t *testing.T) {
+	cfg := config.Config{PriceOverrides: map[string]int64{
+		string(domain.OperationImageGenerate): -10,
+	}}
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "PRICES") || !strings.Contains(err.Error(), "must be positive") {
+		t.Fatalf("expected PRICES positive validation error, got %v", err)
+	}
+
+	cfg.PriceOverrides = map[string]int64{
+		string(domain.OperationTextGenerate): 0,
+	}
+	err = cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "PRICES") || !strings.Contains(err.Error(), "must be positive") {
+		t.Fatalf("expected PRICES positive validation error, got %v", err)
+	}
+}
+
+func TestValidateProductionRealProvidersRequireArtifactScanner(t *testing.T) {
+	cfg := config.Config{
+		Env:             "production",
+		Provider:        "deepinfra",
+		ProviderChain:   []string{"deepinfra"},
+		ArtifactScanner: "none",
+	}
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "ARTIFACT_SCANNER=openai") {
+		t.Fatalf("expected ARTIFACT_SCANNER production validation error, got %v", err)
+	}
+
+	cfg.ArtifactScanner = "openai"
+	err = cfg.Validate()
+	if err == nil || strings.Contains(err.Error(), "ARTIFACT_SCANNER=openai") {
+		t.Fatalf("expected scanner guard to pass before other missing-secret errors, got %v", err)
+	}
+}
+
+func TestValidateModerationSelectors(t *testing.T) {
+	cfg := config.Config{ModerationProvider: "bad"}
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "MODERATION_PROVIDER") {
+		t.Fatalf("expected MODERATION_PROVIDER validation error, got %v", err)
+	}
+
+	cfg = config.Config{ArtifactScanner: "bad"}
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "ARTIFACT_SCANNER") {
+		t.Fatalf("expected ARTIFACT_SCANNER validation error, got %v", err)
 	}
 }
 

@@ -3,6 +3,7 @@ package worker_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 
 	"github.com/google/uuid"
@@ -95,6 +96,49 @@ func TestOutputModerationBlocksDelivery(t *testing.T) {
 	}
 }
 
+func TestOutputModerationBlocksGeneratedTextBeforeDialogSave(t *testing.T) {
+	ctx := context.Background()
+	textCtx := &fakeTextContext{preparedPrompt: "context packet\n"}
+	modRepo := memory.NewModerationRepo()
+	h := newHarnessCore(t, mock.New(), textCtx, func(deps *worker.Deps) {
+		deps.Moderator = moderationservice.NewKeywordModerator("mock generated text result")
+		deps.ModResults = modRepo
+	})
+
+	job := h.queueJob(t, domain.OperationTextGenerate, domain.ModalityText, "clean prompt")
+	rawParams, _ := json.Marshal(map[string]string{
+		"prompt":              "clean prompt",
+		"conversation_source": "miniapp",
+		"external_thread_id":  "thread-a",
+	})
+	job.Params = rawParams
+	if err := h.jobs.Update(ctx, job); err != nil {
+		t.Fatalf("update job params: %v", err)
+	}
+
+	if err := h.gen.Process(ctx, taskFor(job)); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+
+	got := h.reload(t, job.ID)
+	if got.Status != domain.JobStatusRejected {
+		t.Fatalf("status = %q, want rejected", got.Status)
+	}
+	if textCtx.completeCalls != 0 {
+		t.Fatalf("dialog answer was saved before output moderation allow: calls=%d answer=%q", textCtx.completeCalls, textCtx.completedAnswer)
+	}
+	if n := len(h.streams.byStream[redisqueue.StreamDelivery]); n != 0 {
+		t.Fatalf("expected no delivery enqueue for blocked generated text, got %d", n)
+	}
+	if len(h.releaser.released) != 1 || h.releaser.released[0] != job.ID {
+		t.Fatalf("expected reservation release for blocked job, got %v", h.releaser.released)
+	}
+	results, _ := modRepo.ListByJob(ctx, job.ID)
+	if len(results) != 1 || results[0].Decision != domain.ModerationBlock {
+		t.Fatalf("expected one generated-text block verdict, got %+v", results)
+	}
+}
+
 // An allowed output proceeds to delivery as before.
 func TestOutputModerationAllowsDelivery(t *testing.T) {
 	ctx := context.Background()
@@ -136,3 +180,110 @@ func TestExhaustedRetryRoutesToDLQ(t *testing.T) {
 		t.Fatalf("expected exhausted task routed to DLQ, got none")
 	}
 }
+
+func TestGenerationWorkerResumesDurableSyncProviderResultAfterSubmitCrash(t *testing.T) {
+	ctx := context.Background()
+	provider := &durableSyncProvider{}
+	var failingJobs *failStatusOnceJobRepo
+	h := newHarnessCore(t, provider, nil, func(deps *worker.Deps) {
+		failingJobs = &failStatusOnceJobRepo{
+			JobRepository: deps.Jobs,
+			failTo:        domain.JobStatusProviderSubmitted,
+		}
+		deps.Jobs = failingJobs
+	})
+	job := h.queueJob(t, domain.OperationTextGenerate, domain.ModalityText, "clean prompt")
+
+	err := h.gen.Process(ctx, taskFor(job))
+	if err == nil || !errors.Is(err, errInjectedStatusCrash) {
+		t.Fatalf("first process error = %v, want injected crash", err)
+	}
+	if got := h.reload(t, job.ID); got.Status != domain.JobStatusDispatchingProvider {
+		t.Fatalf("status after injected crash = %q, want dispatching_provider", got.Status)
+	}
+	tasks, err := h.tasks.ListByJob(ctx, job.ID)
+	if err != nil {
+		t.Fatalf("list provider tasks: %v", err)
+	}
+	if len(tasks) != 1 || tasks[0].Status != domain.ProviderTaskSucceeded || len(tasks[0].Result) == 0 {
+		t.Fatalf("provider task was not durably completed: %+v", tasks)
+	}
+
+	if err := h.gen.Process(ctx, taskFor(job)); err != nil {
+		t.Fatalf("retry process: %v", err)
+	}
+	if got := h.reload(t, job.ID); got.Status != domain.JobStatusResultReady {
+		t.Fatalf("status after retry = %q, want result_ready", got.Status)
+	}
+	if provider.pollCalls != 0 {
+		t.Fatalf("retry used provider Poll instead of durable result: calls=%d", provider.pollCalls)
+	}
+	if provider.submitCalls != 1 {
+		t.Fatalf("provider Submit calls = %d, want 1", provider.submitCalls)
+	}
+	if n := len(h.streams.byStream[redisqueue.StreamDelivery]); n != 1 {
+		t.Fatalf("delivery enqueue count = %d, want 1", n)
+	}
+}
+
+var errInjectedStatusCrash = errors.New("injected status crash")
+
+type failStatusOnceJobRepo struct {
+	domain.JobRepository
+	failTo domain.JobStatus
+	failed bool
+}
+
+func (r *failStatusOnceJobRepo) UpdateStatus(ctx context.Context, id uuid.UUID, from, to domain.JobStatus, errCode, errMessage string) error {
+	if !r.failed && to == r.failTo {
+		r.failed = true
+		return errInjectedStatusCrash
+	}
+	return r.JobRepository.UpdateStatus(ctx, id, from, to, errCode, errMessage)
+}
+
+type durableSyncProvider struct {
+	submitCalls int
+	pollCalls   int
+}
+
+func (p *durableSyncProvider) Name() domain.ProviderName { return domain.ProviderMock }
+
+func (p *durableSyncProvider) Capabilities(context.Context) ([]domain.Capability, error) {
+	return []domain.Capability{{
+		Operation:       domain.OperationTextGenerate,
+		Modality:        domain.ModalityText,
+		ModelCode:       "durable-sync",
+		SupportsPolling: true,
+	}}, nil
+}
+
+func (p *durableSyncProvider) Estimate(context.Context, domain.ProviderRequest) (domain.CostEstimate, error) {
+	return domain.CostEstimate{AmountCredits: 1, Currency: "credits"}, nil
+}
+
+func (p *durableSyncProvider) Submit(_ context.Context, req domain.ProviderRequest) (domain.ProviderTask, error) {
+	p.submitCalls++
+	res := domain.ProviderTaskResult{
+		Status:     domain.ProviderTaskSucceeded,
+		OutputURLs: []string{"data:text/plain;base64,b2s="},
+		Text:       "ok",
+	}
+	raw, _ := json.Marshal(res)
+	return domain.ProviderTask{
+		JobID:          req.JobID,
+		Provider:       domain.ProviderMock,
+		ModelCode:      "durable-sync",
+		ExternalID:     "durable-sync-" + req.JobID.String(),
+		Status:         domain.ProviderTaskSucceeded,
+		Result:         raw,
+		IdempotencyKey: req.IdempotencyKey,
+	}, nil
+}
+
+func (p *durableSyncProvider) Poll(context.Context, domain.ProviderTaskRef) (domain.ProviderTaskResult, error) {
+	p.pollCalls++
+	return domain.ProviderTaskResult{Status: domain.ProviderTaskFailed, ErrorClass: domain.ProviderErrTaskNotFound}, nil
+}
+
+func (p *durableSyncProvider) Cancel(context.Context, domain.ProviderTaskRef) error { return nil }

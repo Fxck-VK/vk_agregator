@@ -30,6 +30,11 @@ type contextKey int
 
 const ctxVKUserIDKey contextKey = iota
 
+const (
+	miniAppIdempotencyKeyMinLen = 8
+	miniAppIdempotencyKeyMaxLen = 128
+)
+
 // JobRateLimiter is the minimal limiter contract used by Mini App write-like
 // endpoints after authentication. Endpoint-specific keys keep job submits and
 // estimate requests from sharing a bucket.
@@ -507,6 +512,30 @@ func allDigits(value string) bool {
 	return true
 }
 
+func boundedClientIdempotencyKey(w http.ResponseWriter, r *http.Request) (string, bool) {
+	key := strings.TrimSpace(r.Header.Get("X-Idempotency-Key"))
+	if key == "" {
+		writeError(w, http.StatusBadRequest, "X-Idempotency-Key is required")
+		return "", false
+	}
+	if len(key) < miniAppIdempotencyKeyMinLen || len(key) > miniAppIdempotencyKeyMaxLen {
+		writeError(w, http.StatusBadRequest, "X-Idempotency-Key is invalid")
+		return "", false
+	}
+	for _, r := range key {
+		switch {
+		case r >= 'a' && r <= 'z':
+		case r >= 'A' && r <= 'Z':
+		case r >= '0' && r <= '9':
+		case r == '_' || r == '-' || r == ':' || r == '.':
+		default:
+			writeError(w, http.StatusBadRequest, "X-Idempotency-Key is invalid")
+			return "", false
+		}
+	}
+	return key, true
+}
+
 // operationMeta maps an operation string to (OperationType, Modality). Returns
 // false if the operation is not supported via the mini app.
 func operationMeta(op string) (domain.OperationType, domain.Modality, bool) {
@@ -682,11 +711,11 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Accept an optional client-supplied idempotency key. The key is scoped to
-	// the user so one user cannot replay another user's key.
-	clientKey := r.Header.Get("X-Idempotency-Key")
-	if clientKey == "" {
-		clientKey = uuid.New().String()
+	// The client key is required and bounded, then scoped to the verified user
+	// so one user cannot replay another user's key.
+	clientKey, ok := boundedClientIdempotencyKey(w, r)
+	if !ok {
+		return
 	}
 	idemKey := fmt.Sprintf("miniapp_job:%d:%s", vkUserID, clientKey)
 	correlationID := fmt.Sprintf("miniapp:%d:%s", vkUserID, clientKey)
@@ -783,9 +812,9 @@ func (h *Handler) createChatMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	clientKey := r.Header.Get("X-Idempotency-Key")
-	if clientKey == "" {
-		clientKey = uuid.New().String()
+	clientKey, ok := boundedClientIdempotencyKey(w, r)
+	if !ok {
+		return
 	}
 	idemKey := fmt.Sprintf("miniapp_chat:%d:%s", vkUserID, clientKey)
 	correlationID := fmt.Sprintf("miniapp-chat:%d:%s", vkUserID, clientKey)
@@ -1182,9 +1211,8 @@ func (h *Handler) createPaymentIntent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusServiceUnavailable, "service unavailable")
 		return
 	}
-	clientKey := strings.TrimSpace(r.Header.Get("X-Idempotency-Key"))
-	if clientKey == "" {
-		writeError(w, http.StatusBadRequest, "X-Idempotency-Key is required")
+	clientKey, ok := boundedClientIdempotencyKey(w, r)
+	if !ok {
 		return
 	}
 

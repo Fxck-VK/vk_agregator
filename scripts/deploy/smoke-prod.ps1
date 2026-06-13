@@ -1,7 +1,7 @@
 param(
     [string]$VkBaseUrl = "https://vk.neiirohub.ru",
     [string]$AppBaseUrl = "https://app.neiirohub.ru",
-    [string]$PaymentWebhookUrl = "https://vk.neiirohub.ru/billing/webhooks/yookassa",
+    [string]$PaymentWebhookUrl = "https://neiirohub.ru/billing/webhooks/yookassa",
     [int]$TimeoutSeconds = 10,
     [switch]$PaymentWebhookOnly,
     [switch]$AllowInsecureHttp

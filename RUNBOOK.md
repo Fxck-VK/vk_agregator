@@ -123,7 +123,7 @@ Override these values when needed:
 | `MAX_ATTEMPTS` | `3` | Retry budget before dead-lettering |
 | `RETRY_BASE_DELAY` / `RETRY_MAX_DELAY` | `500ms` / `30s` | Exponential backoff bounds |
 | `MODERATION_EXTRA_TERMS` | `` | Comma-separated extra blocklist terms |
-| `WEBHOOK_RATE_LIMIT_RPS` / `WEBHOOK_RATE_LIMIT_BURST` | `20` / `40` | Per-IP webhook rate limit |
+| `WEBHOOK_RATE_LIMIT_RPS` / `WEBHOOK_RATE_LIMIT_BURST` | `20` / `40` | Per-socket-peer webhook rate limit; caller-supplied forwarded headers are ignored |
 | `VK_ANTISPAM_ENABLED` | `true` | Redis-backed per-`vk_user_id` VK bot anti-spam switch |
 | `VK_ANTISPAM_MESSAGE_LIMIT` / `VK_ANTISPAM_MESSAGE_WINDOW` | `40` / `60s` | Any VK user events per window: text, stickers and buttons |
 | `VK_ANTISPAM_GPT_LIMIT` / `VK_ANTISPAM_GPT_WINDOW` | `3` / `30s` | Billable GPT/text jobs per user window |
@@ -144,8 +144,8 @@ Override these values when needed:
 | `YOOKASSA_SECRET_KEY` | `` | YooKassa API secret; required when `PAYMENT_PROVIDER=yookassa`; never commit/log it |
 | `YOOKASSA_BASE_URL` | `https://api.yookassa.ru/v3` | YooKassa API root |
 | `YOOKASSA_RETURN_URL` | `https://neiirohub.ru/payments/return` | User return URL after provider redirect; redirect is not payment proof |
-| `YOOKASSA_WEBHOOK_IP_ALLOWLIST_ENABLED` | `true` | Operational guard for YooKassa webhook ingress; webhook processing still verifies provider state through `GetPayment` |
-| `PAYMENT_WEBHOOK_REQUIRE_HTTPS` | `false` | Local override for `cmd/provider-webhook` HTTPS guard. `APP_ENV=production` forces this guard on; behind Cloudflare/nginx pass `X-Forwarded-Proto: https` or `Forwarded: proto=https` |
+| `YOOKASSA_WEBHOOK_IP_ALLOWLIST_ENABLED` / `YOOKASSA_WEBHOOK_IP_ALLOWLIST` | `false` / `` | Optional YooKassa webhook source-IP allowlist; when enabled the allowlist must contain IP/CIDR ranges and is enforced before ingest |
+| `PAYMENT_WEBHOOK_REQUIRE_HTTPS` / `PAYMENT_WEBHOOK_TRUSTED_PROXIES` | `false` / `` | Local override for `cmd/provider-webhook` HTTPS guard. `APP_ENV=production` forces HTTPS. Production behind nginx/Cloudflare must set trusted reverse proxy IP/CIDR ranges; otherwise `X-Forwarded-Proto` is ignored and proxied HTTPS webhooks fail closed |
 | `PAYMENT_WEBHOOK_ADDR` | `:8082` | Dedicated `cmd/provider-webhook` listen address for payment provider webhooks |
 | `PAYMENT_WEBHOOK_POLL_INTERVAL` | `5s` | Async payment webhook inbox processor interval |
 | `PAYMENT_WEBHOOK_BATCH_LIMIT` | `20` | Max unprocessed payment webhook events handled per processor tick |
@@ -180,7 +180,7 @@ Override these values when needed:
 | `OPENAI_TEXT_PRICE` / `OPENAI_IMAGE_PRICE` / `OPENAI_VIDEO_PRICE` | `1` / `10` / `50` | Internal provider-router cost estimates |
 | `MODERATION_PROVIDER` | `keyword` | Output moderation provider: `keyword` or `openai` |
 | `OPENAI_MODERATION_MODEL` | `omni-moderation-latest` | OpenAI moderation model |
-| `ARTIFACT_SCANNER` | `none` | Artifact scanner: `none` or `openai` |
+| `ARTIFACT_SCANNER` | dev: `none`, production real providers: `openai` | Artifact scanner: `none` or `openai`; production real media providers fail config validation unless this is `openai` |
 | `MEDIA_PIPELINE_ENABLED` | `false` | Worker-owned video/media processing switch; when false, local dev does not need ffmpeg/ffprobe |
 | `MEDIA_VIDEO_PROBE_POLICY` | dev: `disabled`, production: `probe_required` | `disabled`, `trusted_provider`, or `probe_required`; production must fail closed with `probe_required` |
 | `MEDIA_VIDEO_TRANSCODE_POLICY` | `never` | `never`, `fallback`, or `always`; `always` is rejected in production, and `FFMPEG_PATH` is required only when this is not `never` |
@@ -355,7 +355,9 @@ Override these values when needed:
   `payment_provider_errors_total`, `payment_topups_total`,
   `payment_refunds_total` and `payment_reconciliation_mismatches`.
 - **Artifact scanning / media pipeline**: `ARTIFACT_SCANNER=openai` scans
-  text/image artifact bytes before storage. `cmd/worker` owns video media
+  text/image artifact bytes before storage and is required in production when
+  real generation providers are configured. Unsupported scanner media types
+  fail closed instead of being treated as allowed. `cmd/worker` owns video media
   processing; VK Bot and Mini App must not call ffprobe/ffmpeg directly.
   `MEDIA_VIDEO_PROBE_POLICY=probe_required` runs ffprobe when
   `MEDIA_PIPELINE_ENABLED=true`; in production this policy is required, and if
@@ -1208,6 +1210,7 @@ PR checks come from `.github/workflows/ci.yml`:
 | `Backend` | `gofmt -l .`, `golangci-lint run`, `go test ./...`, `go vet ./...` | Uses mock/default config; must not need real provider/VK/payment secrets |
 | `Secret Scan` | Gitleaks with `.gitleaks.toml` | Blocks `.env`, provider keys, tunnel tokens, launch params and similar leaks |
 | `Mini App` | `npm ci`, `npm run lint`, `npm run typecheck`, `npm run build` in `web/miniapp` | No VK WebView or external APIs required |
+| `Admin Web` | `npm ci`, `npm run lint`, `npm run typecheck`, `npm run build` in `web/admin` | No public admin token or backend secrets required |
 | `Infrastructure` | `scripts/ci/validate-infra.ps1` | Validates compose config, migration order, tracked env files, Cloudflare config secret patterns and Prometheus config/rules |
 
 Run the same fast gate locally before opening or updating a PR:
@@ -1220,6 +1223,10 @@ npm --prefix web/miniapp ci
 npm --prefix web/miniapp run lint
 npm --prefix web/miniapp run typecheck
 npm --prefix web/miniapp run build
+npm --prefix web/admin ci
+npm --prefix web/admin run lint
+npm --prefix web/admin run typecheck
+npm --prefix web/admin run build
 docker compose config
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\ci\validate-infra.ps1
 gitleaks detect --no-banner --redact --source .
@@ -1468,8 +1475,8 @@ Reverse proxy routing:
 |--------------|--------|
 | `https://vk.neiirohub.ru/webhooks/vk` | `cmd/api:8080` |
 | `https://vk.neiirohub.ru/health` | `cmd/api:8080` |
-| `https://vk.neiirohub.ru/billing/webhooks/yookassa` | `cmd/provider-webhook:8082` |
-| `https://neiirohub.ru/billing/webhooks/yookassa` | `cmd/provider-webhook:8082` compatibility route if YooKassa is already configured on the root domain |
+| `https://neiirohub.ru/billing/webhooks/yookassa` | `cmd/provider-webhook:8082` |
+| `https://vk.neiirohub.ru/billing/webhooks/yookassa` | `cmd/provider-webhook:8082` legacy compatibility route |
 | `https://app.neiirohub.ru/` | `miniapp:80` |
 | `https://app.neiirohub.ru/miniapp/*` | `cmd/api:8080` |
 
@@ -1551,9 +1558,9 @@ the credentials JSON or token.
 YooKassa-specific HTTPS requirement:
 
 - In YooKassa, webhook URL must be exactly HTTPS, for example
-  `https://vk.neiirohub.ru/billing/webhooks/yookassa`.
-- Compatibility route `https://neiirohub.ru/billing/webhooks/yookassa` exists
-  only for an already configured root-domain webhook.
+  `https://neiirohub.ru/billing/webhooks/yookassa`.
+- Legacy compatibility route `https://vk.neiirohub.ru/billing/webhooks/yookassa`
+  exists only for an already configured VK-domain webhook.
 - `deployments/nginx/nginx.prod.conf` forces `X-Forwarded-Proto: https` and
   `Forwarded: proto=https` on the exact YooKassa webhook location so
   `cmd/provider-webhook` passes its production HTTPS guard behind Cloudflare
@@ -1564,7 +1571,7 @@ Cloudflare smoke checks:
 
 ```bash
 curl -i https://vk.neiirohub.ru/health
-curl -i -X POST https://vk.neiirohub.ru/billing/webhooks/yookassa -d '{}'
+curl -i -X POST https://neiirohub.ru/billing/webhooks/yookassa -d '{}'
 curl -i https://app.neiirohub.ru/
 curl -i https://app.neiirohub.ru/metrics
 ```
@@ -1588,14 +1595,14 @@ Safe public smoke:
 .\scripts\deploy\smoke-prod.ps1 `
   -VkBaseUrl https://vk.neiirohub.ru `
   -AppBaseUrl https://app.neiirohub.ru `
-  -PaymentWebhookUrl https://vk.neiirohub.ru/billing/webhooks/yookassa
+  -PaymentWebhookUrl https://neiirohub.ru/billing/webhooks/yookassa
 ```
 
 ```bash
 bash scripts/deploy/smoke-prod.sh \
   --vk-base-url https://vk.neiirohub.ru \
   --app-base-url https://app.neiirohub.ru \
-  --payment-webhook-url https://vk.neiirohub.ru/billing/webhooks/yookassa
+  --payment-webhook-url https://neiirohub.ru/billing/webhooks/yookassa
 ```
 
 YooKassa webhook-only hardening check:
@@ -1605,7 +1612,7 @@ YooKassa webhook-only hardening check:
   -PaymentWebhookOnly `
   -VkBaseUrl https://vk.neiirohub.ru `
   -AppBaseUrl https://app.neiirohub.ru `
-  -PaymentWebhookUrl https://vk.neiirohub.ru/billing/webhooks/yookassa
+  -PaymentWebhookUrl https://neiirohub.ru/billing/webhooks/yookassa
 ```
 
 ```bash
@@ -1613,7 +1620,7 @@ bash scripts/deploy/smoke-prod.sh \
   --payment-webhook-only \
   --vk-base-url https://vk.neiirohub.ru \
   --app-base-url https://app.neiirohub.ru \
-  --payment-webhook-url https://vk.neiirohub.ru/billing/webhooks/yookassa
+  --payment-webhook-url https://neiirohub.ru/billing/webhooks/yookassa
 ```
 
 Production smoke scripts reject non-HTTPS public URLs by default. Use

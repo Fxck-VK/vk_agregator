@@ -44,9 +44,22 @@ describe("launch and referral parsing helpers", () => {
     expect(normalizeRawParams("#vk_user_id=42")).toBe("vk_user_id=42");
   });
 
-  test("extracts launch params only when a VK user identity is present", () => {
-    window.history.replaceState({}, "", "/?vk_user_id=42&vk_ts=1&sign=fake");
-    expect(launchParamsFromLocation()).toBe("vk_user_id=42&vk_ts=1&sign=fake");
+  test("extracts only sign and vk-prefixed launch params when a VK user identity is present", () => {
+    window.history.replaceState(
+      {},
+      "",
+      "/?vk_user_id=42&vk_ts=1&sign=fake&vk_new_param=keep&ref=ABCD2345&private_url=secret&unsafe=drop",
+    );
+    const raw = launchParamsFromLocation();
+    expect(raw).toContain("vk_user_id=42");
+    expect(raw).toContain("vk_ts=1");
+    expect(raw).toContain("sign=fake");
+    expect(raw).toContain("vk_new_param=keep");
+    expect(raw).not.toContain("ref=");
+    expect(raw).not.toContain("private_url");
+    expect(raw).not.toContain("unsafe");
+
+    expect(referralCodeFromRaw(window.location.search)).toBe("ABCD2345");
 
     window.history.replaceState({}, "", "/?ref=ABCD1234");
     expect(launchParamsFromLocation()).toBe("");
@@ -57,6 +70,9 @@ describe("launch and referral parsing helpers", () => {
       vk_user_id: 42,
       vk_ts: 1,
       sign: "fake",
+      vk_new_param: "keep",
+      ref: "ABCD2345",
+      private_url: "secret",
       ignored: undefined,
       empty: null,
     });
@@ -64,6 +80,9 @@ describe("launch and referral parsing helpers", () => {
     expect(raw).toContain("vk_user_id=42");
     expect(raw).toContain("vk_ts=1");
     expect(raw).toContain("sign=fake");
+    expect(raw).toContain("vk_new_param=keep");
+    expect(raw).not.toContain("ref=");
+    expect(raw).not.toContain("private_url");
     expect(raw).not.toContain("ignored");
     expect(raw).not.toContain("empty");
   });

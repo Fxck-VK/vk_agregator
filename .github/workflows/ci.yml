@@ -102,6 +102,32 @@ jobs:
       - name: Build
         run: npm --prefix web/miniapp run build
 
+  admin:
+    name: Admin Web
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/admin/package-lock.json
+
+      - name: Install dependencies
+        run: npm --prefix web/admin ci
+
+      - name: Lint
+        run: npm --prefix web/admin run lint
+
+      - name: Typecheck
+        run: npm --prefix web/admin run typecheck
+
+      - name: Build
+        run: npm --prefix web/admin run build
+
   infrastructure:
     name: Infrastructure
     runs-on: ubuntu-latest

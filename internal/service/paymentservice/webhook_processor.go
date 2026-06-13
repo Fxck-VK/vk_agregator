@@ -172,6 +172,9 @@ func (p *WebhookProcessor) ProcessEvent(ctx context.Context, event *domain.Payme
 	if event.Provider != p.provider.Code() {
 		return fmt.Errorf("%w: event provider %s", ErrWebhookInvalid, event.Provider)
 	}
+	if isRefundWebhookEvent(event.EventType) {
+		return fmt.Errorf("%w: refund event requires manual reconciliation", ErrWebhookUnsupported)
+	}
 	if strings.TrimSpace(event.ProviderPaymentID) == "" {
 		return ErrWebhookUnsupported
 	}
@@ -194,13 +197,6 @@ func (p *WebhookProcessor) ProcessEvent(ctx context.Context, event *domain.Payme
 			return err
 		}
 
-		if isRefundWebhookEvent(event.EventType) {
-			// Refund accounting requires a product policy about spent credits and
-			// lot/FIFO attribution. Chapter 6 only inboxes and verifies refund
-			// events; balance mutation is intentionally left to a later refund
-			// processor.
-			return payments.MarkEventProcessed(ctx, event.ID, p.now())
-		}
 		if _, err := p.applyProviderPayment(ctx, payments, billingRepo, intent, providerPayment); err != nil {
 			return err
 		}
@@ -355,17 +351,28 @@ func (p *WebhookProcessor) RefundIntent(ctx context.Context, in RefundIntentInpu
 	if in.IntentID == uuid.Nil || in.IdempotencyKey == "" {
 		return RefundIntentResult{}, ErrInvalidInput
 	}
+	refund, err := p.ensureRefundIntentRecord(ctx, in)
+	if err != nil {
+		return RefundIntentResult{}, err
+	}
+	intent, err := p.repo.GetIntentByID(ctx, refund.IntentID)
+	if err != nil {
+		return RefundIntentResult{}, err
+	}
+	if !refundRequiresProviderResume(refund.Status) {
+		return RefundIntentResult{Intent: intent, Refund: refund}, nil
+	}
+	return p.submitProviderRefund(ctx, intent, refund, in.Reason)
+}
+
+func (p *WebhookProcessor) ensureRefundIntentRecord(ctx context.Context, in RefundIntentInput) (*domain.PaymentRefund, error) {
 	if existing, err := p.repo.GetRefundByIdempotencyKey(ctx, in.IdempotencyKey); err == nil {
 		if existing.IntentID != in.IntentID {
-			return RefundIntentResult{}, ErrForbidden
+			return nil, ErrForbidden
 		}
-		intent, getErr := p.repo.GetIntentByID(ctx, existing.IntentID)
-		if getErr != nil {
-			return RefundIntentResult{}, getErr
-		}
-		return RefundIntentResult{Intent: intent, Refund: existing}, nil
+		return existing, nil
 	} else if !errors.Is(err, domain.ErrNotFound) {
-		return RefundIntentResult{}, err
+		return nil, err
 	}
 
 	var refund *domain.PaymentRefund
@@ -409,12 +416,18 @@ func (p *WebhookProcessor) RefundIntent(ctx context.Context, in RefundIntentInpu
 			Reason:         "payment refund debit",
 		})
 	}); err != nil {
-		return RefundIntentResult{}, err
+		return nil, err
 	}
+	return refund, nil
+}
 
-	intent, err := p.repo.GetIntentByID(ctx, in.IntentID)
-	if err != nil {
-		return RefundIntentResult{}, err
+func refundRequiresProviderResume(status domain.PaymentRefundStatus) bool {
+	return status == domain.PaymentRefundCreated || status == domain.PaymentRefundProviderPending
+}
+
+func (p *WebhookProcessor) submitProviderRefund(ctx context.Context, intent *domain.PaymentIntent, refund *domain.PaymentRefund, reason string) (RefundIntentResult, error) {
+	if intent == nil || refund == nil {
+		return RefundIntentResult{}, ErrInvalidInput
 	}
 	providerRefund, err := p.provider.CreateRefund(ctx, domain.CreateRefundInput{
 		RefundID:          refund.ID,
@@ -423,7 +436,7 @@ func (p *WebhookProcessor) RefundIntent(ctx context.Context, in RefundIntentInpu
 		Amount:            intent.Amount,
 		Currency:          intent.Currency,
 		Description:       paymentIntentDescription(intent, nil),
-		Reason:            in.Reason,
+		Reason:            reason,
 		ReceiptEmail:      intent.ReceiptEmail,
 		ReceiptPhone:      intent.ReceiptPhone,
 		VATCode:           paymentIntentVATCode(intent, nil),
@@ -434,7 +447,7 @@ func (p *WebhookProcessor) RefundIntent(ctx context.Context, in RefundIntentInpu
 	if err != nil {
 		recordPaymentProviderError(p.provider.Code(), "create_refund", err)
 		metrics.PaymentRefunds.WithLabelValues(string(p.provider.Code()), "provider_error").Inc()
-		if compErr := p.compensateFailedRefund(ctx, intent, refund); compErr != nil {
+		if compErr := p.compensateRefundDebit(ctx, intent, refund, "", domain.PaymentRefundFailed); compErr != nil {
 			metrics.PaymentRefunds.WithLabelValues(string(p.provider.Code()), "rollback_failed").Inc()
 			return RefundIntentResult{}, fmt.Errorf("paymentservice: refund provider failed and rollback failed: %w: %v", err, compErr)
 		}
@@ -445,9 +458,31 @@ func (p *WebhookProcessor) RefundIntent(ctx context.Context, in RefundIntentInpu
 		err := fmt.Errorf("%w: amount/currency", ErrRefundMismatch)
 		recordPaymentProviderError(p.provider.Code(), "create_refund", err)
 		metrics.PaymentRefunds.WithLabelValues(string(p.provider.Code()), "provider_mismatch").Inc()
-		if compErr := p.compensateFailedRefund(ctx, intent, refund); compErr != nil {
+		if compErr := p.compensateRefundDebit(ctx, intent, refund, providerRefund.ProviderRefundID, domain.PaymentRefundFailed); compErr != nil {
 			metrics.PaymentRefunds.WithLabelValues(string(p.provider.Code()), "rollback_failed").Inc()
 			return RefundIntentResult{}, fmt.Errorf("paymentservice: refund provider mismatch and rollback failed: %w: %v", err, compErr)
+		}
+		metrics.PaymentRefunds.WithLabelValues(string(p.provider.Code()), "rollback_succeeded").Inc()
+		return RefundIntentResult{}, err
+	}
+	if !providerRefund.Status.Valid() {
+		err := fmt.Errorf("%w: provider status %q", ErrRefundMismatch, providerRefund.Status)
+		recordPaymentProviderError(p.provider.Code(), "create_refund", err)
+		metrics.PaymentRefunds.WithLabelValues(string(p.provider.Code()), "provider_mismatch").Inc()
+		if compErr := p.compensateRefundDebit(ctx, intent, refund, providerRefund.ProviderRefundID, domain.PaymentRefundFailed); compErr != nil {
+			metrics.PaymentRefunds.WithLabelValues(string(p.provider.Code()), "rollback_failed").Inc()
+			return RefundIntentResult{}, fmt.Errorf("paymentservice: refund provider status mismatch and rollback failed: %w: %v", err, compErr)
+		}
+		metrics.PaymentRefunds.WithLabelValues(string(p.provider.Code()), "rollback_succeeded").Inc()
+		return RefundIntentResult{}, err
+	}
+	if providerRefund.Status == domain.PaymentRefundFailed || providerRefund.Status == domain.PaymentRefundCanceled {
+		err := fmt.Errorf("%w: provider status %s", ErrRefundNotAllowed, providerRefund.Status)
+		recordPaymentProviderError(p.provider.Code(), "create_refund", err)
+		metrics.PaymentRefunds.WithLabelValues(string(p.provider.Code()), "provider_"+string(providerRefund.Status)).Inc()
+		if compErr := p.compensateRefundDebit(ctx, intent, refund, providerRefund.ProviderRefundID, providerRefund.Status); compErr != nil {
+			metrics.PaymentRefunds.WithLabelValues(string(p.provider.Code()), "rollback_failed").Inc()
+			return RefundIntentResult{}, fmt.Errorf("paymentservice: refund provider terminal state and rollback failed: %w: %v", err, compErr)
 		}
 		metrics.PaymentRefunds.WithLabelValues(string(p.provider.Code()), "rollback_succeeded").Inc()
 		return RefundIntentResult{}, err
@@ -471,7 +506,7 @@ func (p *WebhookProcessor) RefundIntent(ctx context.Context, in RefundIntentInpu
 	}); err != nil {
 		return RefundIntentResult{}, err
 	}
-	updatedRefund, err := p.repo.GetRefundByIdempotencyKey(ctx, in.IdempotencyKey)
+	updatedRefund, err := p.repo.GetRefundByIdempotencyKey(ctx, refund.IdempotencyKey)
 	if err != nil {
 		return RefundIntentResult{}, err
 	}
@@ -498,7 +533,10 @@ func webhookProcessingStage(err error) string {
 	}
 }
 
-func (p *WebhookProcessor) compensateFailedRefund(ctx context.Context, intent *domain.PaymentIntent, refund *domain.PaymentRefund) error {
+func (p *WebhookProcessor) compensateRefundDebit(ctx context.Context, intent *domain.PaymentIntent, refund *domain.PaymentRefund, providerRefundID string, status domain.PaymentRefundStatus) error {
+	if status == "" {
+		status = domain.PaymentRefundFailed
+	}
 	return p.tx.RunPaymentTx(ctx, func(ctx context.Context, payments domain.PaymentRepository, billingRepo domain.BillingRepository) error {
 		account, err := billingRepo.GetAccountByUser(ctx, intent.UserID, domain.CurrencyCredits)
 		if err != nil {
@@ -514,7 +552,7 @@ func (p *WebhookProcessor) compensateFailedRefund(ctx context.Context, intent *d
 		}); err != nil && !errors.Is(err, domain.ErrConflict) {
 			return err
 		}
-		return payments.SetRefundProviderState(ctx, refund.ID, "", domain.PaymentRefundFailed)
+		return payments.SetRefundProviderState(ctx, refund.ID, providerRefundID, status)
 	})
 }
 

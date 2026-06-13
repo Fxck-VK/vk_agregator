@@ -202,24 +202,32 @@ func (p *Provider) submitText(ctx context.Context, req domain.ProviderRequest) (
 	if err != nil {
 		return domain.ProviderTask{}, err
 	}
+	res := domain.ProviderTaskResult{
+		Status:     domain.ProviderTaskSucceeded,
+		OutputURLs: []string{dataURL("text/plain; charset=utf-8", []byte(text))},
+		Text:       text,
+	}
 	p.store(externalID, taskState{
-		status:     domain.ProviderTaskSucceeded,
-		outputURLs: []string{dataURL("text/plain; charset=utf-8", []byte(text))},
-		text:       text,
+		status:     res.Status,
+		outputURLs: res.OutputURLs,
+		text:       res.Text,
 	})
-	return domain.ProviderTask{
+	task := domain.ProviderTask{
 		JobID:          req.JobID,
 		Provider:       domain.ProviderDeepInfra,
 		ModelCode:      model,
 		ExternalID:     externalID,
 		AttemptNo:      1,
-		Status:         domain.ProviderTaskProcessing,
+		Status:         domain.ProviderTaskSucceeded,
 		Request:        req.Params,
+		Result:         providerTaskResultRaw(res),
 		SubmittedAt:    &now,
+		CompletedAt:    &now,
 		CreatedAt:      now,
 		UpdatedAt:      now,
 		IdempotencyKey: req.IdempotencyKey,
-	}, nil
+	}
+	return task, nil
 }
 
 func (p *Provider) submitImage(ctx context.Context, req domain.ProviderRequest) (domain.ProviderTask, error) {
@@ -272,23 +280,30 @@ func (p *Provider) submitImage(ctx context.Context, req domain.ProviderRequest) 
 	if outputURL == "" {
 		return domain.ProviderTask{}, &Error{Class: domain.ProviderErrInternal, Message: "empty image response"}
 	}
+	res := domain.ProviderTaskResult{
+		Status:     domain.ProviderTaskSucceeded,
+		OutputURLs: []string{outputURL},
+	}
 	p.store(externalID, taskState{
-		status:     domain.ProviderTaskSucceeded,
-		outputURLs: []string{outputURL},
+		status:     res.Status,
+		outputURLs: res.OutputURLs,
 	})
-	return domain.ProviderTask{
+	task := domain.ProviderTask{
 		JobID:          req.JobID,
 		Provider:       domain.ProviderDeepInfra,
 		ModelCode:      model,
 		ExternalID:     externalID,
 		AttemptNo:      1,
-		Status:         domain.ProviderTaskProcessing,
+		Status:         domain.ProviderTaskSucceeded,
 		Request:        req.Params,
+		Result:         providerTaskResultRaw(res),
 		SubmittedAt:    &now,
+		CompletedAt:    &now,
 		CreatedAt:      now,
 		UpdatedAt:      now,
 		IdempotencyKey: req.IdempotencyKey,
-	}, nil
+	}
+	return task, nil
 }
 
 // Poll returns cached DeepInfra results.
@@ -312,6 +327,14 @@ func (p *Provider) store(externalID string, state taskState) {
 	p.mu.Lock()
 	p.tasks[externalID] = state
 	p.mu.Unlock()
+}
+
+func providerTaskResultRaw(res domain.ProviderTaskResult) json.RawMessage {
+	raw, err := json.Marshal(res)
+	if err != nil {
+		return nil
+	}
+	return raw
 }
 
 type chatRequest struct {

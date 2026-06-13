@@ -35,6 +35,8 @@ const ReferenceImageValidationPolicyVersion = "image_reference_v1"
 
 var sensitiveURLPattern = regexp.MustCompile(`(?i)(https?|mock)://[^\s"'<>]+|data:[^\s"'<>]+`)
 
+var errRemoteArtifactTooLarge = errors.New("artifactservice: remote artifact too large")
+
 // ObjectStore is the minimal blob storage contract the service needs. It is
 // satisfied by the S3/MinIO adapter and by in-memory test doubles.
 type ObjectStore interface {
@@ -429,11 +431,22 @@ func (d *httpDownloader) Download(ctx context.Context, rawURL string) ([]byte, s
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, "", fmt.Errorf("unexpected status %d", resp.StatusCode)
 	}
-	data, err := io.ReadAll(io.LimitReader(resp.Body, maxRemoteBytes))
+	data, err := readRemoteBody(resp.Body, maxRemoteBytes)
 	if err != nil {
 		return nil, "", err
 	}
 	return data, resp.Header.Get("Content-Type"), nil
+}
+
+func readRemoteBody(r io.Reader, limit int64) ([]byte, error) {
+	data, err := io.ReadAll(io.LimitReader(r, limit+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > limit {
+		return nil, errRemoteArtifactTooLarge
+	}
+	return data, nil
 }
 
 func decodeDataURL(raw string) ([]byte, string, error) {

@@ -150,6 +150,69 @@ func TestCreateIntentUsesReceiptSnapshotWhenProviderCreationIsRetried(t *testing
 	}
 }
 
+func TestCreateIntentRejectsUnsafeProviderConfirmationURLAndCanRetry(t *testing.T) {
+	ctx := context.Background()
+	repo := memory.NewPaymentRepo()
+	repo.PutProduct(&domain.PaymentProduct{
+		Code:         "credits_100",
+		Title:        "100 credits",
+		Amount:       9900,
+		Currency:     domain.CurrencyRUB,
+		Credits:      100,
+		PriceVersion: 1,
+		IsActive:     true,
+	})
+	provider := &recordingPaymentProvider{
+		code:            domain.PaymentProviderMock,
+		confirmationURL: "http://payments.local/insecure",
+	}
+	svc := paymentservice.New(repo, provider, paymentservice.Config{ReturnURL: "https://neiirohub.ru/payments/return"})
+	userID := uuid.New()
+	key := "miniapp_payment:777:unsafe-confirmation"
+
+	_, err := svc.CreateIntent(ctx, paymentservice.CreateIntentInput{
+		UserID:         userID,
+		ProductCode:    "credits_100",
+		ReceiptEmail:   "user@example.com",
+		IdempotencyKey: key,
+		Source:         "vk_miniapp",
+	})
+	if err == nil {
+		t.Fatal("expected unsafe provider confirmation URL to be rejected")
+	}
+	intent, err := repo.GetIntentByIdempotencyKey(ctx, key)
+	if err != nil {
+		t.Fatalf("get local intent: %v", err)
+	}
+	if intent.Status != domain.PaymentIntentCreated || intent.ProviderPaymentID != "" || intent.ConfirmationURL != "" {
+		t.Fatalf("unsafe provider state was persisted: %+v", intent)
+	}
+
+	provider.confirmationURL = "https://payments.local/retry"
+	result, err := svc.CreateIntent(ctx, paymentservice.CreateIntentInput{
+		UserID:         userID,
+		ProductCode:    "credits_100",
+		ReceiptEmail:   "user@example.com",
+		IdempotencyKey: key,
+		Source:         "vk_miniapp",
+	})
+	if err != nil {
+		t.Fatalf("retry provider payment: %v", err)
+	}
+	if result.Created {
+		t.Fatal("retry should resume the existing local intent")
+	}
+	if result.Intent.ConfirmationURL != "https://payments.local/retry" || result.Intent.ProviderPaymentID == "" {
+		t.Fatalf("retry did not persist safe provider state: %+v", result.Intent)
+	}
+	if len(provider.createInputs) != 2 {
+		t.Fatalf("provider calls = %d, want 2", len(provider.createInputs))
+	}
+	if provider.createInputs[0].IdempotencyKey != provider.createInputs[1].IdempotencyKey {
+		t.Fatalf("provider idempotency key changed between retries: %q vs %q", provider.createInputs[0].IdempotencyKey, provider.createInputs[1].IdempotencyKey)
+	}
+}
+
 func TestCreateIntentCanDisableProviderCaptureForOperatorSmoke(t *testing.T) {
 	ctx := context.Background()
 	repo := memory.NewPaymentRepo()
@@ -686,7 +749,7 @@ func TestWebhookProcessorCanceledMarksIntentWithoutTopup(t *testing.T) {
 	}
 }
 
-func TestWebhookProcessorRefundSucceededIsInboxOnly(t *testing.T) {
+func TestWebhookProcessorRefundSucceededStaysUnprocessedForManualReconciliation(t *testing.T) {
 	ctx := context.Background()
 	repo := memory.NewPaymentRepo()
 	repo.PutProduct(&domain.PaymentProduct{
@@ -732,11 +795,11 @@ func TestWebhookProcessorRefundSucceededIsInboxOnly(t *testing.T) {
 		t.Fatalf("ingest refund: %v", err)
 	}
 	processed, err := processor.ProcessBatch(ctx, 10)
-	if err != nil {
-		t.Fatalf("process refund: %v", err)
+	if !errors.Is(err, paymentservice.ErrWebhookUnsupported) {
+		t.Fatalf("process refund err = %v, want ErrWebhookUnsupported", err)
 	}
-	if processed != 1 {
-		t.Fatalf("processed refund = %d, want 1", processed)
+	if processed != 0 {
+		t.Fatalf("processed refund = %d, want 0", processed)
 	}
 	acc, err = billingRepo.GetAccountByUser(ctx, userID, domain.CurrencyCredits)
 	if err != nil {
@@ -756,8 +819,8 @@ func TestWebhookProcessorRefundSucceededIsInboxOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list events: %v", err)
 	}
-	if len(events) != 0 {
-		t.Fatalf("unprocessed events = %d, want 0", len(events))
+	if len(events) != 1 || events[0].EventType != "refund.succeeded" {
+		t.Fatalf("unprocessed refund events = %+v, want refund.succeeded pending manual reconciliation", events)
 	}
 }
 
@@ -950,6 +1013,133 @@ func TestRefundIntentReplayIsIdempotent(t *testing.T) {
 	}
 }
 
+func TestRefundIntentReplayResumesPendingRefundBeforeProviderCall(t *testing.T) {
+	ctx := context.Background()
+	repo, billingRepo, intent := createSucceededTopupForRefund(t, ctx, "resume-before-provider-intent-key")
+
+	refund := &domain.PaymentRefund{
+		IntentID:       intent.ID,
+		Amount:         intent.Amount,
+		Status:         domain.PaymentRefundProviderPending,
+		IdempotencyKey: "refund-resume-before-provider-key",
+		Reason:         "operator refund",
+	}
+	if err := repo.CreateRefund(ctx, refund); err != nil {
+		t.Fatalf("create pending refund: %v", err)
+	}
+	account, err := billingRepo.GetAccountByUser(ctx, intent.UserID, domain.CurrencyCredits)
+	if err != nil {
+		t.Fatalf("get account: %v", err)
+	}
+	if err := billingRepo.AppendEntry(ctx, &domain.LedgerEntry{
+		AccountID:      account.ID,
+		Type:           domain.LedgerAdjustment,
+		Amount:         -intent.Credits,
+		Status:         domain.LedgerStatusCommitted,
+		IdempotencyKey: testRefundDebitLedgerKey(intent.Provider, intent.ProviderPaymentID, refund.ID),
+		Reason:         "payment refund debit",
+	}); err != nil {
+		t.Fatalf("append pending refund debit: %v", err)
+	}
+
+	provider := &recordingPaymentProvider{code: domain.PaymentProviderMock}
+	processor := newTestWebhookProcessorWithProvider(repo, provider, billingRepo)
+	result, err := processor.RefundIntent(ctx, paymentservice.RefundIntentInput{
+		IntentID:       intent.ID,
+		IdempotencyKey: "refund-resume-before-provider-key",
+		Reason:         "operator refund replay",
+	})
+	if err != nil {
+		t.Fatalf("refund replay: %v", err)
+	}
+	if len(provider.refundInputs) != 1 {
+		t.Fatalf("provider refund calls = %d, want 1", len(provider.refundInputs))
+	}
+	if provider.refundInputs[0].IdempotencyKey != "payrefund:"+refund.ID.String() {
+		t.Fatalf("provider idempotency key = %q", provider.refundInputs[0].IdempotencyKey)
+	}
+	if result.Refund.ID != refund.ID || result.Refund.Status != domain.PaymentRefundSucceeded {
+		t.Fatalf("unexpected resumed refund: %+v", result.Refund)
+	}
+	if result.Intent.Status != domain.PaymentIntentRefunded {
+		t.Fatalf("intent status = %s, want refunded", result.Intent.Status)
+	}
+	account, err = billingRepo.GetAccountByUser(ctx, intent.UserID, domain.CurrencyCredits)
+	if err != nil {
+		t.Fatalf("get account after replay: %v", err)
+	}
+	if account.BalanceCached != 0 {
+		t.Fatalf("balance after resumed refund = %d, want 0", account.BalanceCached)
+	}
+}
+
+func TestRefundIntentReplayResumesAfterProviderSuccessBeforeLocalState(t *testing.T) {
+	ctx := context.Background()
+	repo, billingRepo, intent := createSucceededTopupForRefund(t, ctx, "resume-after-provider-intent-key")
+	provider := &recordingPaymentProvider{code: domain.PaymentProviderMock}
+	failingRepo := &setRefundStateFailingRepo{PaymentRepository: repo, failOnce: true}
+	billing := billingservice.New(billingRepo, billingservice.WithStartingBalance(0))
+	processor := paymentservice.NewWebhookProcessor(repo, provider, billing, paymentservice.TxRunnerFunc(
+		func(ctx context.Context, fn func(context.Context, domain.PaymentRepository, domain.BillingRepository) error) error {
+			return fn(ctx, failingRepo, billingRepo)
+		},
+	))
+
+	_, err := processor.RefundIntent(ctx, paymentservice.RefundIntentInput{
+		IntentID:       intent.ID,
+		IdempotencyKey: "refund-resume-after-provider-key",
+		Reason:         "operator refund",
+	})
+	if err == nil {
+		t.Fatal("expected local refund state write failure")
+	}
+	if len(provider.refundInputs) != 1 {
+		t.Fatalf("provider refund calls after first attempt = %d, want 1", len(provider.refundInputs))
+	}
+	pending, err := repo.GetRefundByIdempotencyKey(ctx, "refund-resume-after-provider-key")
+	if err != nil {
+		t.Fatalf("get pending refund: %v", err)
+	}
+	if pending.Status != domain.PaymentRefundProviderPending || pending.ProviderRefundID != "" {
+		t.Fatalf("pending refund after failed local state = %+v", pending)
+	}
+	account, err := billingRepo.GetAccountByUser(ctx, intent.UserID, domain.CurrencyCredits)
+	if err != nil {
+		t.Fatalf("get account after first attempt: %v", err)
+	}
+	if account.BalanceCached != 0 {
+		t.Fatalf("balance after first attempt = %d, want one debit to 0", account.BalanceCached)
+	}
+
+	result, err := processor.RefundIntent(ctx, paymentservice.RefundIntentInput{
+		IntentID:       intent.ID,
+		IdempotencyKey: "refund-resume-after-provider-key",
+		Reason:         "operator refund replay",
+	})
+	if err != nil {
+		t.Fatalf("refund replay: %v", err)
+	}
+	if len(provider.refundInputs) != 2 {
+		t.Fatalf("provider refund calls after replay = %d, want 2", len(provider.refundInputs))
+	}
+	if provider.refundInputs[0].IdempotencyKey != provider.refundInputs[1].IdempotencyKey {
+		t.Fatalf("provider idempotency key changed: first=%q second=%q", provider.refundInputs[0].IdempotencyKey, provider.refundInputs[1].IdempotencyKey)
+	}
+	if result.Refund.ID != pending.ID || result.Refund.Status != domain.PaymentRefundSucceeded {
+		t.Fatalf("unexpected replay result refund: %+v", result.Refund)
+	}
+	if result.Intent.Status != domain.PaymentIntentRefunded {
+		t.Fatalf("intent status = %s, want refunded", result.Intent.Status)
+	}
+	account, err = billingRepo.GetAccountByUser(ctx, intent.UserID, domain.CurrencyCredits)
+	if err != nil {
+		t.Fatalf("get account after replay: %v", err)
+	}
+	if account.BalanceCached != 0 {
+		t.Fatalf("balance after replay = %d, want 0 without duplicate debit", account.BalanceCached)
+	}
+}
+
 func TestRefundIntentProviderFailureCompensatesDebit(t *testing.T) {
 	ctx := context.Background()
 	repo := memory.NewPaymentRepo()
@@ -1081,6 +1271,57 @@ func TestRefundIntentProviderPartialResponseCompensatesDebit(t *testing.T) {
 	}
 }
 
+func createSucceededTopupForRefund(t *testing.T, ctx context.Context, intentKey string) (*memory.PaymentRepo, *memory.BillingRepo, *domain.PaymentIntent) {
+	t.Helper()
+	repo := memory.NewPaymentRepo()
+	repo.PutProduct(&domain.PaymentProduct{
+		Code: "credits_100", Title: "100 credits", Amount: 9900,
+		Currency: domain.CurrencyRUB, Credits: 100, PriceVersion: 1, IsActive: true,
+	})
+	provider := paymentmock.New()
+	intentSvc := paymentservice.New(repo, provider, paymentservice.Config{})
+	userID := uuid.New()
+	created, err := intentSvc.CreateIntent(ctx, paymentservice.CreateIntentInput{
+		UserID:         userID,
+		ProductCode:    "credits_100",
+		ReceiptEmail:   "user@example.com",
+		IdempotencyKey: intentKey,
+	})
+	if err != nil {
+		t.Fatalf("create intent: %v", err)
+	}
+	if err := provider.SetPaymentStatus(created.Intent.ProviderPaymentID, domain.PaymentIntentSucceeded); err != nil {
+		t.Fatalf("set provider status: %v", err)
+	}
+	billingRepo := memory.NewBillingRepo()
+	processor := newTestWebhookProcessor(repo, provider, billingRepo)
+	if _, err := processor.ReconcilePendingOlderThan(ctx, 10, -time.Nanosecond); err != nil {
+		t.Fatalf("reconcile pending: %v", err)
+	}
+	intent, err := repo.GetIntentByID(ctx, created.Intent.ID)
+	if err != nil {
+		t.Fatalf("get reconciled intent: %v", err)
+	}
+	return repo, billingRepo, intent
+}
+
+func testRefundDebitLedgerKey(provider domain.PaymentProviderCode, providerPaymentID string, refundID uuid.UUID) string {
+	return "payment_refund_debit:" + string(provider) + ":" + providerPaymentID + ":" + refundID.String()
+}
+
+type setRefundStateFailingRepo struct {
+	domain.PaymentRepository
+	failOnce bool
+}
+
+func (r *setRefundStateFailingRepo) SetRefundProviderState(ctx context.Context, id uuid.UUID, providerRefundID string, status domain.PaymentRefundStatus) error {
+	if r.failOnce {
+		r.failOnce = false
+		return errors.New("simulated refund provider state write failure")
+	}
+	return r.PaymentRepository.SetRefundProviderState(ctx, id, providerRefundID, status)
+}
+
 func newTestWebhookProcessor(repo *memory.PaymentRepo, provider *paymentmock.Provider, billingRepo *memory.BillingRepo) *paymentservice.WebhookProcessor {
 	return newTestWebhookProcessorWithProvider(repo, provider, billingRepo)
 }
@@ -1094,12 +1335,14 @@ func newTestWebhookProcessorWithProvider(repo *memory.PaymentRepo, provider doma
 }
 
 type recordingPaymentProvider struct {
-	code           domain.PaymentProviderCode
-	createInputs   []domain.CreatePaymentInput
-	refundInputs   []domain.CreateRefundInput
-	refundAmount   *int64
-	refundCurrency domain.Currency
-	refundErr      error
+	code            domain.PaymentProviderCode
+	createInputs    []domain.CreatePaymentInput
+	confirmationURL string
+	refundInputs    []domain.CreateRefundInput
+	refundAmount    *int64
+	refundCurrency  domain.Currency
+	refundErr       error
+	refundResults   map[string]domain.RefundResult
 }
 
 func (p *recordingPaymentProvider) Code() domain.PaymentProviderCode {
@@ -1111,9 +1354,13 @@ func (p *recordingPaymentProvider) Code() domain.PaymentProviderCode {
 
 func (p *recordingPaymentProvider) CreatePayment(_ context.Context, in domain.CreatePaymentInput) (domain.CreatePaymentResult, error) {
 	p.createInputs = append(p.createInputs, in)
+	confirmationURL := p.confirmationURL
+	if confirmationURL == "" {
+		confirmationURL = "https://payments.local/" + in.IntentID.String()
+	}
 	return domain.CreatePaymentResult{
 		ProviderPaymentID: "recording-pay-" + in.IntentID.String(),
-		ConfirmationURL:   "https://payments.local/" + in.IntentID.String(),
+		ConfirmationURL:   confirmationURL,
 		Status:            domain.PaymentIntentWaitingForUser,
 	}, nil
 }
@@ -1131,6 +1378,12 @@ func (p *recordingPaymentProvider) CreateRefund(_ context.Context, in domain.Cre
 	if p.refundErr != nil {
 		return domain.RefundResult{}, p.refundErr
 	}
+	if p.refundResults == nil {
+		p.refundResults = map[string]domain.RefundResult{}
+	}
+	if existing, ok := p.refundResults[in.IdempotencyKey]; ok {
+		return existing, nil
+	}
 	amount := in.Amount
 	if p.refundAmount != nil {
 		amount = *p.refundAmount
@@ -1139,12 +1392,14 @@ func (p *recordingPaymentProvider) CreateRefund(_ context.Context, in domain.Cre
 	if p.refundCurrency != "" {
 		currency = p.refundCurrency
 	}
-	return domain.RefundResult{
+	result := domain.RefundResult{
 		ProviderRefundID: "recording-refund-" + in.RefundID.String(),
 		Status:           domain.PaymentRefundSucceeded,
 		Amount:           amount,
 		Currency:         currency,
-	}, nil
+	}
+	p.refundResults[in.IdempotencyKey] = result
+	return result, nil
 }
 
 func (p *recordingPaymentProvider) ParseWebhook(context.Context, []byte, http.Header) (domain.WebhookEvent, error) {

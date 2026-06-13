@@ -69,23 +69,30 @@ func (p *Provider) submitVideo(ctx context.Context, req domain.ProviderRequest) 
 
 	now := p.now()
 	externalID := "deepinfra-video-" + uuid.NewString()
+	res := domain.ProviderTaskResult{
+		Status:     domain.ProviderTaskSucceeded,
+		OutputURLs: []string{result.OutputURL},
+	}
 	p.store(externalID, taskState{
-		status:     domain.ProviderTaskSucceeded,
-		outputURLs: []string{result.OutputURL},
+		status:     res.Status,
+		outputURLs: res.OutputURLs,
 	})
-	return domain.ProviderTask{
+	task := domain.ProviderTask{
 		JobID:          req.JobID,
 		Provider:       domain.ProviderDeepInfra,
 		ModelCode:      model,
 		ExternalID:     externalID,
 		AttemptNo:      1,
-		Status:         domain.ProviderTaskProcessing,
+		Status:         domain.ProviderTaskSucceeded,
 		Request:        req.Params,
+		Result:         providerTaskResultRaw(res),
 		SubmittedAt:    &now,
+		CompletedAt:    &now,
 		CreatedAt:      now,
 		UpdatedAt:      now,
 		IdempotencyKey: req.IdempotencyKey,
-	}, nil
+	}
+	return task, nil
 }
 
 func (p *Provider) generateVideo(ctx context.Context, req domain.VideoGenerationRequest) (domain.VideoGenerationResult, error) {

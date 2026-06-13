@@ -287,14 +287,15 @@ type callback struct {
 // message under "message" in modern API versions; the flat fields cover older
 // versions.
 type messageNew struct {
-	Message     *vkMessage     `json:"message"`
-	FromID      int64          `json:"from_id"`
-	PeerID      int64          `json:"peer_id"`
-	Text        string         `json:"text"`
-	Payload     string         `json:"payload"`
-	Ref         string         `json:"ref"`
-	RefSource   string         `json:"ref_source"`
-	Attachments []vkAttachment `json:"attachments"`
+	Message               *vkMessage     `json:"message"`
+	FromID                int64          `json:"from_id"`
+	PeerID                int64          `json:"peer_id"`
+	Text                  string         `json:"text"`
+	Payload               string         `json:"payload"`
+	Ref                   string         `json:"ref"`
+	RefSource             string         `json:"ref_source"`
+	ConversationMessageID int64          `json:"conversation_message_id"`
+	Attachments           []vkAttachment `json:"attachments"`
 }
 
 type vkMessage struct {
@@ -339,11 +340,11 @@ type vkSticker struct {
 	Emoji     string `json:"emoji"`
 }
 
-func (m messageNew) resolve() (fromID, peerID int64, text, payload, ref string) {
+func (m messageNew) resolve() (fromID, peerID, conversationMessageID int64, text, payload, ref string) {
 	if m.Message != nil {
-		return m.Message.FromID, m.Message.PeerID, normalizedMessageText(m.Message.Text, m.Message.Attachments), m.Message.Payload, m.Message.Ref
+		return m.Message.FromID, m.Message.PeerID, m.Message.ConversationMessageID, normalizedMessageText(m.Message.Text, m.Message.Attachments), m.Message.Payload, m.Message.Ref
 	}
-	return m.FromID, m.PeerID, normalizedMessageText(m.Text, m.Attachments), m.Payload, m.Ref
+	return m.FromID, m.PeerID, m.ConversationMessageID, normalizedMessageText(m.Text, m.Attachments), m.Payload, m.Ref
 }
 
 func normalizedMessageText(text string, attachments []vkAttachment) string {
@@ -422,13 +423,17 @@ func (h *Handler) handleMessageNew(ctx context.Context, cb callback, rawBody []b
 			return fmt.Errorf("decode object: %w", err)
 		}
 	}
-	fromID, peerID, text, payload, ref := obj.resolve()
+	fromID, peerID, conversationMessageID, text, payload, ref := obj.resolve()
 	if fromID == 0 {
 		return errors.New("message has no from_id")
 	}
 	if eventID == "" {
 		// Fall back to a stable synthetic id when VK omits event_id.
-		eventID = fmt.Sprintf("%d:%d:%x", peerID, fromID, hashText(text))
+		if conversationMessageID > 0 {
+			eventID = fmt.Sprintf("conversation_message:%d:%d:%d", peerID, fromID, conversationMessageID)
+		} else {
+			eventID = fmt.Sprintf("%d:%d:%x", peerID, fromID, hashText(text))
+		}
 	}
 
 	idemKey := fmt.Sprintf("vk_event:%d:%s", cb.GroupID, eventID)

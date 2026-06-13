@@ -1,7 +1,7 @@
 ﻿{
     "schema_version":  3,
-    "updated_at":  "2026-06-13T16:20:18+03:00",
-    "branch":  "serega",
+    "updated_at":  "2026-06-13T19:50:00+03:00",
+    "branch":  "fastlife_dev",
     "git_ref_policy":  "Use git rev-parse HEAD/origin/main for moving SHAs; this file does not track branch head commits.",
     "purpose":  "Minimal machine-readable current context and routing for agents.",
     "read_policy":  {
@@ -26,7 +26,7 @@
                         "history_read_condition":  "Only read logs when explicitly asked for history, debugging a repeated known error, regression archaeology, or old audit details."
                     },
     "progress":  {
-                     "current_focus":  "No active generated execution plan is currently in progress. Completed observability, frontend quality and media safety work is summarized in TASKS.md.",
+                     "current_focus":  "Post-merge hardening plan active_plans.post_merge_fix_plan plus final residual-risk pass is completed locally; next step is final verification and commit decision.",
                      "vk_bot_video_mode":  {
                                                "status":  "prunaai_button_enabled",
                                                "summary":  "VK video model picker exposes PrunaAI and Back. PrunaAI stores peer-scoped video mode; the next plain text creates a video_generate Job through worker/provider flow. Stale Sora/Kling/Seedance/Haiuo payloads fall back to Show Menu and do not create Jobs. VK video delivery supports VK_VIDEO_DELIVERY_MODE=doc for mp4 file attachments and VK_VIDEO_DELIVERY_MODE=video for native VK video attachments through VK_VIDEO_ACCESS_TOKEN.",
@@ -94,7 +94,7 @@
                      "active_runtime":  {
                                             "api_port":  8080,
                                             "miniapp_port":  5173,
-                                           "tunnel":  "cloudflare_vk_tunnel_running_for_local_payment_webhook_smoke",
+                                           "tunnel":  "unknown_after_merge_do_not_assume_running",
                                             "local_env_files":  [
                                                                     ".env",
                                                                     "_env"
@@ -135,6 +135,170 @@
                     "error":  ".agents/schemas/error.schema.json"
                 },
     "active_plans":  {
+                         "post_merge_fix_plan":  {
+                                                     "status":  "completed",
+                                                     "created_at":  "2026-06-13T18:40:33+03:00",
+                                                     "completed_at":  "2026-06-13T19:40:00+03:00",
+                                                     "scope":  "Post-merge safety and reliability hardening after syncing origin/main into fastlife_dev.",
+                                                     "rules":  [
+                                                                   "Do not weaken auth, signatures, moderation, billing, idempotency or TLS.",
+                                                                   "Do not call AI providers from VK handlers, Mini App BFF or cmd/api.",
+                                                                   "Do not log secrets, full launch params, prompt bodies, raw provider payloads or private artifact URLs.",
+                                                                   "Use focused tests for each fix; do not hide failing checks."
+                                                               ],
+                                                     "fix_order":  [
+                                                                       {
+                                                                           "id":  "P0-output-moderation",
+                                                                           "priority":  0,
+                                                                           "status":  "completed",
+                                                                           "completed_at":  "2026-06-13T18:49:20+03:00",
+                                                                           "goal":  "Moderate generated output text/media before any user-visible delivery or dialog-context persistence.",
+                                                                           "scope":  [
+                                                                                         "internal/worker/worker.go",
+                                                                                         "internal/service/moderationservice/**",
+                                                                                         "internal/adapter/inbound/miniapp/** tests"
+                                                                                     ],
+                                                                           "acceptance":  [
+                                                                                              "Output moderation inspects generated text or saved output artifact content, not only the original prompt.",
+                                                                                              "Text dialog answer is persisted only after output moderation allows it.",
+                                                                                              "Blocked output is not delivered, not captured and not visible in Mini App chat history/previews.",
+                                                                                              "Regression tests cover blocked generated text."
+                                                                                          ]
+                                                                       },
+                                                                       {
+                                                                           "id":  "P0-refund-recovery",
+                                                                           "priority":  0,
+                                                                           "status":  "completed",
+                                                                           "completed_at":  "2026-06-13T18:57:00+03:00",
+                                                                           "goal":  "Make manual payment refunds crash-safe and retry-resumable.",
+                                                                           "scope":  [
+                                                                                         "internal/service/paymentservice/**",
+                                                                                         "internal/adapter/storage/postgres/**",
+                                                                                         "migrations/** if a state/outbox change is needed"
+                                                                                     ],
+                                                                           "acceptance":  [
+                                                                                              "No committed credit debit can be stranded before the provider refund is sent, or the pending refund is resumable by retry/reconciliation.",
+                                                                                              "Same operator idempotency key resumes or returns final state instead of leaving provider_pending forever.",
+                                                                                              "refund.succeeded webhooks are reconciled or explicitly surfaced as unsupported external refunds, not silently treated as fully handled.",
+                                                                                              "Crash-window/retry tests cover before-provider-call and after-provider-call failures."
+                                                                                          ]
+                                                                       },
+                                                                       {
+                                                                           "id":  "P1-provider-submit-retry",
+                                                                           "priority":  1,
+                                                                           "status":  "completed",
+                                                                           "completed_at":  "2026-06-13T19:18:00+03:00",
+                                                                           "goal":  "Remove crash windows around synchronous provider Submit calls.",
+                                                                           "scope":  [
+                                                                                         "internal/worker/generation.go",
+                                                                                         "internal/adapter/provider/openai/**",
+                                                                                         "internal/adapter/provider/deepinfra/**",
+                                                                                         "internal/domain/provider.go"
+                                                                                     ],
+                                                                           "acceptance":  [
+                                                                                              "A crash after provider success cannot turn a paid success into lost output/task_not_found.",
+                                                                                              "Provider submit idempotency key maps to durable task/result state or a documented safe retry path.",
+                                                                                              "Tests simulate retry after submit success before poll/save."
+                                                                                          ]
+                                                                       },
+                                                                       {
+                                                                           "id":  "P1-billing-price-guards",
+                                                                           "priority":  1,
+                                                                           "status":  "completed",
+                                                                           "completed_at":  "2026-06-13T19:18:00+03:00",
+                                                                           "goal":  "Reject zero/negative job prices and unsafe PRICES overrides.",
+                                                                           "scope":  [
+                                                                                         "internal/platform/config/config.go",
+                                                                                         "internal/service/billingservice/service.go",
+                                                                                         "internal/service/joborchestrator/** tests"
+                                                                                     ],
+                                                                           "acceptance":  [
+                                                                                              "Configured operation prices must be positive.",
+                                                                                              "ReserveWith rejects non-positive amounts defensively.",
+                                                                                              "Negative PRICES cannot increase available balance or skip capture."
+                                                                                          ]
+                                                                       },
+                                                                       {
+                                                                           "id":  "P1-webhook-ingress-trust",
+                                                                           "priority":  1,
+                                                                           "status":  "completed",
+                                                                           "completed_at":  "2026-06-13T19:18:00+03:00",
+                                                                           "goal":  "Make provider webhook transport/IP trust explicit and non-spoofable.",
+                                                                           "scope":  [
+                                                                                         "cmd/provider-webhook/main.go",
+                                                                                         "internal/platform/config/config.go",
+                                                                                         "internal/platform/ratelimit/ratelimit.go",
+                                                                                         "deployments/nginx/**",
+                                                                                         "deployments/cloudflare/**"
+                                                                                     ],
+                                                                           "acceptance":  [
+                                                                                              "YOOKASSA_WEBHOOK_IP_ALLOWLIST_ENABLED is either enforced or removed/renamed.",
+                                                                                              "Forwarded headers are trusted only from configured proxies.",
+                                                                                              "Webhook rate limiting cannot be bypassed with caller-supplied X-Forwarded-For.",
+                                                                                              "Tests cover direct HTTP spoofing and trusted-proxy HTTPS."
+                                                                                          ]
+                                                                       },
+                                                                       {
+                                                                           "id":  "P2-surface-idempotency-and-inputs",
+                                                                           "priority":  2,
+                                                                           "status":  "completed",
+                                                                           "completed_at":  "2026-06-13T19:40:00+03:00",
+                                                                           "goal":  "Tighten Mini App/VK/front-end idempotency and navigation safety.",
+                                                                           "scope":  [
+                                                                                         "internal/adapter/inbound/miniapp/handler.go",
+                                                                                         "internal/adapter/inbound/vk/handler.go",
+                                                                                         "web/miniapp/src/api/client.ts",
+                                                                                         "web/miniapp/src/settings/SettingsScreen.tsx",
+                                                                                         "web/miniapp/src/utils/openExternalUrl.ts"
+                                                                                     ],
+                                                                           "acceptance":  [
+                                                                                              "Billable Mini App generation endpoints require bounded X-Idempotency-Key.",
+                                                                                              "VK fallback event IDs include conversation_message_id when event_id is absent.",
+                                                                                              "Launch params forwarded by frontend are minimized to expected VK keys plus sign.",
+                                                                                              "Payment confirmation links require https and preferably a backend/provider allowlist."
+                                                                                          ]
+                                                                       },
+                                                                       {
+                                                                           "id":  "P2-artifact-download-limit",
+                                                                           "priority":  2,
+                                                                           "status":  "completed",
+                                                                           "completed_at":  "2026-06-13T19:40:00+03:00",
+                                                                           "goal":  "Reject oversized HTTP artifact downloads instead of storing truncated media.",
+                                                                           "scope":  [
+                                                                                         "internal/service/artifactservice/service.go"
+                                                                                     ],
+                                                                           "acceptance":  [
+                                                                                              "Remote HTTP body larger than maxRemoteBytes returns an explicit too-large error.",
+                                                                                              "Data URL and HTTP size-limit behavior match.",
+                                                                                              "Regression test covers max+1 byte response."
+                                                                                          ]
+                                                                       },
+                                                                       {
+                                                                           "id":  "P2-ci-and-prod-context",
+                                                                           "priority":  2,
+                                                                           "status":  "completed",
+                                                                           "completed_at":  "2026-06-13T19:40:00+03:00",
+                                                                           "goal":  "Close tooling/context gaps that can hide operator UI and deploy-route regressions.",
+                                                                           "scope":  [
+                                                                                         ".github/workflows/ci.yml",
+                                                                                         "web/admin/**",
+                                                                                         "scripts/dev/_payments-common.ps1",
+                                                                                         "scripts/deploy/smoke-prod.*"
+                                                                                     ],
+                                                                           "acceptance":  [
+                                                                                              "CI runs web/admin install/lint/typecheck/build or an explicit equivalent.",
+                                                                                              "Payment smoke defaults match canonical webhook host or are documented as surface-specific.",
+                                                                                              "Final plan status is updated when fixes land."
+                                                                                          ]
+                                                                       }
+                                                                   ],
+                                                     "recommended_batches":  [
+                                                                               "Batch 1: P0-output-moderation plus focused worker/Mini App history tests.",
+                                                                               "Batch 2: P0-refund-recovery plus paymentservice retry/reconciliation tests.",
+                                                                               "Batch 3: P1 billing/provider/webhook hardening.",
+                                                                               "Batch 4: P2 surface, artifact and CI/tooling fixes."
+                                                                           ]
+                                                 }
                      },
     "archive":  {
                     "root":  "",

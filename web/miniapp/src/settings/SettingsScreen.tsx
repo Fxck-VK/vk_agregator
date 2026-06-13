@@ -19,7 +19,7 @@ import { modalityByOperation, type ModalityId } from "../chat/types";
 import neuroHubBanner from "../assets/neurohub-banner.png";
 import { formatCredits } from "../ui/credits";
 import { dedupeHistoryJobs, historyCountLabel, jobDisplayTitle } from "../utils/jobDisplay";
-import { openExternalUrl } from "../utils/openExternalUrl";
+import { openExternalUrl, safeExternalHttpsUrl } from "../utils/openExternalUrl";
 import type { ThemeMode } from "./theme";
 
 type SettingsScreenProps = {
@@ -101,7 +101,7 @@ function typeColor(operation: string): string {
 }
 
 function isActivePaymentIntent(intent: PaymentIntent): boolean {
-  return intent.status === "waiting_for_user" && Boolean(intent.confirmation_url);
+  return intent.status === "waiting_for_user" && Boolean(paymentConfirmationUrl(intent));
 }
 
 function findActivePaymentIntent(intents: PaymentIntent[]): PaymentIntent | null {
@@ -144,6 +144,10 @@ function paymentStatusTone(status: string): "done" | "failed" | "progress" | "re
   return "progress";
 }
 
+function paymentConfirmationUrl(intent: PaymentIntent | null | undefined): string | null {
+  return safeExternalHttpsUrl(intent?.confirmation_url);
+}
+
 export function SettingsScreen({
   themeMode,
   balance,
@@ -171,6 +175,7 @@ export function SettingsScreen({
   const [referralCopied, setReferralCopied] = useState(false);
   const [spinning, setSpinning] = useState(false);
   const activePaymentIntent = useMemo(() => findActivePaymentIntent(paymentIntents), [paymentIntents]);
+  const activePaymentConfirmationUrl = paymentConfirmationUrl(activePaymentIntent);
   const visiblePayments = useMemo(() => paymentIntents.slice(0, 8), [paymentIntents]);
   const visibleJobs = useMemo(() => {
     const deduped = dedupeHistoryJobs(jobs);
@@ -299,19 +304,20 @@ export function SettingsScreen({
       );
       setPaymentIntents((items) => upsertPaymentIntent(items, intent));
       setPaymentsNotice("");
-      if (intent.reused_active_payment && intent.confirmation_url) {
+      const confirmationUrl = paymentConfirmationUrl(intent);
+      if (intent.reused_active_payment && confirmationUrl) {
         setCreatingNewPayment(false);
         setTopUpNotice(intent.notice || "У вас уже есть незавершенный платеж. После оплаты баланс обновится автоматически.");
         void refreshPaymentIntents();
         return;
       }
-      if (!intent.confirmation_url) {
+      if (!confirmationUrl) {
         setTopUpNotice("Платеж создан, но ссылка на оплату пока недоступна. Попробуйте обновить страницу.");
         void refreshPaymentIntents();
         return;
       }
       void refreshPaymentIntents();
-      const opened = await openExternalUrl(intent.confirmation_url);
+      const opened = await openExternalUrl(confirmationUrl);
       setTopUpNotice(
         opened
           ? "Оплата открыта во внешнем окне. После оплаты баланс обновится автоматически."
@@ -407,7 +413,7 @@ export function SettingsScreen({
             </button>
           </div>
         </div>
-        {activePaymentIntent && !creatingNewPayment ? (
+        {activePaymentIntent && activePaymentConfirmationUrl && !creatingNewPayment ? (
           <div className="payment-pending" role="status">
             <strong>У вас есть незавершенный платеж</strong>
             <span>
@@ -415,7 +421,7 @@ export function SettingsScreen({
             </span>
             <p>После оплаты баланс обновится автоматически.</p>
             <div className="payment-pending__actions">
-              <a href={activePaymentIntent.confirmation_url} target="_blank" rel="noopener noreferrer">
+              <a href={activePaymentConfirmationUrl} target="_blank" rel="noopener noreferrer">
                 Продолжить оплату
               </a>
               <button type="button" onClick={handleCreateNewPayment}>
@@ -438,10 +444,10 @@ export function SettingsScreen({
                 onChange={(event) => setReceiptContact(event.target.value)}
               />
             </div>
-            {creatingNewPayment && activePaymentIntent ? (
+            {creatingNewPayment && activePaymentConfirmationUrl ? (
               <a
                 className="payment-current-link"
-                href={activePaymentIntent.confirmation_url}
+                href={activePaymentConfirmationUrl}
                 target="_blank"
                 rel="noopener noreferrer"
               >
@@ -590,7 +596,8 @@ export function SettingsScreen({
         ) : (
           <div className="payment-history-list" aria-label="Платежи">
             {visiblePayments.map((intent) => {
-              const active = isActivePaymentIntent(intent);
+              const confirmationUrl = paymentConfirmationUrl(intent);
+              const active = intent.status === "waiting_for_user" && Boolean(confirmationUrl);
               const tone = paymentStatusTone(intent.status);
               return (
                 <div key={intent.id} className={`payment-history-row payment-history-row--${tone}`}>
@@ -602,8 +609,8 @@ export function SettingsScreen({
                   </div>
                   <div className="payment-history-row__meta">
                     <time dateTime={intent.created_at}>{dateLabel(intent.created_at)}</time>
-                    {active ? (
-                      <a href={intent.confirmation_url} target="_blank" rel="noopener noreferrer">
+                    {active && confirmationUrl ? (
+                      <a href={confirmationUrl} target="_blank" rel="noopener noreferrer">
                         Продолжить
                       </a>
                     ) : null}

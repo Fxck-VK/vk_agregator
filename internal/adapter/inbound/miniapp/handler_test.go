@@ -480,6 +480,7 @@ func TestHandler_CreateJob_OK(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/miniapp/jobs", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Launch-Params", devLaunchParams(777))
+	req.Header.Set("X-Idempotency-Key", "create-job-ok")
 
 	w := httptest.NewRecorder()
 	routes.ServeHTTP(w, req)
@@ -496,6 +497,59 @@ func TestHandler_CreateJob_OK(t *testing.T) {
 	}
 	if resp["prompt"] != "hello world" {
 		t.Fatalf("expected prompt in job response, got %#v", resp["prompt"])
+	}
+}
+
+func TestHandler_BillableEndpointsRequireBoundedIdempotencyKey(t *testing.T) {
+	routes := newTestHandler("").Routes()
+
+	tests := []struct {
+		name   string
+		path   string
+		body   any
+		header string
+	}{
+		{
+			name: "job missing",
+			path: "/miniapp/jobs",
+			body: map[string]string{"operation": "text_generate", "prompt": "hello"},
+		},
+		{
+			name:   "job too long",
+			path:   "/miniapp/jobs",
+			body:   map[string]string{"operation": "text_generate", "prompt": "hello"},
+			header: strings.Repeat("a", 129),
+		},
+		{
+			name:   "chat unsafe chars",
+			path:   "/miniapp/chat/messages",
+			body:   map[string]string{"prompt": "hello", "conversation_id": "thread-a"},
+			header: "bad/key?secret",
+		},
+		{
+			name:   "payment too short",
+			path:   "/miniapp/payments/intents",
+			body:   map[string]string{"product_code": "credits_100", "receipt_email": "user@example.com"},
+			header: "short",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			body, _ := json.Marshal(tc.body)
+			req := httptest.NewRequest(http.MethodPost, tc.path, bytes.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("X-Launch-Params", devLaunchParams(777))
+			if tc.header != "" {
+				req.Header.Set("X-Idempotency-Key", tc.header)
+			}
+
+			w := httptest.NewRecorder()
+			routes.ServeHTTP(w, req)
+
+			if w.Code != http.StatusBadRequest {
+				t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
+			}
+		})
 	}
 }
 
@@ -908,6 +962,106 @@ func TestHandler_ChatConversations_ListAndMessages(t *testing.T) {
 	}
 }
 
+func TestHandler_ChatConversations_RejectedOutputNotVisible(t *testing.T) {
+	fixture := newTestFixture("", nil)
+	routes := fixture.handler.Routes()
+	ctx := context.Background()
+	user := &domain.User{VKUserID: 778, Role: domain.RoleUser, Status: domain.StatusActive, Locale: "ru", Timezone: "UTC"}
+	if err := fixture.userRepo.Create(ctx, user); err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	conversation := &domain.Conversation{
+		UserID:           user.ID,
+		Source:           domain.ConversationSourceMiniApp,
+		ExternalThreadID: "blocked-thread",
+		Title:            "Blocked thread",
+	}
+	if err := fixture.conversationRepo.CreateConversation(ctx, conversation); err != nil {
+		t.Fatalf("create conversation: %v", err)
+	}
+	jobID := uuid.New()
+	if err := fixture.jobRepo.Create(ctx, &domain.Job{
+		ID:             jobID,
+		UserID:         user.ID,
+		OperationType:  domain.OperationTextGenerate,
+		Modality:       domain.ModalityText,
+		Status:         domain.JobStatusRejected,
+		IdempotencyKey: "miniapp-chat:" + uuid.NewString(),
+		ErrorCode:      "content_rejected",
+		ErrorMessage:   "blocked by output moderation",
+	}); err != nil {
+		t.Fatalf("create rejected job: %v", err)
+	}
+	if _, err := fixture.conversationRepo.UpsertMessage(ctx, &domain.ConversationMessage{
+		ConversationID: conversation.ID,
+		JobID:          jobID,
+		Role:           domain.ConversationRoleUser,
+		Text:           "safe user question",
+		TokenCount:     3,
+	}); err != nil {
+		t.Fatalf("upsert user message: %v", err)
+	}
+	if err := fixture.moderationRepo.Create(ctx, &domain.ModerationResult{
+		JobID:      jobID,
+		Stage:      domain.ModerationStageOutput,
+		Decision:   domain.ModerationBlock,
+		Categories: []string{"test:block"},
+		Provider:   "test",
+	}); err != nil {
+		t.Fatalf("create moderation result: %v", err)
+	}
+
+	listReq := httptest.NewRequest(http.MethodGet, "/miniapp/chat/conversations", nil)
+	listReq.Header.Set("X-Launch-Params", devLaunchParams(778))
+	listW := httptest.NewRecorder()
+	routes.ServeHTTP(listW, listReq)
+	if listW.Code != http.StatusOK {
+		t.Fatalf("list conversations: expected 200, got %d: %s", listW.Code, listW.Body.String())
+	}
+	if strings.Contains(listW.Body.String(), "blocked generated answer") {
+		t.Fatalf("blocked output leaked in conversation preview: %s", listW.Body.String())
+	}
+	var listResp struct {
+		Items []struct {
+			ID                 string `json:"id"`
+			LastMessagePreview string `json:"last_message_preview"`
+			LastMessageRole    string `json:"last_message_role"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(listW.Body.Bytes(), &listResp); err != nil {
+		t.Fatalf("invalid list response: %v", err)
+	}
+	if len(listResp.Items) != 1 || listResp.Items[0].ID != "blocked-thread" {
+		t.Fatalf("unexpected conversations: %+v", listResp.Items)
+	}
+	if listResp.Items[0].LastMessagePreview != "safe user question" || listResp.Items[0].LastMessageRole != "user" {
+		t.Fatalf("blocked output should not become preview: %+v", listResp.Items[0])
+	}
+
+	msgReq := httptest.NewRequest(http.MethodGet, "/miniapp/chat/conversations/blocked-thread/messages", nil)
+	msgReq.Header.Set("X-Launch-Params", devLaunchParams(778))
+	msgW := httptest.NewRecorder()
+	routes.ServeHTTP(msgW, msgReq)
+	if msgW.Code != http.StatusOK {
+		t.Fatalf("list messages: expected 200, got %d: %s", msgW.Code, msgW.Body.String())
+	}
+	if strings.Contains(msgW.Body.String(), "blocked generated answer") {
+		t.Fatalf("blocked output leaked in message history: %s", msgW.Body.String())
+	}
+	var msgResp struct {
+		Items []struct {
+			Role string `json:"role"`
+			Text string `json:"text"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(msgW.Body.Bytes(), &msgResp); err != nil {
+		t.Fatalf("invalid message response: %v", err)
+	}
+	if len(msgResp.Items) != 1 || msgResp.Items[0].Role != "user" || msgResp.Items[0].Text != "safe user question" {
+		t.Fatalf("unexpected messages: %+v", msgResp.Items)
+	}
+}
+
 func TestHandler_ChatConversationMessages_OwnerOnlyAndInvalidID(t *testing.T) {
 	fixture := newTestFixture("", nil)
 	routes := fixture.handler.Routes()
@@ -955,6 +1109,7 @@ func TestHandler_CreateJob_InvalidOperation(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/miniapp/jobs", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Launch-Params", devLaunchParams(777))
+	req.Header.Set("X-Idempotency-Key", "invalid-operation-key")
 
 	w := httptest.NewRecorder()
 	routes.ServeHTTP(w, req)
@@ -971,6 +1126,7 @@ func TestHandler_CreateJob_MissingPrompt(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/miniapp/jobs", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Launch-Params", devLaunchParams(777))
+	req.Header.Set("X-Idempotency-Key", "missing-prompt-key")
 
 	w := httptest.NewRecorder()
 	routes.ServeHTTP(w, req)
@@ -2456,6 +2612,7 @@ func TestHandler_CreateJob_NormalizesLegacyTextModelID(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/miniapp/jobs", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Launch-Params", devLaunchParams(777))
+	req.Header.Set("X-Idempotency-Key", "legacy-model-id")
 
 	w := httptest.NewRecorder()
 	routes.ServeHTTP(w, req)
@@ -2870,6 +3027,7 @@ func TestHandler_CreateJob_ReferenceArtifactsRejectForeignAndNonImage(t *testing
 			req := httptest.NewRequest(http.MethodPost, "/miniapp/jobs", bytes.NewReader(body))
 			req.Header.Set("Content-Type", "application/json")
 			req.Header.Set("X-Launch-Params", devLaunchParams(777))
+			req.Header.Set("X-Idempotency-Key", "reference-"+tc.name)
 			w := httptest.NewRecorder()
 			routes.ServeHTTP(w, req)
 			if w.Code != tc.wantCode {
@@ -3031,6 +3189,7 @@ func TestHandler_CreateJob_RateLimitByVerifiedUserID(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/miniapp/jobs", bytes.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("X-Launch-Params", devLaunchParams(vkUserID))
+		req.Header.Set("X-Idempotency-Key", "rate-limit-key")
 		return req
 	}
 

@@ -27,6 +27,10 @@ const DefaultReservationTTL = 30 * time.Minute
 // operation type.
 var ErrUnknownOperation = errors.New("billingservice: unknown operation type")
 
+// ErrInvalidAmount is returned when a configured price or accounting operation
+// amount is zero or negative where a positive credit amount is required.
+var ErrInvalidAmount = errors.New("billingservice: amount must be positive")
+
 // defaultPrices is the seed price list, in credits, per operation type. Per the
 // product spec image_to_video shares the video price.
 var defaultPrices = map[domain.OperationType]int64{
@@ -98,6 +102,9 @@ func (s *Service) Estimate(op domain.OperationType) (int64, error) {
 	if !ok {
 		return 0, fmt.Errorf("%w: %s", ErrUnknownOperation, op)
 	}
+	if price <= 0 {
+		return 0, fmt.Errorf("%w: price for %s is %d", ErrInvalidAmount, op, price)
+	}
 	return price, nil
 }
 
@@ -165,6 +172,9 @@ func (s *Service) Reserve(ctx context.Context, userID, jobID uuid.UUID, amount i
 // with job creation (audit B1). The reservation is keyed by the job, so the call
 // is idempotent per job.
 func (s *Service) ReserveWith(ctx context.Context, repo domain.BillingRepository, userID, jobID uuid.UUID, amount int64) (*domain.CreditReservation, error) {
+	if amount <= 0 {
+		return nil, fmt.Errorf("%w: reservation amount %d", ErrInvalidAmount, amount)
+	}
 	acc, err := s.ensureAccountWith(ctx, repo, userID)
 	if err != nil {
 		return nil, err
@@ -185,6 +195,9 @@ func (s *Service) ReserveWith(ctx context.Context, repo domain.BillingRepository
 
 // Capture converts a reservation into a committed charge.
 func (s *Service) Capture(ctx context.Context, reservationID uuid.UUID, amount int64) error {
+	if amount <= 0 {
+		return fmt.Errorf("%w: capture amount %d", ErrInvalidAmount, amount)
+	}
 	return s.repo.Capture(ctx, reservationID, amount, "cap:"+reservationID.String())
 }
 
@@ -192,6 +205,9 @@ func (s *Service) Capture(ctx context.Context, reservationID uuid.UUID, amount i
 // already-captured reservation is treated as success, so a re-delivered
 // delivery never double-charges.
 func (s *Service) CaptureForJob(ctx context.Context, jobID uuid.UUID, amount int64) error {
+	if amount <= 0 {
+		return fmt.Errorf("%w: capture amount %d", ErrInvalidAmount, amount)
+	}
 	res, err := s.repo.GetReservationByJob(ctx, jobID)
 	if err != nil {
 		return err
