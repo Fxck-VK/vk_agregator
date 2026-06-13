@@ -48,8 +48,43 @@ func setup(t *testing.T) (*billing.Handler, *memory.UserRepo, *memory.PaymentRep
 		Billing:    billingRepo,
 		Payment:    service,
 		PaymentOps: ops,
+		Audits:     memory.NewOperatorAuditRepo(),
 	})
 	return handler, users, payments, provider, billingRepo
+}
+
+func setupWithAudits(t *testing.T) (*billing.Handler, *memory.UserRepo, *memory.PaymentRepo, *paymentmock.Provider, *memory.BillingRepo, *memory.OperatorAuditRepo) {
+	t.Helper()
+	users := memory.NewUserRepo()
+	payments := memory.NewPaymentRepo()
+	billingRepo := memory.NewBillingRepo()
+	audits := memory.NewOperatorAuditRepo()
+	provider := paymentmock.New()
+	payments.PutProduct(&domain.PaymentProduct{
+		Code:         "credits_100",
+		Title:        "100 credits",
+		Amount:       9900,
+		Currency:     domain.CurrencyRUB,
+		Credits:      100,
+		PriceVersion: 1,
+		IsActive:     true,
+	})
+	service := paymentservice.New(payments, provider, paymentservice.Config{
+		ReturnURL: "https://neiirohub.ru/payments/return",
+	})
+	billingSvc := billingservice.New(billingRepo, billingservice.WithStartingBalance(0))
+	tx := paymentservice.TxRunnerFunc(func(ctx context.Context, fn func(context.Context, domain.PaymentRepository, domain.BillingRepository) error) error {
+		return fn(ctx, payments, billingRepo)
+	})
+	ops := paymentservice.NewWebhookProcessor(payments, provider, billingSvc, tx)
+	handler := billing.NewHandler(billing.Config{Token: "secret"}, billing.Deps{
+		Users:      users,
+		Billing:    billingRepo,
+		Payment:    service,
+		PaymentOps: ops,
+		Audits:     audits,
+	})
+	return handler, users, payments, provider, billingRepo, audits
 }
 
 func TestBillingAuthFailClosed(t *testing.T) {
@@ -67,6 +102,108 @@ func TestBillingAuthFailClosed(t *testing.T) {
 	handler.Routes().ServeHTTP(rec, req)
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401 without token header, got %d", rec.Code)
+	}
+}
+
+func TestPaymentOperatorActionsRequireReasonAndIdempotency(t *testing.T) {
+	handler, _, _, _, _ := setup(t)
+	intentID := uuid.New().String()
+
+	syncReq := httptest.NewRequest(http.MethodPost, "/billing/payment-intents/"+intentID+"/sync", bytes.NewReader([]byte(`{"reason":"operator sync check"}`)))
+	syncReq.Header.Set("X-Admin-Token", "secret")
+	syncRec := httptest.NewRecorder()
+	handler.Routes().ServeHTTP(syncRec, syncReq)
+	if syncRec.Code != http.StatusBadRequest {
+		t.Fatalf("sync without idempotency = %d, want 400", syncRec.Code)
+	}
+
+	cancelReq := httptest.NewRequest(http.MethodPost, "/billing/payment-intents/"+intentID+"/cancel", nil)
+	cancelReq.Header.Set("X-Admin-Token", "secret")
+	cancelReq.Header.Set("X-Idempotency-Key", "cancel-action-key")
+	cancelRec := httptest.NewRecorder()
+	handler.Routes().ServeHTTP(cancelRec, cancelReq)
+	if cancelRec.Code != http.StatusBadRequest {
+		t.Fatalf("cancel without reason = %d, want 400", cancelRec.Code)
+	}
+
+	refundReq := httptest.NewRequest(http.MethodPost, "/billing/payment-intents/"+intentID+"/refund", bytes.NewReader([]byte(`{"reason":"x"}`)))
+	refundReq.Header.Set("X-Admin-Token", "secret")
+	refundReq.Header.Set("X-Idempotency-Key", "refund-action-key")
+	refundRec := httptest.NewRecorder()
+	handler.Routes().ServeHTTP(refundRec, refundReq)
+	if refundRec.Code != http.StatusBadRequest {
+		t.Fatalf("refund with short reason = %d, want 400", refundRec.Code)
+	}
+}
+
+func TestPaymentOperatorActionWritesSanitizedAudit(t *testing.T) {
+	handler, users, _, provider, _, audits := setupWithAudits(t)
+	ctx := context.Background()
+	user := &domain.User{VKUserID: 777, Role: domain.RoleUser, Status: domain.StatusActive}
+	if err := users.Create(ctx, user); err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	body := []byte(`{"product_code":"credits_100","receipt_email":"user@example.com"}`)
+	req := httptest.NewRequest(http.MethodPost, "/billing/payment-intents", bytes.NewReader(body))
+	req.Header.Set("X-Admin-Token", "secret")
+	req.Header.Set("X-User-ID", user.ID.String())
+	req.Header.Set("X-Idempotency-Key", "audit-intent-key")
+	rec := httptest.NewRecorder()
+	handler.Routes().ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create intent: %d %s", rec.Code, rec.Body.String())
+	}
+	var intent billing.PaymentIntentDTO
+	if err := json.Unmarshal(rec.Body.Bytes(), &intent); err != nil {
+		t.Fatalf("decode intent: %v", err)
+	}
+	if err := provider.SetPaymentStatus(intent.ProviderPaymentID, domain.PaymentIntentSucceeded); err != nil {
+		t.Fatalf("set provider success: %v", err)
+	}
+	consoleReq := httptest.NewRequest(http.MethodGet, "/billing/operator/console?limit=20", nil)
+	consoleReq.Header.Set("X-Admin-Token", "secret")
+	consoleRec := httptest.NewRecorder()
+	handler.Routes().ServeHTTP(consoleRec, consoleReq)
+	if consoleRec.Code != http.StatusOK {
+		t.Fatalf("operator console: %d %s", consoleRec.Code, consoleRec.Body.String())
+	}
+	var console billing.OperatorConsoleDTO
+	if err := json.Unmarshal(consoleRec.Body.Bytes(), &console); err != nil {
+		t.Fatalf("decode console: %v", err)
+	}
+	if len(console.Intents) != 1 || console.Intents[0].ActionRef == "" {
+		t.Fatalf("expected one intent with action ref, got %+v", console.Intents)
+	}
+	if strings.Contains(console.Intents[0].ActionRef, intent.ID.String()) {
+		t.Fatalf("action ref leaked raw intent id: %s", console.Intents[0].ActionRef)
+	}
+
+	syncReq := httptest.NewRequest(http.MethodPost, "/billing/payment-intents/"+console.Intents[0].ActionRef+"/sync", bytes.NewReader([]byte(`{"reason":"operator verifies provider status"}`)))
+	syncReq.Header.Set("X-Admin-Token", "secret")
+	syncReq.Header.Set("X-Idempotency-Key", "audit-sync-key")
+	syncReq.Header.Set("X-Request-ID", "private-request-id")
+	syncRec := httptest.NewRecorder()
+	handler.Routes().ServeHTTP(syncRec, syncReq)
+	if syncRec.Code != http.StatusOK {
+		t.Fatalf("sync intent: %d %s", syncRec.Code, syncRec.Body.String())
+	}
+
+	entries, err := audits.List(ctx, domain.OperatorAuditFilter{Action: "payment_intent_sync"}, 10, 0)
+	if err != nil {
+		t.Fatalf("list audit: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("expected one sync audit entry, got %d", len(entries))
+	}
+	entry := entries[0]
+	if entry.ActorRef != "admin_token" || entry.TargetType != "payment_intents" || entry.Result != "success" {
+		t.Fatalf("unexpected audit entry: %+v", entry)
+	}
+	rendered := entry.ActorRef + entry.Action + entry.TargetType + entry.TargetRef + entry.RequestRef
+	for _, forbidden := range []string{"secret", "audit-sync-key", "private-request-id", "operator verifies", intent.ID.String(), user.ID.String()} {
+		if strings.Contains(rendered, forbidden) {
+			t.Fatalf("audit entry leaked %q: %+v", forbidden, entry)
+		}
 	}
 }
 
@@ -137,8 +274,9 @@ func TestCreatePaymentIntentCanBeCanceledByOperator(t *testing.T) {
 		t.Fatalf("decode create response: %v", err)
 	}
 
-	cancelReq := httptest.NewRequest(http.MethodPost, "/billing/payment-intents/"+created.ID.String()+"/cancel", nil)
+	cancelReq := httptest.NewRequest(http.MethodPost, "/billing/payment-intents/"+created.ID.String()+"/cancel", bytes.NewReader([]byte(`{"reason":"operator cancels stale unpaid intent"}`)))
 	cancelReq.Header.Set("X-Admin-Token", "secret")
+	cancelReq.Header.Set("X-Idempotency-Key", "cancel-key")
 	cancelRec := httptest.NewRecorder()
 	handler.Routes().ServeHTTP(cancelRec, cancelReq)
 	if cancelRec.Code != http.StatusOK {
@@ -541,8 +679,9 @@ func TestSyncAndRefundPaymentIntent(t *testing.T) {
 		t.Fatalf("set provider success: %v", err)
 	}
 
-	syncReq := httptest.NewRequest(http.MethodPost, "/billing/payment-intents/"+intent.ID.String()+"/sync", nil)
+	syncReq := httptest.NewRequest(http.MethodPost, "/billing/payment-intents/"+intent.ID.String()+"/sync", bytes.NewReader([]byte(`{"reason":"operator syncs verified provider state"}`)))
 	syncReq.Header.Set("X-Admin-Token", "secret")
+	syncReq.Header.Set("X-Idempotency-Key", "sync-key")
 	syncRec := httptest.NewRecorder()
 	handler.Routes().ServeHTTP(syncRec, syncReq)
 	if syncRec.Code != http.StatusOK {
@@ -643,8 +782,9 @@ func TestRefundPaymentIntentRejectsSpentCredits(t *testing.T) {
 	if err := provider.SetPaymentStatus(intent.ProviderPaymentID, domain.PaymentIntentSucceeded); err != nil {
 		t.Fatalf("set provider success: %v", err)
 	}
-	syncReq := httptest.NewRequest(http.MethodPost, "/billing/payment-intents/"+intent.ID.String()+"/sync", nil)
+	syncReq := httptest.NewRequest(http.MethodPost, "/billing/payment-intents/"+intent.ID.String()+"/sync", bytes.NewReader([]byte(`{"reason":"operator syncs verified provider state"}`)))
 	syncReq.Header.Set("X-Admin-Token", "secret")
+	syncReq.Header.Set("X-Idempotency-Key", "spent-sync-key")
 	syncRec := httptest.NewRecorder()
 	handler.Routes().ServeHTTP(syncRec, syncReq)
 	if syncRec.Code != http.StatusOK {

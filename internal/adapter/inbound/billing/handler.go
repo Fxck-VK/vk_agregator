@@ -421,9 +421,11 @@ func (h *Handler) syncIntent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusServiceUnavailable, "service unavailable")
 		return
 	}
-	id, err := uuid.Parse(r.PathValue("id"))
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid id")
+	id, ok := h.paymentIntentIDFromPath(w, r)
+	if !ok {
+		return
+	}
+	if _, ok := parseOperatorPaymentActionRequest(w, r); !ok {
 		return
 	}
 	intent, err := h.deps.PaymentOps.SyncIntent(r.Context(), id)
@@ -439,9 +441,11 @@ func (h *Handler) cancelIntent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusServiceUnavailable, "service unavailable")
 		return
 	}
-	id, err := uuid.Parse(r.PathValue("id"))
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid id")
+	id, ok := h.paymentIntentIDFromPath(w, r)
+	if !ok {
+		return
+	}
+	if _, ok := parseOperatorPaymentActionRequest(w, r); !ok {
 		return
 	}
 	intent, err := h.deps.PaymentOps.CancelIntent(r.Context(), id)
@@ -452,36 +456,23 @@ func (h *Handler) cancelIntent(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, newIntentDTO(intent, true))
 }
 
-type refundIntentRequest struct {
-	Reason string `json:"reason,omitempty"`
-}
-
 func (h *Handler) refundIntent(w http.ResponseWriter, r *http.Request) {
 	if h.deps.PaymentOps == nil {
 		writeError(w, http.StatusServiceUnavailable, "service unavailable")
 		return
 	}
-	id, err := uuid.Parse(r.PathValue("id"))
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid id")
+	id, ok := h.paymentIntentIDFromPath(w, r)
+	if !ok {
 		return
 	}
-	clientKey := strings.TrimSpace(r.Header.Get("X-Idempotency-Key"))
-	if clientKey == "" {
-		writeError(w, http.StatusBadRequest, "X-Idempotency-Key is required")
+	actionReq, ok := parseOperatorPaymentActionRequest(w, r)
+	if !ok {
 		return
-	}
-	var req refundIntentRequest
-	if r.Body != nil && r.ContentLength != 0 {
-		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<10)).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, "invalid json")
-			return
-		}
 	}
 	result, err := h.deps.PaymentOps.RefundIntent(r.Context(), paymentservice.RefundIntentInput{
 		IntentID:       id,
-		IdempotencyKey: "billing_refund:" + id.String() + ":" + clientKey,
-		Reason:         req.Reason,
+		IdempotencyKey: "billing_refund:" + id.String() + ":" + actionReq.IdempotencyKey,
+		Reason:         actionReq.Reason,
 	})
 	if err != nil {
 		h.writePaymentActionError(w, err)
@@ -491,6 +482,62 @@ func (h *Handler) refundIntent(w http.ResponseWriter, r *http.Request) {
 		Intent: newIntentDTO(result.Intent, true),
 		Refund: newRefundDTO(result.Refund),
 	})
+}
+
+func (h *Handler) paymentIntentIDFromPath(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
+	id, ok := parseOperatorPaymentActionRef(h.cfg.Token, r.PathValue("id"))
+	if !ok {
+		writeError(w, http.StatusBadRequest, "invalid id")
+		return uuid.Nil, false
+	}
+	return id, true
+}
+
+type operatorPaymentActionRequest struct {
+	IdempotencyKey string
+	Reason         string
+}
+
+type operatorPaymentActionBody struct {
+	Reason string `json:"reason,omitempty"`
+}
+
+func parseOperatorPaymentActionRequest(w http.ResponseWriter, r *http.Request) (operatorPaymentActionRequest, bool) {
+	clientKey := strings.TrimSpace(r.Header.Get("X-Idempotency-Key"))
+	if clientKey == "" {
+		writeError(w, http.StatusBadRequest, "X-Idempotency-Key is required")
+		return operatorPaymentActionRequest{}, false
+	}
+	var body operatorPaymentActionBody
+	if r.Body == nil || r.ContentLength == 0 {
+		writeError(w, http.StatusBadRequest, "reason is required")
+		return operatorPaymentActionRequest{}, false
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<10)).Decode(&body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json")
+		return operatorPaymentActionRequest{}, false
+	}
+	reason := strings.TrimSpace(body.Reason)
+	if !validOperatorReason(reason) {
+		writeError(w, http.StatusBadRequest, "reason is required")
+		return operatorPaymentActionRequest{}, false
+	}
+	return operatorPaymentActionRequest{IdempotencyKey: clientKey, Reason: reason}, true
+}
+
+func validOperatorReason(reason string) bool {
+	if len(reason) < 3 || len(reason) > 500 {
+		return false
+	}
+	if strings.Contains(reason, "://") {
+		return false
+	}
+	for _, r := range reason {
+		if r < 0x20 || r == 0x7f {
+			return false
+		}
+	}
+	return true
 }
 
 func (h *Handler) listHistory(w http.ResponseWriter, r *http.Request) {

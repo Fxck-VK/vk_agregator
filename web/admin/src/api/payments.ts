@@ -2,6 +2,7 @@ import type { PaginationDTO } from "./jobs";
 
 export type OperatorPaymentIntentDTO = {
   display_id: string;
+  action_ref?: string;
   user_ref: string;
   product_ref?: string;
   status: string;

@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useState } from "react";
 import type { AdminApiError, AdminClient } from "../api/adminClient";
-import { toSafeAdminError } from "../api/adminClient";
+import { AdminApiError as SafeAdminApiError, createIdempotencyKey, toSafeAdminError } from "../api/adminClient";
 import type {
   OperatorBillingDTO,
   OperatorPaymentsConsoleDTO,
@@ -25,6 +25,21 @@ type PaymentsState = {
   data?: OperatorPaymentsConsoleDTO;
   error?: AdminApiError;
   loading: boolean;
+};
+
+export type PaymentActionType = "sync" | "cancel" | "refund";
+
+type PaymentActionDraft = {
+  type: PaymentActionType;
+  intent: OperatorPaymentIntentDTO;
+  reason: string;
+};
+
+type PaymentActionState = {
+  draft?: PaymentActionDraft;
+  error?: AdminApiError;
+  result?: string;
+  submitting: boolean;
 };
 
 const emptyFilters: PaymentFilters = {
@@ -53,6 +68,8 @@ export function PaymentsScreen({ adminTokenSet, client }: PaymentsScreenProps) {
   const [filters, setFilters] = useState<PaymentFilters>(emptyFilters);
   const [query, setQuery] = useState<PaymentFilters>(emptyFilters);
   const [payments, setPayments] = useState<PaymentsState>({ loading: false });
+  const [reloadNonce, setReloadNonce] = useState(0);
+  const [actionState, setActionState] = useState<PaymentActionState>({ submitting: false });
 
   useEffect(() => {
     if (!adminTokenSet) {
@@ -70,7 +87,7 @@ export function PaymentsScreen({ adminTokenSet, client }: PaymentsScreenProps) {
         }
       });
     return () => controller.abort();
-  }, [adminTokenSet, client, query]);
+  }, [adminTokenSet, client, query, reloadNonce]);
 
   function submitFilters(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -80,6 +97,62 @@ export function PaymentsScreen({ adminTokenSet, client }: PaymentsScreenProps) {
   function resetFilters() {
     setFilters(emptyFilters);
     setQuery(emptyFilters);
+  }
+
+  function openAction(type: PaymentActionType, intent: OperatorPaymentIntentDTO) {
+    if (!intent.action_ref || !paymentActionEnabled(intent, type)) {
+      return;
+    }
+    setActionState({ draft: { type, intent, reason: "" }, submitting: false });
+  }
+
+  function closeAction() {
+    if (!actionState.submitting) {
+      setActionState({ submitting: false });
+    }
+  }
+
+  function updateActionReason(reason: string) {
+    setActionState((current) =>
+      current.draft ? { ...current, draft: { ...current.draft, reason }, error: undefined, result: undefined } : current,
+    );
+  }
+
+  async function submitAction() {
+    const draft = actionState.draft;
+    if (!draft) {
+      return;
+    }
+    const reason = draft.reason.trim();
+    if (reason.length < 3) {
+      setActionState((current) => ({
+        ...current,
+        error: new SafeAdminApiError("admin_bad_request", "Admin request is invalid.", 400),
+      }));
+      return;
+    }
+    if (!draft.intent.action_ref) {
+      setActionState((current) => ({
+        ...current,
+        error: new SafeAdminApiError("admin_bad_request", "Admin request is invalid.", 400),
+      }));
+      return;
+    }
+    setActionState((current) => ({ ...current, submitting: true, error: undefined, result: undefined }));
+    try {
+      await client.request(paymentActionPath(draft.intent.action_ref, draft.type), {
+        method: "POST",
+        idempotencyKey: createIdempotencyKey(`payment_${draft.type}`),
+        body: { reason },
+      });
+      setActionState({
+        submitting: false,
+        result: `${paymentActionTitle(draft.type)} completed. The snapshot was refreshed from backend state.`,
+      });
+      setReloadNonce((value) => value + 1);
+    } catch (error: unknown) {
+      setActionState((current) => ({ ...current, submitting: false, error: toSafeAdminError(error) }));
+    }
   }
 
   if (!adminTokenSet) {
@@ -142,6 +215,14 @@ export function PaymentsScreen({ adminTokenSet, client }: PaymentsScreenProps) {
       </form>
 
       {payments.error ? <SafeErrorPanel error={payments.error} /> : null}
+      {actionState.error ? <SafeErrorPanel error={actionState.error} /> : null}
+      {actionState.result ? (
+        <article className="surface panel panel--wide" role="status">
+          <p className="eyebrow">Action complete</p>
+          <h3>{actionState.result}</h3>
+          <p>Rendered state stays backend-derived; no frontend balance or payment truth was inferred.</p>
+        </article>
+      ) : null}
       {payments.data ? <PaymentReconciliationPanel data={payments.data} loading={payments.loading} /> : null}
       {payments.loading && !payments.data ? (
         <article className="surface panel panel--wide" role="status">
@@ -161,7 +242,7 @@ export function PaymentsScreen({ adminTokenSet, client }: PaymentsScreenProps) {
               </div>
               <span>{payments.data.pagination.has_more ? "more available" : "bounded page"}</span>
             </div>
-            <PaymentIntentsTable items={payments.data.intents} />
+            <PaymentIntentsTable items={payments.data.intents} onAction={openAction} submitting={actionState.submitting} />
           </section>
 
           <BillingSnapshot billing={payments.data.billing} userLookupSet={Boolean(query.userId.trim())} />
@@ -188,6 +269,15 @@ export function PaymentsScreen({ adminTokenSet, client }: PaymentsScreenProps) {
             <PaymentRefundsList items={payments.data.refunds} />
           </section>
         </div>
+      ) : null}
+      {actionState.draft ? (
+        <PaymentActionModal
+          draft={actionState.draft}
+          onCancel={closeAction}
+          onReasonChange={updateActionReason}
+          onSubmit={submitAction}
+          submitting={actionState.submitting}
+        />
       ) : null}
     </div>
   );
@@ -229,7 +319,15 @@ function PaymentReconciliationPanel({ data, loading }: { data: OperatorPaymentsC
   );
 }
 
-function PaymentIntentsTable({ items }: { items: OperatorPaymentIntentDTO[] }) {
+function PaymentIntentsTable({
+  items,
+  onAction,
+  submitting,
+}: {
+  items: OperatorPaymentIntentDTO[];
+  onAction: (type: PaymentActionType, intent: OperatorPaymentIntentDTO) => void;
+  submitting: boolean;
+}) {
   if (items.length === 0) {
     return <p className="muted">No intents match the current filters.</p>;
   }
@@ -242,6 +340,7 @@ function PaymentIntentsTable({ items }: { items: OperatorPaymentIntentDTO[] }) {
         <span>Amount</span>
         <span>Capture</span>
         <span>Refund</span>
+        <span>Actions</span>
       </div>
       {items.map((item) => (
         <div className={item.stale ? "payments-row payments-row--warning" : "payments-row"} key={item.display_id} role="row">
@@ -251,8 +350,88 @@ function PaymentIntentsTable({ items }: { items: OperatorPaymentIntentDTO[] }) {
           <span>{formatMoney(item.amount, item.currency)}</span>
           <span>{item.capture_state}</span>
           <span>{item.refund_state}</span>
+          <PaymentActionButtons intent={item} onAction={onAction} submitting={submitting} />
         </div>
       ))}
+    </div>
+  );
+}
+
+function PaymentActionButtons({
+  intent,
+  onAction,
+  submitting,
+}: {
+  intent: OperatorPaymentIntentDTO;
+  onAction: (type: PaymentActionType, intent: OperatorPaymentIntentDTO) => void;
+  submitting: boolean;
+}) {
+  const actions: PaymentActionType[] = ["sync", "cancel", "refund"];
+  return (
+    <span className="action-buttons">
+      {actions.map((type) => {
+        const enabled = paymentActionEnabled(intent, type);
+        return (
+          <button
+            className="button-secondary button-compact"
+            disabled={submitting || !enabled}
+            key={type}
+            onClick={() => onAction(type, intent)}
+            title={enabled ? paymentActionTitle(type) : paymentActionDisabledReason(intent, type)}
+            type="button"
+          >
+            {paymentActionTitle(type)}
+          </button>
+        );
+      })}
+    </span>
+  );
+}
+
+function PaymentActionModal({
+  draft,
+  onCancel,
+  onReasonChange,
+  onSubmit,
+  submitting,
+}: {
+  draft: PaymentActionDraft;
+  onCancel: () => void;
+  onReasonChange: (reason: string) => void;
+  onSubmit: () => void;
+  submitting: boolean;
+}) {
+  const reason = draft.reason.trim();
+  return (
+    <div className="modal-backdrop" role="presentation">
+      <section className="surface action-modal" aria-label={`${paymentActionTitle(draft.type)} confirmation`} role="dialog">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">Operator action</p>
+            <h3>{paymentActionTitle(draft.type)}</h3>
+          </div>
+          <span>{draft.intent.display_id}</span>
+        </div>
+        <p className="muted">{paymentActionDescription(draft.type)}</p>
+        <label>
+          <span>Required reason</span>
+          <textarea
+            autoFocus
+            maxLength={500}
+            onChange={(event) => onReasonChange(event.target.value)}
+            placeholder="Short operational reason without secrets, URLs, payloads or user PII"
+            value={draft.reason}
+          />
+        </label>
+        <div className="modal-actions">
+          <button className="button-secondary" disabled={submitting} onClick={onCancel} type="button">
+            Cancel
+          </button>
+          <button disabled={submitting || reason.length < 3} onClick={onSubmit} type="button">
+            {submitting ? "Working" : "Confirm"}
+          </button>
+        </div>
+      </section>
     </div>
   );
 }
@@ -381,6 +560,58 @@ function operatorPaymentsPath(filters: PaymentFilters): `/billing/${string}` {
     params.set("stale_after", `${Math.round(seconds)}s`);
   }
   return `/billing/operator/console?${params.toString()}`;
+}
+
+export function paymentActionPath(actionRef: string, type: PaymentActionType): `/billing/${string}` {
+  return `/billing/payment-intents/${encodeURIComponent(actionRef)}/${type}`;
+}
+
+export function paymentActionEnabled(intent: OperatorPaymentIntentDTO, type: PaymentActionType): boolean {
+  if (!intent.action_ref) {
+    return false;
+  }
+  if (type === "sync") {
+    return ["created", "provider_pending", "waiting_for_user"].includes(intent.status);
+  }
+  if (type === "cancel") {
+    return intent.cancel_state === "cancelable_by_operator_endpoint";
+  }
+  return intent.refund_state === "eligible_policy_check_required";
+}
+
+function paymentActionTitle(type: PaymentActionType): string {
+  switch (type) {
+    case "sync":
+      return "Sync";
+    case "cancel":
+      return "Cancel";
+    case "refund":
+      return "Refund";
+  }
+}
+
+function paymentActionDescription(type: PaymentActionType): string {
+  switch (type) {
+    case "sync":
+      return "Backend verifies provider state and applies the same ledger-safe path as webhook processing.";
+    case "cancel":
+      return "Backend requests provider cancellation only for open unpaid intents, then verifies provider state.";
+    case "refund":
+      return "Backend performs the MVP full refund policy and refuses when credits cannot be safely reversed.";
+  }
+}
+
+function paymentActionDisabledReason(intent: OperatorPaymentIntentDTO, type: PaymentActionType): string {
+  if (!intent.action_ref) {
+    return "Backend did not provide a protected action reference.";
+  }
+  if (type === "sync") {
+    return "Sync is available only for open pending intents.";
+  }
+  if (type === "cancel") {
+    return `Cancel state: ${intent.cancel_state}`;
+  }
+  return `Refund state: ${intent.refund_state}`;
 }
 
 function formatDateTime(value: string): string {

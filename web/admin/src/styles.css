@@ -582,9 +582,9 @@ button {
   display: grid;
   grid-template-columns:
     minmax(126px, 1fr) minmax(120px, 0.85fr) minmax(96px, 0.7fr)
-    minmax(90px, 0.6fr) minmax(130px, 0.85fr) minmax(150px, 1fr);
+    minmax(90px, 0.6fr) minmax(130px, 0.85fr) minmax(150px, 1fr) minmax(214px, 1.2fr);
   gap: 10px;
-  min-width: 780px;
+  min-width: 1020px;
   align-items: center;
   border: 1px solid #e5dccb;
   border-radius: 8px;
@@ -612,6 +612,51 @@ button {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.payments-row .action-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  overflow: visible;
+  white-space: normal;
+}
+
+.button-compact {
+  min-height: 30px;
+  padding: 6px 9px;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  background: rgba(24, 26, 30, 0.48);
+  padding: 18px;
+}
+
+.action-modal {
+  display: grid;
+  gap: 14px;
+  width: min(520px, 100%);
+}
+
+.action-modal label {
+  display: grid;
+  gap: 6px;
+}
+
+.action-modal textarea {
+  min-height: 96px;
+  resize: vertical;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .provider-table {

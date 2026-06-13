@@ -2,7 +2,11 @@ package billing
 
 import (
 	"context"
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"net/http"
@@ -31,6 +35,7 @@ type OperatorConsoleDTO struct {
 
 type OperatorPaymentIntentDTO struct {
 	DisplayID          string    `json:"display_id"`
+	ActionRef          string    `json:"action_ref,omitempty"`
 	UserRef            string    `json:"user_ref"`
 	ProductRef         string    `json:"product_ref,omitempty"`
 	Status             string    `json:"status"`
@@ -133,7 +138,7 @@ func (h *Handler) operatorConsole(w http.ResponseWriter, r *http.Request) {
 	}
 	intentItems := make([]OperatorPaymentIntentDTO, 0, len(intents))
 	for _, intent := range intents {
-		intentItems = append(intentItems, newOperatorPaymentIntentDTO(intent, now, staleCutoff))
+		intentItems = append(intentItems, h.newOperatorPaymentIntentDTO(intent, now, staleCutoff))
 	}
 
 	events, err := h.deps.Payment.ListEvents(r.Context(), operatorPaymentEventFilter(filter), limit+1, 0)
@@ -265,7 +270,7 @@ func (h *Handler) operatorBillingSnapshot(ctx context.Context, userID uuid.UUID,
 	}, nil
 }
 
-func newOperatorPaymentIntentDTO(intent *domain.PaymentIntent, now, staleCutoff time.Time) OperatorPaymentIntentDTO {
+func (h *Handler) newOperatorPaymentIntentDTO(intent *domain.PaymentIntent, now, staleCutoff time.Time) OperatorPaymentIntentDTO {
 	if intent == nil {
 		return OperatorPaymentIntentDTO{}
 	}
@@ -273,6 +278,7 @@ func newOperatorPaymentIntentDTO(intent *domain.PaymentIntent, now, staleCutoff 
 		!intent.UpdatedAt.After(staleCutoff)
 	dto := OperatorPaymentIntentDTO{
 		DisplayID:          safeUUIDRef("pay", intent.ID),
+		ActionRef:          newOperatorPaymentActionRef(h.cfg.Token, intent.ID),
 		UserRef:            safeUUIDRef("user", intent.UserID),
 		Status:             string(intent.Status),
 		Amount:             intent.Amount,
@@ -486,6 +492,69 @@ func sanitizeOperatorToken(value string) string {
 		return "other"
 	}
 	return b.String()
+}
+
+const operatorPaymentActionRefPrefix = "opact_v1_"
+
+func newOperatorPaymentActionRef(adminToken string, id uuid.UUID) string {
+	if id == uuid.Nil {
+		return ""
+	}
+	block, err := aes.NewCipher(operatorPaymentActionRefKey(adminToken))
+	if err != nil {
+		return ""
+	}
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return ""
+	}
+	nonce := make([]byte, gcm.NonceSize())
+	if _, err := rand.Read(nonce); err != nil {
+		return ""
+	}
+	sealed := gcm.Seal(nonce, nonce, []byte(id.String()), nil)
+	return operatorPaymentActionRefPrefix + base64.RawURLEncoding.EncodeToString(sealed)
+}
+
+func parseOperatorPaymentActionRef(adminToken, value string) (uuid.UUID, bool) {
+	value = strings.TrimSpace(value)
+	if id, err := uuid.Parse(value); err == nil && id != uuid.Nil {
+		return id, true
+	}
+	if !strings.HasPrefix(value, operatorPaymentActionRefPrefix) {
+		return uuid.Nil, false
+	}
+	raw, err := base64.RawURLEncoding.DecodeString(strings.TrimPrefix(value, operatorPaymentActionRefPrefix))
+	if err != nil {
+		return uuid.Nil, false
+	}
+	block, err := aes.NewCipher(operatorPaymentActionRefKey(adminToken))
+	if err != nil {
+		return uuid.Nil, false
+	}
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return uuid.Nil, false
+	}
+	nonceSize := gcm.NonceSize()
+	if len(raw) <= nonceSize {
+		return uuid.Nil, false
+	}
+	plaintext, err := gcm.Open(nil, raw[:nonceSize], raw[nonceSize:], nil)
+	if err != nil {
+		return uuid.Nil, false
+	}
+	id, err := uuid.Parse(string(plaintext))
+	return id, err == nil && id != uuid.Nil
+}
+
+func operatorPaymentActionRefKey(adminToken string) []byte {
+	seed := strings.TrimSpace(adminToken)
+	if seed == "" {
+		seed = "dev-admin-operator-action-ref"
+	}
+	sum := sha256.Sum256([]byte("vk-ai-aggregator:operator-payment-action-ref:v1:" + seed))
+	return sum[:]
 }
 
 func safeUUIDRef(prefix string, id uuid.UUID) string {
