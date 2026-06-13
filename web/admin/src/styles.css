@@ -614,6 +614,90 @@ button {
   white-space: nowrap;
 }
 
+.provider-table {
+  display: grid;
+  gap: 6px;
+  overflow-x: auto;
+}
+
+.provider-row {
+  display: grid;
+  grid-template-columns:
+    minmax(116px, 0.8fr) minmax(134px, 0.9fr) minmax(86px, 0.6fr)
+    minmax(104px, 0.7fr) minmax(86px, 0.5fr) minmax(104px, 0.6fr) minmax(112px, 0.7fr);
+  gap: 10px;
+  min-width: 880px;
+  align-items: center;
+  border: 1px solid #e5dccb;
+  border-radius: 8px;
+  background: #fffef9;
+  color: #24262a;
+  padding: 10px;
+}
+
+.provider-row--config {
+  grid-template-columns: minmax(210px, 0.9fr) minmax(120px, 0.5fr) minmax(110px, 0.4fr) minmax(260px, 1.2fr);
+}
+
+.provider-row--head {
+  border-color: transparent;
+  background: transparent;
+  color: #6d665d;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.provider-row span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.config-grid,
+.signal-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.signal-card {
+  display: grid;
+  gap: 9px;
+  min-width: 0;
+  border: 1px solid #d8d1c3;
+  border-radius: 8px;
+  background: #fffef9;
+  padding: 12px;
+}
+
+.signal-card h4,
+.signal-card p {
+  margin: 0;
+}
+
+.signal-card strong {
+  font-size: 22px;
+}
+
+.signal-card p,
+.signal-card span {
+  color: #6d665d;
+  overflow-wrap: anywhere;
+}
+
+.signal-card--warning strong,
+.signal-card--critical strong {
+  color: #8a3f31;
+}
+
+.signal-card--unknown strong,
+.signal-card--not_wired strong,
+.status-pill--unknown {
+  color: #5f5a52;
+}
+
 .detail-list {
   display: grid;
   gap: 8px;
@@ -698,6 +782,11 @@ button {
   .queue-metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .config-grid,
+  .signal-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 620px) {
@@ -722,6 +811,8 @@ button {
   .panel-grid,
   .overview-grid,
   .queue-metrics,
+  .config-grid,
+  .signal-grid,
   .nav {
     grid-template-columns: 1fr;
   }

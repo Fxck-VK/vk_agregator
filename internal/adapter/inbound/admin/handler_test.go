@@ -15,6 +15,7 @@ import (
 	"vk-ai-aggregator/internal/adapter/inbound/admin"
 	"vk-ai-aggregator/internal/adapter/storage/memory"
 	"vk-ai-aggregator/internal/domain"
+	platformconfig "vk-ai-aggregator/internal/platform/config"
 	"vk-ai-aggregator/internal/service/billingservice"
 )
 
@@ -256,6 +257,147 @@ func TestOperatorJobsListDetailAndQueueSafeDTO(t *testing.T) {
 		t.Fatalf("unexpected queue summary: %+v", queue)
 	}
 	assertNoOperatorJobLeak(t, rec.Body.String(), userID, inputArtifactID, outputArtifactID)
+}
+
+func TestProviderMediaAndConfigOperatorDTOsAreSafe(t *testing.T) {
+	ctx := context.Background()
+	jobs := memory.NewJobRepo()
+	cfg := platformconfig.Config{
+		Env:                                  "production",
+		PaymentProvider:                      "yookassa",
+		PaymentWebhookRequireHTTPS:           true,
+		Provider:                             "deepinfra",
+		ProviderChain:                        []string{"deepinfra", "openai"},
+		ImageProvider:                        "deepinfra",
+		VideoProvider:                        "deepinfra",
+		DeepInfraVideoModel:                  "raw-provider-model-id",
+		OpenAIVideoModel:                     "raw-openai-video-model",
+		MediaPipelineEnabled:                 true,
+		MediaVideoProbePolicy:                platformconfig.MediaVideoProbePolicyProbeRequired,
+		MediaVideoTranscodePolicy:            platformconfig.MediaVideoTranscodePolicyNever,
+		MediaDeliverRawProviderVideo:         platformconfig.MediaDeliverRawProviderVideoIfProbePassed,
+		MediaReferenceUploadsEnabled:         true,
+		MediaReferenceWebPEnabled:            false,
+		MediaMaxImageUploadBytes:             20 << 20,
+		MediaMaxImagePixels:                  4096 * 4096,
+		MediaMaxVideoSizeBytes:               256 << 20,
+		MediaMaxVideoDurationSec:             60,
+		MediaMaxConcurrentUploads:            8,
+		MediaMaxConcurrentProbes:             2,
+		MediaMaxConcurrentTranscodes:         0,
+		MediaMaxPendingVariants:              16,
+		MediaQueueDegradeThreshold:           1000,
+		MediaProviderMaxAttemptsPerJob:       1,
+		MediaProviderFallbackBudget:          0,
+		MediaProviderQualityGuardEnabled:     true,
+		MediaProviderQualityDegradedFailures: 3,
+		MediaProviderQualityDisabledFailures: 5,
+	}
+	h := admin.NewHandler(admin.Config{Runtime: admin.NewRuntimeSnapshot(cfg)}, admin.Deps{
+		Jobs:       jobs,
+		Users:      memory.NewUserRepo(),
+		Deliveries: memory.NewDeliveryRepo(),
+		Referrals:  memory.NewReferralRepo(),
+	})
+	userID := uuid.New()
+	for _, job := range []*domain.Job{
+		{
+			ID:             uuid.New(),
+			UserID:         userID,
+			OperationType:  domain.OperationVideoGenerate,
+			Modality:       domain.ModalityVideo,
+			Status:         domain.JobStatusProviderFailed,
+			ErrorCode:      string(domain.ProviderErrRateLimited),
+			ErrorMessage:   "raw provider payload https://private.example/video prompt text",
+			CostReserved:   50,
+			IdempotencyKey: "idem:secret:provider",
+		},
+		{
+			ID:             uuid.New(),
+			UserID:         userID,
+			OperationType:  domain.OperationVideoGenerate,
+			Modality:       domain.ModalityVideo,
+			Status:         domain.JobStatusFailedTerminal,
+			ErrorCode:      domain.JobErrMediaProviderOutputInvalid,
+			ErrorMessage:   "raw ffprobe path C:/private/video.mp4",
+			CostReserved:   50,
+			IdempotencyKey: "idem:secret:invalid",
+		},
+		{
+			ID:             uuid.New(),
+			UserID:         userID,
+			OperationType:  domain.OperationImageEdit,
+			Modality:       domain.ModalityImage,
+			Status:         domain.JobStatusRejected,
+			ErrorCode:      domain.JobErrMediaUploadTooLarge,
+			ErrorMessage:   "raw image name private.png",
+			IdempotencyKey: "idem:secret:upload",
+		},
+		{
+			ID:             uuid.New(),
+			UserID:         userID,
+			OperationType:  domain.OperationVideoGenerate,
+			Modality:       domain.ModalityVideo,
+			Status:         domain.JobStatusDelivering,
+			CostReserved:   50,
+			CostCaptured:   0,
+			IdempotencyKey: "idem:secret:gap",
+		},
+	} {
+		if err := jobs.Create(ctx, job); err != nil {
+			t.Fatalf("create job: %v", err)
+		}
+	}
+
+	for _, path := range []string{
+		"/admin/providers/operator",
+		"/admin/media-safety/operator",
+		"/admin/config-health/operator",
+	} {
+		rec, _ := do(t, h, path)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("%s expected 200, got %d: %s", path, rec.Code, rec.Body.String())
+		}
+		raw := rec.Body.String()
+		for _, forbidden := range []string{
+			"raw-provider-model-id",
+			"raw-openai-video-model",
+			"private.example",
+			"prompt text",
+			"idem:secret",
+			"raw provider payload",
+			"raw ffprobe path",
+			"private.png",
+			userID.String(),
+		} {
+			if strings.Contains(raw, forbidden) {
+				t.Fatalf("%s leaked forbidden field/value %q: %s", path, forbidden, raw)
+			}
+		}
+	}
+
+	rec, _ := do(t, h, "/admin/providers/operator")
+	var providers admin.OperatorProviderControlRoomDTO
+	if err := json.Unmarshal(rec.Body.Bytes(), &providers); err != nil {
+		t.Fatalf("decode providers: %v", err)
+	}
+	if len(providers.Providers) == 0 || providers.Fallback.Status != "ok" {
+		t.Fatalf("unexpected provider control room: %+v", providers)
+	}
+	if providers.ProviderWaste.Value == "0" || providers.DeliveryCaptureGap.Value == "0" {
+		t.Fatalf("expected provider waste and capture gap signals, got %+v", providers)
+	}
+
+	rec, _ = do(t, h, "/admin/media-safety/operator")
+	var media admin.OperatorMediaSafetyDTO
+	if err := json.Unmarshal(rec.Body.Bytes(), &media); err != nil {
+		t.Fatalf("decode media safety: %v", err)
+	}
+	if media.Policy.ProbePolicy != platformconfig.MediaVideoProbePolicyProbeRequired ||
+		media.Policy.TranscodePolicy != platformconfig.MediaVideoTranscodePolicyNever ||
+		len(media.Uploads) != 3 {
+		t.Fatalf("unexpected media safety DTO: %+v", media)
+	}
 }
 
 func assertNoOperatorJobLeak(t *testing.T, raw string, userID, inputArtifactID, outputArtifactID uuid.UUID) {

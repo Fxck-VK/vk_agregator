@@ -98,7 +98,10 @@ func main() {
 		Logger:       logger,
 	})
 
-	admin := adminapi.NewHandler(adminapi.Config{Token: cfg.AdminToken}, adminapi.Deps{
+	admin := adminapi.NewHandler(adminapi.Config{
+		Token:   cfg.AdminToken,
+		Runtime: adminapi.NewRuntimeSnapshot(cfg),
+	}, adminapi.Deps{
 		Jobs:       core.Jobs,
 		Users:      core.Users,
 		Deliveries: core.Deliveries,

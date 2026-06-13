@@ -151,6 +151,121 @@ type OperatorQueueNotWiredDTO struct {
 	Reason string `json:"reason"`
 }
 
+// OperatorProviderControlRoomDTO is a bounded provider/media business-risk view.
+// It uses curated provider/model classes only and never exposes raw model IDs,
+// provider payloads, prompts, private URLs or user identities.
+type OperatorProviderControlRoomDTO struct {
+	GeneratedAt        time.Time                   `json:"generated_at"`
+	Providers          []OperatorProviderHealthDTO `json:"providers"`
+	Fallback           OperatorProviderFallbackDTO `json:"fallback"`
+	ProviderWaste      OperatorRiskSignalDTO       `json:"provider_waste"`
+	DeliveryCaptureGap OperatorRiskSignalDTO       `json:"delivery_capture_gap"`
+	Circuit            OperatorNotWiredSignalDTO   `json:"circuit"`
+	Notes              []string                    `json:"notes,omitempty"`
+}
+
+// OperatorProviderHealthDTO summarizes one curated provider/model class.
+type OperatorProviderHealthDTO struct {
+	ProviderClass       string `json:"provider_class"`
+	ModelClass          string `json:"model_class"`
+	Modality            string `json:"modality"`
+	Health              string `json:"health"`
+	CircuitState        string `json:"circuit_state"`
+	RateLimitCount      int    `json:"rate_limit_count"`
+	ProviderFailedCount int    `json:"provider_failed_count"`
+	InvalidOutputCount  int    `json:"invalid_output_count"`
+	FallbackState       string `json:"fallback_state"`
+	ContractConfigured  bool   `json:"contract_configured"`
+	QualityGuardEnabled bool   `json:"quality_guard_enabled"`
+	Source              string `json:"source"`
+}
+
+// OperatorProviderFallbackDTO reports whether fallback is configured without
+// exposing provider-native routing internals.
+type OperatorProviderFallbackDTO struct {
+	Status          string   `json:"status"`
+	ProviderClasses []string `json:"provider_classes"`
+	Summary         string   `json:"summary"`
+}
+
+// OperatorRiskSignalDTO is a generic bounded risk counter for operator triage.
+type OperatorRiskSignalDTO struct {
+	ID      string `json:"id"`
+	Title   string `json:"title"`
+	Status  string `json:"status"`
+	Value   string `json:"value"`
+	Source  string `json:"source"`
+	Summary string `json:"summary"`
+}
+
+// OperatorNotWiredSignalDTO marks a missing dedicated source explicitly.
+type OperatorNotWiredSignalDTO struct {
+	Status  string `json:"status"`
+	Source  string `json:"source"`
+	Summary string `json:"summary"`
+}
+
+// OperatorMediaSafetyDTO is a read-only safe media-pipeline control room.
+type OperatorMediaSafetyDTO struct {
+	GeneratedAt time.Time               `json:"generated_at"`
+	Policy      OperatorMediaPolicyDTO  `json:"policy"`
+	Uploads     []OperatorRiskSignalDTO `json:"uploads"`
+	Queue       OperatorQueueSummaryDTO `json:"queue"`
+	Processing  []OperatorRiskSignalDTO `json:"processing"`
+	Cleanup     OperatorRiskSignalDTO   `json:"cleanup"`
+	Notes       []string                `json:"notes,omitempty"`
+}
+
+// OperatorMediaPolicyDTO exposes non-secret media flags and limits only.
+type OperatorMediaPolicyDTO struct {
+	PipelineEnabled                 bool   `json:"pipeline_enabled"`
+	ProbePolicy                     string `json:"probe_policy"`
+	TranscodePolicy                 string `json:"transcode_policy"`
+	RawProviderVideoPolicy          string `json:"raw_provider_video_policy"`
+	ReferenceUploadsEnabled         bool   `json:"reference_uploads_enabled"`
+	WebPReferenceEnabled            bool   `json:"webp_reference_enabled"`
+	MaxImageUploadBytes             int64  `json:"max_image_upload_bytes"`
+	MaxImagePixels                  int64  `json:"max_image_pixels"`
+	MaxVideoSizeBytes               int64  `json:"max_video_size_bytes"`
+	MaxVideoDurationSec             int    `json:"max_video_duration_sec"`
+	MaxConcurrentUploads            int    `json:"max_concurrent_uploads"`
+	MaxConcurrentProbes             int    `json:"max_concurrent_probes"`
+	MaxConcurrentTranscodes         int    `json:"max_concurrent_transcodes"`
+	MaxPendingVariants              int    `json:"max_pending_variants"`
+	QueueDegradeThreshold           int64  `json:"queue_degrade_threshold"`
+	ProviderMaxAttemptsPerJob       int    `json:"provider_max_attempts_per_job"`
+	ProviderFallbackBudgetPerJob    int    `json:"provider_fallback_budget_per_job"`
+	ProviderQualityGuardEnabled     bool   `json:"provider_quality_guard_enabled"`
+	ProviderQualityDegradedFailures int    `json:"provider_quality_degraded_failures"`
+	ProviderQualityDisabledFailures int    `json:"provider_quality_disabled_failures"`
+}
+
+// OperatorConfigHealthDTO reports non-secret runtime posture. It deliberately
+// omits secrets, raw model IDs, local binary paths and URLs.
+type OperatorConfigHealthDTO struct {
+	GeneratedAt     time.Time                    `json:"generated_at"`
+	Environment     string                       `json:"environment"`
+	Flags           []OperatorConfigFlagDTO      `json:"flags"`
+	ProviderClasses []OperatorRuntimeProviderDTO `json:"provider_classes"`
+	Notes           []string                     `json:"notes,omitempty"`
+}
+
+// OperatorConfigFlagDTO is a single non-secret config flag.
+type OperatorConfigFlagDTO struct {
+	Key     string `json:"key"`
+	Value   string `json:"value"`
+	Status  string `json:"status"`
+	Summary string `json:"summary"`
+}
+
+// OperatorRuntimeProviderDTO is a curated provider/model class row.
+type OperatorRuntimeProviderDTO struct {
+	ProviderClass      string `json:"provider_class"`
+	ModelClass         string `json:"model_class"`
+	Modality           string `json:"modality"`
+	ContractConfigured bool   `json:"contract_configured"`
+}
+
 // JobDTO is the admin representation of a job.
 type JobDTO struct {
 	ID                uuid.UUID   `json:"id"`

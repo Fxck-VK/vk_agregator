@@ -3,6 +3,7 @@ import { AdminApiError, createAdminClient, toSafeAdminError } from "./api/adminC
 import type { OverviewCardDTO, OverviewDTO } from "./api/overview";
 import { JobsScreen } from "./screens/JobsScreen";
 import { PaymentsScreen } from "./screens/PaymentsScreen";
+import { ConfigHealthScreen, MediaSafetyScreen, ProvidersScreen } from "./screens/ProviderMediaScreens";
 
 type ScreenId =
   | "overview"
@@ -293,6 +294,12 @@ export function App() {
               <JobsScreen adminTokenSet={Boolean(adminToken)} client={adminClient} />
             ) : screen.id === "payments" ? (
               <PaymentsScreen adminTokenSet={Boolean(adminToken)} client={adminClient} />
+            ) : screen.id === "providers" ? (
+              <ProvidersScreen adminTokenSet={Boolean(adminToken)} client={adminClient} />
+            ) : screen.id === "media" ? (
+              <MediaSafetyScreen adminTokenSet={Boolean(adminToken)} client={adminClient} />
+            ) : screen.id === "config" ? (
+              <ConfigHealthScreen adminTokenSet={Boolean(adminToken)} client={adminClient} />
             ) : (
               <div className="panel-grid">
                 {screen.panels.map((panel) => (

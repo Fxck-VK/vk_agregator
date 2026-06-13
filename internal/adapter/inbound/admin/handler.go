@@ -32,6 +32,7 @@ const (
 	overviewStalePaymentAge = 5 * time.Minute
 	overviewStatusOK        = "ok"
 	overviewStatusWarning   = "warning"
+	overviewStatusCritical  = "critical"
 	overviewStatusNotWired  = "not_wired"
 
 	operatorQueueWarningThreshold  = 10
@@ -47,6 +48,9 @@ type paymentOverviewReader interface {
 type Config struct {
 	// Token, when non-empty, must be presented in the X-Admin-Token header.
 	Token string
+	// Runtime is a sanitized non-secret snapshot of runtime policy/config used
+	// by read-only operator views. It must never contain raw secrets or model IDs.
+	Runtime RuntimeSnapshot
 }
 
 // Deps are the repositories the admin API reads from.
@@ -80,6 +84,9 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /admin/jobs/operator", h.auth(h.operatorAction("admin_operator_jobs_list", h.listOperatorJobs)))
 	mux.HandleFunc("GET /admin/jobs/queue", h.auth(h.operatorAction("admin_operator_queue_get", h.getOperatorQueue)))
 	mux.HandleFunc("GET /admin/jobs/{id}/operator", h.auth(h.operatorAction("admin_operator_job_get", h.getOperatorJob)))
+	mux.HandleFunc("GET /admin/providers/operator", h.auth(h.operatorAction("admin_operator_providers_get", h.getOperatorProviders)))
+	mux.HandleFunc("GET /admin/media-safety/operator", h.auth(h.operatorAction("admin_operator_media_safety_get", h.getOperatorMediaSafety)))
+	mux.HandleFunc("GET /admin/config-health/operator", h.auth(h.operatorAction("admin_operator_config_health_get", h.getOperatorConfigHealth)))
 	mux.HandleFunc("GET /admin/jobs", h.auth(h.operatorAction("admin_jobs_list", h.listJobs)))
 	mux.HandleFunc("GET /admin/jobs/{id}", h.auth(h.operatorAction("admin_job_get", h.getJob)))
 	mux.HandleFunc("GET /admin/users/{id}", h.auth(h.operatorAction("admin_user_get", h.getUser)))
@@ -167,12 +174,7 @@ func (h *Handler) getOverview(w http.ResponseWriter, r *http.Request) {
 			Summary: "Prometheus and Alertmanager stay private; an aggregated alert-status endpoint is pending.",
 		},
 		h.providerHealthOverviewCard(r.Context()),
-		{
-			ID:      "media_safety",
-			Title:   "Media safety",
-			Status:  overviewStatusNotWired,
-			Summary: "Media policy metrics exist outside this UI; safe admin aggregation is a follow-up stage.",
-		},
+		h.mediaSafetyOverviewCard(r.Context()),
 		h.paymentReconciliationOverviewCard(r.Context(), now),
 	}
 	writeJSON(w, http.StatusOK, OverviewDTO{GeneratedAt: now, Cards: cards})
