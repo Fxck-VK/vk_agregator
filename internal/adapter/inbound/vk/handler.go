@@ -30,6 +30,7 @@ import (
 	"vk-ai-aggregator/internal/service/billingservice"
 	"vk-ai-aggregator/internal/service/commandrouter"
 	"vk-ai-aggregator/internal/service/joborchestrator"
+	"vk-ai-aggregator/internal/service/modelcatalog"
 	"vk-ai-aggregator/internal/service/paymentservice"
 	"vk-ai-aggregator/internal/service/referralservice"
 )
@@ -189,6 +190,8 @@ type jobParams struct {
 	Prompt                 string `json:"prompt"`
 	ModelID                string `json:"model_id,omitempty"`
 	ModelName              string `json:"model_name,omitempty"`
+	Provider               string `json:"provider,omitempty"`
+	ModelCode              string `json:"model_code,omitempty"`
 	DurationSec            int    `json:"duration_sec,omitempty"`
 	VKPlaceholderMessageID int64  `json:"vk_placeholder_message_id,omitempty"`
 }
@@ -197,63 +200,35 @@ type videoModeSpec struct {
 	Mode        dialogMode
 	ModelID     string
 	ModelName   string
+	Provider    domain.ProviderName
+	ModelCode   string
 	DurationSec int
 }
 
 func videoModeForCommand(t domain.CommandType) (videoModeSpec, bool) {
 	switch t {
 	case domain.CommandMenuVideoPrunaAI:
-		return videoModeSpec{
-			Mode:        "video:prunaai",
-			ModelID:     "prunaai",
-			ModelName:   "PrunaAI",
-			DurationSec: 5,
-		}, true
+		return videoModeFromCatalog("video:prunaai", modelcatalog.VKVideoPrunaAI)
 	case domain.CommandMenuVideoSora2Start:
-		return videoModeSpec{
-			Mode:        "video:sora_2",
-			ModelID:     "sora_2",
-			ModelName:   "Sora 2",
-			DurationSec: 5,
-		}, true
-	case domain.CommandMenuVideoKling21Start:
-		return videoModeSpec{
-			Mode:        "video:kling_v2_1",
-			ModelID:     "kling_v2_1",
-			ModelName:   "Kling v2.1",
-			DurationSec: 5,
-		}, true
-	case domain.CommandMenuVideoSeedance1Lite:
-		return videoModeSpec{
-			Mode:        "video:seedance_1_lite",
-			ModelID:     "seedance_1_lite",
-			ModelName:   "Seedance 1 Lite",
-			DurationSec: 5,
-		}, true
-	case domain.CommandMenuVideoSeedance1Pro:
-		return videoModeSpec{
-			Mode:        "video:seedance_1_pro",
-			ModelID:     "seedance_1_pro",
-			ModelName:   "Seedance 1 Pro",
-			DurationSec: 5,
-		}, true
-	case domain.CommandMenuVideoHaiuo02Standard:
-		return videoModeSpec{
-			Mode:        "video:haiuo_v0_2_standard",
-			ModelID:     "haiuo_v0_2_standard",
-			ModelName:   "Haiuo v0.2",
-			DurationSec: 5,
-		}, true
-	case domain.CommandMenuVideoHaiuo02Fast:
-		return videoModeSpec{
-			Mode:        "video:haiuo_v0_2_fast",
-			ModelID:     "haiuo_v0_2_fast",
-			ModelName:   "Haiuo v0.2 Fast",
-			DurationSec: 5,
-		}, true
+		return videoModeFromCatalog("video:sora_2", modelcatalog.VKVideoSora2)
 	default:
 		return videoModeSpec{}, false
 	}
+}
+
+func videoModeFromCatalog(mode dialogMode, modelID string) (videoModeSpec, bool) {
+	model, ok := modelcatalog.ResolveVKVideoModel(modelID)
+	if !ok || strings.TrimSpace(model.ModelCode) == "" {
+		return videoModeSpec{}, false
+	}
+	return videoModeSpec{
+		Mode:        mode,
+		ModelID:     model.ModelID,
+		ModelName:   model.ModelName,
+		Provider:    model.Provider,
+		ModelCode:   model.ModelCode,
+		DurationSec: model.DurationSec,
+	}, true
 }
 
 func videoModeFromDialogMode(mode dialogMode) (videoModeSpec, bool) {
@@ -763,6 +738,8 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 		if videoTextJob {
 			jp.ModelID = videoSpec.ModelID
 			jp.ModelName = videoSpec.ModelName
+			jp.Provider = string(videoSpec.Provider)
+			jp.ModelCode = videoSpec.ModelCode
 			jp.DurationSec = videoSpec.DurationSec
 		}
 		params, _ := json.Marshal(jp)

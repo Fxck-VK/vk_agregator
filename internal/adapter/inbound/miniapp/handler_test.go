@@ -217,6 +217,10 @@ func newTestFixture(appSecret string, limiter interface{ Allow(string) bool }) *
 }
 
 func newTestFixtureWithConfig(appSecret string, limiter interface{ Allow(string) bool }, configure func(*miniappinbound.Config)) *testFixture {
+	return newTestFixtureWithConfigAndPaymentProvider(appSecret, limiter, configure, nil)
+}
+
+func newTestFixtureWithConfigAndPaymentProvider(appSecret string, limiter interface{ Allow(string) bool }, configure func(*miniappinbound.Config), payProvider domain.PaymentProvider) *testFixture {
 	userRepo := memory.NewUserRepo()
 	jobRepo := memory.NewJobRepo()
 	conversationRepo := memory.NewConversationRepo()
@@ -230,7 +234,10 @@ func newTestFixtureWithConfig(appSecret string, limiter interface{ Allow(string)
 	uowMgr := memory.NewUnitOfWork(jobRepo, outboxRepo, billingRepo)
 
 	billing := billingservice.New(billingRepo)
-	payment := paymentservice.New(paymentRepo, paymentmock.New(), paymentservice.Config{
+	if payProvider == nil {
+		payProvider = paymentmock.New()
+	}
+	payment := paymentservice.New(paymentRepo, payProvider, paymentservice.Config{
 		ReturnURL: "https://neiirohub.ru/payments/return",
 	})
 	referrals := referralservice.New(referralRepo, billing, referralservice.Config{
@@ -280,6 +287,39 @@ func newTestFixtureWithConfig(appSecret string, limiter interface{ Allow(string)
 		referralRepo:     referralRepo,
 		referrals:        referrals,
 	}
+}
+
+type recordingPaymentProvider struct {
+	createInputs []domain.CreatePaymentInput
+}
+
+func (p *recordingPaymentProvider) Code() domain.PaymentProviderCode {
+	return domain.PaymentProviderMock
+}
+
+func (p *recordingPaymentProvider) CreatePayment(_ context.Context, in domain.CreatePaymentInput) (domain.CreatePaymentResult, error) {
+	p.createInputs = append(p.createInputs, in)
+	return domain.CreatePaymentResult{
+		ProviderPaymentID: "recording-pay-" + in.IntentID.String(),
+		ConfirmationURL:   "https://payments.local/" + in.IntentID.String(),
+		Status:            domain.PaymentIntentWaitingForUser,
+	}, nil
+}
+
+func (p *recordingPaymentProvider) GetPayment(context.Context, string) (domain.ProviderPayment, error) {
+	return domain.ProviderPayment{}, domain.ErrNotFound
+}
+
+func (p *recordingPaymentProvider) CancelPayment(context.Context, string) error {
+	return nil
+}
+
+func (p *recordingPaymentProvider) CreateRefund(context.Context, domain.CreateRefundInput) (domain.RefundResult, error) {
+	return domain.RefundResult{}, domain.ErrNotFound
+}
+
+func (p *recordingPaymentProvider) ParseWebhook(context.Context, []byte, http.Header) (domain.WebhookEvent, error) {
+	return domain.WebhookEvent{}, domain.ErrNotFound
 }
 
 type countingLimiter struct {
@@ -2141,6 +2181,37 @@ func TestHandler_CreatePaymentIntent_IdempotentAndSafeDTO(t *testing.T) {
 	}
 }
 
+func TestHandler_CreatePaymentIntentIgnoresClientReturnURL(t *testing.T) {
+	provider := &recordingPaymentProvider{}
+	fixture := newTestFixtureWithConfigAndPaymentProvider("", nil, nil, provider)
+	fixture.paymentRepo.PutProduct(&domain.PaymentProduct{
+		Code:         "credits_100",
+		Title:        "100 credits",
+		Amount:       9900,
+		Currency:     domain.CurrencyRUB,
+		Credits:      100,
+		PriceVersion: 1,
+		IsActive:     true,
+	})
+
+	body := []byte(`{"product_code":"credits_100","receipt_email":"user@example.com","return_url":"https://attacker.example/return"}`)
+	req := httptest.NewRequest(http.MethodPost, "/miniapp/payments/intents", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Launch-Params", devLaunchParams(777))
+	req.Header.Set("X-Idempotency-Key", "pay-client-return-url")
+	rec := httptest.NewRecorder()
+	fixture.handler.Routes().ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if len(provider.createInputs) != 1 {
+		t.Fatalf("expected one provider call, got %d", len(provider.createInputs))
+	}
+	if got := provider.createInputs[0].ReturnURL; got != "https://neiirohub.ru/payments/return" {
+		t.Fatalf("client return_url was not ignored, got %q", got)
+	}
+}
+
 func TestHandler_CreatePaymentIntentRequiresClientIdempotencyKey(t *testing.T) {
 	fixture := newTestFixture("", nil)
 	fixture.paymentRepo.PutProduct(&domain.PaymentProduct{
@@ -2703,12 +2774,13 @@ func TestHandler_CreateJob_ImageAliasPersistsProviderModelCodePrivately(t *testi
 	var params struct {
 		ModelID   string `json:"model_id"`
 		ModelName string `json:"model_name"`
+		Provider  string `json:"provider"`
 		ModelCode string `json:"model_code"`
 	}
 	if err := json.Unmarshal(job.Params, &params); err != nil {
 		t.Fatalf("invalid params: %v", err)
 	}
-	if params.ModelID != "nano_banana_pro" || params.ModelName != "Nano Banana Pro" || params.ModelCode != "ByteDance/Seedream-4.5" {
+	if params.ModelID != "nano_banana_pro" || params.ModelName != "Nano Banana Pro" || params.Provider != "deepinfra" || params.ModelCode != "ByteDance/Seedream-4.5" {
 		t.Fatalf("unexpected stored params: %+v", params)
 	}
 }
@@ -2762,12 +2834,13 @@ func TestHandler_CreateJob_VideoPersistsProviderModelCodePrivately(t *testing.T)
 	var params struct {
 		ModelID   string `json:"model_id"`
 		ModelName string `json:"model_name"`
+		Provider  string `json:"provider"`
 		ModelCode string `json:"model_code"`
 	}
 	if err := json.Unmarshal(job.Params, &params); err != nil {
 		t.Fatalf("invalid params: %v", err)
 	}
-	if params.ModelID != "kling" || params.ModelName != "Kling" || params.ModelCode != "PrunaAI/p-video" {
+	if params.ModelID != "kling" || params.ModelName != "Kling" || params.Provider != "deepinfra" || params.ModelCode != "PrunaAI/p-video" {
 		t.Fatalf("unexpected stored params: %+v", params)
 	}
 }
@@ -2935,13 +3008,14 @@ func TestHandler_CreateJob_ReferenceArtifactsPassWhenEnabled(t *testing.T) {
 	var params struct {
 		ModelID              string      `json:"model_id"`
 		ModelName            string      `json:"model_name"`
+		Provider             string      `json:"provider"`
 		ModelCode            string      `json:"model_code"`
 		ReferenceArtifactIDs []uuid.UUID `json:"reference_artifact_ids"`
 	}
 	if err := json.Unmarshal(job.Params, &params); err != nil {
 		t.Fatalf("invalid params: %v", err)
 	}
-	if params.ModelID != "nano_banana_pro" || params.ModelName != "Nano Banana Pro" || params.ModelCode != "ByteDance/Seedream-4.5" {
+	if params.ModelID != "nano_banana_pro" || params.ModelName != "Nano Banana Pro" || params.Provider != "deepinfra" || params.ModelCode != "ByteDance/Seedream-4.5" {
 		t.Fatalf("unexpected stored model params: %+v", params)
 	}
 	if len(params.ReferenceArtifactIDs) != 1 || params.ReferenceArtifactIDs[0] != artifact.ID {

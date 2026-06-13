@@ -724,6 +724,7 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 		Prompt:               req.Prompt,
 		ModelID:              model.ModelID,
 		ModelName:            model.ModelName,
+		Provider:             model.Provider,
 		ModelCode:            model.ModelCode,
 		ReferenceArtifactIDs: req.ReferenceArtifactIDs,
 	}
@@ -819,10 +820,19 @@ func (h *Handler) createChatMessage(w http.ResponseWriter, r *http.Request) {
 	idemKey := fmt.Sprintf("miniapp_chat:%d:%s", vkUserID, clientKey)
 	correlationID := fmt.Sprintf("miniapp-chat:%d:%s", vkUserID, clientKey)
 
+	model, ok := resolveMiniAppModel(domain.OperationTextGenerate, "")
+	if !ok {
+		h.logger.Error("miniapp: chat model catalog missing")
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
 	params, _ := json.Marshal(miniAppJobParams{
 		Prompt:             req.Prompt,
-		ModelID:            miniAppChatModelID,
-		ModelName:          miniAppChatPublicModelName,
+		ModelID:            model.ModelID,
+		ModelName:          model.ModelName,
+		Provider:           model.Provider,
+		ModelCode:          model.ModelCode,
 		ConversationSource: domain.ConversationSourceMiniApp,
 		ExternalThreadID:   conversationID,
 	})
@@ -848,7 +858,7 @@ func (h *Handler) createChatMessage(w http.ResponseWriter, r *http.Request) {
 			"job_id":        job.ID,
 			"status":        string(job.Status),
 			"cost_estimate": job.CostEstimate,
-			"model_name":    miniAppChatPublicModelName,
+			"model_name":    model.ModelName,
 		})
 	case errors.Is(err, domain.ErrCostCapExceeded):
 		writeError(w, http.StatusBadRequest, "job cost exceeds platform limit")
@@ -1239,7 +1249,6 @@ func (h *Handler) createPaymentIntent(w http.ResponseWriter, r *http.Request) {
 		ReceiptEmail:   req.ReceiptEmail,
 		ReceiptPhone:   req.ReceiptPhone,
 		IdempotencyKey: "miniapp_payment:" + strconv.FormatInt(vkUserID, 10) + ":" + clientKey,
-		ReturnURL:      req.ReturnURL,
 		Source:         "vk_miniapp",
 		ForceNew:       req.ForceNew,
 	})

@@ -1090,6 +1090,8 @@ func TestPrunaAIVideoButtonEnablesPlainTextVideoJobs(t *testing.T) {
 		Prompt                 string `json:"prompt"`
 		ModelID                string `json:"model_id"`
 		ModelName              string `json:"model_name"`
+		Provider               string `json:"provider"`
+		ModelCode              string `json:"model_code"`
 		DurationSec            int    `json:"duration_sec"`
 		VKPlaceholderMessageID int64  `json:"vk_placeholder_message_id"`
 	}
@@ -1099,6 +1101,8 @@ func TestPrunaAIVideoButtonEnablesPlainTextVideoJobs(t *testing.T) {
 	if params.Prompt != "cinematic neon city at night, rain reflections, slow drone movement" ||
 		params.ModelID != "prunaai" ||
 		params.ModelName != "PrunaAI" ||
+		params.Provider != "deepinfra" ||
+		params.ModelCode != "PrunaAI/p-video" ||
 		params.DurationSec != 5 ||
 		params.VKPlaceholderMessageID != sent[1].MessageID {
 		t.Fatalf("unexpected PrunaAI video job params: %+v, pending=%+v", params, sent[1])
@@ -1856,6 +1860,44 @@ func TestPersistedVideoModeSurvivesHandlerRestart(t *testing.T) {
 	jobs, _ := second.jobs.ListByUser(ctx, user.ID, 10, 0)
 	if len(jobs) != 1 || jobs[0].OperationType != domain.OperationVideoGenerate || jobs[0].Modality != domain.ModalityVideo || second.pub.Len() != 1 {
 		t.Fatalf("persisted video mode should create one video job, jobs=%+v tasks=%d", jobs, second.pub.Len())
+	}
+	var params struct {
+		Provider  string `json:"provider"`
+		ModelCode string `json:"model_code"`
+	}
+	if err := json.Unmarshal(jobs[0].Params, &params); err != nil {
+		t.Fatalf("decode job params: %v", err)
+	}
+	if params.Provider != "openai" || params.ModelCode != "sora-2" {
+		t.Fatalf("persisted video mode should use catalog model, got %+v", params)
+	}
+}
+
+func TestUnsupportedPersistedVideoModeDoesNotCreateJob(t *testing.T) {
+	dialogState := newFakeDialogState()
+	dialogState.modes[5932] = "video:kling_v2_1"
+
+	control := vkdelivery.NewMockClient()
+	h := newHarnessWithConfigAndDialogState(control, vk.Config{
+		ConfirmationToken: "conf-token-123",
+		Secret:            "s3cr3t",
+	}, dialogState)
+	prompt := `{
+		"type":"message_new","group_id":1,"event_id":"evt-video-persist-unsupported","secret":"s3cr3t",
+		"object":{"message":{"from_id":5932,"peer_id":5932,"text":"cinematic ocean waves at sunset"}}
+	}`
+	if rec := h.post(prompt); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected persisted prompt response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	ctx := context.Background()
+	user, err := h.users.GetByVKUserID(ctx, 5932)
+	if err != nil {
+		t.Fatalf("user not created after restart: %v", err)
+	}
+	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
+	if len(jobs) != 0 || h.pub.Len() != 0 {
+		t.Fatalf("unsupported persisted video mode must not create jobs, jobs=%+v tasks=%d", jobs, h.pub.Len())
 	}
 }
 
