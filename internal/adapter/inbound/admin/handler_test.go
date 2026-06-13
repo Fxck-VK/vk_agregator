@@ -442,7 +442,7 @@ func TestUsersReferralsAndAuditOperatorDTOsAreSafe(t *testing.T) {
 			CostReserved:   1,
 			CostCaptured:   1,
 			ErrorMessage:   "sensitive_generation_input should not render",
-			IdempotencyKey: "stage7-idempotency-marker-one",
+			IdempotencyKey: "idem-one",
 		},
 		{
 			ID:             uuid.New(),
@@ -452,7 +452,7 @@ func TestUsersReferralsAndAuditOperatorDTOsAreSafe(t *testing.T) {
 			Status:         domain.JobStatusFailedTerminal,
 			ErrorCode:      "provider_timeout",
 			ErrorMessage:   "private_storage_locator should not render",
-			IdempotencyKey: "stage7-idempotency-marker-two",
+			IdempotencyKey: "idem-two",
 		},
 	} {
 		if err := jobs.Create(ctx, job); err != nil {
@@ -550,6 +550,8 @@ func assertNoOperatorStage7Leak(t *testing.T, raw string, userID uuid.UUID) {
 		"sensitive_generation_input",
 		"private_storage_locator",
 		"idempotency",
+		"idem-one",
+		"idem-two",
 		"stage7-admin-token",
 		"private-request-id",
 		"stage7-payment-key",
