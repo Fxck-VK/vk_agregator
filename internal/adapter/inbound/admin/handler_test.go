@@ -400,6 +400,164 @@ func TestProviderMediaAndConfigOperatorDTOsAreSafe(t *testing.T) {
 	}
 }
 
+func TestUsersReferralsAndAuditOperatorDTOsAreSafe(t *testing.T) {
+	ctx := context.Background()
+	jobs := memory.NewJobRepo()
+	users := memory.NewUserRepo()
+	payments := memory.NewPaymentRepo()
+	refs := memory.NewReferralRepo()
+	audits := memory.NewOperatorAuditRepo()
+	adminToken := "stage7-admin-token"
+	h := admin.NewHandler(admin.Config{Token: adminToken}, admin.Deps{
+		Jobs:       jobs,
+		Users:      users,
+		Deliveries: memory.NewDeliveryRepo(),
+		Audits:     audits,
+		Referrals:  refs,
+		Payment:    payments,
+	})
+	user := &domain.User{
+		VKUserID:    777777,
+		Role:        domain.RoleUser,
+		Status:      domain.StatusActive,
+		Locale:      "ru",
+		Timezone:    "Europe/Moscow",
+		RiskLevel:   45,
+		VKFirstName: "RawName",
+		VKLastName:  "RawLast",
+	}
+	if err := users.Create(ctx, user); err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	for _, job := range []*domain.Job{
+		{
+			ID:             uuid.New(),
+			UserID:         user.ID,
+			OperationType:  domain.OperationTextGenerate,
+			Modality:       domain.ModalityText,
+			Status:         domain.JobStatusSucceeded,
+			CostReserved:   1,
+			CostCaptured:   1,
+			ErrorMessage:   "sensitive_generation_input should not render",
+			IdempotencyKey: "stage7-private-key-1",
+		},
+		{
+			ID:             uuid.New(),
+			UserID:         user.ID,
+			OperationType:  domain.OperationImageGenerate,
+			Modality:       domain.ModalityImage,
+			Status:         domain.JobStatusFailedTerminal,
+			ErrorCode:      "provider_timeout",
+			ErrorMessage:   "private_storage_locator should not render",
+			IdempotencyKey: "stage7-private-key-2",
+		},
+	} {
+		if err := jobs.Create(ctx, job); err != nil {
+			t.Fatalf("create job: %v", err)
+		}
+	}
+	if err := payments.CreateIntent(ctx, &domain.PaymentIntent{
+		ID:             uuid.New(),
+		UserID:         user.ID,
+		Status:         domain.PaymentIntentSucceeded,
+		Amount:         100,
+		Currency:       domain.CurrencyRUB,
+		Credits:        100,
+		Provider:       domain.PaymentProviderMock,
+		IdempotencyKey: "stage7-payment-key",
+	}); err != nil {
+		t.Fatalf("create intent: %v", err)
+	}
+	if err := refs.CreateCode(ctx, &domain.ReferralCode{UserID: user.ID, Code: "SAFE7777"}); err != nil {
+		t.Fatalf("create code: %v", err)
+	}
+	for i := 0; i < 2; i++ {
+		referral := &domain.Referral{
+			ReferrerUserID: user.ID,
+			ReferredUserID: uuid.New(),
+			ReferralCode:   "SAFE7777",
+			Source:         domain.ReferralSourceVKBot,
+			Status:         domain.ReferralStatusRegistered,
+			RewardStatus:   domain.ReferralRewardPending,
+		}
+		if err := refs.CreateReferral(ctx, referral); err != nil {
+			t.Fatalf("create referral: %v", err)
+		}
+	}
+
+	userReq := httptest.NewRequest(http.MethodGet, "/admin/users/operator?user_id="+user.ID.String(), nil)
+	userReq.Header.Set("X-Admin-Token", adminToken)
+	userReq.Header.Set("X-Request-ID", "private-request-id")
+	userRec := httptest.NewRecorder()
+	h.Routes().ServeHTTP(userRec, userReq)
+	if userRec.Code != http.StatusOK {
+		t.Fatalf("expected users 200, got %d: %s", userRec.Code, userRec.Body.String())
+	}
+	var userDTO admin.OperatorUsersDTO
+	if err := json.Unmarshal(userRec.Body.Bytes(), &userDTO); err != nil {
+		t.Fatalf("decode users dto: %v", err)
+	}
+	if userDTO.User == nil || userDTO.User.UserRef == "" || userDTO.User.RiskClass != "medium" || userDTO.Payment.Succeeded != 1 {
+		t.Fatalf("unexpected users dto: %+v", userDTO)
+	}
+	assertNoOperatorStage7Leak(t, userRec.Body.String(), user.ID)
+
+	refReq := httptest.NewRequest(http.MethodGet, "/admin/referrals/operator?code=SAFE7777&min_registered=2&min_total=10", nil)
+	refReq.Header.Set("X-Admin-Token", adminToken)
+	refRec := httptest.NewRecorder()
+	h.Routes().ServeHTTP(refRec, refReq)
+	if refRec.Code != http.StatusOK {
+		t.Fatalf("expected referrals 200, got %d: %s", refRec.Code, refRec.Body.String())
+	}
+	var refDTO admin.OperatorReferralsDTO
+	if err := json.Unmarshal(refRec.Body.Bytes(), &refDTO); err != nil {
+		t.Fatalf("decode referrals dto: %v", err)
+	}
+	if refDTO.CodeStats == nil || refDTO.CodeStats.RegisteredCount != 2 || refDTO.Distribution.RegisteredCount != 2 || len(refDTO.Suspicious) != 1 {
+		t.Fatalf("unexpected referrals dto: %+v", refDTO)
+	}
+	assertNoOperatorStage7Leak(t, refRec.Body.String(), user.ID)
+
+	auditReq := httptest.NewRequest(http.MethodGet, "/admin/audit/operator", nil)
+	auditReq.Header.Set("X-Admin-Token", adminToken)
+	auditRec := httptest.NewRecorder()
+	h.Routes().ServeHTTP(auditRec, auditReq)
+	if auditRec.Code != http.StatusOK {
+		t.Fatalf("expected audit 200, got %d: %s", auditRec.Code, auditRec.Body.String())
+	}
+	var auditDTO admin.OperatorAuditLogDTO
+	if err := json.Unmarshal(auditRec.Body.Bytes(), &auditDTO); err != nil {
+		t.Fatalf("decode audit dto: %v", err)
+	}
+	if len(auditDTO.Items) < 2 {
+		t.Fatalf("expected at least two audit entries, got %+v", auditDTO.Items)
+	}
+	assertNoOperatorStage7Leak(t, auditRec.Body.String(), user.ID)
+}
+
+func assertNoOperatorStage7Leak(t *testing.T, raw string, userID uuid.UUID) {
+	t.Helper()
+	for _, forbidden := range []string{
+		"vk_user_id",
+		"VKUserID",
+		"777777",
+		"RawName",
+		"RawLast",
+		"Europe/Moscow",
+		"sensitive_generation_input",
+		"private_storage_locator",
+		"idempotency",
+		"stage7-admin-token",
+		"private-request-id",
+		"stage7-payment-key",
+		userID.String(),
+	} {
+		if strings.Contains(raw, forbidden) {
+			t.Fatalf("operator Stage 7 DTO leaked forbidden field/value %q: %s", forbidden, raw)
+		}
+	}
+}
+
 func assertNoOperatorJobLeak(t *testing.T, raw string, userID, inputArtifactID, outputArtifactID uuid.UUID) {
 	t.Helper()
 	for _, forbidden := range []string{

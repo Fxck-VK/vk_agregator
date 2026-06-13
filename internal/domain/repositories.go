@@ -267,6 +267,14 @@ type DeliveryRepository interface {
 	ListByJob(ctx context.Context, jobID uuid.UUID) ([]*Delivery, error)
 }
 
+// OperatorAuditRepository persists sanitized operator/admin action records.
+// Implementations must not store raw tokens, request bodies, raw URLs, prompts,
+// private identifiers or provider/payment payloads.
+type OperatorAuditRepository interface {
+	Create(ctx context.Context, entry *OperatorAuditEntry) error
+	List(ctx context.Context, filter OperatorAuditFilter, limit, offset int) ([]*OperatorAuditEntry, error)
+}
+
 // BillingRepository persists the append-only credit ledger, accounts and
 // reservations. Balance is only ever changed through ledger entries.
 type BillingRepository interface {
@@ -426,6 +434,8 @@ type ReferralRepository interface {
 	// ListSuspiciousReferralCodes returns aggregate suspicious referral-code
 	// patterns without exposing invited-user identities.
 	ListSuspiciousReferralCodes(ctx context.Context, filter ReferralSuspiciousFilter) ([]ReferralCodeStats, error)
+	// ReferralStatusDistribution returns global no-PII referral funnel counters.
+	ReferralStatusDistribution(ctx context.Context) (ReferralStats, error)
 	// MarkActivated marks a registered referral as activated by product usage.
 	MarkActivated(ctx context.Context, referralID uuid.UUID, activatedAt time.Time) error
 	// MarkRewardApplied marks signup referral rewards as posted to billing.

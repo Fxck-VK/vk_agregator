@@ -266,6 +266,123 @@ type OperatorRuntimeProviderDTO struct {
 	ContractConfigured bool   `json:"contract_configured"`
 }
 
+// OperatorUsersDTO is the read-only safe user console payload. It never exposes
+// raw VK user ids, names, timezones or internal UUIDs by default.
+type OperatorUsersDTO struct {
+	GeneratedAt time.Time                      `json:"generated_at"`
+	User        *OperatorUserSummaryDTO        `json:"user,omitempty"`
+	RecentJobs  []OperatorUserRecentJobDTO     `json:"recent_jobs,omitempty"`
+	Payment     OperatorUserPaymentSummaryDTO  `json:"payment"`
+	Referrals   OperatorUserReferralSummaryDTO `json:"referrals"`
+	Notes       []string                       `json:"notes,omitempty"`
+}
+
+type OperatorUserSummaryDTO struct {
+	UserRef     string                    `json:"user_ref"`
+	Role        string                    `json:"role"`
+	Status      string                    `json:"status"`
+	Locale      string                    `json:"locale,omitempty"`
+	RiskClass   string                    `json:"risk_class"`
+	FirstSeenAt *time.Time                `json:"first_seen_at,omitempty"`
+	LastSeenAt  *time.Time                `json:"last_seen_at,omitempty"`
+	CreatedAt   time.Time                 `json:"created_at"`
+	UpdatedAt   time.Time                 `json:"updated_at"`
+	AgeSeconds  int64                     `json:"age_seconds"`
+	Jobs        OperatorUserJobSummaryDTO `json:"jobs"`
+}
+
+type OperatorUserJobSummaryDTO struct {
+	Status         string `json:"status"`
+	Total          string `json:"total"`
+	Active         string `json:"active"`
+	Succeeded      string `json:"succeeded"`
+	Failed         string `json:"failed"`
+	TextJobs       string `json:"text_jobs"`
+	ImageJobs      string `json:"image_jobs"`
+	VideoJobs      string `json:"video_jobs"`
+	RecentPageSize int    `json:"recent_page_size"`
+}
+
+type OperatorUserRecentJobDTO struct {
+	DisplayID    string    `json:"display_id"`
+	Operation    string    `json:"operation"`
+	Modality     string    `json:"modality"`
+	Status       string    `json:"status"`
+	ErrorClass   string    `json:"error_class,omitempty"`
+	CostReserved int64     `json:"cost_reserved"`
+	CostCaptured int64     `json:"cost_captured"`
+	CreatedAt    time.Time `json:"created_at"`
+	AgeSeconds   int64     `json:"age_seconds"`
+}
+
+type OperatorUserPaymentSummaryDTO struct {
+	Status           string `json:"status"`
+	Total            int    `json:"total"`
+	Pending          int    `json:"pending"`
+	Succeeded        int    `json:"succeeded"`
+	Failed           int    `json:"failed"`
+	Refunded         int    `json:"refunded"`
+	CreditsPurchased int64  `json:"credits_purchased"`
+}
+
+type OperatorUserReferralSummaryDTO struct {
+	Status     string                    `json:"status"`
+	Code       string                    `json:"code,omitempty"`
+	Invited    int                       `json:"invited"`
+	Registered int                       `json:"registered"`
+	Activated  int                       `json:"activated"`
+	Rewarded   int                       `json:"rewarded"`
+	InvitedBy  *OperatorUserInvitedByDTO `json:"invited_by,omitempty"`
+}
+
+type OperatorUserInvitedByDTO struct {
+	Source       string `json:"source"`
+	Status       string `json:"status"`
+	RewardStatus string `json:"reward_status"`
+}
+
+// OperatorReferralsDTO is a no-PII referral console payload.
+type OperatorReferralsDTO struct {
+	GeneratedAt        time.Time                             `json:"generated_at"`
+	CodeStats          *ReferralStatsDTO                     `json:"code_stats,omitempty"`
+	Distribution       OperatorReferralDistributionDTO       `json:"distribution"`
+	Suspicious         []SuspiciousReferralDTO               `json:"suspicious"`
+	SuspiciousCriteria OperatorReferralSuspiciousCriteriaDTO `json:"suspicious_criteria"`
+	Pagination         pagination                            `json:"pagination"`
+	Notes              []string                              `json:"notes,omitempty"`
+}
+
+type OperatorReferralDistributionDTO struct {
+	RegisteredCount int `json:"registered_count"`
+	ActivatedCount  int `json:"activated_count"`
+	RewardedCount   int `json:"rewarded_count"`
+	Total           int `json:"total"`
+}
+
+type OperatorReferralSuspiciousCriteriaDTO struct {
+	MinRegistered int `json:"min_registered"`
+	MinTotal      int `json:"min_total"`
+}
+
+// OperatorAuditLogDTO is a sanitized read-only operator audit listing.
+type OperatorAuditLogDTO struct {
+	GeneratedAt time.Time               `json:"generated_at"`
+	Items       []OperatorAuditEntryDTO `json:"items"`
+	Pagination  pagination              `json:"pagination"`
+	Notes       []string                `json:"notes,omitempty"`
+}
+
+type OperatorAuditEntryDTO struct {
+	DisplayID  string    `json:"display_id"`
+	ActorRef   string    `json:"actor_ref"`
+	Action     string    `json:"action"`
+	TargetType string    `json:"target_type"`
+	TargetRef  string    `json:"target_ref,omitempty"`
+	Result     string    `json:"result"`
+	RequestRef string    `json:"request_ref,omitempty"`
+	CreatedAt  time.Time `json:"created_at"`
+}
+
 // JobDTO is the admin representation of a job.
 type JobDTO struct {
 	ID                uuid.UUID   `json:"id"`

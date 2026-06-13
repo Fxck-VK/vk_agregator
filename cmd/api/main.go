@@ -105,6 +105,7 @@ func main() {
 		Jobs:       core.Jobs,
 		Users:      core.Users,
 		Deliveries: core.Deliveries,
+		Audits:     core.Audits,
 		Referrals:  core.Referrals,
 		Billing:    core.BillingRepo,
 		Payment:    core.Payment,
@@ -114,6 +115,7 @@ func main() {
 		Billing:    core.BillingRepo,
 		Payment:    core.Payment,
 		PaymentOps: core.PaymentOps,
+		Audits:     core.Audits,
 	})
 
 	miniapp := miniappapp.NewHandler(ctx, cfg, miniappapp.Deps{

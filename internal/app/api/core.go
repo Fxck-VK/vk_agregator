@@ -25,6 +25,7 @@ type SharedCore struct {
 	Inbound       domain.InboundEventRepository
 	Idempotency   domain.IdempotencyRepository
 	Deliveries    domain.DeliveryRepository
+	Audits        domain.OperatorAuditRepository
 	BillingRepo   domain.BillingRepository
 	Payments      domain.PaymentRepository
 	Referrals     domain.ReferralRepository
@@ -91,6 +92,7 @@ func NewSharedCore(pool *pgxpool.Pool, cfg config.Config, opts ...SharedCoreOpti
 		Inbound:       postgres.NewInboundEventRepository(pool),
 		Idempotency:   postgres.NewIdempotencyRepository(pool),
 		Deliveries:    postgres.NewDeliveryRepository(pool),
+		Audits:        postgres.NewOperatorAuditRepository(pool),
 		BillingRepo:   billingRepo,
 		Payments:      payments,
 		Referrals:     postgres.NewReferralRepository(pool),

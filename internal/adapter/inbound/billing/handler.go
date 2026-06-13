@@ -34,6 +34,7 @@ type Deps struct {
 	Billing    domain.BillingRepository
 	Payment    *paymentservice.Service
 	PaymentOps *paymentservice.WebhookProcessor
+	Audits     domain.OperatorAuditRepository
 }
 
 // Handler serves /billing/* routes.
@@ -97,7 +98,69 @@ func (h *Handler) operatorAction(action string, next http.HandlerFunc) http.Hand
 			result = "error"
 		}
 		metrics.AdminActions.WithLabelValues(action, result).Inc()
+		h.recordOperatorAudit(r, action, result)
 	}
+}
+
+func (h *Handler) recordOperatorAudit(r *http.Request, action, result string) {
+	if h.deps.Audits == nil {
+		return
+	}
+	entryID := uuid.New()
+	targetType := billingOperatorTargetType(action)
+	entry := &domain.OperatorAuditEntry{
+		ID:         entryID,
+		ActorRef:   billingOperatorActorRef(h.cfg.Token),
+		Action:     sanitizeOperatorToken(action),
+		TargetType: targetType,
+		TargetRef:  safeStringRef("target", targetType+":"+r.URL.Path),
+		Result:     billingOperatorAuditResult(result),
+		RequestRef: billingOperatorRequestRef(r, entryID),
+	}
+	if entry.Action == "" {
+		entry.Action = "unknown"
+	}
+	if entry.TargetRef == "" {
+		entry.TargetRef = safeUUIDRef("target", entryID)
+	}
+	_ = h.deps.Audits.Create(r.Context(), entry)
+}
+
+func billingOperatorActorRef(token string) string {
+	if strings.TrimSpace(token) == "" {
+		return "admin_dev"
+	}
+	return "admin_token"
+}
+
+func billingOperatorTargetType(action string) string {
+	value := strings.ToLower(action)
+	switch {
+	case strings.Contains(value, "payment_product"):
+		return "payment_products"
+	case strings.Contains(value, "payment_intent"):
+		return "payment_intents"
+	case strings.Contains(value, "payment"):
+		return "payments"
+	default:
+		return "billing"
+	}
+}
+
+func billingOperatorAuditResult(result string) string {
+	if result == "success" {
+		return "success"
+	}
+	return "error"
+}
+
+func billingOperatorRequestRef(r *http.Request, fallback uuid.UUID) string {
+	for _, header := range []string{"X-Request-ID", "X-Correlation-ID"} {
+		if raw := strings.TrimSpace(r.Header.Get(header)); raw != "" {
+			return safeStringRef("request", raw)
+		}
+	}
+	return safeUUIDRef("request", fallback)
 }
 
 func adminTokenEqual(got, want string) bool {

@@ -58,6 +58,7 @@ type Deps struct {
 	Jobs       domain.JobRepository
 	Users      domain.UserRepository
 	Deliveries domain.DeliveryRepository
+	Audits     domain.OperatorAuditRepository
 	Referrals  domain.ReferralRepository
 	// Billing is optional; when set, user responses include the credit balance.
 	Billing domain.BillingRepository
@@ -87,6 +88,9 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /admin/providers/operator", h.auth(h.operatorAction("admin_operator_providers_get", h.getOperatorProviders)))
 	mux.HandleFunc("GET /admin/media-safety/operator", h.auth(h.operatorAction("admin_operator_media_safety_get", h.getOperatorMediaSafety)))
 	mux.HandleFunc("GET /admin/config-health/operator", h.auth(h.operatorAction("admin_operator_config_health_get", h.getOperatorConfigHealth)))
+	mux.HandleFunc("GET /admin/users/operator", h.auth(h.operatorAction("admin_operator_users_get", h.getOperatorUsers)))
+	mux.HandleFunc("GET /admin/referrals/operator", h.auth(h.operatorAction("admin_operator_referrals_get", h.getOperatorReferrals)))
+	mux.HandleFunc("GET /admin/audit/operator", h.auth(h.operatorAction("admin_operator_audit_get", h.getOperatorAudit)))
 	mux.HandleFunc("GET /admin/jobs", h.auth(h.operatorAction("admin_jobs_list", h.listJobs)))
 	mux.HandleFunc("GET /admin/jobs/{id}", h.auth(h.operatorAction("admin_job_get", h.getJob)))
 	mux.HandleFunc("GET /admin/users/{id}", h.auth(h.operatorAction("admin_user_get", h.getUser)))
@@ -128,6 +132,7 @@ func (h *Handler) operatorAction(action string, next http.HandlerFunc) http.Hand
 			result = "error"
 		}
 		metrics.AdminActions.WithLabelValues(action, result).Inc()
+		h.recordOperatorAudit(r, action, result)
 	}
 }
 

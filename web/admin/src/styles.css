@@ -655,6 +655,37 @@ button {
   white-space: nowrap;
 }
 
+.audit-row {
+  display: grid;
+  grid-template-columns:
+    minmax(132px, 0.85fr) minmax(116px, 0.7fr) minmax(190px, 1fr)
+    minmax(170px, 0.9fr) minmax(90px, 0.5fr) minmax(130px, 0.75fr);
+  gap: 10px;
+  min-width: 880px;
+  align-items: center;
+  border: 1px solid #e5dccb;
+  border-radius: 8px;
+  background: #fffef9;
+  color: #24262a;
+  padding: 10px;
+}
+
+.audit-row--head {
+  border-color: transparent;
+  background: transparent;
+  color: #6d665d;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.audit-row span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .config-grid,
 .signal-grid {
   display: grid;

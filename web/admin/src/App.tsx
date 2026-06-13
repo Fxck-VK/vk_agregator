@@ -4,6 +4,7 @@ import type { OverviewCardDTO, OverviewDTO } from "./api/overview";
 import { JobsScreen } from "./screens/JobsScreen";
 import { PaymentsScreen } from "./screens/PaymentsScreen";
 import { ConfigHealthScreen, MediaSafetyScreen, ProvidersScreen } from "./screens/ProviderMediaScreens";
+import { AuditLogScreen, ReferralsScreen, UsersScreen } from "./screens/UsersReferralsAuditScreens";
 
 type ScreenId =
   | "overview"
@@ -294,10 +295,16 @@ export function App() {
               <JobsScreen adminTokenSet={Boolean(adminToken)} client={adminClient} />
             ) : screen.id === "payments" ? (
               <PaymentsScreen adminTokenSet={Boolean(adminToken)} client={adminClient} />
+            ) : screen.id === "users" ? (
+              <UsersScreen adminTokenSet={Boolean(adminToken)} client={adminClient} />
             ) : screen.id === "providers" ? (
               <ProvidersScreen adminTokenSet={Boolean(adminToken)} client={adminClient} />
             ) : screen.id === "media" ? (
               <MediaSafetyScreen adminTokenSet={Boolean(adminToken)} client={adminClient} />
+            ) : screen.id === "referrals" ? (
+              <ReferralsScreen adminTokenSet={Boolean(adminToken)} client={adminClient} />
+            ) : screen.id === "audit" ? (
+              <AuditLogScreen adminTokenSet={Boolean(adminToken)} client={adminClient} />
             ) : screen.id === "config" ? (
               <ConfigHealthScreen adminTokenSet={Boolean(adminToken)} client={adminClient} />
             ) : (
