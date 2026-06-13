@@ -177,6 +177,16 @@ func (r *ReferralRepo) ListSuspiciousReferralCodes(_ context.Context, filter dom
 	return out, nil
 }
 
+func (r *ReferralRepo) ReferralStatusDistribution(_ context.Context) (domain.ReferralStats, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var stats domain.ReferralStats
+	for _, referral := range r.referralsByID {
+		addReferralStatus(&stats, referral)
+	}
+	return stats, nil
+}
+
 func (r *ReferralRepo) statsByCodeLocked(code string) domain.ReferralStats {
 	var stats domain.ReferralStats
 	for _, referral := range r.referralsByID {

@@ -223,6 +223,30 @@ func (r *ReferralRepository) ListSuspiciousReferralCodes(ctx context.Context, fi
 	return out, nil
 }
 
+func (r *ReferralRepository) ReferralStatusDistribution(ctx context.Context) (domain.ReferralStats, error) {
+	const q = `
+		SELECT
+			COALESCE(SUM(CASE
+				WHEN reward_status <> 'applied'
+				 AND (status IS NULL OR status NOT IN ('activated', 'rewarded'))
+				THEN 1 ELSE 0
+			END), 0)::int AS registered_count,
+			COALESCE(SUM(CASE
+				WHEN status = 'activated' AND reward_status <> 'applied'
+				THEN 1 ELSE 0
+			END), 0)::int AS activated_count,
+			COALESCE(SUM(CASE
+				WHEN status = 'rewarded' OR reward_status = 'applied'
+				THEN 1 ELSE 0
+			END), 0)::int AS rewarded_count
+		FROM referrals`
+	var stats domain.ReferralStats
+	if err := r.db.QueryRow(ctx, q).Scan(&stats.RegisteredCount, &stats.ActivatedCount, &stats.RewardedCount); err != nil {
+		return domain.ReferralStats{}, mapError(err)
+	}
+	return stats, nil
+}
+
 func (r *ReferralRepository) MarkActivated(ctx context.Context, referralID uuid.UUID, activatedAt time.Time) error {
 	const q = `
 		UPDATE referrals

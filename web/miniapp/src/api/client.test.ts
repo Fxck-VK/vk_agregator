@@ -1,7 +1,9 @@
 import { describe, expect, test } from "vitest";
 
 import {
+  ApiError,
   artifactUrl,
+  apiUserMessage,
   errorLabel,
   launchParamsFromLocation,
   normalizeRawParams,
@@ -85,5 +87,26 @@ describe("artifact and status helpers", () => {
     expect(statusKind("failed_terminal")).toBe("failed");
     expect(statusKind("provider_running")).toBe("progress");
     expect(errorLabel({ status: "failed_terminal", error_code: "unknown" } as never)).toBeTruthy();
+  });
+
+  test("renders safe media failure labels without provider details", () => {
+    const label = errorLabel({
+      status: "failed_terminal",
+      error_code: "media_provider_output_invalid",
+    } as never);
+
+    expect(label).toContain("Кредиты не списаны");
+    expect(label.toLowerCase()).not.toContain("provider");
+    expect(label.toLowerCase()).not.toContain("prompt");
+    expect(label).not.toContain(ARTIFACT_ID);
+  });
+
+  test("renders safe media API errors without raw backend details", () => {
+    const msg = apiUserMessage(new ApiError(503, "media_overloaded_retry_later"));
+
+    expect(msg).toContain("Кредиты не списаны");
+    expect(msg.toLowerCase()).not.toContain("provider");
+    expect(msg.toLowerCase()).not.toContain("launch");
+    expect(msg.toLowerCase()).not.toContain("payload");
   });
 });

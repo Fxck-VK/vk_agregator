@@ -82,6 +82,27 @@ func (r *ArtifactRepo) GetBySHA256(_ context.Context, ownerID uuid.UUID, sha256 
 	return &a, nil
 }
 
+func (r *ArtifactRepo) FindReusableInputReference(_ context.Context, ownerID uuid.UUID, sha256, validationPolicyVersion, mimeType string) (*domain.Artifact, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, artifact := range r.byID {
+		if artifact.OwnerUserID == ownerID &&
+			artifact.SHA256 == sha256 &&
+			artifact.ValidationPolicyVersion == validationPolicyVersion &&
+			artifact.LifecycleClass == domain.ArtifactLifecycleInputReference &&
+			artifact.Kind == domain.ArtifactKindInput &&
+			artifact.MediaType == domain.MediaTypeImage &&
+			artifact.MimeType == mimeType &&
+			artifact.Status == domain.ArtifactStatusReady &&
+			artifact.StorageBucket != "" &&
+			artifact.StorageKey != "" {
+			a := artifact
+			return &a, nil
+		}
+	}
+	return nil, domain.ErrNotFound
+}
+
 func (r *ArtifactRepo) AddVariant(_ context.Context, v *domain.ArtifactVariant) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -128,6 +149,7 @@ func normalizeArtifactMetadata(a *domain.Artifact) {
 	a.Container = m.Container
 	a.BitrateBPS = m.BitrateBPS
 	a.ProbeStatus = m.ProbeStatus
+	a.LifecycleClass = domain.NormalizeArtifactLifecycleClass(a.LifecycleClass, a.Kind, a.MediaType, a.Status)
 }
 
 func normalizeArtifactVariantMetadata(v *domain.ArtifactVariant) {
@@ -147,6 +169,9 @@ func normalizeArtifactVariantMetadata(v *domain.ArtifactVariant) {
 	v.Container = m.Container
 	v.BitrateBPS = m.BitrateBPS
 	v.ProbeStatus = m.ProbeStatus
+	if !v.LifecycleClass.Valid() {
+		v.LifecycleClass = domain.ArtifactLifecycleDeliveryVariant
+	}
 }
 
 // ObjectStore is an in-memory object store satisfying the artifact service's

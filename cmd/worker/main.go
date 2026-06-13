@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -209,7 +210,14 @@ func main() {
 	artSvc := artifactservice.New(artRepo, store, cfg.S3Bucket, artOpts...)
 	var videoProber worker.VideoProber
 	var videoTranscoder worker.VideoTranscoder
-	if cfg.MediaPipelineEnabled {
+	probePolicy := cfg.EffectiveMediaVideoProbePolicy()
+	transcodePolicy := cfg.EffectiveMediaVideoTranscodePolicy()
+	rawProviderVideoPolicy := cfg.EffectiveMediaDeliverRawProviderVideo()
+	logger.Info("media video policy loaded",
+		"probe_policy", probePolicy,
+		"transcode_policy", transcodePolicy,
+		"raw_provider_video_policy", rawProviderVideoPolicy)
+	if cfg.MediaPipelineEnabled && probePolicy == config.MediaVideoProbePolicyProbeRequired {
 		videoProber = mediaprobe.NewFFProbe(mediaprobe.Config{
 			FFProbePath:            cfg.FFProbePath,
 			MaxVideoSizeBytes:      cfg.MediaMaxVideoSizeBytes,
@@ -221,6 +229,9 @@ func main() {
 			AllowedVideoCodecs:     cfg.MediaAllowedVideoCodecs,
 			Timeout:                cfg.MediaProbeTimeout,
 		})
+		logger.Info("using media video probe", "policy", probePolicy)
+	}
+	if cfg.MediaPipelineEnabled && cfg.MediaVideoTranscodeEnabled() {
 		videoTranscoder = mediatranscode.NewFFmpeg(mediatranscode.Config{
 			FFmpegPath:        cfg.FFmpegPath,
 			MaxVideoSizeBytes: cfg.MediaMaxVideoSizeBytes,
@@ -229,9 +240,12 @@ func main() {
 			MaxVideoBitrate:   cfg.MediaMaxVideoBitrate,
 			TranscodeTimeout:  cfg.MediaTranscodeTimeout,
 		})
-		logger.Info("using media video pipeline")
-	} else if cfg.IsProduction() {
-		logger.Warn("media video pipeline disabled; production video jobs will fail closed")
+		logger.Info("using media video transcode", "policy", transcodePolicy)
+	} else if cfg.MediaPipelineEnabled {
+		logger.Info("media video transcode disabled", "policy", transcodePolicy)
+	}
+	if cfg.MediaVideoProbeRequired() && videoProber == nil {
+		logger.Warn("media video probe unavailable; video jobs that require probing will fail closed", "policy", probePolicy)
 	}
 	providers := worker.NewRegistry(providerList[0], providerList[1:]...)
 	if cfg.ImageProvider != "" {
@@ -267,24 +281,37 @@ func main() {
 	}
 
 	deps := worker.Deps{
-		Jobs:                jobs,
-		Tasks:               tasks,
-		Artifacts:           artSvc,
-		ArtifactRepo:        artRepo,
-		Objects:             store,
-		Providers:           providers,
-		Streams:             publisher,
-		ImageModel:          cfg.ImageModel,
-		ImageSize:           cfg.ImageSize,
-		VideoModel:          defaultForVideoProvider(cfg, domain.ProviderDeepInfra, cfg.DeepInfraVideoModel, cfg.VideoModel),
-		VideoDurationSec:    cfg.VideoDurationSec,
-		VideoResolution:     cfg.VideoResolution,
-		VideoAspectRatio:    cfg.VideoAspectRatio,
-		VideoDraft:          cfg.VideoDraft,
-		VideoProber:         videoProber,
-		VideoTranscoder:     videoTranscoder,
-		RequireVideoProbe:   cfg.IsProduction(),
-		ProviderCallTimeout: cfg.WorkerProviderCallTimeout,
+		Jobs:                                  jobs,
+		Tasks:                                 tasks,
+		Artifacts:                             artSvc,
+		ArtifactRepo:                          artRepo,
+		Objects:                               store,
+		Providers:                             providers,
+		Streams:                               publisher,
+		ImageModel:                            cfg.ImageModel,
+		ImageSize:                             cfg.ImageSize,
+		VideoModel:                            defaultForVideoProvider(cfg, domain.ProviderDeepInfra, cfg.DeepInfraVideoModel, cfg.VideoModel),
+		VideoDurationSec:                      cfg.VideoDurationSec,
+		VideoResolution:                       cfg.VideoResolution,
+		VideoAspectRatio:                      cfg.VideoAspectRatio,
+		VideoDraft:                            cfg.VideoDraft,
+		VideoProber:                           videoProber,
+		VideoTranscoder:                       videoTranscoder,
+		RequireVideoProbe:                     cfg.MediaVideoProbeRequired(),
+		VideoTranscodeEnabled:                 cfg.MediaVideoTranscodeEnabled(),
+		VideoTranscodePolicy:                  cfg.EffectiveMediaVideoTranscodePolicy(),
+		RawVideoDeliveryPolicy:                cfg.EffectiveMediaDeliverRawProviderVideo(),
+		ProviderMediaContracts:                effectiveProviderMediaContracts(cfg),
+		MediaMaxConcurrentProbes:              cfg.MediaMaxConcurrentProbes,
+		MediaMaxConcurrentTranscodes:          cfg.MediaMaxConcurrentTranscodes,
+		MediaMaxPendingVariants:               cfg.MediaMaxPendingVariants,
+		MediaProviderMaxAttempts:              cfg.MediaProviderMaxAttemptsPerJob,
+		MediaProviderFallbackBudget:           cfg.MediaProviderFallbackBudget,
+		MediaProviderQualityGuardEnabled:      cfg.MediaProviderQualityGuardEnabled,
+		MediaProviderQualityDegradedFailures:  cfg.MediaProviderQualityDegradedFailures,
+		MediaProviderQualityDisabledFailures:  cfg.MediaProviderQualityDisabledFailures,
+		MediaProviderQualityRecoverySuccesses: cfg.MediaProviderQualityRecoverySuccesses,
+		ProviderCallTimeout:                   cfg.WorkerProviderCallTimeout,
 		TextContext: dialogcontext.New(conversations, dialogcontext.Config{
 			Enabled:                cfg.TextContextEnabled,
 			MaxInputTokens:         cfg.TextContextMaxInputTokens,
@@ -303,18 +330,19 @@ func main() {
 	gen := worker.NewGenerationWorker(deps)
 	poll := worker.NewPollWorker(deps)
 	delivery := worker.NewDeliveryWorker(worker.DeliveryDeps{
-		Jobs:        jobs,
-		Deliveries:  deliveries,
-		Artifacts:   artRepo,
-		Objects:     store,
-		VK:          vkClient,
-		Billing:     billing,
-		Streams:     publisher,
-		MaxAttempts: cfg.MaxAttempts,
-		Backoff:     worker.ExponentialBackoff(cfg.RetryBaseDelay, cfg.RetryMaxDelay),
-		Signer:      store,
-		SignedURLs:  cfg.SignedDelivery,
-		URLTTL:      cfg.ArtifactURLTTL,
+		Jobs:                   jobs,
+		Deliveries:             deliveries,
+		Artifacts:              artRepo,
+		Objects:                store,
+		VK:                     vkClient,
+		Billing:                billing,
+		Streams:                publisher,
+		MaxAttempts:            cfg.MaxAttempts,
+		Backoff:                worker.ExponentialBackoff(cfg.RetryBaseDelay, cfg.RetryMaxDelay),
+		Signer:                 store,
+		SignedURLs:             cfg.SignedDelivery,
+		RawVideoDeliveryPolicy: cfg.EffectiveMediaDeliverRawProviderVideo(),
+		URLTTL:                 cfg.ArtifactURLTTL,
 	})
 
 	// The outbox relay publishes queued jobs from the transactional outbox to the
@@ -362,7 +390,10 @@ func main() {
 			OutboxRetention:               cfg.OutboxRetention,
 			BillingReconciliationInterval: cfg.BillingReconciliationInterval,
 			BillingReconciliationLimit:    cfg.BillingReconciliationLimit,
-			MediaRetention:                time.Duration(cfg.ArtifactRetentionDays) * 24 * time.Hour,
+			MediaInputRetention:           time.Duration(cfg.MediaInputRetentionDays) * 24 * time.Hour,
+			MediaFailedRetention:          time.Duration(cfg.MediaFailedRetentionDays) * 24 * time.Hour,
+			MediaOriginalRetention:        time.Duration(cfg.MediaOriginalRetentionDays) * 24 * time.Hour,
+			MediaVariantRetention:         time.Duration(cfg.MediaVariantRetentionDays) * 24 * time.Hour,
 		},
 		maintenance.WithLogger(logger),
 		maintenance.WithMediaObjectStore(store),
@@ -472,4 +503,123 @@ func defaultForVideoProvider(cfg config.Config, provider domain.ProviderName, pr
 		return genericValue
 	}
 	return providerValue
+}
+
+func effectiveProviderMediaContracts(cfg config.Config) []domain.ProviderMediaContract {
+	defaults := defaultProviderMediaContracts(cfg)
+	if len(cfg.MediaProviderContracts) == 0 {
+		return defaults
+	}
+	out := make([]domain.ProviderMediaContract, 0, len(defaults)+len(cfg.MediaProviderContracts))
+	out = append(out, defaults...)
+	out = append(out, cfg.MediaProviderContracts...)
+	return out
+}
+
+func defaultProviderMediaContracts(cfg config.Config) []domain.ProviderMediaContract {
+	maxBytes := cfg.MediaMaxVideoSizeBytes
+	if maxBytes <= 0 {
+		maxBytes = 256 << 20
+	}
+	probeRequired := cfg.MediaVideoProbeRequired()
+	transcodeAllowed := cfg.MediaVideoTranscodeEnabled()
+	contracts := []domain.ProviderMediaContract{
+		{
+			Provider:               domain.ProviderMock,
+			Model:                  "mock-video",
+			ModelClass:             "mock_video",
+			Modality:               domain.ModalityVideo,
+			AllowedDurationsSec:    []int{3, 5, 10},
+			AllowedAspectRatios:    []string{"16:9", "9:16", "1:1"},
+			AllowedResolutions:     []string{"720p", "1080p"},
+			ExpectedContainer:      "mp4",
+			ExpectedCodec:          "h264",
+			ExpectedMaxBytes:       maxBytes,
+			DeliveryReadyOutput:    true,
+			RequiresProbe:          probeRequired,
+			TranscodeAllowed:       transcodeAllowed,
+			MaxProviderAttempts:    1,
+			MaxFallbackAttempts:    0,
+			MaxProviderCostCredits: 50,
+		},
+	}
+	if model := strings.TrimSpace(defaultForVideoProvider(cfg, domain.ProviderDeepInfra, cfg.DeepInfraVideoModel, cfg.VideoModel)); model != "" && model != "mock-video" {
+		mockContract := contracts[0]
+		mockContract.Model = model
+		contracts = append(contracts, mockContract)
+	}
+	if model := strings.TrimSpace(defaultForVideoProvider(cfg, domain.ProviderDeepInfra, cfg.DeepInfraVideoModel, cfg.VideoModel)); model != "" {
+		contracts = append(contracts, domain.ProviderMediaContract{
+			Provider:               domain.ProviderDeepInfra,
+			Model:                  model,
+			ModelClass:             "deepinfra_video",
+			Modality:               domain.ModalityVideo,
+			AllowedDurationsSec:    positiveInts(cfg.DeepInfraVideoDurationSec, cfg.VideoDurationSec),
+			AllowedAspectRatios:    nonEmptyStrings(cfg.DeepInfraVideoAspectRatio, cfg.VideoAspectRatio),
+			AllowedResolutions:     nonEmptyStrings(cfg.DeepInfraVideoResolution, cfg.VideoResolution),
+			ExpectedContainer:      "mp4",
+			ExpectedCodec:          "h264",
+			ExpectedMaxBytes:       maxBytes,
+			DeliveryReadyOutput:    true,
+			RequiresProbe:          probeRequired,
+			TranscodeAllowed:       transcodeAllowed,
+			MaxProviderAttempts:    1,
+			MaxFallbackAttempts:    0,
+			MaxProviderCostCredits: cfg.DeepInfraVideoPrice,
+		})
+	}
+	if model := strings.TrimSpace(cfg.OpenAIVideoModel); model != "" {
+		duration, _ := strconv.Atoi(strings.TrimSpace(cfg.OpenAIVideoSeconds))
+		contracts = append(contracts, domain.ProviderMediaContract{
+			Provider:               domain.ProviderOpenAI,
+			Model:                  model,
+			ModelClass:             "openai_video",
+			Modality:               domain.ModalityVideo,
+			AllowedDurationsSec:    positiveInts(duration, cfg.VideoDurationSec),
+			AllowedResolutions:     nonEmptyStrings(cfg.OpenAIVideoSize, cfg.VideoResolution),
+			ExpectedContainer:      "mp4",
+			ExpectedCodec:          "h264",
+			ExpectedMaxBytes:       maxBytes,
+			DeliveryReadyOutput:    true,
+			RequiresProbe:          probeRequired,
+			TranscodeAllowed:       transcodeAllowed,
+			MaxProviderAttempts:    1,
+			MaxFallbackAttempts:    0,
+			MaxProviderCostCredits: cfg.OpenAIVideoPrice,
+		})
+	}
+	return contracts
+}
+
+func positiveInts(values ...int) []int {
+	out := make([]int, 0, len(values))
+	seen := map[int]struct{}{}
+	for _, value := range values {
+		if value <= 0 {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		out = append(out, value)
+	}
+	return out
+}
+
+func nonEmptyStrings(values ...string) []string {
+	out := make([]string, 0, len(values))
+	seen := map[string]struct{}{}
+	for _, value := range values {
+		value = strings.ToLower(strings.TrimSpace(value))
+		if value == "" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		out = append(out, value)
+	}
+	return out
 }

@@ -117,7 +117,7 @@ Override these values when needed:
 | `VK_APP_ID` | `` | VK Mini App id (informational for BFF/dev setup) |
 | `VK_APP_SECRET` | `` | VK Mini App protected key; required in production |
 | `MINIAPP_LAUNCH_PARAMS_MAX_AGE` | `1h` | Maximum accepted VK Mini App launch-param age |
-| `ADMIN_TOKEN` | `` (empty = open) | Admin API `X-Admin-Token` |
+| `ADMIN_TOKEN` | `` (empty = closed) | Admin API and operator console `X-Admin-Token`; set an explicit local value to use `/admin/*` and `/billing/*` |
 | `WORKER_GROUP` / `WORKER_CONSUMER` | `workers` / hostname | Consumer group identity |
 | `APP_ENV` | `development` | `production` enforces fail-closed secrets |
 | `MAX_ATTEMPTS` | `3` | Retry budget before dead-lettering |
@@ -181,12 +181,26 @@ Override these values when needed:
 | `MODERATION_PROVIDER` | `keyword` | Output moderation provider: `keyword` or `openai` |
 | `OPENAI_MODERATION_MODEL` | `omni-moderation-latest` | OpenAI moderation model |
 | `ARTIFACT_SCANNER` | `none` | Artifact scanner: `none` or `openai` |
-| `MEDIA_PIPELINE_ENABLED` | `false` | Worker-owned video/media probe/transcode pipeline switch; when false, local dev does not need ffmpeg/ffprobe |
-| `FFPROBE_PATH` / `FFMPEG_PATH` | `ffprobe` / `ffmpeg` | Tool paths used only after `MEDIA_PIPELINE_ENABLED=true`; VK Bot and Mini App must not call these directly |
+| `MEDIA_PIPELINE_ENABLED` | `false` | Worker-owned video/media processing switch; when false, local dev does not need ffmpeg/ffprobe |
+| `MEDIA_VIDEO_PROBE_POLICY` | dev: `disabled`, production: `probe_required` | `disabled`, `trusted_provider`, or `probe_required`; production must fail closed with `probe_required` |
+| `MEDIA_VIDEO_TRANSCODE_POLICY` | `never` | `never`, `fallback`, or `always`; `always` is rejected in production, and `FFMPEG_PATH` is required only when this is not `never` |
+| `MEDIA_DELIVER_RAW_PROVIDER_VIDEO` | dev: `always_dev_only`, production: `if_probe_passed` | Raw provider video delivery policy reserved for media safety enforcement; production must not use `always_dev_only` |
+| `FFPROBE_PATH` / `FFMPEG_PATH` | `ffprobe` / `ffmpeg` | Worker-only tool paths; `FFPROBE_PATH` is required only when probe policy is `probe_required` and media pipeline is enabled, `FFMPEG_PATH` only when transcode policy allows ffmpeg |
 | `MEDIA_MAX_VIDEO_SIZE_BYTES` / `MEDIA_MAX_VIDEO_DURATION_SEC` | `268435456` / `60` | Hard video input/output limits for probe/transcode stages |
 | `MEDIA_MAX_VIDEO_WIDTH` / `MEDIA_MAX_VIDEO_HEIGHT` / `MEDIA_MAX_VIDEO_BITRATE` | `1920` / `1080` / `12000000` | Video dimension and bitrate ceilings for VK-ready variants |
 | `MEDIA_ALLOWED_VIDEO_CONTAINERS` / `MEDIA_ALLOWED_VIDEO_CODECS` | `mp4,mov,webm` / `h264,h265,hevc,vp8,vp9,av1` | Allowlist used by worker-owned media validation; values are normalized before use |
 | `MEDIA_PROBE_TIMEOUT` / `MEDIA_TRANSCODE_TIMEOUT` | `10s` / `10m` | Time bounds for future probe/transcode subprocesses |
+| `MEDIA_MAX_CONCURRENT_PROBES` / `MEDIA_MAX_CONCURRENT_TRANSCODES` / `MEDIA_MAX_PENDING_VARIANTS` | `2` / `1` / `16` | Per-worker CPU/IO guards for video probe, transcode and variant creation; production queue/user guards remain Redis/Postgres-backed |
+| `MEDIA_MAX_ACTIVE_VIDEO_JOBS_PER_USER` | `1` | Postgres-backed active video job limit per user before reservation/provider submit |
+| `MEDIA_PROVIDER_MAX_ATTEMPTS_PER_JOB` / `MEDIA_PROVIDER_FALLBACK_BUDGET_PER_JOB` | `1` / `0` | Worker-side paid media submit budget; keep fallback conservative unless provider-side idempotency is proven |
+| `MEDIA_QUEUE_DEGRADE_THRESHOLD` | `1000` | Redis Streams consumer-group lag+pending threshold; expensive media jobs are rejected before reservation when exceeded |
+| `MEDIA_MAX_CONCURRENT_UPLOADS` | `8` | Per-API-instance multipart upload memory guard before large request bodies are parsed; not a global user quota |
+| `MEDIA_REFERENCE_UPLOADS_ENABLED` | dev: `true`, production: `false` | Kill switch for Mini App reference-image uploads. Production must explicitly enable it only after edge/proxy body limits are configured |
+| `MEDIA_REFERENCE_WEBP_ENABLED` | `false` | Allows WebP reference uploads. Keep false until product policy accepts WebP validation/privacy handling |
+| `MEDIA_MAX_IMAGE_UPLOAD_BYTES` / `MEDIA_MAX_IMAGE_WIDTH` / `MEDIA_MAX_IMAGE_HEIGHT` / `MEDIA_MAX_IMAGE_PIXELS` | `20971520` / `4096` / `4096` / `16777216` | Cheap API-side reference-image limits before private artifact storage; frontend and edge/proxy limits must stay at or below the byte cap |
+| `MEDIA_PROVIDER_QUALITY_GUARD_ENABLED` | `false` | Enables runtime provider/model_class/modality quality routing; disabled by default so alerts can be reviewed before automatic disable |
+| `MEDIA_PROVIDER_QUALITY_DEGRADED_FAILURES` / `MEDIA_PROVIDER_QUALITY_DISABLED_FAILURES` / `MEDIA_PROVIDER_QUALITY_RECOVERY_SUCCESSES` | `3` / `5` / `2` | Consecutive local quality samples for degraded, disabled and recovery state; the router never drops all capable providers at once |
+| `MEDIA_PROVIDER_CONTRACTS_JSON` | `` | Optional JSON array of product-level provider/model media contracts. Contracts reject unsupported video duration/aspect/resolution/model/cost before provider submit; metrics must use bounded `model_class`, not raw model ids |
 | `VK_DELIVERY_MODE` | `mock` | VK delivery adapter: `mock` or `real` |
 | `VK_ACCESS_TOKEN` / `VK_API_VERSION` | `` / `5.199` | Required for real VK `messages.send`, photo upload, mp4-as-document upload and API-side `/start` control menu responses |
 | `VK_VIDEO_DELIVERY_MODE` | `doc` | Generated video delivery: `doc` sends mp4 as a file attachment; `video` sends a native VK video attachment with inline player |
@@ -207,6 +221,10 @@ Override these values when needed:
 | `VK_TOP_UP_RECEIPT_EMAIL` / `VK_TOP_UP_RECEIPT_PHONE` | `` / `` | Server-side receipt contact for the VK Bot quick top-up flow; set at least one when `VK_MENU_TOP_UP_ENABLED=true` |
 | `SIGNED_DELIVERY` / `ARTIFACT_URL_TTL` | `false` / `1h` | Deliver media through signed artifact URLs |
 | `ARTIFACT_RETENTION_DAYS` | `0` | Optional S3 lifecycle expiry and worker maintenance cleanup window for inactive `failed/deleted` media objects; `0` disables cleanup |
+| `MEDIA_INPUT_RETENTION_DAYS` | `0` | Optional cleanup window for unused uploaded reference images; ready references still used by jobs are kept |
+| `MEDIA_FAILED_RETENTION_DAYS` | `ARTIFACT_RETENTION_DAYS` | Cleanup window for failed/deleted media originals and variants |
+| `MEDIA_ORIGINAL_RETENTION_DAYS` | `0` | Optional cleanup window for unreferenced provider originals; active job/delivery history is kept |
+| `MEDIA_VARIANT_RETENTION_DAYS` | `ARTIFACT_RETENTION_DAYS` | Cleanup window for delivery variants whose parent artifact is failed/deleted or no longer referenced |
 | `PRICES` | `image_generate=0` | Price overrides, e.g. `text_generate=2,image_generate=12`; current VK photo quota uses free image jobs plus `VK_ANTISPAM_IMAGE_DAILY_LIMIT` |
 | `MAX_JOB_COST` | `0` | Per-job cost cap; `0` disables the cap |
 | `STREAM_MAX_LEN` | `100000` | Redis stream max length; `0` disables trimming |
@@ -337,18 +355,42 @@ Override these values when needed:
   `payment_provider_errors_total`, `payment_topups_total`,
   `payment_refunds_total` and `payment_reconciliation_mismatches`.
 - **Artifact scanning / media pipeline**: `ARTIFACT_SCANNER=openai` scans
-  text/image artifact bytes before storage. When `MEDIA_PIPELINE_ENABLED=true`,
-  `cmd/worker` runs ffprobe on generated video artifacts, transcodes a bounded
-  MP4/H.264 `vk_video` variant through ffmpeg, probes that variant, and delivery
-  uploads the variant instead of raw provider output. Unsafe/probe/transcode
-  failures end the video job terminally and release reserved credits before
-  delivery/capture. With the pipeline disabled, local/dev video artifacts are
-  marked `probe_status=skipped`; production video jobs fail closed instead of
-  delivering unprobed video. Maintenance cleanup also uses
-  `ARTIFACT_RETENTION_DAYS` to delete only old inactive `failed/deleted`
-  original media objects and variants/thumbnails, then clears their private
-  storage coordinates; active `ready/stored` artifacts remain available to
-  owners and delivery retries.
+  text/image artifact bytes before storage. `cmd/worker` owns video media
+  processing; VK Bot and Mini App must not call ffprobe/ffmpeg directly.
+  `MEDIA_VIDEO_PROBE_POLICY=probe_required` runs ffprobe when
+  `MEDIA_PIPELINE_ENABLED=true`; in production this policy is required, and if
+  the pipeline is disabled video jobs fail closed instead of delivering
+  unprobed video. `MEDIA_VIDEO_TRANSCODE_POLICY=never` is the CPU-safe default;
+  ffmpeg is wired only when the policy is `fallback` or `always`, and `always`
+  is rejected in production. Unsafe probe/transcode failures end the video job
+  terminally and release reserved credits before delivery/capture. With probe
+  disabled in local/dev, video artifacts are marked `probe_status=skipped`.
+  Before submit, the worker also checks product-level provider media contracts:
+  unsupported video model, duration, aspect ratio, resolution or estimated cost
+  is rejected before paid provider work; raw model ids may live in config, but
+  provider metrics should use curated bounded `model_class` labels. Stage 5
+  scale guards reject expensive media creation before reservation when Redis
+  stream lag/pending crosses `MEDIA_QUEUE_DEGRADE_THRESHOLD`, cap active video
+  jobs per user through the job repository, bound per-worker probe/transcode
+  concurrency, and keep paid media fallback attempts conservative by default.
+  Maintenance cleanup uses lifecycle-specific retention:
+  `MEDIA_INPUT_RETENTION_DAYS` for unused reference uploads,
+  `MEDIA_FAILED_RETENTION_DAYS` for failed/deleted media,
+  `MEDIA_ORIGINAL_RETENTION_DAYS` for unreferenced provider originals and
+  `MEDIA_VARIANT_RETENTION_DAYS` for safe delivery variants. The legacy
+  `ARTIFACT_RETENTION_DAYS` remains the default for failed/deleted and variant
+  cleanup when the split variables are unset. Cleanup is batched and clears
+  private storage coordinates only after object deletion; active `ready/stored`
+  artifacts referenced by jobs or deliveries remain available to owners and
+  delivery retries.
+- **Reference-image upload rollout gate**: do not expose public reference-image
+  uploads until the external edge/proxy/tunnel request body limit is configured
+  at or below `MEDIA_MAX_IMAGE_UPLOAD_BYTES`. The backend also enforces
+  `MEDIA_REFERENCE_UPLOADS_ENABLED`, byte, width, height, pixel and WebP policy
+  limits before private artifact storage, but edge/proxy limits are still
+  required so large bodies are rejected before they consume API bandwidth and
+  memory. Frontend limits are advisory only and must not be treated as security
+  controls.
 - **SSRF**: artifact downloader blocks private/loopback/link-local hosts and
   non-http(s) schemes; optional host allowlist. Provider data URLs are accepted
   for normalized OpenAI text/image/video outputs.
@@ -488,6 +530,32 @@ go run ./cmd/api               # listens on :8080
 
 Serves: `POST /webhooks/vk`, `/miniapp/*`, `GET /admin/...`,
 `GET /metrics`, `GET /health`, and `GET /healthz`.
+
+Admin/operator console frontend:
+
+```bash
+npm --prefix web/admin install
+npm --prefix web/admin run dev
+```
+
+Open the Vite URL locally and enter `ADMIN_TOKEN` in the UI. The token is kept
+in memory by default; do not expose the console publicly. The UI calls only
+protected backend `/admin/*` and `/billing/*` endpoints and does not persist the
+token in `localStorage`.
+
+Full local observability startup also starts the admin console by default:
+
+```powershell
+.\scripts\dev\start-observability.ps1 -NoWait -OpenGrafana -OpenAdmin
+```
+
+It starts Docker dependencies, migrations, `cmd/api`, `cmd/worker`,
+`cmd/provider-webhook`, the Mini App frontend and the Admin UI. Default local
+Admin UI URL is `http://127.0.0.1:5175`; enter `ADMIN_TOKEN` from local `.env`.
+Use `-SkipAdmin` to skip the Admin UI, `-AdminPort <port>` to change its local
+port, `-ApiPort <port>` to make the Admin UI proxy to a non-default local API,
+and `-StopOnly` to stop app processes. The Admin UI is local-only and must not
+be exposed publicly.
 
 API wiring map:
 

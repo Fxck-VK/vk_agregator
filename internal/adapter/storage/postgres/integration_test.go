@@ -66,6 +66,7 @@ func applySchema(ctx context.Context, pool *pgxpool.Pool) error {
 		"000001_init_schema.up.sql",
 		"000002_inbound_events.up.sql",
 		"000016_video_media_metadata.up.sql",
+		"000018_media_lifecycle.up.sql",
 	}
 	for _, name := range scripts {
 		raw, err := os.ReadFile(filepath.Join(root, "migrations", name))
@@ -580,6 +581,30 @@ func TestArtifactAndDeliveryRepository(t *testing.T) {
 	}
 	if bySHA.Codec != "h.264" || bySHA.Container != "png" || bySHA.BitrateBPS != 1200000 || bySHA.ProbeStatus != domain.MediaProbePassed {
 		t.Fatalf("artifact metadata not stored: %+v", bySHA)
+	}
+
+	ref := &domain.Artifact{
+		OwnerUserID:             u.ID,
+		Kind:                    domain.ArtifactKindInput,
+		MediaType:               domain.MediaTypeImage,
+		MimeType:                "image/png",
+		StorageBucket:           "artifacts",
+		StorageKey:              "u/ref_" + uuid.NewString() + ".png",
+		SHA256:                  art.SHA256,
+		ValidationPolicyVersion: "image_reference_v1",
+		LifecycleClass:          domain.ArtifactLifecycleInputReference,
+		SizeBytes:               2048,
+		Status:                  domain.ArtifactStatusReady,
+	}
+	if err := artifacts.Create(ctx, ref); err != nil {
+		t.Fatalf("create reference artifact: %v", err)
+	}
+	reusable, err := artifacts.FindReusableInputReference(ctx, u.ID, art.SHA256, "image_reference_v1", "image/png")
+	if err != nil {
+		t.Fatalf("find reusable reference: %v", err)
+	}
+	if reusable.ID != ref.ID {
+		t.Fatalf("reusable reference id = %s, want %s", reusable.ID, ref.ID)
 	}
 
 	del := &domain.Delivery{

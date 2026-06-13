@@ -551,6 +551,40 @@ func (r *PaymentRepository) GetRefundByIdempotencyKey(ctx context.Context, key s
 	return &refund, nil
 }
 
+// ListRefunds lists protected operator refund rows.
+func (r *PaymentRepository) ListRefunds(ctx context.Context, filter domain.PaymentRefundFilter, limit, offset int) ([]*domain.PaymentRefund, error) {
+	args := []any{}
+	where := []string{"1=1"}
+	if filter.IntentID != nil {
+		args = append(args, *filter.IntentID)
+		where = append(where, "intent_id = $"+strconv.Itoa(len(args)))
+	}
+	if filter.Status != "" {
+		args = append(args, filter.Status)
+		where = append(where, "status = $"+strconv.Itoa(len(args)))
+	}
+	args = append(args, limit, offset)
+	query := `SELECT ` + paymentRefundColumns + `
+		FROM payment_refunds
+		WHERE ` + strings.Join(where, " AND ") + `
+		ORDER BY created_at DESC
+		LIMIT $` + strconv.Itoa(len(args)-1) + ` OFFSET $` + strconv.Itoa(len(args))
+	rows, err := r.db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, mapError(err)
+	}
+	defer rows.Close()
+	var refunds []*domain.PaymentRefund
+	for rows.Next() {
+		var refund domain.PaymentRefund
+		if err := mapError(scanPaymentRefund(rows, &refund)); err != nil {
+			return nil, err
+		}
+		refunds = append(refunds, &refund)
+	}
+	return refunds, mapError(rows.Err())
+}
+
 // SetRefundProviderState stores provider refund fields.
 func (r *PaymentRepository) SetRefundProviderState(ctx context.Context, id uuid.UUID, providerRefundID string, status domain.PaymentRefundStatus) error {
 	const q = `

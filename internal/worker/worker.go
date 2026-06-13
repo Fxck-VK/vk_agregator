@@ -13,12 +13,10 @@ package worker
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
-	"net/http"
 	"sort"
 	"strings"
 	"sync"
@@ -31,6 +29,7 @@ import (
 	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/platform/metrics"
 	"vk-ai-aggregator/internal/platform/queue"
+	"vk-ai-aggregator/internal/platform/ratelimit"
 	"vk-ai-aggregator/internal/platform/tracing"
 	"vk-ai-aggregator/internal/service/dialogcontext"
 	"vk-ai-aggregator/internal/service/moderationservice"
@@ -43,6 +42,16 @@ const maxProviderAttempts = 3
 // defaultProviderCallTimeout bounds one provider Submit/Poll call inside the
 // worker so a stuck provider cannot keep a job generating forever.
 const defaultProviderCallTimeout = 60 * time.Second
+
+const (
+	videoTranscodePolicyNever    = "never"
+	videoTranscodePolicyFallback = "fallback"
+	videoTranscodePolicyAlways   = "always"
+
+	rawProviderVideoPolicyNever         = "never"
+	rawProviderVideoPolicyIfProbePassed = "if_probe_passed"
+	rawProviderVideoPolicyAlwaysDevOnly = "always_dev_only"
+)
 
 // ArtifactSaver stores provider outputs as artifacts. Implemented by
 // artifactservice.Service.
@@ -82,7 +91,46 @@ type Registry struct {
 	order               []domain.ProviderName
 	preferredByModality map[domain.Modality]domain.ProviderName
 	breakers            map[domain.ProviderName]*breakerState
+	mediaContracts      mediaContractRegistry
+	mediaProviderBudget providerSubmitBudget
+	quality             map[qualityKey]*qualityState
+	qualityPolicy       providerQualityPolicy
 	now                 func() time.Time
+}
+
+type providerSubmitBudget struct {
+	configured          bool
+	maxProviderAttempts int
+	maxFallbackAttempts int
+}
+
+type providerQualityPolicy struct {
+	enabled           bool
+	degradedFailures  int
+	disabledFailures  int
+	recoverySuccesses int
+}
+
+type providerQualityStatus string
+
+const (
+	providerQualityHealthy  providerQualityStatus = "healthy"
+	providerQualityDegraded providerQualityStatus = "degraded"
+	providerQualityDisabled providerQualityStatus = "disabled"
+)
+
+type qualityKey struct {
+	provider   domain.ProviderName
+	modelClass string
+	modality   domain.Modality
+}
+
+type qualityState struct {
+	status              providerQualityStatus
+	consecutiveFailures int
+	consecutiveSuccess  int
+	lastReason          string
+	updatedAt           time.Time
 }
 
 // NewRegistry builds a registry with a default provider and optional extras.
@@ -91,6 +139,7 @@ func NewRegistry(def domain.Provider, more ...domain.Provider) *Registry {
 		byName:              map[domain.ProviderName]domain.Provider{},
 		preferredByModality: map[domain.Modality]domain.ProviderName{},
 		breakers:            map[domain.ProviderName]*breakerState{},
+		quality:             map[qualityKey]*qualityState{},
 		now:                 time.Now,
 	}
 	if def != nil {
@@ -100,6 +149,65 @@ func NewRegistry(def domain.Provider, more ...domain.Provider) *Registry {
 		r.add(p)
 	}
 	return r
+}
+
+// ConfigureProviderMediaContracts installs the worker-owned product allowlist
+// used to reject risky video provider/model combinations before Submit.
+func (r *Registry) ConfigureProviderMediaContracts(contracts []domain.ProviderMediaContract, requireVideoProbe, videoTranscodeEnabled bool) {
+	if r == nil {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.mediaContracts = newMediaContractRegistry(contracts, requireVideoProbe, videoTranscodeEnabled)
+}
+
+// ConfigureMediaProviderBudget installs a global media submit budget. It is a
+// second guard alongside per-model contracts and keeps paid media retries
+// bounded even when future provider chains are configured.
+func (r *Registry) ConfigureMediaProviderBudget(maxProviderAttempts, maxFallbackAttempts int) {
+	if r == nil {
+		return
+	}
+	if maxProviderAttempts < 0 {
+		maxProviderAttempts = 0
+	}
+	if maxFallbackAttempts < 0 {
+		maxFallbackAttempts = 0
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.mediaProviderBudget = providerSubmitBudget{
+		configured:          true,
+		maxProviderAttempts: maxProviderAttempts,
+		maxFallbackAttempts: maxFallbackAttempts,
+	}
+}
+
+// ConfigureProviderQualityGuard enables runtime routing decisions based on
+// bounded provider/model_class/modality quality state. Disabled by default; even
+// when enabled, the router will not drop all candidates at once.
+func (r *Registry) ConfigureProviderQualityGuard(enabled bool, degradedFailures, disabledFailures, recoverySuccesses int) {
+	if r == nil {
+		return
+	}
+	if degradedFailures <= 0 {
+		degradedFailures = 3
+	}
+	if disabledFailures < degradedFailures {
+		disabledFailures = degradedFailures
+	}
+	if recoverySuccesses <= 0 {
+		recoverySuccesses = 2
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.qualityPolicy = providerQualityPolicy{
+		enabled:           enabled,
+		degradedFailures:  degradedFailures,
+		disabledFailures:  disabledFailures,
+		recoverySuccesses: recoverySuccesses,
+	}
 }
 
 // PreferProvider makes a provider the first candidate for a modality when it
@@ -164,14 +272,119 @@ func (r *Registry) rawForName(name domain.ProviderName) (domain.Provider, error)
 	return p, nil
 }
 
+func (r *Registry) validateProviderMediaContract(provider domain.ProviderName, req domain.ProviderRequest, estimate domain.CostEstimate) (*domain.ProviderMediaContract, error) {
+	if r == nil {
+		return nil, nil
+	}
+	r.mu.Lock()
+	contracts := r.mediaContracts
+	r.mu.Unlock()
+	return contracts.validateProviderSubmit(provider, req, estimate)
+}
+
+func (r *Registry) metricModelForRequest(provider domain.ProviderName, req domain.ProviderRequest, models ...string) string {
+	if r == nil {
+		return providerMetricModel(append(models, req.ModelCode)...)
+	}
+	r.mu.Lock()
+	contracts := r.mediaContracts
+	r.mu.Unlock()
+	if class := contracts.modelClass(provider, req.ModelCode, req.Modality); class != "" {
+		return providerMetricModel(class)
+	}
+	for _, model := range models {
+		if class := contracts.modelClass(provider, model, req.Modality); class != "" {
+			return providerMetricModel(class)
+		}
+	}
+	return providerMetricModel(append(models, req.ModelCode)...)
+}
+
+func (r *Registry) qualityModelClassForRequest(provider domain.ProviderName, req domain.ProviderRequest, models ...string) string {
+	if r == nil {
+		return "default"
+	}
+	r.mu.Lock()
+	contracts := r.mediaContracts
+	r.mu.Unlock()
+	if class := contracts.modelClass(provider, req.ModelCode, req.Modality); class != "" {
+		return providerMetricModel(class)
+	}
+	for _, model := range models {
+		if class := contracts.modelClass(provider, model, req.Modality); class != "" {
+			return providerMetricModel(class)
+		}
+	}
+	return "default"
+}
+
+func (r *Registry) metricModelForTask(provider domain.ProviderName, model string, modality domain.Modality) string {
+	if r == nil {
+		return providerMetricModel(model)
+	}
+	r.mu.Lock()
+	contracts := r.mediaContracts
+	r.mu.Unlock()
+	if class := contracts.modelClass(provider, model, modality); class != "" {
+		return providerMetricModel(class)
+	}
+	return providerMetricModel(model)
+}
+
+func (r *Registry) qualityModelClassForTask(provider domain.ProviderName, model string, modality domain.Modality) string {
+	if r == nil {
+		return "default"
+	}
+	r.mu.Lock()
+	contracts := r.mediaContracts
+	r.mu.Unlock()
+	if class := contracts.modelClass(provider, model, modality); class != "" {
+		return providerMetricModel(class)
+	}
+	return "default"
+}
+
+func (r *Registry) videoContractForTask(provider domain.ProviderName, model string) (*domain.ProviderMediaContract, bool) {
+	if r == nil {
+		return nil, false
+	}
+	r.mu.Lock()
+	contracts := r.mediaContracts
+	r.mu.Unlock()
+	return contracts.videoContract(provider, model)
+}
+
+func qualityModelClassForRequest(contracts mediaContractRegistry, provider domain.ProviderName, req domain.ProviderRequest) string {
+	if class := contracts.modelClass(provider, req.ModelCode, req.Modality); class != "" {
+		return providerMetricModel(class)
+	}
+	return "default"
+}
+
+func (r *Registry) mediaProviderBudgetFor(req domain.ProviderRequest) (providerSubmitBudget, bool) {
+	if r == nil || !isMediaProviderBudgetedRequest(req) {
+		return providerSubmitBudget{}, false
+	}
+	r.mu.Lock()
+	budget := r.mediaProviderBudget
+	r.mu.Unlock()
+	return budget, budget.configured
+}
+
+func isMediaProviderBudgetedRequest(req domain.ProviderRequest) bool {
+	return req.Operation == domain.OperationVideoGenerate || req.Modality == domain.ModalityVideo
+}
+
 type providerCandidate struct {
-	provider  domain.Provider
-	name      domain.ProviderName
-	cost      int64
-	latency   time.Duration
-	open      bool
-	preferred bool
-	order     int
+	provider   domain.Provider
+	name       domain.ProviderName
+	modelClass string
+	cost       int64
+	latency    time.Duration
+	open       bool
+	quality    providerQualityStatus
+	preferred  bool
+	order      int
 }
 
 type breakerState struct {
@@ -185,6 +398,9 @@ func (r *Registry) candidates(ctx context.Context, req domain.ProviderRequest) (
 	order := append([]domain.ProviderName(nil), r.order...)
 	providers := make(map[domain.ProviderName]domain.Provider, len(r.byName))
 	states := make(map[domain.ProviderName]breakerState, len(r.breakers))
+	qualityStates := make(map[qualityKey]qualityState, len(r.quality))
+	qualityPolicy := r.qualityPolicy
+	contracts := r.mediaContracts
 	preferred := r.preferredByModality[req.Modality]
 	now := r.now()
 	for name, provider := range r.byName {
@@ -193,9 +409,14 @@ func (r *Registry) candidates(ctx context.Context, req domain.ProviderRequest) (
 	for name, state := range r.breakers {
 		states[name] = *state
 	}
+	for key, state := range r.quality {
+		qualityStates[key] = *state
+	}
 	r.mu.Unlock()
 
 	var healthy []providerCandidate
+	var degraded []providerCandidate
+	var disabled []providerCandidate
 	var open []providerCandidate
 	for idx, name := range order {
 		provider := providers[name]
@@ -212,18 +433,33 @@ func (r *Registry) candidates(ctx context.Context, req domain.ProviderRequest) (
 			}
 			estimate.AmountCredits = int64(idx + 1)
 		}
+		modelClass := qualityModelClassForRequest(contracts, name, req)
+		quality := providerQualityHealthy
+		if state, ok := qualityStates[qualityKey{provider: name, modelClass: modelClass, modality: req.Modality}]; ok && state.status != "" {
+			quality = state.status
+		}
 		st := states[name]
 		candidate := providerCandidate{
-			provider:  provider,
-			name:      name,
-			cost:      estimate.AmountCredits,
-			latency:   st.latency,
-			open:      !st.openedUntil.IsZero() && now.Before(st.openedUntil),
-			preferred: preferred != "" && name == preferred,
-			order:     idx,
+			provider:   provider,
+			name:       name,
+			modelClass: modelClass,
+			cost:       estimate.AmountCredits,
+			latency:    st.latency,
+			open:       !st.openedUntil.IsZero() && now.Before(st.openedUntil),
+			quality:    quality,
+			preferred:  preferred != "" && name == preferred,
+			order:      idx,
+		}
+		if qualityPolicy.enabled && candidate.quality == providerQualityDisabled {
+			disabled = append(disabled, candidate)
+			continue
 		}
 		if candidate.open {
 			open = append(open, candidate)
+			continue
+		}
+		if qualityPolicy.enabled && candidate.quality == providerQualityDegraded {
+			degraded = append(degraded, candidate)
 			continue
 		}
 		healthy = append(healthy, candidate)
@@ -232,11 +468,22 @@ func (r *Registry) candidates(ctx context.Context, req domain.ProviderRequest) (
 	if len(healthy) > 0 {
 		return healthy, nil
 	}
+	sortCandidates(degraded)
+	if len(degraded) > 0 {
+		return degraded, nil
+	}
 	sortCandidates(open)
 	if len(open) > 0 {
 		// All capable providers are open. Try them anyway so a temporary breaker
 		// window cannot make the platform permanently unavailable.
 		return open, nil
+	}
+	sortCandidates(disabled)
+	if len(disabled) > 0 {
+		// Do not auto-disable the whole product path. If every capable provider
+		// is disabled, try the least risky candidate so the job can fail through
+		// normal retry/release paths instead of a permanent routing outage.
+		return disabled, nil
 	}
 	return nil, fmt.Errorf("worker: no provider supports %s/%s", req.Operation, req.Modality)
 }
@@ -321,6 +568,92 @@ func (r *Registry) record(name domain.ProviderName, started time.Time, err error
 	metrics.ProviderCircuitState.WithLabelValues(string(name), "all").Set(open)
 }
 
+func (r *Registry) recordProviderQualitySuccess(provider domain.ProviderName, model string, modality domain.Modality) {
+	if r == nil {
+		return
+	}
+	r.updateProviderQuality(provider, r.qualityModelClassForTask(provider, model, modality), modality, "", true)
+}
+
+func (r *Registry) recordProviderQualityFailure(provider domain.ProviderName, model string, modality domain.Modality, reason string) {
+	if r == nil {
+		return
+	}
+	r.updateProviderQuality(provider, r.qualityModelClassForTask(provider, model, modality), modality, reason, false)
+}
+
+func (r *Registry) recordProviderQualityForRequest(provider domain.ProviderName, req domain.ProviderRequest, model string, err error) {
+	if r == nil {
+		return
+	}
+	modelClass := r.qualityModelClassForRequest(provider, req, model)
+	if err == nil {
+		r.updateProviderQuality(provider, modelClass, req.Modality, "", true)
+		return
+	}
+	reason := "provider_error"
+	if class := classOf(err); class != "" {
+		reason = string(class)
+	}
+	r.updateProviderQuality(provider, modelClass, req.Modality, reason, false)
+}
+
+func (r *Registry) updateProviderQuality(provider domain.ProviderName, modelClass string, modality domain.Modality, reason string, success bool) {
+	if r == nil {
+		return
+	}
+	if modelClass == "" {
+		modelClass = "default"
+	}
+	if reason == "" {
+		reason = "none"
+	}
+	now := r.now()
+	r.mu.Lock()
+	if r.quality == nil {
+		r.quality = map[qualityKey]*qualityState{}
+	}
+	policy := r.qualityPolicy
+	key := qualityKey{provider: provider, modelClass: providerMetricModel(modelClass), modality: modality}
+	state := r.quality[key]
+	if state == nil {
+		state = &qualityState{status: providerQualityHealthy}
+		r.quality[key] = state
+	}
+	if success {
+		state.consecutiveFailures = 0
+		state.consecutiveSuccess++
+		state.lastReason = "none"
+		if state.status != providerQualityHealthy && (!policy.enabled || state.consecutiveSuccess >= policy.recoverySuccesses) {
+			state.status = providerQualityHealthy
+		}
+	} else {
+		state.consecutiveSuccess = 0
+		state.consecutiveFailures++
+		state.lastReason = reason
+		if policy.enabled {
+			switch {
+			case state.consecutiveFailures >= policy.disabledFailures:
+				state.status = providerQualityDisabled
+			case state.consecutiveFailures >= policy.degradedFailures:
+				state.status = providerQualityDegraded
+			}
+		} else if state.consecutiveFailures >= 1 {
+			state.status = providerQualityDegraded
+		}
+	}
+	state.updatedAt = now
+	status := state.status
+	r.mu.Unlock()
+
+	result := "failure"
+	if success {
+		result = "success"
+	}
+	metrics.ObserveProviderQualitySample(string(provider), key.modelClass, string(modality), result)
+	metrics.ObserveProviderQualityState(string(provider), key.modelClass, string(modality), string(status))
+}
+
 type observedProvider struct {
 	registry *Registry
 	provider domain.Provider
@@ -334,10 +667,15 @@ func (p *observedProvider) Estimate(ctx context.Context, req domain.ProviderRequ
 	return p.provider.Estimate(ctx, req)
 }
 func (p *observedProvider) Submit(ctx context.Context, req domain.ProviderRequest) (domain.ProviderTask, error) {
+	estimate, _ := p.provider.Estimate(ctx, req)
+	if _, err := p.registry.validateProviderMediaContract(p.provider.Name(), req, estimate); err != nil {
+		return domain.ProviderTask{}, err
+	}
 	started := p.registry.now()
 	task, err := p.provider.Submit(ctx, req)
 	p.registry.record(p.provider.Name(), started, err)
-	recordProviderCall(p.provider.Name(), req.ModelCode, req.Operation, started, err, "")
+	recordProviderCall(p.provider.Name(), p.registry.metricModelForRequest(p.provider.Name(), req, task.ModelCode), req.Operation, started, err, "")
+	p.registry.recordProviderQualityForRequest(p.provider.Name(), req, task.ModelCode, err)
 	return task, err
 }
 func (p *observedProvider) Poll(ctx context.Context, ref domain.ProviderTaskRef) (domain.ProviderTaskResult, error) {
@@ -382,17 +720,27 @@ func (p *routedProvider) Estimate(ctx context.Context, req domain.ProviderReques
 }
 func (p *routedProvider) Submit(ctx context.Context, req domain.ProviderRequest) (domain.ProviderTask, error) {
 	var last error
+	submittedAttempts := 0
+	fallbackAttempts := 0
+	budget, budgeted := p.registry.mediaProviderBudgetFor(req)
 	for idx, candidate := range p.candidates {
+		contract, err := p.registry.validateProviderMediaContract(candidate.name, req, domain.CostEstimate{AmountCredits: candidate.cost, Currency: "credits"})
+		if err != nil {
+			last = err
+			continue
+		}
 		started := p.registry.now()
 		task, err := candidate.provider.Submit(ctx, req)
 		p.registry.record(candidate.name, started, err)
-		recordProviderCall(candidate.name, req.ModelCode, req.Operation, started, err, "")
+		recordProviderCall(candidate.name, p.registry.metricModelForRequest(candidate.name, req, task.ModelCode), req.Operation, started, err, "")
+		p.registry.recordProviderQualityForRequest(candidate.name, req, task.ModelCode, err)
+		submittedAttempts++
 		if err == nil {
 			if task.Provider == "" {
 				task.Provider = candidate.name
 			}
 			if candidate.cost > 0 {
-				model := providerMetricModel(task.ModelCode, req.ModelCode)
+				model := p.registry.metricModelForRequest(candidate.name, req, task.ModelCode)
 				metrics.ProviderEstimatedCost.WithLabelValues(string(candidate.name), model, operationMetricLabel(req.Operation), "credits").Add(float64(candidate.cost))
 			}
 			return task, nil
@@ -401,7 +749,45 @@ func (p *routedProvider) Submit(ctx context.Context, req domain.ProviderRequest)
 		if !isFallbackError(err) {
 			break
 		}
-		if idx+1 < len(p.candidates) {
+		if budgeted && budget.maxProviderAttempts > 0 && submittedAttempts >= budget.maxProviderAttempts {
+			metrics.ProviderFallback.WithLabelValues(
+				string(candidate.name),
+				"none",
+				operationMetricLabel(req.Operation),
+				"media_attempt_budget_exhausted",
+			).Inc()
+			break
+		}
+		if contract != nil && contract.MaxProviderAttempts > 0 && submittedAttempts >= contract.MaxProviderAttempts {
+			metrics.ProviderFallback.WithLabelValues(
+				string(candidate.name),
+				"none",
+				operationMetricLabel(req.Operation),
+				"contract_attempt_budget_exhausted",
+			).Inc()
+			break
+		}
+		hasNext := idx+1 < len(p.candidates)
+		if hasNext && budgeted && fallbackAttempts >= budget.maxFallbackAttempts {
+			metrics.ProviderFallback.WithLabelValues(
+				string(candidate.name),
+				"none",
+				operationMetricLabel(req.Operation),
+				"media_fallback_budget_exhausted",
+			).Inc()
+			break
+		}
+		if hasNext && contract != nil && fallbackAttempts >= contract.MaxFallbackAttempts {
+			metrics.ProviderFallback.WithLabelValues(
+				string(candidate.name),
+				"none",
+				operationMetricLabel(req.Operation),
+				"contract_budget_exhausted",
+			).Inc()
+			break
+		}
+		if hasNext {
+			fallbackAttempts++
 			metrics.ProviderFallback.WithLabelValues(
 				string(candidate.name),
 				string(p.candidates[idx+1].name),
@@ -459,31 +845,36 @@ func (e providerResultError) ProviderErrorClass() domain.ProviderErrorClass { re
 // processor holds the shared dependencies and result-handling logic used by
 // both the generation and poll workers.
 type processor struct {
-	jobs              domain.JobRepository
-	tasks             domain.ProviderTaskRepository
-	artifacts         ArtifactSaver
-	artifactRepo      domain.ArtifactRepository
-	objects           ObjectStore
-	providers         *Registry
-	streams           StreamPublisher
-	imageModel        string
-	imageSize         string
-	videoModel        string
-	videoDurationSec  int
-	videoResolution   string
-	videoAspectRatio  string
-	videoDraft        bool
-	videoProber       VideoProber
-	videoTranscoder   VideoTranscoder
-	requireVideoProbe bool
-	textContext       TextContext
-	moderator         Moderator
-	modResults        domain.ModerationResultRepository
-	releaser          ReservationReleaser
-	maxAttempts       int
-	backoff           func(attempt int) time.Duration
-	callTimeout       time.Duration
-	now               func() time.Time
+	jobs                 domain.JobRepository
+	tasks                domain.ProviderTaskRepository
+	artifacts            ArtifactSaver
+	artifactRepo         domain.ArtifactRepository
+	objects              ObjectStore
+	providers            *Registry
+	streams              StreamPublisher
+	imageModel           string
+	imageSize            string
+	videoModel           string
+	videoDurationSec     int
+	videoResolution      string
+	videoAspectRatio     string
+	videoDraft           bool
+	videoProber          VideoProber
+	videoTranscoder      VideoTranscoder
+	requireVideoProbe    bool
+	videoTranscodePolicy string
+	rawVideoPolicy       string
+	probeLimiter         *ratelimit.ConcurrencyLimiter
+	transcodeLimiter     *ratelimit.ConcurrencyLimiter
+	variantLimiter       *ratelimit.ConcurrencyLimiter
+	textContext          TextContext
+	moderator            Moderator
+	modResults           domain.ModerationResultRepository
+	releaser             ReservationReleaser
+	maxAttempts          int
+	backoff              func(attempt int) time.Duration
+	callTimeout          time.Duration
+	now                  func() time.Time
 }
 
 // Moderator gates delivery: generated output must pass a moderation check
@@ -534,6 +925,30 @@ type Deps struct {
 	VideoTranscoder VideoTranscoder
 	// RequireVideoProbe makes video jobs fail closed when no prober is configured.
 	RequireVideoProbe bool
+	// VideoTranscodeEnabled reports whether worker policy allows expensive video
+	// transcode work. Provider media contracts use it before Submit.
+	VideoTranscodeEnabled bool
+	// VideoTranscodePolicy controls whether ffmpeg is allowed for unsafe video
+	// outputs. Values mirror config: never, fallback, always.
+	VideoTranscodePolicy string
+	// RawVideoDeliveryPolicy controls whether a probed delivery-ready original
+	// may be delivered without a VK-specific variant.
+	RawVideoDeliveryPolicy string
+	// ProviderMediaContracts is the product-level allowlist for risky video
+	// provider/model combinations.
+	ProviderMediaContracts []domain.ProviderMediaContract
+	// MediaMaxConcurrentProbes and MediaMaxConcurrentTranscodes bound CPU-heavy
+	// media work per worker process. Shared queue/user capacity is handled
+	// before job creation by the API/orchestrator.
+	MediaMaxConcurrentProbes              int
+	MediaMaxConcurrentTranscodes          int
+	MediaMaxPendingVariants               int
+	MediaProviderMaxAttempts              int
+	MediaProviderFallbackBudget           int
+	MediaProviderQualityGuardEnabled      bool
+	MediaProviderQualityDegradedFailures  int
+	MediaProviderQualityDisabledFailures  int
+	MediaProviderQualityRecoverySuccesses int
 	// TextContext, when set, stores VK text dialog history and renders compact
 	// provider prompts for text jobs.
 	TextContext TextContext
@@ -573,33 +988,80 @@ func newProcessor(d Deps) processor {
 	if callTimeout <= 0 {
 		callTimeout = defaultProviderCallTimeout
 	}
-	return processor{
-		jobs:              d.Jobs,
-		tasks:             d.Tasks,
-		artifacts:         d.Artifacts,
-		artifactRepo:      d.ArtifactRepo,
-		objects:           d.Objects,
-		providers:         d.Providers,
-		streams:           d.Streams,
-		imageModel:        d.ImageModel,
-		imageSize:         d.ImageSize,
-		videoModel:        d.VideoModel,
-		videoDurationSec:  d.VideoDurationSec,
-		videoResolution:   d.VideoResolution,
-		videoAspectRatio:  d.VideoAspectRatio,
-		videoDraft:        d.VideoDraft,
-		videoProber:       d.VideoProber,
-		videoTranscoder:   d.VideoTranscoder,
-		requireVideoProbe: d.RequireVideoProbe,
-		textContext:       d.TextContext,
-		moderator:         d.Moderator,
-		modResults:        d.ModResults,
-		releaser:          d.Releaser,
-		maxAttempts:       maxAttempts,
-		backoff:           backoff,
-		callTimeout:       callTimeout,
-		now:               now,
+	videoTranscodePolicy := normalizeWorkerPolicy(d.VideoTranscodePolicy)
+	if videoTranscodePolicy == "" {
+		if d.VideoTranscodeEnabled || d.VideoTranscoder != nil {
+			videoTranscodePolicy = videoTranscodePolicyFallback
+		} else {
+			videoTranscodePolicy = videoTranscodePolicyNever
+		}
 	}
+	rawVideoPolicy := normalizeWorkerPolicy(d.RawVideoDeliveryPolicy)
+	if rawVideoPolicy == "" {
+		rawVideoPolicy = rawProviderVideoPolicyAlwaysDevOnly
+	}
+	if d.Providers != nil {
+		d.Providers.ConfigureProviderMediaContracts(d.ProviderMediaContracts, d.RequireVideoProbe, d.VideoTranscodeEnabled)
+		if d.MediaProviderMaxAttempts > 0 || d.MediaProviderFallbackBudget > 0 {
+			d.Providers.ConfigureMediaProviderBudget(d.MediaProviderMaxAttempts, d.MediaProviderFallbackBudget)
+		}
+		d.Providers.ConfigureProviderQualityGuard(
+			d.MediaProviderQualityGuardEnabled,
+			d.MediaProviderQualityDegradedFailures,
+			d.MediaProviderQualityDisabledFailures,
+			d.MediaProviderQualityRecoverySuccesses,
+		)
+	}
+	return processor{
+		jobs:                 d.Jobs,
+		tasks:                d.Tasks,
+		artifacts:            d.Artifacts,
+		artifactRepo:         d.ArtifactRepo,
+		objects:              d.Objects,
+		providers:            d.Providers,
+		streams:              d.Streams,
+		imageModel:           d.ImageModel,
+		imageSize:            d.ImageSize,
+		videoModel:           d.VideoModel,
+		videoDurationSec:     d.VideoDurationSec,
+		videoResolution:      d.VideoResolution,
+		videoAspectRatio:     d.VideoAspectRatio,
+		videoDraft:           d.VideoDraft,
+		videoProber:          d.VideoProber,
+		videoTranscoder:      d.VideoTranscoder,
+		requireVideoProbe:    d.RequireVideoProbe,
+		videoTranscodePolicy: videoTranscodePolicy,
+		rawVideoPolicy:       rawVideoPolicy,
+		probeLimiter:         optionalConcurrencyLimiter(d.MediaMaxConcurrentProbes),
+		transcodeLimiter:     optionalConcurrencyLimiter(d.MediaMaxConcurrentTranscodes),
+		variantLimiter:       optionalConcurrencyLimiter(d.MediaMaxPendingVariants),
+		textContext:          d.TextContext,
+		moderator:            d.Moderator,
+		modResults:           d.ModResults,
+		releaser:             d.Releaser,
+		maxAttempts:          maxAttempts,
+		backoff:              backoff,
+		callTimeout:          callTimeout,
+		now:                  now,
+	}
+}
+
+func optionalConcurrencyLimiter(limit int) *ratelimit.ConcurrencyLimiter {
+	if limit <= 0 {
+		return nil
+	}
+	return ratelimit.NewConcurrencyLimiter(limit)
+}
+
+func acquireOptionalLimiter(limiter *ratelimit.ConcurrencyLimiter) (func(), bool) {
+	if limiter == nil {
+		return func() {}, true
+	}
+	return limiter.TryAcquire()
+}
+
+func normalizeWorkerPolicy(value string) string {
+	return strings.ToLower(strings.TrimSpace(value))
 }
 
 // maxReferenceArtifacts must match miniapp/references.go limit.
@@ -651,8 +1113,7 @@ func (p *processor) buildRequest(ctx context.Context, job *domain.Job, attempt i
 			modelCode = p.videoModel
 		}
 		durationSec = p.videoDurationSec
-		switch pp.DurationSec {
-		case 3, 5, 10:
+		if pp.DurationSec > 0 {
 			durationSec = pp.DurationSec
 		}
 		resolution = p.videoResolution
@@ -688,6 +1149,10 @@ func (p *processor) buildRequest(ctx context.Context, job *domain.Job, attempt i
 			return domain.ProviderRequest{}, err
 		}
 	}
+	providerParams := stripProviderInputURLs(job.Params)
+	if job.Modality == domain.ModalityVideo {
+		providerParams = safeVideoProviderParams(durationSec, resolution, pp.AspectRatio, draft)
+	}
 	return domain.ProviderRequest{
 		JobID:                job.ID,
 		UserID:               job.UserID,
@@ -703,10 +1168,32 @@ func (p *processor) buildRequest(ctx context.Context, job *domain.Job, attempt i
 		Draft:                draft,
 		ReferenceArtifactIDs: pp.ReferenceArtifactIDs,
 		InputURLs:            inputURLs,
-		Params:               stripProviderInputURLs(job.Params),
+		Params:               providerParams,
 		MaxOutputTokens:      maxOutputTokens,
 		IdempotencyKey:       fmt.Sprintf("provider_submit:%s:%d", job.ID, attempt),
+		AttemptNo:            attempt,
 	}, nil
+}
+
+func safeVideoProviderParams(durationSec int, resolution, aspectRatio string, draft bool) json.RawMessage {
+	params := map[string]any{}
+	if durationSec > 0 {
+		params["duration_sec"] = durationSec
+	}
+	if strings.TrimSpace(resolution) != "" {
+		params["resolution"] = strings.TrimSpace(resolution)
+	}
+	if strings.TrimSpace(aspectRatio) != "" {
+		params["aspect_ratio"] = strings.TrimSpace(aspectRatio)
+	}
+	if draft {
+		params["draft"] = true
+	}
+	raw, err := json.Marshal(params)
+	if err != nil {
+		return nil
+	}
+	return raw
 }
 
 func stripProviderInputURLs(raw json.RawMessage) json.RawMessage {
@@ -763,11 +1250,11 @@ func (p *processor) resolveReferenceInputURLs(ctx context.Context, job *domain.J
 		if len(data) > maxReferenceArtifactBytes {
 			return nil, fmt.Errorf("worker: reference artifact too large")
 		}
-		mime := artifact.MimeType
-		if mime == "" {
-			mime = http.DetectContentType(data)
+		inputURL, err := sanitizedReferenceImageDataURL(data, artifact.MimeType)
+		if err != nil {
+			return nil, err
 		}
-		inputURLs = append(inputURLs, "data:"+mime+";base64,"+base64.StdEncoding.EncodeToString(data))
+		inputURLs = append(inputURLs, inputURL)
 	}
 	return inputURLs, nil
 }
@@ -868,26 +1355,40 @@ func recordProviderCall(provider domain.ProviderName, model string, operation do
 	}
 }
 
-func recordProviderPoll(provider domain.ProviderName, model string, operation domain.OperationType, started time.Time, res domain.ProviderTaskResult, err error) {
+func (p *processor) recordProviderPoll(provider domain.ProviderName, model string, modality domain.Modality, operation domain.OperationType, started time.Time, res domain.ProviderTaskResult, err error) {
 	result := "success"
 	if err != nil {
 		result = "error"
 	} else if res.Status != "" {
 		result = string(res.Status)
 	}
-	recordProviderCall(provider, model, operation, started, err, result)
+	modelLabel := providerMetricModel(model)
+	if p.providers != nil {
+		modelLabel = p.providers.metricModelForTask(provider, model, modality)
+	}
+	recordProviderCall(provider, modelLabel, operation, started, err, result)
 	if err == nil && res.Status == domain.ProviderTaskFailed && res.ErrorClass != "" {
 		providerLabel := providerMetricProvider(provider)
-		modelLabel := providerMetricModel(model)
 		operationLabel := operationMetricLabel(operation)
 		metrics.ProviderErrors.WithLabelValues(providerLabel, modelLabel, operationLabel, string(res.ErrorClass)).Inc()
 		if res.ErrorClass == domain.ProviderErrRateLimited {
 			metrics.ProviderRateLimits.WithLabelValues(providerLabel, modelLabel, operationLabel).Inc()
 		}
 	}
+	if p.providers == nil {
+		return
+	}
+	switch {
+	case err != nil:
+		p.providers.recordProviderQualityFailure(provider, model, modality, string(classOf(err)))
+	case res.Status == domain.ProviderTaskFailed && res.ErrorClass != "":
+		p.providers.recordProviderQualityFailure(provider, model, modality, string(res.ErrorClass))
+	case res.Status == domain.ProviderTaskSucceeded:
+		p.providers.recordProviderQualitySuccess(provider, model, modality)
+	}
 }
 
-func recordProviderOutputs(pt *domain.ProviderTask, job *domain.Job, res domain.ProviderTaskResult) {
+func (p *processor) recordProviderOutputs(pt *domain.ProviderTask, job *domain.Job, res domain.ProviderTaskResult) {
 	if pt == nil || job == nil {
 		return
 	}
@@ -897,6 +1398,9 @@ func recordProviderOutputs(pt *domain.ProviderTask, job *domain.Job, res domain.
 	}
 	providerLabel := providerMetricProvider(pt.Provider)
 	modelLabel := providerMetricModel(pt.ModelCode)
+	if p.providers != nil {
+		modelLabel = p.providers.metricModelForTask(pt.Provider, pt.ModelCode, job.Modality)
+	}
 	operationLabel := operationMetricLabel(job.OperationType)
 	switch job.Modality {
 	case domain.ModalityImage:
@@ -904,6 +1408,31 @@ func recordProviderOutputs(pt *domain.ProviderTask, job *domain.Job, res domain.
 	case domain.ModalityVideo:
 		metrics.ProviderVideos.WithLabelValues(providerLabel, modelLabel, operationLabel).Add(count)
 	}
+}
+
+func (p *processor) recordProviderProductFailure(ctx context.Context, job *domain.Job, reason string) {
+	if job == nil {
+		return
+	}
+	task, err := p.latestTask(ctx, job.ID)
+	if err != nil || task == nil {
+		return
+	}
+	p.recordProviderProductFailureForTask(job, task, reason)
+}
+
+func (p *processor) recordProviderProductFailureForTask(job *domain.Job, task *domain.ProviderTask, reason string) {
+	if p == nil || job == nil || task == nil {
+		return
+	}
+	modelClass := "default"
+	if p.providers != nil {
+		modelClass = p.providers.qualityModelClassForTask(task.Provider, task.ModelCode, job.Modality)
+		p.providers.recordProviderQualityFailure(task.Provider, task.ModelCode, job.Modality, reason)
+	}
+	metrics.ObserveProviderOutputInvalid(string(task.Provider), modelClass, string(job.Modality), reason)
+	metrics.AddProductMediaWaste(string(task.Provider), modelClass, string(job.Modality), reason, job.CostReserved)
+	metrics.AddMediaProviderWaste(string(task.Provider), modelClass, reason, job.CostReserved)
 }
 
 func providerMetricProvider(provider domain.ProviderName) string {
@@ -1043,7 +1572,7 @@ func (p *processor) pollOnce(ctx context.Context, job *domain.Job, pt *domain.Pr
 	)
 	started := time.Now()
 	res, err := provider.Poll(pollCtx, domain.ProviderTaskRef{Provider: pt.Provider, ExternalID: pt.ExternalID})
-	recordProviderPoll(pt.Provider, pt.ModelCode, job.OperationType, started, res, err)
+	p.recordProviderPoll(pt.Provider, pt.ModelCode, job.Modality, job.OperationType, started, res, err)
 	if err != nil {
 		tracing.RecordError(span, err)
 		span.End()
@@ -1077,8 +1606,9 @@ func (p *processor) applyResult(ctx context.Context, job *domain.Job, pt *domain
 
 	switch res.Status {
 	case domain.ProviderTaskSucceeded:
-		recordProviderOutputs(pt, job, res)
+		p.recordProviderOutputs(pt, job, res)
 		if err := p.saveOutputs(ctx, job, res.OutputURLs); err != nil {
+			p.recordProviderProductFailureForTask(job, pt, "output_download_failed")
 			// A download failure is retryable provider-side.
 			return p.handleFailure(ctx, job, task, domain.ProviderErrOutputDownloadFailed, err.Error())
 		}
@@ -1090,9 +1620,11 @@ func (p *processor) applyResult(ctx context.Context, job *domain.Job, pt *domain
 			var transcodeErr mediaTranscodeError
 			switch {
 			case errors.As(err, &probeErr):
-				return p.handleMediaFailure(ctx, job, domain.ProviderErrMediaProbeFailed, safeMediaProbeMessage(err))
+				p.recordProviderProductFailure(ctx, job, string(probeErr))
+				return p.handleMediaFailure(ctx, job, safeMediaFailureCode(err), safeMediaFailureMessage(err))
 			case errors.As(err, &transcodeErr):
-				return p.handleMediaFailure(ctx, job, domain.ProviderErrMediaTranscodeFailed, safeMediaTranscodeMessage(err))
+				p.recordProviderProductFailure(ctx, job, string(transcodeErr))
+				return p.handleMediaFailure(ctx, job, safeMediaFailureCode(err), safeMediaFailureMessage(err))
 			default:
 				return err
 			}
@@ -1145,11 +1677,19 @@ func (p *processor) probeVideoOutputs(ctx context.Context, job *domain.Job) erro
 	}
 	operationLabel := operationMetricLabel(job.OperationType)
 	modalityLabel := modalityMetricLabel(job.Modality)
+	observeProviderProbe := func(result, errorClass string, providerName domain.ProviderName, modelClass string) {
+		metrics.ObserveMediaProbeByProvider(result, errorClass, string(providerName), modelClass)
+	}
+	observePolicy := func(decision, reason string) {
+		metrics.ObserveMediaPolicyDecision("worker", operationLabel, modalityLabel, decision, reason)
+	}
 	if err := p.setStatus(ctx, job, domain.JobStatusPostprocessing, "", ""); err != nil {
 		return err
 	}
 	if len(job.OutputArtifactIDs) == 0 {
 		metrics.ObserveMediaProbe("error", operationLabel, modalityLabel, "video_output_missing")
+		observeProviderProbe("error", "video_output_missing", "", "unknown")
+		observePolicy("rejected", "video_output_missing")
 		return mediaProbeError("video_output_missing")
 	}
 	if p.videoProber == nil {
@@ -1158,8 +1698,11 @@ func (p *processor) probeVideoOutputs(ctx context.Context, job *domain.Job) erro
 				return err
 			}
 			metrics.ObserveMediaProbe("error", operationLabel, modalityLabel, "media_probe_unavailable")
+			observeProviderProbe("error", "media_probe_unavailable", "", "unknown")
+			observePolicy("kill_switch", "probe_required_without_prober")
 			return mediaProbeError("media_probe_unavailable")
 		}
+		observePolicy("skipped", "probe_disabled")
 		return p.markVideoProbeSkipped(ctx, job)
 	}
 	if p.objects == nil {
@@ -1167,13 +1710,24 @@ func (p *processor) probeVideoOutputs(ctx context.Context, job *domain.Job) erro
 			return err
 		}
 		metrics.ObserveMediaProbe("error", operationLabel, modalityLabel, "media_probe_storage_unavailable")
+		observeProviderProbe("error", "media_probe_storage_unavailable", "", "unknown")
+		observePolicy("rejected", "media_probe_storage_unavailable")
 		return mediaProbeError("media_probe_storage_unavailable")
+	}
+	providerName, modelClass, contract, err := p.videoOutputContract(ctx, job)
+	if err != nil {
+		metrics.ObserveMediaProbe("error", operationLabel, modalityLabel, "media_contract_unavailable")
+		observeProviderProbe("error", "media_contract_unavailable", providerName, modelClass)
+		observePolicy("rejected", "media_contract_unavailable")
+		return mediaProbeError("media_contract_unavailable")
 	}
 
 	for _, artID := range job.OutputArtifactIDs {
 		art, err := p.artifactRepo.GetByID(ctx, artID)
 		if err != nil {
 			metrics.ObserveMediaProbe("error", operationLabel, modalityLabel, "artifact_metadata_unavailable")
+			observeProviderProbe("error", "artifact_metadata_unavailable", providerName, modelClass)
+			observePolicy("rejected", "artifact_metadata_unavailable")
 			return mediaProbeError("artifact_metadata_unavailable")
 		}
 		if art.MediaType != domain.MediaTypeVideo {
@@ -1181,6 +1735,8 @@ func (p *processor) probeVideoOutputs(ctx context.Context, job *domain.Job) erro
 				return err
 			}
 			metrics.ObserveMediaProbe("error", operationLabel, modalityLabel, "video_artifact_missing")
+			observeProviderProbe("error", "video_artifact_missing", providerName, modelClass)
+			observePolicy("rejected", "video_artifact_missing")
 			return mediaProbeError("video_artifact_missing")
 		}
 		data, err := p.objects.GetObject(ctx, art.StorageBucket, art.StorageKey)
@@ -1189,6 +1745,8 @@ func (p *processor) probeVideoOutputs(ctx context.Context, job *domain.Job) erro
 				return markErr
 			}
 			metrics.ObserveMediaProbe("error", operationLabel, modalityLabel, "artifact_bytes_unavailable")
+			observeProviderProbe("error", "artifact_bytes_unavailable", providerName, modelClass)
+			observePolicy("rejected", "artifact_bytes_unavailable")
 			return mediaProbeError("artifact_bytes_unavailable")
 		}
 		originalSize := art.SizeBytes
@@ -1196,7 +1754,18 @@ func (p *processor) probeVideoOutputs(ctx context.Context, job *domain.Job) erro
 			originalSize = int64(len(data))
 		}
 		metrics.ObserveMediaBytes(operationLabel, modalityLabel, string(domain.VariantOriginal), originalSize)
+		releaseProbe, ok := acquireOptionalLimiter(p.probeLimiter)
+		if !ok {
+			if markErr := p.markArtifactProbeFailed(ctx, art); markErr != nil {
+				return markErr
+			}
+			metrics.ObserveMediaProbe("error", operationLabel, modalityLabel, "media_probe_overloaded")
+			observeProviderProbe("error", "media_probe_overloaded", providerName, modelClass)
+			observePolicy("degraded", "media_probe_overloaded")
+			return mediaProbeError("media_probe_overloaded")
+		}
 		metadata, err := p.videoProber.ProbeVideo(ctx, data, art.SizeBytes)
+		releaseProbe()
 		if err != nil {
 			art.ApplyMediaMetadata(metadata)
 			art.ProbeStatus = domain.MediaProbeFailed
@@ -1205,6 +1774,8 @@ func (p *processor) probeVideoOutputs(ctx context.Context, job *domain.Job) erro
 				return updateErr
 			}
 			metrics.ObserveMediaProbe("error", operationLabel, modalityLabel, "media_probe_failed")
+			observeProviderProbe("error", "media_probe_failed", providerName, modelClass)
+			observePolicy("rejected", "media_probe_failed")
 			return mediaProbeError("media_probe_failed")
 		}
 		art.ApplyMediaMetadata(metadata)
@@ -1214,13 +1785,88 @@ func (p *processor) probeVideoOutputs(ctx context.Context, job *domain.Job) erro
 			return err
 		}
 		metrics.ObserveMediaProbe("success", operationLabel, modalityLabel, "none")
-		if p.videoTranscoder != nil {
+		observeProviderProbe("success", "none", providerName, modelClass)
+		if p.videoFastPathAllowed(contract, metadata, originalSize) {
+			metrics.ObserveMediaFastPath("used")
+			metrics.ObserveMediaVideoFastPath("used", operationLabel, modalityLabel, string(providerName), modelClass)
+			observePolicy("accepted", "fast_path")
+			continue
+		}
+		if p.videoTranscodeAllowed(contract) {
+			metrics.ObserveMediaFastPath("fallback_transcode")
+			metrics.ObserveMediaVideoFastPath("fallback_transcode", operationLabel, modalityLabel, string(providerName), modelClass)
+			observePolicy("fallback", "transcode")
 			if err := p.transcodeVideoVariant(ctx, job, art, data, metadata); err != nil {
 				return err
 			}
+			continue
 		}
+		if p.localDevRawVideoAllowedWithoutContract(contract) {
+			metrics.ObserveMediaFastPath("dev_raw")
+			metrics.ObserveMediaVideoFastPath("dev_raw", operationLabel, modalityLabel, string(providerName), modelClass)
+			observePolicy("accepted", "dev_raw")
+			continue
+		}
+		if err := p.markArtifactProbeFailed(ctx, art); err != nil {
+			return err
+		}
+		metrics.ObserveMediaFastPath("blocked")
+		metrics.ObserveMediaVideoFastPath("blocked", operationLabel, modalityLabel, string(providerName), modelClass)
+		observePolicy("rejected", "media_contract_output_not_delivery_ready")
+		return mediaProbeError("media_contract_output_not_delivery_ready")
 	}
 	return nil
+}
+
+func (p *processor) videoOutputContract(ctx context.Context, job *domain.Job) (domain.ProviderName, string, *domain.ProviderMediaContract, error) {
+	if p.providers == nil {
+		return "", "unknown", nil, nil
+	}
+	task, err := p.latestTask(ctx, job.ID)
+	if err != nil {
+		return "", "unknown", nil, err
+	}
+	if task == nil {
+		return "", "unknown", nil, nil
+	}
+	modelClass := p.providers.metricModelForTask(task.Provider, task.ModelCode, job.Modality)
+	contract, _ := p.providers.videoContractForTask(task.Provider, task.ModelCode)
+	if contract != nil && strings.TrimSpace(contract.ModelClass) != "" {
+		modelClass = providerMetricModel(contract.ModelClass)
+	}
+	return task.Provider, modelClass, contract, nil
+}
+
+func (p *processor) videoFastPathAllowed(contract *domain.ProviderMediaContract, metadata domain.ArtifactMediaMetadata, sizeBytes int64) bool {
+	if !rawVideoPolicyAllowsProbePassed(p.rawVideoPolicy) {
+		return false
+	}
+	return deliveryReadyVideoOutput(contract, metadata, sizeBytes)
+}
+
+func (p *processor) videoTranscodeAllowed(contract *domain.ProviderMediaContract) bool {
+	if p.videoTranscoder == nil {
+		return false
+	}
+	switch p.videoTranscodePolicy {
+	case videoTranscodePolicyFallback, videoTranscodePolicyAlways:
+	default:
+		return false
+	}
+	return contract == nil || contract.TranscodeAllowed || contract.RequiresTranscode
+}
+
+func (p *processor) localDevRawVideoAllowedWithoutContract(contract *domain.ProviderMediaContract) bool {
+	return contract == nil && p.rawVideoPolicy == rawProviderVideoPolicyAlwaysDevOnly
+}
+
+func rawVideoPolicyAllowsProbePassed(policy string) bool {
+	switch normalizeWorkerPolicy(policy) {
+	case rawProviderVideoPolicyIfProbePassed, rawProviderVideoPolicyAlwaysDevOnly:
+		return true
+	default:
+		return false
+	}
 }
 
 func (p *processor) transcodeVideoVariant(ctx context.Context, job *domain.Job, art *domain.Artifact, data []byte, originalMetadata domain.ArtifactMediaMetadata) error {
@@ -1233,35 +1879,76 @@ func (p *processor) transcodeVideoVariant(ctx context.Context, job *domain.Job, 
 	started := time.Now()
 	result := "success"
 	errorClass := "none"
+	releaseVariant, ok := acquireOptionalLimiter(p.variantLimiter)
+	if !ok {
+		metrics.ObserveMediaTranscode("error", operationLabel, modalityLabel, variantType, "media_variant_backlog_full")
+		metrics.ObserveMediaTranscodeDuration("error", operationLabel, modalityLabel, variantType, time.Since(started))
+		metrics.ObserveMediaTranscodeByPolicy(p.videoTranscodePolicy, "error", "media_variant_backlog_full")
+		metrics.ObserveMediaTranscodeCPUSeconds(p.videoTranscodePolicy, "error", "media_variant_backlog_full", time.Since(started))
+		metrics.ObserveMediaPolicyDecision("worker", operationLabel, modalityLabel, "degraded", "media_variant_backlog_full")
+		if err := p.markArtifactProbeFailed(ctx, art); err != nil {
+			return err
+		}
+		return mediaTranscodeError("media_variant_backlog_full")
+	}
+	defer releaseVariant()
 	metrics.AddMediaVariantBacklog(operationLabel, modalityLabel, variantType, 1)
 	defer func() {
 		metrics.AddMediaVariantBacklog(operationLabel, modalityLabel, variantType, -1)
 		metrics.ObserveMediaTranscode(result, operationLabel, modalityLabel, variantType, errorClass)
 		metrics.ObserveMediaTranscodeDuration(result, operationLabel, modalityLabel, variantType, time.Since(started))
+		metrics.ObserveMediaTranscodeByPolicy(p.videoTranscodePolicy, result, errorClass)
+		metrics.ObserveMediaTranscodeCPUSeconds(p.videoTranscodePolicy, result, errorClass, time.Since(started))
 	}()
 	if p.videoProber == nil {
 		result = "error"
 		errorClass = "variant_probe_unavailable"
+		metrics.ObserveMediaPolicyDecision("worker", operationLabel, modalityLabel, "kill_switch", "variant_probe_unavailable")
 		if err := p.markArtifactProbeFailed(ctx, art); err != nil {
 			return err
 		}
 		return mediaTranscodeError("variant_probe_unavailable")
 	}
+	releaseTranscode, ok := acquireOptionalLimiter(p.transcodeLimiter)
+	if !ok {
+		result = "error"
+		errorClass = "media_transcode_overloaded"
+		metrics.ObserveMediaPolicyDecision("worker", operationLabel, modalityLabel, "degraded", "media_transcode_overloaded")
+		if err := p.markArtifactProbeFailed(ctx, art); err != nil {
+			return err
+		}
+		return mediaTranscodeError("media_transcode_overloaded")
+	}
 	variantBytes, expectedMetadata, err := p.videoTranscoder.TranscodeVKVideo(ctx, data, originalMetadata)
+	releaseTranscode()
 	if err != nil {
 		result = "error"
 		errorClass = "media_transcode_failed"
+		metrics.ObserveMediaPolicyDecision("worker", operationLabel, modalityLabel, "rejected", "media_transcode_failed")
 		if markErr := p.markArtifactProbeFailed(ctx, art); markErr != nil {
 			return markErr
 		}
 		return mediaTranscodeError("media_transcode_failed")
 	}
 	metrics.ObserveMediaBytes(operationLabel, modalityLabel, variantType, int64(len(variantBytes)))
+	releaseProbe, ok := acquireOptionalLimiter(p.probeLimiter)
+	if !ok {
+		result = "error"
+		errorClass = "variant_probe_overloaded"
+		metrics.ObserveMediaProbe("error", operationLabel, modalityLabel, "variant_probe_overloaded")
+		metrics.ObserveMediaPolicyDecision("worker", operationLabel, modalityLabel, "degraded", "variant_probe_overloaded")
+		if markErr := p.markArtifactProbeFailed(ctx, art); markErr != nil {
+			return markErr
+		}
+		return mediaTranscodeError("variant_probe_overloaded")
+	}
 	variantMetadata, err := p.videoProber.ProbeVideo(ctx, variantBytes, int64(len(variantBytes)))
+	releaseProbe()
 	if err != nil {
 		result = "error"
 		errorClass = "variant_probe_failed"
 		metrics.ObserveMediaProbe("error", operationLabel, modalityLabel, "variant_probe_failed")
+		metrics.ObserveMediaPolicyDecision("worker", operationLabel, modalityLabel, "rejected", "variant_probe_failed")
 		if markErr := p.markArtifactProbeFailed(ctx, art); markErr != nil {
 			return markErr
 		}
@@ -1283,11 +1970,13 @@ func (p *processor) transcodeVideoVariant(ctx context.Context, job *domain.Job, 
 	if _, err := p.artifacts.SaveVariantWithMetadata(ctx, art, domain.VariantVKVideo, "video/mp4", variantBytes, variantMetadata); err != nil {
 		result = "error"
 		errorClass = "variant_store_failed"
+		metrics.ObserveMediaPolicyDecision("worker", operationLabel, modalityLabel, "rejected", "variant_store_failed")
 		if markErr := p.markArtifactProbeFailed(ctx, art); markErr != nil {
 			return markErr
 		}
 		return mediaTranscodeError("variant_store_failed")
 	}
+	metrics.ObserveMediaPolicyDecision("worker", operationLabel, modalityLabel, "accepted", "transcode_variant")
 	return nil
 }
 
@@ -1308,6 +1997,7 @@ func (p *processor) markVideoProbeSkipped(ctx context.Context, job *domain.Job) 
 			return err
 		}
 		metrics.ObserveMediaProbe("skipped", operationLabel, modalityLabel, "none")
+		metrics.ObserveMediaProbeByProvider("skipped", "none", "unknown", "unknown")
 	}
 	return nil
 }
@@ -1331,12 +2021,12 @@ func (p *processor) markArtifactProbeFailed(ctx context.Context, art *domain.Art
 	return p.artifactRepo.Update(ctx, art)
 }
 
-func (p *processor) handleMediaFailure(ctx context.Context, job *domain.Job, class domain.ProviderErrorClass, message string) error {
+func (p *processor) handleMediaFailure(ctx context.Context, job *domain.Job, errorCode, message string) error {
 	if releaseErr := p.releaseReserved(ctx, job); releaseErr != nil {
 		return releaseErr
 	}
 	metrics.JobsTerminal.WithLabelValues(string(domain.JobStatusFailedTerminal)).Inc()
-	return p.setStatus(ctx, job, domain.JobStatusFailedTerminal, string(class), message)
+	return p.setStatus(ctx, job, domain.JobStatusFailedTerminal, errorCode, message)
 }
 
 type mediaProbeError string
@@ -1348,10 +2038,6 @@ func (e mediaProbeError) Error() string {
 	return string(e)
 }
 
-func safeMediaProbeMessage(_ error) string {
-	return "video media probe failed"
-}
-
 type mediaTranscodeError string
 
 func (e mediaTranscodeError) Error() string {
@@ -1361,8 +2047,45 @@ func (e mediaTranscodeError) Error() string {
 	return string(e)
 }
 
-func safeMediaTranscodeMessage(_ error) string {
-	return "video media transcode failed"
+func safeMediaFailureCode(err error) string {
+	var probeErr mediaProbeError
+	if errors.As(err, &probeErr) {
+		switch string(probeErr) {
+		case "media_probe_overloaded":
+			return domain.JobErrMediaOverloadedRetryLater
+		case "media_probe_unavailable",
+			"media_probe_storage_unavailable",
+			"media_contract_unavailable",
+			"artifact_metadata_unavailable",
+			"artifact_bytes_unavailable":
+			return domain.JobErrMediaProcessingUnavailable
+		default:
+			return domain.JobErrMediaProviderOutputInvalid
+		}
+	}
+	var transcodeErr mediaTranscodeError
+	if errors.As(err, &transcodeErr) {
+		switch string(transcodeErr) {
+		case "media_transcode_overloaded",
+			"variant_probe_overloaded",
+			"media_variant_backlog_full":
+			return domain.JobErrMediaOverloadedRetryLater
+		default:
+			return domain.JobErrMediaProcessingUnavailable
+		}
+	}
+	return domain.JobErrMediaProcessingUnavailable
+}
+
+func safeMediaFailureMessage(err error) string {
+	switch safeMediaFailureCode(err) {
+	case domain.JobErrMediaProviderOutputInvalid:
+		return "generated media failed safety checks; credits were not charged"
+	case domain.JobErrMediaOverloadedRetryLater:
+		return "media processing is overloaded; credits were not charged"
+	default:
+		return "media processing is unavailable; credits were not charged"
+	}
 }
 
 func (p *processor) saveDialogAnswer(ctx context.Context, job *domain.Job, answer string) error {
@@ -1459,13 +2182,45 @@ func (p *processor) handleFailure(ctx context.Context, job *domain.Job, task que
 		p.toDLQ(ctx, task, code, msg)
 	}
 	metrics.JobsTerminal.WithLabelValues(string(domain.JobStatusFailedTerminal)).Inc()
-	if err := p.setStatus(ctx, job, domain.JobStatusFailedTerminal, code, msg); err != nil {
+	terminalCode, terminalMessage := safeTerminalFailure(job, class)
+	if err := p.setStatus(ctx, job, domain.JobStatusFailedTerminal, terminalCode, terminalMessage); err != nil {
 		return err
 	}
 	if p.shouldNotifyTerminalProviderFailure(job) {
 		return p.streams.PublishTo(ctx, redisqueue.StreamDelivery, taskOf(job))
 	}
 	return nil
+}
+
+func safeTerminalFailure(job *domain.Job, class domain.ProviderErrorClass) (string, string) {
+	if job != nil && (job.Modality == domain.ModalityImage || job.Modality == domain.ModalityVideo) {
+		switch class {
+		case domain.ProviderErrRateLimited, domain.ProviderErrOverloaded, domain.ProviderErrTimeout:
+			return domain.JobErrMediaOverloadedRetryLater, "media generation is temporarily overloaded; credits were not charged"
+		case domain.ProviderErrOutputDownloadFailed:
+			return domain.JobErrMediaProcessingUnavailable, "media output could not be loaded safely; credits were not charged"
+		case domain.ProviderErrMediaProbeFailed:
+			return domain.JobErrMediaProviderOutputInvalid, "generated media failed safety checks; credits were not charged"
+		case domain.ProviderErrMediaTranscodeFailed:
+			return domain.JobErrMediaProcessingUnavailable, "media processing is unavailable; credits were not charged"
+		}
+	}
+	return string(class), safeProviderFailureMessage(class)
+}
+
+func safeProviderFailureMessage(class domain.ProviderErrorClass) string {
+	switch class {
+	case domain.ProviderErrRateLimited, domain.ProviderErrOverloaded, domain.ProviderErrTimeout:
+		return "provider is temporarily unavailable; credits were not charged"
+	case domain.ProviderErrContentRejected:
+		return "content was rejected by safety policy; credits were not charged"
+	case domain.ProviderErrInvalidRequest, domain.ProviderErrUnsupportedCapab:
+		return "request is not supported; credits were not charged"
+	case domain.ProviderErrAuthFailed, domain.ProviderErrInsufficientBalance:
+		return "provider configuration is unavailable; credits were not charged"
+	default:
+		return "generation failed; credits were not charged"
+	}
 }
 
 func (p *processor) releaseReserved(ctx context.Context, job *domain.Job) error {
@@ -1481,7 +2236,7 @@ func (p *processor) releaseReserved(ctx context.Context, job *domain.Job) error 
 }
 
 func (p *processor) shouldNotifyTerminalProviderFailure(job *domain.Job) bool {
-	return p.streams != nil && job.VKPeerID != 0 && job.Modality == domain.ModalityImage
+	return p.streams != nil && job.VKPeerID != 0 && (job.Modality == domain.ModalityImage || job.Modality == domain.ModalityVideo)
 }
 
 // moderateOutput runs the output moderation check and, on a block, rejects the

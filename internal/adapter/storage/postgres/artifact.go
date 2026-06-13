@@ -22,12 +22,13 @@ func NewArtifactRepository(db Querier) *ArtifactRepository {
 var _ domain.ArtifactRepository = (*ArtifactRepository)(nil)
 
 const artifactColumns = `id, owner_user_id, job_id, kind, media_type, mime_type,
-	storage_bucket, storage_key, public_url, sha256, size_bytes, width, height,
-	duration_ms, codec, container, bitrate_bps, probe_status, status, created_at, updated_at`
+	storage_bucket, storage_key, public_url, sha256, validation_policy_version,
+	lifecycle_class, size_bytes, width, height, duration_ms, codec, container,
+	bitrate_bps, probe_status, status, created_at, updated_at`
 
 const artifactVariantColumns = `id, artifact_id, variant_type, storage_bucket, storage_key,
 	mime_type, size_bytes, width, height, duration_ms, codec, container, bitrate_bps,
-	probe_status, created_at, updated_at`
+	probe_status, lifecycle_class, created_at, updated_at`
 
 // Create inserts a new artifact.
 func (r *ArtifactRepository) Create(ctx context.Context, a *domain.Artifact) error {
@@ -38,14 +39,16 @@ func (r *ArtifactRepository) Create(ctx context.Context, a *domain.Artifact) err
 	const q = `
 		INSERT INTO artifacts (
 			id, owner_user_id, job_id, kind, media_type, mime_type,
-			storage_bucket, storage_key, public_url, sha256, size_bytes, width, height,
-			duration_ms, codec, container, bitrate_bps, probe_status, status
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+			storage_bucket, storage_key, public_url, sha256, validation_policy_version,
+			lifecycle_class, size_bytes, width, height, duration_ms, codec, container,
+			bitrate_bps, probe_status, status
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
 		RETURNING ` + artifactColumns
 	row := r.db.QueryRow(ctx, q,
 		a.ID, a.OwnerUserID, a.JobID, a.Kind, a.MediaType, a.MimeType,
-		a.StorageBucket, a.StorageKey, a.PublicURL, a.SHA256, a.SizeBytes, a.Width, a.Height,
-		a.DurationMS, a.Codec, a.Container, a.BitrateBPS, a.ProbeStatus, a.Status,
+		a.StorageBucket, a.StorageKey, a.PublicURL, a.SHA256, a.ValidationPolicyVersion,
+		a.LifecycleClass, a.SizeBytes, a.Width, a.Height, a.DurationMS, a.Codec,
+		a.Container, a.BitrateBPS, a.ProbeStatus, a.Status,
 	)
 	return mapError(scanArtifact(row, a))
 }
@@ -56,15 +59,17 @@ func (r *ArtifactRepository) Update(ctx context.Context, a *domain.Artifact) err
 	const q = `
 		UPDATE artifacts
 		SET kind = $2, media_type = $3, mime_type = $4, storage_bucket = $5, storage_key = $6,
-		    public_url = $7, sha256 = $8, size_bytes = $9, width = $10, height = $11,
-		    duration_ms = $12, codec = $13, container = $14, bitrate_bps = $15,
-		    probe_status = $16, status = $17, updated_at = now()
+		    public_url = $7, sha256 = $8, validation_policy_version = $9,
+		    lifecycle_class = $10, size_bytes = $11, width = $12, height = $13,
+		    duration_ms = $14, codec = $15, container = $16, bitrate_bps = $17,
+		    probe_status = $18, status = $19, updated_at = now()
 		WHERE id = $1
 		RETURNING ` + artifactColumns
 	row := r.db.QueryRow(ctx, q,
 		a.ID, a.Kind, a.MediaType, a.MimeType, a.StorageBucket, a.StorageKey,
-		a.PublicURL, a.SHA256, a.SizeBytes, a.Width, a.Height, a.DurationMS,
-		a.Codec, a.Container, a.BitrateBPS, a.ProbeStatus, a.Status,
+		a.PublicURL, a.SHA256, a.ValidationPolicyVersion, a.LifecycleClass,
+		a.SizeBytes, a.Width, a.Height, a.DurationMS, a.Codec, a.Container,
+		a.BitrateBPS, a.ProbeStatus, a.Status,
 	)
 	return mapError(scanArtifact(row, a))
 }
@@ -91,6 +96,36 @@ func (r *ArtifactRepository) GetBySHA256(ctx context.Context, ownerID uuid.UUID,
 	return &a, nil
 }
 
+func (r *ArtifactRepository) FindReusableInputReference(ctx context.Context, ownerID uuid.UUID, sha256, validationPolicyVersion, mimeType string) (*domain.Artifact, error) {
+	const q = `SELECT ` + artifactColumns + `
+		FROM artifacts
+		WHERE owner_user_id = $1
+		  AND sha256 = $2
+		  AND validation_policy_version = $3
+		  AND mime_type = $4
+		  AND lifecycle_class = $5
+		  AND kind = $6
+		  AND media_type = $7
+		  AND status = $8
+		  AND storage_bucket <> ''
+		  AND storage_key <> ''
+		ORDER BY created_at ASC LIMIT 1`
+	var a domain.Artifact
+	if err := mapError(scanArtifact(r.db.QueryRow(ctx, q,
+		ownerID,
+		sha256,
+		validationPolicyVersion,
+		mimeType,
+		domain.ArtifactLifecycleInputReference,
+		domain.ArtifactKindInput,
+		domain.MediaTypeImage,
+		domain.ArtifactStatusReady,
+	), &a)); err != nil {
+		return nil, err
+	}
+	return &a, nil
+}
+
 // AddVariant inserts a derived variant of an artifact.
 func (r *ArtifactRepository) AddVariant(ctx context.Context, v *domain.ArtifactVariant) error {
 	if v.ID == uuid.Nil {
@@ -101,13 +136,13 @@ func (r *ArtifactRepository) AddVariant(ctx context.Context, v *domain.ArtifactV
 		INSERT INTO artifact_variants (
 			id, artifact_id, variant_type, storage_bucket, storage_key,
 			mime_type, size_bytes, width, height, duration_ms, codec, container,
-			bitrate_bps, probe_status
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+			bitrate_bps, probe_status, lifecycle_class
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 		RETURNING ` + artifactVariantColumns
 	row := r.db.QueryRow(ctx, q,
 		v.ID, v.ArtifactID, v.VariantType, v.StorageBucket, v.StorageKey,
 		v.MimeType, v.SizeBytes, v.Width, v.Height, v.DurationMS,
-		v.Codec, v.Container, v.BitrateBPS, v.ProbeStatus,
+		v.Codec, v.Container, v.BitrateBPS, v.ProbeStatus, v.LifecycleClass,
 	)
 	return mapError(scanArtifactVariant(row, v))
 }
@@ -137,9 +172,9 @@ func (r *ArtifactRepository) ListVariants(ctx context.Context, artifactID uuid.U
 func scanArtifact(row rowScanner, a *domain.Artifact) error {
 	return row.Scan(
 		&a.ID, &a.OwnerUserID, &a.JobID, &a.Kind, &a.MediaType, &a.MimeType,
-		&a.StorageBucket, &a.StorageKey, &a.PublicURL, &a.SHA256, &a.SizeBytes, &a.Width, &a.Height,
-		&a.DurationMS, &a.Codec, &a.Container, &a.BitrateBPS, &a.ProbeStatus, &a.Status,
-		&a.CreatedAt, &a.UpdatedAt,
+		&a.StorageBucket, &a.StorageKey, &a.PublicURL, &a.SHA256, &a.ValidationPolicyVersion,
+		&a.LifecycleClass, &a.SizeBytes, &a.Width, &a.Height, &a.DurationMS, &a.Codec,
+		&a.Container, &a.BitrateBPS, &a.ProbeStatus, &a.Status, &a.CreatedAt, &a.UpdatedAt,
 	)
 }
 
@@ -147,7 +182,8 @@ func scanArtifactVariant(row rowScanner, v *domain.ArtifactVariant) error {
 	return row.Scan(
 		&v.ID, &v.ArtifactID, &v.VariantType, &v.StorageBucket, &v.StorageKey,
 		&v.MimeType, &v.SizeBytes, &v.Width, &v.Height, &v.DurationMS,
-		&v.Codec, &v.Container, &v.BitrateBPS, &v.ProbeStatus, &v.CreatedAt, &v.UpdatedAt,
+		&v.Codec, &v.Container, &v.BitrateBPS, &v.ProbeStatus, &v.LifecycleClass,
+		&v.CreatedAt, &v.UpdatedAt,
 	)
 }
 
@@ -168,6 +204,7 @@ func normalizeArtifactMetadata(a *domain.Artifact) {
 	a.Container = m.Container
 	a.BitrateBPS = m.BitrateBPS
 	a.ProbeStatus = m.ProbeStatus
+	a.LifecycleClass = domain.NormalizeArtifactLifecycleClass(a.LifecycleClass, a.Kind, a.MediaType, a.Status)
 }
 
 func normalizeArtifactVariantMetadata(v *domain.ArtifactVariant) {
@@ -187,4 +224,7 @@ func normalizeArtifactVariantMetadata(v *domain.ArtifactVariant) {
 	v.Container = m.Container
 	v.BitrateBPS = m.BitrateBPS
 	v.ProbeStatus = m.ProbeStatus
+	if !v.LifecycleClass.Valid() {
+		v.LifecycleClass = domain.ArtifactLifecycleDeliveryVariant
+	}
 }

@@ -207,6 +207,21 @@ func (r *JobRepo) List(_ context.Context, filter domain.JobFilter, limit, offset
 		if filter.Operation != "" && j.OperationType != filter.Operation {
 			continue
 		}
+		if filter.Modality != "" && j.Modality != filter.Modality {
+			continue
+		}
+		if filter.ErrorCode != "" && j.ErrorCode != filter.ErrorCode {
+			continue
+		}
+		if filter.CorrelationID != "" && j.CorrelationID != filter.CorrelationID {
+			continue
+		}
+		if filter.CreatedFrom != nil && j.CreatedAt.Before(*filter.CreatedFrom) {
+			continue
+		}
+		if filter.CreatedTo != nil && !j.CreatedAt.Before(*filter.CreatedTo) {
+			continue
+		}
 		matched = append(matched, j)
 	}
 	sort.Slice(matched, func(i, k int) bool {

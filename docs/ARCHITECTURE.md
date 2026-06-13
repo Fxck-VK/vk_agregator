@@ -5,9 +5,8 @@
 > **Статус реализации:** этот документ описывает целевую production-архитектуру
 > и архитектурные инварианты. Актуальное состояние кода, выполненные шаги,
 > ограничения и ближайшие задачи см. в `.agents/state.json`, `TASKS.md` и
-> `RUNBOOK.md`.
-> Historical logs and completed PR context are archived under `docs/archive/**`
-> and are not current context by default.
+> `RUNBOOK.md`. Completed logs, plans and merge handoffs are summarized in
+> `TASKS.md` and are not kept as separate active repo context by default.
 
 ---
 

@@ -29,6 +29,14 @@
 <b>Влияние:</b>
 {{ . }}
 {{ end -}}
+{{ with .Annotations.kill_switch -}}
+<b>Kill switch:</b>
+{{ . }}
+{{ end -}}
+{{ with .Annotations.money_risk -}}
+<b>Риск денег:</b>
+{{ . }}
+{{ end -}}
 {{ with .Annotations.dashboard -}}
 <b>Куда зайти:</b>
 {{ . }}

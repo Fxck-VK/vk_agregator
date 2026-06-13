@@ -38,6 +38,7 @@ type URLSigner interface {
 // DeliveryBiller captures a job's reserved credits once it is delivered.
 type DeliveryBiller interface {
 	CaptureForJob(ctx context.Context, jobID uuid.UUID, amount int64) error
+	ReleaseForJob(ctx context.Context, jobID uuid.UUID) error
 }
 
 // DeliveryDeps bundles the delivery worker's collaborators.
@@ -67,6 +68,10 @@ type DeliveryDeps struct {
 	// SignedURLs delivers media via time-limited signed URLs instead of raw
 	// bucket/key references.
 	SignedURLs bool
+	// RawVideoDeliveryPolicy controls when an original provider video may be
+	// delivered without a VK-ready variant. Production should use
+	// if_probe_passed or never.
+	RawVideoDeliveryPolicy string
 	// URLTTL is the validity window of signed media URLs (default 1h).
 	URLTTL time.Duration
 	Now    func() time.Time
@@ -77,21 +82,22 @@ type DeliveryDeps struct {
 // idempotent (one delivery row per job, deduped by key), uses a deterministic
 // random_id so VK suppresses duplicate sends, and is safe to retry/recover.
 type DeliveryWorker struct {
-	jobs        domain.JobRepository
-	deliveries  domain.DeliveryRepository
-	artifacts   domain.ArtifactRepository
-	objects     ObjectStore
-	vk          vkdelivery.Client
-	vkControl   vkdelivery.ControlClient
-	vkUploader  vkdelivery.MediaUploader
-	billing     DeliveryBiller
-	streams     StreamPublisher
-	maxAttempts int
-	backoff     func(attempt int) time.Duration
-	signer      URLSigner
-	signURLs    bool
-	urlTTL      time.Duration
-	now         func() time.Time
+	jobs           domain.JobRepository
+	deliveries     domain.DeliveryRepository
+	artifacts      domain.ArtifactRepository
+	objects        ObjectStore
+	vk             vkdelivery.Client
+	vkControl      vkdelivery.ControlClient
+	vkUploader     vkdelivery.MediaUploader
+	billing        DeliveryBiller
+	streams        StreamPublisher
+	maxAttempts    int
+	backoff        func(attempt int) time.Duration
+	signer         URLSigner
+	signURLs       bool
+	rawVideoPolicy string
+	urlTTL         time.Duration
+	now            func() time.Time
 }
 
 // NewDeliveryWorker builds a DeliveryWorker.
@@ -125,22 +131,31 @@ func NewDeliveryWorker(d DeliveryDeps) *DeliveryWorker {
 		}
 	}
 	return &DeliveryWorker{
-		jobs:        d.Jobs,
-		deliveries:  d.Deliveries,
-		artifacts:   d.Artifacts,
-		objects:     d.Objects,
-		vk:          d.VK,
-		vkControl:   control,
-		vkUploader:  uploader,
-		billing:     d.Billing,
-		streams:     d.Streams,
-		maxAttempts: maxAttempts,
-		backoff:     backoff,
-		signer:      d.Signer,
-		signURLs:    d.SignedURLs,
-		urlTTL:      urlTTL,
-		now:         now,
+		jobs:           d.Jobs,
+		deliveries:     d.Deliveries,
+		artifacts:      d.Artifacts,
+		objects:        d.Objects,
+		vk:             d.VK,
+		vkControl:      control,
+		vkUploader:     uploader,
+		billing:        d.Billing,
+		streams:        d.Streams,
+		maxAttempts:    maxAttempts,
+		backoff:        backoff,
+		signer:         d.Signer,
+		signURLs:       d.SignedURLs,
+		rawVideoPolicy: rawVideoDeliveryPolicyOrDefault(d.RawVideoDeliveryPolicy),
+		urlTTL:         urlTTL,
+		now:            now,
 	}
+}
+
+func rawVideoDeliveryPolicyOrDefault(policy string) string {
+	policy = normalizeWorkerPolicy(policy)
+	if policy == "" {
+		return rawProviderVideoPolicyAlwaysDevOnly
+	}
+	return policy
 }
 
 // Process delivers one job's result. Returning nil acknowledges the task;
@@ -162,7 +177,7 @@ func (w *DeliveryWorker) Process(ctx context.Context, task queue.Task) error {
 		return err
 	}
 	span.SetAttributes(attribute.String("job.status", string(job.Status)))
-	failureNotice := isTerminalImageFailureNotice(job)
+	failureNotice := isTerminalMediaFailureNotice(job)
 	switch job.Status {
 	case domain.JobStatusSucceeded:
 		return nil
@@ -194,18 +209,24 @@ func (w *DeliveryWorker) Process(ctx context.Context, task queue.Task) error {
 		if err := w.send(ctx, del, job); err != nil {
 			tracing.RecordError(span, err)
 			del.Status = domain.DeliveryStatusRetrying
-			del.ErrorMessage = err.Error()
+			del.ErrorCode = domain.JobErrMediaDeliveryFailed
+			del.ErrorMessage = safeDeliveryFailureMessage()
 			del.AttemptNo++
 			_ = w.deliveries.Update(ctx, del)
 			// Retry budget: dead-letter once exhausted so a permanently failing
 			// VK send can no longer be retried forever.
 			if del.AttemptNo > w.maxAttempts {
 				metrics.DLQRouted.WithLabelValues("delivery").Inc()
+				metrics.ObserveMediaDeliveryCaptureGap(deliveryOperationLabel(job), deliveryModalityLabel(job), "delivery_failed")
 				if w.streams != nil {
 					_ = w.streams.PublishTo(ctx, redisqueue.StreamDLQ, task)
 				}
+				if releaseErr := w.releaseReserved(ctx, job); releaseErr != nil {
+					tracing.RecordError(span, releaseErr)
+					return releaseErr
+				}
 				metrics.JobsTerminal.WithLabelValues(string(domain.JobStatusFailedTerminal)).Inc()
-				return w.setStatus(ctx, job, domain.JobStatusFailedTerminal, "delivery_failed", err.Error())
+				return w.setStatus(ctx, job, domain.JobStatusFailedTerminal, domain.JobErrMediaDeliveryFailed, safeDeliveryFailureMessage())
 			}
 			w.sleepBackoff(ctx, del.AttemptNo)
 			return fmt.Errorf("worker: vk send: %w", err)
@@ -226,6 +247,7 @@ func (w *DeliveryWorker) Process(ctx context.Context, task queue.Task) error {
 		)
 		if err := w.billing.CaptureForJob(captureCtx, job.ID, job.CostReserved); err != nil {
 			metrics.BillingCaptures.WithLabelValues(deliveryOperationLabel(job), "error").Inc()
+			metrics.ObserveMediaDeliveryCaptureGap(deliveryOperationLabel(job), deliveryModalityLabel(job), "capture_failed")
 			tracing.RecordError(captureSpan, err)
 			captureSpan.End()
 			tracing.RecordError(span, err)
@@ -246,6 +268,18 @@ func (w *DeliveryWorker) Process(ctx context.Context, task queue.Task) error {
 	metrics.DeliveriesSent.Inc()
 	metrics.JobsTerminal.WithLabelValues(string(domain.JobStatusSucceeded)).Inc()
 	return w.setStatus(ctx, job, domain.JobStatusSucceeded, "", "")
+}
+
+func (w *DeliveryWorker) releaseReserved(ctx context.Context, job *domain.Job) error {
+	if w.billing == nil || job.CostReserved <= 0 || job.CostCaptured > 0 {
+		return nil
+	}
+	if err := w.billing.ReleaseForJob(ctx, job.ID); err != nil {
+		metrics.BillingReleases.WithLabelValues(deliveryOperationLabel(job), "error").Inc()
+		return err
+	}
+	metrics.BillingReleases.WithLabelValues(deliveryOperationLabel(job), "success").Inc()
+	return nil
 }
 
 // ensureDelivery returns the job's delivery row, creating it on first run. The
@@ -289,8 +323,8 @@ func (w *DeliveryWorker) buildDelivery(ctx context.Context, job *domain.Job, key
 		AttemptNo:      1,
 	}
 
-	if isTerminalImageFailureNotice(job) {
-		del.Text = "Не удалось сгенерировать изображение. Средства не списаны. Попробуйте позже или измените описание."
+	if isTerminalMediaFailureNotice(job) {
+		del.Text = safeVKMediaFailureNotice(job.ErrorCode)
 		if params.VKPlaceholderMessageID > 0 {
 			msgID := params.VKPlaceholderMessageID
 			del.VKMessageID = &msgID
@@ -326,10 +360,27 @@ func (w *DeliveryWorker) buildDelivery(ctx context.Context, job *domain.Job, key
 	return del, nil
 }
 
-func isTerminalImageFailureNotice(job *domain.Job) bool {
+func isTerminalMediaFailureNotice(job *domain.Job) bool {
 	return job.Status == domain.JobStatusFailedTerminal &&
 		job.VKPeerID != 0 &&
-		job.Modality == domain.ModalityImage
+		(job.Modality == domain.ModalityImage || job.Modality == domain.ModalityVideo)
+}
+
+func safeVKMediaFailureNotice(errorCode string) string {
+	switch errorCode {
+	case domain.JobErrMediaProviderOutputInvalid:
+		return "Не удалось безопасно подготовить медиафайл. Кредиты не списаны. Попробуйте изменить описание или повторить позже."
+	case domain.JobErrMediaOverloadedRetryLater:
+		return "Сейчас высокая нагрузка на медиаобработку. Кредиты не списаны. Попробуйте позже."
+	case domain.JobErrMediaDeliveryFailed:
+		return "Не удалось доставить готовый медиафайл. Кредиты не списаны. Попробуйте позже."
+	default:
+		return "Медиаобработка временно недоступна. Кредиты не списаны. Попробуйте позже."
+	}
+}
+
+func safeDeliveryFailureMessage() string {
+	return "media delivery failed; credits were not charged"
 }
 
 // textContent loads the stored text bytes for a text artifact, falling back to
@@ -633,7 +684,26 @@ func (w *DeliveryWorker) mediaObjectForDelivery(ctx context.Context, art *domain
 			}, nil
 		}
 	}
-	return obj, nil
+	if readyOriginalVideo(art, w.rawVideoPolicy) {
+		return obj, nil
+	}
+	return obj, fmt.Errorf("worker: video original is not allowed for delivery without ready variant")
+}
+
+func readyOriginalVideo(art *domain.Artifact, policy string) bool {
+	if art == nil || art.MediaType != domain.MediaTypeVideo || art.StorageBucket == "" || art.StorageKey == "" {
+		return false
+	}
+	switch normalizeWorkerPolicy(policy) {
+	case rawProviderVideoPolicyAlwaysDevOnly:
+		return true
+	case rawProviderVideoPolicyIfProbePassed:
+		return art.ProbeStatus == domain.MediaProbePassed &&
+			strings.EqualFold(art.Container, "mp4") &&
+			strings.EqualFold(art.Codec, "h264")
+	default:
+		return false
+	}
 }
 
 func readyVideoVariant(variant *domain.ArtifactVariant, variantType domain.VariantType) bool {

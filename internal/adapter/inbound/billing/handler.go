@@ -31,8 +31,10 @@ type Config struct {
 // Deps are the services/repositories used by billing endpoints.
 type Deps struct {
 	Users      domain.UserRepository
+	Billing    domain.BillingRepository
 	Payment    *paymentservice.Service
 	PaymentOps *paymentservice.WebhookProcessor
+	Audits     domain.OperatorAuditRepository
 }
 
 // Handler serves /billing/* routes.
@@ -59,6 +61,7 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("POST /billing/payment-intents/{id}/sync", h.auth(h.operatorAction("payment_intent_sync", h.syncIntent)))
 	mux.HandleFunc("POST /billing/payment-intents/{id}/cancel", h.auth(h.operatorAction("payment_intent_cancel", h.cancelIntent)))
 	mux.HandleFunc("POST /billing/payment-intents/{id}/refund", h.auth(h.operatorAction("payment_intent_refund", h.refundIntent)))
+	mux.HandleFunc("GET /billing/operator/console", h.auth(h.operatorConsole))
 	mux.HandleFunc("GET /billing/payment-intents/pending", h.auth(h.listPendingIntents))
 	mux.HandleFunc("GET /billing/payment-events/unprocessed", h.auth(h.listUnprocessedEvents))
 	mux.HandleFunc("GET /billing/payment-history", h.auth(h.listHistory))
@@ -95,7 +98,69 @@ func (h *Handler) operatorAction(action string, next http.HandlerFunc) http.Hand
 			result = "error"
 		}
 		metrics.AdminActions.WithLabelValues(action, result).Inc()
+		h.recordOperatorAudit(r, action, result)
 	}
+}
+
+func (h *Handler) recordOperatorAudit(r *http.Request, action, result string) {
+	if h.deps.Audits == nil {
+		return
+	}
+	entryID := uuid.New()
+	targetType := billingOperatorTargetType(action)
+	entry := &domain.OperatorAuditEntry{
+		ID:         entryID,
+		ActorRef:   billingOperatorActorRef(h.cfg.Token),
+		Action:     sanitizeOperatorToken(action),
+		TargetType: targetType,
+		TargetRef:  safeStringRef("target", targetType+":"+r.URL.Path),
+		Result:     billingOperatorAuditResult(result),
+		RequestRef: billingOperatorRequestRef(r, entryID),
+	}
+	if entry.Action == "" {
+		entry.Action = "unknown"
+	}
+	if entry.TargetRef == "" {
+		entry.TargetRef = safeUUIDRef("target", entryID)
+	}
+	_ = h.deps.Audits.Create(r.Context(), entry)
+}
+
+func billingOperatorActorRef(token string) string {
+	if strings.TrimSpace(token) == "" {
+		return "admin_dev"
+	}
+	return "admin_token"
+}
+
+func billingOperatorTargetType(action string) string {
+	value := strings.ToLower(action)
+	switch {
+	case strings.Contains(value, "payment_product"):
+		return "payment_products"
+	case strings.Contains(value, "payment_intent"):
+		return "payment_intents"
+	case strings.Contains(value, "payment"):
+		return "payments"
+	default:
+		return "billing"
+	}
+}
+
+func billingOperatorAuditResult(result string) string {
+	if result == "success" {
+		return "success"
+	}
+	return "error"
+}
+
+func billingOperatorRequestRef(r *http.Request, fallback uuid.UUID) string {
+	for _, header := range []string{"X-Request-ID", "X-Correlation-ID"} {
+		if raw := strings.TrimSpace(r.Header.Get(header)); raw != "" {
+			return safeStringRef("request", raw)
+		}
+	}
+	return safeUUIDRef("request", fallback)
 }
 
 func adminTokenEqual(got, want string) bool {
@@ -356,9 +421,11 @@ func (h *Handler) syncIntent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusServiceUnavailable, "service unavailable")
 		return
 	}
-	id, err := uuid.Parse(r.PathValue("id"))
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid id")
+	id, ok := h.paymentIntentIDFromPath(w, r)
+	if !ok {
+		return
+	}
+	if _, ok := parseOperatorPaymentActionRequest(w, r); !ok {
 		return
 	}
 	intent, err := h.deps.PaymentOps.SyncIntent(r.Context(), id)
@@ -374,9 +441,11 @@ func (h *Handler) cancelIntent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusServiceUnavailable, "service unavailable")
 		return
 	}
-	id, err := uuid.Parse(r.PathValue("id"))
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid id")
+	id, ok := h.paymentIntentIDFromPath(w, r)
+	if !ok {
+		return
+	}
+	if _, ok := parseOperatorPaymentActionRequest(w, r); !ok {
 		return
 	}
 	intent, err := h.deps.PaymentOps.CancelIntent(r.Context(), id)
@@ -387,38 +456,23 @@ func (h *Handler) cancelIntent(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, newIntentDTO(intent, true))
 }
 
-type refundIntentRequest struct {
-	Reason string `json:"reason,omitempty"`
-}
-
 func (h *Handler) refundIntent(w http.ResponseWriter, r *http.Request) {
 	if h.deps.PaymentOps == nil {
 		writeError(w, http.StatusServiceUnavailable, "service unavailable")
 		return
 	}
-	id, err := uuid.Parse(r.PathValue("id"))
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid id")
+	id, ok := h.paymentIntentIDFromPath(w, r)
+	if !ok {
 		return
 	}
-	clientKey := strings.TrimSpace(r.Header.Get("X-Idempotency-Key"))
-	if clientKey == "" {
-		writeError(w, http.StatusBadRequest, "X-Idempotency-Key is required")
+	actionReq, ok := parseOperatorPaymentActionRequest(w, r)
+	if !ok {
 		return
-	}
-	var req refundIntentRequest
-	if r.Body != nil && r.ContentLength != 0 {
-		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<10))
-		decoder.DisallowUnknownFields()
-		if err := decoder.Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, "invalid json")
-			return
-		}
 	}
 	result, err := h.deps.PaymentOps.RefundIntent(r.Context(), paymentservice.RefundIntentInput{
 		IntentID:       id,
-		IdempotencyKey: "billing_refund:" + id.String() + ":" + clientKey,
-		Reason:         req.Reason,
+		IdempotencyKey: "billing_refund:" + id.String() + ":" + actionReq.IdempotencyKey,
+		Reason:         actionReq.Reason,
 	})
 	if err != nil {
 		h.writePaymentActionError(w, err)
@@ -428,6 +482,64 @@ func (h *Handler) refundIntent(w http.ResponseWriter, r *http.Request) {
 		Intent: newIntentDTO(result.Intent, true),
 		Refund: newRefundDTO(result.Refund),
 	})
+}
+
+func (h *Handler) paymentIntentIDFromPath(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
+	id, ok := parseOperatorPaymentActionRef(h.cfg.Token, r.PathValue("id"))
+	if !ok {
+		writeError(w, http.StatusBadRequest, "invalid id")
+		return uuid.Nil, false
+	}
+	return id, true
+}
+
+type operatorPaymentActionRequest struct {
+	IdempotencyKey string
+	Reason         string
+}
+
+type operatorPaymentActionBody struct {
+	Reason string `json:"reason,omitempty"`
+}
+
+func parseOperatorPaymentActionRequest(w http.ResponseWriter, r *http.Request) (operatorPaymentActionRequest, bool) {
+	clientKey := strings.TrimSpace(r.Header.Get("X-Idempotency-Key"))
+	if clientKey == "" {
+		writeError(w, http.StatusBadRequest, "X-Idempotency-Key is required")
+		return operatorPaymentActionRequest{}, false
+	}
+	var body operatorPaymentActionBody
+	if r.Body == nil || r.ContentLength == 0 {
+		writeError(w, http.StatusBadRequest, "reason is required")
+		return operatorPaymentActionRequest{}, false
+	}
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<10))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json")
+		return operatorPaymentActionRequest{}, false
+	}
+	reason := strings.TrimSpace(body.Reason)
+	if !validOperatorReason(reason) {
+		writeError(w, http.StatusBadRequest, "reason is required")
+		return operatorPaymentActionRequest{}, false
+	}
+	return operatorPaymentActionRequest{IdempotencyKey: clientKey, Reason: reason}, true
+}
+
+func validOperatorReason(reason string) bool {
+	if len(reason) < 3 || len(reason) > 500 {
+		return false
+	}
+	if strings.Contains(reason, "://") {
+		return false
+	}
+	for _, r := range reason {
+		if r < 0x20 || r == 0x7f {
+			return false
+		}
+	}
+	return true
 }
 
 func (h *Handler) listHistory(w http.ResponseWriter, r *http.Request) {

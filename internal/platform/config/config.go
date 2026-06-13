@@ -3,13 +3,31 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/joho/godotenv"
+
+	"vk-ai-aggregator/internal/domain"
+)
+
+const (
+	MediaVideoProbePolicyDisabled        = "disabled"
+	MediaVideoProbePolicyTrustedProvider = "trusted_provider"
+	MediaVideoProbePolicyProbeRequired   = "probe_required"
+
+	MediaVideoTranscodePolicyNever    = "never"
+	MediaVideoTranscodePolicyFallback = "fallback"
+	MediaVideoTranscodePolicyAlways   = "always"
+
+	MediaDeliverRawProviderVideoNever         = "never"
+	MediaDeliverRawProviderVideoIfProbePassed = "if_probe_passed"
+	MediaDeliverRawProviderVideoAlwaysDevOnly = "always_dev_only"
 )
 
 // Config is the full application configuration shared by the entrypoints.
@@ -129,18 +147,49 @@ type Config struct {
 
 	// Media pipeline config is worker-owned. VK Bot and Mini App surfaces must
 	// not call ffmpeg/ffprobe directly.
-	MediaPipelineEnabled        bool
-	FFProbePath                 string
-	FFmpegPath                  string
-	MediaMaxVideoSizeBytes      int64
-	MediaMaxVideoDurationSec    int
-	MediaMaxVideoWidth          int
-	MediaMaxVideoHeight         int
-	MediaMaxVideoBitrate        int64
-	MediaAllowedVideoContainers []string
-	MediaAllowedVideoCodecs     []string
-	MediaProbeTimeout           time.Duration
-	MediaTranscodeTimeout       time.Duration
+	MediaPipelineEnabled         bool
+	MediaVideoProbePolicy        string
+	MediaVideoTranscodePolicy    string
+	MediaDeliverRawProviderVideo string
+	FFProbePath                  string
+	FFmpegPath                   string
+	MediaMaxVideoSizeBytes       int64
+	MediaMaxVideoDurationSec     int
+	MediaMaxVideoWidth           int
+	MediaMaxVideoHeight          int
+	MediaMaxVideoBitrate         int64
+	MediaAllowedVideoContainers  []string
+	MediaAllowedVideoCodecs      []string
+	MediaProbeTimeout            time.Duration
+	MediaTranscodeTimeout        time.Duration
+	// Media scale guards keep expensive media work bounded under production
+	// traffic. Queue/backpressure guards are shared via Redis/Postgres wiring;
+	// concurrent probe/transcode limits are per worker process.
+	MediaMaxConcurrentProbes              int
+	MediaMaxConcurrentTranscodes          int
+	MediaMaxPendingVariants               int
+	MediaMaxActiveVideoJobsPerUser        int
+	MediaProviderMaxAttemptsPerJob        int
+	MediaProviderFallbackBudget           int
+	MediaQueueDegradeThreshold            int64
+	MediaMaxConcurrentUploads             int
+	MediaReferenceUploadsEnabled          bool
+	MediaReferenceWebPEnabled             bool
+	MediaMaxImageUploadBytes              int64
+	MediaMaxImageWidth                    int
+	MediaMaxImageHeight                   int
+	MediaMaxImagePixels                   int64
+	MediaProviderQualityGuardEnabled      bool
+	MediaProviderQualityDegradedFailures  int
+	MediaProviderQualityDisabledFailures  int
+	MediaProviderQualityRecoverySuccesses int
+	// MediaProviderContractsRaw is the original env string used to fail closed
+	// on malformed JSON during Validate.
+	MediaProviderContractsRaw string
+	// MediaProviderContracts is an optional product-level media allowlist. It
+	// augments built-in safe defaults in cmd/worker and never belongs in the
+	// frontend.
+	MediaProviderContracts []domain.ProviderMediaContract
 
 	OpenAIAPIKey       string
 	OpenAIBaseURL      string
@@ -272,6 +321,12 @@ type Config struct {
 	SignedDelivery bool
 	// ArtifactRetentionDays configures object lifecycle expiry (0 = keep) (ST1).
 	ArtifactRetentionDays int
+	// Media*RetentionDays split artifact cleanup by lifecycle class. Zero means
+	// keep that class; failed/deleted defaults to ARTIFACT_RETENTION_DAYS.
+	MediaInputRetentionDays    int
+	MediaFailedRetentionDays   int
+	MediaOriginalRetentionDays int
+	MediaVariantRetentionDays  int
 
 	// WorkerProviderCallTimeout bounds one provider Submit/Poll call in workers.
 	WorkerProviderCallTimeout time.Duration
@@ -303,7 +358,42 @@ type Config struct {
 
 // IsProduction reports whether the service runs in a production environment.
 func (c Config) IsProduction() bool {
-	return strings.EqualFold(c.Env, "production") || strings.EqualFold(c.Env, "prod")
+	return isProductionEnv(c.Env)
+}
+
+// EffectiveMediaVideoProbePolicy returns the normalized worker probe policy.
+func (c Config) EffectiveMediaVideoProbePolicy() string {
+	if policy := normalizeConfigToken(c.MediaVideoProbePolicy); policy != "" {
+		return policy
+	}
+	return defaultMediaVideoProbePolicy(c.Env, c.MediaPipelineEnabled)
+}
+
+// EffectiveMediaVideoTranscodePolicy returns the normalized worker transcode policy.
+func (c Config) EffectiveMediaVideoTranscodePolicy() string {
+	if policy := normalizeConfigToken(c.MediaVideoTranscodePolicy); policy != "" {
+		return policy
+	}
+	return MediaVideoTranscodePolicyNever
+}
+
+// EffectiveMediaDeliverRawProviderVideo returns the normalized raw-video delivery policy.
+func (c Config) EffectiveMediaDeliverRawProviderVideo() string {
+	if policy := normalizeConfigToken(c.MediaDeliverRawProviderVideo); policy != "" {
+		return policy
+	}
+	return defaultMediaDeliverRawProviderVideo(c.Env, c.MediaPipelineEnabled)
+}
+
+// MediaVideoProbeRequired reports whether generated video must be probed before delivery.
+func (c Config) MediaVideoProbeRequired() bool {
+	return c.EffectiveMediaVideoProbePolicy() == MediaVideoProbePolicyProbeRequired
+}
+
+// MediaVideoTranscodeEnabled reports whether ffmpeg may be used by the worker.
+func (c Config) MediaVideoTranscodeEnabled() bool {
+	policy := c.EffectiveMediaVideoTranscodePolicy()
+	return policy == MediaVideoTranscodePolicyFallback || policy == MediaVideoTranscodePolicyAlways
 }
 
 // PaymentWebhookHTTPSRequired reports whether the payment webhook receiver must
@@ -343,45 +433,171 @@ func (c Config) Validate() error {
 	if provider := strings.ToLower(strings.TrimSpace(c.PaymentProvider)); provider != "" && !knownPaymentProvider(provider) {
 		return fmt.Errorf("config: PAYMENT_PROVIDER must be one of mock, yookassa")
 	}
-	if c.MediaPipelineEnabled {
+	probePolicy := c.EffectiveMediaVideoProbePolicy()
+	if err := validateMediaVideoProbePolicy(probePolicy); err != nil {
+		return err
+	}
+	transcodePolicy := c.EffectiveMediaVideoTranscodePolicy()
+	if err := validateMediaVideoTranscodePolicy(transcodePolicy); err != nil {
+		return err
+	}
+	rawProviderVideoPolicy := c.EffectiveMediaDeliverRawProviderVideo()
+	if err := validateMediaDeliverRawProviderVideo(rawProviderVideoPolicy); err != nil {
+		return err
+	}
+	if c.IsProduction() && probePolicy != MediaVideoProbePolicyProbeRequired {
+		return fmt.Errorf("config: MEDIA_VIDEO_PROBE_POLICY must be %s in production", MediaVideoProbePolicyProbeRequired)
+	}
+	if probePolicy == MediaVideoProbePolicyTrustedProvider && !c.usesOnlyMockProviders() {
+		return fmt.Errorf("config: MEDIA_VIDEO_PROBE_POLICY=trusted_provider is only allowed for mock-only provider config")
+	}
+	if c.IsProduction() && transcodePolicy == MediaVideoTranscodePolicyAlways {
+		return fmt.Errorf("config: MEDIA_VIDEO_TRANSCODE_POLICY=always is not allowed in production")
+	}
+	if transcodePolicy != MediaVideoTranscodePolicyNever && !c.MediaPipelineEnabled {
+		return fmt.Errorf("config: MEDIA_VIDEO_TRANSCODE_POLICY=%s requires MEDIA_PIPELINE_ENABLED=true", transcodePolicy)
+	}
+	if transcodePolicy != MediaVideoTranscodePolicyNever && probePolicy != MediaVideoProbePolicyProbeRequired {
+		return fmt.Errorf("config: MEDIA_VIDEO_TRANSCODE_POLICY=%s requires MEDIA_VIDEO_PROBE_POLICY=probe_required", transcodePolicy)
+	}
+	if c.IsProduction() && rawProviderVideoPolicy == MediaDeliverRawProviderVideoAlwaysDevOnly {
+		return fmt.Errorf("config: MEDIA_DELIVER_RAW_PROVIDER_VIDEO=always_dev_only is not allowed in production")
+	}
+	if c.MediaPipelineEnabled && probePolicy == MediaVideoProbePolicyProbeRequired {
 		if strings.TrimSpace(c.FFProbePath) == "" {
-			return fmt.Errorf("config: FFPROBE_PATH must be set when MEDIA_PIPELINE_ENABLED=true")
-		}
-		if strings.TrimSpace(c.FFmpegPath) == "" {
-			return fmt.Errorf("config: FFMPEG_PATH must be set when MEDIA_PIPELINE_ENABLED=true")
+			return fmt.Errorf("config: FFPROBE_PATH must be set when MEDIA_VIDEO_PROBE_POLICY=probe_required and MEDIA_PIPELINE_ENABLED=true")
 		}
 		if c.MediaMaxVideoSizeBytes <= 0 {
-			return fmt.Errorf("config: MEDIA_MAX_VIDEO_SIZE_BYTES must be positive when MEDIA_PIPELINE_ENABLED=true")
+			return fmt.Errorf("config: MEDIA_MAX_VIDEO_SIZE_BYTES must be positive when MEDIA_VIDEO_PROBE_POLICY=probe_required")
 		}
 		if c.MediaMaxVideoDurationSec <= 0 {
-			return fmt.Errorf("config: MEDIA_MAX_VIDEO_DURATION_SEC must be positive when MEDIA_PIPELINE_ENABLED=true")
+			return fmt.Errorf("config: MEDIA_MAX_VIDEO_DURATION_SEC must be positive when MEDIA_VIDEO_PROBE_POLICY=probe_required")
 		}
 		if c.MediaMaxVideoWidth <= 0 {
-			return fmt.Errorf("config: MEDIA_MAX_VIDEO_WIDTH must be positive when MEDIA_PIPELINE_ENABLED=true")
+			return fmt.Errorf("config: MEDIA_MAX_VIDEO_WIDTH must be positive when MEDIA_VIDEO_PROBE_POLICY=probe_required")
 		}
 		if c.MediaMaxVideoHeight <= 0 {
-			return fmt.Errorf("config: MEDIA_MAX_VIDEO_HEIGHT must be positive when MEDIA_PIPELINE_ENABLED=true")
+			return fmt.Errorf("config: MEDIA_MAX_VIDEO_HEIGHT must be positive when MEDIA_VIDEO_PROBE_POLICY=probe_required")
 		}
 		if c.MediaMaxVideoBitrate <= 0 {
-			return fmt.Errorf("config: MEDIA_MAX_VIDEO_BITRATE must be positive when MEDIA_PIPELINE_ENABLED=true")
+			return fmt.Errorf("config: MEDIA_MAX_VIDEO_BITRATE must be positive when MEDIA_VIDEO_PROBE_POLICY=probe_required")
 		}
 		if len(c.MediaAllowedVideoContainers) == 0 {
-			return fmt.Errorf("config: MEDIA_ALLOWED_VIDEO_CONTAINERS must not be empty when MEDIA_PIPELINE_ENABLED=true")
+			return fmt.Errorf("config: MEDIA_ALLOWED_VIDEO_CONTAINERS must not be empty when MEDIA_VIDEO_PROBE_POLICY=probe_required")
 		}
 		if err := validateNormalizedList("MEDIA_ALLOWED_VIDEO_CONTAINERS", c.MediaAllowedVideoContainers); err != nil {
 			return err
 		}
 		if len(c.MediaAllowedVideoCodecs) == 0 {
-			return fmt.Errorf("config: MEDIA_ALLOWED_VIDEO_CODECS must not be empty when MEDIA_PIPELINE_ENABLED=true")
+			return fmt.Errorf("config: MEDIA_ALLOWED_VIDEO_CODECS must not be empty when MEDIA_VIDEO_PROBE_POLICY=probe_required")
 		}
 		if err := validateNormalizedList("MEDIA_ALLOWED_VIDEO_CODECS", c.MediaAllowedVideoCodecs); err != nil {
 			return err
 		}
 		if c.MediaProbeTimeout <= 0 {
-			return fmt.Errorf("config: MEDIA_PROBE_TIMEOUT must be positive when MEDIA_PIPELINE_ENABLED=true")
+			return fmt.Errorf("config: MEDIA_PROBE_TIMEOUT must be positive when MEDIA_VIDEO_PROBE_POLICY=probe_required")
+		}
+	}
+	if c.MediaPipelineEnabled && c.MediaVideoTranscodeEnabled() {
+		if strings.TrimSpace(c.FFmpegPath) == "" {
+			return fmt.Errorf("config: FFMPEG_PATH must be set when MEDIA_VIDEO_TRANSCODE_POLICY=%s", transcodePolicy)
 		}
 		if c.MediaTranscodeTimeout <= 0 {
-			return fmt.Errorf("config: MEDIA_TRANSCODE_TIMEOUT must be positive when MEDIA_PIPELINE_ENABLED=true")
+			return fmt.Errorf("config: MEDIA_TRANSCODE_TIMEOUT must be positive when MEDIA_VIDEO_TRANSCODE_POLICY=%s", transcodePolicy)
+		}
+	}
+	if c.MediaMaxConcurrentProbes < 0 {
+		return fmt.Errorf("config: MEDIA_MAX_CONCURRENT_PROBES must be non-negative")
+	}
+	if c.MediaMaxConcurrentTranscodes < 0 {
+		return fmt.Errorf("config: MEDIA_MAX_CONCURRENT_TRANSCODES must be non-negative")
+	}
+	if c.MediaMaxPendingVariants < 0 {
+		return fmt.Errorf("config: MEDIA_MAX_PENDING_VARIANTS must be non-negative")
+	}
+	if c.MediaMaxActiveVideoJobsPerUser < 0 {
+		return fmt.Errorf("config: MEDIA_MAX_ACTIVE_VIDEO_JOBS_PER_USER must be non-negative")
+	}
+	if c.MediaProviderMaxAttemptsPerJob < 0 {
+		return fmt.Errorf("config: MEDIA_PROVIDER_MAX_ATTEMPTS_PER_JOB must be non-negative")
+	}
+	if c.MediaProviderFallbackBudget < 0 {
+		return fmt.Errorf("config: MEDIA_PROVIDER_FALLBACK_BUDGET_PER_JOB must be non-negative")
+	}
+	if c.MediaQueueDegradeThreshold < 0 {
+		return fmt.Errorf("config: MEDIA_QUEUE_DEGRADE_THRESHOLD must be non-negative")
+	}
+	if c.MediaMaxConcurrentUploads < 0 {
+		return fmt.Errorf("config: MEDIA_MAX_CONCURRENT_UPLOADS must be non-negative")
+	}
+	if c.MediaMaxImageUploadBytes < 0 {
+		return fmt.Errorf("config: MEDIA_MAX_IMAGE_UPLOAD_BYTES must be non-negative")
+	}
+	if c.MediaMaxImageWidth < 0 {
+		return fmt.Errorf("config: MEDIA_MAX_IMAGE_WIDTH must be non-negative")
+	}
+	if c.MediaMaxImageHeight < 0 {
+		return fmt.Errorf("config: MEDIA_MAX_IMAGE_HEIGHT must be non-negative")
+	}
+	if c.MediaMaxImagePixels < 0 {
+		return fmt.Errorf("config: MEDIA_MAX_IMAGE_PIXELS must be non-negative")
+	}
+	if c.MediaProviderQualityDegradedFailures < 0 {
+		return fmt.Errorf("config: MEDIA_PROVIDER_QUALITY_DEGRADED_FAILURES must be non-negative")
+	}
+	if c.MediaProviderQualityDisabledFailures < 0 {
+		return fmt.Errorf("config: MEDIA_PROVIDER_QUALITY_DISABLED_FAILURES must be non-negative")
+	}
+	if c.MediaProviderQualityRecoverySuccesses < 0 {
+		return fmt.Errorf("config: MEDIA_PROVIDER_QUALITY_RECOVERY_SUCCESSES must be non-negative")
+	}
+	if c.MediaProviderQualityGuardEnabled {
+		if c.MediaProviderQualityDegradedFailures <= 0 {
+			return fmt.Errorf("config: MEDIA_PROVIDER_QUALITY_DEGRADED_FAILURES must be positive when MEDIA_PROVIDER_QUALITY_GUARD_ENABLED=true")
+		}
+		if c.MediaProviderQualityDisabledFailures <= 0 {
+			return fmt.Errorf("config: MEDIA_PROVIDER_QUALITY_DISABLED_FAILURES must be positive when MEDIA_PROVIDER_QUALITY_GUARD_ENABLED=true")
+		}
+		if c.MediaProviderQualityDisabledFailures < c.MediaProviderQualityDegradedFailures {
+			return fmt.Errorf("config: MEDIA_PROVIDER_QUALITY_DISABLED_FAILURES must be >= MEDIA_PROVIDER_QUALITY_DEGRADED_FAILURES")
+		}
+		if c.MediaProviderQualityRecoverySuccesses <= 0 {
+			return fmt.Errorf("config: MEDIA_PROVIDER_QUALITY_RECOVERY_SUCCESSES must be positive when MEDIA_PROVIDER_QUALITY_GUARD_ENABLED=true")
+		}
+	}
+	if c.MediaInputRetentionDays < 0 {
+		return fmt.Errorf("config: MEDIA_INPUT_RETENTION_DAYS must be non-negative")
+	}
+	if c.MediaFailedRetentionDays < 0 {
+		return fmt.Errorf("config: MEDIA_FAILED_RETENTION_DAYS must be non-negative")
+	}
+	if c.MediaOriginalRetentionDays < 0 {
+		return fmt.Errorf("config: MEDIA_ORIGINAL_RETENTION_DAYS must be non-negative")
+	}
+	if c.MediaVariantRetentionDays < 0 {
+		return fmt.Errorf("config: MEDIA_VARIANT_RETENTION_DAYS must be non-negative")
+	}
+	if c.MediaPipelineEnabled && probePolicy == MediaVideoProbePolicyProbeRequired && c.MediaMaxConcurrentProbes == 0 {
+		return fmt.Errorf("config: MEDIA_MAX_CONCURRENT_PROBES must be positive when MEDIA_VIDEO_PROBE_POLICY=probe_required")
+	}
+	if c.MediaPipelineEnabled && c.MediaVideoTranscodeEnabled() && c.MediaMaxConcurrentTranscodes == 0 {
+		return fmt.Errorf("config: MEDIA_MAX_CONCURRENT_TRANSCODES must be positive when MEDIA_VIDEO_TRANSCODE_POLICY=%s", transcodePolicy)
+	}
+	if strings.TrimSpace(c.MediaProviderContractsRaw) != "" {
+		contracts, err := parseMediaProviderContracts(c.MediaProviderContractsRaw)
+		if err != nil {
+			return fmt.Errorf("config: MEDIA_PROVIDER_CONTRACTS_JSON is invalid: %w", err)
+		}
+		for _, contract := range contracts {
+			if err := contract.Validate(); err != nil {
+				return fmt.Errorf("config: MEDIA_PROVIDER_CONTRACTS_JSON: %w", err)
+			}
+		}
+	} else {
+		for _, contract := range c.MediaProviderContracts {
+			if err := contract.Validate(); err != nil {
+				return fmt.Errorf("config: MEDIA_PROVIDER_CONTRACTS_JSON: %w", err)
+			}
 		}
 	}
 	if c.IsProduction() {
@@ -437,13 +653,18 @@ func Load() Config {
 	loadDotenv()
 
 	host, _ := os.Hostname()
+	appEnv := env("APP_ENV", "development")
 	provider := env("PROVIDER", "mock")
 	providerChain := envList("PROVIDER_CHAIN")
 	if len(providerChain) == 0 {
 		providerChain = []string{provider}
 	}
+	mediaPipelineEnabled := envBool("MEDIA_PIPELINE_ENABLED", false)
+	mediaProviderContractsRaw := env("MEDIA_PROVIDER_CONTRACTS_JSON", "")
+	mediaProviderContracts, _ := parseMediaProviderContracts(mediaProviderContractsRaw)
+	artifactRetentionDays := envInt("ARTIFACT_RETENTION_DAYS", 0)
 	return Config{
-		Env:           env("APP_ENV", "development"),
+		Env:           appEnv,
 		HTTPAddr:      env("HTTP_ADDR", ":8080"),
 		DatabaseURL:   env("DATABASE_URL", "postgres://vk_ai_aggregator:vk_ai_aggregator@localhost:5432/vk_ai_aggregator?sslmode=disable"),
 		MigrationsDir: env("MIGRATIONS_DIR", "migrations"),
@@ -502,78 +723,101 @@ func Load() Config {
 		PriceOverrides: envPriceMap("PRICES"),
 		MaxJobCost:     int64(envInt("MAX_JOB_COST", 0)),
 
-		PaymentProvider:                   env("PAYMENT_PROVIDER", "mock"),
-		YooKassaShopID:                    env("YOOKASSA_SHOP_ID", ""),
-		YooKassaSecretKey:                 env("YOOKASSA_SECRET_KEY", ""),
-		YooKassaBaseURL:                   env("YOOKASSA_BASE_URL", "https://api.yookassa.ru/v3"),
-		YooKassaReturnURL:                 env("YOOKASSA_RETURN_URL", ""),
-		YooKassaWebhookIPAllowlistEnabled: envBool("YOOKASSA_WEBHOOK_IP_ALLOWLIST_ENABLED", true),
-		PaymentWebhookRequireHTTPS:        envBool("PAYMENT_WEBHOOK_REQUIRE_HTTPS", false),
-		PaymentWebhookAddr:                env("PAYMENT_WEBHOOK_ADDR", ":8082"),
-		PaymentWebhookPollInterval:        envDuration("PAYMENT_WEBHOOK_POLL_INTERVAL", 5*time.Second),
-		PaymentWebhookBatchLimit:          envInt("PAYMENT_WEBHOOK_BATCH_LIMIT", 20),
-		PaymentReconciliationInterval:     envDuration("PAYMENT_RECONCILIATION_INTERVAL", time.Minute),
-		PaymentReconciliationLimit:        envInt("PAYMENT_RECONCILIATION_LIMIT", 100),
-		PaymentReconciliationStaleAfter:   envDuration("PAYMENT_RECONCILIATION_STALE_AFTER", 30*time.Second),
-		Provider:                          provider,
-		ProviderChain:                     providerChain,
-		ImageProvider:                     env("IMAGE_PROVIDER", ""),
-		VideoProvider:                     env("VIDEO_PROVIDER", ""),
-		ImageModel:                        env("IMAGE_MODEL", ""),
-		ImageSize:                         env("IMAGE_SIZE", ""),
-		VideoModel:                        env("VIDEO_MODEL", ""),
-		VideoDurationSec:                  envInt("VIDEO_DURATION_SEC", 5),
-		VideoResolution:                   env("VIDEO_RESOLUTION", "720p"),
-		VideoAspectRatio:                  env("VIDEO_ASPECT_RATIO", "16:9"),
-		VideoDraft:                        envBool("VIDEO_DRAFT", true),
-		MediaPipelineEnabled:              envBool("MEDIA_PIPELINE_ENABLED", false),
-		FFProbePath:                       env("FFPROBE_PATH", "ffprobe"),
-		FFmpegPath:                        env("FFMPEG_PATH", "ffmpeg"),
-		MediaMaxVideoSizeBytes:            envInt64("MEDIA_MAX_VIDEO_SIZE_BYTES", 256<<20),
-		MediaMaxVideoDurationSec:          envInt("MEDIA_MAX_VIDEO_DURATION_SEC", 60),
-		MediaMaxVideoWidth:                envInt("MEDIA_MAX_VIDEO_WIDTH", 1920),
-		MediaMaxVideoHeight:               envInt("MEDIA_MAX_VIDEO_HEIGHT", 1080),
-		MediaMaxVideoBitrate:              envInt64("MEDIA_MAX_VIDEO_BITRATE", 12000000),
-		MediaAllowedVideoContainers:       envNormalizedList("MEDIA_ALLOWED_VIDEO_CONTAINERS", []string{"mp4", "mov", "webm"}),
-		MediaAllowedVideoCodecs:           envNormalizedList("MEDIA_ALLOWED_VIDEO_CODECS", []string{"h264", "h265", "hevc", "vp8", "vp9", "av1"}),
-		MediaProbeTimeout:                 envDuration("MEDIA_PROBE_TIMEOUT", 10*time.Second),
-		MediaTranscodeTimeout:             envDuration("MEDIA_TRANSCODE_TIMEOUT", 10*time.Minute),
-		OpenAIAPIKey:                      env("OPENAI_API_KEY", ""),
-		OpenAIBaseURL:                     env("OPENAI_BASE_URL", "https://api.openai.com/v1"),
-		OpenAITextModel:                   env("OPENAI_TEXT_MODEL", "gpt-4.1-mini"),
-		OpenAIImageModel:                  env("OPENAI_IMAGE_MODEL", "gpt-image-1"),
-		OpenAIImageSize:                   env("OPENAI_IMAGE_SIZE", "1024x1024"),
-		OpenAIVideoModel:                  env("OPENAI_VIDEO_MODEL", "sora-2"),
-		OpenAIVideoSeconds:                env("OPENAI_VIDEO_SECONDS", "4"),
-		OpenAIVideoSize:                   env("OPENAI_VIDEO_SIZE", "720x1280"),
-		OpenAITextPrice:                   int64(envInt("OPENAI_TEXT_PRICE", 1)),
-		OpenAIImagePrice:                  int64(envInt("OPENAI_IMAGE_PRICE", 10)),
-		OpenAIVideoPrice:                  int64(envInt("OPENAI_VIDEO_PRICE", 50)),
-		DeepInfraAPIKey:                   env("DEEPINFRA_API_KEY", ""),
-		DeepInfraBaseURL:                  env("DEEPINFRA_BASE_URL", "https://api.deepinfra.com/v1/openai"),
-		DeepInfraTextModel:                env("DEEPINFRA_TEXT_MODEL", "deepseek-ai/DeepSeek-V4-Flash"),
-		DeepInfraTextPrice:                int64(envInt("DEEPINFRA_TEXT_PRICE", 1)),
-		DeepInfraImageModel:               env("DEEPINFRA_IMAGE_MODEL", "ByteDance/Seedream-4.5"),
-		DeepInfraImageFallbackModel:       env("DEEPINFRA_IMAGE_FALLBACK_MODEL", ""),
-		DeepInfraImagePrice:               int64(envInt("DEEPINFRA_IMAGE_PRICE", 10)),
-		DeepInfraImageReferenceEnabled:    envBool("DEEPINFRA_IMAGE_REFERENCE_ENABLED", false),
-		DeepInfraVideoModel:               env("DEEPINFRA_VIDEO_MODEL", "PrunaAI/p-video"),
-		DeepInfraVideoDurationSec:         envInt("DEEPINFRA_VIDEO_DURATION_SEC", 5),
-		DeepInfraVideoResolution:          env("DEEPINFRA_VIDEO_RESOLUTION", "720p"),
-		DeepInfraVideoAspectRatio:         env("DEEPINFRA_VIDEO_ASPECT_RATIO", "16:9"),
-		DeepInfraVideoDraft:               envBool("DEEPINFRA_VIDEO_DRAFT", true),
-		DeepInfraVideoPrice:               int64(envInt("DEEPINFRA_VIDEO_PRICE", 10)),
-		DeepInfraVideoHTTPTimeout:         envDuration("DEEPINFRA_VIDEO_HTTP_TIMEOUT", 180*time.Second),
-		TextContextEnabled:                envBool("TEXT_CONTEXT_ENABLED", true),
-		TextContextMaxInputTokens:         envInt("TEXT_CONTEXT_MAX_INPUT_TOKENS", 1600),
-		TextContextMaxOutputTokens:        envInt("TEXT_CONTEXT_MAX_OUTPUT_TOKENS", 800),
-		TextContextSummaryMaxTokens:       envInt("TEXT_CONTEXT_SUMMARY_MAX_TOKENS", 400),
-		TextContextRecentMessagesLimit:    envInt("TEXT_CONTEXT_RECENT_MESSAGES_LIMIT", 6),
-		TextContextSummarizeAfterMessages: envInt("TEXT_CONTEXT_SUMMARIZE_AFTER_MESSAGES", 10),
-		TextContextSummarizeAfterTokens:   envInt("TEXT_CONTEXT_SUMMARIZE_AFTER_TOKENS", 1500),
-		ModerationProvider:                env("MODERATION_PROVIDER", "keyword"),
-		OpenAIModerationModel:             env("OPENAI_MODERATION_MODEL", "omni-moderation-latest"),
-		ArtifactScanner:                   env("ARTIFACT_SCANNER", "none"),
+		PaymentProvider:                       env("PAYMENT_PROVIDER", "mock"),
+		YooKassaShopID:                        env("YOOKASSA_SHOP_ID", ""),
+		YooKassaSecretKey:                     env("YOOKASSA_SECRET_KEY", ""),
+		YooKassaBaseURL:                       env("YOOKASSA_BASE_URL", "https://api.yookassa.ru/v3"),
+		YooKassaReturnURL:                     env("YOOKASSA_RETURN_URL", ""),
+		YooKassaWebhookIPAllowlistEnabled:     envBool("YOOKASSA_WEBHOOK_IP_ALLOWLIST_ENABLED", true),
+		PaymentWebhookRequireHTTPS:            envBool("PAYMENT_WEBHOOK_REQUIRE_HTTPS", false),
+		PaymentWebhookAddr:                    env("PAYMENT_WEBHOOK_ADDR", ":8082"),
+		PaymentWebhookPollInterval:            envDuration("PAYMENT_WEBHOOK_POLL_INTERVAL", 5*time.Second),
+		PaymentWebhookBatchLimit:              envInt("PAYMENT_WEBHOOK_BATCH_LIMIT", 20),
+		PaymentReconciliationInterval:         envDuration("PAYMENT_RECONCILIATION_INTERVAL", time.Minute),
+		PaymentReconciliationLimit:            envInt("PAYMENT_RECONCILIATION_LIMIT", 100),
+		PaymentReconciliationStaleAfter:       envDuration("PAYMENT_RECONCILIATION_STALE_AFTER", 30*time.Second),
+		Provider:                              provider,
+		ProviderChain:                         providerChain,
+		ImageProvider:                         env("IMAGE_PROVIDER", ""),
+		VideoProvider:                         env("VIDEO_PROVIDER", ""),
+		ImageModel:                            env("IMAGE_MODEL", ""),
+		ImageSize:                             env("IMAGE_SIZE", ""),
+		VideoModel:                            env("VIDEO_MODEL", ""),
+		VideoDurationSec:                      envInt("VIDEO_DURATION_SEC", 5),
+		VideoResolution:                       env("VIDEO_RESOLUTION", "720p"),
+		VideoAspectRatio:                      env("VIDEO_ASPECT_RATIO", "16:9"),
+		VideoDraft:                            envBool("VIDEO_DRAFT", true),
+		MediaPipelineEnabled:                  mediaPipelineEnabled,
+		MediaVideoProbePolicy:                 envConfigToken("MEDIA_VIDEO_PROBE_POLICY", defaultMediaVideoProbePolicy(appEnv, mediaPipelineEnabled)),
+		MediaVideoTranscodePolicy:             envConfigToken("MEDIA_VIDEO_TRANSCODE_POLICY", MediaVideoTranscodePolicyNever),
+		MediaDeliverRawProviderVideo:          envConfigToken("MEDIA_DELIVER_RAW_PROVIDER_VIDEO", defaultMediaDeliverRawProviderVideo(appEnv, mediaPipelineEnabled)),
+		FFProbePath:                           env("FFPROBE_PATH", "ffprobe"),
+		FFmpegPath:                            env("FFMPEG_PATH", "ffmpeg"),
+		MediaMaxVideoSizeBytes:                envInt64("MEDIA_MAX_VIDEO_SIZE_BYTES", 256<<20),
+		MediaMaxVideoDurationSec:              envInt("MEDIA_MAX_VIDEO_DURATION_SEC", 60),
+		MediaMaxVideoWidth:                    envInt("MEDIA_MAX_VIDEO_WIDTH", 1920),
+		MediaMaxVideoHeight:                   envInt("MEDIA_MAX_VIDEO_HEIGHT", 1080),
+		MediaMaxVideoBitrate:                  envInt64("MEDIA_MAX_VIDEO_BITRATE", 12000000),
+		MediaAllowedVideoContainers:           envNormalizedList("MEDIA_ALLOWED_VIDEO_CONTAINERS", []string{"mp4", "mov", "webm"}),
+		MediaAllowedVideoCodecs:               envNormalizedList("MEDIA_ALLOWED_VIDEO_CODECS", []string{"h264", "h265", "hevc", "vp8", "vp9", "av1"}),
+		MediaProbeTimeout:                     envDuration("MEDIA_PROBE_TIMEOUT", 10*time.Second),
+		MediaTranscodeTimeout:                 envDuration("MEDIA_TRANSCODE_TIMEOUT", 10*time.Minute),
+		MediaMaxConcurrentProbes:              envInt("MEDIA_MAX_CONCURRENT_PROBES", 2),
+		MediaMaxConcurrentTranscodes:          envInt("MEDIA_MAX_CONCURRENT_TRANSCODES", 1),
+		MediaMaxPendingVariants:               envInt("MEDIA_MAX_PENDING_VARIANTS", 16),
+		MediaMaxActiveVideoJobsPerUser:        envInt("MEDIA_MAX_ACTIVE_VIDEO_JOBS_PER_USER", 1),
+		MediaProviderMaxAttemptsPerJob:        envInt("MEDIA_PROVIDER_MAX_ATTEMPTS_PER_JOB", 1),
+		MediaProviderFallbackBudget:           envInt("MEDIA_PROVIDER_FALLBACK_BUDGET_PER_JOB", 0),
+		MediaQueueDegradeThreshold:            envInt64("MEDIA_QUEUE_DEGRADE_THRESHOLD", 1000),
+		MediaMaxConcurrentUploads:             envInt("MEDIA_MAX_CONCURRENT_UPLOADS", 8),
+		MediaReferenceUploadsEnabled:          envBool("MEDIA_REFERENCE_UPLOADS_ENABLED", defaultMediaReferenceUploadsEnabled(appEnv)),
+		MediaReferenceWebPEnabled:             envBool("MEDIA_REFERENCE_WEBP_ENABLED", false),
+		MediaMaxImageUploadBytes:              envInt64("MEDIA_MAX_IMAGE_UPLOAD_BYTES", 20<<20),
+		MediaMaxImageWidth:                    envInt("MEDIA_MAX_IMAGE_WIDTH", 4096),
+		MediaMaxImageHeight:                   envInt("MEDIA_MAX_IMAGE_HEIGHT", 4096),
+		MediaMaxImagePixels:                   envInt64("MEDIA_MAX_IMAGE_PIXELS", 4096*4096),
+		MediaProviderQualityGuardEnabled:      envBool("MEDIA_PROVIDER_QUALITY_GUARD_ENABLED", false),
+		MediaProviderQualityDegradedFailures:  envInt("MEDIA_PROVIDER_QUALITY_DEGRADED_FAILURES", 3),
+		MediaProviderQualityDisabledFailures:  envInt("MEDIA_PROVIDER_QUALITY_DISABLED_FAILURES", 5),
+		MediaProviderQualityRecoverySuccesses: envInt("MEDIA_PROVIDER_QUALITY_RECOVERY_SUCCESSES", 2),
+		MediaProviderContractsRaw:             mediaProviderContractsRaw,
+		MediaProviderContracts:                mediaProviderContracts,
+		OpenAIAPIKey:                          env("OPENAI_API_KEY", ""),
+		OpenAIBaseURL:                         env("OPENAI_BASE_URL", "https://api.openai.com/v1"),
+		OpenAITextModel:                       env("OPENAI_TEXT_MODEL", "gpt-4.1-mini"),
+		OpenAIImageModel:                      env("OPENAI_IMAGE_MODEL", "gpt-image-1"),
+		OpenAIImageSize:                       env("OPENAI_IMAGE_SIZE", "1024x1024"),
+		OpenAIVideoModel:                      env("OPENAI_VIDEO_MODEL", "sora-2"),
+		OpenAIVideoSeconds:                    env("OPENAI_VIDEO_SECONDS", "4"),
+		OpenAIVideoSize:                       env("OPENAI_VIDEO_SIZE", "720x1280"),
+		OpenAITextPrice:                       int64(envInt("OPENAI_TEXT_PRICE", 1)),
+		OpenAIImagePrice:                      int64(envInt("OPENAI_IMAGE_PRICE", 10)),
+		OpenAIVideoPrice:                      int64(envInt("OPENAI_VIDEO_PRICE", 50)),
+		DeepInfraAPIKey:                       env("DEEPINFRA_API_KEY", ""),
+		DeepInfraBaseURL:                      env("DEEPINFRA_BASE_URL", "https://api.deepinfra.com/v1/openai"),
+		DeepInfraTextModel:                    env("DEEPINFRA_TEXT_MODEL", "deepseek-ai/DeepSeek-V4-Flash"),
+		DeepInfraTextPrice:                    int64(envInt("DEEPINFRA_TEXT_PRICE", 1)),
+		DeepInfraImageModel:                   env("DEEPINFRA_IMAGE_MODEL", "ByteDance/Seedream-4.5"),
+		DeepInfraImageFallbackModel:           env("DEEPINFRA_IMAGE_FALLBACK_MODEL", ""),
+		DeepInfraImagePrice:                   int64(envInt("DEEPINFRA_IMAGE_PRICE", 10)),
+		DeepInfraImageReferenceEnabled:        envBool("DEEPINFRA_IMAGE_REFERENCE_ENABLED", false),
+		DeepInfraVideoModel:                   env("DEEPINFRA_VIDEO_MODEL", "PrunaAI/p-video"),
+		DeepInfraVideoDurationSec:             envInt("DEEPINFRA_VIDEO_DURATION_SEC", 5),
+		DeepInfraVideoResolution:              env("DEEPINFRA_VIDEO_RESOLUTION", "720p"),
+		DeepInfraVideoAspectRatio:             env("DEEPINFRA_VIDEO_ASPECT_RATIO", "16:9"),
+		DeepInfraVideoDraft:                   envBool("DEEPINFRA_VIDEO_DRAFT", true),
+		DeepInfraVideoPrice:                   int64(envInt("DEEPINFRA_VIDEO_PRICE", 10)),
+		DeepInfraVideoHTTPTimeout:             envDuration("DEEPINFRA_VIDEO_HTTP_TIMEOUT", 180*time.Second),
+		TextContextEnabled:                    envBool("TEXT_CONTEXT_ENABLED", true),
+		TextContextMaxInputTokens:             envInt("TEXT_CONTEXT_MAX_INPUT_TOKENS", 1600),
+		TextContextMaxOutputTokens:            envInt("TEXT_CONTEXT_MAX_OUTPUT_TOKENS", 800),
+		TextContextSummaryMaxTokens:           envInt("TEXT_CONTEXT_SUMMARY_MAX_TOKENS", 400),
+		TextContextRecentMessagesLimit:        envInt("TEXT_CONTEXT_RECENT_MESSAGES_LIMIT", 6),
+		TextContextSummarizeAfterMessages:     envInt("TEXT_CONTEXT_SUMMARIZE_AFTER_MESSAGES", 10),
+		TextContextSummarizeAfterTokens:       envInt("TEXT_CONTEXT_SUMMARIZE_AFTER_TOKENS", 1500),
+		ModerationProvider:                    env("MODERATION_PROVIDER", "keyword"),
+		OpenAIModerationModel:                 env("OPENAI_MODERATION_MODEL", "omni-moderation-latest"),
+		ArtifactScanner:                       env("ARTIFACT_SCANNER", "none"),
 
 		VKDeliveryMode:                    env("VK_DELIVERY_MODE", "mock"),
 		VKAccessToken:                     env("VK_ACCESS_TOKEN", ""),
@@ -631,9 +875,13 @@ func Load() Config {
 		FrontendTelemetryEnabled:        envBool("FRONTEND_TELEMETRY_ENABLED", false),
 		FrontendTelemetryUserHashSecret: env("FRONTEND_TELEMETRY_USER_HASH_SECRET", ""),
 
-		ArtifactURLTTL:        envDuration("ARTIFACT_URL_TTL", time.Hour),
-		SignedDelivery:        envBool("SIGNED_DELIVERY", false),
-		ArtifactRetentionDays: envInt("ARTIFACT_RETENTION_DAYS", 0),
+		ArtifactURLTTL:             envDuration("ARTIFACT_URL_TTL", time.Hour),
+		SignedDelivery:             envBool("SIGNED_DELIVERY", false),
+		ArtifactRetentionDays:      artifactRetentionDays,
+		MediaInputRetentionDays:    envInt("MEDIA_INPUT_RETENTION_DAYS", 0),
+		MediaFailedRetentionDays:   envInt("MEDIA_FAILED_RETENTION_DAYS", artifactRetentionDays),
+		MediaOriginalRetentionDays: envInt("MEDIA_ORIGINAL_RETENTION_DAYS", 0),
+		MediaVariantRetentionDays:  envInt("MEDIA_VARIANT_RETENTION_DAYS", artifactRetentionDays),
 
 		WorkerProviderCallTimeout:     envDuration("WORKER_PROVIDER_CALL_TIMEOUT", 180*time.Second),
 		WorkerShutdownGrace:           envDuration("WORKER_SHUTDOWN_GRACE", 30*time.Second),
@@ -694,12 +942,80 @@ func (c Config) usesMockProvider() bool {
 	return false
 }
 
+func (c Config) usesOnlyMockProviders() bool {
+	providers := make([]string, 0, len(c.ProviderChain)+3)
+	providers = append(providers, c.Provider)
+	providers = append(providers, c.ProviderChain...)
+	providers = append(providers, c.ImageProvider, c.VideoProvider)
+	seenProvider := false
+	for _, provider := range providers {
+		provider = strings.ToLower(strings.TrimSpace(provider))
+		if provider == "" {
+			continue
+		}
+		seenProvider = true
+		if provider != "mock" {
+			return false
+		}
+	}
+	return seenProvider
+}
+
 func knownProvider(name string) bool {
 	switch strings.ToLower(strings.TrimSpace(name)) {
 	case "", "mock", "openai", "deepinfra":
 		return true
 	default:
 		return false
+	}
+}
+
+func isProductionEnv(env string) bool {
+	return strings.EqualFold(env, "production") || strings.EqualFold(env, "prod")
+}
+
+func defaultMediaVideoProbePolicy(env string, mediaPipelineEnabled bool) string {
+	if isProductionEnv(env) || mediaPipelineEnabled {
+		return MediaVideoProbePolicyProbeRequired
+	}
+	return MediaVideoProbePolicyDisabled
+}
+
+func defaultMediaReferenceUploadsEnabled(env string) bool {
+	return !isProductionEnv(env)
+}
+
+func defaultMediaDeliverRawProviderVideo(env string, mediaPipelineEnabled bool) string {
+	if isProductionEnv(env) || mediaPipelineEnabled {
+		return MediaDeliverRawProviderVideoIfProbePassed
+	}
+	return MediaDeliverRawProviderVideoAlwaysDevOnly
+}
+
+func validateMediaVideoProbePolicy(policy string) error {
+	switch policy {
+	case MediaVideoProbePolicyDisabled, MediaVideoProbePolicyTrustedProvider, MediaVideoProbePolicyProbeRequired:
+		return nil
+	default:
+		return fmt.Errorf("config: MEDIA_VIDEO_PROBE_POLICY must be disabled, trusted_provider, or probe_required")
+	}
+}
+
+func validateMediaVideoTranscodePolicy(policy string) error {
+	switch policy {
+	case MediaVideoTranscodePolicyNever, MediaVideoTranscodePolicyFallback, MediaVideoTranscodePolicyAlways:
+		return nil
+	default:
+		return fmt.Errorf("config: MEDIA_VIDEO_TRANSCODE_POLICY must be never, fallback, or always")
+	}
+}
+
+func validateMediaDeliverRawProviderVideo(policy string) error {
+	switch policy {
+	case MediaDeliverRawProviderVideoNever, MediaDeliverRawProviderVideoIfProbePassed, MediaDeliverRawProviderVideoAlwaysDevOnly:
+		return nil
+	default:
+		return fmt.Errorf("config: MEDIA_DELIVER_RAW_PROVIDER_VIDEO must be never, if_probe_passed, or always_dev_only")
 	}
 }
 
@@ -778,6 +1094,10 @@ func envDuration(key string, def time.Duration) time.Duration {
 	return def
 }
 
+func envConfigToken(key, def string) string {
+	return normalizeConfigToken(env(key, def))
+}
+
 // envPriceMap parses a comma-separated "op=amount" list into a price map.
 func envPriceMap(key string) map[string]int64 {
 	v := os.Getenv(key)
@@ -835,6 +1155,59 @@ func envNormalizedList(key string, def []string) []string {
 		}
 		seen[item] = struct{}{}
 		out = append(out, item)
+	}
+	return out
+}
+
+func parseMediaProviderContracts(raw string) ([]domain.ProviderMediaContract, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil, nil
+	}
+	dec := json.NewDecoder(strings.NewReader(raw))
+	dec.DisallowUnknownFields()
+	var contracts []domain.ProviderMediaContract
+	if err := dec.Decode(&contracts); err != nil {
+		return nil, err
+	}
+	if err := dec.Decode(&struct{}{}); err != io.EOF {
+		if err == nil {
+			return nil, fmt.Errorf("unexpected trailing JSON value")
+		}
+		return nil, err
+	}
+	if len(contracts) == 0 {
+		return nil, nil
+	}
+	for i := range contracts {
+		contracts[i].AllowedAspectRatios = normalizeLooseList(contracts[i].AllowedAspectRatios)
+		contracts[i].AllowedResolutions = normalizeLooseList(contracts[i].AllowedResolutions)
+		contracts[i].ExpectedContainer = normalizeConfigToken(contracts[i].ExpectedContainer)
+		contracts[i].ExpectedCodec = normalizeConfigToken(contracts[i].ExpectedCodec)
+		contracts[i].ModelClass = normalizeConfigToken(contracts[i].ModelClass)
+		if contracts[i].ProviderIdempotencyGuarantee == "" {
+			contracts[i].ProviderIdempotencyGuarantee = domain.ProviderIdempotencyNone
+		}
+	}
+	return contracts, nil
+}
+
+func normalizeLooseList(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(values))
+	seen := map[string]struct{}{}
+	for _, value := range values {
+		value = strings.ToLower(strings.TrimSpace(value))
+		if value == "" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		out = append(out, value)
 	}
 	return out
 }

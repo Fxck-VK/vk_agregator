@@ -22,6 +22,367 @@ type listResponse[T any] struct {
 	Pagination pagination `json:"pagination"`
 }
 
+// OverviewDTO is a bounded, secret-free operational summary for the first
+// read-only operator dashboard.
+type OverviewDTO struct {
+	GeneratedAt time.Time         `json:"generated_at"`
+	Cards       []OverviewCardDTO `json:"cards"`
+}
+
+// OverviewCardDTO summarizes one product area without raw entity identifiers,
+// payment/provider payloads or private URLs.
+type OverviewCardDTO struct {
+	ID      string              `json:"id"`
+	Title   string              `json:"title"`
+	Status  string              `json:"status"`
+	Summary string              `json:"summary"`
+	Metrics []OverviewMetricDTO `json:"metrics,omitempty"`
+}
+
+// OverviewMetricDTO contains bounded display metrics only.
+type OverviewMetricDTO struct {
+	Label  string `json:"label"`
+	Value  string `json:"value"`
+	Status string `json:"status,omitempty"`
+}
+
+// OperatorJobsDTO is the safe read-only Jobs screen payload. LookupID is an
+// opaque protected-admin lookup value used by the UI to request details; display
+// should prefer DisplayID and safe refs.
+type OperatorJobsDTO struct {
+	GeneratedAt time.Time               `json:"generated_at"`
+	Items       []OperatorJobListItem   `json:"items"`
+	Pagination  pagination              `json:"pagination"`
+	Queue       OperatorQueueSummaryDTO `json:"queue"`
+}
+
+// OperatorJobListItem is a bounded job row without raw user/VK identifiers,
+// prompts, params, provider payloads or private artifact URLs.
+type OperatorJobListItem struct {
+	LookupID       string    `json:"lookup_id"`
+	DisplayID      string    `json:"display_id"`
+	CorrelationRef string    `json:"correlation_ref,omitempty"`
+	Operation      string    `json:"operation"`
+	Modality       string    `json:"modality"`
+	Status         string    `json:"status"`
+	ErrorClass     string    `json:"error_class,omitempty"`
+	CostEstimate   int64     `json:"cost_estimate"`
+	CostReserved   int64     `json:"cost_reserved"`
+	CostCaptured   int64     `json:"cost_captured"`
+	InputCount     int       `json:"input_count"`
+	OutputCount    int       `json:"output_count"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+	AgeSeconds     int64     `json:"age_seconds"`
+}
+
+// OperatorJobDetailDTO is a safe job detail view for operator triage.
+type OperatorJobDetailDTO struct {
+	Job            OperatorJobListItem       `json:"job"`
+	AllowedNext    []string                  `json:"allowed_next_statuses"`
+	Artifacts      OperatorJobArtifactsDTO   `json:"artifacts"`
+	Reservation    *OperatorReservationDTO   `json:"reservation,omitempty"`
+	Delivery       OperatorDeliverySummary   `json:"delivery"`
+	DeliveryEvents []OperatorDeliveryAttempt `json:"delivery_events"`
+}
+
+// OperatorJobArtifactsDTO exposes safe artifact references only.
+type OperatorJobArtifactsDTO struct {
+	InputRefs  []string `json:"input_refs"`
+	OutputRefs []string `json:"output_refs"`
+}
+
+// OperatorReservationDTO shows ledger-backed reservation state without account
+// ids or idempotency keys.
+type OperatorReservationDTO struct {
+	Status    string    `json:"status"`
+	Amount    int64     `json:"amount"`
+	ExpiresAt time.Time `json:"expires_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// OperatorDeliverySummary summarizes persisted delivery attempts.
+type OperatorDeliverySummary struct {
+	Status             string `json:"status"`
+	Attempts           int    `json:"attempts"`
+	RetryCount         int    `json:"retry_count"`
+	LastErrorClass     string `json:"last_error_class,omitempty"`
+	LastArtifactRef    string `json:"last_artifact_ref,omitempty"`
+	LastDeliveryType   string `json:"last_delivery_type,omitempty"`
+	LastDeliveryStatus string `json:"last_delivery_status,omitempty"`
+}
+
+// OperatorDeliveryAttempt is a safe delivery attempt row.
+type OperatorDeliveryAttempt struct {
+	Type        string    `json:"type"`
+	Status      string    `json:"status"`
+	AttemptNo   int       `json:"attempt_no"`
+	ErrorClass  string    `json:"error_class,omitempty"`
+	ArtifactRef string    `json:"artifact_ref,omitempty"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+// OperatorQueueSummaryDTO is a safe worker/queue pressure snapshot. It is
+// derived from persisted job state and explicitly marks missing DLQ/Redis stream
+// sources as not_wired instead of pretending they are healthy.
+type OperatorQueueSummaryDTO struct {
+	GeneratedAt            time.Time                `json:"generated_at"`
+	DegradationState       string                   `json:"degradation_state"`
+	Backlog                []OperatorQueueMetricDTO `json:"backlog"`
+	OldestQueuedAgeSeconds *int64                   `json:"oldest_queued_age_seconds,omitempty"`
+	RetryCount             int                      `json:"retry_count"`
+	DLQ                    OperatorQueueNotWiredDTO `json:"dlq"`
+	ProviderCircuit        OperatorQueueNotWiredDTO `json:"provider_circuit"`
+	Notes                  []string                 `json:"notes,omitempty"`
+}
+
+// OperatorQueueMetricDTO is a bounded queue metric row.
+type OperatorQueueMetricDTO struct {
+	Label  string `json:"label"`
+	Value  string `json:"value"`
+	Status string `json:"status"`
+}
+
+// OperatorQueueNotWiredDTO marks data that needs a dedicated source before the
+// UI can render it as healthy.
+type OperatorQueueNotWiredDTO struct {
+	Status string `json:"status"`
+	Reason string `json:"reason"`
+}
+
+// OperatorProviderControlRoomDTO is a bounded provider/media business-risk view.
+// It uses curated provider/model classes only and never exposes raw model IDs,
+// provider payloads, prompts, private URLs or user identities.
+type OperatorProviderControlRoomDTO struct {
+	GeneratedAt        time.Time                   `json:"generated_at"`
+	Providers          []OperatorProviderHealthDTO `json:"providers"`
+	Fallback           OperatorProviderFallbackDTO `json:"fallback"`
+	ProviderWaste      OperatorRiskSignalDTO       `json:"provider_waste"`
+	DeliveryCaptureGap OperatorRiskSignalDTO       `json:"delivery_capture_gap"`
+	Circuit            OperatorNotWiredSignalDTO   `json:"circuit"`
+	Notes              []string                    `json:"notes,omitempty"`
+}
+
+// OperatorProviderHealthDTO summarizes one curated provider/model class.
+type OperatorProviderHealthDTO struct {
+	ProviderClass       string `json:"provider_class"`
+	ModelClass          string `json:"model_class"`
+	Modality            string `json:"modality"`
+	Health              string `json:"health"`
+	CircuitState        string `json:"circuit_state"`
+	RateLimitCount      int    `json:"rate_limit_count"`
+	ProviderFailedCount int    `json:"provider_failed_count"`
+	InvalidOutputCount  int    `json:"invalid_output_count"`
+	FallbackState       string `json:"fallback_state"`
+	ContractConfigured  bool   `json:"contract_configured"`
+	QualityGuardEnabled bool   `json:"quality_guard_enabled"`
+	Source              string `json:"source"`
+}
+
+// OperatorProviderFallbackDTO reports whether fallback is configured without
+// exposing provider-native routing internals.
+type OperatorProviderFallbackDTO struct {
+	Status          string   `json:"status"`
+	ProviderClasses []string `json:"provider_classes"`
+	Summary         string   `json:"summary"`
+}
+
+// OperatorRiskSignalDTO is a generic bounded risk counter for operator triage.
+type OperatorRiskSignalDTO struct {
+	ID      string `json:"id"`
+	Title   string `json:"title"`
+	Status  string `json:"status"`
+	Value   string `json:"value"`
+	Source  string `json:"source"`
+	Summary string `json:"summary"`
+}
+
+// OperatorNotWiredSignalDTO marks a missing dedicated source explicitly.
+type OperatorNotWiredSignalDTO struct {
+	Status  string `json:"status"`
+	Source  string `json:"source"`
+	Summary string `json:"summary"`
+}
+
+// OperatorMediaSafetyDTO is a read-only safe media-pipeline control room.
+type OperatorMediaSafetyDTO struct {
+	GeneratedAt time.Time               `json:"generated_at"`
+	Policy      OperatorMediaPolicyDTO  `json:"policy"`
+	Uploads     []OperatorRiskSignalDTO `json:"uploads"`
+	Queue       OperatorQueueSummaryDTO `json:"queue"`
+	Processing  []OperatorRiskSignalDTO `json:"processing"`
+	Cleanup     OperatorRiskSignalDTO   `json:"cleanup"`
+	Notes       []string                `json:"notes,omitempty"`
+}
+
+// OperatorMediaPolicyDTO exposes non-secret media flags and limits only.
+type OperatorMediaPolicyDTO struct {
+	PipelineEnabled                 bool   `json:"pipeline_enabled"`
+	ProbePolicy                     string `json:"probe_policy"`
+	TranscodePolicy                 string `json:"transcode_policy"`
+	RawProviderVideoPolicy          string `json:"raw_provider_video_policy"`
+	ReferenceUploadsEnabled         bool   `json:"reference_uploads_enabled"`
+	WebPReferenceEnabled            bool   `json:"webp_reference_enabled"`
+	MaxImageUploadBytes             int64  `json:"max_image_upload_bytes"`
+	MaxImagePixels                  int64  `json:"max_image_pixels"`
+	MaxVideoSizeBytes               int64  `json:"max_video_size_bytes"`
+	MaxVideoDurationSec             int    `json:"max_video_duration_sec"`
+	MaxConcurrentUploads            int    `json:"max_concurrent_uploads"`
+	MaxConcurrentProbes             int    `json:"max_concurrent_probes"`
+	MaxConcurrentTranscodes         int    `json:"max_concurrent_transcodes"`
+	MaxPendingVariants              int    `json:"max_pending_variants"`
+	QueueDegradeThreshold           int64  `json:"queue_degrade_threshold"`
+	ProviderMaxAttemptsPerJob       int    `json:"provider_max_attempts_per_job"`
+	ProviderFallbackBudgetPerJob    int    `json:"provider_fallback_budget_per_job"`
+	ProviderQualityGuardEnabled     bool   `json:"provider_quality_guard_enabled"`
+	ProviderQualityDegradedFailures int    `json:"provider_quality_degraded_failures"`
+	ProviderQualityDisabledFailures int    `json:"provider_quality_disabled_failures"`
+}
+
+// OperatorConfigHealthDTO reports non-secret runtime posture. It deliberately
+// omits secrets, raw model IDs, local binary paths and URLs.
+type OperatorConfigHealthDTO struct {
+	GeneratedAt     time.Time                    `json:"generated_at"`
+	Environment     string                       `json:"environment"`
+	Flags           []OperatorConfigFlagDTO      `json:"flags"`
+	ProviderClasses []OperatorRuntimeProviderDTO `json:"provider_classes"`
+	Notes           []string                     `json:"notes,omitempty"`
+}
+
+// OperatorConfigFlagDTO is a single non-secret config flag.
+type OperatorConfigFlagDTO struct {
+	Key     string `json:"key"`
+	Value   string `json:"value"`
+	Status  string `json:"status"`
+	Summary string `json:"summary"`
+}
+
+// OperatorRuntimeProviderDTO is a curated provider/model class row.
+type OperatorRuntimeProviderDTO struct {
+	ProviderClass      string `json:"provider_class"`
+	ModelClass         string `json:"model_class"`
+	Modality           string `json:"modality"`
+	ContractConfigured bool   `json:"contract_configured"`
+}
+
+// OperatorUsersDTO is the read-only safe user console payload. It never exposes
+// raw VK user ids, names, timezones or internal UUIDs by default.
+type OperatorUsersDTO struct {
+	GeneratedAt time.Time                      `json:"generated_at"`
+	User        *OperatorUserSummaryDTO        `json:"user,omitempty"`
+	RecentJobs  []OperatorUserRecentJobDTO     `json:"recent_jobs,omitempty"`
+	Payment     OperatorUserPaymentSummaryDTO  `json:"payment"`
+	Referrals   OperatorUserReferralSummaryDTO `json:"referrals"`
+	Notes       []string                       `json:"notes,omitempty"`
+}
+
+type OperatorUserSummaryDTO struct {
+	UserRef     string                    `json:"user_ref"`
+	Role        string                    `json:"role"`
+	Status      string                    `json:"status"`
+	Locale      string                    `json:"locale,omitempty"`
+	RiskClass   string                    `json:"risk_class"`
+	FirstSeenAt *time.Time                `json:"first_seen_at,omitempty"`
+	LastSeenAt  *time.Time                `json:"last_seen_at,omitempty"`
+	CreatedAt   time.Time                 `json:"created_at"`
+	UpdatedAt   time.Time                 `json:"updated_at"`
+	AgeSeconds  int64                     `json:"age_seconds"`
+	Jobs        OperatorUserJobSummaryDTO `json:"jobs"`
+}
+
+type OperatorUserJobSummaryDTO struct {
+	Status         string `json:"status"`
+	Total          string `json:"total"`
+	Active         string `json:"active"`
+	Succeeded      string `json:"succeeded"`
+	Failed         string `json:"failed"`
+	TextJobs       string `json:"text_jobs"`
+	ImageJobs      string `json:"image_jobs"`
+	VideoJobs      string `json:"video_jobs"`
+	RecentPageSize int    `json:"recent_page_size"`
+}
+
+type OperatorUserRecentJobDTO struct {
+	DisplayID    string    `json:"display_id"`
+	Operation    string    `json:"operation"`
+	Modality     string    `json:"modality"`
+	Status       string    `json:"status"`
+	ErrorClass   string    `json:"error_class,omitempty"`
+	CostReserved int64     `json:"cost_reserved"`
+	CostCaptured int64     `json:"cost_captured"`
+	CreatedAt    time.Time `json:"created_at"`
+	AgeSeconds   int64     `json:"age_seconds"`
+}
+
+type OperatorUserPaymentSummaryDTO struct {
+	Status           string `json:"status"`
+	Total            int    `json:"total"`
+	Pending          int    `json:"pending"`
+	Succeeded        int    `json:"succeeded"`
+	Failed           int    `json:"failed"`
+	Refunded         int    `json:"refunded"`
+	CreditsPurchased int64  `json:"credits_purchased"`
+}
+
+type OperatorUserReferralSummaryDTO struct {
+	Status     string                    `json:"status"`
+	Code       string                    `json:"code,omitempty"`
+	Invited    int                       `json:"invited"`
+	Registered int                       `json:"registered"`
+	Activated  int                       `json:"activated"`
+	Rewarded   int                       `json:"rewarded"`
+	InvitedBy  *OperatorUserInvitedByDTO `json:"invited_by,omitempty"`
+}
+
+type OperatorUserInvitedByDTO struct {
+	Source       string `json:"source"`
+	Status       string `json:"status"`
+	RewardStatus string `json:"reward_status"`
+}
+
+// OperatorReferralsDTO is a no-PII referral console payload.
+type OperatorReferralsDTO struct {
+	GeneratedAt        time.Time                             `json:"generated_at"`
+	CodeStats          *ReferralStatsDTO                     `json:"code_stats,omitempty"`
+	Distribution       OperatorReferralDistributionDTO       `json:"distribution"`
+	Suspicious         []SuspiciousReferralDTO               `json:"suspicious"`
+	SuspiciousCriteria OperatorReferralSuspiciousCriteriaDTO `json:"suspicious_criteria"`
+	Pagination         pagination                            `json:"pagination"`
+	Notes              []string                              `json:"notes,omitempty"`
+}
+
+type OperatorReferralDistributionDTO struct {
+	RegisteredCount int `json:"registered_count"`
+	ActivatedCount  int `json:"activated_count"`
+	RewardedCount   int `json:"rewarded_count"`
+	Total           int `json:"total"`
+}
+
+type OperatorReferralSuspiciousCriteriaDTO struct {
+	MinRegistered int `json:"min_registered"`
+	MinTotal      int `json:"min_total"`
+}
+
+// OperatorAuditLogDTO is a sanitized read-only operator audit listing.
+type OperatorAuditLogDTO struct {
+	GeneratedAt time.Time               `json:"generated_at"`
+	Items       []OperatorAuditEntryDTO `json:"items"`
+	Pagination  pagination              `json:"pagination"`
+	Notes       []string                `json:"notes,omitempty"`
+}
+
+type OperatorAuditEntryDTO struct {
+	DisplayID  string    `json:"display_id"`
+	ActorRef   string    `json:"actor_ref"`
+	Action     string    `json:"action"`
+	TargetType string    `json:"target_type"`
+	TargetRef  string    `json:"target_ref,omitempty"`
+	Result     string    `json:"result"`
+	RequestRef string    `json:"request_ref,omitempty"`
+	CreatedAt  time.Time `json:"created_at"`
+}
+
 // JobDTO is the admin representation of a job.
 type JobDTO struct {
 	ID                uuid.UUID   `json:"id"`

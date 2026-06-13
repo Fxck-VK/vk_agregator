@@ -3,6 +3,7 @@ import { Button, NativeSelect } from "@vkontakte/vkui";
 import {
   MAX_REFERENCE_ARTIFACTS,
   apiUserMessage,
+  errorLabel,
   estimateJob,
   hasPreviewableMediaResult,
   isTerminal,
@@ -55,7 +56,7 @@ type ReferenceItem = {
 
 const ESTIMATE_DEBOUNCE_MS = 450;
 const PROMPT_LIMIT = 2000;
-const REFERENCE_ACCEPT = "image/jpeg,image/png,image/webp";
+const REFERENCE_ACCEPT = "image/jpeg,image/png";
 const VIDEO_DURATION_OPTIONS = [3, 5, 10] as const;
 type VideoDurationSec = (typeof VIDEO_DURATION_OPTIONS)[number];
 
@@ -180,7 +181,7 @@ function syntheticMessageForJob(job: Job): ChatMessage {
     operation: job.operation,
     status: job.status,
     pending: !done && !previewable,
-    error: failed ? "Не удалось выполнить запрос" : undefined,
+    error: failed ? errorLabel(job) : undefined,
     artifactIds: done || previewable ? job.output_artifact_ids : undefined,
     createdAt: job.created_at,
   };
@@ -1058,7 +1059,7 @@ function StatusScreen({
         }
         text={
           failed
-            ? "Если списание было, оно будет пересчитано автоматически."
+            ? errorLabel(job)
             : preparingResult
               ? "Скачиваем результат, чтобы показать его сразу."
               : "Статус обновится сам, когда результат будет готов."

@@ -4,12 +4,16 @@
 package admin
 
 import (
+	"context"
+	"crypto/sha256"
 	"crypto/subtle"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -23,12 +27,31 @@ const (
 
 	defaultReferralSuspiciousMinRegistered = 10
 	defaultReferralSuspiciousMinTotal      = 50
+
+	overviewCountLimit      = maxLimit + 1
+	overviewStalePaymentAge = 5 * time.Minute
+	overviewStatusOK        = "ok"
+	overviewStatusWarning   = "warning"
+	overviewStatusCritical  = "critical"
+	overviewStatusNotWired  = "not_wired"
+
+	operatorQueueWarningThreshold  = 10
+	operatorQueueCriticalThreshold = 50
 )
+
+type paymentOverviewReader interface {
+	ListIntents(ctx context.Context, filter domain.PaymentIntentFilter, limit, offset int) ([]*domain.PaymentIntent, error)
+	ListEvents(ctx context.Context, filter domain.PaymentEventFilter, limit, offset int) ([]*domain.PaymentEvent, error)
+}
 
 // Config holds admin API settings.
 type Config struct {
-	// Token, when non-empty, must be presented in the X-Admin-Token header.
+	// Token must be presented in the X-Admin-Token header. Empty tokens fail
+	// closed; local/dev callers should set an explicit admin token too.
 	Token string
+	// Runtime is a sanitized non-secret snapshot of runtime policy/config used
+	// by read-only operator views. It must never contain raw secrets or model IDs.
+	Runtime RuntimeSnapshot
 }
 
 // Deps are the repositories the admin API reads from.
@@ -36,9 +59,13 @@ type Deps struct {
 	Jobs       domain.JobRepository
 	Users      domain.UserRepository
 	Deliveries domain.DeliveryRepository
+	Audits     domain.OperatorAuditRepository
 	Referrals  domain.ReferralRepository
 	// Billing is optional; when set, user responses include the credit balance.
 	Billing domain.BillingRepository
+	// Payment is optional; when set, overview can report safe payment/webhook
+	// backlog counters without exposing raw provider payloads.
+	Payment paymentOverviewReader
 }
 
 // Handler serves the admin endpoints.
@@ -55,6 +82,16 @@ func NewHandler(cfg Config, deps Deps) *Handler {
 // Routes returns an http.Handler with the admin routes registered.
 func (h *Handler) Routes() http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /admin/overview", h.auth(h.operatorAction("admin_overview_get", h.getOverview)))
+	mux.HandleFunc("GET /admin/jobs/operator", h.auth(h.operatorAction("admin_operator_jobs_list", h.listOperatorJobs)))
+	mux.HandleFunc("GET /admin/jobs/queue", h.auth(h.operatorAction("admin_operator_queue_get", h.getOperatorQueue)))
+	mux.HandleFunc("GET /admin/jobs/{id}/operator", h.auth(h.operatorAction("admin_operator_job_get", h.getOperatorJob)))
+	mux.HandleFunc("GET /admin/providers/operator", h.auth(h.operatorAction("admin_operator_providers_get", h.getOperatorProviders)))
+	mux.HandleFunc("GET /admin/media-safety/operator", h.auth(h.operatorAction("admin_operator_media_safety_get", h.getOperatorMediaSafety)))
+	mux.HandleFunc("GET /admin/config-health/operator", h.auth(h.operatorAction("admin_operator_config_health_get", h.getOperatorConfigHealth)))
+	mux.HandleFunc("GET /admin/users/operator", h.auth(h.operatorAction("admin_operator_users_get", h.getOperatorUsers)))
+	mux.HandleFunc("GET /admin/referrals/operator", h.auth(h.operatorAction("admin_operator_referrals_get", h.getOperatorReferrals)))
+	mux.HandleFunc("GET /admin/audit/operator", h.auth(h.operatorAction("admin_operator_audit_get", h.getOperatorAudit)))
 	mux.HandleFunc("GET /admin/jobs", h.auth(h.operatorAction("admin_jobs_list", h.listJobs)))
 	mux.HandleFunc("GET /admin/jobs/{id}", h.auth(h.operatorAction("admin_job_get", h.getJob)))
 	mux.HandleFunc("GET /admin/users/{id}", h.auth(h.operatorAction("admin_user_get", h.getUser)))
@@ -65,10 +102,10 @@ func (h *Handler) Routes() http.Handler {
 	return mux
 }
 
-// auth wraps a handler with the optional admin-token check.
+// auth wraps a handler with the admin-token check.
 func (h *Handler) auth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if h.cfg.Token != "" && !adminTokenEqual(r.Header.Get("X-Admin-Token"), h.cfg.Token) {
+		if !adminTokenEqual(r.Header.Get("X-Admin-Token"), h.cfg.Token) {
 			metrics.AuthFailures.WithLabelValues("admin_api", "invalid_admin_token").Inc()
 			writeError(w, http.StatusUnauthorized, "unauthorized")
 			return
@@ -96,6 +133,7 @@ func (h *Handler) operatorAction(action string, next http.HandlerFunc) http.Hand
 			result = "error"
 		}
 		metrics.AdminActions.WithLabelValues(action, result).Inc()
+		h.recordOperatorAudit(r, action, result)
 	}
 }
 
@@ -109,6 +147,133 @@ func adminTokenEqual(got, want string) bool {
 // ---------------------------------------------------------------------------
 // Handlers
 // ---------------------------------------------------------------------------
+
+func (h *Handler) getOverview(w http.ResponseWriter, r *http.Request) {
+	now := time.Now().UTC()
+	cards := []OverviewCardDTO{
+		{
+			ID:      "api",
+			Title:   "API",
+			Status:  overviewStatusOK,
+			Summary: "Protected admin API is responding with a bounded read-only overview.",
+			Metrics: []OverviewMetricDTO{{Label: "auth", Value: "admin token gate"}},
+		},
+		{
+			ID:      "vk_bot",
+			Title:   "VK Bot",
+			Status:  overviewStatusNotWired,
+			Summary: "Live VK control and delivery health needs a dedicated read-only source.",
+		},
+		{
+			ID:      "miniapp",
+			Title:   "Mini App",
+			Status:  overviewStatusNotWired,
+			Summary: "Mini App BFF health is mounted, but per-surface operator health is not wired yet.",
+		},
+		h.workerOverviewCard(r.Context()),
+		h.paymentProcessingOverviewCard(r.Context(), now),
+		h.queueBacklogOverviewCard(r.Context()),
+		{
+			ID:      "active_alerts",
+			Title:   "Active alerts",
+			Status:  overviewStatusNotWired,
+			Summary: "Prometheus and Alertmanager stay private; an aggregated alert-status endpoint is pending.",
+		},
+		h.providerHealthOverviewCard(r.Context()),
+		h.mediaSafetyOverviewCard(r.Context()),
+		h.paymentReconciliationOverviewCard(r.Context(), now),
+	}
+	writeJSON(w, http.StatusOK, OverviewDTO{GeneratedAt: now, Cards: cards})
+}
+
+func (h *Handler) listOperatorJobs(w http.ResponseWriter, r *http.Request) {
+	if h.deps.Jobs == nil {
+		writeError(w, http.StatusServiceUnavailable, "service unavailable")
+		return
+	}
+	limit, offset := parsePagination(r)
+	filter, ok := parseOperatorJobFilter(w, r)
+	if !ok {
+		return
+	}
+	jobs, err := h.deps.Jobs.List(r.Context(), filter, limit+1, offset)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "list operator jobs failed")
+		return
+	}
+	hasMore := len(jobs) > limit
+	if hasMore {
+		jobs = jobs[:limit]
+	}
+	now := time.Now().UTC()
+	items := make([]OperatorJobListItem, 0, len(jobs))
+	for _, job := range jobs {
+		items = append(items, newOperatorJobListItem(job, now))
+	}
+	writeJSON(w, http.StatusOK, OperatorJobsDTO{
+		GeneratedAt: now,
+		Items:       items,
+		Pagination:  pagination{Limit: limit, Offset: offset, Count: len(items), HasMore: hasMore},
+		Queue:       h.operatorQueueSummary(r.Context(), now),
+	})
+}
+
+func (h *Handler) getOperatorQueue(w http.ResponseWriter, r *http.Request) {
+	if h.deps.Jobs == nil {
+		writeError(w, http.StatusServiceUnavailable, "service unavailable")
+		return
+	}
+	now := time.Now().UTC()
+	writeJSON(w, http.StatusOK, h.operatorQueueSummary(r.Context(), now))
+}
+
+func (h *Handler) getOperatorJob(w http.ResponseWriter, r *http.Request) {
+	if h.deps.Jobs == nil {
+		writeError(w, http.StatusServiceUnavailable, "service unavailable")
+		return
+	}
+	id, ok := parseID(w, r)
+	if !ok {
+		return
+	}
+	job, err := h.deps.Jobs.GetByID(r.Context(), id)
+	if err != nil {
+		writeNotFoundOr500(w, err, "get operator job failed")
+		return
+	}
+	now := time.Now().UTC()
+	detail := OperatorJobDetailDTO{
+		Job:         newOperatorJobListItem(job, now),
+		AllowedNext: jobStatusStrings(job.Status.AllowedNextStatuses()),
+		Artifacts: OperatorJobArtifactsDTO{
+			InputRefs:  safeUUIDRefs("artifact", job.InputArtifactIDs),
+			OutputRefs: safeUUIDRefs("artifact", job.OutputArtifactIDs),
+		},
+	}
+	if h.deps.Billing != nil {
+		res, rerr := h.deps.Billing.GetReservationByJob(r.Context(), job.ID)
+		if rerr != nil && !errors.Is(rerr, domain.ErrNotFound) {
+			writeError(w, http.StatusInternalServerError, "get operator reservation failed")
+			return
+		}
+		if res != nil {
+			detail.Reservation = &OperatorReservationDTO{
+				Status:    string(res.Status),
+				Amount:    res.Amount,
+				ExpiresAt: res.ExpiresAt,
+				UpdatedAt: res.UpdatedAt,
+			}
+		}
+	}
+	deliveries, derr := h.operatorDeliveries(r.Context(), job.ID)
+	if derr != nil {
+		writeError(w, http.StatusInternalServerError, "get operator deliveries failed")
+		return
+	}
+	detail.DeliveryEvents = deliveries
+	detail.Delivery = summarizeOperatorDelivery(deliveries)
+	writeJSON(w, http.StatusOK, detail)
+}
 
 func (h *Handler) listJobs(w http.ResponseWriter, r *http.Request) {
 	limit, offset := parsePagination(r)
@@ -299,6 +464,90 @@ func parsePositiveQueryInt(r *http.Request, key string, fallback int) int {
 	return fallback
 }
 
+func parseOperatorJobFilter(w http.ResponseWriter, r *http.Request) (domain.JobFilter, bool) {
+	var filter domain.JobFilter
+	query := r.URL.Query()
+	if status := strings.TrimSpace(query.Get("status")); status != "" {
+		filter.Status = domain.JobStatus(status)
+		if !filter.Status.Valid() {
+			writeError(w, http.StatusBadRequest, "invalid status")
+			return filter, false
+		}
+	}
+	if kind := strings.TrimSpace(query.Get("kind")); kind != "" {
+		if op := domain.OperationType(kind); op.Valid() {
+			filter.Operation = op
+		} else if modality := domain.Modality(kind); modality.Valid() {
+			filter.Modality = modality
+		} else {
+			writeError(w, http.StatusBadRequest, "invalid kind")
+			return filter, false
+		}
+	}
+	if op := strings.TrimSpace(query.Get("operation")); op != "" {
+		filter.Operation = domain.OperationType(op)
+		if !filter.Operation.Valid() {
+			writeError(w, http.StatusBadRequest, "invalid operation")
+			return filter, false
+		}
+	}
+	if modality := strings.TrimSpace(query.Get("modality")); modality != "" {
+		filter.Modality = domain.Modality(modality)
+		if !filter.Modality.Valid() {
+			writeError(w, http.StatusBadRequest, "invalid modality")
+			return filter, false
+		}
+	}
+	if errorClass := strings.TrimSpace(query.Get("error_class")); errorClass != "" {
+		filter.ErrorCode = sanitizeOperatorToken(errorClass)
+		if filter.ErrorCode == "" {
+			writeError(w, http.StatusBadRequest, "invalid error_class")
+			return filter, false
+		}
+	}
+	if corr := strings.TrimSpace(query.Get("correlation_id")); corr != "" {
+		filter.CorrelationID = sanitizeOperatorToken(corr)
+		if filter.CorrelationID == "" {
+			writeError(w, http.StatusBadRequest, "invalid correlation_id")
+			return filter, false
+		}
+	}
+	if raw := strings.TrimSpace(query.Get("created_from")); raw != "" {
+		t, err := time.Parse(time.RFC3339, raw)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid created_from")
+			return filter, false
+		}
+		filter.CreatedFrom = &t
+	}
+	if raw := strings.TrimSpace(query.Get("created_to")); raw != "" {
+		t, err := time.Parse(time.RFC3339, raw)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid created_to")
+			return filter, false
+		}
+		filter.CreatedTo = &t
+	}
+	return filter, true
+}
+
+func sanitizeOperatorToken(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" || len(value) > 128 {
+		return ""
+	}
+	for _, ch := range value {
+		if (ch >= 'a' && ch <= 'z') ||
+			(ch >= 'A' && ch <= 'Z') ||
+			(ch >= '0' && ch <= '9') ||
+			ch == '_' || ch == '-' || ch == ':' || ch == '.' {
+			continue
+		}
+		return ""
+	}
+	return value
+}
+
 func referralCodePathValue(w http.ResponseWriter, r *http.Request) (string, bool) {
 	code := strings.ToUpper(strings.TrimSpace(r.PathValue("code")))
 	if code == "" {
@@ -320,6 +569,398 @@ func suspiciousReferralReasons(stats ReferralStatsDTO, filter domain.ReferralSus
 		reasons = append(reasons, "aggregate_threshold")
 	}
 	return reasons
+}
+
+func (h *Handler) workerOverviewCard(ctx context.Context) OverviewCardDTO {
+	if h.deps.Jobs == nil {
+		return notWiredOverviewCard("workers", "Workers", "Job repository is not configured for worker health summary.")
+	}
+	queued := h.countJobs(ctx, domain.JobStatusQueued)
+	processing := h.countJobsMany(ctx,
+		domain.JobStatusDispatchingProvider,
+		domain.JobStatusProviderSubmitted,
+		domain.JobStatusProviderPending,
+		domain.JobStatusProviderProcessing,
+		domain.JobStatusPostprocessing,
+		domain.JobStatusDelivering,
+	)
+	retryable := h.countJobs(ctx, domain.JobStatusFailedRetryable)
+	terminalFailed := h.countJobs(ctx, domain.JobStatusFailedTerminal)
+	status := overviewStatusOK
+	if retryable.err || terminalFailed.err || queued.err || processing.err || retryable.count > 0 || terminalFailed.count > 0 {
+		status = overviewStatusWarning
+	}
+	return OverviewCardDTO{
+		ID:      "workers",
+		Title:   "Workers",
+		Status:  status,
+		Summary: "Worker state is derived from bounded job-status snapshots.",
+		Metrics: []OverviewMetricDTO{
+			{Label: "queued jobs", Value: queued.display()},
+			{Label: "processing jobs", Value: processing.display()},
+			{Label: "retryable failures", Value: retryable.display(), Status: metricWarningWhenPositive(retryable)},
+			{Label: "terminal failures", Value: terminalFailed.display(), Status: metricWarningWhenPositive(terminalFailed)},
+		},
+	}
+}
+
+func (h *Handler) operatorQueueSummary(ctx context.Context, now time.Time) OperatorQueueSummaryDTO {
+	queued := h.countJobs(ctx, domain.JobStatusQueued)
+	processing := h.countJobsMany(ctx,
+		domain.JobStatusDispatchingProvider,
+		domain.JobStatusProviderSubmitted,
+		domain.JobStatusProviderPending,
+		domain.JobStatusProviderProcessing,
+		domain.JobStatusProviderSucceeded,
+		domain.JobStatusPostprocessing,
+		domain.JobStatusResultReady,
+		domain.JobStatusDelivering,
+	)
+	retryable := h.countJobs(ctx, domain.JobStatusFailedRetryable)
+	terminalFailed := h.countJobs(ctx, domain.JobStatusFailedTerminal)
+	degradation := "normal"
+	if queued.err || processing.err || retryable.err || terminalFailed.err {
+		degradation = "unknown"
+	} else if queued.count >= operatorQueueCriticalThreshold || retryable.count >= operatorQueueWarningThreshold {
+		degradation = "degraded"
+	} else if queued.count > 0 || retryable.count > 0 || terminalFailed.count > 0 {
+		degradation = "watch"
+	}
+	oldestAge := h.oldestQueuedAgeSeconds(ctx, now)
+	return OperatorQueueSummaryDTO{
+		GeneratedAt:      now,
+		DegradationState: degradation,
+		Backlog: []OperatorQueueMetricDTO{
+			operatorQueueMetric("queued", queued, queueMetricStatus(queued, operatorQueueWarningThreshold, operatorQueueCriticalThreshold)),
+			operatorQueueMetric("processing", processing, queueMetricStatus(processing, maxLimit, maxLimit)),
+			operatorQueueMetric("retryable", retryable, queueMetricStatus(retryable, 1, operatorQueueWarningThreshold)),
+			operatorQueueMetric("terminal_failed", terminalFailed, queueMetricStatus(terminalFailed, 1, operatorQueueWarningThreshold)),
+		},
+		OldestQueuedAgeSeconds: oldestAge,
+		RetryCount:             retryable.count,
+		DLQ: OperatorQueueNotWiredDTO{
+			Status: overviewStatusNotWired,
+			Reason: "Dedicated DLQ/Redis stream source is not exposed to admin API yet; terminal failures are shown separately.",
+		},
+		ProviderCircuit: OperatorQueueNotWiredDTO{
+			Status: overviewStatusNotWired,
+			Reason: "Provider circuit state needs a dedicated bounded provider health endpoint before UI can mark it healthy.",
+		},
+		Notes: []string{"Read-only snapshot from persisted job states; no retry or requeue actions are available here."},
+	}
+}
+
+func (h *Handler) queueBacklogOverviewCard(ctx context.Context) OverviewCardDTO {
+	if h.deps.Jobs == nil {
+		return notWiredOverviewCard("queue_backlog", "Queue backlog", "Job repository is not configured for queue summary.")
+	}
+	queued := h.countJobs(ctx, domain.JobStatusQueued)
+	status := overviewStatusOK
+	if queued.err || queued.count > 0 {
+		status = overviewStatusWarning
+	}
+	return OverviewCardDTO{
+		ID:      "queue_backlog",
+		Title:   "Queue backlog",
+		Status:  status,
+		Summary: "Shows queued jobs only; Redis stream and DLQ counters need a dedicated queue endpoint.",
+		Metrics: []OverviewMetricDTO{{Label: "queued jobs", Value: queued.display(), Status: metricWarningWhenPositive(queued)}},
+	}
+}
+
+func (h *Handler) providerHealthOverviewCard(ctx context.Context) OverviewCardDTO {
+	if h.deps.Jobs == nil {
+		return notWiredOverviewCard("provider_health", "Provider health", "Provider health source is not configured.")
+	}
+	providerFailed := h.countJobs(ctx, domain.JobStatusProviderFailed)
+	status := overviewStatusNotWired
+	if providerFailed.err || providerFailed.count > 0 {
+		status = overviewStatusWarning
+	}
+	return OverviewCardDTO{
+		ID:      "provider_health",
+		Title:   "Provider health",
+		Status:  status,
+		Summary: "Provider-specific circuit state is pending; current card only shows bounded provider-failed jobs.",
+		Metrics: []OverviewMetricDTO{{Label: "provider failed jobs", Value: providerFailed.display(), Status: metricWarningWhenPositive(providerFailed)}},
+	}
+}
+
+func (h *Handler) paymentProcessingOverviewCard(ctx context.Context, now time.Time) OverviewCardDTO {
+	if h.deps.Payment == nil {
+		return notWiredOverviewCard("provider_webhook", "Provider webhook", "Payment provider webhook reader is not configured.")
+	}
+	unprocessed := h.countPaymentEvents(ctx, false)
+	pending := h.countPaymentIntents(ctx, domain.PaymentIntentFilter{
+		Statuses: []domain.PaymentIntentStatus{domain.PaymentIntentProviderPending, domain.PaymentIntentWaitingForUser},
+	})
+	staleBefore := now.Add(-overviewStalePaymentAge)
+	stale := h.countPaymentIntents(ctx, domain.PaymentIntentFilter{
+		Statuses:      []domain.PaymentIntentStatus{domain.PaymentIntentProviderPending, domain.PaymentIntentWaitingForUser},
+		UpdatedBefore: &staleBefore,
+	})
+	status := overviewStatusOK
+	if unprocessed.err || pending.err || stale.err || unprocessed.count > 0 || stale.count > 0 {
+		status = overviewStatusWarning
+	}
+	return OverviewCardDTO{
+		ID:      "provider_webhook",
+		Title:   "Provider webhook/payment processing",
+		Status:  status,
+		Summary: "Payment processing health uses safe counts only and never exposes raw provider bodies.",
+		Metrics: []OverviewMetricDTO{
+			{Label: "unprocessed webhooks", Value: unprocessed.display(), Status: metricWarningWhenPositive(unprocessed)},
+			{Label: "pending payment intents", Value: pending.display()},
+			{Label: "stale payment intents", Value: stale.display(), Status: metricWarningWhenPositive(stale)},
+		},
+	}
+}
+
+func (h *Handler) paymentReconciliationOverviewCard(ctx context.Context, now time.Time) OverviewCardDTO {
+	if h.deps.Payment == nil {
+		return notWiredOverviewCard("payment_reconciliation", "Payment reconciliation", "Payment service is not configured for reconciliation summary.")
+	}
+	staleBefore := now.Add(-overviewStalePaymentAge)
+	stale := h.countPaymentIntents(ctx, domain.PaymentIntentFilter{
+		Statuses:      []domain.PaymentIntentStatus{domain.PaymentIntentProviderPending, domain.PaymentIntentWaitingForUser},
+		UpdatedBefore: &staleBefore,
+	})
+	status := overviewStatusOK
+	if stale.err || stale.count > 0 {
+		status = overviewStatusWarning
+	}
+	return OverviewCardDTO{
+		ID:      "payment_reconciliation",
+		Title:   "Payment reconciliation",
+		Status:  status,
+		Summary: "Flags stale provider-backed payment intents that should be reconciled by the backend path.",
+		Metrics: []OverviewMetricDTO{{Label: "stale payment intents", Value: stale.display(), Status: metricWarningWhenPositive(stale)}},
+	}
+}
+
+func notWiredOverviewCard(id, title, summary string) OverviewCardDTO {
+	return OverviewCardDTO{
+		ID:      id,
+		Title:   title,
+		Status:  overviewStatusNotWired,
+		Summary: summary,
+	}
+}
+
+type overviewCount struct {
+	count int
+	err   bool
+}
+
+func (c overviewCount) display() string {
+	if c.err {
+		return "unavailable"
+	}
+	if c.count >= maxLimit {
+		return strconv.Itoa(maxLimit) + "+"
+	}
+	return strconv.Itoa(c.count)
+}
+
+func (h *Handler) countJobs(ctx context.Context, status domain.JobStatus) overviewCount {
+	jobs, err := h.deps.Jobs.List(ctx, domain.JobFilter{Status: status}, overviewCountLimit, 0)
+	if err != nil {
+		return overviewCount{err: true}
+	}
+	return overviewCount{count: boundedOverviewCount(len(jobs))}
+}
+
+func (h *Handler) countJobsMany(ctx context.Context, statuses ...domain.JobStatus) overviewCount {
+	var total int
+	for _, status := range statuses {
+		c := h.countJobs(ctx, status)
+		if c.err {
+			return c
+		}
+		total += c.count
+		if total >= maxLimit {
+			return overviewCount{count: maxLimit}
+		}
+	}
+	return overviewCount{count: total}
+}
+
+func (h *Handler) countPaymentIntents(ctx context.Context, filter domain.PaymentIntentFilter) overviewCount {
+	intents, err := h.deps.Payment.ListIntents(ctx, filter, overviewCountLimit, 0)
+	if err != nil {
+		return overviewCount{err: true}
+	}
+	return overviewCount{count: boundedOverviewCount(len(intents))}
+}
+
+func (h *Handler) countPaymentEvents(ctx context.Context, processed bool) overviewCount {
+	events, err := h.deps.Payment.ListEvents(ctx, domain.PaymentEventFilter{Processed: &processed}, overviewCountLimit, 0)
+	if err != nil {
+		return overviewCount{err: true}
+	}
+	return overviewCount{count: boundedOverviewCount(len(events))}
+}
+
+func boundedOverviewCount(count int) int {
+	if count >= overviewCountLimit {
+		return maxLimit
+	}
+	return count
+}
+
+func metricWarningWhenPositive(count overviewCount) string {
+	if count.err || count.count > 0 {
+		return overviewStatusWarning
+	}
+	return overviewStatusOK
+}
+
+func newOperatorJobListItem(job *domain.Job, now time.Time) OperatorJobListItem {
+	age := int64(0)
+	if !job.CreatedAt.IsZero() {
+		age = int64(now.Sub(job.CreatedAt).Seconds())
+		if age < 0 {
+			age = 0
+		}
+	}
+	return OperatorJobListItem{
+		LookupID:       job.ID.String(),
+		DisplayID:      safeUUIDRef("job", job.ID),
+		CorrelationRef: safeStringRef("corr", job.CorrelationID),
+		Operation:      string(job.OperationType),
+		Modality:       string(job.Modality),
+		Status:         string(job.Status),
+		ErrorClass:     sanitizeOperatorToken(job.ErrorCode),
+		CostEstimate:   job.CostEstimate,
+		CostReserved:   job.CostReserved,
+		CostCaptured:   job.CostCaptured,
+		InputCount:     len(job.InputArtifactIDs),
+		OutputCount:    len(job.OutputArtifactIDs),
+		CreatedAt:      job.CreatedAt,
+		UpdatedAt:      job.UpdatedAt,
+		AgeSeconds:     age,
+	}
+}
+
+func (h *Handler) operatorDeliveries(ctx context.Context, jobID uuid.UUID) ([]OperatorDeliveryAttempt, error) {
+	if h.deps.Deliveries == nil {
+		return nil, nil
+	}
+	deliveries, err := h.deps.Deliveries.ListByJob(ctx, jobID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]OperatorDeliveryAttempt, 0, len(deliveries))
+	for _, d := range deliveries {
+		artifactRef := ""
+		if d.ArtifactID != nil {
+			artifactRef = safeUUIDRef("artifact", *d.ArtifactID)
+		}
+		out = append(out, OperatorDeliveryAttempt{
+			Type:        string(d.Type),
+			Status:      string(d.Status),
+			AttemptNo:   d.AttemptNo,
+			ErrorClass:  sanitizeOperatorToken(d.ErrorCode),
+			ArtifactRef: artifactRef,
+			CreatedAt:   d.CreatedAt,
+			UpdatedAt:   d.UpdatedAt,
+		})
+	}
+	return out, nil
+}
+
+func summarizeOperatorDelivery(events []OperatorDeliveryAttempt) OperatorDeliverySummary {
+	if len(events) == 0 {
+		return OperatorDeliverySummary{Status: "none"}
+	}
+	last := events[len(events)-1]
+	maxAttempt := 0
+	for _, event := range events {
+		if event.AttemptNo > maxAttempt {
+			maxAttempt = event.AttemptNo
+		}
+	}
+	retryCount := maxAttempt - 1
+	if retryCount < 0 {
+		retryCount = 0
+	}
+	return OperatorDeliverySummary{
+		Status:             last.Status,
+		Attempts:           len(events),
+		RetryCount:         retryCount,
+		LastErrorClass:     last.ErrorClass,
+		LastArtifactRef:    last.ArtifactRef,
+		LastDeliveryType:   last.Type,
+		LastDeliveryStatus: last.Status,
+	}
+}
+
+func jobStatusStrings(statuses []domain.JobStatus) []string {
+	out := make([]string, 0, len(statuses))
+	for _, status := range statuses {
+		out = append(out, string(status))
+	}
+	return out
+}
+
+func safeUUIDRefs(prefix string, ids []uuid.UUID) []string {
+	out := make([]string, 0, len(ids))
+	for _, id := range ids {
+		ref := safeUUIDRef(prefix, id)
+		if ref != "" {
+			out = append(out, ref)
+		}
+	}
+	return out
+}
+
+func safeUUIDRef(prefix string, id uuid.UUID) string {
+	if id == uuid.Nil {
+		return ""
+	}
+	return safeStringRef(prefix, id.String())
+}
+
+func safeStringRef(prefix, value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	sum := sha256.Sum256([]byte(value))
+	return prefix + "_" + hex.EncodeToString(sum[:])[:12]
+}
+
+func operatorQueueMetric(label string, count overviewCount, status string) OperatorQueueMetricDTO {
+	return OperatorQueueMetricDTO{Label: label, Value: count.display(), Status: status}
+}
+
+func queueMetricStatus(count overviewCount, warningThreshold, criticalThreshold int) string {
+	if count.err {
+		return "unknown"
+	}
+	if criticalThreshold > 0 && count.count >= criticalThreshold {
+		return "critical"
+	}
+	if warningThreshold > 0 && count.count >= warningThreshold {
+		return overviewStatusWarning
+	}
+	return overviewStatusOK
+}
+
+func (h *Handler) oldestQueuedAgeSeconds(ctx context.Context, now time.Time) *int64 {
+	jobs, err := h.deps.Jobs.List(ctx, domain.JobFilter{Status: domain.JobStatusQueued}, overviewCountLimit, 0)
+	if err != nil || len(jobs) == 0 {
+		return nil
+	}
+	oldest := jobs[len(jobs)-1].CreatedAt
+	if oldest.IsZero() {
+		return nil
+	}
+	age := int64(now.Sub(oldest).Seconds())
+	if age < 0 {
+		age = 0
+	}
+	return &age
 }
 
 func parseID(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {

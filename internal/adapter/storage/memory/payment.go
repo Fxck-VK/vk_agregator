@@ -550,6 +550,29 @@ func (r *PaymentRepo) GetRefundByIdempotencyKey(_ context.Context, key string) (
 	return copyPaymentRefundPtr(refund), nil
 }
 
+func (r *PaymentRepo) ListRefunds(_ context.Context, filter domain.PaymentRefundFilter, limit, offset int) ([]*domain.PaymentRefund, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	matched := make([]domain.PaymentRefund, 0, len(r.refundsByID))
+	for _, refund := range r.refundsByID {
+		if filter.IntentID != nil && refund.IntentID != *filter.IntentID {
+			continue
+		}
+		if filter.Status != "" && refund.Status != filter.Status {
+			continue
+		}
+		matched = append(matched, refund)
+	}
+	sort.Slice(matched, func(i, j int) bool {
+		return matched[i].CreatedAt.After(matched[j].CreatedAt)
+	})
+	var out []*domain.PaymentRefund
+	for i := offset; i < len(matched) && len(out) < limit; i++ {
+		out = append(out, copyPaymentRefundPtr(matched[i]))
+	}
+	return out, nil
+}
+
 func (r *PaymentRepo) SetRefundProviderState(_ context.Context, id uuid.UUID, providerRefundID string, status domain.PaymentRefundStatus) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()

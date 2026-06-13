@@ -177,6 +177,13 @@ var (
 		Help: "Pending Redis Stream entries by stream and consumer group.",
 	}, []string{"stream", "group"})
 
+	// MediaQueueBacklog tracks media-relevant queue pressure by curated queue
+	// class. It must never include raw stream names derived from user input.
+	MediaQueueBacklog = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "vkagg_media_queue_backlog",
+		Help: "Current media-relevant queue backlog by bounded queue class.",
+	}, []string{"queue_class"})
+
 	// StuckJobs tracks jobs that appear stuck in a non-terminal state.
 	StuckJobs = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "vkagg_stuck_jobs",
@@ -203,11 +210,25 @@ var (
 		Help: "Media probe outcomes by operation, modality, result and coarse error class.",
 	}, []string{"result", "operation", "modality", "error_class"})
 
+	// MediaProbeByProvider counts media probe outcomes by provider/model class
+	// without exposing raw model ids, job ids, artifact ids, URLs or prompts.
+	MediaProbeByProvider = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "vkagg_media_probe_total",
+		Help: "Media probe outcomes by bounded provider class, curated model class, result and coarse error class.",
+	}, []string{"result", "error_class", "provider_class", "model_class"})
+
 	// MediaTranscodeResults counts worker-owned media transcode outcomes.
 	MediaTranscodeResults = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "vkagg_media_transcode_results_total",
 		Help: "Media transcode outcomes by operation, modality, variant type, result and coarse error class.",
 	}, []string{"result", "operation", "modality", "variant_type", "error_class"})
+
+	// MediaTranscodeByPolicy counts transcode outcomes by policy. This is the
+	// production-scale view for detecting unexpected ffmpeg usage.
+	MediaTranscodeByPolicy = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "vkagg_media_transcode_total",
+		Help: "Media transcode outcomes by video transcode policy, result and coarse error class.",
+	}, []string{"policy", "result", "error_class"})
 
 	// MediaTranscodeDuration tracks media transcode duration.
 	MediaTranscodeDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
@@ -215,6 +236,15 @@ var (
 		Help:    "Media transcode duration by operation, modality, variant type and result.",
 		Buckets: []float64{0.1, 0.25, 0.5, 1, 2, 5, 10, 30, 60, 120, 300},
 	}, []string{"result", "operation", "modality", "variant_type"})
+
+	// MediaTranscodeCPUSeconds is a wall-duration proxy for ffmpeg CPU pressure.
+	// Exact CPU accounting is platform-specific, so this keeps labels bounded
+	// and operationally useful without parsing raw ffmpeg output.
+	MediaTranscodeCPUSeconds = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "vkagg_media_transcode_cpu_seconds",
+		Help:    "Media transcode CPU pressure proxy by policy, result and coarse error class.",
+		Buckets: []float64{0.1, 0.25, 0.5, 1, 2, 5, 10, 30, 60, 120, 300},
+	}, []string{"policy", "result", "error_class"})
 
 	// MediaBytes tracks bounded media byte distributions without exposing
 	// object keys or URLs.
@@ -224,11 +254,98 @@ var (
 		Buckets: []float64{1024, 16 * 1024, 64 * 1024, 256 * 1024, 1 << 20, 5 << 20, 20 << 20, 100 << 20, 256 << 20},
 	}, []string{"operation", "modality", "variant_type"})
 
+	// UploadValidation counts API-side upload validation decisions with
+	// bounded classes only. Do not add filenames, users, object keys or raw
+	// validation errors as labels.
+	UploadValidation = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "vkagg_upload_validation_total",
+		Help: "Upload validation decisions by result, reason, surface and bounded MIME class.",
+	}, []string{"result", "reason", "surface", "mime_class"})
+
+	// UploadBytes tracks uploaded byte pressure by surface and MIME class.
+	UploadBytes = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "vkagg_upload_bytes",
+		Help:    "Upload byte size distribution by surface and bounded MIME class.",
+		Buckets: []float64{1024, 16 * 1024, 64 * 1024, 256 * 1024, 1 << 20, 5 << 20, 20 << 20, 50 << 20},
+	}, []string{"surface", "mime_class"})
+
+	// UploadPixels tracks decoded image pixel pressure when cheap metadata is
+	// available. It intentionally omits filenames and object identities.
+	UploadPixels = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "vkagg_upload_pixels",
+		Help:    "Upload decoded image pixels by surface and bounded MIME class.",
+		Buckets: []float64{1e4, 1e5, 5e5, 1e6, 2e6, 5e6, 1e7, 2e7, 5e7},
+	}, []string{"surface", "mime_class"})
+
 	// MediaVariantBacklog tracks in-process variant work without job/artifact ids.
 	MediaVariantBacklog = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "vkagg_media_variant_backlog",
 		Help: "Current in-process media variant backlog by operation, modality and variant type.",
 	}, []string{"operation", "modality", "variant_type"})
+
+	// MediaPolicyDecisions counts media policy decisions, including accepted,
+	// rejected, degraded, skipped, fallback and kill-switch outcomes.
+	MediaPolicyDecisions = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "vkagg_media_policy_decisions_total",
+		Help: "Media policy decisions by bounded surface, operation, modality, decision and reason.",
+	}, []string{"surface", "operation", "modality", "decision", "reason"})
+
+	// MediaFastPath counts simplified fast-path decisions for scale alerts.
+	MediaFastPath = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "vkagg_media_fast_path_total",
+		Help: "Simplified media fast-path decisions by bounded result.",
+	}, []string{"result"})
+
+	// MediaVideoFastPath counts worker video postprocessing decisions. Labels are
+	// bounded; model_class must come from product policy, not raw model ids.
+	MediaVideoFastPath = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "vkagg_media_video_fast_path_total",
+		Help: "Video fast-path decisions by result, operation, modality, provider and curated model class.",
+	}, []string{"result", "operation", "modality", "provider", "model_class"})
+
+	// ProviderQualityState exposes the current bounded quality state for a
+	// provider/model_class/modality tuple. model_class must be curated product
+	// policy, not raw provider-native model ids.
+	ProviderQualityState = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "vkagg_provider_quality_state",
+		Help: "Provider quality state by provider, curated model class, modality and state. Exactly one state should be 1 per observed tuple.",
+	}, []string{"provider", "model_class", "modality", "state"})
+
+	// ProviderQualitySamples counts quality samples used by Prometheus recording
+	// rules. Labels are bounded and intentionally exclude job/user/artifact ids.
+	ProviderQualitySamples = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "vkagg_provider_quality_samples_total",
+		Help: "Provider quality samples by provider, curated model class, modality and result.",
+	}, []string{"provider", "model_class", "modality", "result"})
+
+	// ProviderOutputInvalid counts provider successes that later produced
+	// invalid or unusable output in product-owned media processing.
+	ProviderOutputInvalid = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "vkagg_provider_output_invalid_total",
+		Help: "Provider output invalid events by provider, curated model class, modality and bounded reason.",
+	}, []string{"provider", "model_class", "modality", "reason"})
+
+	// ProductMediaWaste counts internal credit units at risk after provider
+	// success but before product delivery/capture. It is not money and must not
+	// include high-cardinality labels.
+	ProductMediaWaste = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "vkagg_product_media_waste_total",
+		Help: "Estimated internal credits wasted or at risk by provider, curated model class, modality and bounded reason.",
+	}, []string{"provider", "model_class", "modality", "reason"})
+
+	// MediaProviderWaste is the media-specific provider waste view requested by
+	// production readiness alerts. provider_class/model_class are curated.
+	MediaProviderWaste = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "vkagg_media_provider_waste_total",
+		Help: "Media provider waste or money-at-risk units by bounded provider class, curated model class and reason.",
+	}, []string{"provider_class", "model_class", "reason"})
+
+	// MediaDeliveryCaptureGap counts cases where media reached delivery/capture
+	// boundary but could not safely complete the product flow.
+	MediaDeliveryCaptureGap = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "vkagg_media_delivery_capture_gap_total",
+		Help: "Media delivery/capture gap events by operation, modality and bounded reason.",
+	}, []string{"operation", "modality", "reason"})
 
 	// MediaCleanupDeleted counts media cleanup deletion outcomes for inactive
 	// artifacts and variants only.
@@ -544,10 +661,14 @@ func init() {
 		PaymentWebhookProcessingErrors, PaymentWebhookUnprocessedEvents,
 		PaymentWebhookOldestUnprocessedAgeSeconds, PaymentProviderErrors,
 		PaymentTopups, PaymentRefunds, PaymentReconciliationMismatches,
-		QueueDepth, QueueOldestAgeSeconds, QueueConsumerLag, StuckJobs,
-		WorkerTaskDuration, WorkerRetries, MediaProbeResults,
-		MediaTranscodeResults, MediaTranscodeDuration, MediaBytes,
-		MediaVariantBacklog, MediaCleanupDeleted, JobsCreated, JobDuration,
+		QueueDepth, QueueOldestAgeSeconds, QueueConsumerLag, MediaQueueBacklog,
+		StuckJobs, WorkerTaskDuration, WorkerRetries, MediaProbeResults,
+		MediaProbeByProvider, MediaTranscodeResults, MediaTranscodeByPolicy,
+		MediaTranscodeDuration, MediaTranscodeCPUSeconds, MediaBytes,
+		UploadValidation, UploadBytes, UploadPixels, MediaVariantBacklog,
+		MediaPolicyDecisions, MediaFastPath, MediaVideoFastPath, ProviderQualityState,
+		ProviderQualitySamples, ProviderOutputInvalid, ProductMediaWaste,
+		MediaProviderWaste, MediaDeliveryCaptureGap, MediaCleanupDeleted, JobsCreated, JobDuration,
 		ProductEvents, ProductActiveUserEvents, ProductActiveUsers, ProductPromptLength,
 		JobStatusCurrent, JobRejected, ProviderRequests, ProviderRequestDuration,
 		ProviderErrors, ProviderRateLimits, ProviderFallback, ProviderCircuitState,
@@ -700,6 +821,16 @@ func AddProductCreditsFlow(source, flow, result string, credits int64) {
 	).Add(float64(credits))
 }
 
+// SetMediaQueueBacklog sets media-relevant backlog for a bounded queue class.
+func SetMediaQueueBacklog(queueClass string, backlog int64) {
+	if backlog < 0 {
+		backlog = 0
+	}
+	MediaQueueBacklog.WithLabelValues(
+		ProductLabel(queueClass, "unknown"),
+	).Set(float64(backlog))
+}
+
 // ObserveMediaProbe records one worker-owned media probe outcome.
 func ObserveMediaProbe(result, operation, modality, errorClass string) {
 	MediaProbeResults.WithLabelValues(
@@ -710,6 +841,16 @@ func ObserveMediaProbe(result, operation, modality, errorClass string) {
 	).Inc()
 }
 
+// ObserveMediaProbeByProvider records provider/model-class probe outcomes.
+func ObserveMediaProbeByProvider(result, errorClass, providerClass, modelClass string) {
+	MediaProbeByProvider.WithLabelValues(
+		ProductLabel(result, "unknown"),
+		ProductLabel(errorClass, "none"),
+		ProductLabel(providerClass, "unknown"),
+		ProductLabel(modelClass, "unknown"),
+	).Inc()
+}
+
 // ObserveMediaTranscode records one worker-owned media transcode outcome.
 func ObserveMediaTranscode(result, operation, modality, variantType, errorClass string) {
 	MediaTranscodeResults.WithLabelValues(
@@ -717,6 +858,15 @@ func ObserveMediaTranscode(result, operation, modality, variantType, errorClass 
 		ProductLabel(operation, "unknown"),
 		ProductLabel(modality, "unknown"),
 		ProductLabel(variantType, "unknown"),
+		ProductLabel(errorClass, "none"),
+	).Inc()
+}
+
+// ObserveMediaTranscodeByPolicy records transcode outcomes by policy.
+func ObserveMediaTranscodeByPolicy(policy, result, errorClass string) {
+	MediaTranscodeByPolicy.WithLabelValues(
+		ProductLabel(policy, "unknown"),
+		ProductLabel(result, "unknown"),
 		ProductLabel(errorClass, "none"),
 	).Inc()
 }
@@ -734,6 +884,19 @@ func ObserveMediaTranscodeDuration(result, operation, modality, variantType stri
 	).Observe(duration.Seconds())
 }
 
+// ObserveMediaTranscodeCPUSeconds records a bounded wall-duration proxy for CPU
+// pressure from ffmpeg work.
+func ObserveMediaTranscodeCPUSeconds(policy, result, errorClass string, duration time.Duration) {
+	if duration <= 0 {
+		return
+	}
+	MediaTranscodeCPUSeconds.WithLabelValues(
+		ProductLabel(policy, "unknown"),
+		ProductLabel(result, "unknown"),
+		ProductLabel(errorClass, "none"),
+	).Observe(duration.Seconds())
+}
+
 // ObserveMediaBytes records positive media object sizes only.
 func ObserveMediaBytes(operation, modality, variantType string, sizeBytes int64) {
 	if sizeBytes <= 0 {
@@ -746,6 +909,38 @@ func ObserveMediaBytes(operation, modality, variantType string, sizeBytes int64)
 	).Observe(float64(sizeBytes))
 }
 
+// ObserveMediaUploadValidation records a bounded upload validation decision.
+func ObserveMediaUploadValidation(surface, result, reason, mimeClass string) {
+	UploadValidation.WithLabelValues(
+		ProductLabel(result, "unknown"),
+		ProductLabel(reason, "unknown"),
+		ProductLabel(surface, "unknown"),
+		ProductLabel(mimeClass, "unknown"),
+	).Inc()
+}
+
+// ObserveMediaUploadBytes records positive upload byte sizes.
+func ObserveMediaUploadBytes(surface, mimeClass string, sizeBytes int64) {
+	if sizeBytes <= 0 {
+		return
+	}
+	UploadBytes.WithLabelValues(
+		ProductLabel(surface, "unknown"),
+		ProductLabel(mimeClass, "unknown"),
+	).Observe(float64(sizeBytes))
+}
+
+// ObserveMediaUploadPixels records positive decoded image pixel counts.
+func ObserveMediaUploadPixels(surface, mimeClass string, pixels int64) {
+	if pixels <= 0 {
+		return
+	}
+	UploadPixels.WithLabelValues(
+		ProductLabel(surface, "unknown"),
+		ProductLabel(mimeClass, "unknown"),
+	).Observe(float64(pixels))
+}
+
 // AddMediaVariantBacklog updates the in-process media variant backlog.
 func AddMediaVariantBacklog(operation, modality, variantType string, delta float64) {
 	if delta == 0 {
@@ -756,6 +951,110 @@ func AddMediaVariantBacklog(operation, modality, variantType string, delta float
 		ProductLabel(modality, "unknown"),
 		ProductLabel(variantType, "unknown"),
 	).Add(delta)
+}
+
+// ObserveMediaPolicyDecision records product-level media policy decisions.
+func ObserveMediaPolicyDecision(surface, operation, modality, decision, reason string) {
+	MediaPolicyDecisions.WithLabelValues(
+		ProductLabel(surface, "unknown"),
+		ProductLabel(operation, "unknown"),
+		ProductLabel(modality, "unknown"),
+		ProductLabel(decision, "unknown"),
+		ProductLabel(reason, "unknown"),
+	).Inc()
+}
+
+// ObserveMediaFastPath records simplified fast-path decisions.
+func ObserveMediaFastPath(result string) {
+	MediaFastPath.WithLabelValues(
+		ProductLabel(result, "unknown"),
+	).Inc()
+}
+
+// ObserveMediaVideoFastPath records one bounded video postprocessing decision.
+func ObserveMediaVideoFastPath(result, operation, modality, provider, modelClass string) {
+	MediaVideoFastPath.WithLabelValues(
+		ProductLabel(result, "unknown"),
+		ProductLabel(operation, "unknown"),
+		ProductLabel(modality, "unknown"),
+		ProductLabel(provider, "unknown"),
+		ProductLabel(modelClass, "unknown"),
+	).Inc()
+}
+
+// ObserveProviderQualityState sets a one-hot quality state gauge. State values
+// are bounded to healthy/degraded/disabled.
+func ObserveProviderQualityState(provider, modelClass, modality, state string) {
+	state = ProductLabel(state, "healthy")
+	switch state {
+	case "healthy", "degraded", "disabled":
+	default:
+		state = "healthy"
+	}
+	provider = ProductLabel(provider, "unknown")
+	modelClass = ProductLabel(modelClass, "unknown")
+	modality = ProductLabel(modality, "unknown")
+	for _, candidate := range []string{"healthy", "degraded", "disabled"} {
+		value := 0.0
+		if candidate == state {
+			value = 1
+		}
+		ProviderQualityState.WithLabelValues(provider, modelClass, modality, candidate).Set(value)
+	}
+}
+
+// ObserveProviderQualitySample records a bounded quality sample.
+func ObserveProviderQualitySample(provider, modelClass, modality, result string) {
+	ProviderQualitySamples.WithLabelValues(
+		ProductLabel(provider, "unknown"),
+		ProductLabel(modelClass, "unknown"),
+		ProductLabel(modality, "unknown"),
+		ProductLabel(result, "unknown"),
+	).Inc()
+}
+
+// ObserveProviderOutputInvalid records unusable provider media output.
+func ObserveProviderOutputInvalid(provider, modelClass, modality, reason string) {
+	ProviderOutputInvalid.WithLabelValues(
+		ProductLabel(provider, "unknown"),
+		ProductLabel(modelClass, "unknown"),
+		ProductLabel(modality, "unknown"),
+		ProductLabel(reason, "unknown"),
+	).Inc()
+}
+
+// AddProductMediaWaste records bounded internal credit waste/risk units.
+func AddProductMediaWaste(provider, modelClass, modality, reason string, credits int64) {
+	if credits <= 0 {
+		credits = 1
+	}
+	ProductMediaWaste.WithLabelValues(
+		ProductLabel(provider, "unknown"),
+		ProductLabel(modelClass, "unknown"),
+		ProductLabel(modality, "unknown"),
+		ProductLabel(reason, "unknown"),
+	).Add(float64(credits))
+}
+
+// AddMediaProviderWaste records media-specific provider waste/risk units.
+func AddMediaProviderWaste(providerClass, modelClass, reason string, credits int64) {
+	if credits <= 0 {
+		credits = 1
+	}
+	MediaProviderWaste.WithLabelValues(
+		ProductLabel(providerClass, "unknown"),
+		ProductLabel(modelClass, "unknown"),
+		ProductLabel(reason, "unknown"),
+	).Add(float64(credits))
+}
+
+// ObserveMediaDeliveryCaptureGap records delivery/capture boundary failures.
+func ObserveMediaDeliveryCaptureGap(operation, modality, reason string) {
+	MediaDeliveryCaptureGap.WithLabelValues(
+		ProductLabel(operation, "unknown"),
+		ProductLabel(modality, "unknown"),
+		ProductLabel(reason, "unknown"),
+	).Inc()
 }
 
 // ObserveMediaCleanupDeleted records one media cleanup outcome.

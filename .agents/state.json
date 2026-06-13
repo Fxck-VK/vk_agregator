@@ -21,13 +21,12 @@
                                                          "docs/VK_BOT_AGENT_GUIDE.md"
                                                      ],
                         "do_not_read_by_default":  [
-                                                       "docs/archive/**",
                                                        ".agents/logs/**"
                                                    ],
-                        "history_read_condition":  "Only read archive/logs when explicitly asked for history, debugging a repeated known error, regression archaeology, or old audit details."
+                        "history_read_condition":  "Only read logs when explicitly asked for history, debugging a repeated known error, regression archaeology, or old audit details."
                     },
     "progress":  {
-                     "current_focus":  "Product-wide observability/statistics V2 implementation is complete locally: product-wide metrics, reports, alerts, synthetics, exact scheduled active-user aggregates, sanitized traces and trace-aware logging are in place.",
+                     "current_focus":  "No active generated execution plan is currently in progress. Completed observability, frontend quality and media safety work is summarized in TASKS.md.",
                      "vk_bot_video_mode":  {
                                                "status":  "prunaai_button_enabled",
                                                "summary":  "VK video model picker exposes PrunaAI and Back. PrunaAI stores peer-scoped video mode; the next plain text creates a video_generate Job through worker/provider flow. Stale Sora/Kling/Seedance/Haiuo payloads fall back to Show Menu and do not create Jobs. VK video delivery supports VK_VIDEO_DELIVERY_MODE=doc for mp4 file attachments and VK_VIDEO_DELIVERY_MODE=video for native VK video attachments through VK_VIDEO_ACCESS_TOKEN.",
@@ -106,13 +105,8 @@
                                              "date":  "2026-06-10",
                                              "active_human_backlog":  "TASKS.md",
                                              "archived_legacy_docs":  [
-                                                                          "docs/archive/2026-06/TASKS.legacy.md",
-                                                                          "docs/archive/2026-06/ROADMAP.legacy.md",
-                                                                          "docs/archive/2026-06/TESTING.legacy.md",
-                                                                          "docs/archive/2026-06/BILLING_AGENT_HANDOFF.legacy.md",
-                                                                          "docs/archive/2026-06/MERGE_HANDOFF.integration-web-backend.legacy.md"
                                                                       ],
-                                             "policy":  "Keep active docs short and current; use docs/archive/** only for historical investigation or explicitly requested archaeology."
+                                             "policy":  "Keep completed work summarized in TASKS.md; do not keep generated execution plans, merge handoff context, or prompt scratch files as active repo context."
                                          }
                  },
     "doc_update_policy":  {
@@ -141,40 +135,10 @@
                     "error":  ".agents/schemas/error.schema.json"
                 },
     "active_plans":  {
-                         "product_statistics_observability":  {
-                                                                  "status":  "complete",
-                                                                  "plan":  ".agents/plans/product_statistics_observability.json",
-                                                                  "schema":  ".agents/schemas/product_observability_plan.schema.json",
-                                                                  "mode":  "IMPLEMENT",
-                                                                  "runtime_target":  "vps_docker_compose",
-                                                                  "notes":  [
-                                                                                "Product statistics observability implementation is complete in the local repository and should be treated as current context.",
-                                                                                "The previous product_observability plan was complete and removed from .agents/plans to avoid stale active context.",
-                                                                                "Keep implementation local-repository first unless a later task explicitly asks for VPS or Cloudflare changes.",
-                                                                                "Do not expose metrics/Grafana/Prometheus/Loki/Tempo publicly.",
-                                                                                "Do not log or commit secrets, prompts, full launch params, raw PII, raw provider payloads or raw payment payloads."
-                                                                            ]
-                                                              },
-                         "product_observability_v2":  {
-                                                          "status":  "complete",
-                                                          "plan":  ".agents/plans/product_observability_v2.json",
-                                                          "schema":  ".agents/schemas/product_observability_plan.schema.json",
-                                                          "mode":  "IMPLEMENT",
-                                                          "runtime_target":  "vps_docker_compose_first",
-                                                          "notes":  [
-                                                                        "This is the next product-wide observability/statistics plan and covers VK Bot, VK Mini App, jobs, workers, providers, payments, billing, referrals, artifacts, admin/operator APIs and future website readiness.",
-                                                                        "Treat .agents/plans/product_statistics_observability.json as completed baseline context, not as the active implementation target.",
-                                                                        "Keep all observability endpoints private and never expose /metrics publicly.",
-                                                                        "Do not add high-cardinality metric labels such as user_id, vk_user_id, job_id, payment_id, artifact_id, referral_code, raw_error, raw_url, prompt or idempotency_key.",
-                                                                        "Do not log, trace, alert, report or dashboard secrets, prompts, full launch params, raw PII, raw provider payloads, raw payment payloads or private artifact URLs.",
-                                                                        "Do not run live YooKassa money actions or real provider-spend synthetics without separate explicit confirmation.",
-                                                                        "V2 implementation added bounded admin action metrics, exact scheduled active-user aggregate gauge, daily/weekly report specs, provider/worker/payment/security/referral alerts, synthetic runner refinements, sanitized trace error classes and trace-aware runtime logging."
-                                                                    ]
-                                                      }
                      },
     "archive":  {
-                    "root":  "docs/archive",
-                    "policy":  "Historical evidence only, not current instruction."
+                    "root":  "",
+                    "policy":  "Generated plan/archive context should be removed after completion and summarized in TASKS.md."
                 },
     "security_invariants":  [
                                 "no secrets, full launch params, prompt bodies, private artifact URLs, raw PII or provider credentials in docs/logs",
