@@ -18,6 +18,10 @@ web/miniapp/dist/
 web/miniapp/.vite/
 web/miniapp/test-results/
 web/miniapp/playwright-report/
+web/admin/dist/
+web/admin/.vite/
+web/admin/test-results/
+web/admin/playwright-report/
 
 # Environment and secrets (.env.ps1 is covered by .env.*)
 .env
