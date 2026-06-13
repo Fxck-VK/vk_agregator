@@ -494,6 +494,20 @@ in memory by default; do not expose the console publicly. The UI calls only
 protected backend `/admin/*` and `/billing/*` endpoints and does not persist the
 token in `localStorage`.
 
+Full local observability startup also starts the admin console by default:
+
+```powershell
+.\scripts\dev\start-observability.ps1 -NoWait -OpenGrafana -OpenAdmin
+```
+
+It starts Docker dependencies, migrations, `cmd/api`, `cmd/worker`,
+`cmd/provider-webhook`, the Mini App frontend and the Admin UI. Default local
+Admin UI URL is `http://127.0.0.1:5175`; enter `ADMIN_TOKEN` from local `.env`.
+Use `-SkipAdmin` to skip the Admin UI, `-AdminPort <port>` to change its local
+port, `-ApiPort <port>` to make the Admin UI proxy to a non-default local API,
+and `-StopOnly` to stop app processes. The Admin UI is local-only and must not
+be exposed publicly.
+
 API wiring map:
 
 - `cmd/api/main.go` is the thin bootstrap: config validation, tracing,

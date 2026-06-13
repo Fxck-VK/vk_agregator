@@ -29,72 +29,72 @@ type Screen = {
 const screens: readonly Screen[] = [
   {
     id: "overview",
-    title: "Overview",
-    eyebrow: "Product health",
-    summary: "API, workers, queues, payments and alerts in one read-only surface.",
-    panels: ["API readiness", "Worker queues", "Payment webhook", "Active alerts"],
+    title: "Обзор",
+    eyebrow: "Здоровье продукта",
+    summary: "API, воркеры, очереди, платежи и алерты в одной безопасной панели.",
+    panels: ["Готовность API", "Очереди воркеров", "Платежные вебхуки", "Активные алерты"],
   },
   {
     id: "jobs",
-    title: "Jobs",
-    eyebrow: "Execution state",
-    summary: "Search, filters and job detail will use safe backend DTOs only.",
-    panels: ["Status filters", "Delivery state", "Reservation state", "Bounded errors"],
+    title: "Задачи",
+    eyebrow: "Выполнение",
+    summary: "Поиск, фильтры, статусы, очереди, доставки и безопасные детали job.",
+    panels: ["Фильтры статуса", "Состояние доставки", "Резервы баланса", "Классы ошибок"],
   },
   {
     id: "users",
-    title: "Users",
-    eyebrow: "Operator lookup",
-    summary: "User views stay minimal by default and avoid raw PII-heavy output.",
-    panels: ["Safe profile", "Balance snapshot", "Recent jobs", "Payment summary"],
+    title: "Пользователи",
+    eyebrow: "Поиск оператора",
+    summary: "Безопасные сводки пользователей без raw PII и лишних идентификаторов.",
+    panels: ["Безопасный профиль", "Баланс", "Последние задачи", "Сводка платежей"],
   },
   {
     id: "payments",
-    title: "Payments",
-    eyebrow: "Ledger-backed billing",
-    summary: "Payment state comes from protected billing endpoints, not redirects.",
-    panels: ["Intent history", "Webhook inbox", "Reconciliation", "Refund state"],
+    title: "Платежи",
+    eyebrow: "Ledger-биллинг",
+    summary: "Платежи, ledger, reconciliation и возвраты только из защищенного backend.",
+    panels: ["История intents", "Webhook inbox", "Reconciliation", "Возвраты"],
   },
   {
     id: "providers",
-    title: "Providers",
-    eyebrow: "Model health",
-    summary: "Provider visibility uses curated classes and bounded status labels.",
-    panels: ["Circuit state", "Rate limits", "Fallback health", "Waste tracking"],
+    title: "Провайдеры",
+    eyebrow: "Модели",
+    summary: "Здоровье provider/model классов, circuit breaker, fallback и потери денег.",
+    panels: ["Circuit state", "Rate limits", "Fallback", "Provider waste"],
   },
   {
     id: "media",
-    title: "Media Safety",
-    eyebrow: "Upload and video policy",
-    summary: "Media safety screens show policy decisions without raw URLs or storage keys.",
-    panels: ["Upload rejects", "Probe policy", "Fast path", "Queue pressure"],
+    title: "Медиа-безопасность",
+    eyebrow: "Политики медиа",
+    summary: "Политики загрузок, видео fast path, очереди и media risks без private URLs.",
+    panels: ["Отклонения upload", "Probe policy", "Fast path", "Давление очередей"],
   },
   {
     id: "referrals",
-    title: "Referrals",
-    eyebrow: "Aggregate abuse signals",
-    summary: "Referral views expose code-level aggregates without invited-user lists.",
-    panels: ["Code stats", "Suspicious volume", "Activation ratio", "Future freeze flag"],
+    title: "Рефералы",
+    eyebrow: "Агрегаты и abuse",
+    summary: "Статистика referral-кодов и подозрительная активность без списков приглашенных.",
+    panels: ["Статистика кодов", "Подозрительный объем", "Активация", "Freeze flag"],
   },
   {
     id: "alerts",
-    title: "Alerts",
-    eyebrow: "Operational incidents",
-    summary: "Alerts should explain impact and next check without sensitive payloads.",
-    panels: ["Critical alerts", "Money risk", "Provider risk", "Security config"],
+    title: "Алерты",
+    eyebrow: "Инциденты",
+    summary: "Операционные предупреждения: что случилось, где смотреть и что чинить.",
+    panels: ["Критичные алерты", "Риск денег", "Риск провайдеров", "Security config"],
   },
   {
     id: "audit",
-    title: "Audit Log",
-    eyebrow: "Operator actions",
-    summary: "Mutation actions will require reason, idempotency and audit records.",
-    panels: ["Actor", "Action", "Target", "Result"],
+    title: "Аудит",
+    eyebrow: "Действия оператора",
+    summary: "Журнал операторских действий, причин, результатов и correlation/request id.",
+    panels: ["Кто сделал", "Действие", "Цель", "Результат"],
   },
   {
     id: "config",
-    title: "Config Health",
-    eyebrow: "Non-secret flags",
-    summary: "Config health must show only flags, readiness and policy classes.",
+    title: "Конфиг",
+    eyebrow: "Несекретные флаги",
+    summary: "Только безопасные runtime-флаги, readiness и policy-классы без секретов.",
     panels: ["Admin auth", "Media flags", "Provider flags", "Webhook posture"],
   },
 ];
@@ -121,9 +121,9 @@ class ErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryStat
       return (
         <main className="shell__content" role="alert">
           <section className="surface surface--alert">
-            <p className="eyebrow">Safe fallback</p>
-            <h1>Operator console error</h1>
-            <p>The screen stopped without rendering internal details.</p>
+            <p className="eyebrow">Безопасный fallback</p>
+            <h1>Ошибка админки</h1>
+            <p>Экран остановлен без вывода внутренних деталей.</p>
           </section>
         </main>
       );
@@ -141,21 +141,21 @@ function statusLabel(status: OverviewCardDTO["status"]): string {
     return "OK";
   }
   if (status === "warning") {
-    return "Warning";
+    return "Внимание";
   }
   if (status === "critical") {
-    return "Critical";
+    return "Критично";
   }
-  return "Not wired";
+  return "Не подключено";
 }
 
 function formatGeneratedAt(value?: string): string {
   if (!value) {
-    return "not loaded";
+    return "не загружено";
   }
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
-    return "not loaded";
+    return "не загружено";
   }
   return date.toLocaleString(undefined, {
     dateStyle: "medium",
@@ -167,17 +167,18 @@ export function App() {
   const [activeScreen, setActiveScreen] = useState<ScreenId>("overview");
   const [tokenDraft, setTokenDraft] = useState("");
   const [adminToken, setAdminToken] = useState("");
+  const [loginError, setLoginError] = useState("");
   const [overview, setOverview] = useState<OverviewState>({ loading: false });
   const screen = findScreen(activeScreen);
-  const sessionState = adminToken ? "Protected session" : "Token required";
-  const tokenState = adminToken ? "in memory" : "not set";
+  const sessionState = adminToken ? "Доступ открыт" : "Нужен токен";
+  const tokenState = adminToken ? "только в памяти вкладки" : "не введен";
   const adminClient = useMemo(() => createAdminClient({ tokenProvider: () => adminToken }), [adminToken]);
   const riskSummary = useMemo(
     () => [
-      "read-only dashboard",
-      "no direct provider calls",
-      "no localStorage token",
-      "no mutation actions",
+      "внутренняя панель",
+      "токен только в памяти",
+      "без прямого доступа к БД",
+      "provider/billing только через backend",
     ],
     [],
   );
@@ -197,7 +198,15 @@ export function App() {
       .then((data) => setOverview({ data, loading: false }))
       .catch((error: unknown) => {
         if (!controller.signal.aborted) {
-          setOverview({ error: toSafeAdminError(error), loading: false });
+          const safeError = toSafeAdminError(error);
+          if (safeError.code === "admin_auth_required" || safeError.code === "admin_forbidden") {
+            setAdminToken("");
+            setTokenDraft("");
+            setLoginError("Токен не принят. Проверьте локальный ADMIN_TOKEN и войдите снова.");
+            setOverview({ loading: false });
+            return;
+          }
+          setOverview({ error: safeError, loading: false });
         }
       });
     return () => controller.abort();
@@ -205,25 +214,45 @@ export function App() {
 
   function handleTokenSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setAdminToken(tokenDraft.trim());
+    const nextToken = tokenDraft.trim();
+    if (!nextToken) {
+      setLoginError("Введите ADMIN_TOKEN из локального .env.");
+      return;
+    }
+    setLoginError("");
+    setAdminToken(nextToken);
     setTokenDraft("");
   }
 
   function clearSession() {
     setAdminToken("");
     setTokenDraft("");
+    setLoginError("");
     setOverview({ loading: false });
+  }
+
+  if (!adminToken) {
+    return (
+      <ErrorBoundary>
+        <LoginScreen
+          loginError={loginError}
+          onTokenChange={setTokenDraft}
+          onSubmit={handleTokenSubmit}
+          tokenDraft={tokenDraft}
+        />
+      </ErrorBoundary>
+    );
   }
 
   return (
     <ErrorBoundary>
       <div className="shell">
-        <aside className="sidebar" aria-label="Operator sections">
+        <aside className="sidebar" aria-label="Разделы админки">
           <div className="brand">
             <span className="brand__mark">N</span>
             <div>
               <strong>NeiroHub</strong>
-              <span>Operator</span>
+              <span>Операторская</span>
             </div>
           </div>
 
@@ -245,38 +274,20 @@ export function App() {
         <main className="main">
           <header className="topbar">
             <div>
-              <p className="eyebrow">Admin console</p>
+              <p className="eyebrow">Админка</p>
               <h1>{screen.title}</h1>
             </div>
-            <div className="session" aria-label="Admin session status">
+            <div className="session" aria-label="Состояние админской сессии">
               <span className={adminToken ? "dot dot--ok" : "dot"} />
               <div>
                 <strong>{sessionState}</strong>
                 <span>{tokenState}</span>
               </div>
+              <button className="session__logout" onClick={clearSession} type="button">
+                Выйти
+              </button>
             </div>
           </header>
-
-          <section className="auth-panel surface" aria-labelledby="admin-token-title">
-            <div>
-              <p className="eyebrow">Admin token</p>
-              <h2 id="admin-token-title">Session gate</h2>
-            </div>
-            <form className="token-form" onSubmit={handleTokenSubmit}>
-              <input
-                autoComplete="off"
-                aria-label="Admin token"
-                onChange={(event) => setTokenDraft(event.target.value)}
-                placeholder="X-Admin-Token"
-                type="password"
-                value={tokenDraft}
-              />
-              <button type="submit">Use token</button>
-              <button className="button-secondary" onClick={clearSession} type="button">
-                Clear
-              </button>
-            </form>
-          </section>
 
           <section className="screen-grid">
             <article className="surface surface--hero">
@@ -311,9 +322,9 @@ export function App() {
               <div className="panel-grid">
                 {screen.panels.map((panel) => (
                   <article className="surface panel" key={panel}>
-                    <p className="eyebrow">Pending backend contract</p>
+                    <p className="eyebrow">Backend contract не подключен</p>
                     <h3>{panel}</h3>
-                    <p>Read-only placeholder</p>
+                    <p>Read-only placeholder. Здесь появятся безопасные backend DTO.</p>
                   </article>
                 ))}
               </div>
@@ -325,13 +336,68 @@ export function App() {
   );
 }
 
+function LoginScreen({
+  loginError,
+  onSubmit,
+  onTokenChange,
+  tokenDraft,
+}: {
+  loginError: string;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onTokenChange: (value: string) => void;
+  tokenDraft: string;
+}) {
+  return (
+    <main className="login-screen">
+      <section className="surface login-card" aria-labelledby="admin-token-title">
+        <div className="login-card__heading">
+          <span className="brand__mark">N</span>
+          <div>
+            <p className="eyebrow">Локальная админка</p>
+            <h1 id="admin-token-title">Вход в админку</h1>
+          </div>
+        </div>
+        <p className="login-card__copy">
+          Введите локальный `ADMIN_TOKEN`. Токен хранится только в памяти вкладки, не пишется в localStorage и не
+          появляется в логах или ошибках.
+        </p>
+        <form className="token-form token-form--login" onSubmit={onSubmit}>
+          <label>
+            <span>Админский токен</span>
+            <input
+              autoComplete="off"
+              aria-label="Админский токен"
+              onChange={(event) => onTokenChange(event.target.value)}
+              placeholder="ADMIN_TOKEN"
+              type="password"
+              value={tokenDraft}
+            />
+          </label>
+          <button type="submit">Войти</button>
+        </form>
+        {loginError ? (
+          <p className="login-error" role="alert">
+            {loginError}
+          </p>
+        ) : null}
+        <div className="login-hints" aria-label="Что внутри админки">
+          <span>Обзор продукта</span>
+          <span>Задачи и очереди</span>
+          <span>Платежи и ledger</span>
+          <span>Провайдеры и media safety</span>
+        </div>
+      </section>
+    </main>
+  );
+}
+
 function OverviewPanel({ adminTokenSet, overview }: { adminTokenSet: boolean; overview: OverviewState }) {
   if (!adminTokenSet) {
     return (
       <article className="surface panel panel--wide" role="status">
-        <p className="eyebrow">Auth required</p>
-        <h3>Overview is locked</h3>
-        <p>Enter an admin token to load the read-only operational summary.</p>
+        <p className="eyebrow">Нужен доступ</p>
+        <h3>Обзор закрыт</h3>
+        <p>Введите админский токен, чтобы загрузить операционную сводку.</p>
       </article>
     );
   }
@@ -340,8 +406,8 @@ function OverviewPanel({ adminTokenSet, overview }: { adminTokenSet: boolean; ov
     return (
       <article className="surface panel panel--wide" role="status">
         <p className="eyebrow">Loading</p>
-        <h3>Loading overview</h3>
-        <p>Requesting safe bounded summaries from the admin API.</p>
+        <h3>Загружаю обзор</h3>
+        <p>Запрашиваю безопасную ограниченную сводку из admin API.</p>
       </article>
     );
   }
@@ -349,9 +415,9 @@ function OverviewPanel({ adminTokenSet, overview }: { adminTokenSet: boolean; ov
   if (overview.error) {
     return (
       <article className="surface panel panel--wide" role="alert">
-        <p className="eyebrow">Safe error</p>
+        <p className="eyebrow">Безопасная ошибка</p>
         <h3>{overview.error.message}</h3>
-        <p>Code: {overview.error.code}</p>
+        <p>Код: {overview.error.code}</p>
       </article>
     );
   }
@@ -359,9 +425,9 @@ function OverviewPanel({ adminTokenSet, overview }: { adminTokenSet: boolean; ov
   if (!overview.data) {
     return (
       <article className="surface panel panel--wide" role="status">
-        <p className="eyebrow">No data</p>
-        <h3>Overview is not loaded</h3>
-        <p>The admin API has not returned an overview yet.</p>
+        <p className="eyebrow">Нет данных</p>
+        <h3>Обзор еще не загружен</h3>
+        <p>Admin API пока не вернул данные.</p>
       </article>
     );
   }
@@ -369,8 +435,8 @@ function OverviewPanel({ adminTokenSet, overview }: { adminTokenSet: boolean; ov
   return (
     <div className="overview-stack">
       <div className="overview-meta" aria-live="polite">
-        <span>Generated: {formatGeneratedAt(overview.data.generated_at)}</span>
-        {overview.loading ? <span>Refreshing</span> : null}
+        <span>Сгенерировано: {formatGeneratedAt(overview.data.generated_at)}</span>
+        {overview.loading ? <span>Обновляется</span> : null}
       </div>
       <div className="overview-grid">
         {overview.data.cards.map((card) => (

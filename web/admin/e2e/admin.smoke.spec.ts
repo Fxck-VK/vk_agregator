@@ -115,21 +115,21 @@ test("admin operator smoke keeps sensitive data out of UI, console, network bodi
   const capture = await setupMockBackend(page);
 
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Overview is locked" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Вход в админку" })).toBeVisible();
   expect(await localStorageSnapshot(page)).not.toContain(TEST_OPERATOR_AUTH);
 
-  await page.getByLabel("Admin token").fill(TEST_OPERATOR_AUTH);
-  await page.getByRole("button", { name: "Use token" }).click();
+  await page.getByLabel("Админский токен").fill(TEST_OPERATOR_AUTH);
+  await page.getByRole("button", { name: "Войти" }).click();
   await expect(page.getByRole("heading", { name: "API", exact: true })).toBeVisible();
-  await expect(page.getByText("in memory")).toBeVisible();
+  await expect(page.getByText("только в памяти вкладки")).toBeVisible();
   expect(await localStorageSnapshot(page)).not.toContain(TEST_OPERATOR_AUTH);
 
-  await page.getByRole("button", { name: "Jobs Execution state" }).click();
+  await page.getByRole("button", { name: "Задачи Выполнение" }).click();
   await expect(page.getByRole("heading", { name: "job_stage9_display" })).toBeVisible();
   await expect(page.getByText("delivery_timeout").first()).toBeVisible();
 
-  await page.getByRole("button", { name: "Payments Ledger-backed billing" }).click();
-  await expect(page.getByRole("heading", { name: "Payments" })).toBeVisible();
+  await page.getByRole("button", { name: "Платежи Ledger-биллинг" }).click();
+  await expect(page.getByRole("heading", { name: "Платежи", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Refund" }).last().click();
   await expect(page.getByRole("dialog", { name: "Refund confirmation" })).toBeVisible();
   await page.getByPlaceholder("Short operational reason without secrets, URLs, payloads or user PII").fill(
@@ -138,11 +138,11 @@ test("admin operator smoke keeps sensitive data out of UI, console, network bodi
   await page.getByRole("button", { name: "Confirm" }).click();
   await expect(page.getByText("Refund completed. The snapshot was refreshed from backend state.")).toBeVisible();
 
-  await page.getByRole("button", { name: "Providers Model health" }).click();
+  await page.getByRole("button", { name: "Провайдеры Модели" }).click();
   await expect(page.getByRole("heading", { name: "Control room" })).toBeVisible();
   await expect(page.getByText("deepinfra", { exact: true })).toBeVisible();
 
-  await page.getByRole("button", { name: "Media Safety Upload and video policy" }).click();
+  await page.getByRole("button", { name: "Медиа-безопасность Политики медиа" }).click();
   await expect(page.getByRole("heading", { name: "Worker-owned safety config" })).toBeVisible();
   await expect(page.getByText("Probe / transcode / fast path")).toBeVisible();
 
@@ -173,9 +173,9 @@ test("admin operator smoke renders backend failures as safe errors", async ({ pa
   );
 
   await page.goto("/");
-  await page.getByLabel("Admin token").fill(TEST_OPERATOR_AUTH);
-  await page.getByRole("button", { name: "Use token" }).click();
-  await expect(page.getByRole("heading", { name: "Admin service is unavailable." })).toBeVisible();
+  await page.getByLabel("Админский токен").fill(TEST_OPERATOR_AUTH);
+  await page.getByRole("button", { name: "Войти" }).click();
+  await expect(page.getByRole("heading", { name: "Админский сервис недоступен." })).toBeVisible();
 
   await assertNoSensitiveOutput(page, capture);
 });

@@ -30,7 +30,7 @@ describe("admin api client", () => {
       const safe = toSafeAdminError(error);
       const rendered = JSON.stringify(safe);
       expect(safe.code).toBe("admin_server_error");
-      expect(safe.message).toBe("Admin service is unavailable.");
+      expect(safe.message).toBe("Админский сервис недоступен.");
       expect(safe.status).toBe(502);
       expect(rendered).not.toContain(sensitiveToken);
       expect(rendered).not.toContain(privateUrl);
@@ -51,7 +51,7 @@ describe("admin api client", () => {
       expect(error).toBeInstanceOf(AdminApiError);
       const safe = toSafeAdminError(error);
       expect(safe.code).toBe("admin_auth_required");
-      expect(safe.message).toBe("Admin authorization is required.");
+      expect(safe.message).toBe("Нужна авторизация администратора.");
       expect(safe.message).not.toContain(sensitiveToken);
       expect(safe.message).not.toContain(privateUrl);
     });
@@ -69,7 +69,7 @@ describe("admin api client", () => {
 
     await expect(client.request("/admin/jobs")).rejects.toMatchObject({
       code: "admin_timeout",
-      message: "Admin request timed out.",
+      message: "Запрос администратора превысил время ожидания.",
     });
   });
 

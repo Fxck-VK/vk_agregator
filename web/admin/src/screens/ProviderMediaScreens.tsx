@@ -30,7 +30,7 @@ export function ProvidersScreen({ adminTokenSet, client }: OperatorScreenProps) 
   );
 
   if (!adminTokenSet) {
-    return <LockedPanel title="Providers are locked" text="Enter an admin token to load provider health." />;
+    return <LockedPanel title="Провайдеры закрыты" text="Введите админский токен, чтобы загрузить состояние провайдеров." />;
   }
   if (state.error) {
     return <SafeErrorPanel error={state.error} />;
@@ -93,7 +93,7 @@ export function MediaSafetyScreen({ adminTokenSet, client }: OperatorScreenProps
   const state = useOperatorData<OperatorMediaSafetyDTO>(adminTokenSet, client, "/admin/media-safety/operator");
 
   if (!adminTokenSet) {
-    return <LockedPanel title="Media safety is locked" text="Enter an admin token to load media policy and risk signals." />;
+    return <LockedPanel title="Безопасность медиа закрыта" text="Введите админский токен, чтобы загрузить политики медиа и сигналы риска." />;
   }
   if (state.error) {
     return <SafeErrorPanel error={state.error} />;
@@ -146,7 +146,7 @@ export function ConfigHealthScreen({ adminTokenSet, client }: OperatorScreenProp
   const state = useOperatorData<OperatorConfigHealthDTO>(adminTokenSet, client, "/admin/config-health/operator");
 
   if (!adminTokenSet) {
-    return <LockedPanel title="Config health is locked" text="Enter an admin token to load non-secret runtime flags." />;
+    return <LockedPanel title="Состояние конфига закрыто" text="Введите админский токен, чтобы загрузить несекретные runtime-флаги." />;
   }
   if (state.error) {
     return <SafeErrorPanel error={state.error} />;
@@ -361,7 +361,7 @@ function NotesPanel({ notes }: { notes?: string[] }) {
 function LockedPanel({ title, text }: { title: string; text: string }) {
   return (
     <article className="surface panel panel--wide" role="status">
-      <p className="eyebrow">Auth required</p>
+      <p className="eyebrow">Нужен доступ</p>
       <h3>{title}</h3>
       <p>{text}</p>
     </article>
@@ -381,9 +381,9 @@ function LoadingPanel({ loading, title }: { loading: boolean; title: string }) {
 function SafeErrorPanel({ error }: { error: AdminApiError }) {
   return (
     <article className="surface panel panel--wide" role="alert">
-      <p className="eyebrow">Safe error</p>
+      <p className="eyebrow">Безопасная ошибка</p>
       <h3>{error.message}</h3>
-      <p>Code: {error.code}</p>
+      <p>Код: {error.code}</p>
     </article>
   );
 }

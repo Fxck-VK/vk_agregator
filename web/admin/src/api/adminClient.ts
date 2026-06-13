@@ -47,14 +47,14 @@ export class AdminApiError extends Error {
 const defaultTimeoutMs = 10_000;
 
 const safeMessages: Record<SafeAdminApiErrorCode, string> = {
-  admin_auth_required: "Admin authorization is required.",
-  admin_forbidden: "Admin request is forbidden.",
-  admin_not_found: "Requested operator resource was not found.",
-  admin_timeout: "Admin request timed out.",
-  admin_rate_limited: "Admin request was rate limited.",
-  admin_bad_request: "Admin request is invalid.",
-  admin_server_error: "Admin service is unavailable.",
-  admin_network_error: "Admin service is unreachable.",
+  admin_auth_required: "Нужна авторизация администратора.",
+  admin_forbidden: "Запрос администратора запрещен.",
+  admin_not_found: "Запрошенный операторский ресурс не найден.",
+  admin_timeout: "Запрос администратора превысил время ожидания.",
+  admin_rate_limited: "Слишком много админских запросов.",
+  admin_bad_request: "Некорректный админский запрос.",
+  admin_server_error: "Админский сервис недоступен.",
+  admin_network_error: "Админский сервис не отвечает.",
 };
 
 export function createAdminClient(options: AdminClientOptions) {

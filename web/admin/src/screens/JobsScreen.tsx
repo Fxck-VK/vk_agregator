@@ -138,9 +138,9 @@ export function JobsScreen({ adminTokenSet, client }: JobsScreenProps) {
   if (!adminTokenSet) {
     return (
       <article className="surface panel panel--wide" role="status">
-        <p className="eyebrow">Auth required</p>
-        <h3>Jobs are locked</h3>
-        <p>Enter an admin token to load read-only job and worker state.</p>
+        <p className="eyebrow">Нужен доступ</p>
+        <h3>Задачи закрыты</h3>
+        <p>Введите админский токен, чтобы загрузить состояние задач и воркеров.</p>
       </article>
     );
   }
@@ -391,9 +391,9 @@ function JobDetailPanel({ detail, displayID }: { detail: DetailState; displayID:
 function SafeErrorPanel({ error }: { error: AdminApiError }) {
   return (
     <article className="surface panel panel--wide" role="alert">
-      <p className="eyebrow">Safe error</p>
+      <p className="eyebrow">Безопасная ошибка</p>
       <h3>{error.message}</h3>
-      <p>Code: {error.code}</p>
+      <p>Код: {error.code}</p>
     </article>
   );
 }

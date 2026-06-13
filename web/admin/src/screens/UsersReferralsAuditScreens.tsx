@@ -57,7 +57,7 @@ export function UsersScreen({ adminTokenSet, client }: OperatorScreenProps) {
   }
 
   if (!adminTokenSet) {
-    return <LockedPanel title="Users are locked" text="Enter an admin token to load safe user summaries." />;
+    return <LockedPanel title="Пользователи закрыты" text="Введите админский токен, чтобы загрузить безопасные сводки пользователей." />;
   }
 
   return (
@@ -103,7 +103,7 @@ export function ReferralsScreen({ adminTokenSet, client }: OperatorScreenProps) 
   }
 
   if (!adminTokenSet) {
-    return <LockedPanel title="Referrals are locked" text="Enter an admin token to load aggregate referral signals." />;
+    return <LockedPanel title="Рефералы закрыты" text="Введите админский токен, чтобы загрузить агрегированные сигналы рефералов." />;
   }
 
   return (
@@ -167,7 +167,7 @@ export function AuditLogScreen({ adminTokenSet, client }: OperatorScreenProps) {
   }
 
   if (!adminTokenSet) {
-    return <LockedPanel title="Audit log is locked" text="Enter an admin token to load sanitized operator audit rows." />;
+    return <LockedPanel title="Журнал аудита закрыт" text="Введите админский токен, чтобы загрузить очищенные строки операторского аудита." />;
   }
 
   return (
@@ -534,7 +534,7 @@ function NotesPanel({ notes }: { notes?: string[] }) {
 function LockedPanel({ title, text }: { title: string; text: string }) {
   return (
     <article className="surface panel panel--wide" role="status">
-      <p className="eyebrow">Auth required</p>
+      <p className="eyebrow">Нужен доступ</p>
       <h3>{title}</h3>
       <p>{text}</p>
     </article>
@@ -554,9 +554,9 @@ function LoadingPanel({ loading, title }: { loading: boolean; title: string }) {
 function SafeErrorPanel({ error }: { error: AdminApiError }) {
   return (
     <article className="surface panel panel--wide" role="alert">
-      <p className="eyebrow">Safe error</p>
+      <p className="eyebrow">Безопасная ошибка</p>
       <h3>{error.message}</h3>
-      <p>Code: {error.code}</p>
+      <p>Код: {error.code}</p>
     </article>
   );
 }
