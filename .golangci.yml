@@ -13,6 +13,7 @@ linters:
     - unused
   exclusions:
     paths:
+      - web/admin/node_modules
       - web/miniapp/node_modules
 
 issues:

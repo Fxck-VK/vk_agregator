@@ -3,3 +3,6 @@
 a780aa0548be2a1728db82cd03616da30293f272:RUNBOOK.md:generic-api-key:462
 a780aa0548be2a1728db82cd03616da30293f272:RUNBOOK.md:curl-auth-header:460
 7a5a4ac7189b8ec23c846c646ca6787339d569f4:RUNBOOK.md:curl-auth-header:725
+d6e52f0f2f31b12d9e82d69eef4c10a89a7dfb5a:internal/adapter/inbound/admin/handler_test.go:generic-api-key:442
+d6e52f0f2f31b12d9e82d69eef4c10a89a7dfb5a:internal/adapter/inbound/admin/handler_test.go:generic-api-key:452
+aa1ab30c36026c32cbe54ccfd22eb1781b146258:web/admin/e2e/admin.smoke.spec.ts:project-secret-assignment:5

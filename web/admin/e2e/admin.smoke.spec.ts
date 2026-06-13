@@ -2,7 +2,7 @@ const playwright = await import("@playwright/test").catch(() => import("../../mi
 const { expect, test } = playwright;
 
 const NOW = "2026-06-13T08:00:00Z";
-const ADMIN_TOKEN = "stage9_admin_token_must_not_render";
+const TEST_OPERATOR_AUTH = "stage9_operator_auth_must_not_render";
 const RAW_PROMPT = "stage9_raw_prompt_must_not_render";
 const RAW_PROVIDER_PAYLOAD = "stage9_raw_provider_payload_must_not_render";
 const PRIVATE_ARTIFACT_URL = "stage9_private_artifact_url_must_not_render";
@@ -13,7 +13,7 @@ const IDEMPOTENCY_MARKER = "stage9_idempotency_marker_must_not_render";
 const ACTION_REF = "opact_v1_stage9_refund_action";
 
 const forbiddenMarkers = [
-  ADMIN_TOKEN,
+  TEST_OPERATOR_AUTH,
   RAW_PROMPT,
   RAW_PROVIDER_PAYLOAD,
   PRIVATE_ARTIFACT_URL,
@@ -116,13 +116,13 @@ test("admin operator smoke keeps sensitive data out of UI, console, network bodi
 
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Overview is locked" })).toBeVisible();
-  expect(await localStorageSnapshot(page)).not.toContain(ADMIN_TOKEN);
+  expect(await localStorageSnapshot(page)).not.toContain(TEST_OPERATOR_AUTH);
 
-  await page.getByLabel("Admin token").fill(ADMIN_TOKEN);
+  await page.getByLabel("Admin token").fill(TEST_OPERATOR_AUTH);
   await page.getByRole("button", { name: "Use token" }).click();
   await expect(page.getByRole("heading", { name: "API", exact: true })).toBeVisible();
   await expect(page.getByText("in memory")).toBeVisible();
-  expect(await localStorageSnapshot(page)).not.toContain(ADMIN_TOKEN);
+  expect(await localStorageSnapshot(page)).not.toContain(TEST_OPERATOR_AUTH);
 
   await page.getByRole("button", { name: "Jobs Execution state" }).click();
   await expect(page.getByRole("heading", { name: "job_stage9_display" })).toBeVisible();
@@ -163,7 +163,7 @@ test("admin operator smoke renders backend failures as safe errors", async ({ pa
       route,
       {
         error: "provider failed",
-        token: ADMIN_TOKEN,
+        token: TEST_OPERATOR_AUTH,
         prompt: RAW_PROMPT,
         private_url: PRIVATE_ARTIFACT_URL,
         stack: RAW_STACK,
@@ -173,7 +173,7 @@ test("admin operator smoke renders backend failures as safe errors", async ({ pa
   );
 
   await page.goto("/");
-  await page.getByLabel("Admin token").fill(ADMIN_TOKEN);
+  await page.getByLabel("Admin token").fill(TEST_OPERATOR_AUTH);
   await page.getByRole("button", { name: "Use token" }).click();
   await expect(page.getByRole("heading", { name: "Admin service is unavailable." })).toBeVisible();
 
