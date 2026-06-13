@@ -9,11 +9,13 @@ param(
     [switch]$SkipMigrate,
     [switch]$SkipBuild,
     [switch]$SkipMiniApp,
+    [switch]$SkipAdmin,
     [switch]$SkipProviderWebhook,
     [switch]$NoRestart,
     [switch]$NoWait,
     [switch]$OpenGrafana,
     [switch]$OpenMiniApp,
+    [switch]$OpenAdmin,
     [switch]$NoTracing,
     [switch]$NoFrontendTelemetry,
     [switch]$MockProviders,
@@ -24,6 +26,7 @@ param(
     [int]$WorkerMetricsPort = 9090,
     [int]$ProviderWebhookPort = 8082,
     [int]$MiniAppPort = 5173,
+    [int]$AdminPort = 5175,
     [int]$GrafanaPort = 3000,
     [int]$PrometheusPort = 9091,
     [int]$AlertmanagerPort = 9093,
@@ -366,14 +369,17 @@ function Stop-ObservabilityProcesses {
     Stop-PidFileProcess -PidFile (Join-Path $RuntimeDir "worker.pid")
     Stop-PidFileProcess -PidFile (Join-Path $RuntimeDir "provider-webhook.pid")
     Stop-PidFileProcess -PidFile (Join-Path $RuntimeDir "vite.pid")
+    Stop-PidFileProcess -PidFile (Join-Path $RuntimeDir "admin-vite.pid")
 
     Stop-ListenerOnPort -Port $ApiPort
     Stop-ListenerOnPort -Port $WorkerMetricsPort
     Stop-ListenerOnPort -Port $ProviderWebhookPort
     Stop-ListenerOnPort -Port $MiniAppPort
+    Stop-ListenerOnPort -Port $AdminPort
 
     $escapedRoot = [regex]::Escape($Root)
     $escapedRuntime = [regex]::Escape($RuntimeDir)
+    $escapedAdmin = [regex]::Escape((Join-Path $Root "web\admin"))
     $processes = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
         $cmd = [string]$_.CommandLine
         if ($cmd -eq "") {
@@ -384,7 +390,8 @@ function Stop-ObservabilityProcesses {
             $cmd -match 'bin\\dev\\observability\\api\.exe' -or
             $cmd -match 'bin\\dev\\observability\\worker\.exe' -or
             $cmd -match 'bin\\dev\\observability\\provider-webhook\.exe'
-        ))
+        )) -or
+        ($cmd -match $escapedAdmin -and $cmd -match 'vite')
     }
     foreach ($proc in $processes) {
         try {
@@ -417,10 +424,12 @@ function Show-ObservabilityStatus {
     Write-Host "Worker process:    $(Get-ProcessState -RuntimeDir $RuntimeDir -Name "worker")"
     Write-Host "Webhook process:   $(Get-ProcessState -RuntimeDir $RuntimeDir -Name "provider-webhook")"
     Write-Host "Mini App process:  $(Get-ProcessState -RuntimeDir $RuntimeDir -Name "vite")"
+    Write-Host "Admin UI process:  $(Get-ProcessState -RuntimeDir $RuntimeDir -Name "admin-vite")"
     Write-Host "API health:        $(Get-HttpState -Url "http://127.0.0.1:$ApiPort/healthz")"
     Write-Host "Worker health:     $(Get-HttpState -Url "http://127.0.0.1:$WorkerMetricsPort/healthz")"
     Write-Host "Webhook ready:     $(Get-HttpState -Url "http://127.0.0.1:$ProviderWebhookPort/readyz")"
     Write-Host "Mini App:          $(Get-HttpState -Url "http://127.0.0.1:$MiniAppPort/")"
+    Write-Host "Admin UI:          $(Get-HttpState -Url "http://127.0.0.1:$AdminPort/")"
     Write-Host "Grafana:           $(Get-HttpState -Url "http://127.0.0.1:$GrafanaPort/api/health")"
     Write-Host "Prometheus:        $(Get-HttpState -Url "http://127.0.0.1:$PrometheusPort/-/ready")"
     Write-Host "Alertmanager:      $(Get-HttpState -Url "http://127.0.0.1:$AlertmanagerPort/-/ready")"
@@ -530,13 +539,54 @@ function Start-ObservedVite {
     }
 }
 
+function Start-ObservedAdminVite {
+    param(
+        [Parameter(Mandatory = $true)][string]$Root,
+        [Parameter(Mandatory = $true)][string]$RuntimeDir
+    )
+
+    $adminDir = Join-Path $Root "web\admin"
+    $stdout = Join-Path $RuntimeDir "admin-vite-live.log"
+    $stderr = Join-Path $RuntimeDir "admin-vite-live.err"
+
+    $oldDevHost = [Environment]::GetEnvironmentVariable("VITE_ADMIN_DEV_HOST", "Process")
+    $oldApiTarget = [Environment]::GetEnvironmentVariable("VITE_ADMIN_API_TARGET", "Process")
+    try {
+        Set-LocalEnv -Name "VITE_ADMIN_DEV_HOST" -Value "127.0.0.1"
+        Set-LocalEnv -Name "VITE_ADMIN_API_TARGET" -Value "http://127.0.0.1:$ApiPort"
+        $proc = Start-Process npm.cmd `
+            -ArgumentList @("run", "dev", "--", "--host", "127.0.0.1", "--port", [string]$AdminPort) `
+            -WorkingDirectory $adminDir `
+            -WindowStyle Hidden `
+            -RedirectStandardOutput $stdout `
+            -RedirectStandardError $stderr `
+            -PassThru
+        Set-Content -Path (Join-Path $RuntimeDir "admin-vite.pid") -Value $proc.Id -Encoding ASCII
+        return $proc
+    } finally {
+        if ($null -eq $oldDevHost) {
+            Remove-Item Env:\VITE_ADMIN_DEV_HOST -ErrorAction SilentlyContinue
+        } else {
+            Set-LocalEnv -Name "VITE_ADMIN_DEV_HOST" -Value $oldDevHost
+        }
+        if ($null -eq $oldApiTarget) {
+            Remove-Item Env:\VITE_ADMIN_API_TARGET -ErrorAction SilentlyContinue
+        } else {
+            Set-LocalEnv -Name "VITE_ADMIN_API_TARGET" -Value $oldApiTarget
+        }
+    }
+}
+
 function Assert-ObservabilityRequirements {
-    param([switch]$NeedMiniApp)
+    param(
+        [switch]$NeedMiniApp,
+        [switch]$NeedAdmin
+    )
 
     if ($null -eq (Get-Command go -ErrorAction SilentlyContinue | Select-Object -First 1)) {
         throw "go is not installed or not available in PATH."
     }
-    if ($NeedMiniApp -and $null -eq (Get-Command npm.cmd -ErrorAction SilentlyContinue | Select-Object -First 1)) {
+    if (($NeedMiniApp -or $NeedAdmin) -and $null -eq (Get-Command npm.cmd -ErrorAction SilentlyContinue | Select-Object -First 1)) {
         throw "npm.cmd is not installed or not available in PATH."
     }
 }
@@ -611,7 +661,7 @@ try {
     }
 
     Configure-ObservabilityEnv
-    Assert-ObservabilityRequirements -NeedMiniApp:(-not $SkipMiniApp)
+    Assert-ObservabilityRequirements -NeedMiniApp:(-not $SkipMiniApp) -NeedAdmin:(-not $SkipAdmin)
 
     if (-not $SkipDocker) {
         Write-Host "Starting Docker dependencies and observability stack..."
@@ -666,6 +716,12 @@ try {
         Wait-Http -Url "http://127.0.0.1:$MiniAppPort/" -TimeoutSeconds $TimeoutSeconds | Out-Null
     }
 
+    if (-not $SkipAdmin) {
+        Write-Host "Starting Admin UI Vite dev server..."
+        Start-ObservedAdminVite -Root $root -RuntimeDir $runtime | Out-Null
+        Wait-Http -Url "http://127.0.0.1:$AdminPort/" -TimeoutSeconds $TimeoutSeconds | Out-Null
+    }
+
     Write-Host ""
     Write-Host "Product observability dev stack is running."
     Write-Host "Grafana:           http://127.0.0.1:$GrafanaPort"
@@ -679,6 +735,9 @@ try {
     if (-not $SkipMiniApp) {
         Write-Host "Mini App:          http://127.0.0.1:$MiniAppPort"
     }
+    if (-not $SkipAdmin) {
+        Write-Host "Admin UI:          http://127.0.0.1:$AdminPort"
+    }
     Write-Host "Logs:              $runtime"
     Write-Host ""
     Write-Host "Status:            .\scripts\dev\start-observability.ps1 -StatusOnly"
@@ -690,6 +749,9 @@ try {
     }
     if ($OpenMiniApp -and -not $SkipMiniApp) {
         Start-Process "http://127.0.0.1:$MiniAppPort"
+    }
+    if ($OpenAdmin -and -not $SkipAdmin) {
+        Start-Process "http://127.0.0.1:$AdminPort"
     }
 
     if ($NoWait) {

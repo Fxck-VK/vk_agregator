@@ -37,6 +37,12 @@ type JobRateLimiter interface {
 	Allow(key string) bool
 }
 
+// UploadConcurrencyLimiter bounds simultaneous artifact uploads before the BFF
+// buffers multipart bodies into memory.
+type UploadConcurrencyLimiter interface {
+	TryAcquire() (release func(), ok bool)
+}
+
 // ReferralService is the shared backend referral service used by VK bot and
 // the Mini App BFF. It must keep all rewards ledger-backed and idempotent.
 type ReferralService interface {
@@ -57,6 +63,20 @@ type Config struct {
 	// JobRateLimiter bounds POST /miniapp/jobs and POST /miniapp/estimate after
 	// launch params have been verified, keyed by the verified vk_user_id.
 	JobRateLimiter JobRateLimiter
+	// UploadConcurrencyLimiter bounds POST /miniapp/artifacts before multipart
+	// parsing so concurrent large uploads cannot exhaust one API instance.
+	UploadConcurrencyLimiter UploadConcurrencyLimiter
+	// ReferenceUploadsDisabled is an operator kill switch for the artifact
+	// upload endpoint used by reference images.
+	ReferenceUploadsDisabled bool
+	// ReferenceWebPEnabled allows WebP bytes through the upload endpoint. Keep
+	// false until product policy accepts WebP privacy/validation handling.
+	ReferenceWebPEnabled bool
+	// Upload limits are enforced before private artifact storage.
+	MaxUploadBytes       int64
+	MaxUploadImageWidth  int
+	MaxUploadImageHeight int
+	MaxUploadImagePixels int64
 	// ImageReferenceEnabled allows validated image reference artifacts to flow
 	// into image jobs. When false, references fail closed before job creation.
 	ImageReferenceEnabled bool
@@ -109,7 +129,24 @@ func NewHandler(cfg Config, deps Deps) *Handler {
 	if logger == nil {
 		logger = slog.Default()
 	}
+	cfg = normalizeConfig(cfg)
 	return &Handler{cfg: cfg, deps: deps, logger: logger}
+}
+
+func normalizeConfig(cfg Config) Config {
+	if cfg.MaxUploadBytes <= 0 {
+		cfg.MaxUploadBytes = defaultMaxMiniAppUploadBytes
+	}
+	if cfg.MaxUploadImageWidth <= 0 {
+		cfg.MaxUploadImageWidth = defaultMaxMiniAppImageDimension
+	}
+	if cfg.MaxUploadImageHeight <= 0 {
+		cfg.MaxUploadImageHeight = defaultMaxMiniAppImageDimension
+	}
+	if cfg.MaxUploadImagePixels <= 0 {
+		cfg.MaxUploadImagePixels = defaultMaxMiniAppImagePixels
+	}
+	return cfg
 }
 
 // Routes returns an http.Handler with the miniapp routes registered.
@@ -129,10 +166,27 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("POST /miniapp/payments/intents", h.auth(h.rateLimitMiniApp("miniapp_payment", h.createPaymentIntent)))
 	mux.HandleFunc("GET /miniapp/payments", h.auth(h.listPayments))
 	mux.HandleFunc("GET /miniapp/payments/{id}", h.auth(h.getPaymentIntent))
-	mux.HandleFunc("POST /miniapp/artifacts", h.auth(h.rateLimitMiniApp("miniapp_artifact", h.createArtifact)))
+	mux.HandleFunc("POST /miniapp/artifacts", h.auth(h.rateLimitMiniApp("miniapp_artifact", h.limitArtifactUploadConcurrency(h.createArtifact))))
 	mux.HandleFunc("GET /miniapp/artifacts/{id}", h.auth(h.getArtifact))
 	mux.HandleFunc("POST /miniapp/client-events", h.auth(h.rateLimitMiniApp("miniapp_client_events", h.clientEvent)))
 	return mux
+}
+
+func (h *Handler) limitArtifactUploadConcurrency(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if h.cfg.UploadConcurrencyLimiter == nil {
+			next(w, r)
+			return
+		}
+		release, ok := h.cfg.UploadConcurrencyLimiter.TryAcquire()
+		if !ok {
+			w.Header().Set("Retry-After", "1")
+			writeError(w, http.StatusTooManyRequests, "upload concurrency limit exceeded")
+			return
+		}
+		defer release()
+		next(w, r)
+	}
 }
 
 // auth is the middleware that verifies the VK launch-params signature and
@@ -674,6 +728,11 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 		})
 	case errors.Is(err, domain.ErrCostCapExceeded):
 		writeError(w, http.StatusBadRequest, "job cost exceeds platform limit")
+	case errors.Is(err, domain.ErrActiveJobLimitExceeded):
+		writeError(w, http.StatusTooManyRequests, "active video job limit exceeded")
+	case errors.Is(err, domain.ErrCapacityDegraded):
+		w.Header().Set("Retry-After", "30")
+		writeError(w, http.StatusServiceUnavailable, domain.JobErrMediaOverloadedRetryLater)
 	default:
 		h.logger.Error("miniapp: create job failed", slog.String("error", err.Error()))
 		writeError(w, http.StatusInternalServerError, "internal error")
@@ -764,6 +823,11 @@ func (h *Handler) createChatMessage(w http.ResponseWriter, r *http.Request) {
 		})
 	case errors.Is(err, domain.ErrCostCapExceeded):
 		writeError(w, http.StatusBadRequest, "job cost exceeds platform limit")
+	case errors.Is(err, domain.ErrActiveJobLimitExceeded):
+		writeError(w, http.StatusTooManyRequests, "active video job limit exceeded")
+	case errors.Is(err, domain.ErrCapacityDegraded):
+		w.Header().Set("Retry-After", "30")
+		writeError(w, http.StatusServiceUnavailable, "media capacity temporarily unavailable")
 	default:
 		h.logger.Error("miniapp: create chat job failed", slog.String("error", err.Error()))
 		writeError(w, http.StatusInternalServerError, "internal error")

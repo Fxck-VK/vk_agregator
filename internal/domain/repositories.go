@@ -25,6 +25,14 @@ var ErrInsufficientCredits = errors.New("domain: insufficient credits")
 // configured per-job spend cap.
 var ErrCostCapExceeded = errors.New("domain: cost cap exceeded")
 
+// ErrCapacityDegraded is returned when a shared queue/capacity guard refuses
+// new expensive work before reservation/provider submission.
+var ErrCapacityDegraded = errors.New("domain: capacity degraded")
+
+// ErrActiveJobLimitExceeded is returned when one user already has too many
+// active jobs for an expensive operation.
+var ErrActiveJobLimitExceeded = errors.New("domain: active job limit exceeded")
+
 // OutboxStatus is the publishing state of an outbox event.
 type OutboxStatus string
 
@@ -114,6 +122,17 @@ type JobFilter struct {
 	Status JobStatus
 	// Operation, when non-empty, restricts results to one operation type.
 	Operation OperationType
+	// Modality, when non-empty, restricts results to one modality.
+	Modality Modality
+	// ErrorCode, when non-empty, restricts results to one bounded error class.
+	ErrorCode string
+	// CorrelationID, when non-empty, restricts results to one exact request
+	// correlation id. Callers must not expose raw values in public DTOs.
+	CorrelationID string
+	// CreatedFrom, when set, restricts results to jobs created at or after it.
+	CreatedFrom *time.Time
+	// CreatedTo, when set, restricts results to jobs created before it.
+	CreatedTo *time.Time
 }
 
 // JobRepository persists jobs.
@@ -223,6 +242,10 @@ type ArtifactRepository interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*Artifact, error)
 	// GetBySHA256 fetches an artifact by content hash for deduplication.
 	GetBySHA256(ctx context.Context, ownerID uuid.UUID, sha256 string) (*Artifact, error)
+	// FindReusableInputReference fetches a ready input reference image scoped by
+	// owner, content hash and validation policy. It must not return provider
+	// originals, delivery variants or artifacts validated under older policies.
+	FindReusableInputReference(ctx context.Context, ownerID uuid.UUID, sha256, validationPolicyVersion, mimeType string) (*Artifact, error)
 
 	// AddVariant inserts a derived variant of an artifact.
 	AddVariant(ctx context.Context, variant *ArtifactVariant) error
@@ -242,6 +265,14 @@ type DeliveryRepository interface {
 	GetByIdempotencyKey(ctx context.Context, key string) (*Delivery, error)
 	// ListByJob returns all delivery attempts for a job.
 	ListByJob(ctx context.Context, jobID uuid.UUID) ([]*Delivery, error)
+}
+
+// OperatorAuditRepository persists sanitized operator/admin action records.
+// Implementations must not store raw tokens, request bodies, raw URLs, prompts,
+// private identifiers or provider/payment payloads.
+type OperatorAuditRepository interface {
+	Create(ctx context.Context, entry *OperatorAuditEntry) error
+	List(ctx context.Context, filter OperatorAuditFilter, limit, offset int) ([]*OperatorAuditEntry, error)
 }
 
 // BillingRepository persists the append-only credit ledger, accounts and
@@ -290,6 +321,13 @@ type PaymentIntentFilter struct {
 type PaymentEventFilter struct {
 	Provider  PaymentProviderCode
 	Processed *bool
+}
+
+// PaymentRefundFilter narrows protected operator refund listings. It must not
+// be mapped to DTOs that expose idempotency keys or provider-native payloads.
+type PaymentRefundFilter struct {
+	IntentID *uuid.UUID
+	Status   PaymentRefundStatus
 }
 
 // PaymentProductFilter narrows protected operator product-catalog listings.
@@ -367,6 +405,8 @@ type PaymentRepository interface {
 	CreateRefund(ctx context.Context, refund *PaymentRefund) error
 	// GetRefundByIdempotencyKey fetches a refund by internal idempotency key.
 	GetRefundByIdempotencyKey(ctx context.Context, key string) (*PaymentRefund, error)
+	// ListRefunds lists protected operator refund rows, newest first.
+	ListRefunds(ctx context.Context, filter PaymentRefundFilter, limit, offset int) ([]*PaymentRefund, error)
 	// SetRefundProviderState stores provider refund id and normalized refund status.
 	SetRefundProviderState(ctx context.Context, id uuid.UUID, providerRefundID string, status PaymentRefundStatus) error
 }
@@ -394,6 +434,8 @@ type ReferralRepository interface {
 	// ListSuspiciousReferralCodes returns aggregate suspicious referral-code
 	// patterns without exposing invited-user identities.
 	ListSuspiciousReferralCodes(ctx context.Context, filter ReferralSuspiciousFilter) ([]ReferralCodeStats, error)
+	// ReferralStatusDistribution returns global no-PII referral funnel counters.
+	ReferralStatusDistribution(ctx context.Context) (ReferralStats, error)
 	// MarkActivated marks a registered referral as activated by product usage.
 	MarkActivated(ctx context.Context, referralID uuid.UUID, activatedAt time.Time) error
 	// MarkRewardApplied marks signup referral rewards as posted to billing.

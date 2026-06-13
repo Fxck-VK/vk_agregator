@@ -164,6 +164,26 @@ func (r *JobRepository) List(ctx context.Context, filter domain.JobFilter, limit
 		args = append(args, filter.Operation)
 		conds = append(conds, fmt.Sprintf("operation_type = $%d", len(args)))
 	}
+	if filter.Modality != "" {
+		args = append(args, filter.Modality)
+		conds = append(conds, fmt.Sprintf("modality = $%d", len(args)))
+	}
+	if filter.ErrorCode != "" {
+		args = append(args, filter.ErrorCode)
+		conds = append(conds, fmt.Sprintf("error_code = $%d", len(args)))
+	}
+	if filter.CorrelationID != "" {
+		args = append(args, filter.CorrelationID)
+		conds = append(conds, fmt.Sprintf("correlation_id = $%d", len(args)))
+	}
+	if filter.CreatedFrom != nil {
+		args = append(args, *filter.CreatedFrom)
+		conds = append(conds, fmt.Sprintf("created_at >= $%d", len(args)))
+	}
+	if filter.CreatedTo != nil {
+		args = append(args, *filter.CreatedTo)
+		conds = append(conds, fmt.Sprintf("created_at < $%d", len(args)))
+	}
 	if len(conds) > 0 {
 		q += " WHERE " + strings.Join(conds, " AND ")
 	}

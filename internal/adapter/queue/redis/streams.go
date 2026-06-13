@@ -46,6 +46,96 @@ var AllStreamsWithDLQ = []string{StreamText, StreamImage, StreamVideo, StreamDel
 // taskField is the Redis stream entry field that carries the JSON task body.
 const taskField = "task"
 
+// QueuePressure describes bounded, non-payload queue pressure for one stream.
+// It is safe for logs/metrics because it contains no task payload or user data.
+type QueuePressure struct {
+	Stream    string
+	Group     string
+	Lag       int64
+	Pending   int64
+	Threshold int64
+}
+
+// Total returns lag+pending, ignoring Redis' unknown lag sentinel.
+func (p QueuePressure) Total() int64 {
+	lag := p.Lag
+	if lag < 0 {
+		lag = 0
+	}
+	return lag + p.Pending
+}
+
+// BackpressureError reports that a Redis stream is over its configured safe
+// processing threshold.
+type BackpressureError struct {
+	Pressure QueuePressure
+}
+
+func (e BackpressureError) Error() string {
+	return fmt.Sprintf("redisqueue: stream %s/%s backlog %d over threshold %d", e.Pressure.Stream, e.Pressure.Group, e.Pressure.Total(), e.Pressure.Threshold)
+}
+
+// BackpressureGuard reads Redis consumer-group lag/pending counts to decide
+// whether new expensive work should be refused before reservation/provider
+// calls. It never reads task payloads.
+type BackpressureGuard struct {
+	client    redis.Cmdable
+	group     string
+	threshold int64
+}
+
+// NewBackpressureGuard builds a queue pressure guard. threshold <= 0 disables
+// the guard.
+func NewBackpressureGuard(client redis.Cmdable, group string, threshold int64) *BackpressureGuard {
+	return &BackpressureGuard{client: client, group: strings.TrimSpace(group), threshold: threshold}
+}
+
+// Check refuses when any supplied stream's consumer-group lag+pending reaches
+// the configured threshold. Missing streams/groups are treated as no pressure so
+// local startup and tests are not blocked before workers create groups.
+func (g *BackpressureGuard) Check(ctx context.Context, streams ...string) error {
+	if g == nil || g.client == nil || g.threshold <= 0 || g.group == "" {
+		return nil
+	}
+	for _, stream := range streams {
+		stream = strings.TrimSpace(stream)
+		if stream == "" {
+			continue
+		}
+		pressure, ok, err := g.pressure(ctx, stream)
+		if err != nil {
+			return err
+		}
+		if ok && pressure.Total() >= g.threshold {
+			return BackpressureError{Pressure: pressure}
+		}
+	}
+	return nil
+}
+
+func (g *BackpressureGuard) pressure(ctx context.Context, stream string) (QueuePressure, bool, error) {
+	groups, err := g.client.XInfoGroups(ctx, stream).Result()
+	if err != nil {
+		if errors.Is(err, redis.Nil) || isNoGroup(err) {
+			return QueuePressure{}, false, nil
+		}
+		return QueuePressure{}, false, fmt.Errorf("redisqueue: xinfo groups %s: %w", stream, err)
+	}
+	for _, group := range groups {
+		if group.Name != g.group {
+			continue
+		}
+		return QueuePressure{
+			Stream:    stream,
+			Group:     g.group,
+			Lag:       group.Lag,
+			Pending:   group.Pending,
+			Threshold: g.threshold,
+		}, true, nil
+	}
+	return QueuePressure{}, false, nil
+}
+
 // StreamForOperation maps an operation to the stream its generation work runs
 // on. Delivery and provider-poll are produced explicitly, not from operations.
 func StreamForOperation(op domain.OperationType) string {
@@ -311,6 +401,7 @@ func CollectMetrics(ctx context.Context, client redis.Cmdable, group string, str
 			}
 		}
 		metrics.QueueDepth.WithLabelValues(stream).Set(float64(length))
+		metrics.SetMediaQueueBacklog(queueClassForStream(stream), length)
 		if length <= 0 {
 			metrics.QueueOldestAgeSeconds.WithLabelValues(stream).Set(0)
 		} else {
@@ -338,6 +429,25 @@ func CollectMetrics(ctx context.Context, client redis.Cmdable, group string, str
 		metrics.QueueConsumerLag.WithLabelValues(stream, group).Set(float64(pending.Count))
 	}
 	return firstErr
+}
+
+func queueClassForStream(stream string) string {
+	switch strings.TrimSpace(stream) {
+	case StreamText:
+		return "text"
+	case StreamImage:
+		return "image"
+	case StreamVideo:
+		return "video"
+	case StreamDelivery:
+		return "delivery"
+	case StreamProviderPoll:
+		return "provider_poll"
+	case StreamDLQ:
+		return "dlq"
+	default:
+		return "unknown"
+	}
 }
 
 func streamIDAgeSeconds(now time.Time, id string) float64 {
@@ -401,5 +511,9 @@ func isBusyGroup(err error) bool {
 }
 
 func isNoGroup(err error) bool {
-	return err != nil && strings.Contains(strings.ToUpper(err.Error()), "NOGROUP")
+	if err == nil {
+		return false
+	}
+	msg := strings.ToUpper(err.Error())
+	return strings.Contains(msg, "NOGROUP") || strings.Contains(msg, "NO SUCH KEY")
 }

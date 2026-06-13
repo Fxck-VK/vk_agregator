@@ -1,0 +1,17 @@
+# syntax=docker/dockerfile:1
+
+ARG NODE_VERSION=24-alpine
+
+FROM node:${NODE_VERSION} AS build
+WORKDIR /src
+
+COPY web/miniapp/package.json web/miniapp/package-lock.json ./
+RUN npm ci
+
+COPY web/miniapp ./
+RUN npm run build
+
+FROM nginx:1.29-alpine
+COPY --from=build /src/dist /usr/share/nginx/html
+
+EXPOSE 80

@@ -1,8 +1,9 @@
 # TASKS
 
 This file is the short human-readable backlog. Machine-readable current context
-and routing live in `.agents/state.json`. Historical completed work and old
-phase plans live under `docs/archive/**` and are not active context by default.
+and routing live in `.agents/state.json`. Completed execution plans and merge
+handoff context should be summarized here, then removed from the active repo
+surface.
 
 ## Current Focus
 
@@ -29,8 +30,11 @@ phase plans live under `docs/archive/**` and are not active context by default.
   and service units.
 - Run live credential-bound smoke for real OpenAI, DeepInfra and VK delivery
   paths before external users.
-- Complete the full video media pipeline: scan/probe, transcode and VK-ready
-  variants before relying on real video delivery at scale.
+- Verify edge/proxy body-size limits before enabling public reference uploads
+  in production.
+- Keep video delivery rollout on the CPU-safe media policy path: provider
+  contracts, cheap probe when required, no default ffmpeg transcode, bounded
+  retries and no capture before safe delivery/access.
 - Add production retention/archival for old `conversation_messages`; keep
   compact summaries and recent hot turns only.
 - Replace local/extractive dialog summary compaction with a dedicated cheap
@@ -50,12 +54,15 @@ phase plans live under `docs/archive/**` and are not active context by default.
 - Merge/document routing cleanup: stale merge handoff docs archived and the
   current merge checklist shortened.
 - Mini App referral/account UI over the shared referral backend.
-
-## Archived History
-
-- `docs/archive/2026-06/TASKS.legacy.md`
-- `docs/archive/2026-06/ROADMAP.legacy.md`
-- `docs/archive/2026-06/TESTING.legacy.md`
-- `docs/archive/2026-06/BILLING_AGENT_HANDOFF.legacy.md`
-- Other completed audits, merge handoffs and historical logs under
-  `docs/archive/**`.
+- Product-wide observability/statistics V2: private metrics, reports, alerts,
+  synthetics, sanitized traces and trace-aware logging.
+- Mini App frontend quality gates: strict TypeScript, ESLint, focused unit
+  tests and Playwright smoke.
+- Production media safety policy: reference uploads gated, JPG/PNG-only by
+  default, byte/dimension/pixel validation before storage, provider media
+  contracts, backpressure/cost guards, dedupe/lifecycle, provider quality
+  scoring, safe failure UX, media observability and rollout drills.
+- Admin/operator console: protected internal `web/admin` UI with safe DTOs for
+  overview, jobs/queues, payments/billing, providers/media safety, users,
+  referrals, audit log and limited idempotent payment actions with confirmation,
+  reason and sanitized audit records.

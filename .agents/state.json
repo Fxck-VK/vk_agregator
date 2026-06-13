@@ -1,7 +1,7 @@
 ﻿{
     "schema_version":  3,
-    "updated_at":  "2026-06-11T22:10:40+03:00",
-    "branch":  "fastlife_dev",
+    "updated_at":  "2026-06-13T16:20:18+03:00",
+    "branch":  "serega",
     "git_ref_policy":  "Use git rev-parse HEAD/origin/main for moving SHAs; this file does not track branch head commits.",
     "purpose":  "Minimal machine-readable current context and routing for agents.",
     "read_policy":  {
@@ -21,13 +21,12 @@
                                                          "docs/VK_BOT_AGENT_GUIDE.md"
                                                      ],
                         "do_not_read_by_default":  [
-                                                       "docs/archive/**",
                                                        ".agents/logs/**"
                                                    ],
-                        "history_read_condition":  "Only read archive/logs when explicitly asked for history, debugging a repeated known error, regression archaeology, or old audit details."
+                        "history_read_condition":  "Only read logs when explicitly asked for history, debugging a repeated known error, regression archaeology, or old audit details."
                     },
     "progress":  {
-                     "current_focus":  "Product-wide observability/statistics V2 implementation is complete locally: product-wide metrics, reports, alerts, synthetics, exact scheduled active-user aggregates, sanitized traces and trace-aware logging are in place.",
+                     "current_focus":  "No active generated execution plan is currently in progress. Completed observability, frontend quality and media safety work is summarized in TASKS.md.",
                      "vk_bot_video_mode":  {
                                                "status":  "prunaai_button_enabled",
                                                "summary":  "VK video model picker exposes PrunaAI and Back. PrunaAI stores peer-scoped video mode; the next plain text creates a video_generate Job through worker/provider flow. Stale Sora/Kling/Seedance/Haiuo payloads fall back to Show Menu and do not create Jobs. VK video delivery supports VK_VIDEO_DELIVERY_MODE=doc for mp4 file attachments and VK_VIDEO_DELIVERY_MODE=video for native VK video attachments through VK_VIDEO_ACCESS_TOKEN.",
@@ -40,13 +39,13 @@
                                                 "keep payment credits granted only by provider-verified webhook/reconciliation ledger top-ups",
                                                 "keep 54-FZ receipt fields snapshotted on payment_intents for payment retries and manual refunds",
                                                 "keep production YooKassa webhooks HTTPS/proxy guarded and monitor webhook/refund rollback metrics",
-                                                "finish remaining YooKassa live-smoke follow-ups: public HTTPS webhook delivery and protected capture:false local-intent canceled smoke",
+                                                "keep YooKassa payment.succeeded, payment.canceled and refund.succeeded smoke paths covered through public webhook delivery and idempotent replay checks",
                                                 "add lot/FIFO refund attribution later"
                                             ],
                      "last_yookassa_smoke":  {
-                                                 "date":  "2026-06-10",
-                                                 "status":  "partial_pass_with_followups",
-                                                 "environment":  "local _env test credentials against YooKassa test shop",
+                                                 "date":  "2026-06-13",
+                                                 "status":  "pass_public_payment_succeeded_canceled_refund_replay_reconciliation_operator_monitoring_and_refund_policy",
+                                                 "environment":  "local .env test credentials against YooKassa test shop",
                                                  "passed":  [
                                                                 "local postgres and redis healthy",
                                                                 "migrations applied through current head",
@@ -54,16 +53,40 @@
                                                                 "miniapp signed launch params accepted without trusting user_id body",
                                                                 "test card payment created through Mini App BFF",
                                                                 "successful YooKassa checkout completed with test=true",
-                                                                "missed public webhook was recovered by provider-verified reconciliation",
+                                                                "public HTTPS YooKassa payment.succeeded webhook reached cmd/provider-webhook directly",
+                                                                "Mini App BFF-created capture:true test checkout completed successfully",
+                                                                "payment intent moved to succeeded from webhook processing without requiring reconciliation",
                                                                 "topup ledger entry was posted once",
                                                                 "payment.succeeded webhook replay was deduplicated",
+                                                                "protected operator capture:false test checkout reached provider pending state without top-up",
+                                                                "operator cancel produced terminal payment.canceled state",
+                                                                "public HTTPS YooKassa payment.canceled webhook reached cmd/provider-webhook directly",
+                                                                "payment.canceled webhook replay was deduplicated without balance or ledger mutation",
+                                                                "late payment.canceled for an already succeeded intent did not roll back status, balance or top-up ledger",
+                                                                "manual full refund through protected operator route debited credits through ledger and moved the intent to refunded",
                                                                 "manual full refund through protected operator route was idempotent with repeated X-Idempotency-Key",
+                                                                "public HTTPS YooKassa refund.succeeded webhook reached cmd/provider-webhook directly",
                                                                 "refund.succeeded webhook replay was deduplicated by provider_refund_id",
-                                                                "safe Mini App payment history returned no provider-native payload"
+                                                                "consolidated replay smoke confirmed payment.succeeded, payment.canceled and refund.succeeded do not duplicate events or ledger entries",
+                                                                "operator sync replay kept refunded and canceled intents in terminal states",
+                                                                "operator refund replay with the same X-Idempotency-Key returned the existing refund without a second debit",
+                                                                "operator refund DTO returned safe fields without provider-native payload",
+                                                                "safe Mini App payment history returned no provider-native payload",
+                                                                "missed webhook smoke kept a completed test checkout pending with no top-up while cmd/provider-webhook was unavailable",
+                                                                "operator pending list showed the unresolved missed-webhook payment intent",
+                                                                "operator sync verified YooKassa state through GetPayment and posted exactly one top-up ledger entry",
+                                                                "repeated operator sync did not duplicate the top-up or balance change",
+                                                                "restoring cmd/provider-webhook processed the retried YooKassa webhook without creating a duplicate grant",
+                                                                "protected operator endpoints for unprocessed payment events and pending intents failed closed without X-Admin-Token",
+                                                                "protected operator endpoints for unprocessed payment events and pending intents returned safe DTOs without raw provider payload/auth/secret fields",
+                                                                "provider-webhook readiness exposes payment webhook backlog count and oldest unprocessed age",
+                                                                "payment metrics expose webhook backlog, processing errors and payment provider error counters",
+                                                                "Prometheus rules include stale webhook backlog, provider errors and provider-webhook readiness alerts",
+                                                                "manual refund API rejects unknown amount, partial and automatic fields instead of silently treating partial refund attempts as full refunds",
+                                                                "provider refund responses must match the full payment amount and currency or the internal refund debit is compensated and the refund is marked failed",
+                                                                "partial and automatic refunds remain blocked until lot/FIFO attribution exists"
                                                             ],
                                                  "followups":  [
-                                                                   "configure a public HTTPS route so YooKassa dashboard webhooks reach cmd/provider-webhook directly",
-                                                                   "retest payment.canceled through the protected operator capture:false local-intent path",
                                                                    "leave pending failed checkout intents unpaid until provider success/cancel/expiration is verified"
                                                                ],
                                                  "secret_policy":  "No YooKassa secrets, ADMIN_TOKEN, launch params, auth headers or raw provider payloads were recorded."
@@ -71,7 +94,7 @@
                      "active_runtime":  {
                                             "api_port":  8080,
                                             "miniapp_port":  5173,
-                                            "tunnel":  "pending_cloudflare",
+                                           "tunnel":  "cloudflare_vk_tunnel_running_for_local_payment_webhook_smoke",
                                             "local_env_files":  [
                                                                     ".env",
                                                                     "_env"
@@ -82,13 +105,8 @@
                                              "date":  "2026-06-10",
                                              "active_human_backlog":  "TASKS.md",
                                              "archived_legacy_docs":  [
-                                                                          "docs/archive/2026-06/TASKS.legacy.md",
-                                                                          "docs/archive/2026-06/ROADMAP.legacy.md",
-                                                                          "docs/archive/2026-06/TESTING.legacy.md",
-                                                                          "docs/archive/2026-06/BILLING_AGENT_HANDOFF.legacy.md",
-                                                                          "docs/archive/2026-06/MERGE_HANDOFF.integration-web-backend.legacy.md"
                                                                       ],
-                                             "policy":  "Keep active docs short and current; use docs/archive/** only for historical investigation or explicitly requested archaeology."
+                                             "policy":  "Keep completed work summarized in TASKS.md; do not keep generated execution plans, merge handoff context, or prompt scratch files as active repo context."
                                          }
                  },
     "doc_update_policy":  {
@@ -117,40 +135,10 @@
                     "error":  ".agents/schemas/error.schema.json"
                 },
     "active_plans":  {
-                         "product_statistics_observability":  {
-                                                                  "status":  "complete",
-                                                                  "plan":  ".agents/plans/product_statistics_observability.json",
-                                                                  "schema":  ".agents/schemas/product_observability_plan.schema.json",
-                                                                  "mode":  "IMPLEMENT",
-                                                                  "runtime_target":  "vps_docker_compose",
-                                                                  "notes":  [
-                                                                                "Product statistics observability implementation is complete in the local repository and should be treated as current context.",
-                                                                                "The previous product_observability plan was complete and removed from .agents/plans to avoid stale active context.",
-                                                                                "Keep implementation local-repository first unless a later task explicitly asks for VPS or Cloudflare changes.",
-                                                                                "Do not expose metrics/Grafana/Prometheus/Loki/Tempo publicly.",
-                                                                                "Do not log or commit secrets, prompts, full launch params, raw PII, raw provider payloads or raw payment payloads."
-                                                                            ]
-                                                              },
-                         "product_observability_v2":  {
-                                                          "status":  "complete",
-                                                          "plan":  ".agents/plans/product_observability_v2.json",
-                                                          "schema":  ".agents/schemas/product_observability_plan.schema.json",
-                                                          "mode":  "IMPLEMENT",
-                                                          "runtime_target":  "vps_docker_compose_first",
-                                                          "notes":  [
-                                                                        "This is the next product-wide observability/statistics plan and covers VK Bot, VK Mini App, jobs, workers, providers, payments, billing, referrals, artifacts, admin/operator APIs and future website readiness.",
-                                                                        "Treat .agents/plans/product_statistics_observability.json as completed baseline context, not as the active implementation target.",
-                                                                        "Keep all observability endpoints private and never expose /metrics publicly.",
-                                                                        "Do not add high-cardinality metric labels such as user_id, vk_user_id, job_id, payment_id, artifact_id, referral_code, raw_error, raw_url, prompt or idempotency_key.",
-                                                                        "Do not log, trace, alert, report or dashboard secrets, prompts, full launch params, raw PII, raw provider payloads, raw payment payloads or private artifact URLs.",
-                                                                        "Do not run live YooKassa money actions or real provider-spend synthetics without separate explicit confirmation.",
-                                                                        "V2 implementation added bounded admin action metrics, exact scheduled active-user aggregate gauge, daily/weekly report specs, provider/worker/payment/security/referral alerts, synthetic runner refinements, sanitized trace error classes and trace-aware runtime logging."
-                                                                    ]
-                                                      }
                      },
     "archive":  {
-                    "root":  "docs/archive",
-                    "policy":  "Historical evidence only, not current instruction."
+                    "root":  "",
+                    "policy":  "Generated plan/archive context should be removed after completion and summarized in TASKS.md."
                 },
     "security_invariants":  [
                                 "no secrets, full launch params, prompt bodies, private artifact URLs, raw PII or provider credentials in docs/logs",

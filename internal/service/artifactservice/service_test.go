@@ -49,12 +49,100 @@ func TestSaveTextArtifact(t *testing.T) {
 	}
 }
 
-func TestSaveBytesDeduplicates(t *testing.T) {
+func TestSaveInputReferenceImageDeduplicatesByOwnerHashAndPolicy(t *testing.T) {
 	repo := memory.NewArtifactRepo()
 	store := memory.NewObjectStore()
 	svc := artifactservice.New(repo, store, testBucket)
 	owner := uuid.New()
 	payload := []byte{0x1, 0x2, 0x3}
+
+	first, err := svc.SaveBytesArtifact(context.Background(), owner, nil, domain.ArtifactKindInput, domain.MediaTypeImage, "image/png", payload)
+	if err != nil {
+		t.Fatalf("first save: %v", err)
+	}
+	second, err := svc.SaveBytesArtifact(context.Background(), owner, nil, domain.ArtifactKindInput, domain.MediaTypeImage, "image/png", payload)
+	if err != nil {
+		t.Fatalf("second save: %v", err)
+	}
+	if first.ID != second.ID {
+		t.Fatalf("expected dedup to return same artifact, got %s vs %s", first.ID, second.ID)
+	}
+	if first.LifecycleClass != domain.ArtifactLifecycleInputReference {
+		t.Fatalf("LifecycleClass = %q, want input_reference", first.LifecycleClass)
+	}
+	if first.ValidationPolicyVersion != artifactservice.ReferenceImageValidationPolicyVersion {
+		t.Fatalf("ValidationPolicyVersion = %q", first.ValidationPolicyVersion)
+	}
+	if store.Len() != 1 {
+		t.Fatalf("expected one stored object, got %d", store.Len())
+	}
+}
+
+func TestSaveInputReferenceDedupeIsOwnerIsolated(t *testing.T) {
+	repo := memory.NewArtifactRepo()
+	store := memory.NewObjectStore()
+	svc := artifactservice.New(repo, store, testBucket)
+	payload := []byte{0x1, 0x2, 0x3}
+
+	first, err := svc.SaveBytesArtifact(context.Background(), uuid.New(), nil, domain.ArtifactKindInput, domain.MediaTypeImage, "image/png", payload)
+	if err != nil {
+		t.Fatalf("first save: %v", err)
+	}
+	second, err := svc.SaveBytesArtifact(context.Background(), uuid.New(), nil, domain.ArtifactKindInput, domain.MediaTypeImage, "image/png", payload)
+	if err != nil {
+		t.Fatalf("second save: %v", err)
+	}
+	if first.ID == second.ID {
+		t.Fatalf("expected different owners to keep separate artifacts: %s", first.ID)
+	}
+	if store.Len() != 2 {
+		t.Fatalf("expected two stored objects, got %d", store.Len())
+	}
+}
+
+func TestSaveInputReferenceDedupeIgnoresOldPolicy(t *testing.T) {
+	repo := memory.NewArtifactRepo()
+	store := memory.NewObjectStore()
+	svc := artifactservice.New(repo, store, testBucket)
+	owner := uuid.New()
+	payload := []byte{0x1, 0x2, 0x3}
+	sum := sha256.Sum256(payload)
+	old := &domain.Artifact{
+		ID:                      uuid.New(),
+		OwnerUserID:             owner,
+		Kind:                    domain.ArtifactKindInput,
+		MediaType:               domain.MediaTypeImage,
+		MimeType:                "image/png",
+		StorageBucket:           testBucket,
+		StorageKey:              "old-policy.png",
+		SHA256:                  hex.EncodeToString(sum[:]),
+		ValidationPolicyVersion: "image_reference_old",
+		LifecycleClass:          domain.ArtifactLifecycleInputReference,
+		SizeBytes:               int64(len(payload)),
+		Status:                  domain.ArtifactStatusReady,
+	}
+	if err := repo.Create(context.Background(), old); err != nil {
+		t.Fatalf("seed old policy artifact: %v", err)
+	}
+
+	art, err := svc.SaveBytesArtifact(context.Background(), owner, nil, domain.ArtifactKindInput, domain.MediaTypeImage, "image/png", payload)
+	if err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	if art.ID == old.ID {
+		t.Fatalf("unexpected reuse of old policy artifact %s", old.ID)
+	}
+	if art.ValidationPolicyVersion != artifactservice.ReferenceImageValidationPolicyVersion {
+		t.Fatalf("ValidationPolicyVersion = %q", art.ValidationPolicyVersion)
+	}
+}
+
+func TestSaveOutputArtifactsDoNotReuseReferenceDedupe(t *testing.T) {
+	repo := memory.NewArtifactRepo()
+	store := memory.NewObjectStore()
+	svc := artifactservice.New(repo, store, testBucket)
+	owner := uuid.New()
+	payload := []byte("same provider output")
 
 	first, err := svc.SaveBytesArtifact(context.Background(), owner, nil, domain.ArtifactKindOutput, domain.MediaTypeImage, "image/png", payload)
 	if err != nil {
@@ -64,11 +152,14 @@ func TestSaveBytesDeduplicates(t *testing.T) {
 	if err != nil {
 		t.Fatalf("second save: %v", err)
 	}
-	if first.ID != second.ID {
-		t.Fatalf("expected dedup to return same artifact, got %s vs %s", first.ID, second.ID)
+	if first.ID == second.ID {
+		t.Fatalf("output artifacts should keep separate ids, got %s", first.ID)
 	}
-	if store.Len() != 1 {
-		t.Fatalf("expected one stored object, got %d", store.Len())
+	if first.StorageKey == second.StorageKey {
+		t.Fatalf("output artifacts should not share storage key %q", first.StorageKey)
+	}
+	if first.LifecycleClass != domain.ArtifactLifecycleProviderOriginal {
+		t.Fatalf("LifecycleClass = %q, want provider_original", first.LifecycleClass)
 	}
 }
 

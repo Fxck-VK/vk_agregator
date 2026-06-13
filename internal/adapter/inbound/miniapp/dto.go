@@ -2,6 +2,7 @@ package miniapp
 
 import (
 	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -143,7 +144,7 @@ func newJobDTO(j *domain.Job) JobDTO {
 		CostEstimate:      j.CostEstimate,
 		CostCaptured:      j.CostCaptured,
 		OutputArtifactIDs: j.OutputArtifactIDs,
-		ErrorCode:         j.ErrorCode,
+		ErrorCode:         safeJobErrorCode(j),
 		CreatedAt:         j.CreatedAt,
 		UpdatedAt:         j.UpdatedAt,
 	}
@@ -169,6 +170,73 @@ func newJobDTO(j *domain.Job) JobDTO {
 		}
 	}
 	return out
+}
+
+func safeJobErrorCode(j *domain.Job) string {
+	if j == nil || j.ErrorCode == "" {
+		return ""
+	}
+	switch j.ErrorCode {
+	case domain.JobErrMediaUploadInvalid,
+		domain.JobErrMediaUploadTooLarge,
+		domain.JobErrMediaUploadUnsupported,
+		domain.JobErrMediaProviderOutputInvalid,
+		domain.JobErrMediaProcessingUnavailable,
+		domain.JobErrMediaDeliveryFailed,
+		domain.JobErrMediaOverloadedRetryLater:
+		return j.ErrorCode
+	case string(domain.ProviderErrMediaProbeFailed),
+		"media_contract_output_not_delivery_ready",
+		"video_output_missing",
+		"video_artifact_missing":
+		return domain.JobErrMediaProviderOutputInvalid
+	case string(domain.ProviderErrMediaTranscodeFailed),
+		"variant_probe_failed",
+		"variant_store_failed":
+		return domain.JobErrMediaProcessingUnavailable
+	case "media_probe_overloaded",
+		"media_transcode_overloaded",
+		"variant_probe_overloaded",
+		"media_variant_backlog_full",
+		string(domain.ProviderErrOverloaded),
+		string(domain.ProviderErrRateLimited):
+		return domain.JobErrMediaOverloadedRetryLater
+	case "media_probe_unavailable",
+		"media_probe_storage_unavailable",
+		"media_contract_unavailable",
+		"artifact_metadata_unavailable",
+		"artifact_bytes_unavailable",
+		"variant_probe_unavailable",
+		string(domain.ProviderErrOutputDownloadFailed):
+		return domain.JobErrMediaProcessingUnavailable
+	case "delivery_failed":
+		return domain.JobErrMediaDeliveryFailed
+	default:
+		if isFailedMediaJob(j) && looksInternalMediaErrorCode(j.ErrorCode) {
+			return domain.JobErrMediaProcessingUnavailable
+		}
+		return j.ErrorCode
+	}
+}
+
+func isFailedMediaJob(j *domain.Job) bool {
+	if j == nil {
+		return false
+	}
+	if j.Modality != domain.ModalityImage && j.Modality != domain.ModalityVideo {
+		return false
+	}
+	return j.Status == domain.JobStatusFailedTerminal || j.Status == domain.JobStatusRejected || j.Status == domain.JobStatusRefunded
+}
+
+func looksInternalMediaErrorCode(code string) bool {
+	code = strings.ToLower(strings.TrimSpace(code))
+	return strings.Contains(code, "provider") ||
+		strings.Contains(code, "probe") ||
+		strings.Contains(code, "transcode") ||
+		strings.Contains(code, "artifact") ||
+		strings.Contains(code, "storage") ||
+		strings.Contains(code, "delivery")
 }
 
 func newChatJobDTO(j *domain.Job) ChatJobDTO {

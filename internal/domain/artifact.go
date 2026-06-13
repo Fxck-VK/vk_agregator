@@ -83,6 +83,50 @@ const (
 	VariantVKVideo VariantType = "vk_video"
 )
 
+// ArtifactLifecycleClass describes retention/dedup policy for stored media.
+// Values are bounded and internal; do not expose them as public identifiers.
+type ArtifactLifecycleClass string
+
+const (
+	ArtifactLifecycleTempUpload       ArtifactLifecycleClass = "temp_upload"
+	ArtifactLifecycleInputReference   ArtifactLifecycleClass = "input_reference"
+	ArtifactLifecycleProviderOriginal ArtifactLifecycleClass = "provider_original"
+	ArtifactLifecycleDeliveryVariant  ArtifactLifecycleClass = "delivery_variant"
+	ArtifactLifecycleFailedDeleted    ArtifactLifecycleClass = "failed_deleted"
+)
+
+// Valid reports whether the lifecycle class is one of the known values.
+func (c ArtifactLifecycleClass) Valid() bool {
+	switch c {
+	case ArtifactLifecycleTempUpload,
+		ArtifactLifecycleInputReference,
+		ArtifactLifecycleProviderOriginal,
+		ArtifactLifecycleDeliveryVariant,
+		ArtifactLifecycleFailedDeleted:
+		return true
+	default:
+		return false
+	}
+}
+
+// NormalizeArtifactLifecycleClass fills a conservative lifecycle class from
+// artifact shape while rejecting arbitrary persisted values.
+func NormalizeArtifactLifecycleClass(class ArtifactLifecycleClass, kind ArtifactKind, mediaType MediaType, status ArtifactStatus) ArtifactLifecycleClass {
+	if status == ArtifactStatusFailed || status == ArtifactStatusDeleted {
+		return ArtifactLifecycleFailedDeleted
+	}
+	if class.Valid() {
+		return class
+	}
+	if kind == ArtifactKindInput && mediaType == MediaTypeImage {
+		return ArtifactLifecycleInputReference
+	}
+	if kind == ArtifactKindOutput || kind == ArtifactKindIntermediate {
+		return ArtifactLifecycleProviderOriginal
+	}
+	return ArtifactLifecycleTempUpload
+}
+
 // MediaCleanupKind identifies which stored media object a maintenance cleanup
 // candidate points at. It is bounded and safe for internal branching only.
 type MediaCleanupKind string
@@ -92,11 +136,42 @@ const (
 	MediaCleanupVariant  MediaCleanupKind = "variant"
 )
 
+// MediaCleanupClass mirrors artifact lifecycle policy for cleanup decisions.
+type MediaCleanupClass string
+
+const (
+	MediaCleanupTempUpload       MediaCleanupClass = "temp_upload"
+	MediaCleanupInputReference   MediaCleanupClass = "input_reference"
+	MediaCleanupProviderOriginal MediaCleanupClass = "provider_original"
+	MediaCleanupDeliveryVariant  MediaCleanupClass = "delivery_variant"
+	MediaCleanupFailedDeleted    MediaCleanupClass = "failed_deleted"
+)
+
+// MediaCleanupPolicy contains per-class cutoffs. A zero cutoff disables that
+// class so production can retain active history while still purging failures.
+type MediaCleanupPolicy struct {
+	TempUploadCutoff       time.Time
+	InputReferenceCutoff   time.Time
+	ProviderOriginalCutoff time.Time
+	DeliveryVariantCutoff  time.Time
+	FailedDeletedCutoff    time.Time
+}
+
+// Enabled reports whether at least one media cleanup class is enabled.
+func (p MediaCleanupPolicy) Enabled() bool {
+	return !p.TempUploadCutoff.IsZero() ||
+		!p.InputReferenceCutoff.IsZero() ||
+		!p.ProviderOriginalCutoff.IsZero() ||
+		!p.DeliveryVariantCutoff.IsZero() ||
+		!p.FailedDeletedCutoff.IsZero()
+}
+
 // MediaCleanupCandidate is a storage object that maintenance may delete. It
 // intentionally carries only internal ids and storage coordinates; callers must
 // never expose it through public DTOs or logs.
 type MediaCleanupCandidate struct {
 	Kind          MediaCleanupKind
+	CleanupClass  MediaCleanupClass
 	ArtifactID    uuid.UUID
 	VariantID     uuid.UUID
 	VariantType   VariantType
@@ -226,6 +301,10 @@ type Artifact struct {
 	PublicURL string `json:"public_url,omitempty"`
 	// SHA256 is the hex content hash for dedup and integrity.
 	SHA256 string `json:"sha256"`
+	// ValidationPolicyVersion scopes safe reuse decisions for input media.
+	ValidationPolicyVersion string `json:"-"`
+	// LifecycleClass controls retention and reuse policy for stored bytes.
+	LifecycleClass ArtifactLifecycleClass `json:"-"`
 	// SizeBytes is the size of the original bytes.
 	SizeBytes int64 `json:"size_bytes"`
 	// Width is the pixel width for image/video, 0 otherwise.
@@ -305,6 +384,8 @@ type ArtifactVariant struct {
 	BitrateBPS int64 `json:"bitrate_bps,omitempty"`
 	// ProbeStatus is the sanitized media-probe lifecycle status.
 	ProbeStatus MediaProbeStatus `json:"probe_status,omitempty"`
+	// LifecycleClass controls retention policy for variant bytes.
+	LifecycleClass ArtifactLifecycleClass `json:"-"`
 	// CreatedAt is the row creation timestamp.
 	CreatedAt time.Time `json:"created_at"`
 	// UpdatedAt is the last mutation timestamp.

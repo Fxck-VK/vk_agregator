@@ -159,6 +159,20 @@ func (h *deliveryHarness) addVideoVariant(t *testing.T, job *domain.Job, variant
 	return variant
 }
 
+func (h *deliveryHarness) markVideoOriginal(t *testing.T, job *domain.Job, metadata domain.ArtifactMediaMetadata) {
+	t.Helper()
+	ctx := context.Background()
+	art, err := h.artifacts.GetByID(ctx, job.OutputArtifactIDs[0])
+	if err != nil {
+		t.Fatalf("get artifact: %v", err)
+	}
+	art.MimeType = "video/mp4"
+	art.ApplyMediaMetadata(metadata)
+	if err := h.artifacts.Update(ctx, art); err != nil {
+		t.Fatalf("update artifact metadata: %v", err)
+	}
+}
+
 func (h *deliveryHarness) captureEntryCount(t *testing.T, userID uuid.UUID) int {
 	t.Helper()
 	ctx := context.Background()
@@ -177,6 +191,35 @@ func (h *deliveryHarness) captureEntryCount(t *testing.T, userID uuid.UUID) int 
 		}
 	}
 	return captures
+}
+
+func (h *deliveryHarness) releaseEntryCount(t *testing.T, userID uuid.UUID) int {
+	t.Helper()
+	ctx := context.Background()
+	acc, err := h.billingRpo.GetAccountByUser(ctx, userID, domain.CurrencyCredits)
+	if err != nil {
+		t.Fatalf("get account: %v", err)
+	}
+	entries, err := h.billingRpo.ListEntries(ctx, acc.ID, 100, 0)
+	if err != nil {
+		t.Fatalf("list ledger entries: %v", err)
+	}
+	var releases int
+	for _, entry := range entries {
+		if entry.Type == domain.LedgerRelease {
+			releases++
+		}
+	}
+	return releases
+}
+
+func (h *deliveryHarness) balance(t *testing.T, userID uuid.UUID) int64 {
+	t.Helper()
+	acc, err := h.billingRpo.GetAccountByUser(context.Background(), userID, domain.CurrencyCredits)
+	if err != nil {
+		t.Fatalf("get account: %v", err)
+	}
+	return acc.BalanceCached
 }
 
 func deliveryTask(job *domain.Job) queue.Task {
@@ -274,6 +317,96 @@ func TestDeliveryNamesRawVideoArtifactFromPrompt(t *testing.T) {
 	}
 	if uploader.videoFilename != "кот в очках едет на жираф.mp4" {
 		t.Fatalf("video filename = %q", uploader.videoFilename)
+	}
+}
+
+func TestDeliveryAllowsProbePassedRawVideoOriginalByPolicy(t *testing.T) {
+	h := newDeliveryHarness(t)
+	uploader := &fakeVKUploader{}
+	h.worker = worker.NewDeliveryWorker(worker.DeliveryDeps{
+		Jobs:                   h.jobs,
+		Deliveries:             h.deliveries,
+		Artifacts:              h.artifacts,
+		Objects:                h.objects,
+		VK:                     h.vk,
+		VKUploader:             uploader,
+		Billing:                h.billing,
+		RawVideoDeliveryPolicy: "if_probe_passed",
+	})
+	ctx := context.Background()
+	job := h.resultReadyJob(t, domain.MediaTypeVideo, "safe original mp4")
+	job.OperationType = domain.OperationVideoGenerate
+	job.Modality = domain.ModalityVideo
+	if err := h.jobs.Update(ctx, job); err != nil {
+		t.Fatalf("update job: %v", err)
+	}
+	h.markVideoOriginal(t, job, domain.ArtifactMediaMetadata{
+		Width:       1280,
+		Height:      720,
+		DurationMS:  5000,
+		Codec:       "h264",
+		Container:   "mp4",
+		BitrateBPS:  2400000,
+		ProbeStatus: domain.MediaProbePassed,
+	})
+
+	if err := h.worker.Process(ctx, deliveryTask(job)); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+	if string(uploader.videoBytes) != "safe original mp4" {
+		t.Fatalf("uploaded bytes = %q", string(uploader.videoBytes))
+	}
+	got, _ := h.jobs.GetByID(ctx, job.ID)
+	if got.Status != domain.JobStatusSucceeded || got.CostCaptured != 10 {
+		t.Fatalf("expected succeeded job with capture after safe delivery, got %+v", got)
+	}
+	if h.captureEntryCount(t, job.UserID) != 1 {
+		t.Fatalf("expected exactly one capture ledger entry")
+	}
+}
+
+func TestDeliveryRejectsRawVideoOriginalWhenPolicyNever(t *testing.T) {
+	h := newDeliveryHarness(t)
+	uploader := &fakeVKUploader{}
+	h.worker = worker.NewDeliveryWorker(worker.DeliveryDeps{
+		Jobs:                   h.jobs,
+		Deliveries:             h.deliveries,
+		Artifacts:              h.artifacts,
+		Objects:                h.objects,
+		VK:                     h.vk,
+		VKUploader:             uploader,
+		Billing:                h.billing,
+		MaxAttempts:            1,
+		RawVideoDeliveryPolicy: "never",
+	})
+	ctx := context.Background()
+	job := h.resultReadyJob(t, domain.MediaTypeVideo, "safe original mp4")
+	job.OperationType = domain.OperationVideoGenerate
+	job.Modality = domain.ModalityVideo
+	if err := h.jobs.Update(ctx, job); err != nil {
+		t.Fatalf("update job: %v", err)
+	}
+	h.markVideoOriginal(t, job, domain.ArtifactMediaMetadata{
+		Width:       1280,
+		Height:      720,
+		DurationMS:  5000,
+		Codec:       "h264",
+		Container:   "mp4",
+		ProbeStatus: domain.MediaProbePassed,
+	})
+
+	if err := h.worker.Process(ctx, deliveryTask(job)); err != nil {
+		t.Fatalf("terminal delivery failure should be acknowledged: %v", err)
+	}
+	got, _ := h.jobs.GetByID(ctx, job.ID)
+	if got.Status != domain.JobStatusFailedTerminal || got.CostCaptured != 0 {
+		t.Fatalf("raw original without policy must fail without capture, got %+v", got)
+	}
+	if len(uploader.videoBytes) != 0 {
+		t.Fatalf("uploader received raw video bytes despite policy=never")
+	}
+	if h.captureEntryCount(t, job.UserID) != 0 {
+		t.Fatalf("raw original rejection must not capture credits")
 	}
 }
 
@@ -387,11 +520,17 @@ func TestDeliveryMediaUploadFailureUsesRetryBudget(t *testing.T) {
 		t.Fatalf("terminal retry should be acknowledged after DLQ routing: %v", err)
 	}
 	got, _ = h.jobs.GetByID(ctx, job.ID)
-	if got.Status != domain.JobStatusFailedTerminal || got.ErrorCode != "delivery_failed" {
+	if got.Status != domain.JobStatusFailedTerminal || got.ErrorCode != domain.JobErrMediaDeliveryFailed {
 		t.Fatalf("expected terminal delivery failure, got %+v", got)
 	}
-	if got.CostCaptured != 0 || h.captureEntryCount(t, job.UserID) != 0 {
-		t.Fatalf("terminal delivery failure must not capture credits, job=%+v", got)
+	if got.CostCaptured != 0 || h.captureEntryCount(t, job.UserID) != 0 || h.releaseEntryCount(t, job.UserID) != 1 {
+		t.Fatalf("terminal delivery failure must release without capture, job=%+v", got)
+	}
+	if got.ErrorMessage != "media delivery failed; credits were not charged" {
+		t.Fatalf("unsafe delivery error message: %q", got.ErrorMessage)
+	}
+	if balance := h.balance(t, job.UserID); balance != 1000 {
+		t.Fatalf("balance after delivery failure = %d, want reservation released to 1000", balance)
 	}
 }
 
@@ -636,12 +775,67 @@ func TestDeliverySendsImageProviderFailureNoticeWithoutCapture(t *testing.T) {
 		t.Fatalf("failure notice must not mark success or capture credits: %+v", got)
 	}
 	edits := h.vk.Edits()
-	if len(edits) != 1 || edits[0].MessageID != pending.MessageID || !strings.Contains(edits[0].Text, "Средства не списаны") {
+	if len(edits) != 1 || edits[0].MessageID != pending.MessageID || !strings.Contains(edits[0].Text, "Кредиты не списаны") {
 		t.Fatalf("unexpected failure notice edit: %+v", edits)
 	}
 	dels, _ := h.deliveries.ListByJob(ctx, job.ID)
 	if len(dels) != 1 || dels[0].Status != domain.DeliveryStatusSent || dels[0].VKMessageID == nil || *dels[0].VKMessageID != pending.MessageID {
 		t.Fatalf("failure delivery should be persisted as sent edit: %+v", dels)
+	}
+}
+
+func TestDeliverySendsVideoMediaFailureNoticeWithoutCapture(t *testing.T) {
+	h := newDeliveryHarness(t)
+	ctx := context.Background()
+	userID := uuid.New()
+	if _, err := h.billing.EnsureAccount(ctx, userID); err != nil {
+		t.Fatalf("ensure account: %v", err)
+	}
+	pending, err := h.vk.SendMessage(ctx, 556, 9002, vkdelivery.Message{Text: "НейроХаб готовит видео..."})
+	if err != nil {
+		t.Fatalf("send pending: %v", err)
+	}
+	job := &domain.Job{
+		ID:             uuid.New(),
+		UserID:         userID,
+		VKPeerID:       556,
+		OperationType:  domain.OperationVideoGenerate,
+		Modality:       domain.ModalityVideo,
+		Status:         domain.JobStatusFailedTerminal,
+		IdempotencyKey: "job:" + uuid.NewString(),
+		CostReserved:   10,
+		ErrorCode:      domain.JobErrMediaProviderOutputInvalid,
+		ErrorMessage:   "generated media failed safety checks; credits were not charged",
+	}
+	params, _ := json.Marshal(struct {
+		Prompt                 string `json:"prompt"`
+		VKPlaceholderMessageID int64  `json:"vk_placeholder_message_id"`
+	}{
+		Prompt:                 "unsafe video",
+		VKPlaceholderMessageID: pending.MessageID,
+	})
+	job.Params = params
+	if err := h.jobs.Create(ctx, job); err != nil {
+		t.Fatalf("create job: %v", err)
+	}
+
+	if err := h.worker.Process(ctx, deliveryTask(job)); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+
+	got, err := h.jobs.GetByID(ctx, job.ID)
+	if err != nil {
+		t.Fatalf("reload job: %v", err)
+	}
+	if got.Status != domain.JobStatusFailedTerminal || got.CostCaptured != 0 {
+		t.Fatalf("failure notice must not mark success or capture credits: %+v", got)
+	}
+	edits := h.vk.Edits()
+	if len(edits) != 1 || edits[0].MessageID != pending.MessageID || !strings.Contains(edits[0].Text, "Кредиты не списаны") {
+		t.Fatalf("unexpected video failure notice edit: %+v", edits)
+	}
+	if strings.Contains(edits[0].Text, "unsafe video") || strings.Contains(edits[0].Text, "provider") {
+		t.Fatalf("video failure notice leaked unsafe details: %q", edits[0].Text)
 	}
 }
 

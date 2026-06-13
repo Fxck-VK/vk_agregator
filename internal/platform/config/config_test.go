@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/platform/config"
 )
 
@@ -135,6 +136,9 @@ func TestLoadVKVideoUploadConfig(t *testing.T) {
 
 func TestLoadMediaPipelineConfig(t *testing.T) {
 	t.Setenv("MEDIA_PIPELINE_ENABLED", "true")
+	t.Setenv("MEDIA_VIDEO_PROBE_POLICY", "probe_required")
+	t.Setenv("MEDIA_VIDEO_TRANSCODE_POLICY", "fallback")
+	t.Setenv("MEDIA_DELIVER_RAW_PROVIDER_VIDEO", "if_probe_passed")
 	t.Setenv("FFPROBE_PATH", "/opt/bin/ffprobe")
 	t.Setenv("FFMPEG_PATH", "/opt/bin/ffmpeg")
 	t.Setenv("MEDIA_MAX_VIDEO_SIZE_BYTES", "1048576")
@@ -146,10 +150,42 @@ func TestLoadMediaPipelineConfig(t *testing.T) {
 	t.Setenv("MEDIA_ALLOWED_VIDEO_CODECS", "H.264, VP9, vp9")
 	t.Setenv("MEDIA_PROBE_TIMEOUT", "3s")
 	t.Setenv("MEDIA_TRANSCODE_TIMEOUT", "4m")
+	t.Setenv("MEDIA_MAX_CONCURRENT_PROBES", "3")
+	t.Setenv("MEDIA_MAX_CONCURRENT_TRANSCODES", "2")
+	t.Setenv("MEDIA_MAX_PENDING_VARIANTS", "24")
+	t.Setenv("MEDIA_MAX_ACTIVE_VIDEO_JOBS_PER_USER", "2")
+	t.Setenv("MEDIA_PROVIDER_MAX_ATTEMPTS_PER_JOB", "1")
+	t.Setenv("MEDIA_PROVIDER_FALLBACK_BUDGET_PER_JOB", "0")
+	t.Setenv("MEDIA_QUEUE_DEGRADE_THRESHOLD", "2500")
+	t.Setenv("MEDIA_MAX_CONCURRENT_UPLOADS", "12")
+	t.Setenv("MEDIA_REFERENCE_UPLOADS_ENABLED", "false")
+	t.Setenv("MEDIA_REFERENCE_WEBP_ENABLED", "true")
+	t.Setenv("MEDIA_MAX_IMAGE_UPLOAD_BYTES", "10485760")
+	t.Setenv("MEDIA_MAX_IMAGE_WIDTH", "2048")
+	t.Setenv("MEDIA_MAX_IMAGE_HEIGHT", "2048")
+	t.Setenv("MEDIA_MAX_IMAGE_PIXELS", "4194304")
+	t.Setenv("MEDIA_PROVIDER_QUALITY_GUARD_ENABLED", "true")
+	t.Setenv("MEDIA_PROVIDER_QUALITY_DEGRADED_FAILURES", "4")
+	t.Setenv("MEDIA_PROVIDER_QUALITY_DISABLED_FAILURES", "7")
+	t.Setenv("MEDIA_PROVIDER_QUALITY_RECOVERY_SUCCESSES", "3")
+	t.Setenv("ARTIFACT_RETENTION_DAYS", "7")
+	t.Setenv("MEDIA_INPUT_RETENTION_DAYS", "14")
+	t.Setenv("MEDIA_FAILED_RETENTION_DAYS", "3")
+	t.Setenv("MEDIA_ORIGINAL_RETENTION_DAYS", "30")
+	t.Setenv("MEDIA_VARIANT_RETENTION_DAYS", "21")
 
 	cfg := config.Load()
 	if !cfg.MediaPipelineEnabled {
 		t.Fatal("MediaPipelineEnabled = false, want true")
+	}
+	if cfg.MediaVideoProbePolicy != config.MediaVideoProbePolicyProbeRequired {
+		t.Fatalf("MediaVideoProbePolicy = %q", cfg.MediaVideoProbePolicy)
+	}
+	if cfg.MediaVideoTranscodePolicy != config.MediaVideoTranscodePolicyFallback {
+		t.Fatalf("MediaVideoTranscodePolicy = %q", cfg.MediaVideoTranscodePolicy)
+	}
+	if cfg.MediaDeliverRawProviderVideo != config.MediaDeliverRawProviderVideoIfProbePassed {
+		t.Fatalf("MediaDeliverRawProviderVideo = %q", cfg.MediaDeliverRawProviderVideo)
 	}
 	if cfg.FFProbePath != "/opt/bin/ffprobe" || cfg.FFmpegPath != "/opt/bin/ffmpeg" {
 		t.Fatalf("unexpected tool paths: probe=%q ffmpeg=%q", cfg.FFProbePath, cfg.FFmpegPath)
@@ -169,6 +205,141 @@ func TestLoadMediaPipelineConfig(t *testing.T) {
 	if cfg.MediaProbeTimeout != 3*time.Second || cfg.MediaTranscodeTimeout != 4*time.Minute {
 		t.Fatalf("unexpected media timeouts: probe=%s transcode=%s", cfg.MediaProbeTimeout, cfg.MediaTranscodeTimeout)
 	}
+	if cfg.MediaMaxConcurrentProbes != 3 || cfg.MediaMaxConcurrentTranscodes != 2 || cfg.MediaMaxPendingVariants != 24 {
+		t.Fatalf("unexpected media concurrency limits: probes=%d transcodes=%d variants=%d", cfg.MediaMaxConcurrentProbes, cfg.MediaMaxConcurrentTranscodes, cfg.MediaMaxPendingVariants)
+	}
+	if cfg.MediaMaxActiveVideoJobsPerUser != 2 || cfg.MediaProviderMaxAttemptsPerJob != 1 || cfg.MediaProviderFallbackBudget != 0 {
+		t.Fatalf("unexpected media job/provider limits: active=%d attempts=%d fallback=%d", cfg.MediaMaxActiveVideoJobsPerUser, cfg.MediaProviderMaxAttemptsPerJob, cfg.MediaProviderFallbackBudget)
+	}
+	if cfg.MediaQueueDegradeThreshold != 2500 || cfg.MediaMaxConcurrentUploads != 12 {
+		t.Fatalf("unexpected media queue/upload limits: queue=%d uploads=%d", cfg.MediaQueueDegradeThreshold, cfg.MediaMaxConcurrentUploads)
+	}
+	if cfg.MediaReferenceUploadsEnabled || !cfg.MediaReferenceWebPEnabled ||
+		cfg.MediaMaxImageUploadBytes != 10485760 ||
+		cfg.MediaMaxImageWidth != 2048 ||
+		cfg.MediaMaxImageHeight != 2048 ||
+		cfg.MediaMaxImagePixels != 4194304 {
+		t.Fatalf("unexpected media image upload config: enabled=%v webp=%v bytes=%d size=%dx%d pixels=%d",
+			cfg.MediaReferenceUploadsEnabled,
+			cfg.MediaReferenceWebPEnabled,
+			cfg.MediaMaxImageUploadBytes,
+			cfg.MediaMaxImageWidth,
+			cfg.MediaMaxImageHeight,
+			cfg.MediaMaxImagePixels)
+	}
+	if !cfg.MediaProviderQualityGuardEnabled ||
+		cfg.MediaProviderQualityDegradedFailures != 4 ||
+		cfg.MediaProviderQualityDisabledFailures != 7 ||
+		cfg.MediaProviderQualityRecoverySuccesses != 3 {
+		t.Fatalf("unexpected provider quality config: enabled=%v degraded=%d disabled=%d recovery=%d",
+			cfg.MediaProviderQualityGuardEnabled,
+			cfg.MediaProviderQualityDegradedFailures,
+			cfg.MediaProviderQualityDisabledFailures,
+			cfg.MediaProviderQualityRecoverySuccesses)
+	}
+	if cfg.ArtifactRetentionDays != 7 ||
+		cfg.MediaInputRetentionDays != 14 ||
+		cfg.MediaFailedRetentionDays != 3 ||
+		cfg.MediaOriginalRetentionDays != 30 ||
+		cfg.MediaVariantRetentionDays != 21 {
+		t.Fatalf("unexpected media retention config: artifact=%d input=%d failed=%d original=%d variant=%d",
+			cfg.ArtifactRetentionDays,
+			cfg.MediaInputRetentionDays,
+			cfg.MediaFailedRetentionDays,
+			cfg.MediaOriginalRetentionDays,
+			cfg.MediaVariantRetentionDays)
+	}
+}
+
+func TestLoadMediaProviderContractsJSON(t *testing.T) {
+	t.Setenv("MEDIA_PROVIDER_CONTRACTS_JSON", `[{
+		"provider":"deepinfra",
+		"model":"PrunaAI/p-video",
+		"model_class":"deepinfra_video",
+		"modality":"video",
+		"allowed_durations_sec":[5],
+		"allowed_aspect_ratios":["16:9","16:9"],
+		"allowed_resolutions":["720P"],
+		"expected_container":"MP4",
+		"expected_codec":"H264",
+		"expected_max_bytes":134217728,
+		"delivery_ready_output":true,
+		"requires_probe":true,
+		"requires_transcode":false,
+		"transcode_allowed":false,
+		"supports_provider_idempotency":false,
+		"provider_idempotency_guarantee":"none",
+		"max_provider_attempts":1,
+		"max_fallback_attempts":0,
+		"max_provider_cost_credits":10
+	}]`)
+
+	cfg := config.Load()
+	if len(cfg.MediaProviderContracts) != 1 {
+		t.Fatalf("contracts = %d, want 1", len(cfg.MediaProviderContracts))
+	}
+	contract := cfg.MediaProviderContracts[0]
+	if contract.Provider != domain.ProviderDeepInfra || contract.Model != "PrunaAI/p-video" || contract.Modality != domain.ModalityVideo {
+		t.Fatalf("unexpected contract identity: %+v", contract)
+	}
+	if contract.ModelClass != "deepinfra_video" || contract.ExpectedContainer != "mp4" || contract.ExpectedCodec != "h264" {
+		t.Fatalf("contract was not normalized safely: %+v", contract)
+	}
+	if !reflect.DeepEqual(contract.AllowedAspectRatios, []string{"16:9"}) || !reflect.DeepEqual(contract.AllowedResolutions, []string{"720p"}) {
+		t.Fatalf("contract lists were not normalized: %+v", contract)
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("valid media provider contract rejected: %v", err)
+	}
+}
+
+func TestValidateMediaProviderContractsFailClosed(t *testing.T) {
+	cfg := config.Config{MediaProviderContractsRaw: `[{"provider":"deepinfra","unknown":true}]`}
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "MEDIA_PROVIDER_CONTRACTS_JSON") {
+		t.Fatalf("expected JSON validation error, got %v", err)
+	}
+
+	cfg = config.Config{MediaProviderContracts: []domain.ProviderMediaContract{{
+		Provider:            domain.ProviderDeepInfra,
+		Model:               "PrunaAI/p-video",
+		ModelClass:          "deepinfra_video",
+		Modality:            domain.ModalityVideo,
+		ExpectedContainer:   "mp4",
+		ExpectedCodec:       "h264",
+		ExpectedMaxBytes:    1,
+		DeliveryReadyOutput: true,
+		MaxProviderAttempts: 2,
+	}}}
+	err = cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "provider idempotency") {
+		t.Fatalf("expected retry-risk validation error, got %v", err)
+	}
+}
+
+func TestLoadMediaPolicyDefaults(t *testing.T) {
+	t.Setenv("APP_ENV", "development")
+	t.Setenv("MEDIA_PIPELINE_ENABLED", "false")
+
+	cfg := config.Load()
+	if cfg.MediaVideoProbePolicy != config.MediaVideoProbePolicyDisabled {
+		t.Fatalf("dev disabled probe policy = %q", cfg.MediaVideoProbePolicy)
+	}
+	if cfg.MediaVideoTranscodePolicy != config.MediaVideoTranscodePolicyNever {
+		t.Fatalf("default transcode policy = %q", cfg.MediaVideoTranscodePolicy)
+	}
+	if cfg.MediaDeliverRawProviderVideo != config.MediaDeliverRawProviderVideoAlwaysDevOnly {
+		t.Fatalf("dev raw provider video policy = %q", cfg.MediaDeliverRawProviderVideo)
+	}
+
+	t.Setenv("APP_ENV", "production")
+	cfg = config.Load()
+	if cfg.MediaVideoProbePolicy != config.MediaVideoProbePolicyProbeRequired {
+		t.Fatalf("production probe policy = %q", cfg.MediaVideoProbePolicy)
+	}
+	if cfg.MediaDeliverRawProviderVideo != config.MediaDeliverRawProviderVideoIfProbePassed {
+		t.Fatalf("production raw provider video policy = %q", cfg.MediaDeliverRawProviderVideo)
+	}
 }
 
 func TestValidateMediaPipelineDisabledAllowsMissingTools(t *testing.T) {
@@ -178,20 +349,105 @@ func TestValidateMediaPipelineDisabledAllowsMissingTools(t *testing.T) {
 	}
 }
 
+func TestValidateMediaTranscodeNeverDoesNotRequireFFmpeg(t *testing.T) {
+	cfg := validMediaPipelineConfig()
+	cfg.FFmpegPath = ""
+	cfg.MediaTranscodeTimeout = 0
+
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("transcode=never should not require ffmpeg: %v", err)
+	}
+}
+
+func TestValidateMediaTranscodeFallbackRequiresFFmpegAndProbe(t *testing.T) {
+	cfg := validMediaPipelineConfig()
+	cfg.MediaVideoTranscodePolicy = config.MediaVideoTranscodePolicyFallback
+	cfg.FFmpegPath = ""
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "FFMPEG_PATH") {
+		t.Fatalf("expected FFMPEG_PATH validation error, got %v", err)
+	}
+
+	cfg.FFmpegPath = "ffmpeg"
+	cfg.MediaTranscodeTimeout = 0
+	err = cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "MEDIA_TRANSCODE_TIMEOUT") {
+		t.Fatalf("expected MEDIA_TRANSCODE_TIMEOUT validation error, got %v", err)
+	}
+
+	cfg.MediaTranscodeTimeout = time.Second
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("valid fallback transcode config rejected: %v", err)
+	}
+
+	cfg.MediaVideoProbePolicy = config.MediaVideoProbePolicyDisabled
+	err = cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "MEDIA_VIDEO_TRANSCODE_POLICY") {
+		t.Fatalf("expected transcode/probe validation error, got %v", err)
+	}
+}
+
+func TestValidateProductionMediaPoliciesFailClosed(t *testing.T) {
+	cfg := validProductionConfig()
+	cfg.MediaVideoProbePolicy = config.MediaVideoProbePolicyDisabled
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "MEDIA_VIDEO_PROBE_POLICY") {
+		t.Fatalf("expected production probe policy validation error, got %v", err)
+	}
+
+	cfg = validProductionConfig()
+	cfg.MediaVideoTranscodePolicy = config.MediaVideoTranscodePolicyAlways
+	err = cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "MEDIA_VIDEO_TRANSCODE_POLICY=always") {
+		t.Fatalf("expected production transcode policy validation error, got %v", err)
+	}
+
+	cfg = validProductionConfig()
+	cfg.MediaDeliverRawProviderVideo = config.MediaDeliverRawProviderVideoAlwaysDevOnly
+	err = cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "MEDIA_DELIVER_RAW_PROVIDER_VIDEO=always_dev_only") {
+		t.Fatalf("expected production raw provider video validation error, got %v", err)
+	}
+}
+
+func TestValidateTrustedProviderProbePolicyRequiresMockOnly(t *testing.T) {
+	cfg := config.Config{
+		Provider:              "deepinfra",
+		ProviderChain:         []string{"deepinfra"},
+		MediaVideoProbePolicy: config.MediaVideoProbePolicyTrustedProvider,
+	}
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "trusted_provider") {
+		t.Fatalf("expected trusted_provider validation error, got %v", err)
+	}
+
+	cfg = config.Config{
+		Provider:              "mock",
+		ProviderChain:         []string{"mock"},
+		MediaVideoProbePolicy: config.MediaVideoProbePolicyTrustedProvider,
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("mock-only trusted_provider config rejected: %v", err)
+	}
+}
+
 func TestValidateMediaPipelineEnabledRequiresSafeBounds(t *testing.T) {
 	cfg := config.Config{
-		MediaPipelineEnabled:        true,
-		FFProbePath:                 "ffprobe",
-		FFmpegPath:                  "ffmpeg",
-		MediaMaxVideoSizeBytes:      1,
-		MediaMaxVideoDurationSec:    1,
-		MediaMaxVideoWidth:          1,
-		MediaMaxVideoHeight:         1,
-		MediaMaxVideoBitrate:        1,
-		MediaAllowedVideoContainers: []string{"mp4"},
-		MediaAllowedVideoCodecs:     []string{"h264"},
-		MediaProbeTimeout:           time.Second,
-		MediaTranscodeTimeout:       time.Second,
+		MediaPipelineEnabled:         true,
+		FFProbePath:                  "ffprobe",
+		FFmpegPath:                   "ffmpeg",
+		MediaMaxVideoSizeBytes:       1,
+		MediaMaxVideoDurationSec:     1,
+		MediaMaxVideoWidth:           1,
+		MediaMaxVideoHeight:          1,
+		MediaMaxVideoBitrate:         1,
+		MediaAllowedVideoContainers:  []string{"mp4"},
+		MediaAllowedVideoCodecs:      []string{"h264"},
+		MediaProbeTimeout:            time.Second,
+		MediaTranscodeTimeout:        time.Second,
+		MediaMaxConcurrentProbes:     1,
+		MediaMaxConcurrentTranscodes: 1,
 	}
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("valid media pipeline config rejected: %v", err)
@@ -208,6 +464,76 @@ func TestValidateMediaPipelineEnabledRequiresSafeBounds(t *testing.T) {
 	err = cfg.Validate()
 	if err == nil || !strings.Contains(err.Error(), "MEDIA_ALLOWED_VIDEO_CODECS") {
 		t.Fatalf("expected codec allowlist validation error, got %v", err)
+	}
+}
+
+func TestValidateMediaScaleGuards(t *testing.T) {
+	cfg := validMediaPipelineConfig()
+	cfg.MediaMaxConcurrentProbes = 0
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "MEDIA_MAX_CONCURRENT_PROBES") {
+		t.Fatalf("expected probe concurrency validation error, got %v", err)
+	}
+
+	cfg = validMediaPipelineConfig()
+	cfg.MediaVideoTranscodePolicy = config.MediaVideoTranscodePolicyFallback
+	cfg.MediaMaxConcurrentTranscodes = 0
+	err = cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "MEDIA_MAX_CONCURRENT_TRANSCODES") {
+		t.Fatalf("expected transcode concurrency validation error, got %v", err)
+	}
+
+	cfg = validMediaPipelineConfig()
+	cfg.MediaQueueDegradeThreshold = -1
+	err = cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "MEDIA_QUEUE_DEGRADE_THRESHOLD") {
+		t.Fatalf("expected queue threshold validation error, got %v", err)
+	}
+
+	cfg = validMediaPipelineConfig()
+	cfg.MediaFailedRetentionDays = -1
+	err = cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "MEDIA_FAILED_RETENTION_DAYS") {
+		t.Fatalf("expected retention validation error, got %v", err)
+	}
+
+	cfg = validMediaPipelineConfig()
+	cfg.MediaProviderQualityGuardEnabled = true
+	cfg.MediaProviderQualityDegradedFailures = 5
+	cfg.MediaProviderQualityDisabledFailures = 4
+	cfg.MediaProviderQualityRecoverySuccesses = 1
+	err = cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "MEDIA_PROVIDER_QUALITY_DISABLED_FAILURES") {
+		t.Fatalf("expected provider quality threshold validation error, got %v", err)
+	}
+
+	cfg = validMediaPipelineConfig()
+	cfg.MediaMaxImagePixels = -1
+	err = cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "MEDIA_MAX_IMAGE_PIXELS") {
+		t.Fatalf("expected image pixel validation error, got %v", err)
+	}
+}
+
+func validMediaPipelineConfig() config.Config {
+	return config.Config{
+		MediaPipelineEnabled:         true,
+		MediaVideoProbePolicy:        config.MediaVideoProbePolicyProbeRequired,
+		MediaVideoTranscodePolicy:    config.MediaVideoTranscodePolicyNever,
+		MediaDeliverRawProviderVideo: config.MediaDeliverRawProviderVideoIfProbePassed,
+		FFProbePath:                  "ffprobe",
+		FFmpegPath:                   "ffmpeg",
+		MediaMaxVideoSizeBytes:       1,
+		MediaMaxVideoDurationSec:     1,
+		MediaMaxVideoWidth:           1,
+		MediaMaxVideoHeight:          1,
+		MediaMaxVideoBitrate:         1,
+		MediaAllowedVideoContainers:  []string{"mp4"},
+		MediaAllowedVideoCodecs:      []string{"h264"},
+		MediaProbeTimeout:            time.Second,
+		MediaTranscodeTimeout:        time.Second,
+		MediaMaxConcurrentProbes:     1,
+		MediaMaxConcurrentTranscodes: 1,
 	}
 }
 

@@ -23,6 +23,7 @@ var (
 	ErrWebhookUnsupported = errors.New("paymentservice: unsupported webhook event")
 	ErrRefundNotAllowed   = errors.New("paymentservice: refund is not allowed")
 	ErrRefundCreditsSpent = errors.New("paymentservice: refund credits are already spent")
+	ErrRefundMismatch     = errors.New("paymentservice: refund provider response mismatch")
 )
 
 // PaymentTxRunner executes webhook state changes inside one transaction-bound
@@ -440,6 +441,17 @@ func (p *WebhookProcessor) RefundIntent(ctx context.Context, in RefundIntentInpu
 		metrics.PaymentRefunds.WithLabelValues(string(p.provider.Code()), "rollback_succeeded").Inc()
 		return RefundIntentResult{}, err
 	}
+	if providerRefund.Amount != intent.Amount || providerRefund.Currency != intent.Currency {
+		err := fmt.Errorf("%w: amount/currency", ErrRefundMismatch)
+		recordPaymentProviderError(p.provider.Code(), "create_refund", err)
+		metrics.PaymentRefunds.WithLabelValues(string(p.provider.Code()), "provider_mismatch").Inc()
+		if compErr := p.compensateFailedRefund(ctx, intent, refund); compErr != nil {
+			metrics.PaymentRefunds.WithLabelValues(string(p.provider.Code()), "rollback_failed").Inc()
+			return RefundIntentResult{}, fmt.Errorf("paymentservice: refund provider mismatch and rollback failed: %w: %v", err, compErr)
+		}
+		metrics.PaymentRefunds.WithLabelValues(string(p.provider.Code()), "rollback_succeeded").Inc()
+		return RefundIntentResult{}, err
+	}
 	if err := p.tx.RunPaymentTx(ctx, func(ctx context.Context, payments domain.PaymentRepository, billingRepo domain.BillingRepository) error {
 		if err := payments.SetRefundProviderState(ctx, refund.ID, providerRefund.ProviderRefundID, providerRefund.Status); err != nil {
 			return err
@@ -689,6 +701,8 @@ func paymentProviderErrorClass(err error) string {
 		return "canceled"
 	case errors.Is(err, domain.ErrNotFound):
 		return "not_found"
+	case errors.Is(err, ErrRefundMismatch):
+		return "provider_mismatch"
 	default:
 		return "provider_error"
 	}

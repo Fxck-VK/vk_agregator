@@ -109,11 +109,45 @@ func TestMediaMetricsHelpersUseSanitizedLabels(t *testing.T) {
 	}
 
 	ObserveMediaTranscode(" Success ", "Video Generate", "Video", "VK Video", "None")
+	ObserveMediaTranscodeByPolicy(" Fallback ", "Success", "None")
 	ObserveMediaTranscodeDuration(" Success ", "Video Generate", "Video", "VK Video", time.Second)
+	ObserveMediaTranscodeCPUSeconds(" Fallback ", "Success", "None", time.Second)
+	ObserveMediaProbeByProvider(" Success ", "None", " DeepInfra ", "Video Class@example.com")
 	ObserveMediaBytes("Cleanup", "Video", "VK Video", 4096)
+	ObserveMediaUploadValidation(" Mini App ", "Rejected", "Bad File@example.com", "Image/JPEG")
+	ObserveMediaUploadBytes(" Mini App ", "Image/JPEG", 4096)
+	ObserveMediaUploadPixels(" Mini App ", "Image/JPEG", 1024)
 	AddMediaVariantBacklog("Video Generate", "Video", "VK Video", 1)
 	AddMediaVariantBacklog("Video Generate", "Video", "VK Video", -1)
+	SetMediaQueueBacklog("Video", 2)
+	ObserveMediaPolicyDecision(" Worker ", "Video Generate", "Video", "Fallback", "Needs Transcode")
+	ObserveMediaFastPath(" Used ")
 	ObserveMediaCleanupDeleted("Success", "VK Video", "None")
+	ObserveProviderQualityState(" DeepInfra ", "Video Class@example.com", "Video", "Disabled")
+	ObserveProviderQualitySample(" DeepInfra ", "Video Class@example.com", "Video", "Failure")
+	ObserveProviderOutputInvalid(" DeepInfra ", "Video Class@example.com", "Video", "Probe Failed@example.com")
+	AddProductMediaWaste(" DeepInfra ", "Video Class@example.com", "Video", "No Capture@example.com", 10)
+	AddMediaProviderWaste(" DeepInfra ", "Video Class@example.com", "No Capture@example.com", 10)
+	ObserveMediaDeliveryCaptureGap("Video Generate", "Video", "Capture Failed@example.com")
+}
+
+func TestInitPaymentProviderMetricsCreatesZeroProviderErrorSeries(t *testing.T) {
+	InitPaymentProviderMetrics("YooKassa")
+
+	counter, err := PaymentProviderErrors.GetMetricWithLabelValues("yookassa", "get_payment", "provider_error")
+	if err != nil {
+		t.Fatalf("GetMetricWithLabelValues() error = %v", err)
+	}
+	var metric dto.Metric
+	if err := counter.Write(&metric); err != nil {
+		t.Fatalf("counter.Write() error = %v", err)
+	}
+	if metric.Counter == nil {
+		t.Fatal("metric counter is nil")
+	}
+	if got := metric.Counter.GetValue(); got != 0 {
+		t.Fatalf("provider error counter = %v, want 0", got)
+	}
 }
 
 func mediaProbeCounterValue(t *testing.T, labels ...string) float64 {

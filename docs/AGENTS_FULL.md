@@ -83,10 +83,10 @@ When docs disagree, prefer:
 Do not silently “fix” docs or code because of a perceived mismatch. Report the mismatch and propose a focused task.
 
 Historical logs, audits, merge handoffs, old roadmaps, long task history and
-completed PR context live under `docs/archive/**`. Do not read
-`docs/archive/**` or `.agents/logs/**` as current context unless the user
-explicitly asks for historical investigation, regression archaeology or old
-audit details.
+completed PR context should be summarized in `TASKS.md` and removed from the
+active repo surface. Do not read `.agents/logs/**` as current context unless
+the user explicitly asks for historical investigation, regression archaeology or
+old audit details.
 
 ## 3. Instruction hierarchy and trust boundaries
 
@@ -982,9 +982,8 @@ Separate current docs from history:
 - current state/progress/routing belongs in `.agents/state.json`;
 - reusable non-obvious errors belong in `.agents/logs/errors.jsonl`;
 - routine actions/context changes should not be logged;
-- completed PR logs, old audits, old review notes and merge handoffs belong in
-  `docs/archive/**`;
-- archived docs are historical evidence, not current instructions;
+- completed PR logs, old audits, old review notes and merge handoffs belong as
+  short summaries in `TASKS.md`, not as generated archive files;
 - new rolling markdown logs are forbidden unless the user explicitly asks for
   a human-readable report.
 

@@ -25,6 +25,10 @@ type fixture struct {
 }
 
 func newFixture(opts ...billingservice.Option) *fixture {
+	return newFixtureWithOrchestratorOptions(nil, opts...)
+}
+
+func newFixtureWithOrchestratorOptions(orchOpts []joborchestrator.Option, opts ...billingservice.Option) *fixture {
 	jobs := memory.NewJobRepo()
 	outbox := memory.NewOutboxRepo()
 	bill := memory.NewBillingRepo()
@@ -37,7 +41,7 @@ func newFixture(opts ...billingservice.Option) *fixture {
 		billing: billing,
 		pub:     pub,
 		relay:   outboxrelay.New(uowMgr, pub),
-		orch:    joborchestrator.New(jobs, uowMgr, billing, 0),
+		orch:    joborchestrator.New(jobs, uowMgr, billing, 0, orchOpts...),
 	}
 }
 
@@ -181,5 +185,115 @@ func TestCreateJobInsufficientCredits(t *testing.T) {
 	f.drain(t)
 	if f.pub.Len() != 0 {
 		t.Fatalf("expected no enqueued tasks, got %d", f.pub.Len())
+	}
+}
+
+func TestCreateJobCapacityGuardRejectsBeforePersistenceReservationAndOutbox(t *testing.T) {
+	f := newFixtureWithOrchestratorOptions([]joborchestrator.Option{
+		joborchestrator.WithCapacityGuard(joborchestrator.CapacityGuardFunc(func(context.Context, joborchestrator.CapacityCheckInput) error {
+			return domain.ErrCapacityDegraded
+		})),
+	})
+	ctx := context.Background()
+
+	job, err := f.orch.CreateJob(ctx, joborchestrator.CreateJobInput{
+		UserID:         uuid.New(),
+		CommandID:      uuid.New(),
+		Operation:      domain.OperationVideoGenerate,
+		Modality:       domain.ModalityVideo,
+		IdempotencyKey: "vk_job:1:overloaded",
+	})
+	if !errors.Is(err, domain.ErrCapacityDegraded) {
+		t.Fatalf("expected ErrCapacityDegraded, got job=%+v err=%v", job, err)
+	}
+	if job != nil {
+		t.Fatalf("capacity rejection must not create job, got %+v", job)
+	}
+	jobs, listErr := f.jobs.List(ctx, domain.JobFilter{}, 10, 0)
+	if listErr != nil {
+		t.Fatalf("list jobs: %v", listErr)
+	}
+	if len(jobs) != 0 {
+		t.Fatalf("capacity rejection persisted jobs: %+v", jobs)
+	}
+	if events := f.outbox.Events(); len(events) != 0 {
+		t.Fatalf("capacity rejection wrote outbox events: %+v", events)
+	}
+	f.drain(t)
+	if f.pub.Len() != 0 {
+		t.Fatalf("capacity rejection enqueued tasks, got %d", f.pub.Len())
+	}
+}
+
+func TestCreateJobActiveVideoLimitRejectsBeforeReservation(t *testing.T) {
+	f := newFixtureWithOrchestratorOptions([]joborchestrator.Option{
+		joborchestrator.WithMaxActiveVideoJobsPerUser(1),
+	})
+	ctx := context.Background()
+	userID := uuid.New()
+	existing := &domain.Job{
+		ID:             uuid.New(),
+		UserID:         userID,
+		OperationType:  domain.OperationVideoGenerate,
+		Modality:       domain.ModalityVideo,
+		Status:         domain.JobStatusQueued,
+		IdempotencyKey: "vk_job:1:existing-video",
+	}
+	if err := f.jobs.Create(ctx, existing); err != nil {
+		t.Fatalf("seed active video job: %v", err)
+	}
+
+	job, err := f.orch.CreateJob(ctx, joborchestrator.CreateJobInput{
+		UserID:         userID,
+		CommandID:      uuid.New(),
+		Operation:      domain.OperationVideoGenerate,
+		Modality:       domain.ModalityVideo,
+		IdempotencyKey: "vk_job:1:second-video",
+	})
+	if !errors.Is(err, domain.ErrActiveJobLimitExceeded) {
+		t.Fatalf("expected ErrActiveJobLimitExceeded, got job=%+v err=%v", job, err)
+	}
+	if job != nil {
+		t.Fatalf("active job rejection must not create job, got %+v", job)
+	}
+	jobs, listErr := f.jobs.List(ctx, domain.JobFilter{}, 10, 0)
+	if listErr != nil {
+		t.Fatalf("list jobs: %v", listErr)
+	}
+	if len(jobs) != 1 || jobs[0].ID != existing.ID {
+		t.Fatalf("active limit must leave only existing job, got %+v", jobs)
+	}
+	if events := f.outbox.Events(); len(events) != 0 {
+		t.Fatalf("active limit wrote outbox events: %+v", events)
+	}
+}
+
+func TestCreateJobIdempotentExistingBypassesCapacityGuard(t *testing.T) {
+	var guardErr error
+	f := newFixtureWithOrchestratorOptions([]joborchestrator.Option{
+		joborchestrator.WithCapacityGuard(joborchestrator.CapacityGuardFunc(func(context.Context, joborchestrator.CapacityCheckInput) error {
+			return guardErr
+		})),
+	})
+	ctx := context.Background()
+	in := joborchestrator.CreateJobInput{
+		UserID:         uuid.New(),
+		CommandID:      uuid.New(),
+		Operation:      domain.OperationVideoGenerate,
+		Modality:       domain.ModalityVideo,
+		IdempotencyKey: "vk_job:1:capacity-idempotent",
+	}
+
+	first, err := f.orch.CreateJob(ctx, in)
+	if err != nil {
+		t.Fatalf("first create: %v", err)
+	}
+	guardErr = domain.ErrCapacityDegraded
+	second, err := f.orch.CreateJob(ctx, in)
+	if err != nil {
+		t.Fatalf("idempotent create should bypass capacity guard, got %v", err)
+	}
+	if first.ID != second.ID {
+		t.Fatalf("expected existing job %s, got %s", first.ID, second.ID)
 	}
 }

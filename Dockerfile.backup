@@ -1,0 +1,11 @@
+# syntax=docker/dockerfile:1
+
+FROM postgres:16-alpine
+
+RUN apk add --no-cache bash aws-cli ca-certificates coreutils findutils
+
+WORKDIR /app
+COPY scripts/backup /app/scripts/backup
+RUN chmod +x /app/scripts/backup/*.sh
+
+CMD ["/app/scripts/backup/backup-postgres.sh"]
