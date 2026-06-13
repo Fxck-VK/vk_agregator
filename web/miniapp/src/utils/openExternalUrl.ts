@@ -22,8 +22,20 @@ async function bridgeSupports(method: string): Promise<boolean> {
   return true;
 }
 
+export function safeExternalHttpsUrl(url: string | null | undefined): string | null {
+  const trimmed = url?.trim();
+  if (!trimmed) return null;
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol !== "https:" || !parsed.hostname) return null;
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+}
+
 export async function openExternalUrl(url: string): Promise<boolean> {
-  const normalizedUrl = url.trim();
+  const normalizedUrl = safeExternalHttpsUrl(url);
   if (!normalizedUrl) return false;
 
   try {

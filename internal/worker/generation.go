@@ -48,6 +48,11 @@ func (g *GenerationWorker) Process(ctx context.Context, task queue.Task) error {
 	if active, err := g.activeTask(ctx, job.ID); err != nil {
 		return err
 	} else if active != nil {
+		if job.Status == domain.JobStatusDispatchingProvider {
+			if err := g.setStatus(ctx, job, domain.JobStatusProviderSubmitted, "", ""); err != nil {
+				return err
+			}
+		}
 		provider, perr := g.providers.ForName(active.Provider)
 		if perr != nil {
 			return perr
@@ -126,10 +131,16 @@ func (g *GenerationWorker) persistTask(ctx context.Context, job *domain.Job, pro
 		AttemptNo:      attempt,
 		Status:         submitted.Status,
 		Request:        req.Params,
+		Result:         submitted.Result,
+		ErrorClass:     submitted.ErrorClass,
 		IdempotencyKey: req.IdempotencyKey,
 		SubmittedAt:    &now,
+		CompletedAt:    submitted.CompletedAt,
 		CreatedAt:      now,
 		UpdatedAt:      now,
+	}
+	if submitted.SubmittedAt != nil {
+		pt.SubmittedAt = submitted.SubmittedAt
 	}
 	if pt.Status == "" {
 		pt.Status = domain.ProviderTaskPending

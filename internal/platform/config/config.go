@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"strconv"
 	"strings"
@@ -117,7 +118,9 @@ type Config struct {
 	YooKassaBaseURL                   string
 	YooKassaReturnURL                 string
 	YooKassaWebhookIPAllowlistEnabled bool
+	YooKassaWebhookIPAllowlist        []string
 	PaymentWebhookRequireHTTPS        bool
+	PaymentWebhookTrustedProxies      []string
 	PaymentWebhookAddr                string
 	PaymentWebhookPollInterval        time.Duration
 	PaymentWebhookBatchLimit          int
@@ -430,8 +433,26 @@ func (c Config) Validate() error {
 	if provider := strings.ToLower(strings.TrimSpace(c.VideoProvider)); provider != "" && !knownProvider(provider) {
 		return fmt.Errorf("config: VIDEO_PROVIDER must be one of mock, openai, deepinfra")
 	}
+	if provider := strings.ToLower(strings.TrimSpace(c.ModerationProvider)); provider != "" && provider != "keyword" && provider != "openai" {
+		return fmt.Errorf("config: MODERATION_PROVIDER must be keyword or openai")
+	}
+	if scanner := strings.ToLower(strings.TrimSpace(c.ArtifactScanner)); scanner != "" && scanner != "none" && scanner != "openai" {
+		return fmt.Errorf("config: ARTIFACT_SCANNER must be none or openai")
+	}
+	if err := validatePriceOverrides(c.PriceOverrides); err != nil {
+		return err
+	}
 	if provider := strings.ToLower(strings.TrimSpace(c.PaymentProvider)); provider != "" && !knownPaymentProvider(provider) {
 		return fmt.Errorf("config: PAYMENT_PROVIDER must be one of mock, yookassa")
+	}
+	if c.YooKassaWebhookIPAllowlistEnabled && len(c.YooKassaWebhookIPAllowlist) == 0 {
+		return fmt.Errorf("config: YOOKASSA_WEBHOOK_IP_ALLOWLIST must be set when YOOKASSA_WEBHOOK_IP_ALLOWLIST_ENABLED=true")
+	}
+	if err := validateIPOrCIDRList("YOOKASSA_WEBHOOK_IP_ALLOWLIST", c.YooKassaWebhookIPAllowlist); err != nil {
+		return err
+	}
+	if err := validateIPOrCIDRList("PAYMENT_WEBHOOK_TRUSTED_PROXIES", c.PaymentWebhookTrustedProxies); err != nil {
+		return err
 	}
 	probePolicy := c.EffectiveMediaVideoProbePolicy()
 	if err := validateMediaVideoProbePolicy(probePolicy); err != nil {
@@ -604,6 +625,9 @@ func (c Config) Validate() error {
 		if c.usesMockProvider() {
 			return fmt.Errorf("config: mock provider is not allowed in production")
 		}
+		if c.usesRealGenerationProvider() && !strings.EqualFold(strings.TrimSpace(c.ArtifactScanner), "openai") {
+			return fmt.Errorf("config: ARTIFACT_SCANNER=openai is required in production with real providers")
+		}
 		if strings.EqualFold(strings.TrimSpace(c.PaymentProvider), "mock") {
 			return fmt.Errorf("config: PAYMENT_PROVIDER=mock is not allowed in production")
 		}
@@ -728,8 +752,10 @@ func Load() Config {
 		YooKassaSecretKey:                     env("YOOKASSA_SECRET_KEY", ""),
 		YooKassaBaseURL:                       env("YOOKASSA_BASE_URL", "https://api.yookassa.ru/v3"),
 		YooKassaReturnURL:                     env("YOOKASSA_RETURN_URL", ""),
-		YooKassaWebhookIPAllowlistEnabled:     envBool("YOOKASSA_WEBHOOK_IP_ALLOWLIST_ENABLED", true),
+		YooKassaWebhookIPAllowlistEnabled:     envBool("YOOKASSA_WEBHOOK_IP_ALLOWLIST_ENABLED", false),
+		YooKassaWebhookIPAllowlist:            envList("YOOKASSA_WEBHOOK_IP_ALLOWLIST"),
 		PaymentWebhookRequireHTTPS:            envBool("PAYMENT_WEBHOOK_REQUIRE_HTTPS", false),
+		PaymentWebhookTrustedProxies:          envList("PAYMENT_WEBHOOK_TRUSTED_PROXIES"),
 		PaymentWebhookAddr:                    env("PAYMENT_WEBHOOK_ADDR", ":8082"),
 		PaymentWebhookPollInterval:            envDuration("PAYMENT_WEBHOOK_POLL_INTERVAL", 5*time.Second),
 		PaymentWebhookBatchLimit:              envInt("PAYMENT_WEBHOOK_BATCH_LIMIT", 20),
@@ -959,6 +985,33 @@ func (c Config) usesOnlyMockProviders() bool {
 		}
 	}
 	return seenProvider
+}
+
+func (c Config) usesRealGenerationProvider() bool {
+	providers := make([]string, 0, len(c.ProviderChain)+3)
+	providers = append(providers, c.Provider)
+	providers = append(providers, c.ProviderChain...)
+	providers = append(providers, c.ImageProvider, c.VideoProvider)
+	for _, provider := range providers {
+		provider = strings.ToLower(strings.TrimSpace(provider))
+		if provider != "" && provider != "mock" {
+			return true
+		}
+	}
+	return false
+}
+
+func validatePriceOverrides(overrides map[string]int64) error {
+	for op, amount := range overrides {
+		op = strings.TrimSpace(op)
+		if op == "" {
+			return fmt.Errorf("config: PRICES contains an empty operation")
+		}
+		if amount <= 0 {
+			return fmt.Errorf("config: PRICES amount for %s must be positive", op)
+		}
+	}
+	return nil
 }
 
 func knownProvider(name string) bool {
@@ -1239,6 +1292,23 @@ func validateNormalizedList(name string, values []string) error {
 		if value == "" || normalizeConfigToken(value) != value {
 			return fmt.Errorf("config: %s contains unsafe value %q", name, value)
 		}
+	}
+	return nil
+}
+
+func validateIPOrCIDRList(name string, values []string) error {
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			return fmt.Errorf("config: %s contains empty value", name)
+		}
+		if ip := net.ParseIP(value); ip != nil {
+			continue
+		}
+		if _, _, err := net.ParseCIDR(value); err == nil {
+			continue
+		}
+		return fmt.Errorf("config: %s contains invalid IP/CIDR %q", name, value)
 	}
 	return nil
 }

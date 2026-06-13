@@ -137,16 +137,18 @@ type ChatConversationMessageDTO struct {
 
 func newJobDTO(j *domain.Job) JobDTO {
 	out := JobDTO{
-		ID:                j.ID,
-		Operation:         string(j.OperationType),
-		Modality:          string(j.Modality),
-		Status:            string(j.Status),
-		CostEstimate:      j.CostEstimate,
-		CostCaptured:      j.CostCaptured,
-		OutputArtifactIDs: j.OutputArtifactIDs,
-		ErrorCode:         safeJobErrorCode(j),
-		CreatedAt:         j.CreatedAt,
-		UpdatedAt:         j.UpdatedAt,
+		ID:           j.ID,
+		Operation:    string(j.OperationType),
+		Modality:     string(j.Modality),
+		Status:       string(j.Status),
+		CostEstimate: j.CostEstimate,
+		CostCaptured: j.CostCaptured,
+		ErrorCode:    safeJobErrorCode(j),
+		CreatedAt:    j.CreatedAt,
+		UpdatedAt:    j.UpdatedAt,
+	}
+	if j.Status == domain.JobStatusSucceeded {
+		out.OutputArtifactIDs = j.OutputArtifactIDs
 	}
 	if out.OutputArtifactIDs == nil {
 		out.OutputArtifactIDs = []uuid.UUID{}

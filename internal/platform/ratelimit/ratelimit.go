@@ -112,37 +112,13 @@ func (l *Limiter) Middleware(next http.Handler) http.Handler {
 	})
 }
 
-// clientIP extracts the best-effort client IP from the request.
+// clientIP extracts the socket peer IP from the request. Proxy headers are
+// intentionally ignored here: callers that need proxy awareness must normalize
+// the request only after verifying the proxy is trusted.
 func clientIP(r *http.Request) string {
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		if i := indexComma(xff); i >= 0 {
-			return trim(xff[:i])
-		}
-		return trim(xff)
-	}
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
 		return r.RemoteAddr
 	}
 	return host
-}
-
-func indexComma(s string) int {
-	for i := 0; i < len(s); i++ {
-		if s[i] == ',' {
-			return i
-		}
-	}
-	return -1
-}
-
-func trim(s string) string {
-	start, end := 0, len(s)
-	for start < end && (s[start] == ' ' || s[start] == '\t') {
-		start++
-	}
-	for end > start && (s[end-1] == ' ' || s[end-1] == '\t') {
-		end--
-	}
-	return s[start:end]
 }

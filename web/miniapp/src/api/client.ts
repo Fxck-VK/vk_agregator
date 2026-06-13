@@ -342,6 +342,10 @@ export function normalizeRawParams(raw: string): string {
   return raw.replace(/^[?#]/, "");
 }
 
+function isForwardedLaunchParamKey(key: string): boolean {
+  return key === "sign" || key.startsWith("vk_");
+}
+
 function normalizeReferralCode(raw: string | null): string {
   const value = (raw ?? "").trim().toUpperCase();
   if (value.length < 4 || value.length > 64) return "";
@@ -378,16 +382,29 @@ function hasLaunchIdentity(raw: string): boolean {
   return Boolean(params.get("vk_user_id"));
 }
 
+function sanitizeLaunchParams(raw: string): string {
+  const params = new URLSearchParams(normalizeRawParams(raw));
+  const out = new URLSearchParams();
+  for (const [key, value] of params.entries()) {
+    if (!isForwardedLaunchParamKey(key)) continue;
+    out.set(key, value);
+  }
+  const serialized = out.toString();
+  return hasLaunchIdentity(serialized) ? serialized : "";
+}
+
 export function launchParamsFromLocation(): string {
   const candidates = [window.location.search, window.location.hash];
   for (const candidate of candidates) {
     const raw = normalizeRawParams(candidate);
-    if (hasLaunchIdentity(raw)) return raw;
+    const sanitized = sanitizeLaunchParams(raw);
+    if (sanitized) return sanitized;
 
     const queryIndex = raw.indexOf("?");
     if (queryIndex >= 0) {
       const nested = raw.slice(queryIndex + 1);
-      if (hasLaunchIdentity(nested)) return nested;
+      const sanitizedNested = sanitizeLaunchParams(nested);
+      if (sanitizedNested) return sanitizedNested;
     }
   }
   return "";
@@ -397,6 +414,7 @@ export function stringifyBridgeLaunchParams(value: unknown): string {
   if (!value || typeof value !== "object") return "";
   const params = new URLSearchParams();
   for (const [key, raw] of Object.entries(value as Record<string, unknown>)) {
+    if (!isForwardedLaunchParamKey(key)) continue;
     if (raw === undefined || raw === null) continue;
     if (typeof raw === "boolean") {
       params.set(key, raw ? "1" : "0");

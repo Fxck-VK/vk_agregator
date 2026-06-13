@@ -54,3 +54,34 @@ func TestNewJobDTOMapsLegacyMediaErrorCodesToSafeClasses(t *testing.T) {
 		})
 	}
 }
+
+func TestNewJobDTOHidesOutputArtifactIDsUntilSucceeded(t *testing.T) {
+	artifactID := uuid.New()
+
+	pending := newJobDTO(&domain.Job{
+		ID:                uuid.New(),
+		Status:            domain.JobStatusResultReady,
+		OutputArtifactIDs: []uuid.UUID{artifactID},
+	})
+	if len(pending.OutputArtifactIDs) != 0 {
+		t.Fatalf("result_ready DTO leaked output artifact ids: %+v", pending.OutputArtifactIDs)
+	}
+
+	rejected := newJobDTO(&domain.Job{
+		ID:                uuid.New(),
+		Status:            domain.JobStatusRejected,
+		OutputArtifactIDs: []uuid.UUID{artifactID},
+	})
+	if len(rejected.OutputArtifactIDs) != 0 {
+		t.Fatalf("rejected DTO leaked output artifact ids: %+v", rejected.OutputArtifactIDs)
+	}
+
+	succeeded := newJobDTO(&domain.Job{
+		ID:                uuid.New(),
+		Status:            domain.JobStatusSucceeded,
+		OutputArtifactIDs: []uuid.UUID{artifactID},
+	})
+	if len(succeeded.OutputArtifactIDs) != 1 || succeeded.OutputArtifactIDs[0] != artifactID {
+		t.Fatalf("succeeded DTO did not expose output artifact id: %+v", succeeded.OutputArtifactIDs)
+	}
+}

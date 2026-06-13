@@ -37,6 +37,35 @@ func TestEstimate(t *testing.T) {
 	}
 }
 
+func TestEstimateRejectsNonPositiveConfiguredPrices(t *testing.T) {
+	ctx := context.Background()
+	repo := memory.NewBillingRepo()
+	svc := billingservice.New(repo, billingservice.WithPriceOverrides(map[string]int64{
+		string(domain.OperationImageGenerate): -10,
+		string(domain.OperationTextGenerate):  0,
+	}))
+
+	if _, err := svc.Estimate(domain.OperationImageGenerate); !errors.Is(err, billingservice.ErrInvalidAmount) {
+		t.Fatalf("negative price error = %v, want ErrInvalidAmount", err)
+	}
+	if _, err := svc.Estimate(domain.OperationTextGenerate); !errors.Is(err, billingservice.ErrInvalidAmount) {
+		t.Fatalf("zero price error = %v, want ErrInvalidAmount", err)
+	}
+	negativeUserID := uuid.New()
+	zeroUserID := uuid.New()
+	if _, err := svc.ReserveWith(ctx, repo, negativeUserID, uuid.New(), -1); !errors.Is(err, billingservice.ErrInvalidAmount) {
+		t.Fatalf("negative reserve error = %v, want ErrInvalidAmount", err)
+	}
+	if _, err := svc.ReserveWith(ctx, repo, zeroUserID, uuid.New(), 0); !errors.Is(err, billingservice.ErrInvalidAmount) {
+		t.Fatalf("zero reserve error = %v, want ErrInvalidAmount", err)
+	}
+	for _, userID := range []uuid.UUID{negativeUserID, zeroUserID} {
+		if _, err := repo.GetAccountByUser(ctx, userID, domain.CurrencyCredits); !errors.Is(err, domain.ErrNotFound) {
+			t.Fatalf("invalid reservation created account for %s: %v", userID, err)
+		}
+	}
+}
+
 func TestEnsureAccountStartingBalance(t *testing.T) {
 	svc := billingservice.New(memory.NewBillingRepo())
 	ctx := context.Background()
@@ -110,6 +139,34 @@ func TestReserveCaptureRefundFlow(t *testing.T) {
 	acc, _ = svc.EnsureAccount(ctx, userID)
 	if acc.BalanceCached != 1000 {
 		t.Fatalf("balance after refund = %d, want 1000", acc.BalanceCached)
+	}
+}
+
+func TestCaptureRejectsNonPositiveAmounts(t *testing.T) {
+	repo := memory.NewBillingRepo()
+	svc := billingservice.New(repo)
+	ctx := context.Background()
+	userID := uuid.New()
+	jobID := uuid.New()
+
+	res, err := svc.Reserve(ctx, userID, jobID, 50)
+	if err != nil {
+		t.Fatalf("reserve: %v", err)
+	}
+	for _, amount := range []int64{0, -10} {
+		if err := svc.Capture(ctx, res.ID, amount); !errors.Is(err, billingservice.ErrInvalidAmount) {
+			t.Fatalf("Capture(%d) error = %v, want ErrInvalidAmount", amount, err)
+		}
+		if err := svc.CaptureForJob(ctx, jobID, amount); !errors.Is(err, billingservice.ErrInvalidAmount) {
+			t.Fatalf("CaptureForJob(%d) error = %v, want ErrInvalidAmount", amount, err)
+		}
+	}
+	acc, err := svc.EnsureAccount(ctx, userID)
+	if err != nil {
+		t.Fatalf("ensure account: %v", err)
+	}
+	if acc.BalanceCached != billingservice.DefaultStartingBalance {
+		t.Fatalf("balance changed after invalid capture = %d", acc.BalanceCached)
 	}
 }
 

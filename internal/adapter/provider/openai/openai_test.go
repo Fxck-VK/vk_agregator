@@ -251,6 +251,13 @@ func TestOpenAIScannerRejectsFlaggedImage(t *testing.T) {
 	}
 }
 
+func TestOpenAIScannerFailsClosedForUnsupportedVideo(t *testing.T) {
+	m := NewModerator(ModerationConfig{APIKey: "test-key"})
+	if err := m.Scan(context.Background(), domain.MediaTypeVideo, "video/mp4", []byte("mp4")); err == nil {
+		t.Fatal("expected unsupported video scanner error")
+	}
+}
+
 func moderationInput(text string) moderationservice.Input {
 	return moderationservice.Input{Stage: domain.ModerationStageOutput, Modality: domain.ModalityText, Text: text}
 }

@@ -8,6 +8,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -88,8 +89,12 @@ func main() {
 
 	mux := http.NewServeMux()
 	limiter := ratelimit.New(cfg.WebhookRateLimitRPS, cfg.WebhookRateLimitBurst)
-	httpsRequired := cfg.PaymentWebhookHTTPSRequired()
-	mux.Handle("POST /billing/webhooks/yookassa", limiter.Middleware(metrics.Middleware("billing_webhook", webhookHandler(processor, logger, provider.Code(), httpsRequired))))
+	security, err := newWebhookSecurityConfig(cfg)
+	if err != nil {
+		logger.Error("payment webhook ingress config failed", "error", err)
+		os.Exit(1)
+	}
+	mux.Handle("POST /billing/webhooks/yookassa", limiter.Middleware(metrics.Middleware("billing_webhook", webhookHandler(processor, logger, provider.Code(), security))))
 	mux.Handle("GET /metrics", metrics.PrivateHandler())
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -108,7 +113,14 @@ func main() {
 	go runProcessorLoop(ctx, processor, cfg, logger)
 
 	go func() {
-		logger.Info("provider webhook server listening", "addr", cfg.PaymentWebhookAddr, "provider", provider.Code(), "https_required", httpsRequired)
+		logger.Info("provider webhook server listening",
+			"addr", cfg.PaymentWebhookAddr,
+			"provider", provider.Code(),
+			"https_required", security.requireHTTPS,
+			"trusted_proxy_count", len(security.trustedProxies),
+			"ip_allowlist_enabled", security.ipAllowlistEnabled,
+			"ip_allowlist_count", len(security.ipAllowlist),
+		)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			logger.Error("provider webhook server failed", "error", err)
 			stop()
@@ -122,9 +134,14 @@ func main() {
 	logger.Info("provider webhook server stopped")
 }
 
-func webhookHandler(processor *paymentservice.WebhookProcessor, logger *slog.Logger, provider domain.PaymentProviderCode, requireHTTPS bool) http.Handler {
+func webhookHandler(processor *paymentservice.WebhookProcessor, logger *slog.Logger, provider domain.PaymentProviderCode, security webhookSecurityConfig) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if requireHTTPS && !isSecureWebhookRequest(r) {
+		if security.ipAllowlistEnabled && !security.sourceAllowed(r) {
+			metrics.PaymentWebhookSecurityDenials.WithLabelValues(string(provider), "ip_not_allowed").Inc()
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		if security.requireHTTPS && !security.isSecureRequest(r) {
 			metrics.PaymentWebhookSecurityDenials.WithLabelValues(string(provider), "insecure_transport").Inc()
 			http.Error(w, "https required", http.StatusUpgradeRequired)
 			return
@@ -160,27 +177,138 @@ func webhookHandler(processor *paymentservice.WebhookProcessor, logger *slog.Log
 	})
 }
 
+type webhookSecurityConfig struct {
+	requireHTTPS       bool
+	trustedProxies     []*net.IPNet
+	ipAllowlistEnabled bool
+	ipAllowlist        []*net.IPNet
+}
+
+func newWebhookSecurityConfig(cfg config.Config) (webhookSecurityConfig, error) {
+	trustedProxies, err := parseIPNets(cfg.PaymentWebhookTrustedProxies)
+	if err != nil {
+		return webhookSecurityConfig{}, err
+	}
+	allowlist, err := parseIPNets(cfg.YooKassaWebhookIPAllowlist)
+	if err != nil {
+		return webhookSecurityConfig{}, err
+	}
+	if cfg.YooKassaWebhookIPAllowlistEnabled && len(allowlist) == 0 {
+		return webhookSecurityConfig{}, errors.New("YOOKASSA_WEBHOOK_IP_ALLOWLIST must be set when allowlist is enabled")
+	}
+	return webhookSecurityConfig{
+		requireHTTPS:       cfg.PaymentWebhookHTTPSRequired(),
+		trustedProxies:     trustedProxies,
+		ipAllowlistEnabled: cfg.YooKassaWebhookIPAllowlistEnabled,
+		ipAllowlist:        allowlist,
+	}, nil
+}
+
 func readWebhookBody(w http.ResponseWriter, r *http.Request) ([]byte, error) {
 	r.Body = http.MaxBytesReader(w, r.Body, maxWebhookBodyBytes)
 	return io.ReadAll(r.Body)
 }
 
-func isSecureWebhookRequest(r *http.Request) bool {
+func (s webhookSecurityConfig) isSecureRequest(r *http.Request) bool {
 	if r == nil {
 		return false
 	}
 	if r.TLS != nil {
 		return true
 	}
+	if !s.fromTrustedProxy(r) {
+		return false
+	}
 	if firstHeaderValue(r.Header.Get("X-Forwarded-Proto")) == "https" {
 		return true
 	}
 	for _, value := range r.Header.Values("Forwarded") {
-		if forwardedProto(value) == "https" {
-			return true
+		for _, element := range strings.Split(value, ",") {
+			if forwardedProto(element) == "https" {
+				return true
+			}
 		}
 	}
 	return strings.Contains(strings.ToLower(r.Header.Get("CF-Visitor")), `"scheme":"https"`)
+}
+
+func (s webhookSecurityConfig) sourceAllowed(r *http.Request) bool {
+	ip := s.clientIP(r)
+	return ip != nil && ipInNets(ip, s.ipAllowlist)
+}
+
+func (s webhookSecurityConfig) clientIP(r *http.Request) net.IP {
+	remote := remoteIP(r)
+	if remote == nil {
+		return nil
+	}
+	if s.fromTrustedProxy(r) {
+		if forwarded := firstForwardedFor(r.Header.Get("X-Forwarded-For")); forwarded != nil {
+			return forwarded
+		}
+	}
+	return remote
+}
+
+func (s webhookSecurityConfig) fromTrustedProxy(r *http.Request) bool {
+	remote := remoteIP(r)
+	return remote != nil && ipInNets(remote, s.trustedProxies)
+}
+
+func remoteIP(r *http.Request) net.IP {
+	if r == nil {
+		return nil
+	}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host = r.RemoteAddr
+	}
+	return net.ParseIP(strings.TrimSpace(host))
+}
+
+func firstForwardedFor(value string) net.IP {
+	if value == "" {
+		return nil
+	}
+	if i := strings.IndexByte(value, ','); i >= 0 {
+		value = value[:i]
+	}
+	return net.ParseIP(strings.TrimSpace(value))
+}
+
+func ipInNets(ip net.IP, nets []*net.IPNet) bool {
+	for _, n := range nets {
+		if n.Contains(ip) {
+			return true
+		}
+	}
+	return false
+}
+
+func parseIPNets(values []string) ([]*net.IPNet, error) {
+	out := make([]*net.IPNet, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		if ip := net.ParseIP(value); ip != nil {
+			mask := net.CIDRMask(32, 32)
+			if v4 := ip.To4(); v4 != nil {
+				ip = v4
+			} else {
+				mask = net.CIDRMask(128, 128)
+			}
+			out = append(out, &net.IPNet{IP: ip, Mask: mask})
+			continue
+		}
+		_, ipnet, err := net.ParseCIDR(value)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, ipnet)
+	}
+	return out, nil
 }
 
 func firstHeaderValue(value string) string {

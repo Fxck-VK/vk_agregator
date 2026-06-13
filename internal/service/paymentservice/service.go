@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"strings"
 
 	"github.com/google/uuid"
@@ -489,6 +490,10 @@ func (s *Service) ensureProviderPayment(ctx context.Context, intent *domain.Paym
 		recordPaymentProviderError(s.provider.Code(), "create_payment", err)
 		return nil, fmt.Errorf("paymentservice: create provider payment: %w", err)
 	}
+	if err := validateConfirmationURL(result.ConfirmationURL); err != nil {
+		recordPaymentProviderError(s.provider.Code(), "create_payment", err)
+		return nil, err
+	}
 	if err := s.repo.SetIntentProviderState(ctx, intent.ID, result.Status, result.ProviderPaymentID, result.ConfirmationURL); err != nil {
 		return nil, err
 	}
@@ -497,6 +502,18 @@ func (s *Service) ensureProviderPayment(ctx context.Context, intent *domain.Paym
 		return nil, err
 	}
 	return updated, nil
+}
+
+func validateConfirmationURL(raw string) error {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme != "https" || u.Host == "" {
+		return errors.New("paymentservice: unsafe payment confirmation url")
+	}
+	return nil
 }
 
 func paymentDescription(product *domain.PaymentProduct) string {

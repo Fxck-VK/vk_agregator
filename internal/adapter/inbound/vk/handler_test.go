@@ -2035,6 +2035,38 @@ func TestMessageNewDuplicateIsDeduped(t *testing.T) {
 	}
 }
 
+func TestMessageNewFallbackEventIDUsesConversationMessageID(t *testing.T) {
+	h := newHarness()
+	body := func(conversationMessageID int64) string {
+		return fmt.Sprintf(`{
+		"type":"message_new","group_id":1,"secret":"s3cr3t",
+		"object":{"message":{"from_id":777,"peer_id":777,"conversation_message_id":%d,"text":"/video sunrise"}}
+	}`, conversationMessageID)
+	}
+	if rec := h.post(body(101)); rec.Code != http.StatusOK {
+		t.Fatalf("first delivery status = %d body=%q", rec.Code, rec.Body.String())
+	}
+	if rec := h.post(body(102)); rec.Code != http.StatusOK {
+		t.Fatalf("second delivery status = %d body=%q", rec.Code, rec.Body.String())
+	}
+
+	ctx := context.Background()
+	if _, err := h.inbound.GetByIdempotencyKey(ctx, "vk_event:1:conversation_message:777:777:101"); err != nil {
+		t.Fatalf("first synthetic event id was not based on conversation_message_id: %v", err)
+	}
+	if _, err := h.inbound.GetByIdempotencyKey(ctx, "vk_event:1:conversation_message:777:777:102"); err != nil {
+		t.Fatalf("second synthetic event id was not based on conversation_message_id: %v", err)
+	}
+	user, err := h.users.GetByVKUserID(ctx, 777)
+	if err != nil {
+		t.Fatalf("user not created: %v", err)
+	}
+	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
+	if len(jobs) != 2 || h.pub.Len() != 2 {
+		t.Fatalf("same text with different conversation_message_id should create two jobs, jobs=%d tasks=%d", len(jobs), h.pub.Len())
+	}
+}
+
 func TestMessageNewReusesExistingInboundOnRetry(t *testing.T) {
 	h := newHarness()
 	ctx := context.Background()

@@ -31,7 +31,7 @@ function Get-PaymentWebhookPublicUrl {
         return $Override
     }
 
-    return Get-ConfigValue -Root $Root -Name "PAYMENT_WEBHOOK_PUBLIC_URL" -Default "https://vk.neiirohub.ru/billing/webhooks/yookassa"
+    return Get-ConfigValue -Root $Root -Name "PAYMENT_WEBHOOK_PUBLIC_URL" -Default "https://neiirohub.ru/billing/webhooks/yookassa"
 }
 
 function Wait-PaymentsPostgres {

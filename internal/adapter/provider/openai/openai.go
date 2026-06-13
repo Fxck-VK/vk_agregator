@@ -157,12 +157,20 @@ func (p *Provider) Submit(ctx context.Context, req domain.ProviderRequest) (doma
 		if err != nil {
 			return domain.ProviderTask{}, err
 		}
+		res := domain.ProviderTaskResult{
+			Status:     domain.ProviderTaskSucceeded,
+			OutputURLs: []string{dataURL("text/plain; charset=utf-8", []byte(text))},
+			Text:       text,
+		}
 		p.store(externalID, taskState{
-			status:     domain.ProviderTaskSucceeded,
-			outputURLs: []string{dataURL("text/plain; charset=utf-8", []byte(text))},
-			text:       text,
+			status:     res.Status,
+			outputURLs: res.OutputURLs,
+			text:       res.Text,
 		})
-		return p.task(req, p.cfg.TextModel, externalID, domain.ProviderTaskProcessing, now), nil
+		task := p.task(req, p.cfg.TextModel, externalID, domain.ProviderTaskSucceeded, now)
+		task.Result = providerTaskResultRaw(res)
+		task.CompletedAt = &now
+		return task, nil
 
 	case domain.OperationImageGenerate:
 		externalID := "openai-image-" + uuid.NewString()
@@ -172,11 +180,18 @@ func (p *Provider) Submit(ctx context.Context, req domain.ProviderRequest) (doma
 		if err != nil {
 			return domain.ProviderTask{}, err
 		}
+		res := domain.ProviderTaskResult{
+			Status:     domain.ProviderTaskSucceeded,
+			OutputURLs: []string{url},
+		}
 		p.store(externalID, taskState{
-			status:     domain.ProviderTaskSucceeded,
-			outputURLs: []string{url},
+			status:     res.Status,
+			outputURLs: res.OutputURLs,
 		})
-		return p.task(req, model, externalID, domain.ProviderTaskProcessing, now), nil
+		task := p.task(req, model, externalID, domain.ProviderTaskSucceeded, now)
+		task.Result = providerTaskResultRaw(res)
+		task.CompletedAt = &now
+		return task, nil
 
 	case domain.OperationVideoGenerate:
 		video, err := p.createVideo(ctx, req.Prompt, req.IdempotencyKey)
@@ -188,6 +203,14 @@ func (p *Provider) Submit(ctx context.Context, req domain.ProviderRequest) (doma
 	default:
 		return domain.ProviderTask{}, &Error{Class: domain.ProviderErrUnsupportedCapab, Message: string(req.Operation)}
 	}
+}
+
+func providerTaskResultRaw(res domain.ProviderTaskResult) json.RawMessage {
+	raw, err := json.Marshal(res)
+	if err != nil {
+		return nil
+	}
+	return raw
 }
 
 func (p *Provider) task(req domain.ProviderRequest, model, externalID string, status domain.ProviderTaskStatus, now time.Time) domain.ProviderTask {
