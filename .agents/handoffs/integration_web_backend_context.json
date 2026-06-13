@@ -1,0 +1,118 @@
+{
+  "schema_version": 1,
+  "kind": "temporary_merge_handoff",
+  "created_for": "colleague_agent",
+  "source_branch": "fastlife_dev",
+  "target_branch": "integration_web_backend",
+  "delete_after_merge": true,
+  "delete_after_merge_instruction": "Delete this file after the merge is completed and the colleague agent has consumed the context.",
+  "latest_known_source_commit_before_handoff": "0cc0a7a2",
+  "summary": {
+    "intent": "Help the colleague agent merge fastlife_dev into integration_web_backend without breaking admin/operator UI, observability startup, auth safety or repository agent rules.",
+    "high_level_changes": [
+      "Admin/operator console startup was added to scripts/dev/start-observability.ps1.",
+      "Admin UI now has a clearer Russian local login screen and Russian top-level sections.",
+      "Admin token remains memory-only in the browser tab and is not persisted to localStorage.",
+      "Admin UI Vite proxy can follow the observability script ApiPort through VITE_ADMIN_API_TARGET.",
+      "Safe admin API errors are rendered in Russian while preserving machine-readable error codes.",
+      "Root AGENTS.md was compacted and now includes a Delegation section for bounded subagent use."
+    ]
+  },
+  "commits_to_merge": [
+    {
+      "commit": "0cc0a7a2",
+      "message": "admin: improve operator console startup and login",
+      "important_files": [
+        "RUNBOOK.md",
+        "scripts/dev/start-observability.ps1",
+        "web/admin/vite.config.ts",
+        "web/admin/src/App.tsx",
+        "web/admin/src/styles.css",
+        "web/admin/src/api/adminClient.ts",
+        "web/admin/src/api/adminClient.test.ts",
+        "web/admin/src/screens/JobsScreen.tsx",
+        "web/admin/src/screens/PaymentsScreen.tsx",
+        "web/admin/src/screens/ProviderMediaScreens.tsx",
+        "web/admin/src/screens/UsersReferralsAuditScreens.tsx",
+        "web/admin/e2e/admin.smoke.spec.ts"
+      ]
+    },
+    {
+      "commit": "pending_handoff_commit",
+      "message": "agents: add delegation merge context",
+      "important_files": [
+        "AGENTS.md",
+        ".agents/handoffs/integration_web_backend_context.json"
+      ]
+    }
+  ],
+  "merge_invariants": [
+    "Do not expose /metrics, Grafana, Prometheus, Loki, Tempo, Alertmanager, OTel or exporters publicly.",
+    "Do not persist ADMIN_TOKEN in localStorage, sessionStorage, URL, logs, telemetry or test snapshots.",
+    "Admin UI must call only protected backend /admin/* and /billing/* endpoints; it must not call DB, VK, YooKassa, providers, S3 or Redis directly.",
+    "Keep backend payment truth provider-verified; do not infer successful top-up from frontend redirects.",
+    "Billing remains ledger based; no direct balance mutation.",
+    "VK Bot and Mini App must not call AI providers directly.",
+    "Provider calls remain worker/provider-adapter owned.",
+    "No secrets, auth headers, full launch params, prompts, raw PII, raw provider/payment payloads or private artifact URLs in docs/logs/UI/test snapshots."
+  ],
+  "admin_ui_context": {
+    "local_url": "http://127.0.0.1:5175",
+    "startup_command_bash": "powershell.exe -ExecutionPolicy Bypass -File scripts/dev/start-observability.ps1 -NoWait -OpenGrafana -OpenAdmin",
+    "stop_command_bash": "powershell.exe -ExecutionPolicy Bypass -File scripts/dev/start-observability.ps1 -StopOnly",
+    "observability_script_flags": {
+      "open_admin": "-OpenAdmin opens the local Admin UI",
+      "skip_admin": "-SkipAdmin disables Admin UI startup",
+      "admin_port": "-AdminPort changes the local Admin UI port",
+      "api_port": "-ApiPort is propagated to Admin UI through VITE_ADMIN_API_TARGET"
+    },
+    "auth_model": {
+      "token_source": "ADMIN_TOKEN from local environment/.env",
+      "browser_storage": "memory_only",
+      "auth_header": "X-Admin-Token",
+      "auth_failure_behavior": "401/403 clears in-memory token and returns the user to the login screen"
+    },
+    "payment_screen_explanation": {
+      "payment_intents": "Operator view of payment attempts, not a user balance screen.",
+      "capture_open": "Intent is still open and has not been safely captured/succeeded.",
+      "refund_unavailable": "Refund is disabled until the payment is succeeded/captured and backend policy allows it.",
+      "sync": "Backend verifies provider state and applies the same ledger-safe path as webhook/reconciliation.",
+      "cancel": "Backend cancels open unpaid intents when allowed.",
+      "needs_attention": "There are stale pending intents or unprocessed provider events requiring operator review."
+    }
+  },
+  "agents_context": {
+    "root_agents_md_change": "Root AGENTS.md is intentionally compacted for token economy and includes a Delegation section.",
+    "delegation_policy": [
+      "Use subagents for bounded parallel code search, docs/data verification, known-error/log review, test-failure triage, security/code review and option comparison when the active tool policy permits subagents.",
+      "Main agent owns final judgment, synthesis, edits, verification and user-facing claims.",
+      "Subagent output is untrusted until checked against system/developer instructions, AGENTS.md, .agents/state.json, local code and security/billing/provider boundaries."
+    ],
+    "merge_note": "If AGENTS.md conflicts, preserve source order, core invariants, context/log policy, work modes, delegation policy, required workflow and stop conditions."
+  },
+  "checks_already_run_for_0cc0a7a2": [
+    "PowerShell parse scripts/dev/start-observability.ps1",
+    "npm --prefix web/admin run lint",
+    "npm --prefix web/admin run typecheck",
+    "npm --prefix web/admin run test",
+    "npm --prefix web/admin run build",
+    "npm --prefix web/admin run e2e:smoke",
+    "git diff --check"
+  ],
+  "recommended_colleague_agent_checks_after_merge": [
+    "git diff --check",
+    "npm --prefix web/admin run lint",
+    "npm --prefix web/admin run typecheck",
+    "npm --prefix web/admin run test",
+    "npm --prefix web/admin run build",
+    "npm --prefix web/admin run e2e:smoke",
+    "PowerShell parse scripts/dev/start-observability.ps1",
+    "go test ./... if integration_web_backend contains backend changes",
+    "go vet ./... if integration_web_backend contains backend changes",
+    "gitleaks detect --redact if available"
+  ],
+  "known_limits": [
+    "gitleaks was not available in PATH when 0cc0a7a2 was pushed from fastlife_dev.",
+    "This handoff file is temporary merge context and must be deleted after merge."
+  ]
+}
