@@ -2,7 +2,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@vkontakte/vkui";
 import bridge from "@vkontakte/vk-bridge";
 import {
+  MINIAPP_DARK_THEME_ONLY_ENABLED,
   MINIAPP_PAYMENT_CANCEL_ENABLED,
+  MINIAPP_TOPUP_CATALOG_DROPDOWN_ENABLED,
+  MINIAPP_TOPUP_HISTORY_DROPDOWN_ENABLED,
   apiUserMessage,
   cancelPaymentIntent,
   createIdempotencyKey,
@@ -22,6 +25,7 @@ import neuroHubBanner from "../assets/neurohub-banner.png";
 import { formatCredits } from "../ui/credits";
 import { dedupeHistoryJobs, historyCountLabel, jobDisplayTitle } from "../utils/jobDisplay";
 import { openExternalUrl, safeExternalHttpsUrl } from "../utils/openExternalUrl";
+import { paymentHistoryCountLabel, selectedPaymentProduct } from "./paymentUi";
 import type { ThemeMode } from "./theme";
 
 type SettingsScreenProps = {
@@ -150,6 +154,11 @@ function paymentConfirmationUrl(intent: PaymentIntent | null | undefined): strin
   return safeExternalHttpsUrl(intent?.confirmation_url);
 }
 
+function paymentHistorySummary(intent: PaymentIntent | null): string {
+  if (!intent) return "Платежей пока нет";
+  return `${formatCredits(intent.credits)} · ${formatRub(intent.amount)} · ${paymentStatusLabel(intent.status)}`;
+}
+
 export function SettingsScreen({
   themeMode,
   balance,
@@ -162,6 +171,8 @@ export function SettingsScreen({
 }: SettingsScreenProps) {
   const [historyFilter, setHistoryFilter] = useState<HistoryFilter>("all");
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [paymentHistoryOpen, setPaymentHistoryOpen] = useState(false);
+  const [selectedProductCode, setSelectedProductCode] = useState("");
   const [topUpNotice, setTopUpNotice] = useState("");
   const [receiptContact, setReceiptContact] = useState("");
   const [paymentProducts, setPaymentProducts] = useState<PaymentProduct[]>([]);
@@ -180,6 +191,11 @@ export function SettingsScreen({
   const activePaymentIntent = useMemo(() => findActivePaymentIntent(paymentIntents), [paymentIntents]);
   const activePaymentConfirmationUrl = paymentConfirmationUrl(activePaymentIntent);
   const visiblePayments = useMemo(() => paymentIntents.slice(0, 8), [paymentIntents]);
+  const latestPaymentIntent = visiblePayments[0] ?? null;
+  const selectedTopUpProduct = useMemo(
+    () => selectedPaymentProduct(paymentProducts, selectedProductCode),
+    [paymentProducts, selectedProductCode],
+  );
   const visibleJobs = useMemo(() => {
     const deduped = dedupeHistoryJobs(jobs);
     if (historyFilter === "all") return deduped;
@@ -360,6 +376,52 @@ export function SettingsScreen({
     setTopUpNotice("Создайте новый платеж. После оплаты баланс обновится автоматически.");
   }
 
+  const paymentHistoryBody =
+    paymentsLoading && visiblePayments.length === 0 ? (
+      <div className="settings-empty">Загружаем платежи</div>
+    ) : visiblePayments.length === 0 ? (
+      <div className="settings-empty">Платежей пока нет</div>
+    ) : (
+      <div className="payment-history-list" aria-label="Платежи">
+        {visiblePayments.map((intent) => {
+          const confirmationUrl = paymentConfirmationUrl(intent);
+          const waitingForUser = intent.status === "waiting_for_user";
+          const tone = paymentStatusTone(intent.status);
+          return (
+            <div key={intent.id} className={`payment-history-row payment-history-row--${tone}`}>
+              <div className="payment-history-row__main">
+                <strong>{formatCredits(intent.credits)}</strong>
+                <span>
+                  {formatRub(intent.amount)} · {paymentStatusLabel(intent.status)}
+                </span>
+              </div>
+              <div className="payment-history-row__meta">
+                <time dateTime={intent.created_at}>{dateLabel(intent.created_at)}</time>
+                {waitingForUser ? (
+                  <div className="payment-history-row__actions">
+                    {confirmationUrl ? (
+                      <a href={confirmationUrl} target="_blank" rel="noopener noreferrer">
+                        Продолжить
+                      </a>
+                    ) : null}
+                    {MINIAPP_PAYMENT_CANCEL_ENABLED ? (
+                      <button
+                        type="button"
+                        disabled={cancellingPaymentID === intent.id}
+                        onClick={() => void handleCancelPayment(intent)}
+                      >
+                        {cancellingPaymentID === intent.id ? "Отменяем..." : "Отменить"}
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+
   return (
     <main className="settings-screen nh-scroll">
       <div className="nh-hero nh-hero--profile nh-hero--banner-only" aria-hidden="true">
@@ -372,23 +434,25 @@ export function SettingsScreen({
         <p className="nh-page-sub">инструменты для нового поколения</p>
       </div>
 
-      <section className="settings-card" aria-labelledby="settings-theme-title">
-        <h2 id="settings-theme-title" style={{ margin: "0 0 14px", fontSize: "15px" }}>
-          Тема оформления
-        </h2>
-        <div className="theme-segment" role="group" aria-label="Тема приложения">
-          {THEME_OPTIONS.map((option) => (
-            <button
-              key={option.id}
-              type="button"
-              className={"theme-segment__btn" + (themeMode === option.id ? " is-active" : "")}
-              onClick={() => onThemeModeChange(option.id)}
-            >
-              <span>{option.label}</span>
-            </button>
-          ))}
-        </div>
-      </section>
+      {MINIAPP_DARK_THEME_ONLY_ENABLED ? null : (
+        <section className="settings-card" aria-labelledby="settings-theme-title">
+          <h2 id="settings-theme-title" style={{ margin: "0 0 14px", fontSize: "15px" }}>
+            Тема оформления
+          </h2>
+          <div className="theme-segment" role="group" aria-label="Тема приложения">
+            {THEME_OPTIONS.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                className={"theme-segment__btn" + (themeMode === option.id ? " is-active" : "")}
+                onClick={() => onThemeModeChange(option.id)}
+              >
+                <span>{option.label}</span>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
 
       <section className="settings-card" aria-labelledby="settings-balance-title">
         <h2 id="settings-balance-title" style={{ margin: "0 0 14px", fontSize: "15px" }}>
@@ -493,6 +557,48 @@ export function SettingsScreen({
                 <p className="settings-notice">Загружаем тарифы...</p>
               ) : paymentProducts.length === 0 ? (
                 <p className="settings-notice">Тарифы пока недоступны.</p>
+              ) : MINIAPP_TOPUP_CATALOG_DROPDOWN_ENABLED ? (
+                <div className="payment-product-select">
+                  <label htmlFor="payment-product-select">Пакет пополнения</label>
+                  <select
+                    id="payment-product-select"
+                    value={selectedTopUpProduct?.code ?? ""}
+                    disabled={Boolean(paymentPendingCode)}
+                    onChange={(event) => setSelectedProductCode(event.target.value)}
+                  >
+                    {paymentProducts.map((product) => (
+                      <option key={product.code} value={product.code}>
+                        {formatCredits(product.credits)} · {formatRub(product.amount)}
+                      </option>
+                    ))}
+                  </select>
+                  {selectedTopUpProduct ? (
+                    <>
+                      <div className="payment-product-summary">
+                        <strong>{selectedTopUpProduct.title}</strong>
+                        <span>
+                          {formatCredits(selectedTopUpProduct.credits)} · {formatRub(selectedTopUpProduct.amount)}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        className="payment-product payment-product--selected"
+                        disabled={Boolean(paymentPendingCode)}
+                        onClick={() => void handleTopUp(selectedTopUpProduct)}
+                      >
+                        <span>
+                          <strong>{formatCredits(selectedTopUpProduct.credits)}</strong>
+                          <small>{selectedTopUpProduct.title}</small>
+                        </span>
+                        <em>
+                          {paymentPendingCode === selectedTopUpProduct.code
+                            ? "Создаем..."
+                            : formatRub(selectedTopUpProduct.amount)}
+                        </em>
+                      </button>
+                    </>
+                  ) : null}
+                </div>
               ) : (
                 paymentProducts.map((product) => (
                   <button
@@ -594,65 +700,111 @@ export function SettingsScreen({
       </section>
 
       <section className="settings-card payment-history-card" aria-labelledby="settings-payment-history-title">
-        <div className="payment-history-head">
-          <div>
-            <h2 id="settings-payment-history-title">История платежей</h2>
-            <p>После оплаты баланс обновится автоматически.</p>
-          </div>
-          <button
-            type="button"
-            className="chat__history-btn"
-            aria-label="Обновить историю платежей"
-            onClick={() => void refreshPaymentIntents()}
-          >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              className={paymentsLoading ? "nh-spin" : ""}
-              aria-hidden="true"
+        {MINIAPP_TOPUP_HISTORY_DROPDOWN_ENABLED ? (
+          <>
+            <div className="payment-history-collapsible-head">
+              <button
+                type="button"
+                className={"payment-history-toggle" + (paymentHistoryOpen ? " is-open" : "")}
+                aria-expanded={paymentHistoryOpen}
+                aria-controls="settings-payment-history-panel"
+                onClick={() => setPaymentHistoryOpen((open) => !open)}
+              >
+                <span className="payment-history-toggle__main">
+                  <span id="settings-payment-history-title" className="payment-history-toggle__title">
+                    История платежей
+                  </span>
+                  <span className="payment-history-toggle__count">
+                    {paymentsLoading ? "..." : paymentHistoryCountLabel(visiblePayments.length)}
+                  </span>
+                  <span className="payment-history-toggle__summary">
+                    {paymentsLoading && visiblePayments.length === 0
+                      ? "Загружаем платежи"
+                      : paymentHistorySummary(latestPaymentIntent)}
+                  </span>
+                </span>
+                <svg
+                  className="payment-history-toggle__chevron"
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="m6 9 6 6 6-6"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </button>
+              <button
+                type="button"
+                className="chat__history-btn"
+                aria-label="Обновить историю платежей"
+                onClick={() => void refreshPaymentIntents()}
+              >
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  className={paymentsLoading ? "nh-spin" : ""}
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M3 12a9 9 0 1 0 3-6.7M3 3v6h6"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </button>
+            </div>
+            <div
+              id="settings-payment-history-panel"
+              className={"payment-history-panel" + (paymentHistoryOpen ? " is-open" : "")}
+              hidden={!paymentHistoryOpen}
             >
-              <path
-                d="M3 12a9 9 0 1 0 3-6.7M3 3v6h6"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </button>
-        </div>
-        {paymentsLoading && visiblePayments.length === 0 ? (
-          <div className="settings-empty">Загружаем платежи</div>
-        ) : visiblePayments.length === 0 ? (
-          <div className="settings-empty">Платежей пока нет</div>
+              {paymentHistoryBody}
+            </div>
+          </>
         ) : (
-          <div className="payment-history-list" aria-label="Платежи">
-            {visiblePayments.map((intent) => {
-              const confirmationUrl = paymentConfirmationUrl(intent);
-              const active = intent.status === "waiting_for_user" && Boolean(confirmationUrl);
-              const tone = paymentStatusTone(intent.status);
-              return (
-                <div key={intent.id} className={`payment-history-row payment-history-row--${tone}`}>
-                  <div className="payment-history-row__main">
-                    <strong>{formatCredits(intent.credits)}</strong>
-                    <span>
-                      {formatRub(intent.amount)} · {paymentStatusLabel(intent.status)}
-                    </span>
-                  </div>
-                  <div className="payment-history-row__meta">
-                    <time dateTime={intent.created_at}>{dateLabel(intent.created_at)}</time>
-                    {active && confirmationUrl ? (
-                      <a href={confirmationUrl} target="_blank" rel="noopener noreferrer">
-                        Продолжить
-                      </a>
-                    ) : null}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          <>
+            <div className="payment-history-head">
+              <div>
+                <h2 id="settings-payment-history-title">История платежей</h2>
+                <p>После оплаты баланс обновится автоматически.</p>
+              </div>
+              <button
+                type="button"
+                className="chat__history-btn"
+                aria-label="Обновить историю платежей"
+                onClick={() => void refreshPaymentIntents()}
+              >
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  className={paymentsLoading ? "nh-spin" : ""}
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M3 12a9 9 0 1 0 3-6.7M3 3v6h6"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </button>
+            </div>
+            {paymentHistoryBody}
+          </>
         )}
         {paymentsNotice && <p className="settings-notice">{paymentsNotice}</p>}
       </section>

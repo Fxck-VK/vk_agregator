@@ -112,25 +112,28 @@ type Config struct {
 	MaxJobCost int64
 
 	// PaymentProvider selects the money provider for balance top-ups.
-	PaymentProvider                    string
-	YooKassaShopID                     string
-	YooKassaSecretKey                  string
-	YooKassaBaseURL                    string
-	YooKassaReturnURL                  string
-	YooKassaReturnURLMiniApp           string
-	YooKassaReturnURLVKBot             string
-	YooKassaWebhookIPAllowlistEnabled  bool
-	YooKassaWebhookIPAllowlist         []string
-	PaymentWebhookRequireHTTPS         bool
-	PaymentWebhookTrustedProxies       []string
-	PaymentWebhookAddr                 string
-	PaymentWebhookPollInterval         time.Duration
-	PaymentWebhookBatchLimit           int
-	PaymentReconciliationInterval      time.Duration
-	PaymentReconciliationLimit         int
-	PaymentReconciliationStaleAfter    time.Duration
-	FeatureVKTopUpStatusEditEnabled    bool
-	FeatureMiniAppPaymentCancelEnabled bool
+	PaymentProvider                           string
+	YooKassaShopID                            string
+	YooKassaSecretKey                         string
+	YooKassaBaseURL                           string
+	YooKassaReturnURL                         string
+	YooKassaReturnURLMiniApp                  string
+	YooKassaReturnURLVKBot                    string
+	YooKassaWebhookIPAllowlistEnabled         bool
+	YooKassaWebhookIPAllowlist                []string
+	PaymentWebhookRequireHTTPS                bool
+	PaymentWebhookTrustedProxies              []string
+	PaymentWebhookAddr                        string
+	PaymentWebhookPollInterval                time.Duration
+	PaymentWebhookBatchLimit                  int
+	PaymentReconciliationInterval             time.Duration
+	PaymentReconciliationLimit                int
+	PaymentReconciliationStaleAfter           time.Duration
+	FeatureVKTopUpStatusEditEnabled           bool
+	FeatureMiniAppPaymentCancelEnabled        bool
+	FeatureMiniAppTopUpCatalogDropdownEnabled bool
+	FeatureMiniAppDarkThemeOnlyEnabled        bool
+	FeatureMiniAppTopUpHistoryDropdownEnabled bool
 
 	// Provider selects the primary generation provider. ProviderChain, when set,
 	// enables router/fallback selection across multiple providers.
@@ -754,25 +757,28 @@ func Load() Config {
 		PriceOverrides: envPriceMap("PRICES"),
 		MaxJobCost:     int64(envInt("MAX_JOB_COST", 0)),
 
-		PaymentProvider:                       env("PAYMENT_PROVIDER", "mock"),
-		YooKassaShopID:                        env("YOOKASSA_SHOP_ID", ""),
-		YooKassaSecretKey:                     env("YOOKASSA_SECRET_KEY", ""),
-		YooKassaBaseURL:                       env("YOOKASSA_BASE_URL", "https://api.yookassa.ru/v3"),
-		YooKassaReturnURL:                     env("YOOKASSA_RETURN_URL", ""),
-		YooKassaReturnURLMiniApp:              env("YOOKASSA_RETURN_URL_MINIAPP", ""),
-		YooKassaReturnURLVKBot:                env("YOOKASSA_RETURN_URL_VK_BOT", ""),
-		YooKassaWebhookIPAllowlistEnabled:     envBool("YOOKASSA_WEBHOOK_IP_ALLOWLIST_ENABLED", false),
-		YooKassaWebhookIPAllowlist:            envList("YOOKASSA_WEBHOOK_IP_ALLOWLIST"),
-		PaymentWebhookRequireHTTPS:            envBool("PAYMENT_WEBHOOK_REQUIRE_HTTPS", false),
-		PaymentWebhookTrustedProxies:          envList("PAYMENT_WEBHOOK_TRUSTED_PROXIES"),
-		PaymentWebhookAddr:                    env("PAYMENT_WEBHOOK_ADDR", ":8082"),
-		PaymentWebhookPollInterval:            envDuration("PAYMENT_WEBHOOK_POLL_INTERVAL", 5*time.Second),
-		PaymentWebhookBatchLimit:              envInt("PAYMENT_WEBHOOK_BATCH_LIMIT", 20),
-		PaymentReconciliationInterval:         envDuration("PAYMENT_RECONCILIATION_INTERVAL", time.Minute),
-		PaymentReconciliationLimit:            envInt("PAYMENT_RECONCILIATION_LIMIT", 100),
-		PaymentReconciliationStaleAfter:       envDuration("PAYMENT_RECONCILIATION_STALE_AFTER", 30*time.Second),
-		FeatureVKTopUpStatusEditEnabled:       envBool("FEATURE_VK_TOPUP_STATUS_EDIT_ENABLED", false),
-		FeatureMiniAppPaymentCancelEnabled:    envBool("FEATURE_MINIAPP_PAYMENT_CANCEL_ENABLED", false),
+		PaymentProvider:                           env("PAYMENT_PROVIDER", "mock"),
+		YooKassaShopID:                            env("YOOKASSA_SHOP_ID", ""),
+		YooKassaSecretKey:                         env("YOOKASSA_SECRET_KEY", ""),
+		YooKassaBaseURL:                           env("YOOKASSA_BASE_URL", "https://api.yookassa.ru/v3"),
+		YooKassaReturnURL:                         env("YOOKASSA_RETURN_URL", ""),
+		YooKassaReturnURLMiniApp:                  env("YOOKASSA_RETURN_URL_MINIAPP", ""),
+		YooKassaReturnURLVKBot:                    env("YOOKASSA_RETURN_URL_VK_BOT", ""),
+		YooKassaWebhookIPAllowlistEnabled:         envBool("YOOKASSA_WEBHOOK_IP_ALLOWLIST_ENABLED", false),
+		YooKassaWebhookIPAllowlist:                envList("YOOKASSA_WEBHOOK_IP_ALLOWLIST"),
+		PaymentWebhookRequireHTTPS:                envBool("PAYMENT_WEBHOOK_REQUIRE_HTTPS", false),
+		PaymentWebhookTrustedProxies:              envList("PAYMENT_WEBHOOK_TRUSTED_PROXIES"),
+		PaymentWebhookAddr:                        env("PAYMENT_WEBHOOK_ADDR", ":8082"),
+		PaymentWebhookPollInterval:                envDuration("PAYMENT_WEBHOOK_POLL_INTERVAL", 5*time.Second),
+		PaymentWebhookBatchLimit:                  envInt("PAYMENT_WEBHOOK_BATCH_LIMIT", 20),
+		PaymentReconciliationInterval:             envDuration("PAYMENT_RECONCILIATION_INTERVAL", time.Minute),
+		PaymentReconciliationLimit:                envInt("PAYMENT_RECONCILIATION_LIMIT", 100),
+		PaymentReconciliationStaleAfter:           envDuration("PAYMENT_RECONCILIATION_STALE_AFTER", 30*time.Second),
+		FeatureVKTopUpStatusEditEnabled:           envBool("FEATURE_VK_TOPUP_STATUS_EDIT_ENABLED", false),
+		FeatureMiniAppPaymentCancelEnabled:        envBool("FEATURE_MINIAPP_PAYMENT_CANCEL_ENABLED", false),
+		FeatureMiniAppTopUpCatalogDropdownEnabled: envBool("FEATURE_MINIAPP_TOPUP_CATALOG_DROPDOWN_ENABLED", false),
+		FeatureMiniAppDarkThemeOnlyEnabled:        envBool("FEATURE_MINIAPP_DARK_THEME_ONLY_ENABLED", false),
+		FeatureMiniAppTopUpHistoryDropdownEnabled: envBool("FEATURE_MINIAPP_TOPUP_HISTORY_DROPDOWN_ENABLED", false),
 		Provider:                              provider,
 		ProviderChain:                         providerChain,
 		ImageProvider:                         env("IMAGE_PROVIDER", ""),

@@ -246,6 +246,11 @@ interface ClientTelemetryEvent {
 
 const TELEMETRY_ENABLED = import.meta.env.VITE_FRONTEND_TELEMETRY_ENABLED === "true";
 export const MINIAPP_PAYMENT_CANCEL_ENABLED = import.meta.env.VITE_FEATURE_MINIAPP_PAYMENT_CANCEL_ENABLED !== "false";
+export const MINIAPP_TOPUP_CATALOG_DROPDOWN_ENABLED =
+  import.meta.env.VITE_FEATURE_MINIAPP_TOPUP_CATALOG_DROPDOWN_ENABLED !== "false";
+export const MINIAPP_DARK_THEME_ONLY_ENABLED = import.meta.env.VITE_FEATURE_MINIAPP_DARK_THEME_ONLY_ENABLED !== "false";
+export const MINIAPP_TOPUP_HISTORY_DROPDOWN_ENABLED =
+  import.meta.env.VITE_FEATURE_MINIAPP_TOPUP_HISTORY_DROPDOWN_ENABLED !== "false";
 
 let telemetryInstalled = false;
 const appStartedAt = performance.now();

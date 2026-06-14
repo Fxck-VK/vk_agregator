@@ -93,6 +93,9 @@ func TestLoadFrontendTelemetryConfig(t *testing.T) {
 func TestLoadTopUpFeatureFlags(t *testing.T) {
 	t.Setenv("FEATURE_VK_TOPUP_STATUS_EDIT_ENABLED", "true")
 	t.Setenv("FEATURE_MINIAPP_PAYMENT_CANCEL_ENABLED", "true")
+	t.Setenv("FEATURE_MINIAPP_TOPUP_CATALOG_DROPDOWN_ENABLED", "true")
+	t.Setenv("FEATURE_MINIAPP_DARK_THEME_ONLY_ENABLED", "true")
+	t.Setenv("FEATURE_MINIAPP_TOPUP_HISTORY_DROPDOWN_ENABLED", "true")
 
 	cfg := config.Load()
 	if !cfg.FeatureVKTopUpStatusEditEnabled {
@@ -100,6 +103,15 @@ func TestLoadTopUpFeatureFlags(t *testing.T) {
 	}
 	if !cfg.FeatureMiniAppPaymentCancelEnabled {
 		t.Fatal("FeatureMiniAppPaymentCancelEnabled = false, want true")
+	}
+	if !cfg.FeatureMiniAppTopUpCatalogDropdownEnabled {
+		t.Fatal("FeatureMiniAppTopUpCatalogDropdownEnabled = false, want true")
+	}
+	if !cfg.FeatureMiniAppDarkThemeOnlyEnabled {
+		t.Fatal("FeatureMiniAppDarkThemeOnlyEnabled = false, want true")
+	}
+	if !cfg.FeatureMiniAppTopUpHistoryDropdownEnabled {
+		t.Fatal("FeatureMiniAppTopUpHistoryDropdownEnabled = false, want true")
 	}
 }
 
