@@ -103,6 +103,7 @@ func NewHandler(cfg config.Config, deps Deps) http.Handler {
 		TopUpReceiptEmail:                   cfg.VKTopUpReceiptEmail,
 		TopUpReceiptPhone:                   cfg.VKTopUpReceiptPhone,
 		TopUpReturnURL:                      firstNonEmpty(cfg.YooKassaReturnURLVKBot, cfg.YooKassaReturnURL),
+		TopUpStatusEditEnabled:              cfg.FeatureVKTopUpStatusEditEnabled,
 	}, vkinbound.Deps{
 		Idempotency:  deps.Idempotency,
 		Inbound:      deps.Inbound,

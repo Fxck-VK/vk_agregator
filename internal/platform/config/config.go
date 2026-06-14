@@ -112,23 +112,25 @@ type Config struct {
 	MaxJobCost int64
 
 	// PaymentProvider selects the money provider for balance top-ups.
-	PaymentProvider                   string
-	YooKassaShopID                    string
-	YooKassaSecretKey                 string
-	YooKassaBaseURL                   string
-	YooKassaReturnURL                 string
-	YooKassaReturnURLMiniApp          string
-	YooKassaReturnURLVKBot            string
-	YooKassaWebhookIPAllowlistEnabled bool
-	YooKassaWebhookIPAllowlist        []string
-	PaymentWebhookRequireHTTPS        bool
-	PaymentWebhookTrustedProxies      []string
-	PaymentWebhookAddr                string
-	PaymentWebhookPollInterval        time.Duration
-	PaymentWebhookBatchLimit          int
-	PaymentReconciliationInterval     time.Duration
-	PaymentReconciliationLimit        int
-	PaymentReconciliationStaleAfter   time.Duration
+	PaymentProvider                    string
+	YooKassaShopID                     string
+	YooKassaSecretKey                  string
+	YooKassaBaseURL                    string
+	YooKassaReturnURL                  string
+	YooKassaReturnURLMiniApp           string
+	YooKassaReturnURLVKBot             string
+	YooKassaWebhookIPAllowlistEnabled  bool
+	YooKassaWebhookIPAllowlist         []string
+	PaymentWebhookRequireHTTPS         bool
+	PaymentWebhookTrustedProxies       []string
+	PaymentWebhookAddr                 string
+	PaymentWebhookPollInterval         time.Duration
+	PaymentWebhookBatchLimit           int
+	PaymentReconciliationInterval      time.Duration
+	PaymentReconciliationLimit         int
+	PaymentReconciliationStaleAfter    time.Duration
+	FeatureVKTopUpStatusEditEnabled    bool
+	FeatureMiniAppPaymentCancelEnabled bool
 
 	// Provider selects the primary generation provider. ProviderChain, when set,
 	// enables router/fallback selection across multiple providers.
@@ -769,6 +771,8 @@ func Load() Config {
 		PaymentReconciliationInterval:         envDuration("PAYMENT_RECONCILIATION_INTERVAL", time.Minute),
 		PaymentReconciliationLimit:            envInt("PAYMENT_RECONCILIATION_LIMIT", 100),
 		PaymentReconciliationStaleAfter:       envDuration("PAYMENT_RECONCILIATION_STALE_AFTER", 30*time.Second),
+		FeatureVKTopUpStatusEditEnabled:       envBool("FEATURE_VK_TOPUP_STATUS_EDIT_ENABLED", false),
+		FeatureMiniAppPaymentCancelEnabled:    envBool("FEATURE_MINIAPP_PAYMENT_CANCEL_ENABLED", false),
 		Provider:                              provider,
 		ProviderChain:                         providerChain,
 		ImageProvider:                         env("IMAGE_PROVIDER", ""),

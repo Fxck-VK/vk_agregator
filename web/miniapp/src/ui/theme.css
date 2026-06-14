@@ -2213,6 +2213,11 @@ body {
   color: #fff;
 }
 
+.payment-pending__actions button:disabled {
+  opacity: 0.58;
+  cursor: not-allowed;
+}
+
 .payment-current-link {
   width: 100%;
   min-height: 38px;

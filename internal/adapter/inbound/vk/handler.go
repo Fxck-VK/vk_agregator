@@ -70,6 +70,9 @@ type Config struct {
 	// TopUpReturnURL is the server-owned YooKassa redirect target for bot
 	// top-up intents.
 	TopUpReturnURL string
+	// TopUpStatusEditEnabled stores the VK payment message id so provider
+	// webhooks can edit it after a final payment status.
+	TopUpStatusEditEnabled bool
 }
 
 // MenuFeatureFlags allows deployments to hide VK menu buttons without deleting
@@ -883,7 +886,26 @@ func (h *Handler) createAndSendTopUpPayment(ctx context.Context, groupID int64, 
 		return h.sendTopUpNotice(ctx, idemKey, peerID, "Платеж создан, но ссылка на оплату пока недоступна. Попробуйте позже.")
 	}
 	h.clearDialogMode(ctx, peerID)
-	return h.sendTopUpPaymentLink(ctx, idemKey, peerID, result.Intent)
+	messageID, err := h.sendTopUpPaymentLink(ctx, idemKey, peerID, result.Intent)
+	if err != nil {
+		return err
+	}
+	if h.cfg.TopUpStatusEditEnabled && messageID > 0 {
+		if _, err := h.deps.Payment.AttachVKBotPaymentMessage(ctx, paymentservice.AttachVKBotPaymentMessageInput{
+			UserID:    user.ID,
+			IntentID:  result.Intent.ID,
+			VKPeerID:  peerID,
+			MessageID: messageID,
+		}); err != nil {
+			h.logger.Warn("vk top-up payment message tracking failed",
+				slog.String("payment_intent_id", result.Intent.ID.String()),
+				slog.String("error", err.Error()))
+		} else {
+			h.logger.Info("vk top-up payment message tracked",
+				slog.String("payment_intent_id", result.Intent.ID.String()))
+		}
+	}
+	return nil
 }
 
 func paymentIntentProductCode(intent *domain.PaymentIntent) string {

@@ -2,7 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@vkontakte/vkui";
 import bridge from "@vkontakte/vk-bridge";
 import {
+  MINIAPP_PAYMENT_CANCEL_ENABLED,
   apiUserMessage,
+  cancelPaymentIntent,
   createIdempotencyKey,
   createPaymentIntent,
   getReferral,
@@ -169,6 +171,7 @@ export function SettingsScreen({
   const [paymentsLoading, setPaymentsLoading] = useState(false);
   const [paymentsNotice, setPaymentsNotice] = useState("");
   const [paymentPendingCode, setPaymentPendingCode] = useState("");
+  const [cancellingPaymentID, setCancellingPaymentID] = useState("");
   const [referralInfo, setReferralInfo] = useState<ReferralInfo | null>(null);
   const [referralLoading, setReferralLoading] = useState(false);
   const [referralNotice, setReferralNotice] = useState("");
@@ -330,6 +333,28 @@ export function SettingsScreen({
     }
   }
 
+  async function handleCancelPayment(intent: PaymentIntent) {
+    if (!MINIAPP_PAYMENT_CANCEL_ENABLED || !intent.id || cancellingPaymentID) return;
+    setTopUpNotice("");
+    setPaymentsNotice("");
+    setCancellingPaymentID(intent.id);
+    try {
+      const canceled = await cancelPaymentIntent(intent.id);
+      setPaymentIntents((items) => upsertPaymentIntent(items, canceled));
+      setCreatingNewPayment(false);
+      setTopUpNotice(
+        paymentStatusTone(canceled.status) === "failed"
+          ? "Платеж отменен."
+          : "Запрос отмены отправлен. Обновите историю через несколько секунд.",
+      );
+      void refreshPaymentIntents();
+    } catch (error) {
+      setTopUpNotice(apiUserMessage(error));
+    } finally {
+      setCancellingPaymentID("");
+    }
+  }
+
   function handleCreateNewPayment() {
     setCreatingNewPayment(true);
     setTopUpNotice("Создайте новый платеж. После оплаты баланс обновится автоматически.");
@@ -427,6 +452,15 @@ export function SettingsScreen({
               <button type="button" onClick={handleCreateNewPayment}>
                 Создать новый платеж
               </button>
+              {MINIAPP_PAYMENT_CANCEL_ENABLED ? (
+                <button
+                  type="button"
+                  disabled={cancellingPaymentID === activePaymentIntent.id}
+                  onClick={() => void handleCancelPayment(activePaymentIntent)}
+                >
+                  {cancellingPaymentID === activePaymentIntent.id ? "Отменяем..." : "Отменить платеж"}
+                </button>
+              ) : null}
             </div>
           </div>
         ) : (

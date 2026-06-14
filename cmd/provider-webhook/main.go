@@ -18,8 +18,10 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	vkdelivery "vk-ai-aggregator/internal/adapter/delivery/vk"
 	paymentadapter "vk-ai-aggregator/internal/adapter/payment"
 	"vk-ai-aggregator/internal/adapter/storage/postgres"
+	"vk-ai-aggregator/internal/app/paymentstatus"
 	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/platform/config"
 	"vk-ai-aggregator/internal/platform/logging"
@@ -85,7 +87,24 @@ func main() {
 			return fn(ctx, postgres.NewPaymentRepository(tx), postgres.NewBillingRepositoryTx(tx))
 		})
 	})
-	processor := paymentservice.NewWebhookProcessor(payments, provider, billing, txRunner)
+	processorOptions := []paymentservice.WebhookProcessorOption{}
+	if cfg.FeatureVKTopUpStatusEditEnabled {
+		if strings.TrimSpace(cfg.VKAccessToken) == "" {
+			logger.Warn("vk top-up status edit disabled because VK_ACCESS_TOKEN is empty")
+		} else {
+			vkClient := vkdelivery.NewHTTPClient(vkdelivery.HTTPConfig{
+				AccessToken: cfg.VKAccessToken,
+				APIVersion:  cfg.VKAPIVersion,
+				BaseURL:     cfg.VKAPIBaseURL,
+			})
+			processorOptions = append(processorOptions, paymentservice.WithPaymentStatusNotifier(paymentstatus.VKTopUpNotifier{
+				Control: vkClient,
+				Logger:  logger,
+			}))
+			logger.Info("vk top-up status edit notifier enabled")
+		}
+	}
+	processor := paymentservice.NewWebhookProcessor(payments, provider, billing, txRunner, processorOptions...)
 
 	mux := http.NewServeMux()
 	limiter := ratelimit.New(cfg.WebhookRateLimitRPS, cfg.WebhookRateLimitBurst)

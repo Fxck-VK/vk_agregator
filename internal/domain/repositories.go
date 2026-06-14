@@ -377,6 +377,9 @@ type PaymentRepository interface {
 	// UpdateIntentStatus updates an intent status using optimistic state
 	// matching. It returns ErrConflict when the current state changed.
 	UpdateIntentStatus(ctx context.Context, id uuid.UUID, from, to PaymentIntentStatus) error
+	// UpdateIntentMetadata replaces one intent metadata document. Callers must
+	// preserve existing provider/product fields and never store raw secrets.
+	UpdateIntentMetadata(ctx context.Context, id uuid.UUID, metadata json.RawMessage) error
 	// ListIntentsByUser lists intents for one user, newest first.
 	ListIntentsByUser(ctx context.Context, userID uuid.UUID, limit, offset int) ([]*PaymentIntent, error)
 	// ListIntents lists intents for protected operator endpoints, newest first.

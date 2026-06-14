@@ -292,6 +292,21 @@ func (r *PaymentRepository) UpdateIntentStatus(ctx context.Context, id uuid.UUID
 	return nil
 }
 
+// UpdateIntentMetadata replaces one intent metadata document.
+func (r *PaymentRepository) UpdateIntentMetadata(ctx context.Context, id uuid.UUID, metadata json.RawMessage) error {
+	if len(metadata) == 0 {
+		metadata = json.RawMessage(`{}`)
+	}
+	const q = `
+		UPDATE payment_intents
+		SET metadata = COALESCE($2::jsonb, '{}'::jsonb),
+		    updated_at = now()
+		WHERE id = $1
+		RETURNING ` + paymentIntentColumns
+	var intent domain.PaymentIntent
+	return mapError(scanPaymentIntent(r.db.QueryRow(ctx, q, id, rawOrNil(metadata)), &intent))
+}
+
 // ListIntentsByUser lists intents for one user.
 func (r *PaymentRepository) ListIntentsByUser(ctx context.Context, userID uuid.UUID, limit, offset int) ([]*domain.PaymentIntent, error) {
 	const q = `SELECT ` + paymentIntentColumns + `

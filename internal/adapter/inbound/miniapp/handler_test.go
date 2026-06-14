@@ -2182,6 +2182,69 @@ func TestHandler_CreatePaymentIntent_IdempotentAndSafeDTO(t *testing.T) {
 	}
 }
 
+func TestHandler_CancelPaymentIntentFeatureFlagAndOwnerChecks(t *testing.T) {
+	disabled := newTestFixture("", nil)
+	disabledReq := httptest.NewRequest(http.MethodPost, "/miniapp/payments/"+uuid.NewString()+"/cancel", nil)
+	disabledReq.Header.Set("X-Launch-Params", devLaunchParams(777))
+	disabledRec := httptest.NewRecorder()
+	disabled.handler.Routes().ServeHTTP(disabledRec, disabledReq)
+	if disabledRec.Code != http.StatusNotFound {
+		t.Fatalf("expected disabled cancel 404, got %d: %s", disabledRec.Code, disabledRec.Body.String())
+	}
+
+	fixture := newTestFixtureWithConfig("", nil, func(cfg *miniappinbound.Config) {
+		cfg.PaymentCancelEnabled = true
+	})
+	fixture.paymentRepo.PutProduct(&domain.PaymentProduct{
+		Code:         "credits_100",
+		Title:        "100 credits",
+		Amount:       9900,
+		Currency:     domain.CurrencyRUB,
+		Credits:      100,
+		PriceVersion: 1,
+		IsActive:     true,
+	})
+	routes := fixture.handler.Routes()
+
+	body := []byte(`{"product_code":"credits_100","receipt_email":"user@example.com"}`)
+	createReq := httptest.NewRequest(http.MethodPost, "/miniapp/payments/intents", bytes.NewReader(body))
+	createReq.Header.Set("Content-Type", "application/json")
+	createReq.Header.Set("X-Launch-Params", devLaunchParams(777))
+	createReq.Header.Set("X-Idempotency-Key", "pay-cancel-1")
+	createRec := httptest.NewRecorder()
+	routes.ServeHTTP(createRec, createReq)
+	if createRec.Code != http.StatusCreated {
+		t.Fatalf("expected create 201, got %d: %s", createRec.Code, createRec.Body.String())
+	}
+	var created miniappinbound.PaymentIntentDTO
+	if err := json.Unmarshal(createRec.Body.Bytes(), &created); err != nil {
+		t.Fatalf("decode create: %v", err)
+	}
+
+	otherReq := httptest.NewRequest(http.MethodPost, "/miniapp/payments/"+created.ID.String()+"/cancel", nil)
+	otherReq.Header.Set("X-Launch-Params", devLaunchParams(888))
+	otherRec := httptest.NewRecorder()
+	routes.ServeHTTP(otherRec, otherReq)
+	if otherRec.Code != http.StatusNotFound {
+		t.Fatalf("expected foreign cancel 404, got %d: %s", otherRec.Code, otherRec.Body.String())
+	}
+
+	cancelReq := httptest.NewRequest(http.MethodPost, "/miniapp/payments/"+created.ID.String()+"/cancel", nil)
+	cancelReq.Header.Set("X-Launch-Params", devLaunchParams(777))
+	cancelRec := httptest.NewRecorder()
+	routes.ServeHTTP(cancelRec, cancelReq)
+	if cancelRec.Code != http.StatusOK {
+		t.Fatalf("expected cancel 200, got %d: %s", cancelRec.Code, cancelRec.Body.String())
+	}
+	var canceled miniappinbound.PaymentIntentDTO
+	if err := json.Unmarshal(cancelRec.Body.Bytes(), &canceled); err != nil {
+		t.Fatalf("decode canceled: %v", err)
+	}
+	if canceled.ID != created.ID || canceled.Status != string(domain.PaymentIntentCanceled) {
+		t.Fatalf("unexpected canceled dto: %+v", canceled)
+	}
+}
+
 func TestHandler_CreatePaymentIntentIgnoresClientReturnURL(t *testing.T) {
 	provider := &recordingPaymentProvider{}
 	fixture := newTestFixtureWithConfigAndPaymentProvider("", nil, nil, provider)

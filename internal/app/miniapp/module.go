@@ -82,6 +82,7 @@ func NewHandler(ctx context.Context, cfg config.Config, deps Deps) *miniappapi.H
 		FrontendTelemetryEnabled:            cfg.FrontendTelemetryEnabled,
 		FrontendTelemetryUserHashSecret:     cfg.FrontendTelemetryUserHashSecret,
 		PaymentReturnURL:                    firstNonEmpty(cfg.YooKassaReturnURLMiniApp, cfg.YooKassaReturnURL),
+		PaymentCancelEnabled:                cfg.FeatureMiniAppPaymentCancelEnabled,
 	}, miniappapi.Deps{
 		Users:         deps.Users,
 		Jobs:          deps.Jobs,

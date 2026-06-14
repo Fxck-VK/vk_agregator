@@ -307,6 +307,23 @@ func (r *PaymentRepo) UpdateIntentStatus(_ context.Context, id uuid.UUID, from, 
 	return nil
 }
 
+// UpdateIntentMetadata replaces one intent metadata document.
+func (r *PaymentRepo) UpdateIntentMetadata(_ context.Context, id uuid.UUID, metadata json.RawMessage) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	intent, ok := r.intentsByID[id]
+	if !ok {
+		return domain.ErrNotFound
+	}
+	if len(metadata) == 0 {
+		metadata = json.RawMessage(`{}`)
+	}
+	intent.Metadata = append(json.RawMessage(nil), metadata...)
+	intent.UpdatedAt = time.Now()
+	r.intentsByID[id] = intent
+	return nil
+}
+
 func (r *PaymentRepo) ListIntentsByUser(_ context.Context, userID uuid.UUID, limit, offset int) ([]*domain.PaymentIntent, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()

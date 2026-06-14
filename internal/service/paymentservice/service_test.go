@@ -83,6 +83,141 @@ func TestCreateIntentCreatesProviderPaymentAndIsIdempotent(t *testing.T) {
 	}
 }
 
+func TestAttachVKBotPaymentMessageStoresLocalMetadata(t *testing.T) {
+	ctx := context.Background()
+	repo := memory.NewPaymentRepo()
+	repo.PutProduct(&domain.PaymentProduct{
+		Code: "credits_100", Title: "100 credits", Amount: 9900,
+		Currency: domain.CurrencyRUB, Credits: 100, PriceVersion: 1, IsActive: true,
+	})
+	provider := paymentmock.New()
+	svc := paymentservice.New(repo, provider, paymentservice.Config{})
+	userID := uuid.New()
+	created, err := svc.CreateIntent(ctx, paymentservice.CreateIntentInput{
+		UserID:         userID,
+		ProductCode:    "credits_100",
+		ReceiptEmail:   "user@example.com",
+		IdempotencyKey: "vk-payment-attach",
+		Source:         "vk_bot",
+	})
+	if err != nil {
+		t.Fatalf("create intent: %v", err)
+	}
+
+	updated, err := svc.AttachVKBotPaymentMessage(ctx, paymentservice.AttachVKBotPaymentMessageInput{
+		UserID:    userID,
+		IntentID:  created.Intent.ID,
+		VKPeerID:  12345,
+		MessageID: 67890,
+	})
+	if err != nil {
+		t.Fatalf("attach vk message: %v", err)
+	}
+
+	var metadata map[string]any
+	if err := json.Unmarshal(updated.Metadata, &metadata); err != nil {
+		t.Fatalf("decode metadata: %v", err)
+	}
+	if metadata["source"] != "vk_bot" || metadata["product_code"] != "credits_100" {
+		t.Fatalf("unexpected preserved metadata: %+v", metadata)
+	}
+	if metadata["vk_peer_id"] != float64(12345) || metadata["vk_payment_message_id"] != float64(67890) {
+		t.Fatalf("message metadata not stored: %+v", metadata)
+	}
+
+	if _, err := svc.AttachVKBotPaymentMessage(ctx, paymentservice.AttachVKBotPaymentMessageInput{
+		UserID:    uuid.New(),
+		IntentID:  created.Intent.ID,
+		VKPeerID:  12345,
+		MessageID: 67890,
+	}); !errors.Is(err, paymentservice.ErrForbidden) {
+		t.Fatalf("foreign user attach err = %v, want forbidden", err)
+	}
+}
+
+func TestCancelUserWaitingIntentCancelsOwnedMiniAppPaymentOnly(t *testing.T) {
+	ctx := context.Background()
+	repo := memory.NewPaymentRepo()
+	repo.PutProduct(&domain.PaymentProduct{
+		Code: "credits_100", Title: "100 credits", Amount: 9900,
+		Currency: domain.CurrencyRUB, Credits: 100, PriceVersion: 1, IsActive: true,
+	})
+	provider := paymentmock.New()
+	svc := paymentservice.New(repo, provider, paymentservice.Config{})
+	userID := uuid.New()
+	created, err := svc.CreateIntent(ctx, paymentservice.CreateIntentInput{
+		UserID:         userID,
+		ProductCode:    "credits_100",
+		ReceiptEmail:   "user@example.com",
+		IdempotencyKey: "miniapp-cancel",
+		Source:         "vk_miniapp",
+	})
+	if err != nil {
+		t.Fatalf("create intent: %v", err)
+	}
+
+	canceled, err := svc.CancelUserWaitingIntent(ctx, paymentservice.CancelUserIntentInput{
+		UserID:   userID,
+		IntentID: created.Intent.ID,
+		Source:   "vk_miniapp",
+	})
+	if err != nil {
+		t.Fatalf("cancel intent: %v", err)
+	}
+	if canceled.Status != domain.PaymentIntentCanceled {
+		t.Fatalf("status = %s, want canceled", canceled.Status)
+	}
+	replayed, err := svc.CancelUserWaitingIntent(ctx, paymentservice.CancelUserIntentInput{
+		UserID:   userID,
+		IntentID: created.Intent.ID,
+		Source:   "vk_miniapp",
+	})
+	if err != nil || replayed.Status != domain.PaymentIntentCanceled {
+		t.Fatalf("replay cancel = %+v err=%v, want canceled nil", replayed, err)
+	}
+
+	vkBotIntent, err := svc.CreateIntent(ctx, paymentservice.CreateIntentInput{
+		UserID:         userID,
+		ProductCode:    "credits_100",
+		ReceiptEmail:   "user@example.com",
+		IdempotencyKey: "vkbot-cancel-forbidden",
+		Source:         "vk_bot",
+		ForceNew:       true,
+	})
+	if err != nil {
+		t.Fatalf("create vk bot intent: %v", err)
+	}
+	if _, err := svc.CancelUserWaitingIntent(ctx, paymentservice.CancelUserIntentInput{
+		UserID:   userID,
+		IntentID: vkBotIntent.Intent.ID,
+		Source:   "vk_miniapp",
+	}); !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("cross-source cancel err = %v, want not found", err)
+	}
+
+	succeeded, err := svc.CreateIntent(ctx, paymentservice.CreateIntentInput{
+		UserID:         userID,
+		ProductCode:    "credits_100",
+		ReceiptEmail:   "user@example.com",
+		IdempotencyKey: "miniapp-cancel-succeeded",
+		Source:         "vk_miniapp",
+		ForceNew:       true,
+	})
+	if err != nil {
+		t.Fatalf("create succeeded candidate: %v", err)
+	}
+	if err := provider.SetPaymentStatus(succeeded.Intent.ProviderPaymentID, domain.PaymentIntentSucceeded); err != nil {
+		t.Fatalf("set succeeded: %v", err)
+	}
+	if _, err := svc.CancelUserWaitingIntent(ctx, paymentservice.CancelUserIntentInput{
+		UserID:   userID,
+		IntentID: succeeded.Intent.ID,
+		Source:   "vk_miniapp",
+	}); !errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("succeeded provider cancel err = %v, want conflict", err)
+	}
+}
+
 func TestCreateIntentUsesReceiptSnapshotWhenProviderCreationIsRetried(t *testing.T) {
 	ctx := context.Background()
 	repo := memory.NewPaymentRepo()
@@ -519,6 +654,67 @@ func TestWebhookProcessorVerifiedSuccessGrantsOnce(t *testing.T) {
 	}
 	if acc.BalanceCached != 100 {
 		t.Fatalf("balance after replay = %d, want 100", acc.BalanceCached)
+	}
+}
+
+func TestWebhookProcessorNotifiesCommittedStatusChangeOnce(t *testing.T) {
+	ctx := context.Background()
+	repo := memory.NewPaymentRepo()
+	repo.PutProduct(&domain.PaymentProduct{
+		Code: "credits_100", Title: "100 credits", Amount: 9900,
+		Currency: domain.CurrencyRUB, Credits: 100, PriceVersion: 1, IsActive: true,
+	})
+	provider := paymentmock.New()
+	intentSvc := paymentservice.New(repo, provider, paymentservice.Config{})
+	userID := uuid.New()
+	created, err := intentSvc.CreateIntent(ctx, paymentservice.CreateIntentInput{
+		UserID:         userID,
+		ProductCode:    "credits_100",
+		ReceiptEmail:   "user@example.com",
+		IdempotencyKey: "intent-notify-once",
+		Source:         "vk_bot",
+	})
+	if err != nil {
+		t.Fatalf("create intent: %v", err)
+	}
+	if err := provider.SetPaymentStatus(created.Intent.ProviderPaymentID, domain.PaymentIntentSucceeded); err != nil {
+		t.Fatalf("set provider status: %v", err)
+	}
+
+	billingRepo := memory.NewBillingRepo()
+	billing := billingservice.New(billingRepo, billingservice.WithStartingBalance(0))
+	tx := paymentservice.TxRunnerFunc(func(ctx context.Context, fn func(context.Context, domain.PaymentRepository, domain.BillingRepository) error) error {
+		return fn(ctx, repo, billingRepo)
+	})
+	notifier := &recordingStatusNotifier{}
+	processor := paymentservice.NewWebhookProcessor(repo, provider, billing, tx, paymentservice.WithPaymentStatusNotifier(notifier))
+
+	raw := []byte(`{"event_type":"payment.succeeded","provider_payment_id":"` + created.Intent.ProviderPaymentID + `"}`)
+	if _, _, err := processor.IngestWebhook(ctx, raw, nil); err != nil {
+		t.Fatalf("ingest webhook: %v", err)
+	}
+	if _, err := processor.ProcessBatch(ctx, 10); err != nil {
+		t.Fatalf("process batch: %v", err)
+	}
+	if len(notifier.events) != 1 {
+		t.Fatalf("notifier events = %d, want 1", len(notifier.events))
+	}
+	if notifier.events[0].Intent.ID != created.Intent.ID ||
+		notifier.events[0].From != domain.PaymentIntentWaitingForUser ||
+		notifier.events[0].To != domain.PaymentIntentSucceeded ||
+		!notifier.events[0].TopupGranted {
+		t.Fatalf("unexpected notification: %+v", notifier.events[0])
+	}
+
+	rawSecond := []byte(`{"event_type":"payment.succeeded.retry","provider_payment_id":"` + created.Intent.ProviderPaymentID + `"}`)
+	if _, _, err := processor.IngestWebhook(ctx, rawSecond, nil); err != nil {
+		t.Fatalf("ingest second webhook: %v", err)
+	}
+	if _, err := processor.ProcessBatch(ctx, 10); err != nil {
+		t.Fatalf("process second batch: %v", err)
+	}
+	if len(notifier.events) != 1 {
+		t.Fatalf("duplicate notification events = %d, want 1", len(notifier.events))
 	}
 }
 
@@ -1416,6 +1612,15 @@ func newTestWebhookProcessorWithProvider(repo *memory.PaymentRepo, provider doma
 		return fn(ctx, repo, billingRepo)
 	})
 	return paymentservice.NewWebhookProcessor(repo, provider, billing, tx)
+}
+
+type recordingStatusNotifier struct {
+	events []paymentservice.PaymentStatusNotification
+}
+
+func (n *recordingStatusNotifier) PaymentStatusChanged(_ context.Context, event paymentservice.PaymentStatusNotification) error {
+	n.events = append(n.events, event)
+	return nil
 }
 
 type recordingPaymentProvider struct {

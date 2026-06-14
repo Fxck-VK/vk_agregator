@@ -624,6 +624,52 @@ func TestTopUpMenuCreatesPaymentIntentAfterProductSelection(t *testing.T) {
 	}
 }
 
+func TestTopUpPaymentMessageTrackingStoresSentMessageID(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	h := newHarnessWithConfig(control, vk.Config{
+		ConfirmationToken:      "conf-token-123",
+		Secret:                 "s3cr3t",
+		TopUpReceiptEmail:      "bot-payments@example.com",
+		TopUpStatusEditEnabled: true,
+	})
+
+	body := `{
+		"type":"message_new","group_id":1,"event_id":"evt-topup-track","secret":"s3cr3t",
+		"object":{"message":{"from_id":593,"peer_id":593,"text":"99 crystals","payload":"{\"command\":\"top_up\",\"product_code\":\"crystals_99\"}"}}
+	}`
+	if rec := h.post(body); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected product response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	ctx := context.Background()
+	user, err := h.users.GetByVKUserID(ctx, 593)
+	if err != nil {
+		t.Fatalf("user not created: %v", err)
+	}
+	intents, err := h.payment.ListIntentsByUser(ctx, user.ID, 10, 0)
+	if err != nil {
+		t.Fatalf("list payment intents: %v", err)
+	}
+	if len(intents) != 1 {
+		t.Fatalf("expected one payment intent, got %d", len(intents))
+	}
+	sent := control.Sent()
+	if len(sent) == 0 {
+		t.Fatal("expected payment message send")
+	}
+	var metadata struct {
+		Source             string `json:"source"`
+		VKPeerID           int64  `json:"vk_peer_id"`
+		VKPaymentMessageID int64  `json:"vk_payment_message_id"`
+	}
+	if err := json.Unmarshal(intents[0].Metadata, &metadata); err != nil {
+		t.Fatalf("decode metadata: %v", err)
+	}
+	if metadata.Source != "vk_bot" || metadata.VKPeerID != 593 || metadata.VKPaymentMessageID != sent[len(sent)-1].MessageID {
+		t.Fatalf("unexpected tracking metadata: %+v sent=%+v", metadata, sent[len(sent)-1])
+	}
+}
+
 func TestTopUpStaleCatalogDifferentProductCreatesSelectedIntent(t *testing.T) {
 	control := vkdelivery.NewMockClient()
 	h := newHarnessWithConfig(control, vk.Config{

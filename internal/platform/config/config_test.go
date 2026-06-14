@@ -90,6 +90,19 @@ func TestLoadFrontendTelemetryConfig(t *testing.T) {
 	}
 }
 
+func TestLoadTopUpFeatureFlags(t *testing.T) {
+	t.Setenv("FEATURE_VK_TOPUP_STATUS_EDIT_ENABLED", "true")
+	t.Setenv("FEATURE_MINIAPP_PAYMENT_CANCEL_ENABLED", "true")
+
+	cfg := config.Load()
+	if !cfg.FeatureVKTopUpStatusEditEnabled {
+		t.Fatal("FeatureVKTopUpStatusEditEnabled = false, want true")
+	}
+	if !cfg.FeatureMiniAppPaymentCancelEnabled {
+		t.Fatal("FeatureMiniAppPaymentCancelEnabled = false, want true")
+	}
+}
+
 func TestLoadDBPoolConfigBoundsInt32Values(t *testing.T) {
 	t.Setenv("DB_MAX_CONNS", "2147483648")
 	t.Setenv("DB_MIN_CONNS", "7")

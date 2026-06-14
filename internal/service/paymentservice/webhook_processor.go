@@ -49,17 +49,49 @@ type WebhookProcessor struct {
 	billing  *billingservice.Service
 	tx       PaymentTxRunner
 	now      func() time.Time
+	notifier PaymentStatusNotifier
+}
+
+// PaymentStatusNotification is emitted after a provider-verified intent status
+// transition has committed. It contains only local intent data.
+type PaymentStatusNotification struct {
+	Intent       *domain.PaymentIntent
+	From         domain.PaymentIntentStatus
+	To           domain.PaymentIntentStatus
+	TopupGranted bool
+}
+
+// PaymentStatusNotifier observes committed payment status changes. It must be
+// best-effort and must not mutate billing state.
+type PaymentStatusNotifier interface {
+	PaymentStatusChanged(ctx context.Context, event PaymentStatusNotification) error
+}
+
+// WebhookProcessorOption customizes a WebhookProcessor.
+type WebhookProcessorOption func(*WebhookProcessor)
+
+// WithPaymentStatusNotifier installs a best-effort status-change notifier.
+func WithPaymentStatusNotifier(notifier PaymentStatusNotifier) WebhookProcessorOption {
+	return func(p *WebhookProcessor) {
+		p.notifier = notifier
+	}
 }
 
 // NewWebhookProcessor builds a webhook processor.
-func NewWebhookProcessor(repo domain.PaymentRepository, provider domain.PaymentProvider, billing *billingservice.Service, tx PaymentTxRunner) *WebhookProcessor {
-	return &WebhookProcessor{
+func NewWebhookProcessor(repo domain.PaymentRepository, provider domain.PaymentProvider, billing *billingservice.Service, tx PaymentTxRunner, opts ...WebhookProcessorOption) *WebhookProcessor {
+	p := &WebhookProcessor{
 		repo:     repo,
 		provider: provider,
 		billing:  billing,
 		tx:       tx,
 		now:      time.Now,
 	}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(p)
+		}
+	}
+	return p
 }
 
 // IngestWebhook parses a raw provider webhook and stores it in payment_events.
@@ -184,7 +216,9 @@ func (p *WebhookProcessor) ProcessEvent(ctx context.Context, event *domain.Payme
 		return err
 	}
 
-	return p.tx.RunPaymentTx(ctx, func(ctx context.Context, payments domain.PaymentRepository, billingRepo domain.BillingRepository) error {
+	var result applyResult
+	var intentID uuid.UUID
+	if err := p.tx.RunPaymentTx(ctx, func(ctx context.Context, payments domain.PaymentRepository, billingRepo domain.BillingRepository) error {
 		currentEvent, err := payments.GetEventByID(ctx, event.ID)
 		if err != nil {
 			return err
@@ -196,12 +230,18 @@ func (p *WebhookProcessor) ProcessEvent(ctx context.Context, event *domain.Payme
 		if err != nil {
 			return err
 		}
+		intentID = intent.ID
 
-		if _, err := p.applyProviderPayment(ctx, payments, billingRepo, intent, providerPayment); err != nil {
+		result, err = p.applyProviderPayment(ctx, payments, billingRepo, intent, providerPayment)
+		if err != nil {
 			return err
 		}
 		return payments.MarkEventProcessed(ctx, event.ID, p.now())
-	})
+	}); err != nil {
+		return err
+	}
+	p.notifyPaymentStatus(ctx, intentID, result)
+	return nil
 }
 
 // SyncIntent manually syncs one payment intent against provider state. It is a
@@ -222,16 +262,18 @@ func (p *WebhookProcessor) SyncIntent(ctx context.Context, intentID uuid.UUID) (
 	if err != nil {
 		return nil, err
 	}
+	var result applyResult
 	if err := p.tx.RunPaymentTx(ctx, func(ctx context.Context, payments domain.PaymentRepository, billingRepo domain.BillingRepository) error {
 		current, err := payments.GetIntentByID(ctx, intentID)
 		if err != nil {
 			return err
 		}
-		_, err = p.applyProviderPayment(ctx, payments, billingRepo, current, providerPayment)
+		result, err = p.applyProviderPayment(ctx, payments, billingRepo, current, providerPayment)
 		return err
 	}); err != nil {
 		return nil, err
 	}
+	p.notifyPaymentStatus(ctx, intentID, result)
 	return p.repo.GetIntentByID(ctx, intentID)
 }
 
@@ -635,6 +677,8 @@ func (p *WebhookProcessor) observeInboxStats(stats domain.PaymentWebhookInboxSta
 type applyResult struct {
 	StatusChanged bool
 	TopupGranted  bool
+	From          domain.PaymentIntentStatus
+	To            domain.PaymentIntentStatus
 }
 
 func (p *WebhookProcessor) applyProviderPayment(ctx context.Context, payments domain.PaymentRepository, billingRepo domain.BillingRepository, intent *domain.PaymentIntent, providerPayment domain.ProviderPayment) (applyResult, error) {
@@ -653,9 +697,12 @@ func (p *WebhookProcessor) applyProviderPayment(ctx context.Context, payments do
 	}
 	var result applyResult
 	if intent.Status != target {
+		result.From = intent.Status
+		result.To = target
 		if err := payments.UpdateIntentStatus(ctx, intent.ID, intent.Status, target); err != nil {
 			return result, err
 		}
+		intent.Status = target
 		result.StatusChanged = true
 		switch target {
 		case domain.PaymentIntentSucceeded:
@@ -690,6 +737,34 @@ func (p *WebhookProcessor) applyProviderPayment(ctx context.Context, payments do
 		}
 	}
 	return result, nil
+}
+
+func (p *WebhookProcessor) notifyPaymentStatus(ctx context.Context, intentID uuid.UUID, result applyResult) {
+	if p == nil || p.notifier == nil || !result.StatusChanged || !paymentStatusUserVisible(result.To) || intentID == uuid.Nil {
+		return
+	}
+	intent, err := p.repo.GetIntentByID(ctx, intentID)
+	if err != nil {
+		return
+	}
+	_ = p.notifier.PaymentStatusChanged(ctx, PaymentStatusNotification{
+		Intent:       intent,
+		From:         result.From,
+		To:           result.To,
+		TopupGranted: result.TopupGranted,
+	})
+}
+
+func paymentStatusUserVisible(status domain.PaymentIntentStatus) bool {
+	switch status {
+	case domain.PaymentIntentSucceeded,
+		domain.PaymentIntentCanceled,
+		domain.PaymentIntentExpired,
+		domain.PaymentIntentFailed:
+		return true
+	default:
+		return false
+	}
 }
 
 func (p *WebhookProcessor) ackInboxEvent(ctx context.Context, eventID uuid.UUID) error {

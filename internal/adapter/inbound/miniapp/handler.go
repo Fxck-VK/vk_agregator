@@ -100,6 +100,9 @@ type Config struct {
 	// PaymentReturnURL is the server-owned YooKassa redirect target for Mini App
 	// payment intents. Client-provided return_url is ignored.
 	PaymentReturnURL string
+	// PaymentCancelEnabled enables user-owned cancellation of waiting Mini App
+	// top-up payment intents.
+	PaymentCancelEnabled bool
 }
 
 // ObjectReader loads and stores artifact bytes (S3/MinIO).
@@ -174,6 +177,7 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("POST /miniapp/payments/intents", h.auth(h.rateLimitMiniApp("miniapp_payment", h.createPaymentIntent)))
 	mux.HandleFunc("GET /miniapp/payments", h.auth(h.listPayments))
 	mux.HandleFunc("GET /miniapp/payments/{id}", h.auth(h.getPaymentIntent))
+	mux.HandleFunc("POST /miniapp/payments/{id}/cancel", h.auth(h.rateLimitMiniApp("miniapp_payment_cancel", h.cancelPaymentIntent)))
 	mux.HandleFunc("POST /miniapp/artifacts", h.auth(h.rateLimitMiniApp("miniapp_artifact", h.limitArtifactUploadConcurrency(h.createArtifact))))
 	mux.HandleFunc("GET /miniapp/artifacts/{id}", h.auth(h.getArtifact))
 	mux.HandleFunc("POST /miniapp/client-events", h.auth(h.rateLimitMiniApp("miniapp_client_events", h.clientEvent)))
@@ -450,6 +454,7 @@ func safeClientRoute(value string) string {
 		return route
 	case "/miniapp/jobs/:id",
 		"/miniapp/payments/:id",
+		"/miniapp/payments/:id/cancel",
 		"/miniapp/artifacts/:id",
 		"/miniapp/chat/conversations/:id/messages":
 		return route
@@ -1367,6 +1372,59 @@ func (h *Handler) getPaymentIntent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
+	writeJSON(w, http.StatusOK, newPaymentIntentDTO(intent))
+}
+
+func (h *Handler) cancelPaymentIntent(w http.ResponseWriter, r *http.Request) {
+	if !h.cfg.PaymentCancelEnabled {
+		writeError(w, http.StatusNotFound, "not found")
+		return
+	}
+	vkUserID, ok := vkUserIDFromCtx(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	if h.deps.Payment == nil {
+		writeError(w, http.StatusServiceUnavailable, "service unavailable")
+		return
+	}
+	intentID, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid payment id")
+		return
+	}
+	user, err := h.deps.Users.GetByVKUserID(r.Context(), vkUserID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	intent, err := h.deps.Payment.CancelUserWaitingIntent(r.Context(), paymentservice.CancelUserIntentInput{
+		UserID:   user.ID,
+		IntentID: intentID,
+		Source:   "vk_miniapp",
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, paymentservice.ErrInvalidInput):
+			writeError(w, http.StatusBadRequest, "invalid payment request")
+		case errors.Is(err, domain.ErrNotFound):
+			writeError(w, http.StatusNotFound, "not found")
+		case errors.Is(err, domain.ErrConflict):
+			writeError(w, http.StatusConflict, "payment cannot be canceled")
+		default:
+			h.logger.Error("miniapp: payment cancel failed",
+				slog.String("payment_intent_id", intentID.String()),
+				slog.String("error", err.Error()))
+			writeError(w, http.StatusBadGateway, "payment provider error")
+		}
+		return
+	}
+	h.logger.Info("miniapp: payment cancel completed", slog.String("payment_intent_id", intent.ID.String()))
 	writeJSON(w, http.StatusOK, newPaymentIntentDTO(intent))
 }
 
