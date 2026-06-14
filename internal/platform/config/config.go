@@ -32,8 +32,9 @@ const (
 
 // Config is the full application configuration shared by the entrypoints.
 type Config struct {
-	// Env is the deployment environment ("development" or "production"). In
-	// production the API fails closed when required secrets are missing.
+	// Env is the deployment environment ("development", "staging" or
+	// "production"). Production fails closed on the full secret/scanner set;
+	// staging is for test VPS deployments with production-like routing.
 	Env string
 
 	HTTPAddr      string
@@ -229,10 +230,11 @@ type Config struct {
 
 	// ModerationProvider selects output moderation: "keyword" (default) or
 	// "openai". ArtifactScanner selects artifact byte scanning: "none" or
-	// "openai".
-	ModerationProvider    string
-	OpenAIModerationModel string
-	ArtifactScanner       string
+	// "openai". Production requires a scanner; staging may run with "none".
+	ModerationProvider                  string
+	OpenAIModerationModel               string
+	ArtifactScanner                     string
+	AllowUnscannedArtifactsInProduction bool
 
 	// VKDeliveryMode selects the delivery client: "mock" (default) or "real".
 	VKDeliveryMode       string
@@ -400,7 +402,7 @@ func (c Config) MediaVideoTranscodeEnabled() bool {
 // reject requests that did not arrive over HTTPS or through a trusted HTTPS
 // reverse proxy.
 func (c Config) PaymentWebhookHTTPSRequired() bool {
-	return c.PaymentWebhookRequireHTTPS || c.IsProduction()
+	return c.PaymentWebhookRequireHTTPS || c.IsServerEnv()
 }
 
 // Validate fails closed: in production, secrets that protect inbound webhooks
@@ -432,6 +434,9 @@ func (c Config) Validate() error {
 	}
 	if provider := strings.ToLower(strings.TrimSpace(c.PaymentProvider)); provider != "" && !knownPaymentProvider(provider) {
 		return fmt.Errorf("config: PAYMENT_PROVIDER must be one of mock, yookassa")
+	}
+	if scanner := strings.ToLower(strings.TrimSpace(c.ArtifactScanner)); scanner != "" && !knownArtifactScanner(scanner) {
+		return fmt.Errorf("config: ARTIFACT_SCANNER must be none or openai")
 	}
 	probePolicy := c.EffectiveMediaVideoProbePolicy()
 	if err := validateMediaVideoProbePolicy(probePolicy); err != nil {
@@ -645,6 +650,9 @@ func (c Config) Validate() error {
 	if len(missing) > 0 {
 		return fmt.Errorf("config: missing required production secrets: %s", strings.Join(missing, ", "))
 	}
+	if c.IsProduction() && artifactScannerDisabled(c.ArtifactScanner) && !c.AllowUnscannedArtifactsInProduction {
+		return fmt.Errorf("config: ARTIFACT_SCANNER=openai is required in production unless ALLOW_UNSCANNED_ARTIFACTS_IN_PRODUCTION=true")
+	}
 	return nil
 }
 
@@ -818,6 +826,7 @@ func Load() Config {
 		ModerationProvider:                    env("MODERATION_PROVIDER", "keyword"),
 		OpenAIModerationModel:                 env("OPENAI_MODERATION_MODEL", "omni-moderation-latest"),
 		ArtifactScanner:                       env("ARTIFACT_SCANNER", "none"),
+		AllowUnscannedArtifactsInProduction:   envBool("ALLOW_UNSCANNED_ARTIFACTS_IN_PRODUCTION", false),
 
 		VKDeliveryMode:                    env("VK_DELIVERY_MODE", "mock"),
 		VKAccessToken:                     env("VK_ACCESS_TOKEN", ""),
@@ -970,23 +979,49 @@ func knownProvider(name string) bool {
 	}
 }
 
+func knownArtifactScanner(name string) bool {
+	switch strings.ToLower(strings.TrimSpace(name)) {
+	case "", "none", "openai":
+		return true
+	default:
+		return false
+	}
+}
+
+func artifactScannerDisabled(name string) bool {
+	scanner := strings.ToLower(strings.TrimSpace(name))
+	return scanner == "" || scanner == "none"
+}
+
 func isProductionEnv(env string) bool {
 	return strings.EqualFold(env, "production") || strings.EqualFold(env, "prod")
 }
 
+func isStagingEnv(env string) bool {
+	return strings.EqualFold(env, "staging") || strings.EqualFold(env, "stage")
+}
+
+func (c Config) IsStaging() bool {
+	return isStagingEnv(c.Env)
+}
+
+func (c Config) IsServerEnv() bool {
+	return c.IsProduction() || c.IsStaging()
+}
+
 func defaultMediaVideoProbePolicy(env string, mediaPipelineEnabled bool) string {
-	if isProductionEnv(env) || mediaPipelineEnabled {
+	if isProductionEnv(env) || isStagingEnv(env) || mediaPipelineEnabled {
 		return MediaVideoProbePolicyProbeRequired
 	}
 	return MediaVideoProbePolicyDisabled
 }
 
 func defaultMediaReferenceUploadsEnabled(env string) bool {
-	return !isProductionEnv(env)
+	return !isProductionEnv(env) && !isStagingEnv(env)
 }
 
 func defaultMediaDeliverRawProviderVideo(env string, mediaPipelineEnabled bool) string {
-	if isProductionEnv(env) || mediaPipelineEnabled {
+	if isProductionEnv(env) || isStagingEnv(env) || mediaPipelineEnabled {
 		return MediaDeliverRawProviderVideoIfProbePassed
 	}
 	return MediaDeliverRawProviderVideoAlwaysDevOnly

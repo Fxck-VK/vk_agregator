@@ -30,6 +30,7 @@ _env
 _env.*
 !.env.example
 !.env.prod.example
+!.env.staging.example
 
 # Docker/local data
 .runtime/
