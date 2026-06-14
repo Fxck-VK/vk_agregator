@@ -90,6 +90,9 @@ type ProviderRequest struct {
 	Modality Modality `json:"modality"`
 	// ModelCode is the provider-specific model code (e.g. "kling-v2").
 	ModelCode string `json:"model_code"`
+	// Provider optionally pins routing to the provider chosen by trusted
+	// server-side catalog/config.
+	Provider ProviderName `json:"provider,omitempty"`
 	// Prompt is the final, fully-rendered user/system prompt.
 	Prompt string `json:"prompt"`
 	// NegativePrompt is the optional negative prompt for image/video models.

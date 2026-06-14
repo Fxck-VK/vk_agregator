@@ -1292,6 +1292,46 @@ func TestProviderRegistryPrefersDeepInfraImageProvider(t *testing.T) {
 	}
 }
 
+func TestProviderRegistryPinsExplicitRequestProvider(t *testing.T) {
+	cheapDefault := &routingProvider{
+		name:      domain.ProviderName("cheap-default"),
+		cost:      1,
+		operation: domain.OperationImageGenerate,
+		modality:  domain.ModalityImage,
+		model:     "ByteDance/Seedream-4.5",
+	}
+	deepInfraProvider := &routingProvider{
+		name:      domain.ProviderDeepInfra,
+		cost:      99,
+		operation: domain.OperationImageGenerate,
+		modality:  domain.ModalityImage,
+		model:     "ByteDance/Seedream-4.5",
+	}
+	reg := worker.NewRegistry(cheapDefault, deepInfraProvider)
+	req := domain.ProviderRequest{
+		JobID:     uuid.New(),
+		Operation: domain.OperationImageGenerate,
+		Modality:  domain.ModalityImage,
+		ModelCode: "ByteDance/Seedream-4.5",
+		Provider:  domain.ProviderDeepInfra,
+		Prompt:    "a cat",
+	}
+
+	provider, err := reg.ForRequest(context.Background(), req)
+	if err != nil {
+		t.Fatalf("for request: %v", err)
+	}
+	if provider.Name() != domain.ProviderDeepInfra {
+		t.Fatalf("provider = %q, want deepinfra", provider.Name())
+	}
+	if _, err := provider.Submit(context.Background(), req); err != nil {
+		t.Fatalf("submit through router: %v", err)
+	}
+	if cheapDefault.submits != 0 || deepInfraProvider.submits != 1 {
+		t.Fatalf("unexpected submits cheap=%d deepinfra=%d", cheapDefault.submits, deepInfraProvider.submits)
+	}
+}
+
 func TestGenerationImageRequestCarriesImageDefaultsAndReferences(t *testing.T) {
 	provider := &captureImageProvider{}
 	h := newHarnessWithProvider(t, provider, func(d *worker.Deps) {
@@ -1337,6 +1377,38 @@ func TestGenerationImageRequestCarriesImageDefaultsAndReferences(t *testing.T) {
 	}
 	if len(got.InputURLs) != 1 || !strings.HasPrefix(got.InputURLs[0], "data:image/png;base64,") {
 		t.Fatalf("input urls were not resolved from reference artifact: %v", got.InputURLs)
+	}
+}
+
+func TestGenerationImageRequestCarriesProviderFromParams(t *testing.T) {
+	provider := &captureImageProvider{name: domain.ProviderDeepInfra}
+	h := newHarnessWithProvider(t, provider, nil)
+	ctx := context.Background()
+	params, _ := json.Marshal(map[string]any{
+		"prompt":   "a cat",
+		"provider": string(domain.ProviderDeepInfra),
+	})
+	job := &domain.Job{
+		ID:             uuid.New(),
+		UserID:         uuid.New(),
+		OperationType:  domain.OperationImageGenerate,
+		Modality:       domain.ModalityImage,
+		Status:         domain.JobStatusQueued,
+		IdempotencyKey: "job:" + uuid.NewString(),
+		CorrelationID:  "corr",
+		CostReserved:   10,
+		Params:         params,
+	}
+	if err := h.jobs.Create(ctx, job); err != nil {
+		t.Fatalf("create job: %v", err)
+	}
+
+	if err := h.gen.Process(ctx, taskFor(job)); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+
+	if provider.last.Provider != domain.ProviderDeepInfra {
+		t.Fatalf("provider = %q, want %q", provider.last.Provider, domain.ProviderDeepInfra)
 	}
 }
 
@@ -1890,10 +1962,14 @@ func (p *routingProvider) Poll(context.Context, domain.ProviderTaskRef) (domain.
 func (p *routingProvider) Cancel(context.Context, domain.ProviderTaskRef) error { return nil }
 
 type captureImageProvider struct {
+	name domain.ProviderName
 	last domain.ProviderRequest
 }
 
 func (p *captureImageProvider) Name() domain.ProviderName {
+	if p.name != "" {
+		return p.name
+	}
 	return domain.ProviderName("capture-image")
 }
 
