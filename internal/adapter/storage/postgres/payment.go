@@ -324,6 +324,10 @@ func (r *PaymentRepository) ListIntents(ctx context.Context, filter domain.Payme
 		args = append(args, filter.Provider)
 		where = append(where, "provider = $"+strconv.Itoa(len(args)))
 	}
+	if source := strings.TrimSpace(filter.Source); source != "" {
+		args = append(args, source)
+		where = append(where, "metadata->>'source' = $"+strconv.Itoa(len(args)))
+	}
 	if filter.UpdatedBefore != nil && !filter.UpdatedBefore.IsZero() {
 		args = append(args, *filter.UpdatedBefore)
 		where = append(where, "updated_at <= $"+strconv.Itoa(len(args)))

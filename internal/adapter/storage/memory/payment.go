@@ -323,30 +323,62 @@ func (r *PaymentRepo) ListIntents(_ context.Context, filter domain.PaymentIntent
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	statuses := paymentIntentStatusSet(filter)
+	source := strings.TrimSpace(filter.Source)
 	matched := make([]domain.PaymentIntent, 0, len(r.intentsByID))
-	for _, intent := range r.intentsByID {
-		if filter.UserID != nil && intent.UserID != *filter.UserID {
-			continue
+	if filter.UserID != nil {
+		for _, id := range r.intentIDsByUser[*filter.UserID] {
+			intent := r.intentsByID[id]
+			if paymentIntentMatchesFilter(intent, filter, statuses, source) {
+				matched = append(matched, intent)
+			}
 		}
-		if len(statuses) > 0 && !statuses[intent.Status] {
-			continue
+	} else {
+		for _, intent := range r.intentsByID {
+			if paymentIntentMatchesFilter(intent, filter, statuses, source) {
+				matched = append(matched, intent)
+			}
 		}
-		if filter.Provider != "" && intent.Provider != filter.Provider {
-			continue
-		}
-		if filter.UpdatedBefore != nil && intent.UpdatedAt.After(*filter.UpdatedBefore) {
-			continue
-		}
-		matched = append(matched, intent)
+		sort.Slice(matched, func(i, j int) bool {
+			return matched[i].CreatedAt.After(matched[j].CreatedAt)
+		})
 	}
-	sort.Slice(matched, func(i, j int) bool {
-		return matched[i].CreatedAt.After(matched[j].CreatedAt)
-	})
 	var out []*domain.PaymentIntent
 	for i := offset; i < len(matched) && len(out) < limit; i++ {
 		out = append(out, copyPaymentIntentPtr(matched[i]))
 	}
 	return out, nil
+}
+
+func paymentIntentMatchesFilter(intent domain.PaymentIntent, filter domain.PaymentIntentFilter, statuses map[domain.PaymentIntentStatus]bool, source string) bool {
+	if filter.UserID != nil && intent.UserID != *filter.UserID {
+		return false
+	}
+	if len(statuses) > 0 && !statuses[intent.Status] {
+		return false
+	}
+	if filter.Provider != "" && intent.Provider != filter.Provider {
+		return false
+	}
+	if source != "" && paymentIntentSource(intent) != source {
+		return false
+	}
+	if filter.UpdatedBefore != nil && intent.UpdatedAt.After(*filter.UpdatedBefore) {
+		return false
+	}
+	return true
+}
+
+func paymentIntentSource(intent domain.PaymentIntent) string {
+	if len(intent.Metadata) == 0 {
+		return ""
+	}
+	var metadata struct {
+		Source string `json:"source"`
+	}
+	if err := json.Unmarshal(intent.Metadata, &metadata); err != nil {
+		return ""
+	}
+	return strings.TrimSpace(metadata.Source)
 }
 
 func paymentIntentStatusSet(filter domain.PaymentIntentFilter) map[domain.PaymentIntentStatus]bool {

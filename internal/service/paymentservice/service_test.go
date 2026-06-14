@@ -345,6 +345,36 @@ func TestCreateIntentReusesActiveWaitingIntentUnlessForceNew(t *testing.T) {
 		t.Fatalf("expected active intent reuse, got %+v first=%+v", reused, first)
 	}
 
+	botIntent, err := svc.CreateIntent(ctx, paymentservice.CreateIntentInput{
+		UserID:         userID,
+		ProductCode:    "credits_100",
+		ReceiptEmail:   "bot@example.com",
+		IdempotencyKey: "payment:bot",
+		Source:         "vk_bot",
+	})
+	if err != nil {
+		t.Fatalf("create bot intent: %v", err)
+	}
+	if !botIntent.Created || botIntent.ReusedActive || botIntent.Intent.ID == first.Intent.ID {
+		t.Fatalf("expected new intent for different source, got %+v first=%+v", botIntent, first)
+	}
+
+	activeMiniApp, err := svc.ActiveWaitingIntentForSource(ctx, userID, "vk_miniapp")
+	if err != nil {
+		t.Fatalf("load active miniapp intent: %v", err)
+	}
+	if activeMiniApp.ID != first.Intent.ID {
+		t.Fatalf("active miniapp intent = %s, want %s", activeMiniApp.ID, first.Intent.ID)
+	}
+
+	activeBot, err := svc.ActiveWaitingIntentForSource(ctx, userID, "vk_bot")
+	if err != nil {
+		t.Fatalf("load active bot intent: %v", err)
+	}
+	if activeBot.ID != botIntent.Intent.ID {
+		t.Fatalf("active bot intent = %s, want %s", activeBot.ID, botIntent.Intent.ID)
+	}
+
 	differentProduct, err := svc.CreateIntent(ctx, paymentservice.CreateIntentInput{
 		UserID:         userID,
 		ProductCode:    "credits_500",

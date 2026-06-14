@@ -237,6 +237,8 @@ type Job struct {
 	ID uuid.UUID `json:"id"`
 	// UserID is the owner of the job.
 	UserID uuid.UUID `json:"user_id"`
+	// Source is the trusted product surface that created the job.
+	Source string `json:"source"`
 	// VKPeerID is the VK conversation the job belongs to.
 	VKPeerID int64 `json:"vk_peer_id"`
 	// CommandID is the command that produced this job.

@@ -102,6 +102,7 @@ func NewHandler(cfg config.Config, deps Deps) http.Handler {
 		ReferralReferrerSignupRewardCredits: cfg.ReferralReferrerSignupRewardCredits,
 		TopUpReceiptEmail:                   cfg.VKTopUpReceiptEmail,
 		TopUpReceiptPhone:                   cfg.VKTopUpReceiptPhone,
+		TopUpReturnURL:                      firstNonEmpty(cfg.YooKassaReturnURLVKBot, cfg.YooKassaReturnURL),
 	}, vkinbound.Deps{
 		Idempotency:  deps.Idempotency,
 		Inbound:      deps.Inbound,
@@ -119,6 +120,15 @@ func NewHandler(cfg config.Config, deps Deps) http.Handler {
 		AntiSpam:     vkAntiSpam,
 		Logger:       logger,
 	})
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if value != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 func menuFeatures(cfg config.Config) vkinbound.MenuFeatureFlags {

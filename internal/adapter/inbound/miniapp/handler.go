@@ -97,6 +97,9 @@ type Config struct {
 	// FrontendTelemetryUserHashSecret hashes verified VK user ids for optional
 	// debug logs without storing raw user identifiers.
 	FrontendTelemetryUserHashSecret string
+	// PaymentReturnURL is the server-owned YooKassa redirect target for Mini App
+	// payment intents. Client-provided return_url is ignored.
+	PaymentReturnURL string
 }
 
 // ObjectReader loads and stores artifact bytes (S3/MinIO).
@@ -1249,6 +1252,7 @@ func (h *Handler) createPaymentIntent(w http.ResponseWriter, r *http.Request) {
 		ReceiptEmail:   req.ReceiptEmail,
 		ReceiptPhone:   req.ReceiptPhone,
 		IdempotencyKey: "miniapp_payment:" + strconv.FormatInt(vkUserID, 10) + ":" + clientKey,
+		ReturnURL:      h.cfg.PaymentReturnURL,
 		Source:         "vk_miniapp",
 		ForceNew:       req.ForceNew,
 	})
@@ -1311,7 +1315,7 @@ func (h *Handler) listPayments(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	limit, offset := parsePagination(r)
-	intents, err := h.deps.Payment.ListIntentsByUser(r.Context(), user.ID, limit+1, offset)
+	intents, err := h.deps.Payment.ListIntentsByUserSource(r.Context(), user.ID, "vk_miniapp", limit+1, offset)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return

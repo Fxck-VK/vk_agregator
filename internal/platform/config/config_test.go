@@ -761,6 +761,8 @@ func TestLoadPaymentConfig(t *testing.T) {
 	t.Setenv("YOOKASSA_SECRET_KEY", "secret")
 	t.Setenv("YOOKASSA_BASE_URL", "https://example.com/v3")
 	t.Setenv("YOOKASSA_RETURN_URL", "https://neiirohub.ru/payments/return")
+	t.Setenv("YOOKASSA_RETURN_URL_MINIAPP", "https://vk.com/app54623372?section_type=public_r_app")
+	t.Setenv("YOOKASSA_RETURN_URL_VK_BOT", "https://vk.com/write-239332376")
 	t.Setenv("YOOKASSA_WEBHOOK_IP_ALLOWLIST_ENABLED", "true")
 	t.Setenv("YOOKASSA_WEBHOOK_IP_ALLOWLIST", "203.0.113.0/24,198.51.100.10")
 	t.Setenv("PAYMENT_WEBHOOK_REQUIRE_HTTPS", "true")
@@ -781,6 +783,9 @@ func TestLoadPaymentConfig(t *testing.T) {
 	}
 	if cfg.YooKassaBaseURL != "https://example.com/v3" || cfg.YooKassaReturnURL != "https://neiirohub.ru/payments/return" {
 		t.Fatalf("unexpected YooKassa URLs: base=%q return=%q", cfg.YooKassaBaseURL, cfg.YooKassaReturnURL)
+	}
+	if cfg.YooKassaReturnURLMiniApp != "https://vk.com/app54623372?section_type=public_r_app" || cfg.YooKassaReturnURLVKBot != "https://vk.com/write-239332376" {
+		t.Fatalf("unexpected surface YooKassa URLs: miniapp=%q vkbot=%q", cfg.YooKassaReturnURLMiniApp, cfg.YooKassaReturnURLVKBot)
 	}
 	if !cfg.YooKassaWebhookIPAllowlistEnabled {
 		t.Fatal("YooKassaWebhookIPAllowlistEnabled = false, want true")

@@ -117,6 +117,8 @@ type Config struct {
 	YooKassaSecretKey                 string
 	YooKassaBaseURL                   string
 	YooKassaReturnURL                 string
+	YooKassaReturnURLMiniApp          string
+	YooKassaReturnURLVKBot            string
 	YooKassaWebhookIPAllowlistEnabled bool
 	YooKassaWebhookIPAllowlist        []string
 	PaymentWebhookRequireHTTPS        bool
@@ -755,6 +757,8 @@ func Load() Config {
 		YooKassaSecretKey:                     env("YOOKASSA_SECRET_KEY", ""),
 		YooKassaBaseURL:                       env("YOOKASSA_BASE_URL", "https://api.yookassa.ru/v3"),
 		YooKassaReturnURL:                     env("YOOKASSA_RETURN_URL", ""),
+		YooKassaReturnURLMiniApp:              env("YOOKASSA_RETURN_URL_MINIAPP", ""),
+		YooKassaReturnURLVKBot:                env("YOOKASSA_RETURN_URL_VK_BOT", ""),
 		YooKassaWebhookIPAllowlistEnabled:     envBool("YOOKASSA_WEBHOOK_IP_ALLOWLIST_ENABLED", false),
 		YooKassaWebhookIPAllowlist:            envList("YOOKASSA_WEBHOOK_IP_ALLOWLIST"),
 		PaymentWebhookRequireHTTPS:            envBool("PAYMENT_WEBHOOK_REQUIRE_HTTPS", false),

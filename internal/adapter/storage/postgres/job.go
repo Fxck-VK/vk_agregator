@@ -22,7 +22,7 @@ func NewJobRepository(db Querier) *JobRepository {
 
 var _ domain.JobRepository = (*JobRepository)(nil)
 
-const jobColumns = `id, user_id, vk_peer_id, command_id, operation_type, modality,
+const jobColumns = `id, user_id, source, vk_peer_id, command_id, operation_type, modality,
 	provider_id, model_id, status, priority, idempotency_key, correlation_id,
 	input_artifact_ids, output_artifact_ids, params, cost_estimate, cost_reserved,
 	cost_captured, error_code, error_message, created_at, updated_at, expires_at`
@@ -35,6 +35,10 @@ func (r *JobRepository) Create(ctx context.Context, job *domain.Job) error {
 	if len(job.Params) == 0 {
 		job.Params = []byte("{}")
 	}
+	job.Source = strings.TrimSpace(job.Source)
+	if job.Source == "" {
+		job.Source = "unknown"
+	}
 	// command_id is nullable; pass nil when the job has no associated command
 	// (e.g. jobs created directly through the Mini App BFF).
 	var commandID *uuid.UUID
@@ -43,17 +47,17 @@ func (r *JobRepository) Create(ctx context.Context, job *domain.Job) error {
 	}
 	const q = `
 		INSERT INTO jobs (
-			id, user_id, vk_peer_id, command_id, operation_type, modality,
+			id, user_id, source, vk_peer_id, command_id, operation_type, modality,
 			provider_id, model_id, status, priority, idempotency_key, correlation_id,
 			input_artifact_ids, output_artifact_ids, params, cost_estimate, cost_reserved,
 			cost_captured, error_code, error_message, expires_at
 		) VALUES (
 			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
-			$13, $14, $15, $16, $17, $18, $19, $20, $21
+			$13, $14, $15, $16, $17, $18, $19, $20, $21, $22
 		)
 		RETURNING ` + jobColumns
 	row := r.db.QueryRow(ctx, q,
-		job.ID, job.UserID, job.VKPeerID, commandID, job.OperationType, job.Modality,
+		job.ID, job.UserID, job.Source, job.VKPeerID, commandID, job.OperationType, job.Modality,
 		job.ProviderID, job.ModelID, job.Status, job.Priority, job.IdempotencyKey, job.CorrelationID,
 		uuidArray(job.InputArtifactIDs), uuidArray(job.OutputArtifactIDs), []byte(job.Params), job.CostEstimate, job.CostReserved,
 		job.CostCaptured, job.ErrorCode, job.ErrorMessage, job.ExpiresAt,
@@ -104,16 +108,20 @@ func (r *JobRepository) Update(ctx context.Context, job *domain.Job) error {
 	if len(job.Params) == 0 {
 		job.Params = []byte("{}")
 	}
+	job.Source = strings.TrimSpace(job.Source)
+	if job.Source == "" {
+		job.Source = "unknown"
+	}
 	const q = `
 		UPDATE jobs
-		SET provider_id = $2, model_id = $3, priority = $4, correlation_id = $5,
-		    input_artifact_ids = $6, output_artifact_ids = $7, params = $8,
-		    cost_estimate = $9, cost_reserved = $10, cost_captured = $11,
-		    error_code = $12, error_message = $13, expires_at = $14, updated_at = now()
+		SET source = $2, provider_id = $3, model_id = $4, priority = $5, correlation_id = $6,
+		    input_artifact_ids = $7, output_artifact_ids = $8, params = $9,
+		    cost_estimate = $10, cost_reserved = $11, cost_captured = $12,
+		    error_code = $13, error_message = $14, expires_at = $15, updated_at = now()
 		WHERE id = $1
 		RETURNING ` + jobColumns
 	row := r.db.QueryRow(ctx, q,
-		job.ID, job.ProviderID, job.ModelID, job.Priority, job.CorrelationID,
+		job.ID, job.Source, job.ProviderID, job.ModelID, job.Priority, job.CorrelationID,
 		uuidArray(job.InputArtifactIDs), uuidArray(job.OutputArtifactIDs), []byte(job.Params),
 		job.CostEstimate, job.CostReserved, job.CostCaptured,
 		job.ErrorCode, job.ErrorMessage, job.ExpiresAt,
@@ -244,7 +252,7 @@ func (r *JobRepository) CountSucceededByUser(ctx context.Context, userID uuid.UU
 func scanJob(row rowScanner, job *domain.Job) error {
 	var commandID *uuid.UUID
 	if err := row.Scan(
-		&job.ID, &job.UserID, &job.VKPeerID, &commandID, &job.OperationType, &job.Modality,
+		&job.ID, &job.UserID, &job.Source, &job.VKPeerID, &commandID, &job.OperationType, &job.Modality,
 		&job.ProviderID, &job.ModelID, &job.Status, &job.Priority, &job.IdempotencyKey, &job.CorrelationID,
 		&job.InputArtifactIDs, &job.OutputArtifactIDs, &job.Params, &job.CostEstimate, &job.CostReserved,
 		&job.CostCaptured, &job.ErrorCode, &job.ErrorMessage, &job.CreatedAt, &job.UpdatedAt, &job.ExpiresAt,

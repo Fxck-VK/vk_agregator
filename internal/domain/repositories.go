@@ -313,6 +313,7 @@ type PaymentIntentFilter struct {
 	Status        PaymentIntentStatus
 	Statuses      []PaymentIntentStatus
 	Provider      PaymentProviderCode
+	Source        string
 	UpdatedBefore *time.Time
 }
 

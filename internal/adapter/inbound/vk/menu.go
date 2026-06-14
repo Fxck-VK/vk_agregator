@@ -727,7 +727,7 @@ func (h *Handler) activeTopUpIntent(ctx context.Context, userID uuid.UUID) (*dom
 	if h.deps.Payment == nil {
 		return nil, false, nil
 	}
-	intent, err := h.deps.Payment.ActiveWaitingIntent(ctx, userID)
+	intent, err := h.deps.Payment.ActiveWaitingIntentForSource(ctx, userID, "vk_bot")
 	if err == nil {
 		return intent, intent != nil, nil
 	}

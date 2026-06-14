@@ -297,7 +297,7 @@ func (s *Service) CreateIntent(ctx context.Context, in CreateIntentInput) (Creat
 			metrics.ObserveProductEvent(sourceLabel, "payment", "intent_create", "top_up", "credits", "invalid_product")
 			return CreateIntentResult{}, err
 		}
-		active, err := s.ActiveWaitingIntent(ctx, in.UserID)
+		active, err := s.ActiveWaitingIntentForSource(ctx, in.UserID, in.Source)
 		if err == nil {
 			if paymentIntentMatchesProduct(active, product) {
 				metrics.ObserveProductEvent(sourceLabel, "payment", "intent_create", "top_up", "credits", "reused_active")
@@ -389,6 +389,12 @@ func (s *Service) CreateIntent(ctx context.Context, in CreateIntentInput) (Creat
 // ActiveWaitingIntent returns the newest user-owned payment that still needs
 // user confirmation. It does not grant credits and does not query the provider.
 func (s *Service) ActiveWaitingIntent(ctx context.Context, userID uuid.UUID) (*domain.PaymentIntent, error) {
+	return s.ActiveWaitingIntentForSource(ctx, userID, "")
+}
+
+// ActiveWaitingIntentForSource returns the newest user-owned payment for one
+// product surface that still needs user confirmation.
+func (s *Service) ActiveWaitingIntentForSource(ctx context.Context, userID uuid.UUID, source string) (*domain.PaymentIntent, error) {
 	if s == nil || s.repo == nil || s.provider == nil {
 		return nil, errors.New("paymentservice: service is not configured")
 	}
@@ -399,6 +405,7 @@ func (s *Service) ActiveWaitingIntent(ctx context.Context, userID uuid.UUID) (*d
 		UserID:   &userID,
 		Status:   domain.PaymentIntentWaitingForUser,
 		Provider: s.provider.Code(),
+		Source:   strings.TrimSpace(source),
 	}, 20, 0)
 	if err != nil {
 		return nil, err
@@ -431,6 +438,18 @@ func (s *Service) GetIntentAdmin(ctx context.Context, intentID uuid.UUID) (*doma
 // ListIntentsByUser returns user-owned payment history.
 func (s *Service) ListIntentsByUser(ctx context.Context, userID uuid.UUID, limit, offset int) ([]*domain.PaymentIntent, error) {
 	return s.repo.ListIntentsByUser(ctx, userID, normalizeLimit(limit), normalizeOffset(offset))
+}
+
+// ListIntentsByUserSource returns user-owned payment history for one product
+// surface.
+func (s *Service) ListIntentsByUserSource(ctx context.Context, userID uuid.UUID, source string, limit, offset int) ([]*domain.PaymentIntent, error) {
+	if userID == uuid.Nil {
+		return nil, ErrInvalidInput
+	}
+	return s.repo.ListIntents(ctx, domain.PaymentIntentFilter{
+		UserID: &userID,
+		Source: strings.TrimSpace(source),
+	}, normalizeLimit(limit), normalizeOffset(offset))
 }
 
 // ListIntents returns protected operator payment history.

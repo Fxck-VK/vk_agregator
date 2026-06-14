@@ -67,6 +67,9 @@ type Config struct {
 	// while preserving paymentservice/YooKassa receipt requirements.
 	TopUpReceiptEmail string
 	TopUpReceiptPhone string
+	// TopUpReturnURL is the server-owned YooKassa redirect target for bot
+	// top-up intents.
+	TopUpReturnURL string
 }
 
 // MenuFeatureFlags allows deployments to hide VK menu buttons without deleting
@@ -862,6 +865,7 @@ func (h *Handler) createAndSendTopUpPayment(ctx context.Context, groupID int64, 
 		ReceiptEmail:   email,
 		ReceiptPhone:   phone,
 		IdempotencyKey: "vk_payment:" + strconv.FormatInt(groupID, 10) + ":" + eventID,
+		ReturnURL:      h.cfg.TopUpReturnURL,
 		Source:         "vk_bot",
 		ForceNew:       forceNew,
 	})

@@ -252,6 +252,7 @@ func newTestFixtureWithConfigAndPaymentProvider(appSecret string, limiter interf
 		JobRateLimiter:                      limiter,
 		ReferralLinkBase:                    "https://vk.com/write-239332376",
 		ReferralReferrerSignupRewardCredits: 10,
+		PaymentReturnURL:                    "https://neiirohub.ru/payments/return",
 	}
 	if configure != nil {
 		configure(&cfg)
