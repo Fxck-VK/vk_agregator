@@ -14,6 +14,9 @@ Set-StrictMode -Version Latest
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 Set-Location $repoRoot
+$rollbackStartedAt = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+$backupStatus = "skipped"
+$healthStatus = "skipped"
 
 function Invoke-Step {
     param(
@@ -52,6 +55,41 @@ function Get-EnvFileValue {
     return $Default
 }
 
+function Test-EnvPlaceholderValue {
+    param([string]$Value)
+
+    if ([string]::IsNullOrWhiteSpace($Value)) {
+        return $true
+    }
+    $lower = $Value.ToLowerInvariant()
+    return $lower.Contains("change_me") -or $lower.Contains("placeholder") -or $lower.Contains("example")
+}
+
+function Test-DockerRuntime {
+    if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
+        throw "Docker CLI is not installed or not in PATH"
+    }
+    & docker version | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        throw "docker version failed with exit code $LASTEXITCODE"
+    }
+    & docker compose version | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        throw "docker compose version failed with exit code $LASTEXITCODE"
+    }
+    & docker info | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        throw "docker info failed with exit code $LASTEXITCODE"
+    }
+    $dockerVersion = (& docker version --format '{{.Server.Version}}').Trim()
+    $composeVersion = (& docker compose version --short 2>$null)
+    if ([string]::IsNullOrWhiteSpace($composeVersion)) {
+        $composeVersion = (& docker compose version).Trim()
+    }
+    Write-Host "Docker OK: $dockerVersion"
+    Write-Host "Docker Compose OK: $composeVersion"
+}
+
 function Wait-Http {
     param(
         [Parameter(Mandatory = $true)][string]$Name,
@@ -86,6 +124,24 @@ if (-not (Test-Path -LiteralPath $EnvFile)) {
     throw "Production env file not found: $EnvFile"
 }
 
+Write-Host "Rollback target IMAGE_TAG=$ImageTag"
+Write-Warning "This script does not run migrate down. Schema rollback must be a separate reviewed operation after a verified backup."
+
+Invoke-Step "check Docker" {
+    Test-DockerRuntime
+}
+
+Invoke-Step "check production env" {
+    $checkArgs = @("-EnvFile", $EnvFile)
+    if ($WithCloudflare) {
+        $checkArgs += "-WithCloudflare"
+    }
+    if (-not $SkipBackup) {
+        $checkArgs += "-BackupBeforeDeploy"
+    }
+    & (Join-Path $PSScriptRoot "check-prod-env.ps1") @checkArgs
+}
+
 $composeArgs = @(
     "compose",
     "--project-name", $ProjectName,
@@ -111,21 +167,34 @@ try {
     $env:APP_ENV_FILE = $EnvFile
     $env:IMAGE_TAG = $ImageTag
 
-    Write-Host "Rollback target IMAGE_TAG=$ImageTag"
-    Write-Warning "This script does not run migrate down. Schema rollback must be a separate reviewed operation after a verified backup."
-
     Invoke-Step "docker compose config" {
         Invoke-DockerCompose config | Out-Null
     }
 
+    $ghcrUsername = Get-EnvFileValue -Path $EnvFile -Name "GHCR_USERNAME"
+    $ghcrToken = Get-EnvFileValue -Path $EnvFile -Name "GHCR_TOKEN"
+    if (-not (Test-EnvPlaceholderValue -Value $ghcrUsername) -and -not (Test-EnvPlaceholderValue -Value $ghcrToken)) {
+        Invoke-Step "docker login ghcr.io" {
+            $ghcrToken | docker login ghcr.io -u $ghcrUsername --password-stdin | Out-Null
+            if ($LASTEXITCODE -ne 0) {
+                throw "docker login ghcr.io failed with exit code $LASTEXITCODE"
+            }
+        }
+    }
+
+    $backupArgs = @(
+        "compose",
+        "--project-name", $ProjectName,
+        "--env-file", $EnvFile,
+        "-f", "docker-compose.prod.yml",
+        "--profile", "backup"
+    )
+
     if (-not $SkipBackup) {
-        $backupArgs = @(
-            "compose",
-            "--project-name", $ProjectName,
-            "--env-file", $EnvFile,
-            "-f", "docker-compose.prod.yml",
-            "--profile", "backup"
-        )
+        Invoke-Step "pull backup images" {
+            & docker @backupArgs pull backup-postgres backup-minio
+            if ($LASTEXITCODE -ne 0) { throw "docker compose pull backup services failed with exit code $LASTEXITCODE" }
+        }
         Invoke-Step "backup postgres before rollback" {
             & docker @backupArgs run --rm backup-postgres
             if ($LASTEXITCODE -ne 0) { throw "backup-postgres failed with exit code $LASTEXITCODE" }
@@ -134,17 +203,23 @@ try {
             & docker @backupArgs run --rm backup-minio
             if ($LASTEXITCODE -ne 0) { throw "backup-minio failed with exit code $LASTEXITCODE" }
         }
+        $backupStatus = "completed"
     } else {
         Write-Warning "Skipping backup before rollback. Use only if a fresh verified backup already exists."
-    }
-
-    Invoke-Step "ensure stateful dependencies are running" {
-        Invoke-DockerCompose up -d postgres redis minio
+        $backupStatus = "skipped by operator"
     }
 
     $runtimeServices = @("api", "worker", "provider-webhook", "miniapp", "reverse-proxy")
     if ($WithCloudflare) {
         $runtimeServices += "cloudflared"
+    }
+
+    Invoke-Step "pull rollback images" {
+        Invoke-DockerCompose pull @runtimeServices
+    }
+
+    Invoke-Step "ensure stateful dependencies are running" {
+        Invoke-DockerCompose up -d --no-build postgres redis minio
     }
 
     Invoke-Step "rollback runtime services without migrations" {
@@ -158,6 +233,7 @@ try {
         Wait-Http -Name "provider-webhook" -Url "http://127.0.0.1:8082/health"
         Wait-Http -Name "worker" -Url "http://127.0.0.1:9090/healthz"
         Wait-Http -Name "miniapp" -Url "http://127.0.0.1:5173/"
+        $healthStatus = "passed"
     }
 
     Invoke-Step "docker compose ps" {
@@ -165,7 +241,17 @@ try {
     }
 
     Write-Host ""
-    Write-Host "Production rollback completed. Verify payment/referral/job smoke manually before considering the incident closed."
+    Write-Host "Production rollback completed."
+    Write-Host "Started at: $rollbackStartedAt"
+    Write-Host "Finished at: $((Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ"))"
+    Write-Host "Project: $ProjectName"
+    Write-Host "Env file: $EnvFile"
+    Write-Host "Rollback IMAGE_TAG: $ImageTag"
+    Write-Host "Backup before rollback: $backupStatus"
+    Write-Host "Migrations: not run; migrate down is intentionally forbidden"
+    Write-Host "Runtime services: $($runtimeServices -join ', ')"
+    Write-Host "Health checks: $healthStatus"
+    Write-Host "Verify payment/referral/job smoke manually before considering the incident closed."
 } finally {
     if ($null -eq $previousAppEnvFile) {
         Remove-Item Env:\APP_ENV_FILE -ErrorAction SilentlyContinue

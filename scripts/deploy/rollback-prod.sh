@@ -8,6 +8,9 @@ with_cloudflare="false"
 skip_backup="false"
 no_health_check="false"
 timeout_seconds="180"
+rollback_started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+backup_status="skipped"
+health_status="skipped"
 
 usage() {
   cat <<'EOF'
@@ -43,30 +46,21 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "${script_dir}/../.." && pwd)"
 cd "${repo_root}"
 
-if [[ -z "${image_tag}" ]]; then
-  echo "--image-tag is required. Use the previous known-good Docker image tag." >&2
-  exit 2
-fi
-if [[ ! -f docker-compose.prod.yml ]]; then
-  echo "docker-compose.prod.yml not found" >&2
-  exit 1
-fi
-if [[ ! -f "${env_file}" ]]; then
-  echo "Production env file not found: ${env_file}" >&2
-  exit 1
-fi
-
-export APP_ENV_FILE="${env_file}"
-export IMAGE_TAG="${image_tag}"
-
-compose=(docker compose --project-name "${project_name}" --env-file "${env_file}" -f docker-compose.prod.yml)
-if [[ "${with_cloudflare}" == "true" ]]; then
-  compose+=(--profile cloudflare)
-fi
-
 run_step() {
   echo "==> $*"
   "$@"
+}
+
+check_docker() {
+  if ! command -v docker >/dev/null 2>&1; then
+    echo "Docker CLI is not installed or not in PATH" >&2
+    return 1
+  fi
+  docker version >/dev/null
+  docker compose version >/dev/null
+  docker info >/dev/null
+  echo "Docker OK: $(docker version --format '{{.Server.Version}}')"
+  echo "Docker Compose OK: $(docker compose version --short 2>/dev/null || docker compose version)"
 }
 
 get_env_value() {
@@ -85,6 +79,12 @@ get_env_value() {
   fi
 }
 
+is_placeholder_value() {
+  local value
+  value="$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]')"
+  [[ -z "${value//[[:space:]]/}" || "${value}" == *change_me* || "${value}" == *placeholder* || "${value}" == *example* ]]
+}
+
 wait_http() {
   local name="$1"
   local url="$2"
@@ -100,26 +100,70 @@ wait_http() {
   return 1
 }
 
+if [[ -z "${image_tag}" ]]; then
+  echo "--image-tag is required. Use the previous known-good Docker image tag." >&2
+  exit 2
+fi
+if [[ ! -f docker-compose.prod.yml ]]; then
+  echo "docker-compose.prod.yml not found" >&2
+  exit 1
+fi
+if [[ ! -f "${env_file}" ]]; then
+  echo "Production env file not found: ${env_file}" >&2
+  exit 1
+fi
+
 echo "Rollback target IMAGE_TAG=${image_tag}"
 echo "WARNING: this script does not run migrate down. Schema rollback must be a separate reviewed operation after a verified backup." >&2
 
+run_step check_docker
+
+check_args=(--env-file "${env_file}")
+if [[ "${with_cloudflare}" == "true" ]]; then
+  check_args+=(--with-cloudflare)
+fi
+if [[ "${skip_backup}" != "true" ]]; then
+  check_args+=(--backup-before-deploy)
+fi
+run_step bash scripts/deploy/check-prod-env.sh "${check_args[@]}"
+
+export APP_ENV_FILE="${env_file}"
+export IMAGE_TAG="${image_tag}"
+
+compose=(docker compose --project-name "${project_name}" --env-file "${env_file}" -f docker-compose.prod.yml)
+if [[ "${with_cloudflare}" == "true" ]]; then
+  compose+=(--profile cloudflare)
+fi
+
+backup_compose=(docker compose --project-name "${project_name}" --env-file "${env_file}" -f docker-compose.prod.yml --profile backup)
+
 run_step "${compose[@]}" config >/dev/null
 
+ghcr_username="$(get_env_value GHCR_USERNAME "")"
+ghcr_token="$(get_env_value GHCR_TOKEN "")"
+if ! is_placeholder_value "${ghcr_username}" && ! is_placeholder_value "${ghcr_token}"; then
+  echo "==> docker login ghcr.io"
+  printf '%s' "${ghcr_token}" | docker login ghcr.io -u "${ghcr_username}" --password-stdin >/dev/null
+fi
+
 if [[ "${skip_backup}" != "true" ]]; then
-  backup_compose=(docker compose --project-name "${project_name}" --env-file "${env_file}" -f docker-compose.prod.yml --profile backup)
+  run_step "${backup_compose[@]}" pull backup-postgres backup-minio
   run_step "${backup_compose[@]}" run --rm backup-postgres
   run_step "${backup_compose[@]}" run --rm backup-minio
+  backup_status="completed"
 else
   echo "WARNING: skipping backup before rollback. Use only if a fresh verified backup already exists." >&2
+  backup_status="skipped by operator"
 fi
 
-run_step "${compose[@]}" up -d postgres redis minio
-
-runtime_services=(api worker provider-webhook miniapp reverse-proxy)
+rollback_services=(api worker provider-webhook miniapp reverse-proxy)
 if [[ "${with_cloudflare}" == "true" ]]; then
-  runtime_services+=(cloudflared)
+  rollback_services+=(cloudflared)
 fi
-run_step "${compose[@]}" up -d --no-build --no-deps "${runtime_services[@]}"
+
+run_step "${compose[@]}" pull "${rollback_services[@]}"
+run_step "${compose[@]}" up -d --no-build postgres redis minio
+run_step "${compose[@]}" up -d --no-build --no-deps "${rollback_services[@]}"
 
 if [[ "${no_health_check}" != "true" ]]; then
   reverse_proxy_port="$(get_env_value REVERSE_PROXY_HTTP_PORT 8088)"
@@ -128,8 +172,19 @@ if [[ "${no_health_check}" != "true" ]]; then
   wait_http provider-webhook "http://127.0.0.1:8082/health"
   wait_http worker "http://127.0.0.1:9090/healthz"
   wait_http miniapp "http://127.0.0.1:5173/"
+  health_status="passed"
 fi
 
 run_step "${compose[@]}" ps
 echo
-echo "Production rollback completed. Verify payment/referral/job smoke manually before considering the incident closed."
+echo "Production rollback completed."
+echo "Started at: ${rollback_started_at}"
+echo "Finished at: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+echo "Project: ${project_name}"
+echo "Env file: ${env_file}"
+echo "Rollback IMAGE_TAG: ${image_tag}"
+echo "Backup before rollback: ${backup_status}"
+echo "Migrations: not run; migrate down is intentionally forbidden"
+echo "Runtime services: ${rollback_services[*]}"
+echo "Health checks: ${health_status}"
+echo "Verify payment/referral/job smoke manually before considering the incident closed."

@@ -7,10 +7,14 @@ tunnel: CHANGE_ME_TUNNEL_ID
 credentials-file: /etc/cloudflared/CHANGE_ME_TUNNEL_ID.json
 
 ingress:
+  # VK bot/API surface: /webhooks/vk and /health are opened by nginx.
   - hostname: vk.neiirohub.ru
     service: http://127.0.0.1:8088
+  # Mini App surface: / is static frontend, /miniapp/* is API BFF.
   - hostname: app.neiirohub.ru
     service: http://127.0.0.1:8088
+  # Canonical YooKassa webhook surface:
+  # https://neiirohub.ru/billing/webhooks/yookassa
   - hostname: neiirohub.ru
     service: http://127.0.0.1:8088
   - service: http_status:404

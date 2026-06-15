@@ -56,7 +56,7 @@ description = "Documented non-secret placeholders"
 regexTarget = "line"
 regexes = [
   '''dev-confirmation''',
-  '''(?i)change[_-]?me''',
+  '''(?i)change[-_]?me''',
   '''example''',
   '''placeholder''',
 ]

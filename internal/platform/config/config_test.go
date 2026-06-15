@@ -365,6 +365,18 @@ func TestLoadMediaPolicyDefaults(t *testing.T) {
 	if cfg.MediaDeliverRawProviderVideo != config.MediaDeliverRawProviderVideoIfProbePassed {
 		t.Fatalf("production raw provider video policy = %q", cfg.MediaDeliverRawProviderVideo)
 	}
+
+	t.Setenv("APP_ENV", "staging")
+	cfg = config.Load()
+	if cfg.MediaVideoProbePolicy != config.MediaVideoProbePolicyProbeRequired {
+		t.Fatalf("staging probe policy = %q", cfg.MediaVideoProbePolicy)
+	}
+	if cfg.MediaDeliverRawProviderVideo != config.MediaDeliverRawProviderVideoIfProbePassed {
+		t.Fatalf("staging raw provider video policy = %q", cfg.MediaDeliverRawProviderVideo)
+	}
+	if cfg.MediaReferenceUploadsEnabled {
+		t.Fatal("staging reference uploads should default to false")
+	}
 }
 
 func TestValidateMediaPipelineDisabledAllowsMissingTools(t *testing.T) {
@@ -649,20 +661,21 @@ func TestLoadDeepInfraConfig(t *testing.T) {
 
 func validProductionConfig() config.Config {
 	return config.Config{
-		Env:                 "production",
-		Provider:            "deepinfra",
-		ProviderChain:       []string{"deepinfra"},
-		DeepInfraAPIKey:     "test-deepinfra-key",
-		OpenAIAPIKey:        "test-openai-key",
-		ArtifactScanner:     "openai",
-		VKSecret:            "test-vk-secret",
-		AdminToken:          "test-admin-token",
-		VKConfirmationToken: "test-confirmation-token",
-		VKAppSecret:         "test-vk-app-secret",
-		PaymentProvider:     "yookassa",
-		YooKassaShopID:      "test-shop",
-		YooKassaSecretKey:   "test-yookassa-secret",
-		YooKassaReturnURL:   "https://example.com",
+		Env:                          "production",
+		Provider:                     "deepinfra",
+		ProviderChain:                []string{"deepinfra"},
+		DeepInfraAPIKey:              "test-deepinfra-key",
+		OpenAIAPIKey:                 "test-openai-key",
+		ArtifactScanner:              "openai",
+		VKSecret:                     "test-vk-secret",
+		AdminToken:                   "test-admin-token",
+		VKConfirmationToken:          "test-confirmation-token",
+		VKAppSecret:                  "test-vk-app-secret",
+		PaymentProvider:              "yookassa",
+		YooKassaShopID:               "test-shop",
+		YooKassaSecretKey:            "test-yookassa-secret",
+		YooKassaReturnURL:            "https://example.com",
+		PaymentWebhookTrustedProxies: []string{"127.0.0.1"},
 	}
 }
 
@@ -854,6 +867,13 @@ func TestValidatePaymentWebhookAllowlistRequiresConfiguredRanges(t *testing.T) {
 	cfg.PaymentWebhookTrustedProxies = []string{"10.0.0.0/8"}
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("valid webhook ingress config rejected: %v", err)
+	}
+}
+
+func TestPaymentWebhookHTTPSRequiredInStaging(t *testing.T) {
+	cfg := config.Config{Env: "staging"}
+	if !cfg.PaymentWebhookHTTPSRequired() {
+		t.Fatal("staging payment webhooks must require HTTPS")
 	}
 }
 
@@ -1145,6 +1165,96 @@ func TestValidateDeepInfraImageProviderRequiresKey(t *testing.T) {
 	err := cfg.Validate()
 	if err == nil || !strings.Contains(err.Error(), "DEEPINFRA_API_KEY") {
 		t.Fatalf("expected DEEPINFRA_API_KEY validation error, got %v", err)
+	}
+}
+
+func TestValidateArtifactScannerKnownValues(t *testing.T) {
+	cfg := config.Config{
+		Env:             "development",
+		Provider:        "mock",
+		ProviderChain:   []string{"mock"},
+		ArtifactScanner: "clamav",
+	}
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "ARTIFACT_SCANNER") {
+		t.Fatalf("expected ARTIFACT_SCANNER validation error, got %v", err)
+	}
+}
+
+func TestValidateProductionRequiresArtifactScanner(t *testing.T) {
+	cfg := productionDeepInfraConfig()
+	cfg.ArtifactScanner = "none"
+	cfg.AllowUnscannedArtifactsInProduction = false
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "ARTIFACT_SCANNER=openai") {
+		t.Fatalf("expected production artifact scanner validation error, got %v", err)
+	}
+}
+
+func TestValidateProductionAllowsUnscannedArtifactsWithExplicitFlag(t *testing.T) {
+	cfg := productionDeepInfraConfig()
+	cfg.ArtifactScanner = "none"
+	cfg.OpenAIAPIKey = ""
+	cfg.AllowUnscannedArtifactsInProduction = true
+
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate() error = %v", err)
+	}
+}
+
+func TestValidateStagingAllowsUnscannedArtifactsWithoutOpenAI(t *testing.T) {
+	cfg := productionDeepInfraConfig()
+	cfg.Env = "staging"
+	cfg.ArtifactScanner = "none"
+	cfg.OpenAIAPIKey = ""
+
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate() error = %v", err)
+	}
+}
+
+func TestValidateOpenAIArtifactScannerRequiresKey(t *testing.T) {
+	cfg := config.Config{
+		Env:             "development",
+		Provider:        "mock",
+		ProviderChain:   []string{"mock"},
+		ArtifactScanner: "openai",
+	}
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "OPENAI_API_KEY") {
+		t.Fatalf("expected OPENAI_API_KEY validation error, got %v", err)
+	}
+}
+
+func TestLoadAllowUnscannedArtifactsInProduction(t *testing.T) {
+	t.Setenv("ALLOW_UNSCANNED_ARTIFACTS_IN_PRODUCTION", "true")
+
+	cfg := config.Load()
+	if !cfg.AllowUnscannedArtifactsInProduction {
+		t.Fatal("AllowUnscannedArtifactsInProduction = false, want true")
+	}
+}
+
+func productionDeepInfraConfig() config.Config {
+	return config.Config{
+		Env:                          "production",
+		VKConfirmationToken:          "prod-confirmation",
+		VKSecret:                     "vk-secret",
+		VKAppSecret:                  "vk-app-secret",
+		AdminToken:                   "admin-token",
+		PaymentProvider:              "yookassa",
+		YooKassaShopID:               "shop-id",
+		YooKassaSecretKey:            "secret-key",
+		YooKassaReturnURL:            "https://neiirohub.ru/payment-return",
+		PaymentWebhookTrustedProxies: []string{"127.0.0.1"},
+		Provider:                     "deepinfra",
+		ProviderChain:                []string{"deepinfra"},
+		DeepInfraAPIKey:              "deepinfra-key",
+		ArtifactScanner:              "openai",
+		OpenAIAPIKey:                 "openai-key",
 	}
 }
 
