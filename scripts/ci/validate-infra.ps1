@@ -305,9 +305,9 @@ function Assert-CloudflaredComposeConfig {
         "- cloudflare",
         "TUNNEL_TOKEN:",
         "CLOUDFLARED_TUNNEL_TOKEN",
+        "network_mode: host",
         "--metrics",
-        "0.0.0.0:2000",
-        '127.0.0.1:${CLOUDFLARED_METRICS_PORT:-2000}:2000'
+        '127.0.0.1:${CLOUDFLARED_METRICS_PORT:-2000}'
     )
 
     foreach ($snippet in $requiredSnippets) {
@@ -318,6 +318,10 @@ function Assert-CloudflaredComposeConfig {
 
     if ($content -match "(?m)^\s*-\s*--token\s*$") {
         throw "cloudflared compose config must use TUNNEL_TOKEN env instead of command-line --token"
+    }
+
+    if ($content -match [regex]::Escape('127.0.0.1:${CLOUDFLARED_METRICS_PORT:-2000}:2000')) {
+        throw "cloudflared metrics must not publish a Docker port when host networking is enabled"
     }
 
     Write-Host "production cloudflared compose config OK"
