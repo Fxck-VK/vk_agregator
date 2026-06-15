@@ -157,6 +157,7 @@ type OperatorQueueNotWiredDTO struct {
 type OperatorProviderControlRoomDTO struct {
 	GeneratedAt        time.Time                   `json:"generated_at"`
 	Providers          []OperatorProviderHealthDTO `json:"providers"`
+	VideoRoutes        []OperatorVideoRouteDTO     `json:"video_routes"`
 	Fallback           OperatorProviderFallbackDTO `json:"fallback"`
 	ProviderWaste      OperatorRiskSignalDTO       `json:"provider_waste"`
 	DeliveryCaptureGap OperatorRiskSignalDTO       `json:"delivery_capture_gap"`
@@ -247,6 +248,7 @@ type OperatorConfigHealthDTO struct {
 	Environment     string                       `json:"environment"`
 	Flags           []OperatorConfigFlagDTO      `json:"flags"`
 	ProviderClasses []OperatorRuntimeProviderDTO `json:"provider_classes"`
+	VideoRoutes     []OperatorVideoRouteDTO      `json:"video_routes"`
 	Notes           []string                     `json:"notes,omitempty"`
 }
 
@@ -264,6 +266,26 @@ type OperatorRuntimeProviderDTO struct {
 	ModelClass         string `json:"model_class"`
 	Modality           string `json:"modality"`
 	ContractConfigured bool   `json:"contract_configured"`
+}
+
+// OperatorVideoRouteDTO is the safe admin view of a public video route. It
+// intentionally omits provider-native model IDs, URLs, pricing and secrets.
+type OperatorVideoRouteDTO struct {
+	Alias                  string   `json:"alias"`
+	ProviderClass          string   `json:"provider_class"`
+	ModelClass             string   `json:"model_class"`
+	Status                 string   `json:"status"`
+	Reason                 string   `json:"reason"`
+	Enabled                bool     `json:"enabled"`
+	ProviderEnabled        bool     `json:"provider_enabled"`
+	ProviderConfigured     bool     `json:"provider_configured"`
+	ProviderBaseConfigured bool     `json:"provider_base_configured"`
+	CostConfigured         bool     `json:"cost_configured"`
+	RequiresStartImage     bool     `json:"requires_start_image"`
+	SupportsReferenceImage bool     `json:"supports_reference_image"`
+	MaxReferenceImages     int      `json:"max_reference_images,omitempty"`
+	AllowedDurationsSec    []int    `json:"allowed_durations_sec,omitempty"`
+	AllowedResolutions     []string `json:"allowed_resolutions,omitempty"`
 }
 
 // OperatorUsersDTO is the read-only safe user console payload. It never exposes

@@ -134,6 +134,7 @@ func firstNonEmpty(values ...string) string {
 
 func menuFeatures(cfg config.Config) vkinbound.MenuFeatureFlags {
 	disabled := map[domain.CommandType]bool{}
+	enabled := map[domain.CommandType]bool{}
 	disableWhenFalse := func(enabled bool, commands ...domain.CommandType) {
 		if enabled {
 			return
@@ -142,8 +143,17 @@ func menuFeatures(cfg config.Config) vkinbound.MenuFeatureFlags {
 			disabled[command] = true
 		}
 	}
+	enableWhenTrue := func(ok bool, commands ...domain.CommandType) {
+		if !ok {
+			return
+		}
+		for _, command := range commands {
+			enabled[command] = true
+		}
+	}
 
 	disableWhenFalse(cfg.VKMenuVideoEnabled, domain.CommandMenuVideo)
+	disableWhenFalse(false, domain.CommandMenuVideoPrunaAI)
 	disableWhenFalse(cfg.VKMenuImageEnabled, domain.CommandMenuImage)
 	disableWhenFalse(cfg.VKMenuGPTEnabled, domain.CommandMenuText)
 	disableWhenFalse(cfg.VKMenuStudentsEnabled, domain.CommandMenuStudents)
@@ -152,15 +162,28 @@ func menuFeatures(cfg config.Config) vkinbound.MenuFeatureFlags {
 	disableWhenFalse(cfg.VKMenuVideoSora2Enabled, domain.CommandMenuVideoSora2)
 	disableWhenFalse(cfg.VKMenuVideoSora2StartEnabled, domain.CommandMenuVideoSora2Start)
 	disableWhenFalse(cfg.VKMenuVideoSora2ExamplesEnabled, domain.CommandMenuVideoSora2Examples)
+	disableWhenFalse(cfg.FeatureVideoRouteRunwayGen4TurboEnabled, domain.CommandMenuVideoSora2, domain.CommandMenuVideoSora2Start, domain.CommandMenuVideoSora2Examples)
+	enableWhenTrue(cfg.FeatureVideoRouteRunwayGen4TurboEnabled, domain.CommandMenuVideoSora2, domain.CommandMenuVideoSora2Start, domain.CommandMenuVideoSora2Examples)
 	disableWhenFalse(cfg.VKMenuVideoKling21Enabled, domain.CommandMenuVideoKling21)
 	disableWhenFalse(cfg.VKMenuVideoKling21StartEnabled, domain.CommandMenuVideoKling21Start)
 	disableWhenFalse(cfg.VKMenuVideoKling21ExamplesEnabled, domain.CommandMenuVideoKling21Examples)
+	disableWhenFalse(cfg.FeatureVideoRouteKlingO3StandardEnabled, domain.CommandMenuVideoKling21, domain.CommandMenuVideoKling21Start, domain.CommandMenuVideoKling21Examples)
+	enableWhenTrue(cfg.FeatureVideoRouteKlingO3StandardEnabled, domain.CommandMenuVideoKling21, domain.CommandMenuVideoKling21Start, domain.CommandMenuVideoKling21Examples)
 	disableWhenFalse(cfg.VKMenuVideoSeedance1Enabled, domain.CommandMenuVideoSeedance1)
 	disableWhenFalse(cfg.VKMenuVideoSeedance1LiteEnabled, domain.CommandMenuVideoSeedance1Lite)
 	disableWhenFalse(cfg.VKMenuVideoSeedance1ProEnabled, domain.CommandMenuVideoSeedance1Pro)
-	disableWhenFalse(cfg.VKMenuVideoHaiuo02Enabled, domain.CommandMenuVideoHaiuo02)
-	disableWhenFalse(cfg.VKMenuVideoHaiuo02StandardEnabled, domain.CommandMenuVideoHaiuo02Standard)
-	disableWhenFalse(cfg.VKMenuVideoHaiuo02FastEnabled, domain.CommandMenuVideoHaiuo02Fast)
+	disableWhenFalse(cfg.FeatureVideoRouteSeedance20FastEnabled, domain.CommandMenuVideoSeedance1, domain.CommandMenuVideoSeedance1Lite)
+	disableWhenFalse(false, domain.CommandMenuVideoSeedance1Pro)
+	enableWhenTrue(cfg.FeatureVideoRouteSeedance20FastEnabled, domain.CommandMenuVideoSeedance1, domain.CommandMenuVideoSeedance1Lite)
+	disableWhenFalse(cfg.VKMenuVideoHailuo02Enabled, domain.CommandMenuVideoHailuo02)
+	disableWhenFalse(cfg.VKMenuVideoHailuo02StandardEnabled, domain.CommandMenuVideoHailuo02Standard)
+	disableWhenFalse(cfg.VKMenuVideoHailuo02FastEnabled, domain.CommandMenuVideoHailuo02Fast)
+	disableWhenFalse(cfg.FeatureVideoRouteHailuo23StandardEnabled || cfg.FeatureVideoRouteHailuo23FastEnabled, domain.CommandMenuVideoHailuo02)
+	disableWhenFalse(cfg.FeatureVideoRouteHailuo23StandardEnabled, domain.CommandMenuVideoHailuo02Standard)
+	disableWhenFalse(cfg.FeatureVideoRouteHailuo23FastEnabled, domain.CommandMenuVideoHailuo02Fast)
+	enableWhenTrue(cfg.FeatureVideoRouteHailuo23StandardEnabled || cfg.FeatureVideoRouteHailuo23FastEnabled, domain.CommandMenuVideoHailuo02)
+	enableWhenTrue(cfg.FeatureVideoRouteHailuo23StandardEnabled, domain.CommandMenuVideoHailuo02Standard)
+	enableWhenTrue(cfg.FeatureVideoRouteHailuo23FastEnabled, domain.CommandMenuVideoHailuo02Fast)
 	disableWhenFalse(cfg.VKMenuImageTextEnabled, domain.CommandMenuImageText)
 	disableWhenFalse(cfg.VKMenuImageReferenceEnabled, domain.CommandMenuImageReference)
 	disableWhenFalse(cfg.VKMenuStudentsSolverEnabled, domain.CommandMenuStudentSolver)
@@ -168,5 +191,5 @@ func menuFeatures(cfg config.Config) vkinbound.MenuFeatureFlags {
 	disableWhenFalse(cfg.VKMenuStudentsReportEnabled, domain.CommandMenuStudentReport)
 	disableWhenFalse(cfg.VKMenuStudentsQAEnabled, domain.CommandMenuStudentQA)
 
-	return vkinbound.MenuFeatureFlags{DisabledCommands: disabled}
+	return vkinbound.MenuFeatureFlags{DisabledCommands: disabled, EnabledCommands: enabled}
 }

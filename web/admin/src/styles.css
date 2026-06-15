@@ -769,6 +769,13 @@ button {
   grid-template-columns: minmax(210px, 0.9fr) minmax(120px, 0.5fr) minmax(110px, 0.4fr) minmax(260px, 1.2fr);
 }
 
+.provider-row--video-route {
+  grid-template-columns:
+    minmax(188px, 1fr) minmax(104px, 0.55fr) minmax(142px, 0.75fr)
+    minmax(96px, 0.45fr) minmax(132px, 0.65fr) minmax(250px, 1.25fr) minmax(250px, 1.25fr);
+  min-width: 1190px;
+}
+
 .provider-row--head {
   border-color: transparent;
   background: transparent;

@@ -1072,7 +1072,7 @@ Clicking `🎬 Создать видео` opens the video model picker with `Pru
 `⬅️ Назад`. Clicking `PrunaAI` stores peer-scoped video dialog mode. The next
 plain user text creates one `video_generate` Job with private video params and a
 `НейроХаб готовит видео...` placeholder; the VK handler still never calls the
-provider directly. Older Sora/Kling/Seedance/Haiuo payloads are hidden/stale and
+provider directly. Older Sora/Kling/Seedance/Hailuo payloads are hidden/stale and
 fall back to the main menu without creating Jobs.
 Clicking `🖼️ Создать фото` opens the photo instruction screen directly because
 there is one main image model in the VK UX. It immediately stores `photo_text`
@@ -1178,8 +1178,8 @@ default to `false`; the other menu flags default to `true`. Set a flag to
 `VK_MENU_VIDEO_KLING21_START_ENABLED`,
 `VK_MENU_VIDEO_KLING21_EXAMPLES_ENABLED`,
 `VK_MENU_VIDEO_SEEDANCE1_ENABLED`, `VK_MENU_VIDEO_SEEDANCE1_LITE_ENABLED`,
-`VK_MENU_VIDEO_SEEDANCE1_PRO_ENABLED`, `VK_MENU_VIDEO_HAIUO02_ENABLED`,
-`VK_MENU_VIDEO_HAIUO02_STANDARD_ENABLED`, `VK_MENU_VIDEO_HAIUO02_FAST_ENABLED`,
+`VK_MENU_VIDEO_SEEDANCE1_PRO_ENABLED`, `VK_MENU_VIDEO_HAILUO02_ENABLED`,
+`VK_MENU_VIDEO_HAILUO02_STANDARD_ENABLED`, `VK_MENU_VIDEO_HAILUO02_FAST_ENABLED`,
 `VK_MENU_IMAGE_TEXT_ENABLED`, `VK_MENU_IMAGE_REFERENCE_ENABLED`,
 `VK_MENU_STUDENTS_SOLVER_ENABLED`, `VK_MENU_STUDENTS_PRESENTATION_ENABLED`,
 `VK_MENU_STUDENTS_REPORT_ENABLED`, `VK_MENU_STUDENTS_QA_ENABLED`.

@@ -2,6 +2,7 @@ package joborchestrator_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 
@@ -13,6 +14,7 @@ import (
 	"vk-ai-aggregator/internal/service/billingservice"
 	"vk-ai-aggregator/internal/service/joborchestrator"
 	"vk-ai-aggregator/internal/service/outboxrelay"
+	"vk-ai-aggregator/internal/service/videorouter"
 )
 
 type fixture struct {
@@ -226,6 +228,123 @@ func TestCreateJobCapacityGuardRejectsBeforePersistenceReservationAndOutbox(t *t
 	}
 }
 
+func TestCreateJobVideoRouteValidatorRejectsBeforePersistenceReservationAndOutbox(t *testing.T) {
+	f := newFixtureWithOrchestratorOptions([]joborchestrator.Option{
+		joborchestrator.WithVideoRouteValidator(joborchestrator.VideoRouteValidatorFunc(func(context.Context, joborchestrator.VideoRouteCheckInput) error {
+			return videorouter.ErrUnsupportedDuration
+		})),
+	})
+	ctx := context.Background()
+
+	job, err := f.orch.CreateJob(ctx, joborchestrator.CreateJobInput{
+		UserID:         uuid.New(),
+		CommandID:      uuid.New(),
+		Operation:      domain.OperationVideoGenerate,
+		Modality:       domain.ModalityVideo,
+		IdempotencyKey: "vk_job:1:bad-route",
+	})
+	if !errors.Is(err, videorouter.ErrUnsupportedDuration) {
+		t.Fatalf("expected ErrUnsupportedDuration, got job=%+v err=%v", job, err)
+	}
+	if job != nil {
+		t.Fatalf("route rejection must not create job, got %+v", job)
+	}
+	jobs, listErr := f.jobs.List(ctx, domain.JobFilter{}, 10, 0)
+	if listErr != nil {
+		t.Fatalf("list jobs: %v", listErr)
+	}
+	if len(jobs) != 0 {
+		t.Fatalf("route rejection persisted jobs: %+v", jobs)
+	}
+	if events := f.outbox.Events(); len(events) != 0 {
+		t.Fatalf("route rejection wrote outbox events: %+v", events)
+	}
+	f.drain(t)
+	if f.pub.Len() != 0 {
+		t.Fatalf("route rejection enqueued tasks, got %d", f.pub.Len())
+	}
+}
+
+func TestCreateJobResolvedVideoRouteUsesRouteEstimateBeforeReservation(t *testing.T) {
+	catalog := newRouteCatalogForOrchestratorTest(t)
+	f := newFixtureWithOrchestratorOptions([]joborchestrator.Option{
+		joborchestrator.WithVideoRouteResolver(routeResolverForTest(catalog)),
+	}, billingservice.WithStartingBalance(150))
+	ctx := context.Background()
+
+	params, _ := json.Marshal(map[string]any{
+		"prompt":            "clean prompt",
+		"video_route_alias": string(domain.VideoRouteKlingO3Standard),
+		"duration_sec":      10,
+		"resolution":        "720p",
+		"aspect_ratio":      "16:9",
+	})
+	job, err := f.orch.CreateJob(ctx, joborchestrator.CreateJobInput{
+		UserID:         uuid.New(),
+		CommandID:      uuid.New(),
+		Operation:      domain.OperationVideoGenerate,
+		Modality:       domain.ModalityVideo,
+		IdempotencyKey: "vk_job:1:route-expensive",
+		Params:         params,
+	})
+	if !errors.Is(err, domain.ErrInsufficientCredits) {
+		t.Fatalf("expected ErrInsufficientCredits, got job=%+v err=%v", job, err)
+	}
+	if job == nil || job.Status != domain.JobStatusAwaitingPayment {
+		t.Fatalf("expected awaiting_payment job, got %+v", job)
+	}
+	if job.CostEstimate != 200 || job.CostReserved != 0 {
+		t.Fatalf("cost estimate/reserved = %d/%d, want 200/0", job.CostEstimate, job.CostReserved)
+	}
+	var out struct {
+		Snapshot domain.VideoRouteSnapshot `json:"resolved_video_route"`
+	}
+	if err := json.Unmarshal(job.Params, &out); err != nil {
+		t.Fatalf("unmarshal job params: %v", err)
+	}
+	if !out.Snapshot.Valid() || out.Snapshot.InternalCostCredits != 200 {
+		t.Fatalf("missing route snapshot: %+v", out.Snapshot)
+	}
+	f.drain(t)
+	if f.pub.Len() != 0 {
+		t.Fatalf("awaiting_payment job must not enqueue, got %d tasks", f.pub.Len())
+	}
+}
+
+func TestCreateJobResolvedVideoRouteReservesResolvedAmount(t *testing.T) {
+	catalog := newRouteCatalogForOrchestratorTest(t)
+	f := newFixtureWithOrchestratorOptions([]joborchestrator.Option{
+		joborchestrator.WithVideoRouteResolver(routeResolverForTest(catalog)),
+	})
+	ctx := context.Background()
+
+	params, _ := json.Marshal(map[string]any{
+		"prompt":            "clean prompt",
+		"video_route_alias": string(domain.VideoRouteKlingO3Standard),
+		"duration_sec":      10,
+		"resolution":        "720p",
+		"aspect_ratio":      "16:9",
+	})
+	job, err := f.orch.CreateJob(ctx, joborchestrator.CreateJobInput{
+		UserID:         uuid.New(),
+		CommandID:      uuid.New(),
+		Operation:      domain.OperationVideoGenerate,
+		Modality:       domain.ModalityVideo,
+		IdempotencyKey: "vk_job:1:route-reserve",
+		Params:         params,
+	})
+	if err != nil {
+		t.Fatalf("create route job: %v", err)
+	}
+	if job.CostEstimate != 200 || job.CostReserved != 200 {
+		t.Fatalf("cost estimate/reserved = %d/%d, want 200/200", job.CostEstimate, job.CostReserved)
+	}
+	f.drain(t)
+	if f.pub.Len() != 1 {
+		t.Fatalf("reserved route job should enqueue once, got %d tasks", f.pub.Len())
+	}
+}
+
 func TestCreateJobActiveVideoLimitRejectsBeforeReservation(t *testing.T) {
 	f := newFixtureWithOrchestratorOptions([]joborchestrator.Option{
 		joborchestrator.WithMaxActiveVideoJobsPerUser(1),
@@ -297,4 +416,48 @@ func TestCreateJobIdempotentExistingBypassesCapacityGuard(t *testing.T) {
 	if first.ID != second.ID {
 		t.Fatalf("expected existing job %s, got %s", first.ID, second.ID)
 	}
+}
+
+func newRouteCatalogForOrchestratorTest(t *testing.T) *videorouter.Catalog {
+	t.Helper()
+	catalog, err := videorouter.NewCatalog(videorouter.Config{
+		RouterEnabled: true,
+		Providers: map[domain.ProviderName]videorouter.ProviderConfig{
+			domain.ProviderPoYo: {
+				Enabled:           true,
+				RequireAPIKey:     true,
+				APIKeyConfigured:  true,
+				RequireBaseURL:    true,
+				BaseURLConfigured: true,
+			},
+		},
+		EnabledRoutes: map[domain.VideoRouteAlias]bool{
+			domain.VideoRouteKlingO3Standard: true,
+		},
+	})
+	if err != nil {
+		t.Fatalf("new route catalog: %v", err)
+	}
+	return catalog
+}
+
+func routeResolverForTest(catalog *videorouter.Catalog) joborchestrator.VideoRouteResolver {
+	return joborchestrator.VideoRouteResolverFunc(func(ctx context.Context, in joborchestrator.VideoRouteCheckInput) (joborchestrator.VideoRouteResolution, error) {
+		resolution, err := catalog.Resolve(ctx, videorouter.Request{
+			Source:           in.Source,
+			Operation:        in.Operation,
+			Modality:         in.Modality,
+			Params:           in.Params,
+			InputArtifactIDs: in.InputArtifactIDs,
+		})
+		if err != nil {
+			return joborchestrator.VideoRouteResolution{}, err
+		}
+		return joborchestrator.VideoRouteResolution{
+			Resolved:            resolution.Resolved,
+			Params:              resolution.Params,
+			Snapshot:            resolution.Snapshot,
+			InternalCostCredits: resolution.InternalCostCredits,
+		}, nil
+	})
 }

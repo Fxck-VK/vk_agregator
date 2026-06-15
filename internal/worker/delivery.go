@@ -272,11 +272,13 @@ func (w *DeliveryWorker) captureReserved(ctx context.Context, job *domain.Job) e
 	defer captureSpan.End()
 	if err := w.billing.CaptureForJob(captureCtx, job.ID, job.CostReserved); err != nil {
 		metrics.BillingCaptures.WithLabelValues(deliveryOperationLabel(job), "error").Inc()
+		observeVideoRouteBillingForJob(job, "capture", "error")
 		metrics.ObserveMediaDeliveryCaptureGap(deliveryOperationLabel(job), deliveryModalityLabel(job), "capture_failed")
 		tracing.RecordError(captureSpan, err)
 		return fmt.Errorf("worker: capture: %w", err)
 	}
 	metrics.BillingCaptures.WithLabelValues(deliveryOperationLabel(job), "success").Inc()
+	observeVideoRouteBillingForJob(job, "capture", "success")
 	metrics.AddProductCreditsFlow("job_delivery", "capture", "success", job.CostReserved)
 	if job.CostCaptured != job.CostReserved {
 		job.CostCaptured = job.CostReserved
@@ -293,9 +295,11 @@ func (w *DeliveryWorker) releaseReserved(ctx context.Context, job *domain.Job) e
 	}
 	if err := w.billing.ReleaseForJob(ctx, job.ID); err != nil {
 		metrics.BillingReleases.WithLabelValues(deliveryOperationLabel(job), "error").Inc()
+		observeVideoRouteBillingForJob(job, "release", "error")
 		return err
 	}
 	metrics.BillingReleases.WithLabelValues(deliveryOperationLabel(job), "success").Inc()
+	observeVideoRouteBillingForJob(job, "release", "success")
 	return nil
 }
 
@@ -623,6 +627,7 @@ func (w *DeliveryWorker) setStatus(ctx context.Context, job *domain.Job, to doma
 		if duration > 0 {
 			metrics.JobDuration.WithLabelValues(deliveryOperationLabel(job), deliveryModalityLabel(job), string(to)).Observe(duration.Seconds())
 		}
+		observeVideoRouteTerminalForJob(job, to)
 	}
 	if to.IsTerminal() {
 		metrics.ObserveProductEvent("worker", "job", "terminal", deliveryOperationLabel(job), deliveryModalityLabel(job), string(to))

@@ -12,6 +12,7 @@ export interface Job {
   status: string;
   prompt?: string;
   conversation_id?: string;
+  video_route_alias?: string;
   cost_estimate: number;
   cost_captured: number;
   output_artifact_ids: string[];
@@ -25,8 +26,9 @@ export interface CreateJobInput {
   operation: string;
   prompt: string;
   model_id?: string;
+  video_route_alias?: string;
   reference_artifact_ids?: string[];
-  /** video_generate only: 3, 5 or 10 seconds */
+  /** video_generate only: backend route-specific allowed durations */
   duration_sec?: number;
 }
 
@@ -62,6 +64,7 @@ export interface EstimateInput {
   operation: string;
   prompt: string;
   model_id?: string;
+  video_route_alias?: string;
   reference_artifact_ids?: string[];
   duration_sec?: number;
 }
@@ -70,9 +73,23 @@ export interface EstimateResponse {
   operation: string;
   model_id?: string;
   model_name?: string;
+  video_route_alias?: string;
   cost_estimate: number;
   balance_credits: number;
   enough_credits: boolean;
+}
+
+export interface VideoRoute {
+  alias: string;
+  allowed_durations_sec?: number[];
+  allowed_resolutions?: string[];
+  allowed_aspect_ratios?: string[];
+  default_duration_sec?: number;
+  default_resolution?: string;
+  default_aspect_ratio?: string;
+  requires_start_image: boolean;
+  supports_reference_image: boolean;
+  max_reference_images?: number;
 }
 
 /** Mirrors internal/adapter/inbound/miniapp BalanceDTO */
@@ -349,6 +366,16 @@ export function normalizeRawParams(raw: string): string {
   return raw.replace(/^[?#]/, "");
 }
 
+export interface VideoRouteListResponse {
+  items: VideoRoute[];
+  pagination: {
+    limit: number;
+    offset: number;
+    count: number;
+    has_more: boolean;
+  };
+}
+
 function isForwardedLaunchParamKey(key: string): boolean {
   return key === "sign" || key.startsWith("vk_");
 }
@@ -483,6 +510,7 @@ async function launchParams(): Promise<string> {
 
 const ARTIFACT_ID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const VIDEO_ROUTE_ALIAS_RE = /^video_[a-z0-9_]+$/;
 
 export const MAX_REFERENCE_ARTIFACTS = 4;
 export const MAX_UPLOAD_BYTES = 20 << 20;
@@ -719,6 +747,15 @@ export async function listPaymentIntents(): Promise<PaymentIntent[]> {
   return data.items ?? [];
 }
 
+function validateVideoRouteAlias(alias?: string): void {
+  if (!alias) return;
+  if (!VIDEO_ROUTE_ALIAS_RE.test(alias)) {
+    throw new ApiError(400, "validation_error", {
+      backendError: "invalid video route alias",
+    });
+  }
+}
+
 export async function cancelPaymentIntent(id: string): Promise<PaymentIntent> {
   try {
     return await request<PaymentIntent>(`/miniapp/payments/${encodeURIComponent(id)}/cancel`, {
@@ -735,12 +772,18 @@ export async function listJobs(): Promise<Job[]> {
   return data.items ?? [];
 }
 
+export async function listVideoRoutes(): Promise<VideoRoute[]> {
+  const data = await request<VideoRouteListResponse>("/miniapp/video-routes");
+  return data.items ?? [];
+}
+
 export async function getJob(id: string): Promise<Job> {
   return request<Job>(`/miniapp/jobs/${id}`);
 }
 
 export async function createJob(input: CreateJobInput, options: CreateJobOptions): Promise<Job> {
   validateReferenceArtifactIDs(input.reference_artifact_ids);
+  validateVideoRouteAlias(input.video_route_alias);
   return request<Job>("/miniapp/jobs", {
     method: "POST",
     headers: {
@@ -808,6 +851,7 @@ export async function listChatConversationMessages(conversationId: string): Prom
 
 export async function estimateJob(input: EstimateInput): Promise<EstimateResponse> {
   validateReferenceArtifactIDs(input.reference_artifact_ids);
+  validateVideoRouteAlias(input.video_route_alias);
   return request<EstimateResponse>("/miniapp/estimate", {
     method: "POST",
     body: JSON.stringify(input),

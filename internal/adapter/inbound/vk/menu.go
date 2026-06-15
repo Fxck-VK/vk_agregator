@@ -73,7 +73,7 @@ var menuScreens = map[domain.CommandType]menuScreen{
 		keyboard: photoModeKeyboard,
 	},
 	domain.CommandMenuVideo: {
-		text:     fixedText("Выбери модель для генерации:"),
+		text:     fixedText("Выбери режим видео:"),
 		keyboard: videoModelKeyboard,
 	},
 	domain.CommandMenuVideoPrunaAI: {
@@ -116,17 +116,17 @@ var menuScreens = map[domain.CommandType]menuScreen{
 		text:     fixedText(seedance1ProText),
 		keyboard: seedance1BackKeyboard,
 	},
-	domain.CommandMenuVideoHaiuo02: {
-		text:     fixedText(haiuo02Text),
-		keyboard: haiuo02Keyboard,
+	domain.CommandMenuVideoHailuo02: {
+		text:     fixedText(hailuo02Text),
+		keyboard: hailuo02Keyboard,
 	},
-	domain.CommandMenuVideoHaiuo02Standard: {
-		text:     fixedText(haiuo02StandardText),
-		keyboard: haiuo02BackKeyboard,
+	domain.CommandMenuVideoHailuo02Standard: {
+		text:     fixedText(hailuo02StandardText),
+		keyboard: hailuo02BackKeyboard,
 	},
-	domain.CommandMenuVideoHaiuo02Fast: {
-		text:     fixedText(haiuo02FastText),
-		keyboard: haiuo02BackKeyboard,
+	domain.CommandMenuVideoHailuo02Fast: {
+		text:     fixedText(hailuo02FastText),
+		keyboard: hailuo02BackKeyboard,
 	},
 	domain.CommandMenuStudents: {
 		text:     fixedText(studentsText),
@@ -153,23 +153,23 @@ var menuScreens = map[domain.CommandType]menuScreen{
 const (
 	gptActiveText = "🤖 НейроХаб активен!\n\nЯ готов ответить на любые вопросы и помочь с идеями\nСпроси что-нибудь прямо сейчас!"
 
-	prunaAIText = "PrunaAI активен.\n\nНапишите описание видео обычным сообщением.\n\nПример: кот в очках едет на жирафе."
+	prunaAIText = "Видео-режим отключен.\n\nВыберите другой режим видео."
 
-	sora2Text         = "sora-2\nОписание: Генерирует видео по тексту или фото.\n\n“ A hyper-realistic police bodycam video of a kangaroo making punching feints toward a police officer on a dusty rural road in Australia. The kangaroo stands ”\n\n🔗Инструкция: https://t.me/sora_video_1"
-	sora2StartText    = "sora-2 активен.\n\nНапишите описание видео обычным сообщением.\n\nПример: cinematic drone shot over a neon city at night, rain reflections, realistic camera movement."
-	sora2ExamplesText = "ℹ️ Примеры sora-2\n\n1. A cinematic drone shot over a neon city at night, rain reflections on the street, realistic camera movement.\n\n2. A close-up handheld video of a chef cutting fruit in a bright kitchen, natural motion, realistic details."
+	sora2Text         = "Creative video\n\nРежим для выразительных роликов по тексту или фото."
+	sora2StartText    = "Creative video активен.\n\nНапишите описание видео обычным сообщением.\n\nПример: cinematic drone shot over a neon city at night, rain reflections, realistic camera movement."
+	sora2ExamplesText = "ℹ️ Примеры Creative video\n\n1. A cinematic drone shot over a neon city at night, rain reflections on the street, realistic camera movement.\n\n2. A close-up handheld video of a chef cutting fruit in a bright kitchen, natural motion, realistic details."
 
-	kling21Text         = "Kling v2.1 master\nОписание: Генерирует видео по тексту или фото.\n\n“ The setting has warm lighting from streetlights or soft party lights. A little boy around 2 to 3 years old, with light skin tone, brown hair, and big green ”\n\n🔗Инструкция: https://t.me/pakrnet"
-	kling21StartText    = "Kling v2.1 master активен.\n\nНапишите описание видео обычным сообщением.\n\nПример: warm cinematic scene, friends walking under streetlights, realistic motion."
-	kling21ExamplesText = "ℹ️ Примеры Kling v2.1\n\n1. A warm cinematic scene of friends walking under streetlights, soft party lights, realistic skin and motion.\n\n2. A product video of a glass bottle rotating on a table, studio lighting, smooth camera movement."
+	kling21Text         = "Balanced video\n\nУниверсальный режим для видео по тексту или фото."
+	kling21StartText    = "Balanced video активен.\n\nНапишите описание видео обычным сообщением.\n\nПример: warm cinematic scene, friends walking under streetlights, realistic motion."
+	kling21ExamplesText = "ℹ️ Примеры Balanced video\n\n1. A warm cinematic scene of friends walking under streetlights, soft party lights, realistic skin and motion.\n\n2. A product video of a glass bottle rotating on a table, studio lighting, smooth camera movement."
 
-	seedance1Text     = "🔹 Seedance\n\nLite — это как «лайт-версия» приложения: самое простое, чтобы попробовать.\n\nPro — это как «премиум»: больше функций, настроек и возможностей для крутого результата.\n\n☝️ Если хочешь быстро и просто — бери Lite. Если любишь «по максимуму» — тогда Pro."
-	seedance1LiteText = "Seedance 1 Lite активен.\n\nНапишите описание видео обычным сообщением."
-	seedance1ProText  = "Seedance 1 Pro активен.\n\nНапишите описание видео обычным сообщением."
+	seedance1Text     = "Reference video\n\nРежим для генерации с референсами."
+	seedance1LiteText = "Reference video активен.\n\nНапишите описание видео обычным сообщением."
+	seedance1ProText  = "Reference video Pro пока скрыт.\n\nВыберите другой режим видео."
 
-	haiuo02Text         = "🔹 Haiuo 02\n\nHaiuo 02 — картинка суперчёткая, реалистичная, прям как в фильме.\n\nHaiuo 02 Fast — версия «на скорость»: делает видео быстрее, но качество чуть ниже.\n\n☝️ Если нужен «вау-визуал» — бери Haiuo. Если важнее быстро и удобно — Fast."
-	haiuo02StandardText = "Haiuo v0.2 Обычный активен.\n\nНапишите описание видео обычным сообщением."
-	haiuo02FastText     = "Haiuo v0.2 Fast активен.\n\nНапишите описание видео обычным сообщением."
+	hailuo02Text         = "Cinematic video / Fast photo motion\n\nВыберите качество или быстрый режим движения из фото."
+	hailuo02StandardText = "Cinematic video активен.\n\nНапишите описание видео обычным сообщением."
+	hailuo02FastText     = "Fast photo motion активен.\n\nПрикрепите стартовое фото и напишите описание видео обычным сообщением."
 
 	studentsText = "🎁Данные нейронные сети помогут вам во время учебы"
 
@@ -594,20 +594,24 @@ func (h *Handler) menuCommandEnabled(command domain.CommandType) bool {
 	}
 	switch command {
 	case domain.CommandMenuVideoPrunaAI:
-		return h.menuCommandEnabled(domain.CommandMenuVideo)
-	case domain.CommandMenuVideoSora2,
-		domain.CommandMenuVideoSora2Start,
-		domain.CommandMenuVideoSora2Examples,
-		domain.CommandMenuVideoKling21,
-		domain.CommandMenuVideoKling21Start,
-		domain.CommandMenuVideoKling21Examples,
-		domain.CommandMenuVideoSeedance1,
-		domain.CommandMenuVideoSeedance1Lite,
-		domain.CommandMenuVideoSeedance1Pro,
-		domain.CommandMenuVideoHaiuo02,
-		domain.CommandMenuVideoHaiuo02Standard,
-		domain.CommandMenuVideoHaiuo02Fast:
 		return false
+	case domain.CommandMenuVideoSora2,
+		domain.CommandMenuVideoKling21,
+		domain.CommandMenuVideoSeedance1,
+		domain.CommandMenuVideoHailuo02:
+		return h.videoRouteCommandEnabled(command) && h.menuCommandEnabled(domain.CommandMenuVideo)
+	case domain.CommandMenuVideoSora2Start,
+		domain.CommandMenuVideoSora2Examples:
+		return h.videoRouteCommandEnabled(command) && h.menuCommandEnabled(domain.CommandMenuVideoSora2)
+	case domain.CommandMenuVideoKling21Start,
+		domain.CommandMenuVideoKling21Examples:
+		return h.videoRouteCommandEnabled(command) && h.menuCommandEnabled(domain.CommandMenuVideoKling21)
+	case domain.CommandMenuVideoSeedance1Lite,
+		domain.CommandMenuVideoSeedance1Pro:
+		return h.videoRouteCommandEnabled(command) && h.menuCommandEnabled(domain.CommandMenuVideoSeedance1)
+	case domain.CommandMenuVideoHailuo02Standard,
+		domain.CommandMenuVideoHailuo02Fast:
+		return h.videoRouteCommandEnabled(command) && h.menuCommandEnabled(domain.CommandMenuVideoHailuo02)
 	case domain.CommandMenuImageText,
 		domain.CommandMenuImageReference:
 		return h.menuCommandEnabled(domain.CommandMenuImage)
@@ -619,6 +623,10 @@ func (h *Handler) menuCommandEnabled(command domain.CommandType) bool {
 	default:
 		return true
 	}
+}
+
+func (h *Handler) videoRouteCommandEnabled(command domain.CommandType) bool {
+	return h.cfg.MenuFeatures.EnabledCommands[command]
 }
 
 func (h *Handler) getActiveMenu(peerID int64) (activeMenuMessage, bool) {
@@ -828,7 +836,19 @@ func videoModelKeyboard() *vkdelivery.Keyboard {
 		Inline:  true,
 		Buttons: [][]vkdelivery.KeyboardButton{
 			{
-				button("PrunaAI", domain.CommandMenuVideoPrunaAI, "secondary"),
+				button("Fast photo motion", domain.CommandMenuVideoHailuo02Fast, "secondary"),
+			},
+			{
+				button("Cinematic video", domain.CommandMenuVideoHailuo02Standard, "secondary"),
+			},
+			{
+				button("Balanced video", domain.CommandMenuVideoKling21Start, "secondary"),
+			},
+			{
+				button("Reference video", domain.CommandMenuVideoSeedance1Lite, "secondary"),
+			},
+			{
+				button("Creative video", domain.CommandMenuVideoSora2Start, "secondary"),
 			},
 			{
 				button("⬅️ Назад", domain.CommandShowMenu, "secondary"),
@@ -881,10 +901,10 @@ func seedance1Keyboard() *vkdelivery.Keyboard {
 		Inline:  true,
 		Buttons: [][]vkdelivery.KeyboardButton{
 			{
-				button("Seedance 1 Lite", domain.CommandMenuVideoSeedance1Lite, "secondary"),
+				button("Reference video", domain.CommandMenuVideoSeedance1Lite, "secondary"),
 			},
 			{
-				button("Seedance 1 Pro", domain.CommandMenuVideoSeedance1Pro, "secondary"),
+				button("Reference video Pro", domain.CommandMenuVideoSeedance1Pro, "secondary"),
 			},
 			{
 				button("⬅️ Назад", domain.CommandMenuVideo, "secondary"),
@@ -897,16 +917,16 @@ func seedance1BackKeyboard() *vkdelivery.Keyboard {
 	return backToKeyboard(domain.CommandMenuVideoSeedance1)
 }
 
-func haiuo02Keyboard() *vkdelivery.Keyboard {
+func hailuo02Keyboard() *vkdelivery.Keyboard {
 	return &vkdelivery.Keyboard{
 		OneTime: false,
 		Inline:  true,
 		Buttons: [][]vkdelivery.KeyboardButton{
 			{
-				button("Haiuo v0.2 Обычный", domain.CommandMenuVideoHaiuo02Standard, "secondary"),
+				button("Cinematic video", domain.CommandMenuVideoHailuo02Standard, "secondary"),
 			},
 			{
-				button("Haiuo v0.2 Fast", domain.CommandMenuVideoHaiuo02Fast, "secondary"),
+				button("Fast photo motion", domain.CommandMenuVideoHailuo02Fast, "secondary"),
 			},
 			{
 				button("⬅️ Назад", domain.CommandMenuVideo, "secondary"),
@@ -915,8 +935,8 @@ func haiuo02Keyboard() *vkdelivery.Keyboard {
 	}
 }
 
-func haiuo02BackKeyboard() *vkdelivery.Keyboard {
-	return backToKeyboard(domain.CommandMenuVideoHaiuo02)
+func hailuo02BackKeyboard() *vkdelivery.Keyboard {
+	return backToKeyboard(domain.CommandMenuVideoHailuo02)
 }
 
 func photoModeKeyboard() *vkdelivery.Keyboard {

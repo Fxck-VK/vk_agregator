@@ -66,12 +66,12 @@ const (
 	CommandMenuVideoSeedance1Lite CommandType = "menu.video.seedance_1.lite"
 	// CommandMenuVideoSeedance1Pro selects the Seedance 1 Pro variant.
 	CommandMenuVideoSeedance1Pro CommandType = "menu.video.seedance_1.pro"
-	// CommandMenuVideoHaiuo02 selects Haiuo v0.2 in the VK video model picker.
-	CommandMenuVideoHaiuo02 CommandType = "menu.video.haiuo_v0_2"
-	// CommandMenuVideoHaiuo02Standard selects the regular Haiuo v0.2 variant.
-	CommandMenuVideoHaiuo02Standard CommandType = "menu.video.haiuo_v0_2.standard"
-	// CommandMenuVideoHaiuo02Fast selects the fast Haiuo v0.2 variant.
-	CommandMenuVideoHaiuo02Fast CommandType = "menu.video.haiuo_v0_2.fast"
+	// CommandMenuVideoHailuo02 selects Hailuo v0.2 in the VK video model picker.
+	CommandMenuVideoHailuo02 CommandType = "menu.video.haiuo_v0_2"
+	// CommandMenuVideoHailuo02Standard selects the regular Hailuo v0.2 variant.
+	CommandMenuVideoHailuo02Standard CommandType = "menu.video.haiuo_v0_2.standard"
+	// CommandMenuVideoHailuo02Fast selects the fast Hailuo v0.2 variant.
+	CommandMenuVideoHailuo02Fast CommandType = "menu.video.haiuo_v0_2.fast"
 	// CommandMenuStudents opens the student/schoolchild help section.
 	CommandMenuStudents CommandType = "menu.students"
 	// CommandMenuStudentSolver opens the task solver student flow.
@@ -122,9 +122,9 @@ func (c CommandType) Valid() bool {
 		CommandMenuVideoSeedance1,
 		CommandMenuVideoSeedance1Lite,
 		CommandMenuVideoSeedance1Pro,
-		CommandMenuVideoHaiuo02,
-		CommandMenuVideoHaiuo02Standard,
-		CommandMenuVideoHaiuo02Fast,
+		CommandMenuVideoHailuo02,
+		CommandMenuVideoHailuo02Standard,
+		CommandMenuVideoHailuo02Fast,
 		CommandMenuStudents,
 		CommandMenuStudentSolver,
 		CommandMenuStudentPresentation,

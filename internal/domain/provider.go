@@ -17,6 +17,10 @@ const (
 	ProviderOpenAI ProviderName = "openai"
 	// ProviderDeepInfra is the DeepInfra provider.
 	ProviderDeepInfra ProviderName = "deepinfra"
+	// ProviderAPIMart is the APIMart reseller provider.
+	ProviderAPIMart ProviderName = "apimart"
+	// ProviderPoYo is the PoYo reseller provider.
+	ProviderPoYo ProviderName = "poyo"
 	// ProviderGoogle is the Google Gemini provider.
 	ProviderGoogle ProviderName = "google"
 	// ProviderKling is the Kling video provider.

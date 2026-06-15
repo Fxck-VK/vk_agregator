@@ -34,6 +34,9 @@ type CreateJobRequest struct {
 	// ModelID is the optional user-selected model. It is validated server-side
 	// by operation and is never trusted for provider choice or pricing.
 	ModelID string `json:"model_id,omitempty"`
+	// VideoRouteAlias is a public product route alias. Backend resolves it to
+	// provider/model/cost; provider-native ids and prices are never accepted.
+	VideoRouteAlias string `json:"video_route_alias,omitempty"`
 	// ReferenceArtifactIDs are optional input images owned by the user. They are
 	// validated server-side and never expanded into URLs in the BFF response.
 	ReferenceArtifactIDs []uuid.UUID `json:"reference_artifact_ids,omitempty"`
@@ -68,6 +71,7 @@ type miniAppJobParams struct {
 	Prompt               string                    `json:"prompt"`
 	ModelID              string                    `json:"model_id,omitempty"`
 	ModelName            string                    `json:"model_name,omitempty"`
+	VideoRouteAlias      string                    `json:"video_route_alias,omitempty"`
 	Provider             domain.ProviderName       `json:"provider,omitempty"`
 	ModelCode            string                    `json:"model_code,omitempty"`
 	ReferenceArtifactIDs []uuid.UUID               `json:"reference_artifact_ids,omitempty"`
@@ -77,15 +81,29 @@ type miniAppJobParams struct {
 	DurationSec          int                       `json:"duration_sec,omitempty"`
 }
 
+type VideoRouteDTO struct {
+	Alias                  string   `json:"alias"`
+	AllowedDurationsSec    []int    `json:"allowed_durations_sec,omitempty"`
+	AllowedResolutions     []string `json:"allowed_resolutions,omitempty"`
+	AllowedAspectRatios    []string `json:"allowed_aspect_ratios,omitempty"`
+	DefaultDurationSec     int      `json:"default_duration_sec,omitempty"`
+	DefaultResolution      string   `json:"default_resolution,omitempty"`
+	DefaultAspectRatio     string   `json:"default_aspect_ratio,omitempty"`
+	RequiresStartImage     bool     `json:"requires_start_image"`
+	SupportsReferenceImage bool     `json:"supports_reference_image"`
+	MaxReferenceImages     int      `json:"max_reference_images,omitempty"`
+}
+
 // EstimateDTO is returned by POST /miniapp/estimate. It exposes only
 // backend-owned cost and balance information, never provider details.
 type EstimateDTO struct {
-	Operation      string `json:"operation"`
-	ModelID        string `json:"model_id,omitempty"`
-	ModelName      string `json:"model_name,omitempty"`
-	CostEstimate   int64  `json:"cost_estimate"`
-	BalanceCredits int64  `json:"balance_credits"`
-	EnoughCredits  bool   `json:"enough_credits"`
+	Operation       string `json:"operation"`
+	ModelID         string `json:"model_id,omitempty"`
+	ModelName       string `json:"model_name,omitempty"`
+	VideoRouteAlias string `json:"video_route_alias,omitempty"`
+	CostEstimate    int64  `json:"cost_estimate"`
+	BalanceCredits  int64  `json:"balance_credits"`
+	EnoughCredits   bool   `json:"enough_credits"`
 }
 
 // JobDTO is the miniapp representation of a job.
@@ -99,6 +117,7 @@ type JobDTO struct {
 	ConversationID    string      `json:"conversation_id,omitempty"`
 	ModelID           string      `json:"model_id,omitempty"`
 	ModelName         string      `json:"model_name,omitempty"`
+	VideoRouteAlias   string      `json:"video_route_alias,omitempty"`
 	CostEstimate      int64       `json:"cost_estimate"`
 	CostCaptured      int64       `json:"cost_captured"`
 	OutputArtifactIDs []uuid.UUID `json:"output_artifact_ids"`
@@ -166,7 +185,10 @@ func newJobDTO(j *domain.Job) JobDTO {
 			case params.ExternalThreadID != "":
 				out.ConversationID = params.ExternalThreadID
 			}
-			if j.OperationType != domain.OperationTextGenerate {
+			if j.OperationType == domain.OperationVideoGenerate {
+				out.VideoRouteAlias = params.VideoRouteAlias
+				out.ModelName = params.ModelName
+			} else if j.OperationType != domain.OperationTextGenerate {
 				out.ModelID = params.ModelID
 				out.ModelName = params.ModelName
 			}

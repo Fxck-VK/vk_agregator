@@ -535,6 +535,82 @@ groups:
           action: Проверь operation={{ $labels.operation }}, modality={{ $labels.modality }}, reason={{ $labels.reason }}; смотри VK delivery attempts, billing capture errors, reservation release и DLQ. Повторяй delivery только через idempotent worker flow.
           safe_logs: В чат отправляй только operation, modality, reason и counts; не отправляй VK peer/user id, private artifact URL, storage key, prompt или payment/provider payload.
 
+  - name: video-routes
+    rules:
+      - alert: VideoRouteSubmitFailures
+        expr: sum by (provider, route, result) (increase(vkagg_video_route_submit_total{result!="success"}[10m])) > 0
+        for: 0s
+        labels:
+          severity: critical
+          surface: video-routes
+        annotations:
+          summary: Video route provider submit is failing
+          description: A curated video route has provider submit failures grouped by bounded provider, route and result labels.
+          impact: Video jobs for this route can fail before provider task creation; billing reservation must remain releasable.
+          dashboard: Grafana -> Product Observability / Video Routes
+          action: Check route flags, provider kill switch, provider config readiness and recent worker error classes before enabling more traffic.
+          safe_logs: Share only provider, route, result and aggregate counts. Do not share prompts, raw provider payloads, API keys, auth headers, launch params, PII or private URLs.
+
+      - alert: VideoRouteProviderTaskFailures
+        expr: sum by (provider, route, error_class) (increase(vkagg_video_route_provider_task_failure_total[10m])) > 0
+        for: 0s
+        labels:
+          severity: critical
+          surface: video-routes
+        annotations:
+          summary: Video route provider task failed
+          description: Provider async task polling returned a normalized failure class for a curated route.
+          impact: Provider spend may have happened; technical failures must release reserved credits and should not capture.
+          dashboard: Grafana -> Product Observability / Video Routes
+          action: Inspect normalized error class and provider health. Keep route disabled if failures repeat after smoke-test.
+          safe_logs: Share only provider, route and error_class. Do not share provider task payloads, prompts, private output URLs, auth headers or provider API keys.
+
+      - alert: VideoRouteMediaFailures
+        expr: sum by (provider, route, stage, error_class) (increase(vkagg_video_route_media_failure_total[10m])) > 0
+        for: 0s
+        labels:
+          severity: critical
+          surface: video-routes
+        annotations:
+          summary: Video route media pipeline failed
+          description: Download, probe or transcode failed after provider output for a curated video route.
+          impact: User delivery can fail after provider spend; capture must wait for safe stored output.
+          dashboard: Grafana -> Product Observability / Video Routes, Jobs Worker
+          action: Check storage, media download, ffprobe/ffmpeg availability and route output constraints.
+          safe_logs: Share only provider, route, stage and error_class. Do not share private provider URLs, storage keys, prompts or raw media tool output.
+
+      - alert: VideoRouteP95LatencyHigh
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum(rate(vkagg_video_route_submit_to_complete_seconds_bucket[10m])) by (le, provider, route)
+          ) > 300
+        for: 10m
+        labels:
+          severity: warning
+          surface: video-routes
+        annotations:
+          summary: Video route p95 completion latency is high
+          description: p95 submit-to-terminal latency is above 5 minutes for a curated video route.
+          impact: Users wait longer for video jobs and retries can increase reservation hold time.
+          dashboard: Grafana -> Product Observability / Video Routes
+          action: Check provider queue latency, worker queue age, poll intervals and media pipeline backlog.
+          safe_logs: Share only provider, route and latency bucket. Do not share job ids with user data, prompts, provider payloads or private URLs.
+
+      - alert: VideoRouteBillingFailures
+        expr: sum by (provider, route, flow, result) (increase(vkagg_video_route_billing_total{flow=~"capture|release",result="error"}[10m])) > 0
+        for: 0s
+        labels:
+          severity: critical
+          surface: billing
+        annotations:
+          summary: Video route billing capture or release failed
+          description: A route-specific reservation capture/release path returned an error.
+          impact: Credit ledger can be left with stuck reservations or missing captures until retried safely.
+          dashboard: Grafana -> Product Observability / Payments Billing, Video Routes
+          action: Inspect ledger/reservation state through bounded admin views and retry only idempotent billing operations.
+          safe_logs: Share only provider, route, flow and result. Do not share user ids, ledger ids, payment payloads, secrets or provider URLs.
+
   - name: infra-backups
     rules:
       - alert: PostgresExporterDown

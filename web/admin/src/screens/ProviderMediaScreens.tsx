@@ -9,6 +9,7 @@ import type {
   OperatorProviderControlRoomDTO,
   OperatorProviderHealthDTO,
   OperatorRiskSignalDTO,
+  OperatorVideoRouteDTO,
 } from "../api/providerMedia";
 
 type OperatorScreenProps = {
@@ -82,6 +83,17 @@ export function ProvidersScreen({ adminTokenSet, client }: OperatorScreenProps) 
           <span>read-only</span>
         </div>
         <ProviderHealthTable items={state.data.providers} />
+      </section>
+
+      <section className="surface jobs-list" aria-label="Video route state">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">Video routes</p>
+            <h3>{`${state.data.video_routes.length} route aliases`}</h3>
+          </div>
+          <span>model ids omitted</span>
+        </div>
+        <VideoRouteTable items={state.data.video_routes} />
       </section>
 
       <NotesPanel notes={state.data.notes} />
@@ -187,6 +199,17 @@ export function ConfigHealthScreen({ adminTokenSet, client }: OperatorScreenProp
         </div>
       </section>
 
+      <section className="surface jobs-list" aria-label="Runtime video routes">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">Video routes</p>
+            <h3>{`${state.data.video_routes.length} route aliases`}</h3>
+          </div>
+          <span>flags and config only</span>
+        </div>
+        <VideoRouteTable items={state.data.video_routes} />
+      </section>
+
       <NotesPanel notes={state.data.notes} />
     </div>
   );
@@ -240,6 +263,36 @@ function ProviderHealthTable({ items }: { items: OperatorProviderHealthDTO[] }) 
           <span>{item.rate_limit_count}</span>
           <span>{item.invalid_output_count}</span>
           <span>{item.fallback_state}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function VideoRouteTable({ items }: { items: OperatorVideoRouteDTO[] }) {
+  if (items.length === 0) {
+    return <p className="muted">No video route aliases are present in the safe snapshot.</p>;
+  }
+  return (
+    <div className="provider-table" role="table">
+      <div className="provider-row provider-row--video-route provider-row--head" role="row">
+        <span>Alias</span>
+        <span>Provider</span>
+        <span>Model class</span>
+        <span>Status</span>
+        <span>Reason</span>
+        <span>Flags</span>
+        <span>Inputs</span>
+      </div>
+      {items.map((item) => (
+        <div className="provider-row provider-row--video-route" key={item.alias} role="row">
+          <span>{item.alias}</span>
+          <span>{item.provider_class}</span>
+          <span>{item.model_class}</span>
+          <span className={`status-pill status-pill--${item.status}`}>{statusText(item.status)}</span>
+          <span>{item.reason}</span>
+          <span>{routeReadinessText(item)}</span>
+          <span>{routeInputText(item)}</span>
         </div>
       ))}
     </div>
@@ -406,6 +459,23 @@ function statusText(status: string): string {
 
 function boolLabel(value: boolean): string {
   return value ? "enabled" : "disabled";
+}
+
+function routeReadinessText(item: OperatorVideoRouteDTO): string {
+  const bits = [
+    item.enabled ? "route on" : "route off",
+    item.provider_enabled ? "provider on" : "provider off",
+    item.provider_configured && item.provider_base_configured ? "configured" : "unconfigured",
+    item.cost_configured ? "cost ok" : "cost missing",
+  ];
+  return bits.join(" / ");
+}
+
+function routeInputText(item: OperatorVideoRouteDTO): string {
+  const duration = item.allowed_durations_sec?.length ? `${item.allowed_durations_sec.join(",")}s` : "duration n/a";
+  const resolution = item.allowed_resolutions?.length ? item.allowed_resolutions.join(",") : "resolution n/a";
+  const refs = item.supports_reference_image ? `refs ${item.max_reference_images || 1}` : "no refs";
+  return [duration, resolution, item.requires_start_image ? "start image" : "text ok", refs].join(" / ");
 }
 
 function formatDateTime(value: string): string {

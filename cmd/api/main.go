@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -31,6 +32,7 @@ import (
 	"vk-ai-aggregator/internal/platform/ratelimit"
 	"vk-ai-aggregator/internal/platform/tracing"
 	"vk-ai-aggregator/internal/service/joborchestrator"
+	"vk-ai-aggregator/internal/service/videorouter"
 )
 
 func main() {
@@ -75,9 +77,15 @@ func main() {
 	}()
 
 	mediaQueueGuard := redisqueue.NewBackpressureGuard(rdb, cfg.WorkerGroup, cfg.MediaQueueDegradeThreshold)
+	videoRouteResolver, err := videoRouteResolverFromConfig(cfg)
+	if err != nil {
+		logger.Error("video route catalog wiring failed", "error", err)
+		os.Exit(1)
+	}
 	core, err := apiapp.NewSharedCore(pool, cfg, apiapp.WithOrchestratorOptions(
 		joborchestrator.WithMaxActiveVideoJobsPerUser(cfg.MediaMaxActiveVideoJobsPerUser),
 		joborchestrator.WithCapacityGuard(mediaCapacityGuard(mediaQueueGuard)),
+		joborchestrator.WithVideoRouteResolver(videoRouteResolver),
 	))
 	if err != nil {
 		logger.Error("api core wiring failed", "error", err)
@@ -167,6 +175,64 @@ func main() {
 	defer cancel()
 	_ = srv.Shutdown(shutdownCtx)
 	logger.Info("api stopped")
+}
+
+func videoRouteResolverFromConfig(cfg config.Config) (joborchestrator.VideoRouteResolver, error) {
+	catalog, err := videorouter.NewCatalog(videorouter.Config{
+		RouterEnabled: cfg.FeatureVideoRouterEnabled,
+		Providers: map[domain.ProviderName]videorouter.ProviderConfig{
+			domain.ProviderAPIMart: {
+				Enabled:           cfg.APIMartProviderEnabled,
+				RequireAPIKey:     true,
+				APIKeyConfigured:  strings.TrimSpace(cfg.APIMartAPIKey) != "",
+				RequireBaseURL:    true,
+				BaseURLConfigured: strings.TrimSpace(cfg.APIMartBaseURL) != "",
+			},
+			domain.ProviderPoYo: {
+				Enabled:           cfg.PoYoProviderEnabled,
+				RequireAPIKey:     true,
+				APIKeyConfigured:  strings.TrimSpace(cfg.PoYoAPIKey) != "",
+				RequireBaseURL:    true,
+				BaseURLConfigured: strings.TrimSpace(cfg.PoYoBaseURL) != "",
+			},
+			domain.ProviderRunway: {
+				Enabled:           cfg.RunwayProviderEnabled,
+				RequireAPIKey:     true,
+				APIKeyConfigured:  strings.TrimSpace(cfg.RunwayMLAPISecret) != "",
+				RequireBaseURL:    true,
+				BaseURLConfigured: strings.TrimSpace(cfg.RunwayMLBaseURL) != "",
+			},
+		},
+		EnabledRoutes: map[domain.VideoRouteAlias]bool{
+			domain.VideoRouteHailuo23Fast:     cfg.FeatureVideoRouteHailuo23FastEnabled,
+			domain.VideoRouteHailuo23Standard: cfg.FeatureVideoRouteHailuo23StandardEnabled,
+			domain.VideoRouteKlingO3Standard:  cfg.FeatureVideoRouteKlingO3StandardEnabled,
+			domain.VideoRouteRunwayGen4Turbo:  cfg.FeatureVideoRouteRunwayGen4TurboEnabled,
+			domain.VideoRouteSeedance20Fast:   cfg.FeatureVideoRouteSeedance20FastEnabled,
+			domain.VideoRouteRunwayGen45:      cfg.FeatureVideoRouteRunwayGen45Enabled,
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	return joborchestrator.VideoRouteResolverFunc(func(ctx context.Context, in joborchestrator.VideoRouteCheckInput) (joborchestrator.VideoRouteResolution, error) {
+		resolution, err := catalog.Resolve(ctx, videorouter.Request{
+			Source:           in.Source,
+			Operation:        in.Operation,
+			Modality:         in.Modality,
+			Params:           in.Params,
+			InputArtifactIDs: in.InputArtifactIDs,
+		})
+		if err != nil {
+			return joborchestrator.VideoRouteResolution{}, err
+		}
+		return joborchestrator.VideoRouteResolution{
+			Resolved:            resolution.Resolved,
+			Params:              resolution.Params,
+			Snapshot:            resolution.Snapshot,
+			InternalCostCredits: resolution.InternalCostCredits,
+		}, nil
+	}), nil
 }
 
 func mediaCapacityGuard(queueGuard *redisqueue.BackpressureGuard) joborchestrator.CapacityGuard {

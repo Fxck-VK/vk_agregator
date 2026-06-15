@@ -20,9 +20,12 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	vkdelivery "vk-ai-aggregator/internal/adapter/delivery/vk"
+	"vk-ai-aggregator/internal/adapter/provider/apimart"
 	"vk-ai-aggregator/internal/adapter/provider/deepinfra"
 	"vk-ai-aggregator/internal/adapter/provider/mock"
 	"vk-ai-aggregator/internal/adapter/provider/openai"
+	"vk-ai-aggregator/internal/adapter/provider/poyo"
+	"vk-ai-aggregator/internal/adapter/provider/runway"
 	redisqueue "vk-ai-aggregator/internal/adapter/queue/redis"
 	"vk-ai-aggregator/internal/adapter/storage/postgres"
 	"vk-ai-aggregator/internal/adapter/storage/s3"
@@ -138,6 +141,48 @@ func main() {
 	}
 	for _, name := range providerNames {
 		switch strings.ToLower(strings.TrimSpace(name)) {
+		case "apimart":
+			if !cfg.APIMartProviderEnabled {
+				logger.Warn("apimart provider skipped; provider switch disabled")
+				continue
+			}
+			providerList = append(providerList, apimart.New(apimart.Config{
+				APIKey:  cfg.APIMartAPIKey,
+				BaseURL: cfg.APIMartBaseURL,
+			}))
+			logger.Info("registered apimart provider")
+		case "poyo":
+			if !cfg.PoYoProviderEnabled {
+				logger.Warn("poyo provider skipped; provider switch disabled")
+				continue
+			}
+			if strings.TrimSpace(cfg.PoYoBaseURL) == "" {
+				logger.Warn("poyo provider skipped; base url is empty")
+				continue
+			}
+			providerList = append(providerList, poyo.New(poyo.Config{
+				APIKey:  cfg.PoYoAPIKey,
+				BaseURL: cfg.PoYoBaseURL,
+			}))
+			logger.Info("registered poyo provider")
+		case "runway":
+			if !cfg.RunwayProviderEnabled {
+				logger.Warn("runway provider skipped; provider switch disabled")
+				continue
+			}
+			if strings.TrimSpace(cfg.RunwayMLAPISecret) == "" {
+				logger.Warn("runway provider skipped; api secret is empty")
+				continue
+			}
+			if strings.TrimSpace(cfg.RunwayMLBaseURL) == "" {
+				logger.Warn("runway provider skipped; base url is empty")
+				continue
+			}
+			providerList = append(providerList, runway.New(runway.Config{
+				APISecret: cfg.RunwayMLAPISecret,
+				BaseURL:   cfg.RunwayMLBaseURL,
+			}))
+			logger.Info("registered runway provider")
 		case "deepinfra":
 			providerList = append(providerList, deepinfra.New(deepinfra.Config{
 				APIKey:                cfg.DeepInfraAPIKey,
@@ -588,6 +633,79 @@ func defaultProviderMediaContracts(cfg config.Config) []domain.ProviderMediaCont
 			MaxProviderCostCredits: cfg.OpenAIVideoPrice,
 		})
 	}
+	for _, model := range []struct {
+		id    string
+		class string
+	}{
+		{id: apimart.ModelHailuo23Fast, class: "hailuo_2_3_fast"},
+		{id: apimart.ModelHailuo23Standard, class: "hailuo_2_3_standard"},
+	} {
+		contracts = append(contracts, domain.ProviderMediaContract{
+			Provider:               domain.ProviderAPIMart,
+			Model:                  model.id,
+			ModelClass:             model.class,
+			Modality:               domain.ModalityVideo,
+			AllowedDurationsSec:    []int{6, 10},
+			AllowedResolutions:     []string{"768p", "1080p"},
+			ExpectedContainer:      "mp4",
+			ExpectedCodec:          "h264",
+			ExpectedMaxBytes:       maxBytes,
+			DeliveryReadyOutput:    true,
+			RequiresProbe:          probeRequired,
+			TranscodeAllowed:       transcodeAllowed,
+			MaxProviderAttempts:    1,
+			MaxFallbackAttempts:    0,
+			MaxProviderCostCredits: 2,
+		})
+	}
+	for _, model := range []struct {
+		id          string
+		class       string
+		durations   []int
+		resolutions []string
+		maxCost     int64
+	}{
+		{id: poyo.ModelKlingO3Standard, class: "kling_o3_standard", durations: []int{5, 10}, resolutions: []string{"720p", "1080p"}, maxCost: 200},
+		{id: poyo.ModelSeedance20Fast, class: "seedance_2_0_fast", durations: []int{5, 10}, resolutions: []string{"720p"}, maxCost: 560},
+		{id: poyo.ModelRunwayGen45, class: "runway_gen4_5", durations: []int{5, 10}, resolutions: []string{"720p", "1080p"}, maxCost: 0},
+	} {
+		contracts = append(contracts, domain.ProviderMediaContract{
+			Provider:               domain.ProviderPoYo,
+			Model:                  model.id,
+			ModelClass:             model.class,
+			Modality:               domain.ModalityVideo,
+			AllowedDurationsSec:    model.durations,
+			AllowedAspectRatios:    []string{"16:9", "9:16", "1:1"},
+			AllowedResolutions:     model.resolutions,
+			ExpectedContainer:      "mp4",
+			ExpectedCodec:          "h264",
+			ExpectedMaxBytes:       maxBytes,
+			DeliveryReadyOutput:    true,
+			RequiresProbe:          probeRequired,
+			TranscodeAllowed:       transcodeAllowed,
+			MaxProviderAttempts:    1,
+			MaxFallbackAttempts:    0,
+			MaxProviderCostCredits: model.maxCost,
+		})
+	}
+	contracts = append(contracts, domain.ProviderMediaContract{
+		Provider:               domain.ProviderRunway,
+		Model:                  runway.ModelGen4Turbo,
+		ModelClass:             "runway_gen4_turbo",
+		Modality:               domain.ModalityVideo,
+		AllowedDurationsSec:    []int{2, 3, 4, 5, 6, 7, 8, 9, 10},
+		AllowedAspectRatios:    []string{"16:9", "9:16", "1:1"},
+		AllowedResolutions:     []string{"720p"},
+		ExpectedContainer:      "mp4",
+		ExpectedCodec:          "h264",
+		ExpectedMaxBytes:       maxBytes,
+		DeliveryReadyOutput:    true,
+		RequiresProbe:          probeRequired,
+		TranscodeAllowed:       transcodeAllowed,
+		MaxProviderAttempts:    1,
+		MaxFallbackAttempts:    0,
+		MaxProviderCostCredits: 100,
+	})
 	return contracts
 }
 

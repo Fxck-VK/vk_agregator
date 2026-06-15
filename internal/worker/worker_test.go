@@ -12,6 +12,8 @@ import (
 	"image/color"
 	"image/jpeg"
 	"image/png"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"sync"
 	"testing"
@@ -19,8 +21,11 @@ import (
 
 	"github.com/google/uuid"
 
+	"vk-ai-aggregator/internal/adapter/provider/apimart"
 	"vk-ai-aggregator/internal/adapter/provider/deepinfra"
 	"vk-ai-aggregator/internal/adapter/provider/mock"
+	"vk-ai-aggregator/internal/adapter/provider/poyo"
+	"vk-ai-aggregator/internal/adapter/provider/runway"
 	redisqueue "vk-ai-aggregator/internal/adapter/queue/redis"
 	"vk-ai-aggregator/internal/adapter/storage/memory"
 	"vk-ai-aggregator/internal/domain"
@@ -1064,6 +1069,9 @@ func TestProviderSubmitTimeoutBecomesTerminalAndReleasesReservation(t *testing.T
 	if got.ErrorCode != string(domain.ProviderErrTimeout) {
 		t.Fatalf("error code = %q, want %q", got.ErrorCode, domain.ProviderErrTimeout)
 	}
+	if got.CostCaptured != 0 {
+		t.Fatalf("timed out provider submit must not capture credits, got %d", got.CostCaptured)
+	}
 	if len(h.releaser.released) != 1 || h.releaser.released[0] != job.ID {
 		t.Fatalf("expected reservation release for timed out job, got %v", h.releaser.released)
 	}
@@ -1682,6 +1690,340 @@ func TestProviderMediaContractAllowsValidVideoSpec(t *testing.T) {
 	got := h.reload(t, job.ID)
 	if got.Status != domain.JobStatusProviderProcessing {
 		t.Fatalf("status = %q, want provider_processing", got.Status)
+	}
+}
+
+func TestGenerationVideoRequestUsesResolvedRouteSnapshot(t *testing.T) {
+	provider := &captureVideoProvider{
+		name:  domain.ProviderPoYo,
+		model: poyo.ModelKlingO3Standard,
+		cost:  100,
+	}
+	h := newHarnessWithProvider(t, provider, func(d *worker.Deps) {
+		contract := validVideoContract(provider.name, provider.model)
+		contract.AllowedDurationsSec = []int{10}
+		d.RequireVideoProbe = true
+		d.ProviderMediaContracts = []domain.ProviderMediaContract{contract}
+	})
+	ctx := context.Background()
+	snapshot := domain.VideoRouteSnapshot{
+		Alias:                  domain.VideoRouteKlingO3Standard,
+		Provider:               domain.ProviderPoYo,
+		ProviderModelID:        poyo.ModelKlingO3Standard,
+		ModelClass:             "kling_o3_standard",
+		DurationSec:            10,
+		Resolution:             "720p",
+		AspectRatio:            "16:9",
+		ProviderCostCredits:    100,
+		InternalCostCredits:    200,
+		PriceMultiplier:        2,
+		MaxProviderCostCredits: 100,
+		MaxInternalCostCredits: 200,
+	}
+	job := h.queueVideoJob(t, map[string]any{
+		"prompt":               "clean prompt",
+		"video_route_alias":    string(domain.VideoRouteKlingO3Standard),
+		"duration_sec":         5,
+		"resolved_video_route": snapshot,
+	})
+
+	if err := h.gen.Process(ctx, taskFor(job)); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+	if provider.submits != 1 {
+		t.Fatalf("provider submits = %d, want 1", provider.submits)
+	}
+	if provider.last.Provider != domain.ProviderPoYo || provider.last.ModelCode != poyo.ModelKlingO3Standard {
+		t.Fatalf("provider request did not use route snapshot: %+v", provider.last)
+	}
+	if provider.last.DurationSec != 10 || provider.last.Resolution != "720p" || provider.last.AspectRatio != "16:9" {
+		t.Fatalf("provider request timing/shape did not use snapshot: %+v", provider.last)
+	}
+	var providerParams map[string]json.RawMessage
+	if err := json.Unmarshal(provider.last.Params, &providerParams); err != nil {
+		t.Fatalf("unmarshal provider params: %v", err)
+	}
+	if _, ok := providerParams["resolved_video_route"]; !ok {
+		t.Fatalf("provider params missing route snapshot: %s", string(provider.last.Params))
+	}
+	if strings.Contains(string(provider.last.Params), "clean prompt") {
+		t.Fatalf("provider params must not persist prompt: %s", string(provider.last.Params))
+	}
+	tasks, err := h.tasks.ListByJob(ctx, job.ID)
+	if err != nil {
+		t.Fatalf("list provider tasks: %v", err)
+	}
+	if len(tasks) != 1 || tasks[0].ModelCode != poyo.ModelKlingO3Standard {
+		t.Fatalf("unexpected provider task: %+v", tasks)
+	}
+	if strings.Contains(string(tasks[0].Request), "clean prompt") {
+		t.Fatalf("provider task request must not persist prompt: %s", string(tasks[0].Request))
+	}
+}
+
+func TestGenerationVideoResolvesReferenceInputURLs(t *testing.T) {
+	provider := &captureVideoProvider{
+		name:  domain.ProviderAPIMart,
+		model: apimart.ModelHailuo23Fast,
+		cost:  2,
+	}
+	h := newHarnessWithProvider(t, provider, func(d *worker.Deps) {
+		d.ProviderMediaContracts = []domain.ProviderMediaContract{{
+			Provider:               domain.ProviderAPIMart,
+			Model:                  apimart.ModelHailuo23Fast,
+			ModelClass:             "hailuo_2_3_fast",
+			Modality:               domain.ModalityVideo,
+			AllowedDurationsSec:    []int{6},
+			AllowedResolutions:     []string{"768p"},
+			ExpectedContainer:      "mp4",
+			ExpectedCodec:          "h264",
+			ExpectedMaxBytes:       128 << 20,
+			DeliveryReadyOutput:    true,
+			MaxProviderAttempts:    1,
+			MaxFallbackAttempts:    0,
+			MaxProviderCostCredits: 2,
+		}}
+	})
+	ctx := context.Background()
+	userID := uuid.New()
+	reference := h.createInputImageArtifact(t, userID, validPNGBytes(t), "image/png")
+	snapshot := domain.VideoRouteSnapshot{
+		Alias:               domain.VideoRouteHailuo23Fast,
+		Provider:            domain.ProviderAPIMart,
+		ProviderModelID:     apimart.ModelHailuo23Fast,
+		ModelClass:          "hailuo_2_3_fast",
+		DurationSec:         6,
+		Resolution:          "768p",
+		ProviderCostCredits: 1,
+		InternalCostCredits: 2,
+		PriceMultiplier:     2,
+	}
+	params, _ := json.Marshal(map[string]any{
+		"prompt":                 "safe clip",
+		"video_route_alias":      string(domain.VideoRouteHailuo23Fast),
+		"reference_artifact_ids": []string{reference.ID.String()},
+		"resolved_video_route":   snapshot,
+	})
+	job := &domain.Job{
+		ID:             uuid.New(),
+		UserID:         userID,
+		OperationType:  domain.OperationVideoGenerate,
+		Modality:       domain.ModalityVideo,
+		Status:         domain.JobStatusQueued,
+		IdempotencyKey: "job:" + uuid.NewString(),
+		CorrelationID:  "corr",
+		CostReserved:   2,
+		Params:         params,
+	}
+	if err := h.jobs.Create(ctx, job); err != nil {
+		t.Fatalf("create job: %v", err)
+	}
+
+	if err := h.gen.Process(ctx, taskFor(job)); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+	if len(provider.last.InputURLs) != 1 || !strings.HasPrefix(provider.last.InputURLs[0], "data:image/png;base64,") {
+		t.Fatalf("input urls = %v, want one sanitized data URL", provider.last.InputURLs)
+	}
+	tasks, err := h.tasks.ListByJob(ctx, job.ID)
+	if err != nil {
+		t.Fatalf("list tasks: %v", err)
+	}
+	if len(tasks) != 1 {
+		t.Fatalf("tasks = %d, want 1", len(tasks))
+	}
+	if strings.Contains(string(tasks[0].Request), "base64") || strings.Contains(string(tasks[0].Request), "data:image") {
+		t.Fatalf("provider task request must not persist reference bytes: %s", string(tasks[0].Request))
+	}
+}
+
+func TestGenerationVideoAPIMartStoresOutputBeforeDelivery(t *testing.T) {
+	var submitSeen bool
+	var pollSeen bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/videos/generations":
+			submitSeen = true
+			_, _ = w.Write([]byte(`{"code":200,"data":[{"status":"submitted","task_id":"task_apimart"}]}`))
+		case "/tasks/task_apimart":
+			pollSeen = true
+			_, _ = w.Write([]byte(`{"code":200,"data":{"id":"task_apimart","status":"completed","progress":100,"result":{"videos":[{"url":["https://upload.apimart.ai/f/video/output.mp4?token=secret"],"expires_at":1763174708}]}}}`))
+		default:
+			t.Fatalf("unexpected path %s", r.URL.Path)
+		}
+	}))
+	defer srv.Close()
+
+	provider := apimart.New(apimart.Config{APIKey: "test-key", BaseURL: srv.URL, HTTPClient: srv.Client()})
+	h := newHarnessWithProvider(t, provider, func(d *worker.Deps) {
+		d.ProviderMediaContracts = []domain.ProviderMediaContract{{
+			Provider:               domain.ProviderAPIMart,
+			Model:                  apimart.ModelHailuo23Standard,
+			ModelClass:             "hailuo_2_3_standard",
+			Modality:               domain.ModalityVideo,
+			AllowedDurationsSec:    []int{6},
+			AllowedResolutions:     []string{"768p"},
+			ExpectedContainer:      "mp4",
+			ExpectedCodec:          "h264",
+			ExpectedMaxBytes:       128 << 20,
+			DeliveryReadyOutput:    true,
+			MaxProviderAttempts:    1,
+			MaxFallbackAttempts:    0,
+			MaxProviderCostCredits: 2,
+		}}
+	})
+	ctx := context.Background()
+	snapshot := domain.VideoRouteSnapshot{
+		Alias:                  domain.VideoRouteHailuo23Standard,
+		Provider:               domain.ProviderAPIMart,
+		ProviderModelID:        apimart.ModelHailuo23Standard,
+		ModelClass:             "hailuo_2_3_standard",
+		DurationSec:            6,
+		Resolution:             "768p",
+		ProviderCostCredits:    1,
+		InternalCostCredits:    2,
+		PriceMultiplier:        2,
+		MaxProviderCostCredits: 1,
+		MaxInternalCostCredits: 2,
+	}
+	job := h.queueVideoJob(t, map[string]any{
+		"prompt":               "safe video",
+		"video_route_alias":    string(domain.VideoRouteHailuo23Standard),
+		"resolved_video_route": snapshot,
+	})
+
+	if err := h.gen.Process(ctx, taskFor(job)); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+	if !submitSeen || !pollSeen {
+		t.Fatalf("submitSeen=%v pollSeen=%v", submitSeen, pollSeen)
+	}
+	got := h.reload(t, job.ID)
+	if got.Status != domain.JobStatusResultReady {
+		t.Fatalf("status = %q, want result_ready", got.Status)
+	}
+	if len(got.OutputArtifactIDs) != 1 {
+		t.Fatalf("output artifacts = %v, want one", got.OutputArtifactIDs)
+	}
+	artifact, err := h.artRepo.GetByID(ctx, got.OutputArtifactIDs[0])
+	if err != nil {
+		t.Fatalf("get artifact: %v", err)
+	}
+	data, err := h.store.GetObject(ctx, artifact.StorageBucket, artifact.StorageKey)
+	if err != nil {
+		t.Fatalf("get stored output: %v", err)
+	}
+	if string(data) != "output" {
+		t.Fatalf("stored output = %q", data)
+	}
+	if len(h.streams.byStream[redisqueue.StreamDelivery]) != 1 {
+		t.Fatalf("delivery stream = %v, want one task after artifact storage", h.streams.byStream[redisqueue.StreamDelivery])
+	}
+}
+
+func TestGenerationVideoRunwayTaskFailureReleasesReservation(t *testing.T) {
+	var submitSeen bool
+	var pollSeen bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/image_to_video":
+			if r.Method != http.MethodPost {
+				t.Fatalf("submit method = %s", r.Method)
+			}
+			submitSeen = true
+			_, _ = w.Write([]byte(`{"id":"task_runway","status":"PENDING","createdAt":"2026-06-15T10:00:00.000Z"}`))
+		case "/tasks/task_runway":
+			if r.Method != http.MethodGet {
+				t.Fatalf("poll method = %s", r.Method)
+			}
+			pollSeen = true
+			_, _ = w.Write([]byte(`{"id":"task_runway","status":"FAILED","createdAt":"2026-06-15T10:00:00.000Z","failureCode":"SAFETY.INPUT.IMAGE","failure":"blocked by safety policy"}`))
+		default:
+			t.Fatalf("unexpected runway path %s", r.URL.Path)
+		}
+	}))
+	defer srv.Close()
+
+	provider := runway.New(runway.Config{APISecret: "test-secret", BaseURL: srv.URL, HTTPClient: srv.Client()})
+	h := newHarnessWithProvider(t, provider, func(d *worker.Deps) {
+		d.ProviderMediaContracts = []domain.ProviderMediaContract{{
+			Provider:               domain.ProviderRunway,
+			Model:                  runway.ModelGen4Turbo,
+			ModelClass:             "runway_gen4_turbo",
+			Modality:               domain.ModalityVideo,
+			AllowedDurationsSec:    []int{5},
+			AllowedAspectRatios:    []string{"16:9"},
+			AllowedResolutions:     []string{"720p"},
+			ExpectedContainer:      "mp4",
+			ExpectedCodec:          "h264",
+			ExpectedMaxBytes:       128 << 20,
+			DeliveryReadyOutput:    true,
+			MaxProviderAttempts:    1,
+			MaxFallbackAttempts:    0,
+			MaxProviderCostCredits: 50,
+		}}
+	})
+	ctx := context.Background()
+	userID := uuid.New()
+	reference := h.createInputImageArtifact(t, userID, validPNGBytes(t), "image/png")
+	snapshot := domain.VideoRouteSnapshot{
+		Alias:                  domain.VideoRouteRunwayGen4Turbo,
+		Provider:               domain.ProviderRunway,
+		ProviderModelID:        runway.ModelGen4Turbo,
+		ModelClass:             "runway_gen4_turbo",
+		DurationSec:            5,
+		Resolution:             "720p",
+		AspectRatio:            "16:9",
+		ProviderCostCredits:    25,
+		InternalCostCredits:    50,
+		PriceMultiplier:        2,
+		MaxProviderCostCredits: 25,
+		MaxInternalCostCredits: 50,
+	}
+	params, _ := json.Marshal(map[string]any{
+		"prompt":                 "safe video",
+		"video_route_alias":      string(domain.VideoRouteRunwayGen4Turbo),
+		"reference_artifact_ids": []string{reference.ID.String()},
+		"resolved_video_route":   snapshot,
+	})
+	job := &domain.Job{
+		ID:             uuid.New(),
+		UserID:         userID,
+		OperationType:  domain.OperationVideoGenerate,
+		Modality:       domain.ModalityVideo,
+		Status:         domain.JobStatusQueued,
+		IdempotencyKey: "job:" + uuid.NewString(),
+		CorrelationID:  "corr",
+		CostReserved:   50,
+		Params:         params,
+	}
+	if err := h.jobs.Create(ctx, job); err != nil {
+		t.Fatalf("create job: %v", err)
+	}
+
+	if err := h.gen.Process(ctx, taskFor(job)); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+	if !submitSeen || !pollSeen {
+		t.Fatalf("submitSeen=%v pollSeen=%v", submitSeen, pollSeen)
+	}
+	got := h.reload(t, job.ID)
+	if got.Status != domain.JobStatusFailedTerminal {
+		t.Fatalf("status = %q, want failed_terminal", got.Status)
+	}
+	if got.ErrorCode != string(domain.ProviderErrContentRejected) {
+		t.Fatalf("error code = %q, want %q", got.ErrorCode, domain.ProviderErrContentRejected)
+	}
+	if got.CostCaptured != 0 {
+		t.Fatalf("cost captured = %d, want 0", got.CostCaptured)
+	}
+	if len(h.releaser.released) != 1 || h.releaser.released[0] != job.ID {
+		t.Fatalf("expected reservation release for failed runway task, got %v", h.releaser.released)
+	}
+	if len(h.streams.byStream[redisqueue.StreamDelivery]) != 0 {
+		t.Fatalf("failed runway task must not enqueue delivery: %v", h.streams.byStream)
 	}
 }
 
