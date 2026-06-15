@@ -680,7 +680,20 @@ function Invoke-Promtool {
 
     $promtool = Get-Command promtool -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($null -ne $promtool) {
-        & $promtool.Source @Arguments
+        $prometheusRoot = (Resolve-Path (Join-Path $repoRoot "observability\prometheus")).Path
+        $localArguments = @(
+            $Arguments | ForEach-Object {
+                if ($_ -eq "/etc/prometheus") {
+                    $prometheusRoot
+                } elseif ($_.StartsWith("/etc/prometheus/")) {
+                    $relativePath = $_.Substring("/etc/prometheus/".Length).Replace("/", [string][System.IO.Path]::DirectorySeparatorChar)
+                    Join-Path $prometheusRoot $relativePath
+                } else {
+                    $_
+                }
+            }
+        )
+        & $promtool.Source @localArguments
         return
     }
 

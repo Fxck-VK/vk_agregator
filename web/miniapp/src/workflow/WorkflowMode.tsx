@@ -7,11 +7,13 @@ import {
   estimateJob,
   hasPreviewableMediaResult,
   isTerminal,
+  listVideoRoutes,
   preloadArtifactBlobUrl,
   statusKind,
   statusLabel,
   type EstimateResponse,
   type Job,
+  type VideoRoute,
   uploadArtifact,
 } from "../api/client";
 import { ResultCard } from "../components/ResultCard";
@@ -41,7 +43,8 @@ type WorkflowModeProps = {
     prompt: string,
     request: {
       operation: string;
-      modelId: string;
+      modelId?: string;
+      videoRouteAlias?: string;
       referenceArtifactIds?: string[];
       durationSec?: number;
     },
@@ -57,53 +60,111 @@ type ReferenceItem = {
 const ESTIMATE_DEBOUNCE_MS = 450;
 const PROMPT_LIMIT = 2000;
 const REFERENCE_ACCEPT = "image/jpeg,image/png";
-const VIDEO_DURATION_OPTIONS = [3, 5, 10] as const;
-type VideoDurationSec = (typeof VIDEO_DURATION_OPTIONS)[number];
+const DEFAULT_VIDEO_DURATION_SEC = 5;
 
 function createLocalReferenceId(): string {
   if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
   return `ref-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 }
 
-const CREATE_MODELS: Array<{
+type CreateMode = {
   modalityId: ModalityId;
   modelId: string;
+  videoRouteAlias?: string;
   name: string;
   subtitle: string;
   color: string;
   glow: string;
   placeholders: string[];
   quickIdeas: string[];
-}> = [
-  {
-    modalityId: "image",
-    modelId: "nano_banana_pro",
-    name: "Nano Banana Pro",
-    subtitle: "Создать изображение",
-    color: "#a855f7",
-    glow: "rgba(168,85,247,0.4)",
-    placeholders: [
-      "Например, нарисуй кота в киберпанк-броне...",
-      "Закат над неоновым городом будущего...",
-      "Портрет девушки в стиле аниме с лазером...",
-    ],
-    quickIdeas: ["Кот в киберпанке", "Закат на Марсе", "Аниме персонаж", "Неоновый город"],
+  durationOptions?: number[];
+  defaultDurationSec?: number;
+  requiresStartImage?: boolean;
+  supportsReferenceImage?: boolean;
+  maxReferenceImages?: number;
+};
+
+const IMAGE_CREATE_MODE: CreateMode = {
+  modalityId: "image",
+  modelId: "nano_banana_pro",
+  name: "Nano Banana Pro",
+  subtitle: "Создать изображение",
+  color: "#a855f7",
+  glow: "rgba(168,85,247,0.4)",
+  placeholders: [
+    "Например, нарисуй кота в киберпанк-броне...",
+    "Закат над неоновым городом будущего...",
+    "Портрет девушки в стиле аниме с лазером...",
+  ],
+  quickIdeas: ["Кот в киберпанке", "Закат на Марсе", "Аниме персонаж", "Неоновый город"],
+};
+
+const VIDEO_ROUTE_COPY: Record<string, Omit<CreateMode, "modalityId" | "modelId" | "videoRouteAlias">> = {
+  video_hailuo_2_3_fast: {
+    name: "Fast photo motion",
+    subtitle: "Image-to-video",
+    color: "#f97316",
+    glow: "rgba(249,115,22,0.36)",
+    placeholders: ["Animate this photo with natural motion and cinematic camera movement..."],
+    quickIdeas: ["Slow cinematic push-in", "Wind and fabric motion", "Product reveal", "Portrait motion"],
   },
-  {
-    modalityId: "video",
-    modelId: "kling",
-    name: "Kling",
-    subtitle: "Создать видео",
+  video_hailuo_2_3_standard: {
+    name: "Cinematic video",
+    subtitle: "Text or image to video",
     color: "#ec4899",
-    glow: "rgba(236,72,153,0.4)",
-    placeholders: [
-      "Например, снег падает на неоновый город ночью...",
-      "Дракон летит над облаками на рассвете...",
-      "Танцующий робот на дискотеке 80-х...",
-    ],
-    quickIdeas: ["Снегопад в городе", "Море на закате", "Летящий дракон", "Танцующий робот"],
+    glow: "rgba(236,72,153,0.34)",
+    placeholders: ["A cinematic scene with realistic motion, rich lighting, smooth camera movement..."],
+    quickIdeas: ["Neon city rain", "Ocean sunset", "Dragon flight", "Studio product shot"],
   },
-];
+  video_kling_o3_standard: {
+    name: "Balanced video",
+    subtitle: "Mid-range no-audio route",
+    color: "#22c55e",
+    glow: "rgba(34,197,94,0.32)",
+    placeholders: ["A realistic moving scene with stable subject motion and clean composition..."],
+    quickIdeas: ["Street walk", "Food close-up", "Car driving", "Fashion shot"],
+  },
+  video_seedance_2_0_fast: {
+    name: "Reference video",
+    subtitle: "Reference-driven route",
+    color: "#06b6d4",
+    glow: "rgba(6,182,212,0.32)",
+    placeholders: ["Use references to create a coherent video with matching subject and style..."],
+    quickIdeas: ["Character scene", "Style transfer", "Multi-reference shot", "Brand visual"],
+  },
+  video_runway_gen4_turbo: {
+    name: "Creative video",
+    subtitle: "Official creative fallback",
+    color: "#8b5cf6",
+    glow: "rgba(139,92,246,0.34)",
+    placeholders: ["Create a polished video from the image with expressive camera movement..."],
+    quickIdeas: ["Editorial shot", "Music video look", "Surreal product", "Dynamic portrait"],
+  },
+  video_runway_gen4_5: {
+    name: "Premium video",
+    subtitle: "Premium route",
+    color: "#f43f5e",
+    glow: "rgba(244,63,94,0.34)",
+    placeholders: ["Create a premium cinematic video with high detail and controlled motion..."],
+    quickIdeas: ["Luxury product", "Fashion campaign", "Film scene", "Hero shot"],
+  },
+};
+
+function createModeFromVideoRoute(route: VideoRoute): CreateMode {
+  const copy = VIDEO_ROUTE_COPY[route.alias] ?? VIDEO_ROUTE_COPY.video_kling_o3_standard;
+  const durations = route.allowed_durations_sec?.filter((value) => Number.isFinite(value) && value > 0) ?? [];
+  return {
+    ...copy,
+    modalityId: "video",
+    modelId: route.alias,
+    videoRouteAlias: route.alias,
+    durationOptions: durations,
+    defaultDurationSec: route.default_duration_sec ?? durations[0] ?? DEFAULT_VIDEO_DURATION_SEC,
+    requiresStartImage: route.requires_start_image,
+    supportsReferenceImage: route.supports_reference_image,
+    maxReferenceImages: route.max_reference_images,
+  };
+}
 
 const HISTORY_STATUS_FILTERS = [
   { id: "all", label: "Все" },
@@ -232,6 +293,7 @@ export function WorkflowMode({
   const [screen, setScreen] = useState<WorkflowScreen>("home");
   const [modalityId, setModalityId] = useState<ModalityId>("image");
   const [modelId, setModelId] = useState(modalityById("image").models[0].id);
+  const [videoRoutes, setVideoRoutes] = useState<VideoRoute[]>([]);
   const [prompt, setPrompt] = useState("");
   const [estimate, setEstimate] = useState<EstimateResponse | null>(null);
   const [estimateLoading, setEstimateLoading] = useState(false);
@@ -243,7 +305,7 @@ export function WorkflowMode({
   const [referenceItems, setReferenceItems] = useState<ReferenceItem[]>([]);
   const [referenceUploading, setReferenceUploading] = useState(false);
   const [referenceError, setReferenceError] = useState<string | null>(null);
-  const [videoDurationSec, setVideoDurationSec] = useState<VideoDurationSec>(5);
+  const [videoDurationSec, setVideoDurationSec] = useState(DEFAULT_VIDEO_DURATION_SEC);
   const [isDragging, setIsDragging] = useState(false);
   const [resultMediaSrc, setResultMediaSrc] = useState<string | null | undefined>(undefined);
   const [resultPreparing, setResultPreparing] = useState(false);
@@ -256,21 +318,38 @@ export function WorkflowMode({
   const activeMessage = messageForJob(activeJob, chats);
   const activePrompt = prompt.trim();
   const currentModality = modalityById(modalityId);
+  const createModes = useMemo(
+    () => [IMAGE_CREATE_MODE, ...videoRoutes.map(createModeFromVideoRoute)],
+    [videoRoutes],
+  );
   const activeCreateModel =
-    CREATE_MODELS.find((item) => item.modalityId === modalityId) ?? CREATE_MODELS[0];
+    createModes.find((item) => item.modalityId === modalityId && item.modelId === modelId) ??
+    createModes.find((item) => item.modalityId === modalityId) ??
+    createModes[0];
   const isImageModality = modalityId === "image";
   const isVideoModality = modalityId === "video";
-  const referenceArtifactIds = useMemo(
-    () => (isImageModality ? referenceItems.map((item) => item.artifactId) : []),
-    [isImageModality, referenceItems],
+  const acceptsImageReferences =
+    isImageModality || (isVideoModality && activeCreateModel.supportsReferenceImage === true);
+  const maxReferenceItems = Math.max(1, activeCreateModel.maxReferenceImages ?? MAX_REFERENCE_ARTIFACTS);
+  const videoDurationOptions = useMemo(
+    () =>
+      activeCreateModel.durationOptions?.length
+        ? activeCreateModel.durationOptions
+        : [activeCreateModel.defaultDurationSec ?? DEFAULT_VIDEO_DURATION_SEC],
+    [activeCreateModel.defaultDurationSec, activeCreateModel.durationOptions],
   );
-  const modelSelected = currentModality.models.some((model) => model.id === modelId);
+  const referenceArtifactIds = useMemo(
+    () => (acceptsImageReferences ? referenceItems.map((item) => item.artifactId) : []),
+    [acceptsImageReferences, referenceItems],
+  );
+  const modelSelected = Boolean(activeCreateModel && activeCreateModel.modalityId === modalityId);
   const trimmedPrompt = prompt.trim();
   const promptTooLong = prompt.length > PROMPT_LIMIT;
   const canSubmit =
     !!trimmedPrompt &&
     !promptTooLong &&
     modelSelected &&
+    (!activeCreateModel.requiresStartImage || referenceArtifactIds.length > 0) &&
     estimate?.enough_credits === true &&
     !referenceUploading &&
     !submitting;
@@ -286,6 +365,60 @@ export function WorkflowMode({
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+    listVideoRoutes()
+      .then((routes) => {
+        if (!cancelled) setVideoRoutes(routes);
+      })
+      .catch(() => {
+        if (!cancelled) setVideoRoutes([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const clearReferenceItems = useCallback(() => {
+    setReferenceItems((prev) => {
+      prev.forEach((item) => URL.revokeObjectURL(item.previewUrl));
+      return [];
+    });
+    setReferenceError(null);
+  }, []);
+
+  useEffect(() => {
+    if (!activeCreateModel) return;
+    if (modalityId === "video" && !activeCreateModel.videoRouteAlias) {
+      const firstVideo = createModes.find((item) => item.modalityId === "video");
+      if (firstVideo) {
+        setModelId(firstVideo.modelId);
+      } else {
+        setModalityId("image");
+        setModelId(IMAGE_CREATE_MODE.modelId);
+      }
+    }
+  }, [activeCreateModel, createModes, modalityId]);
+
+  useEffect(() => {
+    if (!isVideoModality) return;
+    if (!videoDurationOptions.includes(videoDurationSec)) {
+      setVideoDurationSec(activeCreateModel.defaultDurationSec ?? videoDurationOptions[0] ?? DEFAULT_VIDEO_DURATION_SEC);
+    }
+  }, [activeCreateModel.defaultDurationSec, isVideoModality, videoDurationOptions, videoDurationSec]);
+
+  useEffect(() => {
+    if (!acceptsImageReferences) {
+      clearReferenceItems();
+      return;
+    }
+    setReferenceItems((prev) => {
+      if (prev.length <= maxReferenceItems) return prev;
+      prev.slice(maxReferenceItems).forEach((item) => URL.revokeObjectURL(item.previewUrl));
+      return prev.slice(0, maxReferenceItems);
+    });
+  }, [acceptsImageReferences, clearReferenceItems, maxReferenceItems]);
+
+  useEffect(() => {
     const value = prompt.trim();
     setEstimate(null);
     setEstimateError(null);
@@ -299,7 +432,8 @@ export function WorkflowMode({
       estimateJob({
         operation: currentModality.operation,
         prompt: value,
-        model_id: modelId,
+        model_id: isVideoModality ? undefined : modelId,
+        video_route_alias: isVideoModality ? activeCreateModel.videoRouteAlias : undefined,
         reference_artifact_ids: referenceArtifactIds.length > 0 ? referenceArtifactIds : undefined,
         duration_sec: isVideoModality ? videoDurationSec : undefined,
       })
@@ -321,6 +455,7 @@ export function WorkflowMode({
     };
   }, [
     currentModality.operation,
+    activeCreateModel.videoRouteAlias,
     isVideoModality,
     modelId,
     modelSelected,
@@ -381,14 +516,6 @@ export function WorkflowMode({
     };
   }, [activeJob, screen]);
 
-  const clearReferenceItems = useCallback(() => {
-    setReferenceItems((prev) => {
-      prev.forEach((item) => URL.revokeObjectURL(item.previewUrl));
-      return [];
-    });
-    setReferenceError(null);
-  }, []);
-
   function removeReference(localId: string) {
     setReferenceItems((prev) => {
       const item = prev.find((ref) => ref.localId === localId);
@@ -398,10 +525,10 @@ export function WorkflowMode({
   }
 
   async function addReferenceFiles(files: File[]) {
-    if (!isImageModality || referenceUploading || files.length === 0) return;
-    const remaining = MAX_REFERENCE_ARTIFACTS - referenceItems.length;
+    if (!acceptsImageReferences || referenceUploading || files.length === 0) return;
+    const remaining = maxReferenceItems - referenceItems.length;
     if (remaining <= 0 || files.length > remaining) {
-      setReferenceError(`Можно добавить не больше ${MAX_REFERENCE_ARTIFACTS} референсов`);
+      setReferenceError(`Можно добавить не больше ${maxReferenceItems} референсов`);
       return;
     }
     setReferenceError(null);
@@ -444,18 +571,30 @@ export function WorkflowMode({
 
   const changeModality = useCallback((id: ModalityId) => {
     const next = modalityById(id);
-    const createModel = CREATE_MODELS.find((item) => item.modalityId === id);
-    if (id !== "image") {
+    const createModel = createModes.find((item) => item.modalityId === id);
+    if (!createModel?.supportsReferenceImage && id !== "image") {
       clearReferenceItems();
     }
     setModalityId(id);
     setModelId(createModel?.modelId ?? next.models[0]?.id ?? "");
+    if (createModel?.modalityId === "video") {
+      setVideoDurationSec(createModel.defaultDurationSec ?? DEFAULT_VIDEO_DURATION_SEC);
+    }
     setEstimate(null);
     setEstimateError(null);
-  }, [clearReferenceItems]);
+  }, [clearReferenceItems, createModes]);
 
-  function selectCreateModel(modality: ModalityId) {
-    changeModality(modality);
+  function selectCreateModel(mode: CreateMode) {
+    if (!mode.supportsReferenceImage && mode.modalityId !== "image") {
+      clearReferenceItems();
+    }
+    setModalityId(mode.modalityId);
+    setModelId(mode.modelId);
+    if (mode.modalityId === "video") {
+      setVideoDurationSec(mode.defaultDurationSec ?? DEFAULT_VIDEO_DURATION_SEC);
+    }
+    setEstimate(null);
+    setEstimateError(null);
     setSubmitError(null);
   }
 
@@ -494,7 +633,8 @@ export function WorkflowMode({
     try {
       const job = await onCreateJob(trimmedPrompt, {
         operation: currentModality.operation,
-        modelId,
+        modelId: isVideoModality ? undefined : modelId,
+        videoRouteAlias: isVideoModality ? activeCreateModel.videoRouteAlias : undefined,
         referenceArtifactIds: referenceArtifactIds.length > 0 ? referenceArtifactIds : undefined,
         durationSec: isVideoModality ? videoDurationSec : undefined,
       });
@@ -611,12 +751,12 @@ export function WorkflowMode({
             </header>
 
             <div className="create-model-grid" role="group" aria-label="Выбор модели">
-              {CREATE_MODELS.map((item) => {
-                const isSelected = modalityId === item.modalityId;
+              {createModes.map((item) => {
+                const isSelected = modelId === item.modelId && modalityId === item.modalityId;
                 const isImage = item.modalityId === "image";
                 return (
                   <button
-                    key={item.modalityId}
+                    key={item.modelId}
                     type="button"
                     className={"create-model-card" + (isSelected ? " is-active" : "")}
                     style={
@@ -627,7 +767,7 @@ export function WorkflowMode({
                           }
                         : undefined
                     }
-                    onClick={() => selectCreateModel(item.modalityId)}
+                    onClick={() => selectCreateModel(item)}
                   >
                     <div
                       className="create-model-card__icon"
@@ -660,7 +800,7 @@ export function WorkflowMode({
               <div className="create-duration" role="group" aria-label="Длительность видео">
                 <span className="create-duration__label">Длительность</span>
                 <div className="segment create-duration__segment">
-                  {VIDEO_DURATION_OPTIONS.map((seconds) => {
+                  {videoDurationOptions.map((seconds) => {
                     const active = videoDurationSec === seconds;
                     return (
                       <button
@@ -685,7 +825,7 @@ export function WorkflowMode({
               </div>
             )}
 
-            {isImageModality && (
+            {acceptsImageReferences && (
               <div
                 className={"create-dropzone" + (isDragging ? " is-dragging" : "")}
                 style={
@@ -746,7 +886,7 @@ export function WorkflowMode({
                       Перетащите файл или нажмите{" "}
                       <span style={{ color: activeCreateModel.color }}>+</span>
                     </p>
-                    <p className="create-dropzone__meta">PNG, JPG, WEBP до 20 MB</p>
+                    <p className="create-dropzone__meta">PNG, JPG до 20 MB</p>
                   </>
                 )}
               </div>

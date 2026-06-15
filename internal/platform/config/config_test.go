@@ -115,6 +115,161 @@ func TestLoadTopUpFeatureFlags(t *testing.T) {
 	}
 }
 
+func TestLoadVideoRouterFlagsDefaultDisabled(t *testing.T) {
+	for _, key := range []string{
+		"FEATURE_VIDEO_ROUTER_ENABLED",
+		"FEATURE_VIDEO_ROUTE_HAILUO_2_3_FAST_ENABLED",
+		"FEATURE_VIDEO_ROUTE_HAILUO_2_3_STANDARD_ENABLED",
+		"FEATURE_VIDEO_ROUTE_KLING_O3_STANDARD_ENABLED",
+		"FEATURE_VIDEO_ROUTE_RUNWAY_GEN4_TURBO_ENABLED",
+		"FEATURE_VIDEO_ROUTE_SEEDANCE_2_0_FAST_ENABLED",
+		"FEATURE_VIDEO_ROUTE_RUNWAY_GEN4_5_ENABLED",
+		"FEATURE_VIDEO_ROUTE_RESELLER_EXPERIMENTS_ENABLED",
+		"APIMART_PROVIDER_ENABLED",
+		"POYO_PROVIDER_ENABLED",
+		"RUNWAY_PROVIDER_ENABLED",
+	} {
+		t.Setenv(key, "false")
+	}
+
+	cfg := config.Load()
+	if cfg.FeatureVideoRouterEnabled ||
+		cfg.FeatureVideoRouteHailuo23FastEnabled ||
+		cfg.FeatureVideoRouteHailuo23StandardEnabled ||
+		cfg.FeatureVideoRouteKlingO3StandardEnabled ||
+		cfg.FeatureVideoRouteRunwayGen4TurboEnabled ||
+		cfg.FeatureVideoRouteSeedance20FastEnabled ||
+		cfg.FeatureVideoRouteRunwayGen45Enabled ||
+		cfg.FeatureVideoRouteResellerExperimentsEnabled ||
+		cfg.APIMartProviderEnabled ||
+		cfg.PoYoProviderEnabled ||
+		cfg.RunwayProviderEnabled {
+		t.Fatal("video router/provider flags should default to disabled")
+	}
+}
+
+func TestValidateVideoRouteRequiresRouterFlag(t *testing.T) {
+	cfg := config.Config{
+		Env:                                  "development",
+		Provider:                             "mock",
+		ProviderChain:                        []string{"mock"},
+		FeatureVideoRouteHailuo23FastEnabled: true,
+		APIMartProviderEnabled:               true,
+		APIMartAPIKey:                        "test-key",
+		APIMartBaseURL:                       "https://example.test/v1",
+	}
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "FEATURE_VIDEO_ROUTER_ENABLED") {
+		t.Fatalf("expected FEATURE_VIDEO_ROUTER_ENABLED validation error, got %v", err)
+	}
+}
+
+func TestValidateVideoRouteRequiresProviderKey(t *testing.T) {
+	cfg := config.Config{
+		Env:                                      "development",
+		Provider:                                 "mock",
+		ProviderChain:                            []string{"mock"},
+		FeatureVideoRouterEnabled:                true,
+		FeatureVideoRouteHailuo23StandardEnabled: true,
+		APIMartProviderEnabled:                   true,
+		APIMartBaseURL:                           "https://example.test/v1",
+	}
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "APIMART_API_KEY") {
+		t.Fatalf("expected APIMART_API_KEY validation error, got %v", err)
+	}
+}
+
+func TestValidateVideoRouteRequiresPoYoBaseURL(t *testing.T) {
+	cfg := config.Config{
+		Env:                                     "development",
+		Provider:                                "mock",
+		ProviderChain:                           []string{"mock"},
+		FeatureVideoRouterEnabled:               true,
+		FeatureVideoRouteKlingO3StandardEnabled: true,
+		PoYoProviderEnabled:                     true,
+		PoYoAPIKey:                              "test-key",
+	}
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "POYO_BASE_URL") {
+		t.Fatalf("expected POYO_BASE_URL validation error, got %v", err)
+	}
+}
+
+func TestValidateRunwayRouteRequiresSecret(t *testing.T) {
+	cfg := config.Config{
+		Env:                                     "development",
+		Provider:                                "mock",
+		ProviderChain:                           []string{"mock"},
+		FeatureVideoRouterEnabled:               true,
+		FeatureVideoRouteRunwayGen4TurboEnabled: true,
+		RunwayProviderEnabled:                   true,
+		RunwayMLBaseURL:                         "https://api.dev.runwayml.com/v1",
+	}
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "RUNWAYML_API_SECRET") {
+		t.Fatalf("expected RUNWAYML_API_SECRET validation error, got %v", err)
+	}
+}
+
+func TestValidateSelectedRunwayWithoutSecretDoesNotBlockDevelopment(t *testing.T) {
+	cfg := config.Config{
+		Env:                   "development",
+		Provider:              "mock",
+		ProviderChain:         []string{"runway", "mock"},
+		RunwayProviderEnabled: true,
+		RunwayMLBaseURL:       "https://api.dev.runwayml.com/v1",
+	}
+
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("selected runway without key should be skipped by worker in development, got %v", err)
+	}
+}
+
+func TestValidateSelectedRunwayRequiresSwitchInProduction(t *testing.T) {
+	cfg := validProductionConfig()
+	cfg.Provider = "runway"
+	cfg.ProviderChain = []string{"runway"}
+	cfg.RunwayProviderEnabled = false
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "RUNWAY_PROVIDER_ENABLED") {
+		t.Fatalf("expected RUNWAY_PROVIDER_ENABLED validation error, got %v", err)
+	}
+}
+
+func TestValidateNewProviderSelectionRequiresCredentials(t *testing.T) {
+	cfg := config.Config{
+		Env:           "development",
+		Provider:      "apimart",
+		ProviderChain: []string{"apimart"},
+	}
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "APIMART_API_KEY") {
+		t.Fatalf("expected APIMART_API_KEY validation error, got %v", err)
+	}
+}
+
+func TestValidateNewProviderSelectionRequiresProviderSwitch(t *testing.T) {
+	cfg := config.Config{
+		Env:            "development",
+		Provider:       "apimart",
+		ProviderChain:  []string{"apimart"},
+		APIMartAPIKey:  "test-key",
+		APIMartBaseURL: "https://example.test/v1",
+	}
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "APIMART_PROVIDER_ENABLED") {
+		t.Fatalf("expected APIMART_PROVIDER_ENABLED validation error, got %v", err)
+	}
+}
+
 func TestLoadDBPoolConfigBoundsInt32Values(t *testing.T) {
 	t.Setenv("DB_MAX_CONNS", "2147483648")
 	t.Setenv("DB_MIN_CONNS", "7")

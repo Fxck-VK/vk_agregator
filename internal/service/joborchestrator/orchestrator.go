@@ -29,6 +29,7 @@ import (
 // atomically with job creation (audit B1).
 type Biller interface {
 	Estimate(op domain.OperationType) (int64, error)
+	EstimateProviderCost(providerCostCredits int64, multiplier float64, maxInternalCredits int64) (int64, error)
 	ReserveWith(ctx context.Context, repo domain.BillingRepository, userID, jobID uuid.UUID, amount int64) (*domain.CreditReservation, error)
 }
 
@@ -42,10 +43,41 @@ type CapacityCheckInput struct {
 	Estimate  int64
 }
 
+// VideoRouteCheckInput is the bounded request shape route validators may use
+// before a video job is persisted or credits are reserved.
+type VideoRouteCheckInput struct {
+	UserID           uuid.UUID
+	Source           string
+	Operation        domain.OperationType
+	Modality         domain.Modality
+	Params           json.RawMessage
+	InputArtifactIDs []uuid.UUID
+}
+
+// VideoRouteResolution is the trusted server-side route decision applied before
+// a job is persisted and credits are reserved.
+type VideoRouteResolution struct {
+	Resolved            bool
+	Params              json.RawMessage
+	Snapshot            domain.VideoRouteSnapshot
+	InternalCostCredits int64
+}
+
 // CapacityGuard refuses new expensive work when shared product capacity is
 // degraded. Implementations must not inspect prompts or raw provider payloads.
 type CapacityGuard interface {
 	CheckCapacity(ctx context.Context, in CapacityCheckInput) error
+}
+
+// VideoRouteValidator refuses unsupported/disabled video routes before billing
+// reservation. Implementations must not call external providers.
+type VideoRouteValidator interface {
+	ValidateVideoRoute(ctx context.Context, in VideoRouteCheckInput) error
+}
+
+// VideoRouteResolver resolves route aliases into trusted job params and cost.
+type VideoRouteResolver interface {
+	ResolveVideoRoute(ctx context.Context, in VideoRouteCheckInput) (VideoRouteResolution, error)
 }
 
 // CapacityGuardFunc adapts a function into a CapacityGuard.
@@ -55,6 +87,28 @@ type CapacityGuardFunc func(context.Context, CapacityCheckInput) error
 func (f CapacityGuardFunc) CheckCapacity(ctx context.Context, in CapacityCheckInput) error {
 	if f == nil {
 		return nil
+	}
+	return f(ctx, in)
+}
+
+// VideoRouteValidatorFunc adapts a function into a VideoRouteValidator.
+type VideoRouteValidatorFunc func(context.Context, VideoRouteCheckInput) error
+
+// ValidateVideoRoute implements VideoRouteValidator.
+func (f VideoRouteValidatorFunc) ValidateVideoRoute(ctx context.Context, in VideoRouteCheckInput) error {
+	if f == nil {
+		return nil
+	}
+	return f(ctx, in)
+}
+
+// VideoRouteResolverFunc adapts a function into a VideoRouteResolver.
+type VideoRouteResolverFunc func(context.Context, VideoRouteCheckInput) (VideoRouteResolution, error)
+
+// ResolveVideoRoute implements VideoRouteResolver.
+func (f VideoRouteResolverFunc) ResolveVideoRoute(ctx context.Context, in VideoRouteCheckInput) (VideoRouteResolution, error) {
+	if f == nil {
+		return VideoRouteResolution{}, nil
 	}
 	return f(ctx, in)
 }
@@ -93,6 +147,8 @@ type Orchestrator struct {
 	maxCost                   int64
 	maxActiveVideoJobsPerUser int
 	capacityGuard             CapacityGuard
+	videoRouteValidator       VideoRouteValidator
+	videoRouteResolver        VideoRouteResolver
 	now                       func() time.Time
 }
 
@@ -115,6 +171,20 @@ func WithMaxActiveVideoJobsPerUser(limit int) Option {
 func WithCapacityGuard(guard CapacityGuard) Option {
 	return func(o *Orchestrator) {
 		o.capacityGuard = guard
+	}
+}
+
+// WithVideoRouteValidator installs the fail-closed video route policy guard.
+func WithVideoRouteValidator(validator VideoRouteValidator) Option {
+	return func(o *Orchestrator) {
+		o.videoRouteValidator = validator
+	}
+}
+
+// WithVideoRouteResolver installs the fail-closed video route resolver.
+func WithVideoRouteResolver(resolver VideoRouteResolver) Option {
+	return func(o *Orchestrator) {
+		o.videoRouteResolver = resolver
 	}
 }
 
@@ -167,12 +237,35 @@ func (o *Orchestrator) CreateJob(ctx context.Context, in CreateJobInput) (*domai
 		return nil, fmt.Errorf("joborchestrator: idempotency lookup: %w", err)
 	}
 
-	// 1. Estimate the cost of the operation and enforce the spend cap.
-	estimate, err := o.billing.Estimate(in.Operation)
+	// 1. Resolve trusted route details, estimate cost and enforce spend caps.
+	var estimate int64
+	routeResolution, err := o.resolveVideoRoute(ctx, in, source)
 	if err != nil {
 		tracing.RecordError(span, err)
-		metrics.ObserveProductEvent(source, "job", "estimate", operationLabel, modalityLabel, "error")
-		return nil, fmt.Errorf("joborchestrator: estimate: %w", err)
+		metrics.ObserveProductEvent(source, "job", "create", operationLabel, modalityLabel, "rejected_video_route")
+		return nil, err
+	}
+	if routeResolution.Resolved {
+		in.Params = append(json.RawMessage(nil), routeResolution.Params...)
+		estimate, err = o.billing.EstimateProviderCost(
+			routeResolution.Snapshot.ProviderCostCredits,
+			routeResolution.Snapshot.PriceMultiplier,
+			routeResolution.Snapshot.MaxInternalCostCredits,
+		)
+		if err != nil {
+			tracing.RecordError(span, err)
+			metrics.ObserveProductEvent(source, "job", "estimate", operationLabel, modalityLabel, "route_error")
+			return nil, fmt.Errorf("joborchestrator: route estimate: %w", err)
+		}
+	}
+	routeSnapshot := routeResolution.Snapshot
+	if estimate == 0 {
+		estimate, err = o.billing.Estimate(in.Operation)
+		if err != nil {
+			tracing.RecordError(span, err)
+			metrics.ObserveProductEvent(source, "job", "estimate", operationLabel, modalityLabel, "error")
+			return nil, fmt.Errorf("joborchestrator: estimate: %w", err)
+		}
 	}
 	if o.maxCost > 0 && estimate > o.maxCost {
 		err := fmt.Errorf("joborchestrator: %w: estimate %d exceeds cap %d", domain.ErrCostCapExceeded, estimate, o.maxCost)
@@ -228,6 +321,9 @@ func (o *Orchestrator) CreateJob(ctx context.Context, in CreateJobInput) (*domai
 		if _, err := o.billing.ReserveWith(ctx, repos.Billing, in.UserID, job.ID, estimate); err != nil {
 			if errors.Is(err, domain.ErrInsufficientCredits) {
 				metrics.BillingReservations.WithLabelValues(string(in.Operation), "insufficient_credits").Inc()
+				if routeSnapshot.Valid() {
+					metrics.ObserveVideoRouteBilling(string(routeSnapshot.Provider), string(routeSnapshot.Alias), "reserve", "insufficient_credits")
+				}
 				if err := repos.Jobs.UpdateStatus(ctx, job.ID, domain.JobStatusValidated, domain.JobStatusAwaitingPayment, "insufficient_credits", "not enough credits to reserve"); err != nil {
 					return err
 				}
@@ -235,9 +331,15 @@ func (o *Orchestrator) CreateJob(ctx context.Context, in CreateJobInput) (*domai
 				return nil
 			}
 			metrics.BillingReservations.WithLabelValues(string(in.Operation), "error").Inc()
+			if routeSnapshot.Valid() {
+				metrics.ObserveVideoRouteBilling(string(routeSnapshot.Provider), string(routeSnapshot.Alias), "reserve", "error")
+			}
 			return err
 		}
 		metrics.BillingReservations.WithLabelValues(string(in.Operation), "success").Inc()
+		if routeSnapshot.Valid() {
+			metrics.ObserveVideoRouteBilling(string(routeSnapshot.Provider), string(routeSnapshot.Alias), "reserve", "success")
+		}
 
 		if err := repos.Jobs.UpdateStatus(ctx, job.ID, domain.JobStatusValidated, domain.JobStatusCreditsReserved, "", ""); err != nil {
 			return err
@@ -273,6 +375,30 @@ func (o *Orchestrator) CreateJob(ctx context.Context, in CreateJobInput) (*domai
 	metrics.ObserveProductEvent(source, "job", "create", operationLabel, modalityLabel, "queued")
 	metrics.ObserveProductActiveUserEvent(source, operationLabel, modalityLabel, "created")
 	return job, nil
+}
+
+func (o *Orchestrator) resolveVideoRoute(ctx context.Context, in CreateJobInput, source string) (VideoRouteResolution, error) {
+	check := VideoRouteCheckInput{
+		UserID:           in.UserID,
+		Source:           source,
+		Operation:        in.Operation,
+		Modality:         in.Modality,
+		Params:           in.Params,
+		InputArtifactIDs: append([]uuid.UUID(nil), in.InputArtifactIDs...),
+	}
+	if o.videoRouteResolver != nil {
+		resolved, err := o.videoRouteResolver.ResolveVideoRoute(ctx, check)
+		if err != nil {
+			return VideoRouteResolution{}, fmt.Errorf("joborchestrator: %w", err)
+		}
+		return resolved, nil
+	}
+	if o.videoRouteValidator != nil {
+		if err := o.videoRouteValidator.ValidateVideoRoute(ctx, check); err != nil {
+			return VideoRouteResolution{}, fmt.Errorf("joborchestrator: %w", err)
+		}
+	}
+	return VideoRouteResolution{}, nil
 }
 
 func (o *Orchestrator) checkCapacity(ctx context.Context, in CreateJobInput, source string, estimate int64) error {

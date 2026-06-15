@@ -30,7 +30,6 @@ import (
 	"vk-ai-aggregator/internal/service/billingservice"
 	"vk-ai-aggregator/internal/service/commandrouter"
 	"vk-ai-aggregator/internal/service/joborchestrator"
-	"vk-ai-aggregator/internal/service/modelcatalog"
 	"vk-ai-aggregator/internal/service/paymentservice"
 	"vk-ai-aggregator/internal/service/referralservice"
 )
@@ -79,6 +78,7 @@ type Config struct {
 // the menu screens or changing command parsing.
 type MenuFeatureFlags struct {
 	DisabledCommands map[domain.CommandType]bool
+	EnabledCommands  map[domain.CommandType]bool
 }
 
 // AntiSpam checks per-user VK bot limits after command routing but before
@@ -196,6 +196,7 @@ type jobParams struct {
 	Prompt                 string `json:"prompt"`
 	ModelID                string `json:"model_id,omitempty"`
 	ModelName              string `json:"model_name,omitempty"`
+	VideoRouteAlias        string `json:"video_route_alias,omitempty"`
 	Provider               string `json:"provider,omitempty"`
 	ModelCode              string `json:"model_code,omitempty"`
 	DurationSec            int    `json:"duration_sec,omitempty"`
@@ -203,49 +204,45 @@ type jobParams struct {
 }
 
 type videoModeSpec struct {
-	Mode        dialogMode
-	ModelID     string
-	ModelName   string
-	Provider    domain.ProviderName
-	ModelCode   string
-	DurationSec int
+	Mode            dialogMode
+	ModelName       string
+	VideoRouteAlias domain.VideoRouteAlias
+	DurationSec     int
 }
 
 func videoModeForCommand(t domain.CommandType) (videoModeSpec, bool) {
 	switch t {
-	case domain.CommandMenuVideoPrunaAI:
-		return videoModeFromCatalog("video:prunaai", modelcatalog.VKVideoPrunaAI)
 	case domain.CommandMenuVideoSora2Start:
-		return videoModeFromCatalog("video:sora_2", modelcatalog.VKVideoSora2)
+		return videoRouteMode("video:runway_gen4_turbo", "Creative video", domain.VideoRouteRunwayGen4Turbo, 5), true
+	case domain.CommandMenuVideoKling21Start:
+		return videoRouteMode("video:kling_o3_standard", "Balanced video", domain.VideoRouteKlingO3Standard, 5), true
+	case domain.CommandMenuVideoSeedance1Lite:
+		return videoRouteMode("video:seedance_2_0_fast", "Reference video", domain.VideoRouteSeedance20Fast, 5), true
+	case domain.CommandMenuVideoHailuo02Standard:
+		return videoRouteMode("video:hailuo_2_3_standard", "Cinematic video", domain.VideoRouteHailuo23Standard, 6), true
+	case domain.CommandMenuVideoHailuo02Fast:
+		return videoRouteMode("video:hailuo_2_3_fast", "Fast photo motion", domain.VideoRouteHailuo23Fast, 6), true
 	default:
 		return videoModeSpec{}, false
 	}
 }
 
-func videoModeFromCatalog(mode dialogMode, modelID string) (videoModeSpec, bool) {
-	model, ok := modelcatalog.ResolveVKVideoModel(modelID)
-	if !ok || strings.TrimSpace(model.ModelCode) == "" {
-		return videoModeSpec{}, false
-	}
+func videoRouteMode(mode dialogMode, name string, alias domain.VideoRouteAlias, durationSec int) videoModeSpec {
 	return videoModeSpec{
-		Mode:        mode,
-		ModelID:     model.ModelID,
-		ModelName:   model.ModelName,
-		Provider:    model.Provider,
-		ModelCode:   model.ModelCode,
-		DurationSec: model.DurationSec,
-	}, true
+		Mode:            mode,
+		ModelName:       name,
+		VideoRouteAlias: alias,
+		DurationSec:     durationSec,
+	}
 }
 
 func videoModeFromDialogMode(mode dialogMode) (videoModeSpec, bool) {
 	for _, command := range []domain.CommandType{
-		domain.CommandMenuVideoPrunaAI,
 		domain.CommandMenuVideoSora2Start,
 		domain.CommandMenuVideoKling21Start,
 		domain.CommandMenuVideoSeedance1Lite,
-		domain.CommandMenuVideoSeedance1Pro,
-		domain.CommandMenuVideoHaiuo02Standard,
-		domain.CommandMenuVideoHaiuo02Fast,
+		domain.CommandMenuVideoHailuo02Standard,
+		domain.CommandMenuVideoHailuo02Fast,
 	} {
 		spec, ok := videoModeForCommand(command)
 		if ok && spec.Mode == mode {
@@ -742,10 +739,8 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 			VKPlaceholderMessageID: placeholderID,
 		}
 		if videoTextJob {
-			jp.ModelID = videoSpec.ModelID
 			jp.ModelName = videoSpec.ModelName
-			jp.Provider = string(videoSpec.Provider)
-			jp.ModelCode = videoSpec.ModelCode
+			jp.VideoRouteAlias = string(videoSpec.VideoRouteAlias)
 			jp.DurationSec = videoSpec.DurationSec
 		}
 		params, _ := json.Marshal(jp)

@@ -244,8 +244,6 @@ func newTestFixtureWithConfigAndPaymentProvider(appSecret string, limiter interf
 		ReferrerSignupRewardCredits: 10,
 		RewardOnActivation:          true,
 	})
-	orch := joborchestrator.New(jobRepo, uowMgr, billing, 0)
-
 	cfg := miniappinbound.Config{
 		AppSecret:                           appSecret,
 		LaunchParamsMaxAge:                  time.Hour,
@@ -257,6 +255,11 @@ func newTestFixtureWithConfigAndPaymentProvider(appSecret string, limiter interf
 	if configure != nil {
 		configure(&cfg)
 	}
+	orchOptions := []joborchestrator.Option{}
+	if cfg.VideoRouteResolver != nil {
+		orchOptions = append(orchOptions, joborchestrator.WithVideoRouteResolver(cfg.VideoRouteResolver))
+	}
+	orch := joborchestrator.New(jobRepo, uowMgr, billing, 0, orchOptions...)
 	handler := miniappinbound.NewHandler(
 		cfg,
 		miniappinbound.Deps{
@@ -509,6 +512,56 @@ func createTestArtifact(t *testing.T, fixture *testFixture, ownerID uuid.UUID, k
 		t.Fatalf("create artifact: %v", err)
 	}
 	return artifact
+}
+
+func enableTestVideoRoute(cfg *miniappinbound.Config, alias domain.VideoRouteAlias) {
+	cfg.VideoRoutes = []miniappinbound.VideoRouteDTO{
+		{
+			Alias:                  string(alias),
+			AllowedDurationsSec:    []int{5, 10},
+			DefaultDurationSec:     5,
+			AllowedResolutions:     []string{"720p"},
+			AllowedAspectRatios:    []string{"16:9"},
+			SupportsReferenceImage: true,
+			MaxReferenceImages:     1,
+		},
+	}
+	cfg.VideoRouteResolver = joborchestrator.VideoRouteResolverFunc(func(_ context.Context, in joborchestrator.VideoRouteCheckInput) (joborchestrator.VideoRouteResolution, error) {
+		var params struct {
+			VideoRouteAlias string `json:"video_route_alias"`
+			DurationSec     int    `json:"duration_sec"`
+		}
+		if err := json.Unmarshal(in.Params, &params); err != nil {
+			return joborchestrator.VideoRouteResolution{}, err
+		}
+		if params.VideoRouteAlias != string(alias) {
+			return joborchestrator.VideoRouteResolution{}, domain.ErrNotFound
+		}
+		duration := params.DurationSec
+		if duration == 0 {
+			duration = 5
+		}
+		snapshot := domain.VideoRouteSnapshot{
+			Alias:                  alias,
+			Provider:               domain.ProviderPoYo,
+			ProviderModelID:        "hidden-provider-model",
+			ModelClass:             "test_video_route",
+			DurationSec:            duration,
+			Resolution:             "720p",
+			AspectRatio:            "16:9",
+			ProviderCostCredits:    int64(duration),
+			InternalCostCredits:    int64(duration * 2),
+			PriceMultiplier:        2,
+			MaxProviderCostCredits: 10,
+			MaxInternalCostCredits: 20,
+		}
+		return joborchestrator.VideoRouteResolution{
+			Resolved:            true,
+			Params:              in.Params,
+			Snapshot:            snapshot,
+			InternalCostCredits: snapshot.InternalCostCredits,
+		}, nil
+	})
 }
 
 func TestHandler_CreateJob_OK(t *testing.T) {
@@ -2456,6 +2509,40 @@ func TestHandler_Estimate_ImageAliasUsesPublicModelOnly(t *testing.T) {
 	}
 }
 
+func TestHandler_ListVideoRoutes_PublicAliasesOnly(t *testing.T) {
+	fixture := newTestFixtureWithConfig("", nil, func(cfg *miniappinbound.Config) {
+		enableTestVideoRoute(cfg, domain.VideoRouteKlingO3Standard)
+	})
+	routes := fixture.handler.Routes()
+
+	req := httptest.NewRequest(http.MethodGet, "/miniapp/video-routes", nil)
+	req.Header.Set("X-Launch-Params", devLaunchParams(777))
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	lower := strings.ToLower(w.Body.String())
+	for _, private := range []string{"provider", "model_code", "hidden-provider-model", "cost", "price"} {
+		if strings.Contains(lower, private) {
+			t.Fatalf("video route response leaked %q: %s", private, w.Body.String())
+		}
+	}
+	var resp struct {
+		Items []miniappinbound.VideoRouteDTO `json:"items"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("invalid response json: %v", err)
+	}
+	if len(resp.Items) != 1 || resp.Items[0].Alias != string(domain.VideoRouteKlingO3Standard) {
+		t.Fatalf("unexpected video routes: %+v", resp.Items)
+	}
+	if resp.Items[0].MaxReferenceImages != 1 || len(resp.Items[0].AllowedDurationsSec) != 2 {
+		t.Fatalf("missing public route constraints: %+v", resp.Items[0])
+	}
+}
+
 func TestHandler_Estimate_ReferenceArtifactsFailClosedAfterValidation(t *testing.T) {
 	fixture := newTestFixture("", nil)
 	routes := fixture.handler.Routes()
@@ -2569,6 +2656,50 @@ func TestHandler_Estimate_ReferenceArtifactsRejectTooMany(t *testing.T) {
 	}
 	if !strings.Contains(w.Body.String(), "too many reference artifacts") {
 		t.Fatalf("expected too-many-references error, got %s", w.Body.String())
+	}
+}
+
+func TestHandler_Estimate_VideoRouteUsesResolvedCost(t *testing.T) {
+	fixture := newTestFixtureWithConfig("", nil, func(cfg *miniappinbound.Config) {
+		enableTestVideoRoute(cfg, domain.VideoRouteKlingO3Standard)
+	})
+	routes := fixture.handler.Routes()
+
+	body, _ := json.Marshal(map[string]any{
+		"operation":         "video_generate",
+		"prompt":            "estimate video",
+		"video_route_alias": string(domain.VideoRouteKlingO3Standard),
+		"duration_sec":      10,
+	})
+	req := httptest.NewRequest(http.MethodPost, "/miniapp/estimate", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Launch-Params", devLaunchParams(777))
+
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	lower := strings.ToLower(w.Body.String())
+	for _, private := range []string{"provider", "model_code", "hidden-provider-model"} {
+		if strings.Contains(lower, private) {
+			t.Fatalf("estimate response leaked private detail %q: %s", private, w.Body.String())
+		}
+	}
+	var resp struct {
+		Operation       string `json:"operation"`
+		ModelID         string `json:"model_id"`
+		VideoRouteAlias string `json:"video_route_alias"`
+		CostEstimate    int64  `json:"cost_estimate"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("invalid response json: %v", err)
+	}
+	if resp.Operation != "video_generate" || resp.ModelID != "" || resp.VideoRouteAlias != string(domain.VideoRouteKlingO3Standard) {
+		t.Fatalf("unexpected estimate identity fields: %+v", resp)
+	}
+	if resp.CostEstimate != 20 {
+		t.Fatalf("cost estimate = %d, want 20", resp.CostEstimate)
 	}
 }
 
@@ -2849,7 +2980,7 @@ func TestHandler_CreateJob_ImageAliasPersistsProviderModelCodePrivately(t *testi
 	}
 }
 
-func TestHandler_CreateJob_VideoPersistsProviderModelCodePrivately(t *testing.T) {
+func TestHandler_CreateJob_VideoRejectsLegacyModelID(t *testing.T) {
 	fixture := newTestFixture("", nil)
 	routes := fixture.handler.Routes()
 
@@ -2865,59 +2996,59 @@ func TestHandler_CreateJob_VideoPersistsProviderModelCodePrivately(t *testing.T)
 
 	w := httptest.NewRecorder()
 	routes.ServeHTTP(w, req)
-	if w.Code != http.StatusCreated {
-		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
 	}
-	lower := strings.ToLower(w.Body.String())
-	if strings.Contains(lower, "pruna") || strings.Contains(lower, "p-video") || strings.Contains(lower, "model_code") || strings.Contains(lower, "provider") {
-		t.Fatalf("job response leaked provider/model internals: %s", w.Body.String())
-	}
-	var resp struct {
-		ID        string `json:"id"`
-		Operation string `json:"operation"`
-		ModelID   string `json:"model_id"`
-		ModelName string `json:"model_name"`
-	}
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("invalid response json: %v", err)
-	}
-	if resp.Operation != "video_generate" || resp.ModelID != "kling" || resp.ModelName != "Kling" {
-		t.Fatalf("unexpected response: %+v", resp)
-	}
-	jobID, err := uuid.Parse(resp.ID)
+	jobs, err := fixture.jobRepo.List(context.Background(), domain.JobFilter{}, 10, 0)
 	if err != nil {
-		t.Fatalf("invalid job id: %v", err)
+		t.Fatalf("list jobs: %v", err)
 	}
-	job, err := fixture.jobRepo.GetByID(context.Background(), jobID)
+	if len(jobs) != 0 {
+		t.Fatalf("legacy video model id must not create a job, got %d", len(jobs))
+	}
+}
+
+func TestHandler_CreateJob_VideoRejectsUnknownRouteAlias(t *testing.T) {
+	fixture := newTestFixtureWithConfig("", nil, func(cfg *miniappinbound.Config) {
+		enableTestVideoRoute(cfg, domain.VideoRouteKlingO3Standard)
+	})
+	routes := fixture.handler.Routes()
+
+	body, _ := json.Marshal(map[string]string{
+		"operation":         "video_generate",
+		"prompt":            "snow over neon city",
+		"video_route_alias": "video_unknown",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/miniapp/jobs", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Launch-Params", devLaunchParams(777))
+	req.Header.Set("X-Idempotency-Key", "video-unknown-route")
+
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+	jobs, err := fixture.jobRepo.List(context.Background(), domain.JobFilter{}, 10, 0)
 	if err != nil {
-		t.Fatalf("get job: %v", err)
+		t.Fatalf("list jobs: %v", err)
 	}
-	if job.OperationType != domain.OperationVideoGenerate || job.Modality != domain.ModalityVideo {
-		t.Fatalf("unexpected job: %+v", job)
-	}
-	var params struct {
-		ModelID   string `json:"model_id"`
-		ModelName string `json:"model_name"`
-		Provider  string `json:"provider"`
-		ModelCode string `json:"model_code"`
-	}
-	if err := json.Unmarshal(job.Params, &params); err != nil {
-		t.Fatalf("invalid params: %v", err)
-	}
-	if params.ModelID != "kling" || params.ModelName != "Kling" || params.Provider != "deepinfra" || params.ModelCode != "PrunaAI/p-video" {
-		t.Fatalf("unexpected stored params: %+v", params)
+	if len(jobs) != 0 {
+		t.Fatalf("unknown video route must not create a job, got %d", len(jobs))
 	}
 }
 
 func TestHandler_CreateJob_VideoDurationValidatedAndPersisted(t *testing.T) {
-	fixture := newTestFixture("", nil)
+	fixture := newTestFixtureWithConfig("", nil, func(cfg *miniappinbound.Config) {
+		enableTestVideoRoute(cfg, domain.VideoRouteKlingO3Standard)
+	})
 	routes := fixture.handler.Routes()
 
 	body, _ := json.Marshal(map[string]any{
-		"operation":    "video_generate",
-		"prompt":       "snow over neon city",
-		"model_id":     "kling",
-		"duration_sec": 10,
+		"operation":         "video_generate",
+		"prompt":            "snow over neon city",
+		"video_route_alias": string(domain.VideoRouteKlingO3Standard),
+		"duration_sec":      10,
 	})
 	req := httptest.NewRequest(http.MethodPost, "/miniapp/jobs", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -2945,25 +3076,34 @@ func TestHandler_CreateJob_VideoDurationValidatedAndPersisted(t *testing.T) {
 		t.Fatalf("get job: %v", err)
 	}
 	var params struct {
-		DurationSec int `json:"duration_sec"`
+		ModelID         string `json:"model_id"`
+		Provider        string `json:"provider"`
+		ModelCode       string `json:"model_code"`
+		VideoRouteAlias string `json:"video_route_alias"`
+		DurationSec     int    `json:"duration_sec"`
 	}
 	if err := json.Unmarshal(job.Params, &params); err != nil {
 		t.Fatalf("invalid params: %v", err)
 	}
-	if params.DurationSec != 10 {
-		t.Fatalf("duration_sec = %d, want 10", params.DurationSec)
+	if params.VideoRouteAlias != string(domain.VideoRouteKlingO3Standard) || params.DurationSec != 10 {
+		t.Fatalf("unexpected video route params: %+v", params)
+	}
+	if params.ModelID != "" || params.Provider != "" || params.ModelCode != "" {
+		t.Fatalf("miniapp video params must not persist legacy provider selection: %+v", params)
 	}
 }
 
 func TestHandler_CreateJob_VideoDurationRejectsInvalidValue(t *testing.T) {
-	fixture := newTestFixture("", nil)
+	fixture := newTestFixtureWithConfig("", nil, func(cfg *miniappinbound.Config) {
+		enableTestVideoRoute(cfg, domain.VideoRouteKlingO3Standard)
+	})
 	routes := fixture.handler.Routes()
 
 	body, _ := json.Marshal(map[string]any{
-		"operation":    "video_generate",
-		"prompt":       "snow over neon city",
-		"model_id":     "kling",
-		"duration_sec": 7,
+		"operation":         "video_generate",
+		"prompt":            "snow over neon city",
+		"video_route_alias": string(domain.VideoRouteKlingO3Standard),
+		"duration_sec":      7,
 	})
 	req := httptest.NewRequest(http.MethodPost, "/miniapp/jobs", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -2973,6 +3113,54 @@ func TestHandler_CreateJob_VideoDurationRejectsInvalidValue(t *testing.T) {
 	routes.ServeHTTP(w, req)
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestHandler_CreateJob_VideoReferenceArtifactPassesRouteValidation(t *testing.T) {
+	fixture := newTestFixtureWithConfig("", nil, func(cfg *miniappinbound.Config) {
+		enableTestVideoRoute(cfg, domain.VideoRouteKlingO3Standard)
+	})
+	routes := fixture.handler.Routes()
+	ctx := context.Background()
+	user := &domain.User{VKUserID: 777, Role: domain.RoleUser, Status: domain.StatusActive}
+	if err := fixture.userRepo.Create(ctx, user); err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	artifact := createTestArtifact(t, fixture, user.ID, domain.ArtifactKindInput, domain.MediaTypeImage, domain.ArtifactStatusReady)
+
+	body, _ := json.Marshal(map[string]any{
+		"operation":              "video_generate",
+		"prompt":                 "video with reference",
+		"video_route_alias":      string(domain.VideoRouteKlingO3Standard),
+		"reference_artifact_ids": []string{artifact.ID.String()},
+	})
+	req := httptest.NewRequest(http.MethodPost, "/miniapp/jobs", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Launch-Params", devLaunchParams(777))
+	req.Header.Set("X-Idempotency-Key", "video-reference-enabled")
+
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		ID              uuid.UUID `json:"id"`
+		ModelID         string    `json:"model_id"`
+		VideoRouteAlias string    `json:"video_route_alias"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("invalid response json: %v", err)
+	}
+	if resp.ModelID != "" || resp.VideoRouteAlias != string(domain.VideoRouteKlingO3Standard) {
+		t.Fatalf("unexpected response identity fields: %+v", resp)
+	}
+	job, err := fixture.jobRepo.GetByID(ctx, resp.ID)
+	if err != nil {
+		t.Fatalf("get job: %v", err)
+	}
+	if len(job.InputArtifactIDs) != 1 || job.InputArtifactIDs[0] != artifact.ID {
+		t.Fatalf("unexpected input artifacts: %+v", job.InputArtifactIDs)
 	}
 }
 

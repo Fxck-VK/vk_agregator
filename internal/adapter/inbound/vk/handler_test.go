@@ -107,7 +107,7 @@ func newHarnessWithDeps(control vkdelivery.ControlClient, cfg vk.Config, antiSpa
 	})
 	pub := queue.NewMemoryPublisher()
 	uowMgr := memory.NewUnitOfWork(jobs, outbox, bill)
-	orch := joborchestrator.New(jobs, uowMgr, billing, 0)
+	orch := joborchestrator.New(jobs, uowMgr, billing, 0, joborchestrator.WithVideoRouteResolver(testVKVideoRouteResolver()))
 	h := vk.NewHandler(cfg, vk.Deps{
 		Idempotency:  idem,
 		Inbound:      inbound,
@@ -125,6 +125,54 @@ func newHarnessWithDeps(control vkdelivery.ControlClient, cfg vk.Config, antiSpa
 		AntiSpam:     antiSpam,
 	})
 	return &harness{handler: h, users: users, cmds: cmds, jobs: jobs, inbound: inbound, billing: bill, payment: payments, refs: refs, pub: pub, relay: outboxrelay.New(uowMgr, pub)}
+}
+
+func testVKVideoRouteResolver() joborchestrator.VideoRouteResolver {
+	return joborchestrator.VideoRouteResolverFunc(func(_ context.Context, in joborchestrator.VideoRouteCheckInput) (joborchestrator.VideoRouteResolution, error) {
+		var params struct {
+			VideoRouteAlias string `json:"video_route_alias"`
+			DurationSec     int    `json:"duration_sec"`
+		}
+		if err := json.Unmarshal(in.Params, &params); err != nil {
+			return joborchestrator.VideoRouteResolution{}, err
+		}
+		alias := domain.VideoRouteAlias(strings.TrimSpace(params.VideoRouteAlias))
+		if alias == "" {
+			return joborchestrator.VideoRouteResolution{}, nil
+		}
+		duration := params.DurationSec
+		if duration == 0 {
+			duration = 5
+		}
+		snapshot := domain.VideoRouteSnapshot{
+			Alias:                  alias,
+			Provider:               domain.ProviderPoYo,
+			ProviderModelID:        "hidden-vk-test-model",
+			ModelClass:             "vk_test_video_route",
+			DurationSec:            duration,
+			Resolution:             "720p",
+			AspectRatio:            "16:9",
+			ProviderCostCredits:    int64(duration),
+			InternalCostCredits:    int64(duration * 2),
+			PriceMultiplier:        2,
+			MaxProviderCostCredits: 20,
+			MaxInternalCostCredits: 40,
+		}
+		return joborchestrator.VideoRouteResolution{
+			Resolved:            true,
+			Params:              in.Params,
+			Snapshot:            snapshot,
+			InternalCostCredits: snapshot.InternalCostCredits,
+		}, nil
+	})
+}
+
+func enabledVideoCommands(commands ...domain.CommandType) vk.MenuFeatureFlags {
+	enabled := make(map[domain.CommandType]bool, len(commands))
+	for _, command := range commands {
+		enabled[command] = true
+	}
+	return vk.MenuFeatureFlags{EnabledCommands: enabled}
 }
 
 // post serves the webhook and then drains the outbox relay, mirroring the
@@ -945,7 +993,7 @@ func TestMenuButtonEditsActiveMenuMessage(t *testing.T) {
 	if len(edits) != 1 || edits[0].MessageID != activeID {
 		t.Fatalf("expected one edit of active menu %d, got %+v", activeID, edits)
 	}
-	if sent[1].Text != "Выбери модель для генерации:" {
+	if sent[1].Text != "Выбери режим видео:" {
 		t.Fatalf("active menu was not updated to video picker: %+v", sent[1])
 	}
 }
@@ -988,7 +1036,7 @@ func TestCallbackMenuEventEditsActiveMenuNoJob(t *testing.T) {
 		t.Fatalf("callback should edit active menu instead of sending a new message, got %+v", control.Sent())
 	}
 	edits := control.Edits()
-	if len(edits) != 1 || edits[0].MessageID != activeID || !strings.Contains(edits[0].Text, "Выбери модель") {
+	if len(edits) != 1 || edits[0].MessageID != activeID || !strings.Contains(edits[0].Text, "Выбери режим видео") {
 		t.Fatalf("expected active menu edit to video picker, got %+v", edits)
 	}
 	answers := control.EventAnswers()
@@ -1075,40 +1123,47 @@ func TestVideoMenuButtonSendsModelPickerNoJob(t *testing.T) {
 	if len(sent) != 1 {
 		t.Fatalf("expected one model picker message, got %+v", sent)
 	}
-	if sent[0].Text != "Выбери модель для генерации:" {
+	if sent[0].Text != "Выбери режим видео:" {
 		t.Fatalf("unexpected text: %q", sent[0].Text)
-	}
-	if !strings.Contains(sent[0].Keyboard, "PrunaAI") || !strings.Contains(sent[0].Keyboard, string(domain.CommandMenuVideoPrunaAI)) {
-		t.Fatalf("expected PrunaAI button in keyboard: %q", sent[0].Keyboard)
 	}
 	if !strings.Contains(sent[0].Keyboard, "⬅️ Назад") || !strings.Contains(sent[0].Keyboard, string(domain.CommandShowMenu)) {
 		t.Fatalf("expected back button in keyboard: %q", sent[0].Keyboard)
 	}
 	for _, hidden := range []string{
-		"Sora 2",
-		"Kling v2.1",
-		"Seedance 1",
-		"Haiuo v0.2",
+		"PrunaAI",
+		"Creative video",
+		"Balanced video",
+		"Reference video",
+		"Cinematic video",
+		"Fast photo motion",
 	} {
 		if strings.Contains(sent[0].Keyboard, hidden) {
-			t.Fatalf("expected video model button %q to be hidden: %q", hidden, sent[0].Keyboard)
+			t.Fatalf("expected video route button %q to be hidden: %q", hidden, sent[0].Keyboard)
 		}
 	}
 }
 
-func TestPrunaAIVideoButtonEnablesPlainTextVideoJobs(t *testing.T) {
+func TestVideoRouteButtonEnablesPlainTextVideoJobs(t *testing.T) {
 	control := vkdelivery.NewMockClient()
-	h := newHarnessWithControl(control)
+	h := newHarnessWithConfig(control, vk.Config{
+		ConfirmationToken: "conf-token-123",
+		Secret:            "s3cr3t",
+		MenuFeatures: enabledVideoCommands(
+			domain.CommandMenuVideoKling21,
+			domain.CommandMenuVideoKling21Start,
+			domain.CommandMenuVideoKling21Examples,
+		),
+	})
 	start := `{
-		"type":"message_new","group_id":1,"event_id":"evt-video-prunaai-on","secret":"s3cr3t",
-		"object":{"message":{"from_id":5622,"peer_id":5622,"text":"PrunaAI","payload":"{\"command\":\"menu.video.prunaai\"}"}}
+		"type":"message_new","group_id":1,"event_id":"evt-video-route-on","secret":"s3cr3t",
+		"object":{"message":{"from_id":5622,"peer_id":5622,"text":"Balanced video","payload":"{\"command\":\"menu.video.kling_v2_1.start\"}"}}
 	}`
 	if rec := h.post(start); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
-		t.Fatalf("unexpected PrunaAI response: %d %q", rec.Code, rec.Body.String())
+		t.Fatalf("unexpected route response: %d %q", rec.Code, rec.Body.String())
 	}
 
 	prompt := `{
-		"type":"message_new","group_id":1,"event_id":"evt-video-prunaai-prompt","secret":"s3cr3t",
+		"type":"message_new","group_id":1,"event_id":"evt-video-route-prompt","secret":"s3cr3t",
 		"object":{"message":{"from_id":5622,"peer_id":5622,"text":"cinematic neon city at night, rain reflections, slow drone movement"}}
 	}`
 	if rec := h.post(prompt); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
@@ -1121,21 +1176,22 @@ func TestPrunaAIVideoButtonEnablesPlainTextVideoJobs(t *testing.T) {
 		t.Fatalf("user not created: %v", err)
 	}
 	cmds, _ := h.cmds.ListByUser(ctx, user.ID, 10, 0)
-	if !hasCommandTypes(cmds, domain.CommandMenuVideoPrunaAI, domain.CommandVideoGenerate) {
+	if !hasCommandTypes(cmds, domain.CommandMenuVideoKling21Start, domain.CommandVideoGenerate) {
 		t.Fatalf("unexpected command types: %+v", commandTypes(cmds))
 	}
 	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
 	if len(jobs) != 1 || jobs[0].OperationType != domain.OperationVideoGenerate || jobs[0].Modality != domain.ModalityVideo || h.pub.Len() != 1 {
-		t.Fatalf("PrunaAI mode should create one video job, jobs=%+v tasks=%d", jobs, h.pub.Len())
+		t.Fatalf("video route mode should create one video job, jobs=%+v tasks=%d", jobs, h.pub.Len())
 	}
 	sent := control.Sent()
-	if len(sent) != 2 || !strings.Contains(sent[0].Text, "PrunaAI активен") || sent[1].Text != "НейроХаб готовит видео..." {
-		t.Fatalf("unexpected PrunaAI mode responses: %+v", sent)
+	if len(sent) != 2 || !strings.Contains(sent[0].Text, "Balanced video") || sent[1].Text != "НейроХаб готовит видео..." {
+		t.Fatalf("unexpected video route mode responses: %+v", sent)
 	}
 	var params struct {
 		Prompt                 string `json:"prompt"`
 		ModelID                string `json:"model_id"`
 		ModelName              string `json:"model_name"`
+		VideoRouteAlias        string `json:"video_route_alias"`
 		Provider               string `json:"provider"`
 		ModelCode              string `json:"model_code"`
 		DurationSec            int    `json:"duration_sec"`
@@ -1145,13 +1201,14 @@ func TestPrunaAIVideoButtonEnablesPlainTextVideoJobs(t *testing.T) {
 		t.Fatalf("decode job params: %v", err)
 	}
 	if params.Prompt != "cinematic neon city at night, rain reflections, slow drone movement" ||
-		params.ModelID != "prunaai" ||
-		params.ModelName != "PrunaAI" ||
-		params.Provider != "deepinfra" ||
-		params.ModelCode != "PrunaAI/p-video" ||
+		params.ModelID != "" ||
+		params.ModelName != "Balanced video" ||
+		params.VideoRouteAlias != string(domain.VideoRouteKlingO3Standard) ||
+		params.Provider != "" ||
+		params.ModelCode != "" ||
 		params.DurationSec != 5 ||
 		params.VKPlaceholderMessageID != sent[1].MessageID {
-		t.Fatalf("unexpected PrunaAI video job params: %+v, pending=%+v", params, sent[1])
+		t.Fatalf("unexpected video route job params: %+v, pending=%+v", params, sent[1])
 	}
 }
 
@@ -1876,19 +1933,24 @@ func TestDisabledVideoStartPayloadDoesNotEnablePlainTextVideoJobs(t *testing.T) 
 		t.Fatalf("disabled video start payload must not create video jobs, jobs=%+v tasks=%d", jobs, h.pub.Len())
 	}
 	sent := control.Sent()
-	if len(sent) != 2 || strings.Contains(sent[0].Text, "sora-2 активен") || sent[1].Text == "НейроХаб готовит видео..." {
+	if len(sent) != 2 || strings.Contains(sent[0].Text, "Creative video активен") || sent[1].Text == "НейроХаб готовит видео..." {
 		t.Fatalf("disabled video start payload must fall back without pending video message, got %+v", sent)
 	}
 }
 
 func TestPersistedVideoModeSurvivesHandlerRestart(t *testing.T) {
 	dialogState := newFakeDialogState()
-	dialogState.modes[5931] = "video:sora_2"
+	dialogState.modes[5931] = "video:runway_gen4_turbo"
 
 	secondControl := vkdelivery.NewMockClient()
 	second := newHarnessWithConfigAndDialogState(secondControl, vk.Config{
 		ConfirmationToken: "conf-token-123",
 		Secret:            "s3cr3t",
+		MenuFeatures: enabledVideoCommands(
+			domain.CommandMenuVideoSora2,
+			domain.CommandMenuVideoSora2Start,
+			domain.CommandMenuVideoSora2Examples,
+		),
 	}, dialogState)
 	prompt := `{
 		"type":"message_new","group_id":1,"event_id":"evt-video-persist-prompt","secret":"s3cr3t",
@@ -1908,14 +1970,15 @@ func TestPersistedVideoModeSurvivesHandlerRestart(t *testing.T) {
 		t.Fatalf("persisted video mode should create one video job, jobs=%+v tasks=%d", jobs, second.pub.Len())
 	}
 	var params struct {
-		Provider  string `json:"provider"`
-		ModelCode string `json:"model_code"`
+		VideoRouteAlias string `json:"video_route_alias"`
+		Provider        string `json:"provider"`
+		ModelCode       string `json:"model_code"`
 	}
 	if err := json.Unmarshal(jobs[0].Params, &params); err != nil {
 		t.Fatalf("decode job params: %v", err)
 	}
-	if params.Provider != "openai" || params.ModelCode != "sora-2" {
-		t.Fatalf("persisted video mode should use catalog model, got %+v", params)
+	if params.VideoRouteAlias != string(domain.VideoRouteRunwayGen4Turbo) || params.Provider != "" || params.ModelCode != "" {
+		t.Fatalf("persisted video mode should use public route alias only, got %+v", params)
 	}
 }
 
@@ -2015,20 +2078,20 @@ func TestVideoNestedButtonsAreControlCommandsNoJob(t *testing.T) {
 			wantKeys: []string{"⬅️ Назад", "menu.video.seedance_1"},
 		},
 		{
-			name:     "haiuo picker",
-			eventID:  "evt-video-haiuo",
-			text:     "Haiuo v0.2 — видео текст+фото",
-			command:  domain.CommandMenuVideoHaiuo02,
-			wantText: "Haiuo 02",
-			wantKeys: []string{"Haiuo v0.2 Обычный", "Haiuo v0.2 Fast", "⬅️ Назад"},
+			name:     "hailuo picker",
+			eventID:  "evt-video-hailuo",
+			text:     "Hailuo v0.2 — видео текст+фото",
+			command:  domain.CommandMenuVideoHailuo02,
+			wantText: "Hailuo 02",
+			wantKeys: []string{"Hailuo v0.2 Обычный", "Hailuo v0.2 Fast", "⬅️ Назад"},
 		},
 		{
-			name:     "haiuo fast",
-			eventID:  "evt-video-haiuo-fast",
-			text:     "Haiuo v0.2 Fast",
-			command:  domain.CommandMenuVideoHaiuo02Fast,
-			wantText: "Haiuo v0.2 Fast активен",
-			wantKeys: []string{"⬅️ Назад", "menu.video.haiuo_v0_2"},
+			name:     "hailuo fast",
+			eventID:  "evt-video-hailuo-fast",
+			text:     "Hailuo v0.2 Fast",
+			command:  domain.CommandMenuVideoHailuo02Fast,
+			wantText: "Hailuo v0.2 Fast активен",
+			wantKeys: []string{"⬅️ Назад", "menu.video.hailuo_v0_2"},
 		},
 	}
 
@@ -2062,7 +2125,7 @@ func TestVideoNestedButtonsAreControlCommandsNoJob(t *testing.T) {
 			if len(sent) != 1 || !strings.Contains(sent[0].Text, "Добро пожаловать в НейроХаб") {
 				t.Fatalf("expected current welcome menu fallback, got %+v", sent)
 			}
-			for _, hidden := range []string{"Начать генерацию", "Примеры", "Seedance 1 Lite", "Seedance 1 Pro", "Haiuo v0.2 Обычный", "Haiuo v0.2 Fast"} {
+			for _, hidden := range []string{"Начать генерацию", "Примеры", "Seedance 1 Lite", "Seedance 1 Pro", "Hailuo v0.2 Обычный", "Hailuo v0.2 Fast"} {
 				if strings.Contains(sent[0].Keyboard, hidden) {
 					t.Fatalf("disabled nested video button should stay hidden: %q", sent[0].Keyboard)
 				}
