@@ -122,11 +122,15 @@ func (g *GenerationWorker) toDispatching(ctx context.Context, job *domain.Job) e
 // row if a concurrent attempt already created it (idempotency key conflict).
 func (g *GenerationWorker) persistTask(ctx context.Context, job *domain.Job, provider domain.ProviderName, submitted domain.ProviderTask, req domain.ProviderRequest, attempt int) (*domain.ProviderTask, error) {
 	now := time.Now()
+	modelCode := submitted.ModelCode
+	if modelCode == "" {
+		modelCode = req.ModelCode
+	}
 	pt := &domain.ProviderTask{
 		ID:             uuid.New(),
 		JobID:          job.ID,
 		Provider:       provider,
-		ModelCode:      submitted.ModelCode,
+		ModelCode:      modelCode,
 		ExternalID:     submitted.ExternalID,
 		AttemptNo:      attempt,
 		Status:         submitted.Status,

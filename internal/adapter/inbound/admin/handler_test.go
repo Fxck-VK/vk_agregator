@@ -295,6 +295,13 @@ func TestProviderMediaAndConfigOperatorDTOsAreSafe(t *testing.T) {
 		MediaProviderQualityGuardEnabled:     true,
 		MediaProviderQualityDegradedFailures: 3,
 		MediaProviderQualityDisabledFailures: 5,
+		APIMartAPIKey:                        "raw-apimart-api-key",
+		APIMartBaseURL:                       "https://private.example/apimart",
+		APIMartProviderEnabled:               true,
+		PoYoProviderEnabled:                  true,
+		FeatureVideoRouterEnabled:            true,
+		FeatureVideoRouteHailuo23FastEnabled: true,
+		FeatureVideoRouteRunwayGen45Enabled:  true,
 	}
 	h := admin.NewHandler(admin.Config{Token: testAdminToken, Runtime: admin.NewRuntimeSnapshot(cfg)}, admin.Deps{
 		Jobs:       jobs,
@@ -365,6 +372,13 @@ func TestProviderMediaAndConfigOperatorDTOsAreSafe(t *testing.T) {
 		for _, forbidden := range []string{
 			"raw-provider-model-id",
 			"raw-openai-video-model",
+			"raw-apimart-api-key",
+			"provider_model_id",
+			"MiniMax-Hailuo-2.3",
+			"kling-o3/standard",
+			"seedance-2-fast",
+			"runway-gen-4.5",
+			"https://private.example",
 			"private.example",
 			"prompt text",
 			"idem:secret",
@@ -387,8 +401,34 @@ func TestProviderMediaAndConfigOperatorDTOsAreSafe(t *testing.T) {
 	if len(providers.Providers) == 0 || providers.Fallback.Status != "ok" {
 		t.Fatalf("unexpected provider control room: %+v", providers)
 	}
+	if len(providers.VideoRoutes) == 0 {
+		t.Fatalf("expected safe video route state rows, got none")
+	}
+	hailuoFast := findVideoRouteDTO(providers.VideoRoutes, string(domain.VideoRouteHailuo23Fast))
+	if hailuoFast == nil || hailuoFast.Status != "ok" || hailuoFast.Reason != "ready" ||
+		hailuoFast.ProviderClass != "apimart" || hailuoFast.ModelClass != "hailuo_2_3_fast" {
+		t.Fatalf("unexpected hailuo route state: %+v", hailuoFast)
+	}
+	hailuoStandard := findVideoRouteDTO(providers.VideoRoutes, string(domain.VideoRouteHailuo23Standard))
+	if hailuoStandard == nil || hailuoStandard.Status != "not_wired" || hailuoStandard.Reason != "route_flag_off" {
+		t.Fatalf("unexpected disabled route state: %+v", hailuoStandard)
+	}
+	runwayGen45 := findVideoRouteDTO(providers.VideoRoutes, string(domain.VideoRouteRunwayGen45))
+	if runwayGen45 == nil || runwayGen45.Status != "warning" || runwayGen45.Reason != "provider_unconfigured" ||
+		runwayGen45.ProviderClass != "poyo" {
+		t.Fatalf("unexpected poyo route state: %+v", runwayGen45)
+	}
 	if providers.ProviderWaste.Value == "0" || providers.DeliveryCaptureGap.Value == "0" {
 		t.Fatalf("expected provider waste and capture gap signals, got %+v", providers)
+	}
+
+	rec, _ = do(t, h, "/admin/config-health/operator")
+	var configHealth admin.OperatorConfigHealthDTO
+	if err := json.Unmarshal(rec.Body.Bytes(), &configHealth); err != nil {
+		t.Fatalf("decode config health: %v", err)
+	}
+	if findVideoRouteDTO(configHealth.VideoRoutes, string(domain.VideoRouteHailuo23Fast)) == nil {
+		t.Fatalf("expected route state in config health: %+v", configHealth.VideoRoutes)
 	}
 
 	rec, _ = do(t, h, "/admin/media-safety/operator")
@@ -401,6 +441,15 @@ func TestProviderMediaAndConfigOperatorDTOsAreSafe(t *testing.T) {
 		len(media.Uploads) != 3 {
 		t.Fatalf("unexpected media safety DTO: %+v", media)
 	}
+}
+
+func findVideoRouteDTO(items []admin.OperatorVideoRouteDTO, alias string) *admin.OperatorVideoRouteDTO {
+	for i := range items {
+		if items[i].Alias == alias {
+			return &items[i]
+		}
+	}
+	return nil
 }
 
 func TestUsersReferralsAndAuditOperatorDTOsAreSafe(t *testing.T) {

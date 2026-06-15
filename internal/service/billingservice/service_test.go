@@ -37,6 +37,24 @@ func TestEstimate(t *testing.T) {
 	}
 }
 
+func TestEstimateProviderCost(t *testing.T) {
+	svc := billingservice.New(memory.NewBillingRepo())
+
+	got, err := svc.EstimateProviderCost(100, 2, 250)
+	if err != nil {
+		t.Fatalf("EstimateProviderCost error: %v", err)
+	}
+	if got != 200 {
+		t.Fatalf("EstimateProviderCost = %d, want 200", got)
+	}
+	if _, err := svc.EstimateProviderCost(0, 2, 0); !errors.Is(err, billingservice.ErrInvalidAmount) {
+		t.Fatalf("expected ErrInvalidAmount for zero provider cost, got %v", err)
+	}
+	if _, err := svc.EstimateProviderCost(100, 2, 150); !errors.Is(err, domain.ErrCostCapExceeded) {
+		t.Fatalf("expected ErrCostCapExceeded, got %v", err)
+	}
+}
+
 func TestEstimateRejectsNonPositiveConfiguredPrices(t *testing.T) {
 	ctx := context.Background()
 	repo := memory.NewBillingRepo()

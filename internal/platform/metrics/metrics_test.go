@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
 )
 
@@ -129,6 +130,18 @@ func TestMediaMetricsHelpersUseSanitizedLabels(t *testing.T) {
 	AddProductMediaWaste(" DeepInfra ", "Video Class@example.com", "Video", "No Capture@example.com", 10)
 	AddMediaProviderWaste(" DeepInfra ", "Video Class@example.com", "No Capture@example.com", 10)
 	ObserveMediaDeliveryCaptureGap("Video Generate", "Video", "Capture Failed@example.com")
+	ObserveVideoRouteSubmit(" PoYo ", "Video Kling O3@example.com", "Rate Limited@example.com")
+	AddVideoRouteActualCost(" PoYo ", "Video Kling O3@example.com", "Credits ", 10)
+	ObserveVideoRouteEstimateActualDelta(" PoYo ", "Video Kling O3@example.com", "Success ", -2)
+	ObserveVideoRouteSubmitToComplete(" PoYo ", "Video Kling O3@example.com", "Succeeded ", time.Second)
+	ObserveVideoRouteProviderTaskFailure(" PoYo ", "Video Kling O3@example.com", "Provider Timeout@example.com")
+	ObserveVideoRouteMediaFailure(" PoYo ", "Video Kling O3@example.com", "Download ", "Private URL Expired@example.com")
+	ObserveVideoRouteBilling(" PoYo ", "Video Kling O3@example.com", "Capture ", "Success ")
+	SetVideoRouteProviderBalance(" PoYo ", 100)
+	routeCounter := counterValue(t, VideoRouteSubmit, "poyo", "video_kling_o3_example.com", "rate_limited_example.com")
+	if routeCounter <= 0 {
+		t.Fatalf("video route submit counter = %v, want > 0", routeCounter)
+	}
 }
 
 func TestInitPaymentProviderMetricsCreatesZeroProviderErrorSeries(t *testing.T) {
@@ -158,6 +171,22 @@ func mediaProbeCounterValue(t *testing.T, labels ...string) float64 {
 	}
 	var metric dto.Metric
 	if err := counter.Write(&metric); err != nil {
+		t.Fatalf("counter.Write() error = %v", err)
+	}
+	if metric.Counter == nil {
+		t.Fatal("metric counter is nil")
+	}
+	return metric.Counter.GetValue()
+}
+
+func counterValue(t *testing.T, counter *prometheus.CounterVec, labels ...string) float64 {
+	t.Helper()
+	metricCounter, err := counter.GetMetricWithLabelValues(labels...)
+	if err != nil {
+		t.Fatalf("GetMetricWithLabelValues() error = %v", err)
+	}
+	var metric dto.Metric
+	if err := metricCounter.Write(&metric); err != nil {
 		t.Fatalf("counter.Write() error = %v", err)
 	}
 	if metric.Counter == nil {

@@ -103,6 +103,12 @@ type Config struct {
 	// PaymentCancelEnabled enables user-owned cancellation of waiting Mini App
 	// top-up payment intents.
 	PaymentCancelEnabled bool
+	// VideoRoutes are public product route aliases already filtered by server
+	// feature flags and provider readiness. They must not contain provider ids
+	// or pricing.
+	VideoRoutes []VideoRouteDTO
+	// VideoRouteResolver estimates server-owned route cost for Mini App previews.
+	VideoRouteResolver joborchestrator.VideoRouteResolver
 }
 
 // ObjectReader loads and stores artifact bytes (S3/MinIO).
@@ -170,6 +176,7 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("POST /miniapp/jobs", h.auth(h.rateLimitMiniApp("miniapp_job", h.createJob)))
 	mux.HandleFunc("GET /miniapp/jobs", h.auth(h.listJobs))
 	mux.HandleFunc("GET /miniapp/jobs/{id}", h.auth(h.getJob))
+	mux.HandleFunc("GET /miniapp/video-routes", h.auth(h.listVideoRoutes))
 	mux.HandleFunc("GET /miniapp/balance", h.auth(h.getBalance))
 	mux.HandleFunc("GET /miniapp/referral", h.auth(h.getReferral))
 	mux.HandleFunc("POST /miniapp/referral/accept", h.auth(h.rateLimitMiniApp("miniapp_referral", h.acceptReferral)))
@@ -182,6 +189,20 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /miniapp/artifacts/{id}", h.auth(h.getArtifact))
 	mux.HandleFunc("POST /miniapp/client-events", h.auth(h.rateLimitMiniApp("miniapp_client_events", h.clientEvent)))
 	return mux
+}
+
+func (h *Handler) listVideoRoutes(w http.ResponseWriter, r *http.Request) {
+	routes := make([]VideoRouteDTO, 0, len(h.cfg.VideoRoutes))
+	for _, route := range h.cfg.VideoRoutes {
+		if strings.TrimSpace(route.Alias) == "" {
+			continue
+		}
+		routes = append(routes, copyVideoRouteDTO(route))
+	}
+	writeJSON(w, http.StatusOK, listResponse[VideoRouteDTO]{
+		Items:      routes,
+		Pagination: pagination{Limit: len(routes), Offset: 0, Count: len(routes), HasMore: false},
+	})
 }
 
 func (h *Handler) limitArtifactUploadConcurrency(next http.HandlerFunc) http.HandlerFunc {
@@ -443,6 +464,7 @@ func safeClientRoute(value string) string {
 		"/miniapp/chat/messages",
 		"/miniapp/chat/conversations",
 		"/miniapp/jobs",
+		"/miniapp/video-routes",
 		"/miniapp/balance",
 		"/miniapp/referral",
 		"/miniapp/referral/accept",
@@ -584,35 +606,136 @@ func (h *Handler) readJobRequest(w http.ResponseWriter, r *http.Request) (Create
 		writeError(w, http.StatusBadRequest, "unsupported operation; allowed: text_generate, image_generate, video_generate")
 		return CreateJobRequest{}, "", "", miniAppModelSpec{}, false
 	}
-	model, ok := resolveMiniAppModel(opType, req.ModelID)
-	if !ok {
-		writeError(w, http.StatusBadRequest, "unsupported model")
-		return CreateJobRequest{}, "", "", miniAppModelSpec{}, false
-	}
 	if req.DurationSec != 0 && opType != domain.OperationVideoGenerate {
 		writeError(w, http.StatusBadRequest, "duration_sec is only supported for video_generate")
 		return CreateJobRequest{}, "", "", miniAppModelSpec{}, false
 	}
+	var model miniAppModelSpec
 	if opType == domain.OperationVideoGenerate {
-		duration, ok := normalizeVideoDurationSec(req.DurationSec)
+		if strings.TrimSpace(req.ModelID) != "" {
+			writeError(w, http.StatusBadRequest, "unsupported model")
+			return CreateJobRequest{}, "", "", miniAppModelSpec{}, false
+		}
+		route, ok := h.videoRouteByAlias(req.VideoRouteAlias)
 		if !ok {
-			writeError(w, http.StatusBadRequest, "invalid video duration; allowed: 3, 5, 10")
+			writeError(w, http.StatusBadRequest, "unsupported model")
+			return CreateJobRequest{}, "", "", miniAppModelSpec{}, false
+		}
+		req.VideoRouteAlias = route.Alias
+		duration, ok := normalizeVideoDurationSec(req.DurationSec, route)
+		if !ok {
+			writeError(w, http.StatusBadRequest, "invalid video duration")
+			return CreateJobRequest{}, "", "", miniAppModelSpec{}, false
+		}
+		if !validateVideoReferenceCount(w, route, req.ReferenceArtifactIDs) {
 			return CreateJobRequest{}, "", "", miniAppModelSpec{}, false
 		}
 		req.DurationSec = duration
+		model = videoRouteModelSpec(route)
+	} else {
+		if strings.TrimSpace(req.VideoRouteAlias) != "" {
+			writeError(w, http.StatusBadRequest, "video_route_alias is only supported for video_generate")
+			return CreateJobRequest{}, "", "", miniAppModelSpec{}, false
+		}
+		var ok bool
+		model, ok = resolveMiniAppModel(opType, req.ModelID)
+		if !ok {
+			writeError(w, http.StatusBadRequest, "unsupported model")
+			return CreateJobRequest{}, "", "", miniAppModelSpec{}, false
+		}
 	}
 	return req, opType, modality, model, true
 }
 
-func normalizeVideoDurationSec(sec int) (int, bool) {
-	switch sec {
-	case 0:
-		return 5, true
-	case 3, 5, 10:
-		return sec, true
-	default:
+func normalizeVideoDurationSec(sec int, route VideoRouteDTO) (int, bool) {
+	if len(route.AllowedDurationsSec) == 0 {
 		return 0, false
 	}
+	if sec == 0 {
+		if route.DefaultDurationSec > 0 {
+			sec = route.DefaultDurationSec
+		} else {
+			sec = route.AllowedDurationsSec[0]
+		}
+	}
+	for _, allowed := range route.AllowedDurationsSec {
+		if sec == allowed {
+			return sec, true
+		}
+	}
+	return 0, false
+}
+
+func (h *Handler) videoRouteByAlias(raw string) (VideoRouteDTO, bool) {
+	alias := strings.TrimSpace(raw)
+	if alias == "" {
+		return VideoRouteDTO{}, false
+	}
+	for _, route := range h.cfg.VideoRoutes {
+		if route.Alias == alias {
+			return copyVideoRouteDTO(route), true
+		}
+	}
+	return VideoRouteDTO{}, false
+}
+
+func validateVideoReferenceCount(w http.ResponseWriter, route VideoRouteDTO, ids []uuid.UUID) bool {
+	seen := make(map[uuid.UUID]struct{}, len(ids))
+	for _, id := range ids {
+		if id == uuid.Nil {
+			writeError(w, http.StatusBadRequest, "invalid reference artifact id")
+			return false
+		}
+		seen[id] = struct{}{}
+	}
+	count := len(seen)
+	if count > 0 && !route.SupportsReferenceImage {
+		writeError(w, http.StatusBadRequest, "reference_artifacts_unsupported")
+		return false
+	}
+	if route.MaxReferenceImages > 0 && count > route.MaxReferenceImages {
+		writeError(w, http.StatusBadRequest, "too many reference artifacts")
+		return false
+	}
+	if route.RequiresStartImage && count == 0 {
+		writeError(w, http.StatusBadRequest, "reference_artifacts_required")
+		return false
+	}
+	return true
+}
+
+func videoRouteModelSpec(route VideoRouteDTO) miniAppModelSpec {
+	return miniAppModelSpec{
+		ModelID:   route.Alias,
+		ModelName: videoRouteDisplayName(route.Alias),
+		ExposeID:  true,
+	}
+}
+
+func videoRouteDisplayName(alias string) string {
+	switch alias {
+	case string(domain.VideoRouteHailuo23Fast):
+		return "Fast photo motion"
+	case string(domain.VideoRouteHailuo23Standard):
+		return "Cinematic video"
+	case string(domain.VideoRouteKlingO3Standard):
+		return "Balanced video"
+	case string(domain.VideoRouteRunwayGen4Turbo):
+		return "Creative video"
+	case string(domain.VideoRouteSeedance20Fast):
+		return "Reference video"
+	case string(domain.VideoRouteRunwayGen45):
+		return "Premium video"
+	default:
+		return "Video"
+	}
+}
+
+func copyVideoRouteDTO(route VideoRouteDTO) VideoRouteDTO {
+	route.AllowedDurationsSec = append([]int(nil), route.AllowedDurationsSec...)
+	route.AllowedResolutions = append([]string(nil), route.AllowedResolutions...)
+	route.AllowedAspectRatios = append([]string(nil), route.AllowedAspectRatios...)
+	return route
 }
 
 func (h *Handler) estimateJob(w http.ResponseWriter, r *http.Request) {
@@ -626,6 +749,7 @@ func (h *Handler) estimateJob(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	var estimateUserID uuid.UUID
 	if len(req.ReferenceArtifactIDs) > 0 {
 		user, err := h.deps.Users.GetByVKUserID(r.Context(), vkUserID)
 		if err != nil {
@@ -636,23 +760,27 @@ func (h *Handler) estimateJob(w http.ResponseWriter, r *http.Request) {
 			}
 			return
 		}
+		estimateUserID = user.ID
 		if !h.validateReferenceArtifacts(w, r, user.ID, opType, req.ReferenceArtifactIDs) {
 			return
 		}
-		if !h.cfg.ImageReferenceEnabled {
+		if opType == domain.OperationImageGenerate && !h.cfg.ImageReferenceEnabled {
 			writeError(w, http.StatusBadRequest, "reference_artifacts_unsupported")
 			return
 		}
 	}
 
-	cost, err := h.deps.Billing.Estimate(opType)
+	cost, err := h.estimateRequestCost(r.Context(), estimateUserID, opType, modality, model, req)
 	if err != nil {
 		if errors.Is(err, billingservice.ErrUnknownOperation) {
 			metrics.ObserveProductEvent("miniapp", "job", "estimate", string(opType), string(modality), "unsupported_operation")
 			writeError(w, http.StatusBadRequest, "unsupported operation; allowed: text_generate, image_generate, video_generate")
+		} else if errors.Is(err, domain.ErrCostCapExceeded) {
+			metrics.ObserveProductEvent("miniapp", "job", "estimate", string(opType), string(modality), "cost_cap")
+			writeError(w, http.StatusBadRequest, "job cost exceeds platform limit")
 		} else {
 			metrics.ObserveProductEvent("miniapp", "job", "estimate", string(opType), string(modality), "error")
-			writeError(w, http.StatusInternalServerError, "internal error")
+			writeError(w, http.StatusBadRequest, "unsupported model")
 		}
 		return
 	}
@@ -666,14 +794,54 @@ func (h *Handler) estimateJob(w http.ResponseWriter, r *http.Request) {
 	}
 
 	metrics.ObserveProductEvent("miniapp", "job", "estimate", string(opType), string(modality), "success")
+	responseModelID := miniAppResponseModelID(model)
+	if opType == domain.OperationVideoGenerate {
+		responseModelID = ""
+	}
 	writeJSON(w, http.StatusOK, EstimateDTO{
-		Operation:      string(opType),
-		ModelID:        miniAppResponseModelID(model),
-		ModelName:      model.ModelName,
-		CostEstimate:   cost,
-		BalanceCredits: balance,
-		EnoughCredits:  balance >= cost,
+		Operation:       string(opType),
+		ModelID:         responseModelID,
+		ModelName:       model.ModelName,
+		VideoRouteAlias: strings.TrimSpace(req.VideoRouteAlias),
+		CostEstimate:    cost,
+		BalanceCredits:  balance,
+		EnoughCredits:   balance >= cost,
 	})
+}
+
+func (h *Handler) estimateRequestCost(ctx context.Context, userID uuid.UUID, opType domain.OperationType, modality domain.Modality, model miniAppModelSpec, req CreateJobRequest) (int64, error) {
+	if opType != domain.OperationVideoGenerate {
+		return h.deps.Billing.Estimate(opType)
+	}
+	if h.cfg.VideoRouteResolver == nil {
+		return 0, fmt.Errorf("miniapp video route resolver unavailable")
+	}
+	params, _ := json.Marshal(miniAppJobParams{
+		Prompt:               req.Prompt,
+		ModelName:            model.ModelName,
+		VideoRouteAlias:      strings.TrimSpace(req.VideoRouteAlias),
+		ReferenceArtifactIDs: req.ReferenceArtifactIDs,
+		DurationSec:          req.DurationSec,
+	})
+	resolution, err := h.cfg.VideoRouteResolver.ResolveVideoRoute(ctx, joborchestrator.VideoRouteCheckInput{
+		UserID:           userID,
+		Source:           "miniapp",
+		Operation:        opType,
+		Modality:         modality,
+		Params:           params,
+		InputArtifactIDs: req.ReferenceArtifactIDs,
+	})
+	if err != nil {
+		return 0, err
+	}
+	if !resolution.Resolved || !resolution.Snapshot.Valid() {
+		return 0, fmt.Errorf("miniapp video route unresolved")
+	}
+	return h.deps.Billing.EstimateProviderCost(
+		resolution.Snapshot.ProviderCostCredits,
+		resolution.Snapshot.PriceMultiplier,
+		resolution.Snapshot.MaxInternalCostCredits,
+	)
 }
 
 func (h *Handler) balanceForEstimate(ctx context.Context, vkUserID int64) (int64, error) {
@@ -706,14 +874,10 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(req.ReferenceArtifactIDs) > 0 {
-		if opType == domain.OperationVideoGenerate {
-			writeError(w, http.StatusBadRequest, "reference_artifacts_unsupported")
-			return
-		}
 		if !h.validateReferenceArtifacts(w, r, user.ID, opType, req.ReferenceArtifactIDs) {
 			return
 		}
-		if !h.cfg.ImageReferenceEnabled {
+		if opType == domain.OperationImageGenerate && !h.cfg.ImageReferenceEnabled {
 			writeError(w, http.StatusBadRequest, "reference_artifacts_unsupported")
 			return
 		}
@@ -730,14 +894,17 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 
 	jobParams := miniAppJobParams{
 		Prompt:               req.Prompt,
-		ModelID:              model.ModelID,
-		ModelName:            model.ModelName,
-		Provider:             model.Provider,
-		ModelCode:            model.ModelCode,
 		ReferenceArtifactIDs: req.ReferenceArtifactIDs,
 	}
 	if opType == domain.OperationVideoGenerate {
+		jobParams.ModelName = model.ModelName
 		jobParams.DurationSec = req.DurationSec
+		jobParams.VideoRouteAlias = strings.TrimSpace(req.VideoRouteAlias)
+	} else {
+		jobParams.ModelID = model.ModelID
+		jobParams.ModelName = model.ModelName
+		jobParams.Provider = model.Provider
+		jobParams.ModelCode = model.ModelCode
 	}
 	params, _ := json.Marshal(jobParams)
 	metrics.ObserveProductPromptLength("miniapp", string(opType), string(modality), req.Prompt)

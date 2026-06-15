@@ -17,6 +17,24 @@ export type OperatorProviderHealthDTO = {
   source: string;
 };
 
+export type OperatorVideoRouteDTO = {
+  alias: string;
+  provider_class: string;
+  model_class: string;
+  status: OperatorRiskStatus;
+  reason: string;
+  enabled: boolean;
+  provider_enabled: boolean;
+  provider_configured: boolean;
+  provider_base_configured: boolean;
+  cost_configured: boolean;
+  requires_start_image: boolean;
+  supports_reference_image: boolean;
+  max_reference_images?: number;
+  allowed_durations_sec?: number[];
+  allowed_resolutions?: string[];
+};
+
 export type OperatorProviderFallbackDTO = {
   status: OperatorRiskStatus;
   provider_classes?: string[];
@@ -41,6 +59,7 @@ export type OperatorNotWiredSignalDTO = {
 export type OperatorProviderControlRoomDTO = {
   generated_at: string;
   providers: OperatorProviderHealthDTO[];
+  video_routes: OperatorVideoRouteDTO[];
   fallback: OperatorProviderFallbackDTO;
   provider_waste: OperatorRiskSignalDTO;
   delivery_capture_gap: OperatorRiskSignalDTO;
@@ -100,5 +119,6 @@ export type OperatorConfigHealthDTO = {
   environment: string;
   flags: OperatorConfigFlagDTO[];
   provider_classes: OperatorRuntimeProviderDTO[];
+  video_routes: OperatorVideoRouteDTO[];
   notes?: string[];
 };

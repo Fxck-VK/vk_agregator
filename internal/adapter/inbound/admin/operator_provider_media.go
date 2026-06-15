@@ -9,6 +9,7 @@ import (
 
 	"vk-ai-aggregator/internal/domain"
 	platformconfig "vk-ai-aggregator/internal/platform/config"
+	"vk-ai-aggregator/internal/service/videorouter"
 )
 
 const (
@@ -46,6 +47,7 @@ type RuntimeSnapshot struct {
 	MediaProviderQualityDegradedFailures int
 	MediaProviderQualityDisabledFailures int
 	ProviderClasses                      []RuntimeProviderClass
+	VideoRoutes                          []RuntimeVideoRoute
 }
 
 // RuntimeProviderClass is a curated provider/model class. ProviderClass and
@@ -55,6 +57,26 @@ type RuntimeProviderClass struct {
 	ModelClass         string
 	Modality           string
 	ContractConfigured bool
+}
+
+// RuntimeVideoRoute is a safe route-readiness projection. It intentionally omits
+// provider-native model IDs, URLs, API keys and pricing amounts.
+type RuntimeVideoRoute struct {
+	Alias                  string
+	ProviderClass          string
+	ModelClass             string
+	Status                 string
+	Reason                 string
+	Enabled                bool
+	ProviderEnabled        bool
+	ProviderConfigured     bool
+	ProviderBaseConfigured bool
+	CostConfigured         bool
+	RequiresStartImage     bool
+	SupportsReferenceImage bool
+	MaxReferenceImages     int
+	AllowedDurationsSec    []int
+	AllowedResolutions     []string
 }
 
 // NewRuntimeSnapshot creates a safe admin projection from the full application
@@ -86,6 +108,7 @@ func NewRuntimeSnapshot(cfg platformconfig.Config) RuntimeSnapshot {
 		MediaProviderQualityDegradedFailures: cfg.MediaProviderQualityDegradedFailures,
 		MediaProviderQualityDisabledFailures: cfg.MediaProviderQualityDisabledFailures,
 		ProviderClasses:                      runtimeProviderClasses(cfg),
+		VideoRoutes:                          runtimeVideoRoutes(cfg),
 	}
 }
 
@@ -99,6 +122,7 @@ func (h *Handler) getOperatorProviders(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, OperatorProviderControlRoomDTO{
 		GeneratedAt:        now,
 		Providers:          items,
+		VideoRoutes:        h.operatorVideoRouteDTOs(),
 		Fallback:           h.operatorProviderFallback(),
 		ProviderWaste:      h.operatorProviderWasteSignal(r.Context()),
 		DeliveryCaptureGap: h.operatorDeliveryCaptureGapSignal(r.Context()),
@@ -167,6 +191,7 @@ func (h *Handler) getOperatorConfigHealth(w http.ResponseWriter, r *http.Request
 		Environment:     h.cfg.Runtime.Environment,
 		Flags:           h.operatorConfigFlags(),
 		ProviderClasses: h.operatorRuntimeProviderDTOs(),
+		VideoRoutes:     h.operatorVideoRouteDTOs(),
 		Notes: []string{
 			"This endpoint exposes non-secret flags only; paths, URLs, tokens and raw model IDs are intentionally omitted.",
 		},
@@ -372,6 +397,7 @@ func (h *Handler) operatorConfigFlags() []OperatorConfigFlagDTO {
 		{Key: "MEDIA_REFERENCE_UPLOADS_ENABLED", Value: boolString(h.cfg.Runtime.MediaReferenceUploadsEnabled), Status: overviewStatusOK, Summary: "Reference image upload feature flag."},
 		{Key: "MEDIA_REFERENCE_WEBP_ENABLED", Value: boolString(h.cfg.Runtime.MediaReferenceWebPEnabled), Status: overviewStatusOK, Summary: "WebP references stay disabled by default unless explicitly enabled."},
 		{Key: "MEDIA_PROVIDER_QUALITY_GUARD_ENABLED", Value: boolString(h.cfg.Runtime.MediaProviderQualityGuardEnabled), Status: overviewStatusOK, Summary: "Runtime quality guard configuration; live state remains worker-owned."},
+		{Key: "FEATURE_VIDEO_ROUTER_ENABLED", Value: boolString(h.videoRouterEnabled()), Status: boolStatus(h.videoRouterEnabled()), Summary: "Public video route aliases are accepted only when this router flag is enabled."},
 	}
 	return flags
 }
@@ -387,6 +413,39 @@ func (h *Handler) operatorRuntimeProviderDTOs() []OperatorRuntimeProviderDTO {
 		})
 	}
 	return out
+}
+
+func (h *Handler) operatorVideoRouteDTOs() []OperatorVideoRouteDTO {
+	out := make([]OperatorVideoRouteDTO, 0, len(h.cfg.Runtime.VideoRoutes))
+	for _, route := range h.cfg.Runtime.VideoRoutes {
+		out = append(out, OperatorVideoRouteDTO{
+			Alias:                  route.Alias,
+			ProviderClass:          route.ProviderClass,
+			ModelClass:             route.ModelClass,
+			Status:                 route.Status,
+			Reason:                 route.Reason,
+			Enabled:                route.Enabled,
+			ProviderEnabled:        route.ProviderEnabled,
+			ProviderConfigured:     route.ProviderConfigured,
+			ProviderBaseConfigured: route.ProviderBaseConfigured,
+			CostConfigured:         route.CostConfigured,
+			RequiresStartImage:     route.RequiresStartImage,
+			SupportsReferenceImage: route.SupportsReferenceImage,
+			MaxReferenceImages:     route.MaxReferenceImages,
+			AllowedDurationsSec:    append([]int(nil), route.AllowedDurationsSec...),
+			AllowedResolutions:     append([]string(nil), route.AllowedResolutions...),
+		})
+	}
+	return out
+}
+
+func (h *Handler) videoRouterEnabled() bool {
+	for _, route := range h.cfg.Runtime.VideoRoutes {
+		if route.Reason != "router_disabled" {
+			return true
+		}
+	}
+	return false
 }
 
 func (h *Handler) operatorProviderClassNames() []string {
@@ -517,6 +576,96 @@ func runtimeProviderClasses(cfg platformconfig.Config) []RuntimeProviderClass {
 	return out
 }
 
+func runtimeVideoRoutes(cfg platformconfig.Config) []RuntimeVideoRoute {
+	enabledRoutes := map[domain.VideoRouteAlias]bool{
+		domain.VideoRouteHailuo23Fast:     cfg.FeatureVideoRouteHailuo23FastEnabled,
+		domain.VideoRouteHailuo23Standard: cfg.FeatureVideoRouteHailuo23StandardEnabled,
+		domain.VideoRouteKlingO3Standard:  cfg.FeatureVideoRouteKlingO3StandardEnabled,
+		domain.VideoRouteRunwayGen4Turbo:  cfg.FeatureVideoRouteRunwayGen4TurboEnabled,
+		domain.VideoRouteSeedance20Fast:   cfg.FeatureVideoRouteSeedance20FastEnabled,
+		domain.VideoRouteRunwayGen45:      cfg.FeatureVideoRouteRunwayGen45Enabled,
+	}
+	out := make([]RuntimeVideoRoute, 0, len(enabledRoutes))
+	for _, spec := range videorouter.DefaultRouteSpecs() {
+		provider := runtimeVideoProviderReadiness(cfg, spec.Provider)
+		costConfigured := spec.ProviderCostCreditsFixed > 0 || spec.ProviderCostCreditsPerSecond > 0
+		status, reason := runtimeVideoRouteStatus(
+			cfg.FeatureVideoRouterEnabled,
+			enabledRoutes[spec.Alias],
+			provider.enabled,
+			provider.configured,
+			provider.baseConfigured,
+			costConfigured,
+		)
+		out = append(out, RuntimeVideoRoute{
+			Alias:                  safeRuntimeToken(string(spec.Alias), "unknown_route"),
+			ProviderClass:          safeProviderClass(string(spec.Provider)),
+			ModelClass:             safeRuntimeToken(spec.ModelClass, "unknown_model_class"),
+			Status:                 status,
+			Reason:                 reason,
+			Enabled:                enabledRoutes[spec.Alias],
+			ProviderEnabled:        provider.enabled,
+			ProviderConfigured:     provider.configured,
+			ProviderBaseConfigured: provider.baseConfigured,
+			CostConfigured:         costConfigured,
+			RequiresStartImage:     spec.RequiresStartImage,
+			SupportsReferenceImage: spec.SupportsReferenceImage,
+			MaxReferenceImages:     spec.MaxReferenceImages,
+			AllowedDurationsSec:    append([]int(nil), spec.AllowedDurationsSec...),
+			AllowedResolutions:     compactStrings(spec.AllowedResolutions),
+		})
+	}
+	return out
+}
+
+type runtimeVideoProviderState struct {
+	enabled        bool
+	configured     bool
+	baseConfigured bool
+}
+
+func runtimeVideoProviderReadiness(cfg platformconfig.Config, provider domain.ProviderName) runtimeVideoProviderState {
+	switch provider {
+	case domain.ProviderAPIMart:
+		return runtimeVideoProviderState{
+			enabled:        cfg.APIMartProviderEnabled,
+			configured:     strings.TrimSpace(cfg.APIMartAPIKey) != "",
+			baseConfigured: strings.TrimSpace(cfg.APIMartBaseURL) != "",
+		}
+	case domain.ProviderPoYo:
+		return runtimeVideoProviderState{
+			enabled:        cfg.PoYoProviderEnabled,
+			configured:     strings.TrimSpace(cfg.PoYoAPIKey) != "",
+			baseConfigured: strings.TrimSpace(cfg.PoYoBaseURL) != "",
+		}
+	case domain.ProviderRunway:
+		return runtimeVideoProviderState{
+			enabled:        cfg.RunwayProviderEnabled,
+			configured:     strings.TrimSpace(cfg.RunwayMLAPISecret) != "",
+			baseConfigured: strings.TrimSpace(cfg.RunwayMLBaseURL) != "",
+		}
+	default:
+		return runtimeVideoProviderState{}
+	}
+}
+
+func runtimeVideoRouteStatus(routerEnabled, routeEnabled, providerEnabled, providerConfigured, providerBaseConfigured, costConfigured bool) (string, string) {
+	switch {
+	case !routerEnabled:
+		return overviewStatusNotWired, "router_disabled"
+	case !routeEnabled:
+		return overviewStatusNotWired, "route_flag_off"
+	case !providerEnabled:
+		return overviewStatusWarning, "provider_disabled"
+	case !providerConfigured || !providerBaseConfigured:
+		return overviewStatusWarning, "provider_unconfigured"
+	case !costConfigured:
+		return overviewStatusWarning, "cost_unavailable"
+	default:
+		return overviewStatusOK, "ready"
+	}
+}
+
 func compactStrings(values []string) []string {
 	out := make([]string, 0, len(values))
 	for _, value := range values {
@@ -567,6 +716,12 @@ func safeProviderClass(provider string) string {
 		return "openai"
 	case "deepinfra":
 		return "deepinfra"
+	case "apimart":
+		return "apimart"
+	case "poyo":
+		return "poyo"
+	case "runway":
+		return "runway"
 	case "yookassa":
 		return "yookassa"
 	case "":

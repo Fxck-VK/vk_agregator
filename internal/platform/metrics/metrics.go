@@ -473,6 +473,63 @@ var (
 		Help: "Estimated provider cost by provider, model, operation and currency.",
 	}, []string{"provider", "model", "operation", "currency"})
 
+	// VideoRouteSubmit counts provider submit attempts by curated provider and
+	// public product route alias. It must never include raw provider model ids.
+	VideoRouteSubmit = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "vkagg_video_route_submit_total",
+		Help: "Video route provider submit attempts by provider, public route alias and bounded result.",
+	}, []string{"provider", "route", "result"})
+
+	// VideoRouteActualCost aggregates provider-side route cost units after a
+	// submit is accepted. Units are provider credits, not currency or user ids.
+	VideoRouteActualCost = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "vkagg_video_route_actual_cost_credits_total",
+		Help: "Provider-side video route cost credits accepted for generation by provider and public route alias.",
+	}, []string{"provider", "route", "currency"})
+
+	// VideoRouteEstimateActualDelta tracks internal-credit estimate vs captured
+	// delta at terminal/capture boundaries. Labels stay bounded to route status.
+	VideoRouteEstimateActualDelta = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "vkagg_video_route_estimate_actual_delta_credits",
+		Help:    "Difference between actual captured internal credits and initial route estimate.",
+		Buckets: []float64{-1000, -500, -100, -10, -1, 0, 1, 10, 100, 500, 1000},
+	}, []string{"provider", "route", "result"})
+
+	// VideoRouteSubmitToCompleteDuration tracks route job latency from persisted
+	// job creation to terminal status for p50/p95 dashboards and alerts.
+	VideoRouteSubmitToCompleteDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "vkagg_video_route_submit_to_complete_seconds",
+		Help:    "Video route duration from job creation to terminal status by provider, public route alias and final status.",
+		Buckets: []float64{1, 2, 5, 10, 30, 60, 120, 300, 600, 1800, 3600},
+	}, []string{"provider", "route", "status"})
+
+	// VideoRouteProviderTaskFailures counts normalized provider task failures
+	// by class. It must never expose raw provider payloads or model ids.
+	VideoRouteProviderTaskFailures = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "vkagg_video_route_provider_task_failure_total",
+		Help: "Video route provider task failures by provider, public route alias and normalized error class.",
+	}, []string{"provider", "route", "error_class"})
+
+	// VideoRouteMediaFailures counts bounded media pipeline failures after a
+	// provider route submit. Stage is download/probe/transcode/store/policy.
+	VideoRouteMediaFailures = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "vkagg_video_route_media_failure_total",
+		Help: "Video route media processing failures by provider, route, stage and bounded error class.",
+	}, []string{"provider", "route", "stage", "error_class"})
+
+	// VideoRouteBilling counts reservation/capture/release outcomes by route.
+	VideoRouteBilling = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "vkagg_video_route_billing_total",
+		Help: "Video route billing flow outcomes by provider, route, flow and result.",
+	}, []string{"provider", "route", "flow", "result"})
+
+	// VideoRouteProviderBalance records coarse provider balance when an adapter
+	// supports it. Most adapters leave it unset until explicit smoke support.
+	VideoRouteProviderBalance = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "vkagg_video_route_provider_balance_credits",
+		Help: "Provider balance credits by provider when supported by a safe adapter.",
+	}, []string{"provider"})
+
 	// BillingReservations counts reservation attempts.
 	BillingReservations = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "vkagg_billing_reservations_total",
@@ -673,6 +730,9 @@ func init() {
 		JobStatusCurrent, JobRejected, ProviderRequests, ProviderRequestDuration,
 		ProviderErrors, ProviderRateLimits, ProviderFallback, ProviderCircuitState,
 		ProviderTokens, ProviderImages, ProviderVideos, ProviderEstimatedCost,
+		VideoRouteSubmit, VideoRouteActualCost, VideoRouteEstimateActualDelta,
+		VideoRouteSubmitToCompleteDuration, VideoRouteProviderTaskFailures,
+		VideoRouteMediaFailures, VideoRouteBilling, VideoRouteProviderBalance,
 		BillingReservations, BillingCaptures, BillingReleases, LedgerEntries,
 		PaymentToLedgerDuration, ReferralRewards, FrontendEvents, FrontendJSErrors,
 		FrontendAPIFailures, FrontendLaunchFailures, FrontendPaymentFlowErrors,
@@ -1046,6 +1106,90 @@ func AddMediaProviderWaste(providerClass, modelClass, reason string, credits int
 		ProductLabel(modelClass, "unknown"),
 		ProductLabel(reason, "unknown"),
 	).Add(float64(credits))
+}
+
+// ObserveVideoRouteSubmit records a provider submit attempt for a public route
+// alias. provider/route/result are bounded product labels only.
+func ObserveVideoRouteSubmit(provider, route, result string) {
+	VideoRouteSubmit.WithLabelValues(
+		ProductLabel(provider, "unknown"),
+		ProductLabel(route, "unknown"),
+		ProductLabel(result, "unknown"),
+	).Inc()
+}
+
+// AddVideoRouteActualCost records provider route cost credits after submit is
+// accepted. Do not pass user-facing price or fiat amounts here.
+func AddVideoRouteActualCost(provider, route, currency string, credits int64) {
+	if credits <= 0 {
+		return
+	}
+	VideoRouteActualCost.WithLabelValues(
+		ProductLabel(provider, "unknown"),
+		ProductLabel(route, "unknown"),
+		ProductLabel(currency, "credits"),
+	).Add(float64(credits))
+}
+
+// ObserveVideoRouteEstimateActualDelta records internal-credit estimate drift.
+func ObserveVideoRouteEstimateActualDelta(provider, route, result string, delta int64) {
+	VideoRouteEstimateActualDelta.WithLabelValues(
+		ProductLabel(provider, "unknown"),
+		ProductLabel(route, "unknown"),
+		ProductLabel(result, "unknown"),
+	).Observe(float64(delta))
+}
+
+// ObserveVideoRouteSubmitToComplete records route latency to terminal status.
+func ObserveVideoRouteSubmitToComplete(provider, route, status string, duration time.Duration) {
+	if duration <= 0 {
+		return
+	}
+	VideoRouteSubmitToCompleteDuration.WithLabelValues(
+		ProductLabel(provider, "unknown"),
+		ProductLabel(route, "unknown"),
+		ProductLabel(status, "unknown"),
+	).Observe(duration.Seconds())
+}
+
+// ObserveVideoRouteProviderTaskFailure records normalized task failure classes.
+func ObserveVideoRouteProviderTaskFailure(provider, route, errorClass string) {
+	VideoRouteProviderTaskFailures.WithLabelValues(
+		ProductLabel(provider, "unknown"),
+		ProductLabel(route, "unknown"),
+		ProductLabel(errorClass, "unknown"),
+	).Inc()
+}
+
+// ObserveVideoRouteMediaFailure records media pipeline route failures.
+func ObserveVideoRouteMediaFailure(provider, route, stage, errorClass string) {
+	VideoRouteMediaFailures.WithLabelValues(
+		ProductLabel(provider, "unknown"),
+		ProductLabel(route, "unknown"),
+		ProductLabel(stage, "unknown"),
+		ProductLabel(errorClass, "unknown"),
+	).Inc()
+}
+
+// ObserveVideoRouteBilling records reservation/capture/release route outcomes.
+func ObserveVideoRouteBilling(provider, route, flow, result string) {
+	VideoRouteBilling.WithLabelValues(
+		ProductLabel(provider, "unknown"),
+		ProductLabel(route, "unknown"),
+		ProductLabel(flow, "unknown"),
+		ProductLabel(result, "unknown"),
+	).Inc()
+}
+
+// SetVideoRouteProviderBalance records provider balance when an adapter exposes
+// it through a safe bounded source.
+func SetVideoRouteProviderBalance(provider string, credits int64) {
+	if credits < 0 {
+		credits = 0
+	}
+	VideoRouteProviderBalance.WithLabelValues(
+		ProductLabel(provider, "unknown"),
+	).Set(float64(credits))
 }
 
 // ObserveMediaDeliveryCaptureGap records delivery/capture boundary failures.

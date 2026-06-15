@@ -682,6 +682,21 @@ func (p *observedProvider) Submit(ctx context.Context, req domain.ProviderReques
 	p.registry.record(p.provider.Name(), started, err)
 	recordProviderCall(p.provider.Name(), p.registry.metricModelForRequest(p.provider.Name(), req, task.ModelCode), req.Operation, started, err, "")
 	p.registry.recordProviderQualityForRequest(p.provider.Name(), req, task.ModelCode, err)
+	if routeSnapshot, ok := videoRouteSnapshotFromParams(req.Params); ok {
+		result := "success"
+		if err != nil {
+			result = string(classOf(err))
+			metrics.ObserveVideoRouteProviderTaskFailure(string(p.provider.Name()), string(routeSnapshot.Alias), result)
+		}
+		metrics.ObserveVideoRouteSubmit(string(p.provider.Name()), string(routeSnapshot.Alias), result)
+		if err == nil {
+			actualCost := routeSnapshot.ProviderCostCredits
+			if estimate.AmountCredits > 0 {
+				actualCost = estimate.AmountCredits
+			}
+			metrics.AddVideoRouteActualCost(string(p.provider.Name()), string(routeSnapshot.Alias), "credits", actualCost)
+		}
+	}
 	return task, err
 }
 func (p *observedProvider) Poll(ctx context.Context, ref domain.ProviderTaskRef) (domain.ProviderTaskResult, error) {
@@ -729,6 +744,7 @@ func (p *routedProvider) Submit(ctx context.Context, req domain.ProviderRequest)
 	submittedAttempts := 0
 	fallbackAttempts := 0
 	budget, budgeted := p.registry.mediaProviderBudgetFor(req)
+	routeSnapshot, hasRouteSnapshot := videoRouteSnapshotFromParams(req.Params)
 	for idx, candidate := range p.candidates {
 		contract, err := p.registry.validateProviderMediaContract(candidate.name, req, domain.CostEstimate{AmountCredits: candidate.cost, Currency: "credits"})
 		if err != nil {
@@ -740,6 +756,14 @@ func (p *routedProvider) Submit(ctx context.Context, req domain.ProviderRequest)
 		p.registry.record(candidate.name, started, err)
 		recordProviderCall(candidate.name, p.registry.metricModelForRequest(candidate.name, req, task.ModelCode), req.Operation, started, err, "")
 		p.registry.recordProviderQualityForRequest(candidate.name, req, task.ModelCode, err)
+		if hasRouteSnapshot {
+			result := "success"
+			if err != nil {
+				result = string(classOf(err))
+				metrics.ObserveVideoRouteProviderTaskFailure(string(candidate.name), string(routeSnapshot.Alias), result)
+			}
+			metrics.ObserveVideoRouteSubmit(string(candidate.name), string(routeSnapshot.Alias), result)
+		}
 		submittedAttempts++
 		if err == nil {
 			if task.Provider == "" {
@@ -748,6 +772,13 @@ func (p *routedProvider) Submit(ctx context.Context, req domain.ProviderRequest)
 			if candidate.cost > 0 {
 				model := p.registry.metricModelForRequest(candidate.name, req, task.ModelCode)
 				metrics.ProviderEstimatedCost.WithLabelValues(string(candidate.name), model, operationMetricLabel(req.Operation), "credits").Add(float64(candidate.cost))
+			}
+			if hasRouteSnapshot {
+				actualCost := routeSnapshot.ProviderCostCredits
+				if candidate.cost > 0 {
+					actualCost = candidate.cost
+				}
+				metrics.AddVideoRouteActualCost(string(candidate.name), string(routeSnapshot.Alias), "credits", actualCost)
 			}
 			return task, nil
 		}
@@ -1077,19 +1108,73 @@ const maxReferenceArtifactBytes = 20 << 20
 
 // promptParams is the subset of job params the provider request needs.
 type promptParams struct {
-	Prompt                 string              `json:"prompt"`
-	NegativePrompt         string              `json:"negative_prompt"`
-	ModelCode              string              `json:"model_code,omitempty"`
-	Provider               domain.ProviderName `json:"provider,omitempty"`
-	Size                   string              `json:"size,omitempty"`
-	AspectRatio            string              `json:"aspect_ratio,omitempty"`
-	ReferenceArtifactIDs   []uuid.UUID         `json:"reference_artifact_ids,omitempty"`
-	InputURLs              []string            `json:"input_urls,omitempty"`
-	VKPlaceholderMessageID int64               `json:"vk_placeholder_message_id,omitempty"`
-	ConversationID         string              `json:"conversation_id,omitempty"`
-	ConversationSource     string              `json:"conversation_source,omitempty"`
-	ExternalThreadID       string              `json:"external_thread_id,omitempty"`
-	DurationSec            int                 `json:"duration_sec,omitempty"`
+	Prompt                 string                    `json:"prompt"`
+	NegativePrompt         string                    `json:"negative_prompt"`
+	ModelCode              string                    `json:"model_code,omitempty"`
+	Provider               domain.ProviderName       `json:"provider,omitempty"`
+	Size                   string                    `json:"size,omitempty"`
+	AspectRatio            string                    `json:"aspect_ratio,omitempty"`
+	ReferenceArtifactIDs   []uuid.UUID               `json:"reference_artifact_ids,omitempty"`
+	InputURLs              []string                  `json:"input_urls,omitempty"`
+	VKPlaceholderMessageID int64                     `json:"vk_placeholder_message_id,omitempty"`
+	ConversationID         string                    `json:"conversation_id,omitempty"`
+	ConversationSource     string                    `json:"conversation_source,omitempty"`
+	ExternalThreadID       string                    `json:"external_thread_id,omitempty"`
+	DurationSec            int                       `json:"duration_sec,omitempty"`
+	VideoRouteAlias        string                    `json:"video_route_alias,omitempty"`
+	ResolvedVideoRoute     domain.VideoRouteSnapshot `json:"resolved_video_route,omitempty"`
+}
+
+func videoRouteSnapshotFromJob(job *domain.Job) (domain.VideoRouteSnapshot, bool) {
+	if job == nil || len(job.Params) == 0 {
+		return domain.VideoRouteSnapshot{}, false
+	}
+	return videoRouteSnapshotFromParams(job.Params)
+}
+
+func videoRouteSnapshotFromParams(raw json.RawMessage) (domain.VideoRouteSnapshot, bool) {
+	if len(raw) == 0 {
+		return domain.VideoRouteSnapshot{}, false
+	}
+	var params struct {
+		ResolvedVideoRoute domain.VideoRouteSnapshot `json:"resolved_video_route"`
+	}
+	if err := json.Unmarshal(raw, &params); err != nil || !params.ResolvedVideoRoute.Valid() {
+		return domain.VideoRouteSnapshot{}, false
+	}
+	return params.ResolvedVideoRoute, true
+}
+
+func observeVideoRouteBillingForJob(job *domain.Job, flow, result string) {
+	if snapshot, ok := videoRouteSnapshotFromJob(job); ok {
+		metrics.ObserveVideoRouteBilling(string(snapshot.Provider), string(snapshot.Alias), flow, result)
+	}
+}
+
+func observeVideoRouteTerminalForJob(job *domain.Job, status domain.JobStatus) {
+	snapshot, ok := videoRouteSnapshotFromJob(job)
+	if !ok || job == nil || job.CreatedAt.IsZero() {
+		return
+	}
+	duration := time.Since(job.CreatedAt)
+	if duration > 0 {
+		metrics.ObserveVideoRouteSubmitToComplete(string(snapshot.Provider), string(snapshot.Alias), string(status), duration)
+	}
+	result := string(status)
+	delta := job.CostCaptured - job.CostEstimate
+	metrics.ObserveVideoRouteEstimateActualDelta(string(snapshot.Provider), string(snapshot.Alias), result, delta)
+}
+
+func observeVideoRouteProviderTaskFailureForJob(job *domain.Job, class domain.ProviderErrorClass) {
+	if snapshot, ok := videoRouteSnapshotFromJob(job); ok {
+		metrics.ObserveVideoRouteProviderTaskFailure(string(snapshot.Provider), string(snapshot.Alias), string(class))
+	}
+}
+
+func observeVideoRouteMediaFailureForJob(job *domain.Job, stage, errorClass string) {
+	if snapshot, ok := videoRouteSnapshotFromJob(job); ok {
+		metrics.ObserveVideoRouteMediaFailure(string(snapshot.Provider), string(snapshot.Alias), stage, errorClass)
+	}
 }
 
 // buildRequest builds the normalized provider request for a job. The submit
@@ -1116,6 +1201,11 @@ func (p *processor) buildRequest(ctx context.Context, job *domain.Job, attempt i
 		}
 	}
 	if job.Modality == domain.ModalityVideo {
+		routeSnapshot := pp.ResolvedVideoRoute
+		if routeSnapshot.Valid() {
+			modelCode = routeSnapshot.ProviderModelID
+			pp.Provider = routeSnapshot.Provider
+		}
 		if modelCode == "" {
 			modelCode = p.videoModel
 		}
@@ -1123,9 +1213,18 @@ func (p *processor) buildRequest(ctx context.Context, job *domain.Job, attempt i
 		if pp.DurationSec > 0 {
 			durationSec = pp.DurationSec
 		}
+		if routeSnapshot.Valid() && routeSnapshot.DurationSec > 0 {
+			durationSec = routeSnapshot.DurationSec
+		}
 		resolution = p.videoResolution
+		if routeSnapshot.Valid() && strings.TrimSpace(routeSnapshot.Resolution) != "" {
+			resolution = routeSnapshot.Resolution
+		}
 		if pp.AspectRatio == "" {
 			pp.AspectRatio = p.videoAspectRatio
+		}
+		if routeSnapshot.Valid() && strings.TrimSpace(routeSnapshot.AspectRatio) != "" {
+			pp.AspectRatio = routeSnapshot.AspectRatio
 		}
 		draft = p.videoDraft
 	}
@@ -1149,7 +1248,7 @@ func (p *processor) buildRequest(ctx context.Context, job *domain.Job, attempt i
 		}
 	}
 	var inputURLs []string
-	if job.Modality == domain.ModalityImage && len(pp.ReferenceArtifactIDs) > 0 {
+	if (job.Modality == domain.ModalityImage || job.Modality == domain.ModalityVideo) && len(pp.ReferenceArtifactIDs) > 0 {
 		var err error
 		inputURLs, err = p.resolveReferenceInputURLs(ctx, job, pp.ReferenceArtifactIDs)
 		if err != nil {
@@ -1158,7 +1257,7 @@ func (p *processor) buildRequest(ctx context.Context, job *domain.Job, attempt i
 	}
 	providerParams := stripProviderInputURLs(job.Params)
 	if job.Modality == domain.ModalityVideo {
-		providerParams = safeVideoProviderParams(durationSec, resolution, pp.AspectRatio, draft)
+		providerParams = safeVideoProviderParams(durationSec, resolution, pp.AspectRatio, draft, pp.ResolvedVideoRoute)
 	}
 	return domain.ProviderRequest{
 		JobID:                job.ID,
@@ -1183,7 +1282,7 @@ func (p *processor) buildRequest(ctx context.Context, job *domain.Job, attempt i
 	}, nil
 }
 
-func safeVideoProviderParams(durationSec int, resolution, aspectRatio string, draft bool) json.RawMessage {
+func safeVideoProviderParams(durationSec int, resolution, aspectRatio string, draft bool, route domain.VideoRouteSnapshot) json.RawMessage {
 	params := map[string]any{}
 	if durationSec > 0 {
 		params["duration_sec"] = durationSec
@@ -1196,6 +1295,9 @@ func safeVideoProviderParams(durationSec int, resolution, aspectRatio string, dr
 	}
 	if draft {
 		params["draft"] = true
+	}
+	if route.Valid() {
+		params["resolved_video_route"] = route
 	}
 	raw, err := json.Marshal(params)
 	if err != nil {
@@ -1526,6 +1628,7 @@ func (p *processor) setStatus(ctx context.Context, job *domain.Job, to domain.Jo
 		if duration > 0 {
 			metrics.JobDuration.WithLabelValues(operationMetricLabel(job.OperationType), modalityMetricLabel(job.Modality), string(to)).Observe(duration.Seconds())
 		}
+		observeVideoRouteTerminalForJob(job, to)
 	}
 	if to == domain.JobStatusResultReady {
 		metrics.ObserveProductEvent("worker", "job", "result_ready", operationMetricLabel(job.OperationType), modalityMetricLabel(job.Modality), "success")
@@ -1585,10 +1688,14 @@ func (p *processor) pollOnce(ctx context.Context, job *domain.Job, pt *domain.Pr
 	res, err := provider.Poll(pollCtx, domain.ProviderTaskRef{Provider: pt.Provider, ExternalID: pt.ExternalID})
 	p.recordProviderPoll(pt.Provider, pt.ModelCode, job.Modality, job.OperationType, started, res, err)
 	if err != nil {
+		observeVideoRouteProviderTaskFailureForJob(job, classOf(err))
 		tracing.RecordError(span, err)
 		span.End()
 		cancel()
 		return p.handleFailure(ctx, job, task, classOf(err), err.Error())
+	}
+	if res.Status == domain.ProviderTaskFailed && res.ErrorClass != "" {
+		observeVideoRouteProviderTaskFailureForJob(job, res.ErrorClass)
 	}
 	span.SetAttributes(attribute.String("provider.task_status", string(res.Status)))
 	span.End()
@@ -1634,6 +1741,7 @@ func (p *processor) applyResult(ctx context.Context, job *domain.Job, pt *domain
 		p.recordProviderOutputs(pt, job, res)
 		if err := p.saveOutputs(ctx, job, res.OutputURLs); err != nil {
 			p.recordProviderProductFailureForTask(job, pt, "output_download_failed")
+			observeVideoRouteMediaFailureForJob(job, "download", string(domain.ProviderErrOutputDownloadFailed))
 			// A download failure is retryable provider-side.
 			return p.handleFailure(ctx, job, task, domain.ProviderErrOutputDownloadFailed, err.Error())
 		}
@@ -1646,9 +1754,11 @@ func (p *processor) applyResult(ctx context.Context, job *domain.Job, pt *domain
 			switch {
 			case errors.As(err, &probeErr):
 				p.recordProviderProductFailure(ctx, job, string(probeErr))
+				observeVideoRouteMediaFailureForJob(job, "probe", string(probeErr))
 				return p.handleMediaFailure(ctx, job, safeMediaFailureCode(err), safeMediaFailureMessage(err))
 			case errors.As(err, &transcodeErr):
 				p.recordProviderProductFailure(ctx, job, string(transcodeErr))
+				observeVideoRouteMediaFailureForJob(job, "transcode", string(transcodeErr))
 				return p.handleMediaFailure(ctx, job, safeMediaFailureCode(err), safeMediaFailureMessage(err))
 			default:
 				return err
@@ -2254,9 +2364,11 @@ func (p *processor) releaseReserved(ctx context.Context, job *domain.Job) error 
 	}
 	if err := p.releaser.ReleaseForJob(ctx, job.ID); err != nil {
 		metrics.BillingReleases.WithLabelValues(operationMetricLabel(job.OperationType), "error").Inc()
+		observeVideoRouteBillingForJob(job, "release", "error")
 		return err
 	}
 	metrics.BillingReleases.WithLabelValues(operationMetricLabel(job.OperationType), "success").Inc()
+	observeVideoRouteBillingForJob(job, "release", "success")
 	return nil
 }
 
@@ -2324,10 +2436,12 @@ func (p *processor) moderateOutput(ctx context.Context, job *domain.Job, outputT
 	if p.releaser != nil {
 		if err := p.releaser.ReleaseForJob(ctx, job.ID); err != nil {
 			metrics.BillingReleases.WithLabelValues(operationMetricLabel(job.OperationType), "error").Inc()
+			observeVideoRouteBillingForJob(job, "release", "error")
 			tracing.RecordError(span, err)
 			return false, err
 		}
 		metrics.BillingReleases.WithLabelValues(operationMetricLabel(job.OperationType), "success").Inc()
+		observeVideoRouteBillingForJob(job, "release", "success")
 	}
 	return true, nil
 }

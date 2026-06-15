@@ -41,7 +41,8 @@ const CHAT_ASSISTANT_NAME = "НейроХаб";
 
 type SubmitRequest = {
   operation: string;
-  modelId: string;
+  modelId?: string;
+  videoRouteAlias?: string;
   chat?: boolean;
   referenceArtifactIds?: string[];
   durationSec?: number;
@@ -516,6 +517,7 @@ export function ChatScreen({ user }: { user: VkUser }) {
   ): Promise<Job | null> {
     const operation = request?.operation ?? CHAT_OPERATION;
     const selectedModel = request?.modelId ?? CHAT_MODEL_ID;
+    const selectedVideoRouteAlias = request?.videoRouteAlias;
     const isChat = request?.chat === true;
     const chatId = isChat ? ensureActive() : "";
     const userMsgId = "u-" + uid();
@@ -548,10 +550,12 @@ export function ChatScreen({ user }: { user: VkUser }) {
             {
               operation,
               prompt: text,
-              model_id: selectedModel,
+              model_id: !isChat && operation === "video_generate" ? undefined : selectedModel,
+              video_route_alias:
+                !isChat && operation === "video_generate" ? selectedVideoRouteAlias : undefined,
               reference_artifact_ids:
                 !isChat &&
-                operation === "image_generate" &&
+                (operation === "image_generate" || operation === "video_generate") &&
                 request?.referenceArtifactIds &&
                 request.referenceArtifactIds.length > 0
                   ? request.referenceArtifactIds

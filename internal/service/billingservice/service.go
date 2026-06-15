@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/google/uuid"
@@ -106,6 +107,24 @@ func (s *Service) Estimate(op domain.OperationType) (int64, error) {
 		return 0, fmt.Errorf("%w: price for %s is %d", ErrInvalidAmount, op, price)
 	}
 	return price, nil
+}
+
+// EstimateProviderCost converts provider-route cost into internal credits.
+func (s *Service) EstimateProviderCost(providerCostCredits int64, multiplier float64, maxInternalCredits int64) (int64, error) {
+	if providerCostCredits <= 0 {
+		return 0, fmt.Errorf("%w: provider route cost %d", ErrInvalidAmount, providerCostCredits)
+	}
+	if multiplier <= 0 {
+		return 0, fmt.Errorf("%w: route multiplier %.4f", ErrInvalidAmount, multiplier)
+	}
+	internal := int64(math.Ceil(float64(providerCostCredits) * multiplier))
+	if internal <= 0 {
+		return 0, fmt.Errorf("%w: route internal cost %d", ErrInvalidAmount, internal)
+	}
+	if maxInternalCredits > 0 && internal > maxInternalCredits {
+		return 0, fmt.Errorf("%w: route internal cost %d exceeds cap %d", domain.ErrCostCapExceeded, internal, maxInternalCredits)
+	}
+	return internal, nil
 }
 
 // StartingBalance returns the configured grant for a new account without

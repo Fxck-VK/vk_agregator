@@ -202,6 +202,25 @@ type Config struct {
 	// frontend.
 	MediaProviderContracts []domain.ProviderMediaContract
 
+	APIMartAPIKey          string
+	APIMartBaseURL         string
+	APIMartProviderEnabled bool
+	PoYoAPIKey             string
+	PoYoBaseURL            string
+	PoYoProviderEnabled    bool
+	RunwayMLAPISecret      string
+	RunwayMLBaseURL        string
+	RunwayProviderEnabled  bool
+
+	FeatureVideoRouterEnabled                   bool
+	FeatureVideoRouteHailuo23FastEnabled        bool
+	FeatureVideoRouteHailuo23StandardEnabled    bool
+	FeatureVideoRouteKlingO3StandardEnabled     bool
+	FeatureVideoRouteRunwayGen4TurboEnabled     bool
+	FeatureVideoRouteSeedance20FastEnabled      bool
+	FeatureVideoRouteRunwayGen45Enabled         bool
+	FeatureVideoRouteResellerExperimentsEnabled bool
+
 	OpenAIAPIKey       string
 	OpenAIBaseURL      string
 	OpenAITextModel    string
@@ -270,30 +289,30 @@ type Config struct {
 	// VK menu feature flags hide individual product-menu buttons without
 	// removing the underlying screens. Account/top-up are disabled by default;
 	// other menu flags default to enabled.
-	VKMenuVideoEnabled                bool
-	VKMenuImageEnabled                bool
-	VKMenuGPTEnabled                  bool
-	VKMenuStudentsEnabled             bool
-	VKMenuAccountEnabled              bool
-	VKMenuTopUpEnabled                bool
-	VKMenuVideoSora2Enabled           bool
-	VKMenuVideoSora2StartEnabled      bool
-	VKMenuVideoSora2ExamplesEnabled   bool
-	VKMenuVideoKling21Enabled         bool
-	VKMenuVideoKling21StartEnabled    bool
-	VKMenuVideoKling21ExamplesEnabled bool
-	VKMenuVideoSeedance1Enabled       bool
-	VKMenuVideoSeedance1LiteEnabled   bool
-	VKMenuVideoSeedance1ProEnabled    bool
-	VKMenuVideoHaiuo02Enabled         bool
-	VKMenuVideoHaiuo02StandardEnabled bool
-	VKMenuVideoHaiuo02FastEnabled     bool
-	VKMenuImageTextEnabled            bool
-	VKMenuImageReferenceEnabled       bool
-	VKMenuStudentsSolverEnabled       bool
-	VKMenuStudentsPresentationEnabled bool
-	VKMenuStudentsReportEnabled       bool
-	VKMenuStudentsQAEnabled           bool
+	VKMenuVideoEnabled                 bool
+	VKMenuImageEnabled                 bool
+	VKMenuGPTEnabled                   bool
+	VKMenuStudentsEnabled              bool
+	VKMenuAccountEnabled               bool
+	VKMenuTopUpEnabled                 bool
+	VKMenuVideoSora2Enabled            bool
+	VKMenuVideoSora2StartEnabled       bool
+	VKMenuVideoSora2ExamplesEnabled    bool
+	VKMenuVideoKling21Enabled          bool
+	VKMenuVideoKling21StartEnabled     bool
+	VKMenuVideoKling21ExamplesEnabled  bool
+	VKMenuVideoSeedance1Enabled        bool
+	VKMenuVideoSeedance1LiteEnabled    bool
+	VKMenuVideoSeedance1ProEnabled     bool
+	VKMenuVideoHailuo02Enabled         bool
+	VKMenuVideoHailuo02StandardEnabled bool
+	VKMenuVideoHailuo02FastEnabled     bool
+	VKMenuImageTextEnabled             bool
+	VKMenuImageReferenceEnabled        bool
+	VKMenuStudentsSolverEnabled        bool
+	VKMenuStudentsPresentationEnabled  bool
+	VKMenuStudentsReportEnabled        bool
+	VKMenuStudentsQAEnabled            bool
 	// VKTopUpReceiptEmail/VKTopUpReceiptPhone are server-side receipt contacts
 	// used by the VK Bot quick top-up flow. Mini App may still collect a user
 	// receipt contact explicitly.
@@ -429,18 +448,18 @@ func (c Config) Validate() error {
 		return fmt.Errorf("config: VK_VIDEO_DELIVERY_MODE must be doc or video")
 	}
 	if provider := strings.ToLower(strings.TrimSpace(c.Provider)); provider != "" && !knownProvider(provider) {
-		return fmt.Errorf("config: PROVIDER must be one of mock, openai, deepinfra")
+		return fmt.Errorf("config: PROVIDER must be one of %s", knownProviderList())
 	}
 	for _, provider := range c.ProviderChain {
 		if provider = strings.ToLower(strings.TrimSpace(provider)); provider != "" && !knownProvider(provider) {
-			return fmt.Errorf("config: PROVIDER_CHAIN contains unknown provider %q; allowed: mock, openai, deepinfra", provider)
+			return fmt.Errorf("config: PROVIDER_CHAIN contains unknown provider %q; allowed: %s", provider, knownProviderList())
 		}
 	}
 	if provider := strings.ToLower(strings.TrimSpace(c.ImageProvider)); provider != "" && !knownProvider(provider) {
-		return fmt.Errorf("config: IMAGE_PROVIDER must be one of mock, openai, deepinfra")
+		return fmt.Errorf("config: IMAGE_PROVIDER must be one of %s", knownProviderList())
 	}
 	if provider := strings.ToLower(strings.TrimSpace(c.VideoProvider)); provider != "" && !knownProvider(provider) {
-		return fmt.Errorf("config: VIDEO_PROVIDER must be one of mock, openai, deepinfra")
+		return fmt.Errorf("config: VIDEO_PROVIDER must be one of %s", knownProviderList())
 	}
 	if provider := strings.ToLower(strings.TrimSpace(c.ModerationProvider)); provider != "" && provider != "keyword" && provider != "openai" {
 		return fmt.Errorf("config: MODERATION_PROVIDER must be keyword or openai")
@@ -456,6 +475,9 @@ func (c Config) Validate() error {
 	}
 	if c.YooKassaWebhookIPAllowlistEnabled && len(c.YooKassaWebhookIPAllowlist) == 0 {
 		return fmt.Errorf("config: YOOKASSA_WEBHOOK_IP_ALLOWLIST must be set when YOOKASSA_WEBHOOK_IP_ALLOWLIST_ENABLED=true")
+	}
+	if err := c.validateVideoRouteProviderConfig(); err != nil {
+		return err
 	}
 	if err := validateIPOrCIDRList("YOOKASSA_WEBHOOK_IP_ALLOWLIST", c.YooKassaWebhookIPAllowlist); err != nil {
 		return err
@@ -664,6 +686,30 @@ func (c Config) Validate() error {
 	if c.usesDeepInfra() && c.DeepInfraAPIKey == "" {
 		missing = append(missing, "DEEPINFRA_API_KEY")
 	}
+	if c.usesProviderName("apimart") {
+		if strings.TrimSpace(c.APIMartAPIKey) == "" {
+			missing = append(missing, "APIMART_API_KEY")
+		}
+		if strings.TrimSpace(c.APIMartBaseURL) == "" {
+			missing = append(missing, "APIMART_BASE_URL")
+		}
+	}
+	if c.usesProviderName("poyo") {
+		if strings.TrimSpace(c.PoYoAPIKey) == "" {
+			missing = append(missing, "POYO_API_KEY")
+		}
+		if strings.TrimSpace(c.PoYoBaseURL) == "" {
+			missing = append(missing, "POYO_BASE_URL")
+		}
+	}
+	if c.usesProviderName("runway") && c.RunwayProviderEnabled && c.IsProduction() {
+		if strings.TrimSpace(c.RunwayMLAPISecret) == "" {
+			missing = append(missing, "RUNWAYML_API_SECRET")
+		}
+		if strings.TrimSpace(c.RunwayMLBaseURL) == "" {
+			missing = append(missing, "RUNWAYML_BASE_URL")
+		}
+	}
 	if c.VKDeliveryMode == "real" && c.VKAccessToken == "" {
 		missing = append(missing, "VK_ACCESS_TOKEN")
 	}
@@ -680,6 +726,9 @@ func (c Config) Validate() error {
 	}
 	if len(missing) > 0 {
 		return fmt.Errorf("config: missing required production secrets: %s", strings.Join(missing, ", "))
+	}
+	if err := c.validateSelectedProviderSwitches(); err != nil {
+		return err
 	}
 	return nil
 }
@@ -781,89 +830,109 @@ func Load() Config {
 		FeatureMiniAppTopUpCatalogDropdownEnabled: envBool("FEATURE_MINIAPP_TOPUP_CATALOG_DROPDOWN_ENABLED", false),
 		FeatureMiniAppDarkThemeOnlyEnabled:        envBool("FEATURE_MINIAPP_DARK_THEME_ONLY_ENABLED", false),
 		FeatureMiniAppTopUpHistoryDropdownEnabled: envBool("FEATURE_MINIAPP_TOPUP_HISTORY_DROPDOWN_ENABLED", false),
-		Provider:                              provider,
-		ProviderChain:                         providerChain,
-		ImageProvider:                         env("IMAGE_PROVIDER", ""),
-		VideoProvider:                         env("VIDEO_PROVIDER", ""),
-		ImageModel:                            env("IMAGE_MODEL", ""),
-		ImageSize:                             env("IMAGE_SIZE", ""),
-		VideoModel:                            env("VIDEO_MODEL", ""),
-		VideoDurationSec:                      envInt("VIDEO_DURATION_SEC", 5),
-		VideoResolution:                       env("VIDEO_RESOLUTION", "720p"),
-		VideoAspectRatio:                      env("VIDEO_ASPECT_RATIO", "16:9"),
-		VideoDraft:                            envBool("VIDEO_DRAFT", true),
-		MediaPipelineEnabled:                  mediaPipelineEnabled,
-		MediaVideoProbePolicy:                 envConfigToken("MEDIA_VIDEO_PROBE_POLICY", defaultMediaVideoProbePolicy(appEnv, mediaPipelineEnabled)),
-		MediaVideoTranscodePolicy:             envConfigToken("MEDIA_VIDEO_TRANSCODE_POLICY", MediaVideoTranscodePolicyNever),
-		MediaDeliverRawProviderVideo:          envConfigToken("MEDIA_DELIVER_RAW_PROVIDER_VIDEO", defaultMediaDeliverRawProviderVideo(appEnv, mediaPipelineEnabled)),
-		FFProbePath:                           env("FFPROBE_PATH", "ffprobe"),
-		FFmpegPath:                            env("FFMPEG_PATH", "ffmpeg"),
-		MediaMaxVideoSizeBytes:                envInt64("MEDIA_MAX_VIDEO_SIZE_BYTES", 256<<20),
-		MediaMaxVideoDurationSec:              envInt("MEDIA_MAX_VIDEO_DURATION_SEC", 60),
-		MediaMaxVideoWidth:                    envInt("MEDIA_MAX_VIDEO_WIDTH", 1920),
-		MediaMaxVideoHeight:                   envInt("MEDIA_MAX_VIDEO_HEIGHT", 1080),
-		MediaMaxVideoBitrate:                  envInt64("MEDIA_MAX_VIDEO_BITRATE", 12000000),
-		MediaAllowedVideoContainers:           envNormalizedList("MEDIA_ALLOWED_VIDEO_CONTAINERS", []string{"mp4", "mov", "webm"}),
-		MediaAllowedVideoCodecs:               envNormalizedList("MEDIA_ALLOWED_VIDEO_CODECS", []string{"h264", "h265", "hevc", "vp8", "vp9", "av1"}),
-		MediaProbeTimeout:                     envDuration("MEDIA_PROBE_TIMEOUT", 10*time.Second),
-		MediaTranscodeTimeout:                 envDuration("MEDIA_TRANSCODE_TIMEOUT", 10*time.Minute),
-		MediaMaxConcurrentProbes:              envInt("MEDIA_MAX_CONCURRENT_PROBES", 2),
-		MediaMaxConcurrentTranscodes:          envInt("MEDIA_MAX_CONCURRENT_TRANSCODES", 1),
-		MediaMaxPendingVariants:               envInt("MEDIA_MAX_PENDING_VARIANTS", 16),
-		MediaMaxActiveVideoJobsPerUser:        envInt("MEDIA_MAX_ACTIVE_VIDEO_JOBS_PER_USER", 1),
-		MediaProviderMaxAttemptsPerJob:        envInt("MEDIA_PROVIDER_MAX_ATTEMPTS_PER_JOB", 1),
-		MediaProviderFallbackBudget:           envInt("MEDIA_PROVIDER_FALLBACK_BUDGET_PER_JOB", 0),
-		MediaQueueDegradeThreshold:            envInt64("MEDIA_QUEUE_DEGRADE_THRESHOLD", 1000),
-		MediaMaxConcurrentUploads:             envInt("MEDIA_MAX_CONCURRENT_UPLOADS", 8),
-		MediaReferenceUploadsEnabled:          envBool("MEDIA_REFERENCE_UPLOADS_ENABLED", defaultMediaReferenceUploadsEnabled(appEnv)),
-		MediaReferenceWebPEnabled:             envBool("MEDIA_REFERENCE_WEBP_ENABLED", false),
-		MediaMaxImageUploadBytes:              envInt64("MEDIA_MAX_IMAGE_UPLOAD_BYTES", 20<<20),
-		MediaMaxImageWidth:                    envInt("MEDIA_MAX_IMAGE_WIDTH", 4096),
-		MediaMaxImageHeight:                   envInt("MEDIA_MAX_IMAGE_HEIGHT", 4096),
-		MediaMaxImagePixels:                   envInt64("MEDIA_MAX_IMAGE_PIXELS", 4096*4096),
-		MediaProviderQualityGuardEnabled:      envBool("MEDIA_PROVIDER_QUALITY_GUARD_ENABLED", false),
-		MediaProviderQualityDegradedFailures:  envInt("MEDIA_PROVIDER_QUALITY_DEGRADED_FAILURES", 3),
-		MediaProviderQualityDisabledFailures:  envInt("MEDIA_PROVIDER_QUALITY_DISABLED_FAILURES", 5),
-		MediaProviderQualityRecoverySuccesses: envInt("MEDIA_PROVIDER_QUALITY_RECOVERY_SUCCESSES", 2),
-		MediaProviderContractsRaw:             mediaProviderContractsRaw,
-		MediaProviderContracts:                mediaProviderContracts,
-		OpenAIAPIKey:                          env("OPENAI_API_KEY", ""),
-		OpenAIBaseURL:                         env("OPENAI_BASE_URL", "https://api.openai.com/v1"),
-		OpenAITextModel:                       env("OPENAI_TEXT_MODEL", "gpt-4.1-mini"),
-		OpenAIImageModel:                      env("OPENAI_IMAGE_MODEL", "gpt-image-1"),
-		OpenAIImageSize:                       env("OPENAI_IMAGE_SIZE", "1024x1024"),
-		OpenAIVideoModel:                      env("OPENAI_VIDEO_MODEL", "sora-2"),
-		OpenAIVideoSeconds:                    env("OPENAI_VIDEO_SECONDS", "4"),
-		OpenAIVideoSize:                       env("OPENAI_VIDEO_SIZE", "720x1280"),
-		OpenAITextPrice:                       int64(envInt("OPENAI_TEXT_PRICE", 1)),
-		OpenAIImagePrice:                      int64(envInt("OPENAI_IMAGE_PRICE", 10)),
-		OpenAIVideoPrice:                      int64(envInt("OPENAI_VIDEO_PRICE", 50)),
-		DeepInfraAPIKey:                       env("DEEPINFRA_API_KEY", ""),
-		DeepInfraBaseURL:                      env("DEEPINFRA_BASE_URL", "https://api.deepinfra.com/v1/openai"),
-		DeepInfraTextModel:                    env("DEEPINFRA_TEXT_MODEL", "deepseek-ai/DeepSeek-V4-Flash"),
-		DeepInfraTextPrice:                    int64(envInt("DEEPINFRA_TEXT_PRICE", 1)),
-		DeepInfraImageModel:                   env("DEEPINFRA_IMAGE_MODEL", "ByteDance/Seedream-4.5"),
-		DeepInfraImageFallbackModel:           env("DEEPINFRA_IMAGE_FALLBACK_MODEL", ""),
-		DeepInfraImagePrice:                   int64(envInt("DEEPINFRA_IMAGE_PRICE", 10)),
-		DeepInfraImageReferenceEnabled:        envBool("DEEPINFRA_IMAGE_REFERENCE_ENABLED", false),
-		DeepInfraVideoModel:                   env("DEEPINFRA_VIDEO_MODEL", "PrunaAI/p-video"),
-		DeepInfraVideoDurationSec:             envInt("DEEPINFRA_VIDEO_DURATION_SEC", 5),
-		DeepInfraVideoResolution:              env("DEEPINFRA_VIDEO_RESOLUTION", "720p"),
-		DeepInfraVideoAspectRatio:             env("DEEPINFRA_VIDEO_ASPECT_RATIO", "16:9"),
-		DeepInfraVideoDraft:                   envBool("DEEPINFRA_VIDEO_DRAFT", true),
-		DeepInfraVideoPrice:                   int64(envInt("DEEPINFRA_VIDEO_PRICE", 10)),
-		DeepInfraVideoHTTPTimeout:             envDuration("DEEPINFRA_VIDEO_HTTP_TIMEOUT", 180*time.Second),
-		TextContextEnabled:                    envBool("TEXT_CONTEXT_ENABLED", true),
-		TextContextMaxInputTokens:             envInt("TEXT_CONTEXT_MAX_INPUT_TOKENS", 1600),
-		TextContextMaxOutputTokens:            envInt("TEXT_CONTEXT_MAX_OUTPUT_TOKENS", 800),
-		TextContextSummaryMaxTokens:           envInt("TEXT_CONTEXT_SUMMARY_MAX_TOKENS", 400),
-		TextContextRecentMessagesLimit:        envInt("TEXT_CONTEXT_RECENT_MESSAGES_LIMIT", 6),
-		TextContextSummarizeAfterMessages:     envInt("TEXT_CONTEXT_SUMMARIZE_AFTER_MESSAGES", 10),
-		TextContextSummarizeAfterTokens:       envInt("TEXT_CONTEXT_SUMMARIZE_AFTER_TOKENS", 1500),
-		ModerationProvider:                    env("MODERATION_PROVIDER", "keyword"),
-		OpenAIModerationModel:                 env("OPENAI_MODERATION_MODEL", "omni-moderation-latest"),
-		ArtifactScanner:                       env("ARTIFACT_SCANNER", "none"),
-		AllowUnscannedArtifactsInProduction:   envBool("ALLOW_UNSCANNED_ARTIFACTS_IN_PRODUCTION", false),
+		Provider:                                 provider,
+		ProviderChain:                            providerChain,
+		ImageProvider:                            env("IMAGE_PROVIDER", ""),
+		VideoProvider:                            env("VIDEO_PROVIDER", ""),
+		ImageModel:                               env("IMAGE_MODEL", ""),
+		ImageSize:                                env("IMAGE_SIZE", ""),
+		VideoModel:                               env("VIDEO_MODEL", ""),
+		VideoDurationSec:                         envInt("VIDEO_DURATION_SEC", 5),
+		VideoResolution:                          env("VIDEO_RESOLUTION", "720p"),
+		VideoAspectRatio:                         env("VIDEO_ASPECT_RATIO", "16:9"),
+		VideoDraft:                               envBool("VIDEO_DRAFT", true),
+		MediaPipelineEnabled:                     mediaPipelineEnabled,
+		MediaVideoProbePolicy:                    envConfigToken("MEDIA_VIDEO_PROBE_POLICY", defaultMediaVideoProbePolicy(appEnv, mediaPipelineEnabled)),
+		MediaVideoTranscodePolicy:                envConfigToken("MEDIA_VIDEO_TRANSCODE_POLICY", MediaVideoTranscodePolicyNever),
+		MediaDeliverRawProviderVideo:             envConfigToken("MEDIA_DELIVER_RAW_PROVIDER_VIDEO", defaultMediaDeliverRawProviderVideo(appEnv, mediaPipelineEnabled)),
+		FFProbePath:                              env("FFPROBE_PATH", "ffprobe"),
+		FFmpegPath:                               env("FFMPEG_PATH", "ffmpeg"),
+		MediaMaxVideoSizeBytes:                   envInt64("MEDIA_MAX_VIDEO_SIZE_BYTES", 256<<20),
+		MediaMaxVideoDurationSec:                 envInt("MEDIA_MAX_VIDEO_DURATION_SEC", 60),
+		MediaMaxVideoWidth:                       envInt("MEDIA_MAX_VIDEO_WIDTH", 1920),
+		MediaMaxVideoHeight:                      envInt("MEDIA_MAX_VIDEO_HEIGHT", 1080),
+		MediaMaxVideoBitrate:                     envInt64("MEDIA_MAX_VIDEO_BITRATE", 12000000),
+		MediaAllowedVideoContainers:              envNormalizedList("MEDIA_ALLOWED_VIDEO_CONTAINERS", []string{"mp4", "mov", "webm"}),
+		MediaAllowedVideoCodecs:                  envNormalizedList("MEDIA_ALLOWED_VIDEO_CODECS", []string{"h264", "h265", "hevc", "vp8", "vp9", "av1"}),
+		MediaProbeTimeout:                        envDuration("MEDIA_PROBE_TIMEOUT", 10*time.Second),
+		MediaTranscodeTimeout:                    envDuration("MEDIA_TRANSCODE_TIMEOUT", 10*time.Minute),
+		MediaMaxConcurrentProbes:                 envInt("MEDIA_MAX_CONCURRENT_PROBES", 2),
+		MediaMaxConcurrentTranscodes:             envInt("MEDIA_MAX_CONCURRENT_TRANSCODES", 1),
+		MediaMaxPendingVariants:                  envInt("MEDIA_MAX_PENDING_VARIANTS", 16),
+		MediaMaxActiveVideoJobsPerUser:           envInt("MEDIA_MAX_ACTIVE_VIDEO_JOBS_PER_USER", 1),
+		MediaProviderMaxAttemptsPerJob:           envInt("MEDIA_PROVIDER_MAX_ATTEMPTS_PER_JOB", 1),
+		MediaProviderFallbackBudget:              envInt("MEDIA_PROVIDER_FALLBACK_BUDGET_PER_JOB", 0),
+		MediaQueueDegradeThreshold:               envInt64("MEDIA_QUEUE_DEGRADE_THRESHOLD", 1000),
+		MediaMaxConcurrentUploads:                envInt("MEDIA_MAX_CONCURRENT_UPLOADS", 8),
+		MediaReferenceUploadsEnabled:             envBool("MEDIA_REFERENCE_UPLOADS_ENABLED", defaultMediaReferenceUploadsEnabled(appEnv)),
+		MediaReferenceWebPEnabled:                envBool("MEDIA_REFERENCE_WEBP_ENABLED", false),
+		MediaMaxImageUploadBytes:                 envInt64("MEDIA_MAX_IMAGE_UPLOAD_BYTES", 20<<20),
+		MediaMaxImageWidth:                       envInt("MEDIA_MAX_IMAGE_WIDTH", 4096),
+		MediaMaxImageHeight:                      envInt("MEDIA_MAX_IMAGE_HEIGHT", 4096),
+		MediaMaxImagePixels:                      envInt64("MEDIA_MAX_IMAGE_PIXELS", 4096*4096),
+		MediaProviderQualityGuardEnabled:         envBool("MEDIA_PROVIDER_QUALITY_GUARD_ENABLED", false),
+		MediaProviderQualityDegradedFailures:     envInt("MEDIA_PROVIDER_QUALITY_DEGRADED_FAILURES", 3),
+		MediaProviderQualityDisabledFailures:     envInt("MEDIA_PROVIDER_QUALITY_DISABLED_FAILURES", 5),
+		MediaProviderQualityRecoverySuccesses:    envInt("MEDIA_PROVIDER_QUALITY_RECOVERY_SUCCESSES", 2),
+		MediaProviderContractsRaw:                mediaProviderContractsRaw,
+		MediaProviderContracts:                   mediaProviderContracts,
+		APIMartAPIKey:                            env("APIMART_API_KEY", ""),
+		APIMartBaseURL:                           env("APIMART_BASE_URL", "https://api.apimart.ai/v1"),
+		APIMartProviderEnabled:                   envBool("APIMART_PROVIDER_ENABLED", false),
+		PoYoAPIKey:                               env("POYO_API_KEY", ""),
+		PoYoBaseURL:                              env("POYO_BASE_URL", ""),
+		PoYoProviderEnabled:                      envBool("POYO_PROVIDER_ENABLED", false),
+		RunwayMLAPISecret:                        env("RUNWAYML_API_SECRET", ""),
+		RunwayMLBaseURL:                          env("RUNWAYML_BASE_URL", "https://api.dev.runwayml.com/v1"),
+		RunwayProviderEnabled:                    envBool("RUNWAY_PROVIDER_ENABLED", false),
+		FeatureVideoRouterEnabled:                envBool("FEATURE_VIDEO_ROUTER_ENABLED", false),
+		FeatureVideoRouteHailuo23FastEnabled:     envBool("FEATURE_VIDEO_ROUTE_HAILUO_2_3_FAST_ENABLED", false),
+		FeatureVideoRouteHailuo23StandardEnabled: envBool("FEATURE_VIDEO_ROUTE_HAILUO_2_3_STANDARD_ENABLED", false),
+		FeatureVideoRouteKlingO3StandardEnabled: envBool(
+			"FEATURE_VIDEO_ROUTE_KLING_O3_STANDARD_ENABLED",
+			envBool("FEATURE_VIDEO_ROUTE_KLING_O3_ENABLED", false),
+		),
+		FeatureVideoRouteRunwayGen4TurboEnabled:     envBool("FEATURE_VIDEO_ROUTE_RUNWAY_GEN4_TURBO_ENABLED", false),
+		FeatureVideoRouteSeedance20FastEnabled:      envBool("FEATURE_VIDEO_ROUTE_SEEDANCE_2_0_FAST_ENABLED", false),
+		FeatureVideoRouteRunwayGen45Enabled:         envBool("FEATURE_VIDEO_ROUTE_RUNWAY_GEN4_5_ENABLED", false),
+		FeatureVideoRouteResellerExperimentsEnabled: envBool("FEATURE_VIDEO_ROUTE_RESELLER_EXPERIMENTS_ENABLED", false),
+		OpenAIAPIKey:                        env("OPENAI_API_KEY", ""),
+		OpenAIBaseURL:                       env("OPENAI_BASE_URL", "https://api.openai.com/v1"),
+		OpenAITextModel:                     env("OPENAI_TEXT_MODEL", "gpt-4.1-mini"),
+		OpenAIImageModel:                    env("OPENAI_IMAGE_MODEL", "gpt-image-1"),
+		OpenAIImageSize:                     env("OPENAI_IMAGE_SIZE", "1024x1024"),
+		OpenAIVideoModel:                    env("OPENAI_VIDEO_MODEL", "sora-2"),
+		OpenAIVideoSeconds:                  env("OPENAI_VIDEO_SECONDS", "4"),
+		OpenAIVideoSize:                     env("OPENAI_VIDEO_SIZE", "720x1280"),
+		OpenAITextPrice:                     int64(envInt("OPENAI_TEXT_PRICE", 1)),
+		OpenAIImagePrice:                    int64(envInt("OPENAI_IMAGE_PRICE", 10)),
+		OpenAIVideoPrice:                    int64(envInt("OPENAI_VIDEO_PRICE", 50)),
+		DeepInfraAPIKey:                     env("DEEPINFRA_API_KEY", ""),
+		DeepInfraBaseURL:                    env("DEEPINFRA_BASE_URL", "https://api.deepinfra.com/v1/openai"),
+		DeepInfraTextModel:                  env("DEEPINFRA_TEXT_MODEL", "deepseek-ai/DeepSeek-V4-Flash"),
+		DeepInfraTextPrice:                  int64(envInt("DEEPINFRA_TEXT_PRICE", 1)),
+		DeepInfraImageModel:                 env("DEEPINFRA_IMAGE_MODEL", "ByteDance/Seedream-4.5"),
+		DeepInfraImageFallbackModel:         env("DEEPINFRA_IMAGE_FALLBACK_MODEL", ""),
+		DeepInfraImagePrice:                 int64(envInt("DEEPINFRA_IMAGE_PRICE", 10)),
+		DeepInfraImageReferenceEnabled:      envBool("DEEPINFRA_IMAGE_REFERENCE_ENABLED", false),
+		DeepInfraVideoModel:                 env("DEEPINFRA_VIDEO_MODEL", "PrunaAI/p-video"),
+		DeepInfraVideoDurationSec:           envInt("DEEPINFRA_VIDEO_DURATION_SEC", 5),
+		DeepInfraVideoResolution:            env("DEEPINFRA_VIDEO_RESOLUTION", "720p"),
+		DeepInfraVideoAspectRatio:           env("DEEPINFRA_VIDEO_ASPECT_RATIO", "16:9"),
+		DeepInfraVideoDraft:                 envBool("DEEPINFRA_VIDEO_DRAFT", true),
+		DeepInfraVideoPrice:                 int64(envInt("DEEPINFRA_VIDEO_PRICE", 10)),
+		DeepInfraVideoHTTPTimeout:           envDuration("DEEPINFRA_VIDEO_HTTP_TIMEOUT", 180*time.Second),
+		TextContextEnabled:                  envBool("TEXT_CONTEXT_ENABLED", true),
+		TextContextMaxInputTokens:           envInt("TEXT_CONTEXT_MAX_INPUT_TOKENS", 1600),
+		TextContextMaxOutputTokens:          envInt("TEXT_CONTEXT_MAX_OUTPUT_TOKENS", 800),
+		TextContextSummaryMaxTokens:         envInt("TEXT_CONTEXT_SUMMARY_MAX_TOKENS", 400),
+		TextContextRecentMessagesLimit:      envInt("TEXT_CONTEXT_RECENT_MESSAGES_LIMIT", 6),
+		TextContextSummarizeAfterMessages:   envInt("TEXT_CONTEXT_SUMMARIZE_AFTER_MESSAGES", 10),
+		TextContextSummarizeAfterTokens:     envInt("TEXT_CONTEXT_SUMMARIZE_AFTER_TOKENS", 1500),
+		ModerationProvider:                  env("MODERATION_PROVIDER", "keyword"),
+		OpenAIModerationModel:               env("OPENAI_MODERATION_MODEL", "omni-moderation-latest"),
+		ArtifactScanner:                     env("ARTIFACT_SCANNER", "none"),
+		AllowUnscannedArtifactsInProduction: envBool("ALLOW_UNSCANNED_ARTIFACTS_IN_PRODUCTION", false),
 
 		VKDeliveryMode:                    env("VK_DELIVERY_MODE", "mock"),
 		VKAccessToken:                     env("VK_ACCESS_TOKEN", ""),
@@ -891,9 +960,18 @@ func Load() Config {
 		VKMenuVideoSeedance1Enabled:       envBool("VK_MENU_VIDEO_SEEDANCE1_ENABLED", true),
 		VKMenuVideoSeedance1LiteEnabled:   envBool("VK_MENU_VIDEO_SEEDANCE1_LITE_ENABLED", true),
 		VKMenuVideoSeedance1ProEnabled:    envBool("VK_MENU_VIDEO_SEEDANCE1_PRO_ENABLED", true),
-		VKMenuVideoHaiuo02Enabled:         envBool("VK_MENU_VIDEO_HAIUO02_ENABLED", true),
-		VKMenuVideoHaiuo02StandardEnabled: envBool("VK_MENU_VIDEO_HAIUO02_STANDARD_ENABLED", true),
-		VKMenuVideoHaiuo02FastEnabled:     envBool("VK_MENU_VIDEO_HAIUO02_FAST_ENABLED", true),
+		VKMenuVideoHailuo02Enabled: envBool(
+			"VK_MENU_VIDEO_HAILUO02_ENABLED",
+			envBool("VK_MENU_VIDEO_HAIUO02_ENABLED", true),
+		),
+		VKMenuVideoHailuo02StandardEnabled: envBool(
+			"VK_MENU_VIDEO_HAILUO02_STANDARD_ENABLED",
+			envBool("VK_MENU_VIDEO_HAIUO02_STANDARD_ENABLED", true),
+		),
+		VKMenuVideoHailuo02FastEnabled: envBool(
+			"VK_MENU_VIDEO_HAILUO02_FAST_ENABLED",
+			envBool("VK_MENU_VIDEO_HAIUO02_FAST_ENABLED", true),
+		),
 		VKMenuImageTextEnabled:            envBool("VK_MENU_IMAGE_TEXT_ENABLED", false),
 		VKMenuImageReferenceEnabled:       envBool("VK_MENU_IMAGE_REFERENCE_ENABLED", false),
 		VKMenuStudentsSolverEnabled:       envBool("VK_MENU_STUDENTS_SOLVER_ENABLED", true),
@@ -960,6 +1038,151 @@ func (c Config) usesOpenAI() bool {
 	return false
 }
 
+func (c Config) validateVideoRouteProviderConfig() error {
+	providers := []struct {
+		enabled    bool
+		switchEnv  string
+		apiKey     string
+		apiKeyEnv  string
+		baseURL    string
+		baseURLEnv string
+	}{
+		{
+			enabled:    c.APIMartProviderEnabled,
+			switchEnv:  "APIMART_PROVIDER_ENABLED",
+			apiKey:     c.APIMartAPIKey,
+			apiKeyEnv:  "APIMART_API_KEY",
+			baseURL:    c.APIMartBaseURL,
+			baseURLEnv: "APIMART_BASE_URL",
+		},
+		{
+			enabled:    c.PoYoProviderEnabled,
+			switchEnv:  "POYO_PROVIDER_ENABLED",
+			apiKey:     c.PoYoAPIKey,
+			apiKeyEnv:  "POYO_API_KEY",
+			baseURL:    c.PoYoBaseURL,
+			baseURLEnv: "POYO_BASE_URL",
+		},
+	}
+	for _, provider := range providers {
+		if !provider.enabled {
+			continue
+		}
+		if strings.TrimSpace(provider.apiKey) == "" {
+			return fmt.Errorf("config: %s=true requires %s", provider.switchEnv, provider.apiKeyEnv)
+		}
+		if strings.TrimSpace(provider.baseURL) == "" {
+			return fmt.Errorf("config: %s=true requires %s", provider.switchEnv, provider.baseURLEnv)
+		}
+	}
+
+	routes := []struct {
+		enabled           bool
+		routeEnv          string
+		providerEnabled   bool
+		providerSwitchEnv string
+		apiKey            string
+		apiKeyEnv         string
+		baseURL           string
+		baseURLEnv        string
+	}{
+		{
+			enabled:           c.FeatureVideoRouteHailuo23FastEnabled,
+			routeEnv:          "FEATURE_VIDEO_ROUTE_HAILUO_2_3_FAST_ENABLED",
+			providerEnabled:   c.APIMartProviderEnabled,
+			providerSwitchEnv: "APIMART_PROVIDER_ENABLED",
+			apiKey:            c.APIMartAPIKey,
+			apiKeyEnv:         "APIMART_API_KEY",
+			baseURL:           c.APIMartBaseURL,
+			baseURLEnv:        "APIMART_BASE_URL",
+		},
+		{
+			enabled:           c.FeatureVideoRouteHailuo23StandardEnabled,
+			routeEnv:          "FEATURE_VIDEO_ROUTE_HAILUO_2_3_STANDARD_ENABLED",
+			providerEnabled:   c.APIMartProviderEnabled,
+			providerSwitchEnv: "APIMART_PROVIDER_ENABLED",
+			apiKey:            c.APIMartAPIKey,
+			apiKeyEnv:         "APIMART_API_KEY",
+			baseURL:           c.APIMartBaseURL,
+			baseURLEnv:        "APIMART_BASE_URL",
+		},
+		{
+			enabled:           c.FeatureVideoRouteKlingO3StandardEnabled,
+			routeEnv:          "FEATURE_VIDEO_ROUTE_KLING_O3_STANDARD_ENABLED",
+			providerEnabled:   c.PoYoProviderEnabled,
+			providerSwitchEnv: "POYO_PROVIDER_ENABLED",
+			apiKey:            c.PoYoAPIKey,
+			apiKeyEnv:         "POYO_API_KEY",
+			baseURL:           c.PoYoBaseURL,
+			baseURLEnv:        "POYO_BASE_URL",
+		},
+		{
+			enabled:           c.FeatureVideoRouteRunwayGen4TurboEnabled,
+			routeEnv:          "FEATURE_VIDEO_ROUTE_RUNWAY_GEN4_TURBO_ENABLED",
+			providerEnabled:   c.RunwayProviderEnabled,
+			providerSwitchEnv: "RUNWAY_PROVIDER_ENABLED",
+			apiKey:            c.RunwayMLAPISecret,
+			apiKeyEnv:         "RUNWAYML_API_SECRET",
+			baseURL:           c.RunwayMLBaseURL,
+			baseURLEnv:        "RUNWAYML_BASE_URL",
+		},
+		{
+			enabled:           c.FeatureVideoRouteSeedance20FastEnabled,
+			routeEnv:          "FEATURE_VIDEO_ROUTE_SEEDANCE_2_0_FAST_ENABLED",
+			providerEnabled:   c.PoYoProviderEnabled,
+			providerSwitchEnv: "POYO_PROVIDER_ENABLED",
+			apiKey:            c.PoYoAPIKey,
+			apiKeyEnv:         "POYO_API_KEY",
+			baseURL:           c.PoYoBaseURL,
+			baseURLEnv:        "POYO_BASE_URL",
+		},
+		{
+			enabled:           c.FeatureVideoRouteRunwayGen45Enabled,
+			routeEnv:          "FEATURE_VIDEO_ROUTE_RUNWAY_GEN4_5_ENABLED",
+			providerEnabled:   c.PoYoProviderEnabled,
+			providerSwitchEnv: "POYO_PROVIDER_ENABLED",
+			apiKey:            c.PoYoAPIKey,
+			apiKeyEnv:         "POYO_API_KEY",
+			baseURL:           c.PoYoBaseURL,
+			baseURLEnv:        "POYO_BASE_URL",
+		},
+	}
+	for _, route := range routes {
+		if !route.enabled {
+			continue
+		}
+		if !c.FeatureVideoRouterEnabled {
+			return fmt.Errorf("config: %s=true requires FEATURE_VIDEO_ROUTER_ENABLED=true", route.routeEnv)
+		}
+		if !route.providerEnabled {
+			return fmt.Errorf("config: %s=true requires %s=true", route.routeEnv, route.providerSwitchEnv)
+		}
+		if strings.TrimSpace(route.apiKey) == "" {
+			return fmt.Errorf("config: %s=true requires %s", route.routeEnv, route.apiKeyEnv)
+		}
+		if strings.TrimSpace(route.baseURL) == "" {
+			return fmt.Errorf("config: %s=true requires %s", route.routeEnv, route.baseURLEnv)
+		}
+	}
+	if c.FeatureVideoRouteResellerExperimentsEnabled && !c.FeatureVideoRouterEnabled {
+		return fmt.Errorf("config: FEATURE_VIDEO_ROUTE_RESELLER_EXPERIMENTS_ENABLED=true requires FEATURE_VIDEO_ROUTER_ENABLED=true")
+	}
+	return nil
+}
+
+func (c Config) validateSelectedProviderSwitches() error {
+	if c.usesProviderName("apimart") && !c.APIMartProviderEnabled {
+		return fmt.Errorf("config: selected APIMart provider requires APIMART_PROVIDER_ENABLED=true")
+	}
+	if c.usesProviderName("poyo") && !c.PoYoProviderEnabled {
+		return fmt.Errorf("config: selected PoYo provider requires POYO_PROVIDER_ENABLED=true")
+	}
+	if c.IsProduction() && c.usesProviderName("runway") && !c.RunwayProviderEnabled {
+		return fmt.Errorf("config: selected Runway provider requires RUNWAY_PROVIDER_ENABLED=true")
+	}
+	return nil
+}
+
 func (c Config) usesDeepInfra() bool {
 	if strings.EqualFold(c.Provider, "deepinfra") ||
 		strings.EqualFold(c.ImageProvider, "deepinfra") ||
@@ -968,6 +1191,20 @@ func (c Config) usesDeepInfra() bool {
 	}
 	for _, provider := range c.ProviderChain {
 		if strings.EqualFold(provider, "deepinfra") {
+			return true
+		}
+	}
+	return false
+}
+
+func (c Config) usesProviderName(name string) bool {
+	if strings.EqualFold(c.Provider, name) ||
+		strings.EqualFold(c.ImageProvider, name) ||
+		strings.EqualFold(c.VideoProvider, name) {
+		return true
+	}
+	for _, provider := range c.ProviderChain {
+		if strings.EqualFold(provider, name) {
 			return true
 		}
 	}
@@ -1036,11 +1273,15 @@ func validatePriceOverrides(overrides map[string]int64) error {
 
 func knownProvider(name string) bool {
 	switch strings.ToLower(strings.TrimSpace(name)) {
-	case "", "mock", "openai", "deepinfra":
+	case "", "mock", "openai", "deepinfra", "apimart", "poyo", "runway":
 		return true
 	default:
 		return false
 	}
+}
+
+func knownProviderList() string {
+	return "mock, openai, deepinfra, apimart, poyo, runway"
 }
 
 func knownArtifactScanner(name string) bool {
