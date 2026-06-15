@@ -252,6 +252,9 @@ if [[ "${with_cloudflare}" == "true" ]]; then
   runtime_services+=(cloudflared)
 fi
 runtime_up_args=(up -d)
+if [[ "${skip_migrate}" == "true" ]]; then
+  runtime_up_args+=(--no-deps)
+fi
 if [[ "${build_on_vps}" != "true" ]]; then
   runtime_up_args+=(--no-build)
 fi

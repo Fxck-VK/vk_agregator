@@ -188,6 +188,7 @@ services:
   cloudflared:
     image: cloudflare/cloudflared:latest
     restart: unless-stopped
+    network_mode: host
     profiles:
       - cloudflare
     environment:
@@ -198,13 +199,11 @@ services:
       - --loglevel
       - info
       - --metrics
-      - 0.0.0.0:2000
+      - 127.0.0.1:${CLOUDFLARED_METRICS_PORT:-2000}
       - run
     depends_on:
       reverse-proxy:
         condition: service_healthy
-    ports:
-      - "127.0.0.1:${CLOUDFLARED_METRICS_PORT:-2000}:2000"
     healthcheck:
       test: ["CMD", "cloudflared", "--version"]
       interval: 30s

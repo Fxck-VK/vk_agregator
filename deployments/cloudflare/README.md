@@ -11,11 +11,16 @@ VPS. The connector token is stored only in the real server `.env` as
 `CLOUDFLARED_TUNNEL_TOKEN` and is consumed by `docker-compose.prod.yml` through
 the container environment variable `TUNNEL_TOKEN`.
 
+`cloudflared` runs with host networking in production compose. This keeps
+dashboard-managed routes compatible with the same origin used by a host-level
+connector: `http://127.0.0.1:8088`. The reverse proxy remains bound to VPS
+loopback only.
+
 | Public hostname/path | Cloudflare Tunnel service | Reverse proxy target |
 |---|---|---|
-| `vk.neiirohub.ru` | `http://reverse-proxy:80` in Docker, or `http://127.0.0.1:8088` on host | `cmd/api` for `/webhooks/vk` and `/health` |
-| `app.neiirohub.ru` | `http://reverse-proxy:80` in Docker, or `http://127.0.0.1:8088` on host | Mini App static for `/`, `cmd/api` for `/miniapp/*` |
-| `neiirohub.ru` | `http://reverse-proxy:80` in Docker, or `http://127.0.0.1:8088` on host | `cmd/provider-webhook` only for `/billing/webhooks/yookassa` |
+| `vk.neiirohub.ru` | `http://127.0.0.1:8088` | `cmd/api` for `/webhooks/vk` and `/health` |
+| `app.neiirohub.ru` | `http://127.0.0.1:8088` | Mini App static for `/`, `cmd/api` for `/miniapp/*` |
+| `neiirohub.ru` | `http://127.0.0.1:8088` | `cmd/provider-webhook` only for `/billing/webhooks/yookassa` |
 
 The canonical YooKassa webhook URL is:
 
