@@ -1,3 +1,5 @@
+import { MINIAPP_DARK_THEME_ONLY_ENABLED } from "../api/client";
+
 export type ThemeMode = "system" | "light" | "dark";
 
 const THEME_KEY = "vk_miniapp_theme_v1";
@@ -7,6 +9,7 @@ function isThemeMode(value: string | null): value is ThemeMode {
 }
 
 export function loadThemeMode(): ThemeMode {
+  if (MINIAPP_DARK_THEME_ONLY_ENABLED) return "dark";
   try {
     const value = localStorage.getItem(THEME_KEY);
     return isThemeMode(value) ? value : "system";
@@ -17,6 +20,10 @@ export function loadThemeMode(): ThemeMode {
 
 function saveThemeMode(mode: ThemeMode): void {
   try {
+    if (MINIAPP_DARK_THEME_ONLY_ENABLED) {
+      localStorage.removeItem(THEME_KEY);
+      return;
+    }
     localStorage.setItem(THEME_KEY, mode);
   } catch {
     /* UI preference only */
@@ -26,6 +33,10 @@ function saveThemeMode(mode: ThemeMode): void {
 export function applyInitialThemeMode(): void {
   const mode = loadThemeMode();
   document.documentElement.dataset.themeMode = mode;
+  if (MINIAPP_DARK_THEME_ONLY_ENABLED) {
+    document.documentElement.setAttribute("data-scheme", "dark");
+    return;
+  }
   if (mode === "light" || mode === "dark") {
     document.documentElement.setAttribute("data-scheme", mode);
   }
@@ -33,6 +44,21 @@ export function applyInitialThemeMode(): void {
 
 export function watchThemeMode(mode: ThemeMode): () => void {
   const root = document.documentElement;
+  if (MINIAPP_DARK_THEME_ONLY_ENABLED) {
+    saveThemeMode("dark");
+    const applyDark = () => {
+      if (root.dataset.themeMode !== "dark") {
+        root.dataset.themeMode = "dark";
+      }
+      if (root.getAttribute("data-scheme") !== "dark") {
+        root.setAttribute("data-scheme", "dark");
+      }
+    };
+    applyDark();
+    const observer = new MutationObserver(applyDark);
+    observer.observe(root, { attributes: true, attributeFilter: ["data-scheme", "data-theme-mode"] });
+    return () => observer.disconnect();
+  }
   saveThemeMode(mode);
   root.dataset.themeMode = mode;
 

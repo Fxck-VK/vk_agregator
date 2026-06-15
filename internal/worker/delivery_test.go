@@ -256,6 +256,40 @@ func TestDeliverySuccessCapturesAndSucceeds(t *testing.T) {
 	}
 }
 
+func TestDeliveryMiniAppJobCapturesWithoutVKSend(t *testing.T) {
+	h := newDeliveryHarness(t)
+	ctx := context.Background()
+	job := h.resultReadyJob(t, domain.MediaTypeText, "generated answer")
+	job.Source = "miniapp"
+	job.OperationType = domain.OperationTextGenerate
+	job.Modality = domain.ModalityText
+	if err := h.jobs.Update(ctx, job); err != nil {
+		t.Fatalf("update job: %v", err)
+	}
+
+	if err := h.worker.Process(ctx, deliveryTask(job)); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+
+	got, _ := h.jobs.GetByID(ctx, job.ID)
+	if got.Status != domain.JobStatusSucceeded {
+		t.Fatalf("status = %q, want succeeded", got.Status)
+	}
+	if got.CostCaptured != 10 {
+		t.Fatalf("captured = %d, want 10", got.CostCaptured)
+	}
+	if sent := h.vk.Sent(); len(sent) != 0 {
+		t.Fatalf("miniapp job must not send VK message, got %+v", sent)
+	}
+	dels, _ := h.deliveries.ListByJob(ctx, job.ID)
+	if len(dels) != 0 {
+		t.Fatalf("miniapp job must not create VK delivery rows, got %+v", dels)
+	}
+	if balance := h.balance(t, job.UserID); balance != 990 {
+		t.Fatalf("balance = %d, want 990", balance)
+	}
+}
+
 func TestDeliveryUploadsRawPhotoArtifactToVK(t *testing.T) {
 	h := newDeliveryHarness(t)
 	uploader := &fakeVKUploader{}

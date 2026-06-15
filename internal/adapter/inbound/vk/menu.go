@@ -468,10 +468,10 @@ func (h *Handler) sendTopUpCatalog(ctx context.Context, idemKey string, peerID i
 	return err
 }
 
-func (h *Handler) sendTopUpPaymentLink(ctx context.Context, idemKey string, peerID int64, intent *domain.PaymentIntent) error {
+func (h *Handler) sendTopUpPaymentLink(ctx context.Context, idemKey string, peerID int64, intent *domain.PaymentIntent) (int64, error) {
 	if h.deps.Control == nil {
 		h.logger.Warn("vk top-up payment link skipped because VK_ACCESS_TOKEN is not configured")
-		return nil
+		return 0, nil
 	}
 	link := strings.TrimSpace(intent.ConfirmationURL)
 	msg := vkdelivery.Message{
@@ -483,7 +483,7 @@ func (h *Handler) sendTopUpPaymentLink(ctx context.Context, idemKey string, peer
 	if err == nil {
 		h.setActiveMenu(peerID, result.MessageID)
 	}
-	return err
+	return result.MessageID, err
 }
 
 func (h *Handler) sendTopUpNotice(ctx context.Context, idemKey string, peerID int64, text string) error {
@@ -727,7 +727,7 @@ func (h *Handler) activeTopUpIntent(ctx context.Context, userID uuid.UUID) (*dom
 	if h.deps.Payment == nil {
 		return nil, false, nil
 	}
-	intent, err := h.deps.Payment.ActiveWaitingIntent(ctx, userID)
+	intent, err := h.deps.Payment.ActiveWaitingIntentForSource(ctx, userID, "vk_bot")
 	if err == nil {
 		return intent, intent != nil, nil
 	}

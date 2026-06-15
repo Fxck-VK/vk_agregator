@@ -189,6 +189,7 @@ func (o *Orchestrator) CreateJob(ctx context.Context, in CreateJobInput) (*domai
 	job := &domain.Job{
 		ID:               uuid.New(),
 		UserID:           in.UserID,
+		Source:           source,
 		VKPeerID:         in.VKPeerID,
 		CommandID:        in.CommandID,
 		OperationType:    in.Operation,

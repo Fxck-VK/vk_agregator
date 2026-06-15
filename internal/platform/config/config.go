@@ -33,8 +33,9 @@ const (
 
 // Config is the full application configuration shared by the entrypoints.
 type Config struct {
-	// Env is the deployment environment ("development" or "production"). In
-	// production the API fails closed when required secrets are missing.
+	// Env is the deployment environment ("development", "staging" or
+	// "production"). Production fails closed on the full secret/scanner set;
+	// staging is for test VPS deployments with production-like routing.
 	Env string
 
 	HTTPAddr      string
@@ -112,21 +113,28 @@ type Config struct {
 	MaxJobCost int64
 
 	// PaymentProvider selects the money provider for balance top-ups.
-	PaymentProvider                   string
-	YooKassaShopID                    string
-	YooKassaSecretKey                 string
-	YooKassaBaseURL                   string
-	YooKassaReturnURL                 string
-	YooKassaWebhookIPAllowlistEnabled bool
-	YooKassaWebhookIPAllowlist        []string
-	PaymentWebhookRequireHTTPS        bool
-	PaymentWebhookTrustedProxies      []string
-	PaymentWebhookAddr                string
-	PaymentWebhookPollInterval        time.Duration
-	PaymentWebhookBatchLimit          int
-	PaymentReconciliationInterval     time.Duration
-	PaymentReconciliationLimit        int
-	PaymentReconciliationStaleAfter   time.Duration
+	PaymentProvider                           string
+	YooKassaShopID                            string
+	YooKassaSecretKey                         string
+	YooKassaBaseURL                           string
+	YooKassaReturnURL                         string
+	YooKassaReturnURLMiniApp                  string
+	YooKassaReturnURLVKBot                    string
+	YooKassaWebhookIPAllowlistEnabled         bool
+	YooKassaWebhookIPAllowlist                []string
+	PaymentWebhookRequireHTTPS                bool
+	PaymentWebhookTrustedProxies              []string
+	PaymentWebhookAddr                        string
+	PaymentWebhookPollInterval                time.Duration
+	PaymentWebhookBatchLimit                  int
+	PaymentReconciliationInterval             time.Duration
+	PaymentReconciliationLimit                int
+	PaymentReconciliationStaleAfter           time.Duration
+	FeatureVKTopUpStatusEditEnabled           bool
+	FeatureMiniAppPaymentCancelEnabled        bool
+	FeatureMiniAppTopUpCatalogDropdownEnabled bool
+	FeatureMiniAppDarkThemeOnlyEnabled        bool
+	FeatureMiniAppTopUpHistoryDropdownEnabled bool
 
 	// Provider selects the primary generation provider. ProviderChain, when set,
 	// enables router/fallback selection across multiple providers.
@@ -232,10 +240,11 @@ type Config struct {
 
 	// ModerationProvider selects output moderation: "keyword" (default) or
 	// "openai". ArtifactScanner selects artifact byte scanning: "none" or
-	// "openai".
-	ModerationProvider    string
-	OpenAIModerationModel string
-	ArtifactScanner       string
+	// "openai". Production requires a scanner; staging may run with "none".
+	ModerationProvider                  string
+	OpenAIModerationModel               string
+	ArtifactScanner                     string
+	AllowUnscannedArtifactsInProduction bool
 
 	// VKDeliveryMode selects the delivery client: "mock" (default) or "real".
 	VKDeliveryMode       string
@@ -403,7 +412,7 @@ func (c Config) MediaVideoTranscodeEnabled() bool {
 // reject requests that did not arrive over HTTPS or through a trusted HTTPS
 // reverse proxy.
 func (c Config) PaymentWebhookHTTPSRequired() bool {
-	return c.PaymentWebhookRequireHTTPS || c.IsProduction()
+	return c.PaymentWebhookRequireHTTPS || c.IsServerEnv()
 }
 
 // Validate fails closed: in production, secrets that protect inbound webhooks
@@ -436,7 +445,7 @@ func (c Config) Validate() error {
 	if provider := strings.ToLower(strings.TrimSpace(c.ModerationProvider)); provider != "" && provider != "keyword" && provider != "openai" {
 		return fmt.Errorf("config: MODERATION_PROVIDER must be keyword or openai")
 	}
-	if scanner := strings.ToLower(strings.TrimSpace(c.ArtifactScanner)); scanner != "" && scanner != "none" && scanner != "openai" {
+	if scanner := strings.ToLower(strings.TrimSpace(c.ArtifactScanner)); scanner != "" && !knownArtifactScanner(scanner) {
 		return fmt.Errorf("config: ARTIFACT_SCANNER must be none or openai")
 	}
 	if err := validatePriceOverrides(c.PriceOverrides); err != nil {
@@ -625,8 +634,8 @@ func (c Config) Validate() error {
 		if c.usesMockProvider() {
 			return fmt.Errorf("config: mock provider is not allowed in production")
 		}
-		if c.usesRealGenerationProvider() && !strings.EqualFold(strings.TrimSpace(c.ArtifactScanner), "openai") {
-			return fmt.Errorf("config: ARTIFACT_SCANNER=openai is required in production with real providers")
+		if c.usesRealGenerationProvider() && artifactScannerDisabled(c.ArtifactScanner) && !c.AllowUnscannedArtifactsInProduction {
+			return fmt.Errorf("config: ARTIFACT_SCANNER=openai is required in production unless ALLOW_UNSCANNED_ARTIFACTS_IN_PRODUCTION=true")
 		}
 		if strings.EqualFold(strings.TrimSpace(c.PaymentProvider), "mock") {
 			return fmt.Errorf("config: PAYMENT_PROVIDER=mock is not allowed in production")
@@ -644,6 +653,9 @@ func (c Config) Validate() error {
 		// production; an empty secret would silently disable the check.
 		if c.VKAppSecret == "" {
 			missing = append(missing, "VK_APP_SECRET")
+		}
+		if strings.EqualFold(strings.TrimSpace(c.PaymentProvider), "yookassa") && len(c.PaymentWebhookTrustedProxies) == 0 {
+			missing = append(missing, "PAYMENT_WEBHOOK_TRUSTED_PROXIES")
 		}
 	}
 	if c.usesOpenAI() && c.OpenAIAPIKey == "" {
@@ -747,21 +759,28 @@ func Load() Config {
 		PriceOverrides: envPriceMap("PRICES"),
 		MaxJobCost:     int64(envInt("MAX_JOB_COST", 0)),
 
-		PaymentProvider:                       env("PAYMENT_PROVIDER", "mock"),
-		YooKassaShopID:                        env("YOOKASSA_SHOP_ID", ""),
-		YooKassaSecretKey:                     env("YOOKASSA_SECRET_KEY", ""),
-		YooKassaBaseURL:                       env("YOOKASSA_BASE_URL", "https://api.yookassa.ru/v3"),
-		YooKassaReturnURL:                     env("YOOKASSA_RETURN_URL", ""),
-		YooKassaWebhookIPAllowlistEnabled:     envBool("YOOKASSA_WEBHOOK_IP_ALLOWLIST_ENABLED", false),
-		YooKassaWebhookIPAllowlist:            envList("YOOKASSA_WEBHOOK_IP_ALLOWLIST"),
-		PaymentWebhookRequireHTTPS:            envBool("PAYMENT_WEBHOOK_REQUIRE_HTTPS", false),
-		PaymentWebhookTrustedProxies:          envList("PAYMENT_WEBHOOK_TRUSTED_PROXIES"),
-		PaymentWebhookAddr:                    env("PAYMENT_WEBHOOK_ADDR", ":8082"),
-		PaymentWebhookPollInterval:            envDuration("PAYMENT_WEBHOOK_POLL_INTERVAL", 5*time.Second),
-		PaymentWebhookBatchLimit:              envInt("PAYMENT_WEBHOOK_BATCH_LIMIT", 20),
-		PaymentReconciliationInterval:         envDuration("PAYMENT_RECONCILIATION_INTERVAL", time.Minute),
-		PaymentReconciliationLimit:            envInt("PAYMENT_RECONCILIATION_LIMIT", 100),
-		PaymentReconciliationStaleAfter:       envDuration("PAYMENT_RECONCILIATION_STALE_AFTER", 30*time.Second),
+		PaymentProvider:                           env("PAYMENT_PROVIDER", "mock"),
+		YooKassaShopID:                            env("YOOKASSA_SHOP_ID", ""),
+		YooKassaSecretKey:                         env("YOOKASSA_SECRET_KEY", ""),
+		YooKassaBaseURL:                           env("YOOKASSA_BASE_URL", "https://api.yookassa.ru/v3"),
+		YooKassaReturnURL:                         env("YOOKASSA_RETURN_URL", ""),
+		YooKassaReturnURLMiniApp:                  env("YOOKASSA_RETURN_URL_MINIAPP", ""),
+		YooKassaReturnURLVKBot:                    env("YOOKASSA_RETURN_URL_VK_BOT", ""),
+		YooKassaWebhookIPAllowlistEnabled:         envBool("YOOKASSA_WEBHOOK_IP_ALLOWLIST_ENABLED", false),
+		YooKassaWebhookIPAllowlist:                envList("YOOKASSA_WEBHOOK_IP_ALLOWLIST"),
+		PaymentWebhookRequireHTTPS:                envBool("PAYMENT_WEBHOOK_REQUIRE_HTTPS", false),
+		PaymentWebhookTrustedProxies:              envList("PAYMENT_WEBHOOK_TRUSTED_PROXIES"),
+		PaymentWebhookAddr:                        env("PAYMENT_WEBHOOK_ADDR", ":8082"),
+		PaymentWebhookPollInterval:                envDuration("PAYMENT_WEBHOOK_POLL_INTERVAL", 5*time.Second),
+		PaymentWebhookBatchLimit:                  envInt("PAYMENT_WEBHOOK_BATCH_LIMIT", 20),
+		PaymentReconciliationInterval:             envDuration("PAYMENT_RECONCILIATION_INTERVAL", time.Minute),
+		PaymentReconciliationLimit:                envInt("PAYMENT_RECONCILIATION_LIMIT", 100),
+		PaymentReconciliationStaleAfter:           envDuration("PAYMENT_RECONCILIATION_STALE_AFTER", 30*time.Second),
+		FeatureVKTopUpStatusEditEnabled:           envBool("FEATURE_VK_TOPUP_STATUS_EDIT_ENABLED", false),
+		FeatureMiniAppPaymentCancelEnabled:        envBool("FEATURE_MINIAPP_PAYMENT_CANCEL_ENABLED", false),
+		FeatureMiniAppTopUpCatalogDropdownEnabled: envBool("FEATURE_MINIAPP_TOPUP_CATALOG_DROPDOWN_ENABLED", false),
+		FeatureMiniAppDarkThemeOnlyEnabled:        envBool("FEATURE_MINIAPP_DARK_THEME_ONLY_ENABLED", false),
+		FeatureMiniAppTopUpHistoryDropdownEnabled: envBool("FEATURE_MINIAPP_TOPUP_HISTORY_DROPDOWN_ENABLED", false),
 		Provider:                              provider,
 		ProviderChain:                         providerChain,
 		ImageProvider:                         env("IMAGE_PROVIDER", ""),
@@ -844,6 +863,7 @@ func Load() Config {
 		ModerationProvider:                    env("MODERATION_PROVIDER", "keyword"),
 		OpenAIModerationModel:                 env("OPENAI_MODERATION_MODEL", "omni-moderation-latest"),
 		ArtifactScanner:                       env("ARTIFACT_SCANNER", "none"),
+		AllowUnscannedArtifactsInProduction:   envBool("ALLOW_UNSCANNED_ARTIFACTS_IN_PRODUCTION", false),
 
 		VKDeliveryMode:                    env("VK_DELIVERY_MODE", "mock"),
 		VKAccessToken:                     env("VK_ACCESS_TOKEN", ""),
@@ -1023,23 +1043,49 @@ func knownProvider(name string) bool {
 	}
 }
 
+func knownArtifactScanner(name string) bool {
+	switch strings.ToLower(strings.TrimSpace(name)) {
+	case "", "none", "openai":
+		return true
+	default:
+		return false
+	}
+}
+
+func artifactScannerDisabled(name string) bool {
+	scanner := strings.ToLower(strings.TrimSpace(name))
+	return scanner == "" || scanner == "none"
+}
+
 func isProductionEnv(env string) bool {
 	return strings.EqualFold(env, "production") || strings.EqualFold(env, "prod")
 }
 
+func isStagingEnv(env string) bool {
+	return strings.EqualFold(env, "staging") || strings.EqualFold(env, "stage")
+}
+
+func (c Config) IsStaging() bool {
+	return isStagingEnv(c.Env)
+}
+
+func (c Config) IsServerEnv() bool {
+	return c.IsProduction() || c.IsStaging()
+}
+
 func defaultMediaVideoProbePolicy(env string, mediaPipelineEnabled bool) string {
-	if isProductionEnv(env) || mediaPipelineEnabled {
+	if isProductionEnv(env) || isStagingEnv(env) || mediaPipelineEnabled {
 		return MediaVideoProbePolicyProbeRequired
 	}
 	return MediaVideoProbePolicyDisabled
 }
 
 func defaultMediaReferenceUploadsEnabled(env string) bool {
-	return !isProductionEnv(env)
+	return !isProductionEnv(env) && !isStagingEnv(env)
 }
 
 func defaultMediaDeliverRawProviderVideo(env string, mediaPipelineEnabled bool) string {
-	if isProductionEnv(env) || mediaPipelineEnabled {
+	if isProductionEnv(env) || isStagingEnv(env) || mediaPipelineEnabled {
 		return MediaDeliverRawProviderVideoIfProbePassed
 	}
 	return MediaDeliverRawProviderVideoAlwaysDevOnly

@@ -91,7 +91,8 @@ function Assert-NoTrackedEnvFiles {
     $tracked = Get-TrackedFiles
     $allowedTrackedEnv = @(
         ".env.example",
-        ".env.prod.example"
+        ".env.prod.example",
+        ".env.staging.example"
     )
     $bad = @(
         $tracked | Where-Object {
@@ -188,12 +189,17 @@ function Assert-ReverseProxyConfig {
 
 function Assert-CloudflareDeploymentConfig {
     $path = Join-Path $repoRoot "deployments\cloudflare\cloudflared.prod.example.yml"
+    $readmePath = Join-Path $repoRoot "deployments\cloudflare\README.md"
     if (-not (Test-Path -LiteralPath $path)) {
         Write-Host "no production cloudflared config example found; skipping"
         return
     }
+    if (-not (Test-Path -LiteralPath $readmePath)) {
+        throw "Cloudflare deployment README is missing: deployments/cloudflare/README.md"
+    }
 
     $content = Get-Content -LiteralPath $path -Raw
+    $readme = Get-Content -LiteralPath $readmePath -Raw
     $forbiddenPatterns = @(
         "eyJhIjoi[A-Za-z0-9_-]{20,}",
         '(?i)"TunnelSecret"\s*:'
@@ -215,6 +221,21 @@ function Assert-CloudflareDeploymentConfig {
     foreach ($snippet in $requiredSnippets) {
         if (-not $content.Contains($snippet)) {
             throw "cloudflared config example is missing required snippet: $snippet"
+        }
+    }
+
+    $requiredReadmeSnippets = @(
+        "vk.neiirohub.ru",
+        "app.neiirohub.ru",
+        "https://neiirohub.ru/billing/webhooks/yookassa",
+        "CLOUDFLARED_TUNNEL_TOKEN",
+        "PUBLIC_PAYMENT_WEBHOOK_URL",
+        'Do not route broad `/billing/*`'
+    )
+
+    foreach ($snippet in $requiredReadmeSnippets) {
+        if (-not $readme.Contains($snippet)) {
+            throw "Cloudflare deployment README is missing required snippet: $snippet"
         }
     }
 
@@ -270,34 +291,131 @@ function Assert-ProductionDataServices {
     Write-Host "production data services config OK"
 }
 
+function Assert-CloudflaredComposeConfig {
+    $path = Join-Path $repoRoot "docker-compose.prod.yml"
+    if (-not (Test-Path -LiteralPath $path)) {
+        Write-Host "no production compose file found; skipping cloudflared compose checks"
+        return
+    }
+
+    $content = Get-Content -LiteralPath $path -Raw
+    $requiredSnippets = @(
+        "cloudflared:",
+        "profiles:",
+        "- cloudflare",
+        "TUNNEL_TOKEN:",
+        "CLOUDFLARED_TUNNEL_TOKEN",
+        "--metrics",
+        "0.0.0.0:2000",
+        '127.0.0.1:${CLOUDFLARED_METRICS_PORT:-2000}:2000'
+    )
+
+    foreach ($snippet in $requiredSnippets) {
+        if (-not $content.Contains($snippet)) {
+            throw "production cloudflared compose config is missing required snippet: $snippet"
+        }
+    }
+
+    if ($content -match "(?m)^\s*-\s*--token\s*$") {
+        throw "cloudflared compose config must use TUNNEL_TOKEN env instead of command-line --token"
+    }
+
+    Write-Host "production cloudflared compose config OK"
+}
+
 function Assert-DeployScripts {
     $scripts = @(
         [pscustomobject]@{
             Path = "scripts\deploy\deploy-prod.ps1"
             Required = @(
+                "check Docker",
+                "docker info",
+                "check-prod-env.ps1",
                 "git pull --ff-only origin",
                 "docker-compose.prod.yml",
+                "docker compose pull",
+                "BuildOnVPS",
+                "--no-build",
+                "SkipPublicSmoke",
+                "smoke-prod.ps1",
+                "-EnvFile",
+                "PUBLIC_PAYMENT_WEBHOOK_URL",
                 "IMAGE_TAG",
-                "up --no-deps --exit-code-from migrate migrate",
+                "migrateArgs",
+                "exit-code-from",
                 "api", "worker", "provider-webhook", "miniapp", "reverse-proxy",
-                "Wait-Http"
+                "Wait-Http",
+                "Production deploy completed.",
+                "skipped; pulled registry images",
+                "Health checks:"
             )
         },
         [pscustomobject]@{
             Path = "scripts\deploy\deploy-prod.sh"
             Required = @(
+                "check Docker",
+                "docker info",
+                "check-prod-env.sh",
                 "git pull --ff-only origin",
                 "docker-compose.prod.yml",
+                "image_pull_services",
+                "--build-on-vps",
+                "--no-build",
+                "--skip-public-smoke",
+                "smoke-prod.sh",
+                "--env-file",
+                "PUBLIC_PAYMENT_WEBHOOK_URL",
                 "IMAGE_TAG",
-                "up --no-deps --exit-code-from migrate migrate",
+                "migrate_args",
+                "exit-code-from",
                 "api worker provider-webhook miniapp reverse-proxy",
-                "wait_http"
+                "wait_http",
+                "Production deploy completed.",
+                "skipped; pulled registry images",
+                "Health checks:"
+            )
+        },
+        [pscustomobject]@{
+            Path = "scripts\deploy\check-prod-env.ps1"
+            Required = @(
+                "APP_IMAGE_REGISTRY",
+                "IMAGE_TAG",
+                "APP_ENV",
+                "staging",
+                "CHANGE_ME",
+                "PAYMENT_PROVIDER",
+                "ARTIFACT_SCANNER",
+                "CLOUDFLARED_TUNNEL_TOKEN",
+                "PUBLIC_VK_BASE_URL",
+                "PUBLIC_APP_BASE_URL",
+                "PUBLIC_PAYMENT_WEBHOOK_URL"
+            )
+        },
+        [pscustomobject]@{
+            Path = "scripts\deploy\check-prod-env.sh"
+            Required = @(
+                "APP_IMAGE_REGISTRY",
+                "IMAGE_TAG",
+                "APP_ENV",
+                "staging",
+                "CHANGE_ME",
+                "PAYMENT_PROVIDER",
+                "ARTIFACT_SCANNER",
+                "CLOUDFLARED_TUNNEL_TOKEN",
+                "PUBLIC_VK_BASE_URL",
+                "PUBLIC_APP_BASE_URL",
+                "PUBLIC_PAYMENT_WEBHOOK_URL"
             )
         },
         [pscustomobject]@{
             Path = "scripts\deploy\rollback-prod.ps1"
             Required = @(
                 "ImageTag",
+                "check-prod-env.ps1",
+                "check Docker",
+                "docker info",
+                "pull backup images",
+                "pull rollback images",
                 "backup postgres before rollback",
                 "backup minio before rollback",
                 "does not run migrate down",
@@ -309,6 +427,11 @@ function Assert-DeployScripts {
             Path = "scripts\deploy\rollback-prod.sh"
             Required = @(
                 "--image-tag",
+                "check-prod-env.sh",
+                "check_docker",
+                "docker info",
+                "pull backup-postgres backup-minio",
+                'pull "${rollback_services[@]}"',
                 "backup-postgres",
                 "backup-minio",
                 "does not run migrate down",
@@ -319,11 +442,21 @@ function Assert-DeployScripts {
         [pscustomobject]@{
             Path = "scripts\deploy\smoke-prod.ps1"
             Required = @(
+                "EnvFile",
                 "/health",
+                "/healthz",
                 "/miniapp/balance",
                 "/billing/webhooks/yookassa",
                 "PaymentWebhookOnly",
+                "SkipLocalHealth",
+                "PUBLIC_PAYMENT_WEBHOOK_URL",
+                "WORKER_METRICS_ADDR",
+                "PAYMENT_WEBHOOK_ADDR",
+                "REVERSE_PROXY_HTTP_PORT",
                 "must use https",
+                "VK webhook route",
+                "Worker local health",
+                "Provider webhook local health",
                 "/billing/payment-intents",
                 "/admin/jobs",
                 "/metrics",
@@ -335,11 +468,21 @@ function Assert-DeployScripts {
         [pscustomobject]@{
             Path = "scripts\deploy\smoke-prod.sh"
             Required = @(
+                "--env-file",
                 "/health",
+                "/healthz",
                 "/miniapp/balance",
                 "/billing/webhooks/yookassa",
                 "--payment-webhook-only",
+                "--skip-local-health",
+                "PUBLIC_PAYMENT_WEBHOOK_URL",
+                "WORKER_METRICS_ADDR",
+                "PAYMENT_WEBHOOK_ADDR",
+                "REVERSE_PROXY_HTTP_PORT",
                 "must use https",
+                "VK webhook route",
+                "Worker local health",
+                "Provider webhook local health",
                 "/billing/payment-intents",
                 "/admin/jobs",
                 "/metrics",
@@ -372,6 +515,43 @@ function Assert-DeployScripts {
     Write-Host "deploy scripts OK"
 }
 
+function Assert-DockerImageWorkflow {
+    $path = Join-Path $repoRoot ".github\workflows\docker-images.yml"
+    if (-not (Test-Path -LiteralPath $path)) {
+        throw "Docker image build workflow is missing: .github/workflows/docker-images.yml"
+    }
+
+    $content = Get-Content -LiteralPath $path -Raw
+    $requiredSnippets = @(
+        "name: Docker Images",
+        "packages: write",
+        "ghcr.io/",
+        "docker/setup-buildx-action",
+        "docker/login-action",
+        "docker/metadata-action",
+        "docker/build-push-action",
+        "Dockerfile.api",
+        "Dockerfile.worker",
+        "Dockerfile.provider-webhook",
+        "Dockerfile.miniapp",
+        "Dockerfile.migrate",
+        "service: api",
+        "service: worker",
+        "service: provider-webhook",
+        "service: miniapp",
+        "service: migrate",
+        'push: ${{ github.event_name != ''pull_request'' }}'
+    )
+
+    foreach ($snippet in $requiredSnippets) {
+        if (-not $content.Contains($snippet)) {
+            throw "Docker image workflow is missing required snippet: $snippet"
+        }
+    }
+
+    Write-Host "Docker image workflow OK"
+}
+
 function Assert-RollbackConfig {
     $composePath = Join-Path $repoRoot "docker-compose.prod.yml"
     if (-not (Test-Path -LiteralPath $composePath)) {
@@ -381,12 +561,12 @@ function Assert-RollbackConfig {
 
     $content = Get-Content -LiteralPath $composePath -Raw
     $requiredSnippets = @(
-        'vk-ai-aggregator-api:${IMAGE_TAG:-prod}',
-        'vk-ai-aggregator-worker:${IMAGE_TAG:-prod}',
-        'vk-ai-aggregator-provider-webhook:${IMAGE_TAG:-prod}',
-        'vk-ai-aggregator-miniapp:${IMAGE_TAG:-prod}',
-        'vk-ai-aggregator-migrate:${IMAGE_TAG:-prod}',
-        'vk-ai-aggregator-backup:${BACKUP_IMAGE_TAG:-prod}'
+        '${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/api:${IMAGE_TAG:-main}',
+        '${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/worker:${IMAGE_TAG:-main}',
+        '${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/provider-webhook:${IMAGE_TAG:-main}',
+        '${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/miniapp:${IMAGE_TAG:-main}',
+        '${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/migrate:${IMAGE_TAG:-main}',
+        '${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/backup:${BACKUP_IMAGE_TAG:-main}'
     )
 
     foreach ($snippet in $requiredSnippets) {
@@ -590,6 +770,21 @@ if (Test-Path -LiteralPath "docker-compose.prod.yml") {
             }
         }
     }
+    if (Test-Path -LiteralPath ".env.staging.example") {
+        Invoke-Step "docker compose staging config" {
+            $previousAppEnvFile = $env:APP_ENV_FILE
+            try {
+                $env:APP_ENV_FILE = ".env.staging.example"
+                docker compose --project-name vk-ai-aggregator-staging --env-file .env.staging.example -f docker-compose.prod.yml config | Out-Null
+            } finally {
+                if ($null -eq $previousAppEnvFile) {
+                    Remove-Item Env:\APP_ENV_FILE -ErrorAction SilentlyContinue
+                } else {
+                    $env:APP_ENV_FILE = $previousAppEnvFile
+                }
+            }
+        }
+    }
 }
 
 Assert-Migrations
@@ -598,7 +793,9 @@ Assert-CloudflareConfigHasNoSecrets
 Assert-CloudflareDeploymentConfig
 Assert-ReverseProxyConfig
 Assert-ProductionDataServices
+Assert-CloudflaredComposeConfig
 Assert-DeployScripts
+Assert-DockerImageWorkflow
 Assert-RollbackConfig
 Assert-ObservabilityConfig
 Assert-PrometheusConfig

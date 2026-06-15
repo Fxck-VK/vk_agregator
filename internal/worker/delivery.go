@@ -199,6 +199,15 @@ func (w *DeliveryWorker) Process(ctx context.Context, task queue.Task) error {
 		}
 	}
 
+	if isMiniAppJob(job) {
+		if err := w.captureReserved(ctx, job); err != nil {
+			tracing.RecordError(span, err)
+			return err
+		}
+		metrics.JobsTerminal.WithLabelValues(string(domain.JobStatusSucceeded)).Inc()
+		return w.setStatus(ctx, job, domain.JobStatusSucceeded, "", "")
+	}
+
 	del, err := w.ensureDelivery(ctx, job)
 	if err != nil {
 		tracing.RecordError(span, err)
@@ -238,36 +247,44 @@ func (w *DeliveryWorker) Process(ctx context.Context, task queue.Task) error {
 		return nil
 	}
 
-	// Billing capture: charge the reserved credits now that delivery succeeded.
-	if job.CostReserved > 0 {
-		captureCtx, captureSpan := tracing.Start(ctx, "billing.capture",
-			attribute.String("job.id", job.ID.String()),
-			attribute.Int64("billing.amount", job.CostReserved),
-			tracing.CorrelationAttr(job.CorrelationID),
-		)
-		if err := w.billing.CaptureForJob(captureCtx, job.ID, job.CostReserved); err != nil {
-			metrics.BillingCaptures.WithLabelValues(deliveryOperationLabel(job), "error").Inc()
-			metrics.ObserveMediaDeliveryCaptureGap(deliveryOperationLabel(job), deliveryModalityLabel(job), "capture_failed")
-			tracing.RecordError(captureSpan, err)
-			captureSpan.End()
-			tracing.RecordError(span, err)
-			return fmt.Errorf("worker: capture: %w", err)
-		}
-		metrics.BillingCaptures.WithLabelValues(deliveryOperationLabel(job), "success").Inc()
-		metrics.AddProductCreditsFlow("job_delivery", "capture", "success", job.CostReserved)
-		captureSpan.End()
-		if job.CostCaptured != job.CostReserved {
-			job.CostCaptured = job.CostReserved
-			if err := w.jobs.Update(ctx, job); err != nil {
-				tracing.RecordError(span, err)
-				return err
-			}
-		}
+	if err := w.captureReserved(ctx, job); err != nil {
+		tracing.RecordError(span, err)
+		return err
 	}
 
 	metrics.DeliveriesSent.Inc()
 	metrics.JobsTerminal.WithLabelValues(string(domain.JobStatusSucceeded)).Inc()
 	return w.setStatus(ctx, job, domain.JobStatusSucceeded, "", "")
+}
+
+func (w *DeliveryWorker) captureReserved(ctx context.Context, job *domain.Job) error {
+	if job.CostReserved <= 0 || job.CostCaptured == job.CostReserved {
+		return nil
+	}
+	if w.billing == nil {
+		return errors.New("worker: billing is not configured")
+	}
+	captureCtx, captureSpan := tracing.Start(ctx, "billing.capture",
+		attribute.String("job.id", job.ID.String()),
+		attribute.Int64("billing.amount", job.CostReserved),
+		tracing.CorrelationAttr(job.CorrelationID),
+	)
+	defer captureSpan.End()
+	if err := w.billing.CaptureForJob(captureCtx, job.ID, job.CostReserved); err != nil {
+		metrics.BillingCaptures.WithLabelValues(deliveryOperationLabel(job), "error").Inc()
+		metrics.ObserveMediaDeliveryCaptureGap(deliveryOperationLabel(job), deliveryModalityLabel(job), "capture_failed")
+		tracing.RecordError(captureSpan, err)
+		return fmt.Errorf("worker: capture: %w", err)
+	}
+	metrics.BillingCaptures.WithLabelValues(deliveryOperationLabel(job), "success").Inc()
+	metrics.AddProductCreditsFlow("job_delivery", "capture", "success", job.CostReserved)
+	if job.CostCaptured != job.CostReserved {
+		job.CostCaptured = job.CostReserved
+		if err := w.jobs.Update(ctx, job); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (w *DeliveryWorker) releaseReserved(ctx context.Context, job *domain.Job) error {
@@ -361,9 +378,14 @@ func (w *DeliveryWorker) buildDelivery(ctx context.Context, job *domain.Job, key
 }
 
 func isTerminalMediaFailureNotice(job *domain.Job) bool {
-	return job.Status == domain.JobStatusFailedTerminal &&
+	return !isMiniAppJob(job) &&
+		job.Status == domain.JobStatusFailedTerminal &&
 		job.VKPeerID != 0 &&
 		(job.Modality == domain.ModalityImage || job.Modality == domain.ModalityVideo)
+}
+
+func isMiniAppJob(job *domain.Job) bool {
+	return job != nil && strings.EqualFold(strings.TrimSpace(job.Source), "miniapp")
 }
 
 func safeVKMediaFailureNotice(errorCode string) string {

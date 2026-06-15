@@ -68,6 +68,7 @@ type miniAppJobParams struct {
 	Prompt               string                    `json:"prompt"`
 	ModelID              string                    `json:"model_id,omitempty"`
 	ModelName            string                    `json:"model_name,omitempty"`
+	Provider             domain.ProviderName       `json:"provider,omitempty"`
 	ModelCode            string                    `json:"model_code,omitempty"`
 	ReferenceArtifactIDs []uuid.UUID               `json:"reference_artifact_ids,omitempty"`
 	ConversationID       string                    `json:"conversation_id,omitempty"`

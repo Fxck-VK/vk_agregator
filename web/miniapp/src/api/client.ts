@@ -199,6 +199,7 @@ export type ApiErrorCode =
   | "media_overloaded_retry_later"
   | "auth_error"
   | "insufficient_credits"
+  | "payment_cancel_unavailable"
   | "rate_limited"
   | "artifact_unavailable"
   | "service_unavailable"
@@ -244,6 +245,12 @@ interface ClientTelemetryEvent {
 }
 
 const TELEMETRY_ENABLED = import.meta.env.VITE_FRONTEND_TELEMETRY_ENABLED === "true";
+export const MINIAPP_PAYMENT_CANCEL_ENABLED = import.meta.env.VITE_FEATURE_MINIAPP_PAYMENT_CANCEL_ENABLED !== "false";
+export const MINIAPP_TOPUP_CATALOG_DROPDOWN_ENABLED =
+  import.meta.env.VITE_FEATURE_MINIAPP_TOPUP_CATALOG_DROPDOWN_ENABLED !== "false";
+export const MINIAPP_DARK_THEME_ONLY_ENABLED = import.meta.env.VITE_FEATURE_MINIAPP_DARK_THEME_ONLY_ENABLED !== "false";
+export const MINIAPP_TOPUP_HISTORY_DROPDOWN_ENABLED =
+  import.meta.env.VITE_FEATURE_MINIAPP_TOPUP_HISTORY_DROPDOWN_ENABLED !== "false";
 
 let telemetryInstalled = false;
 const appStartedAt = performance.now();
@@ -511,6 +518,7 @@ function apiErrorCode(status: number, backendError?: string): ApiErrorCode {
   if (status === 400 || raw === "validation_error") return "validation_error";
   if (status === 401 || raw === "auth_error" || raw === "unauthorized") return "auth_error";
   if (status === 402 || raw === "insufficient_credits") return "insufficient_credits";
+  if (status === 409 && raw === "payment cannot be canceled") return "payment_cancel_unavailable";
   if (status === 429 || raw === "rate_limited" || raw === "rate limit exceeded") return "rate_limited";
   if (status === 503 || raw === "service_unavailable") return "service_unavailable";
   if (raw === "artifact_unavailable" || raw === "artifact storage unavailable") {
@@ -547,6 +555,8 @@ function apiErrorMessageForCode(code: ApiErrorCode): string {
       return "Не удалось подтвердить вход через VK. Откройте приложение заново";
     case "insufficient_credits":
       return "Недостаточно кредитов";
+    case "payment_cancel_unavailable":
+      return "Платеж уже нельзя отменить";
     case "rate_limited":
       return "Слишком много запросов. Попробуйте позже";
     case "artifact_unavailable":
@@ -707,6 +717,17 @@ export async function createPaymentIntent(
 export async function listPaymentIntents(): Promise<PaymentIntent[]> {
   const data = await request<PaymentIntentListResponse>("/miniapp/payments");
   return data.items ?? [];
+}
+
+export async function cancelPaymentIntent(id: string): Promise<PaymentIntent> {
+  try {
+    return await request<PaymentIntent>(`/miniapp/payments/${encodeURIComponent(id)}/cancel`, {
+      method: "POST",
+    });
+  } catch (error) {
+    trackPaymentFlowError("cancel_intent", error);
+    throw error;
+  }
 }
 
 export async function listJobs(): Promise<Job[]> {

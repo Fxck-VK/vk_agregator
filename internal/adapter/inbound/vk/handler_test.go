@@ -624,6 +624,52 @@ func TestTopUpMenuCreatesPaymentIntentAfterProductSelection(t *testing.T) {
 	}
 }
 
+func TestTopUpPaymentMessageTrackingStoresSentMessageID(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	h := newHarnessWithConfig(control, vk.Config{
+		ConfirmationToken:      "conf-token-123",
+		Secret:                 "s3cr3t",
+		TopUpReceiptEmail:      "bot-payments@example.com",
+		TopUpStatusEditEnabled: true,
+	})
+
+	body := `{
+		"type":"message_new","group_id":1,"event_id":"evt-topup-track","secret":"s3cr3t",
+		"object":{"message":{"from_id":593,"peer_id":593,"text":"99 crystals","payload":"{\"command\":\"top_up\",\"product_code\":\"crystals_99\"}"}}
+	}`
+	if rec := h.post(body); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected product response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	ctx := context.Background()
+	user, err := h.users.GetByVKUserID(ctx, 593)
+	if err != nil {
+		t.Fatalf("user not created: %v", err)
+	}
+	intents, err := h.payment.ListIntentsByUser(ctx, user.ID, 10, 0)
+	if err != nil {
+		t.Fatalf("list payment intents: %v", err)
+	}
+	if len(intents) != 1 {
+		t.Fatalf("expected one payment intent, got %d", len(intents))
+	}
+	sent := control.Sent()
+	if len(sent) == 0 {
+		t.Fatal("expected payment message send")
+	}
+	var metadata struct {
+		Source             string `json:"source"`
+		VKPeerID           int64  `json:"vk_peer_id"`
+		VKPaymentMessageID int64  `json:"vk_payment_message_id"`
+	}
+	if err := json.Unmarshal(intents[0].Metadata, &metadata); err != nil {
+		t.Fatalf("decode metadata: %v", err)
+	}
+	if metadata.Source != "vk_bot" || metadata.VKPeerID != 593 || metadata.VKPaymentMessageID != sent[len(sent)-1].MessageID {
+		t.Fatalf("unexpected tracking metadata: %+v sent=%+v", metadata, sent[len(sent)-1])
+	}
+}
+
 func TestTopUpStaleCatalogDifferentProductCreatesSelectedIntent(t *testing.T) {
 	control := vkdelivery.NewMockClient()
 	h := newHarnessWithConfig(control, vk.Config{
@@ -1090,6 +1136,8 @@ func TestPrunaAIVideoButtonEnablesPlainTextVideoJobs(t *testing.T) {
 		Prompt                 string `json:"prompt"`
 		ModelID                string `json:"model_id"`
 		ModelName              string `json:"model_name"`
+		Provider               string `json:"provider"`
+		ModelCode              string `json:"model_code"`
 		DurationSec            int    `json:"duration_sec"`
 		VKPlaceholderMessageID int64  `json:"vk_placeholder_message_id"`
 	}
@@ -1099,6 +1147,8 @@ func TestPrunaAIVideoButtonEnablesPlainTextVideoJobs(t *testing.T) {
 	if params.Prompt != "cinematic neon city at night, rain reflections, slow drone movement" ||
 		params.ModelID != "prunaai" ||
 		params.ModelName != "PrunaAI" ||
+		params.Provider != "deepinfra" ||
+		params.ModelCode != "PrunaAI/p-video" ||
 		params.DurationSec != 5 ||
 		params.VKPlaceholderMessageID != sent[1].MessageID {
 		t.Fatalf("unexpected PrunaAI video job params: %+v, pending=%+v", params, sent[1])
@@ -1856,6 +1906,44 @@ func TestPersistedVideoModeSurvivesHandlerRestart(t *testing.T) {
 	jobs, _ := second.jobs.ListByUser(ctx, user.ID, 10, 0)
 	if len(jobs) != 1 || jobs[0].OperationType != domain.OperationVideoGenerate || jobs[0].Modality != domain.ModalityVideo || second.pub.Len() != 1 {
 		t.Fatalf("persisted video mode should create one video job, jobs=%+v tasks=%d", jobs, second.pub.Len())
+	}
+	var params struct {
+		Provider  string `json:"provider"`
+		ModelCode string `json:"model_code"`
+	}
+	if err := json.Unmarshal(jobs[0].Params, &params); err != nil {
+		t.Fatalf("decode job params: %v", err)
+	}
+	if params.Provider != "openai" || params.ModelCode != "sora-2" {
+		t.Fatalf("persisted video mode should use catalog model, got %+v", params)
+	}
+}
+
+func TestUnsupportedPersistedVideoModeDoesNotCreateJob(t *testing.T) {
+	dialogState := newFakeDialogState()
+	dialogState.modes[5932] = "video:kling_v2_1"
+
+	control := vkdelivery.NewMockClient()
+	h := newHarnessWithConfigAndDialogState(control, vk.Config{
+		ConfirmationToken: "conf-token-123",
+		Secret:            "s3cr3t",
+	}, dialogState)
+	prompt := `{
+		"type":"message_new","group_id":1,"event_id":"evt-video-persist-unsupported","secret":"s3cr3t",
+		"object":{"message":{"from_id":5932,"peer_id":5932,"text":"cinematic ocean waves at sunset"}}
+	}`
+	if rec := h.post(prompt); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected persisted prompt response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	ctx := context.Background()
+	user, err := h.users.GetByVKUserID(ctx, 5932)
+	if err != nil {
+		t.Fatalf("user not created after restart: %v", err)
+	}
+	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
+	if len(jobs) != 0 || h.pub.Len() != 0 {
+		t.Fatalf("unsupported persisted video mode must not create jobs, jobs=%+v tasks=%d", jobs, h.pub.Len())
 	}
 }
 

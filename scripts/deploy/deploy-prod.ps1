@@ -6,12 +6,14 @@ param(
     [string]$ImageTag = "",
     [switch]$SkipPull,
     [switch]$AllowDirty,
+    [switch]$BuildOnVPS,
     [switch]$SkipBuild,
     [switch]$SkipMigrate,
     [switch]$WithCloudflare,
     [switch]$BackupBeforeDeploy,
     [switch]$PullBaseImages,
     [switch]$NoHealthCheck,
+    [switch]$SkipPublicSmoke,
     [int]$TimeoutSeconds = 180
 )
 
@@ -20,6 +22,10 @@ Set-StrictMode -Version Latest
 
 $script:RepoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 Set-Location $script:RepoRoot
+$deployStartedAt = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+$healthStatus = "skipped"
+$publicSmokeStatus = "skipped"
+$shouldBuildOnVPS = $BuildOnVPS -and -not $SkipBuild
 
 function Invoke-Step {
     param(
@@ -58,6 +64,60 @@ function Get-EnvFileValue {
     return $Default
 }
 
+function Test-EnvPlaceholderValue {
+    param([string]$Value)
+
+    if ([string]::IsNullOrWhiteSpace($Value)) {
+        return $true
+    }
+    $lower = $Value.ToLowerInvariant()
+    return $lower.Contains("change_me") -or $lower.Contains("placeholder") -or $lower.Contains("example")
+}
+
+function Get-PublicUrlValue {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][string]$PrimaryName,
+        [Parameter(Mandatory = $true)][string]$LegacyName,
+        [Parameter(Mandatory = $true)][string]$Default
+    )
+
+    $value = Get-EnvFileValue -Path $Path -Name $PrimaryName
+    if (-not [string]::IsNullOrWhiteSpace($value)) {
+        return $value
+    }
+    $value = Get-EnvFileValue -Path $Path -Name $LegacyName
+    if (-not [string]::IsNullOrWhiteSpace($value)) {
+        return $value
+    }
+    return $Default
+}
+
+function Test-DockerRuntime {
+    if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
+        throw "Docker CLI is not installed or not in PATH"
+    }
+    & docker version | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        throw "docker version failed with exit code $LASTEXITCODE"
+    }
+    & docker compose version | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        throw "docker compose version failed with exit code $LASTEXITCODE"
+    }
+    & docker info | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        throw "docker info failed with exit code $LASTEXITCODE"
+    }
+    $dockerVersion = (& docker version --format '{{.Server.Version}}').Trim()
+    $composeVersion = (& docker compose version --short 2>$null)
+    if ([string]::IsNullOrWhiteSpace($composeVersion)) {
+        $composeVersion = (& docker compose version).Trim()
+    }
+    Write-Host "Docker OK: $dockerVersion"
+    Write-Host "Docker Compose OK: $composeVersion"
+}
+
 function Wait-Http {
     param(
         [Parameter(Mandatory = $true)][string]$Name,
@@ -87,7 +147,22 @@ if (-not (Test-Path -LiteralPath "docker-compose.prod.yml")) {
     throw "docker-compose.prod.yml not found; run from the repository root or keep this script in scripts/deploy"
 }
 if (-not (Test-Path -LiteralPath $EnvFile)) {
-    throw "Production env file not found: $EnvFile. Copy .env.prod.example to .env on the server and fill real secrets there."
+    throw "Server env file not found: $EnvFile. Copy .env.staging.example or .env.prod.example to .env on the server and fill real values there."
+}
+
+Invoke-Step "check Docker" {
+    Test-DockerRuntime
+}
+
+Invoke-Step "check production env" {
+    $checkArgs = @("-EnvFile", $EnvFile)
+    if ($WithCloudflare) {
+        $checkArgs += "-WithCloudflare"
+    }
+    if ($BackupBeforeDeploy) {
+        $checkArgs += "-BackupBeforeDeploy"
+    }
+    & (Join-Path $PSScriptRoot "check-prod-env.ps1") @checkArgs
 }
 
 $script:ComposeArgs = @(
@@ -138,6 +213,31 @@ try {
         Invoke-DockerCompose config | Out-Null
     }
 
+    $ghcrUsername = Get-EnvFileValue -Path $EnvFile -Name "GHCR_USERNAME"
+    $ghcrToken = Get-EnvFileValue -Path $EnvFile -Name "GHCR_TOKEN"
+    if (-not (Test-EnvPlaceholderValue -Value $ghcrUsername) -and -not (Test-EnvPlaceholderValue -Value $ghcrToken)) {
+        Invoke-Step "docker login ghcr.io" {
+            $ghcrToken | docker login ghcr.io -u $ghcrUsername --password-stdin | Out-Null
+            if ($LASTEXITCODE -ne 0) {
+                throw "docker login ghcr.io failed with exit code $LASTEXITCODE"
+            }
+        }
+    }
+
+    $imagePullServices = @("postgres", "redis", "minio", "reverse-proxy")
+    if (-not $shouldBuildOnVPS) {
+        $imagePullServices += @("api", "worker", "provider-webhook", "miniapp", "migrate")
+        if ($BackupBeforeDeploy) {
+            $imagePullServices += @("backup-postgres", "backup-minio")
+        }
+    }
+    if ($WithCloudflare) {
+        $imagePullServices += "cloudflared"
+    }
+    Invoke-Step "docker compose pull" {
+        Invoke-DockerCompose pull @imagePullServices
+    }
+
     if ($BackupBeforeDeploy) {
         $backupArgs = @(
             "compose",
@@ -160,10 +260,10 @@ try {
     }
 
     Invoke-Step "start stateful dependencies" {
-        Invoke-DockerCompose up -d postgres redis minio
+        Invoke-DockerCompose up -d --no-build postgres redis minio
     }
 
-    if (-not $SkipBuild) {
+    if ($shouldBuildOnVPS) {
         $buildArgs = @("build")
         if ($PullBaseImages) {
             $buildArgs += "--pull"
@@ -175,6 +275,8 @@ try {
         Invoke-Step "docker compose build" {
             Invoke-DockerCompose @buildArgs
         }
+    } else {
+        Write-Host "Skipping VPS image build; using images pulled from registry."
     }
 
     if (-not $SkipMigrate) {
@@ -183,7 +285,12 @@ try {
             $global:LASTEXITCODE = 0
         }
         Invoke-Step "run migrations" {
-            Invoke-DockerCompose up --no-deps --exit-code-from migrate migrate
+            $migrateArgs = @("up", "--no-deps", "--exit-code-from", "migrate")
+            if (-not $shouldBuildOnVPS) {
+                $migrateArgs += "--no-build"
+            }
+            $migrateArgs += "migrate"
+            Invoke-DockerCompose @migrateArgs
         }
     } else {
         Write-Warning "Skipping migrations. Runtime services still require a successful migrate service state in this compose project."
@@ -195,7 +302,12 @@ try {
     }
 
     Invoke-Step "start runtime services" {
-        Invoke-DockerCompose up -d @runtimeServices
+        $runtimeUpArgs = @("up", "-d")
+        if (-not $shouldBuildOnVPS) {
+            $runtimeUpArgs += "--no-build"
+        }
+        $runtimeUpArgs += $runtimeServices
+        Invoke-DockerCompose @runtimeUpArgs
     }
 
     if (-not $NoHealthCheck) {
@@ -205,6 +317,22 @@ try {
         Wait-Http -Name "provider-webhook" -Url "http://127.0.0.1:8082/health" -TimeoutSeconds $TimeoutSeconds
         Wait-Http -Name "worker" -Url "http://127.0.0.1:9090/healthz" -TimeoutSeconds $TimeoutSeconds
         Wait-Http -Name "miniapp" -Url "http://127.0.0.1:5173/" -TimeoutSeconds $TimeoutSeconds
+        $healthStatus = "passed"
+
+        if ($WithCloudflare -and -not $SkipPublicSmoke) {
+            $publicVkUrl = Get-PublicUrlValue -Path $EnvFile -PrimaryName "PUBLIC_VK_BASE_URL" -LegacyName "VK_BASE_URL" -Default "https://vk.neiirohub.ru"
+            $publicAppUrl = Get-PublicUrlValue -Path $EnvFile -PrimaryName "PUBLIC_APP_BASE_URL" -LegacyName "APP_BASE_URL" -Default "https://app.neiirohub.ru"
+            $publicPaymentWebhookUrl = Get-PublicUrlValue -Path $EnvFile -PrimaryName "PUBLIC_PAYMENT_WEBHOOK_URL" -LegacyName "PAYMENT_WEBHOOK_URL" -Default "https://neiirohub.ru/billing/webhooks/yookassa"
+            Invoke-Step "public Cloudflare/DNS smoke" {
+                & (Join-Path $PSScriptRoot "smoke-prod.ps1") `
+                    -EnvFile $EnvFile `
+                    -VkBaseUrl $publicVkUrl `
+                    -AppBaseUrl $publicAppUrl `
+                    -PaymentWebhookUrl $publicPaymentWebhookUrl `
+                    -TimeoutSeconds $TimeoutSeconds
+            }
+            $publicSmokeStatus = "passed"
+        }
     }
 
     Invoke-Step "docker compose ps" {
@@ -213,6 +341,26 @@ try {
 
     Write-Host ""
     Write-Host "Production deploy completed."
+    Write-Host "Started at: $deployStartedAt"
+    Write-Host "Finished at: $((Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ"))"
+    Write-Host "Branch: $Branch"
+    $commit = (& git rev-parse --short HEAD 2>$null)
+    if ([string]::IsNullOrWhiteSpace($commit)) {
+        $commit = "unknown"
+    }
+    Write-Host "Commit: $commit"
+    Write-Host "Project: $ProjectName"
+    Write-Host "Env file: $EnvFile"
+    Write-Host "Runtime services: $($runtimeServices -join ', ')"
+    $migrationsStatus = if ($SkipMigrate) { "skipped" } else { "applied" }
+    $buildStatus = if ($shouldBuildOnVPS) { "completed on VPS" } else { "skipped; pulled registry images" }
+    $cloudflareStatus = if ($WithCloudflare) { "enabled" } else { "disabled" }
+    Write-Host "Migrations: $migrationsStatus"
+    Write-Host "Image pull: completed"
+    Write-Host "Build: $buildStatus"
+    Write-Host "Health checks: $healthStatus"
+    Write-Host "Public Cloudflare/DNS smoke: $publicSmokeStatus"
+    Write-Host "Cloudflare tunnel profile: $cloudflareStatus"
 } finally {
     if ($null -eq $previousAppEnvFile) {
         Remove-Item Env:\APP_ENV_FILE -ErrorAction SilentlyContinue

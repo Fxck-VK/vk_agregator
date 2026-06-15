@@ -7,6 +7,7 @@ package memory
 import (
 	"context"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -116,6 +117,10 @@ func (r *JobRepo) Create(_ context.Context, j *domain.Job) error {
 	if j.ID == uuid.Nil {
 		j.ID = uuid.New()
 	}
+	j.Source = strings.TrimSpace(j.Source)
+	if j.Source == "" {
+		j.Source = "unknown"
+	}
 	now := time.Now()
 	j.CreatedAt, j.UpdatedAt = now, now
 	r.byID[j.ID] = *j
@@ -173,6 +178,10 @@ func (r *JobRepo) Update(_ context.Context, j *domain.Job) error {
 	// Status is owned by UpdateStatus; preserve it across Update.
 	status := cur.Status
 	updated := *j
+	updated.Source = strings.TrimSpace(updated.Source)
+	if updated.Source == "" {
+		updated.Source = "unknown"
+	}
 	updated.Status = status
 	updated.CreatedAt = cur.CreatedAt
 	updated.UpdatedAt = time.Now()

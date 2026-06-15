@@ -81,6 +81,8 @@ func NewHandler(ctx context.Context, cfg config.Config, deps Deps) *miniappapi.H
 		ReferralReferredSignupRewardCredits: cfg.ReferralReferredSignupRewardCredits,
 		FrontendTelemetryEnabled:            cfg.FrontendTelemetryEnabled,
 		FrontendTelemetryUserHashSecret:     cfg.FrontendTelemetryUserHashSecret,
+		PaymentReturnURL:                    firstNonEmpty(cfg.YooKassaReturnURLMiniApp, cfg.YooKassaReturnURL),
+		PaymentCancelEnabled:                cfg.FeatureMiniAppPaymentCancelEnabled,
 	}, miniappapi.Deps{
 		Users:         deps.Users,
 		Jobs:          deps.Jobs,
@@ -95,4 +97,13 @@ func NewHandler(ctx context.Context, cfg config.Config, deps Deps) *miniappapi.H
 		Orchestrator:  deps.Orchestrator,
 		Logger:        logger,
 	})
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if value != "" {
+			return value
+		}
+	}
+	return ""
 }

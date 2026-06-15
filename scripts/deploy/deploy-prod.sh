@@ -7,13 +7,17 @@ project_name="vk-ai-aggregator-prod"
 image_tag=""
 skip_pull="false"
 allow_dirty="false"
-skip_build="false"
+build_on_vps="false"
 skip_migrate="false"
 with_cloudflare="false"
 backup_before_deploy="false"
 pull_base_images="false"
 no_health_check="false"
+skip_public_smoke="false"
 timeout_seconds="180"
+health_status="skipped"
+public_smoke_status="skipped"
+deploy_started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
 usage() {
   cat <<'EOF'
@@ -23,15 +27,17 @@ Options:
   --branch <name>              Git branch to deploy, default: main
   --env-file <path>            Production env file, default: .env
   --project-name <name>        Compose project name, default: vk-ai-aggregator-prod
-  --image-tag <tag>            Docker image tag to build and run, default from env/.env or prod
+  --image-tag <tag>            Docker image tag to pull and run, default from env/.env
   --skip-pull                  Do not fetch/checkout/pull git
   --allow-dirty                Allow tracked worktree changes before git pull
-  --skip-build                 Do not run docker compose build
+  --build-on-vps               Fallback only: build application images on the VPS
+  --skip-build                 Deprecated compatibility flag; production deploys skip VPS builds by default
   --skip-migrate               Do not run migrate service
   --with-cloudflare            Start cloudflared profile too
   --backup-before-deploy       Run Postgres and MinIO backup services before rollout
   --pull-base-images           Pass --pull to docker compose build
   --no-health-check            Skip local HTTP health checks
+  --skip-public-smoke          Skip public Cloudflare/DNS smoke after cloudflared startup
   --timeout-seconds <seconds>  Health check timeout, default: 180
   -h, --help                   Show this help
 EOF
@@ -45,12 +51,14 @@ while [[ $# -gt 0 ]]; do
     --image-tag) image_tag="$2"; shift 2 ;;
     --skip-pull) skip_pull="true"; shift ;;
     --allow-dirty) allow_dirty="true"; shift ;;
-    --skip-build) skip_build="true"; shift ;;
+    --build-on-vps) build_on_vps="true"; shift ;;
+    --skip-build) build_on_vps="false"; shift ;;
     --skip-migrate) skip_migrate="true"; shift ;;
     --with-cloudflare) with_cloudflare="true"; shift ;;
     --backup-before-deploy) backup_before_deploy="true"; shift ;;
     --pull-base-images) pull_base_images="true"; shift ;;
     --no-health-check) no_health_check="true"; shift ;;
+    --skip-public-smoke) skip_public_smoke="true"; shift ;;
     --timeout-seconds) timeout_seconds="$2"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
@@ -61,24 +69,48 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "${script_dir}/../.." && pwd)"
 cd "${repo_root}"
 
+run_step() {
+  echo "==> $*"
+  "$@"
+}
+
+check_docker() {
+  if ! command -v docker >/dev/null 2>&1; then
+    echo "Docker CLI is not installed or not in PATH" >&2
+    return 1
+  fi
+  docker version >/dev/null
+  docker compose version >/dev/null
+  docker info >/dev/null
+  echo "Docker OK: $(docker version --format '{{.Server.Version}}')"
+  echo "Docker Compose OK: $(docker compose version --short 2>/dev/null || docker compose version)"
+}
+
 if [[ ! -f docker-compose.prod.yml ]]; then
   echo "docker-compose.prod.yml not found" >&2
   exit 1
 fi
 if [[ ! -f "${env_file}" ]]; then
-  echo "Production env file not found: ${env_file}. Copy .env.prod.example to .env on the server and fill real secrets there." >&2
+  echo "Server env file not found: ${env_file}. Copy .env.staging.example or .env.prod.example to .env on the server and fill real values there." >&2
   exit 1
 fi
+
+echo "==> check Docker"
+check_docker
+
+check_args=(--env-file "${env_file}")
+if [[ "${with_cloudflare}" == "true" ]]; then
+  check_args+=(--with-cloudflare)
+fi
+if [[ "${backup_before_deploy}" == "true" ]]; then
+  check_args+=(--backup-before-deploy)
+fi
+run_step bash scripts/deploy/check-prod-env.sh "${check_args[@]}"
 
 compose=(docker compose --project-name "${project_name}" --env-file "${env_file}" -f docker-compose.prod.yml)
 if [[ "${with_cloudflare}" == "true" ]]; then
   compose+=(--profile cloudflare)
 fi
-
-run_step() {
-  echo "==> $*"
-  "$@"
-}
 
 get_env_value() {
   local name="$1"
@@ -94,6 +126,30 @@ get_env_value() {
     value="${value#\'}"
     echo "${value}"
   fi
+}
+
+is_placeholder_value() {
+  local value
+  value="$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]')"
+  [[ -z "${value//[[:space:]]/}" || "${value}" == *change_me* || "${value}" == *placeholder* || "${value}" == *example* ]]
+}
+
+get_public_url() {
+  local primary_name="$1"
+  local legacy_name="$2"
+  local default="$3"
+  local value
+  value="$(get_env_value "${primary_name}" "")"
+  if [[ -n "${value}" ]]; then
+    echo "${value}"
+    return
+  fi
+  value="$(get_env_value "${legacy_name}" "")"
+  if [[ -n "${value}" ]]; then
+    echo "${value}"
+    return
+  fi
+  echo "${default}"
 }
 
 wait_http() {
@@ -135,6 +191,25 @@ fi
 
 run_step "${compose[@]}" config >/dev/null
 
+ghcr_username="$(get_env_value GHCR_USERNAME "")"
+ghcr_token="$(get_env_value GHCR_TOKEN "")"
+if ! is_placeholder_value "${ghcr_username}" && ! is_placeholder_value "${ghcr_token}"; then
+  echo "==> docker login ghcr.io"
+  printf '%s' "${ghcr_token}" | docker login ghcr.io -u "${ghcr_username}" --password-stdin >/dev/null
+fi
+
+image_pull_services=(postgres redis minio reverse-proxy)
+if [[ "${build_on_vps}" != "true" ]]; then
+  image_pull_services+=(api worker provider-webhook miniapp migrate)
+  if [[ "${backup_before_deploy}" == "true" ]]; then
+    image_pull_services+=(backup-postgres backup-minio)
+  fi
+fi
+if [[ "${with_cloudflare}" == "true" ]]; then
+  image_pull_services+=(cloudflared)
+fi
+run_step "${compose[@]}" pull "${image_pull_services[@]}"
+
 if [[ "${backup_before_deploy}" == "true" ]]; then
   backup_compose=(docker compose --project-name "${project_name}" --env-file "${env_file}" -f docker-compose.prod.yml --profile backup)
   if [[ "${with_cloudflare}" == "true" ]]; then
@@ -144,9 +219,9 @@ if [[ "${backup_before_deploy}" == "true" ]]; then
   run_step "${backup_compose[@]}" run --rm backup-minio
 fi
 
-run_step "${compose[@]}" up -d postgres redis minio
+run_step "${compose[@]}" up -d --no-build postgres redis minio
 
-if [[ "${skip_build}" != "true" ]]; then
+if [[ "${build_on_vps}" == "true" ]]; then
   build_args=(build)
   if [[ "${pull_base_images}" == "true" ]]; then
     build_args+=(--pull)
@@ -156,11 +231,18 @@ if [[ "${skip_build}" != "true" ]]; then
     build_args+=(backup-postgres backup-minio)
   fi
   run_step "${compose[@]}" "${build_args[@]}"
+else
+  echo "Skipping VPS image build; using images pulled from registry."
 fi
 
 if [[ "${skip_migrate}" != "true" ]]; then
   "${compose[@]}" rm -f -s migrate >/dev/null 2>&1 || true
-  run_step "${compose[@]}" up --no-deps --exit-code-from migrate migrate
+  migrate_args=(up --no-deps --exit-code-from migrate)
+  if [[ "${build_on_vps}" != "true" ]]; then
+    migrate_args+=(--no-build)
+  fi
+  migrate_args+=(migrate)
+  run_step "${compose[@]}" "${migrate_args[@]}"
 else
   echo "WARNING: skipping migrations. Runtime services still require a successful migrate service state in this compose project." >&2
 fi
@@ -169,7 +251,12 @@ runtime_services=(api worker provider-webhook miniapp reverse-proxy)
 if [[ "${with_cloudflare}" == "true" ]]; then
   runtime_services+=(cloudflared)
 fi
-run_step "${compose[@]}" up -d "${runtime_services[@]}"
+runtime_up_args=(up -d)
+if [[ "${build_on_vps}" != "true" ]]; then
+  runtime_up_args+=(--no-build)
+fi
+runtime_up_args+=("${runtime_services[@]}")
+run_step "${compose[@]}" "${runtime_up_args[@]}"
 
 if [[ "${no_health_check}" != "true" ]]; then
   reverse_proxy_port="$(get_env_value REVERSE_PROXY_HTTP_PORT 8088)"
@@ -178,8 +265,39 @@ if [[ "${no_health_check}" != "true" ]]; then
   wait_http provider-webhook "http://127.0.0.1:8082/health"
   wait_http worker "http://127.0.0.1:9090/healthz"
   wait_http miniapp "http://127.0.0.1:5173/"
+  health_status="passed"
+
+  if [[ "${with_cloudflare}" == "true" && "${skip_public_smoke}" != "true" ]]; then
+    public_vk_url="$(get_public_url PUBLIC_VK_BASE_URL VK_BASE_URL https://vk.neiirohub.ru)"
+    public_app_url="$(get_public_url PUBLIC_APP_BASE_URL APP_BASE_URL https://app.neiirohub.ru)"
+    public_payment_webhook_url="$(get_public_url PUBLIC_PAYMENT_WEBHOOK_URL PAYMENT_WEBHOOK_URL https://neiirohub.ru/billing/webhooks/yookassa)"
+    run_step bash scripts/deploy/smoke-prod.sh \
+      --env-file "${env_file}" \
+      --vk-base-url "${public_vk_url}" \
+      --app-base-url "${public_app_url}" \
+      --payment-webhook-url "${public_payment_webhook_url}" \
+      --timeout-seconds "${timeout_seconds}"
+    public_smoke_status="passed"
+  fi
 fi
 
 run_step "${compose[@]}" ps
 echo
 echo "Production deploy completed."
+echo "Started at: ${deploy_started_at}"
+echo "Finished at: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+echo "Branch: ${branch}"
+echo "Commit: $(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
+echo "Project: ${project_name}"
+echo "Env file: ${env_file}"
+echo "Runtime services: ${runtime_services[*]}"
+echo "Migrations: $([[ "${skip_migrate}" == "true" ]] && echo skipped || echo applied)"
+echo "Image pull: completed"
+echo "Build: $([[ "${build_on_vps}" == "true" ]] && echo "completed on VPS" || echo "skipped; pulled registry images")"
+echo "Health checks: ${health_status}"
+echo "Public Cloudflare/DNS smoke: ${public_smoke_status}"
+if [[ "${with_cloudflare}" == "true" ]]; then
+  echo "Cloudflare tunnel profile: enabled"
+else
+  echo "Cloudflare tunnel profile: disabled"
+fi

@@ -401,7 +401,10 @@ func (r *Registry) candidates(ctx context.Context, req domain.ProviderRequest) (
 	qualityStates := make(map[qualityKey]qualityState, len(r.quality))
 	qualityPolicy := r.qualityPolicy
 	contracts := r.mediaContracts
-	preferred := r.preferredByModality[req.Modality]
+	preferred := req.Provider
+	if preferred == "" {
+		preferred = r.preferredByModality[req.Modality]
+	}
 	now := r.now()
 	for name, provider := range r.byName {
 		providers[name] = provider
@@ -421,6 +424,9 @@ func (r *Registry) candidates(ctx context.Context, req domain.ProviderRequest) (
 	for idx, name := range order {
 		provider := providers[name]
 		if provider == nil {
+			continue
+		}
+		if req.Provider != "" && name != req.Provider {
 			continue
 		}
 		if ok, err := supports(ctx, provider, req); err != nil || !ok {
@@ -1071,18 +1077,19 @@ const maxReferenceArtifactBytes = 20 << 20
 
 // promptParams is the subset of job params the provider request needs.
 type promptParams struct {
-	Prompt                 string      `json:"prompt"`
-	NegativePrompt         string      `json:"negative_prompt"`
-	ModelCode              string      `json:"model_code,omitempty"`
-	Size                   string      `json:"size,omitempty"`
-	AspectRatio            string      `json:"aspect_ratio,omitempty"`
-	ReferenceArtifactIDs   []uuid.UUID `json:"reference_artifact_ids,omitempty"`
-	InputURLs              []string    `json:"input_urls,omitempty"`
-	VKPlaceholderMessageID int64       `json:"vk_placeholder_message_id,omitempty"`
-	ConversationID         string      `json:"conversation_id,omitempty"`
-	ConversationSource     string      `json:"conversation_source,omitempty"`
-	ExternalThreadID       string      `json:"external_thread_id,omitempty"`
-	DurationSec            int         `json:"duration_sec,omitempty"`
+	Prompt                 string              `json:"prompt"`
+	NegativePrompt         string              `json:"negative_prompt"`
+	ModelCode              string              `json:"model_code,omitempty"`
+	Provider               domain.ProviderName `json:"provider,omitempty"`
+	Size                   string              `json:"size,omitempty"`
+	AspectRatio            string              `json:"aspect_ratio,omitempty"`
+	ReferenceArtifactIDs   []uuid.UUID         `json:"reference_artifact_ids,omitempty"`
+	InputURLs              []string            `json:"input_urls,omitempty"`
+	VKPlaceholderMessageID int64               `json:"vk_placeholder_message_id,omitempty"`
+	ConversationID         string              `json:"conversation_id,omitempty"`
+	ConversationSource     string              `json:"conversation_source,omitempty"`
+	ExternalThreadID       string              `json:"external_thread_id,omitempty"`
+	DurationSec            int                 `json:"duration_sec,omitempty"`
 }
 
 // buildRequest builds the normalized provider request for a job. The submit
@@ -1159,6 +1166,7 @@ func (p *processor) buildRequest(ctx context.Context, job *domain.Job, attempt i
 		Operation:            job.OperationType,
 		Modality:             job.Modality,
 		ModelCode:            modelCode,
+		Provider:             pp.Provider,
 		Prompt:               prompt,
 		NegativePrompt:       pp.NegativePrompt,
 		Size:                 size,

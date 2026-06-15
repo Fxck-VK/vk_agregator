@@ -90,6 +90,31 @@ func TestLoadFrontendTelemetryConfig(t *testing.T) {
 	}
 }
 
+func TestLoadTopUpFeatureFlags(t *testing.T) {
+	t.Setenv("FEATURE_VK_TOPUP_STATUS_EDIT_ENABLED", "true")
+	t.Setenv("FEATURE_MINIAPP_PAYMENT_CANCEL_ENABLED", "true")
+	t.Setenv("FEATURE_MINIAPP_TOPUP_CATALOG_DROPDOWN_ENABLED", "true")
+	t.Setenv("FEATURE_MINIAPP_DARK_THEME_ONLY_ENABLED", "true")
+	t.Setenv("FEATURE_MINIAPP_TOPUP_HISTORY_DROPDOWN_ENABLED", "true")
+
+	cfg := config.Load()
+	if !cfg.FeatureVKTopUpStatusEditEnabled {
+		t.Fatal("FeatureVKTopUpStatusEditEnabled = false, want true")
+	}
+	if !cfg.FeatureMiniAppPaymentCancelEnabled {
+		t.Fatal("FeatureMiniAppPaymentCancelEnabled = false, want true")
+	}
+	if !cfg.FeatureMiniAppTopUpCatalogDropdownEnabled {
+		t.Fatal("FeatureMiniAppTopUpCatalogDropdownEnabled = false, want true")
+	}
+	if !cfg.FeatureMiniAppDarkThemeOnlyEnabled {
+		t.Fatal("FeatureMiniAppDarkThemeOnlyEnabled = false, want true")
+	}
+	if !cfg.FeatureMiniAppTopUpHistoryDropdownEnabled {
+		t.Fatal("FeatureMiniAppTopUpHistoryDropdownEnabled = false, want true")
+	}
+}
+
 func TestLoadDBPoolConfigBoundsInt32Values(t *testing.T) {
 	t.Setenv("DB_MAX_CONNS", "2147483648")
 	t.Setenv("DB_MIN_CONNS", "7")
@@ -339,6 +364,18 @@ func TestLoadMediaPolicyDefaults(t *testing.T) {
 	}
 	if cfg.MediaDeliverRawProviderVideo != config.MediaDeliverRawProviderVideoIfProbePassed {
 		t.Fatalf("production raw provider video policy = %q", cfg.MediaDeliverRawProviderVideo)
+	}
+
+	t.Setenv("APP_ENV", "staging")
+	cfg = config.Load()
+	if cfg.MediaVideoProbePolicy != config.MediaVideoProbePolicyProbeRequired {
+		t.Fatalf("staging probe policy = %q", cfg.MediaVideoProbePolicy)
+	}
+	if cfg.MediaDeliverRawProviderVideo != config.MediaDeliverRawProviderVideoIfProbePassed {
+		t.Fatalf("staging raw provider video policy = %q", cfg.MediaDeliverRawProviderVideo)
+	}
+	if cfg.MediaReferenceUploadsEnabled {
+		t.Fatal("staging reference uploads should default to false")
 	}
 }
 
@@ -624,20 +661,21 @@ func TestLoadDeepInfraConfig(t *testing.T) {
 
 func validProductionConfig() config.Config {
 	return config.Config{
-		Env:                 "production",
-		Provider:            "deepinfra",
-		ProviderChain:       []string{"deepinfra"},
-		DeepInfraAPIKey:     "test-deepinfra-key",
-		OpenAIAPIKey:        "test-openai-key",
-		ArtifactScanner:     "openai",
-		VKSecret:            "test-vk-secret",
-		AdminToken:          "test-admin-token",
-		VKConfirmationToken: "test-confirmation-token",
-		VKAppSecret:         "test-vk-app-secret",
-		PaymentProvider:     "yookassa",
-		YooKassaShopID:      "test-shop",
-		YooKassaSecretKey:   "test-yookassa-secret",
-		YooKassaReturnURL:   "https://example.com",
+		Env:                          "production",
+		Provider:                     "deepinfra",
+		ProviderChain:                []string{"deepinfra"},
+		DeepInfraAPIKey:              "test-deepinfra-key",
+		OpenAIAPIKey:                 "test-openai-key",
+		ArtifactScanner:              "openai",
+		VKSecret:                     "test-vk-secret",
+		AdminToken:                   "test-admin-token",
+		VKConfirmationToken:          "test-confirmation-token",
+		VKAppSecret:                  "test-vk-app-secret",
+		PaymentProvider:              "yookassa",
+		YooKassaShopID:               "test-shop",
+		YooKassaSecretKey:            "test-yookassa-secret",
+		YooKassaReturnURL:            "https://example.com",
+		PaymentWebhookTrustedProxies: []string{"127.0.0.1"},
 	}
 }
 
@@ -761,6 +799,8 @@ func TestLoadPaymentConfig(t *testing.T) {
 	t.Setenv("YOOKASSA_SECRET_KEY", "secret")
 	t.Setenv("YOOKASSA_BASE_URL", "https://example.com/v3")
 	t.Setenv("YOOKASSA_RETURN_URL", "https://neiirohub.ru/payments/return")
+	t.Setenv("YOOKASSA_RETURN_URL_MINIAPP", "https://vk.com/app54623372?section_type=public_r_app")
+	t.Setenv("YOOKASSA_RETURN_URL_VK_BOT", "https://vk.com/write-239332376")
 	t.Setenv("YOOKASSA_WEBHOOK_IP_ALLOWLIST_ENABLED", "true")
 	t.Setenv("YOOKASSA_WEBHOOK_IP_ALLOWLIST", "203.0.113.0/24,198.51.100.10")
 	t.Setenv("PAYMENT_WEBHOOK_REQUIRE_HTTPS", "true")
@@ -781,6 +821,9 @@ func TestLoadPaymentConfig(t *testing.T) {
 	}
 	if cfg.YooKassaBaseURL != "https://example.com/v3" || cfg.YooKassaReturnURL != "https://neiirohub.ru/payments/return" {
 		t.Fatalf("unexpected YooKassa URLs: base=%q return=%q", cfg.YooKassaBaseURL, cfg.YooKassaReturnURL)
+	}
+	if cfg.YooKassaReturnURLMiniApp != "https://vk.com/app54623372?section_type=public_r_app" || cfg.YooKassaReturnURLVKBot != "https://vk.com/write-239332376" {
+		t.Fatalf("unexpected surface YooKassa URLs: miniapp=%q vkbot=%q", cfg.YooKassaReturnURLMiniApp, cfg.YooKassaReturnURLVKBot)
 	}
 	if !cfg.YooKassaWebhookIPAllowlistEnabled {
 		t.Fatal("YooKassaWebhookIPAllowlistEnabled = false, want true")
@@ -824,6 +867,13 @@ func TestValidatePaymentWebhookAllowlistRequiresConfiguredRanges(t *testing.T) {
 	cfg.PaymentWebhookTrustedProxies = []string{"10.0.0.0/8"}
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("valid webhook ingress config rejected: %v", err)
+	}
+}
+
+func TestPaymentWebhookHTTPSRequiredInStaging(t *testing.T) {
+	cfg := config.Config{Env: "staging"}
+	if !cfg.PaymentWebhookHTTPSRequired() {
+		t.Fatal("staging payment webhooks must require HTTPS")
 	}
 }
 
@@ -898,6 +948,31 @@ func TestValidateYooKassaRequiresConfig(t *testing.T) {
 		if !strings.Contains(msg, want) {
 			t.Fatalf("expected %s in validation error, got %q", want, msg)
 		}
+	}
+}
+
+func TestValidateProductionYooKassaRequiresTrustedProxies(t *testing.T) {
+	cfg := config.Config{
+		Env:                 "production",
+		PaymentProvider:     "yookassa",
+		YooKassaShopID:      "shop",
+		YooKassaSecretKey:   "secret",
+		YooKassaReturnURL:   "https://app.example.com",
+		VKSecret:            "vk",
+		AdminToken:          "admin",
+		VKConfirmationToken: "confirm",
+		VKAppSecret:         "app",
+	}
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "PAYMENT_WEBHOOK_TRUSTED_PROXIES") {
+		t.Fatalf("expected trusted proxy production validation error, got %v", err)
+	}
+
+	cfg.PaymentWebhookTrustedProxies = []string{"127.0.0.1"}
+	err = cfg.Validate()
+	if err != nil && strings.Contains(err.Error(), "PAYMENT_WEBHOOK_TRUSTED_PROXIES") {
+		t.Fatalf("expected trusted proxy check to pass, got %v", err)
 	}
 }
 
@@ -1090,6 +1165,96 @@ func TestValidateDeepInfraImageProviderRequiresKey(t *testing.T) {
 	err := cfg.Validate()
 	if err == nil || !strings.Contains(err.Error(), "DEEPINFRA_API_KEY") {
 		t.Fatalf("expected DEEPINFRA_API_KEY validation error, got %v", err)
+	}
+}
+
+func TestValidateArtifactScannerKnownValues(t *testing.T) {
+	cfg := config.Config{
+		Env:             "development",
+		Provider:        "mock",
+		ProviderChain:   []string{"mock"},
+		ArtifactScanner: "clamav",
+	}
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "ARTIFACT_SCANNER") {
+		t.Fatalf("expected ARTIFACT_SCANNER validation error, got %v", err)
+	}
+}
+
+func TestValidateProductionRequiresArtifactScanner(t *testing.T) {
+	cfg := productionDeepInfraConfig()
+	cfg.ArtifactScanner = "none"
+	cfg.AllowUnscannedArtifactsInProduction = false
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "ARTIFACT_SCANNER=openai") {
+		t.Fatalf("expected production artifact scanner validation error, got %v", err)
+	}
+}
+
+func TestValidateProductionAllowsUnscannedArtifactsWithExplicitFlag(t *testing.T) {
+	cfg := productionDeepInfraConfig()
+	cfg.ArtifactScanner = "none"
+	cfg.OpenAIAPIKey = ""
+	cfg.AllowUnscannedArtifactsInProduction = true
+
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate() error = %v", err)
+	}
+}
+
+func TestValidateStagingAllowsUnscannedArtifactsWithoutOpenAI(t *testing.T) {
+	cfg := productionDeepInfraConfig()
+	cfg.Env = "staging"
+	cfg.ArtifactScanner = "none"
+	cfg.OpenAIAPIKey = ""
+
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate() error = %v", err)
+	}
+}
+
+func TestValidateOpenAIArtifactScannerRequiresKey(t *testing.T) {
+	cfg := config.Config{
+		Env:             "development",
+		Provider:        "mock",
+		ProviderChain:   []string{"mock"},
+		ArtifactScanner: "openai",
+	}
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "OPENAI_API_KEY") {
+		t.Fatalf("expected OPENAI_API_KEY validation error, got %v", err)
+	}
+}
+
+func TestLoadAllowUnscannedArtifactsInProduction(t *testing.T) {
+	t.Setenv("ALLOW_UNSCANNED_ARTIFACTS_IN_PRODUCTION", "true")
+
+	cfg := config.Load()
+	if !cfg.AllowUnscannedArtifactsInProduction {
+		t.Fatal("AllowUnscannedArtifactsInProduction = false, want true")
+	}
+}
+
+func productionDeepInfraConfig() config.Config {
+	return config.Config{
+		Env:                          "production",
+		VKConfirmationToken:          "prod-confirmation",
+		VKSecret:                     "vk-secret",
+		VKAppSecret:                  "vk-app-secret",
+		AdminToken:                   "admin-token",
+		PaymentProvider:              "yookassa",
+		YooKassaShopID:               "shop-id",
+		YooKassaSecretKey:            "secret-key",
+		YooKassaReturnURL:            "https://neiirohub.ru/payment-return",
+		PaymentWebhookTrustedProxies: []string{"127.0.0.1"},
+		Provider:                     "deepinfra",
+		ProviderChain:                []string{"deepinfra"},
+		DeepInfraAPIKey:              "deepinfra-key",
+		ArtifactScanner:              "openai",
+		OpenAIAPIKey:                 "openai-key",
 	}
 }
 

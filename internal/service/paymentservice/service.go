@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -254,6 +255,15 @@ type CreateIntentResult struct {
 	ReusedActive bool
 }
 
+// AttachVKBotPaymentMessageInput links a VK bot payment message to a local
+// intent so webhook/reconciliation status changes can edit that message later.
+type AttachVKBotPaymentMessageInput struct {
+	UserID    uuid.UUID
+	IntentID  uuid.UUID
+	VKPeerID  int64
+	MessageID int64
+}
+
 // CreateIntent creates or resumes an idempotent payment intent. It never grants
 // credits; only trusted webhook processing may later post a top-up ledger entry.
 func (s *Service) CreateIntent(ctx context.Context, in CreateIntentInput) (CreateIntentResult, error) {
@@ -297,7 +307,7 @@ func (s *Service) CreateIntent(ctx context.Context, in CreateIntentInput) (Creat
 			metrics.ObserveProductEvent(sourceLabel, "payment", "intent_create", "top_up", "credits", "invalid_product")
 			return CreateIntentResult{}, err
 		}
-		active, err := s.ActiveWaitingIntent(ctx, in.UserID)
+		active, err := s.ActiveWaitingIntentForSource(ctx, in.UserID, in.Source)
 		if err == nil {
 			if paymentIntentMatchesProduct(active, product) {
 				metrics.ObserveProductEvent(sourceLabel, "payment", "intent_create", "top_up", "credits", "reused_active")
@@ -386,9 +396,119 @@ func (s *Service) CreateIntent(ctx context.Context, in CreateIntentInput) (Creat
 	return CreateIntentResult{Intent: intent, Created: true}, nil
 }
 
+// AttachVKBotPaymentMessage stores only the minimal local routing data needed
+// to edit the VK bot top-up message after provider-confirmed status changes.
+// It never sends this metadata back to the payment provider.
+func (s *Service) AttachVKBotPaymentMessage(ctx context.Context, in AttachVKBotPaymentMessageInput) (*domain.PaymentIntent, error) {
+	if s == nil || s.repo == nil {
+		return nil, errors.New("paymentservice: service is not configured")
+	}
+	if in.UserID == uuid.Nil || in.IntentID == uuid.Nil || in.VKPeerID <= 0 || in.MessageID <= 0 {
+		return nil, ErrInvalidInput
+	}
+	intent, err := s.repo.GetIntentByID(ctx, in.IntentID)
+	if err != nil {
+		return nil, err
+	}
+	if intent.UserID != in.UserID {
+		return nil, ErrForbidden
+	}
+	if paymentMetadataSource(intent.Metadata) != "vk_bot" {
+		return nil, ErrForbidden
+	}
+	metadata, err := paymentMetadataMap(intent.Metadata)
+	if err != nil {
+		return nil, err
+	}
+	metadata["vk_peer_id"] = in.VKPeerID
+	metadata["vk_payment_message_id"] = in.MessageID
+	metadata["vk_payment_message_tracked_at"] = time.Now().UTC().Format(time.RFC3339)
+	raw, err := json.Marshal(metadata)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.repo.UpdateIntentMetadata(ctx, intent.ID, raw); err != nil {
+		return nil, err
+	}
+	return s.repo.GetIntentByID(ctx, intent.ID)
+}
+
+// CancelUserIntentInput describes a user-owned cancel request from one product
+// surface. It is intentionally narrower than protected operator cancellation.
+type CancelUserIntentInput struct {
+	UserID   uuid.UUID
+	IntentID uuid.UUID
+	Source   string
+}
+
+// CancelUserWaitingIntent cancels a user-owned waiting payment. It does not
+// mutate credits; successful payments must still be granted only by trusted
+// webhook/reconciliation processing.
+func (s *Service) CancelUserWaitingIntent(ctx context.Context, in CancelUserIntentInput) (*domain.PaymentIntent, error) {
+	if s == nil || s.repo == nil || s.provider == nil {
+		return nil, errors.New("paymentservice: service is not configured")
+	}
+	in.Source = strings.TrimSpace(in.Source)
+	if in.UserID == uuid.Nil || in.IntentID == uuid.Nil || in.Source == "" {
+		return nil, ErrInvalidInput
+	}
+	intent, err := s.repo.GetIntentByID(ctx, in.IntentID)
+	if err != nil {
+		return nil, err
+	}
+	if intent.UserID != in.UserID || paymentMetadataSource(intent.Metadata) != in.Source {
+		return nil, domain.ErrNotFound
+	}
+	switch intent.Status {
+	case domain.PaymentIntentCanceled, domain.PaymentIntentExpired, domain.PaymentIntentFailed:
+		return intent, nil
+	case domain.PaymentIntentWaitingForUser:
+		// allowed below
+	default:
+		return nil, domain.ErrConflict
+	}
+	if strings.TrimSpace(intent.ProviderPaymentID) == "" {
+		return nil, ErrInvalidInput
+	}
+	sourceLabel := metricLabel(in.Source)
+	if err := s.provider.CancelPayment(ctx, intent.ProviderPaymentID); err != nil {
+		recordPaymentProviderError(s.provider.Code(), "cancel_payment", err)
+		metrics.ObserveProductEvent(sourceLabel, "payment", "intent_cancel", "top_up", "credits", "provider_error")
+		return nil, fmt.Errorf("paymentservice: cancel provider payment: %w", err)
+	}
+	providerPayment, err := s.provider.GetPayment(ctx, intent.ProviderPaymentID)
+	if err != nil {
+		recordPaymentProviderError(s.provider.Code(), "get_payment", err)
+		metrics.ObserveProductEvent(sourceLabel, "payment", "intent_cancel", "top_up", "credits", "provider_error")
+		return nil, fmt.Errorf("paymentservice: verify canceled payment: %w", err)
+	}
+	switch providerPayment.Status {
+	case domain.PaymentIntentCanceled, domain.PaymentIntentExpired, domain.PaymentIntentFailed:
+		if intent.Status != providerPayment.Status {
+			if err := s.repo.UpdateIntentStatus(ctx, intent.ID, intent.Status, providerPayment.Status); err != nil && !errors.Is(err, domain.ErrConflict) {
+				return nil, err
+			}
+		}
+		metrics.ObserveProductEvent(sourceLabel, "payment", "intent_cancel", "top_up", "credits", "success")
+		return s.repo.GetIntentByID(ctx, intent.ID)
+	case domain.PaymentIntentWaitingForUser, domain.PaymentIntentProviderPending:
+		metrics.ObserveProductEvent(sourceLabel, "payment", "intent_cancel", "top_up", "credits", "pending")
+		return s.repo.GetIntentByID(ctx, intent.ID)
+	default:
+		metrics.ObserveProductEvent(sourceLabel, "payment", "intent_cancel", "top_up", "credits", "conflict")
+		return nil, domain.ErrConflict
+	}
+}
+
 // ActiveWaitingIntent returns the newest user-owned payment that still needs
 // user confirmation. It does not grant credits and does not query the provider.
 func (s *Service) ActiveWaitingIntent(ctx context.Context, userID uuid.UUID) (*domain.PaymentIntent, error) {
+	return s.ActiveWaitingIntentForSource(ctx, userID, "")
+}
+
+// ActiveWaitingIntentForSource returns the newest user-owned payment for one
+// product surface that still needs user confirmation.
+func (s *Service) ActiveWaitingIntentForSource(ctx context.Context, userID uuid.UUID, source string) (*domain.PaymentIntent, error) {
 	if s == nil || s.repo == nil || s.provider == nil {
 		return nil, errors.New("paymentservice: service is not configured")
 	}
@@ -399,6 +519,7 @@ func (s *Service) ActiveWaitingIntent(ctx context.Context, userID uuid.UUID) (*d
 		UserID:   &userID,
 		Status:   domain.PaymentIntentWaitingForUser,
 		Provider: s.provider.Code(),
+		Source:   strings.TrimSpace(source),
 	}, 20, 0)
 	if err != nil {
 		return nil, err
@@ -431,6 +552,18 @@ func (s *Service) GetIntentAdmin(ctx context.Context, intentID uuid.UUID) (*doma
 // ListIntentsByUser returns user-owned payment history.
 func (s *Service) ListIntentsByUser(ctx context.Context, userID uuid.UUID, limit, offset int) ([]*domain.PaymentIntent, error) {
 	return s.repo.ListIntentsByUser(ctx, userID, normalizeLimit(limit), normalizeOffset(offset))
+}
+
+// ListIntentsByUserSource returns user-owned payment history for one product
+// surface.
+func (s *Service) ListIntentsByUserSource(ctx context.Context, userID uuid.UUID, source string, limit, offset int) ([]*domain.PaymentIntent, error) {
+	if userID == uuid.Nil {
+		return nil, ErrInvalidInput
+	}
+	return s.repo.ListIntents(ctx, domain.PaymentIntentFilter{
+		UserID: &userID,
+		Source: strings.TrimSpace(source),
+	}, normalizeLimit(limit), normalizeOffset(offset))
 }
 
 // ListIntents returns protected operator payment history.
@@ -571,6 +704,33 @@ func paymentIntentCapture(intent *domain.PaymentIntent) *bool {
 		return nil
 	}
 	return metadata.Capture
+}
+
+func paymentMetadataMap(raw json.RawMessage) (map[string]any, error) {
+	if len(raw) == 0 {
+		return map[string]any{}, nil
+	}
+	var metadata map[string]any
+	if err := json.Unmarshal(raw, &metadata); err != nil {
+		return nil, err
+	}
+	if metadata == nil {
+		return map[string]any{}, nil
+	}
+	return metadata, nil
+}
+
+func paymentMetadataSource(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	var metadata struct {
+		Source string `json:"source"`
+	}
+	if err := json.Unmarshal(raw, &metadata); err != nil {
+		return ""
+	}
+	return strings.TrimSpace(metadata.Source)
 }
 
 func paymentIntentMatchesProduct(intent *domain.PaymentIntent, product *domain.PaymentProduct) bool {
