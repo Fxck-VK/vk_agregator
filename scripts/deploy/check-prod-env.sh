@@ -145,6 +145,13 @@ if [[ "${payment_provider}" == "yookassa" ]]; then
   for required in YOOKASSA_SHOP_ID YOOKASSA_SECRET_KEY YOOKASSA_RETURN_URL; do
     require_value "${required}" "required when PAYMENT_PROVIDER=yookassa"
   done
+  if is_true_value "$(get_value YOOKASSA_WEBHOOK_IP_ALLOWLIST_ENABLED)"; then
+    require_value YOOKASSA_WEBHOOK_IP_ALLOWLIST "required when YOOKASSA_WEBHOOK_IP_ALLOWLIST_ENABLED=true"
+  fi
+fi
+
+if is_true_value "$(get_value PAYMENT_WEBHOOK_REQUIRE_HTTPS)"; then
+  require_value PAYMENT_WEBHOOK_TRUSTED_PROXIES "required when PAYMENT_WEBHOOK_REQUIRE_HTTPS=true behind Cloudflare/nginx"
 fi
 
 provider_values="$(get_value PROVIDER),$(get_value PROVIDER_CHAIN),$(get_value IMAGE_PROVIDER),$(get_value VIDEO_PROVIDER)"
