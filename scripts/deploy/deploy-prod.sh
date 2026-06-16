@@ -120,6 +120,9 @@ get_env_value() {
   if [[ -z "${value}" ]]; then
     echo "${default}"
   else
+    value="${value%$'\r'}"
+    value="${value#"${value%%[![:space:]]*}"}"
+    value="${value%"${value##*[![:space:]]}"}"
     value="${value%\"}"
     value="${value#\"}"
     value="${value%\'}"
