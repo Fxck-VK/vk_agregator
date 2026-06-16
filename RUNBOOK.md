@@ -1580,11 +1580,15 @@ these hostnames. The Cloudflare dashboard token belongs only in the real server
 `.env` as `CLOUDFLARED_TUNNEL_TOKEN`; `docker-compose.prod.yml` passes it to
 cloudflared as `TUNNEL_TOKEN` instead of putting it on the command line.
 
-| Public hostname/path | Service when `cloudflared` runs in `docker-compose.prod.yml` | Service when `cloudflared` runs on the VPS host | Backend owner |
-|----------------------|-------------------------------------------------------------|-----------------------------------------------|---------------|
-| `vk.neiirohub.ru` | `http://reverse-proxy:80` | `http://127.0.0.1:8088` | `cmd/api` for `/webhooks/vk` and `/health` |
-| `app.neiirohub.ru` | `http://reverse-proxy:80` | `http://127.0.0.1:8088` | Mini App static for `/`, `cmd/api` for `/miniapp/*` |
-| `neiirohub.ru/billing/webhooks/yookassa` | `http://reverse-proxy:80` | `http://127.0.0.1:8088` | `cmd/provider-webhook` exact route only |
+Production compose runs `cloudflared` with host networking so dashboard-managed
+routes use the same origin as a host-level connector: `http://127.0.0.1:8088`.
+The reverse proxy itself remains bound to VPS loopback only.
+
+| Public hostname/path | Cloudflare Tunnel service | Backend owner |
+|----------------------|---------------------------|---------------|
+| `vk.neiirohub.ru` | `http://127.0.0.1:8088` | `cmd/api` for `/webhooks/vk` and `/health` |
+| `app.neiirohub.ru` | `http://127.0.0.1:8088` | Mini App static for `/`, `cmd/api` for `/miniapp/*` |
+| `neiirohub.ru/billing/webhooks/yookassa` | `http://127.0.0.1:8088` | `cmd/provider-webhook` exact route only |
 
 Cloudflare should create proxied DNS records pointing each hostname to the
 tunnel target (`<tunnel-id>.cfargotunnel.com`). If DNS is managed manually,
