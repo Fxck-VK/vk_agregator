@@ -169,6 +169,29 @@ wait_http() {
   return 1
 }
 
+run_public_smoke() {
+  local public_vk_url="$1"
+  local public_app_url="$2"
+  local public_payment_webhook_url="$3"
+  local deadline=$((SECONDS + timeout_seconds))
+  local attempt=1
+  while [[ ${SECONDS} -lt ${deadline} ]]; do
+    echo "==> public smoke attempt ${attempt}"
+    if bash scripts/deploy/smoke-prod.sh \
+      --env-file "${env_file}" \
+      --vk-base-url "${public_vk_url}" \
+      --app-base-url "${public_app_url}" \
+      --payment-webhook-url "${public_payment_webhook_url}" \
+      --timeout-seconds "${timeout_seconds}"; then
+      return 0
+    fi
+    attempt=$((attempt + 1))
+    sleep 5
+  done
+  echo "Public Cloudflare/DNS smoke did not pass within ${timeout_seconds}s" >&2
+  return 1
+}
+
 if [[ "${skip_pull}" != "true" ]]; then
   if [[ "${allow_dirty}" != "true" ]]; then
     dirty="$(git status --porcelain --untracked-files=no)"
@@ -219,7 +242,7 @@ if [[ "${backup_before_deploy}" == "true" ]]; then
   run_step "${backup_compose[@]}" run --rm backup-minio
 fi
 
-run_step "${compose[@]}" up -d --no-build postgres redis minio
+run_step "${compose[@]}" up -d --no-build --wait --wait-timeout "${timeout_seconds}" postgres redis minio
 
 if [[ "${build_on_vps}" == "true" ]]; then
   build_args=(build)
@@ -274,12 +297,7 @@ if [[ "${no_health_check}" != "true" ]]; then
     public_vk_url="$(get_public_url PUBLIC_VK_BASE_URL VK_BASE_URL https://vk.neiirohub.ru)"
     public_app_url="$(get_public_url PUBLIC_APP_BASE_URL APP_BASE_URL https://app.neiirohub.ru)"
     public_payment_webhook_url="$(get_public_url PUBLIC_PAYMENT_WEBHOOK_URL PAYMENT_WEBHOOK_URL https://neiirohub.ru/billing/webhooks/yookassa)"
-    run_step bash scripts/deploy/smoke-prod.sh \
-      --env-file "${env_file}" \
-      --vk-base-url "${public_vk_url}" \
-      --app-base-url "${public_app_url}" \
-      --payment-webhook-url "${public_payment_webhook_url}" \
-      --timeout-seconds "${timeout_seconds}"
+    run_public_smoke "${public_vk_url}" "${public_app_url}" "${public_payment_webhook_url}"
     public_smoke_status="passed"
   fi
 fi
