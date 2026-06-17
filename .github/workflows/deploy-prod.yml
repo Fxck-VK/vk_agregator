@@ -1,0 +1,368 @@
+name: Deploy Production
+
+on:
+  workflow_run:
+    workflows:
+      - Docker Images
+    types:
+      - completed
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy VPS
+    runs-on: ubuntu-latest
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'main')
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Resolve deployment image tag
+        id: release
+        shell: bash
+        env:
+          WORKFLOW_RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+
+          deploy_sha="${WORKFLOW_RUN_SHA:-${GITHUB_SHA}}"
+          deploy_short_sha="${deploy_sha:0:7}"
+          deploy_image_tag="sha-${deploy_short_sha}"
+
+          if [[ ! "${deploy_image_tag}" =~ ^sha-[A-Za-z0-9._-]+$ ]]; then
+            echo "Resolved unsafe IMAGE_TAG: ${deploy_image_tag}" >&2
+            exit 1
+          fi
+
+          echo "image_tag=${deploy_image_tag}" >> "${GITHUB_OUTPUT}"
+
+      - name: Validate required secrets
+        shell: bash
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+          PROD_ENV_FILE: ${{ secrets.PROD_ENV_FILE }}
+        run: |
+          set -euo pipefail
+
+          missing=()
+          for name in \
+            DEPLOY_HOST \
+            DEPLOY_USER \
+            DEPLOY_PATH \
+            DEPLOY_SSH_KEY \
+            GHCR_USERNAME \
+            GHCR_TOKEN \
+            PROD_ENV_FILE
+          do
+            if [[ -z "${!name:-}" ]]; then
+              missing+=("${name}")
+            fi
+          done
+
+          if (( ${#missing[@]} > 0 )); then
+            printf 'Missing required repository secrets: %s\n' "${missing[*]}" >&2
+            exit 1
+          fi
+
+      - name: Prepare SSH
+        shell: bash
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          set -euo pipefail
+
+          install -m 700 -d "${HOME}/.ssh"
+          printf '%s\n' "${DEPLOY_SSH_KEY}" > "${HOME}/.ssh/deploy_key"
+          chmod 600 "${HOME}/.ssh/deploy_key"
+          ssh-keyscan -H "${DEPLOY_HOST}" >> "${HOME}/.ssh/known_hosts"
+
+      - name: Capture current production image tag
+        id: current_release
+        shell: bash
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          set -euo pipefail
+
+          previous_image_tag="$(
+            ssh -i "${HOME}/.ssh/deploy_key" "${DEPLOY_USER}@${DEPLOY_HOST}" 'bash -s' -- "${DEPLOY_PATH}" <<'REMOTE'
+          set -euo pipefail
+          deploy_path="$1"
+          cd "${deploy_path}"
+
+          env_tag=""
+          if [[ -f .env ]]; then
+            env_tag="$(grep -E '^IMAGE_TAG=' .env | tail -n 1 | cut -d= -f2- || true)"
+            env_tag="${env_tag%\"}"
+            env_tag="${env_tag#\"}"
+            env_tag="${env_tag%\'}"
+            env_tag="${env_tag#\'}"
+          fi
+
+          git_short="$(git rev-parse --short=7 HEAD 2>/dev/null || true)"
+          if [[ "${env_tag}" == sha-* ]]; then
+            tag="${env_tag}"
+          elif [[ -n "${git_short}" ]]; then
+            tag="sha-${git_short}"
+          else
+            tag="${env_tag}"
+          fi
+
+          printf '%s' "${tag}"
+          REMOTE
+          )"
+
+          if [[ -n "${previous_image_tag}" && ! "${previous_image_tag}" =~ ^[A-Za-z0-9._-]+$ ]]; then
+            echo "Captured unsafe previous IMAGE_TAG" >&2
+            exit 1
+          fi
+
+          echo "previous_image_tag=${previous_image_tag}" >> "${GITHUB_OUTPUT}"
+
+      - name: Update repository on VPS
+        shell: bash
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          set -euo pipefail
+
+          ssh -i "${HOME}/.ssh/deploy_key" "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            "set -euo pipefail; cd '${DEPLOY_PATH}'; git fetch --prune origin; git checkout main; git pull --ff-only origin main"
+
+      - name: Upload production env
+        shell: bash
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+          PROD_ENV_FILE: ${{ secrets.PROD_ENV_FILE }}
+          DEPLOY_IMAGE_TAG: ${{ steps.release.outputs.image_tag }}
+        run: |
+          set -euo pipefail
+
+          tmp_env="$(mktemp)"
+          trap 'rm -f "${tmp_env}"' EXIT
+
+          printf '%s\n' "${PROD_ENV_FILE}" \
+            | sed '/^GHCR_USERNAME=/d;/^GHCR_TOKEN=/d;/^IMAGE_TAG=/d' > "${tmp_env}"
+          {
+            printf '\n'
+            printf 'IMAGE_TAG=%s\n' "${DEPLOY_IMAGE_TAG}"
+            printf 'GHCR_USERNAME=%s\n' "${GHCR_USERNAME}"
+            printf 'GHCR_TOKEN=%s\n' "${GHCR_TOKEN}"
+          } >> "${tmp_env}"
+
+          scp -i "${HOME}/.ssh/deploy_key" "${tmp_env}" "${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_PATH}/.env.next"
+          ssh -i "${HOME}/.ssh/deploy_key" "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            "set -euo pipefail; cd '${DEPLOY_PATH}'; install -m 600 .env.next .env; rm -f .env.next"
+
+      - name: Run production deploy
+        id: production_deploy
+        shell: bash
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          DEPLOY_IMAGE_TAG: ${{ steps.release.outputs.image_tag }}
+        run: |
+          set -euo pipefail
+
+          ssh -i "${HOME}/.ssh/deploy_key" "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            "set -euo pipefail; cd '${DEPLOY_PATH}'; bash scripts/deploy/deploy-prod.sh --branch main --env-file .env --with-cloudflare --skip-public-smoke --image-tag '${DEPLOY_IMAGE_TAG}' --timeout-seconds 240"
+
+      - name: Run production smoke
+        id: production_smoke
+        shell: bash
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          set -euo pipefail
+
+          ssh -i "${HOME}/.ssh/deploy_key" "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            "set -euo pipefail; cd '${DEPLOY_PATH}'; bash scripts/deploy/smoke-prod.sh --env-file .env --timeout-seconds 60"
+
+      - name: Roll back after failed deploy or smoke
+        id: production_rollback
+        if: ${{ failure() && (steps.production_deploy.outcome == 'failure' || steps.production_smoke.outcome == 'failure') }}
+        shell: bash
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          DEPLOY_IMAGE_TAG: ${{ steps.release.outputs.image_tag }}
+          PREVIOUS_IMAGE_TAG: ${{ steps.current_release.outputs.previous_image_tag }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${PREVIOUS_IMAGE_TAG}" ]]; then
+            echo "No previous IMAGE_TAG was captured; automatic rollback cannot choose a target." >&2
+            exit 1
+          fi
+
+          if [[ "${PREVIOUS_IMAGE_TAG}" == "${DEPLOY_IMAGE_TAG}" ]]; then
+            echo "Previous IMAGE_TAG equals deployed IMAGE_TAG; rollback would be a no-op." >&2
+            exit 1
+          fi
+
+          ssh -i "${HOME}/.ssh/deploy_key" "${DEPLOY_USER}@${DEPLOY_HOST}" 'bash -s' -- "${DEPLOY_PATH}" "${PREVIOUS_IMAGE_TAG}" <<'REMOTE'
+          set -euo pipefail
+          deploy_path="$1"
+          previous_image_tag="$2"
+          cd "${deploy_path}"
+
+          tmp_env="$(mktemp)"
+          sed '/^IMAGE_TAG=/d' .env > "${tmp_env}"
+          printf 'IMAGE_TAG=%s\n' "${previous_image_tag}" >> "${tmp_env}"
+          install -m 600 "${tmp_env}" .env
+          rm -f "${tmp_env}"
+
+          bash scripts/deploy/rollback-prod.sh \
+            --env-file .env \
+            --image-tag "${previous_image_tag}" \
+            --with-cloudflare \
+            --skip-backup \
+            --timeout-seconds 240
+
+          bash scripts/deploy/smoke-prod.sh --env-file .env --timeout-seconds 60
+          REMOTE
+
+      - name: Deployment summary
+        if: always()
+        shell: bash
+        env:
+          DEPLOY_OUTCOME: ${{ steps.production_deploy.outcome }}
+          SMOKE_OUTCOME: ${{ steps.production_smoke.outcome }}
+          ROLLBACK_OUTCOME: ${{ steps.production_rollback.outcome }}
+          DEPLOY_IMAGE_TAG: ${{ steps.release.outputs.image_tag }}
+          PREVIOUS_IMAGE_TAG: ${{ steps.current_release.outputs.previous_image_tag }}
+        run: |
+          set -euo pipefail
+
+          deploy_outcome="${DEPLOY_OUTCOME:-skipped}"
+          smoke_outcome="${SMOKE_OUTCOME:-skipped}"
+          rollback_outcome="${ROLLBACK_OUTCOME:-skipped}"
+
+          if [[ "${deploy_outcome}" == "success" && "${smoke_outcome}" == "success" ]]; then
+            verdict="production updated successfully"
+          elif [[ "${rollback_outcome}" == "success" ]]; then
+            verdict="deploy failed; automatic rollback completed; investigate before retry"
+          elif [[ "${deploy_outcome}" == "failure" || "${smoke_outcome}" == "failure" ]]; then
+            verdict="deploy failed; automatic rollback did not complete"
+          else
+            verdict="deploy did not reach runtime rollout"
+          fi
+
+          {
+            echo "## Deploy Production"
+            echo
+            echo "**Verdict:** ${verdict}"
+            echo
+            echo "- Target: configured VPS"
+            echo "- Deploy path: configured repository path"
+            echo "- Trigger: \`${{ github.event_name }}\`"
+            echo "- Commit: \`${{ github.sha }}\`"
+            echo "- Deployed image tag: \`${DEPLOY_IMAGE_TAG:-unknown}\`"
+            echo "- Previous image tag: \`${PREVIOUS_IMAGE_TAG:-unknown}\`"
+            echo
+            echo "| Step | Outcome |"
+            echo "|------|---------|"
+            echo "| Deploy | \`${deploy_outcome}\` |"
+            echo "| Smoke | \`${smoke_outcome}\` |"
+            echo "| Rollback | \`${rollback_outcome}\` |"
+            echo
+            echo "If rollback succeeded, production should be back on the previous image tag, but this workflow remains failed by design."
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Notify Telegram
+        if: always()
+        shell: bash
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          DEPLOY_OUTCOME: ${{ steps.production_deploy.outcome }}
+          SMOKE_OUTCOME: ${{ steps.production_smoke.outcome }}
+          ROLLBACK_OUTCOME: ${{ steps.production_rollback.outcome }}
+          DEPLOY_IMAGE_TAG: ${{ steps.release.outputs.image_tag }}
+          PREVIOUS_IMAGE_TAG: ${{ steps.current_release.outputs.previous_image_tag }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${TELEGRAM_BOT_TOKEN:-}" || -z "${TELEGRAM_CHAT_ID:-}" ]]; then
+            echo "Telegram notification skipped: TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID is not configured." >> "${GITHUB_STEP_SUMMARY}"
+            exit 0
+          fi
+
+          deploy_outcome="${DEPLOY_OUTCOME:-skipped}"
+          smoke_outcome="${SMOKE_OUTCOME:-skipped}"
+          rollback_outcome="${ROLLBACK_OUTCOME:-skipped}"
+
+          if [[ "${deploy_outcome}" == "success" && "${smoke_outcome}" == "success" ]]; then
+            verdict="OK: production updated"
+          elif [[ "${rollback_outcome}" == "success" ]]; then
+            verdict="FAILED: rollback completed"
+          elif [[ "${deploy_outcome}" == "failure" || "${smoke_outcome}" == "failure" ]]; then
+            verdict="FAILED: rollback did not complete"
+          else
+            verdict="FAILED: deploy did not reach runtime rollout"
+          fi
+
+          message="$(printf '%s\n' \
+            "VK AI Aggregator deploy" \
+            "" \
+            "Verdict: ${verdict}" \
+            "Commit: ${GITHUB_SHA}" \
+            "Image: ${DEPLOY_IMAGE_TAG:-unknown}" \
+            "Previous: ${PREVIOUS_IMAGE_TAG:-unknown}" \
+            "" \
+            "Deploy: ${deploy_outcome}" \
+            "Smoke: ${smoke_outcome}" \
+            "Rollback: ${rollback_outcome}" \
+            "" \
+            "Run: ${RUN_URL}")"
+
+          if curl -fsS --retry 2 --max-time 15 \
+            -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
+            --data-urlencode "text=${message}" \
+            >/dev/null; then
+            echo "Telegram notification sent." >> "${GITHUB_STEP_SUMMARY}"
+          else
+            echo "::warning::Telegram notification failed"
+            echo "Telegram notification failed." >> "${GITHUB_STEP_SUMMARY}"
+          fi
+
+      - name: Cleanup SSH key
+        if: always()
+        shell: bash
+        run: rm -f "${HOME}/.ssh/deploy_key"

@@ -1412,10 +1412,6 @@ body {
   .settings-balance-card__actions { grid-template-columns: 1fr; }
   .settings-history-row { grid-template-columns: 1fr; }
   .settings-history-row__meta { justify-items: start; }
-  .payment-history-row { grid-template-columns: 1fr; }
-  .payment-history-row__meta { justify-items: start; }
-  .payment-history-row__actions { justify-content: flex-start; }
-  .payment-history-row__meta time { white-space: normal; }
 }
 
 /* ——— Workflow ——— */
@@ -2245,20 +2241,63 @@ body {
 .referral-card__head {
   display: flex;
   align-items: flex-start;
-  justify-content: space-between;
   gap: 12px;
 }
 
-.referral-card__head h2 {
-  margin: 0 0 4px;
-  font-size: 15px;
+.referral-toggle {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
 }
 
-.referral-card__head p {
-  margin: 0;
+.referral-toggle__main {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.referral-toggle__title {
+  color: var(--fg);
+  font-size: 15px;
+  font-weight: 850;
+}
+
+.referral-toggle__subtitle,
+.referral-toggle__summary {
+  min-width: 0;
   color: var(--fg-muted);
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.referral-toggle__chevron {
+  flex-shrink: 0;
+  color: var(--fg-muted);
+  transition: transform var(--motion-fast) var(--ease-out);
+}
+
+.referral-toggle.is-open .referral-toggle__chevron {
+  transform: rotate(180deg);
+}
+
+.referral-panel {
+  display: none;
+}
+
+.referral-panel.is-open {
+  display: grid;
+  gap: 12px;
 }
 
 .referral-stats {
@@ -2355,60 +2394,6 @@ body {
   margin-bottom: 10px;
 }
 
-.payment-product-select {
-  display: grid;
-  gap: 8px;
-}
-
-.payment-product-select label {
-  color: var(--fg-muted);
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.payment-product-select select {
-  width: 100%;
-  min-height: 44px;
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-control);
-  background: var(--surface-2);
-  color: var(--fg);
-  padding: 0 12px;
-  font: inherit;
-  font-size: 14px;
-  font-weight: 750;
-}
-
-.payment-product-select select:disabled {
-  cursor: wait;
-  opacity: 0.72;
-}
-
-.payment-product-summary {
-  display: grid;
-  gap: 3px;
-  padding: 10px 12px;
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-control);
-  background: color-mix(in srgb, var(--brand-cyan) 10%, transparent);
-}
-
-.payment-product-summary strong,
-.payment-product-summary span {
-  overflow-wrap: anywhere;
-}
-
-.payment-product-summary strong {
-  color: var(--fg);
-  font-size: 13px;
-  font-weight: 850;
-}
-
-.payment-product-summary span {
-  color: var(--fg-muted);
-  font-size: 12px;
-}
-
 .payment-product {
   appearance: none;
   width: 100%;
@@ -2463,186 +2448,6 @@ body {
   font-style: normal;
   font-weight: 800;
   white-space: nowrap;
-}
-
-.payment-history-card {
-  display: grid;
-  gap: 12px;
-}
-
-.payment-history-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.payment-history-head h2 {
-  margin: 0 0 4px;
-  font-size: 15px;
-}
-
-.payment-history-head p {
-  margin: 0;
-  color: var(--fg-muted);
-  font-size: 13px;
-  line-height: 1.35;
-}
-
-.payment-history-collapsible-head {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-}
-
-.payment-history-toggle {
-  min-width: 0;
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-  text-align: left;
-  font: inherit;
-}
-
-.payment-history-toggle__main {
-  min-width: 0;
-  display: grid;
-  gap: 4px;
-}
-
-.payment-history-toggle__title {
-  color: var(--fg);
-  font-size: 15px;
-  font-weight: 850;
-}
-
-.payment-history-toggle__count,
-.payment-history-toggle__summary {
-  min-width: 0;
-  color: var(--fg-muted);
-  font-size: 12px;
-  overflow-wrap: anywhere;
-}
-
-.payment-history-toggle__chevron {
-  flex-shrink: 0;
-  color: var(--fg-muted);
-  transition: transform var(--motion-fast) var(--ease-out);
-}
-
-.payment-history-toggle.is-open .payment-history-toggle__chevron {
-  transform: rotate(180deg);
-}
-
-.payment-history-panel {
-  display: none;
-}
-
-.payment-history-panel.is-open {
-  display: block;
-}
-
-.payment-history-list {
-  display: grid;
-  gap: 8px;
-}
-
-.payment-history-row {
-  position: relative;
-  min-height: 58px;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 0 10px 14px;
-  border-top: 1px solid var(--glass-border);
-}
-
-.payment-history-row::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 14px;
-  bottom: 14px;
-  width: 4px;
-  border-radius: 999px;
-  background: var(--brand-cyan);
-}
-
-.payment-history-row--done::before { background: #22c55e; }
-.payment-history-row--failed::before { background: #ef4444; }
-.payment-history-row--refund::before { background: #f59e0b; }
-
-.payment-history-row__main {
-  min-width: 0;
-  display: grid;
-  gap: 3px;
-}
-
-.payment-history-row__main strong,
-.payment-history-row__main span {
-  overflow-wrap: anywhere;
-}
-
-.payment-history-row__main strong {
-  color: var(--fg);
-  font-size: 14px;
-  font-weight: 850;
-}
-
-.payment-history-row__main span {
-  color: var(--fg-muted);
-  font-size: 12px;
-  line-height: 1.35;
-}
-
-.payment-history-row__meta {
-  display: grid;
-  justify-items: end;
-  gap: 6px;
-}
-
-.payment-history-row__meta time {
-  color: var(--fg-muted);
-  font-size: 12px;
-  white-space: nowrap;
-}
-
-.payment-history-row__actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.payment-history-row__meta button,
-.payment-history-row__meta a {
-  min-height: 32px;
-  padding: 0 11px;
-  border: 1px solid transparent;
-  border-radius: var(--radius-control);
-  background: var(--gradient-brand);
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font: inherit;
-  font-size: 12px;
-  font-weight: 850;
-  text-decoration: none;
-  cursor: pointer;
-}
-
-.payment-history-row__meta button:disabled {
-  cursor: wait;
-  opacity: 0.62;
 }
 
 .settings-filter-pills {

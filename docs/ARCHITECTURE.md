@@ -118,6 +118,24 @@ YooKassa webhook routes. The exact YooKassa webhook location must forward
 `X-Forwarded-Proto: https` / `Forwarded: proto=https` to
 `cmd/provider-webhook`; broad `/billing/*` routes remain private/operator-only.
 
+Production delivery pipeline:
+
+```text
+merge/push to main
+  -> GitHub Actions "Docker Images"
+  -> GHCR images tagged sha-<commit>
+  -> GitHub Actions "Deploy Production"
+  -> VPS docker compose pull/up through scripts/deploy/deploy-prod.*
+  -> scripts/deploy/smoke-prod.*
+  -> scripts/deploy/rollback-prod.* to previous image tag if deploy/smoke fails
+```
+
+The deploy pipeline is part of the architecture boundary. Runtime containers are
+stateless and replaceable by image tag; Postgres, Redis and S3/MinIO carry
+state. Automatic rollback is therefore limited to image/runtime rollback and
+must not run schema rollback. Migration rollback requires a separate reviewed
+backup-first operator decision.
+
 Production observability runs as a private sidecar stack, not as a public
 surface. `docker-compose.prod.yml` and `docker-compose.observability.yml` share
 the explicit Docker network `COMPOSE_NETWORK_NAME` (`vk-ai-aggregator-prod` by

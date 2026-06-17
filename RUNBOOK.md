@@ -1496,6 +1496,69 @@ If GHCR packages are private, set `GHCR_USERNAME` and `GHCR_TOKEN` only in the
 real VPS `.env`; deploy scripts use them for `docker login ghcr.io` before
 pulling images. Do not commit these values.
 
+Automatic production deploy is handled by `.github/workflows/deploy-prod.yml`.
+It starts only after the `Docker Images` workflow succeeds for a push to
+`main`, so the VPS pulls already-built GHCR images instead of racing the image
+build. Manual `workflow_dispatch` is also available for an operator-triggered
+redeploy.
+
+Operator mental model:
+
+```text
+push/merge to main
+  -> Docker Images builds immutable GHCR images
+  -> deploy-prod connects to the VPS over SSH
+  -> deploy-prod.sh pulls and starts the selected image tag
+  -> smoke-prod.sh verifies the deployed runtime
+  -> rollback-prod.sh restores the previous image tag when deploy/smoke fails
+```
+
+Required repository secrets for auto-deploy:
+
+| Secret | Purpose |
+|--------|---------|
+| `DEPLOY_HOST` | VPS hostname or IP |
+| `DEPLOY_USER` | SSH user used by GitHub Actions |
+| `DEPLOY_SSH_KEY` | Private SSH key for that deploy user |
+| `DEPLOY_PATH` | Repository path on the VPS, for example `/opt/vk-ai-aggregator` |
+| `GHCR_USERNAME` / `GHCR_TOKEN` | GHCR credentials used by deploy scripts for private packages |
+| `PROD_ENV_FILE` | Full server `.env` content, without printing it in logs |
+| `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` | Optional deploy result notification target |
+
+The workflow writes `PROD_ENV_FILE` to `${DEPLOY_PATH}/.env` on the VPS with
+`0600` permissions, injects the GHCR credentials from repository secrets,
+pins `IMAGE_TAG` to the immutable `sha-<commit>` image tag built by GitHub
+Actions, then runs:
+
+```bash
+bash scripts/deploy/deploy-prod.sh --branch main --env-file .env --with-cloudflare --skip-public-smoke --image-tag sha-<commit>
+bash scripts/deploy/smoke-prod.sh --env-file .env --timeout-seconds 60
+```
+
+Deploys are serialized with the `production-deploy` concurrency group. If
+`Docker Images` fails, production deploy does not start. If the post-deploy
+smoke fails, the deploy workflow turns red even if containers were started.
+The workflow summary shows the final verdict plus Deploy, Smoke and Rollback
+outcomes so the operator can see whether production updated, rolled back, or
+failed before runtime rollout.
+If `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` are configured as repository
+secrets, the same verdict is also sent to Telegram after every deploy attempt.
+Telegram notification failures are reported as warnings and do not mask the
+deploy/smoke/rollback result.
+
+Before deploy, the workflow captures the current production image tag from the
+VPS. If deploy or smoke fails after the runtime rollout starts, GitHub Actions
+automatically runs:
+
+```bash
+bash scripts/deploy/rollback-prod.sh --env-file .env --image-tag <previous-image-tag> --with-cloudflare --skip-backup
+bash scripts/deploy/smoke-prod.sh --env-file .env --timeout-seconds 60
+```
+
+Automatic rollback changes only the stateless runtime image tag. It does not
+run `migrate down` and must not hide the incident: the workflow remains failed
+after a rollback, even when the previous production image is restored.
+
 Validate the production compose file without real secrets:
 
 ```bash
