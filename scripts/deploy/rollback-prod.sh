@@ -164,6 +164,7 @@ fi
 run_step "${compose[@]}" pull "${rollback_services[@]}"
 run_step "${compose[@]}" up -d --no-build postgres redis minio
 run_step "${compose[@]}" up -d --no-build --no-deps "${rollback_services[@]}"
+run_step "${compose[@]}" up -d --no-build --force-recreate --no-deps reverse-proxy
 
 if [[ "${no_health_check}" != "true" ]]; then
   reverse_proxy_port="$(get_env_value REVERSE_PROXY_HTTP_PORT 8088)"
