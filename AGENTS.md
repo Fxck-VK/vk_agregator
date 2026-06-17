@@ -23,6 +23,13 @@ Source order: system/developer instructions > current task > root `AGENTS.md` > 
 - Every provider response/error is normalized; every text/media output is an Artifact and must pass moderation before user-visible delivery.
 - No secrets, tokens, auth headers, full launch params, prompt bodies, raw PII, raw provider payloads or private artifact URLs in logs/docs/chat.
 
+## Deployment Invariants
+
+- `main` is deployed through GitHub Actions only: `Docker Images` must build immutable `sha-<commit>` images before `deploy-prod` rolls the VPS forward.
+- Production deploy pulls images from GHCR and runs `scripts/deploy/deploy-prod.*`; building on the VPS is an explicit fallback, not the default path.
+- Post-deploy smoke is mandatory. If deploy or smoke fails, rollback may switch stateless runtime containers to the previous image tag, but schema rollback is never automatic.
+- Deployment secrets live in GitHub Repository Secrets and the VPS `.env` only. Do not commit `PROD_ENV_FILE`, GHCR tokens, Cloudflare tunnel tokens, SSH keys or Telegram notification credentials.
+
 ## Context And Logs
 
 - Current machine context: `.agents/state.json`.

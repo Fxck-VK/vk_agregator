@@ -519,6 +519,33 @@ Treat failures seriously, but do not bypass the required PR gate to "fix later".
 CI must run on mock/default configuration. It must not use real VK, YooKassa,
 DeepInfra, OpenAI or Cloudflare secrets and must not call external providers.
 
+### Production auto-deploy
+
+Production deploy is automated after `main` changes:
+
+```text
+push/merge to main
+  -> Docker Images workflow builds api/worker/provider-webhook/miniapp/migrate/backup images
+  -> deploy-prod workflow connects to the VPS
+  -> VPS pulls immutable GHCR images by sha-<commit>
+  -> deploy-prod.sh starts the runtime
+  -> smoke-prod.sh verifies public and private production routes
+  -> rollback-prod.sh restores the previous image tag if deploy/smoke fails
+```
+
+The deploy workflow is serialized with the `production-deploy` concurrency group,
+so two merges to `main` deploy in order. It writes `PROD_ENV_FILE` from GitHub
+Repository Secrets to the VPS `.env`, injects GHCR credentials, pins `IMAGE_TAG`,
+and never stores production secrets in the repository.
+
+Rollback is runtime-only by default: it switches stateless containers back to
+the previous image tag and does not run migration rollback automatically. If
+schema/data rollback is needed, stop and follow the backup-first runbook.
+
+If `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` are configured as repository
+secrets, every deploy attempt sends the same verdict shown in the GitHub Actions
+summary.
+
 ## Troubleshooting
 
 **GitHub required checks are missing in branch protection.**
