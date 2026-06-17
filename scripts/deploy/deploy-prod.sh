@@ -286,6 +286,7 @@ if [[ "${build_on_vps}" != "true" ]]; then
 fi
 runtime_up_args+=("${runtime_services[@]}")
 run_step "${compose[@]}" "${runtime_up_args[@]}"
+run_step "${compose[@]}" up -d --no-build --force-recreate --no-deps reverse-proxy
 
 if [[ "${no_health_check}" != "true" ]]; then
   reverse_proxy_port="$(get_env_value REVERSE_PROXY_HTTP_PORT 8088)"

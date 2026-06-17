@@ -309,6 +309,9 @@ try {
         $runtimeUpArgs += $runtimeServices
         Invoke-DockerCompose @runtimeUpArgs
     }
+    Invoke-Step "recreate reverse proxy to refresh upstream DNS" {
+        Invoke-DockerCompose up -d --no-build --force-recreate --no-deps reverse-proxy
+    }
 
     if (-not $NoHealthCheck) {
         $reverseProxyPort = Get-EnvFileValue -Path $EnvFile -Name "REVERSE_PROXY_HTTP_PORT" -Default "8088"
