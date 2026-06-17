@@ -11,6 +11,7 @@ import { loadThemeMode, watchThemeMode, type ThemeMode } from "../settings/theme
 import { modalityByOperation, uid, type Chat, type ChatMessage } from "./types";
 import { loadAppTab, saveAppTab, type AppTab } from "../mode";
 import {
+  ApiError,
   createChatMessage,
   createJob,
   createIdempotencyKey,
@@ -199,6 +200,14 @@ function mergeHistoryMessages(current: ChatMessage[], history: ChatMessage[]): C
   return Array.from(byID.values()).sort(compareChatMessages);
 }
 
+function fallbackVisibleChatId(chats: Chat[], excludedId?: string): string | null {
+  return visibleChats(chats).find((chat) => chat.id !== excludedId)?.id ?? null;
+}
+
+function isStaleConversationError(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 404;
+}
+
 const EARLY_CHAT_TEXT_STATUSES = new Set([
   "provider_succeeded",
   "postprocessing",
@@ -300,13 +309,22 @@ export function ChatScreen({ user }: { user: VkUser }) {
               : chat,
           ),
         );
-      } catch {
+      } catch (error) {
+        if (!mountedRef.current) return;
+        if (isStaleConversationError(error)) {
+          const existing = chatsRef.current.find((chat) => chat.id === chatId);
+          if (!existing || !isLocalDraftChat(existing)) {
+            setChats((prev) => prev.filter((chat) => chat.id !== chatId));
+            setActiveId((cur) => (cur === chatId ? fallbackVisibleChatId(chatsRef.current, chatId) : cur));
+          }
+          return;
+        }
         /* keep already rendered messages on transient load errors */
       } finally {
         if (mountedRef.current) setHistoryLoading(false);
       }
     },
-    [setChats],
+    [setActiveId, setChats],
   );
 
   const refreshConversations = useCallback(async () => {
@@ -643,9 +661,16 @@ export function ChatScreen({ user }: { user: VkUser }) {
   }, [activeId, chats, setActiveId]);
 
   useEffect(() => {
+    if (!activeId || isScratchpadChatId(activeId)) return;
+    if (chats.some((chat) => chat.id === activeId)) return;
+    setActiveId(fallbackVisibleChatId(chats));
+  }, [activeId, chats, setActiveId]);
+
+  useEffect(() => {
     if (activeTab !== "chat" || !activeId || isScratchpadChatId(activeId)) return;
+    if (!chats.some((chat) => chat.id === activeId)) return;
     void loadConversationMessages(activeId);
-  }, [activeTab, activeId, loadConversationMessages]);
+  }, [activeTab, activeId, chats, loadConversationMessages]);
 
   useEffect(() => {
     const pending = jobs.filter((job) => !isTerminal(job.status));

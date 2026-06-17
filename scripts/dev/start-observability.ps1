@@ -20,6 +20,7 @@ param(
     [switch]$NoFrontendTelemetry,
     [switch]$MockProviders,
     [switch]$RealVkDelivery,
+    [switch]$ResetDevData,
     [ValidateSet("mock", "yookassa")]
     [string]$PaymentProvider = "mock",
     [int]$ApiPort = 8080,
@@ -133,6 +134,26 @@ function Invoke-DockerChecked {
         throw "docker $($ArgumentList -join ' ') failed with exit code $($result.ExitCode).`n$result.Output"
     }
     return $result
+}
+
+function Get-ExternalComposeNetworkName {
+    $configured = [Environment]::GetEnvironmentVariable("COMPOSE_NETWORK_NAME", "Process")
+    if (-not [string]::IsNullOrWhiteSpace($configured)) {
+        return $configured.Trim()
+    }
+    return "vk-ai-aggregator-prod"
+}
+
+function Ensure-ExternalComposeNetwork {
+    param([Parameter(Mandatory = $true)][string]$NetworkName)
+
+    $existing = Invoke-DockerRaw -ArgumentList @("network", "inspect", $NetworkName)
+    if ($existing.ExitCode -eq 0) {
+        return
+    }
+
+    Write-Host "Creating missing Docker network required by observability compose: $NetworkName"
+    Invoke-DockerChecked -ArgumentList @("network", "create", $NetworkName) | Out-Null
 }
 
 function Get-DevContainerNames {
@@ -411,6 +432,18 @@ function Stop-ObservabilityDocker {
     }
 }
 
+function Reset-ObservabilityDockerData {
+    param([Parameter(Mandatory = $true)][string]$Root)
+
+    Push-Location $Root
+    try {
+        Write-Host "Resetting local observability Docker containers and volumes..."
+        Invoke-DockerChecked -ArgumentList @("compose", "-p", $ComposeProject, "-f", "docker-compose.yml", "-f", "docker-compose.observability.yml", "down", "--volumes", "--remove-orphans") | Out-Null
+    } finally {
+        Pop-Location
+    }
+}
+
 function Show-ObservabilityStatus {
     param(
         [Parameter(Mandatory = $true)][string]$Root,
@@ -666,11 +699,15 @@ try {
     if (-not $SkipDocker) {
         Write-Host "Starting Docker dependencies and observability stack..."
         Ensure-ObservabilityDockerRunning -Wait:$WaitDocker -OpenDesktop:$OpenDockerDesktop -DockerWaitSeconds $DockerWaitSeconds
-        if ($KeepDockerContainers) {
+        Ensure-ExternalComposeNetwork -NetworkName (Get-ExternalComposeNetworkName)
+        if ($ResetDevData) {
+            Reset-ObservabilityDockerData -Root $root
+        } elseif ($KeepDockerContainers) {
             Repair-StaleDevContainers -DesiredProject $ComposeProject
         } else {
             Reset-DevContainersForComposeUp
         }
+        Ensure-ExternalComposeNetwork -NetworkName (Get-ExternalComposeNetworkName)
         Invoke-ComposeUpWithConflictRepair -ArgumentList @("compose", "-p", $ComposeProject, "-f", "docker-compose.yml", "-f", "docker-compose.observability.yml", "up", "-d")
         Wait-ContainerDependencies -TimeoutSeconds $TimeoutSeconds
         Wait-Http -Url "http://127.0.0.1:$PrometheusPort/-/ready" -TimeoutSeconds $TimeoutSeconds | Out-Null

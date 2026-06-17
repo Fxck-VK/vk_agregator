@@ -61,6 +61,7 @@ const ESTIMATE_DEBOUNCE_MS = 450;
 const PROMPT_LIMIT = 2000;
 const REFERENCE_ACCEPT = "image/jpeg,image/png";
 const DEFAULT_VIDEO_DURATION_SEC = 5;
+const PREFERRED_VIDEO_DURATION_OPTIONS = [3, 5, 10];
 
 function createLocalReferenceId(): string {
   if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
@@ -164,6 +165,24 @@ function createModeFromVideoRoute(route: VideoRoute): CreateMode {
     supportsReferenceImage: route.supports_reference_image,
     maxReferenceImages: route.max_reference_images,
   };
+}
+
+function durationButtonOptions(model: CreateMode): number[] {
+  const allowed =
+    model.durationOptions?.filter((value) => Number.isFinite(value) && value > 0) ?? [];
+  if (allowed.length === 0) {
+    return [model.defaultDurationSec ?? DEFAULT_VIDEO_DURATION_SEC];
+  }
+  const preferred = PREFERRED_VIDEO_DURATION_OPTIONS.filter((value) => allowed.includes(value));
+  return preferred.length >= 2 ? preferred : allowed;
+}
+
+function defaultDurationForModel(model: CreateMode): number {
+  const options = durationButtonOptions(model);
+  if (options.includes(DEFAULT_VIDEO_DURATION_SEC)) return DEFAULT_VIDEO_DURATION_SEC;
+  const routeDefault = model.defaultDurationSec;
+  if (routeDefault && options.includes(routeDefault)) return routeDefault;
+  return options[0] ?? DEFAULT_VIDEO_DURATION_SEC;
 }
 
 const HISTORY_STATUS_FILTERS = [
@@ -331,13 +350,7 @@ export function WorkflowMode({
   const acceptsImageReferences =
     isImageModality || (isVideoModality && activeCreateModel.supportsReferenceImage === true);
   const maxReferenceItems = Math.max(1, activeCreateModel.maxReferenceImages ?? MAX_REFERENCE_ARTIFACTS);
-  const videoDurationOptions = useMemo(
-    () =>
-      activeCreateModel.durationOptions?.length
-        ? activeCreateModel.durationOptions
-        : [activeCreateModel.defaultDurationSec ?? DEFAULT_VIDEO_DURATION_SEC],
-    [activeCreateModel.defaultDurationSec, activeCreateModel.durationOptions],
-  );
+  const videoDurationOptions = useMemo(() => durationButtonOptions(activeCreateModel), [activeCreateModel]);
   const referenceArtifactIds = useMemo(
     () => (acceptsImageReferences ? referenceItems.map((item) => item.artifactId) : []),
     [acceptsImageReferences, referenceItems],
@@ -402,9 +415,9 @@ export function WorkflowMode({
   useEffect(() => {
     if (!isVideoModality) return;
     if (!videoDurationOptions.includes(videoDurationSec)) {
-      setVideoDurationSec(activeCreateModel.defaultDurationSec ?? videoDurationOptions[0] ?? DEFAULT_VIDEO_DURATION_SEC);
+      setVideoDurationSec(defaultDurationForModel(activeCreateModel));
     }
-  }, [activeCreateModel.defaultDurationSec, isVideoModality, videoDurationOptions, videoDurationSec]);
+  }, [activeCreateModel, isVideoModality, videoDurationOptions, videoDurationSec]);
 
   useEffect(() => {
     if (!acceptsImageReferences) {
@@ -578,7 +591,7 @@ export function WorkflowMode({
     setModalityId(id);
     setModelId(createModel?.modelId ?? next.models[0]?.id ?? "");
     if (createModel?.modalityId === "video") {
-      setVideoDurationSec(createModel.defaultDurationSec ?? DEFAULT_VIDEO_DURATION_SEC);
+      setVideoDurationSec(defaultDurationForModel(createModel));
     }
     setEstimate(null);
     setEstimateError(null);
@@ -591,7 +604,7 @@ export function WorkflowMode({
     setModalityId(mode.modalityId);
     setModelId(mode.modelId);
     if (mode.modalityId === "video") {
-      setVideoDurationSec(mode.defaultDurationSec ?? DEFAULT_VIDEO_DURATION_SEC);
+      setVideoDurationSec(defaultDurationForModel(mode));
     }
     setEstimate(null);
     setEstimateError(null);

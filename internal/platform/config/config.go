@@ -1040,36 +1040,36 @@ func (c Config) usesOpenAI() bool {
 
 func (c Config) validateVideoRouteProviderConfig() error {
 	providers := []struct {
-		enabled    bool
-		switchEnv  string
-		apiKey     string
-		apiKeyEnv  string
-		baseURL    string
-		baseURLEnv string
+		enabled       bool
+		switchEnv     string
+		requiredValue string
+		requiredEnv   string
+		baseURL       string
+		baseURLEnv    string
 	}{
 		{
-			enabled:    c.APIMartProviderEnabled,
-			switchEnv:  "APIMART_PROVIDER_ENABLED",
-			apiKey:     c.APIMartAPIKey,
-			apiKeyEnv:  "APIMART_API_KEY",
-			baseURL:    c.APIMartBaseURL,
-			baseURLEnv: "APIMART_BASE_URL",
+			enabled:       c.APIMartProviderEnabled,
+			switchEnv:     "APIMART_PROVIDER_ENABLED",
+			requiredValue: c.APIMartAPIKey,
+			requiredEnv:   "APIMART_API_KEY", // #nosec G101 -- env var name only; value is read from runtime config.
+			baseURL:       c.APIMartBaseURL,
+			baseURLEnv:    "APIMART_BASE_URL",
 		},
 		{
-			enabled:    c.PoYoProviderEnabled,
-			switchEnv:  "POYO_PROVIDER_ENABLED",
-			apiKey:     c.PoYoAPIKey,
-			apiKeyEnv:  "POYO_API_KEY",
-			baseURL:    c.PoYoBaseURL,
-			baseURLEnv: "POYO_BASE_URL",
+			enabled:       c.PoYoProviderEnabled,
+			switchEnv:     "POYO_PROVIDER_ENABLED",
+			requiredValue: c.PoYoAPIKey,
+			requiredEnv:   "POYO_API_KEY", // #nosec G101 -- env var name only; value is read from runtime config.
+			baseURL:       c.PoYoBaseURL,
+			baseURLEnv:    "POYO_BASE_URL",
 		},
 	}
 	for _, provider := range providers {
 		if !provider.enabled {
 			continue
 		}
-		if strings.TrimSpace(provider.apiKey) == "" {
-			return fmt.Errorf("config: %s=true requires %s", provider.switchEnv, provider.apiKeyEnv)
+		if strings.TrimSpace(provider.requiredValue) == "" {
+			return fmt.Errorf("config: %s=true requires %s", provider.switchEnv, provider.requiredEnv)
 		}
 		if strings.TrimSpace(provider.baseURL) == "" {
 			return fmt.Errorf("config: %s=true requires %s", provider.switchEnv, provider.baseURLEnv)
@@ -1081,8 +1081,8 @@ func (c Config) validateVideoRouteProviderConfig() error {
 		routeEnv          string
 		providerEnabled   bool
 		providerSwitchEnv string
-		apiKey            string
-		apiKeyEnv         string
+		requiredValue     string
+		requiredEnv       string
 		baseURL           string
 		baseURLEnv        string
 	}{
@@ -1091,8 +1091,8 @@ func (c Config) validateVideoRouteProviderConfig() error {
 			routeEnv:          "FEATURE_VIDEO_ROUTE_HAILUO_2_3_FAST_ENABLED",
 			providerEnabled:   c.APIMartProviderEnabled,
 			providerSwitchEnv: "APIMART_PROVIDER_ENABLED",
-			apiKey:            c.APIMartAPIKey,
-			apiKeyEnv:         "APIMART_API_KEY",
+			requiredValue:     c.APIMartAPIKey,
+			requiredEnv:       "APIMART_API_KEY", // #nosec G101 -- env var name only; value is read from runtime config.
 			baseURL:           c.APIMartBaseURL,
 			baseURLEnv:        "APIMART_BASE_URL",
 		},
@@ -1101,8 +1101,8 @@ func (c Config) validateVideoRouteProviderConfig() error {
 			routeEnv:          "FEATURE_VIDEO_ROUTE_HAILUO_2_3_STANDARD_ENABLED",
 			providerEnabled:   c.APIMartProviderEnabled,
 			providerSwitchEnv: "APIMART_PROVIDER_ENABLED",
-			apiKey:            c.APIMartAPIKey,
-			apiKeyEnv:         "APIMART_API_KEY",
+			requiredValue:     c.APIMartAPIKey,
+			requiredEnv:       "APIMART_API_KEY", // #nosec G101 -- env var name only; value is read from runtime config.
 			baseURL:           c.APIMartBaseURL,
 			baseURLEnv:        "APIMART_BASE_URL",
 		},
@@ -1111,8 +1111,8 @@ func (c Config) validateVideoRouteProviderConfig() error {
 			routeEnv:          "FEATURE_VIDEO_ROUTE_KLING_O3_STANDARD_ENABLED",
 			providerEnabled:   c.PoYoProviderEnabled,
 			providerSwitchEnv: "POYO_PROVIDER_ENABLED",
-			apiKey:            c.PoYoAPIKey,
-			apiKeyEnv:         "POYO_API_KEY",
+			requiredValue:     c.PoYoAPIKey,
+			requiredEnv:       "POYO_API_KEY", // #nosec G101 -- env var name only; value is read from runtime config.
 			baseURL:           c.PoYoBaseURL,
 			baseURLEnv:        "POYO_BASE_URL",
 		},
@@ -1121,8 +1121,8 @@ func (c Config) validateVideoRouteProviderConfig() error {
 			routeEnv:          "FEATURE_VIDEO_ROUTE_RUNWAY_GEN4_TURBO_ENABLED",
 			providerEnabled:   c.RunwayProviderEnabled,
 			providerSwitchEnv: "RUNWAY_PROVIDER_ENABLED",
-			apiKey:            c.RunwayMLAPISecret,
-			apiKeyEnv:         "RUNWAYML_API_SECRET",
+			requiredValue:     c.RunwayMLAPISecret,
+			requiredEnv:       "RUNWAYML_API_SECRET", // #nosec G101 -- env var name only; value is read from runtime config.
 			baseURL:           c.RunwayMLBaseURL,
 			baseURLEnv:        "RUNWAYML_BASE_URL",
 		},
@@ -1131,8 +1131,8 @@ func (c Config) validateVideoRouteProviderConfig() error {
 			routeEnv:          "FEATURE_VIDEO_ROUTE_SEEDANCE_2_0_FAST_ENABLED",
 			providerEnabled:   c.PoYoProviderEnabled,
 			providerSwitchEnv: "POYO_PROVIDER_ENABLED",
-			apiKey:            c.PoYoAPIKey,
-			apiKeyEnv:         "POYO_API_KEY",
+			requiredValue:     c.PoYoAPIKey,
+			requiredEnv:       "POYO_API_KEY", // #nosec G101 -- env var name only; value is read from runtime config.
 			baseURL:           c.PoYoBaseURL,
 			baseURLEnv:        "POYO_BASE_URL",
 		},
@@ -1141,8 +1141,8 @@ func (c Config) validateVideoRouteProviderConfig() error {
 			routeEnv:          "FEATURE_VIDEO_ROUTE_RUNWAY_GEN4_5_ENABLED",
 			providerEnabled:   c.PoYoProviderEnabled,
 			providerSwitchEnv: "POYO_PROVIDER_ENABLED",
-			apiKey:            c.PoYoAPIKey,
-			apiKeyEnv:         "POYO_API_KEY",
+			requiredValue:     c.PoYoAPIKey,
+			requiredEnv:       "POYO_API_KEY", // #nosec G101 -- env var name only; value is read from runtime config.
 			baseURL:           c.PoYoBaseURL,
 			baseURLEnv:        "POYO_BASE_URL",
 		},
@@ -1157,8 +1157,8 @@ func (c Config) validateVideoRouteProviderConfig() error {
 		if !route.providerEnabled {
 			return fmt.Errorf("config: %s=true requires %s=true", route.routeEnv, route.providerSwitchEnv)
 		}
-		if strings.TrimSpace(route.apiKey) == "" {
-			return fmt.Errorf("config: %s=true requires %s", route.routeEnv, route.apiKeyEnv)
+		if strings.TrimSpace(route.requiredValue) == "" {
+			return fmt.Errorf("config: %s=true requires %s", route.routeEnv, route.requiredEnv)
 		}
 		if strings.TrimSpace(route.baseURL) == "" {
 			return fmt.Errorf("config: %s=true requires %s", route.routeEnv, route.baseURLEnv)

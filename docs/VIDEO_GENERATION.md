@@ -26,7 +26,7 @@ DEEPINFRA_VIDEO_ASPECT_RATIO=16:9
 DEEPINFRA_VIDEO_PRICE=10
 DEEPINFRA_VIDEO_HTTP_TIMEOUT=180s
 WORKER_PROVIDER_CALL_TIMEOUT=180s
-PRICES=text_generate=1,image_generate=0,video_generate=10
+PRICES=text_generate=1,image_generate=1,video_generate=10
 ```
 
 Production: set `DEEPINFRA_VIDEO_DRAFT=false`, tune `PRICES` and duration.
