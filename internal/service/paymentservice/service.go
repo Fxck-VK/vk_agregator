@@ -275,6 +275,7 @@ func (s *Service) CreateIntent(ctx context.Context, in CreateIntentInput) (Creat
 	in.ReceiptPhone = strings.TrimSpace(in.ReceiptPhone)
 	in.IdempotencyKey = strings.TrimSpace(in.IdempotencyKey)
 	in.ReturnURL = strings.TrimSpace(in.ReturnURL)
+	resolvedReturnURL := defaultString(in.ReturnURL, s.cfg.ReturnURL)
 	in.Source = strings.TrimSpace(in.Source)
 	sourceLabel := metricLabel(in.Source)
 	if in.UserID == uuid.Nil || in.ProductCode == "" || in.IdempotencyKey == "" {
@@ -309,7 +310,7 @@ func (s *Service) CreateIntent(ctx context.Context, in CreateIntentInput) (Creat
 		}
 		active, err := s.ActiveWaitingIntentForSource(ctx, in.UserID, in.Source)
 		if err == nil {
-			if paymentIntentMatchesProduct(active, product) {
+			if paymentIntentMatchesProduct(active, product) && paymentIntentMatchesReturnURL(active, resolvedReturnURL) {
 				metrics.ObserveProductEvent(sourceLabel, "payment", "intent_create", "top_up", "credits", "reused_active")
 				return CreateIntentResult{Intent: active, Created: false, ReusedActive: true}, nil
 			}
@@ -336,6 +337,9 @@ func (s *Service) CreateIntent(ctx context.Context, in CreateIntentInput) (Creat
 		"product_code":  product.Code,
 		"price_version": product.PriceVersion,
 		"source":        in.Source,
+	}
+	if resolvedReturnURL != "" {
+		metadataFields["return_url"] = resolvedReturnURL
 	}
 	if in.Capture != nil {
 		metadataFields["capture"] = *in.Capture
@@ -733,11 +737,35 @@ func paymentMetadataSource(raw json.RawMessage) string {
 	return strings.TrimSpace(metadata.Source)
 }
 
+func paymentMetadataReturnURL(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	var metadata struct {
+		ReturnURL string `json:"return_url"`
+	}
+	if err := json.Unmarshal(raw, &metadata); err != nil {
+		return ""
+	}
+	return strings.TrimSpace(metadata.ReturnURL)
+}
+
 func paymentIntentMatchesProduct(intent *domain.PaymentIntent, product *domain.PaymentProduct) bool {
 	if intent == nil || product == nil || intent.ProductID == nil {
 		return false
 	}
 	return *intent.ProductID == product.ID
+}
+
+func paymentIntentMatchesReturnURL(intent *domain.PaymentIntent, resolvedReturnURL string) bool {
+	if intent == nil {
+		return false
+	}
+	stored := paymentMetadataReturnURL(intent.Metadata)
+	if stored == "" {
+		return strings.TrimSpace(resolvedReturnURL) == ""
+	}
+	return stored == strings.TrimSpace(resolvedReturnURL)
 }
 
 func cloneInt16(value *int16) *int16 {

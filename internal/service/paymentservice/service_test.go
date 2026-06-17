@@ -460,6 +460,7 @@ func TestCreateIntentReusesActiveWaitingIntentUnlessForceNew(t *testing.T) {
 		ProductCode:    "credits_100",
 		ReceiptEmail:   "user@example.com",
 		IdempotencyKey: "payment:first",
+		ReturnURL:      "https://vk.com/app54623372?section_type=public_r_app",
 		Source:         "vk_miniapp",
 	})
 	if err != nil {
@@ -471,6 +472,7 @@ func TestCreateIntentReusesActiveWaitingIntentUnlessForceNew(t *testing.T) {
 		ProductCode:    "credits_100",
 		ReceiptEmail:   "new@example.com",
 		IdempotencyKey: "payment:second",
+		ReturnURL:      "https://vk.com/app54623372?section_type=public_r_app",
 		Source:         "vk_miniapp",
 	})
 	if err != nil {
@@ -508,6 +510,21 @@ func TestCreateIntentReusesActiveWaitingIntentUnlessForceNew(t *testing.T) {
 	}
 	if activeBot.ID != botIntent.Intent.ID {
 		t.Fatalf("active bot intent = %s, want %s", activeBot.ID, botIntent.Intent.ID)
+	}
+
+	differentReturnURL, err := svc.CreateIntent(ctx, paymentservice.CreateIntentInput{
+		UserID:         userID,
+		ProductCode:    "credits_100",
+		ReceiptEmail:   "new@example.com",
+		IdempotencyKey: "payment:different-return-url",
+		ReturnURL:      "https://vk.com/write-239332376",
+		Source:         "vk_miniapp",
+	})
+	if err != nil {
+		t.Fatalf("create different return url intent: %v", err)
+	}
+	if !differentReturnURL.Created || differentReturnURL.ReusedActive || differentReturnURL.Intent.ID == first.Intent.ID {
+		t.Fatalf("expected new intent for different return url, got %+v first=%+v", differentReturnURL, first)
 	}
 
 	differentProduct, err := svc.CreateIntent(ctx, paymentservice.CreateIntentInput{

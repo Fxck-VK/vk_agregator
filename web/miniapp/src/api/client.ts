@@ -461,6 +461,7 @@ export function stringifyBridgeLaunchParams(value: unknown): string {
 }
 
 let launchParamsCache: string | undefined;
+let launchParamsInFlight: Promise<string> | undefined;
 
 function bridgeCallTimeoutMs(): number {
   return import.meta.env.DEV ? 1200 : 3000;
@@ -479,19 +480,15 @@ async function bridgeLaunchParamsFromBridge(): Promise<unknown> {
   }
 }
 
-async function launchParams(): Promise<string> {
-  if (launchParamsCache !== undefined) return launchParamsCache;
-
+async function resolveLaunchParams(): Promise<string> {
   const fromUrl = launchParamsFromLocation();
   if (fromUrl) {
-    launchParamsCache = fromUrl;
     return fromUrl;
   }
 
   try {
     const fromBridge = stringifyBridgeLaunchParams(await bridgeLaunchParamsFromBridge());
     if (fromBridge) {
-      launchParamsCache = fromBridge;
       return fromBridge;
     }
   } catch {
@@ -500,12 +497,25 @@ async function launchParams(): Promise<string> {
 
   const fromDevEnv = import.meta.env.DEV ? import.meta.env.VITE_DEV_LAUNCH_PARAMS : "";
   if (typeof fromDevEnv === "string" && fromDevEnv) {
-    launchParamsCache = fromDevEnv;
     return fromDevEnv;
   }
 
-  launchParamsCache = "";
   return "";
+}
+
+async function launchParams(): Promise<string> {
+  if (launchParamsCache !== undefined) return launchParamsCache;
+  if (launchParamsInFlight) return launchParamsInFlight;
+
+  launchParamsInFlight = resolveLaunchParams()
+    .then((params) => {
+      launchParamsCache = params;
+      return params;
+    })
+    .finally(() => {
+      launchParamsInFlight = undefined;
+    });
+  return launchParamsInFlight;
 }
 
 const ARTIFACT_ID_RE =

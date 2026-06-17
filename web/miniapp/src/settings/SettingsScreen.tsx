@@ -4,8 +4,6 @@ import bridge from "@vkontakte/vk-bridge";
 import {
   MINIAPP_DARK_THEME_ONLY_ENABLED,
   MINIAPP_PAYMENT_CANCEL_ENABLED,
-  MINIAPP_TOPUP_CATALOG_DROPDOWN_ENABLED,
-  MINIAPP_TOPUP_HISTORY_DROPDOWN_ENABLED,
   apiUserMessage,
   cancelPaymentIntent,
   createIdempotencyKey,
@@ -25,7 +23,6 @@ import neuroHubBanner from "../assets/neurohub-banner.png";
 import { formatCredits } from "../ui/credits";
 import { dedupeHistoryJobs, historyCountLabel, jobDisplayTitle } from "../utils/jobDisplay";
 import { openExternalUrl, safeExternalHttpsUrl } from "../utils/openExternalUrl";
-import { paymentHistoryCountLabel, selectedPaymentProduct } from "./paymentUi";
 import type { ThemeMode } from "./theme";
 
 type SettingsScreenProps = {
@@ -118,31 +115,6 @@ function upsertPaymentIntent(items: PaymentIntent[], intent: PaymentIntent): Pay
   return [intent, ...items.filter((item) => item.id !== intent.id)];
 }
 
-function paymentStatusLabel(status: string): string {
-  switch (status) {
-    case "created":
-      return "Создан";
-    case "provider_pending":
-      return "Проверяется";
-    case "waiting_for_user":
-      return "Ожидает оплаты";
-    case "succeeded":
-      return "Оплачен";
-    case "canceled":
-      return "Отменен";
-    case "expired":
-      return "Истек";
-    case "failed":
-      return "Ошибка оплаты";
-    case "refunded":
-      return "Возврат";
-    case "partially_refunded":
-      return "Частичный возврат";
-    default:
-      return "Обработка";
-  }
-}
-
 function paymentStatusTone(status: string): "done" | "failed" | "progress" | "refund" {
   if (status === "succeeded") return "done";
   if (status === "failed" || status === "canceled" || status === "expired") return "failed";
@@ -152,11 +124,6 @@ function paymentStatusTone(status: string): "done" | "failed" | "progress" | "re
 
 function paymentConfirmationUrl(intent: PaymentIntent | null | undefined): string | null {
   return safeExternalHttpsUrl(intent?.confirmation_url);
-}
-
-function paymentHistorySummary(intent: PaymentIntent | null): string {
-  if (!intent) return "Платежей пока нет";
-  return `${formatCredits(intent.credits)} · ${formatRub(intent.amount)} · ${paymentStatusLabel(intent.status)}`;
 }
 
 export function SettingsScreen({
@@ -171,16 +138,13 @@ export function SettingsScreen({
 }: SettingsScreenProps) {
   const [historyFilter, setHistoryFilter] = useState<HistoryFilter>("all");
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [paymentHistoryOpen, setPaymentHistoryOpen] = useState(false);
-  const [selectedProductCode, setSelectedProductCode] = useState("");
+  const [referralOpen, setReferralOpen] = useState(false);
   const [topUpNotice, setTopUpNotice] = useState("");
   const [receiptContact, setReceiptContact] = useState("");
   const [paymentProducts, setPaymentProducts] = useState<PaymentProduct[]>([]);
   const [paymentIntents, setPaymentIntents] = useState<PaymentIntent[]>([]);
   const [creatingNewPayment, setCreatingNewPayment] = useState(false);
   const [productsLoading, setProductsLoading] = useState(false);
-  const [paymentsLoading, setPaymentsLoading] = useState(false);
-  const [paymentsNotice, setPaymentsNotice] = useState("");
   const [paymentPendingCode, setPaymentPendingCode] = useState("");
   const [cancellingPaymentID, setCancellingPaymentID] = useState("");
   const [referralInfo, setReferralInfo] = useState<ReferralInfo | null>(null);
@@ -190,12 +154,11 @@ export function SettingsScreen({
   const [spinning, setSpinning] = useState(false);
   const activePaymentIntent = useMemo(() => findActivePaymentIntent(paymentIntents), [paymentIntents]);
   const activePaymentConfirmationUrl = paymentConfirmationUrl(activePaymentIntent);
-  const visiblePayments = useMemo(() => paymentIntents.slice(0, 8), [paymentIntents]);
-  const latestPaymentIntent = visiblePayments[0] ?? null;
-  const selectedTopUpProduct = useMemo(
-    () => selectedPaymentProduct(paymentProducts, selectedProductCode),
-    [paymentProducts, selectedProductCode],
-  );
+  const referralSummary = useMemo(() => {
+    if (referralLoading && !referralInfo) return "Загружаем ссылку";
+    if (!referralInfo) return "Ссылка пока недоступна";
+    return `${referralInfo.invited_count} приглашённых · ${referralInfo.registered_count} регистраций`;
+  }, [referralInfo, referralLoading]);
   const visibleJobs = useMemo(() => {
     const deduped = dedupeHistoryJobs(jobs);
     if (historyFilter === "all") return deduped;
@@ -219,15 +182,11 @@ export function SettingsScreen({
   }, []);
 
   const refreshPaymentIntents = useCallback(async () => {
-    setPaymentsLoading(true);
     try {
       const intents = await listPaymentIntents();
       setPaymentIntents(intents);
-      setPaymentsNotice("");
     } catch (error) {
-      setPaymentsNotice(apiUserMessage(error));
-    } finally {
-      setPaymentsLoading(false);
+      void error;
     }
   }, []);
 
@@ -243,7 +202,6 @@ export function SettingsScreen({
   useEffect(() => {
     let cancelled = false;
     setProductsLoading(true);
-    setPaymentsLoading(true);
     void Promise.allSettled([listPaymentProducts(), listPaymentIntents()])
       .then(([products, intents]) => {
         if (cancelled) return;
@@ -254,15 +212,11 @@ export function SettingsScreen({
         }
         if (intents.status === "fulfilled") {
           setPaymentIntents(intents.value);
-          setPaymentsNotice("");
-        } else {
-          setPaymentsNotice("Не удалось загрузить историю платежей.");
         }
       })
       .finally(() => {
         if (!cancelled) {
           setProductsLoading(false);
-          setPaymentsLoading(false);
         }
       });
     return () => {
@@ -322,7 +276,6 @@ export function SettingsScreen({
         { idempotencyKey: createIdempotencyKey() },
       );
       setPaymentIntents((items) => upsertPaymentIntent(items, intent));
-      setPaymentsNotice("");
       const confirmationUrl = paymentConfirmationUrl(intent);
       if (intent.reused_active_payment && confirmationUrl) {
         setCreatingNewPayment(false);
@@ -352,7 +305,6 @@ export function SettingsScreen({
   async function handleCancelPayment(intent: PaymentIntent) {
     if (!MINIAPP_PAYMENT_CANCEL_ENABLED || !intent.id || cancellingPaymentID) return;
     setTopUpNotice("");
-    setPaymentsNotice("");
     setCancellingPaymentID(intent.id);
     try {
       const canceled = await cancelPaymentIntent(intent.id);
@@ -375,52 +327,6 @@ export function SettingsScreen({
     setCreatingNewPayment(true);
     setTopUpNotice("Создайте новый платеж. После оплаты баланс обновится автоматически.");
   }
-
-  const paymentHistoryBody =
-    paymentsLoading && visiblePayments.length === 0 ? (
-      <div className="settings-empty">Загружаем платежи</div>
-    ) : visiblePayments.length === 0 ? (
-      <div className="settings-empty">Платежей пока нет</div>
-    ) : (
-      <div className="payment-history-list" aria-label="Платежи">
-        {visiblePayments.map((intent) => {
-          const confirmationUrl = paymentConfirmationUrl(intent);
-          const waitingForUser = intent.status === "waiting_for_user";
-          const tone = paymentStatusTone(intent.status);
-          return (
-            <div key={intent.id} className={`payment-history-row payment-history-row--${tone}`}>
-              <div className="payment-history-row__main">
-                <strong>{formatCredits(intent.credits)}</strong>
-                <span>
-                  {formatRub(intent.amount)} · {paymentStatusLabel(intent.status)}
-                </span>
-              </div>
-              <div className="payment-history-row__meta">
-                <time dateTime={intent.created_at}>{dateLabel(intent.created_at)}</time>
-                {waitingForUser ? (
-                  <div className="payment-history-row__actions">
-                    {confirmationUrl ? (
-                      <a href={confirmationUrl} target="_blank" rel="noopener noreferrer">
-                        Продолжить
-                      </a>
-                    ) : null}
-                    {MINIAPP_PAYMENT_CANCEL_ENABLED ? (
-                      <button
-                        type="button"
-                        disabled={cancellingPaymentID === intent.id}
-                        onClick={() => void handleCancelPayment(intent)}
-                      >
-                        {cancellingPaymentID === intent.id ? "Отменяем..." : "Отменить"}
-                      </button>
-                    ) : null}
-                  </div>
-                ) : null}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    );
 
   return (
     <main className="settings-screen nh-scroll">
@@ -557,48 +463,6 @@ export function SettingsScreen({
                 <p className="settings-notice">Загружаем тарифы...</p>
               ) : paymentProducts.length === 0 ? (
                 <p className="settings-notice">Тарифы пока недоступны.</p>
-              ) : MINIAPP_TOPUP_CATALOG_DROPDOWN_ENABLED ? (
-                <div className="payment-product-select">
-                  <label htmlFor="payment-product-select">Пакет пополнения</label>
-                  <select
-                    id="payment-product-select"
-                    value={selectedTopUpProduct?.code ?? ""}
-                    disabled={Boolean(paymentPendingCode)}
-                    onChange={(event) => setSelectedProductCode(event.target.value)}
-                  >
-                    {paymentProducts.map((product) => (
-                      <option key={product.code} value={product.code}>
-                        {formatCredits(product.credits)} · {formatRub(product.amount)}
-                      </option>
-                    ))}
-                  </select>
-                  {selectedTopUpProduct ? (
-                    <>
-                      <div className="payment-product-summary">
-                        <strong>{selectedTopUpProduct.title}</strong>
-                        <span>
-                          {formatCredits(selectedTopUpProduct.credits)} · {formatRub(selectedTopUpProduct.amount)}
-                        </span>
-                      </div>
-                      <button
-                        type="button"
-                        className="payment-product payment-product--selected"
-                        disabled={Boolean(paymentPendingCode)}
-                        onClick={() => void handleTopUp(selectedTopUpProduct)}
-                      >
-                        <span>
-                          <strong>{formatCredits(selectedTopUpProduct.credits)}</strong>
-                          <small>{selectedTopUpProduct.title}</small>
-                        </span>
-                        <em>
-                          {paymentPendingCode === selectedTopUpProduct.code
-                            ? "Создаем..."
-                            : formatRub(selectedTopUpProduct.amount)}
-                        </em>
-                      </button>
-                    </>
-                  ) : null}
-                </div>
               ) : (
                 paymentProducts.map((product) => (
                   <button
@@ -624,10 +488,37 @@ export function SettingsScreen({
 
       <section className="settings-card referral-card" aria-labelledby="settings-referral-title">
         <div className="referral-card__head">
-          <div>
-            <h2 id="settings-referral-title">Реферальная программа</h2>
-            <p>безлимитное общение с НейроХаб</p>
-          </div>
+          <button
+            type="button"
+            className={"referral-toggle" + (referralOpen ? " is-open" : "")}
+            aria-expanded={referralOpen}
+            aria-controls="settings-referral-panel"
+            onClick={() => setReferralOpen((open) => !open)}
+          >
+            <span className="referral-toggle__main">
+              <span id="settings-referral-title" className="referral-toggle__title">
+                Реферальная программа
+              </span>
+              <span className="referral-toggle__subtitle">безлимитное общение с НейроХаб</span>
+              <span className="referral-toggle__summary">{referralSummary}</span>
+            </span>
+            <svg
+              className="referral-toggle__chevron"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              aria-hidden="true"
+            >
+              <path
+                d="m6 9 6 6 6-6"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
           <button
             type="button"
             className="chat__history-btn"
@@ -653,160 +544,56 @@ export function SettingsScreen({
           </button>
         </div>
 
-        {referralLoading && !referralInfo ? (
-          <div className="settings-empty">Загружаем ссылку</div>
-        ) : referralInfo ? (
-          <>
-            <div className="referral-stats" aria-label="Реферальная статистика">
-              <div>
-                <span>Приглашённых</span>
-                <strong>{referralInfo.invited_count}</strong>
+        <div
+          id="settings-referral-panel"
+          className={"referral-panel" + (referralOpen ? " is-open" : "")}
+          hidden={!referralOpen}
+        >
+          {referralLoading && !referralInfo ? (
+            <div className="settings-empty">Загружаем ссылку</div>
+          ) : referralInfo ? (
+            <>
+              <div className="referral-stats" aria-label="Реферальная статистика">
+                <div>
+                  <span>Приглашённых</span>
+                  <strong>{referralInfo.invited_count}</strong>
+                </div>
+                <div>
+                  <span>Зарегистрировано</span>
+                  <strong>{referralInfo.registered_count}</strong>
+                </div>
+                <div>
+                  <span>Активировано</span>
+                  <strong>{referralInfo.activated_count}</strong>
+                </div>
+                <div>
+                  <span>Бонус начислен</span>
+                  <strong>{referralInfo.rewarded_count}</strong>
+                </div>
+                <div>
+                  <span>Бонус другу</span>
+                  <strong>+{formatCredits(referralInfo.referrer_signup_reward_credits)}</strong>
+                </div>
               </div>
-              <div>
-                <span>Зарегистрировано</span>
-                <strong>{referralInfo.registered_count}</strong>
+              <div className="referral-link-box">
+                <span>{referralInfo.code}</span>
+                <p>{referralInfo.invite_url || "Ссылка появится после настройки VK_REFERRAL_LINK_BASE"}</p>
               </div>
-              <div>
-                <span>Активировано</span>
-                <strong>{referralInfo.activated_count}</strong>
+              <div className="referral-actions">
+                <button type="button" disabled={!referralInfo.invite_url} onClick={() => void shareReferralLink()}>
+                  Поделиться
+                </button>
+                <button type="button" disabled={!referralInfo.invite_url} onClick={() => void copyReferralLink()}>
+                  {referralCopied ? "Скопировано" : "Скопировать"}
+                </button>
               </div>
-              <div>
-                <span>Бонус начислен</span>
-                <strong>{referralInfo.rewarded_count}</strong>
-              </div>
-              <div>
-                <span>Бонус другу</span>
-                <strong>+{formatCredits(referralInfo.referrer_signup_reward_credits)}</strong>
-              </div>
-            </div>
-            <div className="referral-link-box">
-              <span>{referralInfo.code}</span>
-              <p>{referralInfo.invite_url || "Ссылка появится после настройки VK_REFERRAL_LINK_BASE"}</p>
-            </div>
-            <div className="referral-actions">
-              <button type="button" disabled={!referralInfo.invite_url} onClick={() => void shareReferralLink()}>
-                Поделиться
-              </button>
-              <button type="button" disabled={!referralInfo.invite_url} onClick={() => void copyReferralLink()}>
-                {referralCopied ? "Скопировано" : "Скопировать"}
-              </button>
-            </div>
-            <p className="settings-notice">Поддержка: @neirohub_help</p>
-          </>
-        ) : (
-          <div className="settings-empty">Реферальная ссылка пока недоступна</div>
-        )}
-        {referralNotice && <p className="settings-notice">{referralNotice}</p>}
-      </section>
-
-      <section className="settings-card payment-history-card" aria-labelledby="settings-payment-history-title">
-        {MINIAPP_TOPUP_HISTORY_DROPDOWN_ENABLED ? (
-          <>
-            <div className="payment-history-collapsible-head">
-              <button
-                type="button"
-                className={"payment-history-toggle" + (paymentHistoryOpen ? " is-open" : "")}
-                aria-expanded={paymentHistoryOpen}
-                aria-controls="settings-payment-history-panel"
-                onClick={() => setPaymentHistoryOpen((open) => !open)}
-              >
-                <span className="payment-history-toggle__main">
-                  <span id="settings-payment-history-title" className="payment-history-toggle__title">
-                    История платежей
-                  </span>
-                  <span className="payment-history-toggle__count">
-                    {paymentsLoading ? "..." : paymentHistoryCountLabel(visiblePayments.length)}
-                  </span>
-                  <span className="payment-history-toggle__summary">
-                    {paymentsLoading && visiblePayments.length === 0
-                      ? "Загружаем платежи"
-                      : paymentHistorySummary(latestPaymentIntent)}
-                  </span>
-                </span>
-                <svg
-                  className="payment-history-toggle__chevron"
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  aria-hidden="true"
-                >
-                  <path
-                    d="m6 9 6 6 6-6"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </button>
-              <button
-                type="button"
-                className="chat__history-btn"
-                aria-label="Обновить историю платежей"
-                onClick={() => void refreshPaymentIntents()}
-              >
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  className={paymentsLoading ? "nh-spin" : ""}
-                  aria-hidden="true"
-                >
-                  <path
-                    d="M3 12a9 9 0 1 0 3-6.7M3 3v6h6"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </button>
-            </div>
-            <div
-              id="settings-payment-history-panel"
-              className={"payment-history-panel" + (paymentHistoryOpen ? " is-open" : "")}
-              hidden={!paymentHistoryOpen}
-            >
-              {paymentHistoryBody}
-            </div>
-          </>
-        ) : (
-          <>
-            <div className="payment-history-head">
-              <div>
-                <h2 id="settings-payment-history-title">История платежей</h2>
-                <p>После оплаты баланс обновится автоматически.</p>
-              </div>
-              <button
-                type="button"
-                className="chat__history-btn"
-                aria-label="Обновить историю платежей"
-                onClick={() => void refreshPaymentIntents()}
-              >
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  className={paymentsLoading ? "nh-spin" : ""}
-                  aria-hidden="true"
-                >
-                  <path
-                    d="M3 12a9 9 0 1 0 3-6.7M3 3v6h6"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </button>
-            </div>
-            {paymentHistoryBody}
-          </>
-        )}
-        {paymentsNotice && <p className="settings-notice">{paymentsNotice}</p>}
+              <p className="settings-notice">Поддержка: @neirohub_help</p>
+            </>
+          ) : (
+            <div className="settings-empty">Реферальная ссылка пока недоступна</div>
+          )}
+          {referralNotice && <p className="settings-notice">{referralNotice}</p>}
+        </div>
       </section>
 
       <section className="settings-card settings-history-card" aria-labelledby="settings-history-title">
