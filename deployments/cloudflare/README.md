@@ -31,6 +31,79 @@ https://neiirohub.ru/billing/webhooks/yookassa
 Do not route broad `/billing/*`, `/admin/*`, `/metrics`, `/debug/*` or private
 health/readiness endpoints publicly.
 
+## Development Tunnel Route Map
+
+For an isolated VK dev community, use a separate dashboard-managed tunnel and
+route the dev hostnames to the same loopback reverse-proxy origin:
+
+| Public hostname/path | Cloudflare Tunnel service | Reverse proxy target |
+|---|---|---|
+| `dev-vk.neiirohub.ru` | `http://127.0.0.1:8088` | `cmd/api` for `/webhooks/vk` and `/health` |
+| `dev-app.neiirohub.ru` | `http://127.0.0.1:8088` | Mini App static for `/`, `cmd/api` for `/miniapp/*` |
+| `dev.neiirohub.ru` | `http://127.0.0.1:8088` | `cmd/provider-webhook` only for `/billing/webhooks/yookassa` |
+
+The dev VK callback URL is:
+
+```text
+https://dev-vk.neiirohub.ru/webhooks/vk
+```
+
+The dev YooKassa webhook URL is:
+
+```text
+https://dev.neiirohub.ru/billing/webhooks/yookassa
+```
+
+### DEV Dashboard Setup
+
+Create or use a separate dashboard-managed tunnel, for example
+`neiirohub-vk-dev`. Do not reuse the production tunnel token locally.
+
+Add these published application routes:
+
+| Hostname | Path | Service |
+|---|---|---|
+| `dev-vk.neiirohub.ru` | `*` | `http://127.0.0.1:8088` |
+| `dev-app.neiirohub.ru` | `*` | `http://127.0.0.1:8088` |
+| `dev.neiirohub.ru` | `*` | `http://127.0.0.1:8088` |
+
+Use these values in the DEV VK community Callback API settings:
+
+```text
+URL: https://dev-vk.neiirohub.ru/webhooks/vk
+Secret key: VK_SECRET from the local DEV .env
+Confirmation string: VK_CONFIRMATION_TOKEN from the local DEV .env
+Events: message_new and any DEV-only event types under test
+```
+
+Use these values in the YooKassa test shop webhook settings:
+
+```text
+URL: https://dev.neiirohub.ru/billing/webhooks/yookassa
+Events: payment.succeeded, payment.canceled, refund.succeeded
+```
+
+Local DEV lifecycle:
+
+```powershell
+.\scripts\dev\start-dev-stack.ps1 -WithCloudflare
+.\scripts\dev\smoke-dev.ps1
+.\scripts\dev\stop-dev-stack.ps1
+```
+
+The standard DEV startup rebuilds app images from the current working tree.
+This keeps DEV as a production-shaped copy with different env/tunnel/community
+settings, not as a separate stale `:dev` image. `-SkipBuild` requires
+`DEV_ALLOW_REMOTE_IMAGES=true` and should only be used for explicit image-tag
+smoke testing.
+
+Run only one connector for a given tunnel token on a development machine, and
+do not point dev hostnames at production data stores.
+
+The full DEV contour contract is documented in
+`docs/DEV_CONTOUR.md`. DEV hostnames, VK community settings, YooKassa webhook
+settings and env secrets must stay isolated from production.
+
 ## VPS Env
 
 Required values live in the real server `.env`:

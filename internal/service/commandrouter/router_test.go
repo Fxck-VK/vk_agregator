@@ -101,6 +101,51 @@ func TestRouterParse(t *testing.T) {
 			wantType: domain.CommandMenuVideoPrunaAI,
 		},
 		{
+			name:     "vk video pruna button",
+			input:    "Pruna",
+			wantType: domain.CommandMenuVideoPrunaAI,
+		},
+		{
+			name:     "vk video hailuo v23 group button",
+			input:    "Hailuo v2.3",
+			wantType: domain.CommandMenuVideoHailuo02,
+		},
+		{
+			name:     "vk video hailuo v23 standard button",
+			input:    "Hailuo v2.3 обычный",
+			wantType: domain.CommandMenuVideoHailuo02Standard,
+		},
+		{
+			name:     "vk video hailuo v23 fast button",
+			input:    "Hailuo v2.3 Fast",
+			wantType: domain.CommandMenuVideoHailuo02Fast,
+		},
+		{
+			name:     "vk video kling v3 button",
+			input:    "Kling v3",
+			wantType: domain.CommandMenuVideoKling21Start,
+		},
+		{
+			name:     "vk video seedance v2 fast button",
+			input:    "Seedance v2 Fast",
+			wantType: domain.CommandMenuVideoSeedance1Lite,
+		},
+		{
+			name:     "vk video runway group button",
+			input:    "Runway",
+			wantType: domain.CommandMenuVideoSora2,
+		},
+		{
+			name:     "vk video runway 45 button",
+			input:    "Runway 4.5",
+			wantType: domain.CommandMenuVideoSora2Examples,
+		},
+		{
+			name:     "vk video runway 4 turbo button",
+			input:    "Runway 4 Turbo",
+			wantType: domain.CommandMenuVideoSora2Start,
+		},
+		{
 			name:     "vk video sora model button",
 			input:    "Sora 2 — видео текст+фото",
 			wantType: domain.CommandMenuVideoSora2,
@@ -253,7 +298,7 @@ func TestResultCreatesJob(t *testing.T) {
 		}
 	}
 
-	controlCommands := []string{"/balance", "/status 1", "/cancel 1", "/help", "/start", "Старт", "Показать меню", "нет меню", "🎬 Создать видео", "Creative video", "Balanced video", "Reference video", "Cinematic video", "Fast photo motion", "Sora 2 — видео текст+фото", "Seedance 1 Lite", "Seedance 1 Pro", "Hailuo v0.2 Обычный", "Hailuo v0.2 Fast", "⬅️ Назад", "👤 Мой аккаунт", "▶️ Фото по тексту", "📸 Фото с референсом", "💬 Спросить у НейроХаб", "💬 Спросить у GPT", "Решальник задач", "Генерация презентаций (скоро)", "Создание рефератов (скоро)", "❓ Ответы на вопросы"}
+	controlCommands := []string{"/balance", "/status 1", "/cancel 1", "/help", "/start", "Старт", "Показать меню", "нет меню", "🎬 Создать видео", "Pruna", "Hailuo v2.3", "Hailuo v2.3 Обычный", "Hailuo v2.3 Fast", "Kling v3", "Seedance v2 Fast", "Runway", "Runway 4.5", "Runway 4 Turbo", "Creative video", "Balanced video", "Reference video", "Cinematic video", "Fast photo motion", "Sora 2 — видео текст+фото", "Seedance 1 Lite", "Seedance 1 Pro", "Hailuo v0.2 Обычный", "Hailuo v0.2 Fast", "⬅️ Назад", "👤 Мой аккаунт", "▶️ Фото по тексту", "📸 Фото с референсом", "💬 Спросить у НейроХаб", "💬 Спросить у GPT", "Решальник задач", "Генерация презентаций (скоро)", "Создание рефератов (скоро)", "❓ Ответы на вопросы"}
 	for _, in := range controlCommands {
 		if r.Parse(in).CreatesJob() {
 			t.Errorf("expected %q to NOT create a job", in)

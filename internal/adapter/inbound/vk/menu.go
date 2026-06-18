@@ -73,31 +73,31 @@ var menuScreens = map[domain.CommandType]menuScreen{
 		keyboard: photoModeKeyboard,
 	},
 	domain.CommandMenuVideo: {
-		text:     fixedText("Выбери режим видео:"),
+		text:     fixedText(videoModelPickerText),
 		keyboard: videoModelKeyboard,
 	},
 	domain.CommandMenuVideoPrunaAI: {
-		text:     fixedText(prunaAIText),
+		text:     fixedText(videoTextOnlyActiveText("Pruna")),
 		keyboard: prunaAIBackKeyboard,
 	},
 	domain.CommandMenuVideoSora2: {
-		text:     fixedText(sora2Text),
+		text:     fixedText(runwayModelPickerText),
 		keyboard: sora2Keyboard,
 	},
 	domain.CommandMenuVideoSora2Start: {
-		text:     fixedText(sora2StartText),
+		text:     fixedText(videoImageRequiredActiveText("runway 4 turbo")),
 		keyboard: sora2BackKeyboard,
 	},
 	domain.CommandMenuVideoSora2Examples: {
-		text:     fixedText(sora2ExamplesText),
+		text:     fixedText(videoTextOnlyActiveText("runway 4.5")),
 		keyboard: sora2BackKeyboard,
 	},
 	domain.CommandMenuVideoKling21: {
-		text:     fixedText(kling21Text),
+		text:     fixedText(videoTextOnlyActiveText("kling v3")),
 		keyboard: kling21Keyboard,
 	},
 	domain.CommandMenuVideoKling21Start: {
-		text:     fixedText(kling21StartText),
+		text:     fixedText(videoTextOnlyActiveText("kling v3")),
 		keyboard: kling21BackKeyboard,
 	},
 	domain.CommandMenuVideoKling21Examples: {
@@ -105,11 +105,11 @@ var menuScreens = map[domain.CommandType]menuScreen{
 		keyboard: kling21BackKeyboard,
 	},
 	domain.CommandMenuVideoSeedance1: {
-		text:     fixedText(seedance1Text),
+		text:     fixedText(videoTextOnlyActiveText("seedance v2 fast")),
 		keyboard: seedance1Keyboard,
 	},
 	domain.CommandMenuVideoSeedance1Lite: {
-		text:     fixedText(seedance1LiteText),
+		text:     fixedText(videoTextOnlyActiveText("seedance v2 fast")),
 		keyboard: seedance1BackKeyboard,
 	},
 	domain.CommandMenuVideoSeedance1Pro: {
@@ -117,15 +117,15 @@ var menuScreens = map[domain.CommandType]menuScreen{
 		keyboard: seedance1BackKeyboard,
 	},
 	domain.CommandMenuVideoHailuo02: {
-		text:     fixedText(hailuo02Text),
+		text:     fixedText(hailuoModelPickerText),
 		keyboard: hailuo02Keyboard,
 	},
 	domain.CommandMenuVideoHailuo02Standard: {
-		text:     fixedText(hailuo02StandardText),
+		text:     fixedText(videoTextOnlyActiveText("hailuo v2.3 обычный")),
 		keyboard: hailuo02BackKeyboard,
 	},
 	domain.CommandMenuVideoHailuo02Fast: {
-		text:     fixedText(hailuo02FastText),
+		text:     fixedText(videoImageRequiredActiveText("hailuo v2.3 fast")),
 		keyboard: hailuo02BackKeyboard,
 	},
 	domain.CommandMenuStudents: {
@@ -154,6 +154,10 @@ const (
 	gptActiveText = "🤖 НейроХаб активен!\n\nЯ готов ответить на любые вопросы и помочь с идеями\nСпроси что-нибудь прямо сейчас!"
 
 	prunaAIText = "Видео-режим отключен.\n\nВыберите другой режим видео."
+
+	videoModelPickerText  = "Выбери режим видео:\n\ntext-only: kling v3, seedance v2 fast, runway 4.5, Pruna, hailuo v2.3 обычный\nТребуют стартовую картинку: hailuo v2.3 fast, runway 4 turbo"
+	runwayModelPickerText = "runway\n\nВыберите модель runway:\n• runway 4.5 — text-only\n• runway 4 turbo — требует стартовую картинку"
+	hailuoModelPickerText = "hailuo v2.3\n\nВыберите режим генерации:\n• hailuo v2.3 обычный — text-only\n• hailuo v2.3 fast — требует стартовую картинку"
 
 	sora2Text         = "Creative video\n\nРежим для выразительных роликов по тексту или фото."
 	sora2StartText    = "Creative video активен.\n\nНапишите описание видео обычным сообщением.\n\nПример: cinematic drone shot over a neon city at night, rain reflections, realistic camera movement."
@@ -227,6 +231,14 @@ func fixedText(text string) func(int64) string {
 	return func(int64) string {
 		return text
 	}
+}
+
+func videoTextOnlyActiveText(name string) string {
+	return fmt.Sprintf("%s активен.\n\nТип модели: text-only.\nНапишите описание видео обычным сообщением.\n\nПример: кот в очках едет на жирафе", strings.TrimSpace(name))
+}
+
+func videoImageRequiredActiveText(name string) string {
+	return fmt.Sprintf("%s активен.\n\nТип модели: требует стартовую картинку.\nПрикрепите фото и напишите описание видео обычным сообщением.\n\nПример: кот в очках едет на жирафе", strings.TrimSpace(name))
 }
 
 type accountView struct {
@@ -594,7 +606,7 @@ func (h *Handler) menuCommandEnabled(command domain.CommandType) bool {
 	}
 	switch command {
 	case domain.CommandMenuVideoPrunaAI:
-		return false
+		return h.videoRouteCommandEnabled(command) && h.menuCommandEnabled(domain.CommandMenuVideo)
 	case domain.CommandMenuVideoSora2,
 		domain.CommandMenuVideoKling21,
 		domain.CommandMenuVideoSeedance1,
@@ -836,19 +848,19 @@ func videoModelKeyboard() *vkdelivery.Keyboard {
 		Inline:  true,
 		Buttons: [][]vkdelivery.KeyboardButton{
 			{
-				button("Fast photo motion", domain.CommandMenuVideoHailuo02Fast, "secondary"),
+				button("hailuo v2.3", domain.CommandMenuVideoHailuo02, "secondary"),
 			},
 			{
-				button("Cinematic video", domain.CommandMenuVideoHailuo02Standard, "secondary"),
+				button("kling v3", domain.CommandMenuVideoKling21Start, "secondary"),
 			},
 			{
-				button("Balanced video", domain.CommandMenuVideoKling21Start, "secondary"),
+				button("seedance v2 fast", domain.CommandMenuVideoSeedance1Lite, "secondary"),
 			},
 			{
-				button("Reference video", domain.CommandMenuVideoSeedance1Lite, "secondary"),
+				button("runway", domain.CommandMenuVideoSora2, "secondary"),
 			},
 			{
-				button("Creative video", domain.CommandMenuVideoSora2Start, "secondary"),
+				button("Pruna", domain.CommandMenuVideoPrunaAI, "secondary"),
 			},
 			{
 				button("⬅️ Назад", domain.CommandShowMenu, "secondary"),
@@ -862,7 +874,21 @@ func prunaAIBackKeyboard() *vkdelivery.Keyboard {
 }
 
 func sora2Keyboard() *vkdelivery.Keyboard {
-	return videoDetailKeyboard(domain.CommandMenuVideoSora2Start, domain.CommandMenuVideoSora2Examples)
+	return &vkdelivery.Keyboard{
+		OneTime: false,
+		Inline:  true,
+		Buttons: [][]vkdelivery.KeyboardButton{
+			{
+				button("runway 4.5", domain.CommandMenuVideoSora2Examples, "secondary"),
+			},
+			{
+				button("runway 4 turbo", domain.CommandMenuVideoSora2Start, "secondary"),
+			},
+			{
+				button("⬅️ Назад", domain.CommandMenuVideo, "secondary"),
+			},
+		},
+	}
 }
 
 func sora2BackKeyboard() *vkdelivery.Keyboard {
@@ -870,11 +896,11 @@ func sora2BackKeyboard() *vkdelivery.Keyboard {
 }
 
 func kling21Keyboard() *vkdelivery.Keyboard {
-	return videoDetailKeyboard(domain.CommandMenuVideoKling21Start, domain.CommandMenuVideoKling21Examples)
+	return backToKeyboard(domain.CommandMenuVideo)
 }
 
 func kling21BackKeyboard() *vkdelivery.Keyboard {
-	return backToKeyboard(domain.CommandMenuVideoKling21)
+	return backToKeyboard(domain.CommandMenuVideo)
 }
 
 func videoDetailKeyboard(startCommand, examplesCommand domain.CommandType) *vkdelivery.Keyboard {
@@ -901,10 +927,7 @@ func seedance1Keyboard() *vkdelivery.Keyboard {
 		Inline:  true,
 		Buttons: [][]vkdelivery.KeyboardButton{
 			{
-				button("Reference video", domain.CommandMenuVideoSeedance1Lite, "secondary"),
-			},
-			{
-				button("Reference video Pro", domain.CommandMenuVideoSeedance1Pro, "secondary"),
+				button("seedance v2 fast", domain.CommandMenuVideoSeedance1Lite, "secondary"),
 			},
 			{
 				button("⬅️ Назад", domain.CommandMenuVideo, "secondary"),
@@ -914,7 +937,7 @@ func seedance1Keyboard() *vkdelivery.Keyboard {
 }
 
 func seedance1BackKeyboard() *vkdelivery.Keyboard {
-	return backToKeyboard(domain.CommandMenuVideoSeedance1)
+	return backToKeyboard(domain.CommandMenuVideo)
 }
 
 func hailuo02Keyboard() *vkdelivery.Keyboard {
@@ -923,10 +946,10 @@ func hailuo02Keyboard() *vkdelivery.Keyboard {
 		Inline:  true,
 		Buttons: [][]vkdelivery.KeyboardButton{
 			{
-				button("Cinematic video", domain.CommandMenuVideoHailuo02Standard, "secondary"),
+				button("hailuo v2.3 обычный", domain.CommandMenuVideoHailuo02Standard, "secondary"),
 			},
 			{
-				button("Fast photo motion", domain.CommandMenuVideoHailuo02Fast, "secondary"),
+				button("hailuo v2.3 fast", domain.CommandMenuVideoHailuo02Fast, "secondary"),
 			},
 			{
 				button("⬅️ Назад", domain.CommandMenuVideo, "secondary"),

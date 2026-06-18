@@ -910,8 +910,20 @@ func TestLoadVKMenuFeatureFlags(t *testing.T) {
 	if cfg.VKMenuImageReferenceEnabled {
 		t.Fatal("VKMenuImageReferenceEnabled = true, want default false")
 	}
+	if cfg.VKMenuVideoRoutesPreviewEnabled {
+		t.Fatal("VKMenuVideoRoutesPreviewEnabled = true, want default false")
+	}
 	if cfg.VKTopUpReceiptEmail != "payments@example.com" || cfg.VKTopUpReceiptPhone != "+79991234567" {
 		t.Fatalf("unexpected VK top-up receipt contact: email=%q phone=%q", cfg.VKTopUpReceiptEmail, cfg.VKTopUpReceiptPhone)
+	}
+}
+
+func TestLoadVKMenuVideoRoutesPreviewFlag(t *testing.T) {
+	t.Setenv("VK_MENU_VIDEO_ROUTES_PREVIEW_ENABLED", "true")
+
+	cfg := config.Load()
+	if !cfg.VKMenuVideoRoutesPreviewEnabled {
+		t.Fatal("VKMenuVideoRoutesPreviewEnabled = false, want true")
 	}
 }
 

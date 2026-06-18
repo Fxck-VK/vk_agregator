@@ -307,6 +307,7 @@ type Config struct {
 	VKMenuVideoHailuo02Enabled         bool
 	VKMenuVideoHailuo02StandardEnabled bool
 	VKMenuVideoHailuo02FastEnabled     bool
+	VKMenuVideoRoutesPreviewEnabled    bool
 	VKMenuImageTextEnabled             bool
 	VKMenuImageReferenceEnabled        bool
 	VKMenuStudentsSolverEnabled        bool
@@ -972,6 +973,7 @@ func Load() Config {
 			"VK_MENU_VIDEO_HAILUO02_FAST_ENABLED",
 			envBool("VK_MENU_VIDEO_HAIUO02_FAST_ENABLED", true),
 		),
+		VKMenuVideoRoutesPreviewEnabled:   envBool("VK_MENU_VIDEO_ROUTES_PREVIEW_ENABLED", false),
 		VKMenuImageTextEnabled:            envBool("VK_MENU_IMAGE_TEXT_ENABLED", false),
 		VKMenuImageReferenceEnabled:       envBool("VK_MENU_IMAGE_REFERENCE_ENABLED", false),
 		VKMenuStudentsSolverEnabled:       envBool("VK_MENU_STUDENTS_SOLVER_ENABLED", true),

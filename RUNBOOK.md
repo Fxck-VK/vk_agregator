@@ -56,6 +56,102 @@ first and `_env` as a local fallback when started from the repository root.
 OS/CI environment variables override values from local env files. Real env
 files are ignored by Git; commit only `.env.example`.
 
+### DEV contour for local VK/Mini App testing
+
+Use the DEV contour when you need a production-shaped local setup without
+touching production VK, production Cloudflare or production YooKassa settings.
+
+DEV public URLs:
+
+| Surface | DEV URL |
+|---------|---------|
+| VK Callback API | `https://dev-vk.neiirohub.ru/webhooks/vk` |
+| VK health | `https://dev-vk.neiirohub.ru/health` |
+| Mini App | `https://dev-app.neiirohub.ru` |
+| Mini App BFF | `https://dev-app.neiirohub.ru/miniapp/*` |
+| YooKassa webhook | `https://dev.neiirohub.ru/billing/webhooks/yookassa` |
+
+Create the local DEV env:
+
+```powershell
+Copy-Item .env.dev.example .env
+notepad .env
+```
+
+Fill only DEV/test values:
+
+```text
+VK_ACCESS_TOKEN=<dev VK community token>
+VK_SECRET=<dev VK Callback API secret>
+VK_CONFIRMATION_TOKEN=<dev VK confirmation string>
+VK_GROUP_ID=<dev VK group id>
+CLOUDFLARED_TUNNEL_TOKEN=<dev dashboard-managed tunnel token>
+DEEPINFRA_API_KEY=<dev/test DeepInfra key>
+APIMART_API_KEY=<dev/test APIMart or AIMLAPI key>
+POYO_API_KEY=<dev/test PoYo key>
+RUNWAYML_API_SECRET=<dev/test Runway key>
+PAYMENT_PROVIDER=mock
+PROVIDER=deepinfra
+PROVIDER_CHAIN=deepinfra,apimart,poyo,runway,mock
+IMAGE_PROVIDER=mock
+VIDEO_PROVIDER=deepinfra
+DEV_ALLOW_REAL_AI_PROVIDERS=true
+VK_MENU_VIDEO_ROUTES_PREVIEW_ENABLED=true
+```
+
+The DEV contour is production-shaped for manual VK checks: the video picker
+shows `hailuo v2.3`, `kling v3`, `seedance v2 fast`, `runway`, and `Pruna`,
+and route execution can use real DEV provider keys. Keep those keys DEV-only;
+do not paste production provider secrets into local `.env`.
+
+Start the full DEV stack:
+
+```powershell
+.\scripts\dev\start-dev-stack.ps1 -WithCloudflare
+```
+
+This is the normal local development command. It rebuilds runtime containers
+from the current working tree, so DEV uses the same codebase as production with
+only `.env`, Cloudflare tunnel and external VK/YooKassa settings changed.
+`-SkipBuild` is blocked by default unless `DEV_ALLOW_REMOTE_IMAGES=true` is set
+for an explicit remote image smoke.
+
+Check status or stop it:
+
+```powershell
+.\scripts\dev\status-dev-stack.ps1
+.\scripts\dev\smoke-dev.ps1
+.\scripts\dev\stop-dev-stack.ps1
+```
+
+VK DEV Callback API settings:
+
+```text
+URL: https://dev-vk.neiirohub.ru/webhooks/vk
+Secret key: value from DEV VK_SECRET
+Confirmation string: value from DEV VK_CONFIRMATION_TOKEN
+Events: message_new and the DEV events you are testing
+```
+
+YooKassa DEV/test webhook settings:
+
+```text
+URL: https://dev.neiirohub.ru/billing/webhooks/yookassa
+Events: payment.succeeded, payment.canceled, refund.succeeded
+```
+
+Safety rules:
+
+- do not paste production secrets into `.env`;
+- do not run the production Cloudflare tunnel token locally;
+- do not edit production VK Callback API settings for local tests;
+- keep AI providers on DEV/test credentials only when
+  `DEV_ALLOW_REAL_AI_PROVIDERS=true`;
+- keep payments mocked unless `DEV_ALLOW_REAL_PAYMENTS=true` and YooKassa uses
+  a test key.
+
+The detailed DEV contract is in `docs/DEV_CONTOUR.md`.
+
 Server configuration uses separate tracked templates for staging and
 production:
 

@@ -4,6 +4,7 @@ package vkbot
 import (
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/redis/go-redis/v9"
 
@@ -152,8 +153,12 @@ func menuFeatures(cfg config.Config) vkinbound.MenuFeatureFlags {
 		}
 	}
 
+	runwayEnabled := cfg.FeatureVideoRouteRunwayGen4TurboEnabled || cfg.FeatureVideoRouteRunwayGen45Enabled
+	prunaEnabled := strings.TrimSpace(cfg.DeepInfraVideoModel) != ""
+	routePreviewEnabled := cfg.VKMenuVideoRoutesPreviewEnabled && !cfg.IsProduction()
+
 	disableWhenFalse(cfg.VKMenuVideoEnabled, domain.CommandMenuVideo)
-	disableWhenFalse(false, domain.CommandMenuVideoPrunaAI)
+	disableWhenFalse(prunaEnabled, domain.CommandMenuVideoPrunaAI)
 	disableWhenFalse(cfg.VKMenuImageEnabled, domain.CommandMenuImage)
 	disableWhenFalse(cfg.VKMenuGPTEnabled, domain.CommandMenuText)
 	disableWhenFalse(cfg.VKMenuStudentsEnabled, domain.CommandMenuStudents)
@@ -162,8 +167,13 @@ func menuFeatures(cfg config.Config) vkinbound.MenuFeatureFlags {
 	disableWhenFalse(cfg.VKMenuVideoSora2Enabled, domain.CommandMenuVideoSora2)
 	disableWhenFalse(cfg.VKMenuVideoSora2StartEnabled, domain.CommandMenuVideoSora2Start)
 	disableWhenFalse(cfg.VKMenuVideoSora2ExamplesEnabled, domain.CommandMenuVideoSora2Examples)
-	disableWhenFalse(cfg.FeatureVideoRouteRunwayGen4TurboEnabled, domain.CommandMenuVideoSora2, domain.CommandMenuVideoSora2Start, domain.CommandMenuVideoSora2Examples)
-	enableWhenTrue(cfg.FeatureVideoRouteRunwayGen4TurboEnabled, domain.CommandMenuVideoSora2, domain.CommandMenuVideoSora2Start, domain.CommandMenuVideoSora2Examples)
+	disableWhenFalse(runwayEnabled, domain.CommandMenuVideoSora2)
+	disableWhenFalse(cfg.FeatureVideoRouteRunwayGen4TurboEnabled, domain.CommandMenuVideoSora2Start)
+	disableWhenFalse(cfg.FeatureVideoRouteRunwayGen45Enabled, domain.CommandMenuVideoSora2Examples)
+	enableWhenTrue(prunaEnabled, domain.CommandMenuVideoPrunaAI)
+	enableWhenTrue(runwayEnabled, domain.CommandMenuVideoSora2)
+	enableWhenTrue(cfg.FeatureVideoRouteRunwayGen4TurboEnabled, domain.CommandMenuVideoSora2Start)
+	enableWhenTrue(cfg.FeatureVideoRouteRunwayGen45Enabled, domain.CommandMenuVideoSora2Examples)
 	disableWhenFalse(cfg.VKMenuVideoKling21Enabled, domain.CommandMenuVideoKling21)
 	disableWhenFalse(cfg.VKMenuVideoKling21StartEnabled, domain.CommandMenuVideoKling21Start)
 	disableWhenFalse(cfg.VKMenuVideoKling21ExamplesEnabled, domain.CommandMenuVideoKling21Examples)
@@ -190,6 +200,89 @@ func menuFeatures(cfg config.Config) vkinbound.MenuFeatureFlags {
 	disableWhenFalse(cfg.VKMenuStudentsPresentationEnabled, domain.CommandMenuStudentPresentation)
 	disableWhenFalse(cfg.VKMenuStudentsReportEnabled, domain.CommandMenuStudentReport)
 	disableWhenFalse(cfg.VKMenuStudentsQAEnabled, domain.CommandMenuStudentQA)
+
+	if routePreviewEnabled && cfg.VKMenuVideoEnabled {
+		previewCommands := []struct {
+			enabled  bool
+			commands []domain.CommandType
+		}{
+			{
+				enabled: cfg.VKMenuVideoSora2Enabled,
+				commands: []domain.CommandType{
+					domain.CommandMenuVideoSora2,
+				},
+			},
+			{
+				enabled: cfg.VKMenuVideoSora2Enabled && cfg.VKMenuVideoSora2StartEnabled,
+				commands: []domain.CommandType{
+					domain.CommandMenuVideoSora2Start,
+				},
+			},
+			{
+				enabled: cfg.VKMenuVideoSora2Enabled && cfg.VKMenuVideoSora2ExamplesEnabled,
+				commands: []domain.CommandType{
+					domain.CommandMenuVideoSora2Examples,
+				},
+			},
+			{
+				enabled: cfg.VKMenuVideoKling21Enabled,
+				commands: []domain.CommandType{
+					domain.CommandMenuVideoKling21,
+				},
+			},
+			{
+				enabled: cfg.VKMenuVideoKling21Enabled && cfg.VKMenuVideoKling21StartEnabled,
+				commands: []domain.CommandType{
+					domain.CommandMenuVideoKling21Start,
+				},
+			},
+			{
+				enabled: cfg.VKMenuVideoKling21Enabled && cfg.VKMenuVideoKling21ExamplesEnabled,
+				commands: []domain.CommandType{
+					domain.CommandMenuVideoKling21Examples,
+				},
+			},
+			{
+				enabled: cfg.VKMenuVideoSeedance1Enabled,
+				commands: []domain.CommandType{
+					domain.CommandMenuVideoSeedance1,
+				},
+			},
+			{
+				enabled: cfg.VKMenuVideoSeedance1Enabled && cfg.VKMenuVideoSeedance1LiteEnabled,
+				commands: []domain.CommandType{
+					domain.CommandMenuVideoSeedance1Lite,
+				},
+			},
+			{
+				enabled: cfg.VKMenuVideoHailuo02Enabled,
+				commands: []domain.CommandType{
+					domain.CommandMenuVideoHailuo02,
+				},
+			},
+			{
+				enabled: cfg.VKMenuVideoHailuo02Enabled && cfg.VKMenuVideoHailuo02StandardEnabled,
+				commands: []domain.CommandType{
+					domain.CommandMenuVideoHailuo02Standard,
+				},
+			},
+			{
+				enabled: cfg.VKMenuVideoHailuo02Enabled && cfg.VKMenuVideoHailuo02FastEnabled,
+				commands: []domain.CommandType{
+					domain.CommandMenuVideoHailuo02Fast,
+				},
+			},
+		}
+		for _, group := range previewCommands {
+			if !group.enabled {
+				continue
+			}
+			for _, command := range group.commands {
+				delete(disabled, command)
+				enabled[command] = true
+			}
+		}
+	}
 
 	return vkinbound.MenuFeatureFlags{DisabledCommands: disabled, EnabledCommands: enabled}
 }

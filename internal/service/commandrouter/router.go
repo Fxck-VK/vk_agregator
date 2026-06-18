@@ -53,28 +53,30 @@ func (r *Router) Parse(rawText string) Result {
 		return Result{Type: domain.CommandShowMenu}
 	case "🎬 создать видео", "создать видео":
 		return Result{Type: domain.CommandMenuVideo}
-	case "prunaai", "pruna ai":
+	case "pruna", "prunaai", "pruna ai":
 		return Result{Type: domain.CommandMenuVideoPrunaAI}
-	case "creative video", "sora 2 начать генерацию":
+	case "runway 4 turbo", "runway gen4 turbo", "creative video", "sora 2 начать генерацию":
 		return Result{Type: domain.CommandMenuVideoSora2Start}
-	case "sora 2 — видео текст+фото", "sora 2 - видео текст+фото", "sora 2 examples", "sora 2 примеры":
+	case "runway", "sora 2 — видео текст+фото", "sora 2 - видео текст+фото", "sora 2 examples", "sora 2 примеры":
 		return Result{Type: domain.CommandMenuVideoSora2}
-	case "balanced video", "kling v2.1 начать генерацию":
+	case "runway 4.5", "runway 4 5":
+		return Result{Type: domain.CommandMenuVideoSora2Examples}
+	case "kling v3", "balanced video", "kling v2.1 начать генерацию":
 		return Result{Type: domain.CommandMenuVideoKling21Start}
 	case "kling v2.1 — видео текст+фото", "kling v2.1 - видео текст+фото", "kling v2.1 examples", "kling v2.1 примеры":
 		return Result{Type: domain.CommandMenuVideoKling21}
-	case "reference video", "seedance 1 lite":
+	case "seedance v2 fast", "seedance v2.0 fast", "reference video", "seedance 1 lite":
 		return Result{Type: domain.CommandMenuVideoSeedance1Lite}
 	case "seedance 1 — видео по тексту", "seedance 1 - видео по тексту":
 		return Result{Type: domain.CommandMenuVideoSeedance1}
 	case "seedance 1 pro":
 		return Result{Type: domain.CommandMenuVideoSeedance1Pro}
-	case "fast photo motion", "hailuo v0.2 fast", "haiuo v0.2 fast":
+	case "hailuo v2.3 fast", "fast photo motion", "hailuo v0.2 fast", "haiuo v0.2 fast":
 		return Result{Type: domain.CommandMenuVideoHailuo02Fast}
-	case "hailuo v0.2 — видео текст+фото", "hailuo v0.2 - видео текст+фото",
+	case "hailuo v2.3", "hailuo v0.2 — видео текст+фото", "hailuo v0.2 - видео текст+фото",
 		"haiuo v0.2 — видео текст+фото", "haiuo v0.2 - видео текст+фото":
 		return Result{Type: domain.CommandMenuVideoHailuo02}
-	case "cinematic video", "hailuo v0.2 обычный", "hailuo v0.2 standard", "haiuo v0.2 обычный", "haiuo v0.2 standard":
+	case "hailuo v2.3 обычный", "hailuo v2.3 standard", "cinematic video", "hailuo v0.2 обычный", "hailuo v0.2 standard", "haiuo v0.2 обычный", "haiuo v0.2 standard":
 		return Result{Type: domain.CommandMenuVideoHailuo02Standard}
 	case "⬅️ назад", "назад":
 		return Result{Type: domain.CommandShowMenu}

@@ -993,7 +993,7 @@ func TestMenuButtonEditsActiveMenuMessage(t *testing.T) {
 	if len(edits) != 1 || edits[0].MessageID != activeID {
 		t.Fatalf("expected one edit of active menu %d, got %+v", activeID, edits)
 	}
-	if sent[1].Text != "Выбери режим видео:" {
+	if !strings.Contains(sent[1].Text, "Выбери режим видео") || !strings.Contains(sent[1].Text, "text-only") || !strings.Contains(sent[1].Text, "Требуют стартовую картинку") {
 		t.Fatalf("active menu was not updated to video picker: %+v", sent[1])
 	}
 }
@@ -1123,14 +1123,18 @@ func TestVideoMenuButtonSendsModelPickerNoJob(t *testing.T) {
 	if len(sent) != 1 {
 		t.Fatalf("expected one model picker message, got %+v", sent)
 	}
-	if sent[0].Text != "Выбери режим видео:" {
+	if !strings.Contains(sent[0].Text, "Выбери режим видео") || !strings.Contains(sent[0].Text, "text-only") || !strings.Contains(sent[0].Text, "Требуют стартовую картинку") {
 		t.Fatalf("unexpected text: %q", sent[0].Text)
 	}
 	if !strings.Contains(sent[0].Keyboard, "⬅️ Назад") || !strings.Contains(sent[0].Keyboard, string(domain.CommandShowMenu)) {
 		t.Fatalf("expected back button in keyboard: %q", sent[0].Keyboard)
 	}
 	for _, hidden := range []string{
-		"PrunaAI",
+		"Pruna",
+		"hailuo v2.3",
+		"kling v3",
+		"seedance v2 fast",
+		"runway",
 		"Creative video",
 		"Balanced video",
 		"Reference video",
@@ -1156,7 +1160,7 @@ func TestVideoRouteButtonEnablesPlainTextVideoJobs(t *testing.T) {
 	})
 	start := `{
 		"type":"message_new","group_id":1,"event_id":"evt-video-route-on","secret":"s3cr3t",
-		"object":{"message":{"from_id":5622,"peer_id":5622,"text":"Balanced video","payload":"{\"command\":\"menu.video.kling_v2_1.start\"}"}}
+		"object":{"message":{"from_id":5622,"peer_id":5622,"text":"kling v3","payload":"{\"command\":\"menu.video.kling_v2_1.start\"}"}}
 	}`
 	if rec := h.post(start); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
 		t.Fatalf("unexpected route response: %d %q", rec.Code, rec.Body.String())
@@ -1184,7 +1188,7 @@ func TestVideoRouteButtonEnablesPlainTextVideoJobs(t *testing.T) {
 		t.Fatalf("video route mode should create one video job, jobs=%+v tasks=%d", jobs, h.pub.Len())
 	}
 	sent := control.Sent()
-	if len(sent) != 2 || !strings.Contains(sent[0].Text, "Balanced video") || sent[1].Text != "НейроХаб готовит видео..." {
+	if len(sent) != 2 || !strings.Contains(sent[0].Text, "kling v3") || sent[1].Text != "НейроХаб готовит видео..." {
 		t.Fatalf("unexpected video route mode responses: %+v", sent)
 	}
 	var params struct {
@@ -1202,7 +1206,7 @@ func TestVideoRouteButtonEnablesPlainTextVideoJobs(t *testing.T) {
 	}
 	if params.Prompt != "cinematic neon city at night, rain reflections, slow drone movement" ||
 		params.ModelID != "" ||
-		params.ModelName != "Balanced video" ||
+		params.ModelName != "kling v3" ||
 		params.VideoRouteAlias != string(domain.VideoRouteKlingO3Standard) ||
 		params.Provider != "" ||
 		params.ModelCode != "" ||
