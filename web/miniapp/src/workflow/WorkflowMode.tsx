@@ -102,7 +102,7 @@ const IMAGE_CREATE_MODE: CreateMode = {
 
 const VIDEO_ROUTE_COPY: Record<string, Omit<CreateMode, "modalityId" | "modelId" | "videoRouteAlias">> = {
   video_hailuo_2_3_fast: {
-    name: "Fast photo motion",
+    name: "Hailuo 2.3 Fast",
     subtitle: "Image-to-video",
     color: "#f97316",
     glow: "rgba(249,115,22,0.36)",
@@ -110,7 +110,7 @@ const VIDEO_ROUTE_COPY: Record<string, Omit<CreateMode, "modalityId" | "modelId"
     quickIdeas: ["Slow cinematic push-in", "Wind and fabric motion", "Product reveal", "Portrait motion"],
   },
   video_hailuo_2_3_standard: {
-    name: "Cinematic video",
+    name: "Hailuo 2.3 Standard",
     subtitle: "Text or image to video",
     color: "#ec4899",
     glow: "rgba(236,72,153,0.34)",
@@ -118,7 +118,7 @@ const VIDEO_ROUTE_COPY: Record<string, Omit<CreateMode, "modalityId" | "modelId"
     quickIdeas: ["Neon city rain", "Ocean sunset", "Dragon flight", "Studio product shot"],
   },
   video_kling_o3_standard: {
-    name: "Balanced video",
+    name: "Kling O3 Standard",
     subtitle: "Mid-range no-audio route",
     color: "#22c55e",
     glow: "rgba(34,197,94,0.32)",
@@ -126,7 +126,7 @@ const VIDEO_ROUTE_COPY: Record<string, Omit<CreateMode, "modalityId" | "modelId"
     quickIdeas: ["Street walk", "Food close-up", "Car driving", "Fashion shot"],
   },
   video_seedance_2_0_fast: {
-    name: "Reference video",
+    name: "Seedance 2.0 Fast",
     subtitle: "Reference-driven route",
     color: "#06b6d4",
     glow: "rgba(6,182,212,0.32)",
@@ -134,7 +134,7 @@ const VIDEO_ROUTE_COPY: Record<string, Omit<CreateMode, "modalityId" | "modelId"
     quickIdeas: ["Character scene", "Style transfer", "Multi-reference shot", "Brand visual"],
   },
   video_runway_gen4_turbo: {
-    name: "Creative video",
+    name: "Runway Gen-4 Turbo",
     subtitle: "Official creative fallback",
     color: "#8b5cf6",
     glow: "rgba(139,92,246,0.34)",
@@ -142,7 +142,7 @@ const VIDEO_ROUTE_COPY: Record<string, Omit<CreateMode, "modalityId" | "modelId"
     quickIdeas: ["Editorial shot", "Music video look", "Surreal product", "Dynamic portrait"],
   },
   video_runway_gen4_5: {
-    name: "Premium video",
+    name: "Runway Gen-4.5",
     subtitle: "Premium route",
     color: "#f43f5e",
     glow: "rgba(244,63,94,0.34)",
@@ -640,6 +640,42 @@ export function WorkflowMode({
     setScreen("history");
   }
 
+  function createModeForJob(job: Job): CreateMode | undefined {
+    const modality = modalityByOperation(job.operation);
+    if (job.operation === "video_generate" && job.video_route_alias) {
+      const videoMode = createModes.find(
+        (item) => item.modalityId === "video" && item.videoRouteAlias === job.video_route_alias,
+      );
+      if (videoMode) return videoMode;
+    }
+    if (job.operation === "image_generate" && job.model_id) {
+      const imageMode = createModes.find(
+        (item) => item.modalityId === "image" && item.modelId === job.model_id,
+      );
+      if (imageMode) return imageMode;
+    }
+    return createModes.find((item) => item.modalityId === modality.id);
+  }
+
+  function openCreateForJob(job: Job) {
+    const modality = modalityByOperation(job.operation);
+    const mode = createModeForJob(job);
+    setModalityId(modality.id);
+    setModelId(mode?.modelId ?? modality.models[0]?.id ?? "");
+    if (mode?.modalityId === "video") {
+      setVideoDurationSec(defaultDurationForModel(mode));
+    }
+    clearReferenceItems();
+    clearResultMedia();
+    setPrompt("");
+    setSubmitError(null);
+    setEstimate(null);
+    setEstimateError(null);
+    setActiveJobId(null);
+    flowReturnScreenRef.current = "home";
+    setScreen("home");
+  }
+
   async function submitWorkflow() {
     if (!canSubmit) return;
     setSubmitError(null);
@@ -717,10 +753,7 @@ export function WorkflowMode({
   }, [changeModality, clearResultMedia]);
 
   function repeatJob(job: Job) {
-    const modality = modalityByOperation(job.operation);
-    changeModality(modality.id);
-    setPrompt(job.prompt ?? "");
-    setScreen("home");
+    openCreateForJob(job);
   }
 
   useEffect(() => {
@@ -1047,7 +1080,7 @@ export function WorkflowMode({
               authorName={user.name}
               authorAvatar={user.avatar}
               mediaSrcOverride={resultMediaSrc}
-              onRetry={submitWorkflow}
+              onRetry={() => openCreateForJob(activeJob)}
             />
           </div>
           <Button
@@ -1179,7 +1212,6 @@ function JobList({
                 appearance="neutral"
                 size="m"
                 onClick={() => onRepeat(job)}
-                disabled={!job.prompt}
               >
                 Повторить
               </Button>

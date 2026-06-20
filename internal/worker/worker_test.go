@@ -1896,8 +1896,18 @@ func TestGenerationVideoAPIMartStoresOutputBeforeDelivery(t *testing.T) {
 	if err := h.gen.Process(ctx, taskFor(job)); err != nil {
 		t.Fatalf("process: %v", err)
 	}
-	if !submitSeen || !pollSeen {
-		t.Fatalf("submitSeen=%v pollSeen=%v", submitSeen, pollSeen)
+	if !submitSeen || pollSeen {
+		t.Fatalf("after submit submitSeen=%v pollSeen=%v", submitSeen, pollSeen)
+	}
+	pollTasks := h.streams.byStream[redisqueue.StreamProviderPoll]
+	if len(pollTasks) != 1 {
+		t.Fatalf("expected one provider poll task, got %d", len(pollTasks))
+	}
+	if err := h.poll.Process(ctx, pollTasks[0]); err != nil {
+		t.Fatalf("poll process: %v", err)
+	}
+	if !pollSeen {
+		t.Fatalf("poll was not called")
 	}
 	got := h.reload(t, job.ID)
 	if got.Status != domain.JobStatusResultReady {
@@ -2006,8 +2016,18 @@ func TestGenerationVideoRunwayTaskFailureReleasesReservation(t *testing.T) {
 	if err := h.gen.Process(ctx, taskFor(job)); err != nil {
 		t.Fatalf("process: %v", err)
 	}
-	if !submitSeen || !pollSeen {
-		t.Fatalf("submitSeen=%v pollSeen=%v", submitSeen, pollSeen)
+	if !submitSeen || pollSeen {
+		t.Fatalf("after submit submitSeen=%v pollSeen=%v", submitSeen, pollSeen)
+	}
+	pollTasks := h.streams.byStream[redisqueue.StreamProviderPoll]
+	if len(pollTasks) != 1 {
+		t.Fatalf("expected one provider poll task, got %d", len(pollTasks))
+	}
+	if err := h.poll.Process(ctx, pollTasks[0]); err != nil {
+		t.Fatalf("poll process: %v", err)
+	}
+	if !pollSeen {
+		t.Fatalf("poll was not called")
 	}
 	got := h.reload(t, job.ID)
 	if got.Status != domain.JobStatusFailedTerminal {
@@ -2024,6 +2044,103 @@ func TestGenerationVideoRunwayTaskFailureReleasesReservation(t *testing.T) {
 	}
 	if len(h.streams.byStream[redisqueue.StreamDelivery]) != 0 {
 		t.Fatalf("failed runway task must not enqueue delivery: %v", h.streams.byStream)
+	}
+}
+
+func TestExternalAsyncVideoPollTransportErrorKeepsTaskPolling(t *testing.T) {
+	provider := &captureVideoProvider{
+		name:  domain.ProviderPoYo,
+		model: poyo.ModelKlingO3Standard,
+		cost:  100,
+		pollErrors: []error{
+			routingError{class: domain.ProviderErrRateLimited},
+			routingError{class: domain.ProviderErrInternal},
+		},
+		pollResults: []domain.ProviderTaskResult{{
+			Status:     domain.ProviderTaskSucceeded,
+			OutputURLs: []string{"https://provider.test/video.mp4"},
+		}},
+	}
+	h := newHarnessWithProvider(t, provider, func(d *worker.Deps) {
+		d.ProviderMediaContracts = []domain.ProviderMediaContract{{
+			Provider:               domain.ProviderPoYo,
+			Model:                  poyo.ModelKlingO3Standard,
+			ModelClass:             "kling_o3_standard",
+			Modality:               domain.ModalityVideo,
+			AllowedDurationsSec:    []int{5},
+			AllowedAspectRatios:    []string{"16:9"},
+			AllowedResolutions:     []string{"720p"},
+			ExpectedContainer:      "mp4",
+			ExpectedCodec:          "h264",
+			ExpectedMaxBytes:       128 << 20,
+			DeliveryReadyOutput:    true,
+			MaxProviderAttempts:    1,
+			MaxFallbackAttempts:    0,
+			MaxProviderCostCredits: 100,
+		}}
+	})
+	ctx := context.Background()
+	snapshot := domain.VideoRouteSnapshot{
+		Alias:                  domain.VideoRouteKlingO3Standard,
+		Provider:               domain.ProviderPoYo,
+		ProviderModelID:        poyo.ModelKlingO3Standard,
+		ModelClass:             "kling_o3_standard",
+		DurationSec:            5,
+		Resolution:             "720p",
+		AspectRatio:            "16:9",
+		ProviderCostCredits:    50,
+		InternalCostCredits:    100,
+		PriceMultiplier:        2,
+		MaxProviderCostCredits: 100,
+		MaxInternalCostCredits: 200,
+	}
+	job := h.queueVideoJob(t, map[string]any{
+		"prompt":               "safe video",
+		"video_route_alias":    string(domain.VideoRouteKlingO3Standard),
+		"resolved_video_route": snapshot,
+	})
+
+	if err := h.gen.Process(ctx, taskFor(job)); err != nil {
+		t.Fatalf("gen process: %v", err)
+	}
+	pollTasks := h.streams.byStream[redisqueue.StreamProviderPoll]
+	if len(pollTasks) != 1 {
+		t.Fatalf("expected initial poll task, got %d", len(pollTasks))
+	}
+
+	if err := h.poll.Process(ctx, pollTasks[len(pollTasks)-1]); err != nil {
+		t.Fatalf("first poll process: %v", err)
+	}
+	got := h.reload(t, job.ID)
+	if got.Status != domain.JobStatusProviderPending {
+		t.Fatalf("after transient poll error status = %q, want provider_pending", got.Status)
+	}
+	if len(h.releaser.released) != 0 {
+		t.Fatalf("transient poll error must not release credits: %v", h.releaser.released)
+	}
+
+	pollTasks = h.streams.byStream[redisqueue.StreamProviderPoll]
+	if err := h.poll.Process(ctx, pollTasks[len(pollTasks)-1]); err != nil {
+		t.Fatalf("second poll process: %v", err)
+	}
+	got = h.reload(t, job.ID)
+	if got.Status != domain.JobStatusProviderPending {
+		t.Fatalf("after second transient poll error status = %q, want provider_pending", got.Status)
+	}
+
+	pollTasks = h.streams.byStream[redisqueue.StreamProviderPoll]
+	if err := h.poll.Process(ctx, pollTasks[len(pollTasks)-1]); err != nil {
+		t.Fatalf("third poll process: %v", err)
+	}
+	got = h.reload(t, job.ID)
+	if got.Status != domain.JobStatusResultReady {
+		t.Fatalf("after successful poll status = %q, want result_ready", got.Status)
+	}
+	if provider.polls != 3 {
+		t.Fatalf("polls = %d, want 3", provider.polls)
+	}
+	if len(h.streams.byStream[redisqueue.StreamDelivery]) != 1 {
+		t.Fatalf("expected one delivery task, got %v", h.streams.byStream[redisqueue.StreamDelivery])
 	}
 }
 
@@ -2342,11 +2459,14 @@ func (p *captureImageProvider) Poll(context.Context, domain.ProviderTaskRef) (do
 func (p *captureImageProvider) Cancel(context.Context, domain.ProviderTaskRef) error { return nil }
 
 type captureVideoProvider struct {
-	name    domain.ProviderName
-	model   string
-	cost    int64
-	last    domain.ProviderRequest
-	submits int
+	name        domain.ProviderName
+	model       string
+	cost        int64
+	last        domain.ProviderRequest
+	submits     int
+	polls       int
+	pollErrors  []error
+	pollResults []domain.ProviderTaskResult
 }
 
 func (p *captureVideoProvider) Name() domain.ProviderName {
@@ -2392,6 +2512,17 @@ func (p *captureVideoProvider) Submit(_ context.Context, req domain.ProviderRequ
 }
 
 func (p *captureVideoProvider) Poll(context.Context, domain.ProviderTaskRef) (domain.ProviderTaskResult, error) {
+	p.polls++
+	if len(p.pollErrors) > 0 {
+		err := p.pollErrors[0]
+		p.pollErrors = p.pollErrors[1:]
+		return domain.ProviderTaskResult{}, err
+	}
+	if len(p.pollResults) > 0 {
+		res := p.pollResults[0]
+		p.pollResults = p.pollResults[1:]
+		return res, nil
+	}
 	return domain.ProviderTaskResult{Status: domain.ProviderTaskProcessing}, nil
 }
 

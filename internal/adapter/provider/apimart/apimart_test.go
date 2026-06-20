@@ -1,8 +1,14 @@
 package apimart
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
+	"image"
+	"image/color"
+	"image/png"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -81,15 +87,54 @@ func TestSubmitHailuoFastRequiresFirstFrame(t *testing.T) {
 	}
 }
 
-func TestSubmitHailuoFastSendsFirstFrame(t *testing.T) {
-	const firstFrame = "data:image/png;base64,aW1hZ2U="
+func TestSubmitHailuoFastUploadsDataURLFirstFrame(t *testing.T) {
+	const uploadedFrame = "https://upload.apimart.ai/f/image/test-first-frame.png"
+	firstFrame := testPNGDataURL(t)
 	var seen videoGenerationRequest
+	var uploadSeen bool
+	var submitSeen bool
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if err := json.NewDecoder(r.Body).Decode(&seen); err != nil {
-			t.Fatalf("decode request: %v", err)
+		switch r.URL.Path {
+		case "/uploads/images":
+			uploadSeen = true
+			if got := r.Method; got != http.MethodPost {
+				t.Fatalf("upload method = %q", got)
+			}
+			if got := r.Header.Get("Authorization"); got != "Bearer test-key" {
+				t.Fatalf("upload auth header = %q", got)
+			}
+			if !strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data;") {
+				t.Fatalf("upload content type = %q", r.Header.Get("Content-Type"))
+			}
+			file, header, err := r.FormFile("file")
+			if err != nil {
+				t.Fatalf("upload form file: %v", err)
+			}
+			defer func() {
+				_ = file.Close()
+			}()
+			data, err := io.ReadAll(file)
+			if err != nil {
+				t.Fatalf("read upload file: %v", err)
+			}
+			if header.Filename != "first-frame.png" {
+				t.Fatalf("upload filename = %q", header.Filename)
+			}
+			if got := http.DetectContentType(data); got != "image/png" {
+				t.Fatalf("upload file content type = %q", got)
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"url":"` + uploadedFrame + `","filename":"test-first-frame.png","content_type":"image/png","bytes":70,"created_at":1743436800}`))
+		case "/videos/generations":
+			submitSeen = true
+			if err := json.NewDecoder(r.Body).Decode(&seen); err != nil {
+				t.Fatalf("decode request: %v", err)
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"code":200,"data":[{"status":"submitted","task_id":"task_fast"}]}`))
+		default:
+			t.Fatalf("unexpected path = %q", r.URL.Path)
 		}
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"code":200,"data":[{"status":"submitted","task_id":"task_fast"}]}`))
 	}))
 	defer srv.Close()
 
@@ -111,8 +156,68 @@ func TestSubmitHailuoFastSendsFirstFrame(t *testing.T) {
 	if task.ExternalID != "task_fast" {
 		t.Fatalf("external id = %q", task.ExternalID)
 	}
-	if seen.Model != ModelHailuo23Fast || seen.FirstFrameImage != firstFrame {
+	if !uploadSeen || !submitSeen {
+		t.Fatalf("uploadSeen=%v submitSeen=%v", uploadSeen, submitSeen)
+	}
+	if seen.Model != ModelHailuo23Fast || seen.FirstFrameImage != uploadedFrame {
 		t.Fatalf("unexpected request: %+v", seen)
+	}
+	if strings.HasPrefix(seen.FirstFrameImage, "data:") {
+		t.Fatalf("submit leaked data url into generation request")
+	}
+	if seen.FastPretreatment {
+		t.Fatalf("fast_pretreatment must stay independent from Hailuo Fast model")
+	}
+}
+
+func TestSubmitHailuoFastUsesPublicFirstFrameURLDirectly(t *testing.T) {
+	const firstFrame = "https://cdn.test/ref.png"
+	var seen videoGenerationRequest
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.URL.Path; got != "/videos/generations" {
+			t.Fatalf("path = %q, want direct generation submit", got)
+		}
+		if err := json.NewDecoder(r.Body).Decode(&seen); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"code":200,"data":[{"status":"submitted","task_id":"task_fast_url"}]}`))
+	}))
+	defer srv.Close()
+
+	p := New(Config{APIKey: "test-key", BaseURL: srv.URL, HTTPClient: srv.Client()})
+	_, err := p.Submit(context.Background(), domain.ProviderRequest{
+		JobID:       uuid.New(),
+		Operation:   domain.OperationVideoGenerate,
+		Modality:    domain.ModalityVideo,
+		ModelCode:   ModelHailuo23Fast,
+		Prompt:      "clip",
+		DurationSec: 6,
+		Resolution:  "768p",
+		InputURLs:   []string{firstFrame},
+	})
+	if err != nil {
+		t.Fatalf("submit: %v", err)
+	}
+	if seen.FirstFrameImage != firstFrame {
+		t.Fatalf("first frame = %q", seen.FirstFrameImage)
+	}
+}
+
+func TestSubmitHailuoFastRejectsInvalidDataURLFirstFrame(t *testing.T) {
+	p := New(Config{APIKey: "test-key"})
+	_, err := p.Submit(context.Background(), domain.ProviderRequest{
+		JobID:       uuid.New(),
+		Operation:   domain.OperationVideoGenerate,
+		Modality:    domain.ModalityVideo,
+		ModelCode:   ModelHailuo23Fast,
+		Prompt:      "clip",
+		DurationSec: 6,
+		Resolution:  "768p",
+		InputURLs:   []string{"data:image/png;base64,bm90LWEtcG5n"},
+	})
+	if perr, ok := err.(*Error); !ok || perr.ProviderErrorClass() != domain.ProviderErrInvalidRequest {
+		t.Fatalf("expected invalid_request, got %T %v", err, err)
 	}
 }
 
@@ -299,4 +404,15 @@ func TestPollEmptyTaskIDReturnsTaskNotFound(t *testing.T) {
 	if res.Status != domain.ProviderTaskFailed || res.ErrorClass != domain.ProviderErrTaskNotFound {
 		t.Fatalf("unexpected result: %+v", res)
 	}
+}
+
+func testPNGDataURL(t *testing.T) string {
+	t.Helper()
+	img := image.NewRGBA(image.Rect(0, 0, 1, 1))
+	img.Set(0, 0, color.RGBA{R: 255, A: 255})
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		t.Fatalf("encode png: %v", err)
+	}
+	return "data:image/png;base64," + base64.StdEncoding.EncodeToString(buf.Bytes())
 }

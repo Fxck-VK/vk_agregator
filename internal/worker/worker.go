@@ -51,6 +51,8 @@ const (
 	rawProviderVideoPolicyNever         = "never"
 	rawProviderVideoPolicyIfProbePassed = "if_probe_passed"
 	rawProviderVideoPolicyAlwaysDevOnly = "always_dev_only"
+
+	maxAsyncVideoPollTransportAttempts = 20
 )
 
 // ArtifactSaver stores provider outputs as artifacts. Implemented by
@@ -910,6 +912,7 @@ type processor struct {
 	releaser             ReservationReleaser
 	maxAttempts          int
 	backoff              func(attempt int) time.Duration
+	providerPollBackoff  func(attempt int) time.Duration
 	callTimeout          time.Duration
 	now                  func() time.Time
 }
@@ -1002,6 +1005,10 @@ type Deps struct {
 	// Backoff returns the delay before re-enqueue for the given attempt number.
 	// Defaults to no delay (keeps tests fast).
 	Backoff func(attempt int) time.Duration
+	// ProviderPollBackoff returns the delay between async provider status polls.
+	// It is intentionally separate from retry backoff so long provider renders
+	// do not add excessive result-detection latency.
+	ProviderPollBackoff func(attempt int) time.Duration
 	// ProviderCallTimeout bounds one provider Submit/Poll call (default 60s).
 	ProviderCallTimeout time.Duration
 	// Now overrides the clock; defaults to time.Now.
@@ -1020,6 +1027,10 @@ func newProcessor(d Deps) processor {
 	backoff := d.Backoff
 	if backoff == nil {
 		backoff = func(int) time.Duration { return 0 }
+	}
+	providerPollBackoff := d.ProviderPollBackoff
+	if providerPollBackoff == nil {
+		providerPollBackoff = func(int) time.Duration { return 0 }
 	}
 	callTimeout := d.ProviderCallTimeout
 	if callTimeout <= 0 {
@@ -1078,6 +1089,7 @@ func newProcessor(d Deps) processor {
 		releaser:             d.Releaser,
 		maxAttempts:          maxAttempts,
 		backoff:              backoff,
+		providerPollBackoff:  providerPollBackoff,
 		callTimeout:          callTimeout,
 		now:                  now,
 	}
@@ -1688,11 +1700,15 @@ func (p *processor) pollOnce(ctx context.Context, job *domain.Job, pt *domain.Pr
 	res, err := provider.Poll(pollCtx, domain.ProviderTaskRef{Provider: pt.Provider, ExternalID: pt.ExternalID})
 	p.recordProviderPoll(pt.Provider, pt.ModelCode, job.Modality, job.OperationType, started, res, err)
 	if err != nil {
-		observeVideoRouteProviderTaskFailureForJob(job, classOf(err))
+		class := classOf(err)
+		observeVideoRouteProviderTaskFailureForJob(job, class)
 		tracing.RecordError(span, err)
 		span.End()
 		cancel()
-		return p.handleFailure(ctx, job, task, classOf(err), err.Error())
+		if p.shouldKeepPollingAfterTransportFailure(job, pt, class, task.Attempt) {
+			return p.requeueProviderPollAfterError(ctx, job, pt, task, class, err.Error())
+		}
+		return p.handleFailure(ctx, job, task, class, err.Error())
 	}
 	if res.Status == domain.ProviderTaskFailed && res.ErrorClass != "" {
 		observeVideoRouteProviderTaskFailureForJob(job, res.ErrorClass)
@@ -1701,6 +1717,32 @@ func (p *processor) pollOnce(ctx context.Context, job *domain.Job, pt *domain.Pr
 	span.End()
 	cancel()
 	return p.applyResult(ctx, job, pt, res, task)
+}
+
+func (p *processor) shouldKeepPollingAfterTransportFailure(job *domain.Job, pt *domain.ProviderTask, class domain.ProviderErrorClass, attempt int) bool {
+	if job == nil || pt == nil || job.Modality != domain.ModalityVideo || pt.Status.IsTerminal() || !isRetryable(class) {
+		return false
+	}
+	switch pt.Provider {
+	case domain.ProviderAPIMart, domain.ProviderPoYo, domain.ProviderRunway:
+		return attempt < maxAsyncVideoPollTransportAttempts
+	default:
+		return false
+	}
+}
+
+func (p *processor) requeueProviderPollAfterError(ctx context.Context, job *domain.Job, pt *domain.ProviderTask, task queue.Task, class domain.ProviderErrorClass, msg string) error {
+	nextStatus := domain.JobStatusProviderPending
+	if pt.Status == domain.ProviderTaskProcessing {
+		nextStatus = domain.JobStatusProviderProcessing
+	}
+	if err := p.setStatus(ctx, job, nextStatus, string(class), msg); err != nil {
+		return err
+	}
+	next := task
+	next.Attempt = task.Attempt + 1
+	p.sleepBackoff(ctx, next.Attempt)
+	return p.streams.PublishTo(ctx, redisqueue.StreamProviderPoll, next)
 }
 
 func durableProviderTaskResult(pt *domain.ProviderTask) (domain.ProviderTaskResult, bool) {
@@ -1787,13 +1829,19 @@ func (p *processor) applyResult(ctx context.Context, job *domain.Job, pt *domain
 		if err := p.setStatus(ctx, job, domain.JobStatusProviderProcessing, "", ""); err != nil {
 			return err
 		}
-		return p.streams.PublishTo(ctx, redisqueue.StreamProviderPoll, taskOf(job))
+		next := task
+		next.Attempt = task.Attempt + 1
+		p.sleepProviderPollBackoff(ctx, next.Attempt)
+		return p.streams.PublishTo(ctx, redisqueue.StreamProviderPoll, next)
 
 	case domain.ProviderTaskPending:
 		if err := p.setStatus(ctx, job, domain.JobStatusProviderPending, "", ""); err != nil {
 			return err
 		}
-		return p.streams.PublishTo(ctx, redisqueue.StreamProviderPoll, taskOf(job))
+		next := task
+		next.Attempt = task.Attempt + 1
+		p.sleepProviderPollBackoff(ctx, next.Attempt)
+		return p.streams.PublishTo(ctx, redisqueue.StreamProviderPoll, next)
 
 	case domain.ProviderTaskFailed:
 		return p.handleFailure(ctx, job, task, res.ErrorClass, res.ErrorMessage)
@@ -2459,6 +2507,19 @@ func (p *processor) toDLQ(ctx context.Context, task queue.Task, code, msg string
 // context cancellation.
 func (p *processor) sleepBackoff(ctx context.Context, attempt int) {
 	d := p.backoff(attempt)
+	if d <= 0 {
+		return
+	}
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+	case <-t.C:
+	}
+}
+
+func (p *processor) sleepProviderPollBackoff(ctx context.Context, attempt int) {
+	d := p.providerPollBackoff(attempt)
 	if d <= 0 {
 		return
 	}

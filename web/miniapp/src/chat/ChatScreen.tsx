@@ -344,11 +344,14 @@ export function ChatScreen({ user }: { user: VkUser }) {
     });
   }, [setActiveId, setChats]);
 
-  function changeTab(nextTab: AppTab) {
+  const changeTab = useCallback((nextTab: AppTab) => {
+    if (nextTab !== activeTab && document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
     setActiveTab(nextTab);
     saveAppTab(nextTab);
     setDrawerOpen(false);
-  }
+  }, [activeTab]);
 
   const findChatIdForJob = useCallback(async (jobId: string): Promise<string | null> => {
     for (const chat of chatsRef.current) {
@@ -401,7 +404,7 @@ export function ChatScreen({ user }: { user: VkUser }) {
         changeTab("create");
       }
     },
-    [findChatIdForJob, jobs, loadConversationMessages, selectChat],
+    [changeTab, findChatIdForJob, jobs, loadConversationMessages, selectChat],
   );
 
   useEffect(() => watchThemeMode(themeMode), [themeMode]);
@@ -763,7 +766,7 @@ export function ChatScreen({ user }: { user: VkUser }) {
         </header>
       )}
 
-      <section className={"app-tab-panel" + (activeTab === "chat" ? " is-active" : "")} aria-hidden={activeTab !== "chat"}>
+      <section className={"app-tab-panel" + (activeTab === "chat" ? " is-active" : "")}>
           <div className="chat__scroll" ref={scrollRef}>
             {loading && (
               <div className="splash">
@@ -810,7 +813,7 @@ export function ChatScreen({ user }: { user: VkUser }) {
           />
       </section>
 
-      <section className={"app-tab-panel app-tab-panel--create" + (activeTab === "create" ? " is-active" : "")} aria-hidden={activeTab !== "create"}>
+      <section className={"app-tab-panel app-tab-panel--create" + (activeTab === "create" ? " is-active" : "")}>
         <WorkflowMode
           user={user}
           jobs={jobs}
@@ -823,7 +826,7 @@ export function ChatScreen({ user }: { user: VkUser }) {
         />
       </section>
 
-      <section className={"app-tab-panel app-tab-panel--settings" + (activeTab === "settings" ? " is-active" : "")} aria-hidden={activeTab !== "settings"}>
+      <section className={"app-tab-panel app-tab-panel--settings" + (activeTab === "settings" ? " is-active" : "")}>
         <SettingsScreen
           themeMode={themeMode}
           balance={balance}

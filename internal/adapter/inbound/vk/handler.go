@@ -213,15 +213,15 @@ type videoModeSpec struct {
 func videoModeForCommand(t domain.CommandType) (videoModeSpec, bool) {
 	switch t {
 	case domain.CommandMenuVideoSora2Start:
-		return videoRouteMode("video:runway_gen4_turbo", "Creative video", domain.VideoRouteRunwayGen4Turbo, 5), true
+		return videoRouteMode("video:runway_gen4_turbo", "Runway Gen-4 Turbo", domain.VideoRouteRunwayGen4Turbo, 5), true
 	case domain.CommandMenuVideoKling21Start:
-		return videoRouteMode("video:kling_o3_standard", "Balanced video", domain.VideoRouteKlingO3Standard, 5), true
+		return videoRouteMode("video:kling_o3_standard", "Kling O3 Standard", domain.VideoRouteKlingO3Standard, 5), true
 	case domain.CommandMenuVideoSeedance1Lite:
-		return videoRouteMode("video:seedance_2_0_fast", "Reference video", domain.VideoRouteSeedance20Fast, 5), true
+		return videoRouteMode("video:seedance_2_0_fast", "Seedance 2.0 Fast", domain.VideoRouteSeedance20Fast, 5), true
 	case domain.CommandMenuVideoHailuo02Standard:
-		return videoRouteMode("video:hailuo_2_3_standard", "Cinematic video", domain.VideoRouteHailuo23Standard, 6), true
+		return videoRouteMode("video:hailuo_2_3_standard", "Hailuo 2.3 Standard", domain.VideoRouteHailuo23Standard, 6), true
 	case domain.CommandMenuVideoHailuo02Fast:
-		return videoRouteMode("video:hailuo_2_3_fast", "Fast photo motion", domain.VideoRouteHailuo23Fast, 6), true
+		return videoRouteMode("video:hailuo_2_3_fast", "Hailuo 2.3 Fast", domain.VideoRouteHailuo23Fast, 6), true
 	default:
 		return videoModeSpec{}, false
 	}

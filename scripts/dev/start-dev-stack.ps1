@@ -434,7 +434,11 @@ function Wait-CloudflaredReady {
 }
 
 function Start-Cloudflared {
-    param([Parameter(Mandatory = $true)][string]$Token)
+    param(
+        [Parameter(Mandatory = $true)][string]$Token,
+        [string]$Protocol = "http2",
+        [string]$EdgeIPVersion = "4"
+    )
 
     $cloudflared = Get-Command cloudflared -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($null -eq $cloudflared) {
@@ -454,7 +458,15 @@ function Start-Cloudflared {
     try {
         $cloudflaredPath = $cloudflared.Source
         $filePath = $cloudflaredPath
-        $argumentList = @("tunnel", "--no-autoupdate", "--loglevel", "info", "run")
+        $argumentList = @()
+        if (-not [string]::IsNullOrWhiteSpace($EdgeIPVersion)) {
+            $argumentList += @("--edge-ip-version", $EdgeIPVersion)
+        }
+        $argumentList += @("tunnel", "--no-autoupdate", "--loglevel", "info")
+        if (-not [string]::IsNullOrWhiteSpace($Protocol)) {
+            $argumentList += @("--protocol", $Protocol)
+        }
+        $argumentList += "run"
         $extension = [System.IO.Path]::GetExtension($cloudflaredPath)
         if ($extension -ieq ".ps1" -or $extension -ieq ".cmd") {
             $npmDir = Split-Path -Parent $cloudflaredPath
@@ -601,7 +613,9 @@ try {
     if ($WithCloudflare) {
         Invoke-Step "start cloudflared DEV tunnel" {
             $token = Get-EnvValue -Values $envValues -Name "CLOUDFLARED_TUNNEL_TOKEN"
-            $cloudflaredPid = Start-Cloudflared -Token $token
+            $protocol = Get-EnvValue -Values $envValues -Name "CLOUDFLARED_PROTOCOL" -Default "http2"
+            $edgeIPVersion = Get-EnvValue -Values $envValues -Name "CLOUDFLARED_EDGE_IP_VERSION" -Default "4"
+            $cloudflaredPid = Start-Cloudflared -Token $token -Protocol $protocol -EdgeIPVersion $edgeIPVersion
             Write-Host "cloudflared started pid=$cloudflaredPid"
         }
 

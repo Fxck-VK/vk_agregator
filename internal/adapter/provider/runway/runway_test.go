@@ -14,6 +14,23 @@ import (
 	"vk-ai-aggregator/internal/domain"
 )
 
+func TestRunwayRatioMapsSupportedAspectRatios(t *testing.T) {
+	tests := map[string]string{
+		"":     "1280:720",
+		"16:9": "1280:720",
+		"9:16": "720:1280",
+		"4:3":  "1104:832",
+		"3:4":  "832:1104",
+		"1:1":  "960:960",
+		"21:9": "1584:672",
+	}
+	for aspect, want := range tests {
+		if got := runwayRatio(aspect); got != want {
+			t.Fatalf("runwayRatio(%q) = %q, want %q", aspect, got, want)
+		}
+	}
+}
+
 func TestSubmitGen4TurboSuccessAndIdempotency(t *testing.T) {
 	var calls int
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

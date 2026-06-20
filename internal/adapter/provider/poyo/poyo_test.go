@@ -34,20 +34,20 @@ func TestSubmitKlingO3SuccessAndIdempotency(t *testing.T) {
 		if body.Model != ModelKlingO3Standard {
 			t.Fatalf("model = %q", body.Model)
 		}
-		if body.Inputs["prompt"] != "safe prompt" || body.Inputs["image_url"] != "https://cdn.test/input.png" {
-			t.Fatalf("bad inputs: %+v", body.Inputs)
+		if body.Input["prompt"] != "safe prompt" {
+			t.Fatalf("bad input prompt: %+v", body.Input)
 		}
-		if refs, ok := body.Inputs["reference_images"].([]any); !ok || len(refs) != 1 {
-			t.Fatalf("reference_images = %#v", body.Inputs["reference_images"])
+		if refs, ok := body.Input["image_urls"].([]any); !ok || len(refs) != 1 || refs[0] != "https://cdn.test/input.png" {
+			t.Fatalf("image_urls = %#v", body.Input["image_urls"])
 		}
-		if body.Parameters["duration"].(float64) != 10 || body.Parameters["resolution"] != "1080p" || body.Parameters["aspect_ratio"] != "16:9" {
-			t.Fatalf("bad parameters: %+v", body.Parameters)
+		if body.Input["duration"].(float64) != 10 || body.Input["aspect_ratio"] != "16:9" {
+			t.Fatalf("bad input options: %+v", body.Input)
 		}
-		if body.Parameters["audio"] != false {
-			t.Fatalf("kling audio must be explicitly disabled, got %+v", body.Parameters)
+		if body.Input["sound"] != false {
+			t.Fatalf("kling sound must be explicitly disabled, got %+v", body.Input)
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"success":true,"task_id":"poyo_task_1","status":"pending"}`))
+		_, _ = w.Write([]byte(`{"code":200,"data":{"task_id":"poyo_task_1","status":"not_started","created_time":"2026-06-19T15:00:00Z"}}`))
 	}))
 	defer srv.Close()
 
@@ -169,7 +169,7 @@ func TestPollCompletedReturnsOutputAndSanitizesRaw(t *testing.T) {
 			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"success":true,"task_id":"task_1","status":"completed","progress":100,"result":{"video_url":"https://private.poyo.ai/output.mp4?token=secret","duration":5,"resolution":"720p"}}`))
+		_, _ = w.Write([]byte(`{"code":200,"data":{"task_id":"task_1","status":"finished","files":[{"file_type":"video","file_url":"https://private.poyo.ai/output.mp4?token=secret","format":"mp4"}],"credits_amount":50,"created_time":"2026-06-19T15:00:00Z"}}`))
 	}))
 	defer srv.Close()
 
@@ -190,7 +190,7 @@ func TestPollCompletedReturnsOutputAndSanitizesRaw(t *testing.T) {
 func TestPollFailureNormalizesModeration(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"success":true,"task_id":"task_1","status":"failed","error":{"type":"moderation","message":"policy rejected prompt"}}`))
+		_, _ = w.Write([]byte(`{"code":200,"data":{"task_id":"task_1","status":"failed","error_message":"policy rejected prompt"}}`))
 	}))
 	defer srv.Close()
 

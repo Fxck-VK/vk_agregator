@@ -67,7 +67,7 @@ export function MediaResultPreview({
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <path
-              d="M12 3v12m0 0 4-4m-4 4-4m8 4v2a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-2"
+              d="M12 3v12m0 0 4-4m-4 4-4-4M4 19v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"
               stroke="currentColor"
               strokeWidth="1.8"
               strokeLinecap="round"

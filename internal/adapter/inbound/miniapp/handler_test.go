@@ -493,7 +493,15 @@ func minimalWebPBytes() []byte {
 }
 
 func createTestArtifact(t *testing.T, fixture *testFixture, ownerID uuid.UUID, kind domain.ArtifactKind, mediaType domain.MediaType, status domain.ArtifactStatus) *domain.Artifact {
+	return createTestArtifactWithDimensions(t, fixture, ownerID, kind, mediaType, status, 0, 0)
+}
+
+func createTestArtifactWithDimensions(t *testing.T, fixture *testFixture, ownerID uuid.UUID, kind domain.ArtifactKind, mediaType domain.MediaType, status domain.ArtifactStatus, width, height int) *domain.Artifact {
 	t.Helper()
+	data := pngBytes()
+	if width > 0 && height > 0 {
+		data = pngSizedBytes(width, height)
+	}
 	artifact := &domain.Artifact{
 		OwnerUserID:   ownerID,
 		Kind:          kind,
@@ -502,14 +510,19 @@ func createTestArtifact(t *testing.T, fixture *testFixture, ownerID uuid.UUID, k
 		StorageBucket: "artifacts",
 		StorageKey:    "inputs/" + uuid.NewString() + ".png",
 		SHA256:        uuid.NewString(),
-		SizeBytes:     int64(len(pngBytes())),
+		SizeBytes:     int64(len(data)),
 		Status:        status,
+		Width:         width,
+		Height:        height,
 	}
 	if mediaType != domain.MediaTypeImage {
 		artifact.MimeType = "text/plain"
 	}
 	if err := fixture.artifactRepo.Create(context.Background(), artifact); err != nil {
 		t.Fatalf("create artifact: %v", err)
+	}
+	if err := fixture.objects.Put(context.Background(), artifact.StorageBucket, artifact.StorageKey, data, artifact.MimeType); err != nil {
+		t.Fatalf("store artifact bytes: %v", err)
 	}
 	return artifact
 }
@@ -521,7 +534,7 @@ func enableTestVideoRoute(cfg *miniappinbound.Config, alias domain.VideoRouteAli
 			AllowedDurationsSec:    []int{5, 10},
 			DefaultDurationSec:     5,
 			AllowedResolutions:     []string{"720p"},
-			AllowedAspectRatios:    []string{"16:9"},
+			AllowedAspectRatios:    []string{"16:9", "9:16", "1:1"},
 			SupportsReferenceImage: true,
 			MaxReferenceImages:     1,
 		},
@@ -530,6 +543,7 @@ func enableTestVideoRoute(cfg *miniappinbound.Config, alias domain.VideoRouteAli
 		var params struct {
 			VideoRouteAlias string `json:"video_route_alias"`
 			DurationSec     int    `json:"duration_sec"`
+			AspectRatio     string `json:"aspect_ratio"`
 		}
 		if err := json.Unmarshal(in.Params, &params); err != nil {
 			return joborchestrator.VideoRouteResolution{}, err
@@ -541,6 +555,10 @@ func enableTestVideoRoute(cfg *miniappinbound.Config, alias domain.VideoRouteAli
 		if duration == 0 {
 			duration = 5
 		}
+		aspectRatio := strings.TrimSpace(params.AspectRatio)
+		if aspectRatio == "" {
+			aspectRatio = "16:9"
+		}
 		snapshot := domain.VideoRouteSnapshot{
 			Alias:                  alias,
 			Provider:               domain.ProviderPoYo,
@@ -548,7 +566,7 @@ func enableTestVideoRoute(cfg *miniappinbound.Config, alias domain.VideoRouteAli
 			ModelClass:             "test_video_route",
 			DurationSec:            duration,
 			Resolution:             "720p",
-			AspectRatio:            "16:9",
+			AspectRatio:            aspectRatio,
 			ProviderCostCredits:    int64(duration),
 			InternalCostCredits:    int64(duration * 2),
 			PriceMultiplier:        2,
@@ -1534,6 +1552,9 @@ func TestHandler_UploadArtifact_HappyPath(t *testing.T) {
 	}
 	if artifact.OwnerUserID != user.ID || artifact.Kind != domain.ArtifactKindInput || artifact.MediaType != domain.MediaTypeImage || artifact.Status != domain.ArtifactStatusReady {
 		t.Fatalf("unexpected artifact: %+v", artifact)
+	}
+	if artifact.Width != 1 || artifact.Height != 1 {
+		t.Fatalf("upload did not persist image dimensions: got %dx%d", artifact.Width, artifact.Height)
 	}
 	if _, err := fixture.objects.GetObject(context.Background(), artifact.StorageBucket, artifact.StorageKey); err != nil {
 		t.Fatalf("stored object missing: %v", err)
@@ -3161,6 +3182,65 @@ func TestHandler_CreateJob_VideoReferenceArtifactPassesRouteValidation(t *testin
 	}
 	if len(job.InputArtifactIDs) != 1 || job.InputArtifactIDs[0] != artifact.ID {
 		t.Fatalf("unexpected input artifacts: %+v", job.InputArtifactIDs)
+	}
+}
+
+func TestHandler_CreateJob_VideoDerivesAspectRatioFromReferenceArtifact(t *testing.T) {
+	fixture := newTestFixtureWithConfig("", nil, func(cfg *miniappinbound.Config) {
+		enableTestVideoRoute(cfg, domain.VideoRouteRunwayGen4Turbo)
+	})
+	routes := fixture.handler.Routes()
+	ctx := context.Background()
+	user := &domain.User{VKUserID: 777, Role: domain.RoleUser, Status: domain.StatusActive}
+	if err := fixture.userRepo.Create(ctx, user); err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	artifact := createTestArtifactWithDimensions(t, fixture, user.ID, domain.ArtifactKindInput, domain.MediaTypeImage, domain.ArtifactStatusReady, 720, 1280)
+
+	body, _ := json.Marshal(map[string]any{
+		"operation":              "video_generate",
+		"prompt":                 "video with vertical reference",
+		"video_route_alias":      string(domain.VideoRouteRunwayGen4Turbo),
+		"reference_artifact_ids": []string{artifact.ID.String()},
+		"duration_sec":           5,
+		"aspect_ratio":           "16:9",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/miniapp/jobs", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Launch-Params", devLaunchParams(777))
+	req.Header.Set("X-Idempotency-Key", "video-reference-vertical-aspect")
+
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		ID uuid.UUID `json:"id"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("invalid response json: %v", err)
+	}
+	job, err := fixture.jobRepo.GetByID(ctx, resp.ID)
+	if err != nil {
+		t.Fatalf("get job: %v", err)
+	}
+	var params struct {
+		VideoRouteAlias      string      `json:"video_route_alias"`
+		AspectRatio          string      `json:"aspect_ratio"`
+		ReferenceArtifactIDs []uuid.UUID `json:"reference_artifact_ids"`
+	}
+	if err := json.Unmarshal(job.Params, &params); err != nil {
+		t.Fatalf("invalid params: %v", err)
+	}
+	if params.VideoRouteAlias != string(domain.VideoRouteRunwayGen4Turbo) {
+		t.Fatalf("unexpected video route alias: %+v", params)
+	}
+	if params.AspectRatio != "9:16" {
+		t.Fatalf("backend must derive vertical aspect ratio from artifact metadata, got %q", params.AspectRatio)
+	}
+	if len(params.ReferenceArtifactIDs) != 1 || params.ReferenceArtifactIDs[0] != artifact.ID {
+		t.Fatalf("unexpected stored reference params: %+v", params.ReferenceArtifactIDs)
 	}
 }
 

@@ -1131,11 +1131,11 @@ func TestVideoMenuButtonSendsModelPickerNoJob(t *testing.T) {
 	}
 	for _, hidden := range []string{
 		"PrunaAI",
-		"Creative video",
-		"Balanced video",
-		"Reference video",
-		"Cinematic video",
-		"Fast photo motion",
+		"Runway Gen-4 Turbo",
+		"Kling O3 Standard",
+		"Seedance 2.0 Fast",
+		"Hailuo 2.3 Standard",
+		"Hailuo 2.3 Fast",
 	} {
 		if strings.Contains(sent[0].Keyboard, hidden) {
 			t.Fatalf("expected video route button %q to be hidden: %q", hidden, sent[0].Keyboard)
@@ -1156,7 +1156,7 @@ func TestVideoRouteButtonEnablesPlainTextVideoJobs(t *testing.T) {
 	})
 	start := `{
 		"type":"message_new","group_id":1,"event_id":"evt-video-route-on","secret":"s3cr3t",
-		"object":{"message":{"from_id":5622,"peer_id":5622,"text":"Balanced video","payload":"{\"command\":\"menu.video.kling_v2_1.start\"}"}}
+		"object":{"message":{"from_id":5622,"peer_id":5622,"text":"Kling O3 Standard","payload":"{\"command\":\"menu.video.kling_v2_1.start\"}"}}
 	}`
 	if rec := h.post(start); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
 		t.Fatalf("unexpected route response: %d %q", rec.Code, rec.Body.String())
@@ -1184,7 +1184,7 @@ func TestVideoRouteButtonEnablesPlainTextVideoJobs(t *testing.T) {
 		t.Fatalf("video route mode should create one video job, jobs=%+v tasks=%d", jobs, h.pub.Len())
 	}
 	sent := control.Sent()
-	if len(sent) != 2 || !strings.Contains(sent[0].Text, "Balanced video") || sent[1].Text != "НейроХаб готовит видео..." {
+	if len(sent) != 2 || !strings.Contains(sent[0].Text, "Kling O3 Standard") || sent[1].Text != "НейроХаб готовит видео..." {
 		t.Fatalf("unexpected video route mode responses: %+v", sent)
 	}
 	var params struct {
@@ -1202,7 +1202,7 @@ func TestVideoRouteButtonEnablesPlainTextVideoJobs(t *testing.T) {
 	}
 	if params.Prompt != "cinematic neon city at night, rain reflections, slow drone movement" ||
 		params.ModelID != "" ||
-		params.ModelName != "Balanced video" ||
+		params.ModelName != "Kling O3 Standard" ||
 		params.VideoRouteAlias != string(domain.VideoRouteKlingO3Standard) ||
 		params.Provider != "" ||
 		params.ModelCode != "" ||
@@ -1933,7 +1933,7 @@ func TestDisabledVideoStartPayloadDoesNotEnablePlainTextVideoJobs(t *testing.T) 
 		t.Fatalf("disabled video start payload must not create video jobs, jobs=%+v tasks=%d", jobs, h.pub.Len())
 	}
 	sent := control.Sent()
-	if len(sent) != 2 || strings.Contains(sent[0].Text, "Creative video активен") || sent[1].Text == "НейроХаб готовит видео..." {
+	if len(sent) != 2 || strings.Contains(sent[0].Text, "Runway Gen-4 Turbo активен") || sent[1].Text == "НейроХаб готовит видео..." {
 		t.Fatalf("disabled video start payload must fall back without pending video message, got %+v", sent)
 	}
 }

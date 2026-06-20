@@ -715,17 +715,17 @@ func videoRouteModelSpec(route VideoRouteDTO) miniAppModelSpec {
 func videoRouteDisplayName(alias string) string {
 	switch alias {
 	case string(domain.VideoRouteHailuo23Fast):
-		return "Fast photo motion"
+		return "Hailuo 2.3 Fast"
 	case string(domain.VideoRouteHailuo23Standard):
-		return "Cinematic video"
+		return "Hailuo 2.3 Standard"
 	case string(domain.VideoRouteKlingO3Standard):
-		return "Balanced video"
+		return "Kling O3 Standard"
 	case string(domain.VideoRouteRunwayGen4Turbo):
-		return "Creative video"
+		return "Runway Gen-4 Turbo"
 	case string(domain.VideoRouteSeedance20Fast):
-		return "Reference video"
+		return "Seedance 2.0 Fast"
 	case string(domain.VideoRouteRunwayGen45):
-		return "Premium video"
+		return "Runway Gen-4.5"
 	default:
 		return "Video"
 	}
@@ -767,6 +767,11 @@ func (h *Handler) estimateJob(w http.ResponseWriter, r *http.Request) {
 		if opType == domain.OperationImageGenerate && !h.cfg.ImageReferenceEnabled {
 			writeError(w, http.StatusBadRequest, "reference_artifacts_unsupported")
 			return
+		}
+		if opType == domain.OperationVideoGenerate {
+			if route, ok := h.videoRouteByAlias(req.VideoRouteAlias); ok {
+				req.AspectRatio = h.videoAspectRatioFromReferenceArtifacts(r.Context(), user.ID, route, req.ReferenceArtifactIDs)
+			}
 		}
 	}
 
@@ -822,6 +827,7 @@ func (h *Handler) estimateRequestCost(ctx context.Context, userID uuid.UUID, opT
 		VideoRouteAlias:      strings.TrimSpace(req.VideoRouteAlias),
 		ReferenceArtifactIDs: req.ReferenceArtifactIDs,
 		DurationSec:          req.DurationSec,
+		AspectRatio:          req.AspectRatio,
 	})
 	resolution, err := h.cfg.VideoRouteResolver.ResolveVideoRoute(ctx, joborchestrator.VideoRouteCheckInput{
 		UserID:           userID,
@@ -881,6 +887,11 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "reference_artifacts_unsupported")
 			return
 		}
+		if opType == domain.OperationVideoGenerate {
+			if route, ok := h.videoRouteByAlias(req.VideoRouteAlias); ok {
+				req.AspectRatio = h.videoAspectRatioFromReferenceArtifacts(r.Context(), user.ID, route, req.ReferenceArtifactIDs)
+			}
+		}
 	}
 
 	// The client key is required and bounded, then scoped to the verified user
@@ -900,6 +911,7 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 		jobParams.ModelName = model.ModelName
 		jobParams.DurationSec = req.DurationSec
 		jobParams.VideoRouteAlias = strings.TrimSpace(req.VideoRouteAlias)
+		jobParams.AspectRatio = req.AspectRatio
 	} else {
 		jobParams.ModelID = model.ModelID
 		jobParams.ModelName = model.ModelName

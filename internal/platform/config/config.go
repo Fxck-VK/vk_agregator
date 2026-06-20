@@ -361,6 +361,9 @@ type Config struct {
 
 	// WorkerProviderCallTimeout bounds one provider Submit/Poll call in workers.
 	WorkerProviderCallTimeout time.Duration
+	// WorkerProviderPollBaseDelay/MaxDelay control async provider status polling.
+	WorkerProviderPollBaseDelay time.Duration
+	WorkerProviderPollMaxDelay  time.Duration
 
 	// WorkerShutdownGrace is how long workers may drain in-flight work after a
 	// shutdown signal before their processing context is cancelled.
@@ -1008,6 +1011,8 @@ func Load() Config {
 		MediaVariantRetentionDays:  envInt("MEDIA_VARIANT_RETENTION_DAYS", artifactRetentionDays),
 
 		WorkerProviderCallTimeout:     envDuration("WORKER_PROVIDER_CALL_TIMEOUT", 180*time.Second),
+		WorkerProviderPollBaseDelay:   envDuration("WORKER_PROVIDER_POLL_BASE_DELAY", time.Second),
+		WorkerProviderPollMaxDelay:    envDuration("WORKER_PROVIDER_POLL_MAX_DELAY", 5*time.Second),
 		WorkerShutdownGrace:           envDuration("WORKER_SHUTDOWN_GRACE", 30*time.Second),
 		MaintenanceInterval:           envDuration("MAINTENANCE_INTERVAL", time.Hour),
 		OutboxRetention:               envDuration("OUTBOX_RETENTION", 7*24*time.Hour),

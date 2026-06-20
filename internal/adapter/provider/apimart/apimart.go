@@ -4,10 +4,13 @@ package apimart
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
+	"net/textproto"
 	"net/url"
 	"strings"
 	"sync"
@@ -24,6 +27,7 @@ const (
 
 	defaultInternalVideoPriceCredits = 2
 	defaultTaskLanguage              = "en"
+	maxUploadImageBytes              = 20 * 1024 * 1024
 )
 
 // Config holds APIMart connection settings.
@@ -115,6 +119,10 @@ func (p *Provider) Submit(ctx context.Context, req domain.ProviderRequest) (doma
 	if err := validateVideoShape(req, true); err != nil {
 		return domain.ProviderTask{}, err
 	}
+	firstFrameImage, err := p.prepareFirstFrameImage(ctx, firstInputURL(req.InputURLs))
+	if err != nil {
+		return domain.ProviderTask{}, err
+	}
 
 	body := videoGenerationRequest{
 		Model:            req.ModelCode,
@@ -124,7 +132,7 @@ func (p *Provider) Submit(ctx context.Context, req domain.ProviderRequest) (doma
 		PromptOptimizer:  true,
 		FastPretreatment: false,
 		Watermark:        false,
-		FirstFrameImage:  firstInputURL(req.InputURLs),
+		FirstFrameImage:  firstFrameImage,
 	}
 	var decoded submitResponse
 	if err := p.postJSON(ctx, "/videos/generations", body, &decoded, req.IdempotencyKey); err != nil {
@@ -396,6 +404,162 @@ func firstInputURL(values []string) string {
 		return ""
 	}
 	return strings.TrimSpace(values[0])
+}
+
+func (p *Provider) prepareFirstFrameImage(ctx context.Context, value string) (string, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "", nil
+	}
+	if isHTTPURL(value) {
+		return value, nil
+	}
+	if !strings.HasPrefix(strings.ToLower(value), "data:") {
+		return "", &Error{Class: domain.ProviderErrInvalidRequest, Message: "unsupported first frame image reference"}
+	}
+	image, err := decodeImageDataURL(value)
+	if err != nil {
+		return "", err
+	}
+	return p.uploadImage(ctx, image)
+}
+
+type uploadImage struct {
+	ContentType string
+	Data        []byte
+	Filename    string
+}
+
+type uploadImageResponse struct {
+	URL         string        `json:"url"`
+	Filename    string        `json:"filename,omitempty"`
+	ContentType string        `json:"content_type,omitempty"`
+	Bytes       int64         `json:"bytes,omitempty"`
+	CreatedAt   int64         `json:"created_at,omitempty"`
+	Error       providerError `json:"error,omitempty"`
+}
+
+func decodeImageDataURL(value string) (uploadImage, error) {
+	comma := strings.IndexByte(value, ',')
+	if comma <= len("data:") {
+		return uploadImage{}, &Error{Class: domain.ProviderErrInvalidRequest, Message: "invalid first frame image data url"}
+	}
+	meta := strings.ToLower(strings.TrimSpace(value[len("data:"):comma]))
+	payload := strings.TrimSpace(value[comma+1:])
+	parts := strings.Split(meta, ";")
+	contentType := strings.TrimSpace(parts[0])
+	if !isAllowedUploadImageType(contentType) || !dataURLIsBase64(parts[1:]) {
+		return uploadImage{}, &Error{Class: domain.ProviderErrInvalidRequest, Message: "unsupported first frame image data url"}
+	}
+	data, err := base64.StdEncoding.DecodeString(payload)
+	if err != nil {
+		return uploadImage{}, &Error{Class: domain.ProviderErrInvalidRequest, Message: "invalid first frame image data"}
+	}
+	if len(data) == 0 {
+		return uploadImage{}, &Error{Class: domain.ProviderErrInvalidRequest, Message: "empty first frame image"}
+	}
+	if len(data) > maxUploadImageBytes {
+		return uploadImage{}, &Error{Class: domain.ProviderErrInvalidRequest, Message: "first frame image exceeds APIMart upload limit"}
+	}
+	detected := strings.ToLower(http.DetectContentType(data))
+	if detected != contentType {
+		return uploadImage{}, &Error{Class: domain.ProviderErrInvalidRequest, Message: "first frame image content type mismatch"}
+	}
+	return uploadImage{
+		ContentType: contentType,
+		Data:        data,
+		Filename:    "first-frame" + uploadImageExtension(contentType),
+	}, nil
+}
+
+func dataURLIsBase64(parts []string) bool {
+	for _, part := range parts {
+		if strings.TrimSpace(part) == "base64" {
+			return true
+		}
+	}
+	return false
+}
+
+func isAllowedUploadImageType(contentType string) bool {
+	switch contentType {
+	case "image/jpeg", "image/png", "image/gif", "image/webp":
+		return true
+	default:
+		return false
+	}
+}
+
+func uploadImageExtension(contentType string) string {
+	switch contentType {
+	case "image/jpeg":
+		return ".jpg"
+	case "image/png":
+		return ".png"
+	case "image/gif":
+		return ".gif"
+	case "image/webp":
+		return ".webp"
+	default:
+		return ".img"
+	}
+}
+
+func isHTTPURL(value string) bool {
+	parsed, err := url.Parse(value)
+	if err != nil {
+		return false
+	}
+	if parsed.Scheme != "https" && parsed.Scheme != "http" {
+		return false
+	}
+	return strings.TrimSpace(parsed.Host) != ""
+}
+
+func (p *Provider) uploadImage(ctx context.Context, image uploadImage) (string, error) {
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	header := make(textproto.MIMEHeader)
+	header.Set("Content-Disposition", `form-data; name="file"; filename="`+image.Filename+`"`)
+	header.Set("Content-Type", image.ContentType)
+	part, err := writer.CreatePart(header)
+	if err != nil {
+		return "", &Error{Class: domain.ProviderErrInternal, Message: "create upload part: " + sanitizeMessage(err.Error())}
+	}
+	if _, err := part.Write(image.Data); err != nil {
+		return "", &Error{Class: domain.ProviderErrInternal, Message: "write upload part: " + sanitizeMessage(err.Error())}
+	}
+	if err := writer.Close(); err != nil {
+		return "", &Error{Class: domain.ProviderErrInternal, Message: "close upload body: " + sanitizeMessage(err.Error())}
+	}
+
+	req, err := p.request(ctx, http.MethodPost, "/uploads/images", &body)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	resp, err := p.http.Do(req)
+	if err != nil {
+		return "", &Error{Class: domain.ProviderErrTimeout, Message: sanitizeMessage(err.Error())}
+	}
+	defer func() {
+		_ = resp.Body.Close()
+	}()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return "", decodeHTTPError(resp)
+	}
+	var decoded uploadImageResponse
+	if err := json.NewDecoder(resp.Body).Decode(&decoded); err != nil {
+		return "", &Error{Class: domain.ProviderErrInternal, Message: "decode upload response: " + sanitizeMessage(err.Error())}
+	}
+	if !decoded.Error.empty() {
+		return "", apiEnvelopeError(resp.StatusCode, decoded.Error, decoded.Error.Message)
+	}
+	imageURL := strings.TrimSpace(decoded.URL)
+	if !isHTTPURL(imageURL) {
+		return "", &Error{Class: domain.ProviderErrInternal, Message: "apimart upload returned invalid image url"}
+	}
+	return imageURL, nil
 }
 
 func (p *Provider) postJSON(ctx context.Context, path string, in, out any, idempotencyKey string) error {

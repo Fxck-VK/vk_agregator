@@ -146,15 +146,16 @@ func (p *Provider) Submit(ctx context.Context, req domain.ProviderRequest) (doma
 	if err := p.postJSON(ctx, "/api/generate/submit", body, &decoded, req.IdempotencyKey); err != nil {
 		return domain.ProviderTask{}, err
 	}
-	if !decoded.Success {
-		return domain.ProviderTask{}, apiEnvelopeError(http.StatusOK, decoded.Error, decoded.Message)
+	if err := decoded.err(); err != nil {
+		return domain.ProviderTask{}, err
 	}
-	if strings.TrimSpace(decoded.TaskID) == "" {
+	taskID := decoded.taskID()
+	if strings.TrimSpace(taskID) == "" {
 		return domain.ProviderTask{}, &Error{Class: domain.ProviderErrInternal, Message: "empty submit task id"}
 	}
 
 	now := p.now()
-	status := mapTaskStatus(decoded.Status)
+	status := mapTaskStatus(decoded.status())
 	if status == "" {
 		status = domain.ProviderTaskPending
 	}
@@ -162,7 +163,7 @@ func (p *Provider) Submit(ctx context.Context, req domain.ProviderRequest) (doma
 		JobID:          req.JobID,
 		Provider:       domain.ProviderPoYo,
 		ModelCode:      req.ModelCode,
-		ExternalID:     strings.TrimSpace(decoded.TaskID),
+		ExternalID:     strings.TrimSpace(taskID),
 		AttemptNo:      1,
 		Status:         status,
 		Request:        req.Params,
@@ -194,13 +195,13 @@ func (p *Provider) Poll(ctx context.Context, ref domain.ProviderTaskRef) (domain
 	if err := p.getJSON(ctx, "/api/generate/status/"+url.PathEscape(taskID), &decoded); err != nil {
 		return domain.ProviderTaskResult{}, err
 	}
-	if decoded.Success != nil && !*decoded.Success {
-		return domain.ProviderTaskResult{}, apiEnvelopeError(http.StatusOK, decoded.Error, decoded.Message)
+	if err := decoded.err(); err != nil {
+		return domain.ProviderTaskResult{}, err
 	}
-	status := mapTaskStatus(decoded.Status)
+	status := mapTaskStatus(decoded.status())
 	switch status {
 	case domain.ProviderTaskSucceeded:
-		outputs := decoded.Result.OutputVideoURLs()
+		outputs := decoded.outputVideoURLs()
 		if len(outputs) == 0 {
 			return domain.ProviderTaskResult{
 				Status:       domain.ProviderTaskFailed,
@@ -211,7 +212,8 @@ func (p *Provider) Poll(ctx context.Context, ref domain.ProviderTaskRef) (domain
 		}
 		return domain.ProviderTaskResult{Status: status, OutputURLs: outputs, Raw: sanitizedTaskMetadata(decoded)}, nil
 	case domain.ProviderTaskFailed:
-		class := classifyPoYoError(0, decoded.Error.codeString(), decoded.Error.Type, decoded.Error.Message)
+		perr := decoded.providerError()
+		class := classifyPoYoError(0, perr.codeString(), perr.Type, perr.Message)
 		return domain.ProviderTaskResult{
 			Status:       domain.ProviderTaskFailed,
 			ErrorClass:   class,
@@ -244,24 +246,60 @@ func (p *Provider) storeIdempotentTask(key string, task domain.ProviderTask) {
 }
 
 type submitRequest struct {
-	Model      string         `json:"model"`
-	Inputs     map[string]any `json:"inputs"`
-	Parameters map[string]any `json:"parameters,omitempty"`
-	WebhookURL string         `json:"webhook_url,omitempty"`
+	Model       string         `json:"model"`
+	Input       map[string]any `json:"input"`
+	CallbackURL string         `json:"callback_url,omitempty"`
 }
 
 type submitResponse struct {
-	Success bool          `json:"success"`
-	TaskID  string        `json:"task_id"`
-	Status  string        `json:"status"`
+	Code    int           `json:"code,omitempty"`
+	Data    submitData    `json:"data,omitempty"`
+	Success *bool         `json:"success,omitempty"`
+	TaskID  string        `json:"task_id,omitempty"`
+	Status  string        `json:"status,omitempty"`
 	Message string        `json:"message,omitempty"`
 	Error   providerError `json:"error,omitempty"`
 }
 
+type submitData struct {
+	TaskID      string `json:"task_id,omitempty"`
+	Status      string `json:"status,omitempty"`
+	CreatedTime string `json:"created_time,omitempty"`
+}
+
+func (r submitResponse) err() error {
+	if r.Success != nil && !*r.Success {
+		return apiEnvelopeError(http.StatusOK, r.Error, r.Message)
+	}
+	if r.Code != 0 && r.Code != http.StatusOK {
+		return apiEnvelopeError(r.Code, r.Error, r.Message)
+	}
+	if !r.Error.empty() {
+		return apiEnvelopeError(http.StatusOK, r.Error, r.Message)
+	}
+	return nil
+}
+
+func (r submitResponse) taskID() string {
+	if trimmed := strings.TrimSpace(r.Data.TaskID); trimmed != "" {
+		return trimmed
+	}
+	return strings.TrimSpace(r.TaskID)
+}
+
+func (r submitResponse) status() string {
+	if trimmed := strings.TrimSpace(r.Data.Status); trimmed != "" {
+		return trimmed
+	}
+	return strings.TrimSpace(r.Status)
+}
+
 type statusResponse struct {
+	Code      int            `json:"code,omitempty"`
+	Data      statusData     `json:"data,omitempty"`
 	Success   *bool          `json:"success,omitempty"`
-	TaskID    string         `json:"task_id"`
-	Status    string         `json:"status"`
+	TaskID    string         `json:"task_id,omitempty"`
+	Status    string         `json:"status,omitempty"`
 	Progress  int            `json:"progress,omitempty"`
 	Result    statusResult   `json:"result,omitempty"`
 	Error     providerError  `json:"error,omitempty"`
@@ -269,6 +307,94 @@ type statusResponse struct {
 	CreatedAt string         `json:"created_at,omitempty"`
 	UpdatedAt string         `json:"updated_at,omitempty"`
 	Raw       map[string]any `json:"-"`
+}
+
+type statusData struct {
+	TaskID        string       `json:"task_id,omitempty"`
+	Status        string       `json:"status,omitempty"`
+	CreditsAmount float64      `json:"credits_amount,omitempty"`
+	Files         []statusFile `json:"files,omitempty"`
+	CreatedTime   string       `json:"created_time,omitempty"`
+	Progress      int          `json:"progress,omitempty"`
+	ErrorMessage  *string      `json:"error_message,omitempty"`
+}
+
+type statusFile struct {
+	FileURL     string `json:"file_url,omitempty"`
+	FileType    string `json:"file_type,omitempty"`
+	Label       string `json:"label,omitempty"`
+	Format      string `json:"format,omitempty"`
+	ContentType string `json:"content_type,omitempty"`
+	FileName    string `json:"file_name,omitempty"`
+	FileSize    int64  `json:"file_size,omitempty"`
+}
+
+func (r statusResponse) err() error {
+	if r.Success != nil && !*r.Success {
+		return apiEnvelopeError(http.StatusOK, r.Error, r.Message)
+	}
+	if r.Code != 0 && r.Code != http.StatusOK {
+		return apiEnvelopeError(r.Code, r.Error, r.Message)
+	}
+	if !r.Error.empty() {
+		return apiEnvelopeError(http.StatusOK, r.Error, r.Message)
+	}
+	return nil
+}
+
+func (r statusResponse) taskID() string {
+	if trimmed := strings.TrimSpace(r.Data.TaskID); trimmed != "" {
+		return trimmed
+	}
+	return strings.TrimSpace(r.TaskID)
+}
+
+func (r statusResponse) status() string {
+	if trimmed := strings.TrimSpace(r.Data.Status); trimmed != "" {
+		return trimmed
+	}
+	return strings.TrimSpace(r.Status)
+}
+
+func (r statusResponse) progress() int {
+	if r.Data.Progress != 0 {
+		return r.Data.Progress
+	}
+	return r.Progress
+}
+
+func (r statusResponse) createdAt() string {
+	if trimmed := strings.TrimSpace(r.Data.CreatedTime); trimmed != "" {
+		return trimmed
+	}
+	return strings.TrimSpace(r.CreatedAt)
+}
+
+func (r statusResponse) updatedAt() string {
+	return strings.TrimSpace(r.UpdatedAt)
+}
+
+func (r statusResponse) outputVideoURLs() []string {
+	out := r.Result.OutputVideoURLs()
+	for _, file := range r.Data.Files {
+		if strings.TrimSpace(file.FileURL) == "" {
+			continue
+		}
+		fileType := strings.ToLower(strings.TrimSpace(file.FileType))
+		format := strings.ToLower(strings.TrimSpace(file.Format))
+		contentType := strings.ToLower(strings.TrimSpace(file.ContentType))
+		if fileType == "video" || strings.Contains(contentType, "video/") || format == "mp4" || format == "mov" {
+			out = append(out, strings.TrimSpace(file.FileURL))
+		}
+	}
+	return out
+}
+
+func (r statusResponse) providerError() providerError {
+	if r.Data.ErrorMessage != nil && strings.TrimSpace(*r.Data.ErrorMessage) != "" {
+		return providerError{Message: strings.TrimSpace(*r.Data.ErrorMessage)}
+	}
+	return r.Error
 }
 
 type statusResult struct {
@@ -361,37 +487,34 @@ func buildSubmitRequest(req domain.ProviderRequest) (submitRequest, error) {
 		return submitRequest{}, err
 	}
 	inputURLs := cleanInputURLs(req.InputURLs)
-	inputs := map[string]any{
-		"prompt": strings.TrimSpace(req.Prompt),
-	}
-	if len(inputURLs) > 0 {
-		inputs["image_url"] = inputURLs[0]
+	input := map[string]any{
+		"prompt":       strings.TrimSpace(req.Prompt),
+		"duration":     effectiveDuration(req.DurationSec),
+		"aspect_ratio": effectiveAspectRatio(req.AspectRatio),
 	}
 	switch strings.TrimSpace(req.ModelCode) {
 	case ModelKlingO3Standard:
+		input["sound"] = false
 		if len(inputURLs) > 0 {
-			inputs["reference_images"] = inputURLs
+			input["image_urls"] = inputURLs
 		}
 	case ModelSeedance20Fast:
+		input["resolution"] = effectiveResolution(req.ModelCode, req.Resolution)
+		input["generate_audio"] = false
 		if len(inputURLs) > 0 {
-			inputs["reference_images"] = inputURLs
+			input["image_urls"] = inputURLs
 		}
 	case ModelRunwayGen45:
 		// PoYo Runway Gen-4.5 allows only one optional reference image until
 		// smoke tests prove a broader input contract.
-	}
-	params := map[string]any{
-		"duration":     effectiveDuration(req.DurationSec),
-		"resolution":   effectiveResolution(req.ModelCode, req.Resolution),
-		"aspect_ratio": effectiveAspectRatio(req.AspectRatio),
-	}
-	if strings.TrimSpace(req.ModelCode) == ModelKlingO3Standard {
-		params["audio"] = false
+		input["resolution"] = effectiveResolution(req.ModelCode, req.Resolution)
+		if len(inputURLs) > 0 {
+			input["image_url"] = inputURLs[0]
+		}
 	}
 	return submitRequest{
-		Model:      strings.TrimSpace(req.ModelCode),
-		Inputs:     inputs,
-		Parameters: params,
+		Model: strings.TrimSpace(req.ModelCode),
+		Input: input,
 	}, nil
 }
 
@@ -684,11 +807,11 @@ func classifyPoYoError(status int, code, typ, msg string) domain.ProviderErrorCl
 
 func mapTaskStatus(status string) domain.ProviderTaskStatus {
 	switch strings.ToLower(strings.TrimSpace(status)) {
-	case "submitted", "pending", "queued":
+	case "not_started", "submitted", "pending", "queued":
 		return domain.ProviderTaskPending
 	case "processing", "running", "in_progress", "in-progress":
 		return domain.ProviderTaskProcessing
-	case "completed", "complete", "succeeded", "success", "done":
+	case "finished", "completed", "complete", "succeeded", "success", "done":
 		return domain.ProviderTaskSucceeded
 	case "failed", "error":
 		return domain.ProviderTaskFailed
@@ -701,11 +824,11 @@ func mapTaskStatus(status string) domain.ProviderTaskStatus {
 
 func sanitizedTaskMetadata(data statusResponse) json.RawMessage {
 	metadata := map[string]any{
-		"task_id":    data.TaskID,
-		"status":     data.Status,
-		"progress":   data.Progress,
-		"created_at": data.CreatedAt,
-		"updated_at": data.UpdatedAt,
+		"task_id":    data.taskID(),
+		"status":     data.status(),
+		"progress":   data.progress(),
+		"created_at": data.createdAt(),
+		"updated_at": data.updatedAt(),
 	}
 	if data.Result.Duration > 0 {
 		metadata["duration"] = data.Result.Duration
@@ -713,11 +836,11 @@ func sanitizedTaskMetadata(data statusResponse) json.RawMessage {
 	if strings.TrimSpace(data.Result.Resolution) != "" {
 		metadata["resolution"] = data.Result.Resolution
 	}
-	if !data.Error.empty() {
-		class := classifyPoYoError(0, data.Error.codeString(), data.Error.Type, data.Error.Message)
+	if perr := data.providerError(); !perr.empty() {
+		class := classifyPoYoError(0, perr.codeString(), perr.Type, perr.Message)
 		metadata["error"] = map[string]any{
-			"code":    data.Error.codeString(),
-			"type":    data.Error.Type,
+			"code":    perr.codeString(),
+			"type":    perr.Type,
 			"message": providerErrorMessage(class, "poyo task failed"),
 		}
 	}

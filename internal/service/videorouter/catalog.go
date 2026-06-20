@@ -191,7 +191,7 @@ func DefaultRouteSpecs() []domain.VideoRouteSpec {
 			RequiresStartImage:           true,
 			AllowedDurationsSec:          []int{2, 3, 4, 5, 6, 7, 8, 9, 10},
 			AllowedResolutions:           []string{"720p"},
-			AllowedAspectRatios:          []string{"16:9", "9:16", "1:1"},
+			AllowedAspectRatios:          []string{"16:9", "9:16", "4:3", "3:4", "1:1", "21:9"},
 			SupportsReferenceImage:       true,
 			MaxReferenceImages:           1,
 			ProviderCostCreditsPerSecond: 5,

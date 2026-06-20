@@ -155,21 +155,21 @@ const (
 
 	prunaAIText = "Видео-режим отключен.\n\nВыберите другой режим видео."
 
-	sora2Text         = "Creative video\n\nРежим для выразительных роликов по тексту или фото."
-	sora2StartText    = "Creative video активен.\n\nНапишите описание видео обычным сообщением.\n\nПример: cinematic drone shot over a neon city at night, rain reflections, realistic camera movement."
-	sora2ExamplesText = "ℹ️ Примеры Creative video\n\n1. A cinematic drone shot over a neon city at night, rain reflections on the street, realistic camera movement.\n\n2. A close-up handheld video of a chef cutting fruit in a bright kitchen, natural motion, realistic details."
+	sora2Text         = "Runway Gen-4 Turbo\n\nРежим для выразительных роликов по тексту или фото."
+	sora2StartText    = "Runway Gen-4 Turbo активен.\n\nНапишите описание видео обычным сообщением.\n\nПример: cinematic drone shot over a neon city at night, rain reflections, realistic camera movement."
+	sora2ExamplesText = "ℹ️ Примеры Runway Gen-4 Turbo\n\n1. A cinematic drone shot over a neon city at night, rain reflections on the street, realistic camera movement.\n\n2. A close-up handheld video of a chef cutting fruit in a bright kitchen, natural motion, realistic details."
 
-	kling21Text         = "Balanced video\n\nУниверсальный режим для видео по тексту или фото."
-	kling21StartText    = "Balanced video активен.\n\nНапишите описание видео обычным сообщением.\n\nПример: warm cinematic scene, friends walking under streetlights, realistic motion."
-	kling21ExamplesText = "ℹ️ Примеры Balanced video\n\n1. A warm cinematic scene of friends walking under streetlights, soft party lights, realistic skin and motion.\n\n2. A product video of a glass bottle rotating on a table, studio lighting, smooth camera movement."
+	kling21Text         = "Kling O3 Standard\n\nУниверсальный режим для видео по тексту или фото."
+	kling21StartText    = "Kling O3 Standard активен.\n\nНапишите описание видео обычным сообщением.\n\nПример: warm cinematic scene, friends walking under streetlights, realistic motion."
+	kling21ExamplesText = "ℹ️ Примеры Kling O3 Standard\n\n1. A warm cinematic scene of friends walking under streetlights, soft party lights, realistic skin and motion.\n\n2. A product video of a glass bottle rotating on a table, studio lighting, smooth camera movement."
 
-	seedance1Text     = "Reference video\n\nРежим для генерации с референсами."
-	seedance1LiteText = "Reference video активен.\n\nНапишите описание видео обычным сообщением."
-	seedance1ProText  = "Reference video Pro пока скрыт.\n\nВыберите другой режим видео."
+	seedance1Text     = "Seedance 2.0 Fast\n\nРежим для генерации с референсами."
+	seedance1LiteText = "Seedance 2.0 Fast активен.\n\nНапишите описание видео обычным сообщением."
+	seedance1ProText  = "Seedance 2.0 Pro пока скрыт.\n\nВыберите другой режим видео."
 
-	hailuo02Text         = "Cinematic video / Fast photo motion\n\nВыберите качество или быстрый режим движения из фото."
-	hailuo02StandardText = "Cinematic video активен.\n\nНапишите описание видео обычным сообщением."
-	hailuo02FastText     = "Fast photo motion активен.\n\nПрикрепите стартовое фото и напишите описание видео обычным сообщением."
+	hailuo02Text         = "Hailuo 2.3 Standard / Hailuo 2.3 Fast\n\nВыберите качество или быстрый режим движения из фото."
+	hailuo02StandardText = "Hailuo 2.3 Standard активен.\n\nНапишите описание видео обычным сообщением."
+	hailuo02FastText     = "Hailuo 2.3 Fast активен.\n\nПрикрепите стартовое фото и напишите описание видео обычным сообщением."
 
 	studentsText = "🎁Данные нейронные сети помогут вам во время учебы"
 
@@ -836,19 +836,19 @@ func videoModelKeyboard() *vkdelivery.Keyboard {
 		Inline:  true,
 		Buttons: [][]vkdelivery.KeyboardButton{
 			{
-				button("Fast photo motion", domain.CommandMenuVideoHailuo02Fast, "secondary"),
+				button("Hailuo 2.3 Fast", domain.CommandMenuVideoHailuo02Fast, "secondary"),
 			},
 			{
-				button("Cinematic video", domain.CommandMenuVideoHailuo02Standard, "secondary"),
+				button("Hailuo 2.3 Standard", domain.CommandMenuVideoHailuo02Standard, "secondary"),
 			},
 			{
-				button("Balanced video", domain.CommandMenuVideoKling21Start, "secondary"),
+				button("Kling O3 Standard", domain.CommandMenuVideoKling21Start, "secondary"),
 			},
 			{
-				button("Reference video", domain.CommandMenuVideoSeedance1Lite, "secondary"),
+				button("Seedance 2.0 Fast", domain.CommandMenuVideoSeedance1Lite, "secondary"),
 			},
 			{
-				button("Creative video", domain.CommandMenuVideoSora2Start, "secondary"),
+				button("Runway Gen-4 Turbo", domain.CommandMenuVideoSora2Start, "secondary"),
 			},
 			{
 				button("⬅️ Назад", domain.CommandShowMenu, "secondary"),
@@ -901,10 +901,10 @@ func seedance1Keyboard() *vkdelivery.Keyboard {
 		Inline:  true,
 		Buttons: [][]vkdelivery.KeyboardButton{
 			{
-				button("Reference video", domain.CommandMenuVideoSeedance1Lite, "secondary"),
+				button("Seedance 2.0 Fast", domain.CommandMenuVideoSeedance1Lite, "secondary"),
 			},
 			{
-				button("Reference video Pro", domain.CommandMenuVideoSeedance1Pro, "secondary"),
+				button("Seedance 2.0 Pro", domain.CommandMenuVideoSeedance1Pro, "secondary"),
 			},
 			{
 				button("⬅️ Назад", domain.CommandMenuVideo, "secondary"),
@@ -923,10 +923,10 @@ func hailuo02Keyboard() *vkdelivery.Keyboard {
 		Inline:  true,
 		Buttons: [][]vkdelivery.KeyboardButton{
 			{
-				button("Cinematic video", domain.CommandMenuVideoHailuo02Standard, "secondary"),
+				button("Hailuo 2.3 Standard", domain.CommandMenuVideoHailuo02Standard, "secondary"),
 			},
 			{
-				button("Fast photo motion", domain.CommandMenuVideoHailuo02Fast, "secondary"),
+				button("Hailuo 2.3 Fast", domain.CommandMenuVideoHailuo02Fast, "secondary"),
 			},
 			{
 				button("⬅️ Назад", domain.CommandMenuVideo, "secondary"),

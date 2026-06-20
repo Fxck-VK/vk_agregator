@@ -12,6 +12,8 @@ export interface Job {
   status: string;
   prompt?: string;
   conversation_id?: string;
+  model_id?: string;
+  model_name?: string;
   video_route_alias?: string;
   cost_estimate: number;
   cost_captured: number;
@@ -205,6 +207,7 @@ export interface ChatConversationMessageListResponse {
 export type ApiErrorCode =
   | "validation_error"
   | "unsupported_model"
+  | "reference_artifacts_required"
   | "reference_artifacts_unsupported"
   | "too_many_reference_artifacts"
   | "media_upload_invalid"
@@ -536,6 +539,9 @@ function apiErrorCode(status: number, backendError?: string): ApiErrorCode {
   if (raw === "reference_artifacts_unsupported") {
     return "reference_artifacts_unsupported";
   }
+  if (raw === "reference_artifacts_required") {
+    return "reference_artifacts_required";
+  }
   if (raw === "too_many_reference_artifacts" || raw === "too many reference artifacts") {
     return "too_many_reference_artifacts";
   }
@@ -571,6 +577,8 @@ function apiErrorMessageForCode(code: ApiErrorCode): string {
       return "Проверьте запрос и попробуйте снова";
     case "unsupported_model":
       return "Выбранная модель недоступна. Выберите другую модель";
+    case "reference_artifacts_required":
+      return "Для этой модели нужно загрузить стартовую картинку";
     case "reference_artifacts_unsupported":
       return "Генерация с референсом пока недоступна. Попробуйте без фото или позже";
     case "too_many_reference_artifacts":

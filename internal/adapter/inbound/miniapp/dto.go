@@ -43,6 +43,9 @@ type CreateJobRequest struct {
 	// DurationSec is the requested video length in seconds for video_generate.
 	// Allowed values: 3, 5, 10. Omitted defaults to 5.
 	DurationSec int `json:"duration_sec,omitempty"`
+	// AspectRatio is backend-derived from trusted reference artifact metadata.
+	// It is never accepted from client JSON.
+	AspectRatio string `json:"-"`
 }
 
 // ChatMessageRequest is the body accepted by POST /miniapp/chat/messages.
@@ -79,6 +82,7 @@ type miniAppJobParams struct {
 	ConversationSource   domain.ConversationSource `json:"conversation_source,omitempty"`
 	ExternalThreadID     string                    `json:"external_thread_id,omitempty"`
 	DurationSec          int                       `json:"duration_sec,omitempty"`
+	AspectRatio          string                    `json:"aspect_ratio,omitempty"`
 }
 
 type VideoRouteDTO struct {
