@@ -30,10 +30,16 @@ import (
 	"vk-ai-aggregator/internal/platform/logging"
 	"vk-ai-aggregator/internal/platform/metrics"
 	"vk-ai-aggregator/internal/platform/ratelimit"
+	"vk-ai-aggregator/internal/platform/readiness"
 	"vk-ai-aggregator/internal/platform/tracing"
 	"vk-ai-aggregator/internal/service/joborchestrator"
 	"vk-ai-aggregator/internal/service/videorouter"
 )
+
+type postgresReadyPool interface {
+	Ping(context.Context) error
+	readiness.SchemaQuerier
+}
 
 func main() {
 	logger := slog.New(logging.NewJSONHandler(os.Stdout, nil))
@@ -110,13 +116,14 @@ func main() {
 		Token:   cfg.AdminToken,
 		Runtime: adminapi.NewRuntimeSnapshot(cfg),
 	}, adminapi.Deps{
-		Jobs:       core.Jobs,
-		Users:      core.Users,
-		Deliveries: core.Deliveries,
-		Audits:     core.Audits,
-		Referrals:  core.Referrals,
-		Billing:    core.BillingRepo,
-		Payment:    core.Payment,
+		Jobs:        core.Jobs,
+		Users:       core.Users,
+		Deliveries:  core.Deliveries,
+		Audits:      core.Audits,
+		Referrals:   core.Referrals,
+		Billing:     core.BillingRepo,
+		Payment:     core.Payment,
+		Maintenance: core.Maintenance,
 	})
 	billing := billingapi.NewHandler(billingapi.Config{Token: cfg.AdminToken}, billingapi.Deps{
 		Users:      core.Users,
@@ -151,7 +158,9 @@ func main() {
 	mux.Handle("/miniapp/", metrics.Middleware("miniapp", miniapp.Routes()))
 	mux.Handle("GET /metrics", metrics.PrivateHandler())
 	mux.HandleFunc("GET /health", healthHandler(pool, rdb))
-	mux.HandleFunc("GET /healthz", healthHandler(pool, rdb))
+	apiReadyHandler := readinessHandler(pool, rdb, cfg.MigrationsDir)
+	mux.HandleFunc("GET /readyz", apiReadyHandler)
+	mux.HandleFunc("GET /healthz", apiReadyHandler)
 
 	srv := &http.Server{
 		Addr:              cfg.HTTPAddr,
@@ -302,6 +311,46 @@ func healthHandler(pool interface {
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"status": map[int]string{http.StatusOK: "ok", http.StatusServiceUnavailable: "degraded"}[status],
 			"checks": checks,
+		})
+	}
+}
+
+// readinessHandler fails closed until API dependencies and the latest schema
+// migration are available.
+func readinessHandler(pool postgresReadyPool, rdb *redis.Client, migrationsDir string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+		defer cancel()
+
+		checks := map[string]string{
+			"postgres":   "ok",
+			"redis":      "ok",
+			"migrations": "ok",
+		}
+		status := http.StatusOK
+		latestMigration := ""
+		if err := pool.Ping(ctx); err != nil {
+			checks["postgres"] = "down"
+			status = http.StatusServiceUnavailable
+		}
+		if err := rdb.Ping(ctx).Err(); err != nil {
+			checks["redis"] = "down"
+			status = http.StatusServiceUnavailable
+		}
+		if version, err := readiness.CheckLatestMigrationApplied(ctx, pool, migrationsDir); err != nil {
+			latestMigration = version
+			checks["migrations"] = "pending"
+			status = http.StatusServiceUnavailable
+		} else {
+			latestMigration = version
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(status)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"status":           map[int]string{http.StatusOK: "ok", http.StatusServiceUnavailable: "degraded"}[status],
+			"checks":           checks,
+			"latest_migration": latestMigration,
 		})
 	}
 }

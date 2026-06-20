@@ -6,6 +6,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -33,6 +34,7 @@ import (
 	"vk-ai-aggregator/internal/platform/config"
 	"vk-ai-aggregator/internal/platform/logging"
 	"vk-ai-aggregator/internal/platform/metrics"
+	"vk-ai-aggregator/internal/platform/readiness"
 	"vk-ai-aggregator/internal/platform/tracing"
 	"vk-ai-aggregator/internal/service/artifactservice"
 	"vk-ai-aggregator/internal/service/billingservice"
@@ -44,6 +46,15 @@ import (
 	"vk-ai-aggregator/internal/service/outboxrelay"
 	"vk-ai-aggregator/internal/worker"
 )
+
+type workerReadyPool interface {
+	Ping(context.Context) error
+	readiness.SchemaQuerier
+}
+
+type workerReadyObjectStore interface {
+	BucketReady(context.Context, string) error
+}
 
 func main() {
 	logger := slog.New(logging.NewJSONHandler(os.Stdout, nil))
@@ -89,10 +100,12 @@ func main() {
 	}()
 
 	store, err := s3.New(readCtx, s3.Config{
-		Endpoint:  cfg.S3Endpoint,
-		AccessKey: cfg.S3AccessKey,
-		SecretKey: cfg.S3SecretKey,
-		UseSSL:    cfg.S3UseSSL,
+		Endpoint:        cfg.S3Endpoint,
+		AccessKey:       cfg.S3AccessKey,
+		SecretKey:       cfg.S3SecretKey,
+		UseSSL:          cfg.S3UseSSL,
+		Region:          cfg.S3Region,
+		AddressingStyle: cfg.S3AddressingStyle,
 	})
 	if err != nil {
 		logger.Error("s3 connect failed", "error", err)
@@ -395,68 +408,91 @@ func main() {
 	// (audit A2).
 	relay := outboxrelay.New(postgres.NewUnitOfWork(pool), publisher, outboxrelay.WithLogger(logger))
 
-	consumer := redisqueue.NewConsumer(rdb, cfg.WorkerGroup, cfg.WorkerConsumer)
-	if err := consumer.EnsureGroups(readCtx, redisqueue.AllStreams...); err != nil {
-		logger.Error("ensure consumer groups failed", "error", err)
-		os.Exit(1)
-	}
-
-	genStreams := []string{redisqueue.StreamText, redisqueue.StreamImage, redisqueue.StreamVideo}
-	engines := []*worker.Engine{
-		worker.NewEngine(consumer, genStreams, gen.Process, worker.WithLogger(logger)),
-		worker.NewEngine(consumer, []string{redisqueue.StreamProviderPoll}, poll.Process, worker.WithLogger(logger)),
-		worker.NewEngine(consumer, []string{redisqueue.StreamDelivery}, delivery.Process, worker.WithLogger(logger)),
-	}
-
+	runJobWorkers := shouldRunJobWorkers(cfg.WorkerMode)
+	runMaintenance := shouldRunMaintenance(cfg.WorkerMode)
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		runQueueMetrics(readCtx, rdb, cfg.WorkerGroup, 15*time.Second, logger)
-	}()
-	for _, e := range engines {
-		wg.Add(1)
-		go func(eng *worker.Engine) {
-			defer wg.Done()
-			_ = eng.RunWithHandlerContext(readCtx, handlerCtx)
-		}(e)
-	}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		relay.Run(readCtx, time.Second)
-	}()
+	if runJobWorkers {
+		consumer := redisqueue.NewConsumer(rdb, cfg.WorkerGroup, cfg.WorkerConsumer)
+		if err := consumer.EnsureGroups(readCtx, redisqueue.AllStreams...); err != nil {
+			logger.Error("ensure consumer groups failed", "error", err)
+			os.Exit(1)
+		}
 
-	maintenanceSvc := maintenance.New(
-		maintenanceRepo,
-		redisqueue.NewTrimmer(rdb, cfg.StreamMaxLen, redisqueue.AllStreamsWithDLQ...),
-		maintenance.Config{
-			Interval:                      cfg.MaintenanceInterval,
-			OutboxRetention:               cfg.OutboxRetention,
-			BillingReconciliationInterval: cfg.BillingReconciliationInterval,
-			BillingReconciliationLimit:    cfg.BillingReconciliationLimit,
-			MediaInputRetention:           time.Duration(cfg.MediaInputRetentionDays) * 24 * time.Hour,
-			MediaFailedRetention:          time.Duration(cfg.MediaFailedRetentionDays) * 24 * time.Hour,
-			MediaOriginalRetention:        time.Duration(cfg.MediaOriginalRetentionDays) * 24 * time.Hour,
-			MediaVariantRetention:         time.Duration(cfg.MediaVariantRetentionDays) * 24 * time.Hour,
-		},
-		maintenance.WithLogger(logger),
-		maintenance.WithMediaObjectStore(store),
-	)
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		maintenanceSvc.Run(readCtx)
-	}()
+		genStreams := []string{redisqueue.StreamText, redisqueue.StreamImage, redisqueue.StreamVideo}
+		engines := []*worker.Engine{
+			worker.NewEngine(consumer, genStreams, gen.Process, worker.WithLogger(logger)),
+			worker.NewEngine(consumer, []string{redisqueue.StreamProviderPoll}, poll.Process, worker.WithLogger(logger)),
+			worker.NewEngine(consumer, []string{redisqueue.StreamDelivery}, delivery.Process, worker.WithLogger(logger)),
+		}
+
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			runQueueMetrics(readCtx, rdb, cfg.WorkerGroup, 15*time.Second, logger)
+		}()
+		for _, e := range engines {
+			wg.Add(1)
+			go func(eng *worker.Engine) {
+				defer wg.Done()
+				_ = eng.RunWithHandlerContext(readCtx, handlerCtx)
+			}(e)
+		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			relay.Run(readCtx, time.Second)
+		}()
+		logger.Info("job worker loops started", "mode", cfg.WorkerMode, "group", cfg.WorkerGroup, "consumer", cfg.WorkerConsumer)
+	} else {
+		logger.Info("job worker loops disabled", "mode", cfg.WorkerMode)
+	}
+
+	if runMaintenance {
+		maintenanceSvc := maintenance.New(
+			maintenanceRepo,
+			redisqueue.NewTrimmer(rdb, cfg.StreamMaxLen, redisqueue.AllStreamsWithDLQ...),
+			maintenance.Config{
+				Interval:                      cfg.MaintenanceInterval,
+				OutboxRetention:               cfg.OutboxRetention,
+				BillingReconciliationInterval: cfg.BillingReconciliationInterval,
+				BillingReconciliationLimit:    cfg.BillingReconciliationLimit,
+				JobEventsRetention:            time.Duration(cfg.JobEventsRetentionDays) * 24 * time.Hour,
+				ProviderPayloadRetention:      time.Duration(cfg.ProviderPayloadRetentionDays) * 24 * time.Hour,
+				JobLogRetentionLimit:          cfg.JobLogRetentionBatchSize,
+				JobErrorAggregateLookback:     time.Duration(cfg.JobErrorAggregateLookbackDays) * 24 * time.Hour,
+				AnalyticsAggregateLookback:    time.Duration(cfg.AnalyticsAggregateLookbackDays) * 24 * time.Hour,
+				ConversationMessageRetention:  time.Duration(cfg.ConversationMessageRetentionDays) * 24 * time.Hour,
+				ConversationSummaryRetention:  time.Duration(cfg.ConversationSummaryRetentionDays) * 24 * time.Hour,
+				ConversationRetentionLimit:    cfg.ConversationRetentionBatchSize,
+				MediaFreeRetention:            time.Duration(cfg.ArtifactFreeRetentionDays) * 24 * time.Hour,
+				MediaPaidRetention:            time.Duration(cfg.ArtifactPaidRetentionDays) * 24 * time.Hour,
+				MediaOrphanRetention:          time.Duration(cfg.ArtifactOrphanRetentionDays) * 24 * time.Hour,
+				MediaTempUploadRetention:      time.Duration(cfg.ArtifactTemporaryRetentionDays) * 24 * time.Hour,
+				MediaInputRetention:           time.Duration(cfg.MediaInputRetentionDays) * 24 * time.Hour,
+				MediaFailedRetention:          time.Duration(cfg.MediaFailedRetentionDays) * 24 * time.Hour,
+				MediaOriginalRetention:        time.Duration(cfg.MediaOriginalRetentionDays) * 24 * time.Hour,
+				MediaVariantRetention:         time.Duration(cfg.MediaVariantRetentionDays) * 24 * time.Hour,
+			},
+			maintenance.WithLogger(logger),
+			maintenance.WithMediaObjectStore(store),
+		)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			maintenanceSvc.Run(readCtx)
+		}()
+		logger.Info("maintenance loop started", "mode", cfg.WorkerMode)
+	} else {
+		logger.Info("maintenance loop disabled", "mode", cfg.WorkerMode)
+	}
 
 	var metricsSrv *http.Server
 	if cfg.WorkerMetricsAddr != "" {
 		mux := http.NewServeMux()
 		mux.Handle("GET /metrics", metrics.PrivateHandler())
-		mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte("ok"))
-		})
+		workerReadyHandler := workerReadinessHandler(pool, rdb, store, cfg.S3Bucket, cfg.MigrationsDir)
+		mux.HandleFunc("GET /readyz", workerReadyHandler)
+		mux.HandleFunc("GET /healthz", workerReadyHandler)
 		metricsSrv = &http.Server{
 			Addr:              cfg.WorkerMetricsAddr,
 			Handler:           mux,
@@ -472,12 +508,12 @@ func main() {
 			}
 		}()
 	}
-	logger.Info("workers started", "group", cfg.WorkerGroup, "consumer", cfg.WorkerConsumer)
+	logger.Info("worker runtime started", "mode", cfg.WorkerMode, "group", cfg.WorkerGroup, "consumer", cfg.WorkerConsumer)
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 	<-stop
-	logger.Info("shutting down workers", "grace", cfg.WorkerShutdownGrace)
+	logger.Info("shutting down worker runtime", "mode", cfg.WorkerMode, "grace", cfg.WorkerShutdownGrace)
 	stopReads()
 	if metricsSrv != nil {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -503,6 +539,49 @@ func main() {
 		<-done
 	}
 	logger.Info("workers stopped")
+}
+
+func workerReadinessHandler(pool workerReadyPool, rdb *redis.Client, store workerReadyObjectStore, bucket, migrationsDir string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+		defer cancel()
+
+		checks := map[string]string{
+			"postgres":   "ok",
+			"redis":      "ok",
+			"s3_bucket":  "ok",
+			"migrations": "ok",
+		}
+		status := http.StatusOK
+		latestMigration := ""
+		if err := pool.Ping(ctx); err != nil {
+			checks["postgres"] = "down"
+			status = http.StatusServiceUnavailable
+		}
+		if err := rdb.Ping(ctx).Err(); err != nil {
+			checks["redis"] = "down"
+			status = http.StatusServiceUnavailable
+		}
+		if err := store.BucketReady(ctx, bucket); err != nil {
+			checks["s3_bucket"] = "down"
+			status = http.StatusServiceUnavailable
+		}
+		if version, err := readiness.CheckLatestMigrationApplied(ctx, pool, migrationsDir); err != nil {
+			latestMigration = version
+			checks["migrations"] = "pending"
+			status = http.StatusServiceUnavailable
+		} else {
+			latestMigration = version
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(status)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"status":           map[int]string{http.StatusOK: "ok", http.StatusServiceUnavailable: "degraded"}[status],
+			"checks":           checks,
+			"latest_migration": latestMigration,
+		})
+	}
 }
 
 func containsProvider(names []string, want string) bool {
@@ -723,6 +802,24 @@ func positiveInts(values ...int) []int {
 		out = append(out, value)
 	}
 	return out
+}
+
+func shouldRunJobWorkers(mode string) bool {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "", config.WorkerModeAll, config.WorkerModeJobs:
+		return true
+	default:
+		return false
+	}
+}
+
+func shouldRunMaintenance(mode string) bool {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "", config.WorkerModeAll, config.WorkerModeMaintenance:
+		return true
+	default:
+		return false
+	}
 }
 
 func nonEmptyStrings(values ...string) []string {

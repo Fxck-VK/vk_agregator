@@ -25,6 +25,7 @@ Set-Location $script:RepoRoot
 $deployStartedAt = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
 $healthStatus = "skipped"
 $publicSmokeStatus = "skipped"
+$migrationBackupStatus = "skipped"
 $shouldBuildOnVPS = $BuildOnVPS -and -not $SkipBuild
 
 function Invoke-Step {
@@ -72,6 +73,145 @@ function Test-EnvPlaceholderValue {
     }
     $lower = $Value.ToLowerInvariant()
     return $lower.Contains("change_me") -or $lower.Contains("placeholder") -or $lower.Contains("example")
+}
+
+function Normalize-DataServiceMode {
+    param([string]$Value)
+
+    if ([string]::IsNullOrWhiteSpace($Value)) {
+        return "local"
+    }
+    return $Value.Trim().ToLowerInvariant()
+}
+
+function Get-DataServiceMode {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][string]$Name
+    )
+
+    $defaultMode = Normalize-DataServiceMode -Value (Get-EnvFileValue -Path $Path -Name "DATA_SERVICES_MODE" -Default "local")
+    return Normalize-DataServiceMode -Value (Get-EnvFileValue -Path $Path -Name $Name -Default $defaultMode)
+}
+
+function Normalize-AppEnv {
+    param([string]$Value)
+
+    if ([string]::IsNullOrWhiteSpace($Value)) {
+        return "production"
+    }
+    $normalized = $Value.Trim().ToLowerInvariant()
+    switch ($normalized) {
+        "prod" { return "production" }
+        "stage" { return "staging" }
+        default { return $normalized }
+    }
+}
+
+function Get-LocalStatefulServices {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    $services = @()
+    if ((Get-DataServiceMode -Path $Path -Name "POSTGRES_MODE") -eq "local") {
+        $services += "postgres"
+    }
+    if ((Get-DataServiceMode -Path $Path -Name "REDIS_MODE") -eq "local") {
+        $services += "redis"
+    }
+    if ((Get-DataServiceMode -Path $Path -Name "S3_MODE") -eq "local") {
+        $services += "minio"
+    }
+    return $services
+}
+
+function Invoke-ExternalPostgresCheck {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    $databaseUrl = Get-EnvFileValue -Path $Path -Name "DATABASE_URL"
+    & docker run --rm --network host -e "DATABASE_URL=$databaseUrl" postgres:16-alpine sh -ec 'pg_isready -d "$DATABASE_URL" >/dev/null'
+    if ($LASTEXITCODE -ne 0) {
+        throw "external Postgres check failed with exit code $LASTEXITCODE"
+    }
+}
+
+function Split-RedisAddress {
+    param([Parameter(Mandatory = $true)][string]$Address)
+
+    if ($Address -match '^\[(?<host>.+)\]:(?<port>\d+)$') {
+        return [pscustomobject]@{ Host = $Matches.host; Port = $Matches.port }
+    }
+
+    $lastColon = $Address.LastIndexOf(":")
+    if ($lastColon -gt 0) {
+        return [pscustomobject]@{
+            Host = $Address.Substring(0, $lastColon)
+            Port = $Address.Substring($lastColon + 1)
+        }
+    }
+
+    return [pscustomobject]@{ Host = $Address; Port = "6379" }
+}
+
+function Invoke-ExternalRedisCheck {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    $redisAddr = Get-EnvFileValue -Path $Path -Name "REDIS_ADDR"
+    $redisPassword = Get-EnvFileValue -Path $Path -Name "REDIS_PASSWORD"
+    $redisDb = Get-EnvFileValue -Path $Path -Name "REDIS_DB" -Default "0"
+    $redisEndpoint = Split-RedisAddress -Address $redisAddr
+
+    & docker run --rm --network host `
+        -e "REDISCLI_AUTH=$redisPassword" `
+        -e "REDIS_CHECK_HOST=$($redisEndpoint.Host)" `
+        -e "REDIS_CHECK_PORT=$($redisEndpoint.Port)" `
+        -e "REDIS_CHECK_DB=$redisDb" `
+        redis:7-alpine `
+        sh -ec 'redis-cli -h "$REDIS_CHECK_HOST" -p "$REDIS_CHECK_PORT" -n "$REDIS_CHECK_DB" ping | grep -qx PONG'
+    if ($LASTEXITCODE -ne 0) {
+        throw "external Redis check failed with exit code $LASTEXITCODE"
+    }
+}
+
+function Invoke-ExternalS3Check {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    $s3Endpoint = Get-EnvFileValue -Path $Path -Name "S3_ENDPOINT"
+    $s3AccessKey = Get-EnvFileValue -Path $Path -Name "S3_ACCESS_KEY"
+    $s3SecretKey = Get-EnvFileValue -Path $Path -Name "S3_SECRET_KEY"
+    $s3Bucket = Get-EnvFileValue -Path $Path -Name "S3_BUCKET"
+    $s3UseSsl = (Get-EnvFileValue -Path $Path -Name "S3_USE_SSL" -Default "false").ToLowerInvariant()
+
+    & docker run --rm --network host `
+        -e "S3_ENDPOINT=$s3Endpoint" `
+        -e "S3_ACCESS_KEY=$s3AccessKey" `
+        -e "S3_SECRET_KEY=$s3SecretKey" `
+        -e "S3_BUCKET=$s3Bucket" `
+        -e "S3_USE_SSL=$s3UseSsl" `
+        minio/mc:latest `
+        sh -ec 'case "$S3_ENDPOINT" in http://*|https://*) endpoint_url="$S3_ENDPOINT" ;; *) if [ "$S3_USE_SSL" = "true" ]; then endpoint_url="https://$S3_ENDPOINT"; else endpoint_url="http://$S3_ENDPOINT"; fi ;; esac; mc alias set target "$endpoint_url" "$S3_ACCESS_KEY" "$S3_SECRET_KEY" >/dev/null; mc ls "target/$S3_BUCKET" >/dev/null'
+    if ($LASTEXITCODE -ne 0) {
+        throw "external S3 check failed with exit code $LASTEXITCODE"
+    }
+}
+
+function Invoke-ExternalDataServiceChecks {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    if ((Get-DataServiceMode -Path $Path -Name "POSTGRES_MODE") -ne "local") {
+        Invoke-Step "check external Postgres" {
+            Invoke-ExternalPostgresCheck -Path $Path
+        }
+    }
+    if ((Get-DataServiceMode -Path $Path -Name "REDIS_MODE") -ne "local") {
+        Invoke-Step "check external Redis" {
+            Invoke-ExternalRedisCheck -Path $Path
+        }
+    }
+    if ((Get-DataServiceMode -Path $Path -Name "S3_MODE") -ne "local") {
+        Invoke-Step "check external S3" {
+            Invoke-ExternalS3Check -Path $Path
+        }
+    }
 }
 
 function Get-PublicUrlValue {
@@ -165,12 +305,16 @@ Invoke-Step "check production env" {
     & (Join-Path $PSScriptRoot "check-prod-env.ps1") @checkArgs
 }
 
+$statefulServices = @(Get-LocalStatefulServices -Path $EnvFile)
 $script:ComposeArgs = @(
     "compose",
     "--project-name", $ProjectName,
     "--env-file", $EnvFile,
     "-f", "docker-compose.prod.yml"
 )
+if ($statefulServices.Count -gt 0) {
+    $script:ComposeArgs += @("-f", "docker-compose.data.yml")
+}
 if ($WithCloudflare) {
     $script:ComposeArgs += @("--profile", "cloudflare")
 }
@@ -224,9 +368,9 @@ try {
         }
     }
 
-    $imagePullServices = @("postgres", "redis", "minio", "reverse-proxy")
+    $imagePullServices = @($statefulServices + @("reverse-proxy"))
     if (-not $shouldBuildOnVPS) {
-        $imagePullServices += @("api", "worker", "provider-webhook", "miniapp", "migrate")
+        $imagePullServices += @("api", "worker", "maintenance-worker", "provider-webhook", "miniapp", "migrate")
         if ($BackupBeforeDeploy) {
             $imagePullServices += @("backup-postgres", "backup-minio")
         }
@@ -238,14 +382,27 @@ try {
         Invoke-DockerCompose pull @imagePullServices
     }
 
+    if ($statefulServices.Count -gt 0) {
+        Invoke-Step "start local stateful dependencies" {
+            Invoke-DockerCompose up -d --no-build --wait --wait-timeout $TimeoutSeconds @statefulServices
+        }
+    } else {
+        Write-Host "Skipping local stateful containers; DATA_SERVICES_MODE/POSTGRES_MODE/REDIS_MODE/S3_MODE point to external or managed services."
+    }
+
+    Invoke-ExternalDataServiceChecks -Path $EnvFile
+
     if ($BackupBeforeDeploy) {
         $backupArgs = @(
             "compose",
             "--project-name", $ProjectName,
             "--env-file", $EnvFile,
-            "-f", "docker-compose.prod.yml",
-            "--profile", "backup"
+            "-f", "docker-compose.prod.yml"
         )
+        if ($statefulServices.Count -gt 0) {
+            $backupArgs += @("-f", "docker-compose.data.yml")
+        }
+        $backupArgs += @("--profile", "backup")
         if ($WithCloudflare) {
             $backupArgs += @("--profile", "cloudflare")
         }
@@ -259,16 +416,12 @@ try {
         }
     }
 
-    Invoke-Step "start stateful dependencies" {
-        Invoke-DockerCompose up -d --no-build postgres redis minio
-    }
-
     if ($shouldBuildOnVPS) {
         $buildArgs = @("build")
         if ($PullBaseImages) {
             $buildArgs += "--pull"
         }
-        $buildArgs += @("api", "worker", "provider-webhook", "miniapp", "migrate")
+        $buildArgs += @("api", "worker", "maintenance-worker", "provider-webhook", "miniapp", "migrate")
         if ($BackupBeforeDeploy) {
             $buildArgs += @("backup-postgres", "backup-minio")
         }
@@ -280,6 +433,44 @@ try {
     }
 
     if (-not $SkipMigrate) {
+        Invoke-Step "check migrations safety" {
+            & (Join-Path $PSScriptRoot "check-migrations-safe.ps1") -EnvFile $EnvFile -MigrationsDir (Get-EnvFileValue -Path $EnvFile -Name "MIGRATIONS_DIR" -Default "migrations")
+            if ($LASTEXITCODE -ne 0) { throw "check-migrations-safe.ps1 failed with exit code $LASTEXITCODE" }
+            $global:LASTEXITCODE = 0
+        }
+
+        $appEnvNormalized = Normalize-AppEnv -Value (Get-EnvFileValue -Path $EnvFile -Name "APP_ENV" -Default "production")
+        if ($appEnvNormalized -eq "production") {
+            if ((Get-EnvFileValue -Path $EnvFile -Name "MIGRATION_BACKUP_CONFIRMED" -Default "false").ToLowerInvariant() -eq "true") {
+                $migrationBackupStatus = "manual-confirmed"
+                Write-Host "Using manually confirmed production migration backup."
+            } else {
+                $backupArgs = @(
+                    "compose",
+                    "--project-name", $ProjectName,
+                    "--env-file", $EnvFile,
+                    "-f", "docker-compose.prod.yml"
+                )
+                if ($statefulServices.Count -gt 0) {
+                    $backupArgs += @("-f", "docker-compose.data.yml")
+                }
+                $backupArgs += @("--profile", "backup")
+                if ($WithCloudflare) {
+                    $backupArgs += @("--profile", "cloudflare")
+                }
+                if (-not $shouldBuildOnVPS) {
+                    Invoke-Step "docker compose pull backup-postgres" {
+                        Invoke-DockerCompose pull backup-postgres
+                    }
+                }
+                Invoke-Step "backup postgres before migration" {
+                    & docker @backupArgs run --rm backup-postgres
+                    if ($LASTEXITCODE -ne 0) { throw "backup-postgres failed with exit code $LASTEXITCODE" }
+                }
+                $migrationBackupStatus = "postgres-backup"
+            }
+        }
+
         Invoke-Step "remove old migrate container" {
             & docker @script:ComposeArgs rm -f -s migrate | Out-Null
             $global:LASTEXITCODE = 0
@@ -296,7 +487,7 @@ try {
         Write-Warning "Skipping migrations. Runtime services still require a successful migrate service state in this compose project."
     }
 
-    $runtimeServices = @("api", "worker", "provider-webhook", "miniapp", "reverse-proxy")
+    $runtimeServices = @("api", "worker", "maintenance-worker", "provider-webhook", "miniapp", "reverse-proxy")
     if ($WithCloudflare) {
         $runtimeServices += "cloudflared"
     }
@@ -316,9 +507,10 @@ try {
     if (-not $NoHealthCheck) {
         $reverseProxyPort = Get-EnvFileValue -Path $EnvFile -Name "REVERSE_PROXY_HTTP_PORT" -Default "8088"
         Wait-Http -Name "reverse-proxy" -Url "http://127.0.0.1:$reverseProxyPort/proxy-health" -TimeoutSeconds $TimeoutSeconds
-        Wait-Http -Name "api" -Url "http://127.0.0.1:8080/health" -TimeoutSeconds $TimeoutSeconds
-        Wait-Http -Name "provider-webhook" -Url "http://127.0.0.1:8082/health" -TimeoutSeconds $TimeoutSeconds
-        Wait-Http -Name "worker" -Url "http://127.0.0.1:9090/healthz" -TimeoutSeconds $TimeoutSeconds
+        Wait-Http -Name "api" -Url "http://127.0.0.1:8080/readyz" -TimeoutSeconds $TimeoutSeconds
+        Wait-Http -Name "provider-webhook" -Url "http://127.0.0.1:8082/readyz" -TimeoutSeconds $TimeoutSeconds
+        Wait-Http -Name "worker" -Url "http://127.0.0.1:9090/readyz" -TimeoutSeconds $TimeoutSeconds
+        Wait-Http -Name "maintenance-worker" -Url "http://127.0.0.1:9091/readyz" -TimeoutSeconds $TimeoutSeconds
         Wait-Http -Name "miniapp" -Url "http://127.0.0.1:5173/" -TimeoutSeconds $TimeoutSeconds
         $healthStatus = "passed"
 
@@ -359,6 +551,7 @@ try {
     $buildStatus = if ($shouldBuildOnVPS) { "completed on VPS" } else { "skipped; pulled registry images" }
     $cloudflareStatus = if ($WithCloudflare) { "enabled" } else { "disabled" }
     Write-Host "Migrations: $migrationsStatus"
+    Write-Host "Migration backup: $migrationBackupStatus"
     Write-Host "Image pull: completed"
     Write-Host "Build: $buildStatus"
     Write-Host "Health checks: $healthStatus"

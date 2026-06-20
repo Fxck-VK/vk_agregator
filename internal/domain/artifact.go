@@ -150,20 +150,30 @@ const (
 // MediaCleanupPolicy contains per-class cutoffs. A zero cutoff disables that
 // class so production can retain active history while still purging failures.
 type MediaCleanupPolicy struct {
-	TempUploadCutoff       time.Time
-	InputReferenceCutoff   time.Time
-	ProviderOriginalCutoff time.Time
-	DeliveryVariantCutoff  time.Time
-	FailedDeletedCutoff    time.Time
+	FreeArtifactCutoff      time.Time
+	PaidArtifactCutoff      time.Time
+	TemporaryArtifactCutoff time.Time
+	OrphanArtifactCutoff    time.Time
+	TempUploadCutoff        time.Time
+	InputReferenceCutoff    time.Time
+	ProviderOriginalCutoff  time.Time
+	DeliveryVariantCutoff   time.Time
+	FailedDeletedCutoff     time.Time
+	ExpiredCutoff           time.Time
 }
 
 // Enabled reports whether at least one media cleanup class is enabled.
 func (p MediaCleanupPolicy) Enabled() bool {
-	return !p.TempUploadCutoff.IsZero() ||
+	return !p.FreeArtifactCutoff.IsZero() ||
+		!p.PaidArtifactCutoff.IsZero() ||
+		!p.TemporaryArtifactCutoff.IsZero() ||
+		!p.OrphanArtifactCutoff.IsZero() ||
+		!p.TempUploadCutoff.IsZero() ||
 		!p.InputReferenceCutoff.IsZero() ||
 		!p.ProviderOriginalCutoff.IsZero() ||
 		!p.DeliveryVariantCutoff.IsZero() ||
-		!p.FailedDeletedCutoff.IsZero()
+		!p.FailedDeletedCutoff.IsZero() ||
+		!p.ExpiredCutoff.IsZero()
 }
 
 // MediaCleanupCandidate is a storage object that maintenance may delete. It

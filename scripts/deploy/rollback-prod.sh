@@ -85,6 +85,21 @@ is_placeholder_value() {
   [[ -z "${value//[[:space:]]/}" || "${value}" == *change_me* || "${value}" == *placeholder* || "${value}" == *example* ]]
 }
 
+normalize_data_service_mode() {
+  local value
+  value="$(printf '%s' "${1:-local}" | tr '[:upper:]' '[:lower:]')"
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  echo "${value:-local}"
+}
+
+get_data_service_mode() {
+  local name="$1"
+  local default_mode
+  default_mode="$(normalize_data_service_mode "$(get_env_value DATA_SERVICES_MODE local)")"
+  normalize_data_service_mode "$(get_env_value "${name}" "${default_mode}")"
+}
+
 wait_http() {
   local name="$1"
   local url="$2"
@@ -130,12 +145,30 @@ run_step bash scripts/deploy/check-prod-env.sh "${check_args[@]}"
 export APP_ENV_FILE="${env_file}"
 export IMAGE_TAG="${image_tag}"
 
+stateful_services=()
+if [[ "$(get_data_service_mode POSTGRES_MODE)" == "local" ]]; then
+  stateful_services+=(postgres)
+fi
+if [[ "$(get_data_service_mode REDIS_MODE)" == "local" ]]; then
+  stateful_services+=(redis)
+fi
+if [[ "$(get_data_service_mode S3_MODE)" == "local" ]]; then
+  stateful_services+=(minio)
+fi
+
 compose=(docker compose --project-name "${project_name}" --env-file "${env_file}" -f docker-compose.prod.yml)
+if [[ ${#stateful_services[@]} -gt 0 ]]; then
+  compose+=(-f docker-compose.data.yml)
+fi
 if [[ "${with_cloudflare}" == "true" ]]; then
   compose+=(--profile cloudflare)
 fi
 
-backup_compose=(docker compose --project-name "${project_name}" --env-file "${env_file}" -f docker-compose.prod.yml --profile backup)
+backup_compose=(docker compose --project-name "${project_name}" --env-file "${env_file}" -f docker-compose.prod.yml)
+if [[ ${#stateful_services[@]} -gt 0 ]]; then
+  backup_compose+=(-f docker-compose.data.yml)
+fi
+backup_compose+=(--profile backup)
 
 run_step "${compose[@]}" config >/dev/null
 
@@ -144,6 +177,13 @@ ghcr_token="$(get_env_value GHCR_TOKEN "")"
 if ! is_placeholder_value "${ghcr_username}" && ! is_placeholder_value "${ghcr_token}"; then
   echo "==> docker login ghcr.io"
   printf '%s' "${ghcr_token}" | docker login ghcr.io -u "${ghcr_username}" --password-stdin >/dev/null
+fi
+
+if [[ ${#stateful_services[@]} -gt 0 ]]; then
+  run_step "${compose[@]}" pull "${stateful_services[@]}"
+  run_step "${compose[@]}" up -d --no-build --wait --wait-timeout "${timeout_seconds}" "${stateful_services[@]}"
+else
+  echo "Skipping local stateful containers; DATA_SERVICES_MODE/POSTGRES_MODE/REDIS_MODE/S3_MODE point to external or managed services."
 fi
 
 if [[ "${skip_backup}" != "true" ]]; then
@@ -156,22 +196,22 @@ else
   backup_status="skipped by operator"
 fi
 
-rollback_services=(api worker provider-webhook miniapp reverse-proxy)
+rollback_services=(api worker maintenance-worker provider-webhook miniapp reverse-proxy)
 if [[ "${with_cloudflare}" == "true" ]]; then
   rollback_services+=(cloudflared)
 fi
 
 run_step "${compose[@]}" pull "${rollback_services[@]}"
-run_step "${compose[@]}" up -d --no-build postgres redis minio
 run_step "${compose[@]}" up -d --no-build --no-deps "${rollback_services[@]}"
 run_step "${compose[@]}" up -d --no-build --force-recreate --no-deps reverse-proxy
 
 if [[ "${no_health_check}" != "true" ]]; then
   reverse_proxy_port="$(get_env_value REVERSE_PROXY_HTTP_PORT 8088)"
   wait_http reverse-proxy "http://127.0.0.1:${reverse_proxy_port}/proxy-health"
-  wait_http api "http://127.0.0.1:8080/health"
-  wait_http provider-webhook "http://127.0.0.1:8082/health"
-  wait_http worker "http://127.0.0.1:9090/healthz"
+  wait_http api "http://127.0.0.1:8080/readyz"
+  wait_http provider-webhook "http://127.0.0.1:8082/readyz"
+  wait_http worker "http://127.0.0.1:9090/readyz"
+  wait_http maintenance-worker "http://127.0.0.1:9091/readyz"
   wait_http miniapp "http://127.0.0.1:5173/"
   health_status="passed"
 fi

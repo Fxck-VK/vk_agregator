@@ -521,7 +521,8 @@ try {
         "compose",
         "--project-name", $ProjectName,
         "--env-file", $resolvedEnvFile,
-        "-f", "docker-compose.prod.yml"
+        "-f", "docker-compose.prod.yml",
+        "-f", "docker-compose.data.yml"
     )
 
     if ($StatusOnly) {
@@ -581,6 +582,10 @@ try {
         }
         $args += $runtimeServices
         Invoke-DockerCompose @args
+    }
+
+    Invoke-Step "refresh reverse-proxy upstreams" {
+        Invoke-DockerCompose @("up", "-d", "--no-deps", "--force-recreate", "reverse-proxy")
     }
 
     foreach ($service in $runtimeServices) {

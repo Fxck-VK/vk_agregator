@@ -32,6 +32,7 @@ type SharedCore struct {
 	Artifacts     domain.ArtifactRepository
 	Moderation    domain.ModerationResultRepository
 	Conversations domain.ConversationRepository
+	Maintenance   *postgres.MaintenanceRepository
 	Billing       *billingservice.Service
 	Payment       *paymentservice.Service
 	PaymentOps    *paymentservice.WebhookProcessor
@@ -99,6 +100,7 @@ func NewSharedCore(pool *pgxpool.Pool, cfg config.Config, opts ...SharedCoreOpti
 		Artifacts:     postgres.NewArtifactRepository(pool),
 		Moderation:    postgres.NewModerationResultRepository(pool),
 		Conversations: postgres.NewConversationRepository(pool),
+		Maintenance:   postgres.NewMaintenanceRepository(pool),
 		Billing:       billing,
 		Payment:       paymentSvc,
 		PaymentOps:    paymentOps,

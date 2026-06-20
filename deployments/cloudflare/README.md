@@ -119,6 +119,36 @@ CLOUDFLARED_METRICS_PORT=2000
 The deploy preflight validates these values only when `--with-cloudflare` /
 `-WithCloudflare` is used.
 
+## Data Service Modes
+
+Cloudflare routing is the same in both production data modes: every public
+hostname still points to the VPS reverse proxy at `http://127.0.0.1:8088`.
+Only the private server env and compose selection change.
+
+Single VPS mode:
+
+```text
+DATA_SERVICES_MODE=local
+POSTGRES_MODE=local
+REDIS_MODE=local
+S3_MODE=local
+```
+
+Deploy starts local Postgres, Redis and MinIO from `docker-compose.data.yml`.
+
+External data services mode:
+
+```text
+DATA_SERVICES_MODE=managed
+POSTGRES_MODE=managed
+REDIS_MODE=managed
+S3_MODE=managed
+```
+
+Deploy skips local data containers and uses the private `DATABASE_URL`,
+`REDIS_ADDR` and `S3_*` endpoints from the server `.env`. Do not expose
+Postgres, Redis or S3/MinIO through Cloudflare public hostname routes.
+
 ## Deploy
 
 ```bash

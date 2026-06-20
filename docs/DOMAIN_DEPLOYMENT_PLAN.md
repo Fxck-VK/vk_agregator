@@ -57,6 +57,26 @@ One simple deployment option:
   - `/billing/webhooks/yookassa` proxies to `cmd/provider-webhook`
     (`PAYMENT_WEBHOOK_ADDR`, default `:8082`).
 
+## Data service modes
+
+The domain/reverse-proxy map does not depend on where data lives. Production
+supports two data placement modes.
+
+Single VPS mode:
+
+- `docker-compose.prod.yml` runs stateless app services.
+- `docker-compose.data.yml` runs Postgres, Redis and MinIO on the same VPS.
+- `DATABASE_URL=...@postgres:5432/...`, `REDIS_ADDR=redis:6379`,
+  `S3_ENDPOINT=minio:9000`.
+
+External data services mode:
+
+- `docker-compose.prod.yml` runs only app/runtime services.
+- Postgres, Redis and S3-compatible storage are external or managed services.
+- `DATABASE_URL`, `REDIS_ADDR` and `S3_*` point to private external endpoints.
+- Public Cloudflare routes still point only to the reverse proxy; data services
+  must not be exposed as public hostnames.
+
 ## Example Caddy shape
 
 Do not paste secrets into this file. Replace paths and ports per deployment.

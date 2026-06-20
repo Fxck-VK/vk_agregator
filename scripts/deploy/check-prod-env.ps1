@@ -105,6 +105,23 @@ function Require-HttpsUrl {
     }
 }
 
+function Normalize-DataServiceMode {
+    param(
+        [System.Collections.Generic.List[string]]$Problems,
+        [Parameter(Mandatory = $true)][string]$Name,
+        [string]$Value = "local"
+    )
+
+    $mode = $Value.Trim().ToLowerInvariant()
+    if ([string]::IsNullOrWhiteSpace($mode)) {
+        $mode = "local"
+    }
+    if (@("local", "external", "managed") -notcontains $mode) {
+        Add-Problem -Problems $Problems -Name $Name -Reason "must be one of local, external, managed"
+    }
+    return $mode
+}
+
 $envValues = Read-EnvFile -Path $resolvedEnvFile
 $problems = [System.Collections.Generic.List[string]]::new()
 
@@ -117,16 +134,37 @@ switch ($appEnv) {
     default { Add-Problem -Problems $problems -Name "APP_ENV" -Reason "must be staging or production" }
 }
 
+$dataServicesMode = Normalize-DataServiceMode -Problems $problems -Name "DATA_SERVICES_MODE" -Value (Get-Value -Values $envValues -Name "DATA_SERVICES_MODE" -Default "local")
+$postgresMode = Normalize-DataServiceMode -Problems $problems -Name "POSTGRES_MODE" -Value (Get-Value -Values $envValues -Name "POSTGRES_MODE" -Default $dataServicesMode)
+$redisMode = Normalize-DataServiceMode -Problems $problems -Name "REDIS_MODE" -Value (Get-Value -Values $envValues -Name "REDIS_MODE" -Default $dataServicesMode)
+$s3Mode = Normalize-DataServiceMode -Problems $problems -Name "S3_MODE" -Value (Get-Value -Values $envValues -Name "S3_MODE" -Default $dataServicesMode)
+
+if ((Is-TrueValue (Get-Value -Values $envValues -Name "MIGRATION_ALLOW_DESTRUCTIVE" -Default "false")) -and (Get-Value -Values $envValues -Name "MIGRATION_DESTRUCTIVE_CONFIRM") -ne "I_UNDERSTAND_DESTRUCTIVE_MIGRATIONS") {
+    Add-Problem -Problems $problems -Name "MIGRATION_DESTRUCTIVE_CONFIRM" -Reason "required when MIGRATION_ALLOW_DESTRUCTIVE=true"
+}
+if (Is-TrueValue (Get-Value -Values $envValues -Name "RESTORE_ALLOW_DESTRUCTIVE" -Default "false")) {
+    Add-Problem -Problems $problems -Name "RESTORE_ALLOW_DESTRUCTIVE" -Reason "must be false in the persistent deploy env; set it only for a manual restore command"
+}
+if ($appEnv -eq "production" -and -not (Is-TrueValue (Get-Value -Values $envValues -Name "MIGRATION_BACKUP_CONFIRMED" -Default "false"))) {
+    Require-Value -Values $envValues -Problems $problems -Name "BACKUP_IMAGE_TAG" -Reason "required for automatic production migration backup"
+    Require-Value -Values $envValues -Problems $problems -Name "BACKUP_DIR" -Reason "required for automatic production migration backup"
+    Require-Value -Values $envValues -Problems $problems -Name "BACKUP_RETENTION_DAYS" -Reason "required for automatic production migration backup"
+    if ((Get-Value -Values $envValues -Name "BACKUP_POSTGRES_ENABLED" -Default "true").ToLowerInvariant() -eq "false") {
+        Add-Problem -Problems $problems -Name "BACKUP_POSTGRES_ENABLED" -Reason "must not be false unless MIGRATION_BACKUP_CONFIRMED=true"
+    }
+}
+
 foreach ($required in @(
     "APP_IMAGE_REGISTRY",
     "IMAGE_TAG",
-    "POSTGRES_PASSWORD",
     "DATABASE_URL",
+    "REDIS_ADDR",
+    "S3_ENDPOINT",
     "S3_ACCESS_KEY",
     "S3_SECRET_KEY",
     "S3_BUCKET",
-    "MINIO_ROOT_USER",
-    "MINIO_ROOT_PASSWORD",
+    "S3_REGION",
+    "S3_ADDRESSING_STYLE",
     "VK_ACCESS_TOKEN",
     "VK_SECRET",
     "VK_CONFIRMATION_TOKEN",
@@ -134,6 +172,20 @@ foreach ($required in @(
     "ADMIN_TOKEN"
 )) {
     Require-Value -Values $envValues -Problems $problems -Name $required -Reason "required for server runtime"
+}
+
+$s3AddressingStyle = (Get-Value -Values $envValues -Name "S3_ADDRESSING_STYLE" -Default "path").ToLowerInvariant()
+if ($s3AddressingStyle -notin @("auto", "path", "virtual-hosted", "virtual", "dns")) {
+    Add-Problem -Problems $problems -Name "S3_ADDRESSING_STYLE" -Reason "must be auto, path, or virtual-hosted"
+}
+
+if ($postgresMode -eq "local") {
+    Require-Value -Values $envValues -Problems $problems -Name "POSTGRES_PASSWORD" -Reason "required when POSTGRES_MODE=local"
+}
+
+if ($s3Mode -eq "local") {
+    Require-Value -Values $envValues -Problems $problems -Name "MINIO_ROOT_USER" -Reason "required when S3_MODE=local"
+    Require-Value -Values $envValues -Problems $problems -Name "MINIO_ROOT_PASSWORD" -Reason "required when S3_MODE=local"
 }
 
 $imageRegistry = Get-Value -Values $envValues -Name "APP_IMAGE_REGISTRY"

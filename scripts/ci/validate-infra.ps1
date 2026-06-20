@@ -119,6 +119,12 @@ function Assert-DevEnvTemplate {
     $requiredSnippets = @(
         "APP_ENV=development",
         "COMPOSE_NETWORK_NAME=vk-ai-aggregator-dev",
+        "DATA_SERVICES_MODE=local",
+        "POSTGRES_MODE=local",
+        "REDIS_MODE=local",
+        "S3_MODE=local",
+        "S3_REGION=us-east-1",
+        "S3_ADDRESSING_STYLE=path",
         "DEV_ALLOW_REAL_AI_PROVIDERS=true",
         "DEV_ALLOW_REAL_PAYMENTS=false",
         "DEV_ALLOW_REMOTE_IMAGES=false",
@@ -480,17 +486,27 @@ function Assert-CloudflareDeploymentConfig {
 }
 
 function Assert-ProductionDataServices {
-    $path = Join-Path $repoRoot "docker-compose.prod.yml"
-    if (-not (Test-Path -LiteralPath $path)) {
+    $prodPath = Join-Path $repoRoot "docker-compose.prod.yml"
+    $dataPath = Join-Path $repoRoot "docker-compose.data.yml"
+    if (-not (Test-Path -LiteralPath $prodPath)) {
         Write-Host "no production compose file found; skipping data-service checks"
         return
     }
+    if (-not (Test-Path -LiteralPath $dataPath)) {
+        throw "production data compose file is missing: docker-compose.data.yml"
+    }
 
     $requiredFiles = @(
+        "docs/DATA_SERVICES_CONTRACT.md",
+        "docker-compose.data.yml",
         "Dockerfile.migrate",
         "Dockerfile.backup",
         "scripts\backup\backup-postgres.sh",
-        "scripts\backup\backup-minio.sh"
+        "scripts\backup\backup-minio.sh",
+        "scripts\backup\restore-postgres.sh",
+        "scripts\backup\restore-minio.sh",
+        "scripts\deploy\check-migrations-safe.ps1",
+        "scripts\deploy\check-migrations-safe.sh"
     )
     foreach ($requiredFile in $requiredFiles) {
         $fullPath = Join-Path $repoRoot $requiredFile
@@ -499,29 +515,64 @@ function Assert-ProductionDataServices {
         }
     }
 
-    $content = Get-Content -LiteralPath $path -Raw
-    $requiredSnippets = @(
+    $prodContent = Get-Content -LiteralPath $prodPath -Raw
+    $dataContent = Get-Content -LiteralPath $dataPath -Raw
+    $requiredDataSnippets = @(
+        "postgres:",
         "postgres_data:/var/lib/postgresql/data",
+        "redis:",
         "redis_data:/data",
+        "minio:",
         "minio_data:/data",
-        "migrate:",
-        "Dockerfile.migrate",
-        "condition: service_completed_successfully",
-        "backup-postgres:",
-        "backup-minio:",
-        "Dockerfile.backup",
-        "backup_data:/backups",
-        "backup_metrics:/backup-metrics",
+        "local-postgres-disabled",
+        "local-minio-disabled",
         "postgres_data:",
         "redis_data:",
         "minio_data:",
+        'name: ${COMPOSE_NETWORK_NAME:-vk-ai-aggregator-prod}'
+    )
+    $requiredProdSnippets = @(
+        "migrate:",
+        "Dockerfile.migrate",
+        "backup-postgres:",
+        "backup-minio:",
+        "restore-postgres:",
+        "restore-minio:",
+        "Dockerfile.backup",
+        "RESTORE_ALLOW_DESTRUCTIVE",
+        "backup_data:/backups",
+        "backup_metrics:/backup-metrics",
         "backup_data:",
         "backup_metrics:"
     )
 
-    foreach ($snippet in $requiredSnippets) {
-        if (-not $content.Contains($snippet)) {
-            throw "production compose data-service config is missing required snippet: $snippet"
+    foreach ($snippet in $requiredDataSnippets) {
+        if (-not $dataContent.Contains($snippet)) {
+            throw "production data compose config is missing required snippet: $snippet"
+        }
+    }
+    foreach ($snippet in $requiredProdSnippets) {
+        if (-not $prodContent.Contains($snippet)) {
+            throw "production app compose config is missing required snippet: $snippet"
+        }
+    }
+    if ($prodContent -match "(?m)^\s{2}(postgres|redis|minio):\s*$") {
+        throw "docker-compose.prod.yml must not define Postgres/Redis/MinIO services; use docker-compose.data.yml"
+    }
+
+    $modeAwareScripts = @(
+        @{ Path = "scripts\deploy\deploy-prod.sh"; Snippet = "docker-compose.data.yml" },
+        @{ Path = "scripts\deploy\deploy-prod.sh"; Snippet = "check_external_data_services" },
+        @{ Path = "scripts\deploy\rollback-prod.sh"; Snippet = "docker-compose.data.yml" },
+        @{ Path = "scripts\deploy\deploy-prod.ps1"; Snippet = "docker-compose.data.yml" },
+        @{ Path = "scripts\deploy\deploy-prod.ps1"; Snippet = "Invoke-ExternalDataServiceChecks" },
+        @{ Path = "scripts\deploy\rollback-prod.ps1"; Snippet = "docker-compose.data.yml" }
+    )
+    foreach ($script in $modeAwareScripts) {
+        $scriptPath = Join-Path $repoRoot $script.Path
+        $scriptContent = Get-Content -LiteralPath $scriptPath -Raw
+        if (-not $scriptContent.Contains($script.Snippet)) {
+            throw "production deploy script is not data-service-mode aware: $($script.Path)"
         }
     }
 
@@ -578,7 +629,14 @@ function Assert-DeployScripts {
                 "BuildOnVPS",
                 "--no-build",
                 "SkipPublicSmoke",
+                "Invoke-ExternalDataServiceChecks",
+                "postgres:16-alpine",
+                "redis:7-alpine",
+                "minio/mc:latest",
                 "smoke-prod.ps1",
+                "check-migrations-safe.ps1",
+                "MIGRATION_BACKUP_CONFIRMED",
+                "backup postgres before migration",
                 "-EnvFile",
                 "PUBLIC_PAYMENT_WEBHOOK_URL",
                 "IMAGE_TAG",
@@ -586,6 +644,7 @@ function Assert-DeployScripts {
                 "exit-code-from",
                 "api", "worker", "provider-webhook", "miniapp", "reverse-proxy",
                 "Wait-Http",
+                "/readyz",
                 "Production deploy completed.",
                 "skipped; pulled registry images",
                 "Health checks:"
@@ -603,7 +662,14 @@ function Assert-DeployScripts {
                 "--build-on-vps",
                 "--no-build",
                 "--skip-public-smoke",
+                "check_external_data_services",
+                "postgres:16-alpine",
+                "redis:7-alpine",
+                "minio/mc:latest",
                 "smoke-prod.sh",
+                "check-migrations-safe.sh",
+                "MIGRATION_BACKUP_CONFIRMED",
+                "Migration backup:",
                 "--env-file",
                 "PUBLIC_PAYMENT_WEBHOOK_URL",
                 "IMAGE_TAG",
@@ -611,6 +677,7 @@ function Assert-DeployScripts {
                 "exit-code-from",
                 "api worker provider-webhook miniapp reverse-proxy",
                 "wait_http",
+                "/readyz",
                 "Production deploy completed.",
                 "skipped; pulled registry images",
                 "Health checks:"
@@ -622,6 +689,14 @@ function Assert-DeployScripts {
                 "APP_IMAGE_REGISTRY",
                 "IMAGE_TAG",
                 "APP_ENV",
+                "DATA_SERVICES_MODE",
+                "POSTGRES_MODE",
+                "REDIS_MODE",
+                "S3_MODE",
+                "S3_ENDPOINT",
+                "S3_REGION",
+                "S3_ADDRESSING_STYLE",
+                "REDIS_ADDR",
                 "staging",
                 "CHANGE_ME",
                 "PAYMENT_PROVIDER",
@@ -629,7 +704,10 @@ function Assert-DeployScripts {
                 "CLOUDFLARED_TUNNEL_TOKEN",
                 "PUBLIC_VK_BASE_URL",
                 "PUBLIC_APP_BASE_URL",
-                "PUBLIC_PAYMENT_WEBHOOK_URL"
+                "PUBLIC_PAYMENT_WEBHOOK_URL",
+                "MIGRATION_ALLOW_DESTRUCTIVE",
+                "MIGRATION_BACKUP_CONFIRMED",
+                "RESTORE_ALLOW_DESTRUCTIVE"
             )
         },
         [pscustomobject]@{
@@ -638,6 +716,14 @@ function Assert-DeployScripts {
                 "APP_IMAGE_REGISTRY",
                 "IMAGE_TAG",
                 "APP_ENV",
+                "DATA_SERVICES_MODE",
+                "POSTGRES_MODE",
+                "REDIS_MODE",
+                "S3_MODE",
+                "S3_ENDPOINT",
+                "S3_REGION",
+                "S3_ADDRESSING_STYLE",
+                "REDIS_ADDR",
                 "staging",
                 "CHANGE_ME",
                 "PAYMENT_PROVIDER",
@@ -645,7 +731,10 @@ function Assert-DeployScripts {
                 "CLOUDFLARED_TUNNEL_TOKEN",
                 "PUBLIC_VK_BASE_URL",
                 "PUBLIC_APP_BASE_URL",
-                "PUBLIC_PAYMENT_WEBHOOK_URL"
+                "PUBLIC_PAYMENT_WEBHOOK_URL",
+                "MIGRATION_ALLOW_DESTRUCTIVE",
+                "MIGRATION_BACKUP_CONFIRMED",
+                "RESTORE_ALLOW_DESTRUCTIVE"
             )
         },
         [pscustomobject]@{
@@ -685,7 +774,7 @@ function Assert-DeployScripts {
             Required = @(
                 "EnvFile",
                 "/health",
-                "/healthz",
+                "/readyz",
                 "/miniapp/balance",
                 "/billing/webhooks/yookassa",
                 "PaymentWebhookOnly",
@@ -711,7 +800,7 @@ function Assert-DeployScripts {
             Required = @(
                 "--env-file",
                 "/health",
-                "/healthz",
+                "/readyz",
                 "/miniapp/balance",
                 "/billing/webhooks/yookassa",
                 "--payment-webhook-only",
@@ -1010,7 +1099,7 @@ if (Test-Path -LiteralPath "docker-compose.observability.yml") {
 }
 
 if (Test-Path -LiteralPath "docker-compose.prod.yml") {
-    Invoke-Step "docker compose prod config" {
+    Invoke-Step "docker compose prod app config" {
         $previousAppEnvFile = $env:APP_ENV_FILE
         $prodEnvTemplate = if (Test-Path -LiteralPath ".env.prod.example") { ".env.prod.example" } else { ".env.example" }
         try {
@@ -1024,8 +1113,24 @@ if (Test-Path -LiteralPath "docker-compose.prod.yml") {
             }
         }
     }
+    if (Test-Path -LiteralPath "docker-compose.data.yml") {
+        Invoke-Step "docker compose prod app+data config" {
+            $previousAppEnvFile = $env:APP_ENV_FILE
+            $prodEnvTemplate = if (Test-Path -LiteralPath ".env.prod.example") { ".env.prod.example" } else { ".env.example" }
+            try {
+                $env:APP_ENV_FILE = $prodEnvTemplate
+                docker compose --project-name vk-ai-aggregator-prod --env-file $prodEnvTemplate -f docker-compose.prod.yml -f docker-compose.data.yml config | Out-Null
+            } finally {
+                if ($null -eq $previousAppEnvFile) {
+                    Remove-Item Env:\APP_ENV_FILE -ErrorAction SilentlyContinue
+                } else {
+                    $env:APP_ENV_FILE = $previousAppEnvFile
+                }
+            }
+        }
+    }
     if (Test-Path -LiteralPath ".env.staging.example") {
-        Invoke-Step "docker compose staging config" {
+        Invoke-Step "docker compose staging app config" {
             $previousAppEnvFile = $env:APP_ENV_FILE
             try {
                 $env:APP_ENV_FILE = ".env.staging.example"
@@ -1035,6 +1140,21 @@ if (Test-Path -LiteralPath "docker-compose.prod.yml") {
                     Remove-Item Env:\APP_ENV_FILE -ErrorAction SilentlyContinue
                 } else {
                     $env:APP_ENV_FILE = $previousAppEnvFile
+                }
+            }
+        }
+        if (Test-Path -LiteralPath "docker-compose.data.yml") {
+            Invoke-Step "docker compose staging app+data config" {
+                $previousAppEnvFile = $env:APP_ENV_FILE
+                try {
+                    $env:APP_ENV_FILE = ".env.staging.example"
+                    docker compose --project-name vk-ai-aggregator-staging --env-file .env.staging.example -f docker-compose.prod.yml -f docker-compose.data.yml config | Out-Null
+                } finally {
+                    if ($null -eq $previousAppEnvFile) {
+                        Remove-Item Env:\APP_ENV_FILE -ErrorAction SilentlyContinue
+                    } else {
+                        $env:APP_ENV_FILE = $previousAppEnvFile
+                    }
                 }
             }
         }

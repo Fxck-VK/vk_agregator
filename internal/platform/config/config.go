@@ -18,6 +18,14 @@ import (
 )
 
 const (
+	DataServiceModeLocal    = "local"
+	DataServiceModeExternal = "external"
+	DataServiceModeManaged  = "managed"
+
+	WorkerModeAll         = "all"
+	WorkerModeJobs        = "jobs"
+	WorkerModeMaintenance = "maintenance"
+
 	MediaVideoProbePolicyDisabled        = "disabled"
 	MediaVideoProbePolicyTrustedProvider = "trusted_provider"
 	MediaVideoProbePolicyProbeRequired   = "probe_required"
@@ -38,6 +46,14 @@ type Config struct {
 	// staging is for test VPS deployments with production-like routing.
 	Env string
 
+	// DataServicesMode is a default for PostgresMode, RedisMode and S3Mode.
+	// Modes: local = bundled Docker service, external = self-managed remote
+	// service, managed = cloud/provider-managed service.
+	DataServicesMode string
+	PostgresMode     string
+	RedisMode        string
+	S3Mode           string
+
 	HTTPAddr      string
 	DatabaseURL   string
 	MigrationsDir string
@@ -51,12 +67,19 @@ type Config struct {
 	S3SecretKey string
 	S3UseSSL    bool
 	S3Bucket    string
+	S3Region    string
+	// S3AddressingStyle controls bucket addressing for S3-compatible storage:
+	// path, virtual-hosted or auto.
+	S3AddressingStyle string
 
 	VKConfirmationToken string
 	VKSecret            string
 
 	AdminToken string
 
+	// WorkerMode selects which loops cmd/worker starts. Production runs job
+	// consumers and maintenance as separate processes.
+	WorkerMode     string
 	WorkerGroup    string
 	WorkerConsumer string
 	// WorkerMetricsAddr exposes worker-local Prometheus metrics. Empty disables
@@ -355,10 +378,14 @@ type Config struct {
 	ArtifactRetentionDays int
 	// Media*RetentionDays split artifact cleanup by lifecycle class. Zero means
 	// keep that class; failed/deleted defaults to ARTIFACT_RETENTION_DAYS.
-	MediaInputRetentionDays    int
-	MediaFailedRetentionDays   int
-	MediaOriginalRetentionDays int
-	MediaVariantRetentionDays  int
+	ArtifactFreeRetentionDays      int
+	ArtifactPaidRetentionDays      int
+	ArtifactTemporaryRetentionDays int
+	ArtifactOrphanRetentionDays    int
+	MediaInputRetentionDays        int
+	MediaFailedRetentionDays       int
+	MediaOriginalRetentionDays     int
+	MediaVariantRetentionDays      int
 
 	// WorkerProviderCallTimeout bounds one provider Submit/Poll call in workers.
 	WorkerProviderCallTimeout time.Duration
@@ -375,6 +402,22 @@ type Config struct {
 	BillingReconciliationInterval time.Duration
 	// BillingReconciliationLimit caps accounts checked per reconciliation pass.
 	BillingReconciliationLimit int
+	// JobEventsRetentionDays bounds short-lived job lifecycle diagnostics.
+	JobEventsRetentionDays int
+	// ProviderPayloadRetentionDays bounds raw provider request/response storage.
+	ProviderPayloadRetentionDays int
+	// JobLogRetentionBatchSize caps job diagnostics cleanup per maintenance pass.
+	JobLogRetentionBatchSize int
+	// JobErrorAggregateLookbackDays bounds the aggregate refresh window.
+	JobErrorAggregateLookbackDays int
+	// AnalyticsAggregateLookbackDays bounds dashboard aggregate refreshes.
+	AnalyticsAggregateLookbackDays int
+	// ConversationMessageRetentionDays bounds raw dialog prompt/answer storage.
+	ConversationMessageRetentionDays int
+	// ConversationSummaryRetentionDays keeps compact memory longer than raw turns.
+	ConversationSummaryRetentionDays int
+	// ConversationRetentionBatchSize caps retention updates per maintenance pass.
+	ConversationRetentionBatchSize int
 
 	// TracingServiceName is reported in OpenTelemetry resource attributes.
 	TracingServiceName string
@@ -439,11 +482,20 @@ func (c Config) PaymentWebhookHTTPSRequired() bool {
 // and the admin API must be set. Returns a descriptive error otherwise.
 func (c Config) Validate() error {
 	var missing []string
+	if err := c.ValidateDataServiceModes(); err != nil {
+		return err
+	}
+	if style := strings.ToLower(strings.TrimSpace(c.S3AddressingStyle)); style != "" && !knownS3AddressingStyle(style) {
+		return fmt.Errorf("config: S3_ADDRESSING_STYLE must be auto, path, or virtual-hosted")
+	}
 	if mode := strings.ToLower(strings.TrimSpace(c.VKMenuButtonMode)); mode != "" && mode != "callback" && mode != "text" {
 		return fmt.Errorf("config: VK_MENU_BUTTON_MODE must be callback or text")
 	}
 	if mode := strings.ToLower(strings.TrimSpace(c.VKUnroutedTextMode)); mode != "" && mode != "reply" && mode != "silent" && mode != "gpt" {
 		return fmt.Errorf("config: VK_UNROUTED_TEXT_MODE must be reply, silent, or gpt")
+	}
+	if mode := strings.ToLower(strings.TrimSpace(c.WorkerMode)); mode != "" && mode != WorkerModeAll && mode != WorkerModeJobs && mode != WorkerModeMaintenance {
+		return fmt.Errorf("config: WORKER_MODE must be all, jobs, or maintenance")
 	}
 	if mode := strings.ToLower(strings.TrimSpace(c.VKVideoDeliveryMode)); mode != "" && mode != "doc" && mode != "video" {
 		return fmt.Errorf("config: VK_VIDEO_DELIVERY_MODE must be doc or video")
@@ -618,6 +670,18 @@ func (c Config) Validate() error {
 			return fmt.Errorf("config: MEDIA_PROVIDER_QUALITY_RECOVERY_SUCCESSES must be positive when MEDIA_PROVIDER_QUALITY_GUARD_ENABLED=true")
 		}
 	}
+	if c.ArtifactFreeRetentionDays < 0 {
+		return fmt.Errorf("config: ARTIFACT_FREE_RETENTION_DAYS must be non-negative")
+	}
+	if c.ArtifactPaidRetentionDays < 0 {
+		return fmt.Errorf("config: ARTIFACT_PAID_RETENTION_DAYS must be non-negative")
+	}
+	if c.ArtifactTemporaryRetentionDays < 0 {
+		return fmt.Errorf("config: ARTIFACT_TEMP_RETENTION_DAYS must be non-negative")
+	}
+	if c.ArtifactOrphanRetentionDays < 0 {
+		return fmt.Errorf("config: ARTIFACT_ORPHAN_RETENTION_DAYS must be non-negative")
+	}
 	if c.MediaInputRetentionDays < 0 {
 		return fmt.Errorf("config: MEDIA_INPUT_RETENTION_DAYS must be non-negative")
 	}
@@ -629,6 +693,30 @@ func (c Config) Validate() error {
 	}
 	if c.MediaVariantRetentionDays < 0 {
 		return fmt.Errorf("config: MEDIA_VARIANT_RETENTION_DAYS must be non-negative")
+	}
+	if c.JobEventsRetentionDays < 0 {
+		return fmt.Errorf("config: RETENTION_JOB_EVENTS_DAYS must be non-negative")
+	}
+	if c.ProviderPayloadRetentionDays < 0 {
+		return fmt.Errorf("config: RETENTION_PROVIDER_PAYLOAD_DAYS must be non-negative")
+	}
+	if c.JobLogRetentionBatchSize < 0 {
+		return fmt.Errorf("config: JOB_LOG_RETENTION_BATCH_SIZE must be non-negative")
+	}
+	if c.JobErrorAggregateLookbackDays < 0 {
+		return fmt.Errorf("config: JOB_ERROR_AGGREGATE_LOOKBACK_DAYS must be non-negative")
+	}
+	if c.AnalyticsAggregateLookbackDays < 0 {
+		return fmt.Errorf("config: ANALYTICS_AGGREGATE_LOOKBACK_DAYS must be non-negative")
+	}
+	if c.ConversationMessageRetentionDays < 0 {
+		return fmt.Errorf("config: RETENTION_CONVERSATION_MESSAGES_DAYS must be non-negative")
+	}
+	if c.ConversationSummaryRetentionDays < 0 {
+		return fmt.Errorf("config: RETENTION_CONVERSATION_SUMMARIES_DAYS must be non-negative")
+	}
+	if c.ConversationRetentionBatchSize < 0 {
+		return fmt.Errorf("config: CONVERSATION_RETENTION_BATCH_SIZE must be non-negative")
 	}
 	if c.MediaPipelineEnabled && probePolicy == MediaVideoProbePolicyProbeRequired && c.MediaMaxConcurrentProbes == 0 {
 		return fmt.Errorf("config: MEDIA_MAX_CONCURRENT_PROBES must be positive when MEDIA_VIDEO_PROBE_POLICY=probe_required")
@@ -734,12 +822,30 @@ func (c Config) Validate() error {
 	return nil
 }
 
+func (c Config) ValidateDataServiceModes() error {
+	for _, item := range []struct {
+		name  string
+		value string
+	}{
+		{name: "DATA_SERVICES_MODE", value: c.DataServicesMode},
+		{name: "POSTGRES_MODE", value: c.PostgresMode},
+		{name: "REDIS_MODE", value: c.RedisMode},
+		{name: "S3_MODE", value: c.S3Mode},
+	} {
+		if !knownDataServiceMode(item.value) {
+			return fmt.Errorf("config: %s must be one of local, external, managed", item.name)
+		}
+	}
+	return nil
+}
+
 // Load reads configuration from .env/_env and the process environment.
 func Load() Config {
 	loadDotenv()
 
 	host, _ := os.Hostname()
 	appEnv := env("APP_ENV", "development")
+	dataServicesMode := envMode("DATA_SERVICES_MODE", DataServiceModeLocal)
 	provider := env("PROVIDER", "mock")
 	providerChain := envList("PROVIDER_CHAIN")
 	if len(providerChain) == 0 {
@@ -750,10 +856,14 @@ func Load() Config {
 	mediaProviderContracts, _ := parseMediaProviderContracts(mediaProviderContractsRaw)
 	artifactRetentionDays := envInt("ARTIFACT_RETENTION_DAYS", 0)
 	return Config{
-		Env:           appEnv,
-		HTTPAddr:      env("HTTP_ADDR", ":8080"),
-		DatabaseURL:   env("DATABASE_URL", "postgres://vk_ai_aggregator:vk_ai_aggregator@localhost:5432/vk_ai_aggregator?sslmode=disable"),
-		MigrationsDir: env("MIGRATIONS_DIR", "migrations"),
+		Env:              appEnv,
+		DataServicesMode: dataServicesMode,
+		PostgresMode:     envMode("POSTGRES_MODE", dataServicesMode),
+		RedisMode:        envMode("REDIS_MODE", dataServicesMode),
+		S3Mode:           envMode("S3_MODE", dataServicesMode),
+		HTTPAddr:         env("HTTP_ADDR", ":8080"),
+		DatabaseURL:      env("DATABASE_URL", "postgres://vk_ai_aggregator:vk_ai_aggregator@localhost:5432/vk_ai_aggregator?sslmode=disable"),
+		MigrationsDir:    env("MIGRATIONS_DIR", "migrations"),
 
 		RedisAddr:     env("REDIS_ADDR", "localhost:6379"),
 		RedisPassword: env("REDIS_PASSWORD", ""),
@@ -764,12 +874,18 @@ func Load() Config {
 		S3SecretKey: env("S3_SECRET_KEY", "minioadmin"),
 		S3UseSSL:    envBool("S3_USE_SSL", false),
 		S3Bucket:    env("S3_BUCKET", "artifacts"),
+		S3Region:    env("S3_REGION", "us-east-1"),
+		// path is the safest default for local MinIO and most S3-compatible
+		// providers. Set virtual-hosted or auto only when the provider DNS/TLS
+		// setup supports bucket hostnames.
+		S3AddressingStyle: envConfigToken("S3_ADDRESSING_STYLE", "path"),
 
 		VKConfirmationToken: env("VK_CONFIRMATION_TOKEN", "dev-confirmation"),
 		VKSecret:            env("VK_SECRET", ""),
 
 		AdminToken: env("ADMIN_TOKEN", ""),
 
+		WorkerMode:        envConfigToken("WORKER_MODE", WorkerModeAll),
 		WorkerGroup:       env("WORKER_GROUP", "workers"),
 		WorkerConsumer:    env("WORKER_CONSUMER", defaultStr(host, "worker-1")),
 		WorkerMetricsAddr: env("WORKER_METRICS_ADDR", ":9090"),
@@ -1001,20 +1117,38 @@ func Load() Config {
 		FrontendTelemetryEnabled:        envBool("FRONTEND_TELEMETRY_ENABLED", false),
 		FrontendTelemetryUserHashSecret: env("FRONTEND_TELEMETRY_USER_HASH_SECRET", ""),
 
-		ArtifactURLTTL:             envDuration("ARTIFACT_URL_TTL", time.Hour),
-		SignedDelivery:             envBool("SIGNED_DELIVERY", false),
-		ArtifactRetentionDays:      artifactRetentionDays,
-		MediaInputRetentionDays:    envInt("MEDIA_INPUT_RETENTION_DAYS", 0),
-		MediaFailedRetentionDays:   envInt("MEDIA_FAILED_RETENTION_DAYS", artifactRetentionDays),
-		MediaOriginalRetentionDays: envInt("MEDIA_ORIGINAL_RETENTION_DAYS", 0),
-		MediaVariantRetentionDays:  envInt("MEDIA_VARIANT_RETENTION_DAYS", artifactRetentionDays),
+		ArtifactURLTTL:                 envDuration("ARTIFACT_URL_TTL", time.Hour),
+		SignedDelivery:                 envBool("SIGNED_DELIVERY", false),
+		ArtifactRetentionDays:          artifactRetentionDays,
+		ArtifactFreeRetentionDays:      envInt("ARTIFACT_FREE_RETENTION_DAYS", 7),
+		ArtifactPaidRetentionDays:      envInt("ARTIFACT_PAID_RETENTION_DAYS", 365),
+		ArtifactTemporaryRetentionDays: envInt("ARTIFACT_TEMP_RETENTION_DAYS", 1),
+		ArtifactOrphanRetentionDays:    envInt("ARTIFACT_ORPHAN_RETENTION_DAYS", 7),
+		MediaInputRetentionDays:        envInt("MEDIA_INPUT_RETENTION_DAYS", 0),
+		MediaFailedRetentionDays:       envInt("MEDIA_FAILED_RETENTION_DAYS", artifactRetentionDays),
+		MediaOriginalRetentionDays:     envInt("MEDIA_ORIGINAL_RETENTION_DAYS", 0),
+		MediaVariantRetentionDays:      envInt("MEDIA_VARIANT_RETENTION_DAYS", artifactRetentionDays),
 
-		WorkerProviderCallTimeout:     envDuration("WORKER_PROVIDER_CALL_TIMEOUT", 180*time.Second),
-		WorkerShutdownGrace:           envDuration("WORKER_SHUTDOWN_GRACE", 30*time.Second),
-		MaintenanceInterval:           envDuration("MAINTENANCE_INTERVAL", time.Hour),
-		OutboxRetention:               envDuration("OUTBOX_RETENTION", 7*24*time.Hour),
-		BillingReconciliationInterval: envDuration("BILLING_RECONCILIATION_INTERVAL", 5*time.Minute),
-		BillingReconciliationLimit:    envInt("BILLING_RECONCILIATION_LIMIT", 100),
+		WorkerProviderCallTimeout:      envDuration("WORKER_PROVIDER_CALL_TIMEOUT", 180*time.Second),
+		WorkerShutdownGrace:            envDuration("WORKER_SHUTDOWN_GRACE", 30*time.Second),
+		MaintenanceInterval:            envDuration("MAINTENANCE_INTERVAL", time.Hour),
+		OutboxRetention:                envDuration("OUTBOX_RETENTION", 7*24*time.Hour),
+		BillingReconciliationInterval:  envDuration("BILLING_RECONCILIATION_INTERVAL", 5*time.Minute),
+		BillingReconciliationLimit:     envInt("BILLING_RECONCILIATION_LIMIT", 100),
+		JobEventsRetentionDays:         envInt("RETENTION_JOB_EVENTS_DAYS", 30),
+		ProviderPayloadRetentionDays:   envInt("RETENTION_PROVIDER_PAYLOAD_DAYS", 7),
+		JobLogRetentionBatchSize:       envInt("JOB_LOG_RETENTION_BATCH_SIZE", 500),
+		JobErrorAggregateLookbackDays:  envInt("JOB_ERROR_AGGREGATE_LOOKBACK_DAYS", 30),
+		AnalyticsAggregateLookbackDays: envInt("ANALYTICS_AGGREGATE_LOOKBACK_DAYS", 7),
+		ConversationMessageRetentionDays: envInt(
+			"RETENTION_CONVERSATION_MESSAGES_DAYS",
+			90,
+		),
+		ConversationSummaryRetentionDays: envInt(
+			"RETENTION_CONVERSATION_SUMMARIES_DAYS",
+			180,
+		),
+		ConversationRetentionBatchSize: envInt("CONVERSATION_RETENTION_BATCH_SIZE", 500),
 
 		TracingServiceName:         env("OTEL_SERVICE_NAME", "vk-ai-aggregator"),
 		TracingExporter:            env("OTEL_TRACES_EXPORTER", "none"),
@@ -1380,6 +1514,36 @@ func env(key, def string) string {
 		return v
 	}
 	return def
+}
+
+func envMode(key, def string) string {
+	return normalizeMode(env(key, def))
+}
+
+func normalizeMode(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	if value == "" {
+		return DataServiceModeLocal
+	}
+	return value
+}
+
+func knownDataServiceMode(value string) bool {
+	switch normalizeMode(value) {
+	case DataServiceModeLocal, DataServiceModeExternal, DataServiceModeManaged:
+		return true
+	default:
+		return false
+	}
+}
+
+func knownS3AddressingStyle(value string) bool {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "", "auto", "path", "virtual-hosted", "virtual", "dns":
+		return true
+	default:
+		return false
+	}
 }
 
 func envInt(key string, def int) int {

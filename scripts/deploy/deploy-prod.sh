@@ -17,6 +17,7 @@ skip_public_smoke="false"
 timeout_seconds="180"
 health_status="skipped"
 public_smoke_status="skipped"
+migration_backup_status="skipped"
 deploy_started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
 usage() {
@@ -35,6 +36,8 @@ Options:
   --skip-migrate               Do not run migrate service
   --with-cloudflare            Start cloudflared profile too
   --backup-before-deploy       Run Postgres and MinIO backup services before rollout
+                              Production migrations always run a Postgres backup first unless
+                              MIGRATION_BACKUP_CONFIRMED=true is set for an external/manual backup.
   --pull-base-images           Pass --pull to docker compose build
   --no-health-check            Skip local HTTP health checks
   --skip-public-smoke          Skip public Cloudflare/DNS smoke after cloudflared startup
@@ -107,11 +110,6 @@ if [[ "${backup_before_deploy}" == "true" ]]; then
 fi
 run_step bash scripts/deploy/check-prod-env.sh "${check_args[@]}"
 
-compose=(docker compose --project-name "${project_name}" --env-file "${env_file}" -f docker-compose.prod.yml)
-if [[ "${with_cloudflare}" == "true" ]]; then
-  compose+=(--profile cloudflare)
-fi
-
 get_env_value() {
   local name="$1"
   local default="$2"
@@ -135,6 +133,114 @@ is_placeholder_value() {
   local value
   value="$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]')"
   [[ -z "${value//[[:space:]]/}" || "${value}" == *change_me* || "${value}" == *placeholder* || "${value}" == *example* ]]
+}
+
+normalize_data_service_mode() {
+  local value
+  value="$(printf '%s' "${1:-local}" | tr '[:upper:]' '[:lower:]')"
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  echo "${value:-local}"
+}
+
+get_data_service_mode() {
+  local name="$1"
+  local default_mode
+  default_mode="$(normalize_data_service_mode "$(get_env_value DATA_SERVICES_MODE local)")"
+  normalize_data_service_mode "$(get_env_value "${name}" "${default_mode}")"
+}
+
+run_container_check() {
+  docker run --rm --network host "$@"
+}
+
+check_external_postgres() {
+  local database_url
+  database_url="$(get_env_value DATABASE_URL "")"
+  run_container_check \
+    -e DATABASE_URL="${database_url}" \
+    postgres:16-alpine \
+    sh -ec 'pg_isready -d "$DATABASE_URL" >/dev/null'
+}
+
+parse_redis_addr() {
+  local addr="$1"
+  if [[ "${addr}" =~ ^\[(.*)\]:(.*)$ ]]; then
+    REDIS_CHECK_HOST="${BASH_REMATCH[1]}"
+    REDIS_CHECK_PORT="${BASH_REMATCH[2]}"
+    return
+  fi
+  REDIS_CHECK_HOST="${addr%:*}"
+  REDIS_CHECK_PORT="${addr##*:}"
+  if [[ "${REDIS_CHECK_HOST}" == "${REDIS_CHECK_PORT}" ]]; then
+    REDIS_CHECK_PORT="6379"
+  fi
+}
+
+check_external_redis() {
+  local redis_addr redis_password redis_db
+  redis_addr="$(get_env_value REDIS_ADDR "")"
+  redis_password="$(get_env_value REDIS_PASSWORD "")"
+  redis_db="$(get_env_value REDIS_DB 0)"
+  parse_redis_addr "${redis_addr}"
+
+  run_container_check \
+    -e REDISCLI_AUTH="${redis_password}" \
+    -e REDIS_CHECK_HOST="${REDIS_CHECK_HOST}" \
+    -e REDIS_CHECK_PORT="${REDIS_CHECK_PORT}" \
+    -e REDIS_CHECK_DB="${redis_db}" \
+    redis:7-alpine \
+    sh -ec 'redis-cli -h "$REDIS_CHECK_HOST" -p "$REDIS_CHECK_PORT" -n "$REDIS_CHECK_DB" ping | grep -qx PONG'
+}
+
+check_external_s3() {
+  local s3_endpoint s3_access_key s3_secret_key s3_bucket s3_use_ssl
+  s3_endpoint="$(get_env_value S3_ENDPOINT "")"
+  s3_access_key="$(get_env_value S3_ACCESS_KEY "")"
+  s3_secret_key="$(get_env_value S3_SECRET_KEY "")"
+  s3_bucket="$(get_env_value S3_BUCKET "")"
+  s3_use_ssl="$(printf '%s' "$(get_env_value S3_USE_SSL false)" | tr '[:upper:]' '[:lower:]')"
+
+  run_container_check \
+    -e S3_ENDPOINT="${s3_endpoint}" \
+    -e S3_ACCESS_KEY="${s3_access_key}" \
+    -e S3_SECRET_KEY="${s3_secret_key}" \
+    -e S3_BUCKET="${s3_bucket}" \
+    -e S3_USE_SSL="${s3_use_ssl}" \
+    minio/mc:latest \
+    sh -ec '
+      case "$S3_ENDPOINT" in
+        http://*|https://*) endpoint_url="$S3_ENDPOINT" ;;
+        *) if [ "$S3_USE_SSL" = "true" ]; then endpoint_url="https://$S3_ENDPOINT"; else endpoint_url="http://$S3_ENDPOINT"; fi ;;
+      esac
+      mc alias set target "$endpoint_url" "$S3_ACCESS_KEY" "$S3_SECRET_KEY" >/dev/null
+      mc ls "target/$S3_BUCKET" >/dev/null
+    '
+}
+
+check_external_data_services() {
+  if [[ "$(get_data_service_mode POSTGRES_MODE)" != "local" ]]; then
+    echo "==> check external Postgres"
+    run_step check_external_postgres
+  fi
+  if [[ "$(get_data_service_mode REDIS_MODE)" != "local" ]]; then
+    echo "==> check external Redis"
+    run_step check_external_redis
+  fi
+  if [[ "$(get_data_service_mode S3_MODE)" != "local" ]]; then
+    echo "==> check external S3"
+    run_step check_external_s3
+  fi
+}
+
+normalize_app_env() {
+  local value
+  value="$(printf '%s' "${1:-production}" | tr '[:upper:]' '[:lower:]' | xargs)"
+  case "${value}" in
+    prod) echo "production" ;;
+    stage) echo "staging" ;;
+    *) echo "${value:-production}" ;;
+  esac
 }
 
 get_public_url() {
@@ -215,6 +321,25 @@ if [[ -n "${image_tag}" ]]; then
   echo "Using IMAGE_TAG=${image_tag}"
 fi
 
+stateful_services=()
+if [[ "$(get_data_service_mode POSTGRES_MODE)" == "local" ]]; then
+  stateful_services+=(postgres)
+fi
+if [[ "$(get_data_service_mode REDIS_MODE)" == "local" ]]; then
+  stateful_services+=(redis)
+fi
+if [[ "$(get_data_service_mode S3_MODE)" == "local" ]]; then
+  stateful_services+=(minio)
+fi
+
+compose=(docker compose --project-name "${project_name}" --env-file "${env_file}" -f docker-compose.prod.yml)
+if [[ ${#stateful_services[@]} -gt 0 ]]; then
+  compose+=(-f docker-compose.data.yml)
+fi
+if [[ "${with_cloudflare}" == "true" ]]; then
+  compose+=(--profile cloudflare)
+fi
+
 run_step "${compose[@]}" config >/dev/null
 
 ghcr_username="$(get_env_value GHCR_USERNAME "")"
@@ -224,9 +349,9 @@ if ! is_placeholder_value "${ghcr_username}" && ! is_placeholder_value "${ghcr_t
   printf '%s' "${ghcr_token}" | docker login ghcr.io -u "${ghcr_username}" --password-stdin >/dev/null
 fi
 
-image_pull_services=(postgres redis minio reverse-proxy)
+image_pull_services=("${stateful_services[@]}" reverse-proxy)
 if [[ "${build_on_vps}" != "true" ]]; then
-  image_pull_services+=(api worker provider-webhook miniapp migrate)
+  image_pull_services+=(api worker maintenance-worker provider-webhook miniapp migrate)
   if [[ "${backup_before_deploy}" == "true" ]]; then
     image_pull_services+=(backup-postgres backup-minio)
   fi
@@ -236,8 +361,20 @@ if [[ "${with_cloudflare}" == "true" ]]; then
 fi
 run_step "${compose[@]}" pull "${image_pull_services[@]}"
 
+if [[ ${#stateful_services[@]} -gt 0 ]]; then
+  run_step "${compose[@]}" up -d --no-build --wait --wait-timeout "${timeout_seconds}" "${stateful_services[@]}"
+else
+  echo "Skipping local stateful containers; DATA_SERVICES_MODE/POSTGRES_MODE/REDIS_MODE/S3_MODE point to external or managed services."
+fi
+
+check_external_data_services
+
 if [[ "${backup_before_deploy}" == "true" ]]; then
-  backup_compose=(docker compose --project-name "${project_name}" --env-file "${env_file}" -f docker-compose.prod.yml --profile backup)
+  backup_compose=(docker compose --project-name "${project_name}" --env-file "${env_file}" -f docker-compose.prod.yml)
+  if [[ ${#stateful_services[@]} -gt 0 ]]; then
+    backup_compose+=(-f docker-compose.data.yml)
+  fi
+  backup_compose+=(--profile backup)
   if [[ "${with_cloudflare}" == "true" ]]; then
     backup_compose+=(--profile cloudflare)
   fi
@@ -245,14 +382,12 @@ if [[ "${backup_before_deploy}" == "true" ]]; then
   run_step "${backup_compose[@]}" run --rm backup-minio
 fi
 
-run_step "${compose[@]}" up -d --no-build --wait --wait-timeout "${timeout_seconds}" postgres redis minio
-
 if [[ "${build_on_vps}" == "true" ]]; then
   build_args=(build)
   if [[ "${pull_base_images}" == "true" ]]; then
     build_args+=(--pull)
   fi
-  build_args+=(api worker provider-webhook miniapp migrate)
+  build_args+=(api worker maintenance-worker provider-webhook miniapp migrate)
   if [[ "${backup_before_deploy}" == "true" ]]; then
     build_args+=(backup-postgres backup-minio)
   fi
@@ -262,6 +397,28 @@ else
 fi
 
 if [[ "${skip_migrate}" != "true" ]]; then
+  run_step bash scripts/deploy/check-migrations-safe.sh --env-file "${env_file}" --migrations-dir "$(get_env_value MIGRATIONS_DIR migrations)"
+  app_env_normalized="$(normalize_app_env "$(get_env_value APP_ENV production)")"
+  if [[ "${app_env_normalized}" == "production" ]]; then
+    if [[ "$(get_env_value MIGRATION_BACKUP_CONFIRMED false)" == "true" ]]; then
+      migration_backup_status="manual-confirmed"
+      echo "Using manually confirmed production migration backup."
+    else
+      backup_compose=(docker compose --project-name "${project_name}" --env-file "${env_file}" -f docker-compose.prod.yml)
+      if [[ ${#stateful_services[@]} -gt 0 ]]; then
+        backup_compose+=(-f docker-compose.data.yml)
+      fi
+      backup_compose+=(--profile backup)
+      if [[ "${with_cloudflare}" == "true" ]]; then
+        backup_compose+=(--profile cloudflare)
+      fi
+      if [[ "${build_on_vps}" != "true" ]]; then
+        run_step "${compose[@]}" pull backup-postgres
+      fi
+      run_step "${backup_compose[@]}" run --rm backup-postgres
+      migration_backup_status="postgres-backup"
+    fi
+  fi
   "${compose[@]}" rm -f -s migrate >/dev/null 2>&1 || true
   migrate_args=(up --no-deps --exit-code-from migrate)
   if [[ "${build_on_vps}" != "true" ]]; then
@@ -273,7 +430,7 @@ else
   echo "WARNING: skipping migrations. Runtime services still require a successful migrate service state in this compose project." >&2
 fi
 
-runtime_services=(api worker provider-webhook miniapp reverse-proxy)
+runtime_services=(api worker maintenance-worker provider-webhook miniapp reverse-proxy)
 if [[ "${with_cloudflare}" == "true" ]]; then
   runtime_services+=(cloudflared)
 fi
@@ -291,9 +448,10 @@ run_step "${compose[@]}" up -d --no-build --force-recreate --no-deps reverse-pro
 if [[ "${no_health_check}" != "true" ]]; then
   reverse_proxy_port="$(get_env_value REVERSE_PROXY_HTTP_PORT 8088)"
   wait_http reverse-proxy "http://127.0.0.1:${reverse_proxy_port}/proxy-health"
-  wait_http api "http://127.0.0.1:8080/health"
-  wait_http provider-webhook "http://127.0.0.1:8082/health"
-  wait_http worker "http://127.0.0.1:9090/healthz"
+  wait_http api "http://127.0.0.1:8080/readyz"
+  wait_http provider-webhook "http://127.0.0.1:8082/readyz"
+  wait_http worker "http://127.0.0.1:9090/readyz"
+  wait_http maintenance-worker "http://127.0.0.1:9091/readyz"
   wait_http miniapp "http://127.0.0.1:5173/"
   health_status="passed"
 
@@ -317,6 +475,7 @@ echo "Project: ${project_name}"
 echo "Env file: ${env_file}"
 echo "Runtime services: ${runtime_services[*]}"
 echo "Migrations: $([[ "${skip_migrate}" == "true" ]] && echo skipped || echo applied)"
+echo "Migration backup: ${migration_backup_status}"
 echo "Image pull: completed"
 echo "Build: $([[ "${build_on_vps}" == "true" ]] && echo "completed on VPS" || echo "skipped; pulled registry images")"
 echo "Health checks: ${health_status}"

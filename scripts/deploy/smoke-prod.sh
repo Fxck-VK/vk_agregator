@@ -7,6 +7,7 @@ app_base_url=""
 payment_webhook_url=""
 api_health_url=""
 worker_health_url=""
+maintenance_worker_health_url=""
 provider_webhook_health_url=""
 miniapp_health_url=""
 reverse_proxy_health_url=""
@@ -24,9 +25,10 @@ Options:
   --vk-base-url URL                  Public VK/API base URL. Default: PUBLIC_VK_BASE_URL or https://vk.neiirohub.ru
   --app-base-url URL                 Public Mini App base URL. Default: PUBLIC_APP_BASE_URL or https://app.neiirohub.ru
   --payment-webhook-url URL          Public YooKassa webhook URL. Default: PUBLIC_PAYMENT_WEBHOOK_URL or https://neiirohub.ru/billing/webhooks/yookassa
-  --api-health-url URL               Local API health URL. Default: http://127.0.0.1:8080/health
-  --worker-health-url URL            Local worker health URL. Default: http://127.0.0.1:9090/healthz
-  --provider-webhook-health-url URL  Local provider-webhook health URL. Default: http://127.0.0.1:8082/health
+  --api-health-url URL               Local API readiness URL. Default: http://127.0.0.1:8080/readyz
+  --worker-health-url URL            Local worker readiness URL. Default: http://127.0.0.1:9090/readyz
+  --maintenance-worker-health-url URL Local maintenance-worker readiness URL. Default: http://127.0.0.1:9091/readyz
+  --provider-webhook-health-url URL  Local provider-webhook readiness URL. Default: http://127.0.0.1:8082/readyz
   --miniapp-health-url URL           Local Mini App health URL. Default: http://127.0.0.1:5173/
   --reverse-proxy-health-url URL     Local reverse-proxy health URL. Default: http://127.0.0.1:8088/proxy-health
   --timeout-seconds SECONDS          HTTP timeout. Default: 10
@@ -61,6 +63,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --worker-health-url)
       worker_health_url="${2:?missing value for --worker-health-url}"
+      shift 2
+      ;;
+    --maintenance-worker-health-url)
+      maintenance_worker_health_url="${2:?missing value for --maintenance-worker-health-url}"
       shift 2
       ;;
     --provider-webhook-health-url)
@@ -171,9 +177,10 @@ vk_base_url="${vk_base_url:-$(get_env_value PUBLIC_VK_BASE_URL "$(get_env_value 
 app_base_url="${app_base_url:-$(get_env_value PUBLIC_APP_BASE_URL "$(get_env_value APP_BASE_URL "https://app.neiirohub.ru")")}"
 payment_webhook_url="${payment_webhook_url:-$(get_env_value PUBLIC_PAYMENT_WEBHOOK_URL "$(get_env_value PAYMENT_WEBHOOK_URL "https://neiirohub.ru/billing/webhooks/yookassa")")}"
 
-api_health_url="${api_health_url:-$(url_from_listen_addr "$(get_env_value HTTP_ADDR ":8080")" "/health")}"
-worker_health_url="${worker_health_url:-$(url_from_listen_addr "$(get_env_value WORKER_METRICS_ADDR ":9090")" "/healthz")}"
-provider_webhook_health_url="${provider_webhook_health_url:-$(url_from_listen_addr "$(get_env_value PAYMENT_WEBHOOK_ADDR ":8082")" "/health")}"
+api_health_url="${api_health_url:-$(url_from_listen_addr "$(get_env_value HTTP_ADDR ":8080")" "/readyz")}"
+worker_health_url="${worker_health_url:-$(url_from_listen_addr "$(get_env_value WORKER_METRICS_ADDR ":9090")" "/readyz")}"
+maintenance_worker_health_url="${maintenance_worker_health_url:-http://127.0.0.1:9091/readyz}"
+provider_webhook_health_url="${provider_webhook_health_url:-$(url_from_listen_addr "$(get_env_value PAYMENT_WEBHOOK_ADDR ":8082")" "/readyz")}"
 miniapp_health_url="${miniapp_health_url:-http://127.0.0.1:5173/}"
 reverse_proxy_health_url="${reverse_proxy_health_url:-http://127.0.0.1:$(get_env_value REVERSE_PROXY_HTTP_PORT "8088")/proxy-health}"
 
@@ -290,6 +297,9 @@ if [[ "$payment_webhook_only" != "true" && "$skip_local_health" != "true" ]]; th
 
   status="$(http_status GET "$worker_health_url")"
   expect_2xx "Worker local health" "$status"
+
+  status="$(http_status GET "$maintenance_worker_health_url")"
+  expect_2xx "Maintenance worker local health" "$status"
 
   status="$(http_status GET "$provider_webhook_health_url")"
   expect_2xx "Provider webhook local health" "$status"

@@ -22,6 +22,7 @@ RUN apk add --no-cache ca-certificates tzdata ffmpeg \
 WORKDIR /app
 
 COPY --from=build /out/worker /app/worker
+COPY --from=build /src/migrations /app/migrations
 
 EXPOSE 9090
 USER 10001

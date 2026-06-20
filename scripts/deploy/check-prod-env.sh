@@ -107,6 +107,20 @@ require_https_url() {
   fi
 }
 
+normalize_data_service_mode() {
+  local name="$1"
+  local value="$2"
+  value="$(printf '%s' "${value:-local}" | tr '[:upper:]' '[:lower:]' | xargs)"
+  if [[ -z "${value}" ]]; then
+    value="local"
+  fi
+  case "${value}" in
+    local|external|managed) ;;
+    *) add_problem "${name}" "must be one of local, external, managed" ;;
+  esac
+  printf '%s' "${value}"
+}
+
 app_env="$(get_value APP_ENV | tr '[:upper:]' '[:lower:]')"
 case "${app_env}" in
   production|prod) app_env="production" ;;
@@ -114,13 +128,48 @@ case "${app_env}" in
   *) add_problem APP_ENV "must be staging or production" ;;
 esac
 
+data_services_mode="$(normalize_data_service_mode DATA_SERVICES_MODE "$(get_value DATA_SERVICES_MODE local)")"
+postgres_mode="$(normalize_data_service_mode POSTGRES_MODE "$(get_value POSTGRES_MODE "${data_services_mode}")")"
+redis_mode="$(normalize_data_service_mode REDIS_MODE "$(get_value REDIS_MODE "${data_services_mode}")")"
+s3_mode="$(normalize_data_service_mode S3_MODE "$(get_value S3_MODE "${data_services_mode}")")"
+
+if is_true_value "$(get_value MIGRATION_ALLOW_DESTRUCTIVE false)" && [[ "$(get_value MIGRATION_DESTRUCTIVE_CONFIRM)" != "I_UNDERSTAND_DESTRUCTIVE_MIGRATIONS" ]]; then
+  add_problem MIGRATION_DESTRUCTIVE_CONFIRM "required when MIGRATION_ALLOW_DESTRUCTIVE=true"
+fi
+if is_true_value "$(get_value RESTORE_ALLOW_DESTRUCTIVE false)"; then
+  add_problem RESTORE_ALLOW_DESTRUCTIVE "must be false in the persistent deploy env; set it only for a manual restore command"
+fi
+if [[ "${app_env}" == "production" ]] && ! is_true_value "$(get_value MIGRATION_BACKUP_CONFIRMED false)"; then
+  require_value BACKUP_IMAGE_TAG "required for automatic production migration backup"
+  require_value BACKUP_DIR "required for automatic production migration backup"
+  require_value BACKUP_RETENTION_DAYS "required for automatic production migration backup"
+  if [[ "$(get_value BACKUP_POSTGRES_ENABLED true | tr '[:upper:]' '[:lower:]')" == "false" ]]; then
+    add_problem BACKUP_POSTGRES_ENABLED "must not be false unless MIGRATION_BACKUP_CONFIRMED=true"
+  fi
+fi
+
 for required in \
   APP_IMAGE_REGISTRY IMAGE_TAG \
-  POSTGRES_PASSWORD DATABASE_URL \
-  S3_ACCESS_KEY S3_SECRET_KEY S3_BUCKET MINIO_ROOT_USER MINIO_ROOT_PASSWORD \
+  DATABASE_URL REDIS_ADDR \
+  S3_ENDPOINT S3_ACCESS_KEY S3_SECRET_KEY S3_BUCKET S3_REGION S3_ADDRESSING_STYLE \
   VK_ACCESS_TOKEN VK_SECRET VK_CONFIRMATION_TOKEN VK_APP_SECRET ADMIN_TOKEN; do
   require_value "${required}" "required for server runtime"
 done
+
+s3_addressing_style="$(printf '%s' "$(get_value S3_ADDRESSING_STYLE path)" | tr '[:upper:]' '[:lower:]')"
+case "${s3_addressing_style}" in
+  auto|path|virtual-hosted|virtual|dns) ;;
+  *) add_problem S3_ADDRESSING_STYLE "must be auto, path, or virtual-hosted" ;;
+esac
+
+if [[ "${postgres_mode}" == "local" ]]; then
+  require_value POSTGRES_PASSWORD "required when POSTGRES_MODE=local"
+fi
+
+if [[ "${s3_mode}" == "local" ]]; then
+  require_value MINIO_ROOT_USER "required when S3_MODE=local"
+  require_value MINIO_ROOT_PASSWORD "required when S3_MODE=local"
+fi
 
 image_registry="$(get_value APP_IMAGE_REGISTRY)"
 if [[ "${image_registry}" != ghcr.io/* ]]; then

@@ -56,6 +56,111 @@ func TestLoadProviderChain(t *testing.T) {
 	}
 }
 
+func TestLoadDataServiceModesDefaultLocal(t *testing.T) {
+	for _, key := range []string{"DATA_SERVICES_MODE", "POSTGRES_MODE", "REDIS_MODE", "S3_MODE"} {
+		restore := clearEnv(t, key)
+		defer restore()
+	}
+
+	cfg := config.Load()
+	if cfg.DataServicesMode != config.DataServiceModeLocal ||
+		cfg.PostgresMode != config.DataServiceModeLocal ||
+		cfg.RedisMode != config.DataServiceModeLocal ||
+		cfg.S3Mode != config.DataServiceModeLocal {
+		t.Fatalf("unexpected data service defaults: data=%q postgres=%q redis=%q s3=%q",
+			cfg.DataServicesMode, cfg.PostgresMode, cfg.RedisMode, cfg.S3Mode)
+	}
+}
+
+func TestLoadDataServiceModesCanOverridePerService(t *testing.T) {
+	t.Setenv("DATA_SERVICES_MODE", "managed")
+	t.Setenv("POSTGRES_MODE", "external")
+	t.Setenv("REDIS_MODE", "local")
+
+	cfg := config.Load()
+	if cfg.DataServicesMode != config.DataServiceModeManaged {
+		t.Fatalf("DataServicesMode = %q, want managed", cfg.DataServicesMode)
+	}
+	if cfg.PostgresMode != config.DataServiceModeExternal {
+		t.Fatalf("PostgresMode = %q, want external", cfg.PostgresMode)
+	}
+	if cfg.RedisMode != config.DataServiceModeLocal {
+		t.Fatalf("RedisMode = %q, want local", cfg.RedisMode)
+	}
+	if cfg.S3Mode != config.DataServiceModeManaged {
+		t.Fatalf("S3Mode = %q, want managed inherited from DATA_SERVICES_MODE", cfg.S3Mode)
+	}
+}
+
+func TestLoadWorkerModeDefaultAll(t *testing.T) {
+	restore := clearEnv(t, "WORKER_MODE")
+	defer restore()
+
+	cfg := config.Load()
+	if cfg.WorkerMode != config.WorkerModeAll {
+		t.Fatalf("WorkerMode = %q, want %q", cfg.WorkerMode, config.WorkerModeAll)
+	}
+}
+
+func TestValidateWorkerModeRejectsUnknownValue(t *testing.T) {
+	cfg := config.Config{
+		DataServicesMode:    config.DataServiceModeLocal,
+		PostgresMode:        config.DataServiceModeLocal,
+		RedisMode:           config.DataServiceModeLocal,
+		S3Mode:              config.DataServiceModeLocal,
+		WorkerMode:          "vkbot",
+		VKConfirmationToken: "dev-confirmation",
+	}
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "WORKER_MODE") {
+		t.Fatalf("expected WORKER_MODE validation error, got %v", err)
+	}
+}
+
+func TestValidateDataServiceModesRejectsUnknownValue(t *testing.T) {
+	cfg := config.Config{
+		DataServicesMode: config.DataServiceModeLocal,
+		PostgresMode:     "sidecar",
+		RedisMode:        config.DataServiceModeLocal,
+		S3Mode:           config.DataServiceModeLocal,
+	}
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "POSTGRES_MODE") {
+		t.Fatalf("expected POSTGRES_MODE validation error, got %v", err)
+	}
+}
+
+func TestLoadS3CompatibilityConfig(t *testing.T) {
+	t.Setenv("S3_REGION", "ru-central1")
+	t.Setenv("S3_ADDRESSING_STYLE", "virtual-hosted")
+
+	cfg := config.Load()
+	if cfg.S3Region != "ru-central1" {
+		t.Fatalf("S3Region = %q, want ru-central1", cfg.S3Region)
+	}
+	if cfg.S3AddressingStyle != "virtual-hosted" {
+		t.Fatalf("S3AddressingStyle = %q, want virtual-hosted", cfg.S3AddressingStyle)
+	}
+}
+
+func TestValidateS3AddressingStyle(t *testing.T) {
+	cfg := config.Config{
+		DataServicesMode:    config.DataServiceModeLocal,
+		PostgresMode:        config.DataServiceModeLocal,
+		RedisMode:           config.DataServiceModeLocal,
+		S3Mode:              config.DataServiceModeLocal,
+		S3AddressingStyle:   "bucket-on-the-moon",
+		VKConfirmationToken: "dev-confirmation",
+	}
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "S3_ADDRESSING_STYLE") {
+		t.Fatalf("expected S3_ADDRESSING_STYLE validation error, got %v", err)
+	}
+}
+
 func TestLoadTracingOTLPConfig(t *testing.T) {
 	t.Setenv("OTEL_TRACES_EXPORTER", "otlp")
 	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "otel-collector:4317")
@@ -349,10 +454,22 @@ func TestLoadMediaPipelineConfig(t *testing.T) {
 	t.Setenv("MEDIA_PROVIDER_QUALITY_DISABLED_FAILURES", "7")
 	t.Setenv("MEDIA_PROVIDER_QUALITY_RECOVERY_SUCCESSES", "3")
 	t.Setenv("ARTIFACT_RETENTION_DAYS", "7")
+	t.Setenv("ARTIFACT_FREE_RETENTION_DAYS", "11")
+	t.Setenv("ARTIFACT_PAID_RETENTION_DAYS", "370")
+	t.Setenv("ARTIFACT_TEMP_RETENTION_DAYS", "2")
+	t.Setenv("ARTIFACT_ORPHAN_RETENTION_DAYS", "5")
 	t.Setenv("MEDIA_INPUT_RETENTION_DAYS", "14")
 	t.Setenv("MEDIA_FAILED_RETENTION_DAYS", "3")
 	t.Setenv("MEDIA_ORIGINAL_RETENTION_DAYS", "30")
 	t.Setenv("MEDIA_VARIANT_RETENTION_DAYS", "21")
+	t.Setenv("RETENTION_JOB_EVENTS_DAYS", "21")
+	t.Setenv("RETENTION_PROVIDER_PAYLOAD_DAYS", "5")
+	t.Setenv("JOB_LOG_RETENTION_BATCH_SIZE", "125")
+	t.Setenv("JOB_ERROR_AGGREGATE_LOOKBACK_DAYS", "14")
+	t.Setenv("ANALYTICS_AGGREGATE_LOOKBACK_DAYS", "9")
+	t.Setenv("RETENTION_CONVERSATION_MESSAGES_DAYS", "45")
+	t.Setenv("RETENTION_CONVERSATION_SUMMARIES_DAYS", "120")
+	t.Setenv("CONVERSATION_RETENTION_BATCH_SIZE", "250")
 
 	cfg := config.Load()
 	if !cfg.MediaPipelineEnabled {
@@ -418,16 +535,44 @@ func TestLoadMediaPipelineConfig(t *testing.T) {
 			cfg.MediaProviderQualityRecoverySuccesses)
 	}
 	if cfg.ArtifactRetentionDays != 7 ||
+		cfg.ArtifactFreeRetentionDays != 11 ||
+		cfg.ArtifactPaidRetentionDays != 370 ||
+		cfg.ArtifactTemporaryRetentionDays != 2 ||
+		cfg.ArtifactOrphanRetentionDays != 5 ||
 		cfg.MediaInputRetentionDays != 14 ||
 		cfg.MediaFailedRetentionDays != 3 ||
 		cfg.MediaOriginalRetentionDays != 30 ||
 		cfg.MediaVariantRetentionDays != 21 {
-		t.Fatalf("unexpected media retention config: artifact=%d input=%d failed=%d original=%d variant=%d",
+		t.Fatalf("unexpected media retention config: artifact=%d free=%d paid=%d temp=%d orphan=%d input=%d failed=%d original=%d variant=%d",
 			cfg.ArtifactRetentionDays,
+			cfg.ArtifactFreeRetentionDays,
+			cfg.ArtifactPaidRetentionDays,
+			cfg.ArtifactTemporaryRetentionDays,
+			cfg.ArtifactOrphanRetentionDays,
 			cfg.MediaInputRetentionDays,
 			cfg.MediaFailedRetentionDays,
 			cfg.MediaOriginalRetentionDays,
 			cfg.MediaVariantRetentionDays)
+	}
+	if cfg.JobEventsRetentionDays != 21 ||
+		cfg.ProviderPayloadRetentionDays != 5 ||
+		cfg.JobLogRetentionBatchSize != 125 ||
+		cfg.JobErrorAggregateLookbackDays != 14 ||
+		cfg.AnalyticsAggregateLookbackDays != 9 {
+		t.Fatalf("unexpected job log retention config: events=%d payloads=%d batch=%d lookback=%d analytics=%d",
+			cfg.JobEventsRetentionDays,
+			cfg.ProviderPayloadRetentionDays,
+			cfg.JobLogRetentionBatchSize,
+			cfg.JobErrorAggregateLookbackDays,
+			cfg.AnalyticsAggregateLookbackDays)
+	}
+	if cfg.ConversationMessageRetentionDays != 45 ||
+		cfg.ConversationSummaryRetentionDays != 120 ||
+		cfg.ConversationRetentionBatchSize != 250 {
+		t.Fatalf("unexpected conversation retention config: messages=%d summaries=%d batch=%d",
+			cfg.ConversationMessageRetentionDays,
+			cfg.ConversationSummaryRetentionDays,
+			cfg.ConversationRetentionBatchSize)
 	}
 }
 
@@ -687,6 +832,48 @@ func TestValidateMediaScaleGuards(t *testing.T) {
 	err = cfg.Validate()
 	if err == nil || !strings.Contains(err.Error(), "MEDIA_FAILED_RETENTION_DAYS") {
 		t.Fatalf("expected retention validation error, got %v", err)
+	}
+
+	cfg = validMediaPipelineConfig()
+	cfg.ConversationMessageRetentionDays = -1
+	err = cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "RETENTION_CONVERSATION_MESSAGES_DAYS") {
+		t.Fatalf("expected conversation retention validation error, got %v", err)
+	}
+
+	cfg = validMediaPipelineConfig()
+	cfg.JobEventsRetentionDays = -1
+	err = cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "RETENTION_JOB_EVENTS_DAYS") {
+		t.Fatalf("expected job events retention validation error, got %v", err)
+	}
+
+	cfg = validMediaPipelineConfig()
+	cfg.ProviderPayloadRetentionDays = -1
+	err = cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "RETENTION_PROVIDER_PAYLOAD_DAYS") {
+		t.Fatalf("expected provider payload retention validation error, got %v", err)
+	}
+
+	cfg = validMediaPipelineConfig()
+	cfg.JobLogRetentionBatchSize = -1
+	err = cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "JOB_LOG_RETENTION_BATCH_SIZE") {
+		t.Fatalf("expected job log batch validation error, got %v", err)
+	}
+
+	cfg = validMediaPipelineConfig()
+	cfg.JobErrorAggregateLookbackDays = -1
+	err = cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "JOB_ERROR_AGGREGATE_LOOKBACK_DAYS") {
+		t.Fatalf("expected job error aggregate validation error, got %v", err)
+	}
+
+	cfg = validMediaPipelineConfig()
+	cfg.AnalyticsAggregateLookbackDays = -1
+	err = cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "ANALYTICS_AGGREGATE_LOOKBACK_DAYS") {
+		t.Fatalf("expected analytics aggregate validation error, got %v", err)
 	}
 
 	cfg = validMediaPipelineConfig()

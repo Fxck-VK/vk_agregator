@@ -219,12 +219,17 @@ Override these values when needed:
 | `HTTP_ADDR` | `:8080` | API listen address |
 | `DATABASE_URL` | `postgres://vk_ai_aggregator:vk_ai_aggregator@localhost:5432/vk_ai_aggregator?sslmode=disable` | Postgres DSN |
 | `MIGRATIONS_DIR` | `migrations` | Migration files dir |
+| `MIGRATION_BACKUP_CONFIRMED` | `false` | Set `true` only when an external/manual verified Postgres backup already exists for the production migration |
+| `MIGRATION_ALLOW_DESTRUCTIVE` | `false` | Manual emergency gate for destructive `*.up.sql` migrations |
+| `MIGRATION_DESTRUCTIVE_CONFIRM` | `` | Must be `I_UNDERSTAND_DESTRUCTIVE_MIGRATIONS` when destructive migrations are explicitly allowed |
 | `REDIS_ADDR` | `localhost:6379` | Redis address |
 | `REDIS_PASSWORD` / `REDIS_DB` | `` / `0` | Redis auth/db |
-| `S3_ENDPOINT` | `localhost:9000` | MinIO/S3 endpoint (host:port, no scheme) |
+| `S3_ENDPOINT` | `localhost:9000` | MinIO/S3 endpoint; accepts `host:port` or `http(s)://host` without a path |
 | `S3_ACCESS_KEY` / `S3_SECRET_KEY` | `minioadmin` / `minioadmin` | Object store creds |
 | `S3_BUCKET` | `artifacts` | Artifact bucket (auto-created) |
 | `S3_USE_SSL` | `false` | HTTPS to S3 |
+| `S3_REGION` | `us-east-1` | S3 bucket region for MinIO/S3-compatible providers |
+| `S3_ADDRESSING_STYLE` | `path` | Bucket addressing: `path`, `virtual-hosted` or `auto`; keep `path` for MinIO unless provider bucket DNS/TLS is configured |
 | `VK_CONFIRMATION_TOKEN` | `dev-confirmation` | Returned for VK `confirmation` |
 | `VK_SECRET` | `` (empty = no check) | VK callback secret |
 | `VK_APP_ID` | `` | VK Mini App id (informational for BFF/dev setup) |
@@ -335,6 +340,10 @@ Override these values when needed:
 | `VK_TOP_UP_RECEIPT_EMAIL` / `VK_TOP_UP_RECEIPT_PHONE` | `` / `` | Server-side receipt contact for the VK Bot quick top-up flow; set at least one when `VK_MENU_TOP_UP_ENABLED=true` |
 | `SIGNED_DELIVERY` / `ARTIFACT_URL_TTL` | `false` / `1h` | Deliver media through signed artifact URLs |
 | `ARTIFACT_RETENTION_DAYS` | `0` | Optional S3 lifecycle expiry and worker maintenance cleanup window for inactive `failed/deleted` media objects; `0` disables cleanup |
+| `ARTIFACT_FREE_RETENTION_DAYS` | `7` | Product-tier cleanup window for free generated artifacts; metadata is expired before object deletion |
+| `ARTIFACT_PAID_RETENTION_DAYS` | `365` | Product-tier cleanup window for paid/generated artifacts that should live longer |
+| `ARTIFACT_TEMP_RETENTION_DAYS` | `1` | Cleanup window for temporary artifacts and temp uploads |
+| `ARTIFACT_ORPHAN_RETENTION_DAYS` | `7` | Cleanup window for artifact objects with no job/delivery owner reference |
 | `MEDIA_INPUT_RETENTION_DAYS` | `0` | Optional cleanup window for unused uploaded reference images; ready references still used by jobs are kept |
 | `MEDIA_FAILED_RETENTION_DAYS` | `ARTIFACT_RETENTION_DAYS` | Cleanup window for failed/deleted media originals and variants |
 | `MEDIA_ORIGINAL_RETENTION_DAYS` | `0` | Optional cleanup window for unreferenced provider originals; active job/delivery history is kept |
@@ -498,15 +507,59 @@ Override these values when needed:
   jobs per user through the job repository, bound per-worker probe/transcode
   concurrency, and keep paid media fallback attempts conservative by default.
   Maintenance cleanup uses lifecycle-specific retention:
+  `ARTIFACT_FREE_RETENTION_DAYS` for free artifacts,
+  `ARTIFACT_PAID_RETENTION_DAYS` for paid artifacts,
+  `ARTIFACT_TEMP_RETENTION_DAYS` for temporary artifacts and temp uploads,
+  `ARTIFACT_ORPHAN_RETENTION_DAYS` for orphaned media objects,
   `MEDIA_INPUT_RETENTION_DAYS` for unused reference uploads,
   `MEDIA_FAILED_RETENTION_DAYS` for failed/deleted media,
   `MEDIA_ORIGINAL_RETENTION_DAYS` for unreferenced provider originals and
   `MEDIA_VARIANT_RETENTION_DAYS` for safe delivery variants. The legacy
   `ARTIFACT_RETENTION_DAYS` remains the default for failed/deleted and variant
-  cleanup when the split variables are unset. Cleanup is batched and clears
-  private storage coordinates only after object deletion; active `ready/stored`
-  artifacts referenced by jobs or deliveries remain available to owners and
-  delivery retries.
+  cleanup when the split variables are unset. Cleanup is DB-first: Postgres
+  marks rows with `expires_at`, then a later maintenance step deletes S3/MinIO
+  objects and only after successful object deletion clears private storage
+  coordinates and sets `deleted_at`. Active `ready/stored` artifacts referenced
+  by jobs or deliveries remain available to owners and delivery retries.
+- **Data retention policy**: `docs/DATA_RETENTION_POLICY.md` is the retention
+  source of truth. Ledger, payment and balance history are kept long-term and
+  must not be deleted by generic cleanup. Jobs keep lightweight metadata for
+  support/accounting, while job event logs, prompts, conversation messages and
+  raw provider diagnostics are bounded. Artifacts expire by product tier/type,
+  and analytics should be stored as aggregate records rather than raw user
+  content. Job/provider diagnostics are controlled by
+  `RETENTION_JOB_EVENTS_DAYS`, `RETENTION_PROVIDER_PAYLOAD_DAYS`,
+  `JOB_LOG_RETENTION_BATCH_SIZE`, `JOB_ERROR_AGGREGATE_LOOKBACK_DAYS` and
+  `ANALYTICS_AGGREGATE_LOOKBACK_DAYS`.
+  These settings preserve job status/result/artifact links while redacting raw
+  provider request/response payloads after the short diagnostics window.
+- **Analytics aggregates**: product dashboards should read
+  `daily_user_activity`, `daily_generation_stats`, `daily_provider_stats`,
+  `daily_revenue_stats`, `daily_referral_stats`, `daily_retention_stats` and
+  `daily_funnel_stats`. The worker maintenance loop refreshes recent daily
+  windows with idempotent upserts; raw `jobs`, `conversation_messages`,
+  provider payloads and payment event rows remain operational/source-of-truth
+  tables, not cheap dashboard tables.
+- **Retention/operator control room**: protected admin endpoints expose only
+  safe counters, bounded labels and timestamps:
+  `/admin/retention/operator/status`,
+  `/admin/retention/operator/dry-run`,
+  `/admin/analytics/operator/status`,
+  `/admin/data/operator/hot-rows` and
+  `/admin/artifacts/operator/orphans`. They require `X-Admin-Token`, are
+  read-only, and must not return raw prompts, provider payloads, user ids,
+  storage buckets/keys or private artifact URLs. Use dry-run output before
+  shortening retention windows or enabling new cleanup classes.
+- **Retention rollout gate**: before enabling or shortening retention in
+  production, run focused maintenance tests and a dry-run:
+  `go test ./internal/service/maintenance ./internal/domain ./internal/adapter/storage/postgres`,
+  then query `/admin/retention/operator/dry-run` and
+  `/admin/artifacts/operator/orphans`. The checks must confirm that
+  ledger/payment tables are not cleanup targets, old conversation messages are
+  only expired/redacted, analytics refresh uses idempotent daily upserts, and
+  S3/MinIO objects are deleted only after Postgres marks the artifact/variant
+  expired. A second maintenance run must be a no-op or repeat-safe for already
+  processed rows/objects.
 - **Reference-image upload rollout gate**: do not expose public reference-image
   uploads until the external edge/proxy/tunnel request body limit is configured
   at or below `MEDIA_MAX_IMAGE_UPLOAD_BYTES`. The backend also enforces
@@ -621,6 +674,8 @@ minio      Up
 
 ## 5. Migrations
 
+Local development may run migrations directly:
+
 ```bash
 go run ./cmd/migrate up        # apply all pending
 go run ./cmd/migrate status    # verify
@@ -634,6 +689,30 @@ applied 000003_moderation_results
 up complete: 3 migration(s) applied
 ```
 `status` should list every migration as `applied`.
+
+Production migrations use a stricter flow:
+
+1. `cmd/migrate` is built into the dedicated `migrate` container.
+2. `deploy-prod.*` starts Postgres/Redis/MinIO first only when their mode is
+   `local`; otherwise it checks the external/managed endpoints.
+3. `scripts/deploy/check-migrations-safe.*` scans pending `*.up.sql` files for
+   destructive patterns before `migrate up`.
+4. For `APP_ENV=production`, deploy creates a Postgres backup with the
+   `backup-postgres` container before running migrations. If a managed provider
+   backup was taken manually, set `MIGRATION_BACKUP_CONFIRMED=true` in the
+   server env for that deploy.
+5. Only after `migrate up` succeeds does deploy start/update `api`, `worker`,
+   `provider-webhook`, `miniapp` and `reverse-proxy`.
+
+Destructive production migrations are blocked by default. To run one, do a
+manual review, take a verified backup, then explicitly set both:
+
+```env
+MIGRATION_ALLOW_DESTRUCTIVE=true
+MIGRATION_DESTRUCTIVE_CONFIRM=I_UNDERSTAND_DESTRUCTIVE_MIGRATIONS
+```
+
+This is an emergency/manual path, not a normal release path.
 
 Migration rollback is not a routine command. Take a verified backup first, then
 decide whether to roll forward, restore from backup or run a reviewed manual
@@ -712,7 +791,15 @@ curl -s localhost:8080/health
 
 ## 7. Worker Startup
 
-A single binary runs **all** worker pools; start it once:
+`cmd/worker` supports three runtime modes:
+
+| `WORKER_MODE` | Runs |
+|---------------|------|
+| `all` | job consumers plus maintenance loops; default local mode |
+| `jobs` | only generation/polling/delivery consumers |
+| `maintenance` | only scheduled cleanup/reconciliation/aggregation loops |
+
+For local development, start the single binary in the default `all` mode:
 
 ```bash
 go run ./cmd/worker
@@ -726,12 +813,15 @@ It runs these pools over Redis Streams (one consumer group, recovery via `XAUTOC
 | image worker | `stream:jobs:image` | image_generate / edit |
 | video worker | `stream:jobs:video` | video_generate; generated video is probed/transcoded to a VK-ready variant before delivery when media pipeline is enabled |
 | polling worker | `stream:jobs:provider_poll` | poll async provider tasks |
+| maintenance worker | no user/job stream in `maintenance` mode | expires conversations, cleans job events, redacts old provider payloads, deletes orphan/expired artifacts, refreshes daily analytics aggregates |
 | delivery worker | `stream:jobs:delivery` | Artifact → Delivery → Capture → succeeded |
 
-> Scaling note: run multiple `cmd/worker` instances (each joins the same group)
-> for more throughput. Per-pool isolation via `WORKER_POOLS` is still a Beta
-> follow-up (see `TASKS.md` and `.agents/state.json` for current routing). The worker auto-creates the MinIO bucket and
-> consumer groups on start.
+> Scaling note: production runs `worker` as `WORKER_MODE=jobs` and
+> `maintenance-worker` as `WORKER_MODE=maintenance`. Additional job workers can
+> be scaled horizontally by adding more `WORKER_MODE=jobs` instances in the same
+> consumer group. Maintenance must stay a small scheduled process; do not expose
+> it publicly. The worker auto-creates the MinIO bucket and consumer groups on
+> start.
 
 Real adapter modes are opt-in:
 
@@ -1101,14 +1191,16 @@ Expected log:
 | Endpoint | Expected |
 |----------|----------|
 | `GET /health` | `200` `{"status":"ok","checks":{"postgres":"ok","redis":"ok"}}` |
-| `GET /healthz` | same (alias) |
+| `GET /readyz` | `200` JSON with `postgres`, `redis`, `migrations` and `latest_migration`; `503` until the latest bundled migration is applied |
+| `GET /healthz` | same readiness JSON as `/readyz` |
 | `GET /metrics` | `200` Prometheus exposition (`vkagg_*` + Go/process) |
 
 Worker runtime (`WORKER_METRICS_ADDR`, default `:9090`):
 
 | Endpoint | Expected |
 |----------|----------|
-| `GET /healthz` | `200` liveness for the worker metrics server |
+| `GET /readyz` | `200` JSON with `postgres`, `redis`, `s3_bucket`, `migrations` and `latest_migration`; `503` if the worker cannot see Redis/S3/Postgres or the latest schema |
+| `GET /healthz` | same readiness JSON as `/readyz` |
 | `GET /metrics` | `200` Prometheus exposition including `vkagg_queue_depth`, `vkagg_queue_oldest_age_seconds`, `vkagg_queue_consumer_lag` and `vkagg_dlq_routed_total` |
 
 Payment webhook runtime (`PAYMENT_WEBHOOK_ADDR`, default `:8082`):
@@ -1123,6 +1215,9 @@ Payment webhook runtime (`PAYMENT_WEBHOOK_ADDR`, default `:8082`):
 `/readyz` fails closed with `503` only when Postgres or webhook-inbox stats are
 unavailable. A non-zero webhook backlog is reported in JSON and Prometheus but
 does not by itself make readiness fail; alert on age/count instead.
+
+API and worker readiness checks are intentionally stricter than public health:
+deploy must fail if Postgres, Redis, S3 or required migrations are unavailable.
 
 `503 {"status":"degraded",...}` means Postgres or Redis is unreachable — see Troubleshooting.
 
@@ -1445,7 +1540,7 @@ Use this checklist after changing app-surface wiring or shared backend core:
 - Pending/consumers: `redis-cli XINFO GROUPS stream:jobs:text`.
 
 **MinIO**
-- Worker fails at `s3 connect`/`ensure bucket`: confirm MinIO is up, `S3_ENDPOINT` is `host:port` (no scheme), creds match compose.
+- Worker fails at `s3 connect`/`ensure bucket`: confirm MinIO/S3 is up, `S3_ENDPOINT` has no path, creds match compose, and `S3_REGION` / `S3_ADDRESSING_STYLE` match the provider.
 - Console: http://localhost:9001 (`minioadmin`/`minioadmin`); objects live under `artifacts/`.
 
 **Workers**
@@ -1538,6 +1633,7 @@ modular monolith:
 |-----------------|------------------|------|--------------|
 | `cmd/api` | Public through reverse proxy | `POST /webhooks/vk`, `/miniapp/*`, protected `/billing/payment-*` operator routes, `/health`, `/healthz`, private `/metrics` | AI provider calls, ffmpeg/ffprobe work, direct balance mutation, YooKassa webhook verification loop |
 | `cmd/worker` | Private only | Redis job consumers, provider submit/poll, artifact creation, moderation/scanning, media processing, VK delivery, billing capture/release | Public HTTP intake, Mini App auth, payment provider webhooks |
+| `cmd/worker` with `WORKER_MODE=maintenance` (`maintenance-worker`) | Private only | Retention cleanup, job event cleanup, orphan/expired artifact deletion, provider payload redaction, daily analytics aggregate refresh | VK/Mini App HTTP intake, provider submit/poll, user-facing delivery |
 | `cmd/provider-webhook` | Public HTTPS route only for payment provider webhooks | `POST /billing/webhooks/yookassa`, `payment_events` inbox/dedup, provider-verified processing, stale intent reconciliation | VK callback handling, Mini App BFF routes, frontend redirects as payment proof |
 | `web/miniapp/dist` | Public static hosting | VK Mini App UI bundle | Provider calls, payment-provider calls, trusted user identity, balance/job source of truth |
 | Postgres | Private | Durable source of truth: users, jobs, ledger, payments, artifacts metadata, conversations, referrals, inbox/outbox/dedup | Public access |
@@ -1659,17 +1755,16 @@ Validate the production compose file without real secrets:
 
 ```bash
 APP_ENV_FILE=.env.staging.example docker compose --env-file .env.staging.example -f docker-compose.prod.yml config
+APP_ENV_FILE=.env.staging.example docker compose --env-file .env.staging.example -f docker-compose.prod.yml -f docker-compose.data.yml config
 APP_ENV_FILE=.env.prod.example docker compose --env-file .env.prod.example -f docker-compose.prod.yml config
+APP_ENV_FILE=.env.prod.example docker compose --env-file .env.prod.example -f docker-compose.prod.yml -f docker-compose.data.yml config
 ```
 
 Run on a VPS only after creating a real `.env` on that VPS:
 
 ```bash
 # The real VPS .env must contain APP_ENV_FILE=.env.
-docker compose --env-file .env -f docker-compose.prod.yml pull
-docker compose --env-file .env -f docker-compose.prod.yml up -d --no-build postgres redis minio
-docker compose --env-file .env -f docker-compose.prod.yml up --no-deps --exit-code-from migrate --no-build migrate
-docker compose --env-file .env -f docker-compose.prod.yml up -d --no-build api worker provider-webhook miniapp reverse-proxy
+bash scripts/deploy/deploy-prod.sh --branch main --env-file .env --with-cloudflare
 ```
 
 Do not commit the real `.env`. `docker-compose.prod.yml` reads secrets from the
@@ -1863,9 +1958,9 @@ The script checks:
 
 | Check | Expected result |
 |-------|-----------------|
-| `GET http://127.0.0.1:8080/health` or `HTTP_ADDR` override | `2xx` from local `cmd/api` |
-| `GET http://127.0.0.1:9090/healthz` or `WORKER_METRICS_ADDR` override | `2xx` from local `cmd/worker` |
-| `GET http://127.0.0.1:8082/health` or `PAYMENT_WEBHOOK_ADDR` override | `2xx` from local `cmd/provider-webhook` |
+| `GET http://127.0.0.1:8080/readyz` or `HTTP_ADDR` override | `2xx` from local `cmd/api`, including Postgres/Redis/latest migration readiness |
+| `GET http://127.0.0.1:9090/readyz` or `WORKER_METRICS_ADDR` override | `2xx` from local `cmd/worker`, including Redis/S3/Postgres/latest migration readiness |
+| `GET http://127.0.0.1:8082/readyz` or `PAYMENT_WEBHOOK_ADDR` override | `2xx` from local `cmd/provider-webhook` |
 | `GET http://127.0.0.1:5173/` | `2xx` from local Mini App frontend |
 | `GET http://127.0.0.1:8088/proxy-health` or `REVERSE_PROXY_HTTP_PORT` override | `2xx` from local reverse proxy |
 | `GET https://vk.neiirohub.ru/health` | `2xx` from `cmd/api` |
@@ -1920,17 +2015,115 @@ VPS. This is acceptable for beta/small production if the VPS has persistent
 disk, backups and monitoring. For higher availability, move the same env
 contracts to managed services:
 
+The canonical placement contract is `docs/DATA_SERVICES_CONTRACT.md`. Runtime
+config validates the shared mode variables before startup:
+
+#### Single VPS Mode
+
+Single VPS mode is the current simplest production shape. The same VPS runs
+`cmd/api`, `cmd/worker`, `cmd/provider-webhook`, Mini App static, reverse proxy,
+Postgres, Redis and MinIO. Use this when traffic is still modest and one server
+is acceptable as the operational boundary.
+
+```env
+DATA_SERVICES_MODE=local
+POSTGRES_MODE=local
+REDIS_MODE=local
+S3_MODE=local
+DATABASE_URL=postgres://...@postgres:5432/...
+REDIS_ADDR=redis:6379
+S3_ENDPOINT=minio:9000
+S3_ADDRESSING_STYLE=path
+```
+
+Deploy uses `docker-compose.prod.yml` plus `docker-compose.data.yml`, starts
+local Postgres/Redis/MinIO first, runs migrations, then rolls the stateless app
+services. Backups must copy Postgres and MinIO off the VPS.
+
+#### External Data Services Mode
+
+External data services mode keeps the same application containers but moves one
+or more stateful services outside the app stack. This is the path for scaling:
+app/worker nodes can be replaced or multiplied while Postgres, Redis and
+S3-compatible storage stay stable.
+
+```env
+DATA_SERVICES_MODE=managed
+POSTGRES_MODE=managed
+REDIS_MODE=managed
+S3_MODE=managed
+DATABASE_URL=postgres://...managed-host...
+REDIS_ADDR=managed-redis-host:6379
+S3_ENDPOINT=s3.provider.example
+S3_USE_SSL=true
+S3_REGION=ru-1
+S3_ADDRESSING_STYLE=virtual-hosted
+```
+
+Deploy uses only `docker-compose.prod.yml` for runtime containers, skips local
+data containers whose mode is `external`/`managed`, and runs live connectivity
+checks before migrations. Hybrid mode is supported by overriding individual
+`POSTGRES_MODE`, `REDIS_MODE` or `S3_MODE`.
+
+| Env | Meaning |
+|-----|---------|
+| `DATA_SERVICES_MODE` | Default mode for all data services: `local`, `external` or `managed` |
+| `POSTGRES_MODE` | Postgres placement; inherits `DATA_SERVICES_MODE` when unset |
+| `REDIS_MODE` | Redis placement; inherits `DATA_SERVICES_MODE` when unset |
+| `S3_MODE` | S3/MinIO placement; inherits `DATA_SERVICES_MODE` when unset |
+
 | Component | Docker-on-VPS default | Managed replacement |
 |-----------|----------------------|---------------------|
 | Postgres | `postgres` service + `postgres_data` volume | Managed Postgres; set `DATABASE_URL` to the private managed DSN |
 | Redis | `redis` service + `redis_data` volume, AOF enabled | Managed Redis; set `REDIS_ADDR`, `REDIS_PASSWORD`, `REDIS_DB` |
-| S3/MinIO | `minio` service + `minio_data` volume | S3-compatible object storage; set `S3_ENDPOINT`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_USE_SSL`, `S3_BUCKET` |
+| S3/MinIO | `minio` service + `minio_data` volume | S3-compatible object storage; set `S3_ENDPOINT`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_USE_SSL`, `S3_BUCKET`, `S3_REGION`, `S3_ADDRESSING_STYLE` |
+
+Deploy scripts use the mode values as routing for local dependencies:
+
+- `POSTGRES_MODE=local` starts the local `postgres` container;
+- `REDIS_MODE=local` starts the local `redis` container;
+- `S3_MODE=local` starts the local `minio` container;
+- `external` and `managed` skip the matching local container and require the
+  real `DATABASE_URL`, `REDIS_ADDR` and `S3_*` connection values in the server
+  env.
+
+For `external` and `managed` modes the deploy scripts also run explicit
+connectivity checks before migrations:
+
+- Postgres: `postgres:16-alpine` executes `pg_isready` against `DATABASE_URL`;
+- Redis: `redis:7-alpine` executes `redis-cli ping` against `REDIS_ADDR`;
+- S3: `minio/mc` verifies access to `S3_BUCKET` at `S3_ENDPOINT`.
+
+If one of these checks fails, deploy stops before running migrations or starting
+new runtime containers. The checks pass secrets through container environment
+variables and do not print DSNs, tokens or access keys.
+
+Production env validation is fail-closed. Missing service addresses,
+credentials, or invalid mode values stop deploy before migrations or runtime
+containers are started.
 
 Do not expose Postgres, Redis or MinIO ports publicly. Public artifact access
 must go through owner-checked backend delivery or signed URLs, not an open
 bucket.
 
-Production compose persistent volumes:
+For S3-compatible providers, `S3_ENDPOINT` may be `host:port` or a full
+`http(s)://host` URL, but it must not include a path. Keep artifact buckets
+private. Raw provider URLs and raw storage URLs must not be returned to VK,
+Mini App or public API clients; user-facing access must use backend delivery
+or short-lived signed URLs after ownership checks.
+
+Application containers are stateless: do not store database files, Redis state,
+uploads, provider outputs or artifact objects inside `api`, `worker`,
+`provider-webhook`, `miniapp` or `reverse-proxy` containers.
+
+Production compose is split by responsibility:
+
+| File | Contains | Use |
+|------|----------|-----|
+| `docker-compose.prod.yml` | app/runtime services: `api`, `worker`, `maintenance-worker`, `provider-webhook`, `miniapp`, `reverse-proxy`, `cloudflared`, `migrate`, backup jobs | Always used for production runtime |
+| `docker-compose.data.yml` | local `postgres`, `redis`, `minio` and their data volumes | Add only when Postgres/Redis/S3 live on the same VPS |
+
+Production data persistent volumes:
 
 | Volume | Used by | Stores |
 |--------|---------|--------|
@@ -1946,11 +2139,20 @@ destroying data after a verified backup.
 Migration startup flow:
 
 ```bash
-# Validate config without printing resolved secrets.
+# Validate app-only config without printing resolved secrets.
 APP_ENV_FILE=.env docker compose -f docker-compose.prod.yml config >/dev/null
 
+# Validate full single-VPS config with local Postgres/Redis/MinIO.
+APP_ENV_FILE=.env docker compose -f docker-compose.prod.yml -f docker-compose.data.yml config >/dev/null
+
 # Pull release images built by GitHub Actions.
-docker compose -f docker-compose.prod.yml pull migrate api worker provider-webhook miniapp reverse-proxy
+docker compose -f docker-compose.prod.yml pull migrate api worker maintenance-worker provider-webhook miniapp reverse-proxy
+
+# If DATA_SERVICES_MODE/POSTGRES_MODE/REDIS_MODE/S3_MODE are local, start only
+# the matching services from docker-compose.data.yml first. External/managed
+# services are not started by this stack. Prefer the deploy script for this
+# selection logic.
+docker compose -f docker-compose.prod.yml -f docker-compose.data.yml up -d --no-build postgres redis minio
 
 # Run pending migrations before starting/updating app services.
 docker compose -f docker-compose.prod.yml up --no-deps --exit-code-from migrate --no-build migrate
@@ -1959,14 +2161,14 @@ docker compose -f docker-compose.prod.yml up --no-deps --exit-code-from migrate 
 docker compose -f docker-compose.prod.yml run --rm migrate status
 
 # Start/update runtime services after migrations are applied.
-docker compose -f docker-compose.prod.yml up -d --no-build api worker provider-webhook miniapp reverse-proxy
+docker compose -f docker-compose.prod.yml up -d --no-build api worker maintenance-worker provider-webhook miniapp reverse-proxy
 ```
 
-`api`, `worker` and `provider-webhook` also depend on `migrate:
-service_completed_successfully` in compose, but deployment scripts should still
-run `migrate` explicitly before an app rollout. Rollbacks that require schema
-changes must be manual, backup-first and reviewed. Do not run `migrate down`
-blindly; prefer a forward fix or Postgres restore when new writes may have
+Deployment scripts run `migrate` explicitly before an app rollout. Runtime
+compose does not define Postgres/Redis/MinIO directly, so the app stack can run
+with Docker-local, external, or managed data services. Rollbacks that require
+schema changes must be manual, backup-first and reviewed. Do not run `migrate
+down` blindly; prefer a forward fix or Postgres restore when new writes may have
 already happened.
 
 One-command production deploy:
@@ -1989,19 +2191,26 @@ The deploy scripts perform the rollout in this order:
 3. `git fetch`, checkout the target branch and `git pull --ff-only`.
 4. Run `scripts/deploy/check-prod-env` against the selected production env file
    and stop with a variable-name-only error list if required values are missing.
-5. Validate `docker-compose.prod.yml` with the selected env file.
+5. Validate `docker-compose.prod.yml` with the selected env file; if any data
+   service mode is `local`, include `docker-compose.data.yml` too.
 6. Pull Docker images from the configured registry.
-7. Optionally run backup profile first (`-BackupBeforeDeploy` /
-   `--backup-before-deploy`).
-8. Start stateful dependencies: Postgres, Redis, MinIO with `--no-build`.
-9. Build runtime images only when `-BuildOnVPS` / `--build-on-vps` is explicitly
+7. Start only the stateful dependencies whose mode is `local` from
+   `docker-compose.data.yml`: Postgres, Redis and/or MinIO with `--no-build`.
+8. For any data service whose mode is `external` or `managed`, run a live
+   connectivity check before migrations.
+9. Optionally run full backup profile (`-BackupBeforeDeploy` /
+   `--backup-before-deploy`) against the configured data services.
+10. Build runtime images only when `-BuildOnVPS` / `--build-on-vps` is explicitly
    passed.
-10. Recreate and run the one-shot `migrate` service with `--no-build` by
+11. Run migration safety checks. For `APP_ENV=production`, run
+   `backup-postgres` before migration unless `MIGRATION_BACKUP_CONFIRMED=true`
+   marks an external/manual verified backup.
+12. Recreate and run the one-shot `migrate` service with `--no-build` by
    default.
-11. Start `api`, `worker`, `provider-webhook`, `miniapp`, `reverse-proxy` and
+13. Start `api`, `worker`, `maintenance-worker`, `provider-webhook`, `miniapp`, `reverse-proxy` and
    optional `cloudflared`.
-12. Check local health endpoints.
-13. Print `docker compose ps` plus a concise summary: branch, commit, project,
+14. Check local health endpoints.
+15. Print `docker compose ps` plus a concise summary: branch, commit, project,
     env file, runtime services, migration/build status, health status and
     Cloudflare profile state.
 
@@ -2015,7 +2224,7 @@ Useful options:
 | `-SkipBuild` | `--skip-build` | Deprecated compatibility flag; production deploy skips VPS builds by default |
 | `-SkipMigrate` | `--skip-migrate` | Only when this compose project already has a successful `migrate` state |
 | `-WithCloudflare` | `--with-cloudflare` | Start the `cloudflare` profile |
-| `-BackupBeforeDeploy` | `--backup-before-deploy` | Run Postgres and MinIO backups before rollout |
+| `-BackupBeforeDeploy` | `--backup-before-deploy` | Run full Postgres and MinIO backups before rollout; production migration still runs its own Postgres backup gate |
 | `-PullBaseImages` | `--pull-base-images` | Pull newer base images during build |
 | `-NoHealthCheck` | `--no-health-check` | Skip local HTTP health checks |
 
@@ -2024,11 +2233,11 @@ Useful options:
 Run the production runtime first, then start the observability stack. Both
 compose files share the explicit Docker network from `COMPOSE_NETWORK_NAME`
 (`vk-ai-aggregator-prod` by default), so Prometheus scrapes service names such
-as `api:8080`, `worker:9090` and `provider-webhook:8082` instead of public
-domains.
+as `api:8080`, `worker:9090`, `maintenance-worker:9091` and
+`provider-webhook:8082` instead of public domains.
 
 ```bash
-docker compose -f docker-compose.prod.yml up -d postgres redis minio api worker provider-webhook miniapp reverse-proxy
+bash scripts/deploy/deploy-prod.sh --branch main --env-file .env
 docker compose -f docker-compose.observability.yml up -d
 ```
 
@@ -2056,19 +2265,20 @@ bash scripts/deploy/observe-prod.sh --env-file .env
 
 The observe scripts check:
 
-- `api` `/health`, `/healthz`, `/metrics`;
-- `worker` `/healthz`, `/metrics`;
+- `api` `/health`, `/readyz`, `/healthz`, `/metrics`;
+- `worker` `/readyz`, `/healthz`, `/metrics`;
+- `maintenance-worker` `/readyz`, `/healthz`, `/metrics`;
 - `provider-webhook` `/health`, `/readyz`, `/metrics`;
 - `reverse-proxy` `/proxy-health`;
 - Redis Stream lengths for `stream:jobs:*` and `stream:jobs:dlq`;
-- safe aggregate metric samples for payment webhook backlog/provider errors
-  and worker queue/DLQ state.
+- safe aggregate metric samples for payment webhook backlog/provider errors,
+  worker queue/DLQ state and maintenance cleanup/redaction progress.
 
 Logs are not printed by default to avoid leaking payloads. For a controlled
 operator shell:
 
 ```bash
-docker compose -f docker-compose.prod.yml logs --tail=100 api worker provider-webhook reverse-proxy
+docker compose -f docker-compose.prod.yml logs --tail=100 api worker maintenance-worker provider-webhook reverse-proxy
 docker compose -f docker-compose.observability.yml logs --tail=100 prometheus alertmanager grafana
 ```
 
@@ -2076,18 +2286,21 @@ Minimum incident signals:
 
 | Problem | Signal |
 |---------|--------|
-| Worker is down | `WorkerDown`, `WorkerReadinessDegraded`, failed `curl http://127.0.0.1:9090/healthz`, or `worker` not healthy in `docker compose ps` |
+| Worker is down | `WorkerDown`, `WorkerReadinessDegraded`, failed `curl http://127.0.0.1:9090/readyz`, or `worker` not healthy in `docker compose ps` |
+| Maintenance worker is down | `MaintenanceWorkerDown`, `MaintenanceWorkerReadinessDegraded`, failed `curl http://127.0.0.1:9091/readyz`, or `maintenance-worker` not healthy in `docker compose ps` |
 | YooKassa webhook is not processed | `ProviderWebhookDown`, `ProviderWebhookReadinessDegraded`, `PaymentWebhookBacklog`, non-zero `payment_webhook_oldest_unprocessed_age_seconds` |
-| Redis/Postgres is unavailable | `api /healthz` returns degraded/503, exporter down alerts, provider-webhook `/readyz` fails for Postgres |
+| Redis/Postgres/S3 is unavailable | `api /readyz`, `worker /readyz` or `maintenance-worker /readyz` returns degraded/503, exporter down alerts, provider-webhook `/readyz` fails for Postgres |
 | Jobs are accumulating | `QueueOldestAgeHigh`, rising `vkagg_queue_depth`, rising `vkagg_queue_oldest_age_seconds`, or non-zero `stream:jobs:dlq` |
 
-Backup and rollback strategy:
+Backup/restore strategy:
 
 | Target | Strategy |
 |--------|----------|
-| Postgres | Nightly custom-format `pg_dump`; retain at least 7-14 days; copy backups off the VPS |
-| MinIO/S3 | Nightly `aws s3 sync`/mirror of the private artifact bucket; copy snapshots off the VPS |
-| Redis | AOF + `redis_data` volume for restart continuity; optional backup only. Redis is queues/cache and must be rebuildable from Postgres state |
+| Local Postgres in Docker | Custom-format `pg_dump` through the `backup-postgres` container; retain at least 7-14 days; copy backups off the VPS |
+| Managed Postgres | Provider-native automated backups/snapshots first; keep a manual `pg_dump` export path for migration drills and emergency restore |
+| Local MinIO | Mirror the private artifact bucket/volume through the `backup-minio` container; copy snapshots off the VPS |
+| Managed S3 | Enable provider versioning, lifecycle policy and, when available, replication; keep bucket access private |
+| Redis | Not a source of truth. AOF/volume backup is optional for restart continuity only; queues/cache must be rebuildable from Postgres/job state |
 | Runtime images | Build every release in GitHub Actions with an explicit `IMAGE_TAG` such as `main`, `sha-<commit>` or a release tag. Keep at least the previous known-good image tag in the registry |
 | Env | Keep the previous production `.env` snapshot outside the repository with `0600` permissions before changing runtime secrets or feature flags |
 
@@ -2095,6 +2308,11 @@ The repository provides backup scripts and matching compose one-shot services:
 
 ```bash
 # Docker profile, writes into backup_data and backup_metrics volumes.
+docker compose -f docker-compose.prod.yml -f docker-compose.data.yml --profile backup run --rm backup-postgres
+docker compose -f docker-compose.prod.yml -f docker-compose.data.yml --profile backup run --rm backup-minio
+
+# For external/managed Postgres/S3, omit docker-compose.data.yml and point
+# DATABASE_URL/S3_* at the managed services in the server env.
 docker compose -f docker-compose.prod.yml --profile backup run --rm backup-postgres
 docker compose -f docker-compose.prod.yml --profile backup run --rm backup-minio
 
@@ -2104,9 +2322,131 @@ scripts/backup/backup-postgres.sh
 scripts/backup/backup-minio.sh
 ```
 
-For managed Postgres/S3, prefer the provider's native automated backups, but
-keep an application-owned export path for emergency restores and migration
-rollback drills.
+Restore is always manual and fail-closed. It is not part of deploy or rollback
+automation. Set these only for a controlled operator session:
+
+```env
+RESTORE_ALLOW_DESTRUCTIVE=true
+RESTORE_CONFIRM=I_UNDERSTAND_RESTORE_OVERWRITES_DATA
+```
+
+Examples:
+
+```bash
+# Restore local Docker Postgres from a backup stored in backup_data.
+RESTORE_ALLOW_DESTRUCTIVE=true \
+RESTORE_CONFIRM=I_UNDERSTAND_RESTORE_OVERWRITES_DATA \
+RESTORE_POSTGRES_FILE=postgres/postgres-YYYYMMDDTHHMMSSZ.dump \
+docker compose -f docker-compose.prod.yml -f docker-compose.data.yml --profile backup run --rm restore-postgres
+
+# Restore a local MinIO bucket snapshot. Add RESTORE_MINIO_DELETE=true only when
+# the destination bucket must be mirrored exactly to the backup snapshot.
+RESTORE_ALLOW_DESTRUCTIVE=true \
+RESTORE_CONFIRM=I_UNDERSTAND_RESTORE_OVERWRITES_DATA \
+RESTORE_MINIO_DIR=YYYYMMDDTHHMMSSZ \
+docker compose -f docker-compose.prod.yml -f docker-compose.data.yml --profile backup run --rm restore-minio
+```
+
+For managed Postgres, use the provider backup/snapshot restore as the primary
+path. For managed S3, prefer provider versioning/lifecycle/replication recovery.
+The repository restore scripts remain useful for manual exports and drills.
+Redis restore is normally skipped; start Redis empty and let workers rebuild
+transient queues/cache from persisted Postgres/job/provider state.
+
+#### Migration To Managed Data Services
+
+Use this when moving production from single VPS local Postgres/Redis/MinIO to
+external or managed Postgres/Redis/S3. This is a planned maintenance operation:
+do not combine it with a feature release.
+
+Preparation:
+
+1. Create the managed/external services:
+   - Postgres database with private networking or a locked-down allowlist;
+   - Redis instance with auth/TLS/private networking where available;
+   - S3-compatible private bucket with access keys, region and addressing style.
+2. Confirm the new values that will replace local endpoints:
+
+```env
+DATA_SERVICES_MODE=managed
+POSTGRES_MODE=managed
+REDIS_MODE=managed
+S3_MODE=managed
+DATABASE_URL=postgres://...managed-host...
+REDIS_ADDR=managed-redis-host:6379
+REDIS_PASSWORD=...
+S3_ENDPOINT=s3.provider.example
+S3_ACCESS_KEY=...
+S3_SECRET_KEY=...
+S3_USE_SSL=true
+S3_BUCKET=artifacts
+S3_REGION=ru-1
+S3_ADDRESSING_STYLE=virtual-hosted
+```
+
+Cutover checklist:
+
+1. Announce a maintenance window and stop new user write traffic if the product
+   is live.
+2. Stop workers first, then stop public write surfaces if strict zero-write
+   cutover is required:
+
+```bash
+docker compose -f docker-compose.prod.yml stop worker maintenance-worker
+docker compose -f docker-compose.prod.yml stop api provider-webhook
+```
+
+3. Take local backups before copying data:
+
+```bash
+docker compose -f docker-compose.prod.yml -f docker-compose.data.yml --profile backup run --rm backup-postgres
+docker compose -f docker-compose.prod.yml -f docker-compose.data.yml --profile backup run --rm backup-minio
+```
+
+4. Restore/copy data into the managed services:
+   - restore the latest Postgres dump into the managed database with the
+     provider tool or `pg_restore`;
+   - mirror the local MinIO private `artifacts` bucket to the managed
+     S3-compatible bucket;
+   - do not migrate Redis as source of truth. Managed Redis can start empty.
+5. Edit only the real VPS `.env`; do not commit secrets. Switch
+   `DATA_SERVICES_MODE` and per-service modes to `managed` or `external`, then
+   replace `DATABASE_URL`, `REDIS_ADDR` and `S3_*`.
+6. Run env/config validation and connectivity checks before migrations:
+
+```bash
+bash scripts/deploy/check-prod-env.sh .env
+bash scripts/deploy/deploy-prod.sh --branch main --env-file .env --with-cloudflare --skip-public-smoke
+```
+
+The deploy script validates compose, checks managed Postgres/Redis/S3
+connectivity, runs migration safety checks, runs `migrate up`, then starts the
+runtime services.
+
+7. After startup, run production smoke:
+
+```bash
+bash scripts/deploy/smoke-prod.sh --env-file .env
+```
+
+Smoke must cover:
+
+- `api /readyz` sees managed Postgres, Redis and latest migration;
+- `worker /readyz` sees managed Postgres, Redis and S3 bucket;
+- Mini App opens and `/miniapp/balance` works;
+- VK callback route works;
+- YooKassa webhook route reaches `cmd/provider-webhook`;
+- a mock or controlled real job completes and artifact delivery succeeds.
+
+Rollback plan:
+
+- Keep local `postgres_data`, `redis_data` and `minio_data` volumes intact until
+  the managed deployment has passed the agreed verification window.
+- If no writes were accepted only on the managed side, switch `.env` back to
+  local modes and restart the previous known-good image tag.
+- If writes happened on managed Postgres/S3, stop and decide manually whether to
+  keep managed as source of truth, replay data back, or restore from backup.
+- Never run `migrate down` or delete local volumes as an automatic rollback.
 
 Before a risky deploy:
 
@@ -2132,12 +2472,14 @@ The rollback scripts:
 
 1. validate `docker-compose.prod.yml`;
 2. run the same production env preflight as deploy;
-3. run Postgres and MinIO backups first by default;
-4. pull the backup image and the previous known-good runtime images;
-5. set `IMAGE_TAG` to the previous known-good runtime image tag;
-6. start `api`, `worker`, `provider-webhook`, `miniapp`, `reverse-proxy` with
+3. start only local stateful dependencies required by `POSTGRES_MODE`,
+   `REDIS_MODE` and `S3_MODE`;
+4. run Postgres and MinIO backups first by default;
+5. pull the backup image and the previous known-good runtime images;
+6. set `IMAGE_TAG` to the previous known-good runtime image tag;
+7. start `api`, `worker`, `provider-webhook`, `miniapp`, `reverse-proxy` with
    `--no-build --no-deps`;
-7. run local health checks and print a rollback summary.
+8. run local health checks and print a rollback summary.
 
 They intentionally do **not** run `migrate down`. If a release added a
 backward-incompatible migration, stop and decide manually whether to:
@@ -2162,7 +2504,8 @@ Restore order:
 
 Start in dependency order; stop in reverse:
 
-1. **Infrastructure**: Postgres → Redis → MinIO (wait for healthy).
+1. **Infrastructure**: local Postgres/Redis/MinIO when their mode is `local`;
+   otherwise verify external/managed endpoints before rollout.
 2. **Migrations**: `migrate up` (must complete before app starts).
 3. **Provider webhook**: `cmd/provider-webhook` (verify `/health` = 200 and the public YooKassa route reaches this process).
 4. **API**: `cmd/api` (verify `/health` = 200).
@@ -2191,7 +2534,8 @@ bash scripts/deploy/rollback-prod.sh --env-file .env --image-tag <previous-good-
 ```
 
 This rolls back stateless runtime services only: `api`, `worker`,
-`provider-webhook`, `miniapp`, `reverse-proxy` and optional `cloudflared`.
+`maintenance-worker`, `provider-webhook`, `miniapp`, `reverse-proxy` and
+optional `cloudflared`.
 It does not rebuild images and does not run migrations. Postgres and MinIO
 backups run first unless `--skip-backup` / `-SkipBackup` is explicitly used.
 Use skip-backup only when there is already a fresh verified backup.

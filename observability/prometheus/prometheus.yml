@@ -41,6 +41,15 @@ scrape_configs:
           service: worker
           surface: worker
 
+  - job_name: maintenance-worker
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - maintenance-worker:9091
+        labels:
+          service: maintenance-worker
+          surface: maintenance
+
   - job_name: provider-webhook
     metrics_path: /metrics
     static_configs:
@@ -107,6 +116,7 @@ scrape_configs:
       - targets:
           - http://api:8080/healthz
           - http://worker:9090/healthz
+          - http://maintenance-worker:9091/healthz
           - http://provider-webhook:8082/readyz
           - http://miniapp:80/
           - http://reverse-proxy/proxy-health
