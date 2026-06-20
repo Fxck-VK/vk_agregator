@@ -2144,6 +2144,79 @@ func TestExternalAsyncVideoPollTransportErrorKeepsTaskPolling(t *testing.T) {
 	}
 }
 
+func TestExternalAsyncVideoPollTransportErrorKeepsPollingAfterOldBudget(t *testing.T) {
+	provider := &captureVideoProvider{
+		name:  domain.ProviderPoYo,
+		model: poyo.ModelKlingO3Standard,
+		cost:  100,
+		pollErrors: []error{
+			routingError{class: domain.ProviderErrInternal},
+		},
+	}
+	h := newHarnessWithProvider(t, provider, func(d *worker.Deps) {
+		d.ProviderMediaContracts = []domain.ProviderMediaContract{{
+			Provider:               domain.ProviderPoYo,
+			Model:                  poyo.ModelKlingO3Standard,
+			ModelClass:             "kling_o3_standard",
+			Modality:               domain.ModalityVideo,
+			AllowedDurationsSec:    []int{5},
+			AllowedAspectRatios:    []string{"16:9"},
+			AllowedResolutions:     []string{"720p"},
+			ExpectedContainer:      "mp4",
+			ExpectedCodec:          "h264",
+			ExpectedMaxBytes:       128 << 20,
+			DeliveryReadyOutput:    true,
+			MaxProviderAttempts:    1,
+			MaxFallbackAttempts:    0,
+			MaxProviderCostCredits: 100,
+		}}
+	})
+	ctx := context.Background()
+	snapshot := domain.VideoRouteSnapshot{
+		Alias:                  domain.VideoRouteKlingO3Standard,
+		Provider:               domain.ProviderPoYo,
+		ProviderModelID:        poyo.ModelKlingO3Standard,
+		ModelClass:             "kling_o3_standard",
+		DurationSec:            5,
+		Resolution:             "720p",
+		AspectRatio:            "16:9",
+		ProviderCostCredits:    50,
+		InternalCostCredits:    100,
+		PriceMultiplier:        2,
+		MaxProviderCostCredits: 100,
+		MaxInternalCostCredits: 200,
+	}
+	job := h.queueVideoJob(t, map[string]any{
+		"prompt":               "safe video",
+		"video_route_alias":    string(domain.VideoRouteKlingO3Standard),
+		"resolved_video_route": snapshot,
+	})
+
+	if err := h.gen.Process(ctx, taskFor(job)); err != nil {
+		t.Fatalf("gen process: %v", err)
+	}
+	pollTasks := h.streams.byStream[redisqueue.StreamProviderPoll]
+	if len(pollTasks) != 1 {
+		t.Fatalf("expected initial poll task, got %d", len(pollTasks))
+	}
+	task := pollTasks[len(pollTasks)-1]
+	task.Attempt = 20
+	if err := h.poll.Process(ctx, task); err != nil {
+		t.Fatalf("poll process: %v", err)
+	}
+
+	got := h.reload(t, job.ID)
+	if got.Status != domain.JobStatusProviderPending {
+		t.Fatalf("after old-budget poll error status = %q, want provider_pending", got.Status)
+	}
+	if len(h.releaser.released) != 0 {
+		t.Fatalf("old-budget transient poll error must not release credits: %v", h.releaser.released)
+	}
+	if len(h.streams.byStream[redisqueue.StreamProviderPoll]) < 2 {
+		t.Fatalf("expected poll task to be requeued, got %v", h.streams.byStream[redisqueue.StreamProviderPoll])
+	}
+}
+
 func TestProviderMediaContractRejectsUnsupportedDurationBeforeProvider(t *testing.T) {
 	provider := &captureVideoProvider{name: "capture-video", model: "safe-video", cost: 10}
 	h := newHarnessWithProvider(t, provider, func(d *worker.Deps) {

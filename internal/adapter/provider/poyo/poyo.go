@@ -22,14 +22,17 @@ const (
 	ModelKlingO3Standard = "kling-o3/standard"
 	ModelSeedance20Fast  = "seedance-2-fast"
 	ModelRunwayGen45     = "runway-gen-4.5"
+	ModelNanoBanana2New  = "nano-banana-2-new"
 
 	klingO3CreditsPerSecond    int64 = 10
 	seedance20CreditsPerSecond int64 = 28
+	nanoBanana2CreditsPerImage int64 = 5
 	productPriceMultiplier           = 2
 
-	maxKlingReferenceImages    = 4
-	maxSeedanceReferenceImages = 4
-	maxRunwayReferenceImages   = 1
+	maxKlingReferenceImages       = 4
+	maxSeedanceReferenceImages    = 4
+	maxRunwayReferenceImages      = 1
+	maxNanoBanana2ReferenceImages = 14
 )
 
 // Config holds PoYo connection settings.
@@ -75,6 +78,12 @@ func (p *Provider) Name() domain.ProviderName { return domain.ProviderPoYo }
 func (p *Provider) Capabilities(context.Context) ([]domain.Capability, error) {
 	return []domain.Capability{
 		{
+			Operation:       domain.OperationImageGenerate,
+			Modality:        domain.ModalityImage,
+			ModelCode:       ModelNanoBanana2New,
+			SupportsPolling: true,
+		},
+		{
 			Operation:       domain.OperationVideoGenerate,
 			Modality:        domain.ModalityVideo,
 			ModelCode:       ModelKlingO3Standard,
@@ -115,6 +124,16 @@ func (p *Provider) Estimate(_ context.Context, req domain.ProviderRequest) (doma
 			return domain.CostEstimate{}, &Error{Class: domain.ProviderErrInvalidRequest, Message: "resolved route snapshot cost is unavailable"}
 		}
 		return domain.CostEstimate{AmountCredits: snapshot.InternalCostCredits, Currency: "credits", Estimated: false}, nil
+	}
+	if req.Operation == domain.OperationImageGenerate || req.Modality == domain.ModalityImage {
+		if err := validateImageShape(req, false); err != nil {
+			return domain.CostEstimate{}, err
+		}
+		return domain.CostEstimate{
+			AmountCredits: nanoBanana2CreditsPerImage * productPriceMultiplier,
+			Currency:      "credits",
+			Estimated:     false,
+		}, nil
 	}
 	if err := validateVideoShape(req, false); err != nil {
 		return domain.CostEstimate{}, err
@@ -201,12 +220,12 @@ func (p *Provider) Poll(ctx context.Context, ref domain.ProviderTaskRef) (domain
 	status := mapTaskStatus(decoded.status())
 	switch status {
 	case domain.ProviderTaskSucceeded:
-		outputs := decoded.outputVideoURLs()
+		outputs := decoded.outputMediaURLs()
 		if len(outputs) == 0 {
 			return domain.ProviderTaskResult{
 				Status:       domain.ProviderTaskFailed,
 				ErrorClass:   domain.ProviderErrOutputDownloadFailed,
-				ErrorMessage: "poyo task completed without video output",
+				ErrorMessage: "poyo task completed without media output",
 				Raw:          sanitizedTaskMetadata(decoded),
 			}, nil
 		}
@@ -374,7 +393,7 @@ func (r statusResponse) updatedAt() string {
 	return strings.TrimSpace(r.UpdatedAt)
 }
 
-func (r statusResponse) outputVideoURLs() []string {
+func (r statusResponse) outputMediaURLs() []string {
 	out := r.Result.OutputVideoURLs()
 	for _, file := range r.Data.Files {
 		if strings.TrimSpace(file.FileURL) == "" {
@@ -383,7 +402,16 @@ func (r statusResponse) outputVideoURLs() []string {
 		fileType := strings.ToLower(strings.TrimSpace(file.FileType))
 		format := strings.ToLower(strings.TrimSpace(file.Format))
 		contentType := strings.ToLower(strings.TrimSpace(file.ContentType))
-		if fileType == "video" || strings.Contains(contentType, "video/") || format == "mp4" || format == "mov" {
+		if fileType == "image" ||
+			fileType == "video" ||
+			strings.Contains(contentType, "image/") ||
+			strings.Contains(contentType, "video/") ||
+			format == "jpg" ||
+			format == "jpeg" ||
+			format == "png" ||
+			format == "webp" ||
+			format == "mp4" ||
+			format == "mov" {
 			out = append(out, strings.TrimSpace(file.FileURL))
 		}
 	}
@@ -483,6 +511,32 @@ type requestParams struct {
 }
 
 func buildSubmitRequest(req domain.ProviderRequest) (submitRequest, error) {
+	if req.Operation == domain.OperationImageGenerate || req.Modality == domain.ModalityImage {
+		return buildImageSubmitRequest(req)
+	}
+	return buildVideoSubmitRequest(req)
+}
+
+func buildImageSubmitRequest(req domain.ProviderRequest) (submitRequest, error) {
+	if err := validateImageShape(req, true); err != nil {
+		return submitRequest{}, err
+	}
+	inputURLs := cleanInputURLs(req.InputURLs)
+	input := map[string]any{
+		"prompt":     strings.TrimSpace(req.Prompt),
+		"size":       effectiveImageSize(req),
+		"resolution": effectiveImageResolution(req.Resolution),
+	}
+	if len(inputURLs) > 0 {
+		input["image_urls"] = inputURLs
+	}
+	return submitRequest{
+		Model: strings.TrimSpace(req.ModelCode),
+		Input: input,
+	}, nil
+}
+
+func buildVideoSubmitRequest(req domain.ProviderRequest) (submitRequest, error) {
 	if err := validateVideoShape(req, true); err != nil {
 		return submitRequest{}, err
 	}
@@ -518,12 +572,81 @@ func buildSubmitRequest(req domain.ProviderRequest) (submitRequest, error) {
 	}, nil
 }
 
+func validateImageShape(req domain.ProviderRequest, requirePrompt bool) error {
+	if req.Operation != domain.OperationImageGenerate || req.Modality != domain.ModalityImage {
+		return &Error{Class: domain.ProviderErrUnsupportedCapab, Message: string(req.Operation) + "/" + string(req.Modality)}
+	}
+	if strings.TrimSpace(req.ModelCode) != ModelNanoBanana2New {
+		return &Error{Class: domain.ProviderErrUnsupportedCapab, Message: "unsupported PoYo image model"}
+	}
+	if requirePrompt {
+		prompt := strings.TrimSpace(req.Prompt)
+		if prompt == "" {
+			return &Error{Class: domain.ProviderErrInvalidRequest, Message: "prompt is required"}
+		}
+		if len([]rune(prompt)) > 20000 {
+			return &Error{Class: domain.ProviderErrInvalidRequest, Message: "prompt exceeds 20000 characters"}
+		}
+	}
+	if value := strings.TrimSpace(req.AspectRatio); value != "" && !allowedImageSize(value) {
+		return &Error{Class: domain.ProviderErrInvalidRequest, Message: "unsupported PoYo image size"}
+	}
+	if value := strings.TrimSpace(req.Size); value != "" && !allowedImageSize(value) {
+		return &Error{Class: domain.ProviderErrInvalidRequest, Message: "unsupported PoYo image size"}
+	}
+	if value := strings.TrimSpace(req.Resolution); value != "" && !allowedImageResolution(value) {
+		return &Error{Class: domain.ProviderErrInvalidRequest, Message: "unsupported PoYo image resolution"}
+	}
+	if len(cleanInputURLs(req.InputURLs)) > maxNanoBanana2ReferenceImages {
+		return &Error{Class: domain.ProviderErrInvalidRequest, Message: "too many Nano Banana 2 reference images"}
+	}
+	return nil
+}
+
+func effectiveImageSize(req domain.ProviderRequest) string {
+	for _, value := range []string{req.AspectRatio, req.Size} {
+		trimmed := strings.TrimSpace(value)
+		if allowedImageSize(trimmed) {
+			return trimmed
+		}
+	}
+	return "1:1"
+}
+
+func effectiveImageResolution(value string) string {
+	switch strings.ToUpper(strings.TrimSpace(value)) {
+	case "1K", "2K", "4K":
+		return strings.ToUpper(strings.TrimSpace(value))
+	default:
+		return "2K"
+	}
+}
+
+func allowedImageResolution(value string) bool {
+	switch strings.ToUpper(strings.TrimSpace(value)) {
+	case "1K", "2K", "4K":
+		return true
+	default:
+		return false
+	}
+}
+
+func allowedImageSize(value string) bool {
+	switch strings.TrimSpace(value) {
+	case "1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9",
+		"1:4", "4:1", "1:8", "8:1":
+		return true
+	default:
+		return false
+	}
+}
+
 func validateVideoShape(req domain.ProviderRequest, requirePrompt bool) error {
 	if req.Operation != domain.OperationVideoGenerate || req.Modality != domain.ModalityVideo {
 		return &Error{Class: domain.ProviderErrUnsupportedCapab, Message: string(req.Operation) + "/" + string(req.Modality)}
 	}
 	model := strings.TrimSpace(req.ModelCode)
-	if !isSupportedModel(model) {
+	if !isSupportedVideoModel(model) {
 		return &Error{Class: domain.ProviderErrUnsupportedCapab, Message: "unsupported PoYo video model"}
 	}
 	if requirePrompt {
@@ -613,6 +736,10 @@ func videoReferenceRequested(params requestParams) bool {
 }
 
 func isSupportedModel(model string) bool {
+	return isSupportedVideoModel(model) || strings.TrimSpace(model) == ModelNanoBanana2New
+}
+
+func isSupportedVideoModel(model string) bool {
 	switch strings.TrimSpace(model) {
 	case ModelKlingO3Standard, ModelSeedance20Fast, ModelRunwayGen45:
 		return true

@@ -2,14 +2,17 @@
 package vkbot
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/redis/go-redis/v9"
 
 	vkdelivery "vk-ai-aggregator/internal/adapter/delivery/vk"
 	vkinbound "vk-ai-aggregator/internal/adapter/inbound/vk"
 	redisqueue "vk-ai-aggregator/internal/adapter/queue/redis"
+	s3store "vk-ai-aggregator/internal/adapter/storage/s3"
 	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/platform/config"
 	"vk-ai-aggregator/internal/service/antispam"
@@ -32,6 +35,7 @@ type Deps struct {
 	Billing      *billingservice.Service
 	Payment      *paymentservice.Service
 	Referrals    domain.ReferralRepository
+	Artifacts    domain.ArtifactRepository
 	Orchestrator *joborchestrator.Orchestrator
 	Router       *commandrouter.Router
 	Logger       *slog.Logger
@@ -40,7 +44,7 @@ type Deps struct {
 // NewHandler builds the VK callback HTTP handler without owning core business
 // decisions. Provider calls, billing mutations and job processing remain in the
 // shared orchestrator/worker/billing layers.
-func NewHandler(cfg config.Config, deps Deps) http.Handler {
+func NewHandler(ctx context.Context, cfg config.Config, deps Deps) http.Handler {
 	logger := deps.Logger
 	if logger == nil {
 		logger = slog.Default()
@@ -83,6 +87,23 @@ func NewHandler(cfg config.Config, deps Deps) http.Handler {
 		logger.Warn("vk control responses disabled because VK_ACCESS_TOKEN is empty")
 	}
 
+	var objectStore vkinbound.ObjectStore
+	if !cfg.MediaReferenceUploadsEnabled {
+		logger.Warn("vk video reference uploads disabled by MEDIA_REFERENCE_UPLOADS_ENABLED")
+	} else {
+		store, err := s3store.New(ctx, s3store.Config{
+			Endpoint:  cfg.S3Endpoint,
+			AccessKey: cfg.S3AccessKey,
+			SecretKey: cfg.S3SecretKey,
+			UseSSL:    cfg.S3UseSSL,
+		})
+		if err != nil {
+			logger.Warn("s3 connect failed; vk video reference uploads disabled", "error", err)
+		} else {
+			objectStore = store
+		}
+	}
+
 	referrals := referralservice.New(deps.Referrals, deps.Billing, referralservice.Config{
 		CodeLength:                  cfg.ReferralCodeLength,
 		ReferrerSignupRewardCredits: cfg.ReferralReferrerSignupRewardCredits,
@@ -104,6 +125,12 @@ func NewHandler(cfg config.Config, deps Deps) http.Handler {
 		TopUpReceiptPhone:                   cfg.VKTopUpReceiptPhone,
 		TopUpReturnURL:                      firstNonEmpty(cfg.YooKassaReturnURLVKBot, cfg.YooKassaReturnURL),
 		TopUpStatusEditEnabled:              cfg.FeatureVKTopUpStatusEditEnabled,
+		ReferenceUploadsDisabled:            !cfg.MediaReferenceUploadsEnabled,
+		ArtifactBucket:                      cfg.S3Bucket,
+		MaxUploadBytes:                      cfg.MediaMaxImageUploadBytes,
+		MaxUploadImageWidth:                 cfg.MediaMaxImageWidth,
+		MaxUploadImageHeight:                cfg.MediaMaxImageHeight,
+		MaxUploadImagePixels:                cfg.MediaMaxImagePixels,
 	}, vkinbound.Deps{
 		Idempotency:  deps.Idempotency,
 		Inbound:      deps.Inbound,
@@ -119,6 +146,8 @@ func NewHandler(cfg config.Config, deps Deps) http.Handler {
 		Profile:      vkProfile,
 		DialogState:  vkDialogState,
 		AntiSpam:     vkAntiSpam,
+		Artifacts:    deps.Artifacts,
+		Objects:      objectStore,
 		Logger:       logger,
 	})
 }
@@ -154,7 +183,18 @@ func menuFeatures(cfg config.Config) vkinbound.MenuFeatureFlags {
 
 	disableWhenFalse(cfg.VKMenuVideoEnabled, domain.CommandMenuVideo)
 	disableWhenFalse(false, domain.CommandMenuVideoPrunaAI)
-	disableWhenFalse(cfg.VKMenuImageEnabled, domain.CommandMenuImage)
+	apimartProviderReady := cfg.APIMartProviderEnabled &&
+		strings.TrimSpace(cfg.APIMartAPIKey) != "" &&
+		strings.TrimSpace(cfg.APIMartBaseURL) != ""
+	apimartNanoBananaProReady := cfg.FeatureImageModelNanoBananaProEnabled && apimartProviderReady
+	apimartGPTImage2Ready := cfg.FeatureImageModelGPTImage2Enabled && apimartProviderReady
+	poyoImageReady := cfg.FeatureImageModelNanoBanana2Enabled &&
+		cfg.PoYoProviderEnabled &&
+		strings.TrimSpace(cfg.PoYoAPIKey) != "" &&
+		strings.TrimSpace(cfg.PoYoBaseURL) != ""
+
+	disableWhenFalse(cfg.VKMenuImageEnabled && (apimartNanoBananaProReady || apimartGPTImage2Ready || poyoImageReady), domain.CommandMenuImage)
+	disableWhenFalse(apimartNanoBananaProReady, domain.CommandMenuImageText)
 	disableWhenFalse(cfg.VKMenuGPTEnabled, domain.CommandMenuText)
 	disableWhenFalse(cfg.VKMenuStudentsEnabled, domain.CommandMenuStudents)
 	disableWhenFalse(cfg.VKMenuAccountEnabled, domain.CommandAccount)
@@ -184,8 +224,9 @@ func menuFeatures(cfg config.Config) vkinbound.MenuFeatureFlags {
 	enableWhenTrue(cfg.FeatureVideoRouteHailuo23StandardEnabled || cfg.FeatureVideoRouteHailuo23FastEnabled, domain.CommandMenuVideoHailuo02)
 	enableWhenTrue(cfg.FeatureVideoRouteHailuo23StandardEnabled, domain.CommandMenuVideoHailuo02Standard)
 	enableWhenTrue(cfg.FeatureVideoRouteHailuo23FastEnabled, domain.CommandMenuVideoHailuo02Fast)
-	disableWhenFalse(cfg.VKMenuImageTextEnabled, domain.CommandMenuImageText)
-	disableWhenFalse(cfg.VKMenuImageReferenceEnabled, domain.CommandMenuImageReference)
+	disableWhenFalse(poyoImageReady, domain.CommandMenuImageNanoBanana2)
+	disableWhenFalse(apimartGPTImage2Ready, domain.CommandMenuImageGPTImage2)
+	disableWhenFalse(cfg.VKMenuImageReferenceEnabled && apimartNanoBananaProReady, domain.CommandMenuImageReference)
 	disableWhenFalse(cfg.VKMenuStudentsSolverEnabled, domain.CommandMenuStudentSolver)
 	disableWhenFalse(cfg.VKMenuStudentsPresentationEnabled, domain.CommandMenuStudentPresentation)
 	disableWhenFalse(cfg.VKMenuStudentsReportEnabled, domain.CommandMenuStudentReport)

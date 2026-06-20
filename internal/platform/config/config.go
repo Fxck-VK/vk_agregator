@@ -212,6 +212,9 @@ type Config struct {
 	RunwayMLBaseURL        string
 	RunwayProviderEnabled  bool
 
+	FeatureImageModelNanoBananaProEnabled       bool
+	FeatureImageModelGPTImage2Enabled           bool
+	FeatureImageModelNanoBanana2Enabled         bool
 	FeatureVideoRouterEnabled                   bool
 	FeatureVideoRouteHailuo23FastEnabled        bool
 	FeatureVideoRouteHailuo23StandardEnabled    bool
@@ -888,6 +891,9 @@ func Load() Config {
 		RunwayMLAPISecret:                        env("RUNWAYML_API_SECRET", ""),
 		RunwayMLBaseURL:                          env("RUNWAYML_BASE_URL", "https://api.dev.runwayml.com/v1"),
 		RunwayProviderEnabled:                    envBool("RUNWAY_PROVIDER_ENABLED", false),
+		FeatureImageModelNanoBananaProEnabled:    envBool("FEATURE_IMAGE_MODEL_NANO_BANANA_PRO_ENABLED", false),
+		FeatureImageModelGPTImage2Enabled:        envBool("FEATURE_IMAGE_MODEL_GPT_IMAGE_2_ENABLED", false),
+		FeatureImageModelNanoBanana2Enabled:      envBool("FEATURE_IMAGE_MODEL_NANO_BANANA_2_ENABLED", false),
 		FeatureVideoRouterEnabled:                envBool("FEATURE_VIDEO_ROUTER_ENABLED", false),
 		FeatureVideoRouteHailuo23FastEnabled:     envBool("FEATURE_VIDEO_ROUTE_HAILUO_2_3_FAST_ENABLED", false),
 		FeatureVideoRouteHailuo23StandardEnabled: envBool("FEATURE_VIDEO_ROUTE_HAILUO_2_3_STANDARD_ENABLED", false),
@@ -1078,6 +1084,39 @@ func (c Config) validateVideoRouteProviderConfig() error {
 		}
 		if strings.TrimSpace(provider.baseURL) == "" {
 			return fmt.Errorf("config: %s=true requires %s", provider.switchEnv, provider.baseURLEnv)
+		}
+	}
+	if c.FeatureImageModelNanoBanana2Enabled {
+		if !c.PoYoProviderEnabled {
+			return fmt.Errorf("config: FEATURE_IMAGE_MODEL_NANO_BANANA_2_ENABLED=true requires POYO_PROVIDER_ENABLED=true")
+		}
+		if strings.TrimSpace(c.PoYoAPIKey) == "" {
+			return fmt.Errorf("config: FEATURE_IMAGE_MODEL_NANO_BANANA_2_ENABLED=true requires POYO_API_KEY")
+		}
+		if strings.TrimSpace(c.PoYoBaseURL) == "" {
+			return fmt.Errorf("config: FEATURE_IMAGE_MODEL_NANO_BANANA_2_ENABLED=true requires POYO_BASE_URL")
+		}
+	}
+	if c.FeatureImageModelNanoBananaProEnabled {
+		if !c.APIMartProviderEnabled {
+			return fmt.Errorf("config: FEATURE_IMAGE_MODEL_NANO_BANANA_PRO_ENABLED=true requires APIMART_PROVIDER_ENABLED=true")
+		}
+		if strings.TrimSpace(c.APIMartAPIKey) == "" {
+			return fmt.Errorf("config: FEATURE_IMAGE_MODEL_NANO_BANANA_PRO_ENABLED=true requires APIMART_API_KEY")
+		}
+		if strings.TrimSpace(c.APIMartBaseURL) == "" {
+			return fmt.Errorf("config: FEATURE_IMAGE_MODEL_NANO_BANANA_PRO_ENABLED=true requires APIMART_BASE_URL")
+		}
+	}
+	if c.FeatureImageModelGPTImage2Enabled {
+		if !c.APIMartProviderEnabled {
+			return fmt.Errorf("config: FEATURE_IMAGE_MODEL_GPT_IMAGE_2_ENABLED=true requires APIMART_PROVIDER_ENABLED=true")
+		}
+		if strings.TrimSpace(c.APIMartAPIKey) == "" {
+			return fmt.Errorf("config: FEATURE_IMAGE_MODEL_GPT_IMAGE_2_ENABLED=true requires APIMART_API_KEY")
+		}
+		if strings.TrimSpace(c.APIMartBaseURL) == "" {
+			return fmt.Errorf("config: FEATURE_IMAGE_MODEL_GPT_IMAGE_2_ENABLED=true requires APIMART_BASE_URL")
 		}
 	}
 

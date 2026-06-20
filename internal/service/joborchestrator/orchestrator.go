@@ -135,6 +135,13 @@ type CreateJobInput struct {
 	InputArtifactIDs []uuid.UUID
 	// Params holds normalized operation parameters.
 	Params json.RawMessage
+	// ProviderCostCredits is a trusted server-side provider cost for non-video
+	// catalog models. It is never accepted from frontend JSON.
+	ProviderCostCredits int64
+	// PriceMultiplier converts provider credits into internal product credits.
+	PriceMultiplier float64
+	// MaxInternalCostCredits is the fail-closed cap for ProviderCostCredits.
+	MaxInternalCostCredits int64
 }
 
 // Orchestrator implements the command -> estimate -> reserve -> job -> outbox
@@ -256,6 +263,18 @@ func (o *Orchestrator) CreateJob(ctx context.Context, in CreateJobInput) (*domai
 			tracing.RecordError(span, err)
 			metrics.ObserveProductEvent(source, "job", "estimate", operationLabel, modalityLabel, "route_error")
 			return nil, fmt.Errorf("joborchestrator: route estimate: %w", err)
+		}
+	}
+	if estimate == 0 && in.ProviderCostCredits > 0 {
+		estimate, err = o.billing.EstimateProviderCost(
+			in.ProviderCostCredits,
+			in.PriceMultiplier,
+			in.MaxInternalCostCredits,
+		)
+		if err != nil {
+			tracing.RecordError(span, err)
+			metrics.ObserveProductEvent(source, "job", "estimate", operationLabel, modalityLabel, "model_cost_error")
+			return nil, fmt.Errorf("joborchestrator: model estimate: %w", err)
 		}
 	}
 	routeSnapshot := routeResolution.Snapshot

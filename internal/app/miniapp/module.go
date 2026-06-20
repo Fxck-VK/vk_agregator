@@ -13,6 +13,7 @@ import (
 	"vk-ai-aggregator/internal/platform/ratelimit"
 	"vk-ai-aggregator/internal/service/billingservice"
 	"vk-ai-aggregator/internal/service/joborchestrator"
+	"vk-ai-aggregator/internal/service/modelcatalog"
 	"vk-ai-aggregator/internal/service/paymentservice"
 	"vk-ai-aggregator/internal/service/referralservice"
 	"vk-ai-aggregator/internal/service/videorouter"
@@ -71,17 +72,19 @@ func NewHandler(ctx context.Context, cfg config.Config, deps Deps) *miniappapi.H
 		logger.Warn("miniapp video route catalog disabled", "error", err)
 	}
 	return miniappapi.NewHandler(miniappapi.Config{
-		AppSecret:                           cfg.VKAppSecret,
-		LaunchParamsMaxAge:                  cfg.MiniAppLaunchParamsMaxAge,
-		JobRateLimiter:                      miniappJobLimiter,
-		UploadConcurrencyLimiter:            uploadLimiter,
-		ReferenceUploadsDisabled:            !cfg.MediaReferenceUploadsEnabled,
-		ReferenceWebPEnabled:                cfg.MediaReferenceWebPEnabled,
-		MaxUploadBytes:                      cfg.MediaMaxImageUploadBytes,
-		MaxUploadImageWidth:                 cfg.MediaMaxImageWidth,
-		MaxUploadImageHeight:                cfg.MediaMaxImageHeight,
-		MaxUploadImagePixels:                cfg.MediaMaxImagePixels,
-		ImageReferenceEnabled:               cfg.DeepInfraImageReferenceEnabled,
+		AppSecret:                cfg.VKAppSecret,
+		LaunchParamsMaxAge:       cfg.MiniAppLaunchParamsMaxAge,
+		JobRateLimiter:           miniappJobLimiter,
+		UploadConcurrencyLimiter: uploadLimiter,
+		ReferenceUploadsDisabled: !cfg.MediaReferenceUploadsEnabled,
+		ReferenceWebPEnabled:     cfg.MediaReferenceWebPEnabled,
+		MaxUploadBytes:           cfg.MediaMaxImageUploadBytes,
+		MaxUploadImageWidth:      cfg.MediaMaxImageWidth,
+		MaxUploadImageHeight:     cfg.MediaMaxImageHeight,
+		MaxUploadImagePixels:     cfg.MediaMaxImagePixels,
+		ImageReferenceEnabled: cfg.DeepInfraImageReferenceEnabled ||
+			(apimartProviderReady(cfg) && (cfg.FeatureImageModelNanoBananaProEnabled || cfg.FeatureImageModelGPTImage2Enabled)) ||
+			poyoImageReady(cfg),
 		ReferralLinkBase:                    cfg.VKReferralLinkBase,
 		ReferralReferrerSignupRewardCredits: cfg.ReferralReferrerSignupRewardCredits,
 		ReferralReferredSignupRewardCredits: cfg.ReferralReferredSignupRewardCredits,
@@ -89,6 +92,7 @@ func NewHandler(ctx context.Context, cfg config.Config, deps Deps) *miniappapi.H
 		FrontendTelemetryUserHashSecret:     cfg.FrontendTelemetryUserHashSecret,
 		PaymentReturnURL:                    firstNonEmpty(cfg.YooKassaReturnURLMiniApp, cfg.YooKassaReturnURL),
 		PaymentCancelEnabled:                cfg.FeatureMiniAppPaymentCancelEnabled,
+		ImageModels:                         miniAppImageModels(cfg),
 		VideoRoutes:                         miniAppVideoRoutes(videoCatalog),
 		VideoRouteResolver:                  miniAppVideoRouteResolver(videoCatalog),
 	}, miniappapi.Deps{
@@ -142,6 +146,53 @@ func miniAppVideoRouteCatalog(cfg config.Config) (*videorouter.Catalog, error) {
 			domain.VideoRouteRunwayGen45:      cfg.FeatureVideoRouteRunwayGen45Enabled,
 		},
 	})
+}
+
+func miniAppImageModels(cfg config.Config) []miniappapi.ImageModelDTO {
+	models := modelcatalog.ListMiniAppModels(domain.OperationImageGenerate)
+	out := make([]miniappapi.ImageModelDTO, 0, len(models))
+	apimartReady := apimartProviderReady(cfg)
+	poyoReady := poyoImageReady(cfg)
+	for _, model := range models {
+		if model.ModelID == modelcatalog.MiniAppImageNanoBananaPro && !cfg.FeatureImageModelNanoBananaProEnabled {
+			continue
+		}
+		if model.ModelID == modelcatalog.MiniAppImageGPTImage2 && !cfg.FeatureImageModelGPTImage2Enabled {
+			continue
+		}
+		if model.ModelID == modelcatalog.MiniAppImageNanoBanana2 && !cfg.FeatureImageModelNanoBanana2Enabled {
+			continue
+		}
+		if model.Provider == domain.ProviderAPIMart && !apimartReady {
+			continue
+		}
+		if model.Provider == domain.ProviderPoYo && !poyoReady {
+			continue
+		}
+		modelID := modelcatalog.MiniAppResponseModelID(model)
+		if modelID == "" {
+			continue
+		}
+		out = append(out, miniappapi.ImageModelDTO{
+			ID:                     modelID,
+			Name:                   model.ModelName,
+			SupportsReferenceImage: model.SupportsReferenceImage,
+			MaxReferenceImages:     model.MaxReferenceImages,
+		})
+	}
+	return out
+}
+
+func apimartProviderReady(cfg config.Config) bool {
+	return cfg.APIMartProviderEnabled &&
+		strings.TrimSpace(cfg.APIMartAPIKey) != "" &&
+		strings.TrimSpace(cfg.APIMartBaseURL) != ""
+}
+
+func poyoImageReady(cfg config.Config) bool {
+	return cfg.PoYoProviderEnabled &&
+		strings.TrimSpace(cfg.PoYoAPIKey) != "" &&
+		strings.TrimSpace(cfg.PoYoBaseURL) != ""
 }
 
 func miniAppVideoRoutes(catalog *videorouter.Catalog) []miniappapi.VideoRouteDTO {

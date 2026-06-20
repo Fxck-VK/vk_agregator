@@ -43,7 +43,9 @@ export const MODALITIES: ModalityDef[] = [
     label: "Фото",
     operation: "image_generate",
     models: [
+      { id: "nano_banana_2", label: "Nano Banana 2" },
       { id: "nano_banana_pro", label: "Nano Banana Pro" },
+      { id: "gpt_image_2", label: "GPT Image 2" },
       { id: "nano_banana_flash", label: "Nano Banana Flash" },
     ],
   },

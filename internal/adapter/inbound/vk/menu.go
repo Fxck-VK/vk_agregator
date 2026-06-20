@@ -68,6 +68,14 @@ var menuScreens = map[domain.CommandType]menuScreen{
 		text:     fixedText(photoTextModeInstruction),
 		keyboard: photoModeKeyboard,
 	},
+	domain.CommandMenuImageNanoBanana2: {
+		text:     fixedText(photoNanoBanana2Instruction),
+		keyboard: photoModeKeyboard,
+	},
+	domain.CommandMenuImageGPTImage2: {
+		text:     fixedText(photoGPTImage2Instruction),
+		keyboard: photoModeKeyboard,
+	},
 	domain.CommandMenuImageReference: {
 		text:     fixedText(photoReferenceModeInstruction),
 		keyboard: photoModeKeyboard,
@@ -86,7 +94,7 @@ var menuScreens = map[domain.CommandType]menuScreen{
 	},
 	domain.CommandMenuVideoSora2Start: {
 		text:     fixedText(sora2StartText),
-		keyboard: sora2BackKeyboard,
+		keyboard: sora2DurationKeyboard,
 	},
 	domain.CommandMenuVideoSora2Examples: {
 		text:     fixedText(sora2ExamplesText),
@@ -98,7 +106,7 @@ var menuScreens = map[domain.CommandType]menuScreen{
 	},
 	domain.CommandMenuVideoKling21Start: {
 		text:     fixedText(kling21StartText),
-		keyboard: kling21BackKeyboard,
+		keyboard: kling21DurationKeyboard,
 	},
 	domain.CommandMenuVideoKling21Examples: {
 		text:     fixedText(kling21ExamplesText),
@@ -110,7 +118,7 @@ var menuScreens = map[domain.CommandType]menuScreen{
 	},
 	domain.CommandMenuVideoSeedance1Lite: {
 		text:     fixedText(seedance1LiteText),
-		keyboard: seedance1BackKeyboard,
+		keyboard: seedance1DurationKeyboard,
 	},
 	domain.CommandMenuVideoSeedance1Pro: {
 		text:     fixedText(seedance1ProText),
@@ -122,11 +130,11 @@ var menuScreens = map[domain.CommandType]menuScreen{
 	},
 	domain.CommandMenuVideoHailuo02Standard: {
 		text:     fixedText(hailuo02StandardText),
-		keyboard: hailuo02BackKeyboard,
+		keyboard: hailuo02StandardDurationKeyboard,
 	},
 	domain.CommandMenuVideoHailuo02Fast: {
 		text:     fixedText(hailuo02FastText),
-		keyboard: hailuo02BackKeyboard,
+		keyboard: hailuo02FastDurationKeyboard,
 	},
 	domain.CommandMenuStudents: {
 		text:     fixedText(studentsText),
@@ -155,8 +163,8 @@ const (
 
 	prunaAIText = "Видео-режим отключен.\n\nВыберите другой режим видео."
 
-	sora2Text         = "Runway Gen-4 Turbo\n\nРежим для выразительных роликов по тексту или фото."
-	sora2StartText    = "Runway Gen-4 Turbo активен.\n\nНапишите описание видео обычным сообщением.\n\nПример: cinematic drone shot over a neon city at night, rain reflections, realistic camera movement."
+	sora2Text         = "Runway Gen-4 Turbo\n\nРежим для выразительных роликов из стартового фото."
+	sora2StartText    = "Runway Gen-4 Turbo активен.\n\nПрикрепите стартовое фото и напишите описание видео одним сообщением.\n\nПример: cinematic camera movement, rain reflections, realistic motion."
 	sora2ExamplesText = "ℹ️ Примеры Runway Gen-4 Turbo\n\n1. A cinematic drone shot over a neon city at night, rain reflections on the street, realistic camera movement.\n\n2. A close-up handheld video of a chef cutting fruit in a bright kitchen, natural motion, realistic details."
 
 	kling21Text         = "Kling O3 Standard\n\nУниверсальный режим для видео по тексту или фото."
@@ -184,10 +192,14 @@ const (
 	photoReferenceModeInstruction = "📸 Генерация фото с референсом пока будет подключена после входящих фото-артефактов.\n\nСейчас доступна генерация фото по тексту."
 )
 
+const photoNanoBanana2Instruction = "Nano Banana 2 активен.\n\nНапишите описание изображения обычным сообщением.\n\nВ боте сейчас включен текст-в-фото; референс-фото подключим отдельным шагом."
+const photoGPTImage2Instruction = "GPT Image 2 активен.\n\nНапишите описание изображения обычным сообщением."
+
 type controlPayload struct {
 	Command     string `json:"command"`
 	ProductCode string `json:"product_code,omitempty"`
 	Action      string `json:"action,omitempty"`
+	DurationSec int    `json:"duration_sec,omitempty"`
 }
 
 func controlPayloadFromPayload(payload string) (controlPayload, bool) {
@@ -613,6 +625,8 @@ func (h *Handler) menuCommandEnabled(command domain.CommandType) bool {
 		domain.CommandMenuVideoHailuo02Fast:
 		return h.videoRouteCommandEnabled(command) && h.menuCommandEnabled(domain.CommandMenuVideoHailuo02)
 	case domain.CommandMenuImageText,
+		domain.CommandMenuImageNanoBanana2,
+		domain.CommandMenuImageGPTImage2,
 		domain.CommandMenuImageReference:
 		return h.menuCommandEnabled(domain.CommandMenuImage)
 	case domain.CommandMenuStudentSolver,
@@ -869,12 +883,20 @@ func sora2BackKeyboard() *vkdelivery.Keyboard {
 	return backToKeyboard(domain.CommandMenuVideoSora2)
 }
 
+func sora2DurationKeyboard() *vkdelivery.Keyboard {
+	return videoDurationKeyboard(domain.CommandMenuVideoSora2Start, domain.CommandMenuVideoSora2, 3, 5, 10)
+}
+
 func kling21Keyboard() *vkdelivery.Keyboard {
 	return videoDetailKeyboard(domain.CommandMenuVideoKling21Start, domain.CommandMenuVideoKling21Examples)
 }
 
 func kling21BackKeyboard() *vkdelivery.Keyboard {
 	return backToKeyboard(domain.CommandMenuVideoKling21)
+}
+
+func kling21DurationKeyboard() *vkdelivery.Keyboard {
+	return videoDurationKeyboard(domain.CommandMenuVideoKling21Start, domain.CommandMenuVideoKling21, 5, 10)
 }
 
 func videoDetailKeyboard(startCommand, examplesCommand domain.CommandType) *vkdelivery.Keyboard {
@@ -917,6 +939,10 @@ func seedance1BackKeyboard() *vkdelivery.Keyboard {
 	return backToKeyboard(domain.CommandMenuVideoSeedance1)
 }
 
+func seedance1DurationKeyboard() *vkdelivery.Keyboard {
+	return videoDurationKeyboard(domain.CommandMenuVideoSeedance1Lite, domain.CommandMenuVideoSeedance1, 5, 10)
+}
+
 func hailuo02Keyboard() *vkdelivery.Keyboard {
 	return &vkdelivery.Keyboard{
 		OneTime: false,
@@ -939,11 +965,44 @@ func hailuo02BackKeyboard() *vkdelivery.Keyboard {
 	return backToKeyboard(domain.CommandMenuVideoHailuo02)
 }
 
+func hailuo02StandardDurationKeyboard() *vkdelivery.Keyboard {
+	return videoDurationKeyboard(domain.CommandMenuVideoHailuo02Standard, domain.CommandMenuVideoHailuo02, 6, 10)
+}
+
+func hailuo02FastDurationKeyboard() *vkdelivery.Keyboard {
+	return videoDurationKeyboard(domain.CommandMenuVideoHailuo02Fast, domain.CommandMenuVideoHailuo02, 6, 10)
+}
+
+func videoDurationKeyboard(startCommand, backCommand domain.CommandType, durations ...int) *vkdelivery.Keyboard {
+	rows := make([][]vkdelivery.KeyboardButton, 0, 3)
+	durationRow := make([]vkdelivery.KeyboardButton, 0, len(durations))
+	for _, duration := range durations {
+		durationRow = append(durationRow, durationButton(fmt.Sprintf("%d сек", duration), startCommand, duration, "primary"))
+	}
+	if len(durationRow) > 0 {
+		rows = append(rows, durationRow)
+	}
+	rows = append(rows, []vkdelivery.KeyboardButton{
+		button("⬅️ Назад", backCommand, "secondary"),
+	})
+	return &vkdelivery.Keyboard{
+		OneTime: false,
+		Inline:  true,
+		Buttons: rows,
+	}
+}
+
 func photoModeKeyboard() *vkdelivery.Keyboard {
 	return &vkdelivery.Keyboard{
 		OneTime: false,
 		Inline:  true,
 		Buttons: [][]vkdelivery.KeyboardButton{
+			{
+				button("Nano Banana 2", domain.CommandMenuImageNanoBanana2, "primary"),
+			},
+			{
+				button("GPT Image 2", domain.CommandMenuImageGPTImage2, "primary"),
+			},
 			{
 				button("⬅️ Назад", domain.CommandShowMenu, "secondary"),
 			},
@@ -1052,6 +1111,18 @@ func buttonWithAction(label string, command domain.CommandType, action, color st
 	payload, _ := json.Marshal(controlPayload{
 		Command: string(command),
 		Action:  action,
+	})
+	return vkdelivery.KeyboardButton{
+		Label:   label,
+		Payload: string(payload),
+		Color:   color,
+	}
+}
+
+func durationButton(label string, command domain.CommandType, durationSec int, color string) vkdelivery.KeyboardButton {
+	payload, _ := json.Marshal(controlPayload{
+		Command:     string(command),
+		DurationSec: durationSec,
 	})
 	return vkdelivery.KeyboardButton{
 		Label:   label,

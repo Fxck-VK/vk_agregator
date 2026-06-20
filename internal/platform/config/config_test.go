@@ -125,6 +125,9 @@ func TestLoadVideoRouterFlagsDefaultDisabled(t *testing.T) {
 		"FEATURE_VIDEO_ROUTE_SEEDANCE_2_0_FAST_ENABLED",
 		"FEATURE_VIDEO_ROUTE_RUNWAY_GEN4_5_ENABLED",
 		"FEATURE_VIDEO_ROUTE_RESELLER_EXPERIMENTS_ENABLED",
+		"FEATURE_IMAGE_MODEL_NANO_BANANA_PRO_ENABLED",
+		"FEATURE_IMAGE_MODEL_GPT_IMAGE_2_ENABLED",
+		"FEATURE_IMAGE_MODEL_NANO_BANANA_2_ENABLED",
 		"APIMART_PROVIDER_ENABLED",
 		"POYO_PROVIDER_ENABLED",
 		"RUNWAY_PROVIDER_ENABLED",
@@ -141,10 +144,108 @@ func TestLoadVideoRouterFlagsDefaultDisabled(t *testing.T) {
 		cfg.FeatureVideoRouteSeedance20FastEnabled ||
 		cfg.FeatureVideoRouteRunwayGen45Enabled ||
 		cfg.FeatureVideoRouteResellerExperimentsEnabled ||
+		cfg.FeatureImageModelNanoBananaProEnabled ||
+		cfg.FeatureImageModelGPTImage2Enabled ||
+		cfg.FeatureImageModelNanoBanana2Enabled ||
 		cfg.APIMartProviderEnabled ||
 		cfg.PoYoProviderEnabled ||
 		cfg.RunwayProviderEnabled {
 		t.Fatal("video router/provider flags should default to disabled")
+	}
+}
+
+func TestValidateImageModelNanoBananaProRequiresAPIMartConfig(t *testing.T) {
+	cfg := config.Config{
+		Env:                                   "development",
+		Provider:                              "mock",
+		ProviderChain:                         []string{"mock"},
+		FeatureImageModelNanoBananaProEnabled: true,
+	}
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "APIMART_PROVIDER_ENABLED") {
+		t.Fatalf("expected APIMART_PROVIDER_ENABLED validation error, got %v", err)
+	}
+
+	cfg.APIMartProviderEnabled = true
+	err = cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "APIMART_API_KEY") {
+		t.Fatalf("expected APIMART_API_KEY validation error, got %v", err)
+	}
+
+	cfg.APIMartAPIKey = "test-key"
+	cfg.APIMartBaseURL = ""
+	err = cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "APIMART_BASE_URL") {
+		t.Fatalf("expected APIMART_BASE_URL validation error, got %v", err)
+	}
+
+	cfg.APIMartBaseURL = "https://api.apimart.ai/v1"
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate() error = %v", err)
+	}
+}
+
+func TestValidateImageModelGPTImage2RequiresAPIMartConfig(t *testing.T) {
+	cfg := config.Config{
+		Env:                               "development",
+		Provider:                          "mock",
+		ProviderChain:                     []string{"mock"},
+		FeatureImageModelGPTImage2Enabled: true,
+	}
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "APIMART_PROVIDER_ENABLED") {
+		t.Fatalf("expected APIMART_PROVIDER_ENABLED validation error, got %v", err)
+	}
+
+	cfg.APIMartProviderEnabled = true
+	err = cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "APIMART_API_KEY") {
+		t.Fatalf("expected APIMART_API_KEY validation error, got %v", err)
+	}
+
+	cfg.APIMartAPIKey = "test-key"
+	cfg.APIMartBaseURL = ""
+	err = cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "APIMART_BASE_URL") {
+		t.Fatalf("expected APIMART_BASE_URL validation error, got %v", err)
+	}
+
+	cfg.APIMartBaseURL = "https://api.apimart.ai/v1"
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate() error = %v", err)
+	}
+}
+
+func TestValidateImageModelNanoBanana2RequiresPoYoConfig(t *testing.T) {
+	cfg := config.Config{
+		Env:                                 "development",
+		Provider:                            "mock",
+		ProviderChain:                       []string{"mock"},
+		FeatureImageModelNanoBanana2Enabled: true,
+	}
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "POYO_PROVIDER_ENABLED") {
+		t.Fatalf("expected POYO_PROVIDER_ENABLED validation error, got %v", err)
+	}
+
+	cfg.PoYoProviderEnabled = true
+	err = cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "POYO_API_KEY") {
+		t.Fatalf("expected POYO_API_KEY validation error, got %v", err)
+	}
+
+	cfg.PoYoAPIKey = "test-key"
+	err = cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "POYO_BASE_URL") {
+		t.Fatalf("expected POYO_BASE_URL validation error, got %v", err)
+	}
+
+	cfg.PoYoBaseURL = "https://api.poyo.ai"
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate() error = %v", err)
 	}
 }
 

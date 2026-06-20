@@ -42,6 +42,10 @@ const (
 	CommandMenuImage CommandType = "menu.image"
 	// CommandMenuImageText selects text-to-image mode in the VK image menu.
 	CommandMenuImageText CommandType = "menu.image.text"
+	// CommandMenuImageNanoBanana2 selects Nano Banana 2 image generation.
+	CommandMenuImageNanoBanana2 CommandType = "menu.image.nano_banana_2"
+	// CommandMenuImageGPTImage2 selects GPT Image 2 image generation.
+	CommandMenuImageGPTImage2 CommandType = "menu.image.gpt_image_2"
 	// CommandMenuImageReference selects image generation with a reference photo.
 	CommandMenuImageReference CommandType = "menu.image.reference"
 	// CommandMenuVideo explains how to generate a video.
@@ -110,6 +114,8 @@ func (c CommandType) Valid() bool {
 		CommandMenuText,
 		CommandMenuImage,
 		CommandMenuImageText,
+		CommandMenuImageNanoBanana2,
+		CommandMenuImageGPTImage2,
 		CommandMenuImageReference,
 		CommandMenuVideo,
 		CommandMenuVideoPrunaAI,

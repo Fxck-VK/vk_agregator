@@ -7,11 +7,13 @@ import {
   estimateJob,
   hasPreviewableMediaResult,
   isTerminal,
+  listImageModels,
   listVideoRoutes,
   preloadArtifactBlobUrl,
   statusKind,
   statusLabel,
   type EstimateResponse,
+  type ImageModel,
   type Job,
   type VideoRoute,
   uploadArtifact,
@@ -99,6 +101,54 @@ const IMAGE_CREATE_MODE: CreateMode = {
   ],
   quickIdeas: ["Кот в киберпанке", "Закат на Марсе", "Аниме персонаж", "Неоновый город"],
 };
+
+const IMAGE_MODE_COPY: Record<string, Omit<CreateMode, "modalityId" | "modelId" | "name">> = {
+  nano_banana_2: {
+    subtitle: "Text or image to image",
+    color: "#22c55e",
+    glow: "rgba(34,197,94,0.34)",
+    placeholders: [
+      "A premium product photo on a clean studio background with realistic shadows...",
+      "A cinematic portrait with readable neon sign text and realistic lighting...",
+      "Transform the reference into a polished campaign visual with accurate details...",
+    ],
+    quickIdeas: ["Product photo", "Poster text", "Portrait edit", "Brand visual"],
+    supportsReferenceImage: true,
+    maxReferenceImages: 4,
+  },
+  nano_banana_flash: {
+    subtitle: "Fast image generation",
+    color: "#06b6d4",
+    glow: "rgba(6,182,212,0.32)",
+    placeholders: ["A bright clean illustration with simple composition and crisp details..."],
+    quickIdeas: ["Fast concept", "Icon idea", "Simple poster", "Avatar"],
+  },
+  gpt_image_2: {
+    subtitle: "Text or image to image",
+    color: "#f43f5e",
+    glow: "rgba(244,63,94,0.34)",
+    placeholders: [
+      "A detailed cinematic product campaign image with accurate text and premium lighting...",
+      "Turn the reference into a clean editorial poster with realistic materials...",
+      "A high-resolution concept image with controlled composition and sharp details...",
+    ],
+    quickIdeas: ["Campaign image", "Editorial poster", "Reference remix", "High-detail concept"],
+    supportsReferenceImage: true,
+    maxReferenceImages: 16,
+  },
+};
+
+function createModeFromImageModel(model: ImageModel): CreateMode {
+  const copy = IMAGE_MODE_COPY[model.id] ?? IMAGE_CREATE_MODE;
+  return {
+    ...copy,
+    modalityId: "image",
+    modelId: model.id,
+    name: model.name,
+    supportsReferenceImage: model.supports_reference_image || copy.supportsReferenceImage,
+    maxReferenceImages: model.max_reference_images ?? copy.maxReferenceImages,
+  };
+}
 
 const VIDEO_ROUTE_COPY: Record<string, Omit<CreateMode, "modalityId" | "modelId" | "videoRouteAlias">> = {
   video_hailuo_2_3_fast: {
@@ -312,6 +362,7 @@ export function WorkflowMode({
   const [screen, setScreen] = useState<WorkflowScreen>("home");
   const [modalityId, setModalityId] = useState<ModalityId>("image");
   const [modelId, setModelId] = useState(modalityById("image").models[0].id);
+  const [imageModels, setImageModels] = useState<ImageModel[]>([]);
   const [videoRoutes, setVideoRoutes] = useState<VideoRoute[]>([]);
   const [prompt, setPrompt] = useState("");
   const [estimate, setEstimate] = useState<EstimateResponse | null>(null);
@@ -338,8 +389,12 @@ export function WorkflowMode({
   const activePrompt = prompt.trim();
   const currentModality = modalityById(modalityId);
   const createModes = useMemo(
-    () => [IMAGE_CREATE_MODE, ...videoRoutes.map(createModeFromVideoRoute)],
-    [videoRoutes],
+    () => {
+      const imageCreateModes =
+        imageModels.length > 0 ? imageModels.map(createModeFromImageModel) : [IMAGE_CREATE_MODE];
+      return [...imageCreateModes, ...videoRoutes.map(createModeFromVideoRoute)];
+    },
+    [imageModels, videoRoutes],
   );
   const activeCreateModel =
     createModes.find((item) => item.modalityId === modalityId && item.modelId === modelId) ??
@@ -379,6 +434,13 @@ export function WorkflowMode({
 
   useEffect(() => {
     let cancelled = false;
+    listImageModels()
+      .then((models) => {
+        if (!cancelled) setImageModels(models);
+      })
+      .catch(() => {
+        if (!cancelled) setImageModels([]);
+      });
     listVideoRoutes()
       .then((routes) => {
         if (!cancelled) setVideoRoutes(routes);
@@ -401,6 +463,13 @@ export function WorkflowMode({
 
   useEffect(() => {
     if (!activeCreateModel) return;
+    if (modalityId === "image" && activeCreateModel.modalityId !== "image") {
+      const firstImage = createModes.find((item) => item.modalityId === "image");
+      if (firstImage) setModelId(firstImage.modelId);
+    }
+    if (modalityId === "image" && activeCreateModel.modalityId === "image" && activeCreateModel.modelId !== modelId) {
+      setModelId(activeCreateModel.modelId);
+    }
     if (modalityId === "video" && !activeCreateModel.videoRouteAlias) {
       const firstVideo = createModes.find((item) => item.modalityId === "video");
       if (firstVideo) {
@@ -410,7 +479,7 @@ export function WorkflowMode({
         setModelId(IMAGE_CREATE_MODE.modelId);
       }
     }
-  }, [activeCreateModel, createModes, modalityId]);
+  }, [activeCreateModel, createModes, modalityId, modelId]);
 
   useEffect(() => {
     if (!isVideoModality) return;
@@ -445,7 +514,7 @@ export function WorkflowMode({
       estimateJob({
         operation: currentModality.operation,
         prompt: value,
-        model_id: isVideoModality ? undefined : modelId,
+        model_id: isVideoModality ? undefined : activeCreateModel.modelId,
         video_route_alias: isVideoModality ? activeCreateModel.videoRouteAlias : undefined,
         reference_artifact_ids: referenceArtifactIds.length > 0 ? referenceArtifactIds : undefined,
         duration_sec: isVideoModality ? videoDurationSec : undefined,
@@ -468,9 +537,9 @@ export function WorkflowMode({
     };
   }, [
     currentModality.operation,
+    activeCreateModel.modelId,
     activeCreateModel.videoRouteAlias,
     isVideoModality,
-    modelId,
     modelSelected,
     prompt,
     promptTooLong,
@@ -682,7 +751,7 @@ export function WorkflowMode({
     try {
       const job = await onCreateJob(trimmedPrompt, {
         operation: currentModality.operation,
-        modelId: isVideoModality ? undefined : modelId,
+        modelId: isVideoModality ? undefined : activeCreateModel.modelId,
         videoRouteAlias: isVideoModality ? activeCreateModel.videoRouteAlias : undefined,
         referenceArtifactIds: referenceArtifactIds.length > 0 ? referenceArtifactIds : undefined,
         durationSec: isVideoModality ? videoDurationSec : undefined,

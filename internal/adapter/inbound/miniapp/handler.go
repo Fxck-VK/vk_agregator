@@ -103,6 +103,10 @@ type Config struct {
 	// PaymentCancelEnabled enables user-owned cancellation of waiting Mini App
 	// top-up payment intents.
 	PaymentCancelEnabled bool
+	// ImageModels are public product model aliases already filtered by server
+	// feature flags and provider readiness. They must not contain provider ids
+	// or pricing.
+	ImageModels []ImageModelDTO
 	// VideoRoutes are public product route aliases already filtered by server
 	// feature flags and provider readiness. They must not contain provider ids
 	// or pricing.
@@ -176,6 +180,7 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("POST /miniapp/jobs", h.auth(h.rateLimitMiniApp("miniapp_job", h.createJob)))
 	mux.HandleFunc("GET /miniapp/jobs", h.auth(h.listJobs))
 	mux.HandleFunc("GET /miniapp/jobs/{id}", h.auth(h.getJob))
+	mux.HandleFunc("GET /miniapp/image-models", h.auth(h.listImageModels))
 	mux.HandleFunc("GET /miniapp/video-routes", h.auth(h.listVideoRoutes))
 	mux.HandleFunc("GET /miniapp/balance", h.auth(h.getBalance))
 	mux.HandleFunc("GET /miniapp/referral", h.auth(h.getReferral))
@@ -189,6 +194,20 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /miniapp/artifacts/{id}", h.auth(h.getArtifact))
 	mux.HandleFunc("POST /miniapp/client-events", h.auth(h.rateLimitMiniApp("miniapp_client_events", h.clientEvent)))
 	return mux
+}
+
+func (h *Handler) listImageModels(w http.ResponseWriter, r *http.Request) {
+	models := make([]ImageModelDTO, 0, len(h.cfg.ImageModels))
+	for _, model := range h.cfg.ImageModels {
+		if strings.TrimSpace(model.ID) == "" || strings.TrimSpace(model.Name) == "" {
+			continue
+		}
+		models = append(models, copyImageModelDTO(model))
+	}
+	writeJSON(w, http.StatusOK, listResponse[ImageModelDTO]{
+		Items:      models,
+		Pagination: pagination{Limit: len(models), Offset: 0, Count: len(models), HasMore: false},
+	})
 }
 
 func (h *Handler) listVideoRoutes(w http.ResponseWriter, r *http.Request) {
@@ -643,8 +662,27 @@ func (h *Handler) readJobRequest(w http.ResponseWriter, r *http.Request) (Create
 			writeError(w, http.StatusBadRequest, "unsupported model")
 			return CreateJobRequest{}, "", "", miniAppModelSpec{}, false
 		}
+		if opType == domain.OperationImageGenerate && !h.imageModelEnabled(model.ModelID) {
+			writeError(w, http.StatusBadRequest, "unsupported model")
+			return CreateJobRequest{}, "", "", miniAppModelSpec{}, false
+		}
+		if opType == domain.OperationImageGenerate && !validateImageReferenceCount(w, model, req.ReferenceArtifactIDs) {
+			return CreateJobRequest{}, "", "", miniAppModelSpec{}, false
+		}
 	}
 	return req, opType, modality, model, true
+}
+
+func (h *Handler) imageModelEnabled(modelID string) bool {
+	if len(h.cfg.ImageModels) == 0 {
+		return true
+	}
+	for _, model := range h.cfg.ImageModels {
+		if model.ID == modelID {
+			return true
+		}
+	}
+	return false
 }
 
 func normalizeVideoDurationSec(sec int, route VideoRouteDTO) (int, bool) {
@@ -704,6 +742,27 @@ func validateVideoReferenceCount(w http.ResponseWriter, route VideoRouteDTO, ids
 	return true
 }
 
+func validateImageReferenceCount(w http.ResponseWriter, model miniAppModelSpec, ids []uuid.UUID) bool {
+	seen := make(map[uuid.UUID]struct{}, len(ids))
+	for _, id := range ids {
+		if id == uuid.Nil {
+			writeError(w, http.StatusBadRequest, "invalid reference artifact id")
+			return false
+		}
+		seen[id] = struct{}{}
+	}
+	count := len(seen)
+	if count > 0 && !model.SupportsReferenceImage {
+		writeError(w, http.StatusBadRequest, "reference_artifacts_unsupported")
+		return false
+	}
+	if model.MaxReferenceImages > 0 && count > model.MaxReferenceImages {
+		writeError(w, http.StatusBadRequest, "too many reference artifacts")
+		return false
+	}
+	return true
+}
+
 func videoRouteModelSpec(route VideoRouteDTO) miniAppModelSpec {
 	return miniAppModelSpec{
 		ModelID:   route.Alias,
@@ -736,6 +795,10 @@ func copyVideoRouteDTO(route VideoRouteDTO) VideoRouteDTO {
 	route.AllowedResolutions = append([]string(nil), route.AllowedResolutions...)
 	route.AllowedAspectRatios = append([]string(nil), route.AllowedAspectRatios...)
 	return route
+}
+
+func copyImageModelDTO(model ImageModelDTO) ImageModelDTO {
+	return model
 }
 
 func (h *Handler) estimateJob(w http.ResponseWriter, r *http.Request) {
@@ -816,6 +879,13 @@ func (h *Handler) estimateJob(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) estimateRequestCost(ctx context.Context, userID uuid.UUID, opType domain.OperationType, modality domain.Modality, model miniAppModelSpec, req CreateJobRequest) (int64, error) {
 	if opType != domain.OperationVideoGenerate {
+		if model.ProviderCostCredits > 0 {
+			return h.deps.Billing.EstimateProviderCost(
+				model.ProviderCostCredits,
+				model.PriceMultiplier,
+				model.MaxInternalCostCredits,
+			)
+		}
 		return h.deps.Billing.Estimate(opType)
 	}
 	if h.cfg.VideoRouteResolver == nil {
@@ -922,16 +992,19 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 	metrics.ObserveProductPromptLength("miniapp", string(opType), string(modality), req.Prompt)
 
 	job, err := h.deps.Orchestrator.CreateJob(r.Context(), joborchestrator.CreateJobInput{
-		UserID:           user.ID,
-		Source:           "miniapp",
-		VKPeerID:         vkUserID, // peer_id = user_id for direct messages
-		CommandID:        uuid.Nil, // no VK command for mini app path
-		Operation:        opType,
-		Modality:         modality,
-		IdempotencyKey:   idemKey,
-		CorrelationID:    correlationID,
-		InputArtifactIDs: req.ReferenceArtifactIDs,
-		Params:           params,
+		UserID:                 user.ID,
+		Source:                 "miniapp",
+		VKPeerID:               vkUserID, // peer_id = user_id for direct messages
+		CommandID:              uuid.Nil, // no VK command for mini app path
+		Operation:              opType,
+		Modality:               modality,
+		IdempotencyKey:         idemKey,
+		CorrelationID:          correlationID,
+		InputArtifactIDs:       req.ReferenceArtifactIDs,
+		Params:                 params,
+		ProviderCostCredits:    model.ProviderCostCredits,
+		PriceMultiplier:        model.PriceMultiplier,
+		MaxInternalCostCredits: model.MaxInternalCostCredits,
 	})
 	switch {
 	case err == nil:

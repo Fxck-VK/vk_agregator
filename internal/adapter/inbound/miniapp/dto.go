@@ -98,6 +98,13 @@ type VideoRouteDTO struct {
 	MaxReferenceImages     int      `json:"max_reference_images,omitempty"`
 }
 
+type ImageModelDTO struct {
+	ID                     string `json:"id"`
+	Name                   string `json:"name"`
+	SupportsReferenceImage bool   `json:"supports_reference_image"`
+	MaxReferenceImages     int    `json:"max_reference_images,omitempty"`
+}
+
 // EstimateDTO is returned by POST /miniapp/estimate. It exposes only
 // backend-owned cost and balance information, never provider details.
 type EstimateDTO struct {

@@ -75,6 +75,74 @@ func TestSubmitKlingO3SuccessAndIdempotency(t *testing.T) {
 	}
 }
 
+func TestSubmitNanoBanana2ImageSuccess(t *testing.T) {
+	var calls int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if r.Method != http.MethodPost || r.URL.Path != "/api/generate/submit" {
+			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer test-key" {
+			t.Fatalf("auth header = %q", got)
+		}
+		var body submitRequest
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode body: %v", err)
+		}
+		if body.Model != ModelNanoBanana2New {
+			t.Fatalf("model = %q", body.Model)
+		}
+		if body.Input["prompt"] != "safe prompt" || body.Input["size"] != "16:9" || body.Input["resolution"] != "4K" {
+			t.Fatalf("bad image input: %+v", body.Input)
+		}
+		if refs, ok := body.Input["image_urls"].([]any); !ok || len(refs) != 1 || refs[0] != "https://cdn.test/ref.png" {
+			t.Fatalf("image_urls = %#v", body.Input["image_urls"])
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"code":200,"data":{"task_id":"image_task_1","status":"not_started","created_time":"2026-06-20T10:30:00Z"}}`))
+	}))
+	defer srv.Close()
+
+	provider := New(Config{APIKey: "test-key", BaseURL: srv.URL, HTTPClient: srv.Client()})
+	req := baseImageRequest(ModelNanoBanana2New)
+	req.AspectRatio = "16:9"
+	req.Resolution = "4K"
+	req.InputURLs = []string{"https://cdn.test/ref.png"}
+
+	task, err := provider.Submit(context.Background(), req)
+	if err != nil {
+		t.Fatalf("submit: %v", err)
+	}
+	if task.Provider != domain.ProviderPoYo || task.ExternalID != "image_task_1" || task.Status != domain.ProviderTaskPending {
+		t.Fatalf("bad task: %+v", task)
+	}
+	if calls != 1 {
+		t.Fatalf("calls = %d, want 1", calls)
+	}
+}
+
+func TestNanoBanana2EstimateAndValidation(t *testing.T) {
+	provider := New(Config{APIKey: "test-key", BaseURL: "http://127.0.0.1"})
+	req := baseImageRequest(ModelNanoBanana2New)
+
+	estimate, err := provider.Estimate(context.Background(), req)
+	if err != nil {
+		t.Fatalf("estimate: %v", err)
+	}
+	if estimate.AmountCredits != 10 || estimate.Currency != "credits" || estimate.Estimated {
+		t.Fatalf("bad estimate: %+v", estimate)
+	}
+
+	req.InputURLs = []string{"1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15"}
+	_, err = provider.Submit(context.Background(), req)
+	requireErrorClass(t, err, domain.ProviderErrInvalidRequest)
+
+	req.InputURLs = nil
+	req.AspectRatio = "7:7"
+	_, err = provider.Submit(context.Background(), req)
+	requireErrorClass(t, err, domain.ProviderErrInvalidRequest)
+}
+
 func TestSubmitRejectsKlingAudioByDefault(t *testing.T) {
 	var called bool
 	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
@@ -187,6 +255,30 @@ func TestPollCompletedReturnsOutputAndSanitizesRaw(t *testing.T) {
 	}
 }
 
+func TestPollCompletedImageReturnsOutputAndSanitizesRaw(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/api/generate/status/image_task_1" {
+			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"code":200,"data":{"task_id":"image_task_1","status":"finished","files":[{"file_type":"image","file_url":"https://private.poyo.ai/output.jpg?token=secret","format":"jpg"}],"credits_amount":5,"created_time":"2026-06-20T10:30:00Z"}}`))
+	}))
+	defer srv.Close()
+
+	provider := New(Config{APIKey: "test-key", BaseURL: srv.URL, HTTPClient: srv.Client()})
+	result, err := provider.Poll(context.Background(), domain.ProviderTaskRef{Provider: domain.ProviderPoYo, ExternalID: "image_task_1"})
+	if err != nil {
+		t.Fatalf("poll: %v", err)
+	}
+	if result.Status != domain.ProviderTaskSucceeded || len(result.OutputURLs) != 1 {
+		t.Fatalf("bad result: %+v", result)
+	}
+	raw := string(result.Raw)
+	if strings.Contains(raw, "private.poyo.ai") || strings.Contains(raw, "secret") || strings.Contains(raw, "file_url") {
+		t.Fatalf("raw metadata leaked private output URL: %s", raw)
+	}
+}
+
 func TestPollFailureNormalizesModeration(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -235,6 +327,21 @@ func baseVideoRequest(model string) domain.ProviderRequest {
 		DurationSec:    5,
 		Resolution:     "720p",
 		AspectRatio:    "16:9",
+		IdempotencyKey: "idem-" + uuid.NewString(),
+	}
+}
+
+func baseImageRequest(model string) domain.ProviderRequest {
+	return domain.ProviderRequest{
+		JobID:          uuid.New(),
+		UserID:         uuid.New(),
+		Operation:      domain.OperationImageGenerate,
+		Modality:       domain.ModalityImage,
+		ModelCode:      model,
+		Provider:       domain.ProviderPoYo,
+		Prompt:         "safe prompt",
+		AspectRatio:    "1:1",
+		Resolution:     "2K",
 		IdempotencyKey: "idem-" + uuid.NewString(),
 	}
 }

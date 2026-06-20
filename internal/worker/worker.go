@@ -52,7 +52,11 @@ const (
 	rawProviderVideoPolicyIfProbePassed = "if_probe_passed"
 	rawProviderVideoPolicyAlwaysDevOnly = "always_dev_only"
 
-	maxAsyncVideoPollTransportAttempts = 20
+	// Async video providers may finish the generation even when their status
+	// endpoint is temporarily flaky. Keep polling transport errors long enough
+	// to recover the provider task instead of refunding a job that later
+	// becomes ready on the provider side.
+	maxAsyncVideoPollTransportAttempts = 180
 )
 
 // ArtifactSaver stores provider outputs as artifacts. Implemented by

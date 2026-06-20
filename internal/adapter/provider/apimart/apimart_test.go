@@ -71,6 +71,102 @@ func TestSubmitHailuoStandardSuccess(t *testing.T) {
 	}
 }
 
+func TestSubmitGemini3ProImageSuccess(t *testing.T) {
+	var seen imageGenerationRequest
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.URL.Path; got != "/images/generations" {
+			t.Fatalf("path = %q", got)
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer test-key" {
+			t.Fatalf("auth header = %q", got)
+		}
+		if got := r.Header.Get("Idempotency-Key"); got != "provider_submit:image:1" {
+			t.Fatalf("idempotency header = %q", got)
+		}
+		if err := json.NewDecoder(r.Body).Decode(&seen); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"code":200,"data":[{"status":"submitted","task_id":"task_image"}]}`))
+	}))
+	defer srv.Close()
+
+	p := New(Config{APIKey: "test-key", BaseURL: srv.URL, HTTPClient: srv.Client()})
+	task, err := p.Submit(context.Background(), domain.ProviderRequest{
+		JobID:          uuid.New(),
+		Operation:      domain.OperationImageGenerate,
+		Modality:       domain.ModalityImage,
+		ModelCode:      ModelGemini3ProImage,
+		Prompt:         "safe product image",
+		Size:           "16:9",
+		Resolution:     "4K",
+		InputURLs:      []string{" https://cdn.test/reference.png "},
+		Params:         json.RawMessage(`{"model_id":"nano_banana_pro","model_name":"Nano Banana Pro"}`),
+		IdempotencyKey: "provider_submit:image:1",
+	})
+	if err != nil {
+		t.Fatalf("submit: %v", err)
+	}
+	if task.Provider != domain.ProviderAPIMart || task.ModelCode != ModelGemini3ProImage || task.ExternalID != "task_image" {
+		t.Fatalf("unexpected task: %+v", task)
+	}
+	if seen.Model != ModelGemini3ProImage || seen.Prompt != "safe product image" || seen.Size != "16:9" || seen.Resolution != "4K" {
+		t.Fatalf("unexpected request body: %+v", seen)
+	}
+	if seen.N != 1 || seen.OfficialFallback {
+		t.Fatalf("unexpected generation options: %+v", seen)
+	}
+	if len(seen.ImageURLs) != 1 || seen.ImageURLs[0] != "https://cdn.test/reference.png" {
+		t.Fatalf("image_urls = %#v", seen.ImageURLs)
+	}
+	if strings.Contains(string(task.Request), "safe product image") {
+		t.Fatalf("provider task request must not persist prompt: %s", task.Request)
+	}
+}
+
+func TestSubmitGPTImage2Success(t *testing.T) {
+	var seen imageGenerationRequest
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.URL.Path; got != "/images/generations" {
+			t.Fatalf("path = %q", got)
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer test-key" {
+			t.Fatalf("auth header = %q", got)
+		}
+		if err := json.NewDecoder(r.Body).Decode(&seen); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"code":200,"data":[{"status":"submitted","task_id":"task_gpt_image_2"}]}`))
+	}))
+	defer srv.Close()
+
+	p := New(Config{APIKey: "test-key", BaseURL: srv.URL, HTTPClient: srv.Client()})
+	task, err := p.Submit(context.Background(), domain.ProviderRequest{
+		JobID:          uuid.New(),
+		Operation:      domain.OperationImageGenerate,
+		Modality:       domain.ModalityImage,
+		ModelCode:      ModelGPTImage2,
+		Prompt:         "safe editorial image",
+		Size:           "9:21",
+		Resolution:     "2K",
+		InputURLs:      []string{"https://cdn.test/reference-a.png", "https://cdn.test/reference-b.png"},
+		IdempotencyKey: "provider_submit:gpt_image_2:1",
+	})
+	if err != nil {
+		t.Fatalf("submit: %v", err)
+	}
+	if task.Provider != domain.ProviderAPIMart || task.ModelCode != ModelGPTImage2 || task.ExternalID != "task_gpt_image_2" {
+		t.Fatalf("unexpected task: %+v", task)
+	}
+	if seen.Model != ModelGPTImage2 || seen.Prompt != "safe editorial image" || seen.Size != "9:21" || seen.Resolution != "2k" {
+		t.Fatalf("unexpected request body: %+v", seen)
+	}
+	if seen.N != 1 || seen.OfficialFallback || len(seen.ImageURLs) != 2 {
+		t.Fatalf("unexpected generation options: %+v", seen)
+	}
+}
+
 func TestSubmitHailuoFastRequiresFirstFrame(t *testing.T) {
 	p := New(Config{APIKey: "test-key"})
 	_, err := p.Submit(context.Background(), domain.ProviderRequest{
@@ -221,6 +317,79 @@ func TestSubmitHailuoFastRejectsInvalidDataURLFirstFrame(t *testing.T) {
 	}
 }
 
+func TestSubmitGemini3ProImageValidation(t *testing.T) {
+	p := New(Config{APIKey: "test-key", InternalImagePriceCredits: 10})
+	base := domain.ProviderRequest{
+		JobID:     uuid.New(),
+		Operation: domain.OperationImageGenerate,
+		Modality:  domain.ModalityImage,
+		ModelCode: ModelGemini3ProImage,
+		Prompt:    "safe image",
+		Size:      "2K",
+	}
+	estimate, err := p.Estimate(context.Background(), base)
+	if err != nil {
+		t.Fatalf("estimate: %v", err)
+	}
+	if estimate.AmountCredits != 10 || estimate.Currency != "credits" || estimate.Estimated {
+		t.Fatalf("unexpected estimate: %+v", estimate)
+	}
+
+	cases := []struct {
+		name string
+		req  domain.ProviderRequest
+		want domain.ProviderErrorClass
+	}{
+		{
+			name: "unsupported model",
+			req: func() domain.ProviderRequest {
+				req := base
+				req.ModelCode = ModelHailuo23Standard
+				return req
+			}(),
+			want: domain.ProviderErrUnsupportedCapab,
+		},
+		{
+			name: "bad aspect size",
+			req: func() domain.ProviderRequest {
+				req := base
+				req.Size = "1024x1024"
+				return req
+			}(),
+			want: domain.ProviderErrInvalidRequest,
+		},
+		{
+			name: "too many references",
+			req: func() domain.ProviderRequest {
+				req := base
+				req.InputURLs = make([]string, maxGeminiReferenceImages+1)
+				for i := range req.InputURLs {
+					req.InputURLs[i] = "https://cdn.test/ref.png"
+				}
+				return req
+			}(),
+			want: domain.ProviderErrInvalidRequest,
+		},
+		{
+			name: "unsupported data url",
+			req: func() domain.ProviderRequest {
+				req := base
+				req.InputURLs = []string{"data:text/plain;base64,aGVsbG8="}
+				return req
+			}(),
+			want: domain.ProviderErrInvalidRequest,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := p.Estimate(context.Background(), tc.req)
+			if perr, ok := err.(*Error); !ok || perr.ProviderErrorClass() != tc.want {
+				t.Fatalf("expected %s, got %T %v", tc.want, err, err)
+			}
+		})
+	}
+}
+
 func TestSubmitRejectsUnsupportedVideoShape(t *testing.T) {
 	p := New(Config{APIKey: "test-key"})
 	_, err := p.Submit(context.Background(), domain.ProviderRequest{
@@ -270,6 +439,74 @@ func TestSubmitIsAdapterIdempotent(t *testing.T) {
 	}
 	if first.ExternalID != second.ExternalID {
 		t.Fatalf("idempotent external id mismatch: %q vs %q", first.ExternalID, second.ExternalID)
+	}
+}
+
+func TestSubmitGPTImage2ValidationUsesModelSpecificLimits(t *testing.T) {
+	p := New(Config{APIKey: "test-key"})
+	base := domain.ProviderRequest{
+		JobID:      uuid.New(),
+		Operation:  domain.OperationImageGenerate,
+		Modality:   domain.ModalityImage,
+		ModelCode:  ModelGPTImage2,
+		Prompt:     "safe image",
+		Size:       "9:21",
+		Resolution: "4k",
+	}
+	if _, err := p.Estimate(context.Background(), base); err != nil {
+		t.Fatalf("estimate accepted gpt-image-2 9:21/4k: %v", err)
+	}
+	base.Size = "1881x836"
+	if _, err := p.Estimate(context.Background(), base); err != nil {
+		t.Fatalf("estimate accepted gpt-image-2 pixel size: %v", err)
+	}
+	base.Size = "9:21"
+	base.InputURLs = make([]string, maxGPTImage2ReferenceImages)
+	for i := range base.InputURLs {
+		base.InputURLs[i] = "https://cdn.test/ref.png"
+	}
+	if _, err := p.Estimate(context.Background(), base); err != nil {
+		t.Fatalf("estimate accepted 16 refs: %v", err)
+	}
+	base.InputURLs = append(base.InputURLs, "https://cdn.test/ref-extra.png")
+	if _, err := p.Estimate(context.Background(), base); err == nil {
+		t.Fatalf("expected too many refs error")
+	}
+}
+
+func TestPollCompletedImageReturnsProviderURLWithSanitizedRaw(t *testing.T) {
+	const outputURL = "https://upload.apimart.ai/f/image/private-output.png?token=secret"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.URL.Path; got != "/tasks/task_image" {
+			t.Fatalf("path = %q", got)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"code":200,
+			"data":{
+				"id":"task_image",
+				"status":"completed",
+				"cost":0.1,
+				"credits_cost":1,
+				"progress":100,
+				"result":{"images":[{"url":["` + outputURL + `"],"expires_at":1763174708}]},
+				"created":1763088289,
+				"completed":1763088308
+			}
+		}`))
+	}))
+	defer srv.Close()
+
+	p := New(Config{APIKey: "test-key", BaseURL: srv.URL, HTTPClient: srv.Client()})
+	res, err := p.Poll(context.Background(), domain.ProviderTaskRef{Provider: domain.ProviderAPIMart, ExternalID: "task_image"})
+	if err != nil {
+		t.Fatalf("poll: %v", err)
+	}
+	if res.Status != domain.ProviderTaskSucceeded || len(res.OutputURLs) != 1 || res.OutputURLs[0] != outputURL {
+		t.Fatalf("unexpected result: %+v", res)
+	}
+	if strings.Contains(string(res.Raw), "upload.apimart.ai") || strings.Contains(string(res.Raw), "secret") {
+		t.Fatalf("raw metadata leaked provider URL: %s", string(res.Raw))
 	}
 }
 

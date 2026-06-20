@@ -14,27 +14,37 @@ const (
 	MiniAppChatModelName = "ChatGPT"
 
 	MiniAppImageNanoBananaPro   = "nano_banana_pro"
+	MiniAppImageGPTImage2       = "gpt_image_2"
 	MiniAppImageNanoBananaFlash = "nano_banana_flash"
+	MiniAppImageNanoBanana2     = "nano_banana_2"
 	MiniAppVideoKling           = "kling"
 
 	VKVideoPrunaAI = "prunaai"
 	VKVideoSora2   = "sora_2"
 
-	ModelCodeSeedream45 = "ByteDance/Seedream-4.5"
-	ModelCodeSDXLTurbo  = "stabilityai/sdxl-turbo"
-	ModelCodePVideo     = "PrunaAI/p-video"
-	ModelCodeSora2      = "sora-2"
+	ModelCodePoYoNanoBanana2 = "nano-banana-2-new"
+	ModelCodeGemini3ProImage = "gemini-3-pro-image-preview"
+	ModelCodeGPTImage2       = "gpt-image-2"
+	ModelCodeSeedream45      = "ByteDance/Seedream-4.5"
+	ModelCodeSDXLTurbo       = "stabilityai/sdxl-turbo"
+	ModelCodePVideo          = "PrunaAI/p-video"
+	ModelCodeSora2           = "sora-2"
 )
 
 // Model is the private server-side model spec selected for a user-facing
 // public ID.
 type Model struct {
-	ModelID     string
-	ModelName   string
-	Provider    domain.ProviderName
-	ModelCode   string
-	ExposeID    bool
-	DurationSec int
+	ModelID                string
+	ModelName              string
+	Provider               domain.ProviderName
+	ModelCode              string
+	ExposeID               bool
+	DurationSec            int
+	ProviderCostCredits    int64
+	PriceMultiplier        float64
+	MaxInternalCostCredits int64
+	SupportsReferenceImage bool
+	MaxReferenceImages     int
 }
 
 var miniAppModels = map[domain.OperationType]map[string]Model{
@@ -57,12 +67,41 @@ var miniAppModels = map[domain.OperationType]map[string]Model{
 		},
 	},
 	domain.OperationImageGenerate: {
+		MiniAppImageNanoBanana2: {
+			ModelID:                MiniAppImageNanoBanana2,
+			ModelName:              "Nano Banana 2",
+			Provider:               domain.ProviderPoYo,
+			ModelCode:              ModelCodePoYoNanoBanana2,
+			ExposeID:               true,
+			ProviderCostCredits:    5,
+			PriceMultiplier:        2,
+			MaxInternalCostCredits: 20,
+			SupportsReferenceImage: true,
+			MaxReferenceImages:     4,
+		},
 		MiniAppImageNanoBananaPro: {
-			ModelID:   MiniAppImageNanoBananaPro,
-			ModelName: "Nano Banana Pro",
-			Provider:  domain.ProviderDeepInfra,
-			ModelCode: ModelCodeSeedream45,
-			ExposeID:  true,
+			ModelID:                MiniAppImageNanoBananaPro,
+			ModelName:              "Nano Banana Pro",
+			Provider:               domain.ProviderAPIMart,
+			ModelCode:              ModelCodeGemini3ProImage,
+			ExposeID:               true,
+			ProviderCostCredits:    10,
+			PriceMultiplier:        2,
+			MaxInternalCostCredits: 40,
+			SupportsReferenceImage: true,
+			MaxReferenceImages:     14,
+		},
+		MiniAppImageGPTImage2: {
+			ModelID:                MiniAppImageGPTImage2,
+			ModelName:              "GPT Image 2",
+			Provider:               domain.ProviderAPIMart,
+			ModelCode:              ModelCodeGPTImage2,
+			ExposeID:               true,
+			ProviderCostCredits:    10,
+			PriceMultiplier:        2,
+			MaxInternalCostCredits: 40,
+			SupportsReferenceImage: true,
+			MaxReferenceImages:     16,
 		},
 		MiniAppImageNanoBananaFlash: {
 			ModelID:   MiniAppImageNanoBananaFlash,
@@ -80,11 +119,16 @@ var miniAppModels = map[domain.OperationType]map[string]Model{
 			ExposeID:  true,
 		},
 		"kandinsky": {
-			ModelID:   "kandinsky",
-			ModelName: "Nano Banana Pro",
-			Provider:  domain.ProviderDeepInfra,
-			ModelCode: ModelCodeSeedream45,
-			ExposeID:  true,
+			ModelID:                "kandinsky",
+			ModelName:              "Nano Banana Pro",
+			Provider:               domain.ProviderAPIMart,
+			ModelCode:              ModelCodeGemini3ProImage,
+			ExposeID:               true,
+			ProviderCostCredits:    10,
+			PriceMultiplier:        2,
+			MaxInternalCostCredits: 40,
+			SupportsReferenceImage: true,
+			MaxReferenceImages:     14,
 		},
 	},
 	domain.OperationVideoGenerate: {
@@ -103,6 +147,12 @@ var miniAppDefaultModel = map[domain.OperationType]string{
 	domain.OperationTextGenerate:  MiniAppChatModelID,
 	domain.OperationImageGenerate: MiniAppImageNanoBananaPro,
 	domain.OperationVideoGenerate: MiniAppVideoKling,
+}
+
+var miniAppModelOrder = map[domain.OperationType][]string{
+	domain.OperationTextGenerate:  {MiniAppChatModelID},
+	domain.OperationImageGenerate: {MiniAppImageNanoBanana2, MiniAppImageNanoBananaPro, MiniAppImageGPTImage2, MiniAppImageNanoBananaFlash},
+	domain.OperationVideoGenerate: {MiniAppVideoKling},
 }
 
 var vkVideoModels = map[string]Model{
@@ -140,6 +190,31 @@ func MiniAppResponseModelID(model Model) string {
 		return model.ModelID
 	}
 	return ""
+}
+
+func ListMiniAppModels(op domain.OperationType) []Model {
+	models, ok := miniAppModels[op]
+	if !ok {
+		return nil
+	}
+	out := make([]Model, 0, len(models))
+	seen := map[string]struct{}{}
+	for _, modelID := range miniAppModelOrder[op] {
+		model, ok := models[modelID]
+		if !ok {
+			continue
+		}
+		out = append(out, model)
+		seen[model.ModelID] = struct{}{}
+	}
+	for _, model := range models {
+		if _, ok := seen[model.ModelID]; ok {
+			continue
+		}
+		out = append(out, model)
+		seen[model.ModelID] = struct{}{}
+	}
+	return out
 }
 
 func ResolveVKVideoModel(raw string) (Model, bool) {

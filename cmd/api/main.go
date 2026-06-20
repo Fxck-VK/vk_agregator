@@ -91,7 +91,7 @@ func main() {
 		logger.Error("api core wiring failed", "error", err)
 		os.Exit(1)
 	}
-	vkHandler := vkbot.NewHandler(cfg, vkbot.Deps{
+	vkHandler := vkbot.NewHandler(ctx, cfg, vkbot.Deps{
 		Redis:        rdb,
 		Idempotency:  core.Idempotency,
 		Inbound:      core.Inbound,
@@ -101,6 +101,7 @@ func main() {
 		Billing:      core.Billing,
 		Payment:      core.Payment,
 		Referrals:    core.Referrals,
+		Artifacts:    core.Artifacts,
 		Orchestrator: core.Orchestrator,
 		Router:       core.Router,
 		Logger:       logger,

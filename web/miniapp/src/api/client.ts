@@ -94,6 +94,13 @@ export interface VideoRoute {
   max_reference_images?: number;
 }
 
+export interface ImageModel {
+  id: string;
+  name: string;
+  supports_reference_image: boolean;
+  max_reference_images?: number;
+}
+
 /** Mirrors internal/adapter/inbound/miniapp BalanceDTO */
 export interface BalanceResponse {
   balance_credits: number;
@@ -792,6 +799,15 @@ export async function listJobs(): Promise<Job[]> {
 
 export async function listVideoRoutes(): Promise<VideoRoute[]> {
   const data = await request<VideoRouteListResponse>("/miniapp/video-routes");
+  return data.items ?? [];
+}
+
+interface ImageModelListResponse {
+  items: ImageModel[];
+}
+
+export async function listImageModels(): Promise<ImageModel[]> {
+  const data = await request<ImageModelListResponse>("/miniapp/image-models");
   return data.items ?? [];
 }
 

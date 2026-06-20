@@ -2515,8 +2515,10 @@ func TestHandler_Estimate_ImageAliasUsesPublicModelOnly(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
 	lower := strings.ToLower(w.Body.String())
-	if strings.Contains(lower, "deepinfra") || strings.Contains(lower, "bytedance") || strings.Contains(lower, "seedream") || strings.Contains(lower, "model_code") || strings.Contains(lower, "provider") {
-		t.Fatalf("estimate response leaked provider/model internals: %s", w.Body.String())
+	for _, private := range []string{"deepinfra", "bytedance", "seedream", "apimart", "gemini-3-pro-image-preview", "model_code", "provider"} {
+		if strings.Contains(lower, private) {
+			t.Fatalf("estimate response leaked provider/model internals %q: %s", private, w.Body.String())
+		}
 	}
 	var resp struct {
 		ModelID   string `json:"model_id"`
@@ -2527,6 +2529,81 @@ func TestHandler_Estimate_ImageAliasUsesPublicModelOnly(t *testing.T) {
 	}
 	if resp.ModelID != "nano_banana_pro" || resp.ModelName != "Nano Banana Pro" {
 		t.Fatalf("unexpected model response: %+v", resp)
+	}
+}
+
+func TestHandler_Estimate_NanoBanana2UsesServerOwnedCost(t *testing.T) {
+	routes := newTestHandler("").Routes()
+
+	body, _ := json.Marshal(map[string]string{
+		"operation": "image_generate",
+		"prompt":    "estimate image",
+		"model_id":  "nano_banana_2",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/miniapp/estimate", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Launch-Params", devLaunchParams(777))
+
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	lower := strings.ToLower(w.Body.String())
+	for _, private := range []string{"poyo", "nano-banana-2-new", "model_code", "provider", "price"} {
+		if strings.Contains(lower, private) {
+			t.Fatalf("estimate response leaked private detail %q: %s", private, w.Body.String())
+		}
+	}
+	var resp struct {
+		ModelID      string `json:"model_id"`
+		ModelName    string `json:"model_name"`
+		CostEstimate int64  `json:"cost_estimate"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("invalid response json: %v", err)
+	}
+	if resp.ModelID != "nano_banana_2" || resp.ModelName != "Nano Banana 2" || resp.CostEstimate != 10 {
+		t.Fatalf("unexpected model estimate response: %+v", resp)
+	}
+}
+
+func TestHandler_ListImageModels_PublicAliasesOnly(t *testing.T) {
+	fixture := newTestFixtureWithConfig("", nil, func(cfg *miniappinbound.Config) {
+		cfg.ImageModels = []miniappinbound.ImageModelDTO{{
+			ID:                     "nano_banana_2",
+			Name:                   "Nano Banana 2",
+			SupportsReferenceImage: true,
+			MaxReferenceImages:     4,
+		}}
+	})
+	routes := fixture.handler.Routes()
+
+	req := httptest.NewRequest(http.MethodGet, "/miniapp/image-models", nil)
+	req.Header.Set("X-Launch-Params", devLaunchParams(777))
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	lower := strings.ToLower(w.Body.String())
+	for _, private := range []string{"poyo", "nano-banana-2-new", "model_code", "provider", "cost", "price"} {
+		if strings.Contains(lower, private) {
+			t.Fatalf("image model response leaked %q: %s", private, w.Body.String())
+		}
+	}
+	var resp struct {
+		Items []miniappinbound.ImageModelDTO `json:"items"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("invalid response json: %v", err)
+	}
+	if len(resp.Items) != 1 || resp.Items[0].ID != "nano_banana_2" || resp.Items[0].Name != "Nano Banana 2" {
+		t.Fatalf("unexpected image models: %+v", resp.Items)
+	}
+	if !resp.Items[0].SupportsReferenceImage || resp.Items[0].MaxReferenceImages != 4 {
+		t.Fatalf("missing public image constraints: %+v", resp.Items[0])
 	}
 }
 
@@ -2622,8 +2699,10 @@ func TestHandler_Estimate_ReferenceArtifactsPassWhenEnabled(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
 	lower := strings.ToLower(w.Body.String())
-	if strings.Contains(lower, "deepinfra") || strings.Contains(lower, "bytedance") || strings.Contains(lower, "seedream") || strings.Contains(lower, "model_code") || strings.Contains(lower, "provider") {
-		t.Fatalf("estimate response leaked provider/model internals: %s", w.Body.String())
+	for _, private := range []string{"deepinfra", "bytedance", "seedream", "apimart", "gemini-3-pro-image-preview", "model_code", "provider"} {
+		if strings.Contains(lower, private) {
+			t.Fatalf("estimate response leaked provider/model internals %q: %s", private, w.Body.String())
+		}
 	}
 	var resp struct {
 		Operation      string `json:"operation"`
@@ -2654,8 +2733,8 @@ func TestHandler_Estimate_ReferenceArtifactsRejectTooMany(t *testing.T) {
 	if err := fixture.userRepo.Create(ctx, user); err != nil {
 		t.Fatalf("create user: %v", err)
 	}
-	ids := make([]string, 0, 5)
-	for i := 0; i < 5; i++ {
+	ids := make([]string, 0, 15)
+	for i := 0; i < 15; i++ {
 		artifact := createTestArtifact(t, fixture, user.ID, domain.ArtifactKindInput, domain.MediaTypeImage, domain.ArtifactStatusReady)
 		ids = append(ids, artifact.ID.String())
 	}
@@ -2964,8 +3043,10 @@ func TestHandler_CreateJob_ImageAliasPersistsProviderModelCodePrivately(t *testi
 		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
 	}
 	lower := strings.ToLower(w.Body.String())
-	if strings.Contains(lower, "deepinfra") || strings.Contains(lower, "bytedance") || strings.Contains(lower, "seedream") || strings.Contains(lower, "model_code") || strings.Contains(lower, "provider") {
-		t.Fatalf("job response leaked provider/model internals: %s", w.Body.String())
+	for _, private := range []string{"deepinfra", "bytedance", "seedream", "apimart", "gemini-3-pro-image-preview", "model_code", "provider"} {
+		if strings.Contains(lower, private) {
+			t.Fatalf("job response leaked provider/model internals %q: %s", private, w.Body.String())
+		}
 	}
 	var resp struct {
 		ID        string `json:"id"`
@@ -2996,7 +3077,130 @@ func TestHandler_CreateJob_ImageAliasPersistsProviderModelCodePrivately(t *testi
 	if err := json.Unmarshal(job.Params, &params); err != nil {
 		t.Fatalf("invalid params: %v", err)
 	}
-	if params.ModelID != "nano_banana_pro" || params.ModelName != "Nano Banana Pro" || params.Provider != "deepinfra" || params.ModelCode != "ByteDance/Seedream-4.5" {
+	if params.ModelID != "nano_banana_pro" || params.ModelName != "Nano Banana Pro" || params.Provider != "apimart" || params.ModelCode != "gemini-3-pro-image-preview" {
+		t.Fatalf("unexpected stored params: %+v", params)
+	}
+}
+
+func TestHandler_CreateJob_GPTImage2PersistsAPIMartSnapshotPrivately(t *testing.T) {
+	fixture := newTestFixture("", nil)
+	routes := fixture.handler.Routes()
+
+	body, _ := json.Marshal(map[string]string{
+		"operation": "image_generate",
+		"prompt":    "image prompt",
+		"model_id":  "gpt_image_2",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/miniapp/jobs", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Launch-Params", devLaunchParams(777))
+	req.Header.Set("X-Idempotency-Key", "image-model-gpt-image-2")
+
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	lower := strings.ToLower(w.Body.String())
+	for _, private := range []string{"apimart", "gpt-image-2", "model_code", "provider"} {
+		if strings.Contains(lower, private) {
+			t.Fatalf("job response leaked provider/model internals %q: %s", private, w.Body.String())
+		}
+	}
+	var resp struct {
+		ID           string `json:"id"`
+		Operation    string `json:"operation"`
+		ModelID      string `json:"model_id"`
+		ModelName    string `json:"model_name"`
+		CostEstimate int64  `json:"cost_estimate"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("invalid response json: %v", err)
+	}
+	if resp.Operation != "image_generate" || resp.ModelID != "gpt_image_2" || resp.ModelName != "GPT Image 2" || resp.CostEstimate != 20 {
+		t.Fatalf("unexpected response: %+v", resp)
+	}
+	jobID, err := uuid.Parse(resp.ID)
+	if err != nil {
+		t.Fatalf("invalid job id: %v", err)
+	}
+	job, err := fixture.jobRepo.GetByID(context.Background(), jobID)
+	if err != nil {
+		t.Fatalf("get job: %v", err)
+	}
+	var params struct {
+		ModelID   string `json:"model_id"`
+		ModelName string `json:"model_name"`
+		Provider  string `json:"provider"`
+		ModelCode string `json:"model_code"`
+	}
+	if err := json.Unmarshal(job.Params, &params); err != nil {
+		t.Fatalf("invalid params: %v", err)
+	}
+	if params.ModelID != "gpt_image_2" || params.ModelName != "GPT Image 2" || params.Provider != "apimart" || params.ModelCode != "gpt-image-2" {
+		t.Fatalf("unexpected stored params: %+v", params)
+	}
+}
+
+func TestHandler_CreateJob_NanoBanana2PersistsPoYoSnapshotPrivately(t *testing.T) {
+	fixture := newTestFixture("", nil)
+	routes := fixture.handler.Routes()
+
+	body, _ := json.Marshal(map[string]string{
+		"operation": "image_generate",
+		"prompt":    "image prompt",
+		"model_id":  "nano_banana_2",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/miniapp/jobs", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Launch-Params", devLaunchParams(777))
+	req.Header.Set("X-Idempotency-Key", "image-model-nano-banana-2")
+
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	lower := strings.ToLower(w.Body.String())
+	for _, private := range []string{"poyo", "nano-banana-2-new", "model_code", "provider"} {
+		if strings.Contains(lower, private) {
+			t.Fatalf("job response leaked private detail %q: %s", private, w.Body.String())
+		}
+	}
+	var resp struct {
+		ID           string `json:"id"`
+		Operation    string `json:"operation"`
+		ModelID      string `json:"model_id"`
+		ModelName    string `json:"model_name"`
+		CostEstimate int64  `json:"cost_estimate"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("invalid response json: %v", err)
+	}
+	if resp.Operation != "image_generate" || resp.ModelID != "nano_banana_2" || resp.ModelName != "Nano Banana 2" || resp.CostEstimate != 10 {
+		t.Fatalf("unexpected response: %+v", resp)
+	}
+	jobID, err := uuid.Parse(resp.ID)
+	if err != nil {
+		t.Fatalf("invalid job id: %v", err)
+	}
+	job, err := fixture.jobRepo.GetByID(context.Background(), jobID)
+	if err != nil {
+		t.Fatalf("get job: %v", err)
+	}
+	if job.CostEstimate != 10 || job.CostReserved != 10 {
+		t.Fatalf("cost estimate/reserved = %d/%d, want 10/10", job.CostEstimate, job.CostReserved)
+	}
+	var params struct {
+		ModelID   string `json:"model_id"`
+		ModelName string `json:"model_name"`
+		Provider  string `json:"provider"`
+		ModelCode string `json:"model_code"`
+	}
+	if err := json.Unmarshal(job.Params, &params); err != nil {
+		t.Fatalf("invalid params: %v", err)
+	}
+	if params.ModelID != "nano_banana_2" || params.ModelName != "Nano Banana 2" || params.Provider != "poyo" || params.ModelCode != "nano-banana-2-new" {
 		t.Fatalf("unexpected stored params: %+v", params)
 	}
 }
@@ -3311,8 +3515,10 @@ func TestHandler_CreateJob_ReferenceArtifactsPassWhenEnabled(t *testing.T) {
 		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
 	}
 	lower := strings.ToLower(w.Body.String())
-	if strings.Contains(lower, "deepinfra") || strings.Contains(lower, "bytedance") || strings.Contains(lower, "seedream") || strings.Contains(lower, "model_code") || strings.Contains(lower, "provider") {
-		t.Fatalf("job response leaked provider/model internals: %s", w.Body.String())
+	for _, private := range []string{"deepinfra", "bytedance", "seedream", "apimart", "gemini-3-pro-image-preview", "model_code", "provider"} {
+		if strings.Contains(lower, private) {
+			t.Fatalf("job response leaked provider/model internals %q: %s", private, w.Body.String())
+		}
 	}
 	var resp struct {
 		ID        string `json:"id"`
@@ -3347,7 +3553,7 @@ func TestHandler_CreateJob_ReferenceArtifactsPassWhenEnabled(t *testing.T) {
 	if err := json.Unmarshal(job.Params, &params); err != nil {
 		t.Fatalf("invalid params: %v", err)
 	}
-	if params.ModelID != "nano_banana_pro" || params.ModelName != "Nano Banana Pro" || params.Provider != "deepinfra" || params.ModelCode != "ByteDance/Seedream-4.5" {
+	if params.ModelID != "nano_banana_pro" || params.ModelName != "Nano Banana Pro" || params.Provider != "apimart" || params.ModelCode != "gemini-3-pro-image-preview" {
 		t.Fatalf("unexpected stored model params: %+v", params)
 	}
 	if len(params.ReferenceArtifactIDs) != 1 || params.ReferenceArtifactIDs[0] != artifact.ID {
@@ -3365,8 +3571,8 @@ func TestHandler_CreateJob_ReferenceArtifactsRejectTooMany(t *testing.T) {
 	if err := fixture.userRepo.Create(ctx, user); err != nil {
 		t.Fatalf("create user: %v", err)
 	}
-	ids := make([]string, 0, 5)
-	for i := 0; i < 5; i++ {
+	ids := make([]string, 0, 15)
+	for i := 0; i < 15; i++ {
 		artifact := createTestArtifact(t, fixture, user.ID, domain.ArtifactKindInput, domain.MediaTypeImage, domain.ArtifactStatusReady)
 		ids = append(ids, artifact.ID.String())
 	}

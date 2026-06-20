@@ -171,6 +171,16 @@ func TestRouterParse(t *testing.T) {
 			wantType: domain.CommandMenuImageReference,
 		},
 		{
+			name:     "vk photo nano banana 2 button",
+			input:    "Nano Banana 2",
+			wantType: domain.CommandMenuImageNanoBanana2,
+		},
+		{
+			name:     "vk photo gpt image 2 button",
+			input:    "GPT Image 2",
+			wantType: domain.CommandMenuImageGPTImage2,
+		},
+		{
 			name:     "vk neurohub text menu button",
 			input:    "💬 Спросить у НейроХаб",
 			wantType: domain.CommandMenuText,
