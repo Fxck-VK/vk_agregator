@@ -273,7 +273,11 @@ type submitRequest struct {
 type submitResponse struct {
 	Code    int           `json:"code,omitempty"`
 	Data    submitData    `json:"data,omitempty"`
+	Task    submitData    `json:"task,omitempty"`
 	Success *bool         `json:"success,omitempty"`
+	ID      string        `json:"id,omitempty"`
+	UUID    string        `json:"uuid,omitempty"`
+	JobID   string        `json:"job_id,omitempty"`
 	TaskID  string        `json:"task_id,omitempty"`
 	Status  string        `json:"status,omitempty"`
 	Message string        `json:"message,omitempty"`
@@ -281,6 +285,9 @@ type submitResponse struct {
 }
 
 type submitData struct {
+	ID          string `json:"id,omitempty"`
+	UUID        string `json:"uuid,omitempty"`
+	JobID       string `json:"job_id,omitempty"`
 	TaskID      string `json:"task_id,omitempty"`
 	Status      string `json:"status,omitempty"`
 	CreatedTime string `json:"created_time,omitempty"`
@@ -300,14 +307,32 @@ func (r submitResponse) err() error {
 }
 
 func (r submitResponse) taskID() string {
-	if trimmed := strings.TrimSpace(r.Data.TaskID); trimmed != "" {
-		return trimmed
+	for _, raw := range []string{
+		r.Data.TaskID,
+		r.Data.ID,
+		r.Data.UUID,
+		r.Data.JobID,
+		r.Task.TaskID,
+		r.Task.ID,
+		r.Task.UUID,
+		r.Task.JobID,
+		r.TaskID,
+		r.ID,
+		r.UUID,
+		r.JobID,
+	} {
+		if trimmed := strings.TrimSpace(raw); trimmed != "" {
+			return trimmed
+		}
 	}
-	return strings.TrimSpace(r.TaskID)
+	return ""
 }
 
 func (r submitResponse) status() string {
 	if trimmed := strings.TrimSpace(r.Data.Status); trimmed != "" {
+		return trimmed
+	}
+	if trimmed := strings.TrimSpace(r.Task.Status); trimmed != "" {
 		return trimmed
 	}
 	return strings.TrimSpace(r.Status)
@@ -329,10 +354,15 @@ type statusResponse struct {
 }
 
 type statusData struct {
+	ID            string       `json:"id,omitempty"`
+	UUID          string       `json:"uuid,omitempty"`
+	JobID         string       `json:"job_id,omitempty"`
 	TaskID        string       `json:"task_id,omitempty"`
 	Status        string       `json:"status,omitempty"`
 	CreditsAmount float64      `json:"credits_amount,omitempty"`
 	Files         []statusFile `json:"files,omitempty"`
+	Result        statusResult `json:"result,omitempty"`
+	Output        statusResult `json:"output,omitempty"`
 	CreatedTime   string       `json:"created_time,omitempty"`
 	Progress      int          `json:"progress,omitempty"`
 	ErrorMessage  *string      `json:"error_message,omitempty"`
@@ -362,10 +392,12 @@ func (r statusResponse) err() error {
 }
 
 func (r statusResponse) taskID() string {
-	if trimmed := strings.TrimSpace(r.Data.TaskID); trimmed != "" {
-		return trimmed
+	for _, raw := range []string{r.Data.TaskID, r.Data.ID, r.Data.UUID, r.Data.JobID, r.TaskID} {
+		if trimmed := strings.TrimSpace(raw); trimmed != "" {
+			return trimmed
+		}
 	}
-	return strings.TrimSpace(r.TaskID)
+	return ""
 }
 
 func (r statusResponse) status() string {
@@ -395,6 +427,8 @@ func (r statusResponse) updatedAt() string {
 
 func (r statusResponse) outputMediaURLs() []string {
 	out := r.Result.OutputVideoURLs()
+	out = append(out, r.Data.Result.OutputVideoURLs()...)
+	out = append(out, r.Data.Output.OutputVideoURLs()...)
 	for _, file := range r.Data.Files {
 		if strings.TrimSpace(file.FileURL) == "" {
 			continue
@@ -434,21 +468,24 @@ func (r statusResponse) providerError() providerError {
 type statusResult struct {
 	VideoURL   string  `json:"video_url,omitempty"`
 	VideoURLs  urlList `json:"video_urls,omitempty"`
+	ImageURL   string  `json:"image_url,omitempty"`
+	ImageURLs  urlList `json:"image_urls,omitempty"`
 	OutputURL  string  `json:"output_url,omitempty"`
 	OutputURLs urlList `json:"output_urls,omitempty"`
 	URL        string  `json:"url,omitempty"`
+	URLs       urlList `json:"urls,omitempty"`
 	Duration   int     `json:"duration,omitempty"`
 	Resolution string  `json:"resolution,omitempty"`
 }
 
 func (r statusResult) OutputVideoURLs() []string {
 	var out []string
-	for _, value := range []string{r.VideoURL, r.OutputURL, r.URL} {
+	for _, value := range []string{r.VideoURL, r.ImageURL, r.OutputURL, r.URL} {
 		if trimmed := strings.TrimSpace(value); trimmed != "" {
 			out = append(out, trimmed)
 		}
 	}
-	for _, values := range []urlList{r.VideoURLs, r.OutputURLs} {
+	for _, values := range []urlList{r.VideoURLs, r.ImageURLs, r.OutputURLs, r.URLs} {
 		for _, value := range values {
 			if trimmed := strings.TrimSpace(value); trimmed != "" {
 				out = append(out, trimmed)

@@ -121,6 +121,26 @@ func TestSubmitNanoBanana2ImageSuccess(t *testing.T) {
 	}
 }
 
+func TestSubmitNanoBanana2ImageAcceptsDataID(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/generate/submit" {
+			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"code":200,"data":{"id":"I46OXVK51SS6JRZJ","status":"not_started"}}`))
+	}))
+	defer srv.Close()
+
+	provider := New(Config{APIKey: "test-key", BaseURL: srv.URL, HTTPClient: srv.Client()})
+	task, err := provider.Submit(context.Background(), baseImageRequest(ModelNanoBanana2New))
+	if err != nil {
+		t.Fatalf("submit: %v", err)
+	}
+	if task.ExternalID != "I46OXVK51SS6JRZJ" || task.Status != domain.ProviderTaskPending {
+		t.Fatalf("bad task: %+v", task)
+	}
+}
+
 func TestSubmitNanoBanana2ImageDefaultsTo1K(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var body submitRequest
@@ -317,6 +337,31 @@ func TestPollCompletedImageReturnsOutputAndSanitizesRaw(t *testing.T) {
 	}
 	raw := string(result.Raw)
 	if strings.Contains(raw, "private.poyo.ai") || strings.Contains(raw, "secret") || strings.Contains(raw, "file_url") {
+		t.Fatalf("raw metadata leaked private output URL: %s", raw)
+	}
+}
+
+func TestPollCompletedImageAcceptsDataResultImageURLs(t *testing.T) {
+	const outputURL = "https://private.poyo.ai/output.jpg?token=secret"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/api/generate/status/I46OXVK51SS6JRZJ" {
+			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"code":200,"data":{"id":"I46OXVK51SS6JRZJ","status":"finished","result":{"image_urls":["` + outputURL + `"]}}}`))
+	}))
+	defer srv.Close()
+
+	provider := New(Config{APIKey: "test-key", BaseURL: srv.URL, HTTPClient: srv.Client()})
+	result, err := provider.Poll(context.Background(), domain.ProviderTaskRef{Provider: domain.ProviderPoYo, ExternalID: "I46OXVK51SS6JRZJ"})
+	if err != nil {
+		t.Fatalf("poll: %v", err)
+	}
+	if result.Status != domain.ProviderTaskSucceeded || len(result.OutputURLs) != 1 || result.OutputURLs[0] != outputURL {
+		t.Fatalf("unexpected result: %+v", result)
+	}
+	raw := string(result.Raw)
+	if strings.Contains(raw, "private.poyo.ai") || strings.Contains(raw, "secret") || strings.Contains(raw, "image_urls") {
 		t.Fatalf("raw metadata leaked private output URL: %s", raw)
 	}
 }

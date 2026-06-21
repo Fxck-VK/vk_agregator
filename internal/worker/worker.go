@@ -2349,6 +2349,10 @@ func (p *processor) saveOutputs(ctx context.Context, job *domain.Job, urls []str
 	)
 	defer span.End()
 
+	if len(job.OutputArtifactIDs) >= len(urls) && len(urls) > 0 {
+		return p.jobs.Update(ctx, job)
+	}
+
 	mediaType := mediaTypeFor(job.Modality)
 	for _, url := range urls {
 		art, err := p.artifacts.SaveRemoteArtifact(ctx, job.UserID, &job.ID, domain.ArtifactKindOutput, mediaType, url)

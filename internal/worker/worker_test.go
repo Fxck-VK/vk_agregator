@@ -464,6 +464,69 @@ func TestAsyncFlowViaPollWorker(t *testing.T) {
 	}
 }
 
+func TestPollWorkerResumesTerminalProviderTaskWithSavedArtifact(t *testing.T) {
+	provider := &captureImageProvider{name: domain.ProviderAPIMart}
+	h := newHarnessWithProvider(t, provider, nil)
+	ctx := context.Background()
+	job := h.queueJob(t, domain.OperationImageGenerate, domain.ModalityImage, "a cat")
+	artifact := &domain.Artifact{
+		OwnerUserID:   job.UserID,
+		Kind:          domain.ArtifactKindOutput,
+		MediaType:     domain.MediaTypeImage,
+		MimeType:      "image/png",
+		StorageBucket: "artifacts",
+		StorageKey:    "outputs/" + uuid.NewString() + ".png",
+		SHA256:        uuid.NewString(),
+		SizeBytes:     6,
+		Status:        domain.ArtifactStatusReady,
+	}
+	if err := h.store.Put(ctx, artifact.StorageBucket, artifact.StorageKey, []byte("output"), artifact.MimeType); err != nil {
+		t.Fatalf("put output artifact bytes: %v", err)
+	}
+	if err := h.artRepo.Create(ctx, artifact); err != nil {
+		t.Fatalf("create output artifact: %v", err)
+	}
+	job.Status = domain.JobStatusProviderPending
+	job.OutputArtifactIDs = []uuid.UUID{artifact.ID}
+	if err := h.jobs.Update(ctx, job); err != nil {
+		t.Fatalf("update job: %v", err)
+	}
+	rawResult, _ := json.Marshal(domain.ProviderTaskResult{
+		Status:     domain.ProviderTaskSucceeded,
+		OutputURLs: []string{"https://provider.example/output.png"},
+	})
+	pt := &domain.ProviderTask{
+		JobID:          job.ID,
+		Provider:       domain.ProviderAPIMart,
+		ModelCode:      "gpt-image-2",
+		ExternalID:     "task_done",
+		Status:         domain.ProviderTaskSucceeded,
+		Result:         rawResult,
+		IdempotencyKey: "provider_submit:" + job.ID.String() + ":1",
+	}
+	if err := h.tasks.Create(ctx, pt); err != nil {
+		t.Fatalf("create provider task: %v", err)
+	}
+
+	if err := h.poll.Process(ctx, taskFor(job)); err != nil {
+		t.Fatalf("poll process: %v", err)
+	}
+
+	got := h.reload(t, job.ID)
+	if got.Status != domain.JobStatusResultReady {
+		t.Fatalf("status = %q, want result_ready", got.Status)
+	}
+	if len(got.OutputArtifactIDs) != 1 || got.OutputArtifactIDs[0] != artifact.ID {
+		t.Fatalf("output artifacts = %v, want existing %s", got.OutputArtifactIDs, artifact.ID)
+	}
+	if len(h.streams.byStream[redisqueue.StreamDelivery]) != 1 {
+		t.Fatalf("expected delivery enqueue after recovery, got %v", h.streams.byStream)
+	}
+	if provider.polls != 0 {
+		t.Fatalf("provider poll called during durable recovery: %d", provider.polls)
+	}
+}
+
 func TestVideoProbeSuccessBeforeDelivery(t *testing.T) {
 	prober := &fakeVideoProber{metadata: domain.ArtifactMediaMetadata{
 		Width:       1280,
@@ -2533,8 +2596,9 @@ func (p *routingProvider) Poll(context.Context, domain.ProviderTaskRef) (domain.
 func (p *routingProvider) Cancel(context.Context, domain.ProviderTaskRef) error { return nil }
 
 type captureImageProvider struct {
-	name domain.ProviderName
-	last domain.ProviderRequest
+	name  domain.ProviderName
+	last  domain.ProviderRequest
+	polls int
 }
 
 func (p *captureImageProvider) Name() domain.ProviderName {
@@ -2565,6 +2629,7 @@ func (p *captureImageProvider) Submit(_ context.Context, req domain.ProviderRequ
 }
 
 func (p *captureImageProvider) Poll(context.Context, domain.ProviderTaskRef) (domain.ProviderTaskResult, error) {
+	p.polls++
 	return domain.ProviderTaskResult{Status: domain.ProviderTaskSucceeded, OutputURLs: []string{"data:image/png;base64,b2s="}}, nil
 }
 
