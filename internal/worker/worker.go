@@ -1130,6 +1130,7 @@ type promptParams struct {
 	Provider               domain.ProviderName       `json:"provider,omitempty"`
 	Size                   string                    `json:"size,omitempty"`
 	AspectRatio            string                    `json:"aspect_ratio,omitempty"`
+	Resolution             string                    `json:"resolution,omitempty"`
 	ReferenceArtifactIDs   []uuid.UUID               `json:"reference_artifact_ids,omitempty"`
 	InputURLs              []string                  `json:"input_urls,omitempty"`
 	VKPlaceholderMessageID int64                     `json:"vk_placeholder_message_id,omitempty"`
@@ -1215,6 +1216,7 @@ func (p *processor) buildRequest(ctx context.Context, job *domain.Job, attempt i
 		if size == "" {
 			size = p.imageSize
 		}
+		resolution = pp.Resolution
 	}
 	if job.Modality == domain.ModalityVideo {
 		routeSnapshot := pp.ResolvedVideoRoute

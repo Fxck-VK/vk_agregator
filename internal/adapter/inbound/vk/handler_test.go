@@ -1460,6 +1460,12 @@ func TestPhotoMenuButtonSendsInstructionNoJob(t *testing.T) {
 	if !strings.Contains(sent[0].Keyboard, "Nano Banana 2") {
 		t.Fatalf("expected Nano Banana 2 button in photo keyboard: %q", sent[0].Keyboard)
 	}
+	if !strings.Contains(sent[0].Keyboard, "Nano Banana Pro") {
+		t.Fatalf("expected Nano Banana Pro button in photo keyboard: %q", sent[0].Keyboard)
+	}
+	if !strings.Contains(sent[0].Keyboard, "GPT Image 2") {
+		t.Fatalf("expected GPT Image 2 button in photo keyboard: %q", sent[0].Keyboard)
+	}
 	if strings.Contains(sent[0].Keyboard, "Фото по тексту") {
 		t.Fatalf("photo text button should be hidden because photo menu already enables text-to-image mode: keyboard=%q", sent[0].Keyboard)
 	}
@@ -1468,15 +1474,23 @@ func TestPhotoMenuButtonSendsInstructionNoJob(t *testing.T) {
 	}
 }
 
-func TestPhotoMenuButtonEnablesPlainTextImageJobs(t *testing.T) {
+func TestPhotoNanoBananaProQualityFlowCreatesImageJob(t *testing.T) {
 	control := vkdelivery.NewMockClient()
 	h := newHarnessWithControl(control)
 	menu := `{
-		"type":"message_new","group_id":1,"event_id":"evt-photo-text-on","secret":"s3cr3t",
-        "object":{"message":{"from_id":5631,"peer_id":5631,"text":"\ud83d\uddbc\ufe0f \u0421\u043e\u0437\u0434\u0430\u0442\u044c \u0444\u043e\u0442\u043e","payload":"{\"command\":\"menu.image\"}"}}
+		"type":"message_new","group_id":1,"event_id":"evt-photo-pro-on","secret":"s3cr3t",
+		"object":{"message":{"from_id":5631,"peer_id":5631,"text":"Nano Banana Pro","payload":"{\"command\":\"menu.image.text\"}"}}
 	}`
 	if rec := h.post(menu); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
 		t.Fatalf("unexpected menu response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	quality := `{
+		"type":"message_new","group_id":1,"event_id":"evt-photo-pro-quality","secret":"s3cr3t",
+		"object":{"message":{"from_id":5631,"peer_id":5631,"text":"2K","payload":"{\"command\":\"menu.image.quality.2k\"}"}}
+	}`
+	if rec := h.post(quality); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected quality response: %d %q", rec.Code, rec.Body.String())
 	}
 
 	prompt := `{
@@ -1493,25 +1507,36 @@ func TestPhotoMenuButtonEnablesPlainTextImageJobs(t *testing.T) {
 		t.Fatalf("user not created: %v", err)
 	}
 	cmds, _ := h.cmds.ListByUser(ctx, user.ID, 10, 0)
-	if !hasCommandTypes(cmds, domain.CommandMenuImage, domain.CommandImageGenerate) {
+	if !hasCommandTypes(cmds, domain.CommandMenuImageText, domain.CommandMenuImageQuality2K, domain.CommandImageGenerate) {
 		t.Fatalf("unexpected command types: %+v", commandTypes(cmds))
 	}
 	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
-	if len(jobs) != 1 || jobs[0].OperationType != domain.OperationImageGenerate || jobs[0].Modality != domain.ModalityImage || h.pub.Len() != 1 {
+	if len(jobs) != 1 || jobs[0].OperationType != domain.OperationImageGenerate || jobs[0].Modality != domain.ModalityImage || jobs[0].CostEstimate != 20 || h.pub.Len() != 1 {
 		t.Fatalf("photo text mode should create one image job, jobs=%+v tasks=%d", jobs, h.pub.Len())
 	}
 	sent := control.Sent()
-	if len(sent) != 2 || !strings.Contains(sent[0].Text, "Генерация фото по тексту") || sent[1].Text != "НейроХаб рисует..." {
+	if len(sent) != 2 || !strings.Contains(sent[0].Text, "Nano Banana Pro") || !strings.Contains(sent[0].Text, "Цена: 20 кредитов") || sent[1].Text != "НейроХаб рисует..." {
 		t.Fatalf("unexpected photo mode responses: %+v", sent)
 	}
 	var params struct {
 		Prompt                 string `json:"prompt"`
+		ModelID                string `json:"model_id"`
+		ModelName              string `json:"model_name"`
+		Size                   string `json:"size"`
+		Resolution             string `json:"resolution"`
+		ImageQuality           string `json:"image_quality"`
 		VKPlaceholderMessageID int64  `json:"vk_placeholder_message_id"`
 	}
 	if err := json.Unmarshal(jobs[0].Params, &params); err != nil {
 		t.Fatalf("decode job params: %v", err)
 	}
-	if params.Prompt != "кот в очках на пляже" || params.VKPlaceholderMessageID != sent[1].MessageID {
+	if params.Prompt != "кот в очках на пляже" ||
+		params.ModelID != "nano_banana_pro" ||
+		params.ModelName != "Nano Banana Pro" ||
+		params.Size != "1:1" ||
+		params.Resolution != "2K" ||
+		params.ImageQuality != "2K" ||
+		params.VKPlaceholderMessageID != sent[1].MessageID {
 		t.Fatalf("unexpected image job params: %+v, pending=%+v", params, sent[1])
 	}
 }
@@ -1525,6 +1550,14 @@ func TestPhotoNanoBanana2ModeCreatesPoYoImageJob(t *testing.T) {
 	}`
 	if rec := h.post(menu); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
 		t.Fatalf("unexpected menu response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	quality := `{
+		"type":"message_new","group_id":1,"event_id":"evt-photo-nano-2-quality","secret":"s3cr3t",
+		"object":{"message":{"from_id":5632,"peer_id":5632,"text":"4K","payload":"{\"command\":\"menu.image.quality.4k\"}"}}
+	}`
+	if rec := h.post(quality); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected quality response: %d %q", rec.Code, rec.Body.String())
 	}
 
 	prompt := `{
@@ -1541,28 +1574,38 @@ func TestPhotoNanoBanana2ModeCreatesPoYoImageJob(t *testing.T) {
 		t.Fatalf("user not created: %v", err)
 	}
 	cmds, _ := h.cmds.ListByUser(ctx, user.ID, 10, 0)
-	if !hasCommandTypes(cmds, domain.CommandMenuImageNanoBanana2, domain.CommandImageGenerate) {
+	if !hasCommandTypes(cmds, domain.CommandMenuImageNanoBanana2, domain.CommandMenuImageQuality4K, domain.CommandImageGenerate) {
 		t.Fatalf("unexpected command types: %+v", commandTypes(cmds))
 	}
 	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
-	if len(jobs) != 1 || jobs[0].OperationType != domain.OperationImageGenerate || jobs[0].Modality != domain.ModalityImage || jobs[0].CostEstimate != 10 || jobs[0].CostReserved != 10 {
+	if len(jobs) != 1 || jobs[0].OperationType != domain.OperationImageGenerate || jobs[0].Modality != domain.ModalityImage || jobs[0].CostEstimate != 24 || jobs[0].CostReserved != 24 {
 		t.Fatalf("nano banana 2 should create one reserved image job, jobs=%+v", jobs)
 	}
 	var params struct {
-		Prompt    string `json:"prompt"`
-		ModelID   string `json:"model_id"`
-		ModelName string `json:"model_name"`
-		Provider  string `json:"provider"`
-		ModelCode string `json:"model_code"`
+		Prompt       string `json:"prompt"`
+		ModelID      string `json:"model_id"`
+		ModelName    string `json:"model_name"`
+		Provider     string `json:"provider"`
+		ModelCode    string `json:"model_code"`
+		Size         string `json:"size"`
+		Resolution   string `json:"resolution"`
+		ImageQuality string `json:"image_quality"`
 	}
 	if err := json.Unmarshal(jobs[0].Params, &params); err != nil {
 		t.Fatalf("decode job params: %v", err)
 	}
-	if params.Prompt != "cinematic robot portrait" || params.ModelID != "nano_banana_2" || params.ModelName != "Nano Banana 2" || params.Provider != "poyo" || params.ModelCode != "nano-banana-2-new" {
+	if params.Prompt != "cinematic robot portrait" ||
+		params.ModelID != "nano_banana_2" ||
+		params.ModelName != "Nano Banana 2" ||
+		params.Provider != "poyo" ||
+		params.ModelCode != "nano-banana-2-new" ||
+		params.Size != "1:1" ||
+		params.Resolution != "4K" ||
+		params.ImageQuality != "4K" {
 		t.Fatalf("unexpected nano banana 2 job params: %+v", params)
 	}
 	sent := control.Sent()
-	if len(sent) != 2 || !strings.Contains(sent[0].Text, "Nano Banana 2") || sent[1].Text != "НейроХаб рисует..." {
+	if len(sent) != 2 || !strings.Contains(sent[0].Text, "Nano Banana 2") || !strings.Contains(sent[0].Text, "Цена: 24 кредитов") || sent[1].Text != "НейроХаб рисует..." {
 		t.Fatalf("unexpected nano banana 2 responses: %+v", sent)
 	}
 }

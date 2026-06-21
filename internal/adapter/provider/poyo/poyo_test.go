@@ -121,6 +121,29 @@ func TestSubmitNanoBanana2ImageSuccess(t *testing.T) {
 	}
 }
 
+func TestSubmitNanoBanana2ImageDefaultsTo1K(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body submitRequest
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode body: %v", err)
+		}
+		if body.Model != ModelNanoBanana2New {
+			t.Fatalf("model = %q", body.Model)
+		}
+		if body.Input["resolution"] != "1K" {
+			t.Fatalf("resolution = %#v, want 1K", body.Input["resolution"])
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"code":200,"data":{"task_id":"image_task_1","status":"not_started","created_time":"2026-06-20T10:30:00Z"}}`))
+	}))
+	defer srv.Close()
+
+	provider := New(Config{APIKey: "test-key", BaseURL: srv.URL, HTTPClient: srv.Client()})
+	if _, err := provider.Submit(context.Background(), baseImageRequest(ModelNanoBanana2New)); err != nil {
+		t.Fatalf("submit: %v", err)
+	}
+}
+
 func TestNanoBanana2EstimateAndValidation(t *testing.T) {
 	provider := New(Config{APIKey: "test-key", BaseURL: "http://127.0.0.1"})
 	req := baseImageRequest(ModelNanoBanana2New)
@@ -133,6 +156,25 @@ func TestNanoBanana2EstimateAndValidation(t *testing.T) {
 		t.Fatalf("bad estimate: %+v", estimate)
 	}
 
+	req.Resolution = "2K"
+	estimate, err = provider.Estimate(context.Background(), req)
+	if err != nil {
+		t.Fatalf("estimate 2K: %v", err)
+	}
+	if estimate.AmountCredits != 16 {
+		t.Fatalf("2K estimate = %d, want 16", estimate.AmountCredits)
+	}
+
+	req.Resolution = "4K"
+	estimate, err = provider.Estimate(context.Background(), req)
+	if err != nil {
+		t.Fatalf("estimate 4K: %v", err)
+	}
+	if estimate.AmountCredits != 24 {
+		t.Fatalf("4K estimate = %d, want 24", estimate.AmountCredits)
+	}
+
+	req.Resolution = ""
 	req.InputURLs = []string{"1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15"}
 	_, err = provider.Submit(context.Background(), req)
 	requireErrorClass(t, err, domain.ProviderErrInvalidRequest)
@@ -341,7 +383,6 @@ func baseImageRequest(model string) domain.ProviderRequest {
 		Provider:       domain.ProviderPoYo,
 		Prompt:         "safe prompt",
 		AspectRatio:    "1:1",
-		Resolution:     "2K",
 		IdempotencyKey: "idem-" + uuid.NewString(),
 	}
 }

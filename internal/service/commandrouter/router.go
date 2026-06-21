@@ -84,8 +84,18 @@ func (r *Router) Parse(rawText string) Result {
 		return Result{Type: domain.CommandMenuImageText}
 	case "nano banana 2", "nano banana 2 image":
 		return Result{Type: domain.CommandMenuImageNanoBanana2}
+	case "nano banana pro", "nano banana pro image":
+		return Result{Type: domain.CommandMenuImageText}
 	case "gpt image 2", "gpt-image-2", "gpt_image_2":
 		return Result{Type: domain.CommandMenuImageGPTImage2}
+	case "1k", "1k quality", "качество 1k":
+		return Result{Type: domain.CommandMenuImageQuality1K}
+	case "2k", "2k quality", "качество 2k":
+		return Result{Type: domain.CommandMenuImageQuality2K}
+	case "4k", "4k quality", "качество 4k":
+		return Result{Type: domain.CommandMenuImageQuality4K}
+	case "назад к качеству", "back to quality":
+		return Result{Type: domain.CommandMenuImageBackToQuality}
 	case "📸 фото с референсом", "фото с референсом", "фото по тексту и фото":
 		return Result{Type: domain.CommandMenuImageReference}
 	case "💬 спросить у нейрохаб", "спросить у нейрохаб", "💬 спросить у gpt", "спросить у gpt", "задать вопрос":

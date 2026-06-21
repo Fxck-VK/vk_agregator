@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -207,10 +208,12 @@ type activeMenuMessage struct {
 type dialogMode string
 
 const (
-	dialogModeGPT              dialogMode = "gpt"
-	dialogModePhotoText        dialogMode = "photo_text"
-	dialogModePhotoNanoBanana2 dialogMode = "photo_nano_banana_2"
-	dialogModePhotoGPTImage2   dialogMode = "photo_gpt_image_2"
+	dialogModeGPT               dialogMode = "gpt"
+	dialogModePhotoText         dialogMode = "photo_text"
+	dialogModePhotoNanoBanana2  dialogMode = "photo_nano_banana_2"
+	dialogModePhotoGPTImage2    dialogMode = "photo_gpt_image_2"
+	dialogModePhotoSelectPrefix            = "photo_select:"
+	dialogModePhotoPromptPrefix            = "photo_prompt:"
 )
 
 const topUpActionNewPayment = "new_payment"
@@ -222,6 +225,9 @@ type jobParams struct {
 	VideoRouteAlias        string      `json:"video_route_alias,omitempty"`
 	Provider               string      `json:"provider,omitempty"`
 	ModelCode              string      `json:"model_code,omitempty"`
+	Size                   string      `json:"size,omitempty"`
+	Resolution             string      `json:"resolution,omitempty"`
+	ImageQuality           string      `json:"image_quality,omitempty"`
 	DurationSec            int         `json:"duration_sec,omitempty"`
 	AspectRatio            string      `json:"aspect_ratio,omitempty"`
 	ReferenceArtifactIDs   []uuid.UUID `json:"reference_artifact_ids,omitempty"`
@@ -743,7 +749,7 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 	}
 	metrics.ObserveProductEvent("vk_bot", "command", "parsed", productCommandOperation(parsed), productCommandModality(parsed), productCommandResult(parsed, controlOnly, controlFromPayload))
 
-	photoModel, photoTextJob := h.photoModelForActiveDialog(ctx, peerID)
+	photoSelection, photoTextJob := h.photoSelectionForActiveDialog(ctx, peerID)
 	photoTextJob = parsed.Type == domain.CommandImageGenerate && photoTextJob
 	videoBlockedMessage := ""
 	var videoReferenceIDs []uuid.UUID
@@ -809,6 +815,47 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 		if err := h.createAndSendTopUpPayment(ctx, cb.GroupID, eventID, idemKey, peerID, user, topUpProductCode, topUpForceNew); err != nil {
 			return fmt.Errorf("create top-up payment: %w", err)
 		}
+	case isPhotoModelCommand(parsed.Type):
+		modelID, _ := photoModelIDFromCommand(parsed.Type)
+		allowEdit := controlFromPayload
+		if err := h.sendPhotoQualitySelection(ctx, modelID, idemKey, parsed.Type, peerID, allowEdit); err != nil {
+			return fmt.Errorf("send photo quality selection: %w", err)
+		}
+	case isPhotoQualityCommand(parsed.Type):
+		modelID, ok := h.photoModelIDForQualitySelection(ctx, peerID)
+		if !ok {
+			h.clearDialogMode(ctx, peerID)
+			if err := h.sendControlResponse(ctx, domain.CommandMenuImage, idemKey, cb.GroupID, peerID, user, controlFromPayload); err != nil {
+				return fmt.Errorf("send photo model selection: %w", err)
+			}
+			break
+		}
+		quality, _ := photoQualityFromCommand(parsed.Type)
+		model, ok := modelcatalog.ResolveMiniAppModel(domain.OperationImageGenerate, modelID)
+		if !ok {
+			h.clearDialogMode(ctx, peerID)
+			return fmt.Errorf("resolve photo model: %s", modelID)
+		}
+		selection := photoDialogSelection{
+			Model:   modelcatalog.ApplyImageQuality(model, quality),
+			Quality: quality,
+		}
+		h.setDialogMode(ctx, peerID, photoPromptMode(model.ModelID, quality))
+		if err := h.sendPhotoPromptInstruction(ctx, selection, idemKey, parsed.Type, peerID, controlFromPayload); err != nil {
+			return fmt.Errorf("send photo prompt instruction: %w", err)
+		}
+	case parsed.Type == domain.CommandMenuImageBackToQuality:
+		modelID, ok := h.photoModelIDForQualityBack(ctx, peerID)
+		if !ok {
+			h.clearDialogMode(ctx, peerID)
+			if err := h.sendControlResponse(ctx, domain.CommandMenuImage, idemKey, cb.GroupID, peerID, user, controlFromPayload); err != nil {
+				return fmt.Errorf("send photo model selection: %w", err)
+			}
+			break
+		}
+		if err := h.sendPhotoQualitySelection(ctx, modelID, idemKey, parsed.Type, peerID, controlFromPayload); err != nil {
+			return fmt.Errorf("send photo quality selection: %w", err)
+		}
 	case shouldSendControlResponse(parsed.Type):
 		if shouldRepairPersistentKeyboard(parsed.Type, controlFromPayload, controlOnly) {
 			if err := h.sendPersistentMenuButton(ctx, idemKey, peerID); err != nil {
@@ -821,16 +868,8 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 		}
 		if parsed.Type == domain.CommandMenuText {
 			h.setDialogMode(ctx, peerID, dialogModeGPT)
-		} else if parsed.Type == domain.CommandMenuImageNanoBanana2 {
-			h.setDialogMode(ctx, peerID, dialogModePhotoNanoBanana2)
-		} else if parsed.Type == domain.CommandMenuImageGPTImage2 {
-			h.setDialogMode(ctx, peerID, dialogModePhotoGPTImage2)
-		} else if parsed.Type == domain.CommandMenuImage || parsed.Type == domain.CommandMenuImageText {
-			if h.menuCommandEnabled(domain.CommandMenuImageText) {
-				h.setDialogMode(ctx, peerID, dialogModePhotoText)
-			} else {
-				h.clearDialogMode(ctx, peerID)
-			}
+		} else if parsed.Type == domain.CommandMenuImage {
+			h.clearDialogMode(ctx, peerID)
 		} else if spec, ok := videoModeForCommand(parsed.Type); ok {
 			h.setDialogMode(ctx, peerID, spec.modeWithDuration(videoDurationSec))
 		} else {
@@ -862,10 +901,13 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 			VKPlaceholderMessageID: placeholderID,
 		}
 		if photoTextJob {
-			jp.ModelID = photoModel.ModelID
-			jp.ModelName = photoModel.ModelName
-			jp.Provider = string(photoModel.Provider)
-			jp.ModelCode = photoModel.ModelCode
+			jp.ModelID = photoSelection.Model.ModelID
+			jp.ModelName = photoSelection.Model.ModelName
+			jp.Provider = string(photoSelection.Model.Provider)
+			jp.ModelCode = photoSelection.Model.ModelCode
+			jp.Size = "1:1"
+			jp.Resolution = photoSelection.Quality
+			jp.ImageQuality = photoSelection.Quality
 		}
 		if videoTextJob {
 			jp.ModelName = videoSpec.ModelName
@@ -887,9 +929,9 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 			CorrelationID:          idemKey,
 			Params:                 params,
 			InputArtifactIDs:       videoReferenceIDs,
-			ProviderCostCredits:    photoModel.ProviderCostCredits,
-			PriceMultiplier:        photoModel.PriceMultiplier,
-			MaxInternalCostCredits: photoModel.MaxInternalCostCredits,
+			ProviderCostCredits:    photoSelection.Model.ProviderCostCredits,
+			PriceMultiplier:        photoSelection.Model.PriceMultiplier,
+			MaxInternalCostCredits: photoSelection.Model.MaxInternalCostCredits,
 		})
 		switch {
 		case err == nil:
@@ -1038,6 +1080,90 @@ func (h *Handler) createAndSendTopUpPayment(ctx context.Context, groupID int64, 
 	return nil
 }
 
+func (h *Handler) sendPhotoQualitySelection(ctx context.Context, modelID, idemKey string, command domain.CommandType, peerID int64, allowEdit bool) error {
+	model, ok := modelcatalog.ResolveMiniAppModel(domain.OperationImageGenerate, modelID)
+	if !ok {
+		h.clearDialogMode(ctx, peerID)
+		return h.sendControlResponse(ctx, domain.CommandMenuImage, idemKey, 0, peerID, &domain.User{}, allowEdit)
+	}
+	h.setDialogMode(ctx, peerID, photoSelectMode(model.ModelID))
+	options := h.photoQualityOptions(model)
+	text := fmt.Sprintf("%s\n\nВыберите качество генерации. Цена указана в кредитах и списывается только после готового результата.", model.ModelName)
+	msg := vkdelivery.Message{
+		Text:     text,
+		Keyboard: photoQualityKeyboard(options),
+	}
+	return h.deliverPhotoControl(ctx, command, idemKey, peerID, msg, allowEdit)
+}
+
+func (h *Handler) sendPhotoPromptInstruction(ctx context.Context, selection photoDialogSelection, idemKey string, command domain.CommandType, peerID int64, allowEdit bool) error {
+	price := h.imagePriceCredits(selection.Model)
+	text := fmt.Sprintf("%s · %s\n\nЦена: %d кредитов.\n\nВведите описание изображения обычным сообщением.", selection.Model.ModelName, selection.Quality, price)
+	msg := vkdelivery.Message{
+		Text:     text,
+		Keyboard: photoPromptKeyboard(),
+	}
+	return h.deliverPhotoControl(ctx, command, idemKey, peerID, msg, allowEdit)
+}
+
+func (h *Handler) deliverPhotoControl(ctx context.Context, command domain.CommandType, idemKey string, peerID int64, msg vkdelivery.Message, allowEdit bool) error {
+	if h.deps.Control == nil {
+		h.logger.Warn("vk photo control response skipped because VK_ACCESS_TOKEN is not configured",
+			slog.String("command_type", string(command)))
+		return nil
+	}
+	h.filterMenuKeyboard(msg.Keyboard)
+	if msg.Keyboard != nil && len(msg.Keyboard.Buttons) == 0 {
+		msg.Keyboard = nil
+	}
+	h.applyMenuButtonMode(msg.Keyboard)
+	randomID := vkdelivery.DeterministicRandomID("vk_control:" + idemKey + ":" + string(command))
+	result, err := h.deliverControlResponse(ctx, command, peerID, randomID, msg, allowEdit)
+	if err == nil {
+		h.setActiveMenu(peerID, result.MessageID)
+	}
+	return err
+}
+
+func (h *Handler) photoQualityOptions(model modelcatalog.Model) []photoQualityOption {
+	qualities := []struct {
+		label   string
+		quality string
+		command domain.CommandType
+	}{
+		{label: "1K", quality: modelcatalog.ImageQuality1K, command: domain.CommandMenuImageQuality1K},
+		{label: "2K", quality: modelcatalog.ImageQuality2K, command: domain.CommandMenuImageQuality2K},
+		{label: "4K", quality: modelcatalog.ImageQuality4K, command: domain.CommandMenuImageQuality4K},
+	}
+	out := make([]photoQualityOption, 0, len(qualities))
+	for _, quality := range qualities {
+		adjusted := modelcatalog.ApplyImageQuality(model, quality.quality)
+		out = append(out, photoQualityOption{
+			Label:   quality.label,
+			Price:   h.imagePriceCredits(adjusted),
+			Command: quality.command,
+		})
+	}
+	return out
+}
+
+func (h *Handler) imagePriceCredits(model modelcatalog.Model) int64 {
+	if h.deps.Billing != nil {
+		if price, err := h.deps.Billing.EstimateProviderCost(model.ProviderCostCredits, model.PriceMultiplier, model.MaxInternalCostCredits); err == nil {
+			return price
+		}
+	}
+	multiplier := model.PriceMultiplier
+	if multiplier <= 0 {
+		multiplier = 1
+	}
+	price := int64(math.Ceil(float64(model.ProviderCostCredits) * multiplier))
+	if price <= 0 {
+		return model.ProviderCostCredits
+	}
+	return price
+}
+
 func paymentIntentProductCode(intent *domain.PaymentIntent) string {
 	if intent == nil || len(intent.Metadata) == 0 {
 		return ""
@@ -1105,35 +1231,132 @@ func (h *Handler) gptDialogActive(ctx context.Context, peerID int64) bool {
 	return ok && mode == dialogModeGPT
 }
 
-func (h *Handler) photoTextDialogActive(ctx context.Context, peerID int64) bool {
-	mode, ok := h.getDialogMode(ctx, peerID)
-	return ok && mode == dialogModePhotoText
-}
-
 func (h *Handler) photoDialogActive(ctx context.Context, peerID int64) bool {
-	_, ok := h.photoModelForActiveDialog(ctx, peerID)
+	_, ok := h.photoSelectionForActiveDialog(ctx, peerID)
 	return ok
 }
 
-func (h *Handler) photoModelForActiveDialog(ctx context.Context, peerID int64) (modelcatalog.Model, bool) {
-	mode, ok := h.getDialogMode(ctx, peerID)
-	if !ok {
-		return modelcatalog.Model{}, false
-	}
-	return photoModelFromDialogMode(mode)
+type photoDialogSelection struct {
+	Model   modelcatalog.Model
+	Quality string
 }
 
-func photoModelFromDialogMode(mode dialogMode) (modelcatalog.Model, bool) {
-	switch mode {
-	case dialogModePhotoNanoBanana2:
-		return modelcatalog.ResolveMiniAppModel(domain.OperationImageGenerate, modelcatalog.MiniAppImageNanoBanana2)
-	case dialogModePhotoGPTImage2:
-		return modelcatalog.ResolveMiniAppModel(domain.OperationImageGenerate, modelcatalog.MiniAppImageGPTImage2)
-	case dialogModePhotoText:
-		return modelcatalog.ResolveMiniAppModel(domain.OperationImageGenerate, modelcatalog.MiniAppImageNanoBananaPro)
-	default:
-		return modelcatalog.Model{}, false
+func (h *Handler) photoSelectionForActiveDialog(ctx context.Context, peerID int64) (photoDialogSelection, bool) {
+	mode, ok := h.getDialogMode(ctx, peerID)
+	if !ok {
+		return photoDialogSelection{}, false
 	}
+	return photoSelectionFromDialogMode(mode)
+}
+
+func photoSelectionFromDialogMode(mode dialogMode) (photoDialogSelection, bool) {
+	modelID, quality, ok := parsePhotoPromptMode(mode)
+	if !ok {
+		switch mode {
+		case dialogModePhotoNanoBanana2:
+			modelID, quality, ok = modelcatalog.MiniAppImageNanoBanana2, modelcatalog.ImageQuality1K, true
+		case dialogModePhotoGPTImage2:
+			modelID, quality, ok = modelcatalog.MiniAppImageGPTImage2, modelcatalog.ImageQuality1K, true
+		case dialogModePhotoText:
+			modelID, quality, ok = modelcatalog.MiniAppImageNanoBananaPro, modelcatalog.ImageQuality1K, true
+		default:
+			return photoDialogSelection{}, false
+		}
+	}
+	model, ok := modelcatalog.ResolveMiniAppModel(domain.OperationImageGenerate, modelID)
+	if !ok {
+		return photoDialogSelection{}, false
+	}
+	model = modelcatalog.ApplyImageQuality(model, quality)
+	return photoDialogSelection{Model: model, Quality: quality}, true
+}
+
+func photoModelIDFromCommand(t domain.CommandType) (string, bool) {
+	switch t {
+	case domain.CommandMenuImageNanoBanana2:
+		return modelcatalog.MiniAppImageNanoBanana2, true
+	case domain.CommandMenuImageGPTImage2:
+		return modelcatalog.MiniAppImageGPTImage2, true
+	case domain.CommandMenuImageText:
+		return modelcatalog.MiniAppImageNanoBananaPro, true
+	default:
+		return "", false
+	}
+}
+
+func isPhotoModelCommand(t domain.CommandType) bool {
+	_, ok := photoModelIDFromCommand(t)
+	return ok
+}
+
+func (h *Handler) photoModelIDForQualitySelection(ctx context.Context, peerID int64) (string, bool) {
+	mode, ok := h.getDialogMode(ctx, peerID)
+	if !ok {
+		return "", false
+	}
+	return parsePhotoSelectMode(mode)
+}
+
+func (h *Handler) photoModelIDForQualityBack(ctx context.Context, peerID int64) (string, bool) {
+	mode, ok := h.getDialogMode(ctx, peerID)
+	if !ok {
+		return "", false
+	}
+	if modelID, ok := parsePhotoSelectMode(mode); ok {
+		return modelID, true
+	}
+	modelID, _, ok := parsePhotoPromptMode(mode)
+	return modelID, ok
+}
+
+func photoQualityFromCommand(t domain.CommandType) (string, bool) {
+	switch t {
+	case domain.CommandMenuImageQuality1K:
+		return modelcatalog.ImageQuality1K, true
+	case domain.CommandMenuImageQuality2K:
+		return modelcatalog.ImageQuality2K, true
+	case domain.CommandMenuImageQuality4K:
+		return modelcatalog.ImageQuality4K, true
+	default:
+		return "", false
+	}
+}
+
+func isPhotoQualityCommand(t domain.CommandType) bool {
+	_, ok := photoQualityFromCommand(t)
+	return ok
+}
+
+func photoSelectMode(modelID string) dialogMode {
+	return dialogMode(dialogModePhotoSelectPrefix + strings.TrimSpace(modelID))
+}
+
+func photoPromptMode(modelID, quality string) dialogMode {
+	return dialogMode(dialogModePhotoPromptPrefix + strings.TrimSpace(modelID) + ":" + strings.TrimSpace(quality))
+}
+
+func parsePhotoSelectMode(mode dialogMode) (string, bool) {
+	raw, ok := strings.CutPrefix(string(mode), dialogModePhotoSelectPrefix)
+	if !ok || strings.TrimSpace(raw) == "" {
+		return "", false
+	}
+	return strings.TrimSpace(raw), true
+}
+
+func parsePhotoPromptMode(mode dialogMode) (string, string, bool) {
+	raw, ok := strings.CutPrefix(string(mode), dialogModePhotoPromptPrefix)
+	if !ok {
+		return "", "", false
+	}
+	modelID, quality, ok := strings.Cut(raw, ":")
+	if !ok {
+		return "", "", false
+	}
+	quality, ok = modelcatalog.NormalizeImageQuality(quality)
+	if !ok || strings.TrimSpace(modelID) == "" {
+		return "", "", false
+	}
+	return strings.TrimSpace(modelID), quality, true
 }
 
 func (h *Handler) getDialogMode(ctx context.Context, peerID int64) (dialogMode, bool) {

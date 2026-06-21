@@ -46,6 +46,14 @@ const (
 	CommandMenuImageNanoBanana2 CommandType = "menu.image.nano_banana_2"
 	// CommandMenuImageGPTImage2 selects GPT Image 2 image generation.
 	CommandMenuImageGPTImage2 CommandType = "menu.image.gpt_image_2"
+	// CommandMenuImageQuality1K selects 1K output quality for the active image model.
+	CommandMenuImageQuality1K CommandType = "menu.image.quality.1k"
+	// CommandMenuImageQuality2K selects 2K output quality for the active image model.
+	CommandMenuImageQuality2K CommandType = "menu.image.quality.2k"
+	// CommandMenuImageQuality4K selects 4K output quality for the active image model.
+	CommandMenuImageQuality4K CommandType = "menu.image.quality.4k"
+	// CommandMenuImageBackToQuality reopens the quality picker for the active image model.
+	CommandMenuImageBackToQuality CommandType = "menu.image.back_to_quality"
 	// CommandMenuImageReference selects image generation with a reference photo.
 	CommandMenuImageReference CommandType = "menu.image.reference"
 	// CommandMenuVideo explains how to generate a video.
@@ -116,6 +124,10 @@ func (c CommandType) Valid() bool {
 		CommandMenuImageText,
 		CommandMenuImageNanoBanana2,
 		CommandMenuImageGPTImage2,
+		CommandMenuImageQuality1K,
+		CommandMenuImageQuality2K,
+		CommandMenuImageQuality4K,
+		CommandMenuImageBackToQuality,
 		CommandMenuImageReference,
 		CommandMenuVideo,
 		CommandMenuVideoPrunaAI,

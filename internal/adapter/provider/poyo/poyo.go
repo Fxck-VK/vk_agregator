@@ -26,7 +26,6 @@ const (
 
 	klingO3CreditsPerSecond    int64 = 10
 	seedance20CreditsPerSecond int64 = 28
-	nanoBanana2CreditsPerImage int64 = 5
 	productPriceMultiplier           = 2
 
 	maxKlingReferenceImages       = 4
@@ -129,8 +128,9 @@ func (p *Provider) Estimate(_ context.Context, req domain.ProviderRequest) (doma
 		if err := validateImageShape(req, false); err != nil {
 			return domain.CostEstimate{}, err
 		}
+		providerCredits := nanoBanana2ProviderCredits(req.Resolution)
 		return domain.CostEstimate{
-			AmountCredits: nanoBanana2CreditsPerImage * productPriceMultiplier,
+			AmountCredits: providerCredits * productPriceMultiplier,
 			Currency:      "credits",
 			Estimated:     false,
 		}, nil
@@ -618,7 +618,18 @@ func effectiveImageResolution(value string) string {
 	case "1K", "2K", "4K":
 		return strings.ToUpper(strings.TrimSpace(value))
 	default:
-		return "2K"
+		return "1K"
+	}
+}
+
+func nanoBanana2ProviderCredits(resolution string) int64 {
+	switch strings.ToUpper(strings.TrimSpace(resolution)) {
+	case "2K":
+		return 8
+	case "4K":
+		return 12
+	default:
+		return 5
 	}
 }
 

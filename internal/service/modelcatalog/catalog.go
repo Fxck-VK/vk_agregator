@@ -4,6 +4,7 @@
 package modelcatalog
 
 import (
+	"math"
 	"strings"
 
 	"vk-ai-aggregator/internal/domain"
@@ -29,6 +30,10 @@ const (
 	ModelCodeSDXLTurbo       = "stabilityai/sdxl-turbo"
 	ModelCodePVideo          = "PrunaAI/p-video"
 	ModelCodeSora2           = "sora-2"
+
+	ImageQuality1K = "1K"
+	ImageQuality2K = "2K"
+	ImageQuality4K = "4K"
 )
 
 // Model is the private server-side model spec selected for a user-facing
@@ -75,7 +80,7 @@ var miniAppModels = map[domain.OperationType]map[string]Model{
 			ExposeID:               true,
 			ProviderCostCredits:    5,
 			PriceMultiplier:        2,
-			MaxInternalCostCredits: 20,
+			MaxInternalCostCredits: 24,
 			SupportsReferenceImage: true,
 			MaxReferenceImages:     4,
 		},
@@ -190,6 +195,50 @@ func MiniAppResponseModelID(model Model) string {
 		return model.ModelID
 	}
 	return ""
+}
+
+func NormalizeImageQuality(raw string) (string, bool) {
+	switch strings.ToUpper(strings.TrimSpace(raw)) {
+	case ImageQuality1K:
+		return ImageQuality1K, true
+	case ImageQuality2K:
+		return ImageQuality2K, true
+	case ImageQuality4K:
+		return ImageQuality4K, true
+	default:
+		return "", false
+	}
+}
+
+func ApplyImageQuality(model Model, quality string) Model {
+	quality, ok := NormalizeImageQuality(quality)
+	if !ok {
+		return model
+	}
+	if model.ModelID == MiniAppImageNanoBanana2 {
+		switch quality {
+		case ImageQuality2K:
+			model.ProviderCostCredits = 8
+		case ImageQuality4K:
+			model.ProviderCostCredits = 12
+		default:
+			model.ProviderCostCredits = 5
+		}
+		if minCap := estimateInternalCost(model.ProviderCostCredits, model.PriceMultiplier); minCap > model.MaxInternalCostCredits {
+			model.MaxInternalCostCredits = minCap
+		}
+	}
+	return model
+}
+
+func estimateInternalCost(providerCostCredits int64, multiplier float64) int64 {
+	if providerCostCredits <= 0 {
+		return 0
+	}
+	if multiplier <= 0 {
+		multiplier = 1
+	}
+	return int64(math.Ceil(float64(providerCostCredits) * multiplier))
 }
 
 func ListMiniAppModels(op domain.OperationType) []Model {

@@ -176,9 +176,24 @@ func TestRouterParse(t *testing.T) {
 			wantType: domain.CommandMenuImageNanoBanana2,
 		},
 		{
+			name:     "vk photo nano banana pro button",
+			input:    "Nano Banana Pro",
+			wantType: domain.CommandMenuImageText,
+		},
+		{
 			name:     "vk photo gpt image 2 button",
 			input:    "GPT Image 2",
 			wantType: domain.CommandMenuImageGPTImage2,
+		},
+		{
+			name:     "vk photo quality 2k button",
+			input:    "2K",
+			wantType: domain.CommandMenuImageQuality2K,
+		},
+		{
+			name:     "vk photo back to quality button",
+			input:    "Назад к качеству",
+			wantType: domain.CommandMenuImageBackToQuality,
 		},
 		{
 			name:     "vk neurohub text menu button",

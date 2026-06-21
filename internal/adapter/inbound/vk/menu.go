@@ -76,6 +76,22 @@ var menuScreens = map[domain.CommandType]menuScreen{
 		text:     fixedText(photoGPTImage2Instruction),
 		keyboard: photoModeKeyboard,
 	},
+	domain.CommandMenuImageQuality1K: {
+		text:     fixedText(photoQualityFallbackText),
+		keyboard: photoModeKeyboard,
+	},
+	domain.CommandMenuImageQuality2K: {
+		text:     fixedText(photoQualityFallbackText),
+		keyboard: photoModeKeyboard,
+	},
+	domain.CommandMenuImageQuality4K: {
+		text:     fixedText(photoQualityFallbackText),
+		keyboard: photoModeKeyboard,
+	},
+	domain.CommandMenuImageBackToQuality: {
+		text:     fixedText(photoQualityFallbackText),
+		keyboard: photoModeKeyboard,
+	},
 	domain.CommandMenuImageReference: {
 		text:     fixedText(photoReferenceModeInstruction),
 		keyboard: photoModeKeyboard,
@@ -194,6 +210,7 @@ const (
 
 const photoNanoBanana2Instruction = "Nano Banana 2 активен.\n\nНапишите описание изображения обычным сообщением.\n\nВ боте сейчас включен текст-в-фото; референс-фото подключим отдельным шагом."
 const photoGPTImage2Instruction = "GPT Image 2 активен.\n\nНапишите описание изображения обычным сообщением."
+const photoQualityFallbackText = "Выберите модель фото, затем качество генерации."
 
 type controlPayload struct {
 	Command     string `json:"command"`
@@ -627,6 +644,10 @@ func (h *Handler) menuCommandEnabled(command domain.CommandType) bool {
 	case domain.CommandMenuImageText,
 		domain.CommandMenuImageNanoBanana2,
 		domain.CommandMenuImageGPTImage2,
+		domain.CommandMenuImageQuality1K,
+		domain.CommandMenuImageQuality2K,
+		domain.CommandMenuImageQuality4K,
+		domain.CommandMenuImageBackToQuality,
 		domain.CommandMenuImageReference:
 		return h.menuCommandEnabled(domain.CommandMenuImage)
 	case domain.CommandMenuStudentSolver,
@@ -1001,10 +1022,52 @@ func photoModeKeyboard() *vkdelivery.Keyboard {
 				button("Nano Banana 2", domain.CommandMenuImageNanoBanana2, "primary"),
 			},
 			{
+				button("Nano Banana Pro", domain.CommandMenuImageText, "primary"),
+			},
+			{
 				button("GPT Image 2", domain.CommandMenuImageGPTImage2, "primary"),
 			},
 			{
 				button("⬅️ Назад", domain.CommandShowMenu, "secondary"),
+			},
+		},
+	}
+}
+
+type photoQualityOption struct {
+	Label   string
+	Price   int64
+	Command domain.CommandType
+}
+
+func photoQualityKeyboard(options []photoQualityOption) *vkdelivery.Keyboard {
+	rows := make([][]vkdelivery.KeyboardButton, 0, len(options)+1)
+	for _, option := range options {
+		label := fmt.Sprintf("%s · %d кредитов", option.Label, option.Price)
+		rows = append(rows, []vkdelivery.KeyboardButton{
+			button(label, option.Command, "primary"),
+		})
+	}
+	rows = append(rows, []vkdelivery.KeyboardButton{
+		button("⬅️ Назад к моделям", domain.CommandMenuImage, "secondary"),
+	})
+	return &vkdelivery.Keyboard{
+		OneTime: false,
+		Inline:  true,
+		Buttons: rows,
+	}
+}
+
+func photoPromptKeyboard() *vkdelivery.Keyboard {
+	return &vkdelivery.Keyboard{
+		OneTime: false,
+		Inline:  true,
+		Buttons: [][]vkdelivery.KeyboardButton{
+			{
+				button("⬅️ Назад к качеству", domain.CommandMenuImageBackToQuality, "secondary"),
+			},
+			{
+				button("⬅️ Назад к моделям", domain.CommandMenuImage, "secondary"),
 			},
 		},
 	}

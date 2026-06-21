@@ -73,6 +73,7 @@ func TestSubmitHailuoStandardSuccess(t *testing.T) {
 
 func TestSubmitGemini3ProImageSuccess(t *testing.T) {
 	var seen imageGenerationRequest
+	var rawBody map[string]any
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if got := r.URL.Path; got != "/images/generations" {
 			t.Fatalf("path = %q", got)
@@ -83,8 +84,15 @@ func TestSubmitGemini3ProImageSuccess(t *testing.T) {
 		if got := r.Header.Get("Idempotency-Key"); got != "provider_submit:image:1" {
 			t.Fatalf("idempotency header = %q", got)
 		}
-		if err := json.NewDecoder(r.Body).Decode(&seen); err != nil {
+		data, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("read request: %v", err)
+		}
+		if err := json.Unmarshal(data, &seen); err != nil {
 			t.Fatalf("decode request: %v", err)
+		}
+		if err := json.Unmarshal(data, &rawBody); err != nil {
+			t.Fatalf("decode raw request: %v", err)
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"code":200,"data":[{"status":"submitted","task_id":"task_image"}]}`))
@@ -116,6 +124,9 @@ func TestSubmitGemini3ProImageSuccess(t *testing.T) {
 	if seen.N != 1 || seen.OfficialFallback {
 		t.Fatalf("unexpected generation options: %+v", seen)
 	}
+	if _, ok := rawBody["official_fallback"]; ok {
+		t.Fatalf("official_fallback must be omitted unless enabled: %#v", rawBody)
+	}
 	if len(seen.ImageURLs) != 1 || seen.ImageURLs[0] != "https://cdn.test/reference.png" {
 		t.Fatalf("image_urls = %#v", seen.ImageURLs)
 	}
@@ -126,6 +137,7 @@ func TestSubmitGemini3ProImageSuccess(t *testing.T) {
 
 func TestSubmitGPTImage2Success(t *testing.T) {
 	var seen imageGenerationRequest
+	var rawBody map[string]any
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if got := r.URL.Path; got != "/images/generations" {
 			t.Fatalf("path = %q", got)
@@ -133,8 +145,15 @@ func TestSubmitGPTImage2Success(t *testing.T) {
 		if got := r.Header.Get("Authorization"); got != "Bearer test-key" {
 			t.Fatalf("auth header = %q", got)
 		}
-		if err := json.NewDecoder(r.Body).Decode(&seen); err != nil {
+		data, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("read request: %v", err)
+		}
+		if err := json.Unmarshal(data, &seen); err != nil {
 			t.Fatalf("decode request: %v", err)
+		}
+		if err := json.Unmarshal(data, &rawBody); err != nil {
+			t.Fatalf("decode raw request: %v", err)
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"code":200,"data":[{"status":"submitted","task_id":"task_gpt_image_2"}]}`))
@@ -164,6 +183,9 @@ func TestSubmitGPTImage2Success(t *testing.T) {
 	}
 	if seen.N != 1 || seen.OfficialFallback || len(seen.ImageURLs) != 2 {
 		t.Fatalf("unexpected generation options: %+v", seen)
+	}
+	if _, ok := rawBody["official_fallback"]; ok {
+		t.Fatalf("official_fallback must be omitted unless enabled: %#v", rawBody)
 	}
 }
 

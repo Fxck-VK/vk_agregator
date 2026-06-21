@@ -1352,6 +1352,7 @@ func TestGenerationImageRequestCarriesImageDefaultsAndReferences(t *testing.T) {
 	params, _ := json.Marshal(map[string]any{
 		"prompt":                 "a cat",
 		"aspect_ratio":           "1:1",
+		"resolution":             "4K",
 		"reference_artifact_ids": []string{reference.ID.String()},
 	})
 	job := &domain.Job{
@@ -1377,8 +1378,8 @@ func TestGenerationImageRequestCarriesImageDefaultsAndReferences(t *testing.T) {
 	if got.UserID != job.UserID {
 		t.Fatalf("provider request user id = %s, want %s", got.UserID, job.UserID)
 	}
-	if got.ModelCode != "foundation-image" || got.Size != "1024x1024" || got.AspectRatio != "1:1" {
-		t.Fatalf("unexpected image request defaults: model=%q size=%q aspect=%q", got.ModelCode, got.Size, got.AspectRatio)
+	if got.ModelCode != "foundation-image" || got.Size != "1024x1024" || got.AspectRatio != "1:1" || got.Resolution != "4K" {
+		t.Fatalf("unexpected image request defaults: model=%q size=%q aspect=%q resolution=%q", got.ModelCode, got.Size, got.AspectRatio, got.Resolution)
 	}
 	if len(got.ReferenceArtifactIDs) != 1 || got.ReferenceArtifactIDs[0] != reference.ID {
 		t.Fatalf("reference ids = %v, want %s", got.ReferenceArtifactIDs, reference.ID)

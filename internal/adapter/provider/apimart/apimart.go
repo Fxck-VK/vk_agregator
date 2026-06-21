@@ -358,7 +358,7 @@ type imageGenerationRequest struct {
 	Size             string   `json:"size,omitempty"`
 	N                int      `json:"n,omitempty"`
 	Resolution       string   `json:"resolution,omitempty"`
-	OfficialFallback bool     `json:"official_fallback"`
+	OfficialFallback bool     `json:"official_fallback,omitempty"`
 	ImageURLs        []string `json:"image_urls,omitempty"`
 }
 
