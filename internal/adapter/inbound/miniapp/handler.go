@@ -180,8 +180,7 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("POST /miniapp/jobs", h.auth(h.rateLimitMiniApp("miniapp_job", h.createJob)))
 	mux.HandleFunc("GET /miniapp/jobs", h.auth(h.listJobs))
 	mux.HandleFunc("GET /miniapp/jobs/{id}", h.auth(h.getJob))
-	mux.HandleFunc("GET /miniapp/image-models", h.auth(h.listImageModels))
-	mux.HandleFunc("GET /miniapp/video-routes", h.auth(h.listVideoRoutes))
+	mux.HandleFunc("GET /miniapp/model-catalog", h.auth(h.listModelCatalog))
 	mux.HandleFunc("GET /miniapp/balance", h.auth(h.getBalance))
 	mux.HandleFunc("GET /miniapp/referral", h.auth(h.getReferral))
 	mux.HandleFunc("POST /miniapp/referral/accept", h.auth(h.rateLimitMiniApp("miniapp_referral", h.acceptReferral)))
@@ -196,31 +195,23 @@ func (h *Handler) Routes() http.Handler {
 	return mux
 }
 
-func (h *Handler) listImageModels(w http.ResponseWriter, r *http.Request) {
-	models := make([]ImageModelDTO, 0, len(h.cfg.ImageModels))
+func (h *Handler) listModelCatalog(w http.ResponseWriter, r *http.Request) {
+	items := make([]ModelCatalogItemDTO, 0, len(h.cfg.ImageModels)+len(h.cfg.VideoRoutes))
 	for _, model := range h.cfg.ImageModels {
-		if strings.TrimSpace(model.ID) == "" || strings.TrimSpace(model.Name) == "" {
+		if !model.Enabled || strings.TrimSpace(model.ID) == "" || strings.TrimSpace(model.Name) == "" {
 			continue
 		}
-		models = append(models, copyImageModelDTO(model))
+		items = append(items, modelCatalogItemFromImage(copyImageModelDTO(model)))
 	}
-	writeJSON(w, http.StatusOK, listResponse[ImageModelDTO]{
-		Items:      models,
-		Pagination: pagination{Limit: len(models), Offset: 0, Count: len(models), HasMore: false},
-	})
-}
-
-func (h *Handler) listVideoRoutes(w http.ResponseWriter, r *http.Request) {
-	routes := make([]VideoRouteDTO, 0, len(h.cfg.VideoRoutes))
 	for _, route := range h.cfg.VideoRoutes {
-		if strings.TrimSpace(route.Alias) == "" {
+		if !route.Enabled || strings.TrimSpace(route.Alias) == "" {
 			continue
 		}
-		routes = append(routes, copyVideoRouteDTO(route))
+		items = append(items, modelCatalogItemFromVideo(copyVideoRouteDTO(route)))
 	}
-	writeJSON(w, http.StatusOK, listResponse[VideoRouteDTO]{
-		Items:      routes,
-		Pagination: pagination{Limit: len(routes), Offset: 0, Count: len(routes), HasMore: false},
+	writeJSON(w, http.StatusOK, listResponse[ModelCatalogItemDTO]{
+		Items:      items,
+		Pagination: pagination{Limit: len(items), Offset: 0, Count: len(items), HasMore: false},
 	})
 }
 
@@ -483,7 +474,7 @@ func safeClientRoute(value string) string {
 		"/miniapp/chat/messages",
 		"/miniapp/chat/conversations",
 		"/miniapp/jobs",
-		"/miniapp/video-routes",
+		"/miniapp/model-catalog",
 		"/miniapp/balance",
 		"/miniapp/referral",
 		"/miniapp/referral/accept",
@@ -629,6 +620,10 @@ func (h *Handler) readJobRequest(w http.ResponseWriter, r *http.Request) (Create
 		writeError(w, http.StatusBadRequest, "duration_sec is only supported for video_generate")
 		return CreateJobRequest{}, "", "", miniAppModelSpec{}, false
 	}
+	if strings.TrimSpace(req.ImageQuality) != "" && opType != domain.OperationImageGenerate {
+		writeError(w, http.StatusBadRequest, "image_quality is only supported for image_generate")
+		return CreateJobRequest{}, "", "", miniAppModelSpec{}, false
+	}
 	var model miniAppModelSpec
 	if opType == domain.OperationVideoGenerate {
 		if strings.TrimSpace(req.ModelID) != "" {
@@ -666,6 +661,14 @@ func (h *Handler) readJobRequest(w http.ResponseWriter, r *http.Request) (Create
 			writeError(w, http.StatusBadRequest, "unsupported model")
 			return CreateJobRequest{}, "", "", miniAppModelSpec{}, false
 		}
+		if opType == domain.OperationImageGenerate {
+			adjusted, quality, ok := h.applyImageQuality(w, model, req.ImageQuality)
+			if !ok {
+				return CreateJobRequest{}, "", "", miniAppModelSpec{}, false
+			}
+			model = adjusted
+			req.ImageQuality = quality
+		}
 		if opType == domain.OperationImageGenerate && !validateImageReferenceCount(w, model, req.ReferenceArtifactIDs) {
 			return CreateJobRequest{}, "", "", miniAppModelSpec{}, false
 		}
@@ -679,10 +682,73 @@ func (h *Handler) imageModelEnabled(modelID string) bool {
 	}
 	for _, model := range h.cfg.ImageModels {
 		if model.ID == modelID {
+			return model.Enabled
+		}
+	}
+	return false
+}
+
+func (h *Handler) applyImageQuality(w http.ResponseWriter, model miniAppModelSpec, raw string) (miniAppModelSpec, string, bool) {
+	publicModel, found := h.imageModelByID(model.ModelID)
+	raw = strings.TrimSpace(raw)
+	if !found {
+		if raw != "" {
+			writeError(w, http.StatusBadRequest, "unsupported image quality")
+			return miniAppModelSpec{}, "", false
+		}
+		return model, "", true
+	}
+	options := publicModel.QualityOptions
+	if len(options) == 0 {
+		if raw != "" {
+			writeError(w, http.StatusBadRequest, "unsupported image quality")
+			return miniAppModelSpec{}, "", false
+		}
+		return model, "", true
+	}
+	quality := raw
+	if quality == "" {
+		quality = publicModel.DefaultQuality
+	}
+	quality, ok := normalizeMiniAppImageQuality(quality)
+	if !ok || !imageQualityAllowed(quality, options) {
+		writeError(w, http.StatusBadRequest, "unsupported image quality")
+		return miniAppModelSpec{}, "", false
+	}
+	return applyMiniAppImageQuality(model, quality), quality, true
+}
+
+func (h *Handler) imageModelByID(modelID string) (ImageModelDTO, bool) {
+	for _, model := range h.cfg.ImageModels {
+		if model.ID == modelID && model.Enabled {
+			return copyImageModelDTO(model), true
+		}
+	}
+	return ImageModelDTO{}, false
+}
+
+func imageQualityAllowed(quality string, options []string) bool {
+	for _, option := range options {
+		normalized, ok := normalizeMiniAppImageQuality(option)
+		if ok && normalized == quality {
 			return true
 		}
 	}
 	return false
+}
+
+func imageSizeForMiniAppQuality(model miniAppModelSpec, quality string) string {
+	if model.Provider == domain.ProviderDeepInfra {
+		switch quality {
+		case "2K":
+			return "2048x2048"
+		case "4K":
+			return "4096x4096"
+		default:
+			return "1024x1024"
+		}
+	}
+	return "1:1"
 }
 
 func normalizeVideoDurationSec(sec int, route VideoRouteDTO) (int, bool) {
@@ -710,7 +776,7 @@ func (h *Handler) videoRouteByAlias(raw string) (VideoRouteDTO, bool) {
 		return VideoRouteDTO{}, false
 	}
 	for _, route := range h.cfg.VideoRoutes {
-		if route.Alias == alias {
+		if route.Enabled && route.Alias == alias {
 			return copyVideoRouteDTO(route), true
 		}
 	}
@@ -764,9 +830,13 @@ func validateImageReferenceCount(w http.ResponseWriter, model miniAppModelSpec, 
 }
 
 func videoRouteModelSpec(route VideoRouteDTO) miniAppModelSpec {
+	name := strings.TrimSpace(route.Name)
+	if name == "" {
+		name = videoRouteDisplayName(route.Alias)
+	}
 	return miniAppModelSpec{
 		ModelID:   route.Alias,
-		ModelName: videoRouteDisplayName(route.Alias),
+		ModelName: name,
 		ExposeID:  true,
 	}
 }
@@ -798,7 +868,44 @@ func copyVideoRouteDTO(route VideoRouteDTO) VideoRouteDTO {
 }
 
 func copyImageModelDTO(model ImageModelDTO) ImageModelDTO {
+	model.QualityOptions = append([]string(nil), model.QualityOptions...)
 	return model
+}
+
+func modelCatalogItemFromImage(model ImageModelDTO) ModelCatalogItemDTO {
+	return ModelCatalogItemDTO{
+		Type:                   "image",
+		ID:                     model.ID,
+		Name:                   model.Name,
+		Description:            model.Description,
+		EstimateCredits:        model.EstimateCredits,
+		Enabled:                model.Enabled,
+		QualityOptions:         append([]string(nil), model.QualityOptions...),
+		DefaultQuality:         model.DefaultQuality,
+		SupportsReferenceImage: model.SupportsReferenceImage,
+		MaxReferenceImages:     model.MaxReferenceImages,
+	}
+}
+
+func modelCatalogItemFromVideo(route VideoRouteDTO) ModelCatalogItemDTO {
+	return ModelCatalogItemDTO{
+		Type:                   "video",
+		ID:                     route.Alias,
+		Alias:                  route.Alias,
+		Name:                   route.Name,
+		Description:            route.Description,
+		EstimateCredits:        route.EstimateCredits,
+		Enabled:                route.Enabled,
+		AllowedDurationsSec:    append([]int(nil), route.AllowedDurationsSec...),
+		AllowedResolutions:     append([]string(nil), route.AllowedResolutions...),
+		AllowedAspectRatios:    append([]string(nil), route.AllowedAspectRatios...),
+		DefaultDurationSec:     route.DefaultDurationSec,
+		DefaultResolution:      route.DefaultResolution,
+		DefaultAspectRatio:     route.DefaultAspectRatio,
+		RequiresStartImage:     route.RequiresStartImage,
+		SupportsReferenceImage: route.SupportsReferenceImage,
+		MaxReferenceImages:     route.MaxReferenceImages,
+	}
 }
 
 func (h *Handler) estimateJob(w http.ResponseWriter, r *http.Request) {
@@ -871,6 +978,7 @@ func (h *Handler) estimateJob(w http.ResponseWriter, r *http.Request) {
 		ModelID:         responseModelID,
 		ModelName:       model.ModelName,
 		VideoRouteAlias: strings.TrimSpace(req.VideoRouteAlias),
+		ImageQuality:    req.ImageQuality,
 		CostEstimate:    cost,
 		BalanceCredits:  balance,
 		EnoughCredits:   balance >= cost,
@@ -987,6 +1095,11 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 		jobParams.ModelName = model.ModelName
 		jobParams.Provider = model.Provider
 		jobParams.ModelCode = model.ModelCode
+		if opType == domain.OperationImageGenerate && req.ImageQuality != "" {
+			jobParams.ImageQuality = req.ImageQuality
+			jobParams.Resolution = req.ImageQuality
+			jobParams.Size = imageSizeForMiniAppQuality(model, req.ImageQuality)
+		}
 	}
 	params, _ := json.Marshal(jobParams)
 	metrics.ObserveProductPromptLength("miniapp", string(opType), string(modality), req.Prompt)

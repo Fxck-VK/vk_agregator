@@ -53,14 +53,19 @@ var menuScreens = map[domain.CommandType]menuScreen{
 		needsBalance: true,
 	},
 	domain.CommandTopUp: {
-		text:     fixedText(topUpText),
-		keyboard: backKeyboard,
+		text:         fixedText(topUpText),
+		keyboard:     backKeyboard,
+		needsBalance: true,
 	},
 	domain.CommandMenuText: {
 		text:     fixedText(gptActiveText),
 		keyboard: backKeyboard,
 	},
 	domain.CommandMenuImage: {
+		text:     fixedText(photoTextPromptInstruction),
+		keyboard: photoModeKeyboard,
+	},
+	domain.CommandMenuImageSelect: {
 		text:     fixedText(photoTextPromptInstruction),
 		keyboard: photoModeKeyboard,
 	},
@@ -96,6 +101,10 @@ var menuScreens = map[domain.CommandType]menuScreen{
 		text:     fixedText(photoQualityFallbackText),
 		keyboard: photoModeKeyboard,
 	},
+	domain.CommandMenuImageQualitySelect: {
+		text:     fixedText(photoQualityFallbackText),
+		keyboard: photoModeKeyboard,
+	},
 	domain.CommandMenuImageBackToQuality: {
 		text:     fixedText(photoQualityFallbackText),
 		keyboard: photoModeKeyboard,
@@ -106,6 +115,14 @@ var menuScreens = map[domain.CommandType]menuScreen{
 	},
 	domain.CommandMenuVideo: {
 		text:     fixedText("Выбери режим видео:"),
+		keyboard: videoModelKeyboard,
+	},
+	domain.CommandMenuVideoRouteSelect: {
+		text:     fixedText("Выбери режим видео:"),
+		keyboard: videoModelKeyboard,
+	},
+	domain.CommandMenuVideoDurationSelect: {
+		text:     fixedText("Выберите длительность видео."),
 		keyboard: videoModelKeyboard,
 	},
 	domain.CommandMenuVideoPrunaAI: {
@@ -223,10 +240,13 @@ const photoGPTImage2Instruction = "GPT Image 2 активен.\n\nНапишит
 const photoQualityFallbackText = "Выберите модель фото, затем качество генерации."
 
 type controlPayload struct {
-	Command     string `json:"command"`
-	ProductCode string `json:"product_code,omitempty"`
-	Action      string `json:"action,omitempty"`
-	DurationSec int    `json:"duration_sec,omitempty"`
+	Command         string `json:"command"`
+	ProductCode     string `json:"product_code,omitempty"`
+	Action          string `json:"action,omitempty"`
+	DurationSec     int    `json:"duration_sec,omitempty"`
+	ModelID         string `json:"model_id,omitempty"`
+	ImageQuality    string `json:"image_quality,omitempty"`
+	VideoRouteAlias string `json:"video_route_alias,omitempty"`
 }
 
 func controlPayloadFromPayload(payload string) (controlPayload, bool) {
@@ -260,6 +280,27 @@ func shouldSendControlResponse(t domain.CommandType) bool {
 func isMenuCommand(t domain.CommandType) bool {
 	_, ok := menuScreens[t]
 	return ok
+}
+
+func usesPhotoModeKeyboard(t domain.CommandType) bool {
+	switch t {
+	case domain.CommandMenuImage,
+		domain.CommandMenuImageSelect,
+		domain.CommandMenuImageText,
+		domain.CommandMenuImageNanoBanana2,
+		domain.CommandMenuImageDeepInfraSeedream,
+		domain.CommandMenuImageDeepInfraSDXL,
+		domain.CommandMenuImageGPTImage2,
+		domain.CommandMenuImageQuality1K,
+		domain.CommandMenuImageQuality2K,
+		domain.CommandMenuImageQuality4K,
+		domain.CommandMenuImageQualitySelect,
+		domain.CommandMenuImageBackToQuality,
+		domain.CommandMenuImageReference:
+		return true
+	default:
+		return false
+	}
 }
 
 func fixedText(text string) func(int64) string {
@@ -308,6 +349,12 @@ func (h *Handler) sendControlResponse(ctx context.Context, t domain.CommandType,
 
 	msgText := screen.text(balance)
 	keyboard := screen.keyboard()
+	if usesPhotoModeKeyboard(t) {
+		keyboard = h.photoModeKeyboard()
+	}
+	if t == domain.CommandMenuVideo {
+		keyboard = h.videoModelKeyboard()
+	}
 	switch t {
 	case domain.CommandAccount, domain.CommandBalance:
 		view, err := h.accountView(ctx, user.ID, balance, groupID)
@@ -315,19 +362,21 @@ func (h *Handler) sendControlResponse(ctx context.Context, t domain.CommandType,
 			return fmt.Errorf("build account view: %w", err)
 		}
 		msgText = accountDetailsText(view)
+		msgText = insertBalanceLine(msgText, view.Balance)
 		keyboard = accountKeyboard(view)
 	case domain.CommandTopUp:
-		if pending, ok, err := h.activeTopUpIntent(ctx, user.ID); err != nil {
+		returnURL := h.topUpReturnURL(groupID)
+		if pending, ok, err := h.activeTopUpIntent(ctx, user.ID, returnURL); err != nil {
 			return fmt.Errorf("load active top-up intent: %w", err)
 		} else if ok {
-			msgText = topUpPendingText(pending)
+			msgText = topUpPendingText(balance, pending)
 			keyboard = topUpPendingKeyboard(pending.ConfirmationURL)
 		} else {
 			products, err := h.topUpProducts(ctx)
 			if err != nil {
 				return fmt.Errorf("load top-up products: %w", err)
 			}
-			msgText = topUpCatalogText(products)
+			msgText = topUpCatalogText(balance, products)
 			keyboard = topUpCatalogKeyboard(products, false)
 		}
 	}
@@ -485,17 +534,21 @@ func (h *Handler) sendUnroutedTextResponse(ctx context.Context, idemKey string, 
 	return err
 }
 
-func (h *Handler) sendTopUpCatalog(ctx context.Context, idemKey string, peerID int64, forceNew, allowEdit bool) error {
+func (h *Handler) sendTopUpCatalog(ctx context.Context, idemKey string, peerID int64, user *domain.User, forceNew, allowEdit bool) error {
 	if h.deps.Control == nil {
 		h.logger.Warn("vk top-up catalog skipped because VK_ACCESS_TOKEN is not configured")
 		return nil
+	}
+	balance, err := h.currentBalance(ctx, user)
+	if err != nil {
+		return err
 	}
 	products, err := h.topUpProducts(ctx)
 	if err != nil {
 		return fmt.Errorf("load top-up products: %w", err)
 	}
 	msg := vkdelivery.Message{
-		Text:     topUpCatalogText(products),
+		Text:     topUpCatalogText(balance, products),
 		Keyboard: topUpCatalogKeyboard(products, forceNew),
 	}
 	h.applyMenuButtonMode(msg.Keyboard)
@@ -507,14 +560,20 @@ func (h *Handler) sendTopUpCatalog(ctx context.Context, idemKey string, peerID i
 	return err
 }
 
-func (h *Handler) sendTopUpPaymentLink(ctx context.Context, idemKey string, peerID int64, intent *domain.PaymentIntent) (int64, error) {
+func (h *Handler) sendTopUpPaymentLink(ctx context.Context, idemKey string, peerID int64, balance int64, intent *domain.PaymentIntent) (int64, error) {
 	if h.deps.Control == nil {
 		h.logger.Warn("vk top-up payment link skipped because VK_ACCESS_TOKEN is not configured")
 		return 0, nil
 	}
 	link := strings.TrimSpace(intent.ConfirmationURL)
 	msg := vkdelivery.Message{
-		Text:     fmt.Sprintf("%s СЧЁТ\nПокупка %d генераций\n\nДанная ссылка действительна в течение 10 минут", formatRubAmount(intent.Amount), intent.Credits),
+		Text: fmt.Sprintf("%s СЧЕТ\nПокупка: %d кристаллов\nБаланс сейчас: %d кристаллов\nПосле оплаты: %d кристаллов\n\nОткройте оплату кнопкой ниже или по ссылке:\n%s\n\nСсылка на оплату действует ограниченное время.",
+			formatRubAmount(intent.Amount),
+			intent.Credits,
+			balance,
+			balance+intent.Credits,
+			link,
+		),
 		Keyboard: paymentLinkKeyboard(link),
 	}
 	randomID := vkdelivery.DeterministicRandomID("vk_control_topup_payment:" + idemKey)
@@ -614,8 +673,8 @@ func (h *Handler) filterMenuKeyboard(keyboard *vkdelivery.Keyboard) {
 	for _, row := range keyboard.Buttons {
 		filteredRow := make([]vkdelivery.KeyboardButton, 0, len(row))
 		for _, button := range row {
-			command, ok := controlTypeFromPayload(button.Payload)
-			if ok && !h.menuCommandEnabled(command) {
+			control, ok := controlPayloadFromPayload(button.Payload)
+			if ok && !h.controlPayloadEnabled(control) {
 				continue
 			}
 			filteredRow = append(filteredRow, button)
@@ -632,6 +691,9 @@ func (h *Handler) menuCommandEnabled(command domain.CommandType) bool {
 		return false
 	}
 	switch command {
+	case domain.CommandMenuVideoRouteSelect,
+		domain.CommandMenuVideoDurationSelect:
+		return h.menuCommandEnabled(domain.CommandMenuVideo)
 	case domain.CommandMenuVideoPrunaAI:
 		return false
 	case domain.CommandMenuVideoSora2,
@@ -651,7 +713,8 @@ func (h *Handler) menuCommandEnabled(command domain.CommandType) bool {
 	case domain.CommandMenuVideoHailuo02Standard,
 		domain.CommandMenuVideoHailuo02Fast:
 		return h.videoRouteCommandEnabled(command) && h.menuCommandEnabled(domain.CommandMenuVideoHailuo02)
-	case domain.CommandMenuImageText,
+	case domain.CommandMenuImageSelect,
+		domain.CommandMenuImageText,
 		domain.CommandMenuImageNanoBanana2,
 		domain.CommandMenuImageDeepInfraSeedream,
 		domain.CommandMenuImageDeepInfraSDXL,
@@ -659,6 +722,7 @@ func (h *Handler) menuCommandEnabled(command domain.CommandType) bool {
 		domain.CommandMenuImageQuality1K,
 		domain.CommandMenuImageQuality2K,
 		domain.CommandMenuImageQuality4K,
+		domain.CommandMenuImageQualitySelect,
 		domain.CommandMenuImageBackToQuality,
 		domain.CommandMenuImageReference:
 		return h.menuCommandEnabled(domain.CommandMenuImage)
@@ -667,6 +731,29 @@ func (h *Handler) menuCommandEnabled(command domain.CommandType) bool {
 		domain.CommandMenuStudentReport,
 		domain.CommandMenuStudentQA:
 		return h.menuCommandEnabled(domain.CommandMenuStudents)
+	default:
+		return true
+	}
+}
+
+func (h *Handler) controlPayloadEnabled(control controlPayload) bool {
+	command := domain.CommandType(control.Command)
+	if !h.menuCommandEnabled(command) {
+		return false
+	}
+	switch command {
+	case domain.CommandMenuImageSelect:
+		return h.publicImageModelEnabled(control.ModelID)
+	case domain.CommandMenuImageQualitySelect:
+		modelID := strings.TrimSpace(control.ModelID)
+		if modelID == "" {
+			return true
+		}
+		return h.publicImageQualityAllowed(modelID, control.ImageQuality)
+	case domain.CommandMenuVideoRouteSelect:
+		return h.publicVideoRouteEnabled(control.VideoRouteAlias)
+	case domain.CommandMenuVideoDurationSelect:
+		return h.publicVideoRouteDurationAllowed(control.VideoRouteAlias, control.DurationSec)
 	default:
 		return true
 	}
@@ -771,6 +858,14 @@ func accountDetailsText(view accountView) string {
 	)
 }
 
+func insertBalanceLine(text string, balance int64) string {
+	line := fmt.Sprintf("Баланс: %d кристаллов", balance)
+	if strings.Contains(text, line) {
+		return text
+	}
+	return strings.Replace(text, "\n\n", "\n\n"+line+"\n\n", 1)
+}
+
 func (h *Handler) topUpProducts(ctx context.Context) ([]*domain.PaymentProduct, error) {
 	if h.deps.Payment == nil {
 		return nil, nil
@@ -778,12 +873,15 @@ func (h *Handler) topUpProducts(ctx context.Context) ([]*domain.PaymentProduct, 
 	return h.deps.Payment.ListActiveProducts(ctx)
 }
 
-func (h *Handler) activeTopUpIntent(ctx context.Context, userID uuid.UUID) (*domain.PaymentIntent, bool, error) {
+func (h *Handler) activeTopUpIntent(ctx context.Context, userID uuid.UUID, returnURL string) (*domain.PaymentIntent, bool, error) {
 	if h.deps.Payment == nil {
 		return nil, false, nil
 	}
 	intent, err := h.deps.Payment.ActiveWaitingIntentForSource(ctx, userID, "vk_bot")
 	if err == nil {
+		if !paymentIntentReturnURLMatches(intent, returnURL) {
+			return nil, false, nil
+		}
 		return intent, intent != nil, nil
 	}
 	if errors.Is(err, domain.ErrNotFound) {
@@ -792,15 +890,19 @@ func (h *Handler) activeTopUpIntent(ctx context.Context, userID uuid.UUID) (*dom
 	return nil, false, err
 }
 
-func topUpCatalogText(products []*domain.PaymentProduct) string {
+func topUpCatalogText(balance int64, products []*domain.PaymentProduct) string {
 	if len(products) == 0 {
-		return "💰 Пополнить баланс\n\nТарифы пока недоступны. Попробуйте позже."
+		return fmt.Sprintf("💰 Пополнить баланс\n\nБаланс сейчас: %d кристаллов\n\nТарифы пока недоступны. Попробуйте позже.", balance)
 	}
-	return "Выберите пакет для пополнения баланса:"
+	return fmt.Sprintf("💰 Пополнить баланс\n\nБаланс сейчас: %d кристаллов\n\nВыберите пакет для пополнения баланса:", balance)
 }
 
-func topUpPendingText(intent *domain.PaymentIntent) string {
-	return fmt.Sprintf("💰 У вас есть незавершенный платеж\n\nПакет: %d кристаллов\nСумма: %s\n\nПосле оплаты баланс обновится автоматически.", intent.Credits, formatRubAmount(intent.Amount))
+func topUpPendingText(balance int64, intent *domain.PaymentIntent) string {
+	link := strings.TrimSpace(intent.ConfirmationURL)
+	if link != "" {
+		return fmt.Sprintf("💰 У вас есть незавершенный платеж\n\nБаланс сейчас: %d кристаллов\nПакет: %d кристаллов\nСумма: %s\nПосле оплаты: %d кристаллов\n\nПродолжите оплату кнопкой ниже или по ссылке:\n%s\n\nПосле оплаты баланс обновится автоматически.", balance, intent.Credits, formatRubAmount(intent.Amount), balance+intent.Credits, link)
+	}
+	return fmt.Sprintf("💰 У вас есть незавершенный платеж\n\nБаланс сейчас: %d кристаллов\nПакет: %d кристаллов\nСумма: %s\nПосле оплаты: %d кристаллов\n\nПосле оплаты баланс обновится автоматически.", balance, intent.Credits, formatRubAmount(intent.Amount), balance+intent.Credits)
 }
 
 func topUpCatalogKeyboard(products []*domain.PaymentProduct, forceNew bool) *vkdelivery.Keyboard {
@@ -877,6 +979,8 @@ func welcomeKeyboard() *vkdelivery.Keyboard {
 	}
 }
 
+// videoModelKeyboard is a legacy fallback for stale command screens. The
+// primary VK video menu is Handler.videoModelKeyboard and uses catalog payloads.
 func videoModelKeyboard() *vkdelivery.Keyboard {
 	return &vkdelivery.Keyboard{
 		OneTime: false,
@@ -901,6 +1005,26 @@ func videoModelKeyboard() *vkdelivery.Keyboard {
 				button("⬅️ Назад", domain.CommandShowMenu, "secondary"),
 			},
 		},
+	}
+}
+
+func (h *Handler) videoModelKeyboard() *vkdelivery.Keyboard {
+	rows := make([][]vkdelivery.KeyboardButton, 0, len(h.cfg.VideoRoutes)+1)
+	for _, route := range h.cfg.VideoRoutes {
+		if !route.Enabled || strings.TrimSpace(route.Alias) == "" || strings.TrimSpace(route.Name) == "" {
+			continue
+		}
+		rows = append(rows, []vkdelivery.KeyboardButton{
+			videoRouteButton(route.Name, route.Alias, "primary"),
+		})
+	}
+	rows = append(rows, []vkdelivery.KeyboardButton{
+		button("⬅️ Назад", domain.CommandShowMenu, "secondary"),
+	})
+	return &vkdelivery.Keyboard{
+		OneTime: false,
+		Inline:  true,
+		Buttons: rows,
 	}
 }
 
@@ -1025,6 +1149,34 @@ func videoDurationKeyboard(startCommand, backCommand domain.CommandType, duratio
 	}
 }
 
+func videoRouteDurationKeyboard(routeAlias string, durations []int) *vkdelivery.Keyboard {
+	rows := make([][]vkdelivery.KeyboardButton, 0, 4)
+	durationRow := make([]vkdelivery.KeyboardButton, 0, 3)
+	for _, duration := range durations {
+		if duration <= 0 {
+			continue
+		}
+		durationRow = append(durationRow, videoDurationButton(fmt.Sprintf("%d сек", duration), routeAlias, duration, "primary"))
+		if len(durationRow) == 3 {
+			rows = append(rows, durationRow)
+			durationRow = make([]vkdelivery.KeyboardButton, 0, 3)
+		}
+	}
+	if len(durationRow) > 0 {
+		rows = append(rows, durationRow)
+	}
+	rows = append(rows, []vkdelivery.KeyboardButton{
+		button("⬅️ Назад к моделям", domain.CommandMenuVideo, "secondary"),
+	})
+	return &vkdelivery.Keyboard{
+		OneTime: false,
+		Inline:  true,
+		Buttons: rows,
+	}
+}
+
+// photoModeKeyboard is a legacy fallback for stale command screens. The primary
+// VK image menu is Handler.photoModeKeyboard and uses catalog payloads.
 func photoModeKeyboard() *vkdelivery.Keyboard {
 	return &vkdelivery.Keyboard{
 		OneTime: false,
@@ -1052,10 +1204,32 @@ func photoModeKeyboard() *vkdelivery.Keyboard {
 	}
 }
 
+func (h *Handler) photoModeKeyboard() *vkdelivery.Keyboard {
+	rows := make([][]vkdelivery.KeyboardButton, 0, len(h.cfg.ImageModels)+1)
+	for _, model := range h.cfg.ImageModels {
+		if !model.Enabled || strings.TrimSpace(model.ID) == "" || strings.TrimSpace(model.Name) == "" {
+			continue
+		}
+		rows = append(rows, []vkdelivery.KeyboardButton{
+			photoModelButton(model.Name, model.ID, "primary"),
+		})
+	}
+	rows = append(rows, []vkdelivery.KeyboardButton{
+		button("⬅️ Назад", domain.CommandShowMenu, "secondary"),
+	})
+	return &vkdelivery.Keyboard{
+		OneTime: false,
+		Inline:  true,
+		Buttons: rows,
+	}
+}
+
 type photoQualityOption struct {
 	Label   string
 	Price   int64
 	Command domain.CommandType
+	ModelID string
+	Quality string
 }
 
 func photoQualityKeyboard(options []photoQualityOption) *vkdelivery.Keyboard {
@@ -1063,7 +1237,7 @@ func photoQualityKeyboard(options []photoQualityOption) *vkdelivery.Keyboard {
 	for _, option := range options {
 		label := fmt.Sprintf("%s · %d кредитов", option.Label, option.Price)
 		rows = append(rows, []vkdelivery.KeyboardButton{
-			button(label, option.Command, "primary"),
+			photoQualityButton(label, option.ModelID, option.Quality, "primary"),
 		})
 	}
 	rows = append(rows, []vkdelivery.KeyboardButton{
@@ -1088,6 +1262,23 @@ func photoPromptKeyboard() *vkdelivery.Keyboard {
 				button("⬅️ Назад к моделям", domain.CommandMenuImage, "secondary"),
 			},
 		},
+	}
+}
+
+func photoPromptKeyboardForCatalog(showQualityBack bool) *vkdelivery.Keyboard {
+	rows := make([][]vkdelivery.KeyboardButton, 0, 2)
+	if showQualityBack {
+		rows = append(rows, []vkdelivery.KeyboardButton{
+			button("в¬…пёЏ РќР°Р·Р°Рґ Рє РєР°С‡РµСЃС‚РІСѓ", domain.CommandMenuImageBackToQuality, "secondary"),
+		})
+	}
+	rows = append(rows, []vkdelivery.KeyboardButton{
+		button("в¬…пёЏ РќР°Р·Р°Рґ Рє РјРѕРґРµР»СЏРј", domain.CommandMenuImage, "secondary"),
+	})
+	return &vkdelivery.Keyboard{
+		OneTime: false,
+		Inline:  true,
+		Buttons: rows,
 	}
 }
 
@@ -1192,6 +1383,56 @@ func buttonWithAction(label string, command domain.CommandType, action, color st
 	payload, _ := json.Marshal(controlPayload{
 		Command: string(command),
 		Action:  action,
+	})
+	return vkdelivery.KeyboardButton{
+		Label:   label,
+		Payload: string(payload),
+		Color:   color,
+	}
+}
+
+func photoModelButton(label, modelID, color string) vkdelivery.KeyboardButton {
+	payload, _ := json.Marshal(controlPayload{
+		Command: string(domain.CommandMenuImageSelect),
+		ModelID: strings.TrimSpace(modelID),
+	})
+	return vkdelivery.KeyboardButton{
+		Label:   label,
+		Payload: string(payload),
+		Color:   color,
+	}
+}
+
+func photoQualityButton(label, modelID, quality, color string) vkdelivery.KeyboardButton {
+	payload, _ := json.Marshal(controlPayload{
+		Command:      string(domain.CommandMenuImageQualitySelect),
+		ModelID:      strings.TrimSpace(modelID),
+		ImageQuality: strings.TrimSpace(quality),
+	})
+	return vkdelivery.KeyboardButton{
+		Label:   label,
+		Payload: string(payload),
+		Color:   color,
+	}
+}
+
+func videoRouteButton(label, routeAlias, color string) vkdelivery.KeyboardButton {
+	payload, _ := json.Marshal(controlPayload{
+		Command:         string(domain.CommandMenuVideoRouteSelect),
+		VideoRouteAlias: strings.TrimSpace(routeAlias),
+	})
+	return vkdelivery.KeyboardButton{
+		Label:   label,
+		Payload: string(payload),
+		Color:   color,
+	}
+}
+
+func videoDurationButton(label, routeAlias string, durationSec int, color string) vkdelivery.KeyboardButton {
+	payload, _ := json.Marshal(controlPayload{
+		Command:         string(domain.CommandMenuVideoDurationSelect),
+		VideoRouteAlias: strings.TrimSpace(routeAlias),
+		DurationSec:     durationSec,
 	})
 	return vkdelivery.KeyboardButton{
 		Label:   label,

@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -344,7 +345,7 @@ type statusResponse struct {
 	Success   *bool          `json:"success,omitempty"`
 	TaskID    string         `json:"task_id,omitempty"`
 	Status    string         `json:"status,omitempty"`
-	Progress  int            `json:"progress,omitempty"`
+	Progress  progressValue  `json:"progress,omitempty"`
 	Result    statusResult   `json:"result,omitempty"`
 	Error     providerError  `json:"error,omitempty"`
 	Message   string         `json:"message,omitempty"`
@@ -354,18 +355,18 @@ type statusResponse struct {
 }
 
 type statusData struct {
-	ID            string       `json:"id,omitempty"`
-	UUID          string       `json:"uuid,omitempty"`
-	JobID         string       `json:"job_id,omitempty"`
-	TaskID        string       `json:"task_id,omitempty"`
-	Status        string       `json:"status,omitempty"`
-	CreditsAmount float64      `json:"credits_amount,omitempty"`
-	Files         []statusFile `json:"files,omitempty"`
-	Result        statusResult `json:"result,omitempty"`
-	Output        statusResult `json:"output,omitempty"`
-	CreatedTime   string       `json:"created_time,omitempty"`
-	Progress      int          `json:"progress,omitempty"`
-	ErrorMessage  *string      `json:"error_message,omitempty"`
+	ID            string        `json:"id,omitempty"`
+	UUID          string        `json:"uuid,omitempty"`
+	JobID         string        `json:"job_id,omitempty"`
+	TaskID        string        `json:"task_id,omitempty"`
+	Status        string        `json:"status,omitempty"`
+	CreditsAmount float64       `json:"credits_amount,omitempty"`
+	Files         []statusFile  `json:"files,omitempty"`
+	Result        statusResult  `json:"result,omitempty"`
+	Output        statusResult  `json:"output,omitempty"`
+	CreatedTime   string        `json:"created_time,omitempty"`
+	Progress      progressValue `json:"progress,omitempty"`
+	ErrorMessage  *string       `json:"error_message,omitempty"`
 }
 
 type statusFile struct {
@@ -409,9 +410,9 @@ func (r statusResponse) status() string {
 
 func (r statusResponse) progress() int {
 	if r.Data.Progress != 0 {
-		return r.Data.Progress
+		return int(r.Data.Progress)
 	}
-	return r.Progress
+	return int(r.Progress)
 }
 
 func (r statusResponse) createdAt() string {
@@ -496,6 +497,31 @@ func (r statusResult) OutputVideoURLs() []string {
 }
 
 type urlList []string
+
+type progressValue int
+
+func (p *progressValue) UnmarshalJSON(data []byte) error {
+	raw := strings.TrimSpace(string(data))
+	if raw == "" || raw == "null" {
+		return nil
+	}
+	var numeric float64
+	if err := json.Unmarshal(data, &numeric); err == nil {
+		*p = progressValue(numeric)
+		return nil
+	}
+	var text string
+	if err := json.Unmarshal(data, &text); err == nil {
+		text = strings.TrimSpace(strings.TrimSuffix(text, "%"))
+		if text == "" {
+			return nil
+		}
+		if parsed, parseErr := strconv.ParseFloat(text, 64); parseErr == nil {
+			*p = progressValue(parsed)
+		}
+	}
+	return nil
+}
 
 func (u *urlList) UnmarshalJSON(data []byte) error {
 	var values []string

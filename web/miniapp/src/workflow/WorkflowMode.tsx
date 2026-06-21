@@ -7,15 +7,13 @@ import {
   estimateJob,
   hasPreviewableMediaResult,
   isTerminal,
-  listImageModels,
-  listVideoRoutes,
+  listModelCatalog,
   preloadArtifactBlobUrl,
   statusKind,
   statusLabel,
   type EstimateResponse,
-  type ImageModel,
   type Job,
-  type VideoRoute,
+  type ModelCatalogItem,
   uploadArtifact,
 } from "../api/client";
 import { ResultCard } from "../components/ResultCard";
@@ -47,6 +45,7 @@ type WorkflowModeProps = {
       operation: string;
       modelId?: string;
       videoRouteAlias?: string;
+      imageQuality?: string;
       referenceArtifactIds?: string[];
       durationSec?: number;
     },
@@ -76,21 +75,24 @@ type CreateMode = {
   videoRouteAlias?: string;
   name: string;
   subtitle: string;
+  description?: string;
+  estimateCredits?: number;
   color: string;
   glow: string;
   placeholders: string[];
   quickIdeas: string[];
+  qualityOptions?: string[];
+  defaultQuality?: string;
   durationOptions?: number[];
   defaultDurationSec?: number;
+  aspectRatioOptions?: string[];
+  defaultAspectRatio?: string;
   requiresStartImage?: boolean;
   supportsReferenceImage?: boolean;
   maxReferenceImages?: number;
 };
 
-const IMAGE_CREATE_MODE: CreateMode = {
-  modalityId: "image",
-  modelId: "nano_banana_pro",
-  name: "Nano Banana Pro",
+const DEFAULT_IMAGE_COPY: Omit<CreateMode, "modalityId" | "modelId" | "name"> = {
   subtitle: "Создать изображение",
   color: "#a855f7",
   glow: "rgba(168,85,247,0.4)",
@@ -155,13 +157,18 @@ const IMAGE_MODE_COPY: Record<string, Omit<CreateMode, "modalityId" | "modelId" 
   },
 };
 
-function createModeFromImageModel(model: ImageModel): CreateMode {
-  const copy = IMAGE_MODE_COPY[model.id] ?? IMAGE_CREATE_MODE;
+function createModeFromImageItem(model: ModelCatalogItem): CreateMode {
+  const copy = IMAGE_MODE_COPY[model.id] ?? DEFAULT_IMAGE_COPY;
   return {
     ...copy,
     modalityId: "image",
     modelId: model.id,
     name: model.name,
+    subtitle: model.description || copy.subtitle,
+    description: model.description,
+    estimateCredits: model.estimate_credits,
+    qualityOptions: model.quality_options?.filter(Boolean),
+    defaultQuality: model.default_quality,
     supportsReferenceImage: model.supports_reference_image || copy.supportsReferenceImage,
     maxReferenceImages: model.max_reference_images ?? copy.maxReferenceImages,
   };
@@ -218,20 +225,35 @@ const VIDEO_ROUTE_COPY: Record<string, Omit<CreateMode, "modalityId" | "modelId"
   },
 };
 
-function createModeFromVideoRoute(route: VideoRoute): CreateMode {
-  const copy = VIDEO_ROUTE_COPY[route.alias] ?? VIDEO_ROUTE_COPY.video_kling_o3_standard;
+function createModeFromVideoItem(route: ModelCatalogItem): CreateMode {
+  const alias = route.alias || route.id;
+  const copy = VIDEO_ROUTE_COPY[alias] ?? VIDEO_ROUTE_COPY.video_kling_o3_standard;
   const durations = route.allowed_durations_sec?.filter((value) => Number.isFinite(value) && value > 0) ?? [];
+  const aspectRatios = route.allowed_aspect_ratios?.filter(Boolean) ?? [];
   return {
     ...copy,
     modalityId: "video",
-    modelId: route.alias,
-    videoRouteAlias: route.alias,
+    modelId: alias,
+    videoRouteAlias: alias,
+    name: route.name || copy.name,
+    subtitle: route.description || copy.subtitle,
+    description: route.description,
+    estimateCredits: route.estimate_credits,
     durationOptions: durations,
     defaultDurationSec: route.default_duration_sec ?? durations[0] ?? DEFAULT_VIDEO_DURATION_SEC,
+    aspectRatioOptions: aspectRatios,
+    defaultAspectRatio: route.default_aspect_ratio ?? aspectRatios[0],
     requiresStartImage: route.requires_start_image,
     supportsReferenceImage: route.supports_reference_image,
     maxReferenceImages: route.max_reference_images,
   };
+}
+
+function createModeFromCatalogItem(item: ModelCatalogItem): CreateMode | null {
+  if (item.enabled === false) return null;
+  if (item.type === "image") return createModeFromImageItem(item);
+  if (item.type === "video") return createModeFromVideoItem(item);
+  return null;
 }
 
 function durationButtonOptions(model: CreateMode): number[] {
@@ -250,6 +272,13 @@ function defaultDurationForModel(model: CreateMode): number {
   const routeDefault = model.defaultDurationSec;
   if (routeDefault && options.includes(routeDefault)) return routeDefault;
   return options[0] ?? DEFAULT_VIDEO_DURATION_SEC;
+}
+
+function defaultImageQualityForModel(model: CreateMode): string {
+  const options = model.qualityOptions ?? [];
+  if (options.length === 0) return "";
+  if (model.defaultQuality && options.includes(model.defaultQuality)) return model.defaultQuality;
+  return options[0];
 }
 
 const HISTORY_STATUS_FILTERS = [
@@ -378,9 +407,10 @@ export function WorkflowMode({
 }: WorkflowModeProps) {
   const [screen, setScreen] = useState<WorkflowScreen>("home");
   const [modalityId, setModalityId] = useState<ModalityId>("image");
-  const [modelId, setModelId] = useState(modalityById("image").models[0].id);
-  const [imageModels, setImageModels] = useState<ImageModel[]>([]);
-  const [videoRoutes, setVideoRoutes] = useState<VideoRoute[]>([]);
+  const [modelId, setModelId] = useState("");
+  const [modelCatalog, setModelCatalog] = useState<ModelCatalogItem[]>([]);
+  const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
+  const [imageQuality, setImageQuality] = useState("");
   const [prompt, setPrompt] = useState("");
   const [estimate, setEstimate] = useState<EstimateResponse | null>(null);
   const [estimateLoading, setEstimateLoading] = useState(false);
@@ -406,23 +436,36 @@ export function WorkflowMode({
   const activePrompt = prompt.trim();
   const currentModality = modalityById(modalityId);
   const createModes = useMemo(
-    () => {
-      const imageCreateModes =
-        imageModels.length > 0 ? imageModels.map(createModeFromImageModel) : [IMAGE_CREATE_MODE];
-      return [...imageCreateModes, ...videoRoutes.map(createModeFromVideoRoute)];
-    },
-    [imageModels, videoRoutes],
+    () =>
+      modelCatalog
+        .map(createModeFromCatalogItem)
+        .filter((item): item is CreateMode => Boolean(item)),
+    [modelCatalog],
+  );
+  const visibleCreateModes = useMemo(
+    () => createModes.filter((item) => item.modalityId === modalityId),
+    [createModes, modalityId],
   );
   const activeCreateModel =
-    createModes.find((item) => item.modalityId === modalityId && item.modelId === modelId) ??
-    createModes.find((item) => item.modalityId === modalityId) ??
-    createModes[0];
+    visibleCreateModes.find((item) => item.modelId === modelId) ?? visibleCreateModes[0];
   const isImageModality = modalityId === "image";
   const isVideoModality = modalityId === "video";
   const acceptsImageReferences =
-    isImageModality || (isVideoModality && activeCreateModel.supportsReferenceImage === true);
-  const maxReferenceItems = Math.max(1, activeCreateModel.maxReferenceImages ?? MAX_REFERENCE_ARTIFACTS);
-  const videoDurationOptions = useMemo(() => durationButtonOptions(activeCreateModel), [activeCreateModel]);
+    Boolean(activeCreateModel) &&
+    (isImageModality || (isVideoModality && activeCreateModel.supportsReferenceImage === true));
+  const maxReferenceItems = Math.max(1, activeCreateModel?.maxReferenceImages ?? MAX_REFERENCE_ARTIFACTS);
+  const videoDurationOptions = useMemo(
+    () => (activeCreateModel ? durationButtonOptions(activeCreateModel) : []),
+    [activeCreateModel],
+  );
+  const imageQualityOptions = useMemo(
+    () => activeCreateModel?.qualityOptions ?? [],
+    [activeCreateModel],
+  );
+  const videoAspectRatioOptions = useMemo(
+    () => activeCreateModel?.aspectRatioOptions ?? [],
+    [activeCreateModel],
+  );
   const referenceArtifactIds = useMemo(
     () => (acceptsImageReferences ? referenceItems.map((item) => item.artifactId) : []),
     [acceptsImageReferences, referenceItems],
@@ -434,7 +477,7 @@ export function WorkflowMode({
     !!trimmedPrompt &&
     !promptTooLong &&
     modelSelected &&
-    (!activeCreateModel.requiresStartImage || referenceArtifactIds.length > 0) &&
+    (!activeCreateModel?.requiresStartImage || referenceArtifactIds.length > 0) &&
     estimate?.enough_credits === true &&
     !referenceUploading &&
     !submitting;
@@ -451,19 +494,17 @@ export function WorkflowMode({
 
   useEffect(() => {
     let cancelled = false;
-    listImageModels()
-      .then((models) => {
-        if (!cancelled) setImageModels(models);
+    listModelCatalog()
+      .then((items) => {
+        if (cancelled) return;
+        setModelCatalog(
+          items.filter(
+            (item) => item.enabled !== false && (item.type === "image" || item.type === "video"),
+          ),
+        );
       })
       .catch(() => {
-        if (!cancelled) setImageModels([]);
-      });
-    listVideoRoutes()
-      .then((routes) => {
-        if (!cancelled) setVideoRoutes(routes);
-      })
-      .catch(() => {
-        if (!cancelled) setVideoRoutes([]);
+        if (!cancelled) setModelCatalog([]);
       });
     return () => {
       cancelled = true;
@@ -479,31 +520,46 @@ export function WorkflowMode({
   }, []);
 
   useEffect(() => {
-    if (!activeCreateModel) return;
-    if (modalityId === "image" && activeCreateModel.modalityId !== "image") {
-      const firstImage = createModes.find((item) => item.modalityId === "image");
-      if (firstImage) setModelId(firstImage.modelId);
+    const current = createModes.find(
+      (item) => item.modalityId === modalityId && item.modelId === modelId,
+    );
+    if (current) return;
+
+    const firstForTab = createModes.find((item) => item.modalityId === modalityId);
+    if (firstForTab) {
+      setModelId(firstForTab.modelId);
+      return;
     }
-    if (modalityId === "image" && activeCreateModel.modalityId === "image" && activeCreateModel.modelId !== modelId) {
-      setModelId(activeCreateModel.modelId);
+
+    const fallback = createModes.find((item) => item.modalityId === "image") ?? createModes[0];
+    if (fallback) {
+      setModalityId(fallback.modalityId);
+      setModelId(fallback.modelId);
+    } else if (modelId !== "") {
+      setModelId("");
     }
-    if (modalityId === "video" && !activeCreateModel.videoRouteAlias) {
-      const firstVideo = createModes.find((item) => item.modalityId === "video");
-      if (firstVideo) {
-        setModelId(firstVideo.modelId);
-      } else {
-        setModalityId("image");
-        setModelId(IMAGE_CREATE_MODE.modelId);
-      }
-    }
-  }, [activeCreateModel, createModes, modalityId, modelId]);
+  }, [createModes, modalityId, modelId]);
 
   useEffect(() => {
-    if (!isVideoModality) return;
-    if (!videoDurationOptions.includes(videoDurationSec)) {
+    if (!activeCreateModel) return;
+    if (isVideoModality && !videoDurationOptions.includes(videoDurationSec)) {
       setVideoDurationSec(defaultDurationForModel(activeCreateModel));
     }
-  }, [activeCreateModel, isVideoModality, videoDurationOptions, videoDurationSec]);
+    if (isImageModality) {
+      const nextQuality = defaultImageQualityForModel(activeCreateModel);
+      if (nextQuality !== imageQuality && (!imageQuality || !imageQualityOptions.includes(imageQuality))) {
+        setImageQuality(nextQuality);
+      }
+    }
+  }, [
+    activeCreateModel,
+    imageQuality,
+    imageQualityOptions,
+    isImageModality,
+    isVideoModality,
+    videoDurationOptions,
+    videoDurationSec,
+  ]);
 
   useEffect(() => {
     if (!acceptsImageReferences) {
@@ -521,7 +577,7 @@ export function WorkflowMode({
     const value = prompt.trim();
     setEstimate(null);
     setEstimateError(null);
-    if (!value || promptTooLong || !modelSelected) {
+    if (!value || promptTooLong || !modelSelected || !activeCreateModel) {
       setEstimateLoading(false);
       return;
     }
@@ -533,6 +589,7 @@ export function WorkflowMode({
         prompt: value,
         model_id: isVideoModality ? undefined : activeCreateModel.modelId,
         video_route_alias: isVideoModality ? activeCreateModel.videoRouteAlias : undefined,
+        image_quality: isImageModality && imageQuality ? imageQuality : undefined,
         reference_artifact_ids: referenceArtifactIds.length > 0 ? referenceArtifactIds : undefined,
         duration_sec: isVideoModality ? videoDurationSec : undefined,
       })
@@ -554,8 +611,9 @@ export function WorkflowMode({
     };
   }, [
     currentModality.operation,
-    activeCreateModel.modelId,
-    activeCreateModel.videoRouteAlias,
+    activeCreateModel,
+    imageQuality,
+    isImageModality,
     isVideoModality,
     modelSelected,
     prompt,
@@ -669,15 +727,18 @@ export function WorkflowMode({
   }
 
   const changeModality = useCallback((id: ModalityId) => {
-    const next = modalityById(id);
     const createModel = createModes.find((item) => item.modalityId === id);
     if (!createModel?.supportsReferenceImage && id !== "image") {
       clearReferenceItems();
     }
     setModalityId(id);
-    setModelId(createModel?.modelId ?? next.models[0]?.id ?? "");
+    setModelId(createModel?.modelId ?? "");
+    setModelDropdownOpen(false);
     if (createModel?.modalityId === "video") {
       setVideoDurationSec(defaultDurationForModel(createModel));
+    }
+    if (createModel?.modalityId === "image") {
+      setImageQuality(defaultImageQualityForModel(createModel));
     }
     setEstimate(null);
     setEstimateError(null);
@@ -689,8 +750,12 @@ export function WorkflowMode({
     }
     setModalityId(mode.modalityId);
     setModelId(mode.modelId);
+    setModelDropdownOpen(false);
     if (mode.modalityId === "video") {
       setVideoDurationSec(defaultDurationForModel(mode));
+    }
+    if (mode.modalityId === "image") {
+      setImageQuality(defaultImageQualityForModel(mode));
     }
     setEstimate(null);
     setEstimateError(null);
@@ -747,9 +812,16 @@ export function WorkflowMode({
     const modality = modalityByOperation(job.operation);
     const mode = createModeForJob(job);
     setModalityId(modality.id);
-    setModelId(mode?.modelId ?? modality.models[0]?.id ?? "");
+    setModelId(mode?.modelId ?? "");
     if (mode?.modalityId === "video") {
       setVideoDurationSec(defaultDurationForModel(mode));
+    }
+    if (mode?.modalityId === "image") {
+      const restoredQuality =
+        job.image_quality && mode.qualityOptions?.includes(job.image_quality)
+          ? job.image_quality
+          : defaultImageQualityForModel(mode);
+      setImageQuality(restoredQuality);
     }
     clearReferenceItems();
     clearResultMedia();
@@ -763,13 +835,14 @@ export function WorkflowMode({
   }
 
   async function submitWorkflow() {
-    if (!canSubmit) return;
+    if (!canSubmit || !activeCreateModel) return;
     setSubmitError(null);
     try {
       const job = await onCreateJob(trimmedPrompt, {
         operation: currentModality.operation,
         modelId: isVideoModality ? undefined : activeCreateModel.modelId,
         videoRouteAlias: isVideoModality ? activeCreateModel.videoRouteAlias : undefined,
+        imageQuality: isImageModality && imageQuality ? imageQuality : undefined,
         referenceArtifactIds: referenceArtifactIds.length > 0 ? referenceArtifactIds : undefined,
         durationSec: isVideoModality ? videoDurationSec : undefined,
       });
@@ -853,6 +926,20 @@ export function WorkflowMode({
     const kind = statusKind(job.status);
     return statusFilter === "all" || statusFilter === kind;
   });
+  const modelDescription = activeCreateModel?.description || activeCreateModel?.subtitle || "";
+  const activeColor = activeCreateModel?.color ?? "#a855f7";
+  const activeGlow = activeCreateModel?.glow ?? "rgba(168,85,247,0.4)";
+  const promptPlaceholder =
+    activeCreateModel?.placeholders[0] ?? "Выберите модель и опишите, что нужно создать...";
+  const activeModelName = activeCreateModel?.name ?? "Модель не выбрана";
+  const referenceLimitLabel =
+    maxReferenceItems === 1 ? "1 файл" : `до ${maxReferenceItems} файлов`;
+  const referenceTitle = activeCreateModel?.requiresStartImage
+    ? "Загрузите стартовое изображение"
+    : "Добавьте референс";
+  const referenceMeta = activeCreateModel?.requiresStartImage
+    ? `Обязательно для этой модели, ${referenceLimitLabel}, PNG/JPG до 20 MB`
+    : `${referenceLimitLabel}, PNG/JPG до 20 MB`;
 
   return (
     <main className="workflow">
@@ -882,56 +969,133 @@ export function WorkflowMode({
               <p className="nh-page-sub">AI-генерация изображений и видео</p>
             </header>
 
-            <div className="create-model-grid" role="group" aria-label="Выбор модели">
-              {createModes.map((item) => {
-                const isSelected = modelId === item.modelId && modalityId === item.modalityId;
-                const isImage = item.modalityId === "image";
+            <div className="create-kind-segment" role="tablist" aria-label="Тип генерации">
+              {(["image", "video"] as const).map((id) => {
+                const active = modalityId === id;
                 return (
                   <button
-                    key={item.modelId}
+                    key={id}
                     type="button"
-                    className={"create-model-card" + (isSelected ? " is-active" : "")}
-                    style={
-                      isSelected
-                        ? {
-                            borderColor: item.color,
-                            boxShadow: `0 0 24px ${item.color}28`,
-                          }
-                        : undefined
-                    }
-                    onClick={() => selectCreateModel(item)}
+                    role="tab"
+                    aria-selected={active}
+                    className={"create-kind-segment__btn" + (active ? " is-active" : "")}
+                    onClick={() => changeModality(id)}
                   >
-                    <div
-                      className="create-model-card__icon"
-                      style={{
-                        background: `linear-gradient(135deg, ${item.color}, ${item.color}bb)`,
-                        boxShadow: isSelected ? `0 4px 12px ${item.color}55` : `0 3px 8px ${item.color}28`,
-                      }}
-                    >
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                        {isImage ? (
-                          <path d="M4 5h16v14H4z M8 11l3 3 5-6" stroke="#fff" strokeWidth="1.8" />
-                        ) : (
-                          <path d="M4 6h16v12H4z M9 10l2 2 4-5" stroke="#fff" strokeWidth="1.8" />
-                        )}
-                      </svg>
-                    </div>
-                    <div
-                      className="create-model-card__name"
-                      style={isSelected ? { color: item.color } : undefined}
-                    >
-                      {item.name}
-                    </div>
-                    <div className="create-model-card__subtitle">{item.subtitle}</div>
+                    {id === "image" ? "Фото" : "Видео"}
                   </button>
                 );
               })}
             </div>
 
-            {isVideoModality && (
-              <div className="create-duration" role="group" aria-label="Длительность видео">
-                <span className="create-duration__label">Длительность</span>
-                <div className="segment create-duration__segment">
+            <div className="create-model-picker">
+              <span className="create-control-label">Модель</span>
+              <button
+                type="button"
+                className="create-model-trigger"
+                aria-expanded={modelDropdownOpen}
+                aria-controls="workflow-model-list"
+                disabled={visibleCreateModes.length === 0}
+                onClick={() => setModelDropdownOpen((open) => !open)}
+              >
+                <span
+                  className="create-model-trigger__icon"
+                  style={
+                    activeCreateModel
+                      ? {
+                          background: `linear-gradient(135deg, ${activeCreateModel.color}, ${activeCreateModel.color}bb)`,
+                          boxShadow: `0 4px 12px ${activeCreateModel.color}35`,
+                        }
+                      : undefined
+                  }
+                  aria-hidden="true"
+                >
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
+                    {isImageModality ? (
+                      <path d="M4 5h16v14H4z M8 13l2.5 2.5L16 9" stroke="currentColor" strokeWidth="1.8" />
+                    ) : (
+                      <path d="M4 6h16v12H4z M10 9l5 3-5 3V9Z" stroke="currentColor" strokeWidth="1.8" />
+                    )}
+                  </svg>
+                </span>
+                <span className="create-model-trigger__copy">
+                  <strong>{activeCreateModel?.name ?? "Нет доступных моделей"}</strong>
+                  <small>{modelDescription || "Модели появятся после включения на backend"}</small>
+                </span>
+                <svg
+                  className={"create-model-trigger__chevron" + (modelDropdownOpen ? " is-open" : "")}
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  aria-hidden="true"
+                >
+                  <path d="m6 9 6 6 6-6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+
+              <div
+                id="workflow-model-list"
+                className={"create-model-menu" + (modelDropdownOpen ? " is-open" : "")}
+                role="listbox"
+                aria-label="Список моделей"
+              >
+                {visibleCreateModes.map((item) => {
+                  const isSelected = modelId === item.modelId;
+                  return (
+                    <button
+                      key={item.modelId}
+                      type="button"
+                      role="option"
+                      aria-selected={isSelected}
+                      className={"create-model-option" + (isSelected ? " is-active" : "")}
+                      onClick={() => selectCreateModel(item)}
+                    >
+                      <span
+                        className="create-model-option__mark"
+                        style={{ color: item.color }}
+                        aria-hidden="true"
+                      >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                          <path d="M12 3v4M12 17v4M4.2 4.2l2.8 2.8M17 17l2.8 2.8M3 12h4M17 12h4M4.2 19.8 7 17M17 7l2.8-2.8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                        </svg>
+                      </span>
+                      <span className="create-model-option__copy">
+                        <strong>{item.name}</strong>
+                        <small>{item.description || item.subtitle}</small>
+                      </span>
+                      {item.estimateCredits ? <em>{formatCredits(item.estimateCredits)}</em> : null}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {!activeCreateModel && (
+              <div className="workflow-empty">Нет доступных моделей для выбранного типа.</div>
+            )}
+
+            {activeCreateModel && isImageModality && imageQualityOptions.length > 0 && (
+              <div className="create-setting" role="group" aria-label="Качество изображения">
+                <span className="create-control-label">Качество</span>
+                <div className="segment create-setting__segment">
+                  {imageQualityOptions.map((quality) => (
+                    <button
+                      key={quality}
+                      type="button"
+                      className={"segment__btn" + (imageQuality === quality ? " is-active" : "")}
+                      onClick={() => setImageQuality(quality)}
+                    >
+                      {quality}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {activeCreateModel && isVideoModality && videoDurationOptions.length > 0 && (
+              <div className="create-setting" role="group" aria-label="Длительность видео">
+                <span className="create-control-label">Длительность</span>
+                <div className="segment create-setting__segment">
                   {videoDurationOptions.map((seconds) => {
                     const active = videoDurationSec === seconds;
                     return (
@@ -957,14 +1121,27 @@ export function WorkflowMode({
               </div>
             )}
 
-            {acceptsImageReferences && (
+            {activeCreateModel && isVideoModality && videoAspectRatioOptions.length > 0 && (
+              <div className="create-setting" aria-label="Формат видео">
+                <span className="create-control-label">Формат</span>
+                <div className="create-setting__chips">
+                  {videoAspectRatioOptions.map((ratio) => (
+                    <span key={ratio} className="create-setting-chip">
+                      {ratio}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {acceptsImageReferences && activeCreateModel && (
               <div
                 className={"create-dropzone" + (isDragging ? " is-dragging" : "")}
                 style={
                   isDragging
                     ? {
-                        borderColor: activeCreateModel.color,
-                        boxShadow: `0 0 28px ${activeCreateModel.glow}`,
+                        borderColor: activeColor,
+                        boxShadow: `0 0 28px ${activeGlow}`,
                       }
                     : undefined
                 }
@@ -1006,7 +1183,7 @@ export function WorkflowMode({
                     <div className="create-dropzone__icon" aria-hidden="true">
                       <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
                         <path
-                          d="M12 16V4m0 0 7-7M12 4 5 11M4 20h16"
+                          d="M12 16V4m0 0 5 5M12 4 7 9M4 20h16"
                           stroke="#a855f7"
                           strokeWidth="1.8"
                           strokeLinecap="round"
@@ -1015,10 +1192,9 @@ export function WorkflowMode({
                       </svg>
                     </div>
                     <p className="create-dropzone__title">
-                      Перетащите файл или нажмите{" "}
-                      <span style={{ color: activeCreateModel.color }}>+</span>
+                      {referenceTitle} или нажмите <span style={{ color: activeColor }}>+</span>
                     </p>
-                    <p className="create-dropzone__meta">PNG, JPG до 20 MB</p>
+                    <p className="create-dropzone__meta">{referenceMeta}</p>
                   </>
                 )}
               </div>
@@ -1048,8 +1224,8 @@ export function WorkflowMode({
               style={
                 trimmedPrompt
                   ? {
-                      borderColor: `${activeCreateModel.color}55`,
-                      boxShadow: `0 0 22px ${activeCreateModel.glow}22`,
+                      borderColor: `${activeColor}55`,
+                      boxShadow: `0 0 22px ${activeGlow}22`,
                     }
                   : undefined
               }
@@ -1061,7 +1237,7 @@ export function WorkflowMode({
                 maxLength={PROMPT_LIMIT + 100}
                 onChange={(event) => setPrompt(event.target.value)}
                 rows={3}
-                placeholder={activeCreateModel.placeholders[0]}
+                placeholder={promptPlaceholder}
               />
               <div className="create-prompt__footer">
                 <div className="create-prompt__meta">
@@ -1069,9 +1245,9 @@ export function WorkflowMode({
                   <span
                     className="create-prompt__price"
                     style={{
-                      color: activeCreateModel.color,
-                      borderColor: `${activeCreateModel.color}50`,
-                      background: `linear-gradient(135deg, ${activeCreateModel.color}1e, ${activeCreateModel.color}0e)`,
+                      color: activeColor,
+                      borderColor: `${activeColor}50`,
+                      background: `linear-gradient(135deg, ${activeColor}1e, ${activeColor}0e)`,
                     }}
                   >
                     {estimateLoading
@@ -1080,7 +1256,7 @@ export function WorkflowMode({
                         ? formatCredits(estimate.cost_estimate)
                         : "—"}
                   </span>
-                  <span className="create-prompt__model">{activeCreateModel.name}</span>
+                  <span className="create-prompt__model">{activeModelName}</span>
                 </div>
                 <button
                   type="button"
@@ -1090,8 +1266,8 @@ export function WorkflowMode({
                   style={
                     canSubmit
                       ? {
-                          background: `linear-gradient(135deg, ${activeCreateModel.color}, #ec4899)`,
-                          boxShadow: `0 4px 16px ${activeCreateModel.glow}`,
+                          background: `linear-gradient(135deg, ${activeColor}, #ec4899)`,
+                          boxShadow: `0 4px 16px ${activeGlow}`,
                         }
                       : undefined
                   }
@@ -1121,21 +1297,23 @@ export function WorkflowMode({
               </p>
             )}
 
-            <div className="create-quick">
-              <p className="create-quick__label">Быстрые идеи:</p>
-              <div className="create-quick__chips">
-                {activeCreateModel.quickIdeas.map((idea) => (
-                  <button
-                    key={idea}
-                    type="button"
-                    className="nh-chip-btn"
-                    onClick={() => setPrompt(idea)}
-                  >
-                    {idea}
-                  </button>
-                ))}
+            {activeCreateModel && (
+              <div className="create-quick">
+                <p className="create-quick__label">Быстрые идеи:</p>
+                <div className="create-quick__chips">
+                  {activeCreateModel.quickIdeas.map((idea) => (
+                    <button
+                      key={idea}
+                      type="button"
+                      className="nh-chip-btn"
+                      onClick={() => setPrompt(idea)}
+                    >
+                      {idea}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </section>
       )}

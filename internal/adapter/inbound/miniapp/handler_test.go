@@ -31,6 +31,7 @@ import (
 	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/service/billingservice"
 	"vk-ai-aggregator/internal/service/joborchestrator"
+	"vk-ai-aggregator/internal/service/modelcatalog"
 	"vk-ai-aggregator/internal/service/paymentservice"
 	"vk-ai-aggregator/internal/service/referralservice"
 )
@@ -530,7 +531,12 @@ func createTestArtifactWithDimensions(t *testing.T, fixture *testFixture, ownerI
 func enableTestVideoRoute(cfg *miniappinbound.Config, alias domain.VideoRouteAlias) {
 	cfg.VideoRoutes = []miniappinbound.VideoRouteDTO{
 		{
+			Type:                   "video",
 			Alias:                  string(alias),
+			Name:                   "Kling O3 Standard",
+			Description:            "Public video route description.",
+			EstimateCredits:        100,
+			Enabled:                true,
 			AllowedDurationsSec:    []int{5, 10},
 			DefaultDurationSec:     5,
 			AllowedResolutions:     []string{"720p"},
@@ -2568,52 +2574,130 @@ func TestHandler_Estimate_NanoBanana2UsesServerOwnedCost(t *testing.T) {
 	}
 }
 
-func TestHandler_ListImageModels_PublicAliasesOnly(t *testing.T) {
+func TestHandler_Estimate_ImageQualityUsesServerOwnedCost(t *testing.T) {
 	fixture := newTestFixtureWithConfig("", nil, func(cfg *miniappinbound.Config) {
 		cfg.ImageModels = []miniappinbound.ImageModelDTO{{
-			ID:                     "nano_banana_2",
-			Name:                   "Nano Banana 2",
+			Type:            "image",
+			ID:              modelcatalog.MiniAppImageNanoBanana2,
+			Name:            "Nano Banana 2",
+			EstimateCredits: 10,
+			Enabled:         true,
+			QualityOptions: []string{
+				modelcatalog.ImageQuality1K,
+				modelcatalog.ImageQuality2K,
+				modelcatalog.ImageQuality4K,
+			},
+			DefaultQuality:         modelcatalog.ImageQuality1K,
 			SupportsReferenceImage: true,
 			MaxReferenceImages:     4,
 		}}
 	})
 	routes := fixture.handler.Routes()
 
-	req := httptest.NewRequest(http.MethodGet, "/miniapp/image-models", nil)
+	body, _ := json.Marshal(map[string]string{
+		"operation":     "image_generate",
+		"prompt":        "estimate image",
+		"model_id":      modelcatalog.MiniAppImageNanoBanana2,
+		"image_quality": modelcatalog.ImageQuality4K,
+	})
+	req := httptest.NewRequest(http.MethodPost, "/miniapp/estimate", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Launch-Params", devLaunchParams(777))
+
 	w := httptest.NewRecorder()
 	routes.ServeHTTP(w, req)
-
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
 	lower := strings.ToLower(w.Body.String())
-	for _, private := range []string{"poyo", "nano-banana-2-new", "model_code", "provider", "cost", "price"} {
+	for _, private := range []string{"poyo", "nano-banana-2-new", "model_code", "provider", "price"} {
 		if strings.Contains(lower, private) {
-			t.Fatalf("image model response leaked %q: %s", private, w.Body.String())
+			t.Fatalf("estimate response leaked private detail %q: %s", private, w.Body.String())
 		}
 	}
 	var resp struct {
-		Items []miniappinbound.ImageModelDTO `json:"items"`
+		ModelID      string `json:"model_id"`
+		ModelName    string `json:"model_name"`
+		ImageQuality string `json:"image_quality"`
+		CostEstimate int64  `json:"cost_estimate"`
 	}
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("invalid response json: %v", err)
 	}
-	if len(resp.Items) != 1 || resp.Items[0].ID != "nano_banana_2" || resp.Items[0].Name != "Nano Banana 2" {
-		t.Fatalf("unexpected image models: %+v", resp.Items)
-	}
-	if !resp.Items[0].SupportsReferenceImage || resp.Items[0].MaxReferenceImages != 4 {
-		t.Fatalf("missing public image constraints: %+v", resp.Items[0])
+	if resp.ModelID != modelcatalog.MiniAppImageNanoBanana2 ||
+		resp.ModelName != "Nano Banana 2" ||
+		resp.ImageQuality != modelcatalog.ImageQuality4K ||
+		resp.CostEstimate != 24 {
+		t.Fatalf("unexpected quality estimate response: %+v", resp)
 	}
 }
 
-func TestHandler_ListVideoRoutes_PublicAliasesOnly(t *testing.T) {
+func TestHandler_Estimate_ImageQualityRejectsUnsupported(t *testing.T) {
 	fixture := newTestFixtureWithConfig("", nil, func(cfg *miniappinbound.Config) {
-		enableTestVideoRoute(cfg, domain.VideoRouteKlingO3Standard)
+		cfg.ImageModels = []miniappinbound.ImageModelDTO{{
+			Type:                   "image",
+			ID:                     modelcatalog.MiniAppImageNanoBanana2,
+			Name:                   "Nano Banana 2",
+			EstimateCredits:        10,
+			Enabled:                true,
+			QualityOptions:         []string{modelcatalog.ImageQuality1K, modelcatalog.ImageQuality2K},
+			DefaultQuality:         modelcatalog.ImageQuality1K,
+			SupportsReferenceImage: true,
+			MaxReferenceImages:     4,
+		}}
 	})
 	routes := fixture.handler.Routes()
 
-	req := httptest.NewRequest(http.MethodGet, "/miniapp/video-routes", nil)
+	body, _ := json.Marshal(map[string]string{
+		"operation":     "image_generate",
+		"prompt":        "estimate image",
+		"model_id":      modelcatalog.MiniAppImageNanoBanana2,
+		"image_quality": modelcatalog.ImageQuality4K,
+	})
+	req := httptest.NewRequest(http.MethodPost, "/miniapp/estimate", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Launch-Params", devLaunchParams(777))
+
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "unsupported image quality") {
+		t.Fatalf("unexpected error body: %s", w.Body.String())
+	}
+}
+
+func TestHandler_ListModelCatalog_PublicItemsOnly(t *testing.T) {
+	fixture := newTestFixtureWithConfig("", nil, func(cfg *miniappinbound.Config) {
+		cfg.ImageModels = []miniappinbound.ImageModelDTO{{
+			Type:                   "image",
+			ID:                     "nano_banana_2",
+			Name:                   "Nano Banana 2",
+			Description:            "Public image model description.",
+			EstimateCredits:        10,
+			Enabled:                true,
+			QualityOptions:         []string{"1K", "2K", "4K"},
+			DefaultQuality:         "1K",
+			SupportsReferenceImage: true,
+			MaxReferenceImages:     4,
+		}, {
+			Type:    "image",
+			ID:      "disabled_image",
+			Name:    "Disabled image",
+			Enabled: false,
+		}}
+		enableTestVideoRoute(cfg, domain.VideoRouteKlingO3Standard)
+		cfg.VideoRoutes = append(cfg.VideoRoutes, miniappinbound.VideoRouteDTO{
+			Type:    "video",
+			Alias:   "disabled_video",
+			Name:    "Disabled video",
+			Enabled: false,
+		})
+	})
+	routes := fixture.handler.Routes()
+
+	req := httptest.NewRequest(http.MethodGet, "/miniapp/model-catalog", nil)
 	req.Header.Set("X-Launch-Params", devLaunchParams(777))
 	w := httptest.NewRecorder()
 	routes.ServeHTTP(w, req)
@@ -2622,22 +2706,54 @@ func TestHandler_ListVideoRoutes_PublicAliasesOnly(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
 	lower := strings.ToLower(w.Body.String())
-	for _, private := range []string{"provider", "model_code", "hidden-provider-model", "cost", "price"} {
+	for _, private := range []string{"provider", "model_code", "provider_model_id", "nano-banana-2-new", "hidden-provider-model", "price_multiplier"} {
 		if strings.Contains(lower, private) {
-			t.Fatalf("video route response leaked %q: %s", private, w.Body.String())
+			t.Fatalf("model catalog response leaked %q: %s", private, w.Body.String())
+		}
+	}
+	for _, disabled := range []string{"disabled_image", "disabled_video"} {
+		if strings.Contains(lower, disabled) {
+			t.Fatalf("model catalog exposed disabled item %q: %s", disabled, w.Body.String())
 		}
 	}
 	var resp struct {
-		Items []miniappinbound.VideoRouteDTO `json:"items"`
+		Items []miniappinbound.ModelCatalogItemDTO `json:"items"`
 	}
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("invalid response json: %v", err)
 	}
-	if len(resp.Items) != 1 || resp.Items[0].Alias != string(domain.VideoRouteKlingO3Standard) {
-		t.Fatalf("unexpected video routes: %+v", resp.Items)
+	if len(resp.Items) != 2 {
+		t.Fatalf("unexpected model catalog length: %+v", resp.Items)
 	}
-	if resp.Items[0].MaxReferenceImages != 1 || len(resp.Items[0].AllowedDurationsSec) != 2 {
-		t.Fatalf("missing public route constraints: %+v", resp.Items[0])
+	image := resp.Items[0]
+	if image.Type != "image" || image.ID != "nano_banana_2" || image.Alias != "" || image.EstimateCredits != 10 || !image.Enabled {
+		t.Fatalf("unexpected public image catalog item: %+v", image)
+	}
+	if image.DefaultQuality != "1K" || len(image.QualityOptions) != 3 || !image.SupportsReferenceImage || image.MaxReferenceImages != 4 {
+		t.Fatalf("missing public image constraints: %+v", image)
+	}
+	video := resp.Items[1]
+	if video.Type != "video" || video.ID != string(domain.VideoRouteKlingO3Standard) || video.Alias != string(domain.VideoRouteKlingO3Standard) || video.EstimateCredits != 100 || !video.Enabled {
+		t.Fatalf("unexpected public video catalog item: %+v", video)
+	}
+	if video.Name == "" || video.Description == "" || len(video.AllowedDurationsSec) != 2 || video.DefaultDurationSec != 5 || video.MaxReferenceImages != 1 {
+		t.Fatalf("missing public video constraints: %+v", video)
+	}
+}
+
+func TestHandler_LegacyModelCatalogEndpointsRemoved(t *testing.T) {
+	fixture := newTestFixture("", nil)
+	routes := fixture.handler.Routes()
+
+	for _, path := range []string{"/miniapp/image-models", "/miniapp/video-routes"} {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req.Header.Set("X-Launch-Params", devLaunchParams(777))
+		w := httptest.NewRecorder()
+		routes.ServeHTTP(w, req)
+
+		if w.Code != http.StatusNotFound {
+			t.Fatalf("expected %s to be removed with 404, got %d: %s", path, w.Code, w.Body.String())
+		}
 	}
 }
 
@@ -3205,6 +3321,247 @@ func TestHandler_CreateJob_NanoBanana2PersistsPoYoSnapshotPrivately(t *testing.T
 	}
 }
 
+func TestHandler_CreateJob_ImageQualityPersistsServerOwnedSnapshot(t *testing.T) {
+	fixture := newTestFixtureWithConfig("", nil, func(cfg *miniappinbound.Config) {
+		cfg.ImageModels = []miniappinbound.ImageModelDTO{{
+			Type:            "image",
+			ID:              modelcatalog.MiniAppImageNanoBanana2,
+			Name:            "Nano Banana 2",
+			EstimateCredits: 10,
+			Enabled:         true,
+			QualityOptions: []string{
+				modelcatalog.ImageQuality1K,
+				modelcatalog.ImageQuality2K,
+				modelcatalog.ImageQuality4K,
+			},
+			DefaultQuality:         modelcatalog.ImageQuality1K,
+			SupportsReferenceImage: true,
+			MaxReferenceImages:     4,
+		}}
+	})
+	routes := fixture.handler.Routes()
+
+	body, _ := json.Marshal(map[string]string{
+		"operation":     "image_generate",
+		"prompt":        "image prompt",
+		"model_id":      modelcatalog.MiniAppImageNanoBanana2,
+		"image_quality": modelcatalog.ImageQuality2K,
+	})
+	req := httptest.NewRequest(http.MethodPost, "/miniapp/jobs", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Launch-Params", devLaunchParams(777))
+	req.Header.Set("X-Idempotency-Key", "image-quality-nano-banana-2")
+
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	lower := strings.ToLower(w.Body.String())
+	for _, private := range []string{"poyo", "nano-banana-2-new", "model_code", "provider", "price"} {
+		if strings.Contains(lower, private) {
+			t.Fatalf("job response leaked private detail %q: %s", private, w.Body.String())
+		}
+	}
+	var resp struct {
+		ID           string `json:"id"`
+		Operation    string `json:"operation"`
+		ModelID      string `json:"model_id"`
+		ModelName    string `json:"model_name"`
+		ImageQuality string `json:"image_quality"`
+		CostEstimate int64  `json:"cost_estimate"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("invalid response json: %v", err)
+	}
+	if resp.Operation != "image_generate" ||
+		resp.ModelID != modelcatalog.MiniAppImageNanoBanana2 ||
+		resp.ModelName != "Nano Banana 2" ||
+		resp.ImageQuality != modelcatalog.ImageQuality2K ||
+		resp.CostEstimate != 16 {
+		t.Fatalf("unexpected response: %+v", resp)
+	}
+	jobID, err := uuid.Parse(resp.ID)
+	if err != nil {
+		t.Fatalf("invalid job id: %v", err)
+	}
+	job, err := fixture.jobRepo.GetByID(context.Background(), jobID)
+	if err != nil {
+		t.Fatalf("get job: %v", err)
+	}
+	if job.CostEstimate != 16 || job.CostReserved != 16 {
+		t.Fatalf("cost estimate/reserved = %d/%d, want 16/16", job.CostEstimate, job.CostReserved)
+	}
+	var params struct {
+		ModelID      string `json:"model_id"`
+		ModelName    string `json:"model_name"`
+		Provider     string `json:"provider"`
+		ModelCode    string `json:"model_code"`
+		Size         string `json:"size"`
+		Resolution   string `json:"resolution"`
+		ImageQuality string `json:"image_quality"`
+	}
+	if err := json.Unmarshal(job.Params, &params); err != nil {
+		t.Fatalf("invalid params: %v", err)
+	}
+	if params.ModelID != modelcatalog.MiniAppImageNanoBanana2 ||
+		params.ModelName != "Nano Banana 2" ||
+		params.Provider != "poyo" ||
+		params.ModelCode != "nano-banana-2-new" ||
+		params.Size != "1:1" ||
+		params.Resolution != modelcatalog.ImageQuality2K ||
+		params.ImageQuality != modelcatalog.ImageQuality2K {
+		t.Fatalf("unexpected stored params: %+v", params)
+	}
+}
+
+func TestHandler_CreateJob_IgnoresClientProviderAndPriceFields(t *testing.T) {
+	fixture := newTestFixtureWithConfig("", nil, func(cfg *miniappinbound.Config) {
+		cfg.ImageModels = []miniappinbound.ImageModelDTO{{
+			Type:            "image",
+			ID:              modelcatalog.MiniAppImageNanoBanana2,
+			Name:            "Nano Banana 2",
+			EstimateCredits: 10,
+			Enabled:         true,
+			QualityOptions: []string{
+				modelcatalog.ImageQuality1K,
+				modelcatalog.ImageQuality2K,
+				modelcatalog.ImageQuality4K,
+			},
+			DefaultQuality:         modelcatalog.ImageQuality1K,
+			SupportsReferenceImage: true,
+			MaxReferenceImages:     4,
+		}}
+	})
+	routes := fixture.handler.Routes()
+
+	body, _ := json.Marshal(map[string]any{
+		"operation":                 "image_generate",
+		"prompt":                    "image prompt",
+		"model_id":                  modelcatalog.MiniAppImageNanoBanana2,
+		"image_quality":             modelcatalog.ImageQuality2K,
+		"provider":                  "client-provider",
+		"provider_model_id":         "client-provider-model",
+		"model_code":                "client-model-code",
+		"cost_estimate":             1,
+		"price":                     1,
+		"provider_cost_credits":     1,
+		"price_multiplier":          1,
+		"max_internal_cost_credits": 1,
+		"resolved_snapshot":         map[string]any{"provider": "client-provider"},
+	})
+	req := httptest.NewRequest(http.MethodPost, "/miniapp/jobs", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Launch-Params", devLaunchParams(777))
+	req.Header.Set("X-Idempotency-Key", "client-provider-price-ignored")
+
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	lower := strings.ToLower(w.Body.String())
+	for _, private := range []string{
+		"client-provider",
+		"client-provider-model",
+		"client-model-code",
+		"provider",
+		"model_code",
+		"provider_model_id",
+		"resolved_snapshot",
+		"price_multiplier",
+		"provider_cost_credits",
+		"max_internal_cost_credits",
+	} {
+		if strings.Contains(lower, private) {
+			t.Fatalf("job response leaked client/provider private detail %q: %s", private, w.Body.String())
+		}
+	}
+	var resp struct {
+		ID           string `json:"id"`
+		ModelID      string `json:"model_id"`
+		ModelName    string `json:"model_name"`
+		ImageQuality string `json:"image_quality"`
+		CostEstimate int64  `json:"cost_estimate"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("invalid response json: %v", err)
+	}
+	if resp.ModelID != modelcatalog.MiniAppImageNanoBanana2 ||
+		resp.ModelName != "Nano Banana 2" ||
+		resp.ImageQuality != modelcatalog.ImageQuality2K ||
+		resp.CostEstimate != 16 {
+		t.Fatalf("client-provided price/provider fields affected response: %+v", resp)
+	}
+
+	jobID, err := uuid.Parse(resp.ID)
+	if err != nil {
+		t.Fatalf("invalid job id: %v", err)
+	}
+	job, err := fixture.jobRepo.GetByID(context.Background(), jobID)
+	if err != nil {
+		t.Fatalf("get job: %v", err)
+	}
+	if job.CostEstimate != 16 || job.CostReserved != 16 {
+		t.Fatalf("client-provided price affected billing, estimate/reserved=%d/%d", job.CostEstimate, job.CostReserved)
+	}
+	var params struct {
+		ModelID      string `json:"model_id"`
+		ModelName    string `json:"model_name"`
+		Provider     string `json:"provider"`
+		ModelCode    string `json:"model_code"`
+		Resolution   string `json:"resolution"`
+		ImageQuality string `json:"image_quality"`
+	}
+	if err := json.Unmarshal(job.Params, &params); err != nil {
+		t.Fatalf("invalid params: %v", err)
+	}
+	if params.ModelID != modelcatalog.MiniAppImageNanoBanana2 ||
+		params.ModelName != "Nano Banana 2" ||
+		params.Provider != "poyo" ||
+		params.ModelCode != "nano-banana-2-new" ||
+		params.Resolution != modelcatalog.ImageQuality2K ||
+		params.ImageQuality != modelcatalog.ImageQuality2K {
+		t.Fatalf("client-provided provider/model fields affected stored server snapshot: %+v", params)
+	}
+}
+
+func TestHandler_CreateJob_RejectsDisabledImageModelAlias(t *testing.T) {
+	fixture := newTestFixtureWithConfig("", nil, func(cfg *miniappinbound.Config) {
+		cfg.ImageModels = []miniappinbound.ImageModelDTO{{
+			Type:            "image",
+			ID:              modelcatalog.MiniAppImageNanoBanana2,
+			Name:            "Nano Banana 2",
+			EstimateCredits: 10,
+			Enabled:         false,
+		}}
+	})
+	routes := fixture.handler.Routes()
+
+	body, _ := json.Marshal(map[string]string{
+		"operation": "image_generate",
+		"prompt":    "image prompt",
+		"model_id":  modelcatalog.MiniAppImageNanoBanana2,
+	})
+	req := httptest.NewRequest(http.MethodPost, "/miniapp/jobs", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Launch-Params", devLaunchParams(777))
+	req.Header.Set("X-Idempotency-Key", "disabled-image-model")
+
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+	jobs, err := fixture.jobRepo.List(context.Background(), domain.JobFilter{}, 10, 0)
+	if err != nil {
+		t.Fatalf("list jobs: %v", err)
+	}
+	if len(jobs) != 0 {
+		t.Fatalf("disabled image model must not create a job, got %d", len(jobs))
+	}
+}
+
 func TestHandler_CreateJob_VideoRejectsLegacyModelID(t *testing.T) {
 	fixture := newTestFixture("", nil)
 	routes := fixture.handler.Routes()
@@ -3260,6 +3617,44 @@ func TestHandler_CreateJob_VideoRejectsUnknownRouteAlias(t *testing.T) {
 	}
 	if len(jobs) != 0 {
 		t.Fatalf("unknown video route must not create a job, got %d", len(jobs))
+	}
+}
+
+func TestHandler_CreateJob_VideoRejectsDisabledRouteAlias(t *testing.T) {
+	fixture := newTestFixtureWithConfig("", nil, func(cfg *miniappinbound.Config) {
+		cfg.VideoRoutes = []miniappinbound.VideoRouteDTO{{
+			Type:                "video",
+			Alias:               string(domain.VideoRouteKlingO3Standard),
+			Name:                "Kling O3 Standard",
+			Enabled:             false,
+			AllowedDurationsSec: []int{5, 10},
+			DefaultDurationSec:  5,
+		}}
+	})
+	routes := fixture.handler.Routes()
+
+	body, _ := json.Marshal(map[string]any{
+		"operation":         "video_generate",
+		"prompt":            "snow over neon city",
+		"video_route_alias": string(domain.VideoRouteKlingO3Standard),
+		"duration_sec":      5,
+	})
+	req := httptest.NewRequest(http.MethodPost, "/miniapp/jobs", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Launch-Params", devLaunchParams(777))
+	req.Header.Set("X-Idempotency-Key", "disabled-video-route")
+
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+	jobs, err := fixture.jobRepo.List(context.Background(), domain.JobFilter{}, 10, 0)
+	if err != nil {
+		t.Fatalf("list jobs: %v", err)
+	}
+	if len(jobs) != 0 {
+		t.Fatalf("disabled video route must not create a job, got %d", len(jobs))
 	}
 }
 

@@ -71,6 +71,7 @@ type Route struct {
 
 type PublicRoute struct {
 	Alias                  domain.VideoRouteAlias `json:"alias"`
+	EstimateCredits        int64                  `json:"estimate_credits,omitempty"`
 	AllowedDurationsSec    []int                  `json:"allowed_durations_sec,omitempty"`
 	AllowedResolutions     []string               `json:"allowed_resolutions,omitempty"`
 	AllowedAspectRatios    []string               `json:"allowed_aspect_ratios,omitempty"`
@@ -244,6 +245,7 @@ func (c *Catalog) PublicRoutes() []PublicRoute {
 		}
 		out = append(out, PublicRoute{
 			Alias:                  route.Spec.Alias,
+			EstimateCredits:        defaultEstimateCredits(route.Spec),
 			AllowedDurationsSec:    append([]int(nil), route.Spec.AllowedDurationsSec...),
 			AllowedResolutions:     append([]string(nil), route.Spec.AllowedResolutions...),
 			AllowedAspectRatios:    append([]string(nil), route.Spec.AllowedAspectRatios...),
@@ -264,6 +266,25 @@ func (r Route) publiclyAvailable() bool {
 		r.ProviderConfigured &&
 		r.ProviderBaseConfigured &&
 		(r.Spec.ProviderCostCreditsFixed > 0 || r.Spec.ProviderCostCreditsPerSecond > 0)
+}
+
+func defaultEstimateCredits(spec domain.VideoRouteSpec) int64 {
+	duration := defaultDuration(spec)
+	if duration <= 0 {
+		return 0
+	}
+	providerCost := spec.ProviderCostCreditsFixed + spec.ProviderCostCreditsPerSecond*int64(duration)
+	if providerCost <= 0 {
+		return 0
+	}
+	internalCost := int64(math.Ceil(float64(providerCost) * spec.PriceMultiplier))
+	if internalCost <= 0 {
+		return 0
+	}
+	if spec.MaxInternalCostCredits > 0 && internalCost > spec.MaxInternalCostCredits {
+		return spec.MaxInternalCostCredits
+	}
+	return internalCost
 }
 
 func (c *Catalog) Validate(ctx context.Context, req Request) error {

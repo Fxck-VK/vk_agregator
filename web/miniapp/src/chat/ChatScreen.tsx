@@ -44,6 +44,7 @@ type SubmitRequest = {
   operation: string;
   modelId?: string;
   videoRouteAlias?: string;
+  imageQuality?: string;
   chat?: boolean;
   referenceArtifactIds?: string[];
   durationSec?: number;
@@ -574,6 +575,8 @@ export function ChatScreen({ user }: { user: VkUser }) {
               model_id: !isChat && operation === "video_generate" ? undefined : selectedModel,
               video_route_alias:
                 !isChat && operation === "video_generate" ? selectedVideoRouteAlias : undefined,
+              image_quality:
+                !isChat && operation === "image_generate" ? request?.imageQuality : undefined,
               reference_artifact_ids:
                 !isChat &&
                 (operation === "image_generate" || operation === "video_generate") &&

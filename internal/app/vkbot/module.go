@@ -5,7 +5,6 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
-	"strings"
 
 	"github.com/redis/go-redis/v9"
 
@@ -20,7 +19,9 @@ import (
 	"vk-ai-aggregator/internal/service/commandrouter"
 	"vk-ai-aggregator/internal/service/dialogstate"
 	"vk-ai-aggregator/internal/service/joborchestrator"
+	"vk-ai-aggregator/internal/service/modelcatalog"
 	"vk-ai-aggregator/internal/service/paymentservice"
+	"vk-ai-aggregator/internal/service/productcatalog"
 	"vk-ai-aggregator/internal/service/referralservice"
 )
 
@@ -110,6 +111,10 @@ func NewHandler(ctx context.Context, cfg config.Config, deps Deps) http.Handler 
 		ReferredSignupRewardCredits: cfg.ReferralReferredSignupRewardCredits,
 		RewardOnActivation:          cfg.ReferralRewardOnActivation,
 	})
+	runtimeCatalog, err := productcatalog.FromConfig(cfg)
+	if err != nil {
+		logger.Warn("vk bot video route catalog disabled", "error", err)
+	}
 
 	return vkinbound.NewHandler(vkinbound.Config{
 		ConfirmationToken:                   cfg.VKConfirmationToken,
@@ -117,7 +122,9 @@ func NewHandler(ctx context.Context, cfg config.Config, deps Deps) http.Handler 
 		WelcomeAttachment:                   cfg.VKWelcomeAttachment,
 		MenuButtonMode:                      cfg.VKMenuButtonMode,
 		UnroutedTextMode:                    cfg.VKUnroutedTextMode,
-		MenuFeatures:                        menuFeatures(cfg),
+		MenuFeatures:                        menuFeatures(cfg, runtimeCatalog),
+		ImageModels:                         runtimeCatalog.ImageModels(),
+		VideoRoutes:                         runtimeCatalog.VideoRoutes(),
 		ReferralLinkBase:                    cfg.VKReferralLinkBase,
 		ReferralShareBase:                   cfg.VKReferralShareBase,
 		ReferralReferrerSignupRewardCredits: cfg.ReferralReferrerSignupRewardCredits,
@@ -161,7 +168,7 @@ func firstNonEmpty(values ...string) string {
 	return ""
 }
 
-func menuFeatures(cfg config.Config) vkinbound.MenuFeatureFlags {
+func menuFeatures(cfg config.Config, catalog productcatalog.RuntimeCatalog) vkinbound.MenuFeatureFlags {
 	disabled := map[domain.CommandType]bool{}
 	enabled := map[domain.CommandType]bool{}
 	disableWhenFalse := func(enabled bool, commands ...domain.CommandType) {
@@ -181,55 +188,71 @@ func menuFeatures(cfg config.Config) vkinbound.MenuFeatureFlags {
 		}
 	}
 
-	disableWhenFalse(cfg.VKMenuVideoEnabled, domain.CommandMenuVideo)
-	disableWhenFalse(false, domain.CommandMenuVideoPrunaAI)
-	apimartProviderReady := cfg.APIMartProviderEnabled &&
-		strings.TrimSpace(cfg.APIMartAPIKey) != "" &&
-		strings.TrimSpace(cfg.APIMartBaseURL) != ""
-	apimartNanoBananaProReady := cfg.FeatureImageModelNanoBananaProEnabled && apimartProviderReady
-	apimartGPTImage2Ready := cfg.FeatureImageModelGPTImage2Enabled && apimartProviderReady
-	poyoImageReady := cfg.FeatureImageModelNanoBanana2Enabled &&
-		cfg.PoYoProviderEnabled &&
-		strings.TrimSpace(cfg.PoYoAPIKey) != "" &&
-		strings.TrimSpace(cfg.PoYoBaseURL) != ""
-	deepInfraImageReady := strings.TrimSpace(cfg.DeepInfraAPIKey) != "" &&
-		strings.TrimSpace(cfg.DeepInfraBaseURL) != ""
+	imageModels := catalog.ImageModels()
+	videoRoutes := catalog.VideoRoutes()
+	imageAvailable := func(modelID string) bool {
+		for _, model := range imageModels {
+			if model.Enabled && model.ID == modelID {
+				return true
+			}
+		}
+		return false
+	}
+	imageReferenceAvailable := func() bool {
+		for _, model := range imageModels {
+			if model.Enabled && model.SupportsReferenceImage {
+				return true
+			}
+		}
+		return false
+	}
+	videoRouteAvailable := func(alias domain.VideoRouteAlias) bool {
+		for _, route := range videoRoutes {
+			if route.Enabled && route.Alias == string(alias) {
+				return true
+			}
+		}
+		return false
+	}
 
-	disableWhenFalse(cfg.VKMenuImageEnabled && (apimartNanoBananaProReady || apimartGPTImage2Ready || poyoImageReady || deepInfraImageReady), domain.CommandMenuImage)
-	disableWhenFalse(apimartNanoBananaProReady, domain.CommandMenuImageText)
+	disableWhenFalse(cfg.VKMenuVideoEnabled && len(videoRoutes) > 0, domain.CommandMenuVideo)
+	disableWhenFalse(false, domain.CommandMenuVideoPrunaAI)
+
+	disableWhenFalse(cfg.VKMenuImageEnabled && len(imageModels) > 0, domain.CommandMenuImage)
+	disableWhenFalse(imageAvailable(modelcatalog.MiniAppImageNanoBananaPro), domain.CommandMenuImageText)
 	disableWhenFalse(cfg.VKMenuGPTEnabled, domain.CommandMenuText)
 	disableWhenFalse(cfg.VKMenuStudentsEnabled, domain.CommandMenuStudents)
 	disableWhenFalse(cfg.VKMenuAccountEnabled, domain.CommandAccount)
 	disableWhenFalse(cfg.VKMenuTopUpEnabled, domain.CommandTopUp)
-	disableWhenFalse(cfg.VKMenuVideoSora2Enabled, domain.CommandMenuVideoSora2)
-	disableWhenFalse(cfg.VKMenuVideoSora2StartEnabled, domain.CommandMenuVideoSora2Start)
-	disableWhenFalse(cfg.VKMenuVideoSora2ExamplesEnabled, domain.CommandMenuVideoSora2Examples)
-	disableWhenFalse(cfg.FeatureVideoRouteRunwayGen4TurboEnabled, domain.CommandMenuVideoSora2, domain.CommandMenuVideoSora2Start, domain.CommandMenuVideoSora2Examples)
-	enableWhenTrue(cfg.FeatureVideoRouteRunwayGen4TurboEnabled, domain.CommandMenuVideoSora2, domain.CommandMenuVideoSora2Start, domain.CommandMenuVideoSora2Examples)
-	disableWhenFalse(cfg.VKMenuVideoKling21Enabled, domain.CommandMenuVideoKling21)
-	disableWhenFalse(cfg.VKMenuVideoKling21StartEnabled, domain.CommandMenuVideoKling21Start)
-	disableWhenFalse(cfg.VKMenuVideoKling21ExamplesEnabled, domain.CommandMenuVideoKling21Examples)
-	disableWhenFalse(cfg.FeatureVideoRouteKlingO3StandardEnabled, domain.CommandMenuVideoKling21, domain.CommandMenuVideoKling21Start, domain.CommandMenuVideoKling21Examples)
-	enableWhenTrue(cfg.FeatureVideoRouteKlingO3StandardEnabled, domain.CommandMenuVideoKling21, domain.CommandMenuVideoKling21Start, domain.CommandMenuVideoKling21Examples)
-	disableWhenFalse(cfg.VKMenuVideoSeedance1Enabled, domain.CommandMenuVideoSeedance1)
-	disableWhenFalse(cfg.VKMenuVideoSeedance1LiteEnabled, domain.CommandMenuVideoSeedance1Lite)
+	runwayGen4TurboReady := videoRouteAvailable(domain.VideoRouteRunwayGen4Turbo)
+	disableWhenFalse(cfg.VKMenuVideoSora2Enabled && runwayGen4TurboReady, domain.CommandMenuVideoSora2)
+	disableWhenFalse(cfg.VKMenuVideoSora2StartEnabled && runwayGen4TurboReady, domain.CommandMenuVideoSora2Start)
+	disableWhenFalse(cfg.VKMenuVideoSora2ExamplesEnabled && runwayGen4TurboReady, domain.CommandMenuVideoSora2Examples)
+	enableWhenTrue(runwayGen4TurboReady, domain.CommandMenuVideoSora2, domain.CommandMenuVideoSora2Start, domain.CommandMenuVideoSora2Examples)
+	klingO3Ready := videoRouteAvailable(domain.VideoRouteKlingO3Standard)
+	disableWhenFalse(cfg.VKMenuVideoKling21Enabled && klingO3Ready, domain.CommandMenuVideoKling21)
+	disableWhenFalse(cfg.VKMenuVideoKling21StartEnabled && klingO3Ready, domain.CommandMenuVideoKling21Start)
+	disableWhenFalse(cfg.VKMenuVideoKling21ExamplesEnabled && klingO3Ready, domain.CommandMenuVideoKling21Examples)
+	enableWhenTrue(klingO3Ready, domain.CommandMenuVideoKling21, domain.CommandMenuVideoKling21Start, domain.CommandMenuVideoKling21Examples)
+	seedanceReady := videoRouteAvailable(domain.VideoRouteSeedance20Fast)
+	disableWhenFalse(cfg.VKMenuVideoSeedance1Enabled && seedanceReady, domain.CommandMenuVideoSeedance1)
+	disableWhenFalse(cfg.VKMenuVideoSeedance1LiteEnabled && seedanceReady, domain.CommandMenuVideoSeedance1Lite)
 	disableWhenFalse(cfg.VKMenuVideoSeedance1ProEnabled, domain.CommandMenuVideoSeedance1Pro)
-	disableWhenFalse(cfg.FeatureVideoRouteSeedance20FastEnabled, domain.CommandMenuVideoSeedance1, domain.CommandMenuVideoSeedance1Lite)
 	disableWhenFalse(false, domain.CommandMenuVideoSeedance1Pro)
-	enableWhenTrue(cfg.FeatureVideoRouteSeedance20FastEnabled, domain.CommandMenuVideoSeedance1, domain.CommandMenuVideoSeedance1Lite)
-	disableWhenFalse(cfg.VKMenuVideoHailuo02Enabled, domain.CommandMenuVideoHailuo02)
-	disableWhenFalse(cfg.VKMenuVideoHailuo02StandardEnabled, domain.CommandMenuVideoHailuo02Standard)
-	disableWhenFalse(cfg.VKMenuVideoHailuo02FastEnabled, domain.CommandMenuVideoHailuo02Fast)
-	disableWhenFalse(cfg.FeatureVideoRouteHailuo23StandardEnabled || cfg.FeatureVideoRouteHailuo23FastEnabled, domain.CommandMenuVideoHailuo02)
-	disableWhenFalse(cfg.FeatureVideoRouteHailuo23StandardEnabled, domain.CommandMenuVideoHailuo02Standard)
-	disableWhenFalse(cfg.FeatureVideoRouteHailuo23FastEnabled, domain.CommandMenuVideoHailuo02Fast)
-	enableWhenTrue(cfg.FeatureVideoRouteHailuo23StandardEnabled || cfg.FeatureVideoRouteHailuo23FastEnabled, domain.CommandMenuVideoHailuo02)
-	enableWhenTrue(cfg.FeatureVideoRouteHailuo23StandardEnabled, domain.CommandMenuVideoHailuo02Standard)
-	enableWhenTrue(cfg.FeatureVideoRouteHailuo23FastEnabled, domain.CommandMenuVideoHailuo02Fast)
-	disableWhenFalse(poyoImageReady, domain.CommandMenuImageNanoBanana2)
-	disableWhenFalse(deepInfraImageReady, domain.CommandMenuImageDeepInfraSeedream, domain.CommandMenuImageDeepInfraSDXL)
-	disableWhenFalse(apimartGPTImage2Ready, domain.CommandMenuImageGPTImage2)
-	disableWhenFalse(cfg.VKMenuImageReferenceEnabled && apimartNanoBananaProReady, domain.CommandMenuImageReference)
+	enableWhenTrue(seedanceReady, domain.CommandMenuVideoSeedance1, domain.CommandMenuVideoSeedance1Lite)
+	hailuoStandardReady := videoRouteAvailable(domain.VideoRouteHailuo23Standard)
+	hailuoFastReady := videoRouteAvailable(domain.VideoRouteHailuo23Fast)
+	disableWhenFalse(cfg.VKMenuVideoHailuo02Enabled && (hailuoStandardReady || hailuoFastReady), domain.CommandMenuVideoHailuo02)
+	disableWhenFalse(cfg.VKMenuVideoHailuo02StandardEnabled && hailuoStandardReady, domain.CommandMenuVideoHailuo02Standard)
+	disableWhenFalse(cfg.VKMenuVideoHailuo02FastEnabled && hailuoFastReady, domain.CommandMenuVideoHailuo02Fast)
+	enableWhenTrue(hailuoStandardReady || hailuoFastReady, domain.CommandMenuVideoHailuo02)
+	enableWhenTrue(hailuoStandardReady, domain.CommandMenuVideoHailuo02Standard)
+	enableWhenTrue(hailuoFastReady, domain.CommandMenuVideoHailuo02Fast)
+	disableWhenFalse(imageAvailable(modelcatalog.MiniAppImageNanoBanana2), domain.CommandMenuImageNanoBanana2)
+	disableWhenFalse(imageAvailable(modelcatalog.MiniAppImageSeedream45), domain.CommandMenuImageDeepInfraSeedream)
+	disableWhenFalse(imageAvailable(modelcatalog.MiniAppImageSDXLTurbo), domain.CommandMenuImageDeepInfraSDXL)
+	disableWhenFalse(imageAvailable(modelcatalog.MiniAppImageGPTImage2), domain.CommandMenuImageGPTImage2)
+	disableWhenFalse(cfg.VKMenuImageReferenceEnabled && imageReferenceAvailable(), domain.CommandMenuImageReference)
 	disableWhenFalse(cfg.VKMenuStudentsSolverEnabled, domain.CommandMenuStudentSolver)
 	disableWhenFalse(cfg.VKMenuStudentsPresentationEnabled, domain.CommandMenuStudentPresentation)
 	disableWhenFalse(cfg.VKMenuStudentsReportEnabled, domain.CommandMenuStudentReport)

@@ -266,6 +266,17 @@ func estimateInternalCost(providerCostCredits int64, multiplier float64) int64 {
 	return int64(math.Ceil(float64(providerCostCredits) * multiplier))
 }
 
+func EstimateInternalCostCredits(model Model) int64 {
+	cost := estimateInternalCost(model.ProviderCostCredits, model.PriceMultiplier)
+	if cost <= 0 {
+		return 0
+	}
+	if model.MaxInternalCostCredits > 0 && cost > model.MaxInternalCostCredits {
+		return model.MaxInternalCostCredits
+	}
+	return cost
+}
+
 func ListMiniAppModels(op domain.OperationType) []Model {
 	models, ok := miniAppModels[op]
 	if !ok {

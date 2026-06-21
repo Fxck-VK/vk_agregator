@@ -55,6 +55,9 @@ func (r *Router) Parse(rawText string) Result {
 		return Result{Type: domain.CommandMenuVideo}
 	case "prunaai", "pruna ai":
 		return Result{Type: domain.CommandMenuVideoPrunaAI}
+	// Legacy VK text-button labels. Primary VK model buttons now use generic
+	// product-catalog payloads; these names stay only for VK_MENU_BUTTON_MODE=text,
+	// stale keyboards and manual user text.
 	case "runway gen-4 turbo", "runway gen4 turbo", "creative video", "sora 2 начать генерацию":
 		return Result{Type: domain.CommandMenuVideoSora2Start}
 	case "sora 2 — видео текст+фото", "sora 2 - видео текст+фото", "sora 2 examples", "sora 2 примеры":
@@ -80,17 +83,19 @@ func (r *Router) Parse(rawText string) Result {
 		return Result{Type: domain.CommandShowMenu}
 	case "🖼️ создать фото", "🖼 создать фото", "создать фото", "создать изображение":
 		return Result{Type: domain.CommandMenuImage}
+	// Legacy VK text-button labels. Provider/model-code strings intentionally
+	// stay out of this router; only public product names are accepted here.
 	case "▶️ фото по тексту", "▶ фото по тексту", "фото по тексту":
 		return Result{Type: domain.CommandMenuImageText}
 	case "nano banana 2", "nano banana 2 image":
 		return Result{Type: domain.CommandMenuImageNanoBanana2}
 	case "nano banana pro", "nano banana pro image":
 		return Result{Type: domain.CommandMenuImageText}
-	case "seedream 4.5", "seedream", "deepinfra seedream", "deepinfra seedream 4.5", "bytedance seedream 4.5", "bytedance/seedream-4.5":
+	case "seedream 4.5", "seedream", "bytedance seedream 4.5":
 		return Result{Type: domain.CommandMenuImageDeepInfraSeedream}
-	case "sdxl turbo", "sdxl", "deepinfra sdxl", "deepinfra sdxl turbo", "nano banana flash", "stability ai sdxl turbo", "stabilityai/sdxl-turbo":
+	case "sdxl turbo", "sdxl", "stability ai sdxl turbo":
 		return Result{Type: domain.CommandMenuImageDeepInfraSDXL}
-	case "gpt image 2", "gpt-image-2", "gpt_image_2":
+	case "gpt image 2":
 		return Result{Type: domain.CommandMenuImageGPTImage2}
 	case "1k", "1k quality", "качество 1k":
 		return Result{Type: domain.CommandMenuImageQuality1K}

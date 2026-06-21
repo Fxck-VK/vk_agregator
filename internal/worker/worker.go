@@ -52,11 +52,11 @@ const (
 	rawProviderVideoPolicyIfProbePassed = "if_probe_passed"
 	rawProviderVideoPolicyAlwaysDevOnly = "always_dev_only"
 
-	// Async video providers may finish the generation even when their status
+	// Async media providers may finish the generation even when their status
 	// endpoint is temporarily flaky. Keep polling transport errors long enough
 	// to recover the provider task instead of refunding a job that later
 	// becomes ready on the provider side.
-	maxAsyncVideoPollTransportAttempts = 180
+	maxAsyncMediaPollTransportAttempts = 180
 )
 
 // ArtifactSaver stores provider outputs as artifacts. Implemented by
@@ -1769,15 +1769,14 @@ func (p *processor) pollOnce(ctx context.Context, job *domain.Job, pt *domain.Pr
 }
 
 func (p *processor) shouldKeepPollingAfterTransportFailure(job *domain.Job, pt *domain.ProviderTask, class domain.ProviderErrorClass, attempt int) bool {
-	if job == nil || pt == nil || job.Modality != domain.ModalityVideo || pt.Status.IsTerminal() || !isRetryable(class) {
+	if job == nil || pt == nil || pt.Status.IsTerminal() || !isAsyncMediaJob(job) || !isAsyncMediaProvider(pt.Provider) || !isAsyncMediaPollTransient(class) {
 		return false
 	}
-	switch pt.Provider {
-	case domain.ProviderAPIMart, domain.ProviderPoYo, domain.ProviderRunway:
-		return attempt < maxAsyncVideoPollTransportAttempts
-	default:
-		return false
-	}
+	return attempt < maxAsyncMediaPollTransportAttempts
+}
+
+func isAsyncMediaPollTransient(class domain.ProviderErrorClass) bool {
+	return isRetryable(class) || class == domain.ProviderErrTaskNotFound
 }
 
 func (p *processor) requeueProviderPollAfterError(ctx context.Context, job *domain.Job, pt *domain.ProviderTask, task queue.Task, class domain.ProviderErrorClass, msg string) error {

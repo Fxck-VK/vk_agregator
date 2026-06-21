@@ -2246,6 +2246,91 @@ func TestExternalAsyncVideoPollTransportErrorKeepsTaskPolling(t *testing.T) {
 	}
 }
 
+func TestExternalAsyncImagePollTaskNotFoundKeepsTaskPolling(t *testing.T) {
+	provider := &captureAsyncImageProvider{
+		name:  domain.ProviderPoYo,
+		model: poyo.ModelNanoBanana2New,
+		cost:  10,
+		pollErrors: []error{
+			routingError{class: domain.ProviderErrTaskNotFound},
+		},
+		pollResults: []domain.ProviderTaskResult{{
+			Status:     domain.ProviderTaskSucceeded,
+			OutputURLs: []string{"https://provider.test/image.png"},
+		}},
+	}
+	h := newHarnessWithProvider(t, provider, nil)
+	ctx := context.Background()
+	params, _ := json.Marshal(map[string]any{
+		"prompt":     "safe image",
+		"provider":   domain.ProviderPoYo,
+		"model_code": poyo.ModelNanoBanana2New,
+		"size":       "1:1",
+		"resolution": "1K",
+	})
+	job := &domain.Job{
+		ID:             uuid.New(),
+		UserID:         uuid.New(),
+		OperationType:  domain.OperationImageGenerate,
+		Modality:       domain.ModalityImage,
+		Status:         domain.JobStatusQueued,
+		IdempotencyKey: "job:" + uuid.NewString(),
+		CorrelationID:  "corr",
+		CostReserved:   10,
+		Params:         params,
+	}
+	if err := h.jobs.Create(ctx, job); err != nil {
+		t.Fatalf("create job: %v", err)
+	}
+
+	if err := h.gen.Process(ctx, taskFor(job)); err != nil {
+		t.Fatalf("gen process: %v", err)
+	}
+	if provider.polls != 0 {
+		t.Fatalf("initial submit must not poll inline; polls = %d", provider.polls)
+	}
+	got := h.reload(t, job.ID)
+	if got.Status != domain.JobStatusProviderSubmitted {
+		t.Fatalf("after submit status = %q, want provider_submitted", got.Status)
+	}
+	pollTasks := h.streams.byStream[redisqueue.StreamProviderPoll]
+	if len(pollTasks) != 1 {
+		t.Fatalf("expected initial poll task, got %d", len(pollTasks))
+	}
+
+	if err := h.poll.Process(ctx, pollTasks[len(pollTasks)-1]); err != nil {
+		t.Fatalf("first poll process: %v", err)
+	}
+	got = h.reload(t, job.ID)
+	if got.Status != domain.JobStatusProviderPending {
+		t.Fatalf("after transient task_not_found status = %q, want provider_pending", got.Status)
+	}
+	if len(h.releaser.released) != 0 {
+		t.Fatalf("transient async image poll error must not release credits: %v", h.releaser.released)
+	}
+	pollTasks = h.streams.byStream[redisqueue.StreamProviderPoll]
+	if len(pollTasks) < 2 {
+		t.Fatalf("expected poll task to be requeued, got %v", pollTasks)
+	}
+
+	if err := h.poll.Process(ctx, pollTasks[len(pollTasks)-1]); err != nil {
+		t.Fatalf("second poll process: %v", err)
+	}
+	got = h.reload(t, job.ID)
+	if got.Status != domain.JobStatusResultReady {
+		t.Fatalf("after successful poll status = %q, want result_ready", got.Status)
+	}
+	if provider.polls != 2 {
+		t.Fatalf("polls = %d, want 2", provider.polls)
+	}
+	if len(h.streams.byStream[redisqueue.StreamDelivery]) != 1 {
+		t.Fatalf("expected one delivery task, got %v", h.streams.byStream[redisqueue.StreamDelivery])
+	}
+	if len(h.releaser.released) != 0 {
+		t.Fatalf("successful async image job must not release credits: %v", h.releaser.released)
+	}
+}
+
 func TestExternalAsyncVideoPollTransportErrorKeepsPollingAfterOldBudget(t *testing.T) {
 	provider := &captureVideoProvider{
 		name:  domain.ProviderPoYo,
@@ -2634,6 +2719,77 @@ func (p *captureImageProvider) Poll(context.Context, domain.ProviderTaskRef) (do
 }
 
 func (p *captureImageProvider) Cancel(context.Context, domain.ProviderTaskRef) error { return nil }
+
+type captureAsyncImageProvider struct {
+	name        domain.ProviderName
+	model       string
+	cost        int64
+	last        domain.ProviderRequest
+	submits     int
+	polls       int
+	pollErrors  []error
+	pollResults []domain.ProviderTaskResult
+}
+
+func (p *captureAsyncImageProvider) Name() domain.ProviderName {
+	if p.name == "" {
+		return domain.ProviderName("capture-async-image")
+	}
+	return p.name
+}
+
+func (p *captureAsyncImageProvider) Capabilities(context.Context) ([]domain.Capability, error) {
+	model := p.model
+	if model == "" {
+		model = poyo.ModelNanoBanana2New
+	}
+	return []domain.Capability{{
+		Operation:       domain.OperationImageGenerate,
+		Modality:        domain.ModalityImage,
+		ModelCode:       model,
+		SupportsPolling: true,
+	}}, nil
+}
+
+func (p *captureAsyncImageProvider) Estimate(context.Context, domain.ProviderRequest) (domain.CostEstimate, error) {
+	cost := p.cost
+	if cost <= 0 {
+		cost = 10
+	}
+	return domain.CostEstimate{AmountCredits: cost, Currency: "credits"}, nil
+}
+
+func (p *captureAsyncImageProvider) Submit(_ context.Context, req domain.ProviderRequest) (domain.ProviderTask, error) {
+	p.submits++
+	p.last = req
+	return domain.ProviderTask{
+		JobID:          req.JobID,
+		Provider:       p.Name(),
+		ModelCode:      req.ModelCode,
+		ExternalID:     "capture-async-image-task",
+		Status:         domain.ProviderTaskPending,
+		IdempotencyKey: req.IdempotencyKey,
+	}, nil
+}
+
+func (p *captureAsyncImageProvider) Poll(context.Context, domain.ProviderTaskRef) (domain.ProviderTaskResult, error) {
+	p.polls++
+	if len(p.pollErrors) > 0 {
+		err := p.pollErrors[0]
+		p.pollErrors = p.pollErrors[1:]
+		return domain.ProviderTaskResult{}, err
+	}
+	if len(p.pollResults) > 0 {
+		res := p.pollResults[0]
+		p.pollResults = p.pollResults[1:]
+		return res, nil
+	}
+	return domain.ProviderTaskResult{Status: domain.ProviderTaskProcessing}, nil
+}
+
+func (p *captureAsyncImageProvider) Cancel(context.Context, domain.ProviderTaskRef) error {
+	return nil
+}
 
 type captureVideoProvider struct {
 	name        domain.ProviderName

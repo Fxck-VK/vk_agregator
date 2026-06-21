@@ -348,7 +348,7 @@ func TestPollCompletedImageAcceptsDataResultImageURLs(t *testing.T) {
 			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"code":200,"data":{"id":"I46OXVK51SS6JRZJ","status":"finished","result":{"image_urls":["` + outputURL + `"]}}}`))
+		_, _ = w.Write([]byte(`{"code":200,"data":{"id":"I46OXVK51SS6JRZJ","status":"finished","progress":0.0,"result":{"image_urls":["` + outputURL + `"]}}}`))
 	}))
 	defer srv.Close()
 

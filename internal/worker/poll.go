@@ -56,7 +56,7 @@ func (w *PollWorker) Process(ctx context.Context, task queue.Task) error {
 		return err
 	}
 	if job.Status == domain.JobStatusProviderSubmitted && shouldDeferInitialPoll(job, pt.Provider, pt) {
-		w.sleepBackoff(ctx, 1)
+		w.sleepProviderPollBackoff(ctx, 1)
 	}
 	return w.pollOnce(ctx, job, pt, provider, task)
 }

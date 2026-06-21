@@ -114,9 +114,20 @@ func (g *GenerationWorker) Process(ctx context.Context, task queue.Task) error {
 }
 
 func shouldDeferInitialPoll(job *domain.Job, provider domain.ProviderName, pt *domain.ProviderTask) bool {
-	if job == nil || pt == nil || pt.Status.IsTerminal() || job.Modality != domain.ModalityVideo {
+	if job == nil || pt == nil || pt.Status.IsTerminal() || !isAsyncMediaJob(job) {
 		return false
 	}
+	return isAsyncMediaProvider(provider)
+}
+
+func isAsyncMediaJob(job *domain.Job) bool {
+	if job == nil {
+		return false
+	}
+	return job.Modality == domain.ModalityImage || job.Modality == domain.ModalityVideo
+}
+
+func isAsyncMediaProvider(provider domain.ProviderName) bool {
 	switch provider {
 	case domain.ProviderAPIMart, domain.ProviderPoYo, domain.ProviderRunway:
 		return true

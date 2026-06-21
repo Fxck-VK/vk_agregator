@@ -278,6 +278,34 @@ func TestRouterParse(t *testing.T) {
 	}
 }
 
+func TestRouterProviderModelIDsStayFreeFormText(t *testing.T) {
+	r := New()
+
+	for _, input := range []string{
+		"deepinfra seedream",
+		"deepinfra seedream 4.5",
+		"bytedance/seedream-4.5",
+		"deepinfra sdxl",
+		"deepinfra sdxl turbo",
+		"stabilityai/sdxl-turbo",
+		"gpt-image-2",
+		"gpt_image_2",
+		"nano banana flash",
+		"nano-banana-2-new",
+		"kling-o3/standard",
+		"seedance-2-fast",
+		"minimax-hailuo-2.3",
+		"minimax-hailuo-2.3-fast",
+		"runway-gen-4.5",
+		"gen4_turbo",
+	} {
+		got := r.Parse(input)
+		if got.Type != domain.CommandTextAsk || got.Operation != domain.OperationTextGenerate || got.Modality != domain.ModalityText || got.Prompt != input {
+			t.Fatalf("provider/model-code alias %q must stay free-form text, got %+v", input, got)
+		}
+	}
+}
+
 func TestResultCreatesJob(t *testing.T) {
 	r := New()
 

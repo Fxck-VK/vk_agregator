@@ -19,3 +19,11 @@ func resolveMiniAppModel(op domain.OperationType, raw string) (miniAppModelSpec,
 func miniAppResponseModelID(model miniAppModelSpec) string {
 	return modelcatalog.MiniAppResponseModelID(model)
 }
+
+func normalizeMiniAppImageQuality(raw string) (string, bool) {
+	return modelcatalog.NormalizeImageQuality(raw)
+}
+
+func applyMiniAppImageQuality(model miniAppModelSpec, quality string) miniAppModelSpec {
+	return modelcatalog.ApplyImageQuality(model, quality)
+}
