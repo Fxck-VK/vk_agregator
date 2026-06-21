@@ -1217,6 +1217,9 @@ func (p *processor) buildRequest(ctx context.Context, job *domain.Job, attempt i
 			size = p.imageSize
 		}
 		resolution = pp.Resolution
+		if pp.Provider == domain.ProviderDeepInfra {
+			size = normalizeDeepInfraImageSize(size, resolution)
+		}
 	}
 	if job.Modality == domain.ModalityVideo {
 		routeSnapshot := pp.ResolvedVideoRoute
@@ -1298,6 +1301,46 @@ func (p *processor) buildRequest(ctx context.Context, job *domain.Job, attempt i
 		IdempotencyKey:       fmt.Sprintf("provider_submit:%s:%d", job.ID, attempt),
 		AttemptNo:            attempt,
 	}, nil
+}
+
+func normalizeDeepInfraImageSize(size, resolution string) string {
+	size = strings.TrimSpace(size)
+	if isPixelImageSize(size) {
+		return size
+	}
+	quality := strings.ToUpper(strings.TrimSpace(resolution))
+	if quality == "" {
+		quality = strings.ToUpper(size)
+	}
+	switch quality {
+	case "4K":
+		return "4096x4096"
+	case "2K":
+		return "2048x2048"
+	default:
+		return "1024x1024"
+	}
+}
+
+func isPixelImageSize(size string) bool {
+	parts := strings.Split(strings.ToLower(strings.TrimSpace(size)), "x")
+	if len(parts) != 2 {
+		return false
+	}
+	return isPositiveDecimal(parts[0]) && isPositiveDecimal(parts[1])
+}
+
+func isPositiveDecimal(value string) bool {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return false
+	}
+	for _, r := range value {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return strings.TrimLeft(value, "0") != ""
 }
 
 func safeVideoProviderParams(durationSec int, resolution, aspectRatio string, draft bool, route domain.VideoRouteSnapshot) json.RawMessage {

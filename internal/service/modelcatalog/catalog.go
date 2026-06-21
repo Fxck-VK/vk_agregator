@@ -18,6 +18,8 @@ const (
 	MiniAppImageGPTImage2       = "gpt_image_2"
 	MiniAppImageNanoBananaFlash = "nano_banana_flash"
 	MiniAppImageNanoBanana2     = "nano_banana_2"
+	MiniAppImageSeedream45      = "seedream_4_5"
+	MiniAppImageSDXLTurbo       = "sdxl_turbo"
 	MiniAppVideoKling           = "kling"
 
 	VKVideoPrunaAI = "prunaai"
@@ -109,22 +111,45 @@ var miniAppModels = map[domain.OperationType]map[string]Model{
 			MaxReferenceImages:     16,
 		},
 		MiniAppImageNanoBananaFlash: {
-			ModelID:   MiniAppImageNanoBananaFlash,
-			ModelName: "Nano Banana Flash",
+			ModelID:   MiniAppImageSDXLTurbo,
+			ModelName: "Stability AI SDXL Turbo",
 			Provider:  domain.ProviderDeepInfra,
 			ModelCode: ModelCodeSDXLTurbo,
 			ExposeID:  true,
+		},
+		MiniAppImageSeedream45: {
+			ModelID:                MiniAppImageSeedream45,
+			ModelName:              "ByteDance Seedream 4.5",
+			Provider:               domain.ProviderDeepInfra,
+			ModelCode:              ModelCodeSeedream45,
+			ExposeID:               true,
+			ProviderCostCredits:    10,
+			PriceMultiplier:        1,
+			MaxInternalCostCredits: 10,
+		},
+		MiniAppImageSDXLTurbo: {
+			ModelID:                MiniAppImageSDXLTurbo,
+			ModelName:              "Stability AI SDXL Turbo",
+			Provider:               domain.ProviderDeepInfra,
+			ModelCode:              ModelCodeSDXLTurbo,
+			ExposeID:               true,
+			ProviderCostCredits:    10,
+			PriceMultiplier:        1,
+			MaxInternalCostCredits: 10,
 		},
 		// Legacy public aliases remain accepted for older Mini App clients.
 		"sdxl": {
-			ModelID:   "sdxl",
-			ModelName: "Nano Banana Flash",
-			Provider:  domain.ProviderDeepInfra,
-			ModelCode: ModelCodeSDXLTurbo,
-			ExposeID:  true,
+			ModelID:                MiniAppImageSDXLTurbo,
+			ModelName:              "Stability AI SDXL Turbo",
+			Provider:               domain.ProviderDeepInfra,
+			ModelCode:              ModelCodeSDXLTurbo,
+			ExposeID:               true,
+			ProviderCostCredits:    10,
+			PriceMultiplier:        1,
+			MaxInternalCostCredits: 10,
 		},
 		"kandinsky": {
-			ModelID:                "kandinsky",
+			ModelID:                MiniAppImageNanoBananaPro,
 			ModelName:              "Nano Banana Pro",
 			Provider:               domain.ProviderAPIMart,
 			ModelCode:              ModelCodeGemini3ProImage,
@@ -156,7 +181,7 @@ var miniAppDefaultModel = map[domain.OperationType]string{
 
 var miniAppModelOrder = map[domain.OperationType][]string{
 	domain.OperationTextGenerate:  {MiniAppChatModelID},
-	domain.OperationImageGenerate: {MiniAppImageNanoBanana2, MiniAppImageNanoBananaPro, MiniAppImageGPTImage2, MiniAppImageNanoBananaFlash},
+	domain.OperationImageGenerate: {MiniAppImageNanoBanana2, MiniAppImageNanoBananaPro, MiniAppImageGPTImage2, MiniAppImageSeedream45, MiniAppImageSDXLTurbo},
 	domain.OperationVideoGenerate: {MiniAppVideoKling},
 }
 

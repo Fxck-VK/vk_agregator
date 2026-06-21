@@ -72,6 +72,14 @@ var menuScreens = map[domain.CommandType]menuScreen{
 		text:     fixedText(photoNanoBanana2Instruction),
 		keyboard: photoModeKeyboard,
 	},
+	domain.CommandMenuImageDeepInfraSeedream: {
+		text:     fixedText(photoDeepInfraSeedreamInstruction),
+		keyboard: photoModeKeyboard,
+	},
+	domain.CommandMenuImageDeepInfraSDXL: {
+		text:     fixedText(photoDeepInfraSDXLInstruction),
+		keyboard: photoModeKeyboard,
+	},
 	domain.CommandMenuImageGPTImage2: {
 		text:     fixedText(photoGPTImage2Instruction),
 		keyboard: photoModeKeyboard,
@@ -209,6 +217,8 @@ const (
 )
 
 const photoNanoBanana2Instruction = "Nano Banana 2 активен.\n\nНапишите описание изображения обычным сообщением.\n\nВ боте сейчас включен текст-в-фото; референс-фото подключим отдельным шагом."
+const photoDeepInfraSeedreamInstruction = "ByteDance Seedream 4.5 активен.\n\nНапишите описание изображения обычным сообщением."
+const photoDeepInfraSDXLInstruction = "Stability AI SDXL Turbo активен.\n\nНапишите описание изображения обычным сообщением."
 const photoGPTImage2Instruction = "GPT Image 2 активен.\n\nНапишите описание изображения обычным сообщением."
 const photoQualityFallbackText = "Выберите модель фото, затем качество генерации."
 
@@ -643,6 +653,8 @@ func (h *Handler) menuCommandEnabled(command domain.CommandType) bool {
 		return h.videoRouteCommandEnabled(command) && h.menuCommandEnabled(domain.CommandMenuVideoHailuo02)
 	case domain.CommandMenuImageText,
 		domain.CommandMenuImageNanoBanana2,
+		domain.CommandMenuImageDeepInfraSeedream,
+		domain.CommandMenuImageDeepInfraSDXL,
 		domain.CommandMenuImageGPTImage2,
 		domain.CommandMenuImageQuality1K,
 		domain.CommandMenuImageQuality2K,
@@ -1026,6 +1038,12 @@ func photoModeKeyboard() *vkdelivery.Keyboard {
 			},
 			{
 				button("GPT Image 2", domain.CommandMenuImageGPTImage2, "primary"),
+			},
+			{
+				button("ByteDance Seedream 4.5", domain.CommandMenuImageDeepInfraSeedream, "primary"),
+			},
+			{
+				button("Stability AI SDXL Turbo", domain.CommandMenuImageDeepInfraSDXL, "primary"),
 			},
 			{
 				button("⬅️ Назад", domain.CommandShowMenu, "secondary"),

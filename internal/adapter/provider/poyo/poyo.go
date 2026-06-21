@@ -422,6 +422,12 @@ func (r statusResponse) providerError() providerError {
 	if r.Data.ErrorMessage != nil && strings.TrimSpace(*r.Data.ErrorMessage) != "" {
 		return providerError{Message: strings.TrimSpace(*r.Data.ErrorMessage)}
 	}
+	if !r.Error.empty() {
+		return r.Error
+	}
+	if msg := strings.TrimSpace(r.Message); msg != "" {
+		return providerError{Message: msg}
+	}
 	return r.Error
 }
 
@@ -912,12 +918,23 @@ func classifyPoYoError(status int, code, typ, msg string) domain.ProviderErrorCl
 	switch {
 	case strings.Contains(lower, "balance") || strings.Contains(lower, "insufficient") || strings.Contains(lower, "quota") || strings.Contains(lower, "credit"):
 		return domain.ProviderErrInsufficientBalance
-	case strings.Contains(lower, "rate") || strings.Contains(lower, "too many"):
-		return domain.ProviderErrRateLimited
 	case strings.Contains(lower, "auth") || strings.Contains(lower, "unauthorized") || strings.Contains(lower, "forbidden") || strings.Contains(lower, "token") || strings.Contains(lower, "permission"):
 		return domain.ProviderErrAuthFailed
-	case strings.Contains(lower, "moderation") || strings.Contains(lower, "policy") || strings.Contains(lower, "safety") || strings.Contains(lower, "nsfw") || strings.Contains(lower, "sensitive") || strings.Contains(lower, "content rejected"):
+	case strings.Contains(lower, "moderation") ||
+		strings.Contains(lower, "policy") ||
+		strings.Contains(lower, "safety") ||
+		strings.Contains(lower, "nsfw") ||
+		strings.Contains(lower, "sensitive") ||
+		strings.Contains(lower, "content rejected") ||
+		strings.Contains(lower, "does not comply") ||
+		strings.Contains(lower, "platform regulation") ||
+		strings.Contains(lower, "prohibited") ||
+		strings.Contains(lower, "violat") ||
+		strings.Contains(lower, "filtered out") ||
+		strings.Contains(lower, "blocked by"):
 		return domain.ProviderErrContentRejected
+	case strings.Contains(lower, "rate") || strings.Contains(lower, "too many"):
+		return domain.ProviderErrRateLimited
 	case strings.Contains(lower, "timeout") || strings.Contains(lower, "timed out"):
 		return domain.ProviderErrTimeout
 	case strings.Contains(lower, "unavailable") || strings.Contains(lower, "overload") || strings.Contains(lower, "busy") || strings.Contains(lower, "capacity"):

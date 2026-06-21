@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -598,6 +599,39 @@ func TestPollProcessingAndFailedStatus(t *testing.T) {
 	}
 	if res.Status != domain.ProviderTaskFailed || res.ErrorClass != domain.ProviderErrContentRejected {
 		t.Fatalf("unexpected failed result: %+v", res)
+	}
+}
+
+func TestPollImagePolicyFilteredWithoutImagesIsContentRejected(t *testing.T) {
+	const message = "No images found in AI response. Unable to show the generated image. The image was filtered out because it violated Google's Generative AI Prohibited Use Policy."
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.URL.Path; got != "/tasks/task_filtered" {
+			t.Fatalf("path = %q", got)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"code":200,
+			"data":{
+				"id":"task_filtered",
+				"status":"completed",
+				"progress":100,
+				"error_message":` + strconv.Quote(message) + `,
+				"result":{"images":[]}
+			}
+		}`))
+	}))
+	defer srv.Close()
+
+	p := New(Config{APIKey: "test-key", BaseURL: srv.URL, HTTPClient: srv.Client()})
+	res, err := p.Poll(context.Background(), domain.ProviderTaskRef{Provider: domain.ProviderAPIMart, ExternalID: "task_filtered"})
+	if err != nil {
+		t.Fatalf("poll: %v", err)
+	}
+	if res.Status != domain.ProviderTaskFailed || res.ErrorClass != domain.ProviderErrContentRejected {
+		t.Fatalf("unexpected result: %+v", res)
+	}
+	if strings.Contains(string(res.Raw), "Google") || strings.Contains(string(res.Raw), "No images found") {
+		t.Fatalf("raw metadata leaked provider error text: %s", string(res.Raw))
 	}
 }
 

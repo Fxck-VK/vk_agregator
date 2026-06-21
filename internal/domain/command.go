@@ -44,6 +44,10 @@ const (
 	CommandMenuImageText CommandType = "menu.image.text"
 	// CommandMenuImageNanoBanana2 selects Nano Banana 2 image generation.
 	CommandMenuImageNanoBanana2 CommandType = "menu.image.nano_banana_2"
+	// CommandMenuImageDeepInfraSeedream selects DeepInfra Seedream image generation.
+	CommandMenuImageDeepInfraSeedream CommandType = "menu.image.deepinfra_seedream_4_5"
+	// CommandMenuImageDeepInfraSDXL selects DeepInfra SDXL Turbo image generation.
+	CommandMenuImageDeepInfraSDXL CommandType = "menu.image.deepinfra_sdxl_turbo"
 	// CommandMenuImageGPTImage2 selects GPT Image 2 image generation.
 	CommandMenuImageGPTImage2 CommandType = "menu.image.gpt_image_2"
 	// CommandMenuImageQuality1K selects 1K output quality for the active image model.
@@ -123,6 +127,8 @@ func (c CommandType) Valid() bool {
 		CommandMenuImage,
 		CommandMenuImageText,
 		CommandMenuImageNanoBanana2,
+		CommandMenuImageDeepInfraSeedream,
+		CommandMenuImageDeepInfraSDXL,
 		CommandMenuImageGPTImage2,
 		CommandMenuImageQuality1K,
 		CommandMenuImageQuality2K,

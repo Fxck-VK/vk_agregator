@@ -1466,6 +1466,12 @@ func TestPhotoMenuButtonSendsInstructionNoJob(t *testing.T) {
 	if !strings.Contains(sent[0].Keyboard, "GPT Image 2") {
 		t.Fatalf("expected GPT Image 2 button in photo keyboard: %q", sent[0].Keyboard)
 	}
+	if !strings.Contains(sent[0].Keyboard, "ByteDance Seedream 4.5") {
+		t.Fatalf("expected ByteDance Seedream 4.5 button in photo keyboard: %q", sent[0].Keyboard)
+	}
+	if !strings.Contains(sent[0].Keyboard, "Stability AI SDXL Turbo") {
+		t.Fatalf("expected Stability AI SDXL Turbo button in photo keyboard: %q", sent[0].Keyboard)
+	}
 	if strings.Contains(sent[0].Keyboard, "Фото по тексту") {
 		t.Fatalf("photo text button should be hidden because photo menu already enables text-to-image mode: keyboard=%q", sent[0].Keyboard)
 	}
@@ -1607,6 +1613,73 @@ func TestPhotoNanoBanana2ModeCreatesPoYoImageJob(t *testing.T) {
 	sent := control.Sent()
 	if len(sent) != 2 || !strings.Contains(sent[0].Text, "Nano Banana 2") || !strings.Contains(sent[0].Text, "Цена: 24 кредитов") || sent[1].Text != "НейроХаб рисует..." {
 		t.Fatalf("unexpected nano banana 2 responses: %+v", sent)
+	}
+}
+
+func TestPhotoDeepInfraSeedreamQualityFlowCreatesImageJob(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	h := newHarnessWithControl(control)
+	menu := `{
+		"type":"message_new","group_id":1,"event_id":"evt-photo-seedream-on","secret":"s3cr3t",
+		"object":{"message":{"from_id":5633,"peer_id":5633,"text":"ByteDance Seedream 4.5","payload":"{\"command\":\"menu.image.deepinfra_seedream_4_5\"}"}}
+	}`
+	if rec := h.post(menu); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected menu response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	quality := `{
+		"type":"message_new","group_id":1,"event_id":"evt-photo-seedream-quality","secret":"s3cr3t",
+		"object":{"message":{"from_id":5633,"peer_id":5633,"text":"1K","payload":"{\"command\":\"menu.image.quality.1k\"}"}}
+	}`
+	if rec := h.post(quality); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected quality response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	prompt := `{
+		"type":"message_new","group_id":1,"event_id":"evt-photo-seedream-prompt","secret":"s3cr3t",
+		"object":{"message":{"from_id":5633,"peer_id":5633,"text":"safe editorial product image"}}
+	}`
+	if rec := h.post(prompt); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected prompt response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	ctx := context.Background()
+	user, err := h.users.GetByVKUserID(ctx, 5633)
+	if err != nil {
+		t.Fatalf("user not created: %v", err)
+	}
+	cmds, _ := h.cmds.ListByUser(ctx, user.ID, 10, 0)
+	if !hasCommandTypes(cmds, domain.CommandMenuImageDeepInfraSeedream, domain.CommandMenuImageQuality1K, domain.CommandImageGenerate) {
+		t.Fatalf("unexpected command types: %+v", commandTypes(cmds))
+	}
+	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
+	if len(jobs) != 1 || jobs[0].CostEstimate != 10 || jobs[0].CostReserved != 10 {
+		t.Fatalf("seedream should create one reserved image job, jobs=%+v", jobs)
+	}
+	var params struct {
+		ModelID      string `json:"model_id"`
+		ModelName    string `json:"model_name"`
+		Provider     string `json:"provider"`
+		ModelCode    string `json:"model_code"`
+		Size         string `json:"size"`
+		Resolution   string `json:"resolution"`
+		ImageQuality string `json:"image_quality"`
+	}
+	if err := json.Unmarshal(jobs[0].Params, &params); err != nil {
+		t.Fatalf("decode job params: %v", err)
+	}
+	if params.ModelID != "seedream_4_5" ||
+		params.ModelName != "ByteDance Seedream 4.5" ||
+		params.Provider != "deepinfra" ||
+		params.ModelCode != "ByteDance/Seedream-4.5" ||
+		params.Size != "1024x1024" ||
+		params.Resolution != "1K" ||
+		params.ImageQuality != "1K" {
+		t.Fatalf("unexpected seedream job params: %+v", params)
+	}
+	sent := control.Sent()
+	if len(sent) != 2 || !strings.Contains(sent[0].Text, "ByteDance Seedream 4.5") || !strings.Contains(sent[0].Text, "Цена: 10 кредитов") {
+		t.Fatalf("unexpected seedream responses: %+v", sent)
 	}
 }
 

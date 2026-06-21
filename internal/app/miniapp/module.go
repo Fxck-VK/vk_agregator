@@ -153,6 +153,7 @@ func miniAppImageModels(cfg config.Config) []miniappapi.ImageModelDTO {
 	out := make([]miniappapi.ImageModelDTO, 0, len(models))
 	apimartReady := apimartProviderReady(cfg)
 	poyoReady := poyoImageReady(cfg)
+	deepInfraReady := deepInfraImageReady(cfg)
 	for _, model := range models {
 		if model.ModelID == modelcatalog.MiniAppImageNanoBananaPro && !cfg.FeatureImageModelNanoBananaProEnabled {
 			continue
@@ -167,6 +168,9 @@ func miniAppImageModels(cfg config.Config) []miniappapi.ImageModelDTO {
 			continue
 		}
 		if model.Provider == domain.ProviderPoYo && !poyoReady {
+			continue
+		}
+		if model.Provider == domain.ProviderDeepInfra && !deepInfraReady {
 			continue
 		}
 		modelID := modelcatalog.MiniAppResponseModelID(model)
@@ -193,6 +197,11 @@ func poyoImageReady(cfg config.Config) bool {
 	return cfg.PoYoProviderEnabled &&
 		strings.TrimSpace(cfg.PoYoAPIKey) != "" &&
 		strings.TrimSpace(cfg.PoYoBaseURL) != ""
+}
+
+func deepInfraImageReady(cfg config.Config) bool {
+	return strings.TrimSpace(cfg.DeepInfraAPIKey) != "" &&
+		strings.TrimSpace(cfg.DeepInfraBaseURL) != ""
 }
 
 func miniAppVideoRoutes(catalog *videorouter.Catalog) []miniappapi.VideoRouteDTO {

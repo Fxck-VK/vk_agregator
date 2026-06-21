@@ -123,6 +123,23 @@ const IMAGE_MODE_COPY: Record<string, Omit<CreateMode, "modalityId" | "modelId" 
     placeholders: ["A bright clean illustration with simple composition and crisp details..."],
     quickIdeas: ["Fast concept", "Icon idea", "Simple poster", "Avatar"],
   },
+  seedream_4_5: {
+    subtitle: "ByteDance image model",
+    color: "#06b6d4",
+    glow: "rgba(6,182,212,0.32)",
+    placeholders: [
+      "A polished editorial image with realistic lighting and clean composition...",
+      "A cinematic product scene with premium materials and accurate details...",
+    ],
+    quickIdeas: ["Editorial shot", "Product scene", "Character concept", "Poster"],
+  },
+  sdxl_turbo: {
+    subtitle: "Stability AI fast image model",
+    color: "#f59e0b",
+    glow: "rgba(245,158,11,0.3)",
+    placeholders: ["A bright clean concept image with simple composition and crisp details..."],
+    quickIdeas: ["Fast concept", "Icon idea", "Simple poster", "Avatar"],
+  },
   gpt_image_2: {
     subtitle: "Text or image to image",
     color: "#f43f5e",

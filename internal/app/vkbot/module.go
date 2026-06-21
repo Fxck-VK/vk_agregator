@@ -192,8 +192,10 @@ func menuFeatures(cfg config.Config) vkinbound.MenuFeatureFlags {
 		cfg.PoYoProviderEnabled &&
 		strings.TrimSpace(cfg.PoYoAPIKey) != "" &&
 		strings.TrimSpace(cfg.PoYoBaseURL) != ""
+	deepInfraImageReady := strings.TrimSpace(cfg.DeepInfraAPIKey) != "" &&
+		strings.TrimSpace(cfg.DeepInfraBaseURL) != ""
 
-	disableWhenFalse(cfg.VKMenuImageEnabled && (apimartNanoBananaProReady || apimartGPTImage2Ready || poyoImageReady), domain.CommandMenuImage)
+	disableWhenFalse(cfg.VKMenuImageEnabled && (apimartNanoBananaProReady || apimartGPTImage2Ready || poyoImageReady || deepInfraImageReady), domain.CommandMenuImage)
 	disableWhenFalse(apimartNanoBananaProReady, domain.CommandMenuImageText)
 	disableWhenFalse(cfg.VKMenuGPTEnabled, domain.CommandMenuText)
 	disableWhenFalse(cfg.VKMenuStudentsEnabled, domain.CommandMenuStudents)
@@ -225,6 +227,7 @@ func menuFeatures(cfg config.Config) vkinbound.MenuFeatureFlags {
 	enableWhenTrue(cfg.FeatureVideoRouteHailuo23StandardEnabled, domain.CommandMenuVideoHailuo02Standard)
 	enableWhenTrue(cfg.FeatureVideoRouteHailuo23FastEnabled, domain.CommandMenuVideoHailuo02Fast)
 	disableWhenFalse(poyoImageReady, domain.CommandMenuImageNanoBanana2)
+	disableWhenFalse(deepInfraImageReady, domain.CommandMenuImageDeepInfraSeedream, domain.CommandMenuImageDeepInfraSDXL)
 	disableWhenFalse(apimartGPTImage2Ready, domain.CommandMenuImageGPTImage2)
 	disableWhenFalse(cfg.VKMenuImageReferenceEnabled && apimartNanoBananaProReady, domain.CommandMenuImageReference)
 	disableWhenFalse(cfg.VKMenuStudentsSolverEnabled, domain.CommandMenuStudentSolver)

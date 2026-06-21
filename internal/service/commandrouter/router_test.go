@@ -186,6 +186,16 @@ func TestRouterParse(t *testing.T) {
 			wantType: domain.CommandMenuImageGPTImage2,
 		},
 		{
+			name:     "vk photo seedream 4.5 button",
+			input:    "ByteDance Seedream 4.5",
+			wantType: domain.CommandMenuImageDeepInfraSeedream,
+		},
+		{
+			name:     "vk photo sdxl turbo button",
+			input:    "Stability AI SDXL Turbo",
+			wantType: domain.CommandMenuImageDeepInfraSDXL,
+		},
+		{
 			name:     "vk photo quality 2k button",
 			input:    "2K",
 			wantType: domain.CommandMenuImageQuality2K,

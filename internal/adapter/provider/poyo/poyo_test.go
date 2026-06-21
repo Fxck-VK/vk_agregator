@@ -322,22 +322,47 @@ func TestPollCompletedImageReturnsOutputAndSanitizesRaw(t *testing.T) {
 }
 
 func TestPollFailureNormalizesModeration(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"code":200,"data":{"task_id":"task_1","status":"failed","error_message":"policy rejected prompt"}}`))
-	}))
-	defer srv.Close()
+	cases := []struct {
+		name string
+		body string
+		leak string
+	}{
+		{
+			name: "policy error message",
+			body: `{"code":200,"data":{"task_id":"task_1","status":"failed","error_message":"policy rejected prompt"}}`,
+			leak: "policy rejected prompt",
+		},
+		{
+			name: "platform regulations message",
+			body: `{"code":200,"data":{"task_id":"task_1","status":"failed","error_message":"The content does not comply with the platform regulations. Please modify it and try again."}}`,
+			leak: "platform regulations",
+		},
+		{
+			name: "top level status message",
+			body: `{"code":200,"task_id":"task_1","status":"failed","message":"The content does not comply with the platform regulations."}`,
+			leak: "platform regulations",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(tc.body))
+			}))
+			defer srv.Close()
 
-	provider := New(Config{APIKey: "test-key", BaseURL: srv.URL, HTTPClient: srv.Client()})
-	result, err := provider.Poll(context.Background(), domain.ProviderTaskRef{Provider: domain.ProviderPoYo, ExternalID: "task_1"})
-	if err != nil {
-		t.Fatalf("poll: %v", err)
-	}
-	if result.Status != domain.ProviderTaskFailed || result.ErrorClass != domain.ProviderErrContentRejected {
-		t.Fatalf("bad result: %+v", result)
-	}
-	if strings.Contains(string(result.Raw), "policy rejected prompt") {
-		t.Fatalf("raw metadata leaked provider error text: %s", string(result.Raw))
+			provider := New(Config{APIKey: "test-key", BaseURL: srv.URL, HTTPClient: srv.Client()})
+			result, err := provider.Poll(context.Background(), domain.ProviderTaskRef{Provider: domain.ProviderPoYo, ExternalID: "task_1"})
+			if err != nil {
+				t.Fatalf("poll: %v", err)
+			}
+			if result.Status != domain.ProviderTaskFailed || result.ErrorClass != domain.ProviderErrContentRejected {
+				t.Fatalf("bad result: %+v", result)
+			}
+			if strings.Contains(string(result.Raw), tc.leak) {
+				t.Fatalf("raw metadata leaked provider error text: %s", string(result.Raw))
+			}
+		})
 	}
 }
 

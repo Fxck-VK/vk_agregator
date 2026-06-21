@@ -1421,6 +1421,44 @@ func TestGenerationImageRequestCarriesProviderFromParams(t *testing.T) {
 	}
 }
 
+func TestGenerationImageRequestNormalizesDeepInfraQualitySize(t *testing.T) {
+	provider := &captureImageProvider{name: domain.ProviderDeepInfra}
+	h := newHarnessWithProvider(t, provider, func(d *worker.Deps) {
+		d.ImageSize = "2K"
+	})
+	ctx := context.Background()
+	params, _ := json.Marshal(map[string]any{
+		"prompt":     "a cat",
+		"provider":   string(domain.ProviderDeepInfra),
+		"resolution": "2K",
+	})
+	job := &domain.Job{
+		ID:             uuid.New(),
+		UserID:         uuid.New(),
+		OperationType:  domain.OperationImageGenerate,
+		Modality:       domain.ModalityImage,
+		Status:         domain.JobStatusQueued,
+		IdempotencyKey: "job:" + uuid.NewString(),
+		CorrelationID:  "corr",
+		CostReserved:   10,
+		Params:         params,
+	}
+	if err := h.jobs.Create(ctx, job); err != nil {
+		t.Fatalf("create job: %v", err)
+	}
+
+	if err := h.gen.Process(ctx, taskFor(job)); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+
+	if provider.last.Size != "2048x2048" {
+		t.Fatalf("size = %q, want 2048x2048", provider.last.Size)
+	}
+	if provider.last.Resolution != "2K" {
+		t.Fatalf("resolution = %q, want 2K", provider.last.Resolution)
+	}
+}
+
 func TestBuildRequest_ResolvesReferenceInputURLs(t *testing.T) {
 	provider := &captureImageProvider{}
 	h := newHarnessWithProvider(t, provider, nil)

@@ -905,7 +905,7 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 			jp.ModelName = photoSelection.Model.ModelName
 			jp.Provider = string(photoSelection.Model.Provider)
 			jp.ModelCode = photoSelection.Model.ModelCode
-			jp.Size = "1:1"
+			jp.Size = imageSizeForSelection(photoSelection)
 			jp.Resolution = photoSelection.Quality
 			jp.ImageQuality = photoSelection.Quality
 		}
@@ -1098,7 +1098,11 @@ func (h *Handler) sendPhotoQualitySelection(ctx context.Context, modelID, idemKe
 
 func (h *Handler) sendPhotoPromptInstruction(ctx context.Context, selection photoDialogSelection, idemKey string, command domain.CommandType, peerID int64, allowEdit bool) error {
 	price := h.imagePriceCredits(selection.Model)
-	text := fmt.Sprintf("%s · %s\n\nЦена: %d кредитов.\n\nВведите описание изображения обычным сообщением.", selection.Model.ModelName, selection.Quality, price)
+	waitHint := imageModelWaitHint(selection.Model)
+	if waitHint != "" {
+		waitHint = "\nОжидание: " + waitHint + "."
+	}
+	text := fmt.Sprintf("%s · %s\n\nЦена: %d кредитов.%s\n\nВведите описание изображения обычным сообщением.", selection.Model.ModelName, selection.Quality, price, waitHint)
 	msg := vkdelivery.Message{
 		Text:     text,
 		Keyboard: photoPromptKeyboard(),
@@ -1123,6 +1127,35 @@ func (h *Handler) deliverPhotoControl(ctx context.Context, command domain.Comman
 		h.setActiveMenu(peerID, result.MessageID)
 	}
 	return err
+}
+
+func imageModelWaitHint(model modelcatalog.Model) string {
+	switch model.ModelID {
+	case modelcatalog.MiniAppImageGPTImage2:
+		return "обычно 30-60 секунд, при нагрузке дольше"
+	case modelcatalog.MiniAppImageNanoBananaPro:
+		return "обычно 1-3 минуты, зависит от проверки Google"
+	case modelcatalog.MiniAppImageNanoBanana2:
+		return "обычно 1-2 минуты"
+	case modelcatalog.MiniAppImageSeedream45, modelcatalog.MiniAppImageSDXLTurbo:
+		return "обычно до 1 минуты"
+	default:
+		return "обычно 1-2 минуты"
+	}
+}
+
+func imageSizeForSelection(selection photoDialogSelection) string {
+	if selection.Model.Provider == domain.ProviderDeepInfra {
+		switch selection.Quality {
+		case modelcatalog.ImageQuality2K:
+			return "2048x2048"
+		case modelcatalog.ImageQuality4K:
+			return "4096x4096"
+		default:
+			return "1024x1024"
+		}
+	}
+	return "1:1"
 }
 
 func (h *Handler) photoQualityOptions(model modelcatalog.Model) []photoQualityOption {
@@ -1275,6 +1308,10 @@ func photoModelIDFromCommand(t domain.CommandType) (string, bool) {
 	switch t {
 	case domain.CommandMenuImageNanoBanana2:
 		return modelcatalog.MiniAppImageNanoBanana2, true
+	case domain.CommandMenuImageDeepInfraSeedream:
+		return modelcatalog.MiniAppImageSeedream45, true
+	case domain.CommandMenuImageDeepInfraSDXL:
+		return modelcatalog.MiniAppImageSDXLTurbo, true
 	case domain.CommandMenuImageGPTImage2:
 		return modelcatalog.MiniAppImageGPTImage2, true
 	case domain.CommandMenuImageText:

@@ -2410,7 +2410,7 @@ func TestHandler_Estimate_OKNoJobNoReservation(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("invalid response json: %v", err)
 	}
-	if resp.Operation != "image_generate" || resp.ModelID != "sdxl" {
+	if resp.Operation != "image_generate" || resp.ModelID != "sdxl_turbo" {
 		t.Fatalf("unexpected operation/model response: %+v", resp)
 	}
 	if resp.CostEstimate != 10 {

@@ -291,7 +291,7 @@ func (p *Provider) Poll(ctx context.Context, ref domain.ProviderTaskRef) (domain
 	if decoded.Code != 200 {
 		errValue := decoded.Error
 		if errValue.empty() {
-			errValue = decoded.Data.Error
+			errValue = decoded.Data.providerError()
 		}
 		return domain.ProviderTaskResult{}, apiEnvelopeError(decoded.Code, errValue, decoded.Message)
 	}
@@ -300,6 +300,15 @@ func (p *Provider) Poll(ctx context.Context, ref domain.ProviderTaskRef) (domain
 	case domain.ProviderTaskSucceeded:
 		outputs := decoded.Data.Result.MediaURLs()
 		if len(outputs) == 0 {
+			if perr := decoded.Data.providerError(); !perr.empty() {
+				class := classifyAPIMartError(0, perr.codeString(), perr.Type, perr.Message)
+				return domain.ProviderTaskResult{
+					Status:       domain.ProviderTaskFailed,
+					ErrorClass:   class,
+					ErrorMessage: providerErrorMessage(class, "apimart task failed"),
+					Raw:          sanitizedTaskMetadata(decoded.Data),
+				}, nil
+			}
 			return domain.ProviderTaskResult{
 				Status:       domain.ProviderTaskFailed,
 				ErrorClass:   domain.ProviderErrOutputDownloadFailed,
@@ -309,7 +318,8 @@ func (p *Provider) Poll(ctx context.Context, ref domain.ProviderTaskRef) (domain
 		raw := sanitizedTaskMetadata(decoded.Data)
 		return domain.ProviderTaskResult{Status: status, OutputURLs: outputs, Raw: raw}, nil
 	case domain.ProviderTaskFailed:
-		class := classifyAPIMartError(0, decoded.Data.Error.codeString(), decoded.Data.Error.Type, decoded.Data.Error.Message)
+		perr := decoded.Data.providerError()
+		class := classifyAPIMartError(0, perr.codeString(), perr.Type, perr.Message)
 		return domain.ProviderTaskResult{
 			Status:       domain.ProviderTaskFailed,
 			ErrorClass:   class,
@@ -393,6 +403,21 @@ type taskData struct {
 	EstimatedTime int           `json:"estimated_time,omitempty"`
 	ActualTime    int           `json:"actual_time,omitempty"`
 	Error         providerError `json:"error,omitempty"`
+	Message       string        `json:"message,omitempty"`
+	ErrorMessage  string        `json:"error_message,omitempty"`
+}
+
+func (d taskData) providerError() providerError {
+	if !d.Error.empty() {
+		return d.Error
+	}
+	if msg := strings.TrimSpace(d.ErrorMessage); msg != "" {
+		return providerError{Message: msg}
+	}
+	if msg := strings.TrimSpace(d.Message); msg != "" {
+		return providerError{Message: msg}
+	}
+	return providerError{}
 }
 
 type taskResult struct {
@@ -1017,12 +1042,23 @@ func classifyAPIMartError(status int, code, typ, msg string) domain.ProviderErro
 	switch {
 	case strings.Contains(lower, "balance") || strings.Contains(lower, "insufficient") || strings.Contains(lower, "quota"):
 		return domain.ProviderErrInsufficientBalance
-	case strings.Contains(lower, "rate") || strings.Contains(lower, "too many"):
-		return domain.ProviderErrRateLimited
 	case strings.Contains(lower, "auth") || strings.Contains(lower, "unauthorized") || strings.Contains(lower, "forbidden") || strings.Contains(lower, "token") || strings.Contains(lower, "permission"):
 		return domain.ProviderErrAuthFailed
-	case strings.Contains(lower, "moderation") || strings.Contains(lower, "policy") || strings.Contains(lower, "safety") || strings.Contains(lower, "nsfw") || strings.Contains(lower, "sensitive") || strings.Contains(lower, "content rejected"):
+	case strings.Contains(lower, "moderation") ||
+		strings.Contains(lower, "policy") ||
+		strings.Contains(lower, "safety") ||
+		strings.Contains(lower, "nsfw") ||
+		strings.Contains(lower, "sensitive") ||
+		strings.Contains(lower, "content rejected") ||
+		strings.Contains(lower, "does not comply") ||
+		strings.Contains(lower, "platform regulation") ||
+		strings.Contains(lower, "prohibited") ||
+		strings.Contains(lower, "violat") ||
+		strings.Contains(lower, "filtered out") ||
+		strings.Contains(lower, "blocked by"):
 		return domain.ProviderErrContentRejected
+	case strings.Contains(lower, "rate") || strings.Contains(lower, "too many"):
+		return domain.ProviderErrRateLimited
 	case strings.Contains(lower, "timeout") || strings.Contains(lower, "timed out"):
 		return domain.ProviderErrTimeout
 	case strings.Contains(lower, "unavailable") || strings.Contains(lower, "overload") || strings.Contains(lower, "busy") || strings.Contains(lower, "capacity"):
@@ -1077,11 +1113,11 @@ func sanitizedTaskMetadata(data taskData) json.RawMessage {
 		"estimated_time": data.EstimatedTime,
 		"actual_time":    data.ActualTime,
 	}
-	if data.Error.Message != "" || data.Error.Type != "" || len(data.Error.Code) > 0 {
-		class := classifyAPIMartError(0, data.Error.codeString(), data.Error.Type, data.Error.Message)
+	if perr := data.providerError(); !perr.empty() {
+		class := classifyAPIMartError(0, perr.codeString(), perr.Type, perr.Message)
 		metadata["error"] = map[string]any{
-			"code":    data.Error.codeString(),
-			"type":    data.Error.Type,
+			"code":    perr.codeString(),
+			"type":    perr.Type,
 			"message": providerErrorMessage(class, "apimart task failed"),
 		}
 	}

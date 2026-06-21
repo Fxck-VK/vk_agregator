@@ -86,6 +86,10 @@ func (r *Router) Parse(rawText string) Result {
 		return Result{Type: domain.CommandMenuImageNanoBanana2}
 	case "nano banana pro", "nano banana pro image":
 		return Result{Type: domain.CommandMenuImageText}
+	case "seedream 4.5", "seedream", "deepinfra seedream", "deepinfra seedream 4.5", "bytedance seedream 4.5", "bytedance/seedream-4.5":
+		return Result{Type: domain.CommandMenuImageDeepInfraSeedream}
+	case "sdxl turbo", "sdxl", "deepinfra sdxl", "deepinfra sdxl turbo", "nano banana flash", "stability ai sdxl turbo", "stabilityai/sdxl-turbo":
+		return Result{Type: domain.CommandMenuImageDeepInfraSDXL}
 	case "gpt image 2", "gpt-image-2", "gpt_image_2":
 		return Result{Type: domain.CommandMenuImageGPTImage2}
 	case "1k", "1k quality", "качество 1k":
