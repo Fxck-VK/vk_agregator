@@ -79,6 +79,17 @@ function Get-BoolEnv {
     return $raw -in @("1", "true", "yes", "on", "enabled")
 }
 
+function Test-UsesLocalDataServices {
+    param([Parameter(Mandatory = $true)][hashtable]$Values)
+
+    $defaultMode = (Get-EnvValue -Values $Values -Name "DATA_SERVICES_MODE" -Default "local").ToLowerInvariant()
+    $postgresMode = (Get-EnvValue -Values $Values -Name "POSTGRES_MODE" -Default $defaultMode).ToLowerInvariant()
+    $redisMode = (Get-EnvValue -Values $Values -Name "REDIS_MODE" -Default $defaultMode).ToLowerInvariant()
+    $s3Mode = (Get-EnvValue -Values $Values -Name "S3_MODE" -Default $defaultMode).ToLowerInvariant()
+
+    return $postgresMode -eq "local" -or $redisMode -eq "local" -or $s3Mode -eq "local"
+}
+
 function Test-PlaceholderValue {
     param([string]$Value)
 
@@ -371,20 +382,33 @@ function Show-PortStatus {
 }
 
 function Show-CloudflaredStatus {
+    $fallbackProc = Get-Process -Name "cloudflared" -ErrorAction SilentlyContinue | Select-Object -First 1
     $pidFile = Join-Path $script:RuntimeDir "cloudflared.pid"
     if (-not (Test-Path -LiteralPath $pidFile)) {
+        if ($null -ne $fallbackProc) {
+            Write-StatusLine -State "OK" -Name "Tunnel" -Detail "cloudflared process detected pid=$($fallbackProc.Id)"
+            return $true
+        }
         Write-StatusLine -State "WARN" -Name "Tunnel" -Detail "cloudflared pid file is missing"
         return $false
     }
 
     $raw = Get-Content -LiteralPath $pidFile -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($raw -notmatch '^\d+$') {
+        if ($null -ne $fallbackProc) {
+            Write-StatusLine -State "OK" -Name "Tunnel" -Detail "cloudflared process detected pid=$($fallbackProc.Id)"
+            return $true
+        }
         Write-StatusLine -State "WARN" -Name "Tunnel" -Detail "cloudflared pid file is invalid"
         return $false
     }
 
     $proc = Get-Process -Id ([int]$raw) -ErrorAction SilentlyContinue
     if ($null -eq $proc) {
+        if ($null -ne $fallbackProc) {
+            Write-StatusLine -State "OK" -Name "Tunnel" -Detail "cloudflared process detected pid=$($fallbackProc.Id); dev pid file is stale"
+            return $true
+        }
         Write-StatusLine -State "WARN" -Name "Tunnel" -Detail "cloudflared process is not running"
         return $false
     }
@@ -463,6 +487,9 @@ try {
         "--env-file", $resolvedEnvFile,
         "-f", "docker-compose.prod.yml"
     )
+    if (Test-UsesLocalDataServices -Values $envValues) {
+        $script:ComposeArgs += @("-f", "docker-compose.data.yml")
+    }
 
     Write-Host "== DEV stack status"
     Write-Host "Repo:        $script:RepoRoot"

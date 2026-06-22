@@ -281,6 +281,17 @@ function Restore-ProcessEnv {
     }
 }
 
+function Test-UsesLocalDataServices {
+    param([Parameter(Mandatory = $true)][hashtable]$Values)
+
+    $defaultMode = (Get-EnvValue -Values $Values -Name "DATA_SERVICES_MODE" -Default "local").ToLowerInvariant()
+    $postgresMode = (Get-EnvValue -Values $Values -Name "POSTGRES_MODE" -Default $defaultMode).ToLowerInvariant()
+    $redisMode = (Get-EnvValue -Values $Values -Name "REDIS_MODE" -Default $defaultMode).ToLowerInvariant()
+    $s3Mode = (Get-EnvValue -Values $Values -Name "S3_MODE" -Default $defaultMode).ToLowerInvariant()
+
+    return $postgresMode -eq "local" -or $redisMode -eq "local" -or $s3Mode -eq "local"
+}
+
 function Test-DockerRuntime {
     if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
         throw "Docker CLI is not installed or not in PATH"
@@ -401,7 +412,10 @@ function Stop-Cloudflared {
     }
     $raw = Get-Content -LiteralPath $pidFile -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($raw -match '^\d+$') {
-        Stop-Process -Id ([int]$raw) -Force -ErrorAction SilentlyContinue
+        $proc = Get-Process -Id ([int]$raw) -ErrorAction SilentlyContinue
+        if ($null -ne $proc -and $proc.ProcessName -eq "cloudflared") {
+            Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+        }
     }
     Remove-Item -LiteralPath $pidFile -Force -ErrorAction SilentlyContinue
 }
@@ -446,6 +460,11 @@ function Start-Cloudflared {
     }
 
     Stop-Cloudflared
+    $existingCloudflared = Get-Process -Name "cloudflared" -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($null -ne $existingCloudflared) {
+        return $existingCloudflared.Id
+    }
+
     New-Item -ItemType Directory -Force -Path $script:RuntimeDir | Out-Null
     $stdout = Join-Path $script:RuntimeDir "cloudflared-live.log"
     $stderr = Join-Path $script:RuntimeDir "cloudflared-live.err"
@@ -489,13 +508,18 @@ function Start-Cloudflared {
             ) + $argumentList
         }
 
-        $proc = Start-Process -FilePath $filePath `
-            -ArgumentList $argumentList `
-            -WorkingDirectory $script:RepoRoot `
-            -WindowStyle Hidden `
-            -RedirectStandardOutput $stdout `
-            -RedirectStandardError $stderr `
-            -PassThru
+        $startProcessParams = @{
+            FilePath               = $filePath
+            ArgumentList           = $argumentList
+            WorkingDirectory       = $script:RepoRoot
+            RedirectStandardOutput = $stdout
+            RedirectStandardError  = $stderr
+            PassThru               = $true
+        }
+        if ($PSVersionTable.PSEdition -eq "Desktop" -or $IsWindows) {
+            $startProcessParams["WindowStyle"] = "Hidden"
+        }
+        $proc = Start-Process @startProcessParams
     } finally {
         [Environment]::SetEnvironmentVariable("TUNNEL_TOKEN", $oldTunnelToken, "Process")
         [Environment]::SetEnvironmentVariable("CLOUDFLARED_TUNNEL_TOKEN", $oldCloudflaredTunnelToken, "Process")
@@ -535,6 +559,9 @@ try {
         "--env-file", $resolvedEnvFile,
         "-f", "docker-compose.prod.yml"
     )
+    if (Test-UsesLocalDataServices -Values $envValues) {
+        $script:ComposeArgs += @("-f", "docker-compose.data.yml")
+    }
 
     if ($StatusOnly) {
         Invoke-DockerCompose ps
@@ -583,8 +610,8 @@ try {
         Invoke-DockerCompose @args
     }
 
-    $runtimeServices = @("api", "worker", "provider-webhook", "miniapp", "reverse-proxy")
-    Invoke-Step "start API/worker/provider-webhook/miniapp/reverse-proxy" {
+    $runtimeServices = @("api", "worker", "provider-webhook", "miniapp")
+    Invoke-Step "start API/worker/provider-webhook/miniapp" {
         $args = @("up", "-d")
         if ($SkipBuild) {
             $args += "--no-build"
@@ -598,6 +625,11 @@ try {
     foreach ($service in $runtimeServices) {
         Wait-ComposeServiceHealthy -Service $service -TimeoutSeconds $TimeoutSeconds
     }
+
+    Invoke-Step "start reverse-proxy" {
+        Invoke-DockerCompose @("up", "-d", "--force-recreate", "--no-deps", "reverse-proxy")
+    }
+    Wait-ComposeServiceHealthy -Service "reverse-proxy" -TimeoutSeconds $TimeoutSeconds
 
     $reverseProxyPort = Get-EnvValue -Values $envValues -Name "REVERSE_PROXY_HTTP_PORT" -Default "8088"
     Wait-Http -Name "API health" -Url "http://127.0.0.1:8080/health" -ExpectedStatuses @(200) -TimeoutSeconds $TimeoutSeconds
@@ -616,7 +648,7 @@ try {
             $protocol = Get-EnvValue -Values $envValues -Name "CLOUDFLARED_PROTOCOL" -Default "http2"
             $edgeIPVersion = Get-EnvValue -Values $envValues -Name "CLOUDFLARED_EDGE_IP_VERSION" -Default "4"
             $cloudflaredPid = Start-Cloudflared -Token $token -Protocol $protocol -EdgeIPVersion $edgeIPVersion
-            Write-Host "cloudflared started pid=$cloudflaredPid"
+            Write-Host "cloudflared ready pid=$cloudflaredPid"
         }
 
         if (-not $SkipPublicSmoke) {
