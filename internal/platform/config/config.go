@@ -436,6 +436,12 @@ func (c Config) IsProduction() bool {
 	return isProductionEnv(c.Env)
 }
 
+// IsLoadTest reports whether the service runs in the synthetic load-test
+// contour. Load tests must stay mock-backed and isolated from paid providers.
+func (c Config) IsLoadTest() bool {
+	return isLoadTestEnv(c.Env)
+}
+
 // EffectiveMediaVideoProbePolicy returns the normalized worker probe policy.
 func (c Config) EffectiveMediaVideoProbePolicy() string {
 	if policy := normalizeConfigToken(c.MediaVideoProbePolicy); policy != "" {
@@ -548,6 +554,9 @@ func (c Config) Validate() error {
 	}
 	rawProviderVideoPolicy := c.EffectiveMediaDeliverRawProviderVideo()
 	if err := validateMediaDeliverRawProviderVideo(rawProviderVideoPolicy); err != nil {
+		return err
+	}
+	if err := c.validateLoadTestSafeModes(); err != nil {
 		return err
 	}
 	if c.IsProduction() && probePolicy != MediaVideoProbePolicyProbeRequired {
@@ -818,6 +827,43 @@ func (c Config) Validate() error {
 	}
 	if err := c.validateSelectedProviderSwitches(); err != nil {
 		return err
+	}
+	return nil
+}
+
+func (c Config) validateLoadTestSafeModes() error {
+	if !c.IsLoadTest() {
+		return nil
+	}
+
+	var problems []string
+	if !configTokenEquals(c.Provider, "mock") {
+		problems = append(problems, "PROVIDER=mock")
+	}
+	if !providerChainMockOnly(c.ProviderChain) {
+		problems = append(problems, "PROVIDER_CHAIN=mock or empty")
+	}
+	if !optionalConfigTokenEquals(c.ImageProvider, "mock") {
+		problems = append(problems, "IMAGE_PROVIDER=mock or empty")
+	}
+	if !optionalConfigTokenEquals(c.VideoProvider, "mock") {
+		problems = append(problems, "VIDEO_PROVIDER=mock or empty")
+	}
+	if !configTokenEquals(c.PaymentProvider, "mock") {
+		problems = append(problems, "PAYMENT_PROVIDER=mock")
+	}
+	if !configTokenEquals(c.VKDeliveryMode, "mock") {
+		problems = append(problems, "VK_DELIVERY_MODE=mock")
+	}
+	if !optionalConfigTokenEquals(c.ModerationProvider, "keyword") {
+		problems = append(problems, "MODERATION_PROVIDER=keyword or empty")
+	}
+	if !configTokenEquals(c.ArtifactScanner, "none") {
+		problems = append(problems, "ARTIFACT_SCANNER=none")
+	}
+
+	if len(problems) > 0 {
+		return fmt.Errorf("config: APP_ENV=loadtest requires safe mock modes: %s", strings.Join(problems, ", "))
 	}
 	return nil
 }
@@ -1442,6 +1488,11 @@ func isStagingEnv(env string) bool {
 	return strings.EqualFold(env, "staging") || strings.EqualFold(env, "stage")
 }
 
+func isLoadTestEnv(env string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(env))
+	return normalized == "loadtest" || normalized == "load-test" || normalized == "load_testing"
+}
+
 func (c Config) IsStaging() bool {
 	return isStagingEnv(c.Env)
 }
@@ -1502,6 +1553,28 @@ func knownPaymentProvider(name string) bool {
 	default:
 		return false
 	}
+}
+
+func configTokenEquals(value, want string) bool {
+	return strings.EqualFold(strings.TrimSpace(value), want)
+}
+
+func optionalConfigTokenEquals(value, want string) bool {
+	value = strings.TrimSpace(value)
+	return value == "" || strings.EqualFold(value, want)
+}
+
+func providerChainMockOnly(providers []string) bool {
+	for _, provider := range providers {
+		provider = strings.TrimSpace(provider)
+		if provider == "" {
+			continue
+		}
+		if !strings.EqualFold(provider, "mock") {
+			return false
+		}
+	}
+	return true
 }
 
 func loadDotenv() {

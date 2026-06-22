@@ -61,6 +61,51 @@ files are ignored by Git; commit only `.env.example`.
 Use the DEV contour when you need a production-shaped local setup without
 touching production VK, production Cloudflare or production YooKassa settings.
 
+For synthetic load testing, use the separate load-test contract in
+[`docs/LOAD_TESTING.md`](docs/LOAD_TESTING.md). Start from
+`.env.loadtest.example` and run with `APP_ENV=loadtest`; config validation will
+reject real AI providers, real VK delivery and YooKassa in that mode. Load tests
+must not call paid AI providers, spam the production VK community, use
+production YooKassa webhooks or mutate production data stores.
+
+```powershell
+Copy-Item .env.loadtest.example .env.loadtest
+docker compose up -d postgres redis minio
+# Load .env.loadtest into the shell or copy it to .env before starting services.
+```
+
+The first safe k6 API scenario lives in `tests/k6/basic-api.js`. It checks
+health/readiness, VK webhook intake and Mini App balance/job endpoints. The VK
+Bot-specific journey lives in `tests/k6/vk-bot.js` and covers `/start`,
+`Показать меню`, "Спросить у НейроХаб", ordinary text, callback buttons,
+duplicate replay and rate-limit/cooldown bursts. The job/worker load scenario
+lives in `tests/k6/job-worker.js`; it creates text/image/video mock jobs and
+polls completion to reveal queue pressure and worker throughput. For database
+bottlenecks, run `scripts/loadtest/postgres-diagnostics.ps1` before and after
+k6 to inspect locks, table growth, sequential scans, index usage, retention
+candidates and analytics freshness without mutating data. For Redis queue and
+backpressure bottlenecks, run `scripts/loadtest/redis-diagnostics.ps1` before
+and after k6 to inspect stream lengths, consumer-group lag/pending, DLQ growth,
+rate-limit keys and dialog-state TTLs without fetching key values or task
+payloads. After the run, `scripts/loadtest/loadtest-report.ps1` can collect k6
+summaries, Redis/Postgres diagnostics and Docker CPU/RAM into a single operator
+report with the first likely bottleneck. The scripts are disabled by default in
+CI unless a target is explicitly provided:
+
+```powershell
+$env:K6_BASE_URL = "http://127.0.0.1:8080"
+$env:K6_DURATION = "30s"
+$env:K6_VK_SECRET = "loadtest-secret"
+$env:K6_VK_GROUP_ID = "0"
+k6 run tests/k6/basic-api.js
+k6 run tests/k6/vk-bot.js
+$env:K6_JOB_WORKLOAD = "mixed"
+k6 run tests/k6/job-worker.js
+.\scripts\loadtest\postgres-diagnostics.ps1 -EnvFile .env.loadtest
+.\scripts\loadtest\redis-diagnostics.ps1 -EnvFile .env.loadtest -UseDockerCompose
+.\scripts\loadtest\loadtest-report.ps1 -EnvFile .env.loadtest -RunK6 -UseDockerCompose
+```
+
 DEV public URLs:
 
 | Surface | DEV URL |

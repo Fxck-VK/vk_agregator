@@ -1240,6 +1240,83 @@ func TestValidatePaymentProvider(t *testing.T) {
 	}
 }
 
+func TestValidateLoadTestAllowsOnlySafeMockModes(t *testing.T) {
+	cfg := config.Config{
+		Env:                "loadtest",
+		Provider:           "mock",
+		ProviderChain:      []string{"mock"},
+		ImageProvider:      "mock",
+		VideoProvider:      "mock",
+		PaymentProvider:    "mock",
+		VKDeliveryMode:     "mock",
+		ModerationProvider: "keyword",
+		ArtifactScanner:    "none",
+	}
+
+	if !cfg.IsLoadTest() {
+		t.Fatal("IsLoadTest() = false, want true")
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate() error = %v", err)
+	}
+}
+
+func TestValidateLoadTestRejectsRealGenerationProviders(t *testing.T) {
+	cfg := config.Config{
+		Env:                "loadtest",
+		Provider:           "deepinfra",
+		ProviderChain:      []string{"deepinfra", "mock"},
+		ImageProvider:      "mock",
+		VideoProvider:      "mock",
+		PaymentProvider:    "mock",
+		VKDeliveryMode:     "mock",
+		ModerationProvider: "keyword",
+		ArtifactScanner:    "none",
+	}
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "APP_ENV=loadtest") || !strings.Contains(err.Error(), "PROVIDER=mock") || !strings.Contains(err.Error(), "PROVIDER_CHAIN=mock") {
+		t.Fatalf("expected loadtest provider safety error, got %v", err)
+	}
+}
+
+func TestValidateLoadTestRejectsRealPaymentProvider(t *testing.T) {
+	cfg := config.Config{
+		Env:                "loadtest",
+		Provider:           "mock",
+		ProviderChain:      []string{"mock"},
+		PaymentProvider:    "yookassa",
+		VKDeliveryMode:     "mock",
+		ModerationProvider: "keyword",
+		ArtifactScanner:    "none",
+	}
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "APP_ENV=loadtest") || !strings.Contains(err.Error(), "PAYMENT_PROVIDER=mock") {
+		t.Fatalf("expected loadtest payment safety error, got %v", err)
+	}
+}
+
+func TestValidateLoadTestRejectsRealVKDelivery(t *testing.T) {
+	cfg := config.Config{
+		Env:                "load-test",
+		Provider:           "mock",
+		ProviderChain:      []string{"mock"},
+		PaymentProvider:    "mock",
+		VKDeliveryMode:     "real",
+		ModerationProvider: "keyword",
+		ArtifactScanner:    "none",
+	}
+
+	if !cfg.IsLoadTest() {
+		t.Fatal("IsLoadTest() = false, want true")
+	}
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "APP_ENV=loadtest") || !strings.Contains(err.Error(), "VK_DELIVERY_MODE=mock") {
+		t.Fatalf("expected loadtest VK delivery safety error, got %v", err)
+	}
+}
+
 func TestValidatePriceOverridesRejectNonPositiveAmounts(t *testing.T) {
 	cfg := config.Config{PriceOverrides: map[string]int64{
 		string(domain.OperationImageGenerate): -10,

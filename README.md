@@ -500,6 +500,38 @@ The full pipeline is covered by an in-memory end-to-end test:
 `internal/worker/e2e_test.go` (`TestEndToEnd`) drives VK → Job → Provider →
 Artifact → Delivery → Capture without any external services.
 
+Load testing is planned separately from CI and live smoke. The current contract
+is in [`docs/LOAD_TESTING.md`](docs/LOAD_TESTING.md): load tests must use
+the dedicated `APP_ENV=loadtest` profile from `.env.loadtest.example` and must
+not call paid providers, production VK, production YooKassa or production data
+stores. In `loadtest`, config validation requires mock AI providers, mock
+payments and mock VK delivery before the process starts.
+
+The first safe k6 script is `tests/k6/basic-api.js`. It covers health,
+readiness, VK webhook intake and Mini App balance/job endpoints. A second
+script, `tests/k6/vk-bot.js`, exercises the VK Bot journey: `/start`, menu
+callbacks, "Спросить у НейроХаб", ordinary text, duplicate replay and
+rate-limit/cooldown bursts. `tests/k6/job-worker.js` creates text/image/video
+mock jobs and measures API acceptance, polling completion and worker queue
+pressure. `scripts/loadtest/postgres-diagnostics.ps1` captures read-only
+Postgres diagnostics before/after load runs: locks, slow-query visibility,
+table growth, sequential scans, index usage, retention candidates and analytics
+freshness. `scripts/loadtest/redis-diagnostics.ps1` captures read-only Redis
+queue/backpressure snapshots: stream lengths, consumer-group lag/pending, DLQ,
+rate-limit keys and dialog-state TTLs. `scripts/loadtest/loadtest-report.ps1`
+collects k6 summaries, Redis/Postgres diagnostics and Docker CPU/RAM into one
+operator report. All scripts are disabled by default in CI unless
+`K6_BASE_URL` or `K6_RUN=1` is set:
+
+```bash
+K6_BASE_URL=http://127.0.0.1:8080 k6 run tests/k6/basic-api.js
+K6_BASE_URL=http://127.0.0.1:8080 k6 run tests/k6/vk-bot.js
+K6_BASE_URL=http://127.0.0.1:8080 K6_JOB_WORKLOAD=mixed k6 run tests/k6/job-worker.js
+pwsh -File scripts/loadtest/postgres-diagnostics.ps1 -EnvFile .env.loadtest
+pwsh -File scripts/loadtest/redis-diagnostics.ps1 -EnvFile .env.loadtest -UseDockerCompose
+pwsh -File scripts/loadtest/loadtest-report.ps1 -EnvFile .env.loadtest -RunK6 -UseDockerCompose
+```
+
 ## CI/CD
 
 GitHub Actions is the merge gate for `main`. The protected `main` branch must

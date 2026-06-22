@@ -25,7 +25,8 @@ const (
 
 // Config holds protected billing API settings.
 type Config struct {
-	Token string
+	Token                     string
+	AllowLoadTestMockPayments bool
 }
 
 // Deps are the services/repositories used by billing endpoints.
@@ -59,6 +60,7 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("POST /billing/payment-intents", h.auth(h.operatorAction("payment_intent_create", h.createIntent)))
 	mux.HandleFunc("GET /billing/payment-intents/{id}", h.auth(h.getIntent))
 	mux.HandleFunc("POST /billing/payment-intents/{id}/sync", h.auth(h.operatorAction("payment_intent_sync", h.syncIntent)))
+	mux.HandleFunc("POST /billing/payment-intents/{id}/mock-status", h.auth(h.operatorAction("payment_intent_mock_status", h.setMockPaymentStatus)))
 	mux.HandleFunc("POST /billing/payment-intents/{id}/cancel", h.auth(h.operatorAction("payment_intent_cancel", h.cancelIntent)))
 	mux.HandleFunc("POST /billing/payment-intents/{id}/refund", h.auth(h.operatorAction("payment_intent_refund", h.refundIntent)))
 	mux.HandleFunc("GET /billing/operator/console", h.auth(h.operatorConsole))
@@ -436,6 +438,31 @@ func (h *Handler) syncIntent(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, newIntentDTO(intent, true))
 }
 
+func (h *Handler) setMockPaymentStatus(w http.ResponseWriter, r *http.Request) {
+	if !h.cfg.AllowLoadTestMockPayments {
+		writeError(w, http.StatusNotFound, "not found")
+		return
+	}
+	if h.deps.PaymentOps == nil {
+		writeError(w, http.StatusServiceUnavailable, "service unavailable")
+		return
+	}
+	id, ok := h.paymentIntentIDFromPath(w, r)
+	if !ok {
+		return
+	}
+	actionReq, ok := parseOperatorMockStatusRequest(w, r)
+	if !ok {
+		return
+	}
+	intent, err := h.deps.PaymentOps.ForceMockPaymentStatusForLoadTest(r.Context(), id, actionReq.Status)
+	if err != nil {
+		h.writePaymentActionError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, newIntentDTO(intent, true))
+}
+
 func (h *Handler) cancelIntent(w http.ResponseWriter, r *http.Request) {
 	if h.deps.PaymentOps == nil {
 		writeError(w, http.StatusServiceUnavailable, "service unavailable")
@@ -502,6 +529,16 @@ type operatorPaymentActionBody struct {
 	Reason string `json:"reason,omitempty"`
 }
 
+type operatorMockStatusActionRequest struct {
+	operatorPaymentActionRequest
+	Status domain.PaymentIntentStatus
+}
+
+type operatorMockStatusActionBody struct {
+	Reason string `json:"reason,omitempty"`
+	Status string `json:"status"`
+}
+
 func parseOperatorPaymentActionRequest(w http.ResponseWriter, r *http.Request) (operatorPaymentActionRequest, bool) {
 	clientKey := strings.TrimSpace(r.Header.Get("X-Idempotency-Key"))
 	if clientKey == "" {
@@ -525,6 +562,39 @@ func parseOperatorPaymentActionRequest(w http.ResponseWriter, r *http.Request) (
 		return operatorPaymentActionRequest{}, false
 	}
 	return operatorPaymentActionRequest{IdempotencyKey: clientKey, Reason: reason}, true
+}
+
+func parseOperatorMockStatusRequest(w http.ResponseWriter, r *http.Request) (operatorMockStatusActionRequest, bool) {
+	clientKey := strings.TrimSpace(r.Header.Get("X-Idempotency-Key"))
+	if clientKey == "" {
+		writeError(w, http.StatusBadRequest, "X-Idempotency-Key is required")
+		return operatorMockStatusActionRequest{}, false
+	}
+	var body operatorMockStatusActionBody
+	if r.Body == nil || r.ContentLength == 0 {
+		writeError(w, http.StatusBadRequest, "reason and status are required")
+		return operatorMockStatusActionRequest{}, false
+	}
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<10))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json")
+		return operatorMockStatusActionRequest{}, false
+	}
+	reason := strings.TrimSpace(body.Reason)
+	if !validOperatorReason(reason) {
+		writeError(w, http.StatusBadRequest, "reason is required")
+		return operatorMockStatusActionRequest{}, false
+	}
+	status := domain.PaymentIntentStatus(strings.TrimSpace(body.Status))
+	if !status.Valid() {
+		writeError(w, http.StatusBadRequest, "invalid status")
+		return operatorMockStatusActionRequest{}, false
+	}
+	return operatorMockStatusActionRequest{
+		operatorPaymentActionRequest: operatorPaymentActionRequest{IdempotencyKey: clientKey, Reason: reason},
+		Status:                       status,
+	}, true
 }
 
 func validOperatorReason(reason string) bool {
@@ -693,6 +763,8 @@ func (h *Handler) writePaymentActionError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusBadRequest, "invalid payment action")
 	case errors.Is(err, domain.ErrNotFound):
 		writeError(w, http.StatusNotFound, "not found")
+	case errors.Is(err, paymentservice.ErrForbidden):
+		writeError(w, http.StatusForbidden, "forbidden")
 	case errors.Is(err, paymentservice.ErrRefundCreditsSpent),
 		errors.Is(err, paymentservice.ErrRefundNotAllowed),
 		errors.Is(err, paymentservice.ErrWebhookMismatch),

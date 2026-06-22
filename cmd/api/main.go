@@ -125,7 +125,10 @@ func main() {
 		Payment:     core.Payment,
 		Maintenance: core.Maintenance,
 	})
-	billing := billingapi.NewHandler(billingapi.Config{Token: cfg.AdminToken}, billingapi.Deps{
+	billing := billingapi.NewHandler(billingapi.Config{
+		Token:                     cfg.AdminToken,
+		AllowLoadTestMockPayments: cfg.IsLoadTest() && strings.EqualFold(strings.TrimSpace(cfg.PaymentProvider), string(domain.PaymentProviderMock)),
+	}, billingapi.Deps{
 		Users:      core.Users,
 		Billing:    core.BillingRepo,
 		Payment:    core.Payment,

@@ -52,6 +52,10 @@ type WebhookProcessor struct {
 	notifier PaymentStatusNotifier
 }
 
+type mockPaymentStatusSetter interface {
+	SetPaymentStatus(providerPaymentID string, status domain.PaymentIntentStatus) error
+}
+
 // PaymentStatusNotification is emitted after a provider-verified intent status
 // transition has committed. It contains only local intent data.
 type PaymentStatusNotification struct {
@@ -275,6 +279,38 @@ func (p *WebhookProcessor) SyncIntent(ctx context.Context, intentID uuid.UUID) (
 	}
 	p.notifyPaymentStatus(ctx, intentID, result)
 	return p.repo.GetIntentByID(ctx, intentID)
+}
+
+// ForceMockPaymentStatusForLoadTest simulates a provider-side payment status
+// only for the mock provider, then applies the normal provider-verified sync
+// path. It exists for synthetic load tests and must stay behind admin/loadtest
+// HTTP gates.
+func (p *WebhookProcessor) ForceMockPaymentStatusForLoadTest(ctx context.Context, intentID uuid.UUID, status domain.PaymentIntentStatus) (*domain.PaymentIntent, error) {
+	if p == nil || p.repo == nil || p.provider == nil {
+		return nil, errors.New("paymentservice: webhook processor is not configured")
+	}
+	if p.provider.Code() != domain.PaymentProviderMock {
+		return nil, ErrForbidden
+	}
+	if !status.Valid() {
+		return nil, ErrInvalidInput
+	}
+	setter, ok := p.provider.(mockPaymentStatusSetter)
+	if !ok {
+		return nil, ErrForbidden
+	}
+	intent, err := p.repo.GetIntentByID(ctx, intentID)
+	if err != nil {
+		return nil, err
+	}
+	providerPaymentID := strings.TrimSpace(intent.ProviderPaymentID)
+	if providerPaymentID == "" {
+		return nil, ErrWebhookUnsupported
+	}
+	if err := setter.SetPaymentStatus(providerPaymentID, status); err != nil {
+		return nil, err
+	}
+	return p.SyncIntent(ctx, intentID)
 }
 
 // CancelIntent requests provider-side cancellation and then verifies the
