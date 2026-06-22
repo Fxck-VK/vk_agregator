@@ -100,6 +100,7 @@ const (
 	DecisionTemporaryBlock DecisionKind = "temporary_block"
 	DecisionActiveJobs     DecisionKind = "active_jobs"
 	DecisionImageDaily     DecisionKind = "image_daily_limit"
+	DecisionDegraded       DecisionKind = "degraded"
 )
 
 // Decision is the result of an anti-spam check.

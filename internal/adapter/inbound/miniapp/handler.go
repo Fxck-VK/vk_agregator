@@ -19,6 +19,7 @@ import (
 	"github.com/google/uuid"
 
 	"vk-ai-aggregator/internal/domain"
+	"vk-ai-aggregator/internal/platform/logging"
 	"vk-ai-aggregator/internal/platform/metrics"
 	"vk-ai-aggregator/internal/service/billingservice"
 	"vk-ai-aggregator/internal/service/joborchestrator"
@@ -269,7 +270,7 @@ func (h *Handler) auth(next http.HandlerFunc) http.HandlerFunc {
 			// Do not expose the reason to the client (audit S1).
 			if h.cfg.AppSecret != "" {
 				h.logger.Warn("miniapp: launch params rejected",
-					slog.String("reason", err.Error()))
+					logging.ErrorAttr(err))
 			}
 			writeError(w, http.StatusUnauthorized, "unauthorized")
 			return
@@ -962,7 +963,7 @@ func (h *Handler) estimateJob(w http.ResponseWriter, r *http.Request) {
 
 	balance, err := h.balanceForEstimate(r.Context(), vkUserID)
 	if err != nil {
-		h.logger.Error("miniapp: estimate balance failed", slog.String("error", err.Error()))
+		h.logger.Error("miniapp: estimate balance failed", logging.ErrorAttr(err))
 		metrics.ObserveProductEvent("miniapp", "job", "estimate", string(opType), string(modality), "error")
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
@@ -1053,7 +1054,7 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 
 	user, err := h.ensureUser(r.Context(), vkUserID)
 	if err != nil {
-		h.logger.Error("miniapp: ensure user failed", slog.String("error", err.Error()))
+		h.logger.Error("miniapp: ensure user failed", logging.ErrorAttr(err))
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
@@ -1137,7 +1138,7 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Retry-After", "30")
 		writeError(w, http.StatusServiceUnavailable, domain.JobErrMediaOverloadedRetryLater)
 	default:
-		h.logger.Error("miniapp: create job failed", slog.String("error", err.Error()))
+		h.logger.Error("miniapp: create job failed", logging.ErrorAttr(err))
 		writeError(w, http.StatusInternalServerError, "internal error")
 	}
 }
@@ -1181,7 +1182,7 @@ func (h *Handler) createChatMessage(w http.ResponseWriter, r *http.Request) {
 
 	user, err := h.ensureUser(r.Context(), vkUserID)
 	if err != nil {
-		h.logger.Error("miniapp: ensure user failed", slog.String("error", err.Error()))
+		h.logger.Error("miniapp: ensure user failed", logging.ErrorAttr(err))
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
@@ -1241,7 +1242,7 @@ func (h *Handler) createChatMessage(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Retry-After", "30")
 		writeError(w, http.StatusServiceUnavailable, "media capacity temporarily unavailable")
 	default:
-		h.logger.Error("miniapp: create chat job failed", slog.String("error", err.Error()))
+		h.logger.Error("miniapp: create chat job failed", logging.ErrorAttr(err))
 		writeError(w, http.StatusInternalServerError, "internal error")
 	}
 }
@@ -1612,7 +1613,7 @@ func (h *Handler) createPaymentIntent(w http.ResponseWriter, r *http.Request) {
 
 	user, err := h.ensureUser(r.Context(), vkUserID)
 	if err != nil {
-		h.logger.Error("miniapp: ensure user failed", slog.String("error", err.Error()))
+		h.logger.Error("miniapp: ensure user failed", logging.ErrorAttr(err))
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
@@ -1784,7 +1785,7 @@ func (h *Handler) cancelPaymentIntent(w http.ResponseWriter, r *http.Request) {
 		default:
 			h.logger.Error("miniapp: payment cancel failed",
 				slog.String("payment_intent_id", intentID.String()),
-				slog.String("error", err.Error()))
+				logging.ErrorAttr(err))
 			writeError(w, http.StatusBadGateway, "payment provider error")
 		}
 		return
@@ -1803,7 +1804,7 @@ func (h *Handler) writePaymentError(w http.ResponseWriter, err error) {
 	case errors.Is(err, paymentservice.ErrForbidden):
 		writeError(w, http.StatusForbidden, "forbidden")
 	default:
-		h.logger.Error("miniapp: payment provider failed", slog.String("error", err.Error()))
+		h.logger.Error("miniapp: payment provider failed", logging.ErrorAttr(err))
 		writeError(w, http.StatusBadGateway, "payment provider error")
 	}
 }
@@ -1870,7 +1871,7 @@ func (h *Handler) getArtifact(w http.ResponseWriter, r *http.Request) {
 
 	data, err := h.deps.Objects.GetObject(r.Context(), art.StorageBucket, art.StorageKey)
 	if err != nil {
-		h.logger.Error("miniapp: get artifact object failed", slog.String("error", err.Error()))
+		h.logger.Error("miniapp: get artifact object failed", logging.ErrorAttr(err))
 		resultLabel = "error"
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
@@ -1899,7 +1900,7 @@ func (h *Handler) artifactVisible(ctx context.Context, art *domain.Artifact, use
 	}
 	results, err := h.deps.Moderation.ListByJob(ctx, job.ID)
 	if err != nil {
-		h.logger.Error("miniapp: list moderation results failed", slog.String("error", err.Error()))
+		h.logger.Error("miniapp: list moderation results failed", logging.ErrorAttr(err))
 		return false
 	}
 	for _, result := range results {

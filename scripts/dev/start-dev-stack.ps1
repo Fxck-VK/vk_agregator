@@ -165,6 +165,12 @@ function Assert-DevSecurity {
             }
         }
     }
+    if (Get-BoolEnv -Values $Values -Name "APIMART_PROVIDER_ENABLED" -Default $false) {
+        $apimartBaseURL = (Get-EnvValue -Values $Values -Name "APIMART_BASE_URL").TrimEnd("/")
+        if ($apimartBaseURL -ne "https://api.apimart.ai/v1") {
+            [void]$Problems.Add("APIMART_BASE_URL must be https://api.apimart.ai/v1 when APIMART_PROVIDER_ENABLED=true")
+        }
+    }
 
     $allowRealPayments = Get-BoolEnv -Values $Values -Name "DEV_ALLOW_REAL_PAYMENTS" -Default $false
     $paymentProvider = (Get-EnvValue -Values $Values -Name "PAYMENT_PROVIDER").ToLowerInvariant()

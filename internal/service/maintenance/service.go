@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"vk-ai-aggregator/internal/domain"
+	"vk-ai-aggregator/internal/platform/logging"
 	"vk-ai-aggregator/internal/platform/metrics"
 )
 
@@ -19,6 +20,10 @@ const (
 	defaultJobLogCleanupLimit         = 500
 	defaultJobEventsTTL               = 30 * 24 * time.Hour
 	defaultProviderPayloadTTL         = 7 * 24 * time.Hour
+	defaultInboundPayloadTTL          = 30 * 24 * time.Hour
+	defaultInboundPayloadCleanupLimit = 500
+	defaultCommandRawTextTTL          = 30 * 24 * time.Hour
+	defaultCommandCleanupLimit        = 500
 	defaultJobErrorAggregateLookback  = 30 * 24 * time.Hour
 	defaultAnalyticsAggregateLookback = 7 * 24 * time.Hour
 )
@@ -32,6 +37,10 @@ type Store interface {
 	CleanupJobEvents(ctx context.Context, cutoff time.Time, limit int) (int64, error)
 	ExpireProviderPayloads(ctx context.Context, cutoff, expiresAt time.Time, limit int) (int64, error)
 	RedactExpiredProviderPayloads(ctx context.Context, now time.Time, limit int) (int64, error)
+	ExpireInboundEvents(ctx context.Context, cutoff, expiresAt time.Time, limit int) (int64, error)
+	RedactExpiredInboundEvents(ctx context.Context, now time.Time, limit int) (int64, error)
+	ExpireCommandRawText(ctx context.Context, cutoff, expiresAt time.Time, limit int) (int64, error)
+	RedactExpiredCommandRawText(ctx context.Context, now time.Time, limit int) (int64, error)
 	ExpireConversationMessages(ctx context.Context, cutoff, expiresAt time.Time, limit int) (int64, error)
 	RedactExpiredConversationMessages(ctx context.Context, now time.Time, limit int) (int64, error)
 	ExpireConversationSummaries(ctx context.Context, cutoff, expiresAt time.Time, limit int) (int64, error)
@@ -61,6 +70,10 @@ type Config struct {
 	BillingReconciliationLimit    int
 	JobEventsRetention            time.Duration
 	ProviderPayloadRetention      time.Duration
+	InboundPayloadRetention       time.Duration
+	InboundPayloadRetentionLimit  int
+	CommandRawTextRetention       time.Duration
+	CommandRetentionLimit         int
 	JobLogRetentionLimit          int
 	JobErrorAggregateLookback     time.Duration
 	AnalyticsAggregateLookback    time.Duration
@@ -137,6 +150,18 @@ func New(store Store, streams StreamTrimmer, cfg Config, opts ...Option) *Servic
 	if cfg.ProviderPayloadRetention <= 0 {
 		cfg.ProviderPayloadRetention = defaultProviderPayloadTTL
 	}
+	if cfg.InboundPayloadRetention <= 0 {
+		cfg.InboundPayloadRetention = defaultInboundPayloadTTL
+	}
+	if cfg.InboundPayloadRetentionLimit <= 0 {
+		cfg.InboundPayloadRetentionLimit = defaultInboundPayloadCleanupLimit
+	}
+	if cfg.CommandRawTextRetention <= 0 {
+		cfg.CommandRawTextRetention = defaultCommandRawTextTTL
+	}
+	if cfg.CommandRetentionLimit <= 0 {
+		cfg.CommandRetentionLimit = defaultCommandCleanupLimit
+	}
 	if cfg.JobLogRetentionLimit <= 0 {
 		cfg.JobLogRetentionLimit = defaultJobLogCleanupLimit
 	}
@@ -194,13 +219,13 @@ func (s *Service) Run(ctx context.Context) {
 
 func (s *Service) runCleanup(ctx context.Context) {
 	if err := s.Cleanup(ctx); err != nil {
-		s.log.WarnContext(ctx, "maintenance cleanup failed", "error", err)
+		s.log.WarnContext(ctx, "maintenance cleanup failed", logging.ErrorAttr(err))
 	}
 }
 
 func (s *Service) runReconciliation(ctx context.Context) {
 	if err := s.ReconcileBilling(ctx); err != nil {
-		s.log.WarnContext(ctx, "billing reconciliation failed", "error", err)
+		s.log.WarnContext(ctx, "billing reconciliation failed", logging.ErrorAttr(err))
 	}
 }
 
@@ -241,6 +266,20 @@ func (s *Service) Cleanup(ctx context.Context) error {
 	metrics.MaintenanceDeleted.WithLabelValues("conversation_summaries_expired").Add(float64(summaryExpired))
 	metrics.MaintenanceDeleted.WithLabelValues("conversation_summaries_redacted").Add(float64(summaryRedacted))
 
+	inboundExpired, inboundRedacted, err := s.cleanupInboundEvents(ctx, now)
+	if err != nil {
+		return err
+	}
+	metrics.MaintenanceDeleted.WithLabelValues("inbound_events_expired").Add(float64(inboundExpired))
+	metrics.MaintenanceDeleted.WithLabelValues("inbound_events_redacted").Add(float64(inboundRedacted))
+
+	commandsExpired, commandsRedacted, err := s.cleanupCommandRawText(ctx, now)
+	if err != nil {
+		return err
+	}
+	metrics.MaintenanceDeleted.WithLabelValues("commands_raw_text_expired").Add(float64(commandsExpired))
+	metrics.MaintenanceDeleted.WithLabelValues("commands_raw_text_redacted").Add(float64(commandsRedacted))
+
 	if s.streams != nil {
 		trimmed, err := s.streams.Trim(ctx)
 		if err != nil {
@@ -255,13 +294,15 @@ func (s *Service) Cleanup(ctx context.Context) error {
 		return err
 	}
 	if err := s.ObserveProductStats(ctx); err != nil {
-		s.log.WarnContext(ctx, "product stats observation failed", "error", err)
+		s.log.WarnContext(ctx, "product stats observation failed", logging.ErrorAttr(err))
 	}
 	if idemDeleted > 0 || outboxDeleted > 0 || mediaExpired > 0 || mediaDeleted > 0 ||
 		jobErrorsAggregated > 0 || dailyAnalyticsRefreshed > 0 || jobEventsDeleted > 0 ||
 		providerPayloadsExpired > 0 || providerPayloadsRedacted > 0 ||
 		conversationExpired > 0 || conversationRedacted > 0 ||
-		summaryExpired > 0 || summaryRedacted > 0 {
+		summaryExpired > 0 || summaryRedacted > 0 ||
+		inboundExpired > 0 || inboundRedacted > 0 ||
+		commandsExpired > 0 || commandsRedacted > 0 {
 		s.log.InfoContext(ctx, "maintenance cleanup completed",
 			"idempotency_keys_deleted", idemDeleted,
 			"outbox_events_deleted", outboxDeleted,
@@ -274,6 +315,10 @@ func (s *Service) Cleanup(ctx context.Context) error {
 			"conversation_messages_redacted", conversationRedacted,
 			"conversation_summaries_expired", summaryExpired,
 			"conversation_summaries_redacted", summaryRedacted,
+			"inbound_events_expired", inboundExpired,
+			"inbound_events_redacted", inboundRedacted,
+			"commands_raw_text_expired", commandsExpired,
+			"commands_raw_text_redacted", commandsRedacted,
 			"media_artifacts_expired", mediaExpired,
 			"media_objects_deleted", mediaDeleted)
 	}
@@ -350,6 +395,30 @@ func (s *Service) cleanupConversations(ctx context.Context, now time.Time) (int6
 	return messagesExpired, messagesRedacted, summariesExpired, summariesRedacted, nil
 }
 
+func (s *Service) cleanupInboundEvents(ctx context.Context, now time.Time) (int64, int64, error) {
+	redacted, err := s.store.RedactExpiredInboundEvents(ctx, now, s.cfg.InboundPayloadRetentionLimit)
+	if err != nil {
+		return 0, 0, err
+	}
+	expired, err := s.store.ExpireInboundEvents(ctx, now.Add(-s.cfg.InboundPayloadRetention), now, s.cfg.InboundPayloadRetentionLimit)
+	if err != nil {
+		return 0, redacted, err
+	}
+	return expired, redacted, nil
+}
+
+func (s *Service) cleanupCommandRawText(ctx context.Context, now time.Time) (int64, int64, error) {
+	redacted, err := s.store.RedactExpiredCommandRawText(ctx, now, s.cfg.CommandRetentionLimit)
+	if err != nil {
+		return 0, 0, err
+	}
+	expired, err := s.store.ExpireCommandRawText(ctx, now.Add(-s.cfg.CommandRawTextRetention), now, s.cfg.CommandRetentionLimit)
+	if err != nil {
+		return 0, redacted, err
+	}
+	return expired, redacted, nil
+}
+
 func (s *Service) cleanupMedia(ctx context.Context, now time.Time) (int64, int64, error) {
 	if s.mediaObjects == nil {
 		return 0, 0, nil
@@ -386,7 +455,7 @@ func (s *Service) cleanupMedia(ctx context.Context, now time.Time) (int64, int64
 				"kind", metrics.ProductLabel(string(candidate.Kind), "unknown"),
 				"variant_type", variantType,
 				"error_class", "object_delete_failed",
-				"error", err)
+				logging.ErrorAttr(err))
 			continue
 		}
 		if err := s.store.MarkMediaCleanupDeleted(ctx, candidate); err != nil {

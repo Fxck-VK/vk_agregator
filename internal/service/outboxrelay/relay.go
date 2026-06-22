@@ -16,6 +16,7 @@ import (
 	"github.com/google/uuid"
 
 	"vk-ai-aggregator/internal/domain"
+	"vk-ai-aggregator/internal/platform/logging"
 	"vk-ai-aggregator/internal/platform/queue"
 	"vk-ai-aggregator/internal/platform/uow"
 )
@@ -99,7 +100,7 @@ func (r *Relay) Run(ctx context.Context, interval time.Duration) {
 			return
 		case <-ticker.C:
 			if n, err := r.Drain(ctx); err != nil {
-				r.log.Error("outbox relay drain failed", "error", err)
+				r.log.Error("outbox relay drain failed", logging.ErrorAttr(err))
 			} else if n > 0 {
 				r.log.Debug("outbox relay published events", "count", n)
 			}

@@ -39,7 +39,7 @@ branch on these bounded values instead of table-name string matching.
 |------------|----------|----------------|
 | `financial` | ledger entries, balance history, payment intents/events/refunds, billing audit records | Protected audit data. No generic automatic deletion. |
 | `operational` | jobs metadata, delivery state, provider task ids, idempotency state, support diagnostics | Cleanup allowed only for non-audit diagnostics and old event/log details. |
-| `user_content` | prompts, conversation messages, assistant replies, user generation inputs | Bounded retention; redact/delete raw content after the configured window. |
+| `user_content` | prompts, `commands.raw_text`, conversation messages, assistant replies, user generation inputs | Bounded retention; redact/delete raw content after the configured window. |
 | `provider_payload` | raw provider request/response payloads and provider-native debug data | Avoid storage; if stored, redact and keep short-lived only. |
 | `artifact_metadata` | artifact ownership, lifecycle, moderation and private storage coordinates | Cleanup must stay consistent with S3/MinIO object lifecycle and owner checks. |
 | `analytics_aggregate` | DAU/WAU/MAU, jobs by model, payment funnel, provider error counters | Long-lived aggregate data, no prompts/raw PII/raw provider payloads. |
@@ -52,6 +52,7 @@ branch on these bounded values instead of table-name string matching.
 | Job event logs | job lifecycle events, retry logs, provider lifecycle diagnostics, outbox terminal events | 14-30 days | Aggregate useful counters before deletion. Keep enough history for support and incident review. |
 | Conversation content | `conversation_messages`, prompts, assistant replies, short chat context | 30-90 days | Delete or redact raw content after the window. Summaries may live longer if they do not contain sensitive raw text. |
 | Conversation summaries | `conversation_summaries` | 90-180 days | Keep only compact context needed for product UX; allow user reset/delete in later privacy work. |
+| VK inbound payloads | `inbound_events.payload` for VK callback events | Metadata-only on new writes; legacy raw rows redacted after 30 days | Preserve idempotency/support columns, but do not keep raw callback body, message text, button payloads, attachments or URLs. |
 | Provider raw payloads | raw provider request/response/debug payloads | Avoid storage; if enabled, 1-7 days redacted | Never expose to users. Never log secrets, private URLs, prompt bodies or raw PII. |
 | Artifact binaries | generated photos/videos/files, provider originals, VK-ready variants, reference uploads | By product tier and artifact type | Free/temp/failed artifacts can expire earlier; paid/user-visible artifacts live longer. Metadata and objects must expire consistently. |
 | Analytics aggregates | daily/monthly DAU, jobs by model, payments, funnel, provider errors | Long-term | Store aggregate, bounded-label, non-PII records. Do not use raw prompts/provider payloads as analytics source of truth. |
@@ -68,6 +69,10 @@ RETENTION_CONVERSATION_MESSAGES_DAYS=90
 RETENTION_CONVERSATION_SUMMARIES_DAYS=180
 CONVERSATION_RETENTION_BATCH_SIZE=500
 RETENTION_PROVIDER_PAYLOAD_DAYS=7
+RETENTION_VK_INBOUND_PAYLOAD_DAYS=30
+VK_INBOUND_RETENTION_BATCH_SIZE=500
+RETENTION_COMMAND_RAW_TEXT_DAYS=30
+COMMAND_RETENTION_BATCH_SIZE=500
 JOB_LOG_RETENTION_BATCH_SIZE=500
 JOB_ERROR_AGGREGATE_LOOKBACK_DAYS=30
 ANALYTICS_AGGREGATE_LOOKBACK_DAYS=7
@@ -133,6 +138,65 @@ Cleanup behavior:
 
 The retention job is batched and idempotent. It must never touch ledger,
 payments, balance history or VK-side message history.
+
+## VK Inbound Payload Retention Runtime
+
+New VK callback events must persist only minimized metadata in
+`inbound_events.payload`. The raw callback body, message text, button payloads,
+attachments and URLs are not stored in this payload field.
+
+Runtime variables:
+
+```env
+RETENTION_VK_INBOUND_PAYLOAD_DAYS=30
+VK_INBOUND_RETENTION_BATCH_SIZE=500
+```
+
+Cleanup behavior:
+
+- `inbound_events` rows for VK older than
+  `RETENTION_VK_INBOUND_PAYLOAD_DAYS` are marked with `expires_at` in batches.
+- Retention status/dry-run can report expired candidate counts without selecting
+  raw payloads.
+- Expired VK rows from a previous pass are redacted in place by replacing
+  `payload` with bounded metadata (`redacted`, `source`, `event_type`,
+  `payload_class` and boolean presence flags). Idempotency keys, event ids,
+  peer/user ids and status columns remain available for deduplication and
+  support.
+- Rollout should capture a retention dry-run/status report after the first
+  expiry-mark pass and before enabling/allowing the next redaction pass.
+
+Redaction is irreversible unless the operator restores from a database backup.
+
+## Command Raw Text Retention Runtime
+
+`commands.raw_text` is classified as `user_content`. It is useful for short
+operational diagnostics and idempotent command history, but durable job
+execution must use `jobs.params`, attachment references and normalized command
+metadata instead of relying on raw command text forever.
+
+Runtime variables:
+
+```env
+RETENTION_COMMAND_RAW_TEXT_DAYS=30
+COMMAND_RETENTION_BATCH_SIZE=500
+```
+
+Cleanup behavior:
+
+- `commands` rows older than `RETENTION_COMMAND_RAW_TEXT_DAYS` are marked with
+  `expires_at` in batches only when they have no linked unfinished jobs.
+- Retention status/dry-run reports expired command rows by table/class counts
+  only. It never selects raw command text.
+- Expired command rows are redacted in place: `raw_text=''`,
+  `redacted_at=<cleanup time>`. Command ids, idempotency keys, command type,
+  parsed args, attachment ids, correlation ids and job links are preserved.
+- Commands linked to active or not-yet-finished jobs are skipped until those
+  jobs reach a safe terminal/support state.
+- Redaction must not touch `jobs.params`, ledger, payment, reservation or
+  balance tables.
+
+Redaction is irreversible unless the operator restores from a database backup.
 
 ## Job Logs And Provider Payload Runtime
 

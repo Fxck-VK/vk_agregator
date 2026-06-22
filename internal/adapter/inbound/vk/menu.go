@@ -14,6 +14,7 @@ import (
 
 	vkdelivery "vk-ai-aggregator/internal/adapter/delivery/vk"
 	"vk-ai-aggregator/internal/domain"
+	"vk-ai-aggregator/internal/platform/logging"
 )
 
 type menuScreen struct {
@@ -369,8 +370,14 @@ func (h *Handler) sendControlResponse(ctx context.Context, t domain.CommandType,
 		if pending, ok, err := h.activeTopUpIntent(ctx, user.ID, returnURL); err != nil {
 			return fmt.Errorf("load active top-up intent: %w", err)
 		} else if ok {
-			msgText = topUpPendingText(balance, pending)
-			keyboard = topUpPendingKeyboard(pending.ConfirmationURL)
+			link, ok := h.topUpPaymentLink(pending)
+			if !ok {
+				msgText = topUpPaymentUnavailableText(balance)
+				keyboard = backKeyboard()
+			} else {
+				msgText = topUpPendingText(balance, pending)
+				keyboard = topUpPendingKeyboard(link)
+			}
 		} else {
 			products, err := h.topUpProducts(ctx)
 			if err != nil {
@@ -427,7 +434,7 @@ func (h *Handler) personalizedWelcomeName(ctx context.Context, user *domain.User
 	if err != nil {
 		h.logger.Warn("vk user profile lookup failed",
 			slog.Int64("vk_user_id", user.VKUserID),
-			slog.String("error", err.Error()))
+			logging.ErrorAttr(err))
 		return ""
 	}
 
@@ -437,7 +444,7 @@ func (h *Handler) personalizedWelcomeName(ctx context.Context, user *domain.User
 	if err := h.deps.Users.Update(ctx, user); err != nil {
 		h.logger.Warn("vk user profile cache update failed",
 			slog.Int64("vk_user_id", user.VKUserID),
-			slog.String("error", err.Error()))
+			logging.ErrorAttr(err))
 	}
 	return user.VKFirstName
 }
@@ -478,7 +485,7 @@ func (h *Handler) deliverControlResponse(ctx context.Context, t domain.CommandTy
 				slog.String("command_type", string(t)),
 				slog.Int64("peer_id", peerID),
 				slog.Int64("message_id", active.MessageID),
-				slog.String("error", err.Error()))
+				logging.ErrorAttr(err))
 		}
 	}
 	return h.sendControlMessage(ctx, t, peerID, randomID, msg)
@@ -495,7 +502,7 @@ func (h *Handler) editControlMessage(ctx context.Context, t domain.CommandType, 
 
 	h.logger.Warn("vk keyboard edit failed; retrying control response edit without keyboard",
 		slog.String("command_type", string(t)),
-		slog.String("error", err.Error()))
+		logging.ErrorAttr(err))
 	msg.Keyboard = nil
 	return h.deps.Control.EditMessage(ctx, peerID, messageID, msg)
 }
@@ -511,7 +518,7 @@ func (h *Handler) sendControlMessage(ctx context.Context, t domain.CommandType, 
 
 	h.logger.Warn("vk keyboard send failed; retrying control response without keyboard",
 		slog.String("command_type", string(t)),
-		slog.String("error", err.Error()))
+		logging.ErrorAttr(err))
 	msg.Keyboard = nil
 	return h.deps.Control.SendMessage(ctx, peerID, randomID, msg)
 }
@@ -565,14 +572,16 @@ func (h *Handler) sendTopUpPaymentLink(ctx context.Context, idemKey string, peer
 		h.logger.Warn("vk top-up payment link skipped because VK_ACCESS_TOKEN is not configured")
 		return 0, nil
 	}
-	link := strings.TrimSpace(intent.ConfirmationURL)
+	link, ok := h.topUpPaymentLink(intent)
+	if !ok {
+		return 0, h.sendTopUpNotice(ctx, idemKey, peerID, topUpPaymentUnavailableText(balance))
+	}
 	msg := vkdelivery.Message{
-		Text: fmt.Sprintf("%s СЧЕТ\nПокупка: %d кристаллов\nБаланс сейчас: %d кристаллов\nПосле оплаты: %d кристаллов\n\nОткройте оплату кнопкой ниже или по ссылке:\n%s\n\nСсылка на оплату действует ограниченное время.",
+		Text: fmt.Sprintf("%s СЧЕТ\nПокупка: %d кристаллов\nБаланс сейчас: %d кристаллов\nПосле оплаты: %d кристаллов\n\nОткройте оплату кнопкой ниже.\nСсылка на оплату действует ограниченное время.",
 			formatRubAmount(intent.Amount),
 			intent.Credits,
 			balance,
 			balance+intent.Credits,
-			link,
 		),
 		Keyboard: paymentLinkKeyboard(link),
 	}
@@ -611,7 +620,7 @@ func (h *Handler) sendGPTPendingMessage(ctx context.Context, idemKey string, pee
 	if err != nil {
 		h.logger.Warn("vk gpt pending message send failed",
 			slog.Int64("peer_id", peerID),
-			slog.String("error", err.Error()))
+			logging.ErrorAttr(err))
 		return 0
 	}
 	return result.MessageID
@@ -629,7 +638,7 @@ func (h *Handler) sendPhotoPendingMessage(ctx context.Context, idemKey string, p
 	if err != nil {
 		h.logger.Warn("vk image pending message send failed",
 			slog.Int64("peer_id", peerID),
-			slog.String("error", err.Error()))
+			logging.ErrorAttr(err))
 		return 0
 	}
 	return result.MessageID
@@ -647,7 +656,7 @@ func (h *Handler) sendVideoPendingMessage(ctx context.Context, idemKey string, p
 	if err != nil {
 		h.logger.Warn("vk video pending message send failed",
 			slog.Int64("peer_id", peerID),
-			slog.String("error", err.Error()))
+			logging.ErrorAttr(err))
 		return 0
 	}
 	return result.MessageID
@@ -661,7 +670,7 @@ func (h *Handler) editGPTPendingMessage(ctx context.Context, peerID, messageID i
 		h.logger.Warn("vk gpt pending message edit failed",
 			slog.Int64("peer_id", peerID),
 			slog.Int64("message_id", messageID),
-			slog.String("error", err.Error()))
+			logging.ErrorAttr(err))
 	}
 }
 
@@ -764,15 +773,19 @@ func (h *Handler) videoRouteCommandEnabled(command domain.CommandType) bool {
 }
 
 func (h *Handler) getActiveMenu(peerID int64) (activeMenuMessage, bool) {
+	now := time.Now()
 	h.menuMu.Lock()
 	defer h.menuMu.Unlock()
+	h.pruneActiveMenusLocked(now, peerID)
 	msg, ok := h.activeMenus[peerID]
 	return msg, ok
 }
 
 func (h *Handler) hasActiveMenu(peerID int64) bool {
+	now := time.Now()
 	h.menuMu.Lock()
 	defer h.menuMu.Unlock()
+	h.pruneActiveMenusLocked(now, peerID)
 	_, ok := h.activeMenus[peerID]
 	return ok
 }
@@ -781,15 +794,42 @@ func (h *Handler) setActiveMenu(peerID, messageID int64) {
 	if messageID == 0 {
 		return
 	}
+	now := time.Now()
 	h.menuMu.Lock()
 	defer h.menuMu.Unlock()
-	h.activeMenus[peerID] = activeMenuMessage{MessageID: messageID}
+	h.activeMenus[peerID] = activeMenuMessage{
+		MessageID: messageID,
+		ExpiresAt: now.Add(h.cfg.LocalUIStateTTL),
+	}
+	h.pruneActiveMenusLocked(now, peerID)
 }
 
 func (h *Handler) clearActiveMenu(peerID int64) {
 	h.menuMu.Lock()
 	defer h.menuMu.Unlock()
 	delete(h.activeMenus, peerID)
+}
+
+func (h *Handler) pruneActiveMenusLocked(now time.Time, keepPeerID int64) {
+	for peerID, msg := range h.activeMenus {
+		if msg.MessageID == 0 || localUIStateExpired(msg.ExpiresAt, now) {
+			delete(h.activeMenus, peerID)
+		}
+	}
+	for len(h.activeMenus) > h.cfg.LocalUIStateMaxEntries {
+		removed := false
+		for peerID := range h.activeMenus {
+			if peerID == keepPeerID && len(h.activeMenus) > 1 {
+				continue
+			}
+			delete(h.activeMenus, peerID)
+			removed = true
+			break
+		}
+		if !removed {
+			return
+		}
+	}
 }
 
 func (h *Handler) applyMenuButtonMode(keyboard *vkdelivery.Keyboard) {
@@ -822,7 +862,7 @@ func (h *Handler) sendPersistentMenuButton(ctx context.Context, idemKey string, 
 	}
 	if vkdelivery.IsAPIErrorCode(err, 911, 912) {
 		h.logger.Warn("vk persistent keyboard send skipped",
-			slog.String("error", err.Error()))
+			logging.ErrorAttr(err))
 		return nil
 	}
 	return err
@@ -898,11 +938,11 @@ func topUpCatalogText(balance int64, products []*domain.PaymentProduct) string {
 }
 
 func topUpPendingText(balance int64, intent *domain.PaymentIntent) string {
-	link := strings.TrimSpace(intent.ConfirmationURL)
-	if link != "" {
-		return fmt.Sprintf("💰 У вас есть незавершенный платеж\n\nБаланс сейчас: %d кристаллов\nПакет: %d кристаллов\nСумма: %s\nПосле оплаты: %d кристаллов\n\nПродолжите оплату кнопкой ниже или по ссылке:\n%s\n\nПосле оплаты баланс обновится автоматически.", balance, intent.Credits, formatRubAmount(intent.Amount), balance+intent.Credits, link)
-	}
-	return fmt.Sprintf("💰 У вас есть незавершенный платеж\n\nБаланс сейчас: %d кристаллов\nПакет: %d кристаллов\nСумма: %s\nПосле оплаты: %d кристаллов\n\nПосле оплаты баланс обновится автоматически.", balance, intent.Credits, formatRubAmount(intent.Amount), balance+intent.Credits)
+	return fmt.Sprintf("💰 У вас есть незавершенный платеж\n\nБаланс сейчас: %d кристаллов\nПакет: %d кристаллов\nСумма: %s\nПосле оплаты: %d кристаллов\n\nПродолжите оплату кнопкой ниже.\nПосле оплаты баланс обновится автоматически.", balance, intent.Credits, formatRubAmount(intent.Amount), balance+intent.Credits)
+}
+
+func topUpPaymentUnavailableText(balance int64) string {
+	return fmt.Sprintf("💰 Пополнить баланс\n\nБаланс сейчас: %d кристаллов\n\nПлатежи временно недоступны. Попробуйте позже.", balance)
 }
 
 func topUpCatalogKeyboard(products []*domain.PaymentProduct, forceNew bool) *vkdelivery.Keyboard {
@@ -941,6 +981,34 @@ func topUpPendingKeyboard(link string) *vkdelivery.Keyboard {
 			},
 		},
 	}
+}
+
+func (h *Handler) topUpPaymentLink(intent *domain.PaymentIntent) (string, bool) {
+	if intent == nil || intent.ID == uuid.Nil {
+		return "", false
+	}
+	u, ok := h.topUpPaymentRedirectBase()
+	if !ok {
+		return "", false
+	}
+	u.Path = strings.TrimRight(u.Path, "/") + "/payments/vk/" + intent.ID.String()
+	u.RawQuery = ""
+	u.Fragment = ""
+	return u.String(), true
+}
+
+func (h *Handler) topUpPaymentRedirectConfigured() bool {
+	_, ok := h.topUpPaymentRedirectBase()
+	return ok
+}
+
+func (h *Handler) topUpPaymentRedirectBase() (*url.URL, bool) {
+	base := strings.TrimSpace(h.cfg.TopUpPaymentRedirectBaseURL)
+	u, err := url.Parse(base)
+	if err != nil || u.Scheme != "https" || u.Host == "" || u.RawQuery != "" || u.Fragment != "" {
+		return nil, false
+	}
+	return u, true
 }
 
 func topUpProductLabel(product *domain.PaymentProduct) string {

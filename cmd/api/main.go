@@ -20,6 +20,7 @@ import (
 
 	adminapi "vk-ai-aggregator/internal/adapter/inbound/admin"
 	billingapi "vk-ai-aggregator/internal/adapter/inbound/billing"
+	paymentredirect "vk-ai-aggregator/internal/adapter/inbound/paymentredirect"
 	redisqueue "vk-ai-aggregator/internal/adapter/queue/redis"
 	"vk-ai-aggregator/internal/adapter/storage/postgres"
 	apiapp "vk-ai-aggregator/internal/app/api"
@@ -48,7 +49,7 @@ func main() {
 	// Fail closed: refuse to start in production without the secrets that
 	// protect the webhook intake and admin API (audit S1).
 	if err := cfg.Validate(); err != nil {
-		logger.Error("invalid configuration", "error", err)
+		logger.Error("invalid configuration", logging.ErrorAttr(err))
 		os.Exit(1)
 	}
 
@@ -61,7 +62,7 @@ func main() {
 		CriticalSampleRatio: cfg.TracingCriticalSampleRatio,
 	}, logger)
 	if err != nil {
-		logger.Error("tracing init failed", "error", err)
+		logger.Error("tracing init failed", logging.ErrorAttr(err))
 		os.Exit(1)
 	}
 	defer func() {
@@ -72,7 +73,7 @@ func main() {
 
 	pool, err := postgres.NewPoolConfigured(ctx, cfg.DatabaseURL, cfg.DBMaxConns, cfg.DBMinConns)
 	if err != nil {
-		logger.Error("postgres connect failed", "error", err)
+		logger.Error("postgres connect failed", logging.ErrorAttr(err))
 		os.Exit(1)
 	}
 	defer pool.Close()
@@ -85,7 +86,7 @@ func main() {
 	mediaQueueGuard := redisqueue.NewBackpressureGuard(rdb, cfg.WorkerGroup, cfg.MediaQueueDegradeThreshold)
 	videoRouteResolver, err := videoRouteResolverFromConfig(cfg)
 	if err != nil {
-		logger.Error("video route catalog wiring failed", "error", err)
+		logger.Error("video route catalog wiring failed", logging.ErrorAttr(err))
 		os.Exit(1)
 	}
 	core, err := apiapp.NewSharedCore(pool, cfg, apiapp.WithOrchestratorOptions(
@@ -94,7 +95,7 @@ func main() {
 		joborchestrator.WithVideoRouteResolver(videoRouteResolver),
 	))
 	if err != nil {
-		logger.Error("api core wiring failed", "error", err)
+		logger.Error("api core wiring failed", logging.ErrorAttr(err))
 		os.Exit(1)
 	}
 	vkHandler := vkbot.NewHandler(ctx, cfg, vkbot.Deps{
@@ -136,6 +137,11 @@ func main() {
 		PaymentOps: core.PaymentOps,
 		Audits:     core.Audits,
 	})
+	paymentRedirect := paymentredirect.NewHandler(paymentredirect.Deps{
+		Payment:     core.Payment,
+		RateLimiter: ratelimit.New(cfg.PaymentRedirectRateLimitRPS, cfg.PaymentRedirectRateLimitBurst),
+		Logger:      logger,
+	})
 
 	miniapp := miniappapp.NewHandler(ctx, cfg, miniappapp.Deps{
 		Users:         core.Users,
@@ -159,6 +165,7 @@ func main() {
 	mux.Handle("/webhooks/vk", webhookLimiter.Middleware(metrics.Middleware("webhook", vkHandler)))
 	mux.Handle("/admin/", metrics.Middleware("admin", admin.Routes()))
 	mux.Handle("/billing/", metrics.Middleware("billing", billing.Routes()))
+	mux.Handle("/payments/", metrics.Middleware("payment_redirect", paymentRedirect.Routes()))
 	mux.Handle("/miniapp/", metrics.Middleware("miniapp", miniapp.Routes()))
 	mux.Handle("GET /metrics", metrics.PrivateHandler())
 	mux.HandleFunc("GET /health", healthHandler(pool, rdb))
@@ -175,7 +182,7 @@ func main() {
 	go func() {
 		logger.Info("api listening", "addr", cfg.HTTPAddr)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			logger.Error("server error", "error", err)
+			logger.Error("server error", logging.ErrorAttr(err))
 			os.Exit(1)
 		}
 	}()

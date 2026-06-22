@@ -215,6 +215,12 @@ The nightly quality workflow already discovers `tests/k6/*.js`. To avoid
 failing CI when no API server is running, the script is disabled by default and
 performs a no-op unless `K6_BASE_URL` or `K6_RUN=1` is set.
 
+All checked-in k6 scripts refuse known production hostnames such as
+`vk.neiirohub.ru`, `app.neiirohub.ru` and `neiirohub.ru` by default. The
+override `K6_ALLOW_PRODUCTION_LIVE_SMOKE=true` is reserved only for a separate,
+human-approved live smoke; it must not be used for generic load tests or
+capacity runs.
+
 ### Local Run
 
 Start a load-test API contour first:

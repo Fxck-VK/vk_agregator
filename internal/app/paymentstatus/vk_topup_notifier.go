@@ -11,6 +11,7 @@ import (
 
 	vkdelivery "vk-ai-aggregator/internal/adapter/delivery/vk"
 	"vk-ai-aggregator/internal/domain"
+	"vk-ai-aggregator/internal/platform/logging"
 	"vk-ai-aggregator/internal/service/paymentservice"
 )
 
@@ -40,7 +41,7 @@ func (n VKTopUpNotifier) PaymentStatusChanged(ctx context.Context, event payment
 		n.logger().Warn("vk top-up status edit failed",
 			slog.String("payment_intent_id", event.Intent.ID.String()),
 			slog.String("status", string(event.To)),
-			slog.String("error", err.Error()))
+			logging.ErrorAttr(err))
 		return err
 	}
 	n.logger().Info("vk top-up status edit completed",

@@ -672,6 +672,164 @@ func (r *MaintenanceRepository) RedactExpiredProviderPayloads(ctx context.Contex
 	return tag.RowsAffected(), nil
 }
 
+// ExpireInboundEvents marks old VK inbound payloads for redaction while
+// preserving idempotency and support metadata columns.
+func (r *MaintenanceRepository) ExpireInboundEvents(ctx context.Context, cutoff, expiresAt time.Time, limit int) (int64, error) {
+	if limit <= 0 {
+		limit = 500
+	}
+	const q = `
+		WITH candidates AS (
+			SELECT id
+			FROM inbound_events
+			WHERE retention_class = $1
+			  AND source = 'vk'
+			  AND deleted_at IS NULL
+			  AND redacted_at IS NULL
+			  AND expires_at IS NULL
+			  AND created_at <= $2
+			ORDER BY created_at ASC, id ASC
+			LIMIT $4
+		)
+		UPDATE inbound_events e
+		SET expires_at = $3,
+		    updated_at = now()
+		FROM candidates c
+		WHERE e.id = c.id`
+	tag, err := r.db.Exec(ctx, q, domain.DataClassUserContent, cutoff, expiresAt, limit)
+	if err != nil {
+		return 0, mapError(err)
+	}
+	return tag.RowsAffected(), nil
+}
+
+// RedactExpiredInboundEvents replaces raw VK callback JSON with bounded
+// metadata. Idempotency keys, source ids and status columns remain intact.
+func (r *MaintenanceRepository) RedactExpiredInboundEvents(ctx context.Context, now time.Time, limit int) (int64, error) {
+	if limit <= 0 {
+		limit = 500
+	}
+	const q = `
+		WITH candidates AS (
+			SELECT id
+			FROM inbound_events
+			WHERE retention_class = $1
+			  AND source = 'vk'
+			  AND deleted_at IS NULL
+			  AND redacted_at IS NULL
+			  AND expires_at IS NOT NULL
+			  AND expires_at <= $2
+			ORDER BY expires_at ASC, id ASC
+			LIMIT $3
+		)
+		UPDATE inbound_events e
+		SET payload = jsonb_build_object(
+		        'redacted', true,
+		        'source', e.source,
+		        'event_type', e.event_type,
+		        'payload_class', 'vk_callback_metadata',
+		        'has_vk_event_id', e.vk_event_id <> '',
+		        'has_group_id', e.group_id <> 0,
+		        'has_peer_id', e.peer_id <> 0,
+		        'has_vk_user_id', e.vk_user_id <> 0
+		    ),
+		    redacted_at = $2,
+		    updated_at = now()
+		FROM candidates c
+		WHERE e.id = c.id`
+	tag, err := r.db.Exec(ctx, q, domain.DataClassUserContent, now, limit)
+	if err != nil {
+		return 0, mapError(err)
+	}
+	return tag.RowsAffected(), nil
+}
+
+// ExpireCommandRawText marks old normalized command text for redaction. Command
+// rows, idempotency keys and job links stay intact. Commands with unfinished
+// linked jobs are skipped so active work can still reconstruct from durable job
+// params and metadata.
+func (r *MaintenanceRepository) ExpireCommandRawText(ctx context.Context, cutoff, expiresAt time.Time, limit int) (int64, error) {
+	if limit <= 0 {
+		limit = 500
+	}
+	const q = `
+		WITH candidates AS (
+			SELECT c.id
+			FROM commands c
+			WHERE c.retention_class = $1
+			  AND c.deleted_at IS NULL
+			  AND c.redacted_at IS NULL
+			  AND c.expires_at IS NULL
+			  AND c.created_at <= $2
+			  AND NOT EXISTS (
+			      SELECT 1
+			      FROM jobs j
+			      WHERE j.command_id = c.id
+			        AND j.status <> ALL($5::text[])
+			  )
+			ORDER BY c.created_at ASC, c.id ASC
+			LIMIT $4
+		)
+		UPDATE commands c
+		SET expires_at = $3,
+		    updated_at = now()
+		FROM candidates candidate
+		WHERE c.id = candidate.id`
+	tag, err := r.db.Exec(ctx, q, domain.DataClassUserContent, cutoff, expiresAt, limit, commandRawTextSafeJobStatuses())
+	if err != nil {
+		return 0, mapError(err)
+	}
+	return tag.RowsAffected(), nil
+}
+
+// RedactExpiredCommandRawText removes old raw user message text while keeping
+// command identity, args, attachment references and job relationships.
+func (r *MaintenanceRepository) RedactExpiredCommandRawText(ctx context.Context, now time.Time, limit int) (int64, error) {
+	if limit <= 0 {
+		limit = 500
+	}
+	const q = `
+		WITH candidates AS (
+			SELECT c.id
+			FROM commands c
+			WHERE c.retention_class = $1
+			  AND c.deleted_at IS NULL
+			  AND c.redacted_at IS NULL
+			  AND c.expires_at IS NOT NULL
+			  AND c.expires_at <= $2
+			  AND NOT EXISTS (
+			      SELECT 1
+			      FROM jobs j
+			      WHERE j.command_id = c.id
+			        AND j.status <> ALL($4::text[])
+			  )
+			ORDER BY c.expires_at ASC, c.created_at ASC, c.id ASC
+			LIMIT $3
+		)
+		UPDATE commands c
+		SET raw_text = '',
+		    redacted_at = $2,
+		    updated_at = now()
+		FROM candidates candidate
+		WHERE c.id = candidate.id`
+	tag, err := r.db.Exec(ctx, q, domain.DataClassUserContent, now, limit, commandRawTextSafeJobStatuses())
+	if err != nil {
+		return 0, mapError(err)
+	}
+	return tag.RowsAffected(), nil
+}
+
+func commandRawTextSafeJobStatuses() []string {
+	return []string{
+		string(domain.JobStatusSucceeded),
+		string(domain.JobStatusFailedTerminal),
+		string(domain.JobStatusCancelled),
+		string(domain.JobStatusExpired),
+		string(domain.JobStatusRefunded),
+		string(domain.JobStatusRejected),
+	}
+}
+
 // ExpireConversationMessages marks old raw conversation messages for redaction.
 // It preserves rows so sequence numbers and support metadata stay stable.
 func (r *MaintenanceRepository) ExpireConversationMessages(ctx context.Context, cutoff, expiresAt time.Time, limit int) (int64, error) {
@@ -1194,7 +1352,9 @@ type retentionStatusSpec struct {
 func retentionStatusSpecs() []retentionStatusSpec {
 	return []retentionStatusSpec{
 		{tableName: "jobs", retentionClass: domain.DataClassOperational, createdColumn: "created_at"},
+		{tableName: "commands", retentionClass: domain.DataClassUserContent, createdColumn: "created_at"},
 		{tableName: "provider_tasks", retentionClass: domain.DataClassProviderPayload, createdColumn: "created_at"},
+		{tableName: "inbound_events", retentionClass: domain.DataClassUserContent, createdColumn: "created_at"},
 		{tableName: "conversation_messages", retentionClass: domain.DataClassUserContent, createdColumn: "created_at"},
 		{tableName: "conversation_summaries", retentionClass: domain.DataClassUserContent, createdColumn: "created_at"},
 		{tableName: "artifacts", retentionClass: domain.DataClassArtifactMetadata, createdColumn: "created_at", sizeColumn: "size_bytes"},

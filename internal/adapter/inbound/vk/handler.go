@@ -19,12 +19,14 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/attribute"
 
 	vkdelivery "vk-ai-aggregator/internal/adapter/delivery/vk"
 	"vk-ai-aggregator/internal/domain"
+	"vk-ai-aggregator/internal/platform/logging"
 	"vk-ai-aggregator/internal/platform/metrics"
 	"vk-ai-aggregator/internal/platform/tracing"
 	"vk-ai-aggregator/internal/service/antispam"
@@ -80,6 +82,9 @@ type Config struct {
 	// TopUpReturnURL is the server-owned YooKassa redirect target for bot
 	// top-up intents.
 	TopUpReturnURL string
+	// TopUpPaymentRedirectBaseURL is the public API base used to hide provider
+	// confirmation URLs behind a server-owned redirect endpoint.
+	TopUpPaymentRedirectBaseURL string
 	// TopUpStatusEditEnabled stores the VK payment message id so provider
 	// webhooks can edit it after a final payment status.
 	TopUpStatusEditEnabled bool
@@ -90,6 +95,11 @@ type Config struct {
 	MaxUploadImageWidth      int
 	MaxUploadImageHeight     int
 	MaxUploadImagePixels     int64
+	// LocalUIStateTTL bounds best-effort process-local UI caches such as the
+	// last editable menu message and dialog-mode fallback cache.
+	LocalUIStateTTL time.Duration
+	// LocalUIStateMaxEntries caps each process-local UI cache by peer count.
+	LocalUIStateMaxEntries int
 }
 
 // MenuFeatureFlags allows deployments to hide VK menu buttons without deleting
@@ -164,7 +174,7 @@ type Handler struct {
 	activeMenus map[int64]activeMenuMessage
 
 	modeMu      sync.Mutex
-	dialogModes map[int64]dialogMode
+	dialogModes map[int64]cachedDialogMode
 }
 
 // NewHandler builds a VK callback handler.
@@ -175,12 +185,14 @@ func NewHandler(cfg Config, deps Deps) *Handler {
 	}
 	cfg.MenuButtonMode = normalizeMenuButtonMode(cfg.MenuButtonMode)
 	cfg.UnroutedTextMode = normalizeUnroutedTextMode(cfg.UnroutedTextMode)
+	cfg.LocalUIStateTTL = normalizeLocalUIStateTTL(cfg.LocalUIStateTTL)
+	cfg.LocalUIStateMaxEntries = normalizeLocalUIStateMaxEntries(cfg.LocalUIStateMaxEntries)
 	return &Handler{
 		cfg:         cfg,
 		deps:        deps,
 		logger:      logger,
 		activeMenus: map[int64]activeMenuMessage{},
-		dialogModes: map[int64]dialogMode{},
+		dialogModes: map[int64]cachedDialogMode{},
 	}
 }
 
@@ -199,6 +211,11 @@ const (
 	unroutedTextModeGPT    = "gpt"
 )
 
+const (
+	defaultLocalUIStateTTL        = time.Hour
+	defaultLocalUIStateMaxEntries = 10000
+)
+
 func normalizeUnroutedTextMode(mode string) string {
 	switch strings.ToLower(strings.TrimSpace(mode)) {
 	case unroutedTextModeSilent:
@@ -210,8 +227,28 @@ func normalizeUnroutedTextMode(mode string) string {
 	}
 }
 
+func normalizeLocalUIStateTTL(ttl time.Duration) time.Duration {
+	if ttl <= 0 {
+		return defaultLocalUIStateTTL
+	}
+	return ttl
+}
+
+func normalizeLocalUIStateMaxEntries(maxEntries int) int {
+	if maxEntries <= 0 {
+		return defaultLocalUIStateMaxEntries
+	}
+	return maxEntries
+}
+
 type activeMenuMessage struct {
 	MessageID int64
+	ExpiresAt time.Time
+}
+
+type cachedDialogMode struct {
+	Mode      dialogMode
+	ExpiresAt time.Time
 }
 
 type dialogMode string
@@ -546,7 +583,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "message_new":
 		if err := h.handleMessageNew(r.Context(), cb, body); err != nil {
 			h.logger.Error("vk message_new processing failed",
-				slog.Int64("group_id", cb.GroupID), slog.String("error", err.Error()))
+				slog.Int64("group_id", cb.GroupID), logging.ErrorAttr(err))
 			http.Error(w, "processing error", http.StatusInternalServerError)
 			return
 		}
@@ -554,7 +591,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "message_event":
 		if err := h.handleMessageEvent(r.Context(), cb, body); err != nil {
 			h.logger.Error("vk message_event processing failed",
-				slog.Int64("group_id", cb.GroupID), slog.String("error", err.Error()))
+				slog.Int64("group_id", cb.GroupID), logging.ErrorAttr(err))
 			http.Error(w, "processing error", http.StatusInternalServerError)
 			return
 		}
@@ -689,7 +726,7 @@ func (h *Handler) answerMessageEvent(ctx context.Context, eventID string, userID
 	if err := h.deps.Control.AnswerMessageEvent(ctx, eventID, userID, peerID); err != nil {
 		h.logger.Warn("vk message_event answer failed",
 			slog.Int64("peer_id", peerID),
-			slog.String("error", err.Error()))
+			logging.ErrorAttr(err))
 	}
 }
 
@@ -697,7 +734,7 @@ func (h *Handler) answerMessageEvent(ctx context.Context, eventID string, userID
 func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, eventID, idemKey string, fromID, peerID int64, text, payload, ref string, attachments []vkAttachment, controlOnly bool) error {
 	metrics.ObserveProductEvent("vk_bot", "inbound", "received", "unknown", "unknown", cb.Type)
 
-	// InboundEvent: persist the raw event for audit and reprocessing.
+	// InboundEvent: persist only minimized metadata for audit and reprocessing.
 	inbound := &domain.InboundEvent{
 		Source:         "vk",
 		EventType:      cb.Type,
@@ -705,7 +742,7 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 		VKEventID:      eventID,
 		PeerID:         peerID,
 		VKUserID:       fromID,
-		Payload:        json.RawMessage(rawBody),
+		Payload:        redactedVKInboundPayload(cb, eventID, peerID, fromID, controlOnly),
 		Status:         domain.InboundReceived,
 		IdempotencyKey: idemKey,
 	}
@@ -816,19 +853,17 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 			CreatesJob:  parsed.CreatesJob(),
 		})
 		if err != nil {
-			h.logger.Warn("vk anti-spam check failed; allowing event",
-				slog.Int64("vk_user_id", fromID),
-				slog.String("error", err.Error()))
+			blocked, err := h.handleAntiSpamDegraded(ctx, err, inbound.ID, idemKey, peerID, parsed)
+			if err != nil {
+				return err
+			}
+			if blocked {
+				return nil
+			}
 		} else if !decision.Allowed {
 			metrics.ObserveProductEvent("vk_bot", "command", "antispam", productCommandOperation(parsed), productCommandModality(parsed), "denied")
-			if err := h.sendAntiSpamResponse(ctx, idemKey, peerID, decision); err != nil {
-				return fmt.Errorf("send anti-spam response: %w", err)
-			}
-			if err := h.deps.Inbound.SetStatus(ctx, inbound.ID, domain.InboundProcessed); err != nil {
-				return fmt.Errorf("mark inbound processed: %w", err)
-			}
-			if err := h.deps.Idempotency.MarkCompleted(ctx, idemKey, inbound.ID); err != nil {
-				return fmt.Errorf("mark idempotency completed: %w", err)
+			if err := h.finishAntiSpamBlockedEvent(ctx, inbound.ID, idemKey, peerID, parsed, decision); err != nil {
+				return err
 			}
 			return nil
 		}
@@ -891,16 +926,16 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 		if err := h.sendUnroutedTextResponse(ctx, idemKey, peerID); err != nil {
 			return fmt.Errorf("send unrouted text response: %w", err)
 		}
-	case parsed.Type == domain.CommandTopUp && topUpAction == topUpActionNewPayment:
-		if err := h.sendTopUpCatalog(ctx, idemKey, peerID, user, true, controlFromPayload); err != nil {
-			return fmt.Errorf("send top-up catalog: %w", err)
-		}
-		h.clearDialogMode(ctx, peerID)
 	case topUpProductCode != "":
 		topUpForceNew := topUpAction == topUpActionNewPayment
 		if err := h.createAndSendTopUpPayment(ctx, cb.GroupID, eventID, idemKey, peerID, user, topUpProductCode, topUpForceNew); err != nil {
 			return fmt.Errorf("create top-up payment: %w", err)
 		}
+	case parsed.Type == domain.CommandTopUp && topUpAction == topUpActionNewPayment:
+		if err := h.sendTopUpCatalog(ctx, idemKey, peerID, user, true, controlFromPayload); err != nil {
+			return fmt.Errorf("send top-up catalog: %w", err)
+		}
+		h.clearDialogMode(ctx, peerID)
 	case parsed.Type == domain.CommandMenuVideoRouteSelect:
 		if err := h.sendVideoDurationSelection(ctx, videoRouteAlias, idemKey, parsed.Type, peerID, controlFromPayload); err != nil {
 			return fmt.Errorf("send video duration selection: %w", err)
@@ -1057,6 +1092,35 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 		return fmt.Errorf("mark idempotency completed: %w", err)
 	}
 	return nil
+}
+
+func redactedVKInboundPayload(cb callback, eventID string, peerID, fromID int64, controlOnly bool) json.RawMessage {
+	summary := struct {
+		Redacted     bool   `json:"redacted"`
+		Source       string `json:"source"`
+		EventType    string `json:"event_type"`
+		PayloadClass string `json:"payload_class"`
+		ControlOnly  bool   `json:"control_only,omitempty"`
+		HasEventID   bool   `json:"has_vk_event_id"`
+		HasGroupID   bool   `json:"has_group_id"`
+		HasPeerID    bool   `json:"has_peer_id"`
+		HasVKUserID  bool   `json:"has_vk_user_id"`
+	}{
+		Redacted:     true,
+		Source:       "vk",
+		EventType:    cb.Type,
+		PayloadClass: "vk_callback_metadata",
+		ControlOnly:  controlOnly,
+		HasEventID:   strings.TrimSpace(eventID) != "",
+		HasGroupID:   cb.GroupID != 0,
+		HasPeerID:    peerID != 0,
+		HasVKUserID:  fromID != 0,
+	}
+	b, err := json.Marshal(summary)
+	if err != nil {
+		return json.RawMessage(`{"redacted":true,"source":"vk","payload_class":"vk_callback_metadata"}`)
+	}
+	return json.RawMessage(b)
 }
 
 func productCommandOperation(parsed commandrouter.Result) string {
@@ -1216,6 +1280,13 @@ func (h *Handler) createAndSendTopUpPayment(ctx context.Context, groupID int64, 
 	if h.deps.Payment == nil {
 		return h.sendTopUpNotice(ctx, idemKey, peerID, "Платежи пока недоступны. Попробуйте позже.")
 	}
+	if !h.topUpPaymentRedirectConfigured() {
+		balance, err := h.currentBalance(ctx, user)
+		if err != nil {
+			return err
+		}
+		return h.sendTopUpNotice(ctx, idemKey, peerID, topUpPaymentUnavailableText(balance))
+	}
 	returnURL := h.topUpReturnURL(groupID)
 	if !forceNew {
 		if active, ok, err := h.activeTopUpIntent(ctx, user.ID, returnURL); err != nil {
@@ -1247,7 +1318,7 @@ func (h *Handler) createAndSendTopUpPayment(ctx context.Context, groupID int64, 
 		}
 		return err
 	}
-	if result.Intent == nil || strings.TrimSpace(result.Intent.ConfirmationURL) == "" {
+	if result.Intent == nil || result.Intent.Status != domain.PaymentIntentWaitingForUser {
 		return h.sendTopUpNotice(ctx, idemKey, peerID, "Платеж создан, но ссылка на оплату пока недоступна. Попробуйте позже.")
 	}
 	h.clearDialogMode(ctx, peerID)
@@ -1268,7 +1339,7 @@ func (h *Handler) createAndSendTopUpPayment(ctx context.Context, groupID int64, 
 		}); err != nil {
 			h.logger.Warn("vk top-up payment message tracking failed",
 				slog.String("payment_intent_id", result.Intent.ID.String()),
-				slog.String("error", err.Error()))
+				logging.ErrorAttr(err))
 		} else {
 			h.logger.Info("vk top-up payment message tracked",
 				slog.String("payment_intent_id", result.Intent.ID.String()))
@@ -1628,6 +1699,71 @@ func (h *Handler) sendAntiSpamResponse(ctx context.Context, idemKey string, peer
 	return err
 }
 
+const antiSpamDegradedGenerationMessage = "Генерации временно приостановлены: сервис защиты от спама недоступен.\n\nМеню, баланс и помощь работают. Попробуйте чуть позже."
+
+func (h *Handler) handleAntiSpamDegraded(ctx context.Context, cause error, inboundID uuid.UUID, idemKey string, peerID int64, parsed commandrouter.Result) (bool, error) {
+	actionClass := antiSpamActionClass(parsed)
+	blockExpensive := antiSpamBlocksOnDependencyError(parsed)
+	result := "degraded_allowed"
+	if blockExpensive {
+		result = "degraded_blocked"
+	}
+	h.logger.Warn("vk anti-spam degraded",
+		slog.String("surface", "vk_bot"),
+		slog.String("action_class", actionClass),
+		slog.String("reason", "dependency_error"),
+		slog.String("operation", productCommandOperation(parsed)),
+		slog.String("modality", productCommandModality(parsed)),
+		logging.ErrorAttr(cause))
+	metrics.ObserveProductEvent("vk_bot", "command", "antispam", productCommandOperation(parsed), productCommandModality(parsed), result)
+	if !blockExpensive {
+		return false, nil
+	}
+	decision := antispam.Decision{
+		Allowed: false,
+		Kind:    antispam.DecisionDegraded,
+		Message: antiSpamDegradedGenerationMessage,
+	}
+	if err := h.finishAntiSpamBlockedEvent(ctx, inboundID, idemKey, peerID, parsed, decision); err != nil {
+		return true, err
+	}
+	return true, nil
+}
+
+func (h *Handler) finishAntiSpamBlockedEvent(ctx context.Context, inboundID uuid.UUID, idemKey string, peerID int64, parsed commandrouter.Result, decision antispam.Decision) error {
+	if err := h.sendAntiSpamResponse(ctx, idemKey, peerID, decision); err != nil {
+		h.logger.Warn("vk anti-spam response failed; completing inbound",
+			slog.String("surface", "vk_bot"),
+			slog.String("action_class", antiSpamActionClass(parsed)),
+			slog.String("decision", string(decision.Kind)),
+			logging.ErrorAttr(err))
+	}
+	if err := h.deps.Inbound.SetStatus(ctx, inboundID, domain.InboundProcessed); err != nil {
+		return fmt.Errorf("mark inbound processed: %w", err)
+	}
+	if err := h.deps.Idempotency.MarkCompleted(ctx, idemKey, inboundID); err != nil {
+		return fmt.Errorf("mark idempotency completed: %w", err)
+	}
+	return nil
+}
+
+func antiSpamBlocksOnDependencyError(parsed commandrouter.Result) bool {
+	return parsed.CreatesJob()
+}
+
+func antiSpamActionClass(parsed commandrouter.Result) string {
+	switch {
+	case parsed.CreatesJob():
+		return "generation"
+	case parsed.Type == domain.CommandTopUp:
+		return "payment"
+	case parsed.Type == domain.CommandUnknown:
+		return "unknown"
+	default:
+		return "control"
+	}
+}
+
 func (h *Handler) gptDialogActive(ctx context.Context, peerID int64) bool {
 	mode, ok := h.getDialogMode(ctx, peerID)
 	return ok && mode == dialogModeGPT
@@ -1775,11 +1911,13 @@ func parsePhotoPromptMode(mode dialogMode) (string, string, bool) {
 }
 
 func (h *Handler) getDialogMode(ctx context.Context, peerID int64) (dialogMode, bool) {
+	now := time.Now()
 	h.modeMu.Lock()
-	mode, ok := h.dialogModes[peerID]
+	h.pruneDialogModesLocked(now, peerID)
+	cached, ok := h.dialogModes[peerID]
 	h.modeMu.Unlock()
 	if ok {
-		return mode, true
+		return cached.Mode, true
 	}
 	if h.deps.DialogState == nil {
 		return "", false
@@ -1788,22 +1926,31 @@ func (h *Handler) getDialogMode(ctx context.Context, peerID int64) (dialogMode, 
 	if err != nil {
 		h.logger.Warn("vk dialog mode lookup failed",
 			slog.Int64("peer_id", peerID),
-			slog.String("error", err.Error()))
+			logging.ErrorAttr(err))
 		return "", false
 	}
 	if !ok {
 		return "", false
 	}
-	mode = dialogMode(persistedMode)
+	mode := dialogMode(persistedMode)
 	h.modeMu.Lock()
-	h.dialogModes[peerID] = mode
+	h.dialogModes[peerID] = cachedDialogMode{
+		Mode:      mode,
+		ExpiresAt: time.Now().Add(h.cfg.LocalUIStateTTL),
+	}
+	h.pruneDialogModesLocked(time.Now(), peerID)
 	h.modeMu.Unlock()
 	return mode, true
 }
 
 func (h *Handler) setDialogMode(ctx context.Context, peerID int64, mode dialogMode) {
+	now := time.Now()
 	h.modeMu.Lock()
-	h.dialogModes[peerID] = mode
+	h.dialogModes[peerID] = cachedDialogMode{
+		Mode:      mode,
+		ExpiresAt: now.Add(h.cfg.LocalUIStateTTL),
+	}
+	h.pruneDialogModesLocked(now, peerID)
 	h.modeMu.Unlock()
 	if h.deps.DialogState == nil {
 		return
@@ -1812,7 +1959,7 @@ func (h *Handler) setDialogMode(ctx context.Context, peerID int64, mode dialogMo
 		h.logger.Warn("vk dialog mode persist failed",
 			slog.Int64("peer_id", peerID),
 			slog.String("mode", string(mode)),
-			slog.String("error", err.Error()))
+			logging.ErrorAttr(err))
 	}
 }
 
@@ -1826,8 +1973,34 @@ func (h *Handler) clearDialogMode(ctx context.Context, peerID int64) {
 	if err := h.deps.DialogState.Clear(ctx, peerID); err != nil {
 		h.logger.Warn("vk dialog mode clear failed",
 			slog.Int64("peer_id", peerID),
-			slog.String("error", err.Error()))
+			logging.ErrorAttr(err))
 	}
+}
+
+func (h *Handler) pruneDialogModesLocked(now time.Time, keepPeerID int64) {
+	for peerID, cached := range h.dialogModes {
+		if cached.Mode == "" || localUIStateExpired(cached.ExpiresAt, now) {
+			delete(h.dialogModes, peerID)
+		}
+	}
+	for len(h.dialogModes) > h.cfg.LocalUIStateMaxEntries {
+		removed := false
+		for peerID := range h.dialogModes {
+			if peerID == keepPeerID && len(h.dialogModes) > 1 {
+				continue
+			}
+			delete(h.dialogModes, peerID)
+			removed = true
+			break
+		}
+		if !removed {
+			return
+		}
+	}
+}
+
+func localUIStateExpired(expiresAt, now time.Time) bool {
+	return expiresAt.IsZero() || !expiresAt.After(now)
 }
 
 func (h *Handler) ensureUser(ctx context.Context, vkUserID int64) (*domain.User, error) {

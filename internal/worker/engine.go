@@ -8,6 +8,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 
 	redisqueue "vk-ai-aggregator/internal/adapter/queue/redis"
+	"vk-ai-aggregator/internal/platform/logging"
 	"vk-ai-aggregator/internal/platform/metrics"
 	"vk-ai-aggregator/internal/platform/queue"
 	"vk-ai-aggregator/internal/platform/tracing"
@@ -125,7 +126,7 @@ func (e *Engine) Run(ctx context.Context) error {
 // Redis entries on shutdown while allowing in-flight handlers to drain.
 func (e *Engine) RunWithHandlerContext(readCtx, handlerCtx context.Context) error {
 	if err := e.RecoverWithHandlerContext(readCtx, handlerCtx); err != nil {
-		e.logger.WarnContext(readCtx, "worker recovery failed", "error", err)
+		e.logger.WarnContext(readCtx, "worker recovery failed", logging.ErrorAttr(err))
 	}
 	for {
 		if readCtx.Err() != nil {
@@ -135,7 +136,7 @@ func (e *Engine) RunWithHandlerContext(readCtx, handlerCtx context.Context) erro
 			if readCtx.Err() != nil {
 				return readCtx.Err()
 			}
-			e.logger.WarnContext(readCtx, "worker poll failed", "error", err)
+			e.logger.WarnContext(readCtx, "worker poll failed", logging.ErrorAttr(err))
 			select {
 			case <-readCtx.Done():
 				return readCtx.Err()
@@ -190,14 +191,14 @@ func (e *Engine) dispatch(ctx context.Context, deliveries []redisqueue.Delivery)
 			metrics.WorkerTaskDuration.WithLabelValues(phase, operation, modality, "error").Observe(time.Since(started).Seconds())
 			metrics.WorkerRetries.WithLabelValues(phase, operation, modality).Inc()
 			e.logger.WarnContext(taskCtx, "worker handler failed; leaving entry pending",
-				"stream", d.Stream, "job_id", d.Task.JobID, "error", err)
+				"stream", d.Stream, "job_id", d.Task.JobID, logging.ErrorAttr(err))
 			continue
 		}
 		if err := e.reader.Ack(taskCtx, d.Stream, d.ID); err != nil {
 			tracing.RecordError(span, err)
 			span.End()
 			metrics.WorkerTaskDuration.WithLabelValues(phase, operation, modality, "ack_error").Observe(time.Since(started).Seconds())
-			e.logger.WarnContext(taskCtx, "worker ack failed", "stream", d.Stream, "error", err)
+			e.logger.WarnContext(taskCtx, "worker ack failed", "stream", d.Stream, logging.ErrorAttr(err))
 			continue
 		}
 		span.End()

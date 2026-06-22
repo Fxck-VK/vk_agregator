@@ -142,6 +142,7 @@ function Assert-DevEnvTemplate {
         "PAYMENT_PROVIDER=mock",
         "PROVIDER=mock",
         "PROVIDER_CHAIN=deepinfra,apimart,poyo,runway,mock",
+        "APIMART_BASE_URL=https://api.apimart.ai/v1",
         "IMAGE_PROVIDER=mock",
         "VIDEO_PROVIDER=mock"
     )

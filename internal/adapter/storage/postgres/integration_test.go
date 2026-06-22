@@ -117,6 +117,31 @@ func uniqueVKID() int64 {
 	return int64(binary.BigEndian.Uint64(b[:8]) >> 1)
 }
 
+func ensureRetentionColumns(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
+	t.Helper()
+	classes := map[string]domain.DataClass{
+		"commands":          domain.DataClassUserContent,
+		"jobs":              domain.DataClassOperational,
+		"provider_tasks":    domain.DataClassProviderPayload,
+		"inbound_events":    domain.DataClassUserContent,
+		"artifacts":         domain.DataClassArtifactMetadata,
+		"artifact_variants": domain.DataClassArtifactMetadata,
+	}
+	for table, class := range classes {
+		stmt := "ALTER TABLE " + table + " " +
+			"ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ, " +
+			"ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ, " +
+			"ADD COLUMN IF NOT EXISTS redacted_at TIMESTAMPTZ, " +
+			"ADD COLUMN IF NOT EXISTS retention_class TEXT NOT NULL DEFAULT '" + string(class) + "'"
+		if _, err := pool.Exec(ctx, stmt); err != nil {
+			t.Fatalf("ensure retention columns for %s: %v", table, err)
+		}
+		if _, err := pool.Exec(ctx, "UPDATE "+table+" SET retention_class = $1 WHERE retention_class = ''", string(class)); err != nil {
+			t.Fatalf("ensure retention class for %s: %v", table, err)
+		}
+	}
+}
+
 func newTestUser(t *testing.T, ctx context.Context, repo *postgres.UserRepository) *domain.User {
 	t.Helper()
 	u := &domain.User{
@@ -172,6 +197,273 @@ func TestUserRepository(t *testing.T) {
 	if _, err := repo.GetByID(ctx, uuid.New()); err != domain.ErrNotFound {
 		t.Fatalf("expected ErrNotFound, got %v", err)
 	}
+}
+
+func TestMaintenanceRedactsExpiredVKInboundPayloads(t *testing.T) {
+	ctx := context.Background()
+	pool := testPool(t)
+	ensureRetentionColumns(t, ctx, pool)
+	inboundRepo := postgres.NewInboundEventRepository(pool)
+	maintenanceRepo := postgres.NewMaintenanceRepository(pool)
+	now := time.Date(2026, 6, 11, 12, 0, 0, 0, time.UTC)
+	old := now.Add(-48 * time.Hour)
+	key := "vk_event:1:" + uuid.NewString()
+	event := &domain.InboundEvent{
+		Source:         "vk",
+		EventType:      "message_new",
+		GroupID:        1,
+		VKEventID:      "evt-" + uuid.NewString(),
+		PeerID:         uniqueVKID(),
+		VKUserID:       uniqueVKID(),
+		Payload:        []byte(`{"message":"SENSITIVE_TEXT_MARKER","payload":"SENSITIVE_PAYLOAD_MARKER"}`),
+		Status:         domain.InboundReceived,
+		IdempotencyKey: key,
+	}
+	if err := inboundRepo.Create(ctx, event); err != nil {
+		t.Fatalf("create inbound event: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `
+		UPDATE inbound_events
+		SET created_at = $2, updated_at = $2, retention_class = $3
+		WHERE id = $1`, event.ID, old, string(domain.DataClassUserContent)); err != nil {
+		t.Fatalf("age inbound event: %v", err)
+	}
+
+	expired, err := maintenanceRepo.ExpireInboundEvents(ctx, now.Add(-24*time.Hour), now, 10)
+	if err != nil {
+		t.Fatalf("expire inbound events: %v", err)
+	}
+	if expired != 1 {
+		t.Fatalf("expired rows = %d, want 1", expired)
+	}
+	expired, err = maintenanceRepo.ExpireInboundEvents(ctx, now.Add(-24*time.Hour), now, 10)
+	if err != nil {
+		t.Fatalf("repeat expire inbound events: %v", err)
+	}
+	if expired != 0 {
+		t.Fatalf("repeat expired rows = %d, want 0", expired)
+	}
+
+	beforePayload, beforeRedacted := inboundPayloadState(t, ctx, pool, event.ID)
+	dryRun, err := maintenanceRepo.RetentionDryRun(ctx, now, 20)
+	if err != nil {
+		t.Fatalf("retention dry-run: %v", err)
+	}
+	var inboundDryRun *domain.RetentionDryRunItem
+	for i := range dryRun.Items {
+		if dryRun.Items[i].TableName == "inbound_events" {
+			inboundDryRun = &dryRun.Items[i]
+			break
+		}
+	}
+	if inboundDryRun == nil || inboundDryRun.Count < 1 {
+		t.Fatalf("dry-run inbound item = %+v, want count >= 1", inboundDryRun)
+	}
+	afterDryPayload, afterDryRedacted := inboundPayloadState(t, ctx, pool, event.ID)
+	if afterDryPayload != beforePayload || afterDryRedacted != beforeRedacted {
+		t.Fatalf("dry-run mutated inbound row: before payload=%s redacted=%v after payload=%s redacted=%v",
+			beforePayload, beforeRedacted, afterDryPayload, afterDryRedacted)
+	}
+
+	redacted, err := maintenanceRepo.RedactExpiredInboundEvents(ctx, now, 10)
+	if err != nil {
+		t.Fatalf("redact inbound events: %v", err)
+	}
+	if redacted != 1 {
+		t.Fatalf("redacted rows = %d, want 1", redacted)
+	}
+	redacted, err = maintenanceRepo.RedactExpiredInboundEvents(ctx, now, 10)
+	if err != nil {
+		t.Fatalf("repeat redact inbound events: %v", err)
+	}
+	if redacted != 0 {
+		t.Fatalf("repeat redacted rows = %d, want 0", redacted)
+	}
+
+	payload, isRedacted := inboundPayloadState(t, ctx, pool, event.ID)
+	if !isRedacted {
+		t.Fatal("redacted_at is null after redaction")
+	}
+	if strings.Contains(payload, "SENSITIVE_TEXT_MARKER") || strings.Contains(payload, "SENSITIVE_PAYLOAD_MARKER") {
+		t.Fatalf("redacted payload still contains raw marker: %s", payload)
+	}
+	if !strings.Contains(payload, `"payload_class": "vk_callback_metadata"`) && !strings.Contains(payload, `"payload_class":"vk_callback_metadata"`) {
+		t.Fatalf("redacted payload = %s, want metadata marker", payload)
+	}
+	if _, err := inboundRepo.GetByIdempotencyKey(ctx, key); err != nil {
+		t.Fatalf("idempotency lookup after redaction: %v", err)
+	}
+}
+
+func inboundPayloadState(t *testing.T, ctx context.Context, pool *pgxpool.Pool, id uuid.UUID) (string, bool) {
+	t.Helper()
+	var payload string
+	var redacted bool
+	if err := pool.QueryRow(ctx, `
+		SELECT payload::text, redacted_at IS NOT NULL
+		FROM inbound_events
+		WHERE id = $1`, id).Scan(&payload, &redacted); err != nil {
+		t.Fatalf("load inbound payload state: %v", err)
+	}
+	return payload, redacted
+}
+
+func TestMaintenanceRedactsExpiredCommandRawText(t *testing.T) {
+	ctx := context.Background()
+	pool := testPool(t)
+	ensureRetentionColumns(t, ctx, pool)
+	users := postgres.NewUserRepository(pool)
+	commands := postgres.NewCommandRepository(pool)
+	jobs := postgres.NewJobRepository(pool)
+	maintenanceRepo := postgres.NewMaintenanceRepository(pool)
+	now := time.Date(2026, 6, 11, 12, 0, 0, 0, time.UTC)
+	old := now.Add(-48 * time.Hour)
+
+	user := newTestUser(t, ctx, users)
+	completed := &domain.Command{
+		UserID:         user.ID,
+		VKPeerID:       user.VKUserID,
+		InboundEventID: uuid.New(),
+		Type:           domain.CommandTextAsk,
+		RawText:        "SENSITIVE_COMMAND_MARKER completed",
+		Args:           []byte(`{"kind":"completed"}`),
+		IdempotencyKey: "cmd:completed:" + uuid.NewString(),
+	}
+	if err := commands.Create(ctx, completed); err != nil {
+		t.Fatalf("create completed command: %v", err)
+	}
+	active := &domain.Command{
+		UserID:         user.ID,
+		VKPeerID:       user.VKUserID,
+		InboundEventID: uuid.New(),
+		Type:           domain.CommandTextAsk,
+		RawText:        "SENSITIVE_COMMAND_MARKER active",
+		Args:           []byte(`{"kind":"active"}`),
+		IdempotencyKey: "cmd:active:" + uuid.NewString(),
+	}
+	if err := commands.Create(ctx, active); err != nil {
+		t.Fatalf("create active command: %v", err)
+	}
+	completedJob := &domain.Job{
+		UserID:         user.ID,
+		VKPeerID:       user.VKUserID,
+		CommandID:      completed.ID,
+		OperationType:  domain.OperationTextGenerate,
+		Modality:       domain.ModalityText,
+		Status:         domain.JobStatusSucceeded,
+		Params:         []byte(`{"prompt":"durable completed prompt"}`),
+		IdempotencyKey: "job:completed:" + uuid.NewString(),
+	}
+	if err := jobs.Create(ctx, completedJob); err != nil {
+		t.Fatalf("create completed job: %v", err)
+	}
+	activeJob := &domain.Job{
+		UserID:         user.ID,
+		VKPeerID:       user.VKUserID,
+		CommandID:      active.ID,
+		OperationType:  domain.OperationTextGenerate,
+		Modality:       domain.ModalityText,
+		Status:         domain.JobStatusQueued,
+		Params:         []byte(`{"prompt":"durable active prompt"}`),
+		IdempotencyKey: "job:active:" + uuid.NewString(),
+	}
+	if err := jobs.Create(ctx, activeJob); err != nil {
+		t.Fatalf("create active job: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `
+		UPDATE commands
+		SET created_at = $2, updated_at = $2, retention_class = $3
+		WHERE id = ANY($1::uuid[])`, []uuid.UUID{completed.ID, active.ID}, old, string(domain.DataClassUserContent)); err != nil {
+		t.Fatalf("age commands: %v", err)
+	}
+
+	expired, err := maintenanceRepo.ExpireCommandRawText(ctx, now.Add(-24*time.Hour), now, 10)
+	if err != nil {
+		t.Fatalf("expire command raw text: %v", err)
+	}
+	if expired != 1 {
+		t.Fatalf("expired rows = %d, want 1", expired)
+	}
+	expired, err = maintenanceRepo.ExpireCommandRawText(ctx, now.Add(-24*time.Hour), now, 10)
+	if err != nil {
+		t.Fatalf("repeat expire command raw text: %v", err)
+	}
+	if expired != 0 {
+		t.Fatalf("repeat expired rows = %d, want 0", expired)
+	}
+
+	beforeText, beforeRedacted, beforeExpired := commandRawTextState(t, ctx, pool, completed.ID)
+	dryRun, err := maintenanceRepo.RetentionDryRun(ctx, now, 20)
+	if err != nil {
+		t.Fatalf("retention dry-run: %v", err)
+	}
+	var commandDryRun *domain.RetentionDryRunItem
+	for i := range dryRun.Items {
+		if dryRun.Items[i].TableName == "commands" {
+			commandDryRun = &dryRun.Items[i]
+			break
+		}
+	}
+	if commandDryRun == nil || commandDryRun.Count < 1 {
+		t.Fatalf("dry-run commands item = %+v, want count >= 1", commandDryRun)
+	}
+	afterDryText, afterDryRedacted, afterDryExpired := commandRawTextState(t, ctx, pool, completed.ID)
+	if afterDryText != beforeText || afterDryRedacted != beforeRedacted || afterDryExpired != beforeExpired {
+		t.Fatalf("dry-run mutated command row: before text=%q redacted=%v expired=%v after text=%q redacted=%v expired=%v",
+			beforeText, beforeRedacted, beforeExpired, afterDryText, afterDryRedacted, afterDryExpired)
+	}
+
+	redacted, err := maintenanceRepo.RedactExpiredCommandRawText(ctx, now, 10)
+	if err != nil {
+		t.Fatalf("redact command raw text: %v", err)
+	}
+	if redacted != 1 {
+		t.Fatalf("redacted rows = %d, want 1", redacted)
+	}
+	redacted, err = maintenanceRepo.RedactExpiredCommandRawText(ctx, now, 10)
+	if err != nil {
+		t.Fatalf("repeat redact command raw text: %v", err)
+	}
+	if redacted != 0 {
+		t.Fatalf("repeat redacted rows = %d, want 0", redacted)
+	}
+
+	rawText, isRedacted, _ := commandRawTextState(t, ctx, pool, completed.ID)
+	if rawText != "" || !isRedacted {
+		t.Fatalf("completed command raw text = %q redacted=%v, want empty/redacted", rawText, isRedacted)
+	}
+	activeText, activeRedacted, activeExpired := commandRawTextState(t, ctx, pool, active.ID)
+	if !strings.Contains(activeText, "SENSITIVE_COMMAND_MARKER active") || activeRedacted || activeExpired {
+		t.Fatalf("active command state text=%q redacted=%v expired=%v, want still hot", activeText, activeRedacted, activeExpired)
+	}
+	gotCommand, err := commands.GetByIdempotencyKey(ctx, completed.IdempotencyKey)
+	if err != nil {
+		t.Fatalf("command idempotency lookup after redaction: %v", err)
+	}
+	if gotCommand.ID != completed.ID || gotCommand.RawText != "" {
+		t.Fatalf("redacted command lookup = %+v, want same id and empty raw text", gotCommand)
+	}
+	gotJob, err := jobs.GetByID(ctx, completedJob.ID)
+	if err != nil {
+		t.Fatalf("job lookup after command redaction: %v", err)
+	}
+	if gotJob.CommandID != completed.ID || !strings.Contains(string(gotJob.Params), "durable completed prompt") {
+		t.Fatalf("job relationship/params changed after command redaction: %+v params=%s", gotJob, string(gotJob.Params))
+	}
+}
+
+func commandRawTextState(t *testing.T, ctx context.Context, pool *pgxpool.Pool, id uuid.UUID) (string, bool, bool) {
+	t.Helper()
+	var rawText string
+	var redacted bool
+	var expired bool
+	if err := pool.QueryRow(ctx, `
+		SELECT raw_text, redacted_at IS NOT NULL, expires_at IS NOT NULL
+		FROM commands
+		WHERE id = $1`, id).Scan(&rawText, &redacted, &expired); err != nil {
+		t.Fatalf("load command raw text state: %v", err)
+	}
+	return rawText, redacted, expired
 }
 
 func TestJobAndCommandRepository(t *testing.T) {

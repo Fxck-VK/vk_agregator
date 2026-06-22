@@ -9,10 +9,12 @@ import (
 	"image"
 	"image/color"
 	"image/png"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -306,6 +308,34 @@ func TestMessageNewCreatesJob(t *testing.T) {
 	}
 }
 
+func TestMessageNewPersistsRedactedInboundPayload(t *testing.T) {
+	h := newHarness()
+	body := `{
+		"type":"message_new","group_id":1,"event_id":"evt-redacted","secret":"s3cr3t",
+		"object":{"message":{"from_id":556,"peer_id":556,"text":"SENSITIVE_TEXT_MARKER","payload":"{\"marker\":\"SENSITIVE_PAYLOAD_MARKER\"}"}}
+	}`
+	rec := h.post(body)
+	if rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	inbound, err := h.inbound.GetByIdempotencyKey(context.Background(), "vk_event:1:evt-redacted")
+	if err != nil {
+		t.Fatalf("load inbound: %v", err)
+	}
+	payload := string(inbound.Payload)
+	for _, forbidden := range []string{"SENSITIVE_TEXT_MARKER", "SENSITIVE_PAYLOAD_MARKER"} {
+		if strings.Contains(payload, forbidden) {
+			t.Fatalf("inbound payload contains forbidden raw content marker %q: %s", forbidden, payload)
+		}
+	}
+	for _, want := range []string{`"redacted":true`, `"payload_class":"vk_callback_metadata"`, `"event_type":"message_new"`} {
+		if !strings.Contains(payload, want) {
+			t.Fatalf("inbound payload = %s, want marker %s", payload, want)
+		}
+	}
+}
+
 func TestAntiSpamDenialSkipsCommandAndJob(t *testing.T) {
 	control := vkdelivery.NewMockClient()
 	antiSpam := &fakeAntiSpam{
@@ -344,6 +374,140 @@ func TestAntiSpamDenialSkipsCommandAndJob(t *testing.T) {
 	sent := control.Sent()
 	if len(sent) != 1 || !strings.Contains(sent[0].Text, "Слишком много сообщений") {
 		t.Fatalf("unexpected anti-spam response: %+v", sent)
+	}
+}
+
+func TestAntiSpamErrorBlocksGenerationInDegradedMode(t *testing.T) {
+	var logs bytes.Buffer
+	previousLogger := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&logs, nil)))
+	t.Cleanup(func() {
+		slog.SetDefault(previousLogger)
+	})
+
+	control := vkdelivery.NewMockClient()
+	antiSpam := &fakeAntiSpam{err: errors.New("backend SENSITIVE_BACKEND_MARKER unavailable")}
+	h := newHarnessWithConfigAndAntiSpam(control, vk.Config{ConfirmationToken: "conf-token-123", Secret: "s3cr3t"}, antiSpam)
+	body := `{
+		"type":"message_new","group_id":1,"event_id":"evt-antispam-degraded-image","secret":"s3cr3t",
+		"object":{"message":{"from_id":560,"peer_id":560,"text":"/image SENSITIVE_PROMPT_MARKER"}}
+	}`
+	rec := h.post(body)
+	if rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+	}
+	if len(antiSpam.inputs) != 1 || antiSpam.inputs[0].CommandType != domain.CommandImageGenerate || !antiSpam.inputs[0].CreatesJob {
+		t.Fatalf("unexpected anti-spam inputs: %+v", antiSpam.inputs)
+	}
+
+	ctx := context.Background()
+	user, err := h.users.GetByVKUserID(ctx, 560)
+	if err != nil {
+		t.Fatalf("user not created: %v", err)
+	}
+	cmds, _ := h.cmds.ListByUser(ctx, user.ID, 10, 0)
+	if len(cmds) != 0 {
+		t.Fatalf("degraded anti-spam must not create commands, got %+v", cmds)
+	}
+	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
+	if len(jobs) != 0 || h.pub.Len() != 0 {
+		t.Fatalf("degraded anti-spam must not create jobs/tasks, jobs=%+v tasks=%d", jobs, h.pub.Len())
+	}
+	inbound, err := h.inbound.GetByIdempotencyKey(ctx, "vk_event:1:evt-antispam-degraded-image")
+	if err != nil {
+		t.Fatalf("load inbound: %v", err)
+	}
+	if inbound.Status != domain.InboundProcessed {
+		t.Fatalf("inbound status = %s, want processed", inbound.Status)
+	}
+	sent := control.Sent()
+	if len(sent) != 1 || !strings.Contains(sent[0].Text, "Генерации временно приостановлены") {
+		t.Fatalf("unexpected degraded response: %+v", sent)
+	}
+
+	logOutput := logs.String()
+	for _, want := range []string{`"action_class":"generation"`, `"reason":"dependency_error"`, `"operation":"image_generate"`, `"error_code":"internal_error"`} {
+		if !strings.Contains(logOutput, want) {
+			t.Fatalf("degraded log missing %s: %s", want, logOutput)
+		}
+	}
+	for _, forbidden := range []string{"SENSITIVE_BACKEND_MARKER", "SENSITIVE_PROMPT_MARKER", "vk_user_id"} {
+		if strings.Contains(logOutput, forbidden) {
+			t.Fatalf("degraded log contains forbidden marker %q: %s", forbidden, logOutput)
+		}
+	}
+}
+
+func TestAntiSpamErrorAllowsCheapHelpCommand(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	antiSpam := &fakeAntiSpam{err: errors.New("antispam store unavailable")}
+	h := newHarnessWithConfigAndAntiSpam(control, vk.Config{ConfirmationToken: "conf-token-123", Secret: "s3cr3t"}, antiSpam)
+	body := `{
+		"type":"message_new","group_id":1,"event_id":"evt-antispam-degraded-help","secret":"s3cr3t",
+		"object":{"message":{"from_id":561,"peer_id":561,"text":"/help"}}
+	}`
+	rec := h.post(body)
+	if rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+	}
+	if len(antiSpam.inputs) != 1 || antiSpam.inputs[0].CommandType != domain.CommandHelp || antiSpam.inputs[0].CreatesJob {
+		t.Fatalf("unexpected anti-spam inputs: %+v", antiSpam.inputs)
+	}
+
+	ctx := context.Background()
+	user, err := h.users.GetByVKUserID(ctx, 561)
+	if err != nil {
+		t.Fatalf("user not created: %v", err)
+	}
+	cmds, _ := h.cmds.ListByUser(ctx, user.ID, 10, 0)
+	if len(cmds) != 1 || cmds[0].Type != domain.CommandHelp {
+		t.Fatalf("cheap help command should remain available, got %+v", cmds)
+	}
+	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
+	if len(jobs) != 0 || h.pub.Len() != 0 {
+		t.Fatalf("help command must not create jobs/tasks, jobs=%+v tasks=%d", jobs, h.pub.Len())
+	}
+	if sent := control.Sent(); len(sent) != 1 {
+		t.Fatalf("expected help response, got %+v", sent)
+	}
+}
+
+func TestAntiSpamDenialCompletesWhenResponseSendFails(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	control.FailNext(errors.New("vk response unavailable"))
+	antiSpam := &fakeAntiSpam{
+		decision: antispamservice.Decision{
+			Allowed: false,
+			Kind:    antispamservice.DecisionCooldown,
+			Message: "Слишком много сообщений. Попробуйте позже",
+		},
+	}
+	h := newHarnessWithConfigAndAntiSpam(control, vk.Config{ConfirmationToken: "conf-token-123", Secret: "s3cr3t"}, antiSpam)
+	body := `{
+		"type":"message_new","group_id":1,"event_id":"evt-antispam-denied-send-fails","secret":"s3cr3t",
+		"object":{"message":{"from_id":562,"peer_id":562,"text":"/image neon cat"}}
+	}`
+	rec := h.post(body)
+	if rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("anti-spam denial should still acknowledge VK, got %d %q", rec.Code, rec.Body.String())
+	}
+
+	ctx := context.Background()
+	user, err := h.users.GetByVKUserID(ctx, 562)
+	if err != nil {
+		t.Fatalf("user not created: %v", err)
+	}
+	cmds, _ := h.cmds.ListByUser(ctx, user.ID, 10, 0)
+	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
+	if len(cmds) != 0 || len(jobs) != 0 || h.pub.Len() != 0 {
+		t.Fatalf("failed anti-spam response must not resume processing, cmds=%+v jobs=%+v tasks=%d", cmds, jobs, h.pub.Len())
+	}
+	inbound, err := h.inbound.GetByIdempotencyKey(ctx, "vk_event:1:evt-antispam-denied-send-fails")
+	if err != nil {
+		t.Fatalf("load inbound: %v", err)
+	}
+	if inbound.Status != domain.InboundProcessed {
+		t.Fatalf("inbound status = %s, want processed", inbound.Status)
 	}
 }
 
@@ -696,9 +860,10 @@ func TestMenuFeatureFlagsHideMainMenuButtons(t *testing.T) {
 func TestTopUpMenuCreatesPaymentIntentAfterProductSelection(t *testing.T) {
 	control := vkdelivery.NewMockClient()
 	h := newHarnessWithConfig(control, vk.Config{
-		ConfirmationToken: "conf-token-123",
-		Secret:            "s3cr3t",
-		TopUpReceiptEmail: "bot-payments@example.com",
+		ConfirmationToken:           "conf-token-123",
+		Secret:                      "s3cr3t",
+		TopUpReceiptEmail:           "bot-payments@example.com",
+		TopUpPaymentRedirectBaseURL: "https://vk.example.test",
 	})
 
 	menuBody := `{
@@ -751,11 +916,13 @@ func TestTopUpMenuCreatesPaymentIntentAfterProductSelection(t *testing.T) {
 	if jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0); len(jobs) != 0 || h.pub.Len() != 0 {
 		t.Fatalf("top-up flow must not create AI jobs, jobs=%+v tasks=%d", jobs, h.pub.Len())
 	}
+	expectedPaymentLink := "https://vk.example.test/payments/vk/" + intents[0].ID.String()
 	sent := control.Sent()
 	if len(sent) < 2 || !strings.Contains(sent[len(sent)-1].Keyboard, `"type":"open_link"`) ||
-		!strings.Contains(sent[len(sent)-1].Keyboard, "mock.payments.local") ||
-		!strings.Contains(sent[len(sent)-1].Text, "mock.payments.local") ||
+		!strings.Contains(sent[len(sent)-1].Keyboard, expectedPaymentLink) ||
 		!strings.Contains(sent[len(sent)-1].Text, "Баланс сейчас") ||
+		strings.Contains(sent[len(sent)-1].Text, "mock.payments.local") ||
+		strings.Contains(sent[len(sent)-1].Keyboard, "mock.payments.local") ||
 		strings.Contains(sent[len(sent)-1].Keyboard, "payment_link") {
 		t.Fatalf("expected final payment open_link keyboard, got %+v", sent)
 	}
@@ -770,10 +937,11 @@ func TestTopUpMenuCreatesPaymentIntentAfterProductSelection(t *testing.T) {
 	sent = control.Sent()
 	last := sent[len(sent)-1]
 	if !strings.Contains(last.Keyboard, `"type":"open_link"`) ||
-		!strings.Contains(last.Keyboard, "mock.payments.local") ||
-		!strings.Contains(last.Text, "mock.payments.local") ||
+		!strings.Contains(last.Keyboard, expectedPaymentLink) ||
 		!strings.Contains(last.Text, "Баланс сейчас") ||
-		!strings.Contains(last.Keyboard, "new_payment") {
+		!strings.Contains(last.Keyboard, "new_payment") ||
+		strings.Contains(last.Keyboard, "mock.payments.local") ||
+		strings.Contains(last.Text, "mock.payments.local") {
 		t.Fatalf("expected pending payment keyboard with continue/new actions, got %+v", sent)
 	}
 	intents, err = h.payment.ListIntentsByUser(ctx, user.ID, 10, 0)
@@ -785,13 +953,127 @@ func TestTopUpMenuCreatesPaymentIntentAfterProductSelection(t *testing.T) {
 	}
 }
 
+func TestTopUpPaymentRequiresServerOwnedRedirectBase(t *testing.T) {
+	tests := []struct {
+		name string
+		base string
+	}{
+		{name: "missing", base: ""},
+		{name: "http", base: "http://vk.example.test"},
+		{name: "with_query", base: "https://vk.example.test?x=1"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			control := vkdelivery.NewMockClient()
+			h := newHarnessWithConfig(control, vk.Config{
+				ConfirmationToken:           "conf-token-123",
+				Secret:                      "s3cr3t",
+				TopUpReceiptEmail:           "bot-payments@example.com",
+				TopUpPaymentRedirectBaseURL: tt.base,
+			})
+
+			body := fmt.Sprintf(`{
+				"type":"message_new","group_id":1,"event_id":"evt-topup-invalid-redirect-%s","secret":"s3cr3t",
+				"object":{"message":{"from_id":594,"peer_id":594,"text":"99 crystals","payload":"{\"command\":\"top_up\",\"product_code\":\"crystals_99\"}"}}
+			}`, tt.name)
+			if rec := h.post(body); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+				t.Fatalf("unexpected product response: %d %q", rec.Code, rec.Body.String())
+			}
+
+			ctx := context.Background()
+			user, err := h.users.GetByVKUserID(ctx, 594)
+			if err != nil {
+				t.Fatalf("user not created: %v", err)
+			}
+			intents, err := h.payment.ListIntentsByUser(ctx, user.ID, 10, 0)
+			if err != nil {
+				t.Fatalf("list payment intents: %v", err)
+			}
+			if len(intents) != 0 {
+				t.Fatalf("expected no payment intents without server-owned redirect base, got %d", len(intents))
+			}
+			sent := control.Sent()
+			if len(sent) == 0 {
+				t.Fatal("expected safe unavailable notice")
+			}
+			last := sent[len(sent)-1]
+			if !strings.Contains(last.Text, "Платежи временно недоступны") ||
+				strings.Contains(last.Text, "mock.payments.local") ||
+				strings.Contains(last.Keyboard, "mock.payments.local") ||
+				strings.Contains(last.Keyboard, `"type":"open_link"`) {
+				t.Fatalf("expected safe notice without provider link, got %+v", last)
+			}
+		})
+	}
+}
+
+func TestTopUpPendingPaymentDoesNotExposeProviderURLWhenRedirectBaseInvalid(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	h := newHarnessWithConfig(control, vk.Config{
+		ConfirmationToken:           "conf-token-123",
+		Secret:                      "s3cr3t",
+		TopUpReceiptEmail:           "bot-payments@example.com",
+		TopUpPaymentRedirectBaseURL: "http://vk.example.test",
+	})
+
+	firstMenuBody := `{
+		"type":"message_new","group_id":1,"event_id":"evt-topup-pending-invalid-base-user","secret":"s3cr3t",
+		"object":{"message":{"from_id":595,"peer_id":595,"text":"topup","payload":"{\"command\":\"top_up\"}"}}
+	}`
+	if rec := h.post(firstMenuBody); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected menu response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	ctx := context.Background()
+	user, err := h.users.GetByVKUserID(ctx, 595)
+	if err != nil {
+		t.Fatalf("user not created: %v", err)
+	}
+	metadata := json.RawMessage(`{"source":"vk_bot","return_url":"https://vk.com/write-1","product_code":"crystals_99"}`)
+	if err := h.payment.CreateIntent(ctx, &domain.PaymentIntent{
+		UserID:            user.ID,
+		Status:            domain.PaymentIntentWaitingForUser,
+		Amount:            9900,
+		Currency:          domain.CurrencyRUB,
+		Credits:           99,
+		PriceVersion:      1,
+		Provider:          domain.PaymentProviderMock,
+		ProviderPaymentID: "mock-provider-payment",
+		ConfirmationURL:   "https://mock.payments.local/checkout/direct",
+		IdempotencyKey:    "vk_payment:1:existing-pending-invalid-base",
+		ReceiptEmail:      "bot-payments@example.com",
+		Metadata:          metadata,
+	}); err != nil {
+		t.Fatalf("seed pending intent: %v", err)
+	}
+
+	reopenBody := `{
+		"type":"message_new","group_id":1,"event_id":"evt-topup-pending-invalid-base-reopen","secret":"s3cr3t",
+		"object":{"message":{"from_id":595,"peer_id":595,"text":"topup","payload":"{\"command\":\"top_up\"}"}}
+	}`
+	if rec := h.post(reopenBody); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected reopen response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	sent := control.Sent()
+	last := sent[len(sent)-1]
+	if !strings.Contains(last.Text, "Платежи временно недоступны") ||
+		strings.Contains(last.Text, "mock.payments.local") ||
+		strings.Contains(last.Keyboard, "mock.payments.local") ||
+		strings.Contains(last.Keyboard, `"type":"open_link"`) {
+		t.Fatalf("expected pending intent safe fallback without provider link, got %+v", last)
+	}
+}
+
 func TestTopUpPaymentMessageTrackingStoresSentMessageID(t *testing.T) {
 	control := vkdelivery.NewMockClient()
 	h := newHarnessWithConfig(control, vk.Config{
-		ConfirmationToken:      "conf-token-123",
-		Secret:                 "s3cr3t",
-		TopUpReceiptEmail:      "bot-payments@example.com",
-		TopUpStatusEditEnabled: true,
+		ConfirmationToken:           "conf-token-123",
+		Secret:                      "s3cr3t",
+		TopUpReceiptEmail:           "bot-payments@example.com",
+		TopUpPaymentRedirectBaseURL: "https://vk.example.test",
+		TopUpStatusEditEnabled:      true,
 	})
 
 	body := `{
@@ -834,9 +1116,10 @@ func TestTopUpPaymentMessageTrackingStoresSentMessageID(t *testing.T) {
 func TestTopUpStaleCatalogDifferentProductCreatesSelectedIntent(t *testing.T) {
 	control := vkdelivery.NewMockClient()
 	h := newHarnessWithConfig(control, vk.Config{
-		ConfirmationToken: "conf-token-123",
-		Secret:            "s3cr3t",
-		TopUpReceiptEmail: "bot-payments@example.com",
+		ConfirmationToken:           "conf-token-123",
+		Secret:                      "s3cr3t",
+		TopUpReceiptEmail:           "bot-payments@example.com",
+		TopUpPaymentRedirectBaseURL: "https://vk.example.test",
 	})
 
 	firstProductBody := `{
@@ -849,7 +1132,7 @@ func TestTopUpStaleCatalogDifferentProductCreatesSelectedIntent(t *testing.T) {
 
 	staleCatalogProductBody := `{
 		"type":"message_new","group_id":1,"event_id":"evt-topup-700-stale","secret":"s3cr3t",
-		"object":{"message":{"from_id":592,"peer_id":592,"text":"700 crystals","payload":"{\"command\":\"top_up\",\"product_code\":\"crystals_700\"}"}}
+		"object":{"message":{"from_id":592,"peer_id":592,"text":"700 crystals","payload":"{\"command\":\"top_up\",\"product_code\":\"crystals_700\",\"action\":\"new_payment\"}"}}
 	}`
 	if rec := h.post(staleCatalogProductBody); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
 		t.Fatalf("unexpected stale catalog product response: %d %q", rec.Code, rec.Body.String())
@@ -2375,6 +2658,45 @@ func TestStaleCallbackShowMenuAfterGPTTextDoesNotSendMenu(t *testing.T) {
 	answers := control.EventAnswers()
 	if len(answers) != 1 || answers[0].EventID != "vk-button-event-stale-show" {
 		t.Fatalf("expected stale callback acknowledgement, got %+v", answers)
+	}
+}
+
+func TestExpiredActiveMenuCallbackFallsBackAsStale(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	h := newHarnessWithConfig(control, vk.Config{
+		ConfirmationToken:      "conf-token-123",
+		Secret:                 "s3cr3t",
+		LocalUIStateTTL:        time.Nanosecond,
+		LocalUIStateMaxEntries: 4,
+	})
+	videoMenu := `{
+		"type":"message_new","group_id":1,"event_id":"evt-expired-active-menu-open","secret":"s3cr3t",
+		"object":{"message":{"from_id":592,"peer_id":592,"text":"🎬 Создать видео","payload":"{\"command\":\"menu.video\"}"}}
+	}`
+	if rec := h.post(videoMenu); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected menu response: %d %q", rec.Code, rec.Body.String())
+	}
+	if sent := control.Sent(); len(sent) != 1 {
+		t.Fatalf("expected initial menu send, got %+v", sent)
+	}
+	time.Sleep(time.Millisecond)
+
+	back := `{
+		"type":"message_event","group_id":1,"event_id":"evt-expired-active-menu-back","secret":"s3cr3t",
+		"object":{"user_id":592,"peer_id":592,"event_id":"vk-button-event-expired-active-menu","payload":{"command":"show_menu"}}
+	}`
+	if rec := h.post(back); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected stale callback response: %d %q", rec.Code, rec.Body.String())
+	}
+	if sent := control.Sent(); len(sent) != 1 {
+		t.Fatalf("expired active menu callback should not send a fresh menu, got %+v", sent)
+	}
+	if edits := control.Edits(); len(edits) != 0 {
+		t.Fatalf("expired active menu callback should not edit old menu, got %+v", edits)
+	}
+	answers := control.EventAnswers()
+	if len(answers) != 1 || answers[0].EventID != "vk-button-event-expired-active-menu" {
+		t.Fatalf("expected callback acknowledgement, got %+v", answers)
 	}
 }
 
