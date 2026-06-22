@@ -26,7 +26,7 @@ export const options = enabled
           exec: "billingPaymentsMock",
           rate: intEnv("K6_PAYMENT_RATE", 1),
           timeUnit: "1s",
-          duration: __ENV.K6_PAYMENT_DURATION || __ENV.K6_DURATION || "30s",
+          duration: __ENV.K6_PAYMENT_DURATION || "30s",
           preAllocatedVUs: intEnv("K6_PAYMENT_PREALLOCATED_VUS", 5),
           maxVUs: intEnv("K6_PAYMENT_MAX_VUS", 20),
         },

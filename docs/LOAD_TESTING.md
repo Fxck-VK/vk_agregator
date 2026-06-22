@@ -237,7 +237,7 @@ Then run k6:
 
 ```powershell
 $env:K6_BASE_URL = "http://127.0.0.1:8080"
-$env:K6_DURATION = "30s"
+$env:K6_BASIC_DURATION = "30s"
 $env:K6_VK_SECRET = "loadtest-secret"
 $env:K6_VK_GROUP_ID = "0"
 k6 run tests/k6/basic-api.js
@@ -248,7 +248,7 @@ Equivalent Docker run:
 ```powershell
 docker run --rm -i `
   -e K6_BASE_URL=http://host.docker.internal:8080 `
-  -e K6_DURATION=30s `
+  -e K6_BASIC_DURATION=30s `
   -e K6_VK_SECRET=loadtest-secret `
   -e K6_VK_GROUP_ID=0 `
   -v "${PWD}:/src:ro" `
@@ -272,7 +272,7 @@ Do not commit real launch params or use production user data for load tests.
 The first script is intentionally modest:
 
 ```text
-K6_DURATION=30s
+K6_BASIC_DURATION=30s
 K6_HEALTH_VUS=1
 K6_VK_VUS=1
 K6_MINIAPP_VUS=1

@@ -1,6 +1,6 @@
 {
   "schema_version": 4,
-  "updated_at": "2026-06-23T01:35:19+03:00",
+  "updated_at": "2026-06-23T02:06:24+03:00",
   "branch": "fastlife_dev",
   "purpose": "Minimal machine-readable current context and routing for agents.",
   "read_policy": {
@@ -33,7 +33,7 @@
     "owner": "Main agent owns decisions, integration, code quality and user-facing report."
   },
   "progress": {
-    "current_focus": "Security/scale hardening plan R1-R10 completed on fastlife_dev; handoff context lives in docs/SECURITY_SCALE_HARDENING_HANDOFF.md.",
+    "current_focus": "Security/scale hardening plan R1-R10 completed on fastlife_dev; Russian handoff context lives in docs/SECURITY_SCALE_HARDENING_HANDOFF.md; local k6 is installed and local/mock micro-smoke passed.",
     "main_merge": {
       "pr": 6,
       "merge_sha": "1530a9a0fa6fe88a7b63fa29ee6886ecd942f849",
@@ -83,7 +83,13 @@
         "Step 10 closed R8 by removing VK bot fallback from server-owned redirect links to provider confirmation URLs; missing/invalid redirect base now returns a safe unavailable-payment notice and new top-up intent creation is skipped.",
         "Step 11 closed R10 by adding command raw-text retention schema, config, maintenance dry-run/status visibility and idempotent redaction that skips commands linked to unfinished jobs.",
         "Step 12 final review removed docs/SECURITY_SCALE_HARDENING_PLAN_PROMPT.md, found no temporary backup/build junk files, and kept new paymentredirect package, VK local-state test and command retention migrations as implementation artifacts.",
-        "Post-final handoff context file added at docs/SECURITY_SCALE_HARDENING_HANDOFF.md for humans and future agents."
+        "Post-final handoff context file added at docs/SECURITY_SCALE_HARDENING_HANDOFF.md for humans and future agents.",
+        "Handoff context file translated to Russian for the user and next agent.",
+        "k6 installed locally via Homebrew for load-test execution.",
+        "Fixed tests/k6/vk-bot.js missing boolEnv helper found by k6 inspect.",
+        "Fixed k6 v2 K6_DURATION env-name conflict by switching basic-api script/docs/template to K6_BASIC_DURATION and removing K6_DURATION fallbacks from job/payment k6 scripts.",
+        "Local/mock k6 micro-smoke ran on 127.0.0.1:18080 because 127.0.0.1:8080 was already occupied; API and worker used APP_ENV=loadtest with mock providers/payments and disabled real VK delivery.",
+        "A fake VK token attempt was stopped before smoke because the API selected real VK control delivery; safe smoke returned to empty VK_ACCESS_TOKEN with mock/disabled outbound delivery."
       ],
       "checks": [
         "git status --short --branch captured",
@@ -140,7 +146,17 @@
         "Step 12 docker compose config passed",
         "Step 12 go test ./... passed after unsandboxed rerun; sandbox-only first attempt failed on Go build cache and httptest listener access",
         "Step 12 diff secret scan was names-only; changed-diff hits were limited to tracking text and redaction tests with fake token-like samples",
-        "Step 12 untracked implementation files secret scan found no suspicious matches"
+        "Step 12 untracked implementation files secret scan found no suspicious matches",
+        "k6 version passed: k6 v2.0.0 darwin/arm64",
+        "k6 inspect passed for tests/k6/basic-api.js, vk-bot.js, job-worker.js and billing-payments.js",
+        "docker compose up -d postgres redis minio passed for local smoke",
+        "go run ./cmd/migrate up applied pending local migrations through 000024_command_raw_text_retention",
+        "Local health/readiness passed on http://127.0.0.1:18080 with latest migration 000024_command_raw_text_retention",
+        "k6 basic-api micro-smoke passed: 100/100 checks, 0 percent HTTP failures",
+        "k6 vk-bot micro-smoke passed: 34/34 checks, duplicate replay and small burst OK, 0 percent HTTP failures",
+        "k6 job-worker text-only micro-smoke passed: 11 jobs created and terminal, 0 pending, 0 percent HTTP failures",
+        "k6 billing-payments mock micro-smoke passed: 150/150 checks, intent replay/top-up/refund OK, 0 percent HTTP failures",
+        "Redis stream:jobs:dlq length after micro-smoke was 0"
       ],
       "blocked_on": [],
       "baseline": {

@@ -313,6 +313,14 @@ function conversationID(offset) {
   return __ITER * 10000 + offset;
 }
 
+function boolEnv(name, fallback) {
+  const raw = __ENV[name];
+  if (raw === undefined || raw === "") {
+    return fallback;
+  }
+  return ["1", "true", "yes", "on"].includes(String(raw).toLowerCase());
+}
+
 function intEnv(name, fallback) {
   const raw = __ENV[name];
   if (raw === undefined || raw === "") {

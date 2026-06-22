@@ -199,7 +199,7 @@ function extraPayload(operation) {
 
 function buildScenarios() {
   const workload = (__ENV.K6_JOB_WORKLOAD || "mixed").toLowerCase();
-  const duration = __ENV.K6_JOB_DURATION || __ENV.K6_DURATION || "30s";
+  const duration = __ENV.K6_JOB_DURATION || "30s";
 
   if (workload === "text") {
     return { text_jobs: arrivalScenario("textJobs", "K6_JOB_TEXT_RATE", duration) };

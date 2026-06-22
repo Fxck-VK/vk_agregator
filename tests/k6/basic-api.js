@@ -15,19 +15,19 @@ export const options = enabled
           executor: "constant-vus",
           exec: "healthReadiness",
           vus: intEnv("K6_HEALTH_VUS", 1),
-          duration: __ENV.K6_DURATION || "30s",
+          duration: __ENV.K6_BASIC_DURATION || "30s",
         },
         vk_webhook: {
           executor: "constant-vus",
           exec: "vkWebhook",
           vus: intEnv("K6_VK_VUS", 1),
-          duration: __ENV.K6_DURATION || "30s",
+          duration: __ENV.K6_BASIC_DURATION || "30s",
         },
         miniapp_jobs: {
           executor: "constant-vus",
           exec: "miniappJobs",
           vus: intEnv("K6_MINIAPP_VUS", 1),
-          duration: __ENV.K6_DURATION || "30s",
+          duration: __ENV.K6_BASIC_DURATION || "30s",
         },
       },
       thresholds: {
