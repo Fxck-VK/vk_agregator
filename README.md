@@ -500,6 +500,38 @@ The full pipeline is covered by an in-memory end-to-end test:
 `internal/worker/e2e_test.go` (`TestEndToEnd`) drives VK → Job → Provider →
 Artifact → Delivery → Capture without any external services.
 
+Load testing is planned separately from CI and live smoke. The current contract
+is in [`docs/LOAD_TESTING.md`](docs/LOAD_TESTING.md): load tests must use
+the dedicated `APP_ENV=loadtest` profile from `.env.loadtest.example` and must
+not call paid providers, production VK, production YooKassa or production data
+stores. In `loadtest`, config validation requires mock AI providers, mock
+payments and mock VK delivery before the process starts.
+
+The first safe k6 script is `tests/k6/basic-api.js`. It covers health,
+readiness, VK webhook intake and Mini App balance/job endpoints. A second
+script, `tests/k6/vk-bot.js`, exercises the VK Bot journey: `/start`, menu
+callbacks, "Спросить у НейроХаб", ordinary text, duplicate replay and
+rate-limit/cooldown bursts. `tests/k6/job-worker.js` creates text/image/video
+mock jobs and measures API acceptance, polling completion and worker queue
+pressure. `scripts/loadtest/postgres-diagnostics.ps1` captures read-only
+Postgres diagnostics before/after load runs: locks, slow-query visibility,
+table growth, sequential scans, index usage, retention candidates and analytics
+freshness. `scripts/loadtest/redis-diagnostics.ps1` captures read-only Redis
+queue/backpressure snapshots: stream lengths, consumer-group lag/pending, DLQ,
+rate-limit keys and dialog-state TTLs. `scripts/loadtest/loadtest-report.ps1`
+collects k6 summaries, Redis/Postgres diagnostics and Docker CPU/RAM into one
+operator report. All scripts are disabled by default in CI unless
+`K6_BASE_URL` or `K6_RUN=1` is set:
+
+```bash
+K6_BASE_URL=http://127.0.0.1:8080 k6 run tests/k6/basic-api.js
+K6_BASE_URL=http://127.0.0.1:8080 k6 run tests/k6/vk-bot.js
+K6_BASE_URL=http://127.0.0.1:8080 K6_JOB_WORKLOAD=mixed k6 run tests/k6/job-worker.js
+pwsh -File scripts/loadtest/postgres-diagnostics.ps1 -EnvFile .env.loadtest
+pwsh -File scripts/loadtest/redis-diagnostics.ps1 -EnvFile .env.loadtest -UseDockerCompose
+pwsh -File scripts/loadtest/loadtest-report.ps1 -EnvFile .env.loadtest -RunK6 -UseDockerCompose
+```
+
 ## CI/CD
 
 GitHub Actions is the merge gate for `main`. The protected `main` branch must
@@ -518,6 +550,33 @@ Treat failures seriously, but do not bypass the required PR gate to "fix later".
 
 CI must run on mock/default configuration. It must not use real VK, YooKassa,
 DeepInfra, OpenAI or Cloudflare secrets and must not call external providers.
+
+### Production auto-deploy
+
+Production deploy is automated after `main` changes:
+
+```text
+push/merge to main
+  -> Docker Images workflow builds api/worker/provider-webhook/miniapp/migrate/backup images
+  -> deploy-prod workflow connects to the VPS
+  -> VPS pulls immutable GHCR images by sha-<commit>
+  -> deploy-prod.sh starts the runtime
+  -> smoke-prod.sh verifies public and private production routes
+  -> rollback-prod.sh restores the previous image tag if deploy/smoke fails
+```
+
+The deploy workflow is serialized with the `production-deploy` concurrency group,
+so two merges to `main` deploy in order. It writes `PROD_ENV_FILE` from GitHub
+Repository Secrets to the VPS `.env`, injects GHCR credentials, pins `IMAGE_TAG`,
+and never stores production secrets in the repository.
+
+Rollback is runtime-only by default: it switches stateless containers back to
+the previous image tag and does not run migration rollback automatically. If
+schema/data rollback is needed, stop and follow the backup-first runbook.
+
+If `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` are configured as repository
+secrets, every deploy attempt sends the same verdict shown in the GitHub Actions
+summary.
 
 ## Troubleshooting
 

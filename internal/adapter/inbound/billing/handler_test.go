@@ -22,6 +22,11 @@ import (
 
 func setup(t *testing.T) (*billing.Handler, *memory.UserRepo, *memory.PaymentRepo, *paymentmock.Provider, *memory.BillingRepo) {
 	t.Helper()
+	return setupWithBillingConfig(t, billing.Config{Token: "secret"})
+}
+
+func setupWithBillingConfig(t *testing.T, cfg billing.Config) (*billing.Handler, *memory.UserRepo, *memory.PaymentRepo, *paymentmock.Provider, *memory.BillingRepo) {
+	t.Helper()
 	users := memory.NewUserRepo()
 	payments := memory.NewPaymentRepo()
 	billingRepo := memory.NewBillingRepo()
@@ -43,7 +48,7 @@ func setup(t *testing.T) (*billing.Handler, *memory.UserRepo, *memory.PaymentRep
 		return fn(ctx, payments, billingRepo)
 	})
 	ops := paymentservice.NewWebhookProcessor(payments, provider, billingSvc, tx)
-	handler := billing.NewHandler(billing.Config{Token: "secret"}, billing.Deps{
+	handler := billing.NewHandler(cfg, billing.Deps{
 		Users:      users,
 		Billing:    billingRepo,
 		Payment:    service,
@@ -133,6 +138,103 @@ func TestPaymentOperatorActionsRequireReasonAndIdempotency(t *testing.T) {
 	handler.Routes().ServeHTTP(refundRec, refundReq)
 	if refundRec.Code != http.StatusBadRequest {
 		t.Fatalf("refund with short reason = %d, want 400", refundRec.Code)
+	}
+}
+
+func TestLoadTestMockStatusEndpointGrantsAndRefundsThroughLedger(t *testing.T) {
+	ctx := context.Background()
+	closedHandler, users, _, _, _ := setup(t)
+	user := &domain.User{VKUserID: 1777, Role: domain.RoleUser, Status: domain.StatusActive}
+	if err := users.Create(ctx, user); err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+
+	body := []byte(`{"product_code":"credits_100","receipt_email":"user@example.com"}`)
+	createReq := httptest.NewRequest(http.MethodPost, "/billing/payment-intents", bytes.NewReader(body))
+	createReq.Header.Set("X-Admin-Token", "secret")
+	createReq.Header.Set("X-User-ID", user.ID.String())
+	createReq.Header.Set("X-Idempotency-Key", "loadtest-mock-status-create")
+	createRec := httptest.NewRecorder()
+	closedHandler.Routes().ServeHTTP(createRec, createReq)
+	if createRec.Code != http.StatusCreated {
+		t.Fatalf("create intent: %d %s", createRec.Code, createRec.Body.String())
+	}
+	var created billing.PaymentIntentDTO
+	if err := json.Unmarshal(createRec.Body.Bytes(), &created); err != nil {
+		t.Fatalf("decode intent: %v", err)
+	}
+
+	closedReq := httptest.NewRequest(http.MethodPost, "/billing/payment-intents/"+created.ID.String()+"/mock-status", bytes.NewReader([]byte(`{"status":"succeeded","reason":"loadtest mock completion"}`)))
+	closedReq.Header.Set("X-Admin-Token", "secret")
+	closedReq.Header.Set("X-Idempotency-Key", "loadtest-mock-status-closed")
+	closedRec := httptest.NewRecorder()
+	closedHandler.Routes().ServeHTTP(closedRec, closedReq)
+	if closedRec.Code != http.StatusNotFound {
+		t.Fatalf("mock-status without loadtest gate = %d, want 404", closedRec.Code)
+	}
+
+	handler, users, _, _, billingRepo := setupWithBillingConfig(t, billing.Config{
+		Token:                     "secret",
+		AllowLoadTestMockPayments: true,
+	})
+	loadUser := &domain.User{VKUserID: 1888, Role: domain.RoleUser, Status: domain.StatusActive}
+	if err := users.Create(ctx, loadUser); err != nil {
+		t.Fatalf("create load user: %v", err)
+	}
+	createReq = httptest.NewRequest(http.MethodPost, "/billing/payment-intents", bytes.NewReader(body))
+	createReq.Header.Set("X-Admin-Token", "secret")
+	createReq.Header.Set("X-User-ID", loadUser.ID.String())
+	createReq.Header.Set("X-Idempotency-Key", "loadtest-mock-status-open-create")
+	createRec = httptest.NewRecorder()
+	handler.Routes().ServeHTTP(createRec, createReq)
+	if createRec.Code != http.StatusCreated {
+		t.Fatalf("create load intent: %d %s", createRec.Code, createRec.Body.String())
+	}
+	if err := json.Unmarshal(createRec.Body.Bytes(), &created); err != nil {
+		t.Fatalf("decode load intent: %v", err)
+	}
+
+	for i := 0; i < 2; i++ {
+		req := httptest.NewRequest(http.MethodPost, "/billing/payment-intents/"+created.ID.String()+"/mock-status", bytes.NewReader([]byte(`{"status":"succeeded","reason":"loadtest mock completion"}`)))
+		req.Header.Set("X-Admin-Token", "secret")
+		req.Header.Set("X-Idempotency-Key", "loadtest-mock-status-success")
+		rec := httptest.NewRecorder()
+		handler.Routes().ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("mock status attempt %d: %d %s", i+1, rec.Code, rec.Body.String())
+		}
+		var synced billing.PaymentIntentDTO
+		if err := json.Unmarshal(rec.Body.Bytes(), &synced); err != nil {
+			t.Fatalf("decode synced: %v", err)
+		}
+		if synced.Status != string(domain.PaymentIntentSucceeded) {
+			t.Fatalf("synced status = %s, want succeeded", synced.Status)
+		}
+	}
+	acc, err := billingRepo.GetAccountByUser(ctx, loadUser.ID, domain.CurrencyCredits)
+	if err != nil {
+		t.Fatalf("get account after mock status: %v", err)
+	}
+	if acc.BalanceCached != 100 {
+		t.Fatalf("balance after replayed mock status = %d, want 100", acc.BalanceCached)
+	}
+
+	for i := 0; i < 2; i++ {
+		req := httptest.NewRequest(http.MethodPost, "/billing/payment-intents/"+created.ID.String()+"/refund", bytes.NewReader([]byte(`{"reason":"loadtest refund replay"}`)))
+		req.Header.Set("X-Admin-Token", "secret")
+		req.Header.Set("X-Idempotency-Key", "loadtest-refund-key")
+		rec := httptest.NewRecorder()
+		handler.Routes().ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("refund replay attempt %d: %d %s", i+1, rec.Code, rec.Body.String())
+		}
+	}
+	acc, err = billingRepo.GetAccountByUser(ctx, loadUser.ID, domain.CurrencyCredits)
+	if err != nil {
+		t.Fatalf("get account after refund replay: %v", err)
+	}
+	if acc.BalanceCached != 0 {
+		t.Fatalf("balance after refund replay = %d, want 0", acc.BalanceCached)
 	}
 }
 

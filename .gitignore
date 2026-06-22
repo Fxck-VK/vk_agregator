@@ -32,11 +32,13 @@ _env
 _env.*
 !.env.example
 !.env.dev.example
+!.env.loadtest.example
 !.env.prod.example
 !.env.staging.example
 
 # Docker/local data
 .runtime/
+reports/loadtest/
 *.pid
 *.log
 *-live.err

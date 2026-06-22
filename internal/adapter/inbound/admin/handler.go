@@ -44,6 +44,14 @@ type paymentOverviewReader interface {
 	ListEvents(ctx context.Context, filter domain.PaymentEventFilter, limit, offset int) ([]*domain.PaymentEvent, error)
 }
 
+type maintenanceOverviewReader interface {
+	RetentionStatus(ctx context.Context, now time.Time) (domain.RetentionStatus, error)
+	RetentionDryRun(ctx context.Context, now time.Time, limit int) (domain.RetentionDryRun, error)
+	AnalyticsAggregationStatus(ctx context.Context) (domain.AnalyticsAggregationStatus, error)
+	OldestHotRows(ctx context.Context) (domain.OldestHotRowsReport, error)
+	OrphanArtifactsCount(ctx context.Context, now time.Time) (domain.OrphanArtifactsReport, error)
+}
+
 // Config holds admin API settings.
 type Config struct {
 	// Token must be presented in the X-Admin-Token header. Empty tokens fail
@@ -65,7 +73,8 @@ type Deps struct {
 	Billing domain.BillingRepository
 	// Payment is optional; when set, overview can report safe payment/webhook
 	// backlog counters without exposing raw provider payloads.
-	Payment paymentOverviewReader
+	Payment     paymentOverviewReader
+	Maintenance maintenanceOverviewReader
 }
 
 // Handler serves the admin endpoints.
@@ -89,6 +98,11 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /admin/providers/operator", h.auth(h.operatorAction("admin_operator_providers_get", h.getOperatorProviders)))
 	mux.HandleFunc("GET /admin/media-safety/operator", h.auth(h.operatorAction("admin_operator_media_safety_get", h.getOperatorMediaSafety)))
 	mux.HandleFunc("GET /admin/config-health/operator", h.auth(h.operatorAction("admin_operator_config_health_get", h.getOperatorConfigHealth)))
+	mux.HandleFunc("GET /admin/retention/operator/status", h.auth(h.operatorAction("admin_operator_retention_status_get", h.getOperatorRetentionStatus)))
+	mux.HandleFunc("GET /admin/retention/operator/dry-run", h.auth(h.operatorAction("admin_operator_retention_dry_run_get", h.getOperatorRetentionDryRun)))
+	mux.HandleFunc("GET /admin/analytics/operator/status", h.auth(h.operatorAction("admin_operator_analytics_status_get", h.getOperatorAnalyticsStatus)))
+	mux.HandleFunc("GET /admin/data/operator/hot-rows", h.auth(h.operatorAction("admin_operator_hot_rows_get", h.getOperatorHotRows)))
+	mux.HandleFunc("GET /admin/artifacts/operator/orphans", h.auth(h.operatorAction("admin_operator_orphan_artifacts_get", h.getOperatorOrphanArtifacts)))
 	mux.HandleFunc("GET /admin/users/operator", h.auth(h.operatorAction("admin_operator_users_get", h.getOperatorUsers)))
 	mux.HandleFunc("GET /admin/referrals/operator", h.auth(h.operatorAction("admin_operator_referrals_get", h.getOperatorReferrals)))
 	mux.HandleFunc("GET /admin/audit/operator", h.auth(h.operatorAction("admin_operator_audit_get", h.getOperatorAudit)))
@@ -181,6 +195,7 @@ func (h *Handler) getOverview(w http.ResponseWriter, r *http.Request) {
 		},
 		h.providerHealthOverviewCard(r.Context()),
 		h.mediaSafetyOverviewCard(r.Context()),
+		h.retentionOverviewCard(r.Context(), now),
 		h.paymentReconciliationOverviewCard(r.Context(), now),
 	}
 	writeJSON(w, http.StatusOK, OverviewDTO{GeneratedAt: now, Cards: cards})

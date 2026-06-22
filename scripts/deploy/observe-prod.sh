@@ -70,8 +70,9 @@ echo "== Production container status =="
 
 echo "== Health endpoints =="
 check_http "api /health" "http://127.0.0.1:8080/health"
-check_http "api /healthz" "http://127.0.0.1:8080/healthz"
-check_http "worker /healthz" "http://127.0.0.1:9090/healthz"
+check_http "api /readyz" "http://127.0.0.1:8080/readyz"
+check_http "worker /readyz" "http://127.0.0.1:9090/readyz"
+check_http "maintenance-worker /readyz" "http://127.0.0.1:9091/readyz"
 check_http "provider-webhook /health" "http://127.0.0.1:8082/health"
 check_http "provider-webhook /readyz" "http://127.0.0.1:8082/readyz"
 check_http "reverse-proxy /proxy-health" "http://127.0.0.1:${REVERSE_PROXY_PORT}/proxy-health"
@@ -79,8 +80,10 @@ check_http "reverse-proxy /proxy-health" "http://127.0.0.1:${REVERSE_PROXY_PORT}
 echo "== Private metrics endpoints =="
 check_http "api /metrics" "http://127.0.0.1:8080/metrics"
 check_http "worker /metrics" "http://127.0.0.1:9090/metrics"
+check_http "maintenance-worker /metrics" "http://127.0.0.1:9091/metrics"
 check_http "provider-webhook /metrics" "http://127.0.0.1:8082/metrics"
 show_metric_lines "worker queue/DLQ" "http://127.0.0.1:9090/metrics" "^(vkagg_queue_depth|vkagg_queue_oldest_age_seconds|vkagg_queue_consumer_lag|vkagg_dlq_routed_total)"
+show_metric_lines "maintenance cleanup" "http://127.0.0.1:9091/metrics" "^(vkagg_maintenance_deleted_total|vkagg_stream_trimmed_total|vkagg_media_cleanup_deleted_total)"
 show_metric_lines "payment webhook" "http://127.0.0.1:8082/metrics" "^(payment_webhook_unprocessed_events|payment_webhook_oldest_unprocessed_age_seconds|payment_webhook_processing_errors_total|payment_provider_errors_total|payment_reconciliation_mismatches|payment_webhooks_total)"
 
 echo "== Redis stream lengths =="
@@ -98,10 +101,10 @@ done
 
 if [[ "$SHOW_LOGS" == "true" ]]; then
   echo "== Recent container logs =="
-  "${COMPOSE[@]}" logs "--tail=${TAIL_LINES}" api worker provider-webhook reverse-proxy
+  "${COMPOSE[@]}" logs "--tail=${TAIL_LINES}" api worker maintenance-worker provider-webhook reverse-proxy
 else
   echo "Logs are not printed by default. Use --show-logs or run:"
-  echo "docker compose --env-file $ENV_FILE -f docker-compose.prod.yml logs --tail=$TAIL_LINES api worker provider-webhook reverse-proxy"
+  echo "docker compose --env-file $ENV_FILE -f docker-compose.prod.yml logs --tail=$TAIL_LINES api worker maintenance-worker provider-webhook reverse-proxy"
 fi
 
 echo "production observability check OK"

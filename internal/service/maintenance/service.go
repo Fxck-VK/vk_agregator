@@ -11,12 +11,32 @@ import (
 	"vk-ai-aggregator/internal/platform/metrics"
 )
 
-const defaultMediaCleanupLimit = 100
+const (
+	defaultMediaCleanupLimit          = 100
+	defaultConversationCleanupLimit   = 500
+	defaultConversationMessageTTL     = 90 * 24 * time.Hour
+	defaultConversationSummaryTTL     = 180 * 24 * time.Hour
+	defaultJobLogCleanupLimit         = 500
+	defaultJobEventsTTL               = 30 * 24 * time.Hour
+	defaultProviderPayloadTTL         = 7 * 24 * time.Hour
+	defaultJobErrorAggregateLookback  = 30 * 24 * time.Hour
+	defaultAnalyticsAggregateLookback = 7 * 24 * time.Hour
+)
 
 // Store is the database-side maintenance contract.
 type Store interface {
 	CleanupExpiredIdempotencyKeys(ctx context.Context, now time.Time) (int64, error)
 	CleanupOutboxEvents(ctx context.Context, cutoff time.Time) (int64, error)
+	AggregateJobErrors(ctx context.Context, since time.Time) (int64, error)
+	RefreshDailyAnalyticsAggregates(ctx context.Context, from, to time.Time) (int64, error)
+	CleanupJobEvents(ctx context.Context, cutoff time.Time, limit int) (int64, error)
+	ExpireProviderPayloads(ctx context.Context, cutoff, expiresAt time.Time, limit int) (int64, error)
+	RedactExpiredProviderPayloads(ctx context.Context, now time.Time, limit int) (int64, error)
+	ExpireConversationMessages(ctx context.Context, cutoff, expiresAt time.Time, limit int) (int64, error)
+	RedactExpiredConversationMessages(ctx context.Context, now time.Time, limit int) (int64, error)
+	ExpireConversationSummaries(ctx context.Context, cutoff, expiresAt time.Time, limit int) (int64, error)
+	RedactExpiredConversationSummaries(ctx context.Context, now time.Time, limit int) (int64, error)
+	ExpireMediaArtifacts(ctx context.Context, policy domain.MediaCleanupPolicy, expiresAt time.Time, limit int) (int64, error)
 	MediaCleanupCandidates(ctx context.Context, policy domain.MediaCleanupPolicy, limit int) ([]domain.MediaCleanupCandidate, error)
 	MarkMediaCleanupDeleted(ctx context.Context, candidate domain.MediaCleanupCandidate) error
 	ProductActiveUserCounts(ctx context.Context, since time.Time) ([]domain.ProductActiveUserCount, error)
@@ -39,6 +59,17 @@ type Config struct {
 	OutboxRetention               time.Duration
 	BillingReconciliationInterval time.Duration
 	BillingReconciliationLimit    int
+	JobEventsRetention            time.Duration
+	ProviderPayloadRetention      time.Duration
+	JobLogRetentionLimit          int
+	JobErrorAggregateLookback     time.Duration
+	AnalyticsAggregateLookback    time.Duration
+	ConversationMessageRetention  time.Duration
+	ConversationSummaryRetention  time.Duration
+	ConversationRetentionLimit    int
+	MediaFreeRetention            time.Duration
+	MediaPaidRetention            time.Duration
+	MediaOrphanRetention          time.Duration
 	MediaTempUploadRetention      time.Duration
 	MediaInputRetention           time.Duration
 	MediaFailedRetention          time.Duration
@@ -99,6 +130,30 @@ func New(store Store, streams StreamTrimmer, cfg Config, opts ...Option) *Servic
 	}
 	if cfg.BillingReconciliationLimit <= 0 {
 		cfg.BillingReconciliationLimit = 100
+	}
+	if cfg.JobEventsRetention <= 0 {
+		cfg.JobEventsRetention = defaultJobEventsTTL
+	}
+	if cfg.ProviderPayloadRetention <= 0 {
+		cfg.ProviderPayloadRetention = defaultProviderPayloadTTL
+	}
+	if cfg.JobLogRetentionLimit <= 0 {
+		cfg.JobLogRetentionLimit = defaultJobLogCleanupLimit
+	}
+	if cfg.JobErrorAggregateLookback <= 0 {
+		cfg.JobErrorAggregateLookback = defaultJobErrorAggregateLookback
+	}
+	if cfg.AnalyticsAggregateLookback <= 0 {
+		cfg.AnalyticsAggregateLookback = defaultAnalyticsAggregateLookback
+	}
+	if cfg.ConversationMessageRetention <= 0 {
+		cfg.ConversationMessageRetention = defaultConversationMessageTTL
+	}
+	if cfg.ConversationSummaryRetention <= 0 {
+		cfg.ConversationSummaryRetention = defaultConversationSummaryTTL
+	}
+	if cfg.ConversationRetentionLimit <= 0 {
+		cfg.ConversationRetentionLimit = defaultConversationCleanupLimit
 	}
 	if cfg.MediaCleanupLimit <= 0 {
 		cfg.MediaCleanupLimit = defaultMediaCleanupLimit
@@ -164,6 +219,28 @@ func (s *Service) Cleanup(ctx context.Context) error {
 	metrics.MaintenanceDeleted.WithLabelValues("idempotency_keys").Add(float64(idemDeleted))
 	metrics.MaintenanceDeleted.WithLabelValues("outbox_events").Add(float64(outboxDeleted))
 
+	jobErrorsAggregated, jobEventsDeleted, providerPayloadsExpired, providerPayloadsRedacted, err := s.cleanupJobLogs(ctx, now)
+	if err != nil {
+		return err
+	}
+	metrics.MaintenanceDeleted.WithLabelValues("job_events").Add(float64(jobEventsDeleted))
+	metrics.MaintenanceDeleted.WithLabelValues("provider_payloads_expired").Add(float64(providerPayloadsExpired))
+	metrics.MaintenanceDeleted.WithLabelValues("provider_payloads_redacted").Add(float64(providerPayloadsRedacted))
+
+	dailyAnalyticsRefreshed, err := s.refreshDailyAnalytics(ctx, now)
+	if err != nil {
+		return err
+	}
+
+	conversationExpired, conversationRedacted, summaryExpired, summaryRedacted, err := s.cleanupConversations(ctx, now)
+	if err != nil {
+		return err
+	}
+	metrics.MaintenanceDeleted.WithLabelValues("conversation_messages_expired").Add(float64(conversationExpired))
+	metrics.MaintenanceDeleted.WithLabelValues("conversation_messages_redacted").Add(float64(conversationRedacted))
+	metrics.MaintenanceDeleted.WithLabelValues("conversation_summaries_expired").Add(float64(summaryExpired))
+	metrics.MaintenanceDeleted.WithLabelValues("conversation_summaries_redacted").Add(float64(summaryRedacted))
+
 	if s.streams != nil {
 		trimmed, err := s.streams.Trim(ctx)
 		if err != nil {
@@ -173,33 +250,125 @@ func (s *Service) Cleanup(ctx context.Context) error {
 			metrics.StreamTrimmed.WithLabelValues(stream).Add(float64(n))
 		}
 	}
-	mediaDeleted, err := s.cleanupMedia(ctx, now)
+	mediaExpired, mediaDeleted, err := s.cleanupMedia(ctx, now)
 	if err != nil {
 		return err
 	}
 	if err := s.ObserveProductStats(ctx); err != nil {
 		s.log.WarnContext(ctx, "product stats observation failed", "error", err)
 	}
-	if idemDeleted > 0 || outboxDeleted > 0 || mediaDeleted > 0 {
+	if idemDeleted > 0 || outboxDeleted > 0 || mediaExpired > 0 || mediaDeleted > 0 ||
+		jobErrorsAggregated > 0 || dailyAnalyticsRefreshed > 0 || jobEventsDeleted > 0 ||
+		providerPayloadsExpired > 0 || providerPayloadsRedacted > 0 ||
+		conversationExpired > 0 || conversationRedacted > 0 ||
+		summaryExpired > 0 || summaryRedacted > 0 {
 		s.log.InfoContext(ctx, "maintenance cleanup completed",
 			"idempotency_keys_deleted", idemDeleted,
 			"outbox_events_deleted", outboxDeleted,
+			"job_errors_aggregated", jobErrorsAggregated,
+			"daily_analytics_refreshed", dailyAnalyticsRefreshed,
+			"job_events_deleted", jobEventsDeleted,
+			"provider_payloads_expired", providerPayloadsExpired,
+			"provider_payloads_redacted", providerPayloadsRedacted,
+			"conversation_messages_expired", conversationExpired,
+			"conversation_messages_redacted", conversationRedacted,
+			"conversation_summaries_expired", summaryExpired,
+			"conversation_summaries_redacted", summaryRedacted,
+			"media_artifacts_expired", mediaExpired,
 			"media_objects_deleted", mediaDeleted)
 	}
 	return nil
 }
 
-func (s *Service) cleanupMedia(ctx context.Context, now time.Time) (int64, error) {
-	if s.mediaObjects == nil {
+func (s *Service) refreshDailyAnalytics(ctx context.Context, now time.Time) (int64, error) {
+	if s.cfg.AnalyticsAggregateLookback <= 0 {
 		return 0, nil
+	}
+	from := analyticsDay(now.Add(-s.cfg.AnalyticsAggregateLookback))
+	to := analyticsDay(now.Add(24 * time.Hour))
+	return s.store.RefreshDailyAnalyticsAggregates(ctx, from, to)
+}
+
+func analyticsDay(t time.Time) time.Time {
+	year, month, day := t.UTC().Date()
+	return time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
+}
+
+func (s *Service) cleanupJobLogs(ctx context.Context, now time.Time) (int64, int64, int64, int64, error) {
+	errorsAggregated, err := s.store.AggregateJobErrors(ctx, now.Add(-s.cfg.JobErrorAggregateLookback))
+	if err != nil {
+		return 0, 0, 0, 0, err
+	}
+
+	eventsDeleted, err := s.store.CleanupJobEvents(ctx, now.Add(-s.cfg.JobEventsRetention), s.cfg.JobLogRetentionLimit)
+	if err != nil {
+		return 0, 0, 0, 0, err
+	}
+
+	payloadsExpired, err := s.store.ExpireProviderPayloads(ctx, now.Add(-s.cfg.ProviderPayloadRetention), now, s.cfg.JobLogRetentionLimit)
+	if err != nil {
+		return 0, 0, 0, 0, err
+	}
+	payloadsRedacted, err := s.store.RedactExpiredProviderPayloads(ctx, now, s.cfg.JobLogRetentionLimit)
+	if err != nil {
+		return 0, 0, 0, 0, err
+	}
+
+	return errorsAggregated, eventsDeleted, payloadsExpired, payloadsRedacted, nil
+}
+
+func (s *Service) cleanupConversations(ctx context.Context, now time.Time) (int64, int64, int64, int64, error) {
+	var messagesExpired, messagesRedacted, summariesExpired, summariesRedacted int64
+	limit := s.cfg.ConversationRetentionLimit
+
+	if s.cfg.ConversationMessageRetention > 0 {
+		expired, err := s.store.ExpireConversationMessages(ctx, now.Add(-s.cfg.ConversationMessageRetention), now, limit)
+		if err != nil {
+			return 0, 0, 0, 0, err
+		}
+		redacted, err := s.store.RedactExpiredConversationMessages(ctx, now, limit)
+		if err != nil {
+			return 0, 0, 0, 0, err
+		}
+		messagesExpired = expired
+		messagesRedacted = redacted
+	}
+
+	if s.cfg.ConversationSummaryRetention > 0 {
+		expired, err := s.store.ExpireConversationSummaries(ctx, now.Add(-s.cfg.ConversationSummaryRetention), now, limit)
+		if err != nil {
+			return 0, 0, 0, 0, err
+		}
+		redacted, err := s.store.RedactExpiredConversationSummaries(ctx, now, limit)
+		if err != nil {
+			return 0, 0, 0, 0, err
+		}
+		summariesExpired = expired
+		summariesRedacted = redacted
+	}
+
+	return messagesExpired, messagesRedacted, summariesExpired, summariesRedacted, nil
+}
+
+func (s *Service) cleanupMedia(ctx context.Context, now time.Time) (int64, int64, error) {
+	if s.mediaObjects == nil {
+		return 0, 0, nil
 	}
 	policy := s.mediaCleanupPolicy(now)
 	if !policy.Enabled() {
-		return 0, nil
+		return 0, 0, nil
 	}
+	expired, err := s.store.ExpireMediaArtifacts(ctx, policy, now, s.cfg.MediaCleanupLimit)
+	if err != nil {
+		return 0, 0, err
+	}
+	if expired > 0 {
+		metrics.MaintenanceDeleted.WithLabelValues("media_artifacts_expired").Add(float64(expired))
+	}
+	policy.ExpiredCutoff = now
 	candidates, err := s.store.MediaCleanupCandidates(ctx, policy, s.cfg.MediaCleanupLimit)
 	if err != nil {
-		return 0, err
+		return expired, 0, err
 	}
 
 	var deleted int64
@@ -222,19 +391,29 @@ func (s *Service) cleanupMedia(ctx context.Context, now time.Time) (int64, error
 		}
 		if err := s.store.MarkMediaCleanupDeleted(ctx, candidate); err != nil {
 			metrics.ObserveMediaCleanupDeleted("error", variantType, "db_mark_failed")
-			return deleted, fmt.Errorf("maintenance: media cleanup mark deleted failed: %w", err)
+			return expired, deleted, fmt.Errorf("maintenance: media cleanup mark deleted failed: %w", err)
 		}
 		deleted++
 		metrics.MaintenanceDeleted.WithLabelValues("media_objects").Inc()
 		metrics.ObserveMediaCleanupDeleted("success", variantType, "none")
 	}
-	return deleted, nil
+	return expired, deleted, nil
 }
 
 func (s *Service) mediaCleanupPolicy(now time.Time) domain.MediaCleanupPolicy {
 	var policy domain.MediaCleanupPolicy
+	if s.cfg.MediaFreeRetention > 0 {
+		policy.FreeArtifactCutoff = now.Add(-s.cfg.MediaFreeRetention)
+	}
+	if s.cfg.MediaPaidRetention > 0 {
+		policy.PaidArtifactCutoff = now.Add(-s.cfg.MediaPaidRetention)
+	}
+	if s.cfg.MediaOrphanRetention > 0 {
+		policy.OrphanArtifactCutoff = now.Add(-s.cfg.MediaOrphanRetention)
+	}
 	if s.cfg.MediaTempUploadRetention > 0 {
 		policy.TempUploadCutoff = now.Add(-s.cfg.MediaTempUploadRetention)
+		policy.TemporaryArtifactCutoff = policy.TempUploadCutoff
 	}
 	if s.cfg.MediaInputRetention > 0 {
 		policy.InputReferenceCutoff = now.Add(-s.cfg.MediaInputRetention)

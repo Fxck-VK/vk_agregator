@@ -91,6 +91,8 @@ function Assert-NoTrackedEnvFiles {
     $tracked = Get-TrackedFiles
     $allowedTrackedEnv = @(
         ".env.example",
+        ".env.dev.example",
+        ".env.loadtest.example",
         ".env.prod.example",
         ".env.staging.example"
     )
@@ -106,6 +108,63 @@ function Assert-NoTrackedEnvFiles {
     }
 
     Write-Host "tracked env files OK"
+}
+
+function Assert-DevEnvTemplate {
+    $path = Join-Path $repoRoot ".env.dev.example"
+    if (-not (Test-Path -LiteralPath $path)) {
+        throw "DEV env template is missing: .env.dev.example"
+    }
+
+    $content = Get-Content -LiteralPath $path -Raw
+    $requiredSnippets = @(
+        "APP_ENV=development",
+        "COMPOSE_NETWORK_NAME=vk-ai-aggregator-dev",
+        "DATA_SERVICES_MODE=local",
+        "POSTGRES_MODE=local",
+        "REDIS_MODE=local",
+        "S3_MODE=local",
+        "S3_REGION=us-east-1",
+        "S3_ADDRESSING_STYLE=path",
+        "DEV_ALLOW_REAL_AI_PROVIDERS=true",
+        "DEV_ALLOW_REAL_PAYMENTS=false",
+        "DEV_ALLOW_REMOTE_IMAGES=false",
+        "DEV_EXPECTED_TUNNEL_NAME=neiirohub-vk-dev",
+        "DEV_EXPECTED_TUNNEL_HOSTNAME=dev-vk.neiirohub.ru",
+        "PUBLIC_VK_BASE_URL=https://dev-vk.neiirohub.ru",
+        "PUBLIC_APP_BASE_URL=https://dev-app.neiirohub.ru",
+        "PUBLIC_PAYMENT_WEBHOOK_URL=https://dev.neiirohub.ru/billing/webhooks/yookassa",
+        "CLOUDFLARED_TUNNEL_TOKEN=CHANGE_ME_DEV_CLOUDFLARED_TUNNEL_TOKEN",
+        "VK_ACCESS_TOKEN=CHANGE_ME_DEV_VK_ACCESS_TOKEN",
+        "VK_SECRET=CHANGE_ME_DEV_VK_CALLBACK_SECRET",
+        "VK_CONFIRMATION_TOKEN=CHANGE_ME_DEV_VK_CONFIRMATION_TOKEN",
+        "VK_GROUP_ID=CHANGE_ME_DEV_VK_GROUP_ID",
+        "PAYMENT_PROVIDER=mock",
+        "PROVIDER=mock",
+        "PROVIDER_CHAIN=deepinfra,apimart,poyo,runway,mock",
+        "IMAGE_PROVIDER=mock",
+        "VIDEO_PROVIDER=mock"
+    )
+
+    foreach ($snippet in $requiredSnippets) {
+        if (-not $content.Contains($snippet)) {
+            throw "DEV env template is missing required snippet: $snippet"
+        }
+    }
+
+    $forbiddenProdSnippets = @(
+        "https://vk.neiirohub.ru",
+        "https://app.neiirohub.ru",
+        "https://neiirohub.ru/billing/webhooks/yookassa",
+        "239332376"
+    )
+    foreach ($snippet in $forbiddenProdSnippets) {
+        if ($content.Contains($snippet)) {
+            throw "DEV env template contains production-specific value: $snippet"
+        }
+    }
+
+    Write-Host "DEV env template OK"
 }
 
 function Assert-CloudflareConfigHasNoSecrets {
@@ -159,9 +218,12 @@ function Assert-ReverseProxyConfig {
 
     $content = Get-Content -LiteralPath $path -Raw
     $requiredSnippets = @(
-        "server_name vk.neiirohub.ru;",
-        "server_name app.neiirohub.ru;",
-        "server_name neiirohub.ru;",
+        "vk.neiirohub.ru",
+        "app.neiirohub.ru",
+        "neiirohub.ru",
+        "dev-vk.neiirohub.ru",
+        "dev-app.neiirohub.ru",
+        "dev.neiirohub.ru",
         "location = /webhooks/vk",
         "location = /billing/webhooks/yookassa",
         "location ^~ /miniapp/",
@@ -185,6 +247,185 @@ function Assert-ReverseProxyConfig {
     }
 
     Write-Host "reverse proxy config OK"
+}
+
+function Assert-DevReverseProxySmokeScript {
+    $path = Join-Path $repoRoot "scripts\dev\check-dev-reverse-proxy.ps1"
+    if (-not (Test-Path -LiteralPath $path)) {
+        throw "DEV reverse proxy smoke script is missing: scripts/dev/check-dev-reverse-proxy.ps1"
+    }
+
+    $content = Get-Content -LiteralPath $path -Raw
+    $requiredSnippets = @(
+        "http://127.0.0.1:8088",
+        "dev-vk.neiirohub.ru",
+        "dev-app.neiirohub.ru",
+        "dev.neiirohub.ru",
+        "/health",
+        "/miniapp/balance",
+        "/billing/webhooks/yookassa",
+        "/metrics",
+        "/admin/jobs",
+        "ForbiddenStatuses",
+        "DEV reverse proxy smoke OK"
+    )
+
+    foreach ($snippet in $requiredSnippets) {
+        if (-not $content.Contains($snippet)) {
+            throw "DEV reverse proxy smoke script is missing required snippet: $snippet"
+        }
+    }
+
+    Write-Host "DEV reverse proxy smoke script OK"
+}
+
+function Assert-DevStartStackScript {
+    $path = Join-Path $repoRoot "scripts\dev\start-dev-stack.ps1"
+    if (-not (Test-Path -LiteralPath $path)) {
+        throw "DEV stack start script is missing: scripts/dev/start-dev-stack.ps1"
+    }
+
+    $content = Get-Content -LiteralPath $path -Raw
+    $requiredSnippets = @(
+        "WithCloudflare",
+        "APP_ENV must be development/dev",
+        "docker-compose.prod.yml",
+        "start Postgres/Redis/MinIO",
+        "run migrations",
+        "api",
+        "worker",
+        "provider-webhook",
+        "miniapp",
+        "reverse-proxy",
+        "cloudflared DEV tunnel",
+        "DEV_ALLOW_REAL_AI_PROVIDERS",
+        "DEV_ALLOW_REAL_PAYMENTS",
+        "DEV_ALLOW_REMOTE_IMAGES",
+        "DEV runtime mode: local-build from current working tree",
+        "-SkipBuild would run prebuilt Docker images",
+        "COMPOSE_BAKE",
+        "VK_GROUP_ID must not be the production group id",
+        "YOOKASSA_SECRET_KEY must be a YooKassa test key in DEV",
+        "check-dev-reverse-proxy.ps1",
+        "https://dev-vk.neiirohub.ru/health",
+        "https://dev-app.neiirohub.ru/",
+        "https://dev.neiirohub.ru/billing/webhooks/yookassa",
+        "DEV stack is running."
+    )
+
+    foreach ($snippet in $requiredSnippets) {
+        if (-not $content.Contains($snippet)) {
+            throw "DEV stack start script is missing required snippet: $snippet"
+        }
+    }
+
+    if ($content -match "docker compose down -v|reset --hard|push --force|--force-with-lease") {
+        throw "DEV stack start script contains a forbidden destructive operation"
+    }
+
+    Write-Host "DEV stack start script OK"
+}
+
+function Assert-DevStopStatusScripts {
+    $scripts = @(
+        [pscustomobject]@{
+            Path = "scripts\dev\stop-dev-stack.ps1"
+            Required = @(
+                "start-dev-stack.ps1",
+                "StopOnly",
+                "EnvFile",
+                "ProjectName"
+            )
+        },
+        [pscustomobject]@{
+            Path = "scripts\dev\status-dev-stack.ps1"
+            Required = @(
+                "Test-TcpPort",
+                "Invoke-RawHttp",
+                "APP_ENV must be development/dev",
+                "DEV_ALLOW_REAL_AI_PROVIDERS",
+                "DEV_ALLOW_REAL_PAYMENTS",
+                "VK_GROUP_ID must not be the production group id",
+                "YOOKASSA_SECRET_KEY must be a YooKassa test key in DEV",
+                "cloudflared.pid",
+                "dev-vk.neiirohub.ru",
+                "dev-app.neiirohub.ru",
+                "dev.neiirohub.ru",
+                "/webhooks/vk",
+                "/miniapp/balance",
+                "/billing/webhooks/yookassa",
+                "VK callback",
+                "Mini App",
+                "Tunnel",
+                "Public DEV smoke"
+            )
+        }
+    )
+
+    foreach ($script in $scripts) {
+        $fullPath = Join-Path $repoRoot $script.Path
+        if (-not (Test-Path -LiteralPath $fullPath)) {
+            throw "DEV helper script is missing: $($script.Path)"
+        }
+        $content = Get-Content -LiteralPath $fullPath -Raw
+        foreach ($snippet in $script.Required) {
+            if (-not $content.Contains($snippet)) {
+                throw "DEV helper script $($script.Path) is missing required snippet: $snippet"
+            }
+        }
+        if ($content -match "docker compose down -v|reset --hard|push --force|--force-with-lease") {
+            throw "DEV helper script $($script.Path) contains a forbidden destructive operation"
+        }
+    }
+
+    Write-Host "DEV stop/status scripts OK"
+}
+
+function Assert-DevPublicSmokeScript {
+    $path = Join-Path $repoRoot "scripts\dev\smoke-dev.ps1"
+    if (-not (Test-Path -LiteralPath $path)) {
+        throw "DEV public smoke script is missing: scripts/dev/smoke-dev.ps1"
+    }
+
+    $content = Get-Content -LiteralPath $path -Raw
+    $requiredSnippets = @(
+        "https://dev-vk.neiirohub.ru",
+        "https://dev-app.neiirohub.ru",
+        "https://dev.neiirohub.ru",
+        "must use HTTPS",
+        "/health",
+        "/webhooks/vk",
+        "/miniapp/balance",
+        "/billing/webhooks/yookassa",
+        "/admin/jobs",
+        "/metrics",
+        "ForbiddenStatuses",
+        "DEV public smoke OK"
+    )
+
+    foreach ($snippet in $requiredSnippets) {
+        if (-not $content.Contains($snippet)) {
+            throw "DEV public smoke script is missing required snippet: $snippet"
+        }
+    }
+
+    $forbiddenSnippets = @(
+        "https://vk.neiirohub.ru",
+        "https://app.neiirohub.ru",
+        "https://neiirohub.ru/billing/webhooks/yookassa"
+    )
+
+    foreach ($snippet in $forbiddenSnippets) {
+        if ($content.Contains($snippet)) {
+            throw "DEV public smoke script must not target production URL: $snippet"
+        }
+    }
+
+    if ($content -match "VK_ACCESS_TOKEN|VK_SECRET|YOOKASSA_SECRET|DEEPINFRA_API_KEY|OPENAI_API_KEY|CLOUDFLARED_TUNNEL_TOKEN") {
+        throw "DEV public smoke script must not reference secrets"
+    }
+
+    Write-Host "DEV public smoke script OK"
 }
 
 function Assert-CloudflareDeploymentConfig {
@@ -228,6 +469,9 @@ function Assert-CloudflareDeploymentConfig {
         "vk.neiirohub.ru",
         "app.neiirohub.ru",
         "https://neiirohub.ru/billing/webhooks/yookassa",
+        "dev-vk.neiirohub.ru",
+        "dev-app.neiirohub.ru",
+        "https://dev.neiirohub.ru/billing/webhooks/yookassa",
         "CLOUDFLARED_TUNNEL_TOKEN",
         "PUBLIC_PAYMENT_WEBHOOK_URL",
         'Do not route broad `/billing/*`'
@@ -243,17 +487,27 @@ function Assert-CloudflareDeploymentConfig {
 }
 
 function Assert-ProductionDataServices {
-    $path = Join-Path $repoRoot "docker-compose.prod.yml"
-    if (-not (Test-Path -LiteralPath $path)) {
+    $prodPath = Join-Path $repoRoot "docker-compose.prod.yml"
+    $dataPath = Join-Path $repoRoot "docker-compose.data.yml"
+    if (-not (Test-Path -LiteralPath $prodPath)) {
         Write-Host "no production compose file found; skipping data-service checks"
         return
     }
+    if (-not (Test-Path -LiteralPath $dataPath)) {
+        throw "production data compose file is missing: docker-compose.data.yml"
+    }
 
     $requiredFiles = @(
+        "docs/DATA_SERVICES_CONTRACT.md",
+        "docker-compose.data.yml",
         "Dockerfile.migrate",
         "Dockerfile.backup",
         "scripts\backup\backup-postgres.sh",
-        "scripts\backup\backup-minio.sh"
+        "scripts\backup\backup-minio.sh",
+        "scripts\backup\restore-postgres.sh",
+        "scripts\backup\restore-minio.sh",
+        "scripts\deploy\check-migrations-safe.ps1",
+        "scripts\deploy\check-migrations-safe.sh"
     )
     foreach ($requiredFile in $requiredFiles) {
         $fullPath = Join-Path $repoRoot $requiredFile
@@ -262,29 +516,64 @@ function Assert-ProductionDataServices {
         }
     }
 
-    $content = Get-Content -LiteralPath $path -Raw
-    $requiredSnippets = @(
+    $prodContent = Get-Content -LiteralPath $prodPath -Raw
+    $dataContent = Get-Content -LiteralPath $dataPath -Raw
+    $requiredDataSnippets = @(
+        "postgres:",
         "postgres_data:/var/lib/postgresql/data",
+        "redis:",
         "redis_data:/data",
+        "minio:",
         "minio_data:/data",
-        "migrate:",
-        "Dockerfile.migrate",
-        "condition: service_completed_successfully",
-        "backup-postgres:",
-        "backup-minio:",
-        "Dockerfile.backup",
-        "backup_data:/backups",
-        "backup_metrics:/backup-metrics",
+        "local-postgres-disabled",
+        "local-minio-disabled",
         "postgres_data:",
         "redis_data:",
         "minio_data:",
+        'name: ${COMPOSE_NETWORK_NAME:-vk-ai-aggregator-prod}'
+    )
+    $requiredProdSnippets = @(
+        "migrate:",
+        "Dockerfile.migrate",
+        "backup-postgres:",
+        "backup-minio:",
+        "restore-postgres:",
+        "restore-minio:",
+        "Dockerfile.backup",
+        "RESTORE_ALLOW_DESTRUCTIVE",
+        "backup_data:/backups",
+        "backup_metrics:/backup-metrics",
         "backup_data:",
         "backup_metrics:"
     )
 
-    foreach ($snippet in $requiredSnippets) {
-        if (-not $content.Contains($snippet)) {
-            throw "production compose data-service config is missing required snippet: $snippet"
+    foreach ($snippet in $requiredDataSnippets) {
+        if (-not $dataContent.Contains($snippet)) {
+            throw "production data compose config is missing required snippet: $snippet"
+        }
+    }
+    foreach ($snippet in $requiredProdSnippets) {
+        if (-not $prodContent.Contains($snippet)) {
+            throw "production app compose config is missing required snippet: $snippet"
+        }
+    }
+    if ($prodContent -match "(?m)^\s{2}(postgres|redis|minio):\s*$") {
+        throw "docker-compose.prod.yml must not define Postgres/Redis/MinIO services; use docker-compose.data.yml"
+    }
+
+    $modeAwareScripts = @(
+        @{ Path = "scripts\deploy\deploy-prod.sh"; Snippet = "docker-compose.data.yml" },
+        @{ Path = "scripts\deploy\deploy-prod.sh"; Snippet = "check_external_data_services" },
+        @{ Path = "scripts\deploy\rollback-prod.sh"; Snippet = "docker-compose.data.yml" },
+        @{ Path = "scripts\deploy\deploy-prod.ps1"; Snippet = "docker-compose.data.yml" },
+        @{ Path = "scripts\deploy\deploy-prod.ps1"; Snippet = "Invoke-ExternalDataServiceChecks" },
+        @{ Path = "scripts\deploy\rollback-prod.ps1"; Snippet = "docker-compose.data.yml" }
+    )
+    foreach ($script in $modeAwareScripts) {
+        $scriptPath = Join-Path $repoRoot $script.Path
+        $scriptContent = Get-Content -LiteralPath $scriptPath -Raw
+        if (-not $scriptContent.Contains($script.Snippet)) {
+            throw "production deploy script is not data-service-mode aware: $($script.Path)"
         }
     }
 
@@ -341,7 +630,14 @@ function Assert-DeployScripts {
                 "BuildOnVPS",
                 "--no-build",
                 "SkipPublicSmoke",
+                "Invoke-ExternalDataServiceChecks",
+                "postgres:16-alpine",
+                "redis:7-alpine",
+                "minio/mc:latest",
                 "smoke-prod.ps1",
+                "check-migrations-safe.ps1",
+                "MIGRATION_BACKUP_CONFIRMED",
+                "backup postgres before migration",
                 "-EnvFile",
                 "PUBLIC_PAYMENT_WEBHOOK_URL",
                 "IMAGE_TAG",
@@ -349,6 +645,7 @@ function Assert-DeployScripts {
                 "exit-code-from",
                 "api", "worker", "provider-webhook", "miniapp", "reverse-proxy",
                 "Wait-Http",
+                "/readyz",
                 "Production deploy completed.",
                 "skipped; pulled registry images",
                 "Health checks:"
@@ -366,14 +663,22 @@ function Assert-DeployScripts {
                 "--build-on-vps",
                 "--no-build",
                 "--skip-public-smoke",
+                "check_external_data_services",
+                "postgres:16-alpine",
+                "redis:7-alpine",
+                "minio/mc:latest",
                 "smoke-prod.sh",
+                "check-migrations-safe.sh",
+                "MIGRATION_BACKUP_CONFIRMED",
+                "Migration backup:",
                 "--env-file",
                 "PUBLIC_PAYMENT_WEBHOOK_URL",
                 "IMAGE_TAG",
                 "migrate_args",
                 "exit-code-from",
-                "api worker provider-webhook miniapp reverse-proxy",
+                "api worker maintenance-worker provider-webhook miniapp reverse-proxy",
                 "wait_http",
+                "/readyz",
                 "Production deploy completed.",
                 "skipped; pulled registry images",
                 "Health checks:"
@@ -385,6 +690,14 @@ function Assert-DeployScripts {
                 "APP_IMAGE_REGISTRY",
                 "IMAGE_TAG",
                 "APP_ENV",
+                "DATA_SERVICES_MODE",
+                "POSTGRES_MODE",
+                "REDIS_MODE",
+                "S3_MODE",
+                "S3_ENDPOINT",
+                "S3_REGION",
+                "S3_ADDRESSING_STYLE",
+                "REDIS_ADDR",
                 "staging",
                 "CHANGE_ME",
                 "PAYMENT_PROVIDER",
@@ -392,7 +705,10 @@ function Assert-DeployScripts {
                 "CLOUDFLARED_TUNNEL_TOKEN",
                 "PUBLIC_VK_BASE_URL",
                 "PUBLIC_APP_BASE_URL",
-                "PUBLIC_PAYMENT_WEBHOOK_URL"
+                "PUBLIC_PAYMENT_WEBHOOK_URL",
+                "MIGRATION_ALLOW_DESTRUCTIVE",
+                "MIGRATION_BACKUP_CONFIRMED",
+                "RESTORE_ALLOW_DESTRUCTIVE"
             )
         },
         [pscustomobject]@{
@@ -401,6 +717,14 @@ function Assert-DeployScripts {
                 "APP_IMAGE_REGISTRY",
                 "IMAGE_TAG",
                 "APP_ENV",
+                "DATA_SERVICES_MODE",
+                "POSTGRES_MODE",
+                "REDIS_MODE",
+                "S3_MODE",
+                "S3_ENDPOINT",
+                "S3_REGION",
+                "S3_ADDRESSING_STYLE",
+                "REDIS_ADDR",
                 "staging",
                 "CHANGE_ME",
                 "PAYMENT_PROVIDER",
@@ -408,7 +732,10 @@ function Assert-DeployScripts {
                 "CLOUDFLARED_TUNNEL_TOKEN",
                 "PUBLIC_VK_BASE_URL",
                 "PUBLIC_APP_BASE_URL",
-                "PUBLIC_PAYMENT_WEBHOOK_URL"
+                "PUBLIC_PAYMENT_WEBHOOK_URL",
+                "MIGRATION_ALLOW_DESTRUCTIVE",
+                "MIGRATION_BACKUP_CONFIRMED",
+                "RESTORE_ALLOW_DESTRUCTIVE"
             )
         },
         [pscustomobject]@{
@@ -448,7 +775,7 @@ function Assert-DeployScripts {
             Required = @(
                 "EnvFile",
                 "/health",
-                "/healthz",
+                "/readyz",
                 "/miniapp/balance",
                 "/billing/webhooks/yookassa",
                 "PaymentWebhookOnly",
@@ -474,7 +801,7 @@ function Assert-DeployScripts {
             Required = @(
                 "--env-file",
                 "/health",
-                "/healthz",
+                "/readyz",
                 "/miniapp/balance",
                 "/billing/webhooks/yookassa",
                 "--payment-webhook-only",
@@ -773,7 +1100,7 @@ if (Test-Path -LiteralPath "docker-compose.observability.yml") {
 }
 
 if (Test-Path -LiteralPath "docker-compose.prod.yml") {
-    Invoke-Step "docker compose prod config" {
+    Invoke-Step "docker compose prod app config" {
         $previousAppEnvFile = $env:APP_ENV_FILE
         $prodEnvTemplate = if (Test-Path -LiteralPath ".env.prod.example") { ".env.prod.example" } else { ".env.example" }
         try {
@@ -787,8 +1114,24 @@ if (Test-Path -LiteralPath "docker-compose.prod.yml") {
             }
         }
     }
+    if (Test-Path -LiteralPath "docker-compose.data.yml") {
+        Invoke-Step "docker compose prod app+data config" {
+            $previousAppEnvFile = $env:APP_ENV_FILE
+            $prodEnvTemplate = if (Test-Path -LiteralPath ".env.prod.example") { ".env.prod.example" } else { ".env.example" }
+            try {
+                $env:APP_ENV_FILE = $prodEnvTemplate
+                docker compose --project-name vk-ai-aggregator-prod --env-file $prodEnvTemplate -f docker-compose.prod.yml -f docker-compose.data.yml config | Out-Null
+            } finally {
+                if ($null -eq $previousAppEnvFile) {
+                    Remove-Item Env:\APP_ENV_FILE -ErrorAction SilentlyContinue
+                } else {
+                    $env:APP_ENV_FILE = $previousAppEnvFile
+                }
+            }
+        }
+    }
     if (Test-Path -LiteralPath ".env.staging.example") {
-        Invoke-Step "docker compose staging config" {
+        Invoke-Step "docker compose staging app config" {
             $previousAppEnvFile = $env:APP_ENV_FILE
             try {
                 $env:APP_ENV_FILE = ".env.staging.example"
@@ -801,14 +1144,34 @@ if (Test-Path -LiteralPath "docker-compose.prod.yml") {
                 }
             }
         }
+        if (Test-Path -LiteralPath "docker-compose.data.yml") {
+            Invoke-Step "docker compose staging app+data config" {
+                $previousAppEnvFile = $env:APP_ENV_FILE
+                try {
+                    $env:APP_ENV_FILE = ".env.staging.example"
+                    docker compose --project-name vk-ai-aggregator-staging --env-file .env.staging.example -f docker-compose.prod.yml -f docker-compose.data.yml config | Out-Null
+                } finally {
+                    if ($null -eq $previousAppEnvFile) {
+                        Remove-Item Env:\APP_ENV_FILE -ErrorAction SilentlyContinue
+                    } else {
+                        $env:APP_ENV_FILE = $previousAppEnvFile
+                    }
+                }
+            }
+        }
     }
 }
 
 Assert-Migrations
 Assert-NoTrackedEnvFiles
+Assert-DevEnvTemplate
 Assert-CloudflareConfigHasNoSecrets
 Assert-CloudflareDeploymentConfig
 Assert-ReverseProxyConfig
+Assert-DevReverseProxySmokeScript
+Assert-DevStartStackScript
+Assert-DevStopStatusScripts
+Assert-DevPublicSmokeScript
 Assert-ProductionDataServices
 Assert-CloudflaredComposeConfig
 Assert-DeployScripts

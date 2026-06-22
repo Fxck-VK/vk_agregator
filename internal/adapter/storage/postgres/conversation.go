@@ -147,7 +147,11 @@ func (r *ConversationRepository) ListRecentMessagesBefore(ctx context.Context, c
 		FROM (
 			SELECT ` + conversationMessageColumns + `
 			FROM conversation_messages
-			WHERE conversation_id = $1 AND seq < $2 AND seq > $3
+			WHERE conversation_id = $1
+			  AND seq < $2
+			  AND seq > $3
+			  AND deleted_at IS NULL
+			  AND redacted_at IS NULL
 			ORDER BY seq DESC
 			LIMIT $4
 		) recent
@@ -166,7 +170,10 @@ func (r *ConversationRepository) ListMessagesAfter(ctx context.Context, conversa
 	}
 	const q = `SELECT ` + conversationMessageColumns + `
 		FROM conversation_messages
-		WHERE conversation_id = $1 AND seq > $2
+		WHERE conversation_id = $1
+		  AND seq > $2
+		  AND deleted_at IS NULL
+		  AND redacted_at IS NULL
 		ORDER BY seq ASC
 		LIMIT $3`
 	rows, err := r.db.Query(ctx, q, conversationID, afterSeq, limit)
@@ -180,7 +187,9 @@ func (r *ConversationRepository) ListMessagesAfter(ctx context.Context, conversa
 func (r *ConversationRepository) LatestSummary(ctx context.Context, conversationID uuid.UUID) (*domain.ConversationSummary, error) {
 	const q = `SELECT ` + conversationSummaryColumns + `
 		FROM conversation_summaries
-		WHERE conversation_id = $1`
+		WHERE conversation_id = $1
+		  AND deleted_at IS NULL
+		  AND redacted_at IS NULL`
 	var s domain.ConversationSummary
 	if err := mapError(scanConversationSummary(r.db.QueryRow(ctx, q, conversationID), &s)); err != nil {
 		return nil, err

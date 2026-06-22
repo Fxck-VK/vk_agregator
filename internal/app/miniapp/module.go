@@ -45,10 +45,12 @@ func NewHandler(ctx context.Context, cfg config.Config, deps Deps) *miniappapi.H
 
 	var objectStore miniappapi.ObjectReader
 	store, err := s3store.New(ctx, s3store.Config{
-		Endpoint:  cfg.S3Endpoint,
-		AccessKey: cfg.S3AccessKey,
-		SecretKey: cfg.S3SecretKey,
-		UseSSL:    cfg.S3UseSSL,
+		Endpoint:        cfg.S3Endpoint,
+		AccessKey:       cfg.S3AccessKey,
+		SecretKey:       cfg.S3SecretKey,
+		UseSSL:          cfg.S3UseSSL,
+		Region:          cfg.S3Region,
+		AddressingStyle: cfg.S3AddressingStyle,
 	})
 	if err != nil {
 		logger.Warn("s3 connect failed; miniapp artifact downloads disabled", "error", err)

@@ -260,6 +260,102 @@ type OperatorConfigFlagDTO struct {
 	Summary string `json:"summary"`
 }
 
+// OperatorRetentionStatusDTO is a safe retention control-room response. It
+// exposes counts and ages only; no raw prompts, payloads, ids or storage URLs.
+type OperatorRetentionStatusDTO struct {
+	GeneratedAt     time.Time                   `json:"generated_at"`
+	Retention       []OperatorRetentionTableDTO `json:"retention"`
+	OldestHotRows   []OperatorOldestHotRowDTO   `json:"oldest_hot_rows"`
+	OrphanArtifacts OperatorOrphanArtifactsDTO  `json:"orphan_artifacts"`
+	Notes           []string                    `json:"notes,omitempty"`
+}
+
+// OperatorRetentionTableDTO summarizes one retention table/class pair.
+type OperatorRetentionTableDTO struct {
+	TableName           string     `json:"table_name"`
+	RetentionClass      string     `json:"retention_class"`
+	TotalRows           int64      `json:"total_rows"`
+	ExpiredRows         int64      `json:"expired_rows"`
+	RedactedRows        int64      `json:"redacted_rows"`
+	DeletedRows         int64      `json:"deleted_rows"`
+	OldestHotAt         *time.Time `json:"oldest_hot_at,omitempty"`
+	OldestHotAgeSeconds int64      `json:"oldest_hot_age_seconds"`
+	OldestExpiredAt     *time.Time `json:"oldest_expired_at,omitempty"`
+}
+
+// OperatorRetentionDryRunDTO reports cleanup candidates without mutating data.
+type OperatorRetentionDryRunDTO struct {
+	GeneratedAt time.Time                        `json:"generated_at"`
+	Items       []OperatorRetentionDryRunDTOItem `json:"items"`
+	Notes       []string                         `json:"notes,omitempty"`
+}
+
+// OperatorRetentionDryRunDTOItem is one dry-run action row.
+type OperatorRetentionDryRunDTOItem struct {
+	Action           string     `json:"action"`
+	TableName        string     `json:"table_name"`
+	RetentionClass   string     `json:"retention_class"`
+	Count            int64      `json:"count"`
+	Bytes            int64      `json:"bytes"`
+	OldestAt         *time.Time `json:"oldest_at,omitempty"`
+	OldestAgeSeconds int64      `json:"oldest_age_seconds"`
+}
+
+// OperatorAnalyticsStatusDTO reports aggregate table freshness.
+type OperatorAnalyticsStatusDTO struct {
+	GeneratedAt time.Time                        `json:"generated_at"`
+	Items       []OperatorAnalyticsStatusItemDTO `json:"items"`
+	Notes       []string                         `json:"notes,omitempty"`
+}
+
+// OperatorAnalyticsStatusItemDTO is one aggregate table status row.
+type OperatorAnalyticsStatusItemDTO struct {
+	TableName             string     `json:"table_name"`
+	Status                string     `json:"status"`
+	Rows                  int64      `json:"rows"`
+	LatestActivityDate    *time.Time `json:"latest_activity_date,omitempty"`
+	LastUpdatedAt         *time.Time `json:"last_updated_at,omitempty"`
+	LastUpdatedAgeSeconds int64      `json:"last_updated_age_seconds"`
+}
+
+// OperatorOldestHotRowsDTO reports oldest hot rows by table/class.
+type OperatorOldestHotRowsDTO struct {
+	GeneratedAt time.Time                 `json:"generated_at"`
+	Items       []OperatorOldestHotRowDTO `json:"items"`
+	Notes       []string                  `json:"notes,omitempty"`
+}
+
+// OperatorOldestHotRowDTO is a bounded oldest-row signal.
+type OperatorOldestHotRowDTO struct {
+	TableName      string     `json:"table_name"`
+	RetentionClass string     `json:"retention_class"`
+	Count          int64      `json:"count"`
+	OldestAt       *time.Time `json:"oldest_at,omitempty"`
+	AgeSeconds     int64      `json:"age_seconds"`
+}
+
+// OperatorOrphanArtifactsDTO groups orphan artifact candidates without ids,
+// owners, buckets, keys or private URLs.
+type OperatorOrphanArtifactsDTO struct {
+	GeneratedAt time.Time                   `json:"generated_at"`
+	Total       int64                       `json:"total"`
+	Bytes       int64                       `json:"bytes"`
+	Items       []OperatorOrphanArtifactDTO `json:"items"`
+	Notes       []string                    `json:"notes,omitempty"`
+}
+
+// OperatorOrphanArtifactDTO is one safe orphan artifact group.
+type OperatorOrphanArtifactDTO struct {
+	ArtifactTier     string     `json:"artifact_tier"`
+	LifecycleClass   string     `json:"lifecycle_class"`
+	Status           string     `json:"status"`
+	MediaType        string     `json:"media_type"`
+	Count            int64      `json:"count"`
+	Bytes            int64      `json:"bytes"`
+	OldestAt         *time.Time `json:"oldest_at,omitempty"`
+	OldestAgeSeconds int64      `json:"oldest_age_seconds"`
+}
+
 // OperatorRuntimeProviderDTO is a curated provider/model class row.
 type OperatorRuntimeProviderDTO struct {
 	ProviderClass      string `json:"provider_class"`

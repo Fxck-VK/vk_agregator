@@ -65,6 +65,41 @@ function Test-EnvPlaceholderValue {
     return $lower.Contains("change_me") -or $lower.Contains("placeholder") -or $lower.Contains("example")
 }
 
+function Normalize-DataServiceMode {
+    param([string]$Value)
+
+    if ([string]::IsNullOrWhiteSpace($Value)) {
+        return "local"
+    }
+    return $Value.Trim().ToLowerInvariant()
+}
+
+function Get-DataServiceMode {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][string]$Name
+    )
+
+    $defaultMode = Normalize-DataServiceMode -Value (Get-EnvFileValue -Path $Path -Name "DATA_SERVICES_MODE" -Default "local")
+    return Normalize-DataServiceMode -Value (Get-EnvFileValue -Path $Path -Name $Name -Default $defaultMode)
+}
+
+function Get-LocalStatefulServices {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    $services = @()
+    if ((Get-DataServiceMode -Path $Path -Name "POSTGRES_MODE") -eq "local") {
+        $services += "postgres"
+    }
+    if ((Get-DataServiceMode -Path $Path -Name "REDIS_MODE") -eq "local") {
+        $services += "redis"
+    }
+    if ((Get-DataServiceMode -Path $Path -Name "S3_MODE") -eq "local") {
+        $services += "minio"
+    }
+    return $services
+}
+
 function Test-DockerRuntime {
     if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
         throw "Docker CLI is not installed or not in PATH"
@@ -142,12 +177,16 @@ Invoke-Step "check production env" {
     & (Join-Path $PSScriptRoot "check-prod-env.ps1") @checkArgs
 }
 
+$statefulServices = @(Get-LocalStatefulServices -Path $EnvFile)
 $composeArgs = @(
     "compose",
     "--project-name", $ProjectName,
     "--env-file", $EnvFile,
     "-f", "docker-compose.prod.yml"
 )
+if ($statefulServices.Count -gt 0) {
+    $composeArgs += @("-f", "docker-compose.data.yml")
+}
 if ($WithCloudflare) {
     $composeArgs += @("--profile", "cloudflare")
 }
@@ -182,13 +221,25 @@ try {
         }
     }
 
+    if ($statefulServices.Count -gt 0) {
+        Invoke-Step "ensure local stateful dependencies are running" {
+            Invoke-DockerCompose pull @statefulServices
+            Invoke-DockerCompose up -d --no-build --wait --wait-timeout $TimeoutSeconds @statefulServices
+        }
+    } else {
+        Write-Host "Skipping local stateful containers; DATA_SERVICES_MODE/POSTGRES_MODE/REDIS_MODE/S3_MODE point to external or managed services."
+    }
+
     $backupArgs = @(
         "compose",
         "--project-name", $ProjectName,
         "--env-file", $EnvFile,
-        "-f", "docker-compose.prod.yml",
-        "--profile", "backup"
+        "-f", "docker-compose.prod.yml"
     )
+    if ($statefulServices.Count -gt 0) {
+        $backupArgs += @("-f", "docker-compose.data.yml")
+    }
+    $backupArgs += @("--profile", "backup")
 
     if (-not $SkipBackup) {
         Invoke-Step "pull backup images" {
@@ -209,7 +260,7 @@ try {
         $backupStatus = "skipped by operator"
     }
 
-    $runtimeServices = @("api", "worker", "provider-webhook", "miniapp", "reverse-proxy")
+    $runtimeServices = @("api", "worker", "maintenance-worker", "provider-webhook", "miniapp", "reverse-proxy")
     if ($WithCloudflare) {
         $runtimeServices += "cloudflared"
     }
@@ -218,20 +269,20 @@ try {
         Invoke-DockerCompose pull @runtimeServices
     }
 
-    Invoke-Step "ensure stateful dependencies are running" {
-        Invoke-DockerCompose up -d --no-build postgres redis minio
-    }
-
     Invoke-Step "rollback runtime services without migrations" {
         Invoke-DockerCompose up -d --no-build --no-deps @runtimeServices
+    }
+    Invoke-Step "recreate reverse proxy to refresh upstream DNS" {
+        Invoke-DockerCompose up -d --no-build --force-recreate --no-deps reverse-proxy
     }
 
     if (-not $NoHealthCheck) {
         $reverseProxyPort = Get-EnvFileValue -Path $EnvFile -Name "REVERSE_PROXY_HTTP_PORT" -Default "8088"
         Wait-Http -Name "reverse-proxy" -Url "http://127.0.0.1:$reverseProxyPort/proxy-health"
-        Wait-Http -Name "api" -Url "http://127.0.0.1:8080/health"
-        Wait-Http -Name "provider-webhook" -Url "http://127.0.0.1:8082/health"
-        Wait-Http -Name "worker" -Url "http://127.0.0.1:9090/healthz"
+        Wait-Http -Name "api" -Url "http://127.0.0.1:8080/readyz"
+        Wait-Http -Name "provider-webhook" -Url "http://127.0.0.1:8082/readyz"
+        Wait-Http -Name "worker" -Url "http://127.0.0.1:9090/readyz"
+        Wait-Http -Name "maintenance-worker" -Url "http://127.0.0.1:9091/readyz"
         Wait-Http -Name "miniapp" -Url "http://127.0.0.1:5173/"
         $healthStatus = "passed"
     }

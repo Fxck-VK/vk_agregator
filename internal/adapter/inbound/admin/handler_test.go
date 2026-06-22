@@ -38,6 +38,84 @@ func setup(t *testing.T) (*admin.Handler, *memory.JobRepo, *memory.UserRepo, *me
 	return h, jobs, users, deliveries, billing
 }
 
+type fakeMaintenanceReader struct {
+	now time.Time
+}
+
+func (f fakeMaintenanceReader) RetentionStatus(context.Context, time.Time) (domain.RetentionStatus, error) {
+	old := f.now.Add(-48 * time.Hour)
+	return domain.RetentionStatus{
+		GeneratedAt: f.now,
+		Items: []domain.RetentionStatusItem{
+			{
+				TableName:      "conversation_messages",
+				RetentionClass: domain.DataClassUserContent,
+				TotalRows:      42,
+				ExpiredRows:    3,
+				RedactedRows:   7,
+				OldestHotAt:    &old,
+			},
+		},
+	}, nil
+}
+
+func (f fakeMaintenanceReader) RetentionDryRun(context.Context, time.Time, int) (domain.RetentionDryRun, error) {
+	old := f.now.Add(-72 * time.Hour)
+	return domain.RetentionDryRun{
+		GeneratedAt: f.now,
+		Items: []domain.RetentionDryRunItem{
+			{
+				Action:         "process_expired_rows",
+				TableName:      "provider_tasks",
+				RetentionClass: domain.DataClassProviderPayload,
+				Count:          5,
+				Bytes:          0,
+				OldestAt:       &old,
+			},
+		},
+	}, nil
+}
+
+func (f fakeMaintenanceReader) AnalyticsAggregationStatus(context.Context) (domain.AnalyticsAggregationStatus, error) {
+	day := time.Date(2026, 6, 20, 0, 0, 0, 0, time.UTC)
+	return domain.AnalyticsAggregationStatus{
+		GeneratedAt: f.now,
+		Items: []domain.AnalyticsAggregationStatusItem{
+			{TableName: "daily_generation_stats", Status: "ok", Rows: 10, LatestActivityDate: &day, LastUpdatedAt: &f.now},
+		},
+	}, nil
+}
+
+func (f fakeMaintenanceReader) OldestHotRows(context.Context) (domain.OldestHotRowsReport, error) {
+	old := f.now.Add(-96 * time.Hour)
+	return domain.OldestHotRowsReport{
+		GeneratedAt: f.now,
+		Items: []domain.OldestHotRow{
+			{TableName: "conversation_messages", RetentionClass: domain.DataClassUserContent, Count: 42, OldestAt: &old, AgeSeconds: int64(f.now.Sub(old).Seconds())},
+		},
+	}, nil
+}
+
+func (f fakeMaintenanceReader) OrphanArtifactsCount(context.Context, time.Time) (domain.OrphanArtifactsReport, error) {
+	old := f.now.Add(-12 * time.Hour)
+	return domain.OrphanArtifactsReport{
+		GeneratedAt: f.now,
+		Total:       2,
+		Bytes:       2048,
+		Items: []domain.OrphanArtifactCount{
+			{
+				ArtifactTier:   domain.ArtifactTierFree,
+				LifecycleClass: domain.ArtifactLifecycleProviderOriginal,
+				Status:         domain.ArtifactStatusReady,
+				MediaType:      domain.MediaTypeImage,
+				Count:          2,
+				Bytes:          2048,
+				OldestAt:       &old,
+			},
+		},
+	}, nil
+}
+
 func do(t *testing.T, h *admin.Handler, path string) (*httptest.ResponseRecorder, map[string]any) {
 	t.Helper()
 	req := httptest.NewRequest(http.MethodGet, path, nil)
@@ -153,6 +231,42 @@ func TestOverviewReadOnlySafeDTO(t *testing.T) {
 	} {
 		if strings.Contains(raw, forbidden) {
 			t.Fatalf("overview DTO leaked forbidden field/value %q: %s", forbidden, raw)
+		}
+	}
+}
+
+func TestOperatorRetentionEndpointsExposeOnlySafeAggregates(t *testing.T) {
+	now := time.Date(2026, 6, 20, 12, 0, 0, 0, time.UTC)
+	h := admin.NewHandler(admin.Config{Token: testAdminToken}, admin.Deps{
+		Jobs:        memory.NewJobRepo(),
+		Users:       memory.NewUserRepo(),
+		Deliveries:  memory.NewDeliveryRepo(),
+		Referrals:   memory.NewReferralRepo(),
+		Maintenance: fakeMaintenanceReader{now: now},
+	})
+	for _, path := range []string{
+		"/admin/retention/operator/status",
+		"/admin/retention/operator/dry-run",
+		"/admin/analytics/operator/status",
+		"/admin/data/operator/hot-rows",
+		"/admin/artifacts/operator/orphans",
+	} {
+		rec, _ := do(t, h, path)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("%s expected 200, got %d: %s", path, rec.Code, rec.Body.String())
+		}
+		body := rec.Body.String()
+		for _, forbidden := range []string{
+			"raw-prompt",
+			"provider-secret",
+			"vk1.a.",
+			"storage_bucket",
+			"storage_key",
+			"owner_user_id",
+		} {
+			if strings.Contains(body, forbidden) {
+				t.Fatalf("%s leaked forbidden value %q: %s", path, forbidden, body)
+			}
 		}
 	}
 }

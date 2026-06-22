@@ -63,6 +63,7 @@ Current production runtime map for VPS:
 |---------|----------------|----------------|----------------------|
 | `cmd/api` | Yes, behind Cloudflare/reverse proxy | VK Callback API `/webhooks/vk`, Mini App BFF `/miniapp/*`, protected admin/operator routes, `/health`, `/healthz`, private `/metrics` | Postgres, Redis, S3/MinIO for owner-checked artifact reads |
 | `cmd/worker` | No | Consumes job streams, calls AI providers through adapters, polls async provider tasks, creates artifacts, runs moderation/scanning/media processing, performs delivery and billing capture/release | Postgres, Redis, S3/MinIO, provider credentials, VK delivery credentials |
+| `cmd/worker` with `WORKER_MODE=maintenance` | No | Runs scheduled retention cleanup, job event cleanup, orphan/expired artifact deletion, provider payload redaction and daily analytics aggregate refresh without VK/Mini App involvement | Postgres, Redis, S3/MinIO |
 | `cmd/provider-webhook` | Yes, HTTPS only behind Cloudflare/reverse proxy | YooKassa webhook intake `/billing/webhooks/yookassa`, webhook inbox dedup, async provider-verified payment processing and reconciliation | Postgres, payment provider credentials |
 | `web/miniapp/dist` | Yes, static frontend | VK Mini App static UI. It calls backend `/miniapp/*`; it must not call AI/payment providers or own trusted balance/job state | Static file hosting only |
 | Postgres | No | Source of truth for users, jobs, billing ledger, payment intents/events/refunds, artifacts metadata, conversations, referrals, inbox/outbox/dedup | Persistent disk, backups, migrations |
@@ -79,12 +80,30 @@ Current VPS data contract:
   recoverable from Postgres.
 - S3/MinIO stores binary artifacts only. In Docker production MinIO uses the
   `minio_data` named volume; managed S3-compatible storage can replace it via
-  `S3_*` env. Buckets stay private.
+  `S3_*` env. Endpoint, region and bucket addressing style are configurable.
+  Buckets stay private; user-facing delivery uses owner-checked backend paths
+  or short-lived signed URLs, never raw provider/storage URLs.
+- Deployment supports two data-service modes. In single VPS mode the app
+  compose stack is paired with `docker-compose.data.yml` for
+  Postgres/Redis/MinIO. In external data services mode the same stateless app
+  stack connects to external or managed Postgres/Redis/S3 through env only.
 - Migrations are a separate startup step through `cmd/migrate` / the production
   `migrate` compose service. Runtime services must start only after migrations
   complete successfully.
 - Backups cover Postgres and S3/MinIO first. Redis backups are optional and are
   not a substitute for Postgres/job-state recovery.
+- Data retention is class-based and documented in
+  docs/DATA_RETENTION_POLICY.md: financial/billing history is long-lived,
+  prompts and conversation messages are bounded, provider raw payloads are
+  avoided or short-lived/redacted, artifacts expire by product tier/type, and
+  analytics are stored as aggregates rather than raw user content.
+- Retention rollout is guarded by tests and operator dry-runs. Maintenance must
+  not expose or delete financial audit rows (ledger_entries, balances,
+  payment intents/events/refunds), must redact old conversation content rather
+  than breaking conversation ordering, must refresh analytics through
+  idempotent daily upserts, and must delete S3/MinIO objects only after
+  Postgres marks artifact metadata as expired. Re-running maintenance must be
+  safe.
 - Production runtime images are taggable through `IMAGE_TAG`; backup tooling is
   tagged separately through `BACKUP_IMAGE_TAG`, so a runtime rollback can still
   take fresh backups before switching app containers.
@@ -118,6 +137,24 @@ YooKassa webhook routes. The exact YooKassa webhook location must forward
 `X-Forwarded-Proto: https` / `Forwarded: proto=https` to
 `cmd/provider-webhook`; broad `/billing/*` routes remain private/operator-only.
 
+Production delivery pipeline:
+
+```text
+merge/push to main
+  -> GitHub Actions "Docker Images"
+  -> GHCR images tagged sha-<commit>
+  -> GitHub Actions "Deploy Production"
+  -> VPS docker compose pull/up through scripts/deploy/deploy-prod.*
+  -> scripts/deploy/smoke-prod.*
+  -> scripts/deploy/rollback-prod.* to previous image tag if deploy/smoke fails
+```
+
+The deploy pipeline is part of the architecture boundary. Runtime containers are
+stateless and replaceable by image tag; Postgres, Redis and S3/MinIO carry
+state. Automatic rollback is therefore limited to image/runtime rollback and
+must not run schema rollback. Migration rollback requires a separate reviewed
+backup-first operator decision.
+
 Production observability runs as a private sidecar stack, not as a public
 surface. `docker-compose.prod.yml` and `docker-compose.observability.yml` share
 the explicit Docker network `COMPOSE_NETWORK_NAME` (`vk-ai-aggregator-prod` by
@@ -126,13 +163,14 @@ default). Prometheus scrapes private service names:
 ```text
 api:8080/metrics
 worker:9090/metrics
+maintenance-worker:9091/metrics
 provider-webhook:8082/metrics
 postgres-exporter:9187
 redis-exporter:9121
 ```
 
 Blackbox probes check private readiness routes for `api`, `worker`,
-`provider-webhook`, `miniapp` and `reverse-proxy`; separate public probes assert
+`maintenance-worker`, `provider-webhook`, `miniapp` and `reverse-proxy`; separate public probes assert
 that `/metrics` is not exposed through public domains. Grafana, Prometheus,
 Loki, Tempo, Alertmanager and raw `/metrics` endpoints must remain loopback,
 VPN, SSH-tunnel or private-network only.

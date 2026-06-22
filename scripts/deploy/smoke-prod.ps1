@@ -5,6 +5,7 @@ param(
     [string]$PaymentWebhookUrl = "",
     [string]$ApiHealthUrl = "",
     [string]$WorkerHealthUrl = "",
+    [string]$MaintenanceWorkerHealthUrl = "",
     [string]$ProviderWebhookHealthUrl = "",
     [string]$MiniAppHealthUrl = "",
     [string]$ReverseProxyHealthUrl = "",
@@ -195,13 +196,16 @@ if ([string]::IsNullOrWhiteSpace($PaymentWebhookUrl)) {
     $PaymentWebhookUrl = Get-SmokeEnvValue -Name "PUBLIC_PAYMENT_WEBHOOK_URL" -Default (Get-SmokeEnvValue -Name "PAYMENT_WEBHOOK_URL" -Default "https://neiirohub.ru/billing/webhooks/yookassa")
 }
 if ([string]::IsNullOrWhiteSpace($ApiHealthUrl)) {
-    $ApiHealthUrl = Get-SmokeUrlFromListenAddr -Address (Get-SmokeEnvValue -Name "HTTP_ADDR" -Default ":8080") -Path "/health"
+    $ApiHealthUrl = Get-SmokeUrlFromListenAddr -Address (Get-SmokeEnvValue -Name "HTTP_ADDR" -Default ":8080") -Path "/readyz"
 }
 if ([string]::IsNullOrWhiteSpace($WorkerHealthUrl)) {
-    $WorkerHealthUrl = Get-SmokeUrlFromListenAddr -Address (Get-SmokeEnvValue -Name "WORKER_METRICS_ADDR" -Default ":9090") -Path "/healthz"
+    $WorkerHealthUrl = Get-SmokeUrlFromListenAddr -Address (Get-SmokeEnvValue -Name "WORKER_METRICS_ADDR" -Default ":9090") -Path "/readyz"
+}
+if ([string]::IsNullOrWhiteSpace($MaintenanceWorkerHealthUrl)) {
+    $MaintenanceWorkerHealthUrl = "http://127.0.0.1:9091/readyz"
 }
 if ([string]::IsNullOrWhiteSpace($ProviderWebhookHealthUrl)) {
-    $ProviderWebhookHealthUrl = Get-SmokeUrlFromListenAddr -Address (Get-SmokeEnvValue -Name "PAYMENT_WEBHOOK_ADDR" -Default ":8082") -Path "/health"
+    $ProviderWebhookHealthUrl = Get-SmokeUrlFromListenAddr -Address (Get-SmokeEnvValue -Name "PAYMENT_WEBHOOK_ADDR" -Default ":8082") -Path "/readyz"
 }
 if ([string]::IsNullOrWhiteSpace($MiniAppHealthUrl)) {
     $MiniAppHealthUrl = "http://127.0.0.1:5173/"
@@ -231,6 +235,9 @@ if (-not $PaymentWebhookOnly -and -not $SkipLocalHealth) {
 
     $status = Invoke-SmokeRequest -Name "Worker local health" -Method "GET" -Url $WorkerHealthUrl
     Assert-2xx -Name "Worker local health" -Status $status
+
+    $status = Invoke-SmokeRequest -Name "Maintenance worker local health" -Method "GET" -Url $MaintenanceWorkerHealthUrl
+    Assert-2xx -Name "Maintenance worker local health" -Status $status
 
     $status = Invoke-SmokeRequest -Name "Provider webhook local health" -Method "GET" -Url $ProviderWebhookHealthUrl
     Assert-2xx -Name "Provider webhook local health" -Status $status

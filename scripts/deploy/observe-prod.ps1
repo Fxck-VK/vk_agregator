@@ -68,8 +68,9 @@ Invoke-Compose -Args @("ps")
 
 Write-Host "== Health endpoints =="
 Test-Http -Name "api /health" -Url "http://127.0.0.1:8080/health"
-Test-Http -Name "api /healthz" -Url "http://127.0.0.1:8080/healthz"
-Test-Http -Name "worker /healthz" -Url "http://127.0.0.1:9090/healthz"
+Test-Http -Name "api /readyz" -Url "http://127.0.0.1:8080/readyz"
+Test-Http -Name "worker /readyz" -Url "http://127.0.0.1:9090/readyz"
+Test-Http -Name "maintenance-worker /readyz" -Url "http://127.0.0.1:9091/readyz"
 Test-Http -Name "provider-webhook /health" -Url "http://127.0.0.1:8082/health"
 Test-Http -Name "provider-webhook /readyz" -Url "http://127.0.0.1:8082/readyz"
 Test-Http -Name "reverse-proxy /proxy-health" -Url "http://127.0.0.1:$ReverseProxyPort/proxy-health"
@@ -77,8 +78,10 @@ Test-Http -Name "reverse-proxy /proxy-health" -Url "http://127.0.0.1:$ReversePro
 Write-Host "== Private metrics endpoints =="
 Test-Http -Name "api /metrics" -Url "http://127.0.0.1:8080/metrics"
 Test-Http -Name "worker /metrics" -Url "http://127.0.0.1:9090/metrics"
+Test-Http -Name "maintenance-worker /metrics" -Url "http://127.0.0.1:9091/metrics"
 Test-Http -Name "provider-webhook /metrics" -Url "http://127.0.0.1:8082/metrics"
 Show-MetricLines -Name "worker queue/DLQ" -Url "http://127.0.0.1:9090/metrics" -Pattern "^(vkagg_queue_depth|vkagg_queue_oldest_age_seconds|vkagg_queue_consumer_lag|vkagg_dlq_routed_total)"
+Show-MetricLines -Name "maintenance cleanup" -Url "http://127.0.0.1:9091/metrics" -Pattern "^(vkagg_maintenance_deleted_total|vkagg_stream_trimmed_total|vkagg_media_cleanup_deleted_total)"
 Show-MetricLines -Name "payment webhook" -Url "http://127.0.0.1:8082/metrics" -Pattern "^(payment_webhook_unprocessed_events|payment_webhook_oldest_unprocessed_age_seconds|payment_webhook_processing_errors_total|payment_provider_errors_total|payment_reconciliation_mismatches|payment_webhooks_total)"
 
 Write-Host "== Redis stream lengths =="
@@ -97,10 +100,10 @@ foreach ($stream in $streams) {
 
 if ($ShowLogs) {
     Write-Host "== Recent container logs =="
-    Invoke-Compose -Args @("logs", "--tail=$Tail", "api", "worker", "provider-webhook", "reverse-proxy")
+    Invoke-Compose -Args @("logs", "--tail=$Tail", "api", "worker", "maintenance-worker", "provider-webhook", "reverse-proxy")
 } else {
     Write-Host "Logs are not printed by default. Use -ShowLogs or run:"
-    Write-Host "docker compose --env-file $EnvFile -f docker-compose.prod.yml logs --tail=$Tail api worker provider-webhook reverse-proxy"
+    Write-Host "docker compose --env-file $EnvFile -f docker-compose.prod.yml logs --tail=$Tail api worker maintenance-worker provider-webhook reverse-proxy"
 }
 
 Write-Host "production observability check OK"

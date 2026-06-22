@@ -29,6 +29,20 @@ groups:
           action: Проверь, запущен ли cmd/worker; открой http://127.0.0.1:9090/healthz и http://127.0.0.1:9090/metrics; смотри .runtime/observability-dev/worker-live.err.
           safe_logs: В чат отправляй только статус worker, queue age и error class; не отправляй prompts, provider payloads, artifact URLs или ключи провайдеров.
 
+      - alert: MaintenanceWorkerDown
+        expr: up{job="maintenance-worker"} == 0
+        for: 1m
+        labels:
+          severity: warning
+          surface: maintenance
+        annotations:
+          summary: Maintenance worker metrics are unavailable
+          description: Prometheus cannot scrape maintenance-worker /metrics.
+          impact: Retention cleanup, orphan artifact cleanup, provider payload redaction and daily analytics aggregation may stop running.
+          dashboard: Grafana -> Product Observability / Product Health
+          action: Check the maintenance-worker container and http://127.0.0.1:9091/readyz. Do not restart job workers unless job queues are also degraded.
+          safe_logs: Share only service status and sanitized error classes. Do not share prompt bodies, provider payloads, artifact URLs or secrets.
+
       - alert: ProviderWebhookDown
         expr: up{job="provider-webhook"} == 0
         for: 30s
@@ -98,6 +112,20 @@ groups:
           dashboard: Grafana -> Product Observability / Jobs Worker
           action: Check worker container status, queue depth/oldest age metrics, DLQ counters and worker logs.
           safe_logs: Share only aggregate queue metrics and sanitized error classes. Do not share prompts, provider payloads or artifact URLs.
+
+      - alert: MaintenanceWorkerReadinessDegraded
+        expr: probe_success{job="blackbox-local-health", instance="http://maintenance-worker:9091/healthz"} == 0
+        for: 1m
+        labels:
+          severity: warning
+          surface: maintenance
+        annotations:
+          summary: Maintenance worker readiness check is failing
+          description: Maintenance worker /healthz did not return 2xx from the private Docker network.
+          impact: Retention, redaction, orphan cleanup and analytics refresh can lag behind policy.
+          dashboard: Grafana -> Product Observability / Product Health
+          action: Check maintenance-worker logs, Postgres/Redis/S3 readiness and cleanup metrics. Job workers should remain isolated.
+          safe_logs: Share only service status and sanitized error classes. Do not share prompt bodies, provider payloads or artifact URLs.
 
       - alert: ProviderWebhookReadinessDegraded
         expr: probe_success{job="blackbox-local-health", instance="http://provider-webhook:8082/readyz"} == 0
