@@ -101,78 +101,33 @@ func TestRouterParse(t *testing.T) {
 			wantType: domain.CommandMenuVideoPrunaAI,
 		},
 		{
-			name:     "vk video pruna button",
-			input:    "Pruna",
-			wantType: domain.CommandMenuVideoPrunaAI,
-		},
-		{
-			name:     "vk video hailuo v23 group button",
-			input:    "Hailuo v2.3",
-			wantType: domain.CommandMenuVideoHailuo02,
-		},
-		{
-			name:     "vk video hailuo v23 standard button",
-			input:    "Hailuo v2.3 обычный",
-			wantType: domain.CommandMenuVideoHailuo02Standard,
-		},
-		{
-			name:     "vk video hailuo v23 fast button",
-			input:    "Hailuo v2.3 Fast",
-			wantType: domain.CommandMenuVideoHailuo02Fast,
-		},
-		{
-			name:     "vk video kling v3 button",
-			input:    "Kling v3",
-			wantType: domain.CommandMenuVideoKling21Start,
-		},
-		{
-			name:     "vk video seedance v2 fast button",
-			input:    "Seedance v2 Fast",
-			wantType: domain.CommandMenuVideoSeedance1Lite,
-		},
-		{
-			name:     "vk video runway group button",
-			input:    "Runway",
-			wantType: domain.CommandMenuVideoSora2,
-		},
-		{
-			name:     "vk video runway 45 button",
-			input:    "Runway 4.5",
-			wantType: domain.CommandMenuVideoSora2Examples,
-		},
-		{
-			name:     "vk video runway 4 turbo button",
-			input:    "Runway 4 Turbo",
-			wantType: domain.CommandMenuVideoSora2Start,
-		},
-		{
 			name:     "vk video sora model button",
 			input:    "Sora 2 — видео текст+фото",
 			wantType: domain.CommandMenuVideoSora2,
 		},
 		{
-			name:     "vk video creative product mode",
-			input:    "Creative video",
+			name:     "vk video runway gen-4 turbo product mode",
+			input:    "Runway Gen-4 Turbo",
 			wantType: domain.CommandMenuVideoSora2Start,
 		},
 		{
-			name:     "vk video balanced product mode",
-			input:    "Balanced video",
+			name:     "vk video kling o3 standard product mode",
+			input:    "Kling O3 Standard",
 			wantType: domain.CommandMenuVideoKling21Start,
 		},
 		{
-			name:     "vk video reference product mode",
-			input:    "Reference video",
+			name:     "vk video seedance 2 fast product mode",
+			input:    "Seedance 2.0 Fast",
 			wantType: domain.CommandMenuVideoSeedance1Lite,
 		},
 		{
-			name:     "vk video cinematic product mode",
-			input:    "Cinematic video",
+			name:     "vk video hailuo 2.3 standard product mode",
+			input:    "Hailuo 2.3 Standard",
 			wantType: domain.CommandMenuVideoHailuo02Standard,
 		},
 		{
-			name:     "vk video fast photo motion product mode",
-			input:    "Fast photo motion",
+			name:     "vk video hailuo 2.3 fast product mode",
+			input:    "Hailuo 2.3 Fast",
 			wantType: domain.CommandMenuVideoHailuo02Fast,
 		},
 		{
@@ -214,6 +169,41 @@ func TestRouterParse(t *testing.T) {
 			name:     "vk photo reference mode button",
 			input:    "📸 Фото с референсом",
 			wantType: domain.CommandMenuImageReference,
+		},
+		{
+			name:     "vk photo nano banana 2 button",
+			input:    "Nano Banana 2",
+			wantType: domain.CommandMenuImageNanoBanana2,
+		},
+		{
+			name:     "vk photo nano banana pro button",
+			input:    "Nano Banana Pro",
+			wantType: domain.CommandMenuImageText,
+		},
+		{
+			name:     "vk photo gpt image 2 button",
+			input:    "GPT Image 2",
+			wantType: domain.CommandMenuImageGPTImage2,
+		},
+		{
+			name:     "vk photo seedream 4.5 button",
+			input:    "ByteDance Seedream 4.5",
+			wantType: domain.CommandMenuImageDeepInfraSeedream,
+		},
+		{
+			name:     "vk photo sdxl turbo button",
+			input:    "Stability AI SDXL Turbo",
+			wantType: domain.CommandMenuImageDeepInfraSDXL,
+		},
+		{
+			name:     "vk photo quality 2k button",
+			input:    "2K",
+			wantType: domain.CommandMenuImageQuality2K,
+		},
+		{
+			name:     "vk photo back to quality button",
+			input:    "Назад к качеству",
+			wantType: domain.CommandMenuImageBackToQuality,
 		},
 		{
 			name:     "vk neurohub text menu button",
@@ -288,6 +278,34 @@ func TestRouterParse(t *testing.T) {
 	}
 }
 
+func TestRouterProviderModelIDsStayFreeFormText(t *testing.T) {
+	r := New()
+
+	for _, input := range []string{
+		"deepinfra seedream",
+		"deepinfra seedream 4.5",
+		"bytedance/seedream-4.5",
+		"deepinfra sdxl",
+		"deepinfra sdxl turbo",
+		"stabilityai/sdxl-turbo",
+		"gpt-image-2",
+		"gpt_image_2",
+		"nano banana flash",
+		"nano-banana-2-new",
+		"kling-o3/standard",
+		"seedance-2-fast",
+		"minimax-hailuo-2.3",
+		"minimax-hailuo-2.3-fast",
+		"runway-gen-4.5",
+		"gen4_turbo",
+	} {
+		got := r.Parse(input)
+		if got.Type != domain.CommandTextAsk || got.Operation != domain.OperationTextGenerate || got.Modality != domain.ModalityText || got.Prompt != input {
+			t.Fatalf("provider/model-code alias %q must stay free-form text, got %+v", input, got)
+		}
+	}
+}
+
 func TestResultCreatesJob(t *testing.T) {
 	r := New()
 
@@ -298,7 +316,7 @@ func TestResultCreatesJob(t *testing.T) {
 		}
 	}
 
-	controlCommands := []string{"/balance", "/status 1", "/cancel 1", "/help", "/start", "Старт", "Показать меню", "нет меню", "🎬 Создать видео", "Pruna", "Hailuo v2.3", "Hailuo v2.3 Обычный", "Hailuo v2.3 Fast", "Kling v3", "Seedance v2 Fast", "Runway", "Runway 4.5", "Runway 4 Turbo", "Creative video", "Balanced video", "Reference video", "Cinematic video", "Fast photo motion", "Sora 2 — видео текст+фото", "Seedance 1 Lite", "Seedance 1 Pro", "Hailuo v0.2 Обычный", "Hailuo v0.2 Fast", "⬅️ Назад", "👤 Мой аккаунт", "▶️ Фото по тексту", "📸 Фото с референсом", "💬 Спросить у НейроХаб", "💬 Спросить у GPT", "Решальник задач", "Генерация презентаций (скоро)", "Создание рефератов (скоро)", "❓ Ответы на вопросы"}
+	controlCommands := []string{"/balance", "/status 1", "/cancel 1", "/help", "/start", "Старт", "Показать меню", "нет меню", "🎬 Создать видео", "Runway Gen-4 Turbo", "Kling O3 Standard", "Seedance 2.0 Fast", "Hailuo 2.3 Standard", "Hailuo 2.3 Fast", "Sora 2 — видео текст+фото", "Seedance 1 Lite", "Seedance 1 Pro", "Hailuo v0.2 Обычный", "Hailuo v0.2 Fast", "⬅️ Назад", "👤 Мой аккаунт", "▶️ Фото по тексту", "📸 Фото с референсом", "💬 Спросить у НейроХаб", "💬 Спросить у GPT", "Решальник задач", "Генерация презентаций (скоро)", "Создание рефератов (скоро)", "❓ Ответы на вопросы"}
 	for _, in := range controlCommands {
 		if r.Parse(in).CreatesJob() {
 			t.Errorf("expected %q to NOT create a job", in)

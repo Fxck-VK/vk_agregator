@@ -1,0 +1,136 @@
+package productcatalog
+
+import (
+	"strings"
+
+	"vk-ai-aggregator/internal/domain"
+	"vk-ai-aggregator/internal/platform/config"
+	"vk-ai-aggregator/internal/service/modelcatalog"
+	"vk-ai-aggregator/internal/service/videorouter"
+)
+
+// RuntimeCatalog is the single config-derived product catalog used by inbound
+// surfaces. It performs no provider calls; readiness is based only on server
+// config, provider kill switches, route/model flags and required key/base URL
+// presence.
+type RuntimeCatalog struct {
+	Catalog               *Catalog
+	VideoRouteCatalog     *videorouter.Catalog
+	ImageReferenceEnabled bool
+}
+
+func FromConfig(cfg config.Config) (RuntimeCatalog, error) {
+	videoCatalog, err := VideoRouteCatalogFromConfig(cfg)
+	var publicVideoRoutes []videorouter.PublicRoute
+	if err == nil && videoCatalog != nil {
+		publicVideoRoutes = videoCatalog.PublicRoutes()
+	}
+	catalog := New(Config{
+		ImageProviderReady: imageProviderReadyFromConfig(cfg),
+		EnabledImageModels: enabledImageModelsFromConfig(cfg),
+		VideoRoutes:        publicVideoRoutes,
+	})
+	return RuntimeCatalog{
+		Catalog:               catalog,
+		VideoRouteCatalog:     videoCatalog,
+		ImageReferenceEnabled: catalogHasReferenceImageModel(catalog),
+	}, err
+}
+
+func VideoRouteCatalogFromConfig(cfg config.Config) (*videorouter.Catalog, error) {
+	return videorouter.NewCatalog(videorouter.Config{
+		RouterEnabled: cfg.FeatureVideoRouterEnabled,
+		Providers: map[domain.ProviderName]videorouter.ProviderConfig{
+			domain.ProviderAPIMart: {
+				Enabled:           cfg.APIMartProviderEnabled,
+				RequireAPIKey:     true,
+				APIKeyConfigured:  strings.TrimSpace(cfg.APIMartAPIKey) != "",
+				RequireBaseURL:    true,
+				BaseURLConfigured: strings.TrimSpace(cfg.APIMartBaseURL) != "",
+			},
+			domain.ProviderPoYo: {
+				Enabled:           cfg.PoYoProviderEnabled,
+				RequireAPIKey:     true,
+				APIKeyConfigured:  strings.TrimSpace(cfg.PoYoAPIKey) != "",
+				RequireBaseURL:    true,
+				BaseURLConfigured: strings.TrimSpace(cfg.PoYoBaseURL) != "",
+			},
+			domain.ProviderRunway: {
+				Enabled:           cfg.RunwayProviderEnabled,
+				RequireAPIKey:     true,
+				APIKeyConfigured:  strings.TrimSpace(cfg.RunwayMLAPISecret) != "",
+				RequireBaseURL:    true,
+				BaseURLConfigured: strings.TrimSpace(cfg.RunwayMLBaseURL) != "",
+			},
+		},
+		EnabledRoutes: map[domain.VideoRouteAlias]bool{
+			domain.VideoRouteHailuo23Fast:     cfg.FeatureVideoRouteHailuo23FastEnabled,
+			domain.VideoRouteHailuo23Standard: cfg.FeatureVideoRouteHailuo23StandardEnabled,
+			domain.VideoRouteKlingO3Standard:  cfg.FeatureVideoRouteKlingO3StandardEnabled,
+			domain.VideoRouteRunwayGen4Turbo:  cfg.FeatureVideoRouteRunwayGen4TurboEnabled,
+			domain.VideoRouteSeedance20Fast:   cfg.FeatureVideoRouteSeedance20FastEnabled,
+			domain.VideoRouteRunwayGen45:      cfg.FeatureVideoRouteRunwayGen45Enabled,
+		},
+	})
+}
+
+func (r RuntimeCatalog) ImageModels() []ImageModel {
+	if r.Catalog == nil {
+		return nil
+	}
+	return r.Catalog.ImageModels()
+}
+
+func (r RuntimeCatalog) VideoRoutes() []VideoRoute {
+	if r.Catalog == nil {
+		return nil
+	}
+	return r.Catalog.VideoRoutes()
+}
+
+func imageProviderReadyFromConfig(cfg config.Config) map[domain.ProviderName]bool {
+	return map[domain.ProviderName]bool{
+		domain.ProviderAPIMart:   apimartReadyFromConfig(cfg),
+		domain.ProviderPoYo:      poyoReadyFromConfig(cfg),
+		domain.ProviderDeepInfra: deepInfraReadyFromConfig(cfg),
+	}
+}
+
+func enabledImageModelsFromConfig(cfg config.Config) map[string]bool {
+	return map[string]bool{
+		modelcatalog.MiniAppImageNanoBanana2:   cfg.FeatureImageModelNanoBanana2Enabled,
+		modelcatalog.MiniAppImageNanoBananaPro: cfg.FeatureImageModelNanoBananaProEnabled,
+		modelcatalog.MiniAppImageGPTImage2:     cfg.FeatureImageModelGPTImage2Enabled,
+		modelcatalog.MiniAppImageSeedream45:    true,
+		modelcatalog.MiniAppImageSDXLTurbo:     true,
+	}
+}
+
+func apimartReadyFromConfig(cfg config.Config) bool {
+	return cfg.APIMartProviderEnabled &&
+		strings.TrimSpace(cfg.APIMartAPIKey) != "" &&
+		strings.TrimSpace(cfg.APIMartBaseURL) != ""
+}
+
+func poyoReadyFromConfig(cfg config.Config) bool {
+	return cfg.PoYoProviderEnabled &&
+		strings.TrimSpace(cfg.PoYoAPIKey) != "" &&
+		strings.TrimSpace(cfg.PoYoBaseURL) != ""
+}
+
+func deepInfraReadyFromConfig(cfg config.Config) bool {
+	return strings.TrimSpace(cfg.DeepInfraAPIKey) != "" &&
+		strings.TrimSpace(cfg.DeepInfraBaseURL) != ""
+}
+
+func catalogHasReferenceImageModel(catalog *Catalog) bool {
+	if catalog == nil {
+		return false
+	}
+	for _, model := range catalog.ImageModels() {
+		if model.Enabled && model.SupportsReferenceImage {
+			return true
+		}
+	}
+	return false
+}

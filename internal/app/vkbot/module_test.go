@@ -5,52 +5,88 @@ import (
 
 	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/platform/config"
+	"vk-ai-aggregator/internal/service/productcatalog"
 )
 
-func TestMenuFeaturesPreviewVideoRoutesInDevelopment(t *testing.T) {
-	flags := menuFeatures(config.Config{
-		Env:                                "development",
-		VKMenuVideoEnabled:                 true,
-		VKMenuVideoSora2Enabled:            true,
-		VKMenuVideoSora2StartEnabled:       true,
-		VKMenuVideoSora2ExamplesEnabled:    true,
-		VKMenuVideoKling21Enabled:          true,
-		VKMenuVideoKling21StartEnabled:     true,
-		VKMenuVideoKling21ExamplesEnabled:  true,
-		VKMenuVideoSeedance1Enabled:        true,
-		VKMenuVideoSeedance1LiteEnabled:    true,
-		VKMenuVideoHailuo02Enabled:         true,
-		VKMenuVideoHailuo02StandardEnabled: true,
-		VKMenuVideoHailuo02FastEnabled:     true,
-		VKMenuVideoRoutesPreviewEnabled:    true,
+func TestMenuFeaturesUseRuntimeProductCatalogVisibility(t *testing.T) {
+	runtimeCatalog, err := productcatalog.FromConfig(config.Config{
+		PoYoProviderEnabled:                     true,
+		PoYoAPIKey:                              "configured",
+		PoYoBaseURL:                             "https://poyo.test",
+		FeatureImageModelNanoBanana2Enabled:     true,
+		FeatureVideoRouterEnabled:               true,
+		FeatureVideoRouteKlingO3StandardEnabled: true,
 	})
+	if err != nil {
+		t.Fatalf("build runtime catalog: %v", err)
+	}
+	features := menuFeatures(config.Config{
+		VKMenuImageEnabled:                true,
+		VKMenuImageReferenceEnabled:       true,
+		VKMenuVideoEnabled:                true,
+		VKMenuVideoKling21Enabled:         true,
+		VKMenuVideoKling21StartEnabled:    true,
+		VKMenuVideoKling21ExamplesEnabled: true,
+	}, runtimeCatalog)
 
-	for _, command := range []domain.CommandType{
-		domain.CommandMenuVideoSora2,
-		domain.CommandMenuVideoSora2Start,
-		domain.CommandMenuVideoSora2Examples,
-		domain.CommandMenuVideoKling21Start,
-		domain.CommandMenuVideoSeedance1Lite,
-		domain.CommandMenuVideoHailuo02,
-		domain.CommandMenuVideoHailuo02Standard,
-		domain.CommandMenuVideoHailuo02Fast,
-	} {
-		if !flags.EnabledCommands[command] || flags.DisabledCommands[command] {
-			t.Fatalf("command %s must be visible in development preview: enabled=%v disabled=%v", command, flags.EnabledCommands[command], flags.DisabledCommands[command])
-		}
+	assertCommandVisible(t, features.DisabledCommands, domain.CommandMenuImage)
+	assertCommandVisible(t, features.DisabledCommands, domain.CommandMenuImageNanoBanana2)
+	assertCommandVisible(t, features.DisabledCommands, domain.CommandMenuImageReference)
+	assertCommandVisible(t, features.DisabledCommands, domain.CommandMenuVideo)
+	assertCommandVisible(t, features.DisabledCommands, domain.CommandMenuVideoKling21)
+	assertCommandVisible(t, features.DisabledCommands, domain.CommandMenuVideoKling21Start)
+	assertCommandVisible(t, features.DisabledCommands, domain.CommandMenuVideoKling21Examples)
+	assertCommandEnabled(t, features.EnabledCommands, domain.CommandMenuVideoKling21Start)
+}
+
+func TestMenuFeaturesFailClosedWhenRuntimeCatalogHasNoPublicItems(t *testing.T) {
+	runtimeCatalog, err := productcatalog.FromConfig(config.Config{
+		PoYoProviderEnabled:                     true,
+		FeatureImageModelNanoBanana2Enabled:     true,
+		FeatureVideoRouterEnabled:               true,
+		FeatureVideoRouteKlingO3StandardEnabled: true,
+	})
+	if err != nil {
+		t.Fatalf("build runtime catalog: %v", err)
+	}
+	features := menuFeatures(config.Config{
+		VKMenuImageEnabled:                true,
+		VKMenuImageReferenceEnabled:       true,
+		VKMenuVideoEnabled:                true,
+		VKMenuVideoKling21Enabled:         true,
+		VKMenuVideoKling21StartEnabled:    true,
+		VKMenuVideoKling21ExamplesEnabled: true,
+	}, runtimeCatalog)
+
+	assertCommandHidden(t, features.DisabledCommands, domain.CommandMenuImage)
+	assertCommandHidden(t, features.DisabledCommands, domain.CommandMenuImageNanoBanana2)
+	assertCommandHidden(t, features.DisabledCommands, domain.CommandMenuImageReference)
+	assertCommandHidden(t, features.DisabledCommands, domain.CommandMenuVideo)
+	assertCommandHidden(t, features.DisabledCommands, domain.CommandMenuVideoKling21)
+	assertCommandHidden(t, features.DisabledCommands, domain.CommandMenuVideoKling21Start)
+	assertCommandHidden(t, features.DisabledCommands, domain.CommandMenuVideoKling21Examples)
+	if features.EnabledCommands[domain.CommandMenuVideoKling21Start] {
+		t.Fatalf("unconfigured catalog must not explicitly enable %s", domain.CommandMenuVideoKling21Start)
 	}
 }
 
-func TestMenuFeaturesDoNotPreviewVideoRoutesInProduction(t *testing.T) {
-	flags := menuFeatures(config.Config{
-		Env:                             "production",
-		VKMenuVideoEnabled:              true,
-		VKMenuVideoSora2Enabled:         true,
-		VKMenuVideoSora2StartEnabled:    true,
-		VKMenuVideoRoutesPreviewEnabled: true,
-	})
+func assertCommandVisible(t *testing.T, disabled map[domain.CommandType]bool, command domain.CommandType) {
+	t.Helper()
+	if disabled[command] {
+		t.Fatalf("expected %s to be visible", command)
+	}
+}
 
-	if flags.EnabledCommands[domain.CommandMenuVideoSora2Start] || !flags.DisabledCommands[domain.CommandMenuVideoSora2Start] {
-		t.Fatalf("production must not preview disabled video route buttons: enabled=%v disabled=%v", flags.EnabledCommands[domain.CommandMenuVideoSora2Start], flags.DisabledCommands[domain.CommandMenuVideoSora2Start])
+func assertCommandHidden(t *testing.T, disabled map[domain.CommandType]bool, command domain.CommandType) {
+	t.Helper()
+	if !disabled[command] {
+		t.Fatalf("expected %s to be hidden", command)
+	}
+}
+
+func assertCommandEnabled(t *testing.T, enabled map[domain.CommandType]bool, command domain.CommandType) {
+	t.Helper()
+	if !enabled[command] {
+		t.Fatalf("expected %s to be explicitly enabled", command)
 	}
 }

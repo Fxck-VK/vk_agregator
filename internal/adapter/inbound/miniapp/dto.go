@@ -37,12 +37,18 @@ type CreateJobRequest struct {
 	// VideoRouteAlias is a public product route alias. Backend resolves it to
 	// provider/model/cost; provider-native ids and prices are never accepted.
 	VideoRouteAlias string `json:"video_route_alias,omitempty"`
+	// ImageQuality is a public quality alias from /miniapp/model-catalog. The
+	// backend validates it against the selected image model before pricing.
+	ImageQuality string `json:"image_quality,omitempty"`
 	// ReferenceArtifactIDs are optional input images owned by the user. They are
 	// validated server-side and never expanded into URLs in the BFF response.
 	ReferenceArtifactIDs []uuid.UUID `json:"reference_artifact_ids,omitempty"`
 	// DurationSec is the requested video length in seconds for video_generate.
 	// Allowed values: 3, 5, 10. Omitted defaults to 5.
 	DurationSec int `json:"duration_sec,omitempty"`
+	// AspectRatio is backend-derived from trusted reference artifact metadata.
+	// It is never accepted from client JSON.
+	AspectRatio string `json:"-"`
 }
 
 // ChatMessageRequest is the body accepted by POST /miniapp/chat/messages.
@@ -74,15 +80,58 @@ type miniAppJobParams struct {
 	VideoRouteAlias      string                    `json:"video_route_alias,omitempty"`
 	Provider             domain.ProviderName       `json:"provider,omitempty"`
 	ModelCode            string                    `json:"model_code,omitempty"`
+	Size                 string                    `json:"size,omitempty"`
+	Resolution           string                    `json:"resolution,omitempty"`
+	ImageQuality         string                    `json:"image_quality,omitempty"`
 	ReferenceArtifactIDs []uuid.UUID               `json:"reference_artifact_ids,omitempty"`
 	ConversationID       string                    `json:"conversation_id,omitempty"`
 	ConversationSource   domain.ConversationSource `json:"conversation_source,omitempty"`
 	ExternalThreadID     string                    `json:"external_thread_id,omitempty"`
 	DurationSec          int                       `json:"duration_sec,omitempty"`
+	AspectRatio          string                    `json:"aspect_ratio,omitempty"`
 }
 
 type VideoRouteDTO struct {
+	Type                   string   `json:"type,omitempty"`
 	Alias                  string   `json:"alias"`
+	Name                   string   `json:"name,omitempty"`
+	Description            string   `json:"description,omitempty"`
+	EstimateCredits        int64    `json:"estimate_credits,omitempty"`
+	Enabled                bool     `json:"enabled"`
+	AllowedDurationsSec    []int    `json:"allowed_durations_sec,omitempty"`
+	AllowedResolutions     []string `json:"allowed_resolutions,omitempty"`
+	AllowedAspectRatios    []string `json:"allowed_aspect_ratios,omitempty"`
+	DefaultDurationSec     int      `json:"default_duration_sec,omitempty"`
+	DefaultResolution      string   `json:"default_resolution,omitempty"`
+	DefaultAspectRatio     string   `json:"default_aspect_ratio,omitempty"`
+	RequiresStartImage     bool     `json:"requires_start_image"`
+	SupportsReferenceImage bool     `json:"supports_reference_image"`
+	MaxReferenceImages     int      `json:"max_reference_images,omitempty"`
+}
+
+type ImageModelDTO struct {
+	Type                   string   `json:"type,omitempty"`
+	ID                     string   `json:"id"`
+	Name                   string   `json:"name"`
+	Description            string   `json:"description,omitempty"`
+	EstimateCredits        int64    `json:"estimate_credits,omitempty"`
+	Enabled                bool     `json:"enabled"`
+	QualityOptions         []string `json:"quality_options,omitempty"`
+	DefaultQuality         string   `json:"default_quality,omitempty"`
+	SupportsReferenceImage bool     `json:"supports_reference_image"`
+	MaxReferenceImages     int      `json:"max_reference_images,omitempty"`
+}
+
+type ModelCatalogItemDTO struct {
+	Type                   string   `json:"type"`
+	ID                     string   `json:"id"`
+	Alias                  string   `json:"alias,omitempty"`
+	Name                   string   `json:"name"`
+	Description            string   `json:"description,omitempty"`
+	EstimateCredits        int64    `json:"estimate_credits,omitempty"`
+	Enabled                bool     `json:"enabled"`
+	QualityOptions         []string `json:"quality_options,omitempty"`
+	DefaultQuality         string   `json:"default_quality,omitempty"`
 	AllowedDurationsSec    []int    `json:"allowed_durations_sec,omitempty"`
 	AllowedResolutions     []string `json:"allowed_resolutions,omitempty"`
 	AllowedAspectRatios    []string `json:"allowed_aspect_ratios,omitempty"`
@@ -101,6 +150,7 @@ type EstimateDTO struct {
 	ModelID         string `json:"model_id,omitempty"`
 	ModelName       string `json:"model_name,omitempty"`
 	VideoRouteAlias string `json:"video_route_alias,omitempty"`
+	ImageQuality    string `json:"image_quality,omitempty"`
 	CostEstimate    int64  `json:"cost_estimate"`
 	BalanceCredits  int64  `json:"balance_credits"`
 	EnoughCredits   bool   `json:"enough_credits"`
@@ -118,6 +168,7 @@ type JobDTO struct {
 	ModelID           string      `json:"model_id,omitempty"`
 	ModelName         string      `json:"model_name,omitempty"`
 	VideoRouteAlias   string      `json:"video_route_alias,omitempty"`
+	ImageQuality      string      `json:"image_quality,omitempty"`
 	CostEstimate      int64       `json:"cost_estimate"`
 	CostCaptured      int64       `json:"cost_captured"`
 	OutputArtifactIDs []uuid.UUID `json:"output_artifact_ids"`
@@ -191,6 +242,7 @@ func newJobDTO(j *domain.Job) JobDTO {
 			} else if j.OperationType != domain.OperationTextGenerate {
 				out.ModelID = params.ModelID
 				out.ModelName = params.ModelName
+				out.ImageQuality = params.ImageQuality
 			}
 		}
 	}

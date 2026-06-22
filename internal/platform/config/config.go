@@ -235,6 +235,9 @@ type Config struct {
 	RunwayMLBaseURL        string
 	RunwayProviderEnabled  bool
 
+	FeatureImageModelNanoBananaProEnabled       bool
+	FeatureImageModelGPTImage2Enabled           bool
+	FeatureImageModelNanoBanana2Enabled         bool
 	FeatureVideoRouterEnabled                   bool
 	FeatureVideoRouteHailuo23FastEnabled        bool
 	FeatureVideoRouteHailuo23StandardEnabled    bool
@@ -389,6 +392,9 @@ type Config struct {
 
 	// WorkerProviderCallTimeout bounds one provider Submit/Poll call in workers.
 	WorkerProviderCallTimeout time.Duration
+	// WorkerProviderPollBaseDelay/MaxDelay control async provider status polling.
+	WorkerProviderPollBaseDelay time.Duration
+	WorkerProviderPollMaxDelay  time.Duration
 
 	// WorkerShutdownGrace is how long workers may drain in-flight work after a
 	// shutdown signal before their processing context is cancelled.
@@ -1048,6 +1054,9 @@ func Load() Config {
 		RunwayMLAPISecret:                        env("RUNWAYML_API_SECRET", ""),
 		RunwayMLBaseURL:                          env("RUNWAYML_BASE_URL", "https://api.dev.runwayml.com/v1"),
 		RunwayProviderEnabled:                    envBool("RUNWAY_PROVIDER_ENABLED", false),
+		FeatureImageModelNanoBananaProEnabled:    envBool("FEATURE_IMAGE_MODEL_NANO_BANANA_PRO_ENABLED", false),
+		FeatureImageModelGPTImage2Enabled:        envBool("FEATURE_IMAGE_MODEL_GPT_IMAGE_2_ENABLED", false),
+		FeatureImageModelNanoBanana2Enabled:      envBool("FEATURE_IMAGE_MODEL_NANO_BANANA_2_ENABLED", false),
 		FeatureVideoRouterEnabled:                envBool("FEATURE_VIDEO_ROUTER_ENABLED", false),
 		FeatureVideoRouteHailuo23FastEnabled:     envBool("FEATURE_VIDEO_ROUTE_HAILUO_2_3_FAST_ENABLED", false),
 		FeatureVideoRouteHailuo23StandardEnabled: envBool("FEATURE_VIDEO_ROUTE_HAILUO_2_3_STANDARD_ENABLED", false),
@@ -1175,17 +1184,22 @@ func Load() Config {
 		MediaOriginalRetentionDays:     envInt("MEDIA_ORIGINAL_RETENTION_DAYS", 0),
 		MediaVariantRetentionDays:      envInt("MEDIA_VARIANT_RETENTION_DAYS", artifactRetentionDays),
 
-		WorkerProviderCallTimeout:      envDuration("WORKER_PROVIDER_CALL_TIMEOUT", 180*time.Second),
-		WorkerShutdownGrace:            envDuration("WORKER_SHUTDOWN_GRACE", 30*time.Second),
-		MaintenanceInterval:            envDuration("MAINTENANCE_INTERVAL", time.Hour),
-		OutboxRetention:                envDuration("OUTBOX_RETENTION", 7*24*time.Hour),
-		BillingReconciliationInterval:  envDuration("BILLING_RECONCILIATION_INTERVAL", 5*time.Minute),
-		BillingReconciliationLimit:     envInt("BILLING_RECONCILIATION_LIMIT", 100),
-		JobEventsRetentionDays:         envInt("RETENTION_JOB_EVENTS_DAYS", 30),
-		ProviderPayloadRetentionDays:   envInt("RETENTION_PROVIDER_PAYLOAD_DAYS", 7),
-		JobLogRetentionBatchSize:       envInt("JOB_LOG_RETENTION_BATCH_SIZE", 500),
-		JobErrorAggregateLookbackDays:  envInt("JOB_ERROR_AGGREGATE_LOOKBACK_DAYS", 30),
-		AnalyticsAggregateLookbackDays: envInt("ANALYTICS_AGGREGATE_LOOKBACK_DAYS", 7),
+		WorkerProviderCallTimeout:     envDuration("WORKER_PROVIDER_CALL_TIMEOUT", 180*time.Second),
+		WorkerProviderPollBaseDelay:   envDuration("WORKER_PROVIDER_POLL_BASE_DELAY", time.Second),
+		WorkerProviderPollMaxDelay:    envDuration("WORKER_PROVIDER_POLL_MAX_DELAY", 5*time.Second),
+		WorkerShutdownGrace:           envDuration("WORKER_SHUTDOWN_GRACE", 30*time.Second),
+		MaintenanceInterval:           envDuration("MAINTENANCE_INTERVAL", time.Hour),
+		OutboxRetention:               envDuration("OUTBOX_RETENTION", 7*24*time.Hour),
+		BillingReconciliationInterval: envDuration("BILLING_RECONCILIATION_INTERVAL", 5*time.Minute),
+		BillingReconciliationLimit:    envInt("BILLING_RECONCILIATION_LIMIT", 100),
+		JobEventsRetentionDays:        envInt("RETENTION_JOB_EVENTS_DAYS", 30),
+		ProviderPayloadRetentionDays:  envInt("RETENTION_PROVIDER_PAYLOAD_DAYS", 7),
+		JobLogRetentionBatchSize:      envInt("JOB_LOG_RETENTION_BATCH_SIZE", 500),
+		JobErrorAggregateLookbackDays: envInt("JOB_ERROR_AGGREGATE_LOOKBACK_DAYS", 30),
+		AnalyticsAggregateLookbackDays: envInt(
+			"ANALYTICS_AGGREGATE_LOOKBACK_DAYS",
+			7,
+		),
 		ConversationMessageRetentionDays: envInt(
 			"RETENTION_CONVERSATION_MESSAGES_DAYS",
 			90,
@@ -1255,6 +1269,39 @@ func (c Config) validateVideoRouteProviderConfig() error {
 		}
 		if strings.TrimSpace(provider.baseURL) == "" {
 			return fmt.Errorf("config: %s=true requires %s", provider.switchEnv, provider.baseURLEnv)
+		}
+	}
+	if c.FeatureImageModelNanoBanana2Enabled {
+		if !c.PoYoProviderEnabled {
+			return fmt.Errorf("config: FEATURE_IMAGE_MODEL_NANO_BANANA_2_ENABLED=true requires POYO_PROVIDER_ENABLED=true")
+		}
+		if strings.TrimSpace(c.PoYoAPIKey) == "" {
+			return fmt.Errorf("config: FEATURE_IMAGE_MODEL_NANO_BANANA_2_ENABLED=true requires POYO_API_KEY")
+		}
+		if strings.TrimSpace(c.PoYoBaseURL) == "" {
+			return fmt.Errorf("config: FEATURE_IMAGE_MODEL_NANO_BANANA_2_ENABLED=true requires POYO_BASE_URL")
+		}
+	}
+	if c.FeatureImageModelNanoBananaProEnabled {
+		if !c.APIMartProviderEnabled {
+			return fmt.Errorf("config: FEATURE_IMAGE_MODEL_NANO_BANANA_PRO_ENABLED=true requires APIMART_PROVIDER_ENABLED=true")
+		}
+		if strings.TrimSpace(c.APIMartAPIKey) == "" {
+			return fmt.Errorf("config: FEATURE_IMAGE_MODEL_NANO_BANANA_PRO_ENABLED=true requires APIMART_API_KEY")
+		}
+		if strings.TrimSpace(c.APIMartBaseURL) == "" {
+			return fmt.Errorf("config: FEATURE_IMAGE_MODEL_NANO_BANANA_PRO_ENABLED=true requires APIMART_BASE_URL")
+		}
+	}
+	if c.FeatureImageModelGPTImage2Enabled {
+		if !c.APIMartProviderEnabled {
+			return fmt.Errorf("config: FEATURE_IMAGE_MODEL_GPT_IMAGE_2_ENABLED=true requires APIMART_PROVIDER_ENABLED=true")
+		}
+		if strings.TrimSpace(c.APIMartAPIKey) == "" {
+			return fmt.Errorf("config: FEATURE_IMAGE_MODEL_GPT_IMAGE_2_ENABLED=true requires APIMART_API_KEY")
+		}
+		if strings.TrimSpace(c.APIMartBaseURL) == "" {
+			return fmt.Errorf("config: FEATURE_IMAGE_MODEL_GPT_IMAGE_2_ENABLED=true requires APIMART_BASE_URL")
 		}
 	}
 

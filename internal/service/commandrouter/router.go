@@ -53,37 +53,58 @@ func (r *Router) Parse(rawText string) Result {
 		return Result{Type: domain.CommandShowMenu}
 	case "🎬 создать видео", "создать видео":
 		return Result{Type: domain.CommandMenuVideo}
-	case "pruna", "prunaai", "pruna ai":
+	case "prunaai", "pruna ai":
 		return Result{Type: domain.CommandMenuVideoPrunaAI}
-	case "runway 4 turbo", "runway gen4 turbo", "creative video", "sora 2 начать генерацию":
+	// Legacy VK text-button labels. Primary VK model buttons now use generic
+	// product-catalog payloads; these names stay only for VK_MENU_BUTTON_MODE=text,
+	// stale keyboards and manual user text.
+	case "runway gen-4 turbo", "runway gen4 turbo", "creative video", "sora 2 начать генерацию":
 		return Result{Type: domain.CommandMenuVideoSora2Start}
-	case "runway", "sora 2 — видео текст+фото", "sora 2 - видео текст+фото", "sora 2 examples", "sora 2 примеры":
+	case "sora 2 — видео текст+фото", "sora 2 - видео текст+фото", "sora 2 examples", "sora 2 примеры":
 		return Result{Type: domain.CommandMenuVideoSora2}
-	case "runway 4.5", "runway 4 5":
-		return Result{Type: domain.CommandMenuVideoSora2Examples}
-	case "kling v3", "balanced video", "kling v2.1 начать генерацию":
+	case "kling o3 standard", "balanced video", "kling v2.1 начать генерацию":
 		return Result{Type: domain.CommandMenuVideoKling21Start}
 	case "kling v2.1 — видео текст+фото", "kling v2.1 - видео текст+фото", "kling v2.1 examples", "kling v2.1 примеры":
 		return Result{Type: domain.CommandMenuVideoKling21}
-	case "seedance v2 fast", "seedance v2.0 fast", "reference video", "seedance 1 lite":
+	case "seedance 2.0 fast", "seedance 2 fast", "reference video", "seedance 1 lite":
 		return Result{Type: domain.CommandMenuVideoSeedance1Lite}
 	case "seedance 1 — видео по тексту", "seedance 1 - видео по тексту":
 		return Result{Type: domain.CommandMenuVideoSeedance1}
-	case "seedance 1 pro":
+	case "seedance 2.0 pro", "seedance 2 pro", "seedance 1 pro":
 		return Result{Type: domain.CommandMenuVideoSeedance1Pro}
-	case "hailuo v2.3 fast", "fast photo motion", "hailuo v0.2 fast", "haiuo v0.2 fast":
+	case "hailuo 2.3 fast", "fast photo motion", "hailuo v0.2 fast", "haiuo v0.2 fast":
 		return Result{Type: domain.CommandMenuVideoHailuo02Fast}
-	case "hailuo v2.3", "hailuo v0.2 — видео текст+фото", "hailuo v0.2 - видео текст+фото",
+	case "hailuo v0.2 — видео текст+фото", "hailuo v0.2 - видео текст+фото",
 		"haiuo v0.2 — видео текст+фото", "haiuo v0.2 - видео текст+фото":
 		return Result{Type: domain.CommandMenuVideoHailuo02}
-	case "hailuo v2.3 обычный", "hailuo v2.3 standard", "cinematic video", "hailuo v0.2 обычный", "hailuo v0.2 standard", "haiuo v0.2 обычный", "haiuo v0.2 standard":
+	case "hailuo 2.3 standard", "cinematic video", "hailuo v0.2 обычный", "hailuo v0.2 standard", "haiuo v0.2 обычный", "haiuo v0.2 standard":
 		return Result{Type: domain.CommandMenuVideoHailuo02Standard}
 	case "⬅️ назад", "назад":
 		return Result{Type: domain.CommandShowMenu}
 	case "🖼️ создать фото", "🖼 создать фото", "создать фото", "создать изображение":
 		return Result{Type: domain.CommandMenuImage}
+	// Legacy VK text-button labels. Provider/model-code strings intentionally
+	// stay out of this router; only public product names are accepted here.
 	case "▶️ фото по тексту", "▶ фото по тексту", "фото по тексту":
 		return Result{Type: domain.CommandMenuImageText}
+	case "nano banana 2", "nano banana 2 image":
+		return Result{Type: domain.CommandMenuImageNanoBanana2}
+	case "nano banana pro", "nano banana pro image":
+		return Result{Type: domain.CommandMenuImageText}
+	case "seedream 4.5", "seedream", "bytedance seedream 4.5":
+		return Result{Type: domain.CommandMenuImageDeepInfraSeedream}
+	case "sdxl turbo", "sdxl", "stability ai sdxl turbo":
+		return Result{Type: domain.CommandMenuImageDeepInfraSDXL}
+	case "gpt image 2":
+		return Result{Type: domain.CommandMenuImageGPTImage2}
+	case "1k", "1k quality", "качество 1k":
+		return Result{Type: domain.CommandMenuImageQuality1K}
+	case "2k", "2k quality", "качество 2k":
+		return Result{Type: domain.CommandMenuImageQuality2K}
+	case "4k", "4k quality", "качество 4k":
+		return Result{Type: domain.CommandMenuImageQuality4K}
+	case "назад к качеству", "back to quality":
+		return Result{Type: domain.CommandMenuImageBackToQuality}
 	case "📸 фото с референсом", "фото с референсом", "фото по тексту и фото":
 		return Result{Type: domain.CommandMenuImageReference}
 	case "💬 спросить у нейрохаб", "спросить у нейрохаб", "💬 спросить у gpt", "спросить у gpt", "задать вопрос":

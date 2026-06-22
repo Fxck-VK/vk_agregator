@@ -1,14 +1,20 @@
 package vk_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"image"
+	"image/color"
+	"image/png"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/google/uuid"
 
 	vkdelivery "vk-ai-aggregator/internal/adapter/delivery/vk"
 	"vk-ai-aggregator/internal/adapter/inbound/vk"
@@ -20,8 +26,10 @@ import (
 	"vk-ai-aggregator/internal/service/billingservice"
 	"vk-ai-aggregator/internal/service/commandrouter"
 	"vk-ai-aggregator/internal/service/joborchestrator"
+	"vk-ai-aggregator/internal/service/modelcatalog"
 	"vk-ai-aggregator/internal/service/outboxrelay"
 	"vk-ai-aggregator/internal/service/paymentservice"
+	"vk-ai-aggregator/internal/service/productcatalog"
 	"vk-ai-aggregator/internal/service/referralservice"
 )
 
@@ -34,6 +42,8 @@ type harness struct {
 	billing *memory.BillingRepo
 	payment *memory.PaymentRepo
 	refs    *memory.ReferralRepo
+	arts    *memory.ArtifactRepo
+	objects *memory.ObjectStore
 	pub     *queue.MemoryPublisher
 	relay   *outboxrelay.Relay
 }
@@ -59,6 +69,13 @@ func newHarnessWithConfigAndDialogState(control vkdelivery.ControlClient, cfg vk
 }
 
 func newHarnessWithDeps(control vkdelivery.ControlClient, cfg vk.Config, antiSpam vk.AntiSpam, dialogState vk.DialogState) *harness {
+	return newHarnessWithReferenceDownloader(control, cfg, antiSpam, dialogState, nil)
+}
+
+func newHarnessWithReferenceDownloader(control vkdelivery.ControlClient, cfg vk.Config, antiSpam vk.AntiSpam, dialogState vk.DialogState, downloader vk.Downloader) *harness {
+	if cfg.ImageModels == nil {
+		cfg.ImageModels = defaultTestVKImageModels()
+	}
 	var profile vkdelivery.UserProfileClient
 	if p, ok := control.(vkdelivery.UserProfileClient); ok {
 		profile = p
@@ -70,6 +87,8 @@ func newHarnessWithDeps(control vkdelivery.ControlClient, cfg vk.Config, antiSpa
 	inbound := memory.NewInboundRepo()
 	idem := memory.NewIdempotencyRepo()
 	bill := memory.NewBillingRepo()
+	arts := memory.NewArtifactRepo()
+	objects := memory.NewObjectStore()
 	billing := billingservice.New(bill)
 	payments := memory.NewPaymentRepo()
 	vatCode := int16(1)
@@ -123,8 +142,62 @@ func newHarnessWithDeps(control vkdelivery.ControlClient, cfg vk.Config, antiSpa
 		Profile:      profile,
 		DialogState:  dialogState,
 		AntiSpam:     antiSpam,
+		Artifacts:    arts,
+		Objects:      objects,
+		Downloader:   downloader,
 	})
-	return &harness{handler: h, users: users, cmds: cmds, jobs: jobs, inbound: inbound, billing: bill, payment: payments, refs: refs, pub: pub, relay: outboxrelay.New(uowMgr, pub)}
+	return &harness{handler: h, users: users, cmds: cmds, jobs: jobs, inbound: inbound, billing: bill, payment: payments, refs: refs, arts: arts, objects: objects, pub: pub, relay: outboxrelay.New(uowMgr, pub)}
+}
+
+func defaultTestVKImageModels() []productcatalog.ImageModel {
+	catalog := productcatalog.New(productcatalog.Config{
+		ImageProviderReady: map[domain.ProviderName]bool{
+			domain.ProviderAPIMart:   true,
+			domain.ProviderPoYo:      true,
+			domain.ProviderDeepInfra: true,
+		},
+		EnabledImageModels: map[string]bool{
+			modelcatalog.MiniAppImageNanoBanana2:   true,
+			modelcatalog.MiniAppImageNanoBananaPro: true,
+			modelcatalog.MiniAppImageGPTImage2:     true,
+			modelcatalog.MiniAppImageSeedream45:    true,
+			modelcatalog.MiniAppImageSDXLTurbo:     true,
+		},
+	})
+	return catalog.ImageModels()
+}
+
+func testKlingVideoRoute() productcatalog.VideoRoute {
+	return productcatalog.VideoRoute{
+		Type:                   productcatalog.TypeVideo,
+		Alias:                  string(domain.VideoRouteKlingO3Standard),
+		Name:                   "Kling O3 Standard",
+		Description:            "Тестовый публичный маршрут.",
+		Enabled:                true,
+		AllowedDurationsSec:    []int{5, 10},
+		AllowedAspectRatios:    []string{"16:9", "9:16", "1:1"},
+		DefaultDurationSec:     5,
+		DefaultAspectRatio:     "16:9",
+		SupportsReferenceImage: true,
+		MaxReferenceImages:     1,
+	}
+}
+
+func testRunwayVideoRoute() productcatalog.VideoRoute {
+	return productcatalog.VideoRoute{
+		Type:                   productcatalog.TypeVideo,
+		Alias:                  string(domain.VideoRouteRunwayGen4Turbo),
+		Name:                   "Runway Gen-4 Turbo",
+		Description:            "Тестовый public image-to-video маршрут.",
+		Enabled:                true,
+		AllowedDurationsSec:    []int{5, 10},
+		AllowedAspectRatios:    []string{"16:9", "9:16", "1:1"},
+		DefaultDurationSec:     5,
+		DefaultAspectRatio:     "16:9",
+		RequiresStartImage:     true,
+		SupportsReferenceImage: true,
+		MaxReferenceImages:     1,
+	}
 }
 
 func testVKVideoRouteResolver() joborchestrator.VideoRouteResolver {
@@ -239,7 +312,7 @@ func TestAntiSpamDenialSkipsCommandAndJob(t *testing.T) {
 		decision: antispamservice.Decision{
 			Allowed: false,
 			Kind:    antispamservice.DecisionCooldown,
-			Message: "Слишком много сообщений. Попробуйте через 30 секунд",
+			Message: "\u0421\u043b\u0438\u0448\u043a\u043e\u043c \u043c\u043d\u043e\u0433\u043e \u0441\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u0439. \u041f\u043e\u043f\u0440\u043e\u0431\u0443\u0439\u0442\u0435 \u0447\u0435\u0440\u0435\u0437 30 \u0441\u0435\u043a\u0443\u043d\u0434",
 		},
 	}
 	h := newHarnessWithConfigAndAntiSpam(control, vk.Config{ConfirmationToken: "conf-token-123", Secret: "s3cr3t"}, antiSpam)
@@ -303,6 +376,28 @@ func TestMessageNewStickerOutsideGPTDoesNotCreateTextJob(t *testing.T) {
 	}
 	if h.pub.Len() != 0 {
 		t.Fatalf("expected no enqueued task, got %d", h.pub.Len())
+	}
+}
+
+func TestMessageNewOutgoingBotMessageIgnored(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	h := newHarnessWithControl(control)
+	body := `{
+		"type":"message_new","group_id":1,"event_id":"evt-outgoing-video-pending","secret":"s3cr3t",
+		"object":{"message":{"from_id":-1,"peer_id":557,"out":1,"text":"\u041d\u0435\u0439\u0440\u043e\u0425\u0430\u0431 \u0433\u043e\u0442\u043e\u0432\u0438\u0442 \u0432\u0438\u0434\u0435\u043e..."}}
+	}`
+	rec := h.post(body)
+	if rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+	}
+	if sent := control.Sent(); len(sent) != 0 {
+		t.Fatalf("outgoing bot message must not send welcome/menu response, got %+v", sent)
+	}
+	if h.pub.Len() != 0 {
+		t.Fatalf("outgoing bot message must not enqueue jobs, got %d", h.pub.Len())
+	}
+	if _, err := h.users.GetByVKUserID(context.Background(), -1); !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("outgoing bot message must not create a user, err=%v", err)
 	}
 }
 
@@ -496,6 +591,9 @@ func TestAccountMenuShowsReferralStatsAndShareLink(t *testing.T) {
 			t.Fatalf("expected %q in account text: %q", want, sent[0].Text)
 		}
 	}
+	if !strings.Contains(sent[0].Text, fmt.Sprintf("Баланс: %d кристаллов", billingservice.DefaultStartingBalance)) {
+		t.Fatalf("account text must include current balance, got %q", sent[0].Text)
+	}
 	for _, notWant := range []string{"Осталось генераций", "Выполнено генераций", "@supergptsupportbot"} {
 		if strings.Contains(sent[0].Text, notWant) {
 			t.Fatalf("account text should not contain %q: %q", notWant, sent[0].Text)
@@ -612,6 +710,7 @@ func TestTopUpMenuCreatesPaymentIntentAfterProductSelection(t *testing.T) {
 	}
 	if sent := control.Sent(); len(sent) != 1 ||
 		!strings.Contains(sent[0].Text, "Выберите пакет для пополнения баланса") ||
+		!strings.Contains(sent[0].Text, fmt.Sprintf("Баланс сейчас: %d кристаллов", billingservice.DefaultStartingBalance)) ||
 		!strings.Contains(sent[0].Keyboard, "crystals_99") ||
 		!strings.Contains(sent[0].Keyboard, "99 кристаллов") {
 		t.Fatalf("expected top-up product keyboard, got %+v", sent)
@@ -640,12 +739,24 @@ func TestTopUpMenuCreatesPaymentIntentAfterProductSelection(t *testing.T) {
 	if intents[0].Credits != 99 || intents[0].ReceiptEmail != "bot-payments@example.com" || !strings.Contains(intents[0].ConfirmationURL, "mock.payments.local") {
 		t.Fatalf("unexpected payment intent: %+v", intents[0])
 	}
+	var metadata struct {
+		ReturnURL string `json:"return_url"`
+	}
+	if err := json.Unmarshal(intents[0].Metadata, &metadata); err != nil {
+		t.Fatalf("decode payment metadata: %v", err)
+	}
+	if metadata.ReturnURL != "https://vk.com/write-1" {
+		t.Fatalf("unexpected bot payment return url: %q", metadata.ReturnURL)
+	}
 	if jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0); len(jobs) != 0 || h.pub.Len() != 0 {
 		t.Fatalf("top-up flow must not create AI jobs, jobs=%+v tasks=%d", jobs, h.pub.Len())
 	}
 	sent := control.Sent()
 	if len(sent) < 2 || !strings.Contains(sent[len(sent)-1].Keyboard, `"type":"open_link"`) ||
-		!strings.Contains(sent[len(sent)-1].Keyboard, "mock.payments.local") {
+		!strings.Contains(sent[len(sent)-1].Keyboard, "mock.payments.local") ||
+		!strings.Contains(sent[len(sent)-1].Text, "mock.payments.local") ||
+		!strings.Contains(sent[len(sent)-1].Text, "Баланс сейчас") ||
+		strings.Contains(sent[len(sent)-1].Keyboard, "payment_link") {
 		t.Fatalf("expected final payment open_link keyboard, got %+v", sent)
 	}
 
@@ -660,6 +771,8 @@ func TestTopUpMenuCreatesPaymentIntentAfterProductSelection(t *testing.T) {
 	last := sent[len(sent)-1]
 	if !strings.Contains(last.Keyboard, `"type":"open_link"`) ||
 		!strings.Contains(last.Keyboard, "mock.payments.local") ||
+		!strings.Contains(last.Text, "mock.payments.local") ||
+		!strings.Contains(last.Text, "Баланс сейчас") ||
 		!strings.Contains(last.Keyboard, "new_payment") {
 		t.Fatalf("expected pending payment keyboard with continue/new actions, got %+v", sent)
 	}
@@ -979,7 +1092,7 @@ func TestMenuButtonEditsActiveMenuMessage(t *testing.T) {
 
 	video := `{
 		"type":"message_new","group_id":1,"event_id":"evt-menu-edit-video","secret":"s3cr3t",
-		"object":{"message":{"from_id":570,"peer_id":570,"text":"рџЋ¬ РЎРѕР·РґР°С‚СЊ РІРёРґРµРѕ","payload":"{\"command\":\"menu.video\"}"}}
+        "object":{"message":{"from_id":570,"peer_id":570,"text":"\ud83c\udfac \u0421\u043e\u0437\u0434\u0430\u0442\u044c \u0432\u0438\u0434\u0435\u043e","payload":"{\"command\":\"menu.video\"}"}}
 	}`
 	if rec := h.post(video); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
 		t.Fatalf("unexpected video response: %d %q", rec.Code, rec.Body.String())
@@ -993,7 +1106,7 @@ func TestMenuButtonEditsActiveMenuMessage(t *testing.T) {
 	if len(edits) != 1 || edits[0].MessageID != activeID {
 		t.Fatalf("expected one edit of active menu %d, got %+v", activeID, edits)
 	}
-	if !strings.Contains(sent[1].Text, "Выбери режим видео") || !strings.Contains(sent[1].Text, "text-only") || !strings.Contains(sent[1].Text, "Требуют стартовую картинку") {
+	if sent[1].Text != "Выбери режим видео:" {
 		t.Fatalf("active menu was not updated to video picker: %+v", sent[1])
 	}
 }
@@ -1058,7 +1171,7 @@ func TestPlainMessageKeepsPreviousMenuAndLowerShowMenuSendsFreshMenu(t *testing.
 
 	plain := `{
 		"type":"message_new","group_id":1,"event_id":"evt-menu-clear-text","secret":"s3cr3t",
-		"object":{"message":{"from_id":571,"peer_id":571,"text":"РџСЂРёРґСѓРјР°Р№ РёРґРµСЋ РґР»СЏ РІРёРґРµРѕ"}}
+        "object":{"message":{"from_id":571,"peer_id":571,"text":"\u041f\u0440\u0438\u0434\u0443\u043c\u0430\u0439 \u0438\u0434\u0435\u0438 \u0434\u043b\u044f \u0432\u0438\u0434\u0435\u043e"}}
 	}`
 	if rec := h.post(plain); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
 		t.Fatalf("unexpected plain response: %d %q", rec.Code, rec.Body.String())
@@ -1073,7 +1186,7 @@ func TestPlainMessageKeepsPreviousMenuAndLowerShowMenuSendsFreshMenu(t *testing.
 
 	menu := `{
 		"type":"message_new","group_id":1,"event_id":"evt-menu-clear-show","secret":"s3cr3t",
-		"object":{"message":{"from_id":571,"peer_id":571,"text":"РџРѕРєР°Р·Р°С‚СЊ РјРµРЅСЋ","payload":"{\"command\":\"show_menu\"}"}}
+        "object":{"message":{"from_id":571,"peer_id":571,"text":"\u041f\u043e\u043a\u0430\u0437\u0430\u0442\u044c \u043c\u0435\u043d\u044e","payload":"{\"command\":\"show_menu\"}"}}
 	}`
 	if rec := h.post(menu); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
 		t.Fatalf("unexpected menu response: %d %q", rec.Code, rec.Body.String())
@@ -1123,26 +1236,96 @@ func TestVideoMenuButtonSendsModelPickerNoJob(t *testing.T) {
 	if len(sent) != 1 {
 		t.Fatalf("expected one model picker message, got %+v", sent)
 	}
-	if !strings.Contains(sent[0].Text, "Выбери режим видео") || !strings.Contains(sent[0].Text, "text-only") || !strings.Contains(sent[0].Text, "Требуют стартовую картинку") {
+	if sent[0].Text != "Выбери режим видео:" {
 		t.Fatalf("unexpected text: %q", sent[0].Text)
 	}
 	if !strings.Contains(sent[0].Keyboard, "⬅️ Назад") || !strings.Contains(sent[0].Keyboard, string(domain.CommandShowMenu)) {
 		t.Fatalf("expected back button in keyboard: %q", sent[0].Keyboard)
 	}
 	for _, hidden := range []string{
-		"Pruna",
-		"hailuo v2.3",
-		"kling v3",
-		"seedance v2 fast",
-		"runway",
-		"Creative video",
-		"Balanced video",
-		"Reference video",
-		"Cinematic video",
-		"Fast photo motion",
+		"PrunaAI",
+		"Runway Gen-4 Turbo",
+		"Kling O3 Standard",
+		"Seedance 2.0 Fast",
+		"Hailuo 2.3 Standard",
+		"Hailuo 2.3 Fast",
 	} {
 		if strings.Contains(sent[0].Keyboard, hidden) {
 			t.Fatalf("expected video route button %q to be hidden: %q", hidden, sent[0].Keyboard)
+		}
+	}
+}
+
+func TestVideoMenuButtonUsesProductCatalogRoutes(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	h := newHarnessWithConfig(control, vk.Config{
+		ConfirmationToken: "conf-token-123",
+		Secret:            "s3cr3t",
+		VideoRoutes: []productcatalog.VideoRoute{
+			testKlingVideoRoute(),
+			testRunwayVideoRoute(),
+			{
+				Type:                productcatalog.TypeVideo,
+				Alias:               string(domain.VideoRouteSeedance20Fast),
+				Name:                "Seedance 2.0 Fast",
+				Enabled:             false,
+				AllowedDurationsSec: []int{5, 10},
+				DefaultDurationSec:  5,
+			},
+		},
+	})
+	body := `{
+		"type":"message_new","group_id":1,"event_id":"evt-video-menu-catalog","secret":"s3cr3t",
+		"object":{"message":{"from_id":5601,"peer_id":5601,"text":"🎬 Создать видео","payload":"{\"command\":\"menu.video\"}"}}
+	}`
+	rec := h.post(body)
+	if rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	sent := control.Sent()
+	if len(sent) != 1 {
+		t.Fatalf("expected one model picker message, got %+v", sent)
+	}
+	keyboard := sent[0].Keyboard
+	for _, want := range []string{
+		"Kling O3 Standard",
+		"Runway Gen-4 Turbo",
+		string(domain.CommandMenuVideoRouteSelect),
+		string(domain.VideoRouteKlingO3Standard),
+		string(domain.VideoRouteRunwayGen4Turbo),
+	} {
+		if !strings.Contains(keyboard, want) {
+			t.Fatalf("catalog video keyboard missing %q: %q", want, keyboard)
+		}
+	}
+	for _, forbidden := range []string{
+		"Seedance 2.0 Fast",
+		"provider",
+		"provider_model_id",
+		"model_code",
+		"api_key",
+		"authorization",
+		"auth_header",
+		"bearer",
+		"resolved_video_route",
+		"resolved_snapshot",
+		"raw_provider_payload",
+		"private_url",
+		"prompt",
+		"provider_cost_credits",
+		"price_multiplier",
+		"max_internal_cost_credits",
+		"price",
+		"cost",
+		string(domain.CommandMenuVideoSora2Start),
+		string(domain.CommandMenuVideoKling21Start),
+		string(domain.CommandMenuVideoSeedance1Lite),
+		string(domain.CommandMenuVideoHailuo02Standard),
+		string(domain.CommandMenuVideoHailuo02Fast),
+	} {
+		if strings.Contains(keyboard, forbidden) {
+			t.Fatalf("catalog video keyboard leaked/kept forbidden value %q: %q", forbidden, keyboard)
 		}
 	}
 }
@@ -1152,15 +1335,11 @@ func TestVideoRouteButtonEnablesPlainTextVideoJobs(t *testing.T) {
 	h := newHarnessWithConfig(control, vk.Config{
 		ConfirmationToken: "conf-token-123",
 		Secret:            "s3cr3t",
-		MenuFeatures: enabledVideoCommands(
-			domain.CommandMenuVideoKling21,
-			domain.CommandMenuVideoKling21Start,
-			domain.CommandMenuVideoKling21Examples,
-		),
+		VideoRoutes:       []productcatalog.VideoRoute{testKlingVideoRoute()},
 	})
 	start := `{
 		"type":"message_new","group_id":1,"event_id":"evt-video-route-on","secret":"s3cr3t",
-		"object":{"message":{"from_id":5622,"peer_id":5622,"text":"kling v3","payload":"{\"command\":\"menu.video.kling_v2_1.start\"}"}}
+		"object":{"message":{"from_id":5622,"peer_id":5622,"text":"Kling O3 Standard","payload":"{\"command\":\"menu.video.route.select\",\"video_route_alias\":\"video_kling_o3_standard\"}"}}
 	}`
 	if rec := h.post(start); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
 		t.Fatalf("unexpected route response: %d %q", rec.Code, rec.Body.String())
@@ -1180,7 +1359,7 @@ func TestVideoRouteButtonEnablesPlainTextVideoJobs(t *testing.T) {
 		t.Fatalf("user not created: %v", err)
 	}
 	cmds, _ := h.cmds.ListByUser(ctx, user.ID, 10, 0)
-	if !hasCommandTypes(cmds, domain.CommandMenuVideoKling21Start, domain.CommandVideoGenerate) {
+	if !hasCommandTypes(cmds, domain.CommandMenuVideoRouteSelect, domain.CommandVideoGenerate) {
 		t.Fatalf("unexpected command types: %+v", commandTypes(cmds))
 	}
 	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
@@ -1188,8 +1367,11 @@ func TestVideoRouteButtonEnablesPlainTextVideoJobs(t *testing.T) {
 		t.Fatalf("video route mode should create one video job, jobs=%+v tasks=%d", jobs, h.pub.Len())
 	}
 	sent := control.Sent()
-	if len(sent) != 2 || !strings.Contains(sent[0].Text, "kling v3") || sent[1].Text != "НейроХаб готовит видео..." {
+	if len(sent) != 2 || !strings.Contains(sent[0].Text, "Выберите длительность видео") || sent[1].Text != "НейроХаб готовит видео..." {
 		t.Fatalf("unexpected video route mode responses: %+v", sent)
+	}
+	if strings.Contains(sent[0].Keyboard, "provider") || strings.Contains(sent[0].Keyboard, "model_code") || strings.Contains(sent[0].Keyboard, "resolved_video_route") {
+		t.Fatalf("video duration keyboard must not expose provider internals: %q", sent[0].Keyboard)
 	}
 	var params struct {
 		Prompt                 string `json:"prompt"`
@@ -1206,13 +1388,177 @@ func TestVideoRouteButtonEnablesPlainTextVideoJobs(t *testing.T) {
 	}
 	if params.Prompt != "cinematic neon city at night, rain reflections, slow drone movement" ||
 		params.ModelID != "" ||
-		params.ModelName != "kling v3" ||
+		params.ModelName != "Kling O3 Standard" ||
 		params.VideoRouteAlias != string(domain.VideoRouteKlingO3Standard) ||
 		params.Provider != "" ||
 		params.ModelCode != "" ||
 		params.DurationSec != 5 ||
 		params.VKPlaceholderMessageID != sent[1].MessageID {
 		t.Fatalf("unexpected video route job params: %+v, pending=%+v", params, sent[1])
+	}
+}
+
+func TestVideoRouteDurationButtonSetsJobDuration(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	h := newHarnessWithConfig(control, vk.Config{
+		ConfirmationToken: "conf-token-123",
+		Secret:            "s3cr3t",
+		VideoRoutes:       []productcatalog.VideoRoute{testKlingVideoRoute()},
+	})
+	start := `{
+		"type":"message_new","group_id":1,"event_id":"evt-video-route-duration","secret":"s3cr3t",
+		"object":{"message":{"from_id":5623,"peer_id":5623,"text":"10 сек","payload":"{\"command\":\"menu.video.duration.select\",\"video_route_alias\":\"video_kling_o3_standard\",\"duration_sec\":10}"}}
+	}`
+	if rec := h.post(start); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected route response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	prompt := `{
+		"type":"message_new","group_id":1,"event_id":"evt-video-route-duration-prompt","secret":"s3cr3t",
+		"object":{"message":{"from_id":5623,"peer_id":5623,"text":"cinematic city lights, slow camera movement"}}
+	}`
+	if rec := h.post(prompt); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected prompt response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	ctx := context.Background()
+	user, err := h.users.GetByVKUserID(ctx, 5623)
+	if err != nil {
+		t.Fatalf("user not created: %v", err)
+	}
+	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
+	if len(jobs) != 1 || jobs[0].CostEstimate != 20 {
+		t.Fatalf("duration-specific video job was not estimated from 10s route, jobs=%+v", jobs)
+	}
+	var params struct {
+		VideoRouteAlias string `json:"video_route_alias"`
+		DurationSec     int    `json:"duration_sec"`
+	}
+	if err := json.Unmarshal(jobs[0].Params, &params); err != nil {
+		t.Fatalf("decode job params: %v", err)
+	}
+	if params.VideoRouteAlias != string(domain.VideoRouteKlingO3Standard) || params.DurationSec != 10 {
+		t.Fatalf("unexpected duration params: %+v", params)
+	}
+}
+
+func TestVideoRouteWithPhotoAttachmentCreatesReferenceArtifactJob(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	downloader := &fakeReferenceDownloader{data: pngSizedBytes(20, 40)}
+	h := newHarnessWithReferenceDownloader(control, vk.Config{
+		ConfirmationToken: "conf-token-123",
+		Secret:            "s3cr3t",
+		MenuFeatures: enabledVideoCommands(
+			domain.CommandMenuVideoSora2,
+			domain.CommandMenuVideoSora2Start,
+			domain.CommandMenuVideoSora2Examples,
+		),
+	}, nil, nil, downloader)
+	start := `{
+		"type":"message_new","group_id":1,"event_id":"evt-video-runway-start","secret":"s3cr3t",
+		"object":{"message":{"from_id":5630,"peer_id":5630,"text":"Runway Gen-4 Turbo","payload":"{\"command\":\"menu.video.sora_v2.start\"}"}}
+	}`
+	if rec := h.post(start); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected route response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	prompt := `{
+		"type":"message_new","group_id":1,"event_id":"evt-video-runway-photo","secret":"s3cr3t",
+		"object":{"message":{
+			"from_id":5630,
+			"peer_id":5630,
+			"text":"animate this portrait with subtle camera movement",
+			"attachments":[{
+				"type":"photo",
+				"photo":{"sizes":[
+					{"type":"s","url":"https://vk.example/small.png","width":10,"height":10},
+					{"type":"x","url":"https://vk.example/large.png","width":20,"height":40}
+				]}
+			}]
+		}}
+	}`
+	if rec := h.post(prompt); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected prompt response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	ctx := context.Background()
+	user, err := h.users.GetByVKUserID(ctx, 5630)
+	if err != nil {
+		t.Fatalf("user not created: %v", err)
+	}
+	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
+	if len(jobs) != 1 || len(jobs[0].InputArtifactIDs) != 1 || h.pub.Len() != 1 {
+		t.Fatalf("expected one referenced video job, jobs=%+v tasks=%d", jobs, h.pub.Len())
+	}
+	if len(downloader.urls) != 1 || downloader.urls[0] != "https://vk.example/large.png" {
+		t.Fatalf("unexpected downloaded urls: %+v", downloader.urls)
+	}
+	artifact, err := h.arts.GetByID(ctx, jobs[0].InputArtifactIDs[0])
+	if err != nil {
+		t.Fatalf("reference artifact missing: %v", err)
+	}
+	if artifact.OwnerUserID != user.ID || artifact.Kind != domain.ArtifactKindInput || artifact.MediaType != domain.MediaTypeImage || artifact.MimeType != "image/png" || artifact.Width != 20 || artifact.Height != 40 {
+		t.Fatalf("unexpected artifact: %+v", artifact)
+	}
+	if _, err := h.objects.GetObject(ctx, artifact.StorageBucket, artifact.StorageKey); err != nil {
+		t.Fatalf("reference object missing: %v", err)
+	}
+	var params struct {
+		ModelID              string      `json:"model_id"`
+		VideoRouteAlias      string      `json:"video_route_alias"`
+		Provider             string      `json:"provider"`
+		ModelCode            string      `json:"model_code"`
+		AspectRatio          string      `json:"aspect_ratio"`
+		ReferenceArtifactIDs []uuid.UUID `json:"reference_artifact_ids"`
+	}
+	if err := json.Unmarshal(jobs[0].Params, &params); err != nil {
+		t.Fatalf("decode params: %v", err)
+	}
+	if params.ModelID != "" || params.Provider != "" || params.ModelCode != "" ||
+		params.VideoRouteAlias != string(domain.VideoRouteRunwayGen4Turbo) ||
+		params.AspectRatio != "9:16" ||
+		len(params.ReferenceArtifactIDs) != 1 || params.ReferenceArtifactIDs[0] != artifact.ID {
+		t.Fatalf("unexpected video params: %+v", params)
+	}
+}
+
+func TestImageRequiredVideoRouteWithoutPhotoDoesNotCreateJob(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	h := newHarnessWithConfig(control, vk.Config{
+		ConfirmationToken: "conf-token-123",
+		Secret:            "s3cr3t",
+		MenuFeatures: enabledVideoCommands(
+			domain.CommandMenuVideoHailuo02,
+			domain.CommandMenuVideoHailuo02Fast,
+		),
+	})
+	start := `{
+		"type":"message_new","group_id":1,"event_id":"evt-video-hailuo-fast-start","secret":"s3cr3t",
+		"object":{"message":{"from_id":5631,"peer_id":5631,"text":"Hailuo 2.3 Fast","payload":"{\"command\":\"menu.video.hailuo_02.fast\"}"}}
+	}`
+	if rec := h.post(start); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected route response: %d %q", rec.Code, rec.Body.String())
+	}
+	prompt := `{
+		"type":"message_new","group_id":1,"event_id":"evt-video-hailuo-fast-no-photo","secret":"s3cr3t",
+		"object":{"message":{"from_id":5631,"peer_id":5631,"text":"make it move fast"}}
+	}`
+	if rec := h.post(prompt); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected prompt response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	ctx := context.Background()
+	user, err := h.users.GetByVKUserID(ctx, 5631)
+	if err != nil {
+		t.Fatalf("user not created: %v", err)
+	}
+	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
+	if len(jobs) != 0 || h.pub.Len() != 0 {
+		t.Fatalf("missing required photo must not create job, jobs=%+v tasks=%d", jobs, h.pub.Len())
+	}
+	sent := control.Sent()
+	if len(sent) != 2 || sent[1].Text == "НейроХаб готовит видео..." {
+		t.Fatalf("expected reference notice instead of pending job message, got %+v", sent)
 	}
 }
 
@@ -1254,6 +1600,61 @@ func TestPhotoMenuButtonSendsInstructionNoJob(t *testing.T) {
 			t.Fatalf("expected %q in photo response: text=%q keyboard=%q", want, sent[0].Text, sent[0].Keyboard)
 		}
 	}
+	if !strings.Contains(sent[0].Keyboard, "Nano Banana 2") {
+		t.Fatalf("expected Nano Banana 2 button in photo keyboard: %q", sent[0].Keyboard)
+	}
+	if !strings.Contains(sent[0].Keyboard, "menu.image.select") || !strings.Contains(sent[0].Keyboard, "model_id") {
+		t.Fatalf("expected catalog-driven public model payloads in photo keyboard: %q", sent[0].Keyboard)
+	}
+	for _, private := range []string{
+		"model_code",
+		"provider",
+		"provider_model_id",
+		"api_key",
+		"authorization",
+		"auth_header",
+		"bearer",
+		"resolved_snapshot",
+		"raw_provider_payload",
+		"private_url",
+		"prompt",
+		"provider_cost_credits",
+		"price_multiplier",
+		"max_internal_cost_credits",
+		"price",
+		"cost",
+		"nano-banana-2-new",
+		"gemini-3-pro-image-preview",
+		"gpt-image-2",
+	} {
+		if strings.Contains(sent[0].Keyboard, private) {
+			t.Fatalf("photo keyboard leaked private field %q: %q", private, sent[0].Keyboard)
+		}
+	}
+	for _, legacyPayload := range []string{
+		string(domain.CommandMenuImageText),
+		string(domain.CommandMenuImageNanoBanana2),
+		string(domain.CommandMenuImageDeepInfraSeedream),
+		string(domain.CommandMenuImageDeepInfraSDXL),
+		string(domain.CommandMenuImageGPTImage2),
+		string(domain.CommandMenuImageReference),
+	} {
+		if strings.Contains(sent[0].Keyboard, legacyPayload) {
+			t.Fatalf("primary photo menu must use generic catalog payloads, found legacy %q in %q", legacyPayload, sent[0].Keyboard)
+		}
+	}
+	if !strings.Contains(sent[0].Keyboard, "Nano Banana Pro") {
+		t.Fatalf("expected Nano Banana Pro button in photo keyboard: %q", sent[0].Keyboard)
+	}
+	if !strings.Contains(sent[0].Keyboard, "GPT Image 2") {
+		t.Fatalf("expected GPT Image 2 button in photo keyboard: %q", sent[0].Keyboard)
+	}
+	if !strings.Contains(sent[0].Keyboard, "ByteDance Seedream 4.5") {
+		t.Fatalf("expected ByteDance Seedream 4.5 button in photo keyboard: %q", sent[0].Keyboard)
+	}
+	if !strings.Contains(sent[0].Keyboard, "Stability AI SDXL Turbo") {
+		t.Fatalf("expected Stability AI SDXL Turbo button in photo keyboard: %q", sent[0].Keyboard)
+	}
 	if strings.Contains(sent[0].Keyboard, "Фото по тексту") {
 		t.Fatalf("photo text button should be hidden because photo menu already enables text-to-image mode: keyboard=%q", sent[0].Keyboard)
 	}
@@ -1262,12 +1663,12 @@ func TestPhotoMenuButtonSendsInstructionNoJob(t *testing.T) {
 	}
 }
 
-func TestPhotoMenuButtonEnablesPlainTextImageJobs(t *testing.T) {
+func TestPhotoNanoBananaProQualityFlowCreatesImageJob(t *testing.T) {
 	control := vkdelivery.NewMockClient()
 	h := newHarnessWithControl(control)
 	menu := `{
-		"type":"message_new","group_id":1,"event_id":"evt-photo-text-on","secret":"s3cr3t",
-		"object":{"message":{"from_id":5631,"peer_id":5631,"text":"рџ–јпёЏ РЎРѕР·РґР°С‚СЊ С„РѕС‚Рѕ","payload":"{\"command\":\"menu.image\"}"}}
+		"type":"message_new","group_id":1,"event_id":"evt-photo-pro-on","secret":"s3cr3t",
+		"object":{"message":{"from_id":5631,"peer_id":5631,"text":"Nano Banana Pro","payload":"{\"command\":\"menu.image.text\"}"}}
 	}`
 	if rec := h.post(menu); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
 		t.Fatalf("unexpected menu response: %d %q", rec.Code, rec.Body.String())
@@ -1287,26 +1688,174 @@ func TestPhotoMenuButtonEnablesPlainTextImageJobs(t *testing.T) {
 		t.Fatalf("user not created: %v", err)
 	}
 	cmds, _ := h.cmds.ListByUser(ctx, user.ID, 10, 0)
-	if !hasCommandTypes(cmds, domain.CommandMenuImage, domain.CommandImageGenerate) {
+	if !hasCommandTypes(cmds, domain.CommandMenuImageText, domain.CommandImageGenerate) {
 		t.Fatalf("unexpected command types: %+v", commandTypes(cmds))
 	}
 	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
-	if len(jobs) != 1 || jobs[0].OperationType != domain.OperationImageGenerate || jobs[0].Modality != domain.ModalityImage || h.pub.Len() != 1 {
+	if len(jobs) != 1 || jobs[0].OperationType != domain.OperationImageGenerate || jobs[0].Modality != domain.ModalityImage || jobs[0].CostEstimate != 20 || h.pub.Len() != 1 {
 		t.Fatalf("photo text mode should create one image job, jobs=%+v tasks=%d", jobs, h.pub.Len())
 	}
 	sent := control.Sent()
-	if len(sent) != 2 || !strings.Contains(sent[0].Text, "Генерация фото по тексту") || sent[1].Text != "НейроХаб рисует..." {
+	if len(sent) != 2 || !strings.Contains(sent[0].Text, "Nano Banana Pro") || !strings.Contains(sent[0].Text, "Цена: 20 кредитов") || sent[1].Text != "НейроХаб рисует..." {
 		t.Fatalf("unexpected photo mode responses: %+v", sent)
 	}
 	var params struct {
 		Prompt                 string `json:"prompt"`
+		ModelID                string `json:"model_id"`
+		ModelName              string `json:"model_name"`
+		Size                   string `json:"size"`
+		Resolution             string `json:"resolution"`
+		ImageQuality           string `json:"image_quality"`
 		VKPlaceholderMessageID int64  `json:"vk_placeholder_message_id"`
 	}
 	if err := json.Unmarshal(jobs[0].Params, &params); err != nil {
 		t.Fatalf("decode job params: %v", err)
 	}
-	if params.Prompt != "кот в очках на пляже" || params.VKPlaceholderMessageID != sent[1].MessageID {
+	if params.Prompt != "кот в очках на пляже" ||
+		params.ModelID != "nano_banana_pro" ||
+		params.ModelName != "Nano Banana Pro" ||
+		params.Size != "1:1" ||
+		params.Resolution != "" ||
+		params.ImageQuality != "" ||
+		params.VKPlaceholderMessageID != sent[1].MessageID {
 		t.Fatalf("unexpected image job params: %+v, pending=%+v", params, sent[1])
+	}
+}
+
+func TestPhotoNanoBanana2ModeCreatesPoYoImageJob(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	h := newHarnessWithControl(control)
+	menu := `{
+		"type":"message_new","group_id":1,"event_id":"evt-photo-nano-2-on","secret":"s3cr3t",
+		"object":{"message":{"from_id":5632,"peer_id":5632,"text":"Nano Banana 2","payload":"{\"command\":\"menu.image.select\",\"model_id\":\"nano_banana_2\"}"}}
+	}`
+	if rec := h.post(menu); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected menu response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	quality := `{
+		"type":"message_new","group_id":1,"event_id":"evt-photo-nano-2-quality","secret":"s3cr3t",
+		"object":{"message":{"from_id":5632,"peer_id":5632,"text":"4K","payload":"{\"command\":\"menu.image.quality.select\",\"model_id\":\"nano_banana_2\",\"image_quality\":\"4K\"}"}}
+	}`
+	if rec := h.post(quality); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected quality response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	prompt := `{
+		"type":"message_new","group_id":1,"event_id":"evt-photo-nano-2-prompt","secret":"s3cr3t",
+		"object":{"message":{"from_id":5632,"peer_id":5632,"text":"cinematic robot portrait"}}
+	}`
+	if rec := h.post(prompt); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected prompt response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	ctx := context.Background()
+	user, err := h.users.GetByVKUserID(ctx, 5632)
+	if err != nil {
+		t.Fatalf("user not created: %v", err)
+	}
+	cmds, _ := h.cmds.ListByUser(ctx, user.ID, 10, 0)
+	if !hasCommandTypes(cmds, domain.CommandMenuImageSelect, domain.CommandMenuImageQualitySelect, domain.CommandImageGenerate) {
+		t.Fatalf("unexpected command types: %+v", commandTypes(cmds))
+	}
+	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
+	if len(jobs) != 1 || jobs[0].OperationType != domain.OperationImageGenerate || jobs[0].Modality != domain.ModalityImage || jobs[0].CostEstimate != 24 || jobs[0].CostReserved != 24 {
+		t.Fatalf("nano banana 2 should create one reserved image job, jobs=%+v", jobs)
+	}
+	var params struct {
+		Prompt       string `json:"prompt"`
+		ModelID      string `json:"model_id"`
+		ModelName    string `json:"model_name"`
+		Provider     string `json:"provider"`
+		ModelCode    string `json:"model_code"`
+		Size         string `json:"size"`
+		Resolution   string `json:"resolution"`
+		ImageQuality string `json:"image_quality"`
+	}
+	if err := json.Unmarshal(jobs[0].Params, &params); err != nil {
+		t.Fatalf("decode job params: %v", err)
+	}
+	if params.Prompt != "cinematic robot portrait" ||
+		params.ModelID != "nano_banana_2" ||
+		params.ModelName != "Nano Banana 2" ||
+		params.Provider != "poyo" ||
+		params.ModelCode != "nano-banana-2-new" ||
+		params.Size != "1:1" ||
+		params.Resolution != "4K" ||
+		params.ImageQuality != "4K" {
+		t.Fatalf("unexpected nano banana 2 job params: %+v", params)
+	}
+	sent := control.Sent()
+	if len(sent) != 2 || !strings.Contains(sent[0].Text, "Nano Banana 2") || !strings.Contains(sent[0].Text, "Цена: 24 кредитов") || sent[1].Text != "НейроХаб рисует..." {
+		t.Fatalf("unexpected nano banana 2 responses: %+v", sent)
+	}
+	for _, legacyPayload := range []string{
+		string(domain.CommandMenuImageQuality1K),
+		string(domain.CommandMenuImageQuality2K),
+		string(domain.CommandMenuImageQuality4K),
+	} {
+		if strings.Contains(sent[0].Keyboard, legacyPayload) {
+			t.Fatalf("quality picker must use generic catalog payloads, found legacy %q in %q", legacyPayload, sent[0].Keyboard)
+		}
+	}
+}
+
+func TestPhotoDeepInfraSeedreamQualityFlowCreatesImageJob(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	h := newHarnessWithControl(control)
+	menu := `{
+		"type":"message_new","group_id":1,"event_id":"evt-photo-seedream-on","secret":"s3cr3t",
+		"object":{"message":{"from_id":5633,"peer_id":5633,"text":"ByteDance Seedream 4.5","payload":"{\"command\":\"menu.image.deepinfra_seedream_4_5\"}"}}
+	}`
+	if rec := h.post(menu); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected menu response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	prompt := `{
+		"type":"message_new","group_id":1,"event_id":"evt-photo-seedream-prompt","secret":"s3cr3t",
+		"object":{"message":{"from_id":5633,"peer_id":5633,"text":"safe editorial product image"}}
+	}`
+	if rec := h.post(prompt); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected prompt response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	ctx := context.Background()
+	user, err := h.users.GetByVKUserID(ctx, 5633)
+	if err != nil {
+		t.Fatalf("user not created: %v", err)
+	}
+	cmds, _ := h.cmds.ListByUser(ctx, user.ID, 10, 0)
+	if !hasCommandTypes(cmds, domain.CommandMenuImageDeepInfraSeedream, domain.CommandImageGenerate) {
+		t.Fatalf("unexpected command types: %+v", commandTypes(cmds))
+	}
+	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
+	if len(jobs) != 1 || jobs[0].CostEstimate != 10 || jobs[0].CostReserved != 10 {
+		t.Fatalf("seedream should create one reserved image job, jobs=%+v", jobs)
+	}
+	var params struct {
+		ModelID      string `json:"model_id"`
+		ModelName    string `json:"model_name"`
+		Provider     string `json:"provider"`
+		ModelCode    string `json:"model_code"`
+		Size         string `json:"size"`
+		Resolution   string `json:"resolution"`
+		ImageQuality string `json:"image_quality"`
+	}
+	if err := json.Unmarshal(jobs[0].Params, &params); err != nil {
+		t.Fatalf("decode job params: %v", err)
+	}
+	if params.ModelID != "seedream_4_5" ||
+		params.ModelName != "ByteDance Seedream 4.5" ||
+		params.Provider != "deepinfra" ||
+		params.ModelCode != "ByteDance/Seedream-4.5" ||
+		params.Size != "1024x1024" ||
+		params.Resolution != "" ||
+		params.ImageQuality != "" {
+		t.Fatalf("unexpected seedream job params: %+v", params)
+	}
+	sent := control.Sent()
+	if len(sent) != 2 || !strings.Contains(sent[0].Text, "ByteDance Seedream 4.5") || !strings.Contains(sent[0].Text, "Цена: 10 кредитов") {
+		t.Fatalf("unexpected seedream responses: %+v", sent)
 	}
 }
 
@@ -1344,6 +1893,38 @@ func TestDisabledPhotoModeButtonFallsBackToMainMenu(t *testing.T) {
 	sent := control.Sent()
 	if len(sent) != 1 || !strings.Contains(sent[0].Text, "Добро пожаловать в НейроХаб") || strings.Contains(sent[0].Keyboard, "Фото по тексту") {
 		t.Fatalf("disabled photo mode should fall back to main menu without photo text button: %+v", sent)
+	}
+}
+
+func TestDisabledCatalogPhotoModelPayloadFallsBackToMainMenu(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	h := newHarnessWithConfig(control, vk.Config{
+		ConfirmationToken: "conf-token-123",
+		Secret:            "s3cr3t",
+		ImageModels: []productcatalog.ImageModel{
+			{Type: "image", ID: modelcatalog.MiniAppImageNanoBanana2, Name: "Nano Banana 2", Enabled: false},
+		},
+	})
+	body := `{
+		"type":"message_new","group_id":1,"event_id":"evt-photo-disabled-catalog-model","secret":"s3cr3t",
+		"object":{"message":{"from_id":5634,"peer_id":5634,"text":"Nano Banana 2","payload":"{\"command\":\"menu.image.select\",\"model_id\":\"nano_banana_2\"}"}}
+	}`
+	if rec := h.post(body); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	ctx := context.Background()
+	user, err := h.users.GetByVKUserID(ctx, 5634)
+	if err != nil {
+		t.Fatalf("user not created: %v", err)
+	}
+	cmds, _ := h.cmds.ListByUser(ctx, user.ID, 10, 0)
+	if len(cmds) != 1 || cmds[0].Type != domain.CommandShowMenu {
+		t.Fatalf("disabled public model should fall back to menu, commands=%+v", commandTypes(cmds))
+	}
+	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
+	if len(jobs) != 0 || h.pub.Len() != 0 {
+		t.Fatalf("disabled public model must not create job, jobs=%+v tasks=%d", jobs, h.pub.Len())
 	}
 }
 
@@ -1592,7 +2173,7 @@ func TestPersistedGPTModeSurvivesHandlerRestart(t *testing.T) {
 	}, dialogState)
 	gpt := `{
 		"type":"message_new","group_id":1,"event_id":"evt-gpt-persist-on","secret":"s3cr3t",
-		"object":{"message":{"from_id":590,"peer_id":590,"text":"рџ’¬ РЎРїСЂРѕСЃРёС‚СЊ Сѓ РќРµР№СЂРѕРҐР°Р±","payload":"{\"command\":\"menu.text\"}"}}
+        "object":{"message":{"from_id":590,"peer_id":590,"text":"\ud83d\udcac \u0421\u043f\u0440\u043e\u0441\u0438\u0442\u044c \u0443 \u041d\u0435\u0439\u0440\u043e\u0425\u0430\u0431","payload":"{\"command\":\"menu.text\"}"}}
 	}`
 	if rec := first.post(gpt); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
 		t.Fatalf("unexpected gpt response: %d %q", rec.Code, rec.Body.String())
@@ -1937,23 +2518,23 @@ func TestDisabledVideoStartPayloadDoesNotEnablePlainTextVideoJobs(t *testing.T) 
 		t.Fatalf("disabled video start payload must not create video jobs, jobs=%+v tasks=%d", jobs, h.pub.Len())
 	}
 	sent := control.Sent()
-	if len(sent) != 2 || strings.Contains(sent[0].Text, "Creative video активен") || sent[1].Text == "НейроХаб готовит видео..." {
+	if len(sent) != 2 || strings.Contains(sent[0].Text, "Runway Gen-4 Turbo активен") || sent[1].Text == "НейроХаб готовит видео..." {
 		t.Fatalf("disabled video start payload must fall back without pending video message, got %+v", sent)
 	}
 }
 
 func TestPersistedVideoModeSurvivesHandlerRestart(t *testing.T) {
 	dialogState := newFakeDialogState()
-	dialogState.modes[5931] = "video:runway_gen4_turbo"
+	dialogState.modes[5931] = "video:kling_o3_standard"
 
 	secondControl := vkdelivery.NewMockClient()
 	second := newHarnessWithConfigAndDialogState(secondControl, vk.Config{
 		ConfirmationToken: "conf-token-123",
 		Secret:            "s3cr3t",
 		MenuFeatures: enabledVideoCommands(
-			domain.CommandMenuVideoSora2,
-			domain.CommandMenuVideoSora2Start,
-			domain.CommandMenuVideoSora2Examples,
+			domain.CommandMenuVideoKling21,
+			domain.CommandMenuVideoKling21Start,
+			domain.CommandMenuVideoKling21Examples,
 		),
 	}, dialogState)
 	prompt := `{
@@ -1981,7 +2562,7 @@ func TestPersistedVideoModeSurvivesHandlerRestart(t *testing.T) {
 	if err := json.Unmarshal(jobs[0].Params, &params); err != nil {
 		t.Fatalf("decode job params: %v", err)
 	}
-	if params.VideoRouteAlias != string(domain.VideoRouteRunwayGen4Turbo) || params.Provider != "" || params.ModelCode != "" {
+	if params.VideoRouteAlias != string(domain.VideoRouteKlingO3Standard) || params.Provider != "" || params.ModelCode != "" {
 		t.Fatalf("persisted video mode should use public route alias only, got %+v", params)
 	}
 }
@@ -2320,6 +2901,36 @@ func commandByType(cmds []*domain.Command, t domain.CommandType) (*domain.Comman
 		}
 	}
 	return nil, false
+}
+
+type fakeReferenceDownloader struct {
+	data        []byte
+	contentType string
+	err         error
+	urls        []string
+}
+
+func (f *fakeReferenceDownloader) Download(_ context.Context, url string) ([]byte, string, error) {
+	f.urls = append(f.urls, url)
+	if f.err != nil {
+		return nil, "", f.err
+	}
+	data := append([]byte(nil), f.data...)
+	contentType := f.contentType
+	if contentType == "" {
+		contentType = "image/png"
+	}
+	return data, contentType, nil
+}
+
+func pngSizedBytes(width, height int) []byte {
+	img := image.NewNRGBA(image.Rect(0, 0, width, height))
+	img.Set(0, 0, color.NRGBA{R: 255, A: 255})
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		panic(err)
+	}
+	return buf.Bytes()
 }
 
 type fakeAntiSpam struct {

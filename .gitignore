@@ -26,6 +26,8 @@ web/admin/playwright-report/
 # Environment and secrets (.env.ps1 is covered by .env.*)
 .env
 .env.*
+dev.env
+dev.env.*
 _env
 _env.*
 !.env.example

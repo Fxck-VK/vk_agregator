@@ -34,20 +34,20 @@ func TestSubmitKlingO3SuccessAndIdempotency(t *testing.T) {
 		if body.Model != ModelKlingO3Standard {
 			t.Fatalf("model = %q", body.Model)
 		}
-		if body.Inputs["prompt"] != "safe prompt" || body.Inputs["image_url"] != "https://cdn.test/input.png" {
-			t.Fatalf("bad inputs: %+v", body.Inputs)
+		if body.Input["prompt"] != "safe prompt" {
+			t.Fatalf("bad input prompt: %+v", body.Input)
 		}
-		if refs, ok := body.Inputs["reference_images"].([]any); !ok || len(refs) != 1 {
-			t.Fatalf("reference_images = %#v", body.Inputs["reference_images"])
+		if refs, ok := body.Input["image_urls"].([]any); !ok || len(refs) != 1 || refs[0] != "https://cdn.test/input.png" {
+			t.Fatalf("image_urls = %#v", body.Input["image_urls"])
 		}
-		if body.Parameters["duration"].(float64) != 10 || body.Parameters["resolution"] != "1080p" || body.Parameters["aspect_ratio"] != "16:9" {
-			t.Fatalf("bad parameters: %+v", body.Parameters)
+		if body.Input["duration"].(float64) != 10 || body.Input["aspect_ratio"] != "16:9" {
+			t.Fatalf("bad input options: %+v", body.Input)
 		}
-		if body.Parameters["audio"] != false {
-			t.Fatalf("kling audio must be explicitly disabled, got %+v", body.Parameters)
+		if body.Input["sound"] != false {
+			t.Fatalf("kling sound must be explicitly disabled, got %+v", body.Input)
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"success":true,"task_id":"poyo_task_1","status":"pending"}`))
+		_, _ = w.Write([]byte(`{"code":200,"data":{"task_id":"poyo_task_1","status":"not_started","created_time":"2026-06-19T15:00:00Z"}}`))
 	}))
 	defer srv.Close()
 
@@ -73,6 +73,136 @@ func TestSubmitKlingO3SuccessAndIdempotency(t *testing.T) {
 	if task2.ExternalID != task.ExternalID || calls != 1 {
 		t.Fatalf("idempotency failed task2=%+v calls=%d", task2, calls)
 	}
+}
+
+func TestSubmitNanoBanana2ImageSuccess(t *testing.T) {
+	var calls int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if r.Method != http.MethodPost || r.URL.Path != "/api/generate/submit" {
+			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer test-key" {
+			t.Fatalf("auth header = %q", got)
+		}
+		var body submitRequest
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode body: %v", err)
+		}
+		if body.Model != ModelNanoBanana2New {
+			t.Fatalf("model = %q", body.Model)
+		}
+		if body.Input["prompt"] != "safe prompt" || body.Input["size"] != "16:9" || body.Input["resolution"] != "4K" {
+			t.Fatalf("bad image input: %+v", body.Input)
+		}
+		if refs, ok := body.Input["image_urls"].([]any); !ok || len(refs) != 1 || refs[0] != "https://cdn.test/ref.png" {
+			t.Fatalf("image_urls = %#v", body.Input["image_urls"])
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"code":200,"data":{"task_id":"image_task_1","status":"not_started","created_time":"2026-06-20T10:30:00Z"}}`))
+	}))
+	defer srv.Close()
+
+	provider := New(Config{APIKey: "test-key", BaseURL: srv.URL, HTTPClient: srv.Client()})
+	req := baseImageRequest(ModelNanoBanana2New)
+	req.AspectRatio = "16:9"
+	req.Resolution = "4K"
+	req.InputURLs = []string{"https://cdn.test/ref.png"}
+
+	task, err := provider.Submit(context.Background(), req)
+	if err != nil {
+		t.Fatalf("submit: %v", err)
+	}
+	if task.Provider != domain.ProviderPoYo || task.ExternalID != "image_task_1" || task.Status != domain.ProviderTaskPending {
+		t.Fatalf("bad task: %+v", task)
+	}
+	if calls != 1 {
+		t.Fatalf("calls = %d, want 1", calls)
+	}
+}
+
+func TestSubmitNanoBanana2ImageAcceptsDataID(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/generate/submit" {
+			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"code":200,"data":{"id":"I46OXVK51SS6JRZJ","status":"not_started"}}`))
+	}))
+	defer srv.Close()
+
+	provider := New(Config{APIKey: "test-key", BaseURL: srv.URL, HTTPClient: srv.Client()})
+	task, err := provider.Submit(context.Background(), baseImageRequest(ModelNanoBanana2New))
+	if err != nil {
+		t.Fatalf("submit: %v", err)
+	}
+	if task.ExternalID != "I46OXVK51SS6JRZJ" || task.Status != domain.ProviderTaskPending {
+		t.Fatalf("bad task: %+v", task)
+	}
+}
+
+func TestSubmitNanoBanana2ImageDefaultsTo1K(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body submitRequest
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode body: %v", err)
+		}
+		if body.Model != ModelNanoBanana2New {
+			t.Fatalf("model = %q", body.Model)
+		}
+		if body.Input["resolution"] != "1K" {
+			t.Fatalf("resolution = %#v, want 1K", body.Input["resolution"])
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"code":200,"data":{"task_id":"image_task_1","status":"not_started","created_time":"2026-06-20T10:30:00Z"}}`))
+	}))
+	defer srv.Close()
+
+	provider := New(Config{APIKey: "test-key", BaseURL: srv.URL, HTTPClient: srv.Client()})
+	if _, err := provider.Submit(context.Background(), baseImageRequest(ModelNanoBanana2New)); err != nil {
+		t.Fatalf("submit: %v", err)
+	}
+}
+
+func TestNanoBanana2EstimateAndValidation(t *testing.T) {
+	provider := New(Config{APIKey: "test-key", BaseURL: "http://127.0.0.1"})
+	req := baseImageRequest(ModelNanoBanana2New)
+
+	estimate, err := provider.Estimate(context.Background(), req)
+	if err != nil {
+		t.Fatalf("estimate: %v", err)
+	}
+	if estimate.AmountCredits != 10 || estimate.Currency != "credits" || estimate.Estimated {
+		t.Fatalf("bad estimate: %+v", estimate)
+	}
+
+	req.Resolution = "2K"
+	estimate, err = provider.Estimate(context.Background(), req)
+	if err != nil {
+		t.Fatalf("estimate 2K: %v", err)
+	}
+	if estimate.AmountCredits != 16 {
+		t.Fatalf("2K estimate = %d, want 16", estimate.AmountCredits)
+	}
+
+	req.Resolution = "4K"
+	estimate, err = provider.Estimate(context.Background(), req)
+	if err != nil {
+		t.Fatalf("estimate 4K: %v", err)
+	}
+	if estimate.AmountCredits != 24 {
+		t.Fatalf("4K estimate = %d, want 24", estimate.AmountCredits)
+	}
+
+	req.Resolution = ""
+	req.InputURLs = []string{"1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15"}
+	_, err = provider.Submit(context.Background(), req)
+	requireErrorClass(t, err, domain.ProviderErrInvalidRequest)
+
+	req.InputURLs = nil
+	req.AspectRatio = "7:7"
+	_, err = provider.Submit(context.Background(), req)
+	requireErrorClass(t, err, domain.ProviderErrInvalidRequest)
 }
 
 func TestSubmitRejectsKlingAudioByDefault(t *testing.T) {
@@ -169,7 +299,7 @@ func TestPollCompletedReturnsOutputAndSanitizesRaw(t *testing.T) {
 			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"success":true,"task_id":"task_1","status":"completed","progress":100,"result":{"video_url":"https://private.poyo.ai/output.mp4?token=secret","duration":5,"resolution":"720p"}}`))
+		_, _ = w.Write([]byte(`{"code":200,"data":{"task_id":"task_1","status":"finished","files":[{"file_type":"video","file_url":"https://private.poyo.ai/output.mp4?token=secret","format":"mp4"}],"credits_amount":50,"created_time":"2026-06-19T15:00:00Z"}}`))
 	}))
 	defer srv.Close()
 
@@ -187,23 +317,97 @@ func TestPollCompletedReturnsOutputAndSanitizesRaw(t *testing.T) {
 	}
 }
 
-func TestPollFailureNormalizesModeration(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+func TestPollCompletedImageReturnsOutputAndSanitizesRaw(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/api/generate/status/image_task_1" {
+			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"success":true,"task_id":"task_1","status":"failed","error":{"type":"moderation","message":"policy rejected prompt"}}`))
+		_, _ = w.Write([]byte(`{"code":200,"data":{"task_id":"image_task_1","status":"finished","files":[{"file_type":"image","file_url":"https://private.poyo.ai/output.jpg?token=secret","format":"jpg"}],"credits_amount":5,"created_time":"2026-06-20T10:30:00Z"}}`))
 	}))
 	defer srv.Close()
 
 	provider := New(Config{APIKey: "test-key", BaseURL: srv.URL, HTTPClient: srv.Client()})
-	result, err := provider.Poll(context.Background(), domain.ProviderTaskRef{Provider: domain.ProviderPoYo, ExternalID: "task_1"})
+	result, err := provider.Poll(context.Background(), domain.ProviderTaskRef{Provider: domain.ProviderPoYo, ExternalID: "image_task_1"})
 	if err != nil {
 		t.Fatalf("poll: %v", err)
 	}
-	if result.Status != domain.ProviderTaskFailed || result.ErrorClass != domain.ProviderErrContentRejected {
+	if result.Status != domain.ProviderTaskSucceeded || len(result.OutputURLs) != 1 {
 		t.Fatalf("bad result: %+v", result)
 	}
-	if strings.Contains(string(result.Raw), "policy rejected prompt") {
-		t.Fatalf("raw metadata leaked provider error text: %s", string(result.Raw))
+	raw := string(result.Raw)
+	if strings.Contains(raw, "private.poyo.ai") || strings.Contains(raw, "secret") || strings.Contains(raw, "file_url") {
+		t.Fatalf("raw metadata leaked private output URL: %s", raw)
+	}
+}
+
+func TestPollCompletedImageAcceptsDataResultImageURLs(t *testing.T) {
+	const outputURL = "https://private.poyo.ai/output.jpg?token=secret"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/api/generate/status/I46OXVK51SS6JRZJ" {
+			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"code":200,"data":{"id":"I46OXVK51SS6JRZJ","status":"finished","progress":0.0,"result":{"image_urls":["` + outputURL + `"]}}}`))
+	}))
+	defer srv.Close()
+
+	provider := New(Config{APIKey: "test-key", BaseURL: srv.URL, HTTPClient: srv.Client()})
+	result, err := provider.Poll(context.Background(), domain.ProviderTaskRef{Provider: domain.ProviderPoYo, ExternalID: "I46OXVK51SS6JRZJ"})
+	if err != nil {
+		t.Fatalf("poll: %v", err)
+	}
+	if result.Status != domain.ProviderTaskSucceeded || len(result.OutputURLs) != 1 || result.OutputURLs[0] != outputURL {
+		t.Fatalf("unexpected result: %+v", result)
+	}
+	raw := string(result.Raw)
+	if strings.Contains(raw, "private.poyo.ai") || strings.Contains(raw, "secret") || strings.Contains(raw, "image_urls") {
+		t.Fatalf("raw metadata leaked private output URL: %s", raw)
+	}
+}
+
+func TestPollFailureNormalizesModeration(t *testing.T) {
+	cases := []struct {
+		name string
+		body string
+		leak string
+	}{
+		{
+			name: "policy error message",
+			body: `{"code":200,"data":{"task_id":"task_1","status":"failed","error_message":"policy rejected prompt"}}`,
+			leak: "policy rejected prompt",
+		},
+		{
+			name: "platform regulations message",
+			body: `{"code":200,"data":{"task_id":"task_1","status":"failed","error_message":"The content does not comply with the platform regulations. Please modify it and try again."}}`,
+			leak: "platform regulations",
+		},
+		{
+			name: "top level status message",
+			body: `{"code":200,"task_id":"task_1","status":"failed","message":"The content does not comply with the platform regulations."}`,
+			leak: "platform regulations",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(tc.body))
+			}))
+			defer srv.Close()
+
+			provider := New(Config{APIKey: "test-key", BaseURL: srv.URL, HTTPClient: srv.Client()})
+			result, err := provider.Poll(context.Background(), domain.ProviderTaskRef{Provider: domain.ProviderPoYo, ExternalID: "task_1"})
+			if err != nil {
+				t.Fatalf("poll: %v", err)
+			}
+			if result.Status != domain.ProviderTaskFailed || result.ErrorClass != domain.ProviderErrContentRejected {
+				t.Fatalf("bad result: %+v", result)
+			}
+			if strings.Contains(string(result.Raw), tc.leak) {
+				t.Fatalf("raw metadata leaked provider error text: %s", string(result.Raw))
+			}
+		})
 	}
 }
 
@@ -235,6 +439,20 @@ func baseVideoRequest(model string) domain.ProviderRequest {
 		DurationSec:    5,
 		Resolution:     "720p",
 		AspectRatio:    "16:9",
+		IdempotencyKey: "idem-" + uuid.NewString(),
+	}
+}
+
+func baseImageRequest(model string) domain.ProviderRequest {
+	return domain.ProviderRequest{
+		JobID:          uuid.New(),
+		UserID:         uuid.New(),
+		Operation:      domain.OperationImageGenerate,
+		Modality:       domain.ModalityImage,
+		ModelCode:      model,
+		Provider:       domain.ProviderPoYo,
+		Prompt:         "safe prompt",
+		AspectRatio:    "1:1",
 		IdempotencyKey: "idem-" + uuid.NewString(),
 	}
 }

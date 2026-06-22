@@ -45,12 +45,18 @@ func (w *PollWorker) Process(ctx context.Context, task queue.Task) error {
 		return nil
 	}
 	if pt.Status.IsTerminal() {
+		if res, ok := durableProviderTaskResult(pt); ok {
+			return w.applyResult(ctx, job, pt, res, task)
+		}
 		return nil
 	}
 
 	provider, err := w.providers.ForName(pt.Provider)
 	if err != nil {
 		return err
+	}
+	if job.Status == domain.JobStatusProviderSubmitted && shouldDeferInitialPoll(job, pt.Provider, pt) {
+		w.sleepProviderPollBackoff(ctx, 1)
 	}
 	return w.pollOnce(ctx, job, pt, provider, task)
 }

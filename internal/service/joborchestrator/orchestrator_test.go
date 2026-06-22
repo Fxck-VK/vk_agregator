@@ -104,6 +104,32 @@ func TestCreateJobHappyPath(t *testing.T) {
 	}
 }
 
+func TestCreateJobUsesServerOwnedProviderCost(t *testing.T) {
+	f := newFixture()
+	ctx := context.Background()
+
+	job, err := f.orch.CreateJob(ctx, joborchestrator.CreateJobInput{
+		UserID:                 uuid.New(),
+		CommandID:              uuid.New(),
+		Operation:              domain.OperationImageGenerate,
+		Modality:               domain.ModalityImage,
+		IdempotencyKey:         "miniapp_job:1:nano-banana-2",
+		ProviderCostCredits:    5,
+		PriceMultiplier:        2,
+		MaxInternalCostCredits: 20,
+	})
+	if err != nil {
+		t.Fatalf("create job: %v", err)
+	}
+	if job.CostEstimate != 10 || job.CostReserved != 10 {
+		t.Fatalf("cost estimate/reserved = %d/%d, want 10/10", job.CostEstimate, job.CostReserved)
+	}
+	f.drain(t)
+	if f.pub.Len() != 1 {
+		t.Fatalf("provider-cost image job should enqueue once, got %d tasks", f.pub.Len())
+	}
+}
+
 func TestCreateJobIdempotent(t *testing.T) {
 	f := newFixture()
 	ctx := context.Background()

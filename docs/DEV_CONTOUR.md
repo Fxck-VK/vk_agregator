@@ -70,6 +70,26 @@ the DEV VK health/callback route, Mini App frontend and BFF, YooKassa webhook
 entrypoint, and confirms that `/admin/*` and `/metrics` are not publicly open.
 It refuses non-HTTPS URLs and production hostnames.
 
+## Mini App Model Catalog Migration
+
+Mini App model selection uses one public BFF endpoint:
+
+```text
+GET /miniapp/model-catalog
+```
+
+The old catalog endpoints were removed and must keep returning `404`:
+
+```text
+GET /miniapp/image-models
+GET /miniapp/video-routes
+```
+
+The Mini App frontend is already migrated to `/miniapp/model-catalog`. Keep
+Cloudflare routes, VK Mini App settings, smoke scripts and external monitors off
+the removed endpoints. Direct unauthenticated probes to `/miniapp/model-catalog`
+may return `401`; that still means the route exists behind Mini App auth.
+
 ## Start Command
 
 Start the full local DEV contour with one command:
@@ -85,10 +105,10 @@ prebuilt `:dev` images for regular local development.
 
 What it does:
 
-- checks that `.env` exists and is a DEV environment, not production;
+- checks that `dev.env` exists and is a DEV environment, not production;
 - refuses `-SkipBuild` unless `DEV_ALLOW_REMOTE_IMAGES=true` is deliberately
   set for image-tag smoke testing;
-- loads `.env` into the current process for Docker Compose interpolation;
+- loads `dev.env` into the current process for Docker Compose interpolation;
 - starts local Docker Postgres, Redis and MinIO;
 - runs migrations through the existing `migrate` service;
 - starts `cmd/api`, `cmd/worker`, `cmd/provider-webhook`, Mini App and the
@@ -153,7 +173,7 @@ data stores.
 - Do not reuse the production VK community token in local DEV.
 - Do not reuse production YooKassa webhook settings for local DEV.
 - Do not connect local DEV services to production Postgres, Redis or S3/MinIO.
-- Do not commit local `.env`, tunnel tokens, VK tokens, YooKassa keys or
+- Do not commit local `dev.env`, tunnel tokens, VK tokens, YooKassa keys or
   provider keys.
 
 ## Security Rules
@@ -194,12 +214,12 @@ YooKassa credentials are not allowed in the DEV contour.
 
 ## Required DEV Inputs
 
-The local `.env` for this contour must come from a DEV-specific template or be
+The local `dev.env` for this contour must come from a DEV-specific template or be
 filled manually with DEV-only values:
 
 ```powershell
-Copy-Item .env.dev.example .env
-notepad .env
+Copy-Item .env.dev.example dev.env
+notepad dev.env
 ```
 
 ```text

@@ -40,37 +40,84 @@ const (
 	CommandMenuText CommandType = "menu.text"
 	// CommandMenuImage explains how to generate an image.
 	CommandMenuImage CommandType = "menu.image"
-	// CommandMenuImageText selects text-to-image mode in the VK image menu.
+	// CommandMenuImageSelect selects an enabled public image model alias from
+	// the backend-owned product catalog.
+	CommandMenuImageSelect CommandType = "menu.image.select"
+	// CommandMenuImageText is a legacy VK image-model command kept for stale
+	// payload/text compatibility. New buttons use CommandMenuImageSelect.
 	CommandMenuImageText CommandType = "menu.image.text"
+	// CommandMenuImageNanoBanana2 is a legacy VK image-model command kept for
+	// stale payload/text compatibility. New buttons use CommandMenuImageSelect.
+	CommandMenuImageNanoBanana2 CommandType = "menu.image.nano_banana_2"
+	// CommandMenuImageDeepInfraSeedream is a legacy VK image-model command kept
+	// for stale payload/text compatibility. New buttons use CommandMenuImageSelect.
+	CommandMenuImageDeepInfraSeedream CommandType = "menu.image.deepinfra_seedream_4_5"
+	// CommandMenuImageDeepInfraSDXL is a legacy VK image-model command kept for
+	// stale payload/text compatibility. New buttons use CommandMenuImageSelect.
+	CommandMenuImageDeepInfraSDXL CommandType = "menu.image.deepinfra_sdxl_turbo"
+	// CommandMenuImageGPTImage2 is a legacy VK image-model command kept for stale
+	// payload/text compatibility. New buttons use CommandMenuImageSelect.
+	CommandMenuImageGPTImage2 CommandType = "menu.image.gpt_image_2"
+	// CommandMenuImageQuality1K is a legacy VK quality command. New buttons use
+	// CommandMenuImageQualitySelect.
+	CommandMenuImageQuality1K CommandType = "menu.image.quality.1k"
+	// CommandMenuImageQuality2K is a legacy VK quality command. New buttons use
+	// CommandMenuImageQualitySelect.
+	CommandMenuImageQuality2K CommandType = "menu.image.quality.2k"
+	// CommandMenuImageQuality4K is a legacy VK quality command. New buttons use
+	// CommandMenuImageQualitySelect.
+	CommandMenuImageQuality4K CommandType = "menu.image.quality.4k"
+	// CommandMenuImageQualitySelect selects a public image quality alias from
+	// the backend-owned product catalog.
+	CommandMenuImageQualitySelect CommandType = "menu.image.quality.select"
+	// CommandMenuImageBackToQuality reopens the quality picker for the active image model.
+	CommandMenuImageBackToQuality CommandType = "menu.image.back_to_quality"
 	// CommandMenuImageReference selects image generation with a reference photo.
 	CommandMenuImageReference CommandType = "menu.image.reference"
 	// CommandMenuVideo explains how to generate a video.
 	CommandMenuVideo CommandType = "menu.video"
-	// CommandMenuVideoPrunaAI selects the currently wired PrunaAI video model.
+	// CommandMenuVideoRouteSelect selects an enabled public video route alias
+	// from the backend-owned product catalog.
+	CommandMenuVideoRouteSelect CommandType = "menu.video.route.select"
+	// CommandMenuVideoDurationSelect selects an allowed public duration for the
+	// active video route.
+	CommandMenuVideoDurationSelect CommandType = "menu.video.duration.select"
+	// CommandMenuVideoPrunaAI is a disabled legacy VK video command.
 	CommandMenuVideoPrunaAI CommandType = "menu.video.prunaai"
-	// CommandMenuVideoSora2 selects Sora 2 in the VK video model picker.
+	// CommandMenuVideoSora2 is a legacy VK video command kept for stale
+	// payload/text compatibility. New buttons use CommandMenuVideoRouteSelect.
 	CommandMenuVideoSora2 CommandType = "menu.video.sora_2"
-	// CommandMenuVideoSora2Start opens the Sora 2 generation placeholder.
+	// CommandMenuVideoSora2Start is a legacy VK video command kept for stale
+	// payload/text compatibility. New buttons use CommandMenuVideoRouteSelect.
 	CommandMenuVideoSora2Start CommandType = "menu.video.sora_2.start"
-	// CommandMenuVideoSora2Examples opens Sora 2 prompt examples.
+	// CommandMenuVideoSora2Examples is a legacy VK examples command kept for
+	// stale payload/text compatibility.
 	CommandMenuVideoSora2Examples CommandType = "menu.video.sora_2.examples"
-	// CommandMenuVideoKling21 selects Kling v2.1 in the VK video model picker.
+	// CommandMenuVideoKling21 is a legacy VK video command kept for stale
+	// payload/text compatibility. New buttons use CommandMenuVideoRouteSelect.
 	CommandMenuVideoKling21 CommandType = "menu.video.kling_v2_1"
-	// CommandMenuVideoKling21Start opens the Kling v2.1 generation placeholder.
+	// CommandMenuVideoKling21Start is a legacy VK video command kept for stale
+	// payload/text compatibility. New buttons use CommandMenuVideoRouteSelect.
 	CommandMenuVideoKling21Start CommandType = "menu.video.kling_v2_1.start"
-	// CommandMenuVideoKling21Examples opens Kling v2.1 prompt examples.
+	// CommandMenuVideoKling21Examples is a legacy VK examples command kept for
+	// stale payload/text compatibility.
 	CommandMenuVideoKling21Examples CommandType = "menu.video.kling_v2_1.examples"
-	// CommandMenuVideoSeedance1 selects Seedance 1 in the VK video model picker.
+	// CommandMenuVideoSeedance1 is a legacy VK video command kept for stale
+	// payload/text compatibility. New buttons use CommandMenuVideoRouteSelect.
 	CommandMenuVideoSeedance1 CommandType = "menu.video.seedance_1"
-	// CommandMenuVideoSeedance1Lite selects the Seedance 1 Lite variant.
+	// CommandMenuVideoSeedance1Lite is a legacy VK video command kept for stale
+	// payload/text compatibility. New buttons use CommandMenuVideoRouteSelect.
 	CommandMenuVideoSeedance1Lite CommandType = "menu.video.seedance_1.lite"
-	// CommandMenuVideoSeedance1Pro selects the Seedance 1 Pro variant.
+	// CommandMenuVideoSeedance1Pro is a disabled legacy VK video command.
 	CommandMenuVideoSeedance1Pro CommandType = "menu.video.seedance_1.pro"
-	// CommandMenuVideoHailuo02 selects Hailuo v0.2 in the VK video model picker.
+	// CommandMenuVideoHailuo02 is a legacy VK video command kept for stale
+	// payload/text compatibility. New buttons use CommandMenuVideoRouteSelect.
 	CommandMenuVideoHailuo02 CommandType = "menu.video.haiuo_v0_2"
-	// CommandMenuVideoHailuo02Standard selects the regular Hailuo v0.2 variant.
+	// CommandMenuVideoHailuo02Standard is a legacy VK video command kept for
+	// stale payload/text compatibility. New buttons use CommandMenuVideoRouteSelect.
 	CommandMenuVideoHailuo02Standard CommandType = "menu.video.haiuo_v0_2.standard"
-	// CommandMenuVideoHailuo02Fast selects the fast Hailuo v0.2 variant.
+	// CommandMenuVideoHailuo02Fast is a legacy VK video command kept for stale
+	// payload/text compatibility. New buttons use CommandMenuVideoRouteSelect.
 	CommandMenuVideoHailuo02Fast CommandType = "menu.video.haiuo_v0_2.fast"
 	// CommandMenuStudents opens the student/schoolchild help section.
 	CommandMenuStudents CommandType = "menu.students"
@@ -109,9 +156,21 @@ func (c CommandType) Valid() bool {
 		CommandTopUp,
 		CommandMenuText,
 		CommandMenuImage,
+		CommandMenuImageSelect,
 		CommandMenuImageText,
+		CommandMenuImageNanoBanana2,
+		CommandMenuImageDeepInfraSeedream,
+		CommandMenuImageDeepInfraSDXL,
+		CommandMenuImageGPTImage2,
+		CommandMenuImageQuality1K,
+		CommandMenuImageQuality2K,
+		CommandMenuImageQuality4K,
+		CommandMenuImageQualitySelect,
+		CommandMenuImageBackToQuality,
 		CommandMenuImageReference,
 		CommandMenuVideo,
+		CommandMenuVideoRouteSelect,
+		CommandMenuVideoDurationSelect,
 		CommandMenuVideoPrunaAI,
 		CommandMenuVideoSora2,
 		CommandMenuVideoSora2Start,

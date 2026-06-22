@@ -350,7 +350,7 @@ func allowedResolution(value string) bool {
 
 func allowedAspectRatio(value string) bool {
 	switch strings.TrimSpace(value) {
-	case "", "16:9", "9:16", "1:1":
+	case "", "16:9", "9:16", "4:3", "3:4", "1:1", "21:9":
 		return true
 	default:
 		return false
@@ -361,8 +361,14 @@ func runwayRatio(aspect string) string {
 	switch strings.TrimSpace(aspect) {
 	case "9:16":
 		return "720:1280"
+	case "4:3":
+		return "1104:832"
+	case "3:4":
+		return "832:1104"
 	case "1:1":
 		return "960:960"
+	case "21:9":
+		return "1584:672"
 	default:
 		return "1280:720"
 	}

@@ -52,7 +52,7 @@ func (h *Handler) createArtifact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data, mimeType, status, errorCode, ok := h.readMiniAppUpload(w, r)
+	data, mimeType, metadata, status, errorCode, ok := h.readMiniAppUpload(w, r)
 	if !ok {
 		resultLabel = uploadResultLabel(errorCode)
 		writeError(w, status, errorCode)
@@ -60,7 +60,7 @@ func (h *Handler) createArtifact(w http.ResponseWriter, r *http.Request) {
 	}
 
 	saver := artifactservice.New(h.deps.Artifacts, h.deps.Objects, miniAppArtifactBucket)
-	artifact, err := saver.SaveBytesArtifact(r.Context(), user.ID, nil, domain.ArtifactKindInput, domain.MediaTypeImage, mimeType, data)
+	artifact, err := saver.SaveBytesArtifactWithMetadata(r.Context(), user.ID, nil, domain.ArtifactKindInput, domain.MediaTypeImage, mimeType, data, metadata)
 	if err != nil {
 		h.logger.Error("miniapp: upload artifact failed", "error", err.Error())
 		resultLabel = "error"
@@ -70,21 +70,21 @@ func (h *Handler) createArtifact(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, ArtifactUploadDTO{ArtifactID: artifact.ID})
 }
 
-func (h *Handler) readMiniAppUpload(w http.ResponseWriter, r *http.Request) ([]byte, string, int, string, bool) {
+func (h *Handler) readMiniAppUpload(w http.ResponseWriter, r *http.Request) ([]byte, string, domain.ArtifactMediaMetadata, int, string, bool) {
 	maxBytes := h.cfg.MaxUploadBytes
 	r.Body = http.MaxBytesReader(w, r.Body, maxBytes+miniAppMultipartOverage)
 	if err := r.ParseMultipartForm(maxBytes); err != nil {
 		if strings.Contains(strings.ToLower(err.Error()), "too large") {
 			observeMiniAppUploadRejected(domain.JobErrMediaUploadTooLarge, "unknown", 0)
-			return nil, "", http.StatusRequestEntityTooLarge, domain.JobErrMediaUploadTooLarge, false
+			return nil, "", domain.ArtifactMediaMetadata{}, http.StatusRequestEntityTooLarge, domain.JobErrMediaUploadTooLarge, false
 		}
 		observeMiniAppUploadRejected(domain.JobErrMediaUploadInvalid, "unknown", 0)
-		return nil, "", http.StatusBadRequest, domain.JobErrMediaUploadInvalid, false
+		return nil, "", domain.ArtifactMediaMetadata{}, http.StatusBadRequest, domain.JobErrMediaUploadInvalid, false
 	}
 	file, _, err := r.FormFile(miniAppUploadFieldName)
 	if err != nil {
 		observeMiniAppUploadRejected(domain.JobErrMediaUploadInvalid, "unknown", 0)
-		return nil, "", http.StatusBadRequest, domain.JobErrMediaUploadInvalid, false
+		return nil, "", domain.ArtifactMediaMetadata{}, http.StatusBadRequest, domain.JobErrMediaUploadInvalid, false
 	}
 	defer func() {
 		_ = file.Close()
@@ -93,41 +93,41 @@ func (h *Handler) readMiniAppUpload(w http.ResponseWriter, r *http.Request) ([]b
 	data, err := io.ReadAll(io.LimitReader(file, maxBytes+1))
 	if err != nil {
 		observeMiniAppUploadRejected(domain.JobErrMediaUploadInvalid, "unknown", 0)
-		return nil, "", http.StatusBadRequest, domain.JobErrMediaUploadInvalid, false
+		return nil, "", domain.ArtifactMediaMetadata{}, http.StatusBadRequest, domain.JobErrMediaUploadInvalid, false
 	}
 	if len(data) == 0 {
 		observeMiniAppUploadRejected(domain.JobErrMediaUploadInvalid, "unknown", 0)
-		return nil, "", http.StatusBadRequest, domain.JobErrMediaUploadInvalid, false
+		return nil, "", domain.ArtifactMediaMetadata{}, http.StatusBadRequest, domain.JobErrMediaUploadInvalid, false
 	}
 	mimeClass := miniAppDetectedMimeClass(data)
 	if int64(len(data)) > maxBytes {
 		observeMiniAppUploadRejected(domain.JobErrMediaUploadTooLarge, mimeClass, int64(len(data)))
-		return nil, "", http.StatusRequestEntityTooLarge, domain.JobErrMediaUploadTooLarge, false
+		return nil, "", domain.ArtifactMediaMetadata{}, http.StatusRequestEntityTooLarge, domain.JobErrMediaUploadTooLarge, false
 	}
 	mimeType, ok := miniAppImageMime(data, h.cfg.ReferenceWebPEnabled)
 	if !ok {
 		observeMiniAppUploadRejected(domain.JobErrMediaUploadUnsupported, mimeClass, int64(len(data)))
-		return nil, "", http.StatusBadRequest, domain.JobErrMediaUploadUnsupported, false
+		return nil, "", domain.ArtifactMediaMetadata{}, http.StatusBadRequest, domain.JobErrMediaUploadUnsupported, false
 	}
 	mimeClass = miniAppMimeClass(mimeType)
-	pixels, valid, tooLarge := h.miniAppDecodedPixels(data, mimeType)
+	metadata, pixels, valid, tooLarge := h.miniAppImageMetadata(data, mimeType)
 	if !valid {
 		observeMiniAppUploadRejected(domain.JobErrMediaUploadInvalid, mimeClass, int64(len(data)))
-		return nil, "", http.StatusBadRequest, domain.JobErrMediaUploadInvalid, false
+		return nil, "", domain.ArtifactMediaMetadata{}, http.StatusBadRequest, domain.JobErrMediaUploadInvalid, false
 	}
 	if tooLarge {
 		observeMiniAppUploadRejected(domain.JobErrMediaUploadTooLarge, mimeClass, int64(len(data)))
 		if pixels > 0 {
 			metrics.ObserveMediaUploadPixels("miniapp", mimeClass, pixels)
 		}
-		return nil, "", http.StatusRequestEntityTooLarge, domain.JobErrMediaUploadTooLarge, false
+		return nil, "", domain.ArtifactMediaMetadata{}, http.StatusRequestEntityTooLarge, domain.JobErrMediaUploadTooLarge, false
 	}
 	metrics.ObserveMediaUploadValidation("miniapp", "accepted", "none", mimeClass)
 	metrics.ObserveMediaUploadBytes("miniapp", mimeClass, int64(len(data)))
 	if pixels > 0 {
 		metrics.ObserveMediaUploadPixels("miniapp", mimeClass, pixels)
 	}
-	return data, mimeType, http.StatusOK, "", true
+	return data, mimeType, metadata, http.StatusOK, "", true
 }
 
 func miniAppImageMime(data []byte, allowWebP bool) (string, bool) {
@@ -180,21 +180,21 @@ func miniAppMimeClass(mimeType string) string {
 	}
 }
 
-func (h *Handler) miniAppDecodedPixels(data []byte, mimeType string) (int64, bool, bool) {
+func (h *Handler) miniAppImageMetadata(data []byte, mimeType string) (domain.ArtifactMediaMetadata, int64, bool, bool) {
 	switch mimeType {
 	case "image/jpeg", "image/png":
 	default:
-		return 0, true, false
+		return domain.ArtifactMediaMetadata{}, 0, true, false
 	}
 	cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
 	if err != nil || cfg.Width <= 0 || cfg.Height <= 0 {
-		return 0, false, false
+		return domain.ArtifactMediaMetadata{}, 0, false, false
 	}
 	pixels := int64(cfg.Width) * int64(cfg.Height)
 	tooLarge := cfg.Width > h.cfg.MaxUploadImageWidth ||
 		cfg.Height > h.cfg.MaxUploadImageHeight ||
 		pixels > h.cfg.MaxUploadImagePixels
-	return pixels, true, tooLarge
+	return domain.ArtifactMediaMetadata{Width: cfg.Width, Height: cfg.Height, ProbeStatus: domain.MediaProbeSkipped}, pixels, true, tooLarge
 }
 
 func uploadResultLabel(errorCode string) string {

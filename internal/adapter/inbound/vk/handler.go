@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -32,6 +33,7 @@ import (
 	"vk-ai-aggregator/internal/service/joborchestrator"
 	"vk-ai-aggregator/internal/service/modelcatalog"
 	"vk-ai-aggregator/internal/service/paymentservice"
+	"vk-ai-aggregator/internal/service/productcatalog"
 	"vk-ai-aggregator/internal/service/referralservice"
 )
 
@@ -55,6 +57,14 @@ type Config struct {
 	// MenuFeatures controls which VK product-menu buttons are visible and
 	// reachable. Empty means every known menu command is enabled.
 	MenuFeatures MenuFeatureFlags
+	// ImageModels are public product model aliases already filtered by server
+	// feature flags and provider readiness. VK buttons may carry only these
+	// aliases, never provider model ids or prices.
+	ImageModels []productcatalog.ImageModel
+	// VideoRoutes are public product route aliases already filtered by server
+	// feature flags and provider readiness. VK buttons may carry only these
+	// aliases and public options, never provider ids, model codes or prices.
+	VideoRoutes []productcatalog.VideoRoute
 	// ReferralLinkBase builds a single VK referral link per user. If empty the
 	// handler falls back to the current callback group id.
 	ReferralLinkBase string
@@ -73,6 +83,13 @@ type Config struct {
 	// TopUpStatusEditEnabled stores the VK payment message id so provider
 	// webhooks can edit it after a final payment status.
 	TopUpStatusEditEnabled bool
+	// ReferenceUploadsDisabled is an operator kill switch for VK photo inputs.
+	ReferenceUploadsDisabled bool
+	ArtifactBucket           string
+	MaxUploadBytes           int64
+	MaxUploadImageWidth      int
+	MaxUploadImageHeight     int
+	MaxUploadImagePixels     int64
 }
 
 // MenuFeatureFlags allows deployments to hide VK menu buttons without deleting
@@ -121,7 +138,20 @@ type Deps struct {
 	Profile      vkdelivery.UserProfileClient
 	DialogState  DialogState
 	AntiSpam     AntiSpam
+	Artifacts    domain.ArtifactRepository
+	Objects      ObjectStore
+	Downloader   Downloader
 	Logger       *slog.Logger
+}
+
+// ObjectStore persists input artifact bytes.
+type ObjectStore interface {
+	Put(ctx context.Context, bucket, key string, data []byte, contentType string) error
+}
+
+// Downloader fetches VK CDN media without exposing source URLs in logs.
+type Downloader interface {
+	Download(ctx context.Context, url string) ([]byte, string, error)
 }
 
 // Handler serves the POST /webhooks/vk endpoint.
@@ -187,86 +217,79 @@ type activeMenuMessage struct {
 type dialogMode string
 
 const (
-	dialogModeGPT       dialogMode = "gpt"
-	dialogModePhotoText dialogMode = "photo_text"
+	dialogModeGPT               dialogMode = "gpt"
+	dialogModePhotoText         dialogMode = "photo_text"
+	dialogModePhotoNanoBanana2  dialogMode = "photo_nano_banana_2"
+	dialogModePhotoGPTImage2    dialogMode = "photo_gpt_image_2"
+	dialogModePhotoSelectPrefix            = "photo_select:"
+	dialogModePhotoPromptPrefix            = "photo_prompt:"
+	dialogModeVideoRoutePrefix             = "video_route:"
 )
 
 const topUpActionNewPayment = "new_payment"
 
 type jobParams struct {
-	Prompt                 string `json:"prompt"`
-	ModelID                string `json:"model_id,omitempty"`
-	ModelName              string `json:"model_name,omitempty"`
-	VideoRouteAlias        string `json:"video_route_alias,omitempty"`
-	Provider               string `json:"provider,omitempty"`
-	ModelCode              string `json:"model_code,omitempty"`
-	DurationSec            int    `json:"duration_sec,omitempty"`
-	VKPlaceholderMessageID int64  `json:"vk_placeholder_message_id,omitempty"`
+	Prompt                 string      `json:"prompt"`
+	ModelID                string      `json:"model_id,omitempty"`
+	ModelName              string      `json:"model_name,omitempty"`
+	VideoRouteAlias        string      `json:"video_route_alias,omitempty"`
+	Provider               string      `json:"provider,omitempty"`
+	ModelCode              string      `json:"model_code,omitempty"`
+	Size                   string      `json:"size,omitempty"`
+	Resolution             string      `json:"resolution,omitempty"`
+	ImageQuality           string      `json:"image_quality,omitempty"`
+	DurationSec            int         `json:"duration_sec,omitempty"`
+	AspectRatio            string      `json:"aspect_ratio,omitempty"`
+	ReferenceArtifactIDs   []uuid.UUID `json:"reference_artifact_ids,omitempty"`
+	VKPlaceholderMessageID int64       `json:"vk_placeholder_message_id,omitempty"`
 }
 
 type videoModeSpec struct {
-	Mode            dialogMode
-	ModelID         string
-	ModelName       string
-	VideoRouteAlias domain.VideoRouteAlias
-	Provider        domain.ProviderName
-	ModelCode       string
-	DurationSec     int
+	Mode                   dialogMode
+	ModelName              string
+	VideoRouteAlias        domain.VideoRouteAlias
+	DurationSec            int
+	AllowedDurationsSec    []int
+	RequiresStartImage     bool
+	SupportsReferenceImage bool
+	MaxReferenceImages     int
+	AllowedAspectRatios    []string
 }
 
 func videoModeForCommand(t domain.CommandType) (videoModeSpec, bool) {
 	switch t {
-	case domain.CommandMenuVideoPrunaAI:
-		model, ok := modelcatalog.ResolveVKVideoModel(modelcatalog.VKVideoPrunaAI)
-		if !ok {
-			return videoModeSpec{}, false
-		}
-		return videoLegacyMode("video:prunaai", "Pruna", model), true
-	case domain.CommandMenuVideoSora2Examples:
-		return videoRouteMode("video:runway_gen4_5", "runway 4.5", domain.VideoRouteRunwayGen45, 5), true
 	case domain.CommandMenuVideoSora2Start:
-		return videoRouteMode("video:runway_gen4_turbo", "runway 4 turbo", domain.VideoRouteRunwayGen4Turbo, 5), true
+		return videoRouteMode("video:runway_gen4_turbo", "Runway Gen-4 Turbo", domain.VideoRouteRunwayGen4Turbo, 5, []int{3, 5, 10}, true, 1, "16:9", "9:16", "4:3", "3:4", "1:1", "21:9"), true
 	case domain.CommandMenuVideoKling21Start:
-		return videoRouteMode("video:kling_o3_standard", "kling v3", domain.VideoRouteKlingO3Standard, 5), true
+		return videoRouteMode("video:kling_o3_standard", "Kling O3 Standard", domain.VideoRouteKlingO3Standard, 5, []int{5, 10}, false, 1, "16:9", "9:16", "1:1"), true
 	case domain.CommandMenuVideoSeedance1Lite:
-		return videoRouteMode("video:seedance_2_0_fast", "seedance v2 fast", domain.VideoRouteSeedance20Fast, 5), true
+		return videoRouteMode("video:seedance_2_0_fast", "Seedance 2.0 Fast", domain.VideoRouteSeedance20Fast, 5, []int{5, 10}, false, 4, "16:9", "9:16", "1:1"), true
 	case domain.CommandMenuVideoHailuo02Standard:
-		return videoRouteMode("video:hailuo_2_3_standard", "hailuo v2.3 обычный", domain.VideoRouteHailuo23Standard, 6), true
+		return videoRouteMode("video:hailuo_2_3_standard", "Hailuo 2.3 Standard", domain.VideoRouteHailuo23Standard, 6, []int{6, 10}, false, 1), true
 	case domain.CommandMenuVideoHailuo02Fast:
-		return videoRouteMode("video:hailuo_2_3_fast", "hailuo v2.3 fast", domain.VideoRouteHailuo23Fast, 6), true
+		return videoRouteMode("video:hailuo_2_3_fast", "Hailuo 2.3 Fast", domain.VideoRouteHailuo23Fast, 6, []int{6, 10}, true, 1), true
 	default:
 		return videoModeSpec{}, false
 	}
 }
 
-func videoRouteMode(mode dialogMode, name string, alias domain.VideoRouteAlias, durationSec int) videoModeSpec {
+func videoRouteMode(mode dialogMode, name string, alias domain.VideoRouteAlias, durationSec int, allowedDurations []int, requiresStartImage bool, maxReferenceImages int, allowedAspectRatios ...string) videoModeSpec {
 	return videoModeSpec{
-		Mode:            mode,
-		ModelName:       name,
-		VideoRouteAlias: alias,
-		DurationSec:     durationSec,
-	}
-}
-
-func videoLegacyMode(mode dialogMode, displayName string, model modelcatalog.Model) videoModeSpec {
-	name := strings.TrimSpace(displayName)
-	if name == "" {
-		name = model.ModelName
-	}
-	return videoModeSpec{
-		Mode:        mode,
-		ModelID:     model.ModelID,
-		ModelName:   name,
-		Provider:    model.Provider,
-		ModelCode:   model.ModelCode,
-		DurationSec: model.DurationSec,
+		Mode:                   mode,
+		ModelName:              name,
+		VideoRouteAlias:        alias,
+		DurationSec:            durationSec,
+		AllowedDurationsSec:    append([]int(nil), allowedDurations...),
+		RequiresStartImage:     requiresStartImage,
+		SupportsReferenceImage: true,
+		MaxReferenceImages:     maxReferenceImages,
+		AllowedAspectRatios:    append([]string(nil), allowedAspectRatios...),
 	}
 }
 
 func videoModeFromDialogMode(mode dialogMode) (videoModeSpec, bool) {
+	baseMode, durationSec := splitVideoDialogMode(mode)
 	for _, command := range []domain.CommandType{
-		domain.CommandMenuVideoPrunaAI,
-		domain.CommandMenuVideoSora2Examples,
 		domain.CommandMenuVideoSora2Start,
 		domain.CommandMenuVideoKling21Start,
 		domain.CommandMenuVideoSeedance1Lite,
@@ -274,11 +297,111 @@ func videoModeFromDialogMode(mode dialogMode) (videoModeSpec, bool) {
 		domain.CommandMenuVideoHailuo02Fast,
 	} {
 		spec, ok := videoModeForCommand(command)
-		if ok && spec.Mode == mode {
+		if ok && spec.Mode == baseMode {
+			if spec.supportsDuration(durationSec) {
+				spec.DurationSec = durationSec
+			}
 			return spec, true
 		}
 	}
 	return videoModeSpec{}, false
+}
+
+func videoModeFromPublicRoute(route productcatalog.VideoRoute) (videoModeSpec, bool) {
+	alias := strings.TrimSpace(route.Alias)
+	name := strings.TrimSpace(route.Name)
+	if alias == "" || name == "" || !route.Enabled {
+		return videoModeSpec{}, false
+	}
+	durationSec := route.DefaultDurationSec
+	if durationSec <= 0 && len(route.AllowedDurationsSec) > 0 {
+		durationSec = route.AllowedDurationsSec[0]
+	}
+	spec := videoModeSpec{
+		Mode:                   videoRouteDialogMode(alias),
+		ModelName:              name,
+		VideoRouteAlias:        domain.VideoRouteAlias(alias),
+		DurationSec:            durationSec,
+		AllowedDurationsSec:    append([]int(nil), route.AllowedDurationsSec...),
+		RequiresStartImage:     route.RequiresStartImage,
+		SupportsReferenceImage: route.SupportsReferenceImage,
+		MaxReferenceImages:     route.MaxReferenceImages,
+		AllowedAspectRatios:    append([]string(nil), route.AllowedAspectRatios...),
+	}
+	if !spec.supportsDuration(spec.DurationSec) {
+		return videoModeSpec{}, false
+	}
+	return spec, true
+}
+
+func videoRouteDialogMode(alias string) dialogMode {
+	return dialogMode(dialogModeVideoRoutePrefix + strings.TrimSpace(alias))
+}
+
+func parseVideoRouteDialogMode(mode dialogMode) (string, bool) {
+	alias, ok := strings.CutPrefix(string(mode), dialogModeVideoRoutePrefix)
+	alias = strings.TrimSpace(alias)
+	return alias, ok && alias != ""
+}
+
+func (h *Handler) videoModeForRouteAlias(alias string) (videoModeSpec, bool) {
+	alias = strings.TrimSpace(alias)
+	if alias == "" {
+		return videoModeSpec{}, false
+	}
+	for _, route := range h.cfg.VideoRoutes {
+		if route.Enabled && route.Alias == alias {
+			return videoModeFromPublicRoute(route)
+		}
+	}
+	return videoModeSpec{}, false
+}
+
+func (h *Handler) videoModeFromDialogMode(mode dialogMode) (videoModeSpec, bool) {
+	baseMode, durationSec := splitVideoDialogMode(mode)
+	if alias, ok := parseVideoRouteDialogMode(baseMode); ok {
+		spec, ok := h.videoModeForRouteAlias(alias)
+		if !ok {
+			return videoModeSpec{}, false
+		}
+		if spec.supportsDuration(durationSec) {
+			spec.DurationSec = durationSec
+		}
+		return spec, true
+	}
+	return videoModeFromDialogMode(mode)
+}
+
+func splitVideoDialogMode(mode dialogMode) (dialogMode, int) {
+	raw := string(mode)
+	idx := strings.LastIndex(raw, ":")
+	if idx <= 0 || idx == len(raw)-1 {
+		return mode, 0
+	}
+	durationSec, err := strconv.Atoi(raw[idx+1:])
+	if err != nil {
+		return mode, 0
+	}
+	return dialogMode(raw[:idx]), durationSec
+}
+
+func (s videoModeSpec) modeWithDuration(durationSec int) dialogMode {
+	if !s.supportsDuration(durationSec) || durationSec == s.DurationSec {
+		return s.Mode
+	}
+	return dialogMode(fmt.Sprintf("%s:%d", s.Mode, durationSec))
+}
+
+func (s videoModeSpec) supportsDuration(durationSec int) bool {
+	if durationSec <= 0 {
+		return false
+	}
+	for _, allowed := range s.AllowedDurationsSec {
+		if durationSec == allowed {
+			return true
+		}
+	}
+	return false
 }
 
 // callback is the common VK Callback API envelope.
@@ -301,6 +424,7 @@ type messageNew struct {
 	Payload               string         `json:"payload"`
 	Ref                   string         `json:"ref"`
 	RefSource             string         `json:"ref_source"`
+	Out                   int            `json:"out"`
 	ConversationMessageID int64          `json:"conversation_message_id"`
 	Attachments           []vkAttachment `json:"attachments"`
 }
@@ -312,6 +436,7 @@ type vkMessage struct {
 	Payload               string         `json:"payload"`
 	Ref                   string         `json:"ref"`
 	RefSource             string         `json:"ref_source"`
+	Out                   int            `json:"out"`
 	ConversationMessageID int64          `json:"conversation_message_id"`
 	Attachments           []vkAttachment `json:"attachments"`
 }
@@ -339,6 +464,7 @@ func (m messageEvent) payloadString() string {
 type vkAttachment struct {
 	Type    string     `json:"type"`
 	Sticker *vkSticker `json:"sticker,omitempty"`
+	Photo   *vkPhoto   `json:"photo,omitempty"`
 }
 
 type vkSticker struct {
@@ -347,11 +473,29 @@ type vkSticker struct {
 	Emoji     string `json:"emoji"`
 }
 
-func (m messageNew) resolve() (fromID, peerID, conversationMessageID int64, text, payload, ref string) {
+type vkPhoto struct {
+	Sizes []vkPhotoSize `json:"sizes"`
+}
+
+type vkPhotoSize struct {
+	Type   string `json:"type"`
+	URL    string `json:"url"`
+	Width  int    `json:"width"`
+	Height int    `json:"height"`
+}
+
+func (m messageNew) resolve() (fromID, peerID, conversationMessageID int64, text, payload, ref string, attachments []vkAttachment) {
 	if m.Message != nil {
-		return m.Message.FromID, m.Message.PeerID, m.Message.ConversationMessageID, normalizedMessageText(m.Message.Text, m.Message.Attachments), m.Message.Payload, m.Message.Ref
+		return m.Message.FromID, m.Message.PeerID, m.Message.ConversationMessageID, normalizedMessageText(m.Message.Text, m.Message.Attachments), m.Message.Payload, m.Message.Ref, m.Message.Attachments
 	}
-	return m.FromID, m.PeerID, m.ConversationMessageID, normalizedMessageText(m.Text, m.Attachments), m.Payload, m.Ref
+	return m.FromID, m.PeerID, m.ConversationMessageID, normalizedMessageText(m.Text, m.Attachments), m.Payload, m.Ref, m.Attachments
+}
+
+func (m messageNew) outgoing() bool {
+	if m.Message != nil {
+		return m.Message.Out != 0
+	}
+	return m.Out != 0
 }
 
 func normalizedMessageText(text string, attachments []vkAttachment) string {
@@ -430,9 +574,9 @@ func (h *Handler) handleMessageNew(ctx context.Context, cb callback, rawBody []b
 			return fmt.Errorf("decode object: %w", err)
 		}
 	}
-	fromID, peerID, conversationMessageID, text, payload, ref := obj.resolve()
-	if fromID == 0 {
-		return errors.New("message has no from_id")
+	fromID, peerID, conversationMessageID, text, payload, ref, attachments := obj.resolve()
+	if obj.outgoing() || fromID <= 0 {
+		return nil
 	}
 	if eventID == "" {
 		// Fall back to a stable synthetic id when VK omits event_id.
@@ -470,7 +614,7 @@ func (h *Handler) handleMessageNew(ctx context.Context, cb callback, rawBody []b
 		return nil
 	}
 
-	if err := h.process(ctx, cb, rawBody, eventID, idemKey, fromID, peerID, text, payload, ref, false); err != nil {
+	if err := h.process(ctx, cb, rawBody, eventID, idemKey, fromID, peerID, text, payload, ref, attachments, false); err != nil {
 		_ = h.deps.Idempotency.MarkFailed(ctx, idemKey)
 		return err
 	}
@@ -531,7 +675,7 @@ func (h *Handler) handleMessageEvent(ctx context.Context, cb callback, rawBody [
 	}
 	h.answerMessageEvent(ctx, answerEventID, fromID, peerID)
 
-	if err := h.process(ctx, cb, rawBody, eventID, idemKey, fromID, peerID, "", payload, "", true); err != nil {
+	if err := h.process(ctx, cb, rawBody, eventID, idemKey, fromID, peerID, "", payload, "", nil, true); err != nil {
 		_ = h.deps.Idempotency.MarkFailed(ctx, idemKey)
 		return err
 	}
@@ -550,7 +694,7 @@ func (h *Handler) answerMessageEvent(ctx context.Context, eventID string, userID
 }
 
 // process runs the InboundEvent -> User -> Command -> Job flow.
-func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, eventID, idemKey string, fromID, peerID int64, text, payload, ref string, controlOnly bool) error {
+func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, eventID, idemKey string, fromID, peerID int64, text, payload, ref string, attachments []vkAttachment, controlOnly bool) error {
 	metrics.ObserveProductEvent("vk_bot", "inbound", "received", "unknown", "unknown", cb.Type)
 
 	// InboundEvent: persist the raw event for audit and reprocessing.
@@ -587,19 +731,33 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 	controlFromPayload := false
 	topUpProductCode := ""
 	topUpAction := ""
-	if control, ok := controlPayloadFromPayload(payload); ok {
+	videoDurationSec := 0
+	videoRouteAlias := ""
+	photoModelID := ""
+	photoQuality := ""
+	control := controlPayload{}
+	if parsedControl, ok := controlPayloadFromPayload(payload); ok {
+		control = parsedControl
 		parsed = commandrouter.Result{Type: domain.CommandType(control.Command)}
 		topUpProductCode = strings.TrimSpace(control.ProductCode)
 		topUpAction = strings.TrimSpace(control.Action)
+		videoDurationSec = control.DurationSec
+		videoRouteAlias = strings.TrimSpace(control.VideoRouteAlias)
+		photoModelID = strings.TrimSpace(control.ModelID)
+		photoQuality = strings.TrimSpace(control.ImageQuality)
 		controlFromPayload = true
 	} else if controlOnly {
 		parsed = commandrouter.Result{Type: domain.CommandUnknown}
 	}
 	activateReferral := shouldActivateReferralOnVKCommand(parsed.Type)
-	if isMenuCommand(parsed.Type) && !h.menuCommandEnabled(parsed.Type) {
+	if isMenuCommand(parsed.Type) && (!h.menuCommandEnabled(parsed.Type) || (controlFromPayload && !h.controlPayloadEnabled(control))) {
 		parsed = commandrouter.Result{Type: domain.CommandShowMenu}
 		topUpProductCode = ""
 		topUpAction = ""
+		videoDurationSec = 0
+		videoRouteAlias = ""
+		photoModelID = ""
+		photoQuality = ""
 		controlFromPayload = true
 	}
 
@@ -677,7 +835,11 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 	}
 	metrics.ObserveProductEvent("vk_bot", "command", "parsed", productCommandOperation(parsed), productCommandModality(parsed), productCommandResult(parsed, controlOnly, controlFromPayload))
 
-	photoTextJob := parsed.Type == domain.CommandImageGenerate && h.photoTextDialogActive(ctx, peerID)
+	photoSelection, photoTextJob := h.photoSelectionForActiveDialog(ctx, peerID)
+	photoTextJob = parsed.Type == domain.CommandImageGenerate && photoTextJob
+	videoBlockedMessage := ""
+	var videoReferenceIDs []uuid.UUID
+	videoAspectRatio := ""
 
 	cmd := &domain.Command{
 		UserID:         user.ID,
@@ -699,6 +861,22 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 			return fmt.Errorf("save command: %w", err)
 		}
 	}
+	if videoTextJob {
+		var ok bool
+		videoReferenceIDs, videoAspectRatio, videoBlockedMessage, ok = h.prepareVideoReferenceArtifacts(ctx, user.ID, videoSpec, attachments)
+		if !ok {
+			if err := h.sendVideoReferenceNotice(ctx, idemKey, peerID, videoBlockedMessage); err != nil {
+				return fmt.Errorf("send video reference notice: %w", err)
+			}
+			if err := h.deps.Inbound.SetStatus(ctx, inbound.ID, domain.InboundProcessed); err != nil {
+				return fmt.Errorf("mark inbound processed: %w", err)
+			}
+			if err := h.deps.Idempotency.MarkCompleted(ctx, idemKey, cmd.ID); err != nil {
+				return fmt.Errorf("mark idempotency completed: %w", err)
+			}
+			return nil
+		}
+	}
 
 	resourceID := cmd.ID
 
@@ -714,7 +892,7 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 			return fmt.Errorf("send unrouted text response: %w", err)
 		}
 	case parsed.Type == domain.CommandTopUp && topUpAction == topUpActionNewPayment:
-		if err := h.sendTopUpCatalog(ctx, idemKey, peerID, true, controlFromPayload); err != nil {
+		if err := h.sendTopUpCatalog(ctx, idemKey, peerID, user, true, controlFromPayload); err != nil {
 			return fmt.Errorf("send top-up catalog: %w", err)
 		}
 		h.clearDialogMode(ctx, peerID)
@@ -722,6 +900,65 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 		topUpForceNew := topUpAction == topUpActionNewPayment
 		if err := h.createAndSendTopUpPayment(ctx, cb.GroupID, eventID, idemKey, peerID, user, topUpProductCode, topUpForceNew); err != nil {
 			return fmt.Errorf("create top-up payment: %w", err)
+		}
+	case parsed.Type == domain.CommandMenuVideoRouteSelect:
+		if err := h.sendVideoDurationSelection(ctx, videoRouteAlias, idemKey, parsed.Type, peerID, controlFromPayload); err != nil {
+			return fmt.Errorf("send video duration selection: %w", err)
+		}
+	case parsed.Type == domain.CommandMenuVideoDurationSelect:
+		if err := h.sendVideoPromptForDuration(ctx, videoRouteAlias, videoDurationSec, idemKey, parsed.Type, peerID, controlFromPayload); err != nil {
+			return fmt.Errorf("send video prompt instruction: %w", err)
+		}
+	case parsed.Type == domain.CommandMenuImageSelect:
+		if err := h.sendPhotoQualitySelection(ctx, photoModelID, idemKey, parsed.Type, peerID, controlFromPayload); err != nil {
+			return fmt.Errorf("send photo quality selection: %w", err)
+		}
+	case isPhotoModelCommand(parsed.Type):
+		modelID, _ := photoModelIDFromCommand(parsed.Type)
+		allowEdit := controlFromPayload
+		if err := h.sendPhotoQualitySelection(ctx, modelID, idemKey, parsed.Type, peerID, allowEdit); err != nil {
+			return fmt.Errorf("send photo quality selection: %w", err)
+		}
+	case parsed.Type == domain.CommandMenuImageQualitySelect:
+		modelID := photoModelID
+		if modelID == "" {
+			var ok bool
+			modelID, ok = h.photoModelIDForQualitySelection(ctx, peerID)
+			if !ok {
+				h.clearDialogMode(ctx, peerID)
+				if err := h.sendControlResponse(ctx, domain.CommandMenuImage, idemKey, cb.GroupID, peerID, user, controlFromPayload); err != nil {
+					return fmt.Errorf("send photo model selection: %w", err)
+				}
+				break
+			}
+		}
+		if err := h.sendPhotoPromptForQuality(ctx, modelID, photoQuality, idemKey, parsed.Type, peerID, controlFromPayload); err != nil {
+			return fmt.Errorf("send photo prompt instruction: %w", err)
+		}
+	case isPhotoQualityCommand(parsed.Type):
+		modelID, ok := h.photoModelIDForQualitySelection(ctx, peerID)
+		if !ok {
+			h.clearDialogMode(ctx, peerID)
+			if err := h.sendControlResponse(ctx, domain.CommandMenuImage, idemKey, cb.GroupID, peerID, user, controlFromPayload); err != nil {
+				return fmt.Errorf("send photo model selection: %w", err)
+			}
+			break
+		}
+		quality, _ := photoQualityFromCommand(parsed.Type)
+		if err := h.sendPhotoPromptForQuality(ctx, modelID, quality, idemKey, parsed.Type, peerID, controlFromPayload); err != nil {
+			return fmt.Errorf("send photo prompt instruction: %w", err)
+		}
+	case parsed.Type == domain.CommandMenuImageBackToQuality:
+		modelID, ok := h.photoModelIDForQualityBack(ctx, peerID)
+		if !ok {
+			h.clearDialogMode(ctx, peerID)
+			if err := h.sendControlResponse(ctx, domain.CommandMenuImage, idemKey, cb.GroupID, peerID, user, controlFromPayload); err != nil {
+				return fmt.Errorf("send photo model selection: %w", err)
+			}
+			break
+		}
+		if err := h.sendPhotoQualitySelection(ctx, modelID, idemKey, parsed.Type, peerID, controlFromPayload); err != nil {
+			return fmt.Errorf("send photo quality selection: %w", err)
 		}
 	case shouldSendControlResponse(parsed.Type):
 		if shouldRepairPersistentKeyboard(parsed.Type, controlFromPayload, controlOnly) {
@@ -735,10 +972,10 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 		}
 		if parsed.Type == domain.CommandMenuText {
 			h.setDialogMode(ctx, peerID, dialogModeGPT)
-		} else if parsed.Type == domain.CommandMenuImage || parsed.Type == domain.CommandMenuImageText {
-			h.setDialogMode(ctx, peerID, dialogModePhotoText)
+		} else if parsed.Type == domain.CommandMenuImage {
+			h.clearDialogMode(ctx, peerID)
 		} else if spec, ok := videoModeForCommand(parsed.Type); ok {
-			h.setDialogMode(ctx, peerID, spec.Mode)
+			h.setDialogMode(ctx, peerID, spec.modeWithDuration(videoDurationSec))
 		} else {
 			h.clearDialogMode(ctx, peerID)
 		}
@@ -767,30 +1004,38 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 			Prompt:                 parsed.Prompt,
 			VKPlaceholderMessageID: placeholderID,
 		}
+		if photoTextJob {
+			jp.ModelID = photoSelection.Model.ModelID
+			jp.ModelName = photoSelection.Model.ModelName
+			jp.Provider = string(photoSelection.Model.Provider)
+			jp.ModelCode = photoSelection.Model.ModelCode
+			jp.Size = imageSizeForSelection(photoSelection)
+			jp.Resolution = photoSelection.Quality
+			jp.ImageQuality = photoSelection.Quality
+		}
 		if videoTextJob {
-			jp.ModelID = videoSpec.ModelID
 			jp.ModelName = videoSpec.ModelName
-			if videoSpec.VideoRouteAlias != "" {
-				jp.VideoRouteAlias = string(videoSpec.VideoRouteAlias)
-			}
-			if videoSpec.Provider != "" {
-				jp.Provider = string(videoSpec.Provider)
-			}
-			jp.ModelCode = videoSpec.ModelCode
+			jp.VideoRouteAlias = string(videoSpec.VideoRouteAlias)
 			jp.DurationSec = videoSpec.DurationSec
+			jp.AspectRatio = videoAspectRatio
+			jp.ReferenceArtifactIDs = videoReferenceIDs
 		}
 		params, _ := json.Marshal(jp)
 		metrics.ObserveProductPromptLength("vk_bot", string(parsed.Operation), string(parsed.Modality), parsed.Prompt)
 		job, err := h.deps.Orchestrator.CreateJob(ctx, joborchestrator.CreateJobInput{
-			UserID:         user.ID,
-			Source:         "vk_bot",
-			VKPeerID:       peerID,
-			CommandID:      cmd.ID,
-			Operation:      parsed.Operation,
-			Modality:       parsed.Modality,
-			IdempotencyKey: "vk_job:" + strconv.FormatInt(cb.GroupID, 10) + ":" + eventID,
-			CorrelationID:  idemKey,
-			Params:         params,
+			UserID:                 user.ID,
+			Source:                 "vk_bot",
+			VKPeerID:               peerID,
+			CommandID:              cmd.ID,
+			Operation:              parsed.Operation,
+			Modality:               parsed.Modality,
+			IdempotencyKey:         "vk_job:" + strconv.FormatInt(cb.GroupID, 10) + ":" + eventID,
+			CorrelationID:          idemKey,
+			Params:                 params,
+			InputArtifactIDs:       videoReferenceIDs,
+			ProviderCostCredits:    photoSelection.Model.ProviderCostCredits,
+			PriceMultiplier:        photoSelection.Model.PriceMultiplier,
+			MaxInternalCostCredits: photoSelection.Model.MaxInternalCostCredits,
 		})
 		switch {
 		case err == nil:
@@ -857,7 +1102,7 @@ func (h *Handler) shouldRoutePhotoText(ctx context.Context, peerID int64, parsed
 	if strings.TrimSpace(parsed.Prompt) == "" {
 		return false
 	}
-	return h.photoTextDialogActive(ctx, peerID)
+	return h.photoDialogActive(ctx, peerID)
 }
 
 func (h *Handler) shouldRouteVideoText(ctx context.Context, peerID int64, parsed commandrouter.Result, controlFromPayload, controlOnly bool) (videoModeSpec, bool) {
@@ -871,7 +1116,95 @@ func (h *Handler) shouldRouteVideoText(ctx context.Context, peerID int64, parsed
 	if !ok {
 		return videoModeSpec{}, false
 	}
-	return videoModeFromDialogMode(mode)
+	return h.videoModeFromDialogMode(mode)
+}
+
+func (h *Handler) sendVideoDurationSelection(ctx context.Context, routeAlias, idemKey string, command domain.CommandType, peerID int64, allowEdit bool) error {
+	spec, ok := h.videoModeForRouteAlias(routeAlias)
+	if !ok {
+		h.clearDialogMode(ctx, peerID)
+		return h.sendControlResponse(ctx, domain.CommandMenuVideo, idemKey, 0, peerID, &domain.User{}, allowEdit)
+	}
+	h.setDialogMode(ctx, peerID, spec.Mode)
+	if len(spec.AllowedDurationsSec) == 0 {
+		return h.sendVideoPromptInstruction(ctx, spec, idemKey, command, peerID, allowEdit)
+	}
+	msg := vkdelivery.Message{
+		Text:     videoDurationSelectionText(spec),
+		Keyboard: videoRouteDurationKeyboard(string(spec.VideoRouteAlias), spec.AllowedDurationsSec),
+	}
+	return h.deliverVideoControl(ctx, command, idemKey, peerID, msg, allowEdit)
+}
+
+func (h *Handler) sendVideoPromptForDuration(ctx context.Context, routeAlias string, durationSec int, idemKey string, command domain.CommandType, peerID int64, allowEdit bool) error {
+	spec, ok := h.videoModeForRouteAlias(routeAlias)
+	if !ok || !spec.supportsDuration(durationSec) {
+		h.clearDialogMode(ctx, peerID)
+		return h.sendControlResponse(ctx, domain.CommandMenuVideo, idemKey, 0, peerID, &domain.User{}, allowEdit)
+	}
+	mode := spec.modeWithDuration(durationSec)
+	spec.DurationSec = durationSec
+	h.setDialogMode(ctx, peerID, mode)
+	return h.sendVideoPromptInstruction(ctx, spec, idemKey, command, peerID, allowEdit)
+}
+
+func (h *Handler) sendVideoPromptInstruction(ctx context.Context, spec videoModeSpec, idemKey string, command domain.CommandType, peerID int64, allowEdit bool) error {
+	msg := vkdelivery.Message{
+		Text:     videoPromptInstructionText(spec),
+		Keyboard: backToKeyboard(domain.CommandMenuVideo),
+	}
+	return h.deliverVideoControl(ctx, command, idemKey, peerID, msg, allowEdit)
+}
+
+func (h *Handler) deliverVideoControl(ctx context.Context, command domain.CommandType, idemKey string, peerID int64, msg vkdelivery.Message, allowEdit bool) error {
+	if h.deps.Control == nil {
+		h.logger.Warn("vk video control response skipped because VK_ACCESS_TOKEN is not configured",
+			slog.String("command_type", string(command)))
+		return nil
+	}
+	h.filterMenuKeyboard(msg.Keyboard)
+	if msg.Keyboard != nil && len(msg.Keyboard.Buttons) == 0 {
+		msg.Keyboard = nil
+	}
+	h.applyMenuButtonMode(msg.Keyboard)
+	randomID := vkdelivery.DeterministicRandomID("vk_control:" + idemKey + ":" + string(command))
+	result, err := h.deliverControlResponse(ctx, command, peerID, randomID, msg, allowEdit)
+	if err == nil {
+		h.setActiveMenu(peerID, result.MessageID)
+	}
+	return err
+}
+
+func videoDurationSelectionText(spec videoModeSpec) string {
+	var b strings.Builder
+	b.WriteString(spec.ModelName)
+	b.WriteString("\n\nВыберите длительность видео.")
+	if spec.RequiresStartImage {
+		b.WriteString("\n\nДля этой модели нужно стартовое фото.")
+	} else if spec.SupportsReferenceImage {
+		b.WriteString("\n\nМожно написать только текст или прикрепить фото-референс к промту.")
+	}
+	if spec.MaxReferenceImages > 0 {
+		b.WriteString(fmt.Sprintf("\nЛимит фото: %d.", spec.MaxReferenceImages))
+	}
+	return b.String()
+}
+
+func videoPromptInstructionText(spec videoModeSpec) string {
+	var b strings.Builder
+	b.WriteString(fmt.Sprintf("%s · %d сек", spec.ModelName, spec.DurationSec))
+	if spec.RequiresStartImage {
+		b.WriteString("\n\nПрикрепите стартовое фото и напишите описание видео одним сообщением.")
+	} else {
+		b.WriteString("\n\nНапишите описание видео обычным сообщением.")
+		if spec.SupportsReferenceImage {
+			b.WriteString(" Фото-референс можно прикрепить к этому же сообщению.")
+		}
+	}
+	if len(spec.AllowedAspectRatios) > 0 {
+		b.WriteString("\nДопустимые форматы проверяются сервером.")
+	}
+	return b.String()
 }
 
 func (h *Handler) createAndSendTopUpPayment(ctx context.Context, groupID int64, eventID, idemKey string, peerID int64, user *domain.User, productCode string, forceNew bool) error {
@@ -883,8 +1216,9 @@ func (h *Handler) createAndSendTopUpPayment(ctx context.Context, groupID int64, 
 	if h.deps.Payment == nil {
 		return h.sendTopUpNotice(ctx, idemKey, peerID, "Платежи пока недоступны. Попробуйте позже.")
 	}
+	returnURL := h.topUpReturnURL(groupID)
 	if !forceNew {
-		if active, ok, err := h.activeTopUpIntent(ctx, user.ID); err != nil {
+		if active, ok, err := h.activeTopUpIntent(ctx, user.ID, returnURL); err != nil {
 			return fmt.Errorf("load active top-up intent: %w", err)
 		} else if ok {
 			activeProductCode := paymentIntentProductCode(active)
@@ -899,7 +1233,7 @@ func (h *Handler) createAndSendTopUpPayment(ctx context.Context, groupID int64, 
 		ReceiptEmail:   email,
 		ReceiptPhone:   phone,
 		IdempotencyKey: "vk_payment:" + strconv.FormatInt(groupID, 10) + ":" + eventID,
-		ReturnURL:      h.cfg.TopUpReturnURL,
+		ReturnURL:      returnURL,
 		Source:         "vk_bot",
 		ForceNew:       forceNew,
 	})
@@ -917,7 +1251,11 @@ func (h *Handler) createAndSendTopUpPayment(ctx context.Context, groupID int64, 
 		return h.sendTopUpNotice(ctx, idemKey, peerID, "Платеж создан, но ссылка на оплату пока недоступна. Попробуйте позже.")
 	}
 	h.clearDialogMode(ctx, peerID)
-	messageID, err := h.sendTopUpPaymentLink(ctx, idemKey, peerID, result.Intent)
+	balance, err := h.currentBalance(ctx, user)
+	if err != nil {
+		return err
+	}
+	messageID, err := h.sendTopUpPaymentLink(ctx, idemKey, peerID, balance, result.Intent)
 	if err != nil {
 		return err
 	}
@@ -937,6 +1275,295 @@ func (h *Handler) createAndSendTopUpPayment(ctx context.Context, groupID int64, 
 		}
 	}
 	return nil
+}
+
+func (h *Handler) sendPhotoQualitySelection(ctx context.Context, modelID, idemKey string, command domain.CommandType, peerID int64, allowEdit bool) error {
+	publicModel, publicOK := h.publicImageModel(modelID)
+	if !publicOK {
+		h.clearDialogMode(ctx, peerID)
+		return h.sendControlResponse(ctx, domain.CommandMenuImage, idemKey, 0, peerID, &domain.User{}, allowEdit)
+	}
+	model, ok := modelcatalog.ResolveMiniAppModel(domain.OperationImageGenerate, modelID)
+	if !ok {
+		h.clearDialogMode(ctx, peerID)
+		return h.sendControlResponse(ctx, domain.CommandMenuImage, idemKey, 0, peerID, &domain.User{}, allowEdit)
+	}
+	h.setDialogMode(ctx, peerID, photoSelectMode(model.ModelID))
+	options := h.photoQualityOptions(publicModel, model)
+	if len(options) == 0 {
+		selection := photoDialogSelection{Model: model, Quality: strings.TrimSpace(publicModel.DefaultQuality)}
+		h.setDialogMode(ctx, peerID, photoPromptMode(model.ModelID, selection.Quality))
+		return h.sendPhotoPromptInstruction(ctx, selection, idemKey, command, peerID, allowEdit)
+	}
+	text := fmt.Sprintf("%s\n\nВыберите качество генерации. Цена указана в кредитах и списывается только после готового результата.", model.ModelName)
+	msg := vkdelivery.Message{
+		Text:     text,
+		Keyboard: photoQualityKeyboard(options),
+	}
+	return h.deliverPhotoControl(ctx, command, idemKey, peerID, msg, allowEdit)
+}
+
+func (h *Handler) sendPhotoPromptForQuality(ctx context.Context, modelID, rawQuality, idemKey string, command domain.CommandType, peerID int64, allowEdit bool) error {
+	publicModel, ok := h.publicImageModel(modelID)
+	if !ok {
+		h.clearDialogMode(ctx, peerID)
+		return h.sendControlResponse(ctx, domain.CommandMenuImage, idemKey, 0, peerID, &domain.User{}, allowEdit)
+	}
+	quality, ok := h.normalizePublicImageQuality(publicModel, rawQuality)
+	if !ok {
+		h.clearDialogMode(ctx, peerID)
+		return h.sendControlResponse(ctx, domain.CommandMenuImage, idemKey, 0, peerID, &domain.User{}, allowEdit)
+	}
+	model, ok := modelcatalog.ResolveMiniAppModel(domain.OperationImageGenerate, modelID)
+	if !ok {
+		h.clearDialogMode(ctx, peerID)
+		return fmt.Errorf("resolve photo model: %s", modelID)
+	}
+	selection := photoDialogSelection{
+		Model:   modelcatalog.ApplyImageQuality(model, quality),
+		Quality: quality,
+	}
+	h.setDialogMode(ctx, peerID, photoPromptMode(model.ModelID, quality))
+	return h.sendPhotoPromptInstruction(ctx, selection, idemKey, command, peerID, allowEdit)
+}
+
+func (h *Handler) sendPhotoPromptInstruction(ctx context.Context, selection photoDialogSelection, idemKey string, command domain.CommandType, peerID int64, allowEdit bool) error {
+	price := h.imagePriceCredits(selection.Model)
+	waitHint := imageModelWaitHint(selection.Model)
+	if waitHint != "" {
+		waitHint = "\nОжидание: " + waitHint + "."
+	}
+	text := fmt.Sprintf("%s · %s\n\nЦена: %d кредитов.%s\n\nВведите описание изображения обычным сообщением.", selection.Model.ModelName, selection.Quality, price, waitHint)
+	msg := vkdelivery.Message{
+		Text:     text,
+		Keyboard: photoPromptKeyboardForCatalog(h.publicImageModelHasQualityOptions(selection.Model.ModelID)),
+	}
+	return h.deliverPhotoControl(ctx, command, idemKey, peerID, msg, allowEdit)
+}
+
+func (h *Handler) deliverPhotoControl(ctx context.Context, command domain.CommandType, idemKey string, peerID int64, msg vkdelivery.Message, allowEdit bool) error {
+	if h.deps.Control == nil {
+		h.logger.Warn("vk photo control response skipped because VK_ACCESS_TOKEN is not configured",
+			slog.String("command_type", string(command)))
+		return nil
+	}
+	h.filterMenuKeyboard(msg.Keyboard)
+	if msg.Keyboard != nil && len(msg.Keyboard.Buttons) == 0 {
+		msg.Keyboard = nil
+	}
+	h.applyMenuButtonMode(msg.Keyboard)
+	randomID := vkdelivery.DeterministicRandomID("vk_control:" + idemKey + ":" + string(command))
+	result, err := h.deliverControlResponse(ctx, command, peerID, randomID, msg, allowEdit)
+	if err == nil {
+		h.setActiveMenu(peerID, result.MessageID)
+	}
+	return err
+}
+
+func imageModelWaitHint(model modelcatalog.Model) string {
+	switch model.ModelID {
+	case modelcatalog.MiniAppImageGPTImage2:
+		return "обычно 30-60 секунд, при нагрузке дольше"
+	case modelcatalog.MiniAppImageNanoBananaPro:
+		return "обычно 1-3 минуты, зависит от проверки Google"
+	case modelcatalog.MiniAppImageNanoBanana2:
+		return "обычно 1-2 минуты"
+	case modelcatalog.MiniAppImageSeedream45, modelcatalog.MiniAppImageSDXLTurbo:
+		return "обычно до 1 минуты"
+	default:
+		return "обычно 1-2 минуты"
+	}
+}
+
+func imageSizeForSelection(selection photoDialogSelection) string {
+	if selection.Model.Provider == domain.ProviderDeepInfra {
+		switch selection.Quality {
+		case modelcatalog.ImageQuality2K:
+			return "2048x2048"
+		case modelcatalog.ImageQuality4K:
+			return "4096x4096"
+		default:
+			return "1024x1024"
+		}
+	}
+	return "1:1"
+}
+
+func (h *Handler) publicImageModel(modelID string) (productcatalog.ImageModel, bool) {
+	modelID = strings.TrimSpace(modelID)
+	if modelID == "" {
+		return productcatalog.ImageModel{}, false
+	}
+	for _, model := range h.cfg.ImageModels {
+		if model.Enabled && model.ID == modelID {
+			return model, true
+		}
+	}
+	return productcatalog.ImageModel{}, false
+}
+
+func (h *Handler) publicImageModelEnabled(modelID string) bool {
+	_, ok := h.publicImageModel(modelID)
+	return ok
+}
+
+func (h *Handler) publicImageModelHasQualityOptions(modelID string) bool {
+	model, ok := h.publicImageModel(modelID)
+	return ok && len(model.QualityOptions) > 0
+}
+
+func (h *Handler) normalizePublicImageQuality(model productcatalog.ImageModel, raw string) (string, bool) {
+	raw = strings.TrimSpace(raw)
+	if len(model.QualityOptions) == 0 {
+		return "", raw == ""
+	}
+	if raw == "" {
+		raw = model.DefaultQuality
+	}
+	quality, ok := modelcatalog.NormalizeImageQuality(raw)
+	if !ok {
+		return "", false
+	}
+	return quality, imageQualityAllowed(quality, model.QualityOptions)
+}
+
+func (h *Handler) publicImageQualityAllowed(modelID, rawQuality string) bool {
+	model, ok := h.publicImageModel(modelID)
+	if !ok {
+		return false
+	}
+	_, ok = h.normalizePublicImageQuality(model, rawQuality)
+	return ok
+}
+
+func (h *Handler) publicVideoRoute(routeAlias string) (productcatalog.VideoRoute, bool) {
+	routeAlias = strings.TrimSpace(routeAlias)
+	if routeAlias == "" {
+		return productcatalog.VideoRoute{}, false
+	}
+	for _, route := range h.cfg.VideoRoutes {
+		if route.Enabled && route.Alias == routeAlias {
+			return route, true
+		}
+	}
+	return productcatalog.VideoRoute{}, false
+}
+
+func (h *Handler) publicVideoRouteEnabled(routeAlias string) bool {
+	_, ok := h.publicVideoRoute(routeAlias)
+	return ok
+}
+
+func (h *Handler) publicVideoRouteDurationAllowed(routeAlias string, durationSec int) bool {
+	route, ok := h.publicVideoRoute(routeAlias)
+	if !ok || durationSec <= 0 {
+		return false
+	}
+	for _, allowed := range route.AllowedDurationsSec {
+		if durationSec == allowed {
+			return true
+		}
+	}
+	return false
+}
+
+func imageQualityAllowed(quality string, options []string) bool {
+	for _, option := range options {
+		normalized, ok := modelcatalog.NormalizeImageQuality(option)
+		if ok && normalized == quality {
+			return true
+		}
+	}
+	return false
+}
+
+func (h *Handler) photoQualityOptions(publicModel productcatalog.ImageModel, model modelcatalog.Model) []photoQualityOption {
+	out := make([]photoQualityOption, 0, len(publicModel.QualityOptions))
+	for _, rawQuality := range publicModel.QualityOptions {
+		quality, ok := modelcatalog.NormalizeImageQuality(rawQuality)
+		if !ok {
+			continue
+		}
+		adjusted := modelcatalog.ApplyImageQuality(model, quality)
+		out = append(out, photoQualityOption{
+			Label:   quality,
+			Price:   h.imagePriceCredits(adjusted),
+			Command: domain.CommandMenuImageQualitySelect,
+			ModelID: publicModel.ID,
+			Quality: quality,
+		})
+	}
+	return out
+}
+
+func (h *Handler) imagePriceCredits(model modelcatalog.Model) int64 {
+	if h.deps.Billing != nil {
+		if price, err := h.deps.Billing.EstimateProviderCost(model.ProviderCostCredits, model.PriceMultiplier, model.MaxInternalCostCredits); err == nil {
+			return price
+		}
+	}
+	multiplier := model.PriceMultiplier
+	if multiplier <= 0 {
+		multiplier = 1
+	}
+	price := int64(math.Ceil(float64(model.ProviderCostCredits) * multiplier))
+	if price <= 0 {
+		return model.ProviderCostCredits
+	}
+	return price
+}
+
+func (h *Handler) currentBalance(ctx context.Context, user *domain.User) (int64, error) {
+	if user == nil {
+		return 0, nil
+	}
+	acc, err := h.deps.Billing.EnsureAccount(ctx, user.ID)
+	if err != nil {
+		return 0, fmt.Errorf("ensure billing account: %w", err)
+	}
+	return acc.BalanceCached, nil
+}
+
+func (h *Handler) topUpReturnURL(groupID int64) string {
+	raw := strings.TrimSpace(h.cfg.TopUpReturnURL)
+	if shouldUseVKDialogReturnURL(raw) && groupID > 0 {
+		return fmt.Sprintf("https://vk.com/write-%d", groupID)
+	}
+	return raw
+}
+
+func shouldUseVKDialogReturnURL(raw string) bool {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return true
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return false
+	}
+	host := strings.ToLower(u.Host)
+	path := strings.Trim(u.EscapedPath(), "/")
+	return (host == "vk.com" || host == "www.vk.com") && path == ""
+}
+
+func paymentIntentReturnURLMatches(intent *domain.PaymentIntent, returnURL string) bool {
+	if intent == nil {
+		return false
+	}
+	return paymentIntentReturnURL(intent) == strings.TrimSpace(returnURL)
+}
+
+func paymentIntentReturnURL(intent *domain.PaymentIntent) string {
+	if intent == nil || len(intent.Metadata) == 0 {
+		return ""
+	}
+	var metadata struct {
+		ReturnURL string `json:"return_url"`
+	}
+	if err := json.Unmarshal(intent.Metadata, &metadata); err != nil {
+		return ""
+	}
+	return strings.TrimSpace(metadata.ReturnURL)
 }
 
 func paymentIntentProductCode(intent *domain.PaymentIntent) string {
@@ -1006,9 +1633,145 @@ func (h *Handler) gptDialogActive(ctx context.Context, peerID int64) bool {
 	return ok && mode == dialogModeGPT
 }
 
-func (h *Handler) photoTextDialogActive(ctx context.Context, peerID int64) bool {
+func (h *Handler) photoDialogActive(ctx context.Context, peerID int64) bool {
+	_, ok := h.photoSelectionForActiveDialog(ctx, peerID)
+	return ok
+}
+
+type photoDialogSelection struct {
+	Model   modelcatalog.Model
+	Quality string
+}
+
+func (h *Handler) photoSelectionForActiveDialog(ctx context.Context, peerID int64) (photoDialogSelection, bool) {
 	mode, ok := h.getDialogMode(ctx, peerID)
-	return ok && mode == dialogModePhotoText
+	if !ok {
+		return photoDialogSelection{}, false
+	}
+	return photoSelectionFromDialogMode(mode)
+}
+
+func photoSelectionFromDialogMode(mode dialogMode) (photoDialogSelection, bool) {
+	modelID, quality, ok := parsePhotoPromptMode(mode)
+	if !ok {
+		switch mode {
+		case dialogModePhotoNanoBanana2:
+			modelID, quality, ok = modelcatalog.MiniAppImageNanoBanana2, modelcatalog.ImageQuality1K, true
+		case dialogModePhotoGPTImage2:
+			modelID, quality, ok = modelcatalog.MiniAppImageGPTImage2, modelcatalog.ImageQuality1K, true
+		case dialogModePhotoText:
+			modelID, quality, ok = modelcatalog.MiniAppImageNanoBananaPro, modelcatalog.ImageQuality1K, true
+		default:
+			return photoDialogSelection{}, false
+		}
+	}
+	model, ok := modelcatalog.ResolveMiniAppModel(domain.OperationImageGenerate, modelID)
+	if !ok {
+		return photoDialogSelection{}, false
+	}
+	model = modelcatalog.ApplyImageQuality(model, quality)
+	return photoDialogSelection{Model: model, Quality: quality}, true
+}
+
+func photoModelIDFromCommand(t domain.CommandType) (string, bool) {
+	switch t {
+	case domain.CommandMenuImageNanoBanana2:
+		return modelcatalog.MiniAppImageNanoBanana2, true
+	case domain.CommandMenuImageDeepInfraSeedream:
+		return modelcatalog.MiniAppImageSeedream45, true
+	case domain.CommandMenuImageDeepInfraSDXL:
+		return modelcatalog.MiniAppImageSDXLTurbo, true
+	case domain.CommandMenuImageGPTImage2:
+		return modelcatalog.MiniAppImageGPTImage2, true
+	case domain.CommandMenuImageText:
+		return modelcatalog.MiniAppImageNanoBananaPro, true
+	default:
+		return "", false
+	}
+}
+
+func isPhotoModelCommand(t domain.CommandType) bool {
+	_, ok := photoModelIDFromCommand(t)
+	return ok
+}
+
+func (h *Handler) photoModelIDForQualitySelection(ctx context.Context, peerID int64) (string, bool) {
+	mode, ok := h.getDialogMode(ctx, peerID)
+	if !ok {
+		return "", false
+	}
+	return parsePhotoSelectMode(mode)
+}
+
+func (h *Handler) photoModelIDForQualityBack(ctx context.Context, peerID int64) (string, bool) {
+	mode, ok := h.getDialogMode(ctx, peerID)
+	if !ok {
+		return "", false
+	}
+	if modelID, ok := parsePhotoSelectMode(mode); ok {
+		return modelID, true
+	}
+	modelID, _, ok := parsePhotoPromptMode(mode)
+	return modelID, ok
+}
+
+func photoQualityFromCommand(t domain.CommandType) (string, bool) {
+	switch t {
+	case domain.CommandMenuImageQuality1K:
+		return modelcatalog.ImageQuality1K, true
+	case domain.CommandMenuImageQuality2K:
+		return modelcatalog.ImageQuality2K, true
+	case domain.CommandMenuImageQuality4K:
+		return modelcatalog.ImageQuality4K, true
+	default:
+		return "", false
+	}
+}
+
+func isPhotoQualityCommand(t domain.CommandType) bool {
+	_, ok := photoQualityFromCommand(t)
+	return ok
+}
+
+func photoSelectMode(modelID string) dialogMode {
+	return dialogMode(dialogModePhotoSelectPrefix + strings.TrimSpace(modelID))
+}
+
+func photoPromptMode(modelID, quality string) dialogMode {
+	if strings.TrimSpace(quality) == "" {
+		return dialogMode(dialogModePhotoPromptPrefix + strings.TrimSpace(modelID))
+	}
+	return dialogMode(dialogModePhotoPromptPrefix + strings.TrimSpace(modelID) + ":" + strings.TrimSpace(quality))
+}
+
+func parsePhotoSelectMode(mode dialogMode) (string, bool) {
+	raw, ok := strings.CutPrefix(string(mode), dialogModePhotoSelectPrefix)
+	if !ok || strings.TrimSpace(raw) == "" {
+		return "", false
+	}
+	return strings.TrimSpace(raw), true
+}
+
+func parsePhotoPromptMode(mode dialogMode) (string, string, bool) {
+	raw, ok := strings.CutPrefix(string(mode), dialogModePhotoPromptPrefix)
+	if !ok {
+		return "", "", false
+	}
+	modelID, quality, ok := strings.Cut(raw, ":")
+	if !ok {
+		modelID = raw
+		quality = ""
+	}
+	if strings.TrimSpace(quality) != "" {
+		quality, ok = modelcatalog.NormalizeImageQuality(quality)
+		if !ok {
+			return "", "", false
+		}
+	}
+	if strings.TrimSpace(modelID) == "" {
+		return "", "", false
+	}
+	return strings.TrimSpace(modelID), quality, true
 }
 
 func (h *Handler) getDialogMode(ctx context.Context, peerID int64) (dialogMode, bool) {

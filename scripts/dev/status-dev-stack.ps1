@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$EnvFile = ".env",
+    [string]$EnvFile = "dev.env",
     [string]$ProjectName = "vk-ai-aggregator-dev",
     [int]$TimeoutSeconds = 5,
     [switch]$Strict

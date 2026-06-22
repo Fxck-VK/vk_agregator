@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$EnvFile = ".env",
+    [string]$EnvFile = "dev.env",
     [string]$ProjectName = "vk-ai-aggregator-dev",
     [switch]$WithCloudflare,
     [switch]$SkipBuild,
@@ -434,7 +434,11 @@ function Wait-CloudflaredReady {
 }
 
 function Start-Cloudflared {
-    param([Parameter(Mandatory = $true)][string]$Token)
+    param(
+        [Parameter(Mandatory = $true)][string]$Token,
+        [string]$Protocol = "http2",
+        [string]$EdgeIPVersion = "4"
+    )
 
     $cloudflared = Get-Command cloudflared -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($null -eq $cloudflared) {
@@ -454,7 +458,15 @@ function Start-Cloudflared {
     try {
         $cloudflaredPath = $cloudflared.Source
         $filePath = $cloudflaredPath
-        $argumentList = @("tunnel", "--no-autoupdate", "--loglevel", "info", "run")
+        $argumentList = @()
+        if (-not [string]::IsNullOrWhiteSpace($EdgeIPVersion)) {
+            $argumentList += @("--edge-ip-version", $EdgeIPVersion)
+        }
+        $argumentList += @("tunnel", "--no-autoupdate", "--loglevel", "info")
+        if (-not [string]::IsNullOrWhiteSpace($Protocol)) {
+            $argumentList += @("--protocol", $Protocol)
+        }
+        $argumentList += "run"
         $extension = [System.IO.Path]::GetExtension($cloudflaredPath)
         if ($extension -ieq ".ps1" -or $extension -ieq ".cmd") {
             $npmDir = Split-Path -Parent $cloudflaredPath
@@ -504,7 +516,7 @@ $resolvedEnvFile = if ([System.IO.Path]::IsPathRooted($EnvFile)) {
 }
 
 if (-not (Test-Path -LiteralPath $resolvedEnvFile)) {
-    throw "DEV env file not found: $EnvFile. Copy .env.dev.example to .env and fill DEV-only values."
+    throw "DEV env file not found: $EnvFile. Copy .env.dev.example to dev.env and fill DEV-only values."
 }
 
 $envValues = Read-EnvFile -Path $resolvedEnvFile
@@ -521,8 +533,7 @@ try {
         "compose",
         "--project-name", $ProjectName,
         "--env-file", $resolvedEnvFile,
-        "-f", "docker-compose.prod.yml",
-        "-f", "docker-compose.data.yml"
+        "-f", "docker-compose.prod.yml"
     )
 
     if ($StatusOnly) {
@@ -584,10 +595,6 @@ try {
         Invoke-DockerCompose @args
     }
 
-    Invoke-Step "refresh reverse-proxy upstreams" {
-        Invoke-DockerCompose @("up", "-d", "--no-deps", "--force-recreate", "reverse-proxy")
-    }
-
     foreach ($service in $runtimeServices) {
         Wait-ComposeServiceHealthy -Service $service -TimeoutSeconds $TimeoutSeconds
     }
@@ -606,7 +613,9 @@ try {
     if ($WithCloudflare) {
         Invoke-Step "start cloudflared DEV tunnel" {
             $token = Get-EnvValue -Values $envValues -Name "CLOUDFLARED_TUNNEL_TOKEN"
-            $cloudflaredPid = Start-Cloudflared -Token $token
+            $protocol = Get-EnvValue -Values $envValues -Name "CLOUDFLARED_PROTOCOL" -Default "http2"
+            $edgeIPVersion = Get-EnvValue -Values $envValues -Name "CLOUDFLARED_EDGE_IP_VERSION" -Default "4"
+            $cloudflaredPid = Start-Cloudflared -Token $token -Protocol $protocol -EdgeIPVersion $edgeIPVersion
             Write-Host "cloudflared started pid=$cloudflaredPid"
         }
 

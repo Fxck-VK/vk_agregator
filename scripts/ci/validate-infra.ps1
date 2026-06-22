@@ -92,6 +92,7 @@ function Assert-NoTrackedEnvFiles {
     $allowedTrackedEnv = @(
         ".env.example",
         ".env.dev.example",
+        ".env.loadtest.example",
         ".env.prod.example",
         ".env.staging.example"
     )
@@ -675,7 +676,7 @@ function Assert-DeployScripts {
                 "IMAGE_TAG",
                 "migrate_args",
                 "exit-code-from",
-                "api worker provider-webhook miniapp reverse-proxy",
+                "api worker maintenance-worker provider-webhook miniapp reverse-proxy",
                 "wait_http",
                 "/readyz",
                 "Production deploy completed.",

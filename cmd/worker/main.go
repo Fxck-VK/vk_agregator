@@ -370,6 +370,7 @@ func main() {
 		MediaProviderQualityDisabledFailures:  cfg.MediaProviderQualityDisabledFailures,
 		MediaProviderQualityRecoverySuccesses: cfg.MediaProviderQualityRecoverySuccesses,
 		ProviderCallTimeout:                   cfg.WorkerProviderCallTimeout,
+		ProviderPollBackoff:                   worker.ExponentialBackoff(cfg.WorkerProviderPollBaseDelay, cfg.WorkerProviderPollMaxDelay),
 		TextContext: dialogcontext.New(conversations, dialogcontext.Config{
 			Enabled:                cfg.TextContextEnabled,
 			MaxInputTokens:         cfg.TextContextMaxInputTokens,
@@ -773,7 +774,7 @@ func defaultProviderMediaContracts(cfg config.Config) []domain.ProviderMediaCont
 		ModelClass:             "runway_gen4_turbo",
 		Modality:               domain.ModalityVideo,
 		AllowedDurationsSec:    []int{2, 3, 4, 5, 6, 7, 8, 9, 10},
-		AllowedAspectRatios:    []string{"16:9", "9:16", "1:1"},
+		AllowedAspectRatios:    []string{"16:9", "9:16", "4:3", "3:4", "1:1", "21:9"},
 		AllowedResolutions:     []string{"720p"},
 		ExpectedContainer:      "mp4",
 		ExpectedCodec:          "h264",

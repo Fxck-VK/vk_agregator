@@ -12,6 +12,7 @@ type ResultCardProps = {
   /** undefined — грузим сами; string — готовый URL; null — предзагрузка не удалась */
   mediaSrcOverride?: string | null;
   onRetry: () => void;
+  retryDisabled?: boolean;
 };
 
 function canShowResult(msg: ChatMessage): boolean {
@@ -45,6 +46,7 @@ export function ResultCard({
   authorAvatar,
   mediaSrcOverride,
   onRetry,
+  retryDisabled = false,
 }: ResultCardProps) {
   const [copied, setCopied] = useState(false);
   const [mediaFailed, setMediaFailed] = useState(false);
@@ -95,7 +97,7 @@ export function ResultCard({
       {failed && (
         <div className="result-card__fallback">
           <p>{msg.error ?? "Не удалось выполнить запрос"}</p>
-          <button type="button" className="result-card__btn" onClick={onRetry} disabled={!prompt}>
+          <button type="button" className="result-card__btn" onClick={onRetry} disabled={retryDisabled}>
             Повторить
           </button>
         </div>
@@ -188,7 +190,7 @@ export function ResultCard({
               {copied ? "Скопировано" : "Копировать текст"}
             </button>
           )}
-          <button type="button" className="result-card__btn" onClick={onRetry} disabled={!prompt}>
+          <button type="button" className="result-card__btn" onClick={onRetry} disabled={retryDisabled}>
             Повторить
           </button>
         </footer>
@@ -200,16 +202,17 @@ export function ResultCard({
 function UnavailableResult({
   label,
   onRetry,
-  prompt,
+  retryDisabled = false,
 }: {
   label: string;
   onRetry: () => void;
-  prompt: string;
+  prompt?: string;
+  retryDisabled?: boolean;
 }) {
   return (
     <div className="result-card__fallback">
       <p>{label}</p>
-      <button type="button" className="result-card__btn" onClick={onRetry} disabled={!prompt}>
+      <button type="button" className="result-card__btn" onClick={onRetry} disabled={retryDisabled}>
         Повторить
       </button>
     </div>

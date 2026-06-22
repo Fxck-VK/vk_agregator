@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/attribute"
 
+	redisqueue "vk-ai-aggregator/internal/adapter/queue/redis"
 	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/platform/queue"
 	"vk-ai-aggregator/internal/platform/tracing"
@@ -44,7 +45,7 @@ func (g *GenerationWorker) Process(ctx context.Context, task queue.Task) error {
 	}
 
 	// Recovery / idempotency: if a provider task is already in flight, do not
-	// submit again — resume by polling it.
+	// submit again; resume by polling it.
 	if active, err := g.activeTask(ctx, job.ID); err != nil {
 		return err
 	} else if active != nil {
@@ -106,7 +107,33 @@ func (g *GenerationWorker) Process(ctx context.Context, task queue.Task) error {
 	if err := g.setStatus(ctx, job, domain.JobStatusProviderSubmitted, "", ""); err != nil {
 		return err
 	}
+	if shouldDeferInitialPoll(job, taskProvider, pt) {
+		return g.streams.PublishTo(ctx, redisqueue.StreamProviderPoll, taskOf(job))
+	}
 	return g.pollOnce(ctx, job, pt, provider, task)
+}
+
+func shouldDeferInitialPoll(job *domain.Job, provider domain.ProviderName, pt *domain.ProviderTask) bool {
+	if job == nil || pt == nil || pt.Status.IsTerminal() || !isAsyncMediaJob(job) {
+		return false
+	}
+	return isAsyncMediaProvider(provider)
+}
+
+func isAsyncMediaJob(job *domain.Job) bool {
+	if job == nil {
+		return false
+	}
+	return job.Modality == domain.ModalityImage || job.Modality == domain.ModalityVideo
+}
+
+func isAsyncMediaProvider(provider domain.ProviderName) bool {
+	switch provider {
+	case domain.ProviderAPIMart, domain.ProviderPoYo, domain.ProviderRunway:
+		return true
+	default:
+		return false
+	}
 }
 
 // toDispatching moves a queued job into dispatching_provider, tolerating a job

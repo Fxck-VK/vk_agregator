@@ -2,15 +2,16 @@
 package vkbot
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
-	"strings"
 
 	"github.com/redis/go-redis/v9"
 
 	vkdelivery "vk-ai-aggregator/internal/adapter/delivery/vk"
 	vkinbound "vk-ai-aggregator/internal/adapter/inbound/vk"
 	redisqueue "vk-ai-aggregator/internal/adapter/queue/redis"
+	s3store "vk-ai-aggregator/internal/adapter/storage/s3"
 	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/platform/config"
 	"vk-ai-aggregator/internal/service/antispam"
@@ -18,7 +19,9 @@ import (
 	"vk-ai-aggregator/internal/service/commandrouter"
 	"vk-ai-aggregator/internal/service/dialogstate"
 	"vk-ai-aggregator/internal/service/joborchestrator"
+	"vk-ai-aggregator/internal/service/modelcatalog"
 	"vk-ai-aggregator/internal/service/paymentservice"
+	"vk-ai-aggregator/internal/service/productcatalog"
 	"vk-ai-aggregator/internal/service/referralservice"
 )
 
@@ -33,6 +36,7 @@ type Deps struct {
 	Billing      *billingservice.Service
 	Payment      *paymentservice.Service
 	Referrals    domain.ReferralRepository
+	Artifacts    domain.ArtifactRepository
 	Orchestrator *joborchestrator.Orchestrator
 	Router       *commandrouter.Router
 	Logger       *slog.Logger
@@ -41,7 +45,7 @@ type Deps struct {
 // NewHandler builds the VK callback HTTP handler without owning core business
 // decisions. Provider calls, billing mutations and job processing remain in the
 // shared orchestrator/worker/billing layers.
-func NewHandler(cfg config.Config, deps Deps) http.Handler {
+func NewHandler(ctx context.Context, cfg config.Config, deps Deps) http.Handler {
 	logger := deps.Logger
 	if logger == nil {
 		logger = slog.Default()
@@ -84,12 +88,33 @@ func NewHandler(cfg config.Config, deps Deps) http.Handler {
 		logger.Warn("vk control responses disabled because VK_ACCESS_TOKEN is empty")
 	}
 
+	var objectStore vkinbound.ObjectStore
+	if !cfg.MediaReferenceUploadsEnabled {
+		logger.Warn("vk video reference uploads disabled by MEDIA_REFERENCE_UPLOADS_ENABLED")
+	} else {
+		store, err := s3store.New(ctx, s3store.Config{
+			Endpoint:  cfg.S3Endpoint,
+			AccessKey: cfg.S3AccessKey,
+			SecretKey: cfg.S3SecretKey,
+			UseSSL:    cfg.S3UseSSL,
+		})
+		if err != nil {
+			logger.Warn("s3 connect failed; vk video reference uploads disabled", "error", err)
+		} else {
+			objectStore = store
+		}
+	}
+
 	referrals := referralservice.New(deps.Referrals, deps.Billing, referralservice.Config{
 		CodeLength:                  cfg.ReferralCodeLength,
 		ReferrerSignupRewardCredits: cfg.ReferralReferrerSignupRewardCredits,
 		ReferredSignupRewardCredits: cfg.ReferralReferredSignupRewardCredits,
 		RewardOnActivation:          cfg.ReferralRewardOnActivation,
 	})
+	runtimeCatalog, err := productcatalog.FromConfig(cfg)
+	if err != nil {
+		logger.Warn("vk bot video route catalog disabled", "error", err)
+	}
 
 	return vkinbound.NewHandler(vkinbound.Config{
 		ConfirmationToken:                   cfg.VKConfirmationToken,
@@ -97,7 +122,9 @@ func NewHandler(cfg config.Config, deps Deps) http.Handler {
 		WelcomeAttachment:                   cfg.VKWelcomeAttachment,
 		MenuButtonMode:                      cfg.VKMenuButtonMode,
 		UnroutedTextMode:                    cfg.VKUnroutedTextMode,
-		MenuFeatures:                        menuFeatures(cfg),
+		MenuFeatures:                        menuFeatures(cfg, runtimeCatalog),
+		ImageModels:                         runtimeCatalog.ImageModels(),
+		VideoRoutes:                         runtimeCatalog.VideoRoutes(),
 		ReferralLinkBase:                    cfg.VKReferralLinkBase,
 		ReferralShareBase:                   cfg.VKReferralShareBase,
 		ReferralReferrerSignupRewardCredits: cfg.ReferralReferrerSignupRewardCredits,
@@ -105,6 +132,12 @@ func NewHandler(cfg config.Config, deps Deps) http.Handler {
 		TopUpReceiptPhone:                   cfg.VKTopUpReceiptPhone,
 		TopUpReturnURL:                      firstNonEmpty(cfg.YooKassaReturnURLVKBot, cfg.YooKassaReturnURL),
 		TopUpStatusEditEnabled:              cfg.FeatureVKTopUpStatusEditEnabled,
+		ReferenceUploadsDisabled:            !cfg.MediaReferenceUploadsEnabled,
+		ArtifactBucket:                      cfg.S3Bucket,
+		MaxUploadBytes:                      cfg.MediaMaxImageUploadBytes,
+		MaxUploadImageWidth:                 cfg.MediaMaxImageWidth,
+		MaxUploadImageHeight:                cfg.MediaMaxImageHeight,
+		MaxUploadImagePixels:                cfg.MediaMaxImagePixels,
 	}, vkinbound.Deps{
 		Idempotency:  deps.Idempotency,
 		Inbound:      deps.Inbound,
@@ -120,6 +153,8 @@ func NewHandler(cfg config.Config, deps Deps) http.Handler {
 		Profile:      vkProfile,
 		DialogState:  vkDialogState,
 		AntiSpam:     vkAntiSpam,
+		Artifacts:    deps.Artifacts,
+		Objects:      objectStore,
 		Logger:       logger,
 	})
 }
@@ -133,7 +168,7 @@ func firstNonEmpty(values ...string) string {
 	return ""
 }
 
-func menuFeatures(cfg config.Config) vkinbound.MenuFeatureFlags {
+func menuFeatures(cfg config.Config, catalog productcatalog.RuntimeCatalog) vkinbound.MenuFeatureFlags {
 	disabled := map[domain.CommandType]bool{}
 	enabled := map[domain.CommandType]bool{}
 	disableWhenFalse := func(enabled bool, commands ...domain.CommandType) {
@@ -153,136 +188,75 @@ func menuFeatures(cfg config.Config) vkinbound.MenuFeatureFlags {
 		}
 	}
 
-	runwayEnabled := cfg.FeatureVideoRouteRunwayGen4TurboEnabled || cfg.FeatureVideoRouteRunwayGen45Enabled
-	prunaEnabled := strings.TrimSpace(cfg.DeepInfraVideoModel) != ""
-	routePreviewEnabled := cfg.VKMenuVideoRoutesPreviewEnabled && !cfg.IsProduction()
+	imageModels := catalog.ImageModels()
+	videoRoutes := catalog.VideoRoutes()
+	imageAvailable := func(modelID string) bool {
+		for _, model := range imageModels {
+			if model.Enabled && model.ID == modelID {
+				return true
+			}
+		}
+		return false
+	}
+	imageReferenceAvailable := func() bool {
+		for _, model := range imageModels {
+			if model.Enabled && model.SupportsReferenceImage {
+				return true
+			}
+		}
+		return false
+	}
+	videoRouteAvailable := func(alias domain.VideoRouteAlias) bool {
+		for _, route := range videoRoutes {
+			if route.Enabled && route.Alias == string(alias) {
+				return true
+			}
+		}
+		return false
+	}
 
-	disableWhenFalse(cfg.VKMenuVideoEnabled, domain.CommandMenuVideo)
-	disableWhenFalse(prunaEnabled, domain.CommandMenuVideoPrunaAI)
-	disableWhenFalse(cfg.VKMenuImageEnabled, domain.CommandMenuImage)
+	disableWhenFalse(cfg.VKMenuVideoEnabled && len(videoRoutes) > 0, domain.CommandMenuVideo)
+	disableWhenFalse(false, domain.CommandMenuVideoPrunaAI)
+
+	disableWhenFalse(cfg.VKMenuImageEnabled && len(imageModels) > 0, domain.CommandMenuImage)
+	disableWhenFalse(imageAvailable(modelcatalog.MiniAppImageNanoBananaPro), domain.CommandMenuImageText)
 	disableWhenFalse(cfg.VKMenuGPTEnabled, domain.CommandMenuText)
 	disableWhenFalse(cfg.VKMenuStudentsEnabled, domain.CommandMenuStudents)
 	disableWhenFalse(cfg.VKMenuAccountEnabled, domain.CommandAccount)
 	disableWhenFalse(cfg.VKMenuTopUpEnabled, domain.CommandTopUp)
-	disableWhenFalse(cfg.VKMenuVideoSora2Enabled, domain.CommandMenuVideoSora2)
-	disableWhenFalse(cfg.VKMenuVideoSora2StartEnabled, domain.CommandMenuVideoSora2Start)
-	disableWhenFalse(cfg.VKMenuVideoSora2ExamplesEnabled, domain.CommandMenuVideoSora2Examples)
-	disableWhenFalse(runwayEnabled, domain.CommandMenuVideoSora2)
-	disableWhenFalse(cfg.FeatureVideoRouteRunwayGen4TurboEnabled, domain.CommandMenuVideoSora2Start)
-	disableWhenFalse(cfg.FeatureVideoRouteRunwayGen45Enabled, domain.CommandMenuVideoSora2Examples)
-	enableWhenTrue(prunaEnabled, domain.CommandMenuVideoPrunaAI)
-	enableWhenTrue(runwayEnabled, domain.CommandMenuVideoSora2)
-	enableWhenTrue(cfg.FeatureVideoRouteRunwayGen4TurboEnabled, domain.CommandMenuVideoSora2Start)
-	enableWhenTrue(cfg.FeatureVideoRouteRunwayGen45Enabled, domain.CommandMenuVideoSora2Examples)
-	disableWhenFalse(cfg.VKMenuVideoKling21Enabled, domain.CommandMenuVideoKling21)
-	disableWhenFalse(cfg.VKMenuVideoKling21StartEnabled, domain.CommandMenuVideoKling21Start)
-	disableWhenFalse(cfg.VKMenuVideoKling21ExamplesEnabled, domain.CommandMenuVideoKling21Examples)
-	disableWhenFalse(cfg.FeatureVideoRouteKlingO3StandardEnabled, domain.CommandMenuVideoKling21, domain.CommandMenuVideoKling21Start, domain.CommandMenuVideoKling21Examples)
-	enableWhenTrue(cfg.FeatureVideoRouteKlingO3StandardEnabled, domain.CommandMenuVideoKling21, domain.CommandMenuVideoKling21Start, domain.CommandMenuVideoKling21Examples)
-	disableWhenFalse(cfg.VKMenuVideoSeedance1Enabled, domain.CommandMenuVideoSeedance1)
-	disableWhenFalse(cfg.VKMenuVideoSeedance1LiteEnabled, domain.CommandMenuVideoSeedance1Lite)
+	runwayGen4TurboReady := videoRouteAvailable(domain.VideoRouteRunwayGen4Turbo)
+	disableWhenFalse(cfg.VKMenuVideoSora2Enabled && runwayGen4TurboReady, domain.CommandMenuVideoSora2)
+	disableWhenFalse(cfg.VKMenuVideoSora2StartEnabled && runwayGen4TurboReady, domain.CommandMenuVideoSora2Start)
+	disableWhenFalse(cfg.VKMenuVideoSora2ExamplesEnabled && runwayGen4TurboReady, domain.CommandMenuVideoSora2Examples)
+	enableWhenTrue(runwayGen4TurboReady, domain.CommandMenuVideoSora2, domain.CommandMenuVideoSora2Start, domain.CommandMenuVideoSora2Examples)
+	klingO3Ready := videoRouteAvailable(domain.VideoRouteKlingO3Standard)
+	disableWhenFalse(cfg.VKMenuVideoKling21Enabled && klingO3Ready, domain.CommandMenuVideoKling21)
+	disableWhenFalse(cfg.VKMenuVideoKling21StartEnabled && klingO3Ready, domain.CommandMenuVideoKling21Start)
+	disableWhenFalse(cfg.VKMenuVideoKling21ExamplesEnabled && klingO3Ready, domain.CommandMenuVideoKling21Examples)
+	enableWhenTrue(klingO3Ready, domain.CommandMenuVideoKling21, domain.CommandMenuVideoKling21Start, domain.CommandMenuVideoKling21Examples)
+	seedanceReady := videoRouteAvailable(domain.VideoRouteSeedance20Fast)
+	disableWhenFalse(cfg.VKMenuVideoSeedance1Enabled && seedanceReady, domain.CommandMenuVideoSeedance1)
+	disableWhenFalse(cfg.VKMenuVideoSeedance1LiteEnabled && seedanceReady, domain.CommandMenuVideoSeedance1Lite)
 	disableWhenFalse(cfg.VKMenuVideoSeedance1ProEnabled, domain.CommandMenuVideoSeedance1Pro)
-	disableWhenFalse(cfg.FeatureVideoRouteSeedance20FastEnabled, domain.CommandMenuVideoSeedance1, domain.CommandMenuVideoSeedance1Lite)
 	disableWhenFalse(false, domain.CommandMenuVideoSeedance1Pro)
-	enableWhenTrue(cfg.FeatureVideoRouteSeedance20FastEnabled, domain.CommandMenuVideoSeedance1, domain.CommandMenuVideoSeedance1Lite)
-	disableWhenFalse(cfg.VKMenuVideoHailuo02Enabled, domain.CommandMenuVideoHailuo02)
-	disableWhenFalse(cfg.VKMenuVideoHailuo02StandardEnabled, domain.CommandMenuVideoHailuo02Standard)
-	disableWhenFalse(cfg.VKMenuVideoHailuo02FastEnabled, domain.CommandMenuVideoHailuo02Fast)
-	disableWhenFalse(cfg.FeatureVideoRouteHailuo23StandardEnabled || cfg.FeatureVideoRouteHailuo23FastEnabled, domain.CommandMenuVideoHailuo02)
-	disableWhenFalse(cfg.FeatureVideoRouteHailuo23StandardEnabled, domain.CommandMenuVideoHailuo02Standard)
-	disableWhenFalse(cfg.FeatureVideoRouteHailuo23FastEnabled, domain.CommandMenuVideoHailuo02Fast)
-	enableWhenTrue(cfg.FeatureVideoRouteHailuo23StandardEnabled || cfg.FeatureVideoRouteHailuo23FastEnabled, domain.CommandMenuVideoHailuo02)
-	enableWhenTrue(cfg.FeatureVideoRouteHailuo23StandardEnabled, domain.CommandMenuVideoHailuo02Standard)
-	enableWhenTrue(cfg.FeatureVideoRouteHailuo23FastEnabled, domain.CommandMenuVideoHailuo02Fast)
-	disableWhenFalse(cfg.VKMenuImageTextEnabled, domain.CommandMenuImageText)
-	disableWhenFalse(cfg.VKMenuImageReferenceEnabled, domain.CommandMenuImageReference)
+	enableWhenTrue(seedanceReady, domain.CommandMenuVideoSeedance1, domain.CommandMenuVideoSeedance1Lite)
+	hailuoStandardReady := videoRouteAvailable(domain.VideoRouteHailuo23Standard)
+	hailuoFastReady := videoRouteAvailable(domain.VideoRouteHailuo23Fast)
+	disableWhenFalse(cfg.VKMenuVideoHailuo02Enabled && (hailuoStandardReady || hailuoFastReady), domain.CommandMenuVideoHailuo02)
+	disableWhenFalse(cfg.VKMenuVideoHailuo02StandardEnabled && hailuoStandardReady, domain.CommandMenuVideoHailuo02Standard)
+	disableWhenFalse(cfg.VKMenuVideoHailuo02FastEnabled && hailuoFastReady, domain.CommandMenuVideoHailuo02Fast)
+	enableWhenTrue(hailuoStandardReady || hailuoFastReady, domain.CommandMenuVideoHailuo02)
+	enableWhenTrue(hailuoStandardReady, domain.CommandMenuVideoHailuo02Standard)
+	enableWhenTrue(hailuoFastReady, domain.CommandMenuVideoHailuo02Fast)
+	disableWhenFalse(imageAvailable(modelcatalog.MiniAppImageNanoBanana2), domain.CommandMenuImageNanoBanana2)
+	disableWhenFalse(imageAvailable(modelcatalog.MiniAppImageSeedream45), domain.CommandMenuImageDeepInfraSeedream)
+	disableWhenFalse(imageAvailable(modelcatalog.MiniAppImageSDXLTurbo), domain.CommandMenuImageDeepInfraSDXL)
+	disableWhenFalse(imageAvailable(modelcatalog.MiniAppImageGPTImage2), domain.CommandMenuImageGPTImage2)
+	disableWhenFalse(cfg.VKMenuImageReferenceEnabled && imageReferenceAvailable(), domain.CommandMenuImageReference)
 	disableWhenFalse(cfg.VKMenuStudentsSolverEnabled, domain.CommandMenuStudentSolver)
 	disableWhenFalse(cfg.VKMenuStudentsPresentationEnabled, domain.CommandMenuStudentPresentation)
 	disableWhenFalse(cfg.VKMenuStudentsReportEnabled, domain.CommandMenuStudentReport)
 	disableWhenFalse(cfg.VKMenuStudentsQAEnabled, domain.CommandMenuStudentQA)
-
-	if routePreviewEnabled && cfg.VKMenuVideoEnabled {
-		previewCommands := []struct {
-			enabled  bool
-			commands []domain.CommandType
-		}{
-			{
-				enabled: cfg.VKMenuVideoSora2Enabled,
-				commands: []domain.CommandType{
-					domain.CommandMenuVideoSora2,
-				},
-			},
-			{
-				enabled: cfg.VKMenuVideoSora2Enabled && cfg.VKMenuVideoSora2StartEnabled,
-				commands: []domain.CommandType{
-					domain.CommandMenuVideoSora2Start,
-				},
-			},
-			{
-				enabled: cfg.VKMenuVideoSora2Enabled && cfg.VKMenuVideoSora2ExamplesEnabled,
-				commands: []domain.CommandType{
-					domain.CommandMenuVideoSora2Examples,
-				},
-			},
-			{
-				enabled: cfg.VKMenuVideoKling21Enabled,
-				commands: []domain.CommandType{
-					domain.CommandMenuVideoKling21,
-				},
-			},
-			{
-				enabled: cfg.VKMenuVideoKling21Enabled && cfg.VKMenuVideoKling21StartEnabled,
-				commands: []domain.CommandType{
-					domain.CommandMenuVideoKling21Start,
-				},
-			},
-			{
-				enabled: cfg.VKMenuVideoKling21Enabled && cfg.VKMenuVideoKling21ExamplesEnabled,
-				commands: []domain.CommandType{
-					domain.CommandMenuVideoKling21Examples,
-				},
-			},
-			{
-				enabled: cfg.VKMenuVideoSeedance1Enabled,
-				commands: []domain.CommandType{
-					domain.CommandMenuVideoSeedance1,
-				},
-			},
-			{
-				enabled: cfg.VKMenuVideoSeedance1Enabled && cfg.VKMenuVideoSeedance1LiteEnabled,
-				commands: []domain.CommandType{
-					domain.CommandMenuVideoSeedance1Lite,
-				},
-			},
-			{
-				enabled: cfg.VKMenuVideoHailuo02Enabled,
-				commands: []domain.CommandType{
-					domain.CommandMenuVideoHailuo02,
-				},
-			},
-			{
-				enabled: cfg.VKMenuVideoHailuo02Enabled && cfg.VKMenuVideoHailuo02StandardEnabled,
-				commands: []domain.CommandType{
-					domain.CommandMenuVideoHailuo02Standard,
-				},
-			},
-			{
-				enabled: cfg.VKMenuVideoHailuo02Enabled && cfg.VKMenuVideoHailuo02FastEnabled,
-				commands: []domain.CommandType{
-					domain.CommandMenuVideoHailuo02Fast,
-				},
-			},
-		}
-		for _, group := range previewCommands {
-			if !group.enabled {
-				continue
-			}
-			for _, command := range group.commands {
-				delete(disabled, command)
-				enabled[command] = true
-			}
-		}
-	}
 
 	return vkinbound.MenuFeatureFlags{DisabledCommands: disabled, EnabledCommands: enabled}
 }

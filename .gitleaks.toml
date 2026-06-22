@@ -58,5 +58,6 @@ regexes = [
   '''dev-confirmation''',
   '''(?i)change[-_]?me''',
   '''example''',
+  '''loadtest-(confirmation|admin-token)''',
   '''placeholder''',
 ]

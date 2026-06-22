@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -22,14 +23,16 @@ const (
 	ModelKlingO3Standard = "kling-o3/standard"
 	ModelSeedance20Fast  = "seedance-2-fast"
 	ModelRunwayGen45     = "runway-gen-4.5"
+	ModelNanoBanana2New  = "nano-banana-2-new"
 
 	klingO3CreditsPerSecond    int64 = 10
 	seedance20CreditsPerSecond int64 = 28
 	productPriceMultiplier           = 2
 
-	maxKlingReferenceImages    = 4
-	maxSeedanceReferenceImages = 4
-	maxRunwayReferenceImages   = 1
+	maxKlingReferenceImages       = 4
+	maxSeedanceReferenceImages    = 4
+	maxRunwayReferenceImages      = 1
+	maxNanoBanana2ReferenceImages = 14
 )
 
 // Config holds PoYo connection settings.
@@ -75,6 +78,12 @@ func (p *Provider) Name() domain.ProviderName { return domain.ProviderPoYo }
 func (p *Provider) Capabilities(context.Context) ([]domain.Capability, error) {
 	return []domain.Capability{
 		{
+			Operation:       domain.OperationImageGenerate,
+			Modality:        domain.ModalityImage,
+			ModelCode:       ModelNanoBanana2New,
+			SupportsPolling: true,
+		},
+		{
 			Operation:       domain.OperationVideoGenerate,
 			Modality:        domain.ModalityVideo,
 			ModelCode:       ModelKlingO3Standard,
@@ -116,6 +125,17 @@ func (p *Provider) Estimate(_ context.Context, req domain.ProviderRequest) (doma
 		}
 		return domain.CostEstimate{AmountCredits: snapshot.InternalCostCredits, Currency: "credits", Estimated: false}, nil
 	}
+	if req.Operation == domain.OperationImageGenerate || req.Modality == domain.ModalityImage {
+		if err := validateImageShape(req, false); err != nil {
+			return domain.CostEstimate{}, err
+		}
+		providerCredits := nanoBanana2ProviderCredits(req.Resolution)
+		return domain.CostEstimate{
+			AmountCredits: providerCredits * productPriceMultiplier,
+			Currency:      "credits",
+			Estimated:     false,
+		}, nil
+	}
 	if err := validateVideoShape(req, false); err != nil {
 		return domain.CostEstimate{}, err
 	}
@@ -146,15 +166,16 @@ func (p *Provider) Submit(ctx context.Context, req domain.ProviderRequest) (doma
 	if err := p.postJSON(ctx, "/api/generate/submit", body, &decoded, req.IdempotencyKey); err != nil {
 		return domain.ProviderTask{}, err
 	}
-	if !decoded.Success {
-		return domain.ProviderTask{}, apiEnvelopeError(http.StatusOK, decoded.Error, decoded.Message)
+	if err := decoded.err(); err != nil {
+		return domain.ProviderTask{}, err
 	}
-	if strings.TrimSpace(decoded.TaskID) == "" {
+	taskID := decoded.taskID()
+	if strings.TrimSpace(taskID) == "" {
 		return domain.ProviderTask{}, &Error{Class: domain.ProviderErrInternal, Message: "empty submit task id"}
 	}
 
 	now := p.now()
-	status := mapTaskStatus(decoded.Status)
+	status := mapTaskStatus(decoded.status())
 	if status == "" {
 		status = domain.ProviderTaskPending
 	}
@@ -162,7 +183,7 @@ func (p *Provider) Submit(ctx context.Context, req domain.ProviderRequest) (doma
 		JobID:          req.JobID,
 		Provider:       domain.ProviderPoYo,
 		ModelCode:      req.ModelCode,
-		ExternalID:     strings.TrimSpace(decoded.TaskID),
+		ExternalID:     strings.TrimSpace(taskID),
 		AttemptNo:      1,
 		Status:         status,
 		Request:        req.Params,
@@ -194,24 +215,25 @@ func (p *Provider) Poll(ctx context.Context, ref domain.ProviderTaskRef) (domain
 	if err := p.getJSON(ctx, "/api/generate/status/"+url.PathEscape(taskID), &decoded); err != nil {
 		return domain.ProviderTaskResult{}, err
 	}
-	if decoded.Success != nil && !*decoded.Success {
-		return domain.ProviderTaskResult{}, apiEnvelopeError(http.StatusOK, decoded.Error, decoded.Message)
+	if err := decoded.err(); err != nil {
+		return domain.ProviderTaskResult{}, err
 	}
-	status := mapTaskStatus(decoded.Status)
+	status := mapTaskStatus(decoded.status())
 	switch status {
 	case domain.ProviderTaskSucceeded:
-		outputs := decoded.Result.OutputVideoURLs()
+		outputs := decoded.outputMediaURLs()
 		if len(outputs) == 0 {
 			return domain.ProviderTaskResult{
 				Status:       domain.ProviderTaskFailed,
 				ErrorClass:   domain.ProviderErrOutputDownloadFailed,
-				ErrorMessage: "poyo task completed without video output",
+				ErrorMessage: "poyo task completed without media output",
 				Raw:          sanitizedTaskMetadata(decoded),
 			}, nil
 		}
 		return domain.ProviderTaskResult{Status: status, OutputURLs: outputs, Raw: sanitizedTaskMetadata(decoded)}, nil
 	case domain.ProviderTaskFailed:
-		class := classifyPoYoError(0, decoded.Error.codeString(), decoded.Error.Type, decoded.Error.Message)
+		perr := decoded.providerError()
+		class := classifyPoYoError(0, perr.codeString(), perr.Type, perr.Message)
 		return domain.ProviderTaskResult{
 			Status:       domain.ProviderTaskFailed,
 			ErrorClass:   class,
@@ -244,25 +266,86 @@ func (p *Provider) storeIdempotentTask(key string, task domain.ProviderTask) {
 }
 
 type submitRequest struct {
-	Model      string         `json:"model"`
-	Inputs     map[string]any `json:"inputs"`
-	Parameters map[string]any `json:"parameters,omitempty"`
-	WebhookURL string         `json:"webhook_url,omitempty"`
+	Model       string         `json:"model"`
+	Input       map[string]any `json:"input"`
+	CallbackURL string         `json:"callback_url,omitempty"`
 }
 
 type submitResponse struct {
-	Success bool          `json:"success"`
-	TaskID  string        `json:"task_id"`
-	Status  string        `json:"status"`
+	Code    int           `json:"code,omitempty"`
+	Data    submitData    `json:"data,omitempty"`
+	Task    submitData    `json:"task,omitempty"`
+	Success *bool         `json:"success,omitempty"`
+	ID      string        `json:"id,omitempty"`
+	UUID    string        `json:"uuid,omitempty"`
+	JobID   string        `json:"job_id,omitempty"`
+	TaskID  string        `json:"task_id,omitempty"`
+	Status  string        `json:"status,omitempty"`
 	Message string        `json:"message,omitempty"`
 	Error   providerError `json:"error,omitempty"`
 }
 
+type submitData struct {
+	ID          string `json:"id,omitempty"`
+	UUID        string `json:"uuid,omitempty"`
+	JobID       string `json:"job_id,omitempty"`
+	TaskID      string `json:"task_id,omitempty"`
+	Status      string `json:"status,omitempty"`
+	CreatedTime string `json:"created_time,omitempty"`
+}
+
+func (r submitResponse) err() error {
+	if r.Success != nil && !*r.Success {
+		return apiEnvelopeError(http.StatusOK, r.Error, r.Message)
+	}
+	if r.Code != 0 && r.Code != http.StatusOK {
+		return apiEnvelopeError(r.Code, r.Error, r.Message)
+	}
+	if !r.Error.empty() {
+		return apiEnvelopeError(http.StatusOK, r.Error, r.Message)
+	}
+	return nil
+}
+
+func (r submitResponse) taskID() string {
+	for _, raw := range []string{
+		r.Data.TaskID,
+		r.Data.ID,
+		r.Data.UUID,
+		r.Data.JobID,
+		r.Task.TaskID,
+		r.Task.ID,
+		r.Task.UUID,
+		r.Task.JobID,
+		r.TaskID,
+		r.ID,
+		r.UUID,
+		r.JobID,
+	} {
+		if trimmed := strings.TrimSpace(raw); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
+}
+
+func (r submitResponse) status() string {
+	if trimmed := strings.TrimSpace(r.Data.Status); trimmed != "" {
+		return trimmed
+	}
+	if trimmed := strings.TrimSpace(r.Task.Status); trimmed != "" {
+		return trimmed
+	}
+	return strings.TrimSpace(r.Status)
+}
+
 type statusResponse struct {
+	Code      int            `json:"code,omitempty"`
+	Data      statusData     `json:"data,omitempty"`
 	Success   *bool          `json:"success,omitempty"`
-	TaskID    string         `json:"task_id"`
-	Status    string         `json:"status"`
-	Progress  int            `json:"progress,omitempty"`
+	TaskID    string         `json:"task_id,omitempty"`
+	Status    string         `json:"status,omitempty"`
+	Progress  progressValue  `json:"progress,omitempty"`
 	Result    statusResult   `json:"result,omitempty"`
 	Error     providerError  `json:"error,omitempty"`
 	Message   string         `json:"message,omitempty"`
@@ -271,24 +354,139 @@ type statusResponse struct {
 	Raw       map[string]any `json:"-"`
 }
 
+type statusData struct {
+	ID            string        `json:"id,omitempty"`
+	UUID          string        `json:"uuid,omitempty"`
+	JobID         string        `json:"job_id,omitempty"`
+	TaskID        string        `json:"task_id,omitempty"`
+	Status        string        `json:"status,omitempty"`
+	CreditsAmount float64       `json:"credits_amount,omitempty"`
+	Files         []statusFile  `json:"files,omitempty"`
+	Result        statusResult  `json:"result,omitempty"`
+	Output        statusResult  `json:"output,omitempty"`
+	CreatedTime   string        `json:"created_time,omitempty"`
+	Progress      progressValue `json:"progress,omitempty"`
+	ErrorMessage  *string       `json:"error_message,omitempty"`
+}
+
+type statusFile struct {
+	FileURL     string `json:"file_url,omitempty"`
+	FileType    string `json:"file_type,omitempty"`
+	Label       string `json:"label,omitempty"`
+	Format      string `json:"format,omitempty"`
+	ContentType string `json:"content_type,omitempty"`
+	FileName    string `json:"file_name,omitempty"`
+	FileSize    int64  `json:"file_size,omitempty"`
+}
+
+func (r statusResponse) err() error {
+	if r.Success != nil && !*r.Success {
+		return apiEnvelopeError(http.StatusOK, r.Error, r.Message)
+	}
+	if r.Code != 0 && r.Code != http.StatusOK {
+		return apiEnvelopeError(r.Code, r.Error, r.Message)
+	}
+	if !r.Error.empty() {
+		return apiEnvelopeError(http.StatusOK, r.Error, r.Message)
+	}
+	return nil
+}
+
+func (r statusResponse) taskID() string {
+	for _, raw := range []string{r.Data.TaskID, r.Data.ID, r.Data.UUID, r.Data.JobID, r.TaskID} {
+		if trimmed := strings.TrimSpace(raw); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
+}
+
+func (r statusResponse) status() string {
+	if trimmed := strings.TrimSpace(r.Data.Status); trimmed != "" {
+		return trimmed
+	}
+	return strings.TrimSpace(r.Status)
+}
+
+func (r statusResponse) progress() int {
+	if r.Data.Progress != 0 {
+		return int(r.Data.Progress)
+	}
+	return int(r.Progress)
+}
+
+func (r statusResponse) createdAt() string {
+	if trimmed := strings.TrimSpace(r.Data.CreatedTime); trimmed != "" {
+		return trimmed
+	}
+	return strings.TrimSpace(r.CreatedAt)
+}
+
+func (r statusResponse) updatedAt() string {
+	return strings.TrimSpace(r.UpdatedAt)
+}
+
+func (r statusResponse) outputMediaURLs() []string {
+	out := r.Result.OutputVideoURLs()
+	out = append(out, r.Data.Result.OutputVideoURLs()...)
+	out = append(out, r.Data.Output.OutputVideoURLs()...)
+	for _, file := range r.Data.Files {
+		if strings.TrimSpace(file.FileURL) == "" {
+			continue
+		}
+		fileType := strings.ToLower(strings.TrimSpace(file.FileType))
+		format := strings.ToLower(strings.TrimSpace(file.Format))
+		contentType := strings.ToLower(strings.TrimSpace(file.ContentType))
+		if fileType == "image" ||
+			fileType == "video" ||
+			strings.Contains(contentType, "image/") ||
+			strings.Contains(contentType, "video/") ||
+			format == "jpg" ||
+			format == "jpeg" ||
+			format == "png" ||
+			format == "webp" ||
+			format == "mp4" ||
+			format == "mov" {
+			out = append(out, strings.TrimSpace(file.FileURL))
+		}
+	}
+	return out
+}
+
+func (r statusResponse) providerError() providerError {
+	if r.Data.ErrorMessage != nil && strings.TrimSpace(*r.Data.ErrorMessage) != "" {
+		return providerError{Message: strings.TrimSpace(*r.Data.ErrorMessage)}
+	}
+	if !r.Error.empty() {
+		return r.Error
+	}
+	if msg := strings.TrimSpace(r.Message); msg != "" {
+		return providerError{Message: msg}
+	}
+	return r.Error
+}
+
 type statusResult struct {
 	VideoURL   string  `json:"video_url,omitempty"`
 	VideoURLs  urlList `json:"video_urls,omitempty"`
+	ImageURL   string  `json:"image_url,omitempty"`
+	ImageURLs  urlList `json:"image_urls,omitempty"`
 	OutputURL  string  `json:"output_url,omitempty"`
 	OutputURLs urlList `json:"output_urls,omitempty"`
 	URL        string  `json:"url,omitempty"`
+	URLs       urlList `json:"urls,omitempty"`
 	Duration   int     `json:"duration,omitempty"`
 	Resolution string  `json:"resolution,omitempty"`
 }
 
 func (r statusResult) OutputVideoURLs() []string {
 	var out []string
-	for _, value := range []string{r.VideoURL, r.OutputURL, r.URL} {
+	for _, value := range []string{r.VideoURL, r.ImageURL, r.OutputURL, r.URL} {
 		if trimmed := strings.TrimSpace(value); trimmed != "" {
 			out = append(out, trimmed)
 		}
 	}
-	for _, values := range []urlList{r.VideoURLs, r.OutputURLs} {
+	for _, values := range []urlList{r.VideoURLs, r.ImageURLs, r.OutputURLs, r.URLs} {
 		for _, value := range values {
 			if trimmed := strings.TrimSpace(value); trimmed != "" {
 				out = append(out, trimmed)
@@ -299,6 +497,31 @@ func (r statusResult) OutputVideoURLs() []string {
 }
 
 type urlList []string
+
+type progressValue int
+
+func (p *progressValue) UnmarshalJSON(data []byte) error {
+	raw := strings.TrimSpace(string(data))
+	if raw == "" || raw == "null" {
+		return nil
+	}
+	var numeric float64
+	if err := json.Unmarshal(data, &numeric); err == nil {
+		*p = progressValue(numeric)
+		return nil
+	}
+	var text string
+	if err := json.Unmarshal(data, &text); err == nil {
+		text = strings.TrimSpace(strings.TrimSuffix(text, "%"))
+		if text == "" {
+			return nil
+		}
+		if parsed, parseErr := strconv.ParseFloat(text, 64); parseErr == nil {
+			*p = progressValue(parsed)
+		}
+	}
+	return nil
+}
 
 func (u *urlList) UnmarshalJSON(data []byte) error {
 	var values []string
@@ -357,42 +580,145 @@ type requestParams struct {
 }
 
 func buildSubmitRequest(req domain.ProviderRequest) (submitRequest, error) {
+	if req.Operation == domain.OperationImageGenerate || req.Modality == domain.ModalityImage {
+		return buildImageSubmitRequest(req)
+	}
+	return buildVideoSubmitRequest(req)
+}
+
+func buildImageSubmitRequest(req domain.ProviderRequest) (submitRequest, error) {
+	if err := validateImageShape(req, true); err != nil {
+		return submitRequest{}, err
+	}
+	inputURLs := cleanInputURLs(req.InputURLs)
+	input := map[string]any{
+		"prompt":     strings.TrimSpace(req.Prompt),
+		"size":       effectiveImageSize(req),
+		"resolution": effectiveImageResolution(req.Resolution),
+	}
+	if len(inputURLs) > 0 {
+		input["image_urls"] = inputURLs
+	}
+	return submitRequest{
+		Model: strings.TrimSpace(req.ModelCode),
+		Input: input,
+	}, nil
+}
+
+func buildVideoSubmitRequest(req domain.ProviderRequest) (submitRequest, error) {
 	if err := validateVideoShape(req, true); err != nil {
 		return submitRequest{}, err
 	}
 	inputURLs := cleanInputURLs(req.InputURLs)
-	inputs := map[string]any{
-		"prompt": strings.TrimSpace(req.Prompt),
-	}
-	if len(inputURLs) > 0 {
-		inputs["image_url"] = inputURLs[0]
+	input := map[string]any{
+		"prompt":       strings.TrimSpace(req.Prompt),
+		"duration":     effectiveDuration(req.DurationSec),
+		"aspect_ratio": effectiveAspectRatio(req.AspectRatio),
 	}
 	switch strings.TrimSpace(req.ModelCode) {
 	case ModelKlingO3Standard:
+		input["sound"] = false
 		if len(inputURLs) > 0 {
-			inputs["reference_images"] = inputURLs
+			input["image_urls"] = inputURLs
 		}
 	case ModelSeedance20Fast:
+		input["resolution"] = effectiveResolution(req.ModelCode, req.Resolution)
+		input["generate_audio"] = false
 		if len(inputURLs) > 0 {
-			inputs["reference_images"] = inputURLs
+			input["image_urls"] = inputURLs
 		}
 	case ModelRunwayGen45:
 		// PoYo Runway Gen-4.5 allows only one optional reference image until
 		// smoke tests prove a broader input contract.
-	}
-	params := map[string]any{
-		"duration":     effectiveDuration(req.DurationSec),
-		"resolution":   effectiveResolution(req.ModelCode, req.Resolution),
-		"aspect_ratio": effectiveAspectRatio(req.AspectRatio),
-	}
-	if strings.TrimSpace(req.ModelCode) == ModelKlingO3Standard {
-		params["audio"] = false
+		input["resolution"] = effectiveResolution(req.ModelCode, req.Resolution)
+		if len(inputURLs) > 0 {
+			input["image_url"] = inputURLs[0]
+		}
 	}
 	return submitRequest{
-		Model:      strings.TrimSpace(req.ModelCode),
-		Inputs:     inputs,
-		Parameters: params,
+		Model: strings.TrimSpace(req.ModelCode),
+		Input: input,
 	}, nil
+}
+
+func validateImageShape(req domain.ProviderRequest, requirePrompt bool) error {
+	if req.Operation != domain.OperationImageGenerate || req.Modality != domain.ModalityImage {
+		return &Error{Class: domain.ProviderErrUnsupportedCapab, Message: string(req.Operation) + "/" + string(req.Modality)}
+	}
+	if strings.TrimSpace(req.ModelCode) != ModelNanoBanana2New {
+		return &Error{Class: domain.ProviderErrUnsupportedCapab, Message: "unsupported PoYo image model"}
+	}
+	if requirePrompt {
+		prompt := strings.TrimSpace(req.Prompt)
+		if prompt == "" {
+			return &Error{Class: domain.ProviderErrInvalidRequest, Message: "prompt is required"}
+		}
+		if len([]rune(prompt)) > 20000 {
+			return &Error{Class: domain.ProviderErrInvalidRequest, Message: "prompt exceeds 20000 characters"}
+		}
+	}
+	if value := strings.TrimSpace(req.AspectRatio); value != "" && !allowedImageSize(value) {
+		return &Error{Class: domain.ProviderErrInvalidRequest, Message: "unsupported PoYo image size"}
+	}
+	if value := strings.TrimSpace(req.Size); value != "" && !allowedImageSize(value) {
+		return &Error{Class: domain.ProviderErrInvalidRequest, Message: "unsupported PoYo image size"}
+	}
+	if value := strings.TrimSpace(req.Resolution); value != "" && !allowedImageResolution(value) {
+		return &Error{Class: domain.ProviderErrInvalidRequest, Message: "unsupported PoYo image resolution"}
+	}
+	if len(cleanInputURLs(req.InputURLs)) > maxNanoBanana2ReferenceImages {
+		return &Error{Class: domain.ProviderErrInvalidRequest, Message: "too many Nano Banana 2 reference images"}
+	}
+	return nil
+}
+
+func effectiveImageSize(req domain.ProviderRequest) string {
+	for _, value := range []string{req.AspectRatio, req.Size} {
+		trimmed := strings.TrimSpace(value)
+		if allowedImageSize(trimmed) {
+			return trimmed
+		}
+	}
+	return "1:1"
+}
+
+func effectiveImageResolution(value string) string {
+	switch strings.ToUpper(strings.TrimSpace(value)) {
+	case "1K", "2K", "4K":
+		return strings.ToUpper(strings.TrimSpace(value))
+	default:
+		return "1K"
+	}
+}
+
+func nanoBanana2ProviderCredits(resolution string) int64 {
+	switch strings.ToUpper(strings.TrimSpace(resolution)) {
+	case "2K":
+		return 8
+	case "4K":
+		return 12
+	default:
+		return 5
+	}
+}
+
+func allowedImageResolution(value string) bool {
+	switch strings.ToUpper(strings.TrimSpace(value)) {
+	case "1K", "2K", "4K":
+		return true
+	default:
+		return false
+	}
+}
+
+func allowedImageSize(value string) bool {
+	switch strings.TrimSpace(value) {
+	case "1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9",
+		"1:4", "4:1", "1:8", "8:1":
+		return true
+	default:
+		return false
+	}
 }
 
 func validateVideoShape(req domain.ProviderRequest, requirePrompt bool) error {
@@ -400,7 +726,7 @@ func validateVideoShape(req domain.ProviderRequest, requirePrompt bool) error {
 		return &Error{Class: domain.ProviderErrUnsupportedCapab, Message: string(req.Operation) + "/" + string(req.Modality)}
 	}
 	model := strings.TrimSpace(req.ModelCode)
-	if !isSupportedModel(model) {
+	if !isSupportedVideoModel(model) {
 		return &Error{Class: domain.ProviderErrUnsupportedCapab, Message: "unsupported PoYo video model"}
 	}
 	if requirePrompt {
@@ -490,6 +816,10 @@ func videoReferenceRequested(params requestParams) bool {
 }
 
 func isSupportedModel(model string) bool {
+	return isSupportedVideoModel(model) || strings.TrimSpace(model) == ModelNanoBanana2New
+}
+
+func isSupportedVideoModel(model string) bool {
 	switch strings.TrimSpace(model) {
 	case ModelKlingO3Standard, ModelSeedance20Fast, ModelRunwayGen45:
 		return true
@@ -651,12 +981,23 @@ func classifyPoYoError(status int, code, typ, msg string) domain.ProviderErrorCl
 	switch {
 	case strings.Contains(lower, "balance") || strings.Contains(lower, "insufficient") || strings.Contains(lower, "quota") || strings.Contains(lower, "credit"):
 		return domain.ProviderErrInsufficientBalance
-	case strings.Contains(lower, "rate") || strings.Contains(lower, "too many"):
-		return domain.ProviderErrRateLimited
 	case strings.Contains(lower, "auth") || strings.Contains(lower, "unauthorized") || strings.Contains(lower, "forbidden") || strings.Contains(lower, "token") || strings.Contains(lower, "permission"):
 		return domain.ProviderErrAuthFailed
-	case strings.Contains(lower, "moderation") || strings.Contains(lower, "policy") || strings.Contains(lower, "safety") || strings.Contains(lower, "nsfw") || strings.Contains(lower, "sensitive") || strings.Contains(lower, "content rejected"):
+	case strings.Contains(lower, "moderation") ||
+		strings.Contains(lower, "policy") ||
+		strings.Contains(lower, "safety") ||
+		strings.Contains(lower, "nsfw") ||
+		strings.Contains(lower, "sensitive") ||
+		strings.Contains(lower, "content rejected") ||
+		strings.Contains(lower, "does not comply") ||
+		strings.Contains(lower, "platform regulation") ||
+		strings.Contains(lower, "prohibited") ||
+		strings.Contains(lower, "violat") ||
+		strings.Contains(lower, "filtered out") ||
+		strings.Contains(lower, "blocked by"):
 		return domain.ProviderErrContentRejected
+	case strings.Contains(lower, "rate") || strings.Contains(lower, "too many"):
+		return domain.ProviderErrRateLimited
 	case strings.Contains(lower, "timeout") || strings.Contains(lower, "timed out"):
 		return domain.ProviderErrTimeout
 	case strings.Contains(lower, "unavailable") || strings.Contains(lower, "overload") || strings.Contains(lower, "busy") || strings.Contains(lower, "capacity"):
@@ -684,11 +1025,11 @@ func classifyPoYoError(status int, code, typ, msg string) domain.ProviderErrorCl
 
 func mapTaskStatus(status string) domain.ProviderTaskStatus {
 	switch strings.ToLower(strings.TrimSpace(status)) {
-	case "submitted", "pending", "queued":
+	case "not_started", "submitted", "pending", "queued":
 		return domain.ProviderTaskPending
 	case "processing", "running", "in_progress", "in-progress":
 		return domain.ProviderTaskProcessing
-	case "completed", "complete", "succeeded", "success", "done":
+	case "finished", "completed", "complete", "succeeded", "success", "done":
 		return domain.ProviderTaskSucceeded
 	case "failed", "error":
 		return domain.ProviderTaskFailed
@@ -701,11 +1042,11 @@ func mapTaskStatus(status string) domain.ProviderTaskStatus {
 
 func sanitizedTaskMetadata(data statusResponse) json.RawMessage {
 	metadata := map[string]any{
-		"task_id":    data.TaskID,
-		"status":     data.Status,
-		"progress":   data.Progress,
-		"created_at": data.CreatedAt,
-		"updated_at": data.UpdatedAt,
+		"task_id":    data.taskID(),
+		"status":     data.status(),
+		"progress":   data.progress(),
+		"created_at": data.createdAt(),
+		"updated_at": data.updatedAt(),
 	}
 	if data.Result.Duration > 0 {
 		metadata["duration"] = data.Result.Duration
@@ -713,11 +1054,11 @@ func sanitizedTaskMetadata(data statusResponse) json.RawMessage {
 	if strings.TrimSpace(data.Result.Resolution) != "" {
 		metadata["resolution"] = data.Result.Resolution
 	}
-	if !data.Error.empty() {
-		class := classifyPoYoError(0, data.Error.codeString(), data.Error.Type, data.Error.Message)
+	if perr := data.providerError(); !perr.empty() {
+		class := classifyPoYoError(0, perr.codeString(), perr.Type, perr.Message)
 		metadata["error"] = map[string]any{
-			"code":    data.Error.codeString(),
-			"type":    data.Error.Type,
+			"code":    perr.codeString(),
+			"type":    perr.Type,
 			"message": providerErrorMessage(class, "poyo task failed"),
 		}
 	}

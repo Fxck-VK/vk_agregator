@@ -12,7 +12,10 @@ export interface Job {
   status: string;
   prompt?: string;
   conversation_id?: string;
+  model_id?: string;
+  model_name?: string;
   video_route_alias?: string;
+  image_quality?: string;
   cost_estimate: number;
   cost_captured: number;
   output_artifact_ids: string[];
@@ -27,6 +30,7 @@ export interface CreateJobInput {
   prompt: string;
   model_id?: string;
   video_route_alias?: string;
+  image_quality?: string;
   reference_artifact_ids?: string[];
   /** video_generate only: backend route-specific allowed durations */
   duration_sec?: number;
@@ -65,6 +69,7 @@ export interface EstimateInput {
   prompt: string;
   model_id?: string;
   video_route_alias?: string;
+  image_quality?: string;
   reference_artifact_ids?: string[];
   duration_sec?: number;
 }
@@ -74,13 +79,22 @@ export interface EstimateResponse {
   model_id?: string;
   model_name?: string;
   video_route_alias?: string;
+  image_quality?: string;
   cost_estimate: number;
   balance_credits: number;
   enough_credits: boolean;
 }
 
-export interface VideoRoute {
-  alias: string;
+export interface ModelCatalogItem {
+  type: "image" | "video";
+  id: string;
+  alias?: string;
+  name: string;
+  description?: string;
+  estimate_credits?: number;
+  enabled: boolean;
+  quality_options?: string[];
+  default_quality?: string;
   allowed_durations_sec?: number[];
   allowed_resolutions?: string[];
   allowed_aspect_ratios?: string[];
@@ -205,6 +219,7 @@ export interface ChatConversationMessageListResponse {
 export type ApiErrorCode =
   | "validation_error"
   | "unsupported_model"
+  | "reference_artifacts_required"
   | "reference_artifacts_unsupported"
   | "too_many_reference_artifacts"
   | "media_upload_invalid"
@@ -364,16 +379,6 @@ export function trackPaymentFlowError(step: string, error: unknown): void {
 
 export function normalizeRawParams(raw: string): string {
   return raw.replace(/^[?#]/, "");
-}
-
-export interface VideoRouteListResponse {
-  items: VideoRoute[];
-  pagination: {
-    limit: number;
-    offset: number;
-    count: number;
-    has_more: boolean;
-  };
 }
 
 function isForwardedLaunchParamKey(key: string): boolean {
@@ -536,6 +541,9 @@ function apiErrorCode(status: number, backendError?: string): ApiErrorCode {
   if (raw === "reference_artifacts_unsupported") {
     return "reference_artifacts_unsupported";
   }
+  if (raw === "reference_artifacts_required") {
+    return "reference_artifacts_required";
+  }
   if (raw === "too_many_reference_artifacts" || raw === "too many reference artifacts") {
     return "too_many_reference_artifacts";
   }
@@ -571,6 +579,8 @@ function apiErrorMessageForCode(code: ApiErrorCode): string {
       return "Проверьте запрос и попробуйте снова";
     case "unsupported_model":
       return "Выбранная модель недоступна. Выберите другую модель";
+    case "reference_artifacts_required":
+      return "Для этой модели нужно загрузить стартовую картинку";
     case "reference_artifacts_unsupported":
       return "Генерация с референсом пока недоступна. Попробуйте без фото или позже";
     case "too_many_reference_artifacts":
@@ -782,8 +792,12 @@ export async function listJobs(): Promise<Job[]> {
   return data.items ?? [];
 }
 
-export async function listVideoRoutes(): Promise<VideoRoute[]> {
-  const data = await request<VideoRouteListResponse>("/miniapp/video-routes");
+interface ModelCatalogListResponse {
+  items: ModelCatalogItem[];
+}
+
+export async function listModelCatalog(): Promise<ModelCatalogItem[]> {
+  const data = await request<ModelCatalogListResponse>("/miniapp/model-catalog");
   return data.items ?? [];
 }
 

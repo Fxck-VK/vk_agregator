@@ -812,6 +812,9 @@ func TestDeliverySendsImageProviderFailureNoticeWithoutCapture(t *testing.T) {
 	if len(edits) != 1 || edits[0].MessageID != pending.MessageID || !strings.Contains(edits[0].Text, "Кредиты не списаны") {
 		t.Fatalf("unexpected failure notice edit: %+v", edits)
 	}
+	if !strings.Contains(edits[0].Text, "Генерация") || strings.Contains(edits[0].Text, "Медиаобработка") || strings.Contains(edits[0].Text, "provider") {
+		t.Fatalf("provider failure notice should be safe and specific: %q", edits[0].Text)
+	}
 	dels, _ := h.deliveries.ListByJob(ctx, job.ID)
 	if len(dels) != 1 || dels[0].Status != domain.DeliveryStatusSent || dels[0].VKMessageID == nil || *dels[0].VKMessageID != pending.MessageID {
 		t.Fatalf("failure delivery should be persisted as sent edit: %+v", dels)

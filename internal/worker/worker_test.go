@@ -464,6 +464,69 @@ func TestAsyncFlowViaPollWorker(t *testing.T) {
 	}
 }
 
+func TestPollWorkerResumesTerminalProviderTaskWithSavedArtifact(t *testing.T) {
+	provider := &captureImageProvider{name: domain.ProviderAPIMart}
+	h := newHarnessWithProvider(t, provider, nil)
+	ctx := context.Background()
+	job := h.queueJob(t, domain.OperationImageGenerate, domain.ModalityImage, "a cat")
+	artifact := &domain.Artifact{
+		OwnerUserID:   job.UserID,
+		Kind:          domain.ArtifactKindOutput,
+		MediaType:     domain.MediaTypeImage,
+		MimeType:      "image/png",
+		StorageBucket: "artifacts",
+		StorageKey:    "outputs/" + uuid.NewString() + ".png",
+		SHA256:        uuid.NewString(),
+		SizeBytes:     6,
+		Status:        domain.ArtifactStatusReady,
+	}
+	if err := h.store.Put(ctx, artifact.StorageBucket, artifact.StorageKey, []byte("output"), artifact.MimeType); err != nil {
+		t.Fatalf("put output artifact bytes: %v", err)
+	}
+	if err := h.artRepo.Create(ctx, artifact); err != nil {
+		t.Fatalf("create output artifact: %v", err)
+	}
+	job.Status = domain.JobStatusProviderPending
+	job.OutputArtifactIDs = []uuid.UUID{artifact.ID}
+	if err := h.jobs.Update(ctx, job); err != nil {
+		t.Fatalf("update job: %v", err)
+	}
+	rawResult, _ := json.Marshal(domain.ProviderTaskResult{
+		Status:     domain.ProviderTaskSucceeded,
+		OutputURLs: []string{"https://provider.example/output.png"},
+	})
+	pt := &domain.ProviderTask{
+		JobID:          job.ID,
+		Provider:       domain.ProviderAPIMart,
+		ModelCode:      "gpt-image-2",
+		ExternalID:     "task_done",
+		Status:         domain.ProviderTaskSucceeded,
+		Result:         rawResult,
+		IdempotencyKey: "provider_submit:" + job.ID.String() + ":1",
+	}
+	if err := h.tasks.Create(ctx, pt); err != nil {
+		t.Fatalf("create provider task: %v", err)
+	}
+
+	if err := h.poll.Process(ctx, taskFor(job)); err != nil {
+		t.Fatalf("poll process: %v", err)
+	}
+
+	got := h.reload(t, job.ID)
+	if got.Status != domain.JobStatusResultReady {
+		t.Fatalf("status = %q, want result_ready", got.Status)
+	}
+	if len(got.OutputArtifactIDs) != 1 || got.OutputArtifactIDs[0] != artifact.ID {
+		t.Fatalf("output artifacts = %v, want existing %s", got.OutputArtifactIDs, artifact.ID)
+	}
+	if len(h.streams.byStream[redisqueue.StreamDelivery]) != 1 {
+		t.Fatalf("expected delivery enqueue after recovery, got %v", h.streams.byStream)
+	}
+	if provider.polls != 0 {
+		t.Fatalf("provider poll called during durable recovery: %d", provider.polls)
+	}
+}
+
 func TestVideoProbeSuccessBeforeDelivery(t *testing.T) {
 	prober := &fakeVideoProber{metadata: domain.ArtifactMediaMetadata{
 		Width:       1280,
@@ -1352,6 +1415,7 @@ func TestGenerationImageRequestCarriesImageDefaultsAndReferences(t *testing.T) {
 	params, _ := json.Marshal(map[string]any{
 		"prompt":                 "a cat",
 		"aspect_ratio":           "1:1",
+		"resolution":             "4K",
 		"reference_artifact_ids": []string{reference.ID.String()},
 	})
 	job := &domain.Job{
@@ -1377,8 +1441,8 @@ func TestGenerationImageRequestCarriesImageDefaultsAndReferences(t *testing.T) {
 	if got.UserID != job.UserID {
 		t.Fatalf("provider request user id = %s, want %s", got.UserID, job.UserID)
 	}
-	if got.ModelCode != "foundation-image" || got.Size != "1024x1024" || got.AspectRatio != "1:1" {
-		t.Fatalf("unexpected image request defaults: model=%q size=%q aspect=%q", got.ModelCode, got.Size, got.AspectRatio)
+	if got.ModelCode != "foundation-image" || got.Size != "1024x1024" || got.AspectRatio != "1:1" || got.Resolution != "4K" {
+		t.Fatalf("unexpected image request defaults: model=%q size=%q aspect=%q resolution=%q", got.ModelCode, got.Size, got.AspectRatio, got.Resolution)
 	}
 	if len(got.ReferenceArtifactIDs) != 1 || got.ReferenceArtifactIDs[0] != reference.ID {
 		t.Fatalf("reference ids = %v, want %s", got.ReferenceArtifactIDs, reference.ID)
@@ -1417,6 +1481,44 @@ func TestGenerationImageRequestCarriesProviderFromParams(t *testing.T) {
 
 	if provider.last.Provider != domain.ProviderDeepInfra {
 		t.Fatalf("provider = %q, want %q", provider.last.Provider, domain.ProviderDeepInfra)
+	}
+}
+
+func TestGenerationImageRequestNormalizesDeepInfraQualitySize(t *testing.T) {
+	provider := &captureImageProvider{name: domain.ProviderDeepInfra}
+	h := newHarnessWithProvider(t, provider, func(d *worker.Deps) {
+		d.ImageSize = "2K"
+	})
+	ctx := context.Background()
+	params, _ := json.Marshal(map[string]any{
+		"prompt":     "a cat",
+		"provider":   string(domain.ProviderDeepInfra),
+		"resolution": "2K",
+	})
+	job := &domain.Job{
+		ID:             uuid.New(),
+		UserID:         uuid.New(),
+		OperationType:  domain.OperationImageGenerate,
+		Modality:       domain.ModalityImage,
+		Status:         domain.JobStatusQueued,
+		IdempotencyKey: "job:" + uuid.NewString(),
+		CorrelationID:  "corr",
+		CostReserved:   10,
+		Params:         params,
+	}
+	if err := h.jobs.Create(ctx, job); err != nil {
+		t.Fatalf("create job: %v", err)
+	}
+
+	if err := h.gen.Process(ctx, taskFor(job)); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+
+	if provider.last.Size != "2048x2048" {
+		t.Fatalf("size = %q, want 2048x2048", provider.last.Size)
+	}
+	if provider.last.Resolution != "2K" {
+		t.Fatalf("resolution = %q, want 2K", provider.last.Resolution)
 	}
 }
 
@@ -1896,8 +1998,18 @@ func TestGenerationVideoAPIMartStoresOutputBeforeDelivery(t *testing.T) {
 	if err := h.gen.Process(ctx, taskFor(job)); err != nil {
 		t.Fatalf("process: %v", err)
 	}
-	if !submitSeen || !pollSeen {
-		t.Fatalf("submitSeen=%v pollSeen=%v", submitSeen, pollSeen)
+	if !submitSeen || pollSeen {
+		t.Fatalf("after submit submitSeen=%v pollSeen=%v", submitSeen, pollSeen)
+	}
+	pollTasks := h.streams.byStream[redisqueue.StreamProviderPoll]
+	if len(pollTasks) != 1 {
+		t.Fatalf("expected one provider poll task, got %d", len(pollTasks))
+	}
+	if err := h.poll.Process(ctx, pollTasks[0]); err != nil {
+		t.Fatalf("poll process: %v", err)
+	}
+	if !pollSeen {
+		t.Fatalf("poll was not called")
 	}
 	got := h.reload(t, job.ID)
 	if got.Status != domain.JobStatusResultReady {
@@ -2006,8 +2118,18 @@ func TestGenerationVideoRunwayTaskFailureReleasesReservation(t *testing.T) {
 	if err := h.gen.Process(ctx, taskFor(job)); err != nil {
 		t.Fatalf("process: %v", err)
 	}
-	if !submitSeen || !pollSeen {
-		t.Fatalf("submitSeen=%v pollSeen=%v", submitSeen, pollSeen)
+	if !submitSeen || pollSeen {
+		t.Fatalf("after submit submitSeen=%v pollSeen=%v", submitSeen, pollSeen)
+	}
+	pollTasks := h.streams.byStream[redisqueue.StreamProviderPoll]
+	if len(pollTasks) != 1 {
+		t.Fatalf("expected one provider poll task, got %d", len(pollTasks))
+	}
+	if err := h.poll.Process(ctx, pollTasks[0]); err != nil {
+		t.Fatalf("poll process: %v", err)
+	}
+	if !pollSeen {
+		t.Fatalf("poll was not called")
 	}
 	got := h.reload(t, job.ID)
 	if got.Status != domain.JobStatusFailedTerminal {
@@ -2024,6 +2146,261 @@ func TestGenerationVideoRunwayTaskFailureReleasesReservation(t *testing.T) {
 	}
 	if len(h.streams.byStream[redisqueue.StreamDelivery]) != 0 {
 		t.Fatalf("failed runway task must not enqueue delivery: %v", h.streams.byStream)
+	}
+}
+
+func TestExternalAsyncVideoPollTransportErrorKeepsTaskPolling(t *testing.T) {
+	provider := &captureVideoProvider{
+		name:  domain.ProviderPoYo,
+		model: poyo.ModelKlingO3Standard,
+		cost:  100,
+		pollErrors: []error{
+			routingError{class: domain.ProviderErrRateLimited},
+			routingError{class: domain.ProviderErrInternal},
+		},
+		pollResults: []domain.ProviderTaskResult{{
+			Status:     domain.ProviderTaskSucceeded,
+			OutputURLs: []string{"https://provider.test/video.mp4"},
+		}},
+	}
+	h := newHarnessWithProvider(t, provider, func(d *worker.Deps) {
+		d.ProviderMediaContracts = []domain.ProviderMediaContract{{
+			Provider:               domain.ProviderPoYo,
+			Model:                  poyo.ModelKlingO3Standard,
+			ModelClass:             "kling_o3_standard",
+			Modality:               domain.ModalityVideo,
+			AllowedDurationsSec:    []int{5},
+			AllowedAspectRatios:    []string{"16:9"},
+			AllowedResolutions:     []string{"720p"},
+			ExpectedContainer:      "mp4",
+			ExpectedCodec:          "h264",
+			ExpectedMaxBytes:       128 << 20,
+			DeliveryReadyOutput:    true,
+			MaxProviderAttempts:    1,
+			MaxFallbackAttempts:    0,
+			MaxProviderCostCredits: 100,
+		}}
+	})
+	ctx := context.Background()
+	snapshot := domain.VideoRouteSnapshot{
+		Alias:                  domain.VideoRouteKlingO3Standard,
+		Provider:               domain.ProviderPoYo,
+		ProviderModelID:        poyo.ModelKlingO3Standard,
+		ModelClass:             "kling_o3_standard",
+		DurationSec:            5,
+		Resolution:             "720p",
+		AspectRatio:            "16:9",
+		ProviderCostCredits:    50,
+		InternalCostCredits:    100,
+		PriceMultiplier:        2,
+		MaxProviderCostCredits: 100,
+		MaxInternalCostCredits: 200,
+	}
+	job := h.queueVideoJob(t, map[string]any{
+		"prompt":               "safe video",
+		"video_route_alias":    string(domain.VideoRouteKlingO3Standard),
+		"resolved_video_route": snapshot,
+	})
+
+	if err := h.gen.Process(ctx, taskFor(job)); err != nil {
+		t.Fatalf("gen process: %v", err)
+	}
+	pollTasks := h.streams.byStream[redisqueue.StreamProviderPoll]
+	if len(pollTasks) != 1 {
+		t.Fatalf("expected initial poll task, got %d", len(pollTasks))
+	}
+
+	if err := h.poll.Process(ctx, pollTasks[len(pollTasks)-1]); err != nil {
+		t.Fatalf("first poll process: %v", err)
+	}
+	got := h.reload(t, job.ID)
+	if got.Status != domain.JobStatusProviderPending {
+		t.Fatalf("after transient poll error status = %q, want provider_pending", got.Status)
+	}
+	if len(h.releaser.released) != 0 {
+		t.Fatalf("transient poll error must not release credits: %v", h.releaser.released)
+	}
+
+	pollTasks = h.streams.byStream[redisqueue.StreamProviderPoll]
+	if err := h.poll.Process(ctx, pollTasks[len(pollTasks)-1]); err != nil {
+		t.Fatalf("second poll process: %v", err)
+	}
+	got = h.reload(t, job.ID)
+	if got.Status != domain.JobStatusProviderPending {
+		t.Fatalf("after second transient poll error status = %q, want provider_pending", got.Status)
+	}
+
+	pollTasks = h.streams.byStream[redisqueue.StreamProviderPoll]
+	if err := h.poll.Process(ctx, pollTasks[len(pollTasks)-1]); err != nil {
+		t.Fatalf("third poll process: %v", err)
+	}
+	got = h.reload(t, job.ID)
+	if got.Status != domain.JobStatusResultReady {
+		t.Fatalf("after successful poll status = %q, want result_ready", got.Status)
+	}
+	if provider.polls != 3 {
+		t.Fatalf("polls = %d, want 3", provider.polls)
+	}
+	if len(h.streams.byStream[redisqueue.StreamDelivery]) != 1 {
+		t.Fatalf("expected one delivery task, got %v", h.streams.byStream[redisqueue.StreamDelivery])
+	}
+}
+
+func TestExternalAsyncImagePollTaskNotFoundKeepsTaskPolling(t *testing.T) {
+	provider := &captureAsyncImageProvider{
+		name:  domain.ProviderPoYo,
+		model: poyo.ModelNanoBanana2New,
+		cost:  10,
+		pollErrors: []error{
+			routingError{class: domain.ProviderErrTaskNotFound},
+		},
+		pollResults: []domain.ProviderTaskResult{{
+			Status:     domain.ProviderTaskSucceeded,
+			OutputURLs: []string{"https://provider.test/image.png"},
+		}},
+	}
+	h := newHarnessWithProvider(t, provider, nil)
+	ctx := context.Background()
+	params, _ := json.Marshal(map[string]any{
+		"prompt":     "safe image",
+		"provider":   domain.ProviderPoYo,
+		"model_code": poyo.ModelNanoBanana2New,
+		"size":       "1:1",
+		"resolution": "1K",
+	})
+	job := &domain.Job{
+		ID:             uuid.New(),
+		UserID:         uuid.New(),
+		OperationType:  domain.OperationImageGenerate,
+		Modality:       domain.ModalityImage,
+		Status:         domain.JobStatusQueued,
+		IdempotencyKey: "job:" + uuid.NewString(),
+		CorrelationID:  "corr",
+		CostReserved:   10,
+		Params:         params,
+	}
+	if err := h.jobs.Create(ctx, job); err != nil {
+		t.Fatalf("create job: %v", err)
+	}
+
+	if err := h.gen.Process(ctx, taskFor(job)); err != nil {
+		t.Fatalf("gen process: %v", err)
+	}
+	if provider.polls != 0 {
+		t.Fatalf("initial submit must not poll inline; polls = %d", provider.polls)
+	}
+	got := h.reload(t, job.ID)
+	if got.Status != domain.JobStatusProviderSubmitted {
+		t.Fatalf("after submit status = %q, want provider_submitted", got.Status)
+	}
+	pollTasks := h.streams.byStream[redisqueue.StreamProviderPoll]
+	if len(pollTasks) != 1 {
+		t.Fatalf("expected initial poll task, got %d", len(pollTasks))
+	}
+
+	if err := h.poll.Process(ctx, pollTasks[len(pollTasks)-1]); err != nil {
+		t.Fatalf("first poll process: %v", err)
+	}
+	got = h.reload(t, job.ID)
+	if got.Status != domain.JobStatusProviderPending {
+		t.Fatalf("after transient task_not_found status = %q, want provider_pending", got.Status)
+	}
+	if len(h.releaser.released) != 0 {
+		t.Fatalf("transient async image poll error must not release credits: %v", h.releaser.released)
+	}
+	pollTasks = h.streams.byStream[redisqueue.StreamProviderPoll]
+	if len(pollTasks) < 2 {
+		t.Fatalf("expected poll task to be requeued, got %v", pollTasks)
+	}
+
+	if err := h.poll.Process(ctx, pollTasks[len(pollTasks)-1]); err != nil {
+		t.Fatalf("second poll process: %v", err)
+	}
+	got = h.reload(t, job.ID)
+	if got.Status != domain.JobStatusResultReady {
+		t.Fatalf("after successful poll status = %q, want result_ready", got.Status)
+	}
+	if provider.polls != 2 {
+		t.Fatalf("polls = %d, want 2", provider.polls)
+	}
+	if len(h.streams.byStream[redisqueue.StreamDelivery]) != 1 {
+		t.Fatalf("expected one delivery task, got %v", h.streams.byStream[redisqueue.StreamDelivery])
+	}
+	if len(h.releaser.released) != 0 {
+		t.Fatalf("successful async image job must not release credits: %v", h.releaser.released)
+	}
+}
+
+func TestExternalAsyncVideoPollTransportErrorKeepsPollingAfterOldBudget(t *testing.T) {
+	provider := &captureVideoProvider{
+		name:  domain.ProviderPoYo,
+		model: poyo.ModelKlingO3Standard,
+		cost:  100,
+		pollErrors: []error{
+			routingError{class: domain.ProviderErrInternal},
+		},
+	}
+	h := newHarnessWithProvider(t, provider, func(d *worker.Deps) {
+		d.ProviderMediaContracts = []domain.ProviderMediaContract{{
+			Provider:               domain.ProviderPoYo,
+			Model:                  poyo.ModelKlingO3Standard,
+			ModelClass:             "kling_o3_standard",
+			Modality:               domain.ModalityVideo,
+			AllowedDurationsSec:    []int{5},
+			AllowedAspectRatios:    []string{"16:9"},
+			AllowedResolutions:     []string{"720p"},
+			ExpectedContainer:      "mp4",
+			ExpectedCodec:          "h264",
+			ExpectedMaxBytes:       128 << 20,
+			DeliveryReadyOutput:    true,
+			MaxProviderAttempts:    1,
+			MaxFallbackAttempts:    0,
+			MaxProviderCostCredits: 100,
+		}}
+	})
+	ctx := context.Background()
+	snapshot := domain.VideoRouteSnapshot{
+		Alias:                  domain.VideoRouteKlingO3Standard,
+		Provider:               domain.ProviderPoYo,
+		ProviderModelID:        poyo.ModelKlingO3Standard,
+		ModelClass:             "kling_o3_standard",
+		DurationSec:            5,
+		Resolution:             "720p",
+		AspectRatio:            "16:9",
+		ProviderCostCredits:    50,
+		InternalCostCredits:    100,
+		PriceMultiplier:        2,
+		MaxProviderCostCredits: 100,
+		MaxInternalCostCredits: 200,
+	}
+	job := h.queueVideoJob(t, map[string]any{
+		"prompt":               "safe video",
+		"video_route_alias":    string(domain.VideoRouteKlingO3Standard),
+		"resolved_video_route": snapshot,
+	})
+
+	if err := h.gen.Process(ctx, taskFor(job)); err != nil {
+		t.Fatalf("gen process: %v", err)
+	}
+	pollTasks := h.streams.byStream[redisqueue.StreamProviderPoll]
+	if len(pollTasks) != 1 {
+		t.Fatalf("expected initial poll task, got %d", len(pollTasks))
+	}
+	task := pollTasks[len(pollTasks)-1]
+	task.Attempt = 20
+	if err := h.poll.Process(ctx, task); err != nil {
+		t.Fatalf("poll process: %v", err)
+	}
+
+	got := h.reload(t, job.ID)
+	if got.Status != domain.JobStatusProviderPending {
+		t.Fatalf("after old-budget poll error status = %q, want provider_pending", got.Status)
+	}
+	if len(h.releaser.released) != 0 {
+		t.Fatalf("old-budget transient poll error must not release credits: %v", h.releaser.released)
+	}
+	if len(h.streams.byStream[redisqueue.StreamProviderPoll]) < 2 {
+		t.Fatalf("expected poll task to be requeued, got %v", h.streams.byStream[redisqueue.StreamProviderPoll])
 	}
 }
 
@@ -2304,8 +2681,9 @@ func (p *routingProvider) Poll(context.Context, domain.ProviderTaskRef) (domain.
 func (p *routingProvider) Cancel(context.Context, domain.ProviderTaskRef) error { return nil }
 
 type captureImageProvider struct {
-	name domain.ProviderName
-	last domain.ProviderRequest
+	name  domain.ProviderName
+	last  domain.ProviderRequest
+	polls int
 }
 
 func (p *captureImageProvider) Name() domain.ProviderName {
@@ -2336,17 +2714,92 @@ func (p *captureImageProvider) Submit(_ context.Context, req domain.ProviderRequ
 }
 
 func (p *captureImageProvider) Poll(context.Context, domain.ProviderTaskRef) (domain.ProviderTaskResult, error) {
+	p.polls++
 	return domain.ProviderTaskResult{Status: domain.ProviderTaskSucceeded, OutputURLs: []string{"data:image/png;base64,b2s="}}, nil
 }
 
 func (p *captureImageProvider) Cancel(context.Context, domain.ProviderTaskRef) error { return nil }
 
+type captureAsyncImageProvider struct {
+	name        domain.ProviderName
+	model       string
+	cost        int64
+	last        domain.ProviderRequest
+	submits     int
+	polls       int
+	pollErrors  []error
+	pollResults []domain.ProviderTaskResult
+}
+
+func (p *captureAsyncImageProvider) Name() domain.ProviderName {
+	if p.name == "" {
+		return domain.ProviderName("capture-async-image")
+	}
+	return p.name
+}
+
+func (p *captureAsyncImageProvider) Capabilities(context.Context) ([]domain.Capability, error) {
+	model := p.model
+	if model == "" {
+		model = poyo.ModelNanoBanana2New
+	}
+	return []domain.Capability{{
+		Operation:       domain.OperationImageGenerate,
+		Modality:        domain.ModalityImage,
+		ModelCode:       model,
+		SupportsPolling: true,
+	}}, nil
+}
+
+func (p *captureAsyncImageProvider) Estimate(context.Context, domain.ProviderRequest) (domain.CostEstimate, error) {
+	cost := p.cost
+	if cost <= 0 {
+		cost = 10
+	}
+	return domain.CostEstimate{AmountCredits: cost, Currency: "credits"}, nil
+}
+
+func (p *captureAsyncImageProvider) Submit(_ context.Context, req domain.ProviderRequest) (domain.ProviderTask, error) {
+	p.submits++
+	p.last = req
+	return domain.ProviderTask{
+		JobID:          req.JobID,
+		Provider:       p.Name(),
+		ModelCode:      req.ModelCode,
+		ExternalID:     "capture-async-image-task",
+		Status:         domain.ProviderTaskPending,
+		IdempotencyKey: req.IdempotencyKey,
+	}, nil
+}
+
+func (p *captureAsyncImageProvider) Poll(context.Context, domain.ProviderTaskRef) (domain.ProviderTaskResult, error) {
+	p.polls++
+	if len(p.pollErrors) > 0 {
+		err := p.pollErrors[0]
+		p.pollErrors = p.pollErrors[1:]
+		return domain.ProviderTaskResult{}, err
+	}
+	if len(p.pollResults) > 0 {
+		res := p.pollResults[0]
+		p.pollResults = p.pollResults[1:]
+		return res, nil
+	}
+	return domain.ProviderTaskResult{Status: domain.ProviderTaskProcessing}, nil
+}
+
+func (p *captureAsyncImageProvider) Cancel(context.Context, domain.ProviderTaskRef) error {
+	return nil
+}
+
 type captureVideoProvider struct {
-	name    domain.ProviderName
-	model   string
-	cost    int64
-	last    domain.ProviderRequest
-	submits int
+	name        domain.ProviderName
+	model       string
+	cost        int64
+	last        domain.ProviderRequest
+	submits     int
+	polls       int
+	pollErrors  []error
+	pollResults []domain.ProviderTaskResult
 }
 
 func (p *captureVideoProvider) Name() domain.ProviderName {
@@ -2392,6 +2845,17 @@ func (p *captureVideoProvider) Submit(_ context.Context, req domain.ProviderRequ
 }
 
 func (p *captureVideoProvider) Poll(context.Context, domain.ProviderTaskRef) (domain.ProviderTaskResult, error) {
+	p.polls++
+	if len(p.pollErrors) > 0 {
+		err := p.pollErrors[0]
+		p.pollErrors = p.pollErrors[1:]
+		return domain.ProviderTaskResult{}, err
+	}
+	if len(p.pollResults) > 0 {
+		res := p.pollResults[0]
+		p.pollResults = p.pollResults[1:]
+		return res, nil
+	}
 	return domain.ProviderTaskResult{Status: domain.ProviderTaskProcessing}, nil
 }
 

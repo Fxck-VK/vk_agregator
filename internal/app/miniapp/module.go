@@ -4,7 +4,6 @@ package miniapp
 import (
 	"context"
 	"log/slog"
-	"strings"
 
 	miniappapi "vk-ai-aggregator/internal/adapter/inbound/miniapp"
 	s3store "vk-ai-aggregator/internal/adapter/storage/s3"
@@ -14,6 +13,7 @@ import (
 	"vk-ai-aggregator/internal/service/billingservice"
 	"vk-ai-aggregator/internal/service/joborchestrator"
 	"vk-ai-aggregator/internal/service/paymentservice"
+	"vk-ai-aggregator/internal/service/productcatalog"
 	"vk-ai-aggregator/internal/service/referralservice"
 	"vk-ai-aggregator/internal/service/videorouter"
 )
@@ -68,7 +68,7 @@ func NewHandler(ctx context.Context, cfg config.Config, deps Deps) *miniappapi.H
 		ReferredSignupRewardCredits: cfg.ReferralReferredSignupRewardCredits,
 		RewardOnActivation:          cfg.ReferralRewardOnActivation,
 	})
-	videoCatalog, err := miniAppVideoRouteCatalog(cfg)
+	runtimeCatalog, err := productcatalog.FromConfig(cfg)
 	if err != nil {
 		logger.Warn("miniapp video route catalog disabled", "error", err)
 	}
@@ -83,7 +83,7 @@ func NewHandler(ctx context.Context, cfg config.Config, deps Deps) *miniappapi.H
 		MaxUploadImageWidth:                 cfg.MediaMaxImageWidth,
 		MaxUploadImageHeight:                cfg.MediaMaxImageHeight,
 		MaxUploadImagePixels:                cfg.MediaMaxImagePixels,
-		ImageReferenceEnabled:               cfg.DeepInfraImageReferenceEnabled,
+		ImageReferenceEnabled:               runtimeCatalog.ImageReferenceEnabled,
 		ReferralLinkBase:                    cfg.VKReferralLinkBase,
 		ReferralReferrerSignupRewardCredits: cfg.ReferralReferrerSignupRewardCredits,
 		ReferralReferredSignupRewardCredits: cfg.ReferralReferredSignupRewardCredits,
@@ -91,8 +91,9 @@ func NewHandler(ctx context.Context, cfg config.Config, deps Deps) *miniappapi.H
 		FrontendTelemetryUserHashSecret:     cfg.FrontendTelemetryUserHashSecret,
 		PaymentReturnURL:                    firstNonEmpty(cfg.YooKassaReturnURLMiniApp, cfg.YooKassaReturnURL),
 		PaymentCancelEnabled:                cfg.FeatureMiniAppPaymentCancelEnabled,
-		VideoRoutes:                         miniAppVideoRoutes(videoCatalog),
-		VideoRouteResolver:                  miniAppVideoRouteResolver(videoCatalog),
+		ImageModels:                         miniAppImageModels(runtimeCatalog.Catalog),
+		VideoRoutes:                         miniAppVideoRoutes(runtimeCatalog.Catalog),
+		VideoRouteResolver:                  miniAppVideoRouteResolver(runtimeCatalog.VideoRouteCatalog),
 	}, miniappapi.Deps{
 		Users:         deps.Users,
 		Jobs:          deps.Jobs,
@@ -109,52 +110,43 @@ func NewHandler(ctx context.Context, cfg config.Config, deps Deps) *miniappapi.H
 	})
 }
 
-func miniAppVideoRouteCatalog(cfg config.Config) (*videorouter.Catalog, error) {
-	return videorouter.NewCatalog(videorouter.Config{
-		RouterEnabled: cfg.FeatureVideoRouterEnabled,
-		Providers: map[domain.ProviderName]videorouter.ProviderConfig{
-			domain.ProviderAPIMart: {
-				Enabled:           cfg.APIMartProviderEnabled,
-				RequireAPIKey:     true,
-				APIKeyConfigured:  strings.TrimSpace(cfg.APIMartAPIKey) != "",
-				RequireBaseURL:    true,
-				BaseURLConfigured: strings.TrimSpace(cfg.APIMartBaseURL) != "",
-			},
-			domain.ProviderPoYo: {
-				Enabled:           cfg.PoYoProviderEnabled,
-				RequireAPIKey:     true,
-				APIKeyConfigured:  strings.TrimSpace(cfg.PoYoAPIKey) != "",
-				RequireBaseURL:    true,
-				BaseURLConfigured: strings.TrimSpace(cfg.PoYoBaseURL) != "",
-			},
-			domain.ProviderRunway: {
-				Enabled:           cfg.RunwayProviderEnabled,
-				RequireAPIKey:     true,
-				APIKeyConfigured:  strings.TrimSpace(cfg.RunwayMLAPISecret) != "",
-				RequireBaseURL:    true,
-				BaseURLConfigured: strings.TrimSpace(cfg.RunwayMLBaseURL) != "",
-			},
-		},
-		EnabledRoutes: map[domain.VideoRouteAlias]bool{
-			domain.VideoRouteHailuo23Fast:     cfg.FeatureVideoRouteHailuo23FastEnabled,
-			domain.VideoRouteHailuo23Standard: cfg.FeatureVideoRouteHailuo23StandardEnabled,
-			domain.VideoRouteKlingO3Standard:  cfg.FeatureVideoRouteKlingO3StandardEnabled,
-			domain.VideoRouteRunwayGen4Turbo:  cfg.FeatureVideoRouteRunwayGen4TurboEnabled,
-			domain.VideoRouteSeedance20Fast:   cfg.FeatureVideoRouteSeedance20FastEnabled,
-			domain.VideoRouteRunwayGen45:      cfg.FeatureVideoRouteRunwayGen45Enabled,
-		},
-	})
-}
-
-func miniAppVideoRoutes(catalog *videorouter.Catalog) []miniappapi.VideoRouteDTO {
+func miniAppImageModels(catalog *productcatalog.Catalog) []miniappapi.ImageModelDTO {
 	if catalog == nil {
 		return nil
 	}
-	publicRoutes := catalog.PublicRoutes()
+	models := catalog.ImageModels()
+	out := make([]miniappapi.ImageModelDTO, 0, len(models))
+	for _, model := range models {
+		out = append(out, miniappapi.ImageModelDTO{
+			Type:                   model.Type,
+			ID:                     model.ID,
+			Name:                   model.Name,
+			Description:            model.Description,
+			EstimateCredits:        model.EstimateCredits,
+			Enabled:                model.Enabled,
+			QualityOptions:         append([]string(nil), model.QualityOptions...),
+			DefaultQuality:         model.DefaultQuality,
+			SupportsReferenceImage: model.SupportsReferenceImage,
+			MaxReferenceImages:     model.MaxReferenceImages,
+		})
+	}
+	return out
+}
+
+func miniAppVideoRoutes(catalog *productcatalog.Catalog) []miniappapi.VideoRouteDTO {
+	if catalog == nil {
+		return nil
+	}
+	publicRoutes := catalog.VideoRoutes()
 	routes := make([]miniappapi.VideoRouteDTO, 0, len(publicRoutes))
 	for _, route := range publicRoutes {
 		routes = append(routes, miniappapi.VideoRouteDTO{
-			Alias:                  string(route.Alias),
+			Type:                   route.Type,
+			Alias:                  route.Alias,
+			Name:                   route.Name,
+			Description:            route.Description,
+			EstimateCredits:        route.EstimateCredits,
+			Enabled:                route.Enabled,
 			AllowedDurationsSec:    append([]int(nil), route.AllowedDurationsSec...),
 			AllowedResolutions:     append([]string(nil), route.AllowedResolutions...),
 			AllowedAspectRatios:    append([]string(nil), route.AllowedAspectRatios...),

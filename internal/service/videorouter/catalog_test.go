@@ -199,6 +199,39 @@ func TestCatalogResolveHailuoRouteUsesFixedProviderCost(t *testing.T) {
 	}
 }
 
+func TestCatalogResolveRunwaySupportsOfficialPortraitAspect(t *testing.T) {
+	catalog := newConfiguredCatalog(t, map[domain.VideoRouteAlias]bool{
+		domain.VideoRouteRunwayGen4Turbo: true,
+	})
+
+	resolution, err := catalog.Resolve(context.Background(), videorouter.Request{
+		Operation: domain.OperationVideoGenerate,
+		Modality:  domain.ModalityVideo,
+		Params: rawJSON(t, map[string]any{
+			"prompt":            "clean prompt",
+			"video_route_alias": string(domain.VideoRouteRunwayGen4Turbo),
+			"duration_sec":      5,
+			"resolution":        "720p",
+			"aspect_ratio":      "3:4",
+			"reference_artifact_ids": []string{
+				"11111111-1111-1111-8111-111111111111",
+			},
+		}),
+	})
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	if resolution.Snapshot.Provider != domain.ProviderRunway || resolution.Snapshot.ProviderModelID != "gen4_turbo" {
+		t.Fatalf("unexpected Runway snapshot: %+v", resolution.Snapshot)
+	}
+	if resolution.Snapshot.AspectRatio != "3:4" {
+		t.Fatalf("aspect ratio = %q, want 3:4", resolution.Snapshot.AspectRatio)
+	}
+	if resolution.InternalCostCredits != 50 {
+		t.Fatalf("internal cost = %d, want 50", resolution.InternalCostCredits)
+	}
+}
+
 func TestCatalogResolveRejectsClientPriceFields(t *testing.T) {
 	catalog := newConfiguredCatalog(t, map[domain.VideoRouteAlias]bool{
 		domain.VideoRouteKlingO3Standard: true,

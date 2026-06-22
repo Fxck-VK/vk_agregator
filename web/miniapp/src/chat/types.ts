@@ -43,8 +43,11 @@ export const MODALITIES: ModalityDef[] = [
     label: "Фото",
     operation: "image_generate",
     models: [
+      { id: "nano_banana_2", label: "Nano Banana 2" },
       { id: "nano_banana_pro", label: "Nano Banana Pro" },
-      { id: "nano_banana_flash", label: "Nano Banana Flash" },
+      { id: "gpt_image_2", label: "GPT Image 2" },
+      { id: "seedream_4_5", label: "ByteDance Seedream 4.5" },
+      { id: "sdxl_turbo", label: "Stability AI SDXL Turbo" },
     ],
   },
   {
