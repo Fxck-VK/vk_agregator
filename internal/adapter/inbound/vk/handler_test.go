@@ -1673,6 +1673,23 @@ func TestPhotoNanoBananaProQualityFlowCreatesImageJob(t *testing.T) {
 	if rec := h.post(menu); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
 		t.Fatalf("unexpected menu response: %d %q", rec.Code, rec.Body.String())
 	}
+	initial := control.Sent()
+	if len(initial) != 1 || !strings.Contains(initial[0].Text, "Выберите качество генерации") {
+		t.Fatalf("expected Nano Banana Pro quality picker, got %+v", initial)
+	}
+	for _, want := range []string{"1K · 20 кредитов", "2K · 20 кредитов", "4K · 20 кредитов", "⬅️ Назад к моделям"} {
+		if !strings.Contains(initial[0].Keyboard, want) {
+			t.Fatalf("expected %q in Nano Banana Pro quality keyboard: %q", want, initial[0].Keyboard)
+		}
+	}
+
+	quality := `{
+		"type":"message_new","group_id":1,"event_id":"evt-photo-pro-quality","secret":"s3cr3t",
+		"object":{"message":{"from_id":5631,"peer_id":5631,"text":"2K","payload":"{\"command\":\"menu.image.quality.select\",\"model_id\":\"nano_banana_pro\",\"image_quality\":\"2K\"}"}}
+	}`
+	if rec := h.post(quality); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected quality response: %d %q", rec.Code, rec.Body.String())
+	}
 
 	prompt := `{
 		"type":"message_new","group_id":1,"event_id":"evt-photo-text-prompt","secret":"s3cr3t",
@@ -1688,7 +1705,7 @@ func TestPhotoNanoBananaProQualityFlowCreatesImageJob(t *testing.T) {
 		t.Fatalf("user not created: %v", err)
 	}
 	cmds, _ := h.cmds.ListByUser(ctx, user.ID, 10, 0)
-	if !hasCommandTypes(cmds, domain.CommandMenuImageText, domain.CommandImageGenerate) {
+	if !hasCommandTypes(cmds, domain.CommandMenuImageText, domain.CommandMenuImageQualitySelect, domain.CommandImageGenerate) {
 		t.Fatalf("unexpected command types: %+v", commandTypes(cmds))
 	}
 	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
@@ -1696,8 +1713,18 @@ func TestPhotoNanoBananaProQualityFlowCreatesImageJob(t *testing.T) {
 		t.Fatalf("photo text mode should create one image job, jobs=%+v tasks=%d", jobs, h.pub.Len())
 	}
 	sent := control.Sent()
-	if len(sent) != 2 || !strings.Contains(sent[0].Text, "Nano Banana Pro") || !strings.Contains(sent[0].Text, "Цена: 20 кредитов") || sent[1].Text != "НейроХаб рисует..." {
+	if len(sent) != 2 || !strings.Contains(sent[0].Text, "Nano Banana Pro · 2K") || !strings.Contains(sent[0].Text, "Цена: 20 кредитов") || sent[1].Text != "НейроХаб рисует..." {
 		t.Fatalf("unexpected photo mode responses: %+v", sent)
+	}
+	for _, want := range []string{"⬅️ Назад к качеству", "⬅️ Назад к моделям"} {
+		if !strings.Contains(sent[0].Keyboard, want) {
+			t.Fatalf("expected %q in prompt keyboard: %q", want, sent[0].Keyboard)
+		}
+	}
+	for _, mojibake := range []string{"в¬", "РќР°", "РјРѕ"} {
+		if strings.Contains(sent[0].Keyboard, mojibake) {
+			t.Fatalf("prompt keyboard contains mojibake %q: %q", mojibake, sent[0].Keyboard)
+		}
 	}
 	var params struct {
 		Prompt                 string `json:"prompt"`
@@ -1715,10 +1742,73 @@ func TestPhotoNanoBananaProQualityFlowCreatesImageJob(t *testing.T) {
 		params.ModelID != "nano_banana_pro" ||
 		params.ModelName != "Nano Banana Pro" ||
 		params.Size != "1:1" ||
-		params.Resolution != "" ||
-		params.ImageQuality != "" ||
+		params.Resolution != "2K" ||
+		params.ImageQuality != "2K" ||
 		params.VKPlaceholderMessageID != sent[1].MessageID {
 		t.Fatalf("unexpected image job params: %+v, pending=%+v", params, sent[1])
+	}
+}
+
+func TestPhotoGPTImage2QualityFlowCreatesAPIMartImageJob(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	h := newHarnessWithControl(control)
+	menu := `{
+		"type":"message_new","group_id":1,"event_id":"evt-photo-gpt-image-2-on","secret":"s3cr3t",
+		"object":{"message":{"from_id":5635,"peer_id":5635,"text":"GPT Image 2","payload":"{\"command\":\"menu.image.select\",\"model_id\":\"gpt_image_2\"}"}}
+	}`
+	if rec := h.post(menu); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected menu response: %d %q", rec.Code, rec.Body.String())
+	}
+	initial := control.Sent()
+	if len(initial) != 1 || !strings.Contains(initial[0].Text, "Выберите качество генерации") || !strings.Contains(initial[0].Keyboard, "4K · 20 кредитов") {
+		t.Fatalf("expected GPT Image 2 quality picker, got %+v", initial)
+	}
+
+	quality := `{
+		"type":"message_new","group_id":1,"event_id":"evt-photo-gpt-image-2-quality","secret":"s3cr3t",
+		"object":{"message":{"from_id":5635,"peer_id":5635,"text":"4K","payload":"{\"command\":\"menu.image.quality.select\",\"model_id\":\"gpt_image_2\",\"image_quality\":\"4K\"}"}}
+	}`
+	if rec := h.post(quality); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected quality response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	prompt := `{
+		"type":"message_new","group_id":1,"event_id":"evt-photo-gpt-image-2-prompt","secret":"s3cr3t",
+		"object":{"message":{"from_id":5635,"peer_id":5635,"text":"editorial perfume bottle"}}
+	}`
+	if rec := h.post(prompt); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected prompt response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	ctx := context.Background()
+	user, err := h.users.GetByVKUserID(ctx, 5635)
+	if err != nil {
+		t.Fatalf("user not created: %v", err)
+	}
+	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
+	if len(jobs) != 1 || jobs[0].CostEstimate != 20 || jobs[0].CostReserved != 20 {
+		t.Fatalf("GPT Image 2 should create one reserved image job, jobs=%+v", jobs)
+	}
+	var params struct {
+		ModelID      string `json:"model_id"`
+		ModelName    string `json:"model_name"`
+		Provider     string `json:"provider"`
+		ModelCode    string `json:"model_code"`
+		Size         string `json:"size"`
+		Resolution   string `json:"resolution"`
+		ImageQuality string `json:"image_quality"`
+	}
+	if err := json.Unmarshal(jobs[0].Params, &params); err != nil {
+		t.Fatalf("decode job params: %v", err)
+	}
+	if params.ModelID != "gpt_image_2" ||
+		params.ModelName != "GPT Image 2" ||
+		params.Provider != "apimart" ||
+		params.ModelCode != "gpt-image-2" ||
+		params.Size != "1:1" ||
+		params.Resolution != "4K" ||
+		params.ImageQuality != "4K" {
+		t.Fatalf("unexpected GPT Image 2 job params: %+v", params)
 	}
 }
 

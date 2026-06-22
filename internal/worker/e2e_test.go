@@ -22,7 +22,7 @@ import (
 
 // TestEndToEnd exercises the full pipeline with in-memory adapters:
 // VK webhook -> Job -> (queue) -> Generation worker -> Provider -> Artifact ->
-// Delivery worker -> VK send -> Billing capture -> Job success.
+// Delivery worker -> VK send with controls -> Billing capture -> Job success.
 func TestEndToEnd(t *testing.T) {
 	ctx := context.Background()
 
@@ -122,8 +122,12 @@ func TestEndToEnd(t *testing.T) {
 	if job.CostCaptured != 10 {
 		t.Fatalf("captured=%d, want 10", job.CostCaptured)
 	}
-	if sent := vkClient.Sent(); len(sent) != 1 || sent[0].Type != "photo" {
-		t.Fatalf("expected one photo send, got %+v", sent)
+	sent := vkClient.Sent()
+	if len(sent) != 1 || sent[0].Type != "message" || sent[0].Attachment == "" {
+		t.Fatalf("expected one image message send, got %+v", sent)
+	}
+	if !strings.Contains(sent[0].Keyboard, "menu.image.back_to_quality") || !strings.Contains(sent[0].Keyboard, "show_menu") {
+		t.Fatalf("expected image result navigation keyboard, got %q", sent[0].Keyboard)
 	}
 	acc, _ := billingRepo.GetAccountByUser(ctx, job.UserID, domain.CurrencyCredits)
 	if acc.BalanceCached != billingservice.DefaultStartingBalance-10 {

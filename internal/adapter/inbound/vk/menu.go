@@ -1269,11 +1269,11 @@ func photoPromptKeyboardForCatalog(showQualityBack bool) *vkdelivery.Keyboard {
 	rows := make([][]vkdelivery.KeyboardButton, 0, 2)
 	if showQualityBack {
 		rows = append(rows, []vkdelivery.KeyboardButton{
-			button("в¬…пёЏ РќР°Р·Р°Рґ Рє РєР°С‡РµСЃС‚РІСѓ", domain.CommandMenuImageBackToQuality, "secondary"),
+			button("⬅️ Назад к качеству", domain.CommandMenuImageBackToQuality, "secondary"),
 		})
 	}
 	rows = append(rows, []vkdelivery.KeyboardButton{
-		button("в¬…пёЏ РќР°Р·Р°Рґ Рє РјРѕРґРµР»СЏРј", domain.CommandMenuImage, "secondary"),
+		button("⬅️ Назад к моделям", domain.CommandMenuImage, "secondary"),
 	})
 	return &vkdelivery.Keyboard{
 		OneTime: false,

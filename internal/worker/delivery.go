@@ -460,7 +460,15 @@ func (w *DeliveryWorker) send(ctx context.Context, del *domain.Delivery, job *do
 			metrics.VKDeliveryDuration.WithLabelValues(kind).Observe(time.Since(started).Seconds())
 			return err
 		}
-		res, err = w.vk.SendPhoto(ctx, del.VKPeerID, del.VKRandomID, del.Attachment, del.Text)
+		if w.vkControl != nil {
+			res, err = w.vkControl.SendMessage(ctx, del.VKPeerID, del.VKRandomID, vkdelivery.Message{
+				Text:       del.Text,
+				Attachment: del.Attachment,
+				Keyboard:   imageResultKeyboard(),
+			})
+		} else {
+			res, err = w.vk.SendPhoto(ctx, del.VKPeerID, del.VKRandomID, del.Attachment, del.Text)
+		}
 	case domain.DeliveryTypeVideo:
 		if err := w.ensureMediaAttachment(ctx, del, job); err != nil {
 			class := deliveryErrorClass(err)
@@ -489,6 +497,35 @@ func (w *DeliveryWorker) send(ctx context.Context, del *domain.Delivery, job *do
 	del.ErrorCode = ""
 	del.ErrorMessage = ""
 	return w.deliveries.Update(ctx, del)
+}
+
+func imageResultKeyboard() *vkdelivery.Keyboard {
+	return &vkdelivery.Keyboard{
+		OneTime: false,
+		Inline:  true,
+		Buttons: [][]vkdelivery.KeyboardButton{
+			{
+				deliveryButton("🔁 Сгенерировать ещё", domain.CommandMenuImageBackToQuality, "primary"),
+			},
+			{
+				deliveryButton("🏠 Главное меню", domain.CommandShowMenu, "secondary"),
+			},
+		},
+	}
+}
+
+func deliveryButton(label string, command domain.CommandType, color string) vkdelivery.KeyboardButton {
+	payload, _ := json.Marshal(struct {
+		Command string `json:"command"`
+	}{
+		Command: string(command),
+	})
+	return vkdelivery.KeyboardButton{
+		Label:      label,
+		Payload:    string(payload),
+		Color:      color,
+		ActionType: "text",
+	}
 }
 
 func (w *DeliveryWorker) sendTextDelivery(ctx context.Context, del *domain.Delivery) (vkdelivery.SendResult, error) {
