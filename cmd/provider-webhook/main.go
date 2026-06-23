@@ -38,7 +38,7 @@ func main() {
 	logger := slog.New(logging.NewJSONHandler(os.Stdout, nil))
 	cfg := config.Load()
 	if err := cfg.Validate(); err != nil {
-		logger.Error("invalid configuration", "error", err)
+		logger.Error("invalid configuration", logging.ErrorAttr(err))
 		os.Exit(1)
 	}
 
@@ -53,7 +53,7 @@ func main() {
 		CriticalSampleRatio: cfg.TracingCriticalSampleRatio,
 	}, logger)
 	if err != nil {
-		logger.Error("tracing init failed", "error", err)
+		logger.Error("tracing init failed", logging.ErrorAttr(err))
 		os.Exit(1)
 	}
 	defer func() {
@@ -64,14 +64,14 @@ func main() {
 
 	pool, err := postgres.NewPoolConfigured(ctx, cfg.DatabaseURL, cfg.DBMaxConns, cfg.DBMinConns)
 	if err != nil {
-		logger.Error("postgres connect failed", "error", err)
+		logger.Error("postgres connect failed", logging.ErrorAttr(err))
 		os.Exit(1)
 	}
 	defer pool.Close()
 
 	provider, err := paymentadapter.NewProvider(cfg)
 	if err != nil {
-		logger.Error("payment provider wiring failed", "error", err)
+		logger.Error("payment provider wiring failed", logging.ErrorAttr(err))
 		os.Exit(1)
 	}
 	if provider.Code() != domain.PaymentProviderYooKassa {
@@ -110,7 +110,7 @@ func main() {
 	limiter := ratelimit.New(cfg.WebhookRateLimitRPS, cfg.WebhookRateLimitBurst)
 	security, err := newWebhookSecurityConfig(cfg)
 	if err != nil {
-		logger.Error("payment webhook ingress config failed", "error", err)
+		logger.Error("payment webhook ingress config failed", logging.ErrorAttr(err))
 		os.Exit(1)
 	}
 	mux.Handle("POST /billing/webhooks/yookassa", limiter.Middleware(metrics.Middleware("billing_webhook", webhookHandler(processor, logger, provider.Code(), security))))
@@ -141,7 +141,7 @@ func main() {
 			"ip_allowlist_count", len(security.ipAllowlist),
 		)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			logger.Error("provider webhook server failed", "error", err)
+			logger.Error("provider webhook server failed", logging.ErrorAttr(err))
 			stop()
 		}
 	}()
@@ -179,7 +179,7 @@ func webhookHandler(processor *paymentservice.WebhookProcessor, logger *slog.Log
 				http.Error(w, "invalid webhook", http.StatusBadRequest)
 				return
 			}
-			logger.Error("payment webhook ingest failed", "error", err)
+			logger.Error("payment webhook ingest failed", logging.ErrorAttr(err))
 			http.Error(w, "webhook ingest failed", http.StatusInternalServerError)
 			return
 		}
@@ -372,10 +372,10 @@ func runProcessorLoop(ctx context.Context, processor *paymentservice.WebhookProc
 	process := func() {
 		processed, err := processor.ProcessBatch(ctx, batchLimit)
 		if _, statsErr := processor.InboxStats(ctx); statsErr != nil {
-			logger.Error("payment webhook inbox stats failed", "error", statsErr)
+			logger.Error("payment webhook inbox stats failed", logging.ErrorAttr(statsErr))
 		}
 		if err != nil {
-			logger.Error("payment webhook batch processing failed", "error", err, "processed", processed)
+			logger.Error("payment webhook batch processing failed", logging.ErrorAttr(err), "processed", processed)
 			return
 		}
 		if processed > 0 {
@@ -385,7 +385,7 @@ func runProcessorLoop(ctx context.Context, processor *paymentservice.WebhookProc
 	reconcile := func() {
 		result, err := processor.ReconcilePendingOlderThan(ctx, reconcileLimit, reconcileStaleAfter)
 		if err != nil {
-			logger.Error("payment reconciliation failed", "error", err, "checked", result.Checked, "processed", result.Processed, "mismatches", result.Mismatches)
+			logger.Error("payment reconciliation failed", logging.ErrorAttr(err), "checked", result.Checked, "processed", result.Processed, "mismatches", result.Mismatches)
 			return
 		}
 		if result.Checked > 0 || result.Mismatches > 0 {
@@ -444,7 +444,7 @@ func readinessHandler(db postgresPinger, processor *paymentservice.WebhookProces
 			resp.Status = "degraded"
 			resp.Checks["postgres"] = "unavailable"
 			status = http.StatusServiceUnavailable
-			logger.Error("provider webhook readiness postgres failed", "error", err)
+			logger.Error("provider webhook readiness postgres failed", logging.ErrorAttr(err))
 		}
 		if processor == nil {
 			resp.Status = "degraded"
@@ -456,7 +456,7 @@ func readinessHandler(db postgresPinger, processor *paymentservice.WebhookProces
 				resp.Status = "degraded"
 				resp.Checks["webhook_inbox"] = "unavailable"
 				status = http.StatusServiceUnavailable
-				logger.Error("provider webhook readiness inbox stats failed", "error", err)
+				logger.Error("provider webhook readiness inbox stats failed", logging.ErrorAttr(err))
 			} else {
 				resp.PaymentWebhook.Provider = string(stats.Provider)
 				resp.PaymentWebhook.UnprocessedEvents = stats.UnprocessedEvents

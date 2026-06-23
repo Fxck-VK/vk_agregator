@@ -340,6 +340,26 @@ func (l *countingLimiter) Allow(key string) bool {
 	return l.counts[key] <= l.burst
 }
 
+type denyUploadLimiter struct{}
+
+func (denyUploadLimiter) TryAcquire() (func(), bool) {
+	return nil, false
+}
+
+type trackingReadCloser struct {
+	reader *bytes.Reader
+	reads  int
+}
+
+func (r *trackingReadCloser) Read(p []byte) (int, error) {
+	r.reads++
+	return r.reader.Read(p)
+}
+
+func (r *trackingReadCloser) Close() error {
+	return nil
+}
+
 func TestHandler_ClientEvent_DisabledNoops(t *testing.T) {
 	fixture := newTestFixture("", nil)
 	req := httptest.NewRequest(http.MethodPost, "/miniapp/client-events", bytes.NewReader([]byte(`{"event_type":"api_failure","route":"/miniapp/jobs","status":"500"}`)))
@@ -1676,6 +1696,61 @@ func TestHandler_UploadArtifact_RejectsOversize(t *testing.T) {
 	}
 	if !strings.Contains(w.Body.String(), domain.JobErrMediaUploadTooLarge) {
 		t.Fatalf("expected safe too-large upload error, got %s", w.Body.String())
+	}
+}
+
+func TestHandler_UploadArtifact_RejectsOversizeContentLengthBeforeReadingBody(t *testing.T) {
+	maxUploadBytes := int64(len(pngBytes()))
+	fixture := newTestFixtureWithConfig("", nil, func(cfg *miniappinbound.Config) {
+		cfg.MaxUploadBytes = maxUploadBytes
+	})
+	routes := fixture.handler.Routes()
+	body, contentType := multipartUploadBody(t, pngBytes())
+	trackingBody := &trackingReadCloser{reader: bytes.NewReader(body.Bytes())}
+
+	req := httptest.NewRequest(http.MethodPost, "/miniapp/artifacts", nil)
+	req.Body = trackingBody
+	req.ContentLength = maxUploadBytes + (1 << 20) + 1
+	req.Header.Set("Content-Type", contentType)
+	req.Header.Set("X-Launch-Params", devLaunchParams(777))
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, req)
+
+	if w.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("expected 413, got %d: %s", w.Code, w.Body.String())
+	}
+	if trackingBody.reads != 0 {
+		t.Fatalf("oversize Content-Length path read request body %d times, want 0", trackingBody.reads)
+	}
+	if got := fixture.objects.Len(); got != 0 {
+		t.Fatalf("oversize upload stored %d objects, want 0", got)
+	}
+}
+
+func TestHandler_UploadArtifact_ConcurrencyLimitRejectsBeforeReadingBody(t *testing.T) {
+	fixture := newTestFixtureWithConfig("", nil, func(cfg *miniappinbound.Config) {
+		cfg.UploadConcurrencyLimiter = denyUploadLimiter{}
+	})
+	routes := fixture.handler.Routes()
+	body, contentType := multipartUploadBody(t, pngBytes())
+	trackingBody := &trackingReadCloser{reader: bytes.NewReader(body.Bytes())}
+
+	req := httptest.NewRequest(http.MethodPost, "/miniapp/artifacts", nil)
+	req.Body = trackingBody
+	req.ContentLength = int64(body.Len())
+	req.Header.Set("Content-Type", contentType)
+	req.Header.Set("X-Launch-Params", devLaunchParams(777))
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, req)
+
+	if w.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected 429, got %d: %s", w.Code, w.Body.String())
+	}
+	if trackingBody.reads != 0 {
+		t.Fatalf("concurrency limited path read request body %d times, want 0", trackingBody.reads)
+	}
+	if got := fixture.objects.Len(); got != 0 {
+		t.Fatalf("concurrency limited upload stored %d objects, want 0", got)
 	}
 }
 

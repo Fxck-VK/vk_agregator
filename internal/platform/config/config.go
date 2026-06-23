@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -136,6 +137,9 @@ type Config struct {
 	MaxJobCost int64
 
 	// PaymentProvider selects the money provider for balance top-ups.
+	PublicVKBaseURL                           string
+	PaymentRedirectRateLimitRPS               float64
+	PaymentRedirectRateLimitBurst             int
 	PaymentProvider                           string
 	YooKassaShopID                            string
 	YooKassaSecretKey                         string
@@ -412,6 +416,14 @@ type Config struct {
 	JobEventsRetentionDays int
 	// ProviderPayloadRetentionDays bounds raw provider request/response storage.
 	ProviderPayloadRetentionDays int
+	// VKInboundPayloadRetentionDays bounds VK callback payload metadata cleanup.
+	VKInboundPayloadRetentionDays int
+	// VKInboundRetentionBatchSize caps VK inbound retention updates per pass.
+	VKInboundRetentionBatchSize int
+	// CommandRawTextRetentionDays bounds normalized command raw text storage.
+	CommandRawTextRetentionDays int
+	// CommandRetentionBatchSize caps command raw-text retention updates per pass.
+	CommandRetentionBatchSize int
 	// JobLogRetentionBatchSize caps job diagnostics cleanup per maintenance pass.
 	JobLogRetentionBatchSize int
 	// JobErrorAggregateLookbackDays bounds the aggregate refresh window.
@@ -662,6 +674,12 @@ func (c Config) Validate() error {
 	if c.MediaMaxImagePixels < 0 {
 		return fmt.Errorf("config: MEDIA_MAX_IMAGE_PIXELS must be non-negative")
 	}
+	if c.PaymentRedirectRateLimitRPS < 0 {
+		return fmt.Errorf("config: PAYMENT_REDIRECT_RATE_LIMIT_RPS must be non-negative")
+	}
+	if c.PaymentRedirectRateLimitBurst < 0 {
+		return fmt.Errorf("config: PAYMENT_REDIRECT_RATE_LIMIT_BURST must be non-negative")
+	}
 	if c.MediaProviderQualityDegradedFailures < 0 {
 		return fmt.Errorf("config: MEDIA_PROVIDER_QUALITY_DEGRADED_FAILURES must be non-negative")
 	}
@@ -714,6 +732,18 @@ func (c Config) Validate() error {
 	}
 	if c.ProviderPayloadRetentionDays < 0 {
 		return fmt.Errorf("config: RETENTION_PROVIDER_PAYLOAD_DAYS must be non-negative")
+	}
+	if c.VKInboundPayloadRetentionDays < 0 {
+		return fmt.Errorf("config: RETENTION_VK_INBOUND_PAYLOAD_DAYS must be non-negative")
+	}
+	if c.VKInboundRetentionBatchSize < 0 {
+		return fmt.Errorf("config: VK_INBOUND_RETENTION_BATCH_SIZE must be non-negative")
+	}
+	if c.CommandRawTextRetentionDays < 0 {
+		return fmt.Errorf("config: RETENTION_COMMAND_RAW_TEXT_DAYS must be non-negative")
+	}
+	if c.CommandRetentionBatchSize < 0 {
+		return fmt.Errorf("config: COMMAND_RETENTION_BATCH_SIZE must be non-negative")
 	}
 	if c.JobLogRetentionBatchSize < 0 {
 		return fmt.Errorf("config: JOB_LOG_RETENTION_BATCH_SIZE must be non-negative")
@@ -782,6 +812,9 @@ func (c Config) Validate() error {
 		}
 		if strings.EqualFold(strings.TrimSpace(c.PaymentProvider), "yookassa") && len(c.PaymentWebhookTrustedProxies) == 0 {
 			missing = append(missing, "PAYMENT_WEBHOOK_TRUSTED_PROXIES")
+		}
+		if c.VKMenuTopUpEnabled && !safePublicHTTPSBaseURL(c.PublicVKBaseURL) {
+			return fmt.Errorf("config: PUBLIC_VK_BASE_URL must be a valid https URL when VK_MENU_TOP_UP_ENABLED=true in production")
 		}
 	}
 	if c.usesOpenAI() && c.OpenAIAPIKey == "" {
@@ -977,6 +1010,9 @@ func Load() Config {
 		PriceOverrides: envPriceMap("PRICES"),
 		MaxJobCost:     int64(envInt("MAX_JOB_COST", 0)),
 
+		PublicVKBaseURL:                           env("PUBLIC_VK_BASE_URL", ""),
+		PaymentRedirectRateLimitRPS:               envFloat("PAYMENT_REDIRECT_RATE_LIMIT_RPS", 5),
+		PaymentRedirectRateLimitBurst:             envInt("PAYMENT_REDIRECT_RATE_LIMIT_BURST", 10),
 		PaymentProvider:                           env("PAYMENT_PROVIDER", "mock"),
 		YooKassaShopID:                            env("YOOKASSA_SHOP_ID", ""),
 		YooKassaSecretKey:                         env("YOOKASSA_SECRET_KEY", ""),
@@ -1032,7 +1068,7 @@ func Load() Config {
 		MediaProviderMaxAttemptsPerJob:           envInt("MEDIA_PROVIDER_MAX_ATTEMPTS_PER_JOB", 1),
 		MediaProviderFallbackBudget:              envInt("MEDIA_PROVIDER_FALLBACK_BUDGET_PER_JOB", 0),
 		MediaQueueDegradeThreshold:               envInt64("MEDIA_QUEUE_DEGRADE_THRESHOLD", 1000),
-		MediaMaxConcurrentUploads:                envInt("MEDIA_MAX_CONCURRENT_UPLOADS", 8),
+		MediaMaxConcurrentUploads:                envInt("MEDIA_MAX_CONCURRENT_UPLOADS", 4),
 		MediaReferenceUploadsEnabled:             envBool("MEDIA_REFERENCE_UPLOADS_ENABLED", defaultMediaReferenceUploadsEnabled(appEnv)),
 		MediaReferenceWebPEnabled:                envBool("MEDIA_REFERENCE_WEBP_ENABLED", false),
 		MediaMaxImageUploadBytes:                 envInt64("MEDIA_MAX_IMAGE_UPLOAD_BYTES", 20<<20),
@@ -1194,6 +1230,10 @@ func Load() Config {
 		BillingReconciliationLimit:    envInt("BILLING_RECONCILIATION_LIMIT", 100),
 		JobEventsRetentionDays:        envInt("RETENTION_JOB_EVENTS_DAYS", 30),
 		ProviderPayloadRetentionDays:  envInt("RETENTION_PROVIDER_PAYLOAD_DAYS", 7),
+		VKInboundPayloadRetentionDays: envInt("RETENTION_VK_INBOUND_PAYLOAD_DAYS", 30),
+		VKInboundRetentionBatchSize:   envInt("VK_INBOUND_RETENTION_BATCH_SIZE", 500),
+		CommandRawTextRetentionDays:   envInt("RETENTION_COMMAND_RAW_TEXT_DAYS", 30),
+		CommandRetentionBatchSize:     envInt("COMMAND_RETENTION_BATCH_SIZE", 500),
 		JobLogRetentionBatchSize:      envInt("JOB_LOG_RETENTION_BATCH_SIZE", 500),
 		JobErrorAggregateLookbackDays: envInt("JOB_ERROR_AGGREGATE_LOOKBACK_DAYS", 30),
 		AnalyticsAggregateLookbackDays: envInt(
@@ -1600,6 +1640,11 @@ func knownPaymentProvider(name string) bool {
 	default:
 		return false
 	}
+}
+
+func safePublicHTTPSBaseURL(raw string) bool {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	return err == nil && u.Scheme == "https" && u.Host != "" && u.User == nil && u.RawQuery == "" && u.Fragment == ""
 }
 
 func configTokenEquals(value, want string) bool {

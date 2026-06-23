@@ -2,14 +2,18 @@ package miniapp
 
 import (
 	"bytes"
+	"errors"
 	"image"
 	_ "image/jpeg"
 	_ "image/png"
 	"io"
+	"mime"
+	"mime/multipart"
 	"net/http"
 	"strings"
 
 	"vk-ai-aggregator/internal/domain"
+	"vk-ai-aggregator/internal/platform/logging"
 	"vk-ai-aggregator/internal/platform/metrics"
 	"vk-ai-aggregator/internal/service/artifactservice"
 )
@@ -21,6 +25,11 @@ const (
 	defaultMaxMiniAppImagePixels    = 4096 * 4096
 	miniAppUploadFieldName          = "file"
 	miniAppMultipartOverage         = 1 << 20
+)
+
+var (
+	errMiniAppUploadInvalid  = errors.New("miniapp upload invalid")
+	errMiniAppUploadTooLarge = errors.New("miniapp upload too large")
 )
 
 func (h *Handler) createArtifact(w http.ResponseWriter, r *http.Request) {
@@ -46,7 +55,7 @@ func (h *Handler) createArtifact(w http.ResponseWriter, r *http.Request) {
 	}
 	user, err := h.ensureUser(r.Context(), vkUserID)
 	if err != nil {
-		h.logger.Error("miniapp: ensure user failed", "error", err.Error())
+		h.logger.Error("miniapp: ensure user failed", logging.ErrorAttr(err))
 		resultLabel = "error"
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
@@ -62,7 +71,7 @@ func (h *Handler) createArtifact(w http.ResponseWriter, r *http.Request) {
 	saver := artifactservice.New(h.deps.Artifacts, h.deps.Objects, miniAppArtifactBucket)
 	artifact, err := saver.SaveBytesArtifactWithMetadata(r.Context(), user.ID, nil, domain.ArtifactKindInput, domain.MediaTypeImage, mimeType, data, metadata)
 	if err != nil {
-		h.logger.Error("miniapp: upload artifact failed", "error", err.Error())
+		h.logger.Error("miniapp: upload artifact failed", logging.ErrorAttr(err))
 		resultLabel = "error"
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
@@ -72,26 +81,17 @@ func (h *Handler) createArtifact(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) readMiniAppUpload(w http.ResponseWriter, r *http.Request) ([]byte, string, domain.ArtifactMediaMetadata, int, string, bool) {
 	maxBytes := h.cfg.MaxUploadBytes
+	if r.ContentLength > maxBytes+miniAppMultipartOverage {
+		observeMiniAppUploadRejected(domain.JobErrMediaUploadTooLarge, "unknown", r.ContentLength)
+		return nil, "", domain.ArtifactMediaMetadata{}, http.StatusRequestEntityTooLarge, domain.JobErrMediaUploadTooLarge, false
+	}
 	r.Body = http.MaxBytesReader(w, r.Body, maxBytes+miniAppMultipartOverage)
-	if err := r.ParseMultipartForm(maxBytes); err != nil {
-		if strings.Contains(strings.ToLower(err.Error()), "too large") {
+	data, err := readMiniAppMultipartFile(r, maxBytes)
+	if err != nil {
+		if isMiniAppUploadTooLarge(err) {
 			observeMiniAppUploadRejected(domain.JobErrMediaUploadTooLarge, "unknown", 0)
 			return nil, "", domain.ArtifactMediaMetadata{}, http.StatusRequestEntityTooLarge, domain.JobErrMediaUploadTooLarge, false
 		}
-		observeMiniAppUploadRejected(domain.JobErrMediaUploadInvalid, "unknown", 0)
-		return nil, "", domain.ArtifactMediaMetadata{}, http.StatusBadRequest, domain.JobErrMediaUploadInvalid, false
-	}
-	file, _, err := r.FormFile(miniAppUploadFieldName)
-	if err != nil {
-		observeMiniAppUploadRejected(domain.JobErrMediaUploadInvalid, "unknown", 0)
-		return nil, "", domain.ArtifactMediaMetadata{}, http.StatusBadRequest, domain.JobErrMediaUploadInvalid, false
-	}
-	defer func() {
-		_ = file.Close()
-	}()
-
-	data, err := io.ReadAll(io.LimitReader(file, maxBytes+1))
-	if err != nil {
 		observeMiniAppUploadRejected(domain.JobErrMediaUploadInvalid, "unknown", 0)
 		return nil, "", domain.ArtifactMediaMetadata{}, http.StatusBadRequest, domain.JobErrMediaUploadInvalid, false
 	}
@@ -128,6 +128,50 @@ func (h *Handler) readMiniAppUpload(w http.ResponseWriter, r *http.Request) ([]b
 		metrics.ObserveMediaUploadPixels("miniapp", mimeClass, pixels)
 	}
 	return data, mimeType, metadata, http.StatusOK, "", true
+}
+
+func isMiniAppUploadTooLarge(err error) bool {
+	if errors.Is(err, errMiniAppUploadTooLarge) {
+		return true
+	}
+	var maxBytesErr *http.MaxBytesError
+	return errors.As(err, &maxBytesErr) || strings.Contains(strings.ToLower(err.Error()), "too large")
+}
+
+func readMiniAppMultipartFile(r *http.Request, maxBytes int64) ([]byte, error) {
+	mediaType, params, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if err != nil || !strings.HasPrefix(strings.ToLower(mediaType), "multipart/") {
+		return nil, errMiniAppUploadInvalid
+	}
+	boundary := strings.TrimSpace(params["boundary"])
+	if boundary == "" {
+		return nil, errMiniAppUploadInvalid
+	}
+	reader := multipart.NewReader(r.Body, boundary)
+	for {
+		part, err := reader.NextPart()
+		if err == io.EOF {
+			return nil, errMiniAppUploadInvalid
+		}
+		if err != nil {
+			return nil, err
+		}
+		if part.FormName() != miniAppUploadFieldName {
+			_ = part.Close()
+			continue
+		}
+		defer func() {
+			_ = part.Close()
+		}()
+		data, err := io.ReadAll(io.LimitReader(part, maxBytes+1))
+		if err != nil {
+			return nil, err
+		}
+		if int64(len(data)) > maxBytes {
+			return nil, errMiniAppUploadTooLarge
+		}
+		return data, nil
+	}
 }
 
 func miniAppImageMime(data []byte, allowWebP bool) (string, bool) {

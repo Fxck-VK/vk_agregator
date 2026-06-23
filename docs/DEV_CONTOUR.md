@@ -234,7 +234,8 @@ VK_GROUP_ID=<dev VK group id>
 
 CLOUDFLARED_TUNNEL_TOKEN=<dev dashboard-managed tunnel token>
 DEEPINFRA_API_KEY=<dev/test DeepInfra key>
-APIMART_API_KEY=<dev/test APIMart or AIMLAPI key>
+APIMART_API_KEY=<dev/test APIMart key>
+APIMART_BASE_URL=https://api.apimart.ai/v1
 POYO_API_KEY=<dev/test PoYo key>
 RUNWAYML_API_SECRET=<dev/test Runway key>
 PAYMENT_PROVIDER=mock
@@ -244,6 +245,31 @@ DEV_ALLOW_REAL_AI_PROVIDERS=true
 DEV_ALLOW_REAL_PAYMENTS=false
 VK_MENU_VIDEO_ROUTES_PREVIEW_ENABLED=true
 ```
+
+`PUBLIC_VK_BASE_URL` is also used by VK Bot payment buttons. The bot sends a
+server-owned `/payments/vk/{intent_id}` link and the API redirects active
+`vk_bot` payment intents to the provider confirmation page. The redirect route
+is rate-limited (`PAYMENT_REDIRECT_RATE_LIMIT_RPS` /
+`PAYMENT_REDIRECT_RATE_LIMIT_BURST`), and production fails closed when VK bot
+top-up is enabled without a valid HTTPS `PUBLIC_VK_BASE_URL`. Runtime VK bot
+output also fails closed to a safe unavailable-payment notice instead of
+falling back to direct provider checkout links when this base URL is missing or
+invalid.
+
+Rate limiting is split by layer. Nginx/Cloudflare own production-shaped
+source-IP limits before proxying. Redis-backed services own durable user/action
+limits such as VK antispam. The Go in-process limiter is a bounded local
+fallback: buckets expire after idle time, total bucket count is capped per
+process, and spoofable proxy headers are ignored unless a caller adds explicit
+trusted-proxy normalization.
+
+Mini App reference uploads are bounded at both the API and proxy layer. The API
+uses `MEDIA_MAX_IMAGE_UPLOAD_BYTES` and `MEDIA_MAX_CONCURRENT_UPLOADS` to cap
+per-process upload memory; with the committed DEV defaults this is
+approximately `20 MiB * 4` file-buffer memory per API process, plus a small
+multipart envelope. The production nginx route for `POST /miniapp/artifacts`
+uses a matching `21m` body limit and disables proxy request buffering for that
+exact upload endpoint.
 
 Real provider mode is part of the DEV contour for manual VK testing, but it
 must use DEV/test credentials only. Payments stay mocked unless

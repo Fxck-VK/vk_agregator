@@ -215,6 +215,12 @@ The nightly quality workflow already discovers `tests/k6/*.js`. To avoid
 failing CI when no API server is running, the script is disabled by default and
 performs a no-op unless `K6_BASE_URL` or `K6_RUN=1` is set.
 
+All checked-in k6 scripts refuse known production hostnames such as
+`vk.neiirohub.ru`, `app.neiirohub.ru` and `neiirohub.ru` by default. The
+override `K6_ALLOW_PRODUCTION_LIVE_SMOKE=true` is reserved only for a separate,
+human-approved live smoke; it must not be used for generic load tests or
+capacity runs.
+
 ### Local Run
 
 Start a load-test API contour first:
@@ -231,7 +237,7 @@ Then run k6:
 
 ```powershell
 $env:K6_BASE_URL = "http://127.0.0.1:8080"
-$env:K6_DURATION = "30s"
+$env:K6_BASIC_DURATION = "30s"
 $env:K6_VK_SECRET = "loadtest-secret"
 $env:K6_VK_GROUP_ID = "0"
 k6 run tests/k6/basic-api.js
@@ -242,7 +248,7 @@ Equivalent Docker run:
 ```powershell
 docker run --rm -i `
   -e K6_BASE_URL=http://host.docker.internal:8080 `
-  -e K6_DURATION=30s `
+  -e K6_BASIC_DURATION=30s `
   -e K6_VK_SECRET=loadtest-secret `
   -e K6_VK_GROUP_ID=0 `
   -v "${PWD}:/src:ro" `
@@ -266,7 +272,7 @@ Do not commit real launch params or use production user data for load tests.
 The first script is intentionally modest:
 
 ```text
-K6_DURATION=30s
+K6_BASIC_DURATION=30s
 K6_HEALTH_VUS=1
 K6_VK_VUS=1
 K6_MINIAPP_VUS=1

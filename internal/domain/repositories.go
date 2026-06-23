@@ -161,8 +161,8 @@ type JobRepository interface {
 	CountSucceededByUser(ctx context.Context, userID uuid.UUID) (int, error)
 }
 
-// InboundEventRepository persists raw inbound events for audit and idempotent
-// reprocessing.
+// InboundEventRepository persists inbound event metadata/minimized payloads for
+// audit and idempotent reprocessing.
 type InboundEventRepository interface {
 	// Create inserts a new inbound event.
 	Create(ctx context.Context, event *InboundEvent) error

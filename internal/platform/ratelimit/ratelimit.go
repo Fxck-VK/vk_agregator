@@ -1,9 +1,11 @@
 // Package ratelimit provides a small in-memory token-bucket rate limiter and an
 // HTTP middleware that throttles inbound requests per source key (typically the
 // client IP). It is an edge-protection primitive (audit S3): it bounds webhook
-// flooding and abuse without an external dependency. For multi-instance
-// deployments this should be fronted by a shared limiter (e.g. Redis) or an
-// ingress/WAF, but it provides a meaningful per-instance ceiling on its own.
+// flooding and abuse without an external dependency. Buckets have bounded
+// retention and a hard per-process cap, so high-cardinality keys cannot grow
+// memory forever. For multi-instance deployments this should be fronted by a
+// shared limiter (e.g. Redis) or an ingress/WAF, but it provides a meaningful
+// per-instance ceiling on its own.
 package ratelimit
 
 import (
@@ -11,6 +13,12 @@ import (
 	"net/http"
 	"sync"
 	"time"
+)
+
+const (
+	defaultBucketTTL       = 10 * time.Minute
+	defaultMaxBuckets      = 100_000
+	maxSweepChecksPerAllow = 64
 )
 
 // bucket is a single token bucket.
@@ -21,12 +29,19 @@ type bucket struct {
 
 // Limiter is a per-key token-bucket limiter safe for concurrent use.
 type Limiter struct {
-	mu      sync.Mutex
-	buckets map[string]*bucket
-	rate    float64 // tokens per second
-	burst   float64 // bucket capacity
-	now     func() time.Time
+	mu          sync.Mutex
+	buckets     map[string]*bucket
+	keys        []string
+	sweepCursor int
+	rate        float64 // tokens per second
+	burst       float64 // bucket capacity
+	bucketTTL   time.Duration
+	maxBuckets  int
+	now         func() time.Time
 }
+
+// Option customizes a Limiter.
+type Option func(*Limiter)
 
 // ConcurrencyLimiter bounds simultaneous in-flight work in one process. It is
 // intended for per-instance memory protection, not as a global quota.
@@ -35,18 +50,54 @@ type ConcurrencyLimiter struct {
 }
 
 // New builds a Limiter allowing `rate` requests/second with a `burst` ceiling.
-func New(rate float64, burst int) *Limiter {
+func New(rate float64, burst int, opts ...Option) *Limiter {
 	if rate <= 0 {
 		rate = 1
 	}
 	if burst <= 0 {
 		burst = 1
 	}
-	return &Limiter{
-		buckets: make(map[string]*bucket),
-		rate:    rate,
-		burst:   float64(burst),
-		now:     time.Now,
+	l := &Limiter{
+		buckets:    make(map[string]*bucket),
+		rate:       rate,
+		burst:      float64(burst),
+		bucketTTL:  defaultBucketTTL,
+		maxBuckets: defaultMaxBuckets,
+		now:        time.Now,
+	}
+	for _, opt := range opts {
+		opt(l)
+	}
+	if l.bucketTTL <= 0 {
+		l.bucketTTL = defaultBucketTTL
+	}
+	if l.maxBuckets <= 0 {
+		l.maxBuckets = defaultMaxBuckets
+	}
+	if l.now == nil {
+		l.now = time.Now
+	}
+	return l
+}
+
+// WithBucketTTL sets how long an idle key bucket is retained.
+func WithBucketTTL(ttl time.Duration) Option {
+	return func(l *Limiter) {
+		l.bucketTTL = ttl
+	}
+}
+
+// WithMaxBuckets sets a hard cap on the number of buckets retained per process.
+func WithMaxBuckets(n int) Option {
+	return func(l *Limiter) {
+		l.maxBuckets = n
+	}
+}
+
+// WithClock injects a clock for deterministic tests.
+func WithClock(now func() time.Time) Option {
+	return func(l *Limiter) {
+		l.now = now
 	}
 }
 
@@ -80,9 +131,19 @@ func (l *Limiter) Allow(key string) bool {
 	defer l.mu.Unlock()
 
 	now := l.now()
+	l.evictExpired(now)
 	b, ok := l.buckets[key]
 	if !ok {
+		if len(l.buckets) >= l.maxBuckets {
+			return false
+		}
 		l.buckets[key] = &bucket{tokens: l.burst - 1, lastSeen: now}
+		l.keys = append(l.keys, key)
+		return true
+	}
+	if l.expired(b, now) {
+		b.tokens = l.burst - 1
+		b.lastSeen = now
 		return true
 	}
 	// Refill based on elapsed time.
@@ -97,6 +158,40 @@ func (l *Limiter) Allow(key string) bool {
 	}
 	b.tokens--
 	return true
+}
+
+func (l *Limiter) evictExpired(now time.Time) {
+	if l.bucketTTL <= 0 || len(l.keys) == 0 {
+		return
+	}
+	limit := maxSweepChecksPerAllow
+	if len(l.keys) < limit {
+		limit = len(l.keys)
+	}
+	for checked := 0; checked < limit && len(l.keys) > 0; checked++ {
+		if l.sweepCursor >= len(l.keys) {
+			l.sweepCursor = 0
+		}
+		key := l.keys[l.sweepCursor]
+		b, ok := l.buckets[key]
+		if !ok || l.expired(b, now) {
+			if ok {
+				delete(l.buckets, key)
+			}
+			last := len(l.keys) - 1
+			l.keys[l.sweepCursor] = l.keys[last]
+			l.keys = l.keys[:last]
+			if l.sweepCursor >= len(l.keys) {
+				l.sweepCursor = 0
+			}
+			continue
+		}
+		l.sweepCursor++
+	}
+}
+
+func (l *Limiter) expired(b *bucket, now time.Time) bool {
+	return l.bucketTTL > 0 && now.Sub(b.lastSeen) > l.bucketTTL
 }
 
 // Middleware throttles inbound requests per client IP, returning 429 when the

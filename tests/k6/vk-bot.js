@@ -3,6 +3,8 @@ import { check, sleep } from "k6";
 import { Counter, Rate } from "k6/metrics";
 
 const rawBaseURL = __ENV.K6_BASE_URL || __ENV.BASE_URL || "";
+const allowProductionLiveSmoke = boolEnv("K6_ALLOW_PRODUCTION_LIVE_SMOKE", false);
+assertSafeLoadTarget(rawBaseURL, "K6_BASE_URL/BASE_URL", allowProductionLiveSmoke);
 const enabled = rawBaseURL !== "" || __ENV.K6_RUN === "1";
 const baseURL = trimTrailingSlash(rawBaseURL || "http://127.0.0.1:8080");
 const runID = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -311,6 +313,14 @@ function conversationID(offset) {
   return __ITER * 10000 + offset;
 }
 
+function boolEnv(name, fallback) {
+  const raw = __ENV[name];
+  if (raw === undefined || raw === "") {
+    return fallback;
+  }
+  return ["1", "true", "yes", "on"].includes(String(raw).toLowerCase());
+}
+
 function intEnv(name, fallback) {
   const raw = __ENV[name];
   if (raw === undefined || raw === "") {
@@ -331,4 +341,28 @@ function floatEnv(name, fallback) {
 
 function trimTrailingSlash(value) {
   return value.replace(/\/+$/, "");
+}
+
+function assertSafeLoadTarget(rawValue, name, allowProduction) {
+  const value = String(rawValue || "").trim();
+  if (value === "" || allowProduction) {
+    return;
+  }
+  const hostname = hostnameFromURL(value, name);
+  if (isProductionHost(hostname)) {
+    throw new Error(`${name} points to production host ${hostname}; generic load tests must use local, DEV, staging or loadtest targets`);
+  }
+}
+
+function hostnameFromURL(value, name) {
+  const match = value.match(/^[a-z][a-z0-9+.-]*:\/\/([^/?#:]+)(?::\d+)?(?:[/?#]|$)/i);
+  if (!match) {
+    throw new Error(`${name} must be an absolute URL for k6 load tests`);
+  }
+  return match[1].toLowerCase();
+}
+
+function isProductionHost(hostname) {
+  const host = String(hostname || "").toLowerCase();
+  return host === "vk.neiirohub.ru" || host === "app.neiirohub.ru" || host === "neiirohub.ru";
 }

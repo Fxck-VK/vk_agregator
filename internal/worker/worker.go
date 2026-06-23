@@ -27,6 +27,7 @@ import (
 
 	redisqueue "vk-ai-aggregator/internal/adapter/queue/redis"
 	"vk-ai-aggregator/internal/domain"
+	"vk-ai-aggregator/internal/platform/logging"
 	"vk-ai-aggregator/internal/platform/metrics"
 	"vk-ai-aggregator/internal/platform/queue"
 	"vk-ai-aggregator/internal/platform/ratelimit"
@@ -1755,9 +1756,9 @@ func (p *processor) pollOnce(ctx context.Context, job *domain.Job, pt *domain.Pr
 		span.End()
 		cancel()
 		if p.shouldKeepPollingAfterTransportFailure(job, pt, class, task.Attempt) {
-			return p.requeueProviderPollAfterError(ctx, job, pt, task, class, err.Error())
+			return p.requeueProviderPollAfterError(ctx, job, pt, task, class, safeProviderFailureMessage(class))
 		}
-		return p.handleFailure(ctx, job, task, class, err.Error())
+		return p.handleFailure(ctx, job, task, class, safeProviderFailureMessage(class))
 	}
 	if res.Status == domain.ProviderTaskFailed && res.ErrorClass != "" {
 		observeVideoRouteProviderTaskFailureForJob(job, res.ErrorClass)
@@ -1833,7 +1834,7 @@ func (p *processor) applyResult(ctx context.Context, job *domain.Job, pt *domain
 			p.recordProviderProductFailureForTask(job, pt, "output_download_failed")
 			observeVideoRouteMediaFailureForJob(job, "download", string(domain.ProviderErrOutputDownloadFailed))
 			// A download failure is retryable provider-side.
-			return p.handleFailure(ctx, job, task, domain.ProviderErrOutputDownloadFailed, err.Error())
+			return p.handleFailure(ctx, job, task, domain.ProviderErrOutputDownloadFailed, safeProviderFailureMessage(domain.ProviderErrOutputDownloadFailed))
 		}
 		if err := p.setStatus(ctx, job, domain.JobStatusProviderSucceeded, "", ""); err != nil {
 			return err
@@ -1866,7 +1867,7 @@ func (p *processor) applyResult(ctx context.Context, job *domain.Job, pt *domain
 		if err := p.saveDialogAnswer(ctx, job, res.Text); err != nil {
 			slog.WarnContext(ctx, "dialog context answer save failed",
 				slog.String("job_id", job.ID.String()),
-				slog.String("error", err.Error()))
+				logging.ErrorAttr(err))
 		}
 		if err := p.setStatus(ctx, job, domain.JobStatusResultReady, "", ""); err != nil {
 			return err
@@ -1892,7 +1893,7 @@ func (p *processor) applyResult(ctx context.Context, job *domain.Job, pt *domain
 		return p.streams.PublishTo(ctx, redisqueue.StreamProviderPoll, next)
 
 	case domain.ProviderTaskFailed:
-		return p.handleFailure(ctx, job, task, res.ErrorClass, res.ErrorMessage)
+		return p.handleFailure(ctx, job, task, res.ErrorClass, safeProviderFailureMessage(res.ErrorClass))
 
 	case domain.ProviderTaskCancelled:
 		// Cancellation may arrive from a non-cancellable state; best effort.

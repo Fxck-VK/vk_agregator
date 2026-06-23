@@ -242,8 +242,14 @@ func TestDeliverySuccessCapturesAndSucceeds(t *testing.T) {
 	if got.CostCaptured != 10 {
 		t.Fatalf("captured = %d, want 10", got.CostCaptured)
 	}
-	if len(h.vk.Sent()) != 1 || h.vk.Sent()[0].Type != "photo" {
+	if len(h.vk.Sent()) != 1 || h.vk.Sent()[0].Type != "message" || h.vk.Sent()[0].Attachment == "" {
 		t.Fatalf("expected one photo send, got %+v", h.vk.Sent())
+	}
+	if !strings.Contains(h.vk.Sent()[0].Keyboard, "Сгенерировать ещё") ||
+		!strings.Contains(h.vk.Sent()[0].Keyboard, "Главное меню") ||
+		!strings.Contains(h.vk.Sent()[0].Keyboard, string(domain.CommandMenuImageBackToQuality)) ||
+		!strings.Contains(h.vk.Sent()[0].Keyboard, string(domain.CommandShowMenu)) {
+		t.Fatalf("expected image result action keyboard, got %q", h.vk.Sent()[0].Keyboard)
 	}
 	// Balance: 1000 start - 10 captured = 990.
 	acc, _ := h.billingRpo.GetAccountByUser(ctx, got.UserID, domain.CurrencyCredits)

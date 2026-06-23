@@ -42,12 +42,20 @@ func TestCatalogBuildsOnlyPublicEnabledItems(t *testing.T) {
 	if nano == nil {
 		t.Fatalf("Nano Banana 2 missing from public catalog: %+v", items)
 	}
-	if nano.DefaultQuality != modelcatalog.ImageQuality1K || len(nano.QualityOptions) != 3 {
-		t.Fatalf("Nano Banana 2 quality options missing: %+v", nano)
-	}
+	assertImageQualityOptions(t, "Nano Banana 2", nano.DefaultQuality, nano.QualityOptions)
 	if !nano.SupportsReferenceImage || nano.MaxReferenceImages != 4 {
 		t.Fatalf("Nano Banana 2 reference limits missing: %+v", nano)
 	}
+	pro := findItem(items, modelcatalog.MiniAppImageNanoBananaPro)
+	if pro == nil {
+		t.Fatalf("Nano Banana Pro missing from public catalog: %+v", items)
+	}
+	assertImageQualityOptions(t, "Nano Banana Pro", pro.DefaultQuality, pro.QualityOptions)
+	gptImage2 := findItem(items, modelcatalog.MiniAppImageGPTImage2)
+	if gptImage2 == nil {
+		t.Fatalf("GPT Image 2 missing from public catalog: %+v", items)
+	}
+	assertImageQualityOptions(t, "GPT Image 2", gptImage2.DefaultQuality, gptImage2.QualityOptions)
 
 	video := findItem(items, string(domain.VideoRouteKlingO3Standard))
 	if video == nil {
@@ -137,6 +145,19 @@ func findItem(items []productcatalog.Item, id string) *productcatalog.Item {
 		}
 	}
 	return nil
+}
+
+func assertImageQualityOptions(t *testing.T, name, defaultQuality string, options []string) {
+	t.Helper()
+	want := []string{modelcatalog.ImageQuality1K, modelcatalog.ImageQuality2K, modelcatalog.ImageQuality4K}
+	if defaultQuality != modelcatalog.ImageQuality1K || len(options) != len(want) {
+		t.Fatalf("%s quality options missing: default=%q options=%+v", name, defaultQuality, options)
+	}
+	for i, option := range want {
+		if options[i] != option {
+			t.Fatalf("%s quality option %d = %q, want %q; options=%+v", name, i, options[i], option, options)
+		}
+	}
 }
 
 func assertNoPrivateProviderFields(t *testing.T, items []productcatalog.Item) {

@@ -9,6 +9,7 @@ import (
 	s3store "vk-ai-aggregator/internal/adapter/storage/s3"
 	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/platform/config"
+	"vk-ai-aggregator/internal/platform/logging"
 	"vk-ai-aggregator/internal/platform/ratelimit"
 	"vk-ai-aggregator/internal/service/billingservice"
 	"vk-ai-aggregator/internal/service/joborchestrator"
@@ -53,7 +54,7 @@ func NewHandler(ctx context.Context, cfg config.Config, deps Deps) *miniappapi.H
 		AddressingStyle: cfg.S3AddressingStyle,
 	})
 	if err != nil {
-		logger.Warn("s3 connect failed; miniapp artifact downloads disabled", "error", err)
+		logger.Warn("s3 connect failed; miniapp artifact downloads disabled", logging.ErrorAttr(err))
 	} else {
 		objectStore = store
 	}
@@ -70,7 +71,7 @@ func NewHandler(ctx context.Context, cfg config.Config, deps Deps) *miniappapi.H
 	})
 	runtimeCatalog, err := productcatalog.FromConfig(cfg)
 	if err != nil {
-		logger.Warn("miniapp video route catalog disabled", "error", err)
+		logger.Warn("miniapp video route catalog disabled", logging.ErrorAttr(err))
 	}
 	return miniappapi.NewHandler(miniappapi.Config{
 		AppSecret:                           cfg.VKAppSecret,

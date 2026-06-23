@@ -32,29 +32,34 @@ func TestMiniAppImageModelsExposeOnlyPublicCatalogFields(t *testing.T) {
 		t.Fatalf("expected enabled public image models, got %+v", models)
 	}
 
-	var sawNanoBanana2 bool
+	sawQualityOptions := map[string]bool{}
 	for _, model := range models {
 		if model.Type != "image" || model.ID == "" || model.Name == "" || model.Description == "" || !model.Enabled || model.EstimateCredits <= 0 {
 			t.Fatalf("missing public image catalog fields: %+v", model)
 		}
 		serialized := strings.ToLower(fmt.Sprintf("%+v", model))
-		for _, private := range []string{"model_code", "provider", "nano-banana-2-new", "gemini-3-pro-image-preview"} {
+		for _, private := range []string{"model_code", "provider", "nano-banana-2-new", "gemini-3-pro-image-preview", "gpt-image-2"} {
 			if strings.Contains(serialized, private) {
 				t.Fatalf("image catalog leaked private field %q: %+v", private, model)
 			}
 		}
-		if model.ID == modelcatalog.MiniAppImageNanoBanana2 {
-			sawNanoBanana2 = true
+		switch model.ID {
+		case modelcatalog.MiniAppImageNanoBanana2, modelcatalog.MiniAppImageNanoBananaPro, modelcatalog.MiniAppImageGPTImage2:
 			if model.DefaultQuality != modelcatalog.ImageQuality1K || len(model.QualityOptions) != 3 {
-				t.Fatalf("missing Nano Banana 2 quality options: %+v", model)
+				t.Fatalf("missing image quality options: %+v", model)
 			}
+			sawQualityOptions[model.ID] = true
+		}
+		if model.ID == modelcatalog.MiniAppImageNanoBanana2 {
 			if !model.SupportsReferenceImage || model.MaxReferenceImages != 4 {
 				t.Fatalf("missing Nano Banana 2 reference limits: %+v", model)
 			}
 		}
 	}
-	if !sawNanoBanana2 {
-		t.Fatal("Nano Banana 2 public model was not exposed")
+	for _, id := range []string{modelcatalog.MiniAppImageNanoBanana2, modelcatalog.MiniAppImageNanoBananaPro, modelcatalog.MiniAppImageGPTImage2} {
+		if !sawQualityOptions[id] {
+			t.Fatalf("%s public model was not exposed with quality options", id)
+		}
 	}
 }
 

@@ -204,7 +204,9 @@ func imageDescription(modelID string) string {
 
 func imageQualityOptions(modelID string) []string {
 	switch modelID {
-	case modelcatalog.MiniAppImageNanoBanana2:
+	case modelcatalog.MiniAppImageNanoBanana2,
+		modelcatalog.MiniAppImageNanoBananaPro,
+		modelcatalog.MiniAppImageGPTImage2:
 		return []string{modelcatalog.ImageQuality1K, modelcatalog.ImageQuality2K, modelcatalog.ImageQuality4K}
 	default:
 		return nil

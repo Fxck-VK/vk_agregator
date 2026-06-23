@@ -7,7 +7,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// InboundEventStatus is the processing state of a raw inbound event.
+// InboundEventStatus is the processing state of an inbound event.
 type InboundEventStatus string
 
 const (
@@ -21,10 +21,11 @@ const (
 	InboundIgnored InboundEventStatus = "ignored"
 )
 
-// InboundEvent is the raw, persisted record of an external event received by an
-// inbound gateway (for example a VK callback). Storing it before any business
-// processing supports auditing and idempotent reprocessing (invariant: every
-// external inbound event has an idempotency key and is deduplicated).
+// InboundEvent is the persisted record of an external event received by an
+// inbound gateway (for example a VK callback). It stores source metadata and a
+// minimized/redactable payload before business processing to support auditing
+// and idempotent reprocessing (invariant: every external inbound event has an
+// idempotency key and is deduplicated).
 type InboundEvent struct {
 	// ID is the internal primary key.
 	ID uuid.UUID `json:"id"`
@@ -40,7 +41,7 @@ type InboundEvent struct {
 	PeerID int64 `json:"peer_id"`
 	// VKUserID is the external user id that triggered the event.
 	VKUserID int64 `json:"vk_user_id"`
-	// Payload is the raw event body as received, retained for audit.
+	// Payload is a minimized/redactable event representation, not raw content.
 	Payload json.RawMessage `json:"payload"`
 	// Status is the processing state of the event.
 	Status InboundEventStatus `json:"status"`

@@ -14,6 +14,7 @@ import (
 	s3store "vk-ai-aggregator/internal/adapter/storage/s3"
 	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/platform/config"
+	"vk-ai-aggregator/internal/platform/logging"
 	"vk-ai-aggregator/internal/service/antispam"
 	"vk-ai-aggregator/internal/service/billingservice"
 	"vk-ai-aggregator/internal/service/commandrouter"
@@ -99,7 +100,7 @@ func NewHandler(ctx context.Context, cfg config.Config, deps Deps) http.Handler 
 			UseSSL:    cfg.S3UseSSL,
 		})
 		if err != nil {
-			logger.Warn("s3 connect failed; vk video reference uploads disabled", "error", err)
+			logger.Warn("s3 connect failed; vk video reference uploads disabled", logging.ErrorAttr(err))
 		} else {
 			objectStore = store
 		}
@@ -113,7 +114,7 @@ func NewHandler(ctx context.Context, cfg config.Config, deps Deps) http.Handler 
 	})
 	runtimeCatalog, err := productcatalog.FromConfig(cfg)
 	if err != nil {
-		logger.Warn("vk bot video route catalog disabled", "error", err)
+		logger.Warn("vk bot video route catalog disabled", logging.ErrorAttr(err))
 	}
 
 	return vkinbound.NewHandler(vkinbound.Config{
@@ -131,6 +132,7 @@ func NewHandler(ctx context.Context, cfg config.Config, deps Deps) http.Handler 
 		TopUpReceiptEmail:                   cfg.VKTopUpReceiptEmail,
 		TopUpReceiptPhone:                   cfg.VKTopUpReceiptPhone,
 		TopUpReturnURL:                      firstNonEmpty(cfg.YooKassaReturnURLVKBot, cfg.YooKassaReturnURL),
+		TopUpPaymentRedirectBaseURL:         cfg.PublicVKBaseURL,
 		TopUpStatusEditEnabled:              cfg.FeatureVKTopUpStatusEditEnabled,
 		ReferenceUploadsDisabled:            !cfg.MediaReferenceUploadsEnabled,
 		ArtifactBucket:                      cfg.S3Bucket,

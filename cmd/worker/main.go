@@ -61,7 +61,7 @@ func main() {
 	cfg := config.Load()
 
 	if err := cfg.Validate(); err != nil {
-		logger.Error("invalid configuration", "error", err)
+		logger.Error("invalid configuration", logging.ErrorAttr(err))
 		os.Exit(1)
 	}
 
@@ -74,7 +74,7 @@ func main() {
 		CriticalSampleRatio: cfg.TracingCriticalSampleRatio,
 	}, logger)
 	if err != nil {
-		logger.Error("tracing init failed", "error", err)
+		logger.Error("tracing init failed", logging.ErrorAttr(err))
 		os.Exit(1)
 	}
 	defer func() {
@@ -89,7 +89,7 @@ func main() {
 
 	pool, err := postgres.NewPoolConfigured(readCtx, cfg.DatabaseURL, cfg.DBMaxConns, cfg.DBMinConns)
 	if err != nil {
-		logger.Error("postgres connect failed", "error", err)
+		logger.Error("postgres connect failed", logging.ErrorAttr(err))
 		os.Exit(1)
 	}
 	defer pool.Close()
@@ -108,18 +108,18 @@ func main() {
 		AddressingStyle: cfg.S3AddressingStyle,
 	})
 	if err != nil {
-		logger.Error("s3 connect failed", "error", err)
+		logger.Error("s3 connect failed", logging.ErrorAttr(err))
 		os.Exit(1)
 	}
 	if err := store.EnsureBucket(readCtx, cfg.S3Bucket); err != nil {
-		logger.Error("s3 ensure bucket failed", "error", err)
+		logger.Error("s3 ensure bucket failed", logging.ErrorAttr(err))
 		os.Exit(1)
 	}
 	// Configure object retention so generated artifacts are purged on a schedule
 	// (audit ST1).
 	if cfg.ArtifactRetentionDays > 0 {
 		if err := store.SetRetention(readCtx, cfg.S3Bucket, cfg.ArtifactRetentionDays); err != nil {
-			logger.Warn("s3 set retention failed", "error", err)
+			logger.Warn("s3 set retention failed", logging.ErrorAttr(err))
 		}
 	}
 
@@ -415,7 +415,7 @@ func main() {
 	if runJobWorkers {
 		consumer := redisqueue.NewConsumer(rdb, cfg.WorkerGroup, cfg.WorkerConsumer)
 		if err := consumer.EnsureGroups(readCtx, redisqueue.AllStreams...); err != nil {
-			logger.Error("ensure consumer groups failed", "error", err)
+			logger.Error("ensure consumer groups failed", logging.ErrorAttr(err))
 			os.Exit(1)
 		}
 
@@ -459,6 +459,10 @@ func main() {
 				BillingReconciliationLimit:    cfg.BillingReconciliationLimit,
 				JobEventsRetention:            time.Duration(cfg.JobEventsRetentionDays) * 24 * time.Hour,
 				ProviderPayloadRetention:      time.Duration(cfg.ProviderPayloadRetentionDays) * 24 * time.Hour,
+				InboundPayloadRetention:       time.Duration(cfg.VKInboundPayloadRetentionDays) * 24 * time.Hour,
+				InboundPayloadRetentionLimit:  cfg.VKInboundRetentionBatchSize,
+				CommandRawTextRetention:       time.Duration(cfg.CommandRawTextRetentionDays) * 24 * time.Hour,
+				CommandRetentionLimit:         cfg.CommandRetentionBatchSize,
 				JobLogRetentionLimit:          cfg.JobLogRetentionBatchSize,
 				JobErrorAggregateLookback:     time.Duration(cfg.JobErrorAggregateLookbackDays) * 24 * time.Hour,
 				AnalyticsAggregateLookback:    time.Duration(cfg.AnalyticsAggregateLookbackDays) * 24 * time.Hour,
@@ -504,7 +508,7 @@ func main() {
 			defer wg.Done()
 			logger.Info("worker metrics listening", "addr", cfg.WorkerMetricsAddr)
 			if err := metricsSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-				logger.Error("worker metrics server error", "error", err)
+				logger.Error("worker metrics server error", logging.ErrorAttr(err))
 				os.Exit(1)
 			}
 		}()
@@ -600,7 +604,7 @@ func runQueueMetrics(ctx context.Context, rdb redis.Cmdable, group string, inter
 	}
 	collect := func() {
 		if err := redisqueue.CollectMetrics(ctx, rdb, group, redisqueue.AllStreamsWithDLQ...); err != nil && logger != nil {
-			logger.Warn("queue metrics collection failed", "error", err)
+			logger.Warn("queue metrics collection failed", logging.ErrorAttr(err))
 		}
 	}
 	collect()

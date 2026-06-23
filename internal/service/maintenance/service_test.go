@@ -21,6 +21,10 @@ type fakeStore struct {
 	jobEventCutoffs              []time.Time
 	providerPayloadExpireCutoffs []time.Time
 	providerPayloadRedactCalls   int
+	inboundExpireCutoffs         []time.Time
+	inboundRedactCalls           int
+	commandExpireCutoffs         []time.Time
+	commandRedactCalls           int
 	messageExpireCutoffs         []time.Time
 	summaryExpireCutoffs         []time.Time
 	messageRedactCalls           int
@@ -75,6 +79,30 @@ func (s *fakeStore) ExpireProviderPayloads(_ context.Context, cutoff, _ time.Tim
 func (s *fakeStore) RedactExpiredProviderPayloads(context.Context, time.Time, int) (int64, error) {
 	s.operations = append(s.operations, "redact_provider_payloads")
 	s.providerPayloadRedactCalls++
+	return 0, nil
+}
+
+func (s *fakeStore) ExpireInboundEvents(_ context.Context, cutoff, _ time.Time, _ int) (int64, error) {
+	s.operations = append(s.operations, "expire_inbound_events")
+	s.inboundExpireCutoffs = append(s.inboundExpireCutoffs, cutoff)
+	return 0, nil
+}
+
+func (s *fakeStore) RedactExpiredInboundEvents(context.Context, time.Time, int) (int64, error) {
+	s.operations = append(s.operations, "redact_inbound_events")
+	s.inboundRedactCalls++
+	return 0, nil
+}
+
+func (s *fakeStore) ExpireCommandRawText(_ context.Context, cutoff, _ time.Time, _ int) (int64, error) {
+	s.operations = append(s.operations, "expire_command_raw_text")
+	s.commandExpireCutoffs = append(s.commandExpireCutoffs, cutoff)
+	return 0, nil
+}
+
+func (s *fakeStore) RedactExpiredCommandRawText(context.Context, time.Time, int) (int64, error) {
+	s.operations = append(s.operations, "redact_command_raw_text")
+	s.commandRedactCalls++
 	return 0, nil
 }
 
@@ -368,6 +396,62 @@ func TestCleanupAppliesJobLogAndProviderPayloadRetention(t *testing.T) {
 	}
 	if store.providerPayloadRedactCalls != 1 {
 		t.Fatalf("provider payload redact calls = %d, want 1", store.providerPayloadRedactCalls)
+	}
+}
+
+func TestCleanupAppliesInboundPayloadRetention(t *testing.T) {
+	store := &fakeStore{}
+	now := time.Date(2026, 6, 11, 12, 0, 0, 0, time.UTC)
+	svc := New(store, nil, Config{
+		InboundPayloadRetention:      10 * 24 * time.Hour,
+		InboundPayloadRetentionLimit: 25,
+	}, WithClock(func() time.Time { return now }))
+
+	if err := svc.Cleanup(context.Background()); err != nil {
+		t.Fatalf("Cleanup() error = %v", err)
+	}
+
+	if len(store.inboundExpireCutoffs) != 1 {
+		t.Fatalf("ExpireInboundEvents calls = %d, want 1", len(store.inboundExpireCutoffs))
+	}
+	if got := now.Sub(store.inboundExpireCutoffs[0]); got != 10*24*time.Hour {
+		t.Fatalf("inbound payload retention window = %s, want 240h", got)
+	}
+	if store.inboundRedactCalls != 1 {
+		t.Fatalf("inbound payload redact calls = %d, want 1", store.inboundRedactCalls)
+	}
+	expireIndex := operationIndex(store.operations, "expire_inbound_events")
+	redactIndex := operationIndex(store.operations, "redact_inbound_events")
+	if expireIndex == -1 || redactIndex == -1 || redactIndex > expireIndex {
+		t.Fatalf("operation order = %v, want redact previously expired rows before expiring new candidates", store.operations)
+	}
+}
+
+func TestCleanupAppliesCommandRawTextRetention(t *testing.T) {
+	store := &fakeStore{}
+	now := time.Date(2026, 6, 11, 12, 0, 0, 0, time.UTC)
+	svc := New(store, nil, Config{
+		CommandRawTextRetention: 12 * 24 * time.Hour,
+		CommandRetentionLimit:   25,
+	}, WithClock(func() time.Time { return now }))
+
+	if err := svc.Cleanup(context.Background()); err != nil {
+		t.Fatalf("Cleanup() error = %v", err)
+	}
+
+	if len(store.commandExpireCutoffs) != 1 {
+		t.Fatalf("ExpireCommandRawText calls = %d, want 1", len(store.commandExpireCutoffs))
+	}
+	if got := now.Sub(store.commandExpireCutoffs[0]); got != 12*24*time.Hour {
+		t.Fatalf("command raw text retention window = %s, want 288h", got)
+	}
+	if store.commandRedactCalls != 1 {
+		t.Fatalf("command raw text redact calls = %d, want 1", store.commandRedactCalls)
+	}
+	expireIndex := operationIndex(store.operations, "expire_command_raw_text")
+	redactIndex := operationIndex(store.operations, "redact_command_raw_text")
+	if expireIndex == -1 || redactIndex == -1 || redactIndex > expireIndex {
+		t.Fatalf("operation order = %v, want redact previously expired command text before expiring new candidates", store.operations)
 	}
 }
 

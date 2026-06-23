@@ -565,6 +565,10 @@ func TestLoadMediaPipelineConfig(t *testing.T) {
 	t.Setenv("MEDIA_VARIANT_RETENTION_DAYS", "21")
 	t.Setenv("RETENTION_JOB_EVENTS_DAYS", "21")
 	t.Setenv("RETENTION_PROVIDER_PAYLOAD_DAYS", "5")
+	t.Setenv("RETENTION_VK_INBOUND_PAYLOAD_DAYS", "6")
+	t.Setenv("VK_INBOUND_RETENTION_BATCH_SIZE", "175")
+	t.Setenv("RETENTION_COMMAND_RAW_TEXT_DAYS", "8")
+	t.Setenv("COMMAND_RETENTION_BATCH_SIZE", "95")
 	t.Setenv("JOB_LOG_RETENTION_BATCH_SIZE", "125")
 	t.Setenv("JOB_ERROR_AGGREGATE_LOOKBACK_DAYS", "14")
 	t.Setenv("ANALYTICS_AGGREGATE_LOOKBACK_DAYS", "9")
@@ -657,12 +661,20 @@ func TestLoadMediaPipelineConfig(t *testing.T) {
 	}
 	if cfg.JobEventsRetentionDays != 21 ||
 		cfg.ProviderPayloadRetentionDays != 5 ||
+		cfg.VKInboundPayloadRetentionDays != 6 ||
+		cfg.VKInboundRetentionBatchSize != 175 ||
+		cfg.CommandRawTextRetentionDays != 8 ||
+		cfg.CommandRetentionBatchSize != 95 ||
 		cfg.JobLogRetentionBatchSize != 125 ||
 		cfg.JobErrorAggregateLookbackDays != 14 ||
 		cfg.AnalyticsAggregateLookbackDays != 9 {
-		t.Fatalf("unexpected job log retention config: events=%d payloads=%d batch=%d lookback=%d analytics=%d",
+		t.Fatalf("unexpected job log retention config: events=%d payloads=%d vk_inbound_days=%d vk_inbound_batch=%d command_days=%d command_batch=%d batch=%d lookback=%d analytics=%d",
 			cfg.JobEventsRetentionDays,
 			cfg.ProviderPayloadRetentionDays,
+			cfg.VKInboundPayloadRetentionDays,
+			cfg.VKInboundRetentionBatchSize,
+			cfg.CommandRawTextRetentionDays,
+			cfg.CommandRetentionBatchSize,
 			cfg.JobLogRetentionBatchSize,
 			cfg.JobErrorAggregateLookbackDays,
 			cfg.AnalyticsAggregateLookbackDays)
@@ -756,6 +768,9 @@ func TestLoadMediaPolicyDefaults(t *testing.T) {
 	}
 	if cfg.MediaDeliverRawProviderVideo != config.MediaDeliverRawProviderVideoAlwaysDevOnly {
 		t.Fatalf("dev raw provider video policy = %q", cfg.MediaDeliverRawProviderVideo)
+	}
+	if cfg.MediaMaxConcurrentUploads != 4 {
+		t.Fatalf("default media upload concurrency = %d, want 4", cfg.MediaMaxConcurrentUploads)
 	}
 
 	t.Setenv("APP_ENV", "production")
@@ -954,6 +969,34 @@ func TestValidateMediaScaleGuards(t *testing.T) {
 	err = cfg.Validate()
 	if err == nil || !strings.Contains(err.Error(), "RETENTION_PROVIDER_PAYLOAD_DAYS") {
 		t.Fatalf("expected provider payload retention validation error, got %v", err)
+	}
+
+	cfg = validMediaPipelineConfig()
+	cfg.VKInboundPayloadRetentionDays = -1
+	err = cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "RETENTION_VK_INBOUND_PAYLOAD_DAYS") {
+		t.Fatalf("expected VK inbound retention validation error, got %v", err)
+	}
+
+	cfg = validMediaPipelineConfig()
+	cfg.VKInboundRetentionBatchSize = -1
+	err = cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "VK_INBOUND_RETENTION_BATCH_SIZE") {
+		t.Fatalf("expected VK inbound batch validation error, got %v", err)
+	}
+
+	cfg = validMediaPipelineConfig()
+	cfg.CommandRawTextRetentionDays = -1
+	err = cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "RETENTION_COMMAND_RAW_TEXT_DAYS") {
+		t.Fatalf("expected command raw text retention validation error, got %v", err)
+	}
+
+	cfg = validMediaPipelineConfig()
+	cfg.CommandRetentionBatchSize = -1
+	err = cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "COMMAND_RETENTION_BATCH_SIZE") {
+		t.Fatalf("expected command retention batch validation error, got %v", err)
 	}
 
 	cfg = validMediaPipelineConfig()
@@ -1249,6 +1292,7 @@ func TestReferralRewardOnActivationDefaultEnabled(t *testing.T) {
 }
 
 func TestLoadPaymentConfig(t *testing.T) {
+	t.Setenv("PUBLIC_VK_BASE_URL", "https://vk.neiirohub.ru")
 	t.Setenv("PAYMENT_PROVIDER", "yookassa")
 	t.Setenv("YOOKASSA_SHOP_ID", "shop-1")
 	t.Setenv("YOOKASSA_SECRET_KEY", "secret")
@@ -1270,6 +1314,9 @@ func TestLoadPaymentConfig(t *testing.T) {
 	cfg := config.Load()
 	if cfg.PaymentProvider != "yookassa" {
 		t.Fatalf("PaymentProvider = %q, want yookassa", cfg.PaymentProvider)
+	}
+	if cfg.PublicVKBaseURL != "https://vk.neiirohub.ru" {
+		t.Fatalf("PublicVKBaseURL = %q", cfg.PublicVKBaseURL)
 	}
 	if cfg.YooKassaShopID != "shop-1" || cfg.YooKassaSecretKey != "secret" {
 		t.Fatalf("unexpected YooKassa credentials: shop=%q secret=%q", cfg.YooKassaShopID, cfg.YooKassaSecretKey)
@@ -1593,6 +1640,8 @@ func TestLoadReadsUnderscoreEnvFallback(t *testing.T) {
 func TestLoadMiniAppJobRateLimit(t *testing.T) {
 	t.Setenv("MINIAPP_JOB_RATE_LIMIT_RPS", "2.5")
 	t.Setenv("MINIAPP_JOB_RATE_LIMIT_BURST", "7")
+	t.Setenv("PAYMENT_REDIRECT_RATE_LIMIT_RPS", "3.5")
+	t.Setenv("PAYMENT_REDIRECT_RATE_LIMIT_BURST", "11")
 
 	cfg := config.Load()
 	if cfg.MiniAppJobRateLimitRPS != 2.5 {
@@ -1600,6 +1649,46 @@ func TestLoadMiniAppJobRateLimit(t *testing.T) {
 	}
 	if cfg.MiniAppJobRateLimitBurst != 7 {
 		t.Fatalf("MiniAppJobRateLimitBurst = %v", cfg.MiniAppJobRateLimitBurst)
+	}
+	if cfg.PaymentRedirectRateLimitRPS != 3.5 {
+		t.Fatalf("PaymentRedirectRateLimitRPS = %v", cfg.PaymentRedirectRateLimitRPS)
+	}
+	if cfg.PaymentRedirectRateLimitBurst != 11 {
+		t.Fatalf("PaymentRedirectRateLimitBurst = %v", cfg.PaymentRedirectRateLimitBurst)
+	}
+}
+
+func TestValidateProductionVKTopUpRequiresPublicRedirectBase(t *testing.T) {
+	tests := []struct {
+		name string
+		base string
+	}{
+		{name: "missing", base: ""},
+		{name: "http", base: "http://vk.example.test"},
+		{name: "with_query", base: "https://vk.example.test?x=1"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := productionDeepInfraConfig()
+			cfg.VKMenuTopUpEnabled = true
+			cfg.PublicVKBaseURL = tt.base
+
+			err := cfg.Validate()
+			if err == nil || !strings.Contains(err.Error(), "PUBLIC_VK_BASE_URL") {
+				t.Fatalf("expected PUBLIC_VK_BASE_URL validation error, got %v", err)
+			}
+		})
+	}
+}
+
+func TestValidateProductionVKTopUpAcceptsHTTPSPublicRedirectBase(t *testing.T) {
+	cfg := productionDeepInfraConfig()
+	cfg.VKMenuTopUpEnabled = true
+	cfg.PublicVKBaseURL = "https://vk.example.test/pay"
+
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate() error = %v", err)
 	}
 }
 
