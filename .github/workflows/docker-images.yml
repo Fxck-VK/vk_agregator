@@ -8,6 +8,7 @@ on:
       - feature/integration-web-backend
       - integration-web-backend
       - integration_web_backend
+      - dev-deploy
   push:
     branches:
       - main
@@ -15,6 +16,7 @@ on:
       - feature/integration-web-backend
       - integration-web-backend
       - integration_web_backend
+      - dev-deploy
   workflow_dispatch:
 
 permissions:

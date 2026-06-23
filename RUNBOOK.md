@@ -1796,6 +1796,56 @@ Automatic rollback changes only the stateless runtime image tag. It does not
 run `migrate down` and must not hide the incident: the workflow remains failed
 after a rollback, even when the previous production image is restored.
 
+### Automatic DEV deploy
+
+The DEV server deploy is handled by `.github/workflows/deploy-dev.yml`. It is a
+production-shaped rehearsal path, but it must use DEV-only domains, VK
+community, Cloudflare tunnel and secrets.
+
+```text
+push to dev-deploy
+  -> Docker Images builds immutable GHCR images
+  -> deploy-dev connects to the DEV VPS over SSH
+  -> deploy-dev.sh pulls and starts the selected image tag
+  -> smoke-dev.sh verifies only DEV public URLs
+  -> deploy-dev.sh restores the previous DEV image tag when deploy/smoke fails
+```
+
+Required repository secrets for DEV auto-deploy:
+
+| Secret | Purpose |
+|--------|---------|
+| `DEV_DEPLOY_HOST` | DEV VPS hostname or IP |
+| `DEV_DEPLOY_USER` | SSH user used by GitHub Actions for the DEV VPS |
+| `DEV_DEPLOY_SSH_KEY` | Private SSH key for that DEV deploy user |
+| `DEV_DEPLOY_PATH` | Repository path on the DEV VPS, for example `/opt/vk-ai-aggregator-dev` |
+| `GHCR_USERNAME` / `GHCR_TOKEN` | GHCR credentials used by deploy scripts for private packages |
+| `DEV_ENV_FILE` | Full DEV server `.env` content, without printing it in logs |
+| `DEV_TELEGRAM_BOT_TOKEN` / `DEV_TELEGRAM_CHAT_ID` | Optional DEV deploy result notification target |
+
+`DEV_ENV_FILE` must not contain production secrets. It must point to the DEV
+surface only:
+
+```env
+PUBLIC_VK_BASE_URL=https://dev-vk.neiirohub.ru
+PUBLIC_APP_BASE_URL=https://dev-app.neiirohub.ru
+PUBLIC_PAYMENT_WEBHOOK_URL=https://dev.neiirohub.ru/billing/webhooks/yookassa
+```
+
+`deploy-dev.sh` refuses `APP_ENV=production`, refuses production public URLs and
+requires explicit opt-in flags before running real payments or real AI providers
+from the DEV contour:
+
+```env
+DEV_ALLOW_REAL_PAYMENTS=true
+DEV_ALLOW_REAL_AI_PROVIDERS=true
+```
+
+Keep the DEV deploy target separate from production. The default compose files
+use the same container ports as production, so do not point `DEV_DEPLOY_HOST` at
+the production VPS unless production is intentionally stopped or the host port
+layout has been made unique.
+
 Validate the production compose file without real secrets:
 
 ```bash

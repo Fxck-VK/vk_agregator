@@ -674,6 +674,102 @@ func TestWebhookProcessorVerifiedSuccessGrantsOnce(t *testing.T) {
 	}
 }
 
+func TestWebhookProcessorMockEventCanVerifyAcrossProcesses(t *testing.T) {
+	ctx := context.Background()
+	repo := memory.NewPaymentRepo()
+	repo.PutProduct(&domain.PaymentProduct{
+		Code: "credits_100", Title: "100 credits", Amount: 9900,
+		Currency: domain.CurrencyRUB, Credits: 100, PriceVersion: 1, IsActive: true,
+	})
+	apiProvider := paymentmock.New()
+	intentSvc := paymentservice.New(repo, apiProvider, paymentservice.Config{})
+	userID := uuid.New()
+	created, err := intentSvc.CreateIntent(ctx, paymentservice.CreateIntentInput{
+		UserID:         userID,
+		ProductCode:    "credits_100",
+		ReceiptEmail:   "user@example.com",
+		IdempotencyKey: "intent-cross-process-mock-key",
+	})
+	if err != nil {
+		t.Fatalf("create intent: %v", err)
+	}
+
+	billingRepo := memory.NewBillingRepo()
+	webhookProvider := paymentmock.New()
+	processor := newTestWebhookProcessor(repo, webhookProvider, billingRepo)
+	raw := []byte(`{"event_type":"payment.succeeded","provider_payment_id":"` + created.Intent.ProviderPaymentID + `"}`)
+	if _, _, err := processor.IngestWebhook(ctx, raw, nil); err != nil {
+		t.Fatalf("ingest webhook: %v", err)
+	}
+	processed, err := processor.ProcessBatch(ctx, 10)
+	if err != nil {
+		t.Fatalf("process batch: %v", err)
+	}
+	if processed != 1 {
+		t.Fatalf("processed = %d, want 1", processed)
+	}
+	intent, err := repo.GetIntentByID(ctx, created.Intent.ID)
+	if err != nil {
+		t.Fatalf("get intent: %v", err)
+	}
+	if intent.Status != domain.PaymentIntentSucceeded {
+		t.Fatalf("intent status = %s, want succeeded", intent.Status)
+	}
+	acc, err := billingRepo.GetAccountByUser(ctx, userID, domain.CurrencyCredits)
+	if err != nil {
+		t.Fatalf("get account: %v", err)
+	}
+	if acc.BalanceCached != 100 {
+		t.Fatalf("balance = %d, want 100", acc.BalanceCached)
+	}
+}
+
+func TestWebhookProcessorMockCanceledEventCanVerifyAcrossProcesses(t *testing.T) {
+	ctx := context.Background()
+	repo := memory.NewPaymentRepo()
+	repo.PutProduct(&domain.PaymentProduct{
+		Code: "credits_100", Title: "100 credits", Amount: 9900,
+		Currency: domain.CurrencyRUB, Credits: 100, PriceVersion: 1, IsActive: true,
+	})
+	apiProvider := paymentmock.New()
+	intentSvc := paymentservice.New(repo, apiProvider, paymentservice.Config{})
+	userID := uuid.New()
+	created, err := intentSvc.CreateIntent(ctx, paymentservice.CreateIntentInput{
+		UserID:         userID,
+		ProductCode:    "credits_100",
+		ReceiptEmail:   "user@example.com",
+		IdempotencyKey: "intent-cross-process-mock-cancel-key",
+	})
+	if err != nil {
+		t.Fatalf("create intent: %v", err)
+	}
+
+	billingRepo := memory.NewBillingRepo()
+	webhookProvider := paymentmock.New()
+	processor := newTestWebhookProcessor(repo, webhookProvider, billingRepo)
+	raw := []byte(`{"event_type":"payment.canceled","provider_payment_id":"` + created.Intent.ProviderPaymentID + `"}`)
+	if _, _, err := processor.IngestWebhook(ctx, raw, nil); err != nil {
+		t.Fatalf("ingest webhook: %v", err)
+	}
+	processed, err := processor.ProcessBatch(ctx, 10)
+	if err != nil {
+		t.Fatalf("process batch: %v", err)
+	}
+	if processed != 1 {
+		t.Fatalf("processed = %d, want 1", processed)
+	}
+	intent, err := repo.GetIntentByID(ctx, created.Intent.ID)
+	if err != nil {
+		t.Fatalf("get intent: %v", err)
+	}
+	if intent.Status != domain.PaymentIntentCanceled {
+		t.Fatalf("intent status = %s, want canceled", intent.Status)
+	}
+	if _, err := billingRepo.GetAccountByUser(ctx, userID, domain.CurrencyCredits); !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("billing account err = %v, want not found", err)
+	}
+}
+
 func TestWebhookProcessorNotifiesCommittedStatusChangeOnce(t *testing.T) {
 	ctx := context.Background()
 	repo := memory.NewPaymentRepo()

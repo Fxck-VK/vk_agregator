@@ -215,7 +215,7 @@ func (p *WebhookProcessor) ProcessEvent(ctx context.Context, event *domain.Payme
 		return p.ackInboxEvent(ctx, event.ID)
 	}
 
-	providerPayment, err := p.verifiedProviderPayment(ctx, event.ProviderPaymentID)
+	providerPayment, err := p.verifiedProviderPaymentForEvent(ctx, event)
 	if err != nil {
 		return err
 	}
@@ -689,6 +689,73 @@ func (p *WebhookProcessor) verifiedProviderPayment(ctx context.Context, provider
 		return domain.ProviderPayment{}, fmt.Errorf("%w: provider status %q", ErrWebhookMismatch, providerPayment.Status)
 	}
 	return providerPayment, nil
+}
+
+func (p *WebhookProcessor) verifiedProviderPaymentForEvent(ctx context.Context, event *domain.PaymentEvent) (domain.ProviderPayment, error) {
+	if event == nil {
+		return domain.ProviderPayment{}, ErrWebhookInvalid
+	}
+	providerPayment, err := p.provider.GetPayment(ctx, event.ProviderPaymentID)
+	if err == nil {
+		return validateProviderPayment(event.ProviderPaymentID, providerPayment)
+	}
+	if p.provider.Code() == domain.PaymentProviderMock && errors.Is(err, domain.ErrNotFound) {
+		if fallback, fallbackErr := p.mockProviderPaymentFromEvent(ctx, event); fallbackErr == nil {
+			return fallback, nil
+		}
+	}
+	recordPaymentProviderError(p.provider.Code(), "get_payment", err)
+	return domain.ProviderPayment{}, fmt.Errorf("%w: get provider payment: %v", ErrWebhookUnverified, err)
+}
+
+func validateProviderPayment(providerPaymentID string, providerPayment domain.ProviderPayment) (domain.ProviderPayment, error) {
+	if strings.TrimSpace(providerPayment.ProviderPaymentID) != strings.TrimSpace(providerPaymentID) {
+		return domain.ProviderPayment{}, fmt.Errorf("%w: provider payment id", ErrWebhookMismatch)
+	}
+	if providerPayment.Status == "" || !providerPayment.Status.Valid() {
+		return domain.ProviderPayment{}, fmt.Errorf("%w: provider status %q", ErrWebhookMismatch, providerPayment.Status)
+	}
+	return providerPayment, nil
+}
+
+func (p *WebhookProcessor) mockProviderPaymentFromEvent(ctx context.Context, event *domain.PaymentEvent) (domain.ProviderPayment, error) {
+	target, ok := mockPaymentStatusFromEvent(event.EventType)
+	if !ok {
+		return domain.ProviderPayment{}, ErrWebhookUnsupported
+	}
+	intent, err := p.repo.GetIntentByProviderPaymentID(ctx, event.Provider, event.ProviderPaymentID)
+	if err != nil {
+		return domain.ProviderPayment{}, err
+	}
+	payment := domain.ProviderPayment{
+		ProviderPaymentID: intent.ProviderPaymentID,
+		Status:            target,
+		Amount:            intent.Amount,
+		Currency:          intent.Currency,
+		Raw:               append(json.RawMessage(nil), event.Payload...),
+	}
+	if target == domain.PaymentIntentSucceeded {
+		payment.Paid = true
+		payment.Captured = true
+		payment.Refundable = true
+	}
+	return validateProviderPayment(event.ProviderPaymentID, payment)
+}
+
+func mockPaymentStatusFromEvent(eventType string) (domain.PaymentIntentStatus, bool) {
+	normalized := strings.ToLower(strings.TrimSpace(eventType))
+	switch {
+	case normalized == "payment.succeeded" || strings.HasPrefix(normalized, "payment.succeeded."):
+		return domain.PaymentIntentSucceeded, true
+	case normalized == "payment.canceled" || strings.HasPrefix(normalized, "payment.canceled."):
+		return domain.PaymentIntentCanceled, true
+	case normalized == "payment.expired" || strings.HasPrefix(normalized, "payment.expired."):
+		return domain.PaymentIntentExpired, true
+	case normalized == "payment.failed" || strings.HasPrefix(normalized, "payment.failed."):
+		return domain.PaymentIntentFailed, true
+	default:
+		return "", false
+	}
 }
 
 func (p *WebhookProcessor) observeInboxStats(stats domain.PaymentWebhookInboxStats) {

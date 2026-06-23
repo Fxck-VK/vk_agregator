@@ -346,7 +346,8 @@ function Get-RedisSnapshot {
     $memory = Parse-RedisInfo -Lines (Invoke-RedisCli -RedisArguments @("INFO", "memory") -AllowFailure)
     $stats = Parse-RedisInfo -Lines (Invoke-RedisCli -RedisArguments @("INFO", "stats") -AllowFailure)
     $streamRows = @()
-    $totalQueueDepth = 0
+    $totalStreamLength = 0
+    $totalBacklog = 0
     $dlqDepth = 0
 
     foreach ($stream in $Streams) {
@@ -358,11 +359,35 @@ function Get-RedisSnapshot {
                 $xlen = $parsedXLen
             }
         }
-        $totalQueueDepth += $xlen
+
+        $pending = 0
+        $lag = 0
+        $groupInfo = @(Invoke-RedisCli -RedisArguments @("XINFO", "GROUPS", $stream) -AllowFailure)
+        for ($i = 0; $i -lt $groupInfo.Count - 1; $i += 1) {
+            $key = ([string]$groupInfo[$i]).Trim()
+            $value = ([string]$groupInfo[$i + 1]).Trim()
+            $parsed = 0
+            if ($key -eq "pending" -and [int]::TryParse($value, [ref]$parsed)) {
+                $pending += $parsed
+            }
+            if ($key -eq "lag" -and [int]::TryParse($value, [ref]$parsed)) {
+                $lag += $parsed
+            }
+        }
+
+        $backlog = $pending + $lag
+        $totalStreamLength += $xlen
+        $totalBacklog += $backlog
         if ($stream -like "*dlq*") {
             $dlqDepth += $xlen
         }
-        $streamRows += [PSCustomObject]@{ Stream = $stream; Depth = $xlen }
+        $streamRows += [PSCustomObject]@{
+            Stream = $stream
+            Length = $xlen
+            Pending = $pending
+            Lag = $lag
+            Backlog = $backlog
+        }
     }
 
     return [PSCustomObject]@{
@@ -373,7 +398,9 @@ function Get-RedisSnapshot {
         RejectedConnections      = $stats["rejected_connections"]
         ExpiredKeys              = $stats["expired_keys"]
         Streams                  = @($streamRows)
-        TotalQueueDepth          = $totalQueueDepth
+        TotalStreamLength        = $totalStreamLength
+        TotalQueueDepth          = $totalBacklog
+        TotalBacklog             = $totalBacklog
         DlqDepth                 = $dlqDepth
     }
 }
@@ -564,7 +591,7 @@ foreach ($row in $k6Rows) {
 }
 if ($null -ne $redisSnapshot) {
     if ($redisSnapshot.TotalQueueDepth -gt $maxQueueDepth) {
-        $findings.Add("Redis queue depth exceeds threshold: $($redisSnapshot.TotalQueueDepth).")
+        $findings.Add("Redis backlog exceeds threshold: $($redisSnapshot.TotalQueueDepth).")
     }
     if ($redisSnapshot.DlqDepth -gt $maxDlqDepth) {
         $findings.Add("DLQ is not empty: $($redisSnapshot.DlqDepth).")
@@ -595,6 +622,120 @@ $dockerStatsArray = @()
 foreach ($row in $dockerStats) {
     $dockerStatsArray += $row
 }
+
+$maxObservedRps = $null
+$maxObservedP95Ms = $null
+$maxObservedP99Ms = $null
+$maxObservedErrorRate = $null
+$totalJobCreateRate = 0.0
+$totalWorkerThroughput = 0.0
+$hasJobMetrics = $false
+foreach ($row in $k6Rows) {
+    if ($null -ne $row.Rps -and ($null -eq $maxObservedRps -or [double]$row.Rps -gt [double]$maxObservedRps)) {
+        $maxObservedRps = [double]$row.Rps
+    }
+    if ($null -ne $row.P95Ms -and ($null -eq $maxObservedP95Ms -or [double]$row.P95Ms -gt [double]$maxObservedP95Ms)) {
+        $maxObservedP95Ms = [double]$row.P95Ms
+    }
+    if ($null -ne $row.P99Ms -and ($null -eq $maxObservedP99Ms -or [double]$row.P99Ms -gt [double]$maxObservedP99Ms)) {
+        $maxObservedP99Ms = [double]$row.P99Ms
+    }
+    if ($null -ne $row.ErrorRate -and ($null -eq $maxObservedErrorRate -or [double]$row.ErrorRate -gt [double]$maxObservedErrorRate)) {
+        $maxObservedErrorRate = [double]$row.ErrorRate
+    }
+    if ($null -ne $row.JobCreateRate) {
+        $totalJobCreateRate += [double]$row.JobCreateRate
+        $hasJobMetrics = $true
+    }
+    if ($null -ne $row.WorkerThroughput) {
+        $totalWorkerThroughput += [double]$row.WorkerThroughput
+        $hasJobMetrics = $true
+    }
+}
+
+$script:ScalingDecisions = New-Object System.Collections.Generic.List[object]
+function Add-ScalingDecision {
+    param(
+        [string]$Area,
+        [string]$Decision,
+        [string]$Reason
+    )
+
+    $script:ScalingDecisions.Add([PSCustomObject]@{
+        area = $Area
+        decision = $Decision
+        reason = $Reason
+    })
+}
+
+if ($findings.Count -gt 0) {
+    Add-ScalingDecision -Area "first bottleneck" -Decision "fix before scaling" -Reason $firstBottleneck
+} else {
+    Add-ScalingDecision -Area "first bottleneck" -Decision "not found in this run" -Reason "Collected metrics did not cross configured error, latency, queue or DLQ thresholds."
+}
+
+if ($hasJobMetrics) {
+    if ($totalJobCreateRate -gt 0 -and $totalWorkerThroughput -gt 0 -and $totalWorkerThroughput -lt ($totalJobCreateRate * 0.8)) {
+        Add-ScalingDecision -Area "workers" -Decision "add worker capacity" -Reason ("Worker throughput ({0}/s) is below job create rate ({1}/s)." -f (Format-NullableNumber $totalWorkerThroughput 2), (Format-NullableNumber $totalJobCreateRate 2))
+    } elseif ($null -ne $redisSnapshot -and $redisSnapshot.TotalQueueDepth -eq 0 -and $redisSnapshot.DlqDepth -eq 0) {
+        Add-ScalingDecision -Area "workers" -Decision "keep current worker count for this load level" -Reason "Job metrics were collected and Redis backlog/DLQ stayed empty."
+    } else {
+        Add-ScalingDecision -Area "workers" -Decision "review worker throughput with Redis diagnostics" -Reason "Job metrics were collected, but queue diagnostics are missing or inconclusive."
+    }
+} else {
+    Add-ScalingDecision -Area "workers" -Decision "run job-worker scenario before sizing" -Reason "No job create/terminal metrics were collected."
+}
+
+if ($null -ne $redisSnapshot) {
+    $backloggedStreams = @()
+    foreach ($stream in $redisSnapshot.Streams) {
+        if ([int]$stream.Backlog -gt 0) {
+            $backloggedStreams += ("{0}={1}" -f $stream.Stream, $stream.Backlog)
+        }
+    }
+
+    if ($backloggedStreams.Count -eq 0) {
+        Add-ScalingDecision -Area "queues" -Decision "do not split text/image/video queues yet" -Reason "No per-stream backlog was observed. Split queues only after one modality consistently blocks others."
+    } else {
+        Add-ScalingDecision -Area "queues" -Decision "consider per-modality workers/queues" -Reason ("Backlog observed: {0}." -f ($backloggedStreams -join ", "))
+    }
+
+    if ($redisSnapshot.DlqDepth -eq 0) {
+        Add-ScalingDecision -Area "DLQ/retries" -Decision "no retry storm detected" -Reason "DLQ depth is zero in the collected snapshot."
+    } else {
+        Add-ScalingDecision -Area "DLQ/retries" -Decision "inspect retry classification before more load" -Reason ("DLQ depth is {0}." -f $redisSnapshot.DlqDepth)
+    }
+} else {
+    Add-ScalingDecision -Area "queues" -Decision "collect Redis diagnostics" -Reason "Queue depth and DLQ were not available."
+}
+
+if (-not $SkipPostgres -and (Test-Path $postgresOutputFile)) {
+    $postgresDiagnosticsText = Get-Content -LiteralPath $postgresOutputFile -Raw
+    $longQueriesClean = $postgresDiagnosticsText -match "(?s)== Long-running queries ==.*?\(0 rows\)"
+    $blockingLocksClean = $postgresDiagnosticsText -match "(?s)== Blocking locks ==.*?\(0 rows\)"
+    if ($longQueriesClean -and $blockingLocksClean) {
+        Add-ScalingDecision -Area "Postgres" -Decision "no immediate SQL blocker in this run" -Reason "Diagnostics did not show long-running queries or blocking locks. Re-check after higher sustained RPS."
+    } else {
+        Add-ScalingDecision -Area "Postgres" -Decision "inspect SQL before adding API replicas" -Reason "Diagnostics did not prove long-running queries/locks are clean."
+    }
+    if ($postgresDiagnosticsText -match "== Sequential scan candidates ==") {
+        Add-ScalingDecision -Area "indexes" -Decision "watch sequential-scan candidates under larger data volume" -Reason "The report includes a sequential scan section; add indexes only for repeated hot queries, not one-off small-table scans."
+    }
+} elseif ($SkipPostgres) {
+    Add-ScalingDecision -Area "Postgres" -Decision "not evaluated" -Reason "PostgreSQL diagnostics were skipped."
+} else {
+    Add-ScalingDecision -Area "Postgres" -Decision "collect diagnostics" -Reason "PostgreSQL diagnostics file was not produced."
+}
+
+if ($null -ne $maxObservedRps) {
+    Add-ScalingDecision -Area "current VPS/app shape" -Decision "treat current result as mock-load baseline, not final capacity proof" -Reason ("Max observed k6 RPS was {0}; run longer sustained steps before promising production limits." -f (Format-NullableNumber $maxObservedRps 2))
+} else {
+    Add-ScalingDecision -Area "current VPS/app shape" -Decision "not enough traffic data" -Reason "No k6 RPS measurements were collected."
+}
+
+Add-ScalingDecision -Area "external data services" -Decision "defer migration decision until sustained diagnostics show pressure or HA/backup requirements demand it" -Reason "Postgres/Redis/S3 separation is supported by config, but this report should prove the need before changing topology."
+Add-ScalingDecision -Area "provider quotas" -Decision "do not infer real provider capacity from mock tests" -Reason "AI/VK/YooKassa providers are not called in loadtest mode; quota requests require separate credential-bound smoke/load checks."
+Add-ScalingDecision -Area "user limits" -Decision "keep current anti-spam/backpressure defaults until real provider quotas are known" -Reason "Mock load can validate code paths, but paid provider budgets and VK limits determine final user-facing limits."
 
 $script:ReportLines = New-Object System.Collections.Generic.List[string]
 $targetLabel = $BaseUrl
@@ -653,13 +794,14 @@ if ($null -eq $redisSnapshot) {
     Add-Line "- Peak memory: $($redisSnapshot.UsedMemoryPeakHuman)"
     Add-Line "- Instantaneous ops/sec: $($redisSnapshot.InstantaneousOpsPerSec)"
     Add-Line "- Total commands processed: $($redisSnapshot.TotalCommandsProcessed)"
-    Add-Line "- Total queue depth: $($redisSnapshot.TotalQueueDepth)"
+    Add-Line "- Total stream length: $($redisSnapshot.TotalStreamLength)"
+    Add-Line "- Total backlog pending+lag: $($redisSnapshot.TotalQueueDepth)"
     Add-Line "- DLQ depth: $($redisSnapshot.DlqDepth)"
     Add-Line ""
-    Add-TableRow @("Stream", "Depth")
-    Add-TableRow @("---", "---:")
+    Add-TableRow @("Stream", "Length", "Pending", "Lag", "Backlog")
+    Add-TableRow @("---", "---:", "---:", "---:", "---:")
     foreach ($stream in $redisSnapshot.Streams) {
-        Add-TableRow @($stream.Stream, [string]$stream.Depth)
+        Add-TableRow @($stream.Stream, [string]$stream.Length, [string]$stream.Pending, [string]$stream.Lag, [string]$stream.Backlog)
     }
     Add-Line ""
     Add-Line ("Full Redis diagnostics: {0}" -f $redisOutputFile)
@@ -701,20 +843,38 @@ Add-Line "- Postgres long queries or locks appear -> optimize SQL/indexes before
 Add-Line "- Redis memory/ops spike with flat throughput -> inspect key TTLs, streams and rate-limit pressure."
 Add-Line "- CPU/RAM saturation -> split services or add runtime capacity."
 
+Add-Line ""
+Add-Line "## Scaling Decisions"
+Add-Line ""
+Add-TableRow @("Area", "Decision", "Reason")
+Add-TableRow @("---", "---", "---")
+foreach ($decision in $script:ScalingDecisions) {
+    Add-TableRow @($decision.area, $decision.decision, $decision.reason)
+}
+
 $reportPath = Join-Path $ReportDir "loadtest-report.md"
 $script:ReportLines | Set-Content -LiteralPath $reportPath -Encoding UTF8
 
-$summaryObject = [PSCustomObject]@{
-    generated_at = (Get-Date -Format o)
-    app_env = $appEnv
-    target = $BaseUrl
-    report_path = $reportPath
-    first_bottleneck_candidate = $firstBottleneck
-    findings = $findingsArray
-    k6 = $k6RowsArray
-    redis = $redisSnapshot
-    docker_stats = $dockerStatsArray
+$scalingDecisionsArray = @()
+foreach ($decision in $script:ScalingDecisions) {
+    $scalingDecisionsArray += [PSCustomObject]@{
+        area = [string]$decision.area
+        decision = [string]$decision.decision
+        reason = [string]$decision.reason
+    }
 }
+
+$summaryObject = [ordered]@{}
+$summaryObject["generated_at"] = (Get-Date -Format o)
+$summaryObject["app_env"] = $appEnv
+$summaryObject["target"] = $BaseUrl
+$summaryObject["report_path"] = $reportPath
+$summaryObject["first_bottleneck_candidate"] = $firstBottleneck
+$summaryObject["findings"] = [object[]]$findingsArray
+$summaryObject["k6"] = [object[]]$k6RowsArray
+$summaryObject["redis"] = $redisSnapshot
+$summaryObject["docker_stats"] = [object[]]$dockerStatsArray
+$summaryObject["scaling_decisions"] = [object[]]$scalingDecisionsArray
 $summaryObject | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $ReportDir "loadtest-summary.json") -Encoding UTF8
 
 Write-Host "Load-test report written to $reportPath"
