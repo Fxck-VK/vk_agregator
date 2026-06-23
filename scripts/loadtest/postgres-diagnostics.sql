@@ -53,6 +53,32 @@ END AS has_schema_migrations
 \endif
 
 \echo ''
+\echo '== Connection counts =='
+SELECT
+  datname,
+  state,
+  wait_event_type,
+  wait_event,
+  count(*) AS connections
+FROM pg_stat_activity
+WHERE datname = current_database()
+GROUP BY datname, state, wait_event_type, wait_event
+ORDER BY connections DESC, state NULLS LAST, wait_event_type NULLS LAST, wait_event NULLS LAST;
+
+SELECT
+  current_setting('max_connections')::int AS max_connections,
+  count(*) FILTER (WHERE datname = current_database()) AS current_database_connections,
+  count(*) FILTER (WHERE datname = current_database() AND state = 'active') AS active_connections,
+  count(*) FILTER (WHERE datname = current_database() AND state = 'idle') AS idle_connections,
+  round(
+    (count(*) FILTER (WHERE datname = current_database()))::numeric
+    / nullif(current_setting('max_connections')::numeric, 0)
+    * 100,
+    2
+  ) AS current_database_connection_pct
+FROM pg_stat_activity;
+
+\echo ''
 \echo '== Active and waiting queries =='
 SELECT
   pid,
@@ -88,6 +114,7 @@ FROM pg_stat_activity
 WHERE datname = current_database()
   AND pid <> pg_backend_pid()
   AND query_start IS NOT NULL
+  AND state <> 'idle'
   AND now() - query_start >= make_interval(secs => :long_query_seconds::int)
 ORDER BY query_start
 LIMIT :limit;
@@ -152,6 +179,34 @@ ORDER BY seq_tup_read DESC, seq_scan DESC
 LIMIT :limit;
 
 \echo ''
+\echo '== Watchlist: conversations and payment_events =='
+SELECT
+  relname AS table_name,
+  seq_scan,
+  seq_tup_read,
+  idx_scan,
+  idx_tup_fetch,
+  n_live_tup,
+  n_dead_tup,
+  pg_size_pretty(pg_total_relation_size(relid)) AS total_size,
+  last_autoanalyze,
+  last_autovacuum
+FROM pg_stat_user_tables
+WHERE relname IN ('conversations', 'payment_events')
+ORDER BY relname;
+
+SELECT
+  relname AS table_name,
+  indexrelname AS index_name,
+  idx_scan,
+  idx_tup_read,
+  idx_tup_fetch,
+  pg_size_pretty(pg_relation_size(indexrelid)) AS index_size
+FROM pg_stat_user_indexes
+WHERE relname IN ('conversations', 'payment_events')
+ORDER BY relname, idx_scan DESC, indexrelname;
+
+\echo ''
 \echo '== Index usage and size =='
 SELECT
   schemaname,
@@ -182,10 +237,16 @@ LIMIT :limit;
 \echo ''
 \echo '== pg_stat_statements slow query summary =='
 SELECT CASE
-  WHEN EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_stat_statements') THEN 'true'
+  WHEN EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_stat_statements')
+    AND current_setting('shared_preload_libraries', true) ILIKE '%pg_stat_statements%'
+  THEN 'true'
   ELSE 'false'
 END AS has_pg_stat_statements
 \gset
+
+SELECT
+  EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_stat_statements') AS extension_installed,
+  current_setting('shared_preload_libraries', true) AS shared_preload_libraries;
 
 \if :has_pg_stat_statements
   SELECT
@@ -200,7 +261,7 @@ END AS has_pg_stat_statements
   ORDER BY total_exec_time DESC
   LIMIT :limit;
 \else
-  SELECT 'pg_stat_statements is not installed. Enable it on load/staging to rank slow SQL by total_exec_time/calls.' AS note;
+  SELECT 'pg_stat_statements is not installed or is not loaded via shared_preload_libraries. Enable it on load/staging to rank slow SQL by total_exec_time/calls.' AS note;
 \endif
 
 \echo ''
@@ -241,6 +302,48 @@ END AS has_retention_schema
     SELECT 'referral_events', count(*) FILTER (WHERE expires_at <= now() AND deleted_at IS NULL), min(expires_at), max(expires_at) FROM referral_events
   ) AS retention
   ORDER BY expired_rows DESC, table_name;
+
+  \echo ''
+  \echo '== Retention cleanup EXPLAIN samples =='
+  EXPLAIN
+  SELECT id
+  FROM conversation_messages
+  WHERE retention_class = 'user_content'
+    AND expires_at <= now()
+    AND deleted_at IS NULL
+  ORDER BY expires_at, conversation_id, seq
+  LIMIT 100;
+
+  EXPLAIN
+  SELECT id
+  FROM jobs
+  WHERE retention_class <> 'financial'
+    AND expires_at <= now()
+    AND deleted_at IS NULL
+  ORDER BY expires_at, id
+  LIMIT 100;
+
+  EXPLAIN
+  SELECT id
+  FROM artifacts
+  WHERE expires_at IS NOT NULL
+    AND expires_at <= now()
+    AND deleted_at IS NULL
+    AND storage_bucket <> ''
+    AND storage_key <> ''
+  ORDER BY expires_at, id
+  LIMIT 100;
+
+  EXPLAIN
+  SELECT id
+  FROM artifact_variants
+  WHERE expires_at IS NOT NULL
+    AND expires_at <= now()
+    AND deleted_at IS NULL
+    AND storage_bucket <> ''
+    AND storage_key <> ''
+  ORDER BY expires_at, artifact_id, id
+  LIMIT 100;
 \else
   SELECT 'retention columns are missing; run retention migrations before retention load diagnostics' AS note;
 \endif
@@ -271,6 +374,29 @@ END AS has_analytics_schema
     SELECT 'daily_funnel_stats', count(*), max(activity_date) FROM daily_funnel_stats
   ) AS aggregates
   ORDER BY aggregate_name;
+
+  \echo ''
+  \echo '== Analytics aggregate read EXPLAIN samples =='
+  EXPLAIN
+  SELECT activity_date, sum(jobs_created) AS jobs_created, sum(jobs_succeeded) AS jobs_succeeded
+  FROM daily_generation_stats
+  WHERE activity_date >= current_date - interval '30 days'
+  GROUP BY activity_date
+  ORDER BY activity_date;
+
+  EXPLAIN
+  SELECT activity_date, sum(gross_amount_minor) AS gross_amount_minor, sum(net_amount_minor) AS net_amount_minor
+  FROM daily_revenue_stats
+  WHERE activity_date >= current_date - interval '30 days'
+  GROUP BY activity_date
+  ORDER BY activity_date;
+
+  EXPLAIN
+  SELECT activity_date, sum(active_users) AS active_users, sum(generation_users) AS generation_users
+  FROM daily_user_activity
+  WHERE activity_date >= current_date - interval '30 days'
+  GROUP BY activity_date
+  ORDER BY activity_date;
 \else
   SELECT 'analytics aggregate tables are missing; run analytics migrations before analytics load diagnostics' AS note;
 \endif
