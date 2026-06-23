@@ -78,6 +78,8 @@ PAYMENT_PROVIDER=mock
 VK_DELIVERY_MODE=mock
 MODERATION_PROVIDER=keyword
 ARTIFACT_SCANNER=none
+FEATURE_VIDEO_ROUTER_ENABLED=true
+FEATURE_VIDEO_ROUTE_MOCK_TEXT_TO_VIDEO_ENABLED=true
 ```
 
 Any test that enables real providers, real VK delivery, YooKassa or production
@@ -461,7 +463,7 @@ k6 run tests/k6/job-worker.js
 
 $env:K6_JOB_WORKLOAD = "video"
 $env:K6_JOB_VIDEO_RATE = "1"
-$env:K6_JOB_VIDEO_ROUTE_ALIAS = "video_kling_o3_standard"
+$env:K6_JOB_VIDEO_ROUTE_ALIAS = "video_mock_text_to_video"
 k6 run tests/k6/job-worker.js
 ```
 
@@ -490,7 +492,7 @@ K6_JOB_VIDEO_RATE=1
 K6_JOB_POLL=true
 K6_JOB_POLL_ATTEMPTS=10
 K6_JOB_POLL_INTERVAL_SECONDS=0.5
-K6_JOB_VIDEO_ROUTE_ALIAS=video_kling_o3_standard
+K6_JOB_VIDEO_ROUTE_ALIAS=video_mock_text_to_video
 K6_JOB_VIDEO_DURATION_SEC=5
 ```
 
@@ -548,10 +550,27 @@ docker compose exec redis redis-cli --scan --pattern "*job*"
 docker compose exec redis redis-cli --scan --pattern "*dlq*"
 ```
 
-Video load uses `video_route_alias`, not provider model IDs. If the API rejects
-the route, enable a mock-safe video route in the isolated loadtest/dev contour.
+Video load uses `video_route_alias`, not provider model IDs. The default route
+for synthetic load is `video_mock_text_to_video`, enabled only by
+`FEATURE_VIDEO_ROUTE_MOCK_TEXT_TO_VIDEO_ENABLED=true` in `APP_ENV=loadtest`.
 Do not point this scenario at real paid video providers unless that is an
 explicit paid capacity test.
+
+### Mock Video Route Rollback
+
+If the mock video route interferes with live smoke or production-shaped tests,
+roll it back by setting:
+
+```text
+FEATURE_VIDEO_ROUTE_MOCK_TEXT_TO_VIDEO_ENABLED=false
+K6_JOB_VIDEO_ROUTE_ALIAS=<real approved route alias or empty>
+```
+
+For production/staging/live-paid runs, keep
+`FEATURE_VIDEO_ROUTE_MOCK_TEXT_TO_VIDEO_ENABLED=false`; the app validation
+rejects this flag outside `APP_ENV=loadtest`. Real video route flags such as
+`FEATURE_VIDEO_ROUTE_KLING_O3_STANDARD_ENABLED` must continue to require their
+real provider switch, API key and base URL.
 
 Also check service metrics if the contour exposes private `/metrics` locally:
 

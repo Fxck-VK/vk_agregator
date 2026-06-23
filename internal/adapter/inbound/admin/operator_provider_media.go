@@ -584,6 +584,7 @@ func runtimeVideoRoutes(cfg platformconfig.Config) []RuntimeVideoRoute {
 		domain.VideoRouteRunwayGen4Turbo:  cfg.FeatureVideoRouteRunwayGen4TurboEnabled,
 		domain.VideoRouteSeedance20Fast:   cfg.FeatureVideoRouteSeedance20FastEnabled,
 		domain.VideoRouteRunwayGen45:      cfg.FeatureVideoRouteRunwayGen45Enabled,
+		domain.VideoRouteMockTextToVideo:  cfg.FeatureVideoRouteMockTextToVideoEnabled,
 	}
 	out := make([]RuntimeVideoRoute, 0, len(enabledRoutes))
 	for _, spec := range videorouter.DefaultRouteSpecs() {
@@ -643,6 +644,22 @@ func runtimeVideoProviderReadiness(cfg platformconfig.Config, provider domain.Pr
 			enabled:        cfg.RunwayProviderEnabled,
 			configured:     strings.TrimSpace(cfg.RunwayMLAPISecret) != "",
 			baseConfigured: strings.TrimSpace(cfg.RunwayMLBaseURL) != "",
+		}
+	case domain.ProviderMock:
+		videoProvider := strings.TrimSpace(cfg.VideoProvider)
+		ready := cfg.IsLoadTest() &&
+			strings.EqualFold(strings.TrimSpace(cfg.Provider), string(domain.ProviderMock)) &&
+			(videoProvider == "" || strings.EqualFold(videoProvider, string(domain.ProviderMock)))
+		for _, provider := range cfg.ProviderChain {
+			if strings.TrimSpace(provider) != "" && !strings.EqualFold(provider, string(domain.ProviderMock)) {
+				ready = false
+				break
+			}
+		}
+		return runtimeVideoProviderState{
+			enabled:        ready,
+			configured:     ready,
+			baseConfigured: ready,
 		}
 	default:
 		return runtimeVideoProviderState{}

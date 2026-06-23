@@ -230,6 +230,20 @@ func DefaultRouteSpecs() []domain.VideoRouteSpec {
 			MaxProviderCostCredits: 0,
 			PriceMultiplier:        2,
 		},
+		{
+			Alias:                    domain.VideoRouteMockTextToVideo,
+			Provider:                 domain.ProviderMock,
+			ProviderModelID:          "mock-video",
+			ModelClass:               "mock_video",
+			InputModes:               []domain.VideoInputMode{domain.VideoInputText},
+			AllowedDurationsSec:      []int{3, 5, 10},
+			AllowedResolutions:       []string{"720p", "1080p"},
+			AllowedAspectRatios:      []string{"16:9", "9:16", "1:1"},
+			ProviderCostCreditsFixed: 50,
+			MaxProviderCostCredits:   50,
+			MaxInternalCostCredits:   50,
+			PriceMultiplier:          1,
+		},
 	}
 }
 
