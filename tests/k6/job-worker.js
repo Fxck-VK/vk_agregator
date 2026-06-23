@@ -11,8 +11,10 @@ const runID = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
 const jobCreated = new Counter("job_created_total");
 const jobTerminal = new Counter("job_terminal_total");
+const jobTerminalFailure = new Counter("job_terminal_failure_total");
 const jobCreateOK = new Rate("job_create_ok");
 const jobPollOK = new Rate("job_poll_ok");
+const jobSuccessOK = new Rate("job_success_ok");
 const jobCreateDuration = new Trend("job_create_duration");
 const jobCompletionDuration = new Trend("job_completion_duration");
 const jobPendingAfterPoll = new Gauge("job_pending_after_poll");
@@ -25,6 +27,7 @@ export const options = enabled
         http_req_duration: ["p(95)<1500"],
         job_create_ok: ["rate>0.95"],
         job_poll_ok: ["rate>0.90"],
+        job_success_ok: ["rate>0.95"],
       },
       userAgent: "vk-ai-aggregator-k6-job-worker/1.0",
       summaryTrendStats: ["avg", "min", "med", "p(90)", "p(95)", "p(99)", "max"],
@@ -130,7 +133,12 @@ function pollJob(jobID, headers, operation, started) {
 
     lastStatus = String(jsonField(res, "status") || "");
     if (isTerminalStatus(lastStatus)) {
+      const succeeded = isSuccessfulTerminalStatus(lastStatus);
       jobTerminal.add(1, { operation, status: lastStatus });
+      jobSuccessOK.add(succeeded, { operation, status: lastStatus });
+      if (!succeeded) {
+        jobTerminalFailure.add(1, { operation, status: lastStatus });
+      }
       jobCompletionDuration.add(Date.now() - started, { operation, status: lastStatus });
       jobPendingAfterPoll.add(0, { operation });
       return;
@@ -268,6 +276,10 @@ function isTerminalStatus(status) {
     "canceled",
     "cancelled",
   ].includes(status);
+}
+
+function isSuccessfulTerminalStatus(status) {
+  return ["succeeded", "completed", "delivered"].includes(status);
 }
 
 function jsonField(res, field) {

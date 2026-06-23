@@ -20,6 +20,7 @@ const (
 	MiniAppImageNanoBanana2     = "nano_banana_2"
 	MiniAppImageSeedream45      = "seedream_4_5"
 	MiniAppImageSDXLTurbo       = "sdxl_turbo"
+	MiniAppImageMock            = "mock_image"
 	MiniAppVideoKling           = "kling"
 
 	VKVideoPrunaAI = "prunaai"
@@ -30,6 +31,7 @@ const (
 	ModelCodeGPTImage2       = "gpt-image-2"
 	ModelCodeSeedream45      = "ByteDance/Seedream-4.5"
 	ModelCodeSDXLTurbo       = "stabilityai/sdxl-turbo"
+	ModelCodeMockImage       = "mock-image"
 	ModelCodePVideo          = "PrunaAI/p-video"
 	ModelCodeSora2           = "sora-2"
 
@@ -137,6 +139,16 @@ var miniAppModels = map[domain.OperationType]map[string]Model{
 			PriceMultiplier:        1,
 			MaxInternalCostCredits: 10,
 		},
+		MiniAppImageMock: {
+			ModelID:                MiniAppImageMock,
+			ModelName:              "Mock Image Loadtest",
+			Provider:               domain.ProviderMock,
+			ModelCode:              ModelCodeMockImage,
+			ExposeID:               true,
+			ProviderCostCredits:    10,
+			PriceMultiplier:        1,
+			MaxInternalCostCredits: 10,
+		},
 		// Legacy public aliases remain accepted for older Mini App clients.
 		"sdxl": {
 			ModelID:                MiniAppImageSDXLTurbo,
@@ -181,7 +193,7 @@ var miniAppDefaultModel = map[domain.OperationType]string{
 
 var miniAppModelOrder = map[domain.OperationType][]string{
 	domain.OperationTextGenerate:  {MiniAppChatModelID},
-	domain.OperationImageGenerate: {MiniAppImageNanoBanana2, MiniAppImageNanoBananaPro, MiniAppImageGPTImage2, MiniAppImageSeedream45, MiniAppImageSDXLTurbo},
+	domain.OperationImageGenerate: {MiniAppImageNanoBanana2, MiniAppImageNanoBananaPro, MiniAppImageGPTImage2, MiniAppImageSeedream45, MiniAppImageSDXLTurbo, MiniAppImageMock},
 	domain.OperationVideoGenerate: {MiniAppVideoKling},
 }
 

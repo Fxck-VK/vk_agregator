@@ -234,6 +234,7 @@ func TestLoadVideoRouterFlagsDefaultDisabled(t *testing.T) {
 		"FEATURE_IMAGE_MODEL_NANO_BANANA_PRO_ENABLED",
 		"FEATURE_IMAGE_MODEL_GPT_IMAGE_2_ENABLED",
 		"FEATURE_IMAGE_MODEL_NANO_BANANA_2_ENABLED",
+		"FEATURE_IMAGE_MODEL_MOCK_ENABLED",
 		"APIMART_PROVIDER_ENABLED",
 		"POYO_PROVIDER_ENABLED",
 		"RUNWAY_PROVIDER_ENABLED",
@@ -254,6 +255,7 @@ func TestLoadVideoRouterFlagsDefaultDisabled(t *testing.T) {
 		cfg.FeatureImageModelNanoBananaProEnabled ||
 		cfg.FeatureImageModelGPTImage2Enabled ||
 		cfg.FeatureImageModelNanoBanana2Enabled ||
+		cfg.FeatureImageModelMockEnabled ||
 		cfg.APIMartProviderEnabled ||
 		cfg.PoYoProviderEnabled ||
 		cfg.RunwayProviderEnabled {
@@ -351,6 +353,59 @@ func TestValidateImageModelNanoBanana2RequiresPoYoConfig(t *testing.T) {
 	}
 
 	cfg.PoYoBaseURL = "https://api.poyo.ai"
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate() error = %v", err)
+	}
+}
+
+func TestValidateMockImageModelIsLoadTestOnly(t *testing.T) {
+	cfg := config.Config{
+		Env:                          "development",
+		Provider:                     "mock",
+		ProviderChain:                []string{"mock"},
+		ImageProvider:                "mock",
+		FeatureImageModelMockEnabled: true,
+	}
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "APP_ENV=loadtest") {
+		t.Fatalf("expected APP_ENV=loadtest validation error, got %v", err)
+	}
+}
+
+func TestValidateMockImageModelRequiresMockImageProvider(t *testing.T) {
+	cfg := config.Config{
+		Env:                          "loadtest",
+		Provider:                     "mock",
+		ProviderChain:                []string{"mock"},
+		ImageProvider:                "apimart",
+		PaymentProvider:              "mock",
+		VKDeliveryMode:               "mock",
+		ModerationProvider:           "keyword",
+		ArtifactScanner:              "none",
+		FeatureImageModelMockEnabled: true,
+	}
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "IMAGE_PROVIDER=mock") {
+		t.Fatalf("expected IMAGE_PROVIDER=mock validation error, got %v", err)
+	}
+}
+
+func TestValidateMockImageModelAllowsLoadTestMockModes(t *testing.T) {
+	cfg := config.Config{
+		Env:                          "loadtest",
+		Provider:                     "mock",
+		ProviderChain:                []string{"mock"},
+		ImageProvider:                "mock",
+		VideoProvider:                "mock",
+		PaymentProvider:              "mock",
+		VKDeliveryMode:               "mock",
+		ModerationProvider:           "keyword",
+		ArtifactScanner:              "none",
+		FeatureImageModelMockEnabled: true,
+	}
+
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("Validate() error = %v", err)
 	}

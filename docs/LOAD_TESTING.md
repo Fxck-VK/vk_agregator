@@ -80,6 +80,7 @@ MODERATION_PROVIDER=keyword
 ARTIFACT_SCANNER=none
 FEATURE_VIDEO_ROUTER_ENABLED=true
 FEATURE_VIDEO_ROUTE_MOCK_TEXT_TO_VIDEO_ENABLED=true
+FEATURE_IMAGE_MODEL_MOCK_ENABLED=true
 ```
 
 Any test that enables real providers, real VK delivery, YooKassa or production
@@ -451,6 +452,8 @@ $env:K6_BASE_URL = "http://127.0.0.1:8080"
 $env:K6_JOB_WORKLOAD = "mixed"
 $env:K6_JOB_DURATION = "30s"
 $env:K6_JOB_MIXED_RATE = "2"
+$env:K6_JOB_IMAGE_MODEL_ID = "mock_image"
+$env:K6_JOB_VIDEO_ROUTE_ALIAS = "video_mock_text_to_video"
 k6 run tests/k6/job-worker.js
 ```
 
@@ -475,6 +478,8 @@ docker run --rm -i `
   -e K6_JOB_WORKLOAD=mixed `
   -e K6_JOB_DURATION=30s `
   -e K6_JOB_MIXED_RATE=2 `
+  -e K6_JOB_IMAGE_MODEL_ID=mock_image `
+  -e K6_JOB_VIDEO_ROUTE_ALIAS=video_mock_text_to_video `
   -v "${PWD}:/src:ro" `
   grafana/k6:latest run /src/tests/k6/job-worker.js
 ```
@@ -492,6 +497,7 @@ K6_JOB_VIDEO_RATE=1
 K6_JOB_POLL=true
 K6_JOB_POLL_ATTEMPTS=10
 K6_JOB_POLL_INTERVAL_SECONDS=0.5
+K6_JOB_IMAGE_MODEL_ID=mock_image
 K6_JOB_VIDEO_ROUTE_ALIAS=video_mock_text_to_video
 K6_JOB_VIDEO_DURATION_SEC=5
 ```
@@ -556,19 +562,29 @@ for synthetic load is `video_mock_text_to_video`, enabled only by
 Do not point this scenario at real paid video providers unless that is an
 explicit paid capacity test.
 
-### Mock Video Route Rollback
+Image load uses the public model ID `mock_image` in synthetic load. It is
+enabled only by `FEATURE_IMAGE_MODEL_MOCK_ENABLED=true` in `APP_ENV=loadtest`
+with mock providers. Do not use real image model IDs such as
+`nano_banana_pro` or `gpt_image_2` in generic load tests; those belong to
+separate credential-bound paid smoke tests.
 
-If the mock video route interferes with live smoke or production-shaped tests,
-roll it back by setting:
+### Mock Media Rollback
+
+If mock media routes interfere with live smoke or production-shaped tests,
+roll them back by setting:
 
 ```text
+FEATURE_IMAGE_MODEL_MOCK_ENABLED=false
+K6_JOB_IMAGE_MODEL_ID=<real approved image model id or empty>
 FEATURE_VIDEO_ROUTE_MOCK_TEXT_TO_VIDEO_ENABLED=false
 K6_JOB_VIDEO_ROUTE_ALIAS=<real approved route alias or empty>
 ```
 
 For production/staging/live-paid runs, keep
+`FEATURE_IMAGE_MODEL_MOCK_ENABLED=false` and
 `FEATURE_VIDEO_ROUTE_MOCK_TEXT_TO_VIDEO_ENABLED=false`; the app validation
-rejects this flag outside `APP_ENV=loadtest`. Real video route flags such as
+rejects these flags outside `APP_ENV=loadtest`. Real media flags such as
+`FEATURE_IMAGE_MODEL_NANO_BANANA_PRO_ENABLED` and
 `FEATURE_VIDEO_ROUTE_KLING_O3_STANDARD_ENABLED` must continue to require their
 real provider switch, API key and base URL.
 

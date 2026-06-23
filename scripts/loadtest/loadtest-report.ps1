@@ -177,6 +177,7 @@ function Read-K6Summary {
     $iterationsRate = Get-JsonMetricValue -Metrics $metrics -Metric "iterations" -Value "rate" -Default 0
     $jobTerminalRate = Get-K6RateMetricValue -Metrics $metrics -Metric "job_terminal_total" -Default $null
     $jobCreatedRate = Get-K6RateMetricValue -Metrics $metrics -Metric "job_created_total" -Default $null
+    $jobSuccessRate = Get-K6RateMetricValue -Metrics $metrics -Metric "job_success_ok" -Default $null
 
     return [PSCustomObject]@{
         Script            = $scriptName
@@ -189,6 +190,7 @@ function Read-K6Summary {
         IterationsPerSec  = [double]$iterationsRate
         WorkerThroughput  = $jobTerminalRate
         JobCreateRate     = $jobCreatedRate
+        JobSuccessRate    = $jobSuccessRate
     }
 }
 
@@ -579,6 +581,7 @@ $maxErrorRate = [double](Get-Setting -Name "LOADTEST_REPORT_MAX_ERROR_RATE" -Def
 $maxP95Ms = [double](Get-Setting -Name "LOADTEST_REPORT_MAX_P95_MS" -Default "1500")
 $maxQueueDepth = [int](Get-Setting -Name "LOADTEST_REPORT_MAX_QUEUE_DEPTH" -Default "100")
 $maxDlqDepth = [int](Get-Setting -Name "LOADTEST_REPORT_MAX_DLQ" -Default "0")
+$minJobSuccessRate = [double](Get-Setting -Name "LOADTEST_REPORT_MIN_JOB_SUCCESS_RATE" -Default "0.95")
 
 $findings = New-Object System.Collections.Generic.List[string]
 foreach ($row in $k6Rows) {
@@ -587,6 +590,9 @@ foreach ($row in $k6Rows) {
     }
     if ($null -ne $row.P95Ms -and [double]$row.P95Ms -gt $maxP95Ms) {
         $findings.Add("High p95 latency in $($row.Script): $(Format-NullableNumber $row.P95Ms 2) ms.")
+    }
+    if ($null -ne $row.JobSuccessRate -and [double]$row.JobSuccessRate -lt $minJobSuccessRate) {
+        $findings.Add("Low job success rate in $($row.Script): $(Format-NullableNumber $row.JobSuccessRate 4).")
     }
 }
 if ($null -ne $redisSnapshot) {
@@ -768,8 +774,8 @@ Add-Line ""
 if ($k6Rows.Count -eq 0) {
     Add-Line "No k6 summaries were collected. Pass `-RunK6` or `-K6SummaryFiles`."
 } else {
-    Add-TableRow @("Script", "HTTP reqs", "RPS", "p95 ms", "p99 ms", "Error rate", "Worker throughput/s", "Job create/s")
-    Add-TableRow @("---", "---:", "---:", "---:", "---:", "---:", "---:", "---:")
+    Add-TableRow @("Script", "HTTP reqs", "RPS", "p95 ms", "p99 ms", "Error rate", "Job success", "Worker throughput/s", "Job create/s")
+    Add-TableRow @("---", "---:", "---:", "---:", "---:", "---:", "---:", "---:", "---:")
     foreach ($row in $k6Rows) {
         Add-TableRow @(
             $row.Script,
@@ -778,6 +784,7 @@ if ($k6Rows.Count -eq 0) {
             (Format-NullableNumber $row.P95Ms 2),
             (Format-NullableNumber $row.P99Ms 2),
             (Format-NullableNumber $row.ErrorRate 4),
+            (Format-NullableNumber $row.JobSuccessRate 4),
             (Format-NullableNumber $row.WorkerThroughput 2),
             (Format-NullableNumber $row.JobCreateRate 2)
         )

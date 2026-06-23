@@ -122,6 +122,36 @@ func TestFromConfigExposesMockVideoRouteOnlyInLoadTestMockMode(t *testing.T) {
 	}
 }
 
+func TestFromConfigExposesMockImageOnlyInLoadTestMockMode(t *testing.T) {
+	runtimeCatalog, err := productcatalog.FromConfig(config.Config{
+		Env:                          "loadtest",
+		Provider:                     "mock",
+		ProviderChain:                []string{"mock"},
+		ImageProvider:                "mock",
+		FeatureImageModelMockEnabled: true,
+	})
+	if err != nil {
+		t.Fatalf("build runtime catalog: %v", err)
+	}
+	if image := findImage(runtimeCatalog.ImageModels(), modelcatalog.MiniAppImageMock); image == nil {
+		t.Fatalf("mock image missing from loadtest catalog: %+v", runtimeCatalog.ImageModels())
+	}
+
+	runtimeCatalog, err = productcatalog.FromConfig(config.Config{
+		Env:                          "development",
+		Provider:                     "mock",
+		ProviderChain:                []string{"mock"},
+		ImageProvider:                "mock",
+		FeatureImageModelMockEnabled: true,
+	})
+	if err != nil {
+		t.Fatalf("build runtime catalog: %v", err)
+	}
+	if image := findImage(runtimeCatalog.ImageModels(), modelcatalog.MiniAppImageMock); image != nil {
+		t.Fatalf("mock image leaked outside loadtest catalog: %+v", runtimeCatalog.ImageModels())
+	}
+}
+
 func TestFromConfigDeepInfraImagesUseProviderLevelReadiness(t *testing.T) {
 	runtimeCatalog, err := productcatalog.FromConfig(config.Config{
 		DeepInfraAPIKey:  "configured",

@@ -186,6 +186,9 @@ func videoRoutes(routes []videorouter.PublicRoute) []VideoRoute {
 }
 
 func imageDescription(modelID string) string {
+	if modelID == modelcatalog.MiniAppImageMock {
+		return "Synthetic image route for load tests without paid provider calls."
+	}
 	switch modelID {
 	case modelcatalog.MiniAppImageNanoBanana2:
 		return "Быстрая генерация и редактирование изображений с референсами."

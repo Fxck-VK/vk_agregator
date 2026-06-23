@@ -97,6 +97,7 @@ func imageProviderReadyFromConfig(cfg config.Config) map[domain.ProviderName]boo
 		domain.ProviderAPIMart:   apimartReadyFromConfig(cfg),
 		domain.ProviderPoYo:      poyoReadyFromConfig(cfg),
 		domain.ProviderDeepInfra: deepInfraReadyFromConfig(cfg),
+		domain.ProviderMock:      mockImageProviderReadyFromConfig(cfg),
 	}
 }
 
@@ -107,6 +108,7 @@ func enabledImageModelsFromConfig(cfg config.Config) map[string]bool {
 		modelcatalog.MiniAppImageGPTImage2:     cfg.FeatureImageModelGPTImage2Enabled,
 		modelcatalog.MiniAppImageSeedream45:    true,
 		modelcatalog.MiniAppImageSDXLTurbo:     true,
+		modelcatalog.MiniAppImageMock:          cfg.FeatureImageModelMockEnabled,
 	}
 }
 
@@ -132,6 +134,21 @@ func mockVideoProviderReadyFromConfig(cfg config.Config) bool {
 		return false
 	}
 	if !optionalProviderIsMock(cfg.VideoProvider) {
+		return false
+	}
+	for _, provider := range cfg.ProviderChain {
+		if !optionalProviderIsMock(provider) {
+			return false
+		}
+	}
+	return true
+}
+
+func mockImageProviderReadyFromConfig(cfg config.Config) bool {
+	if !cfg.IsLoadTest() || !strings.EqualFold(strings.TrimSpace(cfg.Provider), string(domain.ProviderMock)) {
+		return false
+	}
+	if !optionalProviderIsMock(cfg.ImageProvider) {
 		return false
 	}
 	for _, provider := range cfg.ProviderChain {

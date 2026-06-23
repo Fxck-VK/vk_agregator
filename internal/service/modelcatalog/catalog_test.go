@@ -36,3 +36,13 @@ func TestResolveMiniAppImageLegacyDeepInfraAliases(t *testing.T) {
 		}
 	}
 }
+
+func TestResolveMiniAppMockImageModel(t *testing.T) {
+	model, ok := ResolveMiniAppModel(domain.OperationImageGenerate, MiniAppImageMock)
+	if !ok {
+		t.Fatal("mock image model did not resolve")
+	}
+	if model.ModelID != MiniAppImageMock || model.Provider != domain.ProviderMock || model.ModelCode != ModelCodeMockImage {
+		t.Fatalf("mock image resolved to %+v", model)
+	}
+}

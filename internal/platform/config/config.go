@@ -242,6 +242,7 @@ type Config struct {
 	FeatureImageModelNanoBananaProEnabled       bool
 	FeatureImageModelGPTImage2Enabled           bool
 	FeatureImageModelNanoBanana2Enabled         bool
+	FeatureImageModelMockEnabled                bool
 	FeatureVideoRouterEnabled                   bool
 	FeatureVideoRouteHailuo23FastEnabled        bool
 	FeatureVideoRouteHailuo23StandardEnabled    bool
@@ -1094,6 +1095,7 @@ func Load() Config {
 		FeatureImageModelNanoBananaProEnabled:    envBool("FEATURE_IMAGE_MODEL_NANO_BANANA_PRO_ENABLED", false),
 		FeatureImageModelGPTImage2Enabled:        envBool("FEATURE_IMAGE_MODEL_GPT_IMAGE_2_ENABLED", false),
 		FeatureImageModelNanoBanana2Enabled:      envBool("FEATURE_IMAGE_MODEL_NANO_BANANA_2_ENABLED", false),
+		FeatureImageModelMockEnabled:             envBool("FEATURE_IMAGE_MODEL_MOCK_ENABLED", false),
 		FeatureVideoRouterEnabled:                envBool("FEATURE_VIDEO_ROUTER_ENABLED", false),
 		FeatureVideoRouteHailuo23FastEnabled:     envBool("FEATURE_VIDEO_ROUTE_HAILUO_2_3_FAST_ENABLED", false),
 		FeatureVideoRouteHailuo23StandardEnabled: envBool("FEATURE_VIDEO_ROUTE_HAILUO_2_3_STANDARD_ENABLED", false),
@@ -1344,6 +1346,14 @@ func (c Config) validateVideoRouteProviderConfig() error {
 		}
 		if strings.TrimSpace(c.APIMartBaseURL) == "" {
 			return fmt.Errorf("config: FEATURE_IMAGE_MODEL_GPT_IMAGE_2_ENABLED=true requires APIMART_BASE_URL")
+		}
+	}
+	if c.FeatureImageModelMockEnabled {
+		if !c.IsLoadTest() {
+			return fmt.Errorf("config: FEATURE_IMAGE_MODEL_MOCK_ENABLED=true is only allowed with APP_ENV=loadtest")
+		}
+		if !configTokenEquals(c.Provider, "mock") || !providerChainMockOnly(c.ProviderChain) || !optionalConfigTokenEquals(c.ImageProvider, "mock") {
+			return fmt.Errorf("config: FEATURE_IMAGE_MODEL_MOCK_ENABLED=true requires PROVIDER=mock, PROVIDER_CHAIN=mock or empty, and IMAGE_PROVIDER=mock or empty")
 		}
 	}
 
