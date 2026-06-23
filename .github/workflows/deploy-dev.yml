@@ -1,6 +1,9 @@
 name: Deploy DEV
 
 on:
+  push:
+    branches:
+      - dev-deploy
   workflow_run:
     workflows:
       - Docker Images
@@ -23,6 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     if: >
       github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'push' ||
       (github.event.workflow_run.conclusion == 'success' &&
        github.event.workflow_run.event == 'push' &&
        github.event.workflow_run.head_branch == 'dev-deploy')
@@ -85,6 +89,45 @@ jobs:
             printf 'Missing required repository secrets: %s\n' "${missing[*]}" >&2
             exit 1
           fi
+
+      - name: Wait for GHCR images
+        shell: bash
+        env:
+          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+          IMAGE_TAG: ${{ steps.release.outputs.image_tag }}
+          IMAGE_NAMESPACE: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          image_namespace="${IMAGE_NAMESPACE,,}"
+          services=(api worker provider-webhook miniapp migrate backup)
+          deadline=$((SECONDS + 1200))
+
+          printf '%s' "${GHCR_TOKEN}" | docker login ghcr.io -u "${GHCR_USERNAME}" --password-stdin >/dev/null
+
+          while true; do
+            missing=()
+            for service in "${services[@]}"; do
+              image="ghcr.io/${image_namespace}/${service}:${IMAGE_TAG}"
+              if ! docker manifest inspect "${image}" >/dev/null 2>&1; then
+                missing+=("${service}")
+              fi
+            done
+
+            if (( ${#missing[@]} == 0 )); then
+              echo "All GHCR images are available for ${IMAGE_TAG}."
+              break
+            fi
+
+            if (( SECONDS >= deadline )); then
+              printf 'Timed out waiting for GHCR images with tag %s. Missing: %s\n' "${IMAGE_TAG}" "${missing[*]}" >&2
+              exit 1
+            fi
+
+            printf 'Waiting for GHCR images with tag %s. Missing: %s\n' "${IMAGE_TAG}" "${missing[*]}"
+            sleep 15
+          done
 
       - name: Prepare SSH
         shell: bash
