@@ -249,6 +249,7 @@ type Config struct {
 	FeatureVideoRouteRunwayGen4TurboEnabled     bool
 	FeatureVideoRouteSeedance20FastEnabled      bool
 	FeatureVideoRouteRunwayGen45Enabled         bool
+	FeatureVideoRouteMockTextToVideoEnabled     bool
 	FeatureVideoRouteResellerExperimentsEnabled bool
 
 	OpenAIAPIKey       string
@@ -1103,6 +1104,7 @@ func Load() Config {
 		FeatureVideoRouteRunwayGen4TurboEnabled:     envBool("FEATURE_VIDEO_ROUTE_RUNWAY_GEN4_TURBO_ENABLED", false),
 		FeatureVideoRouteSeedance20FastEnabled:      envBool("FEATURE_VIDEO_ROUTE_SEEDANCE_2_0_FAST_ENABLED", false),
 		FeatureVideoRouteRunwayGen45Enabled:         envBool("FEATURE_VIDEO_ROUTE_RUNWAY_GEN4_5_ENABLED", false),
+		FeatureVideoRouteMockTextToVideoEnabled:     envBool("FEATURE_VIDEO_ROUTE_MOCK_TEXT_TO_VIDEO_ENABLED", false),
 		FeatureVideoRouteResellerExperimentsEnabled: envBool("FEATURE_VIDEO_ROUTE_RESELLER_EXPERIMENTS_ENABLED", false),
 		OpenAIAPIKey:                        env("OPENAI_API_KEY", ""),
 		OpenAIBaseURL:                       env("OPENAI_BASE_URL", "https://api.openai.com/v1"),
@@ -1431,6 +1433,17 @@ func (c Config) validateVideoRouteProviderConfig() error {
 		}
 		if strings.TrimSpace(route.baseURL) == "" {
 			return fmt.Errorf("config: %s=true requires %s", route.routeEnv, route.baseURLEnv)
+		}
+	}
+	if c.FeatureVideoRouteMockTextToVideoEnabled {
+		if !c.FeatureVideoRouterEnabled {
+			return fmt.Errorf("config: FEATURE_VIDEO_ROUTE_MOCK_TEXT_TO_VIDEO_ENABLED=true requires FEATURE_VIDEO_ROUTER_ENABLED=true")
+		}
+		if !c.IsLoadTest() {
+			return fmt.Errorf("config: FEATURE_VIDEO_ROUTE_MOCK_TEXT_TO_VIDEO_ENABLED=true is only allowed with APP_ENV=loadtest")
+		}
+		if !configTokenEquals(c.Provider, "mock") || !providerChainMockOnly(c.ProviderChain) || !optionalConfigTokenEquals(c.VideoProvider, "mock") {
+			return fmt.Errorf("config: FEATURE_VIDEO_ROUTE_MOCK_TEXT_TO_VIDEO_ENABLED=true requires PROVIDER=mock, PROVIDER_CHAIN=mock or empty, and VIDEO_PROVIDER=mock or empty")
 		}
 	}
 	if c.FeatureVideoRouteResellerExperimentsEnabled && !c.FeatureVideoRouterEnabled {

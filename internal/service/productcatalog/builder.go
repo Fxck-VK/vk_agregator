@@ -62,6 +62,9 @@ func VideoRouteCatalogFromConfig(cfg config.Config) (*videorouter.Catalog, error
 				RequireBaseURL:    true,
 				BaseURLConfigured: strings.TrimSpace(cfg.RunwayMLBaseURL) != "",
 			},
+			domain.ProviderMock: {
+				Enabled: mockVideoProviderReadyFromConfig(cfg),
+			},
 		},
 		EnabledRoutes: map[domain.VideoRouteAlias]bool{
 			domain.VideoRouteHailuo23Fast:     cfg.FeatureVideoRouteHailuo23FastEnabled,
@@ -70,6 +73,7 @@ func VideoRouteCatalogFromConfig(cfg config.Config) (*videorouter.Catalog, error
 			domain.VideoRouteRunwayGen4Turbo:  cfg.FeatureVideoRouteRunwayGen4TurboEnabled,
 			domain.VideoRouteSeedance20Fast:   cfg.FeatureVideoRouteSeedance20FastEnabled,
 			domain.VideoRouteRunwayGen45:      cfg.FeatureVideoRouteRunwayGen45Enabled,
+			domain.VideoRouteMockTextToVideo:  cfg.FeatureVideoRouteMockTextToVideoEnabled,
 		},
 	})
 }
@@ -121,6 +125,26 @@ func poyoReadyFromConfig(cfg config.Config) bool {
 func deepInfraReadyFromConfig(cfg config.Config) bool {
 	return strings.TrimSpace(cfg.DeepInfraAPIKey) != "" &&
 		strings.TrimSpace(cfg.DeepInfraBaseURL) != ""
+}
+
+func mockVideoProviderReadyFromConfig(cfg config.Config) bool {
+	if !cfg.IsLoadTest() || !strings.EqualFold(strings.TrimSpace(cfg.Provider), string(domain.ProviderMock)) {
+		return false
+	}
+	if !optionalProviderIsMock(cfg.VideoProvider) {
+		return false
+	}
+	for _, provider := range cfg.ProviderChain {
+		if !optionalProviderIsMock(provider) {
+			return false
+		}
+	}
+	return true
+}
+
+func optionalProviderIsMock(provider string) bool {
+	provider = strings.TrimSpace(provider)
+	return provider == "" || strings.EqualFold(provider, string(domain.ProviderMock))
 }
 
 func catalogHasReferenceImageModel(catalog *Catalog) bool {

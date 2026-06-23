@@ -856,6 +856,8 @@ func videoRouteDisplayName(alias string) string {
 		return "Seedance 2.0 Fast"
 	case string(domain.VideoRouteRunwayGen45):
 		return "Runway Gen-4.5"
+	case string(domain.VideoRouteMockTextToVideo):
+		return "Mock Video Loadtest"
 	default:
 		return "Video"
 	}

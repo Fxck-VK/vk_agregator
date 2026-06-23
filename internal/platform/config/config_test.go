@@ -229,6 +229,7 @@ func TestLoadVideoRouterFlagsDefaultDisabled(t *testing.T) {
 		"FEATURE_VIDEO_ROUTE_RUNWAY_GEN4_TURBO_ENABLED",
 		"FEATURE_VIDEO_ROUTE_SEEDANCE_2_0_FAST_ENABLED",
 		"FEATURE_VIDEO_ROUTE_RUNWAY_GEN4_5_ENABLED",
+		"FEATURE_VIDEO_ROUTE_MOCK_TEXT_TO_VIDEO_ENABLED",
 		"FEATURE_VIDEO_ROUTE_RESELLER_EXPERIMENTS_ENABLED",
 		"FEATURE_IMAGE_MODEL_NANO_BANANA_PRO_ENABLED",
 		"FEATURE_IMAGE_MODEL_GPT_IMAGE_2_ENABLED",
@@ -248,6 +249,7 @@ func TestLoadVideoRouterFlagsDefaultDisabled(t *testing.T) {
 		cfg.FeatureVideoRouteRunwayGen4TurboEnabled ||
 		cfg.FeatureVideoRouteSeedance20FastEnabled ||
 		cfg.FeatureVideoRouteRunwayGen45Enabled ||
+		cfg.FeatureVideoRouteMockTextToVideoEnabled ||
 		cfg.FeatureVideoRouteResellerExperimentsEnabled ||
 		cfg.FeatureImageModelNanoBananaProEnabled ||
 		cfg.FeatureImageModelGPTImage2Enabled ||
@@ -419,6 +421,62 @@ func TestValidateRunwayRouteRequiresSecret(t *testing.T) {
 	err := cfg.Validate()
 	if err == nil || !strings.Contains(err.Error(), "RUNWAYML_API_SECRET") {
 		t.Fatalf("expected RUNWAYML_API_SECRET validation error, got %v", err)
+	}
+}
+
+func TestValidateMockVideoRouteIsLoadTestOnly(t *testing.T) {
+	cfg := config.Config{
+		Env:                                     "development",
+		Provider:                                "mock",
+		ProviderChain:                           []string{"mock"},
+		VideoProvider:                           "mock",
+		FeatureVideoRouterEnabled:               true,
+		FeatureVideoRouteMockTextToVideoEnabled: true,
+	}
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "APP_ENV=loadtest") {
+		t.Fatalf("expected APP_ENV=loadtest validation error, got %v", err)
+	}
+}
+
+func TestValidateMockVideoRouteRequiresMockVideoProvider(t *testing.T) {
+	cfg := config.Config{
+		Env:                                     "loadtest",
+		Provider:                                "mock",
+		ProviderChain:                           []string{"mock"},
+		VideoProvider:                           "poyo",
+		PaymentProvider:                         "mock",
+		VKDeliveryMode:                          "mock",
+		ModerationProvider:                      "keyword",
+		ArtifactScanner:                         "none",
+		FeatureVideoRouterEnabled:               true,
+		FeatureVideoRouteMockTextToVideoEnabled: true,
+	}
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "VIDEO_PROVIDER=mock") {
+		t.Fatalf("expected VIDEO_PROVIDER=mock validation error, got %v", err)
+	}
+}
+
+func TestValidateMockVideoRouteAllowsLoadTestMockModes(t *testing.T) {
+	cfg := config.Config{
+		Env:                                     "loadtest",
+		Provider:                                "mock",
+		ProviderChain:                           []string{"mock"},
+		ImageProvider:                           "mock",
+		VideoProvider:                           "mock",
+		PaymentProvider:                         "mock",
+		VKDeliveryMode:                          "mock",
+		ModerationProvider:                      "keyword",
+		ArtifactScanner:                         "none",
+		FeatureVideoRouterEnabled:               true,
+		FeatureVideoRouteMockTextToVideoEnabled: true,
+	}
+
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate() error = %v", err)
 	}
 }
 

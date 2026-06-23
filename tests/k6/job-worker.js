@@ -57,9 +57,9 @@ export function videoJobs() {
 }
 
 export function mixedJobs() {
-  const textWeight = intEnv("K6_JOB_TEXT_WEIGHT", 60);
-  const imageWeight = intEnv("K6_JOB_IMAGE_WEIGHT", 25);
-  const videoWeight = intEnv("K6_JOB_VIDEO_WEIGHT", 15);
+  const textWeight = nonNegativeIntEnv("K6_JOB_TEXT_WEIGHT", 60);
+  const imageWeight = nonNegativeIntEnv("K6_JOB_IMAGE_WEIGHT", 25);
+  const videoWeight = nonNegativeIntEnv("K6_JOB_VIDEO_WEIGHT", 15);
   const total = Math.max(1, textWeight + imageWeight + videoWeight);
   const roll = Math.random() * total;
 
@@ -157,7 +157,7 @@ function jobPayload(operation) {
 
   if (operation === "video_generate") {
     // Mini App video API accepts public route aliases, not provider model IDs.
-    payload.video_route_alias = __ENV.K6_JOB_VIDEO_ROUTE_ALIAS || "video_kling_o3_standard";
+    payload.video_route_alias = __ENV.K6_JOB_VIDEO_ROUTE_ALIAS || "video_mock_text_to_video";
     payload.duration_sec = intEnv("K6_JOB_VIDEO_DURATION_SEC", 5);
   }
 
@@ -285,6 +285,15 @@ function intEnv(name, fallback) {
   }
   const value = Number.parseInt(raw, 10);
   return Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
+function nonNegativeIntEnv(name, fallback) {
+  const raw = __ENV[name];
+  if (raw === undefined || raw === "") {
+    return fallback;
+  }
+  const value = Number.parseInt(raw, 10);
+  return Number.isFinite(value) && value >= 0 ? value : fallback;
 }
 
 function floatEnv(name, fallback) {

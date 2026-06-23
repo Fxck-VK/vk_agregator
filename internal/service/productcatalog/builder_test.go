@@ -90,6 +90,38 @@ func TestFromConfigFailsClosedForUnconfiguredProviders(t *testing.T) {
 	}
 }
 
+func TestFromConfigExposesMockVideoRouteOnlyInLoadTestMockMode(t *testing.T) {
+	runtimeCatalog, err := productcatalog.FromConfig(config.Config{
+		Env:                                     "loadtest",
+		Provider:                                "mock",
+		ProviderChain:                           []string{"mock"},
+		VideoProvider:                           "mock",
+		FeatureVideoRouterEnabled:               true,
+		FeatureVideoRouteMockTextToVideoEnabled: true,
+	})
+	if err != nil {
+		t.Fatalf("build runtime catalog: %v", err)
+	}
+	if route := findRoute(runtimeCatalog.VideoRoutes(), domain.VideoRouteMockTextToVideo); route == nil {
+		t.Fatalf("mock video route missing from loadtest catalog: %+v", runtimeCatalog.VideoRoutes())
+	}
+
+	runtimeCatalog, err = productcatalog.FromConfig(config.Config{
+		Env:                                     "development",
+		Provider:                                "mock",
+		ProviderChain:                           []string{"mock"},
+		VideoProvider:                           "mock",
+		FeatureVideoRouterEnabled:               true,
+		FeatureVideoRouteMockTextToVideoEnabled: true,
+	})
+	if err != nil {
+		t.Fatalf("build runtime catalog: %v", err)
+	}
+	if route := findRoute(runtimeCatalog.VideoRoutes(), domain.VideoRouteMockTextToVideo); route != nil {
+		t.Fatalf("mock video route leaked outside loadtest catalog: %+v", runtimeCatalog.VideoRoutes())
+	}
+}
+
 func TestFromConfigDeepInfraImagesUseProviderLevelReadiness(t *testing.T) {
 	runtimeCatalog, err := productcatalog.FromConfig(config.Config{
 		DeepInfraAPIKey:  "configured",

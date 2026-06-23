@@ -16,6 +16,7 @@ const (
 	VideoRouteRunwayGen4Turbo  VideoRouteAlias = "video_runway_gen4_turbo"
 	VideoRouteSeedance20Fast   VideoRouteAlias = "video_seedance_2_0_fast"
 	VideoRouteRunwayGen45      VideoRouteAlias = "video_runway_gen4_5"
+	VideoRouteMockTextToVideo  VideoRouteAlias = "video_mock_text_to_video"
 )
 
 // VideoInputMode describes the input shape a route supports.

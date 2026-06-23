@@ -34,6 +34,7 @@ import (
 	"vk-ai-aggregator/internal/platform/readiness"
 	"vk-ai-aggregator/internal/platform/tracing"
 	"vk-ai-aggregator/internal/service/joborchestrator"
+	"vk-ai-aggregator/internal/service/productcatalog"
 	"vk-ai-aggregator/internal/service/videorouter"
 )
 
@@ -198,40 +199,7 @@ func main() {
 }
 
 func videoRouteResolverFromConfig(cfg config.Config) (joborchestrator.VideoRouteResolver, error) {
-	catalog, err := videorouter.NewCatalog(videorouter.Config{
-		RouterEnabled: cfg.FeatureVideoRouterEnabled,
-		Providers: map[domain.ProviderName]videorouter.ProviderConfig{
-			domain.ProviderAPIMart: {
-				Enabled:           cfg.APIMartProviderEnabled,
-				RequireAPIKey:     true,
-				APIKeyConfigured:  strings.TrimSpace(cfg.APIMartAPIKey) != "",
-				RequireBaseURL:    true,
-				BaseURLConfigured: strings.TrimSpace(cfg.APIMartBaseURL) != "",
-			},
-			domain.ProviderPoYo: {
-				Enabled:           cfg.PoYoProviderEnabled,
-				RequireAPIKey:     true,
-				APIKeyConfigured:  strings.TrimSpace(cfg.PoYoAPIKey) != "",
-				RequireBaseURL:    true,
-				BaseURLConfigured: strings.TrimSpace(cfg.PoYoBaseURL) != "",
-			},
-			domain.ProviderRunway: {
-				Enabled:           cfg.RunwayProviderEnabled,
-				RequireAPIKey:     true,
-				APIKeyConfigured:  strings.TrimSpace(cfg.RunwayMLAPISecret) != "",
-				RequireBaseURL:    true,
-				BaseURLConfigured: strings.TrimSpace(cfg.RunwayMLBaseURL) != "",
-			},
-		},
-		EnabledRoutes: map[domain.VideoRouteAlias]bool{
-			domain.VideoRouteHailuo23Fast:     cfg.FeatureVideoRouteHailuo23FastEnabled,
-			domain.VideoRouteHailuo23Standard: cfg.FeatureVideoRouteHailuo23StandardEnabled,
-			domain.VideoRouteKlingO3Standard:  cfg.FeatureVideoRouteKlingO3StandardEnabled,
-			domain.VideoRouteRunwayGen4Turbo:  cfg.FeatureVideoRouteRunwayGen4TurboEnabled,
-			domain.VideoRouteSeedance20Fast:   cfg.FeatureVideoRouteSeedance20FastEnabled,
-			domain.VideoRouteRunwayGen45:      cfg.FeatureVideoRouteRunwayGen45Enabled,
-		},
-	})
+	catalog, err := productcatalog.VideoRouteCatalogFromConfig(cfg)
 	if err != nil {
 		return nil, err
 	}

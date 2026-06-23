@@ -199,6 +199,33 @@ func TestCatalogResolveHailuoRouteUsesFixedProviderCost(t *testing.T) {
 	}
 }
 
+func TestCatalogResolveMockRouteUsesMockProvider(t *testing.T) {
+	catalog := newConfiguredCatalog(t, map[domain.VideoRouteAlias]bool{
+		domain.VideoRouteMockTextToVideo: true,
+	})
+
+	resolution, err := catalog.Resolve(context.Background(), videorouter.Request{
+		Operation: domain.OperationVideoGenerate,
+		Modality:  domain.ModalityVideo,
+		Params: rawJSON(t, map[string]any{
+			"prompt":            "clean prompt",
+			"video_route_alias": string(domain.VideoRouteMockTextToVideo),
+			"duration_sec":      5,
+			"resolution":        "720p",
+			"aspect_ratio":      "16:9",
+		}),
+	})
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	if !resolution.Resolved || resolution.InternalCostCredits != 50 {
+		t.Fatalf("unexpected mock route resolution: %+v", resolution)
+	}
+	if resolution.Snapshot.Provider != domain.ProviderMock || resolution.Snapshot.ProviderModelID != "mock-video" {
+		t.Fatalf("unexpected mock route snapshot: %+v", resolution.Snapshot)
+	}
+}
+
 func TestCatalogResolveRunwaySupportsOfficialPortraitAspect(t *testing.T) {
 	catalog := newConfiguredCatalog(t, map[domain.VideoRouteAlias]bool{
 		domain.VideoRouteRunwayGen4Turbo: true,
@@ -349,6 +376,9 @@ func newConfiguredCatalog(t *testing.T, enabledRoutes map[domain.VideoRouteAlias
 				APIKeyConfigured:  true,
 				RequireBaseURL:    true,
 				BaseURLConfigured: true,
+			},
+			domain.ProviderMock: {
+				Enabled: true,
 			},
 		},
 		EnabledRoutes: enabledRoutes,
