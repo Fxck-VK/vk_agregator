@@ -953,6 +953,67 @@ func TestTopUpMenuCreatesPaymentIntentAfterProductSelection(t *testing.T) {
 	}
 }
 
+func TestTopUpCatalogKeyboardCompactsManyProducts(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	h := newHarnessWithConfig(control, vk.Config{
+		ConfirmationToken:           "conf-token-123",
+		Secret:                      "s3cr3t",
+		TopUpReceiptEmail:           "bot-payments@example.com",
+		TopUpPaymentRedirectBaseURL: "https://vk.example.test",
+	})
+	vatCode := int16(1)
+	for _, product := range []domain.PaymentProduct{
+		{Code: "crystals_10", Title: "NeiroHub 10 crystals", Amount: 1000, Credits: 10},
+		{Code: "crystals_150", Title: "NeiroHub 150 crystals", Amount: 15000, Credits: 150},
+		{Code: "crystals_250", Title: "NeiroHub 250 crystals", Amount: 25000, Credits: 250},
+		{Code: "crystals_400", Title: "NeiroHub 400 crystals", Amount: 40000, Credits: 400},
+	} {
+		product.Currency = domain.CurrencyRUB
+		product.PriceVersion = 1
+		product.IsActive = true
+		product.VATCode = &vatCode
+		product.PaymentSubject = "service"
+		product.PaymentMode = "full_prepayment"
+		h.payment.PutProduct(&product)
+	}
+
+	menuBody := `{
+		"type":"message_new","group_id":1,"event_id":"evt-topup-many-products","secret":"s3cr3t",
+		"object":{"message":{"from_id":596,"peer_id":596,"text":"topup","payload":"{\"command\":\"top_up\"}"}}
+	}`
+	if rec := h.post(menuBody); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected menu response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	sent := control.Sent()
+	if len(sent) != 1 {
+		t.Fatalf("expected one top-up catalog message, got %+v", sent)
+	}
+	var keyboard struct {
+		Inline  bool            `json:"inline"`
+		Buttons [][]interface{} `json:"buttons"`
+	}
+	if err := json.Unmarshal([]byte(sent[0].Keyboard), &keyboard); err != nil {
+		t.Fatalf("decode keyboard: %v; json=%s", err, sent[0].Keyboard)
+	}
+	if !keyboard.Inline {
+		t.Fatalf("top-up keyboard must be inline: %s", sent[0].Keyboard)
+	}
+	if len(keyboard.Buttons) != 4 {
+		t.Fatalf("expected compact 4-row keyboard for 6 products plus back, got %d rows: %s", len(keyboard.Buttons), sent[0].Keyboard)
+	}
+	for i := 0; i < 3; i++ {
+		if len(keyboard.Buttons[i]) != 2 {
+			t.Fatalf("expected product row %d to contain two buttons, got %d: %s", i, len(keyboard.Buttons[i]), sent[0].Keyboard)
+		}
+	}
+	if !strings.Contains(sent[0].Keyboard, "crystals_10") ||
+		!strings.Contains(sent[0].Keyboard, "crystals_700") ||
+		!strings.Contains(sent[0].Keyboard, "Назад") {
+		t.Fatalf("expected all products and back button in compact keyboard: %s", sent[0].Keyboard)
+	}
+}
+
 func TestTopUpPaymentRequiresServerOwnedRedirectBase(t *testing.T) {
 	tests := []struct {
 		name string

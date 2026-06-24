@@ -944,13 +944,20 @@ func topUpPaymentUnavailableText(balance int64) string {
 
 func topUpCatalogKeyboard(products []*domain.PaymentProduct, forceNew bool) *vkdelivery.Keyboard {
 	rows := make([][]vkdelivery.KeyboardButton, 0, len(products)+1)
+	compact := len(products) > 5
+	var row []vkdelivery.KeyboardButton
 	for _, product := range products {
 		if product == nil {
 			continue
 		}
-		rows = append(rows, []vkdelivery.KeyboardButton{
-			productButton(topUpProductLabel(product), product.Code, forceNew),
-		})
+		row = append(row, productButton(topUpProductLabel(product), product.Code, forceNew))
+		if !compact || len(row) == 2 {
+			rows = append(rows, row)
+			row = nil
+		}
+	}
+	if len(row) > 0 {
+		rows = append(rows, row)
 	}
 	rows = append(rows, []vkdelivery.KeyboardButton{
 		button("⬅️ Назад", domain.CommandShowMenu, "secondary"),
