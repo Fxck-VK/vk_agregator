@@ -226,14 +226,98 @@ jobs:
           set -euo pipefail
 
           tmp_env="$(mktemp)"
-          trap 'rm -f "${tmp_env}"' EXIT
+          raw_env="$(mktemp)"
+          trap 'rm -f "${tmp_env}" "${raw_env}"' EXIT
 
-          printf '%s\n' "${DEV_ENV_FILE}" \
-            | sed '/^GHCR_USERNAME=/d;/^GHCR_TOKEN=/d;/^IMAGE_TAG=/d;/^APP_ENV_FILE=/d' > "${tmp_env}"
+          printf '%s\n' "${DEV_ENV_FILE}" > "${raw_env}"
+
+          get_raw_env_value() {
+            local name="$1"
+            local value
+            value="$(grep -E "^${name}=" "${raw_env}" | tail -n 1 | cut -d= -f2- || true)"
+            value="${value%$'\r'}"
+            value="${value#"${value%%[![:space:]]*}"}"
+            value="${value%"${value##*[![:space:]]}"}"
+            value="${value%\"}"
+            value="${value#\"}"
+            value="${value%\'}"
+            value="${value#\'}"
+            printf '%s' "${value}"
+          }
+
+          provider_tokens=()
+          append_provider_token() {
+            local token="$1"
+            token="$(printf '%s' "${token}" | tr '[:upper:]' '[:lower:]')"
+            token="${token#"${token%%[![:space:]]*}"}"
+            token="${token%"${token##*[![:space:]]}"}"
+            token="${token%\"}"
+            token="${token#\"}"
+            token="${token%\'}"
+            token="${token#\'}"
+            case "${token}" in
+              deepinfra|apimart|poyo|runway|mock) ;;
+              ""|none|openai) return 0 ;;
+              *) return 0 ;;
+            esac
+            for existing in "${provider_tokens[@]}"; do
+              if [[ "${existing}" == "${token}" ]]; then
+                return 0
+              fi
+            done
+            provider_tokens+=("${token}")
+          }
+
+          raw_provider="$(get_raw_env_value PROVIDER)"
+          raw_chain="$(get_raw_env_value PROVIDER_CHAIN)"
+          if [[ -z "${raw_chain}" ]]; then
+            raw_chain="${raw_provider}"
+          fi
+          IFS=',' read -ra chain_parts <<< "${raw_chain}"
+          for token in "${chain_parts[@]}"; do
+            append_provider_token "${token}"
+          done
+
+          image_provider="$(get_raw_env_value IMAGE_PROVIDER)"
+          if [[ "${image_provider,,}" != "deepinfra" ]]; then
+            append_provider_token "${image_provider}"
+          fi
+          video_provider="$(get_raw_env_value VIDEO_PROVIDER)"
+          if [[ "${video_provider,,}" != "deepinfra" ]]; then
+            append_provider_token "${video_provider}"
+          fi
+
+          if (( ${#provider_tokens[@]} == 0 )); then
+            if [[ "${raw_provider,,}" == "openai" || "${raw_chain,,}" == *openai* ]]; then
+              provider_tokens+=(deepinfra)
+            else
+              provider_tokens+=(mock)
+            fi
+          fi
+          append_provider_token mock
+          provider_chain="$(IFS=,; printf '%s' "${provider_tokens[*]}")"
+
+          sed \
+            -e '/^GHCR_USERNAME=/d' \
+            -e '/^GHCR_TOKEN=/d' \
+            -e '/^IMAGE_TAG=/d' \
+            -e '/^APP_ENV_FILE=/d' \
+            -e '/^PROVIDER=/d' \
+            -e '/^PROVIDER_CHAIN=/d' \
+            -e '/^IMAGE_PROVIDER=/d' \
+            -e '/^VIDEO_PROVIDER=/d' \
+            -e '/^OPENAI_TEXT_MODEL=/d' \
+            -e '/^OPENAI_IMAGE_MODEL=/d' \
+            -e '/^OPENAI_VIDEO_MODEL=/d' \
+            "${raw_env}" > "${tmp_env}"
           {
             printf '\n'
             printf 'APP_ENV_FILE=.env\n'
             printf 'IMAGE_TAG=%s\n' "${DEPLOY_IMAGE_TAG}"
+            printf 'PROVIDER=%s\n' "${provider_tokens[0]}"
+            printf 'PROVIDER_CHAIN=%s\n' "${provider_chain}"
+            printf 'IMAGE_PROVIDER=\n'
+            printf 'VIDEO_PROVIDER=\n'
             printf 'GHCR_USERNAME=%s\n' "${GHCR_USERNAME}"
             printf 'GHCR_TOKEN=%s\n' "${GHCR_TOKEN}"
           } >> "${tmp_env}"
