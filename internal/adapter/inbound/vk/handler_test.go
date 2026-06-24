@@ -3156,6 +3156,41 @@ func TestStartFallsBackWhenVKKeyboardDisabled(t *testing.T) {
 	}
 }
 
+func TestMenuEditKeyboardFailureSendsNewMessageWithKeyboard(t *testing.T) {
+	control := &editKeyboardFailControl{}
+	h := newHarnessWithControl(control)
+	startBody := `{
+		"type":"message_new","group_id":1,"event_id":"evt-edit-keyboard-start","secret":"s3cr3t",
+		"object":{"message":{"from_id":559,"peer_id":559,"text":"/start"}}
+	}`
+	if rec := h.post(startBody); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected start response: %d %q", rec.Code, rec.Body.String())
+	}
+	initialSends := len(control.sent)
+	if initialSends == 0 {
+		t.Fatalf("expected start to send menu messages")
+	}
+
+	topUpBody := `{
+		"type":"message_new","group_id":1,"event_id":"evt-edit-keyboard-topup","secret":"s3cr3t",
+		"object":{"message":{"from_id":559,"peer_id":559,"text":"topup","payload":"{\"command\":\"top_up\"}"}}
+	}`
+	if rec := h.post(topUpBody); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected top-up response: %d %q", rec.Code, rec.Body.String())
+	}
+	if len(control.edited) != 1 || control.edited[0].Keyboard == nil {
+		t.Fatalf("expected one failed edit attempt with keyboard, got %+v", control.edited)
+	}
+	if len(control.sent) != initialSends+1 {
+		t.Fatalf("expected a new control message after failed edit, sent=%+v edited=%+v", control.sent, control.edited)
+	}
+	got := control.sent[len(control.sent)-1]
+	keyboardJSON, _ := json.Marshal(got.Keyboard)
+	if got.Keyboard == nil || !strings.Contains(string(keyboardJSON), "crystals_99") {
+		t.Fatalf("new top-up message must keep product keyboard, got %+v", got)
+	}
+}
+
 func TestMessageNewDuplicateIsDeduped(t *testing.T) {
 	h := newHarness()
 	body := `{
@@ -3278,6 +3313,30 @@ func (c *keyboardFailControl) EditMessage(_ context.Context, _ int64, _ int64, m
 }
 
 func (c *keyboardFailControl) AnswerMessageEvent(_ context.Context, _ string, _, _ int64) error {
+	return nil
+}
+
+type editKeyboardFailControl struct {
+	sent   []vkdelivery.Message
+	edited []vkdelivery.Message
+	nextID int64
+}
+
+func (c *editKeyboardFailControl) SendMessage(_ context.Context, peerID, _ int64, msg vkdelivery.Message) (vkdelivery.SendResult, error) {
+	c.sent = append(c.sent, msg)
+	c.nextID++
+	return vkdelivery.SendResult{MessageID: c.nextID, PeerID: peerID}, nil
+}
+
+func (c *editKeyboardFailControl) EditMessage(_ context.Context, peerID, messageID int64, msg vkdelivery.Message) (vkdelivery.SendResult, error) {
+	c.edited = append(c.edited, msg)
+	if msg.Keyboard != nil {
+		return vkdelivery.SendResult{}, &vkdelivery.APIError{Code: 912, Message: "Chat bot feature"}
+	}
+	return vkdelivery.SendResult{MessageID: messageID, PeerID: peerID}, nil
+}
+
+func (c *editKeyboardFailControl) AnswerMessageEvent(_ context.Context, _ string, _, _ int64) error {
 	return nil
 }
 

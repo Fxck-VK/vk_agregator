@@ -496,15 +496,12 @@ func (h *Handler) editControlMessage(ctx context.Context, t domain.CommandType, 
 	if err == nil {
 		return result, nil
 	}
-	if msg.Keyboard == nil || !vkdelivery.IsAPIErrorCode(err, 911, 912) {
-		return vkdelivery.SendResult{}, err
+	if msg.Keyboard != nil && vkdelivery.IsAPIErrorCode(err, 911, 912) {
+		h.logger.Warn("vk keyboard edit failed; sending a new control response instead",
+			slog.String("command_type", string(t)),
+			logging.ErrorAttr(err))
 	}
-
-	h.logger.Warn("vk keyboard edit failed; retrying control response edit without keyboard",
-		slog.String("command_type", string(t)),
-		logging.ErrorAttr(err))
-	msg.Keyboard = nil
-	return h.deps.Control.EditMessage(ctx, peerID, messageID, msg)
+	return vkdelivery.SendResult{}, err
 }
 
 func (h *Handler) sendControlMessage(ctx context.Context, t domain.CommandType, peerID, randomID int64, msg vkdelivery.Message) (vkdelivery.SendResult, error) {
