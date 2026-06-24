@@ -29,11 +29,13 @@ const (
 	defaultReceiptPaymentMode    = "full_prepayment"
 	maxProductCodeLen            = 64
 	maxProductTitleLen           = 160
+	devTestPaymentProductCode    = "crystals_10_dev"
 )
 
 // Config controls payment lifecycle behavior.
 type Config struct {
-	ReturnURL string
+	ReturnURL                    string
+	IncludeDevTestPaymentProduct bool
 }
 
 // Service creates and reads payment intents without mutating credit balances.
@@ -54,7 +56,11 @@ func (s *Service) ListActiveProducts(ctx context.Context) ([]*domain.PaymentProd
 	if s == nil || s.repo == nil {
 		return nil, errors.New("paymentservice: service is not configured")
 	}
-	return s.repo.ListActiveProducts(ctx)
+	products, err := s.repo.ListActiveProducts(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return s.filterUserFacingProducts(products), nil
 }
 
 // ListProducts returns product catalog entries for protected operator surfaces.
@@ -308,6 +314,10 @@ func (s *Service) CreateIntent(ctx context.Context, in CreateIntentInput) (Creat
 			metrics.ObserveProductEvent(sourceLabel, "payment", "intent_create", "top_up", "credits", "invalid_product")
 			return CreateIntentResult{}, err
 		}
+		if !s.userFacingProductAllowed(product) {
+			metrics.ObserveProductEvent(sourceLabel, "payment", "intent_create", "top_up", "credits", "invalid_product")
+			return CreateIntentResult{}, domain.ErrNotFound
+		}
 		active, err := s.ActiveWaitingIntentForSource(ctx, in.UserID, in.Source)
 		if err == nil {
 			if paymentIntentMatchesProduct(active, product) && paymentIntentMatchesReturnURL(active, resolvedReturnURL) {
@@ -331,6 +341,10 @@ func (s *Service) CreateIntent(ctx context.Context, in CreateIntentInput) (Creat
 		if err != nil {
 			metrics.ObserveProductEvent(sourceLabel, "payment", "intent_create", "top_up", "credits", "invalid_product")
 			return CreateIntentResult{}, err
+		}
+		if !s.userFacingProductAllowed(product) {
+			metrics.ObserveProductEvent(sourceLabel, "payment", "intent_create", "top_up", "credits", "invalid_product")
+			return CreateIntentResult{}, domain.ErrNotFound
 		}
 	}
 	metadataFields := map[string]any{
@@ -398,6 +412,29 @@ func (s *Service) CreateIntent(ctx context.Context, in CreateIntentInput) (Creat
 	metrics.PaymentsCreated.WithLabelValues(string(intent.Provider), sourceLabel).Inc()
 	metrics.ObserveProductEvent(sourceLabel, "payment", "intent_create", "top_up", "credits", "created")
 	return CreateIntentResult{Intent: intent, Created: true}, nil
+}
+
+func (s *Service) filterUserFacingProducts(products []*domain.PaymentProduct) []*domain.PaymentProduct {
+	if len(products) == 0 {
+		return products
+	}
+	out := products[:0]
+	for _, product := range products {
+		if s.userFacingProductAllowed(product) {
+			out = append(out, product)
+		}
+	}
+	return out
+}
+
+func (s *Service) userFacingProductAllowed(product *domain.PaymentProduct) bool {
+	if product == nil {
+		return false
+	}
+	if strings.EqualFold(strings.TrimSpace(product.Code), devTestPaymentProductCode) {
+		return s != nil && s.cfg.IncludeDevTestPaymentProduct
+	}
+	return true
 }
 
 // AttachVKBotPaymentMessage stores only the minimal local routing data needed

@@ -72,7 +72,8 @@ func NewSharedCore(pool *pgxpool.Pool, cfg config.Config, opts ...SharedCoreOpti
 		return SharedCore{}, err
 	}
 	paymentSvc := paymentservice.New(payments, paymentProvider, paymentservice.Config{
-		ReturnURL: cfg.YooKassaReturnURL,
+		ReturnURL:                    cfg.YooKassaReturnURL,
+		IncludeDevTestPaymentProduct: cfg.FeatureDevPaymentTestProductEnabled,
 	})
 	txRunner := paymentservice.TxRunnerFunc(func(ctx context.Context, fn func(context.Context, domain.PaymentRepository, domain.BillingRepository) error) error {
 		return postgres.RunInTx(ctx, pool, func(ctx context.Context, tx pgx.Tx) error {

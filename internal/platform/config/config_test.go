@@ -1220,6 +1220,25 @@ func TestValidateProductionRejectsMockPaymentProvider(t *testing.T) {
 	}
 }
 
+func TestValidateProductionRejectsDevPaymentTestProduct(t *testing.T) {
+	cfg := validProductionConfig()
+	cfg.FeatureDevPaymentTestProductEnabled = true
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "FEATURE_DEV_PAYMENT_TEST_PRODUCT_ENABLED") {
+		t.Fatalf("expected dev payment test product validation error, got %v", err)
+	}
+}
+
+func TestLoadDevPaymentTestProductFlag(t *testing.T) {
+	t.Setenv("FEATURE_DEV_PAYMENT_TEST_PRODUCT_ENABLED", "true")
+
+	cfg := config.Load()
+	if !cfg.FeatureDevPaymentTestProductEnabled {
+		t.Fatal("FeatureDevPaymentTestProductEnabled was not loaded")
+	}
+}
+
 func TestLoadDeepInfraConfig(t *testing.T) {
 	t.Setenv("PROVIDER", "deepinfra")
 	t.Setenv("DEEPINFRA_API_KEY", "test-key")

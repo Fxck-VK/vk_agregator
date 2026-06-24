@@ -83,6 +83,74 @@ func TestCreateIntentCreatesProviderPaymentAndIsIdempotent(t *testing.T) {
 	}
 }
 
+func TestDevPaymentTestProductRequiresExplicitFlag(t *testing.T) {
+	ctx := context.Background()
+	repo := memory.NewPaymentRepo()
+	repo.PutProduct(&domain.PaymentProduct{
+		Code:           "crystals_10_dev",
+		Title:          "NeiroHub DEV 10 crystals",
+		Amount:         1000,
+		Currency:       domain.CurrencyRUB,
+		Credits:        10,
+		PriceVersion:   1,
+		PaymentSubject: "service",
+		PaymentMode:    "full_prepayment",
+		IsActive:       true,
+	})
+	repo.PutProduct(&domain.PaymentProduct{
+		Code:           "crystals_99",
+		Title:          "NeiroHub 99 crystals",
+		Amount:         9900,
+		Currency:       domain.CurrencyRUB,
+		Credits:        99,
+		PriceVersion:   1,
+		PaymentSubject: "service",
+		PaymentMode:    "full_prepayment",
+		IsActive:       true,
+	})
+
+	hiddenSvc := paymentservice.New(repo, paymentmock.New(), paymentservice.Config{})
+	products, err := hiddenSvc.ListActiveProducts(ctx)
+	if err != nil {
+		t.Fatalf("list products: %v", err)
+	}
+	if len(products) != 1 || products[0].Code != "crystals_99" {
+		t.Fatalf("dev test product should be hidden by default, got %+v", products)
+	}
+	_, err = hiddenSvc.CreateIntent(ctx, paymentservice.CreateIntentInput{
+		UserID:         uuid.New(),
+		ProductCode:    "crystals_10_dev",
+		ReceiptEmail:   "user@example.com",
+		IdempotencyKey: "dev-product-disabled",
+		Source:         "vk_bot",
+	})
+	if !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("expected hidden dev product to be unavailable, got %v", err)
+	}
+
+	enabledSvc := paymentservice.New(repo, paymentmock.New(), paymentservice.Config{IncludeDevTestPaymentProduct: true})
+	products, err = enabledSvc.ListActiveProducts(ctx)
+	if err != nil {
+		t.Fatalf("list enabled products: %v", err)
+	}
+	if len(products) != 2 || products[0].Code != "crystals_10_dev" {
+		t.Fatalf("dev test product should be visible first when enabled, got %+v", products)
+	}
+	created, err := enabledSvc.CreateIntent(ctx, paymentservice.CreateIntentInput{
+		UserID:         uuid.New(),
+		ProductCode:    "crystals_10_dev",
+		ReceiptEmail:   "user@example.com",
+		IdempotencyKey: "dev-product-enabled",
+		Source:         "vk_bot",
+	})
+	if err != nil {
+		t.Fatalf("create enabled dev product intent: %v", err)
+	}
+	if created.Intent.Amount != 1000 || created.Intent.Credits != 10 {
+		t.Fatalf("unexpected dev product intent: %+v", created.Intent)
+	}
+}
+
 func TestAttachVKBotPaymentMessageStoresLocalMetadata(t *testing.T) {
 	ctx := context.Background()
 	repo := memory.NewPaymentRepo()
