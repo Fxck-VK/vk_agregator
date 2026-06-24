@@ -14,6 +14,8 @@ import (
 	"vk-ai-aggregator/internal/domain"
 )
 
+const defaultImageModel = "ByteDance/Seedream-4.5"
+
 func TestSubmitPollTextSuccess(t *testing.T) {
 	var seen chatRequest
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -34,7 +36,7 @@ func TestSubmitPollTextSuccess(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p := New(Config{APIKey: "test-key", BaseURL: srv.URL, HTTPClient: srv.Client()})
+	p := New(Config{APIKey: "test-key", BaseURL: srv.URL, ImageModel: defaultImageModel, HTTPClient: srv.Client()})
 	task, err := p.Submit(context.Background(), domain.ProviderRequest{
 		JobID:           uuid.New(),
 		Operation:       domain.OperationTextGenerate,
@@ -107,23 +109,28 @@ func TestSubmitUsesExplicitModelCode(t *testing.T) {
 	}
 }
 
-func TestCapabilitiesIncludeSeedreamImage(t *testing.T) {
+func TestCapabilitiesAreTextOnlyByDefault(t *testing.T) {
 	p := New(Config{APIKey: "test-key"})
 	caps, err := p.Capabilities(context.Background())
 	if err != nil {
 		t.Fatalf("capabilities: %v", err)
 	}
-	var found bool
+	var imageFound, textFound bool
 	for _, cap := range caps {
 		if cap.Operation == domain.OperationImageGenerate &&
 			cap.Modality == domain.ModalityImage &&
-			cap.ModelCode == defaultImageModel &&
 			cap.SupportsPolling {
-			found = true
+			imageFound = true
+		}
+		if cap.Operation == domain.OperationTextGenerate &&
+			cap.Modality == domain.ModalityText &&
+			cap.ModelCode == defaultTextModel &&
+			cap.SupportsPolling {
+			textFound = true
 		}
 	}
-	if !found {
-		t.Fatalf("seedream image capability not found: %+v", caps)
+	if !textFound || imageFound {
+		t.Fatalf("default capabilities should be text-only, got %+v", caps)
 	}
 }
 
@@ -149,7 +156,7 @@ func TestSubmitPollImageSuccess(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p := New(Config{APIKey: "test-key", BaseURL: srv.URL, HTTPClient: srv.Client()})
+	p := New(Config{APIKey: "test-key", BaseURL: srv.URL, ImageModel: defaultImageModel, HTTPClient: srv.Client()})
 	task, err := p.Submit(context.Background(), domain.ProviderRequest{
 		JobID:          uuid.New(),
 		Operation:      domain.OperationImageGenerate,

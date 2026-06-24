@@ -22,8 +22,6 @@ func TestCatalogBuildsOnlyPublicEnabledItems(t *testing.T) {
 			modelcatalog.MiniAppImageNanoBanana2:   true,
 			modelcatalog.MiniAppImageNanoBananaPro: true,
 			modelcatalog.MiniAppImageGPTImage2:     true,
-			modelcatalog.MiniAppImageSeedream45:    true,
-			modelcatalog.MiniAppImageSDXLTurbo:     true,
 		},
 		VideoRoutes:    videoCatalog.PublicRoutes(),
 		PricingCatalog: staticPricingCatalog(t),

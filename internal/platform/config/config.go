@@ -264,18 +264,8 @@ type Config struct {
 	FeatureVideoRouteMockTextToVideoEnabled     bool
 	FeatureVideoRouteResellerExperimentsEnabled bool
 
-	OpenAIAPIKey                      string
-	OpenAIBaseURL                     string
-	OpenAITextModel                   string
-	OpenAIImageModel                  string
-	OpenAIImageSize                   string
-	OpenAIVideoModel                  string
-	OpenAIVideoSeconds                string
-	OpenAIVideoSize                   string
-	OpenAITextProviderCostCredits     int64
-	OpenAIImageProviderCostCredits    int64
-	OpenAIVideoProviderCostCredits    int64
-	OpenAIVideoMaxProviderCostCredits int64
+	OpenAIAPIKey  string
+	OpenAIBaseURL string
 
 	DeepInfraAPIKey                      string
 	DeepInfraBaseURL                     string
@@ -1133,25 +1123,15 @@ func Load() Config {
 		FeatureVideoRouteResellerExperimentsEnabled: envBool("FEATURE_VIDEO_ROUTE_RESELLER_EXPERIMENTS_ENABLED", false),
 		OpenAIAPIKey:                         env("OPENAI_API_KEY", ""),
 		OpenAIBaseURL:                        env("OPENAI_BASE_URL", "https://api.openai.com/v1"),
-		OpenAITextModel:                      env("OPENAI_TEXT_MODEL", "gpt-4.1-mini"),
-		OpenAIImageModel:                     env("OPENAI_IMAGE_MODEL", "gpt-image-1"),
-		OpenAIImageSize:                      env("OPENAI_IMAGE_SIZE", "1024x1024"),
-		OpenAIVideoModel:                     env("OPENAI_VIDEO_MODEL", "sora-2"),
-		OpenAIVideoSeconds:                   env("OPENAI_VIDEO_SECONDS", "4"),
-		OpenAIVideoSize:                      env("OPENAI_VIDEO_SIZE", "720x1280"),
-		OpenAITextProviderCostCredits:        int64(envIntAlias(1, "OPENAI_TEXT_PROVIDER_COST_CREDITS", "OPENAI_TEXT_PRICE")),
-		OpenAIImageProviderCostCredits:       int64(envIntAlias(10, "OPENAI_IMAGE_PROVIDER_COST_CREDITS", "OPENAI_IMAGE_PRICE")),
-		OpenAIVideoProviderCostCredits:       int64(envIntAlias(50, "OPENAI_VIDEO_PROVIDER_COST_CREDITS", "OPENAI_VIDEO_PRICE")),
-		OpenAIVideoMaxProviderCostCredits:    int64(envIntAlias(envIntAlias(50, "OPENAI_VIDEO_PROVIDER_COST_CREDITS", "OPENAI_VIDEO_PRICE"), "OPENAI_VIDEO_MAX_PROVIDER_COST_CREDITS")),
 		DeepInfraAPIKey:                      env("DEEPINFRA_API_KEY", ""),
 		DeepInfraBaseURL:                     env("DEEPINFRA_BASE_URL", "https://api.deepinfra.com/v1/openai"),
 		DeepInfraTextModel:                   env("DEEPINFRA_TEXT_MODEL", "deepseek-ai/DeepSeek-V4-Flash"),
 		DeepInfraTextProviderCostCredits:     int64(envIntAlias(1, "DEEPINFRA_TEXT_PROVIDER_COST_CREDITS", "DEEPINFRA_TEXT_PRICE")),
-		DeepInfraImageModel:                  env("DEEPINFRA_IMAGE_MODEL", "ByteDance/Seedream-4.5"),
+		DeepInfraImageModel:                  env("DEEPINFRA_IMAGE_MODEL", ""),
 		DeepInfraImageFallbackModel:          env("DEEPINFRA_IMAGE_FALLBACK_MODEL", ""),
 		DeepInfraImageProviderCostCredits:    int64(envIntAlias(10, "DEEPINFRA_IMAGE_PROVIDER_COST_CREDITS", "DEEPINFRA_IMAGE_PRICE")),
 		DeepInfraImageReferenceEnabled:       envBool("DEEPINFRA_IMAGE_REFERENCE_ENABLED", false),
-		DeepInfraVideoModel:                  env("DEEPINFRA_VIDEO_MODEL", "PrunaAI/p-video"),
+		DeepInfraVideoModel:                  env("DEEPINFRA_VIDEO_MODEL", ""),
 		DeepInfraVideoDurationSec:            envInt("DEEPINFRA_VIDEO_DURATION_SEC", 5),
 		DeepInfraVideoResolution:             env("DEEPINFRA_VIDEO_RESOLUTION", "720p"),
 		DeepInfraVideoAspectRatio:            env("DEEPINFRA_VIDEO_ASPECT_RATIO", "16:9"),
@@ -1288,17 +1268,9 @@ func Load() Config {
 }
 
 func (c Config) usesOpenAI() bool {
-	if strings.EqualFold(c.Provider, "openai") ||
-		strings.EqualFold(c.ImageProvider, "openai") ||
-		strings.EqualFold(c.VideoProvider, "openai") ||
-		strings.EqualFold(c.ModerationProvider, "openai") ||
+	if strings.EqualFold(c.ModerationProvider, "openai") ||
 		strings.EqualFold(c.ArtifactScanner, "openai") {
 		return true
-	}
-	for _, provider := range c.ProviderChain {
-		if strings.EqualFold(provider, "openai") {
-			return true
-		}
 	}
 	return false
 }
@@ -1488,6 +1460,12 @@ func (c Config) validateVideoRouteProviderConfig() error {
 }
 
 func (c Config) validateSelectedProviderSwitches() error {
+	if strings.EqualFold(strings.TrimSpace(c.ImageProvider), "deepinfra") {
+		return fmt.Errorf("config: IMAGE_PROVIDER=deepinfra is not supported; DeepInfra is text-only")
+	}
+	if strings.EqualFold(strings.TrimSpace(c.VideoProvider), "deepinfra") {
+		return fmt.Errorf("config: VIDEO_PROVIDER=deepinfra is not supported; DeepInfra is text-only")
+	}
 	if c.usesProviderName("apimart") && !c.APIMartProviderEnabled {
 		return fmt.Errorf("config: selected APIMart provider requires APIMART_PROVIDER_ENABLED=true")
 	}
@@ -1501,9 +1479,7 @@ func (c Config) validateSelectedProviderSwitches() error {
 }
 
 func (c Config) usesDeepInfra() bool {
-	if strings.EqualFold(c.Provider, "deepinfra") ||
-		strings.EqualFold(c.ImageProvider, "deepinfra") ||
-		strings.EqualFold(c.VideoProvider, "deepinfra") {
+	if strings.EqualFold(c.Provider, "deepinfra") {
 		return true
 	}
 	for _, provider := range c.ProviderChain {
@@ -1581,7 +1557,7 @@ func validatePriceOverrides(overrides map[string]int64) error {
 		if op == "" {
 			return fmt.Errorf("config: PRICES contains an empty operation")
 		}
-		if amount <= 0 {
+		if amount < 0 || (amount == 0 && op != string(domain.OperationTextGenerate)) {
 			return fmt.Errorf("config: PRICES amount for %s must be positive", op)
 		}
 	}
@@ -1590,7 +1566,7 @@ func validatePriceOverrides(overrides map[string]int64) error {
 
 func knownProvider(name string) bool {
 	switch strings.ToLower(strings.TrimSpace(name)) {
-	case "", "mock", "openai", "deepinfra", "apimart", "poyo", "runway":
+	case "", "mock", "deepinfra", "apimart", "poyo", "runway":
 		return true
 	default:
 		return false
@@ -1598,7 +1574,7 @@ func knownProvider(name string) bool {
 }
 
 func knownProviderList() string {
-	return "mock, openai, deepinfra, apimart, poyo, runway"
+	return "mock, deepinfra, apimart, poyo, runway"
 }
 
 func knownArtifactScanner(name string) bool {

@@ -1478,16 +1478,6 @@ func imageModelWaitHint(model modelcatalog.Model) string {
 }
 
 func imageSizeForSelection(selection photoDialogSelection) string {
-	if selection.Model.Provider == domain.ProviderDeepInfra {
-		switch selection.Quality {
-		case modelcatalog.ImageQuality2K:
-			return "2048x2048"
-		case modelcatalog.ImageQuality4K:
-			return "4096x4096"
-		default:
-			return "1024x1024"
-		}
-	}
 	return "1:1"
 }
 

@@ -16,7 +16,7 @@ func TestEstimate(t *testing.T) {
 	svc := billingservice.New(memory.NewBillingRepo())
 
 	cases := map[domain.OperationType]int64{
-		domain.OperationTextGenerate:      1,
+		domain.OperationTextGenerate:      0,
 		domain.OperationImageGenerate:     10,
 		domain.OperationImageEdit:         10,
 		domain.OperationVideoGenerate:     50,
@@ -48,8 +48,8 @@ func TestEstimateRejectsNonPositiveConfiguredPrices(t *testing.T) {
 	if _, err := svc.Estimate(domain.OperationImageGenerate); !errors.Is(err, billingservice.ErrInvalidAmount) {
 		t.Fatalf("negative price error = %v, want ErrInvalidAmount", err)
 	}
-	if _, err := svc.Estimate(domain.OperationTextGenerate); !errors.Is(err, billingservice.ErrInvalidAmount) {
-		t.Fatalf("zero price error = %v, want ErrInvalidAmount", err)
+	if got, err := svc.Estimate(domain.OperationTextGenerate); err != nil || got != 0 {
+		t.Fatalf("free text estimate = %d/%v, want 0/<nil>", got, err)
 	}
 	negativeUserID := uuid.New()
 	zeroUserID := uuid.New()

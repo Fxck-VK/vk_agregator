@@ -12,7 +12,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -198,39 +197,12 @@ func main() {
 			logger.Info("registered runway provider")
 		case "deepinfra":
 			providerList = append(providerList, deepinfra.New(deepinfra.Config{
-				APIKey:                   cfg.DeepInfraAPIKey,
-				BaseURL:                  cfg.DeepInfraBaseURL,
-				TextModel:                cfg.DeepInfraTextModel,
-				TextProviderCostCredits:  cfg.DeepInfraTextProviderCostCredits,
-				ImageModel:               defaultForImageProvider(cfg, domain.ProviderDeepInfra, cfg.DeepInfraImageModel, cfg.ImageModel),
-				ImageFallbackModel:       cfg.DeepInfraImageFallbackModel,
-				ImageSize:                cfg.ImageSize,
-				ImageProviderCostCredits: cfg.DeepInfraImageProviderCostCredits,
-				ImageReferenceEnabled:    cfg.DeepInfraImageReferenceEnabled,
-				VideoModel:               defaultForVideoProvider(cfg, domain.ProviderDeepInfra, cfg.DeepInfraVideoModel, cfg.VideoModel),
-				VideoDurationSec:         cfg.DeepInfraVideoDurationSec,
-				VideoResolution:          cfg.DeepInfraVideoResolution,
-				VideoAspectRatio:         cfg.DeepInfraVideoAspectRatio,
-				VideoDraft:               cfg.DeepInfraVideoDraft,
-				VideoProviderCostCredits: cfg.DeepInfraVideoProviderCostCredits,
-				VideoHTTPTimeout:         cfg.DeepInfraVideoHTTPTimeout,
+				APIKey:                  cfg.DeepInfraAPIKey,
+				BaseURL:                 cfg.DeepInfraBaseURL,
+				TextModel:               cfg.DeepInfraTextModel,
+				TextProviderCostCredits: cfg.DeepInfraTextProviderCostCredits,
 			}))
 			logger.Info("registered deepinfra provider")
-		case "openai":
-			providerList = append(providerList, openai.New(openai.Config{
-				APIKey:                   cfg.OpenAIAPIKey,
-				BaseURL:                  cfg.OpenAIBaseURL,
-				TextModel:                cfg.OpenAITextModel,
-				ImageModel:               defaultForImageProvider(cfg, domain.ProviderOpenAI, cfg.OpenAIImageModel, cfg.ImageModel),
-				ImageSize:                defaultForImageProvider(cfg, domain.ProviderOpenAI, cfg.OpenAIImageSize, cfg.ImageSize),
-				VideoModel:               cfg.OpenAIVideoModel,
-				VideoSeconds:             cfg.OpenAIVideoSeconds,
-				VideoSize:                cfg.OpenAIVideoSize,
-				TextProviderCostCredits:  cfg.OpenAITextProviderCostCredits,
-				ImageProviderCostCredits: cfg.OpenAIImageProviderCostCredits,
-				VideoProviderCostCredits: cfg.OpenAIVideoProviderCostCredits,
-			}))
-			logger.Info("registered openai provider")
 		case "mock":
 			providerList = append(providerList, mock.New())
 			hasMockProvider = true
@@ -348,7 +320,7 @@ func main() {
 		Streams:                               publisher,
 		ImageModel:                            cfg.ImageModel,
 		ImageSize:                             cfg.ImageSize,
-		VideoModel:                            defaultForVideoProvider(cfg, domain.ProviderDeepInfra, cfg.DeepInfraVideoModel, cfg.VideoModel),
+		VideoModel:                            cfg.VideoModel,
 		VideoDurationSec:                      cfg.VideoDurationSec,
 		VideoResolution:                       cfg.VideoResolution,
 		VideoAspectRatio:                      cfg.VideoAspectRatio,
@@ -620,20 +592,6 @@ func runQueueMetrics(ctx context.Context, rdb redis.Cmdable, group string, inter
 	}
 }
 
-func defaultForImageProvider(cfg config.Config, provider domain.ProviderName, providerValue, genericValue string) string {
-	if genericValue != "" && strings.EqualFold(cfg.ImageProvider, string(provider)) {
-		return genericValue
-	}
-	return providerValue
-}
-
-func defaultForVideoProvider(cfg config.Config, provider domain.ProviderName, providerValue, genericValue string) string {
-	if genericValue != "" && strings.EqualFold(cfg.VideoProvider, string(provider)) {
-		return genericValue
-	}
-	return providerValue
-}
-
 func effectiveProviderMediaContracts(cfg config.Config) []domain.ProviderMediaContract {
 	defaults := defaultProviderMediaContracts(cfg)
 	if len(cfg.MediaProviderContracts) == 0 {
@@ -671,51 +629,6 @@ func defaultProviderMediaContracts(cfg config.Config) []domain.ProviderMediaCont
 			MaxFallbackAttempts:    0,
 			MaxProviderCostCredits: 50,
 		},
-	}
-	if model := strings.TrimSpace(defaultForVideoProvider(cfg, domain.ProviderDeepInfra, cfg.DeepInfraVideoModel, cfg.VideoModel)); model != "" && model != "mock-video" {
-		mockContract := contracts[0]
-		mockContract.Model = model
-		contracts = append(contracts, mockContract)
-	}
-	if model := strings.TrimSpace(defaultForVideoProvider(cfg, domain.ProviderDeepInfra, cfg.DeepInfraVideoModel, cfg.VideoModel)); model != "" {
-		contracts = append(contracts, domain.ProviderMediaContract{
-			Provider:               domain.ProviderDeepInfra,
-			Model:                  model,
-			ModelClass:             "deepinfra_video",
-			Modality:               domain.ModalityVideo,
-			AllowedDurationsSec:    positiveInts(cfg.DeepInfraVideoDurationSec, cfg.VideoDurationSec),
-			AllowedAspectRatios:    nonEmptyStrings(cfg.DeepInfraVideoAspectRatio, cfg.VideoAspectRatio),
-			AllowedResolutions:     nonEmptyStrings(cfg.DeepInfraVideoResolution, cfg.VideoResolution),
-			ExpectedContainer:      "mp4",
-			ExpectedCodec:          "h264",
-			ExpectedMaxBytes:       maxBytes,
-			DeliveryReadyOutput:    true,
-			RequiresProbe:          probeRequired,
-			TranscodeAllowed:       transcodeAllowed,
-			MaxProviderAttempts:    1,
-			MaxFallbackAttempts:    0,
-			MaxProviderCostCredits: cfg.DeepInfraVideoMaxProviderCostCredits,
-		})
-	}
-	if model := strings.TrimSpace(cfg.OpenAIVideoModel); model != "" {
-		duration, _ := strconv.Atoi(strings.TrimSpace(cfg.OpenAIVideoSeconds))
-		contracts = append(contracts, domain.ProviderMediaContract{
-			Provider:               domain.ProviderOpenAI,
-			Model:                  model,
-			ModelClass:             "openai_video",
-			Modality:               domain.ModalityVideo,
-			AllowedDurationsSec:    positiveInts(duration, cfg.VideoDurationSec),
-			AllowedResolutions:     nonEmptyStrings(cfg.OpenAIVideoSize, cfg.VideoResolution),
-			ExpectedContainer:      "mp4",
-			ExpectedCodec:          "h264",
-			ExpectedMaxBytes:       maxBytes,
-			DeliveryReadyOutput:    true,
-			RequiresProbe:          probeRequired,
-			TranscodeAllowed:       transcodeAllowed,
-			MaxProviderAttempts:    1,
-			MaxFallbackAttempts:    0,
-			MaxProviderCostCredits: cfg.OpenAIVideoMaxProviderCostCredits,
-		})
 	}
 	for _, model := range []struct {
 		id    string

@@ -11,7 +11,7 @@ import (
 
 const (
 	MiniAppChatModelID   = "chatgpt"
-	MiniAppChatModelName = "ChatGPT"
+	MiniAppChatModelName = "NeiroHub Chat"
 
 	MiniAppImageNanoBananaPro   = "nano_banana_pro"
 	MiniAppImageGPTImage2       = "gpt_image_2"
@@ -23,7 +23,6 @@ const (
 	MiniAppVideoKling           = "kling"
 
 	VKVideoPrunaAI = "prunaai"
-	VKVideoSora2   = "sora_2"
 
 	ModelCodePoYoNanoBanana2 = "nano-banana-2-new"
 	ModelCodeGemini3ProImage = "gemini-3-pro-image-preview"
@@ -32,7 +31,6 @@ const (
 	ModelCodeSDXLTurbo       = "stabilityai/sdxl-turbo"
 	ModelCodeMockImage       = "mock-image"
 	ModelCodePVideo          = "PrunaAI/p-video"
-	ModelCodeSora2           = "sora-2"
 
 	ImageQuality1K = "1K"
 	ImageQuality2K = "2K"
@@ -99,40 +97,11 @@ var miniAppModels = map[domain.OperationType]map[string]Model{
 			SupportsReferenceImage: true,
 			MaxReferenceImages:     16,
 		},
-		MiniAppImageNanoBananaFlash: {
-			ModelID:   MiniAppImageSDXLTurbo,
-			ModelName: "Stability AI SDXL Turbo",
-			Provider:  domain.ProviderDeepInfra,
-			ModelCode: ModelCodeSDXLTurbo,
-			ExposeID:  true,
-		},
-		MiniAppImageSeedream45: {
-			ModelID:   MiniAppImageSeedream45,
-			ModelName: "ByteDance Seedream 4.5",
-			Provider:  domain.ProviderDeepInfra,
-			ModelCode: ModelCodeSeedream45,
-			ExposeID:  true,
-		},
-		MiniAppImageSDXLTurbo: {
-			ModelID:   MiniAppImageSDXLTurbo,
-			ModelName: "Stability AI SDXL Turbo",
-			Provider:  domain.ProviderDeepInfra,
-			ModelCode: ModelCodeSDXLTurbo,
-			ExposeID:  true,
-		},
 		MiniAppImageMock: {
 			ModelID:   MiniAppImageMock,
 			ModelName: "Mock Image Loadtest",
 			Provider:  domain.ProviderMock,
 			ModelCode: ModelCodeMockImage,
-			ExposeID:  true,
-		},
-		// Legacy public aliases remain accepted for older Mini App clients.
-		"sdxl": {
-			ModelID:   MiniAppImageSDXLTurbo,
-			ModelName: "Stability AI SDXL Turbo",
-			Provider:  domain.ProviderDeepInfra,
-			ModelCode: ModelCodeSDXLTurbo,
 			ExposeID:  true,
 		},
 		"kandinsky": {
@@ -145,46 +114,22 @@ var miniAppModels = map[domain.OperationType]map[string]Model{
 			MaxReferenceImages:     14,
 		},
 	},
-	domain.OperationVideoGenerate: {
-		MiniAppVideoKling: {
-			ModelID:     MiniAppVideoKling,
-			ModelName:   "Kling",
-			Provider:    domain.ProviderDeepInfra,
-			ModelCode:   ModelCodePVideo,
-			ExposeID:    true,
-			DurationSec: 5,
-		},
-	},
+	domain.OperationVideoGenerate: {},
 }
 
 var miniAppDefaultModel = map[domain.OperationType]string{
 	domain.OperationTextGenerate:  MiniAppChatModelID,
 	domain.OperationImageGenerate: MiniAppImageNanoBananaPro,
-	domain.OperationVideoGenerate: MiniAppVideoKling,
+	domain.OperationVideoGenerate: "",
 }
 
 var miniAppModelOrder = map[domain.OperationType][]string{
 	domain.OperationTextGenerate:  {MiniAppChatModelID},
-	domain.OperationImageGenerate: {MiniAppImageNanoBanana2, MiniAppImageNanoBananaPro, MiniAppImageGPTImage2, MiniAppImageSeedream45, MiniAppImageSDXLTurbo, MiniAppImageMock},
-	domain.OperationVideoGenerate: {MiniAppVideoKling},
+	domain.OperationImageGenerate: {MiniAppImageNanoBanana2, MiniAppImageNanoBananaPro, MiniAppImageGPTImage2, MiniAppImageMock},
+	domain.OperationVideoGenerate: {},
 }
 
-var vkVideoModels = map[string]Model{
-	VKVideoPrunaAI: {
-		ModelID:     VKVideoPrunaAI,
-		ModelName:   "PrunaAI",
-		Provider:    domain.ProviderDeepInfra,
-		ModelCode:   ModelCodePVideo,
-		DurationSec: 5,
-	},
-	VKVideoSora2: {
-		ModelID:     VKVideoSora2,
-		ModelName:   "Sora 2",
-		Provider:    domain.ProviderOpenAI,
-		ModelCode:   ModelCodeSora2,
-		DurationSec: 5,
-	},
-}
+var vkVideoModels = map[string]Model{}
 
 func ResolveMiniAppModel(op domain.OperationType, raw string) (Model, bool) {
 	modelID := strings.TrimSpace(raw)

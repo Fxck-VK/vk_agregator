@@ -856,7 +856,7 @@ func TestHandler_ChatMessage_CreatesTextJobWithPublicAlias(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("invalid response json: %v", err)
 	}
-	if resp.Operation != "text_generate" || resp.ModelName != "ChatGPT" || resp.ModelID != "" {
+	if resp.Operation != "text_generate" || resp.ModelName != "NeiroHub Chat" || resp.ModelID != "" {
 		t.Fatalf("unexpected chat response: %+v", resp)
 	}
 
@@ -882,7 +882,10 @@ func TestHandler_ChatMessage_CreatesTextJobWithPublicAlias(t *testing.T) {
 	if job.OperationType != domain.OperationTextGenerate || job.Modality != domain.ModalityText {
 		t.Fatalf("unexpected job operation/modality: %s/%s", job.OperationType, job.Modality)
 	}
-	if params.Prompt != "hello chat" || params.ModelID != "chatgpt" || params.ModelName != "ChatGPT" {
+	if job.CostEstimate != 0 || job.CostReserved != 0 {
+		t.Fatalf("text job cost/reserved = %d/%d, want 0/0", job.CostEstimate, job.CostReserved)
+	}
+	if params.Prompt != "hello chat" || params.ModelID != "chatgpt" || params.ModelName != "NeiroHub Chat" {
 		t.Fatalf("unexpected job params: %+v", params)
 	}
 	if params.ConversationID != "" || params.ConversationSource != "miniapp" || params.ExternalThreadID != "chat-1" {
@@ -2589,7 +2592,7 @@ func TestHandler_Estimate_TextUsesPublicModelName(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("invalid response json: %v", err)
 	}
-	if resp.ModelName != "ChatGPT" || resp.ModelID != "" {
+	if resp.ModelName != "NeiroHub Chat" || resp.ModelID != "" {
 		t.Fatalf("unexpected model response: %+v", resp)
 	}
 }

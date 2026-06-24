@@ -35,7 +35,7 @@ var ErrInvalidAmount = errors.New("billingservice: amount must be positive")
 // Cataloged generation products must reserve from pricingcatalog snapshots.
 // Per the product spec image_to_video shares the video fallback.
 var defaultPrices = map[domain.OperationType]int64{
-	domain.OperationTextGenerate:      1,
+	domain.OperationTextGenerate:      0,
 	domain.OperationImageGenerate:     10,
 	domain.OperationImageEdit:         10,
 	domain.OperationVideoGenerate:     50,
@@ -103,7 +103,7 @@ func (s *Service) Estimate(op domain.OperationType) (int64, error) {
 	if !ok {
 		return 0, fmt.Errorf("%w: %s", ErrUnknownOperation, op)
 	}
-	if price <= 0 {
+	if price < 0 || (price == 0 && op != domain.OperationTextGenerate) {
 		return 0, fmt.Errorf("%w: price for %s is %d", ErrInvalidAmount, op, price)
 	}
 	return price, nil

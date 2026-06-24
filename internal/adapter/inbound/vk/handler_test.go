@@ -160,16 +160,13 @@ func newHarnessWithReferenceDownloader(control vkdelivery.ControlClient, cfg vk.
 func defaultTestVKImageModels() []productcatalog.ImageModel {
 	catalog := productcatalog.New(productcatalog.Config{
 		ImageProviderReady: map[domain.ProviderName]bool{
-			domain.ProviderAPIMart:   true,
-			domain.ProviderPoYo:      true,
-			domain.ProviderDeepInfra: true,
+			domain.ProviderAPIMart: true,
+			domain.ProviderPoYo:    true,
 		},
 		EnabledImageModels: map[string]bool{
 			modelcatalog.MiniAppImageNanoBanana2:   true,
 			modelcatalog.MiniAppImageNanoBananaPro: true,
 			modelcatalog.MiniAppImageGPTImage2:     true,
-			modelcatalog.MiniAppImageSeedream45:    true,
-			modelcatalog.MiniAppImageSDXLTurbo:     true,
 		},
 		PricingCatalog: staticPricingCatalogForVKTest(),
 	})
@@ -2684,6 +2681,9 @@ func TestPlainTextCanKeepLegacyGPTMode(t *testing.T) {
 	if len(jobs) != 1 || jobs[0].OperationType != domain.OperationTextGenerate || h.pub.Len() != 1 {
 		t.Fatalf("legacy gpt mode should create one text job, jobs=%+v tasks=%d", jobs, h.pub.Len())
 	}
+	if jobs[0].CostEstimate != 0 || jobs[0].CostReserved != 0 {
+		t.Fatalf("text job cost/reserved = %d/%d, want 0/0", jobs[0].CostEstimate, jobs[0].CostReserved)
+	}
 }
 
 func TestGPTMenuButtonEnablesPlainTextJobs(t *testing.T) {
@@ -3240,19 +3240,19 @@ func TestVideoNestedButtonsAreControlCommandsNoJob(t *testing.T) {
 		wantKeys []string
 	}{
 		{
-			name:     "sora examples",
-			eventID:  "evt-video-sora-examples",
+			name:     "runway examples",
+			eventID:  "evt-video-runway-examples",
 			text:     "ℹ️ Примеры",
 			command:  domain.CommandMenuVideoSora2Examples,
-			wantText: "Примеры sora-2",
+			wantText: "Runway Gen-4 Turbo",
 			wantKeys: []string{"⬅️ Назад", "menu.video.sora_2"},
 		},
 		{
-			name:     "sora start",
-			eventID:  "evt-video-sora-start",
+			name:     "runway start",
+			eventID:  "evt-video-runway-start",
 			text:     "😀 Начать генерацию",
 			command:  domain.CommandMenuVideoSora2Start,
-			wantText: "sora-2 активен",
+			wantText: "Runway Gen-4 Turbo",
 			wantKeys: []string{"⬅️ Назад", "menu.video.sora_2"},
 		},
 		{

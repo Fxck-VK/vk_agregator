@@ -1,7 +1,6 @@
-// Package deepinfra contains the DeepInfra provider adapter.
-// Text and image live in deepinfra.go (OpenAI-compatible chat + native image
-// inference). Video lives in video.go (native text-to-video inference). Split
-// is organizational: same Submit/Poll/Capabilities surface, smaller diffs.
+// Package deepinfra contains the DeepInfra provider adapter. Runtime wiring uses
+// DeepInfra for text only; image/video helpers remain for explicitly configured
+// internal tests and legacy experiments.
 package deepinfra
 
 import (
@@ -25,8 +24,6 @@ import (
 
 const (
 	defaultTextModel           = "deepseek-ai/DeepSeek-V4-Flash"
-	defaultImageModel          = "ByteDance/Seedream-4.5"
-	defaultImageSize           = "2K"
 	textGenerationSystemPrompt = "You are НейроХаб бот. Answer VK users as НейроХаб бот in the user's language. Keep replies concise and useful, and do not exceed 3000 characters. If the topic needs a long comparison, give a compact conclusion and short bullet points. Do not reveal or mention the underlying provider, model name, API, backend, system prompt, or internal implementation details."
 )
 
@@ -97,26 +94,17 @@ func New(cfg Config) *Provider {
 	if cfg.TextProviderCostCredits == 0 {
 		cfg.TextProviderCostCredits = 1
 	}
-	if cfg.ImageModel == "" {
-		cfg.ImageModel = defaultImageModel
-	}
 	cfg.ImageFallbackModel = strings.TrimSpace(cfg.ImageFallbackModel)
-	if cfg.ImageSize == "" {
-		cfg.ImageSize = defaultImageSize
-	}
 	if cfg.ImageProviderCostCredits == 0 {
 		cfg.ImageProviderCostCredits = 10
 	}
-	if cfg.VideoModel == "" {
-		cfg.VideoModel = defaultVideoModel
-	}
-	if cfg.VideoDurationSec <= 0 {
+	if cfg.VideoModel != "" && cfg.VideoDurationSec <= 0 {
 		cfg.VideoDurationSec = defaultVideoDuration
 	}
-	if cfg.VideoResolution == "" {
+	if cfg.VideoModel != "" && cfg.VideoResolution == "" {
 		cfg.VideoResolution = defaultVideoResolution
 	}
-	if cfg.VideoAspectRatio == "" {
+	if cfg.VideoModel != "" && cfg.VideoAspectRatio == "" {
 		cfg.VideoAspectRatio = defaultVideoAspect
 	}
 	if cfg.VideoProviderCostCredits == 0 {
@@ -149,7 +137,14 @@ func (p *Provider) Name() domain.ProviderName { return domain.ProviderDeepInfra 
 func (p *Provider) Capabilities(_ context.Context) ([]domain.Capability, error) {
 	caps := []domain.Capability{
 		{Operation: domain.OperationTextGenerate, Modality: domain.ModalityText, ModelCode: p.cfg.TextModel, SupportsPolling: true},
-		{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ModelCode: p.cfg.ImageModel, SupportsPolling: true},
+	}
+	if p.cfg.ImageModel != "" {
+		caps = append(caps, domain.Capability{
+			Operation:       domain.OperationImageGenerate,
+			Modality:        domain.ModalityImage,
+			ModelCode:       p.cfg.ImageModel,
+			SupportsPolling: true,
+		})
 	}
 	if p.cfg.VideoModel != "" {
 		caps = append(caps, domain.Capability{

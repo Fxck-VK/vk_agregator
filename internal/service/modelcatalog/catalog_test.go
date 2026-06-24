@@ -6,7 +6,7 @@ import (
 	"vk-ai-aggregator/internal/domain"
 )
 
-func TestListMiniAppImageModelsIncludesDeepInfraWithoutLegacyDuplicates(t *testing.T) {
+func TestListMiniAppImageModelsExcludesDeepInfraAndLegacyDuplicates(t *testing.T) {
 	models := ListMiniAppModels(domain.OperationImageGenerate)
 	seen := map[string]int{}
 	for _, model := range models {
@@ -14,8 +14,8 @@ func TestListMiniAppImageModelsIncludesDeepInfraWithoutLegacyDuplicates(t *testi
 	}
 
 	for _, id := range []string{MiniAppImageSeedream45, MiniAppImageSDXLTurbo} {
-		if seen[id] != 1 {
-			t.Fatalf("public model %s count = %d, want 1; models=%+v", id, seen[id], models)
+		if seen[id] != 0 {
+			t.Fatalf("deepinfra model %s leaked into public list: %+v", id, models)
 		}
 	}
 	for _, legacy := range []string{"sdxl", "kandinsky", MiniAppImageNanoBananaFlash} {
@@ -25,14 +25,10 @@ func TestListMiniAppImageModelsIncludesDeepInfraWithoutLegacyDuplicates(t *testi
 	}
 }
 
-func TestResolveMiniAppImageLegacyDeepInfraAliases(t *testing.T) {
-	for _, alias := range []string{"sdxl", MiniAppImageNanoBananaFlash} {
-		model, ok := ResolveMiniAppModel(domain.OperationImageGenerate, alias)
-		if !ok {
-			t.Fatalf("alias %s did not resolve", alias)
-		}
-		if model.ModelID != MiniAppImageSDXLTurbo || model.Provider != domain.ProviderDeepInfra || model.ModelCode != ModelCodeSDXLTurbo {
-			t.Fatalf("alias %s resolved to %+v", alias, model)
+func TestResolveMiniAppImageDeepInfraModelsFailClosed(t *testing.T) {
+	for _, modelID := range []string{MiniAppImageSeedream45, MiniAppImageSDXLTurbo, "sdxl", MiniAppImageNanoBananaFlash} {
+		if model, ok := ResolveMiniAppModel(domain.OperationImageGenerate, modelID); ok {
+			t.Fatalf("deepinfra image model %s resolved unexpectedly: %+v", modelID, model)
 		}
 	}
 }

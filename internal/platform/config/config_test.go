@@ -29,7 +29,7 @@ func TestValidateProductionSecrets(t *testing.T) {
 func TestValidateRealModesRequireCredentialsOutsideProduction(t *testing.T) {
 	cfg := config.Config{
 		Env:                 "development",
-		Provider:            "openai",
+		Provider:            "deepinfra",
 		VKDeliveryMode:      "real",
 		VKConfirmationToken: "dev-confirmation",
 	}
@@ -39,7 +39,7 @@ func TestValidateRealModesRequireCredentialsOutsideProduction(t *testing.T) {
 		t.Fatal("expected validation error")
 	}
 	msg := err.Error()
-	for _, want := range []string{"OPENAI_API_KEY", "VK_ACCESS_TOKEN"} {
+	for _, want := range []string{"DEEPINFRA_API_KEY", "VK_ACCESS_TOKEN"} {
 		if !strings.Contains(msg, want) {
 			t.Fatalf("expected %s in validation error, got %q", want, msg)
 		}
@@ -48,10 +48,10 @@ func TestValidateRealModesRequireCredentialsOutsideProduction(t *testing.T) {
 
 func TestLoadProviderChain(t *testing.T) {
 	t.Setenv("PROVIDER", "mock")
-	t.Setenv("PROVIDER_CHAIN", "openai,mock")
+	t.Setenv("PROVIDER_CHAIN", "deepinfra,mock")
 
 	cfg := config.Load()
-	if !reflect.DeepEqual(cfg.ProviderChain, []string{"openai", "mock"}) {
+	if !reflect.DeepEqual(cfg.ProviderChain, []string{"deepinfra", "mock"}) {
 		t.Fatalf("provider chain = %#v", cfg.ProviderChain)
 	}
 }
@@ -603,15 +603,15 @@ func TestLoadDBPoolConfigBoundsInt32Values(t *testing.T) {
 }
 
 func TestLoadImageProviderConfig(t *testing.T) {
-	t.Setenv("IMAGE_PROVIDER", "openai")
-	t.Setenv("IMAGE_MODEL", "gpt-image-2")
-	t.Setenv("IMAGE_SIZE", "1024x1024")
+	t.Setenv("IMAGE_PROVIDER", "poyo")
+	t.Setenv("IMAGE_MODEL", "nano-banana-2-new")
+	t.Setenv("IMAGE_SIZE", "1K")
 
 	cfg := config.Load()
-	if cfg.ImageProvider != "openai" {
-		t.Fatalf("ImageProvider = %q, want openai", cfg.ImageProvider)
+	if cfg.ImageProvider != "poyo" {
+		t.Fatalf("ImageProvider = %q, want poyo", cfg.ImageProvider)
 	}
-	if cfg.ImageModel != "gpt-image-2" || cfg.ImageSize != "1024x1024" {
+	if cfg.ImageModel != "nano-banana-2-new" || cfg.ImageSize != "1K" {
 		t.Fatalf("unexpected image config: model=%q size=%q", cfg.ImageModel, cfg.ImageSize)
 	}
 }
@@ -1200,6 +1200,15 @@ func TestValidateProviderChainRejectsUnknownProvider(t *testing.T) {
 	}
 }
 
+func TestValidateRejectsOpenAIGenerationProvider(t *testing.T) {
+	cfg := config.Config{ProviderChain: []string{"openai"}}
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "PROVIDER_CHAIN") {
+		t.Fatalf("expected openai generation provider validation error, got %v", err)
+	}
+}
+
 func TestValidateProductionRejectsMockProvider(t *testing.T) {
 	cfg := validProductionConfig()
 	cfg.ProviderChain = []string{"deepinfra", "mock"}
@@ -1289,19 +1298,12 @@ func TestLoadProviderCostLegacyPriceAliases(t *testing.T) {
 	t.Setenv("DEEPINFRA_TEXT_PRICE", "2")
 	t.Setenv("DEEPINFRA_IMAGE_PRICE", "11")
 	t.Setenv("DEEPINFRA_VIDEO_PRICE", "12")
-	t.Setenv("OPENAI_TEXT_PRICE", "3")
-	t.Setenv("OPENAI_IMAGE_PRICE", "14")
-	t.Setenv("OPENAI_VIDEO_PRICE", "15")
 
 	cfg := config.Load()
 	if cfg.DeepInfraTextProviderCostCredits != 2 ||
 		cfg.DeepInfraImageProviderCostCredits != 11 ||
 		cfg.DeepInfraVideoProviderCostCredits != 12 ||
-		cfg.DeepInfraVideoMaxProviderCostCredits != 12 ||
-		cfg.OpenAITextProviderCostCredits != 3 ||
-		cfg.OpenAIImageProviderCostCredits != 14 ||
-		cfg.OpenAIVideoProviderCostCredits != 15 ||
-		cfg.OpenAIVideoMaxProviderCostCredits != 15 {
+		cfg.DeepInfraVideoMaxProviderCostCredits != 12 {
 		t.Fatalf("legacy provider cost aliases were not loaded: %+v", cfg)
 	}
 }
@@ -1639,8 +1641,8 @@ func TestValidatePriceOverridesRejectNonPositiveAmounts(t *testing.T) {
 		string(domain.OperationTextGenerate): 0,
 	}
 	err = cfg.Validate()
-	if err == nil || !strings.Contains(err.Error(), "PRICES") || !strings.Contains(err.Error(), "must be positive") {
-		t.Fatalf("expected PRICES positive validation error, got %v", err)
+	if err != nil {
+		t.Fatalf("expected free text PRICES override to validate, got %v", err)
 	}
 }
 
@@ -1934,17 +1936,19 @@ func TestValidateOpenAIModerationRequiresKey(t *testing.T) {
 	}
 }
 
-func TestValidateImageProviderRequiresKey(t *testing.T) {
+func TestValidateAPIMartImageProviderRequiresKey(t *testing.T) {
 	cfg := config.Config{
-		Env:           "development",
-		Provider:      "mock",
-		ProviderChain: []string{"mock"},
-		ImageProvider: "openai",
+		Env:                    "development",
+		Provider:               "mock",
+		ProviderChain:          []string{"mock"},
+		ImageProvider:          "apimart",
+		APIMartProviderEnabled: true,
+		APIMartBaseURL:         "https://api.apimart.test/v1",
 	}
 
 	err := cfg.Validate()
-	if err == nil || !strings.Contains(err.Error(), "OPENAI_API_KEY") {
-		t.Fatalf("expected OPENAI_API_KEY validation error, got %v", err)
+	if err == nil || !strings.Contains(err.Error(), "APIMART_API_KEY") {
+		t.Fatalf("expected APIMART_API_KEY validation error, got %v", err)
 	}
 }
 
@@ -1961,7 +1965,7 @@ func TestValidateDeepInfraRequiresKey(t *testing.T) {
 	}
 }
 
-func TestValidateDeepInfraImageProviderRequiresKey(t *testing.T) {
+func TestValidateRejectsDeepInfraImageProvider(t *testing.T) {
 	cfg := config.Config{
 		Env:           "development",
 		Provider:      "mock",
@@ -1970,8 +1974,22 @@ func TestValidateDeepInfraImageProviderRequiresKey(t *testing.T) {
 	}
 
 	err := cfg.Validate()
-	if err == nil || !strings.Contains(err.Error(), "DEEPINFRA_API_KEY") {
-		t.Fatalf("expected DEEPINFRA_API_KEY validation error, got %v", err)
+	if err == nil || !strings.Contains(err.Error(), "IMAGE_PROVIDER=deepinfra") {
+		t.Fatalf("expected IMAGE_PROVIDER=deepinfra validation error, got %v", err)
+	}
+}
+
+func TestValidateRejectsDeepInfraVideoProvider(t *testing.T) {
+	cfg := config.Config{
+		Env:           "development",
+		Provider:      "mock",
+		ProviderChain: []string{"mock"},
+		VideoProvider: "deepinfra",
+	}
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "VIDEO_PROVIDER=deepinfra") {
+		t.Fatalf("expected VIDEO_PROVIDER=deepinfra validation error, got %v", err)
 	}
 }
 

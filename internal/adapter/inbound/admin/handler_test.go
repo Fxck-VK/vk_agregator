@@ -474,11 +474,7 @@ func TestProviderMediaAndConfigOperatorDTOsAreSafe(t *testing.T) {
 		PaymentProvider:                      "yookassa",
 		PaymentWebhookRequireHTTPS:           true,
 		Provider:                             "deepinfra",
-		ProviderChain:                        []string{"deepinfra", "openai"},
-		ImageProvider:                        "deepinfra",
-		VideoProvider:                        "deepinfra",
-		DeepInfraVideoModel:                  "raw-provider-model-id",
-		OpenAIVideoModel:                     "raw-openai-video-model",
+		ProviderChain:                        []string{"deepinfra", "runway"},
 		MediaPipelineEnabled:                 true,
 		MediaVideoProbePolicy:                platformconfig.MediaVideoProbePolicyProbeRequired,
 		MediaVideoTranscodePolicy:            platformconfig.MediaVideoTranscodePolicyNever,
@@ -574,8 +570,6 @@ func TestProviderMediaAndConfigOperatorDTOsAreSafe(t *testing.T) {
 		}
 		raw := rec.Body.String()
 		for _, forbidden := range []string{
-			"raw-provider-model-id",
-			"raw-openai-video-model",
 			"raw-apimart-api-key",
 			"provider_model_id",
 			"MiniMax-Hailuo-2.3",

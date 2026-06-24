@@ -105,6 +105,12 @@ type moderationResponse struct {
 	Error *apiError `json:"error"`
 }
 
+type apiError struct {
+	Message string `json:"message"`
+	Type    string `json:"type"`
+	Code    string `json:"code"`
+}
+
 func (m *Moderator) moderate(ctx context.Context, input any) (moderationservice.Outcome, error) {
 	body, err := json.Marshal(moderationRequest{Model: m.cfg.Model, Input: input})
 	if err != nil {
@@ -145,6 +151,33 @@ func (m *Moderator) moderate(ctx context.Context, input any) (moderationservice.
 	}
 	return moderationservice.Outcome{Decision: domain.ModerationAllow, Categories: categories}, nil
 }
+
+func classifyStatus(status int) domain.ProviderErrorClass {
+	switch {
+	case status == http.StatusTooManyRequests:
+		return domain.ProviderErrRateLimited
+	case status == http.StatusUnauthorized || status == http.StatusForbidden:
+		return domain.ProviderErrAuthFailed
+	case status == http.StatusBadRequest || status == http.StatusUnprocessableEntity:
+		return domain.ProviderErrInvalidRequest
+	case status >= 500:
+		return domain.ProviderErrOverloaded
+	default:
+		return domain.ProviderErrInternal
+	}
+}
+
+// Error is an OpenAI moderation failure carrying a normalized class so workers
+// can classify it without importing this package's internals.
+type Error struct {
+	Class   domain.ProviderErrorClass
+	Message string
+}
+
+func (e *Error) Error() string { return fmt.Sprintf("openai moderation: %s: %s", e.Class, e.Message) }
+
+// ProviderErrorClass exposes the normalized class for worker classification.
+func (e *Error) ProviderErrorClass() domain.ProviderErrorClass { return e.Class }
 
 func flaggedCategories(in map[string]bool) []string {
 	out := make([]string, 0, len(in))

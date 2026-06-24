@@ -224,7 +224,7 @@ func TestCreateJobIdempotent(t *testing.T) {
 	}
 }
 
-func TestCreateJobNonPositivePriceRejectedBeforePersistence(t *testing.T) {
+func TestCreateJobAllowsFreeTextWithoutReservation(t *testing.T) {
 	f := newFixture(billingservice.WithPriceOverrides(map[string]int64{
 		string(domain.OperationTextGenerate): 0,
 	}))
@@ -240,21 +240,19 @@ func TestCreateJobNonPositivePriceRejectedBeforePersistence(t *testing.T) {
 		IdempotencyKey: "vk_job:1:free-text",
 		CorrelationID:  "corr-free-text",
 	})
-	if !errors.Is(err, billingservice.ErrInvalidAmount) {
-		t.Fatalf("expected ErrInvalidAmount, got job=%+v err=%v", job, err)
+	if err != nil {
+		t.Fatalf("create free text job: %v", err)
 	}
-	if job != nil {
-		t.Fatalf("non-positive price must not create job, got %+v", job)
+	if job.CostEstimate != 0 || job.CostReserved != 0 || job.Status != domain.JobStatusQueued {
+		t.Fatalf("free text job cost/status = %d/%d/%s, want 0/0/queued", job.CostEstimate, job.CostReserved, job.Status)
 	}
-	if jobs, err := f.jobs.List(ctx, domain.JobFilter{}, 10, 0); err != nil || len(jobs) != 0 {
-		t.Fatalf("non-positive price persisted jobs=%+v err=%v", jobs, err)
-	}
-	if events := f.outbox.Events(); len(events) != 0 {
-		t.Fatalf("non-positive price wrote outbox events: %+v", events)
+	jobs, err := f.jobs.List(ctx, domain.JobFilter{}, 10, 0)
+	if err != nil || len(jobs) != 1 {
+		t.Fatalf("free text persisted jobs=%+v err=%v", jobs, err)
 	}
 	f.drain(t)
-	if f.pub.Len() != 0 {
-		t.Fatalf("non-positive price enqueued tasks, got %d", f.pub.Len())
+	if f.pub.Len() != 1 {
+		t.Fatalf("free text job enqueued tasks = %d, want 1", f.pub.Len())
 	}
 }
 

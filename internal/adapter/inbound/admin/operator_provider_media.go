@@ -548,12 +548,6 @@ func runtimeProviderClasses(cfg platformconfig.Config) []RuntimeProviderClass {
 	}
 	add(cfg.ImageProvider, string(domain.ModalityImage), false)
 	add(cfg.VideoProvider, string(domain.ModalityVideo), false)
-	if strings.TrimSpace(cfg.DeepInfraVideoModel) != "" {
-		add(string(domain.ProviderDeepInfra), string(domain.ModalityVideo), false)
-	}
-	if strings.TrimSpace(cfg.OpenAIVideoModel) != "" {
-		add(string(domain.ProviderOpenAI), string(domain.ModalityVideo), false)
-	}
 	for _, contract := range cfg.MediaProviderContracts {
 		modality := string(contract.Modality)
 		modelClass := safeRuntimeToken(contract.ModelClass, "")

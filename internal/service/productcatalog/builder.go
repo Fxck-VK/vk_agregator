@@ -102,10 +102,9 @@ func (r RuntimeCatalog) VideoRoutes() []VideoRoute {
 
 func imageProviderReadyFromConfig(cfg config.Config) map[domain.ProviderName]bool {
 	return map[domain.ProviderName]bool{
-		domain.ProviderAPIMart:   apimartReadyFromConfig(cfg),
-		domain.ProviderPoYo:      poyoReadyFromConfig(cfg),
-		domain.ProviderDeepInfra: deepInfraReadyFromConfig(cfg),
-		domain.ProviderMock:      mockImageProviderReadyFromConfig(cfg),
+		domain.ProviderAPIMart: apimartReadyFromConfig(cfg),
+		domain.ProviderPoYo:    poyoReadyFromConfig(cfg),
+		domain.ProviderMock:    mockImageProviderReadyFromConfig(cfg),
 	}
 }
 
@@ -114,8 +113,6 @@ func enabledImageModelsFromConfig(cfg config.Config) map[string]bool {
 		modelcatalog.MiniAppImageNanoBanana2:   cfg.FeatureImageModelNanoBanana2Enabled,
 		modelcatalog.MiniAppImageNanoBananaPro: cfg.FeatureImageModelNanoBananaProEnabled,
 		modelcatalog.MiniAppImageGPTImage2:     cfg.FeatureImageModelGPTImage2Enabled,
-		modelcatalog.MiniAppImageSeedream45:    true,
-		modelcatalog.MiniAppImageSDXLTurbo:     true,
 		modelcatalog.MiniAppImageMock:          cfg.FeatureImageModelMockEnabled,
 	}
 }
@@ -130,11 +127,6 @@ func poyoReadyFromConfig(cfg config.Config) bool {
 	return cfg.PoYoProviderEnabled &&
 		strings.TrimSpace(cfg.PoYoAPIKey) != "" &&
 		strings.TrimSpace(cfg.PoYoBaseURL) != ""
-}
-
-func deepInfraReadyFromConfig(cfg config.Config) bool {
-	return strings.TrimSpace(cfg.DeepInfraAPIKey) != "" &&
-		strings.TrimSpace(cfg.DeepInfraBaseURL) != ""
 }
 
 func mockVideoProviderReadyFromConfig(cfg config.Config) bool {

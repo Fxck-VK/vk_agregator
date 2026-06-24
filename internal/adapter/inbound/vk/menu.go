@@ -235,8 +235,8 @@ const (
 )
 
 const photoNanoBanana2Instruction = "Nano Banana 2 активен.\n\nНапишите описание изображения обычным сообщением.\n\nВ боте сейчас включен текст-в-фото; референс-фото подключим отдельным шагом."
-const photoDeepInfraSeedreamInstruction = "ByteDance Seedream 4.5 активен.\n\nНапишите описание изображения обычным сообщением."
-const photoDeepInfraSDXLInstruction = "Stability AI SDXL Turbo активен.\n\nНапишите описание изображения обычным сообщением."
+const photoDeepInfraSeedreamInstruction = "ByteDance Seedream 4.5 отключен.\n\nВыберите другую модель фото."
+const photoDeepInfraSDXLInstruction = "Stability AI SDXL Turbo отключен.\n\nВыберите другую модель фото."
 const photoGPTImage2Instruction = "GPT Image 2 активен.\n\nНапишите описание изображения обычным сообщением."
 const photoQualityFallbackText = "Выберите модель фото, затем качество генерации."
 
@@ -1269,12 +1269,6 @@ func photoModeKeyboard() *vkdelivery.Keyboard {
 			},
 			{
 				button("GPT Image 2", domain.CommandMenuImageGPTImage2, "primary"),
-			},
-			{
-				button("ByteDance Seedream 4.5", domain.CommandMenuImageDeepInfraSeedream, "primary"),
-			},
-			{
-				button("Stability AI SDXL Turbo", domain.CommandMenuImageDeepInfraSDXL, "primary"),
 			},
 			{
 				button("⬅️ Назад", domain.CommandShowMenu, "secondary"),
