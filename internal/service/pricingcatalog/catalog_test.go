@@ -187,6 +187,16 @@ func TestCatalogLookupCostEstimateDisplayHintAndSnapshot(t *testing.T) {
 	if firstSnapshot.InternalCredits != exact || firstSnapshot.DefaultDisplayCredits != display {
 		t.Fatalf("snapshot credits mismatch: %+v exact=%d display=%d", firstSnapshot, exact, display)
 	}
+
+	prices := catalog.Prices()
+	if len(prices) != 1 || prices[0].Key != price.Key || prices[0].Version != 7 {
+		t.Fatalf("unexpected price listing: %+v", prices)
+	}
+	prices[0].Key.ImageModelID = "mutated"
+	listedAgain := catalog.Prices()
+	if listedAgain[0].Key.ImageModelID != "nano_banana_2" {
+		t.Fatalf("price listing exposed mutable catalog state: %+v", listedAgain[0])
+	}
 }
 
 func TestCatalogDisplayHintDefaultsToExactEstimate(t *testing.T) {

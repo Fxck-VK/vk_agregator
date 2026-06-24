@@ -384,6 +384,38 @@ type OperatorVideoRouteDTO struct {
 	AllowedResolutions     []string `json:"allowed_resolutions,omitempty"`
 }
 
+// OperatorPricingDTO is the read-only runtime generation pricing view for
+// operators. It lists public product dimensions and backend-calculated credit
+// estimates only; floor, multiplier, provider cost, provider-native ids,
+// prompts, payloads and private URLs are intentionally omitted.
+type OperatorPricingDTO struct {
+	GeneratedAt    time.Time                 `json:"generated_at"`
+	Source         string                    `json:"source"`
+	Version        int                       `json:"version"`
+	StaticFallback bool                      `json:"static_fallback"`
+	LoadedAt       time.Time                 `json:"loaded_at"`
+	EffectiveFrom  *time.Time                `json:"effective_from,omitempty"`
+	EffectiveUntil *time.Time                `json:"effective_until,omitempty"`
+	Entries        []OperatorPricingEntryDTO `json:"entries"`
+	EntryCount     int                       `json:"entry_count"`
+	Notes          []string                  `json:"notes,omitempty"`
+}
+
+// OperatorPricingEntryDTO is one public product key with pricingcatalog-derived
+// display and exact estimates. It does not include provider routing data.
+type OperatorPricingEntryDTO struct {
+	Operation              string `json:"operation"`
+	Modality               string `json:"modality"`
+	ImageModelID           string `json:"image_model_id,omitempty"`
+	VideoRouteAlias        string `json:"video_route_alias,omitempty"`
+	Quality                string `json:"quality,omitempty"`
+	Resolution             string `json:"resolution,omitempty"`
+	DurationSec            int    `json:"duration_sec,omitempty"`
+	CostEstimateCredits    int64  `json:"cost_estimate_credits"`
+	DisplayEstimateCredits int64  `json:"display_estimate_credits"`
+	Enabled                bool   `json:"enabled"`
+}
+
 // OperatorUsersDTO is the read-only safe user console payload. It never exposes
 // raw VK user ids, names, timezones or internal UUIDs by default.
 type OperatorUsersDTO struct {

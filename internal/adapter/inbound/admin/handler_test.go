@@ -17,6 +17,7 @@ import (
 	"vk-ai-aggregator/internal/domain"
 	platformconfig "vk-ai-aggregator/internal/platform/config"
 	"vk-ai-aggregator/internal/service/billingservice"
+	"vk-ai-aggregator/internal/service/pricingcatalog"
 )
 
 const testAdminToken = "test-admin-token"
@@ -268,6 +269,95 @@ func TestOperatorRetentionEndpointsExposeOnlySafeAggregates(t *testing.T) {
 				t.Fatalf("%s leaked forbidden value %q: %s", path, forbidden, body)
 			}
 		}
+	}
+}
+
+func TestOperatorPricingEndpointListsRuntimeCatalogWithoutPrivatePricingFields(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 6, 24, 12, 0, 0, 0, time.UTC)
+	version := pricingcatalog.RuntimeCatalogVersion{
+		ID:            "catalog-version",
+		PriceVersion:  42,
+		Status:        pricingcatalog.RuntimePriceVersionStatusActive,
+		EffectiveFrom: now.Add(-time.Hour),
+	}
+	repo := memory.NewRuntimePricingRepo([]pricingcatalog.RuntimeCatalogVersion{version}, []pricingcatalog.ProductPrice{
+		{
+			Key: pricingcatalog.ProductKey{
+				Operation:    domain.OperationImageGenerate,
+				Modality:     domain.ModalityImage,
+				ImageModelID: pricingcatalog.PublicImageNanoBanana2,
+				Quality:      pricingcatalog.ImageQuality1K,
+			},
+			Version:               version.PriceVersion,
+			Source:                pricingcatalog.RuntimeDBSource,
+			Floor:                 pricingcatalog.PriceFloor{Amount: 5_000_000, Unit: pricingcatalog.FloorUnitPoYoCredits},
+			Multiplier:            pricingcatalog.DefaultMultiplier(),
+			UnitConversion:        pricingcatalog.IdentityUnitConversion(),
+			Caps:                  pricingcatalog.SafetyCaps{InternalCreditCap: 100, FloorAmountCap: 10_000_000},
+			Enabled:               true,
+			DefaultDisplayCredits: 12,
+		},
+	})
+	repo.SetNowForTest(func() time.Time { return now })
+	cache := pricingcatalog.NewRuntimeCatalogCache(repo, nil, pricingcatalog.RuntimeCatalogConfig{DBEnabled: true})
+	if err := cache.Load(ctx); err != nil {
+		t.Fatalf("load runtime pricing: %v", err)
+	}
+
+	h := admin.NewHandler(admin.Config{Token: testAdminToken}, admin.Deps{PricingCache: cache})
+	rec, _ := do(t, h, "/admin/pricing/operator")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var dto admin.OperatorPricingDTO
+	if err := json.Unmarshal(rec.Body.Bytes(), &dto); err != nil {
+		t.Fatalf("decode pricing DTO: %v", err)
+	}
+	if dto.Source != pricingcatalog.RuntimeDBSource || dto.Version != version.PriceVersion || dto.StaticFallback {
+		t.Fatalf("unexpected pricing selection: %+v", dto)
+	}
+	if dto.LoadedAt.IsZero() || dto.EffectiveFrom == nil || dto.EffectiveUntil != nil {
+		t.Fatalf("unexpected pricing metadata: %+v", dto)
+	}
+	if dto.EntryCount != 1 || len(dto.Entries) != 1 {
+		t.Fatalf("unexpected pricing entries: %+v", dto)
+	}
+	entry := dto.Entries[0]
+	if entry.ImageModelID != pricingcatalog.PublicImageNanoBanana2 ||
+		entry.Operation != string(domain.OperationImageGenerate) ||
+		entry.CostEstimateCredits != 15 ||
+		entry.DisplayEstimateCredits != 12 ||
+		!entry.Enabled {
+		t.Fatalf("unexpected pricing entry: %+v", entry)
+	}
+	raw := strings.ToLower(rec.Body.String())
+	for _, forbidden := range []string{
+		`"floor"`,
+		`"floor_amount"`,
+		`"floor_unit"`,
+		`"multiplier"`,
+		`"unit_conversion"`,
+		`"internal_credit_cap"`,
+		`"floor_amount_cap"`,
+		`"provider_cost"`,
+		`"provider_native"`,
+		`"payload"`,
+		`"prompt"`,
+		`"private_url"`,
+		"poyo_credit",
+	} {
+		if strings.Contains(raw, forbidden) {
+			t.Fatalf("operator pricing DTO leaked forbidden field/value %q: %s", forbidden, raw)
+		}
+	}
+
+	postReq := httptest.NewRequest(http.MethodPost, "/admin/pricing/operator", nil)
+	postReq.Header.Set("X-Admin-Token", testAdminToken)
+	postRec := httptest.NewRecorder()
+	h.Routes().ServeHTTP(postRec, postReq)
+	if postRec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("POST pricing endpoint got %d, want 405", postRec.Code)
 	}
 }
 

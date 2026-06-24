@@ -156,14 +156,15 @@ func main() {
 		Token:   cfg.AdminToken,
 		Runtime: adminapi.NewRuntimeSnapshot(cfg),
 	}, adminapi.Deps{
-		Jobs:        core.Jobs,
-		Users:       core.Users,
-		Deliveries:  core.Deliveries,
-		Audits:      core.Audits,
-		Referrals:   core.Referrals,
-		Billing:     core.BillingRepo,
-		Payment:     core.Payment,
-		Maintenance: core.Maintenance,
+		Jobs:         core.Jobs,
+		Users:        core.Users,
+		Deliveries:   core.Deliveries,
+		Audits:       core.Audits,
+		Referrals:    core.Referrals,
+		Billing:      core.BillingRepo,
+		Payment:      core.Payment,
+		Maintenance:  core.Maintenance,
+		PricingCache: pricingCache,
 	})
 	billing := billingapi.NewHandler(billingapi.Config{
 		Token:                     cfg.AdminToken,

@@ -2,6 +2,7 @@ package pricingcatalog
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"sync"
@@ -30,6 +31,16 @@ func TestRuntimePriceSetValidationFailsClosed(t *testing.T) {
 		name  string
 		price ProductPrice
 	}{
+		{
+			name: "unexpectedly disabled",
+			price: ProductPrice{
+				Key:            key,
+				Floor:          PriceFloor{Amount: 5_000_000, Unit: FloorUnitPoYoCredits},
+				Multiplier:     DefaultMultiplier(),
+				UnitConversion: IdentityUnitConversion(),
+				Enabled:        false,
+			},
+		},
 		{
 			name: "zero floor",
 			price: ProductPrice{
@@ -70,6 +81,11 @@ func TestRuntimePriceSetValidationFailsClosed(t *testing.T) {
 			}
 		})
 	}
+
+	emptySet := RuntimePriceSet{Version: version}
+	if _, err := emptySet.Catalog(); !errors.Is(err, ErrInvalidRuntimePrice) {
+		t.Fatalf("empty active runtime price set error = %v, want ErrInvalidRuntimePrice", err)
+	}
 }
 
 func TestSelectActiveRuntimeVersionRejectsOverlap(t *testing.T) {
@@ -82,6 +98,13 @@ func TestSelectActiveRuntimeVersionRejectsOverlap(t *testing.T) {
 	_, err := SelectActiveRuntimeVersion(versions, now)
 	if !errors.Is(err, ErrActiveVersionOverlap) {
 		t.Fatalf("SelectActiveRuntimeVersion() error = %v, want ErrActiveVersionOverlap", err)
+	}
+
+	_, err = SelectActiveRuntimeVersion([]RuntimeCatalogVersion{
+		{ID: "future", PriceVersion: 3, Status: RuntimePriceVersionStatusActive, EffectiveFrom: now.Add(time.Hour)},
+	}, now)
+	if !errors.Is(err, ErrNoActiveVersion) {
+		t.Fatalf("future-only active version error = %v, want ErrNoActiveVersion", err)
 	}
 }
 
@@ -142,6 +165,9 @@ func TestRuntimeCatalogCacheReloadKeepsStablePointerAndFailsClosed(t *testing.T)
 	if selection.Source != RuntimeDBSource || selection.Version != 21 || selection.StaticFallback {
 		t.Fatalf("unexpected selection: %+v", selection)
 	}
+	if selection.EffectiveFrom.IsZero() || selection.EffectiveUntil != nil {
+		t.Fatalf("unexpected selection effective metadata: %+v", selection)
+	}
 	credits, err := catalog.CostEstimateCredits(key)
 	if err != nil {
 		t.Fatalf("initial estimate: %v", err)
@@ -192,6 +218,94 @@ func TestRuntimeCatalogCacheReloadKeepsStablePointerAndFailsClosed(t *testing.T)
 	}
 	if credits != 24 {
 		t.Fatalf("failed reload changed catalog credits = %d, want 24", credits)
+	}
+}
+
+func TestRuntimeCatalogSnapshotsRemainImmutableAcrossDBPriceChanges(t *testing.T) {
+	now := time.Date(2026, 6, 24, 12, 0, 0, 0, time.UTC)
+	key := ProductKey{
+		Operation:    domain.OperationImageGenerate,
+		Modality:     domain.ModalityImage,
+		ImageModelID: PublicImageNanoBanana2,
+		Quality:      ImageQuality1K,
+	}
+	repo := &mutableRuntimeRepo{}
+	repo.setSet(RuntimePriceSet{
+		Version: RuntimeCatalogVersion{
+			ID:            "db-v1",
+			PriceVersion:  31,
+			Status:        RuntimePriceVersionStatusActive,
+			EffectiveFrom: now.Add(-time.Hour),
+		},
+		Prices: []ProductPrice{runtimeTestPrice(key, 5_000_000)},
+	})
+	cache := NewRuntimeCatalogCache(repo, nil, RuntimeCatalogConfig{DBEnabled: true})
+	if err := cache.Load(context.Background()); err != nil {
+		t.Fatalf("initial load: %v", err)
+	}
+	catalog, _, err := cache.Current()
+	if err != nil {
+		t.Fatalf("current catalog: %v", err)
+	}
+	dbSnapshotV1, err := catalog.Snapshot(key)
+	if err != nil {
+		t.Fatalf("db snapshot v1: %v", err)
+	}
+	dbSnapshotV1Raw, err := json.Marshal(dbSnapshotV1)
+	if err != nil {
+		t.Fatalf("marshal db snapshot v1: %v", err)
+	}
+	oldDBJob := domain.Job{PricingSnapshot: dbSnapshotV1Raw, CostReserved: 999}
+	if got := oldDBJob.ChargeAmountCredits(); got != 15 {
+		t.Fatalf("old DB-backed snapshot charge = %d, want 15", got)
+	}
+
+	staticCatalog, err := NewStaticCatalog()
+	if err != nil {
+		t.Fatalf("static catalog: %v", err)
+	}
+	staticSnapshot, err := staticCatalog.Snapshot(key)
+	if err != nil {
+		t.Fatalf("static snapshot: %v", err)
+	}
+	staticSnapshotRaw, err := json.Marshal(staticSnapshot)
+	if err != nil {
+		t.Fatalf("marshal static snapshot: %v", err)
+	}
+	staticJob := domain.Job{PricingSnapshot: staticSnapshotRaw, CostReserved: 999}
+	if got := staticJob.ChargeAmountCredits(); got != staticSnapshot.InternalCredits {
+		t.Fatalf("static snapshot charge = %d, want %d", got, staticSnapshot.InternalCredits)
+	}
+
+	legacyJob := domain.Job{CostReserved: 7}
+	if credits, ok := legacyJob.PricingSnapshotCredits(); ok || credits != 0 {
+		t.Fatalf("legacy no-snapshot credits = %d/%v, want 0/false", credits, ok)
+	}
+	if got := legacyJob.ChargeAmountCredits(); got != 7 {
+		t.Fatalf("legacy no-snapshot charge = %d, want reserved 7", got)
+	}
+
+	repo.setSet(RuntimePriceSet{
+		Version: RuntimeCatalogVersion{
+			ID:            "db-v2",
+			PriceVersion:  32,
+			Status:        RuntimePriceVersionStatusActive,
+			EffectiveFrom: now.Add(-time.Minute),
+		},
+		Prices: []ProductPrice{runtimeTestPrice(key, 8_000_000)},
+	})
+	if err := cache.Reload(context.Background()); err != nil {
+		t.Fatalf("reload v2: %v", err)
+	}
+	if got := oldDBJob.ChargeAmountCredits(); got != 15 {
+		t.Fatalf("old DB-backed snapshot changed after runtime price reload: got %d, want 15", got)
+	}
+	dbSnapshotV2, err := catalog.Snapshot(key)
+	if err != nil {
+		t.Fatalf("db snapshot v2: %v", err)
+	}
+	if dbSnapshotV2.InternalCredits != 24 || dbSnapshotV2.Version != 32 {
+		t.Fatalf("new DB-backed snapshot = %+v, want version 32 and 24 credits", dbSnapshotV2)
 	}
 }
 

@@ -90,24 +90,54 @@ func repoRoot() (string, error) {
 
 // splitStatements breaks a migration script into individual executable
 // statements, stripping SQL comments and the BEGIN/COMMIT wrappers (each
-// statement runs in its own autocommit on a pooled connection).
+// statement runs in its own autocommit on a pooled connection). It keeps
+// semicolons inside SQL string literals intact so COMMENT statements stay valid.
 func splitStatements(script string) []string {
 	var out []string
-	for _, chunk := range strings.Split(script, ";") {
-		var lines []string
-		for _, line := range strings.Split(chunk, "\n") {
-			if strings.HasPrefix(strings.TrimSpace(line), "--") {
-				continue
+	var current strings.Builder
+	inString := false
+	inLineComment := false
+	for i := 0; i < len(script); i++ {
+		ch := script[i]
+		if inLineComment {
+			if ch == '\n' {
+				inLineComment = false
+				current.WriteByte(ch)
 			}
-			lines = append(lines, line)
-		}
-		stmt := strings.TrimSpace(strings.Join(lines, "\n"))
-		if stmt == "" || strings.EqualFold(stmt, "BEGIN") || strings.EqualFold(stmt, "COMMIT") {
 			continue
 		}
-		out = append(out, stmt)
+		if !inString && ch == '-' && i+1 < len(script) && script[i+1] == '-' {
+			inLineComment = true
+			i++
+			continue
+		}
+		if ch == '\'' {
+			current.WriteByte(ch)
+			if inString && i+1 < len(script) && script[i+1] == '\'' {
+				i++
+				current.WriteByte(script[i])
+				continue
+			}
+			inString = !inString
+			continue
+		}
+		if ch == ';' && !inString {
+			appendStatement(&out, current.String())
+			current.Reset()
+			continue
+		}
+		current.WriteByte(ch)
 	}
+	appendStatement(&out, current.String())
 	return out
+}
+
+func appendStatement(out *[]string, stmt string) {
+	stmt = strings.TrimSpace(stmt)
+	if stmt == "" || strings.EqualFold(stmt, "BEGIN") || strings.EqualFold(stmt, "COMMIT") {
+		return
+	}
+	*out = append(*out, stmt)
 }
 
 // uniqueVKID derives a stable-but-unique VK id from a fresh UUID so parallel and

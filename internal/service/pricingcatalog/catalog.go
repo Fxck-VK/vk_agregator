@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"sort"
 	"strings"
 	"sync"
 
@@ -360,6 +361,25 @@ func (c *Catalog) Lookup(key ProductKey) (ProductPrice, error) {
 	return price, nil
 }
 
+// Prices returns a stable copy of active product prices for backend read-only
+// visibility. Callers must still sanitize backend-only fields before exposing
+// data outside trusted operator APIs.
+func (c *Catalog) Prices() []ProductPrice {
+	if c == nil {
+		return nil
+	}
+	c.mu.RLock()
+	prices := make([]ProductPrice, 0, len(c.prices))
+	for _, price := range c.prices {
+		prices = append(prices, price)
+	}
+	c.mu.RUnlock()
+	sort.Slice(prices, func(i, j int) bool {
+		return productKeySortKey(prices[i].Key) < productKeySortKey(prices[j].Key)
+	})
+	return prices
+}
+
 // CostEstimateCredits returns the exact backend-owned charge for a public
 // product key. This is the value future /miniapp/estimate and reservation paths
 // should use.
@@ -409,6 +429,19 @@ func (c *Catalog) ReplaceWith(next *Catalog) error {
 	c.prices = prices
 	c.mu.Unlock()
 	return nil
+}
+
+func productKeySortKey(key ProductKey) string {
+	key = key.Normalize()
+	return strings.Join([]string{
+		string(key.Operation),
+		string(key.Modality),
+		key.ImageModelID,
+		string(key.VideoRouteAlias),
+		key.Quality,
+		key.Resolution,
+		fmt.Sprintf("%010d", key.DurationSec),
+	}, "\x00")
 }
 
 // CalculateInternalCredits converts an exact floor and multiplier into whole

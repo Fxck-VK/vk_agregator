@@ -31,6 +31,8 @@ type RuntimeCatalogSelection struct {
 	Version        int
 	StaticFallback bool
 	LoadedAt       time.Time
+	EffectiveFrom  time.Time
+	EffectiveUntil *time.Time
 }
 
 // RuntimeCatalogCache keeps one runtime Catalog pointer stable for consumers
@@ -172,8 +174,10 @@ func ResolveRuntimeCatalog(ctx context.Context, repo RuntimePricingRepository, s
 			return nil, RuntimeCatalogSelection{}, err
 		}
 		return catalog, RuntimeCatalogSelection{
-			Source:  RuntimeDBSource,
-			Version: set.Version.PriceVersion,
+			Source:         RuntimeDBSource,
+			Version:        set.Version.PriceVersion,
+			EffectiveFrom:  set.Version.EffectiveFrom,
+			EffectiveUntil: cloneTimePtr(set.Version.EffectiveUntil),
 		}, nil
 	}
 
@@ -222,6 +226,14 @@ func (v RuntimeCatalogVersion) Normalize() RuntimeCatalogVersion {
 		v.Status = RuntimePriceVersionStatusActive
 	}
 	return v
+}
+
+func cloneTimePtr(in *time.Time) *time.Time {
+	if in == nil {
+		return nil
+	}
+	out := *in
+	return &out
 }
 
 func (v RuntimeCatalogVersion) Valid() error {

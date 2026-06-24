@@ -19,6 +19,7 @@ import (
 
 	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/platform/metrics"
+	"vk-ai-aggregator/internal/service/pricingcatalog"
 )
 
 const (
@@ -75,6 +76,9 @@ type Deps struct {
 	// backlog counters without exposing raw provider payloads.
 	Payment     paymentOverviewReader
 	Maintenance maintenanceOverviewReader
+	// PricingCache is the single runtime generation pricing catalog used by
+	// Mini App, VK bot and job creation paths.
+	PricingCache *pricingcatalog.RuntimeCatalogCache
 }
 
 // Handler serves the admin endpoints.
@@ -96,6 +100,7 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /admin/jobs/queue", h.auth(h.operatorAction("admin_operator_queue_get", h.getOperatorQueue)))
 	mux.HandleFunc("GET /admin/jobs/{id}/operator", h.auth(h.operatorAction("admin_operator_job_get", h.getOperatorJob)))
 	mux.HandleFunc("GET /admin/providers/operator", h.auth(h.operatorAction("admin_operator_providers_get", h.getOperatorProviders)))
+	mux.HandleFunc("GET /admin/pricing/operator", h.auth(h.operatorAction("admin_operator_pricing_get", h.getOperatorPricing)))
 	mux.HandleFunc("GET /admin/media-safety/operator", h.auth(h.operatorAction("admin_operator_media_safety_get", h.getOperatorMediaSafety)))
 	mux.HandleFunc("GET /admin/config-health/operator", h.auth(h.operatorAction("admin_operator_config_health_get", h.getOperatorConfigHealth)))
 	mux.HandleFunc("GET /admin/retention/operator/status", h.auth(h.operatorAction("admin_operator_retention_status_get", h.getOperatorRetentionStatus)))

@@ -2663,6 +2663,25 @@ If a bad migration corrupted data, restore Postgres from a verified backup, then
 deploy the matching app image tag. MinIO artifacts are content-addressed and
 usually do not need rollback unless the incident affected artifact writes.
 
+**Runtime generation pricing rollback**
+
+DB-backed generation pricing is controlled by `RUNTIME_PRICING_DB_ENABLED` and
+`RUNTIME_PRICING_STATIC_FALLBACK_ENABLED`.
+
+- Schema rollback is not automatic in production. Roll back runtime images first
+  and keep the schema unless a human review decides otherwise.
+- Disabling DB pricing returns generation pricing to the static catalog only
+  when `RUNTIME_PRICING_STATIC_FALLBACK_ENABLED=true` is explicitly configured
+  and the static catalog is verified safe for the incident.
+- If DB pricing is enabled and the active DB catalog is missing, invalid,
+  overlapping, disabled or uses an unknown unit, startup/reload must fail closed
+  instead of silently falling back.
+- `000028_runtime_pricing_catalog.down.sql` drops runtime pricing tables and
+  loses runtime price rows/audit events. Export or back up those rows first and
+  verify the backup before any production schema rollback.
+- Historical generation jobs keep their saved `jobs.pricing_snapshot`; do not
+  mutate old job prices during runtime pricing rollback.
+
 **Manual compatibility notes**
 
 1. Redeploy the previous image/build (binaries are stateless).
