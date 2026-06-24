@@ -169,8 +169,10 @@ func assertNoPrivateProviderFields(t *testing.T, items []productcatalog.Item) {
 	serialized := strings.ToLower(string(raw))
 	for _, private := range []string{
 		"provider",
+		"provider_cost",
 		"model_code",
 		"provider_model_id",
+		"provider_native_model_id",
 		"api_key",
 		"authorization",
 		"auth_header",
@@ -180,6 +182,10 @@ func assertNoPrivateProviderFields(t *testing.T, items []productcatalog.Item) {
 		"private_url",
 		"prompt",
 		"price",
+		"floor",
+		"floor_amount",
+		"floor_unit",
+		"multiplier",
 		"cost_estimate",
 		"provider_cost_credits",
 		"price_multiplier",

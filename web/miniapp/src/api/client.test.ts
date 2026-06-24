@@ -1,10 +1,12 @@
-import { describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 
 import {
   ApiError,
   artifactUrl,
   apiUserMessage,
+  createJob,
   errorLabel,
+  estimateJob,
   launchParamsFromLocation,
   normalizeRawParams,
   referralCodeFromRaw,
@@ -13,8 +15,14 @@ import {
   telemetryLabel,
   telemetryRoute,
 } from "./client";
+import type { CreateJobInput, EstimateInput } from "./client";
 
 const ARTIFACT_ID = "550e8400-e29b-41d4-a716-446655440000";
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  window.history.replaceState({}, "", "/");
+});
 
 describe("telemetry safety helpers", () => {
   test("normalizes routes without query, hash, prompts or launch params", () => {
@@ -129,3 +137,100 @@ describe("artifact and status helpers", () => {
     expect(msg.toLowerCase()).not.toContain("payload");
   });
 });
+
+describe("generation request pricing contract", () => {
+  test("serializes only public fields for create and estimate requests", async () => {
+    window.history.replaceState({}, "", "/?vk_user_id=42&vk_ts=1&sign=fake");
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        jsonResponse({
+          id: ARTIFACT_ID,
+          operation: "image_generate",
+          modality: "image",
+          status: "received",
+          cost_estimate: 16,
+          cost_captured: 0,
+          output_artifact_ids: [],
+          created_at: "2026-01-01T00:00:00Z",
+          updated_at: "2026-01-01T00:00:00Z",
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          operation: "video_generate",
+          video_route_alias: "video_kling_o3_standard",
+          cost_estimate: 100,
+          balance_credits: 200,
+          enough_credits: true,
+        }),
+      );
+
+    await createJob(
+      withPrivatePricingFields({
+        operation: "image_generate",
+        prompt: "public image prompt",
+        model_id: "nano_banana_2",
+        image_quality: "2K",
+        reference_artifact_ids: [ARTIFACT_ID],
+      }) as CreateJobInput,
+      { idempotencyKey: "idem-create" },
+    );
+    await estimateJob(
+      withPrivatePricingFields({
+        operation: "video_generate",
+        prompt: "public video prompt",
+        video_route_alias: "video_kling_o3_standard",
+        duration_sec: 5,
+      }) as EstimateInput,
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const bodies = fetchMock.mock.calls.map(([, init]) =>
+      JSON.parse(String((init as RequestInit | undefined)?.body ?? "{}")) as Record<string, unknown>,
+    );
+    expect(Object.keys(bodies[0]).sort()).toEqual(
+      ["image_quality", "model_id", "operation", "prompt", "reference_artifact_ids"].sort(),
+    );
+    expect(Object.keys(bodies[1]).sort()).toEqual(
+      ["duration_sec", "operation", "prompt", "video_route_alias"].sort(),
+    );
+    for (const body of bodies) {
+      expect(body).not.toHaveProperty("price");
+      expect(body).not.toHaveProperty("cost");
+      expect(body).not.toHaveProperty("cost_estimate");
+      expect(body).not.toHaveProperty("provider");
+      expect(body).not.toHaveProperty("provider_cost");
+      expect(body).not.toHaveProperty("provider_cost_credits");
+      expect(body).not.toHaveProperty("multiplier");
+      expect(body).not.toHaveProperty("price_multiplier");
+      expect(body).not.toHaveProperty("floor");
+      expect(body).not.toHaveProperty("provider_model_id");
+      expect(body).not.toHaveProperty("model_code");
+    }
+  });
+});
+
+function jsonResponse(value: unknown, status = 200): Response {
+  return new Response(JSON.stringify(value), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+function withPrivatePricingFields<T extends Record<string, unknown>>(value: T): T {
+  return {
+    ...value,
+    price: 1,
+    cost: 1,
+    cost_estimate: 1,
+    provider: "client-provider",
+    provider_cost: 1,
+    provider_cost_credits: 1,
+    multiplier: 1,
+    price_multiplier: 1,
+    floor: 1,
+    provider_model_id: "client-provider-model",
+    model_code: "client-model-code",
+  };
+}

@@ -656,7 +656,8 @@ export function SettingsScreen({
               {visibleJobs.slice(0, 30).map((job) => {
                 const modality = modalityByOperation(job.operation);
                 const color = typeColor(job.operation);
-                const cost = job.cost_captured > 0 ? job.cost_captured : job.cost_estimate;
+                const backendJobCredits =
+                  job.cost_captured > 0 ? job.cost_captured : job.cost_estimate;
                 const canOpen =
                   job.operation === "text_generate" ||
                   job.operation === "image_generate" ||
@@ -691,7 +692,7 @@ export function SettingsScreen({
                       </div>
                       <div style={{ fontSize: 12, color: "var(--fg-muted)" }}>
                         {historyRowMeta(job)}
-                        {cost > 0 ? ` · ${formatCredits(cost)}` : ""}
+                        {backendJobCredits > 0 ? ` · ${formatCredits(backendJobCredits)}` : ""}
                       </div>
                     </div>
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">

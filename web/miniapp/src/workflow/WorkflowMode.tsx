@@ -76,7 +76,8 @@ type CreateMode = {
   name: string;
   subtitle: string;
   description?: string;
-  estimateCredits?: number;
+  // Backend catalog display hint only; exact request cost comes from backendEstimate.
+  catalogEstimateCredits?: number;
   color: string;
   glow: string;
   placeholders: string[];
@@ -166,7 +167,7 @@ function createModeFromImageItem(model: ModelCatalogItem): CreateMode {
     name: model.name,
     subtitle: model.description || copy.subtitle,
     description: model.description,
-    estimateCredits: model.estimate_credits,
+    catalogEstimateCredits: model.estimate_credits,
     qualityOptions: model.quality_options?.filter(Boolean),
     defaultQuality: model.default_quality,
     supportsReferenceImage: model.supports_reference_image || copy.supportsReferenceImage,
@@ -238,7 +239,7 @@ function createModeFromVideoItem(route: ModelCatalogItem): CreateMode {
     name: route.name || copy.name,
     subtitle: route.description || copy.subtitle,
     description: route.description,
-    estimateCredits: route.estimate_credits,
+    catalogEstimateCredits: route.estimate_credits,
     durationOptions: durations,
     defaultDurationSec: route.default_duration_sec ?? durations[0] ?? DEFAULT_VIDEO_DURATION_SEC,
     aspectRatioOptions: aspectRatios,
@@ -412,9 +413,9 @@ export function WorkflowMode({
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
   const [imageQuality, setImageQuality] = useState("");
   const [prompt, setPrompt] = useState("");
-  const [estimate, setEstimate] = useState<EstimateResponse | null>(null);
-  const [estimateLoading, setEstimateLoading] = useState(false);
-  const [estimateError, setEstimateError] = useState<string | null>(null);
+  const [backendEstimate, setBackendEstimate] = useState<EstimateResponse | null>(null);
+  const [backendEstimateLoading, setBackendEstimateLoading] = useState(false);
+  const [backendEstimateError, setBackendEstimateError] = useState<string | null>(null);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] =
@@ -473,12 +474,14 @@ export function WorkflowMode({
   const modelSelected = Boolean(activeCreateModel && activeCreateModel.modalityId === modalityId);
   const trimmedPrompt = prompt.trim();
   const promptTooLong = prompt.length > PROMPT_LIMIT;
+  // Submit gating must use backend /miniapp/estimate, never catalog hints.
+  const hasBackendEnoughCredits = backendEstimate?.enough_credits === true;
   const canSubmit =
     !!trimmedPrompt &&
     !promptTooLong &&
     modelSelected &&
     (!activeCreateModel?.requiresStartImage || referenceArtifactIds.length > 0) &&
-    estimate?.enough_credits === true &&
+    hasBackendEnoughCredits &&
     !referenceUploading &&
     !submitting;
 
@@ -575,15 +578,15 @@ export function WorkflowMode({
 
   useEffect(() => {
     const value = prompt.trim();
-    setEstimate(null);
-    setEstimateError(null);
+    setBackendEstimate(null);
+    setBackendEstimateError(null);
     if (!value || promptTooLong || !modelSelected || !activeCreateModel) {
-      setEstimateLoading(false);
+      setBackendEstimateLoading(false);
       return;
     }
     let cancelled = false;
     const timer = window.setTimeout(() => {
-      setEstimateLoading(true);
+      setBackendEstimateLoading(true);
       estimateJob({
         operation: currentModality.operation,
         prompt: value,
@@ -595,14 +598,14 @@ export function WorkflowMode({
       })
         .then((data) => {
           if (cancelled) return;
-          setEstimate(data);
+          setBackendEstimate(data);
         })
         .catch((error) => {
           if (cancelled) return;
-          setEstimateError(apiUserMessage(error));
+          setBackendEstimateError(apiUserMessage(error));
         })
         .finally(() => {
-          if (!cancelled) setEstimateLoading(false);
+          if (!cancelled) setBackendEstimateLoading(false);
         });
     }, ESTIMATE_DEBOUNCE_MS);
     return () => {
@@ -740,8 +743,8 @@ export function WorkflowMode({
     if (createModel?.modalityId === "image") {
       setImageQuality(defaultImageQualityForModel(createModel));
     }
-    setEstimate(null);
-    setEstimateError(null);
+    setBackendEstimate(null);
+    setBackendEstimateError(null);
   }, [clearReferenceItems, createModes]);
 
   function selectCreateModel(mode: CreateMode) {
@@ -757,8 +760,8 @@ export function WorkflowMode({
     if (mode.modalityId === "image") {
       setImageQuality(defaultImageQualityForModel(mode));
     }
-    setEstimate(null);
-    setEstimateError(null);
+    setBackendEstimate(null);
+    setBackendEstimateError(null);
     setSubmitError(null);
   }
 
@@ -827,8 +830,8 @@ export function WorkflowMode({
     clearResultMedia();
     setPrompt("");
     setSubmitError(null);
-    setEstimate(null);
-    setEstimateError(null);
+    setBackendEstimate(null);
+    setBackendEstimateError(null);
     setActiveJobId(null);
     flowReturnScreenRef.current = "home";
     setScreen("home");
@@ -1063,7 +1066,7 @@ export function WorkflowMode({
                         <strong>{item.name}</strong>
                         <small>{item.description || item.subtitle}</small>
                       </span>
-                      {item.estimateCredits ? <em>{formatCredits(item.estimateCredits)}</em> : null}
+                      {item.catalogEstimateCredits ? <em>{formatCredits(item.catalogEstimateCredits)}</em> : null}
                     </button>
                   );
                 })}
@@ -1250,10 +1253,10 @@ export function WorkflowMode({
                       background: `linear-gradient(135deg, ${activeColor}1e, ${activeColor}0e)`,
                     }}
                   >
-                    {estimateLoading
+                    {backendEstimateLoading
                       ? "..."
-                      : estimate
-                        ? formatCredits(estimate.cost_estimate)
+                      : backendEstimate
+                        ? formatCredits(backendEstimate.cost_estimate)
                         : "—"}
                   </span>
                   <span className="create-prompt__model">{activeModelName}</span>
@@ -1286,10 +1289,10 @@ export function WorkflowMode({
               </div>
             </div>
 
-            {estimate && !estimate.enough_credits && (
+            {backendEstimate && !backendEstimate.enough_credits && (
               <p className="field-note is-warn">Недостаточно кредитов для запуска</p>
             )}
-            {estimateError && <p className="field-note is-warn">{estimateError}</p>}
+            {backendEstimateError && <p className="field-note is-warn">{backendEstimateError}</p>}
             {submitError && <div className="workflow-error">{submitError}</div>}
             {promptTooLong && (
               <p className="field-note is-warn">

@@ -24,18 +24,22 @@ type listResponse[T any] struct {
 	Pagination pagination `json:"pagination"`
 }
 
-// CreateJobRequest is the body accepted by POST /miniapp/jobs.
+// CreateJobRequest is the public body accepted by POST /miniapp/jobs. It has
+// no price, cost, provider, provider_cost, multiplier or provider-native model
+// fields; backend pricing and provider resolution stay server-owned.
 type CreateJobRequest struct {
 	// Operation is the AI operation to perform.
 	// Allowed values: "text_generate", "image_generate", "video_generate".
 	Operation string `json:"operation"`
 	// Prompt is the user's input text for the generation.
 	Prompt string `json:"prompt"`
-	// ModelID is the optional user-selected model. It is validated server-side
-	// by operation and is never trusted for provider choice or pricing.
+	// ModelID is the optional public product model id. It is validated
+	// server-side by operation and is never trusted for provider choice,
+	// provider-native model selection or pricing.
 	ModelID string `json:"model_id,omitempty"`
 	// VideoRouteAlias is a public product route alias. Backend resolves it to
-	// provider/model/cost; provider-native ids and prices are never accepted.
+	// provider/model/cost internally; provider-native ids and prices are never
+	// accepted in client JSON.
 	VideoRouteAlias string `json:"video_route_alias,omitempty"`
 	// ImageQuality is a public quality alias from /miniapp/model-catalog. The
 	// backend validates it against the selected image model before pricing.
@@ -73,6 +77,9 @@ type ClientEventRequest struct {
 	DurationMS int64 `json:"duration_ms,omitempty"`
 }
 
+// miniAppJobParams is an internal persisted job payload. It may carry
+// backend-owned provider routing data for workers, but newJobDTO must not echo
+// those fields back through public Mini App responses.
 type miniAppJobParams struct {
 	Prompt               string                    `json:"prompt"`
 	ModelID              string                    `json:"model_id,omitempty"`
@@ -91,6 +98,9 @@ type miniAppJobParams struct {
 	AspectRatio          string                    `json:"aspect_ratio,omitempty"`
 }
 
+// VideoRouteDTO is a public Mini App catalog video route. EstimateCredits is
+// only a backend-provided display hint; clients must use /miniapp/estimate for
+// the exact request cost.
 type VideoRouteDTO struct {
 	Type                   string   `json:"type,omitempty"`
 	Alias                  string   `json:"alias"`
@@ -109,6 +119,9 @@ type VideoRouteDTO struct {
 	MaxReferenceImages     int      `json:"max_reference_images,omitempty"`
 }
 
+// ImageModelDTO is a public Mini App catalog image model. EstimateCredits is
+// only a backend-provided display hint; clients must use /miniapp/estimate for
+// the exact request cost.
 type ImageModelDTO struct {
 	Type                   string   `json:"type,omitempty"`
 	ID                     string   `json:"id"`
@@ -122,6 +135,9 @@ type ImageModelDTO struct {
 	MaxReferenceImages     int      `json:"max_reference_images,omitempty"`
 }
 
+// ModelCatalogItemDTO is the unified public catalog item returned to Mini App.
+// It exposes estimate_credits only as a backend-provided display hint and never
+// exposes provider, floor, multiplier, provider cost or provider-native ids.
 type ModelCatalogItemDTO struct {
 	Type                   string   `json:"type"`
 	ID                     string   `json:"id"`
@@ -143,8 +159,9 @@ type ModelCatalogItemDTO struct {
 	MaxReferenceImages     int      `json:"max_reference_images,omitempty"`
 }
 
-// EstimateDTO is returned by POST /miniapp/estimate. It exposes only
-// backend-owned cost and balance information, never provider details.
+// EstimateDTO is returned by POST /miniapp/estimate. cost_estimate is the exact
+// backend-owned price for the normalized request; provider details, floors,
+// multipliers and provider-native ids stay private.
 type EstimateDTO struct {
 	Operation       string `json:"operation"`
 	ModelID         string `json:"model_id,omitempty"`

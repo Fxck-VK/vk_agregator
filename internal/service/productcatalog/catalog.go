@@ -30,10 +30,12 @@ type Catalog struct {
 }
 
 type ImageModel struct {
-	Type                   string   `json:"type"`
-	ID                     string   `json:"id"`
-	Name                   string   `json:"name"`
-	Description            string   `json:"description,omitempty"`
+	Type        string `json:"type"`
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	// EstimateCredits is a backend-computed display hint for catalog UI only.
+	// Clients must call the estimate endpoint before paid submission.
 	EstimateCredits        int64    `json:"estimate_credits,omitempty"`
 	Enabled                bool     `json:"enabled"`
 	QualityOptions         []string `json:"quality_options,omitempty"`
@@ -43,10 +45,12 @@ type ImageModel struct {
 }
 
 type VideoRoute struct {
-	Type                   string   `json:"type"`
-	Alias                  string   `json:"alias"`
-	Name                   string   `json:"name"`
-	Description            string   `json:"description,omitempty"`
+	Type        string `json:"type"`
+	Alias       string `json:"alias"`
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	// EstimateCredits is a backend-computed display hint for catalog UI only.
+	// Clients must call the estimate endpoint before paid submission.
 	EstimateCredits        int64    `json:"estimate_credits,omitempty"`
 	Enabled                bool     `json:"enabled"`
 	AllowedDurationsSec    []int    `json:"allowed_durations_sec,omitempty"`
@@ -61,11 +65,14 @@ type VideoRoute struct {
 }
 
 type Item struct {
-	Type                   string   `json:"type"`
-	ID                     string   `json:"id"`
-	Alias                  string   `json:"alias,omitempty"`
-	Name                   string   `json:"name"`
-	Description            string   `json:"description,omitempty"`
+	Type        string `json:"type"`
+	ID          string `json:"id"`
+	Alias       string `json:"alias,omitempty"`
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	// EstimateCredits is the only generation price hint exposed in the public
+	// catalog. Provider cost, floors, multipliers and provider-native ids stay
+	// out of this DTO.
 	EstimateCredits        int64    `json:"estimate_credits,omitempty"`
 	Enabled                bool     `json:"enabled"`
 	QualityOptions         []string `json:"quality_options,omitempty"`

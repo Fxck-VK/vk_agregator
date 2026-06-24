@@ -16,7 +16,9 @@ export interface Job {
   model_name?: string;
   video_route_alias?: string;
   image_quality?: string;
+  /** Backend-owned job estimate for display/history only. */
   cost_estimate: number;
+  /** Backend-owned captured credits for display/history only. */
   cost_captured: number;
   output_artifact_ids: string[];
   error_code?: string;
@@ -24,7 +26,7 @@ export interface Job {
   updated_at: string;
 }
 
-/** Mirrors internal/adapter/inbound/miniapp CreateJobRequest */
+/** Public CreateJobRequest: no price/cost/provider/provider_cost/multiplier fields. */
 export interface CreateJobInput {
   operation: string;
   prompt: string;
@@ -63,7 +65,7 @@ export interface CreateJobOptions {
   idempotencyKey: string;
 }
 
-/** Mirrors internal/adapter/inbound/miniapp Estimate request/response */
+/** Public estimate request: no price/cost/provider/provider_cost/multiplier fields. */
 export interface EstimateInput {
   operation: string;
   prompt: string;
@@ -80,17 +82,20 @@ export interface EstimateResponse {
   model_name?: string;
   video_route_alias?: string;
   image_quality?: string;
+  /** Exact backend-owned cost for this normalized request. */
   cost_estimate: number;
   balance_credits: number;
   enough_credits: boolean;
 }
 
+/** Public catalog item: estimate_credits is a backend display hint only. */
 export interface ModelCatalogItem {
   type: "image" | "video";
   id: string;
   alias?: string;
   name: string;
   description?: string;
+  /** Backend-provided display hint; not a frontend pricing source. */
   estimate_credits?: number;
   enabled: boolean;
   quality_options?: string[];
@@ -813,7 +818,7 @@ export async function createJob(input: CreateJobInput, options: CreateJobOptions
     headers: {
       "X-Idempotency-Key": options.idempotencyKey,
     },
-    body: JSON.stringify(input),
+    body: serializeGenerationRequest(input),
   });
 }
 
@@ -878,7 +883,19 @@ export async function estimateJob(input: EstimateInput): Promise<EstimateRespons
   validateVideoRouteAlias(input.video_route_alias);
   return request<EstimateResponse>("/miniapp/estimate", {
     method: "POST",
-    body: JSON.stringify(input),
+    body: serializeGenerationRequest(input),
+  });
+}
+
+function serializeGenerationRequest(input: CreateJobInput | EstimateInput): string {
+  return JSON.stringify({
+    operation: input.operation,
+    prompt: input.prompt,
+    model_id: input.model_id,
+    video_route_alias: input.video_route_alias,
+    image_quality: input.image_quality,
+    reference_artifact_ids: input.reference_artifact_ids,
+    duration_sec: input.duration_sec,
   });
 }
 
