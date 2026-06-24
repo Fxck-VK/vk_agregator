@@ -309,6 +309,9 @@ jobs:
             -e '/^OPENAI_TEXT_MODEL=/d' \
             -e '/^OPENAI_IMAGE_MODEL=/d' \
             -e '/^OPENAI_VIDEO_MODEL=/d' \
+            -e '/^RUNTIME_PRICING_DB_ENABLED=/d' \
+            -e '/^RUNTIME_PRICING_STATIC_FALLBACK_ENABLED=/d' \
+            -e '/^RUNTIME_PRICING_REFRESH_INTERVAL=/d' \
             "${raw_env}" > "${tmp_env}"
           {
             printf '\n'
@@ -318,6 +321,9 @@ jobs:
             printf 'PROVIDER_CHAIN=%s\n' "${provider_chain}"
             printf 'IMAGE_PROVIDER=\n'
             printf 'VIDEO_PROVIDER=\n'
+            printf 'RUNTIME_PRICING_DB_ENABLED=false\n'
+            printf 'RUNTIME_PRICING_STATIC_FALLBACK_ENABLED=true\n'
+            printf 'RUNTIME_PRICING_REFRESH_INTERVAL=0\n'
             printf 'GHCR_USERNAME=%s\n' "${GHCR_USERNAME}"
             printf 'GHCR_TOKEN=%s\n' "${GHCR_TOKEN}"
           } >> "${tmp_env}"
