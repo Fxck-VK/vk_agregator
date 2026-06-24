@@ -43,10 +43,11 @@ type Config struct {
 	VideoSeconds string
 	// VideoSize is the requested video resolution, e.g. 720x1280.
 	VideoSize string
-	// Prices are internal credit costs for routing/estimation.
-	TextPrice  int64
-	ImagePrice int64
-	VideoPrice int64
+	// Provider cost estimates are worker routing/telemetry inputs only. User
+	// generation pricing comes from pricingcatalog/billing snapshots.
+	TextProviderCostCredits  int64
+	ImageProviderCostCredits int64
+	VideoProviderCostCredits int64
 	// HTTPClient overrides the HTTP client (mainly for tests). Optional.
 	HTTPClient *http.Client
 }
@@ -92,14 +93,14 @@ func New(cfg Config) *Provider {
 	if cfg.VideoSize == "" {
 		cfg.VideoSize = "720x1280"
 	}
-	if cfg.TextPrice == 0 {
-		cfg.TextPrice = 1
+	if cfg.TextProviderCostCredits == 0 {
+		cfg.TextProviderCostCredits = 1
 	}
-	if cfg.ImagePrice == 0 {
-		cfg.ImagePrice = 10
+	if cfg.ImageProviderCostCredits == 0 {
+		cfg.ImageProviderCostCredits = 10
 	}
-	if cfg.VideoPrice == 0 {
-		cfg.VideoPrice = 50
+	if cfg.VideoProviderCostCredits == 0 {
+		cfg.VideoProviderCostCredits = 50
 	}
 	httpClient := cfg.HTTPClient
 	if httpClient == nil {
@@ -127,15 +128,16 @@ func (p *Provider) Capabilities(_ context.Context) ([]domain.Capability, error) 
 	}, nil
 }
 
-// Estimate returns the configured credit cost for the operation.
+// Estimate reports provider-side credits for worker routing and telemetry. It
+// must not be used as a user-facing generation price.
 func (p *Provider) Estimate(_ context.Context, req domain.ProviderRequest) (domain.CostEstimate, error) {
 	switch req.Operation {
 	case domain.OperationTextGenerate:
-		return estimate(p.cfg.TextPrice), nil
+		return estimate(p.cfg.TextProviderCostCredits), nil
 	case domain.OperationImageGenerate:
-		return estimate(p.cfg.ImagePrice), nil
+		return estimate(p.cfg.ImageProviderCostCredits), nil
 	case domain.OperationVideoGenerate:
-		return estimate(p.cfg.VideoPrice), nil
+		return estimate(p.cfg.VideoProviderCostCredits), nil
 	default:
 		return domain.CostEstimate{}, &Error{Class: domain.ProviderErrUnsupportedCapab, Message: string(req.Operation)}
 	}

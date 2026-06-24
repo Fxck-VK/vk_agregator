@@ -34,6 +34,7 @@ import (
 	"vk-ai-aggregator/internal/platform/readiness"
 	"vk-ai-aggregator/internal/platform/tracing"
 	"vk-ai-aggregator/internal/service/joborchestrator"
+	"vk-ai-aggregator/internal/service/pricingcatalog"
 	"vk-ai-aggregator/internal/service/productcatalog"
 	"vk-ai-aggregator/internal/service/videorouter"
 )
@@ -84,35 +85,71 @@ func main() {
 		_ = rdb.Close()
 	}()
 
-	mediaQueueGuard := redisqueue.NewBackpressureGuard(rdb, cfg.WorkerGroup, cfg.MediaQueueDegradeThreshold)
-	videoRouteResolver, err := videoRouteResolverFromConfig(cfg)
+	staticPricingCatalog, err := pricingcatalog.NewStaticCatalog()
 	if err != nil {
-		logger.Error("video route catalog wiring failed", logging.ErrorAttr(err))
+		logger.Error("pricing catalog wiring failed", logging.ErrorAttr(err))
 		os.Exit(1)
 	}
+	pricingCache := pricingcatalog.NewRuntimeCatalogCache(
+		postgres.NewRuntimePricingRepository(pool),
+		staticPricingCatalog,
+		pricingcatalog.RuntimeCatalogConfig{
+			DBEnabled:             cfg.RuntimePricingDBEnabled,
+			StaticFallbackEnabled: cfg.RuntimePricingStaticFallbackEnabled,
+		},
+	)
+	if err := pricingCache.Load(ctx); err != nil {
+		logger.Error("runtime pricing load failed", logging.ErrorAttr(err))
+		os.Exit(1)
+	}
+	pricingCatalog, pricingSelection, err := pricingCache.Current()
+	if err != nil {
+		logger.Error("runtime pricing cache unavailable", logging.ErrorAttr(err))
+		os.Exit(1)
+	}
+	if cfg.RuntimePricingRefreshInterval > 0 {
+		stopPricingRefresh := pricingCache.StartAutoRefresh(ctx, cfg.RuntimePricingRefreshInterval, func(err error) {
+			logger.Error("runtime pricing refresh failed", logging.ErrorAttr(err))
+		})
+		defer stopPricingRefresh()
+	}
+	logger.Info("runtime pricing loaded",
+		"source", pricingSelection.Source,
+		"version", pricingSelection.Version,
+		"static_fallback", pricingSelection.StaticFallback,
+	)
+	runtimeCatalog, err := productcatalog.FromConfig(cfg, pricingCatalog)
+	if err != nil {
+		logger.Error("product catalog wiring failed", logging.ErrorAttr(err))
+		os.Exit(1)
+	}
+
+	mediaQueueGuard := redisqueue.NewBackpressureGuard(rdb, cfg.WorkerGroup, cfg.MediaQueueDegradeThreshold)
+	videoRouteResolver := videoRouteResolverFromCatalog(runtimeCatalog.VideoRouteCatalog)
 	core, err := apiapp.NewSharedCore(pool, cfg, apiapp.WithOrchestratorOptions(
 		joborchestrator.WithMaxActiveVideoJobsPerUser(cfg.MediaMaxActiveVideoJobsPerUser),
 		joborchestrator.WithCapacityGuard(mediaCapacityGuard(mediaQueueGuard)),
 		joborchestrator.WithVideoRouteResolver(videoRouteResolver),
-	))
+	), apiapp.WithPricingCatalog(pricingCatalog))
 	if err != nil {
 		logger.Error("api core wiring failed", logging.ErrorAttr(err))
 		os.Exit(1)
 	}
 	vkHandler := vkbot.NewHandler(ctx, cfg, vkbot.Deps{
-		Redis:        rdb,
-		Idempotency:  core.Idempotency,
-		Inbound:      core.Inbound,
-		Users:        core.Users,
-		Jobs:         core.Jobs,
-		Commands:     core.Commands,
-		Billing:      core.Billing,
-		Payment:      core.Payment,
-		Referrals:    core.Referrals,
-		Artifacts:    core.Artifacts,
-		Orchestrator: core.Orchestrator,
-		Router:       core.Router,
-		Logger:       logger,
+		Redis:          rdb,
+		Idempotency:    core.Idempotency,
+		Inbound:        core.Inbound,
+		Users:          core.Users,
+		Jobs:           core.Jobs,
+		Commands:       core.Commands,
+		Billing:        core.Billing,
+		Payment:        core.Payment,
+		Referrals:      core.Referrals,
+		Artifacts:      core.Artifacts,
+		Orchestrator:   core.Orchestrator,
+		Router:         core.Router,
+		RuntimeCatalog: runtimeCatalog,
+		Logger:         logger,
 	})
 
 	admin := adminapi.NewHandler(adminapi.Config{
@@ -145,17 +182,18 @@ func main() {
 	})
 
 	miniapp := miniappapp.NewHandler(ctx, cfg, miniappapp.Deps{
-		Users:         core.Users,
-		Jobs:          core.Jobs,
-		Conversations: core.Conversations,
-		Artifacts:     core.Artifacts,
-		Moderation:    core.Moderation,
-		Billing:       core.Billing,
-		BillingRepo:   core.BillingRepo,
-		Payment:       core.Payment,
-		Referrals:     core.Referrals,
-		Orchestrator:  core.Orchestrator,
-		Logger:        logger,
+		Users:          core.Users,
+		Jobs:           core.Jobs,
+		Conversations:  core.Conversations,
+		Artifacts:      core.Artifacts,
+		Moderation:     core.Moderation,
+		Billing:        core.Billing,
+		BillingRepo:    core.BillingRepo,
+		Payment:        core.Payment,
+		Referrals:      core.Referrals,
+		Orchestrator:   core.Orchestrator,
+		RuntimeCatalog: runtimeCatalog,
+		Logger:         logger,
 	})
 
 	// Per-IP rate limiting protects the webhook intake from flooding/abuse
@@ -198,11 +236,7 @@ func main() {
 	logger.Info("api stopped")
 }
 
-func videoRouteResolverFromConfig(cfg config.Config) (joborchestrator.VideoRouteResolver, error) {
-	catalog, err := productcatalog.VideoRouteCatalogFromConfig(cfg)
-	if err != nil {
-		return nil, err
-	}
+func videoRouteResolverFromCatalog(catalog *videorouter.Catalog) joborchestrator.VideoRouteResolver {
 	return joborchestrator.VideoRouteResolverFunc(func(ctx context.Context, in joborchestrator.VideoRouteCheckInput) (joborchestrator.VideoRouteResolution, error) {
 		resolution, err := catalog.Resolve(ctx, videorouter.Request{
 			Source:           in.Source,
@@ -220,7 +254,7 @@ func videoRouteResolverFromConfig(cfg config.Config) (joborchestrator.VideoRoute
 			Snapshot:            resolution.Snapshot,
 			InternalCostCredits: resolution.InternalCostCredits,
 		}, nil
-	}), nil
+	})
 }
 
 func mediaCapacityGuard(queueGuard *redisqueue.BackpressureGuard) joborchestrator.CapacityGuard {

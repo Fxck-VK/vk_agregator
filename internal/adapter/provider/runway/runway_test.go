@@ -128,7 +128,7 @@ func TestEstimateUsesRateAndRouteSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("estimate: %v", err)
 	}
-	if estimate.AmountCredits != 70 || estimate.Estimated {
+	if estimate.AmountCredits != 35 || estimate.Estimated {
 		t.Fatalf("bad estimate: %+v", estimate)
 	}
 
@@ -149,7 +149,7 @@ func TestEstimateUsesRateAndRouteSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("snapshot estimate: %v", err)
 	}
-	if estimate.AmountCredits != 70 || estimate.Estimated {
+	if estimate.AmountCredits != 35 || estimate.Estimated {
 		t.Fatalf("bad snapshot estimate: %+v", estimate)
 	}
 }

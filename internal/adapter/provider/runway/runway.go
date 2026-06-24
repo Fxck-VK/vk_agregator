@@ -23,7 +23,6 @@ const (
 	ModelGen4Turbo = "gen4_turbo"
 
 	gen4TurboCreditsPerSecond int64 = 5
-	productPriceMultiplier          = 2
 
 	maxReferenceImages = 1
 )
@@ -84,8 +83,9 @@ func (p *Provider) Capabilities(context.Context) ([]domain.Capability, error) {
 	}, nil
 }
 
-// Estimate returns route snapshot pricing when available, otherwise the
-// official Gen-4 Turbo rate with the product multiplier.
+// Estimate reports provider-side credits for worker routing, media safety caps
+// and telemetry. User billing must use pricingcatalog snapshots, never adapter
+// estimates.
 func (p *Provider) Estimate(_ context.Context, req domain.ProviderRequest) (domain.CostEstimate, error) {
 	snapshot, hasSnapshot, err := resolvedRouteSnapshot(req.Params)
 	if err != nil {
@@ -95,16 +95,16 @@ func (p *Provider) Estimate(_ context.Context, req domain.ProviderRequest) (doma
 		if snapshot.Provider != domain.ProviderRunway || strings.TrimSpace(snapshot.ProviderModelID) != strings.TrimSpace(req.ModelCode) {
 			return domain.CostEstimate{}, &Error{Class: domain.ProviderErrInvalidRequest, Message: "resolved route snapshot does not match Runway request"}
 		}
-		if snapshot.InternalCostCredits <= 0 {
-			return domain.CostEstimate{}, &Error{Class: domain.ProviderErrInvalidRequest, Message: "resolved route snapshot cost is unavailable"}
+		if snapshot.ProviderCostCredits <= 0 {
+			return domain.CostEstimate{}, &Error{Class: domain.ProviderErrInvalidRequest, Message: "resolved route snapshot provider cost is unavailable"}
 		}
-		return domain.CostEstimate{AmountCredits: snapshot.InternalCostCredits, Currency: "credits", Estimated: false}, nil
+		return domain.CostEstimate{AmountCredits: snapshot.ProviderCostCredits, Currency: "credits", Estimated: false}, nil
 	}
 	if err := validateVideoShape(req); err != nil {
 		return domain.CostEstimate{}, err
 	}
 	return domain.CostEstimate{
-		AmountCredits: int64(effectiveDuration(req.DurationSec)) * gen4TurboCreditsPerSecond * productPriceMultiplier,
+		AmountCredits: int64(effectiveDuration(req.DurationSec)) * gen4TurboCreditsPerSecond,
 		Currency:      "credits",
 		Estimated:     false,
 	}, nil

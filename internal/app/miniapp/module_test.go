@@ -8,6 +8,7 @@ import (
 	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/platform/config"
 	"vk-ai-aggregator/internal/service/modelcatalog"
+	"vk-ai-aggregator/internal/service/pricingcatalog"
 	"vk-ai-aggregator/internal/service/productcatalog"
 )
 
@@ -23,7 +24,7 @@ func TestMiniAppImageModelsExposeOnlyPublicCatalogFields(t *testing.T) {
 		FeatureImageModelNanoBananaProEnabled: true,
 		FeatureImageModelGPTImage2Enabled:     true,
 	}
-	runtimeCatalog, err := productcatalog.FromConfig(cfg)
+	runtimeCatalog, err := productcatalog.FromConfig(cfg, staticPricingCatalog(t))
 	if err != nil {
 		t.Fatalf("build product catalog: %v", err)
 	}
@@ -44,9 +45,16 @@ func TestMiniAppImageModelsExposeOnlyPublicCatalogFields(t *testing.T) {
 			}
 		}
 		switch model.ID {
-		case modelcatalog.MiniAppImageNanoBanana2, modelcatalog.MiniAppImageNanoBananaPro, modelcatalog.MiniAppImageGPTImage2:
+		case modelcatalog.MiniAppImageNanoBanana2, modelcatalog.MiniAppImageGPTImage2:
 			if model.DefaultQuality != modelcatalog.ImageQuality1K || len(model.QualityOptions) != 3 {
 				t.Fatalf("missing image quality options: %+v", model)
+			}
+			sawQualityOptions[model.ID] = true
+		case modelcatalog.MiniAppImageNanoBananaPro:
+			if model.DefaultQuality != modelcatalog.ImageQuality1K || len(model.QualityOptions) != 2 ||
+				model.QualityOptions[0] != modelcatalog.ImageQuality1K ||
+				model.QualityOptions[1] != modelcatalog.ImageQuality4K {
+				t.Fatalf("missing priced image quality options: %+v", model)
 			}
 			sawQualityOptions[model.ID] = true
 		}
@@ -71,7 +79,7 @@ func TestMiniAppVideoRoutesExposeOnlyPublicCatalogFields(t *testing.T) {
 		PoYoBaseURL:                             "https://poyo.test",
 		FeatureVideoRouteKlingO3StandardEnabled: true,
 	}
-	runtimeCatalog, err := productcatalog.FromConfig(cfg)
+	runtimeCatalog, err := productcatalog.FromConfig(cfg, staticPricingCatalog(t))
 	if err != nil {
 		t.Fatalf("build product catalog: %v", err)
 	}
@@ -92,4 +100,13 @@ func TestMiniAppVideoRoutesExposeOnlyPublicCatalogFields(t *testing.T) {
 			t.Fatalf("video route leaked private field %q: %+v", private, route)
 		}
 	}
+}
+
+func staticPricingCatalog(t *testing.T) *pricingcatalog.Catalog {
+	t.Helper()
+	catalog, err := pricingcatalog.NewStaticCatalog()
+	if err != nil {
+		t.Fatalf("build pricing catalog: %v", err)
+	}
+	return catalog
 }

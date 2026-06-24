@@ -6,6 +6,7 @@ package productcatalog
 import (
 	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/service/modelcatalog"
+	"vk-ai-aggregator/internal/service/pricingcatalog"
 	"vk-ai-aggregator/internal/service/videorouter"
 )
 
@@ -21,6 +22,7 @@ type Config struct {
 	ImageProviderReady map[domain.ProviderName]bool
 	EnabledImageModels map[string]bool
 	VideoRoutes        []videorouter.PublicRoute
+	PricingCatalog     *pricingcatalog.Catalog
 }
 
 type Catalog struct {
@@ -90,7 +92,7 @@ type Item struct {
 
 func New(cfg Config) *Catalog {
 	images := imageModels(cfg)
-	videos := videoRoutes(cfg.VideoRoutes)
+	videos := videoRoutes(cfg.VideoRoutes, cfg.PricingCatalog)
 	items := make([]Item, 0, len(images)+len(videos))
 	for _, model := range images {
 		items = append(items, itemFromImage(model))
@@ -139,6 +141,9 @@ func (c *Catalog) Items() []Item {
 }
 
 func imageModels(cfg Config) []ImageModel {
+	if cfg.PricingCatalog == nil {
+		return nil
+	}
 	models := modelcatalog.ListMiniAppModels(domain.OperationImageGenerate)
 	out := make([]ImageModel, 0, len(models))
 	for _, model := range models {
@@ -152,15 +157,21 @@ func imageModels(cfg Config) []ImageModel {
 		if modelID == "" {
 			continue
 		}
+		qualityOptions := pricedImageQualityOptions(cfg.PricingCatalog, modelID, imageQualityOptions(model.ModelID))
+		defaultQuality := pricedImageDefaultQuality(cfg.PricingCatalog, modelID, imageDefaultQuality(model.ModelID), qualityOptions)
+		estimateCredits, ok := displayImageEstimateCredits(cfg.PricingCatalog, modelID, defaultQuality)
+		if !ok {
+			continue
+		}
 		out = append(out, ImageModel{
 			Type:                   TypeImage,
 			ID:                     modelID,
 			Name:                   model.ModelName,
 			Description:            imageDescription(model.ModelID),
-			EstimateCredits:        modelcatalog.EstimateInternalCostCredits(model),
+			EstimateCredits:        estimateCredits,
 			Enabled:                true,
-			QualityOptions:         imageQualityOptions(model.ModelID),
-			DefaultQuality:         imageDefaultQuality(model.ModelID),
+			QualityOptions:         qualityOptions,
+			DefaultQuality:         defaultQuality,
 			SupportsReferenceImage: model.SupportsReferenceImage,
 			MaxReferenceImages:     model.MaxReferenceImages,
 		})
@@ -168,21 +179,31 @@ func imageModels(cfg Config) []ImageModel {
 	return out
 }
 
-func videoRoutes(routes []videorouter.PublicRoute) []VideoRoute {
+func videoRoutes(routes []videorouter.PublicRoute, pricingCatalog *pricingcatalog.Catalog) []VideoRoute {
+	if pricingCatalog == nil {
+		return nil
+	}
 	out := make([]VideoRoute, 0, len(routes))
 	for _, route := range routes {
+		defaultResolution := route.DefaultResolution
+		pricedDurations := pricedVideoDurations(pricingCatalog, route, defaultResolution)
+		defaultDuration := pricedVideoDefaultDuration(route.DefaultDurationSec, pricedDurations)
+		estimateCredits, ok := displayVideoEstimateCredits(pricingCatalog, route.Alias, defaultResolution, defaultDuration)
+		if !ok {
+			continue
+		}
 		out = append(out, VideoRoute{
 			Type:                   TypeVideo,
 			Alias:                  string(route.Alias),
 			Name:                   videoName(route.Alias),
 			Description:            videoDescription(route.Alias),
-			EstimateCredits:        route.EstimateCredits,
+			EstimateCredits:        estimateCredits,
 			Enabled:                true,
-			AllowedDurationsSec:    append([]int(nil), route.AllowedDurationsSec...),
+			AllowedDurationsSec:    pricedDurations,
 			AllowedResolutions:     append([]string(nil), route.AllowedResolutions...),
 			AllowedAspectRatios:    append([]string(nil), route.AllowedAspectRatios...),
-			DefaultDurationSec:     route.DefaultDurationSec,
-			DefaultResolution:      route.DefaultResolution,
+			DefaultDurationSec:     defaultDuration,
+			DefaultResolution:      defaultResolution,
 			DefaultAspectRatio:     route.DefaultAspectRatio,
 			RequiresStartImage:     route.RequiresStartImage,
 			SupportsReferenceImage: route.SupportsReferenceImage,
@@ -190,6 +211,77 @@ func videoRoutes(routes []videorouter.PublicRoute) []VideoRoute {
 		})
 	}
 	return out
+}
+
+func pricedImageQualityOptions(catalog *pricingcatalog.Catalog, modelID string, options []string) []string {
+	out := make([]string, 0, len(options))
+	for _, option := range options {
+		if _, ok := displayImageEstimateCredits(catalog, modelID, option); ok {
+			out = append(out, option)
+		}
+	}
+	return out
+}
+
+func pricedImageDefaultQuality(catalog *pricingcatalog.Catalog, modelID, configured string, options []string) string {
+	if configured != "" {
+		if _, ok := displayImageEstimateCredits(catalog, modelID, configured); ok {
+			return configured
+		}
+	}
+	if len(options) > 0 {
+		return options[0]
+	}
+	return ""
+}
+
+func displayImageEstimateCredits(catalog *pricingcatalog.Catalog, modelID, quality string) (int64, bool) {
+	if catalog == nil {
+		return 0, false
+	}
+	credits, err := catalog.DisplayEstimateCredits(pricingcatalog.ProductKey{
+		Operation:    domain.OperationImageGenerate,
+		Modality:     domain.ModalityImage,
+		ImageModelID: modelID,
+		Quality:      quality,
+	})
+	return credits, err == nil && credits > 0
+}
+
+func pricedVideoDurations(catalog *pricingcatalog.Catalog, route videorouter.PublicRoute, defaultResolution string) []int {
+	out := make([]int, 0, len(route.AllowedDurationsSec))
+	for _, duration := range route.AllowedDurationsSec {
+		if _, ok := displayVideoEstimateCredits(catalog, route.Alias, defaultResolution, duration); ok {
+			out = append(out, duration)
+		}
+	}
+	return out
+}
+
+func pricedVideoDefaultDuration(configured int, durations []int) int {
+	for _, duration := range durations {
+		if duration == configured {
+			return configured
+		}
+	}
+	if len(durations) > 0 {
+		return durations[0]
+	}
+	return 0
+}
+
+func displayVideoEstimateCredits(catalog *pricingcatalog.Catalog, alias domain.VideoRouteAlias, resolution string, duration int) (int64, bool) {
+	if catalog == nil || duration <= 0 {
+		return 0, false
+	}
+	credits, err := catalog.DisplayEstimateCredits(pricingcatalog.ProductKey{
+		Operation:       domain.OperationVideoGenerate,
+		Modality:        domain.ModalityVideo,
+		VideoRouteAlias: alias,
+		Resolution:      resolution,
+		DurationSec:     duration,
+	})
+	return credits, err == nil && credits > 0
 }
 
 func imageDescription(modelID string) string {

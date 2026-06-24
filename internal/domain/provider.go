@@ -226,10 +226,13 @@ type ProviderTaskRef struct {
 	ExternalID string `json:"external_id"`
 }
 
-// CostEstimate is the normalized cost prediction for a provider request,
-// expressed in internal credits.
+// CostEstimate is a provider-bound prediction used by workers for routing,
+// safety caps and telemetry. It is not a user billing contract; user-facing
+// generation price must come from the backend pricing catalog snapshot.
 type CostEstimate struct {
-	// AmountCredits is the predicted cost in internal credits.
+	// AmountCredits is the predicted provider-side cost in the unit named by
+	// Currency. Legacy providers may still report generic "credits" until their
+	// config cleanup narrows the unit.
 	AmountCredits int64 `json:"amount_credits"`
 	// Currency is the unit of the estimate, normally "credits".
 	Currency string `json:"currency"`

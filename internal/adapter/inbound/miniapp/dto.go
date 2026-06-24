@@ -53,6 +53,9 @@ type CreateJobRequest struct {
 	// AspectRatio is backend-derived from trusted reference artifact metadata.
 	// It is never accepted from client JSON.
 	AspectRatio string `json:"-"`
+	// Resolution is backend-derived from the public route/model catalog. It is
+	// never accepted from client JSON.
+	Resolution string `json:"-"`
 }
 
 // ChatMessageRequest is the body accepted by POST /miniapp/chat/messages.

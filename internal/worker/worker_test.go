@@ -1341,9 +1341,9 @@ func TestProviderRegistryPrefersImageProvider(t *testing.T) {
 
 func TestProviderRegistryPrefersDeepInfraImageProvider(t *testing.T) {
 	deepInfraProvider := deepinfra.New(deepinfra.Config{
-		APIKey:     "test-key",
-		ImageModel: "ByteDance/Seedream-4.5",
-		ImagePrice: 99,
+		APIKey:                   "test-key",
+		ImageModel:               "ByteDance/Seedream-4.5",
+		ImageProviderCostCredits: 99,
 	})
 	reg := worker.NewRegistry(mock.New(), deepInfraProvider)
 	reg.PreferProvider(domain.ModalityImage, domain.ProviderDeepInfra)

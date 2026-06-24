@@ -14,6 +14,7 @@ import (
 	"vk-ai-aggregator/internal/service/billingservice"
 	"vk-ai-aggregator/internal/service/joborchestrator"
 	"vk-ai-aggregator/internal/service/outboxrelay"
+	"vk-ai-aggregator/internal/service/pricingcatalog"
 	"vk-ai-aggregator/internal/service/videorouter"
 )
 
@@ -62,13 +63,14 @@ func TestCreateJobHappyPath(t *testing.T) {
 	userID := uuid.New()
 
 	job, err := f.orch.CreateJob(ctx, joborchestrator.CreateJobInput{
-		UserID:         userID,
-		VKPeerID:       42,
-		CommandID:      uuid.New(),
-		Operation:      domain.OperationVideoGenerate,
-		Modality:       domain.ModalityVideo,
-		IdempotencyKey: "vk_job:1:e1",
-		CorrelationID:  "corr-1",
+		UserID:              userID,
+		VKPeerID:            42,
+		CommandID:           uuid.New(),
+		Operation:           domain.OperationVideoGenerate,
+		Modality:            domain.ModalityVideo,
+		IdempotencyKey:      "vk_job:1:e1",
+		CorrelationID:       "corr-1",
+		CostEstimateCredits: 50,
 	})
 	if err != nil {
 		t.Fatalf("create job: %v", err)
@@ -104,29 +106,93 @@ func TestCreateJobHappyPath(t *testing.T) {
 	}
 }
 
-func TestCreateJobUsesServerOwnedProviderCost(t *testing.T) {
+func TestCreateJobRejectsImageWithoutBackendPrice(t *testing.T) {
 	f := newFixture()
 	ctx := context.Background()
 
 	job, err := f.orch.CreateJob(ctx, joborchestrator.CreateJobInput{
-		UserID:                 uuid.New(),
-		CommandID:              uuid.New(),
-		Operation:              domain.OperationImageGenerate,
-		Modality:               domain.ModalityImage,
-		IdempotencyKey:         "miniapp_job:1:nano-banana-2",
-		ProviderCostCredits:    5,
-		PriceMultiplier:        2,
-		MaxInternalCostCredits: 20,
+		UserID:         uuid.New(),
+		CommandID:      uuid.New(),
+		Operation:      domain.OperationImageGenerate,
+		Modality:       domain.ModalityImage,
+		IdempotencyKey: "miniapp_job:1:nano-banana-2",
+	})
+	if !errors.Is(err, joborchestrator.ErrBackendPriceRequired) {
+		t.Fatalf("expected ErrBackendPriceRequired, got job=%+v err=%v", job, err)
+	}
+	if job != nil {
+		t.Fatalf("missing backend price must not create job, got %+v", job)
+	}
+	f.drain(t)
+	if f.pub.Len() != 0 {
+		t.Fatalf("missing backend price enqueued tasks, got %d", f.pub.Len())
+	}
+}
+
+func TestCreateJobUsesBackendCostEstimateOverride(t *testing.T) {
+	f := newFixture()
+	ctx := context.Background()
+
+	job, err := f.orch.CreateJob(ctx, joborchestrator.CreateJobInput{
+		UserID:              uuid.New(),
+		CommandID:           uuid.New(),
+		Operation:           domain.OperationImageGenerate,
+		Modality:            domain.ModalityImage,
+		IdempotencyKey:      "miniapp_job:1:priced-nano-banana-2",
+		CostEstimateCredits: 15,
 	})
 	if err != nil {
 		t.Fatalf("create job: %v", err)
 	}
-	if job.CostEstimate != 10 || job.CostReserved != 10 {
-		t.Fatalf("cost estimate/reserved = %d/%d, want 10/10", job.CostEstimate, job.CostReserved)
+	if job.CostEstimate != 15 || job.CostReserved != 15 {
+		t.Fatalf("cost estimate/reserved = %d/%d, want 15/15", job.CostEstimate, job.CostReserved)
 	}
-	f.drain(t)
-	if f.pub.Len() != 1 {
-		t.Fatalf("provider-cost image job should enqueue once, got %d tasks", f.pub.Len())
+}
+
+func TestCreateJobPersistsPricingSnapshotAndUsesSnapshotAmount(t *testing.T) {
+	f := newFixture()
+	ctx := context.Background()
+	catalog, err := pricingcatalog.NewStaticCatalog()
+	if err != nil {
+		t.Fatalf("new pricing catalog: %v", err)
+	}
+	snapshot, err := catalog.Snapshot(pricingcatalog.ProductKey{
+		Operation:    domain.OperationImageGenerate,
+		Modality:     domain.ModalityImage,
+		ImageModelID: pricingcatalog.PublicImageNanoBanana2,
+		Quality:      pricingcatalog.ImageQuality1K,
+	})
+	if err != nil {
+		t.Fatalf("snapshot: %v", err)
+	}
+
+	job, err := f.orch.CreateJob(ctx, joborchestrator.CreateJobInput{
+		UserID:          uuid.New(),
+		CommandID:       uuid.New(),
+		Operation:       domain.OperationImageGenerate,
+		Modality:        domain.ModalityImage,
+		IdempotencyKey:  "miniapp_job:1:priced-snapshot-nano-banana-2",
+		PricingSnapshot: snapshot,
+	})
+	if err != nil {
+		t.Fatalf("create job: %v", err)
+	}
+	if job.CostEstimate != snapshot.InternalCredits || job.CostReserved != snapshot.InternalCredits {
+		t.Fatalf("cost estimate/reserved = %d/%d, want %d/%d", job.CostEstimate, job.CostReserved, snapshot.InternalCredits, snapshot.InternalCredits)
+	}
+	if credits, ok := job.PricingSnapshotCredits(); !ok || credits != snapshot.InternalCredits {
+		t.Fatalf("pricing snapshot credits = %d/%v, want %d/true", credits, ok, snapshot.InternalCredits)
+	}
+	stored, err := f.jobs.GetByID(ctx, job.ID)
+	if err != nil {
+		t.Fatalf("get stored job: %v", err)
+	}
+	var storedSnapshot pricingcatalog.PricingSnapshot
+	if err := json.Unmarshal(stored.PricingSnapshot, &storedSnapshot); err != nil {
+		t.Fatalf("decode stored snapshot: %v", err)
+	}
+	if !storedSnapshot.Valid() || storedSnapshot.InternalCredits != snapshot.InternalCredits || storedSnapshot.Key != snapshot.Key {
+		t.Fatalf("unexpected stored snapshot: %+v", storedSnapshot)
 	}
 }
 
@@ -160,7 +226,7 @@ func TestCreateJobIdempotent(t *testing.T) {
 
 func TestCreateJobNonPositivePriceRejectedBeforePersistence(t *testing.T) {
 	f := newFixture(billingservice.WithPriceOverrides(map[string]int64{
-		string(domain.OperationImageGenerate): 0,
+		string(domain.OperationTextGenerate): 0,
 	}))
 	ctx := context.Background()
 	userID := uuid.New()
@@ -169,10 +235,10 @@ func TestCreateJobNonPositivePriceRejectedBeforePersistence(t *testing.T) {
 		UserID:         userID,
 		VKPeerID:       42,
 		CommandID:      uuid.New(),
-		Operation:      domain.OperationImageGenerate,
-		Modality:       domain.ModalityImage,
-		IdempotencyKey: "vk_job:1:free-image",
-		CorrelationID:  "corr-free-image",
+		Operation:      domain.OperationTextGenerate,
+		Modality:       domain.ModalityText,
+		IdempotencyKey: "vk_job:1:free-text",
+		CorrelationID:  "corr-free-text",
 	})
 	if !errors.Is(err, billingservice.ErrInvalidAmount) {
 		t.Fatalf("expected ErrInvalidAmount, got job=%+v err=%v", job, err)
@@ -199,11 +265,12 @@ func TestCreateJobInsufficientCredits(t *testing.T) {
 	ctx := context.Background()
 
 	job, err := f.orch.CreateJob(ctx, joborchestrator.CreateJobInput{
-		UserID:         uuid.New(),
-		CommandID:      uuid.New(),
-		Operation:      domain.OperationVideoGenerate,
-		Modality:       domain.ModalityVideo,
-		IdempotencyKey: "vk_job:1:poor",
+		UserID:              uuid.New(),
+		CommandID:           uuid.New(),
+		Operation:           domain.OperationVideoGenerate,
+		Modality:            domain.ModalityVideo,
+		IdempotencyKey:      "vk_job:1:poor",
+		CostEstimateCredits: 50,
 	})
 	if !errors.Is(err, domain.ErrInsufficientCredits) {
 		t.Fatalf("expected ErrInsufficientCredits, got %v", err)
@@ -226,11 +293,12 @@ func TestCreateJobCapacityGuardRejectsBeforePersistenceReservationAndOutbox(t *t
 	ctx := context.Background()
 
 	job, err := f.orch.CreateJob(ctx, joborchestrator.CreateJobInput{
-		UserID:         uuid.New(),
-		CommandID:      uuid.New(),
-		Operation:      domain.OperationVideoGenerate,
-		Modality:       domain.ModalityVideo,
-		IdempotencyKey: "vk_job:1:overloaded",
+		UserID:              uuid.New(),
+		CommandID:           uuid.New(),
+		Operation:           domain.OperationVideoGenerate,
+		Modality:            domain.ModalityVideo,
+		IdempotencyKey:      "vk_job:1:overloaded",
+		CostEstimateCredits: 50,
 	})
 	if !errors.Is(err, domain.ErrCapacityDegraded) {
 		t.Fatalf("expected ErrCapacityDegraded, got job=%+v err=%v", job, err)
@@ -291,7 +359,7 @@ func TestCreateJobVideoRouteValidatorRejectsBeforePersistenceReservationAndOutbo
 	}
 }
 
-func TestCreateJobResolvedVideoRouteUsesRouteEstimateBeforeReservation(t *testing.T) {
+func TestCreateJobResolvedVideoRouteUsesBackendEstimateBeforeReservation(t *testing.T) {
 	catalog := newRouteCatalogForOrchestratorTest(t)
 	f := newFixtureWithOrchestratorOptions([]joborchestrator.Option{
 		joborchestrator.WithVideoRouteResolver(routeResolverForTest(catalog)),
@@ -306,12 +374,13 @@ func TestCreateJobResolvedVideoRouteUsesRouteEstimateBeforeReservation(t *testin
 		"aspect_ratio":      "16:9",
 	})
 	job, err := f.orch.CreateJob(ctx, joborchestrator.CreateJobInput{
-		UserID:         uuid.New(),
-		CommandID:      uuid.New(),
-		Operation:      domain.OperationVideoGenerate,
-		Modality:       domain.ModalityVideo,
-		IdempotencyKey: "vk_job:1:route-expensive",
-		Params:         params,
+		UserID:              uuid.New(),
+		CommandID:           uuid.New(),
+		Operation:           domain.OperationVideoGenerate,
+		Modality:            domain.ModalityVideo,
+		IdempotencyKey:      "vk_job:1:route-expensive",
+		Params:              params,
+		CostEstimateCredits: 200,
 	})
 	if !errors.Is(err, domain.ErrInsufficientCredits) {
 		t.Fatalf("expected ErrInsufficientCredits, got job=%+v err=%v", job, err)
@@ -352,12 +421,13 @@ func TestCreateJobResolvedVideoRouteReservesResolvedAmount(t *testing.T) {
 		"aspect_ratio":      "16:9",
 	})
 	job, err := f.orch.CreateJob(ctx, joborchestrator.CreateJobInput{
-		UserID:         uuid.New(),
-		CommandID:      uuid.New(),
-		Operation:      domain.OperationVideoGenerate,
-		Modality:       domain.ModalityVideo,
-		IdempotencyKey: "vk_job:1:route-reserve",
-		Params:         params,
+		UserID:              uuid.New(),
+		CommandID:           uuid.New(),
+		Operation:           domain.OperationVideoGenerate,
+		Modality:            domain.ModalityVideo,
+		IdempotencyKey:      "vk_job:1:route-reserve",
+		Params:              params,
+		CostEstimateCredits: 200,
 	})
 	if err != nil {
 		t.Fatalf("create route job: %v", err)
@@ -390,11 +460,12 @@ func TestCreateJobActiveVideoLimitRejectsBeforeReservation(t *testing.T) {
 	}
 
 	job, err := f.orch.CreateJob(ctx, joborchestrator.CreateJobInput{
-		UserID:         userID,
-		CommandID:      uuid.New(),
-		Operation:      domain.OperationVideoGenerate,
-		Modality:       domain.ModalityVideo,
-		IdempotencyKey: "vk_job:1:second-video",
+		UserID:              userID,
+		CommandID:           uuid.New(),
+		Operation:           domain.OperationVideoGenerate,
+		Modality:            domain.ModalityVideo,
+		IdempotencyKey:      "vk_job:1:second-video",
+		CostEstimateCredits: 50,
 	})
 	if !errors.Is(err, domain.ErrActiveJobLimitExceeded) {
 		t.Fatalf("expected ErrActiveJobLimitExceeded, got job=%+v err=%v", job, err)
@@ -423,11 +494,12 @@ func TestCreateJobIdempotentExistingBypassesCapacityGuard(t *testing.T) {
 	})
 	ctx := context.Background()
 	in := joborchestrator.CreateJobInput{
-		UserID:         uuid.New(),
-		CommandID:      uuid.New(),
-		Operation:      domain.OperationVideoGenerate,
-		Modality:       domain.ModalityVideo,
-		IdempotencyKey: "vk_job:1:capacity-idempotent",
+		UserID:              uuid.New(),
+		CommandID:           uuid.New(),
+		Operation:           domain.OperationVideoGenerate,
+		Modality:            domain.ModalityVideo,
+		IdempotencyKey:      "vk_job:1:capacity-idempotent",
+		CostEstimateCredits: 50,
 	}
 
 	first, err := f.orch.CreateJob(ctx, in)

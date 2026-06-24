@@ -9,11 +9,13 @@ import (
 	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/platform/config"
 	"vk-ai-aggregator/internal/service/modelcatalog"
+	"vk-ai-aggregator/internal/service/pricingcatalog"
 	"vk-ai-aggregator/internal/service/productcatalog"
 	"vk-ai-aggregator/internal/service/videorouter"
 )
 
 func TestFromConfigBuildsPublicCatalogFromServerReadiness(t *testing.T) {
+	prices := staticPricingCatalog(t)
 	runtimeCatalog, err := productcatalog.FromConfig(config.Config{
 		APIMartProviderEnabled:                  true,
 		APIMartAPIKey:                           "configured",
@@ -28,19 +30,17 @@ func TestFromConfigBuildsPublicCatalogFromServerReadiness(t *testing.T) {
 		FeatureImageModelGPTImage2Enabled:       true,
 		FeatureVideoRouterEnabled:               true,
 		FeatureVideoRouteKlingO3StandardEnabled: true,
-	})
+	}, prices)
 	if err != nil {
 		t.Fatalf("build runtime catalog: %v", err)
 	}
-	if runtimeCatalog.Catalog == nil || runtimeCatalog.VideoRouteCatalog == nil {
+	if runtimeCatalog.Catalog == nil || runtimeCatalog.VideoRouteCatalog == nil || runtimeCatalog.PricingCatalog != prices {
 		t.Fatalf("missing runtime catalogs: %+v", runtimeCatalog)
 	}
 	for _, id := range []string{
 		modelcatalog.MiniAppImageNanoBanana2,
 		modelcatalog.MiniAppImageNanoBananaPro,
 		modelcatalog.MiniAppImageGPTImage2,
-		modelcatalog.MiniAppImageSeedream45,
-		modelcatalog.MiniAppImageSDXLTurbo,
 	} {
 		if findImage(runtimeCatalog.ImageModels(), id) == nil {
 			t.Fatalf("public image %q missing from runtime catalog: %+v", id, runtimeCatalog.ImageModels())
@@ -61,7 +61,7 @@ func TestFromConfigFailsClosedForUnconfiguredProviders(t *testing.T) {
 		FeatureImageModelNanoBanana2Enabled:     true,
 		FeatureVideoRouterEnabled:               true,
 		FeatureVideoRouteKlingO3StandardEnabled: true,
-	})
+	}, staticPricingCatalog(t))
 	if err != nil {
 		t.Fatalf("build runtime catalog: %v", err)
 	}
@@ -90,7 +90,8 @@ func TestFromConfigFailsClosedForUnconfiguredProviders(t *testing.T) {
 	}
 }
 
-func TestFromConfigExposesMockVideoRouteOnlyInLoadTestMockMode(t *testing.T) {
+func TestFromConfigMockVideoRouteFailsClosedWithoutPricingTariff(t *testing.T) {
+	prices := staticPricingCatalog(t)
 	runtimeCatalog, err := productcatalog.FromConfig(config.Config{
 		Env:                                     "loadtest",
 		Provider:                                "mock",
@@ -98,12 +99,12 @@ func TestFromConfigExposesMockVideoRouteOnlyInLoadTestMockMode(t *testing.T) {
 		VideoProvider:                           "mock",
 		FeatureVideoRouterEnabled:               true,
 		FeatureVideoRouteMockTextToVideoEnabled: true,
-	})
+	}, prices)
 	if err != nil {
 		t.Fatalf("build runtime catalog: %v", err)
 	}
-	if route := findRoute(runtimeCatalog.VideoRoutes(), domain.VideoRouteMockTextToVideo); route == nil {
-		t.Fatalf("mock video route missing from loadtest catalog: %+v", runtimeCatalog.VideoRoutes())
+	if route := findRoute(runtimeCatalog.VideoRoutes(), domain.VideoRouteMockTextToVideo); route != nil {
+		t.Fatalf("unpriced mock video route leaked into public catalog: %+v", runtimeCatalog.VideoRoutes())
 	}
 
 	runtimeCatalog, err = productcatalog.FromConfig(config.Config{
@@ -113,7 +114,7 @@ func TestFromConfigExposesMockVideoRouteOnlyInLoadTestMockMode(t *testing.T) {
 		VideoProvider:                           "mock",
 		FeatureVideoRouterEnabled:               true,
 		FeatureVideoRouteMockTextToVideoEnabled: true,
-	})
+	}, prices)
 	if err != nil {
 		t.Fatalf("build runtime catalog: %v", err)
 	}
@@ -122,19 +123,20 @@ func TestFromConfigExposesMockVideoRouteOnlyInLoadTestMockMode(t *testing.T) {
 	}
 }
 
-func TestFromConfigExposesMockImageOnlyInLoadTestMockMode(t *testing.T) {
+func TestFromConfigMockImageFailsClosedWithoutPricingTariff(t *testing.T) {
+	prices := staticPricingCatalog(t)
 	runtimeCatalog, err := productcatalog.FromConfig(config.Config{
 		Env:                          "loadtest",
 		Provider:                     "mock",
 		ProviderChain:                []string{"mock"},
 		ImageProvider:                "mock",
 		FeatureImageModelMockEnabled: true,
-	})
+	}, prices)
 	if err != nil {
 		t.Fatalf("build runtime catalog: %v", err)
 	}
-	if image := findImage(runtimeCatalog.ImageModels(), modelcatalog.MiniAppImageMock); image == nil {
-		t.Fatalf("mock image missing from loadtest catalog: %+v", runtimeCatalog.ImageModels())
+	if image := findImage(runtimeCatalog.ImageModels(), modelcatalog.MiniAppImageMock); image != nil {
+		t.Fatalf("unpriced mock image leaked into public catalog: %+v", runtimeCatalog.ImageModels())
 	}
 
 	runtimeCatalog, err = productcatalog.FromConfig(config.Config{
@@ -143,7 +145,7 @@ func TestFromConfigExposesMockImageOnlyInLoadTestMockMode(t *testing.T) {
 		ProviderChain:                []string{"mock"},
 		ImageProvider:                "mock",
 		FeatureImageModelMockEnabled: true,
-	})
+	}, prices)
 	if err != nil {
 		t.Fatalf("build runtime catalog: %v", err)
 	}
@@ -152,30 +154,29 @@ func TestFromConfigExposesMockImageOnlyInLoadTestMockMode(t *testing.T) {
 	}
 }
 
-func TestFromConfigDeepInfraImagesUseProviderLevelReadiness(t *testing.T) {
+func TestFromConfigDeepInfraImagesFailClosedWithoutPricingTariffs(t *testing.T) {
+	prices := staticPricingCatalog(t)
 	runtimeCatalog, err := productcatalog.FromConfig(config.Config{
 		DeepInfraAPIKey:  "configured",
 		DeepInfraBaseURL: "https://deepinfra.test",
-	})
+	}, prices)
 	if err != nil {
 		t.Fatalf("build runtime catalog: %v", err)
 	}
-	if findImage(runtimeCatalog.ImageModels(), modelcatalog.MiniAppImageSeedream45) == nil ||
-		findImage(runtimeCatalog.ImageModels(), modelcatalog.MiniAppImageSDXLTurbo) == nil {
-		t.Fatalf("legacy DeepInfra images must be visible when provider-level readiness is configured: %+v", runtimeCatalog.ImageModels())
-	}
-	assertNoPrivateProviderFields(t, runtimeCatalog.Catalog.Items())
-
-	runtimeCatalog, err = productcatalog.FromConfig(config.Config{
-		DeepInfraAPIKey: "configured",
-	})
-	if err != nil {
-		t.Fatalf("build runtime catalog without DeepInfra base URL: %v", err)
-	}
 	if findImage(runtimeCatalog.ImageModels(), modelcatalog.MiniAppImageSeedream45) != nil ||
 		findImage(runtimeCatalog.ImageModels(), modelcatalog.MiniAppImageSDXLTurbo) != nil {
-		t.Fatalf("legacy DeepInfra images must fail closed without key/base URL readiness: %+v", runtimeCatalog.ImageModels())
+		t.Fatalf("unpriced DeepInfra images must fail closed even when provider-ready: %+v", runtimeCatalog.ImageModels())
 	}
+	assertNoPrivateProviderFields(t, runtimeCatalog.Catalog.Items())
+}
+
+func staticPricingCatalog(t *testing.T) *pricingcatalog.Catalog {
+	t.Helper()
+	catalog, err := pricingcatalog.NewStaticCatalog()
+	if err != nil {
+		t.Fatalf("build pricing catalog: %v", err)
+	}
+	return catalog
 }
 
 func findImage(models []productcatalog.ImageModel, id string) *productcatalog.ImageModel {

@@ -172,7 +172,7 @@ func TestNanoBanana2EstimateAndValidation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("estimate: %v", err)
 	}
-	if estimate.AmountCredits != 10 || estimate.Currency != "credits" || estimate.Estimated {
+	if estimate.AmountCredits != 5 || estimate.Currency != "credits" || estimate.Estimated {
 		t.Fatalf("bad estimate: %+v", estimate)
 	}
 
@@ -181,8 +181,8 @@ func TestNanoBanana2EstimateAndValidation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("estimate 2K: %v", err)
 	}
-	if estimate.AmountCredits != 16 {
-		t.Fatalf("2K estimate = %d, want 16", estimate.AmountCredits)
+	if estimate.AmountCredits != 8 {
+		t.Fatalf("2K estimate = %d, want 8", estimate.AmountCredits)
 	}
 
 	req.Resolution = "4K"
@@ -190,8 +190,8 @@ func TestNanoBanana2EstimateAndValidation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("estimate 4K: %v", err)
 	}
-	if estimate.AmountCredits != 24 {
-		t.Fatalf("4K estimate = %d, want 24", estimate.AmountCredits)
+	if estimate.AmountCredits != 12 {
+		t.Fatalf("4K estimate = %d, want 12", estimate.AmountCredits)
 	}
 
 	req.Resolution = ""
@@ -233,7 +233,7 @@ func TestSeedanceEstimateAndReferenceValidation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("estimate: %v", err)
 	}
-	if estimate.AmountCredits != 560 || estimate.Currency != "credits" || estimate.Estimated {
+	if estimate.AmountCredits != 280 || estimate.Currency != "credits" || estimate.Estimated {
 		t.Fatalf("bad estimate: %+v", estimate)
 	}
 
@@ -288,7 +288,7 @@ func TestEstimateUsesResolvedRouteSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("estimate: %v", err)
 	}
-	if estimate.AmountCredits != 50 || estimate.Estimated {
+	if estimate.AmountCredits != 25 || estimate.Estimated {
 		t.Fatalf("bad estimate: %+v", estimate)
 	}
 }

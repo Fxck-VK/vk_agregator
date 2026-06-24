@@ -8,7 +8,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 	"time"
 
 	"github.com/google/uuid"
@@ -32,8 +31,9 @@ var ErrUnknownOperation = errors.New("billingservice: unknown operation type")
 // amount is zero or negative where a positive credit amount is required.
 var ErrInvalidAmount = errors.New("billingservice: amount must be positive")
 
-// defaultPrices is the seed price list, in credits, per operation type. Per the
-// product spec image_to_video shares the video price.
+// defaultPrices is a legacy fallback price list for uncataloged/old jobs.
+// Cataloged generation products must reserve from pricingcatalog snapshots.
+// Per the product spec image_to_video shares the video fallback.
 var defaultPrices = map[domain.OperationType]int64{
 	domain.OperationTextGenerate:      1,
 	domain.OperationImageGenerate:     10,
@@ -65,9 +65,9 @@ func WithPrices(prices map[domain.OperationType]int64) Option {
 	return func(s *Service) { s.prices = prices }
 }
 
-// WithPriceOverrides merges per-operation price overrides (keyed by the
-// operation string) onto the existing price list, leaving unspecified
-// operations unchanged (audit C1).
+// WithPriceOverrides merges legacy per-operation overrides onto the fallback
+// price list. It must not be used as the runtime source for cataloged
+// image/video generation pricing.
 func WithPriceOverrides(overrides map[string]int64) Option {
 	return func(s *Service) {
 		for op, amount := range overrides {
@@ -107,24 +107,6 @@ func (s *Service) Estimate(op domain.OperationType) (int64, error) {
 		return 0, fmt.Errorf("%w: price for %s is %d", ErrInvalidAmount, op, price)
 	}
 	return price, nil
-}
-
-// EstimateProviderCost converts provider-route cost into internal credits.
-func (s *Service) EstimateProviderCost(providerCostCredits int64, multiplier float64, maxInternalCredits int64) (int64, error) {
-	if providerCostCredits <= 0 {
-		return 0, fmt.Errorf("%w: provider route cost %d", ErrInvalidAmount, providerCostCredits)
-	}
-	if multiplier <= 0 {
-		return 0, fmt.Errorf("%w: route multiplier %.4f", ErrInvalidAmount, multiplier)
-	}
-	internal := int64(math.Ceil(float64(providerCostCredits) * multiplier))
-	if internal <= 0 {
-		return 0, fmt.Errorf("%w: route internal cost %d", ErrInvalidAmount, internal)
-	}
-	if maxInternalCredits > 0 && internal > maxInternalCredits {
-		return 0, fmt.Errorf("%w: route internal cost %d exceeds cap %d", domain.ErrCostCapExceeded, internal, maxInternalCredits)
-	}
-	return internal, nil
 }
 
 // StartingBalance returns the configured grant for a new account without

@@ -22,9 +22,9 @@ var (
 	// Approved provider floors imply these exact internal-credit conversions:
 	// PoYo credit = $0.005, APIMart credit = $0.10, Runway credit = $0.01;
 	// one internal generation credit is treated as $0.005 for catalog math.
-	poyoCreditToInternal    = IdentityUnitConversion()
-	apimartCreditToInternal = UnitConversion{InternalCreditUnits: 20, FloorUnits: 1}
-	runwayCreditToInternal  = UnitConversion{InternalCreditUnits: 2, FloorUnits: 1}
+	poyoCreditToInternal    = mustUnitConversionForFloorUnit(FloorUnitPoYoCredits)
+	apimartCreditToInternal = mustUnitConversionForFloorUnit(FloorUnitAPIMartCredits)
+	runwayCreditToInternal  = mustUnitConversionForFloorUnit(FloorUnitRunwayCredits)
 )
 
 // DisabledProductPrice records an approved tariff that is intentionally absent

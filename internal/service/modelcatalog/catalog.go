@@ -4,7 +4,6 @@
 package modelcatalog
 
 import (
-	"math"
 	"strings"
 
 	"vk-ai-aggregator/internal/domain"
@@ -49,9 +48,6 @@ type Model struct {
 	ModelCode              string
 	ExposeID               bool
 	DurationSec            int
-	ProviderCostCredits    int64
-	PriceMultiplier        float64
-	MaxInternalCostCredits int64
 	SupportsReferenceImage bool
 	MaxReferenceImages     int
 }
@@ -82,9 +78,6 @@ var miniAppModels = map[domain.OperationType]map[string]Model{
 			Provider:               domain.ProviderPoYo,
 			ModelCode:              ModelCodePoYoNanoBanana2,
 			ExposeID:               true,
-			ProviderCostCredits:    5,
-			PriceMultiplier:        2,
-			MaxInternalCostCredits: 24,
 			SupportsReferenceImage: true,
 			MaxReferenceImages:     4,
 		},
@@ -94,9 +87,6 @@ var miniAppModels = map[domain.OperationType]map[string]Model{
 			Provider:               domain.ProviderAPIMart,
 			ModelCode:              ModelCodeGemini3ProImage,
 			ExposeID:               true,
-			ProviderCostCredits:    10,
-			PriceMultiplier:        2,
-			MaxInternalCostCredits: 40,
 			SupportsReferenceImage: true,
 			MaxReferenceImages:     14,
 		},
@@ -106,9 +96,6 @@ var miniAppModels = map[domain.OperationType]map[string]Model{
 			Provider:               domain.ProviderAPIMart,
 			ModelCode:              ModelCodeGPTImage2,
 			ExposeID:               true,
-			ProviderCostCredits:    10,
-			PriceMultiplier:        2,
-			MaxInternalCostCredits: 40,
 			SupportsReferenceImage: true,
 			MaxReferenceImages:     16,
 		},
@@ -120,45 +107,33 @@ var miniAppModels = map[domain.OperationType]map[string]Model{
 			ExposeID:  true,
 		},
 		MiniAppImageSeedream45: {
-			ModelID:                MiniAppImageSeedream45,
-			ModelName:              "ByteDance Seedream 4.5",
-			Provider:               domain.ProviderDeepInfra,
-			ModelCode:              ModelCodeSeedream45,
-			ExposeID:               true,
-			ProviderCostCredits:    10,
-			PriceMultiplier:        1,
-			MaxInternalCostCredits: 10,
+			ModelID:   MiniAppImageSeedream45,
+			ModelName: "ByteDance Seedream 4.5",
+			Provider:  domain.ProviderDeepInfra,
+			ModelCode: ModelCodeSeedream45,
+			ExposeID:  true,
 		},
 		MiniAppImageSDXLTurbo: {
-			ModelID:                MiniAppImageSDXLTurbo,
-			ModelName:              "Stability AI SDXL Turbo",
-			Provider:               domain.ProviderDeepInfra,
-			ModelCode:              ModelCodeSDXLTurbo,
-			ExposeID:               true,
-			ProviderCostCredits:    10,
-			PriceMultiplier:        1,
-			MaxInternalCostCredits: 10,
+			ModelID:   MiniAppImageSDXLTurbo,
+			ModelName: "Stability AI SDXL Turbo",
+			Provider:  domain.ProviderDeepInfra,
+			ModelCode: ModelCodeSDXLTurbo,
+			ExposeID:  true,
 		},
 		MiniAppImageMock: {
-			ModelID:                MiniAppImageMock,
-			ModelName:              "Mock Image Loadtest",
-			Provider:               domain.ProviderMock,
-			ModelCode:              ModelCodeMockImage,
-			ExposeID:               true,
-			ProviderCostCredits:    10,
-			PriceMultiplier:        1,
-			MaxInternalCostCredits: 10,
+			ModelID:   MiniAppImageMock,
+			ModelName: "Mock Image Loadtest",
+			Provider:  domain.ProviderMock,
+			ModelCode: ModelCodeMockImage,
+			ExposeID:  true,
 		},
 		// Legacy public aliases remain accepted for older Mini App clients.
 		"sdxl": {
-			ModelID:                MiniAppImageSDXLTurbo,
-			ModelName:              "Stability AI SDXL Turbo",
-			Provider:               domain.ProviderDeepInfra,
-			ModelCode:              ModelCodeSDXLTurbo,
-			ExposeID:               true,
-			ProviderCostCredits:    10,
-			PriceMultiplier:        1,
-			MaxInternalCostCredits: 10,
+			ModelID:   MiniAppImageSDXLTurbo,
+			ModelName: "Stability AI SDXL Turbo",
+			Provider:  domain.ProviderDeepInfra,
+			ModelCode: ModelCodeSDXLTurbo,
+			ExposeID:  true,
 		},
 		"kandinsky": {
 			ModelID:                MiniAppImageNanoBananaPro,
@@ -166,9 +141,6 @@ var miniAppModels = map[domain.OperationType]map[string]Model{
 			Provider:               domain.ProviderAPIMart,
 			ModelCode:              ModelCodeGemini3ProImage,
 			ExposeID:               true,
-			ProviderCostCredits:    10,
-			PriceMultiplier:        2,
-			MaxInternalCostCredits: 40,
 			SupportsReferenceImage: true,
 			MaxReferenceImages:     14,
 		},
@@ -248,45 +220,10 @@ func NormalizeImageQuality(raw string) (string, bool) {
 }
 
 func ApplyImageQuality(model Model, quality string) Model {
-	quality, ok := NormalizeImageQuality(quality)
-	if !ok {
-		return model
-	}
-	if model.ModelID == MiniAppImageNanoBanana2 {
-		switch quality {
-		case ImageQuality2K:
-			model.ProviderCostCredits = 8
-		case ImageQuality4K:
-			model.ProviderCostCredits = 12
-		default:
-			model.ProviderCostCredits = 5
-		}
-		if minCap := estimateInternalCost(model.ProviderCostCredits, model.PriceMultiplier); minCap > model.MaxInternalCostCredits {
-			model.MaxInternalCostCredits = minCap
-		}
-	}
+	// Quality is a public request/pricing dimension. Provider routing stays
+	// model-only; pricingcatalog owns generation prices.
+	_, _ = NormalizeImageQuality(quality)
 	return model
-}
-
-func estimateInternalCost(providerCostCredits int64, multiplier float64) int64 {
-	if providerCostCredits <= 0 {
-		return 0
-	}
-	if multiplier <= 0 {
-		multiplier = 1
-	}
-	return int64(math.Ceil(float64(providerCostCredits) * multiplier))
-}
-
-func EstimateInternalCostCredits(model Model) int64 {
-	cost := estimateInternalCost(model.ProviderCostCredits, model.PriceMultiplier)
-	if cost <= 0 {
-		return 0
-	}
-	if model.MaxInternalCostCredits > 0 && cost > model.MaxInternalCostCredits {
-		return model.MaxInternalCostCredits
-	}
-	return cost
 }
 
 func ListMiniAppModels(op domain.OperationType) []Model {

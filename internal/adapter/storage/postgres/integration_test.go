@@ -516,6 +516,9 @@ func TestJobAndCommandRepository(t *testing.T) {
 	if got.Status != domain.JobStatusValidated {
 		t.Fatalf("status = %q, want validated", got.Status)
 	}
+	if len(got.PricingSnapshot) != 0 {
+		t.Fatalf("legacy job pricing snapshot = %s, want empty", string(got.PricingSnapshot))
+	}
 
 	list, err := jobs.ListByUser(ctx, u.ID, 10, 0)
 	if err != nil {
@@ -523,6 +526,29 @@ func TestJobAndCommandRepository(t *testing.T) {
 	}
 	if len(list) != 1 {
 		t.Fatalf("expected 1 job, got %d", len(list))
+	}
+
+	snapshotJob := &domain.Job{
+		UserID:          u.ID,
+		VKPeerID:        u.VKUserID,
+		CommandID:       cmd.ID,
+		OperationType:   domain.OperationImageGenerate,
+		Modality:        domain.ModalityImage,
+		Status:          domain.JobStatusReceived,
+		IdempotencyKey:  "job:" + uuid.NewString(),
+		PricingSnapshot: []byte(`{"internal_credits":33}`),
+		CostEstimate:    33,
+		CostReserved:    33,
+	}
+	if err := jobs.Create(ctx, snapshotJob); err != nil {
+		t.Fatalf("create snapshot job: %v", err)
+	}
+	gotSnapshotJob, err := jobs.GetByID(ctx, snapshotJob.ID)
+	if err != nil {
+		t.Fatalf("get snapshot job: %v", err)
+	}
+	if credits, ok := gotSnapshotJob.PricingSnapshotCredits(); !ok || credits != 33 {
+		t.Fatalf("snapshot job credits = %d/%v, want 33/true; snapshot=%s", credits, ok, string(gotSnapshotJob.PricingSnapshot))
 	}
 
 	if _, err := commands.GetByIdempotencyKey(ctx, cmd.IdempotencyKey); err != nil {

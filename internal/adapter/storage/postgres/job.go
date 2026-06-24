@@ -24,7 +24,7 @@ var _ domain.JobRepository = (*JobRepository)(nil)
 
 const jobColumns = `id, user_id, source, vk_peer_id, command_id, operation_type, modality,
 	provider_id, model_id, status, priority, idempotency_key, correlation_id,
-	input_artifact_ids, output_artifact_ids, params, cost_estimate, cost_reserved,
+	input_artifact_ids, output_artifact_ids, params, pricing_snapshot, cost_estimate, cost_reserved,
 	cost_captured, error_code, error_message, created_at, updated_at, expires_at`
 
 // Create inserts a new job.
@@ -49,17 +49,17 @@ func (r *JobRepository) Create(ctx context.Context, job *domain.Job) error {
 		INSERT INTO jobs (
 			id, user_id, source, vk_peer_id, command_id, operation_type, modality,
 			provider_id, model_id, status, priority, idempotency_key, correlation_id,
-			input_artifact_ids, output_artifact_ids, params, cost_estimate, cost_reserved,
+			input_artifact_ids, output_artifact_ids, params, pricing_snapshot, cost_estimate, cost_reserved,
 			cost_captured, error_code, error_message, expires_at
 		) VALUES (
 			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
-			$13, $14, $15, $16, $17, $18, $19, $20, $21, $22
+			$13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23
 		)
 		RETURNING ` + jobColumns
 	row := r.db.QueryRow(ctx, q,
 		job.ID, job.UserID, job.Source, job.VKPeerID, commandID, job.OperationType, job.Modality,
 		job.ProviderID, job.ModelID, job.Status, job.Priority, job.IdempotencyKey, job.CorrelationID,
-		uuidArray(job.InputArtifactIDs), uuidArray(job.OutputArtifactIDs), []byte(job.Params), job.CostEstimate, job.CostReserved,
+		uuidArray(job.InputArtifactIDs), uuidArray(job.OutputArtifactIDs), []byte(job.Params), nullableJSON(job.PricingSnapshot), job.CostEstimate, job.CostReserved,
 		job.CostCaptured, job.ErrorCode, job.ErrorMessage, job.ExpiresAt,
 	)
 	return mapError(scanJob(row, job))
@@ -116,13 +116,14 @@ func (r *JobRepository) Update(ctx context.Context, job *domain.Job) error {
 		UPDATE jobs
 		SET source = $2, provider_id = $3, model_id = $4, priority = $5, correlation_id = $6,
 		    input_artifact_ids = $7, output_artifact_ids = $8, params = $9,
-		    cost_estimate = $10, cost_reserved = $11, cost_captured = $12,
-		    error_code = $13, error_message = $14, expires_at = $15, updated_at = now()
+		    pricing_snapshot = $10, cost_estimate = $11, cost_reserved = $12, cost_captured = $13,
+		    error_code = $14, error_message = $15, expires_at = $16, updated_at = now()
 		WHERE id = $1
 		RETURNING ` + jobColumns
 	row := r.db.QueryRow(ctx, q,
 		job.ID, job.Source, job.ProviderID, job.ModelID, job.Priority, job.CorrelationID,
 		uuidArray(job.InputArtifactIDs), uuidArray(job.OutputArtifactIDs), []byte(job.Params),
+		nullableJSON(job.PricingSnapshot),
 		job.CostEstimate, job.CostReserved, job.CostCaptured,
 		job.ErrorCode, job.ErrorMessage, job.ExpiresAt,
 	)
@@ -251,10 +252,11 @@ func (r *JobRepository) CountSucceededByUser(ctx context.Context, userID uuid.UU
 
 func scanJob(row rowScanner, job *domain.Job) error {
 	var commandID *uuid.UUID
+	var pricingSnapshot []byte
 	if err := row.Scan(
 		&job.ID, &job.UserID, &job.Source, &job.VKPeerID, &commandID, &job.OperationType, &job.Modality,
 		&job.ProviderID, &job.ModelID, &job.Status, &job.Priority, &job.IdempotencyKey, &job.CorrelationID,
-		&job.InputArtifactIDs, &job.OutputArtifactIDs, &job.Params, &job.CostEstimate, &job.CostReserved,
+		&job.InputArtifactIDs, &job.OutputArtifactIDs, &job.Params, &pricingSnapshot, &job.CostEstimate, &job.CostReserved,
 		&job.CostCaptured, &job.ErrorCode, &job.ErrorMessage, &job.CreatedAt, &job.UpdatedAt, &job.ExpiresAt,
 	); err != nil {
 		return err
@@ -262,5 +264,17 @@ func scanJob(row rowScanner, job *domain.Job) error {
 	if commandID != nil {
 		job.CommandID = *commandID
 	}
+	if len(pricingSnapshot) > 0 {
+		job.PricingSnapshot = append(job.PricingSnapshot[:0], pricingSnapshot...)
+	} else {
+		job.PricingSnapshot = nil
+	}
 	return nil
+}
+
+func nullableJSON(raw []byte) any {
+	if len(raw) == 0 {
+		return nil
+	}
+	return []byte(raw)
 }

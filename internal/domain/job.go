@@ -265,6 +265,10 @@ type Job struct {
 	OutputArtifactIDs []uuid.UUID `json:"output_artifact_ids"`
 	// Params holds normalized operation parameters (aspect ratio, duration...).
 	Params json.RawMessage `json:"params"`
+	// PricingSnapshot stores immutable backend-owned price facts for new paid
+	// jobs. It is private to backend/worker paths and intentionally omitted
+	// from public JSON DTOs.
+	PricingSnapshot json.RawMessage `json:"-"`
 	// CostEstimate is the estimated cost in credits before reservation.
 	CostEstimate int64 `json:"cost_estimate"`
 	// CostReserved is the amount of credits reserved for the job.
@@ -281,4 +285,30 @@ type Job struct {
 	UpdatedAt time.Time `json:"updated_at"`
 	// ExpiresAt is the deadline after which the job is expired.
 	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+}
+
+// PricingSnapshotCredits returns the immutable charge from a persisted pricing
+// snapshot. Old jobs legitimately have no snapshot and fall back to legacy cost
+// fields in callers.
+func (j Job) PricingSnapshotCredits() (int64, bool) {
+	if len(j.PricingSnapshot) == 0 {
+		return 0, false
+	}
+	var snapshot struct {
+		InternalCredits int64 `json:"internal_credits"`
+	}
+	if err := json.Unmarshal(j.PricingSnapshot, &snapshot); err != nil {
+		return 0, false
+	}
+	return snapshot.InternalCredits, snapshot.InternalCredits > 0
+}
+
+// ChargeAmountCredits returns the amount to capture for a job. New priced jobs
+// use the immutable pricing snapshot; old jobs remain readable by falling back
+// to the legacy reserved amount.
+func (j Job) ChargeAmountCredits() int64 {
+	if credits, ok := j.PricingSnapshotCredits(); ok {
+		return credits
+	}
+	return j.CostReserved
 }

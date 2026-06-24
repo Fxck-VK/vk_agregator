@@ -31,6 +31,7 @@ import (
 	"vk-ai-aggregator/internal/service/modelcatalog"
 	"vk-ai-aggregator/internal/service/outboxrelay"
 	"vk-ai-aggregator/internal/service/paymentservice"
+	"vk-ai-aggregator/internal/service/pricingcatalog"
 	"vk-ai-aggregator/internal/service/productcatalog"
 	"vk-ai-aggregator/internal/service/referralservice"
 )
@@ -128,25 +129,30 @@ func newHarnessWithReferenceDownloader(control vkdelivery.ControlClient, cfg vk.
 	})
 	pub := queue.NewMemoryPublisher()
 	uowMgr := memory.NewUnitOfWork(jobs, outbox, bill)
-	orch := joborchestrator.New(jobs, uowMgr, billing, 0, joborchestrator.WithVideoRouteResolver(testVKVideoRouteResolver()))
+	prices := staticPricingCatalogForVKTest()
+	orch := joborchestrator.New(jobs, uowMgr, billing, 0,
+		joborchestrator.WithVideoRouteResolver(testVKVideoRouteResolver()),
+		joborchestrator.WithPricingCatalog(prices),
+	)
 	h := vk.NewHandler(cfg, vk.Deps{
-		Idempotency:  idem,
-		Inbound:      inbound,
-		Users:        users,
-		Jobs:         jobs,
-		Commands:     cmds,
-		Billing:      billing,
-		Payment:      payment,
-		Referrals:    referrals,
-		Orchestrator: orch,
-		Router:       commandrouter.New(),
-		Control:      control,
-		Profile:      profile,
-		DialogState:  dialogState,
-		AntiSpam:     antiSpam,
-		Artifacts:    arts,
-		Objects:      objects,
-		Downloader:   downloader,
+		Idempotency:    idem,
+		Inbound:        inbound,
+		Users:          users,
+		Jobs:           jobs,
+		Commands:       cmds,
+		Billing:        billing,
+		Payment:        payment,
+		Referrals:      referrals,
+		Orchestrator:   orch,
+		PricingCatalog: prices,
+		Router:         commandrouter.New(),
+		Control:        control,
+		Profile:        profile,
+		DialogState:    dialogState,
+		AntiSpam:       antiSpam,
+		Artifacts:      arts,
+		Objects:        objects,
+		Downloader:     downloader,
 	})
 	return &harness{handler: h, users: users, cmds: cmds, jobs: jobs, inbound: inbound, billing: bill, payment: payments, refs: refs, arts: arts, objects: objects, pub: pub, relay: outboxrelay.New(uowMgr, pub)}
 }
@@ -165,8 +171,60 @@ func defaultTestVKImageModels() []productcatalog.ImageModel {
 			modelcatalog.MiniAppImageSeedream45:    true,
 			modelcatalog.MiniAppImageSDXLTurbo:     true,
 		},
+		PricingCatalog: staticPricingCatalogForVKTest(),
 	})
 	return catalog.ImageModels()
+}
+
+func staticPricingCatalogForVKTest() *pricingcatalog.Catalog {
+	catalog, err := pricingcatalog.NewStaticCatalog()
+	if err != nil {
+		panic(err)
+	}
+	return catalog
+}
+
+func vkTestImageCostCredits(t *testing.T, modelID, quality string) int64 {
+	t.Helper()
+	credits, err := staticPricingCatalogForVKTest().CostEstimateCredits(pricingcatalog.ProductKey{
+		Operation:    domain.OperationImageGenerate,
+		Modality:     domain.ModalityImage,
+		ImageModelID: modelID,
+		Quality:      quality,
+	})
+	if err != nil {
+		t.Fatalf("image cost estimate %s/%s: %v", modelID, quality, err)
+	}
+	return credits
+}
+
+func vkTestImageDisplayCredits(t *testing.T, modelID, quality string) int64 {
+	t.Helper()
+	credits, err := staticPricingCatalogForVKTest().DisplayEstimateCredits(pricingcatalog.ProductKey{
+		Operation:    domain.OperationImageGenerate,
+		Modality:     domain.ModalityImage,
+		ImageModelID: modelID,
+		Quality:      quality,
+	})
+	if err != nil {
+		t.Fatalf("image display estimate %s/%s: %v", modelID, quality, err)
+	}
+	return credits
+}
+
+func vkTestVideoCostCredits(t *testing.T, alias domain.VideoRouteAlias, resolution string, durationSec int) int64 {
+	t.Helper()
+	credits, err := staticPricingCatalogForVKTest().CostEstimateCredits(pricingcatalog.ProductKey{
+		Operation:       domain.OperationVideoGenerate,
+		Modality:        domain.ModalityVideo,
+		VideoRouteAlias: alias,
+		Resolution:      resolution,
+		DurationSec:     durationSec,
+	})
+	if err != nil {
+		t.Fatalf("video cost estimate %s/%s/%ds: %v", alias, resolution, durationSec, err)
+	}
+	return credits
 }
 
 func testKlingVideoRoute() productcatalog.VideoRoute {
@@ -179,6 +237,7 @@ func testKlingVideoRoute() productcatalog.VideoRoute {
 		AllowedDurationsSec:    []int{5, 10},
 		AllowedAspectRatios:    []string{"16:9", "9:16", "1:1"},
 		DefaultDurationSec:     5,
+		DefaultResolution:      pricingcatalog.VideoResolution720p,
 		DefaultAspectRatio:     "16:9",
 		SupportsReferenceImage: true,
 		MaxReferenceImages:     1,
@@ -195,6 +254,7 @@ func testRunwayVideoRoute() productcatalog.VideoRoute {
 		AllowedDurationsSec:    []int{5, 10},
 		AllowedAspectRatios:    []string{"16:9", "9:16", "1:1"},
 		DefaultDurationSec:     5,
+		DefaultResolution:      pricingcatalog.VideoResolution720p,
 		DefaultAspectRatio:     "16:9",
 		RequiresStartImage:     true,
 		SupportsReferenceImage: true,
@@ -1707,7 +1767,13 @@ func TestVideoRouteButtonEnablesPlainTextVideoJobs(t *testing.T) {
 		t.Fatalf("unexpected command types: %+v", commandTypes(cmds))
 	}
 	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
-	if len(jobs) != 1 || jobs[0].OperationType != domain.OperationVideoGenerate || jobs[0].Modality != domain.ModalityVideo || h.pub.Len() != 1 {
+	expectedCost := vkTestVideoCostCredits(t, domain.VideoRouteKlingO3Standard, pricingcatalog.VideoResolution720p, 5)
+	if len(jobs) != 1 ||
+		jobs[0].OperationType != domain.OperationVideoGenerate ||
+		jobs[0].Modality != domain.ModalityVideo ||
+		jobs[0].CostEstimate != expectedCost ||
+		jobs[0].CostReserved != expectedCost ||
+		h.pub.Len() != 1 {
 		t.Fatalf("video route mode should create one video job, jobs=%+v tasks=%d", jobs, h.pub.Len())
 	}
 	sent := control.Sent()
@@ -1771,7 +1837,8 @@ func TestVideoRouteDurationButtonSetsJobDuration(t *testing.T) {
 		t.Fatalf("user not created: %v", err)
 	}
 	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
-	if len(jobs) != 1 || jobs[0].CostEstimate != 20 {
+	expectedCost := vkTestVideoCostCredits(t, domain.VideoRouteKlingO3Standard, pricingcatalog.VideoResolution720p, 10)
+	if len(jobs) != 1 || jobs[0].CostEstimate != expectedCost || jobs[0].CostReserved != expectedCost {
 		t.Fatalf("duration-specific video job was not estimated from 10s route, jobs=%+v", jobs)
 	}
 	var params struct {
@@ -1993,11 +2060,10 @@ func TestPhotoMenuButtonSendsInstructionNoJob(t *testing.T) {
 	if !strings.Contains(sent[0].Keyboard, "GPT Image 2") {
 		t.Fatalf("expected GPT Image 2 button in photo keyboard: %q", sent[0].Keyboard)
 	}
-	if !strings.Contains(sent[0].Keyboard, "ByteDance Seedream 4.5") {
-		t.Fatalf("expected ByteDance Seedream 4.5 button in photo keyboard: %q", sent[0].Keyboard)
-	}
-	if !strings.Contains(sent[0].Keyboard, "Stability AI SDXL Turbo") {
-		t.Fatalf("expected Stability AI SDXL Turbo button in photo keyboard: %q", sent[0].Keyboard)
+	for _, hidden := range []string{"ByteDance Seedream 4.5", "Stability AI SDXL Turbo"} {
+		if strings.Contains(sent[0].Keyboard, hidden) {
+			t.Fatalf("unpriced image model %q must be hidden: %q", hidden, sent[0].Keyboard)
+		}
 	}
 	if strings.Contains(sent[0].Keyboard, "Фото по тексту") {
 		t.Fatalf("photo text button should be hidden because photo menu already enables text-to-image mode: keyboard=%q", sent[0].Keyboard)
@@ -2021,15 +2087,24 @@ func TestPhotoNanoBananaProQualityFlowCreatesImageJob(t *testing.T) {
 	if len(initial) != 1 || !strings.Contains(initial[0].Text, "Выберите качество генерации") {
 		t.Fatalf("expected Nano Banana Pro quality picker, got %+v", initial)
 	}
-	for _, want := range []string{"1K · 20 кредитов", "2K · 20 кредитов", "4K · 20 кредитов", "⬅️ Назад к моделям"} {
+	display1K := vkTestImageDisplayCredits(t, modelcatalog.MiniAppImageNanoBananaPro, modelcatalog.ImageQuality1K)
+	display4K := vkTestImageDisplayCredits(t, modelcatalog.MiniAppImageNanoBananaPro, modelcatalog.ImageQuality4K)
+	for _, want := range []string{
+		fmt.Sprintf("1K \u00b7 %d", display1K),
+		fmt.Sprintf("4K \u00b7 %d", display4K),
+		"⬅️ Назад к моделям",
+	} {
 		if !strings.Contains(initial[0].Keyboard, want) {
 			t.Fatalf("expected %q in Nano Banana Pro quality keyboard: %q", want, initial[0].Keyboard)
 		}
 	}
+	if strings.Contains(initial[0].Keyboard, "2K \u00b7") {
+		t.Fatalf("unpriced Nano Banana Pro 2K option must be hidden: %q", initial[0].Keyboard)
+	}
 
 	quality := `{
 		"type":"message_new","group_id":1,"event_id":"evt-photo-pro-quality","secret":"s3cr3t",
-		"object":{"message":{"from_id":5631,"peer_id":5631,"text":"2K","payload":"{\"command\":\"menu.image.quality.select\",\"model_id\":\"nano_banana_pro\",\"image_quality\":\"2K\"}"}}
+		"object":{"message":{"from_id":5631,"peer_id":5631,"text":"4K","payload":"{\"command\":\"menu.image.quality.select\",\"model_id\":\"nano_banana_pro\",\"image_quality\":\"4K\"}"}}
 	}`
 	if rec := h.post(quality); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
 		t.Fatalf("unexpected quality response: %d %q", rec.Code, rec.Body.String())
@@ -2053,11 +2128,20 @@ func TestPhotoNanoBananaProQualityFlowCreatesImageJob(t *testing.T) {
 		t.Fatalf("unexpected command types: %+v", commandTypes(cmds))
 	}
 	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
-	if len(jobs) != 1 || jobs[0].OperationType != domain.OperationImageGenerate || jobs[0].Modality != domain.ModalityImage || jobs[0].CostEstimate != 20 || h.pub.Len() != 1 {
+	expectedCost := vkTestImageCostCredits(t, modelcatalog.MiniAppImageNanoBananaPro, modelcatalog.ImageQuality4K)
+	if len(jobs) != 1 ||
+		jobs[0].OperationType != domain.OperationImageGenerate ||
+		jobs[0].Modality != domain.ModalityImage ||
+		jobs[0].CostEstimate != expectedCost ||
+		jobs[0].CostReserved != expectedCost ||
+		h.pub.Len() != 1 {
 		t.Fatalf("photo text mode should create one image job, jobs=%+v tasks=%d", jobs, h.pub.Len())
 	}
 	sent := control.Sent()
-	if len(sent) != 2 || !strings.Contains(sent[0].Text, "Nano Banana Pro · 2K") || !strings.Contains(sent[0].Text, "Цена: 20 кредитов") || sent[1].Text != "НейроХаб рисует..." {
+	if len(sent) != 2 ||
+		!strings.Contains(sent[0].Text, "Nano Banana Pro \u00b7 4K") ||
+		!strings.Contains(sent[0].Text, fmt.Sprintf("\u0426\u0435\u043d\u0430: %d", expectedCost)) ||
+		sent[1].Text != "НейроХаб рисует..." {
 		t.Fatalf("unexpected photo mode responses: %+v", sent)
 	}
 	for _, want := range []string{"⬅️ Назад к качеству", "⬅️ Назад к моделям"} {
@@ -2086,8 +2170,8 @@ func TestPhotoNanoBananaProQualityFlowCreatesImageJob(t *testing.T) {
 		params.ModelID != "nano_banana_pro" ||
 		params.ModelName != "Nano Banana Pro" ||
 		params.Size != "1:1" ||
-		params.Resolution != "2K" ||
-		params.ImageQuality != "2K" ||
+		params.Resolution != "4K" ||
+		params.ImageQuality != "4K" ||
 		params.VKPlaceholderMessageID != sent[1].MessageID {
 		t.Fatalf("unexpected image job params: %+v, pending=%+v", params, sent[1])
 	}
@@ -2104,7 +2188,10 @@ func TestPhotoGPTImage2QualityFlowCreatesAPIMartImageJob(t *testing.T) {
 		t.Fatalf("unexpected menu response: %d %q", rec.Code, rec.Body.String())
 	}
 	initial := control.Sent()
-	if len(initial) != 1 || !strings.Contains(initial[0].Text, "Выберите качество генерации") || !strings.Contains(initial[0].Keyboard, "4K · 20 кредитов") {
+	display4K := vkTestImageDisplayCredits(t, modelcatalog.MiniAppImageGPTImage2, modelcatalog.ImageQuality4K)
+	if len(initial) != 1 ||
+		!strings.Contains(initial[0].Text, "Выберите качество генерации") ||
+		!strings.Contains(initial[0].Keyboard, fmt.Sprintf("4K \u00b7 %d", display4K)) {
 		t.Fatalf("expected GPT Image 2 quality picker, got %+v", initial)
 	}
 
@@ -2130,7 +2217,8 @@ func TestPhotoGPTImage2QualityFlowCreatesAPIMartImageJob(t *testing.T) {
 		t.Fatalf("user not created: %v", err)
 	}
 	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
-	if len(jobs) != 1 || jobs[0].CostEstimate != 20 || jobs[0].CostReserved != 20 {
+	expectedCost := vkTestImageCostCredits(t, modelcatalog.MiniAppImageGPTImage2, modelcatalog.ImageQuality4K)
+	if len(jobs) != 1 || jobs[0].CostEstimate != expectedCost || jobs[0].CostReserved != expectedCost {
 		t.Fatalf("GPT Image 2 should create one reserved image job, jobs=%+v", jobs)
 	}
 	var params struct {
@@ -2193,7 +2281,12 @@ func TestPhotoNanoBanana2ModeCreatesPoYoImageJob(t *testing.T) {
 		t.Fatalf("unexpected command types: %+v", commandTypes(cmds))
 	}
 	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
-	if len(jobs) != 1 || jobs[0].OperationType != domain.OperationImageGenerate || jobs[0].Modality != domain.ModalityImage || jobs[0].CostEstimate != 24 || jobs[0].CostReserved != 24 {
+	expectedCost := vkTestImageCostCredits(t, modelcatalog.MiniAppImageNanoBanana2, modelcatalog.ImageQuality4K)
+	if len(jobs) != 1 ||
+		jobs[0].OperationType != domain.OperationImageGenerate ||
+		jobs[0].Modality != domain.ModalityImage ||
+		jobs[0].CostEstimate != expectedCost ||
+		jobs[0].CostReserved != expectedCost {
 		t.Fatalf("nano banana 2 should create one reserved image job, jobs=%+v", jobs)
 	}
 	var params struct {
@@ -2220,7 +2313,10 @@ func TestPhotoNanoBanana2ModeCreatesPoYoImageJob(t *testing.T) {
 		t.Fatalf("unexpected nano banana 2 job params: %+v", params)
 	}
 	sent := control.Sent()
-	if len(sent) != 2 || !strings.Contains(sent[0].Text, "Nano Banana 2") || !strings.Contains(sent[0].Text, "Цена: 24 кредитов") || sent[1].Text != "НейроХаб рисует..." {
+	if len(sent) != 2 ||
+		!strings.Contains(sent[0].Text, "Nano Banana 2") ||
+		!strings.Contains(sent[0].Text, fmt.Sprintf("\u0426\u0435\u043d\u0430: %d", expectedCost)) ||
+		sent[1].Text != "НейроХаб рисует..." {
 		t.Fatalf("unexpected nano banana 2 responses: %+v", sent)
 	}
 	for _, legacyPayload := range []string{
@@ -2234,7 +2330,68 @@ func TestPhotoNanoBanana2ModeCreatesPoYoImageJob(t *testing.T) {
 	}
 }
 
-func TestPhotoDeepInfraSeedreamQualityFlowCreatesImageJob(t *testing.T) {
+func TestPhotoNanoBanana2PricingCatalogParityForDefaultQuality(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	h := newHarnessWithControl(control)
+	expectedDisplay := vkTestImageDisplayCredits(t, modelcatalog.MiniAppImageNanoBanana2, modelcatalog.ImageQuality1K)
+	expectedCost := vkTestImageCostCredits(t, modelcatalog.MiniAppImageNanoBanana2, modelcatalog.ImageQuality1K)
+
+	menu := `{
+		"type":"message_new","group_id":1,"event_id":"evt-photo-nano-2-parity-on","secret":"s3cr3t",
+		"object":{"message":{"from_id":5636,"peer_id":5636,"text":"Nano Banana 2","payload":"{\"command\":\"menu.image.select\",\"model_id\":\"nano_banana_2\"}"}}
+	}`
+	if rec := h.post(menu); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected menu response: %d %q", rec.Code, rec.Body.String())
+	}
+	sent := control.Sent()
+	if len(sent) != 1 || !strings.Contains(sent[0].Keyboard, fmt.Sprintf("1K \u00b7 %d", expectedDisplay)) {
+		t.Fatalf("VK quality display did not use pricing catalog: %+v", sent)
+	}
+
+	quality := `{
+		"type":"message_new","group_id":1,"event_id":"evt-photo-nano-2-parity-quality","secret":"s3cr3t",
+		"object":{"message":{"from_id":5636,"peer_id":5636,"text":"1K","payload":"{\"command\":\"menu.image.quality.select\",\"model_id\":\"nano_banana_2\",\"image_quality\":\"1K\"}"}}
+	}`
+	if rec := h.post(quality); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected quality response: %d %q", rec.Code, rec.Body.String())
+	}
+	sent = control.Sent()
+	if len(sent) != 1 ||
+		!strings.Contains(sent[0].Text, "Nano Banana 2 \u00b7 1K") ||
+		!strings.Contains(sent[0].Text, fmt.Sprintf("\u0426\u0435\u043d\u0430: %d", expectedDisplay)) {
+		t.Fatalf("VK prompt display did not use pricing catalog: %+v", sent)
+	}
+
+	prompt := `{
+		"type":"message_new","group_id":1,"event_id":"evt-photo-nano-2-parity-prompt","secret":"s3cr3t",
+		"object":{"message":{"from_id":5636,"peer_id":5636,"text":"editorial glass object on white background"}}
+	}`
+	if rec := h.post(prompt); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected prompt response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	user, err := h.users.GetByVKUserID(context.Background(), 5636)
+	if err != nil {
+		t.Fatalf("user not created: %v", err)
+	}
+	jobs, _ := h.jobs.ListByUser(context.Background(), user.ID, 10, 0)
+	if len(jobs) != 1 ||
+		jobs[0].CostEstimate != expectedCost ||
+		jobs[0].CostReserved != expectedCost {
+		t.Fatalf("VK job did not use pricing catalog cost %d: %+v", expectedCost, jobs)
+	}
+	if credits, ok := jobs[0].PricingSnapshotCredits(); !ok || credits != expectedCost {
+		t.Fatalf("VK job pricing snapshot credits = %d/%v, want %d/true; snapshot=%s", credits, ok, expectedCost, string(jobs[0].PricingSnapshot))
+	}
+	lowerSnapshot := strings.ToLower(string(jobs[0].PricingSnapshot))
+	for _, private := range []string{"prompt", "model_code", "private_url", "nano-banana-2-new"} {
+		if strings.Contains(lowerSnapshot, private) {
+			t.Fatalf("pricing snapshot leaked private field %q: %s", private, string(jobs[0].PricingSnapshot))
+		}
+	}
+}
+
+func TestPhotoDeepInfraSeedreamFailsClosedWithoutPricingTariff(t *testing.T) {
 	control := vkdelivery.NewMockClient()
 	h := newHarnessWithControl(control)
 	menu := `{
@@ -2243,6 +2400,10 @@ func TestPhotoDeepInfraSeedreamQualityFlowCreatesImageJob(t *testing.T) {
 	}`
 	if rec := h.post(menu); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
 		t.Fatalf("unexpected menu response: %d %q", rec.Code, rec.Body.String())
+	}
+	sent := control.Sent()
+	if len(sent) != 1 || strings.Contains(sent[0].Keyboard, "ByteDance Seedream 4.5") {
+		t.Fatalf("unpriced Seedream callback must return safe public photo catalog, got %+v", sent)
 	}
 
 	prompt := `{
@@ -2259,37 +2420,12 @@ func TestPhotoDeepInfraSeedreamQualityFlowCreatesImageJob(t *testing.T) {
 		t.Fatalf("user not created: %v", err)
 	}
 	cmds, _ := h.cmds.ListByUser(ctx, user.ID, 10, 0)
-	if !hasCommandTypes(cmds, domain.CommandMenuImageDeepInfraSeedream, domain.CommandImageGenerate) {
+	if hasCommandTypes(cmds, domain.CommandImageGenerate) {
 		t.Fatalf("unexpected command types: %+v", commandTypes(cmds))
 	}
 	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
-	if len(jobs) != 1 || jobs[0].CostEstimate != 10 || jobs[0].CostReserved != 10 {
-		t.Fatalf("seedream should create one reserved image job, jobs=%+v", jobs)
-	}
-	var params struct {
-		ModelID      string `json:"model_id"`
-		ModelName    string `json:"model_name"`
-		Provider     string `json:"provider"`
-		ModelCode    string `json:"model_code"`
-		Size         string `json:"size"`
-		Resolution   string `json:"resolution"`
-		ImageQuality string `json:"image_quality"`
-	}
-	if err := json.Unmarshal(jobs[0].Params, &params); err != nil {
-		t.Fatalf("decode job params: %v", err)
-	}
-	if params.ModelID != "seedream_4_5" ||
-		params.ModelName != "ByteDance Seedream 4.5" ||
-		params.Provider != "deepinfra" ||
-		params.ModelCode != "ByteDance/Seedream-4.5" ||
-		params.Size != "1024x1024" ||
-		params.Resolution != "" ||
-		params.ImageQuality != "" {
-		t.Fatalf("unexpected seedream job params: %+v", params)
-	}
-	sent := control.Sent()
-	if len(sent) != 2 || !strings.Contains(sent[0].Text, "ByteDance Seedream 4.5") || !strings.Contains(sent[0].Text, "Цена: 10 кредитов") {
-		t.Fatalf("unexpected seedream responses: %+v", sent)
+	if len(jobs) != 0 || h.pub.Len() != 0 {
+		t.Fatalf("unpriced Seedream must not create jobs/tasks, jobs=%+v tasks=%d", jobs, h.pub.Len())
 	}
 }
 

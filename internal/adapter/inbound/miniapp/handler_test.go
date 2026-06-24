@@ -33,6 +33,7 @@ import (
 	"vk-ai-aggregator/internal/service/joborchestrator"
 	"vk-ai-aggregator/internal/service/modelcatalog"
 	"vk-ai-aggregator/internal/service/paymentservice"
+	"vk-ai-aggregator/internal/service/pricingcatalog"
 	"vk-ai-aggregator/internal/service/referralservice"
 )
 
@@ -256,25 +257,28 @@ func newTestFixtureWithConfigAndPaymentProvider(appSecret string, limiter interf
 	if configure != nil {
 		configure(&cfg)
 	}
+	pricingCatalog := mustStaticPricingCatalog()
 	orchOptions := []joborchestrator.Option{}
 	if cfg.VideoRouteResolver != nil {
 		orchOptions = append(orchOptions, joborchestrator.WithVideoRouteResolver(cfg.VideoRouteResolver))
 	}
+	orchOptions = append(orchOptions, joborchestrator.WithPricingCatalog(pricingCatalog))
 	orch := joborchestrator.New(jobRepo, uowMgr, billing, 0, orchOptions...)
 	handler := miniappinbound.NewHandler(
 		cfg,
 		miniappinbound.Deps{
-			Users:         userRepo,
-			Jobs:          jobRepo,
-			Conversations: conversationRepo,
-			Artifacts:     artifactRepo,
-			Moderation:    moderationRepo,
-			Objects:       objects,
-			Billing:       billing,
-			BillingRepo:   billingRepo,
-			Payment:       payment,
-			Referrals:     referrals,
-			Orchestrator:  orch,
+			Users:          userRepo,
+			Jobs:           jobRepo,
+			Conversations:  conversationRepo,
+			Artifacts:      artifactRepo,
+			Moderation:     moderationRepo,
+			Objects:        objects,
+			Billing:        billing,
+			BillingRepo:    billingRepo,
+			Payment:        payment,
+			Referrals:      referrals,
+			Orchestrator:   orch,
+			PricingCatalog: pricingCatalog,
 		},
 	)
 	return &testFixture{
@@ -478,6 +482,37 @@ func devLaunchParams(vkUserID int64) string {
 	return fmt.Sprintf("vk_user_id=%d&vk_ts=%d", vkUserID, time.Now().Unix())
 }
 
+func staticPricingCatalog(t *testing.T) *pricingcatalog.Catalog {
+	t.Helper()
+	catalog, err := pricingcatalog.NewStaticCatalog()
+	if err != nil {
+		t.Fatalf("new pricing catalog: %v", err)
+	}
+	return catalog
+}
+
+func miniAppTestImageCostCredits(t *testing.T, modelID, quality string) int64 {
+	t.Helper()
+	credits, err := staticPricingCatalog(t).CostEstimateCredits(pricingcatalog.ProductKey{
+		Operation:    domain.OperationImageGenerate,
+		Modality:     domain.ModalityImage,
+		ImageModelID: modelID,
+		Quality:      quality,
+	})
+	if err != nil {
+		t.Fatalf("image cost estimate %s/%s: %v", modelID, quality, err)
+	}
+	return credits
+}
+
+func mustStaticPricingCatalog() *pricingcatalog.Catalog {
+	catalog, err := pricingcatalog.NewStaticCatalog()
+	if err != nil {
+		panic(err)
+	}
+	return catalog
+}
+
 func multipartUploadBody(t *testing.T, data []byte) (*bytes.Buffer, string) {
 	t.Helper()
 	var body bytes.Buffer
@@ -561,6 +596,8 @@ func enableTestVideoRoute(cfg *miniappinbound.Config, alias domain.VideoRouteAli
 			DefaultDurationSec:     5,
 			AllowedResolutions:     []string{"720p"},
 			AllowedAspectRatios:    []string{"16:9", "9:16", "1:1"},
+			DefaultResolution:      "720p",
+			DefaultAspectRatio:     "16:9",
 			SupportsReferenceImage: true,
 			MaxReferenceImages:     1,
 		},
@@ -2447,7 +2484,7 @@ func TestHandler_CreatePaymentIntentRequiresClientIdempotencyKey(t *testing.T) {
 	}
 }
 
-func TestHandler_Estimate_OKNoJobNoReservation(t *testing.T) {
+func TestHandler_Estimate_UnpricedLegacyImageFailsClosedNoJobNoReservation(t *testing.T) {
 	fixture := newTestFixture("", nil)
 	routes := fixture.handler.Routes()
 	ctx := context.Background()
@@ -2476,32 +2513,11 @@ func TestHandler_Estimate_OKNoJobNoReservation(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	routes.ServeHTTP(w, req)
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for unpriced legacy model, got %d: %s", w.Code, w.Body.String())
 	}
-	var resp struct {
-		Operation      string `json:"operation"`
-		ModelID        string `json:"model_id"`
-		CostEstimate   int64  `json:"cost_estimate"`
-		BalanceCredits int64  `json:"balance_credits"`
-		EnoughCredits  bool   `json:"enough_credits"`
-		Provider       string `json:"provider"`
-		Prompt         string `json:"prompt"`
-	}
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("invalid response json: %v", err)
-	}
-	if resp.Operation != "image_generate" || resp.ModelID != "sdxl_turbo" {
-		t.Fatalf("unexpected operation/model response: %+v", resp)
-	}
-	if resp.CostEstimate != 10 {
-		t.Fatalf("cost_estimate = %d, want 10", resp.CostEstimate)
-	}
-	if resp.BalanceCredits != billingservice.DefaultStartingBalance || !resp.EnoughCredits {
-		t.Fatalf("balance/enough = %d/%v, want %d/true", resp.BalanceCredits, resp.EnoughCredits, billingservice.DefaultStartingBalance)
-	}
-	if resp.Provider != "" || resp.Prompt != "" {
-		t.Fatalf("estimate response leaked provider/prompt fields: %s", w.Body.String())
+	if !strings.Contains(w.Body.String(), "unsupported model") {
+		t.Fatalf("unexpected error body: %s", w.Body.String())
 	}
 
 	jobs, err := fixture.jobRepo.ListByUser(ctx, user.ID, 10, 0)
@@ -2644,7 +2660,7 @@ func TestHandler_Estimate_NanoBanana2UsesServerOwnedCost(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("invalid response json: %v", err)
 	}
-	if resp.ModelID != "nano_banana_2" || resp.ModelName != "Nano Banana 2" || resp.CostEstimate != 10 {
+	if resp.ModelID != "nano_banana_2" || resp.ModelName != "Nano Banana 2" || resp.CostEstimate != 15 {
 		t.Fatalf("unexpected model estimate response: %+v", resp)
 	}
 }
@@ -2702,7 +2718,7 @@ func TestHandler_Estimate_ImageQualityUsesServerOwnedCost(t *testing.T) {
 	if resp.ModelID != modelcatalog.MiniAppImageNanoBanana2 ||
 		resp.ModelName != "Nano Banana 2" ||
 		resp.ImageQuality != modelcatalog.ImageQuality4K ||
-		resp.CostEstimate != 24 {
+		resp.CostEstimate != 36 {
 		t.Fatalf("unexpected quality estimate response: %+v", resp)
 	}
 }
@@ -2801,18 +2817,129 @@ func TestHandler_ListModelCatalog_PublicItemsOnly(t *testing.T) {
 		t.Fatalf("unexpected model catalog length: %+v", resp.Items)
 	}
 	image := resp.Items[0]
-	if image.Type != "image" || image.ID != "nano_banana_2" || image.Alias != "" || image.EstimateCredits != 10 || !image.Enabled {
+	if image.Type != "image" || image.ID != "nano_banana_2" || image.Alias != "" || image.EstimateCredits != 15 || !image.Enabled {
 		t.Fatalf("unexpected public image catalog item: %+v", image)
 	}
 	if image.DefaultQuality != "1K" || len(image.QualityOptions) != 3 || !image.SupportsReferenceImage || image.MaxReferenceImages != 4 {
 		t.Fatalf("missing public image constraints: %+v", image)
 	}
 	video := resp.Items[1]
-	if video.Type != "video" || video.ID != string(domain.VideoRouteKlingO3Standard) || video.Alias != string(domain.VideoRouteKlingO3Standard) || video.EstimateCredits != 100 || !video.Enabled {
+	if video.Type != "video" || video.ID != string(domain.VideoRouteKlingO3Standard) || video.Alias != string(domain.VideoRouteKlingO3Standard) || video.EstimateCredits != 150 || !video.Enabled {
 		t.Fatalf("unexpected public video catalog item: %+v", video)
 	}
 	if video.Name == "" || video.Description == "" || len(video.AllowedDurationsSec) != 2 || video.DefaultDurationSec != 5 || video.MaxReferenceImages != 1 {
 		t.Fatalf("missing public video constraints: %+v", video)
+	}
+}
+
+func TestHandler_PricingCatalogParity_ImageNanoBanana2DefaultQuality(t *testing.T) {
+	fixture := newTestFixtureWithConfig("", nil, func(cfg *miniappinbound.Config) {
+		cfg.ImageModels = []miniappinbound.ImageModelDTO{{
+			Type:            "image",
+			ID:              modelcatalog.MiniAppImageNanoBanana2,
+			Name:            "Nano Banana 2",
+			EstimateCredits: 10,
+			Enabled:         true,
+			QualityOptions: []string{
+				modelcatalog.ImageQuality1K,
+				modelcatalog.ImageQuality2K,
+				modelcatalog.ImageQuality4K,
+			},
+			DefaultQuality:         modelcatalog.ImageQuality1K,
+			SupportsReferenceImage: true,
+			MaxReferenceImages:     4,
+		}}
+	})
+	routes := fixture.handler.Routes()
+	expectedCost := miniAppTestImageCostCredits(t, modelcatalog.MiniAppImageNanoBanana2, modelcatalog.ImageQuality1K)
+
+	catalogReq := httptest.NewRequest(http.MethodGet, "/miniapp/model-catalog", nil)
+	catalogReq.Header.Set("X-Launch-Params", devLaunchParams(778))
+	catalogResp := httptest.NewRecorder()
+	routes.ServeHTTP(catalogResp, catalogReq)
+	if catalogResp.Code != http.StatusOK {
+		t.Fatalf("catalog status = %d: %s", catalogResp.Code, catalogResp.Body.String())
+	}
+	var catalogBody struct {
+		Items []miniappinbound.ModelCatalogItemDTO `json:"items"`
+	}
+	if err := json.Unmarshal(catalogResp.Body.Bytes(), &catalogBody); err != nil {
+		t.Fatalf("decode catalog: %v", err)
+	}
+	var image *miniappinbound.ModelCatalogItemDTO
+	for i := range catalogBody.Items {
+		if catalogBody.Items[i].Type == "image" && catalogBody.Items[i].ID == modelcatalog.MiniAppImageNanoBanana2 {
+			image = &catalogBody.Items[i]
+			break
+		}
+	}
+	if image == nil || image.DefaultQuality != modelcatalog.ImageQuality1K || image.EstimateCredits != expectedCost {
+		t.Fatalf("catalog hint did not use pricing catalog cost %d: %+v", expectedCost, image)
+	}
+
+	estimateBody, _ := json.Marshal(map[string]string{
+		"operation":     "image_generate",
+		"prompt":        "estimate image",
+		"model_id":      modelcatalog.MiniAppImageNanoBanana2,
+		"image_quality": modelcatalog.ImageQuality1K,
+	})
+	estimateReq := httptest.NewRequest(http.MethodPost, "/miniapp/estimate", bytes.NewReader(estimateBody))
+	estimateReq.Header.Set("Content-Type", "application/json")
+	estimateReq.Header.Set("X-Launch-Params", devLaunchParams(778))
+	estimateResp := httptest.NewRecorder()
+	routes.ServeHTTP(estimateResp, estimateReq)
+	if estimateResp.Code != http.StatusOK {
+		t.Fatalf("estimate status = %d: %s", estimateResp.Code, estimateResp.Body.String())
+	}
+	var estimate miniappinbound.EstimateDTO
+	if err := json.Unmarshal(estimateResp.Body.Bytes(), &estimate); err != nil {
+		t.Fatalf("decode estimate: %v", err)
+	}
+	if estimate.ModelID != modelcatalog.MiniAppImageNanoBanana2 ||
+		estimate.ImageQuality != modelcatalog.ImageQuality1K ||
+		estimate.CostEstimate != expectedCost {
+		t.Fatalf("estimate did not use pricing catalog cost %d: %+v", expectedCost, estimate)
+	}
+
+	createBody, _ := json.Marshal(map[string]string{
+		"operation":     "image_generate",
+		"prompt":        "image prompt",
+		"model_id":      modelcatalog.MiniAppImageNanoBanana2,
+		"image_quality": modelcatalog.ImageQuality1K,
+	})
+	createReq := httptest.NewRequest(http.MethodPost, "/miniapp/jobs", bytes.NewReader(createBody))
+	createReq.Header.Set("Content-Type", "application/json")
+	createReq.Header.Set("X-Launch-Params", devLaunchParams(778))
+	createReq.Header.Set("X-Idempotency-Key", "miniapp-pricing-parity-nano-banana-2-1k")
+	createResp := httptest.NewRecorder()
+	routes.ServeHTTP(createResp, createReq)
+	if createResp.Code != http.StatusCreated {
+		t.Fatalf("create status = %d: %s", createResp.Code, createResp.Body.String())
+	}
+	var created miniappinbound.JobDTO
+	if err := json.Unmarshal(createResp.Body.Bytes(), &created); err != nil {
+		t.Fatalf("decode create: %v", err)
+	}
+	if created.ModelID != modelcatalog.MiniAppImageNanoBanana2 ||
+		created.ImageQuality != modelcatalog.ImageQuality1K ||
+		created.CostEstimate != expectedCost {
+		t.Fatalf("create response did not use pricing catalog cost %d: %+v", expectedCost, created)
+	}
+	job, err := fixture.jobRepo.GetByID(context.Background(), created.ID)
+	if err != nil {
+		t.Fatalf("get job: %v", err)
+	}
+	if job.CostEstimate != expectedCost || job.CostReserved != expectedCost {
+		t.Fatalf("created job cost/reserved = %d/%d, want %d/%d", job.CostEstimate, job.CostReserved, expectedCost, expectedCost)
+	}
+	if credits, ok := job.PricingSnapshotCredits(); !ok || credits != expectedCost {
+		t.Fatalf("created job pricing snapshot credits = %d/%v, want %d/true; snapshot=%s", credits, ok, expectedCost, string(job.PricingSnapshot))
+	}
+	lowerSnapshot := strings.ToLower(string(job.PricingSnapshot))
+	for _, private := range []string{"prompt", "model_code", "private_url", "nano-banana-2-new"} {
+		if strings.Contains(lowerSnapshot, private) {
+			t.Fatalf("pricing snapshot leaked private field %q: %s", private, string(job.PricingSnapshot))
+		}
 	}
 }
 
@@ -2950,7 +3077,7 @@ func TestHandler_Estimate_ReferenceArtifactsRejectTooMany(t *testing.T) {
 	}
 }
 
-func TestHandler_Estimate_VideoRouteUsesResolvedCost(t *testing.T) {
+func TestHandler_Estimate_VideoRouteUsesPricingCatalogCost(t *testing.T) {
 	fixture := newTestFixtureWithConfig("", nil, func(cfg *miniappinbound.Config) {
 		enableTestVideoRoute(cfg, domain.VideoRouteKlingO3Standard)
 	})
@@ -2989,8 +3116,8 @@ func TestHandler_Estimate_VideoRouteUsesResolvedCost(t *testing.T) {
 	if resp.Operation != "video_generate" || resp.ModelID != "" || resp.VideoRouteAlias != string(domain.VideoRouteKlingO3Standard) {
 		t.Fatalf("unexpected estimate identity fields: %+v", resp)
 	}
-	if resp.CostEstimate != 20 {
-		t.Fatalf("cost estimate = %d, want 20", resp.CostEstimate)
+	if resp.CostEstimate != 300 {
+		t.Fatalf("cost estimate = %d, want 300", resp.CostEstimate)
 	}
 }
 
@@ -3308,7 +3435,7 @@ func TestHandler_CreateJob_GPTImage2PersistsAPIMartSnapshotPrivately(t *testing.
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("invalid response json: %v", err)
 	}
-	if resp.Operation != "image_generate" || resp.ModelID != "gpt_image_2" || resp.ModelName != "GPT Image 2" || resp.CostEstimate != 20 {
+	if resp.Operation != "image_generate" || resp.ModelID != "gpt_image_2" || resp.ModelName != "GPT Image 2" || resp.CostEstimate != 4 {
 		t.Fatalf("unexpected response: %+v", resp)
 	}
 	jobID, err := uuid.Parse(resp.ID)
@@ -3368,7 +3495,7 @@ func TestHandler_CreateJob_NanoBanana2PersistsPoYoSnapshotPrivately(t *testing.T
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("invalid response json: %v", err)
 	}
-	if resp.Operation != "image_generate" || resp.ModelID != "nano_banana_2" || resp.ModelName != "Nano Banana 2" || resp.CostEstimate != 10 {
+	if resp.Operation != "image_generate" || resp.ModelID != "nano_banana_2" || resp.ModelName != "Nano Banana 2" || resp.CostEstimate != 15 {
 		t.Fatalf("unexpected response: %+v", resp)
 	}
 	jobID, err := uuid.Parse(resp.ID)
@@ -3379,8 +3506,8 @@ func TestHandler_CreateJob_NanoBanana2PersistsPoYoSnapshotPrivately(t *testing.T
 	if err != nil {
 		t.Fatalf("get job: %v", err)
 	}
-	if job.CostEstimate != 10 || job.CostReserved != 10 {
-		t.Fatalf("cost estimate/reserved = %d/%d, want 10/10", job.CostEstimate, job.CostReserved)
+	if job.CostEstimate != 15 || job.CostReserved != 15 {
+		t.Fatalf("cost estimate/reserved = %d/%d, want 15/15", job.CostEstimate, job.CostReserved)
 	}
 	var params struct {
 		ModelID   string `json:"model_id"`
@@ -3453,7 +3580,7 @@ func TestHandler_CreateJob_ImageQualityPersistsServerOwnedSnapshot(t *testing.T)
 		resp.ModelID != modelcatalog.MiniAppImageNanoBanana2 ||
 		resp.ModelName != "Nano Banana 2" ||
 		resp.ImageQuality != modelcatalog.ImageQuality2K ||
-		resp.CostEstimate != 16 {
+		resp.CostEstimate != 24 {
 		t.Fatalf("unexpected response: %+v", resp)
 	}
 	jobID, err := uuid.Parse(resp.ID)
@@ -3464,8 +3591,8 @@ func TestHandler_CreateJob_ImageQualityPersistsServerOwnedSnapshot(t *testing.T)
 	if err != nil {
 		t.Fatalf("get job: %v", err)
 	}
-	if job.CostEstimate != 16 || job.CostReserved != 16 {
-		t.Fatalf("cost estimate/reserved = %d/%d, want 16/16", job.CostEstimate, job.CostReserved)
+	if job.CostEstimate != 24 || job.CostReserved != 24 {
+		t.Fatalf("cost estimate/reserved = %d/%d, want 24/24", job.CostEstimate, job.CostReserved)
 	}
 	var params struct {
 		ModelID      string `json:"model_id"`
@@ -3565,7 +3692,7 @@ func TestHandler_CreateJob_IgnoresClientProviderAndPriceFields(t *testing.T) {
 	if resp.ModelID != modelcatalog.MiniAppImageNanoBanana2 ||
 		resp.ModelName != "Nano Banana 2" ||
 		resp.ImageQuality != modelcatalog.ImageQuality2K ||
-		resp.CostEstimate != 16 {
+		resp.CostEstimate != 24 {
 		t.Fatalf("client-provided price/provider fields affected response: %+v", resp)
 	}
 
@@ -3577,7 +3704,7 @@ func TestHandler_CreateJob_IgnoresClientProviderAndPriceFields(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get job: %v", err)
 	}
-	if job.CostEstimate != 16 || job.CostReserved != 16 {
+	if job.CostEstimate != 24 || job.CostReserved != 24 {
 		t.Fatalf("client-provided price affected billing, estimate/reserved=%d/%d", job.CostEstimate, job.CostReserved)
 	}
 	var params struct {
@@ -3856,6 +3983,9 @@ func TestHandler_CreateJob_VideoReferenceArtifactPassesRouteValidation(t *testin
 	}
 	if len(job.InputArtifactIDs) != 1 || job.InputArtifactIDs[0] != artifact.ID {
 		t.Fatalf("unexpected input artifacts: %+v", job.InputArtifactIDs)
+	}
+	if job.CostEstimate != 150 || job.CostReserved != 150 {
+		t.Fatalf("cost estimate/reserved = %d/%d, want 150/150", job.CostEstimate, job.CostReserved)
 	}
 }
 

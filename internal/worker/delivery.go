@@ -258,7 +258,8 @@ func (w *DeliveryWorker) Process(ctx context.Context, task queue.Task) error {
 }
 
 func (w *DeliveryWorker) captureReserved(ctx context.Context, job *domain.Job) error {
-	if job.CostReserved <= 0 || job.CostCaptured == job.CostReserved {
+	amount := job.ChargeAmountCredits()
+	if amount <= 0 || job.CostCaptured == amount {
 		return nil
 	}
 	if w.billing == nil {
@@ -266,11 +267,11 @@ func (w *DeliveryWorker) captureReserved(ctx context.Context, job *domain.Job) e
 	}
 	captureCtx, captureSpan := tracing.Start(ctx, "billing.capture",
 		attribute.String("job.id", job.ID.String()),
-		attribute.Int64("billing.amount", job.CostReserved),
+		attribute.Int64("billing.amount", amount),
 		tracing.CorrelationAttr(job.CorrelationID),
 	)
 	defer captureSpan.End()
-	if err := w.billing.CaptureForJob(captureCtx, job.ID, job.CostReserved); err != nil {
+	if err := w.billing.CaptureForJob(captureCtx, job.ID, amount); err != nil {
 		metrics.BillingCaptures.WithLabelValues(deliveryOperationLabel(job), "error").Inc()
 		observeVideoRouteBillingForJob(job, "capture", "error")
 		metrics.ObserveMediaDeliveryCaptureGap(deliveryOperationLabel(job), deliveryModalityLabel(job), "capture_failed")
@@ -279,9 +280,9 @@ func (w *DeliveryWorker) captureReserved(ctx context.Context, job *domain.Job) e
 	}
 	metrics.BillingCaptures.WithLabelValues(deliveryOperationLabel(job), "success").Inc()
 	observeVideoRouteBillingForJob(job, "capture", "success")
-	metrics.AddProductCreditsFlow("job_delivery", "capture", "success", job.CostReserved)
-	if job.CostCaptured != job.CostReserved {
-		job.CostCaptured = job.CostReserved
+	metrics.AddProductCreditsFlow("job_delivery", "capture", "success", amount)
+	if job.CostCaptured != amount {
+		job.CostCaptured = amount
 		if err := w.jobs.Update(ctx, job); err != nil {
 			return err
 		}

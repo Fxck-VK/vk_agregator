@@ -25,7 +25,8 @@ func TestCatalogBuildsOnlyPublicEnabledItems(t *testing.T) {
 			modelcatalog.MiniAppImageSeedream45:    true,
 			modelcatalog.MiniAppImageSDXLTurbo:     true,
 		},
-		VideoRoutes: videoCatalog.PublicRoutes(),
+		VideoRoutes:    videoCatalog.PublicRoutes(),
+		PricingCatalog: staticPricingCatalog(t),
 	})
 
 	items := catalog.Items()
@@ -50,7 +51,9 @@ func TestCatalogBuildsOnlyPublicEnabledItems(t *testing.T) {
 	if pro == nil {
 		t.Fatalf("Nano Banana Pro missing from public catalog: %+v", items)
 	}
-	assertImageQualityOptions(t, "Nano Banana Pro", pro.DefaultQuality, pro.QualityOptions)
+	if pro.DefaultQuality != modelcatalog.ImageQuality1K || len(pro.QualityOptions) != 2 || pro.QualityOptions[0] != modelcatalog.ImageQuality1K || pro.QualityOptions[1] != modelcatalog.ImageQuality4K {
+		t.Fatalf("Nano Banana Pro must expose only priced quality options: %+v", pro)
+	}
 	gptImage2 := findItem(items, modelcatalog.MiniAppImageGPTImage2)
 	if gptImage2 == nil {
 		t.Fatalf("GPT Image 2 missing from public catalog: %+v", items)
@@ -79,6 +82,7 @@ func TestCatalogFailsClosedForDisabledOrUnconfiguredModels(t *testing.T) {
 			modelcatalog.MiniAppImageNanoBananaPro: true,
 			modelcatalog.MiniAppImageGPTImage2:     true,
 		},
+		PricingCatalog: staticPricingCatalog(t),
 	})
 
 	if images := catalog.ImageModels(); len(images) != 0 {
@@ -95,6 +99,7 @@ func TestCatalogReturnsDefensiveCopies(t *testing.T) {
 		EnabledImageModels: map[string]bool{
 			modelcatalog.MiniAppImageNanoBanana2: true,
 		},
+		PricingCatalog: staticPricingCatalog(t),
 	})
 
 	images := catalog.ImageModels()

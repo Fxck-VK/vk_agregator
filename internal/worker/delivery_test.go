@@ -86,6 +86,10 @@ func (u *fakeVKUploader) UploadVideo(_ context.Context, peerID int64, filename s
 // resultReadyJob creates a user account, reserves credits, stores an output
 // artifact and a job in result_ready, returning the job.
 func (h *deliveryHarness) resultReadyJob(t *testing.T, mediaType domain.MediaType, body string) *domain.Job {
+	return h.resultReadyJobWithCost(t, mediaType, body, 10, nil)
+}
+
+func (h *deliveryHarness) resultReadyJobWithCost(t *testing.T, mediaType domain.MediaType, body string, cost int64, pricingSnapshot json.RawMessage) *domain.Job {
 	t.Helper()
 	ctx := context.Background()
 	userID := uuid.New()
@@ -94,19 +98,20 @@ func (h *deliveryHarness) resultReadyJob(t *testing.T, mediaType domain.MediaTyp
 	}
 
 	job := &domain.Job{
-		ID:             uuid.New(),
-		UserID:         userID,
-		VKPeerID:       555,
-		OperationType:  domain.OperationImageGenerate,
-		Modality:       domain.ModalityImage,
-		Status:         domain.JobStatusResultReady,
-		IdempotencyKey: "job:" + uuid.NewString(),
-		CostReserved:   10,
+		ID:              uuid.New(),
+		UserID:          userID,
+		VKPeerID:        555,
+		OperationType:   domain.OperationImageGenerate,
+		Modality:        domain.ModalityImage,
+		Status:          domain.JobStatusResultReady,
+		IdempotencyKey:  "job:" + uuid.NewString(),
+		PricingSnapshot: pricingSnapshot,
+		CostReserved:    cost,
 	}
 	if err := h.jobs.Create(ctx, job); err != nil {
 		t.Fatalf("create job: %v", err)
 	}
-	if _, err := h.billing.Reserve(ctx, userID, job.ID, 10); err != nil {
+	if _, err := h.billing.Reserve(ctx, userID, job.ID, cost); err != nil {
 		t.Fatalf("reserve: %v", err)
 	}
 
@@ -259,6 +264,25 @@ func TestDeliverySuccessCapturesAndSucceeds(t *testing.T) {
 	dels, _ := h.deliveries.ListByJob(ctx, job.ID)
 	if len(dels) != 1 || dels[0].Status != domain.DeliveryStatusSent {
 		t.Fatalf("unexpected deliveries: %+v", dels)
+	}
+}
+
+func TestDeliveryUsesPricingSnapshotAmountForCapture(t *testing.T) {
+	h := newDeliveryHarness(t)
+	ctx := context.Background()
+	snapshot := json.RawMessage(`{"internal_credits":15}`)
+	job := h.resultReadyJobWithCost(t, domain.MediaTypeImage, "", 15, snapshot)
+
+	if err := h.worker.Process(ctx, deliveryTask(job)); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+
+	got, _ := h.jobs.GetByID(ctx, job.ID)
+	if got.Status != domain.JobStatusSucceeded || got.CostCaptured != 15 {
+		t.Fatalf("expected succeeded job with snapshot capture, got %+v", got)
+	}
+	if h.balance(t, got.UserID) != 985 {
+		t.Fatalf("balance = %d, want 985", h.balance(t, got.UserID))
 	}
 }
 

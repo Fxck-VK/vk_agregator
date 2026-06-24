@@ -340,21 +340,67 @@ func TestSubmitHailuoFastRejectsInvalidDataURLFirstFrame(t *testing.T) {
 	}
 }
 
+func TestEstimateReportsAPIMartProviderCost(t *testing.T) {
+	p := New(Config{APIKey: "test-key"})
+	req := domain.ProviderRequest{
+		JobID:       uuid.New(),
+		Operation:   domain.OperationVideoGenerate,
+		Modality:    domain.ModalityVideo,
+		ModelCode:   ModelHailuo23Standard,
+		Prompt:      "clip",
+		DurationSec: 6,
+		Resolution:  "768p",
+	}
+
+	estimate, err := p.Estimate(context.Background(), req)
+	if err != nil {
+		t.Fatalf("estimate: %v", err)
+	}
+	if estimate.AmountCredits != 1 || estimate.Currency != "credits" || estimate.Estimated {
+		t.Fatalf("unexpected estimate: %+v", estimate)
+	}
+
+	params, err := json.Marshal(map[string]any{
+		"resolved_video_route": domain.VideoRouteSnapshot{
+			Alias:               domain.VideoRouteHailuo23Standard,
+			Provider:            domain.ProviderAPIMart,
+			ProviderModelID:     ModelHailuo23Standard,
+			ModelClass:          "hailuo_2_3_standard",
+			DurationSec:         6,
+			Resolution:          "768p",
+			ProviderCostCredits: 1,
+			InternalCostCredits: 2,
+			PriceMultiplier:     2,
+		},
+	})
+	if err != nil {
+		t.Fatalf("marshal params: %v", err)
+	}
+	req.Params = params
+	estimate, err = p.Estimate(context.Background(), req)
+	if err != nil {
+		t.Fatalf("snapshot estimate: %v", err)
+	}
+	if estimate.AmountCredits != 1 || estimate.Estimated {
+		t.Fatalf("unexpected snapshot estimate: %+v", estimate)
+	}
+}
+
 func TestSubmitGemini3ProImageValidation(t *testing.T) {
-	p := New(Config{APIKey: "test-key", InternalImagePriceCredits: 10})
+	p := New(Config{APIKey: "test-key"})
 	base := domain.ProviderRequest{
 		JobID:     uuid.New(),
 		Operation: domain.OperationImageGenerate,
 		Modality:  domain.ModalityImage,
 		ModelCode: ModelGemini3ProImage,
 		Prompt:    "safe image",
-		Size:      "2K",
+		Size:      "1K",
 	}
 	estimate, err := p.Estimate(context.Background(), base)
 	if err != nil {
 		t.Fatalf("estimate: %v", err)
 	}
-	if estimate.AmountCredits != 10 || estimate.Currency != "credits" || estimate.Estimated {
+	if estimate.AmountCredits != 1 || estimate.Currency != "credits" || estimate.Estimated {
 		t.Fatalf("unexpected estimate: %+v", estimate)
 	}
 
@@ -368,6 +414,15 @@ func TestSubmitGemini3ProImageValidation(t *testing.T) {
 			req: func() domain.ProviderRequest {
 				req := base
 				req.ModelCode = ModelHailuo23Standard
+				return req
+			}(),
+			want: domain.ProviderErrUnsupportedCapab,
+		},
+		{
+			name: "unpriced provider floor",
+			req: func() domain.ProviderRequest {
+				req := base
+				req.Size = "2K"
 				return req
 			}(),
 			want: domain.ProviderErrUnsupportedCapab,

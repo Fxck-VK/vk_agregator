@@ -1,11 +1,13 @@
 package productcatalog
 
 import (
+	"errors"
 	"strings"
 
 	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/platform/config"
 	"vk-ai-aggregator/internal/service/modelcatalog"
+	"vk-ai-aggregator/internal/service/pricingcatalog"
 	"vk-ai-aggregator/internal/service/videorouter"
 )
 
@@ -16,10 +18,14 @@ import (
 type RuntimeCatalog struct {
 	Catalog               *Catalog
 	VideoRouteCatalog     *videorouter.Catalog
+	PricingCatalog        *pricingcatalog.Catalog
 	ImageReferenceEnabled bool
 }
 
-func FromConfig(cfg config.Config) (RuntimeCatalog, error) {
+func FromConfig(cfg config.Config, pricingCatalog *pricingcatalog.Catalog) (RuntimeCatalog, error) {
+	if pricingCatalog == nil {
+		return RuntimeCatalog{}, errors.New("productcatalog: pricing catalog is required")
+	}
 	videoCatalog, err := VideoRouteCatalogFromConfig(cfg)
 	var publicVideoRoutes []videorouter.PublicRoute
 	if err == nil && videoCatalog != nil {
@@ -29,10 +35,12 @@ func FromConfig(cfg config.Config) (RuntimeCatalog, error) {
 		ImageProviderReady: imageProviderReadyFromConfig(cfg),
 		EnabledImageModels: enabledImageModelsFromConfig(cfg),
 		VideoRoutes:        publicVideoRoutes,
+		PricingCatalog:     pricingCatalog,
 	})
 	return RuntimeCatalog{
 		Catalog:               catalog,
 		VideoRouteCatalog:     videoCatalog,
+		PricingCatalog:        pricingCatalog,
 		ImageReferenceEnabled: catalogHasReferenceImageModel(catalog),
 	}, err
 }

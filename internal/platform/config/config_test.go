@@ -1244,10 +1244,12 @@ func TestLoadDeepInfraConfig(t *testing.T) {
 	t.Setenv("DEEPINFRA_API_KEY", "test-key")
 	t.Setenv("DEEPINFRA_BASE_URL", "https://example.com/v1/openai")
 	t.Setenv("DEEPINFRA_TEXT_MODEL", "deepseek-ai/DeepSeek-V4-Flash")
-	t.Setenv("DEEPINFRA_TEXT_PRICE", "2")
+	t.Setenv("DEEPINFRA_TEXT_PROVIDER_COST_CREDITS", "2")
 	t.Setenv("DEEPINFRA_IMAGE_MODEL", "ByteDance/Seedream-4.5")
 	t.Setenv("DEEPINFRA_IMAGE_FALLBACK_MODEL", "stabilityai/sdxl-turbo")
-	t.Setenv("DEEPINFRA_IMAGE_PRICE", "11")
+	t.Setenv("DEEPINFRA_IMAGE_PROVIDER_COST_CREDITS", "11")
+	t.Setenv("DEEPINFRA_VIDEO_PROVIDER_COST_CREDITS", "12")
+	t.Setenv("DEEPINFRA_VIDEO_MAX_PROVIDER_COST_CREDITS", "13")
 	t.Setenv("DEEPINFRA_IMAGE_REFERENCE_ENABLED", "true")
 
 	cfg := config.Load()
@@ -1260,8 +1262,8 @@ func TestLoadDeepInfraConfig(t *testing.T) {
 	if cfg.DeepInfraTextModel != "deepseek-ai/DeepSeek-V4-Flash" {
 		t.Fatalf("DeepInfraTextModel = %q", cfg.DeepInfraTextModel)
 	}
-	if cfg.DeepInfraTextPrice != 2 {
-		t.Fatalf("DeepInfraTextPrice = %d, want 2", cfg.DeepInfraTextPrice)
+	if cfg.DeepInfraTextProviderCostCredits != 2 {
+		t.Fatalf("DeepInfraTextProviderCostCredits = %d, want 2", cfg.DeepInfraTextProviderCostCredits)
 	}
 	if cfg.DeepInfraImageModel != "ByteDance/Seedream-4.5" {
 		t.Fatalf("DeepInfraImageModel = %q", cfg.DeepInfraImageModel)
@@ -1269,11 +1271,38 @@ func TestLoadDeepInfraConfig(t *testing.T) {
 	if cfg.DeepInfraImageFallbackModel != "stabilityai/sdxl-turbo" {
 		t.Fatalf("DeepInfraImageFallbackModel = %q", cfg.DeepInfraImageFallbackModel)
 	}
-	if cfg.DeepInfraImagePrice != 11 {
-		t.Fatalf("DeepInfraImagePrice = %d, want 11", cfg.DeepInfraImagePrice)
+	if cfg.DeepInfraImageProviderCostCredits != 11 {
+		t.Fatalf("DeepInfraImageProviderCostCredits = %d, want 11", cfg.DeepInfraImageProviderCostCredits)
+	}
+	if cfg.DeepInfraVideoProviderCostCredits != 12 {
+		t.Fatalf("DeepInfraVideoProviderCostCredits = %d, want 12", cfg.DeepInfraVideoProviderCostCredits)
+	}
+	if cfg.DeepInfraVideoMaxProviderCostCredits != 13 {
+		t.Fatalf("DeepInfraVideoMaxProviderCostCredits = %d, want 13", cfg.DeepInfraVideoMaxProviderCostCredits)
 	}
 	if !cfg.DeepInfraImageReferenceEnabled {
 		t.Fatal("DeepInfraImageReferenceEnabled was not loaded")
+	}
+}
+
+func TestLoadProviderCostLegacyPriceAliases(t *testing.T) {
+	t.Setenv("DEEPINFRA_TEXT_PRICE", "2")
+	t.Setenv("DEEPINFRA_IMAGE_PRICE", "11")
+	t.Setenv("DEEPINFRA_VIDEO_PRICE", "12")
+	t.Setenv("OPENAI_TEXT_PRICE", "3")
+	t.Setenv("OPENAI_IMAGE_PRICE", "14")
+	t.Setenv("OPENAI_VIDEO_PRICE", "15")
+
+	cfg := config.Load()
+	if cfg.DeepInfraTextProviderCostCredits != 2 ||
+		cfg.DeepInfraImageProviderCostCredits != 11 ||
+		cfg.DeepInfraVideoProviderCostCredits != 12 ||
+		cfg.DeepInfraVideoMaxProviderCostCredits != 12 ||
+		cfg.OpenAITextProviderCostCredits != 3 ||
+		cfg.OpenAIImageProviderCostCredits != 14 ||
+		cfg.OpenAIVideoProviderCostCredits != 15 ||
+		cfg.OpenAIVideoMaxProviderCostCredits != 15 {
+		t.Fatalf("legacy provider cost aliases were not loaded: %+v", cfg)
 	}
 }
 
@@ -1612,6 +1641,31 @@ func TestValidatePriceOverridesRejectNonPositiveAmounts(t *testing.T) {
 	err = cfg.Validate()
 	if err == nil || !strings.Contains(err.Error(), "PRICES") || !strings.Contains(err.Error(), "must be positive") {
 		t.Fatalf("expected PRICES positive validation error, got %v", err)
+	}
+}
+
+func TestLoadRuntimePricingFlags(t *testing.T) {
+	t.Setenv("RUNTIME_PRICING_DB_ENABLED", "true")
+	t.Setenv("RUNTIME_PRICING_STATIC_FALLBACK_ENABLED", "true")
+	t.Setenv("RUNTIME_PRICING_REFRESH_INTERVAL", "5m")
+
+	cfg := config.Load()
+	if !cfg.RuntimePricingDBEnabled {
+		t.Fatal("RuntimePricingDBEnabled = false, want true")
+	}
+	if !cfg.RuntimePricingStaticFallbackEnabled {
+		t.Fatal("RuntimePricingStaticFallbackEnabled = false, want true")
+	}
+	if cfg.RuntimePricingRefreshInterval != 5*time.Minute {
+		t.Fatalf("RuntimePricingRefreshInterval = %s, want 5m", cfg.RuntimePricingRefreshInterval)
+	}
+}
+
+func TestValidateRuntimePricingRejectsNegativeRefreshInterval(t *testing.T) {
+	cfg := config.Config{RuntimePricingRefreshInterval: -time.Second}
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "RUNTIME_PRICING_REFRESH_INTERVAL") {
+		t.Fatalf("expected runtime pricing refresh validation error, got %v", err)
 	}
 }
 

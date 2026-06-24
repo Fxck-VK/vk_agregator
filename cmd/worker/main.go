@@ -198,37 +198,37 @@ func main() {
 			logger.Info("registered runway provider")
 		case "deepinfra":
 			providerList = append(providerList, deepinfra.New(deepinfra.Config{
-				APIKey:                cfg.DeepInfraAPIKey,
-				BaseURL:               cfg.DeepInfraBaseURL,
-				TextModel:             cfg.DeepInfraTextModel,
-				TextPrice:             cfg.DeepInfraTextPrice,
-				ImageModel:            defaultForImageProvider(cfg, domain.ProviderDeepInfra, cfg.DeepInfraImageModel, cfg.ImageModel),
-				ImageFallbackModel:    cfg.DeepInfraImageFallbackModel,
-				ImageSize:             cfg.ImageSize,
-				ImagePrice:            cfg.DeepInfraImagePrice,
-				ImageReferenceEnabled: cfg.DeepInfraImageReferenceEnabled,
-				VideoModel:            defaultForVideoProvider(cfg, domain.ProviderDeepInfra, cfg.DeepInfraVideoModel, cfg.VideoModel),
-				VideoDurationSec:      cfg.DeepInfraVideoDurationSec,
-				VideoResolution:       cfg.DeepInfraVideoResolution,
-				VideoAspectRatio:      cfg.DeepInfraVideoAspectRatio,
-				VideoDraft:            cfg.DeepInfraVideoDraft,
-				VideoPrice:            cfg.DeepInfraVideoPrice,
-				VideoHTTPTimeout:      cfg.DeepInfraVideoHTTPTimeout,
+				APIKey:                   cfg.DeepInfraAPIKey,
+				BaseURL:                  cfg.DeepInfraBaseURL,
+				TextModel:                cfg.DeepInfraTextModel,
+				TextProviderCostCredits:  cfg.DeepInfraTextProviderCostCredits,
+				ImageModel:               defaultForImageProvider(cfg, domain.ProviderDeepInfra, cfg.DeepInfraImageModel, cfg.ImageModel),
+				ImageFallbackModel:       cfg.DeepInfraImageFallbackModel,
+				ImageSize:                cfg.ImageSize,
+				ImageProviderCostCredits: cfg.DeepInfraImageProviderCostCredits,
+				ImageReferenceEnabled:    cfg.DeepInfraImageReferenceEnabled,
+				VideoModel:               defaultForVideoProvider(cfg, domain.ProviderDeepInfra, cfg.DeepInfraVideoModel, cfg.VideoModel),
+				VideoDurationSec:         cfg.DeepInfraVideoDurationSec,
+				VideoResolution:          cfg.DeepInfraVideoResolution,
+				VideoAspectRatio:         cfg.DeepInfraVideoAspectRatio,
+				VideoDraft:               cfg.DeepInfraVideoDraft,
+				VideoProviderCostCredits: cfg.DeepInfraVideoProviderCostCredits,
+				VideoHTTPTimeout:         cfg.DeepInfraVideoHTTPTimeout,
 			}))
 			logger.Info("registered deepinfra provider")
 		case "openai":
 			providerList = append(providerList, openai.New(openai.Config{
-				APIKey:       cfg.OpenAIAPIKey,
-				BaseURL:      cfg.OpenAIBaseURL,
-				TextModel:    cfg.OpenAITextModel,
-				ImageModel:   defaultForImageProvider(cfg, domain.ProviderOpenAI, cfg.OpenAIImageModel, cfg.ImageModel),
-				ImageSize:    defaultForImageProvider(cfg, domain.ProviderOpenAI, cfg.OpenAIImageSize, cfg.ImageSize),
-				VideoModel:   cfg.OpenAIVideoModel,
-				VideoSeconds: cfg.OpenAIVideoSeconds,
-				VideoSize:    cfg.OpenAIVideoSize,
-				TextPrice:    cfg.OpenAITextPrice,
-				ImagePrice:   cfg.OpenAIImagePrice,
-				VideoPrice:   cfg.OpenAIVideoPrice,
+				APIKey:                   cfg.OpenAIAPIKey,
+				BaseURL:                  cfg.OpenAIBaseURL,
+				TextModel:                cfg.OpenAITextModel,
+				ImageModel:               defaultForImageProvider(cfg, domain.ProviderOpenAI, cfg.OpenAIImageModel, cfg.ImageModel),
+				ImageSize:                defaultForImageProvider(cfg, domain.ProviderOpenAI, cfg.OpenAIImageSize, cfg.ImageSize),
+				VideoModel:               cfg.OpenAIVideoModel,
+				VideoSeconds:             cfg.OpenAIVideoSeconds,
+				VideoSize:                cfg.OpenAIVideoSize,
+				TextProviderCostCredits:  cfg.OpenAITextProviderCostCredits,
+				ImageProviderCostCredits: cfg.OpenAIImageProviderCostCredits,
+				VideoProviderCostCredits: cfg.OpenAIVideoProviderCostCredits,
 			}))
 			logger.Info("registered openai provider")
 		case "mock":
@@ -694,7 +694,7 @@ func defaultProviderMediaContracts(cfg config.Config) []domain.ProviderMediaCont
 			TranscodeAllowed:       transcodeAllowed,
 			MaxProviderAttempts:    1,
 			MaxFallbackAttempts:    0,
-			MaxProviderCostCredits: cfg.DeepInfraVideoPrice,
+			MaxProviderCostCredits: cfg.DeepInfraVideoMaxProviderCostCredits,
 		})
 	}
 	if model := strings.TrimSpace(cfg.OpenAIVideoModel); model != "" {
@@ -714,7 +714,7 @@ func defaultProviderMediaContracts(cfg config.Config) []domain.ProviderMediaCont
 			TranscodeAllowed:       transcodeAllowed,
 			MaxProviderAttempts:    1,
 			MaxFallbackAttempts:    0,
-			MaxProviderCostCredits: cfg.OpenAIVideoPrice,
+			MaxProviderCostCredits: cfg.OpenAIVideoMaxProviderCostCredits,
 		})
 	}
 	for _, model := range []struct {

@@ -13,7 +13,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"math"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -35,6 +34,7 @@ import (
 	"vk-ai-aggregator/internal/service/joborchestrator"
 	"vk-ai-aggregator/internal/service/modelcatalog"
 	"vk-ai-aggregator/internal/service/paymentservice"
+	"vk-ai-aggregator/internal/service/pricingcatalog"
 	"vk-ai-aggregator/internal/service/productcatalog"
 	"vk-ai-aggregator/internal/service/referralservice"
 )
@@ -134,24 +134,25 @@ type ReferralService interface {
 // Deps are the collaborators the handler needs. All are interfaces or services
 // so the handler stays storage- and provider-agnostic.
 type Deps struct {
-	Idempotency  domain.IdempotencyRepository
-	Inbound      domain.InboundEventRepository
-	Users        domain.UserRepository
-	Jobs         domain.JobRepository
-	Commands     domain.CommandRepository
-	Billing      *billingservice.Service
-	Payment      *paymentservice.Service
-	Referrals    ReferralService
-	Orchestrator *joborchestrator.Orchestrator
-	Router       *commandrouter.Router
-	Control      vkdelivery.ControlClient
-	Profile      vkdelivery.UserProfileClient
-	DialogState  DialogState
-	AntiSpam     AntiSpam
-	Artifacts    domain.ArtifactRepository
-	Objects      ObjectStore
-	Downloader   Downloader
-	Logger       *slog.Logger
+	Idempotency    domain.IdempotencyRepository
+	Inbound        domain.InboundEventRepository
+	Users          domain.UserRepository
+	Jobs           domain.JobRepository
+	Commands       domain.CommandRepository
+	Billing        *billingservice.Service
+	Payment        *paymentservice.Service
+	Referrals      ReferralService
+	Orchestrator   *joborchestrator.Orchestrator
+	PricingCatalog *pricingcatalog.Catalog
+	Router         *commandrouter.Router
+	Control        vkdelivery.ControlClient
+	Profile        vkdelivery.UserProfileClient
+	DialogState    DialogState
+	AntiSpam       AntiSpam
+	Artifacts      domain.ArtifactRepository
+	Objects        ObjectStore
+	Downloader     Downloader
+	Logger         *slog.Logger
 }
 
 // ObjectStore persists input artifact bytes.
@@ -287,6 +288,7 @@ type videoModeSpec struct {
 	VideoRouteAlias        domain.VideoRouteAlias
 	DurationSec            int
 	AllowedDurationsSec    []int
+	Resolution             string
 	RequiresStartImage     bool
 	SupportsReferenceImage bool
 	MaxReferenceImages     int
@@ -317,10 +319,26 @@ func videoRouteMode(mode dialogMode, name string, alias domain.VideoRouteAlias, 
 		VideoRouteAlias:        alias,
 		DurationSec:            durationSec,
 		AllowedDurationsSec:    append([]int(nil), allowedDurations...),
+		Resolution:             defaultVKVideoResolution(alias),
 		RequiresStartImage:     requiresStartImage,
 		SupportsReferenceImage: true,
 		MaxReferenceImages:     maxReferenceImages,
 		AllowedAspectRatios:    append([]string(nil), allowedAspectRatios...),
+	}
+}
+
+func defaultVKVideoResolution(alias domain.VideoRouteAlias) string {
+	switch alias {
+	case domain.VideoRouteKlingO3Standard,
+		domain.VideoRouteRunwayGen4Turbo,
+		domain.VideoRouteSeedance20Fast,
+		domain.VideoRouteRunwayGen45:
+		return pricingcatalog.VideoResolution720p
+	case domain.VideoRouteHailuo23Fast,
+		domain.VideoRouteHailuo23Standard:
+		return pricingcatalog.VideoResolution768p
+	default:
+		return ""
 	}
 }
 
@@ -360,6 +378,7 @@ func videoModeFromPublicRoute(route productcatalog.VideoRoute) (videoModeSpec, b
 		VideoRouteAlias:        domain.VideoRouteAlias(alias),
 		DurationSec:            durationSec,
 		AllowedDurationsSec:    append([]int(nil), route.AllowedDurationsSec...),
+		Resolution:             strings.TrimSpace(route.DefaultResolution),
 		RequiresStartImage:     route.RequiresStartImage,
 		SupportsReferenceImage: route.SupportsReferenceImage,
 		MaxReferenceImages:     route.MaxReferenceImages,
@@ -1052,25 +1071,31 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 			jp.ModelName = videoSpec.ModelName
 			jp.VideoRouteAlias = string(videoSpec.VideoRouteAlias)
 			jp.DurationSec = videoSpec.DurationSec
+			jp.Resolution = videoSpec.Resolution
 			jp.AspectRatio = videoAspectRatio
 			jp.ReferenceArtifactIDs = videoReferenceIDs
 		}
 		params, _ := json.Marshal(jp)
+		pricingSnapshot, err := h.jobPricingSnapshot(parsed.Operation, parsed.Modality, photoSelection, videoSpec)
+		if err != nil {
+			metrics.ObserveProductEvent("vk_bot", "job", "estimate", string(parsed.Operation), string(parsed.Modality), "error")
+			return fmt.Errorf("vk pricing catalog estimate: %w", err)
+		}
+		costEstimateCredits := pricingSnapshot.InternalCredits
 		metrics.ObserveProductPromptLength("vk_bot", string(parsed.Operation), string(parsed.Modality), parsed.Prompt)
 		job, err := h.deps.Orchestrator.CreateJob(ctx, joborchestrator.CreateJobInput{
-			UserID:                 user.ID,
-			Source:                 "vk_bot",
-			VKPeerID:               peerID,
-			CommandID:              cmd.ID,
-			Operation:              parsed.Operation,
-			Modality:               parsed.Modality,
-			IdempotencyKey:         "vk_job:" + strconv.FormatInt(cb.GroupID, 10) + ":" + eventID,
-			CorrelationID:          idemKey,
-			Params:                 params,
-			InputArtifactIDs:       videoReferenceIDs,
-			ProviderCostCredits:    photoSelection.Model.ProviderCostCredits,
-			PriceMultiplier:        photoSelection.Model.PriceMultiplier,
-			MaxInternalCostCredits: photoSelection.Model.MaxInternalCostCredits,
+			UserID:              user.ID,
+			Source:              "vk_bot",
+			VKPeerID:            peerID,
+			CommandID:           cmd.ID,
+			Operation:           parsed.Operation,
+			Modality:            parsed.Modality,
+			IdempotencyKey:      "vk_job:" + strconv.FormatInt(cb.GroupID, 10) + ":" + eventID,
+			CorrelationID:       idemKey,
+			Params:              params,
+			InputArtifactIDs:    videoReferenceIDs,
+			CostEstimateCredits: costEstimateCredits,
+			PricingSnapshot:     pricingSnapshot,
 		})
 		switch {
 		case err == nil:
@@ -1195,7 +1220,7 @@ func (h *Handler) sendVideoDurationSelection(ctx context.Context, routeAlias, id
 	}
 	msg := vkdelivery.Message{
 		Text:     videoDurationSelectionText(spec),
-		Keyboard: videoRouteDurationKeyboard(string(spec.VideoRouteAlias), spec.AllowedDurationsSec),
+		Keyboard: h.videoRouteDurationKeyboard(spec),
 	}
 	return h.deliverVideoControl(ctx, command, idemKey, peerID, msg, allowEdit)
 }
@@ -1214,7 +1239,7 @@ func (h *Handler) sendVideoPromptForDuration(ctx context.Context, routeAlias str
 
 func (h *Handler) sendVideoPromptInstruction(ctx context.Context, spec videoModeSpec, idemKey string, command domain.CommandType, peerID int64, allowEdit bool) error {
 	msg := vkdelivery.Message{
-		Text:     videoPromptInstructionText(spec),
+		Text:     h.videoPromptInstructionText(spec),
 		Keyboard: backToKeyboard(domain.CommandMenuVideo),
 	}
 	return h.deliverVideoControl(ctx, command, idemKey, peerID, msg, allowEdit)
@@ -1254,9 +1279,12 @@ func videoDurationSelectionText(spec videoModeSpec) string {
 	return b.String()
 }
 
-func videoPromptInstructionText(spec videoModeSpec) string {
+func (h *Handler) videoPromptInstructionText(spec videoModeSpec) string {
 	var b strings.Builder
 	b.WriteString(fmt.Sprintf("%s · %d сек", spec.ModelName, spec.DurationSec))
+	if price, ok := h.videoDisplayEstimateCredits(spec); ok {
+		b.WriteString(fmt.Sprintf("\n\nЦена: %d кредитов.", price))
+	}
 	if spec.RequiresStartImage {
 		b.WriteString("\n\nПрикрепите стартовое фото и напишите описание видео одним сообщением.")
 	} else {
@@ -1360,7 +1388,7 @@ func (h *Handler) sendPhotoQualitySelection(ctx context.Context, modelID, idemKe
 		return h.sendControlResponse(ctx, domain.CommandMenuImage, idemKey, 0, peerID, &domain.User{}, allowEdit)
 	}
 	h.setDialogMode(ctx, peerID, photoSelectMode(model.ModelID))
-	options := h.photoQualityOptions(publicModel, model)
+	options := h.photoQualityOptions(publicModel)
 	if len(options) == 0 {
 		selection := photoDialogSelection{Model: model, Quality: strings.TrimSpace(publicModel.DefaultQuality)}
 		h.setDialogMode(ctx, peerID, photoPromptMode(model.ModelID, selection.Quality))
@@ -1399,7 +1427,10 @@ func (h *Handler) sendPhotoPromptForQuality(ctx context.Context, modelID, rawQua
 }
 
 func (h *Handler) sendPhotoPromptInstruction(ctx context.Context, selection photoDialogSelection, idemKey string, command domain.CommandType, peerID int64, allowEdit bool) error {
-	price := h.imagePriceCredits(selection.Model)
+	price, ok := h.imageDisplayEstimateCredits(selection.Model.ModelID, selection.Quality)
+	if !ok {
+		return pricingcatalog.ErrPriceNotFound
+	}
 	waitHint := imageModelWaitHint(selection.Model)
 	if waitHint != "" {
 		waitHint = "\nОжидание: " + waitHint + "."
@@ -1548,40 +1579,165 @@ func imageQualityAllowed(quality string, options []string) bool {
 	return false
 }
 
-func (h *Handler) photoQualityOptions(publicModel productcatalog.ImageModel, model modelcatalog.Model) []photoQualityOption {
+func (h *Handler) imageDisplayEstimateCredits(modelID, quality string) (int64, bool) {
+	if h.deps.PricingCatalog == nil {
+		return 0, false
+	}
+	key, ok := imagePricingProductKey(modelID, quality)
+	if !ok {
+		return 0, false
+	}
+	credits, err := h.deps.PricingCatalog.DisplayEstimateCredits(key)
+	return credits, err == nil && credits > 0
+}
+
+func (h *Handler) videoDisplayEstimateCredits(spec videoModeSpec) (int64, bool) {
+	if h.deps.PricingCatalog == nil {
+		return 0, false
+	}
+	key, ok := videoPricingProductKey(spec)
+	if !ok {
+		return 0, false
+	}
+	credits, err := h.deps.PricingCatalog.DisplayEstimateCredits(key)
+	return credits, err == nil && credits > 0
+}
+
+func (h *Handler) jobPricingSnapshot(operation domain.OperationType, modality domain.Modality, photoSelection photoDialogSelection, videoSpec videoModeSpec) (pricingcatalog.PricingSnapshot, error) {
+	switch operation {
+	case domain.OperationImageGenerate:
+		if h.deps.PricingCatalog == nil {
+			return pricingcatalog.PricingSnapshot{}, pricingcatalog.ErrPriceNotFound
+		}
+		if modality != domain.ModalityImage {
+			return pricingcatalog.PricingSnapshot{}, pricingcatalog.ErrInvalidProductKey
+		}
+		key, ok := h.imageJobPricingProductKey(photoSelection)
+		if !ok {
+			return pricingcatalog.PricingSnapshot{}, pricingcatalog.ErrInvalidProductKey
+		}
+		return h.deps.PricingCatalog.Snapshot(key)
+	case domain.OperationVideoGenerate:
+		if h.deps.PricingCatalog == nil {
+			return pricingcatalog.PricingSnapshot{}, pricingcatalog.ErrPriceNotFound
+		}
+		if modality != domain.ModalityVideo {
+			return pricingcatalog.PricingSnapshot{}, pricingcatalog.ErrInvalidProductKey
+		}
+		key, ok := h.videoJobPricingProductKey(videoSpec)
+		if !ok {
+			return pricingcatalog.PricingSnapshot{}, pricingcatalog.ErrInvalidProductKey
+		}
+		return h.deps.PricingCatalog.Snapshot(key)
+	default:
+		return pricingcatalog.PricingSnapshot{}, nil
+	}
+}
+
+func (h *Handler) imageJobPricingProductKey(selection photoDialogSelection) (pricingcatalog.ProductKey, bool) {
+	if key, ok := imagePricingProductKey(selection.Model.ModelID, selection.Quality); ok {
+		return key, true
+	}
+	for _, model := range h.cfg.ImageModels {
+		if !model.Enabled {
+			continue
+		}
+		quality := strings.TrimSpace(model.DefaultQuality)
+		if quality == "" && len(model.QualityOptions) > 0 {
+			quality = strings.TrimSpace(model.QualityOptions[0])
+		}
+		key, ok := imagePricingProductKey(model.ID, quality)
+		if !ok {
+			continue
+		}
+		if _, err := h.deps.PricingCatalog.CostEstimateCredits(key); err == nil {
+			return key, true
+		}
+	}
+	return pricingcatalog.ProductKey{}, false
+}
+
+func (h *Handler) videoJobPricingProductKey(spec videoModeSpec) (pricingcatalog.ProductKey, bool) {
+	if key, ok := videoPricingProductKey(spec); ok {
+		return key, true
+	}
+	for _, route := range h.cfg.VideoRoutes {
+		if !route.Enabled {
+			continue
+		}
+		candidate, ok := videoModeFromPublicRoute(route)
+		if !ok {
+			continue
+		}
+		key, ok := videoPricingProductKey(candidate)
+		if !ok {
+			continue
+		}
+		if _, err := h.deps.PricingCatalog.CostEstimateCredits(key); err == nil {
+			return key, true
+		}
+	}
+	key, ok := videoPricingProductKey(videoModeSpec{
+		VideoRouteAlias: domain.VideoRouteKlingO3Standard,
+		DurationSec:     5,
+		Resolution:      pricingcatalog.VideoResolution720p,
+	})
+	if !ok {
+		return pricingcatalog.ProductKey{}, false
+	}
+	if _, err := h.deps.PricingCatalog.CostEstimateCredits(key); err != nil {
+		return pricingcatalog.ProductKey{}, false
+	}
+	return key, true
+}
+
+func imagePricingProductKey(modelID, quality string) (pricingcatalog.ProductKey, bool) {
+	key := pricingcatalog.ProductKey{
+		Operation:    domain.OperationImageGenerate,
+		Modality:     domain.ModalityImage,
+		ImageModelID: strings.TrimSpace(modelID),
+		Quality:      strings.TrimSpace(quality),
+	}
+	key = key.Normalize()
+	return key, key.Valid()
+}
+
+func videoPricingProductKey(spec videoModeSpec) (pricingcatalog.ProductKey, bool) {
+	resolution := strings.TrimSpace(spec.Resolution)
+	if resolution == "" {
+		resolution = defaultVKVideoResolution(spec.VideoRouteAlias)
+	}
+	key := pricingcatalog.ProductKey{
+		Operation:       domain.OperationVideoGenerate,
+		Modality:        domain.ModalityVideo,
+		VideoRouteAlias: spec.VideoRouteAlias,
+		Resolution:      resolution,
+		DurationSec:     spec.DurationSec,
+	}
+	key = key.Normalize()
+	return key, key.Valid()
+}
+
+func (h *Handler) photoQualityOptions(publicModel productcatalog.ImageModel) []photoQualityOption {
 	out := make([]photoQualityOption, 0, len(publicModel.QualityOptions))
 	for _, rawQuality := range publicModel.QualityOptions {
 		quality, ok := modelcatalog.NormalizeImageQuality(rawQuality)
 		if !ok {
 			continue
 		}
-		adjusted := modelcatalog.ApplyImageQuality(model, quality)
+		price, ok := h.imageDisplayEstimateCredits(publicModel.ID, quality)
+		if !ok {
+			continue
+		}
 		out = append(out, photoQualityOption{
 			Label:   quality,
-			Price:   h.imagePriceCredits(adjusted),
+			Price:   price,
 			Command: domain.CommandMenuImageQualitySelect,
 			ModelID: publicModel.ID,
 			Quality: quality,
 		})
 	}
 	return out
-}
-
-func (h *Handler) imagePriceCredits(model modelcatalog.Model) int64 {
-	if h.deps.Billing != nil {
-		if price, err := h.deps.Billing.EstimateProviderCost(model.ProviderCostCredits, model.PriceMultiplier, model.MaxInternalCostCredits); err == nil {
-			return price
-		}
-	}
-	multiplier := model.PriceMultiplier
-	if multiplier <= 0 {
-		multiplier = 1
-	}
-	price := int64(math.Ceil(float64(model.ProviderCostCredits) * multiplier))
-	if price <= 0 {
-		return model.ProviderCostCredits
-	}
-	return price
 }
 
 func (h *Handler) currentBalance(ctx context.Context, user *domain.User) (int64, error) {

@@ -24,6 +24,7 @@ import (
 	"vk-ai-aggregator/internal/service/billingservice"
 	"vk-ai-aggregator/internal/service/joborchestrator"
 	"vk-ai-aggregator/internal/service/paymentservice"
+	"vk-ai-aggregator/internal/service/pricingcatalog"
 	"vk-ai-aggregator/internal/service/referralservice"
 )
 
@@ -124,18 +125,19 @@ type ObjectReader interface {
 
 // Deps are the collaborators needed by the miniapp handler.
 type Deps struct {
-	Users         domain.UserRepository
-	Jobs          domain.JobRepository
-	Conversations domain.ConversationRepository
-	Artifacts     domain.ArtifactRepository
-	Moderation    domain.ModerationResultRepository
-	Objects       ObjectReader
-	Billing       *billingservice.Service
-	BillingRepo   domain.BillingRepository
-	Payment       *paymentservice.Service
-	Referrals     ReferralService
-	Orchestrator  *joborchestrator.Orchestrator
-	Logger        *slog.Logger
+	Users          domain.UserRepository
+	Jobs           domain.JobRepository
+	Conversations  domain.ConversationRepository
+	Artifacts      domain.ArtifactRepository
+	Moderation     domain.ModerationResultRepository
+	Objects        ObjectReader
+	Billing        *billingservice.Service
+	BillingRepo    domain.BillingRepository
+	Payment        *paymentservice.Service
+	Referrals      ReferralService
+	Orchestrator   *joborchestrator.Orchestrator
+	PricingCatalog *pricingcatalog.Catalog
+	Logger         *slog.Logger
 }
 
 // Handler serves the /miniapp/* routes.
@@ -202,13 +204,19 @@ func (h *Handler) listModelCatalog(w http.ResponseWriter, r *http.Request) {
 		if !model.Enabled || strings.TrimSpace(model.ID) == "" || strings.TrimSpace(model.Name) == "" {
 			continue
 		}
-		items = append(items, modelCatalogItemFromImage(copyImageModelDTO(model)))
+		item, ok := h.modelCatalogItemFromImage(copyImageModelDTO(model))
+		if ok {
+			items = append(items, item)
+		}
 	}
 	for _, route := range h.cfg.VideoRoutes {
 		if !route.Enabled || strings.TrimSpace(route.Alias) == "" {
 			continue
 		}
-		items = append(items, modelCatalogItemFromVideo(copyVideoRouteDTO(route)))
+		item, ok := h.modelCatalogItemFromVideo(copyVideoRouteDTO(route))
+		if ok {
+			items = append(items, item)
+		}
 	}
 	writeJSON(w, http.StatusOK, listResponse[ModelCatalogItemDTO]{
 		Items:      items,
@@ -637,6 +645,7 @@ func (h *Handler) readJobRequest(w http.ResponseWriter, r *http.Request) (Create
 			return CreateJobRequest{}, "", "", miniAppModelSpec{}, false
 		}
 		req.VideoRouteAlias = route.Alias
+		req.Resolution = route.DefaultResolution
 		duration, ok := normalizeVideoDurationSec(req.DurationSec, route)
 		if !ok {
 			writeError(w, http.StatusBadRequest, "invalid video duration")
@@ -693,11 +702,19 @@ func (h *Handler) applyImageQuality(w http.ResponseWriter, model miniAppModelSpe
 	publicModel, found := h.imageModelByID(model.ModelID)
 	raw = strings.TrimSpace(raw)
 	if !found {
-		if raw != "" {
+		quality := raw
+		if quality == "" {
+			quality = defaultMiniAppImageQuality(model.ModelID)
+		}
+		if quality == "" {
+			return model, "", true
+		}
+		quality, ok := normalizeMiniAppImageQuality(quality)
+		if !ok {
 			writeError(w, http.StatusBadRequest, "unsupported image quality")
 			return miniAppModelSpec{}, "", false
 		}
-		return model, "", true
+		return applyMiniAppImageQuality(model, quality), quality, true
 	}
 	options := publicModel.QualityOptions
 	if len(options) == 0 {
@@ -717,6 +734,17 @@ func (h *Handler) applyImageQuality(w http.ResponseWriter, model miniAppModelSpe
 		return miniAppModelSpec{}, "", false
 	}
 	return applyMiniAppImageQuality(model, quality), quality, true
+}
+
+func defaultMiniAppImageQuality(modelID string) string {
+	switch modelID {
+	case pricingcatalog.PublicImageNanoBanana2,
+		pricingcatalog.PublicImageNanoBananaPro,
+		pricingcatalog.PublicImageGPTImage2:
+		return pricingcatalog.ImageQuality1K
+	default:
+		return ""
+	}
 }
 
 func (h *Handler) imageModelByID(modelID string) (ImageModelDTO, bool) {
@@ -890,6 +918,20 @@ func modelCatalogItemFromImage(model ImageModelDTO) ModelCatalogItemDTO {
 	}
 }
 
+func (h *Handler) modelCatalogItemFromImage(model ImageModelDTO) (ModelCatalogItemDTO, bool) {
+	if h.deps.PricingCatalog == nil {
+		return ModelCatalogItemDTO{}, false
+	}
+	model.QualityOptions = h.pricedImageQualityOptions(model.ID, model.QualityOptions)
+	model.DefaultQuality = h.pricedImageDefaultQuality(model.ID, model.DefaultQuality, model.QualityOptions)
+	estimate, ok := h.displayImageEstimateCredits(model.ID, model.DefaultQuality)
+	if !ok {
+		return ModelCatalogItemDTO{}, false
+	}
+	model.EstimateCredits = estimate
+	return modelCatalogItemFromImage(model), true
+}
+
 func modelCatalogItemFromVideo(route VideoRouteDTO) ModelCatalogItemDTO {
 	return ModelCatalogItemDTO{
 		Type:                   "video",
@@ -909,6 +951,91 @@ func modelCatalogItemFromVideo(route VideoRouteDTO) ModelCatalogItemDTO {
 		SupportsReferenceImage: route.SupportsReferenceImage,
 		MaxReferenceImages:     route.MaxReferenceImages,
 	}
+}
+
+func (h *Handler) modelCatalogItemFromVideo(route VideoRouteDTO) (ModelCatalogItemDTO, bool) {
+	if h.deps.PricingCatalog == nil {
+		return ModelCatalogItemDTO{}, false
+	}
+	route.AllowedDurationsSec = h.pricedVideoDurations(route)
+	route.DefaultDurationSec = pricedDefaultDuration(route.DefaultDurationSec, route.AllowedDurationsSec)
+	estimate, ok := h.displayVideoEstimateCredits(domain.VideoRouteAlias(route.Alias), route.DefaultResolution, route.DefaultDurationSec)
+	if !ok {
+		return ModelCatalogItemDTO{}, false
+	}
+	route.EstimateCredits = estimate
+	return modelCatalogItemFromVideo(route), true
+}
+
+func (h *Handler) pricedImageQualityOptions(modelID string, options []string) []string {
+	out := make([]string, 0, len(options))
+	for _, option := range options {
+		if _, ok := h.displayImageEstimateCredits(modelID, option); ok {
+			out = append(out, option)
+		}
+	}
+	return out
+}
+
+func (h *Handler) pricedImageDefaultQuality(modelID, configured string, options []string) string {
+	if configured != "" {
+		if _, ok := h.displayImageEstimateCredits(modelID, configured); ok {
+			return configured
+		}
+	}
+	if len(options) > 0 {
+		return options[0]
+	}
+	return ""
+}
+
+func (h *Handler) displayImageEstimateCredits(modelID, quality string) (int64, bool) {
+	if h.deps.PricingCatalog == nil {
+		return 0, false
+	}
+	credits, err := h.deps.PricingCatalog.DisplayEstimateCredits(pricingcatalog.ProductKey{
+		Operation:    domain.OperationImageGenerate,
+		Modality:     domain.ModalityImage,
+		ImageModelID: modelID,
+		Quality:      quality,
+	})
+	return credits, err == nil && credits > 0
+}
+
+func (h *Handler) pricedVideoDurations(route VideoRouteDTO) []int {
+	out := make([]int, 0, len(route.AllowedDurationsSec))
+	for _, duration := range route.AllowedDurationsSec {
+		if _, ok := h.displayVideoEstimateCredits(domain.VideoRouteAlias(route.Alias), route.DefaultResolution, duration); ok {
+			out = append(out, duration)
+		}
+	}
+	return out
+}
+
+func pricedDefaultDuration(configured int, options []int) int {
+	for _, option := range options {
+		if option == configured {
+			return configured
+		}
+	}
+	if len(options) > 0 {
+		return options[0]
+	}
+	return 0
+}
+
+func (h *Handler) displayVideoEstimateCredits(alias domain.VideoRouteAlias, resolution string, duration int) (int64, bool) {
+	if h.deps.PricingCatalog == nil || duration <= 0 {
+		return 0, false
+	}
+	credits, err := h.deps.PricingCatalog.DisplayEstimateCredits(pricingcatalog.ProductKey{
+		Operation:       domain.OperationVideoGenerate,
+		Modality:        domain.ModalityVideo,
+		VideoRouteAlias: alias,
+		Resolution:      resolution,
+		DurationSec:     duration,
+	})
+	return credits, err == nil && credits > 0
 }
 
 func (h *Handler) estimateJob(w http.ResponseWriter, r *http.Request) {
@@ -989,46 +1116,92 @@ func (h *Handler) estimateJob(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) estimateRequestCost(ctx context.Context, userID uuid.UUID, opType domain.OperationType, modality domain.Modality, model miniAppModelSpec, req CreateJobRequest) (int64, error) {
-	if opType != domain.OperationVideoGenerate {
-		if model.ProviderCostCredits > 0 {
-			return h.deps.Billing.EstimateProviderCost(
-				model.ProviderCostCredits,
-				model.PriceMultiplier,
-				model.MaxInternalCostCredits,
-			)
-		}
+	if opType == domain.OperationTextGenerate {
 		return h.deps.Billing.Estimate(opType)
 	}
-	if h.cfg.VideoRouteResolver == nil {
-		return 0, fmt.Errorf("miniapp video route resolver unavailable")
-	}
-	params, _ := json.Marshal(miniAppJobParams{
-		Prompt:               req.Prompt,
-		ModelName:            model.ModelName,
-		VideoRouteAlias:      strings.TrimSpace(req.VideoRouteAlias),
-		ReferenceArtifactIDs: req.ReferenceArtifactIDs,
-		DurationSec:          req.DurationSec,
-		AspectRatio:          req.AspectRatio,
-	})
-	resolution, err := h.cfg.VideoRouteResolver.ResolveVideoRoute(ctx, joborchestrator.VideoRouteCheckInput{
-		UserID:           userID,
-		Source:           "miniapp",
-		Operation:        opType,
-		Modality:         modality,
-		Params:           params,
-		InputArtifactIDs: req.ReferenceArtifactIDs,
-	})
+	snapshot, err := h.pricingSnapshotForRequest(ctx, userID, opType, modality, model, req)
 	if err != nil {
 		return 0, err
 	}
-	if !resolution.Resolved || !resolution.Snapshot.Valid() {
-		return 0, fmt.Errorf("miniapp video route unresolved")
+	return snapshot.InternalCredits, nil
+}
+
+func (h *Handler) pricingSnapshotForRequest(ctx context.Context, userID uuid.UUID, opType domain.OperationType, modality domain.Modality, model miniAppModelSpec, req CreateJobRequest) (pricingcatalog.PricingSnapshot, error) {
+	if h.deps.PricingCatalog == nil {
+		return pricingcatalog.PricingSnapshot{}, pricingcatalog.ErrPriceNotFound
 	}
-	return h.deps.Billing.EstimateProviderCost(
-		resolution.Snapshot.ProviderCostCredits,
-		resolution.Snapshot.PriceMultiplier,
-		resolution.Snapshot.MaxInternalCostCredits,
-	)
+	key, ok := h.pricingProductKey(opType, modality, model, req)
+	if !ok {
+		return pricingcatalog.PricingSnapshot{}, pricingcatalog.ErrInvalidProductKey
+	}
+	if h.cfg.VideoRouteResolver == nil {
+		if opType == domain.OperationVideoGenerate {
+			return pricingcatalog.PricingSnapshot{}, fmt.Errorf("miniapp video route resolver unavailable")
+		}
+		return h.deps.PricingCatalog.Snapshot(key)
+	}
+	if opType == domain.OperationVideoGenerate {
+		params, _ := json.Marshal(miniAppJobParams{
+			Prompt:               req.Prompt,
+			ModelName:            model.ModelName,
+			VideoRouteAlias:      strings.TrimSpace(req.VideoRouteAlias),
+			ReferenceArtifactIDs: req.ReferenceArtifactIDs,
+			DurationSec:          req.DurationSec,
+			Resolution:           req.Resolution,
+			AspectRatio:          req.AspectRatio,
+		})
+		resolution, err := h.cfg.VideoRouteResolver.ResolveVideoRoute(ctx, joborchestrator.VideoRouteCheckInput{
+			UserID:           userID,
+			Source:           "miniapp",
+			Operation:        opType,
+			Modality:         modality,
+			Params:           params,
+			InputArtifactIDs: req.ReferenceArtifactIDs,
+		})
+		if err != nil {
+			return pricingcatalog.PricingSnapshot{}, err
+		}
+		if !resolution.Resolved || !resolution.Snapshot.Valid() {
+			return pricingcatalog.PricingSnapshot{}, fmt.Errorf("miniapp video route unresolved")
+		}
+	}
+	return h.deps.PricingCatalog.Snapshot(key)
+}
+
+func (h *Handler) pricingProductKey(opType domain.OperationType, modality domain.Modality, model miniAppModelSpec, req CreateJobRequest) (pricingcatalog.ProductKey, bool) {
+	switch opType {
+	case domain.OperationImageGenerate:
+		modelID := miniAppResponseModelID(model)
+		if modelID == "" {
+			modelID = model.ModelID
+		}
+		key := pricingcatalog.ProductKey{
+			Operation:    opType,
+			Modality:     modality,
+			ImageModelID: modelID,
+			Quality:      req.ImageQuality,
+		}
+		key = key.Normalize()
+		return key, key.Valid()
+	case domain.OperationVideoGenerate:
+		resolution := strings.TrimSpace(req.Resolution)
+		if resolution == "" {
+			if route, ok := h.videoRouteByAlias(req.VideoRouteAlias); ok {
+				resolution = route.DefaultResolution
+			}
+		}
+		key := pricingcatalog.ProductKey{
+			Operation:       opType,
+			Modality:        modality,
+			VideoRouteAlias: domain.VideoRouteAlias(strings.TrimSpace(req.VideoRouteAlias)),
+			Resolution:      resolution,
+			DurationSec:     req.DurationSec,
+		}
+		key = key.Normalize()
+		return key, key.Valid()
+	default:
+		return pricingcatalog.ProductKey{}, false
+	}
 }
 
 func (h *Handler) balanceForEstimate(ctx context.Context, vkUserID int64) (int64, error) {
@@ -1092,6 +1265,7 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 		jobParams.ModelName = model.ModelName
 		jobParams.DurationSec = req.DurationSec
 		jobParams.VideoRouteAlias = strings.TrimSpace(req.VideoRouteAlias)
+		jobParams.Resolution = req.Resolution
 		jobParams.AspectRatio = req.AspectRatio
 	} else {
 		jobParams.ModelID = model.ModelID
@@ -1106,21 +1280,35 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 	}
 	params, _ := json.Marshal(jobParams)
 	metrics.ObserveProductPromptLength("miniapp", string(opType), string(modality), req.Prompt)
+	var pricingSnapshot pricingcatalog.PricingSnapshot
+	var costEstimate int64
+	if opType == domain.OperationTextGenerate {
+		costEstimate, err = h.deps.Billing.Estimate(opType)
+	} else {
+		pricingSnapshot, err = h.pricingSnapshotForRequest(r.Context(), user.ID, opType, modality, model, req)
+		if err == nil {
+			costEstimate = pricingSnapshot.InternalCredits
+		}
+	}
+	if err != nil {
+		metrics.ObserveProductEvent("miniapp", "job", "estimate", string(opType), string(modality), "error")
+		writeError(w, http.StatusBadRequest, "unsupported model")
+		return
+	}
 
 	job, err := h.deps.Orchestrator.CreateJob(r.Context(), joborchestrator.CreateJobInput{
-		UserID:                 user.ID,
-		Source:                 "miniapp",
-		VKPeerID:               vkUserID, // peer_id = user_id for direct messages
-		CommandID:              uuid.Nil, // no VK command for mini app path
-		Operation:              opType,
-		Modality:               modality,
-		IdempotencyKey:         idemKey,
-		CorrelationID:          correlationID,
-		InputArtifactIDs:       req.ReferenceArtifactIDs,
-		Params:                 params,
-		ProviderCostCredits:    model.ProviderCostCredits,
-		PriceMultiplier:        model.PriceMultiplier,
-		MaxInternalCostCredits: model.MaxInternalCostCredits,
+		UserID:              user.ID,
+		Source:              "miniapp",
+		VKPeerID:            vkUserID, // peer_id = user_id for direct messages
+		CommandID:           uuid.Nil, // no VK command for mini app path
+		Operation:           opType,
+		Modality:            modality,
+		IdempotencyKey:      idemKey,
+		CorrelationID:       correlationID,
+		InputArtifactIDs:    req.ReferenceArtifactIDs,
+		Params:              params,
+		CostEstimateCredits: costEstimate,
+		PricingSnapshot:     pricingSnapshot,
 	})
 	switch {
 	case err == nil:

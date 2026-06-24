@@ -50,12 +50,16 @@ type VideoRouteSpec struct {
 	SupportsReferenceAudio bool `json:"supports_reference_audio,omitempty"`
 	MaxReferenceImages     int  `json:"max_reference_images,omitempty"`
 
+	// Provider cost fields are backend-only route safety metadata used to
+	// validate provider spend and build immutable worker snapshots. Public user
+	// prices come from pricingcatalog, not from these route fields.
 	ProviderCostCreditsFixed     int64 `json:"provider_cost_credits_fixed,omitempty"`
 	ProviderCostCreditsPerSecond int64 `json:"provider_cost_credits_per_second,omitempty"`
 	MaxProviderCostCredits       int64 `json:"max_provider_cost_credits,omitempty"`
 	MaxInternalCostCredits       int64 `json:"max_internal_cost_credits,omitempty"`
 
-	// PriceMultiplier is product policy; Phase 1 keeps it cataloged only.
+	// PriceMultiplier is retained only for legacy route compatibility and
+	// safety-cap math until the old route pricing path is removed.
 	PriceMultiplier float64 `json:"price_multiplier"`
 }
 

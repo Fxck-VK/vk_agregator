@@ -205,6 +205,8 @@ describe("generation request pricing contract", () => {
       expect(body).not.toHaveProperty("multiplier");
       expect(body).not.toHaveProperty("price_multiplier");
       expect(body).not.toHaveProperty("floor");
+      expect(body).not.toHaveProperty("resolution");
+      expect(body).not.toHaveProperty("aspect_ratio");
       expect(body).not.toHaveProperty("provider_model_id");
       expect(body).not.toHaveProperty("model_code");
     }
@@ -230,6 +232,8 @@ function withPrivatePricingFields<T extends Record<string, unknown>>(value: T): 
     multiplier: 1,
     price_multiplier: 1,
     floor: 1,
+    resolution: "client-resolution",
+    aspect_ratio: "client-aspect",
     provider_model_id: "client-provider-model",
     model_code: "client-model-code",
   };

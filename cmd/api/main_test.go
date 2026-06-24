@@ -8,20 +8,27 @@ import (
 	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/platform/config"
 	"vk-ai-aggregator/internal/service/joborchestrator"
+	"vk-ai-aggregator/internal/service/pricingcatalog"
+	"vk-ai-aggregator/internal/service/productcatalog"
 )
 
-func TestVideoRouteResolverFromConfigUsesMockLoadTestRoute(t *testing.T) {
-	resolver, err := videoRouteResolverFromConfig(config.Config{
+func TestVideoRouteResolverFromCatalogUsesMockLoadTestRoute(t *testing.T) {
+	prices, err := pricingcatalog.NewStaticCatalog()
+	if err != nil {
+		t.Fatalf("pricing catalog: %v", err)
+	}
+	runtimeCatalog, err := productcatalog.FromConfig(config.Config{
 		Env:                                     "loadtest",
 		Provider:                                "mock",
 		ProviderChain:                           []string{"mock"},
 		VideoProvider:                           "mock",
 		FeatureVideoRouterEnabled:               true,
 		FeatureVideoRouteMockTextToVideoEnabled: true,
-	})
+	}, prices)
 	if err != nil {
-		t.Fatalf("resolver: %v", err)
+		t.Fatalf("runtime catalog: %v", err)
 	}
+	resolver := videoRouteResolverFromCatalog(runtimeCatalog.VideoRouteCatalog)
 	params, err := json.Marshal(map[string]any{
 		"video_route_alias": string(domain.VideoRouteMockTextToVideo),
 		"duration_sec":      5,

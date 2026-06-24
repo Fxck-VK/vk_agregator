@@ -130,11 +130,21 @@ type Config struct {
 	// StreamMaxLen caps Redis stream backlog; 0 disables trimming.
 	StreamMaxLen int64
 
-	// PriceOverrides replaces per-operation prices, e.g.
-	// "text_generate=2,image_generate=12" (audit C1).
+	// PriceOverrides is a legacy billing fallback for text/old jobs. Cataloged
+	// image/video generation prices come from pricingcatalog snapshots.
 	PriceOverrides map[string]int64
 	// MaxJobCost rejects any job whose estimate exceeds this cap (0 = no cap).
 	MaxJobCost int64
+	// RuntimePricingDBEnabled switches generation pricing to DB-backed catalog
+	// loading. When enabled, invalid DB pricing must fail closed.
+	RuntimePricingDBEnabled bool
+	// RuntimePricingStaticFallbackEnabled explicitly permits the static catalog
+	// path when DB pricing is disabled. It is never an implicit DB failure
+	// fallback.
+	RuntimePricingStaticFallbackEnabled bool
+	// RuntimePricingRefreshInterval reloads DB/static pricing periodically when
+	// positive. Zero disables background refresh.
+	RuntimePricingRefreshInterval time.Duration
 
 	// PaymentProvider selects the money provider for balance top-ups.
 	PublicVKBaseURL                           string
@@ -254,33 +264,35 @@ type Config struct {
 	FeatureVideoRouteMockTextToVideoEnabled     bool
 	FeatureVideoRouteResellerExperimentsEnabled bool
 
-	OpenAIAPIKey       string
-	OpenAIBaseURL      string
-	OpenAITextModel    string
-	OpenAIImageModel   string
-	OpenAIImageSize    string
-	OpenAIVideoModel   string
-	OpenAIVideoSeconds string
-	OpenAIVideoSize    string
-	OpenAITextPrice    int64
-	OpenAIImagePrice   int64
-	OpenAIVideoPrice   int64
+	OpenAIAPIKey                      string
+	OpenAIBaseURL                     string
+	OpenAITextModel                   string
+	OpenAIImageModel                  string
+	OpenAIImageSize                   string
+	OpenAIVideoModel                  string
+	OpenAIVideoSeconds                string
+	OpenAIVideoSize                   string
+	OpenAITextProviderCostCredits     int64
+	OpenAIImageProviderCostCredits    int64
+	OpenAIVideoProviderCostCredits    int64
+	OpenAIVideoMaxProviderCostCredits int64
 
-	DeepInfraAPIKey                string
-	DeepInfraBaseURL               string
-	DeepInfraTextModel             string
-	DeepInfraTextPrice             int64
-	DeepInfraImageModel            string
-	DeepInfraImageFallbackModel    string
-	DeepInfraImagePrice            int64
-	DeepInfraImageReferenceEnabled bool
-	DeepInfraVideoModel            string
-	DeepInfraVideoDurationSec      int
-	DeepInfraVideoResolution       string
-	DeepInfraVideoAspectRatio      string
-	DeepInfraVideoDraft            bool
-	DeepInfraVideoPrice            int64
-	DeepInfraVideoHTTPTimeout      time.Duration
+	DeepInfraAPIKey                      string
+	DeepInfraBaseURL                     string
+	DeepInfraTextModel                   string
+	DeepInfraTextProviderCostCredits     int64
+	DeepInfraImageModel                  string
+	DeepInfraImageFallbackModel          string
+	DeepInfraImageProviderCostCredits    int64
+	DeepInfraImageReferenceEnabled       bool
+	DeepInfraVideoModel                  string
+	DeepInfraVideoDurationSec            int
+	DeepInfraVideoResolution             string
+	DeepInfraVideoAspectRatio            string
+	DeepInfraVideoDraft                  bool
+	DeepInfraVideoProviderCostCredits    int64
+	DeepInfraVideoMaxProviderCostCredits int64
+	DeepInfraVideoHTTPTimeout            time.Duration
 
 	TextContextEnabled                bool
 	TextContextMaxInputTokens         int
@@ -549,6 +561,9 @@ func (c Config) Validate() error {
 	}
 	if err := validatePriceOverrides(c.PriceOverrides); err != nil {
 		return err
+	}
+	if c.RuntimePricingRefreshInterval < 0 {
+		return fmt.Errorf("config: RUNTIME_PRICING_REFRESH_INTERVAL must be non-negative")
 	}
 	if provider := strings.ToLower(strings.TrimSpace(c.PaymentProvider)); provider != "" && !knownPaymentProvider(provider) {
 		return fmt.Errorf("config: PAYMENT_PROVIDER must be one of mock, yookassa")
@@ -1013,8 +1028,11 @@ func Load() Config {
 		RedisPoolSize: envInt("REDIS_POOL_SIZE", 10),
 		StreamMaxLen:  int64(envInt("STREAM_MAX_LEN", 100000)),
 
-		PriceOverrides: envPriceMap("PRICES"),
-		MaxJobCost:     int64(envInt("MAX_JOB_COST", 0)),
+		PriceOverrides:                      envPriceMap("PRICES"),
+		MaxJobCost:                          int64(envInt("MAX_JOB_COST", 0)),
+		RuntimePricingDBEnabled:             envBool("RUNTIME_PRICING_DB_ENABLED", false),
+		RuntimePricingStaticFallbackEnabled: envBool("RUNTIME_PRICING_STATIC_FALLBACK_ENABLED", false),
+		RuntimePricingRefreshInterval:       envDuration("RUNTIME_PRICING_REFRESH_INTERVAL", 0),
 
 		PublicVKBaseURL:                           env("PUBLIC_VK_BASE_URL", ""),
 		PaymentRedirectRateLimitRPS:               envFloat("PAYMENT_REDIRECT_RATE_LIMIT_RPS", 5),
@@ -1113,43 +1131,45 @@ func Load() Config {
 		FeatureVideoRouteRunwayGen45Enabled:         envBool("FEATURE_VIDEO_ROUTE_RUNWAY_GEN4_5_ENABLED", false),
 		FeatureVideoRouteMockTextToVideoEnabled:     envBool("FEATURE_VIDEO_ROUTE_MOCK_TEXT_TO_VIDEO_ENABLED", false),
 		FeatureVideoRouteResellerExperimentsEnabled: envBool("FEATURE_VIDEO_ROUTE_RESELLER_EXPERIMENTS_ENABLED", false),
-		OpenAIAPIKey:                        env("OPENAI_API_KEY", ""),
-		OpenAIBaseURL:                       env("OPENAI_BASE_URL", "https://api.openai.com/v1"),
-		OpenAITextModel:                     env("OPENAI_TEXT_MODEL", "gpt-4.1-mini"),
-		OpenAIImageModel:                    env("OPENAI_IMAGE_MODEL", "gpt-image-1"),
-		OpenAIImageSize:                     env("OPENAI_IMAGE_SIZE", "1024x1024"),
-		OpenAIVideoModel:                    env("OPENAI_VIDEO_MODEL", "sora-2"),
-		OpenAIVideoSeconds:                  env("OPENAI_VIDEO_SECONDS", "4"),
-		OpenAIVideoSize:                     env("OPENAI_VIDEO_SIZE", "720x1280"),
-		OpenAITextPrice:                     int64(envInt("OPENAI_TEXT_PRICE", 1)),
-		OpenAIImagePrice:                    int64(envInt("OPENAI_IMAGE_PRICE", 10)),
-		OpenAIVideoPrice:                    int64(envInt("OPENAI_VIDEO_PRICE", 50)),
-		DeepInfraAPIKey:                     env("DEEPINFRA_API_KEY", ""),
-		DeepInfraBaseURL:                    env("DEEPINFRA_BASE_URL", "https://api.deepinfra.com/v1/openai"),
-		DeepInfraTextModel:                  env("DEEPINFRA_TEXT_MODEL", "deepseek-ai/DeepSeek-V4-Flash"),
-		DeepInfraTextPrice:                  int64(envInt("DEEPINFRA_TEXT_PRICE", 1)),
-		DeepInfraImageModel:                 env("DEEPINFRA_IMAGE_MODEL", "ByteDance/Seedream-4.5"),
-		DeepInfraImageFallbackModel:         env("DEEPINFRA_IMAGE_FALLBACK_MODEL", ""),
-		DeepInfraImagePrice:                 int64(envInt("DEEPINFRA_IMAGE_PRICE", 10)),
-		DeepInfraImageReferenceEnabled:      envBool("DEEPINFRA_IMAGE_REFERENCE_ENABLED", false),
-		DeepInfraVideoModel:                 env("DEEPINFRA_VIDEO_MODEL", "PrunaAI/p-video"),
-		DeepInfraVideoDurationSec:           envInt("DEEPINFRA_VIDEO_DURATION_SEC", 5),
-		DeepInfraVideoResolution:            env("DEEPINFRA_VIDEO_RESOLUTION", "720p"),
-		DeepInfraVideoAspectRatio:           env("DEEPINFRA_VIDEO_ASPECT_RATIO", "16:9"),
-		DeepInfraVideoDraft:                 envBool("DEEPINFRA_VIDEO_DRAFT", true),
-		DeepInfraVideoPrice:                 int64(envInt("DEEPINFRA_VIDEO_PRICE", 10)),
-		DeepInfraVideoHTTPTimeout:           envDuration("DEEPINFRA_VIDEO_HTTP_TIMEOUT", 180*time.Second),
-		TextContextEnabled:                  envBool("TEXT_CONTEXT_ENABLED", true),
-		TextContextMaxInputTokens:           envInt("TEXT_CONTEXT_MAX_INPUT_TOKENS", 1600),
-		TextContextMaxOutputTokens:          envInt("TEXT_CONTEXT_MAX_OUTPUT_TOKENS", 800),
-		TextContextSummaryMaxTokens:         envInt("TEXT_CONTEXT_SUMMARY_MAX_TOKENS", 400),
-		TextContextRecentMessagesLimit:      envInt("TEXT_CONTEXT_RECENT_MESSAGES_LIMIT", 6),
-		TextContextSummarizeAfterMessages:   envInt("TEXT_CONTEXT_SUMMARIZE_AFTER_MESSAGES", 10),
-		TextContextSummarizeAfterTokens:     envInt("TEXT_CONTEXT_SUMMARIZE_AFTER_TOKENS", 1500),
-		ModerationProvider:                  env("MODERATION_PROVIDER", "keyword"),
-		OpenAIModerationModel:               env("OPENAI_MODERATION_MODEL", "omni-moderation-latest"),
-		ArtifactScanner:                     env("ARTIFACT_SCANNER", "none"),
-		AllowUnscannedArtifactsInProduction: envBool("ALLOW_UNSCANNED_ARTIFACTS_IN_PRODUCTION", false),
+		OpenAIAPIKey:                         env("OPENAI_API_KEY", ""),
+		OpenAIBaseURL:                        env("OPENAI_BASE_URL", "https://api.openai.com/v1"),
+		OpenAITextModel:                      env("OPENAI_TEXT_MODEL", "gpt-4.1-mini"),
+		OpenAIImageModel:                     env("OPENAI_IMAGE_MODEL", "gpt-image-1"),
+		OpenAIImageSize:                      env("OPENAI_IMAGE_SIZE", "1024x1024"),
+		OpenAIVideoModel:                     env("OPENAI_VIDEO_MODEL", "sora-2"),
+		OpenAIVideoSeconds:                   env("OPENAI_VIDEO_SECONDS", "4"),
+		OpenAIVideoSize:                      env("OPENAI_VIDEO_SIZE", "720x1280"),
+		OpenAITextProviderCostCredits:        int64(envIntAlias(1, "OPENAI_TEXT_PROVIDER_COST_CREDITS", "OPENAI_TEXT_PRICE")),
+		OpenAIImageProviderCostCredits:       int64(envIntAlias(10, "OPENAI_IMAGE_PROVIDER_COST_CREDITS", "OPENAI_IMAGE_PRICE")),
+		OpenAIVideoProviderCostCredits:       int64(envIntAlias(50, "OPENAI_VIDEO_PROVIDER_COST_CREDITS", "OPENAI_VIDEO_PRICE")),
+		OpenAIVideoMaxProviderCostCredits:    int64(envIntAlias(envIntAlias(50, "OPENAI_VIDEO_PROVIDER_COST_CREDITS", "OPENAI_VIDEO_PRICE"), "OPENAI_VIDEO_MAX_PROVIDER_COST_CREDITS")),
+		DeepInfraAPIKey:                      env("DEEPINFRA_API_KEY", ""),
+		DeepInfraBaseURL:                     env("DEEPINFRA_BASE_URL", "https://api.deepinfra.com/v1/openai"),
+		DeepInfraTextModel:                   env("DEEPINFRA_TEXT_MODEL", "deepseek-ai/DeepSeek-V4-Flash"),
+		DeepInfraTextProviderCostCredits:     int64(envIntAlias(1, "DEEPINFRA_TEXT_PROVIDER_COST_CREDITS", "DEEPINFRA_TEXT_PRICE")),
+		DeepInfraImageModel:                  env("DEEPINFRA_IMAGE_MODEL", "ByteDance/Seedream-4.5"),
+		DeepInfraImageFallbackModel:          env("DEEPINFRA_IMAGE_FALLBACK_MODEL", ""),
+		DeepInfraImageProviderCostCredits:    int64(envIntAlias(10, "DEEPINFRA_IMAGE_PROVIDER_COST_CREDITS", "DEEPINFRA_IMAGE_PRICE")),
+		DeepInfraImageReferenceEnabled:       envBool("DEEPINFRA_IMAGE_REFERENCE_ENABLED", false),
+		DeepInfraVideoModel:                  env("DEEPINFRA_VIDEO_MODEL", "PrunaAI/p-video"),
+		DeepInfraVideoDurationSec:            envInt("DEEPINFRA_VIDEO_DURATION_SEC", 5),
+		DeepInfraVideoResolution:             env("DEEPINFRA_VIDEO_RESOLUTION", "720p"),
+		DeepInfraVideoAspectRatio:            env("DEEPINFRA_VIDEO_ASPECT_RATIO", "16:9"),
+		DeepInfraVideoDraft:                  envBool("DEEPINFRA_VIDEO_DRAFT", true),
+		DeepInfraVideoProviderCostCredits:    int64(envIntAlias(10, "DEEPINFRA_VIDEO_PROVIDER_COST_CREDITS", "DEEPINFRA_VIDEO_PRICE")),
+		DeepInfraVideoMaxProviderCostCredits: int64(envIntAlias(envIntAlias(10, "DEEPINFRA_VIDEO_PROVIDER_COST_CREDITS", "DEEPINFRA_VIDEO_PRICE"), "DEEPINFRA_VIDEO_MAX_PROVIDER_COST_CREDITS")),
+		DeepInfraVideoHTTPTimeout:            envDuration("DEEPINFRA_VIDEO_HTTP_TIMEOUT", 180*time.Second),
+		TextContextEnabled:                   envBool("TEXT_CONTEXT_ENABLED", true),
+		TextContextMaxInputTokens:            envInt("TEXT_CONTEXT_MAX_INPUT_TOKENS", 1600),
+		TextContextMaxOutputTokens:           envInt("TEXT_CONTEXT_MAX_OUTPUT_TOKENS", 800),
+		TextContextSummaryMaxTokens:          envInt("TEXT_CONTEXT_SUMMARY_MAX_TOKENS", 400),
+		TextContextRecentMessagesLimit:       envInt("TEXT_CONTEXT_RECENT_MESSAGES_LIMIT", 6),
+		TextContextSummarizeAfterMessages:    envInt("TEXT_CONTEXT_SUMMARIZE_AFTER_MESSAGES", 10),
+		TextContextSummarizeAfterTokens:      envInt("TEXT_CONTEXT_SUMMARIZE_AFTER_TOKENS", 1500),
+		ModerationProvider:                   env("MODERATION_PROVIDER", "keyword"),
+		OpenAIModerationModel:                env("OPENAI_MODERATION_MODEL", "omni-moderation-latest"),
+		ArtifactScanner:                      env("ARTIFACT_SCANNER", "none"),
+		AllowUnscannedArtifactsInProduction:  envBool("ALLOW_UNSCANNED_ARTIFACTS_IN_PRODUCTION", false),
 
 		VKDeliveryMode:                    env("VK_DELIVERY_MODE", "mock"),
 		VKAccessToken:                     env("VK_ACCESS_TOKEN", ""),
@@ -1748,6 +1768,17 @@ func envInt(key string, def int) int {
 	return def
 }
 
+func envIntAlias(def int, keys ...string) int {
+	for _, key := range keys {
+		if v := os.Getenv(key); v != "" {
+			if n, err := strconv.Atoi(v); err == nil {
+				return n
+			}
+		}
+	}
+	return def
+}
+
 func envInt32(key string, def int32) int32 {
 	if v := os.Getenv(key); v != "" {
 		if n, err := strconv.ParseInt(v, 10, 32); err == nil {
@@ -1797,7 +1828,8 @@ func envConfigToken(key, def string) string {
 	return normalizeConfigToken(env(key, def))
 }
 
-// envPriceMap parses a comma-separated "op=amount" list into a price map.
+// envPriceMap parses legacy PRICES "op=amount" pairs. Runtime cataloged
+// image/video generation pricing must not depend on this map.
 func envPriceMap(key string) map[string]int64 {
 	v := os.Getenv(key)
 	if v == "" {

@@ -28,19 +28,20 @@ import (
 
 // Deps are shared backend-core collaborators required by the VK bot surface.
 type Deps struct {
-	Redis        *redis.Client
-	Idempotency  domain.IdempotencyRepository
-	Inbound      domain.InboundEventRepository
-	Users        domain.UserRepository
-	Jobs         domain.JobRepository
-	Commands     domain.CommandRepository
-	Billing      *billingservice.Service
-	Payment      *paymentservice.Service
-	Referrals    domain.ReferralRepository
-	Artifacts    domain.ArtifactRepository
-	Orchestrator *joborchestrator.Orchestrator
-	Router       *commandrouter.Router
-	Logger       *slog.Logger
+	Redis          *redis.Client
+	Idempotency    domain.IdempotencyRepository
+	Inbound        domain.InboundEventRepository
+	Users          domain.UserRepository
+	Jobs           domain.JobRepository
+	Commands       domain.CommandRepository
+	Billing        *billingservice.Service
+	Payment        *paymentservice.Service
+	Referrals      domain.ReferralRepository
+	Artifacts      domain.ArtifactRepository
+	Orchestrator   *joborchestrator.Orchestrator
+	Router         *commandrouter.Router
+	RuntimeCatalog productcatalog.RuntimeCatalog
+	Logger         *slog.Logger
 }
 
 // NewHandler builds the VK callback HTTP handler without owning core business
@@ -112,9 +113,9 @@ func NewHandler(ctx context.Context, cfg config.Config, deps Deps) http.Handler 
 		ReferredSignupRewardCredits: cfg.ReferralReferredSignupRewardCredits,
 		RewardOnActivation:          cfg.ReferralRewardOnActivation,
 	})
-	runtimeCatalog, err := productcatalog.FromConfig(cfg)
-	if err != nil {
-		logger.Warn("vk bot video route catalog disabled", logging.ErrorAttr(err))
+	runtimeCatalog := deps.RuntimeCatalog
+	if runtimeCatalog.Catalog == nil {
+		logger.Warn("vk bot product catalog is not configured")
 	}
 
 	return vkinbound.NewHandler(vkinbound.Config{
@@ -141,23 +142,24 @@ func NewHandler(ctx context.Context, cfg config.Config, deps Deps) http.Handler 
 		MaxUploadImageHeight:                cfg.MediaMaxImageHeight,
 		MaxUploadImagePixels:                cfg.MediaMaxImagePixels,
 	}, vkinbound.Deps{
-		Idempotency:  deps.Idempotency,
-		Inbound:      deps.Inbound,
-		Users:        deps.Users,
-		Jobs:         deps.Jobs,
-		Commands:     deps.Commands,
-		Billing:      deps.Billing,
-		Payment:      deps.Payment,
-		Referrals:    referrals,
-		Orchestrator: deps.Orchestrator,
-		Router:       deps.Router,
-		Control:      vkControl,
-		Profile:      vkProfile,
-		DialogState:  vkDialogState,
-		AntiSpam:     vkAntiSpam,
-		Artifacts:    deps.Artifacts,
-		Objects:      objectStore,
-		Logger:       logger,
+		Idempotency:    deps.Idempotency,
+		Inbound:        deps.Inbound,
+		Users:          deps.Users,
+		Jobs:           deps.Jobs,
+		Commands:       deps.Commands,
+		Billing:        deps.Billing,
+		Payment:        deps.Payment,
+		Referrals:      referrals,
+		Orchestrator:   deps.Orchestrator,
+		PricingCatalog: runtimeCatalog.PricingCatalog,
+		Router:         deps.Router,
+		Control:        vkControl,
+		Profile:        vkProfile,
+		DialogState:    vkDialogState,
+		AntiSpam:       vkAntiSpam,
+		Artifacts:      deps.Artifacts,
+		Objects:        objectStore,
+		Logger:         logger,
 	})
 }
 

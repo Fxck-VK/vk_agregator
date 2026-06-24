@@ -97,7 +97,8 @@ Real integrations are implemented at adapter level and remain **opt-in**:
   `image.generate` Job, and the API sends `НейроХаб рисует...` while workers
   produce and deliver the image Artifact. The current VK profile gives each
   user 100 free text-to-image attempts per 24h window through
-  `VK_ANTISPAM_IMAGE_DAILY_LIMIT=100` and `PRICES=image_generate=1`;
+  `VK_ANTISPAM_IMAGE_DAILY_LIMIT=100`; image/video user prices come from the
+  backend pricing catalog;
   reference-photo generation stays hidden behind
   `VK_MENU_IMAGE_REFERENCE_ENABLED=false` until input photo artifacts are wired.
 - Text-mode dialog context is persisted in Postgres for both VK bot and Mini

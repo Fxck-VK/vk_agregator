@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"math/big"
 	"strings"
+	"sync"
 
 	"vk-ai-aggregator/internal/domain"
 )
@@ -18,6 +19,8 @@ const (
 	// StaticSource is the initial code-backed catalog source. Runtime DB-backed
 	// sources can layer over it in a later PR without changing public DTOs.
 	StaticSource = "static"
+	// RuntimeDBSource is the runtime DB-backed generation pricing source.
+	RuntimeDBSource = "runtime_db"
 
 	// DefaultMultiplier is the product markup for the initial static catalog.
 	// It is represented as a rational value to avoid float math for money or
@@ -31,15 +34,20 @@ const (
 )
 
 var (
-	ErrInvalidProductKey   = errors.New("pricing catalog product key invalid")
-	ErrInvalidFloor        = errors.New("pricing catalog floor invalid")
-	ErrInvalidMultiplier   = errors.New("pricing catalog multiplier invalid")
-	ErrInvalidCap          = errors.New("pricing catalog cap invalid")
-	ErrInvalidSnapshot     = errors.New("pricing catalog snapshot invalid")
-	ErrPriceNotFound       = errors.New("pricing catalog price not found")
-	ErrDuplicatePrice      = errors.New("pricing catalog duplicate product price")
-	ErrCreditCalculation   = errors.New("pricing catalog credit calculation invalid")
-	ErrInvalidProductPrice = errors.New("pricing catalog product price invalid")
+	ErrInvalidProductKey       = errors.New("pricing catalog product key invalid")
+	ErrInvalidFloor            = errors.New("pricing catalog floor invalid")
+	ErrInvalidMultiplier       = errors.New("pricing catalog multiplier invalid")
+	ErrInvalidCap              = errors.New("pricing catalog cap invalid")
+	ErrInvalidSnapshot         = errors.New("pricing catalog snapshot invalid")
+	ErrPriceNotFound           = errors.New("pricing catalog price not found")
+	ErrDuplicatePrice          = errors.New("pricing catalog duplicate product price")
+	ErrCreditCalculation       = errors.New("pricing catalog credit calculation invalid")
+	ErrInvalidProductPrice     = errors.New("pricing catalog product price invalid")
+	ErrInvalidRuntimePrice     = errors.New("pricing catalog runtime price invalid")
+	ErrRuntimePricingOff       = errors.New("pricing catalog runtime pricing disabled")
+	ErrRuntimePricingNotLoaded = errors.New("pricing catalog runtime pricing not loaded")
+	ErrNoActiveVersion         = errors.New("pricing catalog active runtime price version not found")
+	ErrActiveVersionOverlap    = errors.New("pricing catalog active runtime price version overlap")
 )
 
 // FloorUnit names an exact integer minor unit for a provider floor. Units are
@@ -304,6 +312,7 @@ func (s PricingSnapshot) Valid() bool {
 // to it in a later PR; this package does not call providers or trust frontend
 // price input.
 type Catalog struct {
+	mu     sync.RWMutex
 	prices map[ProductKey]ProductPrice
 }
 
@@ -333,7 +342,12 @@ func (c *Catalog) Lookup(key ProductKey) (ProductPrice, error) {
 	if !key.Valid() {
 		return ProductPrice{}, ErrInvalidProductKey
 	}
-	if c == nil || c.prices == nil {
+	if c == nil {
+		return ProductPrice{}, fmt.Errorf("%w: %+v", ErrPriceNotFound, key)
+	}
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if c.prices == nil {
 		return ProductPrice{}, fmt.Errorf("%w: %+v", ErrPriceNotFound, key)
 	}
 	price, ok := c.prices[key]
@@ -374,6 +388,27 @@ func (c *Catalog) Snapshot(key ProductKey) (PricingSnapshot, error) {
 		return PricingSnapshot{}, err
 	}
 	return price.Snapshot()
+}
+
+// ReplaceWith atomically swaps catalog contents while preserving the Catalog
+// pointer held by runtime consumers.
+func (c *Catalog) ReplaceWith(next *Catalog) error {
+	if c == nil || next == nil {
+		return fmt.Errorf("%w: catalog missing", ErrInvalidRuntimePrice)
+	}
+	next.mu.RLock()
+	prices := make(map[ProductKey]ProductPrice, len(next.prices))
+	for key, price := range next.prices {
+		prices[key] = price
+	}
+	next.mu.RUnlock()
+	if len(prices) == 0 {
+		return fmt.Errorf("%w: empty catalog", ErrInvalidRuntimePrice)
+	}
+	c.mu.Lock()
+	c.prices = prices
+	c.mu.Unlock()
+	return nil
 }
 
 // CalculateInternalCredits converts an exact floor and multiplier into whole

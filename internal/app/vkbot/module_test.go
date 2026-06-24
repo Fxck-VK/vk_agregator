@@ -5,6 +5,7 @@ import (
 
 	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/platform/config"
+	"vk-ai-aggregator/internal/service/pricingcatalog"
 	"vk-ai-aggregator/internal/service/productcatalog"
 )
 
@@ -16,7 +17,7 @@ func TestMenuFeaturesUseRuntimeProductCatalogVisibility(t *testing.T) {
 		FeatureImageModelNanoBanana2Enabled:     true,
 		FeatureVideoRouterEnabled:               true,
 		FeatureVideoRouteKlingO3StandardEnabled: true,
-	})
+	}, staticPricingCatalog(t))
 	if err != nil {
 		t.Fatalf("build runtime catalog: %v", err)
 	}
@@ -45,7 +46,7 @@ func TestMenuFeaturesFailClosedWhenRuntimeCatalogHasNoPublicItems(t *testing.T) 
 		FeatureImageModelNanoBanana2Enabled:     true,
 		FeatureVideoRouterEnabled:               true,
 		FeatureVideoRouteKlingO3StandardEnabled: true,
-	})
+	}, staticPricingCatalog(t))
 	if err != nil {
 		t.Fatalf("build runtime catalog: %v", err)
 	}
@@ -68,6 +69,15 @@ func TestMenuFeaturesFailClosedWhenRuntimeCatalogHasNoPublicItems(t *testing.T) 
 	if features.EnabledCommands[domain.CommandMenuVideoKling21Start] {
 		t.Fatalf("unconfigured catalog must not explicitly enable %s", domain.CommandMenuVideoKling21Start)
 	}
+}
+
+func staticPricingCatalog(t *testing.T) *pricingcatalog.Catalog {
+	t.Helper()
+	catalog, err := pricingcatalog.NewStaticCatalog()
+	if err != nil {
+		t.Fatalf("build pricing catalog: %v", err)
+	}
+	return catalog
 }
 
 func assertCommandVisible(t *testing.T, disabled map[domain.CommandType]bool, command domain.CommandType) {

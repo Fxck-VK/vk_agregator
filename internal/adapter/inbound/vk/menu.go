@@ -387,8 +387,9 @@ func (h *Handler) sendControlResponse(ctx context.Context, t domain.CommandType,
 			keyboard = topUpCatalogKeyboard(products, false)
 		}
 	}
-	markWelcomeSent := user.WelcomeNameSentAt.IsZero() && shouldSendControlResponse(t)
-	if t == domain.CommandStart && user.WelcomeNameSentAt.IsZero() {
+	hasPersistedUser := user != nil && user.ID != uuid.Nil
+	markWelcomeSent := hasPersistedUser && user.WelcomeNameSentAt.IsZero() && shouldSendControlResponse(t)
+	if t == domain.CommandStart && hasPersistedUser && user.WelcomeNameSentAt.IsZero() {
 		if name := h.personalizedWelcomeName(ctx, user); name != "" {
 			msgText = welcomeTextWithName(name)
 		}
@@ -1221,14 +1222,20 @@ func videoDurationKeyboard(startCommand, backCommand domain.CommandType, duratio
 	}
 }
 
-func videoRouteDurationKeyboard(routeAlias string, durations []int) *vkdelivery.Keyboard {
+func (h *Handler) videoRouteDurationKeyboard(spec videoModeSpec) *vkdelivery.Keyboard {
 	rows := make([][]vkdelivery.KeyboardButton, 0, 4)
 	durationRow := make([]vkdelivery.KeyboardButton, 0, 3)
-	for _, duration := range durations {
+	for _, duration := range spec.AllowedDurationsSec {
 		if duration <= 0 {
 			continue
 		}
-		durationRow = append(durationRow, videoDurationButton(fmt.Sprintf("%d сек", duration), routeAlias, duration, "primary"))
+		pricedSpec := spec
+		pricedSpec.DurationSec = duration
+		price, ok := h.videoDisplayEstimateCredits(pricedSpec)
+		if !ok {
+			continue
+		}
+		durationRow = append(durationRow, videoDurationButton(fmt.Sprintf("%d сек · %d кредитов", duration, price), string(spec.VideoRouteAlias), duration, "primary"))
 		if len(durationRow) == 3 {
 			rows = append(rows, durationRow)
 			durationRow = make([]vkdelivery.KeyboardButton, 0, 3)

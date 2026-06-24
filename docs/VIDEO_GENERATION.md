@@ -23,13 +23,16 @@ DEEPINFRA_VIDEO_DRAFT=true
 DEEPINFRA_VIDEO_DURATION_SEC=5
 DEEPINFRA_VIDEO_RESOLUTION=720p
 DEEPINFRA_VIDEO_ASPECT_RATIO=16:9
-DEEPINFRA_VIDEO_PRICE=10
+DEEPINFRA_VIDEO_PROVIDER_COST_CREDITS=10
+DEEPINFRA_VIDEO_MAX_PROVIDER_COST_CREDITS=10
 DEEPINFRA_VIDEO_HTTP_TIMEOUT=180s
 WORKER_PROVIDER_CALL_TIMEOUT=180s
-PRICES=text_generate=1,image_generate=1,video_generate=10
+PRICES=text_generate=1
 ```
 
-Production: set `DEEPINFRA_VIDEO_DRAFT=false`, tune `PRICES` and duration.
+Production: set `DEEPINFRA_VIDEO_DRAFT=false`, tune provider cost/cap values
+only for worker routing/safety, and keep user generation prices in
+`pricingcatalog`.
 
 `scripts/dev/start-miniapp.ps1` also injects video defaults after loading `.env`.
 

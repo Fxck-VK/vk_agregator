@@ -22,14 +22,18 @@ import (
 	"vk-ai-aggregator/internal/platform/metrics"
 	"vk-ai-aggregator/internal/platform/tracing"
 	"vk-ai-aggregator/internal/platform/uow"
+	"vk-ai-aggregator/internal/service/pricingcatalog"
 )
+
+// ErrBackendPriceRequired means a paid non-text job reached the orchestrator
+// without a pricingcatalog snapshot or another backend-owned exact estimate.
+var ErrBackendPriceRequired = errors.New("joborchestrator: backend price is required")
 
 // Biller is the subset of the billing service the orchestrator depends on. The
 // reservation is performed with a transaction-bound repository so it commits
 // atomically with job creation (audit B1).
 type Biller interface {
 	Estimate(op domain.OperationType) (int64, error)
-	EstimateProviderCost(providerCostCredits int64, multiplier float64, maxInternalCredits int64) (int64, error)
 	ReserveWith(ctx context.Context, repo domain.BillingRepository, userID, jobID uuid.UUID, amount int64) (*domain.CreditReservation, error)
 }
 
@@ -135,13 +139,13 @@ type CreateJobInput struct {
 	InputArtifactIDs []uuid.UUID
 	// Params holds normalized operation parameters.
 	Params json.RawMessage
-	// ProviderCostCredits is a trusted server-side provider cost for non-video
-	// catalog models. It is never accepted from frontend JSON.
-	ProviderCostCredits int64
-	// PriceMultiplier converts provider credits into internal product credits.
-	PriceMultiplier float64
-	// MaxInternalCostCredits is the fail-closed cap for ProviderCostCredits.
-	MaxInternalCostCredits int64
+	// CostEstimateCredits is a trusted backend-owned exact product price. It is
+	// used by migrated consumers after their public product dimensions have been
+	// resolved through pricingcatalog.
+	CostEstimateCredits int64
+	// PricingSnapshot is the immutable backend-owned pricingcatalog snapshot for
+	// paid jobs. When present it is the source of reserved/captured amount.
+	PricingSnapshot pricingcatalog.PricingSnapshot
 }
 
 // Orchestrator implements the command -> estimate -> reserve -> job -> outbox
@@ -156,6 +160,7 @@ type Orchestrator struct {
 	capacityGuard             CapacityGuard
 	videoRouteValidator       VideoRouteValidator
 	videoRouteResolver        VideoRouteResolver
+	pricingCatalog            *pricingcatalog.Catalog
 	now                       func() time.Time
 }
 
@@ -192,6 +197,15 @@ func WithVideoRouteValidator(validator VideoRouteValidator) Option {
 func WithVideoRouteResolver(resolver VideoRouteResolver) Option {
 	return func(o *Orchestrator) {
 		o.videoRouteResolver = resolver
+	}
+}
+
+// WithPricingCatalog installs the backend-owned generation pricing catalog.
+// Prompt 1 wires this shared dependency before later prompts migrate individual
+// pricing consumers to it.
+func WithPricingCatalog(catalog *pricingcatalog.Catalog) Option {
+	return func(o *Orchestrator) {
+		o.pricingCatalog = catalog
 	}
 }
 
@@ -254,31 +268,36 @@ func (o *Orchestrator) CreateJob(ctx context.Context, in CreateJobInput) (*domai
 	}
 	if routeResolution.Resolved {
 		in.Params = append(json.RawMessage(nil), routeResolution.Params...)
-		estimate, err = o.billing.EstimateProviderCost(
-			routeResolution.Snapshot.ProviderCostCredits,
-			routeResolution.Snapshot.PriceMultiplier,
-			routeResolution.Snapshot.MaxInternalCostCredits,
-		)
-		if err != nil {
-			tracing.RecordError(span, err)
-			metrics.ObserveProductEvent(source, "job", "estimate", operationLabel, modalityLabel, "route_error")
-			return nil, fmt.Errorf("joborchestrator: route estimate: %w", err)
-		}
 	}
-	if estimate == 0 && in.ProviderCostCredits > 0 {
-		estimate, err = o.billing.EstimateProviderCost(
-			in.ProviderCostCredits,
-			in.PriceMultiplier,
-			in.MaxInternalCostCredits,
-		)
+	pricingSnapshot := in.PricingSnapshot
+	var pricingSnapshotRaw json.RawMessage
+	if pricingSnapshot.Valid() {
+		estimate = pricingSnapshot.InternalCredits
+		if in.CostEstimateCredits > 0 && in.CostEstimateCredits != estimate {
+			err := fmt.Errorf("joborchestrator: pricing snapshot cost %d does not match estimate %d", estimate, in.CostEstimateCredits)
+			tracing.RecordError(span, err)
+			metrics.ObserveProductEvent(source, "job", "estimate", operationLabel, modalityLabel, "pricing_snapshot_mismatch")
+			return nil, err
+		}
+		pricingSnapshotRaw, err = json.Marshal(pricingSnapshot)
 		if err != nil {
 			tracing.RecordError(span, err)
-			metrics.ObserveProductEvent(source, "job", "estimate", operationLabel, modalityLabel, "model_cost_error")
-			return nil, fmt.Errorf("joborchestrator: model estimate: %w", err)
+			metrics.ObserveProductEvent(source, "job", "estimate", operationLabel, modalityLabel, "pricing_snapshot_error")
+			return nil, fmt.Errorf("joborchestrator: pricing snapshot: %w", err)
 		}
+	} else if in.CostEstimateCredits > 0 {
+		estimate = in.CostEstimateCredits
 	}
 	routeSnapshot := routeResolution.Snapshot
 	if estimate == 0 {
+		if requiresBackendPrice(in.Operation, in.Modality) {
+			err := fmt.Errorf("%w: missing price for %s/%s", ErrBackendPriceRequired, in.Operation, in.Modality)
+			tracing.RecordError(span, err)
+			metrics.ObserveProductEvent(source, "job", "estimate", operationLabel, modalityLabel, "price_required")
+			return nil, err
+		}
+		// Legacy non-catalog fallback: image/video generation must already carry
+		// a backend-owned exact estimate or pricing snapshot.
 		estimate, err = o.billing.Estimate(in.Operation)
 		if err != nil {
 			tracing.RecordError(span, err)
@@ -311,6 +330,7 @@ func (o *Orchestrator) CreateJob(ctx context.Context, in CreateJobInput) (*domai
 		CorrelationID:    in.CorrelationID,
 		InputArtifactIDs: in.InputArtifactIDs,
 		Params:           in.Params,
+		PricingSnapshot:  pricingSnapshotRaw,
 		CostEstimate:     estimate,
 	}
 	span.SetAttributes(attribute.String("job.id", job.ID.String()), attribute.Int64("job.cost_estimate", estimate))
@@ -394,6 +414,18 @@ func (o *Orchestrator) CreateJob(ctx context.Context, in CreateJobInput) (*domai
 	metrics.ObserveProductEvent(source, "job", "create", operationLabel, modalityLabel, "queued")
 	metrics.ObserveProductActiveUserEvent(source, operationLabel, modalityLabel, "created")
 	return job, nil
+}
+
+func requiresBackendPrice(op domain.OperationType, modality domain.Modality) bool {
+	if modality == domain.ModalityVideo || modality == domain.ModalityImage {
+		return true
+	}
+	switch op {
+	case domain.OperationImageGenerate, domain.OperationImageEdit, domain.OperationVideoGenerate, domain.OperationVideoImageToVideo, domain.OperationVideoExtend:
+		return true
+	default:
+		return false
+	}
 }
 
 func (o *Orchestrator) resolveVideoRoute(ctx context.Context, in CreateJobInput, source string) (VideoRouteResolution, error) {

@@ -27,25 +27,23 @@ const (
 	ModelGemini3ProImage  = "gemini-3-pro-image-preview"
 	ModelGPTImage2        = "gpt-image-2"
 
-	defaultInternalVideoPriceCredits = 2
-	defaultInternalImagePriceCredits = 10
-	defaultTaskLanguage              = "en"
-	maxUploadImageBytes              = 20 * 1024 * 1024
-	maxGeminiGenerationImageBytes    = 10 * 1024 * 1024
-	maxGeminiReferenceImages         = 14
-	maxGPTImage2ImageBytes           = 20 * 1024 * 1024
-	maxGPTImage2ReferenceImages      = 16
-	maxGPTImage2TotalImageBytes      = 256 * 1024 * 1024
+	defaultVideoProviderCostCredits = 1
+	defaultImageProviderCostCredits = 1
+	defaultTaskLanguage             = "en"
+	maxUploadImageBytes             = 20 * 1024 * 1024
+	maxGeminiGenerationImageBytes   = 10 * 1024 * 1024
+	maxGeminiReferenceImages        = 14
+	maxGPTImage2ImageBytes          = 20 * 1024 * 1024
+	maxGPTImage2ReferenceImages     = 16
+	maxGPTImage2TotalImageBytes     = 256 * 1024 * 1024
 )
 
 // Config holds APIMart connection settings.
 type Config struct {
-	APIKey                    string
-	BaseURL                   string
-	InternalVideoPriceCredits int64
-	InternalImagePriceCredits int64
-	TaskLanguage              string
-	HTTPClient                *http.Client
+	APIKey       string
+	BaseURL      string
+	TaskLanguage string
+	HTTPClient   *http.Client
 }
 
 // Provider is the APIMart domain.Provider adapter.
@@ -63,12 +61,6 @@ func New(cfg Config) *Provider {
 		cfg.BaseURL = DefaultBaseURL
 	}
 	cfg.BaseURL = strings.TrimRight(strings.TrimSpace(cfg.BaseURL), "/")
-	if cfg.InternalVideoPriceCredits <= 0 {
-		cfg.InternalVideoPriceCredits = defaultInternalVideoPriceCredits
-	}
-	if cfg.InternalImagePriceCredits <= 0 {
-		cfg.InternalImagePriceCredits = defaultInternalImagePriceCredits
-	}
 	if strings.TrimSpace(cfg.TaskLanguage) == "" {
 		cfg.TaskLanguage = defaultTaskLanguage
 	}
@@ -121,23 +113,42 @@ func (p *Provider) Capabilities(context.Context) ([]domain.Capability, error) {
 	}, nil
 }
 
-// Estimate returns the route-level internal credits used by the worker router.
+// Estimate reports provider-side credits for worker routing, media safety caps
+// and telemetry. User billing must use pricingcatalog snapshots, never adapter
+// estimates.
 func (p *Provider) Estimate(_ context.Context, req domain.ProviderRequest) (domain.CostEstimate, error) {
 	if req.Operation == domain.OperationImageGenerate || req.Modality == domain.ModalityImage {
 		if err := validateImageShape(req, false); err != nil {
 			return domain.CostEstimate{}, err
 		}
+		providerCredits, err := imageProviderCostCredits(req)
+		if err != nil {
+			return domain.CostEstimate{}, err
+		}
 		return domain.CostEstimate{
-			AmountCredits: p.cfg.InternalImagePriceCredits,
+			AmountCredits: providerCredits,
 			Currency:      "credits",
 			Estimated:     false,
 		}, nil
+	}
+	snapshot, hasSnapshot, err := resolvedRouteSnapshot(req.Params)
+	if err != nil {
+		return domain.CostEstimate{}, err
+	}
+	if hasSnapshot {
+		if snapshot.Provider != domain.ProviderAPIMart || strings.TrimSpace(snapshot.ProviderModelID) != strings.TrimSpace(req.ModelCode) {
+			return domain.CostEstimate{}, &Error{Class: domain.ProviderErrInvalidRequest, Message: "resolved route snapshot does not match APIMart request"}
+		}
+		if snapshot.ProviderCostCredits <= 0 {
+			return domain.CostEstimate{}, &Error{Class: domain.ProviderErrInvalidRequest, Message: "resolved route snapshot provider cost is unavailable"}
+		}
+		return domain.CostEstimate{AmountCredits: snapshot.ProviderCostCredits, Currency: "credits", Estimated: false}, nil
 	}
 	if err := validateVideoShape(req, false); err != nil {
 		return domain.CostEstimate{}, err
 	}
 	return domain.CostEstimate{
-		AmountCredits: p.cfg.InternalVideoPriceCredits,
+		AmountCredits: defaultVideoProviderCostCredits,
 		Currency:      "credits",
 		Estimated:     false,
 	}, nil
@@ -492,6 +503,42 @@ func (e providerError) codeString() string {
 
 func (e providerError) empty() bool {
 	return len(e.Code) == 0 && strings.TrimSpace(e.Message) == "" && strings.TrimSpace(e.Type) == ""
+}
+
+type requestParams struct {
+	ResolvedVideoRoute domain.VideoRouteSnapshot `json:"resolved_video_route,omitempty"`
+}
+
+func resolvedRouteSnapshot(raw json.RawMessage) (domain.VideoRouteSnapshot, bool, error) {
+	if len(raw) == 0 {
+		return domain.VideoRouteSnapshot{}, false, nil
+	}
+	var params requestParams
+	if err := json.Unmarshal(raw, &params); err != nil {
+		return domain.VideoRouteSnapshot{}, false, &Error{Class: domain.ProviderErrInvalidRequest, Message: "invalid APIMart params json"}
+	}
+	if !params.ResolvedVideoRoute.Valid() {
+		return domain.VideoRouteSnapshot{}, false, nil
+	}
+	return params.ResolvedVideoRoute, true, nil
+}
+
+func imageProviderCostCredits(req domain.ProviderRequest) (int64, error) {
+	// APIMart image floors in pricingcatalog are fractional APIMart credits.
+	// CostEstimate carries whole provider credits for worker telemetry/safety,
+	// so known public variants use a conservative one-credit ceiling.
+	resolution := strings.ToUpper(effectiveImageResolution(req))
+	switch strings.TrimSpace(req.ModelCode) {
+	case ModelGPTImage2:
+		if resolution == "1K" || resolution == "2K" || resolution == "4K" {
+			return defaultImageProviderCostCredits, nil
+		}
+	case ModelGemini3ProImage:
+		if resolution == "1K" || resolution == "4K" {
+			return defaultImageProviderCostCredits, nil
+		}
+	}
+	return 0, &Error{Class: domain.ProviderErrUnsupportedCapab, Message: "APIMart image provider cost is unavailable"}
 }
 
 func validateVideoShape(req domain.ProviderRequest, requirePrompt bool) error {

@@ -27,7 +27,6 @@ const (
 
 	klingO3CreditsPerSecond    int64 = 10
 	seedance20CreditsPerSecond int64 = 28
-	productPriceMultiplier           = 2
 
 	maxKlingReferenceImages       = 4
 	maxSeedanceReferenceImages    = 4
@@ -107,10 +106,9 @@ func (p *Provider) Capabilities(context.Context) ([]domain.Capability, error) {
 	}, nil
 }
 
-// Estimate returns the immutable route-level internal credit estimate when the
-// worker passed a resolved route snapshot. Without a snapshot only public exact
-// rates are used; Runway Gen-4.5 stays fail-closed until pricing is configured
-// in the route catalog.
+// Estimate reports provider-side credits for worker routing, media safety caps
+// and telemetry. User billing must use pricingcatalog snapshots, never adapter
+// estimates. Runway Gen-4.5 stays fail-closed until provider cost is configured.
 func (p *Provider) Estimate(_ context.Context, req domain.ProviderRequest) (domain.CostEstimate, error) {
 	snapshot, hasSnapshot, err := resolvedRouteSnapshot(req.Params)
 	if err != nil {
@@ -120,10 +118,10 @@ func (p *Provider) Estimate(_ context.Context, req domain.ProviderRequest) (doma
 		if snapshot.Provider != domain.ProviderPoYo || strings.TrimSpace(snapshot.ProviderModelID) != strings.TrimSpace(req.ModelCode) {
 			return domain.CostEstimate{}, &Error{Class: domain.ProviderErrInvalidRequest, Message: "resolved route snapshot does not match PoYo request"}
 		}
-		if snapshot.InternalCostCredits <= 0 {
-			return domain.CostEstimate{}, &Error{Class: domain.ProviderErrInvalidRequest, Message: "resolved route snapshot cost is unavailable"}
+		if snapshot.ProviderCostCredits <= 0 {
+			return domain.CostEstimate{}, &Error{Class: domain.ProviderErrInvalidRequest, Message: "resolved route snapshot provider cost is unavailable"}
 		}
-		return domain.CostEstimate{AmountCredits: snapshot.InternalCostCredits, Currency: "credits", Estimated: false}, nil
+		return domain.CostEstimate{AmountCredits: snapshot.ProviderCostCredits, Currency: "credits", Estimated: false}, nil
 	}
 	if req.Operation == domain.OperationImageGenerate || req.Modality == domain.ModalityImage {
 		if err := validateImageShape(req, false); err != nil {
@@ -131,7 +129,7 @@ func (p *Provider) Estimate(_ context.Context, req domain.ProviderRequest) (doma
 		}
 		providerCredits := nanoBanana2ProviderCredits(req.Resolution)
 		return domain.CostEstimate{
-			AmountCredits: providerCredits * productPriceMultiplier,
+			AmountCredits: providerCredits,
 			Currency:      "credits",
 			Estimated:     false,
 		}, nil
@@ -145,7 +143,7 @@ func (p *Provider) Estimate(_ context.Context, req domain.ProviderRequest) (doma
 	}
 	duration := effectiveDuration(req.DurationSec)
 	return domain.CostEstimate{
-		AmountCredits: int64(duration) * rate * productPriceMultiplier,
+		AmountCredits: int64(duration) * rate,
 		Currency:      "credits",
 		Estimated:     false,
 	}, nil

@@ -38,16 +38,16 @@ type Config struct {
 	BaseURL string
 	// TextModel is the model used for text generation.
 	TextModel string
-	// TextPrice is the internal credit cost used for provider routing.
-	TextPrice int64
+	// TextProviderCostCredits is provider-side telemetry used for routing only.
+	TextProviderCostCredits int64
 	// ImageModel is the model used for image generation.
 	ImageModel string
 	// ImageFallbackModel is tried after retryable image submit failures.
 	ImageFallbackModel string
 	// ImageSize is the default image size passed to the image endpoint.
 	ImageSize string
-	// ImagePrice is the internal credit cost used for provider routing.
-	ImagePrice int64
+	// ImageProviderCostCredits is provider-side telemetry used for routing only.
+	ImageProviderCostCredits int64
 	// ImageReferenceEnabled is reserved for DeepInfra reference-image flows.
 	ImageReferenceEnabled bool
 	// VideoModel is the model used for text-to-video generation.
@@ -60,8 +60,8 @@ type Config struct {
 	VideoAspectRatio string
 	// VideoDraft enables cheaper preview renders when supported by the model.
 	VideoDraft bool
-	// VideoPrice is the internal credit cost used for provider routing.
-	VideoPrice int64
+	// VideoProviderCostCredits is provider-side telemetry used for routing only.
+	VideoProviderCostCredits int64
 	// VideoHTTPTimeout bounds a single video inference call.
 	VideoHTTPTimeout time.Duration
 	// HTTPClient overrides the HTTP client, mainly for tests.
@@ -94,8 +94,8 @@ func New(cfg Config) *Provider {
 	if cfg.TextModel == "" {
 		cfg.TextModel = defaultTextModel
 	}
-	if cfg.TextPrice == 0 {
-		cfg.TextPrice = 1
+	if cfg.TextProviderCostCredits == 0 {
+		cfg.TextProviderCostCredits = 1
 	}
 	if cfg.ImageModel == "" {
 		cfg.ImageModel = defaultImageModel
@@ -104,8 +104,8 @@ func New(cfg Config) *Provider {
 	if cfg.ImageSize == "" {
 		cfg.ImageSize = defaultImageSize
 	}
-	if cfg.ImagePrice == 0 {
-		cfg.ImagePrice = 10
+	if cfg.ImageProviderCostCredits == 0 {
+		cfg.ImageProviderCostCredits = 10
 	}
 	if cfg.VideoModel == "" {
 		cfg.VideoModel = defaultVideoModel
@@ -119,8 +119,8 @@ func New(cfg Config) *Provider {
 	if cfg.VideoAspectRatio == "" {
 		cfg.VideoAspectRatio = defaultVideoAspect
 	}
-	if cfg.VideoPrice == 0 {
-		cfg.VideoPrice = 10
+	if cfg.VideoProviderCostCredits == 0 {
+		cfg.VideoProviderCostCredits = 10
 	}
 	httpTimeout := 120 * time.Second
 	if cfg.VideoHTTPTimeout > 0 {
@@ -163,16 +163,17 @@ func (p *Provider) Capabilities(_ context.Context) ([]domain.Capability, error) 
 	return caps, nil
 }
 
-// Estimate returns the configured credit cost.
+// Estimate reports provider-side credits for worker routing and telemetry. It
+// must not be used as a user-facing generation price.
 func (p *Provider) Estimate(_ context.Context, req domain.ProviderRequest) (domain.CostEstimate, error) {
 	if req.Operation == domain.OperationTextGenerate && req.Modality == domain.ModalityText {
-		return domain.CostEstimate{AmountCredits: p.cfg.TextPrice, Currency: "credits", Estimated: false}, nil
+		return domain.CostEstimate{AmountCredits: p.cfg.TextProviderCostCredits, Currency: "credits", Estimated: false}, nil
 	}
 	if req.Operation == domain.OperationImageGenerate && req.Modality == domain.ModalityImage {
-		return domain.CostEstimate{AmountCredits: p.cfg.ImagePrice, Currency: "credits", Estimated: false}, nil
+		return domain.CostEstimate{AmountCredits: p.cfg.ImageProviderCostCredits, Currency: "credits", Estimated: false}, nil
 	}
 	if req.Operation == domain.OperationVideoGenerate && req.Modality == domain.ModalityVideo {
-		return domain.CostEstimate{AmountCredits: p.cfg.VideoPrice, Currency: "credits", Estimated: false}, nil
+		return domain.CostEstimate{AmountCredits: p.cfg.VideoProviderCostCredits, Currency: "credits", Estimated: false}, nil
 	}
 	return domain.CostEstimate{}, &Error{Class: domain.ProviderErrUnsupportedCapab, Message: string(req.Operation)}
 }

@@ -21,17 +21,18 @@ import (
 
 // Deps are shared backend-core collaborators required by the Mini App surface.
 type Deps struct {
-	Users         domain.UserRepository
-	Jobs          domain.JobRepository
-	Conversations domain.ConversationRepository
-	Artifacts     domain.ArtifactRepository
-	Moderation    domain.ModerationResultRepository
-	Billing       *billingservice.Service
-	BillingRepo   domain.BillingRepository
-	Payment       *paymentservice.Service
-	Referrals     domain.ReferralRepository
-	Orchestrator  *joborchestrator.Orchestrator
-	Logger        *slog.Logger
+	Users          domain.UserRepository
+	Jobs           domain.JobRepository
+	Conversations  domain.ConversationRepository
+	Artifacts      domain.ArtifactRepository
+	Moderation     domain.ModerationResultRepository
+	Billing        *billingservice.Service
+	BillingRepo    domain.BillingRepository
+	Payment        *paymentservice.Service
+	Referrals      domain.ReferralRepository
+	Orchestrator   *joborchestrator.Orchestrator
+	RuntimeCatalog productcatalog.RuntimeCatalog
+	Logger         *slog.Logger
 }
 
 // NewHandler builds the Mini App BFF HTTP handler. The surface owns only
@@ -69,9 +70,9 @@ func NewHandler(ctx context.Context, cfg config.Config, deps Deps) *miniappapi.H
 		ReferredSignupRewardCredits: cfg.ReferralReferredSignupRewardCredits,
 		RewardOnActivation:          cfg.ReferralRewardOnActivation,
 	})
-	runtimeCatalog, err := productcatalog.FromConfig(cfg)
-	if err != nil {
-		logger.Warn("miniapp video route catalog disabled", logging.ErrorAttr(err))
+	runtimeCatalog := deps.RuntimeCatalog
+	if runtimeCatalog.Catalog == nil {
+		logger.Warn("miniapp product catalog is not configured")
 	}
 	return miniappapi.NewHandler(miniappapi.Config{
 		AppSecret:                           cfg.VKAppSecret,
@@ -96,18 +97,19 @@ func NewHandler(ctx context.Context, cfg config.Config, deps Deps) *miniappapi.H
 		VideoRoutes:                         miniAppVideoRoutes(runtimeCatalog.Catalog),
 		VideoRouteResolver:                  miniAppVideoRouteResolver(runtimeCatalog.VideoRouteCatalog),
 	}, miniappapi.Deps{
-		Users:         deps.Users,
-		Jobs:          deps.Jobs,
-		Conversations: deps.Conversations,
-		Artifacts:     deps.Artifacts,
-		Moderation:    deps.Moderation,
-		Objects:       objectStore,
-		Billing:       deps.Billing,
-		BillingRepo:   deps.BillingRepo,
-		Payment:       deps.Payment,
-		Referrals:     referrals,
-		Orchestrator:  deps.Orchestrator,
-		Logger:        logger,
+		Users:          deps.Users,
+		Jobs:           deps.Jobs,
+		Conversations:  deps.Conversations,
+		Artifacts:      deps.Artifacts,
+		Moderation:     deps.Moderation,
+		Objects:        objectStore,
+		Billing:        deps.Billing,
+		BillingRepo:    deps.BillingRepo,
+		Payment:        deps.Payment,
+		Referrals:      referrals,
+		Orchestrator:   deps.Orchestrator,
+		PricingCatalog: runtimeCatalog.PricingCatalog,
+		Logger:         logger,
 	})
 }
 
