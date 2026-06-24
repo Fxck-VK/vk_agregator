@@ -353,6 +353,39 @@ jobs:
           ssh -i "${HOME}/.ssh/deploy_key" "${DEV_DEPLOY_USER}@${DEV_DEPLOY_HOST}" \
             "set -euo pipefail; cd '${DEV_DEPLOY_PATH}'; bash scripts/deploy/smoke-dev.sh --env-file .env --timeout-seconds 60"
 
+      - name: Collect DEV diagnostics after failed deploy or smoke
+        if: ${{ failure() && (steps.dev_deploy.outcome == 'failure' || steps.dev_smoke.outcome == 'failure') }}
+        shell: bash
+        env:
+          DEV_DEPLOY_HOST: ${{ secrets.DEV_DEPLOY_HOST }}
+          DEV_DEPLOY_USER: ${{ secrets.DEV_DEPLOY_USER }}
+          DEV_DEPLOY_PATH: ${{ secrets.DEV_DEPLOY_PATH }}
+        run: |
+          set -euo pipefail
+
+          ssh -i "${HOME}/.ssh/deploy_key" "${DEV_DEPLOY_USER}@${DEV_DEPLOY_HOST}" 'bash -s' -- "${DEV_DEPLOY_PATH}" <<'REMOTE'
+          set +e
+          deploy_path="$1"
+          cd "${deploy_path}" || exit 0
+
+          compose=(docker compose --project-name vk-ai-aggregator-dev --env-file .env -f docker-compose.prod.yml)
+          if [[ -f docker-compose.data.yml ]]; then
+            compose+=(-f docker-compose.data.yml)
+          fi
+          compose+=(--profile cloudflare)
+
+          echo "==> DEV diagnostic docker compose ps"
+          "${compose[@]}" ps || true
+
+          echo "==> DEV diagnostic migrate logs"
+          "${compose[@]}" logs --no-color --tail=200 migrate || true
+
+          for service in api worker maintenance-worker provider-webhook miniapp reverse-proxy; do
+            echo "==> DEV diagnostic ${service} logs"
+            "${compose[@]}" logs --no-color --tail=80 "${service}" || true
+          done
+          REMOTE
+
       - name: Roll back DEV after failed deploy or smoke
         id: dev_rollback
         if: ${{ failure() && (steps.dev_deploy.outcome == 'failure' || steps.dev_smoke.outcome == 'failure') }}
