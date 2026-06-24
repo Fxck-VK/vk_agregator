@@ -2,6 +2,8 @@
 -- DB-backed generation pricing catalog. Historical jobs keep their immutable
 -- jobs.pricing_snapshot and are not mutated by this schema.
 
+BEGIN;
+
 CREATE TABLE IF NOT EXISTS runtime_pricing_catalog_versions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     price_version INTEGER NOT NULL,
@@ -178,3 +180,5 @@ COMMENT ON TABLE runtime_generation_prices IS
 
 COMMENT ON TABLE runtime_pricing_audit_events IS
     'Sanitized runtime pricing audit trail with bounded refs and metadata only.';
+
+COMMIT;
