@@ -672,6 +672,33 @@ func (h *Handler) editGPTPendingMessage(ctx context.Context, peerID, messageID i
 	}
 }
 
+func (h *Handler) showInsufficientBalanceMessage(ctx context.Context, idemKey string, peerID, messageID int64) {
+	if h.deps.Control == nil {
+		return
+	}
+	msg := vkdelivery.Message{
+		Text:     "Недостаточный баланс",
+		Keyboard: insufficientBalanceKeyboard(),
+	}
+	h.applyMenuButtonMode(msg.Keyboard)
+	if messageID != 0 {
+		if _, err := h.deps.Control.EditMessage(ctx, peerID, messageID, msg); err == nil {
+			return
+		} else {
+			h.logger.Warn("vk insufficient balance message edit failed",
+				slog.Int64("peer_id", peerID),
+				slog.Int64("message_id", messageID),
+				logging.ErrorAttr(err))
+		}
+	}
+	randomID := vkdelivery.DeterministicRandomID("vk_control_insufficient_balance:" + idemKey)
+	if _, err := h.sendControlMessage(ctx, domain.CommandTopUp, peerID, randomID, msg); err != nil {
+		h.logger.Warn("vk insufficient balance message send failed",
+			slog.Int64("peer_id", peerID),
+			logging.ErrorAttr(err))
+	}
+}
+
 func (h *Handler) filterMenuKeyboard(keyboard *vkdelivery.Keyboard) {
 	if keyboard == nil {
 		return
@@ -1245,7 +1272,7 @@ func (h *Handler) videoRouteDurationKeyboard(spec videoModeSpec) *vkdelivery.Key
 		rows = append(rows, durationRow)
 	}
 	rows = append(rows, []vkdelivery.KeyboardButton{
-		button("⬅️ Назад к моделям", domain.CommandMenuVideo, "secondary"),
+		button("⬅️ Назад к видео", domain.CommandMenuVideo, "secondary"),
 	})
 	return &vkdelivery.Keyboard{
 		OneTime: false,
@@ -1314,7 +1341,7 @@ func photoQualityKeyboard(options []photoQualityOption) *vkdelivery.Keyboard {
 		})
 	}
 	rows = append(rows, []vkdelivery.KeyboardButton{
-		button("⬅️ Назад к моделям", domain.CommandMenuImage, "secondary"),
+		button("⬅️ Назад к фото", domain.CommandMenuImage, "secondary"),
 	})
 	return &vkdelivery.Keyboard{
 		OneTime: false,
@@ -1332,7 +1359,7 @@ func photoPromptKeyboard() *vkdelivery.Keyboard {
 				button("⬅️ Назад к качеству", domain.CommandMenuImageBackToQuality, "secondary"),
 			},
 			{
-				button("⬅️ Назад к моделям", domain.CommandMenuImage, "secondary"),
+				button("⬅️ Назад к фото", domain.CommandMenuImage, "secondary"),
 			},
 		},
 	}
@@ -1346,7 +1373,7 @@ func photoPromptKeyboardForCatalog(showQualityBack bool) *vkdelivery.Keyboard {
 		})
 	}
 	rows = append(rows, []vkdelivery.KeyboardButton{
-		button("⬅️ Назад к моделям", domain.CommandMenuImage, "secondary"),
+		button("⬅️ Назад к фото", domain.CommandMenuImage, "secondary"),
 	})
 	return &vkdelivery.Keyboard{
 		OneTime: false,
@@ -1386,6 +1413,33 @@ func backKeyboard() *vkdelivery.Keyboard {
 		Buttons: [][]vkdelivery.KeyboardButton{
 			{
 				button("⬅️ Назад", domain.CommandShowMenu, "secondary"),
+			},
+		},
+	}
+}
+
+func insufficientBalanceKeyboard() *vkdelivery.Keyboard {
+	return &vkdelivery.Keyboard{
+		OneTime: false,
+		Inline:  true,
+		Buttons: [][]vkdelivery.KeyboardButton{
+			{
+				button("Пополнить", domain.CommandTopUp, "positive"),
+			},
+			{
+				button("Назад", domain.CommandShowMenu, "secondary"),
+			},
+		},
+	}
+}
+
+func videoPromptBackKeyboard() *vkdelivery.Keyboard {
+	return &vkdelivery.Keyboard{
+		OneTime: false,
+		Inline:  true,
+		Buttons: [][]vkdelivery.KeyboardButton{
+			{
+				button("⬅️ Назад к видео", domain.CommandMenuVideo, "secondary"),
 			},
 		},
 	}

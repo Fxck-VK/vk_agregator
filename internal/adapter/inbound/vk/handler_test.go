@@ -1805,6 +1805,48 @@ func TestVideoRouteButtonEnablesPlainTextVideoJobs(t *testing.T) {
 	}
 }
 
+func TestVideoBackTextButtonReturnsToVideoMenuNoJob(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	h := newHarnessWithConfig(control, vk.Config{
+		ConfirmationToken: "conf-token-123",
+		Secret:            "s3cr3t",
+		MenuButtonMode:    "text",
+		VideoRoutes:       []productcatalog.VideoRoute{testKlingVideoRoute()},
+	})
+	start := `{
+		"type":"message_new","group_id":1,"event_id":"evt-video-back-text-route","secret":"s3cr3t",
+		"object":{"message":{"from_id":5624,"peer_id":5624,"text":"Kling O3 Standard","payload":"{\"command\":\"menu.video.route.select\",\"video_route_alias\":\"video_kling_o3_standard\"}"}}
+	}`
+	if rec := h.post(start); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected route response: %d %q", rec.Code, rec.Body.String())
+	}
+	back := `{
+		"type":"message_new","group_id":1,"event_id":"evt-video-back-text","secret":"s3cr3t",
+		"object":{"message":{"from_id":5624,"peer_id":5624,"text":"Назад к видео"}}
+	}`
+	if rec := h.post(back); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected back response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	ctx := context.Background()
+	user, err := h.users.GetByVKUserID(ctx, 5624)
+	if err != nil {
+		t.Fatalf("user not created: %v", err)
+	}
+	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
+	if len(jobs) != 0 || h.pub.Len() != 0 {
+		t.Fatalf("back text button must not create jobs, jobs=%+v tasks=%d", jobs, h.pub.Len())
+	}
+	sent := control.Sent()
+	if len(sent) < 2 || !strings.Contains(sent[len(sent)-1].Keyboard, "Kling O3 Standard") {
+		t.Fatalf("expected video menu after text back button, got %+v", sent)
+	}
+	if strings.Contains(sent[len(sent)-1].Keyboard, `"type":"callback"`) ||
+		!strings.Contains(sent[len(sent)-1].Keyboard, `"type":"text"`) {
+		t.Fatalf("text button mode should keep text buttons: %q", sent[len(sent)-1].Keyboard)
+	}
+}
+
 func TestVideoRouteDurationButtonSetsJobDuration(t *testing.T) {
 	control := vkdelivery.NewMockClient()
 	h := newHarnessWithConfig(control, vk.Config{
@@ -2091,7 +2133,7 @@ func TestPhotoNanoBananaProQualityFlowCreatesImageJob(t *testing.T) {
 		fmt.Sprintf("1K \u00b7 %d", display1K),
 		fmt.Sprintf("2K \u00b7 %d", display2K),
 		fmt.Sprintf("4K \u00b7 %d", display4K),
-		"⬅️ Назад к моделям",
+		"⬅️ Назад к фото",
 	} {
 		if !strings.Contains(initial[0].Keyboard, want) {
 			t.Fatalf("expected %q in Nano Banana Pro quality keyboard: %q", want, initial[0].Keyboard)
@@ -2139,7 +2181,13 @@ func TestPhotoNanoBananaProQualityFlowCreatesImageJob(t *testing.T) {
 		sent[1].Text != "НейроХаб рисует..." {
 		t.Fatalf("unexpected photo mode responses: %+v", sent)
 	}
-	for _, want := range []string{"⬅️ Назад к качеству", "⬅️ Назад к моделям"} {
+	if strings.Contains(sent[0].Text, "Google") || strings.Contains(sent[0].Text, "Ожидание") {
+		t.Fatalf("photo prompt text must not expose provider wait details: %q", sent[0].Text)
+	}
+	if strings.HasSuffix(sent[0].Text, ".") {
+		t.Fatalf("photo prompt text must not end with dot: %q", sent[0].Text)
+	}
+	for _, want := range []string{"⬅️ Назад к качеству", "⬅️ Назад к фото"} {
 		if !strings.Contains(sent[0].Keyboard, want) {
 			t.Fatalf("expected %q in prompt keyboard: %q", want, sent[0].Keyboard)
 		}
@@ -2169,6 +2217,122 @@ func TestPhotoNanoBananaProQualityFlowCreatesImageJob(t *testing.T) {
 		params.ImageQuality != "4K" ||
 		params.VKPlaceholderMessageID != sent[1].MessageID {
 		t.Fatalf("unexpected image job params: %+v, pending=%+v", params, sent[1])
+	}
+}
+
+func TestPhotoInsufficientBalanceShowsTopUpKeyboard(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	h := newHarnessWithControl(control)
+	menu := `{
+		"type":"message_new","group_id":1,"event_id":"evt-photo-insufficient-menu","secret":"s3cr3t",
+		"object":{"message":{"from_id":5640,"peer_id":5640,"text":"GPT Image 2","payload":"{\"command\":\"menu.image.select\",\"model_id\":\"gpt_image_2\"}"}}
+	}`
+	if rec := h.post(menu); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected menu response: %d %q", rec.Code, rec.Body.String())
+	}
+	quality := `{
+		"type":"message_new","group_id":1,"event_id":"evt-photo-insufficient-quality","secret":"s3cr3t",
+		"object":{"message":{"from_id":5640,"peer_id":5640,"text":"4K","payload":"{\"command\":\"menu.image.quality.select\",\"model_id\":\"gpt_image_2\",\"image_quality\":\"4K\"}"}}
+	}`
+	if rec := h.post(quality); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected quality response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	ctx := context.Background()
+	user, err := h.users.GetByVKUserID(ctx, 5640)
+	if err != nil {
+		t.Fatalf("user not created: %v", err)
+	}
+	account, err := h.billing.GetAccountByUser(ctx, user.ID, domain.CurrencyCredits)
+	if err != nil {
+		t.Fatalf("billing account not created: %v", err)
+	}
+	if account.BalanceCached > 0 {
+		if err := h.billing.AppendEntry(ctx, &domain.LedgerEntry{
+			AccountID:      account.ID,
+			Type:           domain.LedgerAdjustment,
+			Amount:         -account.BalanceCached,
+			Status:         domain.LedgerStatusCommitted,
+			IdempotencyKey: "test:drain-balance:" + user.ID.String(),
+			Reason:         "test insufficient balance",
+		}); err != nil {
+			t.Fatalf("drain balance: %v", err)
+		}
+	}
+
+	prompt := `{
+		"type":"message_new","group_id":1,"event_id":"evt-photo-insufficient-prompt","secret":"s3cr3t",
+		"object":{"message":{"from_id":5640,"peer_id":5640,"text":"editorial perfume bottle"}}
+	}`
+	if rec := h.post(prompt); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected prompt response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	sent := control.Sent()
+	if len(sent) < 2 {
+		t.Fatalf("expected prompt and insufficient balance messages, got %+v", sent)
+	}
+	last := sent[len(sent)-1]
+	if last.Text != "Недостаточный баланс" ||
+		!strings.Contains(last.Keyboard, "Пополнить") ||
+		!strings.Contains(last.Keyboard, "Назад") ||
+		!strings.Contains(last.Keyboard, string(domain.CommandTopUp)) ||
+		!strings.Contains(last.Keyboard, string(domain.CommandShowMenu)) {
+		t.Fatalf("unexpected insufficient balance message: %+v", last)
+	}
+	if strings.HasSuffix(last.Text, ".") {
+		t.Fatalf("insufficient balance text must not end with dot: %q", last.Text)
+	}
+	if h.pub.Len() != 0 {
+		t.Fatalf("insufficient balance job must not be published, tasks=%d", h.pub.Len())
+	}
+}
+
+func TestPhotoBackTextButtonReturnsToPhotoMenuNoJob(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	h := newHarnessWithConfig(control, vk.Config{
+		ConfirmationToken: "conf-token-123",
+		Secret:            "s3cr3t",
+		MenuButtonMode:    "text",
+	})
+	menu := `{
+		"type":"message_new","group_id":1,"event_id":"evt-photo-back-text-menu","secret":"s3cr3t",
+		"object":{"message":{"from_id":5641,"peer_id":5641,"text":"GPT Image 2","payload":"{\"command\":\"menu.image.select\",\"model_id\":\"gpt_image_2\"}"}}
+	}`
+	if rec := h.post(menu); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected menu response: %d %q", rec.Code, rec.Body.String())
+	}
+	quality := `{
+		"type":"message_new","group_id":1,"event_id":"evt-photo-back-text-quality","secret":"s3cr3t",
+		"object":{"message":{"from_id":5641,"peer_id":5641,"text":"4K","payload":"{\"command\":\"menu.image.quality.select\",\"model_id\":\"gpt_image_2\",\"image_quality\":\"4K\"}"}}
+	}`
+	if rec := h.post(quality); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected quality response: %d %q", rec.Code, rec.Body.String())
+	}
+	back := `{
+		"type":"message_new","group_id":1,"event_id":"evt-photo-back-text","secret":"s3cr3t",
+		"object":{"message":{"from_id":5641,"peer_id":5641,"text":"Назад к фото"}}
+	}`
+	if rec := h.post(back); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected back response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	ctx := context.Background()
+	user, err := h.users.GetByVKUserID(ctx, 5641)
+	if err != nil {
+		t.Fatalf("user not created: %v", err)
+	}
+	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
+	if len(jobs) != 0 || h.pub.Len() != 0 {
+		t.Fatalf("back text button must not create jobs, jobs=%+v tasks=%d", jobs, h.pub.Len())
+	}
+	sent := control.Sent()
+	if len(sent) < 2 || !strings.Contains(sent[len(sent)-1].Keyboard, "GPT Image 2") {
+		t.Fatalf("expected photo menu after text back button, got %+v", sent)
+	}
+	if strings.Contains(sent[len(sent)-1].Keyboard, `"type":"callback"`) ||
+		!strings.Contains(sent[len(sent)-1].Keyboard, `"type":"text"`) {
+		t.Fatalf("text button mode should keep text buttons: %q", sent[len(sent)-1].Keyboard)
 	}
 }
 

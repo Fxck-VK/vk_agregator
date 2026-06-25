@@ -1103,9 +1103,9 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 		case errors.Is(err, domain.ErrInsufficientCredits):
 			// Expected business outcome: job is parked in awaiting_payment.
 			resourceID = job.ID
-			h.editGPTPendingMessage(ctx, peerID, placeholderID, "Недостаточно средств для запроса. Пополните баланс или выберите другой режим.")
+			h.showInsufficientBalanceMessage(ctx, idemKey, peerID, placeholderID)
 		default:
-			h.editGPTPendingMessage(ctx, peerID, placeholderID, "Не удалось поставить запрос в очередь. Попробуйте позже.")
+			h.editGPTPendingMessage(ctx, peerID, placeholderID, "Не удалось поставить запрос в очередь\nПопробуйте позже")
 			return fmt.Errorf("create job: %w", err)
 		}
 	}
@@ -1240,7 +1240,7 @@ func (h *Handler) sendVideoPromptForDuration(ctx context.Context, routeAlias str
 func (h *Handler) sendVideoPromptInstruction(ctx context.Context, spec videoModeSpec, idemKey string, command domain.CommandType, peerID int64, allowEdit bool) error {
 	msg := vkdelivery.Message{
 		Text:     h.videoPromptInstructionText(spec),
-		Keyboard: backToKeyboard(domain.CommandMenuVideo),
+		Keyboard: videoPromptBackKeyboard(),
 	}
 	return h.deliverVideoControl(ctx, command, idemKey, peerID, msg, allowEdit)
 }
@@ -1283,18 +1283,15 @@ func (h *Handler) videoPromptInstructionText(spec videoModeSpec) string {
 	var b strings.Builder
 	b.WriteString(fmt.Sprintf("%s · %d сек", spec.ModelName, spec.DurationSec))
 	if price, ok := h.videoDisplayEstimateCredits(spec); ok {
-		b.WriteString(fmt.Sprintf("\n\nЦена: %d кредитов.", price))
+		b.WriteString(fmt.Sprintf("\n\nЦена: %d кредитов", price))
 	}
 	if spec.RequiresStartImage {
-		b.WriteString("\n\nПрикрепите стартовое фото и напишите описание видео одним сообщением.")
+		b.WriteString("\n\nПрикрепите стартовое фото и напишите описание видео одним сообщением")
 	} else {
-		b.WriteString("\n\nНапишите описание видео обычным сообщением.")
+		b.WriteString("\n\nНапишите описание видео обычным сообщением")
 		if spec.SupportsReferenceImage {
-			b.WriteString(" Фото-референс можно прикрепить к этому же сообщению.")
+			b.WriteString("\nФото-референс можно прикрепить к этому же сообщению")
 		}
-	}
-	if len(spec.AllowedAspectRatios) > 0 {
-		b.WriteString("\nДопустимые форматы проверяются сервером.")
 	}
 	return b.String()
 }
@@ -1431,11 +1428,7 @@ func (h *Handler) sendPhotoPromptInstruction(ctx context.Context, selection phot
 	if !ok {
 		return pricingcatalog.ErrPriceNotFound
 	}
-	waitHint := imageModelWaitHint(selection.Model)
-	if waitHint != "" {
-		waitHint = "\nОжидание: " + waitHint + "."
-	}
-	text := fmt.Sprintf("%s · %s\n\nЦена: %d кредитов.%s\n\nВведите описание изображения обычным сообщением.", selection.Model.ModelName, selection.Quality, price, waitHint)
+	text := fmt.Sprintf("%s · %s\n\nЦена: %d кредитов\n\nВведите описание изображения обычным сообщением", selection.Model.ModelName, selection.Quality, price)
 	msg := vkdelivery.Message{
 		Text:     text,
 		Keyboard: photoPromptKeyboardForCatalog(h.publicImageModelHasQualityOptions(selection.Model.ModelID)),
@@ -1460,21 +1453,6 @@ func (h *Handler) deliverPhotoControl(ctx context.Context, command domain.Comman
 		h.setActiveMenu(peerID, result.MessageID)
 	}
 	return err
-}
-
-func imageModelWaitHint(model modelcatalog.Model) string {
-	switch model.ModelID {
-	case modelcatalog.MiniAppImageGPTImage2:
-		return "обычно 30-60 секунд, при нагрузке дольше"
-	case modelcatalog.MiniAppImageNanoBananaPro:
-		return "обычно 1-3 минуты, зависит от проверки Google"
-	case modelcatalog.MiniAppImageNanoBanana2:
-		return "обычно 1-2 минуты"
-	case modelcatalog.MiniAppImageSeedream45, modelcatalog.MiniAppImageSDXLTurbo:
-		return "обычно до 1 минуты"
-	default:
-		return "обычно 1-2 минуты"
-	}
 }
 
 func imageSizeForSelection(selection photoDialogSelection) string {

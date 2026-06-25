@@ -81,6 +81,8 @@ func (r *Router) Parse(rawText string) Result {
 		return Result{Type: domain.CommandMenuVideoHailuo02Standard}
 	case "⬅️ назад", "назад":
 		return Result{Type: domain.CommandShowMenu}
+	case "⬅️ назад к видео", "назад к видео":
+		return Result{Type: domain.CommandMenuVideo}
 	case "🖼️ создать фото", "🖼 создать фото", "создать фото", "создать изображение":
 		return Result{Type: domain.CommandMenuImage}
 	// Legacy VK text-button labels. Provider/model-code strings intentionally
@@ -105,6 +107,10 @@ func (r *Router) Parse(rawText string) Result {
 		return Result{Type: domain.CommandMenuImageQuality4K}
 	case "назад к качеству", "back to quality":
 		return Result{Type: domain.CommandMenuImageBackToQuality}
+	case "⬅️ назад к фото", "назад к фото":
+		return Result{Type: domain.CommandMenuImage}
+	case "⬅️ назад к моделям", "назад к моделям":
+		return Result{Type: domain.CommandShowMenu}
 	case "📸 фото с референсом", "фото с референсом", "фото по тексту и фото":
 		return Result{Type: domain.CommandMenuImageReference}
 	case "💬 спросить у нейрохаб", "спросить у нейрохаб", "💬 спросить у gpt", "спросить у gpt", "задать вопрос":

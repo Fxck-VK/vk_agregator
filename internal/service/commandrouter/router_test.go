@@ -206,6 +206,21 @@ func TestRouterParse(t *testing.T) {
 			wantType: domain.CommandMenuImageBackToQuality,
 		},
 		{
+			name:     "vk photo back to models button",
+			input:    "Назад к фото",
+			wantType: domain.CommandMenuImage,
+		},
+		{
+			name:     "vk video back to models button",
+			input:    "Назад к видео",
+			wantType: domain.CommandMenuVideo,
+		},
+		{
+			name:     "vk stale ambiguous back to models button",
+			input:    "Назад к моделям",
+			wantType: domain.CommandShowMenu,
+		},
+		{
 			name:     "vk neurohub text menu button",
 			input:    "💬 Спросить у НейроХаб",
 			wantType: domain.CommandMenuText,
