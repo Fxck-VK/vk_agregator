@@ -309,6 +309,7 @@ jobs:
             -e '/^OPENAI_TEXT_MODEL=/d' \
             -e '/^OPENAI_IMAGE_MODEL=/d' \
             -e '/^OPENAI_VIDEO_MODEL=/d' \
+            -e '/^VK_VIDEO_DELIVERY_MODE=/d' \
             -e '/^RUNTIME_PRICING_DB_ENABLED=/d' \
             -e '/^RUNTIME_PRICING_STATIC_FALLBACK_ENABLED=/d' \
             -e '/^RUNTIME_PRICING_REFRESH_INTERVAL=/d' \
@@ -321,6 +322,7 @@ jobs:
             printf 'PROVIDER_CHAIN=%s\n' "${provider_chain}"
             printf 'IMAGE_PROVIDER=\n'
             printf 'VIDEO_PROVIDER=\n'
+            printf 'VK_VIDEO_DELIVERY_MODE=doc\n'
             printf 'RUNTIME_PRICING_DB_ENABLED=false\n'
             printf 'RUNTIME_PRICING_STATIC_FALLBACK_ENABLED=true\n'
             printf 'RUNTIME_PRICING_REFRESH_INTERVAL=0\n'

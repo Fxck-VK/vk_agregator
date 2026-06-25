@@ -1104,6 +1104,8 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 			// Expected business outcome: job is parked in awaiting_payment.
 			resourceID = job.ID
 			h.showInsufficientBalanceMessage(ctx, idemKey, peerID, placeholderID)
+		case errors.Is(err, domain.ErrActiveJobLimitExceeded):
+			h.editGPTPendingMessage(ctx, peerID, placeholderID, "У вас уже есть видео в обработке\nДождитесь результата или попробуйте позже")
 		default:
 			h.editGPTPendingMessage(ctx, peerID, placeholderID, "Не удалось поставить запрос в очередь\nПопробуйте позже")
 			return fmt.Errorf("create job: %w", err)

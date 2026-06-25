@@ -76,6 +76,10 @@ func newHarnessWithDeps(control vkdelivery.ControlClient, cfg vk.Config, antiSpa
 }
 
 func newHarnessWithReferenceDownloader(control vkdelivery.ControlClient, cfg vk.Config, antiSpam vk.AntiSpam, dialogState vk.DialogState, downloader vk.Downloader) *harness {
+	return newHarnessWithReferenceDownloaderAndOrchestratorOptions(control, cfg, antiSpam, dialogState, downloader)
+}
+
+func newHarnessWithReferenceDownloaderAndOrchestratorOptions(control vkdelivery.ControlClient, cfg vk.Config, antiSpam vk.AntiSpam, dialogState vk.DialogState, downloader vk.Downloader, opts ...joborchestrator.Option) *harness {
 	if cfg.ImageModels == nil {
 		cfg.ImageModels = defaultTestVKImageModels()
 	}
@@ -130,10 +134,12 @@ func newHarnessWithReferenceDownloader(control vkdelivery.ControlClient, cfg vk.
 	pub := queue.NewMemoryPublisher()
 	uowMgr := memory.NewUnitOfWork(jobs, outbox, bill)
 	prices := staticPricingCatalogForVKTest()
-	orch := joborchestrator.New(jobs, uowMgr, billing, 0,
+	orchOpts := []joborchestrator.Option{
 		joborchestrator.WithVideoRouteResolver(testVKVideoRouteResolver()),
 		joborchestrator.WithPricingCatalog(prices),
-	)
+	}
+	orchOpts = append(orchOpts, opts...)
+	orch := joborchestrator.New(jobs, uowMgr, billing, 0, orchOpts...)
 	h := vk.NewHandler(cfg, vk.Deps{
 		Idempotency:    idem,
 		Inbound:        inbound,
@@ -1802,6 +1808,64 @@ func TestVideoRouteButtonEnablesPlainTextVideoJobs(t *testing.T) {
 		params.DurationSec != 5 ||
 		params.VKPlaceholderMessageID != sent[1].MessageID {
 		t.Fatalf("unexpected video route job params: %+v, pending=%+v", params, sent[1])
+	}
+}
+
+func TestVideoRouteActiveJobLimitShowsSpecificMessage(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	h := newHarnessWithReferenceDownloaderAndOrchestratorOptions(control, vk.Config{
+		ConfirmationToken: "conf-token-123",
+		Secret:            "s3cr3t",
+		VideoRoutes:       []productcatalog.VideoRoute{testKlingVideoRoute()},
+	}, nil, nil, nil, joborchestrator.WithMaxActiveVideoJobsPerUser(1))
+	start := `{
+		"type":"message_new","group_id":1,"event_id":"evt-video-active-limit-route","secret":"s3cr3t",
+		"object":{"message":{"from_id":5625,"peer_id":5625,"text":"Kling O3 Standard","payload":"{\"command\":\"menu.video.route.select\",\"video_route_alias\":\"video_kling_o3_standard\"}"}}
+	}`
+	if rec := h.post(start); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected route response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	ctx := context.Background()
+	user, err := h.users.GetByVKUserID(ctx, 5625)
+	if err != nil {
+		t.Fatalf("user not created: %v", err)
+	}
+	if err := h.jobs.Create(ctx, &domain.Job{
+		ID:             uuid.New(),
+		UserID:         user.ID,
+		Source:         "vk_bot",
+		VKPeerID:       5625,
+		OperationType:  domain.OperationVideoGenerate,
+		Modality:       domain.ModalityVideo,
+		Status:         domain.JobStatusDelivering,
+		IdempotencyKey: "test:active-video-limit",
+		CorrelationID:  "test-active-video-limit",
+		CostEstimate:   150,
+		CostReserved:   150,
+	}); err != nil {
+		t.Fatalf("seed active job: %v", err)
+	}
+
+	prompt := `{
+		"type":"message_new","group_id":1,"event_id":"evt-video-active-limit-prompt","secret":"s3cr3t",
+		"object":{"message":{"from_id":5625,"peer_id":5625,"text":"cinematic city lights, slow camera movement"}}
+	}`
+	if rec := h.post(prompt); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected prompt response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	edits := control.Edits()
+	if len(edits) == 0 {
+		t.Fatalf("expected pending message edit, sent=%+v", control.Sent())
+	}
+	last := edits[len(edits)-1]
+	if last.Text != "У вас уже есть видео в обработке\nДождитесь результата или попробуйте позже" {
+		t.Fatalf("unexpected active-limit message: %+v", last)
+	}
+	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
+	if len(jobs) != 1 || h.pub.Len() != 0 {
+		t.Fatalf("active limit must not create or publish a second job, jobs=%+v tasks=%d", jobs, h.pub.Len())
 	}
 }
 

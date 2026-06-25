@@ -109,11 +109,7 @@ func (e *Engine) Recover(ctx context.Context) error {
 // Poll performs a single read-process-ack cycle and returns the number of
 // entries handled.
 func (e *Engine) Poll(ctx context.Context) (int, error) {
-	deliveries, err := e.reader.Read(ctx, redisqueue.ReadOptions{Streams: e.streams, Count: e.count, Block: e.block})
-	if err != nil {
-		return 0, err
-	}
-	return e.dispatch(ctx, deliveries), nil
+	return e.PollWithHandlerContext(ctx, ctx)
 }
 
 // Run recovers pending work then loops Poll until the context is cancelled.
@@ -160,11 +156,27 @@ func (e *Engine) RecoverWithHandlerContext(readCtx, handlerCtx context.Context) 
 
 // PollWithHandlerContext is Poll with a distinct handler context.
 func (e *Engine) PollWithHandlerContext(readCtx, handlerCtx context.Context) (int, error) {
+	handled, err := e.reclaimIdlePending(readCtx, handlerCtx)
+	if err != nil {
+		return handled, err
+	}
 	deliveries, err := e.reader.Read(readCtx, redisqueue.ReadOptions{Streams: e.streams, Count: e.count, Block: e.block})
 	if err != nil {
-		return 0, err
+		return handled, err
 	}
-	return e.dispatch(handlerCtx, deliveries), nil
+	return handled + e.dispatch(handlerCtx, deliveries), nil
+}
+
+func (e *Engine) reclaimIdlePending(readCtx, handlerCtx context.Context) (int, error) {
+	handled := 0
+	for _, stream := range e.streams {
+		deliveries, err := e.reader.AutoClaim(readCtx, stream, e.minIdle, e.count)
+		if err != nil {
+			return handled, err
+		}
+		handled += e.dispatch(handlerCtx, deliveries)
+	}
+	return handled, nil
 }
 
 // dispatch processes each delivery, acknowledging only those handled without
