@@ -534,7 +534,7 @@ func imageProviderCostCredits(req domain.ProviderRequest) (int64, error) {
 			return defaultImageProviderCostCredits, nil
 		}
 	case ModelGemini3ProImage:
-		if resolution == "1K" || resolution == "4K" {
+		if resolution == "1K" || resolution == "2K" || resolution == "4K" {
 			return defaultImageProviderCostCredits, nil
 		}
 	}

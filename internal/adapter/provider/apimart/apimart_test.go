@@ -128,6 +128,9 @@ func TestSubmitGemini3ProImageSuccess(t *testing.T) {
 	if _, ok := rawBody["official_fallback"]; ok {
 		t.Fatalf("official_fallback must be omitted unless enabled: %#v", rawBody)
 	}
+	if _, ok := rawBody["quality"]; ok {
+		t.Fatalf("APIMart image requests must use resolution, not quality: %#v", rawBody)
+	}
 	if len(seen.ImageURLs) != 1 || seen.ImageURLs[0] != "https://cdn.test/reference.png" {
 		t.Fatalf("image_urls = %#v", seen.ImageURLs)
 	}
@@ -187,6 +190,9 @@ func TestSubmitGPTImage2Success(t *testing.T) {
 	}
 	if _, ok := rawBody["official_fallback"]; ok {
 		t.Fatalf("official_fallback must be omitted unless enabled: %#v", rawBody)
+	}
+	if _, ok := rawBody["quality"]; ok {
+		t.Fatalf("APIMart image requests must use resolution, not quality: %#v", rawBody)
 	}
 }
 
@@ -403,6 +409,15 @@ func TestSubmitGemini3ProImageValidation(t *testing.T) {
 	if estimate.AmountCredits != 1 || estimate.Currency != "credits" || estimate.Estimated {
 		t.Fatalf("unexpected estimate: %+v", estimate)
 	}
+	twoK := base
+	twoK.Size = "2K"
+	estimate, err = p.Estimate(context.Background(), twoK)
+	if err != nil {
+		t.Fatalf("estimate 2K: %v", err)
+	}
+	if estimate.AmountCredits != 1 || estimate.Currency != "credits" || estimate.Estimated {
+		t.Fatalf("unexpected 2K estimate: %+v", estimate)
+	}
 
 	cases := []struct {
 		name string
@@ -414,15 +429,6 @@ func TestSubmitGemini3ProImageValidation(t *testing.T) {
 			req: func() domain.ProviderRequest {
 				req := base
 				req.ModelCode = ModelHailuo23Standard
-				return req
-			}(),
-			want: domain.ProviderErrUnsupportedCapab,
-		},
-		{
-			name: "unpriced provider floor",
-			req: func() domain.ProviderRequest {
-				req := base
-				req.Size = "2K"
 				return req
 			}(),
 			want: domain.ProviderErrUnsupportedCapab,

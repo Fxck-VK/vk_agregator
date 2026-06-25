@@ -39,22 +39,15 @@ func TestMiniAppImageModelsExposeOnlyPublicCatalogFields(t *testing.T) {
 			t.Fatalf("missing public image catalog fields: %+v", model)
 		}
 		serialized := strings.ToLower(fmt.Sprintf("%+v", model))
-		for _, private := range []string{"model_code", "provider", "nano-banana-2-new", "gemini-3-pro-image-preview", "gpt-image-2"} {
+		for _, private := range []string{"model_code", "provider", "nano-banana-2", "gemini-3-pro-image-preview", "gpt-image-2"} {
 			if strings.Contains(serialized, private) {
 				t.Fatalf("image catalog leaked private field %q: %+v", private, model)
 			}
 		}
 		switch model.ID {
-		case modelcatalog.MiniAppImageNanoBanana2, modelcatalog.MiniAppImageGPTImage2:
+		case modelcatalog.MiniAppImageNanoBanana2, modelcatalog.MiniAppImageNanoBananaPro, modelcatalog.MiniAppImageGPTImage2:
 			if model.DefaultQuality != modelcatalog.ImageQuality1K || len(model.QualityOptions) != 3 {
 				t.Fatalf("missing image quality options: %+v", model)
-			}
-			sawQualityOptions[model.ID] = true
-		case modelcatalog.MiniAppImageNanoBananaPro:
-			if model.DefaultQuality != modelcatalog.ImageQuality1K || len(model.QualityOptions) != 2 ||
-				model.QualityOptions[0] != modelcatalog.ImageQuality1K ||
-				model.QualityOptions[1] != modelcatalog.ImageQuality4K {
-				t.Fatalf("missing priced image quality options: %+v", model)
 			}
 			sawQualityOptions[model.ID] = true
 		}

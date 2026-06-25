@@ -291,7 +291,7 @@ func TestRouterProviderModelIDsStayFreeFormText(t *testing.T) {
 		"gpt-image-2",
 		"gpt_image_2",
 		"nano banana flash",
-		"nano-banana-2-new",
+		"nano-banana-2",
 		"kling-o3/standard",
 		"seedance-2-fast",
 		"minimax-hailuo-2.3",

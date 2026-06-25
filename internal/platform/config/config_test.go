@@ -604,14 +604,14 @@ func TestLoadDBPoolConfigBoundsInt32Values(t *testing.T) {
 
 func TestLoadImageProviderConfig(t *testing.T) {
 	t.Setenv("IMAGE_PROVIDER", "poyo")
-	t.Setenv("IMAGE_MODEL", "nano-banana-2-new")
+	t.Setenv("IMAGE_MODEL", "nano-banana-2")
 	t.Setenv("IMAGE_SIZE", "1K")
 
 	cfg := config.Load()
 	if cfg.ImageProvider != "poyo" {
 		t.Fatalf("ImageProvider = %q, want poyo", cfg.ImageProvider)
 	}
-	if cfg.ImageModel != "nano-banana-2-new" || cfg.ImageSize != "1K" {
+	if cfg.ImageModel != "nano-banana-2" || cfg.ImageSize != "1K" {
 		t.Fatalf("unexpected image config: model=%q size=%q", cfg.ImageModel, cfg.ImageSize)
 	}
 }

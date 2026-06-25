@@ -2031,7 +2031,7 @@ func TestPhotoMenuButtonSendsInstructionNoJob(t *testing.T) {
 		"max_internal_cost_credits",
 		"price",
 		"cost",
-		"nano-banana-2-new",
+		"nano-banana-2",
 		"gemini-3-pro-image-preview",
 		"gpt-image-2",
 	} {
@@ -2085,9 +2085,11 @@ func TestPhotoNanoBananaProQualityFlowCreatesImageJob(t *testing.T) {
 		t.Fatalf("expected Nano Banana Pro quality picker, got %+v", initial)
 	}
 	display1K := vkTestImageDisplayCredits(t, modelcatalog.MiniAppImageNanoBananaPro, modelcatalog.ImageQuality1K)
+	display2K := vkTestImageDisplayCredits(t, modelcatalog.MiniAppImageNanoBananaPro, modelcatalog.ImageQuality2K)
 	display4K := vkTestImageDisplayCredits(t, modelcatalog.MiniAppImageNanoBananaPro, modelcatalog.ImageQuality4K)
 	for _, want := range []string{
 		fmt.Sprintf("1K \u00b7 %d", display1K),
+		fmt.Sprintf("2K \u00b7 %d", display2K),
 		fmt.Sprintf("4K \u00b7 %d", display4K),
 		"⬅️ Назад к моделям",
 	} {
@@ -2095,10 +2097,6 @@ func TestPhotoNanoBananaProQualityFlowCreatesImageJob(t *testing.T) {
 			t.Fatalf("expected %q in Nano Banana Pro quality keyboard: %q", want, initial[0].Keyboard)
 		}
 	}
-	if strings.Contains(initial[0].Keyboard, "2K \u00b7") {
-		t.Fatalf("unpriced Nano Banana Pro 2K option must be hidden: %q", initial[0].Keyboard)
-	}
-
 	quality := `{
 		"type":"message_new","group_id":1,"event_id":"evt-photo-pro-quality","secret":"s3cr3t",
 		"object":{"message":{"from_id":5631,"peer_id":5631,"text":"4K","payload":"{\"command\":\"menu.image.quality.select\",\"model_id\":\"nano_banana_pro\",\"image_quality\":\"4K\"}"}}
@@ -2303,7 +2301,7 @@ func TestPhotoNanoBanana2ModeCreatesPoYoImageJob(t *testing.T) {
 		params.ModelID != "nano_banana_2" ||
 		params.ModelName != "Nano Banana 2" ||
 		params.Provider != "poyo" ||
-		params.ModelCode != "nano-banana-2-new" ||
+		params.ModelCode != "nano-banana-2" ||
 		params.Size != "1:1" ||
 		params.Resolution != "4K" ||
 		params.ImageQuality != "4K" {
@@ -2381,7 +2379,7 @@ func TestPhotoNanoBanana2PricingCatalogParityForDefaultQuality(t *testing.T) {
 		t.Fatalf("VK job pricing snapshot credits = %d/%v, want %d/true; snapshot=%s", credits, ok, expectedCost, string(jobs[0].PricingSnapshot))
 	}
 	lowerSnapshot := strings.ToLower(string(jobs[0].PricingSnapshot))
-	for _, private := range []string{"prompt", "model_code", "private_url", "nano-banana-2-new"} {
+	for _, private := range []string{"prompt", "model_code", "private_url", "nano-banana-2"} {
 		if strings.Contains(lowerSnapshot, private) {
 			t.Fatalf("pricing snapshot leaked private field %q: %s", private, string(jobs[0].PricingSnapshot))
 		}

@@ -23,7 +23,7 @@ const (
 	ModelKlingO3Standard = "kling-o3/standard"
 	ModelSeedance20Fast  = "seedance-2-fast"
 	ModelRunwayGen45     = "runway-gen-4.5"
-	ModelNanoBanana2New  = "nano-banana-2-new"
+	ModelNanoBanana2New  = "nano-banana-2"
 
 	klingO3CreditsPerSecond    int64 = 10
 	seedance20CreditsPerSecond int64 = 28

@@ -27,6 +27,7 @@ func TestNewStaticCatalogContainsApprovedImageTariffs(t *testing.T) {
 		{modelID: PublicImageGPTImage2, quality: ImageQuality2K, want: 8, unit: FloorUnitAPIMartCredits},
 		{modelID: PublicImageGPTImage2, quality: ImageQuality4K, want: 11, unit: FloorUnitAPIMartCredits},
 		{modelID: PublicImageNanoBananaPro, quality: ImageQuality1K, want: 24, unit: FloorUnitAPIMartCredits},
+		{modelID: PublicImageNanoBananaPro, quality: ImageQuality2K, want: 30, unit: FloorUnitAPIMartCredits},
 		{modelID: PublicImageNanoBananaPro, quality: ImageQuality4K, want: 30, unit: FloorUnitAPIMartCredits},
 	}
 	for _, tc := range cases {

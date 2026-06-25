@@ -53,6 +53,7 @@ func StaticProductPrices() []ProductPrice {
 		imageTariff(PublicImageGPTImage2, ImageQuality2K, 120_000, FloorUnitAPIMartCredits, apimartCreditToInternal, 8),
 		imageTariff(PublicImageGPTImage2, ImageQuality4K, 180_000, FloorUnitAPIMartCredits, apimartCreditToInternal, 11),
 		imageTariff(PublicImageNanoBananaPro, ImageQuality1K, 400_000, FloorUnitAPIMartCredits, apimartCreditToInternal, 24),
+		imageTariff(PublicImageNanoBananaPro, ImageQuality2K, 500_000, FloorUnitAPIMartCredits, apimartCreditToInternal, 30),
 		imageTariff(PublicImageNanoBananaPro, ImageQuality4K, 500_000, FloorUnitAPIMartCredits, apimartCreditToInternal, 30),
 	}
 

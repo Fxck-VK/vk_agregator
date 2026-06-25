@@ -2650,7 +2650,7 @@ func TestHandler_Estimate_NanoBanana2UsesServerOwnedCost(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
 	lower := strings.ToLower(w.Body.String())
-	for _, private := range []string{"poyo", "nano-banana-2-new", "model_code", "provider", "price"} {
+	for _, private := range []string{"poyo", "nano-banana-2", "model_code", "provider", "price"} {
 		if strings.Contains(lower, private) {
 			t.Fatalf("estimate response leaked private detail %q: %s", private, w.Body.String())
 		}
@@ -2704,7 +2704,7 @@ func TestHandler_Estimate_ImageQualityUsesServerOwnedCost(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
 	lower := strings.ToLower(w.Body.String())
-	for _, private := range []string{"poyo", "nano-banana-2-new", "model_code", "provider", "price"} {
+	for _, private := range []string{"poyo", "nano-banana-2", "model_code", "provider", "price"} {
 		if strings.Contains(lower, private) {
 			t.Fatalf("estimate response leaked private detail %q: %s", private, w.Body.String())
 		}
@@ -2800,7 +2800,7 @@ func TestHandler_ListModelCatalog_PublicItemsOnly(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
 	lower := strings.ToLower(w.Body.String())
-	for _, private := range []string{"provider", "model_code", "provider_model_id", "nano-banana-2-new", "hidden-provider-model", "price_multiplier"} {
+	for _, private := range []string{"provider", "model_code", "provider_model_id", "nano-banana-2", "hidden-provider-model", "price_multiplier"} {
 		if strings.Contains(lower, private) {
 			t.Fatalf("model catalog response leaked %q: %s", private, w.Body.String())
 		}
@@ -2939,7 +2939,7 @@ func TestHandler_PricingCatalogParity_ImageNanoBanana2DefaultQuality(t *testing.
 		t.Fatalf("created job pricing snapshot credits = %d/%v, want %d/true; snapshot=%s", credits, ok, expectedCost, string(job.PricingSnapshot))
 	}
 	lowerSnapshot := strings.ToLower(string(job.PricingSnapshot))
-	for _, private := range []string{"prompt", "model_code", "private_url", "nano-banana-2-new"} {
+	for _, private := range []string{"prompt", "model_code", "private_url", "nano-banana-2"} {
 		if strings.Contains(lowerSnapshot, private) {
 			t.Fatalf("pricing snapshot leaked private field %q: %s", private, string(job.PricingSnapshot))
 		}
@@ -3483,7 +3483,7 @@ func TestHandler_CreateJob_NanoBanana2PersistsPoYoSnapshotPrivately(t *testing.T
 		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
 	}
 	lower := strings.ToLower(w.Body.String())
-	for _, private := range []string{"poyo", "nano-banana-2-new", "model_code", "provider"} {
+	for _, private := range []string{"poyo", "nano-banana-2", "model_code", "provider"} {
 		if strings.Contains(lower, private) {
 			t.Fatalf("job response leaked private detail %q: %s", private, w.Body.String())
 		}
@@ -3521,7 +3521,7 @@ func TestHandler_CreateJob_NanoBanana2PersistsPoYoSnapshotPrivately(t *testing.T
 	if err := json.Unmarshal(job.Params, &params); err != nil {
 		t.Fatalf("invalid params: %v", err)
 	}
-	if params.ModelID != "nano_banana_2" || params.ModelName != "Nano Banana 2" || params.Provider != "poyo" || params.ModelCode != "nano-banana-2-new" {
+	if params.ModelID != "nano_banana_2" || params.ModelName != "Nano Banana 2" || params.Provider != "poyo" || params.ModelCode != "nano-banana-2" {
 		t.Fatalf("unexpected stored params: %+v", params)
 	}
 }
@@ -3563,7 +3563,7 @@ func TestHandler_CreateJob_ImageQualityPersistsServerOwnedSnapshot(t *testing.T)
 		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
 	}
 	lower := strings.ToLower(w.Body.String())
-	for _, private := range []string{"poyo", "nano-banana-2-new", "model_code", "provider", "price"} {
+	for _, private := range []string{"poyo", "nano-banana-2", "model_code", "provider", "price"} {
 		if strings.Contains(lower, private) {
 			t.Fatalf("job response leaked private detail %q: %s", private, w.Body.String())
 		}
@@ -3612,7 +3612,7 @@ func TestHandler_CreateJob_ImageQualityPersistsServerOwnedSnapshot(t *testing.T)
 	if params.ModelID != modelcatalog.MiniAppImageNanoBanana2 ||
 		params.ModelName != "Nano Banana 2" ||
 		params.Provider != "poyo" ||
-		params.ModelCode != "nano-banana-2-new" ||
+		params.ModelCode != "nano-banana-2" ||
 		params.Size != "1:1" ||
 		params.Resolution != modelcatalog.ImageQuality2K ||
 		params.ImageQuality != modelcatalog.ImageQuality2K {
@@ -3724,7 +3724,7 @@ func TestHandler_CreateJob_IgnoresClientProviderAndPriceFields(t *testing.T) {
 	if params.ModelID != modelcatalog.MiniAppImageNanoBanana2 ||
 		params.ModelName != "Nano Banana 2" ||
 		params.Provider != "poyo" ||
-		params.ModelCode != "nano-banana-2-new" ||
+		params.ModelCode != "nano-banana-2" ||
 		params.Resolution != modelcatalog.ImageQuality2K ||
 		params.ImageQuality != modelcatalog.ImageQuality2K {
 		t.Fatalf("client-provided provider/model fields affected stored server snapshot: %+v", params)

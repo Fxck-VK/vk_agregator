@@ -49,9 +49,7 @@ func TestCatalogBuildsOnlyPublicEnabledItems(t *testing.T) {
 	if pro == nil {
 		t.Fatalf("Nano Banana Pro missing from public catalog: %+v", items)
 	}
-	if pro.DefaultQuality != modelcatalog.ImageQuality1K || len(pro.QualityOptions) != 2 || pro.QualityOptions[0] != modelcatalog.ImageQuality1K || pro.QualityOptions[1] != modelcatalog.ImageQuality4K {
-		t.Fatalf("Nano Banana Pro must expose only priced quality options: %+v", pro)
-	}
+	assertImageQualityOptions(t, "Nano Banana Pro", pro.DefaultQuality, pro.QualityOptions)
 	gptImage2 := findItem(items, modelcatalog.MiniAppImageGPTImage2)
 	if gptImage2 == nil {
 		t.Fatalf("GPT Image 2 missing from public catalog: %+v", items)
@@ -193,7 +191,7 @@ func assertNoPrivateProviderFields(t *testing.T, items []productcatalog.Item) {
 		"provider_cost_credits",
 		"price_multiplier",
 		"max_internal_cost_credits",
-		"nano-banana-2-new",
+		"nano-banana-2",
 		"gemini-3-pro-image-preview",
 		"gpt-image-2",
 		"kling-o3/standard",

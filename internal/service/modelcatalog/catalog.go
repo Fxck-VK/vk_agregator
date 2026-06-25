@@ -24,7 +24,7 @@ const (
 
 	VKVideoPrunaAI = "prunaai"
 
-	ModelCodePoYoNanoBanana2 = "nano-banana-2-new"
+	ModelCodePoYoNanoBanana2 = "nano-banana-2"
 	ModelCodeGemini3ProImage = "gemini-3-pro-image-preview"
 	ModelCodeGPTImage2       = "gpt-image-2"
 	ModelCodeSeedream45      = "ByteDance/Seedream-4.5"
