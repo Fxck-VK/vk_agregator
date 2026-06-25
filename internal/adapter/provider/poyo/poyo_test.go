@@ -37,11 +37,14 @@ func TestSubmitKlingO3SuccessAndIdempotency(t *testing.T) {
 		if body.Input["prompt"] != "safe prompt" {
 			t.Fatalf("bad input prompt: %+v", body.Input)
 		}
-		if refs, ok := body.Input["image_urls"].([]any); !ok || len(refs) != 1 || refs[0] != "https://cdn.test/input.png" {
-			t.Fatalf("image_urls = %#v", body.Input["image_urls"])
+		if refs, ok := body.Input["reference_image_urls"].([]any); !ok || len(refs) != 1 || refs[0] != "https://cdn.test/input.png" {
+			t.Fatalf("reference_image_urls = %#v", body.Input["reference_image_urls"])
 		}
 		if body.Input["duration"].(float64) != 10 || body.Input["aspect_ratio"] != "16:9" {
 			t.Fatalf("bad input options: %+v", body.Input)
+		}
+		if body.Input["multi_shots"] != false {
+			t.Fatalf("kling multi_shots must be explicitly disabled, got %+v", body.Input)
 		}
 		if body.Input["sound"] != false {
 			t.Fatalf("kling sound must be explicitly disabled, got %+v", body.Input)
@@ -139,13 +142,13 @@ func TestSubmitUploadsDataURLReferencesBeforeGenerate(t *testing.T) {
 			name:      "kling video",
 			req:       baseVideoRequest(ModelKlingO3Standard),
 			wantModel: ModelKlingO3Standard,
-			wantField: "image_urls",
+			wantField: "reference_image_urls",
 		},
 		{
 			name:      "seedance video",
 			req:       baseVideoRequest(ModelSeedance20Fast),
 			wantModel: ModelSeedance20Fast,
-			wantField: "image_urls",
+			wantField: "reference_image_urls",
 		},
 		{
 			name:      "runway video",
@@ -187,6 +190,11 @@ func TestSubmitUploadsDataURLReferencesBeforeGenerate(t *testing.T) {
 						refs, ok := body.Input["image_urls"].([]any)
 						if !ok || len(refs) != 1 || refs[0] != wantURL {
 							t.Fatalf("image_urls = %#v", body.Input["image_urls"])
+						}
+					case "reference_image_urls":
+						refs, ok := body.Input["reference_image_urls"].([]any)
+						if !ok || len(refs) != 1 || refs[0] != wantURL {
+							t.Fatalf("reference_image_urls = %#v", body.Input["reference_image_urls"])
 						}
 					case "image_url":
 						if body.Input["image_url"] != wantURL {

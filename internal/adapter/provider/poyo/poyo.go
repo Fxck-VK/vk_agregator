@@ -660,15 +660,16 @@ func buildVideoSubmitRequest(req domain.ProviderRequest) (submitRequest, error) 
 	}
 	switch strings.TrimSpace(req.ModelCode) {
 	case ModelKlingO3Standard:
+		input["multi_shots"] = false
 		input["sound"] = false
 		if len(inputURLs) > 0 {
-			input["image_urls"] = inputURLs
+			input["reference_image_urls"] = inputURLs
 		}
 	case ModelSeedance20Fast:
 		input["resolution"] = effectiveResolution(req.ModelCode, req.Resolution)
 		input["generate_audio"] = false
 		if len(inputURLs) > 0 {
-			input["image_urls"] = inputURLs
+			input["reference_image_urls"] = inputURLs
 		}
 	case ModelRunwayGen45:
 		// PoYo Runway Gen-4.5 allows only one optional reference image until
@@ -696,6 +697,16 @@ func (p *Provider) materializeInputImages(ctx context.Context, body *submitReque
 		}
 		if len(materialized) > 0 {
 			body.Input["image_urls"] = materialized
+		}
+	}
+	if raw, ok := body.Input["reference_image_urls"]; ok {
+		values := inputURLList(raw)
+		materialized, err := p.materializeInputURLList(ctx, values)
+		if err != nil {
+			return err
+		}
+		if len(materialized) > 0 {
+			body.Input["reference_image_urls"] = materialized
 		}
 	}
 	if raw, ok := body.Input["image_url"]; ok {

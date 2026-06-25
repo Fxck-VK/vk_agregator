@@ -140,7 +140,7 @@ func deliveryReadyVideoOutput(contract *domain.ProviderMediaContract, metadata d
 	if contract.ExpectedMaxBytes > 0 && sizeBytes > contract.ExpectedMaxBytes {
 		return false
 	}
-	if !allowedDuration(durationSeconds(metadata.DurationMS), contract.AllowedDurationsSec) {
+	if !allowedOutputDuration(metadata.DurationMS, contract.AllowedDurationsSec) {
 		return false
 	}
 	if !allowedOutputAspect(metadata.Width, metadata.Height, contract.AllowedAspectRatios) {
@@ -165,6 +165,26 @@ func durationSeconds(durationMS int64) int {
 		return 0
 	}
 	return int((durationMS + 999) / 1000)
+}
+
+func allowedOutputDuration(durationMS int64, allowed []int) bool {
+	if len(allowed) == 0 {
+		return true
+	}
+	if durationMS <= 0 {
+		return false
+	}
+	if allowedDuration(durationSeconds(durationMS), allowed) {
+		return true
+	}
+	const containerSlopMS int64 = 1000
+	for _, seconds := range allowed {
+		targetMS := int64(seconds) * 1000
+		if durationMS > targetMS && durationMS <= targetMS+containerSlopMS {
+			return true
+		}
+	}
+	return false
 }
 
 func allowedOutputAspect(width, height int, allowed []string) bool {
