@@ -121,6 +121,118 @@ func TestSubmitNanoBanana2ImageSuccess(t *testing.T) {
 	}
 }
 
+func TestSubmitUploadsDataURLReferencesBeforeGenerate(t *testing.T) {
+	const dataURL = "data:image/png;base64,aW1hZ2U="
+	cases := []struct {
+		name      string
+		req       domain.ProviderRequest
+		wantModel string
+		wantField string
+	}{
+		{
+			name:      "nano banana image",
+			req:       baseImageRequest(ModelNanoBanana2New),
+			wantModel: ModelNanoBanana2New,
+			wantField: "image_urls",
+		},
+		{
+			name:      "kling video",
+			req:       baseVideoRequest(ModelKlingO3Standard),
+			wantModel: ModelKlingO3Standard,
+			wantField: "image_urls",
+		},
+		{
+			name:      "seedance video",
+			req:       baseVideoRequest(ModelSeedance20Fast),
+			wantModel: ModelSeedance20Fast,
+			wantField: "image_urls",
+		},
+		{
+			name:      "runway video",
+			req:       baseVideoRequest(ModelRunwayGen45),
+			wantModel: ModelRunwayGen45,
+			wantField: "image_url",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			wantURL := "https://storage.poyo.ai/temp/ref.png"
+			uploadCalls := 0
+			submitCalls := 0
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				switch r.URL.Path {
+				case "/api/common/upload/base64":
+					uploadCalls++
+					var body uploadBase64Request
+					if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+						t.Fatalf("decode upload body: %v", err)
+					}
+					if body.Base64Data != dataURL {
+						t.Fatalf("base64_data = %q", body.Base64Data)
+					}
+					_, _ = w.Write([]byte(`{"success":true,"code":200,"data":{"file_url":"` + wantURL + `"}}`))
+				case "/api/generate/submit":
+					submitCalls++
+					var body submitRequest
+					if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+						t.Fatalf("decode submit body: %v", err)
+					}
+					if body.Model != tc.wantModel {
+						t.Fatalf("model = %q, want %q", body.Model, tc.wantModel)
+					}
+					switch tc.wantField {
+					case "image_urls":
+						refs, ok := body.Input["image_urls"].([]any)
+						if !ok || len(refs) != 1 || refs[0] != wantURL {
+							t.Fatalf("image_urls = %#v", body.Input["image_urls"])
+						}
+					case "image_url":
+						if body.Input["image_url"] != wantURL {
+							t.Fatalf("image_url = %#v", body.Input["image_url"])
+						}
+					default:
+						t.Fatalf("unexpected field %q", tc.wantField)
+					}
+					_, _ = w.Write([]byte(`{"code":200,"data":{"task_id":"task_1","status":"not_started"}}`))
+				default:
+					t.Fatalf("unexpected path %s", r.URL.Path)
+				}
+			}))
+			defer srv.Close()
+
+			provider := New(Config{APIKey: "test-key", BaseURL: srv.URL, HTTPClient: srv.Client()})
+			req := tc.req
+			req.InputURLs = []string{dataURL}
+			if _, err := provider.Submit(context.Background(), req); err != nil {
+				t.Fatalf("submit: %v", err)
+			}
+			if uploadCalls != 1 || submitCalls != 1 {
+				t.Fatalf("calls upload=%d submit=%d, want 1/1", uploadCalls, submitCalls)
+			}
+		})
+	}
+}
+
+func TestSubmitRejectsInvalidReferenceURLBeforeHTTP(t *testing.T) {
+	var called bool
+	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		called = true
+	}))
+	defer srv.Close()
+
+	provider := New(Config{APIKey: "test-key", BaseURL: srv.URL, HTTPClient: srv.Client()})
+	req := baseVideoRequest(ModelSeedance20Fast)
+	req.InputURLs = []string{"not-a-url"}
+
+	_, err := provider.Submit(context.Background(), req)
+	requireErrorClass(t, err, domain.ProviderErrInvalidRequest)
+	if called {
+		t.Fatal("invalid reference URL must be rejected before HTTP calls")
+	}
+}
+
 func TestSubmitNanoBanana2ImageAcceptsDataID(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/api/generate/submit" {

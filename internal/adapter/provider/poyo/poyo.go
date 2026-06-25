@@ -160,6 +160,9 @@ func (p *Provider) Submit(ctx context.Context, req domain.ProviderRequest) (doma
 	if err != nil {
 		return domain.ProviderTask{}, err
 	}
+	if err := p.materializeInputImages(ctx, &body); err != nil {
+		return domain.ProviderTask{}, err
+	}
 	var decoded submitResponse
 	if err := p.postJSON(ctx, "/api/generate/submit", body, &decoded, req.IdempotencyKey); err != nil {
 		return domain.ProviderTask{}, err
@@ -290,6 +293,48 @@ type submitData struct {
 	TaskID      string `json:"task_id,omitempty"`
 	Status      string `json:"status,omitempty"`
 	CreatedTime string `json:"created_time,omitempty"`
+}
+
+type uploadBase64Request struct {
+	Base64Data string `json:"base64_data"`
+}
+
+type uploadResponse struct {
+	Success *bool         `json:"success,omitempty"`
+	Code    int           `json:"code,omitempty"`
+	Msg     string        `json:"msg,omitempty"`
+	Message string        `json:"message,omitempty"`
+	Data    uploadData    `json:"data,omitempty"`
+	Error   providerError `json:"error,omitempty"`
+}
+
+type uploadData struct {
+	FileURL     string `json:"file_url,omitempty"`
+	DownloadURL string `json:"download_url,omitempty"`
+}
+
+func (r uploadResponse) err() error {
+	message := r.Message
+	if strings.TrimSpace(message) == "" {
+		message = r.Msg
+	}
+	if r.Success != nil && !*r.Success {
+		return apiEnvelopeError(http.StatusOK, r.Error, message)
+	}
+	if r.Code != 0 && r.Code != http.StatusOK {
+		return apiEnvelopeError(r.Code, r.Error, message)
+	}
+	if !r.Error.empty() {
+		return apiEnvelopeError(http.StatusOK, r.Error, message)
+	}
+	return nil
+}
+
+func (r uploadResponse) fileURL() string {
+	if trimmed := strings.TrimSpace(r.Data.FileURL); trimmed != "" {
+		return trimmed
+	}
+	return strings.TrimSpace(r.Data.DownloadURL)
 }
 
 func (r submitResponse) err() error {
@@ -639,6 +684,97 @@ func buildVideoSubmitRequest(req domain.ProviderRequest) (submitRequest, error) 
 	}, nil
 }
 
+func (p *Provider) materializeInputImages(ctx context.Context, body *submitRequest) error {
+	if body == nil || body.Input == nil {
+		return nil
+	}
+	if raw, ok := body.Input["image_urls"]; ok {
+		values := inputURLList(raw)
+		materialized, err := p.materializeInputURLList(ctx, values)
+		if err != nil {
+			return err
+		}
+		if len(materialized) > 0 {
+			body.Input["image_urls"] = materialized
+		}
+	}
+	if raw, ok := body.Input["image_url"]; ok {
+		values := inputURLList(raw)
+		if len(values) == 0 {
+			return nil
+		}
+		materialized, err := p.materializeInputURLList(ctx, values[:1])
+		if err != nil {
+			return err
+		}
+		if len(materialized) > 0 {
+			body.Input["image_url"] = materialized[0]
+		}
+	}
+	return nil
+}
+
+func (p *Provider) materializeInputURLList(ctx context.Context, values []string) ([]string, error) {
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		materialized, err := p.materializeInputURL(ctx, value)
+		if err != nil {
+			return nil, err
+		}
+		if materialized != "" {
+			out = append(out, materialized)
+		}
+	}
+	return out, nil
+}
+
+func (p *Provider) materializeInputURL(ctx context.Context, value string) (string, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "", nil
+	}
+	if isHTTPURL(value) {
+		return value, nil
+	}
+	if !isImageDataURL(value) {
+		return "", &Error{Class: domain.ProviderErrInvalidRequest, Message: "PoYo reference image must be an HTTP(S) URL or image data URL"}
+	}
+	var decoded uploadResponse
+	if err := p.postJSON(ctx, "/api/common/upload/base64", uploadBase64Request{Base64Data: value}, &decoded, ""); err != nil {
+		return "", err
+	}
+	if err := decoded.err(); err != nil {
+		return "", err
+	}
+	fileURL := decoded.fileURL()
+	if !isHTTPURL(fileURL) {
+		return "", &Error{Class: domain.ProviderErrInternal, Message: "PoYo upload returned invalid file URL"}
+	}
+	return fileURL, nil
+}
+
+func inputURLList(value any) []string {
+	switch typed := value.(type) {
+	case string:
+		if trimmed := strings.TrimSpace(typed); trimmed != "" {
+			return []string{trimmed}
+		}
+	case []string:
+		return cleanInputURLs(typed)
+	case []any:
+		out := make([]string, 0, len(typed))
+		for _, item := range typed {
+			if text, ok := item.(string); ok {
+				if trimmed := strings.TrimSpace(text); trimmed != "" {
+					out = append(out, trimmed)
+				}
+			}
+		}
+		return out
+	}
+	return nil
+}
+
 func validateImageShape(req domain.ProviderRequest, requirePrompt bool) error {
 	if req.Operation != domain.OperationImageGenerate || req.Modality != domain.ModalityImage {
 		return &Error{Class: domain.ProviderErrUnsupportedCapab, Message: string(req.Operation) + "/" + string(req.Modality)}
@@ -666,6 +802,9 @@ func validateImageShape(req domain.ProviderRequest, requirePrompt bool) error {
 	}
 	if len(cleanInputURLs(req.InputURLs)) > maxNanoBanana2ReferenceImages {
 		return &Error{Class: domain.ProviderErrInvalidRequest, Message: "too many Nano Banana 2 reference images"}
+	}
+	if err := validateInputURLShape(req.InputURLs); err != nil {
+		return err
 	}
 	return nil
 }
@@ -773,6 +912,9 @@ func validateVideoShape(req domain.ProviderRequest, requirePrompt bool) error {
 			return &Error{Class: domain.ProviderErrInvalidRequest, Message: "Runway Gen-4.5 accepts one reference image"}
 		}
 	}
+	if err := validateInputURLShape(req.InputURLs); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -879,6 +1021,28 @@ func cleanInputURLs(values []string) []string {
 		}
 	}
 	return out
+}
+
+func validateInputURLShape(values []string) error {
+	for _, value := range cleanInputURLs(values) {
+		if !isHTTPURL(value) && !isImageDataURL(value) {
+			return &Error{Class: domain.ProviderErrInvalidRequest, Message: "PoYo reference image must be an HTTP(S) URL or image data URL"}
+		}
+	}
+	return nil
+}
+
+func isHTTPURL(value string) bool {
+	parsed, err := url.Parse(strings.TrimSpace(value))
+	if err != nil || parsed.Host == "" {
+		return false
+	}
+	return parsed.Scheme == "http" || parsed.Scheme == "https"
+}
+
+func isImageDataURL(value string) bool {
+	lower := strings.ToLower(strings.TrimSpace(value))
+	return strings.HasPrefix(lower, "data:image/") && strings.Contains(lower, ";base64,")
 }
 
 func (p *Provider) postJSON(ctx context.Context, path string, in, out any, idempotencyKey string) error {
