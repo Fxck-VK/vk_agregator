@@ -223,7 +223,7 @@ const (
 
 	studentsText = "🎁Данные нейронные сети помогут вам во время учебы"
 
-	topUpText = "💰 Пополнить баланс\n\nПополнение будет подключено отдельным платежным потоком. Пока для тестирования доступны стартовые кредиты."
+	topUpText = "💰 Пополнить баланс\n\nПополнение будет подключено отдельным платежным потоком. Пока для тестирования доступны стартовые ⭐️."
 
 	chooseModeText = "Выберите режим в меню выше или нажмите на кнопку показать меню"
 )
@@ -575,7 +575,7 @@ func (h *Handler) sendTopUpPaymentLink(ctx context.Context, idemKey string, peer
 		return 0, h.sendTopUpNotice(ctx, idemKey, peerID, topUpPaymentUnavailableText(balance))
 	}
 	msg := vkdelivery.Message{
-		Text: fmt.Sprintf("%s СЧЕТ\nПокупка: %d кристаллов\nБаланс сейчас: %d кристаллов\nПосле оплаты: %d кристаллов\n\nОткройте оплату кнопкой ниже.\nСсылка на оплату действует ограниченное время.",
+		Text: fmt.Sprintf("%s СЧЕТ\nПокупка: %d ⭐️\nБаланс сейчас: %d ⭐️\nПосле оплаты: %d ⭐️\n\nОткройте оплату кнопкой ниже.\nСсылка на оплату действует ограниченное время.",
 			formatRubAmount(intent.Amount),
 			intent.Credits,
 			balance,
@@ -906,7 +906,7 @@ func welcomeTextWithName(name string) string {
 }
 
 func accountText(balance int64) string {
-	return fmt.Sprintf("👤 Мой аккаунт\n\nВаш баланс: %d 💎\n\nВыберите действие:", balance)
+	return fmt.Sprintf("👤 Мой аккаунт\n\nВаш баланс: %d ⭐️\n\nВыберите действие:", balance)
 }
 
 func accountDetailsText(view accountView) string {
@@ -924,7 +924,7 @@ func accountDetailsText(view accountView) string {
 }
 
 func insertBalanceLine(text string, balance int64) string {
-	line := fmt.Sprintf("Баланс: %d кристаллов", balance)
+	line := fmt.Sprintf("Баланс: %d ⭐️", balance)
 	if strings.Contains(text, line) {
 		return text
 	}
@@ -957,17 +957,17 @@ func (h *Handler) activeTopUpIntent(ctx context.Context, userID uuid.UUID, retur
 
 func topUpCatalogText(balance int64, products []*domain.PaymentProduct) string {
 	if len(products) == 0 {
-		return fmt.Sprintf("💰 Пополнить баланс\n\nБаланс сейчас: %d кристаллов\n\nТарифы пока недоступны. Попробуйте позже.", balance)
+		return fmt.Sprintf("💰 Пополнить баланс\n\nБаланс сейчас: %d ⭐️\n\nТарифы пока недоступны. Попробуйте позже.", balance)
 	}
-	return fmt.Sprintf("💰 Пополнить баланс\n\nБаланс сейчас: %d кристаллов\n\nВыберите пакет для пополнения баланса:", balance)
+	return fmt.Sprintf("💰 Пополнить баланс\n\nБаланс сейчас: %d ⭐️\n\nВыберите пакет для пополнения баланса:", balance)
 }
 
 func topUpPendingText(balance int64, intent *domain.PaymentIntent) string {
-	return fmt.Sprintf("💰 У вас есть незавершенный платеж\n\nБаланс сейчас: %d кристаллов\nПакет: %d кристаллов\nСумма: %s\nПосле оплаты: %d кристаллов\n\nПродолжите оплату кнопкой ниже.\nПосле оплаты баланс обновится автоматически.", balance, intent.Credits, formatRubAmount(intent.Amount), balance+intent.Credits)
+	return fmt.Sprintf("💰 У вас есть незавершенный платеж\n\nБаланс сейчас: %d ⭐️\nПакет: %d ⭐️\nСумма: %s\nПосле оплаты: %d ⭐️\n\nПродолжите оплату кнопкой ниже.\nПосле оплаты баланс обновится автоматически.", balance, intent.Credits, formatRubAmount(intent.Amount), balance+intent.Credits)
 }
 
 func topUpPaymentUnavailableText(balance int64) string {
-	return fmt.Sprintf("💰 Пополнить баланс\n\nБаланс сейчас: %d кристаллов\n\nПлатежи временно недоступны. Попробуйте позже.", balance)
+	return fmt.Sprintf("💰 Пополнить баланс\n\nБаланс сейчас: %d ⭐️\n\nПлатежи временно недоступны. Попробуйте позже.", balance)
 }
 
 func topUpCatalogKeyboard(products []*domain.PaymentProduct, forceNew bool) *vkdelivery.Keyboard {
@@ -1044,7 +1044,7 @@ func (h *Handler) topUpPaymentRedirectBase() (*url.URL, bool) {
 }
 
 func topUpProductLabel(product *domain.PaymentProduct) string {
-	return fmt.Sprintf("💎 %d кристаллов — %s", product.Credits, formatRubAmount(product.Amount))
+	return fmt.Sprintf("%d ⭐️ — %s", product.Credits, formatRubAmount(product.Amount))
 }
 
 func formatRubAmount(amount int64) string {
@@ -1262,7 +1262,7 @@ func (h *Handler) videoRouteDurationKeyboard(spec videoModeSpec) *vkdelivery.Key
 		if !ok {
 			continue
 		}
-		durationRow = append(durationRow, videoDurationButton(fmt.Sprintf("%d сек · %d кредитов", duration, price), string(spec.VideoRouteAlias), duration, "primary"))
+		durationRow = append(durationRow, videoDurationButton(fmt.Sprintf("%d сек · %d ⭐️", duration, price), string(spec.VideoRouteAlias), duration, "primary"))
 		if len(durationRow) == 3 {
 			rows = append(rows, durationRow)
 			durationRow = make([]vkdelivery.KeyboardButton, 0, 3)
@@ -1335,7 +1335,7 @@ type photoQualityOption struct {
 func photoQualityKeyboard(options []photoQualityOption) *vkdelivery.Keyboard {
 	rows := make([][]vkdelivery.KeyboardButton, 0, len(options)+1)
 	for _, option := range options {
-		label := fmt.Sprintf("%s · %d кредитов", option.Label, option.Price)
+		label := fmt.Sprintf("%s · %d ⭐️", option.Label, option.Price)
 		rows = append(rows, []vkdelivery.KeyboardButton{
 			photoQualityButton(label, option.ModelID, option.Quality, "primary"),
 		})

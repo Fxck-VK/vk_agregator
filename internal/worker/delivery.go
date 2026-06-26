@@ -396,28 +396,28 @@ func isMiniAppJob(job *domain.Job) bool {
 func safeVKMediaFailureNotice(errorCode string) string {
 	switch errorCode {
 	case domain.JobErrMediaProviderOutputInvalid:
-		return "Не удалось безопасно подготовить медиафайл. Кредиты не списаны. Попробуйте изменить описание или повторить позже."
+		return "Не удалось безопасно подготовить медиафайл. ⭐️ не списаны. Попробуйте изменить описание или повторить позже."
 	case domain.JobErrMediaOverloadedRetryLater:
-		return "Сейчас высокая нагрузка на генерацию медиа. Кредиты не списаны. Попробуйте позже."
+		return "Сейчас высокая нагрузка на генерацию медиа. ⭐️ не списаны. Попробуйте позже."
 	case domain.JobErrMediaDeliveryFailed:
-		return "Не удалось доставить готовый медиафайл. Кредиты не списаны. Попробуйте позже."
+		return "Не удалось доставить готовый медиафайл. ⭐️ не списаны. Попробуйте позже."
 	case domain.JobErrMediaProcessingUnavailable:
-		return "Не удалось получить или подготовить готовый медиафайл. Кредиты не списаны. Попробуйте позже."
+		return "Не удалось получить или подготовить готовый медиафайл. ⭐️ не списаны. Попробуйте позже."
 	case string(domain.ProviderErrRateLimited),
 		string(domain.ProviderErrTimeout),
 		string(domain.ProviderErrOverloaded),
 		string(domain.ProviderErrInternal):
-		return "Генерация временно недоступна. Кредиты не списаны. Попробуйте позже."
+		return "Генерация временно недоступна. ⭐️ не списаны. Попробуйте позже."
 	case string(domain.ProviderErrAuthFailed),
 		string(domain.ProviderErrInsufficientBalance):
-		return "Провайдер генерации временно недоступен. Кредиты не списаны. Попробуйте позже."
+		return "Провайдер генерации временно недоступен. ⭐️ не списаны. Попробуйте позже."
 	case string(domain.ProviderErrInvalidRequest),
 		string(domain.ProviderErrUnsupportedCapab):
-		return "Этот запрос не поддерживается выбранной моделью. Кредиты не списаны. Измените параметры и попробуйте снова."
+		return "Этот запрос не поддерживается выбранной моделью. ⭐️ не списаны. Измените параметры и попробуйте снова."
 	case string(domain.ProviderErrContentRejected):
-		return "Запрос отклонен правилами безопасности. Кредиты не списаны. Измените описание и попробуйте снова."
+		return "Запрос отклонен правилами безопасности. ⭐️ не списаны. Измените описание и попробуйте снова."
 	default:
-		return "Генерация временно недоступна. Кредиты не списаны. Попробуйте позже."
+		return "Генерация временно недоступна. ⭐️ не списаны. Попробуйте позже."
 	}
 }
 

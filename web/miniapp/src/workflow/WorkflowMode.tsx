@@ -1290,7 +1290,7 @@ export function WorkflowMode({
             </div>
 
             {backendEstimate && !backendEstimate.enough_credits && (
-              <p className="field-note is-warn">Недостаточно кредитов для запуска</p>
+              <p className="field-note is-warn">Недостаточно ⭐️ для запуска</p>
             )}
             {backendEstimateError && <p className="field-note is-warn">{backendEstimateError}</p>}
             {submitError && <div className="workflow-error">{submitError}</div>}

@@ -818,7 +818,7 @@ func TestAccountMenuShowsReferralStatsAndShareLink(t *testing.T) {
 			t.Fatalf("expected %q in account text: %q", want, sent[0].Text)
 		}
 	}
-	if !strings.Contains(sent[0].Text, fmt.Sprintf("Баланс: %d кристаллов", billingservice.DefaultStartingBalance)) {
+	if !strings.Contains(sent[0].Text, fmt.Sprintf("Баланс: %d ⭐️", billingservice.DefaultStartingBalance)) {
 		t.Fatalf("account text must include current balance, got %q", sent[0].Text)
 	}
 	for _, notWant := range []string{"Осталось генераций", "Выполнено генераций", "@supergptsupportbot"} {
@@ -938,9 +938,9 @@ func TestTopUpMenuCreatesPaymentIntentAfterProductSelection(t *testing.T) {
 	}
 	if sent := control.Sent(); len(sent) != 1 ||
 		!strings.Contains(sent[0].Text, "Выберите пакет для пополнения баланса") ||
-		!strings.Contains(sent[0].Text, fmt.Sprintf("Баланс сейчас: %d кристаллов", billingservice.DefaultStartingBalance)) ||
+		!strings.Contains(sent[0].Text, fmt.Sprintf("Баланс сейчас: %d ⭐️", billingservice.DefaultStartingBalance)) ||
 		!strings.Contains(sent[0].Keyboard, "crystals_99") ||
-		!strings.Contains(sent[0].Keyboard, "99 кристаллов") {
+		!strings.Contains(sent[0].Keyboard, "99 ⭐️") {
 		t.Fatalf("expected top-up product keyboard, got %+v", sent)
 	}
 

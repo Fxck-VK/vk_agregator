@@ -1285,7 +1285,7 @@ func (h *Handler) videoPromptInstructionText(spec videoModeSpec) string {
 	var b strings.Builder
 	b.WriteString(fmt.Sprintf("%s · %d сек", spec.ModelName, spec.DurationSec))
 	if price, ok := h.videoDisplayEstimateCredits(spec); ok {
-		b.WriteString(fmt.Sprintf("\n\nЦена: %d кредитов", price))
+		b.WriteString(fmt.Sprintf("\n\nЦена: %d ⭐️", price))
 	}
 	if spec.RequiresStartImage {
 		b.WriteString("\n\nПрикрепите стартовое фото и напишите описание видео одним сообщением")
@@ -1393,7 +1393,7 @@ func (h *Handler) sendPhotoQualitySelection(ctx context.Context, modelID, idemKe
 		h.setDialogMode(ctx, peerID, photoPromptMode(model.ModelID, selection.Quality))
 		return h.sendPhotoPromptInstruction(ctx, selection, idemKey, command, peerID, allowEdit)
 	}
-	text := fmt.Sprintf("%s\n\nВыберите качество генерации. Цена указана в кредитах и списывается только после готового результата.", model.ModelName)
+	text := fmt.Sprintf("%s\n\nВыберите качество генерации. Цена указана в ⭐️ и списывается только после готового результата.", model.ModelName)
 	msg := vkdelivery.Message{
 		Text:     text,
 		Keyboard: photoQualityKeyboard(options),
@@ -1430,7 +1430,7 @@ func (h *Handler) sendPhotoPromptInstruction(ctx context.Context, selection phot
 	if !ok {
 		return pricingcatalog.ErrPriceNotFound
 	}
-	text := fmt.Sprintf("%s · %s\n\nЦена: %d кредитов\n\nВведите описание изображения обычным сообщением", selection.Model.ModelName, selection.Quality, price)
+	text := fmt.Sprintf("%s · %s\n\nЦена: %d ⭐️\n\nВведите описание изображения обычным сообщением", selection.Model.ModelName, selection.Quality, price)
 	msg := vkdelivery.Message{
 		Text:     text,
 		Keyboard: photoPromptKeyboardForCatalog(h.publicImageModelHasQualityOptions(selection.Model.ModelID)),

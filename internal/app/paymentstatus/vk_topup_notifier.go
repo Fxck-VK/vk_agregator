@@ -107,9 +107,9 @@ func vkTopUpMetadata(raw json.RawMessage) vkTopUpLocalMetadata {
 func vkTopUpStatusText(intent *domain.PaymentIntent, status vkTopUpStatus) string {
 	switch status {
 	case vkTopUpStatusSucceeded:
-		return fmt.Sprintf("✅ Пополнение успешно\n\nБаланс пополнен на %d кристаллов.\nСумма: %s.", intent.Credits, formatRubAmount(intent.Amount))
+		return fmt.Sprintf("✅ Пополнение успешно\n\nБаланс пополнен на %d ⭐️.\nСумма: %s.", intent.Credits, formatRubAmount(intent.Amount))
 	default:
-		return fmt.Sprintf("❌ Платеж отклонен\n\nПокупка %d кристаллов на сумму %s не завершена.", intent.Credits, formatRubAmount(intent.Amount))
+		return fmt.Sprintf("❌ Платеж отклонен\n\nПокупка %d ⭐️ на сумму %s не завершена.", intent.Credits, formatRubAmount(intent.Amount))
 	}
 }
 

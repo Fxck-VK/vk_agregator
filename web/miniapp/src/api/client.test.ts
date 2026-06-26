@@ -122,7 +122,7 @@ describe("artifact and status helpers", () => {
       error_code: "media_provider_output_invalid",
     } as never);
 
-    expect(label).toContain("Кредиты не списаны");
+    expect(label).toContain("⭐️ не списаны");
     expect(label.toLowerCase()).not.toContain("provider");
     expect(label.toLowerCase()).not.toContain("prompt");
     expect(label).not.toContain(ARTIFACT_ID);
@@ -131,7 +131,7 @@ describe("artifact and status helpers", () => {
   test("renders safe media API errors without raw backend details", () => {
     const msg = apiUserMessage(new ApiError(503, "media_overloaded_retry_later"));
 
-    expect(msg).toContain("Кредиты не списаны");
+    expect(msg).toContain("⭐️ не списаны");
     expect(msg.toLowerCase()).not.toContain("provider");
     expect(msg.toLowerCase()).not.toContain("launch");
     expect(msg.toLowerCase()).not.toContain("payload");

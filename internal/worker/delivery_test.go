@@ -839,7 +839,7 @@ func TestDeliverySendsImageProviderFailureNoticeWithoutCapture(t *testing.T) {
 		t.Fatalf("failure notice must not mark success or capture credits: %+v", got)
 	}
 	edits := h.vk.Edits()
-	if len(edits) != 1 || edits[0].MessageID != pending.MessageID || !strings.Contains(edits[0].Text, "Кредиты не списаны") {
+	if len(edits) != 1 || edits[0].MessageID != pending.MessageID || !strings.Contains(edits[0].Text, "⭐️ не списаны") {
 		t.Fatalf("unexpected failure notice edit: %+v", edits)
 	}
 	if !strings.Contains(edits[0].Text, "Генерация") || strings.Contains(edits[0].Text, "Медиаобработка") || strings.Contains(edits[0].Text, "provider") {
@@ -898,7 +898,7 @@ func TestDeliverySendsVideoMediaFailureNoticeWithoutCapture(t *testing.T) {
 		t.Fatalf("failure notice must not mark success or capture credits: %+v", got)
 	}
 	edits := h.vk.Edits()
-	if len(edits) != 1 || edits[0].MessageID != pending.MessageID || !strings.Contains(edits[0].Text, "Кредиты не списаны") {
+	if len(edits) != 1 || edits[0].MessageID != pending.MessageID || !strings.Contains(edits[0].Text, "⭐️ не списаны") {
 		t.Fatalf("unexpected video failure notice edit: %+v", edits)
 	}
 	if strings.Contains(edits[0].Text, "unsafe video") || strings.Contains(edits[0].Text, "provider") {

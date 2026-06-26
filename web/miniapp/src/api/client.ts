@@ -597,17 +597,17 @@ function apiErrorMessageForCode(code: ApiErrorCode): string {
     case "media_upload_unsupported":
       return "Формат не поддерживается. Загрузите JPG или PNG";
     case "media_provider_output_invalid":
-      return "Медиафайл не прошёл безопасную проверку. Кредиты не списаны";
+      return "Медиафайл не прошёл безопасную проверку. ⭐️ не списаны";
     case "media_processing_unavailable":
-      return "Медиаобработка временно недоступна. Кредиты не списаны";
+      return "Медиаобработка временно недоступна. ⭐️ не списаны";
     case "media_delivery_failed":
-      return "Не удалось доставить готовый медиафайл. Кредиты не списаны";
+      return "Не удалось доставить готовый медиафайл. ⭐️ не списаны";
     case "media_overloaded_retry_later":
-      return "Сейчас высокая нагрузка на медиаобработку. Кредиты не списаны, попробуйте позже";
+      return "Сейчас высокая нагрузка на медиаобработку. ⭐️ не списаны, попробуйте позже";
     case "auth_error":
       return "Не удалось подтвердить вход через VK. Откройте приложение заново";
     case "insufficient_credits":
-      return "Недостаточно кредитов";
+      return "Недостаточно ⭐️";
     case "payment_cancel_unavailable":
       return "Платеж уже нельзя отменить";
     case "rate_limited":
@@ -975,7 +975,7 @@ export function hasPreviewableMediaResult(job: Job): boolean {
 const STATUS_LABELS: Record<string, string> = {
   received: "Принято",
   validated: "Проверка",
-  credits_reserved: "Резерв кредитов",
+  credits_reserved: "Резерв ⭐️",
   awaiting_payment: "Ожидает оплаты",
   queued: "В очереди",
   dispatching_provider: "Отправка",
@@ -995,17 +995,17 @@ export function statusLabel(s: string): string {
 }
 
 const ERROR_LABELS: Record<string, string> = {
-  insufficient_credits: "Недостаточно кредитов",
+  insufficient_credits: "Недостаточно ⭐️",
   provider_error: "Временная ошибка генерации",
   timeout: "Превышено время ожидания",
   rate_limited: "Слишком много запросов",
   media_upload_invalid: "Не удалось прочитать файл",
   media_upload_too_large: "Файл слишком большой",
   media_upload_unsupported: "Формат файла не поддерживается",
-  media_provider_output_invalid: "Медиафайл не прошёл безопасную проверку. Кредиты не списаны",
-  media_processing_unavailable: "Медиаобработка временно недоступна. Кредиты не списаны",
-  media_delivery_failed: "Не удалось доставить готовый медиафайл. Кредиты не списаны",
-  media_overloaded_retry_later: "Высокая нагрузка на медиаобработку. Кредиты не списаны",
+  media_provider_output_invalid: "Медиафайл не прошёл безопасную проверку. ⭐️ не списаны",
+  media_processing_unavailable: "Медиаобработка временно недоступна. ⭐️ не списаны",
+  media_delivery_failed: "Не удалось доставить готовый медиафайл. ⭐️ не списаны",
+  media_overloaded_retry_later: "Высокая нагрузка на медиаобработку. ⭐️ не списаны",
 };
 
 export function errorLabel(job: Job): string {
