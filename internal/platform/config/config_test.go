@@ -1769,13 +1769,6 @@ func TestValidateProviderBalanceBotRequiresConfigWhenEnabled(t *testing.T) {
 			wantEnv: "TELEGRAM_ADMIN_CHAT_ID",
 		},
 		{
-			name: "apimart api key",
-			mutate: func(cfg *config.Config) {
-				cfg.APIMartAPIKey = ""
-			},
-			wantEnv: "APIMART_API_KEY",
-		},
-		{
 			name: "apimart base url",
 			mutate: func(cfg *config.Config) {
 				cfg.APIMartBaseURL = ""
@@ -1801,6 +1794,34 @@ func TestValidateProviderBalanceBotRequiresConfigWhenEnabled(t *testing.T) {
 
 	if err := base.Validate(); err != nil {
 		t.Fatalf("valid provider balance bot config rejected: %v", err)
+	}
+}
+
+func TestValidateProviderBalanceBotRequiresAtLeastOneProvider(t *testing.T) {
+	cfg := config.Config{
+		ProviderBalanceBotEnabled: true,
+		AlertTelegramBotToken:     "alert-token",
+		TelegramAdminChatID:       "-1004435823124",
+	}
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "at least one provider balance checker") {
+		t.Fatalf("expected provider checker validation error, got %v", err)
+	}
+}
+
+func TestValidateProviderBalanceBotAllowsPoYoOnlyProvider(t *testing.T) {
+	cfg := config.Config{
+		ProviderBalanceBotEnabled: true,
+		AlertTelegramBotToken:     "alert-token",
+		TelegramAdminChatID:       "-1004435823124",
+		PoYoProviderEnabled:       true,
+		PoYoAPIKey:                "poyo-key",
+		PoYoBaseURL:               "https://api.poyo.ai",
+	}
+
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("PoYo-only provider balance bot config rejected: %v", err)
 	}
 }
 

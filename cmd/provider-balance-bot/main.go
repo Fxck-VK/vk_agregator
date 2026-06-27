@@ -89,11 +89,12 @@ func run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 }
 
 func buildProviderBalanceCheckers(cfg config.Config) []providerbalance.Checker {
-	checkers := []providerbalance.Checker{
-		apimartbalance.New(apimartbalance.Config{
+	var checkers []providerbalance.Checker
+	if strings.TrimSpace(cfg.APIMartAPIKey) != "" {
+		checkers = append(checkers, apimartbalance.New(apimartbalance.Config{
 			APIKey:  cfg.APIMartAPIKey,
 			BaseURL: cfg.APIMartBaseURL,
-		}),
+		}))
 	}
 	if cfg.PoYoProviderEnabled {
 		checkers = append(checkers, poyobalance.New(poyobalance.Config{

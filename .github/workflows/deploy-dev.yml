@@ -259,6 +259,13 @@ jobs:
             [[ -n "${value//[[:space:]]/}" && "${value}" != *change_me* && "${value}" != *placeholder* && "${value}" != *example* ]]
           }
 
+          has_provider_balance_key() {
+            has_raw_env_value APIMART_API_KEY ||
+              has_raw_env_value POYO_API_KEY ||
+              has_raw_env_value RUNWAYML_API_SECRET ||
+              has_raw_env_value DEEPINFRA_API_KEY
+          }
+
           provider_tokens=()
           append_provider_token() {
             local token="$1"
@@ -311,16 +318,29 @@ jobs:
           append_provider_token mock
           provider_chain="$(IFS=,; printf '%s' "${provider_tokens[*]}")"
 
+          telegram_bot_configured="false"
+          if has_raw_env_value ALERT_TELEGRAM_BOT_TOKEN; then
+            telegram_bot_configured="true"
+          fi
+          telegram_admin_configured="false"
+          if has_raw_env_value TELEGRAM_ADMIN_CHAT_ID; then
+            telegram_admin_configured="true"
+          fi
+          provider_balance_key_configured="false"
+          if has_provider_balance_key; then
+            provider_balance_key_configured="true"
+          fi
+
           provider_balance_bot_enabled="false"
           if is_true_value "$(get_raw_env_value PROVIDER_BALANCE_BOT_ENABLED)" ||
-             { has_raw_env_value ALERT_TELEGRAM_BOT_TOKEN &&
-               has_raw_env_value TELEGRAM_ADMIN_CHAT_ID &&
-               has_raw_env_value APIMART_API_KEY; }; then
+             [[ "${telegram_bot_configured}" == "true" &&
+                "${telegram_admin_configured}" == "true" &&
+                "${provider_balance_key_configured}" == "true" ]]; then
             provider_balance_bot_enabled="true"
           fi
 
           apimart_base_url="$(get_raw_env_value APIMART_BASE_URL)"
-          if [[ -z "${apimart_base_url}" && "${provider_balance_bot_enabled}" == "true" ]] && has_raw_env_value APIMART_API_KEY; then
+          if [[ -z "${apimart_base_url}" ]] && has_raw_env_value APIMART_API_KEY; then
             apimart_base_url="https://api.apimart.ai/v1"
           fi
 
@@ -408,7 +428,7 @@ jobs:
             printf 'GHCR_TOKEN=%s\n' "${GHCR_TOKEN}"
           } >> "${tmp_env}"
 
-          echo "DEV provider balance bot env: enabled=${provider_balance_bot_enabled} poyo=${poyo_provider_enabled} runway=${runway_provider_enabled} deepinfra=${deepinfra_balance_provider_enabled}"
+          echo "DEV provider balance bot env: enabled=${provider_balance_bot_enabled} telegram_token=${telegram_bot_configured} admin_chat=${telegram_admin_configured} provider_key=${provider_balance_key_configured} poyo=${poyo_provider_enabled} runway=${runway_provider_enabled} deepinfra=${deepinfra_balance_provider_enabled}"
 
           scp -i "${HOME}/.ssh/deploy_key" "${tmp_env}" "${DEV_DEPLOY_USER}@${DEV_DEPLOY_HOST}:${DEV_DEPLOY_PATH}/.env.next"
           ssh -i "${HOME}/.ssh/deploy_key" "${DEV_DEPLOY_USER}@${DEV_DEPLOY_HOST}" \
