@@ -6,7 +6,9 @@ import (
 	"log/slog"
 	"reflect"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"vk-ai-aggregator/internal/platform/config"
 	"vk-ai-aggregator/internal/service/providerbalance"
@@ -123,10 +125,42 @@ func TestBuildProviderBalanceCheckersIncludesAllOptionalProviders(t *testing.T) 
 	}
 }
 
+func TestRunBalanceWarningsWaitsForFirstTick(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	svc := &stubWarningService{}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		runBalanceWarnings(ctx, svc, time.Hour, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	}()
+
+	time.Sleep(25 * time.Millisecond)
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("runBalanceWarnings did not stop after context cancellation")
+	}
+	if calls := atomic.LoadInt32(&svc.calls); calls != 0 {
+		t.Fatalf("warning checks before first tick = %d, want 0", calls)
+	}
+}
+
 func checkerNames(checkers []providerbalance.Checker) []string {
 	names := make([]string, 0, len(checkers))
 	for _, checker := range checkers {
 		names = append(names, checker.Name())
 	}
 	return names
+}
+
+type stubWarningService struct {
+	calls int32
+}
+
+func (s *stubWarningService) CheckAndWarn(context.Context) error {
+	atomic.AddInt32(&s.calls, 1)
+	return nil
 }

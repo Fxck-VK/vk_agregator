@@ -92,11 +92,11 @@ func (s *Service) HandleCommand(ctx context.Context, text string) error {
 				return s.send(ctx, s.renderChecker(ctx, checker))
 			}
 		}
-		return s.send(ctx, helpMessage())
+		return s.send(ctx, s.helpMessage())
 	case "/help":
-		return s.send(ctx, helpMessage())
+		return s.send(ctx, s.helpMessage())
 	default:
-		return s.send(ctx, helpMessage())
+		return s.send(ctx, s.helpMessage())
 	}
 }
 
@@ -161,7 +161,7 @@ func (s *Service) check(ctx context.Context, checker Checker) (ProviderBalance, 
 	s.mu.Unlock()
 
 	balance, err := checker.Check(ctx)
-	if err != nil && ctx.Err() != nil {
+	if err != nil {
 		return balance, err
 	}
 
@@ -235,8 +235,24 @@ func (s *Service) setWarningActive(provider string, active bool) {
 	delete(s.warningActive, provider)
 }
 
-func helpMessage() string {
-	return "Команды:\n/balances\n/balance apimart\n/balance poyo\n/balance runway\n/balance deepinfra\n/help"
+func (s *Service) helpMessage() string {
+	var b strings.Builder
+	b.WriteString("Команды:\n/balances")
+	seen := make(map[string]bool, len(s.checkers))
+	for _, checker := range s.checkers {
+		if checker == nil {
+			continue
+		}
+		name := normalizeProviderName(checker.Name())
+		if name == "" || seen[name] {
+			continue
+		}
+		seen[name] = true
+		b.WriteString("\n/balance ")
+		b.WriteString(name)
+	}
+	b.WriteString("\n/help")
+	return b.String()
 }
 
 func renderProviderError(provider string, err error) string {
