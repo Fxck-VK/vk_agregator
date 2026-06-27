@@ -963,7 +963,7 @@ func topUpCatalogText(balance int64, products []*domain.PaymentProduct) string {
 }
 
 func topUpPendingText(balance int64, intent *domain.PaymentIntent) string {
-	return fmt.Sprintf("💰 У вас есть незавершенный платеж\n\nБаланс сейчас: %d ⭐️\nПакет: %d ⭐️\nСумма: %s\nПосле оплаты: %d ⭐️\n\nПродолжите оплату кнопкой ниже.\nПосле оплаты баланс обновится автоматически.", balance, intent.Credits, formatRubAmount(intent.Amount), balance+intent.Credits)
+	return fmt.Sprintf("💰 У вас есть незавершенный платеж\n\nБаланс сейчас: %d ⭐️\nПакет: %d ⭐️\nСумма: %s\nПосле оплаты: %d ⭐️\n\nПродолжите оплату кнопкой ниже\nПосле оплаты баланс обновится автоматически", balance, intent.Credits, formatRubAmount(intent.Amount), balance+intent.Credits)
 }
 
 func topUpPaymentUnavailableText(balance int64) string {
