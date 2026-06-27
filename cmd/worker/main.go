@@ -706,22 +706,6 @@ func defaultProviderMediaContracts(cfg config.Config) []domain.ProviderMediaCont
 	return contracts
 }
 
-func positiveInts(values ...int) []int {
-	out := make([]int, 0, len(values))
-	seen := map[int]struct{}{}
-	for _, value := range values {
-		if value <= 0 {
-			continue
-		}
-		if _, ok := seen[value]; ok {
-			continue
-		}
-		seen[value] = struct{}{}
-		out = append(out, value)
-	}
-	return out
-}
-
 func shouldRunJobWorkers(mode string) bool {
 	switch strings.ToLower(strings.TrimSpace(mode)) {
 	case "", config.WorkerModeAll, config.WorkerModeJobs:
@@ -738,21 +722,4 @@ func shouldRunMaintenance(mode string) bool {
 	default:
 		return false
 	}
-}
-
-func nonEmptyStrings(values ...string) []string {
-	out := make([]string, 0, len(values))
-	seen := map[string]struct{}{}
-	for _, value := range values {
-		value = strings.ToLower(strings.TrimSpace(value))
-		if value == "" {
-			continue
-		}
-		if _, ok := seen[value]; ok {
-			continue
-		}
-		seen[value] = struct{}{}
-		out = append(out, value)
-	}
-	return out
 }

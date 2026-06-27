@@ -265,15 +265,6 @@ func controlPayloadFromPayload(payload string) (controlPayload, bool) {
 	return data, true
 }
 
-func controlTypeFromPayload(payload string) (domain.CommandType, bool) {
-	data, ok := controlPayloadFromPayload(payload)
-	if !ok {
-		return "", false
-	}
-	t := domain.CommandType(data.Command)
-	return t, true
-}
-
 func shouldSendControlResponse(t domain.CommandType) bool {
 	return isMenuCommand(t)
 }
@@ -806,15 +797,6 @@ func (h *Handler) getActiveMenu(peerID int64) (activeMenuMessage, bool) {
 	return msg, ok
 }
 
-func (h *Handler) hasActiveMenu(peerID int64) bool {
-	now := time.Now()
-	h.menuMu.Lock()
-	defer h.menuMu.Unlock()
-	h.pruneActiveMenusLocked(now, peerID)
-	_, ok := h.activeMenus[peerID]
-	return ok
-}
-
 func (h *Handler) setActiveMenu(peerID, messageID int64) {
 	if messageID == 0 {
 		return
@@ -1218,10 +1200,6 @@ func hailuo02Keyboard() *vkdelivery.Keyboard {
 	}
 }
 
-func hailuo02BackKeyboard() *vkdelivery.Keyboard {
-	return backToKeyboard(domain.CommandMenuVideoHailuo02)
-}
-
 func hailuo02StandardDurationKeyboard() *vkdelivery.Keyboard {
 	return videoDurationKeyboard(domain.CommandMenuVideoHailuo02Standard, domain.CommandMenuVideoHailuo02, 6, 10)
 }
@@ -1347,21 +1325,6 @@ func photoQualityKeyboard(options []photoQualityOption) *vkdelivery.Keyboard {
 		OneTime: false,
 		Inline:  true,
 		Buttons: rows,
-	}
-}
-
-func photoPromptKeyboard() *vkdelivery.Keyboard {
-	return &vkdelivery.Keyboard{
-		OneTime: false,
-		Inline:  true,
-		Buttons: [][]vkdelivery.KeyboardButton{
-			{
-				button("⬅️ Назад к качеству", domain.CommandMenuImageBackToQuality, "secondary"),
-			},
-			{
-				button("⬅️ Назад к фото", domain.CommandMenuImage, "secondary"),
-			},
-		},
 	}
 }
 

@@ -966,10 +966,6 @@ func videoReferenceRequested(params requestParams) bool {
 	return strings.TrimSpace(params.ReferenceVideoURL) != "" || len(params.ReferenceVideoURLs) > 0
 }
 
-func isSupportedModel(model string) bool {
-	return isSupportedVideoModel(model) || strings.TrimSpace(model) == ModelNanoBanana2New
-}
-
 func isSupportedVideoModel(model string) bool {
 	switch strings.TrimSpace(model) {
 	case ModelKlingO3Standard, ModelSeedance20Fast, ModelRunwayGen45:

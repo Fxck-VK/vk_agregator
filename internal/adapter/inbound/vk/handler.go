@@ -1912,11 +1912,11 @@ func photoSelectionFromDialogMode(mode dialogMode) (photoDialogSelection, bool) 
 	if !ok {
 		switch mode {
 		case dialogModePhotoNanoBanana2:
-			modelID, quality, ok = modelcatalog.MiniAppImageNanoBanana2, modelcatalog.ImageQuality1K, true
+			modelID, quality = modelcatalog.MiniAppImageNanoBanana2, modelcatalog.ImageQuality1K
 		case dialogModePhotoGPTImage2:
-			modelID, quality, ok = modelcatalog.MiniAppImageGPTImage2, modelcatalog.ImageQuality1K, true
+			modelID, quality = modelcatalog.MiniAppImageGPTImage2, modelcatalog.ImageQuality1K
 		case dialogModePhotoText:
-			modelID, quality, ok = modelcatalog.MiniAppImageNanoBananaPro, modelcatalog.ImageQuality1K, true
+			modelID, quality = modelcatalog.MiniAppImageNanoBananaPro, modelcatalog.ImageQuality1K
 		default:
 			return photoDialogSelection{}, false
 		}
