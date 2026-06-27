@@ -117,6 +117,37 @@ services:
       timeout: 5s
       retries: 10
 
+  provider-balance-bot:
+    image: ${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/provider-balance-bot:${IMAGE_TAG:-main}
+    build:
+      context: .
+      dockerfile: Dockerfile.provider-balance-bot
+    restart: on-failure
+    profiles:
+      - provider-balance
+    env_file:
+      - ${APP_ENV_FILE:?APP_ENV_FILE is required}
+    environment:
+      APP_ENV: ${APP_ENV:-production}
+      PROVIDER_BALANCE_BOT_ENABLED: ${PROVIDER_BALANCE_BOT_ENABLED:-false}
+      PROVIDER_BALANCE_POLL_INTERVAL: ${PROVIDER_BALANCE_POLL_INTERVAL:-15m}
+      APIMART_BALANCE_WARN_REMAIN_BALANCE: ${APIMART_BALANCE_WARN_REMAIN_BALANCE:-20}
+      APIMART_BALANCE_WARN_REMAIN_CREDITS: ${APIMART_BALANCE_WARN_REMAIN_CREDITS:-200}
+      ALERT_TELEGRAM_BOT_TOKEN: ${ALERT_TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_ADMIN_CHAT_ID: ${TELEGRAM_ADMIN_CHAT_ID:-}
+      TELEGRAM_ADMIN_THREAD_ID: ${TELEGRAM_ADMIN_THREAD_ID:-}
+      APIMART_API_KEY: ${APIMART_API_KEY:-}
+      APIMART_BASE_URL: ${APIMART_BASE_URL:-https://api.apimart.ai/v1}
+      POYO_PROVIDER_ENABLED: ${POYO_PROVIDER_ENABLED:-false}
+      POYO_API_KEY: ${POYO_API_KEY:-}
+      POYO_BASE_URL: ${POYO_BASE_URL:-}
+      RUNWAY_PROVIDER_ENABLED: ${RUNWAY_PROVIDER_ENABLED:-false}
+      RUNWAYML_API_SECRET: ${RUNWAYML_API_SECRET:-}
+      RUNWAYML_BASE_URL: ${RUNWAYML_BASE_URL:-https://api.dev.runwayml.com/v1}
+      DEEPINFRA_BALANCE_PROVIDER_ENABLED: ${DEEPINFRA_BALANCE_PROVIDER_ENABLED:-false}
+      DEEPINFRA_API_KEY: ${DEEPINFRA_API_KEY:-}
+      DEEPINFRA_BALANCE_BASE_URL: ${DEEPINFRA_BALANCE_BASE_URL:-https://api.deepinfra.com}
+
   miniapp:
     image: ${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/miniapp:${IMAGE_TAG:-main}
     build:

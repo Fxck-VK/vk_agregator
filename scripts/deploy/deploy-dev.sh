@@ -227,6 +227,38 @@ validate_dev_env() {
     exit 1
   fi
 
+  if is_true_value "$(get_env_value PROVIDER_BALANCE_BOT_ENABLED false)"; then
+    for required in ALERT_TELEGRAM_BOT_TOKEN TELEGRAM_ADMIN_CHAT_ID; do
+      require_value "${required}" "required when PROVIDER_BALANCE_BOT_ENABLED=true"
+    done
+    provider_balance_checker_configured=false
+    if ! is_placeholder_value "$(get_env_value APIMART_API_KEY "")"; then
+      provider_balance_checker_configured=true
+    fi
+    if is_true_value "$(get_env_value POYO_PROVIDER_ENABLED false)"; then
+      provider_balance_checker_configured=true
+      for required in POYO_API_KEY POYO_BASE_URL; do
+        require_value "${required}" "required when PROVIDER_BALANCE_BOT_ENABLED=true and POYO_PROVIDER_ENABLED=true"
+      done
+    fi
+    if is_true_value "$(get_env_value RUNWAY_PROVIDER_ENABLED false)"; then
+      provider_balance_checker_configured=true
+      for required in RUNWAYML_API_SECRET RUNWAYML_BASE_URL; do
+        require_value "${required}" "required when PROVIDER_BALANCE_BOT_ENABLED=true and RUNWAY_PROVIDER_ENABLED=true"
+      done
+    fi
+    if is_true_value "$(get_env_value DEEPINFRA_BALANCE_PROVIDER_ENABLED false)"; then
+      provider_balance_checker_configured=true
+      for required in DEEPINFRA_API_KEY DEEPINFRA_BALANCE_BASE_URL; do
+        require_value "${required}" "required when PROVIDER_BALANCE_BOT_ENABLED=true and DEEPINFRA_BALANCE_PROVIDER_ENABLED=true"
+      done
+    fi
+    if [[ "${provider_balance_checker_configured}" != "true" ]]; then
+      echo "PROVIDER_BALANCE_BOT_ENABLED=true requires at least one provider balance checker" >&2
+      exit 1
+    fi
+  fi
+
   echo "DEV env check OK: ${env_file} (${app_env})"
 }
 
@@ -278,6 +310,11 @@ if [[ "$(get_data_service_mode S3_MODE)" == "local" ]]; then
   stateful_services+=(minio)
 fi
 
+provider_balance_bot_enabled="false"
+if is_true_value "$(get_env_value PROVIDER_BALANCE_BOT_ENABLED false)"; then
+  provider_balance_bot_enabled="true"
+fi
+
 compose=(docker compose --project-name "${project_name}" --env-file "${env_file}" -f docker-compose.prod.yml)
 if [[ ${#stateful_services[@]} -gt 0 ]]; then
   compose+=(-f docker-compose.data.yml)
@@ -285,6 +322,7 @@ fi
 if [[ "${with_cloudflare}" == "true" ]]; then
   compose+=(--profile cloudflare)
 fi
+compose+=(--profile provider-balance)
 
 run_step "${compose[@]}" config >/dev/null
 
@@ -298,6 +336,9 @@ fi
 image_pull_services=("${stateful_services[@]}" reverse-proxy)
 if [[ "${build_on_vps}" != "true" ]]; then
   image_pull_services+=(api worker maintenance-worker provider-webhook miniapp migrate)
+  if [[ "${provider_balance_bot_enabled}" == "true" ]]; then
+    image_pull_services+=(provider-balance-bot)
+  fi
 fi
 if [[ "${with_cloudflare}" == "true" ]]; then
   image_pull_services+=(cloudflared)
@@ -316,6 +357,9 @@ if [[ "${build_on_vps}" == "true" ]]; then
     build_args+=(--pull)
   fi
   build_args+=(api worker maintenance-worker provider-webhook miniapp migrate)
+  if [[ "${provider_balance_bot_enabled}" == "true" ]]; then
+    build_args+=(provider-balance-bot)
+  fi
   run_step "${compose[@]}" "${build_args[@]}"
 else
   echo "Skipping VPS image build; using images pulled from registry."
@@ -334,7 +378,14 @@ else
   echo "WARNING: skipping migrations. Runtime services still require a successful migrate service state in this compose project." >&2
 fi
 
+if [[ "${provider_balance_bot_enabled}" != "true" ]]; then
+  "${compose[@]}" rm -f -s provider-balance-bot >/dev/null 2>&1 || true
+fi
+
 runtime_services=(api worker maintenance-worker provider-webhook miniapp reverse-proxy)
+if [[ "${provider_balance_bot_enabled}" == "true" ]]; then
+  runtime_services+=(provider-balance-bot)
+fi
 if [[ "${with_cloudflare}" == "true" ]]; then
   runtime_services+=(cloudflared)
 fi
@@ -385,3 +436,4 @@ if [[ "${with_cloudflare}" == "true" ]]; then
 else
   echo "Cloudflare tunnel profile: disabled"
 fi
+echo "Provider balance bot: ${provider_balance_bot_enabled}"

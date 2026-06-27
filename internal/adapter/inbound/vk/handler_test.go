@@ -813,10 +813,13 @@ func TestAccountMenuShowsReferralStatsAndShareLink(t *testing.T) {
 	if len(sent) != 1 {
 		t.Fatalf("expected account response, got %+v", sent)
 	}
-	for _, want := range []string{"Мой аккаунт", "безлимитное общение с НейроХаб", "Реферальная программа", "Приглашённых: 0", "Зарегистрировано: 0", "Активировано: 0", "Бонус начислен: 0", "https://vk.com/write-1", "Поддержка: @neirohub_help"} {
+	for _, want := range []string{"Мой аккаунт", "общение с НейроХаб", "Реферальная программа", "Приглашённых: 0", "Зарегистрировано: 0", "Активировано: 0", "Бонус начислен: 0", "https://vk.com/write-1", "Поддержка: @neirohub_help"} {
 		if !strings.Contains(sent[0].Text, want) {
 			t.Fatalf("expected %q in account text: %q", want, sent[0].Text)
 		}
+	}
+	if strings.Contains(sent[0].Text, "безлимитное") {
+		t.Fatalf("account text must not promise unlimited usage: %q", sent[0].Text)
 	}
 	if !strings.Contains(sent[0].Text, fmt.Sprintf("Баланс: %d ⭐️", billingservice.DefaultStartingBalance)) {
 		t.Fatalf("account text must include current balance, got %q", sent[0].Text)
@@ -2106,13 +2109,15 @@ func TestPhotoMenuButtonSendsInstructionNoJob(t *testing.T) {
 		t.Fatalf("expected one photo instruction message, got %+v", sent)
 	}
 	for _, want := range []string{
-		"У вас есть 100 бесплатных попыток",
 		"Генерация фото по тексту",
 		"⬅️ Назад",
 	} {
 		if !strings.Contains(sent[0].Text+sent[0].Keyboard, want) {
 			t.Fatalf("expected %q in photo response: text=%q keyboard=%q", want, sent[0].Text, sent[0].Keyboard)
 		}
+	}
+	if strings.Contains(sent[0].Text, "100 бесплатных попыток") {
+		t.Fatalf("photo instruction must not promise free daily attempts: %q", sent[0].Text)
 	}
 	if !strings.Contains(sent[0].Keyboard, "Nano Banana 2") {
 		t.Fatalf("expected Nano Banana 2 button in photo keyboard: %q", sent[0].Keyboard)

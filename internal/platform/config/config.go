@@ -240,15 +240,24 @@ type Config struct {
 	// frontend.
 	MediaProviderContracts []domain.ProviderMediaContract
 
-	APIMartAPIKey          string
-	APIMartBaseURL         string
-	APIMartProviderEnabled bool
-	PoYoAPIKey             string
-	PoYoBaseURL            string
-	PoYoProviderEnabled    bool
-	RunwayMLAPISecret      string
-	RunwayMLBaseURL        string
-	RunwayProviderEnabled  bool
+	APIMartAPIKey                   string
+	APIMartBaseURL                  string
+	APIMartProviderEnabled          bool
+	ProviderBalanceBotEnabled       bool
+	ProviderBalancePollInterval     time.Duration
+	APIMartBalanceWarnRemainBalance float64
+	APIMartBalanceWarnRemainCredits float64
+	AlertTelegramBotToken           string
+	TelegramAdminChatID             string
+	TelegramAdminThreadID           int64
+	PoYoAPIKey                      string
+	PoYoBaseURL                     string
+	PoYoProviderEnabled             bool
+	RunwayMLAPISecret               string
+	RunwayMLBaseURL                 string
+	RunwayProviderEnabled           bool
+	DeepInfraBalanceProviderEnabled bool
+	DeepInfraBalanceBaseURL         string
 
 	FeatureImageModelNanoBananaProEnabled       bool
 	FeatureImageModelGPTImage2Enabled           bool
@@ -557,6 +566,9 @@ func (c Config) Validate() error {
 	}
 	if provider := strings.ToLower(strings.TrimSpace(c.PaymentProvider)); provider != "" && !knownPaymentProvider(provider) {
 		return fmt.Errorf("config: PAYMENT_PROVIDER must be one of mock, yookassa")
+	}
+	if err := c.validateProviderBalanceBotConfig(); err != nil {
+		return err
 	}
 	if c.YooKassaWebhookIPAllowlistEnabled && len(c.YooKassaWebhookIPAllowlist) == 0 {
 		return fmt.Errorf("config: YOOKASSA_WEBHOOK_IP_ALLOWLIST must be set when YOOKASSA_WEBHOOK_IP_ALLOWLIST_ENABLED=true")
@@ -1099,12 +1111,21 @@ func Load() Config {
 		APIMartAPIKey:                             env("APIMART_API_KEY", ""),
 		APIMartBaseURL:                            env("APIMART_BASE_URL", "https://api.apimart.ai/v1"),
 		APIMartProviderEnabled:                    envBool("APIMART_PROVIDER_ENABLED", false),
+		ProviderBalanceBotEnabled:                 envBool("PROVIDER_BALANCE_BOT_ENABLED", false),
+		ProviderBalancePollInterval:               envDuration("PROVIDER_BALANCE_POLL_INTERVAL", 15*time.Minute),
+		APIMartBalanceWarnRemainBalance:           envFloat("APIMART_BALANCE_WARN_REMAIN_BALANCE", 20),
+		APIMartBalanceWarnRemainCredits:           envFloat("APIMART_BALANCE_WARN_REMAIN_CREDITS", 200),
+		AlertTelegramBotToken:                     env("ALERT_TELEGRAM_BOT_TOKEN", ""),
+		TelegramAdminChatID:                       env("TELEGRAM_ADMIN_CHAT_ID", ""),
+		TelegramAdminThreadID:                     envInt64("TELEGRAM_ADMIN_THREAD_ID", 0),
 		PoYoAPIKey:                                env("POYO_API_KEY", ""),
 		PoYoBaseURL:                               env("POYO_BASE_URL", ""),
 		PoYoProviderEnabled:                       envBool("POYO_PROVIDER_ENABLED", false),
 		RunwayMLAPISecret:                         env("RUNWAYML_API_SECRET", ""),
 		RunwayMLBaseURL:                           env("RUNWAYML_BASE_URL", "https://api.dev.runwayml.com/v1"),
 		RunwayProviderEnabled:                     envBool("RUNWAY_PROVIDER_ENABLED", false),
+		DeepInfraBalanceProviderEnabled:           envBool("DEEPINFRA_BALANCE_PROVIDER_ENABLED", false),
+		DeepInfraBalanceBaseURL:                   env("DEEPINFRA_BALANCE_BASE_URL", "https://api.deepinfra.com"),
 		FeatureImageModelNanoBananaProEnabled:     envBool("FEATURE_IMAGE_MODEL_NANO_BANANA_PRO_ENABLED", false),
 		FeatureImageModelGPTImage2Enabled:         envBool("FEATURE_IMAGE_MODEL_GPT_IMAGE_2_ENABLED", false),
 		FeatureImageModelNanoBanana2Enabled:       envBool("FEATURE_IMAGE_MODEL_NANO_BANANA_2_ENABLED", false),
@@ -1273,6 +1294,60 @@ func (c Config) usesOpenAI() bool {
 		return true
 	}
 	return false
+}
+
+func (c Config) validateProviderBalanceBotConfig() error {
+	if !c.ProviderBalanceBotEnabled {
+		return nil
+	}
+	var missing []string
+	providerConfigured := false
+	if strings.TrimSpace(c.AlertTelegramBotToken) == "" {
+		missing = append(missing, "ALERT_TELEGRAM_BOT_TOKEN")
+	}
+	if strings.TrimSpace(c.TelegramAdminChatID) == "" {
+		missing = append(missing, "TELEGRAM_ADMIN_CHAT_ID")
+	}
+	if strings.TrimSpace(c.APIMartAPIKey) != "" {
+		providerConfigured = true
+		if strings.TrimSpace(c.APIMartBaseURL) == "" {
+			missing = append(missing, "APIMART_BASE_URL")
+		}
+	}
+	if c.PoYoProviderEnabled {
+		providerConfigured = true
+		if strings.TrimSpace(c.PoYoAPIKey) == "" {
+			missing = append(missing, "POYO_API_KEY")
+		}
+		if strings.TrimSpace(c.PoYoBaseURL) == "" {
+			missing = append(missing, "POYO_BASE_URL")
+		}
+	}
+	if c.RunwayProviderEnabled {
+		providerConfigured = true
+		if strings.TrimSpace(c.RunwayMLAPISecret) == "" {
+			missing = append(missing, "RUNWAYML_API_SECRET")
+		}
+		if strings.TrimSpace(c.RunwayMLBaseURL) == "" {
+			missing = append(missing, "RUNWAYML_BASE_URL")
+		}
+	}
+	if c.DeepInfraBalanceProviderEnabled {
+		providerConfigured = true
+		if strings.TrimSpace(c.DeepInfraAPIKey) == "" {
+			missing = append(missing, "DEEPINFRA_API_KEY")
+		}
+		if strings.TrimSpace(c.DeepInfraBalanceBaseURL) == "" {
+			missing = append(missing, "DEEPINFRA_BALANCE_BASE_URL")
+		}
+	}
+	if !providerConfigured {
+		missing = append(missing, "at least one provider balance checker")
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf("config: PROVIDER_BALANCE_BOT_ENABLED=true requires %s", strings.Join(missing, ", "))
+	}
+	return nil
 }
 
 func (c Config) validateVideoRouteProviderConfig() error {

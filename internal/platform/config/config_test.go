@@ -1663,6 +1663,378 @@ func TestLoadRuntimePricingFlags(t *testing.T) {
 	}
 }
 
+func TestLoadProviderBalanceBotDefaultsDisabled(t *testing.T) {
+	for _, key := range []string{
+		"PROVIDER_BALANCE_BOT_ENABLED",
+		"PROVIDER_BALANCE_POLL_INTERVAL",
+		"APIMART_BALANCE_WARN_REMAIN_BALANCE",
+		"APIMART_BALANCE_WARN_REMAIN_CREDITS",
+		"ALERT_TELEGRAM_BOT_TOKEN",
+		"TELEGRAM_ADMIN_CHAT_ID",
+		"TELEGRAM_ADMIN_THREAD_ID",
+	} {
+		restore := clearEnv(t, key)
+		defer restore()
+	}
+
+	cfg := config.Load()
+	if cfg.ProviderBalanceBotEnabled {
+		t.Fatal("ProviderBalanceBotEnabled = true, want false")
+	}
+	if cfg.ProviderBalancePollInterval != 15*time.Minute {
+		t.Fatalf("ProviderBalancePollInterval = %s, want 15m", cfg.ProviderBalancePollInterval)
+	}
+	if cfg.APIMartBalanceWarnRemainBalance != 20 || cfg.APIMartBalanceWarnRemainCredits != 200 {
+		t.Fatalf("unexpected APIMart balance warning thresholds: balance=%v credits=%v", cfg.APIMartBalanceWarnRemainBalance, cfg.APIMartBalanceWarnRemainCredits)
+	}
+	if cfg.AlertTelegramBotToken != "" || cfg.TelegramAdminChatID != "" || cfg.TelegramAdminThreadID != 0 {
+		t.Fatalf("telegram admin config should default empty: token=%q chat=%q thread=%d", cfg.AlertTelegramBotToken, cfg.TelegramAdminChatID, cfg.TelegramAdminThreadID)
+	}
+	if err := cfg.Validate(); err != nil && strings.Contains(err.Error(), "TELEGRAM") {
+		t.Fatalf("disabled provider balance bot should not require Telegram config, got %v", err)
+	}
+}
+
+func TestLoadProviderBalanceBotConfig(t *testing.T) {
+	t.Setenv("PROVIDER_BALANCE_BOT_ENABLED", "true")
+	t.Setenv("PROVIDER_BALANCE_POLL_INTERVAL", "5m")
+	t.Setenv("APIMART_BALANCE_WARN_REMAIN_BALANCE", "12.5")
+	t.Setenv("APIMART_BALANCE_WARN_REMAIN_CREDITS", "125.5")
+	t.Setenv("ALERT_TELEGRAM_BOT_TOKEN", "alert-token")
+	t.Setenv("TELEGRAM_ADMIN_CHAT_ID", "-1004435823124")
+	t.Setenv("TELEGRAM_ADMIN_THREAD_ID", "317")
+
+	cfg := config.Load()
+	if !cfg.ProviderBalanceBotEnabled {
+		t.Fatal("ProviderBalanceBotEnabled = false, want true")
+	}
+	if cfg.ProviderBalancePollInterval != 5*time.Minute {
+		t.Fatalf("ProviderBalancePollInterval = %s, want 5m", cfg.ProviderBalancePollInterval)
+	}
+	if cfg.APIMartBalanceWarnRemainBalance != 12.5 || cfg.APIMartBalanceWarnRemainCredits != 125.5 {
+		t.Fatalf("unexpected APIMart balance warning thresholds: balance=%v credits=%v", cfg.APIMartBalanceWarnRemainBalance, cfg.APIMartBalanceWarnRemainCredits)
+	}
+	if cfg.AlertTelegramBotToken != "alert-token" || cfg.TelegramAdminChatID != "-1004435823124" || cfg.TelegramAdminThreadID != 317 {
+		t.Fatalf("unexpected Telegram admin config: token=%q chat=%q thread=%d", cfg.AlertTelegramBotToken, cfg.TelegramAdminChatID, cfg.TelegramAdminThreadID)
+	}
+}
+
+func TestLoadProviderBalanceBotOptionalProviderConfig(t *testing.T) {
+	t.Setenv("RUNWAY_PROVIDER_ENABLED", "true")
+	t.Setenv("RUNWAYML_API_SECRET", "runway-key")
+	t.Setenv("RUNWAYML_BASE_URL", "https://runway.example/v1")
+	t.Setenv("DEEPINFRA_BALANCE_PROVIDER_ENABLED", "true")
+	t.Setenv("DEEPINFRA_BALANCE_BASE_URL", "https://deepinfra.example")
+
+	cfg := config.Load()
+	if !cfg.RunwayProviderEnabled {
+		t.Fatal("RunwayProviderEnabled = false, want true")
+	}
+	if cfg.RunwayMLAPISecret != "runway-key" || cfg.RunwayMLBaseURL != "https://runway.example/v1" {
+		t.Fatalf("unexpected Runway config: secret=%q base=%q", cfg.RunwayMLAPISecret, cfg.RunwayMLBaseURL)
+	}
+	if !cfg.DeepInfraBalanceProviderEnabled {
+		t.Fatal("DeepInfraBalanceProviderEnabled = false, want true")
+	}
+	if cfg.DeepInfraBalanceBaseURL != "https://deepinfra.example" {
+		t.Fatalf("DeepInfraBalanceBaseURL = %q", cfg.DeepInfraBalanceBaseURL)
+	}
+}
+
+func TestValidateProviderBalanceBotRequiresConfigWhenEnabled(t *testing.T) {
+	base := config.Config{
+		ProviderBalanceBotEnabled: true,
+		AlertTelegramBotToken:     "alert-token",
+		TelegramAdminChatID:       "-1004435823124",
+		APIMartAPIKey:             "apimart-key",
+		APIMartBaseURL:            "https://api.apimart.ai/v1",
+	}
+	tests := []struct {
+		name    string
+		mutate  func(*config.Config)
+		wantEnv string
+	}{
+		{
+			name: "bot token",
+			mutate: func(cfg *config.Config) {
+				cfg.AlertTelegramBotToken = ""
+			},
+			wantEnv: "ALERT_TELEGRAM_BOT_TOKEN",
+		},
+		{
+			name: "admin chat",
+			mutate: func(cfg *config.Config) {
+				cfg.TelegramAdminChatID = ""
+			},
+			wantEnv: "TELEGRAM_ADMIN_CHAT_ID",
+		},
+		{
+			name: "apimart base url",
+			mutate: func(cfg *config.Config) {
+				cfg.APIMartBaseURL = ""
+			},
+			wantEnv: "APIMART_BASE_URL",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := base
+			tt.mutate(&cfg)
+			err := cfg.Validate()
+			if err == nil || !strings.Contains(err.Error(), tt.wantEnv) {
+				t.Fatalf("expected %s validation error, got %v", tt.wantEnv, err)
+			}
+			for _, secret := range []string{"alert-token", "apimart-key"} {
+				if strings.Contains(err.Error(), secret) {
+					t.Fatalf("validation error leaked secret value %q: %v", secret, err)
+				}
+			}
+		})
+	}
+
+	if err := base.Validate(); err != nil {
+		t.Fatalf("valid provider balance bot config rejected: %v", err)
+	}
+}
+
+func TestValidateProviderBalanceBotRequiresAtLeastOneProvider(t *testing.T) {
+	cfg := config.Config{
+		ProviderBalanceBotEnabled: true,
+		AlertTelegramBotToken:     "alert-token",
+		TelegramAdminChatID:       "-1004435823124",
+	}
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "at least one provider balance checker") {
+		t.Fatalf("expected provider checker validation error, got %v", err)
+	}
+}
+
+func TestValidateProviderBalanceBotAllowsPoYoOnlyProvider(t *testing.T) {
+	cfg := config.Config{
+		ProviderBalanceBotEnabled: true,
+		AlertTelegramBotToken:     "alert-token",
+		TelegramAdminChatID:       "-1004435823124",
+		PoYoProviderEnabled:       true,
+		PoYoAPIKey:                "poyo-key",
+		PoYoBaseURL:               "https://api.poyo.ai",
+	}
+
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("PoYo-only provider balance bot config rejected: %v", err)
+	}
+}
+
+func TestValidateProviderBalanceBotRunwayOptionalWhenDisabled(t *testing.T) {
+	cfg := config.Config{
+		ProviderBalanceBotEnabled: true,
+		AlertTelegramBotToken:     "alert-token",
+		TelegramAdminChatID:       "-1004435823124",
+		APIMartAPIKey:             "apimart-key",
+		APIMartBaseURL:            "https://api.apimart.ai/v1",
+		RunwayProviderEnabled:     false,
+	}
+
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("disabled Runway balance checker should not require Runway config, got %v", err)
+	}
+}
+
+func TestValidateProviderBalanceBotRequiresRunwayConfigWhenRunwayEnabled(t *testing.T) {
+	base := config.Config{
+		ProviderBalanceBotEnabled: true,
+		AlertTelegramBotToken:     "alert-token",
+		TelegramAdminChatID:       "-1004435823124",
+		APIMartAPIKey:             "apimart-key",
+		APIMartBaseURL:            "https://api.apimart.ai/v1",
+		RunwayProviderEnabled:     true,
+	}
+	tests := []struct {
+		name    string
+		mutate  func(*config.Config)
+		wantEnv string
+	}{
+		{
+			name: "runway api secret",
+			mutate: func(cfg *config.Config) {
+				cfg.RunwayMLAPISecret = ""
+				cfg.RunwayMLBaseURL = "https://api.dev.runwayml.com/v1"
+			},
+			wantEnv: "RUNWAYML_API_SECRET",
+		},
+		{
+			name: "runway base url",
+			mutate: func(cfg *config.Config) {
+				cfg.RunwayMLAPISecret = "runway-key"
+				cfg.RunwayMLBaseURL = ""
+			},
+			wantEnv: "RUNWAYML_BASE_URL",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := base
+			tt.mutate(&cfg)
+			err := cfg.Validate()
+			if err == nil || !strings.Contains(err.Error(), "PROVIDER_BALANCE_BOT_ENABLED=true requires") || !strings.Contains(err.Error(), tt.wantEnv) {
+				t.Fatalf("expected provider balance %s validation error, got %v", tt.wantEnv, err)
+			}
+			for _, secret := range []string{"alert-token", "apimart-key", "runway-key"} {
+				if strings.Contains(err.Error(), secret) {
+					t.Fatalf("validation error leaked secret value %q: %v", secret, err)
+				}
+			}
+		})
+	}
+
+	valid := base
+	valid.RunwayMLAPISecret = "runway-key"
+	valid.RunwayMLBaseURL = "https://api.dev.runwayml.com/v1"
+	if err := valid.Validate(); err != nil {
+		t.Fatalf("valid provider balance bot Runway config rejected: %v", err)
+	}
+}
+
+func TestValidateProviderBalanceBotPoYoOptionalWhenDisabled(t *testing.T) {
+	cfg := config.Config{
+		ProviderBalanceBotEnabled: true,
+		AlertTelegramBotToken:     "alert-token",
+		TelegramAdminChatID:       "-1004435823124",
+		APIMartAPIKey:             "apimart-key",
+		APIMartBaseURL:            "https://api.apimart.ai/v1",
+		PoYoProviderEnabled:       false,
+	}
+
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("disabled PoYo balance checker should not require PoYo config, got %v", err)
+	}
+}
+
+func TestValidateProviderBalanceBotRequiresPoYoConfigWhenPoYoEnabled(t *testing.T) {
+	base := config.Config{
+		ProviderBalanceBotEnabled: true,
+		AlertTelegramBotToken:     "alert-token",
+		TelegramAdminChatID:       "-1004435823124",
+		APIMartAPIKey:             "apimart-key",
+		APIMartBaseURL:            "https://api.apimart.ai/v1",
+		PoYoProviderEnabled:       true,
+	}
+	tests := []struct {
+		name    string
+		mutate  func(*config.Config)
+		wantEnv string
+	}{
+		{
+			name: "poyo api key",
+			mutate: func(cfg *config.Config) {
+				cfg.PoYoAPIKey = ""
+				cfg.PoYoBaseURL = "https://api.poyo.ai"
+			},
+			wantEnv: "POYO_API_KEY",
+		},
+		{
+			name: "poyo base url",
+			mutate: func(cfg *config.Config) {
+				cfg.PoYoAPIKey = "poyo-key"
+				cfg.PoYoBaseURL = ""
+			},
+			wantEnv: "POYO_BASE_URL",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := base
+			tt.mutate(&cfg)
+			err := cfg.Validate()
+			if err == nil || !strings.Contains(err.Error(), "PROVIDER_BALANCE_BOT_ENABLED=true requires") || !strings.Contains(err.Error(), tt.wantEnv) {
+				t.Fatalf("expected provider balance %s validation error, got %v", tt.wantEnv, err)
+			}
+			for _, secret := range []string{"alert-token", "apimart-key", "poyo-key"} {
+				if strings.Contains(err.Error(), secret) {
+					t.Fatalf("validation error leaked secret value %q: %v", secret, err)
+				}
+			}
+		})
+	}
+
+	valid := base
+	valid.PoYoAPIKey = "poyo-key"
+	valid.PoYoBaseURL = "https://api.poyo.ai"
+	if err := valid.Validate(); err != nil {
+		t.Fatalf("valid provider balance bot PoYo config rejected: %v", err)
+	}
+}
+
+func TestValidateProviderBalanceBotDeepInfraOptionalWhenDisabled(t *testing.T) {
+	cfg := config.Config{
+		ProviderBalanceBotEnabled:       true,
+		AlertTelegramBotToken:           "alert-token",
+		TelegramAdminChatID:             "-1004435823124",
+		APIMartAPIKey:                   "apimart-key",
+		APIMartBaseURL:                  "https://api.apimart.ai/v1",
+		DeepInfraBalanceProviderEnabled: false,
+	}
+
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("disabled DeepInfra balance checker should not require DeepInfra config, got %v", err)
+	}
+}
+
+func TestValidateProviderBalanceBotRequiresDeepInfraConfigWhenDeepInfraEnabled(t *testing.T) {
+	base := config.Config{
+		ProviderBalanceBotEnabled:       true,
+		AlertTelegramBotToken:           "alert-token",
+		TelegramAdminChatID:             "-1004435823124",
+		APIMartAPIKey:                   "apimart-key",
+		APIMartBaseURL:                  "https://api.apimart.ai/v1",
+		DeepInfraBalanceProviderEnabled: true,
+	}
+	tests := []struct {
+		name    string
+		mutate  func(*config.Config)
+		wantEnv string
+	}{
+		{
+			name: "deepinfra api key",
+			mutate: func(cfg *config.Config) {
+				cfg.DeepInfraAPIKey = ""
+				cfg.DeepInfraBalanceBaseURL = "https://api.deepinfra.com"
+			},
+			wantEnv: "DEEPINFRA_API_KEY",
+		},
+		{
+			name: "deepinfra balance base url",
+			mutate: func(cfg *config.Config) {
+				cfg.DeepInfraAPIKey = "deepinfra-key"
+				cfg.DeepInfraBalanceBaseURL = ""
+			},
+			wantEnv: "DEEPINFRA_BALANCE_BASE_URL",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := base
+			tt.mutate(&cfg)
+			err := cfg.Validate()
+			if err == nil || !strings.Contains(err.Error(), "PROVIDER_BALANCE_BOT_ENABLED=true requires") || !strings.Contains(err.Error(), tt.wantEnv) {
+				t.Fatalf("expected provider balance %s validation error, got %v", tt.wantEnv, err)
+			}
+			for _, secret := range []string{"alert-token", "apimart-key", "deepinfra-key"} {
+				if strings.Contains(err.Error(), secret) {
+					t.Fatalf("validation error leaked secret value %q: %v", secret, err)
+				}
+			}
+		})
+	}
+
+	valid := base
+	valid.DeepInfraAPIKey = "deepinfra-key"
+	valid.DeepInfraBalanceBaseURL = "https://api.deepinfra.com"
+	if err := valid.Validate(); err != nil {
+		t.Fatalf("valid provider balance bot DeepInfra config rejected: %v", err)
+	}
+}
+
 func TestValidateRuntimePricingRejectsNegativeRefreshInterval(t *testing.T) {
 	cfg := config.Config{RuntimePricingRefreshInterval: -time.Second}
 	err := cfg.Validate()
