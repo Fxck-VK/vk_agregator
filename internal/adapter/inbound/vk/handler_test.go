@@ -3033,12 +3033,12 @@ func TestStaleBackCallbackClearsPersistedGPTModeAfterRestart(t *testing.T) {
 	if len(control.EventAnswers()) != 1 {
 		t.Fatalf("callback should be acknowledged, got %+v", control.EventAnswers())
 	}
-	if sent := control.Sent(); len(sent) != 0 {
-		t.Fatalf("stale back callback should not send a fresh menu, got %+v", sent)
+	if sent := control.Sent(); len(sent) != 1 || !strings.Contains(sent[0].Text, "Добро пожаловать") || !strings.Contains(sent[0].Keyboard, string(domain.CommandMenuText)) {
+		t.Fatalf("stale back callback should send a fresh menu, got %+v", sent)
 	}
 }
 
-func TestStaleCallbackShowMenuAfterGPTTextDoesNotSendMenu(t *testing.T) {
+func TestStaleCallbackShowMenuAfterGPTTextSendsFreshMenu(t *testing.T) {
 	control := vkdelivery.NewMockClient()
 	h := newHarnessWithControl(control)
 	gpt := `{
@@ -3075,8 +3075,12 @@ func TestStaleCallbackShowMenuAfterGPTTextDoesNotSendMenu(t *testing.T) {
 		t.Fatalf("unexpected command types: %+v", commandTypes(cmds))
 	}
 	sent := control.Sent()
-	if len(sent) != 2 || !strings.Contains(sent[0].Text, "НейроХаб активен") || sent[1].Text != "НейроХаб думает..." {
-		t.Fatalf("stale show_menu callback must not send a fresh menu, got %+v", sent)
+	if len(sent) != 3 ||
+		!strings.Contains(sent[0].Text, "НейроХаб активен") ||
+		sent[1].Text != "НейроХаб думает..." ||
+		!strings.Contains(sent[2].Text, "Добро пожаловать") ||
+		!strings.Contains(sent[2].Keyboard, string(domain.CommandMenuText)) {
+		t.Fatalf("stale show_menu callback must send a fresh menu, got %+v", sent)
 	}
 	answers := control.EventAnswers()
 	if len(answers) != 1 || answers[0].EventID != "vk-button-event-stale-show" {
@@ -3084,7 +3088,7 @@ func TestStaleCallbackShowMenuAfterGPTTextDoesNotSendMenu(t *testing.T) {
 	}
 }
 
-func TestExpiredActiveMenuCallbackFallsBackAsStale(t *testing.T) {
+func TestExpiredActiveMenuBackCallbackSendsFreshMenu(t *testing.T) {
 	control := vkdelivery.NewMockClient()
 	h := newHarnessWithConfig(control, vk.Config{
 		ConfirmationToken:      "conf-token-123",
@@ -3111,8 +3115,8 @@ func TestExpiredActiveMenuCallbackFallsBackAsStale(t *testing.T) {
 	if rec := h.post(back); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
 		t.Fatalf("unexpected stale callback response: %d %q", rec.Code, rec.Body.String())
 	}
-	if sent := control.Sent(); len(sent) != 1 {
-		t.Fatalf("expired active menu callback should not send a fresh menu, got %+v", sent)
+	if sent := control.Sent(); len(sent) != 2 || !strings.Contains(sent[1].Text, "Добро пожаловать") || !strings.Contains(sent[1].Keyboard, string(domain.CommandMenuText)) {
+		t.Fatalf("expired active menu callback should send a fresh menu, got %+v", sent)
 	}
 	if edits := control.Edits(); len(edits) != 0 {
 		t.Fatalf("expired active menu callback should not edit old menu, got %+v", edits)

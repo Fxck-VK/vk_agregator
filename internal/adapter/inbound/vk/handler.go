@@ -935,12 +935,6 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 	resourceID := cmd.ID
 
 	switch {
-	case controlOnly && parsed.Type == domain.CommandShowMenu && controlFromPayload && !h.hasActiveMenu(peerID):
-		// A stale inline "Back/show menu" callback can arrive after a GPT answer
-		// has already cleared the active menu. Acknowledge it, but do not create
-		// a new welcome/menu message; the persistent lower text button remains
-		// the explicit way to open a fresh menu at the bottom of the chat.
-		h.clearDialogMode(ctx, peerID)
 	case unroutedText:
 		if err := h.sendUnroutedTextResponse(ctx, idemKey, peerID); err != nil {
 			return fmt.Errorf("send unrouted text response: %w", err)
