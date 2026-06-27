@@ -1263,14 +1263,14 @@ func (h *Handler) deliverVideoControl(ctx context.Context, command domain.Comman
 func videoDurationSelectionText(spec videoModeSpec) string {
 	var b strings.Builder
 	b.WriteString(spec.ModelName)
-	b.WriteString("\n\nВыберите длительность видео.")
+	b.WriteString("\n\nВыберите длительность видео")
 	if spec.RequiresStartImage {
-		b.WriteString("\n\nДля этой модели нужно стартовое фото.")
+		b.WriteString("\n\nДля этой модели нужно стартовое фото")
 	} else if spec.SupportsReferenceImage {
-		b.WriteString("\n\nМожно написать только текст или прикрепить фото-референс к промту.")
+		b.WriteString("\n\nМожно написать только текст или прикрепить фото-референс к промту")
 	}
 	if spec.MaxReferenceImages > 0 {
-		b.WriteString(fmt.Sprintf("\nЛимит фото: %d.", spec.MaxReferenceImages))
+		b.WriteString(fmt.Sprintf("\nЛимит фото: %d", spec.MaxReferenceImages))
 	}
 	return b.String()
 }
@@ -1387,7 +1387,7 @@ func (h *Handler) sendPhotoQualitySelection(ctx context.Context, modelID, idemKe
 		h.setDialogMode(ctx, peerID, photoPromptMode(model.ModelID, selection.Quality))
 		return h.sendPhotoPromptInstruction(ctx, selection, idemKey, command, peerID, allowEdit)
 	}
-	text := fmt.Sprintf("%s\n\nВыберите качество генерации. Цена указана в ⭐️ и списывается только после готового результата.", model.ModelName)
+	text := fmt.Sprintf("%s\n\nВыберите качество генерации\nЦена указана в ⭐️ и списывается только после готового результата", model.ModelName)
 	msg := vkdelivery.Message{
 		Text:     text,
 		Keyboard: photoQualityKeyboard(options),

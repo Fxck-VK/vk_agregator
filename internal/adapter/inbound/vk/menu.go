@@ -123,7 +123,7 @@ var menuScreens = map[domain.CommandType]menuScreen{
 		keyboard: videoModelKeyboard,
 	},
 	domain.CommandMenuVideoDurationSelect: {
-		text:     fixedText("Выберите длительность видео."),
+		text:     fixedText("Выберите длительность видео"),
 		keyboard: videoModelKeyboard,
 	},
 	domain.CommandMenuVideoPrunaAI: {
@@ -229,7 +229,7 @@ const (
 )
 
 const (
-	photoTextPromptInstruction    = "▶️ Генерация фото по тексту - это когда вы пишете, что хотите увидеть, а ИИ рисует такую картинку.\n\nНапишите описание обычным сообщением, например: кот в очках на пляже."
+	photoTextPromptInstruction    = "▶️ Генерация фото по тексту - это когда вы пишете, что хотите увидеть, а ИИ рисует такую картинку\n\nНапишите описание обычным сообщением, например: кот в очках на пляже"
 	photoTextModeInstruction      = "▶️ Генерация фото по тексту выбрана.\n\nНапишите обычным сообщением, что хотите увидеть.\n\nПример: кот в очках на пляже, кинематографичный свет, высокая детализация"
 	photoReferenceModeInstruction = "📸 Генерация фото с референсом пока будет подключена после входящих фото-артефактов.\n\nСейчас доступна генерация фото по тексту."
 )
