@@ -99,6 +99,33 @@ func TestServiceCachesProviderBalanceWithinTTL(t *testing.T) {
 	assertContainsAll(t, messenger.messages[1], "PoYo", "17276.0")
 }
 
+func TestServiceDoesNotCacheProviderErrorsWithinTTL(t *testing.T) {
+	messenger := &recordingMessenger{}
+	poyo := &stubChecker{
+		name: "poyo",
+		errs: []error{errors.New("PoYo balance API returned 429")},
+		balances: []ProviderBalance{{
+			Provider:      "poyo",
+			RemainCredits: 17276,
+			CheckedAt:     time.Date(2026, 6, 27, 15, 30, 0, 0, time.UTC),
+		}},
+	}
+	svc := New([]Checker{poyo}, messenger, Config{CacheTTL: 5 * time.Minute, Location: mustMoscow(t)})
+
+	if err := svc.HandleCommand(context.Background(), "/balance poyo"); err != nil {
+		t.Fatalf("HandleCommand first returned error: %v", err)
+	}
+	if err := svc.HandleCommand(context.Background(), "/balance poyo"); err != nil {
+		t.Fatalf("HandleCommand second returned error: %v", err)
+	}
+
+	if poyo.calls != 2 {
+		t.Fatalf("checker calls = %d, want 2", poyo.calls)
+	}
+	assertContainsAll(t, messenger.messages[0], "provider_unavailable", "429")
+	assertContainsAll(t, messenger.messages[1], "PoYo", "17276.0")
+}
+
 func TestServiceHandleBalanceRunwayRendersOnlyRunway(t *testing.T) {
 	messenger := &recordingMessenger{}
 	apimart := &stubChecker{name: "apimart", balances: []ProviderBalance{{Provider: "apimart", RemainBalance: 20, CheckedAt: time.Date(2026, 6, 27, 15, 30, 0, 0, time.UTC)}}}
@@ -188,11 +215,34 @@ func TestServiceHelpAndUnknownCommandRenderHelp(t *testing.T) {
 			}
 
 			msg := messenger.last(t)
-			assertContainsAll(t, msg, "/balances", "/balance apimart", "/balance poyo", "/balance runway", "/balance deepinfra", "/help")
+			assertContainsAll(t, msg, "/balances", "/help")
+			for _, command := range []string{"/balance apimart", "/balance poyo", "/balance runway", "/balance deepinfra"} {
+				if strings.Contains(msg, command) {
+					t.Fatalf("help must not contain unconfigured provider command %q: %s", command, msg)
+				}
+			}
 			if strings.Contains(msg, "/usage") {
 				t.Fatalf("help must not contain usage command: %s", msg)
 			}
 		})
+	}
+}
+
+func TestServiceHelpListsOnlyConfiguredProviders(t *testing.T) {
+	messenger := &recordingMessenger{}
+	apimart := &stubChecker{name: "apimart", balances: []ProviderBalance{{Provider: "apimart"}}}
+	poyo := &stubChecker{name: "poyo", balances: []ProviderBalance{{Provider: "poyo"}}}
+	runway := &stubChecker{name: "runway", balances: []ProviderBalance{{Provider: "runway"}}}
+	svc := New([]Checker{apimart, poyo, runway}, messenger, Config{})
+
+	if err := svc.HandleCommand(context.Background(), "/help"); err != nil {
+		t.Fatalf("HandleCommand returned error: %v", err)
+	}
+
+	msg := messenger.last(t)
+	assertContainsAll(t, msg, "/balances", "/balance apimart", "/balance poyo", "/balance runway", "/help")
+	if strings.Contains(msg, "/balance deepinfra") {
+		t.Fatalf("help listed unconfigured DeepInfra command: %s", msg)
 	}
 }
 

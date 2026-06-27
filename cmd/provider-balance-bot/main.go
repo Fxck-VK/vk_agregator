@@ -161,12 +161,9 @@ func runTelegramPolling(ctx context.Context, client updateClient, svc commandSer
 }
 
 func runBalanceWarnings(ctx context.Context, svc warningService, interval time.Duration, logger *slog.Logger) {
-	check := func() {
-		if err := svc.CheckAndWarn(ctx); err != nil && !errors.Is(ctx.Err(), context.Canceled) {
-			logger.Warn("provider balance warning check failed", logging.ErrorAttr(err))
-		}
+	if interval <= 0 {
+		interval = 15 * time.Minute
 	}
-	check()
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for {
@@ -174,7 +171,9 @@ func runBalanceWarnings(ctx context.Context, svc warningService, interval time.D
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			check()
+			if err := svc.CheckAndWarn(ctx); err != nil && !errors.Is(ctx.Err(), context.Canceled) {
+				logger.Warn("provider balance warning check failed", logging.ErrorAttr(err))
+			}
 		}
 	}
 }
