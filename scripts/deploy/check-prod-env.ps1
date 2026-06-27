@@ -163,8 +163,6 @@ foreach ($required in @(
     "S3_ACCESS_KEY",
     "S3_SECRET_KEY",
     "S3_BUCKET",
-    "S3_REGION",
-    "S3_ADDRESSING_STYLE",
     "VK_ACCESS_TOKEN",
     "VK_SECRET",
     "VK_CONFIRMATION_TOKEN",
