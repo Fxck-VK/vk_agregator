@@ -235,4 +235,3 @@ owner explicitly asks to add it.
 4. Decide whether worker count, queue split or indexes need changes based on
    measured bottlenecks, not assumptions.
 5. If preparing a main PR, verify GitHub checks and branch protection status.
-
