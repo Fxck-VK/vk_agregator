@@ -227,6 +227,27 @@ if ($providerValues -match "(^|,)deepinfra(,|$)") {
     Require-Value -Values $envValues -Problems $problems -Name "DEEPINFRA_API_KEY" -Reason "required when a DeepInfra provider is configured"
 }
 
+if (Is-TrueValue (Get-Value -Values $envValues -Name "PROVIDER_BALANCE_BOT_ENABLED" -Default "false")) {
+    foreach ($required in @("ALERT_TELEGRAM_BOT_TOKEN", "TELEGRAM_ADMIN_CHAT_ID", "APIMART_API_KEY", "APIMART_BASE_URL")) {
+        Require-Value -Values $envValues -Problems $problems -Name $required -Reason "required when PROVIDER_BALANCE_BOT_ENABLED=true"
+    }
+    if (Is-TrueValue (Get-Value -Values $envValues -Name "POYO_PROVIDER_ENABLED" -Default "false")) {
+        foreach ($required in @("POYO_API_KEY", "POYO_BASE_URL")) {
+            Require-Value -Values $envValues -Problems $problems -Name $required -Reason "required when PROVIDER_BALANCE_BOT_ENABLED=true and POYO_PROVIDER_ENABLED=true"
+        }
+    }
+    if (Is-TrueValue (Get-Value -Values $envValues -Name "RUNWAY_PROVIDER_ENABLED" -Default "false")) {
+        foreach ($required in @("RUNWAYML_API_SECRET", "RUNWAYML_BASE_URL")) {
+            Require-Value -Values $envValues -Problems $problems -Name $required -Reason "required when PROVIDER_BALANCE_BOT_ENABLED=true and RUNWAY_PROVIDER_ENABLED=true"
+        }
+    }
+    if (Is-TrueValue (Get-Value -Values $envValues -Name "DEEPINFRA_BALANCE_PROVIDER_ENABLED" -Default "false")) {
+        foreach ($required in @("DEEPINFRA_API_KEY", "DEEPINFRA_BALANCE_BASE_URL")) {
+            Require-Value -Values $envValues -Problems $problems -Name $required -Reason "required when PROVIDER_BALANCE_BOT_ENABLED=true and DEEPINFRA_BALANCE_PROVIDER_ENABLED=true"
+        }
+    }
+}
+
 $usesOpenAI = $providerValues -match "(^|,)openai(,|$)"
 $moderationProvider = (Get-Value -Values $envValues -Name "MODERATION_PROVIDER" -Default "keyword").ToLowerInvariant()
 $artifactScanner = (Get-Value -Values $envValues -Name "ARTIFACT_SCANNER" -Default "none").ToLowerInvariant()

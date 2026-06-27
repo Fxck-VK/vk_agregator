@@ -499,7 +499,7 @@ export function SettingsScreen({
               <span id="settings-referral-title" className="referral-toggle__title">
                 Реферальная программа
               </span>
-              <span className="referral-toggle__subtitle">безлимитное общение с НейроХаб</span>
+              <span className="referral-toggle__subtitle">общение с НейроХаб</span>
               <span className="referral-toggle__summary">{referralSummary}</span>
             </span>
             <svg

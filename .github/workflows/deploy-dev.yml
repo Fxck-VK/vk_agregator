@@ -101,7 +101,7 @@ jobs:
           set -euo pipefail
 
           image_namespace="${IMAGE_NAMESPACE,,}"
-          services=(api worker provider-webhook miniapp migrate backup)
+          services=(api worker provider-webhook provider-balance-bot miniapp migrate backup)
           deadline=$((SECONDS + 1200))
 
           printf '%s' "${GHCR_TOKEN}" | docker login ghcr.io -u "${GHCR_USERNAME}" --password-stdin >/dev/null
@@ -380,7 +380,7 @@ jobs:
           if [[ -f docker-compose.data.yml ]]; then
             compose+=(-f docker-compose.data.yml)
           fi
-          compose+=(--profile cloudflare)
+          compose+=(--profile cloudflare --profile provider-balance)
 
           echo "==> DEV diagnostic docker compose ps"
           "${compose[@]}" ps || true
@@ -388,7 +388,7 @@ jobs:
           echo "==> DEV diagnostic migrate logs"
           "${compose[@]}" logs --no-color --tail=200 migrate || true
 
-          for service in api worker maintenance-worker provider-webhook miniapp reverse-proxy; do
+          for service in api worker maintenance-worker provider-webhook provider-balance-bot miniapp reverse-proxy; do
             echo "==> DEV diagnostic ${service} logs"
             "${compose[@]}" logs --no-color --tail=80 "${service}" || true
           done

@@ -43,6 +43,25 @@ services:
       - "127.0.0.1:9001:9001"
     volumes:
       - minio_data:/data
+
+  provider-balance-bot:
+    profiles:
+      - provider-balance
+    build:
+      context: .
+      dockerfile: Dockerfile.provider-balance-bot
+    restart: on-failure
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+      PROVIDER_BALANCE_BOT_ENABLED: ${PROVIDER_BALANCE_BOT_ENABLED:-false}
+      PROVIDER_BALANCE_POLL_INTERVAL: ${PROVIDER_BALANCE_POLL_INTERVAL:-15m}
+      APIMART_BALANCE_WARN_REMAIN_BALANCE: ${APIMART_BALANCE_WARN_REMAIN_BALANCE:-20}
+      APIMART_BALANCE_WARN_REMAIN_CREDITS: ${APIMART_BALANCE_WARN_REMAIN_CREDITS:-200}
+      ALERT_TELEGRAM_BOT_TOKEN: ${ALERT_TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_ADMIN_CHAT_ID: ${TELEGRAM_ADMIN_CHAT_ID:-}
+      TELEGRAM_ADMIN_THREAD_ID: ${TELEGRAM_ADMIN_THREAD_ID:-}
+      APIMART_API_KEY: ${APIMART_API_KEY:-}
+      APIMART_BASE_URL: ${APIMART_BASE_URL:-https://api.apimart.ai/v1}
 volumes:
   postgres_data:
   redis_data:

@@ -645,6 +645,9 @@ function Assert-DeployScripts {
                 "migrateArgs",
                 "exit-code-from",
                 "api", "worker", "provider-webhook", "miniapp", "reverse-proxy",
+                "provider-balance",
+                "provider-balance-bot",
+                "Provider balance bot:",
                 "Wait-Http",
                 "/readyz",
                 "Production deploy completed.",
@@ -678,6 +681,9 @@ function Assert-DeployScripts {
                 "migrate_args",
                 "exit-code-from",
                 "api worker maintenance-worker provider-webhook miniapp reverse-proxy",
+                "provider-balance",
+                "provider-balance-bot",
+                "Provider balance bot:",
                 "wait_http",
                 "/readyz",
                 "Production deploy completed.",
@@ -709,7 +715,10 @@ function Assert-DeployScripts {
                 "PUBLIC_PAYMENT_WEBHOOK_URL",
                 "MIGRATION_ALLOW_DESTRUCTIVE",
                 "MIGRATION_BACKUP_CONFIRMED",
-                "RESTORE_ALLOW_DESTRUCTIVE"
+                "RESTORE_ALLOW_DESTRUCTIVE",
+                "PROVIDER_BALANCE_BOT_ENABLED",
+                "TELEGRAM_ADMIN_CHAT_ID",
+                "APIMART_API_KEY"
             )
         },
         [pscustomobject]@{
@@ -736,7 +745,10 @@ function Assert-DeployScripts {
                 "PUBLIC_PAYMENT_WEBHOOK_URL",
                 "MIGRATION_ALLOW_DESTRUCTIVE",
                 "MIGRATION_BACKUP_CONFIRMED",
-                "RESTORE_ALLOW_DESTRUCTIVE"
+                "RESTORE_ALLOW_DESTRUCTIVE",
+                "PROVIDER_BALANCE_BOT_ENABLED",
+                "TELEGRAM_ADMIN_CHAT_ID",
+                "APIMART_API_KEY"
             )
         },
         [pscustomobject]@{
@@ -752,6 +764,7 @@ function Assert-DeployScripts {
                 "backup minio before rollback",
                 "does not run migrate down",
                 "up -d --no-build --no-deps",
+                "provider-balance-bot",
                 "Wait-Http"
             )
         },
@@ -768,6 +781,7 @@ function Assert-DeployScripts {
                 "backup-minio",
                 "does not run migrate down",
                 "up -d --no-build --no-deps",
+                "provider-balance-bot",
                 "wait_http"
             )
         },
@@ -865,11 +879,13 @@ function Assert-DockerImageWorkflow {
         "Dockerfile.api",
         "Dockerfile.worker",
         "Dockerfile.provider-webhook",
+        "Dockerfile.provider-balance-bot",
         "Dockerfile.miniapp",
         "Dockerfile.migrate",
         "service: api",
         "service: worker",
         "service: provider-webhook",
+        "service: provider-balance-bot",
         "service: miniapp",
         "service: migrate",
         'push: ${{ github.event_name != ''pull_request'' }}'
@@ -896,6 +912,7 @@ function Assert-RollbackConfig {
         '${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/api:${IMAGE_TAG:-main}',
         '${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/worker:${IMAGE_TAG:-main}',
         '${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/provider-webhook:${IMAGE_TAG:-main}',
+        '${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/provider-balance-bot:${IMAGE_TAG:-main}',
         '${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/miniapp:${IMAGE_TAG:-main}',
         '${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/migrate:${IMAGE_TAG:-main}',
         '${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/backup:${BACKUP_IMAGE_TAG:-main}'

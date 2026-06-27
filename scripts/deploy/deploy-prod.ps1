@@ -75,6 +75,15 @@ function Test-EnvPlaceholderValue {
     return $lower.Contains("change_me") -or $lower.Contains("placeholder") -or $lower.Contains("example")
 }
 
+function Test-TrueValue {
+    param([string]$Value)
+
+    if ([string]::IsNullOrWhiteSpace($Value)) {
+        return $false
+    }
+    return @("1", "true", "yes", "on") -contains $Value.Trim().ToLowerInvariant()
+}
+
 function Normalize-DataServiceMode {
     param([string]$Value)
 
@@ -306,6 +315,7 @@ Invoke-Step "check production env" {
 }
 
 $statefulServices = @(Get-LocalStatefulServices -Path $EnvFile)
+$providerBalanceBotEnabled = Test-TrueValue -Value (Get-EnvFileValue -Path $EnvFile -Name "PROVIDER_BALANCE_BOT_ENABLED" -Default "false")
 $script:ComposeArgs = @(
     "compose",
     "--project-name", $ProjectName,
@@ -318,6 +328,7 @@ if ($statefulServices.Count -gt 0) {
 if ($WithCloudflare) {
     $script:ComposeArgs += @("--profile", "cloudflare")
 }
+$script:ComposeArgs += @("--profile", "provider-balance")
 
 function Invoke-DockerCompose {
     param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Arguments)
@@ -371,6 +382,9 @@ try {
     $imagePullServices = @($statefulServices + @("reverse-proxy"))
     if (-not $shouldBuildOnVPS) {
         $imagePullServices += @("api", "worker", "maintenance-worker", "provider-webhook", "miniapp", "migrate")
+        if ($providerBalanceBotEnabled) {
+            $imagePullServices += "provider-balance-bot"
+        }
         if ($BackupBeforeDeploy) {
             $imagePullServices += @("backup-postgres", "backup-minio")
         }
@@ -422,6 +436,9 @@ try {
             $buildArgs += "--pull"
         }
         $buildArgs += @("api", "worker", "maintenance-worker", "provider-webhook", "miniapp", "migrate")
+        if ($providerBalanceBotEnabled) {
+            $buildArgs += "provider-balance-bot"
+        }
         if ($BackupBeforeDeploy) {
             $buildArgs += @("backup-postgres", "backup-minio")
         }
@@ -487,7 +504,17 @@ try {
         Write-Warning "Skipping migrations. Runtime services still require a successful migrate service state in this compose project."
     }
 
+    if (-not $providerBalanceBotEnabled) {
+        Invoke-Step "remove disabled provider balance bot" {
+            & docker @script:ComposeArgs rm -f -s provider-balance-bot | Out-Null
+            $global:LASTEXITCODE = 0
+        }
+    }
+
     $runtimeServices = @("api", "worker", "maintenance-worker", "provider-webhook", "miniapp", "reverse-proxy")
+    if ($providerBalanceBotEnabled) {
+        $runtimeServices += "provider-balance-bot"
+    }
     if ($WithCloudflare) {
         $runtimeServices += "cloudflared"
     }
@@ -557,6 +584,7 @@ try {
     Write-Host "Health checks: $healthStatus"
     Write-Host "Public Cloudflare/DNS smoke: $publicSmokeStatus"
     Write-Host "Cloudflare tunnel profile: $cloudflareStatus"
+    Write-Host "Provider balance bot: $providerBalanceBotEnabled"
 } finally {
     if ($null -eq $previousAppEnvFile) {
         Remove-Item Env:\APP_ENV_FILE -ErrorAction SilentlyContinue

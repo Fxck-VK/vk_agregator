@@ -117,6 +117,23 @@ services:
       timeout: 5s
       retries: 10
 
+  provider-balance-bot:
+    image: ${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/provider-balance-bot:${IMAGE_TAG:-main}
+    build:
+      context: .
+      dockerfile: Dockerfile.provider-balance-bot
+    restart: on-failure
+    profiles:
+      - provider-balance
+    env_file:
+      - ${APP_ENV_FILE:?APP_ENV_FILE is required}
+    environment:
+      APP_ENV: ${APP_ENV:-production}
+      PROVIDER_BALANCE_BOT_ENABLED: ${PROVIDER_BALANCE_BOT_ENABLED:-false}
+      PROVIDER_BALANCE_POLL_INTERVAL: ${PROVIDER_BALANCE_POLL_INTERVAL:-15m}
+      APIMART_BALANCE_WARN_REMAIN_BALANCE: ${APIMART_BALANCE_WARN_REMAIN_BALANCE:-20}
+      APIMART_BALANCE_WARN_REMAIN_CREDITS: ${APIMART_BALANCE_WARN_REMAIN_CREDITS:-200}
+
   miniapp:
     image: ${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/miniapp:${IMAGE_TAG:-main}
     build:
