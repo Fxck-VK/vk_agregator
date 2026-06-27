@@ -62,6 +62,19 @@ func TestBuildProviderBalanceCheckersIncludesPoYoWhenEnabled(t *testing.T) {
 	}
 }
 
+func TestBuildProviderBalanceCheckersSkipsAPIMartWithoutKey(t *testing.T) {
+	checkers := buildProviderBalanceCheckers(config.Config{
+		APIMartBaseURL:      "https://api.apimart.ai/v1",
+		PoYoProviderEnabled: true,
+		PoYoAPIKey:          "poyo-key",
+		PoYoBaseURL:         "https://api.poyo.ai",
+	})
+
+	if got, want := checkerNames(checkers), []string{"poyo"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("checker names = %#v, want %#v", got, want)
+	}
+}
+
 func TestBuildProviderBalanceCheckersIncludesRunwayWhenEnabled(t *testing.T) {
 	checkers := buildProviderBalanceCheckers(config.Config{
 		APIMartAPIKey:         "apimart-key",

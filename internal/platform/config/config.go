@@ -1301,19 +1301,21 @@ func (c Config) validateProviderBalanceBotConfig() error {
 		return nil
 	}
 	var missing []string
+	providerConfigured := false
 	if strings.TrimSpace(c.AlertTelegramBotToken) == "" {
 		missing = append(missing, "ALERT_TELEGRAM_BOT_TOKEN")
 	}
 	if strings.TrimSpace(c.TelegramAdminChatID) == "" {
 		missing = append(missing, "TELEGRAM_ADMIN_CHAT_ID")
 	}
-	if strings.TrimSpace(c.APIMartAPIKey) == "" {
-		missing = append(missing, "APIMART_API_KEY")
-	}
-	if strings.TrimSpace(c.APIMartBaseURL) == "" {
-		missing = append(missing, "APIMART_BASE_URL")
+	if strings.TrimSpace(c.APIMartAPIKey) != "" {
+		providerConfigured = true
+		if strings.TrimSpace(c.APIMartBaseURL) == "" {
+			missing = append(missing, "APIMART_BASE_URL")
+		}
 	}
 	if c.PoYoProviderEnabled {
+		providerConfigured = true
 		if strings.TrimSpace(c.PoYoAPIKey) == "" {
 			missing = append(missing, "POYO_API_KEY")
 		}
@@ -1322,6 +1324,7 @@ func (c Config) validateProviderBalanceBotConfig() error {
 		}
 	}
 	if c.RunwayProviderEnabled {
+		providerConfigured = true
 		if strings.TrimSpace(c.RunwayMLAPISecret) == "" {
 			missing = append(missing, "RUNWAYML_API_SECRET")
 		}
@@ -1330,12 +1333,16 @@ func (c Config) validateProviderBalanceBotConfig() error {
 		}
 	}
 	if c.DeepInfraBalanceProviderEnabled {
+		providerConfigured = true
 		if strings.TrimSpace(c.DeepInfraAPIKey) == "" {
 			missing = append(missing, "DEEPINFRA_API_KEY")
 		}
 		if strings.TrimSpace(c.DeepInfraBalanceBaseURL) == "" {
 			missing = append(missing, "DEEPINFRA_BALANCE_BASE_URL")
 		}
+	}
+	if !providerConfigured {
+		missing = append(missing, "at least one provider balance checker")
 	}
 	if len(missing) > 0 {
 		return fmt.Errorf("config: PROVIDER_BALANCE_BOT_ENABLED=true requires %s", strings.Join(missing, ", "))

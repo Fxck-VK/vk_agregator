@@ -228,23 +228,34 @@ validate_dev_env() {
   fi
 
   if is_true_value "$(get_env_value PROVIDER_BALANCE_BOT_ENABLED false)"; then
-    for required in ALERT_TELEGRAM_BOT_TOKEN TELEGRAM_ADMIN_CHAT_ID APIMART_API_KEY APIMART_BASE_URL; do
+    for required in ALERT_TELEGRAM_BOT_TOKEN TELEGRAM_ADMIN_CHAT_ID; do
       require_value "${required}" "required when PROVIDER_BALANCE_BOT_ENABLED=true"
     done
+    provider_balance_checker_configured=false
+    if ! is_placeholder_value "$(get_env_value APIMART_API_KEY "")"; then
+      provider_balance_checker_configured=true
+    fi
     if is_true_value "$(get_env_value POYO_PROVIDER_ENABLED false)"; then
+      provider_balance_checker_configured=true
       for required in POYO_API_KEY POYO_BASE_URL; do
         require_value "${required}" "required when PROVIDER_BALANCE_BOT_ENABLED=true and POYO_PROVIDER_ENABLED=true"
       done
     fi
     if is_true_value "$(get_env_value RUNWAY_PROVIDER_ENABLED false)"; then
+      provider_balance_checker_configured=true
       for required in RUNWAYML_API_SECRET RUNWAYML_BASE_URL; do
         require_value "${required}" "required when PROVIDER_BALANCE_BOT_ENABLED=true and RUNWAY_PROVIDER_ENABLED=true"
       done
     fi
     if is_true_value "$(get_env_value DEEPINFRA_BALANCE_PROVIDER_ENABLED false)"; then
+      provider_balance_checker_configured=true
       for required in DEEPINFRA_API_KEY DEEPINFRA_BALANCE_BASE_URL; do
         require_value "${required}" "required when PROVIDER_BALANCE_BOT_ENABLED=true and DEEPINFRA_BALANCE_PROVIDER_ENABLED=true"
       done
+    fi
+    if [[ "${provider_balance_checker_configured}" != "true" ]]; then
+      echo "PROVIDER_BALANCE_BOT_ENABLED=true requires at least one provider balance checker" >&2
+      exit 1
     fi
   fi
 
