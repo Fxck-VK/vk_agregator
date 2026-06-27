@@ -575,7 +575,7 @@ func (h *Handler) sendTopUpPaymentLink(ctx context.Context, idemKey string, peer
 		return 0, h.sendTopUpNotice(ctx, idemKey, peerID, topUpPaymentUnavailableText(balance))
 	}
 	msg := vkdelivery.Message{
-		Text: fmt.Sprintf("%s СЧЕТ\n\nПокупка: %d ⭐️\nБаланс сейчас: %d ⭐️\nПосле оплаты: %d ⭐️\n\nОткройте оплату кнопкой ниже\n\nСсылка на оплату действует ограниченное время",
+		Text: fmt.Sprintf("%s СЧЕТ\n\nПокупка: %d ⭐️\nБаланс сейчас: %d ⭐️\nПосле оплаты: %d ⭐️\n\nОткройте оплату кнопкой ниже\nСсылка на оплату действует ограниченное время",
 			formatRubAmount(intent.Amount),
 			intent.Credits,
 			balance,
