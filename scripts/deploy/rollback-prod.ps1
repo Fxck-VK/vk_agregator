@@ -65,6 +65,15 @@ function Test-EnvPlaceholderValue {
     return $lower.Contains("change_me") -or $lower.Contains("placeholder") -or $lower.Contains("example")
 }
 
+function Test-TrueValue {
+    param([string]$Value)
+
+    if ([string]::IsNullOrWhiteSpace($Value)) {
+        return $false
+    }
+    return @("1", "true", "yes", "on") -contains $Value.Trim().ToLowerInvariant()
+}
+
 function Normalize-DataServiceMode {
     param([string]$Value)
 
@@ -178,6 +187,7 @@ Invoke-Step "check production env" {
 }
 
 $statefulServices = @(Get-LocalStatefulServices -Path $EnvFile)
+$providerBalanceBotEnabled = Test-TrueValue -Value (Get-EnvFileValue -Path $EnvFile -Name "PROVIDER_BALANCE_BOT_ENABLED" -Default "false")
 $composeArgs = @(
     "compose",
     "--project-name", $ProjectName,
@@ -190,6 +200,7 @@ if ($statefulServices.Count -gt 0) {
 if ($WithCloudflare) {
     $composeArgs += @("--profile", "cloudflare")
 }
+$composeArgs += @("--profile", "provider-balance")
 
 function Invoke-DockerCompose {
     param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Arguments)
@@ -261,6 +272,14 @@ try {
     }
 
     $runtimeServices = @("api", "worker", "maintenance-worker", "provider-webhook", "miniapp", "reverse-proxy")
+    if ($providerBalanceBotEnabled) {
+        $runtimeServices += "provider-balance-bot"
+    } else {
+        Invoke-Step "remove disabled provider balance bot" {
+            & docker @composeArgs rm -f -s provider-balance-bot | Out-Null
+            $global:LASTEXITCODE = 0
+        }
+    }
     if ($WithCloudflare) {
         $runtimeServices += "cloudflared"
     }
@@ -302,6 +321,7 @@ try {
     Write-Host "Migrations: not run; migrate down is intentionally forbidden"
     Write-Host "Runtime services: $($runtimeServices -join ', ')"
     Write-Host "Health checks: $healthStatus"
+    Write-Host "Provider balance bot: $providerBalanceBotEnabled"
     Write-Host "Verify payment/referral/job smoke manually before considering the incident closed."
 } finally {
     if ($null -eq $previousAppEnvFile) {

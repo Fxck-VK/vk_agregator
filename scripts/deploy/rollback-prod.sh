@@ -79,6 +79,12 @@ get_env_value() {
   fi
 }
 
+is_true_value() {
+  local value
+  value="$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]')"
+  [[ "${value}" == "1" || "${value}" == "true" || "${value}" == "yes" || "${value}" == "on" ]]
+}
+
 is_placeholder_value() {
   local value
   value="$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]')"
@@ -156,6 +162,11 @@ if [[ "$(get_data_service_mode S3_MODE)" == "local" ]]; then
   stateful_services+=(minio)
 fi
 
+provider_balance_bot_enabled="false"
+if is_true_value "$(get_env_value PROVIDER_BALANCE_BOT_ENABLED false)"; then
+  provider_balance_bot_enabled="true"
+fi
+
 compose=(docker compose --project-name "${project_name}" --env-file "${env_file}" -f docker-compose.prod.yml)
 if [[ ${#stateful_services[@]} -gt 0 ]]; then
   compose+=(-f docker-compose.data.yml)
@@ -163,6 +174,7 @@ fi
 if [[ "${with_cloudflare}" == "true" ]]; then
   compose+=(--profile cloudflare)
 fi
+compose+=(--profile provider-balance)
 
 backup_compose=(docker compose --project-name "${project_name}" --env-file "${env_file}" -f docker-compose.prod.yml)
 if [[ ${#stateful_services[@]} -gt 0 ]]; then
@@ -197,6 +209,11 @@ else
 fi
 
 rollback_services=(api worker maintenance-worker provider-webhook miniapp reverse-proxy)
+if [[ "${provider_balance_bot_enabled}" == "true" ]]; then
+  rollback_services+=(provider-balance-bot)
+else
+  "${compose[@]}" rm -f -s provider-balance-bot >/dev/null 2>&1 || true
+fi
 if [[ "${with_cloudflare}" == "true" ]]; then
   rollback_services+=(cloudflared)
 fi
@@ -228,4 +245,5 @@ echo "Backup before rollback: ${backup_status}"
 echo "Migrations: not run; migrate down is intentionally forbidden"
 echo "Runtime services: ${rollback_services[*]}"
 echo "Health checks: ${health_status}"
+echo "Provider balance bot: ${provider_balance_bot_enabled}"
 echo "Verify payment/referral/job smoke manually before considering the incident closed."

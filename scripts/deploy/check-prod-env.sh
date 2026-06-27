@@ -212,6 +212,25 @@ if [[ ",${provider_values_lc}," == *",deepinfra,"* ]]; then
   require_value DEEPINFRA_API_KEY "required when a DeepInfra provider is configured"
 fi
 
+if is_true_value "$(get_value PROVIDER_BALANCE_BOT_ENABLED false)"; then
+  require_value ALERT_TELEGRAM_BOT_TOKEN "required when PROVIDER_BALANCE_BOT_ENABLED=true"
+  require_value TELEGRAM_ADMIN_CHAT_ID "required when PROVIDER_BALANCE_BOT_ENABLED=true"
+  require_value APIMART_API_KEY "required when PROVIDER_BALANCE_BOT_ENABLED=true"
+  require_value APIMART_BASE_URL "required when PROVIDER_BALANCE_BOT_ENABLED=true"
+  if is_true_value "$(get_value POYO_PROVIDER_ENABLED false)"; then
+    require_value POYO_API_KEY "required when PROVIDER_BALANCE_BOT_ENABLED=true and POYO_PROVIDER_ENABLED=true"
+    require_value POYO_BASE_URL "required when PROVIDER_BALANCE_BOT_ENABLED=true and POYO_PROVIDER_ENABLED=true"
+  fi
+  if is_true_value "$(get_value RUNWAY_PROVIDER_ENABLED false)"; then
+    require_value RUNWAYML_API_SECRET "required when PROVIDER_BALANCE_BOT_ENABLED=true and RUNWAY_PROVIDER_ENABLED=true"
+    require_value RUNWAYML_BASE_URL "required when PROVIDER_BALANCE_BOT_ENABLED=true and RUNWAY_PROVIDER_ENABLED=true"
+  fi
+  if is_true_value "$(get_value DEEPINFRA_BALANCE_PROVIDER_ENABLED false)"; then
+    require_value DEEPINFRA_API_KEY "required when PROVIDER_BALANCE_BOT_ENABLED=true and DEEPINFRA_BALANCE_PROVIDER_ENABLED=true"
+    require_value DEEPINFRA_BALANCE_BASE_URL "required when PROVIDER_BALANCE_BOT_ENABLED=true and DEEPINFRA_BALANCE_PROVIDER_ENABLED=true"
+  fi
+fi
+
 moderation_provider="$(get_value MODERATION_PROVIDER keyword | tr '[:upper:]' '[:lower:]')"
 artifact_scanner="$(get_value ARTIFACT_SCANNER none | tr '[:upper:]' '[:lower:]')"
 if [[ ",${provider_values_lc}," == *",openai,"* || "${moderation_provider}" == "openai" || "${artifact_scanner}" == "openai" ]]; then
