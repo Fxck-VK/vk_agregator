@@ -320,7 +320,7 @@ jobs:
           fi
 
           apimart_base_url="$(get_raw_env_value APIMART_BASE_URL)"
-          if [[ -z "${apimart_base_url}" && "${provider_balance_bot_enabled}" == "true" && has_raw_env_value APIMART_API_KEY ]]; then
+          if [[ -z "${apimart_base_url}" && "${provider_balance_bot_enabled}" == "true" ]] && has_raw_env_value APIMART_API_KEY; then
             apimart_base_url="https://api.apimart.ai/v1"
           fi
 
