@@ -368,6 +368,7 @@ fi
 if [[ "${skip_migrate}" != "true" ]]; then
   run_step bash scripts/deploy/check-migrations-safe.sh --env-file "${env_file}" --migrations-dir "$(get_env_value MIGRATIONS_DIR migrations)"
   "${compose[@]}" rm -f -s migrate >/dev/null 2>&1 || true
+  docker rm -f "${project_name}-migrate-1" >/dev/null 2>&1 || true
   migrate_args=(up --no-deps --exit-code-from migrate)
   if [[ "${build_on_vps}" != "true" ]]; then
     migrate_args+=(--no-build)
