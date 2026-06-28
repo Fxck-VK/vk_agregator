@@ -614,20 +614,20 @@ export function ChatScreen({ user }: { user: VkUser }) {
         {(
           [
             {
-              id: "create" as AppTab,
-              label: "Создать",
-              icon: (
-                <svg className="nh-tabbar__icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path d="M12 2l2.2 6.8H21l-5.5 4 2.1 6.7L12 15.8 6.4 19.5l2.1-6.7L3 8.8h6.8L12 2z" stroke="currentColor" strokeWidth="1.8" />
-                </svg>
-              ),
-            },
-            {
               id: "chat" as AppTab,
               label: "Чат",
               icon: (
                 <svg className="nh-tabbar__icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                   <path d="M4 5h16a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H9l-5 4V7a2 2 0 0 1 2-2z" stroke="currentColor" strokeWidth="1.8" />
+                </svg>
+              ),
+            },
+            {
+              id: "create" as AppTab,
+              label: "Создать",
+              icon: (
+                <svg className="nh-tabbar__icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M12 2l2.2 6.8H21l-5.5 4 2.1 6.7L12 15.8 6.4 19.5l2.1-6.7L3 8.8h6.8L12 2z" stroke="currentColor" strokeWidth="1.8" />
                 </svg>
               ),
             },

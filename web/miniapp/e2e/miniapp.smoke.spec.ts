@@ -402,6 +402,9 @@ test.describe("VK Mini App smoke", () => {
     const mocks = await setupMiniappMocks(page, "happy");
 
     await openMiniapp(page);
+    await expect(page.locator(".nh-tabbar__label")).toHaveText(["Чат", "Создать", "Профиль"]);
+    await expect(page.locator(".workflow-screen")).toBeVisible();
+    await page.locator(".nh-tabbar__btn", { hasText: "Чат" }).click();
     await expectNoHorizontalOverflow(page);
     await expectNoMultiChatControls(page);
     await expect(page.locator(".msg--user")).toContainText(SAVED_USER_MESSAGE);
@@ -448,6 +451,7 @@ test.describe("VK Mini App smoke", () => {
     const mocks = await setupMiniappMocks(page, "errors");
 
     await openMiniapp(page);
+    await page.locator(".nh-tabbar__btn", { hasText: "Чат" }).click();
     await expectNoHorizontalOverflow(page);
     await expectNoMultiChatControls(page);
 
