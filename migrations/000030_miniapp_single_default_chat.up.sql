@@ -66,8 +66,13 @@ WHERE def.user_id = custom_thread_updates.user_id
   AND def.external_thread_id = 'default'
   AND def.status = 'active';
 
-DELETE FROM conversation_summaries s
-USING conversations c
+UPDATE conversation_summaries s
+SET text = '',
+    token_count = 0,
+    summarized_until_seq = 0,
+    redacted_at = COALESCE(s.redacted_at, now()),
+    updated_at = now()
+FROM conversations c
 WHERE s.conversation_id = c.id
   AND c.source = 'miniapp'
   AND c.external_thread_id <> 'default';
@@ -88,7 +93,10 @@ SET params = jsonb_set(
 WHERE source = 'miniapp'
   AND operation_type = 'text_generate';
 
-DELETE FROM conversations
+UPDATE conversations
+SET status = 'archived',
+    title = '',
+    updated_at = now()
 WHERE source = 'miniapp'
   AND external_thread_id <> 'default';
 
