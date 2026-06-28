@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
-import { clearLocalHistory, loadActiveThreadID, saveActiveThreadID } from "./store";
+import { cleanupLegacyChatStorage, defaultThread } from "./store";
 
 const ACTIVE_THREAD_KEY = "vk_miniapp_active_thread_v1";
 const LEGACY_THREAD_KEY = "vk_miniapp_threads_v1";
@@ -17,36 +17,33 @@ describe("chat UI localStorage safety", () => {
     localStorage.clear();
   });
 
-  test("stores only a safe active thread id", () => {
-    saveActiveThreadID("thread_1:active");
+  test("creates only the in-memory default chat", () => {
+    const chat = defaultThread(123);
 
-    expect(localStorage.getItem(ACTIVE_THREAD_KEY)).toBe("thread_1:active");
-    expect(loadActiveThreadID()).toBe("thread_1:active");
+    expect(chat.id).toBe("default");
+    expect(chat.createdAt).toBe(123);
+    expect(chat.updatedAt).toBe(123);
+    expect(chat.messages).toEqual([]);
   });
 
-  test("rejects unsafe active thread content", () => {
-    localStorage.setItem(ACTIVE_THREAD_KEY, "prompt:do-not-keep");
-
-    expect(loadActiveThreadID()).toBeNull();
-    expect(localStorage.getItem(ACTIVE_THREAD_KEY)).toBeNull();
-  });
-
-  test("clears legacy chat content when reading active state", () => {
+  test("cleanup removes old active thread and legacy chat keys", () => {
     localStorage.setItem(ACTIVE_THREAD_KEY, "safe-thread");
-    localStorage.setItem(LEGACY_THREAD_KEY, JSON.stringify({ messages: ["old"] }));
-    localStorage.setItem(LEGACY_HISTORY_KEY, JSON.stringify({ prompt: "old" }));
+    localStorage.setItem(LEGACY_THREAD_KEY, "old");
+    localStorage.setItem(LEGACY_HISTORY_KEY, "old");
 
-    expect(loadActiveThreadID()).toBe("safe-thread");
+    cleanupLegacyChatStorage();
+
+    expect(localStorage.getItem(ACTIVE_THREAD_KEY)).toBeNull();
     expect(localStorage.getItem(LEGACY_THREAD_KEY)).toBeNull();
     expect(localStorage.getItem(LEGACY_HISTORY_KEY)).toBeNull();
   });
 
-  test("clearLocalHistory removes current and legacy keys", () => {
-    saveActiveThreadID("safe-thread");
-    localStorage.setItem(LEGACY_THREAD_KEY, "old");
-    localStorage.setItem(LEGACY_HISTORY_KEY, "old");
+  test("cleanup does not persist prompts, messages or launch params", () => {
+    localStorage.setItem(ACTIVE_THREAD_KEY, "thread-1");
+    localStorage.setItem(LEGACY_THREAD_KEY, JSON.stringify({ messages: ["old message"], prompt: "old prompt" }));
+    localStorage.setItem(LEGACY_HISTORY_KEY, "launch_params=vk_user_id%3D42&sign=secret");
 
-    clearLocalHistory();
+    cleanupLegacyChatStorage();
 
     expect(localStorage.getItem(ACTIVE_THREAD_KEY)).toBeNull();
     expect(localStorage.getItem(LEGACY_THREAD_KEY)).toBeNull();

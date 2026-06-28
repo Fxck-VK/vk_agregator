@@ -4,14 +4,13 @@ import { Panel } from "@vkontakte/vkui";
 import { Spinner } from "../ui/ui";
 import { MessageBubble } from "./MessageBubble";
 import { Composer } from "./Composer";
-import { ChatList } from "./ChatList";
 import { WorkflowMode } from "../workflow/WorkflowMode";
 import { SettingsScreen } from "../settings/SettingsScreen";
 import { loadThemeMode, watchThemeMode, type ThemeMode } from "../settings/theme";
 import { modalityByOperation, uid, type Chat, type ChatMessage } from "./types";
+import { cleanupLegacyChatStorage, defaultThread } from "./store";
 import { loadAppTab, saveAppTab, type AppTab } from "../mode";
 import {
-  ApiError,
   createChatMessage,
   createJob,
   createIdempotencyKey,
@@ -19,26 +18,23 @@ import {
   listJobs,
   getBalance,
   isTerminal,
-  listChatConversationMessages,
-  listChatConversations,
+  listChatMessages,
   statusKind,
   errorLabel,
   apiUserMessage,
   resolveBotText,
-  type ChatConversation,
   type ChatConversationMessage,
   type Job,
 } from "../api/client";
 import { haptic, type VkUser } from "../hooks/useBridge";
-import { useChats } from "../hooks/useChats";
 import neuroHubAvatar from "../assets/neurohub-avatar.png";
-import { displayChatTitle, isGenericChatTitleValue } from "./display";
 
 const POLL_MS = 1200;
 const POLL_MAX = 90;
 const CHAT_OPERATION = "text_generate";
 const CHAT_MODEL_ID = "chatgpt";
 const CHAT_ASSISTANT_NAME = "НейроХаб";
+const DEFAULT_CHAT_ID = "default";
 
 type SubmitRequest = {
   operation: string;
@@ -50,7 +46,7 @@ type SubmitRequest = {
   durationSec?: number;
 };
 
-function tabTitle(tab: AppTab, activeChat?: Chat | null): { name: string; sub: string } {
+function tabTitle(tab: AppTab): { name: string; sub: string } {
   switch (tab) {
     case "create":
       return { name: "Создать", sub: "фото и видео" };
@@ -59,31 +55,9 @@ function tabTitle(tab: AppTab, activeChat?: Chat | null): { name: string; sub: s
     default:
       return {
         name: CHAT_ASSISTANT_NAME,
-        sub: activeChat ? displayChatTitle(activeChat) : "НейроХаб диалог",
+        sub: "НейроХаб диалог",
       };
   }
-}
-
-function chatIdForJob(jobId: string): string {
-  return "job-" + jobId;
-}
-
-function isScratchpadChatId(chatId: string): boolean {
-  return chatId.startsWith("job-");
-}
-
-function visibleChats(chats: Chat[]): Chat[] {
-  return chats.filter((chat) => !isScratchpadChatId(chat.id));
-}
-
-function jobIdsFromChats(chats: Chat[]): Set<string> {
-  const ids = new Set<string>();
-  for (const chat of chats) {
-    for (const msg of chat.messages) {
-      if (msg.jobId) ids.add(msg.jobId);
-    }
-  }
-  return ids;
 }
 
 function promptForBot(messages: ChatMessage[], index: number): string {
@@ -98,19 +72,6 @@ function upsertJob(jobs: Job[], job: Job): Job[] {
   const exists = jobs.some((item) => item.id === job.id);
   const next = exists ? jobs.map((item) => (item.id === job.id ? job : item)) : [job, ...jobs];
   return next.sort((a, b) => b.created_at.localeCompare(a.created_at));
-}
-
-function chatFromConversation(conversation: ChatConversation): Chat {
-  const createdAt = Date.parse(conversation.created_at) || Date.now();
-  const updatedAt = Date.parse(conversation.updated_at) || createdAt;
-  return {
-    id: conversation.id || "default",
-    title: conversation.title || "НейроХаб диалог",
-    preview: conversation.last_message_preview,
-    createdAt,
-    updatedAt,
-    messages: [],
-  };
 }
 
 function messageFromHistory(message: ChatConversationMessage): ChatMessage {
@@ -137,47 +98,6 @@ function compareChatMessages(a: ChatMessage, b: ChatMessage): number {
   return 0;
 }
 
-function isLocalDraftChat(chat: Chat): boolean {
-  return (
-    chat.messages.length === 0 ||
-    chat.messages.some((msg) => msg.pending || Boolean(msg.error))
-  );
-}
-
-function resolveMergedChatTitle(backend: Chat, local: Chat): string {
-  if (!isGenericChatTitleValue(backend.title)) return backend.title.trim();
-  if (!isGenericChatTitleValue(local.title)) return local.title.trim();
-  return displayChatTitle(backend);
-}
-
-function mergeBackendChats(prev: Chat[], backend: Chat[]): Chat[] {
-  if (backend.length === 0) {
-    return prev.length > 0 ? prev : [];
-  }
-  const byID = new Map<string, Chat>();
-  for (const chat of backend) {
-    byID.set(chat.id, chat);
-  }
-  for (const chat of prev) {
-    const existing = byID.get(chat.id);
-    if (existing) {
-      const messages = chat.messages.length > 0 ? chat.messages : existing.messages;
-      byID.set(chat.id, {
-        ...existing,
-        title: resolveMergedChatTitle(existing, chat),
-        preview: existing.preview || chat.preview,
-        messages,
-        updatedAt: Math.max(existing.updatedAt, chat.updatedAt),
-      });
-      continue;
-    }
-    if (isLocalDraftChat(chat)) {
-      byID.set(chat.id, chat);
-    }
-  }
-  return Array.from(byID.values()).sort((a, b) => b.updatedAt - a.updatedAt);
-}
-
 function mergeHistoryMessages(current: ChatMessage[], history: ChatMessage[]): ChatMessage[] {
   const byID = new Map<string, ChatMessage>();
   for (const message of history) {
@@ -201,14 +121,6 @@ function mergeHistoryMessages(current: ChatMessage[], history: ChatMessage[]): C
   return Array.from(byID.values()).sort(compareChatMessages);
 }
 
-function fallbackVisibleChatId(chats: Chat[], excludedId?: string): string | null {
-  return visibleChats(chats).find((chat) => chat.id !== excludedId)?.id ?? null;
-}
-
-function isStaleConversationError(error: unknown): boolean {
-  return error instanceof ApiError && error.status === 404;
-}
-
 const EARLY_CHAT_TEXT_STATUSES = new Set([
   "provider_succeeded",
   "postprocessing",
@@ -216,11 +128,11 @@ const EARLY_CHAT_TEXT_STATUSES = new Set([
   "delivering",
 ]);
 
-async function earlyChatBotText(chatId: string, job: Job): Promise<string | undefined> {
-  if (job.operation !== CHAT_OPERATION || isScratchpadChatId(chatId)) return undefined;
+async function earlyChatBotText(job: Job): Promise<string | undefined> {
+  if (job.operation !== CHAT_OPERATION) return undefined;
   if (!EARLY_CHAT_TEXT_STATUSES.has(job.status)) return undefined;
   try {
-    const history = await listChatConversationMessages(chatId);
+    const history = await listChatMessages();
     const bot = history.find((item) => item.job_id === job.id && item.role === "bot");
     const text = bot?.text?.trim();
     return text || undefined;
@@ -229,42 +141,19 @@ async function earlyChatBotText(chatId: string, job: Job): Promise<string | unde
   }
 }
 
-function pollTargetForJob(chats: Chat[], job: Job): { chatId: string; botMsgId: string; missing: boolean } {
-  for (const chat of chats) {
-    const msg = chat.messages.find((item) => item.role === "bot" && item.jobId === job.id);
-    if (msg) return { chatId: chat.id, botMsgId: msg.id, missing: false };
-  }
-  return { chatId: chatIdForJob(job.id), botMsgId: "b-" + job.id, missing: true };
-}
-
-function canPollWithTarget(job: Job, target: { missing: boolean }): boolean {
-  return !target.missing || job.operation !== CHAT_OPERATION;
-}
-
 export function ChatScreen({ user }: { user: VkUser }) {
-  const {
-    chats,
-    activeChat,
-    activeId,
-    newChat,
-    selectChat,
-    deleteChat,
-    clearChats,
-    ensureActive,
-    setMessages,
-    setChats,
-    setActiveId,
-  } = useChats();
-
+  const [chat, setChat] = useState<Chat>(() => defaultThread());
   const [balance, setBalance] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [drawerOpen, setDrawerOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<AppTab>(() => loadAppTab());
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => loadThemeMode());
   const [jobs, setJobs] = useState<Job[]>([]);
   const [workflowJobRequest, setWorkflowJobRequest] = useState<Job | null>(null);
+  const chats = [chat];
+  const activeChat = chat;
+  const activeId = chat.id;
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const mountedRef = useRef(true);
@@ -272,15 +161,18 @@ export function ChatScreen({ user }: { user: VkUser }) {
   const pollTimersRef = useRef(new Map<string, number>());
   const seededRef = useRef(false);
   const submittingRef = useRef(false);
-  const chatsRef = useRef(chats);
 
-  useEffect(() => {
-    chatsRef.current = chats;
-  }, [chats]);
+  const setMessages = useCallback((updater: (prev: ChatMessage[]) => ChatMessage[]) => {
+    setChat((prev) => {
+      const messages = updater(prev.messages);
+      return { ...prev, messages, updatedAt: Date.now() };
+    });
+  }, []);
 
   const patchInChat = useCallback(
     (chatId: string, msgId: string, patch: Partial<ChatMessage>) => {
-      setMessages(chatId, (prev) =>
+      if (chatId !== DEFAULT_CHAT_ID) return;
+      setMessages((prev) =>
         prev.map((m) => (m.id === msgId ? { ...m, ...patch } : m)),
       );
     },
@@ -292,58 +184,27 @@ export function ChatScreen({ user }: { user: VkUser }) {
   }, []);
 
   const loadConversationMessages = useCallback(
-    async (chatId: string) => {
-      if (!chatId || isScratchpadChatId(chatId)) return;
+    async () => {
       setHistoryLoading(true);
       try {
-        const history = await listChatConversationMessages(chatId);
+        const history = await listChatMessages();
         if (!mountedRef.current) return;
         const messages = history.map(messageFromHistory);
-        setChats((prev) =>
-          prev.map((chat) =>
-            chat.id === chatId
-              ? {
-                  ...chat,
-                  messages: mergeHistoryMessages(chat.messages, messages),
-                  preview: messages[messages.length - 1]?.text ?? chat.preview,
-                }
-              : chat,
-          ),
-        );
-      } catch (error) {
+        setChat((prev) => ({
+          ...prev,
+          messages: mergeHistoryMessages(prev.messages, messages),
+          preview: messages[messages.length - 1]?.text ?? prev.preview,
+          updatedAt: Date.now(),
+        }));
+      } catch {
         if (!mountedRef.current) return;
-        if (isStaleConversationError(error)) {
-          const existing = chatsRef.current.find((chat) => chat.id === chatId);
-          if (!existing || !isLocalDraftChat(existing)) {
-            setChats((prev) => prev.filter((chat) => chat.id !== chatId));
-            setActiveId((cur) => (cur === chatId ? fallbackVisibleChatId(chatsRef.current, chatId) : cur));
-          }
-          return;
-        }
         /* keep already rendered messages on transient load errors */
       } finally {
         if (mountedRef.current) setHistoryLoading(false);
       }
     },
-    [setActiveId, setChats],
+    [],
   );
-
-  const refreshConversations = useCallback(async () => {
-    const conversations = await listChatConversations();
-    if (!mountedRef.current) return;
-    const backendChats = conversations.map(chatFromConversation);
-    let nextChats: Chat[] = [];
-    setChats((prev) => {
-      const withoutScratchpad = prev.filter((chat) => !isScratchpadChatId(chat.id));
-      const merged = mergeBackendChats(withoutScratchpad, backendChats);
-      nextChats = merged.length > 0 ? merged : withoutScratchpad;
-      return nextChats;
-    });
-    setActiveId((cur) => {
-      if (cur && nextChats.some((chat) => chat.id === cur)) return cur;
-      return nextChats[0]?.id ?? cur ?? null;
-    });
-  }, [setActiveId, setChats]);
 
   const changeTab = useCallback((nextTab: AppTab) => {
     if (nextTab !== activeTab && document.activeElement instanceof HTMLElement) {
@@ -351,52 +212,15 @@ export function ChatScreen({ user }: { user: VkUser }) {
     }
     setActiveTab(nextTab);
     saveAppTab(nextTab);
-    setDrawerOpen(false);
   }, [activeTab]);
-
-  const findChatIdForJob = useCallback(async (jobId: string): Promise<string | null> => {
-    for (const chat of chatsRef.current) {
-      if (chat.messages.some((msg) => msg.jobId === jobId)) {
-        return chat.id;
-      }
-    }
-    try {
-      const conversations = await listChatConversations();
-      for (const conversation of conversations) {
-        const chatId = conversation.id || "default";
-        const messages = await listChatConversationMessages(chatId);
-        if (messages.some((msg) => msg.job_id === jobId)) {
-          return chatId;
-        }
-      }
-    } catch {
-      return null;
-    }
-    return null;
-  }, []);
 
   const clearWorkflowJobRequest = useCallback(() => setWorkflowJobRequest(null), []);
 
   const handleHistoryJobClick = useCallback(
     (job: Job) => {
       if (job.operation === CHAT_OPERATION) {
-        void (async () => {
-          const directChatId = job.conversation_id?.trim();
-          if (directChatId) {
-            selectChat(directChatId);
-            changeTab("chat");
-            void loadConversationMessages(directChatId);
-            return;
-          }
-          const chatId = await findChatIdForJob(job.id);
-          if (chatId) {
-            selectChat(chatId);
-            changeTab("chat");
-            void loadConversationMessages(chatId);
-            return;
-          }
-          changeTab("chat");
-        })();
+        changeTab("chat");
+        void loadConversationMessages();
         return;
       }
       if (job.operation === "image_generate" || job.operation === "video_generate") {
@@ -405,7 +229,7 @@ export function ChatScreen({ user }: { user: VkUser }) {
         changeTab("create");
       }
     },
-    [changeTab, findChatIdForJob, jobs, loadConversationMessages, selectChat],
+    [changeTab, jobs, loadConversationMessages],
   );
 
   useEffect(() => watchThemeMode(themeMode), [themeMode]);
@@ -454,7 +278,7 @@ export function ChatScreen({ user }: { user: VkUser }) {
             });
             haptic("error");
           } else {
-            const text = (await resolveBotText(job)) ?? (await earlyChatBotText(chatId, job));
+            const text = (await resolveBotText(job)) ?? (await earlyChatBotText(job));
             patchInChat(chatId, botMsgId, {
               pending: false,
               status: job.status,
@@ -463,15 +287,13 @@ export function ChatScreen({ user }: { user: VkUser }) {
             });
             haptic("success");
             if (job.operation === CHAT_OPERATION) {
-              void refreshConversations()
-                .then(() => loadConversationMessages(chatId))
-                .catch(() => undefined);
+              void loadConversationMessages().catch(() => undefined);
             }
           }
           refreshBalance();
           return;
         }
-        const earlyText = await earlyChatBotText(chatId, job);
+        const earlyText = await earlyChatBotText(job);
         if (earlyText) {
           patchInChat(chatId, botMsgId, {
             pending: false,
@@ -493,7 +315,7 @@ export function ChatScreen({ user }: { user: VkUser }) {
         });
       }
     },
-    [loadConversationMessages, patchInChat, refreshBalance, refreshConversations],
+    [loadConversationMessages, patchInChat, refreshBalance],
   );
 
   const startPoll = useCallback(
@@ -541,13 +363,13 @@ export function ChatScreen({ user }: { user: VkUser }) {
     const selectedModel = request?.modelId ?? CHAT_MODEL_ID;
     const selectedVideoRouteAlias = request?.videoRouteAlias;
     const isChat = request?.chat === true;
-    const chatId = isChat ? ensureActive() : "";
+    const chatId = isChat ? DEFAULT_CHAT_ID : "";
     const userMsgId = "u-" + uid();
     const botId = "b-" + uid();
     const idempotencyKey = createIdempotencyKey();
     if (isChat) {
       const sentAt = new Date().toISOString();
-      setMessages(chatId, (prev) => [
+      setMessages((prev) => [
         ...prev,
         { id: userMsgId, role: "user", text, createdAt: sentAt },
         {
@@ -565,7 +387,7 @@ export function ChatScreen({ user }: { user: VkUser }) {
     try {
       const job = isChat
         ? await createChatMessage(
-            { prompt: text, conversation_id: chatId },
+            { prompt: text },
             { idempotencyKey },
           )
         : await createJob(
@@ -611,7 +433,7 @@ export function ChatScreen({ user }: { user: VkUser }) {
     }
   }
 
-  // Первый запуск: баланс + восстановление активных и локально отмеченных задач.
+  // Первый запуск: баланс + готовая история чата и активные media jobs.
   useEffect(() => {
     let cancelled = false;
 
@@ -620,7 +442,8 @@ export function ChatScreen({ user }: { user: VkUser }) {
     };
 
     refreshBalance();
-    void refreshConversations().catch(() => undefined);
+    cleanupLegacyChatStorage();
+    void loadConversationMessages().catch(() => undefined);
 
     if (!seededRef.current) {
       seededRef.current = true;
@@ -629,21 +452,9 @@ export function ChatScreen({ user }: { user: VkUser }) {
         if (!mountedRef.current || cancelled) return;
         const sorted = [...jobs].sort((a, b) => b.created_at.localeCompare(a.created_at));
         setJobs(sorted);
-        const localJobIds = jobIdsFromChats(chatsRef.current);
-        const restored = sorted.filter((job) => !isTerminal(job.status) || localJobIds.has(job.id));
-        for (const job of restored) {
-          const target = pollTargetForJob(chatsRef.current, job);
-          if (!isTerminal(job.status)) {
-            if (canPollWithTarget(job, target)) {
-              startPoll(target.chatId, target.botMsgId, job.id);
-            }
-          } else if (statusKind(job.status) === "done" && job.operation === "text_generate") {
-            void resolveBotText(job).then((text) => {
-              if (text && mountedRef.current) {
-                patchInChat(target.chatId, target.botMsgId, { text });
-              }
-            });
-          }
+        for (const job of sorted) {
+          if (job.operation === CHAT_OPERATION || isTerminal(job.status)) continue;
+          startPoll("", "b-" + job.id, job.id);
         }
       })
       .catch(() => undefined)
@@ -661,33 +472,19 @@ export function ChatScreen({ user }: { user: VkUser }) {
   }, []);
 
   useEffect(() => {
-    if (!activeId || !isScratchpadChatId(activeId)) return;
-    const first = visibleChats(chats)[0];
-    if (first) setActiveId(first.id);
-  }, [activeId, chats, setActiveId]);
-
-  useEffect(() => {
-    if (!activeId || isScratchpadChatId(activeId)) return;
-    if (chats.some((chat) => chat.id === activeId)) return;
-    setActiveId(fallbackVisibleChatId(chats));
-  }, [activeId, chats, setActiveId]);
-
-  useEffect(() => {
-    if (activeTab !== "chat" || !activeId || isScratchpadChatId(activeId)) return;
-    if (!chats.some((chat) => chat.id === activeId)) return;
-    void loadConversationMessages(activeId);
-  }, [activeTab, activeId, chats, loadConversationMessages]);
+    if (activeTab !== "chat") return;
+    void loadConversationMessages();
+  }, [activeTab, loadConversationMessages]);
 
   useEffect(() => {
     const pending = jobs.filter((job) => !isTerminal(job.status));
     if (pending.length === 0) return;
 
     for (const job of pending) {
-      const target = pollTargetForJob(chats, job);
-      if (!canPollWithTarget(job, target)) continue;
-      startPoll(target.chatId, target.botMsgId, job.id);
+      if (job.operation === CHAT_OPERATION) continue;
+      startPoll("", "b-" + job.id, job.id);
     }
-  }, [jobs, chats, startPoll]);
+  }, [jobs, startPoll]);
 
   const lastScrollChatIdRef = useRef<string | null>(null);
   useEffect(() => {
@@ -709,41 +506,13 @@ export function ChatScreen({ user }: { user: VkUser }) {
     !historyLoading &&
     messages.length === 0 &&
     !activeChat?.preview;
-  const header = tabTitle(activeTab, activeChat);
+  const header = tabTitle(activeTab);
 
   return (
     <Panel id="miniapp-root-panel" className="chat-panel" mode="plain">
       <div className="chat">
-      <ChatList
-        chats={visibleChats(chats)}
-        activeId={activeId}
-        open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-        onSelect={(id) => {
-          selectChat(id);
-          setDrawerOpen(false);
-        }}
-        onNew={() => {
-          newChat();
-          setDrawerOpen(false);
-        }}
-        onDelete={deleteChat}
-        onClearHistory={clearChats}
-      />
-
       {activeTab === "chat" && (
         <header className="chat__header">
-          <button
-            type="button"
-            className="chat__history-btn"
-            aria-label="История диалогов"
-            onClick={() => setDrawerOpen(true)}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M3 12a9 9 0 1 0 3-6.7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-              <path d="M3 3v6h6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </button>
           <div className="chat__presence">
             <div className="chat__presence-avatar">
               <img src={neuroHubAvatar} alt="" />
@@ -836,7 +605,6 @@ export function ChatScreen({ user }: { user: VkUser }) {
           jobs={jobs}
           loading={loading}
           onThemeModeChange={setThemeMode}
-          onClearLocalHistory={clearChats}
           onRefreshBalance={refreshBalance}
           onHistoryJobClick={handleHistoryJobClick}
         />

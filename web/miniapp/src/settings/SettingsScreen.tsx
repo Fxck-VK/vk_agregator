@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Button } from "@vkontakte/vkui";
 import bridge from "@vkontakte/vk-bridge";
 import {
   MINIAPP_DARK_THEME_ONLY_ENABLED,
@@ -31,12 +30,11 @@ type SettingsScreenProps = {
   jobs: Job[];
   loading: boolean;
   onThemeModeChange: (mode: ThemeMode) => void;
-  onClearLocalHistory: () => void;
   onRefreshBalance: () => void;
   onHistoryJobClick: (job: Job) => void;
 };
 
-type HistoryFilter = "all" | ModalityId | "chat";
+type HistoryFilter = "all" | Exclude<ModalityId, "text">;
 
 const THEME_OPTIONS: Array<{ id: ThemeMode; label: string }> = [
   { id: "system", label: "Авто" },
@@ -48,7 +46,6 @@ const FILTER_OPTIONS: Array<{ id: HistoryFilter; label: string }> = [
   { id: "all", label: "Все" },
   { id: "image", label: "Картинки" },
   { id: "video", label: "Видео" },
-  { id: "text", label: "Диалоги" },
 ];
 
 function formatRub(kopecks: number): string {
@@ -92,8 +89,7 @@ function historyLabel(job: Job): string {
 
 function historyRowMeta(job: Job): string {
   const modality = modalityByOperation(job.operation);
-  const typeLabel = job.operation === "text_generate" ? "Чат" : modality.label;
-  return `${typeLabel} · ${historyLabel(job)} · ${dateLabel(job.created_at)}`;
+  return `${modality.label} · ${historyLabel(job)} · ${dateLabel(job.created_at)}`;
 }
 
 function typeColor(operation: string): string {
@@ -132,7 +128,6 @@ export function SettingsScreen({
   jobs,
   loading,
   onThemeModeChange,
-  onClearLocalHistory,
   onRefreshBalance,
   onHistoryJobClick,
 }: SettingsScreenProps) {
@@ -162,9 +157,6 @@ export function SettingsScreen({
   const visibleJobs = useMemo(() => {
     const deduped = dedupeHistoryJobs(jobs);
     if (historyFilter === "all") return deduped;
-    if (historyFilter === "text") {
-      return deduped.filter((job) => job.operation === "text_generate");
-    }
     return deduped.filter((job) => modalityByOperation(job.operation).id === historyFilter);
   }, [jobs, historyFilter]);
 
@@ -658,10 +650,7 @@ export function SettingsScreen({
                 const color = typeColor(job.operation);
                 const backendJobCredits =
                   job.cost_captured > 0 ? job.cost_captured : job.cost_estimate;
-                const canOpen =
-                  job.operation === "text_generate" ||
-                  job.operation === "image_generate" ||
-                  job.operation === "video_generate";
+                const canOpen = job.operation === "image_generate" || job.operation === "video_generate";
                 return (
                   <button
                     key={job.id}
@@ -712,24 +701,6 @@ export function SettingsScreen({
         </div>
       </section>
 
-      <section className="settings-card" aria-labelledby="settings-privacy-title">
-        <h2 id="settings-privacy-title" style={{ margin: "0 0 12px", fontSize: "15px" }}>
-          Локальные данные
-        </h2>
-        <p style={{ margin: "0 0 12px", color: "var(--fg-muted)", fontSize: 14, lineHeight: 1.45 }}>
-          На устройстве хранятся только UI-настройки: активная вкладка, тема и метаданные диалогов.
-        </p>
-        <Button
-          type="button"
-          mode="secondary"
-          appearance="neutral"
-          size="l"
-          stretched
-          onClick={onClearLocalHistory}
-        >
-          Очистить локальную историю
-        </Button>
-      </section>
     </main>
   );
 }

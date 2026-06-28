@@ -4,10 +4,12 @@ import {
   ApiError,
   artifactUrl,
   apiUserMessage,
+  createChatMessage,
   createJob,
   errorLabel,
   estimateJob,
   launchParamsFromLocation,
+  listChatMessages,
   normalizeRawParams,
   referralCodeFromRaw,
   statusKind,
@@ -15,7 +17,7 @@ import {
   telemetryLabel,
   telemetryRoute,
 } from "./client";
-import type { CreateJobInput, EstimateInput } from "./client";
+import type { CreateChatMessageInput, CreateJobInput, EstimateInput } from "./client";
 
 const ARTIFACT_ID = "550e8400-e29b-41d4-a716-446655440000";
 
@@ -210,6 +212,67 @@ describe("generation request pricing contract", () => {
       expect(body).not.toHaveProperty("provider_model_id");
       expect(body).not.toHaveProperty("model_code");
     }
+  });
+});
+
+describe("chat API single default contract", () => {
+  test("serializes chat messages without client conversation id", async () => {
+    window.history.replaceState({}, "", "/?vk_user_id=42&vk_ts=1&sign=fake");
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      jsonResponse({
+        id: ARTIFACT_ID,
+        operation: "text_generate",
+        modality: "text",
+        status: "received",
+        conversation_id: "default",
+        cost_estimate: 0,
+        cost_captured: 0,
+        output_artifact_ids: [],
+        created_at: "2026-01-01T00:00:00Z",
+        updated_at: "2026-01-01T00:00:00Z",
+      }),
+    );
+
+    await createChatMessage(
+      { prompt: "hello chat", conversation_id: "custom-a" } as CreateChatMessageInput & { conversation_id: string },
+      { idempotencyKey: "idem-chat" },
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0][0]).toBe("/miniapp/chat/messages");
+    const body = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body ?? "{}")) as Record<
+      string,
+      unknown
+    >;
+    expect(body).toEqual({ prompt: "hello chat" });
+    expect(body).not.toHaveProperty("conversation_id");
+  });
+
+  test("loads chat history from the default messages endpoint", async () => {
+    window.history.replaceState({}, "", "/?vk_user_id=42&vk_ts=1&sign=fake");
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      jsonResponse({
+        items: [
+          {
+            id: ARTIFACT_ID,
+            job_id: ARTIFACT_ID,
+            seq: 1,
+            role: "user",
+            text: "saved message",
+            created_at: "2026-01-01T00:00:00Z",
+          },
+        ],
+        pagination: { limit: 20, offset: 0, count: 1, has_more: false },
+      }),
+    );
+
+    const messages = await listChatMessages();
+
+    expect(messages).toHaveLength(1);
+    expect(messages[0]?.text).toBe("saved message");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0][0]).toBe("/miniapp/chat/messages");
+    expect(String(fetchMock.mock.calls[0][0])).not.toContain("/chat/conversations/");
   });
 });
 
