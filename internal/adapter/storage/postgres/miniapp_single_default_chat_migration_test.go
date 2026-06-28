@@ -21,7 +21,7 @@ func TestMiniAppSingleDefaultChatMigrationFilesDeclareIrreversibleMerge(t *testi
 		t.Fatalf("repo root: %v", err)
 	}
 
-	upRaw, err := os.ReadFile(filepath.Join(root, "migrations", "000029_miniapp_single_default_chat.up.sql"))
+	upRaw, err := os.ReadFile(filepath.Join(root, "migrations", "000030_miniapp_single_default_chat.up.sql"))
 	if err != nil {
 		t.Fatalf("read up migration: %v", err)
 	}
@@ -42,7 +42,7 @@ func TestMiniAppSingleDefaultChatMigrationFilesDeclareIrreversibleMerge(t *testi
 		}
 	}
 
-	downRaw, err := os.ReadFile(filepath.Join(root, "migrations", "000029_miniapp_single_default_chat.down.sql"))
+	downRaw, err := os.ReadFile(filepath.Join(root, "migrations", "000030_miniapp_single_default_chat.down.sql"))
 	if err != nil {
 		t.Fatalf("read down migration: %v", err)
 	}
@@ -119,7 +119,7 @@ func TestMiniAppSingleDefaultChatMigrationMergesCustomThreads(t *testing.T) {
 	insertMiniAppMigrationSummary(t, ctx, conn, defaultOneID, "default summary")
 	insertMiniAppMigrationSummary(t, ctx, conn, customOneID, "custom summary")
 
-	runMigrationFile(t, ctx, conn, filepath.Join(root, "migrations", "000029_miniapp_single_default_chat.up.sql"))
+	runMigrationFile(t, ctx, conn, filepath.Join(root, "migrations", "000030_miniapp_single_default_chat.up.sql"))
 
 	assertMiniAppConversationCount(t, ctx, conn, userOneID, "miniapp", "default", 1)
 	assertMiniAppConversationCount(t, ctx, conn, userOneID, "miniapp", "custom-one", 0)

@@ -1,4 +1,4 @@
--- 000029_miniapp_single_default_chat.up.sql
+-- 000030_miniapp_single_default_chat.up.sql
 -- Merge VK Mini App custom chat threads into one backend-owned default thread.
 
 BEGIN;
