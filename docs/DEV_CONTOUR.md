@@ -70,6 +70,61 @@ the DEV VK health/callback route, Mini App frontend and BFF, YooKassa webhook
 entrypoint, and confirms that `/admin/*` and `/metrics` are not publicly open.
 It refuses non-HTTPS URLs and production hostnames.
 
+## GitHub Actions DEV Deploy
+
+The remote DEV VPS deploy mirrors the production deploy process without the
+main-branch approval gate. A push to `dev-deploy` builds immutable GHCR images
+and then runs the `Deploy DEV` workflow.
+
+Required repository secrets:
+
+```text
+DEV_DEPLOY_HOST
+DEV_DEPLOY_USER
+DEV_DEPLOY_SSH_KEY
+DEV_DEPLOY_PATH
+DEV_ENV_FILE
+GHCR_USERNAME
+GHCR_TOKEN
+```
+
+`DEV_ENV_FILE` stores the DEV server env content. It must contain DEV-only
+values: `APP_ENV=development`, `dev-*` public URLs, the DEV VK group id, the
+DEV Cloudflare tunnel token, and either `PAYMENT_PROVIDER=mock` or an explicit
+DEV/test YooKassa configuration.
+
+The workflow does not keep provider/payment business rules in YAML. It only
+orchestrates deployment:
+
+```text
+checkout
+wait for GHCR images
+connect to DEV VPS
+write DEV_ENV_FILE to a temporary file
+run scripts/deploy/prepare-dev-env.sh
+run scripts/deploy/check-dev-env.sh
+upload .env to DEV VPS
+run scripts/deploy/deploy-dev.sh
+run scripts/deploy/smoke-dev.sh
+write GitHub summary / Telegram notification
+```
+
+`prepare-dev-env.sh` renders the final server `.env`, appends the deploy image
+tag and GHCR pull credentials, and prints only non-secret readiness flags.
+`check-dev-env.sh` blocks production hostnames, production VK group id, missing
+Cloudflare tunnel token, unsupported payment providers and non-development
+`APP_ENV` before the env can reach the VPS.
+
+Local validation for these scripts:
+
+```bash
+bash scripts/deploy/test-dev-env.sh
+```
+
+The test uses fake tokens only. It checks `bash -n scripts/deploy/*.sh`, valid
+mock DEV env, valid DEV YooKassa env, production URL rejection, and verifies
+that fake secret markers are not printed to logs.
+
 ## Mini App Model Catalog Migration
 
 Mini App model selection uses one public BFF endpoint:

@@ -195,6 +195,24 @@ Safety rules:
 - keep payments mocked unless `DEV_ALLOW_REAL_PAYMENTS=true` and YooKassa uses
   a test key.
 
+DEV GitHub deploy uses the same environment shape through the
+`DEV_ENV_FILE` repository secret. On each `dev-deploy` rollout the workflow
+writes that secret to a temporary file, runs
+`scripts/deploy/prepare-dev-env.sh`, then runs
+`scripts/deploy/check-dev-env.sh` before uploading `.env` to the DEV VPS.
+The YAML stays orchestration-only; provider/payment defaults and DEV safety
+checks live in scripts.
+
+Before changing DEV deploy env handling, run:
+
+```bash
+bash scripts/deploy/test-dev-env.sh
+```
+
+This test checks shell syntax for `scripts/deploy/*.sh`, valid mock DEV env,
+valid DEV YooKassa env, production URL rejection and that fake secret markers
+are not printed to logs.
+
 The detailed DEV contract is in `docs/DEV_CONTOUR.md`.
 
 Server configuration uses separate tracked templates for staging and

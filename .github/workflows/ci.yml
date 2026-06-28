@@ -138,3 +138,7 @@ jobs:
       - name: Validate infrastructure
         shell: pwsh
         run: ./scripts/ci/validate-infra.ps1
+
+      - name: Test deploy env scripts
+        shell: bash
+        run: bash scripts/deploy/test-dev-env.sh

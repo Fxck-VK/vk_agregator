@@ -1,195 +1,107 @@
 {
-  "schema_version": 4,
-  "updated_at": "2026-06-23T02:06:24+03:00",
-  "branch": "fastlife_dev",
+  "schema_version": 5,
+  "updated_at": "2026-06-28T11:08:41+03:00",
+  "branch": "serega",
+  "remote_tracking": "origin/serega",
   "purpose": "Minimal machine-readable current context and routing for agents.",
   "read_policy": {
-    "read_by_default": ["AGENTS.md", ".agents/state.json"],
+    "read_by_default": [
+      "AGENTS.md",
+      ".agents/state.json"
+    ],
     "read_when_scope_requires": [
-      "TASKS.md",
       "README.md",
       "RUNBOOK.md",
       "DECISIONS.md",
+      "TASKS.md",
       "docs/ARCHITECTURE.md",
-      "docs/DOMAIN_DEPLOYMENT_PLAN.md",
+      "docs/DEV_CONTOUR.md",
+      "docs/LOAD_TESTING.md",
+      "docs/DATA_RETENTION_POLICY.md",
+      "docs/DATA_SERVICES_CONTRACT.md",
       "docs/VIDEO_GENERATION.md",
       "docs/VK_BOT_AGENT_GUIDE.md"
     ],
-    "do_not_read_by_default": [".agents/logs/**"],
-    "history_read_condition": "Only read logs when explicitly asked for history, debugging a repeated known error, regression archaeology, or old audit details."
+    "do_not_read_by_default": [
+      ".agents/logs/**",
+      "docs/archive/**",
+      "old merge handoff files unless explicitly relevant"
+    ],
+    "history_read_condition": "Only read logs/archive when explicitly asked for history, debugging a repeated known error, regression archaeology, or old audit details."
   },
   "context_policy": {
     "keep_current_only": true,
     "no_archive_noise": true,
-    "errors_log": "Append to .agents/logs/errors.jsonl only for sanitized reusable root-cause/fix knowledge.",
-    "routine_work": "Do not update docs/logs for routine actions."
+    "routine_work": "Do not update docs/logs/state for routine actions unless user asks or the task changes architecture, deploy, env, security, billing, retention, or agent routing.",
+    "errors_log": "Append to .agents/logs/errors.jsonl only for sanitized reusable root-cause/fix knowledge."
   },
+  "repo_state": {
+    "worktree_at_update": "clean",
+    "latest_local_commit": "26a6185 billing: reduce default starting balance",
+    "latest_origin_main_seen": "8409747 Merge serega into main",
+    "latest_origin_dev_deploy_seen": "5251018 vkbot: remove trailing dots from model menus",
+    "note": "At update time serega contains work newer than origin/main. Use normal protected PR/approval flow before treating main as updated."
+  },
+  "current_focus": {
+    "summary": "Continue product work on serega while keeping dev-deploy and main release flows aligned. DEV is the daily integration/testing contour; main is production and deploys through GitHub Actions with approval/protection.",
+    "active_environment_model": {
+      "development": "dev-deploy branch and DEV VPS/Cloudflare/VK community. DEV should mirror production architecture but use DEV-specific secrets, tunnel, VK group and payment/provider settings.",
+      "production": "main branch only. Production deploy is GitHub Actions -> GHCR images -> VPS deploy script -> smoke -> rollback if needed.",
+      "loadtest": "APP_ENV=loadtest with mock providers/payments/delivery only. Do not use production hosts or paid providers in load tests."
+    }
+  },
+  "recent_completed_work": [
+    "Security/scale hardening and local/mock k6 smoke baseline were merged from fastlife_dev into the active project history.",
+    "DEV deploy flow exists separately from production deploy and can be triggered from dev-deploy.",
+    "Data retention, analytics aggregate, data services contract, and local/external/managed data-service modes were added.",
+    "Video/image provider catalog was narrowed to active public runtime surfaces; provider/model exposure is controlled by route/catalog flags and env.",
+    "VK bot payment copy and menu copy were polished; default starting balance was reduced to 30 via latest serega work."
+  ],
+  "active_priorities": [
+    "Before production release, merge serega to main through the protected PR/review flow; do not force-push main.",
+    "Keep DEV and PROD env files synchronized by variable names, but never copy DEV secret values into PROD.",
+    "Verify production PROD_ENV_FILE before deploy when new provider/payment/feature flags are added.",
+    "Run live YooKassa smoke before real-money confidence: payment.succeeded, payment.canceled, refund.succeeded, replay/idempotency and reconciliation.",
+    "Confirm public YooKassa webhook route goes to cmd/provider-webhook/PAYMENT_WEBHOOK_ADDR, not cmd/api.",
+    "Finish capacity/load report with p95/p99, CPU/RAM, Redis queue depth, Postgres locks/slow queries and DLQ before claiming scale readiness.",
+    "Plan external/managed Postgres, Redis and S3 migration before serious traffic; current code supports modes, but operational migration must be rehearsed.",
+    "Keep provider calls isolated in worker/adapters; VK bot, Mini App and cmd/api must not call AI providers directly."
+  ],
+  "open_risks": [
+    "DEV/PROD drift can happen if DEV_ENV_FILE and PROD_ENV_FILE are edited manually without a variable-name comparison.",
+    "Real provider/payment smoke tests can spend money or touch external systems; require explicit approval and correct environment.",
+    "Load tests currently prove mock/local behavior, not real provider throughput or external quota limits.",
+    "Lot/FIFO attribution is still needed before automatic or partial refunds for already-spent credits.",
+    "Old handoff docs may contain stale branch names or outdated priorities; prefer this state file for current routing."
+  ],
+  "security_invariants": [
+    "No secrets, tokens, auth headers, full launch params, prompt bodies, provider payloads, private artifact URLs or raw PII in git, logs, docs or chat.",
+    "VK handlers, Mini App BFF and cmd/api never call AI providers directly.",
+    "Provider/media work happens through worker/services/adapters.",
+    "Billing remains append-only ledger based; no direct balance mutation.",
+    "Payment redirect/confirmation URL is not proof of payment.",
+    "YooKassa top-up credits only through provider-verified webhook/reconciliation plus ledger.",
+    "Artifact access must remain owner-checked.",
+    "Do not weaken auth, signature checks, moderation, billing, idempotency, TLS, webhook trust or production CORS."
+  ],
   "subagents": {
-    "use_for": ["narrow search", "bounded audit", "test triage", "simple patch suggestions"],
+    "use_for": [
+      "narrow search",
+      "bounded audit",
+      "test triage",
+      "simple patch suggestions"
+    ],
     "input": "Minimal goal, allowed files/packages, forbidden actions, output schema.",
     "output": "Technical schema-only: status, findings file:line issue fix, changed_files/tests, residual_risks.",
     "max_output_lines": 40,
-    "forbidden_output": ["prose", "code dumps", "secrets", "prompts", "PII", "private URLs"],
-    "owner": "Main agent owns decisions, integration, code quality and user-facing report."
-  },
-  "progress": {
-    "current_focus": "Security/scale hardening plan R1-R10 completed on fastlife_dev; Russian handoff context lives in docs/SECURITY_SCALE_HARDENING_HANDOFF.md; local k6 is installed and local/mock micro-smoke passed.",
-    "main_merge": {
-      "pr": 6,
-      "merge_sha": "1530a9a0fa6fe88a7b63fa29ee6886ecd942f849",
-      "status": "merged"
-    },
-    "active_priorities": [
-      "Route https://neiirohub.ru/billing/webhooks/yookassa to cmd/provider-webhook/PAYMENT_WEBHOOK_ADDR, not cmd/api.",
-      "Repeat live YooKassa smoke for payment.succeeded, payment.canceled and refund.succeeded through dashboard-delivered webhooks.",
-      "Finish production deployment shape for static Mini App, cmd/api, cmd/worker, dedicated payment webhook runtime, TLS/proxy headers and service units.",
-      "Run credential-bound smoke for real OpenAI, DeepInfra and VK delivery before external users.",
-      "Verify edge/proxy body-size limits before public reference uploads.",
-      "Implement lot/FIFO attribution before automatic, partial or already-spent credit refunds."
+    "forbidden_output": [
+      "prose",
+      "code dumps",
+      "secrets",
+      "prompts",
+      "PII",
+      "private URLs"
     ],
-    "security_scale_hardening": {
-      "status": "completed",
-      "current_step": null,
-      "completed_steps": [
-        "step1_baseline_audit_tracking",
-        "step2_logging_leakage_guardrails",
-        "step3_payment_redirect_hardening",
-        "step4_rate_limiting_scale",
-        "step5_vk_payload_retention",
-        "step6_miniapp_upload_memory",
-        "step7_vk_bot_ui_state",
-        "step8_antispam_degradation",
-        "step9_safe_load_security_verification",
-        "step10_vk_topup_provider_url_fallback",
-        "step11_command_raw_text_retention",
-        "step12_final_review_docs_rollback"
-      ],
-      "pending_steps": [],
-      "new_risks": [],
-      "decisions": [
-        "Baseline started on fastlife_dev; no code behavior changes before baseline report.",
-        "No .agents/logs files read; no reusable sanitized error entry needed.",
-        "Step 2 closed R1 by replacing raw runtime error log attrs with bounded error_code attrs and class-based provider failure messages.",
-        "Step 3 closed R2 with app-level and nginx payment redirect limits before repeated DB lookups; opaque redirect tokens deferred because they require a broader payment-link/schema flow.",
-        "Step 3 added production fail-closed validation for VK top-up public redirect base; R8 remains tracked until direct fallback behavior is reviewed explicitly.",
-        "Step 4 closed R3 with per-process limiter bucket TTL, bounded incremental eviction and a hard bucket cap; local limiter remains a fallback behind edge/shared limits.",
-        "Step 5 discovered commands.raw_text retention as a separate user-text retention risk; do not mix it into R4 VK callback payload patch.",
-        "Step 5 closed R4 by storing metadata-only VK inbound payloads for new events and adding batched two-phase legacy inbound payload redaction in maintenance.",
-        "Step 6 closed R5 by replacing Mini App upload multipart buffering with streaming multipart parsing, adding pre-read Content-Length/concurrency rejects, lowering default upload concurrency to 4 and aligning nginx /miniapp/artifacts body limit.",
-        "Step 7 closed R7 by keeping critical VK dialog mode in existing Redis DialogState with TTL while bounding best-effort process-local activeMenus/dialog cache by 1h TTL and 10000-peer caps; no Redis menu payload or payment/provider state was introduced.",
-        "Step 8 closed R6 by classifying antispam dependency-error actions, blocking generation job candidates with an explicit degraded decision, allowing cheap control commands, and completing denied/degraded VK events even if the user-facing antispam response send fails.",
-        "Step 9 closed R9 by verifying loadtest config mock-only guards and adding k6 script-level refusal for known production hosts unless K6_ALLOW_PRODUCTION_LIVE_SMOKE=true is deliberately set for a separate human-approved smoke.",
-        "Plan file updated to add explicit residual steps for R8 VK top-up provider URL fallback and R10 commands.raw_text retention before final review.",
-        "Step 10 closed R8 by removing VK bot fallback from server-owned redirect links to provider confirmation URLs; missing/invalid redirect base now returns a safe unavailable-payment notice and new top-up intent creation is skipped.",
-        "Step 11 closed R10 by adding command raw-text retention schema, config, maintenance dry-run/status visibility and idempotent redaction that skips commands linked to unfinished jobs.",
-        "Step 12 final review removed docs/SECURITY_SCALE_HARDENING_PLAN_PROMPT.md, found no temporary backup/build junk files, and kept new paymentredirect package, VK local-state test and command retention migrations as implementation artifacts.",
-        "Post-final handoff context file added at docs/SECURITY_SCALE_HARDENING_HANDOFF.md for humans and future agents.",
-        "Handoff context file translated to Russian for the user and next agent.",
-        "k6 installed locally via Homebrew for load-test execution.",
-        "Fixed tests/k6/vk-bot.js missing boolEnv helper found by k6 inspect.",
-        "Fixed k6 v2 K6_DURATION env-name conflict by switching basic-api script/docs/template to K6_BASIC_DURATION and removing K6_DURATION fallbacks from job/payment k6 scripts.",
-        "Local/mock k6 micro-smoke ran on 127.0.0.1:18080 because 127.0.0.1:8080 was already occupied; API and worker used APP_ENV=loadtest with mock providers/payments and disabled real VK delivery.",
-        "A fake VK token attempt was stopped before smoke because the API selected real VK control delivery; safe smoke returned to empty VK_ACCESS_TOKEN with mock/disabled outbound delivery."
-      ],
-      "checks": [
-        "git status --short --branch captured",
-        "git diff --cached --name-only showed no staged files",
-        "git diff --check passed",
-        "Step 2 runtime logger grep for raw error attrs passed",
-        "Step 2 focused go test suite passed with escalated cache/listener access after sandbox-only failures",
-        "Step 3 focused go test ./cmd/api ./internal/adapter/inbound/paymentredirect ./internal/adapter/inbound/vk ./internal/platform/config passed",
-        "Step 3 docker compose config passed",
-        "Step 3 grep confirmed no payment_intent_id or confirmation_url logging in paymentredirect",
-        "Step 4 go test ./internal/platform/ratelimit ./cmd/api ./internal/adapter/inbound/miniapp ./internal/adapter/inbound/vk passed",
-        "Step 4 extra go test ./cmd/provider-webhook ./internal/app/miniapp ./internal/adapter/inbound/paymentredirect passed",
-        "Step 4 git diff --check passed",
-        "Step 5 go test ./internal/adapter/inbound/vk ./internal/service/maintenance ./internal/platform/config ./cmd/worker passed",
-        "Step 5 go test ./internal/adapter/storage/postgres/... passed",
-        "Step 5 go test ./internal/adapter/inbound/admin passed",
-        "Step 5 grep found no VK inbound rawBody payload persistence",
-        "Step 5 git diff --check passed",
-        "Step 5 jq empty .agents/state.json passed",
-        "Step 6 go test ./internal/adapter/inbound/miniapp ./internal/adapter/storage/... ./internal/platform/config ./cmd/api passed",
-        "Step 6 go test ./internal/app/miniapp ./internal/platform/ratelimit passed",
-        "Step 6 docker compose config passed",
-        "Step 6 grep confirmed Mini App upload no longer uses ParseMultipartForm/FormFile",
-        "Step 6 git diff --check passed",
-        "Step 6 jq empty .agents/state.json passed",
-        "Step 7 go test ./internal/adapter/inbound/vk ./internal/app/vkbot passed",
-        "Step 7 git diff --check passed",
-        "Step 7 jq empty .agents/state.json passed",
-        "Step 8 go test ./internal/adapter/inbound/vk passed",
-        "Step 8 go test ./internal/adapter/inbound/vk ./internal/service/... passed",
-        "Step 8 grep confirmed payment webhook/reconciliation surfaces have no antispam references",
-        "Step 8 grep confirmed the old antispam fail-open log phrase is gone",
-        "Step 8 git diff --check passed",
-        "Step 8 jq empty .agents/state.json passed",
-        "Step 9 node --check passed for tests/k6/basic-api.js, vk-bot.js, job-worker.js and billing-payments.js",
-        "Step 9 focused go test ./cmd/api ./internal/adapter/inbound/paymentredirect ./internal/adapter/inbound/miniapp ./internal/adapter/inbound/vk ./internal/platform/ratelimit ./internal/platform/config passed",
-        "Step 9 docker compose config passed",
-        "Step 9 go test ./... passed after unsandboxed rerun; sandbox-only first attempt failed because httptest listeners were blocked",
-        "Step 9 grep confirmed k6 production-host guards and default K6_ALLOW_PRODUCTION_LIVE_SMOKE=false",
-        "Step 9 git diff --check passed",
-        "Step 9 jq empty .agents/state.json passed",
-        "Step 9 k6 runtime was not installed locally, so no live k6 run was executed",
-        "Plan update grep confirmed R10 risk row and Step 10/11/12 order in SECURITY_SCALE_HARDENING_PLAN_PROMPT.md",
-        "Step 10 go test ./internal/adapter/inbound/vk ./internal/platform/config ./cmd/api passed after final unsandboxed rerun; sandbox-only first attempt failed on Go build cache access",
-        "Step 10 grep confirmed provider confirmation URL references in the scoped VK surface are limited to tests/docs, and runtime VK handler/menu output paths have no confirmation URL references",
-        "Step 10 git diff --check passed",
-        "Step 11 go test ./internal/platform/config passed after unsandboxed rerun; sandbox-only first attempt failed on Go build cache access",
-        "Step 11 go test ./internal/adapter/storage/postgres/... ./internal/service/maintenance ./cmd/worker passed after unsandboxed rerun; sandbox-only first attempt failed on Go build cache access",
-        "Step 11 git diff --check passed",
-        "Step 11 jq empty .agents/state.json passed before tracking update",
-        "Step 11 plan/state grep confirmed R10 references are tracking/config/test only and no raw command text values were written",
-        "Step 12 rg --files found no temporary backup/swap/coverage/build junk artifacts",
-        "Step 12 git diff --check passed",
-        "Step 12 docker compose config passed",
-        "Step 12 go test ./... passed after unsandboxed rerun; sandbox-only first attempt failed on Go build cache and httptest listener access",
-        "Step 12 diff secret scan was names-only; changed-diff hits were limited to tracking text and redaction tests with fake token-like samples",
-        "Step 12 untracked implementation files secret scan found no suspicious matches",
-        "k6 version passed: k6 v2.0.0 darwin/arm64",
-        "k6 inspect passed for tests/k6/basic-api.js, vk-bot.js, job-worker.js and billing-payments.js",
-        "docker compose up -d postgres redis minio passed for local smoke",
-        "go run ./cmd/migrate up applied pending local migrations through 000024_command_raw_text_retention",
-        "Local health/readiness passed on http://127.0.0.1:18080 with latest migration 000024_command_raw_text_retention",
-        "k6 basic-api micro-smoke passed: 100/100 checks, 0 percent HTTP failures",
-        "k6 vk-bot micro-smoke passed: 34/34 checks, duplicate replay and small burst OK, 0 percent HTTP failures",
-        "k6 job-worker text-only micro-smoke passed: 11 jobs created and terminal, 0 pending, 0 percent HTTP failures",
-        "k6 billing-payments mock micro-smoke passed: 150/150 checks, intent replay/top-up/refund OK, 0 percent HTTP failures",
-        "Redis stream:jobs:dlq length after micro-smoke was 0"
-      ],
-      "blocked_on": [],
-      "baseline": {
-        "branch": "fastlife_dev",
-        "staged_files": 0,
-        "worktree_dirty_before_step1_state_update": true,
-        "next_priority": "None for this hardening plan; prepare commit and push as requested"
-      },
-      "risk_register": {
-        "R1_logging_leakage": "closed in Step 2; logs use bounded error_code and provider failure text is class-based",
-        "R2_payment_redirect_public_lookup": "closed in Step 3; repeated valid-looking probes are rate-limited before unbounded DB lookups and nginx has edge limit",
-        "R3_rate_limiter_unbounded_buckets": "closed in Step 4; local limiter has idle TTL, bounded sweep and hard bucket cap",
-        "R4_vk_payload_retention": "closed in Step 5; new VK inbound payloads are metadata-only and legacy VK payload redaction is batched, idempotent and visible via retention dry-run/status",
-        "R5_miniapp_upload_memory": "closed in Step 6; Mini App upload memory is bounded by streaming multipart parsing, pre-read oversize rejection, per-process concurrency 4 and nginx exact-route body limit",
-        "R6_antispam_degradation": "closed in Step 8; antispam dependency errors block generation job candidates with explicit degraded UX, cheap control commands continue, and denied/degraded VK events complete without retry amplification if response delivery fails",
-        "R7_vk_bot_ui_state_ttl": "closed in Step 7; local VK UI maps have TTL eviction and hard peer caps, stale callbacks fall back without new menu sends, and shared Redis state remains limited to dialog mode strings with TTL",
-        "R8_vk_topup_direct_provider_url": "closed in Step 10; VK bot payment creation/reuse output uses server-owned redirect links or a safe unavailable-payment notice, and missing/invalid redirect base no longer falls back to provider confirmation links",
-        "R9_safe_load_security_verification": "closed in Step 9; loadtest runtime config is mock-only, checked-in k6 scripts refuse known production hosts by default, and verification covered target risk paths plus full Go suite and compose config",
-        "R10_command_raw_text_retention": "closed in Step 11; command raw text is user_content with TTL config, migration-backed expiry/redaction fields, dry-run/status visibility, idempotent redaction and unfinished-job guardrails"
-      }
-    }
-  },
-  "completed_plans": {
-    "post_merge_fix_plan": {
-      "status": "completed",
-      "merged_to_main_pr": 6,
-      "summary": "Output moderation, refund recovery, provider retry, billing guards, webhook trust, surface idempotency, artifact size limits and CI/prod context hardening completed."
-    }
-  },
-  "security_invariants": [
-    "No secrets, full launch params, prompt bodies, private artifact URLs, raw PII or provider credentials in docs/logs/chat.",
-    "No provider calls from VK handlers, Mini App BFF or cmd/api.",
-    "Billing remains append-only ledger based.",
-    "Do not weaken auth, signature checks, moderation, billing, idempotency, TLS or webhook trust."
-  ]
+    "owner": "Main agent owns decisions, integration, code quality and user-facing report."
+  }
 }

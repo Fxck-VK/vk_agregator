@@ -225,215 +225,24 @@ jobs:
         run: |
           set -euo pipefail
 
-          tmp_env="$(mktemp)"
           raw_env="$(mktemp)"
-          trap 'rm -f "${tmp_env}" "${raw_env}"' EXIT
+          rendered_env="$(mktemp)"
+          trap 'rm -f "${raw_env}" "${rendered_env}"' EXIT
 
           printf '%s\n' "${DEV_ENV_FILE}" > "${raw_env}"
 
-          get_raw_env_value() {
-            local name="$1"
-            local value
-            value="$(grep -E "^${name}=" "${raw_env}" | tail -n 1 | cut -d= -f2- || true)"
-            value="${value%$'\r'}"
-            value="${value#"${value%%[![:space:]]*}"}"
-            value="${value%"${value##*[![:space:]]}"}"
-            value="${value%\"}"
-            value="${value#\"}"
-            value="${value%\'}"
-            value="${value#\'}"
-            printf '%s' "${value}"
-          }
+          bash scripts/deploy/prepare-dev-env.sh \
+            --input "${raw_env}" \
+            --output "${rendered_env}" \
+            --image-tag "${DEPLOY_IMAGE_TAG}" \
+            --ghcr-username "${GHCR_USERNAME}" \
+            --ghcr-token "${GHCR_TOKEN}"
 
-          is_true_value() {
-            local value
-            value="$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]')"
-            [[ "${value}" == "1" || "${value}" == "true" || "${value}" == "yes" || "${value}" == "on" ]]
-          }
+          bash scripts/deploy/check-dev-env.sh --env-file "${rendered_env}"
 
-          has_raw_env_value() {
-            local name="$1"
-            local value
-            value="$(get_raw_env_value "${name}")"
-            value="$(printf '%s' "${value}" | tr '[:upper:]' '[:lower:]')"
-            [[ -n "${value//[[:space:]]/}" && "${value}" != *change_me* && "${value}" != *placeholder* && "${value}" != *example* ]]
-          }
-
-          has_provider_balance_key() {
-            has_raw_env_value APIMART_API_KEY ||
-              has_raw_env_value POYO_API_KEY ||
-              has_raw_env_value RUNWAYML_API_SECRET ||
-              has_raw_env_value DEEPINFRA_API_KEY
-          }
-
-          provider_tokens=()
-          append_provider_token() {
-            local token="$1"
-            token="$(printf '%s' "${token}" | tr '[:upper:]' '[:lower:]')"
-            token="${token#"${token%%[![:space:]]*}"}"
-            token="${token%"${token##*[![:space:]]}"}"
-            token="${token%\"}"
-            token="${token#\"}"
-            token="${token%\'}"
-            token="${token#\'}"
-            case "${token}" in
-              deepinfra|apimart|poyo|runway|mock) ;;
-              ""|none|openai) return 0 ;;
-              *) return 0 ;;
-            esac
-            for existing in "${provider_tokens[@]}"; do
-              if [[ "${existing}" == "${token}" ]]; then
-                return 0
-              fi
-            done
-            provider_tokens+=("${token}")
-          }
-
-          raw_provider="$(get_raw_env_value PROVIDER)"
-          raw_chain="$(get_raw_env_value PROVIDER_CHAIN)"
-          if [[ -z "${raw_chain}" ]]; then
-            raw_chain="${raw_provider}"
-          fi
-          IFS=',' read -ra chain_parts <<< "${raw_chain}"
-          for token in "${chain_parts[@]}"; do
-            append_provider_token "${token}"
-          done
-
-          image_provider="$(get_raw_env_value IMAGE_PROVIDER)"
-          if [[ "${image_provider,,}" != "deepinfra" ]]; then
-            append_provider_token "${image_provider}"
-          fi
-          video_provider="$(get_raw_env_value VIDEO_PROVIDER)"
-          if [[ "${video_provider,,}" != "deepinfra" ]]; then
-            append_provider_token "${video_provider}"
-          fi
-
-          if (( ${#provider_tokens[@]} == 0 )); then
-            if [[ "${raw_provider,,}" == "openai" || "${raw_chain,,}" == *openai* ]]; then
-              provider_tokens+=(deepinfra)
-            else
-              provider_tokens+=(mock)
-            fi
-          fi
-          append_provider_token mock
-          provider_chain="$(IFS=,; printf '%s' "${provider_tokens[*]}")"
-
-          telegram_bot_configured="false"
-          if has_raw_env_value ALERT_TELEGRAM_BOT_TOKEN; then
-            telegram_bot_configured="true"
-          fi
-          telegram_admin_configured="false"
-          if has_raw_env_value TELEGRAM_ADMIN_CHAT_ID; then
-            telegram_admin_configured="true"
-          fi
-          provider_balance_key_configured="false"
-          if has_provider_balance_key; then
-            provider_balance_key_configured="true"
-          fi
-
-          provider_balance_bot_enabled="false"
-          if is_true_value "$(get_raw_env_value PROVIDER_BALANCE_BOT_ENABLED)" ||
-             [[ "${telegram_bot_configured}" == "true" &&
-                "${telegram_admin_configured}" == "true" &&
-                "${provider_balance_key_configured}" == "true" ]]; then
-            provider_balance_bot_enabled="true"
-          fi
-
-          apimart_base_url="$(get_raw_env_value APIMART_BASE_URL)"
-          if [[ -z "${apimart_base_url}" ]] && has_raw_env_value APIMART_API_KEY; then
-            apimart_base_url="https://api.apimart.ai/v1"
-          fi
-
-          poyo_provider_enabled="false"
-          if is_true_value "$(get_raw_env_value POYO_PROVIDER_ENABLED)" || has_raw_env_value POYO_API_KEY; then
-            poyo_provider_enabled="true"
-          fi
-          poyo_base_url="$(get_raw_env_value POYO_BASE_URL)"
-          if [[ -z "${poyo_base_url}" && "${poyo_provider_enabled}" == "true" ]]; then
-            poyo_base_url="https://api.poyo.ai"
-          fi
-
-          runway_provider_enabled="false"
-          if is_true_value "$(get_raw_env_value RUNWAY_PROVIDER_ENABLED)" || has_raw_env_value RUNWAYML_API_SECRET; then
-            runway_provider_enabled="true"
-          fi
-          runway_base_url="$(get_raw_env_value RUNWAYML_BASE_URL)"
-          if [[ -z "${runway_base_url}" && "${runway_provider_enabled}" == "true" ]]; then
-            runway_base_url="https://api.dev.runwayml.com/v1"
-          fi
-
-          deepinfra_balance_provider_enabled="false"
-          if is_true_value "$(get_raw_env_value DEEPINFRA_BALANCE_PROVIDER_ENABLED)" || has_raw_env_value DEEPINFRA_API_KEY; then
-            deepinfra_balance_provider_enabled="true"
-          fi
-          deepinfra_balance_base_url="$(get_raw_env_value DEEPINFRA_BALANCE_BASE_URL)"
-          if [[ -z "${deepinfra_balance_base_url}" && "${deepinfra_balance_provider_enabled}" == "true" ]]; then
-            deepinfra_balance_base_url="https://api.deepinfra.com"
-          fi
-
-          sed \
-            -e '/^GHCR_USERNAME=/d' \
-            -e '/^GHCR_TOKEN=/d' \
-            -e '/^IMAGE_TAG=/d' \
-            -e '/^APP_ENV_FILE=/d' \
-            -e '/^PROVIDER_BALANCE_BOT_ENABLED=/d' \
-            -e '/^APIMART_BASE_URL=/d' \
-            -e '/^POYO_PROVIDER_ENABLED=/d' \
-            -e '/^POYO_BASE_URL=/d' \
-            -e '/^RUNWAY_PROVIDER_ENABLED=/d' \
-            -e '/^RUNWAYML_BASE_URL=/d' \
-            -e '/^DEEPINFRA_BALANCE_PROVIDER_ENABLED=/d' \
-            -e '/^DEEPINFRA_BALANCE_BASE_URL=/d' \
-            -e '/^PROVIDER=/d' \
-            -e '/^PROVIDER_CHAIN=/d' \
-            -e '/^IMAGE_PROVIDER=/d' \
-            -e '/^VIDEO_PROVIDER=/d' \
-            -e '/^OPENAI_TEXT_MODEL=/d' \
-            -e '/^OPENAI_IMAGE_MODEL=/d' \
-            -e '/^OPENAI_VIDEO_MODEL=/d' \
-            -e '/^VK_VIDEO_DELIVERY_MODE=/d' \
-            -e '/^RUNTIME_PRICING_DB_ENABLED=/d' \
-            -e '/^RUNTIME_PRICING_STATIC_FALLBACK_ENABLED=/d' \
-            -e '/^RUNTIME_PRICING_REFRESH_INTERVAL=/d' \
-            "${raw_env}" > "${tmp_env}"
-          {
-            printf '\n'
-            printf 'APP_ENV_FILE=.env\n'
-            printf 'IMAGE_TAG=%s\n' "${DEPLOY_IMAGE_TAG}"
-            printf 'PROVIDER=%s\n' "${provider_tokens[0]}"
-            printf 'PROVIDER_CHAIN=%s\n' "${provider_chain}"
-            printf 'IMAGE_PROVIDER=\n'
-            printf 'VIDEO_PROVIDER=\n'
-            printf 'VK_VIDEO_DELIVERY_MODE=doc\n'
-            printf 'RUNTIME_PRICING_DB_ENABLED=false\n'
-            printf 'RUNTIME_PRICING_STATIC_FALLBACK_ENABLED=true\n'
-            printf 'RUNTIME_PRICING_REFRESH_INTERVAL=0\n'
-            printf 'PROVIDER_BALANCE_BOT_ENABLED=%s\n' "${provider_balance_bot_enabled}"
-            if [[ -n "${apimart_base_url}" ]]; then
-              printf 'APIMART_BASE_URL=%s\n' "${apimart_base_url}"
-            fi
-            printf 'POYO_PROVIDER_ENABLED=%s\n' "${poyo_provider_enabled}"
-            if [[ -n "${poyo_base_url}" ]]; then
-              printf 'POYO_BASE_URL=%s\n' "${poyo_base_url}"
-            fi
-            printf 'RUNWAY_PROVIDER_ENABLED=%s\n' "${runway_provider_enabled}"
-            if [[ -n "${runway_base_url}" ]]; then
-              printf 'RUNWAYML_BASE_URL=%s\n' "${runway_base_url}"
-            fi
-            printf 'DEEPINFRA_BALANCE_PROVIDER_ENABLED=%s\n' "${deepinfra_balance_provider_enabled}"
-            if [[ -n "${deepinfra_balance_base_url}" ]]; then
-              printf 'DEEPINFRA_BALANCE_BASE_URL=%s\n' "${deepinfra_balance_base_url}"
-            fi
-            printf 'GHCR_USERNAME=%s\n' "${GHCR_USERNAME}"
-            printf 'GHCR_TOKEN=%s\n' "${GHCR_TOKEN}"
-          } >> "${tmp_env}"
-
-          echo "DEV provider balance bot env: enabled=${provider_balance_bot_enabled} telegram_token=${telegram_bot_configured} admin_chat=${telegram_admin_configured} provider_key=${provider_balance_key_configured} poyo=${poyo_provider_enabled} runway=${runway_provider_enabled} deepinfra=${deepinfra_balance_provider_enabled}"
-
-          scp -i "${HOME}/.ssh/deploy_key" "${tmp_env}" "${DEV_DEPLOY_USER}@${DEV_DEPLOY_HOST}:${DEV_DEPLOY_PATH}/.env.next"
+          scp -i "${HOME}/.ssh/deploy_key" "${rendered_env}" "${DEV_DEPLOY_USER}@${DEV_DEPLOY_HOST}:${DEV_DEPLOY_PATH}/.env.next"
           ssh -i "${HOME}/.ssh/deploy_key" "${DEV_DEPLOY_USER}@${DEV_DEPLOY_HOST}" \
             "set -euo pipefail; cd '${DEV_DEPLOY_PATH}'; install -m 600 .env.next .env; rm -f .env.next"
-
       - name: Run DEV deploy
         id: dev_deploy
         shell: bash
