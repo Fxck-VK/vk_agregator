@@ -9,43 +9,18 @@ export function truncateTitle(text: string, max = TITLE_MAX): string {
   return trimmed.length > max ? `${trimmed.slice(0, max)}…` : trimmed;
 }
 
-/** Contextual row title for history lists (chat, image, video). */
+/** Contextual row title for image/video history lists. */
 export function jobDisplayTitle(job: Job): string {
   const prompt = job.prompt?.trim();
   if (prompt) return truncateTitle(prompt);
   return modalityByOperation(job.operation).label;
 }
 
-function conversationKey(job: Job): string {
-  const id = job.conversation_id?.trim();
-  if (id) return id;
-  return `job:${job.id}`;
-}
-
-/**
- * Profile history: one row per chat thread (first user message), plus each image/video job.
- */
+/** Profile history: image/video jobs only. Chat/text history lives in Chat. */
 export function dedupeHistoryJobs(jobs: Job[]): Job[] {
-  const mediaJobs: Job[] = [];
-  const chatFirstByConversation = new Map<string, Job>();
-
-  const chronological = [...jobs].sort((a, b) => a.created_at.localeCompare(b.created_at));
-  for (const job of chronological) {
-    if (job.operation === "text_generate") {
-      const key = conversationKey(job);
-      if (!chatFirstByConversation.has(key)) {
-        chatFirstByConversation.set(key, job);
-      }
-      continue;
-    }
-    if (job.operation === "image_generate" || job.operation === "video_generate") {
-      mediaJobs.push(job);
-    }
-  }
-
-  return [...mediaJobs, ...chatFirstByConversation.values()].sort((a, b) =>
-    b.created_at.localeCompare(a.created_at),
-  );
+  return jobs
+    .filter((job) => job.operation === "image_generate" || job.operation === "video_generate")
+    .sort((a, b) => b.created_at.localeCompare(a.created_at));
 }
 
 export function historyCountLabel(count: number): string {

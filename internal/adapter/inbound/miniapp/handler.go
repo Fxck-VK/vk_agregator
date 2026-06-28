@@ -178,8 +178,7 @@ func (h *Handler) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /miniapp/estimate", h.auth(h.rateLimitMiniApp("miniapp_estimate", h.estimateJob)))
 	mux.HandleFunc("POST /miniapp/chat/messages", h.auth(h.rateLimitMiniApp("miniapp_chat", h.createChatMessage)))
-	mux.HandleFunc("GET /miniapp/chat/conversations", h.auth(h.listChatConversations))
-	mux.HandleFunc("GET /miniapp/chat/conversations/{id}/messages", h.auth(h.listChatConversationMessages))
+	mux.HandleFunc("GET /miniapp/chat/messages", h.auth(h.listDefaultChatMessages))
 	mux.HandleFunc("POST /miniapp/jobs", h.auth(h.rateLimitMiniApp("miniapp_job", h.createJob)))
 	mux.HandleFunc("GET /miniapp/jobs", h.auth(h.listJobs))
 	mux.HandleFunc("GET /miniapp/jobs/{id}", h.auth(h.getJob))
@@ -481,7 +480,6 @@ func safeClientRoute(value string) string {
 	switch route {
 	case "/miniapp/estimate",
 		"/miniapp/chat/messages",
-		"/miniapp/chat/conversations",
 		"/miniapp/jobs",
 		"/miniapp/model-catalog",
 		"/miniapp/balance",
@@ -496,8 +494,7 @@ func safeClientRoute(value string) string {
 	case "/miniapp/jobs/:id",
 		"/miniapp/payments/:id",
 		"/miniapp/payments/:id/cancel",
-		"/miniapp/artifacts/:id",
-		"/miniapp/chat/conversations/:id/messages":
+		"/miniapp/artifacts/:id":
 		return route
 	default:
 		return "other"
@@ -1333,29 +1330,24 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (h *Handler) readChatMessageRequest(w http.ResponseWriter, r *http.Request) (ChatMessageRequest, string, bool) {
+func (h *Handler) readChatMessageRequest(w http.ResponseWriter, r *http.Request) (ChatMessageRequest, bool) {
 	body, err := io.ReadAll(io.LimitReader(r.Body, 64<<10))
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "cannot read body")
-		return ChatMessageRequest{}, "", false
+		return ChatMessageRequest{}, false
 	}
 	var req ChatMessageRequest
 	if err := json.Unmarshal(body, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid json")
-		return ChatMessageRequest{}, "", false
+		return ChatMessageRequest{}, false
 	}
 	req.Prompt = strings.TrimSpace(req.Prompt)
 	if req.Prompt == "" {
 		writeError(w, http.StatusBadRequest, "prompt is required")
-		return ChatMessageRequest{}, "", false
+		return ChatMessageRequest{}, false
 	}
-	conversationID, ok := normalizeConversationID(req.ConversationID)
-	if !ok {
-		writeError(w, http.StatusBadRequest, "invalid conversation id")
-		return ChatMessageRequest{}, "", false
-	}
-	req.ConversationID = conversationID
-	return req, conversationID, true
+	req.ConversationID = defaultConversationID
+	return req, true
 }
 
 func (h *Handler) createChatMessage(w http.ResponseWriter, r *http.Request) {
@@ -1365,7 +1357,7 @@ func (h *Handler) createChatMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req, conversationID, ok := h.readChatMessageRequest(w, r)
+	req, ok := h.readChatMessageRequest(w, r)
 	if !ok {
 		return
 	}
@@ -1398,7 +1390,7 @@ func (h *Handler) createChatMessage(w http.ResponseWriter, r *http.Request) {
 		Provider:           model.Provider,
 		ModelCode:          model.ModelCode,
 		ConversationSource: domain.ConversationSourceMiniApp,
-		ExternalThreadID:   conversationID,
+		ExternalThreadID:   defaultConversationID,
 	})
 	metrics.ObserveProductPromptLength("miniapp", string(domain.OperationTextGenerate), string(domain.ModalityText), req.Prompt)
 
@@ -1437,7 +1429,7 @@ func (h *Handler) createChatMessage(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (h *Handler) listChatConversations(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) listDefaultChatMessages(w http.ResponseWriter, r *http.Request) {
 	vkUserID, ok := vkUserIDFromCtx(r.Context())
 	if !ok {
 		writeError(w, http.StatusUnauthorized, "unauthorized")
@@ -1448,61 +1440,18 @@ func (h *Handler) listChatConversations(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	user, err := h.deps.Users.GetByVKUserID(r.Context(), vkUserID)
-	if err != nil {
-		if errors.Is(err, domain.ErrNotFound) {
-			writeJSON(w, http.StatusOK, listResponse[ChatConversationDTO]{
-				Items:      []ChatConversationDTO{},
-				Pagination: pagination{Limit: defaultLimit, Offset: 0, Count: 0},
-			})
-			return
-		}
-		writeError(w, http.StatusInternalServerError, "internal error")
-		return
-	}
-
-	limit, offset := parsePagination(r)
-	conversations, err := h.deps.Conversations.ListByUserSource(r.Context(), user.ID, domain.ConversationSourceMiniApp, limit+1, offset)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal error")
-		return
-	}
-	hasMore := len(conversations) > limit
-	if hasMore {
-		conversations = conversations[:limit]
-	}
-
-	items := make([]ChatConversationDTO, 0, len(conversations))
-	for _, conversation := range conversations {
-		items = append(items, h.newChatConversationDTO(r.Context(), conversation))
-	}
-	writeJSON(w, http.StatusOK, listResponse[ChatConversationDTO]{
-		Items:      items,
-		Pagination: pagination{Limit: limit, Offset: offset, Count: len(items), HasMore: hasMore},
-	})
-}
-
-func (h *Handler) listChatConversationMessages(w http.ResponseWriter, r *http.Request) {
-	vkUserID, ok := vkUserIDFromCtx(r.Context())
-	if !ok {
-		writeError(w, http.StatusUnauthorized, "unauthorized")
-		return
-	}
-	if h.deps.Conversations == nil {
-		writeError(w, http.StatusServiceUnavailable, "service unavailable")
-		return
-	}
-
-	threadID, ok := normalizeConversationID(r.PathValue("id"))
-	if !ok {
-		writeError(w, http.StatusBadRequest, "invalid conversation id")
-		return
+	limit, _ := parsePagination(r)
+	writeEmpty := func() {
+		writeJSON(w, http.StatusOK, listResponse[ChatConversationMessageDTO]{
+			Items:      []ChatConversationMessageDTO{},
+			Pagination: pagination{Limit: limit, Offset: 0, Count: 0, HasMore: false},
+		})
 	}
 
 	user, err := h.deps.Users.GetByVKUserID(r.Context(), vkUserID)
 	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
-			writeError(w, http.StatusNotFound, "not found")
+			writeEmpty()
 			return
 		}
 		writeError(w, http.StatusInternalServerError, "internal error")
@@ -1512,18 +1461,17 @@ func (h *Handler) listChatConversationMessages(w http.ResponseWriter, r *http.Re
 	conversation, err := h.deps.Conversations.GetActiveByReference(r.Context(), domain.ConversationRef{
 		UserID:           user.ID,
 		Source:           domain.ConversationSourceMiniApp,
-		ExternalThreadID: threadID,
+		ExternalThreadID: defaultConversationID,
 	})
 	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
-			writeError(w, http.StatusNotFound, "not found")
+			writeEmpty()
 			return
 		}
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
-	limit, _ := parsePagination(r)
 	afterSeq := parseAfterSeq(r)
 	messages, err := h.deps.Conversations.ListMessagesAfter(r.Context(), conversation.ID, afterSeq, limit+1)
 	if err != nil {
@@ -1579,12 +1527,22 @@ func (h *Handler) listJobs(w http.ResponseWriter, r *http.Request) {
 
 	items := make([]JobDTO, 0, len(jobs))
 	for _, j := range jobs {
+		if !visibleInMiniAppProfileHistory(j) {
+			continue
+		}
 		items = append(items, newJobDTO(j))
 	}
 	writeJSON(w, http.StatusOK, listResponse[JobDTO]{
 		Items:      items,
 		Pagination: pagination{Limit: limit, Offset: offset, Count: len(items), HasMore: hasMore},
 	})
+}
+
+func visibleInMiniAppProfileHistory(job *domain.Job) bool {
+	if job == nil {
+		return false
+	}
+	return job.OperationType != domain.OperationTextGenerate
 }
 
 func (h *Handler) getJob(w http.ResponseWriter, r *http.Request) {
@@ -2113,29 +2071,6 @@ func uuidInSlice(ids []uuid.UUID, target uuid.UUID) bool {
 	return false
 }
 
-func (h *Handler) newChatConversationDTO(ctx context.Context, conversation *domain.Conversation) ChatConversationDTO {
-	dto := ChatConversationDTO{
-		ID:        conversation.ExternalThreadID,
-		Title:     chatConversationTitle(conversation),
-		CreatedAt: conversation.CreatedAt,
-		UpdatedAt: conversation.UpdatedAt,
-	}
-	if dto.ID == "" {
-		dto.ID = defaultConversationID
-	}
-	if h.deps.Conversations == nil {
-		return dto
-	}
-	recent, err := h.deps.Conversations.ListRecentMessagesBefore(ctx, conversation.ID, 1<<62, 0, 1)
-	if err != nil || len(recent) == 0 {
-		return dto
-	}
-	last := recent[len(recent)-1]
-	dto.LastMessagePreview = truncateChatText(last.Text, maxChatPreviewRunes)
-	dto.LastMessageRole = chatMessageRole(last.Role)
-	return dto
-}
-
 func newChatConversationMessageDTO(message *domain.ConversationMessage) ChatConversationMessageDTO {
 	return ChatConversationMessageDTO{
 		ID:        message.ID,
@@ -2145,14 +2080,6 @@ func newChatConversationMessageDTO(message *domain.ConversationMessage) ChatConv
 		Text:      truncateChatText(message.Text, maxChatMessageRunes),
 		CreatedAt: message.CreatedAt,
 	}
-}
-
-func chatConversationTitle(conversation *domain.Conversation) string {
-	title := strings.TrimSpace(conversation.Title)
-	if title == "" {
-		return "НейроХаб диалог"
-	}
-	return truncateChatText(title, maxChatTitleRunes)
 }
 
 func chatMessageRole(role domain.ConversationMessageRole) string {
@@ -2181,8 +2108,6 @@ func truncateChatText(text string, maxRunes int) string {
 const (
 	defaultLimit        = 20
 	maxLimit            = 100
-	maxChatTitleRunes   = 80
-	maxChatPreviewRunes = 160
 	maxChatMessageRunes = 100_000
 )
 

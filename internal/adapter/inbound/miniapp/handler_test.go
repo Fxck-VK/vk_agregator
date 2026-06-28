@@ -728,7 +728,7 @@ func TestHandler_BillableEndpointsRequireBoundedIdempotencyKey(t *testing.T) {
 	}
 }
 
-func TestHandler_ListJobs_ExposesPromptForChatAndImageJobs(t *testing.T) {
+func TestHandler_ListJobs_HidesChatJobsAndExposesImageJobs(t *testing.T) {
 	fixture := newTestFixture("", nil)
 	routes := fixture.handler.Routes()
 
@@ -793,36 +793,27 @@ func TestHandler_ListJobs_ExposesPromptForChatAndImageJobs(t *testing.T) {
 
 	var listResp struct {
 		Items []struct {
-			Operation      string `json:"operation"`
-			Prompt         string `json:"prompt"`
-			ConversationID string `json:"conversation_id"`
+			Operation string `json:"operation"`
+			Prompt    string `json:"prompt"`
 		} `json:"items"`
 	}
 	if err := json.Unmarshal(listW.Body.Bytes(), &listResp); err != nil {
 		t.Fatalf("invalid list response: %v", err)
 	}
-	var chatPrompt string
-	var chatConversationID string
 	var imagePrompt string
 	for _, item := range listResp.Items {
 		switch item.Operation {
 		case "text_generate":
-			if chatPrompt == "" || item.Prompt == "КОЗЯВКИ" {
-				chatPrompt = item.Prompt
-				chatConversationID = item.ConversationID
-			}
+			t.Fatalf("chat job leaked into profile history: %+v", item)
 		case "image_generate":
 			imagePrompt = item.Prompt
 		}
 	}
-	if chatPrompt != "КОЗЯВКИ" {
-		t.Fatalf("chat prompt = %q, want КОЗЯВКИ", chatPrompt)
-	}
-	if chatConversationID != "thread-alpha" {
-		t.Fatalf("conversation_id = %q, want thread-alpha", chatConversationID)
-	}
 	if imagePrompt != "Кот в киберпанке" {
 		t.Fatalf("image prompt = %q, want Кот в киберпанке", imagePrompt)
+	}
+	if strings.Contains(listW.Body.String(), "КОЗЯВКИ") || strings.Contains(listW.Body.String(), "второе сообщение") {
+		t.Fatalf("chat prompt leaked into profile history: %s", listW.Body.String())
 	}
 }
 
@@ -848,16 +839,20 @@ func TestHandler_ChatMessage_CreatesTextJobWithPublicAlias(t *testing.T) {
 		t.Fatalf("chat response leaked provider/model detail: %s", w.Body.String())
 	}
 	var resp struct {
-		ID        string `json:"id"`
-		Operation string `json:"operation"`
-		ModelName string `json:"model_name"`
-		ModelID   string `json:"model_id"`
+		ID             string `json:"id"`
+		Operation      string `json:"operation"`
+		ModelName      string `json:"model_name"`
+		ModelID        string `json:"model_id"`
+		ConversationID string `json:"conversation_id"`
 	}
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("invalid response json: %v", err)
 	}
 	if resp.Operation != "text_generate" || resp.ModelName != "NeiroHub Chat" || resp.ModelID != "" {
 		t.Fatalf("unexpected chat response: %+v", resp)
+	}
+	if resp.ConversationID != "default" {
+		t.Fatalf("response conversation_id = %q, want default", resp.ConversationID)
 	}
 
 	jobID, err := uuid.Parse(resp.ID)
@@ -888,15 +883,18 @@ func TestHandler_ChatMessage_CreatesTextJobWithPublicAlias(t *testing.T) {
 	if params.Prompt != "hello chat" || params.ModelID != "chatgpt" || params.ModelName != "NeiroHub Chat" {
 		t.Fatalf("unexpected job params: %+v", params)
 	}
-	if params.ConversationID != "" || params.ConversationSource != "miniapp" || params.ExternalThreadID != "chat-1" {
+	if params.ConversationID != "" || params.ConversationSource != "miniapp" || params.ExternalThreadID != "default" {
 		t.Fatalf("unexpected conversation params: %+v", params)
+	}
+	if strings.Contains(string(job.Params), "chat-1") {
+		t.Fatalf("client conversation id leaked into job params: %s", string(job.Params))
 	}
 	if strings.Contains(strings.ToLower(string(job.Params)), "deepseek") || strings.Contains(strings.ToLower(string(job.Params)), "deepinfra") {
 		t.Fatalf("job params leaked provider/model detail: %s", string(job.Params))
 	}
 }
 
-func TestHandler_ChatMessage_UsesDurableRefsWithoutPromptPrefix(t *testing.T) {
+func TestHandler_ChatMessage_UsesDefaultDurableRefWithoutPromptPrefix(t *testing.T) {
 	fixture := newTestFixture("", nil)
 	routes := fixture.handler.Routes()
 	ctx := context.Background()
@@ -966,13 +964,17 @@ func TestHandler_ChatMessage_UsesDurableRefsWithoutPromptPrefix(t *testing.T) {
 	if firstParams.ConversationSource != "miniapp" || secondParams.ConversationSource != "miniapp" || thirdParams.ConversationSource != "miniapp" {
 		t.Fatalf("missing miniapp conversation source: first=%+v second=%+v third=%+v", firstParams, secondParams, thirdParams)
 	}
-	if firstParams.ExternalThreadID != "thread-a" || secondParams.ExternalThreadID != "thread-a" || thirdParams.ExternalThreadID != "thread-b" {
-		t.Fatalf("thread refs not isolated: first=%+v second=%+v third=%+v", firstParams, secondParams, thirdParams)
+	if firstParams.ExternalThreadID != "default" || secondParams.ExternalThreadID != "default" || thirdParams.ExternalThreadID != "default" {
+		t.Fatalf("chat jobs must use default thread ref: first=%+v second=%+v third=%+v", firstParams, secondParams, thirdParams)
+	}
+	if strings.Contains(string(firstJob.Params), "thread-a") || strings.Contains(string(secondJob.Params), "thread-a") || strings.Contains(string(thirdJob.Params), "thread-b") {
+		t.Fatalf("client thread refs leaked into job params: first=%s second=%s third=%s", string(firstJob.Params), string(secondJob.Params), string(thirdJob.Params))
 	}
 }
 
-func TestHandler_ChatMessage_InvalidConversationID(t *testing.T) {
-	routes := newTestHandler("").Routes()
+func TestHandler_ChatMessage_IgnoresInvalidClientConversationID(t *testing.T) {
+	fixture := newTestFixture("", nil)
+	routes := fixture.handler.Routes()
 
 	body, _ := json.Marshal(map[string]string{
 		"prompt":          "hello chat",
@@ -981,15 +983,30 @@ func TestHandler_ChatMessage_InvalidConversationID(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/miniapp/chat/messages", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Launch-Params", devLaunchParams(777))
+	req.Header.Set("X-Idempotency-Key", "chat-invalid-client-thread")
 
 	w := httptest.NewRecorder()
 	routes.ServeHTTP(w, req)
 
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
 	}
-	if !strings.Contains(w.Body.String(), "invalid conversation id") {
-		t.Fatalf("expected safe invalid conversation message, got %s", w.Body.String())
+	var resp struct {
+		ID             uuid.UUID `json:"id"`
+		ConversationID string    `json:"conversation_id"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("invalid response json: %v", err)
+	}
+	if resp.ConversationID != "default" {
+		t.Fatalf("conversation_id = %q, want default", resp.ConversationID)
+	}
+	job, err := fixture.jobRepo.GetByID(context.Background(), resp.ID)
+	if err != nil {
+		t.Fatalf("get job: %v", err)
+	}
+	if strings.Contains(string(job.Params), "bad/id") {
+		t.Fatalf("invalid client conversation id leaked into params: %s", string(job.Params))
 	}
 }
 
@@ -1037,19 +1054,235 @@ func TestHandler_ChatMessage_EmptyConversationIDUsesDefaultThread(t *testing.T) 
 	}
 }
 
-func TestHandler_ChatConversations_AuthRequired(t *testing.T) {
+func TestHandler_ChatMessage_IgnoresClientConversationIDAndUsesDefaultThread(t *testing.T) {
+	fixture := newTestFixture("", nil)
+	routes := fixture.handler.Routes()
+
+	body, _ := json.Marshal(map[string]string{
+		"prompt":          "hello forced default",
+		"conversation_id": "custom-a",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/miniapp/chat/messages", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Launch-Params", devLaunchParams(777))
+	req.Header.Set("X-Idempotency-Key", "chat-force-default-thread")
+
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		ID             uuid.UUID `json:"id"`
+		ConversationID string    `json:"conversation_id"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("invalid response json: %v", err)
+	}
+	if resp.ConversationID != "default" {
+		t.Fatalf("response conversation_id = %q, want default", resp.ConversationID)
+	}
+
+	job, err := fixture.jobRepo.GetByID(context.Background(), resp.ID)
+	if err != nil {
+		t.Fatalf("get job: %v", err)
+	}
+	var params struct {
+		Prompt             string `json:"prompt"`
+		ConversationSource string `json:"conversation_source"`
+		ExternalThreadID   string `json:"external_thread_id"`
+	}
+	if err := json.Unmarshal(job.Params, &params); err != nil {
+		t.Fatalf("invalid job params: %v", err)
+	}
+	if params.Prompt != "hello forced default" || params.ConversationSource != "miniapp" || params.ExternalThreadID != "default" {
+		t.Fatalf("unexpected forced default params: %+v", params)
+	}
+	if strings.Contains(string(job.Params), "custom-a") {
+		t.Fatalf("client thread id leaked into job params: %s", string(job.Params))
+	}
+}
+
+func TestHandler_ChatConversations_ListRouteRemoved(t *testing.T) {
+	routes := newTestHandler("").Routes()
+
+	req := httptest.NewRequest(http.MethodGet, "/miniapp/chat/conversations", nil)
+	req.Header.Set("X-Launch-Params", devLaunchParams(777))
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected removed route to return 404, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestHandler_ChatMessages_DefaultEndpointOnlyReturnsDefaultConversation(t *testing.T) {
+	fixture := newTestFixture("", nil)
+	routes := fixture.handler.Routes()
+	ctx := context.Background()
+	user := &domain.User{VKUserID: 777, Role: domain.RoleUser, Status: domain.StatusActive, Locale: "ru", Timezone: "UTC"}
+	if err := fixture.userRepo.Create(ctx, user); err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	defaultConversation := &domain.Conversation{
+		UserID:           user.ID,
+		Source:           domain.ConversationSourceMiniApp,
+		ExternalThreadID: "default",
+		Title:            "Default dialog",
+	}
+	if err := fixture.conversationRepo.CreateConversation(ctx, defaultConversation); err != nil {
+		t.Fatalf("create default conversation: %v", err)
+	}
+	customConversation := &domain.Conversation{
+		UserID:           user.ID,
+		Source:           domain.ConversationSourceMiniApp,
+		ExternalThreadID: "custom-a",
+		Title:            "Old custom dialog",
+	}
+	if err := fixture.conversationRepo.CreateConversation(ctx, customConversation); err != nil {
+		t.Fatalf("create custom conversation: %v", err)
+	}
+	if _, err := fixture.conversationRepo.UpsertMessage(ctx, &domain.ConversationMessage{
+		ConversationID: defaultConversation.ID,
+		JobID:          uuid.New(),
+		Role:           domain.ConversationRoleUser,
+		Text:           "default question",
+		TokenCount:     2,
+	}); err != nil {
+		t.Fatalf("upsert default user message: %v", err)
+	}
+	if _, err := fixture.conversationRepo.UpsertMessage(ctx, &domain.ConversationMessage{
+		ConversationID: defaultConversation.ID,
+		JobID:          uuid.New(),
+		Role:           domain.ConversationRoleAssistant,
+		Text:           "default answer",
+		TokenCount:     2,
+	}); err != nil {
+		t.Fatalf("upsert default assistant message: %v", err)
+	}
+	if _, err := fixture.conversationRepo.UpsertMessage(ctx, &domain.ConversationMessage{
+		ConversationID: customConversation.ID,
+		JobID:          uuid.New(),
+		Role:           domain.ConversationRoleUser,
+		Text:           "custom question must stay hidden",
+		TokenCount:     2,
+	}); err != nil {
+		t.Fatalf("upsert custom message: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/miniapp/chat/messages", nil)
+	req.Header.Set("X-Launch-Params", devLaunchParams(777))
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("default chat messages: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		Items []struct {
+			Role string `json:"role"`
+			Text string `json:"text"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("invalid message response: %v", err)
+	}
+	if len(resp.Items) != 2 {
+		t.Fatalf("messages count = %d, want 2: %+v", len(resp.Items), resp.Items)
+	}
+	if resp.Items[0].Role != "user" || resp.Items[0].Text != "default question" ||
+		resp.Items[1].Role != "bot" || resp.Items[1].Text != "default answer" {
+		t.Fatalf("unexpected default messages: %+v", resp.Items)
+	}
+	if strings.Contains(w.Body.String(), "custom question") || strings.Contains(w.Body.String(), "custom-a") {
+		t.Fatalf("custom chat leaked through default history endpoint: %s", w.Body.String())
+	}
+}
+
+func TestHandler_ListJobs_HidesMiniAppTextJobsFromProfileHistory(t *testing.T) {
+	fixture := newTestFixture("", nil)
+	routes := fixture.handler.Routes()
+	ctx := context.Background()
+	user := &domain.User{VKUserID: 777, Role: domain.RoleUser, Status: domain.StatusActive, Locale: "ru", Timezone: "UTC"}
+	if err := fixture.userRepo.Create(ctx, user); err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	textParams, _ := json.Marshal(map[string]string{
+		"prompt":              "hidden chat prompt",
+		"conversation_source": "miniapp",
+		"external_thread_id":  "default",
+	})
+	imageParams, _ := json.Marshal(map[string]string{
+		"prompt":     "visible image prompt",
+		"model_id":   modelcatalog.MiniAppImageNanoBananaPro,
+		"model_name": "Nano Banana Pro",
+	})
+	if err := fixture.jobRepo.Create(ctx, &domain.Job{
+		UserID:         user.ID,
+		Source:         "miniapp",
+		VKPeerID:       user.VKUserID,
+		OperationType:  domain.OperationTextGenerate,
+		Modality:       domain.ModalityText,
+		Status:         domain.JobStatusSucceeded,
+		IdempotencyKey: "profile-hidden-text",
+		Params:         textParams,
+	}); err != nil {
+		t.Fatalf("create text job: %v", err)
+	}
+	if err := fixture.jobRepo.Create(ctx, &domain.Job{
+		UserID:         user.ID,
+		Source:         "miniapp",
+		VKPeerID:       user.VKUserID,
+		OperationType:  domain.OperationImageGenerate,
+		Modality:       domain.ModalityImage,
+		Status:         domain.JobStatusSucceeded,
+		IdempotencyKey: "profile-visible-image",
+		Params:         imageParams,
+		CostEstimate:   10,
+		CostCaptured:   10,
+	}); err != nil {
+		t.Fatalf("create image job: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/miniapp/jobs", nil)
+	req.Header.Set("X-Launch-Params", devLaunchParams(777))
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("list jobs: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		Items []struct {
+			Operation string `json:"operation"`
+			Prompt    string `json:"prompt"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("invalid jobs response: %v", err)
+	}
+	if len(resp.Items) != 1 {
+		t.Fatalf("jobs count = %d, want 1 image job: %+v", len(resp.Items), resp.Items)
+	}
+	if resp.Items[0].Operation != "image_generate" || resp.Items[0].Prompt != "visible image prompt" {
+		t.Fatalf("unexpected visible job: %+v", resp.Items[0])
+	}
+	if strings.Contains(w.Body.String(), "hidden chat prompt") || strings.Contains(w.Body.String(), "text_generate") {
+		t.Fatalf("text chat job leaked into profile history: %s", w.Body.String())
+	}
+}
+
+func TestHandler_ChatConversations_RemovedRouteDoesNotAuth(t *testing.T) {
 	routes := newTestHandler("real-secret").Routes()
 
 	req := httptest.NewRequest(http.MethodGet, "/miniapp/chat/conversations", nil)
 	w := httptest.NewRecorder()
 	routes.ServeHTTP(w, req)
 
-	if w.Code != http.StatusUnauthorized {
-		t.Fatalf("expected 401, got %d: %s", w.Code, w.Body.String())
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d: %s", w.Code, w.Body.String())
 	}
 }
 
-func TestHandler_ChatConversations_ListAndMessages(t *testing.T) {
+func TestHandler_ChatMessages_DefaultEndpointListsMessages(t *testing.T) {
 	fixture := newTestFixture("", nil)
 	routes := fixture.handler.Routes()
 	ctx := context.Background()
@@ -1060,8 +1293,8 @@ func TestHandler_ChatConversations_ListAndMessages(t *testing.T) {
 	conversation := &domain.Conversation{
 		UserID:           user.ID,
 		Source:           domain.ConversationSourceMiniApp,
-		ExternalThreadID: "thread-a",
-		Title:            "Support thread",
+		ExternalThreadID: "default",
+		Title:            "Default thread",
 	}
 	if err := fixture.conversationRepo.CreateConversation(ctx, conversation); err != nil {
 		t.Fatalf("create conversation: %v", err)
@@ -1086,39 +1319,7 @@ func TestHandler_ChatConversations_ListAndMessages(t *testing.T) {
 		t.Fatalf("upsert assistant message: %v", err)
 	}
 
-	listReq := httptest.NewRequest(http.MethodGet, "/miniapp/chat/conversations?limit=999", nil)
-	listReq.Header.Set("X-Launch-Params", devLaunchParams(777))
-	listW := httptest.NewRecorder()
-	routes.ServeHTTP(listW, listReq)
-	if listW.Code != http.StatusOK {
-		t.Fatalf("list conversations: expected 200, got %d: %s", listW.Code, listW.Body.String())
-	}
-	var listResp struct {
-		Items []struct {
-			ID                 string `json:"id"`
-			Title              string `json:"title"`
-			LastMessagePreview string `json:"last_message_preview"`
-			LastMessageRole    string `json:"last_message_role"`
-		} `json:"items"`
-		Pagination struct {
-			Limit int `json:"limit"`
-			Count int `json:"count"`
-		} `json:"pagination"`
-	}
-	if err := json.Unmarshal(listW.Body.Bytes(), &listResp); err != nil {
-		t.Fatalf("invalid list response: %v", err)
-	}
-	if listResp.Pagination.Limit != 100 || listResp.Pagination.Count != 1 {
-		t.Fatalf("unexpected pagination: %+v", listResp.Pagination)
-	}
-	if len(listResp.Items) != 1 || listResp.Items[0].ID != "thread-a" || listResp.Items[0].Title != "Support thread" {
-		t.Fatalf("unexpected conversations: %+v", listResp.Items)
-	}
-	if listResp.Items[0].LastMessagePreview != "history answer" || listResp.Items[0].LastMessageRole != "bot" {
-		t.Fatalf("unexpected preview: %+v", listResp.Items[0])
-	}
-
-	msgReq := httptest.NewRequest(http.MethodGet, "/miniapp/chat/conversations/thread-a/messages?after_seq="+strconv.FormatInt(userMessage.Seq-1, 10), nil)
+	msgReq := httptest.NewRequest(http.MethodGet, "/miniapp/chat/messages?after_seq="+strconv.FormatInt(userMessage.Seq-1, 10), nil)
 	msgReq.Header.Set("X-Launch-Params", devLaunchParams(777))
 	msgW := httptest.NewRecorder()
 	routes.ServeHTTP(msgW, msgReq)
@@ -1140,7 +1341,7 @@ func TestHandler_ChatConversations_ListAndMessages(t *testing.T) {
 	}
 }
 
-func TestHandler_ChatConversations_RejectedOutputNotVisible(t *testing.T) {
+func TestHandler_ChatMessages_RejectedOutputNotVisible(t *testing.T) {
 	fixture := newTestFixture("", nil)
 	routes := fixture.handler.Routes()
 	ctx := context.Background()
@@ -1151,8 +1352,8 @@ func TestHandler_ChatConversations_RejectedOutputNotVisible(t *testing.T) {
 	conversation := &domain.Conversation{
 		UserID:           user.ID,
 		Source:           domain.ConversationSourceMiniApp,
-		ExternalThreadID: "blocked-thread",
-		Title:            "Blocked thread",
+		ExternalThreadID: "default",
+		Title:            "Default thread",
 	}
 	if err := fixture.conversationRepo.CreateConversation(ctx, conversation); err != nil {
 		t.Fatalf("create conversation: %v", err)
@@ -1189,34 +1390,7 @@ func TestHandler_ChatConversations_RejectedOutputNotVisible(t *testing.T) {
 		t.Fatalf("create moderation result: %v", err)
 	}
 
-	listReq := httptest.NewRequest(http.MethodGet, "/miniapp/chat/conversations", nil)
-	listReq.Header.Set("X-Launch-Params", devLaunchParams(778))
-	listW := httptest.NewRecorder()
-	routes.ServeHTTP(listW, listReq)
-	if listW.Code != http.StatusOK {
-		t.Fatalf("list conversations: expected 200, got %d: %s", listW.Code, listW.Body.String())
-	}
-	if strings.Contains(listW.Body.String(), "blocked generated answer") {
-		t.Fatalf("blocked output leaked in conversation preview: %s", listW.Body.String())
-	}
-	var listResp struct {
-		Items []struct {
-			ID                 string `json:"id"`
-			LastMessagePreview string `json:"last_message_preview"`
-			LastMessageRole    string `json:"last_message_role"`
-		} `json:"items"`
-	}
-	if err := json.Unmarshal(listW.Body.Bytes(), &listResp); err != nil {
-		t.Fatalf("invalid list response: %v", err)
-	}
-	if len(listResp.Items) != 1 || listResp.Items[0].ID != "blocked-thread" {
-		t.Fatalf("unexpected conversations: %+v", listResp.Items)
-	}
-	if listResp.Items[0].LastMessagePreview != "safe user question" || listResp.Items[0].LastMessageRole != "user" {
-		t.Fatalf("blocked output should not become preview: %+v", listResp.Items[0])
-	}
-
-	msgReq := httptest.NewRequest(http.MethodGet, "/miniapp/chat/conversations/blocked-thread/messages", nil)
+	msgReq := httptest.NewRequest(http.MethodGet, "/miniapp/chat/messages", nil)
 	msgReq.Header.Set("X-Launch-Params", devLaunchParams(778))
 	msgW := httptest.NewRecorder()
 	routes.ServeHTTP(msgW, msgReq)
@@ -1240,7 +1414,7 @@ func TestHandler_ChatConversations_RejectedOutputNotVisible(t *testing.T) {
 	}
 }
 
-func TestHandler_ChatConversationMessages_OwnerOnlyAndInvalidID(t *testing.T) {
+func TestHandler_ChatMessages_DefaultEndpointDoesNotLeakOtherUserAndOldIDRouteRemoved(t *testing.T) {
 	fixture := newTestFixture("", nil)
 	routes := fixture.handler.Routes()
 	ctx := context.Background()
@@ -1255,25 +1429,45 @@ func TestHandler_ChatConversationMessages_OwnerOnlyAndInvalidID(t *testing.T) {
 	if err := fixture.conversationRepo.CreateConversation(ctx, &domain.Conversation{
 		UserID:           owner.ID,
 		Source:           domain.ConversationSourceMiniApp,
-		ExternalThreadID: "owner-thread",
+		ExternalThreadID: "default",
 	}); err != nil {
 		t.Fatalf("create conversation: %v", err)
 	}
+	ownerConversation, err := fixture.conversationRepo.GetActiveByReference(ctx, domain.ConversationRef{
+		UserID:           owner.ID,
+		Source:           domain.ConversationSourceMiniApp,
+		ExternalThreadID: "default",
+	})
+	if err != nil {
+		t.Fatalf("get owner conversation: %v", err)
+	}
+	if _, err := fixture.conversationRepo.UpsertMessage(ctx, &domain.ConversationMessage{
+		ConversationID: ownerConversation.ID,
+		JobID:          uuid.New(),
+		Role:           domain.ConversationRoleUser,
+		Text:           "owner private message",
+		TokenCount:     3,
+	}); err != nil {
+		t.Fatalf("create owner message: %v", err)
+	}
 
-	otherReq := httptest.NewRequest(http.MethodGet, "/miniapp/chat/conversations/owner-thread/messages", nil)
+	otherReq := httptest.NewRequest(http.MethodGet, "/miniapp/chat/messages", nil)
 	otherReq.Header.Set("X-Launch-Params", devLaunchParams(200))
 	otherW := httptest.NewRecorder()
 	routes.ServeHTTP(otherW, otherReq)
-	if otherW.Code != http.StatusNotFound {
-		t.Fatalf("owner-only expected 404, got %d: %s", otherW.Code, otherW.Body.String())
+	if otherW.Code != http.StatusOK {
+		t.Fatalf("other user expected empty 200, got %d: %s", otherW.Code, otherW.Body.String())
+	}
+	if strings.Contains(otherW.Body.String(), "owner private message") {
+		t.Fatalf("owner message leaked to other user: %s", otherW.Body.String())
 	}
 
 	invalidReq := httptest.NewRequest(http.MethodGet, "/miniapp/chat/conversations/bad%2Fid/messages", nil)
 	invalidReq.Header.Set("X-Launch-Params", devLaunchParams(100))
 	invalidW := httptest.NewRecorder()
 	routes.ServeHTTP(invalidW, invalidReq)
-	if invalidW.Code != http.StatusBadRequest {
-		t.Fatalf("invalid id expected 400, got %d: %s", invalidW.Code, invalidW.Body.String())
+	if invalidW.Code != http.StatusNotFound {
+		t.Fatalf("removed id route expected 404, got %d: %s", invalidW.Code, invalidW.Body.String())
 	}
 }
 
@@ -4284,7 +4478,7 @@ func TestHandler_CreateImageJobDoesNotCreateChatConversationMessages(t *testing.
 	conversation := &domain.Conversation{
 		UserID:           user.ID,
 		Source:           domain.ConversationSourceMiniApp,
-		ExternalThreadID: "thread-a",
+		ExternalThreadID: "default",
 		Title:            "Chat thread",
 	}
 	if err := fixture.conversationRepo.CreateConversation(ctx, conversation); err != nil {
@@ -4301,7 +4495,7 @@ func TestHandler_CreateImageJobDoesNotCreateChatConversationMessages(t *testing.
 		t.Fatalf("create message: %v", err)
 	}
 
-	msgReq := httptest.NewRequest(http.MethodGet, "/miniapp/chat/conversations/thread-a/messages", nil)
+	msgReq := httptest.NewRequest(http.MethodGet, "/miniapp/chat/messages", nil)
 	msgReq.Header.Set("X-Launch-Params", devLaunchParams(777))
 	msgW := httptest.NewRecorder()
 	routes.ServeHTTP(msgW, msgReq)
@@ -4394,7 +4588,8 @@ func TestHandler_CreateJob_RejectsUnsupportedModelID(t *testing.T) {
 
 func TestHandler_CreateJob_RateLimitByVerifiedUserID(t *testing.T) {
 	limiter := &countingLimiter{burst: 1}
-	routes := newTestHandlerWithLimiter("", limiter).Routes()
+	fixture := newTestFixture("", limiter)
+	routes := fixture.handler.Routes()
 
 	body, _ := json.Marshal(map[string]string{
 		"operation": "text_generate",
@@ -4430,21 +4625,17 @@ func TestHandler_CreateJob_RateLimitByVerifiedUserID(t *testing.T) {
 		t.Fatalf("unexpected 429 body: %s", w2.Body.String())
 	}
 
-	listReq := httptest.NewRequest(http.MethodGet, "/miniapp/jobs", nil)
-	listReq.Header.Set("X-Launch-Params", devLaunchParams(777))
-	listW := httptest.NewRecorder()
-	routes.ServeHTTP(listW, listReq)
-	if listW.Code != http.StatusOK {
-		t.Fatalf("list after rate limit: expected 200, got %d: %s", listW.Code, listW.Body.String())
+	ctx := context.Background()
+	user, err := fixture.userRepo.GetByVKUserID(ctx, 777)
+	if err != nil {
+		t.Fatalf("get user: %v", err)
 	}
-	var listResp struct {
-		Items []any `json:"items"`
+	jobs, err := fixture.jobRepo.ListByUser(ctx, user.ID, 10, 0)
+	if err != nil {
+		t.Fatalf("list jobs: %v", err)
 	}
-	if err := json.Unmarshal(listW.Body.Bytes(), &listResp); err != nil {
-		t.Fatalf("invalid list response json: %v", err)
-	}
-	if len(listResp.Items) != 1 {
-		t.Fatalf("rate-limited request must not create a new job, got %d jobs", len(listResp.Items))
+	if len(jobs) != 1 {
+		t.Fatalf("rate-limited request must not create a new job, got %d stored jobs", len(jobs))
 	}
 
 	w3 := httptest.NewRecorder()
