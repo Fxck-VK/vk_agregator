@@ -30,15 +30,26 @@ func TestMiniAppSingleDefaultChatMigrationFilesDeclareIrreversibleMerge(t *testi
 		"BEGIN;",
 		"external_thread_id = 'default'",
 		"UPDATE conversation_messages",
-		"DELETE FROM conversation_summaries",
+		"UPDATE conversation_summaries",
+		"redacted_at",
 		"jsonb_set",
 		"- 'conversation_id'",
-		"DELETE FROM conversations",
+		"status = 'archived'",
 		"COMMIT;",
 	}
 	for _, required := range requiredUp {
 		if !strings.Contains(up, required) {
 			t.Fatalf("up migration missing %q", required)
+		}
+	}
+	forbiddenUp := []string{
+		"DELETE FROM",
+		"DROP TABLE",
+		"TRUNCATE ",
+	}
+	for _, forbidden := range forbiddenUp {
+		if strings.Contains(strings.ToUpper(up), forbidden) {
+			t.Fatalf("up migration must stay non-destructive for deploy safety, found %q", forbidden)
 		}
 	}
 
@@ -90,6 +101,7 @@ func TestMiniAppSingleDefaultChatMigrationMergesCustomThreads(t *testing.T) {
 		"000006_conversation_context.up.sql",
 		"000008_conversation_sources.up.sql",
 		"000020_jobs_source.up.sql",
+		"000021_retention_schema.up.sql",
 	} {
 		runMigrationFile(t, ctx, conn, filepath.Join(root, "migrations", name))
 	}
@@ -122,8 +134,8 @@ func TestMiniAppSingleDefaultChatMigrationMergesCustomThreads(t *testing.T) {
 	runMigrationFile(t, ctx, conn, filepath.Join(root, "migrations", "000030_miniapp_single_default_chat.up.sql"))
 
 	assertMiniAppConversationCount(t, ctx, conn, userOneID, "miniapp", "default", 1)
-	assertMiniAppConversationCount(t, ctx, conn, userOneID, "miniapp", "custom-one", 0)
-	assertMiniAppConversationCount(t, ctx, conn, userTwoID, "miniapp", "custom-two", 0)
+	assertMiniAppConversationStatus(t, ctx, conn, userOneID, "miniapp", "custom-one", "archived")
+	assertMiniAppConversationStatus(t, ctx, conn, userTwoID, "miniapp", "custom-two", "archived")
 	assertMiniAppConversationCount(t, ctx, conn, userOneID, "vk_bot", "", 1)
 
 	userTwoDefaultID := getMiniAppMigrationConversationID(t, ctx, conn, userTwoID, "miniapp", "default")
@@ -131,7 +143,7 @@ func TestMiniAppSingleDefaultChatMigrationMergesCustomThreads(t *testing.T) {
 	assertMiniAppMessageTexts(t, ctx, conn, userTwoDefaultID, []string{"custom two message"})
 	assertMiniAppMessageTexts(t, ctx, conn, vkBotID, []string{"vk bot message"})
 	assertMiniAppSummaryText(t, ctx, conn, defaultOneID, "default summary")
-	assertMiniAppSummaryCount(t, ctx, conn, customOneID, 0)
+	assertMiniAppSummaryRedacted(t, ctx, conn, customOneID)
 
 	assertMiniAppJobParams(t, ctx, conn, customJobID, "default", true)
 	assertMiniAppJobParams(t, ctx, conn, customTwoJobID, "default", true)
@@ -221,6 +233,21 @@ WHERE user_id = $1 AND source = $2 AND external_thread_id = $3`, userID, source,
 	}
 }
 
+func assertMiniAppConversationStatus(t *testing.T, ctx context.Context, execer interface {
+	QueryRow(context.Context, string, ...any) pgx.Row
+}, userID uuid.UUID, source, externalThreadID, want string) {
+	t.Helper()
+	var got string
+	if err := execer.QueryRow(ctx, `
+SELECT status FROM conversations
+WHERE user_id = $1 AND source = $2 AND external_thread_id = $3`, userID, source, externalThreadID).Scan(&got); err != nil {
+		t.Fatalf("conversation status: %v", err)
+	}
+	if got != want {
+		t.Fatalf("conversation status user=%s source=%s thread=%s = %q, want %q", userID, source, externalThreadID, got, want)
+	}
+}
+
 func getMiniAppMigrationConversationID(t *testing.T, ctx context.Context, execer interface {
 	QueryRow(context.Context, string, ...any) pgx.Row
 }, userID uuid.UUID, source, externalThreadID string) uuid.UUID {
@@ -272,6 +299,25 @@ func assertMiniAppSummaryText(t *testing.T, ctx context.Context, execer interfac
 	}
 	if got != want {
 		t.Fatalf("summary text = %q, want %q", got, want)
+	}
+}
+
+func assertMiniAppSummaryRedacted(t *testing.T, ctx context.Context, execer interface {
+	QueryRow(context.Context, string, ...any) pgx.Row
+}, conversationID uuid.UUID) {
+	t.Helper()
+	var text string
+	var tokenCount int
+	var summarizedUntilSeq int64
+	var redacted bool
+	if err := execer.QueryRow(ctx, `
+SELECT text, token_count, summarized_until_seq, redacted_at IS NOT NULL
+FROM conversation_summaries
+WHERE conversation_id = $1`, conversationID).Scan(&text, &tokenCount, &summarizedUntilSeq, &redacted); err != nil {
+		t.Fatalf("summary redaction: %v", err)
+	}
+	if text != "" || tokenCount != 0 || summarizedUntilSeq != 0 || !redacted {
+		t.Fatalf("summary not redacted: text=%q token_count=%d summarized_until_seq=%d redacted=%v", text, tokenCount, summarizedUntilSeq, redacted)
 	}
 }
 
