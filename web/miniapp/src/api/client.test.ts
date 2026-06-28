@@ -12,6 +12,7 @@ import {
   listChatMessages,
   normalizeRawParams,
   referralCodeFromRaw,
+  resetLaunchParamsCacheForTest,
   statusKind,
   stringifyBridgeLaunchParams,
   telemetryLabel,
@@ -23,6 +24,7 @@ const ARTIFACT_ID = "550e8400-e29b-41d4-a716-446655440000";
 
 afterEach(() => {
   vi.restoreAllMocks();
+  resetLaunchParamsCacheForTest();
   window.history.replaceState({}, "", "/");
 });
 
@@ -95,6 +97,27 @@ describe("launch and referral parsing helpers", () => {
     expect(raw).not.toContain("private_url");
     expect(raw).not.toContain("ignored");
     expect(raw).not.toContain("empty");
+  });
+
+  test("does not pin an empty launch-param lookup for later API calls", async () => {
+    window.history.replaceState({}, "", "/");
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(jsonResponse({ error: "unauthorized" }, 401))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          items: [],
+          pagination: { limit: 20, offset: 0, count: 0, has_more: false },
+        }),
+      );
+
+    await expect(listChatMessages()).rejects.toMatchObject({ status: 401 });
+
+    window.history.replaceState({}, "", "/?vk_user_id=42&vk_ts=1&sign=fake");
+    await listChatMessages();
+
+    const secondHeaders = fetchMock.mock.calls[1]?.[1]?.headers as Record<string, string>;
+    expect(secondHeaders["X-Launch-Params"]).toContain("vk_user_id=42");
   });
 
   test("accepts only public referral-code shape", () => {

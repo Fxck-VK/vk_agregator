@@ -462,6 +462,15 @@ export function stringifyBridgeLaunchParams(value: unknown): string {
 let launchParamsCache: string | undefined;
 let launchParamsInFlight: Promise<string> | undefined;
 
+function clearLaunchParamsCache(): void {
+  launchParamsCache = undefined;
+}
+
+export function resetLaunchParamsCacheForTest(): void {
+  clearLaunchParamsCache();
+  launchParamsInFlight = undefined;
+}
+
 function bridgeCallTimeoutMs(): number {
   return import.meta.env.DEV ? 1200 : 3000;
 }
@@ -508,7 +517,9 @@ async function launchParams(): Promise<string> {
 
   launchParamsInFlight = resolveLaunchParams()
     .then((params) => {
-      launchParamsCache = params;
+      if (params) {
+        launchParamsCache = params;
+      }
       return params;
     })
     .finally(() => {
@@ -703,6 +714,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     duration_ms: durationMs,
   });
   if (!res.ok) {
+    if (res.status === 401) {
+      clearLaunchParamsCache();
+    }
     const err = await apiErrorFromResponse(res);
     void sendClientEvent({
       event_type: "api_failure",
