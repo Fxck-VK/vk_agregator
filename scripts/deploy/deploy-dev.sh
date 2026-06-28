@@ -64,6 +64,19 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "${script_dir}/../.." && pwd)"
 cd "${repo_root}"
 
+if ! command -v flock >/dev/null 2>&1; then
+  echo "flock is required to serialize DEV deploys on the VPS" >&2
+  exit 1
+fi
+
+deploy_lock_file="${DEPLOY_LOCK_FILE:-/tmp/${project_name}.deploy.lock}"
+exec 9>"${deploy_lock_file}"
+if ! flock -w "${timeout_seconds}" 9; then
+  echo "Timed out waiting for DEV deploy lock: ${deploy_lock_file}" >&2
+  exit 1
+fi
+echo "DEV deploy lock acquired: ${deploy_lock_file}"
+
 run_step() {
   echo "==> $*"
   "$@"
