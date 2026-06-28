@@ -4,13 +4,6 @@ on:
   push:
     branches:
       - dev-deploy
-  workflow_run:
-    workflows:
-      - Docker Images
-    types:
-      - completed
-    branches:
-      - dev-deploy
   workflow_dispatch:
 
 permissions:
@@ -18,18 +11,12 @@ permissions:
 
 concurrency:
   group: dev-deploy
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   deploy:
     name: Deploy DEV VPS
     runs-on: ubuntu-latest
-    if: >
-      github.event_name == 'workflow_dispatch' ||
-      github.event_name == 'push' ||
-      (github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.event == 'push' &&
-       github.event.workflow_run.head_branch == 'dev-deploy')
 
     steps:
       - name: Checkout
@@ -40,12 +27,10 @@ jobs:
       - name: Resolve deployment image tag
         id: release
         shell: bash
-        env:
-          WORKFLOW_RUN_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
           set -euo pipefail
 
-          deploy_sha="${WORKFLOW_RUN_SHA:-$(git rev-parse HEAD)}"
+          deploy_sha="$(git rev-parse HEAD)"
           deploy_short_sha="${deploy_sha:0:7}"
           deploy_image_tag="sha-${deploy_short_sha}"
 
