@@ -163,6 +163,48 @@ func newHarnessWithReferenceDownloaderAndOrchestratorOptions(control vkdelivery.
 	return &harness{handler: h, users: users, cmds: cmds, jobs: jobs, inbound: inbound, billing: bill, payment: payments, refs: refs, arts: arts, objects: objects, pub: pub, relay: outboxrelay.New(uowMgr, pub)}
 }
 
+func (h *harness) grantTestCredits(t *testing.T, vkUserID int64, targetBalance int64) {
+	t.Helper()
+	ctx := context.Background()
+	user, err := h.users.GetByVKUserID(ctx, vkUserID)
+	if errors.Is(err, domain.ErrNotFound) {
+		user = &domain.User{VKUserID: vkUserID, Role: domain.RoleUser, Status: domain.StatusActive}
+		if err := h.users.Create(ctx, user); err != nil {
+			t.Fatalf("create test user: %v", err)
+		}
+	} else if err != nil {
+		t.Fatalf("get test user: %v", err)
+	}
+
+	acc, err := h.billing.GetAccountByUser(ctx, user.ID, domain.CurrencyCredits)
+	if errors.Is(err, domain.ErrNotFound) {
+		acc = &domain.CreditAccount{
+			UserID:        user.ID,
+			Currency:      domain.CurrencyCredits,
+			BalanceCached: 0,
+		}
+		if err := h.billing.CreateAccount(ctx, acc); err != nil {
+			t.Fatalf("create test account: %v", err)
+		}
+	} else if err != nil {
+		t.Fatalf("get test account: %v", err)
+	}
+
+	if acc.BalanceCached >= targetBalance {
+		return
+	}
+	if err := h.billing.AppendEntry(ctx, &domain.LedgerEntry{
+		AccountID:      acc.ID,
+		Type:           domain.LedgerTopup,
+		Amount:         targetBalance - acc.BalanceCached,
+		Status:         domain.LedgerStatusCommitted,
+		IdempotencyKey: fmt.Sprintf("test:grant:%d:%d", vkUserID, targetBalance),
+		Reason:         "test balance top-up",
+	}); err != nil {
+		t.Fatalf("grant test credits: %v", err)
+	}
+}
+
 func defaultTestVKImageModels() []productcatalog.ImageModel {
 	catalog := productcatalog.New(productcatalog.Config{
 		ImageProviderReady: map[domain.ProviderName]bool{
@@ -1754,6 +1796,7 @@ func TestVideoRouteButtonEnablesPlainTextVideoJobs(t *testing.T) {
 	if rec := h.post(start); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
 		t.Fatalf("unexpected route response: %d %q", rec.Code, rec.Body.String())
 	}
+	h.grantTestCredits(t, 5622, 1000)
 
 	prompt := `{
 		"type":"message_new","group_id":1,"event_id":"evt-video-route-prompt","secret":"s3cr3t",
@@ -1928,6 +1971,7 @@ func TestVideoRouteDurationButtonSetsJobDuration(t *testing.T) {
 	if rec := h.post(start); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
 		t.Fatalf("unexpected route response: %d %q", rec.Code, rec.Body.String())
 	}
+	h.grantTestCredits(t, 5623, 1000)
 
 	prompt := `{
 		"type":"message_new","group_id":1,"event_id":"evt-video-route-duration-prompt","secret":"s3cr3t",
@@ -1978,6 +2022,7 @@ func TestVideoRouteWithPhotoAttachmentCreatesReferenceArtifactJob(t *testing.T) 
 	if rec := h.post(start); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
 		t.Fatalf("unexpected route response: %d %q", rec.Code, rec.Body.String())
 	}
+	h.grantTestCredits(t, 5630, 1000)
 
 	prompt := `{
 		"type":"message_new","group_id":1,"event_id":"evt-video-runway-photo","secret":"s3cr3t",
@@ -2215,6 +2260,7 @@ func TestPhotoNanoBananaProQualityFlowCreatesImageJob(t *testing.T) {
 	if rec := h.post(quality); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
 		t.Fatalf("unexpected quality response: %d %q", rec.Code, rec.Body.String())
 	}
+	h.grantTestCredits(t, 5632, 1000)
 
 	prompt := `{
 		"type":"message_new","group_id":1,"event_id":"evt-photo-text-prompt","secret":"s3cr3t",
@@ -2490,6 +2536,7 @@ func TestPhotoNanoBanana2ModeCreatesPoYoImageJob(t *testing.T) {
 	if rec := h.post(quality); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
 		t.Fatalf("unexpected quality response: %d %q", rec.Code, rec.Body.String())
 	}
+	h.grantTestCredits(t, 5632, 1000)
 
 	prompt := `{
 		"type":"message_new","group_id":1,"event_id":"evt-photo-nano-2-prompt","secret":"s3cr3t",
@@ -3381,6 +3428,7 @@ func TestPersistedVideoModeSurvivesHandlerRestart(t *testing.T) {
 			domain.CommandMenuVideoKling21Examples,
 		),
 	}, dialogState)
+	second.grantTestCredits(t, 5931, 1000)
 	prompt := `{
 		"type":"message_new","group_id":1,"event_id":"evt-video-persist-prompt","secret":"s3cr3t",
 		"object":{"message":{"from_id":5931,"peer_id":5931,"text":"cinematic ocean waves at sunset"}}
@@ -3625,6 +3673,7 @@ func TestMenuEditKeyboardFailureSendsNewMessageWithKeyboard(t *testing.T) {
 
 func TestMessageNewDuplicateIsDeduped(t *testing.T) {
 	h := newHarness()
+	h.grantTestCredits(t, 777, 1000)
 	body := `{
 		"type":"message_new","group_id":1,"event_id":"evt-dup","secret":"s3cr3t",
 		"object":{"message":{"from_id":777,"peer_id":777,"text":"/video sunrise"}}
@@ -3652,6 +3701,7 @@ func TestMessageNewDuplicateIsDeduped(t *testing.T) {
 
 func TestMessageNewFallbackEventIDUsesConversationMessageID(t *testing.T) {
 	h := newHarness()
+	h.grantTestCredits(t, 777, 1000)
 	body := func(conversationMessageID int64) string {
 		return fmt.Sprintf(`{
 		"type":"message_new","group_id":1,"secret":"s3cr3t",

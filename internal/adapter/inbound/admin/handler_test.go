@@ -386,6 +386,9 @@ func TestOperatorJobsListDetailAndQueueSafeDTO(t *testing.T) {
 	if err := jobs.Create(ctx, job); err != nil {
 		t.Fatalf("create job: %v", err)
 	}
+	if err := billing.Grant(ctx, userID, 1000, "test:admin:grant:operator-jobs", "test balance top-up"); err != nil {
+		t.Fatalf("grant test credits: %v", err)
+	}
 	if _, err := billing.Reserve(ctx, userID, job.ID, 50); err != nil {
 		t.Fatalf("reserve: %v", err)
 	}
@@ -924,8 +927,8 @@ func TestGetUserIncludesBalance(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status %d", rec.Code)
 	}
-	if body["balance_credits"].(float64) != 1000 {
-		t.Fatalf("expected balance 1000, got %v", body["balance_credits"])
+	if body["balance_credits"].(float64) != float64(billingservice.DefaultStartingBalance) {
+		t.Fatalf("expected balance %d, got %v", billingservice.DefaultStartingBalance, body["balance_credits"])
 	}
 }
 

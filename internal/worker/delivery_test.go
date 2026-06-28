@@ -36,7 +36,7 @@ func newDeliveryHarness(t *testing.T) *deliveryHarness {
 	objects := memory.NewObjectStore()
 	vk := vkdelivery.NewMockClient()
 	billingRpo := memory.NewBillingRepo()
-	billing := billingservice.New(billingRpo)
+	billing := billingservice.New(billingRpo, billingservice.WithStartingBalance(1000))
 	dw := worker.NewDeliveryWorker(worker.DeliveryDeps{
 		Jobs:       jobs,
 		Deliveries: deliveries,

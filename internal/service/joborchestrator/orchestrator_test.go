@@ -58,7 +58,8 @@ func (f *fixture) drain(t *testing.T) {
 }
 
 func TestCreateJobHappyPath(t *testing.T) {
-	f := newFixture()
+	const startingBalance int64 = 1000
+	f := newFixture(billingservice.WithStartingBalance(startingBalance))
 	ctx := context.Background()
 	userID := uuid.New()
 
@@ -85,7 +86,7 @@ func TestCreateJobHappyPath(t *testing.T) {
 
 	// Job persisted and reservation reduced available balance.
 	acc, _ := f.billing.EnsureAccount(ctx, userID)
-	if acc.BalanceCached != billingservice.DefaultStartingBalance {
+	if acc.BalanceCached != startingBalance {
 		t.Fatalf("balance changed before capture: %d", acc.BalanceCached)
 	}
 
@@ -408,7 +409,7 @@ func TestCreateJobResolvedVideoRouteReservesResolvedAmount(t *testing.T) {
 	catalog := newRouteCatalogForOrchestratorTest(t)
 	f := newFixtureWithOrchestratorOptions([]joborchestrator.Option{
 		joborchestrator.WithVideoRouteResolver(routeResolverForTest(catalog)),
-	})
+	}, billingservice.WithStartingBalance(1000))
 	ctx := context.Background()
 
 	params, _ := json.Marshal(map[string]any{
@@ -489,7 +490,7 @@ func TestCreateJobIdempotentExistingBypassesCapacityGuard(t *testing.T) {
 		joborchestrator.WithCapacityGuard(joborchestrator.CapacityGuardFunc(func(context.Context, joborchestrator.CapacityCheckInput) error {
 			return guardErr
 		})),
-	})
+	}, billingservice.WithStartingBalance(1000))
 	ctx := context.Background()
 	in := joborchestrator.CreateJobInput{
 		UserID:              uuid.New(),

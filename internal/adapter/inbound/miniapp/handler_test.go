@@ -298,6 +298,50 @@ func newTestFixtureWithConfigAndPaymentProvider(appSecret string, limiter interf
 	}
 }
 
+func (f *testFixture) grantTestCreditsForUser(t *testing.T, userID uuid.UUID, credits int64, key string) {
+	t.Helper()
+	ctx := context.Background()
+	acc, err := f.billingRepo.GetAccountByUser(ctx, userID, domain.CurrencyCredits)
+	if errors.Is(err, domain.ErrNotFound) {
+		acc = &domain.CreditAccount{
+			UserID:        userID,
+			Currency:      domain.CurrencyCredits,
+			BalanceCached: credits,
+		}
+		if err := f.billingRepo.CreateAccount(ctx, acc); err != nil {
+			t.Fatalf("create test account: %v", err)
+		}
+		return
+	}
+	if err != nil {
+		t.Fatalf("get test account: %v", err)
+	}
+	if acc.BalanceCached >= credits {
+		return
+	}
+	if err := f.billingRepo.AppendEntry(ctx, &domain.LedgerEntry{
+		AccountID:      acc.ID,
+		Type:           domain.LedgerTopup,
+		Amount:         credits - acc.BalanceCached,
+		Status:         domain.LedgerStatusCommitted,
+		IdempotencyKey: key,
+		Reason:         "test balance top-up",
+	}); err != nil {
+		t.Fatalf("grant test credits: %v", err)
+	}
+}
+
+func (f *testFixture) createVKUserWithCredits(t *testing.T, vkUserID int64, credits int64) *domain.User {
+	t.Helper()
+	ctx := context.Background()
+	user := &domain.User{VKUserID: vkUserID, Role: domain.RoleUser, Status: domain.StatusActive}
+	if err := f.userRepo.Create(ctx, user); err != nil {
+		t.Fatalf("create test user: %v", err)
+	}
+	f.grantTestCreditsForUser(t, user.ID, credits, fmt.Sprintf("test:miniapp:grant:%d:%d", vkUserID, credits))
+	return user
+}
+
 type recordingPaymentProvider struct {
 	createInputs []domain.CreatePaymentInput
 }
@@ -3868,6 +3912,7 @@ func TestHandler_CreateJob_VideoDurationValidatedAndPersisted(t *testing.T) {
 		enableTestVideoRoute(cfg, domain.VideoRouteKlingO3Standard)
 	})
 	routes := fixture.handler.Routes()
+	fixture.createVKUserWithCredits(t, 777, 1000)
 
 	body, _ := json.Marshal(map[string]any{
 		"operation":         "video_generate",
@@ -3951,6 +3996,7 @@ func TestHandler_CreateJob_VideoReferenceArtifactPassesRouteValidation(t *testin
 	if err := fixture.userRepo.Create(ctx, user); err != nil {
 		t.Fatalf("create user: %v", err)
 	}
+	fixture.grantTestCreditsForUser(t, user.ID, 1000, "test:miniapp:grant:video-reference-enabled")
 	artifact := createTestArtifact(t, fixture, user.ID, domain.ArtifactKindInput, domain.MediaTypeImage, domain.ArtifactStatusReady)
 
 	body, _ := json.Marshal(map[string]any{
@@ -4002,6 +4048,7 @@ func TestHandler_CreateJob_VideoDerivesAspectRatioFromReferenceArtifact(t *testi
 	if err := fixture.userRepo.Create(ctx, user); err != nil {
 		t.Fatalf("create user: %v", err)
 	}
+	fixture.grantTestCreditsForUser(t, user.ID, 1000, "test:miniapp:grant:video-reference-vertical")
 	artifact := createTestArtifactWithDimensions(t, fixture, user.ID, domain.ArtifactKindInput, domain.MediaTypeImage, domain.ArtifactStatusReady, 720, 1280)
 
 	body, _ := json.Marshal(map[string]any{

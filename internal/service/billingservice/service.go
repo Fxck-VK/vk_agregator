@@ -15,9 +15,9 @@ import (
 	"vk-ai-aggregator/internal/domain"
 )
 
-// DefaultStartingBalance is the amount of test credits granted to a freshly
-// created account.
-const DefaultStartingBalance int64 = 1000
+// DefaultStartingBalance is the amount of credits granted to a freshly created
+// account.
+const DefaultStartingBalance int64 = 30
 
 // DefaultReservationTTL bounds how long a hold may live before it is eligible
 // for automatic release.

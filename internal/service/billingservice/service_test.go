@@ -108,8 +108,9 @@ func TestBalanceForEstimateDoesNotCreateAccount(t *testing.T) {
 }
 
 func TestReserveCaptureRefundFlow(t *testing.T) {
+	const startingBalance int64 = 1000
 	repo := memory.NewBillingRepo()
-	svc := billingservice.New(repo)
+	svc := billingservice.New(repo, billingservice.WithStartingBalance(startingBalance))
 	ctx := context.Background()
 	userID := uuid.New()
 	jobID := uuid.New()
@@ -123,13 +124,13 @@ func TestReserveCaptureRefundFlow(t *testing.T) {
 		t.Fatalf("reserve: %v", err)
 	}
 
-	// Capturing reduces the cached balance from 1000 to 950.
+	// Capturing reduces the cached balance by the captured amount.
 	if err := svc.Capture(ctx, res.ID, 50); err != nil {
 		t.Fatalf("capture: %v", err)
 	}
 	acc, _ := svc.EnsureAccount(ctx, userID)
-	if acc.BalanceCached != 950 {
-		t.Fatalf("balance after capture = %d, want 950", acc.BalanceCached)
+	if acc.BalanceCached != startingBalance-50 {
+		t.Fatalf("balance after capture = %d, want %d", acc.BalanceCached, startingBalance-50)
 	}
 
 	// Refunding the job returns the credits.
@@ -137,14 +138,15 @@ func TestReserveCaptureRefundFlow(t *testing.T) {
 		t.Fatalf("refund: %v", err)
 	}
 	acc, _ = svc.EnsureAccount(ctx, userID)
-	if acc.BalanceCached != 1000 {
-		t.Fatalf("balance after refund = %d, want 1000", acc.BalanceCached)
+	if acc.BalanceCached != startingBalance {
+		t.Fatalf("balance after refund = %d, want %d", acc.BalanceCached, startingBalance)
 	}
 }
 
 func TestCaptureRejectsNonPositiveAmounts(t *testing.T) {
+	const startingBalance int64 = 1000
 	repo := memory.NewBillingRepo()
-	svc := billingservice.New(repo)
+	svc := billingservice.New(repo, billingservice.WithStartingBalance(startingBalance))
 	ctx := context.Background()
 	userID := uuid.New()
 	jobID := uuid.New()
@@ -165,14 +167,15 @@ func TestCaptureRejectsNonPositiveAmounts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ensure account: %v", err)
 	}
-	if acc.BalanceCached != billingservice.DefaultStartingBalance {
+	if acc.BalanceCached != startingBalance {
 		t.Fatalf("balance changed after invalid capture = %d", acc.BalanceCached)
 	}
 }
 
 func TestReserveRelease(t *testing.T) {
+	const startingBalance int64 = 1000
 	repo := memory.NewBillingRepo()
-	svc := billingservice.New(repo)
+	svc := billingservice.New(repo, billingservice.WithStartingBalance(startingBalance))
 	ctx := context.Background()
 	userID := uuid.New()
 	jobID := uuid.New()
