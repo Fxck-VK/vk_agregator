@@ -27,7 +27,7 @@ describe("job display helpers", () => {
     expect(jobDisplayTitle(job({ prompt: "  short prompt  " }))).toBe("short prompt");
   });
 
-  test("deduplicates chat jobs by conversation while keeping media jobs", () => {
+  test("keeps only image and video jobs in profile history", () => {
     const jobs = [
       job({ id: "chat-new", conversation_id: "thread-1", created_at: "2026-06-12T00:02:00Z" }),
       job({ id: "chat-first", conversation_id: "thread-1", created_at: "2026-06-12T00:01:00Z" }),
@@ -37,9 +37,15 @@ describe("job display helpers", () => {
         modality: "image",
         created_at: "2026-06-12T00:03:00Z",
       }),
+      job({
+        id: "video",
+        operation: "video_generate",
+        modality: "video",
+        created_at: "2026-06-12T00:04:00Z",
+      }),
     ];
 
-    expect(dedupeHistoryJobs(jobs).map((item) => item.id)).toEqual(["image", "chat-first"]);
+    expect(dedupeHistoryJobs(jobs).map((item) => item.id)).toEqual(["video", "image"]);
   });
 
   test("formats history count without throwing on common values", () => {

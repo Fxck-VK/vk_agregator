@@ -31,7 +31,11 @@ import (
 	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/platform/queue"
 	"vk-ai-aggregator/internal/service/artifactservice"
+	"vk-ai-aggregator/internal/service/assistantfacts"
 	"vk-ai-aggregator/internal/service/dialogcontext"
+	"vk-ai-aggregator/internal/service/pricingcatalog"
+	"vk-ai-aggregator/internal/service/productcatalog"
+	"vk-ai-aggregator/internal/service/videorouter"
 	"vk-ai-aggregator/internal/worker"
 )
 
@@ -119,10 +123,12 @@ type fakeTextContext struct {
 	completeCalls   int
 	completedAnswer string
 	conversationID  uuid.UUID
+	lastPrompt      string
 }
 
 func (f *fakeTextContext) Prepare(_ context.Context, _ *domain.Job, prompt string) (dialogcontext.Prepared, error) {
 	f.prepareCalls++
+	f.lastPrompt = prompt
 	if f.conversationID == uuid.Nil {
 		f.conversationID = uuid.New()
 	}
@@ -1037,6 +1043,70 @@ func TestGenerationTextUsesDialogContext(t *testing.T) {
 	}
 	if params.ConversationSource != "miniapp" || params.ExternalThreadID != "thread-a" {
 		t.Fatalf("conversation ref was not preserved: %+v", params)
+	}
+}
+
+func TestGenerationTextPrependsNeuroHubFactsWithoutStoringThem(t *testing.T) {
+	textCtx := &fakeTextContext{preparedPrompt: "context packet\n"}
+	provider := &captureTextProvider{}
+	prices := staticWorkerPricingCatalog(t)
+	catalog := productcatalog.New(productcatalog.Config{
+		ImageProviderReady: map[domain.ProviderName]bool{
+			domain.ProviderPoYo: true,
+		},
+		EnabledImageModels: map[string]bool{
+			pricingcatalog.PublicImageNanoBanana2: true,
+		},
+		VideoRoutes: []videorouter.PublicRoute{
+			{
+				Alias:                  domain.VideoRouteKlingO3Standard,
+				DefaultResolution:      pricingcatalog.VideoResolution720p,
+				AllowedResolutions:     []string{pricingcatalog.VideoResolution720p},
+				AllowedDurationsSec:    []int{5},
+				AllowedAspectRatios:    []string{"16:9"},
+				DefaultDurationSec:     5,
+				DefaultAspectRatio:     "16:9",
+				SupportsReferenceImage: true,
+				MaxReferenceImages:     1,
+			},
+		},
+		PricingCatalog: prices,
+	})
+	h := newHarnessCore(t, provider, textCtx, func(d *worker.Deps) {
+		d.AssistantFacts = assistantfacts.New(assistantfacts.Config{
+			Catalog:        catalog,
+			PricingCatalog: prices,
+		})
+	})
+	ctx := context.Background()
+	rawPrompt := "Какие модели доступны в НейроХаб?"
+	job := h.queueJob(t, domain.OperationTextGenerate, domain.ModalityText, rawPrompt)
+
+	if err := h.gen.Process(ctx, taskFor(job)); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+	for _, want := range []string{"Факты НейроХаб", "Nano Banana 2", "Kling O3 Standard", "context packet", rawPrompt} {
+		if !strings.Contains(provider.last.Prompt, want) {
+			t.Fatalf("provider prompt missing %q:\n%s", want, provider.last.Prompt)
+		}
+	}
+	for _, forbidden := range []string{"NeuroHub", "продукт", "deepseek", "deepinfra", "provider", "floor", "multiplier"} {
+		if strings.Contains(strings.ToLower(provider.last.Prompt), forbidden) {
+			t.Fatalf("provider prompt leaked %q:\n%s", forbidden, provider.last.Prompt)
+		}
+	}
+	if textCtx.lastPrompt != rawPrompt {
+		t.Fatalf("dialog context received %q, want raw prompt %q", textCtx.lastPrompt, rawPrompt)
+	}
+	tasks, err := h.tasks.ListByJob(ctx, job.ID)
+	if err != nil {
+		t.Fatalf("list provider tasks: %v", err)
+	}
+	if len(tasks) != 1 {
+		t.Fatalf("provider task count = %d, want 1", len(tasks))
+	}
+	if strings.Contains(string(tasks[0].Request), "Факты НейроХаб") || strings.Contains(string(tasks[0].Request), rawPrompt) {
+		t.Fatalf("provider task request must not persist facts or prompt: %s", string(tasks[0].Request))
 	}
 }
 
@@ -2896,3 +2966,61 @@ func (p *timeoutProvider) Poll(ctx context.Context, _ domain.ProviderTaskRef) (d
 }
 
 func (p *timeoutProvider) Cancel(context.Context, domain.ProviderTaskRef) error { return nil }
+
+type captureTextProvider struct {
+	last domain.ProviderRequest
+}
+
+func (p *captureTextProvider) Name() domain.ProviderName { return domain.ProviderName("capture-text") }
+
+func (p *captureTextProvider) Capabilities(context.Context) ([]domain.Capability, error) {
+	return []domain.Capability{{
+		Operation:       domain.OperationTextGenerate,
+		Modality:        domain.ModalityText,
+		ModelCode:       "capture-text-model",
+		SupportsPolling: true,
+	}}, nil
+}
+
+func (p *captureTextProvider) Estimate(context.Context, domain.ProviderRequest) (domain.CostEstimate, error) {
+	return domain.CostEstimate{AmountCredits: 1, Currency: "credits"}, nil
+}
+
+func (p *captureTextProvider) Submit(_ context.Context, req domain.ProviderRequest) (domain.ProviderTask, error) {
+	p.last = req
+	now := time.Now()
+	res := domain.ProviderTaskResult{
+		Status:     domain.ProviderTaskSucceeded,
+		OutputURLs: []string{"mock://capture-text/output.txt"},
+		Text:       "ok",
+	}
+	raw, _ := json.Marshal(res)
+	return domain.ProviderTask{
+		JobID:          req.JobID,
+		Provider:       p.Name(),
+		ModelCode:      "capture-text-model",
+		ExternalID:     "capture-text-task",
+		Status:         domain.ProviderTaskSucceeded,
+		Result:         raw,
+		SubmittedAt:    &now,
+		CompletedAt:    &now,
+		CreatedAt:      now,
+		UpdatedAt:      now,
+		IdempotencyKey: req.IdempotencyKey,
+	}, nil
+}
+
+func (p *captureTextProvider) Poll(context.Context, domain.ProviderTaskRef) (domain.ProviderTaskResult, error) {
+	return domain.ProviderTaskResult{Status: domain.ProviderTaskSucceeded, OutputURLs: []string{"mock://capture-text/output.txt"}, Text: "ok"}, nil
+}
+
+func (p *captureTextProvider) Cancel(context.Context, domain.ProviderTaskRef) error { return nil }
+
+func staticWorkerPricingCatalog(t *testing.T) *pricingcatalog.Catalog {
+	t.Helper()
+	catalog, err := pricingcatalog.NewStaticCatalog()
+	if err != nil {
+		t.Fatalf("static pricing catalog: %v", err)
+	}
+	return catalog
+}

@@ -32,6 +32,7 @@ import (
 	"vk-ai-aggregator/internal/platform/queue"
 	"vk-ai-aggregator/internal/platform/ratelimit"
 	"vk-ai-aggregator/internal/platform/tracing"
+	"vk-ai-aggregator/internal/service/assistantfacts"
 	"vk-ai-aggregator/internal/service/dialogcontext"
 	"vk-ai-aggregator/internal/service/moderationservice"
 )
@@ -912,6 +913,7 @@ type processor struct {
 	transcodeLimiter     *ratelimit.ConcurrencyLimiter
 	variantLimiter       *ratelimit.ConcurrencyLimiter
 	textContext          TextContext
+	assistantFacts       AssistantFacts
 	moderator            Moderator
 	modResults           domain.ModerationResultRepository
 	releaser             ReservationReleaser
@@ -941,6 +943,11 @@ type ReservationReleaser interface {
 type TextContext interface {
 	Prepare(ctx context.Context, job *domain.Job, prompt string) (dialogcontext.Prepared, error)
 	Complete(ctx context.Context, job *domain.Job, conversationID uuid.UUID, answer string) error
+}
+
+// AssistantFacts renders public НейроХаб catalog facts for text prompts.
+type AssistantFacts interface {
+	Build(ctx context.Context, in assistantfacts.Input) (assistantfacts.Facts, error)
 }
 
 // Deps bundles the dependencies shared by the workers.
@@ -997,6 +1004,10 @@ type Deps struct {
 	// TextContext, when set, stores VK text dialog history and renders compact
 	// provider prompts for text jobs.
 	TextContext TextContext
+	// AssistantFacts, when set, prepends backend-owned public НейроХаб catalog
+	// facts to product-aware text prompts without storing those facts in
+	// conversation history.
+	AssistantFacts AssistantFacts
 	// Moderator, when set, runs an output moderation check before delivery.
 	// When nil, moderation is skipped (allow-all) for local/test wiring.
 	Moderator Moderator
@@ -1089,6 +1100,7 @@ func newProcessor(d Deps) processor {
 		transcodeLimiter:     optionalConcurrencyLimiter(d.MediaMaxConcurrentTranscodes),
 		variantLimiter:       optionalConcurrencyLimiter(d.MediaMaxPendingVariants),
 		textContext:          d.TextContext,
+		assistantFacts:       d.AssistantFacts,
 		moderator:            d.Moderator,
 		modResults:           d.ModResults,
 		releaser:             d.Releaser,
@@ -1210,6 +1222,19 @@ func (p *processor) buildRequest(ctx context.Context, job *domain.Job, attempt i
 	durationSec := 0
 	resolution := ""
 	draft := false
+	assistantFactsText := ""
+	if p.assistantFacts != nil && job.OperationType == domain.OperationTextGenerate && job.Modality == domain.ModalityText {
+		facts, err := p.assistantFacts.Build(ctx, assistantfacts.Input{
+			UserID: job.UserID,
+			Prompt: pp.Prompt,
+		})
+		if err != nil {
+			return domain.ProviderRequest{}, err
+		}
+		if facts.Relevant && strings.TrimSpace(facts.Text) != "" {
+			assistantFactsText = facts.Text
+		}
+	}
 	if job.Modality == domain.ModalityImage {
 		if modelCode == "" {
 			modelCode = p.imageModel
@@ -1269,6 +1294,9 @@ func (p *processor) buildRequest(ctx context.Context, job *domain.Job, attempt i
 			}
 		}
 	}
+	if assistantFactsText != "" {
+		prompt = assistantfacts.Attach(assistantFactsText, prompt)
+	}
 	var inputURLs []string
 	if (job.Modality == domain.ModalityImage || job.Modality == domain.ModalityVideo) && len(pp.ReferenceArtifactIDs) > 0 {
 		var err error
@@ -1277,7 +1305,7 @@ func (p *processor) buildRequest(ctx context.Context, job *domain.Job, attempt i
 			return domain.ProviderRequest{}, err
 		}
 	}
-	providerParams := stripProviderInputURLs(job.Params)
+	providerParams := safeProviderParams(job.Params)
 	if job.Modality == domain.ModalityVideo {
 		providerParams = safeVideoProviderParams(durationSec, resolution, pp.AspectRatio, draft, pp.ResolvedVideoRoute)
 	}
@@ -1368,7 +1396,7 @@ func safeVideoProviderParams(durationSec int, resolution, aspectRatio string, dr
 	return raw
 }
 
-func stripProviderInputURLs(raw json.RawMessage) json.RawMessage {
+func safeProviderParams(raw json.RawMessage) json.RawMessage {
 	if len(raw) == 0 {
 		return raw
 	}
@@ -1376,10 +1404,16 @@ func stripProviderInputURLs(raw json.RawMessage) json.RawMessage {
 	if err := json.Unmarshal(raw, &params); err != nil {
 		return raw
 	}
-	if _, ok := params["input_urls"]; !ok {
+	changed := false
+	for _, key := range []string{"input_urls", "prompt", "negative_prompt"} {
+		if _, ok := params[key]; ok {
+			delete(params, key)
+			changed = true
+		}
+	}
+	if !changed {
 		return raw
 	}
-	delete(params, "input_urls")
 	out, err := json.Marshal(params)
 	if err != nil {
 		return raw

@@ -51,7 +51,8 @@ func TestSubmitPollTextSuccess(t *testing.T) {
 	if task.Provider != domain.ProviderDeepInfra || task.ModelCode != defaultTextModel {
 		t.Fatalf("unexpected task: %+v", task)
 	}
-	if seen.Model != defaultTextModel || len(seen.Messages) != 2 || seen.Messages[0].Role != "system" || !strings.Contains(seen.Messages[0].Content, "3000 characters") || !strings.Contains(seen.Messages[0].Content, "НейроХаб бот") || !strings.Contains(seen.Messages[0].Content, "model name") || seen.Messages[1].Content != "hello" || seen.Stream {
+	systemPrompt := seen.Messages[0].Content
+	if seen.Model != defaultTextModel || len(seen.Messages) != 2 || seen.Messages[0].Role != "system" || !strings.Contains(systemPrompt, "3000") || !strings.Contains(systemPrompt, "НейроХаб") || !strings.Contains(systemPrompt, "Факты НейроХаб") || !strings.Contains(systemPrompt, "код модели") || strings.Contains(systemPrompt, "NeuroHub") || seen.Messages[1].Content != "hello" || seen.Stream {
 		t.Fatalf("unexpected request body: %+v", seen)
 	}
 

@@ -60,7 +60,9 @@ type CreateJobRequest struct {
 
 // ChatMessageRequest is the body accepted by POST /miniapp/chat/messages.
 type ChatMessageRequest struct {
-	Prompt         string `json:"prompt"`
+	Prompt string `json:"prompt"`
+	// ConversationID is accepted for backward compatibility only. The backend
+	// ignores client-provided values and always uses the single default chat.
 	ConversationID string `json:"conversation_id,omitempty"`
 }
 
@@ -202,17 +204,6 @@ type JobDTO struct {
 type ChatJobDTO struct {
 	JobDTO
 	ModelName string `json:"model_name"`
-}
-
-// ChatConversationDTO is a durable Mini App chat thread owned by the verified
-// backend user. ID is the opaque Mini App thread id, not a database id.
-type ChatConversationDTO struct {
-	ID                 string    `json:"id"`
-	Title              string    `json:"title"`
-	LastMessagePreview string    `json:"last_message_preview,omitempty"`
-	LastMessageRole    string    `json:"last_message_role,omitempty"`
-	CreatedAt          time.Time `json:"created_at"`
-	UpdatedAt          time.Time `json:"updated_at"`
 }
 
 // ChatConversationMessageDTO is one persisted user/bot turn. It intentionally

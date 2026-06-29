@@ -40,7 +40,6 @@ export interface CreateJobInput {
 
 export interface CreateChatMessageInput {
   prompt: string;
-  conversation_id?: string;
 }
 
 export interface ChatConversation {
@@ -193,16 +192,6 @@ export interface ArtifactUploadResponse {
 
 export interface JobListResponse {
   items: Job[];
-  pagination: {
-    limit: number;
-    offset: number;
-    count: number;
-    has_more: boolean;
-  };
-}
-
-export interface ChatConversationListResponse {
-  items: ChatConversation[];
   pagination: {
     limit: number;
     offset: number;
@@ -473,6 +462,15 @@ export function stringifyBridgeLaunchParams(value: unknown): string {
 let launchParamsCache: string | undefined;
 let launchParamsInFlight: Promise<string> | undefined;
 
+function clearLaunchParamsCache(): void {
+  launchParamsCache = undefined;
+}
+
+export function resetLaunchParamsCacheForTest(): void {
+  clearLaunchParamsCache();
+  launchParamsInFlight = undefined;
+}
+
 function bridgeCallTimeoutMs(): number {
   return import.meta.env.DEV ? 1200 : 3000;
 }
@@ -519,7 +517,9 @@ async function launchParams(): Promise<string> {
 
   launchParamsInFlight = resolveLaunchParams()
     .then((params) => {
-      launchParamsCache = params;
+      if (params) {
+        launchParamsCache = params;
+      }
       return params;
     })
     .finally(() => {
@@ -714,6 +714,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     duration_ms: durationMs,
   });
   if (!res.ok) {
+    if (res.status === 401) {
+      clearLaunchParamsCache();
+    }
     const err = await apiErrorFromResponse(res);
     void sendClientEvent({
       event_type: "api_failure",
@@ -862,19 +865,12 @@ export async function createChatMessage(input: CreateChatMessageInput, options: 
     headers: {
       "X-Idempotency-Key": options.idempotencyKey,
     },
-    body: JSON.stringify(input),
+    body: JSON.stringify({ prompt: input.prompt }),
   });
 }
 
-export async function listChatConversations(): Promise<ChatConversation[]> {
-  const data = await request<ChatConversationListResponse>("/miniapp/chat/conversations");
-  return data.items ?? [];
-}
-
-export async function listChatConversationMessages(conversationId: string): Promise<ChatConversationMessage[]> {
-  const data = await request<ChatConversationMessageListResponse>(
-    `/miniapp/chat/conversations/${encodeURIComponent(conversationId)}/messages`,
-  );
+export async function listChatMessages(): Promise<ChatConversationMessage[]> {
+  const data = await request<ChatConversationMessageListResponse>("/miniapp/chat/messages");
   return data.items ?? [];
 }
 

@@ -64,6 +64,19 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "${script_dir}/../.." && pwd)"
 cd "${repo_root}"
 
+if ! command -v flock >/dev/null 2>&1; then
+  echo "flock is required to serialize DEV deploys on the VPS" >&2
+  exit 1
+fi
+
+deploy_lock_file="${DEPLOY_LOCK_FILE:-/tmp/${project_name}.deploy.lock}"
+exec 9>"${deploy_lock_file}"
+if ! flock -w "${timeout_seconds}" 9; then
+  echo "Timed out waiting for DEV deploy lock: ${deploy_lock_file}" >&2
+  exit 1
+fi
+echo "DEV deploy lock acquired: ${deploy_lock_file}"
+
 run_step() {
   echo "==> $*"
   "$@"
@@ -368,6 +381,7 @@ fi
 if [[ "${skip_migrate}" != "true" ]]; then
   run_step bash scripts/deploy/check-migrations-safe.sh --env-file "${env_file}" --migrations-dir "$(get_env_value MIGRATIONS_DIR migrations)"
   "${compose[@]}" rm -f -s migrate >/dev/null 2>&1 || true
+  docker rm -f "${project_name}-migrate-1" >/dev/null 2>&1 || true
   migrate_args=(up --no-deps --exit-code-from migrate)
   if [[ "${build_on_vps}" != "true" ]]; then
     migrate_args+=(--no-build)

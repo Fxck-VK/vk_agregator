@@ -4,23 +4,27 @@ import {
   ApiError,
   artifactUrl,
   apiUserMessage,
+  createChatMessage,
   createJob,
   errorLabel,
   estimateJob,
   launchParamsFromLocation,
+  listChatMessages,
   normalizeRawParams,
   referralCodeFromRaw,
+  resetLaunchParamsCacheForTest,
   statusKind,
   stringifyBridgeLaunchParams,
   telemetryLabel,
   telemetryRoute,
 } from "./client";
-import type { CreateJobInput, EstimateInput } from "./client";
+import type { CreateChatMessageInput, CreateJobInput, EstimateInput } from "./client";
 
 const ARTIFACT_ID = "550e8400-e29b-41d4-a716-446655440000";
 
 afterEach(() => {
   vi.restoreAllMocks();
+  resetLaunchParamsCacheForTest();
   window.history.replaceState({}, "", "/");
 });
 
@@ -93,6 +97,27 @@ describe("launch and referral parsing helpers", () => {
     expect(raw).not.toContain("private_url");
     expect(raw).not.toContain("ignored");
     expect(raw).not.toContain("empty");
+  });
+
+  test("does not pin an empty launch-param lookup for later API calls", async () => {
+    window.history.replaceState({}, "", "/");
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(jsonResponse({ error: "unauthorized" }, 401))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          items: [],
+          pagination: { limit: 20, offset: 0, count: 0, has_more: false },
+        }),
+      );
+
+    await expect(listChatMessages()).rejects.toMatchObject({ status: 401 });
+
+    window.history.replaceState({}, "", "/?vk_user_id=42&vk_ts=1&sign=fake");
+    await listChatMessages();
+
+    const secondHeaders = fetchMock.mock.calls[1]?.[1]?.headers as Record<string, string>;
+    expect(secondHeaders["X-Launch-Params"]).toContain("vk_user_id=42");
   });
 
   test("accepts only public referral-code shape", () => {
@@ -210,6 +235,67 @@ describe("generation request pricing contract", () => {
       expect(body).not.toHaveProperty("provider_model_id");
       expect(body).not.toHaveProperty("model_code");
     }
+  });
+});
+
+describe("chat API single default contract", () => {
+  test("serializes chat messages without client conversation id", async () => {
+    window.history.replaceState({}, "", "/?vk_user_id=42&vk_ts=1&sign=fake");
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      jsonResponse({
+        id: ARTIFACT_ID,
+        operation: "text_generate",
+        modality: "text",
+        status: "received",
+        conversation_id: "default",
+        cost_estimate: 0,
+        cost_captured: 0,
+        output_artifact_ids: [],
+        created_at: "2026-01-01T00:00:00Z",
+        updated_at: "2026-01-01T00:00:00Z",
+      }),
+    );
+
+    await createChatMessage(
+      { prompt: "hello chat", conversation_id: "custom-a" } as CreateChatMessageInput & { conversation_id: string },
+      { idempotencyKey: "idem-chat" },
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0][0]).toBe("/miniapp/chat/messages");
+    const body = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body ?? "{}")) as Record<
+      string,
+      unknown
+    >;
+    expect(body).toEqual({ prompt: "hello chat" });
+    expect(body).not.toHaveProperty("conversation_id");
+  });
+
+  test("loads chat history from the default messages endpoint", async () => {
+    window.history.replaceState({}, "", "/?vk_user_id=42&vk_ts=1&sign=fake");
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      jsonResponse({
+        items: [
+          {
+            id: ARTIFACT_ID,
+            job_id: ARTIFACT_ID,
+            seq: 1,
+            role: "user",
+            text: "saved message",
+            created_at: "2026-01-01T00:00:00Z",
+          },
+        ],
+        pagination: { limit: 20, offset: 0, count: 1, has_more: false },
+      }),
+    );
+
+    const messages = await listChatMessages();
+
+    expect(messages).toHaveLength(1);
+    expect(messages[0]?.text).toBe("saved message");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0][0]).toBe("/miniapp/chat/messages");
+    expect(String(fetchMock.mock.calls[0][0])).not.toContain("/chat/conversations/");
   });
 });
 
