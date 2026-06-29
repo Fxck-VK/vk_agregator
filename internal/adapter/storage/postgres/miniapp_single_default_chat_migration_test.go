@@ -321,19 +321,6 @@ WHERE conversation_id = $1`, conversationID).Scan(&text, &tokenCount, &summarize
 	}
 }
 
-func assertMiniAppSummaryCount(t *testing.T, ctx context.Context, execer interface {
-	QueryRow(context.Context, string, ...any) pgx.Row
-}, conversationID uuid.UUID, want int) {
-	t.Helper()
-	var got int
-	if err := execer.QueryRow(ctx, `SELECT count(*) FROM conversation_summaries WHERE conversation_id = $1`, conversationID).Scan(&got); err != nil {
-		t.Fatalf("summary count: %v", err)
-	}
-	if got != want {
-		t.Fatalf("summary count = %d, want %d", got, want)
-	}
-}
-
 func assertMiniAppJobParams(t *testing.T, ctx context.Context, execer interface {
 	QueryRow(context.Context, string, ...any) pgx.Row
 }, jobID uuid.UUID, wantThread string, wantMiniAppSource bool) {

@@ -58,6 +58,7 @@ regexes = [
   '''dev-confirmation''',
   '''(?i)change[-_]?me''',
   '''example''',
+  '''^(?:OPENAI_API_KEY|DEEPINFRA_API_KEY|FAL_API_KEY|FAL_KEY|FAL_WEBHOOK_SECRET|RUNWAYML_API_SECRET|POYO_API_KEY|APIMART_API_KEY|YOOKASSA_SHOP_ID|YOOKASSA_SECRET_KEY)=$''',
   '''loadtest-(confirmation|admin-token)''',
   '''placeholder''',
 ]

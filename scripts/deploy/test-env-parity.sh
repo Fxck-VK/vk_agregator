@@ -102,7 +102,7 @@ POYO_API_KEY=prod-secret-poyo
 BACKUP_DIR=/var/backups/vk-ai-aggregator
 EOF
 
-valid_log="$("${script}" --dev "${valid_dev}" --prod "${valid_prod}" --dev-template "${dev_template}" --prod-template "${prod_contract}" 2>&1)"
+valid_log="$(bash "${script}" --dev "${valid_dev}" --prod "${valid_prod}" --dev-template "${dev_template}" --prod-template "${prod_contract}" 2>&1)"
 assert_not_contains "${valid_log}" "dev-secret" "valid parity log"
 assert_not_contains "${valid_log}" "prod-secret" "valid parity log"
 assert_not_contains "${valid_log}" "${valid_dev}" "valid parity log"
@@ -114,15 +114,15 @@ missing_prod="${tmpdir}/missing.prod.env"
 grep -v '^POYO_API_KEY=' "${valid_prod}" > "${missing_prod}"
 expect_failure \
   "DEV key missing from PROD" \
-  "${script}" --dev "${valid_dev}" --prod "${missing_prod}" --dev-template "${dev_template}" --prod-template "${prod_contract}"
+  bash "${script}" --dev "${valid_dev}" --prod "${missing_prod}" --dev-template "${dev_template}" --prod-template "${prod_contract}"
 
 missing_contract="${tmpdir}/missing-contract.prod.env"
 grep -v '^YOOKASSA_SECRET_KEY=' "${valid_prod}" > "${missing_contract}"
 expect_failure \
   "PROD contract key missing" \
-  "${script}" --dev "${valid_dev}" --prod "${missing_contract}" --dev-template "${dev_template}" --prod-template "${prod_contract}"
+  bash "${script}" --dev "${valid_dev}" --prod "${missing_contract}" --dev-template "${dev_template}" --prod-template "${prod_contract}"
 
-bad_log="$("${script}" --dev "${valid_dev}" --prod "${missing_prod}" --dev-template "${dev_template}" --prod-template "${prod_contract}" 2>&1 || true)"
+bad_log="$(bash "${script}" --dev "${valid_dev}" --prod "${missing_prod}" --dev-template "${dev_template}" --prod-template "${prod_contract}" 2>&1 || true)"
 assert_not_contains "${bad_log}" "dev-secret" "failing parity log"
 assert_not_contains "${bad_log}" "prod-secret" "failing parity log"
 assert_not_contains "${bad_log}" "${valid_dev}" "failing parity log"

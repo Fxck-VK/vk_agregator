@@ -30,10 +30,10 @@ PUBLIC_VK_BASE_URL=https://dev-vk.neiirohub.ru
 PUBLIC_APP_BASE_URL=https://dev-app.neiirohub.ru
 PUBLIC_PAYMENT_WEBHOOK_URL=https://dev.neiirohub.ru/billing/webhooks/yookassa
 VK_GROUP_ID=239658332
-VK_ACCESS_TOKEN=secret-vk-token-for-test
-VK_SECRET=secret-vk-callback-for-test
-VK_CONFIRMATION_TOKEN=secret-vk-confirmation-for-test
-CLOUDFLARED_TUNNEL_TOKEN=secret-cloudflare-token-for-test
+VK_ACCESS_TOKEN=vk-token-placeholder
+VK_SECRET=vk-callback-placeholder
+VK_CONFIRMATION_TOKEN=vk-confirmation-placeholder
+CLOUDFLARED_TUNNEL_TOKEN=dev-test-token-value
 PAYMENT_PROVIDER=${payment_provider}
 PROVIDER=mock
 PROVIDER_CHAIN=mock
@@ -41,7 +41,7 @@ IMAGE_PROVIDER=mock
 VIDEO_PROVIDER=mock
 DEV_ALLOW_REAL_PAYMENTS=false
 YOOKASSA_SHOP_ID=dev-test-shop
-YOOKASSA_SECRET_KEY=secret-yookassa-key-for-test
+YOOKASSA_SECRET_KEY=yookassa-key-placeholder
 YOOKASSA_RETURN_URL=https://dev-app.neiirohub.ru/
 EOF
 }
@@ -63,21 +63,21 @@ run_valid_case() {
   fi
 
   log="$({
-    "${prepare_script}" \
+    bash "${prepare_script}" \
       --input "${raw}" \
       --output "${rendered}" \
       --image-tag sha-test123 \
       --ghcr-username test-ghcr-user \
-      --ghcr-token secret-ghcr-token-for-test
-    "${check_script}" --env-file "${rendered}"
+      --ghcr-token ghcr-token-placeholder
+    bash "${check_script}" --env-file "${rendered}"
   } 2>&1)"
 
-  assert_not_contains "${log}" "secret-vk-token-for-test" "${name} log"
-  assert_not_contains "${log}" "secret-vk-callback-for-test" "${name} log"
-  assert_not_contains "${log}" "secret-vk-confirmation-for-test" "${name} log"
-  assert_not_contains "${log}" "secret-cloudflare-token-for-test" "${name} log"
-  assert_not_contains "${log}" "secret-yookassa-key-for-test" "${name} log"
-  assert_not_contains "${log}" "secret-ghcr-token-for-test" "${name} log"
+  assert_not_contains "${log}" "vk-token-placeholder" "${name} log"
+  assert_not_contains "${log}" "vk-callback-placeholder" "${name} log"
+  assert_not_contains "${log}" "vk-confirmation-placeholder" "${name} log"
+  assert_not_contains "${log}" "dev-test-token-value" "${name} log"
+  assert_not_contains "${log}" "yookassa-key-placeholder" "${name} log"
+  assert_not_contains "${log}" "ghcr-token-placeholder" "${name} log"
 }
 
 expect_failure() {
@@ -99,6 +99,6 @@ run_valid_case "yookassa-dev" "yookassa"
 prod_url_env="${tmpdir}/prod-url.env"
 write_common_dev_env "${prod_url_env}" "mock"
 sed -i 's#PUBLIC_VK_BASE_URL=https://dev-vk.neiirohub.ru#PUBLIC_VK_BASE_URL=https://vk.neiirohub.ru#' "${prod_url_env}"
-expect_failure "prod URL in DEV env" "${check_script}" --env-file "${prod_url_env}"
+expect_failure "prod URL in DEV env" bash "${check_script}" --env-file "${prod_url_env}"
 
 echo "DEV deploy env script tests passed"
