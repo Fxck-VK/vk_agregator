@@ -1,3 +1,0 @@
--- No-op reservation.
--- Migration 000030 already exists in history; keep 000029 reserved so
--- sequential migration validators pass without renumbering an applied file.
