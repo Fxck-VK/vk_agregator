@@ -58,7 +58,7 @@ func TestBuildIncludesEnabledNeuroHubCatalogFacts(t *testing.T) {
 		t.Fatal("expected facts to be relevant")
 	}
 	for _, want := range []string{
-		"NeuroHub facts",
+		"Факты НейроХаб",
 		"НейроХаб",
 		"Nano Banana 2",
 		"Nano Banana Pro",
@@ -74,6 +74,8 @@ func TestBuildIncludesEnabledNeuroHubCatalogFacts(t *testing.T) {
 	}
 	for _, forbidden := range []string{
 		"GPT Image 2",
+		"NeuroHub",
+		"продукт",
 		"deepseek",
 		"deepinfra",
 		"provider",
@@ -169,11 +171,14 @@ func TestBuildReturnsEmptyForUnrelatedPrompt(t *testing.T) {
 }
 
 func TestAttachDoesNotStoreFactsAsUserText(t *testing.T) {
-	rendered := Attach("NeuroHub facts:\n- model list", "Current user request:\nКакие модели есть?")
-	if !strings.Contains(rendered, "NeuroHub facts") || !strings.Contains(rendered, "Current user request") {
+	rendered := Attach("Факты НейроХаб:\n- список моделей", "Current user request:\nКакие модели есть?")
+	if !strings.Contains(rendered, "Факты НейроХаб") || !strings.Contains(rendered, "Current user request") {
 		t.Fatalf("attached prompt missing sections:\n%s", rendered)
 	}
-	if strings.Index(rendered, "NeuroHub facts") > strings.Index(rendered, "Current user request") {
+	if strings.Contains(rendered, "NeuroHub") || strings.Contains(strings.ToLower(rendered), "product") {
+		t.Fatalf("attached prompt should not contain English brand/product wording:\n%s", rendered)
+	}
+	if strings.Index(rendered, "Факты НейроХаб") > strings.Index(rendered, "Current user request") {
 		t.Fatalf("facts must precede user request:\n%s", rendered)
 	}
 }

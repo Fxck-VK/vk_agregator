@@ -1,4 +1,4 @@
-// Package assistantfacts renders backend-owned public NeuroHub facts for the
+// Package assistantfacts renders backend-owned public НейроХаб facts for the
 // text assistant. It intentionally exposes only product-level catalog data.
 package assistantfacts
 
@@ -14,7 +14,7 @@ import (
 	"vk-ai-aggregator/internal/service/productcatalog"
 )
 
-const header = "NeuroHub facts"
+const header = "Факты НейроХаб"
 
 // BalanceProvider reads the backend-owned user balance for assistant facts.
 type BalanceProvider interface {
@@ -66,7 +66,7 @@ func New(cfg Config) *Builder {
 	}
 }
 
-// Build returns a compact public facts block only for NeuroHub/product intents.
+// Build returns a compact public facts block only for НейроХаб catalog intents.
 func (b *Builder) Build(ctx context.Context, in Input) (Facts, error) {
 	intent := classify(in.Prompt)
 	if !intent.relevant {
@@ -79,7 +79,7 @@ func (b *Builder) Build(ctx context.Context, in Input) (Facts, error) {
 		"- Ты НейроХаб. На вопросы о моделях, генерации, ценах, качестве, длительностях, референсах и балансе отвечай только по этим фактам.",
 		"- Не перечисляй мировые AI-модели, если их нет в каталоге НейроХаб.",
 		"- Не раскрывай внутренние маршруты, API, системные настройки и технические идентификаторы.",
-		"- Текстовый ассистент: НейроХаб, бесплатный чат внутри продукта.",
+		"- Текстовый ассистент: НейроХаб, бесплатный чат.",
 	)
 
 	imageLines, videoLines, err := b.catalogLines(ctx)
@@ -117,7 +117,7 @@ func Attach(facts, prompt string) string {
 	case prompt == "":
 		return facts
 	default:
-		return facts + "\n\nAssistant instruction: use the facts above when they answer the user's product question. If a requested product fact is absent, say that it is currently unavailable in NeuroHub.\n\n" + prompt
+		return facts + "\n\nИнструкция ассистенту: используй факты выше, когда они отвечают на вопрос пользователя о НейроХаб. Если нужного факта нет, скажи, что сейчас в НейроХаб это недоступно.\n\n" + prompt
 	}
 }
 

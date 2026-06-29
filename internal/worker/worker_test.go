@@ -1085,12 +1085,12 @@ func TestGenerationTextPrependsNeuroHubFactsWithoutStoringThem(t *testing.T) {
 	if err := h.gen.Process(ctx, taskFor(job)); err != nil {
 		t.Fatalf("process: %v", err)
 	}
-	for _, want := range []string{"NeuroHub facts", "Nano Banana 2", "Kling O3 Standard", "context packet", rawPrompt} {
+	for _, want := range []string{"Факты НейроХаб", "Nano Banana 2", "Kling O3 Standard", "context packet", rawPrompt} {
 		if !strings.Contains(provider.last.Prompt, want) {
 			t.Fatalf("provider prompt missing %q:\n%s", want, provider.last.Prompt)
 		}
 	}
-	for _, forbidden := range []string{"deepseek", "deepinfra", "provider", "floor", "multiplier"} {
+	for _, forbidden := range []string{"NeuroHub", "продукт", "deepseek", "deepinfra", "provider", "floor", "multiplier"} {
 		if strings.Contains(strings.ToLower(provider.last.Prompt), forbidden) {
 			t.Fatalf("provider prompt leaked %q:\n%s", forbidden, provider.last.Prompt)
 		}
@@ -1105,7 +1105,7 @@ func TestGenerationTextPrependsNeuroHubFactsWithoutStoringThem(t *testing.T) {
 	if len(tasks) != 1 {
 		t.Fatalf("provider task count = %d, want 1", len(tasks))
 	}
-	if strings.Contains(string(tasks[0].Request), "NeuroHub facts") || strings.Contains(string(tasks[0].Request), rawPrompt) {
+	if strings.Contains(string(tasks[0].Request), "Факты НейроХаб") || strings.Contains(string(tasks[0].Request), rawPrompt) {
 		t.Fatalf("provider task request must not persist facts or prompt: %s", string(tasks[0].Request))
 	}
 }

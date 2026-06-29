@@ -52,7 +52,7 @@ func TestSubmitPollTextSuccess(t *testing.T) {
 		t.Fatalf("unexpected task: %+v", task)
 	}
 	systemPrompt := seen.Messages[0].Content
-	if seen.Model != defaultTextModel || len(seen.Messages) != 2 || seen.Messages[0].Role != "system" || !strings.Contains(systemPrompt, "3000 characters") || !strings.Contains(systemPrompt, "NeuroHub") || !strings.Contains(systemPrompt, "NeuroHub facts") || !strings.Contains(systemPrompt, "model name") || seen.Messages[1].Content != "hello" || seen.Stream {
+	if seen.Model != defaultTextModel || len(seen.Messages) != 2 || seen.Messages[0].Role != "system" || !strings.Contains(systemPrompt, "3000") || !strings.Contains(systemPrompt, "НейроХаб") || !strings.Contains(systemPrompt, "Факты НейроХаб") || !strings.Contains(systemPrompt, "код модели") || strings.Contains(systemPrompt, "NeuroHub") || seen.Messages[1].Content != "hello" || seen.Stream {
 		t.Fatalf("unexpected request body: %+v", seen)
 	}
 
