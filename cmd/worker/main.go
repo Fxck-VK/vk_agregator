@@ -36,6 +36,7 @@ import (
 	"vk-ai-aggregator/internal/platform/readiness"
 	"vk-ai-aggregator/internal/platform/tracing"
 	"vk-ai-aggregator/internal/service/artifactservice"
+	"vk-ai-aggregator/internal/service/assistantfacts"
 	"vk-ai-aggregator/internal/service/billingservice"
 	"vk-ai-aggregator/internal/service/dialogcontext"
 	"vk-ai-aggregator/internal/service/maintenance"
@@ -43,6 +44,8 @@ import (
 	"vk-ai-aggregator/internal/service/mediatranscode"
 	"vk-ai-aggregator/internal/service/moderationservice"
 	"vk-ai-aggregator/internal/service/outboxrelay"
+	"vk-ai-aggregator/internal/service/pricingcatalog"
+	"vk-ai-aggregator/internal/service/productcatalog"
 	"vk-ai-aggregator/internal/worker"
 )
 
@@ -134,6 +137,57 @@ func main() {
 
 	billing := billingservice.New(billingRepo, billingservice.WithPriceOverrides(cfg.PriceOverrides))
 	publisher := redisqueue.NewPublisher(rdb, cfg.StreamMaxLen)
+	staticPricingCatalog, err := pricingcatalog.NewStaticCatalog()
+	if err != nil {
+		logger.Error("pricing catalog wiring failed", logging.ErrorAttr(err))
+		os.Exit(1)
+	}
+	pricingCache := pricingcatalog.NewRuntimeCatalogCache(
+		postgres.NewRuntimePricingRepository(pool),
+		staticPricingCatalog,
+		pricingcatalog.RuntimeCatalogConfig{
+			DBEnabled:             cfg.RuntimePricingDBEnabled,
+			StaticFallbackEnabled: cfg.RuntimePricingStaticFallbackEnabled,
+		},
+	)
+	if err := pricingCache.Load(readCtx); err != nil {
+		logger.Error("runtime pricing load failed", logging.ErrorAttr(err))
+		os.Exit(1)
+	}
+	pricingCatalog, pricingSelection, err := pricingCache.Current()
+	if err != nil {
+		logger.Error("runtime pricing cache unavailable", logging.ErrorAttr(err))
+		os.Exit(1)
+	}
+	if cfg.RuntimePricingRefreshInterval > 0 {
+		stopPricingRefresh := pricingCache.StartAutoRefresh(readCtx, cfg.RuntimePricingRefreshInterval, func(err error) {
+			logger.Error("runtime pricing refresh failed", logging.ErrorAttr(err))
+		})
+		defer stopPricingRefresh()
+	}
+	logger.Info("runtime pricing loaded",
+		"source", pricingSelection.Source,
+		"version", pricingSelection.Version,
+		"static_fallback", pricingSelection.StaticFallback,
+	)
+	assistantCatalogSource := func(context.Context) (*productcatalog.Catalog, error) {
+		runtimeCatalog, err := productcatalog.FromConfig(cfg, pricingCatalog)
+		if err != nil {
+			return nil, err
+		}
+		return runtimeCatalog.Catalog, nil
+	}
+	assistantCatalog, err := assistantCatalogSource(readCtx)
+	if err != nil {
+		logger.Error("product catalog wiring failed", logging.ErrorAttr(err))
+		os.Exit(1)
+	}
+	assistantFacts := assistantfacts.New(assistantfacts.Config{
+		Catalog:        assistantCatalog,
+		CatalogSource:  assistantCatalogSource,
+		PricingCatalog: pricingCatalog,
+		Balance:        billing,
+	})
 
 	// Provider routing: the first provider is primary; later providers are
 	// fallback candidates used by the worker registry when retryable submit
@@ -352,11 +406,12 @@ func main() {
 			SummarizeAfterMessages: cfg.TextContextSummarizeAfterMessages,
 			SummarizeAfterTokens:   cfg.TextContextSummarizeAfterTokens,
 		}),
-		Moderator:   moderator,
-		ModResults:  modResults,
-		Releaser:    billing,
-		MaxAttempts: cfg.MaxAttempts,
-		Backoff:     worker.ExponentialBackoff(cfg.RetryBaseDelay, cfg.RetryMaxDelay),
+		AssistantFacts: assistantFacts,
+		Moderator:      moderator,
+		ModResults:     modResults,
+		Releaser:       billing,
+		MaxAttempts:    cfg.MaxAttempts,
+		Backoff:        worker.ExponentialBackoff(cfg.RetryBaseDelay, cfg.RetryMaxDelay),
 	}
 	gen := worker.NewGenerationWorker(deps)
 	poll := worker.NewPollWorker(deps)
