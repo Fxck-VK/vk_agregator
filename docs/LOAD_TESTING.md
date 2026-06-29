@@ -13,6 +13,9 @@ before moving data stores, adding servers or changing queue topology.
 Load tests must answer these questions:
 
 - how much traffic `cmd/api` can accept before latency or errors grow;
+- what sustained API RPS is safe, not just what peak RPS appears briefly;
+- how many Jobs/sec the API accepts into Redis without creating duplicates;
+- how many Jobs/sec workers complete to terminal state;
 - whether VK webhook handling stays idempotent under repeated events;
 - whether Mini App BFF routes keep acceptable latency under concurrent users;
 - whether Redis queue depth grows faster than workers can drain it;
@@ -20,6 +23,41 @@ Load tests must answer these questions:
 - whether workers process text/image/video jobs without starving lighter work;
 - whether artifact storage/readiness becomes a bottleneck;
 - whether billing mock/payment-intent paths stay ledger-safe under load.
+
+### Capacity Definition
+
+For this project, "capacity" means a measured, repeatable load level where all
+of these stay within budget for a sustained step, not a one-off spike:
+
+| Metric | Meaning |
+|---|---|
+| API RPS | Accepted HTTP requests per second across health, VK webhook and Mini App BFF paths |
+| Jobs accepted/sec | Jobs persisted/enqueued by API per second without duplicate job creation |
+| Worker throughput | Jobs reaching terminal state per second through worker/mock provider paths |
+| p95/p99 latency | API latency stays within the configured report thresholds |
+| Error rate | HTTP and job failure rates stay within the configured report thresholds |
+| Redis backlog | Queue pending+lag does not grow continuously during a sustained step |
+| DLQ/retries | DLQ remains zero unless the test intentionally exercises retry failure paths |
+| Postgres | No long-running queries, blocking locks or repeated hot sequential scans |
+| CPU/RAM | Runtime containers do not saturate CPU or memory before the target step ends |
+
+The first bottleneck is the first component that crosses threshold while the
+test is still increasing load. Report it as one of: API, Redis, Postgres,
+worker, S3/MinIO, CPU/RAM, test data/config, or external provider quota if and
+only if a separately approved credential-bound run was performed.
+
+### Stop Criteria
+
+Stop the current ramp step and capture diagnostics when any of these happens:
+
+- HTTP error rate exceeds `LOADTEST_REPORT_MAX_ERROR_RATE`;
+- API p95 exceeds `LOADTEST_REPORT_MAX_P95_MS`;
+- Redis queue depth exceeds `LOADTEST_REPORT_MAX_QUEUE_DEPTH` or grows for the
+  full sustained step without draining;
+- DLQ depth exceeds `LOADTEST_REPORT_MAX_DLQ`;
+- worker throughput stays materially below job create rate;
+- Postgres reports blocking locks or persistent long-running queries;
+- containers hit obvious CPU/RAM saturation.
 
 ### Surfaces In Scope
 
@@ -81,6 +119,9 @@ ARTIFACT_SCANNER=none
 FEATURE_VIDEO_ROUTER_ENABLED=true
 FEATURE_VIDEO_ROUTE_MOCK_TEXT_TO_VIDEO_ENABLED=true
 FEATURE_IMAGE_MODEL_MOCK_ENABLED=true
+LOADTEST_REQUIRE_MOCK_CONTOUR=true
+LOADTEST_BLOCK_PRODUCTION_HOSTS=true
+K6_ALLOW_PRODUCTION_LIVE_SMOKE=false
 ```
 
 Any test that enables real providers, real VK delivery, YooKassa or production
@@ -125,6 +166,8 @@ notepad .env.loadtest
 The template intentionally sets:
 
 ```text
+LOADTEST_REQUIRE_MOCK_CONTOUR=true
+LOADTEST_BLOCK_PRODUCTION_HOSTS=true
 PROVIDER=mock
 PROVIDER_CHAIN=mock
 IMAGE_PROVIDER=mock
@@ -134,6 +177,19 @@ VK_DELIVERY_MODE=mock
 MODERATION_PROVIDER=keyword
 ARTIFACT_SCANNER=none
 ```
+
+Before a capacity run, execute the preflight:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass `
+  -File scripts/loadtest/loadtest-preflight.ps1 `
+  -EnvFile .env.loadtest
+```
+
+The preflight checks only names and modes. It does not print secret values. It
+fails if `APP_ENV` is not `loadtest`, providers/payments/VK delivery are not
+mocked, real provider/payment/VK tokens are present, production hosts are used,
+or production override flags are enabled.
 
 Postgres, Redis and MinIO use the current isolated infrastructure by default:
 
@@ -183,15 +239,75 @@ Chapter 2 enables safe load tests for:
 - MinIO artifact writes;
 - mock billing reservation/capture/release/top-up flows.
 
-It does not yet add k6 scripts or performance budgets. Those belong to later
-chapters.
+The later chapters below add k6 scripts, diagnostics and report generation on
+top of this safe contour.
 
-## Chapter 3. Basic k6 Scenarios
+## Chapter 3. Baseline Smoke
 
 ### Goal
 
-Chapter 3 adds the first safe k6 script for the API surface without heavy
-generation calls or paid providers. The script covers:
+Chapter 3 defines the small smoke that must pass before any capacity ramp. It
+proves that the load-test contour is alive and still safe:
+
+```text
+/health
+/readyz
+VK webhook mock
+Mini App endpoints
+text/image/video mock jobs
+billing mock
+Redis DLQ = 0
+```
+
+The runner does not hit production hosts, real VK delivery, YooKassa or paid AI
+providers. It calls the preflight from Chapter 2 before running k6.
+
+### Runner
+
+The runner lives at:
+
+```text
+scripts/loadtest/baseline-smoke.ps1
+```
+
+Run it after the load-test API/worker/data stack is up:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass `
+  -File scripts/loadtest/baseline-smoke.ps1 `
+  -EnvFile .env.loadtest `
+  -UseDockerCompose
+```
+
+It writes artifacts under:
+
+```text
+reports/loadtest/baseline-<timestamp>/
+```
+
+The baseline smoke executes:
+
+| Step | Script | Purpose |
+|---|---|---|
+| basic-api-smoke | `tests/k6/basic-api.js` | `/health`, `/readyz`, VK webhook, Mini App balance/job create |
+| vk-bot-smoke | `tests/k6/vk-bot.js` | `/start`, menu callbacks, duplicate replay, small cooldown burst |
+| job-text-smoke | `tests/k6/job-worker.js` | text mock job lifecycle |
+| job-image-smoke | `tests/k6/job-worker.js` | image mock job lifecycle |
+| job-video-smoke | `tests/k6/job-worker.js` | video mock job lifecycle through the mock route |
+| billing-mock-smoke | `tests/k6/billing-payments.js` | payment intent, mock top-up, refund/idempotency |
+| Redis DLQ check | `scripts/loadtest/redis-diagnostics.ps1` | requires `dlq_depth = 0` |
+
+The default duration per scenario is:
+
+```text
+K6_BASELINE_SMOKE_DURATION=10s
+```
+
+The runner fails if any k6 scenario fails or if Redis DLQ is non-zero.
+
+### Basic API Script
+
+The basic API script covers:
 
 ```text
 GET  /health
@@ -297,12 +413,138 @@ The basic scenario is green when:
 - p95 request latency stays under the configured threshold;
 - HTTP failures remain below the configured threshold.
 
-## Chapter 4. VK Bot Load Scenario
+## Chapter 4. RPS Ramp
 
 ### Goal
 
-Chapter 4 adds a VK Bot-specific k6 scenario that exercises the same inbound
-surface VK uses in production, but with synthetic users and load-test secrets:
+Chapter 4 turns the safe load-test contour into a controlled capacity ramp.
+Run it only after Chapter 3 baseline smoke is green.
+
+The first supported steps are:
+
+```text
+10 RPS
+25 RPS
+50 RPS
+100 RPS
+```
+
+Continue above 100 RPS only when the previous step is stable and there are no
+DLQ entries, runaway Redis backlog, Postgres lock issues or unacceptable
+latency.
+
+The ramp still uses mock providers, mock payments and synthetic VK/Mini App
+users. It must not hit production hosts or paid provider APIs.
+
+### Runner
+
+The runner lives at:
+
+```text
+scripts/loadtest/rps-ramp.ps1
+```
+
+Run it after the load-test API/worker/data stack is up and the baseline smoke
+has passed:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass `
+  -File scripts/loadtest/rps-ramp.ps1 `
+  -EnvFile .env.loadtest `
+  -UseDockerCompose
+```
+
+It writes artifacts under:
+
+```text
+reports/loadtest/rps-ramp-<timestamp>/
+```
+
+Each RPS step captures:
+
+| Area | Output |
+|---|---|
+| k6 API ramp | `api-ramp.summary.json`, `api-ramp.k6.log` |
+| p95/p99 latency and error rate | `rps-ramp-report.md`, `rps-ramp-summary.json` |
+| Redis queue/DLQ/backlog | `redis-diagnostics.md`, `redis-diagnostics.snapshot.json` |
+| Postgres locks/stats/index usage | `postgres-diagnostics.md` |
+| CPU/RAM snapshot | `docker-stats.jsonl` |
+
+### Ramp Script
+
+The k6 script lives at:
+
+```text
+tests/k6/api-ramp.js
+```
+
+It uses `constant-arrival-rate` and mixes common API surfaces:
+
+| Surface | Default weight | Endpoint |
+|---|---:|---|
+| health/readiness | 20 | `GET /health`, `GET /readyz` |
+| VK webhook mock | 30 | `POST /webhooks/vk` |
+| Mini App balance | 30 | `GET /miniapp/balance` |
+| text job creation | 20 | `POST /miniapp/jobs` |
+
+The job creation path only submits lightweight `text_generate` mock jobs. The
+separate Chapter 5 job/worker tests cover heavier text/image/video queue
+behavior.
+
+### Tunables
+
+The default ramp settings are:
+
+```text
+K6_CAPACITY_RAMP_STEPS=10,25,50,100
+K6_CAPACITY_SUSTAIN_DURATION=2m
+K6_RAMP_HEALTH_WEIGHT=20
+K6_RAMP_VK_WEIGHT=30
+K6_RAMP_MINIAPP_WEIGHT=30
+K6_RAMP_JOB_WEIGHT=20
+K6_RAMP_JOB_PROMPT=load-test ramp text prompt
+```
+
+Use a shorter duration for script validation, not for capacity decisions:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass `
+  -File scripts/loadtest/rps-ramp.ps1 `
+  -EnvFile .env.loadtest `
+  -Steps 10,25 `
+  -Duration 30s `
+  -UseDockerCompose
+```
+
+### Stop Criteria
+
+Stop the ramp and inspect diagnostics when any step shows:
+
+- non-zero DLQ;
+- sustained Redis backlog growth after the step ends;
+- HTTP error rate over the threshold;
+- p95/p99 latency above the agreed threshold;
+- Postgres locks or slow query patterns;
+- CPU/RAM saturation in Docker stats;
+- worker throughput lower than incoming job rate.
+
+### Success Criteria
+
+The RPS ramp is green when:
+
+- all configured steps complete;
+- error rate stays below the k6 threshold;
+- p95/p99 latency is recorded for every step;
+- Redis backlog and DLQ are captured and DLQ remains zero;
+- Postgres diagnostics are captured after every step;
+- CPU/RAM snapshots exist for every step;
+- the report clearly shows the first visible bottleneck or confirms none was
+  observed at the tested load.
+
+### Dedicated VK Bot Scenario
+
+The dedicated VK Bot k6 scenario exercises the same inbound surface VK uses in
+production, but with synthetic users and load-test secrets:
 
 ```text
 POST /webhooks/vk
@@ -484,11 +726,67 @@ docker run --rm -i `
   grafana/k6:latest run /src/tests/k6/job-worker.js
 ```
 
+### Worker Capacity Runner
+
+Use the capacity runner when the goal is to compare text, image, video and
+mixed workloads in one pass:
+
+```powershell
+.\scripts\loadtest\worker-capacity.ps1 `
+  -EnvFile .env.loadtest `
+  -BaseUrl http://127.0.0.1:8080 `
+  -UseDockerCompose
+```
+
+The runner executes these workloads by default:
+
+```text
+text
+image
+video
+mixed
+```
+
+For every workload it writes a separate directory with:
+
+```text
+k6-summary.json
+k6-output.log
+redis-diagnostics.md
+redis-diagnostics.snapshot.json
+docker-stats.txt
+```
+
+The final report is:
+
+```text
+artifacts/loadtest/worker-capacity-*/worker-capacity-report.md
+```
+
+It compares:
+
+- accepted jobs and accepted jobs/sec;
+- terminal jobs and worker throughput/sec;
+- job completion p95/p99;
+- HTTP error rate;
+- Redis backlog and DLQ depth;
+- Redis memory and Docker CPU/RAM snapshot.
+
+If `redis-diagnostics.snapshot.json` reports DLQ entries, the runner fails by
+default. Use `-AllowDLQ` only for an intentional failure/retry test.
+
 ### Tunables
 
 The default run is intentionally small:
 
 ```text
+K6_WORKER_CAPACITY_WORKLOADS=text,image,video,mixed
+K6_WORKER_CAPACITY_DURATION=1m
+K6_WORKER_CAPACITY_TEXT_RATE=5
+K6_WORKER_CAPACITY_IMAGE_RATE=2
+K6_WORKER_CAPACITY_VIDEO_RATE=1
+K6_WORKER_CAPACITY_MIXED_RATE=3
+K6_WORKER_CAPACITY_FAIL_ON_DLQ=true
 K6_JOB_DURATION=30s
 K6_JOB_MIXED_RATE=1
 K6_JOB_TEXT_RATE=1
@@ -601,8 +899,9 @@ Also check service metrics if the contour exposes private `/metrics` locally:
 To check whether video jobs block text jobs:
 
 1. Run text-only at a stable rate and record `job_completion_duration`.
-2. Run `K6_JOB_WORKLOAD=all` with video enabled.
-3. Compare text completion latency and pending jobs.
+2. Run the worker-capacity runner, which includes `video` and `mixed`.
+3. Compare `text` completion latency/throughput with `mixed` completion
+   latency/throughput and Redis backlog.
 
 Text jobs should remain within the agreed budget even when video jobs are slow.
 If text latency grows sharply, split worker pools, queue groups or concurrency
@@ -628,11 +927,14 @@ Chapter 6 adds a read-only database diagnostic pass around load tests. It is
 used to identify Postgres bottlenecks before adding indexes or changing query
 patterns.
 
+Use the same pass as the capacity plan's Postgres diagnostics chapter.
+
 The diagnostic pass watches:
 
 - slow or frequently executed SQL;
 - active and long-running queries;
 - lock waits and blockers;
+- connection counts versus `max_connections`;
 - table size growth and dead tuples;
 - sequential scans on hot tables;
 - index usage and large unused index candidates;
@@ -786,6 +1088,10 @@ scripts/loadtest/redis-diagnostics.ps1
 
 It reads Redis settings from `.env.loadtest` by default and uses read-only
 Redis commands. It does not fetch key values or stream task payloads.
+
+The worker-capacity runner calls this script after each `text`, `image`,
+`video` and `mixed` workload so Redis pressure can be compared with worker
+throughput in the same report.
 
 ### Local Run
 
@@ -998,10 +1304,49 @@ tests/k6/billing-payments.js
 It is disabled by default and performs a no-op unless `K6_BASE_URL` or
 `K6_RUN=1` is set.
 
+The recommended runner for Chapter 8 is:
+
+```text
+scripts/loadtest/billing-load.ps1
+```
+
+It wraps the k6 scenario and writes one report directory with:
+
+- `k6-summary.json` and `k6-output.log`;
+- `postgres-before.md` and `postgres-after.md`;
+- `redis-diagnostics.md` and `redis-diagnostics.snapshot.json`;
+- `docker-stats.txt`;
+- `billing-load-report.md`;
+- `billing-load-summary.json`.
+
+This is the normal way to prove that payment intent creation, history,
+mock top-up, refund and replay/idempotency stay stable under load while
+Postgres and Redis are observed in the same run.
+
 ### Local Run
 
 Start an isolated load-test contour with API, worker, data services and mock
 payments. Then run:
+
+```powershell
+.\scripts\loadtest\billing-load.ps1 `
+  -EnvFile .env.loadtest `
+  -BaseUrl http://127.0.0.1:8080 `
+  -UseDockerCompose
+```
+
+If `cmd/provider-webhook` is running with `PAYMENT_PROVIDER=mock`, include
+the webhook replay endpoint:
+
+```powershell
+.\scripts\loadtest\billing-load.ps1 `
+  -EnvFile .env.loadtest `
+  -BaseUrl http://127.0.0.1:8080 `
+  -WebhookBaseUrl http://127.0.0.1:8082 `
+  -UseDockerCompose
+```
+
+The lower-level direct k6 command is still useful for debugging:
 
 ```powershell
 $env:K6_BASE_URL = "http://127.0.0.1:8080"
@@ -1043,10 +1388,16 @@ K6_PAYMENT_SAME_USER=false
 K6_PAYMENT_PRODUCT_CODE=crystals_99
 K6_PAYMENT_FORCE_NEW=true
 K6_PAYMENT_WEBHOOK_BASE_URL=
+K6_BILLING_LOAD_DURATION=1m
+K6_BILLING_LOAD_RATE=2
+K6_BILLING_LOAD_FAIL_ON_DLQ=true
 ```
 
 Use unique users by default. Set `K6_PAYMENT_SAME_USER=true` only when you
 want to measure same-user payment contention/idempotency behavior.
+
+The `K6_BILLING_LOAD_*` values are consumed by `billing-load.ps1`; the runner
+maps them to the lower-level `K6_PAYMENT_*` settings before invoking k6.
 
 ### k6 Metrics
 
@@ -1140,6 +1491,25 @@ powershell -NoProfile -ExecutionPolicy Bypass `
   -K6SummaryFiles reports/loadtest/run/basic-api.summary.json,reports/loadtest/run/job-worker.summary.json
 ```
 
+### Run From Chapter Runner Artifacts
+
+After Chapters 4, 5 and 8 have produced their reports, generate the final
+capacity report from those artifacts:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass `
+  -File scripts/loadtest/loadtest-report.ps1 `
+  -EnvFile .env.loadtest `
+  -RpsRampSummary reports/loadtest/rps-ramp-<timestamp>/rps-ramp-summary.json `
+  -WorkerCapacitySummary artifacts/loadtest/worker-capacity-<timestamp>/worker-capacity-summary.json `
+  -BillingLoadSummary artifacts/loadtest/billing-load-<timestamp>/billing-load-summary.json `
+  -UseDockerCompose
+```
+
+If explicit paths are omitted, the script searches `reports/loadtest` and
+`artifacts/loadtest` for the newest `rps-ramp-summary.json`,
+`worker-capacity-summary.json` and `billing-load-summary.json`.
+
 ### What The Report Contains
 
 | Area | Collected metrics |
@@ -1149,11 +1519,13 @@ powershell -NoProfile -ExecutionPolicy Bypass `
 | Redis | queue depth per stream, DLQ depth, memory, ops/sec, expired keys |
 | Postgres | long queries, blocking locks, table sizes, index/seq scan hints |
 | Runtime | container CPU/RAM, network I/O, block I/O from Docker stats |
+| Capacity summary | maximum stable RPS, jobs/sec accepted, jobs/sec completed, first bottleneck |
 
 The report also writes a machine-readable summary:
 
 ```text
 loadtest-summary.json
+loadtest-decisions.md
 ```
 
 ### Thresholds
@@ -1165,6 +1537,7 @@ LOADTEST_REPORT_MAX_ERROR_RATE=0.05
 LOADTEST_REPORT_MAX_P95_MS=1500
 LOADTEST_REPORT_MAX_QUEUE_DEPTH=100
 LOADTEST_REPORT_MAX_DLQ=0
+LOADTEST_REPORT_MAX_CPU_PERCENT=85
 ALLOW_PRODUCTION_LOADTEST_REPORT=false
 ```
 
@@ -1184,9 +1557,12 @@ finding as the initial bottleneck candidate.
 Chapter 9 is green when one report clearly shows:
 
 - RPS;
+- maximum stable RPS;
 - p95/p99 latency;
 - error rate;
 - queue depth;
+- jobs/sec accepted;
+- jobs/sec completed;
 - worker throughput;
 - Postgres slow-query/lock diagnostics;
 - Redis memory/ops;
@@ -1259,6 +1635,16 @@ Write a decision note next to the report:
 reports/loadtest/<timestamp>/loadtest-decisions.md
 ```
 
+`loadtest-report.ps1` writes this file automatically. It must record:
+
+- whether the current worker count is enough for the measured mock workload;
+- whether text/image/video queues need to be separated now or only watched;
+- whether indexes are justified by diagnostics or need another run;
+- whether Postgres/Redis/S3 can stay on the current topology for now;
+- what public RPS/rate-limit ceiling is safe before the next run;
+- whether the current VPS is enough for the measured baseline;
+- which real provider quotas must be checked outside mock load tests.
+
 The note must include:
 
 - verdict;
@@ -1273,3 +1659,66 @@ The note must include:
 
 Chapter 10 is complete when the next engineering action is clear and specific.
 It does not mean the system is ready for production-scale traffic.
+
+## Admin / Operator API Capacity
+
+Admin/operator endpoints must be tested separately from public user traffic.
+They read large operational tables and can become their own database bottleneck
+if dashboards scan raw jobs, messages, payments or audit rows.
+
+The k6 scenario lives at:
+
+```text
+tests/k6/admin-actions.js
+```
+
+It checks:
+
+- unauthenticated `/admin/*` access is denied;
+- protected operator read-model endpoints return safe JSON DTOs;
+- retention dry-run stays bounded;
+- optional guarded cleanup action remains controlled and audited.
+
+Local run:
+
+```powershell
+$env:K6_BASE_URL = "http://127.0.0.1:8080"
+$env:K6_ADMIN_TOKEN = "loadtest-admin-token"
+$env:K6_ADMIN_DURATION = "1m"
+$env:K6_ADMIN_READ_RATE = "5"
+k6 run tests/k6/admin-actions.js
+```
+
+Equivalent Docker run:
+
+```powershell
+docker run --rm -i `
+  -e K6_BASE_URL=http://host.docker.internal:8080 `
+  -e K6_ADMIN_TOKEN=loadtest-admin-token `
+  -e K6_ADMIN_DURATION=1m `
+  -e K6_ADMIN_READ_RATE=5 `
+  -v "${PWD}:/src:ro" `
+  grafana/k6:latest run /src/tests/k6/admin-actions.js
+```
+
+The script refuses production hosts by default. Do not override this for
+capacity testing. `K6_ALLOW_PRODUCTION_LIVE_SMOKE=true` is reserved for a
+separate human-approved live smoke, not for load tests.
+
+Mutation smoke:
+
+```powershell
+$env:K6_ADMIN_MUTATION_SMOKE = "true"
+```
+
+Use it only in `APP_ENV=loadtest` with mock data and a fresh backup. It must not
+run against production data.
+
+Admin capacity is acceptable only when:
+
+- public unauthenticated `/admin/*` returns `401`, `403` or `404`;
+- p95 admin read latency stays below the report threshold;
+- no response contains obvious secret markers, raw prompts, provider payloads,
+  payment payloads, private URLs or raw PII;
+- Postgres diagnostics do not show long-running scans from admin dashboards;
+- audit log volume remains bounded and searchable.

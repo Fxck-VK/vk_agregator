@@ -195,6 +195,10 @@ if ([string]::IsNullOrWhiteSpace($AppBaseUrl)) {
 if ([string]::IsNullOrWhiteSpace($PaymentWebhookUrl)) {
     $PaymentWebhookUrl = Get-SmokeEnvValue -Name "PUBLIC_PAYMENT_WEBHOOK_URL" -Default (Get-SmokeEnvValue -Name "PAYMENT_WEBHOOK_URL" -Default "https://neiirohub.ru/billing/webhooks/yookassa")
 }
+$PaymentBaseUrl = Get-SmokeEnvValue -Name "PUBLIC_PAYMENT_BASE_URL" -Default ""
+if ([string]::IsNullOrWhiteSpace($PaymentBaseUrl)) {
+    $PaymentBaseUrl = $PaymentWebhookUrl -replace "/billing/webhooks/yookassa/?$", ""
+}
 if ([string]::IsNullOrWhiteSpace($ApiHealthUrl)) {
     $ApiHealthUrl = Get-SmokeUrlFromListenAddr -Address (Get-SmokeEnvValue -Name "HTTP_ADDR" -Default ":8080") -Path "/readyz"
 }
@@ -216,10 +220,12 @@ if ([string]::IsNullOrWhiteSpace($ReverseProxyHealthUrl)) {
 
 $VkBaseUrl = Normalize-BaseUrl $VkBaseUrl
 $AppBaseUrl = Normalize-BaseUrl $AppBaseUrl
+$PaymentBaseUrl = Normalize-BaseUrl $PaymentBaseUrl
 
 Assert-HttpsUrl -Name "VK base URL" -Url $VkBaseUrl
 Assert-HttpsUrl -Name "Mini App base URL" -Url $AppBaseUrl
 Assert-HttpsUrl -Name "YooKassa webhook URL" -Url $PaymentWebhookUrl
+Assert-HttpsUrl -Name "Payment/admin base URL" -Url $PaymentBaseUrl
 
 Write-Host "Running safe production smoke checks"
 if (-not [string]::IsNullOrWhiteSpace($EnvFile)) {
@@ -228,6 +234,7 @@ if (-not [string]::IsNullOrWhiteSpace($EnvFile)) {
 Write-Host "VK base: $VkBaseUrl"
 Write-Host "Mini App base: $AppBaseUrl"
 Write-Host "Payment webhook: $PaymentWebhookUrl"
+Write-Host "Payment/admin base: $PaymentBaseUrl"
 
 if (-not $PaymentWebhookOnly -and -not $SkipLocalHealth) {
     $status = Invoke-SmokeRequest -Name "API local health" -Method "GET" -Url $ApiHealthUrl
@@ -268,15 +275,30 @@ Assert-ControlledWebhookReject -Name "YooKassa webhook route" -Status $status
 
 $blockedUrls = @(
     "$VkBaseUrl/admin/jobs",
+    "$VkBaseUrl/admin/access/operator",
+    "$VkBaseUrl/admin/audit/operator",
+    "$VkBaseUrl/admin/retention/operator/run-cleanup",
     "$VkBaseUrl/metrics",
+    "$VkBaseUrl/debug/pprof",
     "$VkBaseUrl/billing/payment-intents",
-    "$VkBaseUrl/billing/payment-events/unprocessed"
+    "$VkBaseUrl/billing/payment-events/unprocessed",
+    "$PaymentBaseUrl/admin/jobs",
+    "$PaymentBaseUrl/admin/access/operator",
+    "$PaymentBaseUrl/admin/audit/operator",
+    "$PaymentBaseUrl/admin/retention/operator/run-cleanup",
+    "$PaymentBaseUrl/metrics",
+    "$PaymentBaseUrl/debug/pprof",
+    "$PaymentBaseUrl/billing/payment-intents"
 )
 
 if (-not $PaymentWebhookOnly) {
     $blockedUrls += @(
         "$AppBaseUrl/admin/jobs",
+        "$AppBaseUrl/admin/access/operator",
+        "$AppBaseUrl/admin/audit/operator",
+        "$AppBaseUrl/admin/retention/operator/run-cleanup",
         "$AppBaseUrl/metrics",
+        "$AppBaseUrl/debug/pprof",
         "$AppBaseUrl/billing/payment-intents",
         "$AppBaseUrl/billing/webhooks/yookassa"
     )

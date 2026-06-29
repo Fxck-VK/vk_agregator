@@ -150,6 +150,8 @@ type Config struct {
 	PublicVKBaseURL                           string
 	PaymentRedirectRateLimitRPS               float64
 	PaymentRedirectRateLimitBurst             int
+	AdminRateLimitLimit                       int
+	AdminRateLimitWindow                      time.Duration
 	PaymentProvider                           string
 	YooKassaShopID                            string
 	YooKassaSecretKey                         string
@@ -700,6 +702,12 @@ func (c Config) Validate() error {
 	if c.PaymentRedirectRateLimitBurst < 0 {
 		return fmt.Errorf("config: PAYMENT_REDIRECT_RATE_LIMIT_BURST must be non-negative")
 	}
+	if c.AdminRateLimitLimit < 0 {
+		return fmt.Errorf("config: ADMIN_RATE_LIMIT_LIMIT must be non-negative")
+	}
+	if c.AdminRateLimitWindow < 0 {
+		return fmt.Errorf("config: ADMIN_RATE_LIMIT_WINDOW must be non-negative")
+	}
 	if c.MediaProviderQualityDegradedFailures < 0 {
 		return fmt.Errorf("config: MEDIA_PROVIDER_QUALITY_DEGRADED_FAILURES must be non-negative")
 	}
@@ -1039,6 +1047,8 @@ func Load() Config {
 		PublicVKBaseURL:                           env("PUBLIC_VK_BASE_URL", ""),
 		PaymentRedirectRateLimitRPS:               envFloat("PAYMENT_REDIRECT_RATE_LIMIT_RPS", 5),
 		PaymentRedirectRateLimitBurst:             envInt("PAYMENT_REDIRECT_RATE_LIMIT_BURST", 10),
+		AdminRateLimitLimit:                       envInt("ADMIN_RATE_LIMIT_LIMIT", 120),
+		AdminRateLimitWindow:                      envDuration("ADMIN_RATE_LIMIT_WINDOW", time.Minute),
 		PaymentProvider:                           env("PAYMENT_PROVIDER", "mock"),
 		YooKassaShopID:                            env("YOOKASSA_SHOP_ID", ""),
 		YooKassaSecretKey:                         env("YOOKASSA_SECRET_KEY", ""),

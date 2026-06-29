@@ -10,10 +10,12 @@ import (
 
 // pagination is the echoed paging metadata for list responses.
 type pagination struct {
-	Limit   int  `json:"limit"`
-	Offset  int  `json:"offset"`
-	Count   int  `json:"count"`
-	HasMore bool `json:"has_more"`
+	Limit      int    `json:"limit"`
+	Offset     int    `json:"offset"`
+	Count      int    `json:"count"`
+	HasMore    bool   `json:"has_more"`
+	Cursor     string `json:"cursor,omitempty"`
+	NextCursor string `json:"next_cursor,omitempty"`
 }
 
 // listResponse is the envelope for paginated list endpoints.
@@ -27,6 +29,26 @@ type listResponse[T any] struct {
 type OverviewDTO struct {
 	GeneratedAt time.Time         `json:"generated_at"`
 	Cards       []OverviewCardDTO `json:"cards"`
+}
+
+// OperatorAccessDTO is the safe role/permission contract for the operator UI.
+// It deliberately reports names and boundaries only, never tokens or identities.
+type OperatorAccessDTO struct {
+	GeneratedAt      time.Time               `json:"generated_at"`
+	CurrentAuthMode  string                  `json:"current_auth_mode"`
+	EffectiveRole    string                  `json:"effective_role"`
+	GlobalBoundaries []string                `json:"global_boundaries"`
+	Roles            []OperatorRoleAccessDTO `json:"roles"`
+	Notes            []string                `json:"notes,omitempty"`
+}
+
+// OperatorRoleAccessDTO is one safe role row for UI capability gating.
+type OperatorRoleAccessDTO struct {
+	Role           string   `json:"role"`
+	Description    string   `json:"description"`
+	Permissions    []string `json:"permissions"`
+	DataBoundaries []string `json:"data_boundaries"`
+	Forbidden      []string `json:"forbidden"`
 }
 
 // OverviewCardDTO summarizes one product area without raw entity identifiers,
@@ -124,15 +146,14 @@ type OperatorDeliveryAttempt struct {
 }
 
 // OperatorQueueSummaryDTO is a safe worker/queue pressure snapshot. It is
-// derived from persisted job state and explicitly marks missing DLQ/Redis stream
-// sources as not_wired instead of pretending they are healthy.
+// derived from persisted job state and exposes only bounded counters.
 type OperatorQueueSummaryDTO struct {
 	GeneratedAt            time.Time                `json:"generated_at"`
 	DegradationState       string                   `json:"degradation_state"`
 	Backlog                []OperatorQueueMetricDTO `json:"backlog"`
 	OldestQueuedAgeSeconds *int64                   `json:"oldest_queued_age_seconds,omitempty"`
 	RetryCount             int                      `json:"retry_count"`
-	DLQ                    OperatorQueueNotWiredDTO `json:"dlq"`
+	DLQ                    OperatorDLQSummaryDTO    `json:"dlq"`
 	ProviderCircuit        OperatorQueueNotWiredDTO `json:"provider_circuit"`
 	Notes                  []string                 `json:"notes,omitempty"`
 }
@@ -151,6 +172,73 @@ type OperatorQueueNotWiredDTO struct {
 	Reason string `json:"reason"`
 }
 
+// OperatorDLQSummaryDTO is a bounded DLQ snapshot for queue overview cards.
+type OperatorDLQSummaryDTO struct {
+	Status           string `json:"status"`
+	Reason           string `json:"reason"`
+	RetryableCount   int    `json:"retryable_count"`
+	TerminalCount    int    `json:"terminal_count"`
+	BatchReplayLimit int    `json:"batch_replay_limit"`
+}
+
+// OperatorDLQDTO is the safe DLQ console payload. It must not expose prompts,
+// provider payloads, private URLs or user identifiers.
+type OperatorDLQDTO struct {
+	GeneratedAt time.Time                  `json:"generated_at"`
+	Items       []OperatorDLQItemDTO       `json:"items"`
+	Pagination  pagination                 `json:"pagination"`
+	Replay      OperatorDLQReplayPolicyDTO `json:"replay"`
+	Notes       []string                   `json:"notes,omitempty"`
+}
+
+// OperatorDLQItemDTO is one bounded DLQ row with replay guard-rail metadata.
+type OperatorDLQItemDTO struct {
+	Job                 OperatorJobListItem `json:"job"`
+	AttemptCount        int                 `json:"attempt_count"`
+	ProviderTaskCount   int                 `json:"provider_task_count"`
+	LastErrorClass      string              `json:"last_error_class,omitempty"`
+	LastProviderClass   string              `json:"last_provider_class,omitempty"`
+	SafeReplay          bool                `json:"safe_replay"`
+	ReplayBlockedReason string              `json:"replay_blocked_reason,omitempty"`
+	ReplayTarget        string              `json:"replay_target"`
+}
+
+// OperatorDLQReplayPolicyDTO describes backend-enforced replay boundaries.
+type OperatorDLQReplayPolicyDTO struct {
+	SingleAllowedStatuses  []string `json:"single_allowed_statuses"`
+	BatchLimit             int      `json:"batch_limit"`
+	BatchSkipsPaidProvider bool     `json:"batch_skips_paid_provider"`
+	Notes                  []string `json:"notes,omitempty"`
+}
+
+// OperatorDLQReplayRequestDTO is accepted by replay endpoints. Values are
+// guard-rail hints only; backend policy remains authoritative.
+type OperatorDLQReplayRequestDTO struct {
+	JobIDs            []string `json:"job_ids,omitempty"`
+	Limit             int      `json:"limit,omitempty"`
+	ErrorClass        string   `json:"error_class,omitempty"`
+	AllowPaidProvider bool     `json:"allow_paid_provider,omitempty"`
+}
+
+// OperatorDLQReplayResultDTO reports replay/skipped decisions without raw job
+// payloads or provider details.
+type OperatorDLQReplayResultDTO struct {
+	GeneratedAt time.Time                  `json:"generated_at"`
+	Requested   int                        `json:"requested"`
+	Replayed    []OperatorDLQReplayItemDTO `json:"replayed"`
+	Skipped     []OperatorDLQReplayItemDTO `json:"skipped"`
+	BatchLimit  int                        `json:"batch_limit"`
+}
+
+// OperatorDLQReplayItemDTO is one replay decision row.
+type OperatorDLQReplayItemDTO struct {
+	LookupID  string `json:"lookup_id"`
+	DisplayID string `json:"display_id"`
+	Status    string `json:"status"`
+	Result    string `json:"result"`
+	Reason    string `json:"reason,omitempty"`
+}
+
 // OperatorProviderControlRoomDTO is a bounded provider/media business-risk view.
 // It uses curated provider/model classes only and never exposes raw model IDs,
 // provider payloads, prompts, private URLs or user identities.
@@ -167,18 +255,27 @@ type OperatorProviderControlRoomDTO struct {
 
 // OperatorProviderHealthDTO summarizes one curated provider/model class.
 type OperatorProviderHealthDTO struct {
-	ProviderClass       string `json:"provider_class"`
-	ModelClass          string `json:"model_class"`
-	Modality            string `json:"modality"`
-	Health              string `json:"health"`
-	CircuitState        string `json:"circuit_state"`
-	RateLimitCount      int    `json:"rate_limit_count"`
-	ProviderFailedCount int    `json:"provider_failed_count"`
-	InvalidOutputCount  int    `json:"invalid_output_count"`
-	FallbackState       string `json:"fallback_state"`
-	ContractConfigured  bool   `json:"contract_configured"`
-	QualityGuardEnabled bool   `json:"quality_guard_enabled"`
-	Source              string `json:"source"`
+	ProviderClass       string     `json:"provider_class"`
+	ServiceType         string     `json:"service_type"`
+	ModelClass          string     `json:"model_class"`
+	Modality            string     `json:"modality"`
+	Health              string     `json:"health"`
+	CircuitState        string     `json:"circuit_state"`
+	QuotaState          string     `json:"quota_state"`
+	CooldownState       string     `json:"cooldown_state"`
+	RateLimitCount      int        `json:"rate_limit_count"`
+	ProviderFailedCount int        `json:"provider_failed_count"`
+	InvalidOutputCount  int        `json:"invalid_output_count"`
+	ObservedTotalCount  int64      `json:"observed_total_count"`
+	ErrorRatePercent    float64    `json:"error_rate_percent"`
+	LatencyP95Ms        int64      `json:"latency_p95_ms"`
+	InFlightCount       int64      `json:"in_flight_count"`
+	LatestErrorClass    string     `json:"latest_error_class,omitempty"`
+	LatestErrorAt       *time.Time `json:"latest_error_at,omitempty"`
+	FallbackState       string     `json:"fallback_state"`
+	ContractConfigured  bool       `json:"contract_configured"`
+	QualityGuardEnabled bool       `json:"quality_guard_enabled"`
+	Source              string     `json:"source"`
 }
 
 // OperatorProviderFallbackDTO reports whether fallback is configured without
@@ -288,6 +385,18 @@ type OperatorRetentionDryRunDTO struct {
 	GeneratedAt time.Time                        `json:"generated_at"`
 	Items       []OperatorRetentionDryRunDTOItem `json:"items"`
 	Notes       []string                         `json:"notes,omitempty"`
+}
+
+// OperatorRetentionCleanupDTO reports the safe post-cleanup retention snapshot.
+// It does not include raw deleted rows, prompts, payloads, storage paths or
+// financial table mutations.
+type OperatorRetentionCleanupDTO struct {
+	GeneratedAt     time.Time                   `json:"generated_at"`
+	Completed       bool                        `json:"completed"`
+	Retention       []OperatorRetentionTableDTO `json:"retention"`
+	OldestHotRows   []OperatorOldestHotRowDTO   `json:"oldest_hot_rows"`
+	OrphanArtifacts OperatorOrphanArtifactsDTO  `json:"orphan_artifacts"`
+	Notes           []string                    `json:"notes,omitempty"`
 }
 
 // OperatorRetentionDryRunDTOItem is one dry-run action row.

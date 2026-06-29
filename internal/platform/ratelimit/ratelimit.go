@@ -1,25 +1,51 @@
-// Package ratelimit provides a small in-memory token-bucket rate limiter and an
-// HTTP middleware that throttles inbound requests per source key (typically the
-// client IP). It is an edge-protection primitive (audit S3): it bounds webhook
-// flooding and abuse without an external dependency. Buckets have bounded
-// retention and a hard per-process cap, so high-cardinality keys cannot grow
-// memory forever. For multi-instance deployments this should be fronted by a
-// shared limiter (e.g. Redis) or an ingress/WAF, but it provides a meaningful
-// per-instance ceiling on its own.
+// Package ratelimit provides in-memory token-bucket limiters for per-process
+// edge protection and Redis-backed fixed-window limiters for quotas that must
+// be shared across API instances.
 package ratelimit
 
 import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"errors"
 	"net"
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/redis/go-redis/v9"
 )
 
 const (
 	defaultBucketTTL       = 10 * time.Minute
 	defaultMaxBuckets      = 100_000
 	maxSweepChecksPerAllow = 64
+	defaultSharedNamespace = "default"
 )
+
+var redisFixedWindowScript = redis.NewScript(`
+local current = redis.call("INCR", KEYS[1])
+if current == 1 then
+	redis.call("PEXPIRE", KEYS[1], ARGV[1])
+end
+return current
+`)
+
+// KeyLimiter is a shared per-key limiter used by authenticated surfaces where
+// all API instances must enforce the same quota.
+type KeyLimiter interface {
+	Allow(ctx context.Context, key string) (bool, error)
+}
+
+// RedisFixedWindowLimiter implements a simple shared fixed-window quota in
+// Redis. It stores hashed keys only, so operator/user identifiers are not
+// exposed in Redis key names.
+type RedisFixedWindowLimiter struct {
+	client    redis.Cmdable
+	namespace string
+	limit     int
+	window    time.Duration
+}
 
 // bucket is a single token bucket.
 type bucket struct {
@@ -47,6 +73,41 @@ type Option func(*Limiter)
 // intended for per-instance memory protection, not as a global quota.
 type ConcurrencyLimiter struct {
 	sem chan struct{}
+}
+
+// NewRedisFixedWindowLimiter builds a Redis-backed fixed-window limiter.
+func NewRedisFixedWindowLimiter(client redis.Cmdable, namespace string, limit int, window time.Duration) *RedisFixedWindowLimiter {
+	namespace = safeNamespace(namespace)
+	if limit <= 0 {
+		limit = 1
+	}
+	if window <= 0 {
+		window = time.Minute
+	}
+	return &RedisFixedWindowLimiter{
+		client:    client,
+		namespace: namespace,
+		limit:     limit,
+		window:    window,
+	}
+}
+
+// Allow increments a shared Redis counter and returns true while the current
+// window count is within the configured limit.
+func (l *RedisFixedWindowLimiter) Allow(ctx context.Context, key string) (bool, error) {
+	if l == nil || l.client == nil {
+		return false, errors.New("redis rate limiter is not configured")
+	}
+	key = sharedKey(l.namespace, key)
+	windowMillis := int64(l.window / time.Millisecond)
+	if windowMillis <= 0 {
+		windowMillis = 1
+	}
+	count, err := redisFixedWindowScript.Run(ctx, l.client, []string{key}, windowMillis).Int64()
+	if err != nil {
+		return false, err
+	}
+	return count <= int64(l.limit), nil
 }
 
 // New builds a Limiter allowing `rate` requests/second with a `burst` ceiling.
@@ -192,6 +253,28 @@ func (l *Limiter) evictExpired(now time.Time) {
 
 func (l *Limiter) expired(b *bucket, now time.Time) bool {
 	return l.bucketTTL > 0 && now.Sub(b.lastSeen) > l.bucketTTL
+}
+
+func safeNamespace(namespace string) string {
+	out := make([]byte, 0, len(namespace))
+	for i := 0; i < len(namespace); i++ {
+		ch := namespace[i]
+		if (ch >= 'a' && ch <= 'z') ||
+			(ch >= 'A' && ch <= 'Z') ||
+			(ch >= '0' && ch <= '9') ||
+			ch == '_' || ch == '-' || ch == ':' {
+			out = append(out, ch)
+		}
+	}
+	if len(out) == 0 {
+		return defaultSharedNamespace
+	}
+	return string(out)
+}
+
+func sharedKey(namespace, key string) string {
+	sum := sha256.Sum256([]byte(key))
+	return "rate_limit:" + safeNamespace(namespace) + ":" + hex.EncodeToString(sum[:])
 }
 
 // Middleware throttles inbound requests per client IP, returning 429 when the

@@ -2,6 +2,8 @@ package memory
 
 import (
 	"context"
+	"math"
+	"sort"
 	"sync"
 	"time"
 
@@ -109,4 +111,67 @@ func (r *ProviderTaskRepo) ListByJob(_ context.Context, jobID uuid.UUID) ([]*dom
 		out = append(out, &t)
 	}
 	return out, nil
+}
+
+func (r *ProviderTaskRepo) HealthSnapshot(_ context.Context, since time.Time) ([]domain.ProviderTaskHealth, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	items := map[domain.ProviderName]domain.ProviderTaskHealth{}
+	latencies := map[domain.ProviderName][]int64{}
+	for _, task := range r.byID {
+		if !since.IsZero() && task.CreatedAt.Before(since) {
+			continue
+		}
+		item := items[task.Provider]
+		item.Provider = task.Provider
+		item.TotalCount++
+		switch task.Status {
+		case domain.ProviderTaskFailed:
+			item.FailedCount++
+		case domain.ProviderTaskPending, domain.ProviderTaskProcessing:
+			item.InFlightCount++
+		}
+		if task.ErrorClass == domain.ProviderErrRateLimited {
+			item.RateLimitedCount++
+		}
+		if task.ErrorClass != "" && (item.LatestErrorAt == nil || task.UpdatedAt.After(*item.LatestErrorAt)) {
+			at := task.UpdatedAt
+			item.LatestErrorClass = task.ErrorClass
+			item.LatestErrorAt = &at
+		}
+		if task.CompletedAt != nil {
+			start := task.CreatedAt
+			if task.SubmittedAt != nil {
+				start = *task.SubmittedAt
+			}
+			if task.CompletedAt.After(start) {
+				latencies[task.Provider] = append(latencies[task.Provider], task.CompletedAt.Sub(start).Milliseconds())
+			}
+		}
+		items[task.Provider] = item
+	}
+
+	out := make([]domain.ProviderTaskHealth, 0, len(items))
+	for provider, item := range items {
+		item.LatencyP95Ms = percentile95(latencies[provider])
+		out = append(out, item)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Provider < out[j].Provider })
+	return out, nil
+}
+
+func percentile95(values []int64) int64 {
+	if len(values) == 0 {
+		return 0
+	}
+	sort.Slice(values, func(i, j int) bool { return values[i] < values[j] })
+	idx := int(math.Ceil(float64(len(values))*0.95)) - 1
+	if idx < 0 {
+		idx = 0
+	}
+	if idx >= len(values) {
+		idx = len(values) - 1
+	}
+	return values[idx]
 }

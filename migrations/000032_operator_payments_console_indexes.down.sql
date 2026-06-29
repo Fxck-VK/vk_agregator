@@ -1,0 +1,5 @@
+DROP INDEX IF EXISTS payment_refunds_console_intent_created_id_idx;
+DROP INDEX IF EXISTS payment_events_console_provider_payment_received_idx;
+DROP INDEX IF EXISTS payment_intents_console_provider_payment_created_idx;
+DROP INDEX IF EXISTS payment_intents_console_status_created_id_idx;
+DROP INDEX IF EXISTS payment_intents_console_user_created_id_idx;

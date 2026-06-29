@@ -3,30 +3,48 @@
 package billing
 
 import (
+	"context"
 	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
 
 	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/platform/metrics"
+	"vk-ai-aggregator/internal/platform/ratelimit"
 	"vk-ai-aggregator/internal/service/paymentservice"
 )
 
 const (
 	defaultLimit = 20
 	maxLimit     = 100
+
+	defaultBillingAdminRateLimit = 120
 )
 
 // Config holds protected billing API settings.
 type Config struct {
 	Token                     string
 	AllowLoadTestMockPayments bool
+	// DefaultRole is the backend-enforced role for the legacy single-token
+	// model. Empty/invalid values default to owner for backward compatibility.
+	DefaultRole domain.OperatorRole
+	// RateLimit bounds protected billing/admin endpoints per authenticated actor.
+	RateLimit AdminRateLimitConfig
+}
+
+// AdminRateLimitConfig controls protected billing/admin endpoint request limits.
+type AdminRateLimitConfig struct {
+	Disabled bool
+	Limit    int
+	Window   time.Duration
+	Limiter  ratelimit.KeyLimiter
 }
 
 // Deps are the services/repositories used by billing endpoints.
@@ -40,34 +58,41 @@ type Deps struct {
 
 // Handler serves /billing/* routes.
 type Handler struct {
-	cfg  Config
-	deps Deps
+	cfg         Config
+	deps        Deps
+	rateMu      sync.Mutex
+	rateBuckets map[string]billingAdminRateBucket
 }
 
 // NewHandler builds a protected billing handler.
 func NewHandler(cfg Config, deps Deps) *Handler {
-	return &Handler{cfg: cfg, deps: deps}
+	cfg.RateLimit = normalizeAdminRateLimit(cfg.RateLimit)
+	return &Handler{cfg: cfg, deps: deps, rateBuckets: map[string]billingAdminRateBucket{}}
 }
 
 // Routes returns the protected billing routes.
 func (h *Handler) Routes() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /billing/payment-products", h.auth(h.listProducts))
-	mux.HandleFunc("POST /billing/payment-products", h.auth(h.operatorAction("payment_product_create", h.createProduct)))
-	mux.HandleFunc("GET /billing/payment-products/{id}", h.auth(h.getProduct))
-	mux.HandleFunc("PATCH /billing/payment-products/{id}", h.auth(h.operatorAction("payment_product_update", h.updateProduct)))
-	mux.HandleFunc("POST /billing/payment-products/{id}/disable", h.auth(h.operatorAction("payment_product_disable", h.disableProduct)))
-	mux.HandleFunc("POST /billing/payment-intents", h.auth(h.operatorAction("payment_intent_create", h.createIntent)))
-	mux.HandleFunc("GET /billing/payment-intents/{id}", h.auth(h.getIntent))
-	mux.HandleFunc("POST /billing/payment-intents/{id}/sync", h.auth(h.operatorAction("payment_intent_sync", h.syncIntent)))
-	mux.HandleFunc("POST /billing/payment-intents/{id}/mock-status", h.auth(h.operatorAction("payment_intent_mock_status", h.setMockPaymentStatus)))
-	mux.HandleFunc("POST /billing/payment-intents/{id}/cancel", h.auth(h.operatorAction("payment_intent_cancel", h.cancelIntent)))
-	mux.HandleFunc("POST /billing/payment-intents/{id}/refund", h.auth(h.operatorAction("payment_intent_refund", h.refundIntent)))
-	mux.HandleFunc("GET /billing/operator/console", h.auth(h.operatorConsole))
-	mux.HandleFunc("GET /billing/payment-intents/pending", h.auth(h.listPendingIntents))
-	mux.HandleFunc("GET /billing/payment-events/unprocessed", h.auth(h.listUnprocessedEvents))
-	mux.HandleFunc("GET /billing/payment-history", h.auth(h.listHistory))
+	mux.HandleFunc("GET /billing/payment-products", h.protected("payment_product_list", domain.OperatorPermissionPaymentsSafeRead, h.listProducts))
+	mux.HandleFunc("POST /billing/payment-products", h.protected("payment_product_create", domain.OperatorPermissionRolePolicyManage, h.createProduct))
+	mux.HandleFunc("GET /billing/payment-products/{id}", h.protected("payment_product_get", domain.OperatorPermissionPaymentsSafeRead, h.getProduct))
+	mux.HandleFunc("PATCH /billing/payment-products/{id}", h.protected("payment_product_update", domain.OperatorPermissionRolePolicyManage, h.updateProduct))
+	mux.HandleFunc("POST /billing/payment-products/{id}/disable", h.protected("payment_product_disable", domain.OperatorPermissionRolePolicyManage, h.disableProduct))
+	mux.HandleFunc("POST /billing/payment-intents", h.protected("payment_intent_create", domain.OperatorPermissionRefundsManage, h.createIntent))
+	mux.HandleFunc("GET /billing/payment-intents/{id}", h.protected("payment_intent_get", domain.OperatorPermissionPaymentsSafeRead, h.getIntent))
+	mux.HandleFunc("POST /billing/payment-intents/{id}/sync", h.protected("payment_intent_sync", domain.OperatorPermissionRefundsManage, h.syncIntent))
+	mux.HandleFunc("POST /billing/payment-intents/{id}/mock-status", h.protected("payment_intent_mock_status", domain.OperatorPermissionRefundsManage, h.setMockPaymentStatus))
+	mux.HandleFunc("POST /billing/payment-intents/{id}/cancel", h.protected("payment_intent_cancel", domain.OperatorPermissionRefundsManage, h.cancelIntent))
+	mux.HandleFunc("POST /billing/payment-intents/{id}/refund", h.protected("payment_intent_refund", domain.OperatorPermissionRefundsManage, h.refundIntent))
+	mux.HandleFunc("GET /billing/operator/console", h.protected("payment_operator_console_get", domain.OperatorPermissionPaymentsSafeRead, h.operatorConsole))
+	mux.HandleFunc("GET /billing/payment-intents/pending", h.protected("payment_intents_pending_list", domain.OperatorPermissionPaymentsSafeRead, h.listPendingIntents))
+	mux.HandleFunc("GET /billing/payment-events/unprocessed", h.protected("payment_events_unprocessed_list", domain.OperatorPermissionPaymentsSafeRead, h.listUnprocessedEvents))
+	mux.HandleFunc("GET /billing/payment-history", h.protected("payment_history_list", domain.OperatorPermissionPaymentsSafeRead, h.listHistory))
 	return mux
+}
+
+func (h *Handler) protected(action string, permission domain.OperatorPermission, next http.HandlerFunc) http.HandlerFunc {
+	return h.auth(h.operatorAction(action, h.rateLimit(h.requirePermission(permission, next))))
 }
 
 func (h *Handler) auth(next http.HandlerFunc) http.HandlerFunc {
@@ -77,8 +102,112 @@ func (h *Handler) auth(next http.HandlerFunc) http.HandlerFunc {
 			writeError(w, http.StatusUnauthorized, "unauthorized")
 			return
 		}
+		identity := h.operatorIdentity()
+		next(w, r.WithContext(context.WithValue(r.Context(), operatorIdentityContextKey{}, identity)))
+	}
+}
+
+type operatorIdentityContextKey struct{}
+
+type operatorIdentity struct {
+	Role     domain.OperatorRole
+	ActorRef string
+}
+
+func (h *Handler) operatorIdentity() operatorIdentity {
+	role := h.cfg.DefaultRole
+	if !role.Valid() {
+		role = domain.OperatorRoleOwner
+	}
+	return operatorIdentity{
+		Role:     role,
+		ActorRef: safeStringRef("operator", h.cfg.Token),
+	}
+}
+
+func operatorIdentityFromContext(ctx context.Context) operatorIdentity {
+	identity, ok := ctx.Value(operatorIdentityContextKey{}).(operatorIdentity)
+	if !ok || !identity.Role.Valid() {
+		return operatorIdentity{Role: domain.OperatorRoleOwner, ActorRef: "operator_unknown"}
+	}
+	if strings.TrimSpace(identity.ActorRef) == "" {
+		identity.ActorRef = "operator_unknown"
+	}
+	return identity
+}
+
+func (h *Handler) requirePermission(permission domain.OperatorPermission, next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		identity := operatorIdentityFromContext(r.Context())
+		if !identity.Role.HasPermission(permission) {
+			writeError(w, http.StatusForbidden, "forbidden")
+			return
+		}
 		next(w, r)
 	}
+}
+
+type billingAdminRateBucket struct {
+	Count    int
+	ResetAt  time.Time
+	LastSeen time.Time
+}
+
+func normalizeAdminRateLimit(in AdminRateLimitConfig) AdminRateLimitConfig {
+	if in.Limit <= 0 {
+		in.Limit = defaultBillingAdminRateLimit
+	}
+	if in.Window <= 0 {
+		in.Window = time.Minute
+	}
+	return in
+}
+
+func (h *Handler) rateLimit(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if h.cfg.RateLimit.Disabled {
+			next(w, r)
+			return
+		}
+		identity := operatorIdentityFromContext(r.Context())
+		allowed, err := h.allowAdminRequest(r.Context(), "billing:"+identity.ActorRef, time.Now().UTC())
+		if err != nil {
+			writeError(w, http.StatusServiceUnavailable, "rate limiter unavailable")
+			return
+		}
+		if !allowed {
+			writeError(w, http.StatusTooManyRequests, "rate limited")
+			return
+		}
+		next(w, r)
+	}
+}
+
+func (h *Handler) allowAdminRequest(ctx context.Context, key string, now time.Time) (bool, error) {
+	key = strings.TrimSpace(key)
+	if key == "" {
+		key = "operator_unknown"
+	}
+	if h.cfg.RateLimit.Limiter != nil {
+		return h.cfg.RateLimit.Limiter.Allow(ctx, key)
+	}
+	h.rateMu.Lock()
+	defer h.rateMu.Unlock()
+	bucket := h.rateBuckets[key]
+	if bucket.ResetAt.IsZero() || !now.Before(bucket.ResetAt) {
+		bucket = billingAdminRateBucket{ResetAt: now.Add(h.cfg.RateLimit.Window)}
+	}
+	bucket.Count++
+	bucket.LastSeen = now
+	h.rateBuckets[key] = bucket
+	if len(h.rateBuckets) > 1024 {
+		for candidate, candidateBucket := range h.rateBuckets {
+			if now.After(candidateBucket.ResetAt) || now.Sub(candidateBucket.LastSeen) > h.cfg.RateLimit.Window*2 {
+				delete(h.rateBuckets, candidate)
+			}
+		}
+	}
+	return bucket.Count <= h.cfg.RateLimit.Limit, nil
 }
 
 type actionStatusRecorder struct {
@@ -110,9 +239,10 @@ func (h *Handler) recordOperatorAudit(r *http.Request, action, result string) {
 	}
 	entryID := uuid.New()
 	targetType := billingOperatorTargetType(action)
+	identity := operatorIdentityFromContext(r.Context())
 	entry := &domain.OperatorAuditEntry{
 		ID:         entryID,
-		ActorRef:   billingOperatorActorRef(h.cfg.Token),
+		ActorRef:   identity.ActorRef,
 		Action:     sanitizeOperatorToken(action),
 		TargetType: targetType,
 		TargetRef:  safeStringRef("target", targetType+":"+r.URL.Path),
@@ -121,6 +251,9 @@ func (h *Handler) recordOperatorAudit(r *http.Request, action, result string) {
 	}
 	if entry.Action == "" {
 		entry.Action = "unknown"
+	}
+	if entry.ActorRef == "" {
+		entry.ActorRef = billingOperatorActorRef(h.cfg.Token)
 	}
 	if entry.TargetRef == "" {
 		entry.TargetRef = safeUUIDRef("target", entryID)

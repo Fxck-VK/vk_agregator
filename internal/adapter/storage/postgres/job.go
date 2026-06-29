@@ -161,46 +161,82 @@ func (r *JobRepository) List(ctx context.Context, filter domain.JobFilter, limit
 		conds []string
 		args  []any
 	)
-	if filter.UserID != nil {
-		args = append(args, *filter.UserID)
-		conds = append(conds, fmt.Sprintf("user_id = $%d", len(args)))
+	addJobFilterConds(filter, &conds, &args)
+	if len(conds) > 0 {
+		q += " WHERE " + strings.Join(conds, " AND ")
 	}
-	if filter.Status != "" {
-		args = append(args, filter.Status)
-		conds = append(conds, fmt.Sprintf("status = $%d", len(args)))
-	}
-	if filter.Operation != "" {
-		args = append(args, filter.Operation)
-		conds = append(conds, fmt.Sprintf("operation_type = $%d", len(args)))
-	}
-	if filter.Modality != "" {
-		args = append(args, filter.Modality)
-		conds = append(conds, fmt.Sprintf("modality = $%d", len(args)))
-	}
-	if filter.ErrorCode != "" {
-		args = append(args, filter.ErrorCode)
-		conds = append(conds, fmt.Sprintf("error_code = $%d", len(args)))
-	}
-	if filter.CorrelationID != "" {
-		args = append(args, filter.CorrelationID)
-		conds = append(conds, fmt.Sprintf("correlation_id = $%d", len(args)))
-	}
-	if filter.CreatedFrom != nil {
-		args = append(args, *filter.CreatedFrom)
-		conds = append(conds, fmt.Sprintf("created_at >= $%d", len(args)))
-	}
-	if filter.CreatedTo != nil {
-		args = append(args, *filter.CreatedTo)
-		conds = append(conds, fmt.Sprintf("created_at < $%d", len(args)))
+	args = append(args, limit)
+	q += fmt.Sprintf(" ORDER BY created_at DESC, id DESC LIMIT $%d", len(args))
+	args = append(args, offset)
+	q += fmt.Sprintf(" OFFSET $%d", len(args))
+
+	return r.queryJobs(ctx, q, args...)
+}
+
+// ListCursor returns jobs matching the filter using keyset pagination.
+func (r *JobRepository) ListCursor(ctx context.Context, filter domain.JobFilter, limit int, after *domain.JobCursor) ([]*domain.Job, error) {
+	q := `SELECT ` + jobColumns + ` FROM jobs`
+	var (
+		conds []string
+		args  []any
+	)
+	addJobFilterConds(filter, &conds, &args)
+	if after != nil {
+		args = append(args, after.CreatedAt)
+		createdAtParam := len(args)
+		args = append(args, after.ID)
+		idParam := len(args)
+		conds = append(conds, fmt.Sprintf("(created_at, id) < ($%d, $%d)", createdAtParam, idParam))
 	}
 	if len(conds) > 0 {
 		q += " WHERE " + strings.Join(conds, " AND ")
 	}
 	args = append(args, limit)
-	q += fmt.Sprintf(" ORDER BY created_at DESC LIMIT $%d", len(args))
-	args = append(args, offset)
-	q += fmt.Sprintf(" OFFSET $%d", len(args))
+	q += fmt.Sprintf(" ORDER BY created_at DESC, id DESC LIMIT $%d", len(args))
 
+	return r.queryJobs(ctx, q, args...)
+}
+
+func addJobFilterConds(filter domain.JobFilter, conds *[]string, args *[]any) {
+	if filter.UserID != nil {
+		*args = append(*args, *filter.UserID)
+		*conds = append(*conds, fmt.Sprintf("user_id = $%d", len(*args)))
+	}
+	if filter.Status != "" {
+		*args = append(*args, filter.Status)
+		*conds = append(*conds, fmt.Sprintf("status = $%d", len(*args)))
+	}
+	if filter.Operation != "" {
+		*args = append(*args, filter.Operation)
+		*conds = append(*conds, fmt.Sprintf("operation_type = $%d", len(*args)))
+	}
+	if filter.Modality != "" {
+		*args = append(*args, filter.Modality)
+		*conds = append(*conds, fmt.Sprintf("modality = $%d", len(*args)))
+	}
+	if filter.ErrorCode != "" {
+		*args = append(*args, filter.ErrorCode)
+		*conds = append(*conds, fmt.Sprintf("error_code = $%d", len(*args)))
+	}
+	if filter.Provider != "" {
+		*args = append(*args, filter.Provider)
+		*conds = append(*conds, fmt.Sprintf("EXISTS (SELECT 1 FROM provider_tasks pt WHERE pt.job_id = jobs.id AND pt.provider = $%d)", len(*args)))
+	}
+	if filter.CorrelationID != "" {
+		*args = append(*args, filter.CorrelationID)
+		*conds = append(*conds, fmt.Sprintf("correlation_id = $%d", len(*args)))
+	}
+	if filter.CreatedFrom != nil {
+		*args = append(*args, *filter.CreatedFrom)
+		*conds = append(*conds, fmt.Sprintf("created_at >= $%d", len(*args)))
+	}
+	if filter.CreatedTo != nil {
+		*args = append(*args, *filter.CreatedTo)
+		*conds = append(*conds, fmt.Sprintf("created_at < $%d", len(*args)))
+	}
+}
+
+func (r *JobRepository) queryJobs(ctx context.Context, q string, args ...any) ([]*domain.Job, error) {
 	rows, err := r.db.Query(ctx, q, args...)
 	if err != nil {
 		return nil, mapError(err)

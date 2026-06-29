@@ -119,11 +119,40 @@ Local validation for these scripts:
 
 ```bash
 bash scripts/deploy/test-dev-env.sh
+bash scripts/deploy/test-env-parity.sh
 ```
 
 The test uses fake tokens only. It checks `bash -n scripts/deploy/*.sh`, valid
 mock DEV env, valid DEV YooKassa env, production URL rejection, and verifies
 that fake secret markers are not printed to logs.
+
+## DEV/PROD Env Parity
+
+When a DEV feature starts working because a new env key was added, check that
+production has the same variable name before promoting the change. The parity
+checker compares names only and never prints values, env contents or source file
+paths:
+
+```bash
+scripts/deploy/check-env-parity.sh --dev dev.env --prod prod.env
+```
+
+Sources:
+
+- `DEV_ENV_FILE` from GitHub Secrets or a local `dev.env` copy
+- `PROD_ENV_FILE` from GitHub Secrets or the production VPS `.env`
+- `.env.dev.example` as the DEV template
+- `.env.prod.example` as the production contract
+
+Allowed DEV-only and PROD-only names are explicit allowlist patterns in
+`scripts/deploy/env-parity.allowlist`. Anything else is reported as drift, for
+example a provider key present in DEV but missing from PROD. The report lists
+variable names only. Keep allowlist patterns narrow; do not add broad token or
+secret patterns that could hide production gaps.
+
+`Deploy DEV` runs the parity check as a warning when `PROD_ENV_FILE` is
+available. `Deploy Production` runs the same check as a required pre-deploy gate
+before uploading `.env` to the VPS or starting containers.
 
 ## Mini App Model Catalog Migration
 

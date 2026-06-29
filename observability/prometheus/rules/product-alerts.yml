@@ -85,6 +85,23 @@ groups:
           action: Срочно закрой публичный /metrics на Cloudflare/nginx/tunnel; оставь доступ только localhost/VPN/SSH tunnel; перепроверь https://app.neiirohub.ru/metrics и https://vk.neiirohub.ru/metrics.
           safe_logs: В чат отправляй только URL и HTTP status; не отправляй полный metrics output.
 
+      - alert: PublicAdminSurfaceOpen
+        expr: |
+          (probe_http_status_code{job="blackbox-public-admin"} >= 200)
+            and
+          (probe_http_status_code{job="blackbox-public-admin"} < 300)
+        for: 30s
+        labels:
+          severity: critical
+          surface: security
+        annotations:
+          summary: Публичная /admin поверхность доступна снаружи
+          description: Blackbox probe получил успешный статус от публичного /admin route. Admin/operator API должен быть закрыт reverse proxy, Cloudflare Access/VPN или строгой auth-схемой.
+          impact: Внешний пользователь может получить доступ к operator surface, увидеть служебные DTO или попытаться вызвать административные actions.
+          dashboard: Grafana -> Product Observability / Security Config
+          action: Срочно закрой публичный /admin/* на Cloudflare/nginx/tunnel; проверь vk/app/root домены и запусти scripts/deploy/smoke-prod с production env.
+          safe_logs: В чат отправляй только URL, HTTP status и route class; не отправляй admin tokens, request bodies, user ids, prompts или provider/payment payloads.
+
       - alert: ApiReadinessDegraded
         expr: probe_success{job="blackbox-local-health", instance="http://api:8080/healthz"} == 0
         for: 1m

@@ -12,6 +12,7 @@ import (
 	"vk-ai-aggregator/internal/adapter/storage/postgres"
 	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/platform/config"
+	"vk-ai-aggregator/internal/platform/uow"
 	"vk-ai-aggregator/internal/service/billingservice"
 	"vk-ai-aggregator/internal/service/commandrouter"
 	"vk-ai-aggregator/internal/service/joborchestrator"
@@ -28,6 +29,7 @@ type SharedCore struct {
 	Idempotency    domain.IdempotencyRepository
 	Deliveries     domain.DeliveryRepository
 	Audits         domain.OperatorAuditRepository
+	ProviderTasks  domain.ProviderTaskRepository
 	BillingRepo    domain.BillingRepository
 	Payments       domain.PaymentRepository
 	Referrals      domain.ReferralRepository
@@ -40,6 +42,7 @@ type SharedCore struct {
 	PaymentOps     *paymentservice.WebhookProcessor
 	Orchestrator   *joborchestrator.Orchestrator
 	Router         *commandrouter.Router
+	UnitOfWork     uow.Manager
 	PricingCatalog *pricingcatalog.Catalog
 }
 
@@ -79,6 +82,8 @@ func NewSharedCore(pool *pgxpool.Pool, cfg config.Config, opts ...SharedCoreOpti
 	}
 	users := postgres.NewUserRepository(pool)
 	jobs := postgres.NewJobRepository(pool)
+	providerTasks := postgres.NewProviderTaskRepository(pool)
+	unitOfWork := postgres.NewUnitOfWork(pool)
 	billingRepo := postgres.NewBillingRepository(pool)
 	payments := postgres.NewPaymentRepository(pool)
 	billing := billingservice.New(billingRepo, billingservice.WithPriceOverrides(cfg.PriceOverrides))
@@ -103,7 +108,7 @@ func NewSharedCore(pool *pgxpool.Pool, cfg config.Config, opts ...SharedCoreOpti
 	orchestratorOptions := append([]joborchestrator.Option{
 		joborchestrator.WithPricingCatalog(options.pricingCatalog),
 	}, options.orchestratorOptions...)
-	orch := joborchestrator.New(jobs, postgres.NewUnitOfWork(pool), billing, cfg.MaxJobCost, orchestratorOptions...)
+	orch := joborchestrator.New(jobs, unitOfWork, billing, cfg.MaxJobCost, orchestratorOptions...)
 
 	return SharedCore{
 		Users:          users,
@@ -113,6 +118,7 @@ func NewSharedCore(pool *pgxpool.Pool, cfg config.Config, opts ...SharedCoreOpti
 		Idempotency:    postgres.NewIdempotencyRepository(pool),
 		Deliveries:     postgres.NewDeliveryRepository(pool),
 		Audits:         postgres.NewOperatorAuditRepository(pool),
+		ProviderTasks:  providerTasks,
 		BillingRepo:    billingRepo,
 		Payments:       payments,
 		Referrals:      postgres.NewReferralRepository(pool),
@@ -125,6 +131,7 @@ func NewSharedCore(pool *pgxpool.Pool, cfg config.Config, opts ...SharedCoreOpti
 		PaymentOps:     paymentOps,
 		Orchestrator:   orch,
 		Router:         commandrouter.New(),
+		UnitOfWork:     unitOfWork,
 		PricingCatalog: options.pricingCatalog,
 	}, nil
 }

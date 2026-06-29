@@ -221,13 +221,15 @@ jobs:
           GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
           GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
           DEV_ENV_FILE: ${{ secrets.DEV_ENV_FILE }}
+          PROD_ENV_FILE: ${{ secrets.PROD_ENV_FILE }}
           DEPLOY_IMAGE_TAG: ${{ steps.release.outputs.image_tag }}
         run: |
           set -euo pipefail
 
           raw_env="$(mktemp)"
           rendered_env="$(mktemp)"
-          trap 'rm -f "${raw_env}" "${rendered_env}"' EXIT
+          prod_env="$(mktemp)"
+          trap 'rm -f "${raw_env}" "${rendered_env}" "${prod_env}"' EXIT
 
           printf '%s\n' "${DEV_ENV_FILE}" > "${raw_env}"
 
@@ -239,6 +241,23 @@ jobs:
             --ghcr-token "${GHCR_TOKEN}"
 
           bash scripts/deploy/check-dev-env.sh --env-file "${rendered_env}"
+
+          if [[ -n "${PROD_ENV_FILE:-}" ]]; then
+            printf '%s\n' "${PROD_ENV_FILE}" \
+              | sed '/^GHCR_USERNAME=/d;/^GHCR_TOKEN=/d;/^IMAGE_TAG=/d' > "${prod_env}"
+            {
+              printf '\n'
+              printf 'IMAGE_TAG=%s\n' "${DEPLOY_IMAGE_TAG}"
+              printf 'GHCR_USERNAME=%s\n' "${GHCR_USERNAME}"
+              printf 'GHCR_TOKEN=%s\n' "${GHCR_TOKEN}"
+            } >> "${prod_env}"
+
+            if ! bash scripts/deploy/check-env-parity.sh --dev "${rendered_env}" --prod "${prod_env}"; then
+              echo "::warning::DEV/PROD env parity drift detected. Production deploy will fail until PROD_ENV_FILE is updated."
+            fi
+          else
+            echo "::warning::PROD_ENV_FILE secret is unavailable; skipping DEV/PROD env parity check in DEV deploy."
+          fi
 
           scp -i "${HOME}/.ssh/deploy_key" "${rendered_env}" "${DEV_DEPLOY_USER}@${DEV_DEPLOY_HOST}:${DEV_DEPLOY_PATH}/.env.next"
           ssh -i "${HOME}/.ssh/deploy_key" "${DEV_DEPLOY_USER}@${DEV_DEPLOY_HOST}" \

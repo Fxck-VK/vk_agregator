@@ -96,3 +96,14 @@ type Delivery struct {
 	// UpdatedAt is the last mutation timestamp.
 	UpdatedAt time.Time `json:"updated_at"`
 }
+
+// DeliveryHealth is a bounded aggregate for operator delivery health screens.
+// It does not expose VK ids, attachment strings, message text or raw errors.
+type DeliveryHealth struct {
+	TotalCount      int64      `json:"total_count"`
+	FailedCount     int64      `json:"failed_count"`
+	RetryingCount   int64      `json:"retrying_count"`
+	LatestErrorCode string     `json:"latest_error_code,omitempty"`
+	LatestErrorAt   *time.Time `json:"latest_error_at,omitempty"`
+	LatencyP95Ms    int64      `json:"latency_p95_ms"`
+}

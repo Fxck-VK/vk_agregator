@@ -126,6 +126,10 @@ type JobFilter struct {
 	Modality Modality
 	// ErrorCode, when non-empty, restricts results to one bounded error class.
 	ErrorCode string
+	// Provider, when non-empty, restricts results to jobs that have at least one
+	// persisted provider task for this provider name. It is for operator
+	// filtering only; provider payloads remain private.
+	Provider string
 	// CorrelationID, when non-empty, restricts results to one exact request
 	// correlation id. Callers must not expose raw values in public DTOs.
 	CorrelationID string
@@ -133,6 +137,13 @@ type JobFilter struct {
 	CreatedFrom *time.Time
 	// CreatedTo, when set, restricts results to jobs created before it.
 	CreatedTo *time.Time
+}
+
+// JobCursor is an opaque pagination position for newest-first job listings.
+// It must be derived from a returned row, not from client-owned ordering.
+type JobCursor struct {
+	CreatedAt time.Time
+	ID        uuid.UUID
 }
 
 // JobRepository persists jobs.
@@ -153,6 +164,10 @@ type JobRepository interface {
 	ListByUser(ctx context.Context, userID uuid.UUID, limit, offset int) ([]*Job, error)
 	// List returns jobs matching the filter, newest first, for admin queries.
 	List(ctx context.Context, filter JobFilter, limit, offset int) ([]*Job, error)
+	// ListCursor returns jobs matching the filter using keyset pagination. It is
+	// intended for high-cardinality operator consoles where OFFSET becomes
+	// expensive.
+	ListCursor(ctx context.Context, filter JobFilter, limit int, after *JobCursor) ([]*Job, error)
 	// CountActiveByUserOperation returns active, capacity-consuming jobs for one
 	// user and operation. It is used by abuse protection before enqueueing more
 	// expensive work for the same user.
@@ -230,6 +245,9 @@ type ProviderTaskRepository interface {
 	GetByExternalID(ctx context.Context, provider ProviderName, externalID string) (*ProviderTask, error)
 	// ListByJob returns all provider tasks for a job, oldest attempt first.
 	ListByJob(ctx context.Context, jobID uuid.UUID) ([]*ProviderTask, error)
+	// HealthSnapshot returns provider-level safe aggregates since the supplied
+	// time. It must not expose prompts, provider payloads, native IDs or URLs.
+	HealthSnapshot(ctx context.Context, since time.Time) ([]ProviderTaskHealth, error)
 }
 
 // ArtifactRepository persists artifacts and their variants.
@@ -265,6 +283,9 @@ type DeliveryRepository interface {
 	GetByIdempotencyKey(ctx context.Context, key string) (*Delivery, error)
 	// ListByJob returns all delivery attempts for a job.
 	ListByJob(ctx context.Context, jobID uuid.UUID) ([]*Delivery, error)
+	// HealthSnapshot returns safe delivery aggregates since the supplied time.
+	// It must not expose VK ids, message text, attachments or raw error text.
+	HealthSnapshot(ctx context.Context, since time.Time) (DeliveryHealth, error)
 }
 
 // OperatorAuditRepository persists sanitized operator/admin action records.
@@ -309,19 +330,22 @@ type BillingRepository interface {
 // PaymentIntentFilter narrows admin payment-intent listings. Zero-valued
 // fields are ignored.
 type PaymentIntentFilter struct {
-	UserID        *uuid.UUID
-	Status        PaymentIntentStatus
-	Statuses      []PaymentIntentStatus
-	Provider      PaymentProviderCode
-	Source        string
-	UpdatedBefore *time.Time
+	IntentID          *uuid.UUID
+	UserID            *uuid.UUID
+	Status            PaymentIntentStatus
+	Statuses          []PaymentIntentStatus
+	Provider          PaymentProviderCode
+	ProviderPaymentID string
+	Source            string
+	UpdatedBefore     *time.Time
 }
 
 // PaymentEventFilter narrows protected operator payment-event listings. It
 // must never be used to expose raw provider payloads to public surfaces.
 type PaymentEventFilter struct {
-	Provider  PaymentProviderCode
-	Processed *bool
+	Provider          PaymentProviderCode
+	ProviderPaymentID string
+	Processed         *bool
 }
 
 // PaymentRefundFilter narrows protected operator refund listings. It must not

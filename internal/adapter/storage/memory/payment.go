@@ -367,6 +367,9 @@ func (r *PaymentRepo) ListIntents(_ context.Context, filter domain.PaymentIntent
 }
 
 func paymentIntentMatchesFilter(intent domain.PaymentIntent, filter domain.PaymentIntentFilter, statuses map[domain.PaymentIntentStatus]bool, source string) bool {
+	if filter.IntentID != nil && intent.ID != *filter.IntentID {
+		return false
+	}
 	if filter.UserID != nil && intent.UserID != *filter.UserID {
 		return false
 	}
@@ -374,6 +377,9 @@ func paymentIntentMatchesFilter(intent domain.PaymentIntent, filter domain.Payme
 		return false
 	}
 	if filter.Provider != "" && intent.Provider != filter.Provider {
+		return false
+	}
+	if providerPaymentID := strings.TrimSpace(filter.ProviderPaymentID); providerPaymentID != "" && intent.ProviderPaymentID != providerPaymentID {
 		return false
 	}
 	if source != "" && paymentIntentSource(intent) != source {
@@ -504,6 +510,9 @@ func (r *PaymentRepo) ListEvents(_ context.Context, filter domain.PaymentEventFi
 	for _, id := range r.eventIDs {
 		event := r.eventsByID[id]
 		if filter.Provider != "" && event.Provider != filter.Provider {
+			continue
+		}
+		if providerPaymentID := strings.TrimSpace(filter.ProviderPaymentID); providerPaymentID != "" && event.ProviderPaymentID != providerPaymentID {
 			continue
 		}
 		if filter.Processed != nil {

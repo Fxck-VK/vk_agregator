@@ -18,7 +18,10 @@ import (
 	"vk-ai-aggregator/internal/domain"
 )
 
-const defaultOperatorStaleAfter = 5 * time.Minute
+const (
+	defaultOperatorStaleAfter = 5 * time.Minute
+	maxProviderPaymentIDLen   = 256
+)
 
 // OperatorConsoleDTO is a read-only, display-safe payment and ledger snapshot
 // for the admin UI. It intentionally omits raw UUIDs, YooKassa payloads,
@@ -154,17 +157,20 @@ func (h *Handler) operatorConsole(w http.ResponseWriter, r *http.Request) {
 		eventItems = append(eventItems, newOperatorPaymentEventDTO(event))
 	}
 
-	refunds, err := h.deps.Payment.ListRefunds(r.Context(), domain.PaymentRefundFilter{}, limit+1, 0)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "list payment console refunds failed")
-		return
-	}
-	if len(refunds) > limit {
-		refunds = refunds[:limit]
-	}
-	refundItems := make([]OperatorPaymentRefundDTO, 0, len(refunds))
-	for _, refund := range refunds {
-		refundItems = append(refundItems, newOperatorPaymentRefundDTO(refund))
+	refundItems := make([]OperatorPaymentRefundDTO, 0, limit)
+	refundFilter, skipRefunds := operatorPaymentRefundFilter(filter, intents)
+	if !skipRefunds {
+		refunds, err := h.deps.Payment.ListRefunds(r.Context(), refundFilter, limit+1, 0)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "list payment console refunds failed")
+			return
+		}
+		if len(refunds) > limit {
+			refunds = refunds[:limit]
+		}
+		for _, refund := range refunds {
+			refundItems = append(refundItems, newOperatorPaymentRefundDTO(refund))
+		}
 	}
 
 	dto := OperatorConsoleDTO{
@@ -196,6 +202,14 @@ func (h *Handler) operatorConsole(w http.ResponseWriter, r *http.Request) {
 func parseOperatorPaymentFilter(w http.ResponseWriter, r *http.Request) (domain.PaymentIntentFilter, *uuid.UUID, bool) {
 	var filter domain.PaymentIntentFilter
 	var userID *uuid.UUID
+	if raw := strings.TrimSpace(r.URL.Query().Get("intent_id")); raw != "" {
+		id, err := uuid.Parse(raw)
+		if err != nil || id == uuid.Nil {
+			writeError(w, http.StatusBadRequest, "invalid intent_id")
+			return filter, nil, false
+		}
+		filter.IntentID = &id
+	}
 	if raw := strings.TrimSpace(r.URL.Query().Get("user_id")); raw != "" {
 		id, err := uuid.Parse(raw)
 		if err != nil || id == uuid.Nil {
@@ -221,6 +235,13 @@ func parseOperatorPaymentFilter(w http.ResponseWriter, r *http.Request) (domain.
 		}
 		filter.Provider = parsed
 	}
+	if providerPaymentID := strings.TrimSpace(r.URL.Query().Get("provider_payment_id")); providerPaymentID != "" {
+		if len(providerPaymentID) > maxProviderPaymentIDLen {
+			writeError(w, http.StatusBadRequest, "provider_payment_id is too long")
+			return filter, nil, false
+		}
+		filter.ProviderPaymentID = providerPaymentID
+	}
 	return filter, userID, true
 }
 
@@ -229,7 +250,24 @@ func operatorPaymentEventFilter(intentFilter domain.PaymentIntentFilter) domain.
 	if intentFilter.Provider != "" {
 		filter.Provider = intentFilter.Provider
 	}
+	if providerPaymentID := strings.TrimSpace(intentFilter.ProviderPaymentID); providerPaymentID != "" {
+		filter.ProviderPaymentID = providerPaymentID
+	}
 	return filter
+}
+
+func operatorPaymentRefundFilter(intentFilter domain.PaymentIntentFilter, intents []*domain.PaymentIntent) (domain.PaymentRefundFilter, bool) {
+	if intentFilter.IntentID != nil {
+		return domain.PaymentRefundFilter{IntentID: intentFilter.IntentID}, false
+	}
+	if strings.TrimSpace(intentFilter.ProviderPaymentID) == "" {
+		return domain.PaymentRefundFilter{}, false
+	}
+	if len(intents) == 0 {
+		return domain.PaymentRefundFilter{}, true
+	}
+	intentID := intents[0].ID
+	return domain.PaymentRefundFilter{IntentID: &intentID}, false
 }
 
 func (h *Handler) operatorBillingSnapshot(ctx context.Context, userID uuid.UUID, limit int) (*OperatorBillingDTO, error) {

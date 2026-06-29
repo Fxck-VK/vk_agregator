@@ -22,6 +22,21 @@ import (
 
 const testAdminToken = "test-admin-token"
 
+type fakeKeyLimiter struct {
+	allowed []bool
+	calls   []string
+}
+
+func (f *fakeKeyLimiter) Allow(_ context.Context, key string) (bool, error) {
+	f.calls = append(f.calls, key)
+	if len(f.allowed) == 0 {
+		return true, nil
+	}
+	allowed := f.allowed[0]
+	f.allowed = f.allowed[1:]
+	return allowed, nil
+}
+
 func setup(t *testing.T) (*admin.Handler, *memory.JobRepo, *memory.UserRepo, *memory.DeliveryRepo, *billingservice.Service) {
 	t.Helper()
 	jobs := memory.NewJobRepo()
@@ -117,6 +132,14 @@ func (f fakeMaintenanceReader) OrphanArtifactsCount(context.Context, time.Time) 
 	}, nil
 }
 
+type fakeRetentionCleanupRunner struct {
+	err error
+}
+
+func (f fakeRetentionCleanupRunner) Cleanup(context.Context) error {
+	return f.err
+}
+
 func do(t *testing.T, h *admin.Handler, path string) (*httptest.ResponseRecorder, map[string]any) {
 	t.Helper()
 	req := httptest.NewRequest(http.MethodGet, path, nil)
@@ -128,6 +151,21 @@ func do(t *testing.T, h *admin.Handler, path string) (*httptest.ResponseRecorder
 		_ = json.Unmarshal(rec.Body.Bytes(), &body)
 	}
 	return rec, body
+}
+
+func postJSON(t *testing.T, h *admin.Handler, path string, body string) (*httptest.ResponseRecorder, map[string]any) {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(body))
+	req.Header.Set("X-Admin-Token", testAdminToken)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Idempotency-Key", uuid.NewString())
+	rec := httptest.NewRecorder()
+	h.Routes().ServeHTTP(rec, req)
+	var out map[string]any
+	if rec.Body.Len() > 0 {
+		_ = json.Unmarshal(rec.Body.Bytes(), &out)
+	}
+	return rec, out
 }
 
 func TestOverviewReadOnlySafeDTO(t *testing.T) {
@@ -236,14 +274,62 @@ func TestOverviewReadOnlySafeDTO(t *testing.T) {
 	}
 }
 
+func TestOperatorAccessEndpointExposesSafeRoleBoundaries(t *testing.T) {
+	h := admin.NewHandler(admin.Config{Token: testAdminToken}, admin.Deps{})
+	rec, _ := do(t, h, "/admin/access/operator")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var dto admin.OperatorAccessDTO
+	if err := json.Unmarshal(rec.Body.Bytes(), &dto); err != nil {
+		t.Fatalf("decode operator access: %v", err)
+	}
+	if dto.CurrentAuthMode != "admin_token" || dto.EffectiveRole != string(domain.OperatorRoleOwner) {
+		t.Fatalf("unexpected auth mode/effective role: %+v", dto)
+	}
+	if len(dto.Roles) != 5 {
+		t.Fatalf("expected five roles, got %+v", dto.Roles)
+	}
+
+	roles := map[string]admin.OperatorRoleAccessDTO{}
+	for _, role := range dto.Roles {
+		roles[role.Role] = role
+	}
+	assertRoleHasPermission(t, roles[string(domain.OperatorRoleSupport)], string(domain.OperatorPermissionJobsSafeRead))
+	assertRoleLacksPermission(t, roles[string(domain.OperatorRoleSupport)], string(domain.OperatorPermissionPaymentsSafeRead))
+	assertRoleHasPermission(t, roles[string(domain.OperatorRoleFinance)], string(domain.OperatorPermissionPaymentsSafeRead))
+	assertRoleHasPermission(t, roles[string(domain.OperatorRoleFinance)], string(domain.OperatorPermissionRefundsManage))
+	assertRoleLacksPermission(t, roles[string(domain.OperatorRoleAdmin)], string(domain.OperatorPermissionRefundsManage))
+	assertRoleHasPermission(t, roles[string(domain.OperatorRoleAdmin)], string(domain.OperatorPermissionRetentionCleanup))
+	assertRoleLacksPermission(t, roles[string(domain.OperatorRoleOperator)], string(domain.OperatorPermissionRetentionCleanup))
+	assertRoleHasBoundary(t, roles[string(domain.OperatorRoleOwner)], string(domain.OperatorDataBoundaryNoDirectSQL))
+
+	raw := strings.ToLower(rec.Body.String())
+	for _, forbidden := range []string{
+		"x-admin-token",
+		testAdminToken,
+		"vk1.a.",
+		"raw_prompt",
+		"raw_provider_payload",
+		"provider_payment_id",
+		"confirmation_url",
+		"private_artifact_url",
+	} {
+		if strings.Contains(raw, strings.ToLower(forbidden)) {
+			t.Fatalf("operator access leaked forbidden value %q: %s", forbidden, raw)
+		}
+	}
+}
+
 func TestOperatorRetentionEndpointsExposeOnlySafeAggregates(t *testing.T) {
 	now := time.Date(2026, 6, 20, 12, 0, 0, 0, time.UTC)
 	h := admin.NewHandler(admin.Config{Token: testAdminToken}, admin.Deps{
-		Jobs:        memory.NewJobRepo(),
-		Users:       memory.NewUserRepo(),
-		Deliveries:  memory.NewDeliveryRepo(),
-		Referrals:   memory.NewReferralRepo(),
-		Maintenance: fakeMaintenanceReader{now: now},
+		Jobs:             memory.NewJobRepo(),
+		Users:            memory.NewUserRepo(),
+		Deliveries:       memory.NewDeliveryRepo(),
+		Referrals:        memory.NewReferralRepo(),
+		Maintenance:      fakeMaintenanceReader{now: now},
+		RetentionCleanup: fakeRetentionCleanupRunner{},
 	})
 	for _, path := range []string{
 		"/admin/retention/operator/status",
@@ -268,6 +354,32 @@ func TestOperatorRetentionEndpointsExposeOnlySafeAggregates(t *testing.T) {
 			if strings.Contains(body, forbidden) {
 				t.Fatalf("%s leaked forbidden value %q: %s", path, forbidden, body)
 			}
+		}
+	}
+	rec, _ := postJSON(t, h, "/admin/retention/operator/run-cleanup", `{}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("cleanup expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	for _, required := range []string{
+		`"completed":true`,
+		"Financial tables",
+		"ledger entries",
+	} {
+		if !strings.Contains(body, required) {
+			t.Fatalf("cleanup response missing %q: %s", required, body)
+		}
+	}
+	for _, forbidden := range []string{
+		"raw-prompt",
+		"provider-secret",
+		"vk1.a.",
+		"storage_bucket",
+		"storage_key",
+		"owner_user_id",
+	} {
+		if strings.Contains(body, forbidden) {
+			t.Fatalf("cleanup leaked forbidden value %q: %s", forbidden, body)
 		}
 	}
 }
@@ -463,15 +575,308 @@ func TestOperatorJobsListDetailAndQueueSafeDTO(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &queue); err != nil {
 		t.Fatalf("decode queue: %v", err)
 	}
-	if queue.RetryCount != 1 || queue.DLQ.Status != "not_wired" || queue.ProviderCircuit.Status != "not_wired" {
+	if queue.RetryCount != 1 || queue.DLQ.Status != "warning" || queue.DLQ.RetryableCount != 1 || queue.DLQ.BatchReplayLimit != 25 || queue.ProviderCircuit.Status != "not_wired" {
 		t.Fatalf("unexpected queue summary: %+v", queue)
 	}
 	assertNoOperatorJobLeak(t, rec.Body.String(), userID, inputArtifactID, outputArtifactID)
 }
 
+func TestOperatorDLQListAndSingleReplayGuardRails(t *testing.T) {
+	ctx := context.Background()
+	jobs := memory.NewJobRepo()
+	deliveries := memory.NewDeliveryRepo()
+	billingRepo := memory.NewBillingRepo()
+	providerTasks := memory.NewProviderTaskRepo()
+	outbox := memory.NewOutboxRepo()
+	h := admin.NewHandler(admin.Config{Token: testAdminToken}, admin.Deps{
+		Jobs:          jobs,
+		Deliveries:    deliveries,
+		Billing:       billingRepo,
+		ProviderTasks: providerTasks,
+		UnitOfWork:    memory.NewUnitOfWork(jobs, outbox, billingRepo),
+	})
+
+	userID := uuid.New()
+	safeJob := &domain.Job{
+		ID:             uuid.New(),
+		UserID:         userID,
+		OperationType:  domain.OperationTextGenerate,
+		Modality:       domain.ModalityText,
+		Status:         domain.JobStatusFailedRetryable,
+		ErrorCode:      "temporary_failure",
+		ErrorMessage:   "raw prompt https://private.example/token",
+		IdempotencyKey: uuid.NewString(),
+	}
+	if err := jobs.Create(ctx, safeJob); err != nil {
+		t.Fatalf("create safe job: %v", err)
+	}
+	providerID := uuid.New()
+	modelID := uuid.New()
+	paidJob := &domain.Job{
+		ID:             uuid.New(),
+		UserID:         userID,
+		OperationType:  domain.OperationVideoGenerate,
+		Modality:       domain.ModalityVideo,
+		Status:         domain.JobStatusFailedRetryable,
+		ProviderID:     &providerID,
+		ModelID:        &modelID,
+		CostEstimate:   100,
+		CostReserved:   100,
+		ErrorCode:      string(domain.ProviderErrTimeout),
+		ErrorMessage:   "provider payload https://private.example/provider",
+		IdempotencyKey: uuid.NewString(),
+	}
+	if err := jobs.Create(ctx, paidJob); err != nil {
+		t.Fatalf("create paid job: %v", err)
+	}
+	if err := providerTasks.Create(ctx, &domain.ProviderTask{
+		ID:             uuid.New(),
+		JobID:          paidJob.ID,
+		Provider:       domain.ProviderPoYo,
+		ModelCode:      "kling-o3/standard",
+		ExternalID:     "provider-task-1",
+		AttemptNo:      2,
+		Status:         domain.ProviderTaskFailed,
+		ErrorClass:     domain.ProviderErrTimeout,
+		IdempotencyKey: uuid.NewString(),
+		Request:        json.RawMessage(`{}`),
+	}); err != nil {
+		t.Fatalf("create provider task: %v", err)
+	}
+
+	rec, _ := do(t, h, "/admin/jobs/dlq?limit=10")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected dlq list 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var dlq admin.OperatorDLQDTO
+	if err := json.Unmarshal(rec.Body.Bytes(), &dlq); err != nil {
+		t.Fatalf("decode dlq: %v", err)
+	}
+	if len(dlq.Items) != 2 || dlq.Replay.BatchLimit != 25 || !dlq.Replay.BatchSkipsPaidProvider {
+		t.Fatalf("unexpected dlq payload: %+v", dlq)
+	}
+	for _, leaked := range []string{"raw prompt", "private.example", "provider payload", userID.String()} {
+		if strings.Contains(rec.Body.String(), leaked) {
+			t.Fatalf("dlq response leaked %q: %s", leaked, rec.Body.String())
+		}
+	}
+	var safeRow, paidRow *admin.OperatorDLQItemDTO
+	for i := range dlq.Items {
+		if dlq.Items[i].Job.LookupID == safeJob.ID.String() {
+			safeRow = &dlq.Items[i]
+		}
+		if dlq.Items[i].Job.LookupID == paidJob.ID.String() {
+			paidRow = &dlq.Items[i]
+		}
+	}
+	if safeRow == nil || paidRow == nil {
+		t.Fatalf("expected safe and paid rows, got %+v", dlq.Items)
+	}
+	if !safeRow.SafeReplay || safeRow.AttemptCount != 1 {
+		t.Fatalf("expected safe replay row, got %+v", safeRow)
+	}
+	if paidRow.SafeReplay || paidRow.ProviderTaskCount != 1 || paidRow.AttemptCount != 2 || paidRow.LastProviderClass != string(domain.ProviderErrTimeout) {
+		t.Fatalf("expected paid provider row blocked with task metadata, got %+v", paidRow)
+	}
+
+	rec, _ = postJSON(t, h, "/admin/jobs/"+safeJob.ID.String()+"/replay", `{}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected safe replay 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var safeReplay admin.OperatorDLQReplayResultDTO
+	if err := json.Unmarshal(rec.Body.Bytes(), &safeReplay); err != nil {
+		t.Fatalf("decode safe replay: %v", err)
+	}
+	if len(safeReplay.Replayed) != 1 || len(safeReplay.Skipped) != 0 {
+		t.Fatalf("expected one safe replay, got %+v", safeReplay)
+	}
+	requeued, err := jobs.GetByID(ctx, safeJob.ID)
+	if err != nil {
+		t.Fatalf("get requeued safe job: %v", err)
+	}
+	if requeued.Status != domain.JobStatusQueued || requeued.ErrorCode != "" {
+		t.Fatalf("expected safe job queued, got %+v", requeued)
+	}
+	events := outbox.Events()
+	if len(events) != 1 || events[0].EventType != "event.job.queued" {
+		t.Fatalf("expected queued outbox event, got %+v", events)
+	}
+
+	rec, _ = postJSON(t, h, "/admin/jobs/"+paidJob.ID.String()+"/replay", `{}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected paid replay guard 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var paidBlocked admin.OperatorDLQReplayResultDTO
+	if err := json.Unmarshal(rec.Body.Bytes(), &paidBlocked); err != nil {
+		t.Fatalf("decode paid blocked replay: %v", err)
+	}
+	if len(paidBlocked.Replayed) != 0 || len(paidBlocked.Skipped) != 1 || !strings.Contains(paidBlocked.Skipped[0].Reason, "explicit") {
+		t.Fatalf("expected paid replay to require explicit override, got %+v", paidBlocked)
+	}
+	stillFailed, err := jobs.GetByID(ctx, paidJob.ID)
+	if err != nil {
+		t.Fatalf("get paid job after blocked replay: %v", err)
+	}
+	if stillFailed.Status != domain.JobStatusFailedRetryable {
+		t.Fatalf("expected paid job to stay failed_retryable, got %s", stillFailed.Status)
+	}
+
+	rec, _ = postJSON(t, h, "/admin/jobs/"+paidJob.ID.String()+"/replay", `{"allow_paid_provider":true}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected paid override replay 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var paidReplay admin.OperatorDLQReplayResultDTO
+	if err := json.Unmarshal(rec.Body.Bytes(), &paidReplay); err != nil {
+		t.Fatalf("decode paid replay: %v", err)
+	}
+	if len(paidReplay.Replayed) != 1 || len(paidReplay.Skipped) != 0 {
+		t.Fatalf("expected paid replay after override, got %+v", paidReplay)
+	}
+	paidQueued, err := jobs.GetByID(ctx, paidJob.ID)
+	if err != nil {
+		t.Fatalf("get paid queued job: %v", err)
+	}
+	if paidQueued.Status != domain.JobStatusQueued {
+		t.Fatalf("expected paid job queued after override, got %s", paidQueued.Status)
+	}
+}
+
+func TestOperatorDLQBatchSkipsPaidProviderJobs(t *testing.T) {
+	ctx := context.Background()
+	jobs := memory.NewJobRepo()
+	billingRepo := memory.NewBillingRepo()
+	outbox := memory.NewOutboxRepo()
+	h := admin.NewHandler(admin.Config{Token: testAdminToken}, admin.Deps{
+		Jobs:       jobs,
+		Billing:    billingRepo,
+		UnitOfWork: memory.NewUnitOfWork(jobs, outbox, billingRepo),
+	})
+	userID := uuid.New()
+	safeJob := &domain.Job{
+		ID:             uuid.New(),
+		UserID:         userID,
+		OperationType:  domain.OperationTextGenerate,
+		Modality:       domain.ModalityText,
+		Status:         domain.JobStatusFailedRetryable,
+		ErrorCode:      "temporary_failure",
+		IdempotencyKey: uuid.NewString(),
+	}
+	paidJob := &domain.Job{
+		ID:             uuid.New(),
+		UserID:         userID,
+		OperationType:  domain.OperationVideoGenerate,
+		Modality:       domain.ModalityVideo,
+		Status:         domain.JobStatusFailedRetryable,
+		CostEstimate:   100,
+		CostReserved:   100,
+		ErrorCode:      string(domain.ProviderErrTimeout),
+		IdempotencyKey: uuid.NewString(),
+	}
+	for _, job := range []*domain.Job{safeJob, paidJob} {
+		if err := jobs.Create(ctx, job); err != nil {
+			t.Fatalf("create job: %v", err)
+		}
+		time.Sleep(time.Millisecond)
+	}
+
+	rec, _ := postJSON(t, h, "/admin/jobs/dlq/replay", `{"limit":25,"allow_paid_provider":true}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected batch replay 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var out admin.OperatorDLQReplayResultDTO
+	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
+		t.Fatalf("decode batch replay: %v", err)
+	}
+	if len(out.Replayed) != 1 || len(out.Skipped) != 1 {
+		t.Fatalf("expected one replayed and one skipped, got %+v", out)
+	}
+	paidAfter, err := jobs.GetByID(ctx, paidJob.ID)
+	if err != nil {
+		t.Fatalf("get paid after batch replay: %v", err)
+	}
+	if paidAfter.Status != domain.JobStatusFailedRetryable {
+		t.Fatalf("expected paid job to stay failed_retryable after batch replay, got %s", paidAfter.Status)
+	}
+	if len(outbox.Events()) != 1 {
+		t.Fatalf("expected only one queued event for safe replay, got %+v", outbox.Events())
+	}
+}
+
+func TestOperatorJobsCursorPaginationAndFilters(t *testing.T) {
+	h, jobs, _, _, _ := setup(t)
+	ctx := context.Background()
+	userID := uuid.New()
+	otherUserID := uuid.New()
+	for i := 0; i < 3; i++ {
+		if err := jobs.Create(ctx, &domain.Job{
+			ID:             uuid.New(),
+			UserID:         userID,
+			OperationType:  domain.OperationTextGenerate,
+			Modality:       domain.ModalityText,
+			Status:         domain.JobStatusQueued,
+			IdempotencyKey: uuid.NewString(),
+		}); err != nil {
+			t.Fatalf("create job %d: %v", i, err)
+		}
+		time.Sleep(time.Millisecond)
+	}
+	if err := jobs.Create(ctx, &domain.Job{
+		ID:             uuid.New(),
+		UserID:         otherUserID,
+		OperationType:  domain.OperationVideoGenerate,
+		Modality:       domain.ModalityVideo,
+		Status:         domain.JobStatusSucceeded,
+		IdempotencyKey: uuid.NewString(),
+	}); err != nil {
+		t.Fatalf("create other user job: %v", err)
+	}
+
+	rec, _ := do(t, h, "/admin/jobs/operator?limit=2&user_id="+userID.String())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected page 1 status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var page1 admin.OperatorJobsDTO
+	if err := json.Unmarshal(rec.Body.Bytes(), &page1); err != nil {
+		t.Fatalf("decode page 1: %v", err)
+	}
+	if len(page1.Items) != 2 || !page1.Pagination.HasMore || page1.Pagination.NextCursor == "" {
+		t.Fatalf("unexpected page 1 pagination: items=%d pagination=%+v", len(page1.Items), page1.Pagination)
+	}
+
+	rec, _ = do(t, h, "/admin/jobs/operator?limit=2&user_id="+userID.String()+"&cursor="+url.QueryEscape(page1.Pagination.NextCursor))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected page 2 status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var page2 admin.OperatorJobsDTO
+	if err := json.Unmarshal(rec.Body.Bytes(), &page2); err != nil {
+		t.Fatalf("decode page 2: %v", err)
+	}
+	if len(page2.Items) != 1 || page2.Pagination.HasMore || page2.Pagination.NextCursor != "" {
+		t.Fatalf("unexpected page 2 pagination: items=%d pagination=%+v", len(page2.Items), page2.Pagination)
+	}
+	seen := map[string]bool{}
+	for _, item := range append(page1.Items, page2.Items...) {
+		if seen[item.LookupID] {
+			t.Fatalf("duplicate operator job item across cursor pages: %s", item.LookupID)
+		}
+		seen[item.LookupID] = true
+	}
+	if len(seen) != 3 {
+		t.Fatalf("expected 3 user jobs across cursor pages, got %d", len(seen))
+	}
+
+	rec, _ = do(t, h, "/admin/jobs/operator?cursor=not-a-valid-cursor")
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected invalid cursor status 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestProviderMediaAndConfigOperatorDTOsAreSafe(t *testing.T) {
 	ctx := context.Background()
 	jobs := memory.NewJobRepo()
+	deliveries := memory.NewDeliveryRepo()
+	payments := memory.NewPaymentRepo()
+	providerTasks := memory.NewProviderTaskRepo()
 	cfg := platformconfig.Config{
 		Env:                                  "production",
 		PaymentProvider:                      "yookassa",
@@ -507,10 +912,12 @@ func TestProviderMediaAndConfigOperatorDTOsAreSafe(t *testing.T) {
 		FeatureVideoRouteRunwayGen45Enabled:  true,
 	}
 	h := admin.NewHandler(admin.Config{Token: testAdminToken, Runtime: admin.NewRuntimeSnapshot(cfg)}, admin.Deps{
-		Jobs:       jobs,
-		Users:      memory.NewUserRepo(),
-		Deliveries: memory.NewDeliveryRepo(),
-		Referrals:  memory.NewReferralRepo(),
+		Jobs:          jobs,
+		Users:         memory.NewUserRepo(),
+		Deliveries:    deliveries,
+		Referrals:     memory.NewReferralRepo(),
+		Payment:       payments,
+		ProviderTasks: providerTasks,
 	})
 	userID := uuid.New()
 	for _, job := range []*domain.Job{
@@ -561,6 +968,51 @@ func TestProviderMediaAndConfigOperatorDTOsAreSafe(t *testing.T) {
 			t.Fatalf("create job: %v", err)
 		}
 	}
+	submittedAt := time.Now().Add(-2 * time.Minute)
+	completedAt := time.Now().Add(-time.Minute)
+	if err := providerTasks.Create(ctx, &domain.ProviderTask{
+		ID:             uuid.New(),
+		JobID:          uuid.New(),
+		Provider:       domain.ProviderDeepInfra,
+		ModelCode:      "raw-provider-model-should-not-leak",
+		ExternalID:     "provider-external-secret",
+		AttemptNo:      1,
+		Status:         domain.ProviderTaskFailed,
+		Request:        json.RawMessage(`{"prompt":"provider prompt secret"}`),
+		Result:         json.RawMessage(`{"raw":"provider private response"}`),
+		ErrorClass:     domain.ProviderErrRateLimited,
+		IdempotencyKey: "provider-task-secret",
+		SubmittedAt:    &submittedAt,
+		CompletedAt:    &completedAt,
+	}); err != nil {
+		t.Fatalf("create provider task: %v", err)
+	}
+	if err := deliveries.Create(ctx, &domain.Delivery{
+		ID:             uuid.New(),
+		JobID:          uuid.New(),
+		UserID:         userID,
+		VKPeerID:       123456,
+		Type:           domain.DeliveryTypeVideo,
+		Status:         domain.DeliveryStatusFailed,
+		VKRandomID:     42,
+		Attachment:     "video-private-attachment",
+		Text:           "delivery prompt secret",
+		IdempotencyKey: "delivery-secret",
+		ErrorCode:      "vk_rate_limited",
+		ErrorMessage:   "raw vk private",
+	}); err != nil {
+		t.Fatalf("create delivery: %v", err)
+	}
+	if _, err := payments.CreateEvent(ctx, &domain.PaymentEvent{
+		ID:                uuid.New(),
+		Provider:          domain.PaymentProviderYooKassa,
+		EventType:         "payment.succeeded",
+		ProviderPaymentID: "provider-payment-secret",
+		DedupKey:          "payment-event-secret",
+		Payload:           json.RawMessage(`{"raw":"yookassa private payload"}`),
+	}); err != nil {
+		t.Fatalf("create payment event: %v", err)
+	}
 
 	for _, path := range []string{
 		"/admin/providers/operator",
@@ -586,6 +1038,18 @@ func TestProviderMediaAndConfigOperatorDTOsAreSafe(t *testing.T) {
 			"raw provider payload",
 			"raw ffprobe path",
 			"private.png",
+			"raw-provider-model-should-not-leak",
+			"provider-external-secret",
+			"provider prompt secret",
+			"provider private response",
+			"provider-task-secret",
+			"video-private-attachment",
+			"delivery prompt secret",
+			"delivery-secret",
+			"raw vk private",
+			"provider-payment-secret",
+			"payment-event-secret",
+			"yookassa private payload",
 			userID.String(),
 		} {
 			if strings.Contains(raw, forbidden) {
@@ -604,6 +1068,21 @@ func TestProviderMediaAndConfigOperatorDTOsAreSafe(t *testing.T) {
 	}
 	if len(providers.VideoRoutes) == 0 {
 		t.Fatalf("expected safe video route state rows, got none")
+	}
+	deepInfra := findProviderHealthDTO(providers.Providers, "ai_provider", "deepinfra")
+	if deepInfra == nil || deepInfra.ErrorRatePercent == 0 || deepInfra.LatencyP95Ms == 0 ||
+		deepInfra.QuotaState != "rate_limited_observed" ||
+		deepInfra.CooldownState != "provider_backpressure_observed" ||
+		deepInfra.LatestErrorClass != string(domain.ProviderErrRateLimited) {
+		t.Fatalf("unexpected deepinfra provider health: %+v", deepInfra)
+	}
+	yookassa := findProviderHealthDTO(providers.Providers, "payment_provider", "yookassa")
+	if yookassa == nil || yookassa.Health != "warning" || yookassa.LatestErrorClass != "unprocessed_webhook" {
+		t.Fatalf("unexpected yookassa provider health: %+v", yookassa)
+	}
+	vkDelivery := findProviderHealthDTO(providers.Providers, "delivery", "vk_delivery")
+	if vkDelivery == nil || vkDelivery.Health != "critical" || vkDelivery.LatestErrorClass != "vk_rate_limited" {
+		t.Fatalf("unexpected vk delivery health: %+v", vkDelivery)
 	}
 	hailuoFast := findVideoRouteDTO(providers.VideoRoutes, string(domain.VideoRouteHailuo23Fast))
 	if hailuoFast == nil || hailuoFast.Status != "ok" || hailuoFast.Reason != "ready" ||
@@ -651,6 +1130,44 @@ func findVideoRouteDTO(items []admin.OperatorVideoRouteDTO, alias string) *admin
 		}
 	}
 	return nil
+}
+
+func findProviderHealthDTO(items []admin.OperatorProviderHealthDTO, serviceType, providerClass string) *admin.OperatorProviderHealthDTO {
+	for i := range items {
+		if items[i].ServiceType == serviceType && items[i].ProviderClass == providerClass {
+			return &items[i]
+		}
+	}
+	return nil
+}
+
+func assertRoleHasPermission(t *testing.T, role admin.OperatorRoleAccessDTO, permission string) {
+	t.Helper()
+	for _, candidate := range role.Permissions {
+		if candidate == permission {
+			return
+		}
+	}
+	t.Fatalf("role %q missing permission %q in %+v", role.Role, permission, role.Permissions)
+}
+
+func assertRoleLacksPermission(t *testing.T, role admin.OperatorRoleAccessDTO, permission string) {
+	t.Helper()
+	for _, candidate := range role.Permissions {
+		if candidate == permission {
+			t.Fatalf("role %q unexpectedly has permission %q in %+v", role.Role, permission, role.Permissions)
+		}
+	}
+}
+
+func assertRoleHasBoundary(t *testing.T, role admin.OperatorRoleAccessDTO, boundary string) {
+	t.Helper()
+	for _, candidate := range role.DataBoundaries {
+		if candidate == boundary {
+			return
+		}
+	}
+	t.Fatalf("role %q missing boundary %q in %+v", role.Role, boundary, role.DataBoundaries)
 }
 
 func TestUsersReferralsAndAuditOperatorDTOsAreSafe(t *testing.T) {
@@ -974,6 +1491,109 @@ func TestAuthTokenRequired(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200 with token, got %d", rec.Code)
 	}
+}
+
+func TestOperatorRBACEnforcedAndAudited(t *testing.T) {
+	audits := memory.NewOperatorAuditRepo()
+	h := admin.NewHandler(admin.Config{
+		Token:       "secret",
+		DefaultRole: domain.OperatorRoleSupport,
+	}, admin.Deps{
+		Jobs:       memory.NewJobRepo(),
+		Users:      memory.NewUserRepo(),
+		Deliveries: memory.NewDeliveryRepo(),
+		Audits:     audits,
+	})
+
+	allowedReq := httptest.NewRequest(http.MethodGet, "/admin/jobs/operator", nil)
+	allowedReq.Header.Set("X-Admin-Token", "secret")
+	allowedRec := httptest.NewRecorder()
+	h.Routes().ServeHTTP(allowedRec, allowedReq)
+	if allowedRec.Code != http.StatusOK {
+		t.Fatalf("support safe jobs status = %d, want 200: %s", allowedRec.Code, allowedRec.Body.String())
+	}
+
+	forbiddenReq := httptest.NewRequest(http.MethodGet, "/admin/audit/operator", nil)
+	forbiddenReq.Header.Set("X-Admin-Token", "secret")
+	forbiddenRec := httptest.NewRecorder()
+	h.Routes().ServeHTTP(forbiddenRec, forbiddenReq)
+	if forbiddenRec.Code != http.StatusForbidden {
+		t.Fatalf("support audit status = %d, want 403: %s", forbiddenRec.Code, forbiddenRec.Body.String())
+	}
+	entries, err := audits.List(context.Background(), domain.OperatorAuditFilter{Action: "admin_operator_audit_get"}, 10, 0)
+	if err != nil {
+		t.Fatalf("list audit: %v", err)
+	}
+	if len(entries) != 1 || entries[0].Result != "error" || entries[0].ActorRef == "" {
+		t.Fatalf("expected forbidden action audit entry, got %+v", entries)
+	}
+	if strings.Contains(entries[0].ActorRef, "secret") {
+		t.Fatalf("audit actor leaked token: %+v", entries[0])
+	}
+}
+
+func TestOperatorRateLimitAudited(t *testing.T) {
+	audits := memory.NewOperatorAuditRepo()
+	h := admin.NewHandler(admin.Config{
+		Token:     "secret",
+		RateLimit: admin.AdminRateLimitConfig{Limit: 1, Window: time.Hour},
+	}, admin.Deps{Audits: audits})
+
+	for i, want := range []int{http.StatusOK, http.StatusTooManyRequests} {
+		req := httptest.NewRequest(http.MethodGet, "/admin/overview", nil)
+		req.Header.Set("X-Admin-Token", "secret")
+		rec := httptest.NewRecorder()
+		h.Routes().ServeHTTP(rec, req)
+		if rec.Code != want {
+			t.Fatalf("request %d status = %d, want %d: %s", i+1, rec.Code, want, rec.Body.String())
+		}
+	}
+	entries, err := audits.List(context.Background(), domain.OperatorAuditFilter{Action: "admin_overview_get"}, 10, 0)
+	if err != nil {
+		t.Fatalf("list audit: %v", err)
+	}
+	if len(entries) != 2 || !auditResultsContain(entries, "success") || !auditResultsContain(entries, "error") {
+		t.Fatalf("expected success and rate-limit audit entries, got %+v", entries)
+	}
+}
+
+func TestOperatorRateLimitUsesSharedLimiter(t *testing.T) {
+	limiter := &fakeKeyLimiter{allowed: []bool{true, false}}
+	h := admin.NewHandler(admin.Config{
+		Token: "secret",
+		RateLimit: admin.AdminRateLimitConfig{
+			Limit:   99,
+			Window:  time.Hour,
+			Limiter: limiter,
+		},
+	}, admin.Deps{})
+
+	for i, want := range []int{http.StatusOK, http.StatusTooManyRequests} {
+		req := httptest.NewRequest(http.MethodGet, "/admin/overview", nil)
+		req.Header.Set("X-Admin-Token", "secret")
+		rec := httptest.NewRecorder()
+		h.Routes().ServeHTTP(rec, req)
+		if rec.Code != want {
+			t.Fatalf("request %d status = %d, want %d: %s", i+1, rec.Code, want, rec.Body.String())
+		}
+	}
+	if len(limiter.calls) != 2 {
+		t.Fatalf("shared limiter calls = %d, want 2", len(limiter.calls))
+	}
+	for _, call := range limiter.calls {
+		if !strings.HasPrefix(call, "admin:operator_") {
+			t.Fatalf("shared limiter key = %q, want admin operator key", call)
+		}
+	}
+}
+
+func auditResultsContain(entries []*domain.OperatorAuditEntry, result string) bool {
+	for _, entry := range entries {
+		if entry.Result == result {
+			return true
+		}
+	}
+	return false
 }
 
 func TestReferralStatsByCodeSafeDTO(t *testing.T) {

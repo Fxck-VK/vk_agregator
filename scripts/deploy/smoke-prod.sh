@@ -176,6 +176,11 @@ load_env_file "$env_file"
 vk_base_url="${vk_base_url:-$(get_env_value PUBLIC_VK_BASE_URL "$(get_env_value VK_BASE_URL "https://vk.neiirohub.ru")")}"
 app_base_url="${app_base_url:-$(get_env_value PUBLIC_APP_BASE_URL "$(get_env_value APP_BASE_URL "https://app.neiirohub.ru")")}"
 payment_webhook_url="${payment_webhook_url:-$(get_env_value PUBLIC_PAYMENT_WEBHOOK_URL "$(get_env_value PAYMENT_WEBHOOK_URL "https://neiirohub.ru/billing/webhooks/yookassa")")}"
+payment_base_url="$(get_env_value PUBLIC_PAYMENT_BASE_URL "")"
+if [[ -z "$payment_base_url" ]]; then
+  payment_base_url="${payment_webhook_url%/billing/webhooks/yookassa}"
+  payment_base_url="${payment_base_url%/billing/webhooks/yookassa/}"
+fi
 
 api_health_url="${api_health_url:-$(url_from_listen_addr "$(get_env_value HTTP_ADDR ":8080")" "/readyz")}"
 worker_health_url="${worker_health_url:-$(url_from_listen_addr "$(get_env_value WORKER_METRICS_ADDR ":9090")" "/readyz")}"
@@ -186,6 +191,7 @@ reverse_proxy_health_url="${reverse_proxy_health_url:-http://127.0.0.1:$(get_env
 
 vk_base_url="${vk_base_url%/}"
 app_base_url="${app_base_url%/}"
+payment_base_url="${payment_base_url%/}"
 
 assert_https_url() {
   local name="$1"
@@ -286,10 +292,12 @@ fi
 echo "VK base: $vk_base_url"
 echo "Mini App base: $app_base_url"
 echo "Payment webhook: $payment_webhook_url"
+echo "Payment/admin base: $payment_base_url"
 
 assert_https_url "VK base URL" "$vk_base_url"
 assert_https_url "Mini App base URL" "$app_base_url"
 assert_https_url "YooKassa webhook URL" "$payment_webhook_url"
+assert_https_url "Payment/admin base URL" "$payment_base_url"
 
 if [[ "$payment_webhook_only" != "true" && "$skip_local_health" != "true" ]]; then
   status="$(http_status GET "$api_health_url")"
@@ -330,15 +338,30 @@ expect_controlled_webhook_reject "YooKassa webhook route" "$status"
 
 blocked_urls=(
   "$vk_base_url/admin/jobs"
+  "$vk_base_url/admin/access/operator"
+  "$vk_base_url/admin/audit/operator"
+  "$vk_base_url/admin/retention/operator/run-cleanup"
   "$vk_base_url/metrics"
+  "$vk_base_url/debug/pprof"
   "$vk_base_url/billing/payment-intents"
   "$vk_base_url/billing/payment-events/unprocessed"
+  "$payment_base_url/admin/jobs"
+  "$payment_base_url/admin/access/operator"
+  "$payment_base_url/admin/audit/operator"
+  "$payment_base_url/admin/retention/operator/run-cleanup"
+  "$payment_base_url/metrics"
+  "$payment_base_url/debug/pprof"
+  "$payment_base_url/billing/payment-intents"
 )
 
 if [[ "$payment_webhook_only" != "true" ]]; then
   blocked_urls+=(
     "$app_base_url/admin/jobs"
+    "$app_base_url/admin/access/operator"
+    "$app_base_url/admin/audit/operator"
+    "$app_base_url/admin/retention/operator/run-cleanup"
     "$app_base_url/metrics"
+    "$app_base_url/debug/pprof"
     "$app_base_url/billing/payment-intents"
     "$app_base_url/billing/webhooks/yookassa"
   )

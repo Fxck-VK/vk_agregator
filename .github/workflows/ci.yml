@@ -135,10 +135,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Validate documentation
+        shell: pwsh
+        run: ./scripts/ci/validate-docs.ps1
+
       - name: Validate infrastructure
         shell: pwsh
         run: ./scripts/ci/validate-infra.ps1
 
       - name: Test deploy env scripts
         shell: bash
-        run: bash scripts/deploy/test-dev-env.sh
+        run: |
+          bash scripts/deploy/test-dev-env.sh
+          bash scripts/deploy/test-env-parity.sh

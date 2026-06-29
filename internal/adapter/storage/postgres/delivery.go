@@ -2,6 +2,9 @@ package postgres
 
 import (
 	"context"
+	"database/sql"
+	"errors"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -103,6 +106,59 @@ func (r *DeliveryRepository) ListByJob(ctx context.Context, jobID uuid.UUID) ([]
 		deliveries = append(deliveries, &d)
 	}
 	return deliveries, mapError(rows.Err())
+}
+
+// HealthSnapshot returns safe delivery aggregates for operator screens.
+func (r *DeliveryRepository) HealthSnapshot(ctx context.Context, since time.Time) (domain.DeliveryHealth, error) {
+	const q = `
+		SELECT
+			count(*)::bigint,
+			count(*) FILTER (WHERE status = $2)::bigint,
+			count(*) FILTER (WHERE status = $3)::bigint,
+			COALESCE((
+				percentile_disc(0.95) WITHIN GROUP (
+					ORDER BY EXTRACT(EPOCH FROM (updated_at - created_at)) * 1000
+				) FILTER (
+					WHERE status IN ($4, $2) AND updated_at >= created_at
+				)
+			)::bigint, 0)::bigint
+		FROM deliveries
+		WHERE created_at >= $1`
+	var health domain.DeliveryHealth
+	if err := r.db.QueryRow(ctx, q,
+		since,
+		domain.DeliveryStatusFailed,
+		domain.DeliveryStatusRetrying,
+		domain.DeliveryStatusSent,
+	).Scan(
+		&health.TotalCount,
+		&health.FailedCount,
+		&health.RetryingCount,
+		&health.LatencyP95Ms,
+	); err != nil {
+		return domain.DeliveryHealth{}, mapError(err)
+	}
+
+	const latestQ = `
+		SELECT error_code, updated_at
+		FROM deliveries
+		WHERE created_at >= $1 AND error_code <> ''
+		ORDER BY updated_at DESC
+		LIMIT 1`
+	var errorCode sql.NullString
+	var errorAt sql.NullTime
+	err := r.db.QueryRow(ctx, latestQ, since).Scan(&errorCode, &errorAt)
+	if mapped := mapError(err); mapped != nil && !errors.Is(mapped, domain.ErrNotFound) {
+		return domain.DeliveryHealth{}, mapped
+	}
+	if errorCode.Valid {
+		health.LatestErrorCode = errorCode.String
+	}
+	if errorAt.Valid {
+		at := errorAt.Time
+		health.LatestErrorAt = &at
+	}
+	return health, nil
 }
 
 func scanDelivery(row rowScanner, d *domain.Delivery) error {

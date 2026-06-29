@@ -9,8 +9,10 @@ type JobsScreenProps = {
 };
 
 type JobFilters = {
+  userId: string;
   status: string;
   kind: string;
+  provider: string;
   errorClass: string;
   createdFrom: string;
   createdTo: string;
@@ -30,8 +32,10 @@ type DetailState = {
 };
 
 const emptyFilters: JobFilters = {
+  userId: "",
   status: "",
   kind: "",
+  provider: "",
   errorClass: "",
   createdFrom: "",
   createdTo: "",
@@ -67,6 +71,8 @@ const kindOptions = [
 export function JobsScreen({ adminTokenSet, client }: JobsScreenProps) {
   const [filters, setFilters] = useState<JobFilters>(emptyFilters);
   const [query, setQuery] = useState<JobFilters>(emptyFilters);
+  const [cursor, setCursor] = useState("");
+  const [cursorStack, setCursorStack] = useState<string[]>([]);
   const [jobs, setJobs] = useState<JobsState>({ loading: false });
   const [selectedLookupID, setSelectedLookupID] = useState("");
   const [detail, setDetail] = useState<DetailState>({ loading: false });
@@ -85,7 +91,7 @@ export function JobsScreen({ adminTokenSet, client }: JobsScreenProps) {
     const controller = new AbortController();
     setJobs((current) => ({ data: current.data, loading: true }));
     client
-      .request<OperatorJobsDTO>(operatorJobsPath(query), { signal: controller.signal })
+      .request<OperatorJobsDTO>(operatorJobsPath(query, cursor), { signal: controller.signal })
       .then((data) => {
         setJobs({ data, loading: false });
         setSelectedLookupID((current) => {
@@ -102,7 +108,7 @@ export function JobsScreen({ adminTokenSet, client }: JobsScreenProps) {
         }
       });
     return () => controller.abort();
-  }, [adminTokenSet, client, query]);
+  }, [adminTokenSet, client, query, cursor]);
 
   useEffect(() => {
     if (!adminTokenSet || !selectedLookupID) {
@@ -128,11 +134,32 @@ export function JobsScreen({ adminTokenSet, client }: JobsScreenProps) {
   function submitFilters(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setQuery(filters);
+    setCursor("");
+    setCursorStack([]);
   }
 
   function resetFilters() {
     setFilters(emptyFilters);
     setQuery(emptyFilters);
+    setCursor("");
+    setCursorStack([]);
+  }
+
+  function goNextPage() {
+    const nextCursor = jobs.data?.pagination.next_cursor;
+    if (!nextCursor) {
+      return;
+    }
+    setCursorStack((current) => [...current, cursor]);
+    setCursor(nextCursor);
+  }
+
+  function goPreviousPage() {
+    if (cursorStack.length === 0) {
+      return;
+    }
+    setCursor(cursorStack[cursorStack.length - 1] ?? "");
+    setCursorStack((current) => current.slice(0, -1));
   }
 
   if (!adminTokenSet) {
@@ -148,6 +175,15 @@ export function JobsScreen({ adminTokenSet, client }: JobsScreenProps) {
   return (
     <div className="ops-stack">
       <form className="surface filters-panel" onSubmit={submitFilters}>
+        <label>
+          <span>User ID</span>
+          <input
+            autoComplete="off"
+            onChange={(event) => setFilters({ ...filters, userId: event.target.value })}
+            placeholder="exact user uuid"
+            value={filters.userId}
+          />
+        </label>
         <label>
           <span>Status</span>
           <select value={filters.status} onChange={(event) => setFilters({ ...filters, status: event.target.value })}>
@@ -167,6 +203,15 @@ export function JobsScreen({ adminTokenSet, client }: JobsScreenProps) {
               </option>
             ))}
           </select>
+        </label>
+        <label>
+          <span>Provider</span>
+          <input
+            autoComplete="off"
+            onChange={(event) => setFilters({ ...filters, provider: event.target.value })}
+            placeholder="poyo / runway / apimart"
+            value={filters.provider}
+          />
         </label>
         <label>
           <span>Error class</span>
@@ -221,6 +266,14 @@ export function JobsScreen({ adminTokenSet, client }: JobsScreenProps) {
               <h3>{jobs.loading && !jobs.data ? "Loading jobs" : `${jobs.data?.pagination.count ?? 0} jobs shown`}</h3>
             </div>
             <span>{jobs.data?.pagination.has_more ? "more available" : "bounded page"}</span>
+          </div>
+          <div className="filter-actions">
+            <button className="button-secondary" disabled={cursorStack.length === 0 || jobs.loading} onClick={goPreviousPage} type="button">
+              Previous
+            </button>
+            <button className="button-secondary" disabled={!jobs.data?.pagination.next_cursor || jobs.loading} onClick={goNextPage} type="button">
+              Next
+            </button>
           </div>
           {jobs.data && jobs.data.items.length > 0 ? (
             <div className="jobs-table" role="table">
@@ -398,13 +451,19 @@ function SafeErrorPanel({ error }: { error: AdminApiError }) {
   );
 }
 
-function operatorJobsPath(filters: JobFilters): `/admin/${string}` {
+function operatorJobsPath(filters: JobFilters, cursor: string): `/admin/${string}` {
   const params = new URLSearchParams({ limit: "20" });
+  if (filters.userId.trim()) {
+    params.set("user_id", filters.userId.trim());
+  }
   if (filters.status) {
     params.set("status", filters.status);
   }
   if (filters.kind) {
     params.set("kind", filters.kind);
+  }
+  if (filters.provider.trim()) {
+    params.set("provider", filters.provider.trim());
   }
   if (filters.errorClass.trim()) {
     params.set("error_class", filters.errorClass.trim());
@@ -419,6 +478,9 @@ function operatorJobsPath(filters: JobFilters): `/admin/${string}` {
   const createdTo = toISOString(filters.createdTo);
   if (createdTo) {
     params.set("created_to", createdTo);
+  }
+  if (cursor) {
+    params.set("cursor", cursor);
   }
   return `/admin/jobs/operator?${params.toString()}`;
 }

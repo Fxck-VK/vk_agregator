@@ -1,18 +1,22 @@
 import { Component, FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import { AdminApiError, createAdminClient, toSafeAdminError } from "./api/adminClient";
 import type { OverviewCardDTO, OverviewDTO } from "./api/overview";
+import { DLQScreen } from "./screens/DLQScreen";
 import { JobsScreen } from "./screens/JobsScreen";
 import { PaymentsScreen } from "./screens/PaymentsScreen";
 import { ConfigHealthScreen, MediaSafetyScreen, ProvidersScreen } from "./screens/ProviderMediaScreens";
+import { RetentionScreen } from "./screens/RetentionScreen";
 import { AuditLogScreen, ReferralsScreen, UsersScreen } from "./screens/UsersReferralsAuditScreens";
 
 type ScreenId =
   | "overview"
   | "jobs"
+  | "dlq"
   | "users"
   | "payments"
   | "providers"
   | "media"
+  | "retention"
   | "referrals"
   | "alerts"
   | "audit"
@@ -42,6 +46,13 @@ const screens: readonly Screen[] = [
     panels: ["Фильтры статуса", "Состояние доставки", "Резервы баланса", "Классы ошибок"],
   },
   {
+    id: "dlq",
+    title: "DLQ",
+    eyebrow: "Retries",
+    summary: "Failed retryable jobs, safe replay guard rails and bounded batch tools.",
+    panels: ["Retryable failures", "Safe replay", "Batch guard rails", "Last error class"],
+  },
+  {
     id: "users",
     title: "Пользователи",
     eyebrow: "Поиск оператора",
@@ -68,6 +79,13 @@ const screens: readonly Screen[] = [
     eyebrow: "Политики медиа",
     summary: "Политики загрузок, видео fast path, очереди и media risks без private URLs.",
     panels: ["Отклонения upload", "Probe policy", "Fast path", "Давление очередей"],
+  },
+  {
+    id: "retention",
+    title: "Retention",
+    eyebrow: "Cleanup",
+    summary: "Old messages, job events, artifacts and orphan objects with dry-run and guarded cleanup controls.",
+    panels: ["Retention status", "Dry-run cleanup", "Orphan artifacts", "Cleanup run"],
   },
   {
     id: "referrals",
@@ -304,6 +322,8 @@ export function App() {
               <OverviewPanel adminTokenSet={Boolean(adminToken)} overview={overview} />
             ) : screen.id === "jobs" ? (
               <JobsScreen adminTokenSet={Boolean(adminToken)} client={adminClient} />
+            ) : screen.id === "dlq" ? (
+              <DLQScreen adminTokenSet={Boolean(adminToken)} client={adminClient} />
             ) : screen.id === "payments" ? (
               <PaymentsScreen adminTokenSet={Boolean(adminToken)} client={adminClient} />
             ) : screen.id === "users" ? (
@@ -312,6 +332,8 @@ export function App() {
               <ProvidersScreen adminTokenSet={Boolean(adminToken)} client={adminClient} />
             ) : screen.id === "media" ? (
               <MediaSafetyScreen adminTokenSet={Boolean(adminToken)} client={adminClient} />
+            ) : screen.id === "retention" ? (
+              <RetentionScreen adminTokenSet={Boolean(adminToken)} client={adminClient} />
             ) : screen.id === "referrals" ? (
               <ReferralsScreen adminTokenSet={Boolean(adminToken)} client={adminClient} />
             ) : screen.id === "audit" ? (

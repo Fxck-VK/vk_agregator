@@ -326,6 +326,10 @@ func (r *PaymentRepository) ListIntentsByUser(ctx context.Context, userID uuid.U
 func (r *PaymentRepository) ListIntents(ctx context.Context, filter domain.PaymentIntentFilter, limit, offset int) ([]*domain.PaymentIntent, error) {
 	args := []any{}
 	where := []string{"1=1"}
+	if filter.IntentID != nil {
+		args = append(args, *filter.IntentID)
+		where = append(where, "id = $"+strconv.Itoa(len(args)))
+	}
 	if filter.UserID != nil {
 		args = append(args, *filter.UserID)
 		where = append(where, "user_id = $"+strconv.Itoa(len(args)))
@@ -338,6 +342,10 @@ func (r *PaymentRepository) ListIntents(ctx context.Context, filter domain.Payme
 	if filter.Provider != "" {
 		args = append(args, filter.Provider)
 		where = append(where, "provider = $"+strconv.Itoa(len(args)))
+	}
+	if providerPaymentID := strings.TrimSpace(filter.ProviderPaymentID); providerPaymentID != "" {
+		args = append(args, providerPaymentID)
+		where = append(where, "provider_payment_id = $"+strconv.Itoa(len(args)))
 	}
 	if source := strings.TrimSpace(filter.Source); source != "" {
 		args = append(args, source)
@@ -478,6 +486,10 @@ func (r *PaymentRepository) ListEvents(ctx context.Context, filter domain.Paymen
 	if filter.Provider != "" {
 		args = append(args, filter.Provider)
 		where = append(where, "provider = $"+strconv.Itoa(len(args)))
+	}
+	if providerPaymentID := strings.TrimSpace(filter.ProviderPaymentID); providerPaymentID != "" {
+		args = append(args, providerPaymentID)
+		where = append(where, "provider_payment_id = $"+strconv.Itoa(len(args)))
 	}
 	if filter.Processed != nil {
 		if *filter.Processed {

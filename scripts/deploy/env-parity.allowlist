@@ -1,0 +1,45 @@
+# Explicit DEV/PROD env-name parity allowlist.
+#
+# This file contains regex patterns for variable NAMES only. Values are not
+# compared here because GitHub Actions logs must never expose secrets.
+# Environment-specific values such as APP_ENV=development/production and
+# dev/prod public URLs are validated by check-dev-env.sh and check-prod-env.sh.
+
+[dev-only]
+^DEV_
+^DEV_DEPLOY_
+^VK_BOT_TUNNEL_
+^VK_GROUP_ID$
+^VK_MENU_VIDEO_ROUTES_PREVIEW_ENABLED$
+^CLOUDFLARED_(PROTOCOL|EDGE_IP_VERSION)$
+
+[prod-only]
+^PROD_
+^PROD_DEPLOY_
+^GHCR_(USERNAME|TOKEN)$
+^BACKUP_
+^RESTORE_
+^GRAFANA_
+^PROMETHEUS_
+^POSTGRES_EXPORTER_
+^REDIS_EXPORTER_
+^ALERT_
+^VK_REFERRAL_
+^MIGRATION_
+^WORKER_MODE$
+^AIMLAPI_
+^BYTEPLUS_MODELARK_
+^GEMINI_API_KEY$
+^GOOGLE_
+^KIE_
+^MINIMAX_
+^WAVESPEED_
+^ANALYTICS_
+^ARTIFACT_.*_RETENTION_DAYS$
+^CONVERSATION_RETENTION_BATCH_SIZE$
+^JOB_.*_LOOKBACK_DAYS$
+^JOB_LOG_RETENTION_BATCH_SIZE$
+^RETENTION_
+^FEATURE_MINIAPP_
+^FEATURE_VK_TOPUP_STATUS_EDIT_ENABLED$
+^FEATURE_VIDEO_ROUTE_VEO_

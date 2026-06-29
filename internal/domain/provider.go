@@ -309,6 +309,20 @@ type ProviderTask struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
+// ProviderTaskHealth is a bounded aggregate for operator health screens. It
+// intentionally exposes only normalized counters/classes, never provider
+// payloads, prompts, native model ids, external task ids or private URLs.
+type ProviderTaskHealth struct {
+	Provider         ProviderName       `json:"provider"`
+	TotalCount       int64              `json:"total_count"`
+	FailedCount      int64              `json:"failed_count"`
+	RateLimitedCount int64              `json:"rate_limited_count"`
+	InFlightCount    int64              `json:"in_flight_count"`
+	LatestErrorClass ProviderErrorClass `json:"latest_error_class,omitempty"`
+	LatestErrorAt    *time.Time         `json:"latest_error_at,omitempty"`
+	LatencyP95Ms     int64              `json:"latency_p95_ms"`
+}
+
 // Provider is the unified contract every provider adapter must implement. It
 // isolates the rest of the system from provider-specific API details and must
 // never reference VK delivery or billing concerns.

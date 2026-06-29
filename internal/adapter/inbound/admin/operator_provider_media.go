@@ -2,6 +2,7 @@ package admin
 
 import (
 	"context"
+	"math"
 	"net/http"
 	"sort"
 	"strings"
@@ -15,8 +16,13 @@ import (
 const (
 	operatorSourceJobSnapshot      = "persisted_job_snapshot"
 	operatorSourceJobModalityProxy = "persisted_job_modality_proxy"
+	operatorSourceProviderTasks    = "provider_task_snapshot"
+	operatorSourcePaymentWebhook   = "payment_webhook_inbox"
+	operatorSourceDeliverySnapshot = "delivery_snapshot"
 	operatorSourceRuntimeConfig    = "runtime_config_snapshot"
 	operatorSourcePrometheusNeeded = "private_prometheus_source_pending"
+
+	operatorProviderHealthWindow = 24 * time.Hour
 )
 
 // RuntimeSnapshot is a sanitized non-secret config projection for operator
@@ -115,10 +121,14 @@ func NewRuntimeSnapshot(cfg platformconfig.Config) RuntimeSnapshot {
 func (h *Handler) getOperatorProviders(w http.ResponseWriter, r *http.Request) {
 	now := time.Now().UTC()
 	classes := h.cfg.Runtime.ProviderClasses
-	items := make([]OperatorProviderHealthDTO, 0, len(classes))
+	since := now.Add(-operatorProviderHealthWindow)
+	providerStats := h.operatorProviderTaskHealthByProvider(r.Context(), since)
+	items := make([]OperatorProviderHealthDTO, 0, len(classes)+2)
 	for _, class := range classes {
-		items = append(items, h.operatorProviderHealth(r.Context(), class))
+		items = append(items, h.operatorProviderHealth(r.Context(), class, providerStats))
 	}
+	items = append(items, h.operatorPaymentProviderHealth(r.Context()))
+	items = append(items, h.operatorDeliveryProviderHealth(r.Context(), since))
 	writeJSON(w, http.StatusOK, OperatorProviderControlRoomDTO{
 		GeneratedAt:        now,
 		Providers:          items,
@@ -132,7 +142,7 @@ func (h *Handler) getOperatorProviders(w http.ResponseWriter, r *http.Request) {
 			Summary: "Live circuit state is worker-owned and not exposed as a bounded admin read model yet.",
 		},
 		Notes: []string{
-			"Counts are bounded read-only snapshots; use private Grafana for live Prometheus time-series.",
+			"Counts are bounded read-only snapshots over the recent provider window; use private Grafana for live Prometheus time-series.",
 			"No provider disable/degrade actions are available in this stage.",
 		},
 	})
@@ -143,9 +153,10 @@ func (h *Handler) getOperatorMediaSafety(w http.ResponseWriter, r *http.Request)
 	queue := OperatorQueueSummaryDTO{
 		GeneratedAt:      now,
 		DegradationState: "unknown",
-		DLQ: OperatorQueueNotWiredDTO{
-			Status: overviewStatusNotWired,
-			Reason: "Job repository is not configured for queue pressure summary.",
+		DLQ: OperatorDLQSummaryDTO{
+			Status:           "unknown",
+			Reason:           "Job repository is not configured for DLQ summary.",
+			BatchReplayLimit: operatorDLQBatchReplayLimit,
 		},
 		ProviderCircuit: OperatorQueueNotWiredDTO{
 			Status: overviewStatusNotWired,
@@ -219,35 +230,176 @@ func (h *Handler) mediaSafetyOverviewCard(ctx context.Context) OverviewCardDTO {
 	}
 }
 
-func (h *Handler) operatorProviderHealth(ctx context.Context, class RuntimeProviderClass) OperatorProviderHealthDTO {
+func (h *Handler) operatorProviderHealth(ctx context.Context, class RuntimeProviderClass, providerStats map[domain.ProviderName]domain.ProviderTaskHealth) OperatorProviderHealthDTO {
 	modality := domain.Modality(class.Modality)
 	rateLimited := h.countJobsByFilter(ctx, domain.JobFilter{Modality: modality, ErrorCode: string(domain.ProviderErrRateLimited)})
 	providerFailed := h.countJobsByFilter(ctx, domain.JobFilter{Status: domain.JobStatusProviderFailed, Modality: modality})
 	invalidOutput := h.countJobsByFilter(ctx, domain.JobFilter{Modality: modality, ErrorCode: domain.JobErrMediaProviderOutputInvalid})
+	stats, hasStats := providerStats[domain.ProviderName(class.ProviderClass)]
+	if hasStats {
+		rateLimited = overviewCount{count: boundedOverviewCount64(stats.RateLimitedCount)}
+		providerFailed = overviewCount{count: boundedOverviewCount64(stats.FailedCount)}
+	}
 	health := overviewStatusOK
 	if rateLimited.err || providerFailed.err || invalidOutput.err {
 		health = "unknown"
 	} else if rateLimited.count > 0 || providerFailed.count > 0 || invalidOutput.count > 0 {
 		health = overviewStatusWarning
 	}
+	if hasStats && stats.TotalCount > 0 && stats.FailedCount*2 >= stats.TotalCount {
+		health = overviewStatusCritical
+	}
 	fallbackState := "single_provider"
 	if len(h.operatorProviderClassNames()) > 1 {
 		fallbackState = "configured"
 	}
+	source := operatorSourceJobModalityProxy
+	if hasStats {
+		source = operatorSourceProviderTasks
+	}
 	return OperatorProviderHealthDTO{
 		ProviderClass:       class.ProviderClass,
+		ServiceType:         "ai_provider",
 		ModelClass:          class.ModelClass,
 		Modality:            class.Modality,
 		Health:              health,
-		CircuitState:        overviewStatusNotWired,
+		CircuitState:        h.operatorProviderCircuitState(stats, hasStats),
+		QuotaState:          quotaState(stats, hasStats),
+		CooldownState:       cooldownState(stats, hasStats),
 		RateLimitCount:      rateLimited.count,
 		ProviderFailedCount: providerFailed.count,
 		InvalidOutputCount:  invalidOutput.count,
+		ObservedTotalCount:  stats.TotalCount,
+		ErrorRatePercent:    errorRatePercent(stats.FailedCount, stats.TotalCount),
+		LatencyP95Ms:        stats.LatencyP95Ms,
+		InFlightCount:       stats.InFlightCount,
+		LatestErrorClass:    string(stats.LatestErrorClass),
+		LatestErrorAt:       stats.LatestErrorAt,
 		FallbackState:       fallbackState,
 		ContractConfigured:  class.ContractConfigured,
 		QualityGuardEnabled: h.cfg.Runtime.MediaProviderQualityGuardEnabled,
-		Source:              operatorSourceJobModalityProxy,
+		Source:              source,
 	}
+}
+
+func (h *Handler) operatorPaymentProviderHealth(ctx context.Context) OperatorProviderHealthDTO {
+	providerCode := domain.PaymentProviderCode(h.cfg.Runtime.PaymentProvider)
+	if !providerCode.Valid() {
+		providerCode = domain.PaymentProviderYooKassa
+	}
+	dto := OperatorProviderHealthDTO{
+		ProviderClass:       safeProviderClass(string(providerCode)),
+		ServiceType:         "payment_provider",
+		ModelClass:          "provider_webhook",
+		Modality:            "payment",
+		Health:              overviewStatusNotWired,
+		CircuitState:        overviewStatusNotWired,
+		QuotaState:          "not_applicable",
+		CooldownState:       "unknown",
+		FallbackState:       "not_applicable",
+		ContractConfigured:  h.cfg.Runtime.PaymentProvider != "",
+		QualityGuardEnabled: false,
+		Source:              operatorSourcePaymentWebhook,
+	}
+	if h.deps.Payment == nil {
+		return dto
+	}
+	stats, err := h.deps.Payment.WebhookInboxStats(ctx, providerCode)
+	if err != nil {
+		dto.Health = "unknown"
+		return dto
+	}
+	dto.Health = overviewStatusOK
+	dto.CircuitState = overviewStatusOK
+	dto.CooldownState = "clear"
+	dto.ObservedTotalCount = stats.UnprocessedEvents
+	dto.InFlightCount = stats.UnprocessedEvents
+	if stats.UnprocessedEvents > 0 {
+		dto.Health = overviewStatusWarning
+		dto.CircuitState = overviewStatusWarning
+		dto.CooldownState = "webhook_backlog"
+		dto.LatestErrorClass = "unprocessed_webhook"
+		dto.LatestErrorAt = stats.OldestUnprocessedReceivedAt
+	}
+	return dto
+}
+
+func (h *Handler) operatorDeliveryProviderHealth(ctx context.Context, since time.Time) OperatorProviderHealthDTO {
+	dto := OperatorProviderHealthDTO{
+		ProviderClass:       "vk_delivery",
+		ServiceType:         "delivery",
+		ModelClass:          "messages",
+		Modality:            "delivery",
+		Health:              overviewStatusNotWired,
+		CircuitState:        overviewStatusNotWired,
+		QuotaState:          "not_applicable",
+		CooldownState:       "unknown",
+		FallbackState:       "not_applicable",
+		ContractConfigured:  h.deps.Deliveries != nil,
+		QualityGuardEnabled: false,
+		Source:              operatorSourceDeliverySnapshot,
+	}
+	if h.deps.Deliveries == nil {
+		return dto
+	}
+	stats, err := h.deps.Deliveries.HealthSnapshot(ctx, since)
+	if err != nil {
+		dto.Health = "unknown"
+		return dto
+	}
+	dto.Health = overviewStatusOK
+	dto.CircuitState = overviewStatusOK
+	dto.CooldownState = "clear"
+	dto.ObservedTotalCount = stats.TotalCount
+	dto.ProviderFailedCount = boundedOverviewCount64(stats.FailedCount)
+	dto.ErrorRatePercent = errorRatePercent(stats.FailedCount, stats.TotalCount)
+	dto.LatencyP95Ms = stats.LatencyP95Ms
+	dto.InFlightCount = stats.RetryingCount
+	dto.LatestErrorClass = stats.LatestErrorCode
+	dto.LatestErrorAt = stats.LatestErrorAt
+	if stats.FailedCount > 0 || stats.RetryingCount > 0 {
+		dto.Health = overviewStatusWarning
+		dto.CircuitState = overviewStatusWarning
+		dto.CooldownState = "retrying_or_failed_delivery"
+	}
+	if stats.TotalCount > 0 && stats.FailedCount*2 >= stats.TotalCount {
+		dto.Health = overviewStatusCritical
+		dto.CircuitState = overviewStatusCritical
+	}
+	return dto
+}
+
+func (h *Handler) operatorProviderTaskHealthByProvider(ctx context.Context, since time.Time) map[domain.ProviderName]domain.ProviderTaskHealth {
+	out := map[domain.ProviderName]domain.ProviderTaskHealth{}
+	if h.deps.ProviderTasks == nil {
+		return out
+	}
+	items, err := h.deps.ProviderTasks.HealthSnapshot(ctx, since)
+	if err != nil {
+		return out
+	}
+	for _, item := range items {
+		out[item.Provider] = item
+	}
+	return out
+}
+
+func (h *Handler) operatorProviderCircuitState(stats domain.ProviderTaskHealth, hasStats bool) string {
+	if !h.cfg.Runtime.MediaProviderQualityGuardEnabled {
+		return overviewStatusNotWired
+	}
+	if !hasStats {
+		return overviewStatusNotWired
+	}
+	if h.cfg.Runtime.MediaProviderQualityDisabledFailures > 0 &&
+		int(stats.FailedCount) >= h.cfg.Runtime.MediaProviderQualityDisabledFailures {
+		return overviewStatusCritical
+	}
+	if h.cfg.Runtime.MediaProviderQualityDegradedFailures > 0 &&
+		int(stats.FailedCount) >= h.cfg.Runtime.MediaProviderQualityDegradedFailures {
+		return overviewStatusWarning
+	}
+	return overviewStatusOK
 }
 
 func (h *Handler) operatorProviderFallback() OperatorProviderFallbackDTO {
@@ -699,6 +851,46 @@ func combineOverviewCounts(counts ...overviewCount) overviewCount {
 		}
 	}
 	return overviewCount{count: total}
+}
+
+func boundedOverviewCount64(count int64) int {
+	if count >= int64(overviewCountLimit) {
+		return maxLimit
+	}
+	if count < 0 {
+		return 0
+	}
+	return int(count)
+}
+
+func errorRatePercent(failed, total int64) float64 {
+	if total <= 0 || failed <= 0 {
+		return 0
+	}
+	return math.Round((float64(failed)/float64(total))*1000) / 10
+}
+
+func quotaState(stats domain.ProviderTaskHealth, hasStats bool) string {
+	if !hasStats {
+		return "unknown"
+	}
+	if stats.RateLimitedCount > 0 {
+		return "rate_limited_observed"
+	}
+	return "clear"
+}
+
+func cooldownState(stats domain.ProviderTaskHealth, hasStats bool) string {
+	if !hasStats {
+		return "unknown"
+	}
+	if stats.RateLimitedCount > 0 {
+		return "provider_backpressure_observed"
+	}
+	if stats.InFlightCount > 0 {
+		return "active"
+	}
+	return "clear"
 }
 
 func countRiskStatus(count overviewCount) string {

@@ -3,6 +3,7 @@ package ratelimit
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -69,6 +70,22 @@ func TestLimiterResetsExpiredExistingBucket(t *testing.T) {
 	}
 	if got := len(limiter.buckets); got != 1 {
 		t.Fatalf("bucket count = %d, want 1", got)
+	}
+}
+
+func TestSharedKeyHashesRawIdentifier(t *testing.T) {
+	key := sharedKey("admin api", "operator_secret_token")
+	if key == "" {
+		t.Fatal("shared key is empty")
+	}
+	if key == "operator_secret_token" {
+		t.Fatal("shared key exposed raw identifier")
+	}
+	if strings.Contains(key, "operator_secret_token") || strings.Contains(key, "admin api") {
+		t.Fatalf("shared key leaked raw input: %q", key)
+	}
+	if wantPrefix := "rate_limit:adminapi:"; !strings.HasPrefix(key, wantPrefix) {
+		t.Fatalf("shared key = %q, want prefix %q", key, wantPrefix)
 	}
 }
 

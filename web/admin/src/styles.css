@@ -726,6 +726,12 @@ button {
   display: grid;
   gap: 14px;
   width: min(520px, 100%);
+  padding: 16px;
+}
+
+.action-modal--danger {
+  border-color: #d38a79;
+  box-shadow: 0 18px 52px rgba(138, 63, 49, 0.2);
 }
 
 .action-modal label {
@@ -744,6 +750,37 @@ button {
   gap: 8px;
 }
 
+.modal-actions button {
+  min-height: 38px;
+  border: 1px solid #1f4f4a;
+  border-radius: 8px;
+  background: #1f4f4a;
+  color: #fffaf0;
+  font-weight: 800;
+  padding: 0 14px;
+}
+
+.modal-actions .button-secondary {
+  border-color: #c7bda9;
+  background: #fffaf0;
+  color: #2a2d30;
+}
+
+.modal-actions .button-danger {
+  border-color: #8a3f31;
+  background: #8a3f31;
+  color: #fffaf0;
+}
+
+.confirmation-body {
+  display: grid;
+  gap: 10px;
+  border: 1px solid #ebe2d3;
+  border-radius: 8px;
+  background: #fffef9;
+  padding: 10px;
+}
+
 .provider-table {
   display: grid;
   gap: 6px;
@@ -753,10 +790,10 @@ button {
 .provider-row {
   display: grid;
   grid-template-columns:
-    minmax(116px, 0.8fr) minmax(134px, 0.9fr) minmax(86px, 0.6fr)
-    minmax(104px, 0.7fr) minmax(86px, 0.5fr) minmax(104px, 0.6fr) minmax(112px, 0.7fr);
+    minmax(116px, 0.7fr) minmax(150px, 0.8fr) minmax(134px, 0.75fr)
+    minmax(104px, 0.5fr) minmax(250px, 1.25fr) minmax(190px, 0.95fr) minmax(320px, 1.55fr);
   gap: 10px;
-  min-width: 880px;
+  min-width: 1280px;
   align-items: center;
   border: 1px solid #e5dccb;
   border-radius: 8px;
@@ -786,6 +823,99 @@ button {
 }
 
 .provider-row span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.retention-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.retention-actions button {
+  min-height: 36px;
+  border: 1px solid #1f4f4a;
+  border-radius: 8px;
+  background: #1f4f4a;
+  color: #fffaf0;
+  font-weight: 800;
+  padding: 0 12px;
+}
+
+.retention-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.retention-actions .button-danger {
+  border-color: #8a3f31;
+  background: #8a3f31;
+}
+
+.retention-message {
+  margin: 0;
+  border: 1px solid #c7d9cc;
+  border-radius: 8px;
+  background: #eef7f2;
+  color: #1f4f4a;
+  font-weight: 800;
+  padding: 10px;
+}
+
+.retention-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.retention-table {
+  display: grid;
+  gap: 6px;
+  overflow-x: auto;
+}
+
+.retention-row {
+  display: grid;
+  grid-template-columns:
+    minmax(190px, 1fr) minmax(150px, 0.7fr) minmax(96px, 0.45fr)
+    minmax(96px, 0.45fr) minmax(96px, 0.45fr) minmax(220px, 1fr);
+  gap: 10px;
+  min-width: 920px;
+  align-items: center;
+  border: 1px solid #e5dccb;
+  border-radius: 8px;
+  background: #fffef9;
+  color: #24262a;
+  padding: 10px;
+}
+
+.retention-row--artifacts {
+  grid-template-columns:
+    minmax(112px, 0.6fr) minmax(140px, 0.75fr) minmax(126px, 0.65fr)
+    minmax(110px, 0.55fr) minmax(90px, 0.45fr) minmax(98px, 0.5fr) minmax(220px, 1fr);
+  min-width: 980px;
+}
+
+.retention-row--analytics {
+  grid-template-columns:
+    minmax(220px, 1fr) minmax(110px, 0.45fr) minmax(90px, 0.35fr)
+    minmax(170px, 0.65fr) minmax(220px, 0.85fr);
+  min-width: 850px;
+}
+
+.retention-row--head {
+  border-color: transparent;
+  background: transparent;
+  color: #6d665d;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.retention-row span {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -952,6 +1082,7 @@ button {
   }
 
   .config-grid,
+  .retention-summary-grid,
   .signal-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -980,6 +1111,7 @@ button {
   .overview-grid,
   .queue-metrics,
   .config-grid,
+  .retention-summary-grid,
   .signal-grid,
   .nav {
     grid-template-columns: 1fr;

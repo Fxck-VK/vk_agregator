@@ -2202,6 +2202,8 @@ func TestLoadMiniAppJobRateLimit(t *testing.T) {
 	t.Setenv("MINIAPP_JOB_RATE_LIMIT_BURST", "7")
 	t.Setenv("PAYMENT_REDIRECT_RATE_LIMIT_RPS", "3.5")
 	t.Setenv("PAYMENT_REDIRECT_RATE_LIMIT_BURST", "11")
+	t.Setenv("ADMIN_RATE_LIMIT_LIMIT", "77")
+	t.Setenv("ADMIN_RATE_LIMIT_WINDOW", "2m")
 
 	cfg := config.Load()
 	if cfg.MiniAppJobRateLimitRPS != 2.5 {
@@ -2215,6 +2217,12 @@ func TestLoadMiniAppJobRateLimit(t *testing.T) {
 	}
 	if cfg.PaymentRedirectRateLimitBurst != 11 {
 		t.Fatalf("PaymentRedirectRateLimitBurst = %v", cfg.PaymentRedirectRateLimitBurst)
+	}
+	if cfg.AdminRateLimitLimit != 77 {
+		t.Fatalf("AdminRateLimitLimit = %v", cfg.AdminRateLimitLimit)
+	}
+	if cfg.AdminRateLimitWindow != 2*time.Minute {
+		t.Fatalf("AdminRateLimitWindow = %v", cfg.AdminRateLimitWindow)
 	}
 }
 

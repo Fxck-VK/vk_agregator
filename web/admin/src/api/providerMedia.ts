@@ -4,13 +4,22 @@ export type OperatorRiskStatus = "ok" | "warning" | "critical" | "unknown" | "no
 
 export type OperatorProviderHealthDTO = {
   provider_class: string;
+  service_type: string;
   model_class: string;
   modality: string;
   health: OperatorRiskStatus;
   circuit_state: OperatorRiskStatus;
+  quota_state: string;
+  cooldown_state: string;
   rate_limit_count: number;
   provider_failed_count: number;
   invalid_output_count: number;
+  observed_total_count: number;
+  error_rate_percent: number;
+  latency_p95_ms: number;
+  in_flight_count: number;
+  latest_error_class?: string;
+  latest_error_at?: string;
   fallback_state: string;
   contract_configured: boolean;
   quality_guard_enabled: boolean;

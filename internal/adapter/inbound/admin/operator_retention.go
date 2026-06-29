@@ -15,31 +15,12 @@ func (h *Handler) getOperatorRetentionStatus(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	now := time.Now().UTC()
-	retention, err := h.deps.Maintenance.RetentionStatus(r.Context(), now)
+	dto, err := h.operatorRetentionStatus(r.Context(), now)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "get retention status failed")
 		return
 	}
-	hotRows, err := h.deps.Maintenance.OldestHotRows(r.Context())
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "get oldest hot rows failed")
-		return
-	}
-	orphan, err := h.deps.Maintenance.OrphanArtifactsCount(r.Context(), now)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "get orphan artifacts failed")
-		return
-	}
-	writeJSON(w, http.StatusOK, OperatorRetentionStatusDTO{
-		GeneratedAt:     now,
-		Retention:       newOperatorRetentionTables(retention, now),
-		OldestHotRows:   newOperatorOldestHotRows(hotRows),
-		OrphanArtifacts: newOperatorOrphanArtifacts(orphan, now),
-		Notes: []string{
-			"Read-only operator view: cleanup is not executed by this endpoint.",
-			"Rows expose only table/class counters and timestamps; raw prompts, payloads, ids and private storage paths are intentionally omitted.",
-		},
-	})
+	writeJSON(w, http.StatusOK, dto)
 }
 
 func (h *Handler) retentionOverviewCard(ctx context.Context, now time.Time) OverviewCardDTO {
@@ -108,6 +89,35 @@ func (h *Handler) getOperatorRetentionDryRun(w http.ResponseWriter, r *http.Requ
 	})
 }
 
+func (h *Handler) postOperatorRetentionCleanup(w http.ResponseWriter, r *http.Request) {
+	if h.deps.RetentionCleanup == nil {
+		writeError(w, http.StatusServiceUnavailable, "maintenance service unavailable")
+		return
+	}
+	if err := h.deps.RetentionCleanup.Cleanup(r.Context()); err != nil {
+		writeError(w, http.StatusInternalServerError, "retention cleanup failed")
+		return
+	}
+	now := time.Now().UTC()
+	status, err := h.operatorRetentionStatus(r.Context(), now)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "get retention status failed")
+		return
+	}
+	writeJSON(w, http.StatusOK, OperatorRetentionCleanupDTO{
+		GeneratedAt:     now,
+		Completed:       true,
+		Retention:       status.Retention,
+		OldestHotRows:   status.OldestHotRows,
+		OrphanArtifacts: status.OrphanArtifacts,
+		Notes: []string{
+			"Cleanup completed through the maintenance service and this mutation is operator-audited.",
+			"Financial tables such as ledger entries, payment intents, payment events and refunds are not cleaned automatically.",
+			"Raw prompts, provider payloads, storage paths, owner ids and private URLs are not exposed.",
+		},
+	})
+}
+
 func (h *Handler) getOperatorAnalyticsStatus(w http.ResponseWriter, r *http.Request) {
 	if h.deps.Maintenance == nil {
 		writeError(w, http.StatusServiceUnavailable, "maintenance read model unavailable")
@@ -159,6 +169,32 @@ func (h *Handler) getOperatorOrphanArtifacts(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	writeJSON(w, http.StatusOK, newOperatorOrphanArtifacts(report, now))
+}
+
+func (h *Handler) operatorRetentionStatus(ctx context.Context, now time.Time) (OperatorRetentionStatusDTO, error) {
+	retention, err := h.deps.Maintenance.RetentionStatus(ctx, now)
+	if err != nil {
+		return OperatorRetentionStatusDTO{}, err
+	}
+	hotRows, err := h.deps.Maintenance.OldestHotRows(ctx)
+	if err != nil {
+		return OperatorRetentionStatusDTO{}, err
+	}
+	orphan, err := h.deps.Maintenance.OrphanArtifactsCount(ctx, now)
+	if err != nil {
+		return OperatorRetentionStatusDTO{}, err
+	}
+	return OperatorRetentionStatusDTO{
+		GeneratedAt:     now,
+		Retention:       newOperatorRetentionTables(retention, now),
+		OldestHotRows:   newOperatorOldestHotRows(hotRows),
+		OrphanArtifacts: newOperatorOrphanArtifacts(orphan, now),
+		Notes: []string{
+			"Read-only operator view: cleanup is not executed by this endpoint.",
+			"Rows expose only table/class counters and timestamps; raw prompts, payloads, ids and private storage paths are intentionally omitted.",
+			"Financial tables such as ledger entries, payment intents, payment events and refunds are protected from automatic cleanup.",
+		},
+	}, nil
 }
 
 func newOperatorRetentionTables(status domain.RetentionStatus, now time.Time) []OperatorRetentionTableDTO {

@@ -1,98 +1,103 @@
 {
   "schema_version": 5,
-  "updated_at": "2026-06-28T11:08:41+03:00",
+  "updated_at": "2026-06-29T20:48:22+03:00",
   "branch": "serega",
   "remote_tracking": "origin/serega",
-  "purpose": "Minimal machine-readable current context and routing for agents.",
+  "head": "df3e1a1",
+  "purpose": "Short machine-readable current context and routing for agents. This file is not project history.",
   "read_policy": {
+    "canonical_read_order": [
+      "AGENTS.md",
+      ".agents/state.json",
+      "docs/ARCHITECTURE.md",
+      "relevant local AGENTS.md for touched package/app",
+      "one task-specific active doc when scope requires it",
+      "code and tests"
+    ],
     "read_by_default": [
       "AGENTS.md",
-      ".agents/state.json"
+      ".agents/state.json",
+      "docs/ARCHITECTURE.md"
     ],
     "read_when_scope_requires": [
+      "docs/INDEX.md",
+      "docs/HANDOFF_CURRENT.md",
       "README.md",
       "RUNBOOK.md",
+      "docs/runbooks/DEPLOYMENT.md",
+      "docs/runbooks/DEV.md",
+      "docs/runbooks/BILLING.md",
+      "docs/runbooks/LOAD_TESTING.md",
+      "docs/runbooks/INCIDENTS.md",
+      "docs/runbooks/ROLLBACK.md",
       "DECISIONS.md",
       "TASKS.md",
-      "docs/ARCHITECTURE.md",
       "docs/DEV_CONTOUR.md",
       "docs/LOAD_TESTING.md",
       "docs/DATA_RETENTION_POLICY.md",
       "docs/DATA_SERVICES_CONTRACT.md",
+      "docs/OPERATOR_UI.md",
       "docs/VIDEO_GENERATION.md",
       "docs/VK_BOT_AGENT_GUIDE.md"
     ],
     "do_not_read_by_default": [
       ".agents/logs/**",
+      "docs/merge/**",
       "docs/archive/**",
-      "old merge handoff files unless explicitly relevant"
+      "historical handoff/context files"
     ],
-    "history_read_condition": "Only read logs/archive when explicitly asked for history, debugging a repeated known error, regression archaeology, or old audit details."
+    "history_read_condition": "Read logs/archive only when explicitly asked for history, repeated-error debugging, regression archaeology, or old audit details."
   },
-  "context_policy": {
-    "keep_current_only": true,
-    "no_archive_noise": true,
-    "routine_work": "Do not update docs/logs/state for routine actions unless user asks or the task changes architecture, deploy, env, security, billing, retention, or agent routing.",
-    "errors_log": "Append to .agents/logs/errors.jsonl only for sanitized reusable root-cause/fix knowledge."
+  "current_context": {
+    "worktree": "dirty: multiple documentation, deploy, loadtest and admin/operator changes are in progress",
+    "active_branch_role": "serega is the current integration/development branch",
+    "dev_contour": "dev-deploy branch plus DEV VPS, DEV Cloudflare tunnel, DEV VK group and DEV payment/provider secrets. DEV should mirror production architecture with separate secrets and routes.",
+    "prod_contour": "main only. Production deploy goes through GitHub Actions, GHCR images, VPS deploy script, smoke checks and rollback policy.",
+    "loadtest_contour": "APP_ENV=loadtest with mock providers, mock payments and mock delivery only. Production hosts and paid providers are blocked for load tests.",
+    "current_doc_work": "Canonical documentation cleanup is active. Keep AGENTS.md, docs/INDEX.md, RUNBOOK.md/runbooks and this state file concise."
   },
-  "repo_state": {
-    "worktree_at_update": "clean",
-    "latest_local_commit": "26a6185 billing: reduce default starting balance",
-    "latest_origin_main_seen": "8409747 Merge serega into main",
-    "latest_origin_dev_deploy_seen": "5251018 vkbot: remove trailing dots from model menus",
-    "note": "At update time serega contains work newer than origin/main. Use normal protected PR/approval flow before treating main as updated."
-  },
-  "current_focus": {
-    "summary": "Continue product work on serega while keeping dev-deploy and main release flows aligned. DEV is the daily integration/testing contour; main is production and deploys through GitHub Actions with approval/protection.",
-    "active_environment_model": {
-      "development": "dev-deploy branch and DEV VPS/Cloudflare/VK community. DEV should mirror production architecture but use DEV-specific secrets, tunnel, VK group and payment/provider settings.",
-      "production": "main branch only. Production deploy is GitHub Actions -> GHCR images -> VPS deploy script -> smoke -> rollback if needed.",
-      "loadtest": "APP_ENV=loadtest with mock providers/payments/delivery only. Do not use production hosts or paid providers in load tests."
-    }
-  },
-  "recent_completed_work": [
-    "Security/scale hardening and local/mock k6 smoke baseline were merged from fastlife_dev into the active project history.",
-    "DEV deploy flow exists separately from production deploy and can be triggered from dev-deploy.",
-    "Data retention, analytics aggregate, data services contract, and local/external/managed data-service modes were added.",
-    "Video/image provider catalog was narrowed to active public runtime surfaces; provider/model exposure is controlled by route/catalog flags and env.",
-    "VK bot payment copy and menu copy were polished; default starting balance was reduced to 30 via latest serega work."
+  "recent_decisions": [
+    "Default context is intentionally small: AGENTS.md, .agents/state.json and docs/ARCHITECTURE.md.",
+    "docs/HANDOFF_CURRENT.md is the only active handoff slot; completed handoffs live under docs/archive/handoffs/.",
+    "RUNBOOK.md is an entrypoint; task details live under docs/runbooks/.",
+    "DEV and PROD envs must be compared by variable names without printing values.",
+    "DEV is the daily integration/testing contour; PROD secrets must not be copied from DEV.",
+    "Provider calls remain isolated in workers/adapters; VK bot, Mini App and cmd/api must not call AI providers directly.",
+    "Billing remains ledger-based and payment top-ups require provider-verified webhook/reconciliation."
   ],
   "active_priorities": [
-    "Before production release, merge serega to main through the protected PR/review flow; do not force-push main.",
-    "Keep DEV and PROD env files synchronized by variable names, but never copy DEV secret values into PROD.",
-    "Verify production PROD_ENV_FILE before deploy when new provider/payment/feature flags are added.",
-    "Run live YooKassa smoke before real-money confidence: payment.succeeded, payment.canceled, refund.succeeded, replay/idempotency and reconciliation.",
-    "Confirm public YooKassa webhook route goes to cmd/provider-webhook/PAYMENT_WEBHOOK_ADDR, not cmd/api.",
-    "Finish capacity/load report with p95/p99, CPU/RAM, Redis queue depth, Postgres locks/slow queries and DLQ before claiming scale readiness.",
-    "Plan external/managed Postgres, Redis and S3 migration before serious traffic; current code supports modes, but operational migration must be rehearsed.",
-    "Keep provider calls isolated in worker/adapters; VK bot, Mini App and cmd/api must not call AI providers directly."
+    "Finish documentation canonicalization without turning docs into history logs.",
+    "Keep DEV and PROD deploy workflows aligned but isolated by secrets, tunnel, VK group and payment settings.",
+    "Run longer sustained load tests before claiming scale readiness.",
+    "Verify live YooKassa smoke before real-money confidence: payment.succeeded, payment.canceled, refund.succeeded, replay/idempotency and reconciliation.",
+    "Plan operational migration to external/managed Postgres, Redis and S3 before serious traffic.",
+    "Use protected PR/review flow for main; no force push."
   ],
   "open_risks": [
-    "DEV/PROD drift can happen if DEV_ENV_FILE and PROD_ENV_FILE are edited manually without a variable-name comparison.",
+    "DEV/PROD env drift is still possible if the parity allowlist becomes too broad or secret files are edited manually.",
     "Real provider/payment smoke tests can spend money or touch external systems; require explicit approval and correct environment.",
-    "Load tests currently prove mock/local behavior, not real provider throughput or external quota limits.",
+    "Mock load tests do not prove real provider quota or external API throughput.",
     "Lot/FIFO attribution is still needed before automatic or partial refunds for already-spent credits.",
-    "Old handoff docs may contain stale branch names or outdated priorities; prefer this state file for current routing."
+    "Old archived handoffs may contain stale branch names or outdated priorities; do not treat them as current truth."
   ],
   "security_invariants": [
     "No secrets, tokens, auth headers, full launch params, prompt bodies, provider payloads, private artifact URLs or raw PII in git, logs, docs or chat.",
     "VK handlers, Mini App BFF and cmd/api never call AI providers directly.",
     "Provider/media work happens through worker/services/adapters.",
-    "Billing remains append-only ledger based; no direct balance mutation.",
+    "Billing is append-only ledger based; no direct balance mutation.",
     "Payment redirect/confirmation URL is not proof of payment.",
     "YooKassa top-up credits only through provider-verified webhook/reconciliation plus ledger.",
     "Artifact access must remain owner-checked.",
     "Do not weaken auth, signature checks, moderation, billing, idempotency, TLS, webhook trust or production CORS."
   ],
-  "subagents": {
+  "subagent_policy": {
     "use_for": [
       "narrow search",
       "bounded audit",
       "test triage",
       "simple patch suggestions"
     ],
-    "input": "Minimal goal, allowed files/packages, forbidden actions, output schema.",
-    "output": "Technical schema-only: status, findings file:line issue fix, changed_files/tests, residual_risks.",
+    "output_schema": "status, findings file:line issue fix, changed_files/tests, residual_risks",
     "max_output_lines": 40,
     "forbidden_output": [
       "prose",
@@ -101,7 +106,6 @@
       "prompts",
       "PII",
       "private URLs"
-    ],
-    "owner": "Main agent owns decisions, integration, code quality and user-facing report."
+    ]
   }
 }

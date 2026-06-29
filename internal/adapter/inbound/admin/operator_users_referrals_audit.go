@@ -142,9 +142,10 @@ func (h *Handler) recordOperatorAudit(r *http.Request, action, result string) {
 	}
 	entryID := uuid.New()
 	targetType := operatorTargetType(action)
+	identity := operatorIdentityFromContext(r.Context())
 	entry := &domain.OperatorAuditEntry{
 		ID:         entryID,
-		ActorRef:   operatorActorRef(h.cfg.Token),
+		ActorRef:   identity.ActorRef,
 		Action:     sanitizeOperatorToken(action),
 		TargetType: targetType,
 		TargetRef:  safeStringRef("target", targetType+":"+r.URL.Path),
@@ -153,6 +154,9 @@ func (h *Handler) recordOperatorAudit(r *http.Request, action, result string) {
 	}
 	if entry.Action == "" {
 		entry.Action = "unknown"
+	}
+	if entry.ActorRef == "" {
+		entry.ActorRef = operatorActorRef(h.cfg.Token)
 	}
 	if entry.TargetType == "" {
 		entry.TargetType = "admin"

@@ -1,6 +1,74 @@
 # AGENTS.md — VK AI Aggregator Router
 
-Read this first. Keep context small and current: `AGENTS.md`, `.agents/state.json`, relevant local `AGENTS.md`, then code. Legacy docs are secondary and read only when the task scope truly needs them.
+Read this first. Keep context small and current.
+
+## Canonical Read Order
+
+Every agent should use this order before making decisions:
+
+1. Root `AGENTS.md`.
+2. `.agents/state.json`.
+3. `docs/ARCHITECTURE.md`.
+4. Relevant local `AGENTS.md` for the touched package or app surface.
+5. One task-specific active doc when the task scope requires it.
+6. Code and tests.
+
+Use `docs/INDEX.md` only as the documentation map when you need to choose the
+right task-specific document.
+
+Use `docs/HANDOFF_CURRENT.md` only when the task is explicitly a current
+handoff. Completed handoffs belong under `docs/archive/handoffs/`.
+
+Handoff files are not default context. Do not read `docs/merge/**`,
+`docs/archive/**` or old context files unless the current task is explicitly a
+merge, handoff, regression archaeology, or the user asks for that history.
+
+## Documentation Routing
+
+Always read:
+
+- `AGENTS.md`;
+- `.agents/state.json`;
+- `docs/ARCHITECTURE.md`;
+- relevant local `AGENTS.md` when touching a package or app surface.
+
+Do not read by default:
+
+- `.agents/logs/**`;
+- `docs/archive/**`;
+- `docs/merge/**`;
+- old handoff/context files;
+- generated reports, historical plans or old audit notes.
+
+Use these routing files:
+
+- current machine status and active priorities: `.agents/state.json`;
+- documentation map: `docs/INDEX.md`;
+- current explicit handoff only: `docs/HANDOFF_CURRENT.md`;
+- archive root: `docs/archive/**`;
+- completed handoffs: `docs/archive/handoffs/**`;
+- operational entrypoint: `RUNBOOK.md`, with details in `docs/runbooks/**`.
+
+When adding a new doc:
+
+- keep it task-scoped, not default context;
+- add it to `docs/INDEX.md` under the right task scope;
+- add it to `.agents/state.json` only if it is active routing context;
+- archive or mark the old doc if it replaces one;
+- do not create handoff files outside `docs/HANDOFF_CURRENT.md` or
+  `docs/archive/handoffs/**`.
+
+Update documentation only when the change affects durable project behavior:
+
+- update `docs/ARCHITECTURE.md` for architecture boundaries, service ownership,
+  data flow, billing/provider contracts, storage, scaling or security model
+  changes;
+- update `RUNBOOK.md` or `docs/runbooks/**` for deploy, env, startup, smoke,
+  rollback, backup, incident or operational command changes;
+- update `.agents/state.json` for current branch/contour, active priorities,
+  recent durable decisions, hard forbids or active doc routing changes;
+- update `AGENTS.md` only for agent workflow rules, read order, safety
+  invariants or documentation policy changes.
 
 ## Project
 
@@ -33,11 +101,17 @@ Source order: system/developer instructions > current task > root `AGENTS.md` > 
 ## Context And Logs
 
 - Current machine context: `.agents/state.json`.
+- Keep `.agents/state.json` short and current: branch/contour, active priorities,
+  current decisions, hard forbids, and links to active docs only. Do not use it
+  as project history.
 - Reusable known-error memory: `.agents/logs/errors.jsonl`.
 - Do not read `.agents/logs/**` by default. Read it only when the user asks for history/known-error prevention or when debugging a repeated/non-obvious failure.
 - Keep resolved reusable `errors.jsonl` entries; they are not clutter. Delete only duplicates, superseded sanitized records or entries the user explicitly declares obsolete.
 - Append to `errors.jsonl` only for reusable root-cause/fix knowledge, sanitized and secret-free.
 - Do not update docs/logs for routine work. Update docs only for behavior, architecture, runbook/env, ADR or active-context changes.
+- If a document is obsolete, do not silently edit it as current truth. Archive it
+  or mark the top with `Status: archived`, `Do not use for current
+  implementation.`, and `See: docs/<active-replacement>.md`.
 
 ## Work Modes
 

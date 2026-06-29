@@ -205,6 +205,36 @@ func (r *JobRepo) ListByUser(_ context.Context, userID uuid.UUID, limit, offset 
 func (r *JobRepo) List(_ context.Context, filter domain.JobFilter, limit, offset int) ([]*domain.Job, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	matched := r.filterJobsLocked(filter)
+	var out []*domain.Job
+	for i := offset; i < len(matched) && len(out) < limit; i++ {
+		j := matched[i]
+		out = append(out, &j)
+	}
+	return out, nil
+}
+
+func (r *JobRepo) ListCursor(_ context.Context, filter domain.JobFilter, limit int, after *domain.JobCursor) ([]*domain.Job, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	matched := r.filterJobsLocked(filter)
+	var out []*domain.Job
+	for _, job := range matched {
+		if after != nil {
+			if job.CreatedAt.After(after.CreatedAt) || job.CreatedAt.Equal(after.CreatedAt) && job.ID.String() >= after.ID.String() {
+				continue
+			}
+		}
+		j := job
+		out = append(out, &j)
+		if len(out) >= limit {
+			break
+		}
+	}
+	return out, nil
+}
+
+func (r *JobRepo) filterJobsLocked(filter domain.JobFilter) []domain.Job {
 	matched := make([]domain.Job, 0, len(r.byID))
 	for _, j := range r.byID {
 		if filter.UserID != nil && j.UserID != *filter.UserID {
@@ -222,6 +252,9 @@ func (r *JobRepo) List(_ context.Context, filter domain.JobFilter, limit, offset
 		if filter.ErrorCode != "" && j.ErrorCode != filter.ErrorCode {
 			continue
 		}
+		if filter.Provider != "" && (j.ProviderID == nil || j.ProviderID.String() != filter.Provider) {
+			continue
+		}
 		if filter.CorrelationID != "" && j.CorrelationID != filter.CorrelationID {
 			continue
 		}
@@ -234,14 +267,12 @@ func (r *JobRepo) List(_ context.Context, filter domain.JobFilter, limit, offset
 		matched = append(matched, j)
 	}
 	sort.Slice(matched, func(i, k int) bool {
+		if matched[i].CreatedAt.Equal(matched[k].CreatedAt) {
+			return matched[i].ID.String() > matched[k].ID.String()
+		}
 		return matched[i].CreatedAt.After(matched[k].CreatedAt)
 	})
-	var out []*domain.Job
-	for i := offset; i < len(matched) && len(out) < limit; i++ {
-		j := matched[i]
-		out = append(out, &j)
-	}
-	return out, nil
+	return matched
 }
 
 func (r *JobRepo) CountActiveByUserOperation(_ context.Context, userID uuid.UUID, operation domain.OperationType) (int, error) {

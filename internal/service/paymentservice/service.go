@@ -621,6 +621,15 @@ func (s *Service) ListEvents(ctx context.Context, filter domain.PaymentEventFilt
 	return s.repo.ListEvents(ctx, filter, normalizeLimit(limit), normalizeOffset(offset))
 }
 
+// WebhookInboxStats returns the safe provider webhook backlog for protected
+// operator health views. It never exposes raw provider payloads.
+func (s *Service) WebhookInboxStats(ctx context.Context, provider domain.PaymentProviderCode) (domain.PaymentWebhookInboxStats, error) {
+	if s == nil || s.repo == nil {
+		return domain.PaymentWebhookInboxStats{}, errors.New("paymentservice: service is not configured")
+	}
+	return s.repo.WebhookInboxStats(ctx, provider)
+}
+
 // ListRefunds returns protected operator refund history. Callers must not expose
 // internal idempotency keys or raw provider identifiers without masking.
 func (s *Service) ListRefunds(ctx context.Context, filter domain.PaymentRefundFilter, limit, offset int) ([]*domain.PaymentRefund, error) {

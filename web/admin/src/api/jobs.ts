@@ -3,6 +3,8 @@ export type PaginationDTO = {
   offset: number;
   count: number;
   has_more: boolean;
+  cursor?: string;
+  next_cursor?: string;
 };
 
 export type OperatorQueueMetricDTO = {
@@ -16,13 +18,21 @@ export type OperatorQueueNotWiredDTO = {
   reason: string;
 };
 
+export type OperatorDLQSummaryDTO = {
+  status: "ok" | "warning" | "critical" | "unknown";
+  reason: string;
+  retryable_count: number;
+  terminal_count: number;
+  batch_replay_limit: number;
+};
+
 export type OperatorQueueSummaryDTO = {
   generated_at: string;
   degradation_state: "normal" | "watch" | "degraded" | "unknown";
   backlog: OperatorQueueMetricDTO[];
   oldest_queued_age_seconds?: number;
   retry_count: number;
-  dlq: OperatorQueueNotWiredDTO;
+  dlq: OperatorDLQSummaryDTO;
   provider_circuit: OperatorQueueNotWiredDTO;
   notes?: string[];
 };
@@ -89,4 +99,53 @@ export type OperatorJobDetailDTO = {
   reservation?: OperatorReservationDTO;
   delivery: OperatorDeliverySummaryDTO;
   delivery_events: OperatorDeliveryAttemptDTO[];
+};
+
+export type OperatorDLQItemDTO = {
+  job: OperatorJobListItemDTO;
+  attempt_count: number;
+  provider_task_count: number;
+  last_error_class?: string;
+  last_provider_class?: string;
+  safe_replay: boolean;
+  replay_blocked_reason?: string;
+  replay_target: string;
+};
+
+export type OperatorDLQReplayPolicyDTO = {
+  single_allowed_statuses: string[];
+  batch_limit: number;
+  batch_skips_paid_provider: boolean;
+  notes?: string[];
+};
+
+export type OperatorDLQDTO = {
+  generated_at: string;
+  items: OperatorDLQItemDTO[];
+  pagination: PaginationDTO;
+  replay: OperatorDLQReplayPolicyDTO;
+  notes?: string[];
+};
+
+export type OperatorDLQReplayRequestDTO = {
+  job_ids?: string[];
+  limit?: number;
+  error_class?: string;
+  allow_paid_provider?: boolean;
+};
+
+export type OperatorDLQReplayItemDTO = {
+  lookup_id: string;
+  display_id: string;
+  status: string;
+  result: string;
+  reason?: string;
+};
+
+export type OperatorDLQReplayResultDTO = {
+  generated_at: string;
+  requested: number;
+  replayed: OperatorDLQReplayItemDTO[];
+  skipped: OperatorDLQReplayItemDTO[];
+  batch_limit: number;
 };

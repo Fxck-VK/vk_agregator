@@ -15,8 +15,10 @@ type PaymentsScreenProps = {
 };
 
 type PaymentFilters = {
+  intentId: string;
   status: string;
   provider: string;
+  providerPaymentId: string;
   userId: string;
   staleAfterSeconds: string;
 };
@@ -43,8 +45,10 @@ type PaymentActionState = {
 };
 
 const emptyFilters: PaymentFilters = {
+  intentId: "",
   status: "",
   provider: "",
+  providerPaymentId: "",
   userId: "",
   staleAfterSeconds: "300",
 };
@@ -189,12 +193,30 @@ export function PaymentsScreen({ adminTokenSet, client }: PaymentsScreenProps) {
           </select>
         </label>
         <label>
+          <span>Intent lookup</span>
+          <input
+            autoComplete="off"
+            onChange={(event) => setFilters({ ...filters, intentId: event.target.value })}
+            placeholder="payment intent id"
+            value={filters.intentId}
+          />
+        </label>
+        <label>
           <span>User lookup</span>
           <input
             autoComplete="off"
             onChange={(event) => setFilters({ ...filters, userId: event.target.value })}
             placeholder="internal user id for billing snapshot"
             value={filters.userId}
+          />
+        </label>
+        <label>
+          <span>Provider payment</span>
+          <input
+            autoComplete="off"
+            onChange={(event) => setFilters({ ...filters, providerPaymentId: event.target.value })}
+            placeholder="provider payment id"
+            value={filters.providerPaymentId}
           />
         </label>
         <label>
@@ -544,8 +566,11 @@ function SafeErrorPanel({ error }: { error: AdminApiError }) {
   );
 }
 
-function operatorPaymentsPath(filters: PaymentFilters): `/billing/${string}` {
+export function operatorPaymentsPath(filters: PaymentFilters): `/billing/${string}` {
   const params = new URLSearchParams({ limit: "20" });
+  if (filters.intentId.trim()) {
+    params.set("intent_id", filters.intentId.trim());
+  }
   if (filters.status) {
     params.set("status", filters.status);
   }
@@ -554,6 +579,9 @@ function operatorPaymentsPath(filters: PaymentFilters): `/billing/${string}` {
   }
   if (filters.userId.trim()) {
     params.set("user_id", filters.userId.trim());
+  }
+  if (filters.providerPaymentId.trim()) {
+    params.set("provider_payment_id", filters.providerPaymentId.trim());
   }
   const seconds = Number(filters.staleAfterSeconds);
   if (Number.isFinite(seconds) && seconds > 0) {

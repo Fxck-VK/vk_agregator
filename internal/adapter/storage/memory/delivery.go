@@ -99,3 +99,33 @@ func (r *DeliveryRepo) ListByJob(_ context.Context, jobID uuid.UUID) ([]*domain.
 	}
 	return out, nil
 }
+
+func (r *DeliveryRepo) HealthSnapshot(_ context.Context, since time.Time) (domain.DeliveryHealth, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	var health domain.DeliveryHealth
+	var latencies []int64
+	for _, delivery := range r.byID {
+		if !since.IsZero() && delivery.CreatedAt.Before(since) {
+			continue
+		}
+		health.TotalCount++
+		switch delivery.Status {
+		case domain.DeliveryStatusFailed:
+			health.FailedCount++
+		case domain.DeliveryStatusRetrying:
+			health.RetryingCount++
+		}
+		if delivery.ErrorCode != "" && (health.LatestErrorAt == nil || delivery.UpdatedAt.After(*health.LatestErrorAt)) {
+			at := delivery.UpdatedAt
+			health.LatestErrorCode = delivery.ErrorCode
+			health.LatestErrorAt = &at
+		}
+		if delivery.Status.IsTerminal() && delivery.UpdatedAt.After(delivery.CreatedAt) {
+			latencies = append(latencies, delivery.UpdatedAt.Sub(delivery.CreatedAt).Milliseconds())
+		}
+	}
+	health.LatencyP95Ms = percentile95(latencies)
+	return health, nil
+}

@@ -23,6 +23,7 @@ import (
 	paymentredirect "vk-ai-aggregator/internal/adapter/inbound/paymentredirect"
 	redisqueue "vk-ai-aggregator/internal/adapter/queue/redis"
 	"vk-ai-aggregator/internal/adapter/storage/postgres"
+	s3store "vk-ai-aggregator/internal/adapter/storage/s3"
 	apiapp "vk-ai-aggregator/internal/app/api"
 	miniappapp "vk-ai-aggregator/internal/app/miniapp"
 	"vk-ai-aggregator/internal/app/vkbot"
@@ -34,6 +35,7 @@ import (
 	"vk-ai-aggregator/internal/platform/readiness"
 	"vk-ai-aggregator/internal/platform/tracing"
 	"vk-ai-aggregator/internal/service/joborchestrator"
+	"vk-ai-aggregator/internal/service/maintenance"
 	"vk-ai-aggregator/internal/service/pricingcatalog"
 	"vk-ai-aggregator/internal/service/productcatalog"
 	"vk-ai-aggregator/internal/service/videorouter"
@@ -151,24 +153,46 @@ func main() {
 		RuntimeCatalog: runtimeCatalog,
 		Logger:         logger,
 	})
+	adminRateLimitLimit := cfg.AdminRateLimitLimit
+	if adminRateLimitLimit <= 0 {
+		adminRateLimitLimit = 120
+	}
+	adminRateLimitWindow := cfg.AdminRateLimitWindow
+	if adminRateLimitWindow <= 0 {
+		adminRateLimitWindow = time.Minute
+	}
+	retentionCleanup := newManualRetentionCleanup(ctx, cfg, core.Maintenance, rdb, logger)
 
 	admin := adminapi.NewHandler(adminapi.Config{
 		Token:   cfg.AdminToken,
 		Runtime: adminapi.NewRuntimeSnapshot(cfg),
+		RateLimit: adminapi.AdminRateLimitConfig{
+			Limit:   adminRateLimitLimit,
+			Window:  adminRateLimitWindow,
+			Limiter: ratelimit.NewRedisFixedWindowLimiter(rdb, "admin", adminRateLimitLimit, adminRateLimitWindow),
+		},
 	}, adminapi.Deps{
-		Jobs:         core.Jobs,
-		Users:        core.Users,
-		Deliveries:   core.Deliveries,
-		Audits:       core.Audits,
-		Referrals:    core.Referrals,
-		Billing:      core.BillingRepo,
-		Payment:      core.Payment,
-		Maintenance:  core.Maintenance,
-		PricingCache: pricingCache,
+		Jobs:             core.Jobs,
+		Users:            core.Users,
+		Deliveries:       core.Deliveries,
+		Audits:           core.Audits,
+		Referrals:        core.Referrals,
+		ProviderTasks:    core.ProviderTasks,
+		UnitOfWork:       core.UnitOfWork,
+		Billing:          core.BillingRepo,
+		Payment:          core.Payment,
+		Maintenance:      core.Maintenance,
+		RetentionCleanup: retentionCleanup,
+		PricingCache:     pricingCache,
 	})
 	billing := billingapi.NewHandler(billingapi.Config{
 		Token:                     cfg.AdminToken,
 		AllowLoadTestMockPayments: cfg.IsLoadTest() && strings.EqualFold(strings.TrimSpace(cfg.PaymentProvider), string(domain.PaymentProviderMock)),
+		RateLimit: billingapi.AdminRateLimitConfig{
+			Limit:   adminRateLimitLimit,
+			Window:  adminRateLimitWindow,
+			Limiter: ratelimit.NewRedisFixedWindowLimiter(rdb, "billing_admin", adminRateLimitLimit, adminRateLimitWindow),
+		},
 	}, billingapi.Deps{
 		Users:      core.Users,
 		Billing:    core.BillingRepo,
@@ -300,6 +324,54 @@ func mediaBackpressureStreams(op domain.OperationType) []string {
 		out = append(out, stream)
 	}
 	return out
+}
+
+func newManualRetentionCleanup(ctx context.Context, cfg config.Config, store maintenance.Store, rdb *redis.Client, logger *slog.Logger) *maintenance.Service {
+	opts := []maintenance.Option{maintenance.WithLogger(logger)}
+	mediaStore, err := s3store.New(ctx, s3store.Config{
+		Endpoint:        cfg.S3Endpoint,
+		AccessKey:       cfg.S3AccessKey,
+		SecretKey:       cfg.S3SecretKey,
+		UseSSL:          cfg.S3UseSSL,
+		Region:          cfg.S3Region,
+		AddressingStyle: cfg.S3AddressingStyle,
+	})
+	if err != nil {
+		logger.Warn("s3 connect failed; manual retention cleanup will skip object deletes", logging.ErrorAttr(err))
+	} else {
+		opts = append(opts, maintenance.WithMediaObjectStore(mediaStore))
+	}
+	return maintenance.New(
+		store,
+		redisqueue.NewTrimmer(rdb, cfg.StreamMaxLen, redisqueue.AllStreamsWithDLQ...),
+		maintenance.Config{
+			Interval:                      cfg.MaintenanceInterval,
+			OutboxRetention:               cfg.OutboxRetention,
+			BillingReconciliationInterval: cfg.BillingReconciliationInterval,
+			BillingReconciliationLimit:    cfg.BillingReconciliationLimit,
+			JobEventsRetention:            time.Duration(cfg.JobEventsRetentionDays) * 24 * time.Hour,
+			ProviderPayloadRetention:      time.Duration(cfg.ProviderPayloadRetentionDays) * 24 * time.Hour,
+			InboundPayloadRetention:       time.Duration(cfg.VKInboundPayloadRetentionDays) * 24 * time.Hour,
+			InboundPayloadRetentionLimit:  cfg.VKInboundRetentionBatchSize,
+			CommandRawTextRetention:       time.Duration(cfg.CommandRawTextRetentionDays) * 24 * time.Hour,
+			CommandRetentionLimit:         cfg.CommandRetentionBatchSize,
+			JobLogRetentionLimit:          cfg.JobLogRetentionBatchSize,
+			JobErrorAggregateLookback:     time.Duration(cfg.JobErrorAggregateLookbackDays) * 24 * time.Hour,
+			AnalyticsAggregateLookback:    time.Duration(cfg.AnalyticsAggregateLookbackDays) * 24 * time.Hour,
+			ConversationMessageRetention:  time.Duration(cfg.ConversationMessageRetentionDays) * 24 * time.Hour,
+			ConversationSummaryRetention:  time.Duration(cfg.ConversationSummaryRetentionDays) * 24 * time.Hour,
+			ConversationRetentionLimit:    cfg.ConversationRetentionBatchSize,
+			MediaFreeRetention:            time.Duration(cfg.ArtifactFreeRetentionDays) * 24 * time.Hour,
+			MediaPaidRetention:            time.Duration(cfg.ArtifactPaidRetentionDays) * 24 * time.Hour,
+			MediaOrphanRetention:          time.Duration(cfg.ArtifactOrphanRetentionDays) * 24 * time.Hour,
+			MediaTempUploadRetention:      time.Duration(cfg.ArtifactTemporaryRetentionDays) * 24 * time.Hour,
+			MediaInputRetention:           time.Duration(cfg.MediaInputRetentionDays) * 24 * time.Hour,
+			MediaFailedRetention:          time.Duration(cfg.MediaFailedRetentionDays) * 24 * time.Hour,
+			MediaOriginalRetention:        time.Duration(cfg.MediaOriginalRetentionDays) * 24 * time.Hour,
+			MediaVariantRetention:         time.Duration(cfg.MediaVariantRetentionDays) * 24 * time.Hour,
+		},
+		opts...,
+	)
 }
 
 // healthHandler reports 200 only when PostgreSQL and Redis are both reachable.

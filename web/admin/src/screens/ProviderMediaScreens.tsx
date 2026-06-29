@@ -247,22 +247,22 @@ function ProviderHealthTable({ items }: { items: OperatorProviderHealthDTO[] }) 
     <div className="provider-table" role="table">
       <div className="provider-row provider-row--head" role="row">
         <span>Provider</span>
+        <span>Service</span>
         <span>Model class</span>
-        <span>Modality</span>
         <span>Health</span>
-        <span>Rate limits</span>
-        <span>Invalid output</span>
-        <span>Fallback</span>
+        <span>Errors</span>
+        <span>Latency</span>
+        <span>Guards</span>
       </div>
       {items.map((item) => (
-        <div className="provider-row" key={`${item.provider_class}:${item.model_class}:${item.modality}`} role="row">
+        <div className="provider-row" key={`${item.service_type}:${item.provider_class}:${item.model_class}:${item.modality}`} role="row">
           <span>{item.provider_class}</span>
+          <span>{providerServiceText(item)}</span>
           <span>{item.model_class}</span>
-          <span>{item.modality}</span>
           <span className={`status-pill status-pill--${item.health}`}>{statusText(item.health)}</span>
-          <span>{item.rate_limit_count}</span>
-          <span>{item.invalid_output_count}</span>
-          <span>{item.fallback_state}</span>
+          <span>{providerErrorsText(item)}</span>
+          <span>{providerLatencyText(item)}</span>
+          <span>{providerGuardsText(item)}</span>
         </div>
       ))}
     </div>
@@ -478,6 +478,25 @@ function routeInputText(item: OperatorVideoRouteDTO): string {
   return [duration, resolution, item.requires_start_image ? "start image" : "text ok", refs].join(" / ");
 }
 
+function providerServiceText(item: OperatorProviderHealthDTO): string {
+  return `${item.service_type || "ai_provider"} / ${item.modality}`;
+}
+
+function providerErrorsText(item: OperatorProviderHealthDTO): string {
+  const latest = item.latest_error_class ? ` / latest ${item.latest_error_class}` : "";
+  return `${formatPercent(item.error_rate_percent)} / failed ${item.provider_failed_count} / rate ${item.rate_limit_count} / invalid ${item.invalid_output_count}${latest}`;
+}
+
+function providerLatencyText(item: OperatorProviderHealthDTO): string {
+  const latency = item.latency_p95_ms > 0 ? `p95 ${item.latency_p95_ms} ms` : "p95 n/a";
+  return `${latency} / in-flight ${item.in_flight_count} / samples ${item.observed_total_count}`;
+}
+
+function providerGuardsText(item: OperatorProviderHealthDTO): string {
+  const latestAt = item.latest_error_at ? ` / ${formatDateTime(item.latest_error_at)}` : "";
+  return `quota ${item.quota_state} / cooldown ${item.cooldown_state} / circuit ${item.circuit_state} / fallback ${item.fallback_state}${latestAt}`;
+}
+
 function formatDateTime(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
@@ -524,4 +543,11 @@ function formatNumber(value: number): string {
     return "unknown";
   }
   return new Intl.NumberFormat().format(value);
+}
+
+function formatPercent(value: number): string {
+  if (!Number.isFinite(value)) {
+    return "unknown";
+  }
+  return `${value.toFixed(value >= 10 ? 0 : 1)}%`;
 }

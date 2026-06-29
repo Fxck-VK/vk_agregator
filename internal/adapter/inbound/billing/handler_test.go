@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -19,6 +20,21 @@ import (
 	"vk-ai-aggregator/internal/service/billingservice"
 	"vk-ai-aggregator/internal/service/paymentservice"
 )
+
+type fakeKeyLimiter struct {
+	allowed []bool
+	calls   []string
+}
+
+func (f *fakeKeyLimiter) Allow(_ context.Context, key string) (bool, error) {
+	f.calls = append(f.calls, key)
+	if len(f.allowed) == 0 {
+		return true, nil
+	}
+	allowed := f.allowed[0]
+	f.allowed = f.allowed[1:]
+	return allowed, nil
+}
 
 func setup(t *testing.T) (*billing.Handler, *memory.UserRepo, *memory.PaymentRepo, *paymentmock.Provider, *memory.BillingRepo) {
 	t.Helper()
@@ -60,6 +76,11 @@ func setupWithBillingConfig(t *testing.T, cfg billing.Config) (*billing.Handler,
 
 func setupWithAudits(t *testing.T) (*billing.Handler, *memory.UserRepo, *memory.PaymentRepo, *paymentmock.Provider, *memory.BillingRepo, *memory.OperatorAuditRepo) {
 	t.Helper()
+	return setupWithAuditsAndConfig(t, billing.Config{Token: "secret"})
+}
+
+func setupWithAuditsAndConfig(t *testing.T, cfg billing.Config) (*billing.Handler, *memory.UserRepo, *memory.PaymentRepo, *paymentmock.Provider, *memory.BillingRepo, *memory.OperatorAuditRepo) {
+	t.Helper()
 	users := memory.NewUserRepo()
 	payments := memory.NewPaymentRepo()
 	billingRepo := memory.NewBillingRepo()
@@ -82,7 +103,7 @@ func setupWithAudits(t *testing.T) (*billing.Handler, *memory.UserRepo, *memory.
 		return fn(ctx, payments, billingRepo)
 	})
 	ops := paymentservice.NewWebhookProcessor(payments, provider, billingSvc, tx)
-	handler := billing.NewHandler(billing.Config{Token: "secret"}, billing.Deps{
+	handler := billing.NewHandler(cfg, billing.Deps{
 		Users:      users,
 		Billing:    billingRepo,
 		Payment:    service,
@@ -107,6 +128,36 @@ func TestBillingAuthFailClosed(t *testing.T) {
 	handler.Routes().ServeHTTP(rec, req)
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401 without token header, got %d", rec.Code)
+	}
+}
+
+func TestBillingOperatorRateLimitUsesSharedLimiter(t *testing.T) {
+	limiter := &fakeKeyLimiter{allowed: []bool{true, false}}
+	handler, _, _, _, _ := setupWithBillingConfig(t, billing.Config{
+		Token: "secret",
+		RateLimit: billing.AdminRateLimitConfig{
+			Limit:   99,
+			Window:  time.Hour,
+			Limiter: limiter,
+		},
+	})
+
+	for i, want := range []int{http.StatusOK, http.StatusTooManyRequests} {
+		req := httptest.NewRequest(http.MethodGet, "/billing/payment-products", nil)
+		req.Header.Set("X-Admin-Token", "secret")
+		rec := httptest.NewRecorder()
+		handler.Routes().ServeHTTP(rec, req)
+		if rec.Code != want {
+			t.Fatalf("request %d status = %d, want %d: %s", i+1, rec.Code, want, rec.Body.String())
+		}
+	}
+	if len(limiter.calls) != 2 {
+		t.Fatalf("shared limiter calls = %d, want 2", len(limiter.calls))
+	}
+	for _, call := range limiter.calls {
+		if !strings.HasPrefix(call, "billing:operator_") {
+			t.Fatalf("shared limiter key = %q, want billing operator key", call)
+		}
 	}
 }
 
@@ -298,7 +349,7 @@ func TestPaymentOperatorActionWritesSanitizedAudit(t *testing.T) {
 		t.Fatalf("expected one sync audit entry, got %d", len(entries))
 	}
 	entry := entries[0]
-	if entry.ActorRef != "admin_token" || entry.TargetType != "payment_intents" || entry.Result != "success" {
+	if entry.ActorRef == "" || entry.ActorRef == "admin_token" || entry.TargetType != "payment_intents" || entry.Result != "success" {
 		t.Fatalf("unexpected audit entry: %+v", entry)
 	}
 	rendered := entry.ActorRef + entry.Action + entry.TargetType + entry.TargetRef + entry.RequestRef
@@ -307,6 +358,85 @@ func TestPaymentOperatorActionWritesSanitizedAudit(t *testing.T) {
 			t.Fatalf("audit entry leaked %q: %+v", forbidden, entry)
 		}
 	}
+}
+
+func TestPaymentOperatorRBACEnforcedAndAudited(t *testing.T) {
+	handler, _, _, _, _, audits := setupWithAuditsAndConfig(t, billing.Config{
+		Token:       "secret",
+		DefaultRole: domain.OperatorRoleSupport,
+	})
+
+	refundReq := httptest.NewRequest(http.MethodPost, "/billing/payment-intents/"+uuid.NewString()+"/refund", bytes.NewReader([]byte(`{"reason":"support should not refund"}`)))
+	refundReq.Header.Set("X-Admin-Token", "secret")
+	refundReq.Header.Set("X-Idempotency-Key", "support-refund-key")
+	refundRec := httptest.NewRecorder()
+	handler.Routes().ServeHTTP(refundRec, refundReq)
+	if refundRec.Code != http.StatusForbidden {
+		t.Fatalf("support refund status = %d, want 403: %s", refundRec.Code, refundRec.Body.String())
+	}
+	entries, err := audits.List(context.Background(), domain.OperatorAuditFilter{Action: "payment_intent_refund"}, 10, 0)
+	if err != nil {
+		t.Fatalf("list audit: %v", err)
+	}
+	if len(entries) != 1 || entries[0].Result != "error" || entries[0].ActorRef == "" {
+		t.Fatalf("expected forbidden refund audit entry, got %+v", entries)
+	}
+	if strings.Contains(entries[0].ActorRef, "secret") {
+		t.Fatalf("audit actor leaked token: %+v", entries[0])
+	}
+
+	financeHandler, _, _, _, _, _ := setupWithAuditsAndConfig(t, billing.Config{
+		Token:       "secret",
+		DefaultRole: domain.OperatorRoleFinance,
+	})
+	consoleReq := httptest.NewRequest(http.MethodGet, "/billing/operator/console", nil)
+	consoleReq.Header.Set("X-Admin-Token", "secret")
+	consoleRec := httptest.NewRecorder()
+	financeHandler.Routes().ServeHTTP(consoleRec, consoleReq)
+	if consoleRec.Code != http.StatusOK {
+		t.Fatalf("finance console status = %d, want 200: %s", consoleRec.Code, consoleRec.Body.String())
+	}
+
+	productReq := httptest.NewRequest(http.MethodPost, "/billing/payment-products", bytes.NewReader([]byte(`{"code":"credits_1","title":"one","amount":100,"currency":"rub","credits":1}`)))
+	productReq.Header.Set("X-Admin-Token", "secret")
+	productRec := httptest.NewRecorder()
+	financeHandler.Routes().ServeHTTP(productRec, productReq)
+	if productRec.Code != http.StatusForbidden {
+		t.Fatalf("finance product create status = %d, want 403: %s", productRec.Code, productRec.Body.String())
+	}
+}
+
+func TestPaymentOperatorRateLimitAudited(t *testing.T) {
+	handler, _, _, _, _, audits := setupWithAuditsAndConfig(t, billing.Config{
+		Token:     "secret",
+		RateLimit: billing.AdminRateLimitConfig{Limit: 1, Window: time.Hour},
+	})
+
+	for i, want := range []int{http.StatusOK, http.StatusTooManyRequests} {
+		req := httptest.NewRequest(http.MethodGet, "/billing/payment-history", nil)
+		req.Header.Set("X-Admin-Token", "secret")
+		rec := httptest.NewRecorder()
+		handler.Routes().ServeHTTP(rec, req)
+		if rec.Code != want {
+			t.Fatalf("request %d status = %d, want %d: %s", i+1, rec.Code, want, rec.Body.String())
+		}
+	}
+	entries, err := audits.List(context.Background(), domain.OperatorAuditFilter{Action: "payment_history_list"}, 10, 0)
+	if err != nil {
+		t.Fatalf("list audit: %v", err)
+	}
+	if len(entries) != 2 || !auditResultsContain(entries, "success") || !auditResultsContain(entries, "error") {
+		t.Fatalf("expected success and rate-limit audit entries, got %+v", entries)
+	}
+}
+
+func auditResultsContain(entries []*domain.OperatorAuditEntry, result string) bool {
+	for _, entry := range entries {
+		if entry.Result == result {
+			return true
+		}
+	}
+	return false
 }
 
 func TestCreatePaymentIntentUsesTrustedUserIDAndIsIdempotent(t *testing.T) {
@@ -753,6 +883,107 @@ func TestOperatorConsoleMasksPaymentAndBillingSecrets(t *testing.T) {
 	}
 	if console.Billing == nil || console.Billing.UserRef == "" || len(console.Billing.Ledger) < 2 || len(console.Billing.Reservations) != 1 {
 		t.Fatalf("unexpected billing snapshot: %+v", console.Billing)
+	}
+}
+
+func TestOperatorConsoleSearchesPaymentsWithoutRawProviderPayload(t *testing.T) {
+	handler, users, payments, _, _ := setup(t)
+	ctx := context.Background()
+	user := &domain.User{VKUserID: 786, Role: domain.RoleUser, Status: domain.StatusActive}
+	if err := users.Create(ctx, user); err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+
+	body := []byte(`{"product_code":"credits_100","receipt_email":"user@example.com"}`)
+	req := httptest.NewRequest(http.MethodPost, "/billing/payment-intents", bytes.NewReader(body))
+	req.Header.Set("X-Admin-Token", "secret")
+	req.Header.Set("X-User-ID", user.ID.String())
+	req.Header.Set("X-Idempotency-Key", "console-search-intent")
+	rec := httptest.NewRecorder()
+	handler.Routes().ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create intent: %d %s", rec.Code, rec.Body.String())
+	}
+	var created billing.PaymentIntentDTO
+	if err := json.Unmarshal(rec.Body.Bytes(), &created); err != nil {
+		t.Fatalf("decode intent: %v", err)
+	}
+	if created.ProviderPaymentID == "" {
+		t.Fatal("expected provider payment id")
+	}
+
+	if inserted, err := payments.CreateEvent(ctx, &domain.PaymentEvent{
+		Provider:          domain.PaymentProviderMock,
+		EventType:         "payment.succeeded",
+		ProviderPaymentID: created.ProviderPaymentID,
+		DedupKey:          "webhook:mock:payment.succeeded:" + created.ProviderPaymentID,
+		Payload:           json.RawMessage(`{"provider_payload":"must-not-return"}`),
+	}); err != nil || !inserted {
+		t.Fatalf("create matching event inserted=%v err=%v", inserted, err)
+	}
+	if inserted, err := payments.CreateEvent(ctx, &domain.PaymentEvent{
+		Provider:          domain.PaymentProviderMock,
+		EventType:         "payment.succeeded",
+		ProviderPaymentID: "mock-pay-unrelated",
+		DedupKey:          "webhook:mock:payment.succeeded:mock-pay-unrelated",
+		Payload:           json.RawMessage(`{"provider_payload":"unrelated"}`),
+	}); err != nil || !inserted {
+		t.Fatalf("create unrelated event inserted=%v err=%v", inserted, err)
+	}
+	if err := payments.CreateRefund(ctx, &domain.PaymentRefund{
+		IntentID:         created.ID,
+		ProviderRefundID: "mock-refund-search-match",
+		Amount:           9900,
+		Status:           domain.PaymentRefundSucceeded,
+		IdempotencyKey:   "refund-search-secret",
+		Reason:           "operator search refund",
+	}); err != nil {
+		t.Fatalf("create matching refund: %v", err)
+	}
+	if err := payments.CreateRefund(ctx, &domain.PaymentRefund{
+		IntentID:         uuid.New(),
+		ProviderRefundID: "mock-refund-search-unrelated",
+		Amount:           9900,
+		Status:           domain.PaymentRefundSucceeded,
+		IdempotencyKey:   "refund-search-unrelated-secret",
+		Reason:           "unrelated refund",
+	}); err != nil {
+		t.Fatalf("create unrelated refund: %v", err)
+	}
+
+	consoleReq := httptest.NewRequest(http.MethodGet, "/billing/operator/console?provider_payment_id="+url.QueryEscape(created.ProviderPaymentID)+"&limit=10", nil)
+	consoleReq.Header.Set("X-Admin-Token", "secret")
+	consoleRec := httptest.NewRecorder()
+	handler.Routes().ServeHTTP(consoleRec, consoleReq)
+	if consoleRec.Code != http.StatusOK {
+		t.Fatalf("console: %d %s", consoleRec.Code, consoleRec.Body.String())
+	}
+	raw := consoleRec.Body.String()
+	for _, forbidden := range []string{
+		created.ProviderPaymentID,
+		created.ID.String(),
+		user.ID.String(),
+		"provider_payload",
+		"must-not-return",
+		"unrelated",
+		"refund-search-secret",
+	} {
+		if strings.Contains(raw, forbidden) {
+			t.Fatalf("operator console leaked %q: %s", forbidden, raw)
+		}
+	}
+	var console billing.OperatorConsoleDTO
+	if err := json.Unmarshal(consoleRec.Body.Bytes(), &console); err != nil {
+		t.Fatalf("decode console: %v", err)
+	}
+	if len(console.Intents) != 1 || console.Intents[0].ProviderPaymentRef == "" {
+		t.Fatalf("unexpected intents: %+v", console.Intents)
+	}
+	if len(console.Events) != 1 || console.Events[0].ProviderPaymentRef == "" {
+		t.Fatalf("unexpected events: %+v", console.Events)
+	}
+	if len(console.Refunds) != 1 || console.Refunds[0].ProviderRefundRef == "" {
+		t.Fatalf("unexpected refunds: %+v", console.Refunds)
 	}
 }
 

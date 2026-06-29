@@ -1,0 +1,5 @@
+BEGIN;
+
+DROP TABLE IF EXISTS daily_dlq_stats;
+
+COMMIT;

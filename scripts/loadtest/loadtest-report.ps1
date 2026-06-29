@@ -3,6 +3,10 @@ param(
     [string]$EnvFile = ".env.loadtest",
     [string]$ReportDir = "",
     [string]$BaseUrl = "",
+    [string]$ArtifactsRoot = "",
+    [string]$RpsRampSummary = "",
+    [string]$WorkerCapacitySummary = "",
+    [string]$BillingLoadSummary = "",
     [string[]]$K6Scripts = @(),
     [string[]]$K6SummaryFiles = @(),
     [switch]$RunK6,
@@ -10,7 +14,8 @@ param(
     [switch]$SkipRedis,
     [switch]$SkipDockerStats,
     [switch]$UseDockerCompose,
-    [switch]$AllowProduction
+    [switch]$AllowProduction,
+    [switch]$SkipPreflight
 )
 
 $ErrorActionPreference = "Stop"
@@ -51,6 +56,22 @@ function Read-EnvFile {
 }
 
 $EnvValues = Read-EnvFile -Path $EnvFile
+
+if (-not $SkipPreflight) {
+    $preflightArgs = @(
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "scripts/loadtest/loadtest-preflight.ps1",
+        "-EnvFile",
+        $EnvFile
+    )
+    & powershell @preflightArgs
+    if ($LASTEXITCODE -ne 0) {
+        throw "Loadtest preflight failed. Fix the loadtest env before running capacity reports."
+    }
+}
 
 function Get-Setting {
     param(
@@ -160,6 +181,108 @@ function Format-NullableNumber {
         return ([double]$Value).ToString("F$Digits", [Globalization.CultureInfo]::InvariantCulture)
     } catch {
         return [string]$Value
+    }
+}
+
+function Get-ObjectProperty {
+    param(
+        [object]$Object,
+        [string]$Name,
+        [object]$Default = $null
+    )
+
+    if ($null -eq $Object) {
+        return $Default
+    }
+
+    $prop = $Object.PSObject.Properties[$Name]
+    if ($null -eq $prop) {
+        return $Default
+    }
+
+    return $prop.Value
+}
+
+function Get-DoubleProperty {
+    param(
+        [object]$Object,
+        [string]$Name,
+        [object]$Default = $null
+    )
+
+    $value = Get-ObjectProperty -Object $Object -Name $Name -Default $Default
+    if ($null -eq $value -or $value -eq "") {
+        return $Default
+    }
+
+    try {
+        return [double]$value
+    } catch {
+        return $Default
+    }
+}
+
+function Read-JsonFile {
+    param([string]$Path)
+
+    if ([string]::IsNullOrWhiteSpace($Path) -or -not (Test-Path $Path)) {
+        return $null
+    }
+
+    return Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json
+}
+
+function Find-LatestArtifactFile {
+    param(
+        [string]$Filter,
+        [string[]]$Roots
+    )
+
+    $candidates = @()
+    foreach ($root in ($Roots | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique)) {
+        if (-not (Test-Path $root)) {
+            continue
+        }
+
+        $candidates += Get-ChildItem -LiteralPath $root -Recurse -File -Filter $Filter -ErrorAction SilentlyContinue
+    }
+
+    if ($candidates.Count -eq 0) {
+        return ""
+    }
+
+    return ($candidates | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1).FullName
+}
+
+function Resolve-RunnerSummaryFile {
+    param(
+        [string]$ExplicitPath,
+        [string]$Filter,
+        [string[]]$Roots
+    )
+
+    if (-not [string]::IsNullOrWhiteSpace($ExplicitPath)) {
+        if (Test-Path $ExplicitPath) {
+            return (Resolve-Path $ExplicitPath).Path
+        }
+        return $ExplicitPath
+    }
+
+    return Find-LatestArtifactFile -Filter $Filter -Roots $Roots
+}
+
+function Convert-PercentString {
+    param([string]$Value)
+
+    if ([string]::IsNullOrWhiteSpace($Value)) {
+        return $null
+    }
+
+    $raw = $Value.Trim().TrimEnd("%").Replace(",", ".")
+    try {
+        return [double]$raw
+    } catch {
+        return $null
     }
 }
 
@@ -472,7 +595,8 @@ $defaultK6Scripts = @(
     "tests/k6/basic-api.js",
     "tests/k6/vk-bot.js",
     "tests/k6/job-worker.js",
-    "tests/k6/billing-payments.js"
+    "tests/k6/billing-payments.js",
+    "tests/k6/admin-actions.js"
 )
 $K6Scripts = Split-SettingList -Explicit $K6Scripts -EnvName "LOADTEST_REPORT_K6_SCRIPTS" -Default $defaultK6Scripts
 
@@ -582,8 +706,141 @@ $maxP95Ms = [double](Get-Setting -Name "LOADTEST_REPORT_MAX_P95_MS" -Default "15
 $maxQueueDepth = [int](Get-Setting -Name "LOADTEST_REPORT_MAX_QUEUE_DEPTH" -Default "100")
 $maxDlqDepth = [int](Get-Setting -Name "LOADTEST_REPORT_MAX_DLQ" -Default "0")
 $minJobSuccessRate = [double](Get-Setting -Name "LOADTEST_REPORT_MIN_JOB_SUCCESS_RATE" -Default "0.95")
+$maxCpuPercent = [double](Get-Setting -Name "LOADTEST_REPORT_MAX_CPU_PERCENT" -Default "85")
+
+$artifactRoots = @()
+if (-not [string]::IsNullOrWhiteSpace($ArtifactsRoot)) {
+    $artifactRoots += $ArtifactsRoot
+}
+$artifactRoots += @("reports/loadtest", "artifacts/loadtest")
+
+$rpsRampSummaryPath = Resolve-RunnerSummaryFile -ExplicitPath $RpsRampSummary -Filter "rps-ramp-summary.json" -Roots $artifactRoots
+$workerCapacitySummaryPath = Resolve-RunnerSummaryFile -ExplicitPath $WorkerCapacitySummary -Filter "worker-capacity-summary.json" -Roots $artifactRoots
+$billingLoadSummaryPath = Resolve-RunnerSummaryFile -ExplicitPath $BillingLoadSummary -Filter "billing-load-summary.json" -Roots $artifactRoots
+
+$rpsRampRows = @()
+$workerCapacityData = $null
+$workerWorkloads = @()
+$billingLoadData = $null
+
+if (-not [string]::IsNullOrWhiteSpace($rpsRampSummaryPath)) {
+    if (Test-Path $rpsRampSummaryPath) {
+        $rpsRampData = Read-JsonFile -Path $rpsRampSummaryPath
+        $rpsRampRows = @($rpsRampData)
+    } elseif (-not [string]::IsNullOrWhiteSpace($RpsRampSummary)) {
+        $failures.Add("RPS ramp summary file not found: $rpsRampSummaryPath")
+    }
+}
+
+if (-not [string]::IsNullOrWhiteSpace($workerCapacitySummaryPath)) {
+    if (Test-Path $workerCapacitySummaryPath) {
+        $workerCapacityData = Read-JsonFile -Path $workerCapacitySummaryPath
+        $workerWorkloads = @(Get-ObjectProperty -Object $workerCapacityData -Name "workloads" -Default @())
+    } elseif (-not [string]::IsNullOrWhiteSpace($WorkerCapacitySummary)) {
+        $failures.Add("Worker capacity summary file not found: $workerCapacitySummaryPath")
+    }
+}
+
+if (-not [string]::IsNullOrWhiteSpace($billingLoadSummaryPath)) {
+    if (Test-Path $billingLoadSummaryPath) {
+        $billingLoadData = Read-JsonFile -Path $billingLoadSummaryPath
+    } elseif (-not [string]::IsNullOrWhiteSpace($BillingLoadSummary)) {
+        $failures.Add("Billing load summary file not found: $billingLoadSummaryPath")
+    }
+}
+
+$maxStableRps = $null
+$maxStableRpsStep = ""
+$maxRampRps = $null
+$maxRampP95Ms = $null
+$maxRampP99Ms = $null
+$maxRampErrorRate = $null
+$rpsFailures = New-Object System.Collections.Generic.List[string]
+
+foreach ($row in $rpsRampRows) {
+    $rowStatus = [string](Get-ObjectProperty -Object $row -Name "Status" -Default "")
+    $rowRps = Get-DoubleProperty -Object $row -Name "RPS" -Default $null
+    $rowStep = [string](Get-ObjectProperty -Object $row -Name "Step" -Default "")
+    $rowP95 = Get-DoubleProperty -Object $row -Name "P95Ms" -Default $null
+    $rowP99 = Get-DoubleProperty -Object $row -Name "P99Ms" -Default $null
+    $rowErrorRate = Get-DoubleProperty -Object $row -Name "ErrorRate" -Default $null
+    $rowRedisBacklog = Get-DoubleProperty -Object $row -Name "RedisBacklog" -Default 0
+    $rowDlq = Get-DoubleProperty -Object $row -Name "DLQDepth" -Default 0
+
+    if ($null -ne $rowRps -and ($null -eq $maxRampRps -or $rowRps -gt $maxRampRps)) {
+        $maxRampRps = $rowRps
+    }
+    if ($null -ne $rowP95 -and ($null -eq $maxRampP95Ms -or $rowP95 -gt $maxRampP95Ms)) {
+        $maxRampP95Ms = $rowP95
+    }
+    if ($null -ne $rowP99 -and ($null -eq $maxRampP99Ms -or $rowP99 -gt $maxRampP99Ms)) {
+        $maxRampP99Ms = $rowP99
+    }
+    if ($null -ne $rowErrorRate -and ($null -eq $maxRampErrorRate -or $rowErrorRate -gt $maxRampErrorRate)) {
+        $maxRampErrorRate = $rowErrorRate
+    }
+
+    $stable = ($rowStatus -eq "ok")
+    if ($null -ne $rowErrorRate -and $rowErrorRate -gt $maxErrorRate) {
+        $stable = $false
+        $rpsFailures.Add("RPS step $rowStep exceeded HTTP error threshold: $(Format-NullableNumber $rowErrorRate 4).")
+    }
+    if ($null -ne $rowP95 -and $rowP95 -gt $maxP95Ms) {
+        $stable = $false
+        $rpsFailures.Add("RPS step $rowStep exceeded p95 threshold: $(Format-NullableNumber $rowP95 2) ms.")
+    }
+    if ($rowRedisBacklog -gt $maxQueueDepth) {
+        $stable = $false
+        $rpsFailures.Add("RPS step $rowStep exceeded Redis backlog threshold: $rowRedisBacklog.")
+    }
+    if ($rowDlq -gt $maxDlqDepth) {
+        $stable = $false
+        $rpsFailures.Add("RPS step $rowStep exceeded DLQ threshold: $rowDlq.")
+    }
+
+    if ($stable -and $null -ne $rowRps -and ($null -eq $maxStableRps -or $rowRps -gt $maxStableRps)) {
+        $maxStableRps = $rowRps
+        $maxStableRpsStep = $rowStep
+    }
+}
+
+$primaryWorkerRow = $null
+foreach ($row in $workerWorkloads) {
+    if ([string](Get-ObjectProperty -Object $row -Name "workload" -Default "") -eq "mixed") {
+        $primaryWorkerRow = $row
+        break
+    }
+}
+if ($null -eq $primaryWorkerRow) {
+    foreach ($row in $workerWorkloads) {
+        $throughput = Get-DoubleProperty -Object $row -Name "worker_throughput_per_sec" -Default 0
+        if ($null -eq $primaryWorkerRow -or $throughput -gt (Get-DoubleProperty -Object $primaryWorkerRow -Name "worker_throughput_per_sec" -Default 0)) {
+            $primaryWorkerRow = $row
+        }
+    }
+}
+
+$jobsAcceptedPerSec = Get-DoubleProperty -Object $primaryWorkerRow -Name "jobs_created_per_sec" -Default $null
+$jobsCompletedPerSec = Get-DoubleProperty -Object $primaryWorkerRow -Name "worker_throughput_per_sec" -Default $null
+$workerDlq = Get-DoubleProperty -Object $primaryWorkerRow -Name "redis_dlq" -Default $null
+$workerBacklog = Get-DoubleProperty -Object $primaryWorkerRow -Name "redis_backlog" -Default $null
+$workerWorkloadName = [string](Get-ObjectProperty -Object $primaryWorkerRow -Name "workload" -Default "")
+
+$billingMetrics = Get-ObjectProperty -Object $billingLoadData -Name "metrics" -Default $null
+$billingFailures = @(Get-ObjectProperty -Object $billingLoadData -Name "failures" -Default @())
+
+$maxCpuObserved = $null
+foreach ($row in $dockerStats) {
+    $cpu = Convert-PercentString -Value ([string]$row.CPU)
+    if ($null -ne $cpu -and ($null -eq $maxCpuObserved -or $cpu -gt $maxCpuObserved)) {
+        $maxCpuObserved = $cpu
+    }
+}
 
 $findings = New-Object System.Collections.Generic.List[string]
+foreach ($failure in $rpsFailures) {
+    $findings.Add($failure)
+}
 foreach ($row in $k6Rows) {
     if ($row.ErrorRate -gt $maxErrorRate) {
         $findings.Add("High HTTP error rate in $($row.Script): $(Format-NullableNumber $row.ErrorRate 4).")
@@ -603,6 +860,19 @@ if ($null -ne $redisSnapshot) {
         $findings.Add("DLQ is not empty: $($redisSnapshot.DlqDepth).")
     }
 }
+foreach ($failure in @(Get-ObjectProperty -Object $workerCapacityData -Name "failures" -Default @())) {
+    if (-not [string]::IsNullOrWhiteSpace([string]$failure)) {
+        $findings.Add("Worker capacity finding: $failure")
+    }
+}
+foreach ($failure in $billingFailures) {
+    if (-not [string]::IsNullOrWhiteSpace([string]$failure)) {
+        $findings.Add("Billing load finding: $failure")
+    }
+}
+if ($null -ne $maxCpuObserved -and $maxCpuObserved -gt $maxCpuPercent) {
+    $findings.Add("CPU usage exceeded threshold: $(Format-NullableNumber $maxCpuObserved 2)%.")
+}
 foreach ($failure in $failures) {
     $findings.Add($failure)
 }
@@ -612,6 +882,71 @@ if ($findings.Count -gt 0) {
     $firstBottleneck = $findings[0]
 } elseif ($k6Rows.Count -eq 0 -and $null -eq $redisSnapshot -and $dockerStats.Count -eq 0) {
     $firstBottleneck = "No measurements were collected. Run with -RunK6 and enabled diagnostics."
+}
+
+$postgresBottleneck = "not evaluated"
+if (-not $SkipPostgres -and (Test-Path $postgresOutputFile)) {
+    $postgresDiagnosticsTextForSummary = Get-Content -LiteralPath $postgresOutputFile -Raw
+    if ($postgresDiagnosticsTextForSummary -match "(?s)== Blocking locks ==.*?\(0 rows\)" -and $postgresDiagnosticsTextForSummary -match "(?s)== Long-running queries ==.*?\(0 rows\)") {
+        $postgresBottleneck = "no blocking locks or long-running queries in collected diagnostics"
+    } else {
+        $postgresBottleneck = "inspect diagnostics for locks/long queries before scaling API"
+    }
+} elseif ($SkipPostgres) {
+    $postgresBottleneck = "skipped"
+}
+
+$redisBottleneck = "not evaluated"
+if ($null -ne $redisSnapshot) {
+    if ($redisSnapshot.DlqDepth -gt $maxDlqDepth) {
+        $redisBottleneck = "DLQ depth above threshold"
+    } elseif ($redisSnapshot.TotalQueueDepth -gt $maxQueueDepth) {
+        $redisBottleneck = "queue depth above threshold"
+    } else {
+        $redisBottleneck = "no queue/DLQ bottleneck in collected snapshot"
+    }
+} elseif ($null -ne $workerBacklog -or $null -ne $workerDlq) {
+    if ($workerDlq -gt $maxDlqDepth) {
+        $redisBottleneck = "worker run observed DLQ entries"
+    } elseif ($workerBacklog -gt $maxQueueDepth) {
+        $redisBottleneck = "worker run observed Redis backlog"
+    } else {
+        $redisBottleneck = "worker run did not show Redis backlog/DLQ"
+    }
+}
+
+$cpuRamLimit = "not evaluated"
+if ($dockerStats.Count -gt 0) {
+    if ($null -ne $maxCpuObserved -and $maxCpuObserved -gt $maxCpuPercent) {
+        $cpuRamLimit = "CPU above threshold: $(Format-NullableNumber $maxCpuObserved 2)%"
+    } elseif ($null -ne $maxCpuObserved) {
+        $cpuRamLimit = "CPU below threshold in snapshot: $(Format-NullableNumber $maxCpuObserved 2)%"
+    } else {
+        $cpuRamLimit = "docker stats captured; inspect memory column"
+    }
+}
+
+$capacitySummary = [ordered]@{
+    max_stable_rps = $maxStableRps
+    max_stable_rps_step = $maxStableRpsStep
+    max_observed_rps = $maxRampRps
+    max_observed_p95_ms = $maxRampP95Ms
+    max_observed_p99_ms = $maxRampP99Ms
+    max_observed_error_rate = $maxRampErrorRate
+    jobs_per_sec_accepted = $jobsAcceptedPerSec
+    jobs_per_sec_completed = $jobsCompletedPerSec
+    worker_reference_workload = $workerWorkloadName
+    redis_bottleneck = $redisBottleneck
+    postgres_bottleneck = $postgresBottleneck
+    cpu_ram_limit = $cpuRamLimit
+    dlq_count = if ($null -ne $redisSnapshot) { $redisSnapshot.DlqDepth } elseif ($null -ne $workerDlq) { $workerDlq } else { $null }
+    retry_count = $null
+    first_bottleneck = $firstBottleneck
+    sources = [ordered]@{
+        rps_ramp_summary = $rpsRampSummaryPath
+        worker_capacity_summary = $workerCapacitySummaryPath
+        billing_load_summary = $billingLoadSummaryPath
+    }
 }
 
 $findingsArray = @()
@@ -743,6 +1078,42 @@ Add-ScalingDecision -Area "external data services" -Decision "defer migration de
 Add-ScalingDecision -Area "provider quotas" -Decision "do not infer real provider capacity from mock tests" -Reason "AI/VK/YooKassa providers are not called in loadtest mode; quota requests require separate credential-bound smoke/load checks."
 Add-ScalingDecision -Area "user limits" -Decision "keep current anti-spam/backpressure defaults until real provider quotas are known" -Reason "Mock load can validate code paths, but paid provider budgets and VK limits determine final user-facing limits."
 
+if ($null -ne $maxStableRps) {
+    Add-ScalingDecision -Area "rate limits" -Decision ("cap public traffic below measured stable RPS {0} until next run" -f (Format-NullableNumber $maxStableRps 2)) -Reason "Use the highest stable RPS step as the upper bound for initial rollout, then keep user-facing limits below it with safety margin."
+} else {
+    Add-ScalingDecision -Area "rate limits" -Decision "do not raise public limits yet" -Reason "No stable RPS step was proven by the ramp artifacts."
+}
+
+if ($null -ne $jobsAcceptedPerSec -and $null -ne $jobsCompletedPerSec) {
+    if ($jobsCompletedPerSec -lt ($jobsAcceptedPerSec * 0.8)) {
+        Add-ScalingDecision -Area "worker count" -Decision "increase worker count or reduce accepted job rate" -Reason ("Reference workload {0}: accepted {1}/s, completed {2}/s." -f $workerWorkloadName, (Format-NullableNumber $jobsAcceptedPerSec 2), (Format-NullableNumber $jobsCompletedPerSec 2))
+    } else {
+        Add-ScalingDecision -Area "worker count" -Decision "current worker count is acceptable for measured mock workload" -Reason ("Reference workload {0}: accepted {1}/s, completed {2}/s." -f $workerWorkloadName, (Format-NullableNumber $jobsAcceptedPerSec 2), (Format-NullableNumber $jobsCompletedPerSec 2))
+    }
+} else {
+    Add-ScalingDecision -Area "worker count" -Decision "run worker-capacity.ps1 before sizing workers" -Reason "No worker capacity summary was found."
+}
+
+if ($postgresBottleneck -like "inspect*") {
+    Add-ScalingDecision -Area "indexes" -Decision "do not add broad indexes blindly; inspect slow SQL first" -Reason $postgresBottleneck
+} else {
+    Add-ScalingDecision -Area "indexes" -Decision "no index change from this report alone" -Reason $postgresBottleneck
+}
+
+if ($redisBottleneck -like "*above threshold*" -or $redisBottleneck -like "*backlog*") {
+    Add-ScalingDecision -Area "separate queues" -Decision "consider separate text/image/video worker pools before scaling traffic" -Reason $redisBottleneck
+} else {
+    Add-ScalingDecision -Area "separate queues" -Decision "keep queue topology for now" -Reason $redisBottleneck
+}
+
+if ($cpuRamLimit -like "*above threshold*") {
+    Add-ScalingDecision -Area "minimum VPS" -Decision "current VPS is below target for this load step" -Reason $cpuRamLimit
+} elseif ($dockerStats.Count -gt 0) {
+    Add-ScalingDecision -Area "minimum VPS" -Decision "current VPS can be used for the measured mock baseline only" -Reason $cpuRamLimit
+} else {
+    Add-ScalingDecision -Area "minimum VPS" -Decision "not enough runtime data" -Reason "Docker CPU/RAM snapshot was not collected."
+}
+
 $script:ReportLines = New-Object System.Collections.Generic.List[string]
 $targetLabel = $BaseUrl
 if ([string]::IsNullOrWhiteSpace($targetLabel)) {
@@ -767,6 +1138,32 @@ if ($findings.Count -eq 0) {
         Add-Line "- $finding"
     }
 }
+
+Add-Line ""
+Add-Line "## Capacity Summary"
+Add-Line ""
+Add-TableRow @("Metric", "Value")
+Add-TableRow @("---", "---:")
+Add-TableRow @("Maximum stable RPS", (Format-NullableNumber $maxStableRps 2))
+Add-TableRow @("Stable RPS step", $(if ([string]::IsNullOrWhiteSpace($maxStableRpsStep)) { "-" } else { $maxStableRpsStep }))
+Add-TableRow @("Maximum observed RPS", (Format-NullableNumber $maxRampRps 2))
+Add-TableRow @("Worst observed p95 ms", (Format-NullableNumber $maxRampP95Ms 2))
+Add-TableRow @("Worst observed p99 ms", (Format-NullableNumber $maxRampP99Ms 2))
+Add-TableRow @("Worst observed error rate", (Format-NullableNumber $maxRampErrorRate 4))
+Add-TableRow @("Jobs/sec accepted", (Format-NullableNumber $jobsAcceptedPerSec 2))
+Add-TableRow @("Jobs/sec completed", (Format-NullableNumber $jobsCompletedPerSec 2))
+Add-TableRow @("Worker reference workload", $(if ([string]::IsNullOrWhiteSpace($workerWorkloadName)) { "-" } else { $workerWorkloadName }))
+Add-TableRow @("Redis bottleneck", $redisBottleneck)
+Add-TableRow @("Postgres bottleneck", $postgresBottleneck)
+Add-TableRow @("CPU/RAM limit", $cpuRamLimit)
+Add-TableRow @("DLQ count", $(if ($null -ne $capacitySummary["dlq_count"]) { [string]$capacitySummary["dlq_count"] } else { "-" }))
+Add-TableRow @("Retry count", "not collected")
+Add-Line ""
+Add-Line "Source summaries:"
+Add-Line ""
+Add-Line "- RPS ramp: $(if ([string]::IsNullOrWhiteSpace($rpsRampSummaryPath)) { 'not found' } else { $rpsRampSummaryPath })"
+Add-Line "- Worker capacity: $(if ([string]::IsNullOrWhiteSpace($workerCapacitySummaryPath)) { 'not found' } else { $workerCapacitySummaryPath })"
+Add-Line "- Billing load: $(if ([string]::IsNullOrWhiteSpace($billingLoadSummaryPath)) { 'not found' } else { $billingLoadSummaryPath })"
 
 Add-Line ""
 Add-Line "## k6 HTTP Summary"
@@ -862,6 +1259,45 @@ foreach ($decision in $script:ScalingDecisions) {
 $reportPath = Join-Path $ReportDir "loadtest-report.md"
 $script:ReportLines | Set-Content -LiteralPath $reportPath -Encoding UTF8
 
+$decisionPath = Join-Path $ReportDir "loadtest-decisions.md"
+$decisionLines = New-Object System.Collections.Generic.List[string]
+$decisionLines.Add("# Load Test Decisions")
+$decisionLines.Add("")
+$decisionLines.Add("- Generated: $(Get-Date -Format o)")
+$decisionLines.Add("- Report: $reportPath")
+$decisionLines.Add("- Environment: $appEnv")
+$decisionLines.Add("- Safety: decisions are based on mock/loadtest artifacts only; no real provider capacity is inferred.")
+$decisionLines.Add("")
+$decisionLines.Add("## Capacity Result")
+$decisionLines.Add("")
+$decisionLines.Add("| Metric | Value |")
+$decisionLines.Add("|---|---:|")
+$decisionLines.Add("| Maximum stable RPS | $(Format-NullableNumber $maxStableRps 2) |")
+$decisionLines.Add("| Jobs/sec accepted | $(Format-NullableNumber $jobsAcceptedPerSec 2) |")
+$decisionLines.Add("| Jobs/sec completed | $(Format-NullableNumber $jobsCompletedPerSec 2) |")
+$decisionLines.Add("| First bottleneck | $firstBottleneck |")
+$decisionLines.Add("| Redis bottleneck | $redisBottleneck |")
+$decisionLines.Add("| Postgres bottleneck | $postgresBottleneck |")
+$decisionLines.Add("| CPU/RAM limit | $cpuRamLimit |")
+$decisionLines.Add("")
+$decisionLines.Add("## Decisions")
+$decisionLines.Add("")
+$decisionLines.Add("| Area | Decision | Reason |")
+$decisionLines.Add("|---|---|---|")
+foreach ($decision in $script:ScalingDecisions) {
+    $area = ([string]$decision.area) -replace "\|", "\\|"
+    $decisionText = ([string]$decision.decision) -replace "\|", "\\|"
+    $reason = ([string]$decision.reason) -replace "\|", "\\|"
+    $decisionLines.Add("| $area | $decisionText | $reason |")
+}
+$decisionLines.Add("")
+$decisionLines.Add("## Required Follow-Up")
+$decisionLines.Add("")
+$decisionLines.Add("- Rerun with longer sustained steps before promising production limits.")
+$decisionLines.Add("- Do not use this mock report to infer real AI, VK delivery or YooKassa provider quotas.")
+$decisionLines.Add("- If a bottleneck appears, fix that component and rerun the same scenario before changing unrelated infrastructure.")
+$decisionLines | Set-Content -LiteralPath $decisionPath -Encoding UTF8
+
 $scalingDecisionsArray = @()
 foreach ($decision in $script:ScalingDecisions) {
     $scalingDecisionsArray += [PSCustomObject]@{
@@ -876,7 +1312,9 @@ $summaryObject["generated_at"] = (Get-Date -Format o)
 $summaryObject["app_env"] = $appEnv
 $summaryObject["target"] = $BaseUrl
 $summaryObject["report_path"] = $reportPath
+$summaryObject["decision_path"] = $decisionPath
 $summaryObject["first_bottleneck_candidate"] = $firstBottleneck
+$summaryObject["capacity"] = $capacitySummary
 $summaryObject["findings"] = [object[]]$findingsArray
 $summaryObject["k6"] = [object[]]$k6RowsArray
 $summaryObject["redis"] = $redisSnapshot

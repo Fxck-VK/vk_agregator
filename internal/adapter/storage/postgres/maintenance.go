@@ -254,6 +254,43 @@ const refreshDailyRevenueStatsSQL = `
 		credits_sold = EXCLUDED.credits_sold,
 		updated_at = now()`
 
+const refreshDailyDLQStatsSQL = `
+	INSERT INTO daily_dlq_stats (
+		activity_date,
+		surface,
+		operation_type,
+		modality,
+		job_status,
+		error_class,
+		retryable_count,
+		terminal_count,
+		latest_failure_at,
+		updated_at
+	)
+	SELECT
+		date_trunc('day', COALESCE(j.updated_at, j.created_at))::date AS activity_date,
+		COALESCE(NULLIF(j.source, ''), 'unknown') AS surface,
+		COALESCE(NULLIF(j.operation_type::text, ''), 'unknown') AS operation_type,
+		COALESCE(NULLIF(j.modality::text, ''), 'unknown') AS modality,
+		COALESCE(NULLIF(j.status::text, ''), 'unknown') AS job_status,
+		COALESCE(NULLIF(j.error_code, ''), 'unknown') AS error_class,
+		(COUNT(*) FILTER (WHERE j.status = 'failed_retryable'))::bigint AS retryable_count,
+		(COUNT(*) FILTER (WHERE j.status IN ('failed_terminal', 'provider_failed')))::bigint AS terminal_count,
+		MAX(COALESCE(j.updated_at, j.created_at)) AS latest_failure_at,
+		now()
+	FROM jobs j
+	WHERE COALESCE(j.updated_at, j.created_at) >= $1
+	  AND COALESCE(j.updated_at, j.created_at) < $2
+	  AND j.deleted_at IS NULL
+	  AND j.status IN ('failed_retryable', 'failed_terminal', 'provider_failed')
+	GROUP BY 1, 2, 3, 4, 5, 6
+	ON CONFLICT (activity_date, surface, operation_type, modality, job_status, error_class)
+	DO UPDATE SET
+		retryable_count = EXCLUDED.retryable_count,
+		terminal_count = EXCLUDED.terminal_count,
+		latest_failure_at = EXCLUDED.latest_failure_at,
+		updated_at = now()`
+
 const refreshDailyReferralStatsSQL = `
 	INSERT INTO daily_referral_stats (
 		activity_date,
@@ -563,6 +600,7 @@ func (r *MaintenanceRepository) RefreshDailyAnalyticsAggregates(ctx context.Cont
 		refreshDailyGenerationStatsSQL,
 		refreshDailyProviderStatsSQL,
 		refreshDailyRevenueStatsSQL,
+		refreshDailyDLQStatsSQL,
 		refreshDailyReferralStatsSQL,
 		refreshDailyRetentionStatsSQL,
 		refreshDailyFunnelStatsSQL,
@@ -1503,6 +1541,7 @@ func (r *MaintenanceRepository) AnalyticsAggregationStatus(ctx context.Context) 
 		"daily_generation_stats",
 		"daily_provider_stats",
 		"daily_revenue_stats",
+		"daily_dlq_stats",
 		"daily_referral_stats",
 		"daily_retention_stats",
 		"daily_funnel_stats",

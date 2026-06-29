@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { OperatorPaymentIntentDTO } from "../api/payments";
-import { paymentActionEnabled, paymentActionPath } from "./PaymentsScreen";
+import { operatorPaymentsPath, paymentActionEnabled, paymentActionPath } from "./PaymentsScreen";
 
 function intent(overrides: Partial<OperatorPaymentIntentDTO> = {}): OperatorPaymentIntentDTO {
   return {
@@ -24,6 +24,24 @@ function intent(overrides: Partial<OperatorPaymentIntentDTO> = {}): OperatorPaym
 }
 
 describe("payment operator action helpers", () => {
+  it("builds safe lookup filters for payment console search", () => {
+    const path = operatorPaymentsPath({
+      intentId: " 6fd16aaf-c70b-4f0f-bad4-ea0f9af5c2a6 ",
+      status: "succeeded",
+      provider: "yookassa",
+      providerPaymentId: " pay_2abc+provider/ref ",
+      userId: " 361969a2-0569-438a-af3b-d4adf1e76e7d ",
+      staleAfterSeconds: "120",
+    });
+
+    expect(path).toContain("intent_id=6fd16aaf-c70b-4f0f-bad4-ea0f9af5c2a6");
+    expect(path).toContain("provider_payment_id=pay_2abc%2Bprovider%2Fref");
+    expect(path).toContain("user_id=361969a2-0569-438a-af3b-d4adf1e76e7d");
+    expect(path).toContain("provider=yookassa");
+    expect(path).toContain("status=succeeded");
+    expect(path).toContain("stale_after=120s");
+  });
+
   it("uses the opaque action ref in mutation paths", () => {
     const path = paymentActionPath("opact_v1_opaque/action+ref", "refund");
 
