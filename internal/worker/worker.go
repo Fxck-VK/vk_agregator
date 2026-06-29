@@ -945,7 +945,7 @@ type TextContext interface {
 	Complete(ctx context.Context, job *domain.Job, conversationID uuid.UUID, answer string) error
 }
 
-// AssistantFacts renders public NeuroHub product facts for text prompts.
+// AssistantFacts renders public НейроХаб catalog facts for text prompts.
 type AssistantFacts interface {
 	Build(ctx context.Context, in assistantfacts.Input) (assistantfacts.Facts, error)
 }
@@ -1004,7 +1004,7 @@ type Deps struct {
 	// TextContext, when set, stores VK text dialog history and renders compact
 	// provider prompts for text jobs.
 	TextContext TextContext
-	// AssistantFacts, when set, prepends backend-owned public NeuroHub catalog
+	// AssistantFacts, when set, prepends backend-owned public НейроХаб catalog
 	// facts to product-aware text prompts without storing those facts in
 	// conversation history.
 	AssistantFacts AssistantFacts
