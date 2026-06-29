@@ -117,10 +117,11 @@ expect_failure \
   bash "${script}" --dev "${valid_dev}" --prod "${missing_prod}" --dev-template "${dev_template}" --prod-template "${prod_contract}"
 
 missing_contract="${tmpdir}/missing-contract.prod.env"
-grep -v '^YOOKASSA_SECRET_KEY=' "${valid_prod}" > "${missing_contract}"
-expect_failure \
-  "PROD contract key missing" \
-  bash "${script}" --dev "${valid_dev}" --prod "${missing_contract}" --dev-template "${dev_template}" --prod-template "${prod_contract}"
+grep -v '^BACKUP_DIR=' "${valid_prod}" > "${missing_contract}"
+contract_log="$(bash "${script}" --dev "${valid_dev}" --prod "${missing_contract}" --dev-template "${dev_template}" --prod-template "${prod_contract}" 2>&1)"
+assert_contains "${contract_log}" "Missing in PROD from production template (non-blocking)" "contract parity log"
+assert_contains "${contract_log}" "- BACKUP_DIR" "contract parity log"
+assert_contains "${contract_log}" "Env parity check passed" "contract parity log"
 
 bad_log="$(bash "${script}" --dev "${valid_dev}" --prod "${missing_prod}" --dev-template "${dev_template}" --prod-template "${prod_contract}" 2>&1 || true)"
 assert_not_contains "${bad_log}" "dev-secret" "failing parity log"
