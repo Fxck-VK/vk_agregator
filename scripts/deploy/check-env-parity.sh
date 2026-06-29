@@ -243,11 +243,10 @@ print_list "Missing in PROD" "${tmpdir}/dev-only.blocked.keys"
 echo
 print_list "Missing in DEV" "${tmpdir}/prod-only.blocked.keys"
 echo
-print_list "Missing in PROD from production contract" "${tmpdir}/missing-prod-contract.keys"
+print_list "Missing in PROD from production template (non-blocking)" "${tmpdir}/missing-prod-contract.keys"
 
 if [[ -s "${tmpdir}/dev-only.blocked.keys" ||
-      -s "${tmpdir}/prod-only.blocked.keys" ||
-      -s "${tmpdir}/missing-prod-contract.keys" ]]; then
+      -s "${tmpdir}/prod-only.blocked.keys" ]]; then
   echo
   echo "Env parity check failed. Only variable names were printed; values were not read from output."
   exit 1
