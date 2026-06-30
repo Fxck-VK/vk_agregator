@@ -7,29 +7,30 @@ import (
 	"strings"
 
 	"vk-ai-aggregator/internal/domain"
+	"vk-ai-aggregator/internal/service/providermodels"
 )
 
 const (
-	MiniAppChatModelID   = "chatgpt"
+	MiniAppChatModelID   = providermodels.PublicTextChatGPT
 	MiniAppChatModelName = "NeiroHub Chat"
 
-	MiniAppImageNanoBananaPro   = "nano_banana_pro"
-	MiniAppImageGPTImage2       = "gpt_image_2"
+	MiniAppImageNanoBananaPro   = providermodels.PublicImageNanoBananaPro
+	MiniAppImageGPTImage2       = providermodels.PublicImageGPTImage2
 	MiniAppImageNanoBananaFlash = "nano_banana_flash"
-	MiniAppImageNanoBanana2     = "nano_banana_2"
+	MiniAppImageNanoBanana2     = providermodels.PublicImageNanoBanana2
 	MiniAppImageSeedream45      = "seedream_4_5"
 	MiniAppImageSDXLTurbo       = "sdxl_turbo"
-	MiniAppImageMock            = "mock_image"
+	MiniAppImageMock            = providermodels.LoadTestImageMock
 	MiniAppVideoKling           = "kling"
 
 	VKVideoPrunaAI = "prunaai"
 
-	ModelCodePoYoNanoBanana2 = "nano-banana-2"
-	ModelCodeGemini3ProImage = "gemini-3-pro-image-preview"
-	ModelCodeGPTImage2       = "gpt-image-2"
+	ModelCodePoYoNanoBanana2 = providermodels.ProviderModelPoYoNanoBanana2
+	ModelCodeGemini3ProImage = providermodels.ProviderModelGemini3ProImage
+	ModelCodeGPTImage2       = providermodels.ProviderModelGPTImage2
 	ModelCodeSeedream45      = "ByteDance/Seedream-4.5"
 	ModelCodeSDXLTurbo       = "stabilityai/sdxl-turbo"
-	ModelCodeMockImage       = "mock-image"
+	ModelCodeMockImage       = providermodels.ProviderModelMockImage
 	ModelCodePVideo          = "PrunaAI/p-video"
 
 	ImageQuality1K = "1K"
@@ -50,83 +51,10 @@ type Model struct {
 	MaxReferenceImages     int
 }
 
-var miniAppModels = map[domain.OperationType]map[string]Model{
-	domain.OperationTextGenerate: {
-		MiniAppChatModelID: {
-			ModelID:   MiniAppChatModelID,
-			ModelName: MiniAppChatModelName,
-		},
-		MiniAppChatModelName: {
-			ModelID:   MiniAppChatModelID,
-			ModelName: MiniAppChatModelName,
-		},
-		"deepseek-v4-flash": {
-			ModelID:   MiniAppChatModelID,
-			ModelName: MiniAppChatModelName,
-		},
-		"deepseek-ai/DeepSeek-V4-Flash": {
-			ModelID:   MiniAppChatModelID,
-			ModelName: MiniAppChatModelName,
-		},
-	},
-	domain.OperationImageGenerate: {
-		MiniAppImageNanoBanana2: {
-			ModelID:                MiniAppImageNanoBanana2,
-			ModelName:              "Nano Banana 2",
-			Provider:               domain.ProviderPoYo,
-			ModelCode:              ModelCodePoYoNanoBanana2,
-			ExposeID:               true,
-			SupportsReferenceImage: true,
-			MaxReferenceImages:     4,
-		},
-		MiniAppImageNanoBananaPro: {
-			ModelID:                MiniAppImageNanoBananaPro,
-			ModelName:              "Nano Banana Pro",
-			Provider:               domain.ProviderAPIMart,
-			ModelCode:              ModelCodeGemini3ProImage,
-			ExposeID:               true,
-			SupportsReferenceImage: true,
-			MaxReferenceImages:     14,
-		},
-		MiniAppImageGPTImage2: {
-			ModelID:                MiniAppImageGPTImage2,
-			ModelName:              "GPT Image 2",
-			Provider:               domain.ProviderAPIMart,
-			ModelCode:              ModelCodeGPTImage2,
-			ExposeID:               true,
-			SupportsReferenceImage: true,
-			MaxReferenceImages:     16,
-		},
-		MiniAppImageMock: {
-			ModelID:   MiniAppImageMock,
-			ModelName: "Mock Image Loadtest",
-			Provider:  domain.ProviderMock,
-			ModelCode: ModelCodeMockImage,
-			ExposeID:  true,
-		},
-		"kandinsky": {
-			ModelID:                MiniAppImageNanoBananaPro,
-			ModelName:              "Nano Banana Pro",
-			Provider:               domain.ProviderAPIMart,
-			ModelCode:              ModelCodeGemini3ProImage,
-			ExposeID:               true,
-			SupportsReferenceImage: true,
-			MaxReferenceImages:     14,
-		},
-	},
-	domain.OperationVideoGenerate: {},
-}
-
 var miniAppDefaultModel = map[domain.OperationType]string{
 	domain.OperationTextGenerate:  MiniAppChatModelID,
 	domain.OperationImageGenerate: MiniAppImageNanoBananaPro,
 	domain.OperationVideoGenerate: "",
-}
-
-var miniAppModelOrder = map[domain.OperationType][]string{
-	domain.OperationTextGenerate:  {MiniAppChatModelID},
-	domain.OperationImageGenerate: {MiniAppImageNanoBanana2, MiniAppImageNanoBananaPro, MiniAppImageGPTImage2, MiniAppImageMock},
-	domain.OperationVideoGenerate: {},
 }
 
 var vkVideoModels = map[string]Model{}
@@ -136,10 +64,7 @@ func ResolveMiniAppModel(op domain.OperationType, raw string) (Model, bool) {
 	if modelID == "" {
 		modelID = miniAppDefaultModel[op]
 	}
-	models, ok := miniAppModels[op]
-	if !ok {
-		return Model{}, false
-	}
+	models := miniAppModels(op)
 	model, ok := models[modelID]
 	return model, ok
 }
@@ -172,13 +97,15 @@ func ApplyImageQuality(model Model, quality string) Model {
 }
 
 func ListMiniAppModels(op domain.OperationType) []Model {
-	models, ok := miniAppModels[op]
-	if !ok {
+	ordered := orderedMiniAppModels(op)
+	if len(ordered) == 0 {
 		return nil
 	}
-	out := make([]Model, 0, len(models))
+	models := miniAppModels(op)
+	out := make([]Model, 0, len(ordered)+len(models))
 	seen := map[string]struct{}{}
-	for _, modelID := range miniAppModelOrder[op] {
+	for _, orderedModel := range ordered {
+		modelID := orderedModel.ModelID
 		model, ok := models[modelID]
 		if !ok {
 			continue
@@ -200,4 +127,81 @@ func ResolveVKVideoModel(raw string) (Model, bool) {
 	modelID := strings.TrimSpace(raw)
 	model, ok := vkVideoModels[modelID]
 	return model, ok
+}
+
+func miniAppModels(op domain.OperationType) map[string]Model {
+	switch op {
+	case domain.OperationTextGenerate:
+		return miniAppTextModels()
+	case domain.OperationImageGenerate:
+		return miniAppImageModels()
+	default:
+		return map[string]Model{}
+	}
+}
+
+func orderedMiniAppModels(op domain.OperationType) []Model {
+	switch op {
+	case domain.OperationTextGenerate:
+		if model, ok := miniAppTextModels()[MiniAppChatModelID]; ok {
+			return []Model{model}
+		}
+	case domain.OperationImageGenerate:
+		registry := providermodels.StaticRegistry()
+		models := make([]Model, 0, len(registry.PublicImageModels())+len(registry.LoadTestImageModels))
+		for _, registryModel := range registry.PublicImageModels() {
+			models = append(models, modelFromRegistryImage(registryModel))
+		}
+		for _, registryModel := range registry.LoadTestImageModels {
+			models = append(models, modelFromRegistryImage(registryModel))
+		}
+		return models
+	}
+	return nil
+}
+
+func miniAppTextModels() map[string]Model {
+	models := map[string]Model{}
+	for _, alias := range providermodels.StaticRegistry().TextAliasModels() {
+		model := Model{
+			ModelID:   alias.PublicID,
+			ModelName: alias.DisplayName,
+		}
+		models[alias.PublicID] = model
+		models[alias.DisplayName] = model
+		models[alias.ProviderModelID] = model
+	}
+	if model, ok := models[MiniAppChatModelID]; ok {
+		models["deepseek-v4-flash"] = model
+	}
+	return models
+}
+
+func miniAppImageModels() map[string]Model {
+	registry := providermodels.StaticRegistry()
+	models := map[string]Model{}
+	for _, registryModel := range registry.PublicImageModels() {
+		model := modelFromRegistryImage(registryModel)
+		models[model.ModelID] = model
+	}
+	for _, registryModel := range registry.LoadTestImageModels {
+		model := modelFromRegistryImage(registryModel)
+		models[model.ModelID] = model
+	}
+	if model, ok := models[MiniAppImageNanoBananaPro]; ok {
+		models["kandinsky"] = model
+	}
+	return models
+}
+
+func modelFromRegistryImage(registryModel providermodels.ImageModel) Model {
+	return Model{
+		ModelID:                registryModel.PublicID,
+		ModelName:              registryModel.DisplayName,
+		Provider:               registryModel.Provider,
+		ModelCode:              registryModel.ProviderModelID,
+		ExposeID:               true,
+		SupportsReferenceImage: registryModel.Limits.SupportsReferenceImage,
+		MaxReferenceImages:     registryModel.Limits.MaxReferenceImages,
+	}
 }

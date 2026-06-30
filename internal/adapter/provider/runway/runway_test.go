@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 
+	providertest "vk-ai-aggregator/internal/adapter/provider/providertest"
 	"vk-ai-aggregator/internal/domain"
 )
 
@@ -29,6 +30,15 @@ func TestRunwayRatioMapsSupportedAspectRatios(t *testing.T) {
 			t.Fatalf("runwayRatio(%q) = %q, want %q", aspect, got, want)
 		}
 	}
+}
+
+func TestCapabilitiesAdvertiseGen4TurboVideo(t *testing.T) {
+	provider := New(Config{APISecret: "test-secret"})
+	caps, err := provider.Capabilities(context.Background())
+	if err != nil {
+		t.Fatalf("capabilities: %v", err)
+	}
+	providertest.RequireCapability(t, caps, domain.OperationVideoGenerate, domain.ModalityVideo, ModelGen4Turbo)
 }
 
 func TestSubmitGen4TurboSuccessAndIdempotency(t *testing.T) {

@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 
+	providertest "vk-ai-aggregator/internal/adapter/provider/providertest"
 	"vk-ai-aggregator/internal/domain"
 )
 
@@ -81,6 +82,62 @@ func TestSubmitPollTextSuccess(t *testing.T) {
 	if string(decoded) != "DeepSeek answer" {
 		t.Fatalf("output = %q", decoded)
 	}
+}
+
+func TestSubmitTextIdempotencyContract(t *testing.T) {
+	var calls int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if got := r.Header.Get("Idempotency-Key"); got != "provider_submit:text:same" {
+			t.Fatalf("idempotency header = %q", got)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"chatcmpl_` + uuid.NewString() + `","choices":[{"message":{"role":"assistant","content":"ok"}}]}`))
+	}))
+	defer srv.Close()
+
+	p := New(Config{APIKey: "test-key", BaseURL: srv.URL, HTTPClient: srv.Client()})
+	req := domain.ProviderRequest{
+		JobID:          uuid.New(),
+		Operation:      domain.OperationTextGenerate,
+		Modality:       domain.ModalityText,
+		Prompt:         "hello",
+		IdempotencyKey: "provider_submit:text:same",
+	}
+	first, err := p.Submit(context.Background(), req)
+	if err != nil {
+		t.Fatalf("first submit: %v", err)
+	}
+	second, err := p.Submit(context.Background(), req)
+	if err != nil {
+		t.Fatalf("second submit: %v", err)
+	}
+	if calls != 1 {
+		t.Fatalf("idempotent submit called provider %d times, want 1", calls)
+	}
+	if first.ExternalID != second.ExternalID {
+		t.Fatalf("idempotent external id mismatch: %q vs %q", first.ExternalID, second.ExternalID)
+	}
+}
+
+func TestSubmitHTTPErrorDoesNotLeakSecretFixture(t *testing.T) {
+	const fakeSecret = "deepinfra-secret-fixture"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte(`{"error":{"message":"invalid token ` + fakeSecret + `"}}`))
+	}))
+	defer srv.Close()
+
+	p := New(Config{APIKey: fakeSecret, BaseURL: srv.URL, HTTPClient: srv.Client()})
+	_, err := p.Submit(context.Background(), domain.ProviderRequest{
+		JobID:     uuid.New(),
+		Operation: domain.OperationTextGenerate,
+		Modality:  domain.ModalityText,
+		Prompt:    "hello",
+	})
+	providertest.RequireErrorClass(t, err, domain.ProviderErrAuthFailed)
+	providertest.RequireErrorDoesNotContain(t, err, fakeSecret)
 }
 
 func TestSubmitUsesExplicitModelCode(t *testing.T) {

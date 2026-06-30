@@ -2,12 +2,13 @@ package productcatalog
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 
 	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/platform/config"
-	"vk-ai-aggregator/internal/service/modelcatalog"
 	"vk-ai-aggregator/internal/service/pricingcatalog"
+	"vk-ai-aggregator/internal/service/providermodels"
 	"vk-ai-aggregator/internal/service/videorouter"
 )
 
@@ -25,6 +26,9 @@ type RuntimeCatalog struct {
 func FromConfig(cfg config.Config, pricingCatalog *pricingcatalog.Catalog) (RuntimeCatalog, error) {
 	if pricingCatalog == nil {
 		return RuntimeCatalog{}, errors.New("productcatalog: pricing catalog is required")
+	}
+	if err := validateRegistryConfigMappings(providermodels.StaticRegistry()); err != nil {
+		return RuntimeCatalog{}, err
 	}
 	videoCatalog, err := VideoRouteCatalogFromConfig(cfg)
 	var publicVideoRoutes []videorouter.PublicRoute
@@ -46,43 +50,23 @@ func FromConfig(cfg config.Config, pricingCatalog *pricingcatalog.Catalog) (Runt
 }
 
 func VideoRouteCatalogFromConfig(cfg config.Config) (*videorouter.Catalog, error) {
+	registry := providermodels.StaticRegistry()
+	if err := validateRegistryConfigMappings(registry); err != nil {
+		return nil, err
+	}
+	providers := make(map[domain.ProviderName]videorouter.ProviderConfig)
+	enabledRoutes := make(map[domain.VideoRouteAlias]bool)
+	for _, route := range registry.VideoRoutes() {
+		enabledRoutes[route.Alias] = featureFlagEnabled(cfg, route.FeatureFlag)
+		if _, ok := providers[route.Provider]; ok {
+			continue
+		}
+		providers[route.Provider] = videoProviderConfigFromRegistry(cfg, route)
+	}
 	return videorouter.NewCatalog(videorouter.Config{
-		RouterEnabled: cfg.FeatureVideoRouterEnabled,
-		Providers: map[domain.ProviderName]videorouter.ProviderConfig{
-			domain.ProviderAPIMart: {
-				Enabled:           cfg.APIMartProviderEnabled,
-				RequireAPIKey:     true,
-				APIKeyConfigured:  strings.TrimSpace(cfg.APIMartAPIKey) != "",
-				RequireBaseURL:    true,
-				BaseURLConfigured: strings.TrimSpace(cfg.APIMartBaseURL) != "",
-			},
-			domain.ProviderPoYo: {
-				Enabled:           cfg.PoYoProviderEnabled,
-				RequireAPIKey:     true,
-				APIKeyConfigured:  strings.TrimSpace(cfg.PoYoAPIKey) != "",
-				RequireBaseURL:    true,
-				BaseURLConfigured: strings.TrimSpace(cfg.PoYoBaseURL) != "",
-			},
-			domain.ProviderRunway: {
-				Enabled:           cfg.RunwayProviderEnabled,
-				RequireAPIKey:     true,
-				APIKeyConfigured:  strings.TrimSpace(cfg.RunwayMLAPISecret) != "",
-				RequireBaseURL:    true,
-				BaseURLConfigured: strings.TrimSpace(cfg.RunwayMLBaseURL) != "",
-			},
-			domain.ProviderMock: {
-				Enabled: mockVideoProviderReadyFromConfig(cfg),
-			},
-		},
-		EnabledRoutes: map[domain.VideoRouteAlias]bool{
-			domain.VideoRouteHailuo23Fast:     cfg.FeatureVideoRouteHailuo23FastEnabled,
-			domain.VideoRouteHailuo23Standard: cfg.FeatureVideoRouteHailuo23StandardEnabled,
-			domain.VideoRouteKlingO3Standard:  cfg.FeatureVideoRouteKlingO3StandardEnabled,
-			domain.VideoRouteRunwayGen4Turbo:  cfg.FeatureVideoRouteRunwayGen4TurboEnabled,
-			domain.VideoRouteSeedance20Fast:   cfg.FeatureVideoRouteSeedance20FastEnabled,
-			domain.VideoRouteRunwayGen45:      cfg.FeatureVideoRouteRunwayGen45Enabled,
-			domain.VideoRouteMockTextToVideo:  cfg.FeatureVideoRouteMockTextToVideoEnabled,
-		},
+		RouterEnabled: featureFlagEnabled(cfg, providermodels.FeatureVideoRouter),
+		Providers:     providers,
+		EnabledRoutes: enabledRoutes,
 	})
 }
 
@@ -101,32 +85,31 @@ func (r RuntimeCatalog) VideoRoutes() []VideoRoute {
 }
 
 func imageProviderReadyFromConfig(cfg config.Config) map[domain.ProviderName]bool {
-	return map[domain.ProviderName]bool{
-		domain.ProviderAPIMart: apimartReadyFromConfig(cfg),
-		domain.ProviderPoYo:    poyoReadyFromConfig(cfg),
-		domain.ProviderMock:    mockImageProviderReadyFromConfig(cfg),
+	registry := providermodels.StaticRegistry()
+	ready := make(map[domain.ProviderName]bool)
+	for _, model := range registry.PublicImageModels() {
+		ready[model.Provider] = ready[model.Provider] || providerReadyFromReadiness(cfg, model.Readiness)
 	}
+	for _, model := range registry.LoadTestImageModels {
+		if model.Provider == domain.ProviderMock {
+			ready[model.Provider] = ready[model.Provider] || mockImageProviderReadyFromConfig(cfg)
+			continue
+		}
+		ready[model.Provider] = ready[model.Provider] || providerReadyFromReadiness(cfg, model.Readiness)
+	}
+	return ready
 }
 
 func enabledImageModelsFromConfig(cfg config.Config) map[string]bool {
-	return map[string]bool{
-		modelcatalog.MiniAppImageNanoBanana2:   cfg.FeatureImageModelNanoBanana2Enabled,
-		modelcatalog.MiniAppImageNanoBananaPro: cfg.FeatureImageModelNanoBananaProEnabled,
-		modelcatalog.MiniAppImageGPTImage2:     cfg.FeatureImageModelGPTImage2Enabled,
-		modelcatalog.MiniAppImageMock:          cfg.FeatureImageModelMockEnabled,
+	registry := providermodels.StaticRegistry()
+	enabled := make(map[string]bool)
+	for _, model := range registry.PublicImageModels() {
+		enabled[model.PublicID] = featureFlagEnabled(cfg, model.FeatureFlag)
 	}
-}
-
-func apimartReadyFromConfig(cfg config.Config) bool {
-	return cfg.APIMartProviderEnabled &&
-		strings.TrimSpace(cfg.APIMartAPIKey) != "" &&
-		strings.TrimSpace(cfg.APIMartBaseURL) != ""
-}
-
-func poyoReadyFromConfig(cfg config.Config) bool {
-	return cfg.PoYoProviderEnabled &&
-		strings.TrimSpace(cfg.PoYoAPIKey) != "" &&
-		strings.TrimSpace(cfg.PoYoBaseURL) != ""
+	for _, model := range registry.LoadTestImageModels {
+		enabled[model.PublicID] = featureFlagEnabled(cfg, model.FeatureFlag)
+	}
+	return enabled
 }
 
 func mockVideoProviderReadyFromConfig(cfg config.Config) bool {
@@ -157,6 +140,205 @@ func mockImageProviderReadyFromConfig(cfg config.Config) bool {
 		}
 	}
 	return true
+}
+
+func videoProviderConfigFromRegistry(cfg config.Config, route providermodels.VideoRoute) videorouter.ProviderConfig {
+	if route.Readiness.LoadTestOnly && route.Provider == domain.ProviderMock {
+		return videorouter.ProviderConfig{Enabled: mockVideoProviderReadyFromConfig(cfg)}
+	}
+	apiKeyConfigured := requiredConfigGroupConfigured(cfg, route.Readiness.RequiredConfigKeys, configKeyIsAPIKey)
+	baseURLConfigured := requiredConfigGroupConfigured(cfg, route.Readiness.RequiredConfigKeys, configKeyIsBaseURL)
+	return videorouter.ProviderConfig{
+		Enabled:           providerEnabledFromFlag(cfg, route.Readiness.ProviderEnabledFlag),
+		RequireAPIKey:     requiredConfigGroupPresent(route.Readiness.RequiredConfigKeys, configKeyIsAPIKey),
+		APIKeyConfigured:  apiKeyConfigured,
+		RequireBaseURL:    requiredConfigGroupPresent(route.Readiness.RequiredConfigKeys, configKeyIsBaseURL),
+		BaseURLConfigured: baseURLConfigured,
+	}
+}
+
+func providerReadyFromReadiness(cfg config.Config, readiness providermodels.ProviderReadiness) bool {
+	if readiness.LoadTestOnly {
+		return false
+	}
+	if !providerEnabledFromFlag(cfg, readiness.ProviderEnabledFlag) {
+		return false
+	}
+	for _, key := range readiness.RequiredConfigKeys {
+		if strings.TrimSpace(configValueByKey(cfg, key)) == "" {
+			return false
+		}
+	}
+	return true
+}
+
+func providerEnabledFromFlag(cfg config.Config, flag string) bool {
+	enabled, ok := providerFlagValue(cfg, flag)
+	return ok && enabled
+}
+
+func providerFlagValue(cfg config.Config, flag string) (bool, bool) {
+	switch flag {
+	case providermodels.ProviderFlagAPIMart:
+		return cfg.APIMartProviderEnabled, true
+	case providermodels.ProviderFlagPoYo:
+		return cfg.PoYoProviderEnabled, true
+	case providermodels.ProviderFlagRunway:
+		return cfg.RunwayProviderEnabled, true
+	default:
+		return false, false
+	}
+}
+
+func featureFlagEnabled(cfg config.Config, flag string) bool {
+	enabled, ok := featureFlagValue(cfg, flag)
+	return ok && enabled
+}
+
+func featureFlagValue(cfg config.Config, flag string) (bool, bool) {
+	switch flag {
+	case providermodels.FeatureImageNanoBanana2:
+		return cfg.FeatureImageModelNanoBanana2Enabled, true
+	case providermodels.FeatureImageNanoBananaPro:
+		return cfg.FeatureImageModelNanoBananaProEnabled, true
+	case providermodels.FeatureImageGPTImage2:
+		return cfg.FeatureImageModelGPTImage2Enabled, true
+	case providermodels.FeatureImageMock:
+		return cfg.FeatureImageModelMockEnabled, true
+	case providermodels.FeatureVideoRouter:
+		return cfg.FeatureVideoRouterEnabled, true
+	case providermodels.FeatureVideoHailuo23Fast:
+		return cfg.FeatureVideoRouteHailuo23FastEnabled, true
+	case providermodels.FeatureVideoHailuo23Standard:
+		return cfg.FeatureVideoRouteHailuo23StandardEnabled, true
+	case providermodels.FeatureVideoKlingO3Standard:
+		return cfg.FeatureVideoRouteKlingO3StandardEnabled, true
+	case providermodels.FeatureVideoRunwayGen4Turbo:
+		return cfg.FeatureVideoRouteRunwayGen4TurboEnabled, true
+	case providermodels.FeatureVideoSeedance20Fast:
+		return cfg.FeatureVideoRouteSeedance20FastEnabled, true
+	case providermodels.FeatureVideoRunwayGen45:
+		return cfg.FeatureVideoRouteRunwayGen45Enabled, true
+	case providermodels.FeatureVideoMockTextToVideo:
+		return cfg.FeatureVideoRouteMockTextToVideoEnabled, true
+	case providermodels.FeatureVideoResellerExperiment:
+		return cfg.FeatureVideoRouteResellerExperimentsEnabled, true
+	default:
+		return false, false
+	}
+}
+
+func requiredConfigGroupPresent(keys []string, match func(string) bool) bool {
+	for _, key := range keys {
+		if match(key) {
+			return true
+		}
+	}
+	return false
+}
+
+func requiredConfigGroupConfigured(cfg config.Config, keys []string, match func(string) bool) bool {
+	hasMatch := false
+	for _, key := range keys {
+		if !match(key) {
+			continue
+		}
+		hasMatch = true
+		if strings.TrimSpace(configValueByKey(cfg, key)) == "" {
+			return false
+		}
+	}
+	return hasMatch
+}
+
+func configKeyIsAPIKey(key string) bool {
+	return strings.HasSuffix(key, "_API_KEY") || strings.HasSuffix(key, "_API_SECRET")
+}
+
+func configKeyIsBaseURL(key string) bool {
+	return strings.HasSuffix(key, "_BASE_URL")
+}
+
+func configValueByKey(cfg config.Config, key string) string {
+	value, _ := configValue(cfg, key)
+	return value
+}
+
+func configValue(cfg config.Config, key string) (string, bool) {
+	switch key {
+	case providermodels.ConfigKeyAPIMartAPIKey:
+		return cfg.APIMartAPIKey, true
+	case providermodels.ConfigKeyAPIMartBaseURL:
+		return cfg.APIMartBaseURL, true
+	case providermodels.ConfigKeyPoYoAPIKey:
+		return cfg.PoYoAPIKey, true
+	case providermodels.ConfigKeyPoYoBaseURL:
+		return cfg.PoYoBaseURL, true
+	case providermodels.ConfigKeyRunwaySecret:
+		return cfg.RunwayMLAPISecret, true
+	case providermodels.ConfigKeyRunwayBaseURL:
+		return cfg.RunwayMLBaseURL, true
+	case providermodels.ConfigKeyDeepInfraKey:
+		return cfg.DeepInfraAPIKey, true
+	case providermodels.ConfigKeyDeepInfraURL:
+		return cfg.DeepInfraBaseURL, true
+	default:
+		return "", false
+	}
+}
+
+func validateRegistryConfigMappings(registry providermodels.Registry) error {
+	var missing []string
+	requireFeatureFlag := func(scope, flag string) {
+		flag = strings.TrimSpace(flag)
+		if flag == "" {
+			return
+		}
+		if _, ok := featureFlagValue(config.Config{}, flag); !ok {
+			missing = append(missing, fmt.Sprintf("%s feature flag %q", scope, flag))
+		}
+	}
+	requireReadiness := func(scope string, readiness providermodels.ProviderReadiness) {
+		if readiness.LoadTestOnly {
+			return
+		}
+		if flag := strings.TrimSpace(readiness.ProviderEnabledFlag); flag != "" {
+			if _, ok := providerFlagValue(config.Config{}, flag); !ok {
+				missing = append(missing, fmt.Sprintf("%s provider flag %q", scope, flag))
+			}
+		}
+		for _, key := range readiness.RequiredConfigKeys {
+			key = strings.TrimSpace(key)
+			if key == "" {
+				continue
+			}
+			if _, ok := configValue(config.Config{}, key); !ok {
+				missing = append(missing, fmt.Sprintf("%s config key %q", scope, key))
+			}
+		}
+	}
+
+	for _, alias := range registry.TextAliasModels() {
+		requireFeatureFlag("text "+alias.PublicID, alias.FeatureFlag)
+		requireReadiness("text "+alias.PublicID, alias.Readiness)
+	}
+	for _, model := range registry.PublicImageModels() {
+		requireFeatureFlag("image "+model.PublicID, model.FeatureFlag)
+		requireReadiness("image "+model.PublicID, model.Readiness)
+	}
+	for _, model := range registry.LoadTestImageModels {
+		requireFeatureFlag("image "+model.PublicID, model.FeatureFlag)
+		requireReadiness("image "+model.PublicID, model.Readiness)
+	}
+	for _, route := range registry.VideoRoutes() {
+		requireFeatureFlag("video "+string(route.Alias), route.RouterFeatureFlag)
+		requireFeatureFlag("video "+string(route.Alias), route.FeatureFlag)
+		requireReadiness("video "+string(route.Alias), route.Readiness)
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf("productcatalog: provider registry config mapping missing: %s", strings.Join(missing, "; "))
+	}
+	return nil
 }
 
 func optionalProviderIsMock(provider string) bool {

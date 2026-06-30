@@ -30,6 +30,7 @@ Read only the document that matches the current task:
 | k6, loadtest contour, capacity reports | `docs/runbooks/LOAD_TESTING.md` |
 | Incidents, broken deploys, provider/payment/queue triage | `docs/runbooks/INCIDENTS.md` |
 | Rollback, backups, restore policy | `docs/runbooks/ROLLBACK.md` |
+| Provider/model registry, adapter contracts, add-provider/add-model checklist | `docs/ARCHITECTURE.md` and `docs/runbooks/DEV.md` |
 | DEV contour, local DEV tunnel, DEV deploy | `docs/DEV_CONTOUR.md` |
 | Production/runtime deployment domains | `docs/DOMAIN_DEPLOYMENT_PLAN.md` |
 | Data services, Postgres/Redis/S3 modes | `docs/DATA_SERVICES_CONTRACT.md` |
@@ -63,7 +64,7 @@ There must be only one active handoff file:
 
 | File | Status |
 | --- | --- |
-| `docs/HANDOFF_CURRENT.md` | Current handoff slot; currently `Status: none` |
+| `docs/HANDOFF_CURRENT.md` | Current handoff slot; currently active for provider API hardening |
 
 When a handoff or merge is complete, archive it under `docs/archive/handoffs/`
 and reset `docs/HANDOFF_CURRENT.md` back to `Status: none`.

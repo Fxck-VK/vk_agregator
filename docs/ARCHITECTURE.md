@@ -420,6 +420,69 @@ Where to add features:
   `internal/service`, `internal/worker`, provider/storage adapters as
   appropriate), not in a surface module.
 
+Provider API architecture:
+
+- `internal/adapter/provider/*` implements the provider adapter contract:
+  capabilities, estimate, submit, poll, cancel when supported, normalized
+  `domain.ProviderErrorClass` errors, idempotent submit behavior where the
+  adapter can guarantee it, and sanitized raw metadata.
+- `internal/service/providermodels` is the central static provider/model
+  registry. It owns public model IDs, provider model IDs, feature flags,
+  readiness requirements, route specs, request limits, active/disabled pricing
+  keys and static media contract classes. It stores config/env names only; it
+  does not read env values and does not call providers.
+- `internal/service/modelcatalog` resolves public Mini App/VK model choices
+  from the registry. Public catalogs expose public IDs and display constraints,
+  not provider names, model codes or provider model IDs.
+- `internal/service/videorouter` derives route specs from the registry and
+  rejects client-supplied provider/model fields before paid submit.
+- `internal/service/productcatalog` combines registry readiness metadata,
+  backend config and `pricingcatalog` display estimates. Pricing remains
+  backend-owned and fail-closed.
+- `cmd/worker` builds default provider media contracts from
+  `providermodels.ProviderMediaContracts` plus runtime media config. It still
+  accepts validated `config.MediaProviderContracts` as an override/extension.
+
+Add a provider:
+
+1. Implement the adapter under `internal/adapter/provider/<provider>`.
+2. Cover it with shared contract tests in
+   `internal/adapter/provider/providertest`.
+3. Normalize provider statuses and errors into domain types; keep
+   provider-native response details inside the adapter.
+4. Add readiness metadata to `providermodels` using env/config names only.
+5. Wire construction only in `cmd/worker`; API/VK/Mini App surfaces must remain
+   provider-free.
+6. Run provider tests and the provider security scans before enabling the
+   provider.
+
+Add a model or route:
+
+1. Add model/route metadata in `internal/service/providermodels`.
+2. Add pricing product keys in `pricingcatalog`, or disabled pricing keys when
+   the route must remain fail-closed.
+3. Let `modelcatalog`, `videorouter`, `productcatalog` and worker media
+   contracts derive from the registry.
+4. Add tests that prove public DTOs hide provider internals, unconfigured
+   providers fail closed, and unsafe video media fields are rejected before
+   submit.
+
+Provider security gate:
+
+```bash
+go test ./internal/adapter/provider/... ./internal/worker ./internal/service/... ./cmd/api ./cmd/worker -count=1
+go test ./... -count=1
+git diff --check
+rg -n "internal/adapter/provider" cmd/api internal/adapter/inbound internal/app -g "*.go"
+rg -n "Authorization|Bearer |OPENAI_API_KEY|DEEPINFRA_API_KEY|APIMART_API_KEY|POYO_API_KEY|RUNWAYML_API_SECRET"
+rg -n "provider_native_payload|raw provider|private artifact|prompt body|launch params"
+```
+
+Every `rg` match must be reviewed. Accept only env var names, placeholders,
+fake test literals, adapter auth-header construction and sanitizer tests. Do
+not commit secret values, prompt bodies, raw provider payloads or private media
+URLs.
+
 Forbidden shortcuts:
 
 - Do not call providers from `internal/app/*`, `cmd/api`, VK inbound handlers or

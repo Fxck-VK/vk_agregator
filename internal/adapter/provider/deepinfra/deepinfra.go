@@ -67,11 +67,12 @@ type Config struct {
 
 // Provider is the DeepInfra domain.Provider adapter.
 type Provider struct {
-	cfg   Config
-	http  *http.Client
-	mu    sync.Mutex
-	tasks map[string]taskState
-	now   func() time.Time
+	cfg        Config
+	http       *http.Client
+	mu         sync.Mutex
+	tasks      map[string]taskState
+	idempotent map[string]domain.ProviderTask
+	now        func() time.Time
 }
 
 type taskState struct {
@@ -121,10 +122,11 @@ func New(cfg Config) *Provider {
 		httpClient = &http.Client{Timeout: httpTimeout}
 	}
 	return &Provider{
-		cfg:   cfg,
-		http:  httpClient,
-		tasks: map[string]taskState{},
-		now:   time.Now,
+		cfg:        cfg,
+		http:       httpClient,
+		tasks:      map[string]taskState{},
+		idempotent: map[string]domain.ProviderTask{},
+		now:        time.Now,
 	}
 }
 
@@ -175,16 +177,31 @@ func (p *Provider) Estimate(_ context.Context, req domain.ProviderRequest) (doma
 
 // Submit calls DeepInfra and caches the sync result for Poll.
 func (p *Provider) Submit(ctx context.Context, req domain.ProviderRequest) (domain.ProviderTask, error) {
+	if req.IdempotencyKey != "" {
+		if task, ok := p.idempotentTask(req.IdempotencyKey); ok {
+			return task, nil
+		}
+	}
+	var (
+		task domain.ProviderTask
+		err  error
+	)
 	if req.Operation == domain.OperationTextGenerate && req.Modality == domain.ModalityText {
-		return p.submitText(ctx, req)
+		task, err = p.submitText(ctx, req)
+	} else if req.Operation == domain.OperationImageGenerate && req.Modality == domain.ModalityImage {
+		task, err = p.submitImage(ctx, req)
+	} else if req.Operation == domain.OperationVideoGenerate && req.Modality == domain.ModalityVideo {
+		task, err = p.submitVideo(ctx, req)
+	} else {
+		err = &Error{Class: domain.ProviderErrUnsupportedCapab, Message: string(req.Operation)}
 	}
-	if req.Operation == domain.OperationImageGenerate && req.Modality == domain.ModalityImage {
-		return p.submitImage(ctx, req)
+	if err != nil {
+		return domain.ProviderTask{}, err
 	}
-	if req.Operation == domain.OperationVideoGenerate && req.Modality == domain.ModalityVideo {
-		return p.submitVideo(ctx, req)
+	if req.IdempotencyKey != "" {
+		p.storeIdempotentTask(req.IdempotencyKey, task)
 	}
-	return domain.ProviderTask{}, &Error{Class: domain.ProviderErrUnsupportedCapab, Message: string(req.Operation)}
+	return task, nil
 }
 
 func (p *Provider) submitText(ctx context.Context, req domain.ProviderRequest) (domain.ProviderTask, error) {
@@ -322,6 +339,19 @@ func (p *Provider) Cancel(_ context.Context, _ domain.ProviderTaskRef) error { r
 func (p *Provider) store(externalID string, state taskState) {
 	p.mu.Lock()
 	p.tasks[externalID] = state
+	p.mu.Unlock()
+}
+
+func (p *Provider) idempotentTask(key string) (domain.ProviderTask, bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	task, ok := p.idempotent[key]
+	return task, ok
+}
+
+func (p *Provider) storeIdempotentTask(key string, task domain.ProviderTask) {
+	p.mu.Lock()
+	p.idempotent[key] = task
 	p.mu.Unlock()
 }
 
@@ -537,21 +567,8 @@ type apiError struct {
 }
 
 func (p *Provider) decodeError(resp *http.Response) error {
-	msg := fmt.Sprintf("deepinfra http %d", resp.StatusCode)
-	var decoded map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&decoded); err == nil {
-		switch errValue := decoded["error"].(type) {
-		case string:
-			if errValue != "" {
-				msg = errValue
-			}
-		case map[string]any:
-			if message, ok := errValue["message"].(string); ok && message != "" {
-				msg = message
-			}
-		}
-	}
-	return &Error{Class: classifyStatus(resp.StatusCode), Message: msg}
+	class := classifyStatus(resp.StatusCode)
+	return &Error{Class: class, Message: safeHTTPErrorMessage("deepinfra", class, resp.StatusCode)}
 }
 
 func classifyStatus(status int) domain.ProviderErrorClass {
@@ -575,6 +592,25 @@ func classifyStatus(status int) domain.ProviderErrorClass {
 
 func dataURL(contentType string, data []byte) string {
 	return "data:" + contentType + ";base64," + base64.StdEncoding.EncodeToString(data)
+}
+
+func safeHTTPErrorMessage(provider string, class domain.ProviderErrorClass, status int) string {
+	switch class {
+	case domain.ProviderErrAuthFailed:
+		return provider + " auth failed"
+	case domain.ProviderErrRateLimited:
+		return provider + " rate limited"
+	case domain.ProviderErrInsufficientBalance:
+		return provider + " insufficient balance"
+	case domain.ProviderErrInvalidRequest:
+		return provider + " invalid request"
+	case domain.ProviderErrTimeout:
+		return provider + " timeout"
+	case domain.ProviderErrOverloaded:
+		return provider + " overloaded"
+	default:
+		return fmt.Sprintf("%s http %d", provider, status)
+	}
 }
 
 func (p *Provider) imageFallbackModel(requestedModel, primaryModel string) string {
@@ -619,7 +655,12 @@ type Error struct {
 	Message string
 }
 
-func (e *Error) Error() string { return fmt.Sprintf("deepinfra provider: %s: %s", e.Class, e.Message) }
+func (e *Error) Error() string {
+	if e.Message == "" {
+		return "deepinfra provider: " + string(e.Class)
+	}
+	return "deepinfra provider: " + string(e.Class) + ": " + e.Message
+}
 
 // ProviderErrorClass exposes the normalized class for worker classification.
 func (e *Error) ProviderErrorClass() domain.ProviderErrorClass { return e.Class }

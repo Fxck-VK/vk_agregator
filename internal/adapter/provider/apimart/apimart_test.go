@@ -17,8 +17,21 @@ import (
 
 	"github.com/google/uuid"
 
+	providertest "vk-ai-aggregator/internal/adapter/provider/providertest"
 	"vk-ai-aggregator/internal/domain"
 )
+
+func TestCapabilitiesAdvertiseSupportedMedia(t *testing.T) {
+	p := New(Config{APIKey: "test-key"})
+	caps, err := p.Capabilities(context.Background())
+	if err != nil {
+		t.Fatalf("capabilities: %v", err)
+	}
+	providertest.RequireCapability(t, caps, domain.OperationImageGenerate, domain.ModalityImage, ModelGemini3ProImage)
+	providertest.RequireCapability(t, caps, domain.OperationImageGenerate, domain.ModalityImage, ModelGPTImage2)
+	providertest.RequireCapability(t, caps, domain.OperationVideoGenerate, domain.ModalityVideo, ModelHailuo23Standard)
+	providertest.RequireCapability(t, caps, domain.OperationVideoGenerate, domain.ModalityVideo, ModelHailuo23Fast)
+}
 
 func TestSubmitHailuoStandardSuccess(t *testing.T) {
 	var seen videoGenerationRequest

@@ -136,11 +136,8 @@ func (m *Moderator) moderate(ctx context.Context, input any) (moderationservice.
 		return moderationservice.Outcome{}, &Error{Class: domain.ProviderErrInternal, Message: "decode moderation response: " + err.Error()}
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		msg := fmt.Sprintf("openai moderation http %d", resp.StatusCode)
-		if decoded.Error != nil && decoded.Error.Message != "" {
-			msg = decoded.Error.Message
-		}
-		return moderationservice.Outcome{}, &Error{Class: classifyStatus(resp.StatusCode), Message: msg}
+		class := classifyStatus(resp.StatusCode)
+		return moderationservice.Outcome{}, &Error{Class: class, Message: safeHTTPErrorMessage("openai moderation", class, resp.StatusCode)}
 	}
 	if len(decoded.Results) == 0 {
 		return moderationservice.Outcome{}, &Error{Class: domain.ProviderErrInternal, Message: "empty moderation response"}
@@ -174,10 +171,30 @@ type Error struct {
 	Message string
 }
 
-func (e *Error) Error() string { return fmt.Sprintf("openai moderation: %s: %s", e.Class, e.Message) }
+func (e *Error) Error() string {
+	if e.Message == "" {
+		return "openai moderation: " + string(e.Class)
+	}
+	return "openai moderation: " + string(e.Class) + ": " + e.Message
+}
 
 // ProviderErrorClass exposes the normalized class for worker classification.
 func (e *Error) ProviderErrorClass() domain.ProviderErrorClass { return e.Class }
+
+func safeHTTPErrorMessage(provider string, class domain.ProviderErrorClass, status int) string {
+	switch class {
+	case domain.ProviderErrAuthFailed:
+		return provider + " auth failed"
+	case domain.ProviderErrRateLimited:
+		return provider + " rate limited"
+	case domain.ProviderErrInvalidRequest:
+		return provider + " invalid request"
+	case domain.ProviderErrOverloaded:
+		return provider + " overloaded"
+	default:
+		return fmt.Sprintf("%s http %d", provider, status)
+	}
+}
 
 func flaggedCategories(in map[string]bool) []string {
 	out := make([]string, 0, len(in))

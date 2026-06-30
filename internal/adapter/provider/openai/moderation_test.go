@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	providertest "vk-ai-aggregator/internal/adapter/provider/providertest"
 	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/service/moderationservice"
 )
@@ -28,6 +29,21 @@ func TestOpenAIModerationBlocksText(t *testing.T) {
 	if out.Decision != domain.ModerationBlock || len(out.Categories) != 1 || out.Categories[0] != "violence" {
 		t.Fatalf("unexpected moderation outcome: %+v", out)
 	}
+}
+
+func TestOpenAIModerationHTTPErrorIsNormalizedAndRedacted(t *testing.T) {
+	const fakeSecret = "openai-secret-fixture"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte(`{"error":{"message":"invalid bearer ` + fakeSecret + `"}}`))
+	}))
+	defer srv.Close()
+
+	m := NewModerator(ModerationConfig{APIKey: fakeSecret, BaseURL: srv.URL, HTTPClient: srv.Client()})
+	_, err := m.Check(context.Background(), moderationInput("safe text"))
+	providertest.RequireErrorClass(t, err, domain.ProviderErrAuthFailed)
+	providertest.RequireErrorDoesNotContain(t, err, fakeSecret)
 }
 
 func TestOpenAIScannerRejectsFlaggedImage(t *testing.T) {

@@ -46,6 +46,7 @@ import (
 	"vk-ai-aggregator/internal/service/outboxrelay"
 	"vk-ai-aggregator/internal/service/pricingcatalog"
 	"vk-ai-aggregator/internal/service/productcatalog"
+	"vk-ai-aggregator/internal/service/providermodels"
 	"vk-ai-aggregator/internal/worker"
 )
 
@@ -663,102 +664,11 @@ func defaultProviderMediaContracts(cfg config.Config) []domain.ProviderMediaCont
 	if maxBytes <= 0 {
 		maxBytes = 256 << 20
 	}
-	probeRequired := cfg.MediaVideoProbeRequired()
-	transcodeAllowed := cfg.MediaVideoTranscodeEnabled()
-	contracts := []domain.ProviderMediaContract{
-		{
-			Provider:               domain.ProviderMock,
-			Model:                  "mock-video",
-			ModelClass:             "mock_video",
-			Modality:               domain.ModalityVideo,
-			AllowedDurationsSec:    []int{3, 5, 10},
-			AllowedAspectRatios:    []string{"16:9", "9:16", "1:1"},
-			AllowedResolutions:     []string{"720p", "1080p"},
-			ExpectedContainer:      "mp4",
-			ExpectedCodec:          "h264",
-			ExpectedMaxBytes:       maxBytes,
-			DeliveryReadyOutput:    true,
-			RequiresProbe:          probeRequired,
-			TranscodeAllowed:       transcodeAllowed,
-			MaxProviderAttempts:    1,
-			MaxFallbackAttempts:    0,
-			MaxProviderCostCredits: 50,
-		},
-	}
-	for _, model := range []struct {
-		id    string
-		class string
-	}{
-		{id: apimart.ModelHailuo23Fast, class: "hailuo_2_3_fast"},
-		{id: apimart.ModelHailuo23Standard, class: "hailuo_2_3_standard"},
-	} {
-		contracts = append(contracts, domain.ProviderMediaContract{
-			Provider:               domain.ProviderAPIMart,
-			Model:                  model.id,
-			ModelClass:             model.class,
-			Modality:               domain.ModalityVideo,
-			AllowedDurationsSec:    []int{6, 10},
-			AllowedResolutions:     []string{"768p", "1080p"},
-			ExpectedContainer:      "mp4",
-			ExpectedCodec:          "h264",
-			ExpectedMaxBytes:       maxBytes,
-			DeliveryReadyOutput:    true,
-			RequiresProbe:          probeRequired,
-			TranscodeAllowed:       transcodeAllowed,
-			MaxProviderAttempts:    1,
-			MaxFallbackAttempts:    0,
-			MaxProviderCostCredits: 2,
-		})
-	}
-	for _, model := range []struct {
-		id          string
-		class       string
-		durations   []int
-		resolutions []string
-		maxCost     int64
-	}{
-		{id: poyo.ModelKlingO3Standard, class: "kling_o3_standard", durations: []int{5, 10}, resolutions: []string{"720p", "1080p"}, maxCost: 200},
-		{id: poyo.ModelSeedance20Fast, class: "seedance_2_0_fast", durations: []int{5, 10}, resolutions: []string{"720p"}, maxCost: 560},
-		{id: poyo.ModelRunwayGen45, class: "runway_gen4_5", durations: []int{5, 10}, resolutions: []string{"720p", "1080p"}, maxCost: 0},
-	} {
-		contracts = append(contracts, domain.ProviderMediaContract{
-			Provider:               domain.ProviderPoYo,
-			Model:                  model.id,
-			ModelClass:             model.class,
-			Modality:               domain.ModalityVideo,
-			AllowedDurationsSec:    model.durations,
-			AllowedAspectRatios:    []string{"16:9", "9:16", "1:1"},
-			AllowedResolutions:     model.resolutions,
-			ExpectedContainer:      "mp4",
-			ExpectedCodec:          "h264",
-			ExpectedMaxBytes:       maxBytes,
-			DeliveryReadyOutput:    true,
-			RequiresProbe:          probeRequired,
-			TranscodeAllowed:       transcodeAllowed,
-			MaxProviderAttempts:    1,
-			MaxFallbackAttempts:    0,
-			MaxProviderCostCredits: model.maxCost,
-		})
-	}
-	contracts = append(contracts, domain.ProviderMediaContract{
-		Provider:               domain.ProviderRunway,
-		Model:                  runway.ModelGen4Turbo,
-		ModelClass:             "runway_gen4_turbo",
-		Modality:               domain.ModalityVideo,
-		AllowedDurationsSec:    []int{2, 3, 4, 5, 6, 7, 8, 9, 10},
-		AllowedAspectRatios:    []string{"16:9", "9:16", "4:3", "3:4", "1:1", "21:9"},
-		AllowedResolutions:     []string{"720p"},
-		ExpectedContainer:      "mp4",
-		ExpectedCodec:          "h264",
-		ExpectedMaxBytes:       maxBytes,
-		DeliveryReadyOutput:    true,
-		RequiresProbe:          probeRequired,
-		TranscodeAllowed:       transcodeAllowed,
-		MaxProviderAttempts:    1,
-		MaxFallbackAttempts:    0,
-		MaxProviderCostCredits: 100,
+	return providermodels.StaticRegistry().ProviderMediaContracts(providermodels.MediaContractRuntime{
+		ExpectedMaxVideoBytes: maxBytes,
+		RequireVideoProbe:     cfg.MediaVideoProbeRequired(),
+		VideoTranscodeAllowed: cfg.MediaVideoTranscodeEnabled(),
 	})
-	return contracts
 }
 
 func shouldRunJobWorkers(mode string) bool {
