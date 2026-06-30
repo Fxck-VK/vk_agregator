@@ -48,7 +48,10 @@ Status, smoke and stop:
 
 ## DEV GitHub Deploy
 
-`dev-deploy` branch triggers the DEV deployment workflow.
+Pushing `dev-deploy` first triggers the `Docker Images` workflow. After all
+GHCR images for the pushed SHA are built successfully, GitHub Actions triggers
+`Deploy DEV` through `workflow_run`. `Deploy DEV` can also be started manually
+with `workflow_dispatch`.
 
 Required GitHub repository secrets:
 

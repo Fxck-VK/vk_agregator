@@ -1,9 +1,6 @@
 name: Deploy DEV
 
 on:
-  push:
-    branches:
-      - dev-deploy
   workflow_run:
     workflows:
       - Docker Images
@@ -26,7 +23,6 @@ jobs:
     runs-on: ubuntu-latest
     if: >
       github.event_name == 'workflow_dispatch' ||
-      github.event_name == 'push' ||
       (github.event.workflow_run.conclusion == 'success' &&
        github.event.workflow_run.event == 'push' &&
        github.event.workflow_run.head_branch == 'dev-deploy')
