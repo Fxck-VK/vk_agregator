@@ -723,17 +723,46 @@ func TestPollEnvelopeErrorUsesTopLevelError(t *testing.T) {
 	}
 }
 
+func TestAPIMartClassifiesModelUnavailable(t *testing.T) {
+	const providerMessage = "unsupported model unknown-model-v9"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		_, _ = w.Write([]byte(`{"error":{"type":"validation_error","message":` + strconv.Quote(providerMessage) + `}}`))
+	}))
+	defer srv.Close()
+
+	p := New(Config{APIKey: "test-key", BaseURL: srv.URL, HTTPClient: srv.Client()})
+	_, err := p.Submit(context.Background(), domain.ProviderRequest{
+		JobID:       uuid.New(),
+		Operation:   domain.OperationVideoGenerate,
+		Modality:    domain.ModalityVideo,
+		ModelCode:   ModelHailuo23Standard,
+		Prompt:      "clip",
+		DurationSec: 6,
+		Resolution:  "768p",
+	})
+	if perr, ok := err.(*Error); !ok || perr.ProviderErrorClass() != domain.ProviderErrModelUnavailable {
+		t.Fatalf("class = %T %v, want %s", err, err, domain.ProviderErrModelUnavailable)
+	}
+	if strings.Contains(err.Error(), providerMessage) || strings.Contains(err.Error(), "unknown-model-v9") {
+		t.Fatalf("provider message leaked: %v", err)
+	}
+}
+
 func TestHTTPErrorClasses(t *testing.T) {
 	cases := []struct {
 		name   string
 		status int
 		body   string
 		want   domain.ProviderErrorClass
+		leak   string
 	}{
 		{name: "auth", status: http.StatusUnauthorized, body: `{"error":{"message":"invalid token"}}`, want: domain.ProviderErrAuthFailed},
 		{name: "balance", status: http.StatusPaymentRequired, body: `{"error":{"message":"insufficient balance"}}`, want: domain.ProviderErrInsufficientBalance},
 		{name: "rate", status: http.StatusTooManyRequests, body: `{"error":{"message":"rate limit"}}`, want: domain.ProviderErrRateLimited},
+		{name: "copyright policy", status: http.StatusUnprocessableEntity, body: `{"error":{"message":"blocked by copyright policy"}}`, want: domain.ProviderErrContentRejected, leak: "copyright policy"},
 		{name: "validation", status: http.StatusBadRequest, body: `{"error":{"type":"validation_error","message":"bad request"}}`, want: domain.ProviderErrInvalidRequest},
+		{name: "invalid prompt for model", status: http.StatusUnprocessableEntity, body: `{"error":{"type":"validation_error","message":"invalid prompt length for model"}}`, want: domain.ProviderErrInvalidRequest},
 		{name: "unavailable", status: http.StatusBadGateway, body: `{"error":{"message":"provider unavailable"}}`, want: domain.ProviderErrOverloaded},
 		{name: "timeout", status: http.StatusGatewayTimeout, body: `{"error":{"message":"upstream timeout"}}`, want: domain.ProviderErrTimeout},
 	}
@@ -757,6 +786,9 @@ func TestHTTPErrorClasses(t *testing.T) {
 			})
 			if perr, ok := err.(*Error); !ok || perr.ProviderErrorClass() != tc.want {
 				t.Fatalf("class = %T %v, want %s", err, err, tc.want)
+			}
+			if tc.leak != "" && strings.Contains(err.Error(), tc.leak) {
+				t.Fatalf("provider message leaked: %v", err)
 			}
 		})
 	}

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -516,6 +517,11 @@ func TestPollFailureNormalizesModeration(t *testing.T) {
 			leak: "platform regulations",
 		},
 		{
+			name: "copyright policy message",
+			body: `{"code":200,"data":{"task_id":"task_1","status":"failed","error_message":"blocked by copyright policy"}}`,
+			leak: "copyright policy",
+		},
+		{
 			name: "top level status message",
 			body: `{"code":200,"task_id":"task_1","status":"failed","message":"The content does not comply with the platform regulations."}`,
 			leak: "platform regulations",
@@ -544,6 +550,23 @@ func TestPollFailureNormalizesModeration(t *testing.T) {
 	}
 }
 
+func TestPoYoClassifiesModelUnavailable(t *testing.T) {
+	const providerMessage = "unknown model poyo-model-v9"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		_, _ = w.Write([]byte(`{"error":{"type":"validation_error","message":` + strconv.Quote(providerMessage) + `}}`))
+	}))
+	defer srv.Close()
+
+	provider := New(Config{APIKey: "test-key", BaseURL: srv.URL, HTTPClient: srv.Client()})
+	_, err := provider.Submit(context.Background(), baseVideoRequest(ModelKlingO3Standard))
+	requireErrorClass(t, err, domain.ProviderErrModelUnavailable)
+	if err != nil && (strings.Contains(err.Error(), providerMessage) || strings.Contains(err.Error(), "poyo-model-v9")) {
+		t.Fatalf("provider message leaked: %v", err)
+	}
+}
+
 func TestSubmitHTTPErrorIsNormalized(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -557,6 +580,13 @@ func TestSubmitHTTPErrorIsNormalized(t *testing.T) {
 	requireErrorClass(t, err, domain.ProviderErrAuthFailed)
 	if err != nil && strings.Contains(err.Error(), "bad-key") {
 		t.Fatalf("error leaked api key: %v", err)
+	}
+}
+
+func TestPoYoInvalidPromptForModelStaysInvalidRequest(t *testing.T) {
+	class := classifyPoYoError(http.StatusUnprocessableEntity, "validation_error", "", "invalid prompt length for model")
+	if class != domain.ProviderErrInvalidRequest {
+		t.Fatalf("class = %q, want invalid_request", class)
 	}
 }
 

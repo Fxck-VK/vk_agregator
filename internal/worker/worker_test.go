@@ -51,6 +51,26 @@ func (f *fakeStreams) PublishTo(_ context.Context, stream string, task queue.Tas
 	return nil
 }
 
+type orderedStreams struct {
+	base  *fakeStreams
+	order *[]string
+}
+
+func (s *orderedStreams) PublishTo(ctx context.Context, stream string, task queue.Task) error {
+	*s.order = append(*s.order, "publish:"+stream)
+	return s.base.PublishTo(ctx, stream, task)
+}
+
+type orderedReleaser struct {
+	base  *fakeReleaser
+	order *[]string
+}
+
+func (r *orderedReleaser) ReleaseForJob(ctx context.Context, jobID uuid.UUID) error {
+	*r.order = append(*r.order, "release")
+	return r.base.ReleaseForJob(ctx, jobID)
+}
+
 // harness wires the in-memory adapters, a mock provider and the workers.
 type harness struct {
 	jobs     *memory.JobRepo
@@ -1136,6 +1156,92 @@ func TestTerminalProviderError(t *testing.T) {
 	}
 	if len(h.streams.byStream[redisqueue.StreamDelivery]) != 1 {
 		t.Fatalf("expected one failure delivery enqueue, got %v", h.streams.byStream)
+	}
+}
+
+func TestTerminalMediaProviderErrorMapsSafeCodesAndReleasesBeforeNotice(t *testing.T) {
+	cases := []struct {
+		name         string
+		class        domain.ProviderErrorClass
+		wantCode     string
+		wantMessages []string
+	}{
+		{
+			name:         "model unavailable",
+			class:        domain.ProviderErrModelUnavailable,
+			wantCode:     domain.JobErrModelUnavailable,
+			wantMessages: []string{"model is unavailable", "try another model"},
+		},
+		{
+			name:         "invalid request",
+			class:        domain.ProviderErrInvalidRequest,
+			wantCode:     string(domain.ProviderErrInvalidRequest),
+			wantMessages: []string{"not accepted", "try another model", "change the prompt"},
+		},
+		{
+			name:         "content rejected",
+			class:        domain.ProviderErrContentRejected,
+			wantCode:     string(domain.ProviderErrContentRejected),
+			wantMessages: []string{"safety policy"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var order []string
+			streams := &orderedStreams{base: newFakeStreams(), order: &order}
+			releaser := &orderedReleaser{base: &fakeReleaser{}, order: &order}
+			provider := &routingProvider{
+				name:      domain.ProviderName("terminal-media"),
+				cost:      10,
+				fail:      detailedRoutingError{class: tc.class, message: "raw provider says private-model-v9 failed"},
+				operation: domain.OperationImageGenerate,
+				modality:  domain.ModalityImage,
+				model:     "image-model",
+			}
+			h := newHarnessWithProvider(t, provider, func(d *worker.Deps) {
+				d.Streams = streams
+				d.Releaser = releaser
+				d.MaxAttempts = 3
+			})
+			ctx := context.Background()
+			job := h.queueJob(t, domain.OperationImageGenerate, domain.ModalityImage, "draw")
+			job.VKPeerID = 555
+			if err := h.jobs.Update(ctx, job); err != nil {
+				t.Fatalf("update job peer: %v", err)
+			}
+
+			if err := h.gen.Process(ctx, taskFor(job)); err != nil {
+				t.Fatalf("process: %v", err)
+			}
+			got := h.reload(t, job.ID)
+			if got.Status != domain.JobStatusFailedTerminal {
+				t.Fatalf("status = %q, want failed_terminal", got.Status)
+			}
+			if got.ErrorCode != tc.wantCode {
+				t.Fatalf("error code = %q, want %q", got.ErrorCode, tc.wantCode)
+			}
+			for _, want := range tc.wantMessages {
+				if !strings.Contains(got.ErrorMessage, want) {
+					t.Fatalf("error message = %q, want to contain %q", got.ErrorMessage, want)
+				}
+			}
+			if strings.Contains(got.ErrorMessage, "private-model-v9") || strings.Contains(got.ErrorMessage, "raw provider") {
+				t.Fatalf("terminal error leaked raw provider detail: %q", got.ErrorMessage)
+			}
+			if len(releaser.base.released) != 1 || releaser.base.released[0] != job.ID {
+				t.Fatalf("expected reservation release for terminal media failure, got %v", releaser.base.released)
+			}
+			if len(streams.base.byStream[redisqueue.StreamDelivery]) != 1 {
+				t.Fatalf("expected one failure delivery enqueue, got %v", streams.base.byStream)
+			}
+			if len(streams.base.byStream[redisqueue.StreamImage]) != 0 {
+				t.Fatalf("non-retryable failure must not requeue image job: %v", streams.base.byStream)
+			}
+			wantOrder := []string{"release", "publish:" + redisqueue.StreamDelivery}
+			if strings.Join(order, ",") != strings.Join(wantOrder, ",") {
+				t.Fatalf("order = %v, want %v", order, wantOrder)
+			}
+		})
 	}
 }
 
@@ -2936,6 +3042,15 @@ type routingError struct{ class domain.ProviderErrorClass }
 func (e routingError) Error() string { return string(e.class) }
 
 func (e routingError) ProviderErrorClass() domain.ProviderErrorClass { return e.class }
+
+type detailedRoutingError struct {
+	class   domain.ProviderErrorClass
+	message string
+}
+
+func (e detailedRoutingError) Error() string { return e.message }
+
+func (e detailedRoutingError) ProviderErrorClass() domain.ProviderErrorClass { return e.class }
 
 type timeoutProvider struct {
 	name domain.ProviderName

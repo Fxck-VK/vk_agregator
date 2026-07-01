@@ -1695,6 +1695,54 @@ func TestHandler_GetJob_OwnershipCheck(t *testing.T) {
 	}
 }
 
+func TestHandler_GetJob_IncludesSafeUserMessageAndHidesRawError(t *testing.T) {
+	fixture := newTestFixture("", nil)
+	routes := fixture.handler.Routes()
+	ctx := context.Background()
+	user := &domain.User{VKUserID: 777, Role: domain.RoleUser, Status: domain.StatusActive, Locale: "ru", Timezone: "UTC"}
+	if err := fixture.userRepo.Create(ctx, user); err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	job := &domain.Job{
+		ID:             uuid.New(),
+		UserID:         user.ID,
+		Source:         "miniapp",
+		VKPeerID:       user.VKUserID,
+		OperationType:  domain.OperationImageGenerate,
+		Modality:       domain.ModalityImage,
+		Status:         domain.JobStatusFailedTerminal,
+		IdempotencyKey: "miniapp-safe-user-message",
+		ErrorCode:      string(domain.ProviderErrModelUnavailable),
+		ErrorMessage:   "raw provider private-model-v9 was not found",
+	}
+	if err := fixture.jobRepo.Create(ctx, job); err != nil {
+		t.Fatalf("create failed job: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/miniapp/jobs/"+job.ID.String(), nil)
+	req.Header.Set("X-Launch-Params", devLaunchParams(777))
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("get job: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var resp map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("invalid job response: %v", err)
+	}
+	if resp["error_code"] != domain.JobErrModelUnavailable {
+		t.Fatalf("error_code = %#v, want %q; body=%s", resp["error_code"], domain.JobErrModelUnavailable, w.Body.String())
+	}
+	if resp["user_message"] != "Выбранная модель сейчас недоступна. Попробуйте другую модель. ⭐️ не списаны" {
+		t.Fatalf("user_message = %#v; body=%s", resp["user_message"], w.Body.String())
+	}
+	for _, forbidden := range []string{"error_message", "raw provider", "private-model-v9", "not found"} {
+		if strings.Contains(w.Body.String(), forbidden) {
+			t.Fatalf("job response leaked %q: %s", forbidden, w.Body.String())
+		}
+	}
+}
+
 func TestHandler_GetArtifact_GuardsSucceededAndModerationPassed(t *testing.T) {
 	allow := domain.ModerationAllow
 	block := domain.ModerationBlock
@@ -4591,7 +4639,22 @@ func TestHandler_CreateImageJobDoesNotCreateChatConversationMessages(t *testing.
 }
 
 func TestHandler_CreateJob_RejectsUnsupportedModelID(t *testing.T) {
-	routes := newTestHandler("").Routes()
+	fixture := newTestFixture("", nil)
+	routes := fixture.handler.Routes()
+	ctx := context.Background()
+
+	user := &domain.User{VKUserID: 777, Role: domain.RoleUser, Status: domain.StatusActive}
+	if err := fixture.userRepo.Create(ctx, user); err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	acc, err := fixture.billing.EnsureAccount(ctx, user.ID)
+	if err != nil {
+		t.Fatalf("ensure account: %v", err)
+	}
+	beforeEntries, err := fixture.billingRepo.ListEntries(ctx, acc.ID, 100, 0)
+	if err != nil {
+		t.Fatalf("list entries before: %v", err)
+	}
 
 	body, _ := json.Marshal(map[string]string{
 		"operation": "text_generate",
@@ -4630,6 +4693,13 @@ func TestHandler_CreateJob_RejectsUnsupportedModelID(t *testing.T) {
 	}
 	if len(listResp.Items) != 0 {
 		t.Fatalf("rejected model must not create a job, got %d jobs", len(listResp.Items))
+	}
+	afterEntries, err := fixture.billingRepo.ListEntries(ctx, acc.ID, 100, 0)
+	if err != nil {
+		t.Fatalf("list entries after: %v", err)
+	}
+	if len(afterEntries) != len(beforeEntries) {
+		t.Fatalf("rejected model must not create reservations or ledger entries, before=%d after=%d", len(beforeEntries), len(afterEntries))
 	}
 }
 

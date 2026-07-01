@@ -2467,6 +2467,10 @@ func safeTerminalFailure(job *domain.Job, class domain.ProviderErrorClass) (stri
 		switch class {
 		case domain.ProviderErrRateLimited, domain.ProviderErrOverloaded, domain.ProviderErrTimeout:
 			return domain.JobErrMediaOverloadedRetryLater, "media generation is temporarily overloaded; credits were not charged"
+		case domain.ProviderErrModelUnavailable:
+			return domain.JobErrModelUnavailable, "selected model is unavailable; credits were not charged; try another model"
+		case domain.ProviderErrInvalidRequest:
+			return string(domain.ProviderErrInvalidRequest), "request was not accepted; credits were not charged; try another model or change the prompt"
 		case domain.ProviderErrOutputDownloadFailed:
 			return domain.JobErrMediaProcessingUnavailable, "media output could not be loaded safely; credits were not charged"
 		case domain.ProviderErrMediaProbeFailed:
@@ -2484,7 +2488,11 @@ func safeProviderFailureMessage(class domain.ProviderErrorClass) string {
 		return "provider is temporarily unavailable; credits were not charged"
 	case domain.ProviderErrContentRejected:
 		return "content was rejected by safety policy; credits were not charged"
-	case domain.ProviderErrInvalidRequest, domain.ProviderErrUnsupportedCapab:
+	case domain.ProviderErrModelUnavailable:
+		return "selected model is unavailable; credits were not charged; try another model"
+	case domain.ProviderErrInvalidRequest:
+		return "request was not accepted; credits were not charged; try another model or change the prompt"
+	case domain.ProviderErrUnsupportedCapab:
 		return "request is not supported; credits were not charged"
 	case domain.ProviderErrAuthFailed, domain.ProviderErrInsufficientBalance:
 		return "provider configuration is unavailable; credits were not charged"

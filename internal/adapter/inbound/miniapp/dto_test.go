@@ -2,6 +2,7 @@ package miniapp
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -114,6 +115,11 @@ func TestNewJobDTOMapsLegacyMediaErrorCodesToSafeClasses(t *testing.T) {
 			code: string(domain.ProviderErrInternal),
 			want: domain.JobErrMediaProcessingUnavailable,
 		},
+		{
+			name: "provider model unavailable",
+			code: string(domain.ProviderErrModelUnavailable),
+			want: domain.JobErrModelUnavailable,
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -127,6 +133,100 @@ func TestNewJobDTOMapsLegacyMediaErrorCodesToSafeClasses(t *testing.T) {
 				t.Fatalf("ErrorCode = %q, want %q", dto.ErrorCode, tc.want)
 			}
 		})
+	}
+}
+
+func TestNewJobDTOExposesSafeUserMessageForTerminalFailures(t *testing.T) {
+	tests := []struct {
+		name        string
+		status      domain.JobStatus
+		modality    domain.Modality
+		errorCode   string
+		wantCode    string
+		wantMessage string
+	}{
+		{
+			name:        "model unavailable",
+			status:      domain.JobStatusFailedTerminal,
+			modality:    domain.ModalityImage,
+			errorCode:   string(domain.ProviderErrModelUnavailable),
+			wantCode:    domain.JobErrModelUnavailable,
+			wantMessage: "Выбранная модель сейчас недоступна. Попробуйте другую модель. ⭐️ не списаны",
+		},
+		{
+			name:        "content rejected",
+			status:      domain.JobStatusFailedTerminal,
+			modality:    domain.ModalityImage,
+			errorCode:   string(domain.ProviderErrContentRejected),
+			wantCode:    string(domain.ProviderErrContentRejected),
+			wantMessage: "Запрос отклонён правилами безопасности. Измените описание. ⭐️ не списаны",
+		},
+		{
+			name:        "invalid request",
+			status:      domain.JobStatusFailedTerminal,
+			modality:    domain.ModalityImage,
+			errorCode:   string(domain.ProviderErrInvalidRequest),
+			wantCode:    string(domain.ProviderErrInvalidRequest),
+			wantMessage: "Модель не приняла запрос. Попробуйте другую модель или измените описание; возможны ограничения по содержанию. ⭐️ не списаны",
+		},
+		{
+			name:        "overloaded",
+			status:      domain.JobStatusFailedTerminal,
+			modality:    domain.ModalityVideo,
+			errorCode:   domain.JobErrMediaOverloadedRetryLater,
+			wantCode:    domain.JobErrMediaOverloadedRetryLater,
+			wantMessage: "Генерация временно перегружена. Попробуйте позже. ⭐️ не списаны",
+		},
+		{
+			name:        "processing unavailable",
+			status:      domain.JobStatusFailedTerminal,
+			modality:    domain.ModalityVideo,
+			errorCode:   "provider_native_private_failure",
+			wantCode:    domain.JobErrMediaProcessingUnavailable,
+			wantMessage: "Не удалось безопасно подготовить результат. Попробуйте позже. ⭐️ не списаны",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			dto := newJobDTO(&domain.Job{
+				ID:           uuid.New(),
+				Modality:     tc.modality,
+				Status:       tc.status,
+				ErrorCode:    tc.errorCode,
+				ErrorMessage: "raw provider private-model-v9 rejected prompt",
+			})
+			if dto.ErrorCode != tc.wantCode {
+				t.Fatalf("ErrorCode = %q, want %q", dto.ErrorCode, tc.wantCode)
+			}
+			fields := marshalFields(t, dto)
+			var gotMessage string
+			if err := json.Unmarshal(fields["user_message"], &gotMessage); err != nil {
+				t.Fatalf("decode user_message: %v; fields=%+v", err, fields)
+			}
+			if gotMessage != tc.wantMessage {
+				t.Fatalf("user_message = %q, want %q", gotMessage, tc.wantMessage)
+			}
+			raw := string(mustMarshalJSON(t, dto))
+			for _, forbidden := range []string{"raw provider", "private-model-v9", "rejected prompt", "error_message"} {
+				if strings.Contains(raw, forbidden) {
+					t.Fatalf("DTO leaked %q in %s", forbidden, raw)
+				}
+			}
+		})
+	}
+}
+
+func TestNewJobDTOOmitsUserMessageForNonTerminalJobs(t *testing.T) {
+	dto := newJobDTO(&domain.Job{
+		ID:           uuid.New(),
+		Modality:     domain.ModalityImage,
+		Status:       domain.JobStatusQueued,
+		ErrorCode:    string(domain.ProviderErrInvalidRequest),
+		ErrorMessage: "raw provider detail",
+	})
+	fields := marshalFields(t, dto)
+	if _, ok := fields["user_message"]; ok {
+		t.Fatalf("queued DTO must not include user_message: %+v", fields)
 	}
 }
 
@@ -159,6 +259,25 @@ func TestNewJobDTOHidesOutputArtifactIDsUntilSucceeded(t *testing.T) {
 	if len(succeeded.OutputArtifactIDs) != 1 || succeeded.OutputArtifactIDs[0] != artifactID {
 		t.Fatalf("succeeded DTO did not expose output artifact id: %+v", succeeded.OutputArtifactIDs)
 	}
+}
+
+func marshalFields(t *testing.T, value any) map[string]json.RawMessage {
+	t.Helper()
+	raw := mustMarshalJSON(t, value)
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		t.Fatalf("unmarshal json: %v; raw=%s", err, raw)
+	}
+	return fields
+}
+
+func mustMarshalJSON(t *testing.T, value any) []byte {
+	t.Helper()
+	raw, err := json.Marshal(value)
+	if err != nil {
+		t.Fatalf("marshal json: %v", err)
+	}
+	return raw
 }
 
 func assertJSONAllowedKeys(t *testing.T, name string, value any, allowed map[string]bool) map[string]json.RawMessage {
