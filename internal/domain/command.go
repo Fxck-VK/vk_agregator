@@ -38,6 +38,8 @@ const (
 	CommandTopUp CommandType = "top_up"
 	// CommandMenuText explains how to ask the text model.
 	CommandMenuText CommandType = "menu.text"
+	// CommandMenuPro opens the PRO mode information screen.
+	CommandMenuPro CommandType = "menu.pro"
 	// CommandMenuImage explains how to generate an image.
 	CommandMenuImage CommandType = "menu.image"
 	// CommandMenuImageSelect selects an enabled public image model alias from
@@ -155,6 +157,7 @@ func (c CommandType) Valid() bool {
 		CommandAccount,
 		CommandTopUp,
 		CommandMenuText,
+		CommandMenuPro,
 		CommandMenuImage,
 		CommandMenuImageSelect,
 		CommandMenuImageText,

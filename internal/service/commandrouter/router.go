@@ -115,6 +115,8 @@ func (r *Router) Parse(rawText string) Result {
 		return Result{Type: domain.CommandMenuImageReference}
 	case "💬 спросить у нейрохаб", "спросить у нейрохаб", "💬 спросить у gpt", "спросить у gpt", "задать вопрос":
 		return Result{Type: domain.CommandMenuText}
+	case "🚀 pro режим", "pro режим", "про режим":
+		return Result{Type: domain.CommandMenuPro}
 	case "🎁 студентам и школьникам", "студентам и школьникам":
 		return Result{Type: domain.CommandMenuStudents}
 	case "решальник задач":

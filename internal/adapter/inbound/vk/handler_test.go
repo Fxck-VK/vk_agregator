@@ -958,7 +958,7 @@ func TestMenuFeatureFlagsHideMainMenuButtons(t *testing.T) {
 	if strings.Contains(sent[1].Keyboard, "Студентам и школьникам") || strings.Contains(sent[1].Keyboard, "Пополнить баланс") {
 		t.Fatalf("disabled main menu buttons should be hidden: %q", sent[1].Keyboard)
 	}
-	for _, want := range []string{"Создать видео", "Создать фото", "Спросить у НейроХаб", "Мой аккаунт"} {
+	for _, want := range []string{"Создать видео", "Создать фото", "Спросить у НейроХаб", "PRO режим", "Мой аккаунт"} {
 		if !strings.Contains(sent[1].Keyboard, want) {
 			t.Fatalf("expected enabled button %q in keyboard: %q", want, sent[1].Keyboard)
 		}

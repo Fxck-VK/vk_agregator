@@ -62,6 +62,10 @@ var menuScreens = map[domain.CommandType]menuScreen{
 		text:     fixedText(gptActiveText),
 		keyboard: backKeyboard,
 	},
+	domain.CommandMenuPro: {
+		text:     fixedText(proModeText),
+		keyboard: backKeyboard,
+	},
 	domain.CommandMenuImage: {
 		text:     fixedText(photoTextPromptInstruction),
 		keyboard: photoModeKeyboard,
@@ -202,6 +206,7 @@ var menuScreens = map[domain.CommandType]menuScreen{
 
 const (
 	gptActiveText = "🤖 НейроХаб активен!\n\nЯ готов ответить на любые вопросы и помочь с идеями\nСпроси что-нибудь прямо сейчас!"
+	proModeText   = "🚀 PRO режим\n\nСкоро здесь появятся расширенные возможности НейроХаб"
 
 	prunaAIText = "Видео-режим отключен.\n\nВыберите другой режим видео."
 
@@ -1049,6 +1054,9 @@ func welcomeKeyboard() *vkdelivery.Keyboard {
 			},
 			{
 				button("💬 Спросить у НейроХаб", domain.CommandMenuText, "secondary"),
+			},
+			{
+				button("🚀 PRO режим", domain.CommandMenuPro, "secondary"),
 			},
 			{
 				button("🎁 Студентам и школьникам", domain.CommandMenuStudents, "secondary"),
