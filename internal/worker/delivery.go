@@ -403,6 +403,9 @@ func safeVKMediaFailureNotice(errorCode string) string {
 		return "Не удалось доставить готовый медиафайл. ⭐️ не списаны. Попробуйте позже."
 	case domain.JobErrMediaProcessingUnavailable:
 		return "Не удалось получить или подготовить готовый медиафайл. ⭐️ не списаны. Попробуйте позже."
+	case domain.JobErrModelUnavailable,
+		string(domain.ProviderErrModelUnavailable):
+		return "Выбранная модель сейчас недоступна. ⭐️ не списаны. Попробуйте другую модель."
 	case string(domain.ProviderErrRateLimited),
 		string(domain.ProviderErrTimeout),
 		string(domain.ProviderErrOverloaded),
@@ -411,8 +414,9 @@ func safeVKMediaFailureNotice(errorCode string) string {
 	case string(domain.ProviderErrAuthFailed),
 		string(domain.ProviderErrInsufficientBalance):
 		return "Провайдер генерации временно недоступен. ⭐️ не списаны. Попробуйте позже."
-	case string(domain.ProviderErrInvalidRequest),
-		string(domain.ProviderErrUnsupportedCapab):
+	case string(domain.ProviderErrInvalidRequest):
+		return "Модель не приняла запрос. ⭐️ не списаны. Попробуйте другую модель или измените описание; возможны ограничения по содержанию."
+	case string(domain.ProviderErrUnsupportedCapab):
 		return "Этот запрос не поддерживается выбранной моделью. ⭐️ не списаны. Измените параметры и попробуйте снова."
 	case string(domain.ProviderErrContentRejected):
 		return "Запрос отклонен правилами безопасности. ⭐️ не списаны. Измените описание и попробуйте снова."

@@ -195,6 +195,7 @@ type JobDTO struct {
 	CostCaptured      int64       `json:"cost_captured"`
 	OutputArtifactIDs []uuid.UUID `json:"output_artifact_ids"`
 	ErrorCode         string      `json:"error_code,omitempty"`
+	UserMessage       string      `json:"user_message,omitempty"`
 	CreatedAt         time.Time   `json:"created_at"`
 	UpdatedAt         time.Time   `json:"updated_at"`
 }
@@ -218,6 +219,7 @@ type ChatConversationMessageDTO struct {
 }
 
 func newJobDTO(j *domain.Job) JobDTO {
+	errorCode := safeJobErrorCode(j)
 	out := JobDTO{
 		ID:           j.ID,
 		Operation:    string(j.OperationType),
@@ -225,7 +227,8 @@ func newJobDTO(j *domain.Job) JobDTO {
 		Status:       string(j.Status),
 		CostEstimate: j.CostEstimate,
 		CostCaptured: j.CostCaptured,
-		ErrorCode:    safeJobErrorCode(j),
+		ErrorCode:    errorCode,
+		UserMessage:  safeJobUserMessage(j, errorCode),
 		CreatedAt:    j.CreatedAt,
 		UpdatedAt:    j.UpdatedAt,
 	}
@@ -271,8 +274,11 @@ func safeJobErrorCode(j *domain.Job) string {
 		domain.JobErrMediaProviderOutputInvalid,
 		domain.JobErrMediaProcessingUnavailable,
 		domain.JobErrMediaDeliveryFailed,
-		domain.JobErrMediaOverloadedRetryLater:
+		domain.JobErrMediaOverloadedRetryLater,
+		domain.JobErrModelUnavailable:
 		return j.ErrorCode
+	case string(domain.ProviderErrModelUnavailable):
+		return domain.JobErrModelUnavailable
 	case string(domain.ProviderErrMediaProbeFailed),
 		"media_contract_output_not_delivery_ready",
 		"video_output_missing",
@@ -304,6 +310,35 @@ func safeJobErrorCode(j *domain.Job) string {
 			return domain.JobErrMediaProcessingUnavailable
 		}
 		return j.ErrorCode
+	}
+}
+
+func safeJobUserMessage(j *domain.Job, errorCode string) string {
+	if j == nil || errorCode == "" || !isTerminalUserVisibleFailure(j.Status) {
+		return ""
+	}
+	switch errorCode {
+	case domain.JobErrModelUnavailable:
+		return "Выбранная модель сейчас недоступна. Попробуйте другую модель. ⭐️ не списаны"
+	case string(domain.ProviderErrContentRejected):
+		return "Запрос отклонён правилами безопасности. Измените описание. ⭐️ не списаны"
+	case string(domain.ProviderErrInvalidRequest):
+		return "Модель не приняла запрос. Попробуйте другую модель или измените описание; возможны ограничения по содержанию. ⭐️ не списаны"
+	case domain.JobErrMediaOverloadedRetryLater:
+		return "Генерация временно перегружена. Попробуйте позже. ⭐️ не списаны"
+	case domain.JobErrMediaProcessingUnavailable, domain.JobErrMediaProviderOutputInvalid:
+		return "Не удалось безопасно подготовить результат. Попробуйте позже. ⭐️ не списаны"
+	default:
+		return ""
+	}
+}
+
+func isTerminalUserVisibleFailure(status domain.JobStatus) bool {
+	switch status {
+	case domain.JobStatusFailedTerminal, domain.JobStatusRejected, domain.JobStatusRefunded:
+		return true
+	default:
+		return false
 	}
 }
 

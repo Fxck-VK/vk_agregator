@@ -18,7 +18,7 @@ import {
   telemetryLabel,
   telemetryRoute,
 } from "./client";
-import type { CreateChatMessageInput, CreateJobInput, EstimateInput } from "./client";
+import type { CreateChatMessageInput, CreateJobInput, EstimateInput, Job } from "./client";
 
 const ARTIFACT_ID = "550e8400-e29b-41d4-a716-446655440000";
 
@@ -160,6 +160,29 @@ describe("artifact and status helpers", () => {
     expect(msg.toLowerCase()).not.toContain("provider");
     expect(msg.toLowerCase()).not.toContain("launch");
     expect(msg.toLowerCase()).not.toContain("payload");
+  });
+
+  test("prefers backend safe user message over local error code label", () => {
+    const label = errorLabel(
+      jobFixture({
+        error_code: "model_unavailable",
+        user_message: "Безопасное сообщение от backend",
+      }),
+    );
+
+    expect(label).toBe("Безопасное сообщение от backend");
+  });
+
+  test("keeps local error code fallback for older backend responses", () => {
+    expect(errorLabel(jobFixture({ error_code: "model_unavailable" }))).toBe(
+      "Выбранная модель сейчас недоступна. Попробуйте другую модель. ⭐️ не списаны",
+    );
+    expect(errorLabel(jobFixture({ error_code: "invalid_request", user_message: "   " }))).toBe(
+      "Модель не приняла запрос. Попробуйте другую модель или измените описание; возможны ограничения по содержанию. ⭐️ не списаны",
+    );
+    expect(errorLabel(jobFixture({ error_code: "content_rejected" }))).toBe(
+      "Запрос отклонён правилами безопасности. Измените описание. ⭐️ не списаны",
+    );
   });
 });
 
@@ -304,6 +327,21 @@ function jsonResponse(value: unknown, status = 200): Response {
     status,
     headers: { "Content-Type": "application/json" },
   });
+}
+
+function jobFixture(overrides: Partial<Job> = {}): Job {
+  return {
+    id: ARTIFACT_ID,
+    operation: "image_generate",
+    modality: "image",
+    status: "failed_terminal",
+    cost_estimate: 0,
+    cost_captured: 0,
+    output_artifact_ids: [],
+    created_at: "2026-01-01T00:00:00Z",
+    updated_at: "2026-01-01T00:00:00Z",
+    ...overrides,
+  };
 }
 
 function withPrivatePricingFields<T extends Record<string, unknown>>(value: T): T {

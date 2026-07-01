@@ -906,6 +906,85 @@ func TestDeliverySendsVideoMediaFailureNoticeWithoutCapture(t *testing.T) {
 	}
 }
 
+func TestDeliveryUsesSpecificModelAndInvalidRequestFailureNotices(t *testing.T) {
+	cases := []struct {
+		name     string
+		code     string
+		expected string
+	}{
+		{
+			name:     "model unavailable",
+			code:     domain.JobErrModelUnavailable,
+			expected: "Выбранная модель сейчас недоступна. ⭐️ не списаны. Попробуйте другую модель.",
+		},
+		{
+			name:     "invalid request",
+			code:     string(domain.ProviderErrInvalidRequest),
+			expected: "Модель не приняла запрос. ⭐️ не списаны. Попробуйте другую модель или измените описание; возможны ограничения по содержанию.",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newDeliveryHarness(t)
+			ctx := context.Background()
+			userID := uuid.New()
+			if _, err := h.billing.EnsureAccount(ctx, userID); err != nil {
+				t.Fatalf("ensure account: %v", err)
+			}
+			pending, err := h.vk.SendMessage(ctx, 557, 9003, vkdelivery.Message{Text: "pending"})
+			if err != nil {
+				t.Fatalf("send pending: %v", err)
+			}
+			job := &domain.Job{
+				ID:             uuid.New(),
+				UserID:         userID,
+				VKPeerID:       557,
+				OperationType:  domain.OperationImageGenerate,
+				Modality:       domain.ModalityImage,
+				Status:         domain.JobStatusFailedTerminal,
+				IdempotencyKey: "job:" + uuid.NewString(),
+				CostReserved:   10,
+				ErrorCode:      tc.code,
+				ErrorMessage:   "raw provider private-model-v9 failure",
+			}
+			params, _ := json.Marshal(struct {
+				Prompt                 string `json:"prompt"`
+				VKPlaceholderMessageID int64  `json:"vk_placeholder_message_id"`
+			}{
+				Prompt:                 "raw unsafe prompt must not leak",
+				VKPlaceholderMessageID: pending.MessageID,
+			})
+			job.Params = params
+			if err := h.jobs.Create(ctx, job); err != nil {
+				t.Fatalf("create job: %v", err)
+			}
+
+			if err := h.worker.Process(ctx, deliveryTask(job)); err != nil {
+				t.Fatalf("process: %v", err)
+			}
+			got, err := h.jobs.GetByID(ctx, job.ID)
+			if err != nil {
+				t.Fatalf("reload job: %v", err)
+			}
+			if got.Status != domain.JobStatusFailedTerminal || got.CostCaptured != 0 {
+				t.Fatalf("failure notice must not mark success or capture credits: %+v", got)
+			}
+			edits := h.vk.Edits()
+			if len(edits) != 1 || edits[0].MessageID != pending.MessageID {
+				t.Fatalf("unexpected failure notice edits: %+v", edits)
+			}
+			if edits[0].Text != tc.expected {
+				t.Fatalf("notice = %q, want %q", edits[0].Text, tc.expected)
+			}
+			for _, forbidden := range []string{"private-model-v9", "raw provider", "raw unsafe prompt"} {
+				if strings.Contains(edits[0].Text, forbidden) {
+					t.Fatalf("notice leaked %q: %q", forbidden, edits[0].Text)
+				}
+			}
+		})
+	}
+}
+
 func TestDeliverySendFailureRetries(t *testing.T) {
 	h := newDeliveryHarness(t)
 	ctx := context.Background()

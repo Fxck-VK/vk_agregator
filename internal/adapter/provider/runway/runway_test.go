@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -189,22 +190,45 @@ func TestPollSucceededReturnsOutputAndSanitizesRaw(t *testing.T) {
 }
 
 func TestPollFailedNormalizesSafetyFailure(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"id":"task_runway","status":"FAILED","createdAt":"2026-06-15T10:00:00.000Z","failure":"The provided image was flagged by content moderation.","failureCode":"SAFETY.INPUT.IMAGE"}`))
-	}))
-	defer srv.Close()
+	cases := []struct {
+		name    string
+		failure string
+		code    string
+		leak    string
+	}{
+		{
+			name:    "moderation",
+			failure: "The provided image was flagged by content moderation.",
+			code:    "SAFETY.INPUT.IMAGE",
+			leak:    "flagged by content moderation",
+		},
+		{
+			name:    "copyright policy",
+			failure: "Video blocked by copyright policy.",
+			code:    "CONTENT.POLICY",
+			leak:    "copyright policy",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"id":"task_runway","status":"FAILED","createdAt":"2026-06-15T10:00:00.000Z","failure":` + strconv.Quote(tc.failure) + `,"failureCode":` + strconv.Quote(tc.code) + `}`))
+			}))
+			defer srv.Close()
 
-	provider := New(Config{APISecret: "test-secret", BaseURL: srv.URL, HTTPClient: srv.Client()})
-	result, err := provider.Poll(context.Background(), domain.ProviderTaskRef{Provider: domain.ProviderRunway, ExternalID: "task_runway"})
-	if err != nil {
-		t.Fatalf("poll: %v", err)
-	}
-	if result.Status != domain.ProviderTaskFailed || result.ErrorClass != domain.ProviderErrContentRejected {
-		t.Fatalf("bad result: %+v", result)
-	}
-	if strings.Contains(string(result.Raw), "flagged by content moderation") {
-		t.Fatalf("raw metadata leaked provider failure text: %s", string(result.Raw))
+			provider := New(Config{APISecret: "test-secret", BaseURL: srv.URL, HTTPClient: srv.Client()})
+			result, err := provider.Poll(context.Background(), domain.ProviderTaskRef{Provider: domain.ProviderRunway, ExternalID: "task_runway"})
+			if err != nil {
+				t.Fatalf("poll: %v", err)
+			}
+			if result.Status != domain.ProviderTaskFailed || result.ErrorClass != domain.ProviderErrContentRejected {
+				t.Fatalf("bad result: %+v", result)
+			}
+			if strings.Contains(string(result.Raw), tc.leak) {
+				t.Fatalf("raw metadata leaked provider failure text: %s", string(result.Raw))
+			}
+		})
 	}
 }
 
@@ -236,6 +260,25 @@ func TestCancelUsesTaskEndpointAndIgnores404(t *testing.T) {
 	}
 }
 
+func TestRunwayClassifiesModelUnavailable(t *testing.T) {
+	const providerMessage = "unsupported model runway-model-v9"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		_, _ = w.Write([]byte(`{"message":` + strconv.Quote(providerMessage) + `}`))
+	}))
+	defer srv.Close()
+
+	provider := New(Config{APISecret: "test-secret", BaseURL: srv.URL, HTTPClient: srv.Client()})
+	req := baseVideoRequest()
+	req.InputURLs = []string{"data:image/png;base64,aW1hZ2U="}
+	_, err := provider.Submit(context.Background(), req)
+	requireErrorClass(t, err, domain.ProviderErrModelUnavailable)
+	if err != nil && (strings.Contains(err.Error(), providerMessage) || strings.Contains(err.Error(), "runway-model-v9")) {
+		t.Fatalf("provider message leaked: %v", err)
+	}
+}
+
 func TestSubmitHTTPErrorIsNormalized(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -251,6 +294,20 @@ func TestSubmitHTTPErrorIsNormalized(t *testing.T) {
 	requireErrorClass(t, err, domain.ProviderErrAuthFailed)
 	if err != nil && strings.Contains(err.Error(), "bad-secret") {
 		t.Fatalf("error leaked api secret: %v", err)
+	}
+}
+
+func TestRunwayInvalidPromptForModelStaysInvalidRequest(t *testing.T) {
+	class := classifyRunwayError(http.StatusUnprocessableEntity, "validation_error", "invalid prompt length for model")
+	if class != domain.ProviderErrInvalidRequest {
+		t.Fatalf("class = %q, want invalid_request", class)
+	}
+}
+
+func TestRunwayContentLengthErrorStaysInvalidRequest(t *testing.T) {
+	class := classifyRunwayError(http.StatusUnprocessableEntity, "validation_error", "content length is invalid")
+	if class != domain.ProviderErrInvalidRequest {
+		t.Fatalf("class = %q, want invalid_request", class)
 	}
 }
 

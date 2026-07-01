@@ -68,6 +68,7 @@ const (
 	ProviderErrAuthFailed           ProviderErrorClass = "auth_failed"
 	ProviderErrInsufficientBalance  ProviderErrorClass = "insufficient_provider_balance"
 	ProviderErrInvalidRequest       ProviderErrorClass = "invalid_request"
+	ProviderErrModelUnavailable     ProviderErrorClass = "provider_model_unavailable"
 	ProviderErrContentRejected      ProviderErrorClass = "content_rejected"
 	ProviderErrOverloaded           ProviderErrorClass = "provider_overloaded"
 	ProviderErrTimeout              ProviderErrorClass = "provider_timeout"

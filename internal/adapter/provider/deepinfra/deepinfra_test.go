@@ -480,6 +480,76 @@ func TestSubmitImageInvalidRequestClass(t *testing.T) {
 	}
 }
 
+func TestSubmitDeepInfraModelUnavailableClass(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"error":{"message":"model private-model-v9 was not found","type":"model_not_found","code":"model_not_found"}}`))
+	}))
+	defer srv.Close()
+
+	p := New(Config{APIKey: "test-key", BaseURL: srv.URL, HTTPClient: srv.Client()})
+	_, err := p.Submit(context.Background(), domain.ProviderRequest{
+		JobID:     uuid.New(),
+		Operation: domain.OperationImageGenerate,
+		Modality:  domain.ModalityImage,
+		Prompt:    "hello",
+	})
+	providertest.RequireErrorClass(t, err, domain.ProviderErrModelUnavailable)
+	if strings.Contains(err.Error(), "private-model-v9") {
+		t.Fatalf("provider body leaked into error: %v", err)
+	}
+}
+
+func TestSubmitDeepInfraContentRejectedClass(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		_, _ = w.Write([]byte(`{"message":"prompt was blocked by copyright policy"}`))
+	}))
+	defer srv.Close()
+
+	p := New(Config{APIKey: "test-key", BaseURL: srv.URL, HTTPClient: srv.Client()})
+	_, err := p.Submit(context.Background(), domain.ProviderRequest{
+		JobID:     uuid.New(),
+		Operation: domain.OperationImageGenerate,
+		Modality:  domain.ModalityImage,
+		Prompt:    "hello",
+	})
+	providertest.RequireErrorClass(t, err, domain.ProviderErrContentRejected)
+	if strings.Contains(err.Error(), "copyright policy") {
+		t.Fatalf("provider body leaked into error: %v", err)
+	}
+}
+
+func TestSubmitDeepInfraInvalidRequestFallbackClass(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		_, _ = w.Write([]byte(`{"detail":"width must be between 256 and 2048"}`))
+	}))
+	defer srv.Close()
+
+	p := New(Config{APIKey: "test-key", BaseURL: srv.URL, HTTPClient: srv.Client()})
+	_, err := p.Submit(context.Background(), domain.ProviderRequest{
+		JobID:     uuid.New(),
+		Operation: domain.OperationImageGenerate,
+		Modality:  domain.ModalityImage,
+		Prompt:    "hello",
+	})
+	providertest.RequireErrorClass(t, err, domain.ProviderErrInvalidRequest)
+	if strings.Contains(err.Error(), "width must be") {
+		t.Fatalf("provider body leaked into error: %v", err)
+	}
+}
+
+func TestDeepInfraInvalidPromptForModelStaysInvalidRequest(t *testing.T) {
+	class := classifyErrorBody(
+		http.StatusUnprocessableEntity,
+		strings.NewReader(`{"error":{"message":"invalid prompt length for model"}}`),
+	)
+	if class != "" {
+		t.Fatalf("class = %q, want status fallback invalid_request", class)
+	}
+}
+
 func TestSubmitRateLimitedClass(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusTooManyRequests)

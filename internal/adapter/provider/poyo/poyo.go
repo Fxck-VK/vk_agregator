@@ -1156,6 +1156,7 @@ func classifyPoYoError(status int, code, typ, msg string) domain.ProviderErrorCl
 		strings.Contains(lower, "policy") ||
 		strings.Contains(lower, "safety") ||
 		strings.Contains(lower, "nsfw") ||
+		strings.Contains(lower, "copyright") ||
 		strings.Contains(lower, "sensitive") ||
 		strings.Contains(lower, "content rejected") ||
 		strings.Contains(lower, "does not comply") ||
@@ -1165,6 +1166,8 @@ func classifyPoYoError(status int, code, typ, msg string) domain.ProviderErrorCl
 		strings.Contains(lower, "filtered out") ||
 		strings.Contains(lower, "blocked by"):
 		return domain.ProviderErrContentRejected
+	case isModelUnavailableError(lower):
+		return domain.ProviderErrModelUnavailable
 	case strings.Contains(lower, "rate") || strings.Contains(lower, "too many"):
 		return domain.ProviderErrRateLimited
 	case strings.Contains(lower, "timeout") || strings.Contains(lower, "timed out"):
@@ -1190,6 +1193,46 @@ func classifyPoYoError(status int, code, typ, msg string) domain.ProviderErrorCl
 		return domain.ProviderErrOverloaded
 	}
 	return domain.ProviderErrInternal
+}
+
+func isModelUnavailableError(lower string) bool {
+	normalized := strings.NewReplacer("_", " ", "-", " ").Replace(lower)
+	for _, phrase := range []string{
+		"model not found",
+		"unknown model",
+		"model unknown",
+		"unsupported model",
+		"model unsupported",
+		"model unavailable",
+		"model not available",
+		"model does not exist",
+		"model doesn't exist",
+		"model doesnt exist",
+		"model not exist",
+		"invalid model",
+		"model invalid",
+	} {
+		if strings.Contains(normalized, phrase) {
+			return true
+		}
+	}
+	if !strings.Contains(normalized, "model") {
+		return false
+	}
+	for _, phrase := range []string{
+		"not found",
+		"not available",
+		"unavailable",
+		"does not exist",
+		"doesn't exist",
+		"doesnt exist",
+		"not exist",
+	} {
+		if strings.Contains(normalized, phrase) {
+			return true
+		}
+	}
+	return false
 }
 
 func mapTaskStatus(status string) domain.ProviderTaskStatus {
@@ -1248,6 +1291,8 @@ func providerErrorMessage(class domain.ProviderErrorClass, fallback string) stri
 		return "poyo rate limit exceeded"
 	case domain.ProviderErrInvalidRequest:
 		return "poyo request validation failed"
+	case domain.ProviderErrModelUnavailable:
+		return "poyo model is unavailable"
 	case domain.ProviderErrContentRejected:
 		return "poyo content moderation rejected the request"
 	case domain.ProviderErrOverloaded:

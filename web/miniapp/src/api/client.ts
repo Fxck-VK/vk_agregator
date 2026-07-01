@@ -22,6 +22,7 @@ export interface Job {
   cost_captured: number;
   output_artifact_ids: string[];
   error_code?: string;
+  user_message?: string;
   created_at: string;
   updated_at: string;
 }
@@ -993,6 +994,10 @@ export function statusLabel(s: string): string {
 const ERROR_LABELS: Record<string, string> = {
   insufficient_credits: "Недостаточно ⭐️",
   provider_error: "Временная ошибка генерации",
+  model_unavailable: "Выбранная модель сейчас недоступна. Попробуйте другую модель. ⭐️ не списаны",
+  invalid_request:
+    "Модель не приняла запрос. Попробуйте другую модель или измените описание; возможны ограничения по содержанию. ⭐️ не списаны",
+  content_rejected: "Запрос отклонён правилами безопасности. Измените описание. ⭐️ не списаны",
   timeout: "Превышено время ожидания",
   rate_limited: "Слишком много запросов",
   media_upload_invalid: "Не удалось прочитать файл",
@@ -1005,6 +1010,8 @@ const ERROR_LABELS: Record<string, string> = {
 };
 
 export function errorLabel(job: Job): string {
+  const userMessage = job.user_message?.trim();
+  if (userMessage) return userMessage;
   if (job.error_code && ERROR_LABELS[job.error_code]) return ERROR_LABELS[job.error_code];
   if (job.status === "expired") return "Истёк срок";
   if (job.status === "cancelled") return "Отменено";
