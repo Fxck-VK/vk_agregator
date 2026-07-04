@@ -264,6 +264,7 @@ type Config struct {
 	FeatureImageModelNanoBananaProEnabled       bool
 	FeatureImageModelGPTImage2Enabled           bool
 	FeatureImageModelNanoBanana2Enabled         bool
+	FeatureImageModelSeedream45Enabled          bool
 	FeatureImageModelMockEnabled                bool
 	FeatureVideoRouterEnabled                   bool
 	FeatureVideoRouteHailuo23FastEnabled        bool
@@ -1208,6 +1209,7 @@ func Load() Config {
 		FeatureImageModelNanoBananaProEnabled:     envBool("FEATURE_IMAGE_MODEL_NANO_BANANA_PRO_ENABLED", false),
 		FeatureImageModelGPTImage2Enabled:         envBool("FEATURE_IMAGE_MODEL_GPT_IMAGE_2_ENABLED", false),
 		FeatureImageModelNanoBanana2Enabled:       envBool("FEATURE_IMAGE_MODEL_NANO_BANANA_2_ENABLED", false),
+		FeatureImageModelSeedream45Enabled:        envBool("FEATURE_IMAGE_MODEL_SEEDREAM_4_5_ENABLED", false),
 		FeatureImageModelMockEnabled:              envBool("FEATURE_IMAGE_MODEL_MOCK_ENABLED", false),
 		FeatureVideoRouterEnabled:                 envBool("FEATURE_VIDEO_ROUTER_ENABLED", false),
 		FeatureVideoRouteHailuo23FastEnabled:      envBool("FEATURE_VIDEO_ROUTE_HAILUO_2_3_FAST_ENABLED", false),
@@ -1510,6 +1512,17 @@ func (c Config) validateVideoRouteProviderConfig() error {
 		}
 		if strings.TrimSpace(c.PoYoBaseURL) == "" {
 			return fmt.Errorf("config: FEATURE_IMAGE_MODEL_NANO_BANANA_PRO_ENABLED=true requires POYO_BASE_URL")
+		}
+	}
+	if c.FeatureImageModelSeedream45Enabled {
+		if !c.PoYoProviderEnabled {
+			return fmt.Errorf("config: FEATURE_IMAGE_MODEL_SEEDREAM_4_5_ENABLED=true requires POYO_PROVIDER_ENABLED=true")
+		}
+		if strings.TrimSpace(c.PoYoAPIKey) == "" {
+			return fmt.Errorf("config: FEATURE_IMAGE_MODEL_SEEDREAM_4_5_ENABLED=true requires POYO_API_KEY")
+		}
+		if strings.TrimSpace(c.PoYoBaseURL) == "" {
+			return fmt.Errorf("config: FEATURE_IMAGE_MODEL_SEEDREAM_4_5_ENABLED=true requires POYO_BASE_URL")
 		}
 	}
 	if c.FeatureImageModelGPTImage2Enabled {

@@ -1628,6 +1628,78 @@ func TestGenerationImageRequestCarriesImageDefaultsAndReferences(t *testing.T) {
 	}
 }
 
+func TestGenerationSeedream45RequestUsesPoyoModelQualityAndReferences(t *testing.T) {
+	provider := &captureAsyncImageProvider{
+		name:  domain.ProviderPoYo,
+		model: poyo.ModelSeedream45,
+		cost:  15,
+	}
+	h := newHarnessWithProvider(t, provider, nil)
+	ctx := context.Background()
+	userID := uuid.New()
+	reference := h.createInputImageArtifact(t, userID, validPNGBytes(t), "image/png")
+	params, _ := json.Marshal(map[string]any{
+		"prompt":                 "seedream product render",
+		"provider":               domain.ProviderPoYo,
+		"model_code":             poyo.ModelSeedream45,
+		"size":                   "1:1",
+		"resolution":             pricingcatalog.ImageQuality4K,
+		"image_quality":          pricingcatalog.ImageQuality4K,
+		"reference_artifact_ids": []string{reference.ID.String()},
+	})
+	job := &domain.Job{
+		ID:             uuid.New(),
+		UserID:         userID,
+		OperationType:  domain.OperationImageGenerate,
+		Modality:       domain.ModalityImage,
+		Status:         domain.JobStatusQueued,
+		IdempotencyKey: "job:" + uuid.NewString(),
+		CorrelationID:  "corr",
+		CostReserved:   15,
+		Params:         params,
+	}
+	if err := h.jobs.Create(ctx, job); err != nil {
+		t.Fatalf("create job: %v", err)
+	}
+
+	if err := h.gen.Process(ctx, taskFor(job)); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+
+	got := provider.last
+	if got.Provider != domain.ProviderPoYo || got.ModelCode != poyo.ModelSeedream45 {
+		t.Fatalf("provider/model = %q/%q, want poyo/%q", got.Provider, got.ModelCode, poyo.ModelSeedream45)
+	}
+	if got.Size != "1:1" || got.Resolution != pricingcatalog.ImageQuality4K {
+		t.Fatalf("size/resolution = %q/%q, want 1:1/%s", got.Size, got.Resolution, pricingcatalog.ImageQuality4K)
+	}
+	if len(got.ReferenceArtifactIDs) != 1 || got.ReferenceArtifactIDs[0] != reference.ID {
+		t.Fatalf("reference ids = %v, want %s", got.ReferenceArtifactIDs, reference.ID)
+	}
+	if len(got.InputURLs) != 1 || !strings.HasPrefix(got.InputURLs[0], "data:image/png;base64,") {
+		t.Fatalf("input urls were not resolved from reference artifact: %v", got.InputURLs)
+	}
+	var safeParams map[string]any
+	if err := json.Unmarshal(got.Params, &safeParams); err != nil {
+		t.Fatalf("provider params json: %v", err)
+	}
+	if safeParams["image_quality"] != pricingcatalog.ImageQuality4K {
+		t.Fatalf("image_quality param = %#v, want %s", safeParams["image_quality"], pricingcatalog.ImageQuality4K)
+	}
+	if _, ok := safeParams["prompt"]; ok {
+		t.Fatalf("provider params must not persist prompt: %s", string(got.Params))
+	}
+	if strings.Contains(string(got.Params), "base64") || strings.Contains(string(got.Params), "data:") {
+		t.Fatalf("provider params must not persist reference bytes: %s", string(got.Params))
+	}
+	if provider.polls != 0 {
+		t.Fatalf("initial async Seedream submit must not poll inline; polls = %d", provider.polls)
+	}
+	if len(h.streams.byStream[redisqueue.StreamProviderPoll]) != 1 {
+		t.Fatalf("expected one provider poll task, got %v", h.streams.byStream)
+	}
+}
+
 func TestGenerationImageRequestCarriesProviderFromParams(t *testing.T) {
 	provider := &captureImageProvider{name: domain.ProviderDeepInfra}
 	h := newHarnessWithProvider(t, provider, nil)

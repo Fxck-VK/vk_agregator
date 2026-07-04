@@ -203,6 +203,8 @@ func featureFlagValue(cfg config.Config, flag string) (bool, bool) {
 		return cfg.FeatureImageModelNanoBananaProEnabled, true
 	case providermodels.FeatureImageGPTImage2:
 		return cfg.FeatureImageModelGPTImage2Enabled, true
+	case providermodels.FeatureImageSeedream45:
+		return cfg.FeatureImageModelSeedream45Enabled, true
 	case providermodels.FeatureImageMock:
 		return cfg.FeatureImageModelMockEnabled, true
 	case providermodels.FeatureVideoRouter:

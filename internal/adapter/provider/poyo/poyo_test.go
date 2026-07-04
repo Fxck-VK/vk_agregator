@@ -24,6 +24,7 @@ func TestCapabilitiesAdvertiseSupportedMedia(t *testing.T) {
 	}
 	providertest.RequireCapability(t, caps, domain.OperationImageGenerate, domain.ModalityImage, ModelNanoBanana2New)
 	providertest.RequireCapability(t, caps, domain.OperationImageGenerate, domain.ModalityImage, ModelNanoBananaPro)
+	providertest.RequireCapability(t, caps, domain.OperationImageGenerate, domain.ModalityImage, "seedream-4.5")
 	providertest.RequireCapability(t, caps, domain.OperationVideoGenerate, domain.ModalityVideo, ModelKlingO3Standard)
 	providertest.RequireCapability(t, caps, domain.OperationVideoGenerate, domain.ModalityVideo, ModelSeedance20Fast)
 	providertest.RequireCapability(t, caps, domain.OperationVideoGenerate, domain.ModalityVideo, ModelRunwayGen45)
@@ -268,6 +269,164 @@ func TestSubmitNanoBananaProReferencesUseEditModelAndImageURLs(t *testing.T) {
 	}
 }
 
+func TestSubmitSeedream45TextOnlyUsesGenerationModel(t *testing.T) {
+	var calls int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if r.Method != http.MethodPost || r.URL.Path != "/api/generate/submit" {
+			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		var body submitRequest
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode body: %v", err)
+		}
+		if body.Model != "seedream-4.5" {
+			t.Fatalf("model = %q, want seedream-4.5", body.Model)
+		}
+		if body.Input["prompt"] != "safe prompt" || body.Input["size"] != "4K" || body.Input["n"].(float64) != 1 {
+			t.Fatalf("bad Seedream input: %+v", body.Input)
+		}
+		if _, ok := body.Input["image_urls"]; ok {
+			t.Fatalf("image_urls must be omitted without references: %+v", body.Input)
+		}
+		if _, ok := body.Input["reference_image_urls"]; ok {
+			t.Fatalf("reference_image_urls must not be used for Seedream 4.5: %+v", body.Input)
+		}
+		if _, ok := body.Input["resolution"]; ok {
+			t.Fatalf("resolution must not be sent for Seedream 4.5: %+v", body.Input)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"code":200,"data":{"task_id":"seedream_task_1","status":"not_started","created_time":"2026-07-05T10:30:00Z"}}`))
+	}))
+	defer srv.Close()
+
+	provider := New(Config{APIKey: "test-key", BaseURL: srv.URL, HTTPClient: srv.Client()})
+	req := baseImageRequest("seedream-4.5")
+	req.Resolution = "4K"
+
+	task, err := provider.Submit(context.Background(), req)
+	if err != nil {
+		t.Fatalf("submit: %v", err)
+	}
+	if task.Provider != domain.ProviderPoYo || task.ModelCode != "seedream-4.5" || task.ExternalID != "seedream_task_1" || task.Status != domain.ProviderTaskPending {
+		t.Fatalf("bad task: %+v", task)
+	}
+	if calls != 1 {
+		t.Fatalf("calls = %d, want 1", calls)
+	}
+}
+
+func TestSubmitSeedream45ReferencesUseEditModelAndImageURLs(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/generate/submit" {
+			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		var body submitRequest
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode body: %v", err)
+		}
+		if body.Model != "seedream-4.5-edit" {
+			t.Fatalf("model = %q, want seedream-4.5-edit", body.Model)
+		}
+		if body.Input["prompt"] != "safe prompt" || body.Input["size"] != "2K" || body.Input["n"].(float64) != 1 {
+			t.Fatalf("bad Seedream edit input: %+v", body.Input)
+		}
+		refs, ok := body.Input["image_urls"].([]any)
+		if !ok || len(refs) != 2 || refs[0] != "https://cdn.test/ref-a.png" || refs[1] != "https://cdn.test/ref-b.png" {
+			t.Fatalf("image_urls = %#v", body.Input["image_urls"])
+		}
+		if _, ok := body.Input["reference_image_urls"]; ok {
+			t.Fatalf("reference_image_urls must not be used for Seedream 4.5: %+v", body.Input)
+		}
+		if _, ok := body.Input["resolution"]; ok {
+			t.Fatalf("resolution must not be sent for Seedream 4.5: %+v", body.Input)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"code":200,"data":{"task_id":"seedream_edit_task_1","status":"not_started","created_time":"2026-07-05T10:30:00Z"}}`))
+	}))
+	defer srv.Close()
+
+	provider := New(Config{APIKey: "test-key", BaseURL: srv.URL, HTTPClient: srv.Client()})
+	req := baseImageRequest("seedream-4.5")
+	req.Resolution = "2K"
+	req.InputURLs = []string{" https://cdn.test/ref-a.png ", "https://cdn.test/ref-b.png"}
+
+	task, err := provider.Submit(context.Background(), req)
+	if err != nil {
+		t.Fatalf("submit: %v", err)
+	}
+	if task.Provider != domain.ProviderPoYo || task.ModelCode != "seedream-4.5" || task.ExternalID != "seedream_edit_task_1" {
+		t.Fatalf("bad task: %+v", task)
+	}
+}
+
+func TestSeedream45ReferenceValidationAndEstimate(t *testing.T) {
+	provider := New(Config{APIKey: "test-key", BaseURL: "http://127.0.0.1"})
+	req := baseImageRequest("seedream-4.5")
+	req.Resolution = "2K"
+	req.InputURLs = make([]string, 10)
+	for i := range req.InputURLs {
+		req.InputURLs[i] = "https://cdn.test/ref.png"
+	}
+	estimate, err := provider.Estimate(context.Background(), req)
+	if err != nil {
+		t.Fatalf("estimate accepted 10 refs: %v", err)
+	}
+	if estimate.AmountCredits != 10 || estimate.Currency != "credits" || estimate.Estimated {
+		t.Fatalf("bad 2K estimate: %+v", estimate)
+	}
+
+	req.InputURLs = nil
+	req.Resolution = "4K"
+	estimate, err = provider.Estimate(context.Background(), req)
+	if err != nil {
+		t.Fatalf("estimate 4K: %v", err)
+	}
+	if estimate.AmountCredits != 15 {
+		t.Fatalf("4K estimate = %d, want 15", estimate.AmountCredits)
+	}
+
+	req.Resolution = "1K"
+	_, err = provider.Estimate(context.Background(), req)
+	requireErrorClass(t, err, domain.ProviderErrInvalidRequest)
+
+	req.Resolution = "2K"
+	req.InputURLs = make([]string, 11)
+	for i := range req.InputURLs {
+		req.InputURLs[i] = "https://cdn.test/ref.png"
+	}
+	_, err = provider.Estimate(context.Background(), req)
+	requireErrorClass(t, err, domain.ProviderErrInvalidRequest)
+}
+
+func TestSeedream45AllowedSizes(t *testing.T) {
+	wantSize := ""
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body submitRequest
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode body: %v", err)
+		}
+		if body.Input["size"] != wantSize {
+			t.Fatalf("size = %#v, want %s; input=%+v", body.Input["size"], wantSize, body.Input)
+		}
+		_, _ = w.Write([]byte(`{"code":200,"data":{"task_id":"seedream_task_1","status":"not_started"}}`))
+	}))
+	defer srv.Close()
+
+	for _, size := range []string{"1:1", "4:3", "3:4", "16:9", "9:16", "3:2", "2:3", "21:9", "2K", "4K"} {
+		t.Run(size, func(t *testing.T) {
+			wantSize = size
+			provider := New(Config{APIKey: "test-key", BaseURL: srv.URL, HTTPClient: srv.Client()})
+			req := baseImageRequest("seedream-4.5")
+			req.AspectRatio = ""
+			req.Size = size
+			if _, err := provider.Submit(context.Background(), req); err != nil {
+				t.Fatalf("submit: %v", err)
+			}
+		})
+	}
+}
+
 func TestNanoBananaProReferenceValidation(t *testing.T) {
 	provider := New(Config{APIKey: "test-key", BaseURL: "http://127.0.0.1"})
 	req := baseImageRequest(ModelNanoBananaPro)
@@ -304,6 +463,12 @@ func TestSubmitUploadsDataURLReferencesBeforeGenerate(t *testing.T) {
 			name:      "nano banana pro image",
 			req:       baseImageRequest(ModelNanoBananaPro),
 			wantModel: ModelNanoBananaProEdit,
+			wantField: "image_urls",
+		},
+		{
+			name:      "seedream image",
+			req:       baseImageRequest("seedream-4.5"),
+			wantModel: "seedream-4.5-edit",
 			wantField: "image_urls",
 		},
 		{

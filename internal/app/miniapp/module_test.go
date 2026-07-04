@@ -22,6 +22,7 @@ func TestMiniAppImageModelsExposeOnlyPublicCatalogFields(t *testing.T) {
 		PoYoBaseURL:                           "https://poyo.test",
 		FeatureImageModelNanoBanana2Enabled:   true,
 		FeatureImageModelNanoBananaProEnabled: true,
+		FeatureImageModelSeedream45Enabled:    true,
 		FeatureImageModelGPTImage2Enabled:     true,
 	}
 	runtimeCatalog, err := productcatalog.FromConfig(cfg, staticPricingCatalog(t))
@@ -29,7 +30,7 @@ func TestMiniAppImageModelsExposeOnlyPublicCatalogFields(t *testing.T) {
 		t.Fatalf("build product catalog: %v", err)
 	}
 	models := miniAppImageModels(runtimeCatalog.Catalog)
-	if len(models) != 3 {
+	if len(models) != 4 {
 		t.Fatalf("expected enabled public image models, got %+v", models)
 	}
 
@@ -39,7 +40,7 @@ func TestMiniAppImageModelsExposeOnlyPublicCatalogFields(t *testing.T) {
 			t.Fatalf("missing public image catalog fields: %+v", model)
 		}
 		serialized := strings.ToLower(fmt.Sprintf("%+v", model))
-		for _, private := range []string{"model_code", "provider", "nano-banana-2", "gemini-3-pro-image-preview", "gpt-image-2"} {
+		for _, private := range []string{"model_code", "provider", "nano-banana-2", "gemini-3-pro-image-preview", "gpt-image-2", "seedream-4.5"} {
 			if strings.Contains(serialized, private) {
 				t.Fatalf("image catalog leaked private field %q: %+v", private, model)
 			}
@@ -50,6 +51,17 @@ func TestMiniAppImageModelsExposeOnlyPublicCatalogFields(t *testing.T) {
 				t.Fatalf("missing image quality options: %+v", model)
 			}
 			sawQualityOptions[model.ID] = true
+		case modelcatalog.MiniAppImageSeedream45:
+			if model.DefaultQuality != modelcatalog.ImageQuality2K ||
+				len(model.QualityOptions) != 2 ||
+				model.QualityOptions[0] != modelcatalog.ImageQuality2K ||
+				model.QualityOptions[1] != modelcatalog.ImageQuality4K ||
+				model.EstimateCredits != 10 ||
+				!model.SupportsReferenceImage ||
+				model.MaxReferenceImages != 10 {
+				t.Fatalf("missing Seedream 4.5 public image contract: %+v", model)
+			}
+			sawQualityOptions[model.ID] = true
 		}
 		if model.ID == modelcatalog.MiniAppImageNanoBanana2 {
 			if !model.SupportsReferenceImage || model.MaxReferenceImages != 14 {
@@ -57,7 +69,7 @@ func TestMiniAppImageModelsExposeOnlyPublicCatalogFields(t *testing.T) {
 			}
 		}
 	}
-	for _, id := range []string{modelcatalog.MiniAppImageNanoBanana2, modelcatalog.MiniAppImageNanoBananaPro, modelcatalog.MiniAppImageGPTImage2} {
+	for _, id := range []string{modelcatalog.MiniAppImageNanoBanana2, modelcatalog.MiniAppImageNanoBananaPro, modelcatalog.MiniAppImageGPTImage2, modelcatalog.MiniAppImageSeedream45} {
 		if !sawQualityOptions[id] {
 			t.Fatalf("%s public model was not exposed with quality options", id)
 		}

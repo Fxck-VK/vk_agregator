@@ -186,6 +186,50 @@ func TestRegistryNanoBananaProUsesPoyoSourceContract(t *testing.T) {
 	}
 }
 
+func TestRegistrySeedream45UsesPoyoSourceContract(t *testing.T) {
+	registry := providermodels.StaticRegistry()
+
+	model, ok := registry.PublicImageModel(modelcatalog.MiniAppImageSeedream45)
+	if !ok {
+		t.Fatal("Seedream 4.5 image model missing")
+	}
+	if model.PublicID != providermodels.PublicImageSeedream45 {
+		t.Fatalf("Seedream 4.5 public id = %q, want %q", model.PublicID, providermodels.PublicImageSeedream45)
+	}
+	if model.Provider != domain.ProviderPoYo {
+		t.Fatalf("Seedream 4.5 provider = %s, want %s", model.Provider, domain.ProviderPoYo)
+	}
+	if model.ProviderModelID != providermodels.ProviderModelPoYoSeedream45 {
+		t.Fatalf("Seedream 4.5 provider model = %q, want %q", model.ProviderModelID, providermodels.ProviderModelPoYoSeedream45)
+	}
+	if model.FeatureFlag != providermodels.FeatureImageSeedream45 {
+		t.Fatalf("Seedream 4.5 feature flag = %q, want %q", model.FeatureFlag, providermodels.FeatureImageSeedream45)
+	}
+	if model.Readiness.ProviderEnabledFlag != providermodels.ProviderFlagPoYo {
+		t.Fatalf("Seedream 4.5 readiness flag = %q, want %q", model.Readiness.ProviderEnabledFlag, providermodels.ProviderFlagPoYo)
+	}
+	if !reflect.DeepEqual(model.Readiness.RequiredConfigKeys, []string{providermodels.ConfigKeyPoYoAPIKey, providermodels.ConfigKeyPoYoBaseURL}) {
+		t.Fatalf("Seedream 4.5 readiness keys = %#v", model.Readiness.RequiredConfigKeys)
+	}
+	if !model.Limits.SupportsReferenceImage || model.Limits.MaxReferenceImages != 10 {
+		t.Fatalf("Seedream 4.5 reference limits = %+v, want optional refs max 10", model.Limits)
+	}
+	if !reflect.DeepEqual(model.Limits.AllowedQualities, []string{modelcatalog.ImageQuality2K, modelcatalog.ImageQuality4K}) {
+		t.Fatalf("Seedream 4.5 qualities = %#v, want 2K/4K only", model.Limits.AllowedQualities)
+	}
+	if len(model.PricingKeys) != 2 {
+		t.Fatalf("Seedream 4.5 pricing keys = %d, want 2", len(model.PricingKeys))
+	}
+	for _, key := range model.PricingKeys {
+		if key.ImageModelID != providermodels.PublicImageSeedream45 {
+			t.Fatalf("Seedream 4.5 pricing key model = %q", key.ImageModelID)
+		}
+		if key.Quality == pricingcatalog.ImageQuality1K {
+			t.Fatalf("Seedream 4.5 must not include 1K pricing key: %+v", key)
+		}
+	}
+}
+
 func TestRegistryVideoRoutesMatchCurrentRouterSpecs(t *testing.T) {
 	registry := providermodels.StaticRegistry()
 	routes := registry.VideoRoutes()

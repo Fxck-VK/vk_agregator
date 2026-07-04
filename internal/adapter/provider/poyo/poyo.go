@@ -27,6 +27,8 @@ const (
 	ModelNanoBanana2NewEdit = "nano-banana-2-new-edit"
 	ModelNanoBananaPro      = "nano-banana-pro"
 	ModelNanoBananaProEdit  = "nano-banana-pro-edit"
+	ModelSeedream45         = "seedream-4.5"
+	ModelSeedream45Edit     = "seedream-4.5-edit"
 
 	klingO3CreditsPerSecond    int64 = 10
 	seedance20CreditsPerSecond int64 = 28
@@ -35,6 +37,7 @@ const (
 	maxSeedanceReferenceImages    = 4
 	maxRunwayReferenceImages      = 1
 	maxNanoBanana2ReferenceImages = 14
+	maxSeedream45ReferenceImages  = 10
 )
 
 // Config holds PoYo connection settings.
@@ -92,6 +95,12 @@ func (p *Provider) Capabilities(context.Context) ([]domain.Capability, error) {
 			SupportsPolling: true,
 		},
 		{
+			Operation:       domain.OperationImageGenerate,
+			Modality:        domain.ModalityImage,
+			ModelCode:       ModelSeedream45,
+			SupportsPolling: true,
+		},
+		{
 			Operation:       domain.OperationVideoGenerate,
 			Modality:        domain.ModalityVideo,
 			ModelCode:       ModelKlingO3Standard,
@@ -136,7 +145,7 @@ func (p *Provider) Estimate(_ context.Context, req domain.ProviderRequest) (doma
 		if err := validateImageShape(req, false); err != nil {
 			return domain.CostEstimate{}, err
 		}
-		providerCredits := nanoBanana2ProviderCredits(req.Resolution)
+		providerCredits := imageProviderCredits(req.ModelCode, req.Resolution)
 		return domain.CostEstimate{
 			AmountCredits: providerCredits,
 			Currency:      "credits",
@@ -651,15 +660,23 @@ func buildImageSubmitRequest(req domain.ProviderRequest) (submitRequest, error) 
 	if modelCode == ModelNanoBananaPro && len(inputURLs) > 0 {
 		submitModel = ModelNanoBananaProEdit
 	}
+	if modelCode == ModelSeedream45 && len(inputURLs) > 0 {
+		submitModel = ModelSeedream45Edit
+	}
 	input := map[string]any{
-		"prompt":     strings.TrimSpace(req.Prompt),
-		"size":       effectiveImageSize(modelCode, req),
-		"resolution": effectiveImageResolution(req.Resolution),
+		"prompt": strings.TrimSpace(req.Prompt),
+		"size":   effectiveImageSize(modelCode, req),
+	}
+	if modelCode != ModelSeedream45 {
+		input["resolution"] = effectiveImageResolution(req.Resolution)
 	}
 	if modelCode == ModelNanoBananaPro {
 		input["n"] = 1
 		input["output_format"] = "png"
 		input["enable_web_search"] = false
+	}
+	if modelCode == ModelSeedream45 {
+		input["n"] = 1
 	}
 	if len(inputURLs) > 0 {
 		input["image_urls"] = inputURLs
@@ -829,11 +846,11 @@ func validateImageShape(req domain.ProviderRequest, requirePrompt bool) error {
 	if value := strings.TrimSpace(req.Size); value != "" && !allowedImageSize(modelCode, value) {
 		return &Error{Class: domain.ProviderErrInvalidRequest, Message: "unsupported PoYo image size"}
 	}
-	if value := strings.TrimSpace(req.Resolution); value != "" && !allowedImageResolution(value) {
+	if value := strings.TrimSpace(req.Resolution); value != "" && !allowedImageResolution(modelCode, value) {
 		return &Error{Class: domain.ProviderErrInvalidRequest, Message: "unsupported PoYo image resolution"}
 	}
-	if len(cleanInputURLs(req.InputURLs)) > maxNanoBanana2ReferenceImages {
-		return &Error{Class: domain.ProviderErrInvalidRequest, Message: "too many Nano Banana 2 reference images"}
+	if len(cleanInputURLs(req.InputURLs)) > maxImageReferenceImages(modelCode) {
+		return &Error{Class: domain.ProviderErrInvalidRequest, Message: "too many PoYo reference images"}
 	}
 	if err := validateInputURLShape(req.InputURLs); err != nil {
 		return err
@@ -843,7 +860,7 @@ func validateImageShape(req domain.ProviderRequest, requirePrompt bool) error {
 
 func isSupportedImageModel(model string) bool {
 	switch strings.TrimSpace(model) {
-	case ModelNanoBanana2New, ModelNanoBananaPro:
+	case ModelNanoBanana2New, ModelNanoBananaPro, ModelSeedream45:
 		return true
 	default:
 		return false
@@ -851,6 +868,9 @@ func isSupportedImageModel(model string) bool {
 }
 
 func effectiveImageSize(model string, req domain.ProviderRequest) string {
+	if strings.TrimSpace(model) == ModelSeedream45 {
+		return effectiveSeedream45Size(req)
+	}
 	for _, value := range []string{req.AspectRatio, req.Size} {
 		trimmed := strings.TrimSpace(value)
 		if allowedImageSize(model, trimmed) {
@@ -872,6 +892,13 @@ func effectiveImageResolution(value string) string {
 	}
 }
 
+func imageProviderCredits(model, resolution string) int64 {
+	if strings.TrimSpace(model) == ModelSeedream45 {
+		return seedream45ProviderCredits(resolution)
+	}
+	return nanoBanana2ProviderCredits(resolution)
+}
+
 func nanoBanana2ProviderCredits(resolution string) int64 {
 	switch strings.ToUpper(strings.TrimSpace(resolution)) {
 	case "2K":
@@ -883,7 +910,24 @@ func nanoBanana2ProviderCredits(resolution string) int64 {
 	}
 }
 
-func allowedImageResolution(value string) bool {
+func seedream45ProviderCredits(resolution string) int64 {
+	switch strings.ToUpper(strings.TrimSpace(resolution)) {
+	case "4K":
+		return 15
+	default:
+		return 10
+	}
+}
+
+func allowedImageResolution(model, value string) bool {
+	if strings.TrimSpace(model) == ModelSeedream45 {
+		switch strings.ToUpper(strings.TrimSpace(value)) {
+		case "2K", "4K":
+			return true
+		default:
+			return false
+		}
+	}
 	switch strings.ToUpper(strings.TrimSpace(value)) {
 	case "1K", "2K", "4K":
 		return true
@@ -892,8 +936,34 @@ func allowedImageResolution(value string) bool {
 	}
 }
 
+func effectiveSeedream45Size(req domain.ProviderRequest) string {
+	resolution := strings.ToUpper(strings.TrimSpace(req.Resolution))
+	if resolution == "2K" || resolution == "4K" {
+		return resolution
+	}
+	for _, value := range []string{req.Size, req.AspectRatio} {
+		trimmed := strings.TrimSpace(value)
+		if allowedImageSize(ModelSeedream45, trimmed) {
+			return trimmed
+		}
+	}
+	return "1:1"
+}
+
 func allowedImageSize(model, value string) bool {
 	trimmed := strings.TrimSpace(value)
+	if strings.TrimSpace(model) == ModelSeedream45 {
+		switch strings.ToUpper(trimmed) {
+		case "2K", "4K":
+			return true
+		}
+		switch trimmed {
+		case "1:1", "4:3", "3:4", "16:9", "9:16", "3:2", "2:3", "21:9":
+			return true
+		default:
+			return false
+		}
+	}
 	if strings.TrimSpace(model) == ModelNanoBananaPro {
 		switch trimmed {
 		case "auto", "1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9":
@@ -908,6 +978,15 @@ func allowedImageSize(model, value string) bool {
 		return true
 	default:
 		return false
+	}
+}
+
+func maxImageReferenceImages(model string) int {
+	switch strings.TrimSpace(model) {
+	case ModelSeedream45:
+		return maxSeedream45ReferenceImages
+	default:
+		return maxNanoBanana2ReferenceImages
 	}
 }
 

@@ -154,6 +154,27 @@ func TestFromConfigMockImageFailsClosedWithoutPricingTariff(t *testing.T) {
 	}
 }
 
+func TestFromConfigSeedream45VisibleWhenReadyEnabledAndPriced(t *testing.T) {
+	prices := staticPricingCatalog(t)
+	runtimeCatalog, err := productcatalog.FromConfig(config.Config{
+		PoYoProviderEnabled:                true,
+		PoYoAPIKey:                         "configured",
+		PoYoBaseURL:                        "https://poyo.test",
+		FeatureImageModelSeedream45Enabled: true,
+	}, prices)
+	if err != nil {
+		t.Fatalf("build runtime catalog: %v", err)
+	}
+	image := findImage(runtimeCatalog.ImageModels(), modelcatalog.MiniAppImageSeedream45)
+	if image == nil {
+		t.Fatalf("Seedream 4.5 missing from ready priced public catalog: %+v", runtimeCatalog.ImageModels())
+	}
+	if image.DefaultQuality != modelcatalog.ImageQuality2K || image.EstimateCredits != 10 || !image.SupportsReferenceImage || image.MaxReferenceImages != 10 {
+		t.Fatalf("Seedream 4.5 public catalog contract = %+v", image)
+	}
+	assertNoPrivateProviderFields(t, runtimeCatalog.Catalog.Items())
+}
+
 func TestFromConfigDeepInfraImagesFailClosedWithoutPricingTariffs(t *testing.T) {
 	prices := staticPricingCatalog(t)
 	runtimeCatalog, err := productcatalog.FromConfig(config.Config{

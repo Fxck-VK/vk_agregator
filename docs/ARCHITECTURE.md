@@ -217,6 +217,10 @@ Current image-generation foundation:
 - `cmd/worker` may prefer an image provider through `IMAGE_PROVIDER` and attach
   worker-only `IMAGE_MODEL` / `IMAGE_SIZE` defaults. `PROVIDER_CHAIN` remains
   the fallback mechanism.
+- PoYo Seedream 4.5 is wired as a priced public image model through the PoYo
+  adapter. Text-only uses `seedream-4.5`; optional reference images use
+  `seedream-4.5-edit` with `image_urls`. Missing provider readiness or missing
+  pricing keeps the model hidden/fail-closed.
 - DeepInfra `ByteDance/Seedream-4.5` is wired as a text-to-image adapter through
   the native `/v1/inference/{model}` endpoint. Optional
   `DEEPINFRA_IMAGE_FALLBACK_MODEL` stays inside the provider adapter and is only

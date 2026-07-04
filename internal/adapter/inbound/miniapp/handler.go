@@ -731,6 +731,8 @@ func defaultMiniAppImageQuality(modelID string) string {
 		pricingcatalog.PublicImageNanoBananaPro,
 		pricingcatalog.PublicImageGPTImage2:
 		return pricingcatalog.ImageQuality1K
+	case pricingcatalog.PublicImageSeedream45:
+		return pricingcatalog.ImageQuality2K
 	default:
 		return ""
 	}

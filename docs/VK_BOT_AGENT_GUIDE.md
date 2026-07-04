@@ -64,6 +64,9 @@ feature flags. Не включай их без отдельного product deci
 - Text-only поведение не меняется: обычный текст создает `image.generate`.
 - Photo+text в supported image model создает `image.generate` с input artifact
   IDs; VK attachment URLs не передаются провайдерам.
+- Seedream 4.5 appears as a normal image model when enabled and priced. Users
+  may attach photos in the normal prompt message; no separate reference-only
+  command is required.
 - Photo-only просит добавить описание и не создает Job, ledger reservation или
   provider task.
 - Если выбранная image model не поддерживает references, фото отклоняется

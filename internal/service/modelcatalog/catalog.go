@@ -18,7 +18,7 @@ const (
 	MiniAppImageGPTImage2       = providermodels.PublicImageGPTImage2
 	MiniAppImageNanoBananaFlash = "nano_banana_flash"
 	MiniAppImageNanoBanana2     = providermodels.PublicImageNanoBanana2
-	MiniAppImageSeedream45      = "seedream_4_5"
+	MiniAppImageSeedream45      = providermodels.PublicImageSeedream45
 	MiniAppImageSDXLTurbo       = "sdxl_turbo"
 	MiniAppImageMock            = providermodels.LoadTestImageMock
 	MiniAppVideoKling           = "kling"

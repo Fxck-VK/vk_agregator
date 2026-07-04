@@ -243,7 +243,7 @@ const (
 )
 
 const photoNanoBanana2Instruction = "Nano Banana 2 активен.\n\nНапишите описание изображения обычным сообщением.\n\nВ боте сейчас включен текст-в-фото; референс-фото подключим отдельным шагом."
-const photoDeepInfraSeedreamInstruction = "ByteDance Seedream 4.5 отключен.\n\nВыберите другую модель фото."
+const photoDeepInfraSeedreamInstruction = "Seedream 4.5 активен.\n\nНапишите описание изображения обычным сообщением. Если нужно, прикрепите фото к тому же сообщению."
 const photoDeepInfraSDXLInstruction = "Stability AI SDXL Turbo отключен.\n\nВыберите другую модель фото."
 const photoGPTImage2Instruction = "GPT Image 2 активен.\n\nНапишите описание изображения обычным сообщением."
 const photoQualityFallbackText = "Выберите модель фото, затем качество генерации."
