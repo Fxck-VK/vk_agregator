@@ -52,7 +52,7 @@ func TestMiniAppImageModelsExposeOnlyPublicCatalogFields(t *testing.T) {
 			sawQualityOptions[model.ID] = true
 		}
 		if model.ID == modelcatalog.MiniAppImageNanoBanana2 {
-			if !model.SupportsReferenceImage || model.MaxReferenceImages != 4 {
+			if !model.SupportsReferenceImage || model.MaxReferenceImages != 14 {
 				t.Fatalf("missing Nano Banana 2 reference limits: %+v", model)
 			}
 		}

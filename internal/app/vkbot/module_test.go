@@ -71,6 +71,76 @@ func TestMenuFeaturesFailClosedWhenRuntimeCatalogHasNoPublicItems(t *testing.T) 
 	}
 }
 
+func TestMenuFeaturesDoNotFeatureGateImageReferenceCommand(t *testing.T) {
+	runtimeCatalog, err := productcatalog.FromConfig(config.Config{
+		PoYoProviderEnabled:                 true,
+		PoYoAPIKey:                          "configured",
+		PoYoBaseURL:                         "https://poyo.test",
+		FeatureImageModelNanoBanana2Enabled: true,
+	}, staticPricingCatalog(t))
+	if err != nil {
+		t.Fatalf("build runtime catalog: %v", err)
+	}
+
+	features := menuFeatures(config.Config{
+		VKMenuImageEnabled:          true,
+		VKMenuImageReferenceEnabled: false,
+	}, runtimeCatalog)
+
+	assertCommandVisible(t, features.DisabledCommands, domain.CommandMenuImage)
+	if features.DisabledCommands[domain.CommandMenuImageReference] {
+		t.Fatalf("%s must not be a separately visible feature gate; stale callbacks should flow through the normal photo menu", domain.CommandMenuImageReference)
+	}
+}
+
+func TestMenuFeaturesKeepOfficialRunwayAndExposePoyoRunwayGen45(t *testing.T) {
+	runtimeCatalog, err := productcatalog.FromConfig(config.Config{
+		PoYoProviderEnabled:                     true,
+		PoYoAPIKey:                              "configured",
+		PoYoBaseURL:                             "https://poyo.test",
+		RunwayProviderEnabled:                   true,
+		RunwayMLAPISecret:                       "configured",
+		RunwayMLBaseURL:                         "https://runway.test/v1",
+		FeatureVideoRouterEnabled:               true,
+		FeatureVideoRouteRunwayGen4TurboEnabled: true,
+		FeatureVideoRouteRunwayGen45Enabled:     true,
+	}, staticPricingCatalog(t))
+	if err != nil {
+		t.Fatalf("build runtime catalog: %v", err)
+	}
+
+	if findRuntimeVideoRoute(runtimeCatalog.VideoRoutes(), domain.VideoRouteRunwayGen4Turbo) == nil {
+		t.Fatalf("official Runway route missing from runtime catalog: %+v", runtimeCatalog.VideoRoutes())
+	}
+	if route := findRuntimeVideoRoute(runtimeCatalog.VideoRoutes(), domain.VideoRouteRunwayGen45); route == nil {
+		t.Fatalf("PoYo Runway Gen-4.5 route missing from runtime catalog: %+v", runtimeCatalog.VideoRoutes())
+	} else if route.Name != "Runway Gen-4.5" ||
+		!route.SupportsReferenceImage ||
+		route.MaxReferenceImages != 1 ||
+		route.RequiresStartImage {
+		t.Fatalf("unexpected PoYo Runway Gen-4.5 public route: %+v", route)
+	}
+
+	features := menuFeatures(config.Config{
+		VKMenuVideoEnabled:              true,
+		VKMenuVideoSora2Enabled:         true,
+		VKMenuVideoSora2StartEnabled:    true,
+		VKMenuVideoSora2ExamplesEnabled: true,
+	}, runtimeCatalog)
+	assertCommandVisible(t, features.DisabledCommands, domain.CommandMenuVideo)
+	assertCommandVisible(t, features.DisabledCommands, domain.CommandMenuVideoSora2Start)
+	assertCommandEnabled(t, features.EnabledCommands, domain.CommandMenuVideoSora2Start)
+}
+
+func findRuntimeVideoRoute(routes []productcatalog.VideoRoute, alias domain.VideoRouteAlias) *productcatalog.VideoRoute {
+	for i := range routes {
+		if routes[i].Alias == string(alias) {
+			return &routes[i]
+		}
+	}
+	return nil
+}
+
 func staticPricingCatalog(t *testing.T) *pricingcatalog.Catalog {
 	t.Helper()
 	catalog, err := pricingcatalog.NewStaticCatalog()

@@ -111,6 +111,12 @@ func TestRouterParse(t *testing.T) {
 			wantType: domain.CommandMenuVideoSora2Start,
 		},
 		{
+			name:     "vk video poyo runway gen-4.5 product mode",
+			input:    "Runway Gen-4.5",
+			wantType: domain.CommandMenuVideoRouteSelect,
+			wantArg:  string(domain.VideoRouteRunwayGen45),
+		},
+		{
 			name:     "vk video kling o3 standard product mode",
 			input:    "Kling O3 Standard",
 			wantType: domain.CommandMenuVideoKling21Start,
@@ -168,7 +174,7 @@ func TestRouterParse(t *testing.T) {
 		{
 			name:     "vk photo reference mode button",
 			input:    "📸 Фото с референсом",
-			wantType: domain.CommandMenuImageReference,
+			wantType: domain.CommandMenuImage,
 		},
 		{
 			name:     "vk photo nano banana 2 button",

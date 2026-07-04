@@ -1835,7 +1835,7 @@ func TestBuildRequest_SanitizesPNGTextMetadata(t *testing.T) {
 	}
 }
 
-func TestBuildRequest_RejectsUnsupportedWebPReferenceBeforeProvider(t *testing.T) {
+func TestGenerationReferenceRejectsUnsupportedWebPReferenceTerminally(t *testing.T) {
 	provider := &captureImageProvider{}
 	h := newHarnessWithProvider(t, provider, nil)
 	ctx := context.Background()
@@ -1861,15 +1861,13 @@ func TestBuildRequest_RejectsUnsupportedWebPReferenceBeforeProvider(t *testing.T
 	}
 
 	err := h.gen.Process(ctx, taskFor(job))
-	if err == nil || !strings.Contains(err.Error(), "unsupported reference image format") {
-		t.Fatalf("expected unsupported reference image error, got %v", err)
+	if err != nil {
+		t.Fatalf("process: %v", err)
 	}
-	if provider.last.JobID != uuid.Nil {
-		t.Fatalf("provider must not be called for unsupported reference image, got request %+v", provider.last)
-	}
+	assertImageReferenceRejectedBeforeProvider(t, h, provider, job)
 }
 
-func TestBuildRequest_ResolveReferenceRejectsForeignOwner(t *testing.T) {
+func TestGenerationReferenceRejectsForeignOwnerTerminally(t *testing.T) {
 	provider := &captureImageProvider{}
 	h := newHarnessWithProvider(t, provider, nil)
 	ctx := context.Background()
@@ -1894,20 +1892,18 @@ func TestBuildRequest_ResolveReferenceRejectsForeignOwner(t *testing.T) {
 	}
 
 	err := h.gen.Process(ctx, taskFor(job))
-	if err == nil || !strings.Contains(err.Error(), "invalid reference artifact owner") {
-		t.Fatalf("expected foreign owner error, got %v", err)
+	if err != nil {
+		t.Fatalf("process: %v", err)
 	}
-	if provider.last.JobID != uuid.Nil {
-		t.Fatalf("provider must not be called for invalid reference, got request %+v", provider.last)
-	}
+	assertImageReferenceRejectedBeforeProvider(t, h, provider, job)
 }
 
-func TestBuildRequest_ResolveReferenceRejectsTooMany(t *testing.T) {
+func TestGenerationReferenceRejectsTooManyTerminally(t *testing.T) {
 	provider := &captureImageProvider{}
 	h := newHarnessWithProvider(t, provider, nil)
 	ctx := context.Background()
-	ids := make([]string, 0, 5)
-	for i := 0; i < 5; i++ {
+	ids := make([]string, 0, 17)
+	for i := 0; i < 17; i++ {
 		ids = append(ids, uuid.NewString())
 	}
 	params, _ := json.Marshal(map[string]any{
@@ -1930,11 +1926,144 @@ func TestBuildRequest_ResolveReferenceRejectsTooMany(t *testing.T) {
 	}
 
 	err := h.gen.Process(ctx, taskFor(job))
-	if err == nil || !strings.Contains(err.Error(), "too many reference artifacts") {
-		t.Fatalf("expected too many references error, got %v", err)
+	if err != nil {
+		t.Fatalf("process: %v", err)
 	}
+	assertImageReferenceRejectedBeforeProvider(t, h, provider, job)
+}
+
+func TestGenerationReferenceRejectsMissingStorageObjectTerminally(t *testing.T) {
+	provider := &captureImageProvider{}
+	h := newHarnessWithProvider(t, provider, nil)
+	ctx := context.Background()
+	userID := uuid.New()
+	reference := h.createInputImageArtifact(t, userID, validPNGBytes(t), "image/png")
+	if err := h.store.DeleteObject(ctx, reference.StorageBucket, reference.StorageKey); err != nil {
+		t.Fatalf("delete input artifact object: %v", err)
+	}
+	job := queueImageReferenceJob(t, h, userID, "missing object reference", []string{reference.ID.String()})
+
+	if err := h.gen.Process(ctx, taskFor(job)); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+	assertImageReferenceRejectedBeforeProvider(t, h, provider, job)
+}
+
+func TestGenerationReferenceRejectsNonReadyArtifactTerminally(t *testing.T) {
+	provider := &captureImageProvider{}
+	h := newHarnessWithProvider(t, provider, nil)
+	ctx := context.Background()
+	userID := uuid.New()
+	reference := h.createInputImageArtifact(t, userID, validPNGBytes(t), "image/png")
+	reference.Status = domain.ArtifactStatusPending
+	if err := h.artRepo.Update(ctx, reference); err != nil {
+		t.Fatalf("update reference artifact: %v", err)
+	}
+	job := queueImageReferenceJob(t, h, userID, "non-ready reference", []string{reference.ID.String()})
+
+	if err := h.gen.Process(ctx, taskFor(job)); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+	assertImageReferenceRejectedBeforeProvider(t, h, provider, job)
+}
+
+func TestGenerationReferenceRejectsMissingArtifactTerminally(t *testing.T) {
+	provider := &captureImageProvider{}
+	h := newHarnessWithProvider(t, provider, nil)
+	ctx := context.Background()
+	userID := uuid.New()
+	job := queueImageReferenceJob(t, h, userID, "missing reference", []string{uuid.NewString()})
+
+	if err := h.gen.Process(ctx, taskFor(job)); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+	assertImageReferenceRejectedBeforeProvider(t, h, provider, job)
+}
+
+func TestGenerationReferenceAllowsSixteenSanitizedImages(t *testing.T) {
+	provider := &captureImageProvider{}
+	h := newHarnessWithProvider(t, provider, nil)
+	ctx := context.Background()
+	userID := uuid.New()
+	ids := make([]string, 0, 16)
+	for i := 0; i < 16; i++ {
+		reference := h.createInputImageArtifact(t, userID, validPNGBytes(t), "image/png")
+		ids = append(ids, reference.ID.String())
+	}
+	job := queueImageReferenceJob(t, h, userID, "sixteen references", ids)
+
+	if err := h.gen.Process(ctx, taskFor(job)); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+
+	if provider.last.JobID != job.ID {
+		t.Fatalf("provider job id = %s, want %s", provider.last.JobID, job.ID)
+	}
+	if len(provider.last.InputURLs) != 16 {
+		t.Fatalf("input url count = %d, want 16", len(provider.last.InputURLs))
+	}
+	for _, inputURL := range provider.last.InputURLs {
+		if !strings.HasPrefix(inputURL, "data:image/png;base64,") {
+			t.Fatalf("input url = %q, want sanitized png data URL", inputURL)
+		}
+	}
+	if len(h.releaser.released) != 0 {
+		t.Fatalf("valid references must not release reservation, got %v", h.releaser.released)
+	}
+}
+
+func queueImageReferenceJob(t *testing.T, h *harness, userID uuid.UUID, prompt string, ids []string) *domain.Job {
+	t.Helper()
+	params, _ := json.Marshal(map[string]any{
+		"prompt":                 prompt,
+		"reference_artifact_ids": ids,
+	})
+	job := &domain.Job{
+		ID:             uuid.New(),
+		UserID:         userID,
+		OperationType:  domain.OperationImageGenerate,
+		Modality:       domain.ModalityImage,
+		Status:         domain.JobStatusQueued,
+		IdempotencyKey: "job:" + uuid.NewString(),
+		CorrelationID:  "corr",
+		CostReserved:   10,
+		Params:         params,
+	}
+	if err := h.jobs.Create(context.Background(), job); err != nil {
+		t.Fatalf("create image reference job: %v", err)
+	}
+	return job
+}
+
+func assertImageReferenceRejectedBeforeProvider(t *testing.T, h *harness, provider *captureImageProvider, job *domain.Job) {
+	t.Helper()
 	if provider.last.JobID != uuid.Nil {
-		t.Fatalf("provider must not be called for too many references, got request %+v", provider.last)
+		t.Fatalf("provider must not be called for invalid reference, got request %+v", provider.last)
+	}
+	got := h.reload(t, job.ID)
+	if got.Status != domain.JobStatusFailedTerminal {
+		t.Fatalf("status = %q, want failed_terminal", got.Status)
+	}
+	if got.ErrorCode != string(domain.ProviderErrInvalidRequest) {
+		t.Fatalf("error code = %q, want %q", got.ErrorCode, domain.ProviderErrInvalidRequest)
+	}
+	if got.CostCaptured != 0 {
+		t.Fatalf("cost captured = %d, want 0", got.CostCaptured)
+	}
+	if len(h.releaser.released) != 1 || h.releaser.released[0] != job.ID {
+		t.Fatalf("expected reservation release for rejected reference job, got %v", h.releaser.released)
+	}
+	if len(h.streams.byStream[redisqueue.StreamProviderPoll]) != 0 ||
+		len(h.streams.byStream[redisqueue.StreamDelivery]) != 0 ||
+		len(h.streams.byStream[redisqueue.StreamForOperation(job.OperationType)]) != 0 {
+		t.Fatalf("rejected reference must not enqueue follow-up streams: %v", h.streams.byStream)
+	}
+	tasks, err := h.tasks.ListByJob(context.Background(), job.ID)
+	if err != nil {
+		t.Fatalf("list provider tasks: %v", err)
+	}
+	if len(tasks) != 0 {
+		t.Fatalf("provider task must not be created for rejected reference, got %+v", tasks)
 	}
 }
 

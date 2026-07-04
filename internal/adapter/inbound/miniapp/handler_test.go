@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -258,7 +259,7 @@ func newTestFixtureWithConfigAndPaymentProvider(appSecret string, limiter interf
 		configure(&cfg)
 	}
 	pricingCatalog := mustStaticPricingCatalog()
-	orchOptions := []joborchestrator.Option{}
+	orchOptions := []joborchestrator.Option{joborchestrator.WithArtifactRepository(artifactRepo)}
 	if cfg.VideoRouteResolver != nil {
 		orchOptions = append(orchOptions, joborchestrator.WithVideoRouteResolver(cfg.VideoRouteResolver))
 	}
@@ -2901,7 +2902,7 @@ func TestHandler_Estimate_ImageAliasUsesPublicModelOnly(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
 	lower := strings.ToLower(w.Body.String())
-	for _, private := range []string{"deepinfra", "bytedance", "seedream", "apimart", "gemini-3-pro-image-preview", "model_code", "provider"} {
+	for _, private := range []string{"deepinfra", "bytedance", "seedream", "apimart", "poyo", "gemini-3-pro-image-preview", "nano-banana-pro", "nano-banana-pro-edit", "model_code", "provider"} {
 		if strings.Contains(lower, private) {
 			t.Fatalf("estimate response leaked provider/model internals %q: %s", private, w.Body.String())
 		}
@@ -3306,7 +3307,7 @@ func TestHandler_Estimate_ReferenceArtifactsPassWhenEnabled(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
 	lower := strings.ToLower(w.Body.String())
-	for _, private := range []string{"deepinfra", "bytedance", "seedream", "apimart", "gemini-3-pro-image-preview", "model_code", "provider"} {
+	for _, private := range []string{"deepinfra", "bytedance", "seedream", "apimart", "poyo", "gemini-3-pro-image-preview", "nano-banana-pro", "nano-banana-pro-edit", "model_code", "provider"} {
 		if strings.Contains(lower, private) {
 			t.Fatalf("estimate response leaked provider/model internals %q: %s", private, w.Body.String())
 		}
@@ -3650,7 +3651,7 @@ func TestHandler_CreateJob_ImageAliasPersistsProviderModelCodePrivately(t *testi
 		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
 	}
 	lower := strings.ToLower(w.Body.String())
-	for _, private := range []string{"deepinfra", "bytedance", "seedream", "apimart", "gemini-3-pro-image-preview", "model_code", "provider"} {
+	for _, private := range []string{"deepinfra", "bytedance", "seedream", "apimart", "poyo", "gemini-3-pro-image-preview", "nano-banana-pro", "nano-banana-pro-edit", "model_code", "provider"} {
 		if strings.Contains(lower, private) {
 			t.Fatalf("job response leaked provider/model internals %q: %s", private, w.Body.String())
 		}
@@ -3684,7 +3685,7 @@ func TestHandler_CreateJob_ImageAliasPersistsProviderModelCodePrivately(t *testi
 	if err := json.Unmarshal(job.Params, &params); err != nil {
 		t.Fatalf("invalid params: %v", err)
 	}
-	if params.ModelID != "nano_banana_pro" || params.ModelName != "Nano Banana Pro" || params.Provider != "apimart" || params.ModelCode != "gemini-3-pro-image-preview" {
+	if params.ModelID != "nano_banana_pro" || params.ModelName != "Nano Banana Pro" || params.Provider != "poyo" || params.ModelCode != "nano-banana-pro" {
 		t.Fatalf("unexpected stored params: %+v", params)
 	}
 }
@@ -3807,7 +3808,7 @@ func TestHandler_CreateJob_NanoBanana2PersistsPoYoSnapshotPrivately(t *testing.T
 	if err := json.Unmarshal(job.Params, &params); err != nil {
 		t.Fatalf("invalid params: %v", err)
 	}
-	if params.ModelID != "nano_banana_2" || params.ModelName != "Nano Banana 2" || params.Provider != "poyo" || params.ModelCode != "nano-banana-2" {
+	if params.ModelID != "nano_banana_2" || params.ModelName != "Nano Banana 2" || params.Provider != "poyo" || params.ModelCode != "nano-banana-2-new" {
 		t.Fatalf("unexpected stored params: %+v", params)
 	}
 }
@@ -3898,7 +3899,7 @@ func TestHandler_CreateJob_ImageQualityPersistsServerOwnedSnapshot(t *testing.T)
 	if params.ModelID != modelcatalog.MiniAppImageNanoBanana2 ||
 		params.ModelName != "Nano Banana 2" ||
 		params.Provider != "poyo" ||
-		params.ModelCode != "nano-banana-2" ||
+		params.ModelCode != "nano-banana-2-new" ||
 		params.Size != "1:1" ||
 		params.Resolution != modelcatalog.ImageQuality2K ||
 		params.ImageQuality != modelcatalog.ImageQuality2K {
@@ -4010,7 +4011,7 @@ func TestHandler_CreateJob_IgnoresClientProviderAndPriceFields(t *testing.T) {
 	if params.ModelID != modelcatalog.MiniAppImageNanoBanana2 ||
 		params.ModelName != "Nano Banana 2" ||
 		params.Provider != "poyo" ||
-		params.ModelCode != "nano-banana-2" ||
+		params.ModelCode != "nano-banana-2-new" ||
 		params.Resolution != modelcatalog.ImageQuality2K ||
 		params.ImageQuality != modelcatalog.ImageQuality2K {
 		t.Fatalf("client-provided provider/model fields affected stored server snapshot: %+v", params)
@@ -4407,7 +4408,7 @@ func TestHandler_CreateJob_ReferenceArtifactsPassWhenEnabled(t *testing.T) {
 		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
 	}
 	lower := strings.ToLower(w.Body.String())
-	for _, private := range []string{"deepinfra", "bytedance", "seedream", "apimart", "gemini-3-pro-image-preview", "model_code", "provider"} {
+	for _, private := range []string{"deepinfra", "bytedance", "seedream", "apimart", "poyo", "gemini-3-pro-image-preview", "nano-banana-pro", "nano-banana-pro-edit", "model_code", "provider"} {
 		if strings.Contains(lower, private) {
 			t.Fatalf("job response leaked provider/model internals %q: %s", private, w.Body.String())
 		}
@@ -4445,11 +4446,64 @@ func TestHandler_CreateJob_ReferenceArtifactsPassWhenEnabled(t *testing.T) {
 	if err := json.Unmarshal(job.Params, &params); err != nil {
 		t.Fatalf("invalid params: %v", err)
 	}
-	if params.ModelID != "nano_banana_pro" || params.ModelName != "Nano Banana Pro" || params.Provider != "apimart" || params.ModelCode != "gemini-3-pro-image-preview" {
+	if params.ModelID != "nano_banana_pro" || params.ModelName != "Nano Banana Pro" || params.Provider != "poyo" || params.ModelCode != "nano-banana-pro" {
 		t.Fatalf("unexpected stored model params: %+v", params)
 	}
 	if len(params.ReferenceArtifactIDs) != 1 || params.ReferenceArtifactIDs[0] != artifact.ID {
 		t.Fatalf("unexpected stored reference params: %+v", params.ReferenceArtifactIDs)
+	}
+}
+
+func TestHandler_CreateJob_NanoBanana2AcceptsCatalogReferenceLimit(t *testing.T) {
+	fixture := newTestFixtureWithConfig("", nil, func(cfg *miniappinbound.Config) {
+		cfg.ImageReferenceEnabled = true
+	})
+	routes := fixture.handler.Routes()
+	ctx := context.Background()
+	user := &domain.User{VKUserID: 777, Role: domain.RoleUser, Status: domain.StatusActive}
+	if err := fixture.userRepo.Create(ctx, user); err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	ids := make([]string, 0, 14)
+	wantIDs := make([]uuid.UUID, 0, 14)
+	for i := 0; i < 14; i++ {
+		artifact := createTestArtifact(t, fixture, user.ID, domain.ArtifactKindInput, domain.MediaTypeImage, domain.ArtifactStatusReady)
+		ids = append(ids, artifact.ID.String())
+		wantIDs = append(wantIDs, artifact.ID)
+	}
+
+	body, _ := json.Marshal(map[string]any{
+		"operation":              "image_generate",
+		"prompt":                 "image with catalog max references",
+		"model_id":               modelcatalog.MiniAppImageNanoBanana2,
+		"reference_artifact_ids": ids,
+	})
+	req := httptest.NewRequest(http.MethodPost, "/miniapp/jobs", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Launch-Params", devLaunchParams(777))
+	req.Header.Set("X-Idempotency-Key", "nano-banana-2-reference-limit")
+
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("invalid response json: %v", err)
+	}
+	jobID, err := uuid.Parse(resp.ID)
+	if err != nil {
+		t.Fatalf("invalid job id: %v", err)
+	}
+	job, err := fixture.jobRepo.GetByID(ctx, jobID)
+	if err != nil {
+		t.Fatalf("get job: %v", err)
+	}
+	if !reflect.DeepEqual(job.InputArtifactIDs, wantIDs) {
+		t.Fatalf("job input artifact ids = %+v, want %+v", job.InputArtifactIDs, wantIDs)
 	}
 }
 

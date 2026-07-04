@@ -285,24 +285,32 @@ func TestCatalogPublicRoutesHidePrivateProviderDetails(t *testing.T) {
 	})
 
 	routes := catalog.PublicRoutes()
-	if len(routes) != 1 {
-		t.Fatalf("public routes = %d, want only costed enabled route: %+v", len(routes), routes)
+	if len(routes) != 2 {
+		t.Fatalf("public routes = %d, want costed enabled routes only: %+v", len(routes), routes)
 	}
-	route := routes[0]
-	if route.Alias != domain.VideoRouteHailuo23Standard {
-		t.Fatalf("unexpected public route: %+v", route)
-	}
-	raw, err := json.Marshal(route)
-	if err != nil {
-		t.Fatalf("marshal public route: %v", err)
-	}
-	for _, private := range []string{"provider", "model", "MiniMax", "cost", "price"} {
-		if strings.Contains(string(raw), private) {
-			t.Fatalf("public route leaked private detail %q: %s", private, raw)
+	for _, route := range routes {
+		raw, err := json.Marshal(route)
+		if err != nil {
+			t.Fatalf("marshal public route: %v", err)
+		}
+		for _, private := range []string{"provider", "model", "MiniMax", "runway-gen-4.5", "cost", "price"} {
+			if strings.Contains(string(raw), private) {
+				t.Fatalf("public route leaked private detail %q: %s", private, raw)
+			}
 		}
 	}
-	if route.MaxReferenceImages != 1 || route.DefaultDurationSec != 6 {
-		t.Fatalf("missing route constraints: %+v", route)
+
+	hailuo := publicRouteByAlias(routes, domain.VideoRouteHailuo23Standard)
+	if hailuo == nil || hailuo.MaxReferenceImages != 1 || hailuo.DefaultDurationSec != 6 {
+		t.Fatalf("missing Hailuo route constraints: %+v", hailuo)
+	}
+	runway45 := publicRouteByAlias(routes, domain.VideoRouteRunwayGen45)
+	if runway45 == nil ||
+		runway45.RequiresStartImage ||
+		!runway45.SupportsReferenceImage ||
+		runway45.MaxReferenceImages != 1 ||
+		runway45.DefaultDurationSec != 5 {
+		t.Fatalf("missing PoYo Runway Gen-4.5 route constraints: %+v", runway45)
 	}
 }
 
@@ -329,26 +337,46 @@ func TestCatalogRejectsTooManyImageReferences(t *testing.T) {
 	}
 }
 
-func TestCatalogResolveFailsClosedWhenRouteCostMissing(t *testing.T) {
+func TestCatalogResolvePoyoRunwayGen45UsesBoundedCostAndOptionalImage(t *testing.T) {
 	catalog := newConfiguredCatalog(t, map[domain.VideoRouteAlias]bool{
 		domain.VideoRouteRunwayGen45: true,
 	})
 
-	_, err := catalog.Resolve(context.Background(), videorouter.Request{
+	resolution, err := catalog.Resolve(context.Background(), videorouter.Request{
 		Operation: domain.OperationVideoGenerate,
 		Modality:  domain.ModalityVideo,
 		Params: rawJSON(t, map[string]any{
 			"video_route_alias": string(domain.VideoRouteRunwayGen45),
 			"duration_sec":      5,
 			"resolution":        "720p",
-			"reference_artifact_ids": []string{
-				"11111111-1111-1111-1111-111111111111",
-			},
+			"aspect_ratio":      "21:9",
 		}),
 	})
-	if !errors.Is(err, videorouter.ErrRouteCostUnavailable) {
-		t.Fatalf("expected ErrRouteCostUnavailable, got %v", err)
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
 	}
+	if !resolution.Resolved || resolution.InternalCostCredits != 225 {
+		t.Fatalf("unexpected PoYo Runway Gen-4.5 route resolution: %+v", resolution)
+	}
+	if resolution.Snapshot.Provider != domain.ProviderPoYo ||
+		resolution.Snapshot.ProviderModelID != "runway-gen-4.5" ||
+		resolution.Snapshot.ProviderCostCredits != 75 ||
+		resolution.Snapshot.MaxProviderCostCredits != 150 ||
+		resolution.Snapshot.MaxInternalCostCredits != 450 {
+		t.Fatalf("unexpected PoYo Runway Gen-4.5 snapshot: %+v", resolution.Snapshot)
+	}
+	if resolution.Snapshot.AspectRatio != "21:9" {
+		t.Fatalf("aspect ratio = %q, want 21:9", resolution.Snapshot.AspectRatio)
+	}
+}
+
+func publicRouteByAlias(routes []videorouter.PublicRoute, alias domain.VideoRouteAlias) *videorouter.PublicRoute {
+	for i := range routes {
+		if routes[i].Alias == alias {
+			return &routes[i]
+		}
+	}
+	return nil
 }
 
 func newConfiguredCatalog(t *testing.T, enabledRoutes map[domain.VideoRouteAlias]bool) *videorouter.Catalog {

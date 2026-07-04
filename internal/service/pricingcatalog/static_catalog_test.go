@@ -104,6 +104,108 @@ func TestNewStaticCatalogContainsApprovedVideoTariffs(t *testing.T) {
 	}
 }
 
+func TestStaticCatalogKeepsOfficialRunwayAndPoyoRunwayGen45Tariffs(t *testing.T) {
+	catalog, err := NewStaticCatalog()
+	if err != nil {
+		t.Fatalf("new static catalog: %v", err)
+	}
+
+	cases := []struct {
+		name       string
+		alias      domain.VideoRouteAlias
+		resolution string
+		duration   int
+		want       int64
+		unit       FloorUnit
+	}{
+		{
+			name:       "official runway 5s",
+			alias:      domain.VideoRouteRunwayGen4Turbo,
+			resolution: VideoResolution720p,
+			duration:   5,
+			want:       150,
+			unit:       FloorUnitRunwayCredits,
+		},
+		{
+			name:       "official runway 10s",
+			alias:      domain.VideoRouteRunwayGen4Turbo,
+			resolution: VideoResolution720p,
+			duration:   10,
+			want:       300,
+			unit:       FloorUnitRunwayCredits,
+		},
+		{
+			name:       "poyo runway gen45 720p 5s",
+			alias:      domain.VideoRouteRunwayGen45,
+			resolution: VideoResolution720p,
+			duration:   5,
+			want:       225,
+			unit:       FloorUnitPoYoCredits,
+		},
+		{
+			name:       "poyo runway gen45 1080p 10s",
+			alias:      domain.VideoRouteRunwayGen45,
+			resolution: VideoResolution1080p,
+			duration:   10,
+			want:       450,
+			unit:       FloorUnitPoYoCredits,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			key := ProductKey{
+				Operation:       domain.OperationVideoGenerate,
+				Modality:        domain.ModalityVideo,
+				VideoRouteAlias: tc.alias,
+				Resolution:      tc.resolution,
+				DurationSec:     tc.duration,
+			}
+			got, err := catalog.CostEstimateCredits(key)
+			if err != nil {
+				t.Fatalf("cost estimate: %v", err)
+			}
+			if got != tc.want {
+				t.Fatalf("cost estimate = %d, want %d", got, tc.want)
+			}
+			price, err := catalog.Lookup(key)
+			if err != nil {
+				t.Fatalf("lookup: %v", err)
+			}
+			if price.Floor.Unit != tc.unit {
+				t.Fatalf("floor unit = %s, want %s", price.Floor.Unit, tc.unit)
+			}
+		})
+	}
+}
+
+func TestStaticCatalogImageTariffsStayUnchangedWhileAddingPoyoRunwayGen45(t *testing.T) {
+	catalog, err := NewStaticCatalog()
+	if err != nil {
+		t.Fatalf("new static catalog: %v", err)
+	}
+
+	want := map[ProductKey]int64{
+		{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ImageModelID: PublicImageNanoBanana2, Quality: ImageQuality1K}:   15,
+		{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ImageModelID: PublicImageNanoBanana2, Quality: ImageQuality2K}:   24,
+		{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ImageModelID: PublicImageNanoBanana2, Quality: ImageQuality4K}:   36,
+		{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ImageModelID: PublicImageGPTImage2, Quality: ImageQuality1K}:     4,
+		{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ImageModelID: PublicImageGPTImage2, Quality: ImageQuality2K}:     8,
+		{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ImageModelID: PublicImageGPTImage2, Quality: ImageQuality4K}:     11,
+		{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ImageModelID: PublicImageNanoBananaPro, Quality: ImageQuality1K}: 24,
+		{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ImageModelID: PublicImageNanoBananaPro, Quality: ImageQuality2K}: 30,
+		{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ImageModelID: PublicImageNanoBananaPro, Quality: ImageQuality4K}: 30,
+	}
+	for key, expected := range want {
+		got, err := catalog.CostEstimateCredits(key)
+		if err != nil {
+			t.Fatalf("image cost estimate %+v: %v", key, err)
+		}
+		if got != expected {
+			t.Fatalf("image cost estimate %+v = %d, want %d", key, got, expected)
+		}
+	}
+}
+
 func TestStaticCatalogUsesOnlyBoundedAliasesAndExplicitUnits(t *testing.T) {
 	allowedImages := map[string]bool{
 		PublicImageNanoBanana2:   true,

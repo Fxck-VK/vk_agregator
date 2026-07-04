@@ -23,6 +23,7 @@ func TestCapabilitiesAdvertiseSupportedMedia(t *testing.T) {
 		t.Fatalf("capabilities: %v", err)
 	}
 	providertest.RequireCapability(t, caps, domain.OperationImageGenerate, domain.ModalityImage, ModelNanoBanana2New)
+	providertest.RequireCapability(t, caps, domain.OperationImageGenerate, domain.ModalityImage, ModelNanoBananaPro)
 	providertest.RequireCapability(t, caps, domain.OperationVideoGenerate, domain.ModalityVideo, ModelKlingO3Standard)
 	providertest.RequireCapability(t, caps, domain.OperationVideoGenerate, domain.ModalityVideo, ModelSeedance20Fast)
 	providertest.RequireCapability(t, caps, domain.OperationVideoGenerate, domain.ModalityVideo, ModelRunwayGen45)
@@ -92,7 +93,7 @@ func TestSubmitKlingO3SuccessAndIdempotency(t *testing.T) {
 	}
 }
 
-func TestSubmitNanoBanana2ImageSuccess(t *testing.T) {
+func TestSubmitNanoBanana2TextOnlyUsesGenerationModel(t *testing.T) {
 	var calls int
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls++
@@ -112,8 +113,8 @@ func TestSubmitNanoBanana2ImageSuccess(t *testing.T) {
 		if body.Input["prompt"] != "safe prompt" || body.Input["size"] != "16:9" || body.Input["resolution"] != "4K" {
 			t.Fatalf("bad image input: %+v", body.Input)
 		}
-		if refs, ok := body.Input["image_urls"].([]any); !ok || len(refs) != 1 || refs[0] != "https://cdn.test/ref.png" {
-			t.Fatalf("image_urls = %#v", body.Input["image_urls"])
+		if _, ok := body.Input["image_urls"]; ok {
+			t.Fatalf("image_urls must be omitted without references: %+v", body.Input)
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"code":200,"data":{"task_id":"image_task_1","status":"not_started","created_time":"2026-06-20T10:30:00Z"}}`))
@@ -124,7 +125,6 @@ func TestSubmitNanoBanana2ImageSuccess(t *testing.T) {
 	req := baseImageRequest(ModelNanoBanana2New)
 	req.AspectRatio = "16:9"
 	req.Resolution = "4K"
-	req.InputURLs = []string{"https://cdn.test/ref.png"}
 
 	task, err := provider.Submit(context.Background(), req)
 	if err != nil {
@@ -138,6 +138,154 @@ func TestSubmitNanoBanana2ImageSuccess(t *testing.T) {
 	}
 }
 
+func TestSubmitNanoBanana2ReferencesUseEditModelAndImageURLs(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/generate/submit" {
+			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		var body submitRequest
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode body: %v", err)
+		}
+		if body.Model != ModelNanoBanana2NewEdit {
+			t.Fatalf("model = %q, want %q", body.Model, ModelNanoBanana2NewEdit)
+		}
+		if body.Input["prompt"] != "safe prompt" || body.Input["size"] != "16:9" || body.Input["resolution"] != "4K" {
+			t.Fatalf("bad image input: %+v", body.Input)
+		}
+		refs, ok := body.Input["image_urls"].([]any)
+		if !ok || len(refs) != 2 || refs[0] != "https://cdn.test/ref-a.png" || refs[1] != "https://cdn.test/ref-b.png" {
+			t.Fatalf("image_urls = %#v", body.Input["image_urls"])
+		}
+		if _, ok := body.Input["reference_image_urls"]; ok {
+			t.Fatalf("reference_image_urls must not be used for Nano Banana 2: %+v", body.Input)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"code":200,"data":{"task_id":"image_edit_task_1","status":"not_started","created_time":"2026-06-20T10:30:00Z"}}`))
+	}))
+	defer srv.Close()
+
+	provider := New(Config{APIKey: "test-key", BaseURL: srv.URL, HTTPClient: srv.Client()})
+	req := baseImageRequest(ModelNanoBanana2New)
+	req.AspectRatio = "16:9"
+	req.Resolution = "4K"
+	req.InputURLs = []string{" https://cdn.test/ref-a.png ", "https://cdn.test/ref-b.png"}
+
+	task, err := provider.Submit(context.Background(), req)
+	if err != nil {
+		t.Fatalf("submit: %v", err)
+	}
+	if task.Provider != domain.ProviderPoYo || task.ModelCode != ModelNanoBanana2New || task.ExternalID != "image_edit_task_1" || task.Status != domain.ProviderTaskPending {
+		t.Fatalf("bad task: %+v", task)
+	}
+}
+
+func TestSubmitNanoBananaProTextOnlyUsesGenerationModel(t *testing.T) {
+	var calls int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if r.Method != http.MethodPost || r.URL.Path != "/api/generate/submit" {
+			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		var body submitRequest
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode body: %v", err)
+		}
+		if body.Model != ModelNanoBananaPro {
+			t.Fatalf("model = %q, want %q", body.Model, ModelNanoBananaPro)
+		}
+		if body.Input["prompt"] != "safe prompt" || body.Input["size"] != "auto" || body.Input["resolution"] != "1K" {
+			t.Fatalf("bad pro image input: %+v", body.Input)
+		}
+		if body.Input["n"].(float64) != 1 || body.Input["output_format"] != "png" || body.Input["enable_web_search"] != false {
+			t.Fatalf("bad pro options: %+v", body.Input)
+		}
+		if _, ok := body.Input["image_urls"]; ok {
+			t.Fatalf("image_urls must be omitted without references: %+v", body.Input)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"code":200,"data":{"task_id":"pro_image_task_1","status":"not_started","created_time":"2026-06-20T10:30:00Z"}}`))
+	}))
+	defer srv.Close()
+
+	provider := New(Config{APIKey: "test-key", BaseURL: srv.URL, HTTPClient: srv.Client()})
+	req := baseImageRequest(ModelNanoBananaPro)
+	req.AspectRatio = ""
+	req.Size = "auto"
+
+	task, err := provider.Submit(context.Background(), req)
+	if err != nil {
+		t.Fatalf("submit: %v", err)
+	}
+	if task.Provider != domain.ProviderPoYo || task.ModelCode != ModelNanoBananaPro || task.ExternalID != "pro_image_task_1" || task.Status != domain.ProviderTaskPending {
+		t.Fatalf("bad task: %+v", task)
+	}
+	if calls != 1 {
+		t.Fatalf("calls = %d, want 1", calls)
+	}
+}
+
+func TestSubmitNanoBananaProReferencesUseEditModelAndImageURLs(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/generate/submit" {
+			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		var body submitRequest
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode body: %v", err)
+		}
+		if body.Model != ModelNanoBananaProEdit {
+			t.Fatalf("model = %q, want %q", body.Model, ModelNanoBananaProEdit)
+		}
+		refs, ok := body.Input["image_urls"].([]any)
+		if !ok || len(refs) != 2 || refs[0] != "https://cdn.test/ref-a.png" || refs[1] != "https://cdn.test/ref-b.png" {
+			t.Fatalf("image_urls = %#v", body.Input["image_urls"])
+		}
+		if _, ok := body.Input["reference_image_urls"]; ok {
+			t.Fatalf("reference_image_urls must not be used for Nano Banana Pro: %+v", body.Input)
+		}
+		if body.Input["size"] != "auto" || body.Input["resolution"] != "4K" || body.Input["output_format"] != "png" {
+			t.Fatalf("bad pro edit options: %+v", body.Input)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"code":200,"data":{"task_id":"pro_edit_task_1","status":"not_started","created_time":"2026-06-20T10:30:00Z"}}`))
+	}))
+	defer srv.Close()
+
+	provider := New(Config{APIKey: "test-key", BaseURL: srv.URL, HTTPClient: srv.Client()})
+	req := baseImageRequest(ModelNanoBananaPro)
+	req.AspectRatio = ""
+	req.Size = "auto"
+	req.Resolution = "4K"
+	req.InputURLs = []string{" https://cdn.test/ref-a.png ", "https://cdn.test/ref-b.png"}
+
+	task, err := provider.Submit(context.Background(), req)
+	if err != nil {
+		t.Fatalf("submit: %v", err)
+	}
+	if task.Provider != domain.ProviderPoYo || task.ModelCode != ModelNanoBananaPro || task.ExternalID != "pro_edit_task_1" {
+		t.Fatalf("bad task: %+v", task)
+	}
+}
+
+func TestNanoBananaProReferenceValidation(t *testing.T) {
+	provider := New(Config{APIKey: "test-key", BaseURL: "http://127.0.0.1"})
+	req := baseImageRequest(ModelNanoBananaPro)
+	req.AspectRatio = ""
+	req.Size = "auto"
+	req.InputURLs = make([]string, 14)
+	for i := range req.InputURLs {
+		req.InputURLs[i] = "https://cdn.test/ref.png"
+	}
+	if _, err := provider.Estimate(context.Background(), req); err != nil {
+		t.Fatalf("estimate accepted 14 refs: %v", err)
+	}
+
+	req.InputURLs = append(req.InputURLs, "https://cdn.test/ref-extra.png")
+	_, err := provider.Submit(context.Background(), req)
+	requireErrorClass(t, err, domain.ProviderErrInvalidRequest)
+}
+
 func TestSubmitUploadsDataURLReferencesBeforeGenerate(t *testing.T) {
 	const dataURL = "data:image/png;base64,aW1hZ2U="
 	cases := []struct {
@@ -149,7 +297,13 @@ func TestSubmitUploadsDataURLReferencesBeforeGenerate(t *testing.T) {
 		{
 			name:      "nano banana image",
 			req:       baseImageRequest(ModelNanoBanana2New),
-			wantModel: ModelNanoBanana2New,
+			wantModel: ModelNanoBanana2NewEdit,
+			wantField: "image_urls",
+		},
+		{
+			name:      "nano banana pro image",
+			req:       baseImageRequest(ModelNanoBananaPro),
+			wantModel: ModelNanoBananaProEdit,
 			wantField: "image_urls",
 		},
 		{
@@ -168,7 +322,7 @@ func TestSubmitUploadsDataURLReferencesBeforeGenerate(t *testing.T) {
 			name:      "runway video",
 			req:       baseVideoRequest(ModelRunwayGen45),
 			wantModel: ModelRunwayGen45,
-			wantField: "image_url",
+			wantField: "image_urls",
 		},
 	}
 
@@ -209,10 +363,6 @@ func TestSubmitUploadsDataURLReferencesBeforeGenerate(t *testing.T) {
 						refs, ok := body.Input["reference_image_urls"].([]any)
 						if !ok || len(refs) != 1 || refs[0] != wantURL {
 							t.Fatalf("reference_image_urls = %#v", body.Input["reference_image_urls"])
-						}
-					case "image_url":
-						if body.Input["image_url"] != wantURL {
-							t.Fatalf("image_url = %#v", body.Input["image_url"])
 						}
 					default:
 						t.Fatalf("unexpected field %q", tc.wantField)
@@ -397,6 +547,75 @@ func TestRunwayGen45DurationAndReferenceValidation(t *testing.T) {
 	req.InputURLs = nil
 	_, err = provider.Estimate(context.Background(), req)
 	requireErrorClass(t, err, domain.ProviderErrUnsupportedCapab)
+}
+
+func TestSubmitRunwayGen45UsesOptionalImageURLsList(t *testing.T) {
+	cases := []struct {
+		name      string
+		inputURLs []string
+		wantRefs  bool
+	}{
+		{name: "text only"},
+		{name: "single reference", inputURLs: []string{"https://cdn.test/ref.png"}, wantRefs: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodPost || r.URL.Path != "/api/generate/submit" {
+					t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+				}
+				var body submitRequest
+				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+					t.Fatalf("decode body: %v", err)
+				}
+				if body.Model != ModelRunwayGen45 {
+					t.Fatalf("model = %q, want %q", body.Model, ModelRunwayGen45)
+				}
+				if _, ok := body.Input["image_url"]; ok {
+					t.Fatalf("image_url must not be used for Runway Gen-4.5: %+v", body.Input)
+				}
+				refs, ok := body.Input["image_urls"].([]any)
+				if !tc.wantRefs {
+					if ok {
+						t.Fatalf("image_urls must be omitted without references: %+v", body.Input)
+					}
+				} else if !ok || len(refs) != 1 || refs[0] != tc.inputURLs[0] {
+					t.Fatalf("image_urls = %#v", body.Input["image_urls"])
+				}
+				_, _ = w.Write([]byte(`{"code":200,"data":{"task_id":"runway_task_1","status":"not_started"}}`))
+			}))
+			defer srv.Close()
+
+			provider := New(Config{APIKey: "test-key", BaseURL: srv.URL, HTTPClient: srv.Client()})
+			req := baseVideoRequest(ModelRunwayGen45)
+			req.InputURLs = tc.inputURLs
+			if _, err := provider.Submit(context.Background(), req); err != nil {
+				t.Fatalf("submit: %v", err)
+			}
+		})
+	}
+}
+
+func TestSubmitRunwayGen45AcceptsDocumentedAspectRatios(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body submitRequest
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode body: %v", err)
+		}
+		_, _ = w.Write([]byte(`{"code":200,"data":{"task_id":"runway_task_1","status":"not_started"}}`))
+	}))
+	defer srv.Close()
+
+	provider := New(Config{APIKey: "test-key", BaseURL: srv.URL, HTTPClient: srv.Client()})
+	for _, aspectRatio := range []string{"16:9", "9:16", "4:3", "3:4", "1:1", "21:9"} {
+		t.Run(aspectRatio, func(t *testing.T) {
+			req := baseVideoRequest(ModelRunwayGen45)
+			req.AspectRatio = aspectRatio
+			if _, err := provider.Submit(context.Background(), req); err != nil {
+				t.Fatalf("submit: %v", err)
+			}
+		})
+	}
 }
 
 func TestEstimateUsesResolvedRouteSnapshot(t *testing.T) {

@@ -121,6 +121,11 @@ Source order: system/developer instructions > current task > root `AGENTS.md` > 
 - `REVIEW`: code-review stance; findings first, no code changes unless asked.
 
 Subagents: delegate only narrow bounded search/audit/test/simple patch tasks; give minimal context, allowed files, forbidden actions and output schema; require technical output only (`status`, `findings file:line issue fix`, `changed_files/tests`, `residual_risks`), max 40 lines, no prose/code dumps/secrets/prompts/PII; main agent owns decisions, integration and report.
+
+When launching subagents in this project, use the default agent role only:
+set `model: gpt-5.5`, set `reasoning_effort: xhigh`, omit `agent_type`,
+omit `service_tier`, do not use explorer agents, and do not set
+`service_tier=priority`.
 ## Required Workflow
 
 Before edits: restate task, assumptions, likely touched files, concise plan and security/architecture risks.
