@@ -58,7 +58,18 @@ feature flags. Не включай их без отдельного product deci
 
 - На фото-экране остается только `⬅️ Назад`.
 - Кнопка `Фото по тексту` выключена: `VK_MENU_IMAGE_TEXT_ENABLED=false`.
-- `Фото с референсом` выключено: `VK_MENU_IMAGE_REFERENCE_ENABLED=false`.
+- Отдельный заметный пункт `Фото с референсом` не показывается. Старый
+  `menu.image.reference` остается совместимым входом и возвращает обычное
+  фото-меню.
+- Text-only поведение не меняется: обычный текст создает `image.generate`.
+- Photo+text в supported image model создает `image.generate` с input artifact
+  IDs; VK attachment URLs не передаются провайдерам.
+- Photo-only просит добавить описание и не создает Job, ledger reservation или
+  provider task.
+- Если выбранная image model не поддерживает references, фото отклоняется
+  пользовательским unsupported-reference сообщением до CreateJob.
+- Reference photos принимаются только как JPG/PNG, с проверкой размера и
+  dimensions перед сохранением в `ArtifactService`.
 - Старые stale payloads выключенных кнопок не должны создавать Jobs.
 - Placeholder: `НейроХаб рисует...`.
 - Лимит: `100` фото-генераций на пользователя за `24h`.

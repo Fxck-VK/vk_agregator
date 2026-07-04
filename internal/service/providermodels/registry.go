@@ -19,10 +19,11 @@ const (
 	PublicImageGPTImage2     = "gpt_image_2"
 	LoadTestImageMock        = "mock_image"
 
-	ProviderModelPoYoNanoBanana2 = "nano-banana-2"
-	ProviderModelGemini3ProImage = "gemini-3-pro-image-preview"
-	ProviderModelGPTImage2       = "gpt-image-2"
-	ProviderModelMockImage       = "mock-image"
+	ProviderModelPoYoNanoBanana2   = "nano-banana-2-new"
+	ProviderModelPoYoNanoBananaPro = "nano-banana-pro"
+	ProviderModelGemini3ProImage   = "gemini-3-pro-image-preview"
+	ProviderModelGPTImage2         = "gpt-image-2"
+	ProviderModelMockImage         = "mock-image"
 
 	FeatureImageNanoBanana2   = "FEATURE_IMAGE_MODEL_NANO_BANANA_2_ENABLED"
 	FeatureImageNanoBananaPro = "FEATURE_IMAGE_MODEL_NANO_BANANA_PRO_ENABLED"
@@ -167,8 +168,8 @@ func textAliases() []TextAlias {
 
 func imageModels() []ImageModel {
 	return []ImageModel{
-		imageModel(PublicImageNanoBanana2, "Nano Banana 2", domain.ProviderPoYo, ProviderModelPoYoNanoBanana2, FeatureImageNanoBanana2, poyoReadiness(), 4),
-		imageModel(PublicImageNanoBananaPro, "Nano Banana Pro", domain.ProviderAPIMart, ProviderModelGemini3ProImage, FeatureImageNanoBananaPro, apimartReadiness(), 14),
+		imageModel(PublicImageNanoBanana2, "Nano Banana 2", domain.ProviderPoYo, ProviderModelPoYoNanoBanana2, FeatureImageNanoBanana2, poyoReadiness(), 14),
+		imageModel(PublicImageNanoBananaPro, "Nano Banana Pro", domain.ProviderPoYo, ProviderModelPoYoNanoBananaPro, FeatureImageNanoBananaPro, poyoReadiness(), 14),
 		imageModel(PublicImageGPTImage2, "GPT Image 2", domain.ProviderAPIMart, ProviderModelGPTImage2, FeatureImageGPTImage2, apimartReadiness(), 16),
 	}
 }
@@ -369,18 +370,20 @@ func seedance20FastSpec() domain.VideoRouteSpec {
 
 func runwayGen45Spec() domain.VideoRouteSpec {
 	return domain.VideoRouteSpec{
-		Alias:                  domain.VideoRouteRunwayGen45,
-		Provider:               domain.ProviderPoYo,
-		ProviderModelID:        "runway-gen-4.5",
-		ModelClass:             "runway_gen4_5",
-		InputModes:             []domain.VideoInputMode{domain.VideoInputText, domain.VideoInputImage},
-		AllowedDurationsSec:    []int{5, 10},
-		AllowedResolutions:     []string{"720p", "1080p"},
-		AllowedAspectRatios:    []string{"16:9", "9:16", "1:1"},
-		SupportsReferenceImage: true,
-		MaxReferenceImages:     1,
-		MaxProviderCostCredits: 0,
-		PriceMultiplier:        2,
+		Alias:                        domain.VideoRouteRunwayGen45,
+		Provider:                     domain.ProviderPoYo,
+		ProviderModelID:              "runway-gen-4.5",
+		ModelClass:                   "runway_gen4_5",
+		InputModes:                   []domain.VideoInputMode{domain.VideoInputText, domain.VideoInputImage},
+		AllowedDurationsSec:          []int{5, 10},
+		AllowedResolutions:           []string{"720p", "1080p"},
+		AllowedAspectRatios:          []string{"16:9", "9:16", "4:3", "3:4", "1:1", "21:9"},
+		SupportsReferenceImage:       true,
+		MaxReferenceImages:           1,
+		ProviderCostCreditsPerSecond: 15,
+		MaxProviderCostCredits:       150,
+		MaxInternalCostCredits:       450,
+		PriceMultiplier:              3,
 	}
 }
 

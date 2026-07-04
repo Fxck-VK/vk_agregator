@@ -186,7 +186,7 @@ func TestSubmitGPTImage2Success(t *testing.T) {
 		Prompt:         "safe editorial image",
 		Size:           "9:21",
 		Resolution:     "2K",
-		InputURLs:      []string{"https://cdn.test/reference-a.png", "https://cdn.test/reference-b.png"},
+		InputURLs:      []string{" https://cdn.test/reference-a.png ", "https://cdn.test/reference-b.png"},
 		IdempotencyKey: "provider_submit:gpt_image_2:1",
 	})
 	if err != nil {
@@ -201,11 +201,67 @@ func TestSubmitGPTImage2Success(t *testing.T) {
 	if seen.N != 1 || seen.OfficialFallback || len(seen.ImageURLs) != 2 {
 		t.Fatalf("unexpected generation options: %+v", seen)
 	}
+	if seen.ImageURLs[0] != "https://cdn.test/reference-a.png" || seen.ImageURLs[1] != "https://cdn.test/reference-b.png" {
+		t.Fatalf("image_urls = %#v", seen.ImageURLs)
+	}
+	if imageURLs, ok := rawBody["image_urls"].([]any); !ok || len(imageURLs) != 2 {
+		t.Fatalf("image_urls raw body = %#v", rawBody["image_urls"])
+	}
 	if _, ok := rawBody["official_fallback"]; ok {
 		t.Fatalf("official_fallback must be omitted unless enabled: %#v", rawBody)
 	}
 	if _, ok := rawBody["quality"]; ok {
 		t.Fatalf("APIMart image requests must use resolution, not quality: %#v", rawBody)
+	}
+}
+
+func TestSubmitGPTImage2OmitsImageURLsWithoutReferences(t *testing.T) {
+	var seen imageGenerationRequest
+	var rawBody map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.URL.Path; got != "/images/generations" {
+			t.Fatalf("path = %q", got)
+		}
+		data, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("read request: %v", err)
+		}
+		if err := json.Unmarshal(data, &seen); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		if err := json.Unmarshal(data, &rawBody); err != nil {
+			t.Fatalf("decode raw request: %v", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"code":200,"data":[{"status":"submitted","task_id":"task_gpt_image_2_text"}]}`))
+	}))
+	defer srv.Close()
+
+	p := New(Config{APIKey: "test-key", BaseURL: srv.URL, HTTPClient: srv.Client()})
+	task, err := p.Submit(context.Background(), domain.ProviderRequest{
+		JobID:          uuid.New(),
+		Operation:      domain.OperationImageGenerate,
+		Modality:       domain.ModalityImage,
+		ModelCode:      ModelGPTImage2,
+		Prompt:         "safe text only image",
+		Size:           "auto",
+		Resolution:     "1K",
+		IdempotencyKey: "provider_submit:gpt_image_2:text_only",
+	})
+	if err != nil {
+		t.Fatalf("submit: %v", err)
+	}
+	if task.Provider != domain.ProviderAPIMart || task.ModelCode != ModelGPTImage2 || task.ExternalID != "task_gpt_image_2_text" {
+		t.Fatalf("unexpected task: %+v", task)
+	}
+	if seen.Model != ModelGPTImage2 || seen.Prompt != "safe text only image" || seen.Size != "auto" || seen.Resolution != "1k" {
+		t.Fatalf("unexpected request body: %+v", seen)
+	}
+	if len(seen.ImageURLs) != 0 {
+		t.Fatalf("image_urls decoded = %#v, want omitted/empty", seen.ImageURLs)
+	}
+	if _, ok := rawBody["image_urls"]; ok {
+		t.Fatalf("image_urls must be omitted without references: %#v", rawBody)
 	}
 }
 

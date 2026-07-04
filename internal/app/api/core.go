@@ -82,6 +82,7 @@ func NewSharedCore(pool *pgxpool.Pool, cfg config.Config, opts ...SharedCoreOpti
 	}
 	users := postgres.NewUserRepository(pool)
 	jobs := postgres.NewJobRepository(pool)
+	artifacts := postgres.NewArtifactRepository(pool)
 	providerTasks := postgres.NewProviderTaskRepository(pool)
 	unitOfWork := postgres.NewUnitOfWork(pool)
 	billingRepo := postgres.NewBillingRepository(pool)
@@ -106,6 +107,7 @@ func NewSharedCore(pool *pgxpool.Pool, cfg config.Config, opts ...SharedCoreOpti
 	// publishes it to the queue, so the api process does not enqueue directly
 	// (audit A2).
 	orchestratorOptions := append([]joborchestrator.Option{
+		joborchestrator.WithArtifactRepository(artifacts),
 		joborchestrator.WithPricingCatalog(options.pricingCatalog),
 	}, options.orchestratorOptions...)
 	orch := joborchestrator.New(jobs, unitOfWork, billing, cfg.MaxJobCost, orchestratorOptions...)
@@ -122,7 +124,7 @@ func NewSharedCore(pool *pgxpool.Pool, cfg config.Config, opts ...SharedCoreOpti
 		BillingRepo:    billingRepo,
 		Payments:       payments,
 		Referrals:      postgres.NewReferralRepository(pool),
-		Artifacts:      postgres.NewArtifactRepository(pool),
+		Artifacts:      artifacts,
 		Moderation:     postgres.NewModerationResultRepository(pool),
 		Conversations:  postgres.NewConversationRepository(pool),
 		Maintenance:    postgres.NewMaintenanceRepository(pool),

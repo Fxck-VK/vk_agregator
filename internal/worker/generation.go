@@ -73,6 +73,9 @@ func (g *GenerationWorker) Process(ctx context.Context, task queue.Task) error {
 
 	req, err := g.buildRequest(ctx, job, attempt)
 	if err != nil {
+		if class, msg, ok := deterministicRequestFailure(err); ok {
+			return g.handleFailure(ctx, job, task, class, msg)
+		}
 		return err
 	}
 	provider, err := g.providers.ForRequest(ctx, req)

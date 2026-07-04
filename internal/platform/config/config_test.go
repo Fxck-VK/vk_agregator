@@ -263,7 +263,7 @@ func TestLoadVideoRouterFlagsDefaultDisabled(t *testing.T) {
 	}
 }
 
-func TestValidateImageModelNanoBananaProRequiresAPIMartConfig(t *testing.T) {
+func TestValidateImageModelNanoBananaProRequiresPoYoConfig(t *testing.T) {
 	cfg := config.Config{
 		Env:                                   "development",
 		Provider:                              "mock",
@@ -272,24 +272,24 @@ func TestValidateImageModelNanoBananaProRequiresAPIMartConfig(t *testing.T) {
 	}
 
 	err := cfg.Validate()
-	if err == nil || !strings.Contains(err.Error(), "APIMART_PROVIDER_ENABLED") {
-		t.Fatalf("expected APIMART_PROVIDER_ENABLED validation error, got %v", err)
+	if err == nil || !strings.Contains(err.Error(), "POYO_PROVIDER_ENABLED") {
+		t.Fatalf("expected POYO_PROVIDER_ENABLED validation error, got %v", err)
 	}
 
-	cfg.APIMartProviderEnabled = true
+	cfg.PoYoProviderEnabled = true
 	err = cfg.Validate()
-	if err == nil || !strings.Contains(err.Error(), "APIMART_API_KEY") {
-		t.Fatalf("expected APIMART_API_KEY validation error, got %v", err)
+	if err == nil || !strings.Contains(err.Error(), "POYO_API_KEY") {
+		t.Fatalf("expected POYO_API_KEY validation error, got %v", err)
 	}
 
-	cfg.APIMartAPIKey = "test-key"
-	cfg.APIMartBaseURL = ""
+	cfg.PoYoAPIKey = "test-key"
+	cfg.PoYoBaseURL = ""
 	err = cfg.Validate()
-	if err == nil || !strings.Contains(err.Error(), "APIMART_BASE_URL") {
-		t.Fatalf("expected APIMART_BASE_URL validation error, got %v", err)
+	if err == nil || !strings.Contains(err.Error(), "POYO_BASE_URL") {
+		t.Fatalf("expected POYO_BASE_URL validation error, got %v", err)
 	}
 
-	cfg.APIMartBaseURL = "https://api.apimart.ai/v1"
+	cfg.PoYoBaseURL = "https://api.poyo.ai"
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("Validate() error = %v", err)
 	}
@@ -604,14 +604,14 @@ func TestLoadDBPoolConfigBoundsInt32Values(t *testing.T) {
 
 func TestLoadImageProviderConfig(t *testing.T) {
 	t.Setenv("IMAGE_PROVIDER", "poyo")
-	t.Setenv("IMAGE_MODEL", "nano-banana-2")
+	t.Setenv("IMAGE_MODEL", "nano-banana-2-new")
 	t.Setenv("IMAGE_SIZE", "1K")
 
 	cfg := config.Load()
 	if cfg.ImageProvider != "poyo" {
 		t.Fatalf("ImageProvider = %q, want poyo", cfg.ImageProvider)
 	}
-	if cfg.ImageModel != "nano-banana-2" || cfg.ImageSize != "1K" {
+	if cfg.ImageModel != "nano-banana-2-new" || cfg.ImageSize != "1K" {
 		t.Fatalf("unexpected image config: model=%q size=%q", cfg.ImageModel, cfg.ImageSize)
 	}
 }

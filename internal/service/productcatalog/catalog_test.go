@@ -42,7 +42,7 @@ func TestCatalogBuildsOnlyPublicEnabledItems(t *testing.T) {
 		t.Fatalf("Nano Banana 2 missing from public catalog: %+v", items)
 	}
 	assertImageQualityOptions(t, "Nano Banana 2", nano.DefaultQuality, nano.QualityOptions)
-	if !nano.SupportsReferenceImage || nano.MaxReferenceImages != 4 {
+	if !nano.SupportsReferenceImage || nano.MaxReferenceImages != 14 {
 		t.Fatalf("Nano Banana 2 reference limits missing: %+v", nano)
 	}
 	pro := findItem(items, modelcatalog.MiniAppImageNanoBananaPro)
@@ -71,7 +71,7 @@ func TestCatalogFailsClosedForDisabledOrUnconfiguredModels(t *testing.T) {
 	catalog := productcatalog.New(productcatalog.Config{
 		ImageProviderReady: map[domain.ProviderName]bool{
 			domain.ProviderAPIMart: false,
-			domain.ProviderPoYo:    true,
+			domain.ProviderPoYo:    false,
 		},
 		EnabledImageModels: map[string]bool{
 			modelcatalog.MiniAppImageNanoBanana2:   false,
@@ -192,6 +192,8 @@ func assertNoPrivateProviderFields(t *testing.T, items []productcatalog.Item) {
 		"price_multiplier",
 		"max_internal_cost_credits",
 		"nano-banana-2",
+		"nano-banana-pro",
+		"nano-banana-pro-edit",
 		"gemini-3-pro-image-preview",
 		"gpt-image-2",
 		"kling-o3/standard",

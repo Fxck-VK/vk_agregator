@@ -14,7 +14,7 @@ import (
 	"vk-ai-aggregator/internal/domain"
 )
 
-const maxReferenceArtifacts = 4
+const maxReferenceArtifacts = 16
 
 func (h *Handler) validateReferenceArtifacts(w http.ResponseWriter, r *http.Request, userID uuid.UUID, op domain.OperationType, ids []uuid.UUID) bool {
 	if op != domain.OperationImageGenerate && op != domain.OperationVideoGenerate {

@@ -29,6 +29,10 @@ import (
 // without a pricingcatalog snapshot or another backend-owned exact estimate.
 var ErrBackendPriceRequired = errors.New("joborchestrator: backend price is required")
 
+// ErrInvalidInputArtifact means a job referenced media that is not a ready,
+// owner-scoped, storage-backed input image.
+var ErrInvalidInputArtifact = errors.New("joborchestrator: invalid input artifact")
+
 // Biller is the subset of the billing service the orchestrator depends on. The
 // reservation is performed with a transaction-bound repository so it commits
 // atomically with job creation (audit B1).
@@ -161,6 +165,7 @@ type Orchestrator struct {
 	videoRouteValidator       VideoRouteValidator
 	videoRouteResolver        VideoRouteResolver
 	pricingCatalog            *pricingcatalog.Catalog
+	artifacts                 domain.ArtifactRepository
 	now                       func() time.Time
 }
 
@@ -206,6 +211,13 @@ func WithVideoRouteResolver(resolver VideoRouteResolver) Option {
 func WithPricingCatalog(catalog *pricingcatalog.Catalog) Option {
 	return func(o *Orchestrator) {
 		o.pricingCatalog = catalog
+	}
+}
+
+// WithArtifactRepository installs the shared input-artifact validator backend.
+func WithArtifactRepository(repo domain.ArtifactRepository) Option {
+	return func(o *Orchestrator) {
+		o.artifacts = repo
 	}
 }
 
@@ -256,6 +268,12 @@ func (o *Orchestrator) CreateJob(ctx context.Context, in CreateJobInput) (*domai
 		tracing.RecordError(span, err)
 		metrics.ObserveProductEvent(source, "job", "create", operationLabel, modalityLabel, "idempotency_error")
 		return nil, fmt.Errorf("joborchestrator: idempotency lookup: %w", err)
+	}
+
+	if err := o.validateInputArtifacts(ctx, in); err != nil {
+		tracing.RecordError(span, err)
+		metrics.ObserveProductEvent(source, "job", "create", operationLabel, modalityLabel, "rejected_input_artifact")
+		return nil, err
 	}
 
 	// 1. Resolve trusted route details, estimate cost and enforce spend caps.
@@ -414,6 +432,43 @@ func (o *Orchestrator) CreateJob(ctx context.Context, in CreateJobInput) (*domai
 	metrics.ObserveProductEvent(source, "job", "create", operationLabel, modalityLabel, "queued")
 	metrics.ObserveProductActiveUserEvent(source, operationLabel, modalityLabel, "created")
 	return job, nil
+}
+
+func (o *Orchestrator) validateInputArtifacts(ctx context.Context, in CreateJobInput) error {
+	if len(in.InputArtifactIDs) == 0 {
+		return nil
+	}
+	if o.artifacts == nil {
+		return fmt.Errorf("%w: repository unavailable", ErrInvalidInputArtifact)
+	}
+	for _, id := range in.InputArtifactIDs {
+		if id == uuid.Nil {
+			return fmt.Errorf("%w: empty id", ErrInvalidInputArtifact)
+		}
+		artifact, err := o.artifacts.GetByID(ctx, id)
+		if err != nil {
+			if errors.Is(err, domain.ErrNotFound) {
+				return fmt.Errorf("%w: missing", ErrInvalidInputArtifact)
+			}
+			return fmt.Errorf("joborchestrator: input artifact lookup: %w", err)
+		}
+		if artifact.OwnerUserID != in.UserID {
+			return fmt.Errorf("%w: foreign owner", ErrInvalidInputArtifact)
+		}
+		if artifact.Kind != domain.ArtifactKindInput {
+			return fmt.Errorf("%w: kind %s", ErrInvalidInputArtifact, artifact.Kind)
+		}
+		if artifact.MediaType != domain.MediaTypeImage {
+			return fmt.Errorf("%w: media %s", ErrInvalidInputArtifact, artifact.MediaType)
+		}
+		if artifact.Status != domain.ArtifactStatusReady {
+			return fmt.Errorf("%w: status %s", ErrInvalidInputArtifact, artifact.Status)
+		}
+		if strings.TrimSpace(artifact.StorageBucket) == "" || strings.TrimSpace(artifact.StorageKey) == "" {
+			return fmt.Errorf("%w: storage missing", ErrInvalidInputArtifact)
+		}
+	}
+	return nil
 }
 
 func requiresBackendPrice(op domain.OperationType, modality domain.Modality) bool {

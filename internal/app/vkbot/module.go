@@ -202,14 +202,6 @@ func menuFeatures(cfg config.Config, catalog productcatalog.RuntimeCatalog) vkin
 		}
 		return false
 	}
-	imageReferenceAvailable := func() bool {
-		for _, model := range imageModels {
-			if model.Enabled && model.SupportsReferenceImage {
-				return true
-			}
-		}
-		return false
-	}
 	videoRouteAvailable := func(alias domain.VideoRouteAlias) bool {
 		for _, route := range videoRoutes {
 			if route.Enabled && route.Alias == string(alias) {
@@ -222,7 +214,8 @@ func menuFeatures(cfg config.Config, catalog productcatalog.RuntimeCatalog) vkin
 	disableWhenFalse(cfg.VKMenuVideoEnabled && len(videoRoutes) > 0, domain.CommandMenuVideo)
 	disableWhenFalse(false, domain.CommandMenuVideoPrunaAI)
 
-	disableWhenFalse(cfg.VKMenuImageEnabled && len(imageModels) > 0, domain.CommandMenuImage)
+	imageMenuReady := cfg.VKMenuImageEnabled && len(imageModels) > 0
+	disableWhenFalse(imageMenuReady, domain.CommandMenuImage)
 	disableWhenFalse(imageAvailable(modelcatalog.MiniAppImageNanoBananaPro), domain.CommandMenuImageText)
 	disableWhenFalse(cfg.VKMenuGPTEnabled, domain.CommandMenuText)
 	disableWhenFalse(cfg.VKMenuStudentsEnabled, domain.CommandMenuStudents)
@@ -256,7 +249,7 @@ func menuFeatures(cfg config.Config, catalog productcatalog.RuntimeCatalog) vkin
 	disableWhenFalse(imageAvailable(modelcatalog.MiniAppImageSeedream45), domain.CommandMenuImageDeepInfraSeedream)
 	disableWhenFalse(imageAvailable(modelcatalog.MiniAppImageSDXLTurbo), domain.CommandMenuImageDeepInfraSDXL)
 	disableWhenFalse(imageAvailable(modelcatalog.MiniAppImageGPTImage2), domain.CommandMenuImageGPTImage2)
-	disableWhenFalse(cfg.VKMenuImageReferenceEnabled && imageReferenceAvailable(), domain.CommandMenuImageReference)
+	disableWhenFalse(imageMenuReady, domain.CommandMenuImageReference)
 	disableWhenFalse(cfg.VKMenuStudentsSolverEnabled, domain.CommandMenuStudentSolver)
 	disableWhenFalse(cfg.VKMenuStudentsPresentationEnabled, domain.CommandMenuStudentPresentation)
 	disableWhenFalse(cfg.VKMenuStudentsReportEnabled, domain.CommandMenuStudentReport)

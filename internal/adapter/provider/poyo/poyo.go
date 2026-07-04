@@ -20,10 +20,13 @@ import (
 const (
 	DefaultBaseURL = "https://api.poyo.ai"
 
-	ModelKlingO3Standard = "kling-o3/standard"
-	ModelSeedance20Fast  = "seedance-2-fast"
-	ModelRunwayGen45     = "runway-gen-4.5"
-	ModelNanoBanana2New  = "nano-banana-2"
+	ModelKlingO3Standard    = "kling-o3/standard"
+	ModelSeedance20Fast     = "seedance-2-fast"
+	ModelRunwayGen45        = "runway-gen-4.5"
+	ModelNanoBanana2New     = "nano-banana-2-new"
+	ModelNanoBanana2NewEdit = "nano-banana-2-new-edit"
+	ModelNanoBananaPro      = "nano-banana-pro"
+	ModelNanoBananaProEdit  = "nano-banana-pro-edit"
 
 	klingO3CreditsPerSecond    int64 = 10
 	seedance20CreditsPerSecond int64 = 28
@@ -80,6 +83,12 @@ func (p *Provider) Capabilities(context.Context) ([]domain.Capability, error) {
 			Operation:       domain.OperationImageGenerate,
 			Modality:        domain.ModalityImage,
 			ModelCode:       ModelNanoBanana2New,
+			SupportsPolling: true,
+		},
+		{
+			Operation:       domain.OperationImageGenerate,
+			Modality:        domain.ModalityImage,
+			ModelCode:       ModelNanoBananaPro,
 			SupportsPolling: true,
 		},
 		{
@@ -633,17 +642,30 @@ func buildImageSubmitRequest(req domain.ProviderRequest) (submitRequest, error) 
 	if err := validateImageShape(req, true); err != nil {
 		return submitRequest{}, err
 	}
+	modelCode := strings.TrimSpace(req.ModelCode)
 	inputURLs := cleanInputURLs(req.InputURLs)
+	submitModel := modelCode
+	if modelCode == ModelNanoBanana2New && len(inputURLs) > 0 {
+		submitModel = ModelNanoBanana2NewEdit
+	}
+	if modelCode == ModelNanoBananaPro && len(inputURLs) > 0 {
+		submitModel = ModelNanoBananaProEdit
+	}
 	input := map[string]any{
 		"prompt":     strings.TrimSpace(req.Prompt),
-		"size":       effectiveImageSize(req),
+		"size":       effectiveImageSize(modelCode, req),
 		"resolution": effectiveImageResolution(req.Resolution),
+	}
+	if modelCode == ModelNanoBananaPro {
+		input["n"] = 1
+		input["output_format"] = "png"
+		input["enable_web_search"] = false
 	}
 	if len(inputURLs) > 0 {
 		input["image_urls"] = inputURLs
 	}
 	return submitRequest{
-		Model: strings.TrimSpace(req.ModelCode),
+		Model: submitModel,
 		Input: input,
 	}, nil
 }
@@ -672,11 +694,9 @@ func buildVideoSubmitRequest(req domain.ProviderRequest) (submitRequest, error) 
 			input["reference_image_urls"] = inputURLs
 		}
 	case ModelRunwayGen45:
-		// PoYo Runway Gen-4.5 allows only one optional reference image until
-		// smoke tests prove a broader input contract.
 		input["resolution"] = effectiveResolution(req.ModelCode, req.Resolution)
 		if len(inputURLs) > 0 {
-			input["image_url"] = inputURLs[0]
+			input["image_urls"] = inputURLs
 		}
 	}
 	return submitRequest{
@@ -790,7 +810,8 @@ func validateImageShape(req domain.ProviderRequest, requirePrompt bool) error {
 	if req.Operation != domain.OperationImageGenerate || req.Modality != domain.ModalityImage {
 		return &Error{Class: domain.ProviderErrUnsupportedCapab, Message: string(req.Operation) + "/" + string(req.Modality)}
 	}
-	if strings.TrimSpace(req.ModelCode) != ModelNanoBanana2New {
+	modelCode := strings.TrimSpace(req.ModelCode)
+	if !isSupportedImageModel(modelCode) {
 		return &Error{Class: domain.ProviderErrUnsupportedCapab, Message: "unsupported PoYo image model"}
 	}
 	if requirePrompt {
@@ -802,10 +823,10 @@ func validateImageShape(req domain.ProviderRequest, requirePrompt bool) error {
 			return &Error{Class: domain.ProviderErrInvalidRequest, Message: "prompt exceeds 20000 characters"}
 		}
 	}
-	if value := strings.TrimSpace(req.AspectRatio); value != "" && !allowedImageSize(value) {
+	if value := strings.TrimSpace(req.AspectRatio); value != "" && !allowedImageSize(modelCode, value) {
 		return &Error{Class: domain.ProviderErrInvalidRequest, Message: "unsupported PoYo image size"}
 	}
-	if value := strings.TrimSpace(req.Size); value != "" && !allowedImageSize(value) {
+	if value := strings.TrimSpace(req.Size); value != "" && !allowedImageSize(modelCode, value) {
 		return &Error{Class: domain.ProviderErrInvalidRequest, Message: "unsupported PoYo image size"}
 	}
 	if value := strings.TrimSpace(req.Resolution); value != "" && !allowedImageResolution(value) {
@@ -820,12 +841,24 @@ func validateImageShape(req domain.ProviderRequest, requirePrompt bool) error {
 	return nil
 }
 
-func effectiveImageSize(req domain.ProviderRequest) string {
+func isSupportedImageModel(model string) bool {
+	switch strings.TrimSpace(model) {
+	case ModelNanoBanana2New, ModelNanoBananaPro:
+		return true
+	default:
+		return false
+	}
+}
+
+func effectiveImageSize(model string, req domain.ProviderRequest) string {
 	for _, value := range []string{req.AspectRatio, req.Size} {
 		trimmed := strings.TrimSpace(value)
-		if allowedImageSize(trimmed) {
+		if allowedImageSize(model, trimmed) {
 			return trimmed
 		}
+	}
+	if strings.TrimSpace(model) == ModelNanoBananaPro {
+		return "auto"
 	}
 	return "1:1"
 }
@@ -859,8 +892,17 @@ func allowedImageResolution(value string) bool {
 	}
 }
 
-func allowedImageSize(value string) bool {
-	switch strings.TrimSpace(value) {
+func allowedImageSize(model, value string) bool {
+	trimmed := strings.TrimSpace(value)
+	if strings.TrimSpace(model) == ModelNanoBananaPro {
+		switch trimmed {
+		case "auto", "1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9":
+			return true
+		default:
+			return false
+		}
+	}
+	switch trimmed {
 	case "1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9",
 		"1:4", "4:1", "1:8", "8:1":
 		return true
@@ -905,7 +947,7 @@ func validateVideoShape(req domain.ProviderRequest, requirePrompt bool) error {
 		return &Error{Class: domain.ProviderErrInvalidRequest, Message: "unsupported PoYo video resolution"}
 	}
 	aspectRatio := effectiveAspectRatio(req.AspectRatio)
-	if aspectRatio != "16:9" && aspectRatio != "9:16" && aspectRatio != "1:1" {
+	if !allowedVideoAspectRatio(model, aspectRatio) {
 		return &Error{Class: domain.ProviderErrInvalidRequest, Message: "unsupported PoYo video aspect ratio"}
 	}
 	inputCount := len(cleanInputURLs(req.InputURLs))
@@ -1018,6 +1060,25 @@ func effectiveAspectRatio(value string) string {
 		return trimmed
 	}
 	return "16:9"
+}
+
+func allowedVideoAspectRatio(model, aspectRatio string) bool {
+	switch strings.TrimSpace(model) {
+	case ModelRunwayGen45:
+		switch aspectRatio {
+		case "16:9", "9:16", "4:3", "3:4", "1:1", "21:9":
+			return true
+		default:
+			return false
+		}
+	default:
+		switch aspectRatio {
+		case "16:9", "9:16", "1:1":
+			return true
+		default:
+			return false
+		}
+	}
 }
 
 func cleanInputURLs(values []string) []string {

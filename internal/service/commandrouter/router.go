@@ -60,6 +60,8 @@ func (r *Router) Parse(rawText string) Result {
 	// stale keyboards and manual user text.
 	case "runway gen-4 turbo", "runway gen4 turbo", "creative video", "sora 2 начать генерацию":
 		return Result{Type: domain.CommandMenuVideoSora2Start}
+	case "runway gen-4.5", "runway gen4.5", "runway gen 4.5":
+		return Result{Type: domain.CommandMenuVideoRouteSelect, Arg: string(domain.VideoRouteRunwayGen45)}
 	case "sora 2 — видео текст+фото", "sora 2 - видео текст+фото", "sora 2 examples", "sora 2 примеры":
 		return Result{Type: domain.CommandMenuVideoSora2}
 	case "kling o3 standard", "balanced video", "kling v2.1 начать генерацию":
@@ -112,7 +114,7 @@ func (r *Router) Parse(rawText string) Result {
 	case "⬅️ назад к моделям", "назад к моделям":
 		return Result{Type: domain.CommandShowMenu}
 	case "📸 фото с референсом", "фото с референсом", "фото по тексту и фото":
-		return Result{Type: domain.CommandMenuImageReference}
+		return Result{Type: domain.CommandMenuImage}
 	case "💬 спросить у нейрохаб", "спросить у нейрохаб", "💬 спросить у gpt", "спросить у gpt", "задать вопрос":
 		return Result{Type: domain.CommandMenuText}
 	case "🎁 студентам и школьникам", "студентам и школьникам":

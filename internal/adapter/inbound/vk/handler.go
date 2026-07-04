@@ -804,6 +804,8 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 		controlFromPayload = true
 	} else if controlOnly {
 		parsed = commandrouter.Result{Type: domain.CommandUnknown}
+	} else if parsed.Type == domain.CommandMenuVideoRouteSelect {
+		videoRouteAlias = strings.TrimSpace(parsed.Arg)
 	}
 	activateReferral := shouldActivateReferralOnVKCommand(parsed.Type)
 	if isMenuCommand(parsed.Type) && (!h.menuCommandEnabled(parsed.Type) || (controlFromPayload && !h.controlPayloadEnabled(control))) {
@@ -889,8 +891,10 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 	}
 	metrics.ObserveProductEvent("vk_bot", "command", "parsed", productCommandOperation(parsed), productCommandModality(parsed), productCommandResult(parsed, controlOnly, controlFromPayload))
 
-	photoSelection, photoTextJob := h.photoSelectionForActiveDialog(ctx, peerID)
-	photoTextJob = parsed.Type == domain.CommandImageGenerate && photoTextJob
+	photoSelection, photoDialogActive := h.photoSelectionForActiveDialog(ctx, peerID)
+	photoTextJob := parsed.Type == domain.CommandImageGenerate && photoDialogActive
+	photoReferenceOnlyNotice := !controlFromPayload && !controlOnly && photoDialogActive && strings.TrimSpace(text) == "" && len(vkPhotoReferences(attachments)) > 0
+	var imageReferenceIDs []uuid.UUID
 	videoBlockedMessage := ""
 	var videoReferenceIDs []uuid.UUID
 	videoAspectRatio := ""
@@ -914,6 +918,34 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 		} else {
 			return fmt.Errorf("save command: %w", err)
 		}
+	}
+	if photoReferenceOnlyNotice {
+		if err := h.sendImageReferenceNotice(ctx, idemKey, peerID, "Прикрепите фото вместе с описанием, что нужно сгенерировать."); err != nil {
+			return fmt.Errorf("send image reference notice: %w", err)
+		}
+		if err := h.deps.Inbound.SetStatus(ctx, inbound.ID, domain.InboundProcessed); err != nil {
+			return fmt.Errorf("mark inbound processed: %w", err)
+		}
+		if err := h.deps.Idempotency.MarkCompleted(ctx, idemKey, cmd.ID); err != nil {
+			return fmt.Errorf("mark idempotency completed: %w", err)
+		}
+		return nil
+	}
+	if photoTextJob && len(vkPhotoReferences(attachments)) > 0 {
+		result := h.prepareReferenceArtifacts(ctx, user.ID, h.imageReferenceArtifactRequest(photoSelection), attachments)
+		if !result.OK {
+			if err := h.sendImageReferenceNotice(ctx, idemKey, peerID, result.Notice); err != nil {
+				return fmt.Errorf("send image reference notice: %w", err)
+			}
+			if err := h.deps.Inbound.SetStatus(ctx, inbound.ID, domain.InboundProcessed); err != nil {
+				return fmt.Errorf("mark inbound processed: %w", err)
+			}
+			if err := h.deps.Idempotency.MarkCompleted(ctx, idemKey, cmd.ID); err != nil {
+				return fmt.Errorf("mark idempotency completed: %w", err)
+			}
+			return nil
+		}
+		imageReferenceIDs = result.ArtifactIDs
 	}
 	if videoTextJob {
 		var ok bool
@@ -1060,6 +1092,7 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 			jp.Size = imageSizeForSelection(photoSelection)
 			jp.Resolution = photoSelection.Quality
 			jp.ImageQuality = photoSelection.Quality
+			jp.ReferenceArtifactIDs = imageReferenceIDs
 		}
 		if videoTextJob {
 			jp.ModelName = videoSpec.ModelName
@@ -1087,7 +1120,7 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 			IdempotencyKey:      "vk_job:" + strconv.FormatInt(cb.GroupID, 10) + ":" + eventID,
 			CorrelationID:       idemKey,
 			Params:              params,
-			InputArtifactIDs:    videoReferenceIDs,
+			InputArtifactIDs:    jobInputArtifactIDs(photoTextJob, imageReferenceIDs, videoReferenceIDs),
 			CostEstimateCredits: costEstimateCredits,
 			PricingSnapshot:     pricingSnapshot,
 		})
@@ -1453,6 +1486,13 @@ func (h *Handler) deliverPhotoControl(ctx context.Context, command domain.Comman
 
 func imageSizeForSelection(selection photoDialogSelection) string {
 	return "1:1"
+}
+
+func jobInputArtifactIDs(photoTextJob bool, imageReferenceIDs, videoReferenceIDs []uuid.UUID) []uuid.UUID {
+	if photoTextJob {
+		return imageReferenceIDs
+	}
+	return videoReferenceIDs
 }
 
 func (h *Handler) publicImageModel(modelID string) (productcatalog.ImageModel, bool) {
