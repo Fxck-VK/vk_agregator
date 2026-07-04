@@ -20,6 +20,15 @@ assert_not_contains() {
   fi
 }
 
+assert_file_contains() {
+  local file="$1"
+  local needle="$2"
+  if ! grep -Fxq "${needle}" "${file}"; then
+    printf 'Expected %s to contain: %s\n' "${file}" "${needle}" >&2
+    exit 1
+  fi
+}
+
 write_common_dev_env() {
   local output="$1"
   local payment_provider="$2"
@@ -39,6 +48,13 @@ PROVIDER=mock
 PROVIDER_CHAIN=mock
 IMAGE_PROVIDER=mock
 VIDEO_PROVIDER=mock
+DEEPINFRA_API_KEY=deepinfra-dev-test-key
+APIMART_API_KEY=apimart-dev-test-key
+APIMART_BASE_URL=https://api.aimlapi.com/v1
+POYO_API_KEY=poyo-dev-test-key
+POYO_BASE_URL=https://api.poyo.ai
+RUNWAYML_API_SECRET=runway-dev-test-key
+RUNWAYML_BASE_URL=https://api.dev.runwayml.com/v1
 DEV_ALLOW_REAL_PAYMENTS=false
 YOOKASSA_SHOP_ID=dev-test-shop
 YOOKASSA_SECRET_KEY=yookassa-key-placeholder
@@ -78,6 +94,30 @@ run_valid_case() {
   assert_not_contains "${log}" "dev-test-token-value" "${name} log"
   assert_not_contains "${log}" "yookassa-key-placeholder" "${name} log"
   assert_not_contains "${log}" "ghcr-token-placeholder" "${name} log"
+  assert_not_contains "${log}" "deepinfra-dev-test-key" "${name} log"
+  assert_not_contains "${log}" "apimart-dev-test-key" "${name} log"
+  assert_not_contains "${log}" "poyo-dev-test-key" "${name} log"
+  assert_not_contains "${log}" "runway-dev-test-key" "${name} log"
+
+  assert_file_contains "${rendered}" "APIMART_PROVIDER_ENABLED=true"
+  assert_file_contains "${rendered}" "POYO_PROVIDER_ENABLED=true"
+  assert_file_contains "${rendered}" "RUNWAY_PROVIDER_ENABLED=true"
+  assert_file_contains "${rendered}" "VK_MENU_VIDEO_ENABLED=true"
+  assert_file_contains "${rendered}" "VK_MENU_IMAGE_ENABLED=true"
+  assert_file_contains "${rendered}" "VK_MENU_VIDEO_ROUTES_PREVIEW_ENABLED=true"
+  assert_file_contains "${rendered}" "FEATURE_IMAGE_MODEL_NANO_BANANA_PRO_ENABLED=true"
+  assert_file_contains "${rendered}" "FEATURE_IMAGE_MODEL_GPT_IMAGE_2_ENABLED=true"
+  assert_file_contains "${rendered}" "FEATURE_IMAGE_MODEL_NANO_BANANA_2_ENABLED=true"
+  assert_file_contains "${rendered}" "FEATURE_IMAGE_MODEL_MOCK_ENABLED=false"
+  assert_file_contains "${rendered}" "FEATURE_VIDEO_ROUTER_ENABLED=true"
+  assert_file_contains "${rendered}" "FEATURE_VIDEO_ROUTE_HAILUO_2_3_FAST_ENABLED=true"
+  assert_file_contains "${rendered}" "FEATURE_VIDEO_ROUTE_HAILUO_2_3_STANDARD_ENABLED=true"
+  assert_file_contains "${rendered}" "FEATURE_VIDEO_ROUTE_KLING_O3_STANDARD_ENABLED=true"
+  assert_file_contains "${rendered}" "FEATURE_VIDEO_ROUTE_RUNWAY_GEN4_TURBO_ENABLED=true"
+  assert_file_contains "${rendered}" "FEATURE_VIDEO_ROUTE_SEEDANCE_2_0_FAST_ENABLED=true"
+  assert_file_contains "${rendered}" "FEATURE_VIDEO_ROUTE_RUNWAY_GEN4_5_ENABLED=true"
+  assert_file_contains "${rendered}" "FEATURE_VIDEO_ROUTE_MOCK_TEXT_TO_VIDEO_ENABLED=false"
+  assert_file_contains "${rendered}" "FEATURE_VIDEO_ROUTE_RESELLER_EXPERIMENTS_ENABLED=false"
 }
 
 expect_failure() {
