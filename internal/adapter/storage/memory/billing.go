@@ -43,9 +43,18 @@ func userCurrencyKey(userID uuid.UUID, currency domain.Currency) string {
 func (r *BillingRepo) CreateAccount(_ context.Context, a *domain.CreditAccount) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if a.OwnerAccountID == uuid.Nil {
+		a.OwnerAccountID = a.UserID
+	}
 	key := userCurrencyKey(a.UserID, a.Currency)
 	if _, ok := r.byUser[key]; ok {
 		return domain.ErrConflict
+	}
+	ownerKey := userCurrencyKey(a.OwnerAccountID, a.Currency)
+	if ownerKey != key {
+		if _, ok := r.byUser[ownerKey]; ok {
+			return domain.ErrConflict
+		}
 	}
 	if a.ID == uuid.Nil {
 		a.ID = uuid.New()
@@ -59,9 +68,13 @@ func (r *BillingRepo) CreateAccount(_ context.Context, a *domain.CreditAccount) 
 	a.BalanceCached = 0
 	r.accounts[a.ID] = *a
 	r.byUser[key] = a.ID
+	if ownerKey != key {
+		r.byUser[ownerKey] = a.ID
+	}
 	if grant != 0 {
 		if err := r.appendLocked(&domain.LedgerEntry{
 			AccountID:      a.ID,
+			OwnerAccountID: a.OwnerAccountID,
 			Type:           domain.LedgerTopup,
 			Amount:         grant,
 			Status:         domain.LedgerStatusCommitted,
@@ -112,6 +125,11 @@ func (r *BillingRepo) appendLocked(e *domain.LedgerEntry) error {
 	if e.Status == "" {
 		e.Status = domain.LedgerStatusCommitted
 	}
+	if e.OwnerAccountID == uuid.Nil {
+		if acc, ok := r.accounts[e.AccountID]; ok {
+			e.OwnerAccountID = acc.OwnerAccountID
+		}
+	}
 	e.CreatedAt = time.Now()
 	r.ledger = append(r.ledger, *e)
 	r.ledgerKeys[e.IdempotencyKey] = true
@@ -161,6 +179,9 @@ func (r *BillingRepo) Reserve(_ context.Context, res *domain.CreditReservation) 
 	if _, ok := r.accounts[res.AccountID]; !ok {
 		return domain.ErrNotFound
 	}
+	if res.OwnerAccountID == uuid.Nil {
+		res.OwnerAccountID = r.accounts[res.AccountID].OwnerAccountID
+	}
 	if r.availableLocked(res.AccountID) < res.Amount {
 		return domain.ErrInsufficientCredits
 	}
@@ -178,6 +199,7 @@ func (r *BillingRepo) Reserve(_ context.Context, res *domain.CreditReservation) 
 	jobID := res.JobID
 	return r.appendLocked(&domain.LedgerEntry{
 		AccountID:      res.AccountID,
+		OwnerAccountID: res.OwnerAccountID,
 		JobID:          &jobID,
 		ReservationID:  &res.ID,
 		Type:           domain.LedgerReserve,
@@ -205,6 +227,7 @@ func (r *BillingRepo) Capture(_ context.Context, reservationID uuid.UUID, amount
 	jobID := res.JobID
 	return r.appendLocked(&domain.LedgerEntry{
 		AccountID:      res.AccountID,
+		OwnerAccountID: res.OwnerAccountID,
 		JobID:          &jobID,
 		ReservationID:  &res.ID,
 		Type:           domain.LedgerCapture,
@@ -232,6 +255,7 @@ func (r *BillingRepo) Release(_ context.Context, reservationID uuid.UUID, idempo
 	jobID := res.JobID
 	return r.appendLocked(&domain.LedgerEntry{
 		AccountID:      res.AccountID,
+		OwnerAccountID: res.OwnerAccountID,
 		JobID:          &jobID,
 		ReservationID:  &res.ID,
 		Type:           domain.LedgerRelease,

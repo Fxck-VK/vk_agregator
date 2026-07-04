@@ -15,6 +15,8 @@ import (
 	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/platform/config"
 	"vk-ai-aggregator/internal/platform/logging"
+	"vk-ai-aggregator/internal/service/accountlink"
+	"vk-ai-aggregator/internal/service/accountservice"
 	"vk-ai-aggregator/internal/service/antispam"
 	"vk-ai-aggregator/internal/service/billingservice"
 	"vk-ai-aggregator/internal/service/commandrouter"
@@ -32,6 +34,9 @@ type Deps struct {
 	Idempotency    domain.IdempotencyRepository
 	Inbound        domain.InboundEventRepository
 	Users          domain.UserRepository
+	Identity       domain.IdentityResolver
+	Account        *accountservice.Service
+	AccountLink    *accountlink.Service
 	Jobs           domain.JobRepository
 	Commands       domain.CommandRepository
 	Billing        *billingservice.Service
@@ -145,6 +150,9 @@ func NewHandler(ctx context.Context, cfg config.Config, deps Deps) http.Handler 
 		Idempotency:    deps.Idempotency,
 		Inbound:        deps.Inbound,
 		Users:          deps.Users,
+		Identity:       deps.Identity,
+		Account:        deps.Account,
+		AccountLink:    deps.AccountLink,
 		Jobs:           deps.Jobs,
 		Commands:       deps.Commands,
 		Billing:        deps.Billing,

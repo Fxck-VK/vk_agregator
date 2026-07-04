@@ -52,10 +52,14 @@ func activeConversationRefKey(ref domain.ConversationRef) string {
 	if source == "" {
 		source = domain.ConversationSourceVKBot
 	}
-	if source == domain.ConversationSourceVKBot {
-		return ref.UserID.String() + "|" + string(source) + "|" + strconv.FormatInt(ref.VKPeerID, 10)
+	ownerID := ref.UserID
+	if ref.AccountID != uuid.Nil {
+		ownerID = ref.AccountID
 	}
-	return ref.UserID.String() + "|" + string(source) + "|" + ref.ExternalThreadID
+	if source == domain.ConversationSourceVKBot {
+		return ownerID.String() + "|" + string(source) + "|" + strconv.FormatInt(ref.VKPeerID, 10)
+	}
+	return ownerID.String() + "|" + string(source) + "|" + ref.ExternalThreadID
 }
 
 func messageRoleKey(jobID uuid.UUID, role domain.ConversationMessageRole) string {
@@ -78,7 +82,13 @@ func (r *ConversationRepo) GetActiveByReference(_ context.Context, ref domain.Co
 	defer r.mu.Unlock()
 	id, ok := r.activeByRef[activeConversationRefKey(ref)]
 	if !ok {
-		return nil, domain.ErrNotFound
+		if ref.AccountID != uuid.Nil && ref.UserID != uuid.Nil {
+			ref.AccountID = uuid.Nil
+			id, ok = r.activeByRef[activeConversationRefKey(ref)]
+		}
+		if !ok {
+			return nil, domain.ErrNotFound
+		}
 	}
 	c := r.byID[id]
 	return &c, nil
@@ -88,7 +98,7 @@ func (r *ConversationRepo) GetByIDForUser(_ context.Context, userID, conversatio
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	c, ok := r.byID[conversationID]
-	if !ok || c.UserID != userID {
+	if !ok || c.UserID != userID && c.AccountID != userID {
 		return nil, domain.ErrNotFound
 	}
 	return &c, nil
@@ -105,7 +115,7 @@ func (r *ConversationRepo) ListByUserSource(_ context.Context, userID uuid.UUID,
 	}
 	var matched []domain.Conversation
 	for _, c := range r.byID {
-		if c.UserID == userID && c.Source == source {
+		if (c.UserID == userID || c.AccountID == userID) && c.Source == source {
 			matched = append(matched, c)
 		}
 	}
@@ -136,6 +146,9 @@ func (r *ConversationRepo) CreateConversation(_ context.Context, c *domain.Conve
 	if c.ID == uuid.Nil {
 		c.ID = uuid.New()
 	}
+	if c.AccountID == uuid.Nil {
+		c.AccountID = c.UserID
+	}
 	if c.Source == "" {
 		c.Source = domain.ConversationSourceVKBot
 	}
@@ -144,6 +157,7 @@ func (r *ConversationRepo) CreateConversation(_ context.Context, c *domain.Conve
 	}
 	key := activeConversationRefKey(domain.ConversationRef{
 		UserID:           c.UserID,
+		AccountID:        c.AccountID,
 		Source:           c.Source,
 		VKPeerID:         c.VKPeerID,
 		ExternalThreadID: c.ExternalThreadID,
@@ -153,6 +167,15 @@ func (r *ConversationRepo) CreateConversation(_ context.Context, c *domain.Conve
 			return domain.ErrConflict
 		}
 		r.activeByRef[key] = c.ID
+		legacyKey := activeConversationRefKey(domain.ConversationRef{
+			UserID:           c.UserID,
+			Source:           c.Source,
+			VKPeerID:         c.VKPeerID,
+			ExternalThreadID: c.ExternalThreadID,
+		})
+		if legacyKey != key {
+			r.activeByRef[legacyKey] = c.ID
+		}
 	}
 	now := time.Now()
 	c.CreatedAt = now

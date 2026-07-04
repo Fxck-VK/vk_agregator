@@ -67,6 +67,7 @@ func applySchema(ctx context.Context, pool *pgxpool.Pool) error {
 		"000002_inbound_events.up.sql",
 		"000016_video_media_metadata.up.sql",
 		"000018_media_lifecycle.up.sql",
+		"000035_account_identity.up.sql",
 	}
 	for _, name := range scripts {
 		raw, err := os.ReadFile(filepath.Join(root, "migrations", name))
@@ -78,6 +79,17 @@ func applySchema(ctx context.Context, pool *pgxpool.Pool) error {
 				return err
 			}
 		}
+	}
+	if _, err := pool.Exec(ctx, `
+		ALTER TABLE users
+			ADD COLUMN IF NOT EXISTS account_id UUID REFERENCES accounts (id) ON DELETE SET NULL`); err != nil {
+		return err
+	}
+	if _, err := pool.Exec(ctx, `
+		CREATE INDEX IF NOT EXISTS users_account_id_idx
+			ON users (account_id)
+			WHERE account_id IS NOT NULL`); err != nil {
+		return err
 	}
 	return nil
 }

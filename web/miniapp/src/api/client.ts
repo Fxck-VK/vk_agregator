@@ -187,6 +187,38 @@ export interface PaymentIntentListResponse {
   };
 }
 
+export type AccountIdentityProvider = "vk" | "telegram" | "google" | "apple" | "email" | "phone" | "password";
+
+export interface AccountIdentity {
+  id: string;
+  account_id: string;
+  provider: AccountIdentityProvider | string;
+  label: string;
+  verified: boolean;
+  last_used_at?: string;
+  created_at: string;
+}
+
+export interface AccountProfile {
+  account_id: string;
+  identity_refs: AccountIdentity[];
+}
+
+export interface AccountIdentityListResponse {
+  items: AccountIdentity[];
+  pagination: {
+    limit: number;
+    offset: number;
+    count: number;
+    has_more: boolean;
+  };
+}
+
+export interface AccountLinkRequestResult {
+  status: string;
+  expires_in_seconds: number;
+}
+
 export interface ArtifactUploadResponse {
   artifact_id: string;
 }
@@ -774,6 +806,49 @@ export async function createPaymentIntent(
 export async function listPaymentIntents(): Promise<PaymentIntent[]> {
   const data = await request<PaymentIntentListResponse>("/miniapp/payments");
   return data.items ?? [];
+}
+
+export async function getAccountProfile(): Promise<AccountProfile> {
+  return request<AccountProfile>("/account/me");
+}
+
+export async function listAccountIdentities(): Promise<AccountIdentity[]> {
+  const data = await request<AccountIdentityListResponse>("/account/identities");
+  return data.items ?? [];
+}
+
+export async function requestAccountEmailCode(email: string): Promise<AccountLinkRequestResult> {
+  return request<AccountLinkRequestResult>("/account/identities/email/request-code", {
+    method: "POST",
+    body: JSON.stringify({ email }),
+  });
+}
+
+export async function verifyAccountEmailCode(email: string, code: string): Promise<AccountIdentity> {
+  return request<AccountIdentity>("/account/identities/email/verify", {
+    method: "POST",
+    body: JSON.stringify({ email, code }),
+  });
+}
+
+export async function requestAccountPhoneOTP(phone: string): Promise<AccountLinkRequestResult> {
+  return request<AccountLinkRequestResult>("/account/identities/phone/request-otp", {
+    method: "POST",
+    body: JSON.stringify({ phone }),
+  });
+}
+
+export async function verifyAccountPhoneOTP(phone: string, code: string): Promise<AccountIdentity> {
+  return request<AccountIdentity>("/account/identities/phone/verify", {
+    method: "POST",
+    body: JSON.stringify({ phone, code }),
+  });
+}
+
+export async function unlinkAccountIdentity(id: string): Promise<void> {
+  return request<void>(`/account/identities/${encodeURIComponent(id)}/unlink`, {
+    method: "POST",
+  });
 }
 
 function validateVideoRouteAlias(alias?: string): void {

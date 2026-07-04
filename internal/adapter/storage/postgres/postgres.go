@@ -91,6 +91,15 @@ func nullableTime(t time.Time) *time.Time {
 	return &t
 }
 
+// nullableUUID returns nil for a zero UUID so nullable foreign keys stay NULL
+// until a compatibility bridge such as IdentityResolver links them.
+func nullableUUID(id uuid.UUID) *uuid.UUID {
+	if id == uuid.Nil {
+		return nil
+	}
+	return &id
+}
+
 // rawOrNil returns nil for an empty JSON payload so the column is stored as
 // SQL NULL rather than an invalid empty JSONB value.
 func rawOrNil(raw json.RawMessage) []byte {

@@ -144,6 +144,7 @@ type TopUpPackage = PaymentProduct
 type PaymentIntent struct {
 	ID                 uuid.UUID           `json:"id"`
 	UserID             uuid.UUID           `json:"user_id"`
+	AccountID          uuid.UUID           `json:"account_id,omitempty"`
 	ProductID          *uuid.UUID          `json:"product_id,omitempty"`
 	Status             PaymentIntentStatus `json:"status"`
 	Amount             int64               `json:"amount"`

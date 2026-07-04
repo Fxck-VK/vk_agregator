@@ -21,7 +21,7 @@ func NewArtifactRepository(db Querier) *ArtifactRepository {
 
 var _ domain.ArtifactRepository = (*ArtifactRepository)(nil)
 
-const artifactColumns = `id, owner_user_id, job_id, kind, media_type, mime_type,
+const artifactColumns = `id, owner_user_id, owner_account_id, job_id, kind, media_type, mime_type,
 	storage_bucket, storage_key, public_url, sha256, validation_policy_version,
 	lifecycle_class, size_bytes, width, height, duration_ms, codec, container,
 	bitrate_bps, probe_status, status, created_at, updated_at`
@@ -38,14 +38,14 @@ func (r *ArtifactRepository) Create(ctx context.Context, a *domain.Artifact) err
 	normalizeArtifactMetadata(a)
 	const q = `
 		INSERT INTO artifacts (
-			id, owner_user_id, job_id, kind, media_type, mime_type,
+			id, owner_user_id, owner_account_id, job_id, kind, media_type, mime_type,
 			storage_bucket, storage_key, public_url, sha256, validation_policy_version,
 			lifecycle_class, size_bytes, width, height, duration_ms, codec, container,
 			bitrate_bps, probe_status, status
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+		) VALUES ($1, $2, COALESCE($3::uuid, (SELECT account_id FROM users WHERE id = $2)), $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
 		RETURNING ` + artifactColumns
 	row := r.db.QueryRow(ctx, q,
-		a.ID, a.OwnerUserID, a.JobID, a.Kind, a.MediaType, a.MimeType,
+		a.ID, a.OwnerUserID, nullableUUID(a.OwnerAccountID), a.JobID, a.Kind, a.MediaType, a.MimeType,
 		a.StorageBucket, a.StorageKey, a.PublicURL, a.SHA256, a.ValidationPolicyVersion,
 		a.LifecycleClass, a.SizeBytes, a.Width, a.Height, a.DurationMS, a.Codec,
 		a.Container, a.BitrateBPS, a.ProbeStatus, a.Status,
@@ -58,15 +58,16 @@ func (r *ArtifactRepository) Update(ctx context.Context, a *domain.Artifact) err
 	normalizeArtifactMetadata(a)
 	const q = `
 		UPDATE artifacts
-		SET kind = $2, media_type = $3, mime_type = $4, storage_bucket = $5, storage_key = $6,
-		    public_url = $7, sha256 = $8, validation_policy_version = $9,
-		    lifecycle_class = $10, size_bytes = $11, width = $12, height = $13,
-		    duration_ms = $14, codec = $15, container = $16, bitrate_bps = $17,
-		    probe_status = $18, status = $19, updated_at = now()
+		SET owner_account_id = COALESCE($2::uuid, owner_account_id, (SELECT account_id FROM users WHERE id = artifacts.owner_user_id)),
+		    kind = $3, media_type = $4, mime_type = $5, storage_bucket = $6, storage_key = $7,
+		    public_url = $8, sha256 = $9, validation_policy_version = $10,
+		    lifecycle_class = $11, size_bytes = $12, width = $13, height = $14,
+		    duration_ms = $15, codec = $16, container = $17, bitrate_bps = $18,
+		    probe_status = $19, status = $20, updated_at = now()
 		WHERE id = $1
 		RETURNING ` + artifactColumns
 	row := r.db.QueryRow(ctx, q,
-		a.ID, a.Kind, a.MediaType, a.MimeType, a.StorageBucket, a.StorageKey,
+		a.ID, nullableUUID(a.OwnerAccountID), a.Kind, a.MediaType, a.MimeType, a.StorageBucket, a.StorageKey,
 		a.PublicURL, a.SHA256, a.ValidationPolicyVersion, a.LifecycleClass,
 		a.SizeBytes, a.Width, a.Height, a.DurationMS, a.Codec, a.Container,
 		a.BitrateBPS, a.ProbeStatus, a.Status,
@@ -87,7 +88,7 @@ func (r *ArtifactRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain
 // GetBySHA256 fetches an artifact by content hash for deduplication.
 func (r *ArtifactRepository) GetBySHA256(ctx context.Context, ownerID uuid.UUID, sha256 string) (*domain.Artifact, error) {
 	const q = `SELECT ` + artifactColumns + `
-		FROM artifacts WHERE owner_user_id = $1 AND sha256 = $2
+		FROM artifacts WHERE (owner_user_id = $1 OR owner_account_id = $1) AND sha256 = $2
 		ORDER BY created_at ASC LIMIT 1`
 	var a domain.Artifact
 	if err := mapError(scanArtifact(r.db.QueryRow(ctx, q, ownerID, sha256), &a)); err != nil {
@@ -99,7 +100,7 @@ func (r *ArtifactRepository) GetBySHA256(ctx context.Context, ownerID uuid.UUID,
 func (r *ArtifactRepository) FindReusableInputReference(ctx context.Context, ownerID uuid.UUID, sha256, validationPolicyVersion, mimeType string) (*domain.Artifact, error) {
 	const q = `SELECT ` + artifactColumns + `
 		FROM artifacts
-		WHERE owner_user_id = $1
+		WHERE (owner_user_id = $1 OR owner_account_id = $1)
 		  AND sha256 = $2
 		  AND validation_policy_version = $3
 		  AND mime_type = $4
@@ -170,12 +171,19 @@ func (r *ArtifactRepository) ListVariants(ctx context.Context, artifactID uuid.U
 }
 
 func scanArtifact(row rowScanner, a *domain.Artifact) error {
-	return row.Scan(
-		&a.ID, &a.OwnerUserID, &a.JobID, &a.Kind, &a.MediaType, &a.MimeType,
+	var ownerAccountID *uuid.UUID
+	if err := row.Scan(
+		&a.ID, &a.OwnerUserID, &ownerAccountID, &a.JobID, &a.Kind, &a.MediaType, &a.MimeType,
 		&a.StorageBucket, &a.StorageKey, &a.PublicURL, &a.SHA256, &a.ValidationPolicyVersion,
 		&a.LifecycleClass, &a.SizeBytes, &a.Width, &a.Height, &a.DurationMS, &a.Codec,
 		&a.Container, &a.BitrateBPS, &a.ProbeStatus, &a.Status, &a.CreatedAt, &a.UpdatedAt,
-	)
+	); err != nil {
+		return err
+	}
+	if ownerAccountID != nil {
+		a.OwnerAccountID = *ownerAccountID
+	}
+	return nil
 }
 
 func scanArtifactVariant(row rowScanner, v *domain.ArtifactVariant) error {

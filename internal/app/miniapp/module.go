@@ -22,6 +22,7 @@ import (
 // Deps are shared backend-core collaborators required by the Mini App surface.
 type Deps struct {
 	Users          domain.UserRepository
+	Identity       domain.IdentityResolver
 	Jobs           domain.JobRepository
 	Conversations  domain.ConversationRepository
 	Artifacts      domain.ArtifactRepository
@@ -98,6 +99,7 @@ func NewHandler(ctx context.Context, cfg config.Config, deps Deps) *miniappapi.H
 		VideoRouteResolver:                  miniAppVideoRouteResolver(runtimeCatalog.VideoRouteCatalog),
 	}, miniappapi.Deps{
 		Users:          deps.Users,
+		Identity:       deps.Identity,
 		Jobs:           deps.Jobs,
 		Conversations:  deps.Conversations,
 		Artifacts:      deps.Artifacts,

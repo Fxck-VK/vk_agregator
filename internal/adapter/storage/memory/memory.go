@@ -117,6 +117,9 @@ func (r *JobRepo) Create(_ context.Context, j *domain.Job) error {
 	if j.ID == uuid.Nil {
 		j.ID = uuid.New()
 	}
+	if j.AccountID == uuid.Nil {
+		j.AccountID = j.UserID
+	}
 	j.Source = strings.TrimSpace(j.Source)
 	if j.Source == "" {
 		j.Source = "unknown"
@@ -126,6 +129,9 @@ func (r *JobRepo) Create(_ context.Context, j *domain.Job) error {
 	r.byID[j.ID] = *j
 	r.byKey[j.IdempotencyKey] = j.ID
 	r.byUser[j.UserID] = append([]uuid.UUID{j.ID}, r.byUser[j.UserID]...)
+	if j.AccountID != uuid.Nil && j.AccountID != j.UserID {
+		r.byUser[j.AccountID] = append([]uuid.UUID{j.ID}, r.byUser[j.AccountID]...)
+	}
 	return nil
 }
 
@@ -178,6 +184,12 @@ func (r *JobRepo) Update(_ context.Context, j *domain.Job) error {
 	// Status is owned by UpdateStatus; preserve it across Update.
 	status := cur.Status
 	updated := *j
+	if updated.AccountID == uuid.Nil {
+		updated.AccountID = cur.AccountID
+	}
+	if updated.AccountID == uuid.Nil {
+		updated.AccountID = updated.UserID
+	}
 	updated.Source = strings.TrimSpace(updated.Source)
 	if updated.Source == "" {
 		updated.Source = "unknown"
@@ -186,6 +198,9 @@ func (r *JobRepo) Update(_ context.Context, j *domain.Job) error {
 	updated.CreatedAt = cur.CreatedAt
 	updated.UpdatedAt = time.Now()
 	r.byID[j.ID] = updated
+	if updated.AccountID != uuid.Nil && updated.AccountID != updated.UserID {
+		r.byUser[updated.AccountID] = append([]uuid.UUID{updated.ID}, r.byUser[updated.AccountID]...)
+	}
 	*j = updated
 	return nil
 }
@@ -193,10 +208,21 @@ func (r *JobRepo) Update(_ context.Context, j *domain.Job) error {
 func (r *JobRepo) ListByUser(_ context.Context, userID uuid.UUID, limit, offset int) ([]*domain.Job, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	ids := r.byUser[userID]
+	matched := make([]domain.Job, 0, len(r.byID))
+	for _, j := range r.byID {
+		if j.UserID == userID || j.AccountID == userID {
+			matched = append(matched, j)
+		}
+	}
+	sort.Slice(matched, func(i, k int) bool {
+		if matched[i].CreatedAt.Equal(matched[k].CreatedAt) {
+			return matched[i].ID.String() > matched[k].ID.String()
+		}
+		return matched[i].CreatedAt.After(matched[k].CreatedAt)
+	})
 	var out []*domain.Job
-	for i := offset; i < len(ids) && len(out) < limit; i++ {
-		j := r.byID[ids[i]]
+	for i := offset; i < len(matched) && len(out) < limit; i++ {
+		j := matched[i]
 		out = append(out, &j)
 	}
 	return out, nil
@@ -237,7 +263,10 @@ func (r *JobRepo) ListCursor(_ context.Context, filter domain.JobFilter, limit i
 func (r *JobRepo) filterJobsLocked(filter domain.JobFilter) []domain.Job {
 	matched := make([]domain.Job, 0, len(r.byID))
 	for _, j := range r.byID {
-		if filter.UserID != nil && j.UserID != *filter.UserID {
+		if filter.UserID != nil && j.UserID != *filter.UserID && j.AccountID != *filter.UserID {
+			continue
+		}
+		if filter.AccountID != nil && j.AccountID != *filter.AccountID {
 			continue
 		}
 		if filter.Status != "" && j.Status != filter.Status {
@@ -280,7 +309,7 @@ func (r *JobRepo) CountActiveByUserOperation(_ context.Context, userID uuid.UUID
 	defer r.mu.Unlock()
 	count := 0
 	for _, j := range r.byID {
-		if j.UserID == userID && j.OperationType == operation && j.Status.IsActiveWork() {
+		if (j.UserID == userID || j.AccountID == userID) && j.OperationType == operation && j.Status.IsActiveWork() {
 			count++
 		}
 	}
@@ -292,7 +321,7 @@ func (r *JobRepo) CountSucceededByUser(_ context.Context, userID uuid.UUID) (int
 	defer r.mu.Unlock()
 	count := 0
 	for _, j := range r.byID {
-		if j.UserID == userID && j.Status == domain.JobStatusSucceeded {
+		if (j.UserID == userID || j.AccountID == userID) && j.Status == domain.JobStatusSucceeded {
 			count++
 		}
 	}

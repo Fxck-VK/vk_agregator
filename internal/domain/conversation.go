@@ -29,6 +29,7 @@ const (
 type Conversation struct {
 	ID               uuid.UUID          `json:"id"`
 	UserID           uuid.UUID          `json:"user_id"`
+	AccountID        uuid.UUID          `json:"account_id,omitempty"`
 	Source           ConversationSource `json:"source"`
 	VKPeerID         int64              `json:"vk_peer_id"`
 	ExternalThreadID string             `json:"external_thread_id,omitempty"`
@@ -42,6 +43,7 @@ type Conversation struct {
 // uses VKPeerID; Mini App uses ExternalThreadID scoped by backend UserID.
 type ConversationRef struct {
 	UserID           uuid.UUID
+	AccountID        uuid.UUID
 	Source           ConversationSource
 	VKPeerID         int64
 	ExternalThreadID string

@@ -744,6 +744,8 @@ POST /webhooks/vk/{group_id}
 
 ## 4.4. User / Identity Service
 
+Target account identity architecture is defined in `docs/ACCOUNT_IDENTITY_CONTRACT.md`. `account_id` is the future canonical owner of billing, jobs, artifacts, conversations and referrals. `vk_user_id`, Telegram ID, email, phone, Google, Apple and password credentials are identity bindings only. Current implementation is in VK compatibility mode: `IdentityResolver` is wired through SharedCore and both VK Bot and VK Mini App resolve verified VK identities through it. Business storage now has additive account ownership columns for jobs, payments, artifacts, conversations, referrals and billing ledger surfaces, while repository reads/writes remain compatible with legacy `user_id` during the rollout.
+
 Хранит пользователей VK и их состояние.
 
 ```text

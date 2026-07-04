@@ -24,9 +24,13 @@ import (
 	"vk-ai-aggregator/internal/adapter/storage/memory"
 	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/platform/queue"
+	"vk-ai-aggregator/internal/service/accountauth"
+	"vk-ai-aggregator/internal/service/accountlink"
+	"vk-ai-aggregator/internal/service/accountservice"
 	antispamservice "vk-ai-aggregator/internal/service/antispam"
 	"vk-ai-aggregator/internal/service/billingservice"
 	"vk-ai-aggregator/internal/service/commandrouter"
+	"vk-ai-aggregator/internal/service/identityresolver"
 	"vk-ai-aggregator/internal/service/joborchestrator"
 	"vk-ai-aggregator/internal/service/modelcatalog"
 	"vk-ai-aggregator/internal/service/outboxrelay"
@@ -45,6 +49,9 @@ type harness struct {
 	billing *memory.BillingRepo
 	payment *memory.PaymentRepo
 	refs    *memory.ReferralRepo
+	ids     *memory.AccountIdentityRepo
+	account *accountservice.Service
+	linker  *fakeAccountLinker
 	arts    *memory.ArtifactRepo
 	objects *memory.ObjectStore
 	pub     *queue.MemoryPublisher
@@ -97,6 +104,11 @@ func newHarnessWithReferenceDownloaderAndOrchestratorOptions(control vkdelivery.
 	arts := memory.NewArtifactRepo()
 	objects := memory.NewObjectStore()
 	billing := billingservice.New(bill)
+	identities := memory.NewAccountIdentityRepo()
+	identity := identityresolver.New(users, identities, billing)
+	accountAuth := accountauth.New(identity)
+	accountSvc := accountservice.New(identities, accountAuth)
+	accountLinker := newFakeAccountLinker(accountSvc)
 	payments := memory.NewPaymentRepo()
 	vatCode := int16(1)
 	payments.PutProduct(&domain.PaymentProduct{
@@ -144,6 +156,9 @@ func newHarnessWithReferenceDownloaderAndOrchestratorOptions(control vkdelivery.
 		Idempotency:    idem,
 		Inbound:        inbound,
 		Users:          users,
+		Identity:       identity,
+		Account:        accountSvc,
+		AccountLink:    accountLinker,
 		Jobs:           jobs,
 		Commands:       cmds,
 		Billing:        billing,
@@ -160,7 +175,7 @@ func newHarnessWithReferenceDownloaderAndOrchestratorOptions(control vkdelivery.
 		Objects:        objects,
 		Downloader:     downloader,
 	})
-	return &harness{handler: h, users: users, cmds: cmds, jobs: jobs, inbound: inbound, billing: bill, payment: payments, refs: refs, arts: arts, objects: objects, pub: pub, relay: outboxrelay.New(uowMgr, pub)}
+	return &harness{handler: h, users: users, cmds: cmds, jobs: jobs, inbound: inbound, billing: bill, payment: payments, refs: refs, ids: identities, account: accountSvc, linker: accountLinker, arts: arts, objects: objects, pub: pub, relay: outboxrelay.New(uowMgr, pub)}
 }
 
 func (h *harness) grantTestCredits(t *testing.T, vkUserID int64, targetBalance int64) {
@@ -363,6 +378,56 @@ func (h *harness) post(body string) *httptest.ResponseRecorder {
 	h.handler.ServeHTTP(rec, req)
 	_, _ = h.relay.Drain(context.Background())
 	return rec
+}
+
+type fakeAccountLinker struct {
+	account *accountservice.Service
+}
+
+func newFakeAccountLinker(account *accountservice.Service) *fakeAccountLinker {
+	return &fakeAccountLinker{account: account}
+}
+
+func (l *fakeAccountLinker) RequestEmailCode(_ context.Context, accountID uuid.UUID, email string) (accountlink.RequestResult, error) {
+	if accountID == uuid.Nil {
+		return accountlink.RequestResult{}, domain.ErrInvalidIdentity
+	}
+	if _, err := domain.NormalizeExternalIdentity(domain.IdentityProviderEmail, email); err != nil {
+		return accountlink.RequestResult{}, err
+	}
+	return accountlink.RequestResult{Status: "verification_sent", ExpiresInSeconds: 600}, nil
+}
+
+func (l *fakeAccountLinker) VerifyEmailCode(ctx context.Context, accountID uuid.UUID, email, code string) (accountservice.AccountIdentitySafe, error) {
+	if strings.TrimSpace(code) != "123456" {
+		return accountservice.AccountIdentitySafe{}, accountlink.ErrInvalidCode
+	}
+	return l.account.LinkVerifiedIdentity(ctx, accountID, accountID, domain.VerifiedAccountLogin{
+		Method:     domain.AccountLoginEmailPassword,
+		ExternalID: email,
+		Verified:   true,
+	})
+}
+
+func (l *fakeAccountLinker) RequestPhoneOTP(_ context.Context, accountID uuid.UUID, phone string) (accountlink.RequestResult, error) {
+	if accountID == uuid.Nil {
+		return accountlink.RequestResult{}, domain.ErrInvalidIdentity
+	}
+	if _, err := domain.NormalizeExternalIdentity(domain.IdentityProviderPhone, phone); err != nil {
+		return accountlink.RequestResult{}, err
+	}
+	return accountlink.RequestResult{Status: "verification_sent", ExpiresInSeconds: 600}, nil
+}
+
+func (l *fakeAccountLinker) VerifyPhoneOTP(ctx context.Context, accountID uuid.UUID, phone, code string) (accountservice.AccountIdentitySafe, error) {
+	if strings.TrimSpace(code) != "123456" {
+		return accountservice.AccountIdentitySafe{}, accountlink.ErrInvalidCode
+	}
+	return l.account.LinkVerifiedIdentity(ctx, accountID, accountID, domain.VerifiedAccountLogin{
+		Method:     domain.AccountLoginPhoneOTP,
+		ExternalID: phone,
+		Verified:   true,
+	})
 }
 
 func TestConfirmation(t *testing.T) {
@@ -888,6 +953,121 @@ func TestAccountMenuShowsReferralStatsAndShareLink(t *testing.T) {
 	}
 	if !strings.Contains(sent[0].Text, code.Code) {
 		t.Fatalf("account text must include user's referral code %q: %q", code.Code, sent[0].Text)
+	}
+}
+
+func TestAccountLinkEmailRequiresConfirmationAndBindsCurrentAccount(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	dialogState := newFakeDialogState()
+	h := newHarnessWithConfigAndDialogState(control, vk.Config{
+		ConfirmationToken: "conf-token-123",
+		Secret:            "s3cr3t",
+	}, dialogState)
+
+	start := `{
+		"type":"message_new","group_id":1,"event_id":"evt-account-link-start","secret":"s3cr3t",
+		"object":{"message":{"from_id":901001,"peer_id":901001,"text":"link email","payload":"{\"command\":\"account.link_identity\",\"action\":\"link_email\"}"}}
+	}`
+	rec := h.post(start)
+	if rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected start response: %d %q", rec.Code, rec.Body.String())
+	}
+	if got := dialogState.modes[901001]; got != "account_link_email" {
+		t.Fatalf("dialog mode after start = %q, want account_link_email", got)
+	}
+
+	emailBody := `{
+		"type":"message_new","group_id":1,"event_id":"evt-account-link-email","secret":"s3cr3t",
+		"object":{"message":{"from_id":901001,"peer_id":901001,"text":"User@Example.COM"}}
+	}`
+	rec = h.post(emailBody)
+	if rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected email response: %d %q", rec.Code, rec.Body.String())
+	}
+	mode := dialogState.modes[901001]
+	if !strings.HasPrefix(mode, "account_link_email_verify:") {
+		t.Fatalf("dialog mode after email = %q, want pending email verification", mode)
+	}
+	sent := control.Sent()
+	if len(sent) != 2 {
+		t.Fatalf("expected start and verification messages, got %+v", sent)
+	}
+	if strings.Contains(sent[1].Keyboard, string(domain.CommandAccountConfirmLinkIdentity)) {
+		t.Fatalf("verification keyboard must not contain legacy confirm command, got %q", sent[1].Keyboard)
+	}
+	if strings.Contains(sent[1].Text, "User@Example.COM") {
+		t.Fatalf("verification text must not expose full email: %q", sent[1].Text)
+	}
+	normalized, err := domain.NormalizeExternalIdentity(domain.IdentityProviderEmail, "User@Example.COM")
+	if err != nil {
+		t.Fatalf("normalize email: %v", err)
+	}
+	if _, err := h.ids.ResolveIdentity(context.Background(), domain.IdentityProviderEmail, normalized); !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("identity must not be linked before confirmation, err=%v", err)
+	}
+
+	verify := `{
+		"type":"message_new","group_id":1,"event_id":"evt-account-link-verify","secret":"s3cr3t",
+		"object":{"message":{"from_id":901001,"peer_id":901001,"text":"123456"}}
+	}`
+	rec = h.post(verify)
+	if rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected verify response: %d %q", rec.Code, rec.Body.String())
+	}
+	if _, ok := dialogState.modes[901001]; ok {
+		t.Fatalf("dialog mode must be cleared after successful verification: %+v", dialogState.modes)
+	}
+	user, err := h.users.GetByVKUserID(context.Background(), 901001)
+	if err != nil {
+		t.Fatalf("user not found: %v", err)
+	}
+	identity, err := h.ids.ResolveIdentity(context.Background(), domain.IdentityProviderEmail, normalized)
+	if err != nil {
+		t.Fatalf("linked identity not found: %v", err)
+	}
+	if identity.AccountID != user.EffectiveAccountID() {
+		t.Fatalf("linked identity account = %s, want current account %s", identity.AccountID, user.EffectiveAccountID())
+	}
+	jobs, _ := h.jobs.ListByUser(context.Background(), user.ID, 10, 0)
+	if len(jobs) != 0 || h.pub.Len() != 0 {
+		t.Fatalf("account linking must not create jobs, jobs=%+v tasks=%d", jobs, h.pub.Len())
+	}
+}
+
+func TestAccountLinkInvalidInputDoesNotCreateJobAndKeepsDialog(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	dialogState := newFakeDialogState()
+	dialogState.modes[901002] = "account_link"
+	h := newHarnessWithConfigAndDialogState(control, vk.Config{
+		ConfirmationToken: "conf-token-123",
+		Secret:            "s3cr3t",
+	}, dialogState)
+
+	body := `{
+		"type":"message_new","group_id":1,"event_id":"evt-account-link-invalid","secret":"s3cr3t",
+		"object":{"message":{"from_id":901002,"peer_id":901002,"text":"not-a-contact"}}
+	}`
+	rec := h.post(body)
+	if rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+	}
+	if got := dialogState.modes[901002]; got != "account_link" {
+		t.Fatalf("invalid input must keep account_link mode, got %q", got)
+	}
+	sent := control.Sent()
+	if len(sent) != 1 {
+		t.Fatalf("expected one validation response, got %+v", sent)
+	}
+	if strings.Contains(sent[0].Keyboard, string(domain.CommandAccountConfirmLinkIdentity)) {
+		t.Fatalf("invalid input must not expose confirmation keyboard, got %q", sent[0].Keyboard)
+	}
+	user, err := h.users.GetByVKUserID(context.Background(), 901002)
+	if err != nil {
+		t.Fatalf("user not found: %v", err)
+	}
+	jobs, _ := h.jobs.ListByUser(context.Background(), user.ID, 10, 0)
+	if len(jobs) != 0 || h.pub.Len() != 0 {
+		t.Fatalf("invalid account link input must not create jobs, jobs=%+v tasks=%d", jobs, h.pub.Len())
 	}
 }
 

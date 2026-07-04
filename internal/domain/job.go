@@ -237,6 +237,9 @@ type Job struct {
 	ID uuid.UUID `json:"id"`
 	// UserID is the owner of the job.
 	UserID uuid.UUID `json:"user_id"`
+	// AccountID is the canonical owner during the multi-surface identity
+	// rollout. Legacy user_id remains populated for compatibility.
+	AccountID uuid.UUID `json:"account_id,omitempty"`
 	// Source is the trusted product surface that created the job.
 	Source string `json:"source"`
 	// VKPeerID is the VK conversation the job belongs to.

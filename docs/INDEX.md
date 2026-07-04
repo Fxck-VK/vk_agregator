@@ -34,6 +34,7 @@ Read only the document that matches the current task:
 | DEV contour, local DEV tunnel, DEV deploy | `docs/DEV_CONTOUR.md` |
 | Production/runtime deployment domains | `docs/DOMAIN_DEPLOYMENT_PLAN.md` |
 | Data services, Postgres/Redis/S3 modes | `docs/DATA_SERVICES_CONTRACT.md` |
+| Account identity, multi-UI login, VK/TG/Web/Mobile ownership model | `docs/ACCOUNT_IDENTITY_CONTRACT.md` |
 | Retention, cleanup, analytics aggregates | `docs/DATA_RETENTION_POLICY.md` |
 | Load testing, k6, capacity report | `docs/LOAD_TESTING.md` |
 | Operator/admin UI and safety | `docs/OPERATOR_UI.md` |

@@ -8,15 +8,18 @@ import {
   createJob,
   errorLabel,
   estimateJob,
+  getAccountProfile,
   launchParamsFromLocation,
   listChatMessages,
   normalizeRawParams,
   referralCodeFromRaw,
+  requestAccountEmailCode,
   resetLaunchParamsCacheForTest,
   statusKind,
   stringifyBridgeLaunchParams,
   telemetryLabel,
   telemetryRoute,
+  verifyAccountEmailCode,
 } from "./client";
 import type { CreateChatMessageInput, CreateJobInput, EstimateInput, Job } from "./client";
 
@@ -319,6 +322,72 @@ describe("chat API single default contract", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock.mock.calls[0][0]).toBe("/miniapp/chat/messages");
     expect(String(fetchMock.mock.calls[0][0])).not.toContain("/chat/conversations/");
+  });
+});
+
+describe("account API safe identity contract", () => {
+  test("loads account profile through launch-authenticated safe endpoint", async () => {
+    window.history.replaceState({}, "", "/?vk_user_id=42&vk_ts=1&sign=fake");
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      jsonResponse({
+        account_id: "acc_1234567890",
+        identity_refs: [
+          {
+            id: "ident_1",
+            account_id: "acc_1234567890",
+            provider: "vk",
+            label: "VK",
+            verified: true,
+            created_at: "2026-01-01T00:00:00Z",
+          },
+        ],
+      }),
+    );
+
+    const profile = await getAccountProfile();
+
+    expect(profile.identity_refs[0]?.label).toBe("VK");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0][0]).toBe("/account/me");
+    const headers = fetchMock.mock.calls[0]?.[1]?.headers as Record<string, string>;
+    expect(headers["X-Launch-Params"]).toContain("vk_user_id=42");
+    expect(Object.prototype.hasOwnProperty.call(profile.identity_refs[0] ?? {}, "external_id")).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(profile.identity_refs[0] ?? {}, "normalized_id")).toBe(false);
+  });
+
+  test("uses method-specific email link flow without generic identity payload", async () => {
+    window.history.replaceState({}, "", "/?vk_user_id=42&vk_ts=1&sign=fake");
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(jsonResponse({ status: "sent", expires_in_seconds: 600 }, 202))
+      .mockResolvedValueOnce(
+        jsonResponse(
+          {
+            id: "ident_email",
+            account_id: "acc_1234567890",
+            provider: "email",
+            label: "u***@example.com",
+            verified: true,
+            created_at: "2026-01-01T00:00:00Z",
+          },
+          201,
+        ),
+      );
+
+    await requestAccountEmailCode("user@example.com");
+    const identity = await verifyAccountEmailCode("user@example.com", "123456");
+
+    expect(identity.provider).toBe("email");
+    expect(fetchMock.mock.calls[0][0]).toBe("/account/identities/email/request-code");
+    expect(fetchMock.mock.calls[1][0]).toBe("/account/identities/email/verify");
+    const bodies = fetchMock.mock.calls.map(([, init]) =>
+      JSON.parse(String((init as RequestInit | undefined)?.body ?? "{}")) as Record<string, unknown>,
+    );
+    for (const body of bodies) {
+      expect(body).not.toHaveProperty("external_id");
+      expect(body).not.toHaveProperty("verification_token");
+      expect(body).not.toHaveProperty("provider");
+    }
   });
 });
 

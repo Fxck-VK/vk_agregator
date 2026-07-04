@@ -47,6 +47,8 @@ func (r *Router) Parse(rawText string) Result {
 	trimmed := strings.TrimSpace(rawText)
 	normalized := strings.ToLower(strings.Join(strings.Fields(trimmed), " "))
 	switch normalized {
+	case "🔐 привязать email/телефон", "привязать email/телефон", "привязать email", "привязать телефон", "link email", "link phone":
+		return Result{Type: domain.CommandAccountLinkIdentity}
 	case "/start", "start", "старт", "🚀 старт", "▶️ старт", "начать":
 		return Result{Type: domain.CommandStart}
 	case "показать меню", "меню", "нет меню", "нет кнопки", "где меню", "menu":

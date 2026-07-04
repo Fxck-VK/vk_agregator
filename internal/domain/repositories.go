@@ -113,11 +113,66 @@ type UserRepository interface {
 	GetByVKUserID(ctx context.Context, vkUserID int64) (*User, error)
 }
 
+// AccountIdentityRepository persists account identity bindings.
+type AccountIdentityRepository interface {
+	// ResolveIdentity fetches an identity by provider and normalized id.
+	ResolveIdentity(ctx context.Context, provider IdentityProvider, normalizedID string) (*AccountIdentity, error)
+	// EnsureIdentityForUser binds a legacy user to an account identity, creating
+	// the account/identity when necessary.
+	EnsureIdentityForUser(ctx context.Context, user *User, provider IdentityProvider, externalID, normalizedID string) (*AccountIdentity, error)
+	// CreateAccountWithIdentity creates a standalone account and binds the
+	// supplied identity to it.
+	CreateAccountWithIdentity(ctx context.Context, provider IdentityProvider, externalID, normalizedID string) (*AccountIdentity, error)
+	// ListIdentitiesByAccount lists safe-to-transform identity rows for one
+	// account. Callers must map them to DTOs that omit raw external ids.
+	ListIdentitiesByAccount(ctx context.Context, accountID uuid.UUID, limit, offset int) ([]*AccountIdentity, error)
+	// LinkIdentity attaches an additional identity to an existing account.
+	LinkIdentity(ctx context.Context, accountID uuid.UUID, provider IdentityProvider, externalID, normalizedID string) (*AccountIdentity, error)
+	// UnlinkIdentity removes an identity from an account.
+	UnlinkIdentity(ctx context.Context, accountID, identityID uuid.UUID) error
+}
+
+// AccountSessionRepository persists Web/Mobile account sessions. Implementations
+// must store only token/device/network hashes, never raw tokens, IPs or user
+// agents.
+type AccountSessionRepository interface {
+	CreateSession(ctx context.Context, session AccountSession) (*AccountSession, error)
+	FindSessionByRefreshHash(ctx context.Context, refreshTokenHash string) (*AccountSession, error)
+	ListActiveSessionsByAccount(ctx context.Context, accountID uuid.UUID, now time.Time, limit int) ([]*AccountSession, error)
+	RevokeSession(ctx context.Context, accountID, sessionID uuid.UUID, revokedAt time.Time) (*AccountSession, error)
+	RevokeSessionByRefreshHash(ctx context.Context, refreshTokenHash string, revokedAt time.Time) (*AccountSession, error)
+	RevokeAllSessions(ctx context.Context, accountID uuid.UUID, revokedAt time.Time) (int64, error)
+}
+
+// AccountCredentialRepository persists account login verifiers. Implementations
+// must store only one-way hashes and never raw passwords, OTPs or passkeys.
+type AccountCredentialRepository interface {
+	UpsertCredential(ctx context.Context, credential AccountCredential) (*AccountCredential, error)
+	FindCredential(ctx context.Context, accountID uuid.UUID, credentialType AccountCredentialType) (*AccountCredential, error)
+}
+
+// AccountLinkAuditRepository persists PII-free account security audit events.
+type AccountLinkAuditRepository interface {
+	RecordAccountAudit(ctx context.Context, entry AccountLinkAuditEntry) error
+}
+
+// IdentityResolver is the public account resolution boundary for user-facing
+// surfaces. VK Bot, Mini App and future surfaces should go through this layer
+// instead of resolving users directly from channel-specific identifiers.
+type IdentityResolver interface {
+	Resolve(ctx context.Context, provider IdentityProvider, externalID string) (uuid.UUID, error)
+	ResolveOrCreate(ctx context.Context, provider IdentityProvider, externalID string) (IdentityResolution, error)
+	LinkIdentity(ctx context.Context, accountID uuid.UUID, provider IdentityProvider, externalID string) (*AccountIdentity, error)
+	UnlinkIdentity(ctx context.Context, accountID, identityID uuid.UUID) error
+}
+
 // JobFilter narrows a job listing. Zero-valued fields are ignored, so an empty
 // filter matches all jobs. It backs the admin jobs listing.
 type JobFilter struct {
 	// UserID, when set, restricts results to one user.
 	UserID *uuid.UUID
+	// AccountID, when set, restricts results to one canonical account owner.
+	AccountID *uuid.UUID
 	// Status, when non-empty, restricts results to one job status.
 	Status JobStatus
 	// Operation, when non-empty, restricts results to one operation type.
@@ -332,6 +387,7 @@ type BillingRepository interface {
 type PaymentIntentFilter struct {
 	IntentID          *uuid.UUID
 	UserID            *uuid.UUID
+	AccountID         *uuid.UUID
 	Status            PaymentIntentStatus
 	Statuses          []PaymentIntentStatus
 	Provider          PaymentProviderCode

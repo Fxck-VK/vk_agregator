@@ -61,6 +61,14 @@ func (r *ReferralRepo) CreateCode(_ context.Context, code *domain.ReferralCode) 
 	if _, ok := r.codesByUser[code.UserID]; ok {
 		return domain.ErrConflict
 	}
+	if code.AccountID == uuid.Nil {
+		code.AccountID = code.UserID
+	}
+	if code.AccountID != code.UserID {
+		if _, ok := r.codesByUser[code.AccountID]; ok {
+			return domain.ErrConflict
+		}
+	}
 	if _, ok := r.codesByValue[code.Code]; ok {
 		return domain.ErrConflict
 	}
@@ -70,6 +78,9 @@ func (r *ReferralRepo) CreateCode(_ context.Context, code *domain.ReferralCode) 
 	now := time.Now()
 	code.CreatedAt, code.UpdatedAt = now, now
 	r.codesByUser[code.UserID] = *code
+	if code.AccountID != uuid.Nil && code.AccountID != code.UserID {
+		r.codesByUser[code.AccountID] = *code
+	}
 	r.codesByValue[code.Code] = code.UserID
 	return nil
 }
@@ -77,11 +88,22 @@ func (r *ReferralRepo) CreateCode(_ context.Context, code *domain.ReferralCode) 
 func (r *ReferralRepo) CreateReferral(_ context.Context, referral *domain.Referral) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if referral.ReferrerUserID == referral.ReferredUserID {
+	if referral.ReferrerAccountID == uuid.Nil {
+		referral.ReferrerAccountID = referral.ReferrerUserID
+	}
+	if referral.ReferredAccountID == uuid.Nil {
+		referral.ReferredAccountID = referral.ReferredUserID
+	}
+	if referral.ReferrerUserID == referral.ReferredUserID || referral.ReferrerAccountID == referral.ReferredAccountID {
 		return domain.ErrConflict
 	}
 	if _, ok := r.referredToID[referral.ReferredUserID]; ok {
 		return domain.ErrConflict
+	}
+	if referral.ReferredAccountID != uuid.Nil && referral.ReferredAccountID != referral.ReferredUserID {
+		if _, ok := r.referredToID[referral.ReferredAccountID]; ok {
+			return domain.ErrConflict
+		}
 	}
 	if referral.ID == uuid.Nil {
 		referral.ID = uuid.New()
@@ -102,7 +124,13 @@ func (r *ReferralRepo) CreateReferral(_ context.Context, referral *domain.Referr
 	}
 	r.referralsByID[referral.ID] = *referral
 	r.referredToID[referral.ReferredUserID] = referral.ID
+	if referral.ReferredAccountID != uuid.Nil && referral.ReferredAccountID != referral.ReferredUserID {
+		r.referredToID[referral.ReferredAccountID] = referral.ID
+	}
 	r.referrerToRefs[referral.ReferrerUserID] = append(r.referrerToRefs[referral.ReferrerUserID], referral.ID)
+	if referral.ReferrerAccountID != uuid.Nil && referral.ReferrerAccountID != referral.ReferrerUserID {
+		r.referrerToRefs[referral.ReferrerAccountID] = append(r.referrerToRefs[referral.ReferrerAccountID], referral.ID)
+	}
 	return nil
 }
 

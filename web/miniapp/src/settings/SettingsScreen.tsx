@@ -22,6 +22,7 @@ import neuroHubBanner from "../assets/neurohub-banner.png";
 import { formatCredits } from "../ui/credits";
 import { dedupeHistoryJobs, historyCountLabel, jobDisplayTitle } from "../utils/jobDisplay";
 import { openExternalUrl, safeExternalHttpsUrl } from "../utils/openExternalUrl";
+import { AccountSection } from "./AccountSection";
 import type { ThemeMode } from "./theme";
 
 type SettingsScreenProps = {
@@ -351,6 +352,8 @@ export function SettingsScreen({
           </div>
         </section>
       )}
+
+      <AccountSection />
 
       <section className="settings-card" aria-labelledby="settings-balance-title">
         <h2 id="settings-balance-title" style={{ margin: "0 0 14px", fontSize: "15px" }}>

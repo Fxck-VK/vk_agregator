@@ -55,11 +55,16 @@ func (s Status) Valid() bool {
 	}
 }
 
-// User is the canonical identity of a VK user known to the platform. It is the
-// owner of jobs, artifacts, deliveries and billing accounts.
+// User is the legacy VK-scoped user bridge known to the platform. During the
+// account identity rollout, AccountID carries the canonical owner while existing
+// user_id ownership remains in place for jobs, artifacts, deliveries and
+// billing accounts.
 type User struct {
 	// ID is the internal primary key.
 	ID uuid.UUID `json:"id"`
+	// AccountID is the canonical account owner for new multi-surface identity
+	// flows. It may be zero for legacy rows until IdentityResolver links them.
+	AccountID uuid.UUID `json:"account_id,omitempty"`
 	// VKUserID is the external VK identifier. It is unique per user.
 	VKUserID int64 `json:"vk_user_id"`
 	// Role controls the access level of the user.
@@ -94,4 +99,16 @@ type User struct {
 // IsActive reports whether the user is allowed to create new jobs.
 func (u *User) IsActive() bool {
 	return u.Status == StatusActive
+}
+
+// EffectiveAccountID returns the canonical account id when it is known, falling
+// back to the legacy user id during the compatibility rollout.
+func (u *User) EffectiveAccountID() uuid.UUID {
+	if u == nil {
+		return uuid.Nil
+	}
+	if u.AccountID != uuid.Nil {
+		return u.AccountID
+	}
+	return u.ID
 }

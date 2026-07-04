@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"vk-ai-aggregator/internal/domain"
 )
@@ -21,7 +22,7 @@ func NewUserRepository(db Querier) *UserRepository {
 
 var _ domain.UserRepository = (*UserRepository)(nil)
 
-const userColumns = `id, vk_user_id, role, status, locale, timezone, risk_level,
+const userColumns = `id, account_id, vk_user_id, role, status, locale, timezone, risk_level,
 	vk_first_name, vk_last_name, vk_profile_synced_at, welcome_name_sent_at,
 	first_seen_at, last_seen_at, created_at, updated_at`
 
@@ -33,14 +34,14 @@ func (r *UserRepository) Create(ctx context.Context, user *domain.User) error {
 	}
 	const q = `
 		INSERT INTO users (
-			id, vk_user_id, role, status, locale, timezone, risk_level,
+			id, account_id, vk_user_id, role, status, locale, timezone, risk_level,
 			vk_first_name, vk_last_name, vk_profile_synced_at, welcome_name_sent_at,
 			first_seen_at, last_seen_at
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, COALESCE($12, now()), COALESCE($13, now()))
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, COALESCE($13, now()), COALESCE($14, now()))
 		RETURNING ` + userColumns
 	row := r.db.QueryRow(ctx, q,
-		user.ID, user.VKUserID, user.Role, user.Status, user.Locale, user.Timezone, user.RiskLevel,
+		user.ID, nullableUUID(user.AccountID), user.VKUserID, user.Role, user.Status, user.Locale, user.Timezone, user.RiskLevel,
 		user.VKFirstName, user.VKLastName, nullableTime(user.VKProfileSyncedAt), nullableTime(user.WelcomeNameSentAt),
 		nullableTime(user.FirstSeenAt), nullableTime(user.LastSeenAt),
 	)
@@ -91,12 +92,18 @@ type rowScanner interface {
 
 func scanUser(row rowScanner, user *domain.User) error {
 	var vkProfileSyncedAt, welcomeNameSentAt *time.Time
+	var accountID pgtype.UUID
 	if err := row.Scan(
-		&user.ID, &user.VKUserID, &user.Role, &user.Status, &user.Locale, &user.Timezone,
+		&user.ID, &accountID, &user.VKUserID, &user.Role, &user.Status, &user.Locale, &user.Timezone,
 		&user.RiskLevel, &user.VKFirstName, &user.VKLastName, &vkProfileSyncedAt,
 		&welcomeNameSentAt, &user.FirstSeenAt, &user.LastSeenAt, &user.CreatedAt, &user.UpdatedAt,
 	); err != nil {
 		return err
+	}
+	if accountID.Valid {
+		user.AccountID = uuid.UUID(accountID.Bytes)
+	} else {
+		user.AccountID = uuid.Nil
 	}
 	if vkProfileSyncedAt != nil {
 		user.VKProfileSyncedAt = *vkProfileSyncedAt

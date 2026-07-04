@@ -53,6 +53,10 @@ var menuScreens = map[domain.CommandType]menuScreen{
 		keyboard:     emptyAccountKeyboard,
 		needsBalance: true,
 	},
+	domain.CommandAccountLinkIdentity: {
+		text:     fixedText(accountLinkIdentityTextV2),
+		keyboard: backKeyboard,
+	},
 	domain.CommandTopUp: {
 		text:         fixedText(topUpText),
 		keyboard:     backKeyboard,
@@ -249,6 +253,7 @@ type controlPayload struct {
 	Command         string `json:"command"`
 	ProductCode     string `json:"product_code,omitempty"`
 	Action          string `json:"action,omitempty"`
+	IdentityID      string `json:"identity_id,omitempty"`
 	DurationSec     int    `json:"duration_sec,omitempty"`
 	ModelID         string `json:"model_id,omitempty"`
 	ImageQuality    string `json:"image_quality,omitempty"`
@@ -264,7 +269,7 @@ func controlPayloadFromPayload(payload string) (controlPayload, bool) {
 		return controlPayload{}, false
 	}
 	t := domain.CommandType(data.Command)
-	if !isMenuCommand(t) {
+	if !isControlPayloadCommand(t) {
 		return controlPayload{}, false
 	}
 	return data, true
@@ -272,6 +277,10 @@ func controlPayloadFromPayload(payload string) (controlPayload, bool) {
 
 func shouldSendControlResponse(t domain.CommandType) bool {
 	return isMenuCommand(t)
+}
+
+func isControlPayloadCommand(t domain.CommandType) bool {
+	return isMenuCommand(t) || t == domain.CommandAccountConfirmLinkIdentity || t == domain.CommandAccountUnlinkIdentity
 }
 
 func isMenuCommand(t domain.CommandType) bool {
@@ -309,12 +318,22 @@ func fixedText(text string) func(int64) string {
 type accountView struct {
 	Balance               int64
 	CompletedGenerations  int
+	AccountStatus         string
+	IdentityRefs          []accountIdentityView
 	InvitedCount          int
 	RegisteredCount       int
 	ActivatedCount        int
 	RewardedCount         int
 	ReferralLink          string
 	ReferrerRewardCredits int64
+}
+
+type accountIdentityView struct {
+	ID        string
+	Provider  domain.IdentityProvider
+	Label     string
+	Verified  bool
+	CanUnlink bool
 }
 
 func (h *Handler) sendControlResponse(ctx context.Context, t domain.CommandType, idemKey string, groupID, peerID int64, user *domain.User, allowEdit bool) error {
@@ -354,11 +373,11 @@ func (h *Handler) sendControlResponse(ctx context.Context, t domain.CommandType,
 	}
 	switch t {
 	case domain.CommandAccount, domain.CommandBalance:
-		view, err := h.accountView(ctx, user.ID, balance, groupID)
+		view, err := h.accountView(ctx, user, balance, groupID)
 		if err != nil {
 			return fmt.Errorf("build account view: %w", err)
 		}
-		msgText = accountDetailsText(view)
+		msgText = accountDetailsTextV2(view)
 		msgText = insertBalanceLine(msgText, view.Balance)
 		keyboard = accountKeyboard(view)
 	case domain.CommandTopUp:
@@ -446,19 +465,45 @@ func (h *Handler) personalizedWelcomeName(ctx context.Context, user *domain.User
 	return user.VKFirstName
 }
 
-func (h *Handler) accountView(ctx context.Context, userID uuid.UUID, balance, groupID int64) (accountView, error) {
-	view := accountView{Balance: balance, ReferrerRewardCredits: h.cfg.ReferralReferrerSignupRewardCredits}
+func (h *Handler) accountView(ctx context.Context, user *domain.User, balance, groupID int64) (accountView, error) {
+	view := accountView{
+		Balance:               balance,
+		AccountStatus:         "активен",
+		ReferrerRewardCredits: h.cfg.ReferralReferrerSignupRewardCredits,
+	}
+	if user == nil {
+		return view, nil
+	}
 	if h.deps.Jobs != nil {
-		count, err := h.deps.Jobs.CountSucceededByUser(ctx, userID)
+		count, err := h.deps.Jobs.CountSucceededByUser(ctx, user.ID)
 		if err != nil {
 			return view, err
 		}
 		view.CompletedGenerations = count
 	}
+	if h.deps.Account != nil {
+		accountID := user.EffectiveAccountID()
+		if accountID != uuid.Nil {
+			profile, err := h.deps.Account.Profile(ctx, accountID)
+			if err != nil && !errors.Is(err, domain.ErrNotFound) {
+				return view, err
+			}
+			for _, identity := range profile.IdentityRefs {
+				provider := domain.NormalizeIdentityProvider(identity.Provider)
+				view.IdentityRefs = append(view.IdentityRefs, accountIdentityView{
+					ID:        identity.ID.String(),
+					Provider:  provider,
+					Label:     identity.Label,
+					Verified:  identity.Verified,
+					CanUnlink: provider == domain.IdentityProviderEmail || provider == domain.IdentityProviderPhone,
+				})
+			}
+		}
+	}
 	if h.deps.Referrals == nil {
 		return view, nil
 	}
-	code, stats, err := h.deps.Referrals.StatsDetailed(ctx, userID)
+	code, stats, err := h.deps.Referrals.StatsDetailed(ctx, user.ID)
 	if err != nil {
 		return view, err
 	}
@@ -768,6 +813,9 @@ func (h *Handler) menuCommandEnabled(command domain.CommandType) bool {
 
 func (h *Handler) controlPayloadEnabled(control controlPayload) bool {
 	command := domain.CommandType(control.Command)
+	if command == domain.CommandAccountConfirmLinkIdentity {
+		return true
+	}
 	if !h.menuCommandEnabled(command) {
 		return false
 	}
@@ -908,6 +956,70 @@ func accountDetailsText(view accountView) string {
 		view.RewardedCount,
 		referralLink,
 	)
+}
+
+const accountLinkIdentityText = "🔐 Привязка email или телефона\n\nПришлите email или телефон обычным сообщением\n\nОн будет привязан к вашему текущему аккаунту\n\nБаланс, платежи, история и артефакты останутся на месте"
+
+const accountLinkIdentityTextV2 = "🔐 Привязка способа входа\n\nВыберите email или телефон в разделе «Мой аккаунт»\n\nПосле подтверждения баланс, платежи, история и артефакты останутся на месте"
+
+func accountDetailsTextV2(view accountView) string {
+	referralLink := view.ReferralLink
+	if referralLink == "" {
+		referralLink = "ссылка появится после настройки VK_REFERRAL_LINK_BASE"
+	}
+	status := strings.TrimSpace(view.AccountStatus)
+	if status == "" {
+		status = "активен"
+	}
+	return fmt.Sprintf("👤 Мой аккаунт\n\nСтатус: %s\n\nСпособы входа:\n%s\n\n• общение с НейроХаб\n\n👥 Реферальная программа\n\n• Приглашённых: %d\n• Зарегистрировано: %d\n• Активировано: %d\n• Бонус начислен: %d\n\n• Ссылка: %s\n\nПоддержка: @neirohub_help",
+		status,
+		accountIdentityLines(view.IdentityRefs),
+		view.InvitedCount,
+		view.RegisteredCount,
+		view.ActivatedCount,
+		view.RewardedCount,
+		referralLink,
+	)
+}
+
+func accountIdentityLines(identities []accountIdentityView) string {
+	if len(identities) == 0 {
+		return "• VK"
+	}
+	lines := make([]string, 0, len(identities))
+	for _, identity := range identities {
+		label := strings.TrimSpace(identity.Label)
+		if label == "" {
+			label = accountIdentityProviderLabel(identity.Provider)
+		}
+		status := ""
+		if identity.Verified {
+			status = " подтвержден"
+		}
+		lines = append(lines, fmt.Sprintf("• %s: %s%s", accountIdentityProviderLabel(identity.Provider), label, status))
+	}
+	return strings.Join(lines, "\n")
+}
+
+func accountIdentityProviderLabel(provider domain.IdentityProvider) string {
+	switch domain.NormalizeIdentityProvider(provider) {
+	case domain.IdentityProviderVK:
+		return "VK"
+	case domain.IdentityProviderEmail:
+		return "email"
+	case domain.IdentityProviderPhone:
+		return "телефон"
+	case domain.IdentityProviderTelegram:
+		return "Telegram"
+	case domain.IdentityProviderGoogle:
+		return "Google"
+	case domain.IdentityProviderApple:
+		return "Apple"
+	case domain.IdentityProviderPassword:
+		return "пароль"
+	default:
+		return "способ входа"
+	}
 }
 
 func insertBalanceLine(text string, balance int64) string {
@@ -1389,6 +1501,21 @@ func backKeyboard() *vkdelivery.Keyboard {
 	}
 }
 
+func accountLinkConfirmKeyboard() *vkdelivery.Keyboard {
+	return &vkdelivery.Keyboard{
+		OneTime: false,
+		Inline:  true,
+		Buttons: [][]vkdelivery.KeyboardButton{
+			{
+				button("Подтвердить привязку", domain.CommandAccountConfirmLinkIdentity, "positive"),
+			},
+			{
+				button("⬅️ Назад", domain.CommandShowMenu, "secondary"),
+			},
+		},
+	}
+}
+
 func insufficientBalanceKeyboard() *vkdelivery.Keyboard {
 	return &vkdelivery.Keyboard{
 		OneTime: false,
@@ -1447,6 +1574,18 @@ func emptyAccountKeyboard() *vkdelivery.Keyboard {
 func accountKeyboard(view accountView) *vkdelivery.Keyboard {
 	rows := [][]vkdelivery.KeyboardButton{}
 	rows = append(rows, []vkdelivery.KeyboardButton{
+		buttonWithAction("✉️ Привязать email", domain.CommandAccountLinkIdentity, accountActionLinkEmail, "secondary"),
+		buttonWithAction("📱 Привязать телефон", domain.CommandAccountLinkIdentity, accountActionLinkPhone, "secondary"),
+	})
+	for _, identity := range view.IdentityRefs {
+		if !identity.CanUnlink || strings.TrimSpace(identity.ID) == "" {
+			continue
+		}
+		rows = append(rows, []vkdelivery.KeyboardButton{
+			accountIdentityButton("Отвязать "+accountIdentityProviderLabel(identity.Provider), identity.ID, "negative"),
+		})
+	}
+	rows = append(rows, []vkdelivery.KeyboardButton{
 		button("⬅️ Назад", domain.CommandShowMenu, "secondary"),
 	})
 	return &vkdelivery.Keyboard{
@@ -1481,6 +1620,18 @@ func buttonWithAction(label string, command domain.CommandType, action, color st
 	payload, _ := json.Marshal(controlPayload{
 		Command: string(command),
 		Action:  action,
+	})
+	return vkdelivery.KeyboardButton{
+		Label:   label,
+		Payload: string(payload),
+		Color:   color,
+	}
+}
+
+func accountIdentityButton(label, identityID, color string) vkdelivery.KeyboardButton {
+	payload, _ := json.Marshal(controlPayload{
+		Command:    string(domain.CommandAccountUnlinkIdentity),
+		IdentityID: strings.TrimSpace(identityID),
 	})
 	return vkdelivery.KeyboardButton{
 		Label:   label,

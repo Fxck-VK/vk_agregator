@@ -37,12 +37,18 @@ func (r *ArtifactRepo) Create(_ context.Context, a *domain.Artifact) error {
 	if a.ID == uuid.Nil {
 		a.ID = uuid.New()
 	}
+	if a.OwnerAccountID == uuid.Nil {
+		a.OwnerAccountID = a.OwnerUserID
+	}
 	normalizeArtifactMetadata(a)
 	now := time.Now()
 	a.CreatedAt, a.UpdatedAt = now, now
 	r.byID[a.ID] = *a
 	if a.SHA256 != "" {
 		r.bySHA[shaKey(a.OwnerUserID, a.SHA256)] = a.ID
+		if a.OwnerAccountID != uuid.Nil && a.OwnerAccountID != a.OwnerUserID {
+			r.bySHA[shaKey(a.OwnerAccountID, a.SHA256)] = a.ID
+		}
 	}
 	return nil
 }
@@ -54,10 +60,22 @@ func (r *ArtifactRepo) Update(_ context.Context, a *domain.Artifact) error {
 	if !ok {
 		return domain.ErrNotFound
 	}
+	if a.OwnerAccountID == uuid.Nil {
+		a.OwnerAccountID = cur.OwnerAccountID
+	}
+	if a.OwnerAccountID == uuid.Nil {
+		a.OwnerAccountID = a.OwnerUserID
+	}
 	normalizeArtifactMetadata(a)
 	a.CreatedAt = cur.CreatedAt
 	a.UpdatedAt = time.Now()
 	r.byID[a.ID] = *a
+	if a.SHA256 != "" {
+		r.bySHA[shaKey(a.OwnerUserID, a.SHA256)] = a.ID
+		if a.OwnerAccountID != uuid.Nil && a.OwnerAccountID != a.OwnerUserID {
+			r.bySHA[shaKey(a.OwnerAccountID, a.SHA256)] = a.ID
+		}
+	}
 	return nil
 }
 
@@ -86,7 +104,7 @@ func (r *ArtifactRepo) FindReusableInputReference(_ context.Context, ownerID uui
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	for _, artifact := range r.byID {
-		if artifact.OwnerUserID == ownerID &&
+		if (artifact.OwnerUserID == ownerID || artifact.OwnerAccountID == ownerID) &&
 			artifact.SHA256 == sha256 &&
 			artifact.ValidationPolicyVersion == validationPolicyVersion &&
 			artifact.LifecycleClass == domain.ArtifactLifecycleInputReference &&

@@ -387,6 +387,34 @@ type Config struct {
 	// MiniAppLaunchParamsMaxAge is the maximum age of VK launch params before
 	// they are rejected. Zero disables the age check.
 	MiniAppLaunchParamsMaxAge time.Duration
+	// AccountEmailLink* control short-lived email identity verification codes.
+	AccountEmailLinkCodeTTL       time.Duration
+	AccountEmailLinkCodeDigits    int
+	AccountEmailLinkRequestLimit  int
+	AccountEmailLinkRequestWindow time.Duration
+	AccountEmailLinkVerifyLimit   int
+	AccountEmailLinkVerifyWindow  time.Duration
+	// AccountPhoneLink* control short-lived phone identity OTP verification.
+	AccountPhoneLinkOTPTTL        time.Duration
+	AccountPhoneLinkOTPDigits     int
+	AccountPhoneLinkRequestLimit  int
+	AccountPhoneLinkRequestWindow time.Duration
+	AccountPhoneLinkVerifyLimit   int
+	AccountPhoneLinkVerifyWindow  time.Duration
+	// AccountOAuth* configure provider adapters. Missing provider-specific
+	// trust material keeps that provider fail-closed.
+	AccountOAuthGoogleClientIDs   []string
+	AccountOAuthGoogleJWKSURL     string
+	AccountOAuthAppleClientIDs    []string
+	AccountOAuthAppleJWKSURL      string
+	AccountOAuthTelegramBotToken  string
+	AccountOAuthTelegramMaxAge    time.Duration
+	AccountOAuthTelegramClientIDs []string
+	AccountOAuthTelegramIssuer    string
+	AccountOAuthTelegramJWKSURL   string
+	AccountOAuthVKIDClientIDs     []string
+	AccountOAuthVKIDIssuer        string
+	AccountOAuthVKIDJWKSURL       string
 	// FrontendTelemetryEnabled accepts safe Mini App client telemetry events.
 	FrontendTelemetryEnabled bool
 	// FrontendTelemetryUserHashSecret enables anonymized client user hashing
@@ -565,6 +593,47 @@ func (c Config) Validate() error {
 	}
 	if c.RuntimePricingRefreshInterval < 0 {
 		return fmt.Errorf("config: RUNTIME_PRICING_REFRESH_INTERVAL must be non-negative")
+	}
+	if c.AccountEmailLinkCodeTTL < 0 {
+		return fmt.Errorf("config: ACCOUNT_EMAIL_LINK_CODE_TTL must be non-negative")
+	}
+	if c.AccountEmailLinkCodeDigits != 0 &&
+		(c.AccountEmailLinkCodeDigits < 4 || c.AccountEmailLinkCodeDigits > 10) {
+		return fmt.Errorf("config: ACCOUNT_EMAIL_LINK_CODE_DIGITS must be between 4 and 10")
+	}
+	if c.AccountEmailLinkRequestLimit < 0 {
+		return fmt.Errorf("config: ACCOUNT_EMAIL_LINK_REQUEST_LIMIT must be non-negative")
+	}
+	if c.AccountEmailLinkRequestWindow < 0 {
+		return fmt.Errorf("config: ACCOUNT_EMAIL_LINK_REQUEST_WINDOW must be non-negative")
+	}
+	if c.AccountEmailLinkVerifyLimit < 0 {
+		return fmt.Errorf("config: ACCOUNT_EMAIL_LINK_VERIFY_LIMIT must be non-negative")
+	}
+	if c.AccountEmailLinkVerifyWindow < 0 {
+		return fmt.Errorf("config: ACCOUNT_EMAIL_LINK_VERIFY_WINDOW must be non-negative")
+	}
+	if c.AccountPhoneLinkOTPTTL < 0 {
+		return fmt.Errorf("config: ACCOUNT_PHONE_LINK_OTP_TTL must be non-negative")
+	}
+	if c.AccountPhoneLinkOTPDigits != 0 &&
+		(c.AccountPhoneLinkOTPDigits < 4 || c.AccountPhoneLinkOTPDigits > 10) {
+		return fmt.Errorf("config: ACCOUNT_PHONE_LINK_OTP_DIGITS must be between 4 and 10")
+	}
+	if c.AccountPhoneLinkRequestLimit < 0 {
+		return fmt.Errorf("config: ACCOUNT_PHONE_LINK_REQUEST_LIMIT must be non-negative")
+	}
+	if c.AccountPhoneLinkRequestWindow < 0 {
+		return fmt.Errorf("config: ACCOUNT_PHONE_LINK_REQUEST_WINDOW must be non-negative")
+	}
+	if c.AccountPhoneLinkVerifyLimit < 0 {
+		return fmt.Errorf("config: ACCOUNT_PHONE_LINK_VERIFY_LIMIT must be non-negative")
+	}
+	if c.AccountPhoneLinkVerifyWindow < 0 {
+		return fmt.Errorf("config: ACCOUNT_PHONE_LINK_VERIFY_WINDOW must be non-negative")
+	}
+	if c.AccountOAuthTelegramMaxAge < 0 {
+		return fmt.Errorf("config: ACCOUNT_OAUTH_TELEGRAM_MAX_AGE must be non-negative")
 	}
 	if provider := strings.ToLower(strings.TrimSpace(c.PaymentProvider)); provider != "" && !knownPaymentProvider(provider) {
 		return fmt.Errorf("config: PAYMENT_PROVIDER must be one of mock, yookassa")
@@ -1245,6 +1314,30 @@ func Load() Config {
 		VKAppID:                         env("VK_APP_ID", ""),
 		VKAppSecret:                     env("VK_APP_SECRET", ""),
 		MiniAppLaunchParamsMaxAge:       envDuration("MINIAPP_LAUNCH_PARAMS_MAX_AGE", time.Hour),
+		AccountEmailLinkCodeTTL:         envDuration("ACCOUNT_EMAIL_LINK_CODE_TTL", 10*time.Minute),
+		AccountEmailLinkCodeDigits:      envInt("ACCOUNT_EMAIL_LINK_CODE_DIGITS", 6),
+		AccountEmailLinkRequestLimit:    envInt("ACCOUNT_EMAIL_LINK_REQUEST_LIMIT", 3),
+		AccountEmailLinkRequestWindow:   envDuration("ACCOUNT_EMAIL_LINK_REQUEST_WINDOW", 15*time.Minute),
+		AccountEmailLinkVerifyLimit:     envInt("ACCOUNT_EMAIL_LINK_VERIFY_LIMIT", 5),
+		AccountEmailLinkVerifyWindow:    envDuration("ACCOUNT_EMAIL_LINK_VERIFY_WINDOW", 15*time.Minute),
+		AccountPhoneLinkOTPTTL:          envDuration("ACCOUNT_PHONE_LINK_OTP_TTL", 10*time.Minute),
+		AccountPhoneLinkOTPDigits:       envInt("ACCOUNT_PHONE_LINK_OTP_DIGITS", 6),
+		AccountPhoneLinkRequestLimit:    envInt("ACCOUNT_PHONE_LINK_REQUEST_LIMIT", 3),
+		AccountPhoneLinkRequestWindow:   envDuration("ACCOUNT_PHONE_LINK_REQUEST_WINDOW", 15*time.Minute),
+		AccountPhoneLinkVerifyLimit:     envInt("ACCOUNT_PHONE_LINK_VERIFY_LIMIT", 5),
+		AccountPhoneLinkVerifyWindow:    envDuration("ACCOUNT_PHONE_LINK_VERIFY_WINDOW", 15*time.Minute),
+		AccountOAuthGoogleClientIDs:     envList("ACCOUNT_OAUTH_GOOGLE_CLIENT_IDS"),
+		AccountOAuthGoogleJWKSURL:       env("ACCOUNT_OAUTH_GOOGLE_JWKS_URL", "https://www.googleapis.com/oauth2/v3/certs"),
+		AccountOAuthAppleClientIDs:      envList("ACCOUNT_OAUTH_APPLE_CLIENT_IDS"),
+		AccountOAuthAppleJWKSURL:        env("ACCOUNT_OAUTH_APPLE_JWKS_URL", "https://appleid.apple.com/auth/keys"),
+		AccountOAuthTelegramBotToken:    env("ACCOUNT_OAUTH_TELEGRAM_BOT_TOKEN", ""),
+		AccountOAuthTelegramMaxAge:      envDuration("ACCOUNT_OAUTH_TELEGRAM_MAX_AGE", 24*time.Hour),
+		AccountOAuthTelegramClientIDs:   envList("ACCOUNT_OAUTH_TELEGRAM_CLIENT_IDS"),
+		AccountOAuthTelegramIssuer:      env("ACCOUNT_OAUTH_TELEGRAM_ISSUER", "https://oauth.telegram.org"),
+		AccountOAuthTelegramJWKSURL:     env("ACCOUNT_OAUTH_TELEGRAM_JWKS_URL", "https://oauth.telegram.org/.well-known/jwks.json"),
+		AccountOAuthVKIDClientIDs:       envList("ACCOUNT_OAUTH_VK_ID_CLIENT_IDS"),
+		AccountOAuthVKIDIssuer:          env("ACCOUNT_OAUTH_VK_ID_ISSUER", ""),
+		AccountOAuthVKIDJWKSURL:         env("ACCOUNT_OAUTH_VK_ID_JWKS_URL", ""),
 		FrontendTelemetryEnabled:        envBool("FRONTEND_TELEMETRY_ENABLED", false),
 		FrontendTelemetryUserHashSecret: env("FRONTEND_TELEMETRY_USER_HASH_SECRET", ""),
 

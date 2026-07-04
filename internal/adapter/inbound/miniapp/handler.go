@@ -22,6 +22,7 @@ import (
 	"vk-ai-aggregator/internal/platform/logging"
 	"vk-ai-aggregator/internal/platform/metrics"
 	"vk-ai-aggregator/internal/service/billingservice"
+	"vk-ai-aggregator/internal/service/identityresolver"
 	"vk-ai-aggregator/internal/service/joborchestrator"
 	"vk-ai-aggregator/internal/service/paymentservice"
 	"vk-ai-aggregator/internal/service/pricingcatalog"
@@ -126,6 +127,7 @@ type ObjectReader interface {
 // Deps are the collaborators needed by the miniapp handler.
 type Deps struct {
 	Users          domain.UserRepository
+	Identity       domain.IdentityResolver
 	Jobs           domain.JobRepository
 	Conversations  domain.ConversationRepository
 	Artifacts      domain.ArtifactRepository
@@ -152,6 +154,9 @@ func NewHandler(cfg Config, deps Deps) *Handler {
 	logger := deps.Logger
 	if logger == nil {
 		logger = slog.Default()
+	}
+	if deps.Identity == nil {
+		deps.Identity = identityresolver.New(deps.Users, nil, deps.Billing)
 	}
 	cfg = normalizeConfig(cfg)
 	return &Handler{cfg: cfg, deps: deps, logger: logger}
@@ -322,33 +327,20 @@ func (h *Handler) rateLimitMiniApp(keyPrefix string, next http.HandlerFunc) http
 	}
 }
 
-// ensureUser returns the existing user or creates a new one with a billing
-// account, identical to the VK webhook handler's ensureUser.
+// ensureUser resolves the verified VK identity through the shared account
+// resolver and creates the legacy user/billing bridge when needed.
 func (h *Handler) ensureUser(ctx context.Context, vkUserID int64) (*domain.User, error) {
-	user, err := h.deps.Users.GetByVKUserID(ctx, vkUserID)
-	if err == nil {
-		return user, nil
-	}
-	if !errors.Is(err, domain.ErrNotFound) {
+	resolution, err := h.deps.Identity.ResolveOrCreate(ctx, domain.IdentityProviderVK, strconv.FormatInt(vkUserID, 10))
+	if err != nil {
 		return nil, err
 	}
-	user = &domain.User{
-		VKUserID: vkUserID,
-		Role:     domain.RoleUser,
-		Status:   domain.StatusActive,
-		Locale:   "ru",
-		Timezone: "Europe/Moscow",
+	if resolution.User == nil {
+		return nil, errors.New("identity resolver returned no legacy user")
 	}
-	if err := h.deps.Users.Create(ctx, user); err != nil {
-		if errors.Is(err, domain.ErrConflict) {
-			return h.deps.Users.GetByVKUserID(ctx, vkUserID)
-		}
-		return nil, err
+	if resolution.AccountID == uuid.Nil || resolution.User.EffectiveAccountID() == uuid.Nil {
+		return nil, errors.New("identity resolver returned no account id")
 	}
-	if _, err := h.deps.Billing.EnsureAccount(ctx, user.ID); err != nil {
-		return nil, fmt.Errorf("ensure account: %w", err)
-	}
-	return user, nil
+	return resolution.User, nil
 }
 
 func (h *Handler) clientEvent(w http.ResponseWriter, r *http.Request) {
@@ -1048,13 +1040,9 @@ func (h *Handler) estimateJob(w http.ResponseWriter, r *http.Request) {
 	}
 	var estimateUserID uuid.UUID
 	if len(req.ReferenceArtifactIDs) > 0 {
-		user, err := h.deps.Users.GetByVKUserID(r.Context(), vkUserID)
+		user, err := h.ensureUser(r.Context(), vkUserID)
 		if err != nil {
-			if errors.Is(err, domain.ErrNotFound) {
-				writeError(w, http.StatusNotFound, "not found")
-			} else {
-				writeError(w, http.StatusInternalServerError, "internal error")
-			}
+			writeError(w, http.StatusInternalServerError, "internal error")
 			return
 		}
 		estimateUserID = user.ID
@@ -1202,11 +1190,8 @@ func (h *Handler) pricingProductKey(opType domain.OperationType, modality domain
 }
 
 func (h *Handler) balanceForEstimate(ctx context.Context, vkUserID int64) (int64, error) {
-	user, err := h.deps.Users.GetByVKUserID(ctx, vkUserID)
+	user, err := h.ensureUser(ctx, vkUserID)
 	if err != nil {
-		if errors.Is(err, domain.ErrNotFound) {
-			return h.deps.Billing.StartingBalance(), nil
-		}
 		return 0, err
 	}
 	return h.deps.Billing.BalanceForEstimate(ctx, user.ID)
@@ -1448,12 +1433,8 @@ func (h *Handler) listDefaultChatMessages(w http.ResponseWriter, r *http.Request
 		})
 	}
 
-	user, err := h.deps.Users.GetByVKUserID(r.Context(), vkUserID)
+	user, err := h.ensureUser(r.Context(), vkUserID)
 	if err != nil {
-		if errors.Is(err, domain.ErrNotFound) {
-			writeEmpty()
-			return
-		}
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
@@ -1500,15 +1481,8 @@ func (h *Handler) listJobs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := h.deps.Users.GetByVKUserID(r.Context(), vkUserID)
+	user, err := h.ensureUser(r.Context(), vkUserID)
 	if err != nil {
-		if errors.Is(err, domain.ErrNotFound) {
-			writeJSON(w, http.StatusOK, listResponse[JobDTO]{
-				Items:      []JobDTO{},
-				Pagination: pagination{Limit: 20, Offset: 0, Count: 0},
-			})
-			return
-		}
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
@@ -1558,13 +1532,9 @@ func (h *Handler) getJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := h.deps.Users.GetByVKUserID(r.Context(), vkUserID)
+	user, err := h.ensureUser(r.Context(), vkUserID)
 	if err != nil {
-		if errors.Is(err, domain.ErrNotFound) {
-			writeError(w, http.StatusNotFound, "not found")
-		} else {
-			writeError(w, http.StatusInternalServerError, "internal error")
-		}
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
@@ -1821,15 +1791,8 @@ func (h *Handler) listPayments(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusServiceUnavailable, "service unavailable")
 		return
 	}
-	user, err := h.deps.Users.GetByVKUserID(r.Context(), vkUserID)
+	user, err := h.ensureUser(r.Context(), vkUserID)
 	if err != nil {
-		if errors.Is(err, domain.ErrNotFound) {
-			writeJSON(w, http.StatusOK, listResponse[PaymentIntentDTO]{
-				Items:      []PaymentIntentDTO{},
-				Pagination: pagination{Limit: defaultLimit, Offset: 0, Count: 0},
-			})
-			return
-		}
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
@@ -1868,12 +1831,8 @@ func (h *Handler) getPaymentIntent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid payment id")
 		return
 	}
-	user, err := h.deps.Users.GetByVKUserID(r.Context(), vkUserID)
+	user, err := h.ensureUser(r.Context(), vkUserID)
 	if err != nil {
-		if errors.Is(err, domain.ErrNotFound) {
-			writeError(w, http.StatusNotFound, "not found")
-			return
-		}
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
@@ -1908,12 +1867,8 @@ func (h *Handler) cancelPaymentIntent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid payment id")
 		return
 	}
-	user, err := h.deps.Users.GetByVKUserID(r.Context(), vkUserID)
+	user, err := h.ensureUser(r.Context(), vkUserID)
 	if err != nil {
-		if errors.Is(err, domain.ErrNotFound) {
-			writeError(w, http.StatusNotFound, "not found")
-			return
-		}
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
@@ -1982,15 +1937,10 @@ func (h *Handler) getArtifact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := h.deps.Users.GetByVKUserID(r.Context(), vkUserID)
+	user, err := h.ensureUser(r.Context(), vkUserID)
 	if err != nil {
-		if errors.Is(err, domain.ErrNotFound) {
-			resultLabel = "not_found"
-			writeError(w, http.StatusNotFound, "not found")
-		} else {
-			resultLabel = "error"
-			writeError(w, http.StatusInternalServerError, "internal error")
-		}
+		resultLabel = "error"
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
