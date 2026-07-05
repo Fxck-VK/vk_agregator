@@ -1130,10 +1130,45 @@ func normalizeWorkerPolicy(value string) string {
 	return strings.ToLower(strings.TrimSpace(value))
 }
 
-// maxReferenceArtifacts must match miniapp/references.go limit.
-const maxReferenceArtifacts = 4
+// maxReferenceArtifacts is the worker-wide ceiling; provider adapters still
+// enforce each model's narrower contract.
+const maxReferenceArtifacts = 16
 
 const maxReferenceArtifactBytes = 20 << 20
+
+type deterministicRequestError struct {
+	class domain.ProviderErrorClass
+	err   error
+}
+
+func (e *deterministicRequestError) Error() string {
+	if e == nil || e.err == nil {
+		return ""
+	}
+	return e.err.Error()
+}
+
+func (e *deterministicRequestError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.err
+}
+
+func deterministicRequestFailure(err error) (domain.ProviderErrorClass, string, bool) {
+	var requestErr *deterministicRequestError
+	if !errors.As(err, &requestErr) || requestErr.class == "" {
+		return "", "", false
+	}
+	return requestErr.class, safeProviderFailureMessage(requestErr.class), true
+}
+
+func referenceInputError(format string, args ...any) error {
+	return &deterministicRequestError{
+		class: domain.ProviderErrInvalidRequest,
+		err:   fmt.Errorf(format, args...),
+	}
+}
 
 // promptParams is the subset of job params the provider request needs.
 type promptParams struct {
@@ -1423,42 +1458,42 @@ func safeProviderParams(raw json.RawMessage) json.RawMessage {
 
 func (p *processor) resolveReferenceInputURLs(ctx context.Context, job *domain.Job, ids []uuid.UUID) ([]string, error) {
 	if len(ids) > maxReferenceArtifacts {
-		return nil, fmt.Errorf("worker: too many reference artifacts")
+		return nil, referenceInputError("worker: too many reference artifacts")
 	}
 	if p.artifactRepo == nil {
-		return nil, fmt.Errorf("worker: artifact repository unavailable")
+		return nil, referenceInputError("worker: artifact repository unavailable")
 	}
 	if p.objects == nil {
-		return nil, fmt.Errorf("worker: object store unavailable")
+		return nil, referenceInputError("worker: object store unavailable")
 	}
 	inputURLs := make([]string, 0, len(ids))
 	for _, id := range ids {
 		if id == uuid.Nil {
-			return nil, fmt.Errorf("worker: invalid reference artifact id")
+			return nil, referenceInputError("worker: invalid reference artifact id")
 		}
 		artifact, err := p.artifactRepo.GetByID(ctx, id)
 		if err != nil {
-			return nil, fmt.Errorf("worker: reference artifact not found: %w", err)
+			return nil, referenceInputError("worker: reference artifact not found: %w", err)
 		}
 		if artifact.OwnerUserID != job.UserID {
-			return nil, fmt.Errorf("worker: invalid reference artifact owner")
+			return nil, referenceInputError("worker: invalid reference artifact owner")
 		}
 		if artifact.Kind != domain.ArtifactKindInput || artifact.MediaType != domain.MediaTypeImage || artifact.Status != domain.ArtifactStatusReady {
-			return nil, fmt.Errorf("worker: invalid reference artifact")
+			return nil, referenceInputError("worker: invalid reference artifact")
 		}
 		if artifact.StorageBucket == "" || artifact.StorageKey == "" {
-			return nil, fmt.Errorf("worker: reference artifact storage missing")
+			return nil, referenceInputError("worker: reference artifact storage missing")
 		}
 		data, err := p.objects.GetObject(ctx, artifact.StorageBucket, artifact.StorageKey)
 		if err != nil {
-			return nil, fmt.Errorf("worker: reference artifact object missing: %w", err)
+			return nil, referenceInputError("worker: reference artifact object missing: %w", err)
 		}
 		if len(data) > maxReferenceArtifactBytes {
-			return nil, fmt.Errorf("worker: reference artifact too large")
+			return nil, referenceInputError("worker: reference artifact too large")
 		}
 		inputURL, err := sanitizedReferenceImageDataURL(data, artifact.MimeType)
 		if err != nil {
-			return nil, err
+			return nil, referenceInputError("%w", err)
 		}
 		inputURLs = append(inputURLs, inputURL)
 	}

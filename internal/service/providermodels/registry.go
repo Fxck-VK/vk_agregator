@@ -17,16 +17,21 @@ const (
 	PublicImageNanoBanana2   = "nano_banana_2"
 	PublicImageNanoBananaPro = "nano_banana_pro"
 	PublicImageGPTImage2     = "gpt_image_2"
+	PublicImageSeedream45    = "seedream_4_5"
 	LoadTestImageMock        = "mock_image"
 
-	ProviderModelPoYoNanoBanana2 = "nano-banana-2"
-	ProviderModelGemini3ProImage = "gemini-3-pro-image-preview"
-	ProviderModelGPTImage2       = "gpt-image-2"
-	ProviderModelMockImage       = "mock-image"
+	ProviderModelPoYoNanoBanana2    = "nano-banana-2-new"
+	ProviderModelPoYoNanoBananaPro  = "nano-banana-pro"
+	ProviderModelPoYoSeedream45     = "seedream-4.5"
+	ProviderModelPoYoSeedream45Edit = "seedream-4.5-edit"
+	ProviderModelGemini3ProImage    = "gemini-3-pro-image-preview"
+	ProviderModelGPTImage2          = "gpt-image-2"
+	ProviderModelMockImage          = "mock-image"
 
 	FeatureImageNanoBanana2   = "FEATURE_IMAGE_MODEL_NANO_BANANA_2_ENABLED"
 	FeatureImageNanoBananaPro = "FEATURE_IMAGE_MODEL_NANO_BANANA_PRO_ENABLED"
 	FeatureImageGPTImage2     = "FEATURE_IMAGE_MODEL_GPT_IMAGE_2_ENABLED"
+	FeatureImageSeedream45    = "FEATURE_IMAGE_MODEL_SEEDREAM_4_5_ENABLED"
 	FeatureImageMock          = "FEATURE_IMAGE_MODEL_MOCK_ENABLED"
 
 	FeatureVideoRouter             = "FEATURE_VIDEO_ROUTER_ENABLED"
@@ -167,9 +172,13 @@ func textAliases() []TextAlias {
 
 func imageModels() []ImageModel {
 	return []ImageModel{
-		imageModel(PublicImageNanoBanana2, "Nano Banana 2", domain.ProviderPoYo, ProviderModelPoYoNanoBanana2, FeatureImageNanoBanana2, poyoReadiness(), 4),
+		imageModel(PublicImageNanoBanana2, "Nano Banana 2", domain.ProviderPoYo, ProviderModelPoYoNanoBanana2, FeatureImageNanoBanana2, poyoReadiness(), 14),
 		imageModel(PublicImageNanoBananaPro, "Nano Banana Pro", domain.ProviderAPIMart, ProviderModelGemini3ProImage, FeatureImageNanoBananaPro, apimartReadiness(), 14),
 		imageModel(PublicImageGPTImage2, "GPT Image 2", domain.ProviderAPIMart, ProviderModelGPTImage2, FeatureImageGPTImage2, apimartReadiness(), 16),
+		imageModelWithQualities(PublicImageSeedream45, "Seedream 4.5", domain.ProviderPoYo, ProviderModelPoYoSeedream45, FeatureImageSeedream45, poyoReadiness(), []string{
+			pricingcatalog.ImageQuality2K,
+			pricingcatalog.ImageQuality4K,
+		}, 10),
 	}
 }
 
@@ -189,6 +198,10 @@ func loadTestImageModels() []ImageModel {
 
 func imageModel(publicID, displayName string, provider domain.ProviderName, providerModelID, featureFlag string, readiness ProviderReadiness, maxRefs int) ImageModel {
 	qualities := []string{pricingcatalog.ImageQuality1K, pricingcatalog.ImageQuality2K, pricingcatalog.ImageQuality4K}
+	return imageModelWithQualities(publicID, displayName, provider, providerModelID, featureFlag, readiness, qualities, maxRefs)
+}
+
+func imageModelWithQualities(publicID, displayName string, provider domain.ProviderName, providerModelID, featureFlag string, readiness ProviderReadiness, qualities []string, maxRefs int) ImageModel {
 	keys := make([]pricingcatalog.ProductKey, 0, len(qualities))
 	for _, quality := range qualities {
 		keys = append(keys, pricingcatalog.ProductKey{
@@ -369,18 +382,20 @@ func seedance20FastSpec() domain.VideoRouteSpec {
 
 func runwayGen45Spec() domain.VideoRouteSpec {
 	return domain.VideoRouteSpec{
-		Alias:                  domain.VideoRouteRunwayGen45,
-		Provider:               domain.ProviderPoYo,
-		ProviderModelID:        "runway-gen-4.5",
-		ModelClass:             "runway_gen4_5",
-		InputModes:             []domain.VideoInputMode{domain.VideoInputText, domain.VideoInputImage},
-		AllowedDurationsSec:    []int{5, 10},
-		AllowedResolutions:     []string{"720p", "1080p"},
-		AllowedAspectRatios:    []string{"16:9", "9:16", "1:1"},
-		SupportsReferenceImage: true,
-		MaxReferenceImages:     1,
-		MaxProviderCostCredits: 0,
-		PriceMultiplier:        2,
+		Alias:                        domain.VideoRouteRunwayGen45,
+		Provider:                     domain.ProviderPoYo,
+		ProviderModelID:              "runway-gen-4.5",
+		ModelClass:                   "runway_gen4_5",
+		InputModes:                   []domain.VideoInputMode{domain.VideoInputText, domain.VideoInputImage},
+		AllowedDurationsSec:          []int{5, 10},
+		AllowedResolutions:           []string{"720p", "1080p"},
+		AllowedAspectRatios:          []string{"16:9", "9:16", "4:3", "3:4", "1:1", "21:9"},
+		SupportsReferenceImage:       true,
+		MaxReferenceImages:           1,
+		ProviderCostCreditsPerSecond: 15,
+		MaxProviderCostCredits:       150,
+		MaxInternalCostCredits:       450,
+		PriceMultiplier:              3,
 	}
 }
 

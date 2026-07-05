@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -258,7 +259,7 @@ func newTestFixtureWithConfigAndPaymentProvider(appSecret string, limiter interf
 		configure(&cfg)
 	}
 	pricingCatalog := mustStaticPricingCatalog()
-	orchOptions := []joborchestrator.Option{}
+	orchOptions := []joborchestrator.Option{joborchestrator.WithArtifactRepository(artifactRepo)}
 	if cfg.VideoRouteResolver != nil {
 		orchOptions = append(orchOptions, joborchestrator.WithVideoRouteResolver(cfg.VideoRouteResolver))
 	}
@@ -2901,7 +2902,7 @@ func TestHandler_Estimate_ImageAliasUsesPublicModelOnly(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
 	lower := strings.ToLower(w.Body.String())
-	for _, private := range []string{"deepinfra", "bytedance", "seedream", "apimart", "gemini-3-pro-image-preview", "model_code", "provider"} {
+	for _, private := range []string{"deepinfra", "bytedance", "seedream", "apimart", "poyo", "gemini-3-pro-image-preview", "nano-banana-pro", "nano-banana-pro-edit", "model_code", "provider"} {
 		if strings.Contains(lower, private) {
 			t.Fatalf("estimate response leaked provider/model internals %q: %s", private, w.Body.String())
 		}
@@ -3306,7 +3307,7 @@ func TestHandler_Estimate_ReferenceArtifactsPassWhenEnabled(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
 	lower := strings.ToLower(w.Body.String())
-	for _, private := range []string{"deepinfra", "bytedance", "seedream", "apimart", "gemini-3-pro-image-preview", "model_code", "provider"} {
+	for _, private := range []string{"deepinfra", "bytedance", "seedream", "apimart", "poyo", "gemini-3-pro-image-preview", "nano-banana-pro", "nano-banana-pro-edit", "model_code", "provider"} {
 		if strings.Contains(lower, private) {
 			t.Fatalf("estimate response leaked provider/model internals %q: %s", private, w.Body.String())
 		}
@@ -3363,6 +3364,60 @@ func TestHandler_Estimate_ReferenceArtifactsRejectTooMany(t *testing.T) {
 	}
 	if !strings.Contains(w.Body.String(), "too many reference artifacts") {
 		t.Fatalf("expected too-many-references error, got %s", w.Body.String())
+	}
+}
+
+func TestHandler_Estimate_Seedream45UsesPricingSnapshot(t *testing.T) {
+	fixture := newTestFixture("", nil)
+	routes := fixture.handler.Routes()
+	ctx := context.Background()
+	user := &domain.User{VKUserID: 777, Role: domain.RoleUser, Status: domain.StatusActive}
+	if err := fixture.userRepo.Create(ctx, user); err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	fixture.grantTestCreditsForUser(t, user.ID, 1000, "test:miniapp:seedream-estimate")
+
+	body, _ := json.Marshal(map[string]any{
+		"operation":     "image_generate",
+		"prompt":        "estimate seedream",
+		"model_id":      modelcatalog.MiniAppImageSeedream45,
+		"image_quality": modelcatalog.ImageQuality4K,
+	})
+	req := httptest.NewRequest(http.MethodPost, "/miniapp/estimate", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Launch-Params", devLaunchParams(777))
+
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	lower := strings.ToLower(w.Body.String())
+	for _, private := range []string{"deepinfra", "bytedance", "seedream-4.5", "seedream-4.5-edit", "poyo", "model_code", "provider"} {
+		if strings.Contains(lower, private) {
+			t.Fatalf("estimate response leaked private detail %q: %s", private, w.Body.String())
+		}
+	}
+	var resp struct {
+		Operation      string `json:"operation"`
+		ModelID        string `json:"model_id"`
+		ModelName      string `json:"model_name"`
+		ImageQuality   string `json:"image_quality"`
+		CostEstimate   int64  `json:"cost_estimate"`
+		BalanceCredits int64  `json:"balance_credits"`
+		EnoughCredits  bool   `json:"enough_credits"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("invalid response json: %v", err)
+	}
+	if resp.Operation != "image_generate" ||
+		resp.ModelID != modelcatalog.MiniAppImageSeedream45 ||
+		resp.ModelName != "Seedream 4.5" ||
+		resp.ImageQuality != modelcatalog.ImageQuality4K ||
+		resp.CostEstimate != 15 ||
+		resp.BalanceCredits <= 0 ||
+		!resp.EnoughCredits {
+		t.Fatalf("unexpected Seedream estimate response: %+v", resp)
 	}
 }
 
@@ -3650,7 +3705,7 @@ func TestHandler_CreateJob_ImageAliasPersistsProviderModelCodePrivately(t *testi
 		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
 	}
 	lower := strings.ToLower(w.Body.String())
-	for _, private := range []string{"deepinfra", "bytedance", "seedream", "apimart", "gemini-3-pro-image-preview", "model_code", "provider"} {
+	for _, private := range []string{"deepinfra", "bytedance", "seedream", "apimart", "poyo", "gemini-3-pro-image-preview", "nano-banana-pro", "nano-banana-pro-edit", "model_code", "provider"} {
 		if strings.Contains(lower, private) {
 			t.Fatalf("job response leaked provider/model internals %q: %s", private, w.Body.String())
 		}
@@ -3807,7 +3862,7 @@ func TestHandler_CreateJob_NanoBanana2PersistsPoYoSnapshotPrivately(t *testing.T
 	if err := json.Unmarshal(job.Params, &params); err != nil {
 		t.Fatalf("invalid params: %v", err)
 	}
-	if params.ModelID != "nano_banana_2" || params.ModelName != "Nano Banana 2" || params.Provider != "poyo" || params.ModelCode != "nano-banana-2" {
+	if params.ModelID != "nano_banana_2" || params.ModelName != "Nano Banana 2" || params.Provider != "poyo" || params.ModelCode != "nano-banana-2-new" {
 		t.Fatalf("unexpected stored params: %+v", params)
 	}
 }
@@ -3898,7 +3953,7 @@ func TestHandler_CreateJob_ImageQualityPersistsServerOwnedSnapshot(t *testing.T)
 	if params.ModelID != modelcatalog.MiniAppImageNanoBanana2 ||
 		params.ModelName != "Nano Banana 2" ||
 		params.Provider != "poyo" ||
-		params.ModelCode != "nano-banana-2" ||
+		params.ModelCode != "nano-banana-2-new" ||
 		params.Size != "1:1" ||
 		params.Resolution != modelcatalog.ImageQuality2K ||
 		params.ImageQuality != modelcatalog.ImageQuality2K {
@@ -4010,7 +4065,7 @@ func TestHandler_CreateJob_IgnoresClientProviderAndPriceFields(t *testing.T) {
 	if params.ModelID != modelcatalog.MiniAppImageNanoBanana2 ||
 		params.ModelName != "Nano Banana 2" ||
 		params.Provider != "poyo" ||
-		params.ModelCode != "nano-banana-2" ||
+		params.ModelCode != "nano-banana-2-new" ||
 		params.Resolution != modelcatalog.ImageQuality2K ||
 		params.ImageQuality != modelcatalog.ImageQuality2K {
 		t.Fatalf("client-provided provider/model fields affected stored server snapshot: %+v", params)
@@ -4407,7 +4462,7 @@ func TestHandler_CreateJob_ReferenceArtifactsPassWhenEnabled(t *testing.T) {
 		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
 	}
 	lower := strings.ToLower(w.Body.String())
-	for _, private := range []string{"deepinfra", "bytedance", "seedream", "apimart", "gemini-3-pro-image-preview", "model_code", "provider"} {
+	for _, private := range []string{"deepinfra", "bytedance", "seedream", "apimart", "poyo", "gemini-3-pro-image-preview", "nano-banana-pro", "nano-banana-pro-edit", "model_code", "provider"} {
 		if strings.Contains(lower, private) {
 			t.Fatalf("job response leaked provider/model internals %q: %s", private, w.Body.String())
 		}
@@ -4450,6 +4505,266 @@ func TestHandler_CreateJob_ReferenceArtifactsPassWhenEnabled(t *testing.T) {
 	}
 	if len(params.ReferenceArtifactIDs) != 1 || params.ReferenceArtifactIDs[0] != artifact.ID {
 		t.Fatalf("unexpected stored reference params: %+v", params.ReferenceArtifactIDs)
+	}
+}
+
+func TestHandler_CreateJob_NanoBanana2AcceptsCatalogReferenceLimit(t *testing.T) {
+	fixture := newTestFixtureWithConfig("", nil, func(cfg *miniappinbound.Config) {
+		cfg.ImageReferenceEnabled = true
+	})
+	routes := fixture.handler.Routes()
+	ctx := context.Background()
+	user := &domain.User{VKUserID: 777, Role: domain.RoleUser, Status: domain.StatusActive}
+	if err := fixture.userRepo.Create(ctx, user); err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	ids := make([]string, 0, 14)
+	wantIDs := make([]uuid.UUID, 0, 14)
+	for i := 0; i < 14; i++ {
+		artifact := createTestArtifact(t, fixture, user.ID, domain.ArtifactKindInput, domain.MediaTypeImage, domain.ArtifactStatusReady)
+		ids = append(ids, artifact.ID.String())
+		wantIDs = append(wantIDs, artifact.ID)
+	}
+
+	body, _ := json.Marshal(map[string]any{
+		"operation":              "image_generate",
+		"prompt":                 "image with catalog max references",
+		"model_id":               modelcatalog.MiniAppImageNanoBanana2,
+		"reference_artifact_ids": ids,
+	})
+	req := httptest.NewRequest(http.MethodPost, "/miniapp/jobs", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Launch-Params", devLaunchParams(777))
+	req.Header.Set("X-Idempotency-Key", "nano-banana-2-reference-limit")
+
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("invalid response json: %v", err)
+	}
+	jobID, err := uuid.Parse(resp.ID)
+	if err != nil {
+		t.Fatalf("invalid job id: %v", err)
+	}
+	job, err := fixture.jobRepo.GetByID(ctx, jobID)
+	if err != nil {
+		t.Fatalf("get job: %v", err)
+	}
+	if !reflect.DeepEqual(job.InputArtifactIDs, wantIDs) {
+		t.Fatalf("job input artifact ids = %+v, want %+v", job.InputArtifactIDs, wantIDs)
+	}
+}
+
+func TestHandler_CreateJob_Seedream45TextOnlyDefaultsTo2K(t *testing.T) {
+	fixture := newTestFixture("", nil)
+	routes := fixture.handler.Routes()
+	ctx := context.Background()
+	user := &domain.User{VKUserID: 777, Role: domain.RoleUser, Status: domain.StatusActive}
+	if err := fixture.userRepo.Create(ctx, user); err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	fixture.grantTestCreditsForUser(t, user.ID, 1000, "test:miniapp:seedream-create")
+
+	body, _ := json.Marshal(map[string]any{
+		"operation": "image_generate",
+		"prompt":    "seedream product render",
+		"model_id":  modelcatalog.MiniAppImageSeedream45,
+	})
+	req := httptest.NewRequest(http.MethodPost, "/miniapp/jobs", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Launch-Params", devLaunchParams(777))
+	req.Header.Set("X-Idempotency-Key", "seedream-text-default-2k")
+
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	lower := strings.ToLower(w.Body.String())
+	for _, private := range []string{"deepinfra", "bytedance", "seedream-4.5", "seedream-4.5-edit", "poyo", "model_code", "provider"} {
+		if strings.Contains(lower, private) {
+			t.Fatalf("job response leaked private detail %q: %s", private, w.Body.String())
+		}
+	}
+	var resp struct {
+		ID           string `json:"id"`
+		Operation    string `json:"operation"`
+		ModelID      string `json:"model_id"`
+		ModelName    string `json:"model_name"`
+		ImageQuality string `json:"image_quality"`
+		CostEstimate int64  `json:"cost_estimate"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("invalid response json: %v", err)
+	}
+	if resp.Operation != "image_generate" ||
+		resp.ModelID != modelcatalog.MiniAppImageSeedream45 ||
+		resp.ModelName != "Seedream 4.5" ||
+		resp.ImageQuality != modelcatalog.ImageQuality2K ||
+		resp.CostEstimate != 10 {
+		t.Fatalf("unexpected Seedream create response: %+v", resp)
+	}
+	jobID, err := uuid.Parse(resp.ID)
+	if err != nil {
+		t.Fatalf("invalid job id: %v", err)
+	}
+	job, err := fixture.jobRepo.GetByID(ctx, jobID)
+	if err != nil {
+		t.Fatalf("get job: %v", err)
+	}
+	if job.CostEstimate != 10 || job.CostReserved != 10 {
+		t.Fatalf("unexpected Seedream job cost: %+v", job)
+	}
+	var params struct {
+		ModelID      string `json:"model_id"`
+		ModelName    string `json:"model_name"`
+		Provider     string `json:"provider"`
+		ModelCode    string `json:"model_code"`
+		Resolution   string `json:"resolution"`
+		ImageQuality string `json:"image_quality"`
+		Size         string `json:"size"`
+	}
+	if err := json.Unmarshal(job.Params, &params); err != nil {
+		t.Fatalf("invalid params: %v", err)
+	}
+	if params.ModelID != modelcatalog.MiniAppImageSeedream45 ||
+		params.ModelName != "Seedream 4.5" ||
+		params.Provider != "poyo" ||
+		params.ModelCode != "seedream-4.5" ||
+		params.Resolution != modelcatalog.ImageQuality2K ||
+		params.ImageQuality != modelcatalog.ImageQuality2K ||
+		params.Size != "1:1" {
+		t.Fatalf("unexpected Seedream job params: %+v", params)
+	}
+}
+
+func TestHandler_CreateJob_Seedream45AcceptsTenReferenceArtifacts(t *testing.T) {
+	fixture := newTestFixtureWithConfig("", nil, func(cfg *miniappinbound.Config) {
+		cfg.ImageReferenceEnabled = true
+	})
+	routes := fixture.handler.Routes()
+	ctx := context.Background()
+	user := &domain.User{VKUserID: 777, Role: domain.RoleUser, Status: domain.StatusActive}
+	if err := fixture.userRepo.Create(ctx, user); err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	fixture.grantTestCreditsForUser(t, user.ID, 1000, "test:miniapp:seedream-reference-10")
+	ids := make([]string, 0, 10)
+	wantIDs := make([]uuid.UUID, 0, 10)
+	for i := 0; i < 10; i++ {
+		artifact := createTestArtifact(t, fixture, user.ID, domain.ArtifactKindInput, domain.MediaTypeImage, domain.ArtifactStatusReady)
+		ids = append(ids, artifact.ID.String())
+		wantIDs = append(wantIDs, artifact.ID)
+	}
+
+	body, _ := json.Marshal(map[string]any{
+		"operation":              "image_generate",
+		"prompt":                 "seedream with references",
+		"model_id":               modelcatalog.MiniAppImageSeedream45,
+		"reference_artifact_ids": ids,
+	})
+	req := httptest.NewRequest(http.MethodPost, "/miniapp/jobs", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Launch-Params", devLaunchParams(777))
+	req.Header.Set("X-Idempotency-Key", "seedream-reference-10")
+
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("invalid response json: %v", err)
+	}
+	jobID, err := uuid.Parse(resp.ID)
+	if err != nil {
+		t.Fatalf("invalid job id: %v", err)
+	}
+	job, err := fixture.jobRepo.GetByID(ctx, jobID)
+	if err != nil {
+		t.Fatalf("get job: %v", err)
+	}
+	if !reflect.DeepEqual(job.InputArtifactIDs, wantIDs) {
+		t.Fatalf("job input artifact ids = %+v, want %+v", job.InputArtifactIDs, wantIDs)
+	}
+	var params struct {
+		ReferenceArtifactIDs []uuid.UUID `json:"reference_artifact_ids"`
+		ImageQuality         string      `json:"image_quality"`
+	}
+	if err := json.Unmarshal(job.Params, &params); err != nil {
+		t.Fatalf("invalid params: %v", err)
+	}
+	if !reflect.DeepEqual(params.ReferenceArtifactIDs, wantIDs) || params.ImageQuality != modelcatalog.ImageQuality2K {
+		t.Fatalf("unexpected Seedream reference params: %+v", params)
+	}
+}
+
+func TestHandler_CreateJob_Seedream45RejectsElevenReferenceArtifactsBeforeReservation(t *testing.T) {
+	fixture := newTestFixtureWithConfig("", nil, func(cfg *miniappinbound.Config) {
+		cfg.ImageReferenceEnabled = true
+	})
+	routes := fixture.handler.Routes()
+	ctx := context.Background()
+	user := &domain.User{VKUserID: 777, Role: domain.RoleUser, Status: domain.StatusActive}
+	if err := fixture.userRepo.Create(ctx, user); err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	fixture.grantTestCreditsForUser(t, user.ID, 1000, "test:miniapp:seedream-reference-11")
+	ids := make([]string, 0, 11)
+	for i := 0; i < 11; i++ {
+		artifact := createTestArtifact(t, fixture, user.ID, domain.ArtifactKindInput, domain.MediaTypeImage, domain.ArtifactStatusReady)
+		ids = append(ids, artifact.ID.String())
+	}
+	acc, err := fixture.billing.EnsureAccount(ctx, user.ID)
+	if err != nil {
+		t.Fatalf("ensure account: %v", err)
+	}
+	beforeEntries, err := fixture.billingRepo.ListEntries(ctx, acc.ID, 100, 0)
+	if err != nil {
+		t.Fatalf("list entries before: %v", err)
+	}
+
+	body, _ := json.Marshal(map[string]any{
+		"operation":              "image_generate",
+		"prompt":                 "seedream with too many references",
+		"model_id":               modelcatalog.MiniAppImageSeedream45,
+		"reference_artifact_ids": ids,
+	})
+	req := httptest.NewRequest(http.MethodPost, "/miniapp/jobs", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Launch-Params", devLaunchParams(777))
+	req.Header.Set("X-Idempotency-Key", "seedream-reference-11")
+
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "too many reference artifacts") {
+		t.Fatalf("expected too-many-references error, got %s", w.Body.String())
+	}
+	jobs, err := fixture.jobRepo.ListByUser(ctx, user.ID, 10, 0)
+	if err != nil {
+		t.Fatalf("list jobs: %v", err)
+	}
+	if len(jobs) != 0 {
+		t.Fatalf("too many Seedream references must not create a job, got %d", len(jobs))
+	}
+	afterEntries, err := fixture.billingRepo.ListEntries(ctx, acc.ID, 100, 0)
+	if err != nil {
+		t.Fatalf("list entries after: %v", err)
+	}
+	if len(afterEntries) != len(beforeEntries) {
+		t.Fatalf("too many Seedream references must not reserve credits, before=%d after=%d", len(beforeEntries), len(afterEntries))
 	}
 }
 

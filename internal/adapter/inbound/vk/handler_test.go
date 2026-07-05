@@ -147,6 +147,7 @@ func newHarnessWithReferenceDownloaderAndOrchestratorOptions(control vkdelivery.
 	uowMgr := memory.NewUnitOfWork(jobs, outbox, bill)
 	prices := staticPricingCatalogForVKTest()
 	orchOpts := []joborchestrator.Option{
+		joborchestrator.WithArtifactRepository(arts),
 		joborchestrator.WithVideoRouteResolver(testVKVideoRouteResolver()),
 		joborchestrator.WithPricingCatalog(prices),
 	}
@@ -236,6 +237,52 @@ func defaultTestVKImageModels() []productcatalog.ImageModel {
 	return catalog.ImageModels()
 }
 
+func testVKImageModelsWithSeedream() []productcatalog.ImageModel {
+	catalog := productcatalog.New(productcatalog.Config{
+		ImageProviderReady: map[domain.ProviderName]bool{
+			domain.ProviderAPIMart: true,
+			domain.ProviderPoYo:    true,
+		},
+		EnabledImageModels: map[string]bool{
+			modelcatalog.MiniAppImageNanoBanana2:   true,
+			modelcatalog.MiniAppImageNanoBananaPro: true,
+			modelcatalog.MiniAppImageGPTImage2:     true,
+			modelcatalog.MiniAppImageSeedream45:    true,
+		},
+		PricingCatalog: staticPricingCatalogForVKTest(),
+	})
+	return catalog.ImageModels()
+}
+
+func testVKImageModelsWithSeedreamPriceMissing() []productcatalog.ImageModel {
+	prices := pricingcatalog.StaticProductPrices()
+	filtered := make([]pricingcatalog.ProductPrice, 0, len(prices))
+	for _, price := range prices {
+		if price.Key.ImageModelID == pricingcatalog.PublicImageSeedream45 {
+			continue
+		}
+		filtered = append(filtered, price)
+	}
+	pricing, err := pricingcatalog.NewCatalog(filtered)
+	if err != nil {
+		panic(err)
+	}
+	catalog := productcatalog.New(productcatalog.Config{
+		ImageProviderReady: map[domain.ProviderName]bool{
+			domain.ProviderAPIMart: true,
+			domain.ProviderPoYo:    true,
+		},
+		EnabledImageModels: map[string]bool{
+			modelcatalog.MiniAppImageNanoBanana2:   true,
+			modelcatalog.MiniAppImageNanoBananaPro: true,
+			modelcatalog.MiniAppImageGPTImage2:     true,
+			modelcatalog.MiniAppImageSeedream45:    true,
+		},
+		PricingCatalog: pricing,
+	})
+	return catalog.ImageModels()
+}
+
 func staticPricingCatalogForVKTest() *pricingcatalog.Catalog {
 	catalog, err := pricingcatalog.NewStaticCatalog()
 	if err != nil {
@@ -317,6 +364,24 @@ func testRunwayVideoRoute() productcatalog.VideoRoute {
 		DefaultResolution:      pricingcatalog.VideoResolution720p,
 		DefaultAspectRatio:     "16:9",
 		RequiresStartImage:     true,
+		SupportsReferenceImage: true,
+		MaxReferenceImages:     1,
+	}
+}
+
+func testPoyoRunwayGen45VideoRoute() productcatalog.VideoRoute {
+	return productcatalog.VideoRoute{
+		Type:                   productcatalog.TypeVideo,
+		Alias:                  string(domain.VideoRouteRunwayGen45),
+		Name:                   "Runway Gen-4.5",
+		Description:            "Test public PoYo Runway route.",
+		Enabled:                true,
+		AllowedDurationsSec:    []int{5, 10},
+		AllowedResolutions:     []string{pricingcatalog.VideoResolution720p, pricingcatalog.VideoResolution1080p},
+		AllowedAspectRatios:    []string{"16:9", "9:16", "1:1"},
+		DefaultDurationSec:     5,
+		DefaultResolution:      pricingcatalog.VideoResolution720p,
+		DefaultAspectRatio:     "16:9",
 		SupportsReferenceImage: true,
 		MaxReferenceImages:     1,
 	}
@@ -1896,6 +1961,7 @@ func TestVideoMenuButtonUsesProductCatalogRoutes(t *testing.T) {
 		VideoRoutes: []productcatalog.VideoRoute{
 			testKlingVideoRoute(),
 			testRunwayVideoRoute(),
+			testPoyoRunwayGen45VideoRoute(),
 			{
 				Type:                productcatalog.TypeVideo,
 				Alias:               string(domain.VideoRouteSeedance20Fast),
@@ -1923,9 +1989,11 @@ func TestVideoMenuButtonUsesProductCatalogRoutes(t *testing.T) {
 	for _, want := range []string{
 		"Kling O3 Standard",
 		"Runway Gen-4 Turbo",
+		"Runway Gen-4.5",
 		string(domain.CommandMenuVideoRouteSelect),
 		string(domain.VideoRouteKlingO3Standard),
 		string(domain.VideoRouteRunwayGen4Turbo),
+		string(domain.VideoRouteRunwayGen45),
 	} {
 		if !strings.Contains(keyboard, want) {
 			t.Fatalf("catalog video keyboard missing %q: %q", want, keyboard)
@@ -1959,6 +2027,67 @@ func TestVideoMenuButtonUsesProductCatalogRoutes(t *testing.T) {
 		if strings.Contains(keyboard, forbidden) {
 			t.Fatalf("catalog video keyboard leaked/kept forbidden value %q: %q", forbidden, keyboard)
 		}
+	}
+}
+
+func TestPoyoRunwayGen45RouteButtonEnablesTextOnlyVideoJobs(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	h := newHarnessWithConfig(control, vk.Config{
+		ConfirmationToken: "conf-token-123",
+		Secret:            "s3cr3t",
+		VideoRoutes: []productcatalog.VideoRoute{
+			testRunwayVideoRoute(),
+			testPoyoRunwayGen45VideoRoute(),
+		},
+	})
+	start := `{
+		"type":"message_new","group_id":1,"event_id":"evt-video-runway45-route-on","secret":"s3cr3t",
+		"object":{"message":{"from_id":56245,"peer_id":56245,"text":"Runway Gen-4.5"}}
+	}`
+	if rec := h.post(start); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected route response: %d %q", rec.Code, rec.Body.String())
+	}
+	h.grantTestCredits(t, 56245, 1000)
+
+	prompt := `{
+		"type":"message_new","group_id":1,"event_id":"evt-video-runway45-route-prompt","secret":"s3cr3t",
+		"object":{"message":{"from_id":56245,"peer_id":56245,"text":"cinematic product reveal, slow push-in, glossy reflections"}}
+	}`
+	if rec := h.post(prompt); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected prompt response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	ctx := context.Background()
+	user, err := h.users.GetByVKUserID(ctx, 56245)
+	if err != nil {
+		t.Fatalf("user not created: %v", err)
+	}
+	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
+	expectedCost := vkTestVideoCostCredits(t, domain.VideoRouteRunwayGen45, pricingcatalog.VideoResolution720p, 5)
+	if len(jobs) != 1 ||
+		jobs[0].OperationType != domain.OperationVideoGenerate ||
+		jobs[0].Modality != domain.ModalityVideo ||
+		jobs[0].CostEstimate != expectedCost ||
+		jobs[0].CostReserved != expectedCost ||
+		h.pub.Len() != 1 {
+		t.Fatalf("PoYo Runway Gen-4.5 route mode should create one video job, jobs=%+v tasks=%d", jobs, h.pub.Len())
+	}
+	var params struct {
+		ModelName       string `json:"model_name"`
+		VideoRouteAlias string `json:"video_route_alias"`
+		Provider        string `json:"provider"`
+		ModelCode       string `json:"model_code"`
+		DurationSec     int    `json:"duration_sec"`
+	}
+	if err := json.Unmarshal(jobs[0].Params, &params); err != nil {
+		t.Fatalf("decode job params: %v", err)
+	}
+	if params.ModelName != "Runway Gen-4.5" ||
+		params.VideoRouteAlias != string(domain.VideoRouteRunwayGen45) ||
+		params.Provider != "" ||
+		params.ModelCode != "" ||
+		params.DurationSec != 5 {
+		t.Fatalf("unexpected PoYo Runway Gen-4.5 params: %+v", params)
 	}
 }
 
@@ -2368,6 +2497,8 @@ func TestPhotoMenuButtonSendsInstructionNoJob(t *testing.T) {
 		"price",
 		"cost",
 		"nano-banana-2",
+		"nano-banana-pro",
+		"nano-banana-pro-edit",
 		"gemini-3-pro-image-preview",
 		"gpt-image-2",
 	} {
@@ -2403,6 +2534,67 @@ func TestPhotoMenuButtonSendsInstructionNoJob(t *testing.T) {
 	}
 	if strings.Contains(sent[0].Keyboard, "Фото с референсом") {
 		t.Fatalf("photo reference button should be hidden: keyboard=%q", sent[0].Keyboard)
+	}
+}
+
+func TestPhotoReferenceLegacyPayloadRedirectsToPhotoMenuLowProfile(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	h := newHarnessWithControl(control)
+	body := `{
+		"type":"message_new","group_id":1,"event_id":"evt-photo-ref-legacy","secret":"s3cr3t",
+		"object":{"message":{"from_id":5637,"peer_id":5637,"text":"Фото с референсом","payload":"{\"command\":\"menu.image.reference\"}"}}
+	}`
+	if rec := h.post(body); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	sent := control.Sent()
+	if len(sent) != 1 {
+		t.Fatalf("expected one photo menu response, got %+v", sent)
+	}
+	if !strings.Contains(sent[0].Text, "Генерация фото по тексту") {
+		t.Fatalf("legacy reference payload should show normal photo guidance, got text=%q", sent[0].Text)
+	}
+	for _, forbidden := range []string{
+		"референс",
+		"menu.image.reference",
+		string(domain.CommandMenuImageReference),
+	} {
+		if strings.Contains(strings.ToLower(sent[0].Text+sent[0].Keyboard), strings.ToLower(forbidden)) {
+			t.Fatalf("legacy reference payload must stay low-profile; found %q in text=%q keyboard=%q", forbidden, sent[0].Text, sent[0].Keyboard)
+		}
+	}
+	if !strings.Contains(sent[0].Keyboard, "menu.image.select") {
+		t.Fatalf("legacy reference payload should return catalog-driven photo menu, keyboard=%q", sent[0].Keyboard)
+	}
+}
+
+func TestPhotoMenuHidesSeedream45WhenPriceMissing(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	h := newHarnessWithConfig(control, vk.Config{
+		ConfirmationToken: "conf-token-123",
+		Secret:            "s3cr3t",
+		ImageModels:       testVKImageModelsWithSeedreamPriceMissing(),
+	})
+	body := `{
+		"type":"message_new","group_id":1,"event_id":"evt-photo-seedream-price-missing","secret":"s3cr3t",
+		"object":{"message":{"from_id":5664,"peer_id":5664,"text":"Фото","payload":"{\"command\":\"menu.image\"}"}}
+	}`
+	if rec := h.post(body); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	sent := control.Sent()
+	if len(sent) != 1 {
+		t.Fatalf("expected one photo menu response, got %+v", sent)
+	}
+	if !strings.Contains(sent[0].Keyboard, "Nano Banana 2") {
+		t.Fatalf("expected priced image models to remain visible, keyboard=%q", sent[0].Keyboard)
+	}
+	for _, hidden := range []string{"Seedream 4.5", modelcatalog.MiniAppImageSeedream45} {
+		if strings.Contains(sent[0].Keyboard, hidden) {
+			t.Fatalf("Seedream must be hidden from VK menu when pricing is missing; found %q in %q", hidden, sent[0].Keyboard)
+		}
 	}
 }
 
@@ -2698,6 +2890,251 @@ func TestPhotoGPTImage2QualityFlowCreatesAPIMartImageJob(t *testing.T) {
 	}
 }
 
+func TestPhotoActiveImageModeTextOnlyDoesNotAttachReferences(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	dialogState := newFakeDialogState()
+	dialogState.modes[5650] = "photo_prompt:gpt_image_2:1K"
+	h := newHarnessWithConfigAndDialogState(control, vk.Config{
+		ConfirmationToken: "conf-token-123",
+		Secret:            "s3cr3t",
+	}, dialogState)
+	h.grantTestCredits(t, 5650, 1000)
+
+	prompt := `{
+		"type":"message_new","group_id":1,"event_id":"evt-photo-active-text-only","secret":"s3cr3t",
+		"object":{"message":{"from_id":5650,"peer_id":5650,"text":"clean product render on white background"}}
+	}`
+	if rec := h.post(prompt); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected prompt response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	ctx := context.Background()
+	user, err := h.users.GetByVKUserID(ctx, 5650)
+	if err != nil {
+		t.Fatalf("user not created: %v", err)
+	}
+	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
+	if len(jobs) != 1 || len(jobs[0].InputArtifactIDs) != 0 || h.pub.Len() != 1 {
+		t.Fatalf("text-only active image mode should create one image job without input artifacts, jobs=%+v tasks=%d", jobs, h.pub.Len())
+	}
+	var params struct {
+		ModelID              string      `json:"model_id"`
+		ReferenceArtifactIDs []uuid.UUID `json:"reference_artifact_ids"`
+	}
+	if err := json.Unmarshal(jobs[0].Params, &params); err != nil {
+		t.Fatalf("decode params: %v", err)
+	}
+	if params.ModelID != modelcatalog.MiniAppImageGPTImage2 || len(params.ReferenceArtifactIDs) != 0 {
+		t.Fatalf("unexpected text-only image params: %+v", params)
+	}
+}
+
+func TestPhotoActiveImageModeWithPhotoAndTextCreatesReferenceImageJob(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	dialogState := newFakeDialogState()
+	dialogState.modes[5651] = "photo_prompt:gpt_image_2:1K"
+	downloader := &fakeReferenceDownloader{data: pngSizedBytes(32, 48)}
+	h := newHarnessWithReferenceDownloader(control, vk.Config{
+		ConfirmationToken: "conf-token-123",
+		Secret:            "s3cr3t",
+	}, nil, dialogState, downloader)
+	h.grantTestCredits(t, 5651, 1000)
+
+	prompt := `{
+		"type":"message_new","group_id":1,"event_id":"evt-photo-active-photo-text","secret":"s3cr3t",
+		"object":{"message":{
+			"from_id":5651,
+			"peer_id":5651,
+			"text":"turn this into a studio catalog image",
+			"attachments":[{
+				"type":"photo",
+				"photo":{"sizes":[
+					{"type":"s","url":"https://vk.example/ref-small.png","width":8,"height":8},
+					{"type":"x","url":"https://vk.example/ref-large.png","width":32,"height":48}
+				]}
+			}]
+		}}
+	}`
+	if rec := h.post(prompt); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected prompt response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	ctx := context.Background()
+	user, err := h.users.GetByVKUserID(ctx, 5651)
+	if err != nil {
+		t.Fatalf("user not created: %v", err)
+	}
+	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
+	if len(jobs) != 1 || len(jobs[0].InputArtifactIDs) != 1 || h.pub.Len() != 1 {
+		t.Fatalf("photo+text active image mode should create one referenced image job, jobs=%+v tasks=%d", jobs, h.pub.Len())
+	}
+	if len(downloader.urls) != 1 || downloader.urls[0] != "https://vk.example/ref-large.png" {
+		t.Fatalf("unexpected downloaded urls: %+v", downloader.urls)
+	}
+	artifact, err := h.arts.GetByID(ctx, jobs[0].InputArtifactIDs[0])
+	if err != nil {
+		t.Fatalf("reference artifact missing: %v", err)
+	}
+	if artifact.OwnerUserID != user.ID || artifact.Kind != domain.ArtifactKindInput || artifact.MediaType != domain.MediaTypeImage || artifact.MimeType != "image/png" || artifact.Width != 32 || artifact.Height != 48 {
+		t.Fatalf("unexpected artifact: %+v", artifact)
+	}
+	if h.objects.Len() != 1 {
+		t.Fatalf("expected one persisted reference object, got %d", h.objects.Len())
+	}
+	var params struct {
+		ModelID              string      `json:"model_id"`
+		ReferenceArtifactIDs []uuid.UUID `json:"reference_artifact_ids"`
+	}
+	if err := json.Unmarshal(jobs[0].Params, &params); err != nil {
+		t.Fatalf("decode params: %v", err)
+	}
+	if params.ModelID != modelcatalog.MiniAppImageGPTImage2 ||
+		len(params.ReferenceArtifactIDs) != 1 ||
+		params.ReferenceArtifactIDs[0] != artifact.ID {
+		t.Fatalf("unexpected referenced image params: %+v", params)
+	}
+}
+
+func TestPhotoActiveImageModePhotoOnlyAsksForDescriptionNoJob(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	dialogState := newFakeDialogState()
+	dialogState.modes[5652] = "photo_prompt:gpt_image_2:1K"
+	downloader := &fakeReferenceDownloader{data: pngSizedBytes(16, 16)}
+	h := newHarnessWithReferenceDownloader(control, vk.Config{
+		ConfirmationToken: "conf-token-123",
+		Secret:            "s3cr3t",
+	}, nil, dialogState, downloader)
+	h.grantTestCredits(t, 5652, 1000)
+
+	prompt := `{
+		"type":"message_new","group_id":1,"event_id":"evt-photo-active-photo-only","secret":"s3cr3t",
+		"object":{"message":{
+			"from_id":5652,
+			"peer_id":5652,
+			"text":"",
+			"attachments":[{
+				"type":"photo",
+				"photo":{"sizes":[{"type":"x","url":"https://vk.example/ref-only.png","width":16,"height":16}]}
+			}]
+		}}
+	}`
+	if rec := h.post(prompt); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected prompt response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	ctx := context.Background()
+	user, err := h.users.GetByVKUserID(ctx, 5652)
+	if err != nil {
+		t.Fatalf("user not created: %v", err)
+	}
+	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
+	if len(jobs) != 0 || h.pub.Len() != 0 || h.objects.Len() != 0 || len(downloader.urls) != 0 {
+		t.Fatalf("photo-only image mode must not create job, artifacts, or downloads; jobs=%+v tasks=%d objects=%d urls=%+v", jobs, h.pub.Len(), h.objects.Len(), downloader.urls)
+	}
+	sent := control.Sent()
+	if len(sent) != 1 || !strings.Contains(strings.ToLower(sent[0].Text), "опис") {
+		t.Fatalf("expected description request, got %+v", sent)
+	}
+}
+
+func TestPhotoActiveImageModeUnsupportedReferenceModelReturnsErrorNoJob(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	dialogState := newFakeDialogState()
+	dialogState.modes[5653] = "photo_prompt:gpt_image_2:1K"
+	downloader := &fakeReferenceDownloader{data: pngSizedBytes(16, 16)}
+	imageModels := defaultTestVKImageModels()
+	for i := range imageModels {
+		if imageModels[i].ID == modelcatalog.MiniAppImageGPTImage2 {
+			imageModels[i].SupportsReferenceImage = false
+			imageModels[i].MaxReferenceImages = 0
+		}
+	}
+	h := newHarnessWithReferenceDownloader(control, vk.Config{
+		ConfirmationToken: "conf-token-123",
+		Secret:            "s3cr3t",
+		ImageModels:       imageModels,
+	}, nil, dialogState, downloader)
+	h.grantTestCredits(t, 5653, 1000)
+
+	prompt := `{
+		"type":"message_new","group_id":1,"event_id":"evt-photo-active-unsupported-ref","secret":"s3cr3t",
+		"object":{"message":{
+			"from_id":5653,
+			"peer_id":5653,
+			"text":"use this photo as reference",
+			"attachments":[{
+				"type":"photo",
+				"photo":{"sizes":[{"type":"x","url":"https://vk.example/ref-unsupported.png","width":16,"height":16}]}
+			}]
+		}}
+	}`
+	if rec := h.post(prompt); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected prompt response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	ctx := context.Background()
+	user, err := h.users.GetByVKUserID(ctx, 5653)
+	if err != nil {
+		t.Fatalf("user not created: %v", err)
+	}
+	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
+	if len(jobs) != 0 || h.pub.Len() != 0 || h.objects.Len() != 0 || len(downloader.urls) != 0 {
+		t.Fatalf("unsupported reference model must fail before job/download/store; jobs=%+v tasks=%d objects=%d urls=%+v", jobs, h.pub.Len(), h.objects.Len(), downloader.urls)
+	}
+	sent := control.Sent()
+	if len(sent) != 1 || !strings.Contains(strings.ToLower(sent[0].Text), "фото") {
+		t.Fatalf("expected unsupported-reference error, got %+v", sent)
+	}
+}
+
+func TestPhotoActiveImageModeUnsupportedFormatRejectsBeforeArtifactPersistence(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	dialogState := newFakeDialogState()
+	dialogState.modes[5654] = "photo_prompt:gpt_image_2:1K"
+	downloader := &fakeReferenceDownloader{
+		data:        []byte("GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff\xff,\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;"),
+		contentType: "image/gif",
+	}
+	h := newHarnessWithReferenceDownloader(control, vk.Config{
+		ConfirmationToken: "conf-token-123",
+		Secret:            "s3cr3t",
+	}, nil, dialogState, downloader)
+	h.grantTestCredits(t, 5654, 1000)
+
+	prompt := `{
+		"type":"message_new","group_id":1,"event_id":"evt-photo-active-gif-ref","secret":"s3cr3t",
+		"object":{"message":{
+			"from_id":5654,
+			"peer_id":5654,
+			"text":"use this animated image as reference",
+			"attachments":[{
+				"type":"photo",
+				"photo":{"sizes":[{"type":"x","url":"https://vk.example/ref.gif","width":16,"height":16}]}
+			}]
+		}}
+	}`
+	if rec := h.post(prompt); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected prompt response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	ctx := context.Background()
+	user, err := h.users.GetByVKUserID(ctx, 5654)
+	if err != nil {
+		t.Fatalf("user not created: %v", err)
+	}
+	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
+	if len(jobs) != 0 || h.pub.Len() != 0 || h.objects.Len() != 0 {
+		t.Fatalf("unsupported reference format must not create job/task/artifact object; jobs=%+v tasks=%d objects=%d", jobs, h.pub.Len(), h.objects.Len())
+	}
+	if len(downloader.urls) != 1 || downloader.urls[0] != "https://vk.example/ref.gif" {
+		t.Fatalf("expected exactly one validation download, got %+v", downloader.urls)
+	}
+	sent := control.Sent()
+	if len(sent) != 1 || (!strings.Contains(strings.ToLower(sent[0].Text), "jpg") && !strings.Contains(strings.ToLower(sent[0].Text), "png")) {
+		t.Fatalf("expected JPG/PNG validation error, got %+v", sent)
+	}
+}
+
 func TestPhotoNanoBanana2ModeCreatesPoYoImageJob(t *testing.T) {
 	control := vkdelivery.NewMockClient()
 	h := newHarnessWithControl(control)
@@ -2761,7 +3198,7 @@ func TestPhotoNanoBanana2ModeCreatesPoYoImageJob(t *testing.T) {
 		params.ModelID != "nano_banana_2" ||
 		params.ModelName != "Nano Banana 2" ||
 		params.Provider != "poyo" ||
-		params.ModelCode != "nano-banana-2" ||
+		params.ModelCode != "nano-banana-2-new" ||
 		params.Size != "1:1" ||
 		params.Resolution != "4K" ||
 		params.ImageQuality != "4K" {
@@ -2843,6 +3280,214 @@ func TestPhotoNanoBanana2PricingCatalogParityForDefaultQuality(t *testing.T) {
 		if strings.Contains(lowerSnapshot, private) {
 			t.Fatalf("pricing snapshot leaked private field %q: %s", private, string(jobs[0].PricingSnapshot))
 		}
+	}
+}
+
+func TestPhotoSeedream45QualityFlowCreatesPoYoImageJob(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	h := newHarnessWithConfig(control, vk.Config{
+		ConfirmationToken: "conf-token-123",
+		Secret:            "s3cr3t",
+		ImageModels:       testVKImageModelsWithSeedream(),
+	})
+	menu := `{
+		"type":"message_new","group_id":1,"event_id":"evt-photo-seedream-active-on","secret":"s3cr3t",
+		"object":{"message":{"from_id":5660,"peer_id":5660,"text":"Seedream 4.5","payload":"{\"command\":\"menu.image.select\",\"model_id\":\"seedream_4_5\"}"}}
+	}`
+	if rec := h.post(menu); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected menu response: %d %q", rec.Code, rec.Body.String())
+	}
+	initial := control.Sent()
+	display2K := vkTestImageDisplayCredits(t, modelcatalog.MiniAppImageSeedream45, modelcatalog.ImageQuality2K)
+	display4K := vkTestImageDisplayCredits(t, modelcatalog.MiniAppImageSeedream45, modelcatalog.ImageQuality4K)
+	if len(initial) != 1 ||
+		!strings.Contains(initial[0].Text, "Seedream 4.5") ||
+		strings.Contains(strings.ToLower(initial[0].Text), "отключен") ||
+		!strings.Contains(initial[0].Keyboard, fmt.Sprintf("2K \u00b7 %d", display2K)) ||
+		!strings.Contains(initial[0].Keyboard, fmt.Sprintf("4K \u00b7 %d", display4K)) ||
+		strings.Contains(initial[0].Keyboard, "1K") {
+		t.Fatalf("expected active Seedream quality picker with 2K/4K only, got %+v", initial)
+	}
+
+	quality := `{
+		"type":"message_new","group_id":1,"event_id":"evt-photo-seedream-active-quality","secret":"s3cr3t",
+		"object":{"message":{"from_id":5660,"peer_id":5660,"text":"4K","payload":"{\"command\":\"menu.image.quality.select\",\"model_id\":\"seedream_4_5\",\"image_quality\":\"4K\"}"}}
+	}`
+	if rec := h.post(quality); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected quality response: %d %q", rec.Code, rec.Body.String())
+	}
+	h.grantTestCredits(t, 5660, 1000)
+
+	prompt := `{
+		"type":"message_new","group_id":1,"event_id":"evt-photo-seedream-active-prompt","secret":"s3cr3t",
+		"object":{"message":{"from_id":5660,"peer_id":5660,"text":"editorial perfume bottle on marble"}}
+	}`
+	if rec := h.post(prompt); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected prompt response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	ctx := context.Background()
+	user, err := h.users.GetByVKUserID(ctx, 5660)
+	if err != nil {
+		t.Fatalf("user not created: %v", err)
+	}
+	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
+	expectedCost := vkTestImageCostCredits(t, modelcatalog.MiniAppImageSeedream45, modelcatalog.ImageQuality4K)
+	if len(jobs) != 1 ||
+		jobs[0].OperationType != domain.OperationImageGenerate ||
+		jobs[0].Modality != domain.ModalityImage ||
+		jobs[0].CostEstimate != expectedCost ||
+		jobs[0].CostReserved != expectedCost ||
+		h.pub.Len() != 1 {
+		t.Fatalf("Seedream should create one reserved image job, jobs=%+v tasks=%d", jobs, h.pub.Len())
+	}
+	var params struct {
+		Prompt       string `json:"prompt"`
+		ModelID      string `json:"model_id"`
+		ModelName    string `json:"model_name"`
+		Provider     string `json:"provider"`
+		ModelCode    string `json:"model_code"`
+		Size         string `json:"size"`
+		Resolution   string `json:"resolution"`
+		ImageQuality string `json:"image_quality"`
+	}
+	if err := json.Unmarshal(jobs[0].Params, &params); err != nil {
+		t.Fatalf("decode job params: %v", err)
+	}
+	if params.Prompt != "editorial perfume bottle on marble" ||
+		params.ModelID != modelcatalog.MiniAppImageSeedream45 ||
+		params.ModelName != "Seedream 4.5" ||
+		params.Provider != "poyo" ||
+		params.ModelCode != "seedream-4.5" ||
+		params.Size != "1:1" ||
+		params.Resolution != modelcatalog.ImageQuality4K ||
+		params.ImageQuality != modelcatalog.ImageQuality4K {
+		t.Fatalf("unexpected Seedream job params: %+v", params)
+	}
+}
+
+func TestPhotoSeedream45LegacyPayloadShowsActiveCopyWhenAvailable(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	h := newHarnessWithConfig(control, vk.Config{
+		ConfirmationToken: "conf-token-123",
+		Secret:            "s3cr3t",
+		ImageModels:       testVKImageModelsWithSeedream(),
+	})
+	menu := `{
+		"type":"message_new","group_id":1,"event_id":"evt-photo-seedream-legacy-active","secret":"s3cr3t",
+		"object":{"message":{"from_id":5663,"peer_id":5663,"text":"Seedream 4.5","payload":"{\"command\":\"menu.image.deepinfra_seedream_4_5\"}"}}
+	}`
+	if rec := h.post(menu); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected menu response: %d %q", rec.Code, rec.Body.String())
+	}
+	sent := control.Sent()
+	if len(sent) != 1 ||
+		!strings.Contains(sent[0].Text, "Seedream 4.5") ||
+		strings.Contains(strings.ToLower(sent[0].Text), "отключен") {
+		t.Fatalf("legacy Seedream payload should show active Seedream copy when available, got %+v", sent)
+	}
+}
+
+func TestPhotoSeedream45ActiveModeWithPhotoAndTextCreatesReferenceImageJob(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	dialogState := newFakeDialogState()
+	dialogState.modes[5661] = "photo_prompt:seedream_4_5:2K"
+	downloader := &fakeReferenceDownloader{data: pngSizedBytes(32, 48)}
+	h := newHarnessWithReferenceDownloader(control, vk.Config{
+		ConfirmationToken: "conf-token-123",
+		Secret:            "s3cr3t",
+		ImageModels:       testVKImageModelsWithSeedream(),
+	}, nil, dialogState, downloader)
+	h.grantTestCredits(t, 5661, 1000)
+
+	prompt := `{
+		"type":"message_new","group_id":1,"event_id":"evt-photo-seedream-ref-text","secret":"s3cr3t",
+		"object":{"message":{
+			"from_id":5661,
+			"peer_id":5661,
+			"text":"turn this into a fashion campaign image",
+			"attachments":[{
+				"type":"photo",
+				"photo":{"sizes":[{"type":"x","url":"https://vk.example/seedream-ref.png","width":32,"height":48}]}
+			}]
+		}}
+	}`
+	if rec := h.post(prompt); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected prompt response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	ctx := context.Background()
+	user, err := h.users.GetByVKUserID(ctx, 5661)
+	if err != nil {
+		t.Fatalf("user not created: %v", err)
+	}
+	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
+	expectedCost := vkTestImageCostCredits(t, modelcatalog.MiniAppImageSeedream45, modelcatalog.ImageQuality2K)
+	if len(jobs) != 1 ||
+		jobs[0].CostEstimate != expectedCost ||
+		len(jobs[0].InputArtifactIDs) != 1 ||
+		h.pub.Len() != 1 {
+		t.Fatalf("Seedream photo+text should create one referenced image job, jobs=%+v tasks=%d", jobs, h.pub.Len())
+	}
+	if len(downloader.urls) != 1 || downloader.urls[0] != "https://vk.example/seedream-ref.png" {
+		t.Fatalf("unexpected downloaded urls: %+v", downloader.urls)
+	}
+	var params struct {
+		ModelID              string      `json:"model_id"`
+		Provider             string      `json:"provider"`
+		ModelCode            string      `json:"model_code"`
+		ImageQuality         string      `json:"image_quality"`
+		ReferenceArtifactIDs []uuid.UUID `json:"reference_artifact_ids"`
+	}
+	if err := json.Unmarshal(jobs[0].Params, &params); err != nil {
+		t.Fatalf("decode params: %v", err)
+	}
+	if params.ModelID != modelcatalog.MiniAppImageSeedream45 ||
+		params.Provider != "poyo" ||
+		params.ModelCode != "seedream-4.5" ||
+		params.ImageQuality != modelcatalog.ImageQuality2K ||
+		len(params.ReferenceArtifactIDs) != 1 ||
+		params.ReferenceArtifactIDs[0] != jobs[0].InputArtifactIDs[0] {
+		t.Fatalf("unexpected Seedream referenced params: %+v", params)
+	}
+}
+
+func TestPhotoSeedream45ActiveModePhotoOnlyAsksForDescriptionNoJob(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	dialogState := newFakeDialogState()
+	dialogState.modes[5662] = "photo_prompt:seedream_4_5:2K"
+	downloader := &fakeReferenceDownloader{data: pngSizedBytes(16, 16)}
+	h := newHarnessWithReferenceDownloader(control, vk.Config{
+		ConfirmationToken: "conf-token-123",
+		Secret:            "s3cr3t",
+		ImageModels:       testVKImageModelsWithSeedream(),
+	}, nil, dialogState, downloader)
+	h.grantTestCredits(t, 5662, 1000)
+
+	prompt := `{
+		"type":"message_new","group_id":1,"event_id":"evt-photo-seedream-photo-only","secret":"s3cr3t",
+		"object":{"message":{
+			"from_id":5662,
+			"peer_id":5662,
+			"text":"",
+			"attachments":[{
+				"type":"photo",
+				"photo":{"sizes":[{"type":"x","url":"https://vk.example/seedream-only.png","width":16,"height":16}]}
+			}]
+		}}
+	}`
+	if rec := h.post(prompt); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected prompt response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	ctx := context.Background()
+	user, err := h.users.GetByVKUserID(ctx, 5662)
+	if err != nil {
+		t.Fatalf("user not created: %v", err)
+	}
+	jobs, _ := h.jobs.ListByUser(ctx, user.ID, 10, 0)
+	if len(jobs) != 0 || h.pub.Len() != 0 || h.objects.Len() != 0 || len(downloader.urls) != 0 {
+		t.Fatalf("Seedream photo-only must not create job, artifacts, or downloads; jobs=%+v tasks=%d objects=%d urls=%+v", jobs, h.pub.Len(), h.objects.Len(), downloader.urls)
 	}
 }
 

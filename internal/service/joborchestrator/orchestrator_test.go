@@ -21,7 +21,9 @@ import (
 type fixture struct {
 	jobs    *memory.JobRepo
 	outbox  *memory.OutboxRepo
+	bill    *memory.BillingRepo
 	billing *billingservice.Service
+	arts    *memory.ArtifactRepo
 	pub     *queue.MemoryPublisher
 	relay   *outboxrelay.Relay
 	orch    *joborchestrator.Orchestrator
@@ -35,16 +37,19 @@ func newFixtureWithOrchestratorOptions(orchOpts []joborchestrator.Option, opts .
 	jobs := memory.NewJobRepo()
 	outbox := memory.NewOutboxRepo()
 	bill := memory.NewBillingRepo()
+	arts := memory.NewArtifactRepo()
 	billing := billingservice.New(bill, opts...)
 	pub := queue.NewMemoryPublisher()
 	uowMgr := memory.NewUnitOfWork(jobs, outbox, bill)
 	return &fixture{
 		jobs:    jobs,
 		outbox:  outbox,
+		bill:    bill,
 		billing: billing,
+		arts:    arts,
 		pub:     pub,
 		relay:   outboxrelay.New(uowMgr, pub),
-		orch:    joborchestrator.New(jobs, uowMgr, billing, 0, orchOpts...),
+		orch:    joborchestrator.New(jobs, uowMgr, billing, 0, append([]joborchestrator.Option{joborchestrator.WithArtifactRepository(arts)}, orchOpts...)...),
 	}
 }
 
@@ -358,6 +363,106 @@ func TestCreateJobVideoRouteValidatorRejectsBeforePersistenceReservationAndOutbo
 	}
 }
 
+func TestCreateJobRejectsInvalidInputArtifactsBeforePersistenceReservationAndOutbox(t *testing.T) {
+	tests := []struct {
+		name string
+		seed func(t *testing.T, f *fixture, userID uuid.UUID) uuid.UUID
+	}{
+		{
+			name: "missing artifact",
+			seed: func(t *testing.T, f *fixture, userID uuid.UUID) uuid.UUID {
+				return uuid.New()
+			},
+		},
+		{
+			name: "foreign owner input artifact",
+			seed: func(t *testing.T, f *fixture, userID uuid.UUID) uuid.UUID {
+				return seedInputArtifact(t, f, uuid.New(), domain.ArtifactKindInput, domain.MediaTypeImage, domain.ArtifactStatusReady, "artifacts", "refs/foreign.png")
+			},
+		},
+		{
+			name: "output artifact reused as input",
+			seed: func(t *testing.T, f *fixture, userID uuid.UUID) uuid.UUID {
+				return seedInputArtifact(t, f, userID, domain.ArtifactKindOutput, domain.MediaTypeImage, domain.ArtifactStatusReady, "artifacts", "refs/output.png")
+			},
+		},
+		{
+			name: "non-ready input artifact",
+			seed: func(t *testing.T, f *fixture, userID uuid.UUID) uuid.UUID {
+				return seedInputArtifact(t, f, userID, domain.ArtifactKindInput, domain.MediaTypeImage, domain.ArtifactStatusStored, "artifacts", "refs/stored.png")
+			},
+		},
+		{
+			name: "non-image input artifact",
+			seed: func(t *testing.T, f *fixture, userID uuid.UUID) uuid.UUID {
+				return seedInputArtifact(t, f, userID, domain.ArtifactKindInput, domain.MediaTypeVideo, domain.ArtifactStatusReady, "artifacts", "refs/video.mp4")
+			},
+		},
+		{
+			name: "storage-empty input artifact",
+			seed: func(t *testing.T, f *fixture, userID uuid.UUID) uuid.UUID {
+				return seedInputArtifact(t, f, userID, domain.ArtifactKindInput, domain.MediaTypeImage, domain.ArtifactStatusReady, "", "")
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newFixture(billingservice.WithStartingBalance(1000))
+			ctx := context.Background()
+			userID := uuid.New()
+			artifactID := tt.seed(t, f, userID)
+
+			job, err := f.orch.CreateJob(ctx, joborchestrator.CreateJobInput{
+				UserID:              userID,
+				CommandID:           uuid.New(),
+				Operation:           domain.OperationImageGenerate,
+				Modality:            domain.ModalityImage,
+				IdempotencyKey:      "vk_job:1:invalid-input:" + tt.name,
+				InputArtifactIDs:    []uuid.UUID{artifactID},
+				CostEstimateCredits: 50,
+			})
+			if !errors.Is(err, joborchestrator.ErrInvalidInputArtifact) {
+				t.Fatalf("expected ErrInvalidInputArtifact, got job=%+v err=%v", job, err)
+			}
+			if job != nil {
+				t.Fatalf("invalid input artifact must not create job, got %+v", job)
+			}
+			assertNoJobReservationOrTask(t, f, userID)
+		})
+	}
+}
+
+func TestCreateJobAcceptsReadyOwnedInputImageArtifact(t *testing.T) {
+	f := newFixture(billingservice.WithStartingBalance(1000))
+	ctx := context.Background()
+	userID := uuid.New()
+	artifactID := seedInputArtifact(t, f, userID, domain.ArtifactKindInput, domain.MediaTypeImage, domain.ArtifactStatusReady, "artifacts", "refs/ready.png")
+
+	job, err := f.orch.CreateJob(ctx, joborchestrator.CreateJobInput{
+		UserID:              userID,
+		CommandID:           uuid.New(),
+		Operation:           domain.OperationImageGenerate,
+		Modality:            domain.ModalityImage,
+		IdempotencyKey:      "vk_job:1:valid-input-image",
+		InputArtifactIDs:    []uuid.UUID{artifactID},
+		CostEstimateCredits: 50,
+	})
+	if err != nil {
+		t.Fatalf("create job: %v", err)
+	}
+	if job == nil || job.Status != domain.JobStatusQueued || job.CostReserved != 50 {
+		t.Fatalf("expected queued reserved job, got %+v", job)
+	}
+	if len(job.InputArtifactIDs) != 1 || job.InputArtifactIDs[0] != artifactID {
+		t.Fatalf("job input artifacts = %+v, want [%s]", job.InputArtifactIDs, artifactID)
+	}
+	f.drain(t)
+	if f.pub.Len() != 1 {
+		t.Fatalf("valid input artifact job should enqueue once, got %d tasks", f.pub.Len())
+	}
+}
+
 func TestCreateJobResolvedVideoRouteUsesBackendEstimateBeforeReservation(t *testing.T) {
 	catalog := newRouteCatalogForOrchestratorTest(t)
 	f := newFixtureWithOrchestratorOptions([]joborchestrator.Option{
@@ -512,6 +617,46 @@ func TestCreateJobIdempotentExistingBypassesCapacityGuard(t *testing.T) {
 	}
 	if first.ID != second.ID {
 		t.Fatalf("expected existing job %s, got %s", first.ID, second.ID)
+	}
+}
+
+func seedInputArtifact(t *testing.T, f *fixture, ownerID uuid.UUID, kind domain.ArtifactKind, mediaType domain.MediaType, status domain.ArtifactStatus, bucket, key string) uuid.UUID {
+	t.Helper()
+	artifact := &domain.Artifact{
+		ID:            uuid.New(),
+		OwnerUserID:   ownerID,
+		Kind:          kind,
+		MediaType:     mediaType,
+		MimeType:      "image/png",
+		Status:        status,
+		StorageBucket: bucket,
+		StorageKey:    key,
+	}
+	if err := f.arts.Create(context.Background(), artifact); err != nil {
+		t.Fatalf("seed artifact: %v", err)
+	}
+	return artifact.ID
+}
+
+func assertNoJobReservationOrTask(t *testing.T, f *fixture, userID uuid.UUID) {
+	t.Helper()
+	ctx := context.Background()
+	jobs, listErr := f.jobs.List(ctx, domain.JobFilter{}, 10, 0)
+	if listErr != nil {
+		t.Fatalf("list jobs: %v", listErr)
+	}
+	if len(jobs) != 0 {
+		t.Fatalf("rejection persisted jobs: %+v", jobs)
+	}
+	if _, err := f.bill.GetAccountByUser(ctx, userID, domain.CurrencyCredits); !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("rejection should not create billing account/reservation, err=%v", err)
+	}
+	if events := f.outbox.Events(); len(events) != 0 {
+		t.Fatalf("rejection wrote outbox events: %+v", events)
+	}
+	f.drain(t)
+	if f.pub.Len() != 0 {
+		t.Fatalf("rejection enqueued tasks, got %d", f.pub.Len())
 	}
 }
 

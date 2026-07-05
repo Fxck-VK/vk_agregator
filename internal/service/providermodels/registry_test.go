@@ -83,6 +83,156 @@ func TestRegistryIncludesTextAliasAndLoadTestImageSeparately(t *testing.T) {
 	}
 }
 
+func TestRegistryGPTImage2ReferenceLimitIsIsolated(t *testing.T) {
+	registry := providermodels.StaticRegistry()
+
+	gpt, ok := registry.PublicImageModel(modelcatalog.MiniAppImageGPTImage2)
+	if !ok {
+		t.Fatal("GPT Image 2 image model missing")
+	}
+	if gpt.Provider != domain.ProviderAPIMart || gpt.ProviderModelID != providermodels.ProviderModelGPTImage2 {
+		t.Fatalf("GPT Image 2 provider mapping drifted: %+v", gpt)
+	}
+	if !gpt.Limits.SupportsReferenceImage || gpt.Limits.MaxReferenceImages != 16 {
+		t.Fatalf("GPT Image 2 reference limits = %+v, want max refs 16", gpt.Limits)
+	}
+
+	stableImageLimits := map[string]int{
+		modelcatalog.MiniAppImageNanoBananaPro: 14,
+	}
+	for publicID, want := range stableImageLimits {
+		model, ok := registry.PublicImageModel(publicID)
+		if !ok {
+			t.Fatalf("%s image model missing", publicID)
+		}
+		if model.Limits.MaxReferenceImages != want {
+			t.Fatalf("%s max reference images = %d, want unchanged %d", publicID, model.Limits.MaxReferenceImages, want)
+		}
+	}
+
+	stableVideoLimits := map[domain.VideoRouteAlias]int{
+		domain.VideoRouteRunwayGen4Turbo: 1,
+		domain.VideoRouteRunwayGen45:     1,
+	}
+	for alias, want := range stableVideoLimits {
+		route, ok := registry.VideoRoute(alias)
+		if !ok {
+			t.Fatalf("%s video route missing", alias)
+		}
+		if route.Limits.MaxReferenceImages != want {
+			t.Fatalf("%s max reference images = %d, want unchanged %d", alias, route.Limits.MaxReferenceImages, want)
+		}
+	}
+}
+
+func TestRegistryNanoBanana2UsesPoyoSourceContract(t *testing.T) {
+	registry := providermodels.StaticRegistry()
+
+	model, ok := registry.PublicImageModel(modelcatalog.MiniAppImageNanoBanana2)
+	if !ok {
+		t.Fatal("Nano Banana 2 image model missing")
+	}
+	if model.Provider != domain.ProviderPoYo {
+		t.Fatalf("Nano Banana 2 provider = %s, want %s", model.Provider, domain.ProviderPoYo)
+	}
+	if model.ProviderModelID != providermodels.ProviderModelPoYoNanoBanana2 {
+		t.Fatalf("Nano Banana 2 provider model = %q, want %q", model.ProviderModelID, providermodels.ProviderModelPoYoNanoBanana2)
+	}
+	if model.ProviderModelID != "nano-banana-2-new" {
+		t.Fatalf("Nano Banana 2 provider model = %q, want source-doc nano-banana-2-new", model.ProviderModelID)
+	}
+	if !model.Limits.SupportsReferenceImage || model.Limits.MaxReferenceImages != 14 {
+		t.Fatalf("Nano Banana 2 reference limits = %+v, want optional refs max 14", model.Limits)
+	}
+}
+
+func TestRegistryNanoBananaProUsesAPIMartGemini3ProContract(t *testing.T) {
+	registry := providermodels.StaticRegistry()
+
+	model, ok := registry.PublicImageModel(modelcatalog.MiniAppImageNanoBananaPro)
+	if !ok {
+		t.Fatal("Nano Banana Pro image model missing")
+	}
+	if model.Provider != domain.ProviderAPIMart {
+		t.Fatalf("Nano Banana Pro provider = %s, want %s", model.Provider, domain.ProviderAPIMart)
+	}
+	if model.ProviderModelID != providermodels.ProviderModelGemini3ProImage {
+		t.Fatalf("Nano Banana Pro provider model = %q, want %q", model.ProviderModelID, providermodels.ProviderModelGemini3ProImage)
+	}
+	if model.Readiness.ProviderEnabledFlag != providermodels.ProviderFlagAPIMart {
+		t.Fatalf("Nano Banana Pro readiness flag = %q, want %q", model.Readiness.ProviderEnabledFlag, providermodels.ProviderFlagAPIMart)
+	}
+	if !reflect.DeepEqual(model.Readiness.RequiredConfigKeys, []string{providermodels.ConfigKeyAPIMartAPIKey, providermodels.ConfigKeyAPIMartBaseURL}) {
+		t.Fatalf("Nano Banana Pro readiness keys = %#v", model.Readiness.RequiredConfigKeys)
+	}
+	if !model.Limits.SupportsReferenceImage || model.Limits.MaxReferenceImages != 14 {
+		t.Fatalf("Nano Banana Pro reference limits = %+v, want optional refs max 14", model.Limits)
+	}
+
+	unchangedImages := map[string]struct {
+		provider domain.ProviderName
+		modelID  string
+		maxRefs  int
+	}{
+		modelcatalog.MiniAppImageNanoBanana2: {provider: domain.ProviderPoYo, modelID: providermodels.ProviderModelPoYoNanoBanana2, maxRefs: 14},
+		modelcatalog.MiniAppImageGPTImage2:   {provider: domain.ProviderAPIMart, modelID: providermodels.ProviderModelGPTImage2, maxRefs: 16},
+	}
+	for publicID, want := range unchangedImages {
+		got, ok := registry.PublicImageModel(publicID)
+		if !ok {
+			t.Fatalf("%s image model missing", publicID)
+		}
+		if got.Provider != want.provider || got.ProviderModelID != want.modelID || got.Limits.MaxReferenceImages != want.maxRefs {
+			t.Fatalf("%s drifted: provider=%s model=%s maxRefs=%d, want %s/%s/%d",
+				publicID, got.Provider, got.ProviderModelID, got.Limits.MaxReferenceImages, want.provider, want.modelID, want.maxRefs)
+		}
+	}
+}
+
+func TestRegistrySeedream45UsesPoyoSourceContract(t *testing.T) {
+	registry := providermodels.StaticRegistry()
+
+	model, ok := registry.PublicImageModel(modelcatalog.MiniAppImageSeedream45)
+	if !ok {
+		t.Fatal("Seedream 4.5 image model missing")
+	}
+	if model.PublicID != providermodels.PublicImageSeedream45 {
+		t.Fatalf("Seedream 4.5 public id = %q, want %q", model.PublicID, providermodels.PublicImageSeedream45)
+	}
+	if model.Provider != domain.ProviderPoYo {
+		t.Fatalf("Seedream 4.5 provider = %s, want %s", model.Provider, domain.ProviderPoYo)
+	}
+	if model.ProviderModelID != providermodels.ProviderModelPoYoSeedream45 {
+		t.Fatalf("Seedream 4.5 provider model = %q, want %q", model.ProviderModelID, providermodels.ProviderModelPoYoSeedream45)
+	}
+	if model.FeatureFlag != providermodels.FeatureImageSeedream45 {
+		t.Fatalf("Seedream 4.5 feature flag = %q, want %q", model.FeatureFlag, providermodels.FeatureImageSeedream45)
+	}
+	if model.Readiness.ProviderEnabledFlag != providermodels.ProviderFlagPoYo {
+		t.Fatalf("Seedream 4.5 readiness flag = %q, want %q", model.Readiness.ProviderEnabledFlag, providermodels.ProviderFlagPoYo)
+	}
+	if !reflect.DeepEqual(model.Readiness.RequiredConfigKeys, []string{providermodels.ConfigKeyPoYoAPIKey, providermodels.ConfigKeyPoYoBaseURL}) {
+		t.Fatalf("Seedream 4.5 readiness keys = %#v", model.Readiness.RequiredConfigKeys)
+	}
+	if !model.Limits.SupportsReferenceImage || model.Limits.MaxReferenceImages != 10 {
+		t.Fatalf("Seedream 4.5 reference limits = %+v, want optional refs max 10", model.Limits)
+	}
+	if !reflect.DeepEqual(model.Limits.AllowedQualities, []string{modelcatalog.ImageQuality2K, modelcatalog.ImageQuality4K}) {
+		t.Fatalf("Seedream 4.5 qualities = %#v, want 2K/4K only", model.Limits.AllowedQualities)
+	}
+	if len(model.PricingKeys) != 2 {
+		t.Fatalf("Seedream 4.5 pricing keys = %d, want 2", len(model.PricingKeys))
+	}
+	for _, key := range model.PricingKeys {
+		if key.ImageModelID != providermodels.PublicImageSeedream45 {
+			t.Fatalf("Seedream 4.5 pricing key model = %q", key.ImageModelID)
+		}
+		if key.Quality == pricingcatalog.ImageQuality1K {
+			t.Fatalf("Seedream 4.5 must not include 1K pricing key: %+v", key)
+		}
+	}
+}
+
 func TestRegistryVideoRoutesMatchCurrentRouterSpecs(t *testing.T) {
 	registry := providermodels.StaticRegistry()
 	routes := registry.VideoRoutes()
@@ -108,6 +258,55 @@ func TestRegistryVideoRoutesMatchCurrentRouterSpecs(t *testing.T) {
 		if route.MediaContract.ModelClass != want.ModelClass || route.MediaContract.Modality != domain.ModalityVideo {
 			t.Fatalf("route %s media contract class incomplete: %+v", want.Alias, route.MediaContract)
 		}
+	}
+}
+
+func TestRegistryKeepsOfficialRunwayAndAddsPoyoRunwayGen45Separately(t *testing.T) {
+	registry := providermodels.StaticRegistry()
+
+	official, ok := registry.VideoRoute(domain.VideoRouteRunwayGen4Turbo)
+	if !ok {
+		t.Fatal("official Runway Gen-4 Turbo route missing")
+	}
+	if official.Provider != domain.ProviderRunway ||
+		official.ProviderModelID != "gen4_turbo" ||
+		official.ModelClass != "runway_gen4_turbo" ||
+		official.FeatureFlag != providermodels.FeatureVideoRunwayGen4Turbo ||
+		!official.Limits.RequiresStartImage ||
+		!official.Limits.SupportsReferenceImage ||
+		official.Limits.MaxReferenceImages != 1 {
+		t.Fatalf("official Runway route drifted: %+v", official)
+	}
+	if len(official.PricingKeys) == 0 {
+		t.Fatalf("official Runway route lost active pricing keys: %+v", official)
+	}
+
+	poyo, ok := registry.VideoRoute(domain.VideoRouteRunwayGen45)
+	if !ok {
+		t.Fatal("PoYo Runway Gen-4.5 route missing")
+	}
+	if poyo.Provider != domain.ProviderPoYo ||
+		poyo.ProviderModelID != "runway-gen-4.5" ||
+		poyo.ModelClass != "runway_gen4_5" ||
+		poyo.FeatureFlag != providermodels.FeatureVideoRunwayGen45 ||
+		poyo.Limits.RequiresStartImage ||
+		!poyo.Limits.SupportsReferenceImage ||
+		poyo.Limits.MaxReferenceImages != 1 {
+		t.Fatalf("PoYo Runway Gen-4.5 route metadata drifted: %+v", poyo)
+	}
+	if !reflect.DeepEqual(poyo.Limits.AllowedDurationsSec, []int{5, 10}) {
+		t.Fatalf("PoYo Runway Gen-4.5 durations = %#v, want 5/10", poyo.Limits.AllowedDurationsSec)
+	}
+	if !reflect.DeepEqual(poyo.Limits.AllowedAspectRatios, []string{"16:9", "9:16", "4:3", "3:4", "1:1", "21:9"}) {
+		t.Fatalf("PoYo Runway Gen-4.5 aspect ratios = %#v", poyo.Limits.AllowedAspectRatios)
+	}
+	if len(poyo.PricingKeys) != 4 {
+		t.Fatalf("PoYo Runway Gen-4.5 pricing keys = %d, want 4", len(poyo.PricingKeys))
+	}
+	if poyo.Spec.ProviderCostCreditsPerSecond <= 0 ||
+		poyo.Spec.MaxProviderCostCredits <= 0 ||
+		poyo.Spec.MaxInternalCostCredits <= 0 {
+		t.Fatalf("PoYo Runway Gen-4.5 must be routable with bounded provider cost: %+v", poyo.Spec)
 	}
 }
 

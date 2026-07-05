@@ -14,6 +14,30 @@ func TestRegistryConfigMappingsCoverCurrentProviderModels(t *testing.T) {
 	}
 }
 
+func TestRegistryConfigMappingsCoverSeedream45FeatureFlag(t *testing.T) {
+	registry := providermodels.Registry{
+		ImageModels: []providermodels.ImageModel{
+			{
+				PublicID:        providermodels.PublicImageSeedream45,
+				Provider:        domain.ProviderPoYo,
+				ProviderModelID: providermodels.ProviderModelPoYoSeedream45,
+				FeatureFlag:     providermodels.FeatureImageSeedream45,
+				Readiness: providermodels.ProviderReadiness{
+					ProviderEnabledFlag: providermodels.ProviderFlagPoYo,
+					RequiredConfigKeys: []string{
+						providermodels.ConfigKeyPoYoAPIKey,
+						providermodels.ConfigKeyPoYoBaseURL,
+					},
+				},
+			},
+		},
+	}
+
+	if err := validateRegistryConfigMappings(registry); err != nil {
+		t.Fatalf("Seedream 4.5 registry config mapping missing: %v", err)
+	}
+}
+
 func TestRegistryConfigMappingsRejectUnknownFeatureFlagProviderFlagAndConfigKey(t *testing.T) {
 	registry := providermodels.Registry{
 		ImageModels: []providermodels.ImageModel{

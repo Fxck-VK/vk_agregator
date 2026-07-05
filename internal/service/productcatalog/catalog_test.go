@@ -7,6 +7,7 @@ import (
 
 	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/service/modelcatalog"
+	"vk-ai-aggregator/internal/service/pricingcatalog"
 	"vk-ai-aggregator/internal/service/productcatalog"
 	"vk-ai-aggregator/internal/service/videorouter"
 )
@@ -22,14 +23,15 @@ func TestCatalogBuildsOnlyPublicEnabledItems(t *testing.T) {
 			modelcatalog.MiniAppImageNanoBanana2:   true,
 			modelcatalog.MiniAppImageNanoBananaPro: true,
 			modelcatalog.MiniAppImageGPTImage2:     true,
+			modelcatalog.MiniAppImageSeedream45:    true,
 		},
 		VideoRoutes:    videoCatalog.PublicRoutes(),
 		PricingCatalog: staticPricingCatalog(t),
 	})
 
 	items := catalog.Items()
-	if len(items) != 4 {
-		t.Fatalf("expected 3 image models and 1 video route, got %+v", items)
+	if len(items) != 5 {
+		t.Fatalf("expected 4 image models and 1 video route, got %+v", items)
 	}
 	for _, item := range items {
 		if item.ID == "" || item.Type == "" || item.Name == "" || item.Description == "" || !item.Enabled || item.EstimateCredits <= 0 {
@@ -42,7 +44,7 @@ func TestCatalogBuildsOnlyPublicEnabledItems(t *testing.T) {
 		t.Fatalf("Nano Banana 2 missing from public catalog: %+v", items)
 	}
 	assertImageQualityOptions(t, "Nano Banana 2", nano.DefaultQuality, nano.QualityOptions)
-	if !nano.SupportsReferenceImage || nano.MaxReferenceImages != 4 {
+	if !nano.SupportsReferenceImage || nano.MaxReferenceImages != 14 {
 		t.Fatalf("Nano Banana 2 reference limits missing: %+v", nano)
 	}
 	pro := findItem(items, modelcatalog.MiniAppImageNanoBananaPro)
@@ -55,6 +57,19 @@ func TestCatalogBuildsOnlyPublicEnabledItems(t *testing.T) {
 		t.Fatalf("GPT Image 2 missing from public catalog: %+v", items)
 	}
 	assertImageQualityOptions(t, "GPT Image 2", gptImage2.DefaultQuality, gptImage2.QualityOptions)
+	seedream := findItem(items, modelcatalog.MiniAppImageSeedream45)
+	if seedream == nil {
+		t.Fatalf("Seedream 4.5 missing from public catalog: %+v", items)
+	}
+	if seedream.DefaultQuality != modelcatalog.ImageQuality2K ||
+		len(seedream.QualityOptions) != 2 ||
+		seedream.QualityOptions[0] != modelcatalog.ImageQuality2K ||
+		seedream.QualityOptions[1] != modelcatalog.ImageQuality4K ||
+		seedream.EstimateCredits != 10 ||
+		!seedream.SupportsReferenceImage ||
+		seedream.MaxReferenceImages != 10 {
+		t.Fatalf("Seedream 4.5 public contract mismatch: %+v", seedream)
+	}
 
 	video := findItem(items, string(domain.VideoRouteKlingO3Standard))
 	if video == nil {
@@ -71,7 +86,7 @@ func TestCatalogFailsClosedForDisabledOrUnconfiguredModels(t *testing.T) {
 	catalog := productcatalog.New(productcatalog.Config{
 		ImageProviderReady: map[domain.ProviderName]bool{
 			domain.ProviderAPIMart: false,
-			domain.ProviderPoYo:    true,
+			domain.ProviderPoYo:    false,
 		},
 		EnabledImageModels: map[string]bool{
 			modelcatalog.MiniAppImageNanoBanana2:   false,
@@ -86,6 +101,43 @@ func TestCatalogFailsClosedForDisabledOrUnconfiguredModels(t *testing.T) {
 	}
 	if items := catalog.Items(); len(items) != 0 {
 		t.Fatalf("disabled/unconfigured product items leaked: %+v", items)
+	}
+}
+
+func TestCatalogHidesSeedream45UnlessEnabledReadyAndPriced(t *testing.T) {
+	cases := []struct {
+		name          string
+		providerReady bool
+		enabled       bool
+		pricing       bool
+		wantVisible   bool
+	}{
+		{name: "visible", providerReady: true, enabled: true, pricing: true, wantVisible: true},
+		{name: "feature disabled", providerReady: true, enabled: false, pricing: true},
+		{name: "provider unready", providerReady: false, enabled: true, pricing: true},
+		{name: "pricing missing", providerReady: true, enabled: true, pricing: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var prices = staticPricingCatalog(t)
+			if !tc.pricing {
+				prices = emptyPricingCatalog(t)
+			}
+			catalog := productcatalog.New(productcatalog.Config{
+				ImageProviderReady: map[domain.ProviderName]bool{
+					domain.ProviderPoYo: tc.providerReady,
+				},
+				EnabledImageModels: map[string]bool{
+					modelcatalog.MiniAppImageSeedream45: tc.enabled,
+				},
+				PricingCatalog: prices,
+			})
+
+			got := findItem(catalog.Items(), modelcatalog.MiniAppImageSeedream45) != nil
+			if got != tc.wantVisible {
+				t.Fatalf("Seedream visibility = %v, want %v; items=%+v", got, tc.wantVisible, catalog.Items())
+			}
+		})
 	}
 }
 
@@ -135,6 +187,15 @@ func newVideoCatalog(t *testing.T) *videorouter.Catalog {
 	})
 	if err != nil {
 		t.Fatalf("new video catalog: %v", err)
+	}
+	return catalog
+}
+
+func emptyPricingCatalog(t *testing.T) *pricingcatalog.Catalog {
+	t.Helper()
+	catalog, err := pricingcatalog.NewCatalog(nil)
+	if err != nil {
+		t.Fatalf("build empty pricing catalog: %v", err)
 	}
 	return catalog
 }
@@ -192,6 +253,8 @@ func assertNoPrivateProviderFields(t *testing.T, items []productcatalog.Item) {
 		"price_multiplier",
 		"max_internal_cost_credits",
 		"nano-banana-2",
+		"nano-banana-pro",
+		"nano-banana-pro-edit",
 		"gemini-3-pro-image-preview",
 		"gpt-image-2",
 		"kling-o3/standard",

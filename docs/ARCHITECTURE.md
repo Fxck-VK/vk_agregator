@@ -217,25 +217,42 @@ Current image-generation foundation:
 - `cmd/worker` may prefer an image provider through `IMAGE_PROVIDER` and attach
   worker-only `IMAGE_MODEL` / `IMAGE_SIZE` defaults. `PROVIDER_CHAIN` remains
   the fallback mechanism.
+- PoYo Seedream 4.5 is wired as a priced public image model through the PoYo
+  adapter. Text-only uses `seedream-4.5`; optional reference images use
+  `seedream-4.5-edit` with `image_urls`. Missing provider readiness or missing
+  pricing keeps the model hidden/fail-closed.
 - DeepInfra `ByteDance/Seedream-4.5` is wired as a text-to-image adapter through
   the native `/v1/inference/{model}` endpoint. Optional
   `DEEPINFRA_IMAGE_FALLBACK_MODEL` stays inside the provider adapter and is only
-  tried after retryable primary-model failures. Reference-image generation
-  remains fail-closed until provider-safe artifact URL preparation is
-  implemented.
+  tried after retryable primary-model failures. If a selected image model does
+  not support references, attached photos are rejected before job creation.
 - VK bot text-to-image UX is wired as a surface state, not a provider shortcut:
   `Создать фото` stores peer-scoped `photo_text` mode immediately, the next
   plain text creates an `image.generate` Job, and the API sends `НейроХаб
   рисует...` as a VK control placeholder. The extra `Фото по тексту` selection
   button is hidden while there is only one text-to-image mode.
+- VK bot image modes accept optional user photos for reference-capable image
+  models without adding a prominent reference-only menu item. Text-only
+  generation stays unchanged. Photo+text creates an `image.generate` Job with
+  owner-scoped input artifact IDs. Photo-only input asks the user to add a
+  description and creates no job or ledger reservation.
+- VK reference photos must be downloaded from VK, sniffed as JPG/PNG, bounded by
+  size/dimensions, and persisted through `ArtifactService` as ready
+  storage-backed input image artifacts before a job can be reserved. Raw VK
+  attachment URLs are not passed to providers.
+- `joborchestrator` owner-checks input artifact IDs before reservation. The
+  worker resolves accepted reference artifacts into sanitized provider inputs
+  and provider adapters enforce per-model caps and request fields. VK handlers,
+  Mini App BFF and `cmd/api` still do not call providers or construct
+  provider-native payloads.
 - VK bot text-to-video UX follows the same surface-state pattern: the active
   `PrunaAI` video button stores peer-scoped `video:*` dialog mode, the next
   plain text creates a `video_generate` Job, and the API sends `НейроХаб готовит
   видео...` as a control placeholder. Model/provider execution still belongs to
   `cmd/worker` and `internal/adapter/provider`; stale Sora/Kling/Seedance/Hailuo
   payloads are hidden and fall back to the main menu without Jobs.
-- The current VK bot profile hides reference-photo generation by default and
-  allows 100 free text-to-image attempts per user per 24h window through
+- The current VK bot profile keeps reference-photo UX low-profile and allows
+  100 free text-to-image attempts per user per 24h window through
   Redis-backed anti-spam quota (`VK_ANTISPAM_IMAGE_DAILY_LIMIT=100`) and a free
   `image_generate` price override.
 - Image provider failures that reach terminal state release reserved credits

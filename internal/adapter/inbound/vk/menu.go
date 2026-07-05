@@ -119,7 +119,7 @@ var menuScreens = map[domain.CommandType]menuScreen{
 		keyboard: photoModeKeyboard,
 	},
 	domain.CommandMenuImageReference: {
-		text:     fixedText(photoReferenceModeInstruction),
+		text:     fixedText(photoTextPromptInstruction),
 		keyboard: photoModeKeyboard,
 	},
 	domain.CommandMenuVideo: {
@@ -238,13 +238,12 @@ const (
 )
 
 const (
-	photoTextPromptInstruction    = "▶️ Генерация фото по тексту - это когда вы пишете, что хотите увидеть, а ИИ рисует такую картинку\n\nНапишите описание обычным сообщением, например: кот в очках на пляже"
-	photoTextModeInstruction      = "▶️ Генерация фото по тексту выбрана.\n\nНапишите обычным сообщением, что хотите увидеть.\n\nПример: кот в очках на пляже, кинематографичный свет, высокая детализация"
-	photoReferenceModeInstruction = "📸 Генерация фото с референсом пока будет подключена после входящих фото-артефактов.\n\nСейчас доступна генерация фото по тексту."
+	photoTextPromptInstruction = "▶️ Генерация фото по тексту - это когда вы пишете, что хотите увидеть, а ИИ рисует такую картинку\n\nНапишите описание обычным сообщением, например: кот в очках на пляже"
+	photoTextModeInstruction   = "▶️ Генерация фото по тексту выбрана.\n\nНапишите обычным сообщением, что хотите увидеть.\n\nПример: кот в очках на пляже, кинематографичный свет, высокая детализация"
 )
 
 const photoNanoBanana2Instruction = "Nano Banana 2 активен.\n\nНапишите описание изображения обычным сообщением.\n\nВ боте сейчас включен текст-в-фото; референс-фото подключим отдельным шагом."
-const photoDeepInfraSeedreamInstruction = "ByteDance Seedream 4.5 отключен.\n\nВыберите другую модель фото."
+const photoDeepInfraSeedreamInstruction = "Seedream 4.5 активен.\n\nНапишите описание изображения обычным сообщением. Если нужно, прикрепите фото к тому же сообщению."
 const photoDeepInfraSDXLInstruction = "Stability AI SDXL Turbo отключен.\n\nВыберите другую модель фото."
 const photoGPTImage2Instruction = "GPT Image 2 активен.\n\nНапишите описание изображения обычным сообщением."
 const photoQualityFallbackText = "Выберите модель фото, затем качество генерации."
