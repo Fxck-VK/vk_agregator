@@ -175,6 +175,39 @@ func TestFromConfigSeedream45VisibleWhenReadyEnabledAndPriced(t *testing.T) {
 	assertNoPrivateProviderFields(t, runtimeCatalog.Catalog.Items())
 }
 
+func TestFromConfigNanoBananaProUsesAPIMartReadiness(t *testing.T) {
+	prices := staticPricingCatalog(t)
+	runtimeCatalog, err := productcatalog.FromConfig(config.Config{
+		APIMartProviderEnabled:                true,
+		APIMartAPIKey:                         "configured",
+		APIMartBaseURL:                        "https://apimart.test",
+		FeatureImageModelNanoBananaProEnabled: true,
+	}, prices)
+	if err != nil {
+		t.Fatalf("build runtime catalog: %v", err)
+	}
+	image := findImage(runtimeCatalog.ImageModels(), modelcatalog.MiniAppImageNanoBananaPro)
+	if image == nil {
+		t.Fatalf("Nano Banana Pro missing from APIMart-ready public catalog: %+v", runtimeCatalog.ImageModels())
+	}
+	if image.DefaultQuality != modelcatalog.ImageQuality1K || image.EstimateCredits != 24 || !image.SupportsReferenceImage || image.MaxReferenceImages != 14 {
+		t.Fatalf("Nano Banana Pro public catalog contract = %+v", image)
+	}
+
+	runtimeCatalog, err = productcatalog.FromConfig(config.Config{
+		PoYoProviderEnabled:                   true,
+		PoYoAPIKey:                            "configured",
+		PoYoBaseURL:                           "https://poyo.test",
+		FeatureImageModelNanoBananaProEnabled: true,
+	}, prices)
+	if err != nil {
+		t.Fatalf("build runtime catalog with PoYo only: %v", err)
+	}
+	if image := findImage(runtimeCatalog.ImageModels(), modelcatalog.MiniAppImageNanoBananaPro); image != nil {
+		t.Fatalf("Nano Banana Pro must not be visible from PoYo readiness only: %+v", image)
+	}
+}
+
 func TestFromConfigDeepInfraImagesFailClosedWithoutPricingTariffs(t *testing.T) {
 	prices := staticPricingCatalog(t)
 	runtimeCatalog, err := productcatalog.FromConfig(config.Config{

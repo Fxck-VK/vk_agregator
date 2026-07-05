@@ -31,6 +31,7 @@ Read only the document that matches the current task:
 | Incidents, broken deploys, provider/payment/queue triage | `docs/runbooks/INCIDENTS.md` |
 | Rollback, backups, restore policy | `docs/runbooks/ROLLBACK.md` |
 | Provider/model registry, adapter contracts, add-provider/add-model checklist | `docs/ARCHITECTURE.md` and `docs/runbooks/DEV.md` |
+| APIMart Nano Banana Pro provider migration | `docs/superpowers/plans/2026-07-05-apimart-nano-banana-pro-migration.md` |
 | DEV contour, local DEV tunnel, DEV deploy | `docs/DEV_CONTOUR.md` |
 | Production/runtime deployment domains | `docs/DOMAIN_DEPLOYMENT_PLAN.md` |
 | Data services, Postgres/Redis/S3 modes | `docs/DATA_SERVICES_CONTRACT.md` |

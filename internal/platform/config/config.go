@@ -1504,14 +1504,14 @@ func (c Config) validateVideoRouteProviderConfig() error {
 		}
 	}
 	if c.FeatureImageModelNanoBananaProEnabled {
-		if !c.PoYoProviderEnabled {
-			return fmt.Errorf("config: FEATURE_IMAGE_MODEL_NANO_BANANA_PRO_ENABLED=true requires POYO_PROVIDER_ENABLED=true")
+		if !c.APIMartProviderEnabled {
+			return fmt.Errorf("config: FEATURE_IMAGE_MODEL_NANO_BANANA_PRO_ENABLED=true requires APIMART_PROVIDER_ENABLED=true")
 		}
-		if strings.TrimSpace(c.PoYoAPIKey) == "" {
-			return fmt.Errorf("config: FEATURE_IMAGE_MODEL_NANO_BANANA_PRO_ENABLED=true requires POYO_API_KEY")
+		if strings.TrimSpace(c.APIMartAPIKey) == "" {
+			return fmt.Errorf("config: FEATURE_IMAGE_MODEL_NANO_BANANA_PRO_ENABLED=true requires APIMART_API_KEY")
 		}
-		if strings.TrimSpace(c.PoYoBaseURL) == "" {
-			return fmt.Errorf("config: FEATURE_IMAGE_MODEL_NANO_BANANA_PRO_ENABLED=true requires POYO_BASE_URL")
+		if strings.TrimSpace(c.APIMartBaseURL) == "" {
+			return fmt.Errorf("config: FEATURE_IMAGE_MODEL_NANO_BANANA_PRO_ENABLED=true requires APIMART_BASE_URL")
 		}
 	}
 	if c.FeatureImageModelSeedream45Enabled {

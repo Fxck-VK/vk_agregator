@@ -3739,7 +3739,7 @@ func TestHandler_CreateJob_ImageAliasPersistsProviderModelCodePrivately(t *testi
 	if err := json.Unmarshal(job.Params, &params); err != nil {
 		t.Fatalf("invalid params: %v", err)
 	}
-	if params.ModelID != "nano_banana_pro" || params.ModelName != "Nano Banana Pro" || params.Provider != "poyo" || params.ModelCode != "nano-banana-pro" {
+	if params.ModelID != "nano_banana_pro" || params.ModelName != "Nano Banana Pro" || params.Provider != "apimart" || params.ModelCode != "gemini-3-pro-image-preview" {
 		t.Fatalf("unexpected stored params: %+v", params)
 	}
 }
@@ -4500,7 +4500,7 @@ func TestHandler_CreateJob_ReferenceArtifactsPassWhenEnabled(t *testing.T) {
 	if err := json.Unmarshal(job.Params, &params); err != nil {
 		t.Fatalf("invalid params: %v", err)
 	}
-	if params.ModelID != "nano_banana_pro" || params.ModelName != "Nano Banana Pro" || params.Provider != "poyo" || params.ModelCode != "nano-banana-pro" {
+	if params.ModelID != "nano_banana_pro" || params.ModelName != "Nano Banana Pro" || params.Provider != "apimart" || params.ModelCode != "gemini-3-pro-image-preview" {
 		t.Fatalf("unexpected stored model params: %+v", params)
 	}
 	if len(params.ReferenceArtifactIDs) != 1 || params.ReferenceArtifactIDs[0] != artifact.ID {

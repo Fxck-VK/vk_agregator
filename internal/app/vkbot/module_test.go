@@ -93,6 +93,26 @@ func TestMenuFeaturesDoNotFeatureGateImageReferenceCommand(t *testing.T) {
 	}
 }
 
+func TestMenuFeaturesExposeNanoBananaProFromAPIMartReadiness(t *testing.T) {
+	runtimeCatalog, err := productcatalog.FromConfig(config.Config{
+		APIMartProviderEnabled:                true,
+		APIMartAPIKey:                         "configured",
+		APIMartBaseURL:                        "https://apimart.test",
+		FeatureImageModelNanoBananaProEnabled: true,
+	}, staticPricingCatalog(t))
+	if err != nil {
+		t.Fatalf("build runtime catalog: %v", err)
+	}
+
+	features := menuFeatures(config.Config{
+		VKMenuImageEnabled: true,
+	}, runtimeCatalog)
+
+	assertCommandVisible(t, features.DisabledCommands, domain.CommandMenuImage)
+	assertCommandVisible(t, features.DisabledCommands, domain.CommandMenuImageText)
+	assertCommandHidden(t, features.DisabledCommands, domain.CommandMenuImageNanoBanana2)
+}
+
 func TestMenuFeaturesKeepOfficialRunwayAndExposePoyoRunwayGen45(t *testing.T) {
 	runtimeCatalog, err := productcatalog.FromConfig(config.Config{
 		PoYoProviderEnabled:                     true,

@@ -296,7 +296,7 @@ func TestValidateImageModelSeedream45RequiresPoYoConfig(t *testing.T) {
 	}
 }
 
-func TestValidateImageModelNanoBananaProRequiresPoYoConfig(t *testing.T) {
+func TestValidateImageModelNanoBananaProRequiresAPIMartConfig(t *testing.T) {
 	cfg := config.Config{
 		Env:                                   "development",
 		Provider:                              "mock",
@@ -305,24 +305,24 @@ func TestValidateImageModelNanoBananaProRequiresPoYoConfig(t *testing.T) {
 	}
 
 	err := cfg.Validate()
-	if err == nil || !strings.Contains(err.Error(), "POYO_PROVIDER_ENABLED") {
-		t.Fatalf("expected POYO_PROVIDER_ENABLED validation error, got %v", err)
+	if err == nil || !strings.Contains(err.Error(), "APIMART_PROVIDER_ENABLED") {
+		t.Fatalf("expected APIMART_PROVIDER_ENABLED validation error, got %v", err)
 	}
 
-	cfg.PoYoProviderEnabled = true
+	cfg.APIMartProviderEnabled = true
 	err = cfg.Validate()
-	if err == nil || !strings.Contains(err.Error(), "POYO_API_KEY") {
-		t.Fatalf("expected POYO_API_KEY validation error, got %v", err)
+	if err == nil || !strings.Contains(err.Error(), "APIMART_API_KEY") {
+		t.Fatalf("expected APIMART_API_KEY validation error, got %v", err)
 	}
 
-	cfg.PoYoAPIKey = "test-key"
-	cfg.PoYoBaseURL = ""
+	cfg.APIMartAPIKey = "test-key"
+	cfg.APIMartBaseURL = ""
 	err = cfg.Validate()
-	if err == nil || !strings.Contains(err.Error(), "POYO_BASE_URL") {
-		t.Fatalf("expected POYO_BASE_URL validation error, got %v", err)
+	if err == nil || !strings.Contains(err.Error(), "APIMART_BASE_URL") {
+		t.Fatalf("expected APIMART_BASE_URL validation error, got %v", err)
 	}
 
-	cfg.PoYoBaseURL = "https://api.poyo.ai"
+	cfg.APIMartBaseURL = "https://api.apimart.ai/v1"
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("Validate() error = %v", err)
 	}

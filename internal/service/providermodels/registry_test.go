@@ -146,21 +146,24 @@ func TestRegistryNanoBanana2UsesPoyoSourceContract(t *testing.T) {
 	}
 }
 
-func TestRegistryNanoBananaProUsesPoyoSourceContract(t *testing.T) {
+func TestRegistryNanoBananaProUsesAPIMartGemini3ProContract(t *testing.T) {
 	registry := providermodels.StaticRegistry()
 
 	model, ok := registry.PublicImageModel(modelcatalog.MiniAppImageNanoBananaPro)
 	if !ok {
 		t.Fatal("Nano Banana Pro image model missing")
 	}
-	if model.Provider != domain.ProviderPoYo {
-		t.Fatalf("Nano Banana Pro provider = %s, want %s", model.Provider, domain.ProviderPoYo)
+	if model.Provider != domain.ProviderAPIMart {
+		t.Fatalf("Nano Banana Pro provider = %s, want %s", model.Provider, domain.ProviderAPIMart)
 	}
-	if model.ProviderModelID != providermodels.ProviderModelPoYoNanoBananaPro {
-		t.Fatalf("Nano Banana Pro provider model = %q, want %q", model.ProviderModelID, providermodels.ProviderModelPoYoNanoBananaPro)
+	if model.ProviderModelID != providermodels.ProviderModelGemini3ProImage {
+		t.Fatalf("Nano Banana Pro provider model = %q, want %q", model.ProviderModelID, providermodels.ProviderModelGemini3ProImage)
 	}
-	if model.Readiness.ProviderEnabledFlag != providermodels.ProviderFlagPoYo {
-		t.Fatalf("Nano Banana Pro readiness flag = %q, want %q", model.Readiness.ProviderEnabledFlag, providermodels.ProviderFlagPoYo)
+	if model.Readiness.ProviderEnabledFlag != providermodels.ProviderFlagAPIMart {
+		t.Fatalf("Nano Banana Pro readiness flag = %q, want %q", model.Readiness.ProviderEnabledFlag, providermodels.ProviderFlagAPIMart)
+	}
+	if !reflect.DeepEqual(model.Readiness.RequiredConfigKeys, []string{providermodels.ConfigKeyAPIMartAPIKey, providermodels.ConfigKeyAPIMartBaseURL}) {
+		t.Fatalf("Nano Banana Pro readiness keys = %#v", model.Readiness.RequiredConfigKeys)
 	}
 	if !model.Limits.SupportsReferenceImage || model.Limits.MaxReferenceImages != 14 {
 		t.Fatalf("Nano Banana Pro reference limits = %+v, want optional refs max 14", model.Limits)

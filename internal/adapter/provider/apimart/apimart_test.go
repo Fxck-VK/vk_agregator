@@ -152,6 +152,56 @@ func TestSubmitGemini3ProImageSuccess(t *testing.T) {
 	}
 }
 
+func TestSubmitGemini3ProImageOmitsImageURLsWithoutReferences(t *testing.T) {
+	var seen imageGenerationRequest
+	var rawBody map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.URL.Path; got != "/images/generations" {
+			t.Fatalf("path = %q", got)
+		}
+		data, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("read request: %v", err)
+		}
+		if err := json.Unmarshal(data, &seen); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		if err := json.Unmarshal(data, &rawBody); err != nil {
+			t.Fatalf("decode raw request: %v", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"code":200,"data":[{"status":"submitted","task_id":"task_image_text_only"}]}`))
+	}))
+	defer srv.Close()
+
+	p := New(Config{APIKey: "test-key", BaseURL: srv.URL, HTTPClient: srv.Client()})
+	task, err := p.Submit(context.Background(), domain.ProviderRequest{
+		JobID:      uuid.New(),
+		Operation:  domain.OperationImageGenerate,
+		Modality:   domain.ModalityImage,
+		ModelCode:  ModelGemini3ProImage,
+		Prompt:     "A bamboo forest path under moonlight",
+		Size:       "1:1",
+		Resolution: "1K",
+		Params:     json.RawMessage(`{"model_id":"nano_banana_pro","model_name":"Nano Banana Pro"}`),
+	})
+	if err != nil {
+		t.Fatalf("submit: %v", err)
+	}
+	if task.Provider != domain.ProviderAPIMart || task.ModelCode != ModelGemini3ProImage || task.ExternalID != "task_image_text_only" {
+		t.Fatalf("unexpected task: %+v", task)
+	}
+	if seen.Model != ModelGemini3ProImage || seen.Prompt != "A bamboo forest path under moonlight" || seen.Size != "1:1" || seen.Resolution != "1K" || seen.N != 1 {
+		t.Fatalf("unexpected request body: %+v", seen)
+	}
+	if _, ok := rawBody["image_urls"]; ok {
+		t.Fatalf("image_urls must be omitted without references: %#v", rawBody)
+	}
+	if _, ok := rawBody["official_fallback"]; ok {
+		t.Fatalf("official_fallback must be omitted by default: %#v", rawBody)
+	}
+}
+
 func TestSubmitGPTImage2Success(t *testing.T) {
 	var seen imageGenerationRequest
 	var rawBody map[string]any

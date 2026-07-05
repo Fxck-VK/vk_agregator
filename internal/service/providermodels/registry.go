@@ -173,7 +173,7 @@ func textAliases() []TextAlias {
 func imageModels() []ImageModel {
 	return []ImageModel{
 		imageModel(PublicImageNanoBanana2, "Nano Banana 2", domain.ProviderPoYo, ProviderModelPoYoNanoBanana2, FeatureImageNanoBanana2, poyoReadiness(), 14),
-		imageModel(PublicImageNanoBananaPro, "Nano Banana Pro", domain.ProviderPoYo, ProviderModelPoYoNanoBananaPro, FeatureImageNanoBananaPro, poyoReadiness(), 14),
+		imageModel(PublicImageNanoBananaPro, "Nano Banana Pro", domain.ProviderAPIMart, ProviderModelGemini3ProImage, FeatureImageNanoBananaPro, apimartReadiness(), 14),
 		imageModel(PublicImageGPTImage2, "GPT Image 2", domain.ProviderAPIMart, ProviderModelGPTImage2, FeatureImageGPTImage2, apimartReadiness(), 16),
 		imageModelWithQualities(PublicImageSeedream45, "Seedream 4.5", domain.ProviderPoYo, ProviderModelPoYoSeedream45, FeatureImageSeedream45, poyoReadiness(), []string{
 			pricingcatalog.ImageQuality2K,
