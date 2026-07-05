@@ -117,9 +117,10 @@ func (s *Service) StartingBalance() int64 {
 
 // BalanceForEstimate returns the current cached balance for estimate-only
 // reads. If the account does not exist yet, it returns the configured starting
-// balance without creating a ledger entry.
-func (s *Service) BalanceForEstimate(ctx context.Context, userID uuid.UUID) (int64, error) {
-	acc, err := s.repo.GetAccountByUser(ctx, userID, s.currency)
+// balance without creating a ledger entry. The ownerID is the canonical account
+// id; repositories still provide legacy user_id fallback for old rows.
+func (s *Service) BalanceForEstimate(ctx context.Context, ownerID uuid.UUID) (int64, error) {
+	acc, err := s.repo.GetAccountByUser(ctx, ownerID, s.currency)
 	if err == nil {
 		return acc.BalanceCached, nil
 	}
@@ -129,32 +130,43 @@ func (s *Service) BalanceForEstimate(ctx context.Context, userID uuid.UUID) (int
 	return 0, err
 }
 
-// EnsureAccount returns the user's credit account, creating it with the
+// EnsureAccount returns the canonical credit account, creating it with the
 // starting balance if it does not yet exist.
 func (s *Service) EnsureAccount(ctx context.Context, userID uuid.UUID) (*domain.CreditAccount, error) {
-	return s.ensureAccountWith(ctx, s.repo, userID)
+	return s.ensureAccountWith(ctx, s.repo, userID, uuid.Nil)
 }
 
-// ensureAccountWith resolves or creates the user's account using the supplied
+// EnsureAccountForOwner returns the canonical credit account for accountID
+// while retaining legacy userID as channel metadata for schema compatibility.
+func (s *Service) EnsureAccountForOwner(ctx context.Context, userID, accountID uuid.UUID) (*domain.CreditAccount, error) {
+	return s.ensureAccountWith(ctx, s.repo, userID, accountID)
+}
+
+// ensureAccountWith resolves or creates the owner's account using the supplied
 // repository, which may be transaction-bound so account creation joins the
 // caller's unit of work.
-func (s *Service) ensureAccountWith(ctx context.Context, repo domain.BillingRepository, userID uuid.UUID) (*domain.CreditAccount, error) {
-	acc, err := repo.GetAccountByUser(ctx, userID, s.currency)
+func (s *Service) ensureAccountWith(ctx context.Context, repo domain.BillingRepository, userID, accountID uuid.UUID) (*domain.CreditAccount, error) {
+	ownerID := accountOwnerID(userID, accountID)
+	acc, err := repo.GetAccountByUser(ctx, ownerID, s.currency)
 	if err == nil {
+		if acc.OwnerAccountID == uuid.Nil {
+			acc.OwnerAccountID = ownerID
+		}
 		return acc, nil
 	}
 	if !errors.Is(err, domain.ErrNotFound) {
 		return nil, err
 	}
 	acc = &domain.CreditAccount{
-		UserID:        userID,
-		Currency:      s.currency,
-		BalanceCached: s.startingBalance,
+		UserID:         userID,
+		OwnerAccountID: accountID,
+		Currency:       s.currency,
+		BalanceCached:  s.startingBalance,
 	}
 	if err := repo.CreateAccount(ctx, acc); err != nil {
 		// A concurrent creation may have won the race; re-read in that case.
 		if errors.Is(err, domain.ErrConflict) {
-			return repo.GetAccountByUser(ctx, userID, s.currency)
+			return repo.GetAccountByUser(ctx, ownerID, s.currency)
 		}
 		return nil, err
 	}
@@ -173,15 +185,22 @@ func (s *Service) Reserve(ctx context.Context, userID, jobID uuid.UUID, amount i
 // with job creation (audit B1). The reservation is keyed by the job, so the call
 // is idempotent per job.
 func (s *Service) ReserveWith(ctx context.Context, repo domain.BillingRepository, userID, jobID uuid.UUID, amount int64) (*domain.CreditReservation, error) {
+	return s.ReserveWithOwner(ctx, repo, userID, uuid.Nil, jobID, amount)
+}
+
+// ReserveWithOwner holds credits for the canonical account owner while keeping
+// the legacy user id on the credit account for old foreign-key relationships.
+func (s *Service) ReserveWithOwner(ctx context.Context, repo domain.BillingRepository, userID, accountID, jobID uuid.UUID, amount int64) (*domain.CreditReservation, error) {
 	if amount <= 0 {
 		return nil, fmt.Errorf("%w: reservation amount %d", ErrInvalidAmount, amount)
 	}
-	acc, err := s.ensureAccountWith(ctx, repo, userID)
+	acc, err := s.ensureAccountWith(ctx, repo, userID, accountID)
 	if err != nil {
 		return nil, err
 	}
 	res := &domain.CreditReservation{
 		AccountID:      acc.ID,
+		OwnerAccountID: creditAccountOwnerID(acc, accountOwnerID(userID, accountID)),
 		JobID:          jobID,
 		Amount:         amount,
 		Status:         domain.ReservationReserved,
@@ -254,15 +273,22 @@ func (s *Service) ReleaseForJob(ctx context.Context, jobID uuid.UUID) error {
 	return nil
 }
 
-// Refund returns previously captured credits to the user's account by appending
+// Refund returns previously captured credits to the owner's account by appending
 // a committed positive ledger entry. It is idempotent per job.
 func (s *Service) Refund(ctx context.Context, userID, jobID uuid.UUID, amount int64) error {
-	acc, err := s.EnsureAccount(ctx, userID)
+	return s.RefundForOwner(ctx, userID, uuid.Nil, jobID, amount)
+}
+
+// RefundForOwner returns previously captured credits to the canonical account.
+func (s *Service) RefundForOwner(ctx context.Context, userID, accountID, jobID uuid.UUID, amount int64) error {
+	ownerID := accountOwnerID(userID, accountID)
+	acc, err := s.EnsureAccountForOwner(ctx, userID, accountID)
 	if err != nil {
 		return err
 	}
 	entry := &domain.LedgerEntry{
 		AccountID:      acc.ID,
+		OwnerAccountID: creditAccountOwnerID(acc, ownerID),
 		JobID:          &jobID,
 		Type:           domain.LedgerRefund,
 		Amount:         amount,
@@ -285,18 +311,25 @@ func (s *Service) Grant(ctx context.Context, userID uuid.UUID, amount int64, ide
 // webhook processing commit payment event processing, intent status and the
 // ledger top-up atomically in one caller-owned transaction.
 func (s *Service) GrantWith(ctx context.Context, repo domain.BillingRepository, userID uuid.UUID, amount int64, idempotencyKey, reason string) error {
+	return s.GrantWithOwner(ctx, repo, userID, uuid.Nil, amount, idempotencyKey, reason)
+}
+
+// GrantWithOwner appends an idempotent top-up for the canonical account owner.
+func (s *Service) GrantWithOwner(ctx context.Context, repo domain.BillingRepository, userID, accountID uuid.UUID, amount int64, idempotencyKey, reason string) error {
 	if amount <= 0 {
 		return nil
 	}
 	if idempotencyKey == "" {
 		return errors.New("billingservice: grant idempotency key is required")
 	}
-	acc, err := s.ensureAccountWith(ctx, repo, userID)
+	ownerID := accountOwnerID(userID, accountID)
+	acc, err := s.ensureAccountWith(ctx, repo, userID, accountID)
 	if err != nil {
 		return err
 	}
 	entry := &domain.LedgerEntry{
 		AccountID:      acc.ID,
+		OwnerAccountID: creditAccountOwnerID(acc, ownerID),
 		Type:           domain.LedgerTopup,
 		Amount:         amount,
 		Status:         domain.LedgerStatusCommitted,
@@ -310,6 +343,20 @@ func (s *Service) GrantWith(ctx context.Context, repo domain.BillingRepository, 
 		return err
 	}
 	return nil
+}
+
+func accountOwnerID(userID, accountID uuid.UUID) uuid.UUID {
+	if accountID != uuid.Nil {
+		return accountID
+	}
+	return userID
+}
+
+func creditAccountOwnerID(acc *domain.CreditAccount, fallback uuid.UUID) uuid.UUID {
+	if acc != nil && acc.OwnerAccountID != uuid.Nil {
+		return acc.OwnerAccountID
+	}
+	return fallback
 }
 
 func clonePrices(in map[domain.OperationType]int64) map[domain.OperationType]int64 {

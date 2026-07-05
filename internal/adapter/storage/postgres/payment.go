@@ -310,12 +310,23 @@ func (r *PaymentRepository) UpdateIntentMetadata(ctx context.Context, id uuid.UU
 
 // ListIntentsByUser lists intents for one user.
 func (r *PaymentRepository) ListIntentsByUser(ctx context.Context, userID uuid.UUID, limit, offset int) ([]*domain.PaymentIntent, error) {
-	const q = `SELECT ` + paymentIntentColumns + `
+	intents, err := r.listIntentsByOwnerColumn(ctx, "account_id", userID, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	if len(intents) > 0 {
+		return intents, nil
+	}
+	return r.listIntentsByOwnerColumn(ctx, "user_id", userID, limit, offset)
+}
+
+func (r *PaymentRepository) listIntentsByOwnerColumn(ctx context.Context, column string, ownerID uuid.UUID, limit, offset int) ([]*domain.PaymentIntent, error) {
+	q := `SELECT ` + paymentIntentColumns + `
 		FROM payment_intents
-		WHERE user_id = $1 OR account_id = $1
+		WHERE ` + column + ` = $1
 		ORDER BY created_at DESC
 		LIMIT $2 OFFSET $3`
-	rows, err := r.db.Query(ctx, q, userID, limit, offset)
+	rows, err := r.db.Query(ctx, q, ownerID, limit, offset)
 	if err != nil {
 		return nil, mapError(err)
 	}

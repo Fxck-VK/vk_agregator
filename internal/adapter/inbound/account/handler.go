@@ -834,6 +834,8 @@ func statusForError(err error) int {
 		return http.StatusNotFound
 	case errors.Is(err, domain.ErrConflict):
 		return http.StatusConflict
+	case errors.Is(err, domain.ErrAccountMergeRequiresConfirmation):
+		return http.StatusConflict
 	case errors.Is(err, domain.ErrInvalidIdentity):
 		return http.StatusBadRequest
 	case errors.Is(err, domain.ErrAccountIdentityOwnershipRequired):

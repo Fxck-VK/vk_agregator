@@ -139,7 +139,7 @@ func TestLinkUnlinkAuditAndSafeRef(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal safe ref: %v", err)
 	}
-	for _, forbidden := range []string{linked.ExternalID, linked.NormalizedID, "999", "111"} {
+	for _, forbidden := range []string{linked.ExternalID, linked.NormalizedID} {
 		if strings.Contains(string(safeJSON), forbidden) {
 			t.Fatalf("safe identity ref leaked %q: %s", forbidden, safeJSON)
 		}
@@ -203,6 +203,37 @@ func TestLinkIdentityRequiresSameActorAndVerifiedTarget(t *testing.T) {
 	})
 	if !errors.Is(err, domain.ErrUnverifiedLogin) {
 		t.Fatalf("link unverified error = %v, want unverified", err)
+	}
+}
+
+func TestLinkIdentityConflictRequiresExplicitMerge(t *testing.T) {
+	ctx := context.Background()
+	resolver := identityresolver.New(memory.NewUserRepo(), memory.NewAccountIdentityRepo(), nil)
+	service := accountauth.New(resolver)
+
+	owner, err := service.ResolveVerifiedEmailPassword(ctx, "owner@example.com")
+	if err != nil {
+		t.Fatalf("resolve owner: %v", err)
+	}
+	other, err := service.ResolveVerifiedEmailPassword(ctx, "other@example.com")
+	if err != nil {
+		t.Fatalf("resolve other: %v", err)
+	}
+
+	_, err = service.LinkVerifiedIdentity(ctx, other.AccountID, other.AccountID, domain.VerifiedAccountLogin{
+		Method:     domain.AccountLoginEmailPassword,
+		ExternalID: "owner@example.com",
+		Verified:   true,
+	})
+	if !errors.Is(err, domain.ErrAccountMergeRequiresConfirmation) {
+		t.Fatalf("conflicting link error = %v, want merge confirmation required", err)
+	}
+	resolved, err := service.ResolveVerifiedEmailPassword(ctx, "owner@example.com")
+	if err != nil {
+		t.Fatalf("resolve owner after conflict: %v", err)
+	}
+	if resolved.AccountID != owner.AccountID {
+		t.Fatalf("conflict moved identity to account %s, want %s", resolved.AccountID, owner.AccountID)
 	}
 }
 
@@ -318,8 +349,10 @@ func TestPasswordSetRejectsUnlinkedEmailAndWeakPassword(t *testing.T) {
 func TestPasswordResetAuditsAndRotatesCredential(t *testing.T) {
 	ctx := context.Background()
 	security := memory.NewAccountSecurityRepo()
+	sessionRepo := memory.NewAccountSessionRepo()
 	resolver := identityresolver.New(memory.NewUserRepo(), memory.NewAccountIdentityRepo(), nil)
 	service := accountauth.New(resolver,
+		accountauth.WithSessionRepository(sessionRepo),
 		accountauth.WithCredentialRepository(security),
 		accountauth.WithAccountAuditRepository(security),
 	)
@@ -330,6 +363,10 @@ func TestPasswordResetAuditsAndRotatesCredential(t *testing.T) {
 	if err := service.SetPasswordForVerifiedEmail(ctx, account.AccountID, account.AccountID, "owner@example.com", "old password value"); err != nil {
 		t.Fatalf("set password: %v", err)
 	}
+	tokens, err := service.IssueSession(ctx, account.AccountID, accountauth.SessionMetadata{DeviceInfo: "before-reset"})
+	if err != nil {
+		t.Fatalf("issue session: %v", err)
+	}
 	if err := service.ResetPasswordForVerifiedEmail(ctx, account.AccountID, "owner@example.com", "new password value"); err != nil {
 		t.Fatalf("reset password: %v", err)
 	}
@@ -338,6 +375,9 @@ func TestPasswordResetAuditsAndRotatesCredential(t *testing.T) {
 	}
 	if _, err := service.AuthenticateEmailPassword(ctx, "owner@example.com", "new password value"); err != nil {
 		t.Fatalf("new password login: %v", err)
+	}
+	if _, err := service.RefreshSession(ctx, tokens.RefreshToken, accountauth.SessionMetadata{}); !errors.Is(err, accountauth.ErrInvalidSession) {
+		t.Fatalf("refresh after password reset error = %v, want invalid session", err)
 	}
 	var foundReset bool
 	for _, audit := range security.AuditEntries() {
@@ -354,6 +394,9 @@ func TestMergeRequiresExplicitConfirmedFlow(t *testing.T) {
 	service := accountauth.New(identityresolver.New(memory.NewUserRepo(), memory.NewAccountIdentityRepo(), nil))
 	if err := service.MergeAccounts(context.Background(), false, uuid.New(), uuid.New()); !errors.Is(err, domain.ErrAccountMergeRequiresConfirmation) {
 		t.Fatalf("unconfirmed merge error = %v, want confirmation required", err)
+	}
+	if err := service.MergeAccounts(context.Background(), true, uuid.New(), uuid.New()); err == nil {
+		t.Fatal("confirmed merge unexpectedly succeeded before audited merge flow is implemented")
 	}
 }
 

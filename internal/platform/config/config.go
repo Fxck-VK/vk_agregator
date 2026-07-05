@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/http"
 	"net/url"
 	"os"
 	"strconv"
@@ -402,6 +403,29 @@ type Config struct {
 	AccountPhoneLinkRequestWindow time.Duration
 	AccountPhoneLinkVerifyLimit   int
 	AccountPhoneLinkVerifyWindow  time.Duration
+	// AccountEmailDelivery* and AccountPhoneDelivery* configure real
+	// out-of-band verification delivery. Missing/disabled providers keep link
+	// flows fail-closed.
+	AccountEmailDeliveryProvider string
+	AccountEmailSMTPHost         string
+	AccountEmailSMTPPort         int
+	AccountEmailSMTPUsername     string
+	AccountEmailSMTPPassword     string
+	AccountEmailSMTPFrom         string
+	AccountEmailSMTPSubject      string
+	AccountEmailSMTPTLSMode      string
+	AccountEmailSMTPTimeout      time.Duration
+	AccountPhoneDeliveryProvider string
+	AccountPhoneHTTPURL          string
+	AccountPhoneHTTPMethod       string
+	AccountPhoneHTTPAuthHeader   string
+	AccountPhoneHTTPAuthValue    string
+	AccountPhoneHTTPContentType  string
+	AccountPhoneHTTPBodyTemplate string
+	AccountPhoneHTTPTimeout      time.Duration
+	// AccountAuthRateLimit* controls shared login/link/password throttling.
+	AccountAuthRateLimitLimit  int
+	AccountAuthRateLimitWindow time.Duration
 	// AccountOAuth* configure provider adapters. Missing provider-specific
 	// trust material keeps that provider fail-closed.
 	AccountOAuthGoogleClientIDs   []string
@@ -632,6 +656,15 @@ func (c Config) Validate() error {
 	}
 	if c.AccountPhoneLinkVerifyWindow < 0 {
 		return fmt.Errorf("config: ACCOUNT_PHONE_LINK_VERIFY_WINDOW must be non-negative")
+	}
+	if err := c.validateAccountDeliveryConfig(); err != nil {
+		return err
+	}
+	if c.AccountAuthRateLimitLimit < 0 {
+		return fmt.Errorf("config: ACCOUNT_AUTH_RATE_LIMIT_LIMIT must be non-negative")
+	}
+	if c.AccountAuthRateLimitWindow < 0 {
+		return fmt.Errorf("config: ACCOUNT_AUTH_RATE_LIMIT_WINDOW must be non-negative")
 	}
 	if c.AccountOAuthTelegramMaxAge < 0 {
 		return fmt.Errorf("config: ACCOUNT_OAUTH_TELEGRAM_MAX_AGE must be non-negative")
@@ -1328,6 +1361,25 @@ func Load() Config {
 		AccountPhoneLinkRequestWindow:   envDuration("ACCOUNT_PHONE_LINK_REQUEST_WINDOW", 15*time.Minute),
 		AccountPhoneLinkVerifyLimit:     envInt("ACCOUNT_PHONE_LINK_VERIFY_LIMIT", 5),
 		AccountPhoneLinkVerifyWindow:    envDuration("ACCOUNT_PHONE_LINK_VERIFY_WINDOW", 15*time.Minute),
+		AccountEmailDeliveryProvider:    envConfigToken("ACCOUNT_EMAIL_DELIVERY_PROVIDER", "disabled"),
+		AccountEmailSMTPHost:            env("ACCOUNT_EMAIL_SMTP_HOST", ""),
+		AccountEmailSMTPPort:            envInt("ACCOUNT_EMAIL_SMTP_PORT", 587),
+		AccountEmailSMTPUsername:        env("ACCOUNT_EMAIL_SMTP_USERNAME", ""),
+		AccountEmailSMTPPassword:        env("ACCOUNT_EMAIL_SMTP_PASSWORD", ""),
+		AccountEmailSMTPFrom:            env("ACCOUNT_EMAIL_SMTP_FROM", ""),
+		AccountEmailSMTPSubject:         env("ACCOUNT_EMAIL_SMTP_SUBJECT", "Код подтверждения НейроХаб"),
+		AccountEmailSMTPTLSMode:         envConfigToken("ACCOUNT_EMAIL_SMTP_TLS_MODE", "starttls"),
+		AccountEmailSMTPTimeout:         envDuration("ACCOUNT_EMAIL_SMTP_TIMEOUT", 10*time.Second),
+		AccountPhoneDeliveryProvider:    envConfigToken("ACCOUNT_PHONE_DELIVERY_PROVIDER", "disabled"),
+		AccountPhoneHTTPURL:             env("ACCOUNT_PHONE_HTTP_URL", ""),
+		AccountPhoneHTTPMethod:          env("ACCOUNT_PHONE_HTTP_METHOD", "POST"),
+		AccountPhoneHTTPAuthHeader:      env("ACCOUNT_PHONE_HTTP_AUTH_HEADER", ""),
+		AccountPhoneHTTPAuthValue:       env("ACCOUNT_PHONE_HTTP_AUTH_VALUE", ""),
+		AccountPhoneHTTPContentType:     env("ACCOUNT_PHONE_HTTP_CONTENT_TYPE", "application/json"),
+		AccountPhoneHTTPBodyTemplate:    env("ACCOUNT_PHONE_HTTP_BODY_TEMPLATE", ""),
+		AccountPhoneHTTPTimeout:         envDuration("ACCOUNT_PHONE_HTTP_TIMEOUT", 10*time.Second),
+		AccountAuthRateLimitLimit:       envInt("ACCOUNT_AUTH_RATE_LIMIT_LIMIT", 30),
+		AccountAuthRateLimitWindow:      envDuration("ACCOUNT_AUTH_RATE_LIMIT_WINDOW", 15*time.Minute),
 		AccountOAuthGoogleClientIDs:     envList("ACCOUNT_OAUTH_GOOGLE_CLIENT_IDS"),
 		AccountOAuthGoogleJWKSURL:       env("ACCOUNT_OAUTH_GOOGLE_JWKS_URL", "https://www.googleapis.com/oauth2/v3/certs"),
 		AccountOAuthAppleClientIDs:      envList("ACCOUNT_OAUTH_APPLE_CLIENT_IDS"),
@@ -1451,6 +1503,65 @@ func (c Config) validateProviderBalanceBotConfig() error {
 	}
 	if len(missing) > 0 {
 		return fmt.Errorf("config: PROVIDER_BALANCE_BOT_ENABLED=true requires %s", strings.Join(missing, ", "))
+	}
+	return nil
+}
+
+func (c Config) validateAccountDeliveryConfig() error {
+	switch strings.ToLower(strings.TrimSpace(c.AccountEmailDeliveryProvider)) {
+	case "", "disabled":
+	case "smtp":
+		if strings.TrimSpace(c.AccountEmailSMTPHost) == "" {
+			return fmt.Errorf("config: ACCOUNT_EMAIL_SMTP_HOST must be set when ACCOUNT_EMAIL_DELIVERY_PROVIDER=smtp")
+		}
+		if strings.TrimSpace(c.AccountEmailSMTPFrom) == "" {
+			return fmt.Errorf("config: ACCOUNT_EMAIL_SMTP_FROM must be set when ACCOUNT_EMAIL_DELIVERY_PROVIDER=smtp")
+		}
+		if c.AccountEmailSMTPPort < 1 || c.AccountEmailSMTPPort > 65535 {
+			return fmt.Errorf("config: ACCOUNT_EMAIL_SMTP_PORT must be between 1 and 65535")
+		}
+		if c.AccountEmailSMTPTimeout < 0 {
+			return fmt.Errorf("config: ACCOUNT_EMAIL_SMTP_TIMEOUT must be non-negative")
+		}
+		mode := strings.ToLower(strings.TrimSpace(c.AccountEmailSMTPTLSMode))
+		if mode != "" && mode != "starttls" && mode != "none" {
+			return fmt.Errorf("config: ACCOUNT_EMAIL_SMTP_TLS_MODE must be starttls or none")
+		}
+		if (strings.TrimSpace(c.AccountEmailSMTPUsername) == "") != (strings.TrimSpace(c.AccountEmailSMTPPassword) == "") {
+			return fmt.Errorf("config: ACCOUNT_EMAIL_SMTP_USERNAME and ACCOUNT_EMAIL_SMTP_PASSWORD must be set together")
+		}
+	default:
+		return fmt.Errorf("config: ACCOUNT_EMAIL_DELIVERY_PROVIDER must be disabled or smtp")
+	}
+
+	switch strings.ToLower(strings.TrimSpace(c.AccountPhoneDeliveryProvider)) {
+	case "", "disabled":
+	case "http":
+		parsed, err := url.Parse(strings.TrimSpace(c.AccountPhoneHTTPURL))
+		if err != nil || parsed == nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+			return fmt.Errorf("config: ACCOUNT_PHONE_HTTP_URL must be http or https when ACCOUNT_PHONE_DELIVERY_PROVIDER=http")
+		}
+		method := strings.ToUpper(strings.TrimSpace(c.AccountPhoneHTTPMethod))
+		if method == "" {
+			method = http.MethodPost
+		}
+		if method != http.MethodPost && method != http.MethodPut && method != http.MethodPatch {
+			return fmt.Errorf("config: ACCOUNT_PHONE_HTTP_METHOD must be POST, PUT, or PATCH")
+		}
+		if strings.TrimSpace(c.AccountPhoneHTTPBodyTemplate) == "" {
+			return fmt.Errorf("config: ACCOUNT_PHONE_HTTP_BODY_TEMPLATE must be set when ACCOUNT_PHONE_DELIVERY_PROVIDER=http")
+		}
+		if !strings.Contains(c.AccountPhoneHTTPBodyTemplate, "{{phone}}") || !strings.Contains(c.AccountPhoneHTTPBodyTemplate, "{{code}}") {
+			return fmt.Errorf("config: ACCOUNT_PHONE_HTTP_BODY_TEMPLATE must include {{phone}} and {{code}}")
+		}
+		if (strings.TrimSpace(c.AccountPhoneHTTPAuthHeader) == "") != (strings.TrimSpace(c.AccountPhoneHTTPAuthValue) == "") {
+			return fmt.Errorf("config: ACCOUNT_PHONE_HTTP_AUTH_HEADER and ACCOUNT_PHONE_HTTP_AUTH_VALUE must be set together")
+		}
+		if c.AccountPhoneHTTPTimeout < 0 {
+			return fmt.Errorf("config: ACCOUNT_PHONE_HTTP_TIMEOUT must be non-negative")
+		}
+	default:
+		return fmt.Errorf("config: ACCOUNT_PHONE_DELIVERY_PROVIDER must be disabled or http")
 	}
 	return nil
 }

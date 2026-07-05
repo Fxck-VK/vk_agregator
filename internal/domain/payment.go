@@ -210,6 +210,7 @@ type PaymentRefund struct {
 // money provider. Amount is in minor currency units (kopecks for RUB).
 type CreatePaymentInput struct {
 	IntentID       uuid.UUID       `json:"intent_id"`
+	AccountID      uuid.UUID       `json:"account_id,omitempty"`
 	UserID         uuid.UUID       `json:"user_id"`
 	Amount         int64           `json:"amount"`
 	Currency       Currency        `json:"currency"`

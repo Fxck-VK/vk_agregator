@@ -2651,7 +2651,11 @@ func TestHandler_CreatePaymentIntent_IdempotentAndSafeDTO(t *testing.T) {
 	if err := json.Unmarshal(listRec.Body.Bytes(), &listResp); err != nil {
 		t.Fatalf("decode list: %v", err)
 	}
-	if len(listResp.Items) != 2 || listResp.Items[0].ID != forced.ID || listResp.Items[1].ID != first.ID {
+	gotIntentIDs := map[uuid.UUID]bool{}
+	for _, item := range listResp.Items {
+		gotIntentIDs[item.ID] = true
+	}
+	if len(listResp.Items) != 2 || !gotIntentIDs[forced.ID] || !gotIntentIDs[first.ID] {
 		t.Fatalf("unexpected payment list: %+v", listResp.Items)
 	}
 

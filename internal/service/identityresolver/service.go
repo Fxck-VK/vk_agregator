@@ -15,9 +15,9 @@ import (
 )
 
 // BillingEnsurer is the subset of billingservice.Service needed by the
-// resolver to keep legacy user credit accounts available.
+// resolver to keep credit accounts available for resolved account owners.
 type BillingEnsurer interface {
-	EnsureAccount(ctx context.Context, userID uuid.UUID) (*domain.CreditAccount, error)
+	EnsureAccountForOwner(ctx context.Context, userID, accountID uuid.UUID) (*domain.CreditAccount, error)
 }
 
 // Service resolves external identities into canonical account ids.
@@ -148,7 +148,7 @@ func (s *Service) resolveOrCreateVK(ctx context.Context, externalID, normalizedI
 	}
 	user.AccountID = accountID
 	if created && s.billing != nil {
-		if _, err := s.billing.EnsureAccount(ctx, user.ID); err != nil {
+		if _, err := s.billing.EnsureAccountForOwner(ctx, user.ID, accountID); err != nil {
 			return domain.IdentityResolution{}, fmt.Errorf("ensure billing account: %w", err)
 		}
 	}

@@ -378,23 +378,27 @@ func (r *PaymentRepo) ListIntents(_ context.Context, filter domain.PaymentIntent
 }
 
 func (r *PaymentRepo) intentListForOwnerLocked(ownerID uuid.UUID) []domain.PaymentIntent {
-	ids := r.intentIDsByUser[ownerID]
-	matched := make([]domain.PaymentIntent, 0, len(ids))
-	seen := make(map[uuid.UUID]struct{}, len(ids))
-	for _, id := range ids {
-		if _, ok := seen[id]; ok {
-			continue
-		}
-		intent, ok := r.intentsByID[id]
-		if !ok {
-			continue
-		}
-		if intent.UserID != ownerID && intent.AccountID != ownerID {
-			continue
-		}
-		seen[id] = struct{}{}
-		matched = append(matched, intent)
+	matched := r.intentListMatchingOwnerLocked(ownerID, func(intent domain.PaymentIntent, ownerID uuid.UUID) bool {
+		return intent.AccountID == ownerID
+	})
+	if len(matched) > 0 {
+		return matched
 	}
+	return r.intentListMatchingOwnerLocked(ownerID, func(intent domain.PaymentIntent, ownerID uuid.UUID) bool {
+		return intent.UserID == ownerID
+	})
+}
+
+func (r *PaymentRepo) intentListMatchingOwnerLocked(ownerID uuid.UUID, matches func(domain.PaymentIntent, uuid.UUID) bool) []domain.PaymentIntent {
+	matched := make([]domain.PaymentIntent, 0, len(r.intentsByID))
+	for _, intent := range r.intentsByID {
+		if matches(intent, ownerID) {
+			matched = append(matched, intent)
+		}
+	}
+	sort.Slice(matched, func(i, j int) bool {
+		return matched[i].CreatedAt.After(matched[j].CreatedAt)
+	})
 	return matched
 }
 

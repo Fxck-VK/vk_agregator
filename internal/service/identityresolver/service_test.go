@@ -35,6 +35,10 @@ func TestResolveOrCreateVKCreatesLegacyUserIdentityAndBillingOnce(t *testing.T) 
 	if billing.calls != 1 {
 		t.Fatalf("billing calls after create = %d, want 1", billing.calls)
 	}
+	if billing.lastUserID != first.User.ID || billing.lastAccountID != first.AccountID {
+		t.Fatalf("billing ensured owner = user %s account %s, want user %s account %s",
+			billing.lastUserID, billing.lastAccountID, first.User.ID, first.AccountID)
+	}
 
 	second, err := resolver.ResolveOrCreate(ctx, domain.IdentityProviderVK, "777")
 	if err != nil {
@@ -69,12 +73,16 @@ func TestLinkIdentityRejectsAlreadyLinkedIdentity(t *testing.T) {
 }
 
 type fakeBillingEnsurer struct {
-	calls int
+	calls         int
+	lastUserID    uuid.UUID
+	lastAccountID uuid.UUID
 }
 
-func (f *fakeBillingEnsurer) EnsureAccount(context.Context, uuid.UUID) (*domain.CreditAccount, error) {
+func (f *fakeBillingEnsurer) EnsureAccountForOwner(_ context.Context, userID, accountID uuid.UUID) (*domain.CreditAccount, error) {
 	f.calls++
-	return &domain.CreditAccount{ID: uuid.New()}, nil
+	f.lastUserID = userID
+	f.lastAccountID = accountID
+	return &domain.CreditAccount{ID: uuid.New(), UserID: userID, OwnerAccountID: accountID}, nil
 }
 
 type fakeIdentityRepo struct {

@@ -134,12 +134,107 @@ func TestAccountIdentityRolloutPreservesLegacyVKBusinessState(t *testing.T) {
 		ExternalID: "owner@example.com",
 		Verified:   true,
 	})
-	if !errors.Is(err, domain.ErrConflict) {
-		t.Fatalf("conflicting email link error = %v, want conflict", err)
+	if !errors.Is(err, domain.ErrAccountMergeRequiresConfirmation) {
+		t.Fatalf("conflicting email link error = %v, want merge confirmation required", err)
 	}
 	assertBalance(t, ctx, billing, accountID, 100)
 	assertOldPaymentsVisible(t, ctx, payments, accountID, oldIntent.ID)
 	assertOldJobsVisible(t, ctx, jobs, accountID, oldJob.ID)
+}
+
+func TestE2ESmokeVKUserLinksEmailAndWebLoginKeepsBusinessState(t *testing.T) {
+	ctx := context.Background()
+	users := memory.NewUserRepo()
+	identities := memory.NewAccountIdentityRepo()
+	billingRepo := memory.NewBillingRepo()
+	billing := billingservice.New(billingRepo)
+	resolver := identityresolver.New(users, identities, billing)
+	security := memory.NewAccountSecurityRepo()
+	auth := accountauth.New(resolver,
+		accountauth.WithSessionRepository(memory.NewAccountSessionRepo()),
+		accountauth.WithCredentialRepository(security),
+		accountauth.WithAccountAuditRepository(security),
+	)
+	jobs := memory.NewJobRepo()
+	payments := memory.NewPaymentRepo()
+
+	vkUser, err := resolver.ResolveOrCreate(ctx, domain.IdentityProviderVK, "9010001")
+	if err != nil {
+		t.Fatalf("resolve VK user: %v", err)
+	}
+	if vkUser.AccountID == uuid.Nil || vkUser.User == nil {
+		t.Fatalf("VK user did not get implicit account: %+v", vkUser)
+	}
+	accountID := vkUser.AccountID
+	userID := vkUser.User.ID
+	initialBalance, err := billing.BalanceForEstimate(ctx, accountID)
+	if err != nil {
+		t.Fatalf("read initial balance: %v", err)
+	}
+
+	intent := &domain.PaymentIntent{
+		UserID:            userID,
+		AccountID:         accountID,
+		Status:            domain.PaymentIntentSucceeded,
+		Amount:            1000,
+		Currency:          domain.CurrencyRUB,
+		Credits:           30,
+		PriceVersion:      1,
+		Provider:          domain.PaymentProviderMock,
+		ProviderPaymentID: "mock-pay-e2e-account-link",
+		IdempotencyKey:    "e2e:account-link:payment",
+	}
+	if err := payments.CreateIntent(ctx, intent); err != nil {
+		t.Fatalf("create succeeded payment intent: %v", err)
+	}
+	if err := billing.GrantWithOwner(ctx, billingRepo, userID, accountID, intent.Credits, "e2e:account-link:topup", "e2e payment topup"); err != nil {
+		t.Fatalf("grant payment topup: %v", err)
+	}
+
+	job := &domain.Job{
+		UserID:         userID,
+		AccountID:      accountID,
+		Source:         "vk_bot",
+		OperationType:  domain.OperationTextGenerate,
+		Modality:       domain.ModalityText,
+		Status:         domain.JobStatusSucceeded,
+		IdempotencyKey: "e2e:account-link:job",
+		CorrelationID:  "e2e-account-link-job",
+	}
+	if err := jobs.Create(ctx, job); err != nil {
+		t.Fatalf("create VK job: %v", err)
+	}
+
+	if _, err := auth.LinkVerifiedIdentity(ctx, accountID, accountID, domain.VerifiedAccountLogin{
+		Method:     domain.AccountLoginEmailPassword,
+		ExternalID: "web-login@example.com",
+		Verified:   true,
+	}); err != nil {
+		t.Fatalf("link email identity: %v", err)
+	}
+	if err := auth.SetPasswordForVerifiedEmail(ctx, accountID, accountID, "web-login@example.com", "correct horse battery staple"); err != nil {
+		t.Fatalf("set email password: %v", err)
+	}
+
+	webLogin, err := auth.AuthenticateEmailPassword(ctx, "web-login@example.com", "correct horse battery staple")
+	if err != nil {
+		t.Fatalf("web email/password login: %v", err)
+	}
+	if webLogin.AccountID != accountID {
+		t.Fatalf("web login account = %s, want VK account %s", webLogin.AccountID, accountID)
+	}
+	tokens, err := auth.IssueSession(ctx, webLogin.AccountID, accountauth.SessionMetadata{DeviceInfo: "web"})
+	if err != nil {
+		t.Fatalf("issue web session: %v", err)
+	}
+	if tokens.Session.AccountID != accountID {
+		t.Fatalf("web session account = %s, want %s", tokens.Session.AccountID, accountID)
+	}
+
+	assertBalance(t, ctx, billing, webLogin.AccountID, initialBalance+intent.Credits)
+	assertOldJobsVisible(t, ctx, jobs, webLogin.AccountID, job.ID)
+	assertOldPaymentsVisible(t, ctx, payments, webLogin.AccountID, intent.ID)
+	assertLedgerOwnedByAccount(t, ctx, billingRepo, accountID)
 }
 
 func assertBalance(t *testing.T, ctx context.Context, billing *billingservice.Service, accountID uuid.UUID, want int64) {

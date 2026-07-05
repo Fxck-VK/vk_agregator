@@ -64,7 +64,7 @@ const (
 // ArtifactSaver stores provider outputs as artifacts. Implemented by
 // artifactservice.Service.
 type ArtifactSaver interface {
-	SaveRemoteArtifact(ctx context.Context, ownerID uuid.UUID, jobID *uuid.UUID, kind domain.ArtifactKind, mediaType domain.MediaType, url string) (*domain.Artifact, error)
+	SaveRemoteArtifactForAccount(ctx context.Context, userID, accountID uuid.UUID, jobID *uuid.UUID, kind domain.ArtifactKind, mediaType domain.MediaType, url string) (*domain.Artifact, error)
 	SaveVariantWithMetadata(ctx context.Context, artifact *domain.Artifact, variantType domain.VariantType, mimeType string, data []byte, metadata domain.ArtifactMediaMetadata) (*domain.ArtifactVariant, error)
 }
 
@@ -1260,7 +1260,7 @@ func (p *processor) buildRequest(ctx context.Context, job *domain.Job, attempt i
 	assistantFactsText := ""
 	if p.assistantFacts != nil && job.OperationType == domain.OperationTextGenerate && job.Modality == domain.ModalityText {
 		facts, err := p.assistantFacts.Build(ctx, assistantfacts.Input{
-			UserID: job.UserID,
+			UserID: workerJobOwnerID(job),
 			Prompt: pp.Prompt,
 		})
 		if err != nil {
@@ -1346,7 +1346,7 @@ func (p *processor) buildRequest(ctx context.Context, job *domain.Job, attempt i
 	}
 	return domain.ProviderRequest{
 		JobID:                job.ID,
-		UserID:               job.UserID,
+		UserID:               workerJobOwnerID(job),
 		Operation:            job.OperationType,
 		Modality:             job.Modality,
 		ModelCode:            modelCode,
@@ -1475,7 +1475,7 @@ func (p *processor) resolveReferenceInputURLs(ctx context.Context, job *domain.J
 		if err != nil {
 			return nil, referenceInputError("worker: reference artifact not found: %w", err)
 		}
-		if artifact.OwnerUserID != job.UserID {
+		if workerArtifactOwnerID(artifact) != workerJobOwnerID(job) {
 			return nil, referenceInputError("worker: invalid reference artifact owner")
 		}
 		if artifact.Kind != domain.ArtifactKindInput || artifact.MediaType != domain.MediaTypeImage || artifact.Status != domain.ArtifactStatusReady {
@@ -1521,6 +1521,26 @@ func mediaTypeFor(modality domain.Modality) domain.MediaType {
 	default:
 		return domain.MediaTypeText
 	}
+}
+
+func workerJobOwnerID(job *domain.Job) uuid.UUID {
+	if job == nil {
+		return uuid.Nil
+	}
+	if job.AccountID != uuid.Nil {
+		return job.AccountID
+	}
+	return job.UserID
+}
+
+func workerArtifactOwnerID(artifact *domain.Artifact) uuid.UUID {
+	if artifact == nil {
+		return uuid.Nil
+	}
+	if artifact.OwnerAccountID != uuid.Nil {
+		return artifact.OwnerAccountID
+	}
+	return artifact.OwnerUserID
 }
 
 // isDone reports whether a job has reached a state where neither generation nor
@@ -2424,7 +2444,7 @@ func (p *processor) saveOutputs(ctx context.Context, job *domain.Job, urls []str
 
 	mediaType := mediaTypeFor(job.Modality)
 	for _, url := range urls {
-		art, err := p.artifacts.SaveRemoteArtifact(ctx, job.UserID, &job.ID, domain.ArtifactKindOutput, mediaType, url)
+		art, err := p.artifacts.SaveRemoteArtifactForAccount(ctx, job.UserID, workerJobOwnerID(job), &job.ID, domain.ArtifactKindOutput, mediaType, url)
 		if err != nil {
 			tracing.RecordError(span, err)
 			return err

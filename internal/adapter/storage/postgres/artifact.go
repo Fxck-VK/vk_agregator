@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"errors"
 
 	"github.com/google/uuid"
 
@@ -87,8 +88,19 @@ func (r *ArtifactRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain
 
 // GetBySHA256 fetches an artifact by content hash for deduplication.
 func (r *ArtifactRepository) GetBySHA256(ctx context.Context, ownerID uuid.UUID, sha256 string) (*domain.Artifact, error) {
-	const q = `SELECT ` + artifactColumns + `
-		FROM artifacts WHERE (owner_user_id = $1 OR owner_account_id = $1) AND sha256 = $2
+	artifact, err := r.getBySHA256OwnerColumn(ctx, "owner_account_id", ownerID, sha256)
+	if err == nil {
+		return artifact, nil
+	}
+	if !errors.Is(err, domain.ErrNotFound) {
+		return nil, err
+	}
+	return r.getBySHA256OwnerColumn(ctx, "owner_user_id", ownerID, sha256)
+}
+
+func (r *ArtifactRepository) getBySHA256OwnerColumn(ctx context.Context, column string, ownerID uuid.UUID, sha256 string) (*domain.Artifact, error) {
+	q := `SELECT ` + artifactColumns + `
+		FROM artifacts WHERE ` + column + ` = $1 AND sha256 = $2
 		ORDER BY created_at ASC LIMIT 1`
 	var a domain.Artifact
 	if err := mapError(scanArtifact(r.db.QueryRow(ctx, q, ownerID, sha256), &a)); err != nil {
@@ -98,9 +110,20 @@ func (r *ArtifactRepository) GetBySHA256(ctx context.Context, ownerID uuid.UUID,
 }
 
 func (r *ArtifactRepository) FindReusableInputReference(ctx context.Context, ownerID uuid.UUID, sha256, validationPolicyVersion, mimeType string) (*domain.Artifact, error) {
-	const q = `SELECT ` + artifactColumns + `
+	artifact, err := r.findReusableInputReferenceByOwnerColumn(ctx, "owner_account_id", ownerID, sha256, validationPolicyVersion, mimeType)
+	if err == nil {
+		return artifact, nil
+	}
+	if !errors.Is(err, domain.ErrNotFound) {
+		return nil, err
+	}
+	return r.findReusableInputReferenceByOwnerColumn(ctx, "owner_user_id", ownerID, sha256, validationPolicyVersion, mimeType)
+}
+
+func (r *ArtifactRepository) findReusableInputReferenceByOwnerColumn(ctx context.Context, column string, ownerID uuid.UUID, sha256, validationPolicyVersion, mimeType string) (*domain.Artifact, error) {
+	q := `SELECT ` + artifactColumns + `
 		FROM artifacts
-		WHERE (owner_user_id = $1 OR owner_account_id = $1)
+		WHERE ` + column + ` = $1
 		  AND sha256 = $2
 		  AND validation_policy_version = $3
 		  AND mime_type = $4

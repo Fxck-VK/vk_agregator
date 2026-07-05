@@ -86,8 +86,9 @@ const (
 type ProviderRequest struct {
 	// JobID is the originating job, used for correlation and idempotency.
 	JobID uuid.UUID `json:"job_id"`
-	// UserID is the owner of the originating job. It is used for provider-side
-	// correlation only; adapters must not make billing or delivery decisions.
+	// UserID is the canonical account owner of the originating job. It is used
+	// for provider-side correlation only; adapters must not make billing or
+	// delivery decisions.
 	UserID uuid.UUID `json:"user_id"`
 	// Operation is the operation the provider must perform.
 	Operation OperationType `json:"operation"`

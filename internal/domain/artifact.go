@@ -293,10 +293,10 @@ func normalizeMediaToken(value string) string {
 type Artifact struct {
 	// ID is the internal primary key.
 	ID uuid.UUID `json:"id"`
-	// OwnerUserID is the user that owns the artifact.
+	// OwnerUserID is the legacy channel user that created the artifact.
 	OwnerUserID uuid.UUID `json:"owner_user_id"`
-	// OwnerAccountID is the canonical account owner. OwnerUserID remains for
-	// legacy compatibility during the account_id rollout.
+	// OwnerAccountID is the canonical account owner for access and lifecycle.
+	// OwnerUserID remains for legacy compatibility.
 	OwnerAccountID uuid.UUID `json:"owner_account_id,omitempty"`
 	// JobID is the job that produced or consumed the artifact, if any.
 	JobID *uuid.UUID `json:"job_id,omitempty"`

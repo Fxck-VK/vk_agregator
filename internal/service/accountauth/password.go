@@ -84,6 +84,11 @@ func (s *Service) ResetPasswordForVerifiedEmail(ctx context.Context, accountID u
 	if err := s.upsertPassword(ctx, accountID, password); err != nil {
 		return err
 	}
+	if s.sessions != nil {
+		if _, err := s.sessions.RevokeAllSessions(ctx, accountID, s.currentTime()); err != nil {
+			return err
+		}
+	}
 	return s.recordAudit(ctx, accountID, nil, domain.AccountLinkActionPasswordReset, domain.IdentityProviderEmail)
 }
 

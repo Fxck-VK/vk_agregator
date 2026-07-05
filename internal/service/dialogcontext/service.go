@@ -179,6 +179,7 @@ func resolveConversationTarget(job *domain.Job) conversationTarget {
 	if job == nil {
 		return conversationTarget{invalid: true}
 	}
+	ownerID := dialogJobOwnerID(job)
 	var params conversationParams
 	if len(job.Params) > 0 {
 		_ = json.Unmarshal(job.Params, &params)
@@ -189,9 +190,10 @@ func resolveConversationTarget(job *domain.Job) conversationTarget {
 			return conversationTarget{invalid: true}
 		}
 		return conversationTarget{ref: domain.ConversationRef{
-			UserID:   job.UserID,
-			Source:   domain.ConversationSourceVKBot,
-			VKPeerID: job.VKPeerID,
+			UserID:    job.UserID,
+			AccountID: ownerID,
+			Source:    domain.ConversationSourceVKBot,
+			VKPeerID:  job.VKPeerID,
 		}}
 	}
 
@@ -202,9 +204,10 @@ func resolveConversationTarget(job *domain.Job) conversationTarget {
 			return conversationTarget{explicit: true, invalid: true}
 		}
 		return conversationTarget{explicit: true, ref: domain.ConversationRef{
-			UserID:   job.UserID,
-			Source:   domain.ConversationSourceVKBot,
-			VKPeerID: job.VKPeerID,
+			UserID:    job.UserID,
+			AccountID: ownerID,
+			Source:    domain.ConversationSourceVKBot,
+			VKPeerID:  job.VKPeerID,
 		}}
 	case domain.ConversationSourceMiniApp:
 		threadID := strings.TrimSpace(params.ExternalThreadID)
@@ -216,6 +219,7 @@ func resolveConversationTarget(job *domain.Job) conversationTarget {
 					conversationID: parsed,
 					ref: domain.ConversationRef{
 						UserID:           job.UserID,
+						AccountID:        ownerID,
 						Source:           domain.ConversationSourceMiniApp,
 						ExternalThreadID: threadID,
 					},
@@ -230,6 +234,7 @@ func resolveConversationTarget(job *domain.Job) conversationTarget {
 		}
 		return conversationTarget{explicit: true, ref: domain.ConversationRef{
 			UserID:           job.UserID,
+			AccountID:        ownerID,
 			Source:           domain.ConversationSourceMiniApp,
 			ExternalThreadID: threadID,
 		}}
@@ -240,7 +245,7 @@ func resolveConversationTarget(job *domain.Job) conversationTarget {
 
 func (s *Service) getOrCreateConversation(ctx context.Context, job *domain.Job, target conversationTarget) (*domain.Conversation, bool, error) {
 	if target.conversationID != uuid.Nil {
-		conversation, err := s.repo.GetByIDForUser(ctx, job.UserID, target.conversationID)
+		conversation, err := s.repo.GetByIDForUser(ctx, dialogJobOwnerID(job), target.conversationID)
 		if err != nil {
 			if errors.Is(err, domain.ErrNotFound) {
 				return nil, false, nil
@@ -266,6 +271,7 @@ func (s *Service) getOrCreateConversation(ctx context.Context, job *domain.Job, 
 	}
 	conversation = &domain.Conversation{
 		UserID:           job.UserID,
+		AccountID:        dialogJobOwnerID(job),
 		Source:           target.ref.Source,
 		VKPeerID:         target.ref.VKPeerID,
 		ExternalThreadID: target.ref.ExternalThreadID,
@@ -282,6 +288,16 @@ func (s *Service) getOrCreateConversation(ctx context.Context, job *domain.Job, 
 		return nil, false, err
 	}
 	return conversation, true, nil
+}
+
+func dialogJobOwnerID(job *domain.Job) uuid.UUID {
+	if job == nil {
+		return uuid.Nil
+	}
+	if job.AccountID != uuid.Nil {
+		return job.AccountID
+	}
+	return job.UserID
 }
 
 func (s *Service) renderPrompt(summary string, recent []*domain.ConversationMessage, current string) string {

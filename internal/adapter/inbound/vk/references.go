@@ -55,8 +55,8 @@ type vkReferenceArtifactResult struct {
 	HasReferences bool
 }
 
-func (h *Handler) prepareVideoReferenceArtifacts(ctx context.Context, userID uuid.UUID, spec videoModeSpec, attachments []vkAttachment) ([]uuid.UUID, string, string, bool) {
-	result := h.prepareReferenceArtifacts(ctx, userID, vkReferenceArtifactRequest{
+func (h *Handler) prepareVideoReferenceArtifacts(ctx context.Context, userID, accountID uuid.UUID, spec videoModeSpec, attachments []vkAttachment) ([]uuid.UUID, string, string, bool) {
+	result := h.prepareReferenceArtifacts(ctx, userID, accountID, vkReferenceArtifactRequest{
 		RequiresReferenceImage: spec.RequiresStartImage,
 		SupportsReferenceImage: spec.SupportsReferenceImage,
 		MaxReferenceImages:     spec.MaxReferenceImages,
@@ -91,7 +91,7 @@ func (h *Handler) imageReferenceArtifactRequest(selection photoDialogSelection) 
 	}
 }
 
-func (h *Handler) prepareReferenceArtifacts(ctx context.Context, userID uuid.UUID, req vkReferenceArtifactRequest, attachments []vkAttachment) vkReferenceArtifactResult {
+func (h *Handler) prepareReferenceArtifacts(ctx context.Context, userID, accountID uuid.UUID, req vkReferenceArtifactRequest, attachments []vkAttachment) vkReferenceArtifactResult {
 	photoRefs := vkPhotoReferences(attachments)
 	result := vkReferenceArtifactResult{HasReferences: len(photoRefs) > 0}
 	if len(photoRefs) == 0 {
@@ -141,7 +141,7 @@ func (h *Handler) prepareReferenceArtifacts(ctx context.Context, userID uuid.UUI
 		if aspectRatio == "" && metadata.Width > 0 && metadata.Height > 0 {
 			aspectRatio = closestVKAllowedAspectRatio(metadata.Width, metadata.Height, req.AllowedAspectRatios)
 		}
-		artifact, err := saver.SaveBytesArtifactWithMetadata(ctx, userID, nil, domain.ArtifactKindInput, domain.MediaTypeImage, mimeType, data, metadata)
+		artifact, err := saver.SaveBytesArtifactWithMetadataForAccount(ctx, userID, accountID, nil, domain.ArtifactKindInput, domain.MediaTypeImage, mimeType, data, metadata)
 		if err != nil {
 			h.logger.Warn("vk reference photo store failed", "error_type", fmt.Sprintf("%T", err))
 			result.Notice = req.Messages.StoreFailed

@@ -16,7 +16,7 @@ import (
 
 const maxReferenceArtifacts = 16
 
-func (h *Handler) validateReferenceArtifacts(w http.ResponseWriter, r *http.Request, userID uuid.UUID, op domain.OperationType, ids []uuid.UUID) bool {
+func (h *Handler) validateReferenceArtifacts(w http.ResponseWriter, r *http.Request, accountID uuid.UUID, op domain.OperationType, ids []uuid.UUID) bool {
 	if op != domain.OperationImageGenerate && op != domain.OperationVideoGenerate {
 		writeError(w, http.StatusBadRequest, "reference_artifacts require image_generate or video_generate")
 		return false
@@ -44,7 +44,7 @@ func (h *Handler) validateReferenceArtifacts(w http.ResponseWriter, r *http.Requ
 			writeError(w, http.StatusNotFound, "not found")
 			return false
 		}
-		if artifact.OwnerUserID != userID {
+		if miniAppArtifactOwnerID(artifact) != accountID {
 			writeError(w, http.StatusNotFound, "not found")
 			return false
 		}
@@ -56,7 +56,7 @@ func (h *Handler) validateReferenceArtifacts(w http.ResponseWriter, r *http.Requ
 	return true
 }
 
-func (h *Handler) videoAspectRatioFromReferenceArtifacts(ctx context.Context, userID uuid.UUID, route VideoRouteDTO, ids []uuid.UUID) string {
+func (h *Handler) videoAspectRatioFromReferenceArtifacts(ctx context.Context, accountID uuid.UUID, route VideoRouteDTO, ids []uuid.UUID) string {
 	if h.deps.Artifacts == nil || len(ids) == 0 || len(route.AllowedAspectRatios) == 0 {
 		return ""
 	}
@@ -70,7 +70,7 @@ func (h *Handler) videoAspectRatioFromReferenceArtifacts(ctx context.Context, us
 		}
 		seen[id] = struct{}{}
 		artifact, err := h.deps.Artifacts.GetByID(ctx, id)
-		if err != nil || artifact == nil || artifact.OwnerUserID != userID {
+		if err != nil || miniAppArtifactOwnerID(artifact) != accountID {
 			continue
 		}
 		if artifact.Kind != domain.ArtifactKindInput || artifact.MediaType != domain.MediaTypeImage || artifact.Status != domain.ArtifactStatusReady {
@@ -89,6 +89,26 @@ func (h *Handler) videoAspectRatioFromReferenceArtifacts(ctx context.Context, us
 		}
 	}
 	return ""
+}
+
+func miniAppJobOwnerID(job *domain.Job) uuid.UUID {
+	if job == nil {
+		return uuid.Nil
+	}
+	if job.AccountID != uuid.Nil {
+		return job.AccountID
+	}
+	return job.UserID
+}
+
+func miniAppArtifactOwnerID(artifact *domain.Artifact) uuid.UUID {
+	if artifact == nil {
+		return uuid.Nil
+	}
+	if artifact.OwnerAccountID != uuid.Nil {
+		return artifact.OwnerAccountID
+	}
+	return artifact.OwnerUserID
 }
 
 func allowedAspectRatioForDimensions(width, height int, allowed []string) string {

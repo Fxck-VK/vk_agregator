@@ -527,6 +527,10 @@ func TestAccountAPIPasswordResetUsesEmailCode(t *testing.T) {
 	if err := service.auth.SetPasswordForVerifiedEmail(ctx, vk.AccountID, vk.AccountID, "owner@example.com", "old password value"); err != nil {
 		t.Fatalf("set password: %v", err)
 	}
+	oldTokens, err := service.auth.IssueSession(ctx, vk.AccountID, accountauth.SessionMetadata{DeviceInfo: "before-reset"})
+	if err != nil {
+		t.Fatalf("issue old session: %v", err)
+	}
 
 	req := httptest.NewRequest(http.MethodPost, "/account/password/request-reset", strings.NewReader(`{"email":"owner@example.com"}`))
 	rec := httptest.NewRecorder()
@@ -545,6 +549,14 @@ func TestAccountAPIPasswordResetUsesEmailCode(t *testing.T) {
 	h.Routes().ServeHTTP(rec, req)
 	if rec.Code != http.StatusNoContent {
 		t.Fatalf("reset status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+
+	refreshBody := fmt.Sprintf(`{"refresh_token":%q}`, oldTokens.RefreshToken)
+	req = httptest.NewRequest(http.MethodPost, "/account/sessions/refresh", strings.NewReader(refreshBody))
+	rec = httptest.NewRecorder()
+	h.Routes().ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("old refresh status after reset = %d, want 401, body = %s", rec.Code, rec.Body.String())
 	}
 
 	req = httptest.NewRequest(http.MethodPost, "/account/password/login", strings.NewReader(`{"email":"owner@example.com","password":"old password value"}`))
@@ -621,6 +633,46 @@ func TestAccountAPIOAuthLinkAttachesSafeIdentity(t *testing.T) {
 		t.Fatalf("safe google identity missing: %s", rec.Body.String())
 	}
 	assertNoRawOAuthMaterial(t, rec.Body.String())
+}
+
+func TestAccountAPIOAuthLinkConflictRequiresMergeConfirmation(t *testing.T) {
+	h, service := newTestHandler(t)
+	ctx := context.Background()
+	owner, err := service.auth.ResolveVKID(ctx, 1001)
+	if err != nil {
+		t.Fatalf("resolve owner vk: %v", err)
+	}
+	if _, err := service.account.LinkVerifiedIdentity(ctx, owner.AccountID, owner.AccountID, domain.VerifiedAccountLogin{
+		Method:     domain.AccountLoginGoogle,
+		ExternalID: "google-subject-conflict",
+		Verified:   true,
+	}); err != nil {
+		t.Fatalf("link google to owner: %v", err)
+	}
+	h.deps.OAuth = fakeOAuthVerifier{
+		login: domain.VerifiedAccountLogin{
+			Method:     domain.AccountLoginGoogle,
+			ExternalID: "google-subject-conflict",
+			Verified:   true,
+		},
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/account/oauth/link", strings.NewReader(`{"provider":"google","id_token":"raw-id-token"}`))
+	req.Header.Set("X-VK-User-ID", "2002")
+	rec := httptest.NewRecorder()
+	h.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("oauth conflict status = %d, want 409, body = %s", rec.Code, rec.Body.String())
+	}
+	assertNoRawOAuthMaterial(t, rec.Body.String())
+	resolved, err := service.auth.ResolveVerifiedGoogleSubject(ctx, "google-subject-conflict")
+	if err != nil {
+		t.Fatalf("resolve google after conflict: %v", err)
+	}
+	if resolved.AccountID != owner.AccountID {
+		t.Fatalf("conflict moved google identity to account %s, want %s", resolved.AccountID, owner.AccountID)
+	}
 }
 
 func TestAccountAPIOAuthRejectsInvalidAssertionWithoutLeak(t *testing.T) {

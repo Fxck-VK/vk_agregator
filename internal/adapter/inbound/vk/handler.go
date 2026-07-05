@@ -817,6 +817,7 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 	if err != nil {
 		return fmt.Errorf("ensure user: %w", err)
 	}
+	accountID := user.EffectiveAccountID()
 
 	// Command: classify the message into a normalized command.
 	parsed := h.deps.Router.Parse(text)
@@ -981,7 +982,7 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 		return nil
 	}
 	if photoTextJob && len(vkPhotoReferences(attachments)) > 0 {
-		result := h.prepareReferenceArtifacts(ctx, user.ID, h.imageReferenceArtifactRequest(photoSelection), attachments)
+		result := h.prepareReferenceArtifacts(ctx, user.ID, accountID, h.imageReferenceArtifactRequest(photoSelection), attachments)
 		if !result.OK {
 			if err := h.sendImageReferenceNotice(ctx, idemKey, peerID, result.Notice); err != nil {
 				return fmt.Errorf("send image reference notice: %w", err)
@@ -998,7 +999,7 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 	}
 	if videoTextJob {
 		var ok bool
-		videoReferenceIDs, videoAspectRatio, videoBlockedMessage, ok = h.prepareVideoReferenceArtifacts(ctx, user.ID, videoSpec, attachments)
+		videoReferenceIDs, videoAspectRatio, videoBlockedMessage, ok = h.prepareVideoReferenceArtifacts(ctx, user.ID, accountID, videoSpec, attachments)
 		if !ok {
 			if err := h.sendVideoReferenceNotice(ctx, idemKey, peerID, videoBlockedMessage); err != nil {
 				return fmt.Errorf("send video reference notice: %w", err)
@@ -1179,6 +1180,7 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 		metrics.ObserveProductPromptLength("vk_bot", string(parsed.Operation), string(parsed.Modality), parsed.Prompt)
 		job, err := h.deps.Orchestrator.CreateJob(ctx, joborchestrator.CreateJobInput{
 			UserID:              user.ID,
+			AccountID:           accountID,
 			Source:              "vk_bot",
 			VKPeerID:            peerID,
 			CommandID:           cmd.ID,
@@ -1393,6 +1395,7 @@ func (h *Handler) videoPromptInstructionText(spec videoModeSpec) string {
 }
 
 func (h *Handler) createAndSendTopUpPayment(ctx context.Context, groupID int64, eventID, idemKey string, peerID int64, user *domain.User, productCode string, forceNew bool) error {
+	accountID := user.EffectiveAccountID()
 	email := strings.TrimSpace(h.cfg.TopUpReceiptEmail)
 	phone := strings.TrimSpace(h.cfg.TopUpReceiptPhone)
 	if email == "" && phone == "" {
@@ -1410,7 +1413,7 @@ func (h *Handler) createAndSendTopUpPayment(ctx context.Context, groupID int64, 
 	}
 	returnURL := h.topUpReturnURL(groupID)
 	if !forceNew {
-		if active, ok, err := h.activeTopUpIntent(ctx, user.ID, returnURL); err != nil {
+		if active, ok, err := h.activeTopUpIntent(ctx, accountID, returnURL); err != nil {
 			return fmt.Errorf("load active top-up intent: %w", err)
 		} else if ok {
 			activeProductCode := paymentIntentProductCode(active)
@@ -1421,6 +1424,7 @@ func (h *Handler) createAndSendTopUpPayment(ctx context.Context, groupID int64, 
 	}
 	result, err := h.deps.Payment.CreateIntent(ctx, paymentservice.CreateIntentInput{
 		UserID:         user.ID,
+		AccountID:      accountID,
 		ProductCode:    productCode,
 		ReceiptEmail:   email,
 		ReceiptPhone:   phone,
@@ -1454,6 +1458,7 @@ func (h *Handler) createAndSendTopUpPayment(ctx context.Context, groupID int64, 
 	if h.cfg.TopUpStatusEditEnabled && messageID > 0 {
 		if _, err := h.deps.Payment.AttachVKBotPaymentMessage(ctx, paymentservice.AttachVKBotPaymentMessageInput{
 			UserID:    user.ID,
+			AccountID: accountID,
 			IntentID:  result.Intent.ID,
 			VKPeerID:  peerID,
 			MessageID: messageID,
@@ -1815,7 +1820,7 @@ func (h *Handler) currentBalance(ctx context.Context, user *domain.User) (int64,
 	if user == nil {
 		return 0, nil
 	}
-	acc, err := h.deps.Billing.EnsureAccount(ctx, user.ID)
+	acc, err := h.deps.Billing.EnsureAccountForOwner(ctx, user.ID, user.EffectiveAccountID())
 	if err != nil {
 		return 0, fmt.Errorf("ensure billing account: %w", err)
 	}

@@ -225,8 +225,11 @@ Rules:
 - request and verify rate-limit keys must not contain raw email values;
 - responses must not echo raw email values or verification codes;
 - expired challenges return a controlled failure and are deleted;
-- the default runtime sender is fail-closed until a real email delivery adapter
-  is configured.
+- the default runtime sender is fail-closed until real delivery is explicitly
+  configured with `ACCOUNT_EMAIL_DELIVERY_PROVIDER=smtp`;
+- the SMTP adapter is used only by the account link service, sends plaintext
+  verification codes through the configured mail relay, and must not log codes,
+  passwords or raw recipient values.
 
 Phone linking uses the same method-specific verifier boundary:
 
@@ -253,8 +256,12 @@ Rules:
 - request and verify rate-limit keys must not contain raw phone values;
 - responses must show only masked phone labels and must not echo OTP codes;
 - expired challenges return a controlled failure and are deleted;
-- the default runtime sender is fail-closed until a real SMS/phone delivery
-  adapter is configured.
+- the default runtime sender is fail-closed until real delivery is explicitly
+  configured with `ACCOUNT_PHONE_DELIVERY_PROVIDER=http`;
+- the HTTP phone adapter is a generic SMS/OTP provider boundary. It accepts a
+  templated request body with `{{phone}}` and `{{code}}`, treats non-2xx
+  responses as delivery failures, and must not log request bodies, response
+  bodies or raw phone values.
 
 OAuth and platform login use provider-specific adapters under
 `internal/adapter/accountoauth`:
@@ -459,6 +466,10 @@ The target migration is additive:
 - Session tokens and refresh tokens are stored only as hashes.
 - Passwords and OTP secrets are stored only as strong hashes or verifier
   material.
+- Email/password credentials can be created only for an email identity that is
+  already verified and linked to the same account.
+- Password reset requires the same verified email code path and revokes active
+  account sessions after the credential is rotated.
 - Link, unlink and merge actions are always audited.
 - Account and identity APIs must not expose raw provider tokens, launch params,
   full phone/email values or private artifact URLs.
@@ -469,6 +480,33 @@ The target migration is additive:
 - Account merge must stay disabled unless a dedicated confirmed and audited
   merge flow exists.
 
+## Conflict And Merge Rules
+
+Identity conflicts must be treated as account-merge candidates, not as a reason
+to silently move ownership.
+
+Rules:
+
+- linking an identity that already belongs to the same `account_id` is
+  idempotent and may return the existing safe identity;
+- linking email, phone, Google, Apple, Telegram, VK ID or VK identity that
+  already belongs to another `account_id` must return a controlled conflict
+  (`ErrAccountMergeRequiresConfirmation` at the account auth boundary);
+- the system must not copy, move or merge balance, ledger entries, jobs,
+  artifacts, payment intents, referrals or conversations during a conflicting
+  link attempt;
+- resolving an already known VK/platform identity must return the existing
+  account instead of creating a second account;
+- account merge needs a separate flow that proves control over both accounts,
+  shows the consequences, records audit and receives explicit confirmation;
+- financial merge rules are conservative: ledger history remains append-only,
+  payment/refund ownership is not rewritten implicitly, and operator review is
+  required before any future money-related merge path;
+- until that dedicated flow exists, `accountauth.MergeAccounts` stays blocked
+  and returns a non-success error even when the caller passes `confirmed=true`;
+- HTTP account endpoints map merge-required conflicts to `409 Conflict` and do
+  not reveal which account owns the conflicting identity.
+
 ## Security And Audit Foundation
 
 Runtime code now includes explicit guard rails for the future account auth
@@ -477,17 +515,26 @@ surface:
 - `AccountSession` stores `refresh_token_hash`, never a raw refresh token;
 - `AccountCredential` stores `secret_hash`, never a raw password, OTP secret or
   passkey secret;
+- password login uses a salted PBKDF2-SHA256 verifier and never creates
+  accounts without a pre-existing verified email identity;
+- password reset reuses the verified email-code flow, rotates the credential,
+  writes audit and revokes active sessions when session storage is wired;
 - `AccountIdentity.SafeRef()` returns a PII-free identity reference for APIs and
   logs;
 - `accountauth` accepts only verified login assertions and rejects unverified
   email/password, phone OTP, OAuth and platform login claims;
 - `accountauth.LinkVerifiedIdentity` requires the actor account to match the
   account being modified until a separate operator flow exists;
+- `accountauth.LinkVerifiedIdentity` converts conflicts for already-owned
+  identities into `ErrAccountMergeRequiresConfirmation` so user-facing flows do
+  not accidentally imply an automatic merge;
 - `accountauth.UnlinkIdentity` applies the same ownership check;
 - `accountauth.MergeAccounts` intentionally returns
   `ErrAccountMergeRequiresConfirmation` unless a future confirmed merge flow is
   implemented;
-- login/link/unlink rate-limit keys are hashed before they reach the limiter;
+- login/link/unlink/password rate-limit keys are hashed before they reach the
+  limiter, and `cmd/api` wires account auth to a Redis-backed limiter so the
+  quota is shared across API instances;
 - PostgreSQL `AccountIdentityRepository` writes `account_links_audit` records
   for account/identity link and unlink mutations, and the in-memory repository
   mirrors that behavior for tests and DEV runs.
@@ -505,12 +552,18 @@ suite covers these invariants:
 - a new VK user receives an implicit account on first resolve;
 - email linking attaches to the existing account and is idempotent;
 - attempting to link an already bound identity to another account returns a
-  conflict and does not change balance/history;
+  merge-required conflict and does not change balance/history;
 - unlink refuses to remove the last usable identity from an account;
 - link/unlink audit rows stay PII-free;
-- login, link and unlink rate limits are enforced with hashed keys;
+- login, link, unlink and password set/reset rate limits are enforced with
+  hashed keys;
+- password reset revokes previously active web/mobile sessions;
 - billing ledger entries carry `owner_account_id` and are checked through the
   canonical account owner during rollout.
+- E2E smoke covers the key post-use registration path: VK user receives an
+  implicit account, receives a payment top-up, creates jobs, links an email,
+  logs in through email/password web flow, and still sees the same balance,
+  jobs and payment history through the same `account_id`.
 
 ## Non-Goals For Current Identity Rollout
 

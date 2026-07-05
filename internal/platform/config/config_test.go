@@ -46,6 +46,90 @@ func TestValidateRealModesRequireCredentialsOutsideProduction(t *testing.T) {
 	}
 }
 
+func TestValidateAccountEmailDeliverySMTPConfig(t *testing.T) {
+	cfg := config.Config{
+		AccountEmailDeliveryProvider: "smtp",
+		AccountEmailSMTPPort:         587,
+		AccountEmailSMTPTLSMode:      "starttls",
+	}
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "ACCOUNT_EMAIL_SMTP_HOST") {
+		t.Fatalf("expected ACCOUNT_EMAIL_SMTP_HOST validation error, got %v", err)
+	}
+
+	cfg.AccountEmailSMTPHost = "smtp.example.test"
+	err = cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "ACCOUNT_EMAIL_SMTP_FROM") {
+		t.Fatalf("expected ACCOUNT_EMAIL_SMTP_FROM validation error, got %v", err)
+	}
+
+	cfg.AccountEmailSMTPFrom = "noreply@example.test"
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate() error = %v", err)
+	}
+}
+
+func TestValidateAccountPhoneDeliveryHTTPConfig(t *testing.T) {
+	cfg := config.Config{
+		AccountPhoneDeliveryProvider: "http",
+		AccountPhoneHTTPURL:          "https://sms.example.test/send",
+		AccountPhoneHTTPMethod:       "POST",
+		AccountPhoneHTTPBodyTemplate: `{"to":"{{phone}}"}`,
+	}
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "{{phone}} and {{code}}") {
+		t.Fatalf("expected body template placeholder validation error, got %v", err)
+	}
+
+	cfg.AccountPhoneHTTPBodyTemplate = `{"to":"{{phone}}","otp":"{{code}}"}`
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate() error = %v", err)
+	}
+}
+
+func TestLoadAccountDeliveryConfig(t *testing.T) {
+	t.Setenv("ACCOUNT_EMAIL_DELIVERY_PROVIDER", "smtp")
+	t.Setenv("ACCOUNT_EMAIL_SMTP_HOST", "smtp.example.test")
+	t.Setenv("ACCOUNT_EMAIL_SMTP_PORT", "2525")
+	t.Setenv("ACCOUNT_EMAIL_SMTP_USERNAME", "smtp-user")
+	t.Setenv("ACCOUNT_EMAIL_SMTP_PASSWORD", "smtp-password")
+	t.Setenv("ACCOUNT_EMAIL_SMTP_FROM", "noreply@example.test")
+	t.Setenv("ACCOUNT_EMAIL_SMTP_SUBJECT", "Verify")
+	t.Setenv("ACCOUNT_EMAIL_SMTP_TLS_MODE", "none")
+	t.Setenv("ACCOUNT_EMAIL_SMTP_TIMEOUT", "3s")
+	t.Setenv("ACCOUNT_PHONE_DELIVERY_PROVIDER", "http")
+	t.Setenv("ACCOUNT_PHONE_HTTP_URL", "https://sms.example.test/send")
+	t.Setenv("ACCOUNT_PHONE_HTTP_METHOD", "PATCH")
+	t.Setenv("ACCOUNT_PHONE_HTTP_AUTH_HEADER", "Authorization")
+	t.Setenv("ACCOUNT_PHONE_HTTP_AUTH_VALUE", "Bearer token")
+	t.Setenv("ACCOUNT_PHONE_HTTP_CONTENT_TYPE", "application/vnd.sms+json")
+	t.Setenv("ACCOUNT_PHONE_HTTP_BODY_TEMPLATE", `{"to":"{{phone}}","otp":"{{code}}"}`)
+	t.Setenv("ACCOUNT_PHONE_HTTP_TIMEOUT", "4s")
+
+	cfg := config.Load()
+	if cfg.AccountEmailDeliveryProvider != "smtp" ||
+		cfg.AccountEmailSMTPHost != "smtp.example.test" ||
+		cfg.AccountEmailSMTPPort != 2525 ||
+		cfg.AccountEmailSMTPUsername != "smtp-user" ||
+		cfg.AccountEmailSMTPPassword != "smtp-password" ||
+		cfg.AccountEmailSMTPFrom != "noreply@example.test" ||
+		cfg.AccountEmailSMTPSubject != "Verify" ||
+		cfg.AccountEmailSMTPTLSMode != "none" ||
+		cfg.AccountEmailSMTPTimeout != 3*time.Second {
+		t.Fatalf("unexpected email delivery config: %+v", cfg)
+	}
+	if cfg.AccountPhoneDeliveryProvider != "http" ||
+		cfg.AccountPhoneHTTPURL != "https://sms.example.test/send" ||
+		cfg.AccountPhoneHTTPMethod != "PATCH" ||
+		cfg.AccountPhoneHTTPAuthHeader != "Authorization" ||
+		cfg.AccountPhoneHTTPAuthValue != "Bearer token" ||
+		cfg.AccountPhoneHTTPContentType != "application/vnd.sms+json" ||
+		cfg.AccountPhoneHTTPBodyTemplate != `{"to":"{{phone}}","otp":"{{code}}"}` ||
+		cfg.AccountPhoneHTTPTimeout != 4*time.Second {
+		t.Fatalf("unexpected phone delivery config: %+v", cfg)
+	}
+}
+
 func TestLoadProviderChain(t *testing.T) {
 	t.Setenv("PROVIDER", "mock")
 	t.Setenv("PROVIDER_CHAIN", "deepinfra,mock")
@@ -2237,6 +2321,8 @@ func TestLoadMiniAppJobRateLimit(t *testing.T) {
 	t.Setenv("PAYMENT_REDIRECT_RATE_LIMIT_BURST", "11")
 	t.Setenv("ADMIN_RATE_LIMIT_LIMIT", "77")
 	t.Setenv("ADMIN_RATE_LIMIT_WINDOW", "2m")
+	t.Setenv("ACCOUNT_AUTH_RATE_LIMIT_LIMIT", "12")
+	t.Setenv("ACCOUNT_AUTH_RATE_LIMIT_WINDOW", "4m")
 
 	cfg := config.Load()
 	if cfg.MiniAppJobRateLimitRPS != 2.5 {
@@ -2256,6 +2342,12 @@ func TestLoadMiniAppJobRateLimit(t *testing.T) {
 	}
 	if cfg.AdminRateLimitWindow != 2*time.Minute {
 		t.Fatalf("AdminRateLimitWindow = %v", cfg.AdminRateLimitWindow)
+	}
+	if cfg.AccountAuthRateLimitLimit != 12 {
+		t.Fatalf("AccountAuthRateLimitLimit = %v", cfg.AccountAuthRateLimitLimit)
+	}
+	if cfg.AccountAuthRateLimitWindow != 4*time.Minute {
+		t.Fatalf("AccountAuthRateLimitWindow = %v", cfg.AccountAuthRateLimitWindow)
 	}
 }
 

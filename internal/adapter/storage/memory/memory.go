@@ -208,9 +208,26 @@ func (r *JobRepo) Update(_ context.Context, j *domain.Job) error {
 func (r *JobRepo) ListByUser(_ context.Context, userID uuid.UUID, limit, offset int) ([]*domain.Job, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	matched := r.jobsForOwnerLocked(userID, func(j domain.Job, ownerID uuid.UUID) bool {
+		return j.AccountID == ownerID
+	})
+	if len(matched) == 0 {
+		matched = r.jobsForOwnerLocked(userID, func(j domain.Job, ownerID uuid.UUID) bool {
+			return j.UserID == ownerID
+		})
+	}
+	var out []*domain.Job
+	for i := offset; i < len(matched) && len(out) < limit; i++ {
+		j := matched[i]
+		out = append(out, &j)
+	}
+	return out, nil
+}
+
+func (r *JobRepo) jobsForOwnerLocked(ownerID uuid.UUID, matches func(domain.Job, uuid.UUID) bool) []domain.Job {
 	matched := make([]domain.Job, 0, len(r.byID))
 	for _, j := range r.byID {
-		if j.UserID == userID || j.AccountID == userID {
+		if matches(j, ownerID) {
 			matched = append(matched, j)
 		}
 	}
@@ -220,12 +237,7 @@ func (r *JobRepo) ListByUser(_ context.Context, userID uuid.UUID, limit, offset 
 		}
 		return matched[i].CreatedAt.After(matched[k].CreatedAt)
 	})
-	var out []*domain.Job
-	for i := offset; i < len(matched) && len(out) < limit; i++ {
-		j := matched[i]
-		out = append(out, &j)
-	}
-	return out, nil
+	return matched
 }
 
 func (r *JobRepo) List(_ context.Context, filter domain.JobFilter, limit, offset int) ([]*domain.Job, error) {
@@ -307,25 +319,39 @@ func (r *JobRepo) filterJobsLocked(filter domain.JobFilter) []domain.Job {
 func (r *JobRepo) CountActiveByUserOperation(_ context.Context, userID uuid.UUID, operation domain.OperationType) (int, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	count := 0
-	for _, j := range r.byID {
-		if (j.UserID == userID || j.AccountID == userID) && j.OperationType == operation && j.Status.IsActiveWork() {
-			count++
-		}
+	count := r.countJobsByOwnerLocked(userID, func(j domain.Job, ownerID uuid.UUID) bool {
+		return j.AccountID == ownerID && j.OperationType == operation && j.Status.IsActiveWork()
+	})
+	if count > 0 {
+		return count, nil
 	}
-	return count, nil
+	return r.countJobsByOwnerLocked(userID, func(j domain.Job, ownerID uuid.UUID) bool {
+		return j.UserID == ownerID && j.OperationType == operation && j.Status.IsActiveWork()
+	}), nil
 }
 
 func (r *JobRepo) CountSucceededByUser(_ context.Context, userID uuid.UUID) (int, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	count := r.countJobsByOwnerLocked(userID, func(j domain.Job, ownerID uuid.UUID) bool {
+		return j.AccountID == ownerID && j.Status == domain.JobStatusSucceeded
+	})
+	if count > 0 {
+		return count, nil
+	}
+	return r.countJobsByOwnerLocked(userID, func(j domain.Job, ownerID uuid.UUID) bool {
+		return j.UserID == ownerID && j.Status == domain.JobStatusSucceeded
+	}), nil
+}
+
+func (r *JobRepo) countJobsByOwnerLocked(ownerID uuid.UUID, matches func(domain.Job, uuid.UUID) bool) int {
 	count := 0
 	for _, j := range r.byID {
-		if (j.UserID == userID || j.AccountID == userID) && j.Status == domain.JobStatusSucceeded {
+		if matches(j, ownerID) {
 			count++
 		}
 	}
-	return count, nil
+	return count
 }
 
 // ---------------------------------------------------------------------------

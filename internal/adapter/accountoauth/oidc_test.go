@@ -10,35 +10,73 @@ import (
 )
 
 func TestOIDCAdapterVerifiesSubjectOnly(t *testing.T) {
-	verifier := &fakeOIDCVerifier{
-		claims: OIDCClaims{
-			Subject:   "google-subject-123",
-			Issuer:    "https://accounts.google.com",
-			Audience:  []string{"client-a"},
-			ExpiresAt: time.Now().Add(time.Hour),
+	tests := []struct {
+		name     string
+		provider domain.IdentityProvider
+		method   domain.AccountLoginMethod
+		issuer   string
+		subject  string
+		jwksURL  string
+	}{
+		{
+			name:     "google",
+			provider: domain.IdentityProviderGoogle,
+			method:   domain.AccountLoginGoogle,
+			issuer:   "https://accounts.google.com",
+			subject:  "google-subject-123",
+			jwksURL:  GoogleJWKSURL,
+		},
+		{
+			name:     "apple",
+			provider: domain.IdentityProviderApple,
+			method:   domain.AccountLoginApple,
+			issuer:   "https://appleid.apple.com",
+			subject:  "apple-subject-123",
+			jwksURL:  AppleJWKSURL,
+		},
+		{
+			name:     "vk id",
+			provider: domain.IdentityProviderVK,
+			method:   domain.AccountLoginVKID,
+			issuer:   "https://vkid.example.test",
+			subject:  "777000",
+			jwksURL:  "https://vkid.example.test/jwks",
 		},
 	}
-	adapter := NewOIDCAdapter(OIDCAdapterConfig{
-		Provider: domain.IdentityProviderGoogle,
-		Method:   domain.AccountLoginGoogle,
-		Issuers:  []string{"https://accounts.google.com"},
-		Audience: []string{"client-a"},
-		JWKSURL:  GoogleJWKSURL,
-		Verifier: verifier,
-	})
 
-	login, err := adapter.Verify(context.Background(), VerifyRequest{
-		Provider: domain.IdentityProviderGoogle,
-		IDToken:  "signed-token",
-	})
-	if err != nil {
-		t.Fatalf("verify oidc: %v", err)
-	}
-	if login.Method != domain.AccountLoginGoogle || login.ExternalID != "google-subject-123" || !login.Verified {
-		t.Fatalf("login = %+v", login)
-	}
-	if verifier.seenToken != "signed-token" {
-		t.Fatalf("verifier token = %q", verifier.seenToken)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			verifier := &fakeOIDCVerifier{
+				claims: OIDCClaims{
+					Subject:   tt.subject,
+					Issuer:    tt.issuer,
+					Audience:  []string{"client-a"},
+					ExpiresAt: time.Now().Add(time.Hour),
+				},
+			}
+			adapter := NewOIDCAdapter(OIDCAdapterConfig{
+				Provider: tt.provider,
+				Method:   tt.method,
+				Issuers:  []string{tt.issuer},
+				Audience: []string{"client-a"},
+				JWKSURL:  tt.jwksURL,
+				Verifier: verifier,
+			})
+
+			login, err := adapter.Verify(context.Background(), VerifyRequest{
+				Provider: tt.provider,
+				IDToken:  "signed-token",
+			})
+			if err != nil {
+				t.Fatalf("verify oidc: %v", err)
+			}
+			if login.Method != tt.method || login.ExternalID != tt.subject || !login.Verified {
+				t.Fatalf("login = %+v", login)
+			}
+			if verifier.seenToken != "signed-token" {
+				t.Fatalf("verifier token = %q", verifier.seenToken)
+			}
+		})
 	}
 }
 

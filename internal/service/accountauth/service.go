@@ -102,7 +102,11 @@ func (s *Service) LinkVerifiedIdentity(ctx context.Context, actorAccountID, acco
 	if err := s.checkRateLimit(ctx, "link", provider, normalizedID); err != nil {
 		return nil, err
 	}
-	return s.resolver.LinkIdentity(ctx, accountID, provider, externalID)
+	identity, err := s.resolver.LinkIdentity(ctx, accountID, provider, externalID)
+	if errors.Is(err, domain.ErrConflict) {
+		return nil, domain.ErrAccountMergeRequiresConfirmation
+	}
+	return identity, err
 }
 
 // UnlinkIdentity removes an identity from the current account. The current

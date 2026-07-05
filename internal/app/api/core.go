@@ -54,6 +54,7 @@ type SharedCore struct {
 
 type sharedCoreOptions struct {
 	orchestratorOptions []joborchestrator.Option
+	accountAuthOptions  []accountauth.Option
 	pricingCatalog      *pricingcatalog.Catalog
 }
 
@@ -72,6 +73,14 @@ func WithOrchestratorOptions(opts ...joborchestrator.Option) SharedCoreOption {
 func WithPricingCatalog(catalog *pricingcatalog.Catalog) SharedCoreOption {
 	return func(o *sharedCoreOptions) {
 		o.pricingCatalog = catalog
+	}
+}
+
+// WithAccountAuthOptions forwards runtime account-auth controls such as shared
+// rate limiting without making the shared core own Redis or HTTP concerns.
+func WithAccountAuthOptions(opts ...accountauth.Option) SharedCoreOption {
+	return func(o *sharedCoreOptions) {
+		o.accountAuthOptions = append(o.accountAuthOptions, opts...)
 	}
 }
 
@@ -98,11 +107,12 @@ func NewSharedCore(pool *pgxpool.Pool, cfg config.Config, opts ...SharedCoreOpti
 	payments := postgres.NewPaymentRepository(pool)
 	billing := billingservice.New(billingRepo, billingservice.WithPriceOverrides(cfg.PriceOverrides))
 	identity := identityresolver.New(users, identities, billing)
-	accountAuth := accountauth.New(identity,
+	accountAuthOptions := append([]accountauth.Option{
 		accountauth.WithSessionRepository(sessions),
 		accountauth.WithCredentialRepository(accountSecurity),
 		accountauth.WithAccountAuditRepository(accountSecurity),
-	)
+	}, options.accountAuthOptions...)
+	accountAuth := accountauth.New(identity, accountAuthOptions...)
 	accountSvc := accountservice.New(identities, accountAuth)
 	paymentProvider, err := paymentadapter.NewProvider(cfg)
 	if err != nil {

@@ -355,7 +355,7 @@ func (h *Handler) sendControlResponse(ctx context.Context, t domain.CommandType,
 
 	balance := int64(0)
 	if screen.needsBalance {
-		acc, err := h.deps.Billing.EnsureAccount(ctx, user.ID)
+		acc, err := h.deps.Billing.EnsureAccountForOwner(ctx, user.ID, user.EffectiveAccountID())
 		if err != nil {
 			return fmt.Errorf("ensure billing account: %w", err)
 		}
@@ -381,7 +381,7 @@ func (h *Handler) sendControlResponse(ctx context.Context, t domain.CommandType,
 		keyboard = accountKeyboard(view)
 	case domain.CommandTopUp:
 		returnURL := h.topUpReturnURL(groupID)
-		if pending, ok, err := h.activeTopUpIntent(ctx, user.ID, returnURL); err != nil {
+		if pending, ok, err := h.activeTopUpIntent(ctx, user.EffectiveAccountID(), returnURL); err != nil {
 			return fmt.Errorf("load active top-up intent: %w", err)
 		} else if ok {
 			link, ok := h.topUpPaymentLink(pending)
@@ -474,7 +474,7 @@ func (h *Handler) accountView(ctx context.Context, user *domain.User, balance, g
 		return view, nil
 	}
 	if h.deps.Jobs != nil {
-		count, err := h.deps.Jobs.CountSucceededByUser(ctx, user.ID)
+		count, err := h.deps.Jobs.CountSucceededByUser(ctx, user.EffectiveAccountID())
 		if err != nil {
 			return view, err
 		}
@@ -1036,11 +1036,11 @@ func (h *Handler) topUpProducts(ctx context.Context) ([]*domain.PaymentProduct, 
 	return h.deps.Payment.ListActiveProducts(ctx)
 }
 
-func (h *Handler) activeTopUpIntent(ctx context.Context, userID uuid.UUID, returnURL string) (*domain.PaymentIntent, bool, error) {
+func (h *Handler) activeTopUpIntent(ctx context.Context, ownerID uuid.UUID, returnURL string) (*domain.PaymentIntent, bool, error) {
 	if h.deps.Payment == nil {
 		return nil, false, nil
 	}
-	intent, err := h.deps.Payment.ActiveWaitingIntentForSource(ctx, userID, "vk_bot")
+	intent, err := h.deps.Payment.ActiveWaitingIntentForSource(ctx, ownerID, "vk_bot")
 	if err == nil {
 		if !paymentIntentReturnURLMatches(intent, returnURL) {
 			return nil, false, nil

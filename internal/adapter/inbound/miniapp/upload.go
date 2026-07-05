@@ -69,7 +69,7 @@ func (h *Handler) createArtifact(w http.ResponseWriter, r *http.Request) {
 	}
 
 	saver := artifactservice.New(h.deps.Artifacts, h.deps.Objects, miniAppArtifactBucket)
-	artifact, err := saver.SaveBytesArtifactWithMetadata(r.Context(), user.ID, nil, domain.ArtifactKindInput, domain.MediaTypeImage, mimeType, data, metadata)
+	artifact, err := saver.SaveBytesArtifactWithMetadataForAccount(r.Context(), user.ID, user.EffectiveAccountID(), nil, domain.ArtifactKindInput, domain.MediaTypeImage, mimeType, data, metadata)
 	if err != nil {
 		h.logger.Error("miniapp: upload artifact failed", logging.ErrorAttr(err))
 		resultLabel = "error"

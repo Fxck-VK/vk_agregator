@@ -136,11 +136,22 @@ func (r *JobRepository) Update(ctx context.Context, job *domain.Job) error {
 
 // ListByUser returns the most recent jobs for a user, newest first.
 func (r *JobRepository) ListByUser(ctx context.Context, userID uuid.UUID, limit, offset int) ([]*domain.Job, error) {
-	const q = `SELECT ` + jobColumns + `
-		FROM jobs WHERE user_id = $1 OR account_id = $1
+	jobs, err := r.listByOwnerColumn(ctx, "account_id", userID, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	if len(jobs) > 0 {
+		return jobs, nil
+	}
+	return r.listByOwnerColumn(ctx, "user_id", userID, limit, offset)
+}
+
+func (r *JobRepository) listByOwnerColumn(ctx context.Context, column string, ownerID uuid.UUID, limit, offset int) ([]*domain.Job, error) {
+	q := `SELECT ` + jobColumns + `
+		FROM jobs WHERE ` + column + ` = $1
 		ORDER BY created_at DESC
 		LIMIT $2 OFFSET $3`
-	rows, err := r.db.Query(ctx, q, userID, limit, offset)
+	rows, err := r.db.Query(ctx, q, ownerID, limit, offset)
 	if err != nil {
 		return nil, mapError(err)
 	}
@@ -268,14 +279,25 @@ func (r *JobRepository) CountActiveByUserOperation(ctx context.Context, userID u
 	for _, status := range statuses {
 		statusValues = append(statusValues, string(status))
 	}
-	const q = `
+	count, err := r.countActiveByOwnerColumn(ctx, "account_id", userID, operation, statusValues)
+	if err != nil {
+		return 0, err
+	}
+	if count > 0 {
+		return count, nil
+	}
+	return r.countActiveByOwnerColumn(ctx, "user_id", userID, operation, statusValues)
+}
+
+func (r *JobRepository) countActiveByOwnerColumn(ctx context.Context, column string, ownerID uuid.UUID, operation domain.OperationType, statusValues []string) (int, error) {
+	q := `
 		SELECT count(*)
 		FROM jobs
-		WHERE (user_id = $1 OR account_id = $1)
+		WHERE ` + column + ` = $1
 		  AND operation_type = $2
 		  AND status = ANY($3::text[])`
 	var count int
-	if err := r.db.QueryRow(ctx, q, userID, operation, statusValues).Scan(&count); err != nil {
+	if err := r.db.QueryRow(ctx, q, ownerID, operation, statusValues).Scan(&count); err != nil {
 		return 0, mapError(err)
 	}
 	return count, nil
@@ -283,12 +305,23 @@ func (r *JobRepository) CountActiveByUserOperation(ctx context.Context, userID u
 
 // CountSucceededByUser returns completed successful jobs for one user.
 func (r *JobRepository) CountSucceededByUser(ctx context.Context, userID uuid.UUID) (int, error) {
-	const q = `
+	count, err := r.countSucceededByOwnerColumn(ctx, "account_id", userID)
+	if err != nil {
+		return 0, err
+	}
+	if count > 0 {
+		return count, nil
+	}
+	return r.countSucceededByOwnerColumn(ctx, "user_id", userID)
+}
+
+func (r *JobRepository) countSucceededByOwnerColumn(ctx context.Context, column string, ownerID uuid.UUID) (int, error) {
+	q := `
 		SELECT count(*)
 		FROM jobs
-		WHERE (user_id = $1 OR account_id = $1) AND status = $2`
+		WHERE ` + column + ` = $1 AND status = $2`
 	var count int
-	if err := r.db.QueryRow(ctx, q, userID, domain.JobStatusSucceeded).Scan(&count); err != nil {
+	if err := r.db.QueryRow(ctx, q, ownerID, domain.JobStatusSucceeded).Scan(&count); err != nil {
 		return 0, mapError(err)
 	}
 	return count, nil

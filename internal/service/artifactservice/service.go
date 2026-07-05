@@ -117,18 +117,35 @@ func New(repo domain.ArtifactRepository, store ObjectStore, bucket string, opts 
 
 // SaveTextArtifact stores a text payload as an artifact.
 func (s *Service) SaveTextArtifact(ctx context.Context, ownerID uuid.UUID, jobID *uuid.UUID, kind domain.ArtifactKind, text string) (*domain.Artifact, error) {
-	return s.saveBytes(ctx, ownerID, jobID, kind, domain.MediaTypeText, "text/plain; charset=utf-8", []byte(text), domain.ArtifactMediaMetadata{})
+	return s.SaveTextArtifactForAccount(ctx, ownerID, ownerID, jobID, kind, text)
+}
+
+// SaveTextArtifactForAccount stores a text payload for a canonical account
+// owner while retaining the legacy channel user id for compatibility.
+func (s *Service) SaveTextArtifactForAccount(ctx context.Context, userID, accountID uuid.UUID, jobID *uuid.UUID, kind domain.ArtifactKind, text string) (*domain.Artifact, error) {
+	return s.saveBytes(ctx, userID, accountID, jobID, kind, domain.MediaTypeText, "text/plain; charset=utf-8", []byte(text), domain.ArtifactMediaMetadata{})
 }
 
 // SaveBytesArtifact stores raw bytes as an artifact of the given media type.
 func (s *Service) SaveBytesArtifact(ctx context.Context, ownerID uuid.UUID, jobID *uuid.UUID, kind domain.ArtifactKind, mediaType domain.MediaType, mimeType string, data []byte) (*domain.Artifact, error) {
-	return s.saveBytes(ctx, ownerID, jobID, kind, mediaType, mimeType, data, domain.ArtifactMediaMetadata{})
+	return s.SaveBytesArtifactForAccount(ctx, ownerID, ownerID, jobID, kind, mediaType, mimeType, data)
+}
+
+// SaveBytesArtifactForAccount stores raw bytes for a canonical account owner.
+func (s *Service) SaveBytesArtifactForAccount(ctx context.Context, userID, accountID uuid.UUID, jobID *uuid.UUID, kind domain.ArtifactKind, mediaType domain.MediaType, mimeType string, data []byte) (*domain.Artifact, error) {
+	return s.saveBytes(ctx, userID, accountID, jobID, kind, mediaType, mimeType, data, domain.ArtifactMediaMetadata{})
 }
 
 // SaveBytesArtifactWithMetadata stores raw bytes with safe media facts already
 // extracted by a worker-owned media pipeline.
 func (s *Service) SaveBytesArtifactWithMetadata(ctx context.Context, ownerID uuid.UUID, jobID *uuid.UUID, kind domain.ArtifactKind, mediaType domain.MediaType, mimeType string, data []byte, metadata domain.ArtifactMediaMetadata) (*domain.Artifact, error) {
-	return s.saveBytes(ctx, ownerID, jobID, kind, mediaType, mimeType, data, metadata)
+	return s.SaveBytesArtifactWithMetadataForAccount(ctx, ownerID, ownerID, jobID, kind, mediaType, mimeType, data, metadata)
+}
+
+// SaveBytesArtifactWithMetadataForAccount stores raw bytes with metadata for a
+// canonical account owner.
+func (s *Service) SaveBytesArtifactWithMetadataForAccount(ctx context.Context, userID, accountID uuid.UUID, jobID *uuid.UUID, kind domain.ArtifactKind, mediaType domain.MediaType, mimeType string, data []byte, metadata domain.ArtifactMediaMetadata) (*domain.Artifact, error) {
+	return s.saveBytes(ctx, userID, accountID, jobID, kind, mediaType, mimeType, data, metadata)
 }
 
 // SaveVariantWithMetadata stores a derived rendition of an existing artifact.
@@ -152,7 +169,11 @@ func (s *Service) SaveVariantWithMetadata(ctx context.Context, artifact *domain.
 
 	sum := sha256.Sum256(data)
 	sha := hex.EncodeToString(sum[:])
-	key := fmt.Sprintf("artifacts/%s/%s/%s-%s.%s", artifact.OwnerUserID, artifact.ID, variantType, sha, extFor(artifact.MediaType))
+	ownerID := artifact.OwnerAccountID
+	if ownerID == uuid.Nil {
+		ownerID = artifact.OwnerUserID
+	}
+	key := fmt.Sprintf("artifacts/%s/%s/%s-%s.%s", ownerID, artifact.ID, variantType, sha, extFor(artifact.MediaType))
 	if err := s.store.Put(ctx, s.bucket, key, data, mimeType); err != nil {
 		return nil, fmt.Errorf("artifactservice: store variant object: %w", err)
 	}
@@ -193,14 +214,28 @@ func (s *Service) findVariant(ctx context.Context, artifactID uuid.UUID, variant
 // SaveRemoteArtifact downloads a remote URL (e.g. a provider output) and stores
 // it as an artifact. The content type from the response fills in an empty mime.
 func (s *Service) SaveRemoteArtifact(ctx context.Context, ownerID uuid.UUID, jobID *uuid.UUID, kind domain.ArtifactKind, mediaType domain.MediaType, url string) (*domain.Artifact, error) {
-	return s.SaveRemoteArtifactWithMetadata(ctx, ownerID, jobID, kind, mediaType, url, domain.ArtifactMediaMetadata{})
+	return s.SaveRemoteArtifactForAccount(ctx, ownerID, ownerID, jobID, kind, mediaType, url)
+}
+
+// SaveRemoteArtifactForAccount downloads a remote URL and stores it for a
+// canonical account owner.
+func (s *Service) SaveRemoteArtifactForAccount(ctx context.Context, userID, accountID uuid.UUID, jobID *uuid.UUID, kind domain.ArtifactKind, mediaType domain.MediaType, url string) (*domain.Artifact, error) {
+	return s.SaveRemoteArtifactWithMetadataForAccount(ctx, userID, accountID, jobID, kind, mediaType, url, domain.ArtifactMediaMetadata{})
 }
 
 // SaveRemoteArtifactWithMetadata downloads a provider output and stores it with
 // safe metadata produced by the worker-owned media pipeline.
 func (s *Service) SaveRemoteArtifactWithMetadata(ctx context.Context, ownerID uuid.UUID, jobID *uuid.UUID, kind domain.ArtifactKind, mediaType domain.MediaType, url string, metadata domain.ArtifactMediaMetadata) (*domain.Artifact, error) {
+	return s.SaveRemoteArtifactWithMetadataForAccount(ctx, ownerID, ownerID, jobID, kind, mediaType, url, metadata)
+}
+
+// SaveRemoteArtifactWithMetadataForAccount downloads a provider output and
+// stores it for a canonical account owner.
+func (s *Service) SaveRemoteArtifactWithMetadataForAccount(ctx context.Context, userID, accountID uuid.UUID, jobID *uuid.UUID, kind domain.ArtifactKind, mediaType domain.MediaType, url string, metadata domain.ArtifactMediaMetadata) (*domain.Artifact, error) {
+	ownerID := artifactOwnerID(userID, accountID)
 	ctx, span := tracing.Start(ctx, "artifact.download",
 		attribute.String("owner.id", ownerID.String()),
+		attribute.String("owner.user_id", userID.String()),
 		attribute.String("artifact.kind", string(kind)),
 		attribute.String("artifact.media_type", string(mediaType)),
 	)
@@ -219,7 +254,7 @@ func (s *Service) SaveRemoteArtifactWithMetadata(ctx context.Context, ownerID uu
 	if contentType == "" {
 		contentType = "application/octet-stream"
 	}
-	return s.saveBytes(ctx, ownerID, jobID, kind, mediaType, contentType, data, metadata)
+	return s.saveBytes(ctx, userID, ownerID, jobID, kind, mediaType, contentType, data, metadata)
 }
 
 func safeDownloadError(err error) error {
@@ -235,9 +270,11 @@ func safeDownloadError(err error) error {
 
 // saveBytes computes the content hash, reuses only policy-compatible input
 // reference images, uploads new bytes and records artifact metadata.
-func (s *Service) saveBytes(ctx context.Context, ownerID uuid.UUID, jobID *uuid.UUID, kind domain.ArtifactKind, mediaType domain.MediaType, mimeType string, data []byte, metadata domain.ArtifactMediaMetadata) (*domain.Artifact, error) {
+func (s *Service) saveBytes(ctx context.Context, userID, accountID uuid.UUID, jobID *uuid.UUID, kind domain.ArtifactKind, mediaType domain.MediaType, mimeType string, data []byte, metadata domain.ArtifactMediaMetadata) (*domain.Artifact, error) {
+	ownerID := artifactOwnerID(userID, accountID)
 	ctx, span := tracing.Start(ctx, "artifact.store",
 		attribute.String("owner.id", ownerID.String()),
+		attribute.String("owner.user_id", userID.String()),
 		attribute.String("artifact.kind", string(kind)),
 		attribute.String("artifact.media_type", string(mediaType)),
 		attribute.String("artifact.mime_type", mimeType),
@@ -279,7 +316,8 @@ func (s *Service) saveBytes(ctx context.Context, ownerID uuid.UUID, jobID *uuid.
 
 	artifact := &domain.Artifact{
 		ID:                      artifactID,
-		OwnerUserID:             ownerID,
+		OwnerUserID:             userID,
+		OwnerAccountID:          ownerID,
 		JobID:                   jobID,
 		Kind:                    kind,
 		MediaType:               mediaType,
@@ -299,6 +337,13 @@ func (s *Service) saveBytes(ctx context.Context, ownerID uuid.UUID, jobID *uuid.
 	}
 	span.SetAttributes(attribute.String("artifact.id", artifact.ID.String()))
 	return artifact, nil
+}
+
+func artifactOwnerID(userID, accountID uuid.UUID) uuid.UUID {
+	if accountID != uuid.Nil {
+		return accountID
+	}
+	return userID
 }
 
 func classifyArtifact(kind domain.ArtifactKind, mediaType domain.MediaType, status domain.ArtifactStatus) (domain.ArtifactLifecycleClass, string) {

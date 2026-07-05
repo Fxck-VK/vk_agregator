@@ -235,10 +235,10 @@ func (s JobStatus) AllowedNextStatuses() []JobStatus {
 type Job struct {
 	// ID is the internal primary key.
 	ID uuid.UUID `json:"id"`
-	// UserID is the owner of the job.
+	// UserID is the legacy channel user that created the job.
 	UserID uuid.UUID `json:"user_id"`
-	// AccountID is the canonical owner during the multi-surface identity
-	// rollout. Legacy user_id remains populated for compatibility.
+	// AccountID is the canonical owner for billing, history and artifacts.
+	// Legacy user_id remains populated for channel compatibility.
 	AccountID uuid.UUID `json:"account_id,omitempty"`
 	// Source is the trusted product surface that created the job.
 	Source string `json:"source"`
