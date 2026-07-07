@@ -229,13 +229,6 @@ validate_dev_env() {
     done
   fi
 
-  provider_values="$(get_env_value PROVIDER mock),$(get_env_value IMAGE_PROVIDER mock),$(get_env_value VIDEO_PROVIDER mock)"
-  provider_values_lc="$(printf '%s' "${provider_values}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
-  if [[ "${provider_values_lc}" != "mock,mock,mock" ]] && ! is_true_value "$(get_env_value DEV_ALLOW_REAL_AI_PROVIDERS false)"; then
-    echo "Real AI providers in DEV require DEV_ALLOW_REAL_AI_PROVIDERS=true" >&2
-    exit 1
-  fi
-
   if is_true_value "$(get_env_value PROVIDER_BALANCE_BOT_ENABLED false)"; then
     for required in ALERT_TELEGRAM_BOT_TOKEN TELEGRAM_ADMIN_CHAT_ID; do
       require_value "${required}" "required when PROVIDER_BALANCE_BOT_ENABLED=true"
