@@ -567,9 +567,10 @@ push/merge to main
 ```
 
 The deploy workflow is serialized with the `production-deploy` concurrency group,
-so two merges to `main` deploy in order. It writes `PROD_ENV_FILE` from GitHub
-Repository Secrets to the VPS `.env`, injects GHCR credentials, pins `IMAGE_TAG`,
-and never stores production secrets in the repository.
+so two merges to `main` deploy in order. It assembles the VPS `.env` from split
+GitHub Repository Secrets (`ENV_COMMON`, `ENV_PROVIDERS_COMMON`,
+`ENV_SECRETS_PROD`, `ENV_PAYMENTS_PROD`), injects GHCR credentials, pins
+`IMAGE_TAG`, and never stores production secrets in the repository.
 
 Rollback is runtime-only by default: it switches stateless containers back to
 the previous image tag and does not run migration rollback automatically. If

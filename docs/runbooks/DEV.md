@@ -56,14 +56,20 @@ Required GitHub repository secrets:
 - `DEV_DEPLOY_USER`
 - `DEV_DEPLOY_SSH_KEY`
 - `DEV_DEPLOY_PATH`
-- `DEV_ENV_FILE`
+- `ENV_COMMON`
+- `ENV_PROVIDERS_COMMON`
+- `ENV_SECRETS_DEV`
+- `ENV_PAYMENTS_DEV`
 - `GHCR_USERNAME`
 - `GHCR_TOKEN`
 
-The workflow writes `DEV_ENV_FILE` to a temporary file, prepares it with
-`scripts/deploy/prepare-dev-env.sh`, validates it with
+The workflow assembles the DEV runtime env from split GitHub Secrets, prepares
+it with `scripts/deploy/prepare-dev-env.sh`, validates it with
 `scripts/deploy/check-dev-env.sh`, uploads it to the DEV VPS, deploys, then runs
 DEV smoke.
+
+DEV deploy does not read production env secrets. Run DEV/PROD parity as a
+separate operator check when changing env structure.
 
 ## DEV Safety Rules
 
