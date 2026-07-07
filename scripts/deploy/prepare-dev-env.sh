@@ -6,7 +6,7 @@ usage() {
 Usage:
   prepare-dev-env.sh --input <raw-env> --output <rendered-env> --image-tag <tag> --ghcr-username <name> --ghcr-token <token>
 
-Builds a sanitized DEV runtime .env from DEV_ENV_FILE content.
+Builds a sanitized DEV runtime .env from assembled raw env content.
 The script intentionally prints only non-secret readiness flags.
 USAGE
 }
