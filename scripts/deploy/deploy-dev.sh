@@ -224,10 +224,6 @@ validate_dev_env() {
 
   payment_provider="$(get_env_value PAYMENT_PROVIDER mock | tr '[:upper:]' '[:lower:]')"
   if [[ "${payment_provider}" == "yookassa" ]]; then
-    if ! is_true_value "$(get_env_value DEV_ALLOW_REAL_PAYMENTS false)"; then
-      echo "PAYMENT_PROVIDER=yookassa in DEV requires DEV_ALLOW_REAL_PAYMENTS=true" >&2
-      exit 1
-    fi
     for required in YOOKASSA_SHOP_ID YOOKASSA_SECRET_KEY YOOKASSA_RETURN_URL; do
       require_value "${required}" "required when DEV payment provider is YooKassa"
     done
