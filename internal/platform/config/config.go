@@ -914,6 +914,12 @@ func (c Config) Validate() error {
 		if c.VKMenuTopUpEnabled && !safePublicHTTPSBaseURL(c.PublicVKBaseURL) {
 			return fmt.Errorf("config: PUBLIC_VK_BASE_URL must be a valid https URL when VK_MENU_TOP_UP_ENABLED=true in production")
 		}
+		if strings.EqualFold(strings.TrimSpace(c.PaymentProvider), "yookassa") {
+			yooKassaSecretKey := strings.ToLower(strings.TrimSpace(c.YooKassaSecretKey))
+			if yooKassaSecretKey != "" && !strings.HasPrefix(yooKassaSecretKey, "live") {
+				return fmt.Errorf("config: YOOKASSA_SECRET_KEY must be a live YooKassa key in production")
+			}
+		}
 		if c.FeatureDevPaymentTestProductEnabled {
 			return fmt.Errorf("config: FEATURE_DEV_PAYMENT_TEST_PRODUCT_ENABLED is not allowed in production")
 		}

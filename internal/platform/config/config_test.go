@@ -1272,6 +1272,16 @@ func TestValidateProductionRejectsDevPaymentTestProduct(t *testing.T) {
 	}
 }
 
+func TestValidateProductionRejectsTestYooKassaSecretKey(t *testing.T) {
+	cfg := validProductionConfig()
+	cfg.YooKassaSecretKey = "test-yookassa-secret"
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "YOOKASSA_SECRET_KEY") {
+		t.Fatalf("expected YooKassa live key validation error, got %v", err)
+	}
+}
+
 func TestValidateStagingRejectsDevPaymentTestProduct(t *testing.T) {
 	cfg := validProductionConfig()
 	cfg.Env = "staging"
@@ -1368,7 +1378,7 @@ func validProductionConfig() config.Config {
 		VKAppSecret:                  "test-vk-app-secret",
 		PaymentProvider:              "yookassa",
 		YooKassaShopID:               "test-shop",
-		YooKassaSecretKey:            "test-yookassa-secret",
+		YooKassaSecretKey:            "live-yookassa-secret",
 		YooKassaReturnURL:            "https://example.com",
 		PaymentWebhookTrustedProxies: []string{"127.0.0.1"},
 	}
@@ -2141,7 +2151,7 @@ func TestValidateProductionYooKassaRequiresTrustedProxies(t *testing.T) {
 		Env:                 "production",
 		PaymentProvider:     "yookassa",
 		YooKassaShopID:      "shop",
-		YooKassaSecretKey:   "secret",
+		YooKassaSecretKey:   "live-yookassa-secret",
 		YooKassaReturnURL:   "https://app.example.com",
 		VKSecret:            "vk",
 		AdminToken:          "admin",
@@ -2498,7 +2508,7 @@ func productionDeepInfraConfig() config.Config {
 		AdminToken:                   "admin-token",
 		PaymentProvider:              "yookassa",
 		YooKassaShopID:               "shop-id",
-		YooKassaSecretKey:            "secret-key",
+		YooKassaSecretKey:            "live-yookassa-secret",
 		YooKassaReturnURL:            "https://neiirohub.ru/payment-return",
 		PaymentWebhookTrustedProxies: []string{"127.0.0.1"},
 		Provider:                     "deepinfra",
