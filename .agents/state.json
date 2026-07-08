@@ -72,6 +72,7 @@
     "Account identity rollout checks now cover old VK balance/jobs/payments visibility by account_id, implicit accounts for new VK users, idempotent email linking, conflict handling and ledger owner_account_id.",
     "Current business tables have additive account ownership columns for dual-read/dual-write: jobs, payment_intents, artifacts, conversations, referrals and billing credit/ledger surfaces. Subscriptions are target-model only until a real table/domain model exists.",
     "DEV is the daily integration/testing contour; PROD secrets must not be copied from DEV.",
+    "YooKassa payment values are contour-specific: do not value-sync payments.dev.env and payments.prod.env, and do not force YOOKASSA_SECRET_KEY, YOOKASSA_SHOP_ID or YooKassa return URLs to match across DEV, PROD, .env and dev.env.",
     "Provider calls remain isolated in workers/adapters; VK bot, Mini App and cmd/api must not call AI providers directly.",
     "Billing remains ledger-based and payment top-ups require provider-verified webhook/reconciliation."
   ],

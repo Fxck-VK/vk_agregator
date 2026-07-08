@@ -1272,6 +1272,19 @@ func TestValidateProductionRejectsDevPaymentTestProduct(t *testing.T) {
 	}
 }
 
+func TestValidateStagingRejectsDevPaymentTestProduct(t *testing.T) {
+	cfg := validProductionConfig()
+	cfg.Env = "staging"
+	cfg.ArtifactScanner = "none"
+	cfg.OpenAIAPIKey = ""
+	cfg.FeatureDevPaymentTestProductEnabled = true
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "FEATURE_DEV_PAYMENT_TEST_PRODUCT_ENABLED") {
+		t.Fatalf("expected dev payment test product validation error, got %v", err)
+	}
+}
+
 func TestLoadDevPaymentTestProductFlag(t *testing.T) {
 	t.Setenv("FEATURE_DEV_PAYMENT_TEST_PRODUCT_ENABLED", "true")
 

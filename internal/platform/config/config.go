@@ -918,6 +918,9 @@ func (c Config) Validate() error {
 			return fmt.Errorf("config: FEATURE_DEV_PAYMENT_TEST_PRODUCT_ENABLED is not allowed in production")
 		}
 	}
+	if c.IsServerEnv() && c.FeatureDevPaymentTestProductEnabled {
+		return fmt.Errorf("config: FEATURE_DEV_PAYMENT_TEST_PRODUCT_ENABLED is not allowed in staging/production")
+	}
 	if c.usesOpenAI() && c.OpenAIAPIKey == "" {
 		missing = append(missing, "OPENAI_API_KEY")
 	}

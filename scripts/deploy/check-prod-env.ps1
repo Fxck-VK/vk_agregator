@@ -17,7 +17,7 @@ $resolvedEnvFile = if ([System.IO.Path]::IsPathRooted($EnvFile)) {
 }
 
 if (-not (Test-Path -LiteralPath $resolvedEnvFile)) {
-    throw "Server env file not found: $EnvFile. Copy .env.staging.example or .env.prod.example to .env and fill real values."
+    throw "Server env file not found: $EnvFile. Copy .env.prod.example to .env and fill real values."
 }
 
 function Read-EnvFile {
@@ -210,6 +210,9 @@ if ($paymentProvider -eq "yookassa") {
         Require-Value -Values $envValues -Problems $problems -Name $required -Reason "required when PAYMENT_PROVIDER=yookassa"
     }
 }
+if (Is-TrueValue (Get-Value -Values $envValues -Name "FEATURE_DEV_PAYMENT_TEST_PRODUCT_ENABLED" -Default "false")) {
+    Add-Problem -Problems $problems -Name "FEATURE_DEV_PAYMENT_TEST_PRODUCT_ENABLED" -Reason "not allowed in staging/production"
+}
 
 $providerValues = @(
     Get-Value -Values $envValues -Name "PROVIDER"
@@ -278,6 +281,10 @@ if ($prices -match "(^|,)image_generate=0(,|$)") {
 if (Is-TrueValue (Get-Value -Values $envValues -Name "VK_MENU_TOP_UP_ENABLED")) {
     $email = Get-Value -Values $envValues -Name "VK_TOP_UP_RECEIPT_EMAIL"
     $phone = Get-Value -Values $envValues -Name "VK_TOP_UP_RECEIPT_PHONE"
+    Require-HttpsUrl -Values $envValues -Problems $problems -Name "PUBLIC_VK_BASE_URL" -Reason "required for VK top-up payment links"
+    if (-not (Is-TrueValue (Get-Value -Values $envValues -Name "FEATURE_VK_TOPUP_STATUS_EDIT_ENABLED" -Default "false"))) {
+        Add-Problem -Problems $problems -Name "FEATURE_VK_TOPUP_STATUS_EDIT_ENABLED" -Reason "must be true when VK_MENU_TOP_UP_ENABLED=true"
+    }
     if ([string]::IsNullOrWhiteSpace($email) -and [string]::IsNullOrWhiteSpace($phone)) {
         Add-Problem -Problems $problems -Name "VK_TOP_UP_RECEIPT_EMAIL/VK_TOP_UP_RECEIPT_PHONE" -Reason "one receipt contact is required when VK_MENU_TOP_UP_ENABLED=true"
     }

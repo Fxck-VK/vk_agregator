@@ -20,7 +20,8 @@ Do not use production hosts, production VK, real YooKassa or paid AI providers.
 ## Preflight
 
 ```powershell
-Copy-Item .env.loadtest.example .env.loadtest
+Copy-Item .env.dev.example .env.loadtest
+# set APP_ENV=loadtest and keep the Safe Mode values above
 .\scripts\loadtest\loadtest-preflight.ps1 -EnvFile .env.loadtest
 ```
 

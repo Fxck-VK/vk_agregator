@@ -35,7 +35,7 @@ repo_root="$(cd "${script_dir}/../.." && pwd)"
 cd "${repo_root}"
 
 if [[ ! -f "${env_file}" ]]; then
-  echo "Server env file not found: ${env_file}. Copy .env.staging.example or .env.prod.example to .env and fill real values." >&2
+  echo "Server env file not found: ${env_file}. Copy .env.prod.example to .env and fill real values." >&2
   exit 1
 fi
 
@@ -198,6 +198,9 @@ if [[ "${payment_provider}" == "yookassa" ]]; then
     require_value YOOKASSA_WEBHOOK_IP_ALLOWLIST "required when YOOKASSA_WEBHOOK_IP_ALLOWLIST_ENABLED=true"
   fi
 fi
+if is_true_value "$(get_value FEATURE_DEV_PAYMENT_TEST_PRODUCT_ENABLED false)"; then
+  add_problem FEATURE_DEV_PAYMENT_TEST_PRODUCT_ENABLED "not allowed in staging/production"
+fi
 
 if is_true_value "$(get_value PAYMENT_WEBHOOK_REQUIRE_HTTPS)"; then
   require_value PAYMENT_WEBHOOK_TRUSTED_PROXIES "required when PAYMENT_WEBHOOK_REQUIRE_HTTPS=true behind Cloudflare/nginx"
@@ -261,6 +264,10 @@ fi
 if is_true_value "$(get_value VK_MENU_TOP_UP_ENABLED)"; then
   email="$(get_value VK_TOP_UP_RECEIPT_EMAIL)"
   phone="$(get_value VK_TOP_UP_RECEIPT_PHONE)"
+  require_https_url PUBLIC_VK_BASE_URL "required for VK top-up payment links"
+  if ! is_true_value "$(get_value FEATURE_VK_TOPUP_STATUS_EDIT_ENABLED false)"; then
+    add_problem FEATURE_VK_TOPUP_STATUS_EDIT_ENABLED "must be true when VK_MENU_TOP_UP_ENABLED=true"
+  fi
   if [[ -z "${email//[[:space:]]/}" && -z "${phone//[[:space:]]/}" ]]; then
     add_problem "VK_TOP_UP_RECEIPT_EMAIL/VK_TOP_UP_RECEIPT_PHONE" "one receipt contact is required when VK_MENU_TOP_UP_ENABLED=true"
   fi

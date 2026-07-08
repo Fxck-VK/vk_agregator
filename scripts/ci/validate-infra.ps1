@@ -90,16 +90,16 @@ function Assert-Migrations {
 function Assert-NoTrackedEnvFiles {
     $tracked = Get-TrackedFiles
     $allowedTrackedEnv = @(
-        ".env.example",
         ".env.dev.example",
-        ".env.loadtest.example",
-        ".env.prod.example",
-        ".env.staging.example"
+        ".env.prod.example"
     )
     $bad = @(
         $tracked | Where-Object {
+            $path = Join-Path $repoRoot $_
             $leaf = Split-Path $_ -Leaf
-            ($leaf -eq ".env" -or $leaf -like ".env.*") -and $allowedTrackedEnv -notcontains $leaf
+            (Test-Path -LiteralPath $path) -and
+                ($leaf -eq ".env" -or $leaf -like ".env.*") -and
+                $allowedTrackedEnv -notcontains $leaf
         }
     )
 
@@ -1118,7 +1118,7 @@ if (Test-Path -LiteralPath "docker-compose.observability.yml") {
 if (Test-Path -LiteralPath "docker-compose.prod.yml") {
     Invoke-Step "docker compose prod app config" {
         $previousAppEnvFile = $env:APP_ENV_FILE
-        $prodEnvTemplate = if (Test-Path -LiteralPath ".env.prod.example") { ".env.prod.example" } else { ".env.example" }
+        $prodEnvTemplate = ".env.prod.example"
         try {
             $env:APP_ENV_FILE = $prodEnvTemplate
             docker compose --project-name vk-ai-aggregator-prod --env-file $prodEnvTemplate -f docker-compose.prod.yml config | Out-Null
@@ -1133,7 +1133,7 @@ if (Test-Path -LiteralPath "docker-compose.prod.yml") {
     if (Test-Path -LiteralPath "docker-compose.data.yml") {
         Invoke-Step "docker compose prod app+data config" {
             $previousAppEnvFile = $env:APP_ENV_FILE
-            $prodEnvTemplate = if (Test-Path -LiteralPath ".env.prod.example") { ".env.prod.example" } else { ".env.example" }
+            $prodEnvTemplate = ".env.prod.example"
             try {
                 $env:APP_ENV_FILE = $prodEnvTemplate
                 docker compose --project-name vk-ai-aggregator-prod --env-file $prodEnvTemplate -f docker-compose.prod.yml -f docker-compose.data.yml config | Out-Null
@@ -1142,36 +1142,6 @@ if (Test-Path -LiteralPath "docker-compose.prod.yml") {
                     Remove-Item Env:\APP_ENV_FILE -ErrorAction SilentlyContinue
                 } else {
                     $env:APP_ENV_FILE = $previousAppEnvFile
-                }
-            }
-        }
-    }
-    if (Test-Path -LiteralPath ".env.staging.example") {
-        Invoke-Step "docker compose staging app config" {
-            $previousAppEnvFile = $env:APP_ENV_FILE
-            try {
-                $env:APP_ENV_FILE = ".env.staging.example"
-                docker compose --project-name vk-ai-aggregator-staging --env-file .env.staging.example -f docker-compose.prod.yml config | Out-Null
-            } finally {
-                if ($null -eq $previousAppEnvFile) {
-                    Remove-Item Env:\APP_ENV_FILE -ErrorAction SilentlyContinue
-                } else {
-                    $env:APP_ENV_FILE = $previousAppEnvFile
-                }
-            }
-        }
-        if (Test-Path -LiteralPath "docker-compose.data.yml") {
-            Invoke-Step "docker compose staging app+data config" {
-                $previousAppEnvFile = $env:APP_ENV_FILE
-                try {
-                    $env:APP_ENV_FILE = ".env.staging.example"
-                    docker compose --project-name vk-ai-aggregator-staging --env-file .env.staging.example -f docker-compose.prod.yml -f docker-compose.data.yml config | Out-Null
-                } finally {
-                    if ($null -eq $previousAppEnvFile) {
-                        Remove-Item Env:\APP_ENV_FILE -ErrorAction SilentlyContinue
-                    } else {
-                        $env:APP_ENV_FILE = $previousAppEnvFile
-                    }
                 }
             }
         }

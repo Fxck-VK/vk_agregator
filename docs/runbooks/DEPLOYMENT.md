@@ -35,7 +35,10 @@ Do not build images on the VPS unless explicitly debugging a fallback path.
 Production secrets live in GitHub Repository Secrets and the VPS `.env`, never in
 git:
 
-- `PROD_ENV_FILE`
+- `ENV_COMMON`
+- `ENV_PROVIDERS_COMMON`
+- `ENV_SECRETS_PROD`
+- `ENV_PAYMENTS_PROD`
 - `DEPLOY_HOST`
 - `DEPLOY_USER`
 - `DEPLOY_SSH_KEY`
@@ -51,6 +54,8 @@ bash scripts/deploy/check-env-parity.sh --dev .env.dev --prod .env.prod
 ```
 
 The script prints variable names only, never values.
+Production deploy does not read DEV env secrets. Run DEV/PROD parity as a
+separate operator check when changing env structure.
 
 ## VPS Deploy Command
 
