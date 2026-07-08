@@ -18,7 +18,7 @@ VK community, YooKassa/test settings and Cloudflare tunnel.
 Create local env:
 
 ```powershell
-Copy-Item .env.dev.example .env
+Copy-Item dev.env .env
 notepad .env
 ```
 

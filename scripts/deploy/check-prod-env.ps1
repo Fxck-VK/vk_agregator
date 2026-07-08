@@ -17,7 +17,7 @@ $resolvedEnvFile = if ([System.IO.Path]::IsPathRooted($EnvFile)) {
 }
 
 if (-not (Test-Path -LiteralPath $resolvedEnvFile)) {
-    throw "Server env file not found: $EnvFile. Copy .env.prod.example to .env and fill real values."
+    throw "Server env file not found: $EnvFile. Assemble it from split PROD env secrets or create it with real production values."
 }
 
 function Read-EnvFile {

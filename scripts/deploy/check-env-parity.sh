@@ -7,8 +7,8 @@ Usage:
   scripts/deploy/check-env-parity.sh --dev <dev-env> --prod <prod-env> [options]
 
 Options:
-  --dev-template <path>     DEV env template, default: .env.dev.example
-  --prod-template <path>    PROD env contract template, default: .env.prod.example
+  --dev-template <path>     Deprecated compatibility option; ignored
+  --prod-template <path>    Optional production key contract file
   --allowlist <path>        DEV/PROD env-name allowlist, default: scripts/deploy/env-parity.allowlist
   --allow-dev-only <regex>  Additional allowed DEV-only key regex
   --allow-prod-only <regex> Additional allowed PROD-only key regex
@@ -22,8 +22,8 @@ USAGE
 
 dev_env=""
 prod_env=""
-dev_template=".env.dev.example"
-prod_template=".env.prod.example"
+dev_template=""
+prod_template=""
 allowlist="scripts/deploy/env-parity.allowlist"
 extra_dev_only_patterns=()
 extra_prod_only_patterns=()
@@ -87,9 +87,10 @@ require_file() {
 
 require_file "DEV env" "${dev_env}"
 require_file "PROD env" "${prod_env}"
-require_file "DEV template" "${dev_template}"
-require_file "PROD template" "${prod_template}"
 require_file "allowlist" "${allowlist}"
+if [[ -n "${prod_template}" ]]; then
+  require_file "PROD key contract" "${prod_template}"
+fi
 
 tmpdir="$(mktemp -d)"
 trap 'rm -rf "${tmpdir}"' EXIT
@@ -212,8 +213,11 @@ print_list() {
 
 extract_keys "${dev_env}" > "${tmpdir}/dev.keys"
 extract_keys "${prod_env}" > "${tmpdir}/prod.keys"
-extract_keys "${dev_template}" > "${tmpdir}/dev-template.keys"
-extract_keys "${prod_template}" > "${tmpdir}/prod-template.keys"
+if [[ -n "${prod_template}" ]]; then
+  extract_keys "${prod_template}" > "${tmpdir}/prod-template.keys"
+else
+  : > "${tmpdir}/prod-template.keys"
+fi
 load_allowlist "${allowlist}"
 
 comm -13 "${tmpdir}/prod.keys" "${tmpdir}/dev.keys" > "${tmpdir}/dev-only.keys"

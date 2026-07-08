@@ -89,17 +89,12 @@ function Assert-Migrations {
 
 function Assert-NoTrackedEnvFiles {
     $tracked = Get-TrackedFiles
-    $allowedTrackedEnv = @(
-        ".env.dev.example",
-        ".env.prod.example"
-    )
     $bad = @(
         $tracked | Where-Object {
             $path = Join-Path $repoRoot $_
             $leaf = Split-Path $_ -Leaf
             (Test-Path -LiteralPath $path) -and
-                ($leaf -eq ".env" -or $leaf -like ".env.*") -and
-                $allowedTrackedEnv -notcontains $leaf
+                ($leaf -eq ".env" -or $leaf -like ".env.*")
         }
     )
 
@@ -110,62 +105,55 @@ function Assert-NoTrackedEnvFiles {
     Write-Host "tracked env files OK"
 }
 
-function Assert-DevEnvTemplate {
-    $path = Join-Path $repoRoot ".env.dev.example"
-    if (-not (Test-Path -LiteralPath $path)) {
-        throw "DEV env template is missing: .env.dev.example"
+function Assert-NoActiveEnvExampleReferences {
+    $tracked = Get-TrackedFiles
+    $activeFiles = @(
+        $tracked | Where-Object {
+            $_ -notmatch '^(docs/archive/|docs/superpowers/plans/)' -and
+            $_ -notmatch '^\.agents/logs/' -and
+            $_ -notin @(".gitignore", ".gitleaksignore")
+        }
+    )
+    $bad = @()
+    foreach ($file in $activeFiles) {
+        if (-not (Test-Path -LiteralPath $file)) {
+            continue
+        }
+        $content = Get-Content -LiteralPath $file -Raw -ErrorAction SilentlyContinue
+        if ($null -ne $content -and $content -match '\.env\.(dev|prod|staging|loadtest)?\.?example') {
+            $bad += $file
+        }
+    }
+    if ($bad.Count -gt 0) {
+        throw "active files still reference env example files: $($bad -join ', ')"
     }
 
-    $content = Get-Content -LiteralPath $path -Raw
-    $requiredSnippets = @(
-        "APP_ENV=development",
-        "COMPOSE_NETWORK_NAME=vk-ai-aggregator-dev",
-        "DATA_SERVICES_MODE=local",
-        "POSTGRES_MODE=local",
-        "REDIS_MODE=local",
-        "S3_MODE=local",
+    Write-Host "active env example references OK"
+}
+
+function New-ComposeValidationEnvFile {
+    $path = Join-Path ([System.IO.Path]::GetTempPath()) ("vkagg-compose-validate-{0}.env" -f ([guid]::NewGuid().ToString("N")))
+    $appEnvFile = $path.Replace("\", "/")
+    $lines = @(
+        "APP_ENV_FILE=$appEnvFile",
+        "APP_ENV=production",
+        "APP_IMAGE_REGISTRY=ghcr.io/fxck-vk/vk_agregator",
+        "IMAGE_TAG=infra-validate",
+        "BACKUP_IMAGE_TAG=infra-validate",
+        "DATABASE_URL=postgres://vk_ai_aggregator:vk_ai_aggregator@postgres:5432/vk_ai_aggregator?sslmode=disable",
+        "REDIS_ADDR=redis:6379",
+        "S3_ENDPOINT=minio:9000",
+        "S3_ACCESS_KEY=compose_validate_access",
+        "S3_SECRET_KEY=compose_validate_secret",
+        "S3_BUCKET=artifacts",
+        "S3_USE_SSL=false",
         "S3_REGION=us-east-1",
         "S3_ADDRESSING_STYLE=path",
-        "DEV_ALLOW_REAL_AI_PROVIDERS=true",
-        "DEV_ALLOW_REAL_PAYMENTS=false",
-        "DEV_ALLOW_REMOTE_IMAGES=false",
-        "DEV_EXPECTED_TUNNEL_NAME=neiirohub-vk-dev",
-        "DEV_EXPECTED_TUNNEL_HOSTNAME=dev-vk.neiirohub.ru",
-        "PUBLIC_VK_BASE_URL=https://dev-vk.neiirohub.ru",
-        "PUBLIC_APP_BASE_URL=https://dev-app.neiirohub.ru",
-        "PUBLIC_PAYMENT_WEBHOOK_URL=https://dev.neiirohub.ru/billing/webhooks/yookassa",
-        "CLOUDFLARED_TUNNEL_TOKEN=CHANGE_ME_DEV_CLOUDFLARED_TUNNEL_TOKEN",
-        "VK_ACCESS_TOKEN=CHANGE_ME_DEV_VK_ACCESS_TOKEN",
-        "VK_SECRET=CHANGE_ME_DEV_VK_CALLBACK_SECRET",
-        "VK_CONFIRMATION_TOKEN=CHANGE_ME_DEV_VK_CONFIRMATION_TOKEN",
-        "VK_GROUP_ID=CHANGE_ME_DEV_VK_GROUP_ID",
-        "PAYMENT_PROVIDER=mock",
-        "PROVIDER=mock",
-        "PROVIDER_CHAIN=deepinfra,apimart,poyo,runway,mock",
-        "APIMART_BASE_URL=https://api.apimart.ai/v1",
-        "IMAGE_PROVIDER=mock",
-        "VIDEO_PROVIDER=mock"
+        "CLOUDFLARED_TUNNEL_TOKEN=compose-validate-token",
+        "COMPOSE_NETWORK_NAME=vk-ai-aggregator-prod"
     )
-
-    foreach ($snippet in $requiredSnippets) {
-        if (-not $content.Contains($snippet)) {
-            throw "DEV env template is missing required snippet: $snippet"
-        }
-    }
-
-    $forbiddenProdSnippets = @(
-        "https://vk.neiirohub.ru",
-        "https://app.neiirohub.ru",
-        "https://neiirohub.ru/billing/webhooks/yookassa",
-        "239332376"
-    )
-    foreach ($snippet in $forbiddenProdSnippets) {
-        if ($content.Contains($snippet)) {
-            throw "DEV env template contains production-specific value: $snippet"
-        }
-    }
-
-    Write-Host "DEV env template OK"
+    [IO.File]::WriteAllLines($path, $lines, [Text.UTF8Encoding]::new($false))
+    return $path
 }
 
 function Assert-CloudflareConfigHasNoSecrets {
@@ -1116,12 +1104,12 @@ if (Test-Path -LiteralPath "docker-compose.observability.yml") {
 }
 
 if (Test-Path -LiteralPath "docker-compose.prod.yml") {
+    $composeEnvFile = New-ComposeValidationEnvFile
     Invoke-Step "docker compose prod app config" {
         $previousAppEnvFile = $env:APP_ENV_FILE
-        $prodEnvTemplate = ".env.prod.example"
         try {
-            $env:APP_ENV_FILE = $prodEnvTemplate
-            docker compose --project-name vk-ai-aggregator-prod --env-file $prodEnvTemplate -f docker-compose.prod.yml config | Out-Null
+            $env:APP_ENV_FILE = $composeEnvFile
+            docker compose --project-name vk-ai-aggregator-prod --env-file $composeEnvFile -f docker-compose.prod.yml config | Out-Null
         } finally {
             if ($null -eq $previousAppEnvFile) {
                 Remove-Item Env:\APP_ENV_FILE -ErrorAction SilentlyContinue
@@ -1133,10 +1121,9 @@ if (Test-Path -LiteralPath "docker-compose.prod.yml") {
     if (Test-Path -LiteralPath "docker-compose.data.yml") {
         Invoke-Step "docker compose prod app+data config" {
             $previousAppEnvFile = $env:APP_ENV_FILE
-            $prodEnvTemplate = ".env.prod.example"
             try {
-                $env:APP_ENV_FILE = $prodEnvTemplate
-                docker compose --project-name vk-ai-aggregator-prod --env-file $prodEnvTemplate -f docker-compose.prod.yml -f docker-compose.data.yml config | Out-Null
+                $env:APP_ENV_FILE = $composeEnvFile
+                docker compose --project-name vk-ai-aggregator-prod --env-file $composeEnvFile -f docker-compose.prod.yml -f docker-compose.data.yml config | Out-Null
             } finally {
                 if ($null -eq $previousAppEnvFile) {
                     Remove-Item Env:\APP_ENV_FILE -ErrorAction SilentlyContinue
@@ -1146,11 +1133,12 @@ if (Test-Path -LiteralPath "docker-compose.prod.yml") {
             }
         }
     }
+    Remove-Item -LiteralPath $composeEnvFile -Force -ErrorAction SilentlyContinue
 }
 
 Assert-Migrations
 Assert-NoTrackedEnvFiles
-Assert-DevEnvTemplate
+Assert-NoActiveEnvExampleReferences
 Assert-CloudflareConfigHasNoSecrets
 Assert-CloudflareDeploymentConfig
 Assert-ReverseProxyConfig

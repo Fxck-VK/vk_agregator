@@ -292,25 +292,27 @@ migrations/          SQL migrations
 
 ## Running locally
 
-Create a local environment file from the committed DEV template:
+Create a local environment file from the split DEV env parts or fill it
+manually with DEV-only values:
 
 ```bash
-cp .env.dev.example .env
-# edit .env and fill VK_ACCESS_TOKEN / VK_SECRET / VK_CONFIRMATION_TOKEN if needed
+cp dev.env .env
+# edit .env only if you need local overrides
 # macOS local fallback used in this workspace is also supported:
-# cp .env.dev.example _env
+# cp dev.env _env
 ```
 
 On Windows PowerShell:
 
 ```powershell
-Copy-Item .env.dev.example .env
+Copy-Item dev.env .env
 notepad .env
 ```
 
 The application loads `.env` first and `_env` as a local fallback when started
-from the repository root. Real env files are ignored by Git; only
-`.env.dev.example` and `.env.prod.example` are committed.
+from the repository root. Real env files and env examples are ignored by Git.
+Runtime deploy env is assembled from split GitHub Secrets and local `.env.d`
+parts.
 
 ### VK bot one-command startup
 

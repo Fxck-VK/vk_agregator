@@ -35,7 +35,7 @@ repo_root="$(cd "${script_dir}/../.." && pwd)"
 cd "${repo_root}"
 
 if [[ ! -f "${env_file}" ]]; then
-  echo "Server env file not found: ${env_file}. Copy .env.prod.example to .env and fill real values." >&2
+  echo "Server env file not found: ${env_file}. Assemble it from split PROD env secrets or create it with real production values." >&2
   exit 1
 fi
 
