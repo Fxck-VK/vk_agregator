@@ -116,7 +116,7 @@ Provider output перед отправкой в VK нормализуется: 
 
 Если меняешь limits, обнови:
 
-- `.env.example`
+- `.env.d` split files / GitHub split env secrets
 - `internal/platform/config/config.go`
 - `internal/platform/config/config_test.go`
 - `RUNBOOK.md`
@@ -187,7 +187,7 @@ tokens
 - `internal/adapter/delivery/vk/**`
 - `internal/platform/config/**`
 - `migrations/**`
-- `.env.example`
+- `.env.d` split files / GitHub split env secrets
 - `.runtime/vk-bot/cloudflared/config.yml`
 
 ## Feature Flags

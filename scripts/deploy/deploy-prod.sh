@@ -94,7 +94,7 @@ if [[ ! -f docker-compose.prod.yml ]]; then
   exit 1
 fi
 if [[ ! -f "${env_file}" ]]; then
-  echo "Server env file not found: ${env_file}. Copy .env.staging.example or .env.prod.example to .env on the server and fill real values there." >&2
+  echo "Server env file not found: ${env_file}. Assemble it from split PROD env secrets or create it on the server with real production values." >&2
   exit 1
 fi
 

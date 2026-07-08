@@ -61,8 +61,10 @@ jobs:
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
           GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
-          DEV_ENV_FILE: ${{ secrets.DEV_ENV_FILE }}
-          PROD_ENV_FILE: ${{ secrets.PROD_ENV_FILE }}
+          ENV_COMMON: ${{ secrets.ENV_COMMON }}
+          ENV_PROVIDERS_COMMON: ${{ secrets.ENV_PROVIDERS_COMMON }}
+          ENV_SECRETS_PROD: ${{ secrets.ENV_SECRETS_PROD }}
+          ENV_PAYMENTS_PROD: ${{ secrets.ENV_PAYMENTS_PROD }}
         run: |
           set -euo pipefail
 
@@ -74,8 +76,10 @@ jobs:
             DEPLOY_SSH_KEY \
             GHCR_USERNAME \
             GHCR_TOKEN \
-            DEV_ENV_FILE \
-            PROD_ENV_FILE
+            ENV_COMMON \
+            ENV_PROVIDERS_COMMON \
+            ENV_SECRETS_PROD \
+            ENV_PAYMENTS_PROD
           do
             if [[ -z "${!name:-}" ]]; then
               missing+=("${name}")
@@ -86,35 +90,6 @@ jobs:
             printf 'Missing required repository secrets: %s\n' "${missing[*]}" >&2
             exit 1
           fi
-
-      - name: Check DEV/PROD env parity
-        shell: bash
-        env:
-          DEV_ENV_FILE: ${{ secrets.DEV_ENV_FILE }}
-          PROD_ENV_FILE: ${{ secrets.PROD_ENV_FILE }}
-          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
-          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
-          DEPLOY_IMAGE_TAG: ${{ steps.release.outputs.image_tag }}
-        run: |
-          set -euo pipefail
-
-          tmpdir="$(mktemp -d)"
-          trap 'rm -rf "${tmpdir}"' EXIT
-
-          dev_env="${tmpdir}/dev.env"
-          prod_env="${tmpdir}/prod.env"
-
-          printf '%s\n' "${DEV_ENV_FILE}" > "${dev_env}"
-          printf '%s\n' "${PROD_ENV_FILE}" \
-            | sed '/^GHCR_USERNAME=/d;/^GHCR_TOKEN=/d;/^IMAGE_TAG=/d' > "${prod_env}"
-          {
-            printf '\n'
-            printf 'IMAGE_TAG=%s\n' "${DEPLOY_IMAGE_TAG}"
-            printf 'GHCR_USERNAME=%s\n' "${GHCR_USERNAME}"
-            printf 'GHCR_TOKEN=%s\n' "${GHCR_TOKEN}"
-          } >> "${prod_env}"
-
-          bash scripts/deploy/check-env-parity.sh --dev "${dev_env}" --prod "${prod_env}"
 
       - name: Prepare SSH
         shell: bash
@@ -194,7 +169,10 @@ jobs:
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
           GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
           GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
-          PROD_ENV_FILE: ${{ secrets.PROD_ENV_FILE }}
+          ENV_COMMON: ${{ secrets.ENV_COMMON }}
+          ENV_PROVIDERS_COMMON: ${{ secrets.ENV_PROVIDERS_COMMON }}
+          ENV_SECRETS_PROD: ${{ secrets.ENV_SECRETS_PROD }}
+          ENV_PAYMENTS_PROD: ${{ secrets.ENV_PAYMENTS_PROD }}
           DEPLOY_IMAGE_TAG: ${{ steps.release.outputs.image_tag }}
         run: |
           set -euo pipefail
@@ -202,14 +180,12 @@ jobs:
           tmp_env="$(mktemp)"
           trap 'rm -f "${tmp_env}"' EXIT
 
-          printf '%s\n' "${PROD_ENV_FILE}" \
-            | sed '/^GHCR_USERNAME=/d;/^GHCR_TOKEN=/d;/^IMAGE_TAG=/d' > "${tmp_env}"
-          {
-            printf '\n'
-            printf 'IMAGE_TAG=%s\n' "${DEPLOY_IMAGE_TAG}"
-            printf 'GHCR_USERNAME=%s\n' "${GHCR_USERNAME}"
-            printf 'GHCR_TOKEN=%s\n' "${GHCR_TOKEN}"
-          } >> "${tmp_env}"
+          bash scripts/deploy/assemble-env-parts.sh \
+            --target prod \
+            --output "${tmp_env}" \
+            --image-tag "${DEPLOY_IMAGE_TAG}" \
+            --ghcr-username "${GHCR_USERNAME}" \
+            --ghcr-token "${GHCR_TOKEN}"
 
           scp -i "${HOME}/.ssh/deploy_key" "${tmp_env}" "${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_PATH}/.env.next"
           ssh -i "${HOME}/.ssh/deploy_key" "${DEPLOY_USER}@${DEPLOY_HOST}" \

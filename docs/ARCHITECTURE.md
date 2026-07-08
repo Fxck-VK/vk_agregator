@@ -214,18 +214,17 @@ Current image-generation foundation:
 - `internal/domain` exposes provider-agnostic `ImageGenerationRequest` and
   `ImageGenerationResult` shapes for image adapters. Surface modules must not
   depend on provider-native request/response JSON.
-- `cmd/worker` may prefer an image provider through `IMAGE_PROVIDER` and attach
-  worker-only `IMAGE_MODEL` / `IMAGE_SIZE` defaults. `PROVIDER_CHAIN` remains
-  the fallback mechanism.
+- `cmd/worker` registers generation providers from `PROVIDER_CHAIN`. Public
+  image model selection is catalog-owned; local env should not force stale
+  `IMAGE_MODEL` / `IMAGE_SIZE` overrides.
 - PoYo Seedream 4.5 is wired as a priced public image model through the PoYo
   adapter. Text-only uses `seedream-4.5`; optional reference images use
   `seedream-4.5-edit` with `image_urls`. Missing provider readiness or missing
   pricing keeps the model hidden/fail-closed.
-- DeepInfra `ByteDance/Seedream-4.5` is wired as a text-to-image adapter through
-  the native `/v1/inference/{model}` endpoint. Optional
-  `DEEPINFRA_IMAGE_FALLBACK_MODEL` stays inside the provider adapter and is only
-  tried after retryable primary-model failures. If a selected image model does
-  not support references, attached photos are rejected before job creation.
+- DeepInfra is active for text generation only in the current runtime.
+  `IMAGE_PROVIDER=deepinfra` and `VIDEO_PROVIDER=deepinfra` are rejected by
+  config validation; DeepInfra image/video env keys are legacy/test-only until
+  a new catalog-backed route explicitly wires them.
 - VK bot text-to-image UX is wired as a surface state, not a provider shortcut:
   `Ñמחהאעü פמעמ` stores peer-scoped `photo_text` mode immediately, the next
   plain text creates an `image.generate` Job, and the API sends `ÍוינמÕאב
@@ -245,12 +244,12 @@ Current image-generation foundation:
   and provider adapters enforce per-model caps and request fields. VK handlers,
   Mini App BFF and `cmd/api` still do not call providers or construct
   provider-native payloads.
-- VK bot text-to-video UX follows the same surface-state pattern: the active
-  `PrunaAI` video button stores peer-scoped `video:*` dialog mode, the next
-  plain text creates a `video_generate` Job, and the API sends `ÍוינמÕאב דמעמגטע
-  גטהומ...` as a control placeholder. Model/provider execution still belongs to
-  `cmd/worker` and `internal/adapter/provider`; stale Sora/Kling/Seedance/Hailuo
-  payloads are hidden and fall back to the main menu without Jobs.
+- VK bot text-to-video UX follows the same surface-state pattern: enabled route
+  buttons store peer-scoped `video:*` dialog mode, the next plain text creates a
+  `video_generate` Job, and the API sends `ÍוינמÕאב דמעמגטע גטהומ...` as a
+  control placeholder. Model/provider execution still belongs to `cmd/worker`
+  and `internal/adapter/provider`; stale Sora/Kling/Seedance/Hailuo payloads are
+  hidden and fall back to the main menu without Jobs.
 - The current VK bot profile keeps reference-photo UX low-profile and allows
   100 free text-to-image attempts per user per 24h window through
   Redis-backed anti-spam quota (`VK_ANTISPAM_IMAGE_DAILY_LIMIT=100`) and a free

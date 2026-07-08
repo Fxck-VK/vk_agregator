@@ -296,7 +296,7 @@ if (-not (Test-Path -LiteralPath "docker-compose.prod.yml")) {
     throw "docker-compose.prod.yml not found; run from the repository root or keep this script in scripts/deploy"
 }
 if (-not (Test-Path -LiteralPath $EnvFile)) {
-    throw "Server env file not found: $EnvFile. Copy .env.staging.example or .env.prod.example to .env on the server and fill real values there."
+    throw "Server env file not found: $EnvFile. Assemble it from split PROD env secrets or create it on the server with real production values."
 }
 
 Invoke-Step "check Docker" {

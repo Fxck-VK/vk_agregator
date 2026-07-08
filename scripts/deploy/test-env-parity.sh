@@ -54,25 +54,10 @@ BACKUP_DIR=/var/backups/vk-ai-aggregator
 EOF
 }
 
-write_dev_template() {
-  local output="$1"
-  cat > "${output}" <<'EOF'
-APP_ENV=development
-PUBLIC_VK_BASE_URL=https://dev-vk.neiirohub.ru
-PUBLIC_APP_BASE_URL=https://dev-app.neiirohub.ru
-PUBLIC_PAYMENT_WEBHOOK_URL=https://dev.neiirohub.ru/billing/webhooks/yookassa
-PAYMENT_PROVIDER=mock
-FEATURE_VIDEO_ROUTER_ENABLED=true
-DEV_EXPECTED_VK_GROUP_ID=239658332
-EOF
-}
-
 bash -n "${script}"
 
 prod_contract="${tmpdir}/prod.template.env"
-dev_template="${tmpdir}/dev.template.env"
 write_prod_contract "${prod_contract}"
-write_dev_template "${dev_template}"
 
 valid_dev="${tmpdir}/valid.dev.env"
 valid_prod="${tmpdir}/valid.prod.env"
@@ -102,28 +87,27 @@ POYO_API_KEY=prod-secret-poyo
 BACKUP_DIR=/var/backups/vk-ai-aggregator
 EOF
 
-valid_log="$(bash "${script}" --dev "${valid_dev}" --prod "${valid_prod}" --dev-template "${dev_template}" --prod-template "${prod_contract}" 2>&1)"
+valid_log="$(bash "${script}" --dev "${valid_dev}" --prod "${valid_prod}" --prod-template "${prod_contract}" 2>&1)"
 assert_not_contains "${valid_log}" "dev-secret" "valid parity log"
 assert_not_contains "${valid_log}" "prod-secret" "valid parity log"
 assert_not_contains "${valid_log}" "${valid_dev}" "valid parity log"
 assert_not_contains "${valid_log}" "${valid_prod}" "valid parity log"
-assert_not_contains "${valid_log}" "${dev_template}" "valid parity log"
 assert_not_contains "${valid_log}" "${prod_contract}" "valid parity log"
 
 missing_prod="${tmpdir}/missing.prod.env"
 grep -v '^POYO_API_KEY=' "${valid_prod}" > "${missing_prod}"
 expect_failure \
   "DEV key missing from PROD" \
-  bash "${script}" --dev "${valid_dev}" --prod "${missing_prod}" --dev-template "${dev_template}" --prod-template "${prod_contract}"
+  bash "${script}" --dev "${valid_dev}" --prod "${missing_prod}" --prod-template "${prod_contract}"
 
 missing_contract="${tmpdir}/missing-contract.prod.env"
 grep -v '^BACKUP_DIR=' "${valid_prod}" > "${missing_contract}"
-contract_log="$(bash "${script}" --dev "${valid_dev}" --prod "${missing_contract}" --dev-template "${dev_template}" --prod-template "${prod_contract}" 2>&1)"
+contract_log="$(bash "${script}" --dev "${valid_dev}" --prod "${missing_contract}" --prod-template "${prod_contract}" 2>&1)"
 assert_contains "${contract_log}" "Missing in PROD from production template (non-blocking)" "contract parity log"
 assert_contains "${contract_log}" "- BACKUP_DIR" "contract parity log"
 assert_contains "${contract_log}" "Env parity check passed" "contract parity log"
 
-bad_log="$(bash "${script}" --dev "${valid_dev}" --prod "${missing_prod}" --dev-template "${dev_template}" --prod-template "${prod_contract}" 2>&1 || true)"
+bad_log="$(bash "${script}" --dev "${valid_dev}" --prod "${missing_prod}" --prod-template "${prod_contract}" 2>&1 || true)"
 assert_not_contains "${bad_log}" "dev-secret" "failing parity log"
 assert_not_contains "${bad_log}" "prod-secret" "failing parity log"
 assert_not_contains "${bad_log}" "${valid_dev}" "failing parity log"
