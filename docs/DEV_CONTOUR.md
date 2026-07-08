@@ -302,11 +302,10 @@ YooKassa credentials are not allowed in the DEV contour.
 
 ## Required DEV Inputs
 
-The local `dev.env` for this contour must come from a DEV-specific template or be
-filled manually with DEV-only values:
+The local `dev.env` for this contour must be assembled from the split DEV env
+parts or filled manually with DEV-only values:
 
 ```powershell
-Copy-Item .env.dev.example dev.env
 notepad dev.env
 ```
 

@@ -156,11 +156,10 @@ can be used accidentally.
 
 ### Load-Test Env File
 
-Create a local load-test env from the DEV template, then keep the Safe Mode
-values below:
+Create a local load-test env manually or from a safe DEV env, then keep the
+Safe Mode values below:
 
 ```powershell
-Copy-Item .env.dev.example .env.loadtest
 notepad .env.loadtest
 ```
 
@@ -346,7 +345,6 @@ capacity runs.
 Start a load-test API contour first:
 
 ```powershell
-Copy-Item .env.dev.example .env.loadtest
 docker compose up -d postgres redis minio
 
 # Load .env.loadtest into the shell or copy it to .env before starting API,
