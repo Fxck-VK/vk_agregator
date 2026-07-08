@@ -3,7 +3,6 @@ package paymentstatus
 import (
 	"context"
 	"encoding/json"
-	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -48,7 +47,8 @@ func TestVKTopUpNotifierEditsOnlyTrackedVKBotMessage(t *testing.T) {
 	if len(edits) != 1 {
 		t.Fatalf("edits = %d, want 1", len(edits))
 	}
-	if !strings.Contains(edits[0].Text, "Пополнение успешно") || edits[0].Keyboard != "" {
+	wantText := "✅ Пополнение успешно\n\nБаланс пополнен на 99 ⭐️\nСумма: 99₽"
+	if edits[0].Text != wantText || edits[0].Keyboard != "" {
 		t.Fatalf("unexpected edit: %+v", edits[0])
 	}
 
