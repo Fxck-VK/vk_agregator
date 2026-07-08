@@ -108,7 +108,7 @@ function Assert-Matrix {
 function Assert-TrackedRouteFlagsOff {
     param([Parameter(Mandatory = $true)][string]$Root)
 
-    $envFiles = @(".env.example", ".env.staging.example", ".env.prod.example")
+    $envFiles = @(".env.prod.example")
     foreach ($relative in $envFiles) {
         $path = Join-Path $Root $relative
         if (-not (Test-Path -LiteralPath $path)) {

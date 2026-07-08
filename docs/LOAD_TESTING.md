@@ -154,12 +154,13 @@ make load tests production-shaped enough to exercise the backend, while still
 failing closed before any paid provider, YooKassa payment or real VK delivery
 can be used accidentally.
 
-### Load-Test Env Template
+### Load-Test Env File
 
-Use the checked-in template:
+Create a local load-test env from the DEV template, then keep the Safe Mode
+values below:
 
 ```powershell
-Copy-Item .env.loadtest.example .env.loadtest
+Copy-Item .env.dev.example .env.loadtest
 notepad .env.loadtest
 ```
 
@@ -345,7 +346,7 @@ capacity runs.
 Start a load-test API contour first:
 
 ```powershell
-Copy-Item .env.loadtest.example .env.loadtest
+Copy-Item .env.dev.example .env.loadtest
 docker compose up -d postgres redis minio
 
 # Load .env.loadtest into the shell or copy it to .env before starting API,
