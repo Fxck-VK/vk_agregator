@@ -209,6 +209,10 @@ if ($paymentProvider -eq "yookassa") {
     foreach ($required in @("YOOKASSA_SHOP_ID", "YOOKASSA_SECRET_KEY", "YOOKASSA_RETURN_URL")) {
         Require-Value -Values $envValues -Problems $problems -Name $required -Reason "required when PAYMENT_PROVIDER=yookassa"
     }
+    $yooKassaSecretKey = (Get-Value -Values $envValues -Name "YOOKASSA_SECRET_KEY").Trim().ToLowerInvariant()
+    if (-not [string]::IsNullOrWhiteSpace($yooKassaSecretKey) -and -not $yooKassaSecretKey.Contains("change_me") -and -not $yooKassaSecretKey.StartsWith("live")) {
+        Add-Problem -Problems $problems -Name "YOOKASSA_SECRET_KEY" -Reason "must be a live YooKassa key in production"
+    }
 }
 if (Is-TrueValue (Get-Value -Values $envValues -Name "FEATURE_DEV_PAYMENT_TEST_PRODUCT_ENABLED" -Default "false")) {
     Add-Problem -Problems $problems -Name "FEATURE_DEV_PAYMENT_TEST_PRODUCT_ENABLED" -Reason "not allowed in staging/production"
@@ -288,8 +292,10 @@ if (Is-TrueValue (Get-Value -Values $envValues -Name "VK_MENU_TOP_UP_ENABLED")) 
     if ([string]::IsNullOrWhiteSpace($email) -and [string]::IsNullOrWhiteSpace($phone)) {
         Add-Problem -Problems $problems -Name "VK_TOP_UP_RECEIPT_EMAIL/VK_TOP_UP_RECEIPT_PHONE" -Reason "one receipt contact is required when VK_MENU_TOP_UP_ENABLED=true"
     }
-    if ($email -match "CHANGE_ME" -or $phone -match "CHANGE_ME") {
-        Add-Problem -Problems $problems -Name "VK_TOP_UP_RECEIPT_EMAIL/VK_TOP_UP_RECEIPT_PHONE" -Reason "replace CHANGE_ME placeholder before enabling VK top-up"
+    $emailLower = $email.ToLowerInvariant()
+    $phoneLower = $phone.ToLowerInvariant()
+    if ($emailLower.Contains("change_me") -or $phoneLower.Contains("change_me") -or $emailLower.Contains("example.com") -or $phoneLower.Contains("example")) {
+        Add-Problem -Problems $problems -Name "VK_TOP_UP_RECEIPT_EMAIL/VK_TOP_UP_RECEIPT_PHONE" -Reason "replace placeholder before enabling VK top-up"
     }
 }
 
