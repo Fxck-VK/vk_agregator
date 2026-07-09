@@ -12,6 +12,7 @@ Reads split env parts from GitHub Actions environment variables:
   ENV_PAYMENTS_PROD / ENV_PAYMENTS_DEV
 
 The script writes a single runtime .env file and never prints secret values.
+For production, --image-tag pins both IMAGE_TAG and BACKUP_IMAGE_TAG.
 USAGE
 }
 
@@ -117,7 +118,7 @@ append_part() {
     fi
     key="${BASH_REMATCH[1]}"
     case "${key}" in
-      IMAGE_TAG|GHCR_USERNAME|GHCR_TOKEN)
+      IMAGE_TAG|BACKUP_IMAGE_TAG|GHCR_USERNAME|GHCR_TOKEN)
         echo "${key} is injected by the deploy workflow and must not be stored in split env secrets" >&2
         exit 1
         ;;
@@ -138,6 +139,9 @@ done
 
 if [[ -n "${image_tag}" ]]; then
   printf 'IMAGE_TAG=%s\n' "${image_tag}" >> "${tmp}"
+  if [[ "${target}" == "prod" ]]; then
+    printf 'BACKUP_IMAGE_TAG=%s\n' "${image_tag}" >> "${tmp}"
+  fi
 fi
 
 if [[ -n "${ghcr_username}" ]]; then

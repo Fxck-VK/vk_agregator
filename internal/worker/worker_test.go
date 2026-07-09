@@ -177,6 +177,31 @@ func (d stubDownloader) Download(_ context.Context, _ string) ([]byte, string, e
 	return d.data, d.contentType, nil
 }
 
+type rejectingMediaScanner struct {
+	mediaType domain.MediaType
+}
+
+func (s rejectingMediaScanner) Scan(_ context.Context, mediaType domain.MediaType, _ string, _ []byte) error {
+	if mediaType == s.mediaType {
+		return errors.New("unsupported artifact media scan")
+	}
+	return nil
+}
+
+type payloadRejectingScanner struct {
+	rejected string
+	scanned  []string
+}
+
+func (s *payloadRejectingScanner) Scan(_ context.Context, _ domain.MediaType, _ string, data []byte) error {
+	payload := string(data)
+	s.scanned = append(s.scanned, payload)
+	if payload == s.rejected {
+		return errors.New("stored artifact rejected")
+	}
+	return nil
+}
+
 type fakeVideoProber struct {
 	mu       sync.Mutex
 	metadata domain.ArtifactMediaMetadata
@@ -553,6 +578,159 @@ func TestPollWorkerResumesTerminalProviderTaskWithSavedArtifact(t *testing.T) {
 	}
 }
 
+func TestPollWorkerRejectsPreexistingUnscannedArtifactOnRecovery(t *testing.T) {
+	provider := &captureImageProvider{name: domain.ProviderAPIMart}
+	h := newHarnessWithProvider(t, provider, func(d *worker.Deps) {
+		store, ok := d.Objects.(*memory.ObjectStore)
+		if !ok {
+			t.Fatalf("objects = %T, want *memory.ObjectStore", d.Objects)
+		}
+		d.Artifacts = artifactservice.New(d.ArtifactRepo, store, "artifacts",
+			artifactservice.WithDownloader(stubDownloader{data: []byte("output"), contentType: "image/png"}),
+			artifactservice.WithScanner(rejectingMediaScanner{mediaType: domain.MediaTypeImage}),
+		)
+	})
+	ctx := context.Background()
+	job := h.queueJob(t, domain.OperationImageGenerate, domain.ModalityImage, "a cat")
+	artifact := &domain.Artifact{
+		OwnerUserID:   job.UserID,
+		JobID:         &job.ID,
+		Kind:          domain.ArtifactKindOutput,
+		MediaType:     domain.MediaTypeImage,
+		MimeType:      "image/png",
+		StorageBucket: "artifacts",
+		StorageKey:    "outputs/" + uuid.NewString() + ".png",
+		SHA256:        uuid.NewString(),
+		SizeBytes:     6,
+		Status:        domain.ArtifactStatusReady,
+	}
+	if err := h.store.Put(ctx, artifact.StorageBucket, artifact.StorageKey, []byte("output"), artifact.MimeType); err != nil {
+		t.Fatalf("put output artifact bytes: %v", err)
+	}
+	if err := h.artRepo.Create(ctx, artifact); err != nil {
+		t.Fatalf("create output artifact: %v", err)
+	}
+	job.Status = domain.JobStatusProviderPending
+	job.OutputArtifactIDs = []uuid.UUID{artifact.ID}
+	if err := h.jobs.Update(ctx, job); err != nil {
+		t.Fatalf("update job: %v", err)
+	}
+	rawResult, _ := json.Marshal(domain.ProviderTaskResult{
+		Status:     domain.ProviderTaskSucceeded,
+		OutputURLs: []string{"https://provider.example/output.png"},
+	})
+	pt := &domain.ProviderTask{
+		JobID:          job.ID,
+		Provider:       domain.ProviderAPIMart,
+		ModelCode:      "gpt-image-2",
+		ExternalID:     "task_done_unscanned",
+		Status:         domain.ProviderTaskSucceeded,
+		Result:         rawResult,
+		IdempotencyKey: "provider_submit:" + job.ID.String() + ":1",
+	}
+	if err := h.tasks.Create(ctx, pt); err != nil {
+		t.Fatalf("create provider task: %v", err)
+	}
+
+	if err := h.poll.Process(ctx, taskFor(job)); err != nil {
+		t.Fatalf("poll process: %v", err)
+	}
+
+	got := h.reload(t, job.ID)
+	if got.Status != domain.JobStatusFailedTerminal {
+		t.Fatalf("status = %q, want failed_terminal", got.Status)
+	}
+	if got.ErrorCode != string(domain.ProviderErrContentRejected) {
+		t.Fatalf("error code = %q, want %q", got.ErrorCode, domain.ProviderErrContentRejected)
+	}
+	if got.CostCaptured != 0 {
+		t.Fatalf("cost captured = %d, want 0", got.CostCaptured)
+	}
+	if len(h.streams.byStream[redisqueue.StreamDelivery]) != 0 {
+		t.Fatalf("unscanned recovery artifact must not enqueue delivery: %v", h.streams.byStream)
+	}
+	if len(h.releaser.released) != 1 || h.releaser.released[0] != job.ID {
+		t.Fatalf("expected reservation release, got %v", h.releaser.released)
+	}
+}
+
+func TestPollWorkerRescansPartialRecoveredArtifactsBeforeSavingMissingOutputs(t *testing.T) {
+	provider := &captureImageProvider{name: domain.ProviderAPIMart}
+	scanner := &payloadRejectingScanner{rejected: "legacy-unscanned-output"}
+	h := newHarnessWithProvider(t, provider, func(d *worker.Deps) {
+		store, ok := d.Objects.(*memory.ObjectStore)
+		if !ok {
+			t.Fatalf("objects = %T, want *memory.ObjectStore", d.Objects)
+		}
+		d.Artifacts = artifactservice.New(d.ArtifactRepo, store, "artifacts",
+			artifactservice.WithDownloader(stubDownloader{data: []byte("safe-new-output"), contentType: "image/png"}),
+			artifactservice.WithScanner(scanner),
+		)
+	})
+	ctx := context.Background()
+	job := h.queueJob(t, domain.OperationImageGenerate, domain.ModalityImage, "two images")
+	artifact := &domain.Artifact{
+		OwnerUserID:   job.UserID,
+		JobID:         &job.ID,
+		Kind:          domain.ArtifactKindOutput,
+		MediaType:     domain.MediaTypeImage,
+		MimeType:      "image/png",
+		StorageBucket: "artifacts",
+		StorageKey:    "outputs/" + uuid.NewString() + ".png",
+		SHA256:        uuid.NewString(),
+		SizeBytes:     int64(len("legacy-unscanned-output")),
+		Status:        domain.ArtifactStatusReady,
+	}
+	if err := h.store.Put(ctx, artifact.StorageBucket, artifact.StorageKey, []byte("legacy-unscanned-output"), artifact.MimeType); err != nil {
+		t.Fatalf("put legacy output artifact: %v", err)
+	}
+	if err := h.artRepo.Create(ctx, artifact); err != nil {
+		t.Fatalf("create legacy output artifact: %v", err)
+	}
+	job.Status = domain.JobStatusProviderPending
+	job.OutputArtifactIDs = []uuid.UUID{artifact.ID}
+	if err := h.jobs.Update(ctx, job); err != nil {
+		t.Fatalf("update job: %v", err)
+	}
+	rawResult, _ := json.Marshal(domain.ProviderTaskResult{
+		Status:     domain.ProviderTaskSucceeded,
+		OutputURLs: []string{"https://provider.example/first.png", "https://provider.example/second.png"},
+	})
+	pt := &domain.ProviderTask{
+		JobID:          job.ID,
+		Provider:       domain.ProviderAPIMart,
+		ModelCode:      "gpt-image-2",
+		ExternalID:     "task_partial_unscanned",
+		Status:         domain.ProviderTaskSucceeded,
+		Result:         rawResult,
+		IdempotencyKey: "provider_submit:" + job.ID.String() + ":1",
+	}
+	if err := h.tasks.Create(ctx, pt); err != nil {
+		t.Fatalf("create provider task: %v", err)
+	}
+
+	if err := h.poll.Process(ctx, taskFor(job)); err != nil {
+		t.Fatalf("poll process: %v", err)
+	}
+
+	got := h.reload(t, job.ID)
+	if got.Status != domain.JobStatusFailedTerminal || got.ErrorCode != string(domain.ProviderErrContentRejected) {
+		t.Fatalf("job = status %q error %q, want failed_terminal/content_rejected", got.Status, got.ErrorCode)
+	}
+	if len(scanner.scanned) != 1 || scanner.scanned[0] != "legacy-unscanned-output" {
+		t.Fatalf("scanner inputs = %q, want legacy artifact first", scanner.scanned)
+	}
+	if h.store.Len() != 1 {
+		t.Fatalf("missing outputs must not be saved before legacy rescan, objects=%d", h.store.Len())
+	}
+	if got.CostCaptured != 0 || len(h.streams.byStream[redisqueue.StreamDelivery]) != 0 {
+		t.Fatalf("blocked partial recovery must not capture or deliver: job=%+v streams=%v", got, h.streams.byStream)
+	}
+	if len(h.releaser.released) != 1 || h.releaser.released[0] != job.ID {
+		t.Fatalf("expected reservation release, got %v", h.releaser.released)
+	}
+}
+
 func TestVideoProbeSuccessBeforeDelivery(t *testing.T) {
 	prober := &fakeVideoProber{metadata: domain.ArtifactMediaMetadata{
 		Width:       1280,
@@ -596,6 +774,48 @@ func TestVideoProbeSuccessBeforeDelivery(t *testing.T) {
 	}
 	if art.Width != 1280 || art.Height != 720 || art.DurationMS != 5000 || art.BitrateBPS != 2400000 {
 		t.Fatalf("probe numeric metadata not stored: %+v", art)
+	}
+}
+
+func TestVideoArtifactScanRejectionStopsDeliveryAndReleasesReservation(t *testing.T) {
+	h := newHarnessWithProvider(t, mock.New(), func(d *worker.Deps) {
+		store, ok := d.Objects.(*memory.ObjectStore)
+		if !ok {
+			t.Fatalf("objects = %T, want *memory.ObjectStore", d.Objects)
+		}
+		d.Artifacts = artifactservice.New(d.ArtifactRepo, store, "artifacts",
+			artifactservice.WithDownloader(stubDownloader{data: []byte("video-bytes"), contentType: "video/mp4"}),
+			artifactservice.WithScanner(rejectingMediaScanner{mediaType: domain.MediaTypeVideo}),
+		)
+	})
+	ctx := context.Background()
+	job := h.queueJob(t, domain.OperationVideoGenerate, domain.ModalityVideo, "unsafe scanner gap")
+
+	if err := h.gen.Process(ctx, taskFor(job)); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+
+	got := h.reload(t, job.ID)
+	if got.Status != domain.JobStatusFailedTerminal {
+		t.Fatalf("status = %q, want failed_terminal", got.Status)
+	}
+	if got.ErrorCode != string(domain.ProviderErrContentRejected) {
+		t.Fatalf("error code = %q, want %q", got.ErrorCode, domain.ProviderErrContentRejected)
+	}
+	if len(got.OutputArtifactIDs) != 0 {
+		t.Fatalf("rejected scanner output must not attach artifacts, got %v", got.OutputArtifactIDs)
+	}
+	if got.CostCaptured != 0 {
+		t.Fatalf("cost captured = %d, want 0", got.CostCaptured)
+	}
+	if len(h.streams.byStream[redisqueue.StreamDelivery]) != 0 {
+		t.Fatalf("scanner rejection must not enqueue delivery: %v", h.streams.byStream)
+	}
+	if len(h.releaser.released) != 1 || h.releaser.released[0] != job.ID {
+		t.Fatalf("expected reservation release for scanner rejection, got %v", h.releaser.released)
+	}
+	if h.store.Len() != 0 {
+		t.Fatalf("rejected scanner output must not store objects, got %d", h.store.Len())
 	}
 }
 

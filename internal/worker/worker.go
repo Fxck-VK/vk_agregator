@@ -66,6 +66,7 @@ const (
 type ArtifactSaver interface {
 	SaveRemoteArtifact(ctx context.Context, ownerID uuid.UUID, jobID *uuid.UUID, kind domain.ArtifactKind, mediaType domain.MediaType, url string) (*domain.Artifact, error)
 	SaveVariantWithMetadata(ctx context.Context, artifact *domain.Artifact, variantType domain.VariantType, mimeType string, data []byte, metadata domain.ArtifactMediaMetadata) (*domain.ArtifactVariant, error)
+	EnsureArtifactScanned(ctx context.Context, artifactID uuid.UUID) error
 }
 
 // VideoProber validates generated video bytes before delivery/capture.
@@ -1555,6 +1556,16 @@ func isRetryable(class domain.ProviderErrorClass) bool {
 	}
 }
 
+func outputArtifactFailureClass(err error) domain.ProviderErrorClass {
+	var ce classedError
+	if errors.As(err, &ce) {
+		if class := ce.ProviderErrorClass(); class != "" {
+			return class
+		}
+	}
+	return domain.ProviderErrOutputDownloadFailed
+}
+
 // classOf extracts the normalized error class from a provider error, defaulting
 // to provider_internal_error for unclassified failures.
 func classOf(err error) domain.ProviderErrorClass {
@@ -1900,10 +1911,10 @@ func (p *processor) applyResult(ctx context.Context, job *domain.Job, pt *domain
 	case domain.ProviderTaskSucceeded:
 		p.recordProviderOutputs(pt, job, res)
 		if err := p.saveOutputs(ctx, job, res.OutputURLs); err != nil {
-			p.recordProviderProductFailureForTask(job, pt, "output_download_failed")
-			observeVideoRouteMediaFailureForJob(job, "download", string(domain.ProviderErrOutputDownloadFailed))
-			// A download failure is retryable provider-side.
-			return p.handleFailure(ctx, job, task, domain.ProviderErrOutputDownloadFailed, safeProviderFailureMessage(domain.ProviderErrOutputDownloadFailed))
+			failureClass := outputArtifactFailureClass(err)
+			p.recordProviderProductFailureForTask(job, pt, string(failureClass))
+			observeVideoRouteMediaFailureForJob(job, "download", string(failureClass))
+			return p.handleFailure(ctx, job, task, failureClass, safeProviderFailureMessage(failureClass))
 		}
 		if err := p.setStatus(ctx, job, domain.JobStatusProviderSucceeded, "", ""); err != nil {
 			return err
@@ -2418,12 +2429,18 @@ func (p *processor) saveOutputs(ctx context.Context, job *domain.Job, urls []str
 	)
 	defer span.End()
 
-	if len(job.OutputArtifactIDs) >= len(urls) && len(urls) > 0 {
+	for _, artifactID := range job.OutputArtifactIDs {
+		if err := p.artifacts.EnsureArtifactScanned(ctx, artifactID); err != nil {
+			return err
+		}
+	}
+	existingCount := len(job.OutputArtifactIDs)
+	if len(urls) == 0 || existingCount >= len(urls) {
 		return p.jobs.Update(ctx, job)
 	}
 
 	mediaType := mediaTypeFor(job.Modality)
-	for _, url := range urls {
+	for _, url := range urls[existingCount:] {
 		art, err := p.artifacts.SaveRemoteArtifact(ctx, job.UserID, &job.ID, domain.ArtifactKindOutput, mediaType, url)
 		if err != nil {
 			tracing.RecordError(span, err)
