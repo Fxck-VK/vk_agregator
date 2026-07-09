@@ -58,10 +58,17 @@ Required GitHub repository secrets:
 - `DEV_DEPLOY_HOST`
 - `DEV_DEPLOY_USER`
 - `DEV_DEPLOY_SSH_KEY`
+- `DEV_DEPLOY_SSH_KNOWN_HOSTS`
 - `DEV_DEPLOY_PATH`
 - `DEV_ENV_FILE`
 - `GHCR_USERNAME`
 - `GHCR_TOKEN`
+
+`DEV_DEPLOY_SSH_KNOWN_HOSTS` must contain the DEV VPS SSH host key line(s)
+verified out of band, in OpenSSH `known_hosts` format. The DEV deploy workflow
+does not trust live `ssh-keyscan`; if the secret is missing, invalid, does not
+contain `DEV_DEPLOY_HOST`, or the server presents a different host key, deploy
+fails before uploading `.env`.
 
 The workflow writes `DEV_ENV_FILE` to a temporary file, prepares it with
 `scripts/deploy/prepare-dev-env.sh`, validates it with

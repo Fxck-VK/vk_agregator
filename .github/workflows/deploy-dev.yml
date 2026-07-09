@@ -60,6 +60,7 @@ jobs:
           DEV_DEPLOY_USER: ${{ secrets.DEV_DEPLOY_USER }}
           DEV_DEPLOY_PATH: ${{ secrets.DEV_DEPLOY_PATH }}
           DEV_DEPLOY_SSH_KEY: ${{ secrets.DEV_DEPLOY_SSH_KEY }}
+          DEV_DEPLOY_SSH_KNOWN_HOSTS: ${{ secrets.DEV_DEPLOY_SSH_KNOWN_HOSTS }}
           GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
           GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
           DEV_ENV_FILE: ${{ secrets.DEV_ENV_FILE }}
@@ -72,6 +73,7 @@ jobs:
             DEV_DEPLOY_USER \
             DEV_DEPLOY_PATH \
             DEV_DEPLOY_SSH_KEY \
+            DEV_DEPLOY_SSH_KNOWN_HOSTS \
             GHCR_USERNAME \
             GHCR_TOKEN \
             DEV_ENV_FILE
@@ -130,13 +132,24 @@ jobs:
         env:
           DEV_DEPLOY_HOST: ${{ secrets.DEV_DEPLOY_HOST }}
           DEV_DEPLOY_SSH_KEY: ${{ secrets.DEV_DEPLOY_SSH_KEY }}
+          DEV_DEPLOY_SSH_KNOWN_HOSTS: ${{ secrets.DEV_DEPLOY_SSH_KNOWN_HOSTS }}
         run: |
           set -euo pipefail
 
           install -m 700 -d "${HOME}/.ssh"
           printf '%s\n' "${DEV_DEPLOY_SSH_KEY}" > "${HOME}/.ssh/deploy_key"
           chmod 600 "${HOME}/.ssh/deploy_key"
-          ssh-keyscan -H "${DEV_DEPLOY_HOST}" >> "${HOME}/.ssh/known_hosts"
+          printf '%s\n' "${DEV_DEPLOY_SSH_KNOWN_HOSTS}" > "${HOME}/.ssh/known_hosts"
+          chmod 600 "${HOME}/.ssh/known_hosts"
+
+          if ! ssh-keygen -l -f "${HOME}/.ssh/known_hosts" >/dev/null; then
+            echo "Pinned DEV known_hosts is invalid." >&2
+            exit 1
+          fi
+          if ! ssh-keygen -F "${DEV_DEPLOY_HOST}" -f "${HOME}/.ssh/known_hosts" >/dev/null; then
+            echo "Pinned DEV known_hosts does not contain DEV_DEPLOY_HOST." >&2
+            exit 1
+          fi
 
       - name: Ensure repository on DEV VPS
         shell: bash
@@ -147,8 +160,9 @@ jobs:
           REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
+          ssh_opts=(-i "${HOME}/.ssh/deploy_key" -o StrictHostKeyChecking=yes -o UserKnownHostsFile="${HOME}/.ssh/known_hosts" -o GlobalKnownHostsFile=/dev/null)
 
-          ssh -i "${HOME}/.ssh/deploy_key" "${DEV_DEPLOY_USER}@${DEV_DEPLOY_HOST}" 'bash -s' -- "${DEV_DEPLOY_PATH}" "${REPOSITORY}" <<'REMOTE'
+          ssh "${ssh_opts[@]}" "${DEV_DEPLOY_USER}@${DEV_DEPLOY_HOST}" 'bash -s' -- "${DEV_DEPLOY_PATH}" "${REPOSITORY}" <<'REMOTE'
           set -euo pipefail
           deploy_path="$1"
           repository="$2"
@@ -172,9 +186,10 @@ jobs:
           DEV_DEPLOY_PATH: ${{ secrets.DEV_DEPLOY_PATH }}
         run: |
           set -euo pipefail
+          ssh_opts=(-i "${HOME}/.ssh/deploy_key" -o StrictHostKeyChecking=yes -o UserKnownHostsFile="${HOME}/.ssh/known_hosts" -o GlobalKnownHostsFile=/dev/null)
 
           previous_image_tag="$(
-            ssh -i "${HOME}/.ssh/deploy_key" "${DEV_DEPLOY_USER}@${DEV_DEPLOY_HOST}" 'bash -s' -- "${DEV_DEPLOY_PATH}" <<'REMOTE'
+            ssh "${ssh_opts[@]}" "${DEV_DEPLOY_USER}@${DEV_DEPLOY_HOST}" 'bash -s' -- "${DEV_DEPLOY_PATH}" <<'REMOTE'
           set -euo pipefail
           deploy_path="$1"
           cd "${deploy_path}"
@@ -221,6 +236,7 @@ jobs:
           DEPLOY_IMAGE_TAG: ${{ steps.release.outputs.image_tag }}
         run: |
           set -euo pipefail
+          ssh_opts=(-i "${HOME}/.ssh/deploy_key" -o StrictHostKeyChecking=yes -o UserKnownHostsFile="${HOME}/.ssh/known_hosts" -o GlobalKnownHostsFile=/dev/null)
 
           raw_env="$(mktemp)"
           rendered_env="$(mktemp)"
@@ -255,8 +271,8 @@ jobs:
             echo "::warning::PROD_ENV_FILE secret is unavailable; skipping DEV/PROD env parity check in DEV deploy."
           fi
 
-          scp -i "${HOME}/.ssh/deploy_key" "${rendered_env}" "${DEV_DEPLOY_USER}@${DEV_DEPLOY_HOST}:${DEV_DEPLOY_PATH}/.env.next"
-          ssh -i "${HOME}/.ssh/deploy_key" "${DEV_DEPLOY_USER}@${DEV_DEPLOY_HOST}" \
+          scp "${ssh_opts[@]}" "${rendered_env}" "${DEV_DEPLOY_USER}@${DEV_DEPLOY_HOST}:${DEV_DEPLOY_PATH}/.env.next"
+          ssh "${ssh_opts[@]}" "${DEV_DEPLOY_USER}@${DEV_DEPLOY_HOST}" \
             "set -euo pipefail; cd '${DEV_DEPLOY_PATH}'; install -m 600 .env.next .env; rm -f .env.next"
       - name: Run DEV deploy
         id: dev_deploy
@@ -268,8 +284,9 @@ jobs:
           DEPLOY_IMAGE_TAG: ${{ steps.release.outputs.image_tag }}
         run: |
           set -euo pipefail
+          ssh_opts=(-i "${HOME}/.ssh/deploy_key" -o StrictHostKeyChecking=yes -o UserKnownHostsFile="${HOME}/.ssh/known_hosts" -o GlobalKnownHostsFile=/dev/null)
 
-          ssh -i "${HOME}/.ssh/deploy_key" "${DEV_DEPLOY_USER}@${DEV_DEPLOY_HOST}" \
+          ssh "${ssh_opts[@]}" "${DEV_DEPLOY_USER}@${DEV_DEPLOY_HOST}" \
             "set -euo pipefail; cd '${DEV_DEPLOY_PATH}'; bash scripts/deploy/deploy-dev.sh --branch dev-deploy --env-file .env --with-cloudflare --skip-public-smoke --image-tag '${DEPLOY_IMAGE_TAG}' --timeout-seconds 240"
 
       - name: Run DEV smoke
@@ -281,8 +298,9 @@ jobs:
           DEV_DEPLOY_PATH: ${{ secrets.DEV_DEPLOY_PATH }}
         run: |
           set -euo pipefail
+          ssh_opts=(-i "${HOME}/.ssh/deploy_key" -o StrictHostKeyChecking=yes -o UserKnownHostsFile="${HOME}/.ssh/known_hosts" -o GlobalKnownHostsFile=/dev/null)
 
-          ssh -i "${HOME}/.ssh/deploy_key" "${DEV_DEPLOY_USER}@${DEV_DEPLOY_HOST}" \
+          ssh "${ssh_opts[@]}" "${DEV_DEPLOY_USER}@${DEV_DEPLOY_HOST}" \
             "set -euo pipefail; cd '${DEV_DEPLOY_PATH}'; bash scripts/deploy/smoke-dev.sh --env-file .env --timeout-seconds 60"
 
       - name: Collect DEV diagnostics after failed deploy or smoke
@@ -294,8 +312,9 @@ jobs:
           DEV_DEPLOY_PATH: ${{ secrets.DEV_DEPLOY_PATH }}
         run: |
           set -euo pipefail
+          ssh_opts=(-i "${HOME}/.ssh/deploy_key" -o StrictHostKeyChecking=yes -o UserKnownHostsFile="${HOME}/.ssh/known_hosts" -o GlobalKnownHostsFile=/dev/null)
 
-          ssh -i "${HOME}/.ssh/deploy_key" "${DEV_DEPLOY_USER}@${DEV_DEPLOY_HOST}" 'bash -s' -- "${DEV_DEPLOY_PATH}" <<'REMOTE'
+          ssh "${ssh_opts[@]}" "${DEV_DEPLOY_USER}@${DEV_DEPLOY_HOST}" 'bash -s' -- "${DEV_DEPLOY_PATH}" <<'REMOTE'
           set +e
           deploy_path="$1"
           cd "${deploy_path}" || exit 0
@@ -330,6 +349,7 @@ jobs:
           PREVIOUS_IMAGE_TAG: ${{ steps.current_release.outputs.previous_image_tag }}
         run: |
           set -euo pipefail
+          ssh_opts=(-i "${HOME}/.ssh/deploy_key" -o StrictHostKeyChecking=yes -o UserKnownHostsFile="${HOME}/.ssh/known_hosts" -o GlobalKnownHostsFile=/dev/null)
 
           if [[ -z "${PREVIOUS_IMAGE_TAG}" ]]; then
             echo "No previous IMAGE_TAG was captured; automatic rollback cannot choose a target." >&2
@@ -341,7 +361,7 @@ jobs:
             exit 1
           fi
 
-          ssh -i "${HOME}/.ssh/deploy_key" "${DEV_DEPLOY_USER}@${DEV_DEPLOY_HOST}" 'bash -s' -- "${DEV_DEPLOY_PATH}" "${PREVIOUS_IMAGE_TAG}" <<'REMOTE'
+          ssh "${ssh_opts[@]}" "${DEV_DEPLOY_USER}@${DEV_DEPLOY_HOST}" 'bash -s' -- "${DEV_DEPLOY_PATH}" "${PREVIOUS_IMAGE_TAG}" <<'REMOTE'
           set -euo pipefail
           deploy_path="$1"
           previous_image_tag="$2"
@@ -474,4 +494,4 @@ jobs:
       - name: Cleanup SSH key
         if: always()
         shell: bash
-        run: rm -f "${HOME}/.ssh/deploy_key"
+        run: rm -f "${HOME}/.ssh/deploy_key" "${HOME}/.ssh/known_hosts"

@@ -306,9 +306,11 @@ type Config struct {
 	// ModerationProvider selects output moderation: "keyword" (default) or
 	// "openai". ArtifactScanner selects artifact byte scanning: "none" or
 	// "openai". Production requires a scanner; staging may run with "none".
-	ModerationProvider                  string
-	OpenAIModerationModel               string
-	ArtifactScanner                     string
+	ModerationProvider    string
+	OpenAIModerationModel string
+	ArtifactScanner       string
+	// Deprecated compatibility input. Production validation no longer permits
+	// this flag to disable artifact scanning.
 	AllowUnscannedArtifactsInProduction bool
 
 	// VKDeliveryMode selects the delivery client: "mock" (default) or "real".
@@ -818,8 +820,8 @@ func (c Config) Validate() error {
 		if c.usesMockProvider() {
 			return fmt.Errorf("config: mock provider is not allowed in production")
 		}
-		if c.usesRealGenerationProvider() && artifactScannerDisabled(c.ArtifactScanner) && !c.AllowUnscannedArtifactsInProduction {
-			return fmt.Errorf("config: ARTIFACT_SCANNER=openai is required in production unless ALLOW_UNSCANNED_ARTIFACTS_IN_PRODUCTION=true")
+		if c.usesRealGenerationProvider() && artifactScannerDisabled(c.ArtifactScanner) {
+			return fmt.Errorf("config: ARTIFACT_SCANNER=openai is required in production")
 		}
 		if strings.EqualFold(strings.TrimSpace(c.PaymentProvider), "mock") {
 			return fmt.Errorf("config: PAYMENT_PROVIDER=mock is not allowed in production")

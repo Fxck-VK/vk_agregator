@@ -245,8 +245,8 @@ artifact_scanner="$(get_value ARTIFACT_SCANNER none | tr '[:upper:]' '[:lower:]'
 if [[ ",${provider_values_lc}," == *",openai,"* || "${moderation_provider}" == "openai" || "${artifact_scanner}" == "openai" ]]; then
   require_value OPENAI_API_KEY "required when OpenAI provider/moderation/scanner is configured"
 fi
-if [[ "${app_env}" == "production" && ( -z "${artifact_scanner}" || "${artifact_scanner}" == "none" ) ]] && ! is_true_value "$(get_value ALLOW_UNSCANNED_ARTIFACTS_IN_PRODUCTION)"; then
-  add_problem ARTIFACT_SCANNER "must be openai in production unless ALLOW_UNSCANNED_ARTIFACTS_IN_PRODUCTION=true"
+if [[ "${app_env}" == "production" && ( -z "${artifact_scanner}" || "${artifact_scanner}" == "none" ) ]]; then
+	add_problem ARTIFACT_SCANNER "must be openai in production"
 elif [[ -z "${artifact_scanner}" || "${artifact_scanner}" == "none" ]]; then
   :
 elif [[ "${artifact_scanner}" != "openai" ]]; then
