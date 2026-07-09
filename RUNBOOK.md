@@ -25,6 +25,8 @@ Do not use old handoff or merge files as the default source of truth.
 
 - Do not commit real `.env`, `PROD_ENV_FILE`, `DEV_ENV_FILE`, SSH keys, GHCR
   tokens, Cloudflare tunnel tokens, VK tokens, YooKassa secrets or provider keys.
+- GitHub deploy workflows must use out-of-band pinned SSH `known_hosts` secrets;
+  do not rely on workflow-time `ssh-keyscan` before uploading env/secrets.
 - Do not run production providers, production YooKassa or production VK delivery
   from load tests.
 - `main` is production. It deploys through GitHub Actions and protected review

@@ -59,10 +59,23 @@ func TestOpenAIScannerRejectsFlaggedImage(t *testing.T) {
 	}
 }
 
-func TestOpenAIScannerSkipsVideoArtifactScan(t *testing.T) {
+func TestOpenAIScannerFailsClosedForUnsupportedArtifactMedia(t *testing.T) {
 	m := NewModerator(ModerationConfig{APIKey: "test-key"})
-	if err := m.Scan(context.Background(), domain.MediaTypeVideo, "video/mp4", []byte("mp4")); err != nil {
-		t.Fatalf("expected video scan to be skipped, got: %v", err)
+	tests := []struct {
+		name      string
+		mediaType domain.MediaType
+		mimeType  string
+	}{
+		{name: "video", mediaType: domain.MediaTypeVideo, mimeType: "video/mp4"},
+		{name: "audio", mediaType: domain.MediaTypeAudio, mimeType: "audio/mpeg"},
+		{name: "document", mediaType: domain.MediaTypeDocument, mimeType: "application/pdf"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := m.Scan(context.Background(), tt.mediaType, tt.mimeType, []byte("artifact")); err == nil {
+				t.Fatal("expected unsupported artifact media scan to fail closed")
+			}
+		})
 	}
 }
 
