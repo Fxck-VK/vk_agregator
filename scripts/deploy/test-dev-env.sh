@@ -48,7 +48,7 @@ PROVIDER=mock
 PROVIDER_CHAIN=mock
 IMAGE_PROVIDER=mock
 VIDEO_PROVIDER=mock
-DEEPINFRA_API_KEY=deepinfra-dev-test-key
+DEEPINFRA_API_KEY=deepinfra-placeholder
 APIMART_API_KEY=apimart-dev-test-key
 APIMART_BASE_URL=https://api.aimlapi.com/v1
 POYO_API_KEY=poyo-dev-test-key
@@ -94,7 +94,7 @@ run_valid_case() {
   assert_not_contains "${log}" "dev-test-token-value" "${name} log"
   assert_not_contains "${log}" "yookassa-key-placeholder" "${name} log"
   assert_not_contains "${log}" "ghcr-token-placeholder" "${name} log"
-  assert_not_contains "${log}" "deepinfra-dev-test-key" "${name} log"
+  assert_not_contains "${log}" "deepinfra-placeholder" "${name} log"
   assert_not_contains "${log}" "apimart-dev-test-key" "${name} log"
   assert_not_contains "${log}" "poyo-dev-test-key" "${name} log"
   assert_not_contains "${log}" "runway-dev-test-key" "${name} log"

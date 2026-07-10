@@ -699,7 +699,11 @@ __HELPER_FUNCTIONS__
 helper_env_file=""
 create_helper_env_file helper_env_file DATABASE_URL "sentinel-db" REDISCLI_AUTH "sentinel-redis"
 [[ -n "$helper_env_file" && -f "$helper_env_file" ]]
-mode="$(stat -f '%Lp' "$helper_env_file" 2>/dev/null || stat -c '%a' "$helper_env_file")"
+if mode="$(stat -c '%a' "$helper_env_file" 2>/dev/null)"; then
+  :
+else
+  mode="$(stat -f '%Lp' "$helper_env_file")"
+fi
 [[ "$mode" == "600" ]]
 expected=$'DATABASE_URL=sentinel-db\nREDISCLI_AUTH=sentinel-redis'
 [[ "$(<"$helper_env_file")" == "$expected" ]]
