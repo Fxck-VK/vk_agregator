@@ -1,6 +1,32 @@
 services:
+  docker-socket-proxy:
+    image: haproxy:3.2.21-alpine@sha256:66e25cc9a8332635f4e897f7f4b1e5622c25f09f0ee23cddc6ce9bdb3a24772a
+    container_name: vk-ai-aggregator-docker-socket-proxy
+    user: "0:0"
+    volumes:
+      - ./observability/docker-socket-proxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=16m
+      - /run:rw,noexec,nosuid,nodev,size=4m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 128
+    mem_limit: 128m
+    cpus: 0.50
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:2375/_ping | grep -qx OK"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped
+
   prometheus:
-    image: ${PROMETHEUS_IMAGE:-prom/prometheus:latest}
+    image: prom/prometheus:v3.13.1@sha256:3c42b892cf723fa54d2f262c37a0e1f80aa8c8ddb1da7b9b0df9455a35a7f893
     container_name: vk-ai-aggregator-prometheus
     command:
       - --config.file=/etc/prometheus/prometheus.yml
@@ -27,7 +53,7 @@ services:
     restart: unless-stopped
 
   alertmanager:
-    image: ${ALERTMANAGER_IMAGE:-prom/alertmanager:latest}
+    image: prom/alertmanager:v0.33.1@sha256:9e082985f56f4c8c9f724e18f2288c6708f472e56a5286b8863d080434ea065d
     container_name: vk-ai-aggregator-alertmanager
     entrypoint:
       - /bin/sh
@@ -54,7 +80,7 @@ services:
     restart: unless-stopped
 
   grafana:
-    image: ${GRAFANA_IMAGE:-grafana/grafana:latest}
+    image: grafana/grafana:13.1.0@sha256:121a7a9ece6dc10b969f1f96eed64b4f07dfac0d0b8abc070f7cb83bbde86f63
     container_name: vk-ai-aggregator-grafana
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
@@ -78,7 +104,7 @@ services:
     restart: unless-stopped
 
   loki:
-    image: ${LOKI_IMAGE:-grafana/loki:latest}
+    image: grafana/loki:3.7.3@sha256:70b9f699fc9bb868b62f1cfd4f787dfa50242f1fd92e6089787d5d7daea75fe8
     container_name: vk-ai-aggregator-loki
     command:
       - -config.file=/etc/loki/loki.yml
@@ -89,22 +115,41 @@ services:
     restart: unless-stopped
 
   alloy:
-    image: ${ALLOY_IMAGE:-grafana/alloy:latest}
+    image: grafana/alloy:v1.17.1@sha256:4f6ddc56ffdcf8a6316748fc5162972e20cb301523cac1bb4a31957df733ae9b
     container_name: vk-ai-aggregator-alloy
     command:
       - run
       - /etc/alloy/config.alloy
       - --storage.path=/var/lib/alloy/data
+    user: "473:473"
     volumes:
       - ./observability/alloy/config.alloy:/etc/alloy/config.alloy:ro
       - alloy_data:/var/lib/alloy/data
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=16m,uid=473,gid=473
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 128
+    mem_limit: 256m
+    cpus: 0.50
+    healthcheck:
+      test: ["CMD", "/bin/alloy", "--version"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     depends_on:
-      - loki
+      loki:
+        condition: service_started
+      docker-socket-proxy:
+        condition: service_healthy
     restart: unless-stopped
 
   tempo:
-    image: ${TEMPO_IMAGE:-grafana/tempo:latest}
+    image: grafana/tempo:3.0.2@sha256:cda87c212d8c584dc0b89e337e7ed648a5100feb657e5d528480ee4fa03dbbe3
     container_name: vk-ai-aggregator-tempo
     user: "0:0"
     command:
@@ -115,7 +160,7 @@ services:
     restart: unless-stopped
 
   otel-collector:
-    image: ${OTEL_COLLECTOR_IMAGE:-otel/opentelemetry-collector-contrib:latest}
+    image: otel/opentelemetry-collector-contrib:0.156.0@sha256:125bdbeb7590cc1952c5b3430ecf14063568980c2c93d5b38676cc0446ed8108
     container_name: vk-ai-aggregator-otel-collector
     command:
       - --config=/etc/otel-collector.yml
@@ -129,7 +174,7 @@ services:
     restart: unless-stopped
 
   blackbox-exporter:
-    image: ${BLACKBOX_EXPORTER_IMAGE:-prom/blackbox-exporter:latest}
+    image: prom/blackbox-exporter:v0.28.0@sha256:e753ff9f3fc458d02cca5eddab5a77e1c175eee484a8925ac7d524f04366c2fc
     container_name: vk-ai-aggregator-blackbox-exporter
     command:
       - --config.file=/etc/blackbox_exporter/blackbox.yml
@@ -143,7 +188,7 @@ services:
     restart: unless-stopped
 
   postgres-exporter:
-    image: ${POSTGRES_EXPORTER_IMAGE:-prometheuscommunity/postgres-exporter:latest}
+    image: prometheuscommunity/postgres-exporter:v0.20.1@sha256:ac5ec343104fae0e2d84a27bb8d69b38430a11910c5382cad85d478d2bab713e
     container_name: vk-ai-aggregator-postgres-exporter
     environment:
       DATA_SOURCE_NAME: ${POSTGRES_EXPORTER_DATA_SOURCE_NAME:-postgresql://vk_ai_aggregator:vk_ai_aggregator@postgres:5432/vk_ai_aggregator?sslmode=disable}
@@ -153,7 +198,7 @@ services:
     restart: unless-stopped
 
   redis-exporter:
-    image: ${REDIS_EXPORTER_IMAGE:-oliver006/redis_exporter:latest}
+    image: oliver006/redis_exporter:v1.86.0@sha256:2e9795be900db073e9475fdb9c5124db309b07a3e4e75a1770705cb03be1a1c8
     container_name: vk-ai-aggregator-redis-exporter
     environment:
       REDIS_ADDR: ${REDIS_EXPORTER_REDIS_ADDR:-redis://redis:6379}
@@ -163,7 +208,7 @@ services:
     restart: unless-stopped
 
   node-exporter:
-    image: ${NODE_EXPORTER_IMAGE:-prom/node-exporter:latest}
+    image: prom/node-exporter:v1.11.1@sha256:e9cff4fc67b1818f8c97adb115b9f12c9a54b533de86765d4a0effc01b357205
     container_name: vk-ai-aggregator-node-exporter
     command:
       - --path.rootfs=/host
@@ -175,17 +220,27 @@ services:
     restart: unless-stopped
 
   cadvisor:
-    image: ${CADVISOR_IMAGE:-gcr.io/cadvisor/cadvisor:latest}
+    image: ghcr.io/google/cadvisor:v0.60.4@sha256:1f5616675a8de5cf6c1dc5b660d6b354b4be7fb11d835118f4008a06a273a577
     container_name: vk-ai-aggregator-cadvisor
-    privileged: true
-    devices:
-      - /dev/kmsg
     volumes:
-      - /:/rootfs:ro
-      - /var/run:/var/run:ro
       - /sys:/sys:ro
-      - /var/lib/docker/:/var/lib/docker:ro
-      - /dev/disk/:/dev/disk:ro
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=16m
+      - /var/run:rw,noexec,nosuid,nodev,size=4m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 128
+    mem_limit: 256m
+    cpus: 0.50
+    healthcheck:
+      test: ["CMD-SHELL", "/usr/bin/healthcheck.sh"]
+      interval: 30s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
     restart: unless-stopped
 
 volumes:

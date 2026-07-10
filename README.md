@@ -555,9 +555,10 @@ Production deploy is automated after `main` changes:
 
 ```text
 push/merge to main
-  -> Docker Images workflow builds api/worker/provider-webhook/miniapp/migrate/backup images
+  -> CI succeeds for the exact full commit SHA
+  -> Docker Images builds api/worker/provider-webhook/miniapp/migrate/backup images
   -> deploy-prod workflow connects to the VPS
-  -> VPS pulls immutable GHCR images by sha-<commit>
+  -> VPS pulls immutable GHCR images by sha-<full-commit>
   -> deploy-prod.sh starts the runtime
   -> smoke-prod.sh verifies public and private production routes
   -> rollback-prod.sh restores the previous image tag if deploy/smoke fails

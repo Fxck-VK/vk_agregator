@@ -48,10 +48,17 @@ Status, smoke and stop:
 
 ## DEV GitHub Deploy
 
-Pushing `dev-deploy` first triggers the `Docker Images` workflow. After all
-GHCR images for the pushed SHA are built successfully, GitHub Actions triggers
-`Deploy DEV` through `workflow_run`. `Deploy DEV` can also be started manually
-with `workflow_dispatch`.
+Pushing `dev-deploy` triggers `CI`, `Docker Images` and `Deploy DEV` for the
+same full commit SHA. `Docker Images` waits for the complete CI workflow to
+succeed before publishing immutable `sha-<full commit>` GHCR images. The
+secret-free `Deploy DEV` validation job waits for both successful CI and all
+matching images before the `development` environment and deploy secrets are
+available. The VPS checks out that exact commit in detached mode, and the deploy
+script runs with `--skip-pull` so branch movement cannot replace validated code.
+
+Manual `Deploy DEV` dispatch is accepted only from `dev-deploy` and only when
+successful CI and immutable images already exist for the dispatch SHA. A manual
+dispatch cannot build, select or deploy a different branch tip.
 
 Required GitHub repository secrets:
 

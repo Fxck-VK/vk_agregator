@@ -19,6 +19,10 @@ health_status="skipped"
 public_smoke_status="skipped"
 migration_backup_status="skipped"
 deploy_started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+readonly POSTGRES_HELPER_IMAGE="postgres:16-alpine@sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777"
+readonly REDIS_HELPER_IMAGE="redis:7-alpine@sha256:6ab0b6e7381779332f97b8ca76193e45b0756f38d4c0dcda72dbb3c32061ab99"
+readonly S3_HELPER_IMAGE="minio/mc:RELEASE.2025-08-13T08-35-41Z@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727"
+helper_env_files=()
 
 usage() {
   cat <<'EOF'
@@ -75,6 +79,49 @@ cd "${repo_root}"
 run_step() {
   echo "==> $*"
   "$@"
+}
+
+cleanup_helper_env_files() {
+  local helper_env_file
+  for helper_env_file in "${helper_env_files[@]:-}"; do
+    if [[ -n "${helper_env_file}" ]]; then
+      rm -f -- "${helper_env_file}"
+    fi
+  done
+}
+trap cleanup_helper_env_files EXIT
+
+create_helper_env_file() {
+  local output_name="$1"
+  shift
+  local created_file name value
+
+  if [[ ! "${output_name}" =~ ^[A-Za-z_][A-Za-z0-9_]*$ || $(( $# % 2 )) -ne 0 ]]; then
+    echo "Invalid helper env-file arguments." >&2
+    return 1
+  fi
+
+  created_file="$(mktemp "${TMPDIR:-/tmp}/vk-ai-aggregator-helper.XXXXXX")"
+  chmod 600 "${created_file}"
+  helper_env_files+=("${created_file}")
+
+  while (( $# > 0 )); do
+    name="$1"
+    value="$2"
+    shift 2
+    if [[ ! "${name}" =~ ^[A-Za-z_][A-Za-z0-9_]*$ || "${value}" == *$'\n'* || "${value}" == *$'\r'* ]]; then
+      echo "Invalid helper environment entry." >&2
+      return 1
+    fi
+    printf '%s=%s\n' "${name}" "${value}" >> "${created_file}"
+  done
+
+  printf -v "${output_name}" '%s' "${created_file}"
+}
+
+remove_helper_env_file() {
+  local helper_env_file="$1"
+  rm -f -- "${helper_env_file}"
 }
 
 check_docker() {
@@ -161,12 +208,16 @@ run_container_check() {
 }
 
 check_external_postgres() {
-  local database_url
+  local database_url helper_env_file status
   database_url="$(get_env_value DATABASE_URL "")"
+  create_helper_env_file helper_env_file DATABASE_URL "${database_url}"
+  status=0
   run_container_check \
-    -e DATABASE_URL="${database_url}" \
-    postgres:16-alpine \
-    sh -ec 'pg_isready -d "$DATABASE_URL" >/dev/null'
+    --env-file "${helper_env_file}" \
+    "${POSTGRES_HELPER_IMAGE}" \
+    sh -ec 'pg_isready -d "$DATABASE_URL" >/dev/null' || status=$?
+  remove_helper_env_file "${helper_env_file}"
+  return "${status}"
 }
 
 parse_redis_addr() {
@@ -184,44 +235,54 @@ parse_redis_addr() {
 }
 
 check_external_redis() {
-  local redis_addr redis_password redis_db
+  local redis_addr redis_password redis_db helper_env_file status
   redis_addr="$(get_env_value REDIS_ADDR "")"
   redis_password="$(get_env_value REDIS_PASSWORD "")"
   redis_db="$(get_env_value REDIS_DB 0)"
   parse_redis_addr "${redis_addr}"
 
+  create_helper_env_file helper_env_file \
+    REDISCLI_AUTH "${redis_password}" \
+    REDIS_CHECK_HOST "${REDIS_CHECK_HOST}" \
+    REDIS_CHECK_PORT "${REDIS_CHECK_PORT}" \
+    REDIS_CHECK_DB "${redis_db}"
+  status=0
   run_container_check \
-    -e REDISCLI_AUTH="${redis_password}" \
-    -e REDIS_CHECK_HOST="${REDIS_CHECK_HOST}" \
-    -e REDIS_CHECK_PORT="${REDIS_CHECK_PORT}" \
-    -e REDIS_CHECK_DB="${redis_db}" \
-    redis:7-alpine \
-    sh -ec 'redis-cli -h "$REDIS_CHECK_HOST" -p "$REDIS_CHECK_PORT" -n "$REDIS_CHECK_DB" ping | grep -qx PONG'
+    --env-file "${helper_env_file}" \
+    "${REDIS_HELPER_IMAGE}" \
+    sh -ec 'redis-cli -h "$REDIS_CHECK_HOST" -p "$REDIS_CHECK_PORT" -n "$REDIS_CHECK_DB" ping | grep -qx PONG' || status=$?
+  remove_helper_env_file "${helper_env_file}"
+  return "${status}"
 }
 
 check_external_s3() {
-  local s3_endpoint s3_access_key s3_secret_key s3_bucket s3_use_ssl
+  local s3_endpoint s3_access_key s3_secret_key s3_bucket s3_use_ssl helper_env_file status
   s3_endpoint="$(get_env_value S3_ENDPOINT "")"
   s3_access_key="$(get_env_value S3_ACCESS_KEY "")"
   s3_secret_key="$(get_env_value S3_SECRET_KEY "")"
   s3_bucket="$(get_env_value S3_BUCKET "")"
   s3_use_ssl="$(printf '%s' "$(get_env_value S3_USE_SSL false)" | tr '[:upper:]' '[:lower:]')"
 
+  create_helper_env_file helper_env_file \
+    S3_ENDPOINT "${s3_endpoint}" \
+    S3_ACCESS_KEY "${s3_access_key}" \
+    S3_SECRET_KEY "${s3_secret_key}" \
+    S3_BUCKET "${s3_bucket}" \
+    S3_USE_SSL "${s3_use_ssl}"
+  status=0
   run_container_check \
-    -e S3_ENDPOINT="${s3_endpoint}" \
-    -e S3_ACCESS_KEY="${s3_access_key}" \
-    -e S3_SECRET_KEY="${s3_secret_key}" \
-    -e S3_BUCKET="${s3_bucket}" \
-    -e S3_USE_SSL="${s3_use_ssl}" \
-    minio/mc:latest \
+    --env-file "${helper_env_file}" \
+    "${S3_HELPER_IMAGE}" \
     sh -ec '
       case "$S3_ENDPOINT" in
-        http://*|https://*) endpoint_url="$S3_ENDPOINT" ;;
+      http://*|https://*) endpoint_url="$S3_ENDPOINT" ;;
         *) if [ "$S3_USE_SSL" = "true" ]; then endpoint_url="https://$S3_ENDPOINT"; else endpoint_url="http://$S3_ENDPOINT"; fi ;;
       esac
       mc alias set target "$endpoint_url" "$S3_ACCESS_KEY" "$S3_SECRET_KEY" >/dev/null
       mc ls "target/$S3_BUCKET" >/dev/null
-    '
+    ' || status=$?
+  remove_helper_env_file "${helper_env_file}"
+  return "${status}"
 }
 
 check_external_data_services() {

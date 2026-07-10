@@ -1,11 +1,15 @@
-# syntax=docker/dockerfile:1
+# syntax=docker/dockerfile:1@sha256:87999aa3d42bdc6bea60565083ee17e86d1f3339802f543c0d03998580f9cb89
 
-FROM postgres:16-alpine
+FROM alpine:3.22@sha256:14358309a308569c32bdc37e2e0e9694be33a9d99e68afb0f5ff33cc1f695dce
 
-RUN apk add --no-cache bash aws-cli ca-certificates coreutils findutils
+RUN apk add --no-cache bash aws-cli ca-certificates coreutils findutils postgresql16-client \
+    && addgroup -S -g 10001 appgroup \
+    && adduser -S -D -H -u 10001 -G appgroup appuser \
+    && install -d -o 10001 -g 10001 -m 0770 /backups /backup-metrics
 
 WORKDIR /app
-COPY scripts/backup /app/scripts/backup
+COPY --chown=10001:10001 scripts/backup /app/scripts/backup
 RUN chmod +x /app/scripts/backup/*.sh
 
+USER 10001:10001
 CMD ["/app/scripts/backup/backup-postgres.sh"]

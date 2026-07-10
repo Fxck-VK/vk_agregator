@@ -2,7 +2,7 @@ name: vk-ai-aggregator-prod
 
 services:
   migrate:
-    image: ${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/migrate:${IMAGE_TAG:-main}
+    image: ${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/migrate:${IMAGE_TAG:?IMAGE_TAG is required}
     build:
       context: .
       dockerfile: Dockerfile.migrate
@@ -15,7 +15,7 @@ services:
       MIGRATIONS_DIR: ${MIGRATIONS_DIR:-migrations}
 
   api:
-    image: ${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/api:${IMAGE_TAG:-main}
+    image: ${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/api:${IMAGE_TAG:?IMAGE_TAG is required}
     build:
       context: .
       dockerfile: Dockerfile.api
@@ -40,7 +40,7 @@ services:
       retries: 10
 
   worker:
-    image: ${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/worker:${IMAGE_TAG:-main}
+    image: ${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/worker:${IMAGE_TAG:?IMAGE_TAG is required}
     build:
       context: .
       dockerfile: Dockerfile.worker
@@ -66,7 +66,7 @@ services:
       retries: 10
 
   maintenance-worker:
-    image: ${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/worker:${IMAGE_TAG:-main}
+    image: ${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/worker:${IMAGE_TAG:?IMAGE_TAG is required}
     build:
       context: .
       dockerfile: Dockerfile.worker
@@ -93,7 +93,7 @@ services:
       retries: 10
 
   provider-webhook:
-    image: ${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/provider-webhook:${IMAGE_TAG:-main}
+    image: ${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/provider-webhook:${IMAGE_TAG:?IMAGE_TAG is required}
     build:
       context: .
       dockerfile: Dockerfile.provider-webhook
@@ -118,7 +118,7 @@ services:
       retries: 10
 
   provider-balance-bot:
-    image: ${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/provider-balance-bot:${IMAGE_TAG:-main}
+    image: ${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/provider-balance-bot:${IMAGE_TAG:?IMAGE_TAG is required}
     build:
       context: .
       dockerfile: Dockerfile.provider-balance-bot
@@ -149,10 +149,25 @@ services:
       DEEPINFRA_BALANCE_BASE_URL: ${DEEPINFRA_BALANCE_BASE_URL:-https://api.deepinfra.com}
 
   miniapp:
-    image: ${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/miniapp:${IMAGE_TAG:-main}
+    image: ${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/miniapp:${IMAGE_TAG:?IMAGE_TAG is required}
     build:
       context: .
       dockerfile: Dockerfile.miniapp
+    user: "101:101"
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx:rw,noexec,nosuid,nodev,size=32m,uid=101,gid=101
+      - /var/run:rw,noexec,nosuid,nodev,size=4m,uid=101,gid=101
+      - /tmp:rw,noexec,nosuid,nodev,size=16m,uid=101,gid=101
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    pids_limit: 128
+    mem_limit: 128m
+    cpus: 0.50
     restart: unless-stopped
     ports:
       - "127.0.0.1:5173:80"
@@ -163,7 +178,22 @@ services:
       retries: 10
 
   reverse-proxy:
-    image: nginx:1.29-alpine
+    image: ${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/miniapp:${IMAGE_TAG:?IMAGE_TAG is required}
+    user: "101:101"
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx:rw,noexec,nosuid,nodev,size=32m,uid=101,gid=101
+      - /var/run:rw,noexec,nosuid,nodev,size=4m,uid=101,gid=101
+      - /tmp:rw,noexec,nosuid,nodev,size=16m,uid=101,gid=101
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    pids_limit: 128
+    mem_limit: 128m
+    cpus: 0.50
     restart: unless-stopped
     volumes:
       - ./deployments/nginx/nginx.prod.conf:/etc/nginx/nginx.conf:ro
@@ -183,7 +213,7 @@ services:
       retries: 10
 
   cloudflared:
-    image: cloudflare/cloudflared:latest
+    image: cloudflare/cloudflared:2026.7.1@sha256:188bb03589a32affed3cf4d0590565ffe67b78866e6b5582574afab2b705bafe
     restart: unless-stopped
     network_mode: host
     profiles:
@@ -208,16 +238,28 @@ services:
       retries: 3
 
   backup-postgres:
-    image: ${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/backup:${BACKUP_IMAGE_TAG:-main}
+    image: ${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/backup:${BACKUP_IMAGE_TAG:?BACKUP_IMAGE_TAG is required}
     build:
       context: .
       dockerfile: Dockerfile.backup
+    user: "10001:10001"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=64m,uid=10001,gid=10001
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 128
+    mem_limit: 512m
+    cpus: 0.50
     restart: "no"
     profiles:
       - backup
     env_file:
       - ${APP_ENV_FILE:?APP_ENV_FILE is required}
     environment:
+      HOME: /tmp
       DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
       BACKUP_DIR: /backups
       BACKUP_TEXTFILE_DIR: /backup-metrics
@@ -229,16 +271,28 @@ services:
     command: ["/app/scripts/backup/backup-postgres.sh"]
 
   backup-minio:
-    image: ${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/backup:${BACKUP_IMAGE_TAG:-main}
+    image: ${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/backup:${BACKUP_IMAGE_TAG:?BACKUP_IMAGE_TAG is required}
     build:
       context: .
       dockerfile: Dockerfile.backup
+    user: "10001:10001"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=64m,uid=10001,gid=10001
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 128
+    mem_limit: 512m
+    cpus: 0.50
     restart: "no"
     profiles:
       - backup
     env_file:
       - ${APP_ENV_FILE:?APP_ENV_FILE is required}
     environment:
+      HOME: /tmp
       S3_ENDPOINT: ${S3_ENDPOINT:-minio:9000}
       S3_ACCESS_KEY: ${S3_ACCESS_KEY:?S3_ACCESS_KEY is required}
       S3_SECRET_KEY: ${S3_SECRET_KEY:?S3_SECRET_KEY is required}
@@ -256,16 +310,28 @@ services:
     command: ["/app/scripts/backup/backup-minio.sh"]
 
   restore-postgres:
-    image: ${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/backup:${BACKUP_IMAGE_TAG:-main}
+    image: ${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/backup:${BACKUP_IMAGE_TAG:?BACKUP_IMAGE_TAG is required}
     build:
       context: .
       dockerfile: Dockerfile.backup
+    user: "10001:10001"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=64m,uid=10001,gid=10001
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 128
+    mem_limit: 512m
+    cpus: 0.50
     restart: "no"
     profiles:
       - backup
     env_file:
       - ${APP_ENV_FILE:?APP_ENV_FILE is required}
     environment:
+      HOME: /tmp
       DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
       BACKUP_DIR: /backups
       RESTORE_ALLOW_DESTRUCTIVE: ${RESTORE_ALLOW_DESTRUCTIVE:-false}
@@ -277,16 +343,28 @@ services:
     command: ["/app/scripts/backup/restore-postgres.sh"]
 
   restore-minio:
-    image: ${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/backup:${BACKUP_IMAGE_TAG:-main}
+    image: ${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/backup:${BACKUP_IMAGE_TAG:?BACKUP_IMAGE_TAG is required}
     build:
       context: .
       dockerfile: Dockerfile.backup
+    user: "10001:10001"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=64m,uid=10001,gid=10001
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 128
+    mem_limit: 512m
+    cpus: 0.50
     restart: "no"
     profiles:
       - backup
     env_file:
       - ${APP_ENV_FILE:?APP_ENV_FILE is required}
     environment:
+      HOME: /tmp
       S3_ENDPOINT: ${S3_ENDPOINT:-minio:9000}
       S3_ACCESS_KEY: ${S3_ACCESS_KEY:?S3_ACCESS_KEY is required}
       S3_SECRET_KEY: ${S3_SECRET_KEY:?S3_SECRET_KEY is required}
