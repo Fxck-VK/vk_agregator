@@ -27,6 +27,9 @@ $healthStatus = "skipped"
 $publicSmokeStatus = "skipped"
 $migrationBackupStatus = "skipped"
 $shouldBuildOnVPS = $BuildOnVPS -and -not $SkipBuild
+$script:PostgresHelperImage = "postgres:16-alpine@sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777"
+$script:RedisHelperImage = "redis:7-alpine@sha256:6ab0b6e7381779332f97b8ca76193e45b0756f38d4c0dcda72dbb3c32061ab99"
+$script:S3HelperImage = "minio/mc:RELEASE.2025-08-13T08-35-41Z@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727"
 
 function Invoke-Step {
     param(
@@ -63,6 +66,53 @@ function Get-EnvFileValue {
         }
     }
     return $Default
+}
+
+function New-HelperEnvFile {
+    param([Parameter(Mandatory = $true)][hashtable]$Values)
+
+    $helperEnvFile = Join-Path ([System.IO.Path]::GetTempPath()) "vk-ai-aggregator-helper-$([guid]::NewGuid().ToString('N')).env"
+    $lines = [System.Collections.Generic.List[string]]::new()
+    foreach ($rawName in @($Values.Keys | Sort-Object)) {
+        $name = $rawName.ToString()
+        $value = if ($null -eq $Values[$rawName]) { "" } else { $Values[$rawName].ToString() }
+        if ($name -notmatch '^[A-Za-z_][A-Za-z0-9_]*$' -or $value -match "[\r\n]") {
+            throw "Invalid helper environment entry."
+        }
+        $lines.Add("${name}=${value}")
+    }
+
+    try {
+        [System.IO.File]::Open(
+            $helperEnvFile,
+            [System.IO.FileMode]::CreateNew,
+            [System.IO.FileAccess]::Write,
+            [System.IO.FileShare]::None
+        ).Dispose()
+        if ($IsWindows) {
+            $acl = Get-Acl -LiteralPath $helperEnvFile
+            $acl.SetAccessRuleProtection($true, $false)
+            foreach ($rule in @($acl.Access)) {
+                $null = $acl.RemoveAccessRule($rule)
+            }
+            $identity = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+            $accessRule = [System.Security.AccessControl.FileSystemAccessRule]::new(
+                $identity,
+                [System.Security.AccessControl.FileSystemRights]::FullControl,
+                [System.Security.AccessControl.AccessControlType]::Allow
+            )
+            $acl.SetAccessRule($accessRule)
+            Set-Acl -LiteralPath $helperEnvFile -AclObject $acl
+        } else {
+            $mode = [System.IO.UnixFileMode]::UserRead -bor [System.IO.UnixFileMode]::UserWrite
+            [System.IO.File]::SetUnixFileMode($helperEnvFile, $mode)
+        }
+        [System.IO.File]::WriteAllLines($helperEnvFile, $lines.ToArray(), [System.Text.UTF8Encoding]::new($false))
+        return $helperEnvFile
+    } catch {
+        Remove-Item -LiteralPath $helperEnvFile -Force -ErrorAction SilentlyContinue
+        throw
+    }
 }
 
 function Test-EnvPlaceholderValue {
@@ -137,9 +187,14 @@ function Invoke-ExternalPostgresCheck {
     param([Parameter(Mandatory = $true)][string]$Path)
 
     $databaseUrl = Get-EnvFileValue -Path $Path -Name "DATABASE_URL"
-    & docker run --rm --network host -e "DATABASE_URL=$databaseUrl" postgres:16-alpine sh -ec 'pg_isready -d "$DATABASE_URL" >/dev/null'
-    if ($LASTEXITCODE -ne 0) {
-        throw "external Postgres check failed with exit code $LASTEXITCODE"
+    $helperEnvFile = New-HelperEnvFile -Values @{ DATABASE_URL = $databaseUrl }
+    try {
+        & docker run --rm --network host --env-file $helperEnvFile $script:PostgresHelperImage sh -ec 'pg_isready -d "$DATABASE_URL" >/dev/null'
+        if ($LASTEXITCODE -ne 0) {
+            throw "external Postgres check failed with exit code $LASTEXITCODE"
+        }
+    } finally {
+        Remove-Item -LiteralPath $helperEnvFile -Force -ErrorAction SilentlyContinue
     }
 }
 
@@ -169,15 +224,20 @@ function Invoke-ExternalRedisCheck {
     $redisDb = Get-EnvFileValue -Path $Path -Name "REDIS_DB" -Default "0"
     $redisEndpoint = Split-RedisAddress -Address $redisAddr
 
-    & docker run --rm --network host `
-        -e "REDISCLI_AUTH=$redisPassword" `
-        -e "REDIS_CHECK_HOST=$($redisEndpoint.Host)" `
-        -e "REDIS_CHECK_PORT=$($redisEndpoint.Port)" `
-        -e "REDIS_CHECK_DB=$redisDb" `
-        redis:7-alpine `
-        sh -ec 'redis-cli -h "$REDIS_CHECK_HOST" -p "$REDIS_CHECK_PORT" -n "$REDIS_CHECK_DB" ping | grep -qx PONG'
-    if ($LASTEXITCODE -ne 0) {
-        throw "external Redis check failed with exit code $LASTEXITCODE"
+    $helperEnvFile = New-HelperEnvFile -Values @{
+        REDISCLI_AUTH = $redisPassword
+        REDIS_CHECK_HOST = $redisEndpoint.Host
+        REDIS_CHECK_PORT = $redisEndpoint.Port
+        REDIS_CHECK_DB = $redisDb
+    }
+    try {
+        & docker run --rm --network host --env-file $helperEnvFile $script:RedisHelperImage `
+            sh -ec 'redis-cli -h "$REDIS_CHECK_HOST" -p "$REDIS_CHECK_PORT" -n "$REDIS_CHECK_DB" ping | grep -qx PONG'
+        if ($LASTEXITCODE -ne 0) {
+            throw "external Redis check failed with exit code $LASTEXITCODE"
+        }
+    } finally {
+        Remove-Item -LiteralPath $helperEnvFile -Force -ErrorAction SilentlyContinue
     }
 }
 
@@ -190,16 +250,21 @@ function Invoke-ExternalS3Check {
     $s3Bucket = Get-EnvFileValue -Path $Path -Name "S3_BUCKET"
     $s3UseSsl = (Get-EnvFileValue -Path $Path -Name "S3_USE_SSL" -Default "false").ToLowerInvariant()
 
-    & docker run --rm --network host `
-        -e "S3_ENDPOINT=$s3Endpoint" `
-        -e "S3_ACCESS_KEY=$s3AccessKey" `
-        -e "S3_SECRET_KEY=$s3SecretKey" `
-        -e "S3_BUCKET=$s3Bucket" `
-        -e "S3_USE_SSL=$s3UseSsl" `
-        minio/mc:latest `
-        sh -ec 'case "$S3_ENDPOINT" in http://*|https://*) endpoint_url="$S3_ENDPOINT" ;; *) if [ "$S3_USE_SSL" = "true" ]; then endpoint_url="https://$S3_ENDPOINT"; else endpoint_url="http://$S3_ENDPOINT"; fi ;; esac; mc alias set target "$endpoint_url" "$S3_ACCESS_KEY" "$S3_SECRET_KEY" >/dev/null; mc ls "target/$S3_BUCKET" >/dev/null'
-    if ($LASTEXITCODE -ne 0) {
-        throw "external S3 check failed with exit code $LASTEXITCODE"
+    $helperEnvFile = New-HelperEnvFile -Values @{
+        S3_ENDPOINT = $s3Endpoint
+        S3_ACCESS_KEY = $s3AccessKey
+        S3_SECRET_KEY = $s3SecretKey
+        S3_BUCKET = $s3Bucket
+        S3_USE_SSL = $s3UseSsl
+    }
+    try {
+        & docker run --rm --network host --env-file $helperEnvFile $script:S3HelperImage `
+            sh -ec 'case "$S3_ENDPOINT" in http://*|https://*) endpoint_url="$S3_ENDPOINT" ;; *) if [ "$S3_USE_SSL" = "true" ]; then endpoint_url="https://$S3_ENDPOINT"; else endpoint_url="http://$S3_ENDPOINT"; fi ;; esac; mc alias set target "$endpoint_url" "$S3_ACCESS_KEY" "$S3_SECRET_KEY" >/dev/null; mc ls "target/$S3_BUCKET" >/dev/null'
+        if ($LASTEXITCODE -ne 0) {
+            throw "external S3 check failed with exit code $LASTEXITCODE"
+        }
+    } finally {
+        Remove-Item -LiteralPath $helperEnvFile -Force -ErrorAction SilentlyContinue
     }
 }
 

@@ -169,6 +169,16 @@ postgres-exporter:9187
 redis-exporter:9121
 ```
 
+Alloy must not mount the Docker socket. Container discovery and log reads pass
+through the private `docker-socket-proxy`, whose HAProxy policy permits only
+GET/HEAD requests for ping/version/info/events, container list/inspect/logs and
+network listing; Docker create/start/exec, image, volume, secret and other write
+surfaces are denied. The proxy is the only container that mounts the socket and
+is not published on a host port. cAdvisor does not use the Docker API, is not
+privileged, and reads container cgroups through `/sys:ro` only. Mini App and
+backup/restore containers run non-root with read-only root filesystems and
+explicit writable tmpfs/volume paths.
+
 Blackbox probes check private readiness routes for `api`, `worker`,
 `maintenance-worker`, `provider-webhook`, `miniapp` and `reverse-proxy`; separate public probes assert
 that `/metrics` is not exposed through public domains. Grafana, Prometheus,

@@ -1,0 +1,66 @@
+{
+  "@context": "https://openvex.dev/ns/v0.2.0",
+  "@id": "https://github.com/fxck-vk/vk_agregator/security/vex/alloy-v1.17.1-docker-client",
+  "author": "VK AI Aggregator security review",
+  "timestamp": "2026-07-10T20:08:30Z",
+  "version": 1,
+  "statements": [
+    {
+      "vulnerability": {
+        "name": "CVE-2026-34040"
+      },
+      "products": [
+        {
+          "@id": "pkg:golang/github.com/grafana/alloy/otel_engine",
+          "subcomponents": [
+            {
+              "@id": "pkg:golang/github.com/docker/docker@v28.5.2%2Bincompatible"
+            }
+          ]
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "The affected Docker daemon AuthZ request-body path is not part of the Alloy client runtime. HAProxy accepts only allowlisted GET/HEAD requests and does not delegate authorization decisions to a Docker AuthZ plugin.",
+      "action_statement": "Re-evaluate when the Alloy image, embedded Docker module, or HAProxy allowlist changes."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-41567"
+      },
+      "products": [
+        {
+          "@id": "pkg:golang/github.com/grafana/alloy/otel_engine",
+          "subcomponents": [
+            {
+              "@id": "pkg:golang/github.com/docker/docker@v28.5.2%2Bincompatible"
+            }
+          ]
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "The affected Docker daemon PUT archive handler is not part of the Alloy client runtime. HAProxy denies PUT and does not allow any containers archive path.",
+      "action_statement": "Re-evaluate when the Alloy image, embedded Docker module, or HAProxy allowlist changes."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-42306"
+      },
+      "products": [
+        {
+          "@id": "pkg:golang/github.com/grafana/alloy/otel_engine",
+          "subcomponents": [
+            {
+              "@id": "pkg:golang/github.com/docker/docker@v28.5.2%2Bincompatible"
+            }
+          ]
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "The affected Docker daemon archive mount setup is not part of the Alloy client runtime. HAProxy denies PUT and HEAD requests to every containers archive path.",
+      "action_statement": "Re-evaluate when the Alloy image, embedded Docker module, or HAProxy allowlist changes."
+    }
+  ]
+}

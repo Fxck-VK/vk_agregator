@@ -1,11 +1,7 @@
 name: Deploy DEV
 
 on:
-  workflow_run:
-    workflows:
-      - Docker Images
-    types:
-      - completed
+  push:
     branches:
       - dev-deploy
   workflow_dispatch:
@@ -18,35 +14,149 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  validate_source:
+    name: Validate DEV source
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      commit_sha: ${{ steps.source.outputs.commit_sha }}
+    steps:
+      - name: Require exact-SHA CI and image success
+        id: source
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CI_WORKFLOW: ci.yml
+          IMAGE_WORKFLOW: docker-images.yml
+        run: |
+          set -euo pipefail
+
+          case "${GITHUB_EVENT_NAME}" in
+            push)
+              if [[ "${GITHUB_REF}" != "refs/heads/dev-deploy" ]]; then
+                echo "Automatic DEV deploy is restricted to refs/heads/dev-deploy." >&2
+                exit 1
+              fi
+              SOURCE_SHA="${GITHUB_SHA}"
+              SOURCE_BRANCH="dev-deploy"
+              ;;
+            workflow_dispatch)
+              if [[ "${GITHUB_REF}" != "refs/heads/dev-deploy" ]]; then
+                echo "Manual DEV deploy must be dispatched from refs/heads/dev-deploy." >&2
+                exit 1
+              fi
+              SOURCE_SHA="${GITHUB_SHA}"
+              SOURCE_BRANCH="dev-deploy"
+              ;;
+            *)
+              echo "Unsupported DEV deploy event: ${GITHUB_EVENT_NAME}" >&2
+              exit 1
+              ;;
+          esac
+
+          if [[ ! "${SOURCE_SHA}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "DEV deploy requires a full immutable commit SHA." >&2
+            exit 1
+          fi
+
+          deadline=$((SECONDS + 1800))
+          while true; do
+            ci_runs="$(curl --fail-with-body --silent --show-error --retry 3 \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/actions/workflows/${CI_WORKFLOW}/runs?head_sha=${SOURCE_SHA}&event=push&per_page=100")"
+            ci_success="$(jq -r --arg sha "${SOURCE_SHA}" --arg branch "${SOURCE_BRANCH}" \
+              '[.workflow_runs[] | select(.head_sha == $sha and .head_branch == $branch and .event == "push" and .status == "completed" and .conclusion == "success")] | length' \
+              <<< "${ci_runs}")"
+            ci_active="$(jq -r --arg sha "${SOURCE_SHA}" --arg branch "${SOURCE_BRANCH}" \
+              '[.workflow_runs[] | select(.head_sha == $sha and .head_branch == $branch and .event == "push" and .status != "completed")] | length' \
+              <<< "${ci_runs}")"
+            ci_failed="$(jq -r --arg sha "${SOURCE_SHA}" --arg branch "${SOURCE_BRANCH}" \
+              '[.workflow_runs[] | select(.head_sha == $sha and .head_branch == $branch and .event == "push" and .status == "completed" and .conclusion != "success")] | length' \
+              <<< "${ci_runs}")"
+
+            if (( ci_success > 0 )); then
+              break
+            fi
+            if (( ci_active == 0 && ci_failed > 0 )); then
+              echo "CI completed without success for DEV commit ${SOURCE_SHA}." >&2
+              exit 1
+            fi
+            if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" && ${ci_active} -eq 0 ]]; then
+              echo "Manual DEV deploy requires prior successful CI for ${SOURCE_SHA}." >&2
+              exit 1
+            fi
+            if (( SECONDS >= deadline )); then
+              echo "Timed out waiting for successful CI for DEV commit ${SOURCE_SHA}." >&2
+              exit 1
+            fi
+            sleep 15
+          done
+
+          while true; do
+            image_runs="$(curl --fail-with-body --silent --show-error --retry 3 \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/actions/workflows/${IMAGE_WORKFLOW}/runs?head_sha=${SOURCE_SHA}&per_page=100")"
+            image_success="$(jq -r --arg sha "${SOURCE_SHA}" --arg branch "${SOURCE_BRANCH}" \
+              '[.workflow_runs[] | select(.head_sha == $sha and .head_branch == $branch and (.event == "push" or .event == "workflow_dispatch") and .status == "completed" and .conclusion == "success")] | length' \
+              <<< "${image_runs}")"
+            image_active="$(jq -r --arg sha "${SOURCE_SHA}" --arg branch "${SOURCE_BRANCH}" \
+              '[.workflow_runs[] | select(.head_sha == $sha and .head_branch == $branch and (.event == "push" or .event == "workflow_dispatch") and .status != "completed")] | length' \
+              <<< "${image_runs}")"
+            image_failed="$(jq -r --arg sha "${SOURCE_SHA}" --arg branch "${SOURCE_BRANCH}" \
+              '[.workflow_runs[] | select(.head_sha == $sha and .head_branch == $branch and (.event == "push" or .event == "workflow_dispatch") and .status == "completed" and .conclusion != "success")] | length' \
+              <<< "${image_runs}")"
+
+            if (( image_success > 0 )); then
+              break
+            fi
+            if (( image_active == 0 && image_failed > 0 )); then
+              echo "Docker Images completed without success for DEV commit ${SOURCE_SHA}." >&2
+              exit 1
+            fi
+            if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" && ${image_active} -eq 0 ]]; then
+              echo "Manual DEV deploy requires prior immutable images for ${SOURCE_SHA}." >&2
+              exit 1
+            fi
+            if (( SECONDS >= deadline )); then
+              echo "Timed out waiting for immutable images for DEV commit ${SOURCE_SHA}." >&2
+              exit 1
+            fi
+            sleep 15
+          done
+
+          echo "commit_sha=${SOURCE_SHA}" >> "${GITHUB_OUTPUT}"
+
   deploy:
     name: Deploy DEV VPS
     runs-on: ubuntu-latest
-    if: >
-      github.event_name == 'workflow_dispatch' ||
-      (github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.event == 'push' &&
-       github.event.workflow_run.head_branch == 'dev-deploy')
+    needs: validate_source
+    environment: development
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
-          ref: dev-deploy
+          ref: ${{ needs.validate_source.outputs.commit_sha }}
 
       - name: Resolve deployment image tag
         id: release
         shell: bash
         env:
-          WORKFLOW_RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+          DEPLOY_SHA: ${{ needs.validate_source.outputs.commit_sha }}
         run: |
           set -euo pipefail
 
-          deploy_sha="${WORKFLOW_RUN_SHA:-$(git rev-parse HEAD)}"
-          deploy_short_sha="${deploy_sha:0:7}"
-          deploy_image_tag="sha-${deploy_short_sha}"
+          deploy_sha="${DEPLOY_SHA}"
+          deploy_image_tag="sha-${deploy_sha}"
 
-          if [[ ! "${deploy_image_tag}" =~ ^sha-[A-Za-z0-9._-]+$ ]]; then
-            echo "Resolved unsafe IMAGE_TAG: ${deploy_image_tag}" >&2
+          if [[ ! "${deploy_sha}" =~ ^[0-9a-f]{40}$ || "$(git rev-parse --verify HEAD)" != "${deploy_sha}" ]]; then
+            echo "Checked-out DEV source does not match the validated commit SHA." >&2
             exit 1
           fi
 
@@ -164,14 +274,21 @@ jobs:
           DEV_DEPLOY_USER: ${{ secrets.DEV_DEPLOY_USER }}
           DEV_DEPLOY_PATH: ${{ secrets.DEV_DEPLOY_PATH }}
           REPOSITORY: ${{ github.repository }}
+          DEPLOY_COMMIT_SHA: ${{ steps.release.outputs.commit_sha }}
         run: |
           set -euo pipefail
           ssh_opts=(-i "${HOME}/.ssh/deploy_key" -o StrictHostKeyChecking=yes -o UserKnownHostsFile="${HOME}/.ssh/known_hosts" -o GlobalKnownHostsFile=/dev/null)
 
-          ssh "${ssh_opts[@]}" "${DEV_DEPLOY_USER}@${DEV_DEPLOY_HOST}" 'bash -s' -- "${DEV_DEPLOY_PATH}" "${REPOSITORY}" <<'REMOTE'
+          ssh "${ssh_opts[@]}" "${DEV_DEPLOY_USER}@${DEV_DEPLOY_HOST}" 'bash -s' -- "${DEV_DEPLOY_PATH}" "${REPOSITORY}" "${DEPLOY_COMMIT_SHA}" <<'REMOTE'
           set -euo pipefail
           deploy_path="$1"
           repository="$2"
+          deploy_sha="$3"
+
+          if [[ ! "${deploy_sha}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Invalid immutable DEV deploy commit SHA." >&2
+            exit 1
+          fi
 
           if [[ ! -d "${deploy_path}/.git" ]]; then
             mkdir -p "$(dirname "${deploy_path}")"
@@ -179,8 +296,22 @@ jobs:
           fi
 
           cd "${deploy_path}"
-          git fetch --prune origin
-          git checkout -B dev-deploy origin/dev-deploy
+          if [[ -n "$(git status --porcelain --untracked-files=no)" ]]; then
+            echo "Tracked DEV VPS repository changes block immutable deploy." >&2
+            exit 1
+          fi
+
+          git fetch --prune origin dev-deploy
+          if ! git cat-file -e "${deploy_sha}^{commit}"; then
+            echo "Selected DEV deploy commit is unavailable on the VPS." >&2
+            exit 1
+          fi
+          git checkout --detach "${deploy_sha}"
+
+          if [[ "$(git rev-parse --verify HEAD)" != "${deploy_sha}" || -n "$(git status --porcelain --untracked-files=no)" ]]; then
+            echo "DEV VPS repository does not match the immutable deploy commit." >&2
+            exit 1
+          fi
           REMOTE
 
       - name: Capture current DEV image tag
@@ -209,21 +340,18 @@ jobs:
             env_tag="${env_tag#\'}"
           fi
 
-          git_short="$(git rev-parse --short=7 HEAD 2>/dev/null || true)"
-          if [[ "${env_tag}" == sha-* ]]; then
+          if [[ "${env_tag}" =~ ^sha-[0-9a-f]{40}$ ]]; then
             tag="${env_tag}"
-          elif [[ -n "${git_short}" ]]; then
-            tag="sha-${git_short}"
           else
-            tag="${env_tag}"
+            tag=""
           fi
 
           printf '%s' "${tag}"
           REMOTE
           )"
 
-          if [[ -n "${previous_image_tag}" && ! "${previous_image_tag}" =~ ^[A-Za-z0-9._-]+$ ]]; then
-            echo "Captured unsafe previous IMAGE_TAG" >&2
+          if [[ -n "${previous_image_tag}" && ! "${previous_image_tag}" =~ ^sha-[0-9a-f]{40}$ ]]; then
+            echo "Captured previous IMAGE_TAG is not an immutable full-SHA tag." >&2
             exit 1
           fi
 
@@ -279,7 +407,7 @@ jobs:
           ssh_opts=(-i "${HOME}/.ssh/deploy_key" -o StrictHostKeyChecking=yes -o UserKnownHostsFile="${HOME}/.ssh/known_hosts" -o GlobalKnownHostsFile=/dev/null)
 
           ssh "${ssh_opts[@]}" "${DEV_DEPLOY_USER}@${DEV_DEPLOY_HOST}" \
-            "set -euo pipefail; cd '${DEV_DEPLOY_PATH}'; bash scripts/deploy/deploy-dev.sh --branch dev-deploy --env-file .env --with-cloudflare --skip-public-smoke --image-tag '${DEPLOY_IMAGE_TAG}' --timeout-seconds 240"
+            "set -euo pipefail; cd '${DEV_DEPLOY_PATH}'; bash scripts/deploy/deploy-dev.sh --branch dev-deploy --env-file .env --skip-pull --with-cloudflare --skip-public-smoke --image-tag '${DEPLOY_IMAGE_TAG}' --timeout-seconds 240"
 
       - name: Run DEV smoke
         id: dev_smoke
@@ -368,6 +496,7 @@ jobs:
           bash scripts/deploy/deploy-dev.sh \
             --branch dev-deploy \
             --env-file .env \
+            --skip-pull \
             --project-name vk-ai-aggregator-dev \
             --with-cloudflare \
             --skip-migrate \

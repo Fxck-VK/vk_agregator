@@ -1,47 +1,135 @@
 name: Docker Images
 
 on:
-  pull_request:
-    branches:
-      - main
-      - serega
-      - feature/integration-web-backend
-      - integration-web-backend
-      - integration_web_backend
-      - dev-deploy
   push:
     branches:
       - main
-      - serega
-      - feature/integration-web-backend
-      - integration-web-backend
-      - integration_web_backend
       - dev-deploy
   workflow_dispatch:
 
 permissions:
   contents: read
-  packages: write
 
 jobs:
   validate_source:
     name: Validate image source
     runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      commit_sha: ${{ steps.source.outputs.commit_sha }}
+      source_branch: ${{ steps.source.outputs.source_branch }}
     steps:
-      - name: Enforce main-only manual image build
+      - name: Resolve immutable image source
+        id: source
         shell: bash
         run: |
           set -euo pipefail
 
-          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" && "${GITHUB_REF}" != "refs/heads/main" ]]; then
-            echo "Manual Docker Images dispatch is restricted to refs/heads/main." >&2
+          case "${GITHUB_EVENT_NAME}" in
+            push)
+              if [[ "${GITHUB_REF}" != "refs/heads/main" && "${GITHUB_REF}" != "refs/heads/dev-deploy" ]]; then
+                echo "Docker image pushes are restricted to main and dev-deploy." >&2
+                exit 1
+              fi
+              ;;
+            workflow_dispatch)
+              if [[ "${GITHUB_REF}" != "refs/heads/main" ]]; then
+                echo "Manual Docker Images dispatch is restricted to refs/heads/main." >&2
+                exit 1
+              fi
+              ;;
+            *)
+              echo "Unsupported Docker Images event: ${GITHUB_EVENT_NAME}" >&2
+              exit 1
+              ;;
+          esac
+
+          if [[ ! "${GITHUB_SHA}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Docker Images requires a full immutable commit SHA." >&2
             exit 1
           fi
+
+          echo "commit_sha=${GITHUB_SHA}" >> "${GITHUB_OUTPUT}"
+          echo "source_branch=${GITHUB_REF_NAME}" >> "${GITHUB_OUTPUT}"
+
+      - name: Require successful CI for exact commit
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CI_WORKFLOW: ci.yml
+          SOURCE_SHA: ${{ steps.source.outputs.commit_sha }}
+          SOURCE_BRANCH: ${{ steps.source.outputs.source_branch }}
+        run: |
+          set -euo pipefail
+
+          deadline=$((SECONDS + 1800))
+          while true; do
+            response="$(curl --fail-with-body --silent --show-error --retry 3 \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/actions/workflows/${CI_WORKFLOW}/runs?head_sha=${SOURCE_SHA}&event=push&per_page=100")"
+
+            successful_runs="$(jq -r \
+              --arg sha "${SOURCE_SHA}" \
+              --arg branch "${SOURCE_BRANCH}" \
+              '[.workflow_runs[] | select(
+                .head_sha == $sha and
+                .head_branch == $branch and
+                .event == "push" and
+                .status == "completed" and
+                .conclusion == "success"
+              )] | length' <<< "${response}")"
+            failed_runs="$(jq -r \
+              --arg sha "${SOURCE_SHA}" \
+              --arg branch "${SOURCE_BRANCH}" \
+              '[.workflow_runs[] | select(
+                .head_sha == $sha and
+                .head_branch == $branch and
+                .event == "push" and
+                .status == "completed" and
+                .conclusion != "success"
+              )] | length' <<< "${response}")"
+            active_runs="$(jq -r \
+              --arg sha "${SOURCE_SHA}" \
+              --arg branch "${SOURCE_BRANCH}" \
+              '[.workflow_runs[] | select(
+                .head_sha == $sha and
+                .head_branch == $branch and
+                .event == "push" and
+                .status != "completed"
+              )] | length' <<< "${response}")"
+
+            if (( successful_runs > 0 )); then
+              echo "Successful CI confirmed for exact commit ${SOURCE_SHA}."
+              break
+            fi
+            if (( active_runs == 0 && failed_runs > 0 )); then
+              echo "CI completed without success for exact commit ${SOURCE_SHA}." >&2
+              exit 1
+            fi
+            if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" && ${active_runs} -eq 0 ]]; then
+              echo "Manual Docker Images dispatch requires prior successful CI for ${SOURCE_SHA}." >&2
+              exit 1
+            fi
+            if (( SECONDS >= deadline )); then
+              echo "Timed out waiting for successful CI for exact commit ${SOURCE_SHA}." >&2
+              exit 1
+            fi
+
+            echo "Waiting for CI on exact commit ${SOURCE_SHA}."
+            sleep 15
+          done
 
   build:
     name: Build ${{ matrix.service }}
     runs-on: ubuntu-latest
     needs: validate_source
+    permissions:
+      contents: read
+      packages: write
     strategy:
       fail-fast: false
       matrix:
@@ -63,18 +151,19 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          ref: ${{ needs.validate_source.outputs.commit_sha }}
 
       - name: Set image namespace
         shell: bash
         run: echo "IMAGE_NAMESPACE=${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
 
       - name: Log in to GitHub Container Registry
-        if: github.event_name != 'pull_request'
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -82,21 +171,18 @@ jobs:
 
       - name: Docker metadata
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5.10.0
         with:
           images: ghcr.io/${{ env.IMAGE_NAMESPACE }}/${{ matrix.service }}
           tags: |
-            type=ref,event=branch
-            type=sha,prefix=sha-,format=short
-            type=sha,prefix=sha-,format=long,enable=${{ github.ref == 'refs/heads/main' }}
-            type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
+            type=raw,value=sha-${{ needs.validate_source.outputs.commit_sha }}
 
-      - name: Build and optionally push
-        uses: docker/build-push-action@v6
+      - name: Build and push immutable image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
           context: .
           file: ${{ matrix.dockerfile }}
-          push: ${{ github.event_name != 'pull_request' }}
+          push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha

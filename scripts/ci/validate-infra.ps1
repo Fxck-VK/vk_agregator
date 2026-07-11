@@ -569,6 +569,238 @@ function Assert-ProductionDataServices {
     Write-Host "production data services config OK"
 }
 
+function Assert-VersionDigestImageReference {
+    param(
+        [Parameter(Mandatory = $true)][string]$Reference,
+        [Parameter(Mandatory = $true)][string]$Context
+    )
+
+    if ($Reference -match ':latest(?:@|$)' -or $Reference -notmatch '^[^@\s]+:[^@\s]+@sha256:[0-9a-f]{64}$') {
+        throw "external container image must use a readable non-latest tag and sha256 digest: ${Context}: $Reference"
+    }
+}
+
+function Assert-ExternalContainerPinsAndHelperSecrets {
+    $dockerfiles = @(Get-ChildItem -LiteralPath $repoRoot -File -Filter "Dockerfile.*" | Sort-Object Name)
+    if ($dockerfiles.Count -ne 7) {
+        throw "expected seven application Dockerfiles, found $($dockerfiles.Count)"
+    }
+
+    $dockerfileImageCount = 0
+    foreach ($dockerfile in $dockerfiles) {
+        $lineNumber = 0
+        foreach ($line in Get-Content -LiteralPath $dockerfile.FullName) {
+            $lineNumber++
+            if ($line -match '^\s*#\s*syntax=(?<image>\S+)\s*$') {
+                Assert-VersionDigestImageReference -Reference $Matches.image -Context "$($dockerfile.Name):${lineNumber} syntax"
+                $dockerfileImageCount++
+                continue
+            }
+            if ($line -match '^\s*FROM\s+(?<image>\S+)') {
+                Assert-VersionDigestImageReference -Reference $Matches.image -Context "$($dockerfile.Name):${lineNumber} FROM"
+                $dockerfileImageCount++
+            }
+        }
+    }
+    if ($dockerfileImageCount -eq 0) {
+        throw "Dockerfile pin validation found no external image inputs"
+    }
+
+    $composePaths = @(
+        "docker-compose.prod.yml",
+        "docker-compose.data.yml",
+        "docker-compose.observability.yml"
+    )
+    $externalComposeCount = 0
+    foreach ($relativePath in $composePaths) {
+        $path = Join-Path $repoRoot $relativePath
+        $lineNumber = 0
+        foreach ($line in Get-Content -LiteralPath $path) {
+            $lineNumber++
+            if ($line -notmatch '^\s*image:\s*(?<image>\S+)\s*$') {
+                continue
+            }
+
+            $image = $Matches.image
+            if ($image.Contains('APP_IMAGE_REGISTRY')) {
+                if ($image.Contains(':-main') -or ($image -notmatch '\$\{(?:IMAGE_TAG|BACKUP_IMAGE_TAG):\?')) {
+                    throw "internal application image must require the immutable SHA tag without main fallback: ${relativePath}:${lineNumber}"
+                }
+                continue
+            }
+
+            Assert-VersionDigestImageReference -Reference $image -Context "${relativePath}:${lineNumber} image"
+            $externalComposeCount++
+        }
+    }
+    if ($externalComposeCount -eq 0) {
+        throw "Compose pin validation found no external production images"
+    }
+
+    $productionCompose = Get-Content -LiteralPath (Join-Path $repoRoot "docker-compose.prod.yml") -Raw
+    $internalProxyPattern = '(?m)^  reverse-proxy:\r?\n    image: \$\{APP_IMAGE_REGISTRY:-ghcr\.io/fxck-vk/vk_agregator\}/miniapp:\$\{IMAGE_TAG:\?IMAGE_TAG is required\}\s*$'
+    if ($productionCompose -notmatch $internalProxyPattern) {
+        throw "production reverse proxy must reuse the scanned internal miniapp SHA image"
+    }
+
+    $helperScripts = @(
+        [pscustomobject]@{
+            Path = "scripts\deploy\deploy-prod.sh"
+            Required = @("POSTGRES_HELPER_IMAGE", "REDIS_HELPER_IMAGE", "S3_HELPER_IMAGE", "--env-file", "chmod 600", "cleanup_helper_env_files", "rm -f")
+            ForbiddenPattern = '(?m)(docker run[^\r\n]*\s-e\s|^\s*-e\s+)'
+        },
+        [pscustomobject]@{
+            Path = "scripts\deploy\deploy-prod.ps1"
+            Required = @("PostgresHelperImage", "RedisHelperImage", "S3HelperImage", "--env-file", "SetUnixFileMode", "finally", "Remove-Item -LiteralPath")
+            ForbiddenPattern = '(?m)(docker run[^\r\n]*\s-e\s|^\s*-e\s+)'
+        }
+    )
+    foreach ($helperScript in $helperScripts) {
+        $path = Join-Path $repoRoot $helperScript.Path
+        $content = Get-Content -LiteralPath $path -Raw
+        foreach ($snippet in $helperScript.Required) {
+            if (-not $content.Contains($snippet)) {
+                throw "deploy helper script $($helperScript.Path) is missing secure helper snippet: $snippet"
+            }
+        }
+        if ($content -match $helperScript.ForbiddenPattern) {
+            throw "deploy helper script $($helperScript.Path) passes helper environment values in docker CLI arguments"
+        }
+        foreach ($helperName in @("Postgres", "Redis", "S3")) {
+            if (-not $content.Contains($helperName)) {
+                throw "deploy helper script $($helperScript.Path) is missing $helperName helper path"
+            }
+        }
+    }
+
+    $dependabotPath = Join-Path $repoRoot ".github\dependabot.yml"
+    $dependabot = Get-Content -LiteralPath $dependabotPath -Raw
+    if (-not $dependabot.Contains('package-ecosystem: "docker"')) {
+        throw "Dependabot config is missing Docker ecosystem updates"
+    }
+
+    Write-Host "external container pins OK: $dockerfileImageCount Dockerfile inputs and $externalComposeCount production Compose images; helper secrets use scoped env files"
+}
+
+function Assert-HelperEnvFileBehavior {
+    $bashPath = Join-Path $repoRoot "scripts\deploy\deploy-prod.sh"
+    $bashContent = Get-Content -LiteralPath $bashPath -Raw
+    $bashStart = $bashContent.IndexOf("cleanup_helper_env_files() {")
+    $bashEnd = $bashContent.IndexOf("check_docker() {")
+    if ($bashStart -lt 0 -or $bashEnd -le $bashStart) {
+        throw "could not isolate Bash helper env-file functions"
+    }
+
+    $bashFunctions = $bashContent.Substring($bashStart, $bashEnd - $bashStart)
+    $bashTest = @'
+set -euo pipefail
+helper_env_files=()
+__HELPER_FUNCTIONS__
+helper_env_file=""
+create_helper_env_file helper_env_file DATABASE_URL "sentinel-db" REDISCLI_AUTH "sentinel-redis"
+[[ -n "$helper_env_file" && -f "$helper_env_file" ]]
+if mode="$(stat -c '%a' "$helper_env_file" 2>/dev/null)"; then
+  :
+else
+  mode="$(stat -f '%Lp' "$helper_env_file")"
+fi
+[[ "$mode" == "600" ]]
+expected=$'DATABASE_URL=sentinel-db\nREDISCLI_AUTH=sentinel-redis'
+[[ "$(<"$helper_env_file")" == "$expected" ]]
+remove_helper_env_file "$helper_env_file"
+[[ ! -e "$helper_env_file" ]]
+invalid_file=""
+if create_helper_env_file invalid_file TOKEN $'bad\nvalue' 2>/dev/null; then
+  exit 1
+fi
+'@.Replace("__HELPER_FUNCTIONS__", $bashFunctions)
+
+    $bashTempDir = Join-Path ([System.IO.Path]::GetTempPath()) "vkagg-helper-test-$([guid]::NewGuid().ToString('N'))"
+    New-Item -ItemType Directory -Path $bashTempDir | Out-Null
+    $previousTmpDir = $env:TMPDIR
+    try {
+        $env:TMPDIR = $bashTempDir
+        & bash -c $bashTest
+        if ($LASTEXITCODE -ne 0) {
+            throw "Bash helper env-file behavior test failed with exit code $LASTEXITCODE"
+        }
+        if (@(Get-ChildItem -LiteralPath $bashTempDir -Force).Count -ne 0) {
+            throw "Bash helper env-file behavior test left temporary files behind"
+        }
+    } finally {
+        if ($null -eq $previousTmpDir) {
+            Remove-Item Env:\TMPDIR -ErrorAction SilentlyContinue
+        } else {
+            $env:TMPDIR = $previousTmpDir
+        }
+        Remove-Item -LiteralPath $bashTempDir -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
+    $powerShellPath = Join-Path $repoRoot "scripts\deploy\deploy-prod.ps1"
+    $tokens = $null
+    $parseErrors = $null
+    $ast = [System.Management.Automation.Language.Parser]::ParseFile($powerShellPath, [ref]$tokens, [ref]$parseErrors)
+    if ($parseErrors.Count -gt 0) {
+        throw "PowerShell deploy script has parser errors"
+    }
+    $helperFunction = $ast.Find({
+        param($node)
+        $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq "New-HelperEnvFile"
+    }, $true)
+    if ($null -eq $helperFunction) {
+        throw "could not isolate PowerShell helper env-file function"
+    }
+    . ([scriptblock]::Create($helperFunction.Extent.Text))
+
+    $powerShellEnvFile = New-HelperEnvFile -Values @{
+        S3_ACCESS_KEY = "sentinel-access"
+        S3_SECRET_KEY = "sentinel-secret"
+    }
+    try {
+        if (-not (Test-Path -LiteralPath $powerShellEnvFile -PathType Leaf)) {
+            throw "PowerShell helper env-file was not created"
+        }
+        if ($IsWindows) {
+            $identity = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+            $unexpectedRules = @(
+                (Get-Acl -LiteralPath $powerShellEnvFile).Access |
+                    Where-Object {
+                        $_.AccessControlType -eq [System.Security.AccessControl.AccessControlType]::Allow -and
+                        $_.IdentityReference.Value -ne $identity
+                    }
+            )
+            if ($unexpectedRules.Count -ne 0) {
+                throw "PowerShell helper env-file grants access beyond the current Windows identity"
+            }
+        } else {
+            $expectedMode = [System.IO.UnixFileMode]::UserRead -bor [System.IO.UnixFileMode]::UserWrite
+            if ([System.IO.File]::GetUnixFileMode($powerShellEnvFile) -ne $expectedMode) {
+                throw "PowerShell helper env-file mode is not 0600"
+            }
+        }
+        $actualLines = @(Get-Content -LiteralPath $powerShellEnvFile)
+        $expectedLines = @("S3_ACCESS_KEY=sentinel-access", "S3_SECRET_KEY=sentinel-secret")
+        if (($actualLines -join "`n") -ne ($expectedLines -join "`n")) {
+            throw "PowerShell helper env-file content is invalid"
+        }
+    } finally {
+        Remove-Item -LiteralPath $powerShellEnvFile -Force -ErrorAction SilentlyContinue
+    }
+
+    $rejected = $false
+    try {
+        $unexpectedFile = New-HelperEnvFile -Values @{ TOKEN = "bad`nvalue" }
+        Remove-Item -LiteralPath $unexpectedFile -Force -ErrorAction SilentlyContinue
+    } catch {
+        $rejected = $true
+    }
+    if (-not $rejected) {
+        throw "PowerShell helper env-file accepted a newline-bearing value"
+    }
+
+    Write-Host "deploy helper env-file behavior OK: Bash and PowerShell mode, content, injection rejection, cleanup"
+}
+
 function Assert-CloudflaredComposeConfig {
     $path = Join-Path $repoRoot "docker-compose.prod.yml"
     if (-not (Test-Path -LiteralPath $path)) {
@@ -620,9 +852,9 @@ function Assert-DeployScripts {
                 "--no-build",
                 "SkipPublicSmoke",
                 "Invoke-ExternalDataServiceChecks",
-                "postgres:16-alpine",
-                "redis:7-alpine",
-                "minio/mc:latest",
+                "PostgresHelperImage",
+                "RedisHelperImage",
+                "S3HelperImage",
                 "smoke-prod.ps1",
                 "check-migrations-safe.ps1",
                 "MIGRATION_BACKUP_CONFIRMED",
@@ -656,9 +888,9 @@ function Assert-DeployScripts {
                 "--no-build",
                 "--skip-public-smoke",
                 "check_external_data_services",
-                "postgres:16-alpine",
-                "redis:7-alpine",
-                "minio/mc:latest",
+                "POSTGRES_HELPER_IMAGE",
+                "REDIS_HELPER_IMAGE",
+                "S3_HELPER_IMAGE",
                 "smoke-prod.sh",
                 "check-migrations-safe.sh",
                 "MIGRATION_BACKUP_CONFIRMED",
@@ -847,6 +1079,94 @@ function Assert-DeployScripts {
     Write-Host "deploy scripts OK"
 }
 
+function Assert-CIWorkflowCoverage {
+    $path = Join-Path $repoRoot ".github\workflows\ci.yml"
+    if (-not (Test-Path -LiteralPath $path)) {
+        throw "CI workflow is missing: .github/workflows/ci.yml"
+    }
+
+    $content = Get-Content -LiteralPath $path -Raw
+    $permissionsIndex = $content.IndexOf("permissions:", [StringComparison]::Ordinal)
+    if ($permissionsIndex -lt 0) {
+        throw "CI workflow permissions block is missing"
+    }
+    $triggerSection = $content.Substring(0, $permissionsIndex)
+
+    foreach ($branch in @("main", "dev-deploy", "fastlife_dev")) {
+        $pattern = "(?m)^\s+-\s+$([regex]::Escape($branch))\s*$"
+        $triggerCount = [regex]::Matches($triggerSection, $pattern).Count
+        if ($triggerCount -lt 2) {
+            throw "CI workflow must cover both pull_request and push for branch: $branch"
+        }
+    }
+
+    foreach ($jobName in @("Backend", "Secret Scan", "Mini App", "Infrastructure")) {
+        if (-not $content.Contains("name: $jobName")) {
+            throw "CI workflow is missing required quality job: $jobName"
+        }
+    }
+    if ($content.Contains("continue-on-error:") -or $content.Contains('secrets.')) {
+        throw "CI quality jobs must fail closed and must not consume repository secrets in pull_request context"
+    }
+    if ($content.Contains("pull_request_target:") -or $content.Contains("write-all") -or $content.Contains("contents: write")) {
+        throw "CI workflow must not grant broad write access or use pull_request_target"
+    }
+
+    Write-Host "CI workflow coverage OK: main, dev-deploy, fastlife_dev; quality failures block and PR jobs are secret-free"
+}
+
+function Assert-GitHubActionPins {
+    $workflowDir = Join-Path $repoRoot ".github\workflows"
+    if (-not (Test-Path -LiteralPath $workflowDir)) {
+        throw "GitHub workflow directory is missing: .github/workflows"
+    }
+
+    $workflowFiles = @(Get-ChildItem -LiteralPath $workflowDir -File -Include "*.yml", "*.yaml" | Sort-Object Name)
+    if ($workflowFiles.Count -eq 0) {
+        throw "no GitHub workflow files found for action pin validation"
+    }
+
+    $externalCount = 0
+    $actions = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    foreach ($workflowFile in $workflowFiles) {
+        $lineNumber = 0
+        foreach ($line in Get-Content -LiteralPath $workflowFile.FullName) {
+            $lineNumber++
+            if ($line -notmatch '^\s*uses:\s*(?<value>[^\s#]+)(?:\s+#.*)?$') {
+                continue
+            }
+
+            $value = $Matches.value
+            if ($value.StartsWith("./", [StringComparison]::Ordinal)) {
+                continue
+            }
+            if ($value -notmatch '^(?<action>[^@]+)@(?<ref>[0-9a-fA-F]{40})$') {
+                throw "external GitHub Action must use a full 40-character commit SHA: $($workflowFile.Name):${lineNumber}: $value"
+            }
+
+            $externalCount++
+            $null = $actions.Add($Matches.action)
+        }
+    }
+
+    if ($externalCount -eq 0 -or $actions.Count -eq 0) {
+        throw "GitHub Action pin validation found no external uses entries"
+    }
+
+    $dependabotPath = Join-Path $repoRoot ".github\dependabot.yml"
+    if (-not (Test-Path -LiteralPath $dependabotPath)) {
+        throw "GitHub Actions Dependabot config is missing: .github/dependabot.yml"
+    }
+    $dependabot = Get-Content -LiteralPath $dependabotPath -Raw
+    foreach ($snippet in @('package-ecosystem: "github-actions"', 'directory: "/"')) {
+        if (-not $dependabot.Contains($snippet)) {
+            throw "GitHub Actions Dependabot config is missing required snippet: $snippet"
+        }
+    }
+
+    Write-Host "GitHub Action pins OK: $externalCount external uses across $($actions.Count) repositories; all refs are full commit SHAs"
+}
+
 function Assert-DockerImageWorkflow {
     $path = Join-Path $repoRoot ".github\workflows\docker-images.yml"
     if (-not (Test-Path -LiteralPath $path)) {
@@ -856,8 +1176,25 @@ function Assert-DockerImageWorkflow {
     $content = Get-Content -LiteralPath $path -Raw
     $requiredSnippets = @(
         "name: Docker Images",
+        "actions: read",
         "packages: write",
         "ghcr.io/",
+        "CI_WORKFLOW: ci.yml",
+        'commit_sha: ${{ steps.source.outputs.commit_sha }}',
+        'ref: ${{ needs.validate_source.outputs.commit_sha }}',
+        'value=sha-${{ needs.validate_source.outputs.commit_sha }}',
+        'head_sha=${SOURCE_SHA}',
+        'actions/workflows/${CI_WORKFLOW}/runs',
+        "event=push",
+        "workflow_dispatch)",
+        '.head_sha == $sha',
+        '.conclusion == "success"',
+        "failed_runs",
+        "active_runs",
+        "Manual Docker Images dispatch requires prior successful CI",
+        "needs: validate_source",
+        "push: true",
+        "^[0-9a-f]{40}$",
         "docker/setup-buildx-action",
         "docker/login-action",
         "docker/metadata-action",
@@ -873,8 +1210,7 @@ function Assert-DockerImageWorkflow {
         "service: provider-webhook",
         "service: provider-balance-bot",
         "service: miniapp",
-        "service: migrate",
-        'push: ${{ github.event_name != ''pull_request'' }}'
+        "service: migrate"
     )
 
     foreach ($snippet in $requiredSnippets) {
@@ -883,7 +1219,127 @@ function Assert-DockerImageWorkflow {
         }
     }
 
-    Write-Host "Docker image workflow OK"
+    $permissionsIndex = $content.IndexOf("permissions:", [StringComparison]::Ordinal)
+    $buildIndex = $content.IndexOf("`n  build:", [StringComparison]::Ordinal)
+    $packagesWriteIndex = $content.IndexOf("packages: write", [StringComparison]::Ordinal)
+    if ($permissionsIndex -lt 0 -or $buildIndex -lt 0 -or $packagesWriteIndex -lt $buildIndex) {
+        throw "Docker image packages:write permission must be scoped to the gated build job"
+    }
+    $triggerSection = $content.Substring(0, $permissionsIndex)
+    if ($triggerSection.Contains("pull_request:") -or $triggerSection.Contains("pull_request_target:")) {
+        throw "Docker image publish workflow must not run in pull request context"
+    }
+    if ($content.Contains("format=short") -or $content.Contains("deploy_short_sha")) {
+        throw "Docker image workflow must not use short SHA as a release identity"
+    }
+    if ($content.Contains("write-all") -or $content.Contains("contents: write") -or $content.Contains("id-token: write")) {
+        throw "Docker image workflow contains an unnecessary broad write permission"
+    }
+
+    $validateIndex = $content.IndexOf("`n  validate_source:", [StringComparison]::Ordinal)
+    $validateSection = $content.Substring($validateIndex, $buildIndex - $validateIndex)
+    if ($validateSection.Contains("actions/checkout") -or $validateSection.Contains('secrets.') -or $validateSection.Contains("packages: write")) {
+        throw "Docker image validation must run without checkout, repository secrets, or package write access"
+    }
+
+    Write-Host "Docker image workflow exact-SHA CI gate OK: Backend/Secret Scan failure and PR/manual bypass paths fail closed"
+}
+
+function Assert-DeployWorkflowTrustChain {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][string]$TargetBranch,
+        [Parameter(Mandatory = $true)][string]$EnvironmentName,
+        [Parameter(Mandatory = $true)][ValidateSet("push", "workflow_run")][string]$AutomaticEvent
+    )
+
+    $fullPath = Join-Path $repoRoot $Path
+    if (-not (Test-Path -LiteralPath $fullPath)) {
+        throw "deploy workflow is missing: $Path"
+    }
+
+    $content = Get-Content -LiteralPath $fullPath -Raw
+    $requiredSnippets = @(
+        "validate_source:",
+        "actions: read",
+        "CI_WORKFLOW: ci.yml",
+        "IMAGE_WORKFLOW: docker-images.yml",
+        'commit_sha: ${{ steps.source.outputs.commit_sha }}',
+        'ref: ${{ needs.validate_source.outputs.commit_sha }}',
+        'head_sha=${SOURCE_SHA}',
+        'actions/workflows/${CI_WORKFLOW}/runs',
+        'actions/workflows/${IMAGE_WORKFLOW}/runs',
+        "workflow_dispatch)",
+        '.head_sha == $sha',
+        '.conclusion == "success"',
+        "ci_success",
+        "image_success",
+        "refs/heads/$TargetBranch",
+        "environment: $EnvironmentName",
+        "needs: validate_source",
+        "sha-`${deploy_sha}",
+        "^sha-[0-9a-f]{40}$",
+        "^[0-9a-f]{40}$"
+    )
+    foreach ($snippet in $requiredSnippets) {
+        if (-not $content.Contains($snippet)) {
+            throw "deploy workflow $Path is missing exact-SHA trust snippet: $snippet"
+        }
+    }
+
+    if ($AutomaticEvent -eq "workflow_run") {
+        foreach ($snippet in @(
+            "workflow_run:",
+            'WORKFLOW_RUN_ID: ${{ github.event.workflow_run.id }}',
+            'actions/runs/${WORKFLOW_RUN_ID}'
+        )) {
+            if (-not $content.Contains($snippet)) {
+                throw "deploy workflow $Path is missing workflow_run trust snippet: $snippet"
+            }
+        }
+    } else {
+        foreach ($snippet in @(
+            "push:",
+            'SOURCE_SHA="${GITHUB_SHA}"',
+            "SOURCE_BRANCH=`"$TargetBranch`""
+        )) {
+            if (-not $content.Contains($snippet)) {
+                throw "deploy workflow $Path is missing protected push trust snippet: $snippet"
+            }
+        }
+    }
+
+    $permissionsIndex = $content.IndexOf("permissions:", [StringComparison]::Ordinal)
+    if ($permissionsIndex -lt 0) {
+        throw "deploy workflow $Path permissions block is missing"
+    }
+    $triggerSection = $content.Substring(0, $permissionsIndex)
+    if ($triggerSection.Contains("pull_request:") -or $triggerSection.Contains("pull_request_target:")) {
+        throw "deploy workflow $Path must not run in pull request context"
+    }
+    if ($content.Contains("write-all") -or $content.Contains("contents: write") -or $content.Contains("packages: write") -or $content.Contains("id-token: write")) {
+        throw "deploy workflow $Path contains an unnecessary write permission"
+    }
+
+    $validateIndex = $content.IndexOf("`n  validate_source:", [StringComparison]::Ordinal)
+    $deployIndex = $content.IndexOf("`n  deploy:", [StringComparison]::Ordinal)
+    $firstSecretIndex = $content.IndexOf('secrets.', [StringComparison]::Ordinal)
+    if ($validateIndex -lt 0 -or $deployIndex -lt 0 -or $deployIndex -le $validateIndex) {
+        throw "deploy workflow $Path must gate deploy behind validate_source"
+    }
+    if ($firstSecretIndex -ge 0 -and $firstSecretIndex -lt $deployIndex) {
+        throw "deploy workflow $Path exposes secrets before exact-SHA validation"
+    }
+
+    $validateSection = $content.Substring($validateIndex, $deployIndex - $validateIndex)
+    if ($validateSection.Contains('secrets.')) {
+        throw "deploy workflow $Path validate_source must not access repository secrets"
+    }
+    if ($content.Contains("deploy_short_sha") -or $content.Contains("git_short") -or $content.Contains("--short=7")) {
+        throw "deploy workflow $Path must not use short SHA as release identity"
+    }
+
+    Write-Host "deploy workflow trust OK: $Path -> $AutomaticEvent/$TargetBranch -> $EnvironmentName -> exact CI/image SHA before secrets"
 }
 
 function Assert-RollbackConfig {
@@ -895,13 +1351,13 @@ function Assert-RollbackConfig {
 
     $content = Get-Content -LiteralPath $composePath -Raw
     $requiredSnippets = @(
-        '${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/api:${IMAGE_TAG:-main}',
-        '${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/worker:${IMAGE_TAG:-main}',
-        '${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/provider-webhook:${IMAGE_TAG:-main}',
-        '${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/provider-balance-bot:${IMAGE_TAG:-main}',
-        '${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/miniapp:${IMAGE_TAG:-main}',
-        '${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/migrate:${IMAGE_TAG:-main}',
-        '${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/backup:${BACKUP_IMAGE_TAG:-main}'
+        '${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/api:${IMAGE_TAG:?IMAGE_TAG is required}',
+        '${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/worker:${IMAGE_TAG:?IMAGE_TAG is required}',
+        '${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/provider-webhook:${IMAGE_TAG:?IMAGE_TAG is required}',
+        '${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/provider-balance-bot:${IMAGE_TAG:?IMAGE_TAG is required}',
+        '${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/miniapp:${IMAGE_TAG:?IMAGE_TAG is required}',
+        '${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/migrate:${IMAGE_TAG:?IMAGE_TAG is required}',
+        '${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/backup:${BACKUP_IMAGE_TAG:?BACKUP_IMAGE_TAG is required}'
     )
 
     foreach ($snippet in $requiredSnippets) {
@@ -911,6 +1367,204 @@ function Assert-RollbackConfig {
     }
 
     Write-Host "production rollback config OK"
+}
+
+function Get-ComposeServiceBlock {
+    param(
+        [Parameter(Mandatory = $true)][string]$Content,
+        [Parameter(Mandatory = $true)][string]$Service
+    )
+
+    $pattern = "(?ms)^  $([regex]::Escape($Service)):\r?\n(?<block>.*?)(?=^  [A-Za-z0-9][A-Za-z0-9_-]*:\r?\n|\z)"
+    $match = [regex]::Match($Content, $pattern)
+    if (-not $match.Success) {
+        throw "compose service is missing: $Service"
+    }
+    return $match.Value
+}
+
+function Assert-HardenedServiceBlock {
+    param(
+        [Parameter(Mandatory = $true)][string]$Block,
+        [Parameter(Mandatory = $true)][string]$Service,
+        [switch]$RequireHealthcheck,
+        [switch]$RequireTmpfs
+    )
+
+    $required = @(
+        "read_only: true",
+        "no-new-privileges:true",
+        "cap_drop:",
+        "- ALL",
+        "pids_limit:",
+        "mem_limit:",
+        "cpus:"
+    )
+    if ($RequireHealthcheck) {
+        $required += "healthcheck:"
+    }
+    if ($RequireTmpfs) {
+        $required += "tmpfs:"
+    }
+    foreach ($snippet in $required) {
+        if (-not $Block.Contains($snippet)) {
+            throw "service $Service is missing hardening control: $snippet"
+        }
+    }
+    if ($Block.Contains("privileged: true")) {
+        throw "service $Service must not be privileged"
+    }
+}
+
+function Assert-ContainerPrivilegeHardening {
+    $observabilityPath = Join-Path $repoRoot "docker-compose.observability.yml"
+    $productionPath = Join-Path $repoRoot "docker-compose.prod.yml"
+    $alloyPath = Join-Path $repoRoot "observability\alloy\config.alloy"
+    $socketProxyConfigPath = Join-Path $repoRoot "observability\docker-socket-proxy\haproxy.cfg"
+    $alloyVexPath = Join-Path $repoRoot "security\trivy\alloy.openvex.json"
+    $backupDockerfilePath = Join-Path $repoRoot "Dockerfile.backup"
+    $miniappDockerfilePath = Join-Path $repoRoot "Dockerfile.miniapp"
+
+    if (-not (Test-Path -LiteralPath $socketProxyConfigPath)) {
+        throw "docker-socket-proxy deny-by-default HAProxy config is missing"
+    }
+    if (-not (Test-Path -LiteralPath $alloyVexPath)) {
+        throw "Alloy Docker client OpenVEX is missing"
+    }
+
+    $observability = Get-Content -LiteralPath $observabilityPath -Raw
+    $production = Get-Content -LiteralPath $productionPath -Raw
+    $alloy = Get-Content -LiteralPath $alloyPath -Raw
+    $socketProxyConfig = Get-Content -LiteralPath $socketProxyConfigPath -Raw
+    $alloyVex = Get-Content -LiteralPath $alloyVexPath -Raw | ConvertFrom-Json -Depth 20
+    $backupDockerfile = Get-Content -LiteralPath $backupDockerfilePath -Raw
+    $miniappDockerfile = Get-Content -LiteralPath $miniappDockerfilePath -Raw
+
+    $socketProxy = Get-ComposeServiceBlock -Content $observability -Service "docker-socket-proxy"
+    if (-not $socketProxy.Contains("/var/run/docker.sock:/var/run/docker.sock:ro")) {
+        throw "docker-socket-proxy must be the only service mounting docker.sock"
+    }
+    $observabilityWithoutProxy = $observability.Replace($socketProxy, "")
+    if ($observabilityWithoutProxy.Contains("/var/run/docker.sock") -or $alloy.Contains("unix:///var/run/docker.sock")) {
+        throw "observability services must not access docker.sock directly"
+    }
+
+    foreach ($snippet in @(
+        'image: haproxy:3.2.21-alpine@sha256:66e25cc9a8332635f4e897f7f4b1e5622c25f09f0ee23cddc6ce9bdb3a24772a',
+        './observability/docker-socket-proxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro'
+    )) {
+        if (-not $socketProxy.Contains($snippet)) {
+            throw "docker-socket-proxy is missing pinned proxy control: $snippet"
+        }
+    }
+
+    foreach ($snippet in @(
+        'acl read_method method GET HEAD',
+        'acl allowed_path path_reg',
+        '/networks$',
+        'maxconn 256',
+        'http-request deny deny_status 403 unless read_method allowed_path',
+        'server docker unix@/var/run/docker.sock'
+    )) {
+        if (-not $socketProxyConfig.Contains($snippet)) {
+            throw "docker-socket-proxy HAProxy policy is missing deny-by-default control: $snippet"
+        }
+    }
+    foreach ($forbiddenPath in @("/auth", "/build", "/commit", "/configs", "/exec", "/images", "/plugins", "/secrets", "/services", "/swarm", "/tasks", "/volumes")) {
+        if ($socketProxyConfig.Contains($forbiddenPath)) {
+            throw "docker-socket-proxy HAProxy allowlist includes forbidden Docker API path: $forbiddenPath"
+        }
+    }
+
+    $expectedAlloyCves = @("CVE-2026-34040", "CVE-2026-41567", "CVE-2026-42306")
+    $alloyVexStatements = @($alloyVex.statements)
+    if ($alloyVex.'@context' -ne "https://openvex.dev/ns/v0.2.0" -or $alloyVexStatements.Count -ne $expectedAlloyCves.Count) {
+        throw "Alloy OpenVEX must use OpenVEX 0.2 and contain exactly the reviewed Docker client findings"
+    }
+    foreach ($cve in $expectedAlloyCves) {
+        $statement = @($alloyVexStatements | Where-Object { $_.vulnerability.name -eq $cve })
+        if ($statement.Count -ne 1) {
+            throw "Alloy OpenVEX must contain exactly one statement for $cve"
+        }
+        $product = @($statement[0].products)[0]
+        $subcomponent = @($product.subcomponents)[0]
+        if ($statement[0].status -ne "not_affected" -or
+            $statement[0].justification -ne "vulnerable_code_not_in_execute_path" -or
+            $product.'@id' -ne "pkg:golang/github.com/grafana/alloy/otel_engine" -or
+            $subcomponent.'@id' -ne "pkg:golang/github.com/docker/docker@v28.5.2%2Bincompatible" -or
+            -not $statement[0].impact_statement.Contains("Docker daemon") -or
+            -not $statement[0].impact_statement.Contains("HAProxy")) {
+            throw "Alloy OpenVEX statement is not scoped to the reviewed daemon-only $cve attack path"
+        }
+    }
+    if ($socketProxy -match '(?m)^\s+ports:\s*$') {
+        throw "docker-socket-proxy must not publish a host port"
+    }
+    foreach ($capacityControl in @("pids_limit: 128", "mem_limit: 128m", "cpus: 0.50")) {
+        if (-not $socketProxy.Contains($capacityControl)) {
+            throw "docker-socket-proxy is missing tested streaming capacity control: $capacityControl"
+        }
+    }
+    Assert-HardenedServiceBlock -Block $socketProxy -Service "docker-socket-proxy" -RequireHealthcheck -RequireTmpfs
+
+    if (-not $alloy.Contains('host = "http://docker-socket-proxy:2375"')) {
+        throw "Alloy Docker discovery and log source must use docker-socket-proxy"
+    }
+    $alloyService = Get-ComposeServiceBlock -Content $observability -Service "alloy"
+    Assert-HardenedServiceBlock -Block $alloyService -Service "alloy" -RequireHealthcheck -RequireTmpfs
+
+    $cadvisor = Get-ComposeServiceBlock -Content $observability -Service "cadvisor"
+    foreach ($forbidden in @("privileged: true", "- /var/run:/var/run", "/dev/kmsg", "/dev/disk", "devices:", "DOCKER_HOST:", "/:/rootfs", "/var/lib/docker")) {
+        if ($cadvisor.Contains($forbidden)) {
+            throw "cAdvisor retains forbidden host-control access: $forbidden"
+        }
+    }
+    if (-not $cadvisor.Contains("- /sys:/sys:ro")) {
+        throw "cAdvisor must retain only the proven read-only cgroup mount"
+    }
+    Assert-HardenedServiceBlock -Block $cadvisor -Service "cadvisor" -RequireHealthcheck -RequireTmpfs
+
+    if (-not $backupDockerfile.Contains("USER 10001:10001")) {
+        throw "backup image must run as non-root UID/GID 10001"
+    }
+    if (-not $miniappDockerfile.Contains("USER 101:101")) {
+        throw "Mini App image must run as the nginx non-root UID/GID"
+    }
+    if (-not $miniappDockerfile.Contains("EXPOSE 80") -or -not (Get-Content -LiteralPath (Join-Path $repoRoot "deployments\nginx\miniapp.static.conf") -Raw).Contains("listen 80;")) {
+        throw "Mini App non-root hardening must preserve the Nginx bind port"
+    }
+
+    foreach ($service in @("miniapp", "reverse-proxy")) {
+        $block = Get-ComposeServiceBlock -Content $production -Service $service
+        Assert-HardenedServiceBlock -Block $block -Service $service -RequireHealthcheck -RequireTmpfs
+        foreach ($snippet in @('user: "101:101"', "cap_add:", "- NET_BIND_SERVICE")) {
+            if (-not $block.Contains($snippet)) {
+                throw "service $service is missing non-root Nginx control: $snippet"
+            }
+        }
+    }
+
+    foreach ($service in @("backup-postgres", "backup-minio", "restore-postgres", "restore-minio")) {
+        $block = Get-ComposeServiceBlock -Content $production -Service $service
+        Assert-HardenedServiceBlock -Block $block -Service $service -RequireTmpfs
+        foreach ($snippet in @('user: "10001:10001"', "HOME: /tmp")) {
+            if (-not $block.Contains($snippet)) {
+                throw "service $service is missing non-root backup control: $snippet"
+            }
+        }
+        if ($block.Contains("cap_add:")) {
+            throw "service $service must not add Linux capabilities"
+        }
+    }
+
+    foreach ($restoreScript in @("scripts\backup\restore-postgres.sh", "scripts\backup\restore-minio.sh")) {
+        $restore = Get-Content -LiteralPath (Join-Path $repoRoot $restoreScript) -Raw
+        if (-not $restore.Contains('RESTORE_ALLOW_DESTRUCTIVE:-false') -or -not $restore.Contains('I_UNDERSTAND_RESTORE_OVERWRITES_DATA')) {
+            throw "restore script must remain fail-closed: $restoreScript"
+        }
+    }
+
+    Write-Host "container privilege hardening OK: Docker API proxy, cAdvisor, Mini App, backup and restore"
 }
 
 function Assert-ObservabilityConfig {
@@ -1054,11 +1708,7 @@ function Invoke-Promtool {
 
     $promDir = (Resolve-Path (Join-Path $repoRoot "observability\prometheus")).Path.Replace("\", "/")
     $mount = "${promDir}:/etc/prometheus:ro"
-    $prometheusImage = if ([string]::IsNullOrWhiteSpace($env:PROMETHEUS_IMAGE)) {
-        "prom/prometheus:latest"
-    } else {
-        $env:PROMETHEUS_IMAGE
-    }
+    $prometheusImage = "prom/prometheus:v3.13.1@sha256:3c42b892cf723fa54d2f262c37a0e1f80aa8c8ddb1da7b9b0df9455a35a7f893"
     & $docker.Source run --rm -v $mount --entrypoint=promtool $prometheusImage @Arguments
 }
 
@@ -1147,10 +1797,17 @@ Assert-DevStartStackScript
 Assert-DevStopStatusScripts
 Assert-DevPublicSmokeScript
 Assert-ProductionDataServices
+Assert-ExternalContainerPinsAndHelperSecrets
+Assert-HelperEnvFileBehavior
 Assert-CloudflaredComposeConfig
 Assert-DeployScripts
+Assert-CIWorkflowCoverage
+Assert-GitHubActionPins
 Assert-DockerImageWorkflow
+Assert-DeployWorkflowTrustChain -Path ".github\workflows\deploy-dev.yml" -TargetBranch "dev-deploy" -EnvironmentName "development" -AutomaticEvent "push"
+Assert-DeployWorkflowTrustChain -Path ".github\workflows\deploy-prod.yml" -TargetBranch "main" -EnvironmentName "production" -AutomaticEvent "workflow_run"
 Assert-RollbackConfig
+Assert-ContainerPrivilegeHardening
 Assert-ObservabilityConfig
 Assert-PrometheusConfig
 

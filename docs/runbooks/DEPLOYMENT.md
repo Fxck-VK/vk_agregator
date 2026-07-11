@@ -21,6 +21,7 @@ Production flow:
 
 ```text
 main push/merge
+  -> CI workflow succeeds for the exact full commit SHA
   -> Docker Images workflow builds immutable sha-<full-main-commit> images in GHCR
   -> Deploy Production workflow connects to VPS
   -> deploy-prod.sh pulls immutable images
@@ -32,7 +33,9 @@ Do not build images on the VPS unless explicitly debugging a fallback path.
 Manual production dispatches in GitHub Actions must be started from the `main`
 branch only. `Deploy Production` deploys the checked-out `main` commit by its
 immutable `sha-<full commit>` GHCR tag and fails before SSH/env upload if the
-matching images have not already been built by `Docker Images`. The VPS checks
+whole CI workflow did not succeed for that exact SHA or matching images have not
+already been built successfully by `Docker Images`. Image publication uses
+job-scoped package write permission only after the same-SHA CI gate. The VPS checks
 out that exact commit in detached mode, and both runtime and backup images are
 pinned to the same immutable tag for the rollout.
 
@@ -146,3 +149,25 @@ Supported modes:
 
 Production can start as `local`, but serious traffic should move Postgres,
 Redis and S3-compatible storage out of the app VPS.
+
+## Backup Runtime Ownership
+
+Backup and restore containers run as `10001:10001`. Fresh named volumes inherit
+that ownership from the image. Before the first rollout over backup volumes
+created by an older root runtime, migrate ownership once with the exact deployed
+backup image, no network and only `CAP_CHOWN` (replace `<project>` with the
+Compose project name):
+
+```bash
+docker run --rm --network none --user 0:0 --read-only \
+  --security-opt no-new-privileges:true --cap-drop ALL --cap-add CHOWN \
+  --entrypoint /bin/chown \
+  -v "<project>_backup_data:/backups" \
+  -v "<project>_backup_metrics:/backup-metrics" \
+  "${APP_IMAGE_REGISTRY}/backup:${BACKUP_IMAGE_TAG}" \
+  -R 10001:10001 /backups /backup-metrics
+```
+
+Run this only for the two backup volumes and verify a normal `backup-postgres`
+and `backup-minio` job before deployment continues. Routine backup and restore
+jobs must never override their configured non-root user.

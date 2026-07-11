@@ -127,7 +127,6 @@ type RemoteJWKSOIDCVerifier struct {
 	mu     sync.Mutex
 	keys   map[string]*rsa.PublicKey
 	expiry time.Time
-	now    func() time.Time
 }
 
 // NewRemoteJWKSOIDCVerifier builds a JWKS-backed verifier.

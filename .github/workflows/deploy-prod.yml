@@ -21,10 +21,21 @@ jobs:
   validate_source:
     name: Validate production source
     runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      commit_sha: ${{ steps.source.outputs.commit_sha }}
     steps:
-      - name: Enforce main-only production deploy
+      - name: Require exact-SHA CI and image success
+        id: source
         shell: bash
         env:
+          GH_TOKEN: ${{ github.token }}
+          CI_WORKFLOW: ci.yml
+          IMAGE_WORKFLOW: docker-images.yml
+          WORKFLOW_RUN_ID: ${{ github.event.workflow_run.id }}
+          WORKFLOW_RUN_SHA: ${{ github.event.workflow_run.head_sha }}
           WORKFLOW_RUN_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
           WORKFLOW_RUN_EVENT: ${{ github.event.workflow_run.event }}
           WORKFLOW_RUN_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
@@ -37,12 +48,32 @@ jobs:
                 echo "Manual production deploy must be dispatched from refs/heads/main." >&2
                 exit 1
               fi
+              SOURCE_SHA="${GITHUB_SHA}"
+              SOURCE_BRANCH="main"
               ;;
             workflow_run)
               if [[ "${WORKFLOW_RUN_CONCLUSION}" != "success" || "${WORKFLOW_RUN_EVENT}" != "push" || "${WORKFLOW_RUN_HEAD_BRANCH}" != "main" ]]; then
                 echo "Production deploy requires a successful Docker Images push from main." >&2
                 exit 1
               fi
+              SOURCE_SHA="${WORKFLOW_RUN_SHA}"
+              SOURCE_BRANCH="${WORKFLOW_RUN_HEAD_BRANCH}"
+
+              image_run="$(curl --fail-with-body --silent --show-error --retry 3 \
+                -H "Authorization: Bearer ${GH_TOKEN}" \
+                -H "Accept: application/vnd.github+json" \
+                -H "X-GitHub-Api-Version: 2022-11-28" \
+                "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/actions/runs/${WORKFLOW_RUN_ID}")"
+              jq -e \
+                --arg sha "${SOURCE_SHA}" \
+                --arg branch "${SOURCE_BRANCH}" \
+                '.name == "Docker Images" and
+                 .head_sha == $sha and
+                 .head_branch == $branch and
+                 .event == "push" and
+                 .status == "completed" and
+                 .conclusion == "success"' \
+                <<< "${image_run}" >/dev/null
               ;;
             *)
               echo "Unsupported production deploy event: ${GITHUB_EVENT_NAME}" >&2
@@ -50,34 +81,78 @@ jobs:
               ;;
           esac
 
+          if [[ ! "${SOURCE_SHA}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Production deploy requires a full immutable commit SHA." >&2
+            exit 1
+          fi
+
+          ci_runs="$(curl --fail-with-body --silent --show-error --retry 3 \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/actions/workflows/${CI_WORKFLOW}/runs?head_sha=${SOURCE_SHA}&event=push&status=completed&per_page=100")"
+          ci_success="$(jq -r \
+            --arg sha "${SOURCE_SHA}" \
+            --arg branch "${SOURCE_BRANCH}" \
+            '[.workflow_runs[] | select(
+              .head_sha == $sha and
+              .head_branch == $branch and
+              .event == "push" and
+              .status == "completed" and
+              .conclusion == "success"
+            )] | length' <<< "${ci_runs}")"
+          if (( ci_success == 0 )); then
+            echo "No successful CI run exists for production commit ${SOURCE_SHA}." >&2
+            exit 1
+          fi
+
+          image_runs="$(curl --fail-with-body --silent --show-error --retry 3 \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/actions/workflows/${IMAGE_WORKFLOW}/runs?head_sha=${SOURCE_SHA}&status=completed&per_page=100")"
+          image_success="$(jq -r \
+            --arg sha "${SOURCE_SHA}" \
+            --arg branch "${SOURCE_BRANCH}" \
+            '[.workflow_runs[] | select(
+              .head_sha == $sha and
+              .head_branch == $branch and
+              (.event == "push" or .event == "workflow_dispatch") and
+              .status == "completed" and
+              .conclusion == "success"
+            )] | length' <<< "${image_runs}")"
+          if (( image_success == 0 )); then
+            echo "No successful immutable image build exists for production commit ${SOURCE_SHA}." >&2
+            exit 1
+          fi
+
+          echo "commit_sha=${SOURCE_SHA}" >> "${GITHUB_OUTPUT}"
+
   deploy:
     name: Deploy VPS
     runs-on: ubuntu-latest
     needs: validate_source
     environment: production
-    if: >
-      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
-      (github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.event == 'push' &&
-       github.event.workflow_run.head_branch == 'main')
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
-          ref: ${{ github.event.workflow_run.head_sha || 'main' }}
+          ref: ${{ needs.validate_source.outputs.commit_sha }}
 
       - name: Resolve deployment image tag
         id: release
         shell: bash
+        env:
+          DEPLOY_SHA: ${{ needs.validate_source.outputs.commit_sha }}
         run: |
           set -euo pipefail
 
-          deploy_sha="$(git rev-parse --verify HEAD)"
+          deploy_sha="${DEPLOY_SHA}"
           deploy_image_tag="sha-${deploy_sha}"
 
-          if [[ ! "${deploy_sha}" =~ ^[0-9a-f]{40}$ ]]; then
-            echo "Resolved unsafe production commit SHA." >&2
+          if [[ ! "${deploy_sha}" =~ ^[0-9a-f]{40}$ || "$(git rev-parse --verify HEAD)" != "${deploy_sha}" ]]; then
+            echo "Checked-out production source does not match the validated commit SHA." >&2
             exit 1
           fi
 
@@ -205,21 +280,18 @@ jobs:
             env_tag="${env_tag#\'}"
           fi
 
-          git_short="$(git rev-parse --short=7 HEAD 2>/dev/null || true)"
-          if [[ "${env_tag}" == sha-* ]]; then
+          if [[ "${env_tag}" =~ ^sha-[0-9a-f]{40}$ ]]; then
             tag="${env_tag}"
-          elif [[ -n "${git_short}" ]]; then
-            tag="sha-${git_short}"
           else
-            tag="${env_tag}"
+            tag=""
           fi
 
           printf '%s' "${tag}"
           REMOTE
           )"
 
-          if [[ -n "${previous_image_tag}" && ! "${previous_image_tag}" =~ ^[A-Za-z0-9._-]+$ ]]; then
-            echo "Captured unsafe previous IMAGE_TAG" >&2
+          if [[ -n "${previous_image_tag}" && ! "${previous_image_tag}" =~ ^sha-[0-9a-f]{40}$ ]]; then
+            echo "Captured previous IMAGE_TAG is not an immutable full-SHA tag." >&2
             exit 1
           fi
 
