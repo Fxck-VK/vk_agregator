@@ -1,9 +1,9 @@
 {
   "schema_version": 5,
-  "updated_at": "2026-07-02T22:20:00+03:00",
-  "branch": "serega",
-  "remote_tracking": "origin/serega",
-  "head": "2a273ed",
+  "updated_at": "2026-07-12T00:00:00+03:00",
+  "branch": "fastlife_dev",
+  "remote_tracking": "origin/fastlife_dev",
+  "head": "187de6979",
   "purpose": "Short machine-readable current context and routing for agents. This file is not project history.",
   "read_policy": {
     "canonical_read_order": [
@@ -50,8 +50,8 @@
     "history_read_condition": "Read logs/archive only when explicitly asked for history, repeated-error debugging, regression archaeology, or old audit details."
   },
   "current_context": {
-    "worktree": "dirty: multiple documentation, deploy, loadtest and admin/operator changes are in progress",
-    "active_branch_role": "serega is the current integration/development branch",
+    "worktree": "Stage 7 release supply-chain implementation is locally verified; live GitHub OIDC/GHCR verification awaits the pushed workflow run",
+    "active_branch_role": "fastlife_dev is the current integration/development branch",
     "dev_contour": "dev-deploy branch plus DEV VPS, DEV Cloudflare tunnel, DEV VK group and DEV payment/provider secrets. DEV should mirror production architecture with separate secrets and routes.",
     "prod_contour": "main only. Production deploy goes through GitHub Actions, GHCR images, VPS deploy script, smoke checks and rollback policy.",
     "loadtest_contour": "APP_ENV=loadtest with mock providers, mock payments and mock delivery only. Production hosts and paid providers are blocked for load tests.",
@@ -74,7 +74,9 @@
     "DEV is the daily integration/testing contour; PROD secrets must not be copied from DEV.",
     "YooKassa payment values are contour-specific: do not value-sync payments.dev.env and payments.prod.env, and do not force YOOKASSA_SECRET_KEY, YOOKASSA_SHOP_ID or YooKassa return URLs to match across DEV, PROD, .env and dev.env.",
     "Provider calls remain isolated in workers/adapters; VK bot, Mini App and cmd/api must not call AI providers directly.",
-    "Billing remains ledger-based and payment top-ups require provider-verified webhook/reconciliation."
+    "Billing remains ledger-based and payment top-ups require provider-verified webhook/reconciliation.",
+    "Release deploys are digest-only: a signed manifest binds the full commit to seven GHCR digests, SBOM/provenance, Trivy policy and keyless Cosign identity; rollback uses a previous verified digest set.",
+    "Deploy, promotion and rollback reverify the signed release bundle; VPS state uses immutable sets/<full-sha> directories plus atomic current/previous SHA pointer files."
   ],
   "active_priorities": [
     "Finish documentation canonicalization without turning docs into history logs.",

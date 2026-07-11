@@ -4,7 +4,8 @@ set -euo pipefail
 branch="main"
 env_file=".env"
 project_name="vk-ai-aggregator-prod"
-image_tag=""
+release_bundle_dir=""
+release_env_file=""
 skip_pull="false"
 allow_dirty="false"
 build_on_vps="false"
@@ -14,6 +15,7 @@ backup_before_deploy="false"
 pull_base_images="false"
 no_health_check="false"
 skip_public_smoke="false"
+dry_run="false"
 timeout_seconds="180"
 health_status="skipped"
 public_smoke_status="skipped"
@@ -23,6 +25,7 @@ readonly POSTGRES_HELPER_IMAGE="postgres:16-alpine@sha256:57c72fd2a128e416c7fcc4
 readonly REDIS_HELPER_IMAGE="redis:7-alpine@sha256:6ab0b6e7381779332f97b8ca76193e45b0756f38d4c0dcda72dbb3c32061ab99"
 readonly S3_HELPER_IMAGE="minio/mc:RELEASE.2025-08-13T08-35-41Z@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727"
 helper_env_files=()
+docker_config_dir=""
 
 usage() {
   cat <<'EOF'
@@ -32,10 +35,10 @@ Options:
   --branch <name>              Git branch to deploy, default: main
   --env-file <path>            Production env file, default: .env
   --project-name <name>        Compose project name, default: vk-ai-aggregator-prod
-  --image-tag <tag>            Docker image tag to pull and run, default from env/.env
+  --release-bundle-dir <path>  Signed release bundle for seven digests (required)
   --skip-pull                  Do not fetch/checkout/pull git
   --allow-dirty                Allow tracked worktree changes before git pull
-  --build-on-vps               Fallback only: build application images on the VPS
+  --build-on-vps               Rejected: verified digest deploys cannot build on the VPS
   --skip-build                 Deprecated compatibility flag; production deploys skip VPS builds by default
   --skip-migrate               Do not run migrate service
   --with-cloudflare            Start cloudflared profile too
@@ -45,6 +48,7 @@ Options:
   --pull-base-images           Pass --pull to docker compose build
   --no-health-check            Skip local HTTP health checks
   --skip-public-smoke          Skip public Cloudflare/DNS smoke after cloudflared startup
+  --dry-run                    Verify trust and Compose config without changing runtime state
   --timeout-seconds <seconds>  Health check timeout, default: 180
   -h, --help                   Show this help
 EOF
@@ -55,7 +59,7 @@ while [[ $# -gt 0 ]]; do
     --branch) branch="$2"; shift 2 ;;
     --env-file) env_file="$2"; shift 2 ;;
     --project-name) project_name="$2"; shift 2 ;;
-    --image-tag) image_tag="$2"; shift 2 ;;
+    --release-bundle-dir) release_bundle_dir="$2"; shift 2 ;;
     --skip-pull) skip_pull="true"; shift ;;
     --allow-dirty) allow_dirty="true"; shift ;;
     --build-on-vps) build_on_vps="true"; shift ;;
@@ -66,11 +70,17 @@ while [[ $# -gt 0 ]]; do
     --pull-base-images) pull_base_images="true"; shift ;;
     --no-health-check) no_health_check="true"; shift ;;
     --skip-public-smoke) skip_public_smoke="true"; shift ;;
+    --dry-run) dry_run="true"; shift ;;
     --timeout-seconds) timeout_seconds="$2"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
   esac
 done
+
+if [[ "${build_on_vps}" == "true" ]]; then
+  echo "--build-on-vps is incompatible with verified digest-only deployment." >&2
+  exit 2
+fi
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "${script_dir}/../.." && pwd)"
@@ -88,6 +98,9 @@ cleanup_helper_env_files() {
       rm -f -- "${helper_env_file}"
     fi
   done
+  if [[ -n "${docker_config_dir:-}" ]]; then
+    rm -rf -- "${docker_config_dir}"
+  fi
 }
 trap cleanup_helper_env_files EXIT
 
@@ -136,6 +149,12 @@ check_docker() {
   echo "Docker Compose OK: $(docker compose version --short 2>/dev/null || docker compose version)"
 }
 
+check_compose_cli() {
+  command -v docker >/dev/null 2>&1 || { echo "Docker CLI is not installed or not in PATH" >&2; return 1; }
+  docker compose version >/dev/null
+  echo "Docker Compose CLI OK: $(docker compose version --short 2>/dev/null || docker compose version)"
+}
+
 if [[ ! -f docker-compose.prod.yml ]]; then
   echo "docker-compose.prod.yml not found" >&2
   exit 1
@@ -144,18 +163,43 @@ if [[ ! -f "${env_file}" ]]; then
   echo "Server env file not found: ${env_file}. Assemble it from split PROD env secrets or create it on the server with real production values." >&2
   exit 1
 fi
+if [[ -z "${release_bundle_dir}" || ! -d "${release_bundle_dir}" || -L "${release_bundle_dir}" ]]; then
+  echo "--release-bundle-dir must reference a signed non-symlink release bundle." >&2
+  exit 2
+fi
 
 echo "==> check Docker"
-check_docker
+if [[ "${dry_run}" == "true" ]]; then
+  check_compose_cli
+else
+  check_docker
+fi
 
-check_args=(--env-file "${env_file}")
-if [[ "${with_cloudflare}" == "true" ]]; then
-  check_args+=(--with-cloudflare)
-fi
-if [[ "${backup_before_deploy}" == "true" ]]; then
-  check_args+=(--backup-before-deploy)
-fi
-run_step bash scripts/deploy/check-prod-env.sh "${check_args[@]}"
+load_verified_release_env() {
+  local line key value
+  while IFS= read -r line || [[ -n "${line}" ]]; do
+    key="${line%%=*}"
+    value="${line#*=}"
+    case "${key}" in
+      API_IMAGE|WORKER_IMAGE|PROVIDER_WEBHOOK_IMAGE|PROVIDER_BALANCE_BOT_IMAGE|MINIAPP_IMAGE|MIGRATE_IMAGE|BACKUP_IMAGE|RELEASE_COMMIT_SHA|RELEASE_MANIFEST_SHA256|RELEASE_WORKFLOW_IDENTITY)
+        printf -v "${key}" '%s' "${value}"
+        export "${key}"
+        ;;
+      *) echo "Unexpected verified release key ${key}." >&2; return 1 ;;
+    esac
+  done < "$1"
+}
+
+verify_compose_release_images() {
+  local configured_images expected_image
+  configured_images="$("${compose[@]}" --profile backup config --images)"
+  for expected_image in "${API_IMAGE}" "${WORKER_IMAGE}" "${PROVIDER_WEBHOOK_IMAGE}" "${PROVIDER_BALANCE_BOT_IMAGE}" "${MINIAPP_IMAGE}" "${MIGRATE_IMAGE}" "${BACKUP_IMAGE}"; do
+    grep -Fxq -- "${expected_image}" <<< "${configured_images}" || {
+      echo "Compose did not select verified digest ${expected_image}." >&2
+      return 1
+    }
+  done
+}
 
 get_env_value() {
   local name="$1"
@@ -382,11 +426,36 @@ if [[ "${skip_pull}" != "true" ]]; then
   run_step git pull --ff-only origin "${branch}"
 fi
 
-export APP_ENV_FILE="${env_file}"
-if [[ -n "${image_tag}" ]]; then
-  export IMAGE_TAG="${image_tag}"
-  echo "Using IMAGE_TAG=${image_tag}"
+checked_out_commit="$(git rev-parse HEAD)"
+release_workflow_identity="https://github.com/Fxck-VK/vk_agregator/.github/workflows/docker-images.yml@refs/heads/${branch}"
+
+ghcr_username="$(get_env_value GHCR_USERNAME "")"
+ghcr_token="$(get_env_value GHCR_TOKEN "")"
+if ! is_placeholder_value "${ghcr_username}" && ! is_placeholder_value "${ghcr_token}"; then
+  echo "==> docker login ghcr.io"
+  docker_config_dir="$(mktemp -d "${TMPDIR:-/tmp}/vk-ai-aggregator-docker.XXXXXX")"
+  chmod 700 "${docker_config_dir}"
+  export DOCKER_CONFIG="${docker_config_dir}"
+  printf '%s' "${ghcr_token}" | docker login ghcr.io -u "${ghcr_username}" --password-stdin >/dev/null
 fi
+
+release_env_file="$(mktemp "${TMPDIR:-/tmp}/vk-ai-aggregator-release.XXXXXX")"
+chmod 600 "${release_env_file}"
+helper_env_files+=("${release_env_file}")
+run_step bash scripts/release/verify-release-bundle.sh \
+  --bundle-dir "${release_bundle_dir}" \
+  --repository fxck-vk/vk_agregator \
+  --commit "${checked_out_commit}" \
+  --workflow-identity "${release_workflow_identity}" \
+  --output-env "${release_env_file}"
+run_step bash scripts/deploy/validate-release-env.sh --release-env-file "${release_env_file}" --expected-commit "${checked_out_commit}"
+load_verified_release_env "${release_env_file}"
+release_commit="${RELEASE_COMMIT_SHA}"
+if [[ "${dry_run}" != "true" ]]; then
+  install -m 600 "${release_env_file}" "${release_bundle_dir}/release-images.env"
+fi
+export APP_ENV_FILE="${env_file}"
+echo "Using verified release commit ${release_commit}."
 
 stateful_services=()
 if [[ "$(get_data_service_mode POSTGRES_MODE)" == "local" ]]; then
@@ -404,7 +473,7 @@ if is_true_value "$(get_env_value PROVIDER_BALANCE_BOT_ENABLED false)"; then
   provider_balance_bot_enabled="true"
 fi
 
-compose=(docker compose --project-name "${project_name}" --env-file "${env_file}" -f docker-compose.prod.yml)
+compose=(docker compose --project-name "${project_name}" --env-file "${env_file}" --env-file "${release_env_file}" -f docker-compose.prod.yml)
 if [[ ${#stateful_services[@]} -gt 0 ]]; then
   compose+=(-f docker-compose.data.yml)
 fi
@@ -414,13 +483,20 @@ fi
 compose+=(--profile provider-balance)
 
 run_step "${compose[@]}" config >/dev/null
-
-ghcr_username="$(get_env_value GHCR_USERNAME "")"
-ghcr_token="$(get_env_value GHCR_TOKEN "")"
-if ! is_placeholder_value "${ghcr_username}" && ! is_placeholder_value "${ghcr_token}"; then
-  echo "==> docker login ghcr.io"
-  printf '%s' "${ghcr_token}" | docker login ghcr.io -u "${ghcr_username}" --password-stdin >/dev/null
+run_step verify_compose_release_images
+if [[ "${dry_run}" == "true" ]]; then
+  echo "Production deploy dry-run passed for signed release ${release_commit}."
+  exit 0
 fi
+
+check_args=(--env-file "${env_file}")
+if [[ "${with_cloudflare}" == "true" ]]; then
+  check_args+=(--with-cloudflare)
+fi
+if [[ "${backup_before_deploy}" == "true" ]]; then
+  check_args+=(--backup-before-deploy)
+fi
+run_step bash scripts/deploy/check-prod-env.sh "${check_args[@]}"
 
 image_pull_services=("${stateful_services[@]}" reverse-proxy)
 if [[ "${build_on_vps}" != "true" ]]; then
@@ -446,7 +522,7 @@ fi
 check_external_data_services
 
 if [[ "${backup_before_deploy}" == "true" ]]; then
-  backup_compose=(docker compose --project-name "${project_name}" --env-file "${env_file}" -f docker-compose.prod.yml)
+  backup_compose=(docker compose --project-name "${project_name}" --env-file "${env_file}" --env-file "${release_env_file}" -f docker-compose.prod.yml)
   if [[ ${#stateful_services[@]} -gt 0 ]]; then
     backup_compose+=(-f docker-compose.data.yml)
   fi
@@ -483,7 +559,7 @@ if [[ "${skip_migrate}" != "true" ]]; then
       migration_backup_status="manual-confirmed"
       echo "Using manually confirmed production migration backup."
     else
-      backup_compose=(docker compose --project-name "${project_name}" --env-file "${env_file}" -f docker-compose.prod.yml)
+      backup_compose=(docker compose --project-name "${project_name}" --env-file "${env_file}" --env-file "${release_env_file}" -f docker-compose.prod.yml)
       if [[ ${#stateful_services[@]} -gt 0 ]]; then
         backup_compose+=(-f docker-compose.data.yml)
       fi
@@ -559,6 +635,8 @@ echo "Branch: ${branch}"
 echo "Commit: $(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
 echo "Project: ${project_name}"
 echo "Env file: ${env_file}"
+echo "Verified release bundle: ${release_bundle_dir}"
+echo "Release commit: ${release_commit}"
 echo "Runtime services: ${runtime_services[*]}"
 echo "Migrations: $([[ "${skip_migrate}" == "true" ]] && echo skipped || echo applied)"
 echo "Migration backup: ${migration_backup_status}"

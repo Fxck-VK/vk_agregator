@@ -1,11 +1,15 @@
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory = $true)][string]$ImageTag,
+    [Parameter(Mandatory = $true)][string]$ReleaseBundleDir,
+    [Parameter(Mandatory = $true)][string]$WorkflowIdentity,
     [string]$EnvFile = ".env",
     [string]$ProjectName = "vk-ai-aggregator-prod",
+    [string]$CosignPath = "cosign",
+    [string]$ReleaseManifestPath = "",
     [switch]$WithCloudflare,
     [switch]$SkipBackup,
     [switch]$NoHealthCheck,
+    [switch]$DryRun,
     [int]$TimeoutSeconds = 180
 )
 
@@ -17,6 +21,18 @@ Set-Location $repoRoot
 $rollbackStartedAt = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
 $backupStatus = "skipped"
 $healthStatus = "skipped"
+$script:ReleaseEnvironmentNames = @(
+    "API_IMAGE",
+    "WORKER_IMAGE",
+    "PROVIDER_WEBHOOK_IMAGE",
+    "PROVIDER_BALANCE_BOT_IMAGE",
+    "MINIAPP_IMAGE",
+    "MIGRATE_IMAGE",
+    "BACKUP_IMAGE",
+    "RELEASE_COMMIT_SHA",
+    "RELEASE_MANIFEST_SHA256",
+    "RELEASE_WORKFLOW_IDENTITY"
+)
 
 function Invoke-Step {
     param(
@@ -158,8 +174,8 @@ function Wait-Http {
     throw "$Name health check timed out at $Url ($lastError)"
 }
 
-if ([string]::IsNullOrWhiteSpace($ImageTag)) {
-    throw "ImageTag is required. Use the previous known-good Docker image tag."
+if (-not (Test-Path -LiteralPath $ReleaseBundleDir -PathType Container)) {
+    throw "ReleaseBundleDir is required. Use the previous signed release bundle."
 }
 if (-not (Test-Path -LiteralPath "docker-compose.prod.yml")) {
     throw "docker-compose.prod.yml not found"
@@ -168,23 +184,96 @@ if (-not (Test-Path -LiteralPath $EnvFile)) {
     throw "Production env file not found: $EnvFile"
 }
 
-Write-Host "Rollback target IMAGE_TAG=$ImageTag"
-Write-Warning "This script does not run migrate down. Schema rollback must be a separate reviewed operation after a verified backup."
-
-Invoke-Step "check Docker" {
-    Test-DockerRuntime
+function Save-ReleaseProcessEnvironment {
+    $saved = @{}
+    foreach ($name in $script:ReleaseEnvironmentNames) {
+        $saved[$name] = [pscustomobject]@{
+            Exists = Test-Path -LiteralPath "Env:$name"
+            Value = [Environment]::GetEnvironmentVariable($name, [EnvironmentVariableTarget]::Process)
+        }
+    }
+    return $saved
 }
 
-Invoke-Step "check production env" {
-    $checkArgs = @("-EnvFile", $EnvFile)
-    if ($WithCloudflare) {
-        $checkArgs += "-WithCloudflare"
+function Import-VerifiedReleaseEnvironment {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    $values = @{}
+    foreach ($line in Get-Content -LiteralPath $Path) {
+        if ($line -notmatch '^(?<key>[A-Z][A-Z0-9_]*)=(?<value>.+)$') {
+            throw "Verifier-generated release environment contains an invalid line."
+        }
+        if ($script:ReleaseEnvironmentNames -notcontains $Matches.key -or $values.ContainsKey($Matches.key)) {
+            throw "Verifier-generated release environment contains an unexpected or duplicate key."
+        }
+        $values[$Matches.key] = $Matches.value
     }
-    if (-not $SkipBackup) {
-        $checkArgs += "-BackupBeforeDeploy"
+    if ($values.Count -ne $script:ReleaseEnvironmentNames.Count) {
+        throw "Verifier-generated release environment must contain exactly ten entries."
     }
-    & (Join-Path $PSScriptRoot "check-prod-env.ps1") @checkArgs
+    foreach ($name in $script:ReleaseEnvironmentNames) {
+        if (-not $values.ContainsKey($name)) {
+            throw "Verifier-generated release environment is missing $name."
+        }
+        [Environment]::SetEnvironmentVariable($name, $values[$name], [EnvironmentVariableTarget]::Process)
+    }
 }
+
+function Restore-ReleaseProcessEnvironment {
+    param([Parameter(Mandatory = $true)][hashtable]$Saved)
+
+    foreach ($name in $script:ReleaseEnvironmentNames) {
+        if ($Saved[$name].Exists) {
+            [Environment]::SetEnvironmentVariable($name, $Saved[$name].Value, [EnvironmentVariableTarget]::Process)
+        } else {
+            [Environment]::SetEnvironmentVariable($name, $null, [EnvironmentVariableTarget]::Process)
+        }
+    }
+}
+
+$releaseEnvFile = Join-Path ([IO.Path]::GetTempPath()) ("vk-ai-aggregator-rollback-release-{0}.env" -f ([guid]::NewGuid().ToString("N")))
+$savedReleaseEnvironment = Save-ReleaseProcessEnvironment
+$previousAppEnvFile = $env:APP_ENV_FILE
+try {
+    Invoke-Step "check Docker" {
+        Test-DockerRuntime
+    }
+    Invoke-Step "check production env" {
+        $checkArgs = @{ EnvFile = $EnvFile }
+        if ($WithCloudflare) {
+            $checkArgs.WithCloudflare = $true
+        }
+        if (-not $SkipBackup) {
+            $checkArgs.BackupBeforeDeploy = $true
+        }
+        & (Join-Path $PSScriptRoot "check-prod-env.ps1") @checkArgs
+    }
+    $ghcrUsername = Get-EnvFileValue -Path $EnvFile -Name "GHCR_USERNAME"
+    $ghcrToken = Get-EnvFileValue -Path $EnvFile -Name "GHCR_TOKEN"
+    if (-not (Test-EnvPlaceholderValue -Value $ghcrUsername) -and -not (Test-EnvPlaceholderValue -Value $ghcrToken)) {
+        Invoke-Step "docker login ghcr.io for release verification" {
+            $ghcrToken | docker login ghcr.io -u $ghcrUsername --password-stdin | Out-Null
+            if ($LASTEXITCODE -ne 0) {
+                throw "docker login ghcr.io failed with exit code $LASTEXITCODE"
+            }
+        }
+    }
+    Invoke-Step "verify previous signed release bundle" {
+        $verifyArgs = @{
+            ReleaseBundleDir = $ReleaseBundleDir
+            WorkflowIdentity = $WorkflowIdentity
+            OutputEnvFile = $releaseEnvFile
+            CosignPath = $CosignPath
+        }
+        if (-not [string]::IsNullOrWhiteSpace($ReleaseManifestPath)) {
+            $verifyArgs.ReleaseManifestPath = $ReleaseManifestPath
+        }
+        & (Join-Path $repoRoot "scripts\release\verify-release-bundle.ps1") @verifyArgs
+    }
+    Import-VerifiedReleaseEnvironment -Path $releaseEnvFile
+    $releaseCommit = Get-EnvFileValue -Path $releaseEnvFile -Name "RELEASE_COMMIT_SHA"
+    Write-Host "Rollback target verified release commit $releaseCommit"
+    Write-Warning "This script does not run migrate down. Schema rollback must be a separate reviewed operation after a verified backup."
 
 $statefulServices = @(Get-LocalStatefulServices -Path $EnvFile)
 $providerBalanceBotEnabled = Test-TrueValue -Value (Get-EnvFileValue -Path $EnvFile -Name "PROVIDER_BALANCE_BOT_ENABLED" -Default "false")
@@ -192,6 +281,7 @@ $composeArgs = @(
     "compose",
     "--project-name", $ProjectName,
     "--env-file", $EnvFile,
+    "--env-file", $releaseEnvFile,
     "-f", "docker-compose.prod.yml"
 )
 if ($statefulServices.Count -gt 0) {
@@ -211,25 +301,14 @@ function Invoke-DockerCompose {
     }
 }
 
-$previousAppEnvFile = $env:APP_ENV_FILE
-$previousImageTag = $env:IMAGE_TAG
-try {
     $env:APP_ENV_FILE = $EnvFile
-    $env:IMAGE_TAG = $ImageTag
 
     Invoke-Step "docker compose config" {
         Invoke-DockerCompose config | Out-Null
     }
-
-    $ghcrUsername = Get-EnvFileValue -Path $EnvFile -Name "GHCR_USERNAME"
-    $ghcrToken = Get-EnvFileValue -Path $EnvFile -Name "GHCR_TOKEN"
-    if (-not (Test-EnvPlaceholderValue -Value $ghcrUsername) -and -not (Test-EnvPlaceholderValue -Value $ghcrToken)) {
-        Invoke-Step "docker login ghcr.io" {
-            $ghcrToken | docker login ghcr.io -u $ghcrUsername --password-stdin | Out-Null
-            if ($LASTEXITCODE -ne 0) {
-                throw "docker login ghcr.io failed with exit code $LASTEXITCODE"
-            }
-        }
+    if ($DryRun) {
+        Write-Host "Production rollback dry-run completed after signed bundle verification and docker compose config."
+        return
     }
 
     if ($statefulServices.Count -gt 0) {
@@ -245,6 +324,7 @@ try {
         "compose",
         "--project-name", $ProjectName,
         "--env-file", $EnvFile,
+        "--env-file", $releaseEnvFile,
         "-f", "docker-compose.prod.yml"
     )
     if ($statefulServices.Count -gt 0) {
@@ -316,7 +396,8 @@ try {
     Write-Host "Finished at: $((Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ"))"
     Write-Host "Project: $ProjectName"
     Write-Host "Env file: $EnvFile"
-    Write-Host "Rollback IMAGE_TAG: $ImageTag"
+    Write-Host "Rollback verified release bundle: $ReleaseBundleDir"
+    Write-Host "Rollback release commit: $releaseCommit"
     Write-Host "Backup before rollback: $backupStatus"
     Write-Host "Migrations: not run; migrate down is intentionally forbidden"
     Write-Host "Runtime services: $($runtimeServices -join ', ')"
@@ -324,14 +405,11 @@ try {
     Write-Host "Provider balance bot: $providerBalanceBotEnabled"
     Write-Host "Verify payment/referral/job smoke manually before considering the incident closed."
 } finally {
+    Restore-ReleaseProcessEnvironment -Saved $savedReleaseEnvironment
+    Remove-Item -LiteralPath $releaseEnvFile -Force -ErrorAction SilentlyContinue
     if ($null -eq $previousAppEnvFile) {
         Remove-Item Env:\APP_ENV_FILE -ErrorAction SilentlyContinue
     } else {
         $env:APP_ENV_FILE = $previousAppEnvFile
-    }
-    if ($null -eq $previousImageTag) {
-        Remove-Item Env:\IMAGE_TAG -ErrorAction SilentlyContinue
-    } else {
-        $env:IMAGE_TAG = $previousImageTag
     }
 }

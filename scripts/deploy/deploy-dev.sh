@@ -4,15 +4,19 @@ set -euo pipefail
 branch="dev-deploy"
 env_file=".env"
 project_name="vk-ai-aggregator-dev"
-image_tag=""
+release_bundle_dir=""
+release_env_file=""
+docker_config_dir=""
 skip_pull="false"
 allow_dirty="false"
 build_on_vps="false"
 skip_migrate="false"
+rollback_verified_release="false"
 with_cloudflare="false"
 pull_base_images="false"
 no_health_check="false"
 skip_public_smoke="false"
+dry_run="false"
 timeout_seconds="180"
 health_status="skipped"
 public_smoke_status="skipped"
@@ -26,15 +30,17 @@ Options:
   --branch <name>              Git branch to deploy, default: dev-deploy
   --env-file <path>            DEV env file, default: .env
   --project-name <name>        Compose project name, default: vk-ai-aggregator-dev
-  --image-tag <tag>            Docker image tag to pull and run, default from env/.env
+  --release-bundle-dir <path>  Signed release bundle for seven digests (required)
   --skip-pull                  Do not fetch/checkout/pull git
   --allow-dirty                Allow tracked worktree changes before git pull
-  --build-on-vps               Fallback only: build application images on the VPS
+  --build-on-vps               Rejected: verified digest deploys cannot build on the VPS
   --skip-migrate               Do not run migrate service
+  --rollback-verified-release  Allow a previous verified release commit; requires --skip-migrate
   --with-cloudflare            Start cloudflared profile too
   --pull-base-images           Pass --pull to docker compose build
   --no-health-check            Skip local HTTP health checks
   --skip-public-smoke          Skip public DEV Cloudflare smoke after cloudflared startup
+  --dry-run                    Verify trust and Compose config without changing runtime state
   --timeout-seconds <seconds>  Health check timeout, default: 180
   -h, --help                   Show this help
 EOF
@@ -45,20 +51,31 @@ while [[ $# -gt 0 ]]; do
     --branch) branch="$2"; shift 2 ;;
     --env-file) env_file="$2"; shift 2 ;;
     --project-name) project_name="$2"; shift 2 ;;
-    --image-tag) image_tag="$2"; shift 2 ;;
+    --release-bundle-dir) release_bundle_dir="$2"; shift 2 ;;
     --skip-pull) skip_pull="true"; shift ;;
     --allow-dirty) allow_dirty="true"; shift ;;
     --build-on-vps) build_on_vps="true"; shift ;;
     --skip-migrate) skip_migrate="true"; shift ;;
+    --rollback-verified-release) rollback_verified_release="true"; shift ;;
     --with-cloudflare) with_cloudflare="true"; shift ;;
     --pull-base-images) pull_base_images="true"; shift ;;
     --no-health-check) no_health_check="true"; shift ;;
     --skip-public-smoke) skip_public_smoke="true"; shift ;;
+    --dry-run) dry_run="true"; shift ;;
     --timeout-seconds) timeout_seconds="$2"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
   esac
 done
+
+if [[ "${build_on_vps}" == "true" ]]; then
+  echo "--build-on-vps is incompatible with verified digest-only deployment." >&2
+  exit 2
+fi
+if [[ "${rollback_verified_release}" == "true" && "${skip_migrate}" != "true" ]]; then
+  echo "--rollback-verified-release requires --skip-migrate; schema rollback is forbidden." >&2
+  exit 2
+fi
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "${script_dir}/../.." && pwd)"
@@ -82,6 +99,38 @@ run_step() {
   "$@"
 }
 
+cleanup_release_env() {
+  [[ -z "${release_env_file}" ]] || rm -f -- "${release_env_file}"
+  [[ -z "${docker_config_dir:-}" ]] || rm -rf -- "${docker_config_dir}"
+}
+trap cleanup_release_env EXIT
+
+load_verified_release_env() {
+  local line key value
+  while IFS= read -r line || [[ -n "${line}" ]]; do
+    key="${line%%=*}"
+    value="${line#*=}"
+    case "${key}" in
+      API_IMAGE|WORKER_IMAGE|PROVIDER_WEBHOOK_IMAGE|PROVIDER_BALANCE_BOT_IMAGE|MINIAPP_IMAGE|MIGRATE_IMAGE|BACKUP_IMAGE|RELEASE_COMMIT_SHA|RELEASE_MANIFEST_SHA256|RELEASE_WORKFLOW_IDENTITY)
+        printf -v "${key}" '%s' "${value}"
+        export "${key}"
+        ;;
+      *) echo "Unexpected verified release key ${key}." >&2; return 1 ;;
+    esac
+  done < "$1"
+}
+
+verify_compose_release_images() {
+  local configured_images expected_image
+  configured_images="$("${compose[@]}" --profile backup config --images)"
+  for expected_image in "${API_IMAGE}" "${WORKER_IMAGE}" "${PROVIDER_WEBHOOK_IMAGE}" "${PROVIDER_BALANCE_BOT_IMAGE}" "${MINIAPP_IMAGE}" "${MIGRATE_IMAGE}" "${BACKUP_IMAGE}"; do
+    grep -Fxq -- "${expected_image}" <<< "${configured_images}" || {
+      echo "Compose did not select verified digest ${expected_image}." >&2
+      return 1
+    }
+  done
+}
+
 check_docker() {
   if ! command -v docker >/dev/null 2>&1; then
     echo "Docker CLI is not installed or not in PATH" >&2
@@ -92,6 +141,12 @@ check_docker() {
   docker info >/dev/null
   echo "Docker OK: $(docker version --format '{{.Server.Version}}')"
   echo "Docker Compose OK: $(docker compose version --short 2>/dev/null || docker compose version)"
+}
+
+check_compose_cli() {
+  command -v docker >/dev/null 2>&1 || { echo "Docker CLI is not installed or not in PATH" >&2; return 1; }
+  docker compose version >/dev/null
+  echo "Docker Compose CLI OK: $(docker compose version --short 2>/dev/null || docker compose version)"
 }
 
 get_env_value() {
@@ -199,7 +254,6 @@ validate_dev_env() {
   esac
 
   for required in \
-    APP_IMAGE_REGISTRY IMAGE_TAG \
     DATABASE_URL REDIS_ADDR \
     S3_ENDPOINT S3_ACCESS_KEY S3_SECRET_KEY S3_BUCKET S3_REGION S3_ADDRESSING_STYLE \
     VK_ACCESS_TOKEN VK_SECRET VK_CONFIRMATION_TOKEN VK_GROUP_ID ADMIN_TOKEN; do
@@ -276,9 +330,17 @@ if [[ ! -f "${env_file}" ]]; then
   echo "DEV env file not found: ${env_file}" >&2
   exit 1
 fi
+if [[ -z "${release_bundle_dir}" || ! -d "${release_bundle_dir}" || -L "${release_bundle_dir}" ]]; then
+  echo "--release-bundle-dir must reference a signed non-symlink release bundle." >&2
+  exit 2
+fi
 
 echo "==> check Docker"
-check_docker
+if [[ "${dry_run}" == "true" ]]; then
+  check_compose_cli
+else
+  check_docker
+fi
 validate_dev_env
 
 if [[ "${skip_pull}" != "true" ]]; then
@@ -295,11 +357,41 @@ if [[ "${skip_pull}" != "true" ]]; then
   run_step git pull --ff-only origin "${branch}"
 fi
 
-export APP_ENV_FILE="${env_file}"
-if [[ -n "${image_tag}" ]]; then
-  export IMAGE_TAG="${image_tag}"
-  echo "Using IMAGE_TAG=${image_tag}"
+checked_out_commit="$(git rev-parse HEAD)"
+expected_release_commit="${checked_out_commit}"
+if [[ "${rollback_verified_release}" == "true" ]]; then
+  stored_release_env="${release_bundle_dir}/release-images.env"
+  run_step bash scripts/deploy/validate-release-env.sh --release-env-file "${stored_release_env}"
+  expected_release_commit="$(grep -E '^RELEASE_COMMIT_SHA=' "${stored_release_env}" | cut -d= -f2-)"
 fi
+release_workflow_identity="https://github.com/Fxck-VK/vk_agregator/.github/workflows/docker-images.yml@refs/heads/${branch}"
+
+ghcr_username="$(get_env_value GHCR_USERNAME "")"
+ghcr_token="$(get_env_value GHCR_TOKEN "")"
+if ! is_placeholder_value "${ghcr_username}" && ! is_placeholder_value "${ghcr_token}"; then
+  echo "==> docker login ghcr.io"
+  docker_config_dir="$(mktemp -d "${TMPDIR:-/tmp}/vk-ai-aggregator-docker.XXXXXX")"
+  chmod 700 "${docker_config_dir}"
+  export DOCKER_CONFIG="${docker_config_dir}"
+  printf '%s' "${ghcr_token}" | docker login ghcr.io -u "${ghcr_username}" --password-stdin >/dev/null
+fi
+
+release_env_file="$(mktemp "${TMPDIR:-/tmp}/vk-ai-aggregator-release.XXXXXX")"
+chmod 600 "${release_env_file}"
+run_step bash scripts/release/verify-release-bundle.sh \
+  --bundle-dir "${release_bundle_dir}" \
+  --repository fxck-vk/vk_agregator \
+  --commit "${expected_release_commit}" \
+  --workflow-identity "${release_workflow_identity}" \
+  --output-env "${release_env_file}"
+run_step bash scripts/deploy/validate-release-env.sh --release-env-file "${release_env_file}" --expected-commit "${expected_release_commit}"
+load_verified_release_env "${release_env_file}"
+release_commit="${RELEASE_COMMIT_SHA}"
+if [[ "${dry_run}" != "true" ]]; then
+  install -m 600 "${release_env_file}" "${release_bundle_dir}/release-images.env"
+fi
+export APP_ENV_FILE="${env_file}"
+echo "Using verified release commit ${release_commit}."
 
 stateful_services=()
 if [[ "$(get_data_service_mode POSTGRES_MODE)" == "local" ]]; then
@@ -317,7 +409,7 @@ if is_true_value "$(get_env_value PROVIDER_BALANCE_BOT_ENABLED false)"; then
   provider_balance_bot_enabled="true"
 fi
 
-compose=(docker compose --project-name "${project_name}" --env-file "${env_file}" -f docker-compose.prod.yml)
+compose=(docker compose --project-name "${project_name}" --env-file "${env_file}" --env-file "${release_env_file}" -f docker-compose.prod.yml)
 if [[ ${#stateful_services[@]} -gt 0 ]]; then
   compose+=(-f docker-compose.data.yml)
 fi
@@ -327,12 +419,10 @@ fi
 compose+=(--profile provider-balance)
 
 run_step "${compose[@]}" config >/dev/null
-
-ghcr_username="$(get_env_value GHCR_USERNAME "")"
-ghcr_token="$(get_env_value GHCR_TOKEN "")"
-if ! is_placeholder_value "${ghcr_username}" && ! is_placeholder_value "${ghcr_token}"; then
-  echo "==> docker login ghcr.io"
-  printf '%s' "${ghcr_token}" | docker login ghcr.io -u "${ghcr_username}" --password-stdin >/dev/null
+run_step verify_compose_release_images
+if [[ "${dry_run}" == "true" ]]; then
+  echo "DEV deploy dry-run passed for signed release ${release_commit}."
+  exit 0
 fi
 
 image_pull_services=("${stateful_services[@]}" reverse-proxy)
@@ -428,6 +518,8 @@ echo "Branch: ${branch}"
 echo "Commit: $(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
 echo "Project: ${project_name}"
 echo "Env file: ${env_file}"
+echo "Verified release bundle: ${release_bundle_dir}"
+echo "Release commit: ${release_commit}"
 echo "Runtime services: ${runtime_services[*]}"
 echo "Migrations: $([[ "${skip_migrate}" == "true" ]] && echo skipped || echo applied)"
 echo "Image pull: completed"

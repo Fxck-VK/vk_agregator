@@ -146,7 +146,6 @@ if (Is-TrueValue (Get-Value -Values $envValues -Name "RESTORE_ALLOW_DESTRUCTIVE"
     Add-Problem -Problems $problems -Name "RESTORE_ALLOW_DESTRUCTIVE" -Reason "must be false in the persistent deploy env; set it only for a manual restore command"
 }
 if ($appEnv -eq "production" -and -not (Is-TrueValue (Get-Value -Values $envValues -Name "MIGRATION_BACKUP_CONFIRMED" -Default "false"))) {
-    Require-Value -Values $envValues -Problems $problems -Name "BACKUP_IMAGE_TAG" -Reason "required for automatic production migration backup"
     Require-Value -Values $envValues -Problems $problems -Name "BACKUP_DIR" -Reason "required for automatic production migration backup"
     Require-Value -Values $envValues -Problems $problems -Name "BACKUP_RETENTION_DAYS" -Reason "required for automatic production migration backup"
     if ((Get-Value -Values $envValues -Name "BACKUP_POSTGRES_ENABLED" -Default "true").ToLowerInvariant() -eq "false") {
@@ -155,8 +154,6 @@ if ($appEnv -eq "production" -and -not (Is-TrueValue (Get-Value -Values $envValu
 }
 
 foreach ($required in @(
-    "APP_IMAGE_REGISTRY",
-    "IMAGE_TAG",
     "DATABASE_URL",
     "REDIS_ADDR",
     "S3_ENDPOINT",
@@ -186,10 +183,6 @@ if ($s3Mode -eq "local") {
     Require-Value -Values $envValues -Problems $problems -Name "MINIO_ROOT_PASSWORD" -Reason "required when S3_MODE=local"
 }
 
-$imageRegistry = Get-Value -Values $envValues -Name "APP_IMAGE_REGISTRY"
-if ($imageRegistry -notlike "ghcr.io/*") {
-    Add-Problem -Problems $problems -Name "APP_IMAGE_REGISTRY" -Reason "must point at the GitHub Container Registry image namespace, for example ghcr.io/fxck-vk/vk_agregator"
-}
 $ghcrUsername = Get-Value -Values $envValues -Name "GHCR_USERNAME"
 $ghcrToken = Get-Value -Values $envValues -Name "GHCR_TOKEN"
 if (-not [string]::IsNullOrWhiteSpace("$ghcrUsername$ghcrToken")) {
@@ -307,7 +300,6 @@ if ($WithCloudflare) {
 }
 
 if ($BackupBeforeDeploy) {
-    Require-Value -Values $envValues -Problems $problems -Name "BACKUP_IMAGE_TAG" -Reason "required when backup-before-deploy is enabled"
     Require-Value -Values $envValues -Problems $problems -Name "BACKUP_DIR" -Reason "required when backup-before-deploy is enabled"
     Require-Value -Values $envValues -Problems $problems -Name "BACKUP_RETENTION_DAYS" -Reason "required when backup-before-deploy is enabled"
 }

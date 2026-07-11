@@ -137,9 +137,13 @@ function New-ComposeValidationEnvFile {
     $lines = @(
         "APP_ENV_FILE=$appEnvFile",
         "APP_ENV=production",
-        "APP_IMAGE_REGISTRY=ghcr.io/fxck-vk/vk_agregator",
-        "IMAGE_TAG=infra-validate",
-        "BACKUP_IMAGE_TAG=infra-validate",
+        "API_IMAGE=ghcr.io/fxck-vk/vk_agregator/api@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "WORKER_IMAGE=ghcr.io/fxck-vk/vk_agregator/worker@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "PROVIDER_WEBHOOK_IMAGE=ghcr.io/fxck-vk/vk_agregator/provider-webhook@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "PROVIDER_BALANCE_BOT_IMAGE=ghcr.io/fxck-vk/vk_agregator/provider-balance-bot@sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "MINIAPP_IMAGE=ghcr.io/fxck-vk/vk_agregator/miniapp@sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "MIGRATE_IMAGE=ghcr.io/fxck-vk/vk_agregator/migrate@sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "BACKUP_IMAGE=ghcr.io/fxck-vk/vk_agregator/backup@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
         "DATABASE_URL=postgres://vk_ai_aggregator:vk_ai_aggregator@postgres:5432/vk_ai_aggregator?sslmode=disable",
         "REDIS_ADDR=redis:6379",
         "S3_ENDPOINT=minio:9000",
@@ -622,11 +626,11 @@ function Assert-ExternalContainerPinsAndHelperSecrets {
             }
 
             $image = $Matches.image
-            if ($image.Contains('APP_IMAGE_REGISTRY')) {
-                if ($image.Contains(':-main') -or ($image -notmatch '\$\{(?:IMAGE_TAG|BACKUP_IMAGE_TAG):\?')) {
-                    throw "internal application image must require the immutable SHA tag without main fallback: ${relativePath}:${lineNumber}"
-                }
+            if ($image -match '^\$\{(?:API_IMAGE|WORKER_IMAGE|PROVIDER_WEBHOOK_IMAGE|PROVIDER_BALANCE_BOT_IMAGE|MINIAPP_IMAGE|MIGRATE_IMAGE|BACKUP_IMAGE):\?') {
                 continue
+            }
+            if ($image.Contains('APP_IMAGE_REGISTRY') -or $image.Contains('IMAGE_TAG')) {
+                throw "internal application image must require a verified digest reference: ${relativePath}:${lineNumber}"
             }
 
             Assert-VersionDigestImageReference -Reference $image -Context "${relativePath}:${lineNumber} image"
@@ -638,9 +642,9 @@ function Assert-ExternalContainerPinsAndHelperSecrets {
     }
 
     $productionCompose = Get-Content -LiteralPath (Join-Path $repoRoot "docker-compose.prod.yml") -Raw
-    $internalProxyPattern = '(?m)^  reverse-proxy:\r?\n    image: \$\{APP_IMAGE_REGISTRY:-ghcr\.io/fxck-vk/vk_agregator\}/miniapp:\$\{IMAGE_TAG:\?IMAGE_TAG is required\}\s*$'
+    $internalProxyPattern = '(?m)^  reverse-proxy:\r?\n    image: \$\{MINIAPP_IMAGE:\?MINIAPP_IMAGE verified digest is required\}\s*$'
     if ($productionCompose -notmatch $internalProxyPattern) {
-        throw "production reverse proxy must reuse the scanned internal miniapp SHA image"
+        throw "production reverse proxy must reuse the verified Mini App digest"
     }
 
     $helperScripts = @(
@@ -692,19 +696,21 @@ function Assert-HelperEnvFileBehavior {
     }
 
     $bashFunctions = $bashContent.Substring($bashStart, $bashEnd - $bashStart)
-    $bashTest = @'
+    $bashTest = (@'
 set -euo pipefail
 helper_env_files=()
 __HELPER_FUNCTIONS__
 helper_env_file=""
 create_helper_env_file helper_env_file DATABASE_URL "sentinel-db" REDISCLI_AUTH "sentinel-redis"
 [[ -n "$helper_env_file" && -f "$helper_env_file" ]]
-if mode="$(stat -c '%a' "$helper_env_file" 2>/dev/null)"; then
-  :
-else
-  mode="$(stat -f '%Lp' "$helper_env_file")"
+if [[ "${VKAGG_SKIP_POSIX_MODE_CHECK:-false}" != "true" ]]; then
+  if mode="$(stat -c '%a' "$helper_env_file" 2>/dev/null)"; then
+    :
+  else
+    mode="$(stat -f '%Lp' "$helper_env_file")"
+  fi
+  [[ "$mode" == "600" ]]
 fi
-[[ "$mode" == "600" ]]
 expected=$'DATABASE_URL=sentinel-db\nREDISCLI_AUTH=sentinel-redis'
 [[ "$(<"$helper_env_file")" == "$expected" ]]
 remove_helper_env_file "$helper_env_file"
@@ -713,17 +719,40 @@ invalid_file=""
 if create_helper_env_file invalid_file TOKEN $'bad\nvalue' 2>/dev/null; then
   exit 1
 fi
-'@.Replace("__HELPER_FUNCTIONS__", $bashFunctions)
+'@.Replace("__HELPER_FUNCTIONS__", $bashFunctions)) -replace "`r`n", "`n"
+
+    $bashCommand = Get-Command bash -ErrorAction SilentlyContinue | Select-Object -First 1
+    $bashExecutable = if ($null -eq $bashCommand) { "" } else { $bashCommand.Source }
+    $runningOnWindows = $env:OS -eq "Windows_NT"
+    if ($runningOnWindows -and ($bashExecutable -like "*\System32\bash.exe" -or [string]::IsNullOrWhiteSpace($bashExecutable))) {
+        $gitBash = Join-Path $env:ProgramFiles "Git\bin\bash.exe"
+        if (Test-Path -LiteralPath $gitBash) {
+            $bashExecutable = $gitBash
+        }
+    }
+    if ([string]::IsNullOrWhiteSpace($bashExecutable)) {
+        throw "Bash is required for helper env-file behavior validation"
+    }
 
     $bashTempDir = Join-Path ([System.IO.Path]::GetTempPath()) "vkagg-helper-test-$([guid]::NewGuid().ToString('N'))"
     New-Item -ItemType Directory -Path $bashTempDir | Out-Null
+    $bashTestPath = Join-Path $bashTempDir "helper-env-test.sh"
+    [IO.File]::WriteAllText($bashTestPath, $bashTest, [Text.UTF8Encoding]::new($false))
     $previousTmpDir = $env:TMPDIR
+    $previousSkipPosixModeCheck = $env:VKAGG_SKIP_POSIX_MODE_CHECK
     try {
-        $env:TMPDIR = $bashTempDir
-        & bash -c $bashTest
+        if ($runningOnWindows -and $bashExecutable -like "*\Git\bin\bash.exe") {
+            $env:TMPDIR = (& $bashExecutable -lc 'cygpath -u "$1"' "_" $bashTempDir).Trim()
+            $env:VKAGG_SKIP_POSIX_MODE_CHECK = "true"
+            & $bashExecutable -l $bashTestPath
+        } else {
+            $env:TMPDIR = $bashTempDir
+            & $bashExecutable $bashTestPath
+        }
         if ($LASTEXITCODE -ne 0) {
             throw "Bash helper env-file behavior test failed with exit code $LASTEXITCODE"
         }
+        Remove-Item -LiteralPath $bashTestPath -Force
         if (@(Get-ChildItem -LiteralPath $bashTempDir -Force).Count -ne 0) {
             throw "Bash helper env-file behavior test left temporary files behind"
         }
@@ -732,6 +761,11 @@ fi
             Remove-Item Env:\TMPDIR -ErrorAction SilentlyContinue
         } else {
             $env:TMPDIR = $previousTmpDir
+        }
+        if ($null -eq $previousSkipPosixModeCheck) {
+            Remove-Item Env:\VKAGG_SKIP_POSIX_MODE_CHECK -ErrorAction SilentlyContinue
+        } else {
+            $env:VKAGG_SKIP_POSIX_MODE_CHECK = $previousSkipPosixModeCheck
         }
         Remove-Item -LiteralPath $bashTempDir -Recurse -Force -ErrorAction SilentlyContinue
     }
@@ -760,7 +794,7 @@ fi
         if (-not (Test-Path -LiteralPath $powerShellEnvFile -PathType Leaf)) {
             throw "PowerShell helper env-file was not created"
         }
-        if ($IsWindows) {
+        if ($runningOnWindows) {
             $identity = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
             $unexpectedRules = @(
                 (Get-Acl -LiteralPath $powerShellEnvFile).Access |
@@ -860,8 +894,12 @@ function Assert-DeployScripts {
                 "MIGRATION_BACKUP_CONFIRMED",
                 "backup postgres before migration",
                 "-EnvFile",
+                "ReleaseBundleDir",
+                "WorkflowIdentity",
+                "verify-release-bundle.ps1",
+                "Restore-ReleaseProcessEnvironment",
+                "DryRun",
                 "PUBLIC_PAYMENT_WEBHOOK_URL",
-                "IMAGE_TAG",
                 "migrateArgs",
                 "exit-code-from",
                 "api", "worker", "provider-webhook", "miniapp", "reverse-proxy",
@@ -896,8 +934,13 @@ function Assert-DeployScripts {
                 "MIGRATION_BACKUP_CONFIRMED",
                 "Migration backup:",
                 "--env-file",
+                "--release-bundle-dir",
+                "verify-release-bundle.sh",
+                "load_verified_release_env",
+                "verify_compose_release_images",
+                "--dry-run",
+                "validate-release-env.sh",
                 "PUBLIC_PAYMENT_WEBHOOK_URL",
-                "IMAGE_TAG",
                 "migrate_args",
                 "exit-code-from",
                 "api worker maintenance-worker provider-webhook miniapp reverse-proxy",
@@ -914,8 +957,6 @@ function Assert-DeployScripts {
         [pscustomobject]@{
             Path = "scripts\deploy\check-prod-env.ps1"
             Required = @(
-                "APP_IMAGE_REGISTRY",
-                "IMAGE_TAG",
                 "APP_ENV",
                 "DATA_SERVICES_MODE",
                 "POSTGRES_MODE",
@@ -943,8 +984,6 @@ function Assert-DeployScripts {
         [pscustomobject]@{
             Path = "scripts\deploy\check-prod-env.sh"
             Required = @(
-                "APP_IMAGE_REGISTRY",
-                "IMAGE_TAG",
                 "APP_ENV",
                 "DATA_SERVICES_MODE",
                 "POSTGRES_MODE",
@@ -972,7 +1011,11 @@ function Assert-DeployScripts {
         [pscustomobject]@{
             Path = "scripts\deploy\rollback-prod.ps1"
             Required = @(
-                "ImageTag",
+                "ReleaseBundleDir",
+                "WorkflowIdentity",
+                "verify-release-bundle.ps1",
+                "Restore-ReleaseProcessEnvironment",
+                "DryRun",
                 "check-prod-env.ps1",
                 "check Docker",
                 "docker info",
@@ -989,7 +1032,12 @@ function Assert-DeployScripts {
         [pscustomobject]@{
             Path = "scripts\deploy\rollback-prod.sh"
             Required = @(
-                "--image-tag",
+                "--release-bundle-dir",
+                "verify-release-bundle.sh",
+                "load_verified_release_env",
+                "verify_compose_release_images",
+                "--dry-run",
+                "validate-release-env.sh",
                 "check-prod-env.sh",
                 "check_docker",
                 "docker info",
@@ -1178,6 +1226,7 @@ function Assert-DockerImageWorkflow {
         "name: Docker Images",
         "actions: read",
         "packages: write",
+        "id-token: write",
         "ghcr.io/",
         "CI_WORKFLOW: ci.yml",
         'commit_sha: ${{ steps.source.outputs.commit_sha }}',
@@ -1192,8 +1241,30 @@ function Assert-DockerImageWorkflow {
         "failed_runs",
         "active_runs",
         "Manual Docker Images dispatch requires prior successful CI",
+        "publish:",
+        "sign:",
         "needs: validate_source",
+        "needs: [validate_source, publish]",
         "push: true",
+        "id: build",
+        "sbom: true",
+        "provenance: mode=max",
+        '${{ steps.build.outputs.digest }}',
+        "anchore/sbom-action/download-syft",
+        "aquasecurity/trivy-action",
+        "severity: HIGH,CRITICAL",
+        "enforce-trivy-policy.sh",
+        "output: release/",
+        "cosign sign --yes",
+        "cosign attest --yes --type cyclonedx",
+        "cosign attest --yes --type spdx",
+        "cosign attest --yes --type slsaprovenance",
+        "cosign verify ",
+        "verify-attestation-predicate.sh",
+        "cosign sign-blob",
+        "cosign verify-blob",
+        "release-manifest assemble",
+        "release-bundle-",
         "^[0-9a-f]{40}$",
         "docker/setup-buildx-action",
         "docker/login-action",
@@ -1205,12 +1276,14 @@ function Assert-DockerImageWorkflow {
         "Dockerfile.provider-balance-bot",
         "Dockerfile.miniapp",
         "Dockerfile.migrate",
+        "Dockerfile.backup",
         "service: api",
         "service: worker",
         "service: provider-webhook",
         "service: provider-balance-bot",
         "service: miniapp",
-        "service: migrate"
+        "service: migrate",
+        "service: backup"
     )
 
     foreach ($snippet in $requiredSnippets) {
@@ -1220,10 +1293,19 @@ function Assert-DockerImageWorkflow {
     }
 
     $permissionsIndex = $content.IndexOf("permissions:", [StringComparison]::Ordinal)
-    $buildIndex = $content.IndexOf("`n  build:", [StringComparison]::Ordinal)
+    $buildIndex = $content.IndexOf("`n  publish:", [StringComparison]::Ordinal)
+    $signIndex = $content.IndexOf("`n  sign:", [StringComparison]::Ordinal)
     $packagesWriteIndex = $content.IndexOf("packages: write", [StringComparison]::Ordinal)
-    if ($permissionsIndex -lt 0 -or $buildIndex -lt 0 -or $packagesWriteIndex -lt $buildIndex) {
-        throw "Docker image packages:write permission must be scoped to the gated build job"
+    if ($permissionsIndex -lt 0 -or $buildIndex -lt 0 -or $signIndex -le $buildIndex -or $packagesWriteIndex -lt $buildIndex -or $packagesWriteIndex -ge $signIndex) {
+        throw "Docker image packages:write permission must be scoped to the publish job"
+    }
+    $publishSection = $content.Substring($buildIndex, $signIndex - $buildIndex)
+    $signSection = $content.Substring($signIndex)
+    if (-not $publishSection.Contains("id-token: write") -or -not $signSection.Contains("id-token: write") -or [regex]::Matches($content, '(?m)^\s*id-token:\s*write\s*$').Count -ne 2) {
+        throw "Docker image id-token:write permission must be scoped only to the image and manifest signing jobs"
+    }
+    if ([regex]::Matches($content, '(?m)^\s*packages:\s*write\s*$').Count -ne 1) {
+        throw "Docker image packages:write permission must appear only once"
     }
     $triggerSection = $content.Substring(0, $permissionsIndex)
     if ($triggerSection.Contains("pull_request:") -or $triggerSection.Contains("pull_request_target:")) {
@@ -1232,17 +1314,17 @@ function Assert-DockerImageWorkflow {
     if ($content.Contains("format=short") -or $content.Contains("deploy_short_sha")) {
         throw "Docker image workflow must not use short SHA as a release identity"
     }
-    if ($content.Contains("write-all") -or $content.Contains("contents: write") -or $content.Contains("id-token: write")) {
+    if ($content.Contains("write-all") -or $content.Contains("contents: write")) {
         throw "Docker image workflow contains an unnecessary broad write permission"
     }
 
     $validateIndex = $content.IndexOf("`n  validate_source:", [StringComparison]::Ordinal)
     $validateSection = $content.Substring($validateIndex, $buildIndex - $validateIndex)
-    if ($validateSection.Contains("actions/checkout") -or $validateSection.Contains('secrets.') -or $validateSection.Contains("packages: write")) {
-        throw "Docker image validation must run without checkout, repository secrets, or package write access"
+    if ($validateSection.Contains("actions/checkout") -or $validateSection.Contains('secrets.') -or $validateSection.Contains("packages: write") -or $validateSection.Contains("id-token: write")) {
+        throw "Docker image validation must run without checkout, repository secrets, package write, or OIDC access"
     }
 
-    Write-Host "Docker image workflow exact-SHA CI gate OK: Backend/Secret Scan failure and PR/manual bypass paths fail closed"
+    Write-Host "Docker release workflow OK: exact-SHA gate, seven digest builds, SBOM/provenance, Trivy, keyless signing and signed manifest"
 }
 
 function Assert-DeployWorkflowTrustChain {
@@ -1261,24 +1343,36 @@ function Assert-DeployWorkflowTrustChain {
     $content = Get-Content -LiteralPath $fullPath -Raw
     $requiredSnippets = @(
         "validate_source:",
+        "verify_release:",
         "actions: read",
+        "packages: read",
         "CI_WORKFLOW: ci.yml",
         "IMAGE_WORKFLOW: docker-images.yml",
         'commit_sha: ${{ steps.source.outputs.commit_sha }}',
+        'image_run_id: ${{ steps.source.outputs.image_run_id }}',
         'ref: ${{ needs.validate_source.outputs.commit_sha }}',
-        'head_sha=${SOURCE_SHA}',
+        'head_sha=${source_sha}',
         'actions/workflows/${CI_WORKFLOW}/runs',
         'actions/workflows/${IMAGE_WORKFLOW}/runs',
-        "workflow_dispatch)",
         '.head_sha == $sha',
         '.conclusion == "success"',
         "ci_success",
-        "image_success",
+        "image_run_id",
         "refs/heads/$TargetBranch",
         "environment: $EnvironmentName",
-        "needs: validate_source",
-        "sha-`${deploy_sha}",
-        "^sha-[0-9a-f]{40}$",
+        "needs: [validate_source, verify_release]",
+        "release-bundle-",
+        'run-id: ${{ needs.validate_source.outputs.image_run_id }}',
+        "verify-release-bundle.sh",
+        "verified/release-images.env",
+        "--release-bundle-dir",
+        ".releases/sets/",
+        ".releases/current",
+        ".releases/previous",
+        "verified/release-manifest",
+        "verified/cosign",
+        "--dry-run",
+        "cosign-installer",
         "^[0-9a-f]{40}$"
     )
     foreach ($snippet in $requiredSnippets) {
@@ -1291,7 +1385,7 @@ function Assert-DeployWorkflowTrustChain {
         foreach ($snippet in @(
             "workflow_run:",
             'WORKFLOW_RUN_ID: ${{ github.event.workflow_run.id }}',
-            'actions/runs/${WORKFLOW_RUN_ID}'
+            'actions/runs/${image_run_id}'
         )) {
             if (-not $content.Contains($snippet)) {
                 throw "deploy workflow $Path is missing workflow_run trust snippet: $snippet"
@@ -1300,8 +1394,8 @@ function Assert-DeployWorkflowTrustChain {
     } else {
         foreach ($snippet in @(
             "push:",
-            'SOURCE_SHA="${GITHUB_SHA}"',
-            "SOURCE_BRANCH=`"$TargetBranch`""
+            'source_sha="${GITHUB_SHA}"',
+            "source_branch=`"$TargetBranch`""
         )) {
             if (-not $content.Contains($snippet)) {
                 throw "deploy workflow $Path is missing protected push trust snippet: $snippet"
@@ -1338,8 +1432,13 @@ function Assert-DeployWorkflowTrustChain {
     if ($content.Contains("deploy_short_sha") -or $content.Contains("git_short") -or $content.Contains("--short=7")) {
         throw "deploy workflow $Path must not use short SHA as release identity"
     }
+    foreach ($forbidden in @("docker manifest inspect", "IMAGE_TAG", "BACKUP_IMAGE_TAG", ":sha-")) {
+        if ($content.Contains($forbidden)) {
+            throw "deploy workflow $Path contains forbidden mutable-tag proof or deployment material: $forbidden"
+        }
+    }
 
-    Write-Host "deploy workflow trust OK: $Path -> $AutomaticEvent/$TargetBranch -> $EnvironmentName -> exact CI/image SHA before secrets"
+    Write-Host "deploy workflow trust OK: $Path -> signed bundle and seven verified digests before $EnvironmentName secrets"
 }
 
 function Assert-RollbackConfig {
@@ -1351,22 +1450,26 @@ function Assert-RollbackConfig {
 
     $content = Get-Content -LiteralPath $composePath -Raw
     $requiredSnippets = @(
-        '${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/api:${IMAGE_TAG:?IMAGE_TAG is required}',
-        '${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/worker:${IMAGE_TAG:?IMAGE_TAG is required}',
-        '${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/provider-webhook:${IMAGE_TAG:?IMAGE_TAG is required}',
-        '${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/provider-balance-bot:${IMAGE_TAG:?IMAGE_TAG is required}',
-        '${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/miniapp:${IMAGE_TAG:?IMAGE_TAG is required}',
-        '${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/migrate:${IMAGE_TAG:?IMAGE_TAG is required}',
-        '${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/backup:${BACKUP_IMAGE_TAG:?BACKUP_IMAGE_TAG is required}'
+        '${API_IMAGE:?API_IMAGE verified digest is required}',
+        '${WORKER_IMAGE:?WORKER_IMAGE verified digest is required}',
+        '${PROVIDER_WEBHOOK_IMAGE:?PROVIDER_WEBHOOK_IMAGE verified digest is required}',
+        '${PROVIDER_BALANCE_BOT_IMAGE:?PROVIDER_BALANCE_BOT_IMAGE verified digest is required}',
+        '${MINIAPP_IMAGE:?MINIAPP_IMAGE verified digest is required}',
+        '${MIGRATE_IMAGE:?MIGRATE_IMAGE verified digest is required}',
+        '${BACKUP_IMAGE:?BACKUP_IMAGE verified digest is required}'
     )
 
     foreach ($snippet in $requiredSnippets) {
         if (-not $content.Contains($snippet)) {
-            throw "production rollback image tag config is missing required snippet: $snippet"
+            throw "production digest-only image config is missing required snippet: $snippet"
         }
     }
 
-    Write-Host "production rollback config OK"
+    if ($content.Contains('IMAGE_TAG') -or $content.Contains('BACKUP_IMAGE_TAG') -or $content.Contains('APP_IMAGE_REGISTRY')) {
+        throw "production Compose must not resolve application images from mutable tags"
+    }
+
+    Write-Host "production digest-only Compose config OK"
 }
 
 function Get-ComposeServiceBlock {
@@ -1436,7 +1539,7 @@ function Assert-ContainerPrivilegeHardening {
     $production = Get-Content -LiteralPath $productionPath -Raw
     $alloy = Get-Content -LiteralPath $alloyPath -Raw
     $socketProxyConfig = Get-Content -LiteralPath $socketProxyConfigPath -Raw
-    $alloyVex = Get-Content -LiteralPath $alloyVexPath -Raw | ConvertFrom-Json -Depth 20
+    $alloyVex = Get-Content -LiteralPath $alloyVexPath -Raw | ConvertFrom-Json
     $backupDockerfile = Get-Content -LiteralPath $backupDockerfilePath -Raw
     $miniappDockerfile = Get-Content -LiteralPath $miniappDockerfilePath -Raw
 

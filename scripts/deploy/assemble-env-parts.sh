@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat >&2 <<'USAGE'
-Usage: assemble-env-parts.sh --target prod|dev --output <path> [--image-tag <tag>] [--ghcr-username <name>] [--ghcr-token <token>]
+Usage: assemble-env-parts.sh --target prod|dev --output <path> [--ghcr-username <name>] [--ghcr-token <token>]
 
 Reads split env parts from GitHub Actions environment variables:
   ENV_COMMON
@@ -12,13 +12,12 @@ Reads split env parts from GitHub Actions environment variables:
   ENV_PAYMENTS_PROD / ENV_PAYMENTS_DEV
 
 The script writes a single runtime .env file and never prints secret values.
-For production, --image-tag pins both IMAGE_TAG and BACKUP_IMAGE_TAG.
+Verified image digests are supplied separately by the signed release bundle.
 USAGE
 }
 
 target=""
 output=""
-image_tag=""
 ghcr_username=""
 ghcr_token=""
 
@@ -30,10 +29,6 @@ while [[ $# -gt 0 ]]; do
       ;;
     --output)
       output="${2:-}"
-      shift 2
-      ;;
-    --image-tag)
-      image_tag="${2:-}"
       shift 2
       ;;
     --ghcr-username)
@@ -86,11 +81,6 @@ if (( ${#missing[@]} > 0 )); then
   exit 1
 fi
 
-if [[ -n "${image_tag}" && ! "${image_tag}" =~ ^[A-Za-z0-9._-]+$ ]]; then
-  echo "Unsafe IMAGE_TAG" >&2
-  exit 1
-fi
-
 if [[ -n "${ghcr_username}" || -n "${ghcr_token}" ]]; then
   if [[ -z "${ghcr_username}" || -z "${ghcr_token}" ]]; then
     echo "GHCR username and token must be provided together" >&2
@@ -118,8 +108,8 @@ append_part() {
     fi
     key="${BASH_REMATCH[1]}"
     case "${key}" in
-      IMAGE_TAG|BACKUP_IMAGE_TAG|GHCR_USERNAME|GHCR_TOKEN)
-        echo "${key} is injected by the deploy workflow and must not be stored in split env secrets" >&2
+      IMAGE_TAG|BACKUP_IMAGE_TAG|API_IMAGE|WORKER_IMAGE|PROVIDER_WEBHOOK_IMAGE|PROVIDER_BALANCE_BOT_IMAGE|MINIAPP_IMAGE|MIGRATE_IMAGE|BACKUP_IMAGE|RELEASE_COMMIT_SHA|RELEASE_MANIFEST_SHA256|RELEASE_WORKFLOW_IDENTITY|GHCR_USERNAME|GHCR_TOKEN)
+        echo "${key} is supplied by the deploy trust chain and must not be stored in split env secrets" >&2
         exit 1
         ;;
     esac
@@ -136,13 +126,6 @@ append_part() {
 for part in "${part_vars[@]}"; do
   append_part "${part}"
 done
-
-if [[ -n "${image_tag}" ]]; then
-  printf 'IMAGE_TAG=%s\n' "${image_tag}" >> "${tmp}"
-  if [[ "${target}" == "prod" ]]; then
-    printf 'BACKUP_IMAGE_TAG=%s\n' "${image_tag}" >> "${tmp}"
-  fi
-fi
 
 if [[ -n "${ghcr_username}" ]]; then
   printf 'GHCR_USERNAME=%s\n' "${ghcr_username}" >> "${tmp}"

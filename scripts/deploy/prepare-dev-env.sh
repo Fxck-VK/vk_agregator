@@ -4,7 +4,7 @@ set -euo pipefail
 usage() {
   cat <<'USAGE'
 Usage:
-  prepare-dev-env.sh --input <raw-env> --output <rendered-env> --image-tag <tag> --ghcr-username <name> --ghcr-token <token>
+  prepare-dev-env.sh --input <raw-env> --output <rendered-env> --ghcr-username <name> --ghcr-token <token>
 
 Builds a sanitized DEV runtime .env from assembled raw env content.
 The script intentionally prints only non-secret readiness flags.
@@ -13,7 +13,6 @@ USAGE
 
 input_file=""
 output_file=""
-image_tag=""
 ghcr_username=""
 ghcr_token=""
 
@@ -25,10 +24,6 @@ while [[ $# -gt 0 ]]; do
       ;;
     --output)
       output_file="${2:-}"
-      shift 2
-      ;;
-    --image-tag)
-      image_tag="${2:-}"
       shift 2
       ;;
     --ghcr-username)
@@ -54,7 +49,6 @@ done
 required_args=()
 [[ -n "${input_file}" ]] || required_args+=(--input)
 [[ -n "${output_file}" ]] || required_args+=(--output)
-[[ -n "${image_tag}" ]] || required_args+=(--image-tag)
 [[ -n "${ghcr_username}" ]] || required_args+=(--ghcr-username)
 [[ -n "${ghcr_token}" ]] || required_args+=(--ghcr-token)
 
@@ -68,9 +62,8 @@ if [[ ! -f "${input_file}" ]]; then
   echo "Input env file does not exist: ${input_file}" >&2
   exit 1
 fi
-
-if [[ ! "${image_tag}" =~ ^[A-Za-z0-9._-]+$ ]]; then
-  echo "Unsafe IMAGE_TAG value" >&2
+if grep -Eq '^(IMAGE_TAG|BACKUP_IMAGE_TAG|API_IMAGE|WORKER_IMAGE|PROVIDER_WEBHOOK_IMAGE|PROVIDER_BALANCE_BOT_IMAGE|MINIAPP_IMAGE|MIGRATE_IMAGE|BACKUP_IMAGE|RELEASE_COMMIT_SHA|RELEASE_MANIFEST_SHA256|RELEASE_WORKFLOW_IDENTITY)=' "${input_file}"; then
+  echo "Image release state must come from the separately verified release env file" >&2
   exit 1
 fi
 
@@ -362,7 +355,6 @@ sed \
   printf '\n'
   printf 'APP_ENV=development\n'
   printf 'APP_ENV_FILE=.env\n'
-  printf 'IMAGE_TAG=%s\n' "${image_tag}"
   printf 'PROVIDER=%s\n' "${provider_tokens[0]}"
   printf 'PROVIDER_CHAIN=%s\n' "${provider_chain}"
   printf 'IMAGE_PROVIDER=\n'

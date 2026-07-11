@@ -104,13 +104,15 @@ Current VPS data contract:
   idempotent daily upserts, and must delete S3/MinIO objects only after
   Postgres marks artifact metadata as expired. Re-running maintenance must be
   safe.
-- Production runtime images are taggable through `IMAGE_TAG`; backup tooling is
-  tagged separately through `BACKUP_IMAGE_TAG`, so a runtime rollback can still
-  take fresh backups before switching app containers.
+- Every release binds the full commit SHA to seven GHCR image digests, BuildKit
+  SPDX SBOM/provenance, CycloneDX SBOM, Trivy policy result and keyless Cosign
+  identity in a signed release manifest. DEV and PROD Compose accept only the
+  verifier-produced `*_IMAGE=ghcr.io/...@sha256:...` set; tags are never integrity
+  proof or deploy input.
 - Rollback policy is backup-first and schema-conservative: runtime rollback may
-  switch stateless containers to a previous image tag, but migration rollback is
-  a separate reviewed operation. Never run schema rollback blindly, especially
-  around billing, payments, referrals or artifacts.
+  switch stateless containers to the previous verified seven-digest set, but
+  migration rollback is a separate reviewed operation. Never run schema rollback
+  blindly, especially around billing, payments, referrals or artifacts.
 
 Production routing must keep process boundaries explicit:
 
@@ -141,19 +143,21 @@ Production delivery pipeline:
 
 ```text
 merge/push to main
-  -> GitHub Actions "Docker Images"
-  -> GHCR images tagged sha-<commit>
-  -> GitHub Actions "Deploy Production"
-  -> VPS docker compose pull/up through scripts/deploy/deploy-prod.*
+  -> exact-commit CI succeeds
+  -> GitHub Actions "Docker Images" builds seven GHCR images by digest
+  -> SBOM/provenance generation, Trivy gate and keyless Cosign signing
+  -> signed release manifest binds the commit, evidence and seven digests
+  -> GitHub Actions "Deploy Production" verifies the bundle and attestations
+  -> VPS docker compose pull/up uses only verifier-produced digest references
   -> scripts/deploy/smoke-prod.*
-  -> scripts/deploy/rollback-prod.* to previous image tag if deploy/smoke fails
+  -> scripts/deploy/rollback-prod.* to the previous verified digest set if deploy/smoke fails
 ```
 
 The deploy pipeline is part of the architecture boundary. Runtime containers are
-stateless and replaceable by image tag; Postgres, Redis and S3/MinIO carry
-state. Automatic rollback is therefore limited to image/runtime rollback and
-must not run schema rollback. Migration rollback requires a separate reviewed
-backup-first operator decision.
+stateless and replaceable by a verified digest set; Postgres, Redis and S3/MinIO
+carry state. Automatic rollback is therefore limited to digest-pinned runtime
+rollback and must not run schema rollback. Migration rollback requires a
+separate reviewed backup-first operator decision.
 
 Production observability runs as a private sidecar stack, not as a public
 surface. `docker-compose.prod.yml` and `docker-compose.observability.yml` share

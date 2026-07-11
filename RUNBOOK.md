@@ -51,11 +51,22 @@ Copy-Item dev.env .env
 .\scripts\dev\stop-dev-stack.ps1
 ```
 
-Production deploy on VPS, when explicitly needed:
+Production bundle dry-run and deploy on VPS, when explicitly needed and after
+checking out the exact release SHA:
 
 ```bash
-bash scripts/deploy/deploy-prod.sh --branch main --env-file .env --with-cloudflare
+release_sha="<full-sha>"
+bundle=".releases/sets/${release_sha}"
+export COSIGN_BIN=".releases/tools/cosign"
+export RELEASE_MANIFEST_BIN=".releases/tools/release-manifest"
+bash scripts/deploy/deploy-prod.sh --branch main --env-file .env \
+  --release-bundle-dir "${bundle}" --skip-pull --with-cloudflare --dry-run
+bash scripts/deploy/deploy-prod.sh --branch main --env-file .env \
+  --release-bundle-dir "${bundle}" --skip-pull --with-cloudflare
 ```
+
+`.releases/current` and `.releases/previous` contain full SHA pointers into
+`.releases/sets/`; every selected bundle is reverified before use.
 
 Production smoke:
 

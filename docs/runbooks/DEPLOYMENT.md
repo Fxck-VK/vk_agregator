@@ -22,22 +22,32 @@ Production flow:
 ```text
 main push/merge
   -> CI workflow succeeds for the exact full commit SHA
-  -> Docker Images workflow builds immutable sha-<full-main-commit> images in GHCR
-  -> Deploy Production workflow connects to VPS
-  -> deploy-prod.sh pulls immutable images
+  -> Docker Images builds seven images and records their immutable GHCR digests
+  -> BuildKit emits SPDX SBOM/provenance; Syft emits CycloneDX (+ npm source SBOM)
+  -> Trivy blocks unresolved HIGH/CRITICAL; Cosign keyless-signs every digest
+  -> a signed release manifest binds commit, digests, SBOMs and provenance
+  -> Deploy Production verifies the exact workflow identity and all attestations
+  -> only then does the production environment job connect to the VPS
+  -> deploy-prod.sh pulls the seven verifier-produced digest references
   -> smoke-prod.sh verifies public/private routes
-  -> rollback-prod.* may restore previous stateless image tag if smoke fails
+  -> rollback-prod.* may restore the previous verified digest set if smoke fails
 ```
 
-Do not build images on the VPS unless explicitly debugging a fallback path.
+Do not build release images on the VPS. Digest-only release deploys reject that
+fallback because a local build has no matching signed release manifest.
 Manual production dispatches in GitHub Actions must be started from the `main`
-branch only. `Deploy Production` deploys the checked-out `main` commit by its
-immutable `sha-<full commit>` GHCR tag and fails before SSH/env upload if the
-whole CI workflow did not succeed for that exact SHA or matching images have not
-already been built successfully by `Docker Images`. Image publication uses
-job-scoped package write permission only after the same-SHA CI gate. The VPS checks
-out that exact commit in detached mode, and both runtime and backup images are
-pinned to the same immutable tag for the rollout.
+branch only. It downloads `release-bundle-<full SHA>` from the exact successful
+`Docker Images` run, verifies its keyless signature and all seven digest
+signatures/attestations before repository secrets or the production environment
+are used. The VPS checks out that exact commit in detached mode. Signed bundles
+are stored under `.releases/sets/<full-sha>/`; `.releases/tools/` contains the
+uploaded Cosign and `release-manifest` verifier binaries. Mode-0600 regular files
+`.releases/current` and `.releases/previous` contain only full SHA pointers into
+`sets/`, never image values or symlinks. Pointer updates use a mode-0600 `.next`
+file followed by an atomic rename. The candidate bundle is reverified during
+deploy and dry-run promotion; the previous bundle is reverified before rollback.
+Only after post-deploy smoke succeeds does promotion move the old `current` SHA
+to `previous` and the candidate SHA to `current`.
 
 ## Required Production Secrets
 
@@ -75,16 +85,47 @@ separate operator check when changing env structure.
 
 ## VPS Deploy Command
 
-Use only when manually operating the VPS:
+Use only when manually operating the VPS. The bundle and verifier tools must
+come from the exact successful `Docker Images`/verification run. Check out the
+same full SHA before passing `--skip-pull`:
 
 ```bash
 cd /opt/vk-ai-aggregator
-bash scripts/deploy/deploy-prod.sh --branch main --env-file .env --with-cloudflare
+release_sha="<full-sha>"
+[[ "${release_sha}" =~ ^[0-9a-f]{40}$ ]] || exit 1
+git checkout --detach "${release_sha}"
+bundle=".releases/sets/${release_sha}"
+export COSIGN_BIN=".releases/tools/cosign"
+export RELEASE_MANIFEST_BIN=".releases/tools/release-manifest"
+bash scripts/deploy/deploy-prod.sh --branch main --env-file .env \
+  --release-bundle-dir "${bundle}" --skip-pull --with-cloudflare --dry-run
+bash scripts/deploy/deploy-prod.sh --branch main --env-file .env \
+  --release-bundle-dir "${bundle}" --skip-pull --with-cloudflare
+```
+
+PowerShell equivalent with approved local verifier binaries:
+
+```powershell
+$releaseSha = "<full-sha>"
+$identity = "https://github.com/Fxck-VK/vk_agregator/.github/workflows/docker-images.yml@refs/heads/main"
+git checkout --detach $releaseSha
+$deploy = @{
+  Branch = "main"; EnvFile = ".env"; SkipPull = $true; WithCloudflare = $true
+  ReleaseBundleDir = ".releases\sets\$releaseSha"; WorkflowIdentity = $identity
+  CosignPath = "C:\tools\cosign.exe"
+  ReleaseManifestPath = "C:\tools\release-manifest.exe"
+}
+.\scripts\deploy\deploy-prod.ps1 @deploy -DryRun
+.\scripts\deploy\deploy-prod.ps1 @deploy
 ```
 
 Expected behavior:
 
 - verifies Docker and env;
+- re-verifies the manifest signature, workflow identity, exact predicates and
+  seven image digests, then checks the manifest commit against the checkout;
+- dry-run validates trust and `docker compose config` without changing runtime
+  state or writing derived release state into the bundle;
 - logs in to GHCR if credentials are present;
 - starts local data services only when `DATA_SERVICES_MODE=local`;
 - waits for Postgres/Redis/MinIO health before migrations;
@@ -164,7 +205,7 @@ docker run --rm --network none --user 0:0 --read-only \
   --entrypoint /bin/chown \
   -v "<project>_backup_data:/backups" \
   -v "<project>_backup_metrics:/backup-metrics" \
-  "${APP_IMAGE_REGISTRY}/backup:${BACKUP_IMAGE_TAG}" \
+  "ghcr.io/fxck-vk/vk_agregator/backup@sha256:<verified-backup-digest>" \
   -R 10001:10001 /backups /backup-metrics
 ```
 

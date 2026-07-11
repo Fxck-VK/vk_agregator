@@ -140,7 +140,6 @@ if is_true_value "$(get_value RESTORE_ALLOW_DESTRUCTIVE false)"; then
   add_problem RESTORE_ALLOW_DESTRUCTIVE "must be false in the persistent deploy env; set it only for a manual restore command"
 fi
 if [[ "${app_env}" == "production" ]] && ! is_true_value "$(get_value MIGRATION_BACKUP_CONFIRMED false)"; then
-  require_value BACKUP_IMAGE_TAG "required for automatic production migration backup"
   require_value BACKUP_DIR "required for automatic production migration backup"
   require_value BACKUP_RETENTION_DAYS "required for automatic production migration backup"
   if [[ "$(get_value BACKUP_POSTGRES_ENABLED true | tr '[:upper:]' '[:lower:]')" == "false" ]]; then
@@ -149,7 +148,6 @@ if [[ "${app_env}" == "production" ]] && ! is_true_value "$(get_value MIGRATION_
 fi
 
 for required in \
-  APP_IMAGE_REGISTRY IMAGE_TAG \
   DATABASE_URL REDIS_ADDR \
   S3_ENDPOINT S3_ACCESS_KEY S3_SECRET_KEY S3_BUCKET \
   VK_ACCESS_TOKEN VK_SECRET VK_CONFIRMATION_TOKEN VK_APP_SECRET ADMIN_TOKEN; do
@@ -171,10 +169,6 @@ if [[ "${s3_mode}" == "local" ]]; then
   require_value MINIO_ROOT_PASSWORD "required when S3_MODE=local"
 fi
 
-image_registry="$(get_value APP_IMAGE_REGISTRY)"
-if [[ "${image_registry}" != ghcr.io/* ]]; then
-  add_problem APP_IMAGE_REGISTRY "must point at the GitHub Container Registry image namespace, for example ghcr.io/fxck-vk/vk_agregator"
-fi
 ghcr_username="$(get_value GHCR_USERNAME)"
 ghcr_token="$(get_value GHCR_TOKEN)"
 if [[ -n "${ghcr_username}${ghcr_token}" ]]; then
@@ -290,7 +284,6 @@ if [[ "${with_cloudflare}" == "true" ]]; then
 fi
 
 if [[ "${backup_before_deploy}" == "true" ]]; then
-  require_value BACKUP_IMAGE_TAG "required when backup-before-deploy is enabled"
   require_value BACKUP_DIR "required when backup-before-deploy is enabled"
   require_value BACKUP_RETENTION_DAYS "required when backup-before-deploy is enabled"
 fi

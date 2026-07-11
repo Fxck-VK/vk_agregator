@@ -50,15 +50,41 @@ Status, smoke and stop:
 
 Pushing `dev-deploy` triggers `CI`, `Docker Images` and `Deploy DEV` for the
 same full commit SHA. `Docker Images` waits for the complete CI workflow to
-succeed before publishing immutable `sha-<full commit>` GHCR images. The
-secret-free `Deploy DEV` validation job waits for both successful CI and all
-matching images before the `development` environment and deploy secrets are
-available. The VPS checks out that exact commit in detached mode, and the deploy
-script runs with `--skip-pull` so branch movement cannot replace validated code.
+succeed before publishing seven GHCR images by digest. It generates SBOM and
+provenance evidence, enforces the Trivy policy, keyless-signs every digest and
+attestation, and publishes a signed release manifest for that commit. The
+secret-free `Deploy DEV` verification job downloads the bundle from the exact
+successful `Docker Images` run and verifies its `dev-deploy` workflow identity,
+signatures, predicates and seven digests before the `development` environment
+and deploy secrets are available. The VPS checks out that exact commit in
+detached mode and Compose receives only the verifier-produced digest references.
+
+On the DEV VPS, bundles live under `.releases/sets/<full-sha>/`, verifier tools
+under `.releases/tools/`, and mode-0600 `current`/`previous` files contain
+full-SHA pointers updated through atomic rename. Deploy runs a trust/Compose
+dry-run before mutation. The
+candidate is reverified again before pointer promotion, and failure rollback
+reverifies the bundle selected through `current` before changing containers.
+
+Manual DEV verification and deploy use the exact checked-out SHA:
+
+```bash
+release_sha="<full-sha>"
+[[ "${release_sha}" =~ ^[0-9a-f]{40}$ ]] || exit 1
+git checkout --detach "${release_sha}"
+export COSIGN_BIN=".releases/tools/cosign"
+export RELEASE_MANIFEST_BIN=".releases/tools/release-manifest"
+bundle=".releases/sets/${release_sha}"
+bash scripts/deploy/deploy-dev.sh --branch dev-deploy --env-file .env \
+  --release-bundle-dir "${bundle}" --skip-pull --with-cloudflare --dry-run
+bash scripts/deploy/deploy-dev.sh --branch dev-deploy --env-file .env \
+  --release-bundle-dir "${bundle}" --skip-pull --with-cloudflare
+```
 
 Manual `Deploy DEV` dispatch is accepted only from `dev-deploy` and only when
-successful CI and immutable images already exist for the dispatch SHA. A manual
-dispatch cannot build, select or deploy a different branch tip.
+successful CI and a signed release bundle already exist for the dispatch SHA.
+A manual dispatch cannot build, select or deploy a different branch tip or a
+mutable image tag.
 
 Required GitHub repository secrets:
 

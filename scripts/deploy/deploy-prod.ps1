@@ -3,7 +3,10 @@ param(
     [string]$Branch = "main",
     [string]$EnvFile = ".env",
     [string]$ProjectName = "vk-ai-aggregator-prod",
-    [string]$ImageTag = "",
+    [Parameter(Mandatory = $true)][string]$ReleaseBundleDir,
+    [Parameter(Mandatory = $true)][string]$WorkflowIdentity,
+    [string]$CosignPath = "cosign",
+    [string]$ReleaseManifestPath = "",
     [switch]$SkipPull,
     [switch]$AllowDirty,
     [switch]$BuildOnVPS,
@@ -14,6 +17,7 @@ param(
     [switch]$PullBaseImages,
     [switch]$NoHealthCheck,
     [switch]$SkipPublicSmoke,
+    [switch]$DryRun,
     [int]$TimeoutSeconds = 180
 )
 
@@ -27,9 +31,24 @@ $healthStatus = "skipped"
 $publicSmokeStatus = "skipped"
 $migrationBackupStatus = "skipped"
 $shouldBuildOnVPS = $BuildOnVPS -and -not $SkipBuild
+if ($shouldBuildOnVPS) {
+    throw "-BuildOnVPS is incompatible with verified digest-only deployment."
+}
 $script:PostgresHelperImage = "postgres:16-alpine@sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777"
 $script:RedisHelperImage = "redis:7-alpine@sha256:6ab0b6e7381779332f97b8ca76193e45b0756f38d4c0dcda72dbb3c32061ab99"
 $script:S3HelperImage = "minio/mc:RELEASE.2025-08-13T08-35-41Z@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727"
+$script:ReleaseEnvironmentNames = @(
+    "API_IMAGE",
+    "WORKER_IMAGE",
+    "PROVIDER_WEBHOOK_IMAGE",
+    "PROVIDER_BALANCE_BOT_IMAGE",
+    "MINIAPP_IMAGE",
+    "MIGRATE_IMAGE",
+    "BACKUP_IMAGE",
+    "RELEASE_COMMIT_SHA",
+    "RELEASE_MANIFEST_SHA256",
+    "RELEASE_WORKFLOW_IDENTITY"
+)
 
 function Invoke-Step {
     param(
@@ -89,7 +108,7 @@ function New-HelperEnvFile {
             [System.IO.FileAccess]::Write,
             [System.IO.FileShare]::None
         ).Dispose()
-        if ($IsWindows) {
+        if ($env:OS -eq "Windows_NT") {
             $acl = Get-Acl -LiteralPath $helperEnvFile
             $acl.SetAccessRuleProtection($true, $false)
             foreach ($rule in @($acl.Access)) {
@@ -364,27 +383,81 @@ if (-not (Test-Path -LiteralPath $EnvFile)) {
     throw "Server env file not found: $EnvFile. Assemble it from split PROD env secrets or create it on the server with real production values."
 }
 
+function Save-ReleaseProcessEnvironment {
+    $saved = @{}
+    foreach ($name in $script:ReleaseEnvironmentNames) {
+        $saved[$name] = [pscustomobject]@{
+            Exists = Test-Path -LiteralPath "Env:$name"
+            Value = [Environment]::GetEnvironmentVariable($name, [EnvironmentVariableTarget]::Process)
+        }
+    }
+    return $saved
+}
+
+function Import-VerifiedReleaseEnvironment {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    $values = @{}
+    foreach ($line in Get-Content -LiteralPath $Path) {
+        if ($line -notmatch '^(?<key>[A-Z][A-Z0-9_]*)=(?<value>.+)$') {
+            throw "Verifier-generated release environment contains an invalid line."
+        }
+        if ($script:ReleaseEnvironmentNames -notcontains $Matches.key -or $values.ContainsKey($Matches.key)) {
+            throw "Verifier-generated release environment contains an unexpected or duplicate key."
+        }
+        $values[$Matches.key] = $Matches.value
+    }
+    if ($values.Count -ne $script:ReleaseEnvironmentNames.Count) {
+        throw "Verifier-generated release environment must contain exactly ten entries."
+    }
+    foreach ($name in $script:ReleaseEnvironmentNames) {
+        if (-not $values.ContainsKey($name)) {
+            throw "Verifier-generated release environment is missing $name."
+        }
+        [Environment]::SetEnvironmentVariable($name, $values[$name], [EnvironmentVariableTarget]::Process)
+    }
+}
+
+function Restore-ReleaseProcessEnvironment {
+    param([Parameter(Mandatory = $true)][hashtable]$Saved)
+
+    foreach ($name in $script:ReleaseEnvironmentNames) {
+        if ($Saved[$name].Exists) {
+            [Environment]::SetEnvironmentVariable($name, $Saved[$name].Value, [EnvironmentVariableTarget]::Process)
+        } else {
+            [Environment]::SetEnvironmentVariable($name, $null, [EnvironmentVariableTarget]::Process)
+        }
+    }
+}
+if (-not (Test-Path -LiteralPath $ReleaseBundleDir -PathType Container)) {
+    throw "-ReleaseBundleDir must reference the signed release bundle."
+}
+
 Invoke-Step "check Docker" {
     Test-DockerRuntime
 }
 
 Invoke-Step "check production env" {
-    $checkArgs = @("-EnvFile", $EnvFile)
+    $checkArgs = @{ EnvFile = $EnvFile }
     if ($WithCloudflare) {
-        $checkArgs += "-WithCloudflare"
+        $checkArgs.WithCloudflare = $true
     }
     if ($BackupBeforeDeploy) {
-        $checkArgs += "-BackupBeforeDeploy"
+        $checkArgs.BackupBeforeDeploy = $true
     }
     & (Join-Path $PSScriptRoot "check-prod-env.ps1") @checkArgs
 }
 
 $statefulServices = @(Get-LocalStatefulServices -Path $EnvFile)
 $providerBalanceBotEnabled = Test-TrueValue -Value (Get-EnvFileValue -Path $EnvFile -Name "PROVIDER_BALANCE_BOT_ENABLED" -Default "false")
+$releaseEnvFile = Join-Path ([IO.Path]::GetTempPath()) ("vk-ai-aggregator-release-{0}.env" -f ([guid]::NewGuid().ToString("N")))
+$savedReleaseEnvironment = Save-ReleaseProcessEnvironment
+$previousAppEnvFile = $env:APP_ENV_FILE
 $script:ComposeArgs = @(
     "compose",
     "--project-name", $ProjectName,
     "--env-file", $EnvFile,
+    "--env-file", $releaseEnvFile,
     "-f", "docker-compose.prod.yml"
 )
 if ($statefulServices.Count -gt 0) {
@@ -404,44 +477,59 @@ function Invoke-DockerCompose {
     }
 }
 
-if (-not $SkipPull) {
-    if (-not $AllowDirty) {
-        $dirty = @(git status --porcelain --untracked-files=no)
-        if ($LASTEXITCODE -ne 0) {
-            throw "git status failed"
-        }
-        if ($dirty.Count -gt 0) {
-            throw "Tracked worktree changes found. Commit/stash them or rerun with -AllowDirty. Changes: $($dirty -join '; ')"
-        }
-    }
-
-    Invoke-Step "git fetch" { git fetch --prune origin }
-    Invoke-Step "git checkout $Branch" { git checkout $Branch }
-    Invoke-Step "git pull --ff-only origin $Branch" { git pull --ff-only origin $Branch }
-}
-
-$previousAppEnvFile = $env:APP_ENV_FILE
-$previousImageTag = $env:IMAGE_TAG
 try {
-    $env:APP_ENV_FILE = $EnvFile
-    if (-not [string]::IsNullOrWhiteSpace($ImageTag)) {
-        $env:IMAGE_TAG = $ImageTag
-        Write-Host "Using IMAGE_TAG=$ImageTag"
+    if (-not $SkipPull -and -not $DryRun) {
+        if (-not $AllowDirty) {
+            $dirty = @(git status --porcelain --untracked-files=no)
+            if ($LASTEXITCODE -ne 0) {
+                throw "git status failed"
+            }
+            if ($dirty.Count -gt 0) {
+                throw "Tracked worktree changes found. Commit/stash them or rerun with -AllowDirty. Changes: $($dirty -join '; ')"
+            }
+        }
+
+        Invoke-Step "git fetch" { git fetch --prune origin }
+        Invoke-Step "git checkout $Branch" { git checkout $Branch }
+        Invoke-Step "git pull --ff-only origin $Branch" { git pull --ff-only origin $Branch }
     }
 
-    Invoke-Step "docker compose config" {
-        Invoke-DockerCompose config | Out-Null
-    }
-
+    $checkedOutCommit = (& git rev-parse HEAD).Trim()
     $ghcrUsername = Get-EnvFileValue -Path $EnvFile -Name "GHCR_USERNAME"
     $ghcrToken = Get-EnvFileValue -Path $EnvFile -Name "GHCR_TOKEN"
     if (-not (Test-EnvPlaceholderValue -Value $ghcrUsername) -and -not (Test-EnvPlaceholderValue -Value $ghcrToken)) {
-        Invoke-Step "docker login ghcr.io" {
+        Invoke-Step "docker login ghcr.io for release verification" {
             $ghcrToken | docker login ghcr.io -u $ghcrUsername --password-stdin | Out-Null
             if ($LASTEXITCODE -ne 0) {
                 throw "docker login ghcr.io failed with exit code $LASTEXITCODE"
             }
         }
+    }
+    Invoke-Step "verify signed release bundle" {
+        $verifyArgs = @{
+            ReleaseBundleDir = $ReleaseBundleDir
+            WorkflowIdentity = $WorkflowIdentity
+            ExpectedCommit = $checkedOutCommit
+            OutputEnvFile = $releaseEnvFile
+            CosignPath = $CosignPath
+        }
+        if (-not [string]::IsNullOrWhiteSpace($ReleaseManifestPath)) {
+            $verifyArgs.ReleaseManifestPath = $ReleaseManifestPath
+        }
+        & (Join-Path $script:RepoRoot "scripts\release\verify-release-bundle.ps1") @verifyArgs
+    }
+    Import-VerifiedReleaseEnvironment -Path $releaseEnvFile
+    $releaseCommit = Get-EnvFileValue -Path $releaseEnvFile -Name "RELEASE_COMMIT_SHA"
+
+    $env:APP_ENV_FILE = $EnvFile
+    Write-Host "Using verified release commit $releaseCommit"
+
+    Invoke-Step "docker compose config" {
+        Invoke-DockerCompose config | Out-Null
+    }
+    if ($DryRun) {
+        Write-Host "Production deploy dry-run completed after signed bundle verification and docker compose config."
+        return
     }
 
     $imagePullServices = @($statefulServices + @("reverse-proxy"))
@@ -476,6 +564,7 @@ try {
             "compose",
             "--project-name", $ProjectName,
             "--env-file", $EnvFile,
+            "--env-file", $releaseEnvFile,
             "-f", "docker-compose.prod.yml"
         )
         if ($statefulServices.Count -gt 0) {
@@ -531,6 +620,7 @@ try {
                     "compose",
                     "--project-name", $ProjectName,
                     "--env-file", $EnvFile,
+                    "--env-file", $releaseEnvFile,
                     "-f", "docker-compose.prod.yml"
                 )
                 if ($statefulServices.Count -gt 0) {
@@ -638,6 +728,8 @@ try {
     Write-Host "Commit: $commit"
     Write-Host "Project: $ProjectName"
     Write-Host "Env file: $EnvFile"
+    Write-Host "Verified release bundle: $ReleaseBundleDir"
+    Write-Host "Release commit: $releaseCommit"
     Write-Host "Runtime services: $($runtimeServices -join ', ')"
     $migrationsStatus = if ($SkipMigrate) { "skipped" } else { "applied" }
     $buildStatus = if ($shouldBuildOnVPS) { "completed on VPS" } else { "skipped; pulled registry images" }
@@ -651,14 +743,11 @@ try {
     Write-Host "Cloudflare tunnel profile: $cloudflareStatus"
     Write-Host "Provider balance bot: $providerBalanceBotEnabled"
 } finally {
+    Restore-ReleaseProcessEnvironment -Saved $savedReleaseEnvironment
+    Remove-Item -LiteralPath $releaseEnvFile -Force -ErrorAction SilentlyContinue
     if ($null -eq $previousAppEnvFile) {
         Remove-Item Env:\APP_ENV_FILE -ErrorAction SilentlyContinue
     } else {
         $env:APP_ENV_FILE = $previousAppEnvFile
-    }
-    if ($null -eq $previousImageTag) {
-        Remove-Item Env:\IMAGE_TAG -ErrorAction SilentlyContinue
-    } else {
-        $env:IMAGE_TAG = $previousImageTag
     }
 }

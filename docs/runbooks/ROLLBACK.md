@@ -6,19 +6,22 @@ Rollback should restore service without pretending schema rollback is safe.
 
 - Take backup before risky production migration/deploy.
 - Do not run down migrations blindly in production.
-- Roll back stateless runtime containers by image tag.
+- Roll back stateless runtime containers only by a previous verified digest set.
 - Treat database restore as a separate explicit operation.
 - Keep rollback logs secret-free.
 
 ## Automatic Rollback
 
-Production deploy can rollback stateless services to the previous image tag if
-deploy or smoke fails.
+If candidate deploy or smoke fails before promotion, `.releases/current` still
+points to the previously promoted SHA. The workflow resolves
+`.releases/sets/<current-sha>/`, re-verifies its manifest, identity, predicates
+and seven digests, then rolls stateless services back. It never trusts a stored
+env file as release proof.
 
 Expected behavior:
 
 ```text
-deploy -> smoke fails -> rollback to previous image tag -> smoke rollback result
+deploy candidate -> smoke fails -> validate previous digest set -> rollback -> smoke result
 ```
 
 Workflow may still be red after successful rollback. That is correct: the new
@@ -30,13 +33,49 @@ On VPS:
 
 ```bash
 cd /opt/vk-ai-aggregator
-bash scripts/deploy/rollback-prod.sh --env-file .env --image-tag sha-<previous>
+previous_sha="$(tr -d '\r\n' < .releases/previous)"
+[[ "${previous_sha}" =~ ^[0-9a-f]{40}$ ]] || exit 1
+bundle=".releases/sets/${previous_sha}"
+export COSIGN_BIN=".releases/tools/cosign"
+export RELEASE_MANIFEST_BIN=".releases/tools/release-manifest"
+bash scripts/deploy/rollback-prod.sh --env-file .env \
+  --release-bundle-dir "${bundle}" --with-cloudflare --dry-run
+bash scripts/deploy/rollback-prod.sh --env-file .env \
+  --release-bundle-dir "${bundle}" --with-cloudflare
 ```
 
-PowerShell equivalent:
+PowerShell equivalent with approved local verifier binaries:
 
 ```powershell
-.\scripts\deploy\rollback-prod.ps1 -EnvFile .env -ImageTag sha-<previous>
+$previousSha = (Get-Content .releases\previous -Raw).Trim()
+if ($previousSha -notmatch '^[0-9a-f]{40}$') { throw "Invalid previous release pointer" }
+$identity = "https://github.com/Fxck-VK/vk_agregator/.github/workflows/docker-images.yml@refs/heads/main"
+$rollback = @{
+  EnvFile = ".env"; WithCloudflare = $true
+  ReleaseBundleDir = ".releases\sets\$previousSha"; WorkflowIdentity = $identity
+  CosignPath = "C:\tools\cosign.exe"
+  ReleaseManifestPath = "C:\tools\release-manifest.exe"
+}
+.\scripts\deploy\rollback-prod.ps1 @rollback -DryRun
+.\scripts\deploy\rollback-prod.ps1 @rollback
+```
+
+Both dry-run and real rollback reverify the signed bundle. After manual rollback
+and successful smoke, preserve the failed SHA and update each pointer through a
+mode-0600 `.next` file plus rename; never edit a pointer in place or point it
+outside `sets/`:
+
+```bash
+rolled_back_sha="$(tr -d '\r\n' < .releases/previous)"
+failed_sha="$(tr -d '\r\n' < .releases/current)"
+[[ "${rolled_back_sha}" =~ ^[0-9a-f]{40}$ ]] || exit 1
+[[ "${failed_sha}" =~ ^[0-9a-f]{40}$ ]] || exit 1
+printf '%s\n' "${rolled_back_sha}" > .releases/current.next
+chmod 600 .releases/current.next
+mv -f .releases/current.next .releases/current
+printf '%s\n' "${failed_sha}" > .releases/previous.next
+chmod 600 .releases/previous.next
+mv -f .releases/previous.next .releases/previous
 ```
 
 ## Backups

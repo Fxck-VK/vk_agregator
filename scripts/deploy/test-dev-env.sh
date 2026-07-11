@@ -82,7 +82,6 @@ run_valid_case() {
     bash "${prepare_script}" \
       --input "${raw}" \
       --output "${rendered}" \
-      --image-tag sha-test123 \
       --ghcr-username test-ghcr-user \
       --ghcr-token ghcr-token-placeholder
     bash "${check_script}" --env-file "${rendered}"

@@ -7,7 +7,7 @@ Use this when production or DEV behavior is broken.
 1. Identify environment: production, DEV, local or loadtest.
 2. Do not paste secrets, tokens, raw prompts, provider payloads, private URLs or
    PII into chat/logs.
-3. Check latest deploy and image tag.
+3. Check the latest signed release commit, manifest hash and deployed digest set.
 4. Run environment-specific smoke.
 5. Check logs only with sanitized excerpts.
 
@@ -34,7 +34,7 @@ DEV smoke:
 | Provider unavailable | provider health metrics, circuit breaker state, credentials, quota |
 | Balance wrong | ledger entries, payment intent state, reservation/capture/release |
 | Admin exposed | reverse proxy route, Cloudflare Access/VPN, smoke blocked URLs |
-| Deploy failed | GitHub Actions summary, image tag, smoke failure, rollback result |
+| Deploy failed | GitHub Actions summary, signed release commit/digests, smoke failure, rollback result |
 
 ## Logs
 

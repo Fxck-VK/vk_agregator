@@ -93,9 +93,9 @@ Source order: system/developer instructions > current task > root `AGENTS.md` > 
 
 ## Deployment Invariants
 
-- `main` is deployed through GitHub Actions only: `Docker Images` must build immutable `sha-<commit>` images before `deploy-prod` rolls the VPS forward.
-- Production deploy pulls images from GHCR and runs `scripts/deploy/deploy-prod.*`; building on the VPS is an explicit fallback, not the default path.
-- Post-deploy smoke is mandatory. If deploy or smoke fails, rollback may switch stateless runtime containers to the previous image tag, but schema rollback is never automatic.
+- `main` is deployed through GitHub Actions only: `Docker Images` must bind the full commit SHA to seven GHCR image digests, SBOM/provenance evidence and the Trivy result in a keyless Cosign-signed release manifest before `deploy-prod` rolls the VPS forward.
+- Production deploy verifies the release manifest, workflow identity, signatures and attestations, then pulls only the verifier-produced digest references through `scripts/deploy/deploy-prod.*`; building release images on the VPS is not allowed.
+- Post-deploy smoke is mandatory. If deploy or smoke fails, rollback may switch stateless runtime containers only to the previous verified digest set, but schema rollback is never automatic.
 - Deployment secrets live in GitHub Repository Secrets and the VPS `.env` only. Do not commit `PROD_ENV_FILE`, GHCR tokens, Cloudflare tunnel tokens, SSH keys or Telegram notification credentials.
 
 ## Context And Logs
