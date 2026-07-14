@@ -37,10 +37,35 @@ var sensitiveURLPattern = regexp.MustCompile(`(?i)(https?|mock)://[^\s"'<>]+|dat
 
 var errRemoteArtifactTooLarge = errors.New("artifactservice: remote artifact too large")
 
+// ContentScanError marks scanner rejections as non-retryable provider content
+// failures for callers that need billing-safe delivery decisions.
+type ContentScanError struct {
+	Err error
+}
+
+func (e ContentScanError) Error() string {
+	if e.Err == nil {
+		return "artifactservice: content scan rejected"
+	}
+	return "artifactservice: content scan rejected: " + e.Err.Error()
+}
+
+func (e ContentScanError) Unwrap() error {
+	return e.Err
+}
+
+func (e ContentScanError) ProviderErrorClass() domain.ProviderErrorClass {
+	return domain.ProviderErrContentRejected
+}
+
 // ObjectStore is the minimal blob storage contract the service needs. It is
 // satisfied by the S3/MinIO adapter and by in-memory test doubles.
 type ObjectStore interface {
 	Put(ctx context.Context, bucket, key string, data []byte, contentType string) error
+}
+
+type objectReader interface {
+	GetObject(ctx context.Context, bucket, key string) ([]byte, error)
 }
 
 // Downloader fetches remote content. It is abstracted so remote downloads can
@@ -100,6 +125,23 @@ func WithScanner(sc Scanner) Option {
 	return func(s *Service) { s.scanner = sc }
 }
 
+// EnsureArtifactScanned re-checks the stored bytes before a persisted output
+// artifact is reused by a retry or recovery path. Local/test wiring without a
+// scanner remains a no-op; production configuration requires a scanner.
+func (s *Service) EnsureArtifactScanned(ctx context.Context, artifactID uuid.UUID) error {
+	if s.scanner == nil {
+		return nil
+	}
+	artifact, err := s.repo.GetByID(ctx, artifactID)
+	if err != nil {
+		return fmt.Errorf("artifactservice: load artifact for rescan: %w", err)
+	}
+	if artifact.Status != domain.ArtifactStatusReady {
+		return fmt.Errorf("artifactservice: artifact is not ready for reuse")
+	}
+	return s.scanStoredObject(ctx, artifact.MediaType, artifact.MimeType, artifact.StorageBucket, artifact.StorageKey)
+}
+
 // New builds an artifact Service that stores bytes in the given bucket.
 func New(repo domain.ArtifactRepository, store ObjectStore, bucket string, opts ...Option) *Service {
 	s := &Service{
@@ -156,6 +198,9 @@ func (s *Service) SaveVariantWithMetadata(ctx context.Context, artifact *domain.
 		return nil, fmt.Errorf("artifactservice: variant parent missing")
 	}
 	if existing, err := s.findVariant(ctx, artifact.ID, variantType); err == nil {
+		if err := s.scanStoredObject(ctx, artifact.MediaType, existing.MimeType, existing.StorageBucket, existing.StorageKey); err != nil {
+			return nil, err
+		}
 		return existing, nil
 	} else if !errors.Is(err, domain.ErrNotFound) {
 		return nil, err
@@ -163,7 +208,7 @@ func (s *Service) SaveVariantWithMetadata(ctx context.Context, artifact *domain.
 
 	if s.scanner != nil {
 		if err := s.scanner.Scan(ctx, artifact.MediaType, mimeType, data); err != nil {
-			return nil, fmt.Errorf("artifactservice: content scan rejected: %w", err)
+			return nil, ContentScanError{Err: err}
 		}
 	}
 
@@ -191,11 +236,36 @@ func (s *Service) SaveVariantWithMetadata(ctx context.Context, artifact *domain.
 	variant.ApplyMediaMetadata(metadata)
 	if err := s.repo.AddVariant(ctx, variant); err != nil {
 		if errors.Is(err, domain.ErrConflict) {
-			return s.findVariant(ctx, artifact.ID, variantType)
+			existing, findErr := s.findVariant(ctx, artifact.ID, variantType)
+			if findErr != nil {
+				return nil, findErr
+			}
+			if scanErr := s.scanStoredObject(ctx, artifact.MediaType, existing.MimeType, existing.StorageBucket, existing.StorageKey); scanErr != nil {
+				return nil, scanErr
+			}
+			return existing, nil
 		}
 		return nil, fmt.Errorf("artifactservice: record variant: %w", err)
 	}
 	return variant, nil
+}
+
+func (s *Service) scanStoredObject(ctx context.Context, mediaType domain.MediaType, mimeType, bucket, key string) error {
+	if s.scanner == nil {
+		return nil
+	}
+	reader, ok := s.store.(objectReader)
+	if !ok {
+		return fmt.Errorf("artifactservice: object store cannot read bytes for rescan")
+	}
+	data, err := reader.GetObject(ctx, bucket, key)
+	if err != nil {
+		return fmt.Errorf("artifactservice: read stored bytes for rescan: %w", err)
+	}
+	if err := s.scanner.Scan(ctx, mediaType, mimeType, data); err != nil {
+		return ContentScanError{Err: err}
+	}
+	return nil
 }
 
 func (s *Service) findVariant(ctx context.Context, artifactID uuid.UUID, variantType domain.VariantType) (*domain.ArtifactVariant, error) {
@@ -302,8 +372,9 @@ func (s *Service) saveBytes(ctx context.Context, userID, accountID uuid.UUID, jo
 	// Scan new content before it is persisted or delivered (audit ST1).
 	if s.scanner != nil {
 		if err := s.scanner.Scan(ctx, mediaType, mimeType, data); err != nil {
-			tracing.RecordError(span, err)
-			return nil, fmt.Errorf("artifactservice: content scan rejected: %w", err)
+			scanErr := ContentScanError{Err: err}
+			tracing.RecordError(span, scanErr)
+			return nil, scanErr
 		}
 	}
 
@@ -379,15 +450,44 @@ type httpDownloader struct {
 	client       *http.Client
 	allowedHosts map[string]struct{}
 	blockPrivate bool
+	resolver     ipResolver
+	dialContext  dialContextFunc
 }
+
+type ipResolver interface {
+	LookupIPAddr(ctx context.Context, host string) ([]net.IPAddr, error)
+}
+
+type defaultIPResolver struct{}
+
+func (defaultIPResolver) LookupIPAddr(ctx context.Context, host string) ([]net.IPAddr, error) {
+	if ip := net.ParseIP(host); ip != nil {
+		return []net.IPAddr{{IP: ip}}, nil
+	}
+	return net.DefaultResolver.LookupIPAddr(ctx, host)
+}
+
+type dialContextFunc func(ctx context.Context, network, address string) (net.Conn, error)
 
 // newHTTPDownloader builds the default SSRF-hardened downloader.
 func newHTTPDownloader() *httpDownloader {
-	d := &httpDownloader{blockPrivate: true}
+	baseDialer := &net.Dialer{
+		Timeout:   30 * time.Second,
+		KeepAlive: 30 * time.Second,
+	}
+	d := &httpDownloader{
+		blockPrivate: true,
+		resolver:     defaultIPResolver{},
+		dialContext:  baseDialer.DialContext,
+	}
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.Proxy = nil
+	transport.DialContext = d.dialPublicContext
 	d.client = &http.Client{
-		Timeout: 60 * time.Second,
+		Timeout:   60 * time.Second,
+		Transport: transport,
 		CheckRedirect: func(req *http.Request, _ []*http.Request) error {
-			return d.guard(req.URL)
+			return d.guard(req.Context(), req.URL)
 		},
 	}
 	return d
@@ -407,12 +507,64 @@ func (d *httpDownloader) setAllowedHosts(hosts []string) {
 	d.allowedHosts = m
 }
 
+func (d *httpDownloader) dialPublicContext(ctx context.Context, network, address string) (net.Conn, error) {
+	host, port, err := net.SplitHostPort(address)
+	if err != nil {
+		return nil, fmt.Errorf("artifactservice: parse dial address %q: %w", address, err)
+	}
+	if err := d.guardHost(host); err != nil {
+		return nil, err
+	}
+	if !d.blockPrivate {
+		return d.dial(ctx, network, address)
+	}
+	ips, err := d.publicIPs(ctx, host)
+	if err != nil {
+		return nil, err
+	}
+	var lastErr error
+	for _, ip := range ips {
+		if !networkAllowsIP(network, ip) {
+			continue
+		}
+		conn, err := d.dial(ctx, network, net.JoinHostPort(ip.String(), port))
+		if err == nil {
+			return conn, nil
+		}
+		lastErr = err
+	}
+	if lastErr != nil {
+		return nil, fmt.Errorf("artifactservice: dial public address for %q: %w", host, lastErr)
+	}
+	return nil, fmt.Errorf("artifactservice: no public address for %q matches network %q", host, network)
+}
+
+func (d *httpDownloader) dial(ctx context.Context, network, address string) (net.Conn, error) {
+	if d.dialContext != nil {
+		return d.dialContext(ctx, network, address)
+	}
+	var dialer net.Dialer
+	return dialer.DialContext(ctx, network, address)
+}
+
 // guard validates a URL against the SSRF policy.
-func (d *httpDownloader) guard(u *url.URL) error {
+func (d *httpDownloader) guard(ctx context.Context, u *url.URL) error {
 	if u.Scheme != "http" && u.Scheme != "https" {
 		return fmt.Errorf("artifactservice: blocked url scheme %q", u.Scheme)
 	}
 	host := strings.ToLower(u.Hostname())
+	if err := d.guardHost(host); err != nil {
+		return err
+	}
+	if !d.blockPrivate {
+		return nil
+	}
+	_, err := d.publicIPs(ctx, host)
+	return err
+}
+
+func (d *httpDownloader) guardHost(host string) error {
+	host = strings.ToLower(host)
 	if host == "" {
 		return fmt.Errorf("artifactservice: missing host")
 	}
@@ -421,19 +573,43 @@ func (d *httpDownloader) guard(u *url.URL) error {
 			return fmt.Errorf("artifactservice: host %q not in egress allowlist", host)
 		}
 	}
-	if !d.blockPrivate {
-		return nil
-	}
-	ips, err := net.LookupIP(host)
-	if err != nil {
-		return fmt.Errorf("artifactservice: resolve %q: %w", host, err)
-	}
-	for _, ip := range ips {
-		if isBlockedIP(ip) {
-			return fmt.Errorf("artifactservice: blocked non-public address %s", ip)
-		}
-	}
 	return nil
+}
+
+func (d *httpDownloader) publicIPs(ctx context.Context, host string) ([]net.IP, error) {
+	resolver := d.resolver
+	if resolver == nil {
+		resolver = defaultIPResolver{}
+	}
+	addrs, err := resolver.LookupIPAddr(ctx, host)
+	if err != nil {
+		return nil, fmt.Errorf("artifactservice: resolve %q: %w", host, err)
+	}
+	ips := make([]net.IP, 0, len(addrs))
+	for _, addr := range addrs {
+		if addr.IP == nil {
+			continue
+		}
+		if isBlockedIP(addr.IP) {
+			return nil, fmt.Errorf("artifactservice: blocked non-public address %s", addr.IP)
+		}
+		ips = append(ips, addr.IP)
+	}
+	if len(ips) == 0 {
+		return nil, fmt.Errorf("artifactservice: resolve %q: no ip addresses", host)
+	}
+	return ips, nil
+}
+
+func networkAllowsIP(network string, ip net.IP) bool {
+	switch network {
+	case "tcp4":
+		return ip.To4() != nil
+	case "tcp6":
+		return ip.To4() == nil
+	default:
+		return true
+	}
 }
 
 // isBlockedIP reports whether an IP is in a range that must not be reached from
@@ -459,7 +635,7 @@ func (d *httpDownloader) Download(ctx context.Context, rawURL string) ([]byte, s
 	if u.Scheme == "data" {
 		return decodeDataURL(rawURL)
 	}
-	if err := d.guard(u); err != nil {
+	if err := d.guard(ctx, u); err != nil {
 		return nil, "", err
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)

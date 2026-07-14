@@ -270,8 +270,8 @@ $artifactScanner = (Get-Value -Values $envValues -Name "ARTIFACT_SCANNER" -Defau
 if ($moderationProvider -eq "openai" -or $artifactScanner -eq "openai" -or $usesOpenAI) {
     Require-Value -Values $envValues -Problems $problems -Name "OPENAI_API_KEY" -Reason "required when OpenAI provider/moderation/scanner is configured"
 }
-if ($appEnv -eq "production" -and ($artifactScanner -eq "" -or $artifactScanner -eq "none") -and -not (Is-TrueValue (Get-Value -Values $envValues -Name "ALLOW_UNSCANNED_ARTIFACTS_IN_PRODUCTION"))) {
-    Add-Problem -Problems $problems -Name "ARTIFACT_SCANNER" -Reason "must be openai in production unless ALLOW_UNSCANNED_ARTIFACTS_IN_PRODUCTION=true"
+if ($appEnv -eq "production" -and ($artifactScanner -eq "" -or $artifactScanner -eq "none")) {
+    Add-Problem -Problems $problems -Name "ARTIFACT_SCANNER" -Reason "must be openai in production"
 } elseif ($artifactScanner -eq "" -or $artifactScanner -eq "none") {
 } elseif ($artifactScanner -ne "openai") {
     Add-Problem -Problems $problems -Name "ARTIFACT_SCANNER" -Reason "must be none or openai"

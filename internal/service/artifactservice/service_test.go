@@ -28,6 +28,16 @@ func (d stubDownloader) Download(_ context.Context, _ string) ([]byte, string, e
 	return d.data, d.contentType, d.err
 }
 
+type recordingScanner struct {
+	err      error
+	payloads [][]byte
+}
+
+func (s *recordingScanner) Scan(_ context.Context, _ domain.MediaType, _ string, data []byte) error {
+	s.payloads = append(s.payloads, append([]byte(nil), data...))
+	return s.err
+}
+
 func TestSaveTextArtifact(t *testing.T) {
 	repo := memory.NewArtifactRepo()
 	store := memory.NewObjectStore()
@@ -265,19 +275,53 @@ func TestSaveVariantWithMetadataIsIdempotent(t *testing.T) {
 	}
 }
 
-func TestSaveBytesArtifactVideoWithOpenAIScanner(t *testing.T) {
+func TestSaveVariantWithMetadataRescansStoredVariantBeforeReuse(t *testing.T) {
+	repo := memory.NewArtifactRepo()
+	store := memory.NewObjectStore()
+	ctx := context.Background()
+	owner := uuid.New()
+	unscanned := artifactservice.New(repo, store, testBucket)
+
+	parent, err := unscanned.SaveBytesArtifact(ctx, owner, nil, domain.ArtifactKindOutput, domain.MediaTypeVideo, "video/webm", []byte("raw-provider-video"))
+	if err != nil {
+		t.Fatalf("save parent: %v", err)
+	}
+	if _, err := unscanned.SaveVariantWithMetadata(ctx, parent, domain.VariantVKVideo, "video/mp4", []byte("stored-unscanned-variant"), domain.ArtifactMediaMetadata{}); err != nil {
+		t.Fatalf("seed variant: %v", err)
+	}
+
+	scanner := &recordingScanner{err: errors.New("stored variant rejected")}
+	guarded := artifactservice.New(repo, store, testBucket, artifactservice.WithScanner(scanner))
+	_, err = guarded.SaveVariantWithMetadata(ctx, parent, domain.VariantVKVideo, "video/mp4", []byte("different-retry-bytes"), domain.ArtifactMediaMetadata{})
+	if err == nil {
+		t.Fatal("expected stored variant to be rescanned before reuse")
+	}
+	var scanErr artifactservice.ContentScanError
+	if !errors.As(err, &scanErr) {
+		t.Fatalf("expected content scan error, got %T: %v", err, err)
+	}
+	if len(scanner.payloads) != 1 || string(scanner.payloads[0]) != "stored-unscanned-variant" {
+		t.Fatalf("scanner payloads = %q, want stored variant bytes", scanner.payloads)
+	}
+}
+
+func TestSaveBytesArtifactVideoWithOpenAIScannerFailsClosed(t *testing.T) {
 	repo := memory.NewArtifactRepo()
 	store := memory.NewObjectStore()
 	scanner := openai.NewModerator(openai.ModerationConfig{APIKey: "test-key"})
 	svc := artifactservice.New(repo, store, testBucket, artifactservice.WithScanner(scanner))
 	owner := uuid.New()
 
-	art, err := svc.SaveBytesArtifact(context.Background(), owner, nil, domain.ArtifactKindOutput, domain.MediaTypeVideo, "video/mp4", []byte("video-bytes"))
-	if err != nil {
-		t.Fatalf("save: %v", err)
+	_, err := svc.SaveBytesArtifact(context.Background(), owner, nil, domain.ArtifactKindOutput, domain.MediaTypeVideo, "video/mp4", []byte("video-bytes"))
+	if err == nil {
+		t.Fatal("expected unsupported OpenAI video artifact scan to fail closed")
 	}
-	if art.MediaType != domain.MediaTypeVideo || art.Status != domain.ArtifactStatusReady {
-		t.Fatalf("unexpected artifact: %+v", art)
+	var scanErr artifactservice.ContentScanError
+	if !errors.As(err, &scanErr) {
+		t.Fatalf("expected content scan error, got %T: %v", err, err)
+	}
+	if store.Len() != 0 {
+		t.Fatalf("rejected artifact must not be stored, got %d objects", store.Len())
 	}
 }
 
