@@ -40,6 +40,9 @@ export function ProvidersScreen({ adminTokenSet, client }: OperatorScreenProps) 
     return <LoadingPanel loading={state.loading} title="Loading provider control room" />;
   }
 
+  const providers = Array.isArray(state.data.providers) ? state.data.providers : [];
+  const videoRoutes = Array.isArray(state.data.video_routes) ? state.data.video_routes : [];
+
   return (
     <div className="ops-stack">
       <section className="surface queue-panel" aria-label="Provider risk summary">
@@ -78,22 +81,22 @@ export function ProvidersScreen({ adminTokenSet, client }: OperatorScreenProps) 
         <div className="section-heading">
           <div>
             <p className="eyebrow">Curated classes</p>
-            <h3>{`${state.data.providers.length} provider classes`}</h3>
+            <h3>{`${providers.length} provider classes`}</h3>
           </div>
           <span>read-only</span>
         </div>
-        <ProviderHealthTable items={state.data.providers} />
+        <ProviderHealthTable items={providers} />
       </section>
 
       <section className="surface jobs-list" aria-label="Video route state">
         <div className="section-heading">
           <div>
             <p className="eyebrow">Video routes</p>
-            <h3>{`${state.data.video_routes.length} route aliases`}</h3>
+            <h3>{`${videoRoutes.length} route aliases`}</h3>
           </div>
           <span>model ids omitted</span>
         </div>
-        <VideoRouteTable items={state.data.video_routes} />
+        <VideoRouteTable items={videoRoutes} />
       </section>
 
       <NotesPanel notes={state.data.notes} />

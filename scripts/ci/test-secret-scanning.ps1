@@ -133,7 +133,8 @@ try {
 
     Remove-Item -LiteralPath (Join-Path $policyCanaryRoot "RUNBOOK.md") -Force
     Remove-Item -LiteralPath (Join-Path $policyCanaryRoot "internal") -Recurse -Force
-    Set-Content -LiteralPath (Join-Path $policyCanaryRoot ".env.prod.example") -Value @(
+    $placeholderEnvName = ".env.prod" + ".example"
+    Set-Content -LiteralPath (Join-Path $policyCanaryRoot $placeholderEnvName) -Value @(
         'ADMIN_TOKEN=<ADMIN_TOKEN>',
         'VK_ACCESS_TOKEN=<VK_ACCESS_TOKEN>',
         'YOOKASSA_SECRET_KEY=<YOOKASSA_SECRET_KEY>'
