@@ -199,8 +199,20 @@ jobs:
         run: |
           set -euo pipefail
           image_digest_ref="${IMAGE_REF}@${IMAGE_DIGEST}"
-          sbom="$(docker buildx imagetools inspect "${image_digest_ref}" --format '{{ json (index .SBOM "linux/amd64").SPDX }}')"
-          provenance="$(docker buildx imagetools inspect "${image_digest_ref}" --format '{{ json (index .Provenance "linux/amd64").SLSA }}')"
+          sbom="$(docker buildx imagetools inspect "${image_digest_ref}" --format '{{ json .SBOM.SPDX }}')"
+          provenance="$(docker buildx imagetools inspect "${image_digest_ref}" --format '{{ json .Provenance.SLSA }}')"
 
-          jq -e 'type == "object" and (.spdxVersion | startswith("SPDX-")) and ((.packages // []) | length > 0)' <<<"${sbom}" >/dev/null
-          jq -e 'type == "object" and (.buildType | type == "string") and (.builder.id | type == "string")' <<<"${provenance}" >/dev/null
+          if ! jq -e 'type == "object" and (.spdxVersion | startswith("SPDX-")) and ((.packages // []) | length > 0)' <<<"${sbom}" >/dev/null; then
+            echo "SBOM assertion failed: expected nonempty SPDX package inventory." >&2
+            exit 1
+          fi
+          if ! jq -e '
+            def nonempty_string: type == "string" and length > 0;
+            type == "object" and (
+              ((.buildType | nonempty_string) and (.builder.id | nonempty_string)) or
+              ((.buildDefinition.buildType | nonempty_string) and (.runDetails.builder.id | nonempty_string))
+            )
+          ' <<<"${provenance}" >/dev/null; then
+            echo "Provenance assertion failed: expected nonempty SLSA v0.2 or v1 builder metadata." >&2
+            exit 1
+          fi
