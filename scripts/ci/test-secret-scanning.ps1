@@ -241,3 +241,7 @@ finally {
         }
     }
 }
+
+# Expected scanner detections use exit code 1; do not leak that native status
+# as this policy test's final process exit code after every assertion passed.
+$global:LASTEXITCODE = 0

@@ -12,6 +12,8 @@ $deployDevPath = Join-Path $repoRoot ".github\workflows\deploy-dev.yml"
 $dependabotPath = Join-Path $repoRoot ".github\dependabot.yml"
 $codeownersPath = Join-Path $repoRoot ".github\CODEOWNERS"
 $releaseVerifierTestPath = Join-Path $repoRoot "scripts\deploy\test-verify-release-images.sh"
+$cosignInstallerPath = Join-Path $repoRoot "scripts\ci\install-cosign.sh"
+$trivyInstallerPath = Join-Path $repoRoot "scripts\ci\install-trivy.sh"
 
 $expectedDockerfiles = @(
     "Dockerfile.api",
@@ -76,7 +78,7 @@ foreach ($path in @($nightlyPath, $dockerImagesPath)) {
     }
 }
 
-foreach ($path in @($deployProdPath, $deployDevPath, $dependabotPath, $codeownersPath, $releaseVerifierTestPath)) {
+foreach ($path in @($deployProdPath, $deployDevPath, $dependabotPath, $codeownersPath, $releaseVerifierTestPath, $cosignInstallerPath, $trivyInstallerPath)) {
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
         throw "required supply-chain policy file is missing: $path"
     }
@@ -88,6 +90,8 @@ $deployProd = Get-Content -LiteralPath $deployProdPath -Raw
 $deployDev = Get-Content -LiteralPath $deployDevPath -Raw
 $dependabot = Get-Content -LiteralPath $dependabotPath -Raw
 $codeowners = Get-Content -LiteralPath $codeownersPath -Raw
+$cosignInstaller = Get-Content -LiteralPath $cosignInstallerPath -Raw
+$trivyInstaller = Get-Content -LiteralPath $trivyInstallerPath -Raw
 
 $workflowFiles = Get-ChildItem -LiteralPath (Join-Path $repoRoot ".github\workflows") -Filter "*.yml" -File
 foreach ($workflowFile in $workflowFiles) {
@@ -110,10 +114,15 @@ Assert-Contains $nightly 'path: web/admin' 'Nightly Quality frontend matrix'
 Assert-Contains $nightly 'npm --prefix "${{ matrix.path }}" audit --audit-level=moderate' 'Nightly Quality'
 Assert-Contains $nightly 'trivy-filesystem:' 'Nightly Quality'
 Assert-Contains $nightly 'trivy-images:' 'Nightly Quality'
-Assert-Contains $nightly 'uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0' 'Nightly Quality'
-Assert-Contains $nightly 'version: v0.72.0' 'Nightly Quality'
-Assert-Contains $nightly 'severity: HIGH,CRITICAL' 'Nightly Quality'
-Assert-Contains $nightly 'exit-code: "1"' 'Nightly Quality'
+Assert-Contains $nightly 'bash scripts/ci/install-trivy.sh' 'Nightly Quality'
+if ([regex]::Matches($nightly, 'bash scripts/ci/install-trivy\.sh').Count -ne 2) {
+    throw 'Nightly Quality must install pinned Trivy independently in filesystem and image jobs.'
+}
+Assert-Contains $nightly 'trivy fs' 'Nightly Quality filesystem scan'
+Assert-Contains $nightly 'trivy image' 'Nightly Quality image scan'
+Assert-Contains $nightly '--severity HIGH,CRITICAL' 'Nightly Quality'
+Assert-Contains $nightly '--exit-code 1' 'Nightly Quality'
+Assert-NotMatch $nightly 'uses:\s*aquasecurity/trivy-action@' 'Nightly Quality'
 Assert-Contains $nightly 'if [ ! -f "${{ matrix.dockerfile }}" ]; then' 'Nightly Quality'
 Assert-Contains $nightly 'grafana/k6:2.1.0' 'Nightly Quality'
 Assert-Contains $nightly '--network none' 'Nightly Quality k6 validation'
@@ -122,6 +131,12 @@ Assert-NotMatch $nightly '(?m)(@latest|:latest(?:\s|$))' 'Nightly Quality'
 Assert-NotMatch $nightly '(?m)^\s*continue-on-error:\s*true\s*$' 'Nightly Quality'
 Assert-NotMatch $nightly '(?i)(No Dockerfiles found|skipping container image scan)' 'Nightly Quality'
 Assert-NotMatch $nightly '(?i)(ignore-unfixed|ignore-policy|severity:\s*UNKNOWN)' 'Nightly Quality'
+
+Assert-Contains $trivyInstaller 'readonly TRIVY_VERSION="0.72.0"' 'Pinned Trivy installer'
+Assert-Contains $trivyInstaller 'readonly TRIVY_LINUX_AMD64_ARCHIVE_SHA256="bbb64b9695866ce4a7a8f5c9592002c5961cab378577fa3f8a040df362b9b2ea"' 'Pinned Trivy installer'
+Assert-Contains $trivyInstaller 'https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz' 'Pinned Trivy installer'
+Assert-Contains $trivyInstaller 'sha256sum --check --strict' 'Pinned Trivy installer'
+Assert-NotMatch $trivyInstaller '(?i)(?:@|/)latest(?:\b|/)' 'Pinned Trivy installer'
 
 $nightlyInventory = Get-DockerfileInventory $nightly
 $dockerImagesInventory = Get-DockerfileInventory $dockerImages
@@ -140,14 +155,23 @@ Assert-Contains $dockerImages 'github-token: ${{ github.token }}' 'Docker Images
 Assert-Contains $dockerImages 'cosign sign --yes' 'Docker Images signing'
 Assert-NotMatch $dockerImages '(?i)type=raw,value=latest' 'Docker Images tags'
 
+Assert-Contains $cosignInstaller 'readonly COSIGN_VERSION="3.0.2"' 'Pinned Cosign installer'
+Assert-Contains $cosignInstaller 'readonly COSIGN_LINUX_AMD64_SHA256="46dbdcb5467a3dfec2526923d0b3365e40c8d9dc00ec23d5aca3437449e8cbfd"' 'Pinned Cosign installer'
+Assert-Contains $cosignInstaller 'https://github.com/sigstore/cosign/releases/download/v${COSIGN_VERSION}/cosign-linux-amd64' 'Pinned Cosign installer'
+Assert-Contains $cosignInstaller 'sha256sum --check --strict' 'Pinned Cosign installer'
+Assert-NotMatch $cosignInstaller '(?i)(?:@|/)latest(?:\b|/)' 'Pinned Cosign installer'
+
+foreach ($workflow in @($dockerImages, $deployProd, $deployDev)) {
+    Assert-Contains $workflow 'bash scripts/ci/install-cosign.sh' 'Pinned Cosign installation'
+    Assert-NotMatch $workflow 'uses:\s*sigstore/cosign-installer@' 'Pinned Cosign installation'
+}
+
 foreach ($deploy in @($deployProd, $deployDev)) {
     Assert-Contains $deploy 'scripts/deploy/verify-release-images.sh' 'Deployment image verification'
     Assert-Contains $deploy 'EXPECTED_SOURCE_REPOSITORY' 'Deployment image verification'
     Assert-Contains $deploy 'EXPECTED_SOURCE_REVISION' 'Deployment image verification'
     Assert-Contains $deploy 'EXPECTED_WORKFLOW_REF' 'Deployment image verification'
     Assert-Contains $deploy 'github.event.workflow_run.head_sha || github.sha' 'Deployment immutable checkout'
-    Assert-Contains $deploy 'uses: sigstore/cosign-installer@7e8b541eb2e61bf99390e1afd4be13a184e9ebc5 # v3.10.1' 'Deployment image verification'
-    Assert-Contains $deploy 'cosign-release: v3.0.2' 'Deployment image verification'
 }
 
 Assert-Contains $deployDev 'Manual DEV deploy must be dispatched from refs/heads/dev-deploy.' 'DEV immutable deployment'

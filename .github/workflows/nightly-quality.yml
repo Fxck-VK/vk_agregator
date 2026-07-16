@@ -123,17 +123,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
+      - name: Install pinned Trivy
+        shell: bash
+        run: bash scripts/ci/install-trivy.sh
+
       - name: Scan repository filesystem and configuration
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
-        with:
-          scan-type: fs
-          scan-ref: .
-          scanners: vuln,misconfig
-          severity: HIGH,CRITICAL
-          exit-code: "1"
-          format: table
-          hide-progress: true
-          version: v0.72.0
+        shell: bash
+        run: |
+          set -euo pipefail
+          trivy fs \
+            --scanners vuln,misconfig \
+            --severity HIGH,CRITICAL \
+            --exit-code 1 \
+            --format table \
+            --no-progress \
+            .
         timeout-minutes: 15
 
   trivy-images:
@@ -176,15 +180,19 @@ jobs:
           image_ref="nightly/${{ matrix.service }}:${GITHUB_SHA}"
           docker build --file "${{ matrix.dockerfile }}" --tag "${image_ref}" .
 
+      - name: Install pinned Trivy
+        shell: bash
+        run: bash scripts/ci/install-trivy.sh
+
       - name: Scan image
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
-        with:
-          scan-type: image
-          image-ref: nightly/${{ matrix.service }}:${{ github.sha }}
-          scanners: vuln
-          severity: HIGH,CRITICAL
-          exit-code: "1"
-          format: table
-          hide-progress: true
-          version: v0.72.0
+        shell: bash
+        run: |
+          set -euo pipefail
+          trivy image \
+            --scanners vuln \
+            --severity HIGH,CRITICAL \
+            --exit-code 1 \
+            --format table \
+            --no-progress \
+            "nightly/${{ matrix.service }}:${GITHUB_SHA}"
         timeout-minutes: 15
