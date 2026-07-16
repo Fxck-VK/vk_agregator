@@ -249,10 +249,7 @@ type linkRequest struct {
 
 func (h *Handler) linkIdentity(w http.ResponseWriter, r *http.Request) {
 	var req linkRequest
-	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxLinkRequestBytes))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid identity link request")
+	if !decodeRequiredJSON(w, r, &req, "invalid identity link request") {
 		return
 	}
 	if strings.TrimSpace(string(req.Method)) == "" || strings.TrimSpace(req.ExternalID) == "" {
@@ -284,10 +281,7 @@ func (h *Handler) requestEmailCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req emailCodeRequest
-	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxLinkRequestBytes))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid email verification request")
+	if !decodeRequiredJSON(w, r, &req, "invalid email verification request") {
 		return
 	}
 	if strings.TrimSpace(req.Email) == "" {
@@ -318,10 +312,7 @@ func (h *Handler) verifyEmailCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req emailVerifyRequest
-	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxLinkRequestBytes))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid email verification request")
+	if !decodeRequiredJSON(w, r, &req, "invalid email verification request") {
 		return
 	}
 	if strings.TrimSpace(req.Email) == "" || strings.TrimSpace(req.Code) == "" {
@@ -351,10 +342,7 @@ func (h *Handler) requestPhoneOTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req phoneOTPRequest
-	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxLinkRequestBytes))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid phone verification request")
+	if !decodeRequiredJSON(w, r, &req, "invalid phone verification request") {
 		return
 	}
 	if strings.TrimSpace(req.Phone) == "" {
@@ -385,10 +373,7 @@ func (h *Handler) verifyPhoneOTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req phoneVerifyRequest
-	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxLinkRequestBytes))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid phone verification request")
+	if !decodeRequiredJSON(w, r, &req, "invalid phone verification request") {
 		return
 	}
 	if strings.TrimSpace(req.Phone) == "" || strings.TrimSpace(req.Code) == "" {
@@ -825,6 +810,11 @@ func decodeRequiredJSON(w http.ResponseWriter, r *http.Request, dst any, message
 			writeError(w, http.StatusBadRequest, message)
 			return false
 		}
+		writeError(w, http.StatusBadRequest, message)
+		return false
+	}
+	var extra struct{}
+	if err := dec.Decode(&extra); err != io.EOF {
 		writeError(w, http.StatusBadRequest, message)
 		return false
 	}

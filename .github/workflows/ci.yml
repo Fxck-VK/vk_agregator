@@ -130,6 +130,9 @@ jobs:
           cache: npm
           cache-dependency-path: web/miniapp/package-lock.json
 
+      - name: Validate lockfile integrity
+        run: node scripts/ci/validate-npm-lockfiles.mjs web/miniapp/package-lock.json
+
       - name: Install dependencies
         run: npm --prefix web/miniapp ci
 
@@ -155,6 +158,9 @@ jobs:
           node-version: "22"
           cache: npm
           cache-dependency-path: web/admin/package-lock.json
+
+      - name: Validate lockfile integrity
+        run: node scripts/ci/validate-npm-lockfiles.mjs web/admin/package-lock.json
 
       - name: Install dependencies
         run: npm --prefix web/admin ci

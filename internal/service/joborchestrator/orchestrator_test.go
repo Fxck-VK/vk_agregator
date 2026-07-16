@@ -463,6 +463,76 @@ func TestCreateJobAcceptsReadyOwnedInputImageArtifact(t *testing.T) {
 	}
 }
 
+func TestCreateJobAcceptsInputArtifactOwnedBySameAccountAcrossLegacyUsers(t *testing.T) {
+	f := newFixture(billingservice.WithStartingBalance(1000))
+	ctx := context.Background()
+	accountID := uuid.New()
+	artifactOwnerUserID := uuid.New()
+	requestUserID := uuid.New()
+	artifactID := seedInputArtifactForAccount(
+		t,
+		f,
+		artifactOwnerUserID,
+		accountID,
+		domain.ArtifactKindInput,
+		domain.MediaTypeImage,
+		domain.ArtifactStatusReady,
+		"artifacts",
+		"refs/account-owned.png",
+	)
+
+	job, err := f.orch.CreateJob(ctx, joborchestrator.CreateJobInput{
+		UserID:              requestUserID,
+		AccountID:           accountID,
+		CommandID:           uuid.New(),
+		Operation:           domain.OperationImageGenerate,
+		Modality:            domain.ModalityImage,
+		IdempotencyKey:      "vk_job:account-owned-input",
+		InputArtifactIDs:    []uuid.UUID{artifactID},
+		CostEstimateCredits: 50,
+	})
+	if err != nil {
+		t.Fatalf("create job with account-owned artifact: %v", err)
+	}
+	if job == nil || job.AccountID != accountID {
+		t.Fatalf("job account = %+v, want %s", job, accountID)
+	}
+}
+
+func TestCreateJobRejectsInputArtifactOwnedByDifferentAccount(t *testing.T) {
+	f := newFixture(billingservice.WithStartingBalance(1000))
+	ctx := context.Background()
+	userID := uuid.New()
+	artifactID := seedInputArtifactForAccount(
+		t,
+		f,
+		userID,
+		uuid.New(),
+		domain.ArtifactKindInput,
+		domain.MediaTypeImage,
+		domain.ArtifactStatusReady,
+		"artifacts",
+		"refs/foreign-account.png",
+	)
+
+	job, err := f.orch.CreateJob(ctx, joborchestrator.CreateJobInput{
+		UserID:              userID,
+		AccountID:           uuid.New(),
+		CommandID:           uuid.New(),
+		Operation:           domain.OperationImageGenerate,
+		Modality:            domain.ModalityImage,
+		IdempotencyKey:      "vk_job:foreign-account-input",
+		InputArtifactIDs:    []uuid.UUID{artifactID},
+		CostEstimateCredits: 50,
+	})
+	if !errors.Is(err, joborchestrator.ErrInvalidInputArtifact) {
+		t.Fatalf("expected ErrInvalidInputArtifact, got job=%+v err=%v", job, err)
+	}
+	if job != nil {
+		t.Fatalf("foreign account artifact must not create job, got %+v", job)
+	}
+}
+
 func TestCreateJobResolvedVideoRouteUsesBackendEstimateBeforeReservation(t *testing.T) {
 	catalog := newRouteCatalogForOrchestratorTest(t)
 	f := newFixtureWithOrchestratorOptions([]joborchestrator.Option{
@@ -621,16 +691,21 @@ func TestCreateJobIdempotentExistingBypassesCapacityGuard(t *testing.T) {
 }
 
 func seedInputArtifact(t *testing.T, f *fixture, ownerID uuid.UUID, kind domain.ArtifactKind, mediaType domain.MediaType, status domain.ArtifactStatus, bucket, key string) uuid.UUID {
+	return seedInputArtifactForAccount(t, f, ownerID, uuid.Nil, kind, mediaType, status, bucket, key)
+}
+
+func seedInputArtifactForAccount(t *testing.T, f *fixture, ownerUserID, ownerAccountID uuid.UUID, kind domain.ArtifactKind, mediaType domain.MediaType, status domain.ArtifactStatus, bucket, key string) uuid.UUID {
 	t.Helper()
 	artifact := &domain.Artifact{
-		ID:            uuid.New(),
-		OwnerUserID:   ownerID,
-		Kind:          kind,
-		MediaType:     mediaType,
-		MimeType:      "image/png",
-		Status:        status,
-		StorageBucket: bucket,
-		StorageKey:    key,
+		ID:             uuid.New(),
+		OwnerUserID:    ownerUserID,
+		OwnerAccountID: ownerAccountID,
+		Kind:           kind,
+		MediaType:      mediaType,
+		MimeType:       "image/png",
+		Status:         status,
+		StorageBucket:  bucket,
+		StorageKey:     key,
 	}
 	if err := f.arts.Create(context.Background(), artifact); err != nil {
 		t.Fatalf("seed artifact: %v", err)

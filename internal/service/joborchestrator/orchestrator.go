@@ -460,7 +460,7 @@ func (o *Orchestrator) validateInputArtifacts(ctx context.Context, in CreateJobI
 			}
 			return fmt.Errorf("joborchestrator: input artifact lookup: %w", err)
 		}
-		if artifact.OwnerUserID != in.UserID {
+		if !inputArtifactOwnedBy(artifact, in.UserID, in.AccountID) {
 			return fmt.Errorf("%w: foreign owner", ErrInvalidInputArtifact)
 		}
 		if artifact.Kind != domain.ArtifactKindInput {
@@ -477,6 +477,16 @@ func (o *Orchestrator) validateInputArtifacts(ctx context.Context, in CreateJobI
 		}
 	}
 	return nil
+}
+
+func inputArtifactOwnedBy(artifact *domain.Artifact, userID, accountID uuid.UUID) bool {
+	if artifact == nil {
+		return false
+	}
+	if artifact.OwnerAccountID != uuid.Nil {
+		return artifact.OwnerAccountID == ownerAccountID(userID, accountID)
+	}
+	return artifact.OwnerUserID == userID
 }
 
 func requiresBackendPrice(op domain.OperationType, modality domain.Modality) bool {

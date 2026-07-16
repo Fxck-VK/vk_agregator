@@ -24,8 +24,16 @@ elif [[ "${joined}" == *".SBOM.SPDX"* ]]; then
     printf '{"spdxVersion":"SPDX-2.3","packages":[{"name":"fixture"}]}\n'
   fi
 elif [[ "${joined}" == *".Provenance.SLSA"* ]]; then
-  printf '{"buildType":"https://mobyproject.org/buildkit@v1","builder":{"id":"https://github.com/docker/build-push-action"},"materials":[{"uri":"https://github.com/%s.git","digest":{"sha1":"%s"}}]}\n' \
-    "${MOCK_REPOSITORY}" "${MOCK_REVISION}"
+  material_repository="${MOCK_MATERIAL_REPOSITORY:-${MOCK_REPOSITORY}}"
+  build_type="${MOCK_BUILD_TYPE:-https://mobyproject.org/buildkit@v1}"
+  builder_id="${MOCK_BUILDER_ID:-https://github.com/docker/build-push-action}"
+  if [[ "${MOCK_PROVENANCE_SCHEMA:-v02}" == "v1" ]]; then
+    printf '{"buildDefinition":{"buildType":"%s","resolvedDependencies":[{"uri":"https://github.com/%s.git","digest":{"sha1":"%s"}}]},"runDetails":{"builder":{"id":"%s"}}}\n' \
+      "${build_type}" "${material_repository}" "${MOCK_REVISION}" "${builder_id}"
+  else
+    printf '{"buildType":"%s","builder":{"id":"%s"},"materials":[{"uri":"https://github.com/%s.git","digest":{"sha1":"%s"}}]}\n' \
+      "${build_type}" "${builder_id}" "${material_repository}" "${MOCK_REVISION}"
+  fi
 else
   echo "Unexpected docker mock invocation." >&2
   exit 1
@@ -92,6 +100,11 @@ verified_count="$(grep -c '^Verified signed release image:' <<<"${success_output
 [[ "${verified_count}" == "7" ]] || { echo "Expected seven verified release images; got ${verified_count}." >&2; exit 1; }
 echo "PASS positive: seven exact signed image digests"
 
+v1_success_output="$(MOCK_PROVENANCE_SCHEMA=v1 run_verifier)"
+v1_verified_count="$(grep -c '^Verified signed release image:' <<<"${v1_success_output}")"
+[[ "${v1_verified_count}" == "7" ]] || { echo "Expected seven verified SLSA v1 release images; got ${v1_verified_count}." >&2; exit 1; }
+echo "PASS positive: seven exact signed image digests with SLSA v1 provenance"
+
 expect_failure "mismatched image tag" \
   bash "${verifier}" \
     --image-registry "ghcr.io/example/project" \
@@ -131,6 +144,33 @@ expect_failure "wrong signed repository" env MOCK_REPOSITORY="${MOCK_REPOSITORY}
 export MOCK_REPOSITORY="${original_repository}"
 
 expect_failure "empty SBOM attestation" env MOCK_EMPTY_SBOM=1 PATH="${mock_bin}:${PATH}" \
+  bash "${verifier}" \
+    --image-registry "ghcr.io/example/project" \
+    --image-tag "sha-${MOCK_REVISION}" \
+    --repository "${MOCK_REPOSITORY}" \
+    --revision "${MOCK_REVISION}" \
+    --workflow-ref "${MOCK_WORKFLOW_REF}"
+
+expect_failure "repository material with matching suffix" env \
+  MOCK_MATERIAL_REPOSITORY="attacker/${MOCK_REPOSITORY}" PATH="${mock_bin}:${PATH}" \
+  bash "${verifier}" \
+    --image-registry "ghcr.io/example/project" \
+    --image-tag "sha-${MOCK_REVISION}" \
+    --repository "${MOCK_REPOSITORY}" \
+    --revision "${MOCK_REVISION}" \
+    --workflow-ref "${MOCK_WORKFLOW_REF}"
+
+expect_failure "unexpected provenance builder" env \
+  MOCK_BUILDER_ID="https://github.com/example/untrusted-builder" PATH="${mock_bin}:${PATH}" \
+  bash "${verifier}" \
+    --image-registry "ghcr.io/example/project" \
+    --image-tag "sha-${MOCK_REVISION}" \
+    --repository "${MOCK_REPOSITORY}" \
+    --revision "${MOCK_REVISION}" \
+    --workflow-ref "${MOCK_WORKFLOW_REF}"
+
+expect_failure "unexpected provenance build type" env \
+  MOCK_BUILD_TYPE="https://example.invalid/build@v1" PATH="${mock_bin}:${PATH}" \
   bash "${verifier}" \
     --image-registry "ghcr.io/example/project" \
     --image-tag "sha-${MOCK_REVISION}" \

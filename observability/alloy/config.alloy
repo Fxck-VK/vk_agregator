@@ -1,35 +1,21 @@
-discovery.docker "containers" {
-  host = "unix:///var/run/docker.sock"
+local.file_match "docker_logs" {
+  path_targets = [{
+    __path__    = "/var/lib/docker/containers/*/*-json.log",
+    environment = "production",
+    job         = "docker",
+    product     = "vk-ai-aggregator",
+  }]
 }
 
-discovery.relabel "containers" {
-  targets = discovery.docker.containers.targets
-
-  rule {
-    source_labels = ["__meta_docker_container_name"]
-    regex         = "/(.*)"
-    target_label  = "container"
-  }
-
-  rule {
-    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
-    target_label  = "service"
-  }
-
-  rule {
-    target_label = "environment"
-    replacement  = "local"
-  }
-
-  rule {
-    target_label = "product"
-    replacement  = "vk-ai-aggregator"
-  }
+loki.source.file "docker_logs" {
+  targets       = local.file_match.docker_logs.targets
+  forward_to    = [loki.process.docker_logs.receiver]
+  tail_from_end = true
 }
 
-loki.source.docker "containers" {
-  host       = "unix:///var/run/docker.sock"
-  targets    = discovery.relabel.containers.output
+loki.process "docker_logs" {
+  stage.docker { }
+
   forward_to = [loki.write.local.receiver]
 }
 

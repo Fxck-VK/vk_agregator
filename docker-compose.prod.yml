@@ -235,7 +235,7 @@ services:
       retries: 10
 
   reverse-proxy:
-    image: ${REVERSE_PROXY_IMAGE:-nginx:1.29-alpine}
+    image: ${REVERSE_PROXY_IMAGE:-nginx:1.29-alpine@sha256:5616878291a2eed594aee8db4dade5878cf7edcb475e59193904b198d9b830de}
     restart: unless-stopped
     cap_drop:
       - ALL
@@ -269,7 +269,7 @@ services:
       retries: 10
 
   cloudflared:
-    image: ${CLOUDFLARED_IMAGE:-cloudflare/cloudflared:2024.12.2}
+    image: ${CLOUDFLARED_IMAGE:-cloudflare/cloudflared:2024.12.2@sha256:cb38f3f30910a7d51545118a179b8516eb7066eac61855d62ce6ed733c54ce70}
     restart: unless-stopped
     # The remotely managed tunnel routes to 127.0.0.1:8088 on the VPS.
     # Host networking is intentionally retained while the container itself is

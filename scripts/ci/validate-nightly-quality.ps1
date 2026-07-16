@@ -6,6 +6,7 @@ Set-StrictMode -Version Latest
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 $nightlyPath = Join-Path $repoRoot ".github\workflows\nightly-quality.yml"
+$ciPath = Join-Path $repoRoot ".github\workflows\ci.yml"
 $dockerImagesPath = Join-Path $repoRoot ".github\workflows\docker-images.yml"
 $deployProdPath = Join-Path $repoRoot ".github\workflows\deploy-prod.yml"
 $deployDevPath = Join-Path $repoRoot ".github\workflows\deploy-dev.yml"
@@ -14,6 +15,7 @@ $codeownersPath = Join-Path $repoRoot ".github\CODEOWNERS"
 $releaseVerifierTestPath = Join-Path $repoRoot "scripts\deploy\test-verify-release-images.sh"
 $cosignInstallerPath = Join-Path $repoRoot "scripts\ci\install-cosign.sh"
 $trivyInstallerPath = Join-Path $repoRoot "scripts\ci\install-trivy.sh"
+$npmLockValidatorPath = Join-Path $repoRoot "scripts\ci\validate-npm-lockfiles.mjs"
 
 $expectedDockerfiles = @(
     "Dockerfile.api",
@@ -72,19 +74,20 @@ function Assert-ExactInventory {
     }
 }
 
-foreach ($path in @($nightlyPath, $dockerImagesPath)) {
+foreach ($path in @($nightlyPath, $ciPath, $dockerImagesPath)) {
     if (-not (Test-Path -LiteralPath $path)) {
         throw "required workflow is missing: $path"
     }
 }
 
-foreach ($path in @($deployProdPath, $deployDevPath, $dependabotPath, $codeownersPath, $releaseVerifierTestPath, $cosignInstallerPath, $trivyInstallerPath)) {
+foreach ($path in @($deployProdPath, $deployDevPath, $dependabotPath, $codeownersPath, $releaseVerifierTestPath, $cosignInstallerPath, $trivyInstallerPath, $npmLockValidatorPath)) {
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
         throw "required supply-chain policy file is missing: $path"
     }
 }
 
 $nightly = Get-Content -LiteralPath $nightlyPath -Raw
+$ci = Get-Content -LiteralPath $ciPath -Raw
 $dockerImages = Get-Content -LiteralPath $dockerImagesPath -Raw
 $deployProd = Get-Content -LiteralPath $deployProdPath -Raw
 $deployDev = Get-Content -LiteralPath $deployDevPath -Raw
@@ -112,6 +115,10 @@ Assert-Contains $nightly 'golang.org/x/vuln/cmd/govulncheck@v1.6.0' 'Nightly Qua
 Assert-Contains $nightly 'path: web/miniapp' 'Nightly Quality frontend matrix'
 Assert-Contains $nightly 'path: web/admin' 'Nightly Quality frontend matrix'
 Assert-Contains $nightly 'npm --prefix "${{ matrix.path }}" audit --audit-level=moderate' 'Nightly Quality'
+Assert-Contains $nightly 'node scripts/ci/validate-npm-lockfiles.mjs "${{ matrix.lockfile }}"' 'Nightly Quality lockfile integrity'
+if ([regex]::Matches($ci, 'node scripts/ci/validate-npm-lockfiles\.mjs web/(?:miniapp|admin)/package-lock\.json').Count -ne 2) {
+    throw 'CI must validate immutable source metadata for both frontend lockfiles.'
+}
 Assert-Contains $nightly 'trivy-filesystem:' 'Nightly Quality'
 Assert-Contains $nightly 'trivy-images:' 'Nightly Quality'
 Assert-Contains $nightly 'bash scripts/ci/install-trivy.sh' 'Nightly Quality'
@@ -124,7 +131,7 @@ Assert-Contains $nightly '--severity HIGH,CRITICAL' 'Nightly Quality'
 Assert-Contains $nightly '--exit-code 1' 'Nightly Quality'
 Assert-NotMatch $nightly 'uses:\s*aquasecurity/trivy-action@' 'Nightly Quality'
 Assert-Contains $nightly 'if [ ! -f "${{ matrix.dockerfile }}" ]; then' 'Nightly Quality'
-Assert-Contains $nightly 'grafana/k6:2.1.0' 'Nightly Quality'
+Assert-Contains $nightly 'grafana/k6:2.1.0@sha256:65c920dc067d5e2e00befbf982af6ad6ad0117034e8b1c65817c7975c52d4669' 'Nightly Quality'
 Assert-Contains $nightly '--network none' 'Nightly Quality k6 validation'
 
 Assert-NotMatch $nightly '(?m)(@latest|:latest(?:\s|$))' 'Nightly Quality'

@@ -84,6 +84,9 @@ jobs:
           cache: npm
           cache-dependency-path: ${{ matrix.lockfile }}
 
+      - name: Validate lockfile integrity
+        run: node scripts/ci/validate-npm-lockfiles.mjs "${{ matrix.lockfile }}"
+
       - name: Install dependencies
         run: npm --prefix "${{ matrix.path }}" ci
 
@@ -113,7 +116,7 @@ jobs:
               --network none \
               -v "${PWD}:/src:ro" \
               -w /src \
-              grafana/k6:2.1.0 inspect "${script#./}"
+              grafana/k6:2.1.0@sha256:65c920dc067d5e2e00befbf982af6ad6ad0117034e8b1c65817c7975c52d4669 inspect "${script#./}"
           done
 
   trivy-filesystem:

@@ -645,7 +645,7 @@ function Assert-CloudflaredComposeConfig {
     $content = Get-Content -LiteralPath $path -Raw
     $requiredSnippets = @(
         "cloudflared:",
-        'image: ${CLOUDFLARED_IMAGE:-cloudflare/cloudflared:2024.12.2}',
+        'image: ${CLOUDFLARED_IMAGE:-cloudflare/cloudflared:2024.12.2@sha256:cb38f3f30910a7d51545118a179b8516eb7066eac61855d62ce6ed733c54ce70}',
         "profiles:",
         "- cloudflare",
         "TUNNEL_TOKEN:",
@@ -696,9 +696,9 @@ function Assert-DeployScripts {
                 "--no-build",
                 "SkipPublicSmoke",
                 "Invoke-ExternalDataServiceChecks",
-                "postgres:16-alpine",
-                "redis:7-alpine",
-                "minio/mc:latest",
+                "postgres:16-alpine@sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777",
+                "redis:7-alpine@sha256:6ab0b6e7381779332f97b8ca76193e45b0756f38d4c0dcda72dbb3c32061ab99",
+                "minio/mc:RELEASE.2025-08-13T08-35-41Z@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727",
                 "smoke-prod.ps1",
                 "check-migrations-safe.ps1",
                 "MIGRATION_BACKUP_CONFIRMED",
@@ -732,9 +732,9 @@ function Assert-DeployScripts {
                 "--no-build",
                 "--skip-public-smoke",
                 "check_external_data_services",
-                "postgres:16-alpine",
-                "redis:7-alpine",
-                "minio/mc:latest",
+                "postgres:16-alpine@sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777",
+                "redis:7-alpine@sha256:6ab0b6e7381779332f97b8ca76193e45b0756f38d4c0dcda72dbb3c32061ab99",
+                "minio/mc:RELEASE.2025-08-13T08-35-41Z@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727",
                 "smoke-prod.sh",
                 "check-migrations-safe.sh",
                 "MIGRATION_BACKUP_CONFIRMED",
@@ -781,7 +781,8 @@ function Assert-DeployScripts {
                 "RESTORE_ALLOW_DESTRUCTIVE",
                 "PROVIDER_BALANCE_BOT_ENABLED",
                 "TELEGRAM_ADMIN_CHAT_ID",
-                "APIMART_API_KEY"
+                "APIMART_API_KEY",
+                "GRAFANA_ADMIN_USER"
             )
         },
         [pscustomobject]@{
@@ -810,7 +811,8 @@ function Assert-DeployScripts {
                 "RESTORE_ALLOW_DESTRUCTIVE",
                 "PROVIDER_BALANCE_BOT_ENABLED",
                 "TELEGRAM_ADMIN_CHAT_ID",
-                "APIMART_API_KEY"
+                "APIMART_API_KEY",
+                "GRAFANA_ADMIN_USER"
             )
         },
         [pscustomobject]@{
@@ -1151,7 +1153,7 @@ function Invoke-Promtool {
     $promDir = (Resolve-Path (Join-Path $repoRoot "observability\prometheus")).Path.Replace("\", "/")
     $mount = "${promDir}:/etc/prometheus:ro"
     $prometheusImage = if ([string]::IsNullOrWhiteSpace($env:PROMETHEUS_IMAGE)) {
-        "prom/prometheus:v2.55.1"
+        "prom/prometheus:v2.55.1@sha256:2659f4c2ebb718e7695cb9b25ffa7d6be64db013daba13e05c875451cf51b0d3"
     } else {
         $env:PROMETHEUS_IMAGE
     }
@@ -1196,9 +1198,21 @@ Invoke-Step "docker compose config" {
 if (Test-Path -LiteralPath "docker-compose.observability.yml") {
     Invoke-Step "docker compose observability config" {
         $previousExporterDSN = $env:POSTGRES_EXPORTER_DATA_SOURCE_NAME
+        $previousGrafanaUser = $env:GRAFANA_ADMIN_USER
+        $previousGrafanaPassword = $env:GRAFANA_ADMIN_PASSWORD
+        $previousGrafanaSecret = $env:GRAFANA_SECRET_KEY
         try {
             if ([string]::IsNullOrWhiteSpace($previousExporterDSN)) {
                 $env:POSTGRES_EXPORTER_DATA_SOURCE_NAME = "config-validation-placeholder"
+            }
+            if ([string]::IsNullOrWhiteSpace($previousGrafanaUser)) {
+                $env:GRAFANA_ADMIN_USER = "config-validation-user"
+            }
+            if ([string]::IsNullOrWhiteSpace($previousGrafanaPassword)) {
+                $env:GRAFANA_ADMIN_PASSWORD = ("test" + "-grafana-" + "password")
+            }
+            if ([string]::IsNullOrWhiteSpace($previousGrafanaSecret)) {
+                $env:GRAFANA_SECRET_KEY = "config-validation-secret"
             }
             docker compose --project-name vk-ai-aggregator-observability -f docker-compose.observability.yml config | Out-Null
         } finally {
@@ -1206,6 +1220,21 @@ if (Test-Path -LiteralPath "docker-compose.observability.yml") {
                 Remove-Item Env:POSTGRES_EXPORTER_DATA_SOURCE_NAME -ErrorAction SilentlyContinue
             } else {
                 $env:POSTGRES_EXPORTER_DATA_SOURCE_NAME = $previousExporterDSN
+            }
+            if ($null -eq $previousGrafanaUser) {
+                Remove-Item Env:GRAFANA_ADMIN_USER -ErrorAction SilentlyContinue
+            } else {
+                $env:GRAFANA_ADMIN_USER = $previousGrafanaUser
+            }
+            if ($null -eq $previousGrafanaPassword) {
+                Remove-Item Env:GRAFANA_ADMIN_PASSWORD -ErrorAction SilentlyContinue
+            } else {
+                $env:GRAFANA_ADMIN_PASSWORD = $previousGrafanaPassword
+            }
+            if ($null -eq $previousGrafanaSecret) {
+                Remove-Item Env:GRAFANA_SECRET_KEY -ErrorAction SilentlyContinue
+            } else {
+                $env:GRAFANA_SECRET_KEY = $previousGrafanaSecret
             }
         }
     }

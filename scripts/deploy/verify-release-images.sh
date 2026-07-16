@@ -48,6 +48,9 @@ services=(api worker provider-webhook provider-balance-bot miniapp migrate backu
 certificate_identity="https://github.com/${repository}/.github/workflows/docker-images.yml@${workflow_ref}"
 oidc_issuer="https://token.actions.githubusercontent.com"
 repository_lc="${repository,,}"
+repository_uri="https://github.com/${repository_lc}"
+expected_build_type="https://mobyproject.org/buildkit@v1"
+expected_builder_id="https://github.com/docker/build-push-action"
 
 for service in "${services[@]}"; do
   tagged_ref="${image_registry}/${service}:${image_tag}"
@@ -82,13 +85,34 @@ for service in "${services[@]}"; do
 
   jq -e 'type == "object" and (.spdxVersion | startswith("SPDX-")) and ((.packages // []) | length > 0)' <<<"${sbom}" >/dev/null
   jq -e \
-    --arg repository "${repository_lc}" \
+    --arg repository_uri "${repository_uri}" \
     --arg revision "${revision}" \
-    'type == "object" and
-     (.buildType | type == "string") and
-     (.builder.id | type == "string") and
-     any((.materials // [])[];
-       ((.uri // "") | ascii_downcase | contains($repository)) and
+    --arg build_type "${expected_build_type}" \
+    --arg builder_id "${expected_builder_id}" \
+    'def normalized_provenance:
+       if (.buildDefinition? | type) == "object" then
+         {
+           build_type: .buildDefinition.buildType,
+           builder_id: .runDetails.builder.id,
+           materials: (.buildDefinition.resolvedDependencies // [])
+         }
+       else
+         {
+           build_type: .buildType,
+           builder_id: .builder.id,
+           materials: (.materials // [])
+         }
+       end;
+     def normalized_material_uri:
+       ascii_downcase
+       | sub("^git\\+"; "")
+       | sub("\\.git$"; "")
+       | sub("/$"; "");
+     type == "object" and
+     (normalized_provenance | .build_type == $build_type) and
+     (normalized_provenance | .builder_id == $builder_id) and
+     any((normalized_provenance | .materials)[];
+       ((.uri // "") | normalized_material_uri) == $repository_uri and
        ((.digest.sha1 // "") == $revision)
      )' <<<"${provenance}" >/dev/null
 

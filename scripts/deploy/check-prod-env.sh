@@ -296,7 +296,7 @@ if [[ "${backup_before_deploy}" == "true" ]]; then
 fi
 
 if [[ "${include_observability}" == "true" ]]; then
-  for required in GRAFANA_ADMIN_PASSWORD GRAFANA_SECRET_KEY POSTGRES_EXPORTER_DATA_SOURCE_NAME; do
+  for required in GRAFANA_ADMIN_USER GRAFANA_ADMIN_PASSWORD GRAFANA_SECRET_KEY POSTGRES_EXPORTER_DATA_SOURCE_NAME; do
     require_value "${required}" "required for production observability"
   done
   if is_true_value "$(get_value ALERT_TELEGRAM_ENABLED)"; then

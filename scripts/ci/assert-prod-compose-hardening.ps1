@@ -72,6 +72,62 @@ function Assert-NoPrivilegedContainers {
     }
 }
 
+function Assert-ExternalImagesPinned {
+    param(
+        [Parameter(Mandatory = $true)][string]$Content,
+        [Parameter(Mandatory = $true)][string]$FileName
+    )
+
+    $unpinned = @(
+        $Content -split "\r?\n" |
+            Where-Object { $_ -match '^\s*image:\s+' } |
+            Where-Object { $_ -notmatch '\$\{(?:IMAGE_TAG|BACKUP_IMAGE_TAG):\?' } |
+            Where-Object { $_ -notmatch '@sha256:[0-9a-f]{64}' }
+    )
+    if ($unpinned.Count -gt 0) {
+        throw "$FileName contains third-party images without immutable digests: $($unpinned -join '; ')"
+    }
+}
+
+function Assert-DockerfilesPinned {
+    param([Parameter(Mandatory = $true)][string[]]$Paths)
+
+    foreach ($path in $Paths) {
+        $content = Get-Content -LiteralPath $path -Raw
+        $unpinned = @(
+            $content -split "\r?\n" |
+                Where-Object { $_ -match '^\s*FROM\s+' } |
+                Where-Object { $_ -notmatch '@sha256:[0-9a-f]{64}(?:\s+AS\s+\S+)?\s*$' }
+        )
+        if ($unpinned.Count -gt 0) {
+            throw "$(Split-Path -Leaf $path) contains base images without immutable digests: $($unpinned -join '; ')"
+        }
+    }
+}
+
+function Assert-ServiceResourceBounds {
+    param(
+        [Parameter(Mandatory = $true)][string]$Block,
+        [Parameter(Mandatory = $true)][string]$ServiceName
+    )
+
+    Assert-Matches -Text $Block -Pattern '(?m)^\s+pids_limit:\s+\d+\s*$' -Message "$ServiceName must set pids_limit"
+    Assert-Matches -Text $Block -Pattern '(?m)^\s+cpus:\s+"?[0-9.]+[0-9]"?\s*$' -Message "$ServiceName must set cpus"
+    Assert-Matches -Text $Block -Pattern '(?m)^\s+mem_limit:\s+\S+\s*$' -Message "$ServiceName must set mem_limit"
+}
+
+function Assert-NoNewPrivileges {
+    param(
+        [Parameter(Mandatory = $true)][string]$Block,
+        [Parameter(Mandatory = $true)][string]$ServiceName
+    )
+
+    Assert-Matches `
+        -Text $Block `
+        -Pattern '(?ms)^\s+security_opt:\s*(?:\r?\n\s+-\s+no-new-privileges:true\s*$|\[\s*"?no-new-privileges:true"?\s*\]\s*$)' `
+        -Message "$ServiceName must set no-new-privileges"
+}
+
 function Assert-RequiredTag {
     param(
         [Parameter(Mandatory = $true)][string]$Block,
@@ -122,12 +178,45 @@ function Assert-ServiceHardening {
 }
 
 $prod = Get-RequiredContent -RelativePath "docker-compose.prod.yml"
+$data = Get-RequiredContent -RelativePath "docker-compose.data.yml"
 $observability = Get-RequiredContent -RelativePath "docker-compose.observability.yml"
+$local = Get-RequiredContent -RelativePath "docker-compose.yml"
 
 Assert-NoLatestImages -Content $prod -FileName "docker-compose.prod.yml"
+Assert-NoLatestImages -Content $data -FileName "docker-compose.data.yml"
 Assert-NoLatestImages -Content $observability -FileName "docker-compose.observability.yml"
+Assert-NoLatestImages -Content $local -FileName "docker-compose.yml"
 Assert-NoPrivilegedContainers -Content $prod -FileName "docker-compose.prod.yml"
+Assert-NoPrivilegedContainers -Content $data -FileName "docker-compose.data.yml"
 Assert-NoPrivilegedContainers -Content $observability -FileName "docker-compose.observability.yml"
+Assert-ExternalImagesPinned -Content $prod -FileName "docker-compose.prod.yml"
+Assert-ExternalImagesPinned -Content $data -FileName "docker-compose.data.yml"
+Assert-ExternalImagesPinned -Content $observability -FileName "docker-compose.observability.yml"
+Assert-ExternalImagesPinned -Content $local -FileName "docker-compose.yml"
+Assert-DockerfilesPinned -Paths @(
+    Get-ChildItem -LiteralPath $repoRoot -Filter "Dockerfile.*" -File |
+        Sort-Object Name |
+        Select-Object -ExpandProperty FullName
+)
+Assert-Matches `
+    -Text $observability `
+    -Pattern '(?m)^\s+GF_SECURITY_ADMIN_USER:\s+\$\{GRAFANA_ADMIN_USER:\?[^}]+\}\s*$' `
+    -Message "Grafana admin user must be required without a fallback"
+Assert-Matches `
+    -Text $observability `
+    -Pattern '(?m)^\s+GF_SECURITY_ADMIN_PASSWORD:\s+\$\{GRAFANA_ADMIN_PASSWORD:\?[^}]+\}\s*$' `
+    -Message "Grafana admin password must be required without a fallback"
+Assert-Matches `
+    -Text $observability `
+    -Pattern '(?m)^\s+GF_SECURITY_SECRET_KEY:\s+\$\{GRAFANA_SECRET_KEY:\?[^}]+\}\s*$' `
+    -Message "Grafana secret key must be required without a fallback"
+Assert-Matches -Text $observability -Pattern '(?m)^\s*-\s+/var/lib/docker/containers:/var/lib/docker/containers:ro\s*$' -Message "Alloy must read bounded Docker log files"
+if ($observability -match '(?i)docker\.sock' -or $observability -match '(?m)^\s+pid:\s+host\s*$' -or $observability -match '(?m)^\s+devices:\s*$') {
+    throw "observability compose must not expose Docker socket, host PID namespace, or host devices"
+}
+if ($observability -match '(?m)^\s+user:\s+["'']?0(?::0)?["'']?\s*$') {
+    throw "observability compose must not explicitly run services as root"
+}
 Assert-Matches `
     -Text $observability `
     -Pattern '(?m)^\s+DATA_SOURCE_NAME:\s+\$\{POSTGRES_EXPORTER_DATA_SOURCE_NAME:\?[^}]+\}\s*$' `
@@ -161,6 +250,31 @@ foreach ($service in @(
 foreach ($service in @("reverse-proxy", "cloudflared")) {
     $block = Get-ServiceBlock -Content $prod -ServiceName $service -FileName "docker-compose.prod.yml"
     Assert-ServiceHardening -Block $block -ServiceName $service
+}
+
+foreach ($service in @("postgres", "redis", "minio")) {
+    $block = Get-ServiceBlock -Content $data -ServiceName $service -FileName "docker-compose.data.yml"
+    Assert-NoNewPrivileges -Block $block -ServiceName $service
+    Assert-ServiceResourceBounds -Block $block -ServiceName $service
+}
+
+foreach ($service in @(
+    "prometheus",
+    "alertmanager",
+    "grafana",
+    "loki",
+    "alloy",
+    "tempo",
+    "otel-collector",
+    "blackbox-exporter",
+    "postgres-exporter",
+    "redis-exporter",
+    "node-exporter",
+    "cadvisor"
+)) {
+    $block = Get-ServiceBlock -Content $observability -ServiceName $service -FileName "docker-compose.observability.yml"
+    Assert-NoNewPrivileges -Block $block -ServiceName $service
+    Assert-ServiceResourceBounds -Block $block -ServiceName $service
 }
 
 Write-Host "production compose hardening assertions OK"

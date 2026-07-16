@@ -195,6 +195,55 @@ func TestAccountAPILinkEndpointDoesNotTrustClientVerifiedFlag(t *testing.T) {
 	}
 }
 
+func TestAccountAPIRejectsTrailingJSONValues(t *testing.T) {
+	tests := []struct {
+		name string
+		path string
+		body string
+		auth bool
+	}{
+		{
+			name: "identity link",
+			path: "/account/identities/link",
+			body: `{"method":"email_password","external_id":"owner@example.com"}{"verified":true}`,
+			auth: true,
+		},
+		{
+			name: "email code",
+			path: "/account/identities/email/request-code",
+			body: `{"email":"owner@example.com"}{"email":"attacker@example.com"}`,
+			auth: true,
+		},
+		{
+			name: "password login",
+			path: "/account/password/login",
+			body: `{"email":"owner@example.com","password":"wrong password"}{"password":"replacement"}`,
+		},
+		{
+			name: "oauth login",
+			path: "/account/oauth/login",
+			body: `{"provider":"google","id_token":"invalid"}{"provider":"vk_id"}`,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			h, _ := newTestHandler(t)
+			req := httptest.NewRequest(http.MethodPost, tc.path, strings.NewReader(tc.body))
+			if tc.auth {
+				req.Header.Set("X-VK-User-ID", "555")
+			}
+			rec := httptest.NewRecorder()
+
+			h.Routes().ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("status = %d, want 400 for trailing JSON, body = %s", rec.Code, rec.Body.String())
+			}
+		})
+	}
+}
+
 func TestAccountAPIEmailLinkCodeFlow(t *testing.T) {
 	h, service := newTestHandler(t)
 
