@@ -86,6 +86,7 @@ jobs:
         with:
           context: .
           file: ${{ matrix.dockerfile }}
+          platforms: linux/amd64
           push: false
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -163,6 +164,7 @@ jobs:
           context: https://github.com/${{ github.repository }}.git#${{ github.sha }}
           github-token: ${{ github.token }}
           file: ${{ matrix.dockerfile }}
+          platforms: linux/amd64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -197,8 +199,8 @@ jobs:
         run: |
           set -euo pipefail
           image_digest_ref="${IMAGE_REF}@${IMAGE_DIGEST}"
-          sbom="$(docker buildx imagetools inspect "${image_digest_ref}" --format '{{ json .SBOM.SPDX }}')"
-          provenance="$(docker buildx imagetools inspect "${image_digest_ref}" --format '{{ json .Provenance.SLSA }}')"
+          sbom="$(docker buildx imagetools inspect "${image_digest_ref}" --format '{{ json (index .SBOM "linux/amd64").SPDX }}')"
+          provenance="$(docker buildx imagetools inspect "${image_digest_ref}" --format '{{ json (index .Provenance "linux/amd64").SLSA }}')"
 
           jq -e 'type == "object" and (.spdxVersion | startswith("SPDX-")) and ((.packages // []) | length > 0)' <<<"${sbom}" >/dev/null
           jq -e 'type == "object" and (.buildType | type == "string") and (.builder.id | type == "string")' <<<"${provenance}" >/dev/null
