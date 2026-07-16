@@ -1,195 +1,313 @@
 # Current Handoff
 
 Status: active
-Topic: Generation error clarity for provider failures
-Updated: 2026-07-02
+Topic: Account identity system rollout
+Updated: 2026-07-05
 
-## Branch And Commits
+## Branch And Current State
 
-- Current branch: `dev-deploy`
-- Remote target: `origin/dev-deploy`
-- Local and remote are synchronized at `2a273eddd`.
-- Feature commit: `69afe83a4 improve generation error clarity`
-- Merge commit: `2a273eddd merge generation error clarity into dev deploy`
+- Current integration branch: `serega`.
+- Same current project was pushed to `origin/serega` and `origin/dev-deploy`.
+- Current local HEAD when this handoff was written: `b3c71f2`.
+- Recent important commit: `b3c71f2 account: finish identity rollout integration`.
+- Recent merge included latest `origin/dev-deploy` provider model changes, including Nano Banana Pro routing through APIMart, before account rollout fixes were committed.
 - Do not commit or push additional changes unless the user explicitly asks.
 
-## Goal
+## Read This First
 
-Make generation failures clearer for VK Bot and Mini App without exposing raw
-provider payloads and without charging credits for failed generations.
+Use the canonical read order:
 
-Provider adapters now normalize model/content/request failures into bounded
-domain error classes. Worker maps those classes to safe terminal job codes and
-messages. VK and Mini App surfaces show product-safe messages only.
+1. `AGENTS.md`
+2. `.agents/state.json`
+3. `docs/ARCHITECTURE.md`
+4. `docs/ACCOUNT_IDENTITY_CONTRACT.md`
+5. `docs/ACCOUNT_ID_ONLY_AUDIT.md`
+6. Relevant local `AGENTS.md` for touched package/app
+7. Code and tests
 
-## What Changed
+Do not read archived handoffs by default. Use `docs/INDEX.md` only to route to
+task-specific docs.
 
-- Added `ProviderErrModelUnavailable` and `JobErrModelUnavailable`.
-- DeepInfra, APIMart, PoYo and Runway now classify provider-side
-  model-not-found-like responses as `provider_model_unavailable`.
-- Provider bodies containing safety, policy, moderation, NSFW, copyright,
-  filtered, blocked, prohibited or violation-like text classify as
-  `provider_content_rejected`.
-- Other malformed 400/422-style failures stay `provider_invalid_request`.
-- Provider raw response bodies are read with bounded limits and are not returned
-  as user-facing `Error.Message`.
-- Worker maps terminal `ProviderErrModelUnavailable` media failures to
-  `model_unavailable`.
-- Worker keeps `content_rejected` for safety failures and safe retry guidance
-  for `invalid_request`.
-- Terminal failed media jobs release reserved credits before failure delivery
-  notice.
-- VK failure notices now include safe Russian messages for
-  `model_unavailable` and `invalid_request`.
-- Mini App backend DTOs expose `user_message,omitempty` computed only from safe
-  job status/error code/modality. Raw `job.ErrorMessage` is not exposed as the
-  user message.
-- Mini App frontend `errorLabel(job)` prefers backend `user_message` and keeps
-  local fallback labels for older backend responses.
-- Added tests for safe DTOs, handler response shape, provider classification,
-  worker terminal mapping, VK delivery text and frontend fallback behavior.
+## Goal Of The Account Work
+
+The project is moving from VK-user-owned business data to account-owned business
+data.
+
+Target model:
+
+```text
+VK Bot / VK Mini App / future Telegram / Web / Mobile
+    -> platform/session verification
+    -> IdentityResolver
+    -> account_id
+    -> Billing / Jobs / Artifacts / Conversations / Referrals / Payments
+```
+
+`account_id` is the canonical owner of money, jobs, artifacts, conversations,
+payments, referrals and future subscriptions. VK user id, Telegram id, email,
+phone, Google, Apple and password credentials are identity bindings only.
+
+## What Was Implemented
+
+### Account schema and migration foundation
+
+- Added/used account identity schema:
+  - `accounts`
+  - `account_identities`
+  - `account_sessions`
+  - `account_credentials`
+  - `account_links_audit`
+- Existing VK users are backfilled to accounts and `provider=vk` identities.
+- Business tables have additive account owner columns for compatibility:
+  - `jobs.account_id`
+  - `payment_intents.account_id`
+  - `artifacts.owner_account_id`
+  - `conversations.account_id`
+  - referral account owner fields
+  - billing `owner_account_id` surfaces
+
+### Identity and account boundaries
+
+- `IdentityResolver` is the resolver bridge:
+  - `Resolve`
+  - `ResolveOrCreate`
+  - `LinkIdentity`
+  - `UnlinkIdentity`
+- `AccountService` is the product-facing account boundary above identity/auth:
+  - returns safe account DTOs;
+  - lists identities without raw PII;
+  - masks email/phone;
+  - routes verified link/unlink;
+  - keeps VK Bot, Mini App and future Web/Mobile from reading raw identity rows.
+
+### Account API
+
+Account HTTP routes are mounted under `/account/*`.
+
+Implemented endpoint families:
+
+```text
+GET    /account/me
+GET    /account/identities
+POST   /account/identities/email/request-code
+POST   /account/identities/email/verify
+POST   /account/identities/phone/request-otp
+POST   /account/identities/phone/verify
+DELETE /account/identities/{id}
+POST   /account/identities/{id}/unlink
+
+GET    /account/sessions
+POST   /account/sessions
+POST   /account/sessions/refresh
+POST   /account/sessions/logout
+POST   /account/sessions/{id}/revoke
+
+POST   /account/password/set
+POST   /account/password/login
+POST   /account/password/request-reset
+POST   /account/password/reset
+
+POST   /account/oauth/login
+POST   /account/oauth/link
+```
+
+Responses must stay safe: no raw `external_id`, `normalized_id`, tokens,
+launch params, refresh token hashes, provider subjects, phone/email in full, or
+private URLs.
+
+### Email and phone link flows
+
+- Email link flow:
+  - request code;
+  - store hashed challenge with TTL;
+  - verify code;
+  - link email identity to current account.
+- Phone link flow:
+  - request OTP;
+  - store hashed challenge with TTL;
+  - verify OTP;
+  - link phone identity to current account.
+- Delivery boundaries exist through `internal/adapter/accountdelivery`.
+- Default delivery remains fail-closed unless configured.
+- Rate-limit keys are hashed and must not include raw email/phone values.
+
+### Sessions and password login
+
+- Account sessions exist for future Web/Mobile:
+  - access/session handling;
+  - refresh token hash;
+  - revoke/logout;
+  - device info hash.
+- Password login is built on top of verified linked email:
+  - password hashes only;
+  - password cannot be set for an unverified/unlinked email;
+  - reset password uses email-code verification;
+  - reset rotates password and revokes active sessions.
+
+### OAuth/platform adapters
+
+- OAuth/platform adapter boundary exists under `internal/adapter/accountoauth`.
+- Supported target providers:
+  - Google
+  - Apple
+  - VK ID
+  - Telegram
+- Adapters only verify external assertions and pass verified assertions into the
+  shared account auth layer. Account linking/login logic remains in the account
+  layer, not in provider adapters.
+
+### VK Bot and Mini App account ownership
+
+- VK Bot and Mini App resolve users through `IdentityResolver`.
+- Product service boundaries now prefer/pass canonical `account_id` for:
+  - jobs;
+  - billing balance/reservations/top-ups;
+  - payment intents/history/webhook grants;
+  - artifacts and reference artifacts;
+  - conversations/dialog context;
+  - account UI.
+- Legacy `user_id` remains as channel metadata and rollback-safe compatibility,
+  especially for VK delivery and historical rows.
+
+### Account-first business flow
+
+Current business behavior is account-native at service boundaries, with legacy
+compatibility still present:
+
+- billing service has account-owner methods for balance, reservation, refund and
+  top-up;
+- payment service resolves ownership through account id;
+- job orchestrator accepts/persists account id;
+- artifact service can save owner user id plus owner account id;
+- worker checks reference artifact ownership through account owner helpers;
+- dialog context creates/reads conversations by canonical account owner.
+
+### Conflict and merge rules
+
+- Linking an identity already attached to the same account is idempotent.
+- Linking an identity owned by another account returns a controlled conflict.
+- No automatic account merge exists.
+- Money, jobs, artifacts, conversations, payments and referrals must not be
+  copied or moved during a conflicting link attempt.
+- Future merge flow must prove control over both accounts and write audit before
+  any merge.
 
 ## Key Files
 
-- `internal/domain/provider.go`
-- `internal/domain/job_errors.go`
-- `internal/adapter/provider/deepinfra/deepinfra.go`
-- `internal/adapter/provider/apimart/apimart.go`
-- `internal/adapter/provider/poyo/poyo.go`
-- `internal/adapter/provider/runway/runway.go`
+Docs:
+
+- `docs/ACCOUNT_IDENTITY_CONTRACT.md`
+- `docs/ACCOUNT_ID_ONLY_AUDIT.md`
+- `docs/ARCHITECTURE.md`
+- `.agents/state.json`
+
+Schema/storage:
+
+- `migrations/000035_account_identity.up.sql`
+- `migrations/000036_account_identity_backfill.up.sql`
+- `migrations/000037_account_business_dual_write.up.sql`
+- `internal/adapter/storage/postgres/account_identity.go`
+- `internal/adapter/storage/postgres/account_security.go`
+- `internal/adapter/storage/postgres/account_session.go`
+- `internal/adapter/storage/postgres/billing.go`
+- `internal/adapter/storage/postgres/payment.go`
+- `internal/adapter/storage/postgres/job.go`
+- `internal/adapter/storage/postgres/artifact.go`
+- `internal/adapter/storage/postgres/conversation.go`
+- `internal/adapter/storage/postgres/referral.go`
+
+Services/adapters:
+
+- `internal/service/identityresolver/service.go`
+- `internal/service/accountservice/service.go`
+- `internal/service/accountauth/service.go`
+- `internal/service/accountauth/password.go`
+- `internal/service/accountlink/service.go`
+- `internal/adapter/accountdelivery/sender.go`
+- `internal/adapter/accountoauth/*`
+- `internal/service/billingservice/service.go`
+- `internal/service/paymentservice/service.go`
+- `internal/service/joborchestrator/orchestrator.go`
+- `internal/service/artifactservice/service.go`
+- `internal/service/dialogcontext/service.go`
 - `internal/worker/worker.go`
-- `internal/worker/delivery.go`
-- `internal/adapter/inbound/miniapp/dto.go`
+
+Inbound/UI:
+
+- `internal/adapter/inbound/account/handler.go`
+- `internal/adapter/inbound/vk/handler.go`
+- `internal/adapter/inbound/vk/menu.go`
+- `internal/adapter/inbound/miniapp/handler.go`
+- `internal/adapter/inbound/miniapp/references.go`
+- `internal/adapter/inbound/miniapp/upload.go`
 - `web/miniapp/src/api/client.ts`
-
-Important tests:
-
-- `internal/adapter/provider/deepinfra/deepinfra_test.go`
-- `internal/adapter/provider/apimart/apimart_test.go`
-- `internal/adapter/provider/poyo/poyo_test.go`
-- `internal/adapter/provider/runway/runway_test.go`
-- `internal/worker/worker_test.go`
-- `internal/worker/delivery_test.go`
-- `internal/adapter/inbound/miniapp/dto_test.go`
-- `internal/adapter/inbound/miniapp/handler_test.go`
-- `web/miniapp/src/api/client.test.ts`
+- `web/miniapp/src/settings/AccountSection.tsx`
 
 ## Verification Already Run
 
-Before merge:
+Before the last push:
 
-- `go test -count=1 ./...`
+- `go test ./...`
 - `go vet ./...`
-- `npm --prefix web/miniapp run test`
-- `npm --prefix web/miniapp run typecheck`
-- `npm --prefix web/miniapp run build`
-- `npm --prefix web/miniapp run lint`
 - `git diff --check`
-- Local DEV stack start and smoke with `scripts/dev/start-dev-stack.ps1`
-- Public DEV smoke with `scripts/dev/smoke-dev.ps1`
-- DEV stack status with `scripts/dev/status-dev-stack.ps1`
 
-After merge into `dev-deploy`:
+Focused tests were also run for affected account/miniapp surfaces while fixing
+merge fallout.
 
-- `go test -count=1 ./...`
-- `go vet ./...`
-- `npm --prefix web/miniapp run test`
-- `npm --prefix web/miniapp run typecheck`
-- `npm --prefix web/miniapp run build`
-- `npm --prefix web/miniapp run lint`
-- `git diff --check`
-- Rebuilt local DEV stack from merged `dev-deploy`
-- Local reverse-proxy smoke passed
-- Public DEV smoke passed
-- DEV stack status reported OK with 0 warnings
+## Important Invariants
 
-GitHub:
+- VK Bot, Mini App and `cmd/api` must not call AI providers directly.
+- Provider/media work remains in worker/services/adapters.
+- Billing is ledger-based; no direct balance mutation.
+- Payment redirect URL is not payment proof.
+- Top-ups only through provider-verified webhook/reconciliation plus ledger.
+- `account_id` owns money, jobs, artifacts and history.
+- External identities are login/channel bindings only.
+- No raw PII, launch params, tokens, provider payloads, prompt bodies or private
+  URLs in logs, docs or API responses.
+- Link/unlink/login/password/session actions need audit and rate limiting.
+- Do not auto-merge accounts.
 
-- Pushed `dev-deploy`.
-- `Docker Images` workflow succeeded for `2a273eddd`.
-- No fresh `Deploy DEV` workflow run was visible after that push when checked.
-  The user later saw a VK safety rejection message, which confirms safe
-  `content_rejected` behavior but is not by itself definitive proof that
-  `2a273eddd` is deployed.
+## Current Compatibility State
 
-## Local Dev Env Notes
+The project is not fully legacy-free yet.
 
-`dev.env` is ignored and was intentionally not committed.
+Legacy compatibility that intentionally remains:
 
-Local changes made only to make local DEV smoke pass:
+- `users.id` is still present and used as a channel/legacy bridge.
+- Many repository method names still say `*ByUser` even when callers now pass
+  canonical account owner ids.
+- `jobs.user_id`, `payment_intents.user_id`, `artifacts.owner_user_id`,
+  `conversations.user_id` and billing `credit_accounts.user_id` remain populated
+  for foreign keys, delivery metadata and rollback.
+- Some referral APIs still expose legacy naming even though account fields are
+  dual-written.
+- Operator filters that accept `user_id` still exist for support workflows.
 
-- YooKassa secret was replaced with the user-provided test key. Do not copy or
-  print the value.
-- `IMAGE_PROVIDER=mock`
-- `VIDEO_PROVIDER=mock`
-- `RUNTIME_PRICING_DB_ENABLED=false`
-- `RUNTIME_PRICING_STATIC_FALLBACK_ENABLED=true`
+This is expected during rollout. Do not delete legacy fields or rewrite
+historical ownership without a dedicated migration plan and backfill validation.
 
-Do not stage `dev.env`.
+## Residual Risks / Next Work
 
-## Manual QA Notes
+1. Run full DB migration/integration tests against Postgres for split-owner rows
+   where `user_id != account_id`.
+2. Add production-sized query/index checks for account-owned hot paths.
+3. Finish cleanup of legacy method names after production data proves every
+   active business row has a valid account owner.
+4. Build real email/SMS delivery smoke if enabling standalone email/phone login.
+5. Configure and smoke real OAuth provider credentials before exposing OAuth UI.
+6. Implement account merge only as a separate explicit audited flow.
+7. Add end-to-end smoke:
+   `VK bot user -> pays/topups -> creates jobs -> links email -> logs in via web -> sees same balance/jobs/payments`.
+8. Keep DEV and PROD env parity checks active before pushing account auth changes
+   to production.
 
-Normal UI cannot select a nonexistent model. That is intentional: public
-catalogs only expose approved aliases and clients must not be able to submit
-provider-native `model_code` or `provider_model_id`.
+## Suggested Next Steps For The Other Agent
 
-Current manual evidence:
-
-- User reported successful generations in VK Bot and Mini App.
-- User reported bad generations show safe text and balance is correct.
-- Screenshot showed VK text for safety rejection:
-  safe content rejection, stars not charged, no raw provider text.
-
-To manually verify `model_unavailable`, use one of these approaches:
-
-1. Add a development-only mock provider fault injection flag such as
-   `MOCK_PROVIDER_FORCE_ERROR_CLASS=model_unavailable`. It must be allowed only
-   in `APP_ENV=development` or `APP_ENV=loadtest` and must fail config
-   validation in production.
-2. Temporarily point a DEV provider/model config to a real provider model that
-   is known to return provider-side model-not-found. Restore the config
-   immediately after the test.
-3. Keep relying on existing unit/integration tests for exact classification
-   until a dev-only fault injection path exists.
-
-The recommended next implementation is option 1 because it tests the full
-worker, billing release and user-message path without external provider spend
-or quota.
-
-## Security And Architecture Notes
-
-- Provider calls remain worker-only. VK handlers, Mini App BFF and `cmd/api`
-  still do not call providers directly.
-- Raw provider payloads, prompts, private URLs, tokens and API keys must not be
-  logged, committed or returned in DTOs.
-- Billing remains ledger-based. Failed terminal generations must release
-  reserved credits before user-facing failure notices.
-- Mini App `user_message` must remain derived from safe status/error code only.
-- Provider adapters should classify raw errors but return safe bounded messages
-  to the worker.
-
-## Residual Risks
-
-- `model_unavailable` is hard to verify manually through normal UI because the
-  product catalog correctly hides unsupported provider-native models.
-- GitHub `Deploy DEV` did not appear after the latest push when checked. If the
-  next agent needs deployed-runtime certainty, trigger or inspect `Deploy DEV`
-  before asking the user to retest.
-- Existing `content_rejected` VK text predates part of this change, so seeing
-  that text alone is not a definitive deployment proof for this specific
-  commit.
-- Live provider smoke can spend quota or money and requires explicit approval.
-
-## Suggested Next Steps
-
-1. If deployment certainty matters, run or inspect `Deploy DEV` for
-   `dev-deploy` at `2a273eddd`, then run DEV smoke.
-2. Add dev-only provider fault injection for manual `model_unavailable`,
-   `invalid_request`, `content_rejected` and `overloaded` smoke.
-3. Re-run focused checks after any fault injection change:
-   `go test ./internal/adapter/provider/mock ./internal/worker ./internal/adapter/inbound/miniapp`
-   and Mini App client tests if frontend behavior changes.
-4. Keep `.agents/state.json` and ignored env files out of routine commits.
-
-Do not read archived handoff files by default. Use `docs/INDEX.md` for
-documentation routing.
+1. Read the files listed in `Read This First`.
+2. Inspect `git status --short --branch` before touching anything.
+3. If continuing account work, start with
+   `docs/ACCOUNT_ID_ONLY_AUDIT.md` residual risks and add split-owner tests.
+4. Keep changes additive and rollback-safe.
+5. Do not run live VK/YooKassa/paid provider tests without explicit approval.
+6. Do not push unless the user explicitly asks.

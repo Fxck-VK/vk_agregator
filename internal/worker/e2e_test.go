@@ -96,6 +96,7 @@ func TestEndToEnd(t *testing.T) {
 		Artifacts:  artRepo,
 		Objects:    objects,
 		VK:         vkClient,
+		VKUploader: &fakeVKUploader{},
 		Billing:    billing,
 	})
 
@@ -182,6 +183,7 @@ func TestSeedream45AsyncPoYoImageFlowStoresArtifactAndCapturesPrice(t *testing.T
 		Artifacts:  h.artRepo,
 		Objects:    h.store,
 		VK:         vkClient,
+		VKUploader: &fakeVKUploader{},
 		Billing:    billing,
 	})
 	prices, err := pricingcatalog.NewStaticCatalog()

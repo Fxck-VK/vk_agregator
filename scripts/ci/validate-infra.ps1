@@ -140,7 +140,7 @@ function New-ComposeValidationEnvFile {
         "APP_IMAGE_REGISTRY=ghcr.io/fxck-vk/vk_agregator",
         "IMAGE_TAG=infra-validate",
         "BACKUP_IMAGE_TAG=infra-validate",
-        "DATABASE_URL=postgres://vk_ai_aggregator:vk_ai_aggregator@postgres:5432/vk_ai_aggregator?sslmode=disable",
+        "DATABASE_URL=config-validation-placeholder",
         "REDIS_ADDR=redis:6379",
         "S3_ENDPOINT=minio:9000",
         "S3_ACCESS_KEY=compose_validate_access",
@@ -222,7 +222,15 @@ function Assert-ReverseProxyConfig {
         "X-Forwarded-Proto",
         "proxy_set_header X-Forwarded-Proto https;",
         'proxy_set_header Forwarded "proto=https;host=$host";',
-        "/(admin|metrics|debug"
+        "/(admin|metrics|debug",
+        "Strict-Transport-Security",
+        "Content-Security-Policy",
+        "frame-ancestors 'self' https://vk.com https://*.vk.com https://vk.ru https://*.vk.ru",
+        "https://*.userapi.com",
+        "https://*.vkuserphoto.ru",
+        "X-Content-Type-Options",
+        "Referrer-Policy",
+        "Permissions-Policy"
     )
 
     foreach ($snippet in $requiredSnippets) {
@@ -234,8 +242,45 @@ function Assert-ReverseProxyConfig {
     if ($content -match '\$request(?!_)') {
         throw "reverse proxy access log must not use `$request because it includes query strings"
     }
+    if ($content -match '(?im)^\s*add_header\s+Access-Control-Allow-Origin\s+["'']?\*') {
+        throw "reverse proxy must not enable broad wildcard CORS"
+    }
+    if ($content -match '(?im)script-src\s+[^;]*(unsafe-inline|unsafe-eval)') {
+        throw "reverse proxy CSP must not allow unsafe inline/eval scripts"
+    }
 
     Write-Host "reverse proxy config OK"
+}
+
+function Assert-MiniAppStaticSecurityHeaders {
+    $path = Join-Path $repoRoot "deployments\nginx\miniapp.static.conf"
+    if (-not (Test-Path -LiteralPath $path)) {
+        throw "Mini App static nginx config is missing"
+    }
+
+    $content = Get-Content -LiteralPath $path -Raw
+    foreach ($snippet in @(
+        "Strict-Transport-Security",
+        "Content-Security-Policy",
+        "frame-ancestors 'self' https://vk.com https://*.vk.com https://vk.ru https://*.vk.ru",
+        "https://*.userapi.com",
+        "https://*.vkuserphoto.ru",
+        "X-Content-Type-Options",
+        "Referrer-Policy",
+        "Permissions-Policy"
+    )) {
+        if (-not $content.Contains($snippet)) {
+            throw "Mini App static nginx config is missing required security policy: $snippet"
+        }
+    }
+    if ($content -match '(?im)^\s*add_header\s+Access-Control-Allow-Origin\s+["'']?\*') {
+        throw "Mini App static nginx must not enable broad wildcard CORS"
+    }
+    if ($content -match '(?im)script-src\s+[^;]*(unsafe-inline|unsafe-eval)') {
+        throw "Mini App static CSP must not allow unsafe inline/eval scripts"
+    }
+
+    Write-Host "Mini App static browser security headers OK"
 }
 
 function Assert-DevReverseProxySmokeScript {
@@ -493,6 +538,7 @@ function Assert-ProductionDataServices {
         "Dockerfile.backup",
         "scripts\backup\backup-postgres.sh",
         "scripts\backup\backup-minio.sh",
+        "scripts\backup\test-objectsync-wrapper.sh",
         "scripts\backup\restore-postgres.sh",
         "scripts\backup\restore-minio.sh",
         "scripts\deploy\check-migrations-safe.ps1",
@@ -502,6 +548,26 @@ function Assert-ProductionDataServices {
         $fullPath = Join-Path $repoRoot $requiredFile
         if (-not (Test-Path -LiteralPath $fullPath)) {
             throw "production data-service support file is missing: $requiredFile"
+        }
+    }
+
+    $backupDockerfileContent = Get-Content -LiteralPath (Join-Path $repoRoot "Dockerfile.backup") -Raw
+    foreach ($requiredSnippet in @("./cmd/objectsync", "/out/objectsync", "/app/objectsync")) {
+        if (-not $backupDockerfileContent.Contains($requiredSnippet)) {
+            throw "Dockerfile.backup must build and install the internal object sync binary: $requiredSnippet"
+        }
+    }
+    if ($backupDockerfileContent -match '(?m)\b(?:aws-cli|minio-client|rclone)\b') {
+        throw "Dockerfile.backup must not include an external S3 CLI with an independently vulnerable dependency graph"
+    }
+
+    foreach ($relativePath in @("scripts\backup\backup-minio.sh", "scripts\backup\restore-minio.sh")) {
+        $scriptContent = Get-Content -LiteralPath (Join-Path $repoRoot $relativePath) -Raw
+        if ($scriptContent -notmatch '(?m)command -v objectsync' -or $scriptContent -notmatch '(?m)\bobjectsync\b.*\b(?:backup|restore)\b') {
+            throw "$relativePath must use the internal object sync binary with an explicit availability check"
+        }
+        if ($scriptContent -match '(?m)\b(?:aws|mc|rclone)\b') {
+            throw "$relativePath must not invoke an external S3 CLI"
         }
     }
 
@@ -579,6 +645,7 @@ function Assert-CloudflaredComposeConfig {
     $content = Get-Content -LiteralPath $path -Raw
     $requiredSnippets = @(
         "cloudflared:",
+        'image: ${CLOUDFLARED_IMAGE:-cloudflare/cloudflared:2024.12.2}',
         "profiles:",
         "- cloudflare",
         "TUNNEL_TOKEN:",
@@ -603,6 +670,15 @@ function Assert-CloudflaredComposeConfig {
     }
 
     Write-Host "production cloudflared compose config OK"
+}
+
+function Assert-ProductionComposeHardening {
+    $path = Join-Path $repoRoot "scripts\ci\assert-prod-compose-hardening.ps1"
+    if (-not (Test-Path -LiteralPath $path)) {
+        throw "production compose hardening assertion script is missing: scripts/ci/assert-prod-compose-hardening.ps1"
+    }
+
+    & $path
 }
 
 function Assert-DeployScripts {
@@ -868,13 +944,24 @@ function Assert-DockerImageWorkflow {
         "Dockerfile.provider-balance-bot",
         "Dockerfile.miniapp",
         "Dockerfile.migrate",
+        "Dockerfile.backup",
         "service: api",
         "service: worker",
         "service: provider-webhook",
         "service: provider-balance-bot",
         "service: miniapp",
         "service: migrate",
-        'push: ${{ github.event_name != ''pull_request'' }}'
+        "service: backup",
+        "pull-request-build:",
+        "Build without registry publication",
+        "push: false",
+        "publish:",
+        "if: github.event_name != 'pull_request'",
+        "push: true",
+        "id-token: write",
+        "sbom: true",
+        "provenance: mode=max",
+        "cosign sign --yes"
     )
 
     foreach ($snippet in $requiredSnippets) {
@@ -886,6 +973,15 @@ function Assert-DockerImageWorkflow {
     Write-Host "Docker image workflow OK"
 }
 
+function Assert-NightlyQualityWorkflow {
+    $path = Join-Path $repoRoot "scripts\ci\validate-nightly-quality.ps1"
+    if (-not (Test-Path -LiteralPath $path)) {
+        throw "Nightly Quality workflow validator is missing: scripts/ci/validate-nightly-quality.ps1"
+    }
+
+    & $path
+}
+
 function Assert-RollbackConfig {
     $composePath = Join-Path $repoRoot "docker-compose.prod.yml"
     if (-not (Test-Path -LiteralPath $composePath)) {
@@ -895,13 +991,13 @@ function Assert-RollbackConfig {
 
     $content = Get-Content -LiteralPath $composePath -Raw
     $requiredSnippets = @(
-        '${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/api:${IMAGE_TAG:-main}',
-        '${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/worker:${IMAGE_TAG:-main}',
-        '${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/provider-webhook:${IMAGE_TAG:-main}',
-        '${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/provider-balance-bot:${IMAGE_TAG:-main}',
-        '${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/miniapp:${IMAGE_TAG:-main}',
-        '${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/migrate:${IMAGE_TAG:-main}',
-        '${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/backup:${BACKUP_IMAGE_TAG:-main}'
+        '${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/api:${IMAGE_TAG:?IMAGE_TAG is required}',
+        '${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/worker:${IMAGE_TAG:?IMAGE_TAG is required}',
+        '${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/provider-webhook:${IMAGE_TAG:?IMAGE_TAG is required}',
+        '${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/provider-balance-bot:${IMAGE_TAG:?IMAGE_TAG is required}',
+        '${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/miniapp:${IMAGE_TAG:?IMAGE_TAG is required}',
+        '${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/migrate:${IMAGE_TAG:?IMAGE_TAG is required}',
+        '${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/backup:${BACKUP_IMAGE_TAG:?BACKUP_IMAGE_TAG is required}'
     )
 
     foreach ($snippet in $requiredSnippets) {
@@ -972,7 +1068,7 @@ function Assert-ObservabilityConfig {
         "api:8080",
         "worker:9090",
         "provider-webhook:8082",
-        "miniapp:80",
+        "miniapp:8080",
         "reverse-proxy/proxy-health",
         "payment_webhook_oldest_unprocessed_age_seconds",
         "vkagg_queue_oldest_age_seconds",
@@ -1055,7 +1151,7 @@ function Invoke-Promtool {
     $promDir = (Resolve-Path (Join-Path $repoRoot "observability\prometheus")).Path.Replace("\", "/")
     $mount = "${promDir}:/etc/prometheus:ro"
     $prometheusImage = if ([string]::IsNullOrWhiteSpace($env:PROMETHEUS_IMAGE)) {
-        "prom/prometheus:latest"
+        "prom/prometheus:v2.55.1"
     } else {
         $env:PROMETHEUS_IMAGE
     }
@@ -1099,7 +1195,19 @@ Invoke-Step "docker compose config" {
 
 if (Test-Path -LiteralPath "docker-compose.observability.yml") {
     Invoke-Step "docker compose observability config" {
-        docker compose --project-name vk-ai-aggregator-observability -f docker-compose.observability.yml config | Out-Null
+        $previousExporterDSN = $env:POSTGRES_EXPORTER_DATA_SOURCE_NAME
+        try {
+            if ([string]::IsNullOrWhiteSpace($previousExporterDSN)) {
+                $env:POSTGRES_EXPORTER_DATA_SOURCE_NAME = "config-validation-placeholder"
+            }
+            docker compose --project-name vk-ai-aggregator-observability -f docker-compose.observability.yml config | Out-Null
+        } finally {
+            if ($null -eq $previousExporterDSN) {
+                Remove-Item Env:POSTGRES_EXPORTER_DATA_SOURCE_NAME -ErrorAction SilentlyContinue
+            } else {
+                $env:POSTGRES_EXPORTER_DATA_SOURCE_NAME = $previousExporterDSN
+            }
+        }
     }
 }
 
@@ -1142,14 +1250,17 @@ Assert-NoActiveEnvExampleReferences
 Assert-CloudflareConfigHasNoSecrets
 Assert-CloudflareDeploymentConfig
 Assert-ReverseProxyConfig
+Assert-MiniAppStaticSecurityHeaders
 Assert-DevReverseProxySmokeScript
 Assert-DevStartStackScript
 Assert-DevStopStatusScripts
 Assert-DevPublicSmokeScript
 Assert-ProductionDataServices
 Assert-CloudflaredComposeConfig
+Assert-ProductionComposeHardening
 Assert-DeployScripts
 Assert-DockerImageWorkflow
+Assert-NightlyQualityWorkflow
 Assert-RollbackConfig
 Assert-ObservabilityConfig
 Assert-PrometheusConfig

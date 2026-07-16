@@ -68,6 +68,10 @@ type Config struct {
 	// LaunchParamsMaxAge is the maximum allowed age of the vk_ts timestamp.
 	// Zero disables the age check.
 	LaunchParamsMaxAge time.Duration
+	// AllowQueryLaunchParams permits the legacy launch_params query fallback.
+	// It is intended only for explicit local development/test use and must stay
+	// false in server environments to keep signed credentials out of URLs.
+	AllowQueryLaunchParams bool
 	// JobRateLimiter bounds POST /miniapp/jobs and POST /miniapp/estimate after
 	// launch params have been verified, keyed by the verified vk_user_id.
 	JobRateLimiter JobRateLimiter
@@ -250,10 +254,9 @@ func (h *Handler) limitArtifactUploadConcurrency(next http.HandlerFunc) http.Han
 // for any signature failure without revealing details (audit S1).
 func (h *Handler) auth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		rawParams := r.Header.Get("X-Launch-Params")
-		if rawParams == "" {
-			// Also accept query param for easier browser testing.
-			rawParams = r.URL.Query().Get("launch_params")
+		rawParams := strings.TrimSpace(r.Header.Get("X-Launch-Params"))
+		if rawParams == "" && h.cfg.AllowQueryLaunchParams {
+			rawParams = strings.TrimSpace(r.URL.Query().Get("launch_params"))
 		}
 
 		if rawParams == "" && h.cfg.AppSecret == "" {
@@ -357,10 +360,8 @@ func (h *Handler) clientEvent(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		_ = r.Body.Close()
 	}()
-	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8<<10))
-	dec.DisallowUnknownFields()
 	var req ClientEventRequest
-	if err := dec.Decode(&req); err != nil {
+	if err := decodeStrictJSON(w, r, 8<<10, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid client event")
 		return
 	}
@@ -594,13 +595,8 @@ func operationMeta(op string) (domain.OperationType, domain.Modality, bool) {
 // ---------------------------------------------------------------------------
 
 func (h *Handler) readJobRequest(w http.ResponseWriter, r *http.Request) (CreateJobRequest, domain.OperationType, domain.Modality, miniAppModelSpec, bool) {
-	body, err := io.ReadAll(io.LimitReader(r.Body, 64<<10))
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "cannot read body")
-		return CreateJobRequest{}, "", "", miniAppModelSpec{}, false
-	}
 	var req CreateJobRequest
-	if err := json.Unmarshal(body, &req); err != nil {
+	if err := decodeStrictJSON(w, r, 64<<10, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid json")
 		return CreateJobRequest{}, "", "", miniAppModelSpec{}, false
 	}
@@ -1320,13 +1316,8 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) readChatMessageRequest(w http.ResponseWriter, r *http.Request) (ChatMessageRequest, bool) {
-	body, err := io.ReadAll(io.LimitReader(r.Body, 64<<10))
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "cannot read body")
-		return ChatMessageRequest{}, false
-	}
 	var req ChatMessageRequest
-	if err := json.Unmarshal(body, &req); err != nil {
+	if err := decodeStrictJSON(w, r, 64<<10, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid json")
 		return ChatMessageRequest{}, false
 	}
@@ -1635,13 +1626,8 @@ func (h *Handler) acceptReferral(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	body, err := io.ReadAll(io.LimitReader(r.Body, 16<<10))
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "cannot read body")
-		return
-	}
 	var req ApplyReferralRequest
-	if err := json.Unmarshal(body, &req); err != nil {
+	if err := decodeStrictJSON(w, r, 16<<10, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid json")
 		return
 	}
@@ -1725,13 +1711,8 @@ func (h *Handler) createPaymentIntent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	body, err := io.ReadAll(io.LimitReader(r.Body, 16<<10))
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "cannot read body")
-		return
-	}
 	var req CreatePaymentIntentRequest
-	if err := json.Unmarshal(body, &req); err != nil {
+	if err := decodeStrictJSON(w, r, 16<<10, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid json")
 		return
 	}
@@ -2065,6 +2046,22 @@ func truncateChatText(text string, maxRunes int) string {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+func decodeStrictJSON(w http.ResponseWriter, r *http.Request, maxBytes int64, dst any) error {
+	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBytes))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(dst); err != nil {
+		return err
+	}
+	var extra struct{}
+	if err := dec.Decode(&extra); err != io.EOF {
+		if err == nil {
+			return errors.New("request body must contain exactly one JSON value")
+		}
+		return err
+	}
+	return nil
+}
 
 const (
 	defaultLimit        = 20

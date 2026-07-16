@@ -16,9 +16,9 @@ import (
 
 const header = "Факты НейроХаб"
 
-// BalanceProvider reads the backend-owned user balance for assistant facts.
+// BalanceProvider reads the backend-owned account balance for assistant facts.
 type BalanceProvider interface {
-	BalanceForEstimate(ctx context.Context, userID uuid.UUID) (int64, error)
+	BalanceForEstimate(ctx context.Context, accountID uuid.UUID) (int64, error)
 }
 
 // CatalogSource returns the current public product catalog. It lets callers
@@ -36,8 +36,8 @@ type Config struct {
 
 // Input is one text-assistant request.
 type Input struct {
-	UserID uuid.UUID
-	Prompt string
+	AccountID uuid.UUID
+	Prompt    string
 }
 
 // Facts is the rendered public context for the text model.
@@ -100,25 +100,10 @@ func (b *Builder) Build(ctx context.Context, in Input) (Facts, error) {
 	}
 
 	if intent.balance {
-		lines = append(lines, b.balanceLine(ctx, in.UserID))
+		lines = append(lines, b.balanceLine(ctx, in.AccountID))
 	}
 
 	return Facts{Relevant: true, Text: strings.Join(lines, "\n")}, nil
-}
-
-// Attach prepends facts to an already-rendered prompt without changing the
-// user text stored by dialog history.
-func Attach(facts, prompt string) string {
-	facts = strings.TrimSpace(facts)
-	prompt = strings.TrimSpace(prompt)
-	switch {
-	case facts == "":
-		return prompt
-	case prompt == "":
-		return facts
-	default:
-		return facts + "\n\nИнструкция ассистенту: используй факты выше, когда они отвечают на вопрос пользователя о НейроХаб. Если нужного факта нет, скажи, что сейчас в НейроХаб это недоступно.\n\n" + prompt
-	}
 }
 
 type intent struct {
@@ -272,11 +257,11 @@ func (b *Builder) catalogLines(ctx context.Context) ([]string, []string, error) 
 	return imageLines, videoLines, nil
 }
 
-func (b *Builder) balanceLine(ctx context.Context, userID uuid.UUID) string {
-	if b == nil || b.balance == nil || userID == uuid.Nil {
+func (b *Builder) balanceLine(ctx context.Context, accountID uuid.UUID) string {
+	if b == nil || b.balance == nil || accountID == uuid.Nil {
 		return "- Баланс пользователя: временно недоступен."
 	}
-	balance, err := b.balance.BalanceForEstimate(ctx, userID)
+	balance, err := b.balance.BalanceForEstimate(ctx, accountID)
 	if err != nil {
 		return "- Баланс пользователя: временно недоступен."
 	}

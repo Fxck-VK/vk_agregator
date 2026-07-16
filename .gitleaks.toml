@@ -51,14 +51,129 @@ keywords = [
   "ADMIN_TOKEN",
 ]
 
-[[rules.allowlists]]
-description = "Documented non-secret placeholders"
-regexTarget = "line"
-regexes = [
-  '''dev-confirmation''',
-  '''(?i)change[-_]?me''',
-  '''example''',
-  '''^(?:OPENAI_API_KEY|DEEPINFRA_API_KEY|FAL_API_KEY|FAL_KEY|FAL_WEBHOOK_SECRET|RUNWAYML_API_SECRET|POYO_API_KEY|APIMART_API_KEY|YOOKASSA_SHOP_ID|YOOKASSA_SECRET_KEY)=$''',
-  '''loadtest-(confirmation|admin-token)''',
-  '''placeholder''',
-]
+  [[rules.allowlists]]
+  description = "Exact non-secret values in committed environment templates"
+  condition = "AND"
+  regexTarget = "secret"
+  paths = [
+    '''(?i)(^|/)\.env(?:\.[a-z0-9_-]+)?\.example$''',
+  ]
+  regexes = [
+    '''^(?:loadtest-confirmation|loadtest-admin-token|CHANGE_ME_DEV_VK_ACCESS_TOKEN|CHANGE_ME_DEV_VK_CALLBACK_SECRET|CHANGE_ME_DEV_VK_CONFIRMATION_TOKEN|CHANGE_ME_DEV_ADMIN_TOKEN|CHANGE_ME_VK_ACCESS_TOKEN|CHANGE_ME_VK_CALLBACK_SECRET|CHANGE_ME_VK_CONFIRMATION_TOKEN|CHANGE_ME_LONG_RANDOM_ADMIN_TOKEN|CHANGE_ME_YOOKASSA_SECRET_KEY|CHANGE_ME_DEEPINFRA_API_KEY|CHANGE_ME_OPENAI_API_KEY|CHANGE_ME_GRAFANA_ADMIN_PASSWORD|change-me-local-only|dev-confirmation)$''',
+  ]
+
+  [[rules.allowlists]]
+  description = "Grafana password is referenced from an environment variable"
+  condition = "AND"
+  regexTarget = "secret"
+  paths = [
+    '''(?i)(^|/)docker-compose\.observability\.yml$''',
+  ]
+  regexes = [
+    '''^-?change-me-local-only$''',
+  ]
+
+  [[rules.allowlists]]
+  description = "Exact load-test admin placeholder documented for local mock runs"
+  condition = "AND"
+  regexTarget = "secret"
+  paths = [
+    '''(?i)(^|/)docs/LOAD_TESTING\.md$''',
+  ]
+  regexes = [
+    '''^loadtest-admin-token$''',
+  ]
+
+  [[rules.allowlists]]
+  description = "Exact mock credentials used by the DEV env script tests"
+  condition = "AND"
+  regexTarget = "secret"
+  paths = [
+    '''(?i)(^|/)scripts/deploy/test-dev-env\.sh$''',
+  ]
+  regexes = [
+    '''^(?:deepinfra-placeholder|deepinfra-dev-test-key|vk-token-placeholder|vk-callback-placeholder|vk-confirmation-placeholder|yookassa-key-placeholder|secret-vk-token-for-test|secret-vk-callback-for-test|secret-vk-confirmation-for-test|secret-yookassa-key-for-test)$''',
+  ]
+
+  [[rules.allowlists]]
+  description = "Exact mock credentials used by release bundle tests"
+  condition = "AND"
+  regexTarget = "secret"
+  paths = [
+    '''(?i)(^|/)scripts/deploy/test-release-bundle\.ps1$''',
+  ]
+  regexes = [
+    '''^(?:vk-live-confirmation|admin-live-token)$''',
+  ]
+
+  [[rules.allowlists]]
+  description = "Exact DEV placeholder assignments asserted by infra validation"
+  condition = "AND"
+  regexTarget = "secret"
+  paths = [
+    '''(?i)(^|/)scripts/ci/validate-infra\.ps1$''',
+  ]
+  regexes = [
+    '''^(?:CHANGE_ME_DEV_VK_ACCESS_TOKEN|CHANGE_ME_DEV_VK_CALLBACK_SECRET|CHANGE_ME_DEV_VK_CONFIRMATION_TOKEN)$''',
+  ]
+
+  [[rules.allowlists]]
+  description = "Exact Admin UI rendering canary"
+  condition = "AND"
+  regexTarget = "secret"
+  paths = [
+    '''(?i)(^|/)web/admin/e2e/admin\.smoke\.spec\.ts$''',
+  ]
+  regexes = [
+    '''^stage9_admin_token_must_not_render$''',
+  ]
+
+[[rules]]
+id = "generic-api-key"
+
+  [[rules.allowlists]]
+  description = "Exact admin idempotency fixtures"
+  condition = "AND"
+  regexTarget = "secret"
+  paths = [
+    '''(?i)(^|/)internal/adapter/inbound/admin/handler_test\.go$''',
+  ]
+  regexes = [
+    '''^(?:stage7-idempotency-marker-(?:one|two)|stage7-private-key-(?:1|2)|stage7-payment-key)$''',
+  ]
+
+  [[rules.allowlists]]
+  description = "Exact Admin UI rendering canary"
+  condition = "AND"
+  regexTarget = "secret"
+  paths = [
+    '''(?i)(^|/)web/admin/e2e/admin\.smoke\.spec\.ts$''',
+  ]
+  regexes = [
+    '''^stage9_admin_token_must_not_render$''',
+  ]
+
+  [[rules.allowlists]]
+  description = "Exact operator idempotency placeholder in runbooks"
+  condition = "AND"
+  regexTarget = "secret"
+  paths = [
+    '''(?i)(^|/)(?:RUNBOOK\.md|docs/BILLING_AGENT_HANDOFF\.md)$''',
+  ]
+  regexes = [
+    '''^operator-ticket-123$''',
+  ]
+
+[[rules]]
+id = "curl-auth-header"
+
+  [[rules.allowlists]]
+  description = "Exact local operator commands using environment-backed credentials"
+  condition = "AND"
+  regexTarget = "match"
+  paths = [
+    '''(?i)(^|/)(?:RUNBOOK\.md|docs/BILLING_AGENT_HANDOFF\.md)$''',
+  ]
+  regexes = [
+    '''X-Admin-Token:\s*\$ADMIN_TOKEN''',
+  ]

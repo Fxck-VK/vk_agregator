@@ -31,9 +31,8 @@ func (r *ProviderTaskRepository) Create(ctx context.Context, task *domain.Provid
 	if task.ID == uuid.Nil {
 		task.ID = uuid.New()
 	}
-	if len(task.Request) == 0 {
-		task.Request = []byte("{}")
-	}
+	task.Request = domain.DurableProviderTaskRequestJSON()
+	task.Result = domain.DurableProviderTaskResultJSONFromRaw(task.Result, task.Status, task.ErrorClass)
 	if task.AttemptNo == 0 {
 		task.AttemptNo = 1
 	}
@@ -53,6 +52,7 @@ func (r *ProviderTaskRepository) Create(ctx context.Context, task *domain.Provid
 
 // Update persists changes to a provider task.
 func (r *ProviderTaskRepository) Update(ctx context.Context, task *domain.ProviderTask) error {
+	task.Result = domain.DurableProviderTaskResultJSONFromRaw(task.Result, task.Status, task.ErrorClass)
 	const q = `
 		UPDATE provider_tasks
 		SET external_id = $2, attempt_no = $3, status = $4, result = $5,

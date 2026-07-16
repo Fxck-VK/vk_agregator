@@ -1261,8 +1261,8 @@ func (p *processor) buildRequest(ctx context.Context, job *domain.Job, attempt i
 	assistantFactsText := ""
 	if p.assistantFacts != nil && job.OperationType == domain.OperationTextGenerate && job.Modality == domain.ModalityText {
 		facts, err := p.assistantFacts.Build(ctx, assistantfacts.Input{
-			UserID: workerJobOwnerID(job),
-			Prompt: pp.Prompt,
+			AccountID: workerJobOwnerID(job),
+			Prompt:    pp.Prompt,
 		})
 		if err != nil {
 			return domain.ProviderRequest{}, err
@@ -1330,9 +1330,6 @@ func (p *processor) buildRequest(ctx context.Context, job *domain.Job, attempt i
 			}
 		}
 	}
-	if assistantFactsText != "" {
-		prompt = assistantfacts.Attach(assistantFactsText, prompt)
-	}
 	var inputURLs []string
 	if (job.Modality == domain.ModalityImage || job.Modality == domain.ModalityVideo) && len(pp.ReferenceArtifactIDs) > 0 {
 		var err error
@@ -1353,6 +1350,7 @@ func (p *processor) buildRequest(ctx context.Context, job *domain.Job, attempt i
 		ModelCode:            modelCode,
 		Provider:             pp.Provider,
 		Prompt:               prompt,
+		TrustedFacts:         assistantFactsText,
 		NegativePrompt:       pp.NegativePrompt,
 		Size:                 size,
 		AspectRatio:          pp.AspectRatio,
@@ -1836,7 +1834,7 @@ func (p *processor) latestTask(ctx context.Context, jobID uuid.UUID) (*domain.Pr
 
 // pollOnce polls the provider once and applies the normalized result.
 func (p *processor) pollOnce(ctx context.Context, job *domain.Job, pt *domain.ProviderTask, provider domain.Provider, task queue.Task) error {
-	if res, ok := durableProviderTaskResult(pt); ok {
+	if res, ok := durableProviderTaskResultForJob(pt, job); ok {
 		return p.applyResult(ctx, job, pt, res, task)
 	}
 	callCtx, cancel := p.providerCallContext(ctx)
@@ -1895,6 +1893,10 @@ func (p *processor) requeueProviderPollAfterError(ctx context.Context, job *doma
 }
 
 func durableProviderTaskResult(pt *domain.ProviderTask) (domain.ProviderTaskResult, bool) {
+	return durableProviderTaskResultForJob(pt, nil)
+}
+
+func durableProviderTaskResultForJob(pt *domain.ProviderTask, job *domain.Job) (domain.ProviderTaskResult, bool) {
 	if pt == nil || !pt.Status.IsTerminal() || len(pt.Result) == 0 {
 		return domain.ProviderTaskResult{}, false
 	}
@@ -1905,7 +1907,20 @@ func durableProviderTaskResult(pt *domain.ProviderTask) (domain.ProviderTaskResu
 	if res.Status != pt.Status {
 		res.Status = pt.Status
 	}
-	return res, true
+	switch res.Status {
+	case domain.ProviderTaskSucceeded:
+		if len(res.OutputURLs) > 0 {
+			return res, true
+		}
+		if job != nil && len(job.OutputArtifactIDs) > 0 {
+			return res, true
+		}
+		return domain.ProviderTaskResult{}, false
+	case domain.ProviderTaskFailed, domain.ProviderTaskCancelled:
+		return res, true
+	default:
+		return domain.ProviderTaskResult{}, false
+	}
 }
 
 // applyResult persists the task result and advances the job: success stores
@@ -1913,9 +1928,7 @@ func durableProviderTaskResult(pt *domain.ProviderTask) (domain.ProviderTaskResu
 // classified and retried or made terminal.
 func (p *processor) applyResult(ctx context.Context, job *domain.Job, pt *domain.ProviderTask, res domain.ProviderTaskResult, task queue.Task) error {
 	pt.Status = res.Status
-	if raw, err := json.Marshal(res); err == nil {
-		pt.Result = raw
-	}
+	pt.Result = domain.DurableProviderTaskResultJSON(res)
 	if res.ErrorClass != "" {
 		pt.ErrorClass = res.ErrorClass
 	}

@@ -181,7 +181,7 @@ func TestExhaustedRetryRoutesToDLQ(t *testing.T) {
 	}
 }
 
-func TestGenerationWorkerResumesDurableSyncProviderResultAfterSubmitCrash(t *testing.T) {
+func TestGenerationWorkerRecoversSanitizedSyncProviderResultAfterSubmitCrash(t *testing.T) {
 	ctx := context.Background()
 	provider := &durableSyncProvider{}
 	var failingJobs *failStatusOnceJobRepo
@@ -215,8 +215,8 @@ func TestGenerationWorkerResumesDurableSyncProviderResultAfterSubmitCrash(t *tes
 	if got := h.reload(t, job.ID); got.Status != domain.JobStatusResultReady {
 		t.Fatalf("status after retry = %q, want result_ready", got.Status)
 	}
-	if provider.pollCalls != 0 {
-		t.Fatalf("retry used provider Poll instead of durable result: calls=%d", provider.pollCalls)
+	if provider.pollCalls != 1 {
+		t.Fatalf("retry should recover by polling sanitized provider task, calls=%d", provider.pollCalls)
 	}
 	if provider.submitCalls != 1 {
 		t.Fatalf("provider Submit calls = %d, want 1", provider.submitCalls)
@@ -245,6 +245,7 @@ func (r *failStatusOnceJobRepo) UpdateStatus(ctx context.Context, id uuid.UUID, 
 type durableSyncProvider struct {
 	submitCalls int
 	pollCalls   int
+	result      domain.ProviderTaskResult
 }
 
 func (p *durableSyncProvider) Name() domain.ProviderName { return domain.ProviderMock }
@@ -269,6 +270,7 @@ func (p *durableSyncProvider) Submit(_ context.Context, req domain.ProviderReque
 		OutputURLs: []string{"data:text/plain;base64,b2s="},
 		Text:       "ok",
 	}
+	p.result = res
 	raw, _ := json.Marshal(res)
 	return domain.ProviderTask{
 		JobID:          req.JobID,
@@ -283,7 +285,10 @@ func (p *durableSyncProvider) Submit(_ context.Context, req domain.ProviderReque
 
 func (p *durableSyncProvider) Poll(context.Context, domain.ProviderTaskRef) (domain.ProviderTaskResult, error) {
 	p.pollCalls++
-	return domain.ProviderTaskResult{Status: domain.ProviderTaskFailed, ErrorClass: domain.ProviderErrTaskNotFound}, nil
+	if p.result.Status == "" {
+		return domain.ProviderTaskResult{Status: domain.ProviderTaskFailed, ErrorClass: domain.ProviderErrTaskNotFound}, nil
+	}
+	return p.result, nil
 }
 
 func (p *durableSyncProvider) Cancel(context.Context, domain.ProviderTaskRef) error { return nil }

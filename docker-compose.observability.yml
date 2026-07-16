@@ -1,6 +1,6 @@
 services:
   prometheus:
-    image: ${PROMETHEUS_IMAGE:-prom/prometheus:latest}
+    image: ${PROMETHEUS_IMAGE:-prom/prometheus:v2.55.1}
     container_name: vk-ai-aggregator-prometheus
     command:
       - --config.file=/etc/prometheus/prometheus.yml
@@ -27,7 +27,7 @@ services:
     restart: unless-stopped
 
   alertmanager:
-    image: ${ALERTMANAGER_IMAGE:-prom/alertmanager:latest}
+    image: ${ALERTMANAGER_IMAGE:-prom/alertmanager:v0.27.0}
     container_name: vk-ai-aggregator-alertmanager
     entrypoint:
       - /bin/sh
@@ -54,7 +54,7 @@ services:
     restart: unless-stopped
 
   grafana:
-    image: ${GRAFANA_IMAGE:-grafana/grafana:latest}
+    image: ${GRAFANA_IMAGE:-grafana/grafana:11.5.2}
     container_name: vk-ai-aggregator-grafana
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
@@ -78,7 +78,7 @@ services:
     restart: unless-stopped
 
   loki:
-    image: ${LOKI_IMAGE:-grafana/loki:latest}
+    image: ${LOKI_IMAGE:-grafana/loki:3.3.2}
     container_name: vk-ai-aggregator-loki
     command:
       - -config.file=/etc/loki/loki.yml
@@ -89,7 +89,7 @@ services:
     restart: unless-stopped
 
   alloy:
-    image: ${ALLOY_IMAGE:-grafana/alloy:latest}
+    image: ${ALLOY_IMAGE:-grafana/alloy:v1.6.1}
     container_name: vk-ai-aggregator-alloy
     command:
       - run
@@ -104,7 +104,7 @@ services:
     restart: unless-stopped
 
   tempo:
-    image: ${TEMPO_IMAGE:-grafana/tempo:latest}
+    image: ${TEMPO_IMAGE:-grafana/tempo:2.6.1}
     container_name: vk-ai-aggregator-tempo
     user: "0:0"
     command:
@@ -115,7 +115,7 @@ services:
     restart: unless-stopped
 
   otel-collector:
-    image: ${OTEL_COLLECTOR_IMAGE:-otel/opentelemetry-collector-contrib:latest}
+    image: ${OTEL_COLLECTOR_IMAGE:-otel/opentelemetry-collector-contrib:0.116.1}
     container_name: vk-ai-aggregator-otel-collector
     command:
       - --config=/etc/otel-collector.yml
@@ -129,7 +129,7 @@ services:
     restart: unless-stopped
 
   blackbox-exporter:
-    image: ${BLACKBOX_EXPORTER_IMAGE:-prom/blackbox-exporter:latest}
+    image: ${BLACKBOX_EXPORTER_IMAGE:-prom/blackbox-exporter:v0.25.0}
     container_name: vk-ai-aggregator-blackbox-exporter
     command:
       - --config.file=/etc/blackbox_exporter/blackbox.yml
@@ -143,17 +143,17 @@ services:
     restart: unless-stopped
 
   postgres-exporter:
-    image: ${POSTGRES_EXPORTER_IMAGE:-prometheuscommunity/postgres-exporter:latest}
+    image: ${POSTGRES_EXPORTER_IMAGE:-prometheuscommunity/postgres-exporter:v0.16.0}
     container_name: vk-ai-aggregator-postgres-exporter
     environment:
-      DATA_SOURCE_NAME: ${POSTGRES_EXPORTER_DATA_SOURCE_NAME:-postgresql://vk_ai_aggregator:vk_ai_aggregator@postgres:5432/vk_ai_aggregator?sslmode=disable}
+      DATA_SOURCE_NAME: ${POSTGRES_EXPORTER_DATA_SOURCE_NAME:?POSTGRES_EXPORTER_DATA_SOURCE_NAME is required}
     networks:
       - default
       - prod
     restart: unless-stopped
 
   redis-exporter:
-    image: ${REDIS_EXPORTER_IMAGE:-oliver006/redis_exporter:latest}
+    image: ${REDIS_EXPORTER_IMAGE:-oliver006/redis_exporter:v1.67.0}
     container_name: vk-ai-aggregator-redis-exporter
     environment:
       REDIS_ADDR: ${REDIS_EXPORTER_REDIS_ADDR:-redis://redis:6379}
@@ -163,7 +163,7 @@ services:
     restart: unless-stopped
 
   node-exporter:
-    image: ${NODE_EXPORTER_IMAGE:-prom/node-exporter:latest}
+    image: ${NODE_EXPORTER_IMAGE:-prom/node-exporter:v1.8.2}
     container_name: vk-ai-aggregator-node-exporter
     command:
       - --path.rootfs=/host
@@ -175,9 +175,8 @@ services:
     restart: unless-stopped
 
   cadvisor:
-    image: ${CADVISOR_IMAGE:-gcr.io/cadvisor/cadvisor:latest}
+    image: ${CADVISOR_IMAGE:-gcr.io/cadvisor/cadvisor:v0.49.1}
     container_name: vk-ai-aggregator-cadvisor
-    privileged: true
     devices:
       - /dev/kmsg
     volumes:

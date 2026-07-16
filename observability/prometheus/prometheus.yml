@@ -118,7 +118,7 @@ scrape_configs:
           - http://worker:9090/healthz
           - http://maintenance-worker:9091/healthz
           - http://provider-webhook:8082/readyz
-          - http://miniapp:80/
+          - http://miniapp:8080/
           - http://reverse-proxy/proxy-health
     relabel_configs:
       - source_labels:

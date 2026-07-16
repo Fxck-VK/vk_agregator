@@ -9,112 +9,182 @@ permissions:
   contents: read
 
 jobs:
+  workflow-policy:
+    name: Workflow Policy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install actionlint
+        run: go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+
+      - name: Validate GitHub Actions workflows
+        run: |
+          "$(go env GOPATH)/bin/actionlint" .github/workflows/*.yml
+
+      - name: Validate Nightly Quality coverage
+        shell: pwsh
+        run: ./scripts/ci/validate-nightly-quality.ps1
+
   go-security:
     name: Go Security
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: go.mod
           cache: true
 
+      - name: Install gosec
+        run: go install github.com/securego/gosec/v2/cmd/gosec@v2.28.0
+
       - name: Run gosec
-        uses: securego/gosec@v2
-        with:
-          args: -conf .gosec.json ./...
+        run: |
+          "$(go env GOPATH)/bin/gosec" -conf .gosec.json ./...
 
       - name: Install govulncheck
-        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+        run: go install golang.org/x/vuln/cmd/govulncheck@v1.6.0
 
       - name: Run govulncheck
         run: |
           "$(go env GOPATH)/bin/govulncheck" ./...
+
   frontend-security:
-    name: Frontend Security
+    name: Frontend Security (${{ matrix.app }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - app: Mini App
+            path: web/miniapp
+            lockfile: web/miniapp/package-lock.json
+          - app: Admin
+            path: web/admin
+            lockfile: web/admin/package-lock.json
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "22"
           cache: npm
-          cache-dependency-path: web/miniapp/package-lock.json
+          cache-dependency-path: ${{ matrix.lockfile }}
 
       - name: Install dependencies
-        run: npm --prefix web/miniapp ci
+        run: npm --prefix "${{ matrix.path }}" ci
 
       - name: Audit dependencies
-        run: npm --prefix web/miniapp audit --audit-level=moderate
+        run: npm --prefix "${{ matrix.path }}" audit --audit-level=moderate
 
   k6-smoke-load:
     name: k6 Smoke/Load
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
-      - name: Run k6 scripts when present
+      - name: Validate k6 scripts
         shell: bash
         run: |
           set -euo pipefail
           mapfile -t scripts < <(find . -type f \( -path "./k6/*.js" -o -path "./tests/k6/*.js" -o -path "./load-tests/*.js" \) | sort)
           if [ "${#scripts[@]}" -eq 0 ]; then
-            echo "No k6 scripts found; skipping."
-            exit 0
+            echo "Expected at least one k6 script."
+            exit 1
           fi
 
           for script in "${scripts[@]}"; do
-            echo "Running k6: ${script}"
-            docker run --rm -i \
+            echo "Inspecting k6: ${script}"
+            docker run --rm \
+              --network none \
               -v "${PWD}:/src:ro" \
-              grafana/k6:latest run "/src/${script#./}"
+              -w /src \
+              grafana/k6:2.1.0 inspect "${script#./}"
           done
 
-  container-scan:
-    name: Container Scan
+  trivy-filesystem:
+    name: Trivy Filesystem/Misconfig
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
-      - name: Trivy filesystem scan
+      - name: Scan repository filesystem and configuration
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,misconfig
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          format: table
+          hide-progress: true
+          version: v0.72.0
+        timeout-minutes: 15
+
+  trivy-images:
+    name: Trivy Image (${{ matrix.service }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: api
+            dockerfile: Dockerfile.api
+          - service: worker
+            dockerfile: Dockerfile.worker
+          - service: provider-webhook
+            dockerfile: Dockerfile.provider-webhook
+          - service: provider-balance-bot
+            dockerfile: Dockerfile.provider-balance-bot
+          - service: miniapp
+            dockerfile: Dockerfile.miniapp
+          - service: migrate
+            dockerfile: Dockerfile.migrate
+          - service: backup
+            dockerfile: Dockerfile.backup
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Assert expected Dockerfile exists
         shell: bash
         run: |
-          set -euo pipefail
-          docker run --rm \
-            -v "${PWD}:/src:ro" \
-            aquasec/trivy:latest fs \
-              --scanners vuln,misconfig \
-              --severity HIGH,CRITICAL \
-              --exit-code 1 \
-              --no-progress \
-              /src
-
-      - name: Trivy container image scan when Dockerfiles exist
-        shell: bash
-        run: |
-          set -euo pipefail
-          mapfile -t dockerfiles < <(find . -type f \( -name Dockerfile -o -name "*.Dockerfile" \) | sort)
-          if [ "${#dockerfiles[@]}" -eq 0 ]; then
-            echo "No Dockerfiles found; skipping container image scan."
-            exit 0
+          if [ ! -f "${{ matrix.dockerfile }}" ]; then
+            echo "Expected production Dockerfile is missing: ${{ matrix.dockerfile }}"
+            exit 1
           fi
 
-          for dockerfile in "${dockerfiles[@]}"; do
-            context_dir="$(dirname "$dockerfile")"
-            image_name="vk-ai-aggregator-ci-$(echo "$dockerfile" | tr '/.' '--' | tr -cd '[:alnum:]-')"
-            echo "Building ${image_name} from ${dockerfile}"
-            docker build -f "$dockerfile" -t "$image_name" "$context_dir"
-            docker run --rm aquasec/trivy:latest image \
-              --severity HIGH,CRITICAL \
-              --exit-code 1 \
-              --no-progress \
-              "$image_name"
-          done
+      - name: Build image
+        shell: bash
+        run: |
+          set -euo pipefail
+          image_ref="nightly/${{ matrix.service }}:${GITHUB_SHA}"
+          docker build --file "${{ matrix.dockerfile }}" --tag "${image_ref}" .
+
+      - name: Scan image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: nightly/${{ matrix.service }}:${{ github.sha }}
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          format: table
+          hide-progress: true
+          version: v0.72.0
+        timeout-minutes: 15

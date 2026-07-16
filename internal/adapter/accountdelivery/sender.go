@@ -278,25 +278,6 @@ func normalizedProvider(provider string) string {
 	return strings.ToLower(strings.TrimSpace(provider))
 }
 
-func buildEmailMessageLegacy(from, to, subject, code string, expiresAt time.Time) []byte {
-	var buf bytes.Buffer
-	headers := map[string]string{
-		"From":                      sanitizeHeader(from),
-		"To":                        sanitizeHeader(to),
-		"Subject":                   mime.QEncoding.Encode("utf-8", sanitizeHeader(subject)),
-		"MIME-Version":              "1.0",
-		"Content-Type":              "text/plain; charset=UTF-8",
-		"Content-Transfer-Encoding": "8bit",
-	}
-	for key, value := range headers {
-		_, _ = fmt.Fprintf(&buf, "%s: %s\r\n", key, value)
-	}
-	_, _ = fmt.Fprintf(&buf, "\r\nКод подтверждения НейроХаб: %s\r\n", code)
-	_, _ = fmt.Fprintf(&buf, "Код действует до %s.\r\n", expiresAt.UTC().Format(time.RFC3339))
-	_, _ = fmt.Fprint(&buf, "Если вы не запрашивали код, просто проигнорируйте это письмо.\r\n")
-	return buf.Bytes()
-}
-
 func buildEmailMessage(from, to, subject, code string, expiresAt time.Time) []byte {
 	var buf bytes.Buffer
 	headers := map[string]string{

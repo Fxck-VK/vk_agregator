@@ -1,11 +1,30 @@
 # syntax=docker/dockerfile:1
 
-FROM postgres:16-alpine
+ARG GO_VERSION=1.25.12
 
-RUN apk add --no-cache bash aws-cli ca-certificates coreutils findutils
+FROM golang:${GO_VERSION}-alpine AS objectsync-build
+
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY cmd/objectsync ./cmd/objectsync
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/objectsync ./cmd/objectsync
+
+FROM alpine:3.23
+
+RUN apk upgrade --no-cache \
+    && apk add --no-cache bash ca-certificates coreutils findutils postgresql-client \
+    && addgroup -S backup \
+    && adduser -S -G backup backup
 
 WORKDIR /app
+ENV PATH="/app:${PATH}"
+COPY --from=objectsync-build /out/objectsync /app/objectsync
 COPY scripts/backup /app/scripts/backup
-RUN chmod +x /app/scripts/backup/*.sh
+RUN chmod +x /app/scripts/backup/*.sh \
+    && mkdir -p /backups /backup-metrics \
+    && chown -R backup:backup /app /backups /backup-metrics
+
+USER backup
 
 CMD ["/app/scripts/backup/backup-postgres.sh"]

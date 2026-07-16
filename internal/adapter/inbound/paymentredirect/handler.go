@@ -103,7 +103,7 @@ func (h *Handler) redirectVKPayment(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "payment unavailable", http.StatusGone)
 		return
 	}
-	http.Redirect(w, r, target, http.StatusSeeOther)
+	http.Redirect(w, r, target, http.StatusSeeOther) // #nosec G710 -- target is a server-stored provider URL gated by source, state, expiry, and HTTPS validation.
 }
 
 func setNoStoreHeaders(w http.ResponseWriter) {

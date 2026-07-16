@@ -2,27 +2,39 @@ package accountauth
 
 import (
 	"context"
-	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 
 	"github.com/google/uuid"
+	"golang.org/x/crypto/argon2"
+	"golang.org/x/crypto/pbkdf2"
 
 	"vk-ai-aggregator/internal/domain"
 )
 
 const (
-	passwordMinBytes      = 8
-	passwordMaxBytes      = 256
-	passwordSaltBytes     = 16
-	passwordHashBytes     = 32
-	passwordIterations    = 120000
-	passwordHashAlgorithm = "pbkdf2_sha256"
+	passwordMinBytes                      = 8
+	passwordMaxBytes                      = 256
+	passwordSaltBytes                     = 16
+	passwordHashBytes                     = 32
+	passwordMaxEncodedHashBytes           = 256
+	passwordHashAlgorithm                 = "pbkdf2_sha256" // #nosec G101 -- legacy password hash algorithm identifier, not a credential.
+	passwordLegacyPBKDF2Iterations        = 120000
+	passwordMaxPBKDF2Iterations           = 600000
+	passwordCurrentHashAlgorithm          = "argon2id" // #nosec G101 -- password hash algorithm identifier, not a credential.
+	passwordArgonVersion                  = argon2.Version
+	passwordArgonMemoryKiB         uint32 = 19 * 1024
+	passwordArgonTime              uint32 = 2
+	passwordArgonThreads           uint8  = 1
+	passwordMaxArgonMemoryKiB      uint64 = 64 * 1024
+	passwordMaxArgonTime           uint64 = 10
+	passwordMaxArgonThreads        uint64 = 4
 )
 
 var (
@@ -127,9 +139,14 @@ func (s *Service) AuthenticateEmailPassword(ctx context.Context, email, password
 		}
 		return domain.IdentityResolution{}, err
 	}
-	ok, err := verifyPassword(password, credential.SecretHash)
+	ok, needsRehash, err := verifyPasswordWithUpgrade(password, credential.SecretHash)
 	if err != nil || !ok {
 		return domain.IdentityResolution{}, ErrInvalidPasswordLogin
+	}
+	if needsRehash {
+		if err := s.upsertPassword(ctx, accountID, password); err != nil {
+			return domain.IdentityResolution{}, err
+		}
 	}
 	if err := s.recordAudit(ctx, accountID, nil, domain.AccountLinkActionLogin, domain.IdentityProviderEmail); err != nil {
 		return domain.IdentityResolution{}, err
@@ -210,37 +227,152 @@ func hashPassword(password string) (string, error) {
 	if _, err := rand.Read(salt); err != nil {
 		return "", err
 	}
-	sum := pbkdf2SHA256([]byte(password), salt, passwordIterations, passwordHashBytes)
-	return strings.Join([]string{
-		passwordHashAlgorithm,
-		strconv.Itoa(passwordIterations),
+	sum := argon2.IDKey(
+		[]byte(password),
+		salt,
+		passwordArgonTime,
+		passwordArgonMemoryKiB,
+		passwordArgonThreads,
+		passwordHashBytes,
+	)
+	return fmt.Sprintf(
+		"$%s$v=%d$m=%d,t=%d,p=%d$%s$%s",
+		passwordCurrentHashAlgorithm,
+		passwordArgonVersion,
+		passwordArgonMemoryKiB,
+		passwordArgonTime,
+		passwordArgonThreads,
 		base64.RawStdEncoding.EncodeToString(salt),
 		base64.RawStdEncoding.EncodeToString(sum),
-	}, "$"), nil
+	), nil
 }
 
 func verifyPassword(password, encoded string) (bool, error) {
+	ok, _, err := verifyPasswordWithUpgrade(password, encoded)
+	return ok, err
+}
+
+func verifyPasswordWithUpgrade(password, encoded string) (bool, bool, error) {
 	if validatePassword(password) != nil {
-		return false, nil
+		return false, false, nil
 	}
+	if len(encoded) == 0 || len(encoded) > passwordMaxEncodedHashBytes {
+		return false, false, errors.New("accountauth: invalid password hash size")
+	}
+	if strings.HasPrefix(encoded, "$"+passwordCurrentHashAlgorithm+"$") {
+		return verifyArgon2idPassword(password, encoded)
+	}
+	if strings.HasPrefix(encoded, passwordHashAlgorithm+"$") {
+		ok, err := verifyLegacyPBKDF2Password(password, encoded)
+		return ok, ok && err == nil, err
+	}
+	return false, false, errors.New("accountauth: unsupported password hash")
+}
+
+func verifyLegacyPBKDF2Password(password, encoded string) (bool, error) {
 	parts := strings.Split(encoded, "$")
 	if len(parts) != 4 || parts[0] != passwordHashAlgorithm {
 		return false, errors.New("accountauth: unsupported password hash")
 	}
 	iterations, err := strconv.Atoi(parts[1])
-	if err != nil || iterations <= 0 {
+	if err != nil || iterations < passwordLegacyPBKDF2Iterations || iterations > passwordMaxPBKDF2Iterations {
 		return false, errors.New("accountauth: invalid password hash iterations")
 	}
 	salt, err := base64.RawStdEncoding.DecodeString(parts[2])
-	if err != nil || len(salt) == 0 {
+	if err != nil || len(salt) != passwordSaltBytes {
 		return false, errors.New("accountauth: invalid password hash salt")
 	}
 	expected, err := base64.RawStdEncoding.DecodeString(parts[3])
-	if err != nil || len(expected) == 0 {
+	if err != nil || len(expected) != passwordHashBytes {
 		return false, errors.New("accountauth: invalid password hash digest")
 	}
-	actual := pbkdf2SHA256([]byte(password), salt, iterations, len(expected))
+	actual := pbkdf2.Key([]byte(password), salt, iterations, len(expected), sha256.New)
 	return subtle.ConstantTimeCompare(actual, expected) == 1, nil
+}
+
+func verifyArgon2idPassword(password, encoded string) (bool, bool, error) {
+	parts := strings.Split(encoded, "$")
+	if len(parts) != 6 || parts[0] != "" || parts[1] != passwordCurrentHashAlgorithm {
+		return false, false, errors.New("accountauth: invalid argon2id hash format")
+	}
+	version, err := parsePasswordHashUint(parts[2], "v=")
+	if err != nil || version != uint64(passwordArgonVersion) {
+		return false, false, errors.New("accountauth: invalid argon2id version")
+	}
+	params := strings.Split(parts[3], ",")
+	if len(params) != 3 {
+		return false, false, errors.New("accountauth: invalid argon2id parameters")
+	}
+	memory, memoryErr := parsePasswordHashUint32(params[0], "m=")
+	timeCost, timeErr := parsePasswordHashUint32(params[1], "t=")
+	threads, threadsErr := parsePasswordHashUint8(params[2], "p=")
+	if memoryErr != nil || timeErr != nil || threadsErr != nil ||
+		memory == 0 || memory > uint32(passwordMaxArgonMemoryKiB) ||
+		timeCost == 0 || timeCost > uint32(passwordMaxArgonTime) ||
+		threads == 0 || threads > uint8(passwordMaxArgonThreads) {
+		return false, false, errors.New("accountauth: unsafe argon2id parameters")
+	}
+	salt, err := base64.RawStdEncoding.DecodeString(parts[4])
+	if err != nil || len(salt) != passwordSaltBytes {
+		return false, false, errors.New("accountauth: invalid argon2id salt")
+	}
+	expected, err := base64.RawStdEncoding.DecodeString(parts[5])
+	if err != nil || len(expected) != passwordHashBytes {
+		return false, false, errors.New("accountauth: invalid argon2id digest")
+	}
+	actual := argon2.IDKey([]byte(password), salt, timeCost, memory, threads, passwordHashBytes)
+	ok := subtle.ConstantTimeCompare(actual, expected) == 1
+	needsRehash := ok && (memory != passwordArgonMemoryKiB ||
+		timeCost != passwordArgonTime || threads != passwordArgonThreads)
+	return ok, needsRehash, nil
+}
+
+func parsePasswordHashUint(raw, prefix string) (uint64, error) {
+	value, err := passwordHashParameterValue(raw, prefix)
+	if err != nil {
+		return 0, err
+	}
+	return strconv.ParseUint(value, 10, 64)
+}
+
+func parsePasswordHashUint32(raw, prefix string) (uint32, error) {
+	value, err := passwordHashParameterValue(raw, prefix)
+	if err != nil {
+		return 0, err
+	}
+	var parsed uint32
+	if _, err := fmt.Sscanf(value, "%d", &parsed); err != nil {
+		return 0, errors.New("accountauth: invalid password hash parameter")
+	}
+	return parsed, nil
+}
+
+func parsePasswordHashUint8(raw, prefix string) (uint8, error) {
+	value, err := passwordHashParameterValue(raw, prefix)
+	if err != nil {
+		return 0, err
+	}
+	var parsed uint8
+	if _, err := fmt.Sscanf(value, "%d", &parsed); err != nil {
+		return 0, errors.New("accountauth: invalid password hash parameter")
+	}
+	return parsed, nil
+}
+
+func passwordHashParameterValue(raw, prefix string) (string, error) {
+	if !strings.HasPrefix(raw, prefix) {
+		return "", errors.New("accountauth: invalid password hash parameter")
+	}
+	value := strings.TrimPrefix(raw, prefix)
+	if value == "" || len(value) > 10 {
+		return "", errors.New("accountauth: invalid password hash parameter")
+	}
+	for _, digit := range value {
+		if digit < '0' || digit > '9' {
+			return "", errors.New("accountauth: invalid password hash parameter")
+		}
+	}
+	return value, nil
 }
 
 func validatePassword(password string) error {
@@ -251,33 +383,4 @@ func validatePassword(password string) error {
 		return ErrWeakPassword
 	}
 	return nil
-}
-
-func pbkdf2SHA256(password, salt []byte, iterations, keyLen int) []byte {
-	hashLen := sha256.Size
-	numBlocks := (keyLen + hashLen - 1) / hashLen
-	out := make([]byte, 0, numBlocks*hashLen)
-	for block := 1; block <= numBlocks; block++ {
-		u := pbkdf2Block(password, salt, iterations, block)
-		out = append(out, u...)
-	}
-	return out[:keyLen]
-}
-
-func pbkdf2Block(password, salt []byte, iterations, block int) []byte {
-	mac := hmac.New(sha256.New, password)
-	_, _ = mac.Write(salt)
-	_, _ = mac.Write([]byte{byte(block >> 24), byte(block >> 16), byte(block >> 8), byte(block)})
-	u := mac.Sum(nil)
-	out := make([]byte, len(u))
-	copy(out, u)
-	for i := 1; i < iterations; i++ {
-		mac = hmac.New(sha256.New, password)
-		_, _ = mac.Write(u)
-		u = mac.Sum(nil)
-		for j := range out {
-			out[j] ^= u[j]
-		}
-	}
-	return out
 }

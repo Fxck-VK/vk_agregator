@@ -6,6 +6,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -23,6 +24,7 @@ type deliveryHarness struct {
 	artifacts  *memory.ArtifactRepo
 	objects    *memory.ObjectStore
 	vk         *vkdelivery.MockClient
+	uploader   *fakeVKUploader
 	billingRpo *memory.BillingRepo
 	billing    *billingservice.Service
 	worker     *worker.DeliveryWorker
@@ -35,6 +37,7 @@ func newDeliveryHarness(t *testing.T) *deliveryHarness {
 	artifacts := memory.NewArtifactRepo()
 	objects := memory.NewObjectStore()
 	vk := vkdelivery.NewMockClient()
+	uploader := &fakeVKUploader{}
 	billingRpo := memory.NewBillingRepo()
 	billing := billingservice.New(billingRpo, billingservice.WithStartingBalance(1000))
 	dw := worker.NewDeliveryWorker(worker.DeliveryDeps{
@@ -43,6 +46,7 @@ func newDeliveryHarness(t *testing.T) *deliveryHarness {
 		Artifacts:  artifacts,
 		Objects:    objects,
 		VK:         vk,
+		VKUploader: uploader,
 		Billing:    billing,
 	})
 	return &deliveryHarness{
@@ -51,6 +55,7 @@ func newDeliveryHarness(t *testing.T) *deliveryHarness {
 		artifacts:  artifacts,
 		objects:    objects,
 		vk:         vk,
+		uploader:   uploader,
 		billingRpo: billingRpo,
 		billing:    billing,
 		worker:     dw,
@@ -81,6 +86,17 @@ func (u *fakeVKUploader) UploadVideo(_ context.Context, peerID int64, filename s
 	u.videoBytes = append([]byte(nil), data...)
 	u.videoFilename = filename
 	return "video123_456_key", nil
+}
+
+type fakeURLSigner struct {
+	err error
+}
+
+func (s fakeURLSigner) PresignedGetURL(context.Context, string, string, time.Duration) (string, error) {
+	if s.err != nil {
+		return "", s.err
+	}
+	return "https://signed-delivery.example/artifact", nil
 }
 
 // resultReadyJob creates a user account, reserves credits, stores an output
@@ -344,6 +360,63 @@ func TestDeliveryUploadsRawPhotoArtifactToVK(t *testing.T) {
 	sent := h.vk.Sent()
 	if len(sent) != 1 || sent[0].Attachment != "photo123_456_key" {
 		t.Fatalf("expected uploaded VK attachment send, got %+v", sent)
+	}
+}
+
+func TestDeliveryFailsClosedWithoutVKAttachmentOrSignedURL(t *testing.T) {
+	h := newDeliveryHarness(t)
+	h.worker = worker.NewDeliveryWorker(worker.DeliveryDeps{
+		Jobs:        h.jobs,
+		Deliveries:  h.deliveries,
+		Artifacts:   h.artifacts,
+		Objects:     h.objects,
+		VK:          h.vk,
+		Billing:     h.billing,
+		MaxAttempts: 1,
+	})
+	ctx := context.Background()
+	job := h.resultReadyJob(t, domain.MediaTypeImage, "raw png bytes")
+
+	if err := h.worker.Process(ctx, deliveryTask(job)); err != nil {
+		t.Fatalf("terminal delivery failure should be acknowledged: %v", err)
+	}
+	got, _ := h.jobs.GetByID(ctx, job.ID)
+	if got.Status != domain.JobStatusFailedTerminal || got.CostCaptured != 0 {
+		t.Fatalf("unsafe media fallback must fail closed without capture: status=%q captured=%d", got.Status, got.CostCaptured)
+	}
+	if sent := h.vk.Sent(); len(sent) != 0 {
+		t.Fatalf("unsafe media fallback sent %d message(s)", len(sent))
+	}
+	if h.captureEntryCount(t, job.UserID) != 0 || h.releaseEntryCount(t, job.UserID) != 1 {
+		t.Fatalf("unsafe media fallback must release reservation without capture")
+	}
+}
+
+func TestDeliveryUsesSignedURLWhenExplicitlyEnabled(t *testing.T) {
+	h := newDeliveryHarness(t)
+	h.worker = worker.NewDeliveryWorker(worker.DeliveryDeps{
+		Jobs:       h.jobs,
+		Deliveries: h.deliveries,
+		Artifacts:  h.artifacts,
+		Objects:    h.objects,
+		VK:         h.vk,
+		Billing:    h.billing,
+		SignedURLs: true,
+		Signer:     fakeURLSigner{},
+	})
+	ctx := context.Background()
+	job := h.resultReadyJob(t, domain.MediaTypeImage, "raw png bytes")
+
+	if err := h.worker.Process(ctx, deliveryTask(job)); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+	got, _ := h.jobs.GetByID(ctx, job.ID)
+	if got.Status != domain.JobStatusSucceeded || got.CostCaptured != 10 {
+		t.Fatalf("signed delivery did not complete safely: status=%q captured=%d", got.Status, got.CostCaptured)
+	}
+	sent := h.vk.Sent()
+	if len(sent) != 1 || sent[0].Attachment == "" || !strings.HasPrefix(sent[0].Attachment, "https://signed-delivery.example/") {
+		t.Fatalf("expected one signed delivery attachment")
 	}
 }
 

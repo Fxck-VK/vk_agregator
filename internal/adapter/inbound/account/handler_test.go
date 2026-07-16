@@ -2,10 +2,16 @@ package account
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"sort"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -77,6 +83,45 @@ func TestAccountAPIRejectsUnauthenticatedRequest(t *testing.T) {
 
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("status = %d, want 401, body = %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestAccountAPILaunchParamsTransportIsHeaderOnlyByDefault(t *testing.T) {
+	h, _ := newTestHandler(t)
+	const secret = "account-launch-transport-test-secret"
+	h.cfg = Config{AppSecret: secret, LaunchParamsMaxAge: time.Hour}
+	launchParams := signedAccountLaunchParams(t, 123456789, secret)
+
+	queryReq := httptest.NewRequest(http.MethodGet, "/account/me?launch_params="+url.QueryEscape(launchParams), nil)
+	queryRec := httptest.NewRecorder()
+	h.Routes().ServeHTTP(queryRec, queryReq)
+	if queryRec.Code != http.StatusUnauthorized {
+		t.Fatalf("query launch params status = %d, want 401", queryRec.Code)
+	}
+
+	headerReq := httptest.NewRequest(http.MethodGet, "/account/me", nil)
+	headerReq.Header.Set("X-Launch-Params", launchParams)
+	headerRec := httptest.NewRecorder()
+	h.Routes().ServeHTTP(headerRec, headerReq)
+	if headerRec.Code != http.StatusOK {
+		t.Fatalf("header launch params status = %d, want 200, body = %s", headerRec.Code, headerRec.Body.String())
+	}
+}
+
+func TestAccountAPIQueryLaunchParamsRequireExplicitOptIn(t *testing.T) {
+	h, _ := newTestHandler(t)
+	const secret = "account-query-opt-in-test-secret"
+	h.cfg = Config{
+		AppSecret:              secret,
+		LaunchParamsMaxAge:     time.Hour,
+		AllowQueryLaunchParams: true,
+	}
+	launchParams := signedAccountLaunchParams(t, 123456789, secret)
+	req := httptest.NewRequest(http.MethodGet, "/account/me?launch_params="+url.QueryEscape(launchParams), nil)
+	rec := httptest.NewRecorder()
+	h.Routes().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("explicit query opt-in status = %d, want 200, body = %s", rec.Code, rec.Body.String())
 	}
 }
 
@@ -788,6 +833,31 @@ func newTestHandlerWithEmailConfig(t *testing.T, emailCfg accountlink.Config) (*
 type fakeOAuthVerifier struct {
 	login domain.VerifiedAccountLogin
 	err   error
+}
+
+func signedAccountLaunchParams(t *testing.T, vkUserID int64, secret string) string {
+	t.Helper()
+	values := url.Values{
+		"vk_app_id":   {"123456"},
+		"vk_platform": {"desktop_web"},
+		"vk_ts":       {strconv.FormatInt(time.Now().Unix(), 10)},
+		"vk_user_id":  {strconv.FormatInt(vkUserID, 10)},
+	}
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	parts := make([]string, 0, len(keys))
+	for _, key := range keys {
+		parts = append(parts, key+"="+url.QueryEscape(values.Get(key)))
+	}
+	mac := hmac.New(sha256.New, []byte(secret))
+	if _, err := mac.Write([]byte(strings.Join(parts, "&"))); err != nil {
+		t.Fatalf("sign launch params: %v", err)
+	}
+	values.Set("sign", base64.RawURLEncoding.EncodeToString(mac.Sum(nil)))
+	return values.Encode()
 }
 
 func (f fakeOAuthVerifier) Verify(_ context.Context, _ accountoauth.VerifyRequest) (domain.VerifiedAccountLogin, error) {

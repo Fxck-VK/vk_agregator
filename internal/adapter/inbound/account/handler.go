@@ -36,6 +36,9 @@ type Config struct {
 	// LaunchParamsMaxAge bounds replay of VK launch params. Zero disables age
 	// validation and is intended only for local tests.
 	LaunchParamsMaxAge time.Duration
+	// AllowQueryLaunchParams permits the legacy launch_params query fallback.
+	// It is dev/test-only because URLs leak through browser and proxy surfaces.
+	AllowQueryLaunchParams bool
 }
 
 // AccountService is the safe product account boundary.
@@ -154,7 +157,7 @@ func (h *Handler) accountIDFromRequest(r *http.Request) (uuid.UUID, error) {
 		return uuid.Nil, errors.New("account api: identity resolver is required")
 	}
 	raw := strings.TrimSpace(r.Header.Get("X-Launch-Params"))
-	if raw == "" {
+	if raw == "" && h.cfg.AllowQueryLaunchParams {
 		raw = strings.TrimSpace(r.URL.Query().Get("launch_params"))
 	}
 	if raw == "" && h.cfg.AppSecret == "" {

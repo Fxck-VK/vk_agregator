@@ -17,8 +17,8 @@ require_restore_confirmation() {
 
 require_restore_confirmation
 
-if ! command -v aws >/dev/null 2>&1; then
-  echo "aws CLI is missing." >&2
+if ! command -v objectsync >/dev/null 2>&1; then
+  echo "Object sync tool is missing." >&2
   exit 1
 fi
 
@@ -45,27 +45,18 @@ if [ ! -d "${restore_dir}" ]; then
   exit 1
 fi
 
-scheme="http"
-if [ "${S3_USE_SSL:-false}" = "true" ]; then
-  scheme="https"
-fi
-endpoint="${scheme}://${S3_ENDPOINT}"
+access_key="${S3_ACCESS_KEY:-${AWS_ACCESS_KEY_ID:-}}"
+secret_key="${S3_SECRET_KEY:-${AWS_SECRET_ACCESS_KEY:-}}"
 
-export AWS_ACCESS_KEY_ID="${S3_ACCESS_KEY:-${AWS_ACCESS_KEY_ID:-}}"
-export AWS_SECRET_ACCESS_KEY="${S3_SECRET_KEY:-${AWS_SECRET_ACCESS_KEY:-}}"
-export AWS_DEFAULT_REGION="${S3_REGION:-${AWS_DEFAULT_REGION:-us-east-1}}"
-export AWS_EC2_METADATA_DISABLED=true
-
-if [ -z "${AWS_ACCESS_KEY_ID}" ] || [ -z "${AWS_SECRET_ACCESS_KEY}" ]; then
+if [ -z "${access_key}" ] || [ -z "${secret_key}" ]; then
   echo "S3 credentials are required for MinIO/S3 restore." >&2
   exit 1
 fi
 
-sync_args=(--endpoint-url "${endpoint}" s3 sync "${restore_dir}" "s3://${S3_BUCKET}" --only-show-errors)
+echo "Restoring the configured MinIO/S3 bucket from ${restore_dir}"
 if [ "${RESTORE_MINIO_DELETE:-false}" = "true" ]; then
-  sync_args+=(--delete)
+  objectsync restore --directory "${restore_dir}" --delete
+else
+  objectsync restore --directory "${restore_dir}"
 fi
-
-echo "Restoring MinIO/S3 bucket ${S3_BUCKET} from ${restore_dir}"
-aws "${sync_args[@]}"
 echo "MinIO/S3 restore completed. Verify artifact access before opening traffic."
