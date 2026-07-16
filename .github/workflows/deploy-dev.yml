@@ -309,8 +309,15 @@ jobs:
           bash scripts/deploy/check-dev-env.sh --env-file "${rendered_env}"
 
           scp "${ssh_opts[@]}" "${rendered_env}" "${DEV_DEPLOY_USER}@${DEV_DEPLOY_HOST}:${DEV_DEPLOY_PATH}/.env.next"
-          ssh "${ssh_opts[@]}" "${DEV_DEPLOY_USER}@${DEV_DEPLOY_HOST}" \
-            "set -euo pipefail; cd '${DEV_DEPLOY_PATH}'; install -m 600 .env.next .env; rm -f .env.next"
+          {
+            printf 'deploy_path=%q\n' "${DEV_DEPLOY_PATH}"
+            cat <<'REMOTE'
+          set -euo pipefail
+          cd "${deploy_path}"
+          install -m 600 .env.next .env
+          rm -f .env.next
+          REMOTE
+          } | ssh "${ssh_opts[@]}" "${DEV_DEPLOY_USER}@${DEV_DEPLOY_HOST}" bash -s
       - name: Run DEV deploy
         id: dev_deploy
         shell: bash
@@ -323,8 +330,15 @@ jobs:
           set -euo pipefail
           ssh_opts=(-i "${HOME}/.ssh/deploy_key" -o StrictHostKeyChecking=yes -o UserKnownHostsFile="${HOME}/.ssh/known_hosts" -o GlobalKnownHostsFile=/dev/null)
 
-          ssh "${ssh_opts[@]}" "${DEV_DEPLOY_USER}@${DEV_DEPLOY_HOST}" \
-            "set -euo pipefail; cd '${DEV_DEPLOY_PATH}'; bash scripts/deploy/deploy-dev.sh --branch dev-deploy --env-file .env --skip-pull --with-cloudflare --skip-public-smoke --image-tag '${DEPLOY_IMAGE_TAG}' --timeout-seconds 240"
+          {
+            printf 'deploy_path=%q\n' "${DEV_DEPLOY_PATH}"
+            printf 'deploy_image_tag=%q\n' "${DEPLOY_IMAGE_TAG}"
+            cat <<'REMOTE'
+          set -euo pipefail
+          cd "${deploy_path}"
+          bash scripts/deploy/deploy-dev.sh --branch dev-deploy --env-file .env --skip-pull --with-cloudflare --skip-public-smoke --image-tag "${deploy_image_tag}" --timeout-seconds 240
+          REMOTE
+          } | ssh "${ssh_opts[@]}" "${DEV_DEPLOY_USER}@${DEV_DEPLOY_HOST}" bash -s
 
       - name: Run DEV smoke
         id: dev_smoke
@@ -337,8 +351,14 @@ jobs:
           set -euo pipefail
           ssh_opts=(-i "${HOME}/.ssh/deploy_key" -o StrictHostKeyChecking=yes -o UserKnownHostsFile="${HOME}/.ssh/known_hosts" -o GlobalKnownHostsFile=/dev/null)
 
-          ssh "${ssh_opts[@]}" "${DEV_DEPLOY_USER}@${DEV_DEPLOY_HOST}" \
-            "set -euo pipefail; cd '${DEV_DEPLOY_PATH}'; bash scripts/deploy/smoke-dev.sh --env-file .env --timeout-seconds 60"
+          {
+            printf 'deploy_path=%q\n' "${DEV_DEPLOY_PATH}"
+            cat <<'REMOTE'
+          set -euo pipefail
+          cd "${deploy_path}"
+          bash scripts/deploy/smoke-dev.sh --env-file .env --timeout-seconds 60
+          REMOTE
+          } | ssh "${ssh_opts[@]}" "${DEV_DEPLOY_USER}@${DEV_DEPLOY_HOST}" bash -s
 
       - name: Collect DEV diagnostics after failed deploy or smoke
         if: ${{ failure() && (steps.dev_deploy.outcome == 'failure' || steps.dev_smoke.outcome == 'failure') }}

@@ -291,8 +291,15 @@ jobs:
             --ghcr-token "${GHCR_TOKEN}"
 
           scp "${ssh_opts[@]}" "${tmp_env}" "${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_PATH}/.env.next"
-          ssh "${ssh_opts[@]}" "${DEPLOY_USER}@${DEPLOY_HOST}" \
-            "set -euo pipefail; cd '${DEPLOY_PATH}'; install -m 600 .env.next .env; rm -f .env.next"
+          {
+            printf 'deploy_path=%q\n' "${DEPLOY_PATH}"
+            cat <<'REMOTE'
+          set -euo pipefail
+          cd "${deploy_path}"
+          install -m 600 .env.next .env
+          rm -f .env.next
+          REMOTE
+          } | ssh "${ssh_opts[@]}" "${DEPLOY_USER}@${DEPLOY_HOST}" bash -s
 
       - name: Run production deploy
         id: production_deploy
@@ -306,8 +313,15 @@ jobs:
           set -euo pipefail
           ssh_opts=(-i "${HOME}/.ssh/deploy_key" -o StrictHostKeyChecking=yes -o UserKnownHostsFile="${HOME}/.ssh/known_hosts" -o GlobalKnownHostsFile=/dev/null)
 
-          ssh "${ssh_opts[@]}" "${DEPLOY_USER}@${DEPLOY_HOST}" \
-            "set -euo pipefail; cd '${DEPLOY_PATH}'; bash scripts/deploy/deploy-prod.sh --branch main --env-file .env --skip-pull --with-cloudflare --skip-public-smoke --image-tag '${DEPLOY_IMAGE_TAG}' --timeout-seconds 240"
+          {
+            printf 'deploy_path=%q\n' "${DEPLOY_PATH}"
+            printf 'deploy_image_tag=%q\n' "${DEPLOY_IMAGE_TAG}"
+            cat <<'REMOTE'
+          set -euo pipefail
+          cd "${deploy_path}"
+          bash scripts/deploy/deploy-prod.sh --branch main --env-file .env --skip-pull --with-cloudflare --skip-public-smoke --image-tag "${deploy_image_tag}" --timeout-seconds 240
+          REMOTE
+          } | ssh "${ssh_opts[@]}" "${DEPLOY_USER}@${DEPLOY_HOST}" bash -s
 
       - name: Run production smoke
         id: production_smoke
@@ -320,8 +334,14 @@ jobs:
           set -euo pipefail
           ssh_opts=(-i "${HOME}/.ssh/deploy_key" -o StrictHostKeyChecking=yes -o UserKnownHostsFile="${HOME}/.ssh/known_hosts" -o GlobalKnownHostsFile=/dev/null)
 
-          ssh "${ssh_opts[@]}" "${DEPLOY_USER}@${DEPLOY_HOST}" \
-            "set -euo pipefail; cd '${DEPLOY_PATH}'; bash scripts/deploy/smoke-prod.sh --env-file .env --timeout-seconds 60"
+          {
+            printf 'deploy_path=%q\n' "${DEPLOY_PATH}"
+            cat <<'REMOTE'
+          set -euo pipefail
+          cd "${deploy_path}"
+          bash scripts/deploy/smoke-prod.sh --env-file .env --timeout-seconds 60
+          REMOTE
+          } | ssh "${ssh_opts[@]}" "${DEPLOY_USER}@${DEPLOY_HOST}" bash -s
 
       - name: Roll back after failed deploy or smoke
         id: production_rollback
