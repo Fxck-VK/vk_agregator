@@ -460,8 +460,19 @@ func decodeHTTPError(resp *http.Response) error {
 func classifyRunwayError(status int, code, msg string) domain.ProviderErrorClass {
 	lower := strings.ToLower(strings.Join([]string{code, msg}, " "))
 	switch {
-	case strings.Contains(lower, "safety") || strings.Contains(lower, "moderation") || strings.Contains(lower, "policy") || strings.Contains(lower, "content") || strings.Contains(lower, "nsfw"):
+	case strings.Contains(lower, "safety") ||
+		strings.Contains(lower, "moderation") ||
+		strings.Contains(lower, "policy") ||
+		strings.Contains(lower, "content rejected") ||
+		strings.Contains(lower, "nsfw") ||
+		strings.Contains(lower, "copyright") ||
+		strings.Contains(lower, "filtered out") ||
+		strings.Contains(lower, "blocked by") ||
+		strings.Contains(lower, "prohibited") ||
+		strings.Contains(lower, "violat"):
 		return domain.ProviderErrContentRejected
+	case isModelUnavailableError(lower):
+		return domain.ProviderErrModelUnavailable
 	case strings.Contains(lower, "balance") || strings.Contains(lower, "credit") || strings.Contains(lower, "quota") || strings.Contains(lower, "insufficient"):
 		return domain.ProviderErrInsufficientBalance
 	case strings.Contains(lower, "rate") || strings.Contains(lower, "throttle") || strings.Contains(lower, "too many"):
@@ -493,6 +504,46 @@ func classifyRunwayError(status int, code, msg string) domain.ProviderErrorClass
 		return domain.ProviderErrOverloaded
 	}
 	return domain.ProviderErrInternal
+}
+
+func isModelUnavailableError(lower string) bool {
+	normalized := strings.NewReplacer("_", " ", "-", " ").Replace(lower)
+	for _, phrase := range []string{
+		"model not found",
+		"unknown model",
+		"model unknown",
+		"unsupported model",
+		"model unsupported",
+		"model unavailable",
+		"model not available",
+		"model does not exist",
+		"model doesn't exist",
+		"model doesnt exist",
+		"model not exist",
+		"invalid model",
+		"model invalid",
+	} {
+		if strings.Contains(normalized, phrase) {
+			return true
+		}
+	}
+	if !strings.Contains(normalized, "model") {
+		return false
+	}
+	for _, phrase := range []string{
+		"not found",
+		"not available",
+		"unavailable",
+		"does not exist",
+		"doesn't exist",
+		"doesnt exist",
+		"not exist",
+	} {
+		if strings.Contains(normalized, phrase) {
+			return true
+		}
+	}
+	return false
 }
 
 func mapTaskStatus(status string) domain.ProviderTaskStatus {
@@ -545,6 +596,8 @@ func providerErrorMessage(class domain.ProviderErrorClass, fallback string) stri
 		return "runway rate limit exceeded"
 	case domain.ProviderErrInvalidRequest:
 		return "runway request validation failed"
+	case domain.ProviderErrModelUnavailable:
+		return "runway model is unavailable"
 	case domain.ProviderErrContentRejected:
 		return "runway content moderation rejected the request"
 	case domain.ProviderErrOverloaded:

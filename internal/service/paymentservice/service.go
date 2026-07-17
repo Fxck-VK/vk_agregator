@@ -241,6 +241,7 @@ func (s *Service) DisableProduct(ctx context.Context, productID uuid.UUID) (*dom
 
 // CreateIntentInput describes a user-owned top-up intent creation request.
 type CreateIntentInput struct {
+	AccountID      uuid.UUID
 	UserID         uuid.UUID
 	ProductCode    string
 	ReceiptEmail   string
@@ -264,6 +265,7 @@ type CreateIntentResult struct {
 // AttachVKBotPaymentMessageInput links a VK bot payment message to a local
 // intent so webhook/reconciliation status changes can edit that message later.
 type AttachVKBotPaymentMessageInput struct {
+	AccountID uuid.UUID
 	UserID    uuid.UUID
 	IntentID  uuid.UUID
 	VKPeerID  int64
@@ -284,13 +286,14 @@ func (s *Service) CreateIntent(ctx context.Context, in CreateIntentInput) (Creat
 	resolvedReturnURL := defaultString(in.ReturnURL, s.cfg.ReturnURL)
 	in.Source = strings.TrimSpace(in.Source)
 	sourceLabel := metricLabel(in.Source)
-	if in.UserID == uuid.Nil || in.ProductCode == "" || in.IdempotencyKey == "" {
+	ownerID := paymentOwnerID(in.UserID, in.AccountID)
+	if in.UserID == uuid.Nil || ownerID == uuid.Nil || in.ProductCode == "" || in.IdempotencyKey == "" {
 		metrics.ObserveProductEvent(sourceLabel, "payment", "intent_create", "top_up", "credits", "invalid_input")
 		return CreateIntentResult{}, ErrInvalidInput
 	}
 
 	if existing, err := s.repo.GetIntentByIdempotencyKey(ctx, in.IdempotencyKey); err == nil {
-		if existing.UserID != in.UserID {
+		if intentOwnerID(existing) != ownerID {
 			metrics.ObserveProductEvent(sourceLabel, "payment", "intent_create", "top_up", "credits", "forbidden")
 			return CreateIntentResult{}, ErrForbidden
 		}
@@ -318,7 +321,7 @@ func (s *Service) CreateIntent(ctx context.Context, in CreateIntentInput) (Creat
 			metrics.ObserveProductEvent(sourceLabel, "payment", "intent_create", "top_up", "credits", "invalid_product")
 			return CreateIntentResult{}, domain.ErrNotFound
 		}
-		active, err := s.ActiveWaitingIntentForSource(ctx, in.UserID, in.Source)
+		active, err := s.ActiveWaitingIntentForSource(ctx, ownerID, in.Source)
 		if err == nil {
 			if paymentIntentMatchesProduct(active, product) && paymentIntentMatchesReturnURL(active, resolvedReturnURL) {
 				metrics.ObserveProductEvent(sourceLabel, "payment", "intent_create", "top_up", "credits", "reused_active")
@@ -365,6 +368,7 @@ func (s *Service) CreateIntent(ctx context.Context, in CreateIntentInput) (Creat
 	}
 	intent := &domain.PaymentIntent{
 		UserID:             in.UserID,
+		AccountID:          ownerID,
 		ProductID:          &product.ID,
 		Status:             domain.PaymentIntentCreated,
 		Amount:             product.Amount,
@@ -391,7 +395,7 @@ func (s *Service) CreateIntent(ctx context.Context, in CreateIntentInput) (Creat
 			metrics.ObserveProductEvent(sourceLabel, "payment", "intent_create", "top_up", "credits", "error")
 			return CreateIntentResult{}, getErr
 		}
-		if existing.UserID != in.UserID {
+		if intentOwnerID(existing) != ownerID {
 			metrics.ObserveProductEvent(sourceLabel, "payment", "intent_create", "top_up", "credits", "forbidden")
 			return CreateIntentResult{}, ErrForbidden
 		}
@@ -444,14 +448,15 @@ func (s *Service) AttachVKBotPaymentMessage(ctx context.Context, in AttachVKBotP
 	if s == nil || s.repo == nil {
 		return nil, errors.New("paymentservice: service is not configured")
 	}
-	if in.UserID == uuid.Nil || in.IntentID == uuid.Nil || in.VKPeerID <= 0 || in.MessageID <= 0 {
+	ownerID := paymentOwnerID(in.UserID, in.AccountID)
+	if in.UserID == uuid.Nil || ownerID == uuid.Nil || in.IntentID == uuid.Nil || in.VKPeerID <= 0 || in.MessageID <= 0 {
 		return nil, ErrInvalidInput
 	}
 	intent, err := s.repo.GetIntentByID(ctx, in.IntentID)
 	if err != nil {
 		return nil, err
 	}
-	if intent.UserID != in.UserID {
+	if intentOwnerID(intent) != ownerID {
 		return nil, ErrForbidden
 	}
 	if paymentMetadataSource(intent.Metadata) != "vk_bot" {
@@ -477,9 +482,10 @@ func (s *Service) AttachVKBotPaymentMessage(ctx context.Context, in AttachVKBotP
 // CancelUserIntentInput describes a user-owned cancel request from one product
 // surface. It is intentionally narrower than protected operator cancellation.
 type CancelUserIntentInput struct {
-	UserID   uuid.UUID
-	IntentID uuid.UUID
-	Source   string
+	AccountID uuid.UUID
+	UserID    uuid.UUID
+	IntentID  uuid.UUID
+	Source    string
 }
 
 // CancelUserWaitingIntent cancels a user-owned waiting payment. It does not
@@ -490,14 +496,15 @@ func (s *Service) CancelUserWaitingIntent(ctx context.Context, in CancelUserInte
 		return nil, errors.New("paymentservice: service is not configured")
 	}
 	in.Source = strings.TrimSpace(in.Source)
-	if in.UserID == uuid.Nil || in.IntentID == uuid.Nil || in.Source == "" {
+	ownerID := paymentOwnerID(in.UserID, in.AccountID)
+	if in.UserID == uuid.Nil || ownerID == uuid.Nil || in.IntentID == uuid.Nil || in.Source == "" {
 		return nil, ErrInvalidInput
 	}
 	intent, err := s.repo.GetIntentByID(ctx, in.IntentID)
 	if err != nil {
 		return nil, err
 	}
-	if intent.UserID != in.UserID || paymentMetadataSource(intent.Metadata) != in.Source {
+	if intentOwnerID(intent) != ownerID || paymentMetadataSource(intent.Metadata) != in.Source {
 		return nil, domain.ErrNotFound
 	}
 	switch intent.Status {
@@ -543,24 +550,24 @@ func (s *Service) CancelUserWaitingIntent(ctx context.Context, in CancelUserInte
 
 // ActiveWaitingIntent returns the newest user-owned payment that still needs
 // user confirmation. It does not grant credits and does not query the provider.
-func (s *Service) ActiveWaitingIntent(ctx context.Context, userID uuid.UUID) (*domain.PaymentIntent, error) {
-	return s.ActiveWaitingIntentForSource(ctx, userID, "")
+func (s *Service) ActiveWaitingIntent(ctx context.Context, ownerID uuid.UUID) (*domain.PaymentIntent, error) {
+	return s.ActiveWaitingIntentForSource(ctx, ownerID, "")
 }
 
 // ActiveWaitingIntentForSource returns the newest user-owned payment for one
 // product surface that still needs user confirmation.
-func (s *Service) ActiveWaitingIntentForSource(ctx context.Context, userID uuid.UUID, source string) (*domain.PaymentIntent, error) {
+func (s *Service) ActiveWaitingIntentForSource(ctx context.Context, ownerID uuid.UUID, source string) (*domain.PaymentIntent, error) {
 	if s == nil || s.repo == nil || s.provider == nil {
 		return nil, errors.New("paymentservice: service is not configured")
 	}
-	if userID == uuid.Nil {
+	if ownerID == uuid.Nil {
 		return nil, ErrInvalidInput
 	}
 	intents, err := s.repo.ListIntents(ctx, domain.PaymentIntentFilter{
-		UserID:   &userID,
-		Status:   domain.PaymentIntentWaitingForUser,
-		Provider: s.provider.Code(),
-		Source:   strings.TrimSpace(source),
+		AccountID: &ownerID,
+		Status:    domain.PaymentIntentWaitingForUser,
+		Provider:  s.provider.Code(),
+		Source:    strings.TrimSpace(source),
 	}, 20, 0)
 	if err != nil {
 		return nil, err
@@ -574,12 +581,12 @@ func (s *Service) ActiveWaitingIntentForSource(ctx context.Context, userID uuid.
 }
 
 // GetIntent fetches one user-owned intent.
-func (s *Service) GetIntent(ctx context.Context, userID, intentID uuid.UUID) (*domain.PaymentIntent, error) {
+func (s *Service) GetIntent(ctx context.Context, ownerID, intentID uuid.UUID) (*domain.PaymentIntent, error) {
 	intent, err := s.repo.GetIntentByID(ctx, intentID)
 	if err != nil {
 		return nil, err
 	}
-	if intent.UserID != userID {
+	if intentOwnerID(intent) != ownerID {
 		return nil, domain.ErrNotFound
 	}
 	return intent, nil
@@ -591,19 +598,19 @@ func (s *Service) GetIntentAdmin(ctx context.Context, intentID uuid.UUID) (*doma
 }
 
 // ListIntentsByUser returns user-owned payment history.
-func (s *Service) ListIntentsByUser(ctx context.Context, userID uuid.UUID, limit, offset int) ([]*domain.PaymentIntent, error) {
-	return s.repo.ListIntentsByUser(ctx, userID, normalizeLimit(limit), normalizeOffset(offset))
+func (s *Service) ListIntentsByUser(ctx context.Context, ownerID uuid.UUID, limit, offset int) ([]*domain.PaymentIntent, error) {
+	return s.repo.ListIntentsByUser(ctx, ownerID, normalizeLimit(limit), normalizeOffset(offset))
 }
 
 // ListIntentsByUserSource returns user-owned payment history for one product
 // surface.
-func (s *Service) ListIntentsByUserSource(ctx context.Context, userID uuid.UUID, source string, limit, offset int) ([]*domain.PaymentIntent, error) {
-	if userID == uuid.Nil {
+func (s *Service) ListIntentsByUserSource(ctx context.Context, ownerID uuid.UUID, source string, limit, offset int) ([]*domain.PaymentIntent, error) {
+	if ownerID == uuid.Nil {
 		return nil, ErrInvalidInput
 	}
 	return s.repo.ListIntents(ctx, domain.PaymentIntentFilter{
-		UserID: &userID,
-		Source: strings.TrimSpace(source),
+		AccountID: &ownerID,
+		Source:    strings.TrimSpace(source),
 	}, normalizeLimit(limit), normalizeOffset(offset))
 }
 
@@ -653,6 +660,7 @@ func (s *Service) ensureProviderPayment(ctx context.Context, intent *domain.Paym
 	}
 	createInput := domain.CreatePaymentInput{
 		IntentID:       intent.ID,
+		AccountID:      intentOwnerID(intent),
 		UserID:         intent.UserID,
 		Amount:         intent.Amount,
 		Currency:       intent.Currency,
@@ -685,6 +693,23 @@ func (s *Service) ensureProviderPayment(ctx context.Context, intent *domain.Paym
 		return nil, err
 	}
 	return updated, nil
+}
+
+func paymentOwnerID(userID, accountID uuid.UUID) uuid.UUID {
+	if accountID != uuid.Nil {
+		return accountID
+	}
+	return userID
+}
+
+func intentOwnerID(intent *domain.PaymentIntent) uuid.UUID {
+	if intent == nil {
+		return uuid.Nil
+	}
+	if intent.AccountID != uuid.Nil {
+		return intent.AccountID
+	}
+	return intent.UserID
 }
 
 func validateConfirmationURL(raw string) error {

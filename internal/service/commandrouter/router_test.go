@@ -111,6 +111,12 @@ func TestRouterParse(t *testing.T) {
 			wantType: domain.CommandMenuVideoSora2Start,
 		},
 		{
+			name:     "vk video poyo runway gen-4.5 product mode",
+			input:    "Runway Gen-4.5",
+			wantType: domain.CommandMenuVideoRouteSelect,
+			wantArg:  string(domain.VideoRouteRunwayGen45),
+		},
+		{
 			name:     "vk video kling o3 standard product mode",
 			input:    "Kling O3 Standard",
 			wantType: domain.CommandMenuVideoKling21Start,
@@ -168,7 +174,7 @@ func TestRouterParse(t *testing.T) {
 		{
 			name:     "vk photo reference mode button",
 			input:    "📸 Фото с референсом",
-			wantType: domain.CommandMenuImageReference,
+			wantType: domain.CommandMenuImage,
 		},
 		{
 			name:     "vk photo nano banana 2 button",
@@ -224,6 +230,11 @@ func TestRouterParse(t *testing.T) {
 			name:     "vk neurohub text menu button",
 			input:    "💬 Спросить у НейроХаб",
 			wantType: domain.CommandMenuText,
+		},
+		{
+			name:     "vk pro mode button",
+			input:    "🚀 PRO режим",
+			wantType: domain.CommandMenuPro,
 		},
 		{
 			name:     "vk student solver button",
@@ -331,7 +342,7 @@ func TestResultCreatesJob(t *testing.T) {
 		}
 	}
 
-	controlCommands := []string{"/balance", "/status 1", "/cancel 1", "/help", "/start", "Старт", "Показать меню", "нет меню", "🎬 Создать видео", "Runway Gen-4 Turbo", "Kling O3 Standard", "Seedance 2.0 Fast", "Hailuo 2.3 Standard", "Hailuo 2.3 Fast", "Sora 2 — видео текст+фото", "Seedance 1 Lite", "Seedance 1 Pro", "Hailuo v0.2 Обычный", "Hailuo v0.2 Fast", "⬅️ Назад", "👤 Мой аккаунт", "▶️ Фото по тексту", "📸 Фото с референсом", "💬 Спросить у НейроХаб", "💬 Спросить у GPT", "Решальник задач", "Генерация презентаций (скоро)", "Создание рефератов (скоро)", "❓ Ответы на вопросы"}
+	controlCommands := []string{"/balance", "/status 1", "/cancel 1", "/help", "/start", "Старт", "Показать меню", "нет меню", "🎬 Создать видео", "Runway Gen-4 Turbo", "Kling O3 Standard", "Seedance 2.0 Fast", "Hailuo 2.3 Standard", "Hailuo 2.3 Fast", "Sora 2 — видео текст+фото", "Seedance 1 Lite", "Seedance 1 Pro", "Hailuo v0.2 Обычный", "Hailuo v0.2 Fast", "⬅️ Назад", "👤 Мой аккаунт", "▶️ Фото по тексту", "📸 Фото с референсом", "💬 Спросить у НейроХаб", "💬 Спросить у GPT", "🚀 PRO режим", "Решальник задач", "Генерация презентаций (скоро)", "Создание рефератов (скоро)", "❓ Ответы на вопросы"}
 	for _, in := range controlCommands {
 		if r.Parse(in).CreatesJob() {
 			t.Errorf("expected %q to NOT create a job", in)

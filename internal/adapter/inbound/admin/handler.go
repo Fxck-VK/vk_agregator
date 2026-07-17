@@ -646,7 +646,7 @@ func (h *Handler) getUser(w http.ResponseWriter, r *http.Request) {
 	}
 	dto := newUserDTO(user)
 	if h.deps.Billing != nil {
-		if acc, aerr := h.deps.Billing.GetAccountByUser(r.Context(), user.ID, domain.CurrencyCredits); aerr == nil {
+		if acc, aerr := h.deps.Billing.GetAccountByUser(r.Context(), user.EffectiveAccountID(), domain.CurrencyCredits); aerr == nil {
 			dto.BalanceCredits = &acc.BalanceCached
 		}
 	}

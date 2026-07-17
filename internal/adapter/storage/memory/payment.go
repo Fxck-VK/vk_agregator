@@ -219,6 +219,9 @@ func (r *PaymentRepo) CreateIntent(_ context.Context, intent *domain.PaymentInte
 	if intent.Provider == "" {
 		intent.Provider = domain.PaymentProviderMock
 	}
+	if intent.AccountID == uuid.Nil {
+		intent.AccountID = intent.UserID
+	}
 	if len(intent.Metadata) == 0 {
 		intent.Metadata = json.RawMessage(`{}`)
 	}
@@ -230,6 +233,9 @@ func (r *PaymentRepo) CreateIntent(_ context.Context, intent *domain.PaymentInte
 		r.intentIDByProvider[intent.ProviderPaymentID] = intent.ID
 	}
 	r.intentIDsByUser[intent.UserID] = append([]uuid.UUID{intent.ID}, r.intentIDsByUser[intent.UserID]...)
+	if intent.AccountID != uuid.Nil && intent.AccountID != intent.UserID {
+		r.intentIDsByUser[intent.AccountID] = append([]uuid.UUID{intent.ID}, r.intentIDsByUser[intent.AccountID]...)
+	}
 	return nil
 }
 
@@ -327,10 +333,10 @@ func (r *PaymentRepo) UpdateIntentMetadata(_ context.Context, id uuid.UUID, meta
 func (r *PaymentRepo) ListIntentsByUser(_ context.Context, userID uuid.UUID, limit, offset int) ([]*domain.PaymentIntent, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	ids := r.intentIDsByUser[userID]
+	matched := r.intentListForOwnerLocked(userID)
 	var out []*domain.PaymentIntent
-	for i := offset; i < len(ids) && len(out) < limit; i++ {
-		intent := r.intentsByID[ids[i]]
+	for i := offset; i < len(matched) && len(out) < limit; i++ {
+		intent := matched[i]
 		out = append(out, copyPaymentIntentPtr(intent))
 	}
 	return out, nil
@@ -342,9 +348,14 @@ func (r *PaymentRepo) ListIntents(_ context.Context, filter domain.PaymentIntent
 	statuses := paymentIntentStatusSet(filter)
 	source := strings.TrimSpace(filter.Source)
 	matched := make([]domain.PaymentIntent, 0, len(r.intentsByID))
-	if filter.UserID != nil {
-		for _, id := range r.intentIDsByUser[*filter.UserID] {
-			intent := r.intentsByID[id]
+	if filter.UserID != nil && filter.AccountID == nil {
+		for _, intent := range r.intentListForOwnerLocked(*filter.UserID) {
+			if paymentIntentMatchesFilter(intent, filter, statuses, source) {
+				matched = append(matched, intent)
+			}
+		}
+	} else if filter.AccountID != nil {
+		for _, intent := range r.intentListForOwnerLocked(*filter.AccountID) {
 			if paymentIntentMatchesFilter(intent, filter, statuses, source) {
 				matched = append(matched, intent)
 			}
@@ -366,11 +377,39 @@ func (r *PaymentRepo) ListIntents(_ context.Context, filter domain.PaymentIntent
 	return out, nil
 }
 
+func (r *PaymentRepo) intentListForOwnerLocked(ownerID uuid.UUID) []domain.PaymentIntent {
+	matched := r.intentListMatchingOwnerLocked(ownerID, func(intent domain.PaymentIntent, ownerID uuid.UUID) bool {
+		return intent.AccountID == ownerID
+	})
+	if len(matched) > 0 {
+		return matched
+	}
+	return r.intentListMatchingOwnerLocked(ownerID, func(intent domain.PaymentIntent, ownerID uuid.UUID) bool {
+		return intent.UserID == ownerID
+	})
+}
+
+func (r *PaymentRepo) intentListMatchingOwnerLocked(ownerID uuid.UUID, matches func(domain.PaymentIntent, uuid.UUID) bool) []domain.PaymentIntent {
+	matched := make([]domain.PaymentIntent, 0, len(r.intentsByID))
+	for _, intent := range r.intentsByID {
+		if matches(intent, ownerID) {
+			matched = append(matched, intent)
+		}
+	}
+	sort.Slice(matched, func(i, j int) bool {
+		return matched[i].CreatedAt.After(matched[j].CreatedAt)
+	})
+	return matched
+}
+
 func paymentIntentMatchesFilter(intent domain.PaymentIntent, filter domain.PaymentIntentFilter, statuses map[domain.PaymentIntentStatus]bool, source string) bool {
 	if filter.IntentID != nil && intent.ID != *filter.IntentID {
 		return false
 	}
-	if filter.UserID != nil && intent.UserID != *filter.UserID {
+	if filter.UserID != nil && intent.UserID != *filter.UserID && intent.AccountID != *filter.UserID {
+		return false
+	}
+	if filter.AccountID != nil && intent.AccountID != *filter.AccountID {
 		return false
 	}
 	if len(statuses) > 0 && !statuses[intent.Status] {

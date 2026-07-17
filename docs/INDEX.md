@@ -30,9 +30,12 @@ Read only the document that matches the current task:
 | k6, loadtest contour, capacity reports | `docs/runbooks/LOAD_TESTING.md` |
 | Incidents, broken deploys, provider/payment/queue triage | `docs/runbooks/INCIDENTS.md` |
 | Rollback, backups, restore policy | `docs/runbooks/ROLLBACK.md` |
+| Provider/model registry, adapter contracts, add-provider/add-model checklist | `docs/ARCHITECTURE.md` and `docs/runbooks/DEV.md` |
+| APIMart Nano Banana Pro provider migration | `docs/superpowers/plans/2026-07-05-apimart-nano-banana-pro-migration.md` |
 | DEV contour, local DEV tunnel, DEV deploy | `docs/DEV_CONTOUR.md` |
 | Production/runtime deployment domains | `docs/DOMAIN_DEPLOYMENT_PLAN.md` |
 | Data services, Postgres/Redis/S3 modes | `docs/DATA_SERVICES_CONTRACT.md` |
+| Account identity, multi-UI login, VK/TG/Web/Mobile ownership model | `docs/ACCOUNT_IDENTITY_CONTRACT.md`; current account-only rollout audit: `docs/ACCOUNT_ID_ONLY_AUDIT.md` |
 | Retention, cleanup, analytics aggregates | `docs/DATA_RETENTION_POLICY.md` |
 | Load testing, k6, capacity report | `docs/LOAD_TESTING.md` |
 | Operator/admin UI and safety | `docs/OPERATOR_UI.md` |
@@ -63,7 +66,7 @@ There must be only one active handoff file:
 
 | File | Status |
 | --- | --- |
-| `docs/HANDOFF_CURRENT.md` | Current handoff slot; currently `Status: none` |
+| `docs/HANDOFF_CURRENT.md` | Current handoff slot; currently active for provider API hardening |
 
 When a handoff or merge is complete, archive it under `docs/archive/handoffs/`
 and reset `docs/HANDOFF_CURRENT.md` back to `Status: none`.

@@ -22,7 +22,7 @@ func NewJobRepository(db Querier) *JobRepository {
 
 var _ domain.JobRepository = (*JobRepository)(nil)
 
-const jobColumns = `id, user_id, source, vk_peer_id, command_id, operation_type, modality,
+const jobColumns = `id, user_id, account_id, source, vk_peer_id, command_id, operation_type, modality,
 	provider_id, model_id, status, priority, idempotency_key, correlation_id,
 	input_artifact_ids, output_artifact_ids, params, pricing_snapshot, cost_estimate, cost_reserved,
 	cost_captured, error_code, error_message, created_at, updated_at, expires_at`
@@ -47,17 +47,19 @@ func (r *JobRepository) Create(ctx context.Context, job *domain.Job) error {
 	}
 	const q = `
 		INSERT INTO jobs (
-			id, user_id, source, vk_peer_id, command_id, operation_type, modality,
+			id, user_id, account_id, source, vk_peer_id, command_id, operation_type, modality,
 			provider_id, model_id, status, priority, idempotency_key, correlation_id,
 			input_artifact_ids, output_artifact_ids, params, pricing_snapshot, cost_estimate, cost_reserved,
 			cost_captured, error_code, error_message, expires_at
 		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
-			$13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23
+			$1, $2, COALESCE($3::uuid, (SELECT account_id FROM users WHERE id = $2)), $4, $5, $6, $7, $8,
+			$9, $10, $11, $12, $13, $14,
+			$15, $16, $17, $18, $19, $20,
+			$21, $22, $23, $24
 		)
 		RETURNING ` + jobColumns
 	row := r.db.QueryRow(ctx, q,
-		job.ID, job.UserID, job.Source, job.VKPeerID, commandID, job.OperationType, job.Modality,
+		job.ID, job.UserID, nullableUUID(job.AccountID), job.Source, job.VKPeerID, commandID, job.OperationType, job.Modality,
 		job.ProviderID, job.ModelID, job.Status, job.Priority, job.IdempotencyKey, job.CorrelationID,
 		uuidArray(job.InputArtifactIDs), uuidArray(job.OutputArtifactIDs), []byte(job.Params), nullableJSON(job.PricingSnapshot), job.CostEstimate, job.CostReserved,
 		job.CostCaptured, job.ErrorCode, job.ErrorMessage, job.ExpiresAt,
@@ -117,7 +119,9 @@ func (r *JobRepository) Update(ctx context.Context, job *domain.Job) error {
 		SET source = $2, provider_id = $3, model_id = $4, priority = $5, correlation_id = $6,
 		    input_artifact_ids = $7, output_artifact_ids = $8, params = $9,
 		    pricing_snapshot = $10, cost_estimate = $11, cost_reserved = $12, cost_captured = $13,
-		    error_code = $14, error_message = $15, expires_at = $16, updated_at = now()
+		    error_code = $14, error_message = $15, expires_at = $16,
+		    account_id = COALESCE($17::uuid, account_id, (SELECT account_id FROM users WHERE id = jobs.user_id)),
+		    updated_at = now()
 		WHERE id = $1
 		RETURNING ` + jobColumns
 	row := r.db.QueryRow(ctx, q,
@@ -125,18 +129,29 @@ func (r *JobRepository) Update(ctx context.Context, job *domain.Job) error {
 		uuidArray(job.InputArtifactIDs), uuidArray(job.OutputArtifactIDs), []byte(job.Params),
 		nullableJSON(job.PricingSnapshot),
 		job.CostEstimate, job.CostReserved, job.CostCaptured,
-		job.ErrorCode, job.ErrorMessage, job.ExpiresAt,
+		job.ErrorCode, job.ErrorMessage, job.ExpiresAt, nullableUUID(job.AccountID),
 	)
 	return mapError(scanJob(row, job))
 }
 
 // ListByUser returns the most recent jobs for a user, newest first.
 func (r *JobRepository) ListByUser(ctx context.Context, userID uuid.UUID, limit, offset int) ([]*domain.Job, error) {
-	const q = `SELECT ` + jobColumns + `
-		FROM jobs WHERE user_id = $1
+	jobs, err := r.listByOwnerColumn(ctx, "account_id", userID, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	if len(jobs) > 0 {
+		return jobs, nil
+	}
+	return r.listByOwnerColumn(ctx, "user_id", userID, limit, offset)
+}
+
+func (r *JobRepository) listByOwnerColumn(ctx context.Context, column string, ownerID uuid.UUID, limit, offset int) ([]*domain.Job, error) {
+	q := `SELECT ` + jobColumns + `
+		FROM jobs WHERE ` + column + ` = $1
 		ORDER BY created_at DESC
 		LIMIT $2 OFFSET $3`
-	rows, err := r.db.Query(ctx, q, userID, limit, offset)
+	rows, err := r.db.Query(ctx, q, ownerID, limit, offset)
 	if err != nil {
 		return nil, mapError(err)
 	}
@@ -200,7 +215,11 @@ func (r *JobRepository) ListCursor(ctx context.Context, filter domain.JobFilter,
 func addJobFilterConds(filter domain.JobFilter, conds *[]string, args *[]any) {
 	if filter.UserID != nil {
 		*args = append(*args, *filter.UserID)
-		*conds = append(*conds, fmt.Sprintf("user_id = $%d", len(*args)))
+		*conds = append(*conds, fmt.Sprintf("(user_id = $%d OR account_id = $%d)", len(*args), len(*args)))
+	}
+	if filter.AccountID != nil {
+		*args = append(*args, *filter.AccountID)
+		*conds = append(*conds, fmt.Sprintf("account_id = $%d", len(*args)))
 	}
 	if filter.Status != "" {
 		*args = append(*args, filter.Status)
@@ -260,14 +279,25 @@ func (r *JobRepository) CountActiveByUserOperation(ctx context.Context, userID u
 	for _, status := range statuses {
 		statusValues = append(statusValues, string(status))
 	}
-	const q = `
+	count, err := r.countActiveByOwnerColumn(ctx, "account_id", userID, operation, statusValues)
+	if err != nil {
+		return 0, err
+	}
+	if count > 0 {
+		return count, nil
+	}
+	return r.countActiveByOwnerColumn(ctx, "user_id", userID, operation, statusValues)
+}
+
+func (r *JobRepository) countActiveByOwnerColumn(ctx context.Context, column string, ownerID uuid.UUID, operation domain.OperationType, statusValues []string) (int, error) {
+	q := `
 		SELECT count(*)
 		FROM jobs
-		WHERE user_id = $1
+		WHERE ` + column + ` = $1
 		  AND operation_type = $2
 		  AND status = ANY($3::text[])`
 	var count int
-	if err := r.db.QueryRow(ctx, q, userID, operation, statusValues).Scan(&count); err != nil {
+	if err := r.db.QueryRow(ctx, q, ownerID, operation, statusValues).Scan(&count); err != nil {
 		return 0, mapError(err)
 	}
 	return count, nil
@@ -275,12 +305,23 @@ func (r *JobRepository) CountActiveByUserOperation(ctx context.Context, userID u
 
 // CountSucceededByUser returns completed successful jobs for one user.
 func (r *JobRepository) CountSucceededByUser(ctx context.Context, userID uuid.UUID) (int, error) {
-	const q = `
+	count, err := r.countSucceededByOwnerColumn(ctx, "account_id", userID)
+	if err != nil {
+		return 0, err
+	}
+	if count > 0 {
+		return count, nil
+	}
+	return r.countSucceededByOwnerColumn(ctx, "user_id", userID)
+}
+
+func (r *JobRepository) countSucceededByOwnerColumn(ctx context.Context, column string, ownerID uuid.UUID) (int, error) {
+	q := `
 		SELECT count(*)
 		FROM jobs
-		WHERE user_id = $1 AND status = $2`
+		WHERE ` + column + ` = $1 AND status = $2`
 	var count int
-	if err := r.db.QueryRow(ctx, q, userID, domain.JobStatusSucceeded).Scan(&count); err != nil {
+	if err := r.db.QueryRow(ctx, q, ownerID, domain.JobStatusSucceeded).Scan(&count); err != nil {
 		return 0, mapError(err)
 	}
 	return count, nil
@@ -288,14 +329,18 @@ func (r *JobRepository) CountSucceededByUser(ctx context.Context, userID uuid.UU
 
 func scanJob(row rowScanner, job *domain.Job) error {
 	var commandID *uuid.UUID
+	var accountID *uuid.UUID
 	var pricingSnapshot []byte
 	if err := row.Scan(
-		&job.ID, &job.UserID, &job.Source, &job.VKPeerID, &commandID, &job.OperationType, &job.Modality,
+		&job.ID, &job.UserID, &accountID, &job.Source, &job.VKPeerID, &commandID, &job.OperationType, &job.Modality,
 		&job.ProviderID, &job.ModelID, &job.Status, &job.Priority, &job.IdempotencyKey, &job.CorrelationID,
 		&job.InputArtifactIDs, &job.OutputArtifactIDs, &job.Params, &pricingSnapshot, &job.CostEstimate, &job.CostReserved,
 		&job.CostCaptured, &job.ErrorCode, &job.ErrorMessage, &job.CreatedAt, &job.UpdatedAt, &job.ExpiresAt,
 	); err != nil {
 		return err
+	}
+	if accountID != nil {
+		job.AccountID = *accountID
 	}
 	if commandID != nil {
 		job.CommandID = *commandID

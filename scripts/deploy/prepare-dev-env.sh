@@ -6,7 +6,7 @@ usage() {
 Usage:
   prepare-dev-env.sh --input <raw-env> --output <rendered-env> --image-tag <tag> --ghcr-username <name> --ghcr-token <token>
 
-Builds a sanitized DEV runtime .env from DEV_ENV_FILE content.
+Builds a sanitized DEV runtime .env from assembled raw env content.
 The script intentionally prints only non-secret readiness flags.
 USAGE
 }
@@ -202,6 +202,19 @@ if [[ "${video_provider,,}" != "deepinfra" ]]; then
   append_provider_token "${video_provider}"
 fi
 
+if has_raw_env_value DEEPINFRA_API_KEY; then
+  append_provider_token deepinfra
+fi
+if has_raw_env_value APIMART_API_KEY; then
+  append_provider_token apimart
+fi
+if has_raw_env_value POYO_API_KEY; then
+  append_provider_token poyo
+fi
+if has_raw_env_value RUNWAYML_API_SECRET; then
+  append_provider_token runway
+fi
+
 if (( ${#provider_tokens[@]} == 0 )); then
   if [[ "${raw_provider,,}" == "openai" || "${raw_chain,,}" == *openai* ]]; then
     provider_tokens+=(deepinfra)
@@ -239,6 +252,10 @@ apimart_base_url="$(get_raw_env_value APIMART_BASE_URL)"
 if [[ -z "${apimart_base_url}" ]] && has_raw_env_value APIMART_API_KEY; then
   apimart_base_url="https://api.apimart.ai/v1"
 fi
+apimart_provider_enabled=false
+if is_true_value "$(get_raw_env_value APIMART_PROVIDER_ENABLED)" || has_raw_env_value APIMART_API_KEY; then
+  apimart_provider_enabled=true
+fi
 
 poyo_provider_enabled=false
 if is_true_value "$(get_raw_env_value POYO_PROVIDER_ENABLED)" || has_raw_env_value POYO_API_KEY; then
@@ -267,6 +284,33 @@ if [[ -z "${deepinfra_balance_base_url}" && "${deepinfra_balance_provider_enable
   deepinfra_balance_base_url="https://api.deepinfra.com"
 fi
 
+image_nano_banana_2_enabled="${poyo_provider_enabled}"
+image_nano_banana_pro_enabled="${apimart_provider_enabled}"
+image_gpt_image_2_enabled="${apimart_provider_enabled}"
+
+video_hailuo_fast_enabled="${apimart_provider_enabled}"
+video_hailuo_standard_enabled="${apimart_provider_enabled}"
+video_kling_o3_enabled="${poyo_provider_enabled}"
+video_seedance_fast_enabled="${poyo_provider_enabled}"
+video_runway_gen45_enabled="${poyo_provider_enabled}"
+video_runway_turbo_enabled="${runway_provider_enabled}"
+video_router_enabled=false
+if [[ "${video_hailuo_fast_enabled}" == "true" ||
+      "${video_hailuo_standard_enabled}" == "true" ||
+      "${video_kling_o3_enabled}" == "true" ||
+      "${video_seedance_fast_enabled}" == "true" ||
+      "${video_runway_gen45_enabled}" == "true" ||
+      "${video_runway_turbo_enabled}" == "true" ]]; then
+  video_router_enabled=true
+fi
+
+image_menu_enabled=false
+if [[ "${image_nano_banana_2_enabled}" == "true" ||
+      "${image_nano_banana_pro_enabled}" == "true" ||
+      "${image_gpt_image_2_enabled}" == "true" ]]; then
+  image_menu_enabled=true
+fi
+
 tmp_output="$(mktemp)"
 trap 'rm -f "${tmp_output}"' EXIT
 
@@ -275,8 +319,11 @@ sed \
   -e '/^GHCR_USERNAME=/d' \
   -e '/^GHCR_TOKEN=/d' \
   -e '/^IMAGE_TAG=/d' \
+  -e '/^BACKUP_IMAGE_TAG=/d' \
+  -e '/^WORKER_CPU_LIMIT=/d' \
   -e '/^APP_ENV_FILE=/d' \
   -e '/^PROVIDER_BALANCE_BOT_ENABLED=/d' \
+  -e '/^APIMART_PROVIDER_ENABLED=/d' \
   -e '/^APIMART_BASE_URL=/d' \
   -e '/^POYO_PROVIDER_ENABLED=/d' \
   -e '/^POYO_BASE_URL=/d' \
@@ -295,6 +342,22 @@ sed \
   -e '/^RUNTIME_PRICING_DB_ENABLED=/d' \
   -e '/^RUNTIME_PRICING_STATIC_FALLBACK_ENABLED=/d' \
   -e '/^RUNTIME_PRICING_REFRESH_INTERVAL=/d' \
+  -e '/^VK_MENU_VIDEO_ENABLED=/d' \
+  -e '/^VK_MENU_IMAGE_ENABLED=/d' \
+  -e '/^VK_MENU_VIDEO_ROUTES_PREVIEW_ENABLED=/d' \
+  -e '/^FEATURE_IMAGE_MODEL_NANO_BANANA_PRO_ENABLED=/d' \
+  -e '/^FEATURE_IMAGE_MODEL_GPT_IMAGE_2_ENABLED=/d' \
+  -e '/^FEATURE_IMAGE_MODEL_NANO_BANANA_2_ENABLED=/d' \
+  -e '/^FEATURE_IMAGE_MODEL_MOCK_ENABLED=/d' \
+  -e '/^FEATURE_VIDEO_ROUTER_ENABLED=/d' \
+  -e '/^FEATURE_VIDEO_ROUTE_HAILUO_2_3_FAST_ENABLED=/d' \
+  -e '/^FEATURE_VIDEO_ROUTE_HAILUO_2_3_STANDARD_ENABLED=/d' \
+  -e '/^FEATURE_VIDEO_ROUTE_KLING_O3_STANDARD_ENABLED=/d' \
+  -e '/^FEATURE_VIDEO_ROUTE_RUNWAY_GEN4_TURBO_ENABLED=/d' \
+  -e '/^FEATURE_VIDEO_ROUTE_SEEDANCE_2_0_FAST_ENABLED=/d' \
+  -e '/^FEATURE_VIDEO_ROUTE_RUNWAY_GEN4_5_ENABLED=/d' \
+  -e '/^FEATURE_VIDEO_ROUTE_MOCK_TEXT_TO_VIDEO_ENABLED=/d' \
+  -e '/^FEATURE_VIDEO_ROUTE_RESELLER_EXPERIMENTS_ENABLED=/d' \
   "${input_file}" > "${tmp_output}"
 
 {
@@ -302,6 +365,8 @@ sed \
   printf 'APP_ENV=development\n'
   printf 'APP_ENV_FILE=.env\n'
   printf 'IMAGE_TAG=%s\n' "${image_tag}"
+  printf 'BACKUP_IMAGE_TAG=%s\n' "${image_tag}"
+  printf 'WORKER_CPU_LIMIT=1.00\n'
   printf 'PROVIDER=%s\n' "${provider_tokens[0]}"
   printf 'PROVIDER_CHAIN=%s\n' "${provider_chain}"
   printf 'IMAGE_PROVIDER=\n'
@@ -311,6 +376,7 @@ sed \
   printf 'RUNTIME_PRICING_STATIC_FALLBACK_ENABLED=true\n'
   printf 'RUNTIME_PRICING_REFRESH_INTERVAL=0\n'
   printf 'PROVIDER_BALANCE_BOT_ENABLED=%s\n' "${provider_balance_bot_enabled}"
+  printf 'APIMART_PROVIDER_ENABLED=%s\n' "${apimart_provider_enabled}"
   if [[ -n "${apimart_base_url}" ]]; then
     printf 'APIMART_BASE_URL=%s\n' "${apimart_base_url}"
   fi
@@ -326,10 +392,26 @@ sed \
   if [[ -n "${deepinfra_balance_base_url}" ]]; then
     printf 'DEEPINFRA_BALANCE_BASE_URL=%s\n' "${deepinfra_balance_base_url}"
   fi
+  printf 'VK_MENU_VIDEO_ENABLED=%s\n' "${video_router_enabled}"
+  printf 'VK_MENU_IMAGE_ENABLED=%s\n' "${image_menu_enabled}"
+  printf 'VK_MENU_VIDEO_ROUTES_PREVIEW_ENABLED=true\n'
+  printf 'FEATURE_IMAGE_MODEL_NANO_BANANA_PRO_ENABLED=%s\n' "${image_nano_banana_pro_enabled}"
+  printf 'FEATURE_IMAGE_MODEL_GPT_IMAGE_2_ENABLED=%s\n' "${image_gpt_image_2_enabled}"
+  printf 'FEATURE_IMAGE_MODEL_NANO_BANANA_2_ENABLED=%s\n' "${image_nano_banana_2_enabled}"
+  printf 'FEATURE_IMAGE_MODEL_MOCK_ENABLED=false\n'
+  printf 'FEATURE_VIDEO_ROUTER_ENABLED=%s\n' "${video_router_enabled}"
+  printf 'FEATURE_VIDEO_ROUTE_HAILUO_2_3_FAST_ENABLED=%s\n' "${video_hailuo_fast_enabled}"
+  printf 'FEATURE_VIDEO_ROUTE_HAILUO_2_3_STANDARD_ENABLED=%s\n' "${video_hailuo_standard_enabled}"
+  printf 'FEATURE_VIDEO_ROUTE_KLING_O3_STANDARD_ENABLED=%s\n' "${video_kling_o3_enabled}"
+  printf 'FEATURE_VIDEO_ROUTE_RUNWAY_GEN4_TURBO_ENABLED=%s\n' "${video_runway_turbo_enabled}"
+  printf 'FEATURE_VIDEO_ROUTE_SEEDANCE_2_0_FAST_ENABLED=%s\n' "${video_seedance_fast_enabled}"
+  printf 'FEATURE_VIDEO_ROUTE_RUNWAY_GEN4_5_ENABLED=%s\n' "${video_runway_gen45_enabled}"
+  printf 'FEATURE_VIDEO_ROUTE_MOCK_TEXT_TO_VIDEO_ENABLED=false\n'
+  printf 'FEATURE_VIDEO_ROUTE_RESELLER_EXPERIMENTS_ENABLED=false\n'
   printf 'GHCR_USERNAME=%s\n' "${ghcr_username}"
   printf 'GHCR_TOKEN=%s\n' "${ghcr_token}"
 } >> "${tmp_output}"
 
 install -m 600 "${tmp_output}" "${output_file}"
 
-echo "DEV env prepared: providers=${provider_chain} provider_balance_bot=${provider_balance_bot_enabled} telegram_token=${telegram_bot_configured} admin_chat=${telegram_admin_configured} provider_key=${provider_balance_key_configured} poyo=${poyo_provider_enabled} runway=${runway_provider_enabled} deepinfra=${deepinfra_balance_provider_enabled}"
+echo "DEV env prepared: providers=${provider_chain} provider_balance_bot=${provider_balance_bot_enabled} telegram_token=${telegram_bot_configured} admin_chat=${telegram_admin_configured} provider_key=${provider_balance_key_configured} apimart=${apimart_provider_enabled} poyo=${poyo_provider_enabled} runway=${runway_provider_enabled} deepinfra=${deepinfra_balance_provider_enabled} image_menu=${image_menu_enabled} video_menu=${video_router_enabled}"

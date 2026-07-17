@@ -81,6 +81,9 @@ type CreditAccount struct {
 	ID uuid.UUID `json:"id"`
 	// UserID is the owner of the account.
 	UserID uuid.UUID `json:"user_id"`
+	// OwnerAccountID is the canonical account owner. ID remains the credit
+	// account id used by ledger_entries.account_id.
+	OwnerAccountID uuid.UUID `json:"owner_account_id,omitempty"`
 	// Currency is the unit the account is denominated in.
 	Currency Currency `json:"currency"`
 	// BalanceCached is the projected available balance from the ledger.
@@ -98,6 +101,9 @@ type LedgerEntry struct {
 	ID uuid.UUID `json:"id"`
 	// AccountID is the affected credit account.
 	AccountID uuid.UUID `json:"account_id"`
+	// OwnerAccountID is the canonical human/product account owner. It must not
+	// be confused with AccountID, which points to credit_accounts.id.
+	OwnerAccountID uuid.UUID `json:"owner_account_id,omitempty"`
 	// JobID is the job this movement relates to, if any.
 	JobID *uuid.UUID `json:"job_id,omitempty"`
 	// ReservationID links capture/release entries to a reservation, if any.
@@ -124,6 +130,8 @@ type CreditReservation struct {
 	ID uuid.UUID `json:"id"`
 	// AccountID is the account the hold is placed on.
 	AccountID uuid.UUID `json:"account_id"`
+	// OwnerAccountID is the canonical owner of the affected credit account.
+	OwnerAccountID uuid.UUID `json:"owner_account_id,omitempty"`
 	// JobID is the job the reservation is for.
 	JobID uuid.UUID `json:"job_id"`
 	// Amount is the held amount in the account's currency.

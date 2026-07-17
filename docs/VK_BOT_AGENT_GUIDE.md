@@ -58,7 +58,21 @@ feature flags. Не включай их без отдельного product deci
 
 - На фото-экране остается только `⬅️ Назад`.
 - Кнопка `Фото по тексту` выключена: `VK_MENU_IMAGE_TEXT_ENABLED=false`.
-- `Фото с референсом` выключено: `VK_MENU_IMAGE_REFERENCE_ENABLED=false`.
+- Отдельный заметный пункт `Фото с референсом` не показывается. Старый
+  `menu.image.reference` остается совместимым входом и возвращает обычное
+  фото-меню.
+- Text-only поведение не меняется: обычный текст создает `image.generate`.
+- Photo+text в supported image model создает `image.generate` с input artifact
+  IDs; VK attachment URLs не передаются провайдерам.
+- Seedream 4.5 appears as a normal image model when enabled and priced. Users
+  may attach photos in the normal prompt message; no separate reference-only
+  command is required.
+- Photo-only просит добавить описание и не создает Job, ledger reservation или
+  provider task.
+- Если выбранная image model не поддерживает references, фото отклоняется
+  пользовательским unsupported-reference сообщением до CreateJob.
+- Reference photos принимаются только как JPG/PNG, с проверкой размера и
+  dimensions перед сохранением в `ArtifactService`.
 - Старые stale payloads выключенных кнопок не должны создавать Jobs.
 - Placeholder: `НейроХаб рисует...`.
 - Лимит: `100` фото-генераций на пользователя за `24h`.
@@ -102,7 +116,7 @@ Provider output перед отправкой в VK нормализуется: 
 
 Если меняешь limits, обнови:
 
-- `.env.example`
+- `.env.d` split files / GitHub split env secrets
 - `internal/platform/config/config.go`
 - `internal/platform/config/config_test.go`
 - `RUNBOOK.md`
@@ -173,7 +187,7 @@ tokens
 - `internal/adapter/delivery/vk/**`
 - `internal/platform/config/**`
 - `migrations/**`
-- `.env.example`
+- `.env.d` split files / GitHub split env secrets
 - `.runtime/vk-bot/cloudflared/config.yml`
 
 ## Feature Flags

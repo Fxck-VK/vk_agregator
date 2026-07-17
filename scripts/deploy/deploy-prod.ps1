@@ -137,7 +137,7 @@ function Invoke-ExternalPostgresCheck {
     param([Parameter(Mandatory = $true)][string]$Path)
 
     $databaseUrl = Get-EnvFileValue -Path $Path -Name "DATABASE_URL"
-    & docker run --rm --network host -e "DATABASE_URL=$databaseUrl" postgres:16-alpine sh -ec 'pg_isready -d "$DATABASE_URL" >/dev/null'
+    & docker run --rm --network host -e "DATABASE_URL=$databaseUrl" postgres:16-alpine@sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777 sh -ec 'pg_isready -d "$DATABASE_URL" >/dev/null'
     if ($LASTEXITCODE -ne 0) {
         throw "external Postgres check failed with exit code $LASTEXITCODE"
     }
@@ -174,7 +174,7 @@ function Invoke-ExternalRedisCheck {
         -e "REDIS_CHECK_HOST=$($redisEndpoint.Host)" `
         -e "REDIS_CHECK_PORT=$($redisEndpoint.Port)" `
         -e "REDIS_CHECK_DB=$redisDb" `
-        redis:7-alpine `
+        redis:7-alpine@sha256:6ab0b6e7381779332f97b8ca76193e45b0756f38d4c0dcda72dbb3c32061ab99 `
         sh -ec 'redis-cli -h "$REDIS_CHECK_HOST" -p "$REDIS_CHECK_PORT" -n "$REDIS_CHECK_DB" ping | grep -qx PONG'
     if ($LASTEXITCODE -ne 0) {
         throw "external Redis check failed with exit code $LASTEXITCODE"
@@ -196,7 +196,7 @@ function Invoke-ExternalS3Check {
         -e "S3_SECRET_KEY=$s3SecretKey" `
         -e "S3_BUCKET=$s3Bucket" `
         -e "S3_USE_SSL=$s3UseSsl" `
-        minio/mc:latest `
+        minio/mc:RELEASE.2025-08-13T08-35-41Z@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727 `
         sh -ec 'case "$S3_ENDPOINT" in http://*|https://*) endpoint_url="$S3_ENDPOINT" ;; *) if [ "$S3_USE_SSL" = "true" ]; then endpoint_url="https://$S3_ENDPOINT"; else endpoint_url="http://$S3_ENDPOINT"; fi ;; esac; mc alias set target "$endpoint_url" "$S3_ACCESS_KEY" "$S3_SECRET_KEY" >/dev/null; mc ls "target/$S3_BUCKET" >/dev/null'
     if ($LASTEXITCODE -ne 0) {
         throw "external S3 check failed with exit code $LASTEXITCODE"
@@ -296,7 +296,7 @@ if (-not (Test-Path -LiteralPath "docker-compose.prod.yml")) {
     throw "docker-compose.prod.yml not found; run from the repository root or keep this script in scripts/deploy"
 }
 if (-not (Test-Path -LiteralPath $EnvFile)) {
-    throw "Server env file not found: $EnvFile. Copy .env.staging.example or .env.prod.example to .env on the server and fill real values there."
+    throw "Server env file not found: $EnvFile. Assemble it from split PROD env secrets or create it on the server with real production values."
 }
 
 Invoke-Step "check Docker" {

@@ -8,6 +8,7 @@ const (
 	PublicImageNanoBanana2   = "nano_banana_2"
 	PublicImageNanoBananaPro = "nano_banana_pro"
 	PublicImageGPTImage2     = "gpt_image_2"
+	PublicImageSeedream45    = "seedream_4_5"
 
 	ImageQuality1K = "1K"
 	ImageQuality2K = "2K"
@@ -55,6 +56,8 @@ func StaticProductPrices() []ProductPrice {
 		imageTariff(PublicImageNanoBananaPro, ImageQuality1K, 400_000, FloorUnitAPIMartCredits, apimartCreditToInternal, 24),
 		imageTariff(PublicImageNanoBananaPro, ImageQuality2K, 500_000, FloorUnitAPIMartCredits, apimartCreditToInternal, 30),
 		imageTariff(PublicImageNanoBananaPro, ImageQuality4K, 500_000, FloorUnitAPIMartCredits, apimartCreditToInternal, 30),
+		fixedInternalImageTariff(PublicImageSeedream45, ImageQuality2K, 10),
+		fixedInternalImageTariff(PublicImageSeedream45, ImageQuality4K, 15),
 	}
 
 	for _, resolution := range []string{VideoResolution720p, VideoResolution1080p} {
@@ -133,6 +136,28 @@ func imageTariff(modelID, quality string, floorAmount int64, unit FloorUnit, con
 		UnitConversion: conversion,
 		Caps: SafetyCaps{
 			InternalCreditCap: internalCap,
+			FloorAmountCap:    floorAmount,
+		},
+		Enabled: true,
+	}
+}
+
+func fixedInternalImageTariff(modelID, quality string, credits int64) ProductPrice {
+	floorAmount := credits * MinorUnitsPerCredit
+	return ProductPrice{
+		Key: ProductKey{
+			Operation:    domain.OperationImageGenerate,
+			Modality:     domain.ModalityImage,
+			ImageModelID: modelID,
+			Quality:      quality,
+		},
+		Version:        StaticCatalogVersion,
+		Source:         StaticSource,
+		Floor:          PriceFloor{Amount: floorAmount, Unit: FloorUnitInternalCredits},
+		Multiplier:     Multiplier{Numerator: 1, Denominator: 1},
+		UnitConversion: IdentityUnitConversion(),
+		Caps: SafetyCaps{
+			InternalCreditCap: credits,
 			FloorAmountCap:    floorAmount,
 		},
 		Enabled: true,

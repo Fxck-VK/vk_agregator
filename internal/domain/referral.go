@@ -85,6 +85,7 @@ const (
 type ReferralCode struct {
 	ID        uuid.UUID `json:"id"`
 	UserID    uuid.UUID `json:"user_id"`
+	AccountID uuid.UUID `json:"account_id,omitempty"`
 	Code      string    `json:"code"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
@@ -92,16 +93,18 @@ type ReferralCode struct {
 
 // Referral records that one user joined through another user's referral code.
 type Referral struct {
-	ID             uuid.UUID            `json:"id"`
-	ReferrerUserID uuid.UUID            `json:"referrer_user_id"`
-	ReferredUserID uuid.UUID            `json:"referred_user_id"`
-	ReferralCode   string               `json:"referral_code"`
-	Source         ReferralSource       `json:"source"`
-	Status         ReferralStatus       `json:"status"`
-	RewardStatus   ReferralRewardStatus `json:"reward_status"`
-	FirstSeenAt    time.Time            `json:"first_seen_at"`
-	ActivatedAt    *time.Time           `json:"activated_at,omitempty"`
-	RewardedAt     *time.Time           `json:"rewarded_at,omitempty"`
-	CreatedAt      time.Time            `json:"created_at"`
-	UpdatedAt      time.Time            `json:"updated_at"`
+	ID                uuid.UUID            `json:"id"`
+	ReferrerUserID    uuid.UUID            `json:"referrer_user_id"`
+	ReferrerAccountID uuid.UUID            `json:"referrer_account_id,omitempty"`
+	ReferredUserID    uuid.UUID            `json:"referred_user_id"`
+	ReferredAccountID uuid.UUID            `json:"referred_account_id,omitempty"`
+	ReferralCode      string               `json:"referral_code"`
+	Source            ReferralSource       `json:"source"`
+	Status            ReferralStatus       `json:"status"`
+	RewardStatus      ReferralRewardStatus `json:"reward_status"`
+	FirstSeenAt       time.Time            `json:"first_seen_at"`
+	ActivatedAt       *time.Time           `json:"activated_at,omitempty"`
+	RewardedAt        *time.Time           `json:"rewarded_at,omitempty"`
+	CreatedAt         time.Time            `json:"created_at"`
+	UpdatedAt         time.Time            `json:"updated_at"`
 }

@@ -310,6 +310,8 @@ func imageQualityOptions(modelID string) []string {
 		modelcatalog.MiniAppImageNanoBananaPro,
 		modelcatalog.MiniAppImageGPTImage2:
 		return []string{modelcatalog.ImageQuality1K, modelcatalog.ImageQuality2K, modelcatalog.ImageQuality4K}
+	case modelcatalog.MiniAppImageSeedream45:
+		return []string{modelcatalog.ImageQuality2K, modelcatalog.ImageQuality4K}
 	default:
 		return nil
 	}

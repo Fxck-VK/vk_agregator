@@ -22,6 +22,7 @@ import (
 	"vk-ai-aggregator/internal/platform/logging"
 	"vk-ai-aggregator/internal/platform/metrics"
 	"vk-ai-aggregator/internal/service/billingservice"
+	"vk-ai-aggregator/internal/service/identityresolver"
 	"vk-ai-aggregator/internal/service/joborchestrator"
 	"vk-ai-aggregator/internal/service/paymentservice"
 	"vk-ai-aggregator/internal/service/pricingcatalog"
@@ -67,6 +68,10 @@ type Config struct {
 	// LaunchParamsMaxAge is the maximum allowed age of the vk_ts timestamp.
 	// Zero disables the age check.
 	LaunchParamsMaxAge time.Duration
+	// AllowQueryLaunchParams permits the legacy launch_params query fallback.
+	// It is intended only for explicit local development/test use and must stay
+	// false in server environments to keep signed credentials out of URLs.
+	AllowQueryLaunchParams bool
 	// JobRateLimiter bounds POST /miniapp/jobs and POST /miniapp/estimate after
 	// launch params have been verified, keyed by the verified vk_user_id.
 	JobRateLimiter JobRateLimiter
@@ -126,6 +131,7 @@ type ObjectReader interface {
 // Deps are the collaborators needed by the miniapp handler.
 type Deps struct {
 	Users          domain.UserRepository
+	Identity       domain.IdentityResolver
 	Jobs           domain.JobRepository
 	Conversations  domain.ConversationRepository
 	Artifacts      domain.ArtifactRepository
@@ -152,6 +158,9 @@ func NewHandler(cfg Config, deps Deps) *Handler {
 	logger := deps.Logger
 	if logger == nil {
 		logger = slog.Default()
+	}
+	if deps.Identity == nil {
+		deps.Identity = identityresolver.New(deps.Users, nil, deps.Billing)
 	}
 	cfg = normalizeConfig(cfg)
 	return &Handler{cfg: cfg, deps: deps, logger: logger}
@@ -245,10 +254,9 @@ func (h *Handler) limitArtifactUploadConcurrency(next http.HandlerFunc) http.Han
 // for any signature failure without revealing details (audit S1).
 func (h *Handler) auth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		rawParams := r.Header.Get("X-Launch-Params")
-		if rawParams == "" {
-			// Also accept query param for easier browser testing.
-			rawParams = r.URL.Query().Get("launch_params")
+		rawParams := strings.TrimSpace(r.Header.Get("X-Launch-Params"))
+		if rawParams == "" && h.cfg.AllowQueryLaunchParams {
+			rawParams = strings.TrimSpace(r.URL.Query().Get("launch_params"))
 		}
 
 		if rawParams == "" && h.cfg.AppSecret == "" {
@@ -322,33 +330,20 @@ func (h *Handler) rateLimitMiniApp(keyPrefix string, next http.HandlerFunc) http
 	}
 }
 
-// ensureUser returns the existing user or creates a new one with a billing
-// account, identical to the VK webhook handler's ensureUser.
+// ensureUser resolves the verified VK identity through the shared account
+// resolver and creates the legacy user/billing bridge when needed.
 func (h *Handler) ensureUser(ctx context.Context, vkUserID int64) (*domain.User, error) {
-	user, err := h.deps.Users.GetByVKUserID(ctx, vkUserID)
-	if err == nil {
-		return user, nil
-	}
-	if !errors.Is(err, domain.ErrNotFound) {
+	resolution, err := h.deps.Identity.ResolveOrCreate(ctx, domain.IdentityProviderVK, strconv.FormatInt(vkUserID, 10))
+	if err != nil {
 		return nil, err
 	}
-	user = &domain.User{
-		VKUserID: vkUserID,
-		Role:     domain.RoleUser,
-		Status:   domain.StatusActive,
-		Locale:   "ru",
-		Timezone: "Europe/Moscow",
+	if resolution.User == nil {
+		return nil, errors.New("identity resolver returned no legacy user")
 	}
-	if err := h.deps.Users.Create(ctx, user); err != nil {
-		if errors.Is(err, domain.ErrConflict) {
-			return h.deps.Users.GetByVKUserID(ctx, vkUserID)
-		}
-		return nil, err
+	if resolution.AccountID == uuid.Nil || resolution.User.EffectiveAccountID() == uuid.Nil {
+		return nil, errors.New("identity resolver returned no account id")
 	}
-	if _, err := h.deps.Billing.EnsureAccount(ctx, user.ID); err != nil {
-		return nil, fmt.Errorf("ensure account: %w", err)
-	}
-	return user, nil
+	return resolution.User, nil
 }
 
 func (h *Handler) clientEvent(w http.ResponseWriter, r *http.Request) {
@@ -365,10 +360,8 @@ func (h *Handler) clientEvent(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		_ = r.Body.Close()
 	}()
-	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8<<10))
-	dec.DisallowUnknownFields()
 	var req ClientEventRequest
-	if err := dec.Decode(&req); err != nil {
+	if err := decodeStrictJSON(w, r, 8<<10, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid client event")
 		return
 	}
@@ -602,13 +595,8 @@ func operationMeta(op string) (domain.OperationType, domain.Modality, bool) {
 // ---------------------------------------------------------------------------
 
 func (h *Handler) readJobRequest(w http.ResponseWriter, r *http.Request) (CreateJobRequest, domain.OperationType, domain.Modality, miniAppModelSpec, bool) {
-	body, err := io.ReadAll(io.LimitReader(r.Body, 64<<10))
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "cannot read body")
-		return CreateJobRequest{}, "", "", miniAppModelSpec{}, false
-	}
 	var req CreateJobRequest
-	if err := json.Unmarshal(body, &req); err != nil {
+	if err := decodeStrictJSON(w, r, 64<<10, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid json")
 		return CreateJobRequest{}, "", "", miniAppModelSpec{}, false
 	}
@@ -739,6 +727,8 @@ func defaultMiniAppImageQuality(modelID string) string {
 		pricingcatalog.PublicImageNanoBananaPro,
 		pricingcatalog.PublicImageGPTImage2:
 		return pricingcatalog.ImageQuality1K
+	case pricingcatalog.PublicImageSeedream45:
+		return pricingcatalog.ImageQuality2K
 	default:
 		return ""
 	}
@@ -1046,19 +1036,14 @@ func (h *Handler) estimateJob(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	var estimateUserID uuid.UUID
+	user, err := h.ensureUser(r.Context(), vkUserID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	estimateAccountID := user.EffectiveAccountID()
 	if len(req.ReferenceArtifactIDs) > 0 {
-		user, err := h.deps.Users.GetByVKUserID(r.Context(), vkUserID)
-		if err != nil {
-			if errors.Is(err, domain.ErrNotFound) {
-				writeError(w, http.StatusNotFound, "not found")
-			} else {
-				writeError(w, http.StatusInternalServerError, "internal error")
-			}
-			return
-		}
-		estimateUserID = user.ID
-		if !h.validateReferenceArtifacts(w, r, user.ID, opType, req.ReferenceArtifactIDs) {
+		if !h.validateReferenceArtifacts(w, r, estimateAccountID, opType, req.ReferenceArtifactIDs) {
 			return
 		}
 		if opType == domain.OperationImageGenerate && !h.cfg.ImageReferenceEnabled {
@@ -1067,12 +1052,12 @@ func (h *Handler) estimateJob(w http.ResponseWriter, r *http.Request) {
 		}
 		if opType == domain.OperationVideoGenerate {
 			if route, ok := h.videoRouteByAlias(req.VideoRouteAlias); ok {
-				req.AspectRatio = h.videoAspectRatioFromReferenceArtifacts(r.Context(), user.ID, route, req.ReferenceArtifactIDs)
+				req.AspectRatio = h.videoAspectRatioFromReferenceArtifacts(r.Context(), estimateAccountID, route, req.ReferenceArtifactIDs)
 			}
 		}
 	}
 
-	cost, err := h.estimateRequestCost(r.Context(), estimateUserID, opType, modality, model, req)
+	cost, err := h.estimateRequestCost(r.Context(), estimateAccountID, opType, modality, model, req)
 	if err != nil {
 		if errors.Is(err, billingservice.ErrUnknownOperation) {
 			metrics.ObserveProductEvent("miniapp", "job", "estimate", string(opType), string(modality), "unsupported_operation")
@@ -1149,6 +1134,7 @@ func (h *Handler) pricingSnapshotForRequest(ctx context.Context, userID uuid.UUI
 		})
 		resolution, err := h.cfg.VideoRouteResolver.ResolveVideoRoute(ctx, joborchestrator.VideoRouteCheckInput{
 			UserID:           userID,
+			AccountID:        userID,
 			Source:           "miniapp",
 			Operation:        opType,
 			Modality:         modality,
@@ -1202,14 +1188,11 @@ func (h *Handler) pricingProductKey(opType domain.OperationType, modality domain
 }
 
 func (h *Handler) balanceForEstimate(ctx context.Context, vkUserID int64) (int64, error) {
-	user, err := h.deps.Users.GetByVKUserID(ctx, vkUserID)
+	user, err := h.ensureUser(ctx, vkUserID)
 	if err != nil {
-		if errors.Is(err, domain.ErrNotFound) {
-			return h.deps.Billing.StartingBalance(), nil
-		}
 		return 0, err
 	}
-	return h.deps.Billing.BalanceForEstimate(ctx, user.ID)
+	return h.deps.Billing.BalanceForEstimate(ctx, user.EffectiveAccountID())
 }
 
 func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
@@ -1230,8 +1213,9 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
+	accountID := user.EffectiveAccountID()
 	if len(req.ReferenceArtifactIDs) > 0 {
-		if !h.validateReferenceArtifacts(w, r, user.ID, opType, req.ReferenceArtifactIDs) {
+		if !h.validateReferenceArtifacts(w, r, accountID, opType, req.ReferenceArtifactIDs) {
 			return
 		}
 		if opType == domain.OperationImageGenerate && !h.cfg.ImageReferenceEnabled {
@@ -1240,7 +1224,7 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 		}
 		if opType == domain.OperationVideoGenerate {
 			if route, ok := h.videoRouteByAlias(req.VideoRouteAlias); ok {
-				req.AspectRatio = h.videoAspectRatioFromReferenceArtifacts(r.Context(), user.ID, route, req.ReferenceArtifactIDs)
+				req.AspectRatio = h.videoAspectRatioFromReferenceArtifacts(r.Context(), accountID, route, req.ReferenceArtifactIDs)
 			}
 		}
 	}
@@ -1282,7 +1266,7 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 	if opType == domain.OperationTextGenerate {
 		costEstimate, err = h.deps.Billing.Estimate(opType)
 	} else {
-		pricingSnapshot, err = h.pricingSnapshotForRequest(r.Context(), user.ID, opType, modality, model, req)
+		pricingSnapshot, err = h.pricingSnapshotForRequest(r.Context(), accountID, opType, modality, model, req)
 		if err == nil {
 			costEstimate = pricingSnapshot.InternalCredits
 		}
@@ -1295,6 +1279,7 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 
 	job, err := h.deps.Orchestrator.CreateJob(r.Context(), joborchestrator.CreateJobInput{
 		UserID:              user.ID,
+		AccountID:           accountID,
 		Source:              "miniapp",
 		VKPeerID:            vkUserID, // peer_id = user_id for direct messages
 		CommandID:           uuid.Nil, // no VK command for mini app path
@@ -1331,13 +1316,8 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) readChatMessageRequest(w http.ResponseWriter, r *http.Request) (ChatMessageRequest, bool) {
-	body, err := io.ReadAll(io.LimitReader(r.Body, 64<<10))
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "cannot read body")
-		return ChatMessageRequest{}, false
-	}
 	var req ChatMessageRequest
-	if err := json.Unmarshal(body, &req); err != nil {
+	if err := decodeStrictJSON(w, r, 64<<10, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid json")
 		return ChatMessageRequest{}, false
 	}
@@ -1368,6 +1348,7 @@ func (h *Handler) createChatMessage(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
+	accountID := user.EffectiveAccountID()
 
 	clientKey, ok := boundedClientIdempotencyKey(w, r)
 	if !ok {
@@ -1396,6 +1377,7 @@ func (h *Handler) createChatMessage(w http.ResponseWriter, r *http.Request) {
 
 	job, err := h.deps.Orchestrator.CreateJob(r.Context(), joborchestrator.CreateJobInput{
 		UserID:         user.ID,
+		AccountID:      accountID,
 		Source:         "miniapp",
 		VKPeerID:       vkUserID,
 		CommandID:      uuid.Nil,
@@ -1448,18 +1430,15 @@ func (h *Handler) listDefaultChatMessages(w http.ResponseWriter, r *http.Request
 		})
 	}
 
-	user, err := h.deps.Users.GetByVKUserID(r.Context(), vkUserID)
+	user, err := h.ensureUser(r.Context(), vkUserID)
 	if err != nil {
-		if errors.Is(err, domain.ErrNotFound) {
-			writeEmpty()
-			return
-		}
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
 	conversation, err := h.deps.Conversations.GetActiveByReference(r.Context(), domain.ConversationRef{
 		UserID:           user.ID,
+		AccountID:        user.EffectiveAccountID(),
 		Source:           domain.ConversationSourceMiniApp,
 		ExternalThreadID: defaultConversationID,
 	})
@@ -1500,22 +1479,15 @@ func (h *Handler) listJobs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := h.deps.Users.GetByVKUserID(r.Context(), vkUserID)
+	user, err := h.ensureUser(r.Context(), vkUserID)
 	if err != nil {
-		if errors.Is(err, domain.ErrNotFound) {
-			writeJSON(w, http.StatusOK, listResponse[JobDTO]{
-				Items:      []JobDTO{},
-				Pagination: pagination{Limit: 20, Offset: 0, Count: 0},
-			})
-			return
-		}
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
 	limit, offset := parsePagination(r)
 
-	jobs, err := h.deps.Jobs.ListByUser(r.Context(), user.ID, limit+1, offset)
+	jobs, err := h.deps.Jobs.ListByUser(r.Context(), user.EffectiveAccountID(), limit+1, offset)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "list jobs failed")
 		return
@@ -1558,13 +1530,9 @@ func (h *Handler) getJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := h.deps.Users.GetByVKUserID(r.Context(), vkUserID)
+	user, err := h.ensureUser(r.Context(), vkUserID)
 	if err != nil {
-		if errors.Is(err, domain.ErrNotFound) {
-			writeError(w, http.StatusNotFound, "not found")
-		} else {
-			writeError(w, http.StatusInternalServerError, "internal error")
-		}
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
@@ -1579,7 +1547,7 @@ func (h *Handler) getJob(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Ownership check: a user may only retrieve their own jobs (invariant).
-	if job.UserID != user.ID {
+	if miniAppJobOwnerID(job) != user.EffectiveAccountID() {
 		writeError(w, http.StatusNotFound, "not found")
 		return
 	}
@@ -1600,7 +1568,7 @@ func (h *Handler) getBalance(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	acc, err := h.deps.BillingRepo.GetAccountByUser(r.Context(), user.ID, domain.CurrencyCredits)
+	acc, err := h.deps.BillingRepo.GetAccountByUser(r.Context(), user.EffectiveAccountID(), domain.CurrencyCredits)
 	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
 			writeJSON(w, http.StatusOK, BalanceDTO{BalanceCredits: 0})
@@ -1658,13 +1626,8 @@ func (h *Handler) acceptReferral(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	body, err := io.ReadAll(io.LimitReader(r.Body, 16<<10))
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "cannot read body")
-		return
-	}
 	var req ApplyReferralRequest
-	if err := json.Unmarshal(body, &req); err != nil {
+	if err := decodeStrictJSON(w, r, 16<<10, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid json")
 		return
 	}
@@ -1748,13 +1711,8 @@ func (h *Handler) createPaymentIntent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	body, err := io.ReadAll(io.LimitReader(r.Body, 16<<10))
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "cannot read body")
-		return
-	}
 	var req CreatePaymentIntentRequest
-	if err := json.Unmarshal(body, &req); err != nil {
+	if err := decodeStrictJSON(w, r, 16<<10, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid json")
 		return
 	}
@@ -1765,8 +1723,10 @@ func (h *Handler) createPaymentIntent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
+	accountID := user.EffectiveAccountID()
 	result, err := h.deps.Payment.CreateIntent(r.Context(), paymentservice.CreateIntentInput{
 		UserID:         user.ID,
+		AccountID:      accountID,
 		ProductCode:    req.ProductCode,
 		ReceiptEmail:   req.ReceiptEmail,
 		ReceiptPhone:   req.ReceiptPhone,
@@ -1821,20 +1781,13 @@ func (h *Handler) listPayments(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusServiceUnavailable, "service unavailable")
 		return
 	}
-	user, err := h.deps.Users.GetByVKUserID(r.Context(), vkUserID)
+	user, err := h.ensureUser(r.Context(), vkUserID)
 	if err != nil {
-		if errors.Is(err, domain.ErrNotFound) {
-			writeJSON(w, http.StatusOK, listResponse[PaymentIntentDTO]{
-				Items:      []PaymentIntentDTO{},
-				Pagination: pagination{Limit: defaultLimit, Offset: 0, Count: 0},
-			})
-			return
-		}
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	limit, offset := parsePagination(r)
-	intents, err := h.deps.Payment.ListIntentsByUserSource(r.Context(), user.ID, "vk_miniapp", limit+1, offset)
+	intents, err := h.deps.Payment.ListIntentsByUserSource(r.Context(), user.EffectiveAccountID(), "vk_miniapp", limit+1, offset)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
@@ -1868,16 +1821,12 @@ func (h *Handler) getPaymentIntent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid payment id")
 		return
 	}
-	user, err := h.deps.Users.GetByVKUserID(r.Context(), vkUserID)
+	user, err := h.ensureUser(r.Context(), vkUserID)
 	if err != nil {
-		if errors.Is(err, domain.ErrNotFound) {
-			writeError(w, http.StatusNotFound, "not found")
-			return
-		}
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	intent, err := h.deps.Payment.GetIntent(r.Context(), user.ID, intentID)
+	intent, err := h.deps.Payment.GetIntent(r.Context(), user.EffectiveAccountID(), intentID)
 	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "not found")
@@ -1908,19 +1857,16 @@ func (h *Handler) cancelPaymentIntent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid payment id")
 		return
 	}
-	user, err := h.deps.Users.GetByVKUserID(r.Context(), vkUserID)
+	user, err := h.ensureUser(r.Context(), vkUserID)
 	if err != nil {
-		if errors.Is(err, domain.ErrNotFound) {
-			writeError(w, http.StatusNotFound, "not found")
-			return
-		}
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	intent, err := h.deps.Payment.CancelUserWaitingIntent(r.Context(), paymentservice.CancelUserIntentInput{
-		UserID:   user.ID,
-		IntentID: intentID,
-		Source:   "vk_miniapp",
+		UserID:    user.ID,
+		AccountID: user.EffectiveAccountID(),
+		IntentID:  intentID,
+		Source:    "vk_miniapp",
 	})
 	if err != nil {
 		switch {
@@ -1982,15 +1928,10 @@ func (h *Handler) getArtifact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := h.deps.Users.GetByVKUserID(r.Context(), vkUserID)
+	user, err := h.ensureUser(r.Context(), vkUserID)
 	if err != nil {
-		if errors.Is(err, domain.ErrNotFound) {
-			resultLabel = "not_found"
-			writeError(w, http.StatusNotFound, "not found")
-		} else {
-			resultLabel = "error"
-			writeError(w, http.StatusInternalServerError, "internal error")
-		}
+		resultLabel = "error"
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
@@ -2006,12 +1947,13 @@ func (h *Handler) getArtifact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if art.OwnerUserID != user.ID {
+	accountID := user.EffectiveAccountID()
+	if miniAppArtifactOwnerID(art) != accountID {
 		resultLabel = "not_found"
 		writeError(w, http.StatusNotFound, "not found")
 		return
 	}
-	if !h.artifactVisible(r.Context(), art, user.ID) {
+	if !h.artifactVisible(r.Context(), art, accountID) {
 		resultLabel = "not_visible"
 		writeError(w, http.StatusNotFound, "not found")
 		return
@@ -2035,12 +1977,12 @@ func (h *Handler) getArtifact(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(data)
 }
 
-func (h *Handler) artifactVisible(ctx context.Context, art *domain.Artifact, userID uuid.UUID) bool {
+func (h *Handler) artifactVisible(ctx context.Context, art *domain.Artifact, accountID uuid.UUID) bool {
 	if art == nil || art.JobID == nil || art.Kind != domain.ArtifactKindOutput || art.Status != domain.ArtifactStatusReady {
 		return false
 	}
 	job, err := h.deps.Jobs.GetByID(ctx, *art.JobID)
-	if err != nil || job.UserID != userID || job.Status != domain.JobStatusSucceeded {
+	if err != nil || miniAppJobOwnerID(job) != accountID || job.Status != domain.JobStatusSucceeded {
 		return false
 	}
 	if !uuidInSlice(job.OutputArtifactIDs, art.ID) || h.deps.Moderation == nil {
@@ -2104,6 +2046,22 @@ func truncateChatText(text string, maxRunes int) string {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+func decodeStrictJSON(w http.ResponseWriter, r *http.Request, maxBytes int64, dst any) error {
+	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBytes))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(dst); err != nil {
+		return err
+	}
+	var extra struct{}
+	if err := dec.Decode(&extra); err != io.EOF {
+		if err == nil {
+			return errors.New("request body must contain exactly one JSON value")
+		}
+		return err
+	}
+	return nil
+}
 
 const (
 	defaultLimit        = 20

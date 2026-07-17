@@ -17,7 +17,7 @@ $resolvedEnvFile = if ([System.IO.Path]::IsPathRooted($EnvFile)) {
 }
 
 if (-not (Test-Path -LiteralPath $resolvedEnvFile)) {
-    throw "Server env file not found: $EnvFile. Copy .env.staging.example or .env.prod.example to .env and fill real values."
+    throw "Server env file not found: $EnvFile. Assemble it from split PROD env secrets or create it with real production values."
 }
 
 function Read-EnvFile {
@@ -209,6 +209,13 @@ if ($paymentProvider -eq "yookassa") {
     foreach ($required in @("YOOKASSA_SHOP_ID", "YOOKASSA_SECRET_KEY", "YOOKASSA_RETURN_URL")) {
         Require-Value -Values $envValues -Problems $problems -Name $required -Reason "required when PAYMENT_PROVIDER=yookassa"
     }
+    $yooKassaSecretKey = (Get-Value -Values $envValues -Name "YOOKASSA_SECRET_KEY").Trim().ToLowerInvariant()
+    if (-not [string]::IsNullOrWhiteSpace($yooKassaSecretKey) -and -not $yooKassaSecretKey.Contains("change_me") -and -not $yooKassaSecretKey.StartsWith("live")) {
+        Add-Problem -Problems $problems -Name "YOOKASSA_SECRET_KEY" -Reason "must be a live YooKassa key in production"
+    }
+}
+if (Is-TrueValue (Get-Value -Values $envValues -Name "FEATURE_DEV_PAYMENT_TEST_PRODUCT_ENABLED" -Default "false")) {
+    Add-Problem -Problems $problems -Name "FEATURE_DEV_PAYMENT_TEST_PRODUCT_ENABLED" -Reason "not allowed in staging/production"
 }
 
 $providerValues = @(
@@ -263,8 +270,8 @@ $artifactScanner = (Get-Value -Values $envValues -Name "ARTIFACT_SCANNER" -Defau
 if ($moderationProvider -eq "openai" -or $artifactScanner -eq "openai" -or $usesOpenAI) {
     Require-Value -Values $envValues -Problems $problems -Name "OPENAI_API_KEY" -Reason "required when OpenAI provider/moderation/scanner is configured"
 }
-if ($appEnv -eq "production" -and ($artifactScanner -eq "" -or $artifactScanner -eq "none") -and -not (Is-TrueValue (Get-Value -Values $envValues -Name "ALLOW_UNSCANNED_ARTIFACTS_IN_PRODUCTION"))) {
-    Add-Problem -Problems $problems -Name "ARTIFACT_SCANNER" -Reason "must be openai in production unless ALLOW_UNSCANNED_ARTIFACTS_IN_PRODUCTION=true"
+if ($appEnv -eq "production" -and ($artifactScanner -eq "" -or $artifactScanner -eq "none")) {
+    Add-Problem -Problems $problems -Name "ARTIFACT_SCANNER" -Reason "must be openai in production"
 } elseif ($artifactScanner -eq "" -or $artifactScanner -eq "none") {
 } elseif ($artifactScanner -ne "openai") {
     Add-Problem -Problems $problems -Name "ARTIFACT_SCANNER" -Reason "must be none or openai"
@@ -278,11 +285,17 @@ if ($prices -match "(^|,)image_generate=0(,|$)") {
 if (Is-TrueValue (Get-Value -Values $envValues -Name "VK_MENU_TOP_UP_ENABLED")) {
     $email = Get-Value -Values $envValues -Name "VK_TOP_UP_RECEIPT_EMAIL"
     $phone = Get-Value -Values $envValues -Name "VK_TOP_UP_RECEIPT_PHONE"
+    Require-HttpsUrl -Values $envValues -Problems $problems -Name "PUBLIC_VK_BASE_URL" -Reason "required for VK top-up payment links"
+    if (-not (Is-TrueValue (Get-Value -Values $envValues -Name "FEATURE_VK_TOPUP_STATUS_EDIT_ENABLED" -Default "false"))) {
+        Add-Problem -Problems $problems -Name "FEATURE_VK_TOPUP_STATUS_EDIT_ENABLED" -Reason "must be true when VK_MENU_TOP_UP_ENABLED=true"
+    }
     if ([string]::IsNullOrWhiteSpace($email) -and [string]::IsNullOrWhiteSpace($phone)) {
         Add-Problem -Problems $problems -Name "VK_TOP_UP_RECEIPT_EMAIL/VK_TOP_UP_RECEIPT_PHONE" -Reason "one receipt contact is required when VK_MENU_TOP_UP_ENABLED=true"
     }
-    if ($email -match "CHANGE_ME" -or $phone -match "CHANGE_ME") {
-        Add-Problem -Problems $problems -Name "VK_TOP_UP_RECEIPT_EMAIL/VK_TOP_UP_RECEIPT_PHONE" -Reason "replace CHANGE_ME placeholder before enabling VK top-up"
+    $emailLower = $email.ToLowerInvariant()
+    $phoneLower = $phone.ToLowerInvariant()
+    if ($emailLower.Contains("change_me") -or $phoneLower.Contains("change_me") -or $emailLower.Contains("example.com") -or $phoneLower.Contains("example")) {
+        Add-Problem -Problems $problems -Name "VK_TOP_UP_RECEIPT_EMAIL/VK_TOP_UP_RECEIPT_PHONE" -Reason "replace placeholder before enabling VK top-up"
     }
 }
 
@@ -300,7 +313,7 @@ if ($BackupBeforeDeploy) {
 }
 
 if ($IncludeObservability) {
-    foreach ($required in @("GRAFANA_ADMIN_PASSWORD", "GRAFANA_SECRET_KEY", "POSTGRES_EXPORTER_DATA_SOURCE_NAME")) {
+    foreach ($required in @("GRAFANA_ADMIN_USER", "GRAFANA_ADMIN_PASSWORD", "GRAFANA_SECRET_KEY", "POSTGRES_EXPORTER_DATA_SOURCE_NAME")) {
         Require-Value -Values $envValues -Problems $problems -Name $required -Reason "required for production observability"
     }
     if (Is-TrueValue (Get-Value -Values $envValues -Name "ALERT_TELEGRAM_ENABLED")) {

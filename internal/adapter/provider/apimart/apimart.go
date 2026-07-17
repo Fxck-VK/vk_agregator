@@ -1095,6 +1095,7 @@ func classifyAPIMartError(status int, code, typ, msg string) domain.ProviderErro
 		strings.Contains(lower, "policy") ||
 		strings.Contains(lower, "safety") ||
 		strings.Contains(lower, "nsfw") ||
+		strings.Contains(lower, "copyright") ||
 		strings.Contains(lower, "sensitive") ||
 		strings.Contains(lower, "content rejected") ||
 		strings.Contains(lower, "does not comply") ||
@@ -1104,6 +1105,8 @@ func classifyAPIMartError(status int, code, typ, msg string) domain.ProviderErro
 		strings.Contains(lower, "filtered out") ||
 		strings.Contains(lower, "blocked by"):
 		return domain.ProviderErrContentRejected
+	case isModelUnavailableError(lower):
+		return domain.ProviderErrModelUnavailable
 	case strings.Contains(lower, "rate") || strings.Contains(lower, "too many"):
 		return domain.ProviderErrRateLimited
 	case strings.Contains(lower, "timeout") || strings.Contains(lower, "timed out"):
@@ -1129,6 +1132,46 @@ func classifyAPIMartError(status int, code, typ, msg string) domain.ProviderErro
 		return domain.ProviderErrOverloaded
 	}
 	return domain.ProviderErrInternal
+}
+
+func isModelUnavailableError(lower string) bool {
+	normalized := strings.NewReplacer("_", " ", "-", " ").Replace(lower)
+	for _, phrase := range []string{
+		"model not found",
+		"unknown model",
+		"model unknown",
+		"unsupported model",
+		"model unsupported",
+		"model unavailable",
+		"model not available",
+		"model does not exist",
+		"model doesn't exist",
+		"model doesnt exist",
+		"model not exist",
+		"invalid model",
+		"model invalid",
+	} {
+		if strings.Contains(normalized, phrase) {
+			return true
+		}
+	}
+	if !strings.Contains(normalized, "model") {
+		return false
+	}
+	for _, phrase := range []string{
+		"not found",
+		"not available",
+		"unavailable",
+		"does not exist",
+		"doesn't exist",
+		"doesnt exist",
+		"not exist",
+	} {
+		if strings.Contains(normalized, phrase) {
+			return true
+		}
+	}
+	return false
 }
 
 func mapTaskStatus(status string) domain.ProviderTaskStatus {
@@ -1185,6 +1228,8 @@ func providerErrorMessage(class domain.ProviderErrorClass, fallback string) stri
 		return "apimart rate limit exceeded"
 	case domain.ProviderErrInvalidRequest:
 		return "apimart request validation failed"
+	case domain.ProviderErrModelUnavailable:
+		return "apimart model is unavailable"
 	case domain.ProviderErrContentRejected:
 		return "apimart content moderation rejected the request"
 	case domain.ProviderErrOverloaded:

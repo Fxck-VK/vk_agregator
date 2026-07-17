@@ -292,25 +292,27 @@ migrations/          SQL migrations
 
 ## Running locally
 
-Create a local environment file from the committed template:
+Create a local environment file from the split DEV env parts or fill it
+manually with DEV-only values:
 
 ```bash
-cp .env.example .env
-# edit .env and fill VK_ACCESS_TOKEN / VK_SECRET / VK_CONFIRMATION_TOKEN if needed
+cp dev.env .env
+# edit .env only if you need local overrides
 # macOS local fallback used in this workspace is also supported:
-# cp .env.example _env
+# cp dev.env _env
 ```
 
 On Windows PowerShell:
 
 ```powershell
-Copy-Item .env.example .env
+Copy-Item dev.env .env
 notepad .env
 ```
 
 The application loads `.env` first and `_env` as a local fallback when started
-from the repository root. Real env files are ignored by Git; only
-`.env.example` is committed.
+from the repository root. Real env files and env examples are ignored by Git.
+Runtime deploy env is assembled from split GitHub Secrets and local `.env.d`
+parts.
 
 ### VK bot one-command startup
 
@@ -417,18 +419,12 @@ expected results.
 Real adapter modes are opt-in:
 
 ```bash
-# OpenAI text/image/video generation; requires a real key.
-PROVIDER=openai OPENAI_API_KEY=... go run ./cmd/worker
+# DeepInfra text generation.
+PROVIDER_CHAIN=deepinfra DEEPINFRA_API_KEY=... go run ./cmd/worker
 
-# OpenAI primary with mock fallback through the provider router.
-PROVIDER_CHAIN=openai,mock OPENAI_API_KEY=... go run ./cmd/worker
-
-# DeepInfra DeepSeek-V4-Flash text generation and Seedream image generation.
-PROVIDER_CHAIN=deepinfra,mock DEEPINFRA_API_KEY=... go run ./cmd/worker
-
-# Prefer DeepInfra Seedream for image jobs while preserving provider-chain
-# fallback.
-IMAGE_PROVIDER=deepinfra DEEPINFRA_IMAGE_MODEL=ByteDance/Seedream-4.5 DEEPINFRA_IMAGE_FALLBACK_MODEL=stabilityai/sdxl-turbo IMAGE_SIZE=2K PROVIDER_CHAIN=deepinfra,mock DEEPINFRA_API_KEY=... go run ./cmd/worker
+# Image/video routes are enabled through the model catalog and provider flags,
+# not through DeepInfra media overrides.
+PROVIDER_CHAIN=deepinfra,apimart,poyo,runway APIMART_PROVIDER_ENABLED=true POYO_PROVIDER_ENABLED=true RUNWAY_PROVIDER_ENABLED=true go run ./cmd/worker
 
 # Real VK messages.send + photo/video upload; requires a real token.
 VK_DELIVERY_MODE=real VK_ACCESS_TOKEN=... go run ./cmd/worker
@@ -442,12 +438,13 @@ MODERATION_PROVIDER=openai ARTIFACT_SCANNER=openai OPENAI_API_KEY=... go run ./c
 
 For production, set `APP_ENV=production` and configure non-default
 `VK_SECRET`, `ADMIN_TOKEN` and `VK_CONFIRMATION_TOKEN`. Both `cmd/api` and
-`cmd/worker` run fail-closed config validation; `PROVIDER=openai` requires
-`OPENAI_API_KEY`, `PROVIDER=deepinfra` or `IMAGE_PROVIDER=deepinfra` requires
-`DEEPINFRA_API_KEY`, and `VK_DELIVERY_MODE=real` requires `VK_ACCESS_TOKEN` in
-any environment. `PROVIDER_CHAIN`, `IMAGE_PROVIDER`,
-`MODERATION_PROVIDER=openai` and `ARTIFACT_SCANNER=openai` also require the
-corresponding provider key when they include/enable that provider.
+`cmd/worker` run fail-closed config validation. `PROVIDER_CHAIN=deepinfra`
+requires `DEEPINFRA_API_KEY`; APIMart, PoYo and Runway routes require their
+provider switch, key and base URL. `IMAGE_PROVIDER=deepinfra` and
+`VIDEO_PROVIDER=deepinfra` are invalid because DeepInfra is text-only in the
+current runtime. `VK_DELIVERY_MODE=real` requires `VK_ACCESS_TOKEN` in any
+environment. `MODERATION_PROVIDER=openai` and `ARTIFACT_SCANNER=openai` require
+`OPENAI_API_KEY`.
 For a VK welcome banner, set `VK_WELCOME_ATTACHMENT` to a pre-uploaded
 attachment string such as `photo-239332376_123_accesskey`.
 
@@ -503,7 +500,7 @@ Artifact → Delivery → Capture without any external services.
 
 Load testing is planned separately from CI and live smoke. The current contract
 is in [`docs/LOAD_TESTING.md`](docs/LOAD_TESTING.md): load tests must use
-the dedicated `APP_ENV=loadtest` profile from `.env.loadtest.example` and must
+the dedicated `APP_ENV=loadtest` profile from `.env.loadtest` and must
 not call paid providers, production VK, production YooKassa or production data
 stores. In `loadtest`, config validation requires mock AI providers, mock
 payments and mock VK delivery before the process starts.
@@ -567,9 +564,10 @@ push/merge to main
 ```
 
 The deploy workflow is serialized with the `production-deploy` concurrency group,
-so two merges to `main` deploy in order. It writes `PROD_ENV_FILE` from GitHub
-Repository Secrets to the VPS `.env`, injects GHCR credentials, pins `IMAGE_TAG`,
-and never stores production secrets in the repository.
+so two merges to `main` deploy in order. It assembles the VPS `.env` from split
+GitHub Repository Secrets (`ENV_COMMON`, `ENV_PROVIDERS_COMMON`,
+`ENV_SECRETS_PROD`, `ENV_PAYMENTS_PROD`), injects GHCR credentials, pins
+`IMAGE_TAG`, and never stores production secrets in the repository.
 
 Rollback is runtime-only by default: it switches stateless containers back to
 the previous image tag and does not run migration rollback automatically. If

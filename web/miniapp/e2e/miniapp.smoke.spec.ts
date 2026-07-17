@@ -346,7 +346,8 @@ async function openMiniapp(page: Page) {
     private_artifact_url: PRIVATE_STORAGE_URL,
   });
   await page.goto(`/?${launchParams.toString()}`);
-  await expect(page.locator(".chat")).toBeVisible();
+  // Production bridge calls use a bounded 3s timeout each outside VK.
+  await expect(page.locator(".chat")).toBeVisible({ timeout: 12_000 });
 }
 
 async function expectNoHorizontalOverflow(page: Page) {
@@ -387,6 +388,7 @@ async function expectNoSensitiveLeaks(page: Page, mocks: MiniappMocks) {
     expect(message).not.toContain(PRIVATE_STORAGE_URL);
     expect(message).not.toContain(CHAT_PROMPT);
     expect(message).not.toContain(IMAGE_PROMPT);
+    expect(message.toLowerCase()).not.toContain("content security policy");
   }
 }
 

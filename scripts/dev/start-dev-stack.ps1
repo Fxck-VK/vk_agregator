@@ -546,7 +546,7 @@ $resolvedEnvFile = if ([System.IO.Path]::IsPathRooted($EnvFile)) {
 }
 
 if (-not (Test-Path -LiteralPath $resolvedEnvFile)) {
-    throw "DEV env file not found: $EnvFile. Copy .env.dev.example to dev.env and fill DEV-only values."
+    throw "DEV env file not found: $EnvFile. Create dev.env from the split DEV env parts or fill it with DEV-only values."
 }
 
 $envValues = Read-EnvFile -Path $resolvedEnvFile

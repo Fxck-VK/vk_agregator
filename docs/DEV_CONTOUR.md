@@ -83,15 +83,18 @@ DEV_DEPLOY_HOST
 DEV_DEPLOY_USER
 DEV_DEPLOY_SSH_KEY
 DEV_DEPLOY_PATH
-DEV_ENV_FILE
+ENV_COMMON
+ENV_PROVIDERS_COMMON
+ENV_SECRETS_DEV
+ENV_PAYMENTS_DEV
 GHCR_USERNAME
 GHCR_TOKEN
 ```
 
-`DEV_ENV_FILE` stores the DEV server env content. It must contain DEV-only
-values: `APP_ENV=development`, `dev-*` public URLs, the DEV VK group id, the
-DEV Cloudflare tunnel token, and either `PAYMENT_PROVIDER=mock` or an explicit
-DEV/test YooKassa configuration.
+The workflow assembles the DEV server `.env` from split GitHub Secrets. The DEV
+parts must contain DEV-only values: `APP_ENV=development`, `dev-*` public URLs,
+the DEV VK group id, the DEV Cloudflare tunnel token, and either
+`PAYMENT_PROVIDER=mock` or an explicit DEV/test YooKassa configuration.
 
 The workflow does not keep provider/payment business rules in YAML. It only
 orchestrates deployment:
@@ -100,7 +103,7 @@ orchestrates deployment:
 checkout
 wait for GHCR images
 connect to DEV VPS
-write DEV_ENV_FILE to a temporary file
+assemble split DEV env to a temporary file
 run scripts/deploy/prepare-dev-env.sh
 run scripts/deploy/check-dev-env.sh
 upload .env to DEV VPS
@@ -109,8 +112,12 @@ run scripts/deploy/smoke-dev.sh
 write GitHub summary / Telegram notification
 ```
 
-`prepare-dev-env.sh` renders the final server `.env`, appends the deploy image
-tag and GHCR pull credentials, and prints only non-secret readiness flags.
+`prepare-dev-env.sh` renders the final server `.env`, pins runtime and backup
+images to the deploy SHA, appends GHCR pull credentials, and prints only
+non-secret readiness flags.
+It also caps the DEV jobs worker at `1.00` CPU for the current one-vCPU DEV
+server. Production keeps the Compose default of `2.00` CPUs unless
+`WORKER_CPU_LIMIT` is explicitly overridden there.
 `check-dev-env.sh` blocks production hostnames, production VK group id, missing
 Cloudflare tunnel token, unsupported payment providers and non-development
 `APP_ENV` before the env can reach the VPS.
@@ -139,10 +146,11 @@ scripts/deploy/check-env-parity.sh --dev dev.env --prod prod.env
 
 Sources:
 
-- `DEV_ENV_FILE` from GitHub Secrets or a local `dev.env` copy
-- `PROD_ENV_FILE` from GitHub Secrets or the production VPS `.env`
-- `.env.dev.example` as the DEV template
-- `.env.prod.example` as the production contract
+- `ENV_COMMON`, `ENV_PROVIDERS_COMMON`, `ENV_SECRETS_DEV` and
+  `ENV_PAYMENTS_DEV` from GitHub Secrets or the local `.env.d` split files
+- `ENV_COMMON`, `ENV_PROVIDERS_COMMON`, `ENV_SECRETS_PROD` and
+  `ENV_PAYMENTS_PROD` from GitHub Secrets or the production VPS `.env`
+- the checked-in config loader and deploy scripts as the runtime contract
 
 Allowed DEV-only and PROD-only names are explicit allowlist patterns in
 `scripts/deploy/env-parity.allowlist`. Anything else is reported as drift, for
@@ -150,9 +158,9 @@ example a provider key present in DEV but missing from PROD. The report lists
 variable names only. Keep allowlist patterns narrow; do not add broad token or
 secret patterns that could hide production gaps.
 
-`Deploy DEV` runs the parity check as a warning when `PROD_ENV_FILE` is
-available. `Deploy Production` runs the same check as a required pre-deploy gate
-before uploading `.env` to the VPS or starting containers.
+Deploy workflows do not read the opposite contour's env secrets: DEV deploy
+uses only DEV parts, and production deploy uses only production parts. Run
+DEV/PROD parity as a separate operator check when changing env structure.
 
 ## Mini App Model Catalog Migration
 
@@ -298,11 +306,10 @@ YooKassa credentials are not allowed in the DEV contour.
 
 ## Required DEV Inputs
 
-The local `dev.env` for this contour must come from a DEV-specific template or be
-filled manually with DEV-only values:
+The local `dev.env` for this contour must be assembled from the split DEV env
+parts or filled manually with DEV-only values:
 
 ```powershell
-Copy-Item .env.dev.example dev.env
 notepad dev.env
 ```
 

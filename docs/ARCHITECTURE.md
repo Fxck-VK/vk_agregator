@@ -214,28 +214,44 @@ Current image-generation foundation:
 - `internal/domain` exposes provider-agnostic `ImageGenerationRequest` and
   `ImageGenerationResult` shapes for image adapters. Surface modules must not
   depend on provider-native request/response JSON.
-- `cmd/worker` may prefer an image provider through `IMAGE_PROVIDER` and attach
-  worker-only `IMAGE_MODEL` / `IMAGE_SIZE` defaults. `PROVIDER_CHAIN` remains
-  the fallback mechanism.
-- DeepInfra `ByteDance/Seedream-4.5` is wired as a text-to-image adapter through
-  the native `/v1/inference/{model}` endpoint. Optional
-  `DEEPINFRA_IMAGE_FALLBACK_MODEL` stays inside the provider adapter and is only
-  tried after retryable primary-model failures. Reference-image generation
-  remains fail-closed until provider-safe artifact URL preparation is
-  implemented.
+- `cmd/worker` registers generation providers from `PROVIDER_CHAIN`. Public
+  image model selection is catalog-owned; local env should not force stale
+  `IMAGE_MODEL` / `IMAGE_SIZE` overrides.
+- PoYo Seedream 4.5 is wired as a priced public image model through the PoYo
+  adapter. Text-only uses `seedream-4.5`; optional reference images use
+  `seedream-4.5-edit` with `image_urls`. Missing provider readiness or missing
+  pricing keeps the model hidden/fail-closed.
+- DeepInfra is active for text generation only in the current runtime.
+  `IMAGE_PROVIDER=deepinfra` and `VIDEO_PROVIDER=deepinfra` are rejected by
+  config validation; DeepInfra image/video env keys are legacy/test-only until
+  a new catalog-backed route explicitly wires them.
 - VK bot text-to-image UX is wired as a surface state, not a provider shortcut:
   `Создать фото` stores peer-scoped `photo_text` mode immediately, the next
   plain text creates an `image.generate` Job, and the API sends `НейроХаб
   рисует...` as a VK control placeholder. The extra `Фото по тексту` selection
   button is hidden while there is only one text-to-image mode.
-- VK bot text-to-video UX follows the same surface-state pattern: the active
-  `PrunaAI` video button stores peer-scoped `video:*` dialog mode, the next
-  plain text creates a `video_generate` Job, and the API sends `НейроХаб готовит
-  видео...` as a control placeholder. Model/provider execution still belongs to
-  `cmd/worker` and `internal/adapter/provider`; stale Sora/Kling/Seedance/Hailuo
-  payloads are hidden and fall back to the main menu without Jobs.
-- The current VK bot profile hides reference-photo generation by default and
-  allows 100 free text-to-image attempts per user per 24h window through
+- VK bot image modes accept optional user photos for reference-capable image
+  models without adding a prominent reference-only menu item. Text-only
+  generation stays unchanged. Photo+text creates an `image.generate` Job with
+  owner-scoped input artifact IDs. Photo-only input asks the user to add a
+  description and creates no job or ledger reservation.
+- VK reference photos must be downloaded from VK, sniffed as JPG/PNG, bounded by
+  size/dimensions, and persisted through `ArtifactService` as ready
+  storage-backed input image artifacts before a job can be reserved. Raw VK
+  attachment URLs are not passed to providers.
+- `joborchestrator` owner-checks input artifact IDs before reservation. The
+  worker resolves accepted reference artifacts into sanitized provider inputs
+  and provider adapters enforce per-model caps and request fields. VK handlers,
+  Mini App BFF and `cmd/api` still do not call providers or construct
+  provider-native payloads.
+- VK bot text-to-video UX follows the same surface-state pattern: enabled route
+  buttons store peer-scoped `video:*` dialog mode, the next plain text creates a
+  `video_generate` Job, and the API sends `НейроХаб готовит видео...` as a
+  control placeholder. Model/provider execution still belongs to `cmd/worker`
+  and `internal/adapter/provider`; stale Sora/Kling/Seedance/Hailuo payloads are
+  hidden and fall back to the main menu without Jobs.
+- The current VK bot profile keeps reference-photo UX low-profile and allows
+  100 free text-to-image attempts per user per 24h window through
   Redis-backed anti-spam quota (`VK_ANTISPAM_IMAGE_DAILY_LIMIT=100`) and a free
   `image_generate` price override.
 - Image provider failures that reach terminal state release reserved credits
@@ -419,6 +435,69 @@ Where to add features:
   moderation rule: implement it in backend core (`internal/domain`,
   `internal/service`, `internal/worker`, provider/storage adapters as
   appropriate), not in a surface module.
+
+Provider API architecture:
+
+- `internal/adapter/provider/*` implements the provider adapter contract:
+  capabilities, estimate, submit, poll, cancel when supported, normalized
+  `domain.ProviderErrorClass` errors, idempotent submit behavior where the
+  adapter can guarantee it, and sanitized raw metadata.
+- `internal/service/providermodels` is the central static provider/model
+  registry. It owns public model IDs, provider model IDs, feature flags,
+  readiness requirements, route specs, request limits, active/disabled pricing
+  keys and static media contract classes. It stores config/env names only; it
+  does not read env values and does not call providers.
+- `internal/service/modelcatalog` resolves public Mini App/VK model choices
+  from the registry. Public catalogs expose public IDs and display constraints,
+  not provider names, model codes or provider model IDs.
+- `internal/service/videorouter` derives route specs from the registry and
+  rejects client-supplied provider/model fields before paid submit.
+- `internal/service/productcatalog` combines registry readiness metadata,
+  backend config and `pricingcatalog` display estimates. Pricing remains
+  backend-owned and fail-closed.
+- `cmd/worker` builds default provider media contracts from
+  `providermodels.ProviderMediaContracts` plus runtime media config. It still
+  accepts validated `config.MediaProviderContracts` as an override/extension.
+
+Add a provider:
+
+1. Implement the adapter under `internal/adapter/provider/<provider>`.
+2. Cover it with shared contract tests in
+   `internal/adapter/provider/providertest`.
+3. Normalize provider statuses and errors into domain types; keep
+   provider-native response details inside the adapter.
+4. Add readiness metadata to `providermodels` using env/config names only.
+5. Wire construction only in `cmd/worker`; API/VK/Mini App surfaces must remain
+   provider-free.
+6. Run provider tests and the provider security scans before enabling the
+   provider.
+
+Add a model or route:
+
+1. Add model/route metadata in `internal/service/providermodels`.
+2. Add pricing product keys in `pricingcatalog`, or disabled pricing keys when
+   the route must remain fail-closed.
+3. Let `modelcatalog`, `videorouter`, `productcatalog` and worker media
+   contracts derive from the registry.
+4. Add tests that prove public DTOs hide provider internals, unconfigured
+   providers fail closed, and unsafe video media fields are rejected before
+   submit.
+
+Provider security gate:
+
+```bash
+go test ./internal/adapter/provider/... ./internal/worker ./internal/service/... ./cmd/api ./cmd/worker -count=1
+go test ./... -count=1
+git diff --check
+rg -n "internal/adapter/provider" cmd/api internal/adapter/inbound internal/app -g "*.go"
+rg -n "Authorization|Bearer |OPENAI_API_KEY|DEEPINFRA_API_KEY|APIMART_API_KEY|POYO_API_KEY|RUNWAYML_API_SECRET"
+rg -n "provider_native_payload|raw provider|private artifact|prompt body|launch params"
+```
+
+Every `rg` match must be reviewed. Accept only env var names, placeholders,
+fake test literals, adapter auth-header construction and sanitizer tests. Do
+not commit secret values, prompt bodies, raw provider payloads or private media
+URLs.
 
 Forbidden shortcuts:
 
@@ -680,6 +759,8 @@ POST /webhooks/vk/{group_id}
 ---
 
 ## 4.4. User / Identity Service
+
+Target account identity architecture is defined in `docs/ACCOUNT_IDENTITY_CONTRACT.md`. `account_id` is the future canonical owner of billing, jobs, artifacts, conversations and referrals. `vk_user_id`, Telegram ID, email, phone, Google, Apple and password credentials are identity bindings only. Current implementation is in VK compatibility mode: `IdentityResolver` is wired through SharedCore and both VK Bot and VK Mini App resolve verified VK identities through it. Business storage now has additive account ownership columns for jobs, payments, artifacts, conversations, referrals and billing ledger surfaces, while repository reads/writes remain compatible with legacy `user_id` during the rollout.
 
 Хранит пользователей VK и их состояние.
 

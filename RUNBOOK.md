@@ -25,6 +25,8 @@ Do not use old handoff or merge files as the default source of truth.
 
 - Do not commit real `.env`, `PROD_ENV_FILE`, `DEV_ENV_FILE`, SSH keys, GHCR
   tokens, Cloudflare tunnel tokens, VK tokens, YooKassa secrets or provider keys.
+- GitHub deploy workflows must use out-of-band pinned SSH `known_hosts` secrets;
+  do not rely on workflow-time `ssh-keyscan` before uploading env/secrets.
 - Do not run production providers, production YooKassa or production VK delivery
   from load tests.
 - `main` is production. It deploys through GitHub Actions and protected review
@@ -42,7 +44,7 @@ Do not use old handoff or merge files as the default source of truth.
 DEV:
 
 ```powershell
-Copy-Item .env.dev.example .env
+Copy-Item dev.env .env
 .\scripts\dev\start-dev-stack.ps1 -WithCloudflare
 .\scripts\dev\status-dev-stack.ps1
 .\scripts\dev\smoke-dev.ps1
@@ -64,7 +66,7 @@ bash scripts/deploy/smoke-prod.sh --env-file .env
 Loadtest:
 
 ```powershell
-Copy-Item .env.loadtest.example .env.loadtest
+# create .env.loadtest manually or from a safe DEV env, then force APP_ENV=loadtest
 .\scripts\loadtest\loadtest-preflight.ps1 -EnvFile .env.loadtest
 .\scripts\loadtest\loadtest-report.ps1 -EnvFile .env.loadtest -RunK6 -UseDockerCompose
 ```

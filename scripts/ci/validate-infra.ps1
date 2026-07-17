@@ -89,17 +89,12 @@ function Assert-Migrations {
 
 function Assert-NoTrackedEnvFiles {
     $tracked = Get-TrackedFiles
-    $allowedTrackedEnv = @(
-        ".env.example",
-        ".env.dev.example",
-        ".env.loadtest.example",
-        ".env.prod.example",
-        ".env.staging.example"
-    )
     $bad = @(
         $tracked | Where-Object {
+            $path = Join-Path $repoRoot $_
             $leaf = Split-Path $_ -Leaf
-            ($leaf -eq ".env" -or $leaf -like ".env.*") -and $allowedTrackedEnv -notcontains $leaf
+            (Test-Path -LiteralPath $path) -and
+                ($leaf -eq ".env" -or $leaf -like ".env.*")
         }
     )
 
@@ -110,62 +105,58 @@ function Assert-NoTrackedEnvFiles {
     Write-Host "tracked env files OK"
 }
 
-function Assert-DevEnvTemplate {
-    $path = Join-Path $repoRoot ".env.dev.example"
-    if (-not (Test-Path -LiteralPath $path)) {
-        throw "DEV env template is missing: .env.dev.example"
+function Assert-NoActiveEnvExampleReferences {
+    $tracked = Get-TrackedFiles
+    $activeFiles = @(
+        $tracked | Where-Object {
+            $_ -notmatch '^(docs/archive/|docs/superpowers/plans/)' -and
+            $_ -notmatch '^\.agents/logs/' -and
+            $_ -notin @(".gitignore", ".gitleaksignore")
+        }
+    )
+    $bad = @()
+    foreach ($file in $activeFiles) {
+        if (-not (Test-Path -LiteralPath $file)) {
+            continue
+        }
+        $content = Get-Content -LiteralPath $file -Raw -ErrorAction SilentlyContinue
+        if ($null -ne $content -and $content -match '\.env\.(dev|prod|staging|loadtest)?\.?example') {
+            $bad += $file
+        }
+    }
+    if ($bad.Count -gt 0) {
+        throw "active files still reference env example files: $($bad -join ', ')"
     }
 
-    $content = Get-Content -LiteralPath $path -Raw
-    $requiredSnippets = @(
-        "APP_ENV=development",
-        "COMPOSE_NETWORK_NAME=vk-ai-aggregator-dev",
-        "DATA_SERVICES_MODE=local",
-        "POSTGRES_MODE=local",
-        "REDIS_MODE=local",
-        "S3_MODE=local",
+    Write-Host "active env example references OK"
+}
+
+function New-ComposeValidationEnvFile {
+    $path = Join-Path ([System.IO.Path]::GetTempPath()) ("vkagg-compose-validate-{0}.env" -f ([guid]::NewGuid().ToString("N")))
+    $appEnvFile = $path.Replace("\", "/")
+    $lines = @(
+        "APP_ENV_FILE=$appEnvFile",
+        "APP_ENV=production",
+        "APP_IMAGE_REGISTRY=ghcr.io/fxck-vk/vk_agregator",
+        "IMAGE_TAG=infra-validate",
+        "BACKUP_IMAGE_TAG=infra-validate",
+        "DATABASE_URL=config-validation-placeholder",
+        "POSTGRES_PASSWORD=pg-config",
+        "REDIS_ADDR=redis:6379",
+        "S3_ENDPOINT=minio:9000",
+        "S3_ACCESS_KEY=compose_validate_access",
+        "S3_SECRET_KEY=compose_validate_secret",
+        "S3_BUCKET=artifacts",
+        "S3_USE_SSL=false",
         "S3_REGION=us-east-1",
         "S3_ADDRESSING_STYLE=path",
-        "DEV_ALLOW_REAL_AI_PROVIDERS=true",
-        "DEV_ALLOW_REAL_PAYMENTS=false",
-        "DEV_ALLOW_REMOTE_IMAGES=false",
-        "DEV_EXPECTED_TUNNEL_NAME=neiirohub-vk-dev",
-        "DEV_EXPECTED_TUNNEL_HOSTNAME=dev-vk.neiirohub.ru",
-        "PUBLIC_VK_BASE_URL=https://dev-vk.neiirohub.ru",
-        "PUBLIC_APP_BASE_URL=https://dev-app.neiirohub.ru",
-        "PUBLIC_PAYMENT_WEBHOOK_URL=https://dev.neiirohub.ru/billing/webhooks/yookassa",
-        "CLOUDFLARED_TUNNEL_TOKEN=CHANGE_ME_DEV_CLOUDFLARED_TUNNEL_TOKEN",
-        "VK_ACCESS_TOKEN=CHANGE_ME_DEV_VK_ACCESS_TOKEN",
-        "VK_SECRET=CHANGE_ME_DEV_VK_CALLBACK_SECRET",
-        "VK_CONFIRMATION_TOKEN=CHANGE_ME_DEV_VK_CONFIRMATION_TOKEN",
-        "VK_GROUP_ID=CHANGE_ME_DEV_VK_GROUP_ID",
-        "PAYMENT_PROVIDER=mock",
-        "PROVIDER=mock",
-        "PROVIDER_CHAIN=deepinfra,apimart,poyo,runway,mock",
-        "APIMART_BASE_URL=https://api.apimart.ai/v1",
-        "IMAGE_PROVIDER=mock",
-        "VIDEO_PROVIDER=mock"
+        "MINIO_ROOT_USER=minio-config",
+        "MINIO_ROOT_PASSWORD=minio-config",
+        "CLOUDFLARED_TUNNEL_TOKEN=compose-validate-token",
+        "COMPOSE_NETWORK_NAME=vk-ai-aggregator-prod"
     )
-
-    foreach ($snippet in $requiredSnippets) {
-        if (-not $content.Contains($snippet)) {
-            throw "DEV env template is missing required snippet: $snippet"
-        }
-    }
-
-    $forbiddenProdSnippets = @(
-        "https://vk.neiirohub.ru",
-        "https://app.neiirohub.ru",
-        "https://neiirohub.ru/billing/webhooks/yookassa",
-        "239332376"
-    )
-    foreach ($snippet in $forbiddenProdSnippets) {
-        if ($content.Contains($snippet)) {
-            throw "DEV env template contains production-specific value: $snippet"
-        }
-    }
-
-    Write-Host "DEV env template OK"
+    [IO.File]::WriteAllLines($path, $lines, [Text.UTF8Encoding]::new($false))
+    return $path
 }
 
 function Assert-CloudflareConfigHasNoSecrets {
@@ -234,7 +225,15 @@ function Assert-ReverseProxyConfig {
         "X-Forwarded-Proto",
         "proxy_set_header X-Forwarded-Proto https;",
         'proxy_set_header Forwarded "proto=https;host=$host";',
-        "/(admin|metrics|debug"
+        "/(admin|metrics|debug",
+        "Strict-Transport-Security",
+        "Content-Security-Policy",
+        "frame-ancestors 'self' https://vk.com https://*.vk.com https://vk.ru https://*.vk.ru",
+        "https://*.userapi.com",
+        "https://*.vkuserphoto.ru",
+        "X-Content-Type-Options",
+        "Referrer-Policy",
+        "Permissions-Policy"
     )
 
     foreach ($snippet in $requiredSnippets) {
@@ -246,8 +245,45 @@ function Assert-ReverseProxyConfig {
     if ($content -match '\$request(?!_)') {
         throw "reverse proxy access log must not use `$request because it includes query strings"
     }
+    if ($content -match '(?im)^\s*add_header\s+Access-Control-Allow-Origin\s+["'']?\*') {
+        throw "reverse proxy must not enable broad wildcard CORS"
+    }
+    if ($content -match '(?im)script-src\s+[^;]*(unsafe-inline|unsafe-eval)') {
+        throw "reverse proxy CSP must not allow unsafe inline/eval scripts"
+    }
 
     Write-Host "reverse proxy config OK"
+}
+
+function Assert-MiniAppStaticSecurityHeaders {
+    $path = Join-Path $repoRoot "deployments\nginx\miniapp.static.conf"
+    if (-not (Test-Path -LiteralPath $path)) {
+        throw "Mini App static nginx config is missing"
+    }
+
+    $content = Get-Content -LiteralPath $path -Raw
+    foreach ($snippet in @(
+        "Strict-Transport-Security",
+        "Content-Security-Policy",
+        "frame-ancestors 'self' https://vk.com https://*.vk.com https://vk.ru https://*.vk.ru",
+        "https://*.userapi.com",
+        "https://*.vkuserphoto.ru",
+        "X-Content-Type-Options",
+        "Referrer-Policy",
+        "Permissions-Policy"
+    )) {
+        if (-not $content.Contains($snippet)) {
+            throw "Mini App static nginx config is missing required security policy: $snippet"
+        }
+    }
+    if ($content -match '(?im)^\s*add_header\s+Access-Control-Allow-Origin\s+["'']?\*') {
+        throw "Mini App static nginx must not enable broad wildcard CORS"
+    }
+    if ($content -match '(?im)script-src\s+[^;]*(unsafe-inline|unsafe-eval)') {
+        throw "Mini App static CSP must not allow unsafe inline/eval scripts"
+    }
+
+    Write-Host "Mini App static browser security headers OK"
 }
 
 function Assert-DevReverseProxySmokeScript {
@@ -505,6 +541,7 @@ function Assert-ProductionDataServices {
         "Dockerfile.backup",
         "scripts\backup\backup-postgres.sh",
         "scripts\backup\backup-minio.sh",
+        "scripts\backup\test-objectsync-wrapper.sh",
         "scripts\backup\restore-postgres.sh",
         "scripts\backup\restore-minio.sh",
         "scripts\deploy\check-migrations-safe.ps1",
@@ -517,6 +554,26 @@ function Assert-ProductionDataServices {
         }
     }
 
+    $backupDockerfileContent = Get-Content -LiteralPath (Join-Path $repoRoot "Dockerfile.backup") -Raw
+    foreach ($requiredSnippet in @("./cmd/objectsync", "/out/objectsync", "/app/objectsync")) {
+        if (-not $backupDockerfileContent.Contains($requiredSnippet)) {
+            throw "Dockerfile.backup must build and install the internal object sync binary: $requiredSnippet"
+        }
+    }
+    if ($backupDockerfileContent -match '(?m)\b(?:aws-cli|minio-client|rclone)\b') {
+        throw "Dockerfile.backup must not include an external S3 CLI with an independently vulnerable dependency graph"
+    }
+
+    foreach ($relativePath in @("scripts\backup\backup-minio.sh", "scripts\backup\restore-minio.sh")) {
+        $scriptContent = Get-Content -LiteralPath (Join-Path $repoRoot $relativePath) -Raw
+        if ($scriptContent -notmatch '(?m)command -v objectsync' -or $scriptContent -notmatch '(?m)\bobjectsync\b.*\b(?:backup|restore)\b') {
+            throw "$relativePath must use the internal object sync binary with an explicit availability check"
+        }
+        if ($scriptContent -match '(?m)\b(?:aws|mc|rclone)\b') {
+            throw "$relativePath must not invoke an external S3 CLI"
+        }
+    }
+
     $prodContent = Get-Content -LiteralPath $prodPath -Raw
     $dataContent = Get-Content -LiteralPath $dataPath -Raw
     $requiredDataSnippets = @(
@@ -526,8 +583,9 @@ function Assert-ProductionDataServices {
         "redis_data:/data",
         "minio:",
         "minio_data:/data",
-        "local-postgres-disabled",
-        "local-minio-disabled",
+        '${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}',
+        '${MINIO_ROOT_USER:?MINIO_ROOT_USER is required}',
+        '${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}',
         "postgres_data:",
         "redis_data:",
         "minio_data:",
@@ -591,6 +649,7 @@ function Assert-CloudflaredComposeConfig {
     $content = Get-Content -LiteralPath $path -Raw
     $requiredSnippets = @(
         "cloudflared:",
+        'image: ${CLOUDFLARED_IMAGE:-cloudflare/cloudflared:2024.12.2@sha256:cb38f3f30910a7d51545118a179b8516eb7066eac61855d62ce6ed733c54ce70}',
         "profiles:",
         "- cloudflare",
         "TUNNEL_TOKEN:",
@@ -617,6 +676,39 @@ function Assert-CloudflaredComposeConfig {
     Write-Host "production cloudflared compose config OK"
 }
 
+function Assert-ProductionComposeHardening {
+    $path = Join-Path $repoRoot "scripts\ci\assert-prod-compose-hardening.ps1"
+    if (-not (Test-Path -LiteralPath $path)) {
+        throw "production compose hardening assertion script is missing: scripts/ci/assert-prod-compose-hardening.ps1"
+    }
+
+    & $path
+
+    $dataComposePath = Join-Path $repoRoot "docker-compose.data.yml"
+    $dataCompose = Get-Content -LiteralPath $dataComposePath -Raw
+    foreach ($requiredSecret in @(
+        '${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}',
+        '${MINIO_ROOT_USER:?MINIO_ROOT_USER is required}',
+        '${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}'
+    )) {
+        if (-not $dataCompose.Contains($requiredSecret)) {
+            throw "data compose must fail closed for missing credential: $requiredSecret"
+        }
+    }
+    if ($dataCompose -match '(?i)local-(?:postgres|minio)-disabled') {
+        throw "data compose must not provide disabled-looking credential fallbacks"
+    }
+    if ([regex]::Matches($dataCompose, '(?m)^\s+cap_drop:\s*$').Count -ne 3) {
+        throw "all three data services must drop the default Linux capability set"
+    }
+    if ([regex]::Matches($dataCompose, '(?m)^\s+read_only:\s+true\s*$').Count -ne 3) {
+        throw "all three data services must use a read-only root filesystem"
+    }
+    if ([regex]::Matches($dataCompose, '(?m)^\s+tmpfs:\s*$').Count -ne 3) {
+        throw "all three data services must declare bounded writable tmpfs mounts"
+    }
+}
+
 function Assert-DeployScripts {
     $scripts = @(
         [pscustomobject]@{
@@ -632,9 +724,9 @@ function Assert-DeployScripts {
                 "--no-build",
                 "SkipPublicSmoke",
                 "Invoke-ExternalDataServiceChecks",
-                "postgres:16-alpine",
-                "redis:7-alpine",
-                "minio/mc:latest",
+                "postgres:16-alpine@sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777",
+                "redis:7-alpine@sha256:6ab0b6e7381779332f97b8ca76193e45b0756f38d4c0dcda72dbb3c32061ab99",
+                "minio/mc:RELEASE.2025-08-13T08-35-41Z@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727",
                 "smoke-prod.ps1",
                 "check-migrations-safe.ps1",
                 "MIGRATION_BACKUP_CONFIRMED",
@@ -668,9 +760,9 @@ function Assert-DeployScripts {
                 "--no-build",
                 "--skip-public-smoke",
                 "check_external_data_services",
-                "postgres:16-alpine",
-                "redis:7-alpine",
-                "minio/mc:latest",
+                "postgres:16-alpine@sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777",
+                "redis:7-alpine@sha256:6ab0b6e7381779332f97b8ca76193e45b0756f38d4c0dcda72dbb3c32061ab99",
+                "minio/mc:RELEASE.2025-08-13T08-35-41Z@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727",
                 "smoke-prod.sh",
                 "check-migrations-safe.sh",
                 "MIGRATION_BACKUP_CONFIRMED",
@@ -717,7 +809,8 @@ function Assert-DeployScripts {
                 "RESTORE_ALLOW_DESTRUCTIVE",
                 "PROVIDER_BALANCE_BOT_ENABLED",
                 "TELEGRAM_ADMIN_CHAT_ID",
-                "APIMART_API_KEY"
+                "APIMART_API_KEY",
+                "GRAFANA_ADMIN_USER"
             )
         },
         [pscustomobject]@{
@@ -746,7 +839,8 @@ function Assert-DeployScripts {
                 "RESTORE_ALLOW_DESTRUCTIVE",
                 "PROVIDER_BALANCE_BOT_ENABLED",
                 "TELEGRAM_ADMIN_CHAT_ID",
-                "APIMART_API_KEY"
+                "APIMART_API_KEY",
+                "GRAFANA_ADMIN_USER"
             )
         },
         [pscustomobject]@{
@@ -856,6 +950,18 @@ function Assert-DeployScripts {
         }
     }
 
+    foreach ($deployScript in @(
+        @{ Path = "scripts\deploy\deploy-prod.sh"; EnvCheck = "check-prod-env.sh" },
+        @{ Path = "scripts\deploy\deploy-dev.sh"; EnvCheck = "check-dev-env.sh" }
+    )) {
+        $content = Get-Content -LiteralPath (Join-Path $repoRoot $deployScript.Path) -Raw
+        $tagValidation = $content.IndexOf('validate_image_tag "${image_tag}"', [StringComparison]::Ordinal)
+        $envValidation = $content.IndexOf($deployScript.EnvCheck, [StringComparison]::Ordinal)
+        if ($tagValidation -lt 0 -or $envValidation -lt 0 -or $tagValidation -ge $envValidation) {
+            throw "deploy script $($deployScript.Path) must validate an explicit image tag before env validation"
+        }
+    }
+
     Write-Host "deploy scripts OK"
 }
 
@@ -880,13 +986,25 @@ function Assert-DockerImageWorkflow {
         "Dockerfile.provider-balance-bot",
         "Dockerfile.miniapp",
         "Dockerfile.migrate",
+        "Dockerfile.backup",
         "service: api",
         "service: worker",
         "service: provider-webhook",
         "service: provider-balance-bot",
         "service: miniapp",
         "service: migrate",
-        'push: ${{ github.event_name != ''pull_request'' }}'
+        "service: backup",
+        "pull-request-build:",
+        "Build without registry publication",
+        "push: false",
+        "publish:",
+        "github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev-deploy'",
+        "type=sha,prefix=sha-,format=long",
+        "push: true",
+        "id-token: write",
+        "sbom: true",
+        "provenance: mode=max",
+        "cosign sign --yes"
     )
 
     foreach ($snippet in $requiredSnippets) {
@@ -895,7 +1013,21 @@ function Assert-DockerImageWorkflow {
         }
     }
 
+    if ($content -match '(?m)^\s*type=ref,event=branch\s*$' -or
+        $content -match '(?m)^\s*type=sha,prefix=sha-,format=short\s*$') {
+        throw "Docker image workflow must publish only immutable full-SHA tags"
+    }
+
     Write-Host "Docker image workflow OK"
+}
+
+function Assert-NightlyQualityWorkflow {
+    $path = Join-Path $repoRoot "scripts\ci\validate-nightly-quality.ps1"
+    if (-not (Test-Path -LiteralPath $path)) {
+        throw "Nightly Quality workflow validator is missing: scripts/ci/validate-nightly-quality.ps1"
+    }
+
+    & $path
 }
 
 function Assert-RollbackConfig {
@@ -907,13 +1039,13 @@ function Assert-RollbackConfig {
 
     $content = Get-Content -LiteralPath $composePath -Raw
     $requiredSnippets = @(
-        '${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/api:${IMAGE_TAG:-main}',
-        '${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/worker:${IMAGE_TAG:-main}',
-        '${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/provider-webhook:${IMAGE_TAG:-main}',
-        '${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/provider-balance-bot:${IMAGE_TAG:-main}',
-        '${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/miniapp:${IMAGE_TAG:-main}',
-        '${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/migrate:${IMAGE_TAG:-main}',
-        '${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/backup:${BACKUP_IMAGE_TAG:-main}'
+        '${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/api:${IMAGE_TAG:?IMAGE_TAG is required}',
+        '${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/worker:${IMAGE_TAG:?IMAGE_TAG is required}',
+        '${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/provider-webhook:${IMAGE_TAG:?IMAGE_TAG is required}',
+        '${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/provider-balance-bot:${IMAGE_TAG:?IMAGE_TAG is required}',
+        '${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/miniapp:${IMAGE_TAG:?IMAGE_TAG is required}',
+        '${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/migrate:${IMAGE_TAG:?IMAGE_TAG is required}',
+        '${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/backup:${BACKUP_IMAGE_TAG:?BACKUP_IMAGE_TAG is required}'
     )
 
     foreach ($snippet in $requiredSnippets) {
@@ -984,7 +1116,7 @@ function Assert-ObservabilityConfig {
         "api:8080",
         "worker:9090",
         "provider-webhook:8082",
-        "miniapp:80",
+        "miniapp:8080",
         "reverse-proxy/proxy-health",
         "payment_webhook_oldest_unprocessed_age_seconds",
         "vkagg_queue_oldest_age_seconds",
@@ -1067,7 +1199,7 @@ function Invoke-Promtool {
     $promDir = (Resolve-Path (Join-Path $repoRoot "observability\prometheus")).Path.Replace("\", "/")
     $mount = "${promDir}:/etc/prometheus:ro"
     $prometheusImage = if ([string]::IsNullOrWhiteSpace($env:PROMETHEUS_IMAGE)) {
-        "prom/prometheus:latest"
+        "prom/prometheus:v2.55.1@sha256:2659f4c2ebb718e7695cb9b25ffa7d6be64db013daba13e05c875451cf51b0d3"
     } else {
         $env:PROMETHEUS_IMAGE
     }
@@ -1111,17 +1243,56 @@ Invoke-Step "docker compose config" {
 
 if (Test-Path -LiteralPath "docker-compose.observability.yml") {
     Invoke-Step "docker compose observability config" {
-        docker compose --project-name vk-ai-aggregator-observability -f docker-compose.observability.yml config | Out-Null
+        $previousExporterDSN = $env:POSTGRES_EXPORTER_DATA_SOURCE_NAME
+        $previousGrafanaUser = $env:GRAFANA_ADMIN_USER
+        $previousGrafanaPassword = $env:GRAFANA_ADMIN_PASSWORD
+        $previousGrafanaSecret = $env:GRAFANA_SECRET_KEY
+        try {
+            if ([string]::IsNullOrWhiteSpace($previousExporterDSN)) {
+                $env:POSTGRES_EXPORTER_DATA_SOURCE_NAME = "config-validation-placeholder"
+            }
+            if ([string]::IsNullOrWhiteSpace($previousGrafanaUser)) {
+                $env:GRAFANA_ADMIN_USER = "config-validation-user"
+            }
+            if ([string]::IsNullOrWhiteSpace($previousGrafanaPassword)) {
+                $env:GRAFANA_ADMIN_PASSWORD = ("test" + "-grafana-" + "password")
+            }
+            if ([string]::IsNullOrWhiteSpace($previousGrafanaSecret)) {
+                $env:GRAFANA_SECRET_KEY = "config-validation-secret"
+            }
+            docker compose --project-name vk-ai-aggregator-observability -f docker-compose.observability.yml config | Out-Null
+        } finally {
+            if ($null -eq $previousExporterDSN) {
+                Remove-Item Env:POSTGRES_EXPORTER_DATA_SOURCE_NAME -ErrorAction SilentlyContinue
+            } else {
+                $env:POSTGRES_EXPORTER_DATA_SOURCE_NAME = $previousExporterDSN
+            }
+            if ($null -eq $previousGrafanaUser) {
+                Remove-Item Env:GRAFANA_ADMIN_USER -ErrorAction SilentlyContinue
+            } else {
+                $env:GRAFANA_ADMIN_USER = $previousGrafanaUser
+            }
+            if ($null -eq $previousGrafanaPassword) {
+                Remove-Item Env:GRAFANA_ADMIN_PASSWORD -ErrorAction SilentlyContinue
+            } else {
+                $env:GRAFANA_ADMIN_PASSWORD = $previousGrafanaPassword
+            }
+            if ($null -eq $previousGrafanaSecret) {
+                Remove-Item Env:GRAFANA_SECRET_KEY -ErrorAction SilentlyContinue
+            } else {
+                $env:GRAFANA_SECRET_KEY = $previousGrafanaSecret
+            }
+        }
     }
 }
 
 if (Test-Path -LiteralPath "docker-compose.prod.yml") {
+    $composeEnvFile = New-ComposeValidationEnvFile
     Invoke-Step "docker compose prod app config" {
         $previousAppEnvFile = $env:APP_ENV_FILE
-        $prodEnvTemplate = if (Test-Path -LiteralPath ".env.prod.example") { ".env.prod.example" } else { ".env.example" }
         try {
-            $env:APP_ENV_FILE = $prodEnvTemplate
-            docker compose --project-name vk-ai-aggregator-prod --env-file $prodEnvTemplate -f docker-compose.prod.yml config | Out-Null
+            $env:APP_ENV_FILE = $composeEnvFile
+            docker compose --project-name vk-ai-aggregator-prod --env-file $composeEnvFile -f docker-compose.prod.yml config | Out-Null
         } finally {
             if ($null -eq $previousAppEnvFile) {
                 Remove-Item Env:\APP_ENV_FILE -ErrorAction SilentlyContinue
@@ -1133,10 +1304,9 @@ if (Test-Path -LiteralPath "docker-compose.prod.yml") {
     if (Test-Path -LiteralPath "docker-compose.data.yml") {
         Invoke-Step "docker compose prod app+data config" {
             $previousAppEnvFile = $env:APP_ENV_FILE
-            $prodEnvTemplate = if (Test-Path -LiteralPath ".env.prod.example") { ".env.prod.example" } else { ".env.example" }
             try {
-                $env:APP_ENV_FILE = $prodEnvTemplate
-                docker compose --project-name vk-ai-aggregator-prod --env-file $prodEnvTemplate -f docker-compose.prod.yml -f docker-compose.data.yml config | Out-Null
+                $env:APP_ENV_FILE = $composeEnvFile
+                docker compose --project-name vk-ai-aggregator-prod --env-file $composeEnvFile -f docker-compose.prod.yml -f docker-compose.data.yml config | Out-Null
             } finally {
                 if ($null -eq $previousAppEnvFile) {
                     Remove-Item Env:\APP_ENV_FILE -ErrorAction SilentlyContinue
@@ -1146,52 +1316,26 @@ if (Test-Path -LiteralPath "docker-compose.prod.yml") {
             }
         }
     }
-    if (Test-Path -LiteralPath ".env.staging.example") {
-        Invoke-Step "docker compose staging app config" {
-            $previousAppEnvFile = $env:APP_ENV_FILE
-            try {
-                $env:APP_ENV_FILE = ".env.staging.example"
-                docker compose --project-name vk-ai-aggregator-staging --env-file .env.staging.example -f docker-compose.prod.yml config | Out-Null
-            } finally {
-                if ($null -eq $previousAppEnvFile) {
-                    Remove-Item Env:\APP_ENV_FILE -ErrorAction SilentlyContinue
-                } else {
-                    $env:APP_ENV_FILE = $previousAppEnvFile
-                }
-            }
-        }
-        if (Test-Path -LiteralPath "docker-compose.data.yml") {
-            Invoke-Step "docker compose staging app+data config" {
-                $previousAppEnvFile = $env:APP_ENV_FILE
-                try {
-                    $env:APP_ENV_FILE = ".env.staging.example"
-                    docker compose --project-name vk-ai-aggregator-staging --env-file .env.staging.example -f docker-compose.prod.yml -f docker-compose.data.yml config | Out-Null
-                } finally {
-                    if ($null -eq $previousAppEnvFile) {
-                        Remove-Item Env:\APP_ENV_FILE -ErrorAction SilentlyContinue
-                    } else {
-                        $env:APP_ENV_FILE = $previousAppEnvFile
-                    }
-                }
-            }
-        }
-    }
+    Remove-Item -LiteralPath $composeEnvFile -Force -ErrorAction SilentlyContinue
 }
 
 Assert-Migrations
 Assert-NoTrackedEnvFiles
-Assert-DevEnvTemplate
+Assert-NoActiveEnvExampleReferences
 Assert-CloudflareConfigHasNoSecrets
 Assert-CloudflareDeploymentConfig
 Assert-ReverseProxyConfig
+Assert-MiniAppStaticSecurityHeaders
 Assert-DevReverseProxySmokeScript
 Assert-DevStartStackScript
 Assert-DevStopStatusScripts
 Assert-DevPublicSmokeScript
 Assert-ProductionDataServices
 Assert-CloudflaredComposeConfig
+Assert-ProductionComposeHardening
 Assert-DeployScripts
 Assert-DockerImageWorkflow
+Assert-NightlyQualityWorkflow
 Assert-RollbackConfig
 Assert-ObservabilityConfig
 Assert-PrometheusConfig

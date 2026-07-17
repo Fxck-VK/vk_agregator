@@ -58,7 +58,7 @@ groups:
           safe_logs: Не отправляй raw YooKassa payload, Authorization, shop id, secret key, payment metadata или user identifiers.
 
       - alert: MiniAppLocalProbeDown
-        expr: probe_success{job="blackbox-local-health", instance="http://miniapp:80/"} == 0
+        expr: probe_success{job="blackbox-local-health", instance="http://miniapp:8080/"} == 0
         for: 1m
         labels:
           severity: warning

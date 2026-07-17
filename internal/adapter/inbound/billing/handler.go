@@ -498,7 +498,8 @@ func (h *Handler) createIntent(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if _, err := h.deps.Users.GetByID(r.Context(), userID); err != nil {
+	user, err := h.deps.Users.GetByID(r.Context(), userID)
+	if err != nil {
 		writeNotFoundOr500(w, err, "get user failed")
 		return
 	}
@@ -514,6 +515,7 @@ func (h *Handler) createIntent(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.deps.Payment.CreateIntent(r.Context(), paymentservice.CreateIntentInput{
 		UserID:         userID,
+		AccountID:      user.EffectiveAccountID(),
 		ProductCode:    req.ProductCode,
 		ReceiptEmail:   req.ReceiptEmail,
 		ReceiptPhone:   req.ReceiptPhone,

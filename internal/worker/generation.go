@@ -73,6 +73,9 @@ func (g *GenerationWorker) Process(ctx context.Context, task queue.Task) error {
 
 	req, err := g.buildRequest(ctx, job, attempt)
 	if err != nil {
+		if class, msg, ok := deterministicRequestFailure(err); ok {
+			return g.handleFailure(ctx, job, task, class, msg)
+		}
 		return err
 	}
 	provider, err := g.providers.ForRequest(ctx, req)
@@ -163,8 +166,8 @@ func (g *GenerationWorker) persistTask(ctx context.Context, job *domain.Job, pro
 		ExternalID:     submitted.ExternalID,
 		AttemptNo:      attempt,
 		Status:         submitted.Status,
-		Request:        req.Params,
-		Result:         submitted.Result,
+		Request:        domain.DurableProviderTaskRequestJSON(),
+		Result:         domain.DurableProviderTaskResultJSONFromRaw(submitted.Result, submitted.Status, submitted.ErrorClass),
 		ErrorClass:     submitted.ErrorClass,
 		IdempotencyKey: req.IdempotencyKey,
 		SubmittedAt:    &now,

@@ -46,6 +46,90 @@ func TestValidateRealModesRequireCredentialsOutsideProduction(t *testing.T) {
 	}
 }
 
+func TestValidateAccountEmailDeliverySMTPConfig(t *testing.T) {
+	cfg := config.Config{
+		AccountEmailDeliveryProvider: "smtp",
+		AccountEmailSMTPPort:         587,
+		AccountEmailSMTPTLSMode:      "starttls",
+	}
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "ACCOUNT_EMAIL_SMTP_HOST") {
+		t.Fatalf("expected ACCOUNT_EMAIL_SMTP_HOST validation error, got %v", err)
+	}
+
+	cfg.AccountEmailSMTPHost = "smtp.example.test"
+	err = cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "ACCOUNT_EMAIL_SMTP_FROM") {
+		t.Fatalf("expected ACCOUNT_EMAIL_SMTP_FROM validation error, got %v", err)
+	}
+
+	cfg.AccountEmailSMTPFrom = "noreply@example.test"
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate() error = %v", err)
+	}
+}
+
+func TestValidateAccountPhoneDeliveryHTTPConfig(t *testing.T) {
+	cfg := config.Config{
+		AccountPhoneDeliveryProvider: "http",
+		AccountPhoneHTTPURL:          "https://sms.example.test/send",
+		AccountPhoneHTTPMethod:       "POST",
+		AccountPhoneHTTPBodyTemplate: `{"to":"{{phone}}"}`,
+	}
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "{{phone}} and {{code}}") {
+		t.Fatalf("expected body template placeholder validation error, got %v", err)
+	}
+
+	cfg.AccountPhoneHTTPBodyTemplate = `{"to":"{{phone}}","otp":"{{code}}"}`
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate() error = %v", err)
+	}
+}
+
+func TestLoadAccountDeliveryConfig(t *testing.T) {
+	t.Setenv("ACCOUNT_EMAIL_DELIVERY_PROVIDER", "smtp")
+	t.Setenv("ACCOUNT_EMAIL_SMTP_HOST", "smtp.example.test")
+	t.Setenv("ACCOUNT_EMAIL_SMTP_PORT", "2525")
+	t.Setenv("ACCOUNT_EMAIL_SMTP_USERNAME", "smtp-user")
+	t.Setenv("ACCOUNT_EMAIL_SMTP_PASSWORD", "smtp-password")
+	t.Setenv("ACCOUNT_EMAIL_SMTP_FROM", "noreply@example.test")
+	t.Setenv("ACCOUNT_EMAIL_SMTP_SUBJECT", "Verify")
+	t.Setenv("ACCOUNT_EMAIL_SMTP_TLS_MODE", "none")
+	t.Setenv("ACCOUNT_EMAIL_SMTP_TIMEOUT", "3s")
+	t.Setenv("ACCOUNT_PHONE_DELIVERY_PROVIDER", "http")
+	t.Setenv("ACCOUNT_PHONE_HTTP_URL", "https://sms.example.test/send")
+	t.Setenv("ACCOUNT_PHONE_HTTP_METHOD", "PATCH")
+	t.Setenv("ACCOUNT_PHONE_HTTP_AUTH_HEADER", "Authorization")
+	t.Setenv("ACCOUNT_PHONE_HTTP_AUTH_VALUE", "Bearer token")
+	t.Setenv("ACCOUNT_PHONE_HTTP_CONTENT_TYPE", "application/vnd.sms+json")
+	t.Setenv("ACCOUNT_PHONE_HTTP_BODY_TEMPLATE", `{"to":"{{phone}}","otp":"{{code}}"}`)
+	t.Setenv("ACCOUNT_PHONE_HTTP_TIMEOUT", "4s")
+
+	cfg := config.Load()
+	if cfg.AccountEmailDeliveryProvider != "smtp" ||
+		cfg.AccountEmailSMTPHost != "smtp.example.test" ||
+		cfg.AccountEmailSMTPPort != 2525 ||
+		cfg.AccountEmailSMTPUsername != "smtp-user" ||
+		cfg.AccountEmailSMTPPassword != "smtp-password" ||
+		cfg.AccountEmailSMTPFrom != "noreply@example.test" ||
+		cfg.AccountEmailSMTPSubject != "Verify" ||
+		cfg.AccountEmailSMTPTLSMode != "none" ||
+		cfg.AccountEmailSMTPTimeout != 3*time.Second {
+		t.Fatalf("unexpected email delivery config: %+v", cfg)
+	}
+	if cfg.AccountPhoneDeliveryProvider != "http" ||
+		cfg.AccountPhoneHTTPURL != "https://sms.example.test/send" ||
+		cfg.AccountPhoneHTTPMethod != "PATCH" ||
+		cfg.AccountPhoneHTTPAuthHeader != "Authorization" ||
+		cfg.AccountPhoneHTTPAuthValue != "Bearer token" ||
+		cfg.AccountPhoneHTTPContentType != "application/vnd.sms+json" ||
+		cfg.AccountPhoneHTTPBodyTemplate != `{"to":"{{phone}}","otp":"{{code}}"}` ||
+		cfg.AccountPhoneHTTPTimeout != 4*time.Second {
+		t.Fatalf("unexpected phone delivery config: %+v", cfg)
+	}
+}
+
 func TestLoadProviderChain(t *testing.T) {
 	t.Setenv("PROVIDER", "mock")
 	t.Setenv("PROVIDER_CHAIN", "deepinfra,mock")
@@ -53,6 +137,32 @@ func TestLoadProviderChain(t *testing.T) {
 	cfg := config.Load()
 	if !reflect.DeepEqual(cfg.ProviderChain, []string{"deepinfra", "mock"}) {
 		t.Fatalf("provider chain = %#v", cfg.ProviderChain)
+	}
+}
+
+func TestLoadMiniAppQueryLaunchParamsDefaultsOffAndSupportsDevOptIn(t *testing.T) {
+	restore := clearEnv(t, "MINIAPP_ALLOW_QUERY_LAUNCH_PARAMS")
+	defer restore()
+
+	cfg := config.Load()
+	if cfg.MiniAppAllowQueryLaunchParams {
+		t.Fatal("query launch params fallback must default to false")
+	}
+
+	t.Setenv("MINIAPP_ALLOW_QUERY_LAUNCH_PARAMS", "true")
+	cfg = config.Load()
+	if !cfg.MiniAppAllowQueryLaunchParams {
+		t.Fatal("explicit development query launch params opt-in was not loaded")
+	}
+}
+
+func TestValidateProductionRejectsQueryLaunchParamsFallback(t *testing.T) {
+	cfg := productionDeepInfraConfig()
+	cfg.MiniAppAllowQueryLaunchParams = true
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "MINIAPP_ALLOW_QUERY_LAUNCH_PARAMS") {
+		t.Fatalf("expected production query fallback validation error, got %v", err)
 	}
 }
 
@@ -234,6 +344,7 @@ func TestLoadVideoRouterFlagsDefaultDisabled(t *testing.T) {
 		"FEATURE_IMAGE_MODEL_NANO_BANANA_PRO_ENABLED",
 		"FEATURE_IMAGE_MODEL_GPT_IMAGE_2_ENABLED",
 		"FEATURE_IMAGE_MODEL_NANO_BANANA_2_ENABLED",
+		"FEATURE_IMAGE_MODEL_SEEDREAM_4_5_ENABLED",
 		"FEATURE_IMAGE_MODEL_MOCK_ENABLED",
 		"APIMART_PROVIDER_ENABLED",
 		"POYO_PROVIDER_ENABLED",
@@ -255,11 +366,43 @@ func TestLoadVideoRouterFlagsDefaultDisabled(t *testing.T) {
 		cfg.FeatureImageModelNanoBananaProEnabled ||
 		cfg.FeatureImageModelGPTImage2Enabled ||
 		cfg.FeatureImageModelNanoBanana2Enabled ||
+		cfg.FeatureImageModelSeedream45Enabled ||
 		cfg.FeatureImageModelMockEnabled ||
 		cfg.APIMartProviderEnabled ||
 		cfg.PoYoProviderEnabled ||
 		cfg.RunwayProviderEnabled {
 		t.Fatal("video router/provider flags should default to disabled")
+	}
+}
+
+func TestValidateImageModelSeedream45RequiresPoYoConfig(t *testing.T) {
+	cfg := config.Config{
+		Env:                                "development",
+		Provider:                           "mock",
+		ProviderChain:                      []string{"mock"},
+		FeatureImageModelSeedream45Enabled: true,
+	}
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "POYO_PROVIDER_ENABLED") {
+		t.Fatalf("expected POYO_PROVIDER_ENABLED validation error, got %v", err)
+	}
+
+	cfg.PoYoProviderEnabled = true
+	err = cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "POYO_API_KEY") {
+		t.Fatalf("expected POYO_API_KEY validation error, got %v", err)
+	}
+
+	cfg.PoYoAPIKey = "test-key"
+	err = cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "POYO_BASE_URL") {
+		t.Fatalf("expected POYO_BASE_URL validation error, got %v", err)
+	}
+
+	cfg.PoYoBaseURL = "https://api.poyo.ai"
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate() error = %v", err)
 	}
 }
 
@@ -604,14 +747,14 @@ func TestLoadDBPoolConfigBoundsInt32Values(t *testing.T) {
 
 func TestLoadImageProviderConfig(t *testing.T) {
 	t.Setenv("IMAGE_PROVIDER", "poyo")
-	t.Setenv("IMAGE_MODEL", "nano-banana-2")
+	t.Setenv("IMAGE_MODEL", "nano-banana-2-new")
 	t.Setenv("IMAGE_SIZE", "1K")
 
 	cfg := config.Load()
 	if cfg.ImageProvider != "poyo" {
 		t.Fatalf("ImageProvider = %q, want poyo", cfg.ImageProvider)
 	}
-	if cfg.ImageModel != "nano-banana-2" || cfg.ImageSize != "1K" {
+	if cfg.ImageModel != "nano-banana-2-new" || cfg.ImageSize != "1K" {
 		t.Fatalf("unexpected image config: model=%q size=%q", cfg.ImageModel, cfg.ImageSize)
 	}
 }
@@ -1239,6 +1382,29 @@ func TestValidateProductionRejectsDevPaymentTestProduct(t *testing.T) {
 	}
 }
 
+func TestValidateProductionRejectsTestYooKassaSecretKey(t *testing.T) {
+	cfg := validProductionConfig()
+	cfg.YooKassaSecretKey = "test-yookassa-secret"
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "YOOKASSA_SECRET_KEY") {
+		t.Fatalf("expected YooKassa live key validation error, got %v", err)
+	}
+}
+
+func TestValidateStagingRejectsDevPaymentTestProduct(t *testing.T) {
+	cfg := validProductionConfig()
+	cfg.Env = "staging"
+	cfg.ArtifactScanner = "none"
+	cfg.OpenAIAPIKey = ""
+	cfg.FeatureDevPaymentTestProductEnabled = true
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "FEATURE_DEV_PAYMENT_TEST_PRODUCT_ENABLED") {
+		t.Fatalf("expected dev payment test product validation error, got %v", err)
+	}
+}
+
 func TestLoadDevPaymentTestProductFlag(t *testing.T) {
 	t.Setenv("FEATURE_DEV_PAYMENT_TEST_PRODUCT_ENABLED", "true")
 
@@ -1322,7 +1488,7 @@ func validProductionConfig() config.Config {
 		VKAppSecret:                  "test-vk-app-secret",
 		PaymentProvider:              "yookassa",
 		YooKassaShopID:               "test-shop",
-		YooKassaSecretKey:            "test-yookassa-secret",
+		YooKassaSecretKey:            "live-yookassa-secret",
 		YooKassaReturnURL:            "https://example.com",
 		PaymentWebhookTrustedProxies: []string{"127.0.0.1"},
 	}
@@ -2095,7 +2261,7 @@ func TestValidateProductionYooKassaRequiresTrustedProxies(t *testing.T) {
 		Env:                 "production",
 		PaymentProvider:     "yookassa",
 		YooKassaShopID:      "shop",
-		YooKassaSecretKey:   "secret",
+		YooKassaSecretKey:   "live-yookassa-secret",
 		YooKassaReturnURL:   "https://app.example.com",
 		VKSecret:            "vk",
 		AdminToken:          "admin",
@@ -2204,6 +2370,8 @@ func TestLoadMiniAppJobRateLimit(t *testing.T) {
 	t.Setenv("PAYMENT_REDIRECT_RATE_LIMIT_BURST", "11")
 	t.Setenv("ADMIN_RATE_LIMIT_LIMIT", "77")
 	t.Setenv("ADMIN_RATE_LIMIT_WINDOW", "2m")
+	t.Setenv("ACCOUNT_AUTH_RATE_LIMIT_LIMIT", "12")
+	t.Setenv("ACCOUNT_AUTH_RATE_LIMIT_WINDOW", "4m")
 
 	cfg := config.Load()
 	if cfg.MiniAppJobRateLimitRPS != 2.5 {
@@ -2223,6 +2391,12 @@ func TestLoadMiniAppJobRateLimit(t *testing.T) {
 	}
 	if cfg.AdminRateLimitWindow != 2*time.Minute {
 		t.Fatalf("AdminRateLimitWindow = %v", cfg.AdminRateLimitWindow)
+	}
+	if cfg.AccountAuthRateLimitLimit != 12 {
+		t.Fatalf("AccountAuthRateLimitLimit = %v", cfg.AccountAuthRateLimitLimit)
+	}
+	if cfg.AccountAuthRateLimitWindow != 4*time.Minute {
+		t.Fatalf("AccountAuthRateLimitWindow = %v", cfg.AccountAuthRateLimitWindow)
 	}
 }
 
@@ -2398,14 +2572,15 @@ func TestValidateProductionRequiresArtifactScanner(t *testing.T) {
 	}
 }
 
-func TestValidateProductionAllowsUnscannedArtifactsWithExplicitFlag(t *testing.T) {
+func TestValidateProductionExplicitFlagCannotDisableArtifactScanner(t *testing.T) {
 	cfg := productionDeepInfraConfig()
 	cfg.ArtifactScanner = "none"
 	cfg.OpenAIAPIKey = ""
 	cfg.AllowUnscannedArtifactsInProduction = true
 
-	if err := cfg.Validate(); err != nil {
-		t.Fatalf("Validate() error = %v", err)
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "ARTIFACT_SCANNER=openai") {
+		t.Fatalf("expected production artifact scanner validation error, got %v", err)
 	}
 }
 
@@ -2452,7 +2627,7 @@ func productionDeepInfraConfig() config.Config {
 		AdminToken:                   "admin-token",
 		PaymentProvider:              "yookassa",
 		YooKassaShopID:               "shop-id",
-		YooKassaSecretKey:            "secret-key",
+		YooKassaSecretKey:            "live-yookassa-secret",
 		YooKassaReturnURL:            "https://neiirohub.ru/payment-return",
 		PaymentWebhookTrustedProxies: []string{"127.0.0.1"},
 		Provider:                     "deepinfra",

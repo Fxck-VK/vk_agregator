@@ -74,12 +74,8 @@ function Set-MiniAppDevDefaults {
     $env:HTTP_ADDR = ":$ApiPort"
     $env:PROVIDER = "deepinfra"
     $env:PROVIDER_CHAIN = "deepinfra"
-    $env:IMAGE_PROVIDER = "deepinfra"
-    $env:VIDEO_PROVIDER = "deepinfra"
-    $env:DEEPINFRA_VIDEO_MODEL = "PrunaAI/p-video"
-    $env:DEEPINFRA_VIDEO_DRAFT = "true"
-    $env:DEEPINFRA_VIDEO_DURATION_SEC = "5"
-    $env:DEEPINFRA_VIDEO_RESOLUTION = "720p"
+    $env:IMAGE_PROVIDER = ""
+    $env:VIDEO_PROVIDER = ""
     $env:WORKER_PROVIDER_CALL_TIMEOUT = "180s"
     if (-not $env:PRICES) {
         $env:PRICES = "video_generate=10"
@@ -118,6 +114,26 @@ function New-MiniAppLaunchParams {
     return (($params.GetEnumerator() | ForEach-Object {
         $_.Key + "=" + [uri]::EscapeDataString([string]$_.Value)
     }) -join "&")
+}
+
+function Open-MiniAppBrowserWithoutDisclosure {
+    param(
+        [Parameter(Mandatory = $true)][string]$PublicUrl,
+        [Parameter(Mandatory = $true)][string]$LaunchParams,
+        [scriptblock]$BrowserLauncher
+    )
+
+    if ([string]::IsNullOrWhiteSpace($PublicUrl) -or [string]::IsNullOrWhiteSpace($LaunchParams)) {
+        throw "Public URL and signed launch params are required."
+    }
+
+    $target = $PublicUrl.TrimEnd("/") + "/?" + $LaunchParams
+    if ($null -ne $BrowserLauncher) {
+        & $BrowserLauncher $target | Out-Null
+        return
+    }
+
+    Start-Process -FilePath $target | Out-Null
 }
 
 function Stop-ViteDevServer {

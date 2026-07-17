@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"strconv"
 	"strings"
 
 	"github.com/google/uuid"
@@ -22,7 +23,7 @@ func NewConversationRepository(db Querier) *ConversationRepository {
 
 var _ domain.ConversationRepository = (*ConversationRepository)(nil)
 
-const conversationColumns = `id, user_id, source, vk_peer_id, external_thread_id, status, title, created_at, updated_at`
+const conversationColumns = `id, user_id, account_id, source, vk_peer_id, external_thread_id, status, title, created_at, updated_at`
 const conversationMessageColumns = `id, conversation_id, job_id, seq, role, text, token_count, created_at`
 const conversationSummaryColumns = `id, conversation_id, text, token_count, summarized_until_seq, created_at, updated_at`
 
@@ -38,28 +39,50 @@ func (r *ConversationRepository) GetActiveByUserPeer(ctx context.Context, userID
 }
 
 func (r *ConversationRepository) GetActiveByReference(ctx context.Context, ref domain.ConversationRef) (*domain.Conversation, error) {
-	source := ref.Source
-	if source == "" {
-		source = domain.ConversationSourceVKBot
-	}
-	if source == domain.ConversationSourceVKBot {
-		return r.GetActiveByUserPeer(ctx, ref.UserID, ref.VKPeerID)
-	}
-
-	const q = `SELECT ` + conversationColumns + `
-		FROM conversations
-		WHERE user_id = $1 AND source = $2 AND external_thread_id = $3 AND status = 'active'`
+	q, args := activeConversationLookup(ref)
 	var c domain.Conversation
-	if err := mapError(scanConversation(r.db.QueryRow(ctx, q, ref.UserID, source, ref.ExternalThreadID), &c)); err != nil {
+	if err := mapError(scanConversation(r.db.QueryRow(ctx, q, args...), &c)); err != nil {
 		return nil, err
 	}
 	return &c, nil
 }
 
+func activeConversationLookup(ref domain.ConversationRef) (string, []any) {
+	source := ref.Source
+	if source == "" {
+		source = domain.ConversationSourceVKBot
+	}
+
+	ownerFilter := "user_id = $1"
+	ownerArgs := []any{ref.UserID}
+	nextParam := 2
+	if ref.AccountID != uuid.Nil {
+		ownerFilter = "account_id = $1"
+		ownerArgs = []any{ref.AccountID}
+		if ref.UserID != uuid.Nil {
+			ownerFilter = "(account_id = $1 OR (account_id IS NULL AND user_id = $2))"
+			ownerArgs = append(ownerArgs, ref.UserID)
+			nextParam = 3
+		}
+	}
+
+	if source == domain.ConversationSourceVKBot {
+		q := `SELECT ` + conversationColumns + `
+			FROM conversations
+			WHERE ` + ownerFilter + ` AND source = 'vk_bot' AND vk_peer_id = $` + strconv.Itoa(nextParam) + ` AND status = 'active'`
+		return q, append(ownerArgs, ref.VKPeerID)
+	}
+
+	q := `SELECT ` + conversationColumns + `
+		FROM conversations
+		WHERE ` + ownerFilter + ` AND source = $` + strconv.Itoa(nextParam) + ` AND external_thread_id = $` + strconv.Itoa(nextParam+1) + ` AND status = 'active'`
+	return q, append(ownerArgs, source, ref.ExternalThreadID)
+}
+
 func (r *ConversationRepository) GetByIDForUser(ctx context.Context, userID, conversationID uuid.UUID) (*domain.Conversation, error) {
 	const q = `SELECT ` + conversationColumns + `
 		FROM conversations
-		WHERE user_id = $1 AND id = $2`
+		WHERE (user_id = $1 OR account_id = $1) AND id = $2`
 	var c domain.Conversation
 	if err := mapError(scanConversation(r.db.QueryRow(ctx, q, userID, conversationID), &c)); err != nil {
 		return nil, err
@@ -76,7 +99,7 @@ func (r *ConversationRepository) ListByUserSource(ctx context.Context, userID uu
 	}
 	const q = `SELECT ` + conversationColumns + `
 		FROM conversations
-		WHERE user_id = $1 AND source = $2
+		WHERE (user_id = $1 OR account_id = $1) AND source = $2
 		ORDER BY updated_at DESC, created_at DESC
 		LIMIT $3 OFFSET $4`
 	rows, err := r.db.Query(ctx, q, userID, source, limit, offset)
@@ -98,11 +121,11 @@ func (r *ConversationRepository) CreateConversation(ctx context.Context, c *doma
 		c.Status = domain.ConversationActive
 	}
 	const q = `
-		INSERT INTO conversations (id, user_id, source, vk_peer_id, external_thread_id, status, title)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		INSERT INTO conversations (id, user_id, account_id, source, vk_peer_id, external_thread_id, status, title)
+		VALUES ($1, $2, COALESCE($3::uuid, (SELECT account_id FROM users WHERE id = $2)), $4, $5, $6, $7, $8)
 		RETURNING ` + conversationColumns
 	return mapError(scanConversation(r.db.QueryRow(ctx, q,
-		c.ID, c.UserID, c.Source, c.VKPeerID, c.ExternalThreadID, c.Status, c.Title), c))
+		c.ID, c.UserID, nullableUUID(c.AccountID), c.Source, c.VKPeerID, c.ExternalThreadID, c.Status, c.Title), c))
 }
 
 func (r *ConversationRepository) SetConversationTitleIfEmpty(ctx context.Context, conversationID uuid.UUID, title string) error {
@@ -215,7 +238,14 @@ func (r *ConversationRepository) UpsertSummary(ctx context.Context, s *domain.Co
 }
 
 func scanConversation(row rowScanner, c *domain.Conversation) error {
-	return row.Scan(&c.ID, &c.UserID, &c.Source, &c.VKPeerID, &c.ExternalThreadID, &c.Status, &c.Title, &c.CreatedAt, &c.UpdatedAt)
+	var accountID *uuid.UUID
+	if err := row.Scan(&c.ID, &c.UserID, &accountID, &c.Source, &c.VKPeerID, &c.ExternalThreadID, &c.Status, &c.Title, &c.CreatedAt, &c.UpdatedAt); err != nil {
+		return err
+	}
+	if accountID != nil {
+		c.AccountID = *accountID
+	}
+	return nil
 }
 
 func scanConversations(rows rowScannerRows) ([]*domain.Conversation, error) {

@@ -29,18 +29,24 @@ import (
 // without a pricingcatalog snapshot or another backend-owned exact estimate.
 var ErrBackendPriceRequired = errors.New("joborchestrator: backend price is required")
 
+// ErrInvalidInputArtifact means a job referenced media that is not a ready,
+// owner-scoped, storage-backed input image.
+var ErrInvalidInputArtifact = errors.New("joborchestrator: invalid input artifact")
+
 // Biller is the subset of the billing service the orchestrator depends on. The
 // reservation is performed with a transaction-bound repository so it commits
 // atomically with job creation (audit B1).
 type Biller interface {
 	Estimate(op domain.OperationType) (int64, error)
 	ReserveWith(ctx context.Context, repo domain.BillingRepository, userID, jobID uuid.UUID, amount int64) (*domain.CreditReservation, error)
+	ReserveWithOwner(ctx context.Context, repo domain.BillingRepository, userID, accountID, jobID uuid.UUID, amount int64) (*domain.CreditReservation, error)
 }
 
 // CapacityCheckInput is the safe, product-level data a capacity guard may use
 // before a job is persisted or credits are reserved.
 type CapacityCheckInput struct {
 	UserID    uuid.UUID
+	AccountID uuid.UUID
 	Source    string
 	Operation domain.OperationType
 	Modality  domain.Modality
@@ -50,6 +56,7 @@ type CapacityCheckInput struct {
 // VideoRouteCheckInput is the bounded request shape route validators may use
 // before a video job is persisted or credits are reserved.
 type VideoRouteCheckInput struct {
+	AccountID        uuid.UUID
 	UserID           uuid.UUID
 	Source           string
 	Operation        domain.OperationType
@@ -119,8 +126,11 @@ func (f VideoRouteResolverFunc) ResolveVideoRoute(ctx context.Context, in VideoR
 
 // CreateJobInput is the normalized request to create a job from a command.
 type CreateJobInput struct {
-	// UserID is the owner of the job.
+	// UserID is the legacy channel user that requested the job.
 	UserID uuid.UUID
+	// AccountID is the canonical owner of billing, history and artifacts. When
+	// empty, legacy UserID is used as a compatibility fallback.
+	AccountID uuid.UUID
 	// Source is the trusted product surface that requested the job.
 	Source string
 	// VKPeerID is the conversation the job belongs to.
@@ -161,6 +171,7 @@ type Orchestrator struct {
 	videoRouteValidator       VideoRouteValidator
 	videoRouteResolver        VideoRouteResolver
 	pricingCatalog            *pricingcatalog.Catalog
+	artifacts                 domain.ArtifactRepository
 	now                       func() time.Time
 }
 
@@ -209,6 +220,13 @@ func WithPricingCatalog(catalog *pricingcatalog.Catalog) Option {
 	}
 }
 
+// WithArtifactRepository installs the shared input-artifact validator backend.
+func WithArtifactRepository(repo domain.ArtifactRepository) Option {
+	return func(o *Orchestrator) {
+		o.artifacts = repo
+	}
+}
+
 // New builds an Orchestrator. jobs is used for the idempotency read; uow
 // composes the job write, its credit reservation and the outbox events
 // atomically. maxCost (0 = unlimited) rejects jobs whose estimate exceeds the
@@ -245,6 +263,7 @@ func (o *Orchestrator) CreateJob(ctx context.Context, in CreateJobInput) (*domai
 	if source == "" {
 		source = "unknown"
 	}
+	ownerID := ownerAccountID(in.UserID, in.AccountID)
 	operationLabel := string(in.Operation)
 	modalityLabel := string(in.Modality)
 
@@ -256,6 +275,12 @@ func (o *Orchestrator) CreateJob(ctx context.Context, in CreateJobInput) (*domai
 		tracing.RecordError(span, err)
 		metrics.ObserveProductEvent(source, "job", "create", operationLabel, modalityLabel, "idempotency_error")
 		return nil, fmt.Errorf("joborchestrator: idempotency lookup: %w", err)
+	}
+
+	if err := o.validateInputArtifacts(ctx, in); err != nil {
+		tracing.RecordError(span, err)
+		metrics.ObserveProductEvent(source, "job", "create", operationLabel, modalityLabel, "rejected_input_artifact")
+		return nil, err
 	}
 
 	// 1. Resolve trusted route details, estimate cost and enforce spend caps.
@@ -320,6 +345,7 @@ func (o *Orchestrator) CreateJob(ctx context.Context, in CreateJobInput) (*domai
 	job := &domain.Job{
 		ID:               uuid.New(),
 		UserID:           in.UserID,
+		AccountID:        ownerID,
 		Source:           source,
 		VKPeerID:         in.VKPeerID,
 		CommandID:        in.CommandID,
@@ -357,7 +383,7 @@ func (o *Orchestrator) CreateJob(ctx context.Context, in CreateJobInput) (*domai
 			return repos.Outbox.Add(ctx, jobEvent(ctx, "event.job.queued", &queuedJob))
 		}
 
-		if _, err := o.billing.ReserveWith(ctx, repos.Billing, in.UserID, job.ID, estimate); err != nil {
+		if _, err := o.billing.ReserveWithOwner(ctx, repos.Billing, in.UserID, ownerID, job.ID, estimate); err != nil {
 			if errors.Is(err, domain.ErrInsufficientCredits) {
 				metrics.BillingReservations.WithLabelValues(string(in.Operation), "insufficient_credits").Inc()
 				if routeSnapshot.Valid() {
@@ -416,6 +442,53 @@ func (o *Orchestrator) CreateJob(ctx context.Context, in CreateJobInput) (*domai
 	return job, nil
 }
 
+func (o *Orchestrator) validateInputArtifacts(ctx context.Context, in CreateJobInput) error {
+	if len(in.InputArtifactIDs) == 0 {
+		return nil
+	}
+	if o.artifacts == nil {
+		return fmt.Errorf("%w: repository unavailable", ErrInvalidInputArtifact)
+	}
+	for _, id := range in.InputArtifactIDs {
+		if id == uuid.Nil {
+			return fmt.Errorf("%w: empty id", ErrInvalidInputArtifact)
+		}
+		artifact, err := o.artifacts.GetByID(ctx, id)
+		if err != nil {
+			if errors.Is(err, domain.ErrNotFound) {
+				return fmt.Errorf("%w: missing", ErrInvalidInputArtifact)
+			}
+			return fmt.Errorf("joborchestrator: input artifact lookup: %w", err)
+		}
+		if !inputArtifactOwnedBy(artifact, in.UserID, in.AccountID) {
+			return fmt.Errorf("%w: foreign owner", ErrInvalidInputArtifact)
+		}
+		if artifact.Kind != domain.ArtifactKindInput {
+			return fmt.Errorf("%w: kind %s", ErrInvalidInputArtifact, artifact.Kind)
+		}
+		if artifact.MediaType != domain.MediaTypeImage {
+			return fmt.Errorf("%w: media %s", ErrInvalidInputArtifact, artifact.MediaType)
+		}
+		if artifact.Status != domain.ArtifactStatusReady {
+			return fmt.Errorf("%w: status %s", ErrInvalidInputArtifact, artifact.Status)
+		}
+		if strings.TrimSpace(artifact.StorageBucket) == "" || strings.TrimSpace(artifact.StorageKey) == "" {
+			return fmt.Errorf("%w: storage missing", ErrInvalidInputArtifact)
+		}
+	}
+	return nil
+}
+
+func inputArtifactOwnedBy(artifact *domain.Artifact, userID, accountID uuid.UUID) bool {
+	if artifact == nil {
+		return false
+	}
+	if artifact.OwnerAccountID != uuid.Nil {
+		return artifact.OwnerAccountID == ownerAccountID(userID, accountID)
+	}
+	return artifact.OwnerUserID == userID
+}
+
 func requiresBackendPrice(op domain.OperationType, modality domain.Modality) bool {
 	if modality == domain.ModalityVideo || modality == domain.ModalityImage {
 		return true
@@ -430,6 +503,7 @@ func requiresBackendPrice(op domain.OperationType, modality domain.Modality) boo
 
 func (o *Orchestrator) resolveVideoRoute(ctx context.Context, in CreateJobInput, source string) (VideoRouteResolution, error) {
 	check := VideoRouteCheckInput{
+		AccountID:        ownerAccountID(in.UserID, in.AccountID),
 		UserID:           in.UserID,
 		Source:           source,
 		Operation:        in.Operation,
@@ -453,8 +527,9 @@ func (o *Orchestrator) resolveVideoRoute(ctx context.Context, in CreateJobInput,
 }
 
 func (o *Orchestrator) checkCapacity(ctx context.Context, in CreateJobInput, source string, estimate int64) error {
+	ownerID := ownerAccountID(in.UserID, in.AccountID)
 	if o.maxActiveVideoJobsPerUser > 0 && in.Operation == domain.OperationVideoGenerate {
-		active, err := o.jobs.CountActiveByUserOperation(ctx, in.UserID, domain.OperationVideoGenerate)
+		active, err := o.jobs.CountActiveByUserOperation(ctx, ownerID, domain.OperationVideoGenerate)
 		if err != nil {
 			return fmt.Errorf("joborchestrator: active video jobs: %w", err)
 		}
@@ -467,6 +542,7 @@ func (o *Orchestrator) checkCapacity(ctx context.Context, in CreateJobInput, sou
 	}
 	if err := o.capacityGuard.CheckCapacity(ctx, CapacityCheckInput{
 		UserID:    in.UserID,
+		AccountID: ownerID,
 		Source:    source,
 		Operation: in.Operation,
 		Modality:  in.Modality,
@@ -487,9 +563,10 @@ func jobEvent(ctx context.Context, eventType string, job *domain.Job) *domain.Ou
 		Operation     domain.OperationType `json:"operation"`
 		Modality      domain.Modality      `json:"modality"`
 		UserID        uuid.UUID            `json:"user_id"`
+		AccountID     uuid.UUID            `json:"account_id,omitempty"`
 		CorrelationID string               `json:"correlation_id,omitempty"`
 		Traceparent   string               `json:"traceparent,omitempty"`
-	}{job.ID, job.Status, job.OperationType, job.Modality, job.UserID, job.CorrelationID, tracing.Traceparent(ctx)})
+	}{job.ID, job.Status, job.OperationType, job.Modality, job.UserID, job.AccountID, job.CorrelationID, tracing.Traceparent(ctx)})
 
 	return &domain.OutboxEvent{
 		AggregateType: "job",
@@ -497,4 +574,11 @@ func jobEvent(ctx context.Context, eventType string, job *domain.Job) *domain.Ou
 		EventType:     eventType,
 		Payload:       payload,
 	}
+}
+
+func ownerAccountID(userID, accountID uuid.UUID) uuid.UUID {
+	if accountID != uuid.Nil {
+		return accountID
+	}
+	return userID
 }

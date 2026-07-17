@@ -108,7 +108,14 @@ function Assert-Matrix {
 function Assert-TrackedRouteFlagsOff {
     param([Parameter(Mandatory = $true)][string]$Root)
 
-    $envFiles = @(".env.example", ".env.staging.example", ".env.prod.example")
+    $trackedEnvFiles = @()
+    Push-Location $Root
+    try {
+        $trackedEnvFiles = @(git ls-files -- ".env*" 2>$null)
+    } finally {
+        Pop-Location
+    }
+    $envFiles = @($trackedEnvFiles | Where-Object { $_ -notmatch "\.example$" })
     foreach ($relative in $envFiles) {
         $path = Join-Path $Root $relative
         if (-not (Test-Path -LiteralPath $path)) {

@@ -29,6 +29,8 @@ func TestNewStaticCatalogContainsApprovedImageTariffs(t *testing.T) {
 		{modelID: PublicImageNanoBananaPro, quality: ImageQuality1K, want: 24, unit: FloorUnitAPIMartCredits},
 		{modelID: PublicImageNanoBananaPro, quality: ImageQuality2K, want: 30, unit: FloorUnitAPIMartCredits},
 		{modelID: PublicImageNanoBananaPro, quality: ImageQuality4K, want: 30, unit: FloorUnitAPIMartCredits},
+		{modelID: PublicImageSeedream45, quality: ImageQuality2K, want: 10, unit: FloorUnitInternalCredits},
+		{modelID: PublicImageSeedream45, quality: ImageQuality4K, want: 15, unit: FloorUnitInternalCredits},
 	}
 	for _, tc := range cases {
 		t.Run(tc.modelID+"/"+tc.quality, func(t *testing.T) {
@@ -52,7 +54,33 @@ func TestNewStaticCatalogContainsApprovedImageTariffs(t *testing.T) {
 			if price.Floor.Unit != tc.unit {
 				t.Fatalf("floor unit = %s, want %s", price.Floor.Unit, tc.unit)
 			}
+			if tc.modelID == PublicImageSeedream45 {
+				wantFloor := map[string]int64{
+					ImageQuality2K: 10 * MinorUnitsPerCredit,
+					ImageQuality4K: 15 * MinorUnitsPerCredit,
+				}[tc.quality]
+				if price.Floor.Amount != wantFloor {
+					t.Fatalf("Seedream 4.5 %s floor = %d, want %d", tc.quality, price.Floor.Amount, wantFloor)
+				}
+			}
 		})
+	}
+}
+
+func TestStaticCatalogSeedream45OneKFailsClosed(t *testing.T) {
+	catalog, err := NewStaticCatalog()
+	if err != nil {
+		t.Fatalf("new static catalog: %v", err)
+	}
+
+	_, err = catalog.Lookup(ProductKey{
+		Operation:    domain.OperationImageGenerate,
+		Modality:     domain.ModalityImage,
+		ImageModelID: PublicImageSeedream45,
+		Quality:      ImageQuality1K,
+	})
+	if !errors.Is(err, ErrPriceNotFound) {
+		t.Fatalf("Seedream 4.5 1K lookup error = %v, want ErrPriceNotFound", err)
 	}
 }
 
@@ -104,11 +132,114 @@ func TestNewStaticCatalogContainsApprovedVideoTariffs(t *testing.T) {
 	}
 }
 
+func TestStaticCatalogKeepsOfficialRunwayAndPoyoRunwayGen45Tariffs(t *testing.T) {
+	catalog, err := NewStaticCatalog()
+	if err != nil {
+		t.Fatalf("new static catalog: %v", err)
+	}
+
+	cases := []struct {
+		name       string
+		alias      domain.VideoRouteAlias
+		resolution string
+		duration   int
+		want       int64
+		unit       FloorUnit
+	}{
+		{
+			name:       "official runway 5s",
+			alias:      domain.VideoRouteRunwayGen4Turbo,
+			resolution: VideoResolution720p,
+			duration:   5,
+			want:       150,
+			unit:       FloorUnitRunwayCredits,
+		},
+		{
+			name:       "official runway 10s",
+			alias:      domain.VideoRouteRunwayGen4Turbo,
+			resolution: VideoResolution720p,
+			duration:   10,
+			want:       300,
+			unit:       FloorUnitRunwayCredits,
+		},
+		{
+			name:       "poyo runway gen45 720p 5s",
+			alias:      domain.VideoRouteRunwayGen45,
+			resolution: VideoResolution720p,
+			duration:   5,
+			want:       225,
+			unit:       FloorUnitPoYoCredits,
+		},
+		{
+			name:       "poyo runway gen45 1080p 10s",
+			alias:      domain.VideoRouteRunwayGen45,
+			resolution: VideoResolution1080p,
+			duration:   10,
+			want:       450,
+			unit:       FloorUnitPoYoCredits,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			key := ProductKey{
+				Operation:       domain.OperationVideoGenerate,
+				Modality:        domain.ModalityVideo,
+				VideoRouteAlias: tc.alias,
+				Resolution:      tc.resolution,
+				DurationSec:     tc.duration,
+			}
+			got, err := catalog.CostEstimateCredits(key)
+			if err != nil {
+				t.Fatalf("cost estimate: %v", err)
+			}
+			if got != tc.want {
+				t.Fatalf("cost estimate = %d, want %d", got, tc.want)
+			}
+			price, err := catalog.Lookup(key)
+			if err != nil {
+				t.Fatalf("lookup: %v", err)
+			}
+			if price.Floor.Unit != tc.unit {
+				t.Fatalf("floor unit = %s, want %s", price.Floor.Unit, tc.unit)
+			}
+		})
+	}
+}
+
+func TestStaticCatalogImageTariffsStayUnchangedWhileAddingPoyoRunwayGen45(t *testing.T) {
+	catalog, err := NewStaticCatalog()
+	if err != nil {
+		t.Fatalf("new static catalog: %v", err)
+	}
+
+	want := map[ProductKey]int64{
+		{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ImageModelID: PublicImageNanoBanana2, Quality: ImageQuality1K}:   15,
+		{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ImageModelID: PublicImageNanoBanana2, Quality: ImageQuality2K}:   24,
+		{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ImageModelID: PublicImageNanoBanana2, Quality: ImageQuality4K}:   36,
+		{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ImageModelID: PublicImageGPTImage2, Quality: ImageQuality1K}:     4,
+		{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ImageModelID: PublicImageGPTImage2, Quality: ImageQuality2K}:     8,
+		{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ImageModelID: PublicImageGPTImage2, Quality: ImageQuality4K}:     11,
+		{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ImageModelID: PublicImageNanoBananaPro, Quality: ImageQuality1K}: 24,
+		{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ImageModelID: PublicImageNanoBananaPro, Quality: ImageQuality2K}: 30,
+		{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ImageModelID: PublicImageNanoBananaPro, Quality: ImageQuality4K}: 30,
+	}
+	for key, expected := range want {
+		got, err := catalog.CostEstimateCredits(key)
+		if err != nil {
+			t.Fatalf("image cost estimate %+v: %v", key, err)
+		}
+		if got != expected {
+			t.Fatalf("image cost estimate %+v = %d, want %d", key, got, expected)
+		}
+	}
+}
+
 func TestStaticCatalogUsesOnlyBoundedAliasesAndExplicitUnits(t *testing.T) {
 	allowedImages := map[string]bool{
 		PublicImageNanoBanana2:   true,
 		PublicImageNanoBananaPro: true,
 		PublicImageGPTImage2:     true,
+		PublicImageSeedream45:    true,
 	}
 	allowedVideos := map[domain.VideoRouteAlias]bool{
 		domain.VideoRouteKlingO3Standard: true,
@@ -124,7 +255,11 @@ func TestStaticCatalogUsesOnlyBoundedAliasesAndExplicitUnits(t *testing.T) {
 		if price.Floor.Unit == FloorUnit("provider_credit_micros") {
 			t.Fatalf("static price used generic provider credit unit: %+v", price)
 		}
-		if price.Multiplier != DefaultMultiplier() {
+		if price.Key.ImageModelID == PublicImageSeedream45 {
+			if price.Multiplier != (Multiplier{Numerator: 1, Denominator: 1}) {
+				t.Fatalf("Seedream 4.5 multiplier = %+v, want exact fixed price", price.Multiplier)
+			}
+		} else if price.Multiplier != DefaultMultiplier() {
 			t.Fatalf("static price multiplier = %+v, want x3", price.Multiplier)
 		}
 		switch price.Key.Modality {

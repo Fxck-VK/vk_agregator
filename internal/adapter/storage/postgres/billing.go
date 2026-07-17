@@ -67,12 +67,13 @@ func (r *BillingRepository) inTx(ctx context.Context, fn func(q Querier) error) 
 	return fn(r.db)
 }
 
-const accountColumns = `id, user_id, currency, balance_cached, created_at, updated_at`
+const accountColumns = `id, user_id, owner_account_id, currency, balance_cached, created_at, updated_at`
+const creditAccountOwnerFilter = `(owner_account_id = $1 OR (owner_account_id IS NULL AND user_id = $1))`
 
-const reservationColumns = `id, account_id, job_id, amount, status, idempotency_key,
+const reservationColumns = `id, account_id, owner_account_id, job_id, amount, status, idempotency_key,
 	expires_at, created_at, updated_at`
 
-const ledgerColumns = `id, account_id, job_id, reservation_id, type, amount, status,
+const ledgerColumns = `id, account_id, owner_account_id, job_id, reservation_id, type, amount, status,
 	idempotency_key, reason, created_at`
 
 // CreateAccount inserts a new credit account. The account is always created
@@ -89,10 +90,10 @@ func (r *BillingRepository) CreateAccount(ctx context.Context, a *domain.CreditA
 	grant := a.BalanceCached
 	return r.inTx(ctx, func(q Querier) error {
 		const insAcc = `
-			INSERT INTO credit_accounts (id, user_id, currency, balance_cached)
-			VALUES ($1, $2, $3, 0)
+			INSERT INTO credit_accounts (id, user_id, owner_account_id, currency, balance_cached)
+			VALUES ($1, $2, COALESCE($3::uuid, (SELECT account_id FROM users WHERE id = $2)), $4, 0)
 			RETURNING ` + accountColumns
-		if err := mapError(scanAccount(q.QueryRow(ctx, insAcc, a.ID, a.UserID, a.Currency), a)); err != nil {
+		if err := mapError(scanAccount(q.QueryRow(ctx, insAcc, a.ID, a.UserID, nullableUUID(a.OwnerAccountID), a.Currency), a)); err != nil {
 			return err
 		}
 		if grant == 0 {
@@ -102,6 +103,7 @@ func (r *BillingRepository) CreateAccount(ctx context.Context, a *domain.CreditA
 		// balance, keyed uniquely per account so it is created exactly once.
 		entry := &domain.LedgerEntry{
 			AccountID:      a.ID,
+			OwnerAccountID: a.OwnerAccountID,
 			Type:           domain.LedgerTopup,
 			Amount:         grant,
 			Status:         domain.LedgerStatusCommitted,
@@ -135,7 +137,7 @@ func (r *BillingRepository) GetAccount(ctx context.Context, id uuid.UUID) (*doma
 
 // GetAccountByUser fetches a user's account for a currency.
 func (r *BillingRepository) GetAccountByUser(ctx context.Context, userID uuid.UUID, currency domain.Currency) (*domain.CreditAccount, error) {
-	const q = `SELECT ` + accountColumns + ` FROM credit_accounts WHERE user_id = $1 AND currency = $2`
+	q := `SELECT ` + accountColumns + ` FROM credit_accounts WHERE ` + creditAccountOwnerFilter + ` AND currency = $2`
 	var a domain.CreditAccount
 	if err := mapError(scanAccount(r.q().QueryRow(ctx, q, userID, currency), &a)); err != nil {
 		return nil, err
@@ -199,17 +201,18 @@ func (r *BillingRepository) Reserve(ctx context.Context, res *domain.CreditReser
 			return domain.ErrInsufficientCredits
 		}
 		const insRes = `
-			INSERT INTO credit_reservations (id, account_id, job_id, amount, status, idempotency_key, expires_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7)
+			INSERT INTO credit_reservations (id, account_id, owner_account_id, job_id, amount, status, idempotency_key, expires_at)
+			VALUES ($1, $2, COALESCE($3::uuid, (SELECT owner_account_id FROM credit_accounts WHERE id = $2)), $4, $5, $6, $7, $8)
 			RETURNING ` + reservationColumns
 		row := q.QueryRow(ctx, insRes,
-			res.ID, res.AccountID, res.JobID, res.Amount, res.Status, res.IdempotencyKey, res.ExpiresAt,
+			res.ID, res.AccountID, nullableUUID(res.OwnerAccountID), res.JobID, res.Amount, res.Status, res.IdempotencyKey, res.ExpiresAt,
 		)
 		if err := mapError(scanReservation(row, res)); err != nil {
 			return err
 		}
 		entry := &domain.LedgerEntry{
 			AccountID:      res.AccountID,
+			OwnerAccountID: res.OwnerAccountID,
 			JobID:          &res.JobID,
 			ReservationID:  &res.ID,
 			Type:           domain.LedgerReserve,
@@ -241,6 +244,7 @@ func (r *BillingRepository) Capture(ctx context.Context, reservationID uuid.UUID
 		}
 		entry := &domain.LedgerEntry{
 			AccountID:      res.AccountID,
+			OwnerAccountID: res.OwnerAccountID,
 			JobID:          &res.JobID,
 			ReservationID:  &res.ID,
 			Type:           domain.LedgerCapture,
@@ -274,6 +278,7 @@ func (r *BillingRepository) Release(ctx context.Context, reservationID uuid.UUID
 		}
 		entry := &domain.LedgerEntry{
 			AccountID:      res.AccountID,
+			OwnerAccountID: res.OwnerAccountID,
 			JobID:          &res.JobID,
 			ReservationID:  &res.ID,
 			Type:           domain.LedgerRelease,
@@ -344,12 +349,12 @@ func insertLedgerEntry(ctx context.Context, q Querier, e *domain.LedgerEntry) (b
 		e.Status = domain.LedgerStatusCommitted
 	}
 	const sql = `
-		INSERT INTO ledger_entries (id, account_id, job_id, reservation_id, type, amount, status, idempotency_key, reason)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		INSERT INTO ledger_entries (id, account_id, owner_account_id, job_id, reservation_id, type, amount, status, idempotency_key, reason)
+		VALUES ($1, $2, COALESCE($3::uuid, (SELECT owner_account_id FROM credit_accounts WHERE id = $2)), $4, $5, $6, $7, $8, $9, $10)
 		ON CONFLICT (idempotency_key) DO NOTHING
 		RETURNING ` + ledgerColumns
 	row := q.QueryRow(ctx, sql,
-		e.ID, e.AccountID, e.JobID, e.ReservationID, e.Type, e.Amount, e.Status, e.IdempotencyKey, e.Reason,
+		e.ID, e.AccountID, nullableUUID(e.OwnerAccountID), e.JobID, e.ReservationID, e.Type, e.Amount, e.Status, e.IdempotencyKey, e.Reason,
 	)
 	if err := scanLedgerEntry(row, e); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -369,19 +374,40 @@ func adjustBalance(ctx context.Context, q Querier, accountID uuid.UUID, delta in
 }
 
 func scanAccount(row rowScanner, a *domain.CreditAccount) error {
-	return row.Scan(&a.ID, &a.UserID, &a.Currency, &a.BalanceCached, &a.CreatedAt, &a.UpdatedAt)
+	var ownerAccountID *uuid.UUID
+	if err := row.Scan(&a.ID, &a.UserID, &ownerAccountID, &a.Currency, &a.BalanceCached, &a.CreatedAt, &a.UpdatedAt); err != nil {
+		return err
+	}
+	if ownerAccountID != nil {
+		a.OwnerAccountID = *ownerAccountID
+	}
+	return nil
 }
 
 func scanReservation(row rowScanner, res *domain.CreditReservation) error {
-	return row.Scan(
-		&res.ID, &res.AccountID, &res.JobID, &res.Amount, &res.Status, &res.IdempotencyKey,
+	var ownerAccountID *uuid.UUID
+	if err := row.Scan(
+		&res.ID, &res.AccountID, &ownerAccountID, &res.JobID, &res.Amount, &res.Status, &res.IdempotencyKey,
 		&res.ExpiresAt, &res.CreatedAt, &res.UpdatedAt,
-	)
+	); err != nil {
+		return err
+	}
+	if ownerAccountID != nil {
+		res.OwnerAccountID = *ownerAccountID
+	}
+	return nil
 }
 
 func scanLedgerEntry(row rowScanner, e *domain.LedgerEntry) error {
-	return row.Scan(
-		&e.ID, &e.AccountID, &e.JobID, &e.ReservationID, &e.Type, &e.Amount, &e.Status,
+	var ownerAccountID *uuid.UUID
+	if err := row.Scan(
+		&e.ID, &e.AccountID, &ownerAccountID, &e.JobID, &e.ReservationID, &e.Type, &e.Amount, &e.Status,
 		&e.IdempotencyKey, &e.Reason, &e.CreatedAt,
-	)
+	); err != nil {
+		return err
+	}
+	if ownerAccountID != nil {
+		e.OwnerAccountID = *ownerAccountID
+	}
+	return nil
 }

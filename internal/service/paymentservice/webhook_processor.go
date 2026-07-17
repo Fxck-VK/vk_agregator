@@ -465,7 +465,7 @@ func (p *WebhookProcessor) ensureRefundIntentRecord(ctx context.Context, in Refu
 		if strings.TrimSpace(intent.ProviderPaymentID) == "" {
 			return ErrRefundNotAllowed
 		}
-		account, err := billingRepo.GetAccountByUser(ctx, intent.UserID, domain.CurrencyCredits)
+		account, err := billingRepo.GetAccountByUser(ctx, intentOwnerID(intent), domain.CurrencyCredits)
 		if err != nil {
 			return err
 		}
@@ -616,12 +616,13 @@ func (p *WebhookProcessor) compensateRefundDebit(ctx context.Context, intent *do
 		status = domain.PaymentRefundFailed
 	}
 	return p.tx.RunPaymentTx(ctx, func(ctx context.Context, payments domain.PaymentRepository, billingRepo domain.BillingRepository) error {
-		account, err := billingRepo.GetAccountByUser(ctx, intent.UserID, domain.CurrencyCredits)
+		account, err := billingRepo.GetAccountByUser(ctx, intentOwnerID(intent), domain.CurrencyCredits)
 		if err != nil {
 			return err
 		}
 		if err := billingRepo.AppendEntry(ctx, &domain.LedgerEntry{
 			AccountID:      account.ID,
+			OwnerAccountID: intentOwnerID(intent),
 			Type:           domain.LedgerAdjustment,
 			Amount:         intent.Credits,
 			Status:         domain.LedgerStatusCommitted,
@@ -815,10 +816,11 @@ func (p *WebhookProcessor) applyProviderPayment(ctx context.Context, payments do
 		}
 	}
 	if target == domain.PaymentIntentSucceeded {
-		if err := p.billing.GrantWith(
+		if err := p.billing.GrantWithOwner(
 			ctx,
 			billingRepo,
 			intent.UserID,
+			intentOwnerID(intent),
 			intent.Credits,
 			topUpLedgerKey(intent.Provider, intent.ProviderPaymentID),
 			"payment top-up via "+string(intent.Provider),

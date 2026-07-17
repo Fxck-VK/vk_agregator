@@ -21,7 +21,7 @@ Production flow:
 
 ```text
 main push/merge
-  -> Docker Images workflow builds sha-<commit> images in GHCR
+  -> Docker Images workflow builds immutable sha-<full-main-commit> images in GHCR
   -> Deploy Production workflow connects to VPS
   -> deploy-prod.sh pulls immutable images
   -> smoke-prod.sh verifies public/private routes
@@ -29,20 +29,36 @@ main push/merge
 ```
 
 Do not build images on the VPS unless explicitly debugging a fallback path.
+Manual production dispatches in GitHub Actions must be started from the `main`
+branch only. `Deploy Production` deploys the checked-out `main` commit by its
+immutable `sha-<full commit>` GHCR tag and fails before SSH/env upload if the
+matching images have not already been built by `Docker Images`. The VPS checks
+out that exact commit in detached mode, and both runtime and backup images are
+pinned to the same immutable tag for the rollout.
 
 ## Required Production Secrets
 
 Production secrets live in GitHub Repository Secrets and the VPS `.env`, never in
 git:
 
-- `PROD_ENV_FILE`
+- `ENV_COMMON`
+- `ENV_PROVIDERS_COMMON`
+- `ENV_SECRETS_PROD`
+- `ENV_PAYMENTS_PROD`
 - `DEPLOY_HOST`
 - `DEPLOY_USER`
 - `DEPLOY_SSH_KEY`
+- `DEPLOY_SSH_KNOWN_HOSTS`
 - `DEPLOY_PATH`
 - `GHCR_USERNAME`
 - `GHCR_TOKEN`
 - optional Telegram notification secrets
+
+`DEPLOY_SSH_KNOWN_HOSTS` must contain the production VPS SSH host key line(s)
+verified out of band, in OpenSSH `known_hosts` format. The deploy workflow
+does not trust live `ssh-keyscan`; if the secret is missing, invalid, does not
+contain `DEPLOY_HOST`, or the server presents a different host key, deploy fails
+before uploading `.env` or running remote commands.
 
 Before production deploy, compare DEV/PROD variable names:
 
@@ -51,6 +67,8 @@ bash scripts/deploy/check-env-parity.sh --dev .env.dev --prod .env.prod
 ```
 
 The script prints variable names only, never values.
+Production deploy does not read DEV env secrets. Run DEV/PROD parity as a
+separate operator check when changing env structure.
 
 ## VPS Deploy Command
 

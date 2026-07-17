@@ -403,6 +403,9 @@ func safeVKMediaFailureNotice(errorCode string) string {
 		return "Не удалось доставить готовый медиафайл. ⭐️ не списаны. Попробуйте позже."
 	case domain.JobErrMediaProcessingUnavailable:
 		return "Не удалось получить или подготовить готовый медиафайл. ⭐️ не списаны. Попробуйте позже."
+	case domain.JobErrModelUnavailable,
+		string(domain.ProviderErrModelUnavailable):
+		return "Выбранная модель сейчас недоступна. ⭐️ не списаны. Попробуйте другую модель."
 	case string(domain.ProviderErrRateLimited),
 		string(domain.ProviderErrTimeout),
 		string(domain.ProviderErrOverloaded),
@@ -411,8 +414,9 @@ func safeVKMediaFailureNotice(errorCode string) string {
 	case string(domain.ProviderErrAuthFailed),
 		string(domain.ProviderErrInsufficientBalance):
 		return "Провайдер генерации временно недоступен. ⭐️ не списаны. Попробуйте позже."
-	case string(domain.ProviderErrInvalidRequest),
-		string(domain.ProviderErrUnsupportedCapab):
+	case string(domain.ProviderErrInvalidRequest):
+		return "Модель не приняла запрос. ⭐️ не списаны. Попробуйте другую модель или измените описание; возможны ограничения по содержанию."
+	case string(domain.ProviderErrUnsupportedCapab):
 		return "Этот запрос не поддерживается выбранной моделью. ⭐️ не списаны. Измените параметры и попробуйте снова."
 	case string(domain.ProviderErrContentRejected):
 		return "Запрос отклонен правилами безопасности. ⭐️ не списаны. Измените описание и попробуйте снова."
@@ -692,8 +696,8 @@ func (w *DeliveryWorker) setStatus(ctx context.Context, job *domain.Job, to doma
 // a real VK uploader and stored bytes, it uploads the selected media object to VK
 // and returns the VK attachment string. For videos, a ready VK-specific variant
 // is preferred over raw provider output. Otherwise, when signed delivery is
-// enabled it issues a time-limited signed URL; finally it falls back to the
-// selected object's public URL or storage location.
+// enabled it issues a time-limited signed URL. Without a VK attachment/upload or
+// explicit signer, media delivery fails closed.
 func (w *DeliveryWorker) mediaAttachment(ctx context.Context, peerID int64, art *domain.Artifact, filenamePrompt string) (string, error) {
 	if ref := attachmentRef(art); isVKAttachment(ref) {
 		return ref, nil
@@ -716,21 +720,22 @@ func (w *DeliveryWorker) mediaAttachment(ctx context.Context, peerID int64, art 
 		}
 	}
 	if w.signURLs && w.signer != nil && obj.storageKey != "" {
-		if signed, err := w.signer.PresignedGetURL(ctx, obj.storageBucket, obj.storageKey, w.urlTTL); err == nil && signed != "" {
-			return signed, nil
+		signed, err := w.signer.PresignedGetURL(ctx, obj.storageBucket, obj.storageKey, w.urlTTL)
+		if err != nil {
+			return "", fmt.Errorf("worker: sign media delivery url: %w", err)
 		}
+		if signed == "" {
+			return "", fmt.Errorf("worker: signed media delivery url is empty")
+		}
+		return signed, nil
 	}
-	if obj.fallbackRef != "" {
-		return obj.fallbackRef, nil
-	}
-	return attachmentRef(art), nil
+	return "", fmt.Errorf("worker: media delivery requires vk attachment or signed url")
 }
 
 type mediaDeliveryObject struct {
 	storageBucket string
 	storageKey    string
 	mimeType      string
-	fallbackRef   string
 }
 
 func (w *DeliveryWorker) mediaObjectForDelivery(ctx context.Context, art *domain.Artifact) (mediaDeliveryObject, error) {
@@ -738,7 +743,6 @@ func (w *DeliveryWorker) mediaObjectForDelivery(ctx context.Context, art *domain
 		storageBucket: art.StorageBucket,
 		storageKey:    art.StorageKey,
 		mimeType:      art.MimeType,
-		fallbackRef:   attachmentRef(art),
 	}
 	if art.MediaType != domain.MediaTypeVideo {
 		return obj, nil
@@ -760,7 +764,6 @@ func (w *DeliveryWorker) mediaObjectForDelivery(ctx context.Context, art *domain
 				storageBucket: variant.StorageBucket,
 				storageKey:    variant.StorageKey,
 				mimeType:      mimeType,
-				fallbackRef:   variant.StorageBucket + "/" + variant.StorageKey,
 			}, nil
 		}
 	}
@@ -794,13 +797,13 @@ func readyVideoVariant(variant *domain.ArtifactVariant, variantType domain.Varia
 		variant.ProbeStatus == domain.MediaProbePassed
 }
 
-// attachmentRef returns the VK attachment reference for a media artifact,
-// preferring a public URL and falling back to the storage location.
+// attachmentRef returns a stored public reference for a media artifact. Callers
+// must validate that it is a VK attachment before sending it.
 func attachmentRef(art *domain.Artifact) string {
-	if art.PublicURL != "" {
-		return art.PublicURL
+	if art == nil {
+		return ""
 	}
-	return art.StorageBucket + "/" + art.StorageKey
+	return art.PublicURL
 }
 
 func isVKAttachment(ref string) bool {

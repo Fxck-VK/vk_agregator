@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/http"
 	"net/url"
 	"os"
 	"strconv"
@@ -264,6 +265,7 @@ type Config struct {
 	FeatureImageModelNanoBananaProEnabled       bool
 	FeatureImageModelGPTImage2Enabled           bool
 	FeatureImageModelNanoBanana2Enabled         bool
+	FeatureImageModelSeedream45Enabled          bool
 	FeatureImageModelMockEnabled                bool
 	FeatureVideoRouterEnabled                   bool
 	FeatureVideoRouteHailuo23FastEnabled        bool
@@ -306,9 +308,11 @@ type Config struct {
 	// ModerationProvider selects output moderation: "keyword" (default) or
 	// "openai". ArtifactScanner selects artifact byte scanning: "none" or
 	// "openai". Production requires a scanner; staging may run with "none".
-	ModerationProvider                  string
-	OpenAIModerationModel               string
-	ArtifactScanner                     string
+	ModerationProvider    string
+	OpenAIModerationModel string
+	ArtifactScanner       string
+	// Deprecated compatibility input. Production validation no longer permits
+	// this flag to disable artifact scanning.
 	AllowUnscannedArtifactsInProduction bool
 
 	// VKDeliveryMode selects the delivery client: "mock" (default) or "real".
@@ -387,6 +391,61 @@ type Config struct {
 	// MiniAppLaunchParamsMaxAge is the maximum age of VK launch params before
 	// they are rejected. Zero disables the age check.
 	MiniAppLaunchParamsMaxAge time.Duration
+	// MiniAppAllowQueryLaunchParams enables the legacy launch_params query
+	// fallback for explicit local development/tests only. Server environments
+	// reject this setting because signed credentials must use a request header.
+	MiniAppAllowQueryLaunchParams bool
+	// AccountEmailLink* control short-lived email identity verification codes.
+	AccountEmailLinkCodeTTL       time.Duration
+	AccountEmailLinkCodeDigits    int
+	AccountEmailLinkRequestLimit  int
+	AccountEmailLinkRequestWindow time.Duration
+	AccountEmailLinkVerifyLimit   int
+	AccountEmailLinkVerifyWindow  time.Duration
+	// AccountPhoneLink* control short-lived phone identity OTP verification.
+	AccountPhoneLinkOTPTTL        time.Duration
+	AccountPhoneLinkOTPDigits     int
+	AccountPhoneLinkRequestLimit  int
+	AccountPhoneLinkRequestWindow time.Duration
+	AccountPhoneLinkVerifyLimit   int
+	AccountPhoneLinkVerifyWindow  time.Duration
+	// AccountEmailDelivery* and AccountPhoneDelivery* configure real
+	// out-of-band verification delivery. Missing/disabled providers keep link
+	// flows fail-closed.
+	AccountEmailDeliveryProvider string
+	AccountEmailSMTPHost         string
+	AccountEmailSMTPPort         int
+	AccountEmailSMTPUsername     string
+	AccountEmailSMTPPassword     string
+	AccountEmailSMTPFrom         string
+	AccountEmailSMTPSubject      string
+	AccountEmailSMTPTLSMode      string
+	AccountEmailSMTPTimeout      time.Duration
+	AccountPhoneDeliveryProvider string
+	AccountPhoneHTTPURL          string
+	AccountPhoneHTTPMethod       string
+	AccountPhoneHTTPAuthHeader   string
+	AccountPhoneHTTPAuthValue    string
+	AccountPhoneHTTPContentType  string
+	AccountPhoneHTTPBodyTemplate string
+	AccountPhoneHTTPTimeout      time.Duration
+	// AccountAuthRateLimit* controls shared login/link/password throttling.
+	AccountAuthRateLimitLimit  int
+	AccountAuthRateLimitWindow time.Duration
+	// AccountOAuth* configure provider adapters. Missing provider-specific
+	// trust material keeps that provider fail-closed.
+	AccountOAuthGoogleClientIDs   []string
+	AccountOAuthGoogleJWKSURL     string
+	AccountOAuthAppleClientIDs    []string
+	AccountOAuthAppleJWKSURL      string
+	AccountOAuthTelegramBotToken  string
+	AccountOAuthTelegramMaxAge    time.Duration
+	AccountOAuthTelegramClientIDs []string
+	AccountOAuthTelegramIssuer    string
+	AccountOAuthTelegramJWKSURL   string
+	AccountOAuthVKIDClientIDs     []string
+	AccountOAuthVKIDIssuer        string
+	AccountOAuthVKIDJWKSURL       string
 	// FrontendTelemetryEnabled accepts safe Mini App client telemetry events.
 	FrontendTelemetryEnabled bool
 	// FrontendTelemetryUserHashSecret enables anonymized client user hashing
@@ -522,6 +581,9 @@ func (c Config) PaymentWebhookHTTPSRequired() bool {
 // and the admin API must be set. Returns a descriptive error otherwise.
 func (c Config) Validate() error {
 	var missing []string
+	if c.IsServerEnv() && c.MiniAppAllowQueryLaunchParams {
+		return fmt.Errorf("config: MINIAPP_ALLOW_QUERY_LAUNCH_PARAMS must be false in production/staging")
+	}
 	if err := c.ValidateDataServiceModes(); err != nil {
 		return err
 	}
@@ -565,6 +627,56 @@ func (c Config) Validate() error {
 	}
 	if c.RuntimePricingRefreshInterval < 0 {
 		return fmt.Errorf("config: RUNTIME_PRICING_REFRESH_INTERVAL must be non-negative")
+	}
+	if c.AccountEmailLinkCodeTTL < 0 {
+		return fmt.Errorf("config: ACCOUNT_EMAIL_LINK_CODE_TTL must be non-negative")
+	}
+	if c.AccountEmailLinkCodeDigits != 0 &&
+		(c.AccountEmailLinkCodeDigits < 4 || c.AccountEmailLinkCodeDigits > 10) {
+		return fmt.Errorf("config: ACCOUNT_EMAIL_LINK_CODE_DIGITS must be between 4 and 10")
+	}
+	if c.AccountEmailLinkRequestLimit < 0 {
+		return fmt.Errorf("config: ACCOUNT_EMAIL_LINK_REQUEST_LIMIT must be non-negative")
+	}
+	if c.AccountEmailLinkRequestWindow < 0 {
+		return fmt.Errorf("config: ACCOUNT_EMAIL_LINK_REQUEST_WINDOW must be non-negative")
+	}
+	if c.AccountEmailLinkVerifyLimit < 0 {
+		return fmt.Errorf("config: ACCOUNT_EMAIL_LINK_VERIFY_LIMIT must be non-negative")
+	}
+	if c.AccountEmailLinkVerifyWindow < 0 {
+		return fmt.Errorf("config: ACCOUNT_EMAIL_LINK_VERIFY_WINDOW must be non-negative")
+	}
+	if c.AccountPhoneLinkOTPTTL < 0 {
+		return fmt.Errorf("config: ACCOUNT_PHONE_LINK_OTP_TTL must be non-negative")
+	}
+	if c.AccountPhoneLinkOTPDigits != 0 &&
+		(c.AccountPhoneLinkOTPDigits < 4 || c.AccountPhoneLinkOTPDigits > 10) {
+		return fmt.Errorf("config: ACCOUNT_PHONE_LINK_OTP_DIGITS must be between 4 and 10")
+	}
+	if c.AccountPhoneLinkRequestLimit < 0 {
+		return fmt.Errorf("config: ACCOUNT_PHONE_LINK_REQUEST_LIMIT must be non-negative")
+	}
+	if c.AccountPhoneLinkRequestWindow < 0 {
+		return fmt.Errorf("config: ACCOUNT_PHONE_LINK_REQUEST_WINDOW must be non-negative")
+	}
+	if c.AccountPhoneLinkVerifyLimit < 0 {
+		return fmt.Errorf("config: ACCOUNT_PHONE_LINK_VERIFY_LIMIT must be non-negative")
+	}
+	if c.AccountPhoneLinkVerifyWindow < 0 {
+		return fmt.Errorf("config: ACCOUNT_PHONE_LINK_VERIFY_WINDOW must be non-negative")
+	}
+	if err := c.validateAccountDeliveryConfig(); err != nil {
+		return err
+	}
+	if c.AccountAuthRateLimitLimit < 0 {
+		return fmt.Errorf("config: ACCOUNT_AUTH_RATE_LIMIT_LIMIT must be non-negative")
+	}
+	if c.AccountAuthRateLimitWindow < 0 {
+		return fmt.Errorf("config: ACCOUNT_AUTH_RATE_LIMIT_WINDOW must be non-negative")
+	}
+	if c.AccountOAuthTelegramMaxAge < 0 {
+		return fmt.Errorf("config: ACCOUNT_OAUTH_TELEGRAM_MAX_AGE must be non-negative")
 	}
 	if provider := strings.ToLower(strings.TrimSpace(c.PaymentProvider)); provider != "" && !knownPaymentProvider(provider) {
 		return fmt.Errorf("config: PAYMENT_PROVIDER must be one of mock, yookassa")
@@ -818,8 +930,8 @@ func (c Config) Validate() error {
 		if c.usesMockProvider() {
 			return fmt.Errorf("config: mock provider is not allowed in production")
 		}
-		if c.usesRealGenerationProvider() && artifactScannerDisabled(c.ArtifactScanner) && !c.AllowUnscannedArtifactsInProduction {
-			return fmt.Errorf("config: ARTIFACT_SCANNER=openai is required in production unless ALLOW_UNSCANNED_ARTIFACTS_IN_PRODUCTION=true")
+		if c.usesRealGenerationProvider() && artifactScannerDisabled(c.ArtifactScanner) {
+			return fmt.Errorf("config: ARTIFACT_SCANNER=openai is required in production")
 		}
 		if strings.EqualFold(strings.TrimSpace(c.PaymentProvider), "mock") {
 			return fmt.Errorf("config: PAYMENT_PROVIDER=mock is not allowed in production")
@@ -844,9 +956,18 @@ func (c Config) Validate() error {
 		if c.VKMenuTopUpEnabled && !safePublicHTTPSBaseURL(c.PublicVKBaseURL) {
 			return fmt.Errorf("config: PUBLIC_VK_BASE_URL must be a valid https URL when VK_MENU_TOP_UP_ENABLED=true in production")
 		}
+		if strings.EqualFold(strings.TrimSpace(c.PaymentProvider), "yookassa") {
+			yooKassaSecretKey := strings.ToLower(strings.TrimSpace(c.YooKassaSecretKey))
+			if yooKassaSecretKey != "" && !strings.HasPrefix(yooKassaSecretKey, "live") {
+				return fmt.Errorf("config: YOOKASSA_SECRET_KEY must be a live YooKassa key in production")
+			}
+		}
 		if c.FeatureDevPaymentTestProductEnabled {
 			return fmt.Errorf("config: FEATURE_DEV_PAYMENT_TEST_PRODUCT_ENABLED is not allowed in production")
 		}
+	}
+	if c.IsServerEnv() && c.FeatureDevPaymentTestProductEnabled {
+		return fmt.Errorf("config: FEATURE_DEV_PAYMENT_TEST_PRODUCT_ENABLED is not allowed in staging/production")
 	}
 	if c.usesOpenAI() && c.OpenAIAPIKey == "" {
 		missing = append(missing, "OPENAI_API_KEY")
@@ -1139,6 +1260,7 @@ func Load() Config {
 		FeatureImageModelNanoBananaProEnabled:     envBool("FEATURE_IMAGE_MODEL_NANO_BANANA_PRO_ENABLED", false),
 		FeatureImageModelGPTImage2Enabled:         envBool("FEATURE_IMAGE_MODEL_GPT_IMAGE_2_ENABLED", false),
 		FeatureImageModelNanoBanana2Enabled:       envBool("FEATURE_IMAGE_MODEL_NANO_BANANA_2_ENABLED", false),
+		FeatureImageModelSeedream45Enabled:        envBool("FEATURE_IMAGE_MODEL_SEEDREAM_4_5_ENABLED", false),
 		FeatureImageModelMockEnabled:              envBool("FEATURE_IMAGE_MODEL_MOCK_ENABLED", false),
 		FeatureVideoRouterEnabled:                 envBool("FEATURE_VIDEO_ROUTER_ENABLED", false),
 		FeatureVideoRouteHailuo23FastEnabled:      envBool("FEATURE_VIDEO_ROUTE_HAILUO_2_3_FAST_ENABLED", false),
@@ -1245,6 +1367,50 @@ func Load() Config {
 		VKAppID:                         env("VK_APP_ID", ""),
 		VKAppSecret:                     env("VK_APP_SECRET", ""),
 		MiniAppLaunchParamsMaxAge:       envDuration("MINIAPP_LAUNCH_PARAMS_MAX_AGE", time.Hour),
+		MiniAppAllowQueryLaunchParams:   envBool("MINIAPP_ALLOW_QUERY_LAUNCH_PARAMS", false),
+		AccountEmailLinkCodeTTL:         envDuration("ACCOUNT_EMAIL_LINK_CODE_TTL", 10*time.Minute),
+		AccountEmailLinkCodeDigits:      envInt("ACCOUNT_EMAIL_LINK_CODE_DIGITS", 6),
+		AccountEmailLinkRequestLimit:    envInt("ACCOUNT_EMAIL_LINK_REQUEST_LIMIT", 3),
+		AccountEmailLinkRequestWindow:   envDuration("ACCOUNT_EMAIL_LINK_REQUEST_WINDOW", 15*time.Minute),
+		AccountEmailLinkVerifyLimit:     envInt("ACCOUNT_EMAIL_LINK_VERIFY_LIMIT", 5),
+		AccountEmailLinkVerifyWindow:    envDuration("ACCOUNT_EMAIL_LINK_VERIFY_WINDOW", 15*time.Minute),
+		AccountPhoneLinkOTPTTL:          envDuration("ACCOUNT_PHONE_LINK_OTP_TTL", 10*time.Minute),
+		AccountPhoneLinkOTPDigits:       envInt("ACCOUNT_PHONE_LINK_OTP_DIGITS", 6),
+		AccountPhoneLinkRequestLimit:    envInt("ACCOUNT_PHONE_LINK_REQUEST_LIMIT", 3),
+		AccountPhoneLinkRequestWindow:   envDuration("ACCOUNT_PHONE_LINK_REQUEST_WINDOW", 15*time.Minute),
+		AccountPhoneLinkVerifyLimit:     envInt("ACCOUNT_PHONE_LINK_VERIFY_LIMIT", 5),
+		AccountPhoneLinkVerifyWindow:    envDuration("ACCOUNT_PHONE_LINK_VERIFY_WINDOW", 15*time.Minute),
+		AccountEmailDeliveryProvider:    envConfigToken("ACCOUNT_EMAIL_DELIVERY_PROVIDER", "disabled"),
+		AccountEmailSMTPHost:            env("ACCOUNT_EMAIL_SMTP_HOST", ""),
+		AccountEmailSMTPPort:            envInt("ACCOUNT_EMAIL_SMTP_PORT", 587),
+		AccountEmailSMTPUsername:        env("ACCOUNT_EMAIL_SMTP_USERNAME", ""),
+		AccountEmailSMTPPassword:        env("ACCOUNT_EMAIL_SMTP_PASSWORD", ""),
+		AccountEmailSMTPFrom:            env("ACCOUNT_EMAIL_SMTP_FROM", ""),
+		AccountEmailSMTPSubject:         env("ACCOUNT_EMAIL_SMTP_SUBJECT", "Код подтверждения НейроХаб"),
+		AccountEmailSMTPTLSMode:         envConfigToken("ACCOUNT_EMAIL_SMTP_TLS_MODE", "starttls"),
+		AccountEmailSMTPTimeout:         envDuration("ACCOUNT_EMAIL_SMTP_TIMEOUT", 10*time.Second),
+		AccountPhoneDeliveryProvider:    envConfigToken("ACCOUNT_PHONE_DELIVERY_PROVIDER", "disabled"),
+		AccountPhoneHTTPURL:             env("ACCOUNT_PHONE_HTTP_URL", ""),
+		AccountPhoneHTTPMethod:          env("ACCOUNT_PHONE_HTTP_METHOD", "POST"),
+		AccountPhoneHTTPAuthHeader:      env("ACCOUNT_PHONE_HTTP_AUTH_HEADER", ""),
+		AccountPhoneHTTPAuthValue:       env("ACCOUNT_PHONE_HTTP_AUTH_VALUE", ""),
+		AccountPhoneHTTPContentType:     env("ACCOUNT_PHONE_HTTP_CONTENT_TYPE", "application/json"),
+		AccountPhoneHTTPBodyTemplate:    env("ACCOUNT_PHONE_HTTP_BODY_TEMPLATE", ""),
+		AccountPhoneHTTPTimeout:         envDuration("ACCOUNT_PHONE_HTTP_TIMEOUT", 10*time.Second),
+		AccountAuthRateLimitLimit:       envInt("ACCOUNT_AUTH_RATE_LIMIT_LIMIT", 30),
+		AccountAuthRateLimitWindow:      envDuration("ACCOUNT_AUTH_RATE_LIMIT_WINDOW", 15*time.Minute),
+		AccountOAuthGoogleClientIDs:     envList("ACCOUNT_OAUTH_GOOGLE_CLIENT_IDS"),
+		AccountOAuthGoogleJWKSURL:       env("ACCOUNT_OAUTH_GOOGLE_JWKS_URL", "https://www.googleapis.com/oauth2/v3/certs"),
+		AccountOAuthAppleClientIDs:      envList("ACCOUNT_OAUTH_APPLE_CLIENT_IDS"),
+		AccountOAuthAppleJWKSURL:        env("ACCOUNT_OAUTH_APPLE_JWKS_URL", "https://appleid.apple.com/auth/keys"),
+		AccountOAuthTelegramBotToken:    env("ACCOUNT_OAUTH_TELEGRAM_BOT_TOKEN", ""),
+		AccountOAuthTelegramMaxAge:      envDuration("ACCOUNT_OAUTH_TELEGRAM_MAX_AGE", 24*time.Hour),
+		AccountOAuthTelegramClientIDs:   envList("ACCOUNT_OAUTH_TELEGRAM_CLIENT_IDS"),
+		AccountOAuthTelegramIssuer:      env("ACCOUNT_OAUTH_TELEGRAM_ISSUER", "https://oauth.telegram.org"),
+		AccountOAuthTelegramJWKSURL:     env("ACCOUNT_OAUTH_TELEGRAM_JWKS_URL", "https://oauth.telegram.org/.well-known/jwks.json"),
+		AccountOAuthVKIDClientIDs:       envList("ACCOUNT_OAUTH_VK_ID_CLIENT_IDS"),
+		AccountOAuthVKIDIssuer:          env("ACCOUNT_OAUTH_VK_ID_ISSUER", ""),
+		AccountOAuthVKIDJWKSURL:         env("ACCOUNT_OAUTH_VK_ID_JWKS_URL", ""),
 		FrontendTelemetryEnabled:        envBool("FRONTEND_TELEMETRY_ENABLED", false),
 		FrontendTelemetryUserHashSecret: env("FRONTEND_TELEMETRY_USER_HASH_SECRET", ""),
 
@@ -1360,6 +1526,65 @@ func (c Config) validateProviderBalanceBotConfig() error {
 	return nil
 }
 
+func (c Config) validateAccountDeliveryConfig() error {
+	switch strings.ToLower(strings.TrimSpace(c.AccountEmailDeliveryProvider)) {
+	case "", "disabled":
+	case "smtp":
+		if strings.TrimSpace(c.AccountEmailSMTPHost) == "" {
+			return fmt.Errorf("config: ACCOUNT_EMAIL_SMTP_HOST must be set when ACCOUNT_EMAIL_DELIVERY_PROVIDER=smtp")
+		}
+		if strings.TrimSpace(c.AccountEmailSMTPFrom) == "" {
+			return fmt.Errorf("config: ACCOUNT_EMAIL_SMTP_FROM must be set when ACCOUNT_EMAIL_DELIVERY_PROVIDER=smtp")
+		}
+		if c.AccountEmailSMTPPort < 1 || c.AccountEmailSMTPPort > 65535 {
+			return fmt.Errorf("config: ACCOUNT_EMAIL_SMTP_PORT must be between 1 and 65535")
+		}
+		if c.AccountEmailSMTPTimeout < 0 {
+			return fmt.Errorf("config: ACCOUNT_EMAIL_SMTP_TIMEOUT must be non-negative")
+		}
+		mode := strings.ToLower(strings.TrimSpace(c.AccountEmailSMTPTLSMode))
+		if mode != "" && mode != "starttls" && mode != "none" {
+			return fmt.Errorf("config: ACCOUNT_EMAIL_SMTP_TLS_MODE must be starttls or none")
+		}
+		if (strings.TrimSpace(c.AccountEmailSMTPUsername) == "") != (strings.TrimSpace(c.AccountEmailSMTPPassword) == "") {
+			return fmt.Errorf("config: ACCOUNT_EMAIL_SMTP_USERNAME and ACCOUNT_EMAIL_SMTP_PASSWORD must be set together")
+		}
+	default:
+		return fmt.Errorf("config: ACCOUNT_EMAIL_DELIVERY_PROVIDER must be disabled or smtp")
+	}
+
+	switch strings.ToLower(strings.TrimSpace(c.AccountPhoneDeliveryProvider)) {
+	case "", "disabled":
+	case "http":
+		parsed, err := url.Parse(strings.TrimSpace(c.AccountPhoneHTTPURL))
+		if err != nil || parsed == nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+			return fmt.Errorf("config: ACCOUNT_PHONE_HTTP_URL must be http or https when ACCOUNT_PHONE_DELIVERY_PROVIDER=http")
+		}
+		method := strings.ToUpper(strings.TrimSpace(c.AccountPhoneHTTPMethod))
+		if method == "" {
+			method = http.MethodPost
+		}
+		if method != http.MethodPost && method != http.MethodPut && method != http.MethodPatch {
+			return fmt.Errorf("config: ACCOUNT_PHONE_HTTP_METHOD must be POST, PUT, or PATCH")
+		}
+		if strings.TrimSpace(c.AccountPhoneHTTPBodyTemplate) == "" {
+			return fmt.Errorf("config: ACCOUNT_PHONE_HTTP_BODY_TEMPLATE must be set when ACCOUNT_PHONE_DELIVERY_PROVIDER=http")
+		}
+		if !strings.Contains(c.AccountPhoneHTTPBodyTemplate, "{{phone}}") || !strings.Contains(c.AccountPhoneHTTPBodyTemplate, "{{code}}") {
+			return fmt.Errorf("config: ACCOUNT_PHONE_HTTP_BODY_TEMPLATE must include {{phone}} and {{code}}")
+		}
+		if (strings.TrimSpace(c.AccountPhoneHTTPAuthHeader) == "") != (strings.TrimSpace(c.AccountPhoneHTTPAuthValue) == "") {
+			return fmt.Errorf("config: ACCOUNT_PHONE_HTTP_AUTH_HEADER and ACCOUNT_PHONE_HTTP_AUTH_VALUE must be set together")
+		}
+		if c.AccountPhoneHTTPTimeout < 0 {
+			return fmt.Errorf("config: ACCOUNT_PHONE_HTTP_TIMEOUT must be non-negative")
+		}
+	default:
+		return fmt.Errorf("config: ACCOUNT_PHONE_DELIVERY_PROVIDER must be disabled or http")
+	}
+	return nil
+}
+
 func (c Config) validateVideoRouteProviderConfig() error {
 	providers := []struct {
 		enabled       bool
@@ -1417,6 +1642,17 @@ func (c Config) validateVideoRouteProviderConfig() error {
 		}
 		if strings.TrimSpace(c.APIMartBaseURL) == "" {
 			return fmt.Errorf("config: FEATURE_IMAGE_MODEL_NANO_BANANA_PRO_ENABLED=true requires APIMART_BASE_URL")
+		}
+	}
+	if c.FeatureImageModelSeedream45Enabled {
+		if !c.PoYoProviderEnabled {
+			return fmt.Errorf("config: FEATURE_IMAGE_MODEL_SEEDREAM_4_5_ENABLED=true requires POYO_PROVIDER_ENABLED=true")
+		}
+		if strings.TrimSpace(c.PoYoAPIKey) == "" {
+			return fmt.Errorf("config: FEATURE_IMAGE_MODEL_SEEDREAM_4_5_ENABLED=true requires POYO_API_KEY")
+		}
+		if strings.TrimSpace(c.PoYoBaseURL) == "" {
+			return fmt.Errorf("config: FEATURE_IMAGE_MODEL_SEEDREAM_4_5_ENABLED=true requires POYO_BASE_URL")
 		}
 	}
 	if c.FeatureImageModelGPTImage2Enabled {

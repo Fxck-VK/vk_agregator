@@ -1,6 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
 const shouldStartWebServer = process.env.PLAYWRIGHT_SKIP_WEBSERVER !== "1";
+const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:5174";
 
 export default defineConfig({
   testDir: "./e2e",
@@ -12,7 +13,7 @@ export default defineConfig({
   reporter: [["list"]],
   use: {
     ...devices["Pixel 5"],
-    baseURL: "http://127.0.0.1:5174",
+    baseURL,
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
     video: "off",

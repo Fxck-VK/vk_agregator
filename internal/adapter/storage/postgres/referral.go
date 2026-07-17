@@ -21,13 +21,13 @@ func NewReferralRepository(db Querier) *ReferralRepository {
 
 var _ domain.ReferralRepository = (*ReferralRepository)(nil)
 
-const referralCodeColumns = `id, user_id, code, created_at, updated_at`
+const referralCodeColumns = `id, user_id, account_id, code, created_at, updated_at`
 
-const referralColumns = `id, referrer_user_id, referred_user_id, referral_code,
+const referralColumns = `id, referrer_user_id, referrer_account_id, referred_user_id, referred_account_id, referral_code,
 	source, status, reward_status, first_seen_at, activated_at, rewarded_at, created_at, updated_at`
 
 func (r *ReferralRepository) GetCodeByUserID(ctx context.Context, userID uuid.UUID) (*domain.ReferralCode, error) {
-	const q = `SELECT ` + referralCodeColumns + ` FROM referral_codes WHERE user_id = $1`
+	const q = `SELECT ` + referralCodeColumns + ` FROM referral_codes WHERE user_id = $1 OR account_id = $1`
 	var code domain.ReferralCode
 	if err := mapError(scanReferralCode(r.db.QueryRow(ctx, q, userID), &code)); err != nil {
 		return nil, err
@@ -49,10 +49,10 @@ func (r *ReferralRepository) CreateCode(ctx context.Context, code *domain.Referr
 		code.ID = uuid.New()
 	}
 	const q = `
-		INSERT INTO referral_codes (id, user_id, code)
-		VALUES ($1, $2, $3)
+		INSERT INTO referral_codes (id, user_id, account_id, code)
+		VALUES ($1, $2, COALESCE($3::uuid, (SELECT account_id FROM users WHERE id = $2)), $4)
 		RETURNING ` + referralCodeColumns
-	return mapError(scanReferralCode(r.db.QueryRow(ctx, q, code.ID, code.UserID, code.Code), code))
+	return mapError(scanReferralCode(r.db.QueryRow(ctx, q, code.ID, code.UserID, nullableUUID(code.AccountID), code.Code), code))
 }
 
 func (r *ReferralRepository) CreateReferral(ctx context.Context, referral *domain.Referral) error {
@@ -70,15 +70,23 @@ func (r *ReferralRepository) CreateReferral(ctx context.Context, referral *domai
 	}
 	const q = `
 		INSERT INTO referrals (
-			id, referrer_user_id, referred_user_id, referral_code, source, status, reward_status
+			id, referrer_user_id, referrer_account_id, referred_user_id, referred_account_id,
+			referral_code, source, status, reward_status
 		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7
+			$1,
+			$2,
+			COALESCE($3::uuid, (SELECT account_id FROM users WHERE id = $2)),
+			$4,
+			COALESCE($5::uuid, (SELECT account_id FROM users WHERE id = $4)),
+			$6, $7, $8, $9
 		)
 		RETURNING ` + referralColumns
 	return mapError(scanReferral(r.db.QueryRow(ctx, q,
 		referral.ID,
 		referral.ReferrerUserID,
+		nullableUUID(referral.ReferrerAccountID),
 		referral.ReferredUserID,
+		nullableUUID(referral.ReferredAccountID),
 		referral.ReferralCode,
 		referral.Source,
 		referral.Status,
@@ -87,7 +95,7 @@ func (r *ReferralRepository) CreateReferral(ctx context.Context, referral *domai
 }
 
 func (r *ReferralRepository) GetReferralByReferredUserID(ctx context.Context, userID uuid.UUID) (*domain.Referral, error) {
-	const q = `SELECT ` + referralColumns + ` FROM referrals WHERE referred_user_id = $1`
+	const q = `SELECT ` + referralColumns + ` FROM referrals WHERE referred_user_id = $1 OR referred_account_id = $1`
 	var referral domain.Referral
 	if err := mapError(scanReferral(r.db.QueryRow(ctx, q, userID), &referral)); err != nil {
 		return nil, err
@@ -96,7 +104,7 @@ func (r *ReferralRepository) GetReferralByReferredUserID(ctx context.Context, us
 }
 
 func (r *ReferralRepository) CountByReferrer(ctx context.Context, referrerUserID uuid.UUID) (int, error) {
-	const q = `SELECT count(*) FROM referrals WHERE referrer_user_id = $1`
+	const q = `SELECT count(*) FROM referrals WHERE referrer_user_id = $1 OR referrer_account_id = $1`
 	var count int
 	if err := r.db.QueryRow(ctx, q, referrerUserID).Scan(&count); err != nil {
 		return 0, mapError(err)
@@ -108,7 +116,7 @@ func (r *ReferralRepository) CountByReferrerStatus(ctx context.Context, referrer
 	const q = `
 		SELECT status, reward_status, count(*)
 		FROM referrals
-		WHERE referrer_user_id = $1
+		WHERE referrer_user_id = $1 OR referrer_account_id = $1
 		GROUP BY status, reward_status`
 	rows, err := r.db.Query(ctx, q, referrerUserID)
 	if err != nil {
@@ -298,14 +306,24 @@ func (r *ReferralRepository) MarkRewardApplied(ctx context.Context, referralID u
 }
 
 func scanReferralCode(row rowScanner, code *domain.ReferralCode) error {
-	return row.Scan(&code.ID, &code.UserID, &code.Code, &code.CreatedAt, &code.UpdatedAt)
+	var accountID *uuid.UUID
+	if err := row.Scan(&code.ID, &code.UserID, &accountID, &code.Code, &code.CreatedAt, &code.UpdatedAt); err != nil {
+		return err
+	}
+	if accountID != nil {
+		code.AccountID = *accountID
+	}
+	return nil
 }
 
 func scanReferral(row rowScanner, referral *domain.Referral) error {
-	return row.Scan(
+	var referrerAccountID, referredAccountID *uuid.UUID
+	if err := row.Scan(
 		&referral.ID,
 		&referral.ReferrerUserID,
+		&referrerAccountID,
 		&referral.ReferredUserID,
+		&referredAccountID,
 		&referral.ReferralCode,
 		&referral.Source,
 		&referral.Status,
@@ -315,5 +333,14 @@ func scanReferral(row rowScanner, referral *domain.Referral) error {
 		&referral.RewardedAt,
 		&referral.CreatedAt,
 		&referral.UpdatedAt,
-	)
+	); err != nil {
+		return err
+	}
+	if referrerAccountID != nil {
+		referral.ReferrerAccountID = *referrerAccountID
+	}
+	if referredAccountID != nil {
+		referral.ReferredAccountID = *referredAccountID
+	}
+	return nil
 }

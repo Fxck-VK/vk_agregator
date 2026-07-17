@@ -31,26 +31,92 @@ type vkPhotoReference struct {
 	Height int
 }
 
-func (h *Handler) prepareVideoReferenceArtifacts(ctx context.Context, userID uuid.UUID, spec videoModeSpec, attachments []vkAttachment) ([]uuid.UUID, string, string, bool) {
+type vkReferenceArtifactMessages struct {
+	MissingRequired   string
+	Unsupported       string
+	UploadUnavailable string
+	DownloadFailed    string
+	StoreFailed       string
+}
+
+type vkReferenceArtifactRequest struct {
+	RequiresReferenceImage bool
+	SupportsReferenceImage bool
+	MaxReferenceImages     int
+	AllowedAspectRatios    []string
+	Messages               vkReferenceArtifactMessages
+}
+
+type vkReferenceArtifactResult struct {
+	ArtifactIDs   []uuid.UUID
+	AspectRatio   string
+	Notice        string
+	OK            bool
+	HasReferences bool
+}
+
+func (h *Handler) prepareVideoReferenceArtifacts(ctx context.Context, userID, accountID uuid.UUID, spec videoModeSpec, attachments []vkAttachment) ([]uuid.UUID, string, string, bool) {
+	result := h.prepareReferenceArtifacts(ctx, userID, accountID, vkReferenceArtifactRequest{
+		RequiresReferenceImage: spec.RequiresStartImage,
+		SupportsReferenceImage: spec.SupportsReferenceImage,
+		MaxReferenceImages:     spec.MaxReferenceImages,
+		AllowedAspectRatios:    spec.AllowedAspectRatios,
+		Messages: vkReferenceArtifactMessages{
+			MissingRequired:   "Для этой модели нужно прикрепить стартовое фото и написать описание одним сообщением.",
+			Unsupported:       "Эта модель не принимает фото. Выберите другой режим видео.",
+			UploadUnavailable: "Загрузка фото для видео сейчас недоступна. Попробуйте позже или выберите текстовую модель.",
+			DownloadFailed:    "Не удалось загрузить фото из VK. Попробуйте отправить изображение заново.",
+			StoreFailed:       "Не удалось сохранить фото для видео. Попробуйте позже.",
+		},
+	}, attachments)
+	return result.ArtifactIDs, result.AspectRatio, result.Notice, result.OK
+}
+
+func (h *Handler) imageReferenceArtifactRequest(selection photoDialogSelection) vkReferenceArtifactRequest {
+	supportsReferenceImage := selection.Model.SupportsReferenceImage
+	maxReferenceImages := selection.Model.MaxReferenceImages
+	if publicModel, ok := h.publicImageModel(selection.Model.ModelID); ok {
+		supportsReferenceImage = publicModel.SupportsReferenceImage
+		maxReferenceImages = publicModel.MaxReferenceImages
+	}
+	return vkReferenceArtifactRequest{
+		SupportsReferenceImage: supportsReferenceImage,
+		MaxReferenceImages:     maxReferenceImages,
+		Messages: vkReferenceArtifactMessages{
+			Unsupported:       "Эта модель не принимает фото. Отправьте текст без фото или выберите другую модель фото.",
+			UploadUnavailable: "Загрузка фото для генерации сейчас недоступна. Попробуйте позже или отправьте текст без фото.",
+			DownloadFailed:    "Не удалось загрузить фото из VK. Попробуйте отправить изображение заново.",
+			StoreFailed:       "Не удалось сохранить фото для генерации. Попробуйте позже.",
+		},
+	}
+}
+
+func (h *Handler) prepareReferenceArtifacts(ctx context.Context, userID, accountID uuid.UUID, req vkReferenceArtifactRequest, attachments []vkAttachment) vkReferenceArtifactResult {
 	photoRefs := vkPhotoReferences(attachments)
+	result := vkReferenceArtifactResult{HasReferences: len(photoRefs) > 0}
 	if len(photoRefs) == 0 {
-		if spec.RequiresStartImage {
-			return nil, "", "Для этой модели нужно прикрепить стартовое фото и написать описание одним сообщением.", false
+		if req.RequiresReferenceImage {
+			result.Notice = req.Messages.MissingRequired
+			return result
 		}
-		return nil, "", "", true
+		result.OK = true
+		return result
 	}
-	if !spec.SupportsReferenceImage {
-		return nil, "", "Эта модель не принимает фото. Выберите другой режим видео.", false
+	if !req.SupportsReferenceImage {
+		result.Notice = req.Messages.Unsupported
+		return result
 	}
-	maxRefs := spec.MaxReferenceImages
+	maxRefs := req.MaxReferenceImages
 	if maxRefs <= 0 {
 		maxRefs = 1
 	}
 	if len(photoRefs) > maxRefs {
-		return nil, "", fmt.Sprintf("Для этой модели можно прикрепить не больше %d фото.", maxRefs), false
+		result.Notice = fmt.Sprintf("Для этой модели можно прикрепить не больше %d фото.", maxRefs)
+		return result
 	}
 	if h.cfg.ReferenceUploadsDisabled || h.deps.Artifacts == nil || h.deps.Objects == nil {
-		return nil, "", "Загрузка фото для видео сейчас недоступна. Попробуйте позже или выберите текстовую модель.", false
+		result.Notice = req.Messages.UploadUnavailable
+		return result
 	}
 
 	downloader := h.deps.Downloader
@@ -64,23 +130,29 @@ func (h *Handler) prepareVideoReferenceArtifacts(ctx context.Context, userID uui
 		data, _, err := downloader.Download(ctx, ref.URL)
 		if err != nil {
 			h.logger.Warn("vk reference photo download failed", "error_type", fmt.Sprintf("%T", err))
-			return nil, "", "Не удалось загрузить фото из VK. Попробуйте отправить изображение заново.", false
+			result.Notice = req.Messages.DownloadFailed
+			return result
 		}
 		mimeType, metadata, status, ok := h.validateVKReferenceImage(data)
 		if !ok {
-			return nil, "", status, false
+			result.Notice = status
+			return result
 		}
 		if aspectRatio == "" && metadata.Width > 0 && metadata.Height > 0 {
-			aspectRatio = closestVKAllowedAspectRatio(metadata.Width, metadata.Height, spec.AllowedAspectRatios)
+			aspectRatio = closestVKAllowedAspectRatio(metadata.Width, metadata.Height, req.AllowedAspectRatios)
 		}
-		artifact, err := saver.SaveBytesArtifactWithMetadata(ctx, userID, nil, domain.ArtifactKindInput, domain.MediaTypeImage, mimeType, data, metadata)
+		artifact, err := saver.SaveBytesArtifactWithMetadataForAccount(ctx, userID, accountID, nil, domain.ArtifactKindInput, domain.MediaTypeImage, mimeType, data, metadata)
 		if err != nil {
 			h.logger.Warn("vk reference photo store failed", "error_type", fmt.Sprintf("%T", err))
-			return nil, "", "Не удалось сохранить фото для видео. Попробуйте позже.", false
+			result.Notice = req.Messages.StoreFailed
+			return result
 		}
 		ids = append(ids, artifact.ID)
 	}
-	return ids, aspectRatio, "", true
+	result.ArtifactIDs = ids
+	result.AspectRatio = aspectRatio
+	result.OK = true
+	return result
 }
 
 func (h *Handler) vkArtifactBucket() string {
@@ -233,5 +305,18 @@ func (h *Handler) sendVideoReferenceNotice(ctx context.Context, idemKey string, 
 	}
 	randomID := vkdelivery.DeterministicRandomID("vk_control_video_reference:" + idemKey)
 	_, err := h.sendControlMessage(ctx, domain.CommandMenuVideo, peerID, randomID, vkdelivery.Message{Text: text})
+	return err
+}
+
+func (h *Handler) sendImageReferenceNotice(ctx context.Context, idemKey string, peerID int64, text string) error {
+	if strings.TrimSpace(text) == "" {
+		text = "Не удалось подготовить фото для генерации. Попробуйте позже."
+	}
+	if h.deps.Control == nil {
+		h.logger.Warn("vk image reference notice skipped because VK_ACCESS_TOKEN is not configured")
+		return nil
+	}
+	randomID := vkdelivery.DeterministicRandomID("vk_control_image_reference:" + idemKey)
+	_, err := h.sendControlMessage(ctx, domain.CommandMenuImage, peerID, randomID, vkdelivery.Message{Text: text})
 	return err
 }

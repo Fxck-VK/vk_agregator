@@ -14,11 +14,13 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/mail"
 	"net/url"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/attribute"
@@ -28,9 +30,12 @@ import (
 	"vk-ai-aggregator/internal/platform/logging"
 	"vk-ai-aggregator/internal/platform/metrics"
 	"vk-ai-aggregator/internal/platform/tracing"
+	"vk-ai-aggregator/internal/service/accountlink"
+	"vk-ai-aggregator/internal/service/accountservice"
 	"vk-ai-aggregator/internal/service/antispam"
 	"vk-ai-aggregator/internal/service/billingservice"
 	"vk-ai-aggregator/internal/service/commandrouter"
+	"vk-ai-aggregator/internal/service/identityresolver"
 	"vk-ai-aggregator/internal/service/joborchestrator"
 	"vk-ai-aggregator/internal/service/modelcatalog"
 	"vk-ai-aggregator/internal/service/paymentservice"
@@ -131,12 +136,29 @@ type ReferralService interface {
 	Activate(ctx context.Context, input referralservice.ActivateInput) (referralservice.ActivateResult, error)
 }
 
+// AccountService is the safe account boundary used by VK Bot UI actions.
+type AccountService interface {
+	Profile(ctx context.Context, accountID uuid.UUID) (accountservice.AccountProfile, error)
+	UnlinkIdentity(ctx context.Context, actorAccountID, accountID, identityID uuid.UUID) error
+}
+
+// AccountLinkService verifies email/phone ownership before linking identities.
+type AccountLinkService interface {
+	RequestEmailCode(ctx context.Context, accountID uuid.UUID, email string) (accountlink.RequestResult, error)
+	VerifyEmailCode(ctx context.Context, accountID uuid.UUID, email, code string) (accountservice.AccountIdentitySafe, error)
+	RequestPhoneOTP(ctx context.Context, accountID uuid.UUID, phone string) (accountlink.RequestResult, error)
+	VerifyPhoneOTP(ctx context.Context, accountID uuid.UUID, phone, code string) (accountservice.AccountIdentitySafe, error)
+}
+
 // Deps are the collaborators the handler needs. All are interfaces or services
 // so the handler stays storage- and provider-agnostic.
 type Deps struct {
 	Idempotency    domain.IdempotencyRepository
 	Inbound        domain.InboundEventRepository
 	Users          domain.UserRepository
+	Identity       domain.IdentityResolver
+	Account        AccountService
+	AccountLink    AccountLinkService
 	Jobs           domain.JobRepository
 	Commands       domain.CommandRepository
 	Billing        *billingservice.Service
@@ -188,6 +210,9 @@ func NewHandler(cfg Config, deps Deps) *Handler {
 	cfg.UnroutedTextMode = normalizeUnroutedTextMode(cfg.UnroutedTextMode)
 	cfg.LocalUIStateTTL = normalizeLocalUIStateTTL(cfg.LocalUIStateTTL)
 	cfg.LocalUIStateMaxEntries = normalizeLocalUIStateMaxEntries(cfg.LocalUIStateMaxEntries)
+	if deps.Identity == nil {
+		deps.Identity = identityresolver.New(deps.Users, nil, deps.Billing)
+	}
 	return &Handler{
 		cfg:         cfg,
 		deps:        deps,
@@ -255,16 +280,27 @@ type cachedDialogMode struct {
 type dialogMode string
 
 const (
-	dialogModeGPT               dialogMode = "gpt"
-	dialogModePhotoText         dialogMode = "photo_text"
-	dialogModePhotoNanoBanana2  dialogMode = "photo_nano_banana_2"
-	dialogModePhotoGPTImage2    dialogMode = "photo_gpt_image_2"
-	dialogModePhotoSelectPrefix            = "photo_select:"
-	dialogModePhotoPromptPrefix            = "photo_prompt:"
-	dialogModeVideoRoutePrefix             = "video_route:"
+	dialogModeGPT                          dialogMode = "gpt"
+	dialogModeAccountLink                  dialogMode = "account_link"
+	dialogModeAccountLinkEmail             dialogMode = "account_link_email"
+	dialogModeAccountLinkPhone             dialogMode = "account_link_phone"
+	dialogModePhotoText                    dialogMode = "photo_text"
+	dialogModePhotoNanoBanana2             dialogMode = "photo_nano_banana_2"
+	dialogModePhotoGPTImage2               dialogMode = "photo_gpt_image_2"
+	dialogModePhotoSelectPrefix                       = "photo_select:"
+	dialogModePhotoPromptPrefix                       = "photo_prompt:"
+	dialogModeVideoRoutePrefix                        = "video_route:"
+	dialogModeAccountLinkConfirmPrefix                = "account_link_confirm:"
+	dialogModeAccountLinkEmailVerifyPrefix            = "account_link_email_verify:"
+	dialogModeAccountLinkPhoneVerifyPrefix            = "account_link_phone_verify:"
 )
 
-const topUpActionNewPayment = "new_payment"
+const (
+	topUpActionNewPayment = "new_payment"
+
+	accountActionLinkEmail = "link_email"
+	accountActionLinkPhone = "link_phone"
+)
 
 type jobParams struct {
 	Prompt                 string      `json:"prompt"`
@@ -781,12 +817,15 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 	if err != nil {
 		return fmt.Errorf("ensure user: %w", err)
 	}
+	accountID := user.EffectiveAccountID()
 
 	// Command: classify the message into a normalized command.
 	parsed := h.deps.Router.Parse(text)
 	controlFromPayload := false
 	topUpProductCode := ""
 	topUpAction := ""
+	accountAction := ""
+	accountIdentityID := ""
 	videoDurationSec := 0
 	videoRouteAlias := ""
 	photoModelID := ""
@@ -797,6 +836,8 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 		parsed = commandrouter.Result{Type: domain.CommandType(control.Command)}
 		topUpProductCode = strings.TrimSpace(control.ProductCode)
 		topUpAction = strings.TrimSpace(control.Action)
+		accountAction = strings.TrimSpace(control.Action)
+		accountIdentityID = strings.TrimSpace(control.IdentityID)
 		videoDurationSec = control.DurationSec
 		videoRouteAlias = strings.TrimSpace(control.VideoRouteAlias)
 		photoModelID = strings.TrimSpace(control.ModelID)
@@ -804,12 +845,16 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 		controlFromPayload = true
 	} else if controlOnly {
 		parsed = commandrouter.Result{Type: domain.CommandUnknown}
+	} else if parsed.Type == domain.CommandMenuVideoRouteSelect {
+		videoRouteAlias = strings.TrimSpace(parsed.Arg)
 	}
 	activateReferral := shouldActivateReferralOnVKCommand(parsed.Type)
 	if isMenuCommand(parsed.Type) && (!h.menuCommandEnabled(parsed.Type) || (controlFromPayload && !h.controlPayloadEnabled(control))) {
 		parsed = commandrouter.Result{Type: domain.CommandShowMenu}
 		topUpProductCode = ""
 		topUpAction = ""
+		accountAction = ""
+		accountIdentityID = ""
 		videoDurationSec = 0
 		videoRouteAlias = ""
 		photoModelID = ""
@@ -826,6 +871,13 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 		if err := h.activateReferral(ctx, user.ID); err != nil {
 			return fmt.Errorf("activate referral: %w", err)
 		}
+	}
+
+	if h.accountLinkDialogActive(ctx, peerID) && !controlFromPayload && !controlOnly && strings.TrimSpace(text) != "" {
+		if err := h.handleAccountLinkText(ctx, inbound.ID, idemKey, peerID, user, text); err != nil {
+			return fmt.Errorf("link account identity: %w", err)
+		}
+		return nil
 	}
 
 	if h.shouldRoutePhotoText(ctx, peerID, parsed, controlFromPayload, controlOnly) {
@@ -889,8 +941,10 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 	}
 	metrics.ObserveProductEvent("vk_bot", "command", "parsed", productCommandOperation(parsed), productCommandModality(parsed), productCommandResult(parsed, controlOnly, controlFromPayload))
 
-	photoSelection, photoTextJob := h.photoSelectionForActiveDialog(ctx, peerID)
-	photoTextJob = parsed.Type == domain.CommandImageGenerate && photoTextJob
+	photoSelection, photoDialogActive := h.photoSelectionForActiveDialog(ctx, peerID)
+	photoTextJob := parsed.Type == domain.CommandImageGenerate && photoDialogActive
+	photoReferenceOnlyNotice := !controlFromPayload && !controlOnly && photoDialogActive && strings.TrimSpace(text) == "" && len(vkPhotoReferences(attachments)) > 0
+	var imageReferenceIDs []uuid.UUID
 	videoBlockedMessage := ""
 	var videoReferenceIDs []uuid.UUID
 	videoAspectRatio := ""
@@ -915,9 +969,37 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 			return fmt.Errorf("save command: %w", err)
 		}
 	}
+	if photoReferenceOnlyNotice {
+		if err := h.sendImageReferenceNotice(ctx, idemKey, peerID, "Прикрепите фото вместе с описанием, что нужно сгенерировать."); err != nil {
+			return fmt.Errorf("send image reference notice: %w", err)
+		}
+		if err := h.deps.Inbound.SetStatus(ctx, inbound.ID, domain.InboundProcessed); err != nil {
+			return fmt.Errorf("mark inbound processed: %w", err)
+		}
+		if err := h.deps.Idempotency.MarkCompleted(ctx, idemKey, cmd.ID); err != nil {
+			return fmt.Errorf("mark idempotency completed: %w", err)
+		}
+		return nil
+	}
+	if photoTextJob && len(vkPhotoReferences(attachments)) > 0 {
+		result := h.prepareReferenceArtifacts(ctx, user.ID, accountID, h.imageReferenceArtifactRequest(photoSelection), attachments)
+		if !result.OK {
+			if err := h.sendImageReferenceNotice(ctx, idemKey, peerID, result.Notice); err != nil {
+				return fmt.Errorf("send image reference notice: %w", err)
+			}
+			if err := h.deps.Inbound.SetStatus(ctx, inbound.ID, domain.InboundProcessed); err != nil {
+				return fmt.Errorf("mark inbound processed: %w", err)
+			}
+			if err := h.deps.Idempotency.MarkCompleted(ctx, idemKey, cmd.ID); err != nil {
+				return fmt.Errorf("mark idempotency completed: %w", err)
+			}
+			return nil
+		}
+		imageReferenceIDs = result.ArtifactIDs
+	}
 	if videoTextJob {
 		var ok bool
-		videoReferenceIDs, videoAspectRatio, videoBlockedMessage, ok = h.prepareVideoReferenceArtifacts(ctx, user.ID, videoSpec, attachments)
+		videoReferenceIDs, videoAspectRatio, videoBlockedMessage, ok = h.prepareVideoReferenceArtifacts(ctx, user.ID, accountID, videoSpec, attachments)
 		if !ok {
 			if err := h.sendVideoReferenceNotice(ctx, idemKey, peerID, videoBlockedMessage); err != nil {
 				return fmt.Errorf("send video reference notice: %w", err)
@@ -943,6 +1025,22 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 		topUpForceNew := topUpAction == topUpActionNewPayment
 		if err := h.createAndSendTopUpPayment(ctx, cb.GroupID, eventID, idemKey, peerID, user, topUpProductCode, topUpForceNew); err != nil {
 			return fmt.Errorf("create top-up payment: %w", err)
+		}
+	case parsed.Type == domain.CommandAccountLinkIdentity && accountAction == accountActionLinkEmail:
+		if err := h.handleAccountLinkStart(ctx, idemKey, peerID, domain.IdentityProviderEmail); err != nil {
+			return fmt.Errorf("start email account identity link: %w", err)
+		}
+	case parsed.Type == domain.CommandAccountLinkIdentity && accountAction == accountActionLinkPhone:
+		if err := h.handleAccountLinkStart(ctx, idemKey, peerID, domain.IdentityProviderPhone); err != nil {
+			return fmt.Errorf("start phone account identity link: %w", err)
+		}
+	case parsed.Type == domain.CommandAccountUnlinkIdentity:
+		if err := h.handleAccountUnlinkIdentity(ctx, idemKey, peerID, user, accountIdentityID); err != nil {
+			return fmt.Errorf("unlink account identity: %w", err)
+		}
+	case parsed.Type == domain.CommandAccountConfirmLinkIdentity:
+		if err := h.handleAccountLinkConfirm(ctx, idemKey, peerID, user); err != nil {
+			return fmt.Errorf("confirm account identity link: %w", err)
 		}
 	case parsed.Type == domain.CommandTopUp && topUpAction == topUpActionNewPayment:
 		if err := h.sendTopUpCatalog(ctx, idemKey, peerID, user, true, controlFromPayload); err != nil {
@@ -1018,7 +1116,9 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 		if err := h.sendControlResponse(ctx, parsed.Type, idemKey, cb.GroupID, peerID, user, allowEdit); err != nil {
 			return fmt.Errorf("send control response: %w", err)
 		}
-		if parsed.Type == domain.CommandMenuText {
+		if parsed.Type == domain.CommandAccountLinkIdentity {
+			h.setDialogMode(ctx, peerID, dialogModeAccountLink)
+		} else if parsed.Type == domain.CommandMenuText {
 			h.setDialogMode(ctx, peerID, dialogModeGPT)
 		} else if parsed.Type == domain.CommandMenuImage {
 			h.clearDialogMode(ctx, peerID)
@@ -1060,6 +1160,7 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 			jp.Size = imageSizeForSelection(photoSelection)
 			jp.Resolution = photoSelection.Quality
 			jp.ImageQuality = photoSelection.Quality
+			jp.ReferenceArtifactIDs = imageReferenceIDs
 		}
 		if videoTextJob {
 			jp.ModelName = videoSpec.ModelName
@@ -1079,6 +1180,7 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 		metrics.ObserveProductPromptLength("vk_bot", string(parsed.Operation), string(parsed.Modality), parsed.Prompt)
 		job, err := h.deps.Orchestrator.CreateJob(ctx, joborchestrator.CreateJobInput{
 			UserID:              user.ID,
+			AccountID:           accountID,
 			Source:              "vk_bot",
 			VKPeerID:            peerID,
 			CommandID:           cmd.ID,
@@ -1087,7 +1189,7 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 			IdempotencyKey:      "vk_job:" + strconv.FormatInt(cb.GroupID, 10) + ":" + eventID,
 			CorrelationID:       idemKey,
 			Params:              params,
-			InputArtifactIDs:    videoReferenceIDs,
+			InputArtifactIDs:    jobInputArtifactIDs(photoTextJob, imageReferenceIDs, videoReferenceIDs),
 			CostEstimateCredits: costEstimateCredits,
 			PricingSnapshot:     pricingSnapshot,
 		})
@@ -1293,6 +1395,7 @@ func (h *Handler) videoPromptInstructionText(spec videoModeSpec) string {
 }
 
 func (h *Handler) createAndSendTopUpPayment(ctx context.Context, groupID int64, eventID, idemKey string, peerID int64, user *domain.User, productCode string, forceNew bool) error {
+	accountID := user.EffectiveAccountID()
 	email := strings.TrimSpace(h.cfg.TopUpReceiptEmail)
 	phone := strings.TrimSpace(h.cfg.TopUpReceiptPhone)
 	if email == "" && phone == "" {
@@ -1310,7 +1413,7 @@ func (h *Handler) createAndSendTopUpPayment(ctx context.Context, groupID int64, 
 	}
 	returnURL := h.topUpReturnURL(groupID)
 	if !forceNew {
-		if active, ok, err := h.activeTopUpIntent(ctx, user.ID, returnURL); err != nil {
+		if active, ok, err := h.activeTopUpIntent(ctx, accountID, returnURL); err != nil {
 			return fmt.Errorf("load active top-up intent: %w", err)
 		} else if ok {
 			activeProductCode := paymentIntentProductCode(active)
@@ -1321,6 +1424,7 @@ func (h *Handler) createAndSendTopUpPayment(ctx context.Context, groupID int64, 
 	}
 	result, err := h.deps.Payment.CreateIntent(ctx, paymentservice.CreateIntentInput{
 		UserID:         user.ID,
+		AccountID:      accountID,
 		ProductCode:    productCode,
 		ReceiptEmail:   email,
 		ReceiptPhone:   phone,
@@ -1354,6 +1458,7 @@ func (h *Handler) createAndSendTopUpPayment(ctx context.Context, groupID int64, 
 	if h.cfg.TopUpStatusEditEnabled && messageID > 0 {
 		if _, err := h.deps.Payment.AttachVKBotPaymentMessage(ctx, paymentservice.AttachVKBotPaymentMessageInput{
 			UserID:    user.ID,
+			AccountID: accountID,
 			IntentID:  result.Intent.ID,
 			VKPeerID:  peerID,
 			MessageID: messageID,
@@ -1453,6 +1558,13 @@ func (h *Handler) deliverPhotoControl(ctx context.Context, command domain.Comman
 
 func imageSizeForSelection(selection photoDialogSelection) string {
 	return "1:1"
+}
+
+func jobInputArtifactIDs(photoTextJob bool, imageReferenceIDs, videoReferenceIDs []uuid.UUID) []uuid.UUID {
+	if photoTextJob {
+		return imageReferenceIDs
+	}
+	return videoReferenceIDs
 }
 
 func (h *Handler) publicImageModel(modelID string) (productcatalog.ImageModel, bool) {
@@ -1708,7 +1820,7 @@ func (h *Handler) currentBalance(ctx context.Context, user *domain.User) (int64,
 	if user == nil {
 		return 0, nil
 	}
-	acc, err := h.deps.Billing.EnsureAccount(ctx, user.ID)
+	acc, err := h.deps.Billing.EnsureAccountForOwner(ctx, user.ID, user.EffectiveAccountID())
 	if err != nil {
 		return 0, fmt.Errorf("ensure billing account: %w", err)
 	}
@@ -1867,6 +1979,16 @@ func (h *Handler) finishAntiSpamBlockedEvent(ctx context.Context, inboundID uuid
 	return nil
 }
 
+func (h *Handler) finishInboundWithoutCommand(ctx context.Context, inboundID uuid.UUID, idemKey string) error {
+	if err := h.deps.Inbound.SetStatus(ctx, inboundID, domain.InboundProcessed); err != nil {
+		return fmt.Errorf("mark inbound processed: %w", err)
+	}
+	if err := h.deps.Idempotency.MarkCompleted(ctx, idemKey, inboundID); err != nil {
+		return fmt.Errorf("mark idempotency completed: %w", err)
+	}
+	return nil
+}
+
 func antiSpamBlocksOnDependencyError(parsed commandrouter.Result) bool {
 	return parsed.CreatesJob()
 }
@@ -1887,6 +2009,326 @@ func antiSpamActionClass(parsed commandrouter.Result) string {
 func (h *Handler) gptDialogActive(ctx context.Context, peerID int64) bool {
 	mode, ok := h.getDialogMode(ctx, peerID)
 	return ok && mode == dialogModeGPT
+}
+
+func (h *Handler) accountLinkDialogActive(ctx context.Context, peerID int64) bool {
+	mode, ok := h.getDialogMode(ctx, peerID)
+	if !ok {
+		return false
+	}
+	raw := string(mode)
+	return mode == dialogModeAccountLink ||
+		mode == dialogModeAccountLinkEmail ||
+		mode == dialogModeAccountLinkPhone ||
+		strings.HasPrefix(raw, dialogModeAccountLinkConfirmPrefix) ||
+		strings.HasPrefix(raw, dialogModeAccountLinkEmailVerifyPrefix) ||
+		strings.HasPrefix(raw, dialogModeAccountLinkPhoneVerifyPrefix)
+}
+
+func (h *Handler) handleAccountLinkText(ctx context.Context, inboundID uuid.UUID, idemKey string, peerID int64, user *domain.User, raw string) error {
+	mode, ok := h.getDialogMode(ctx, peerID)
+	if !ok {
+		return h.finishInboundWithoutCommand(ctx, inboundID, idemKey)
+	}
+
+	if provider, externalID, pending := parseAccountLinkVerifyMode(mode); pending {
+		if err := h.verifyAccountLinkCode(ctx, idemKey, peerID, user, provider, externalID, raw); err != nil {
+			return err
+		}
+		return h.finishInboundWithoutCommand(ctx, inboundID, idemKey)
+	}
+
+	provider, externalID, err := classifyAccountLinkIdentity(raw)
+	if err == nil {
+		switch mode {
+		case dialogModeAccountLinkEmail:
+			if provider != domain.IdentityProviderEmail {
+				err = domain.ErrInvalidIdentity
+			}
+		case dialogModeAccountLinkPhone:
+			if provider != domain.IdentityProviderPhone {
+				err = domain.ErrInvalidIdentity
+			}
+		}
+	}
+	if err != nil {
+		if sendErr := h.sendAccountLinkIdentityNotice(ctx, idemKey, peerID, accountLinkIdentityErrorText(err), backKeyboard()); sendErr != nil {
+			return sendErr
+		}
+		return h.finishInboundWithoutCommand(ctx, inboundID, idemKey)
+	}
+	if err := h.requestAccountLinkCode(ctx, idemKey, peerID, user, provider, externalID); err != nil {
+		return err
+	}
+	return h.finishInboundWithoutCommand(ctx, inboundID, idemKey)
+}
+
+func (h *Handler) handleAccountLinkStart(ctx context.Context, idemKey string, peerID int64, provider domain.IdentityProvider) error {
+	switch domain.NormalizeIdentityProvider(provider) {
+	case domain.IdentityProviderEmail:
+		h.setDialogMode(ctx, peerID, dialogModeAccountLinkEmail)
+		return h.sendAccountLinkIdentityNotice(ctx, idemKey, peerID, accountLinkStartText(domain.IdentityProviderEmail), backKeyboard())
+	case domain.IdentityProviderPhone:
+		h.setDialogMode(ctx, peerID, dialogModeAccountLinkPhone)
+		return h.sendAccountLinkIdentityNotice(ctx, idemKey, peerID, accountLinkStartText(domain.IdentityProviderPhone), backKeyboard())
+	default:
+		return h.sendAccountLinkIdentityNotice(ctx, idemKey, peerID, accountLinkIdentityErrorText(domain.ErrInvalidIdentity), backKeyboard())
+	}
+}
+
+func (h *Handler) requestAccountLinkCode(ctx context.Context, idemKey string, peerID int64, user *domain.User, provider domain.IdentityProvider, externalID string) error {
+	if h.deps.AccountLink == nil {
+		return h.sendAccountLinkIdentityNotice(ctx, idemKey, peerID, accountLinkIdentityErrorText(accountlink.ErrMissingDependency), backKeyboard())
+	}
+	accountID := user.EffectiveAccountID()
+	if accountID == uuid.Nil {
+		return h.sendAccountLinkIdentityNotice(ctx, idemKey, peerID, accountLinkIdentityErrorText(domain.ErrNotFound), backKeyboard())
+	}
+
+	var result accountlink.RequestResult
+	var err error
+	switch provider {
+	case domain.IdentityProviderEmail:
+		result, err = h.deps.AccountLink.RequestEmailCode(ctx, accountID, externalID)
+	case domain.IdentityProviderPhone:
+		result, err = h.deps.AccountLink.RequestPhoneOTP(ctx, accountID, externalID)
+	default:
+		err = domain.ErrInvalidIdentity
+	}
+	if err != nil {
+		return h.sendAccountLinkIdentityNotice(ctx, idemKey, peerID, accountLinkIdentityErrorText(err), backKeyboard())
+	}
+
+	switch provider {
+	case domain.IdentityProviderEmail:
+		h.setDialogMode(ctx, peerID, accountLinkEmailVerifyMode(externalID))
+	case domain.IdentityProviderPhone:
+		h.setDialogMode(ctx, peerID, accountLinkPhoneVerifyMode(externalID))
+	}
+	return h.sendAccountLinkIdentityNotice(ctx, idemKey, peerID, accountLinkCodeSentText(provider, result.ExpiresInSeconds), backKeyboard())
+}
+
+func (h *Handler) verifyAccountLinkCode(ctx context.Context, idemKey string, peerID int64, user *domain.User, provider domain.IdentityProvider, externalID, code string) error {
+	if h.deps.AccountLink == nil {
+		return h.sendAccountLinkIdentityNotice(ctx, idemKey, peerID, accountLinkIdentityErrorText(accountlink.ErrMissingDependency), backKeyboard())
+	}
+	accountID := user.EffectiveAccountID()
+	if accountID == uuid.Nil {
+		h.clearDialogMode(ctx, peerID)
+		return h.sendAccountLinkIdentityNotice(ctx, idemKey, peerID, accountLinkIdentityErrorText(domain.ErrNotFound), backKeyboard())
+	}
+
+	var err error
+	switch provider {
+	case domain.IdentityProviderEmail:
+		_, err = h.deps.AccountLink.VerifyEmailCode(ctx, accountID, externalID, code)
+	case domain.IdentityProviderPhone:
+		_, err = h.deps.AccountLink.VerifyPhoneOTP(ctx, accountID, externalID, code)
+	default:
+		err = domain.ErrInvalidIdentity
+	}
+	if err != nil {
+		if errors.Is(err, accountlink.ErrExpiredCode) {
+			h.clearDialogMode(ctx, peerID)
+		}
+		return h.sendAccountLinkIdentityNotice(ctx, idemKey, peerID, accountLinkIdentityErrorText(err), backKeyboard())
+	}
+	h.clearDialogMode(ctx, peerID)
+	return h.sendAccountLinkIdentityNotice(ctx, idemKey, peerID, accountLinkIdentitySuccessText(provider), backKeyboard())
+}
+
+func (h *Handler) handleAccountLinkConfirm(ctx context.Context, idemKey string, peerID int64, _ *domain.User) error {
+	h.clearDialogMode(ctx, peerID)
+	return h.sendAccountLinkIdentityNotice(ctx, idemKey, peerID, "Подтверждение устарело\n\nОткройте «Мой аккаунт» и начните привязку заново", backKeyboard())
+}
+
+func (h *Handler) handleAccountUnlinkIdentity(ctx context.Context, idemKey string, peerID int64, user *domain.User, identityIDRaw string) error {
+	if h.deps.Account == nil {
+		return h.sendAccountLinkIdentityNotice(ctx, idemKey, peerID, accountLinkIdentityErrorText(accountlink.ErrMissingDependency), backKeyboard())
+	}
+	accountID := user.EffectiveAccountID()
+	if accountID == uuid.Nil {
+		return h.sendAccountLinkIdentityNotice(ctx, idemKey, peerID, accountLinkIdentityErrorText(domain.ErrNotFound), backKeyboard())
+	}
+	identityID, err := uuid.Parse(strings.TrimSpace(identityIDRaw))
+	if err != nil {
+		return h.sendAccountLinkIdentityNotice(ctx, idemKey, peerID, accountLinkIdentityErrorText(domain.ErrInvalidIdentity), backKeyboard())
+	}
+	profile, err := h.deps.Account.Profile(ctx, accountID)
+	if err != nil {
+		return h.sendAccountLinkIdentityNotice(ctx, idemKey, peerID, accountLinkIdentityErrorText(err), backKeyboard())
+	}
+	var target accountservice.AccountIdentitySafe
+	for _, identity := range profile.IdentityRefs {
+		if identity.ID == identityID {
+			target = identity
+			break
+		}
+	}
+	if target.ID == uuid.Nil {
+		return h.sendAccountLinkIdentityNotice(ctx, idemKey, peerID, accountLinkIdentityErrorText(domain.ErrNotFound), backKeyboard())
+	}
+	provider := domain.NormalizeIdentityProvider(target.Provider)
+	if provider != domain.IdentityProviderEmail && provider != domain.IdentityProviderPhone {
+		return h.sendAccountLinkIdentityNotice(ctx, idemKey, peerID, "Этот способ входа нельзя отвязать из VK-бота", backKeyboard())
+	}
+	if len(profile.IdentityRefs) <= 1 {
+		return h.sendAccountLinkIdentityNotice(ctx, idemKey, peerID, "Нельзя отвязать последний способ входа", backKeyboard())
+	}
+	if err := h.deps.Account.UnlinkIdentity(ctx, accountID, accountID, identityID); err != nil {
+		return h.sendAccountLinkIdentityNotice(ctx, idemKey, peerID, accountLinkIdentityErrorText(err), backKeyboard())
+	}
+	return h.sendAccountLinkIdentityNotice(ctx, idemKey, peerID, accountLinkIdentityUnlinkSuccessText(provider), backKeyboard())
+}
+
+func classifyAccountLinkIdentity(raw string) (domain.IdentityProvider, string, error) {
+	value := strings.TrimSpace(raw)
+	if value == "" {
+		return "", "", domain.ErrInvalidIdentity
+	}
+	if strings.Contains(value, "@") {
+		address, err := mail.ParseAddress(value)
+		if err != nil || strings.TrimSpace(address.Address) == "" || strings.Contains(address.Address, " ") {
+			return "", "", domain.ErrInvalidIdentity
+		}
+		return domain.IdentityProviderEmail, address.Address, nil
+	}
+	digitCount := 0
+	for i, r := range value {
+		switch {
+		case unicode.IsDigit(r):
+			digitCount++
+		case r == '+' && i == 0:
+		case r == ' ' || r == '-' || r == '(' || r == ')':
+		default:
+			return "", "", domain.ErrInvalidIdentity
+		}
+	}
+	if digitCount < 10 || digitCount > 15 {
+		return "", "", domain.ErrInvalidIdentity
+	}
+	return domain.IdentityProviderPhone, value, nil
+}
+
+func accountLinkEmailVerifyMode(email string) dialogMode {
+	return dialogMode(dialogModeAccountLinkEmailVerifyPrefix + url.QueryEscape(strings.TrimSpace(email)))
+}
+
+func accountLinkPhoneVerifyMode(phone string) dialogMode {
+	return dialogMode(dialogModeAccountLinkPhoneVerifyPrefix + url.QueryEscape(strings.TrimSpace(phone)))
+}
+
+func parseAccountLinkVerifyMode(mode dialogMode) (domain.IdentityProvider, string, bool) {
+	raw := string(mode)
+	switch {
+	case strings.HasPrefix(raw, dialogModeAccountLinkEmailVerifyPrefix):
+		externalRaw := strings.TrimPrefix(raw, dialogModeAccountLinkEmailVerifyPrefix)
+		externalID, err := url.QueryUnescape(externalRaw)
+		if err != nil || strings.TrimSpace(externalID) == "" {
+			return "", "", false
+		}
+		return domain.IdentityProviderEmail, externalID, true
+	case strings.HasPrefix(raw, dialogModeAccountLinkPhoneVerifyPrefix):
+		externalRaw := strings.TrimPrefix(raw, dialogModeAccountLinkPhoneVerifyPrefix)
+		externalID, err := url.QueryUnescape(externalRaw)
+		if err != nil || strings.TrimSpace(externalID) == "" {
+			return "", "", false
+		}
+		return domain.IdentityProviderPhone, externalID, true
+	default:
+		return "", "", false
+	}
+}
+
+func accountLinkStartText(provider domain.IdentityProvider) string {
+	switch provider {
+	case domain.IdentityProviderEmail:
+		return "🔐 Привязать email\n\nПришлите email обычным сообщением\n\nМы отправим код подтверждения"
+	case domain.IdentityProviderPhone:
+		return "🔐 Привязать телефон\n\nПришлите телефон обычным сообщением\n\nМы отправим код подтверждения"
+	default:
+		return accountLinkIdentityErrorText(domain.ErrInvalidIdentity)
+	}
+}
+
+func accountLinkCodeSentText(provider domain.IdentityProvider, expiresInSeconds int64) string {
+	label := "код"
+	switch provider {
+	case domain.IdentityProviderEmail:
+		label = "код на email"
+	case domain.IdentityProviderPhone:
+		label = "код на телефон"
+	}
+	if expiresInSeconds <= 0 {
+		return fmt.Sprintf("Мы отправили %s\n\nПришлите код обычным сообщением", label)
+	}
+	minutes := expiresInSeconds / 60
+	if minutes <= 0 {
+		return fmt.Sprintf("Мы отправили %s\n\nПришлите код обычным сообщением", label)
+	}
+	return fmt.Sprintf("Мы отправили %s\n\nПришлите код обычным сообщением\n\nКод действует %d мин", label, minutes)
+}
+
+func accountLinkIdentitySuccessText(provider domain.IdentityProvider) string {
+	switch provider {
+	case domain.IdentityProviderEmail:
+		return "✅ Email привязан к вашему аккаунту\n\nБаланс, платежи, история и артефакты остались на месте"
+	case domain.IdentityProviderPhone:
+		return "✅ Телефон привязан к вашему аккаунту\n\nБаланс, платежи, история и артефакты остались на месте"
+	default:
+		return "✅ Способ входа привязан к вашему аккаунту\n\nБаланс, платежи, история и артефакты остались на месте"
+	}
+}
+
+func accountLinkIdentityUnlinkSuccessText(provider domain.IdentityProvider) string {
+	switch provider {
+	case domain.IdentityProviderEmail:
+		return "✅ Email отвязан от аккаунта"
+	case domain.IdentityProviderPhone:
+		return "✅ Телефон отвязан от аккаунта"
+	default:
+		return "✅ Способ входа отвязан от аккаунта"
+	}
+}
+
+func accountLinkIdentityErrorText(err error) string {
+	switch {
+	case errors.Is(err, domain.ErrConflict):
+		return "Этот email или телефон уже привязан к другому аккаунту\n\nПришлите другой email или телефон"
+	case errors.Is(err, domain.ErrInvalidIdentity):
+		return "Не удалось распознать email или телефон\n\nПришлите корректный email или телефон обычным сообщением"
+	case errors.Is(err, accountlink.ErrRateLimited):
+		return "Слишком много попыток\n\nПопробуйте позже"
+	case errors.Is(err, accountlink.ErrInvalidCode):
+		return "Неверный код\n\nПроверьте код и пришлите его еще раз"
+	case errors.Is(err, accountlink.ErrExpiredCode):
+		return "Код устарел\n\nНачните привязку заново"
+	case errors.Is(err, accountlink.ErrDeliveryUnavailable), errors.Is(err, accountlink.ErrSMSDeliveryUnavailable), errors.Is(err, accountlink.ErrMissingDependency):
+		return "Привязка временно недоступна\n\nПопробуйте позже"
+	case errors.Is(err, domain.ErrAccountIdentityOwnershipRequired), errors.Is(err, domain.ErrNotFound):
+		return "Не удалось найти этот способ входа\n\nОткройте «Мой аккаунт» и попробуйте еще раз"
+	default:
+		return "Привязка временно недоступна\n\nПопробуйте позже"
+	}
+}
+
+func (h *Handler) sendAccountLinkIdentityNotice(ctx context.Context, idemKey string, peerID int64, text string, keyboard *vkdelivery.Keyboard) error {
+	if h.deps.Control == nil {
+		h.logger.Warn("vk account link response skipped because VK_ACCESS_TOKEN is not configured")
+		return nil
+	}
+	msg := vkdelivery.Message{
+		Text:     text,
+		Keyboard: keyboard,
+	}
+	h.filterMenuKeyboard(msg.Keyboard)
+	h.applyMenuButtonMode(msg.Keyboard)
+	randomID := vkdelivery.DeterministicRandomID("vk_account_link:" + idemKey)
+	_, err := h.deps.Control.SendMessage(ctx, peerID, randomID, msg)
+	if err != nil {
+		return fmt.Errorf("send account link response: %w", err)
+	}
+	return nil
 }
 
 func (h *Handler) photoDialogActive(ctx context.Context, peerID int64) bool {
@@ -2124,30 +2566,17 @@ func localUIStateExpired(expiresAt, now time.Time) bool {
 }
 
 func (h *Handler) ensureUser(ctx context.Context, vkUserID int64) (*domain.User, error) {
-	user, err := h.deps.Users.GetByVKUserID(ctx, vkUserID)
-	if err == nil {
-		return user, nil
-	}
-	if !errors.Is(err, domain.ErrNotFound) {
+	resolution, err := h.deps.Identity.ResolveOrCreate(ctx, domain.IdentityProviderVK, strconv.FormatInt(vkUserID, 10))
+	if err != nil {
 		return nil, err
 	}
-	user = &domain.User{
-		VKUserID: vkUserID,
-		Role:     domain.RoleUser,
-		Status:   domain.StatusActive,
-		Locale:   "ru",
-		Timezone: "Europe/Moscow",
+	if resolution.User == nil {
+		return nil, errors.New("identity resolver returned no legacy user")
 	}
-	if err := h.deps.Users.Create(ctx, user); err != nil {
-		if errors.Is(err, domain.ErrConflict) {
-			return h.deps.Users.GetByVKUserID(ctx, vkUserID)
-		}
-		return nil, err
+	if resolution.AccountID == uuid.Nil || resolution.User.EffectiveAccountID() == uuid.Nil {
+		return nil, errors.New("identity resolver returned no account id")
 	}
-	if _, err := h.deps.Billing.EnsureAccount(ctx, user.ID); err != nil {
-		return nil, fmt.Errorf("ensure account: %w", err)
-	}
-	return user, nil
+	return resolution.User, nil
 }
 
 func (h *Handler) referralCodeFromEvent(ref string, parsed commandrouter.Result) string {

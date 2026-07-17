@@ -29,7 +29,7 @@ const paymentProductColumns = `id, code, title, amount, currency, credits,
 	price_version, vat_code, payment_subject, payment_mode, is_active,
 	created_at, updated_at`
 
-const paymentIntentColumns = `id, user_id, product_id, status, amount, currency,
+const paymentIntentColumns = `id, user_id, account_id, product_id, status, amount, currency,
 	credits, price_version, receipt_description, vat_code, payment_subject,
 	payment_mode, provider, provider_payment_id, confirmation_url,
 	idempotency_key, receipt_email, receipt_phone, metadata, created_at,
@@ -192,16 +192,17 @@ func (r *PaymentRepository) CreateIntent(ctx context.Context, intent *domain.Pay
 	}
 	const q = `
 		INSERT INTO payment_intents (
-			id, user_id, product_id, status, amount, currency, credits,
+			id, user_id, account_id, product_id, status, amount, currency, credits,
 			price_version, receipt_description, vat_code, payment_subject,
 			payment_mode, provider, provider_payment_id, confirmation_url,
 			idempotency_key, receipt_email, receipt_phone, metadata, expires_at
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, COALESCE($19::jsonb, '{}'::jsonb), $20)
+		VALUES ($1, $2, COALESCE($3::uuid, (SELECT account_id FROM users WHERE id = $2)), $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, COALESCE($20::jsonb, '{}'::jsonb), $21)
 		RETURNING ` + paymentIntentColumns
 	return mapError(scanPaymentIntent(r.db.QueryRow(ctx, q,
 		intent.ID,
 		intent.UserID,
+		nullableUUID(intent.AccountID),
 		intent.ProductID,
 		intent.Status,
 		intent.Amount,
@@ -309,12 +310,23 @@ func (r *PaymentRepository) UpdateIntentMetadata(ctx context.Context, id uuid.UU
 
 // ListIntentsByUser lists intents for one user.
 func (r *PaymentRepository) ListIntentsByUser(ctx context.Context, userID uuid.UUID, limit, offset int) ([]*domain.PaymentIntent, error) {
-	const q = `SELECT ` + paymentIntentColumns + `
+	intents, err := r.listIntentsByOwnerColumn(ctx, "account_id", userID, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	if len(intents) > 0 {
+		return intents, nil
+	}
+	return r.listIntentsByOwnerColumn(ctx, "user_id", userID, limit, offset)
+}
+
+func (r *PaymentRepository) listIntentsByOwnerColumn(ctx context.Context, column string, ownerID uuid.UUID, limit, offset int) ([]*domain.PaymentIntent, error) {
+	q := `SELECT ` + paymentIntentColumns + `
 		FROM payment_intents
-		WHERE user_id = $1
+		WHERE ` + column + ` = $1
 		ORDER BY created_at DESC
 		LIMIT $2 OFFSET $3`
-	rows, err := r.db.Query(ctx, q, userID, limit, offset)
+	rows, err := r.db.Query(ctx, q, ownerID, limit, offset)
 	if err != nil {
 		return nil, mapError(err)
 	}
@@ -332,7 +344,11 @@ func (r *PaymentRepository) ListIntents(ctx context.Context, filter domain.Payme
 	}
 	if filter.UserID != nil {
 		args = append(args, *filter.UserID)
-		where = append(where, "user_id = $"+strconv.Itoa(len(args)))
+		where = append(where, "(user_id = $"+strconv.Itoa(len(args))+" OR account_id = $"+strconv.Itoa(len(args))+")")
+	}
+	if filter.AccountID != nil {
+		args = append(args, *filter.AccountID)
+		where = append(where, "account_id = $"+strconv.Itoa(len(args)))
 	}
 	statuses := paymentIntentStatuses(filter)
 	if len(statuses) > 0 {
@@ -649,11 +665,13 @@ func scanPaymentProduct(row rowScanner, product *domain.PaymentProduct) error {
 
 func scanPaymentIntent(row rowScanner, intent *domain.PaymentIntent) error {
 	var productID *uuid.UUID
+	var accountID *uuid.UUID
 	var providerPaymentID, receiptEmail, receiptPhone *string
 	var metadata []byte
 	if err := row.Scan(
 		&intent.ID,
 		&intent.UserID,
+		&accountID,
 		&productID,
 		&intent.Status,
 		&intent.Amount,
@@ -676,6 +694,9 @@ func scanPaymentIntent(row rowScanner, intent *domain.PaymentIntent) error {
 		&intent.ExpiresAt,
 	); err != nil {
 		return err
+	}
+	if accountID != nil {
+		intent.AccountID = *accountID
 	}
 	intent.ProductID = productID
 	if providerPaymentID != nil {

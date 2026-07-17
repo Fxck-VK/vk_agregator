@@ -68,6 +68,7 @@ const (
 	ProviderErrAuthFailed           ProviderErrorClass = "auth_failed"
 	ProviderErrInsufficientBalance  ProviderErrorClass = "insufficient_provider_balance"
 	ProviderErrInvalidRequest       ProviderErrorClass = "invalid_request"
+	ProviderErrModelUnavailable     ProviderErrorClass = "provider_model_unavailable"
 	ProviderErrContentRejected      ProviderErrorClass = "content_rejected"
 	ProviderErrOverloaded           ProviderErrorClass = "provider_overloaded"
 	ProviderErrTimeout              ProviderErrorClass = "provider_timeout"
@@ -85,8 +86,9 @@ const (
 type ProviderRequest struct {
 	// JobID is the originating job, used for correlation and idempotency.
 	JobID uuid.UUID `json:"job_id"`
-	// UserID is the owner of the originating job. It is used for provider-side
-	// correlation only; adapters must not make billing or delivery decisions.
+	// UserID is the canonical account owner of the originating job. It is used
+	// for provider-side correlation only; adapters must not make billing or
+	// delivery decisions.
 	UserID uuid.UUID `json:"user_id"`
 	// Operation is the operation the provider must perform.
 	Operation OperationType `json:"operation"`
@@ -97,8 +99,14 @@ type ProviderRequest struct {
 	// Provider optionally pins routing to the provider chosen by trusted
 	// server-side catalog/config.
 	Provider ProviderName `json:"provider,omitempty"`
-	// Prompt is the final, fully-rendered user/system prompt.
+	// Prompt is untrusted user/dialog content. It may contain role-like markers
+	// and must never be promoted to a trusted provider role by an adapter.
 	Prompt string `json:"prompt"`
+	// TrustedFacts is optional backend-owned context for text generation.
+	// Supporting adapters must transport it in a separate trusted message and
+	// must never concatenate it into Prompt. It is excluded from serialized
+	// provider request snapshots and ignored by image/video typed contracts.
+	TrustedFacts string `json:"-"`
 	// NegativePrompt is the optional negative prompt for image/video models.
 	NegativePrompt string `json:"negative_prompt,omitempty"`
 	// Size is the requested image/video size when supported by the adapter.
@@ -270,8 +278,53 @@ type ProviderTaskResult struct {
 	ErrorClass ProviderErrorClass `json:"error_class,omitempty"`
 	// ErrorMessage is a human-readable failure description.
 	ErrorMessage string `json:"error_message,omitempty"`
-	// Raw is the untouched provider payload for audit (no secrets).
+	// Raw is transient provider metadata for adapter/worker decisions only.
+	// Durable provider_tasks rows must use DurableProviderTaskResultJSON so raw
+	// payloads, output URLs and inline text are not stored.
 	Raw json.RawMessage `json:"raw,omitempty"`
+}
+
+// DurableProviderTaskResultJSON returns the bounded provider task result
+// metadata that may be stored in provider_tasks.result. It intentionally omits
+// output URLs, inline text, raw provider payloads and provider error messages.
+func DurableProviderTaskResultJSON(res ProviderTaskResult) json.RawMessage {
+	safe := ProviderTaskResult{
+		Status:     res.Status,
+		ErrorClass: res.ErrorClass,
+	}
+	if safe.Status == "" && safe.ErrorClass == "" {
+		return nil
+	}
+	raw, err := json.Marshal(safe)
+	if err != nil {
+		return nil
+	}
+	return raw
+}
+
+// DurableProviderTaskResultJSONFromRaw extracts only bounded metadata from a
+// provider-supplied task result snapshot, falling back to task columns when the
+// raw snapshot is empty or incomplete.
+func DurableProviderTaskResultJSONFromRaw(raw json.RawMessage, status ProviderTaskStatus, errorClass ProviderErrorClass) json.RawMessage {
+	var res ProviderTaskResult
+	if len(raw) > 0 {
+		_ = json.Unmarshal(raw, &res)
+	}
+	if res.Status == "" {
+		res.Status = status
+	}
+	if res.ErrorClass == "" {
+		res.ErrorClass = errorClass
+	}
+	return DurableProviderTaskResultJSON(res)
+}
+
+// DurableProviderTaskRequestJSON returns the only provider request snapshot
+// allowed in durable storage. Polling and reconciliation use the task's typed
+// columns, so persisting prompts, signed input URLs or provider params is both
+// unnecessary and unsafe.
+func DurableProviderTaskRequestJSON() json.RawMessage {
+	return json.RawMessage(`{}`)
 }
 
 // ProviderTask is the persisted record of one submission to an external
@@ -291,7 +344,8 @@ type ProviderTask struct {
 	AttemptNo int `json:"attempt_no"`
 	// Status is the normalized provider task status.
 	Status ProviderTaskStatus `json:"status"`
-	// Request is the normalized request that was submitted.
+	// Request is retained for schema compatibility and must contain only the
+	// empty durable snapshot returned by DurableProviderTaskRequestJSON.
 	Request json.RawMessage `json:"request"`
 	// Result is the normalized result once available.
 	Result json.RawMessage `json:"result,omitempty"`

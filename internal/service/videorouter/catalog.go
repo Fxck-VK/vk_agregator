@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 
 	"vk-ai-aggregator/internal/domain"
+	"vk-ai-aggregator/internal/service/providermodels"
 )
 
 const (
@@ -113,11 +114,9 @@ func NewCatalog(cfg Config) (*Catalog, error) {
 		}
 		modelIDs[modelKey] = spec.Alias
 	}
-	addProviderModelAlias(modelIDs, domain.VideoRouteKlingO3Standard, "kling-o3")
-	addProviderModelAlias(modelIDs, domain.VideoRouteKlingO3Standard, "kling-o3-standard")
-	addProviderModelAlias(modelIDs, domain.VideoRouteKlingO3Standard, "Kling O3 Standard")
-	addProviderModelAlias(modelIDs, domain.VideoRouteSeedance20Fast, "seedance-2.0-fast")
-	addProviderModelAlias(modelIDs, domain.VideoRouteRunwayGen4Turbo, "runway-gen-4-turbo")
+	for _, alias := range providermodels.StaticRegistry().ProviderModelAliases() {
+		addProviderModelAlias(modelIDs, alias.Alias, alias.ProviderModelID)
+	}
 	return &Catalog{
 		routerEnabled: cfg.RouterEnabled,
 		routes:        routes,
@@ -126,124 +125,7 @@ func NewCatalog(cfg Config) (*Catalog, error) {
 }
 
 func DefaultRouteSpecs() []domain.VideoRouteSpec {
-	return []domain.VideoRouteSpec{
-		{
-			Alias:               domain.VideoRouteHailuo23Fast,
-			Provider:            domain.ProviderAPIMart,
-			ProviderModelID:     "MiniMax-Hailuo-2.3-Fast",
-			ModelClass:          "hailuo_2_3_fast",
-			InputModes:          []domain.VideoInputMode{domain.VideoInputImage},
-			RequiresStartImage:  true,
-			AllowedDurationsSec: []int{6, 10},
-			AllowedResolutions:  []string{"768p", "1080p"},
-			ResolutionDurationsSec: map[string][]int{
-				"768p":  {6, 10},
-				"1080p": {6},
-			},
-			SupportsReferenceImage:   true,
-			MaxReferenceImages:       1,
-			ProviderCostCreditsFixed: 1,
-			MaxProviderCostCredits:   1,
-			MaxInternalCostCredits:   2,
-			PriceMultiplier:          2,
-		},
-		{
-			Alias:               domain.VideoRouteHailuo23Standard,
-			Provider:            domain.ProviderAPIMart,
-			ProviderModelID:     "MiniMax-Hailuo-2.3",
-			ModelClass:          "hailuo_2_3_standard",
-			InputModes:          []domain.VideoInputMode{domain.VideoInputText, domain.VideoInputImage},
-			AllowedDurationsSec: []int{6, 10},
-			AllowedResolutions:  []string{"768p", "1080p"},
-			ResolutionDurationsSec: map[string][]int{
-				"768p":  {6, 10},
-				"1080p": {6},
-			},
-			SupportsReferenceImage:   true,
-			MaxReferenceImages:       1,
-			ProviderCostCreditsFixed: 1,
-			MaxProviderCostCredits:   1,
-			MaxInternalCostCredits:   2,
-			PriceMultiplier:          2,
-		},
-		{
-			Alias:                        domain.VideoRouteKlingO3Standard,
-			Provider:                     domain.ProviderPoYo,
-			ProviderModelID:              "kling-o3/standard",
-			ModelClass:                   "kling_o3_standard",
-			InputModes:                   []domain.VideoInputMode{domain.VideoInputText, domain.VideoInputImage},
-			AllowedDurationsSec:          []int{5, 10},
-			AllowedResolutions:           []string{"720p", "1080p"},
-			AllowedAspectRatios:          []string{"16:9", "9:16", "1:1"},
-			SupportsReferenceImage:       true,
-			MaxReferenceImages:           1,
-			ProviderCostCreditsPerSecond: 10,
-			MaxProviderCostCredits:       100,
-			MaxInternalCostCredits:       200,
-			PriceMultiplier:              2,
-		},
-		{
-			Alias:                        domain.VideoRouteRunwayGen4Turbo,
-			Provider:                     domain.ProviderRunway,
-			ProviderModelID:              "gen4_turbo",
-			ModelClass:                   "runway_gen4_turbo",
-			InputModes:                   []domain.VideoInputMode{domain.VideoInputImage},
-			RequiresStartImage:           true,
-			AllowedDurationsSec:          []int{2, 3, 4, 5, 6, 7, 8, 9, 10},
-			AllowedResolutions:           []string{"720p"},
-			AllowedAspectRatios:          []string{"16:9", "9:16", "4:3", "3:4", "1:1", "21:9"},
-			SupportsReferenceImage:       true,
-			MaxReferenceImages:           1,
-			ProviderCostCreditsPerSecond: 5,
-			MaxProviderCostCredits:       50,
-			MaxInternalCostCredits:       100,
-			PriceMultiplier:              2,
-		},
-		{
-			Alias:                        domain.VideoRouteSeedance20Fast,
-			Provider:                     domain.ProviderPoYo,
-			ProviderModelID:              "seedance-2-fast",
-			ModelClass:                   "seedance_2_0_fast",
-			InputModes:                   []domain.VideoInputMode{domain.VideoInputText, domain.VideoInputImage, domain.VideoInputReference},
-			AllowedDurationsSec:          []int{5, 10},
-			AllowedResolutions:           []string{"720p"},
-			AllowedAspectRatios:          []string{"16:9", "9:16", "1:1"},
-			SupportsReferenceImage:       true,
-			MaxReferenceImages:           4,
-			ProviderCostCreditsPerSecond: 28,
-			MaxProviderCostCredits:       280,
-			MaxInternalCostCredits:       560,
-			PriceMultiplier:              2,
-		},
-		{
-			Alias:                  domain.VideoRouteRunwayGen45,
-			Provider:               domain.ProviderPoYo,
-			ProviderModelID:        "runway-gen-4.5",
-			ModelClass:             "runway_gen4_5",
-			InputModes:             []domain.VideoInputMode{domain.VideoInputText, domain.VideoInputImage},
-			AllowedDurationsSec:    []int{5, 10},
-			AllowedResolutions:     []string{"720p", "1080p"},
-			AllowedAspectRatios:    []string{"16:9", "9:16", "1:1"},
-			SupportsReferenceImage: true,
-			MaxReferenceImages:     1,
-			MaxProviderCostCredits: 0,
-			PriceMultiplier:        2,
-		},
-		{
-			Alias:                    domain.VideoRouteMockTextToVideo,
-			Provider:                 domain.ProviderMock,
-			ProviderModelID:          "mock-video",
-			ModelClass:               "mock_video",
-			InputModes:               []domain.VideoInputMode{domain.VideoInputText},
-			AllowedDurationsSec:      []int{3, 5, 10},
-			AllowedResolutions:       []string{"720p", "1080p"},
-			AllowedAspectRatios:      []string{"16:9", "9:16", "1:1"},
-			ProviderCostCreditsFixed: 50,
-			MaxProviderCostCredits:   50,
-			MaxInternalCostCredits:   50,
-			PriceMultiplier:          1,
-		},
-	}
+	return providermodels.StaticRegistry().VideoRouteSpecs()
 }
 
 func (c *Catalog) PublicRoutes() []PublicRoute {

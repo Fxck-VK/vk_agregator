@@ -10,4 +10,5 @@ const (
 	JobErrMediaProcessingUnavailable = "media_processing_unavailable"
 	JobErrMediaDeliveryFailed        = "media_delivery_failed"
 	JobErrMediaOverloadedRetryLater  = "media_overloaded_retry_later"
+	JobErrModelUnavailable           = "model_unavailable"
 )

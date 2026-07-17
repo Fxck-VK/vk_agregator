@@ -48,8 +48,8 @@ func TestBuildIncludesEnabledNeuroHubCatalogFacts(t *testing.T) {
 	builder := New(Config{Catalog: catalog, PricingCatalog: staticPricingCatalog(t)})
 
 	facts, err := builder.Build(context.Background(), Input{
-		UserID: uuid.New(),
-		Prompt: "Какие модели доступны в НейроХаб и можно ли с референсом?",
+		AccountID: uuid.New(),
+		Prompt:    "Какие модели доступны в НейроХаб и можно ли с референсом?",
 	})
 	if err != nil {
 		t.Fatalf("build facts: %v", err)
@@ -101,7 +101,7 @@ func TestBuildIncludesBalanceOnlyForBalanceIntent(t *testing.T) {
 		}),
 	})
 
-	noBalance, err := builder.Build(context.Background(), Input{UserID: uuid.New(), Prompt: "Какие модели есть?"})
+	noBalance, err := builder.Build(context.Background(), Input{AccountID: uuid.New(), Prompt: "Какие модели есть?"})
 	if err != nil {
 		t.Fatalf("build catalog facts: %v", err)
 	}
@@ -109,7 +109,7 @@ func TestBuildIncludesBalanceOnlyForBalanceIntent(t *testing.T) {
 		t.Fatalf("balance should not be included for catalog-only prompt; calls=%d facts=%s", calls, noBalance.Text)
 	}
 
-	withBalance, err := builder.Build(context.Background(), Input{UserID: uuid.New(), Prompt: "Какой у меня баланс?"})
+	withBalance, err := builder.Build(context.Background(), Input{AccountID: uuid.New(), Prompt: "Какой у меня баланс?"})
 	if err != nil {
 		t.Fatalf("build balance facts: %v", err)
 	}
@@ -142,7 +142,7 @@ func TestBuildUsesCatalogSourceForEachRelevantPrompt(t *testing.T) {
 		},
 	})
 
-	first, err := builder.Build(context.Background(), Input{UserID: uuid.New(), Prompt: "Какие модели есть?"})
+	first, err := builder.Build(context.Background(), Input{AccountID: uuid.New(), Prompt: "Какие модели есть?"})
 	if err != nil {
 		t.Fatalf("first build facts: %v", err)
 	}
@@ -150,7 +150,7 @@ func TestBuildUsesCatalogSourceForEachRelevantPrompt(t *testing.T) {
 		t.Fatalf("first facts should use first catalog snapshot:\n%s", first.Text)
 	}
 
-	second, err := builder.Build(context.Background(), Input{UserID: uuid.New(), Prompt: "Какие модели есть?"})
+	second, err := builder.Build(context.Background(), Input{AccountID: uuid.New(), Prompt: "Какие модели есть?"})
 	if err != nil {
 		t.Fatalf("second build facts: %v", err)
 	}
@@ -161,7 +161,7 @@ func TestBuildUsesCatalogSourceForEachRelevantPrompt(t *testing.T) {
 
 func TestBuildReturnsEmptyForUnrelatedPrompt(t *testing.T) {
 	builder := New(Config{Catalog: productcatalog.New(productcatalog.Config{PricingCatalog: staticPricingCatalog(t)})})
-	facts, err := builder.Build(context.Background(), Input{UserID: uuid.New(), Prompt: "Напиши поздравление с днем рождения"})
+	facts, err := builder.Build(context.Background(), Input{AccountID: uuid.New(), Prompt: "Напиши поздравление с днем рождения"})
 	if err != nil {
 		t.Fatalf("build facts: %v", err)
 	}
@@ -170,16 +170,30 @@ func TestBuildReturnsEmptyForUnrelatedPrompt(t *testing.T) {
 	}
 }
 
-func TestAttachDoesNotStoreFactsAsUserText(t *testing.T) {
-	rendered := Attach("Факты НейроХаб:\n- список моделей", "Current user request:\nКакие модели есть?")
-	if !strings.Contains(rendered, "Факты НейроХаб") || !strings.Contains(rendered, "Current user request") {
-		t.Fatalf("attached prompt missing sections:\n%s", rendered)
+func TestBuildBalanceFactsAreBoundToAccount(t *testing.T) {
+	accountA := uuid.New()
+	accountB := uuid.New()
+	balances := map[uuid.UUID]int64{accountA: 17, accountB: 42}
+	builder := New(Config{
+		Catalog: productcatalog.New(productcatalog.Config{PricingCatalog: staticPricingCatalog(t)}),
+		Balance: balanceProviderFunc(func(_ context.Context, accountID uuid.UUID) (int64, error) {
+			return balances[accountID], nil
+		}),
+	})
+
+	factsA, err := builder.Build(context.Background(), Input{AccountID: accountA, Prompt: "Какой у меня баланс?"})
+	if err != nil {
+		t.Fatalf("build account A facts: %v", err)
 	}
-	if strings.Contains(rendered, "NeuroHub") || strings.Contains(strings.ToLower(rendered), "product") {
-		t.Fatalf("attached prompt should not contain English brand/product wording:\n%s", rendered)
+	factsB, err := builder.Build(context.Background(), Input{AccountID: accountB, Prompt: "Какой у меня баланс?"})
+	if err != nil {
+		t.Fatalf("build account B facts: %v", err)
 	}
-	if strings.Index(rendered, "Факты НейроХаб") > strings.Index(rendered, "Current user request") {
-		t.Fatalf("facts must precede user request:\n%s", rendered)
+	if !strings.Contains(factsA.Text, "17 кредитов") || strings.Contains(factsA.Text, "42 кредитов") {
+		t.Fatalf("account A facts leaked another balance: %s", factsA.Text)
+	}
+	if !strings.Contains(factsB.Text, "42 кредитов") || strings.Contains(factsB.Text, "17 кредитов") {
+		t.Fatalf("account B facts leaked another balance: %s", factsB.Text)
 	}
 }
 

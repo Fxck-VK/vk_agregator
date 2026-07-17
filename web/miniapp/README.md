@@ -138,6 +138,7 @@ App admin panel as the "Application URL".
 | `VK_APP_SECRET` | VK App protected key for sign verification. Set = real check; empty = dev mode (no check); empty in production = fail-closed startup |
 | `VK_APP_ID` | VK Application ID (informational for the BFF) |
 | `MINIAPP_LAUNCH_PARAMS_MAX_AGE` | Max age of launch params (default `1h`) |
+| `MINIAPP_ALLOW_QUERY_LAUNCH_PARAMS` | Legacy BFF `launch_params` query fallback. Default `false`; explicit local dev/test only; production/staging reject `true` |
 
 ## Authentication flow
 
@@ -147,6 +148,10 @@ App admin panel as the "Application URL".
 3. Every BFF request includes the raw string in the `X-Launch-Params` header.
 4. The BFF verifies the HMAC-SHA256 signature with `VK_APP_SECRET` before
    processing any request. Invalid/expired params → `401`.
+
+BFF endpoints do not accept signed launch credentials from their query string
+by default. Local tests may opt in explicitly; server environments remain
+header-only.
 
 ## Screens
 

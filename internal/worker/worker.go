@@ -64,8 +64,9 @@ const (
 // ArtifactSaver stores provider outputs as artifacts. Implemented by
 // artifactservice.Service.
 type ArtifactSaver interface {
-	SaveRemoteArtifact(ctx context.Context, ownerID uuid.UUID, jobID *uuid.UUID, kind domain.ArtifactKind, mediaType domain.MediaType, url string) (*domain.Artifact, error)
+	SaveRemoteArtifactForAccount(ctx context.Context, userID, accountID uuid.UUID, jobID *uuid.UUID, kind domain.ArtifactKind, mediaType domain.MediaType, url string) (*domain.Artifact, error)
 	SaveVariantWithMetadata(ctx context.Context, artifact *domain.Artifact, variantType domain.VariantType, mimeType string, data []byte, metadata domain.ArtifactMediaMetadata) (*domain.ArtifactVariant, error)
+	EnsureArtifactScanned(ctx context.Context, artifactID uuid.UUID) error
 }
 
 // VideoProber validates generated video bytes before delivery/capture.
@@ -1130,10 +1131,45 @@ func normalizeWorkerPolicy(value string) string {
 	return strings.ToLower(strings.TrimSpace(value))
 }
 
-// maxReferenceArtifacts must match miniapp/references.go limit.
-const maxReferenceArtifacts = 4
+// maxReferenceArtifacts is the worker-wide ceiling; provider adapters still
+// enforce each model's narrower contract.
+const maxReferenceArtifacts = 16
 
 const maxReferenceArtifactBytes = 20 << 20
+
+type deterministicRequestError struct {
+	class domain.ProviderErrorClass
+	err   error
+}
+
+func (e *deterministicRequestError) Error() string {
+	if e == nil || e.err == nil {
+		return ""
+	}
+	return e.err.Error()
+}
+
+func (e *deterministicRequestError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.err
+}
+
+func deterministicRequestFailure(err error) (domain.ProviderErrorClass, string, bool) {
+	var requestErr *deterministicRequestError
+	if !errors.As(err, &requestErr) || requestErr.class == "" {
+		return "", "", false
+	}
+	return requestErr.class, safeProviderFailureMessage(requestErr.class), true
+}
+
+func referenceInputError(format string, args ...any) error {
+	return &deterministicRequestError{
+		class: domain.ProviderErrInvalidRequest,
+		err:   fmt.Errorf(format, args...),
+	}
+}
 
 // promptParams is the subset of job params the provider request needs.
 type promptParams struct {
@@ -1225,8 +1261,8 @@ func (p *processor) buildRequest(ctx context.Context, job *domain.Job, attempt i
 	assistantFactsText := ""
 	if p.assistantFacts != nil && job.OperationType == domain.OperationTextGenerate && job.Modality == domain.ModalityText {
 		facts, err := p.assistantFacts.Build(ctx, assistantfacts.Input{
-			UserID: job.UserID,
-			Prompt: pp.Prompt,
+			AccountID: workerJobOwnerID(job),
+			Prompt:    pp.Prompt,
 		})
 		if err != nil {
 			return domain.ProviderRequest{}, err
@@ -1294,9 +1330,6 @@ func (p *processor) buildRequest(ctx context.Context, job *domain.Job, attempt i
 			}
 		}
 	}
-	if assistantFactsText != "" {
-		prompt = assistantfacts.Attach(assistantFactsText, prompt)
-	}
 	var inputURLs []string
 	if (job.Modality == domain.ModalityImage || job.Modality == domain.ModalityVideo) && len(pp.ReferenceArtifactIDs) > 0 {
 		var err error
@@ -1311,12 +1344,13 @@ func (p *processor) buildRequest(ctx context.Context, job *domain.Job, attempt i
 	}
 	return domain.ProviderRequest{
 		JobID:                job.ID,
-		UserID:               job.UserID,
+		UserID:               workerJobOwnerID(job),
 		Operation:            job.OperationType,
 		Modality:             job.Modality,
 		ModelCode:            modelCode,
 		Provider:             pp.Provider,
 		Prompt:               prompt,
+		TrustedFacts:         assistantFactsText,
 		NegativePrompt:       pp.NegativePrompt,
 		Size:                 size,
 		AspectRatio:          pp.AspectRatio,
@@ -1423,42 +1457,42 @@ func safeProviderParams(raw json.RawMessage) json.RawMessage {
 
 func (p *processor) resolveReferenceInputURLs(ctx context.Context, job *domain.Job, ids []uuid.UUID) ([]string, error) {
 	if len(ids) > maxReferenceArtifacts {
-		return nil, fmt.Errorf("worker: too many reference artifacts")
+		return nil, referenceInputError("worker: too many reference artifacts")
 	}
 	if p.artifactRepo == nil {
-		return nil, fmt.Errorf("worker: artifact repository unavailable")
+		return nil, referenceInputError("worker: artifact repository unavailable")
 	}
 	if p.objects == nil {
-		return nil, fmt.Errorf("worker: object store unavailable")
+		return nil, referenceInputError("worker: object store unavailable")
 	}
 	inputURLs := make([]string, 0, len(ids))
 	for _, id := range ids {
 		if id == uuid.Nil {
-			return nil, fmt.Errorf("worker: invalid reference artifact id")
+			return nil, referenceInputError("worker: invalid reference artifact id")
 		}
 		artifact, err := p.artifactRepo.GetByID(ctx, id)
 		if err != nil {
-			return nil, fmt.Errorf("worker: reference artifact not found: %w", err)
+			return nil, referenceInputError("worker: reference artifact not found: %w", err)
 		}
-		if artifact.OwnerUserID != job.UserID {
-			return nil, fmt.Errorf("worker: invalid reference artifact owner")
+		if workerArtifactOwnerID(artifact) != workerJobOwnerID(job) {
+			return nil, referenceInputError("worker: invalid reference artifact owner")
 		}
 		if artifact.Kind != domain.ArtifactKindInput || artifact.MediaType != domain.MediaTypeImage || artifact.Status != domain.ArtifactStatusReady {
-			return nil, fmt.Errorf("worker: invalid reference artifact")
+			return nil, referenceInputError("worker: invalid reference artifact")
 		}
 		if artifact.StorageBucket == "" || artifact.StorageKey == "" {
-			return nil, fmt.Errorf("worker: reference artifact storage missing")
+			return nil, referenceInputError("worker: reference artifact storage missing")
 		}
 		data, err := p.objects.GetObject(ctx, artifact.StorageBucket, artifact.StorageKey)
 		if err != nil {
-			return nil, fmt.Errorf("worker: reference artifact object missing: %w", err)
+			return nil, referenceInputError("worker: reference artifact object missing: %w", err)
 		}
 		if len(data) > maxReferenceArtifactBytes {
-			return nil, fmt.Errorf("worker: reference artifact too large")
+			return nil, referenceInputError("worker: reference artifact too large")
 		}
 		inputURL, err := sanitizedReferenceImageDataURL(data, artifact.MimeType)
 		if err != nil {
-			return nil, err
+			return nil, referenceInputError("%w", err)
 		}
 		inputURLs = append(inputURLs, inputURL)
 	}
@@ -1486,6 +1520,26 @@ func mediaTypeFor(modality domain.Modality) domain.MediaType {
 	default:
 		return domain.MediaTypeText
 	}
+}
+
+func workerJobOwnerID(job *domain.Job) uuid.UUID {
+	if job == nil {
+		return uuid.Nil
+	}
+	if job.AccountID != uuid.Nil {
+		return job.AccountID
+	}
+	return job.UserID
+}
+
+func workerArtifactOwnerID(artifact *domain.Artifact) uuid.UUID {
+	if artifact == nil {
+		return uuid.Nil
+	}
+	if artifact.OwnerAccountID != uuid.Nil {
+		return artifact.OwnerAccountID
+	}
+	return artifact.OwnerUserID
 }
 
 // isDone reports whether a job has reached a state where neither generation nor
@@ -1518,6 +1572,16 @@ func isRetryable(class domain.ProviderErrorClass) bool {
 	default:
 		return false
 	}
+}
+
+func outputArtifactFailureClass(err error) domain.ProviderErrorClass {
+	var ce classedError
+	if errors.As(err, &ce) {
+		if class := ce.ProviderErrorClass(); class != "" {
+			return class
+		}
+	}
+	return domain.ProviderErrOutputDownloadFailed
 }
 
 // classOf extracts the normalized error class from a provider error, defaulting
@@ -1770,7 +1834,7 @@ func (p *processor) latestTask(ctx context.Context, jobID uuid.UUID) (*domain.Pr
 
 // pollOnce polls the provider once and applies the normalized result.
 func (p *processor) pollOnce(ctx context.Context, job *domain.Job, pt *domain.ProviderTask, provider domain.Provider, task queue.Task) error {
-	if res, ok := durableProviderTaskResult(pt); ok {
+	if res, ok := durableProviderTaskResultForJob(pt, job); ok {
 		return p.applyResult(ctx, job, pt, res, task)
 	}
 	callCtx, cancel := p.providerCallContext(ctx)
@@ -1829,6 +1893,10 @@ func (p *processor) requeueProviderPollAfterError(ctx context.Context, job *doma
 }
 
 func durableProviderTaskResult(pt *domain.ProviderTask) (domain.ProviderTaskResult, bool) {
+	return durableProviderTaskResultForJob(pt, nil)
+}
+
+func durableProviderTaskResultForJob(pt *domain.ProviderTask, job *domain.Job) (domain.ProviderTaskResult, bool) {
 	if pt == nil || !pt.Status.IsTerminal() || len(pt.Result) == 0 {
 		return domain.ProviderTaskResult{}, false
 	}
@@ -1839,7 +1907,20 @@ func durableProviderTaskResult(pt *domain.ProviderTask) (domain.ProviderTaskResu
 	if res.Status != pt.Status {
 		res.Status = pt.Status
 	}
-	return res, true
+	switch res.Status {
+	case domain.ProviderTaskSucceeded:
+		if len(res.OutputURLs) > 0 {
+			return res, true
+		}
+		if job != nil && len(job.OutputArtifactIDs) > 0 {
+			return res, true
+		}
+		return domain.ProviderTaskResult{}, false
+	case domain.ProviderTaskFailed, domain.ProviderTaskCancelled:
+		return res, true
+	default:
+		return domain.ProviderTaskResult{}, false
+	}
 }
 
 // applyResult persists the task result and advances the job: success stores
@@ -1847,9 +1928,7 @@ func durableProviderTaskResult(pt *domain.ProviderTask) (domain.ProviderTaskResu
 // classified and retried or made terminal.
 func (p *processor) applyResult(ctx context.Context, job *domain.Job, pt *domain.ProviderTask, res domain.ProviderTaskResult, task queue.Task) error {
 	pt.Status = res.Status
-	if raw, err := json.Marshal(res); err == nil {
-		pt.Result = raw
-	}
+	pt.Result = domain.DurableProviderTaskResultJSON(res)
 	if res.ErrorClass != "" {
 		pt.ErrorClass = res.ErrorClass
 	}
@@ -1865,10 +1944,10 @@ func (p *processor) applyResult(ctx context.Context, job *domain.Job, pt *domain
 	case domain.ProviderTaskSucceeded:
 		p.recordProviderOutputs(pt, job, res)
 		if err := p.saveOutputs(ctx, job, res.OutputURLs); err != nil {
-			p.recordProviderProductFailureForTask(job, pt, "output_download_failed")
-			observeVideoRouteMediaFailureForJob(job, "download", string(domain.ProviderErrOutputDownloadFailed))
-			// A download failure is retryable provider-side.
-			return p.handleFailure(ctx, job, task, domain.ProviderErrOutputDownloadFailed, safeProviderFailureMessage(domain.ProviderErrOutputDownloadFailed))
+			failureClass := outputArtifactFailureClass(err)
+			p.recordProviderProductFailureForTask(job, pt, string(failureClass))
+			observeVideoRouteMediaFailureForJob(job, "download", string(failureClass))
+			return p.handleFailure(ctx, job, task, failureClass, safeProviderFailureMessage(failureClass))
 		}
 		if err := p.setStatus(ctx, job, domain.JobStatusProviderSucceeded, "", ""); err != nil {
 			return err
@@ -2383,13 +2462,19 @@ func (p *processor) saveOutputs(ctx context.Context, job *domain.Job, urls []str
 	)
 	defer span.End()
 
-	if len(job.OutputArtifactIDs) >= len(urls) && len(urls) > 0 {
+	for _, artifactID := range job.OutputArtifactIDs {
+		if err := p.artifacts.EnsureArtifactScanned(ctx, artifactID); err != nil {
+			return err
+		}
+	}
+	existingCount := len(job.OutputArtifactIDs)
+	if len(urls) == 0 || existingCount >= len(urls) {
 		return p.jobs.Update(ctx, job)
 	}
 
 	mediaType := mediaTypeFor(job.Modality)
-	for _, url := range urls {
-		art, err := p.artifacts.SaveRemoteArtifact(ctx, job.UserID, &job.ID, domain.ArtifactKindOutput, mediaType, url)
+	for _, url := range urls[existingCount:] {
+		art, err := p.artifacts.SaveRemoteArtifactForAccount(ctx, job.UserID, workerJobOwnerID(job), &job.ID, domain.ArtifactKindOutput, mediaType, url)
 		if err != nil {
 			tracing.RecordError(span, err)
 			return err
@@ -2467,6 +2552,10 @@ func safeTerminalFailure(job *domain.Job, class domain.ProviderErrorClass) (stri
 		switch class {
 		case domain.ProviderErrRateLimited, domain.ProviderErrOverloaded, domain.ProviderErrTimeout:
 			return domain.JobErrMediaOverloadedRetryLater, "media generation is temporarily overloaded; credits were not charged"
+		case domain.ProviderErrModelUnavailable:
+			return domain.JobErrModelUnavailable, "selected model is unavailable; credits were not charged; try another model"
+		case domain.ProviderErrInvalidRequest:
+			return string(domain.ProviderErrInvalidRequest), "request was not accepted; credits were not charged; try another model or change the prompt"
 		case domain.ProviderErrOutputDownloadFailed:
 			return domain.JobErrMediaProcessingUnavailable, "media output could not be loaded safely; credits were not charged"
 		case domain.ProviderErrMediaProbeFailed:
@@ -2484,7 +2573,11 @@ func safeProviderFailureMessage(class domain.ProviderErrorClass) string {
 		return "provider is temporarily unavailable; credits were not charged"
 	case domain.ProviderErrContentRejected:
 		return "content was rejected by safety policy; credits were not charged"
-	case domain.ProviderErrInvalidRequest, domain.ProviderErrUnsupportedCapab:
+	case domain.ProviderErrModelUnavailable:
+		return "selected model is unavailable; credits were not charged; try another model"
+	case domain.ProviderErrInvalidRequest:
+		return "request was not accepted; credits were not charged; try another model or change the prompt"
+	case domain.ProviderErrUnsupportedCapab:
 		return "request is not supported; credits were not charged"
 	case domain.ProviderErrAuthFailed, domain.ProviderErrInsufficientBalance:
 		return "provider configuration is unavailable; credits were not charged"
@@ -2511,12 +2604,57 @@ func (p *processor) shouldNotifyTerminalProviderFailure(job *domain.Job) bool {
 	return p.streams != nil && job.VKPeerID != 0 && (job.Modality == domain.ModalityImage || job.Modality == domain.ModalityVideo)
 }
 
-// moderateOutput runs the output moderation check and, on a block, rejects the
-// job (no delivery, no capture), releases the reservation and records an audit
-// verdict. It returns blocked=true when delivery must be stopped. When no
-// moderator is configured it is a no-op (allow).
+const internalOutputPolicyProvider = "internal-output-policy"
+
+var internalOutputMarkers = []string{
+	"факты нейрохаб:",
+	"<|im_start|>system",
+	"<|start_header_id|>system",
+	"все содержимое сообщения с ролью user",
+	"deepinfra",
+	"apimart",
+	"poyo",
+	"runwayml",
+	"aimlapi",
+	"deepseek-ai/deepseek-v4-flash",
+	"internal generation provider",
+	"internal provider:",
+	"provider model id",
+	"provider_model_id",
+	"model code:",
+	"backend api endpoint",
+	"api endpoint:",
+	"api key:",
+	"base_url",
+	"system prompt:",
+	"developer message:",
+	"внутренний провайдер:",
+	"системный промпт:",
+	"системное сообщение:",
+	"сообщение разработчика:",
+}
+
+func internalOutputPolicy(outputText string) (moderationservice.Outcome, bool) {
+	normalized := strings.ToLower(outputText)
+	for _, marker := range internalOutputMarkers {
+		if strings.Contains(normalized, marker) {
+			return moderationservice.Outcome{
+				Decision:   domain.ModerationBlock,
+				Categories: []string{"internal_detail_disclosure"},
+			}, true
+		}
+	}
+	return moderationservice.Outcome{}, false
+}
+
+// moderateOutput runs the deterministic internal-detail policy and the
+// configured output moderator. A block rejects the job before dialog storage,
+// delivery, or capture, releases the reservation, and records an audit verdict.
+// The deterministic policy remains active when no external moderator exists.
 func (p *processor) moderateOutput(ctx context.Context, job *domain.Job, outputText string) (bool, error) {
-	if p.moderator == nil {
+	out, policyBlocked := internalOutputPolicy(outputText)
+	moderationProvider := internalOutputPolicyProvider
+	if !policyBlocked && p.moderator == nil {
 		return false, nil
 	}
 	ctx, span := tracing.Start(ctx, "moderation.output",
@@ -2526,19 +2664,23 @@ func (p *processor) moderateOutput(ctx context.Context, job *domain.Job, outputT
 	)
 	defer span.End()
 
-	var pp promptParams
-	if len(job.Params) > 0 {
-		_ = json.Unmarshal(job.Params, &pp)
-	}
-	out, err := p.moderator.Check(ctx, moderationservice.Input{
-		Stage:    domain.ModerationStageOutput,
-		Modality: job.Modality,
-		Prompt:   pp.Prompt,
-		Text:     outputText,
-	})
-	if err != nil {
-		tracing.RecordError(span, err)
-		return false, err
+	if !policyBlocked {
+		var pp promptParams
+		if len(job.Params) > 0 {
+			_ = json.Unmarshal(job.Params, &pp)
+		}
+		var err error
+		out, err = p.moderator.Check(ctx, moderationservice.Input{
+			Stage:    domain.ModerationStageOutput,
+			Modality: job.Modality,
+			Prompt:   pp.Prompt,
+			Text:     outputText,
+		})
+		if err != nil {
+			tracing.RecordError(span, err)
+			return false, err
+		}
+		moderationProvider = p.moderator.Name()
 	}
 	span.SetAttributes(attribute.String("moderation.decision", string(out.Decision)))
 
@@ -2554,7 +2696,7 @@ func (p *processor) moderateOutput(ctx context.Context, job *domain.Job, outputT
 			Stage:      domain.ModerationStageOutput,
 			Decision:   out.Decision,
 			Categories: out.Categories,
-			Provider:   p.moderator.Name(),
+			Provider:   moderationProvider,
 		})
 	}
 

@@ -37,10 +37,35 @@ var sensitiveURLPattern = regexp.MustCompile(`(?i)(https?|mock)://[^\s"'<>]+|dat
 
 var errRemoteArtifactTooLarge = errors.New("artifactservice: remote artifact too large")
 
+// ContentScanError marks scanner rejections as non-retryable provider content
+// failures for callers that need billing-safe delivery decisions.
+type ContentScanError struct {
+	Err error
+}
+
+func (e ContentScanError) Error() string {
+	if e.Err == nil {
+		return "artifactservice: content scan rejected"
+	}
+	return "artifactservice: content scan rejected: " + e.Err.Error()
+}
+
+func (e ContentScanError) Unwrap() error {
+	return e.Err
+}
+
+func (e ContentScanError) ProviderErrorClass() domain.ProviderErrorClass {
+	return domain.ProviderErrContentRejected
+}
+
 // ObjectStore is the minimal blob storage contract the service needs. It is
 // satisfied by the S3/MinIO adapter and by in-memory test doubles.
 type ObjectStore interface {
 	Put(ctx context.Context, bucket, key string, data []byte, contentType string) error
+}
+
+type objectReader interface {
+	GetObject(ctx context.Context, bucket, key string) ([]byte, error)
 }
 
 // Downloader fetches remote content. It is abstracted so remote downloads can
@@ -100,6 +125,23 @@ func WithScanner(sc Scanner) Option {
 	return func(s *Service) { s.scanner = sc }
 }
 
+// EnsureArtifactScanned re-checks the stored bytes before a persisted output
+// artifact is reused by a retry or recovery path. Local/test wiring without a
+// scanner remains a no-op; production configuration requires a scanner.
+func (s *Service) EnsureArtifactScanned(ctx context.Context, artifactID uuid.UUID) error {
+	if s.scanner == nil {
+		return nil
+	}
+	artifact, err := s.repo.GetByID(ctx, artifactID)
+	if err != nil {
+		return fmt.Errorf("artifactservice: load artifact for rescan: %w", err)
+	}
+	if artifact.Status != domain.ArtifactStatusReady {
+		return fmt.Errorf("artifactservice: artifact is not ready for reuse")
+	}
+	return s.scanStoredObject(ctx, artifact.MediaType, artifact.MimeType, artifact.StorageBucket, artifact.StorageKey)
+}
+
 // New builds an artifact Service that stores bytes in the given bucket.
 func New(repo domain.ArtifactRepository, store ObjectStore, bucket string, opts ...Option) *Service {
 	s := &Service{
@@ -117,18 +159,35 @@ func New(repo domain.ArtifactRepository, store ObjectStore, bucket string, opts 
 
 // SaveTextArtifact stores a text payload as an artifact.
 func (s *Service) SaveTextArtifact(ctx context.Context, ownerID uuid.UUID, jobID *uuid.UUID, kind domain.ArtifactKind, text string) (*domain.Artifact, error) {
-	return s.saveBytes(ctx, ownerID, jobID, kind, domain.MediaTypeText, "text/plain; charset=utf-8", []byte(text), domain.ArtifactMediaMetadata{})
+	return s.SaveTextArtifactForAccount(ctx, ownerID, ownerID, jobID, kind, text)
+}
+
+// SaveTextArtifactForAccount stores a text payload for a canonical account
+// owner while retaining the legacy channel user id for compatibility.
+func (s *Service) SaveTextArtifactForAccount(ctx context.Context, userID, accountID uuid.UUID, jobID *uuid.UUID, kind domain.ArtifactKind, text string) (*domain.Artifact, error) {
+	return s.saveBytes(ctx, userID, accountID, jobID, kind, domain.MediaTypeText, "text/plain; charset=utf-8", []byte(text), domain.ArtifactMediaMetadata{})
 }
 
 // SaveBytesArtifact stores raw bytes as an artifact of the given media type.
 func (s *Service) SaveBytesArtifact(ctx context.Context, ownerID uuid.UUID, jobID *uuid.UUID, kind domain.ArtifactKind, mediaType domain.MediaType, mimeType string, data []byte) (*domain.Artifact, error) {
-	return s.saveBytes(ctx, ownerID, jobID, kind, mediaType, mimeType, data, domain.ArtifactMediaMetadata{})
+	return s.SaveBytesArtifactForAccount(ctx, ownerID, ownerID, jobID, kind, mediaType, mimeType, data)
+}
+
+// SaveBytesArtifactForAccount stores raw bytes for a canonical account owner.
+func (s *Service) SaveBytesArtifactForAccount(ctx context.Context, userID, accountID uuid.UUID, jobID *uuid.UUID, kind domain.ArtifactKind, mediaType domain.MediaType, mimeType string, data []byte) (*domain.Artifact, error) {
+	return s.saveBytes(ctx, userID, accountID, jobID, kind, mediaType, mimeType, data, domain.ArtifactMediaMetadata{})
 }
 
 // SaveBytesArtifactWithMetadata stores raw bytes with safe media facts already
 // extracted by a worker-owned media pipeline.
 func (s *Service) SaveBytesArtifactWithMetadata(ctx context.Context, ownerID uuid.UUID, jobID *uuid.UUID, kind domain.ArtifactKind, mediaType domain.MediaType, mimeType string, data []byte, metadata domain.ArtifactMediaMetadata) (*domain.Artifact, error) {
-	return s.saveBytes(ctx, ownerID, jobID, kind, mediaType, mimeType, data, metadata)
+	return s.SaveBytesArtifactWithMetadataForAccount(ctx, ownerID, ownerID, jobID, kind, mediaType, mimeType, data, metadata)
+}
+
+// SaveBytesArtifactWithMetadataForAccount stores raw bytes with metadata for a
+// canonical account owner.
+func (s *Service) SaveBytesArtifactWithMetadataForAccount(ctx context.Context, userID, accountID uuid.UUID, jobID *uuid.UUID, kind domain.ArtifactKind, mediaType domain.MediaType, mimeType string, data []byte, metadata domain.ArtifactMediaMetadata) (*domain.Artifact, error) {
+	return s.saveBytes(ctx, userID, accountID, jobID, kind, mediaType, mimeType, data, metadata)
 }
 
 // SaveVariantWithMetadata stores a derived rendition of an existing artifact.
@@ -139,6 +198,9 @@ func (s *Service) SaveVariantWithMetadata(ctx context.Context, artifact *domain.
 		return nil, fmt.Errorf("artifactservice: variant parent missing")
 	}
 	if existing, err := s.findVariant(ctx, artifact.ID, variantType); err == nil {
+		if err := s.scanStoredObject(ctx, artifact.MediaType, existing.MimeType, existing.StorageBucket, existing.StorageKey); err != nil {
+			return nil, err
+		}
 		return existing, nil
 	} else if !errors.Is(err, domain.ErrNotFound) {
 		return nil, err
@@ -146,13 +208,17 @@ func (s *Service) SaveVariantWithMetadata(ctx context.Context, artifact *domain.
 
 	if s.scanner != nil {
 		if err := s.scanner.Scan(ctx, artifact.MediaType, mimeType, data); err != nil {
-			return nil, fmt.Errorf("artifactservice: content scan rejected: %w", err)
+			return nil, ContentScanError{Err: err}
 		}
 	}
 
 	sum := sha256.Sum256(data)
 	sha := hex.EncodeToString(sum[:])
-	key := fmt.Sprintf("artifacts/%s/%s/%s-%s.%s", artifact.OwnerUserID, artifact.ID, variantType, sha, extFor(artifact.MediaType))
+	ownerID := artifact.OwnerAccountID
+	if ownerID == uuid.Nil {
+		ownerID = artifact.OwnerUserID
+	}
+	key := fmt.Sprintf("artifacts/%s/%s/%s-%s.%s", ownerID, artifact.ID, variantType, sha, extFor(artifact.MediaType))
 	if err := s.store.Put(ctx, s.bucket, key, data, mimeType); err != nil {
 		return nil, fmt.Errorf("artifactservice: store variant object: %w", err)
 	}
@@ -170,11 +236,36 @@ func (s *Service) SaveVariantWithMetadata(ctx context.Context, artifact *domain.
 	variant.ApplyMediaMetadata(metadata)
 	if err := s.repo.AddVariant(ctx, variant); err != nil {
 		if errors.Is(err, domain.ErrConflict) {
-			return s.findVariant(ctx, artifact.ID, variantType)
+			existing, findErr := s.findVariant(ctx, artifact.ID, variantType)
+			if findErr != nil {
+				return nil, findErr
+			}
+			if scanErr := s.scanStoredObject(ctx, artifact.MediaType, existing.MimeType, existing.StorageBucket, existing.StorageKey); scanErr != nil {
+				return nil, scanErr
+			}
+			return existing, nil
 		}
 		return nil, fmt.Errorf("artifactservice: record variant: %w", err)
 	}
 	return variant, nil
+}
+
+func (s *Service) scanStoredObject(ctx context.Context, mediaType domain.MediaType, mimeType, bucket, key string) error {
+	if s.scanner == nil {
+		return nil
+	}
+	reader, ok := s.store.(objectReader)
+	if !ok {
+		return fmt.Errorf("artifactservice: object store cannot read bytes for rescan")
+	}
+	data, err := reader.GetObject(ctx, bucket, key)
+	if err != nil {
+		return fmt.Errorf("artifactservice: read stored bytes for rescan: %w", err)
+	}
+	if err := s.scanner.Scan(ctx, mediaType, mimeType, data); err != nil {
+		return ContentScanError{Err: err}
+	}
+	return nil
 }
 
 func (s *Service) findVariant(ctx context.Context, artifactID uuid.UUID, variantType domain.VariantType) (*domain.ArtifactVariant, error) {
@@ -193,14 +284,28 @@ func (s *Service) findVariant(ctx context.Context, artifactID uuid.UUID, variant
 // SaveRemoteArtifact downloads a remote URL (e.g. a provider output) and stores
 // it as an artifact. The content type from the response fills in an empty mime.
 func (s *Service) SaveRemoteArtifact(ctx context.Context, ownerID uuid.UUID, jobID *uuid.UUID, kind domain.ArtifactKind, mediaType domain.MediaType, url string) (*domain.Artifact, error) {
-	return s.SaveRemoteArtifactWithMetadata(ctx, ownerID, jobID, kind, mediaType, url, domain.ArtifactMediaMetadata{})
+	return s.SaveRemoteArtifactForAccount(ctx, ownerID, ownerID, jobID, kind, mediaType, url)
+}
+
+// SaveRemoteArtifactForAccount downloads a remote URL and stores it for a
+// canonical account owner.
+func (s *Service) SaveRemoteArtifactForAccount(ctx context.Context, userID, accountID uuid.UUID, jobID *uuid.UUID, kind domain.ArtifactKind, mediaType domain.MediaType, url string) (*domain.Artifact, error) {
+	return s.SaveRemoteArtifactWithMetadataForAccount(ctx, userID, accountID, jobID, kind, mediaType, url, domain.ArtifactMediaMetadata{})
 }
 
 // SaveRemoteArtifactWithMetadata downloads a provider output and stores it with
 // safe metadata produced by the worker-owned media pipeline.
 func (s *Service) SaveRemoteArtifactWithMetadata(ctx context.Context, ownerID uuid.UUID, jobID *uuid.UUID, kind domain.ArtifactKind, mediaType domain.MediaType, url string, metadata domain.ArtifactMediaMetadata) (*domain.Artifact, error) {
+	return s.SaveRemoteArtifactWithMetadataForAccount(ctx, ownerID, ownerID, jobID, kind, mediaType, url, metadata)
+}
+
+// SaveRemoteArtifactWithMetadataForAccount downloads a provider output and
+// stores it for a canonical account owner.
+func (s *Service) SaveRemoteArtifactWithMetadataForAccount(ctx context.Context, userID, accountID uuid.UUID, jobID *uuid.UUID, kind domain.ArtifactKind, mediaType domain.MediaType, url string, metadata domain.ArtifactMediaMetadata) (*domain.Artifact, error) {
+	ownerID := artifactOwnerID(userID, accountID)
 	ctx, span := tracing.Start(ctx, "artifact.download",
 		attribute.String("owner.id", ownerID.String()),
+		attribute.String("owner.user_id", userID.String()),
 		attribute.String("artifact.kind", string(kind)),
 		attribute.String("artifact.media_type", string(mediaType)),
 	)
@@ -219,7 +324,7 @@ func (s *Service) SaveRemoteArtifactWithMetadata(ctx context.Context, ownerID uu
 	if contentType == "" {
 		contentType = "application/octet-stream"
 	}
-	return s.saveBytes(ctx, ownerID, jobID, kind, mediaType, contentType, data, metadata)
+	return s.saveBytes(ctx, userID, ownerID, jobID, kind, mediaType, contentType, data, metadata)
 }
 
 func safeDownloadError(err error) error {
@@ -235,9 +340,11 @@ func safeDownloadError(err error) error {
 
 // saveBytes computes the content hash, reuses only policy-compatible input
 // reference images, uploads new bytes and records artifact metadata.
-func (s *Service) saveBytes(ctx context.Context, ownerID uuid.UUID, jobID *uuid.UUID, kind domain.ArtifactKind, mediaType domain.MediaType, mimeType string, data []byte, metadata domain.ArtifactMediaMetadata) (*domain.Artifact, error) {
+func (s *Service) saveBytes(ctx context.Context, userID, accountID uuid.UUID, jobID *uuid.UUID, kind domain.ArtifactKind, mediaType domain.MediaType, mimeType string, data []byte, metadata domain.ArtifactMediaMetadata) (*domain.Artifact, error) {
+	ownerID := artifactOwnerID(userID, accountID)
 	ctx, span := tracing.Start(ctx, "artifact.store",
 		attribute.String("owner.id", ownerID.String()),
+		attribute.String("owner.user_id", userID.String()),
 		attribute.String("artifact.kind", string(kind)),
 		attribute.String("artifact.media_type", string(mediaType)),
 		attribute.String("artifact.mime_type", mimeType),
@@ -265,8 +372,9 @@ func (s *Service) saveBytes(ctx context.Context, ownerID uuid.UUID, jobID *uuid.
 	// Scan new content before it is persisted or delivered (audit ST1).
 	if s.scanner != nil {
 		if err := s.scanner.Scan(ctx, mediaType, mimeType, data); err != nil {
-			tracing.RecordError(span, err)
-			return nil, fmt.Errorf("artifactservice: content scan rejected: %w", err)
+			scanErr := ContentScanError{Err: err}
+			tracing.RecordError(span, scanErr)
+			return nil, scanErr
 		}
 	}
 
@@ -279,7 +387,8 @@ func (s *Service) saveBytes(ctx context.Context, ownerID uuid.UUID, jobID *uuid.
 
 	artifact := &domain.Artifact{
 		ID:                      artifactID,
-		OwnerUserID:             ownerID,
+		OwnerUserID:             userID,
+		OwnerAccountID:          ownerID,
 		JobID:                   jobID,
 		Kind:                    kind,
 		MediaType:               mediaType,
@@ -299,6 +408,13 @@ func (s *Service) saveBytes(ctx context.Context, ownerID uuid.UUID, jobID *uuid.
 	}
 	span.SetAttributes(attribute.String("artifact.id", artifact.ID.String()))
 	return artifact, nil
+}
+
+func artifactOwnerID(userID, accountID uuid.UUID) uuid.UUID {
+	if accountID != uuid.Nil {
+		return accountID
+	}
+	return userID
 }
 
 func classifyArtifact(kind domain.ArtifactKind, mediaType domain.MediaType, status domain.ArtifactStatus) (domain.ArtifactLifecycleClass, string) {
@@ -334,15 +450,44 @@ type httpDownloader struct {
 	client       *http.Client
 	allowedHosts map[string]struct{}
 	blockPrivate bool
+	resolver     ipResolver
+	dialContext  dialContextFunc
 }
+
+type ipResolver interface {
+	LookupIPAddr(ctx context.Context, host string) ([]net.IPAddr, error)
+}
+
+type defaultIPResolver struct{}
+
+func (defaultIPResolver) LookupIPAddr(ctx context.Context, host string) ([]net.IPAddr, error) {
+	if ip := net.ParseIP(host); ip != nil {
+		return []net.IPAddr{{IP: ip}}, nil
+	}
+	return net.DefaultResolver.LookupIPAddr(ctx, host)
+}
+
+type dialContextFunc func(ctx context.Context, network, address string) (net.Conn, error)
 
 // newHTTPDownloader builds the default SSRF-hardened downloader.
 func newHTTPDownloader() *httpDownloader {
-	d := &httpDownloader{blockPrivate: true}
+	baseDialer := &net.Dialer{
+		Timeout:   30 * time.Second,
+		KeepAlive: 30 * time.Second,
+	}
+	d := &httpDownloader{
+		blockPrivate: true,
+		resolver:     defaultIPResolver{},
+		dialContext:  baseDialer.DialContext,
+	}
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.Proxy = nil
+	transport.DialContext = d.dialPublicContext
 	d.client = &http.Client{
-		Timeout: 60 * time.Second,
+		Timeout:   60 * time.Second,
+		Transport: transport,
 		CheckRedirect: func(req *http.Request, _ []*http.Request) error {
-			return d.guard(req.URL)
+			return d.guard(req.Context(), req.URL)
 		},
 	}
 	return d
@@ -362,12 +507,64 @@ func (d *httpDownloader) setAllowedHosts(hosts []string) {
 	d.allowedHosts = m
 }
 
+func (d *httpDownloader) dialPublicContext(ctx context.Context, network, address string) (net.Conn, error) {
+	host, port, err := net.SplitHostPort(address)
+	if err != nil {
+		return nil, fmt.Errorf("artifactservice: parse dial address %q: %w", address, err)
+	}
+	if err := d.guardHost(host); err != nil {
+		return nil, err
+	}
+	if !d.blockPrivate {
+		return d.dial(ctx, network, address)
+	}
+	ips, err := d.publicIPs(ctx, host)
+	if err != nil {
+		return nil, err
+	}
+	var lastErr error
+	for _, ip := range ips {
+		if !networkAllowsIP(network, ip) {
+			continue
+		}
+		conn, err := d.dial(ctx, network, net.JoinHostPort(ip.String(), port))
+		if err == nil {
+			return conn, nil
+		}
+		lastErr = err
+	}
+	if lastErr != nil {
+		return nil, fmt.Errorf("artifactservice: dial public address for %q: %w", host, lastErr)
+	}
+	return nil, fmt.Errorf("artifactservice: no public address for %q matches network %q", host, network)
+}
+
+func (d *httpDownloader) dial(ctx context.Context, network, address string) (net.Conn, error) {
+	if d.dialContext != nil {
+		return d.dialContext(ctx, network, address)
+	}
+	var dialer net.Dialer
+	return dialer.DialContext(ctx, network, address)
+}
+
 // guard validates a URL against the SSRF policy.
-func (d *httpDownloader) guard(u *url.URL) error {
+func (d *httpDownloader) guard(ctx context.Context, u *url.URL) error {
 	if u.Scheme != "http" && u.Scheme != "https" {
 		return fmt.Errorf("artifactservice: blocked url scheme %q", u.Scheme)
 	}
 	host := strings.ToLower(u.Hostname())
+	if err := d.guardHost(host); err != nil {
+		return err
+	}
+	if !d.blockPrivate {
+		return nil
+	}
+	_, err := d.publicIPs(ctx, host)
+	return err
+}
+
+func (d *httpDownloader) guardHost(host string) error {
+	host = strings.ToLower(host)
 	if host == "" {
 		return fmt.Errorf("artifactservice: missing host")
 	}
@@ -376,19 +573,43 @@ func (d *httpDownloader) guard(u *url.URL) error {
 			return fmt.Errorf("artifactservice: host %q not in egress allowlist", host)
 		}
 	}
-	if !d.blockPrivate {
-		return nil
-	}
-	ips, err := net.LookupIP(host)
-	if err != nil {
-		return fmt.Errorf("artifactservice: resolve %q: %w", host, err)
-	}
-	for _, ip := range ips {
-		if isBlockedIP(ip) {
-			return fmt.Errorf("artifactservice: blocked non-public address %s", ip)
-		}
-	}
 	return nil
+}
+
+func (d *httpDownloader) publicIPs(ctx context.Context, host string) ([]net.IP, error) {
+	resolver := d.resolver
+	if resolver == nil {
+		resolver = defaultIPResolver{}
+	}
+	addrs, err := resolver.LookupIPAddr(ctx, host)
+	if err != nil {
+		return nil, fmt.Errorf("artifactservice: resolve %q: %w", host, err)
+	}
+	ips := make([]net.IP, 0, len(addrs))
+	for _, addr := range addrs {
+		if addr.IP == nil {
+			continue
+		}
+		if isBlockedIP(addr.IP) {
+			return nil, fmt.Errorf("artifactservice: blocked non-public address %s", addr.IP)
+		}
+		ips = append(ips, addr.IP)
+	}
+	if len(ips) == 0 {
+		return nil, fmt.Errorf("artifactservice: resolve %q: no ip addresses", host)
+	}
+	return ips, nil
+}
+
+func networkAllowsIP(network string, ip net.IP) bool {
+	switch network {
+	case "tcp4":
+		return ip.To4() != nil
+	case "tcp6":
+		return ip.To4() == nil
+	default:
+		return true
+	}
 }
 
 // isBlockedIP reports whether an IP is in a range that must not be reached from
@@ -414,7 +635,7 @@ func (d *httpDownloader) Download(ctx context.Context, rawURL string) ([]byte, s
 	if u.Scheme == "data" {
 		return decodeDataURL(rawURL)
 	}
-	if err := d.guard(u); err != nil {
+	if err := d.guard(ctx, u); err != nil {
 		return nil, "", err
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)

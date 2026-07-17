@@ -13,8 +13,11 @@ import (
 	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/platform/config"
 	"vk-ai-aggregator/internal/platform/uow"
+	"vk-ai-aggregator/internal/service/accountauth"
+	"vk-ai-aggregator/internal/service/accountservice"
 	"vk-ai-aggregator/internal/service/billingservice"
 	"vk-ai-aggregator/internal/service/commandrouter"
+	"vk-ai-aggregator/internal/service/identityresolver"
 	"vk-ai-aggregator/internal/service/joborchestrator"
 	"vk-ai-aggregator/internal/service/paymentservice"
 	"vk-ai-aggregator/internal/service/pricingcatalog"
@@ -23,6 +26,9 @@ import (
 // SharedCore groups backend-core collaborators shared by app surfaces.
 type SharedCore struct {
 	Users          domain.UserRepository
+	Identity       domain.IdentityResolver
+	Account        *accountservice.Service
+	AccountAuth    *accountauth.Service
 	Jobs           domain.JobRepository
 	Commands       domain.CommandRepository
 	Inbound        domain.InboundEventRepository
@@ -48,6 +54,7 @@ type SharedCore struct {
 
 type sharedCoreOptions struct {
 	orchestratorOptions []joborchestrator.Option
+	accountAuthOptions  []accountauth.Option
 	pricingCatalog      *pricingcatalog.Catalog
 }
 
@@ -69,6 +76,14 @@ func WithPricingCatalog(catalog *pricingcatalog.Catalog) SharedCoreOption {
 	}
 }
 
+// WithAccountAuthOptions forwards runtime account-auth controls such as shared
+// rate limiting without making the shared core own Redis or HTTP concerns.
+func WithAccountAuthOptions(opts ...accountauth.Option) SharedCoreOption {
+	return func(o *sharedCoreOptions) {
+		o.accountAuthOptions = append(o.accountAuthOptions, opts...)
+	}
+}
+
 // NewSharedCore wires repositories and services without owning surface behavior.
 func NewSharedCore(pool *pgxpool.Pool, cfg config.Config, opts ...SharedCoreOption) (SharedCore, error) {
 	var options sharedCoreOptions
@@ -81,12 +96,24 @@ func NewSharedCore(pool *pgxpool.Pool, cfg config.Config, opts ...SharedCoreOpti
 		return SharedCore{}, errors.New("api core: pricing catalog is required")
 	}
 	users := postgres.NewUserRepository(pool)
+	identities := postgres.NewAccountIdentityRepository(pool)
+	sessions := postgres.NewAccountSessionRepository(pool)
+	accountSecurity := postgres.NewAccountSecurityRepository(pool)
 	jobs := postgres.NewJobRepository(pool)
+	artifacts := postgres.NewArtifactRepository(pool)
 	providerTasks := postgres.NewProviderTaskRepository(pool)
 	unitOfWork := postgres.NewUnitOfWork(pool)
 	billingRepo := postgres.NewBillingRepository(pool)
 	payments := postgres.NewPaymentRepository(pool)
 	billing := billingservice.New(billingRepo, billingservice.WithPriceOverrides(cfg.PriceOverrides))
+	identity := identityresolver.New(users, identities, billing)
+	accountAuthOptions := append([]accountauth.Option{
+		accountauth.WithSessionRepository(sessions),
+		accountauth.WithCredentialRepository(accountSecurity),
+		accountauth.WithAccountAuditRepository(accountSecurity),
+	}, options.accountAuthOptions...)
+	accountAuth := accountauth.New(identity, accountAuthOptions...)
+	accountSvc := accountservice.New(identities, accountAuth)
 	paymentProvider, err := paymentadapter.NewProvider(cfg)
 	if err != nil {
 		return SharedCore{}, err
@@ -106,12 +133,16 @@ func NewSharedCore(pool *pgxpool.Pool, cfg config.Config, opts ...SharedCoreOpti
 	// publishes it to the queue, so the api process does not enqueue directly
 	// (audit A2).
 	orchestratorOptions := append([]joborchestrator.Option{
+		joborchestrator.WithArtifactRepository(artifacts),
 		joborchestrator.WithPricingCatalog(options.pricingCatalog),
 	}, options.orchestratorOptions...)
 	orch := joborchestrator.New(jobs, unitOfWork, billing, cfg.MaxJobCost, orchestratorOptions...)
 
 	return SharedCore{
 		Users:          users,
+		Identity:       identity,
+		Account:        accountSvc,
+		AccountAuth:    accountAuth,
 		Jobs:           jobs,
 		Commands:       postgres.NewCommandRepository(pool),
 		Inbound:        postgres.NewInboundEventRepository(pool),
@@ -122,7 +153,7 @@ func NewSharedCore(pool *pgxpool.Pool, cfg config.Config, opts ...SharedCoreOpti
 		BillingRepo:    billingRepo,
 		Payments:       payments,
 		Referrals:      postgres.NewReferralRepository(pool),
-		Artifacts:      postgres.NewArtifactRepository(pool),
+		Artifacts:      artifacts,
 		Moderation:     postgres.NewModerationResultRepository(pool),
 		Conversations:  postgres.NewConversationRepository(pool),
 		Maintenance:    postgres.NewMaintenanceRepository(pool),

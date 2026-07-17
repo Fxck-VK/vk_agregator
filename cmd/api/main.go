@@ -18,11 +18,15 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
+	"vk-ai-aggregator/internal/adapter/accountdelivery"
+	"vk-ai-aggregator/internal/adapter/accountoauth"
+	accountapi "vk-ai-aggregator/internal/adapter/inbound/account"
 	adminapi "vk-ai-aggregator/internal/adapter/inbound/admin"
 	billingapi "vk-ai-aggregator/internal/adapter/inbound/billing"
 	paymentredirect "vk-ai-aggregator/internal/adapter/inbound/paymentredirect"
 	redisqueue "vk-ai-aggregator/internal/adapter/queue/redis"
 	"vk-ai-aggregator/internal/adapter/storage/postgres"
+	redisstore "vk-ai-aggregator/internal/adapter/storage/redis"
 	s3store "vk-ai-aggregator/internal/adapter/storage/s3"
 	apiapp "vk-ai-aggregator/internal/app/api"
 	miniappapp "vk-ai-aggregator/internal/app/miniapp"
@@ -34,6 +38,8 @@ import (
 	"vk-ai-aggregator/internal/platform/ratelimit"
 	"vk-ai-aggregator/internal/platform/readiness"
 	"vk-ai-aggregator/internal/platform/tracing"
+	"vk-ai-aggregator/internal/service/accountauth"
+	"vk-ai-aggregator/internal/service/accountlink"
 	"vk-ai-aggregator/internal/service/joborchestrator"
 	"vk-ai-aggregator/internal/service/maintenance"
 	"vk-ai-aggregator/internal/service/pricingcatalog"
@@ -132,9 +138,67 @@ func main() {
 		joborchestrator.WithMaxActiveVideoJobsPerUser(cfg.MediaMaxActiveVideoJobsPerUser),
 		joborchestrator.WithCapacityGuard(mediaCapacityGuard(mediaQueueGuard)),
 		joborchestrator.WithVideoRouteResolver(videoRouteResolver),
-	), apiapp.WithPricingCatalog(pricingCatalog))
+	), apiapp.WithPricingCatalog(pricingCatalog), apiapp.WithAccountAuthOptions(
+		accountauth.WithLimiter(ratelimit.NewRedisFixedWindowLimiter(
+			rdb,
+			"account_auth",
+			cfg.AccountAuthRateLimitLimit,
+			cfg.AccountAuthRateLimitWindow,
+		)),
+	))
 	if err != nil {
 		logger.Error("api core wiring failed", logging.ErrorAttr(err))
+		os.Exit(1)
+	}
+	accountSender, err := accountdelivery.NewSender(accountdelivery.Config{
+		EmailProvider: cfg.AccountEmailDeliveryProvider,
+		EmailSMTP: accountdelivery.SMTPConfig{
+			Host:     cfg.AccountEmailSMTPHost,
+			Port:     cfg.AccountEmailSMTPPort,
+			Username: cfg.AccountEmailSMTPUsername,
+			Password: cfg.AccountEmailSMTPPassword,
+			From:     cfg.AccountEmailSMTPFrom,
+			Subject:  cfg.AccountEmailSMTPSubject,
+			TLSMode:  cfg.AccountEmailSMTPTLSMode,
+			Timeout:  cfg.AccountEmailSMTPTimeout,
+		},
+		PhoneProvider: cfg.AccountPhoneDeliveryProvider,
+		PhoneHTTP: accountdelivery.HTTPPhoneConfig{
+			URL:             cfg.AccountPhoneHTTPURL,
+			Method:          cfg.AccountPhoneHTTPMethod,
+			AuthHeaderName:  cfg.AccountPhoneHTTPAuthHeader,
+			AuthHeaderValue: cfg.AccountPhoneHTTPAuthValue,
+			ContentType:     cfg.AccountPhoneHTTPContentType,
+			BodyTemplate:    cfg.AccountPhoneHTTPBodyTemplate,
+			Timeout:         cfg.AccountPhoneHTTPTimeout,
+		},
+	})
+	if err != nil {
+		logger.Error("account delivery wiring failed", logging.ErrorAttr(err))
+		os.Exit(1)
+	}
+	emailLinker, err := accountlink.New(
+		redisstore.NewAccountLinkStore(rdb),
+		accountSender,
+		core.Account,
+		accountlink.Config{
+			CodeTTL:            cfg.AccountEmailLinkCodeTTL,
+			CodeDigits:         cfg.AccountEmailLinkCodeDigits,
+			RequestLimit:       cfg.AccountEmailLinkRequestLimit,
+			RequestWindow:      cfg.AccountEmailLinkRequestWindow,
+			VerifyLimit:        cfg.AccountEmailLinkVerifyLimit,
+			VerifyWindow:       cfg.AccountEmailLinkVerifyWindow,
+			PhoneCodeTTL:       cfg.AccountPhoneLinkOTPTTL,
+			PhoneCodeDigits:    cfg.AccountPhoneLinkOTPDigits,
+			PhoneRequestLimit:  cfg.AccountPhoneLinkRequestLimit,
+			PhoneRequestWindow: cfg.AccountPhoneLinkRequestWindow,
+			PhoneVerifyLimit:   cfg.AccountPhoneLinkVerifyLimit,
+			PhoneVerifyWindow:  cfg.AccountPhoneLinkVerifyWindow,
+			HashSecret:         cfg.VKAppSecret,
+		},
+	)
+	if err != nil {
+		logger.Error("account email linker wiring failed", logging.ErrorAttr(err))
 		os.Exit(1)
 	}
 	vkHandler := vkbot.NewHandler(ctx, cfg, vkbot.Deps{
@@ -142,6 +206,9 @@ func main() {
 		Idempotency:    core.Idempotency,
 		Inbound:        core.Inbound,
 		Users:          core.Users,
+		Identity:       core.Identity,
+		Account:        core.Account,
+		AccountLink:    emailLinker,
 		Jobs:           core.Jobs,
 		Commands:       core.Commands,
 		Billing:        core.Billing,
@@ -205,9 +272,38 @@ func main() {
 		RateLimiter: ratelimit.New(cfg.PaymentRedirectRateLimitRPS, cfg.PaymentRedirectRateLimitBurst),
 		Logger:      logger,
 	})
+	oauthRegistry := accountoauth.NewRegistryFromConfig(accountoauth.Config{
+		GoogleClientIDs:   cfg.AccountOAuthGoogleClientIDs,
+		GoogleJWKSURL:     cfg.AccountOAuthGoogleJWKSURL,
+		AppleClientIDs:    cfg.AccountOAuthAppleClientIDs,
+		AppleJWKSURL:      cfg.AccountOAuthAppleJWKSURL,
+		TelegramBotToken:  cfg.AccountOAuthTelegramBotToken,
+		TelegramMaxAge:    cfg.AccountOAuthTelegramMaxAge,
+		TelegramClientIDs: cfg.AccountOAuthTelegramClientIDs,
+		TelegramIssuer:    cfg.AccountOAuthTelegramIssuer,
+		TelegramJWKSURL:   cfg.AccountOAuthTelegramJWKSURL,
+		VKIDClientIDs:     cfg.AccountOAuthVKIDClientIDs,
+		VKIDIssuer:        cfg.AccountOAuthVKIDIssuer,
+		VKIDJWKSURL:       cfg.AccountOAuthVKIDJWKSURL,
+	})
+	account := accountapi.NewHandler(accountapi.Config{
+		AppSecret:              cfg.VKAppSecret,
+		LaunchParamsMaxAge:     cfg.MiniAppLaunchParamsMaxAge,
+		AllowQueryLaunchParams: cfg.MiniAppAllowQueryLaunchParams,
+	}, accountapi.Deps{
+		Identity:  core.Identity,
+		Account:   core.Account,
+		Logins:    core.AccountAuth,
+		Sessions:  core.AccountAuth,
+		Passwords: core.AccountAuth,
+		OAuth:     oauthRegistry,
+		Linker:    emailLinker,
+		Logger:    logger,
+	})
 
 	miniapp := miniappapp.NewHandler(ctx, cfg, miniappapp.Deps{
 		Users:          core.Users,
+		Identity:       core.Identity,
 		Jobs:           core.Jobs,
 		Conversations:  core.Conversations,
 		Artifacts:      core.Artifacts,
@@ -230,6 +326,7 @@ func main() {
 	mux.Handle("/admin/", metrics.Middleware("admin", admin.Routes()))
 	mux.Handle("/billing/", metrics.Middleware("billing", billing.Routes()))
 	mux.Handle("/payments/", metrics.Middleware("payment_redirect", paymentRedirect.Routes()))
+	mux.Handle("/account/", metrics.Middleware("account", account.Routes()))
 	mux.Handle("/miniapp/", metrics.Middleware("miniapp", miniapp.Routes()))
 	mux.Handle("GET /metrics", metrics.PrivateHandler())
 	mux.HandleFunc("GET /health", healthHandler(pool, rdb))

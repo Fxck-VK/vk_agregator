@@ -139,6 +139,125 @@ func TestOutputModerationBlocksGeneratedTextBeforeDialogSave(t *testing.T) {
 	}
 }
 
+type internalMarkerTextProvider struct {
+	*mock.Provider
+	output string
+}
+
+func (p *internalMarkerTextProvider) Poll(ctx context.Context, ref domain.ProviderTaskRef) (domain.ProviderTaskResult, error) {
+	result, err := p.Provider.Poll(ctx, ref)
+	if err == nil && result.Status == domain.ProviderTaskSucceeded {
+		result.Text = p.output
+	}
+	return result, err
+}
+
+func TestInternalOutputGuardBlocksTrustedFactsDisclosureWithoutModerator(t *testing.T) {
+	ctx := context.Background()
+	textCtx := &fakeTextContext{preparedPrompt: "context packet\n"}
+	modRepo := memory.NewModerationRepo()
+	provider := &internalMarkerTextProvider{
+		Provider: mock.New(),
+		output:   "Факты НейроХаб:\n- synthetic internal detail",
+	}
+	h := newHarnessCore(t, provider, textCtx, func(deps *worker.Deps) {
+		deps.ModResults = modRepo
+	})
+
+	job := h.queueJob(t, domain.OperationTextGenerate, domain.ModalityText, "clean prompt")
+	if err := h.gen.Process(ctx, taskFor(job)); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+
+	got := h.reload(t, job.ID)
+	if got.Status != domain.JobStatusRejected {
+		t.Fatalf("status = %q, want rejected", got.Status)
+	}
+	if textCtx.completeCalls != 0 {
+		t.Fatalf("internal output reached dialog context: calls=%d", textCtx.completeCalls)
+	}
+	if n := len(h.streams.byStream[redisqueue.StreamDelivery]); n != 0 {
+		t.Fatalf("internal output reached delivery queue: count=%d", n)
+	}
+	if len(h.releaser.released) != 1 || h.releaser.released[0] != job.ID {
+		t.Fatalf("expected reservation release for rejected job, got %v", h.releaser.released)
+	}
+	results, err := modRepo.ListByJob(ctx, job.ID)
+	if err != nil {
+		t.Fatalf("list moderation results: %v", err)
+	}
+	if len(results) != 1 || results[0].Decision != domain.ModerationBlock || results[0].Provider != "internal-output-policy" {
+		t.Fatalf("expected deterministic internal-output block verdict, got %+v", results)
+	}
+}
+
+func TestInternalOutputGuardBlocksMarkerFreeInfrastructureDisclosure(t *testing.T) {
+	tests := []struct {
+		name   string
+		output string
+	}{
+		{name: "internal provider", output: "The internal generation provider is DeepInfra."},
+		{name: "internal model code", output: "Active model code: deepseek-ai/DeepSeek-V4-Flash."},
+		{name: "api endpoint", output: "Backend API endpoint: https://api.deepinfra.com/v1/openai."},
+		{name: "system prompt", output: "System prompt: answer as NeiroHub."},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			textCtx := &fakeTextContext{preparedPrompt: "context packet\n"}
+			provider := &internalMarkerTextProvider{
+				Provider: mock.New(),
+				output:   tt.output,
+			}
+			h := newHarnessCore(t, provider, textCtx, nil)
+
+			job := h.queueJob(t, domain.OperationTextGenerate, domain.ModalityText, "clean prompt")
+			if err := h.gen.Process(ctx, taskFor(job)); err != nil {
+				t.Fatalf("process: %v", err)
+			}
+
+			if got := h.reload(t, job.ID); got.Status != domain.JobStatusRejected {
+				t.Fatalf("status = %q, want rejected", got.Status)
+			}
+			if textCtx.completeCalls != 0 {
+				t.Fatalf("internal output reached dialog context: calls=%d", textCtx.completeCalls)
+			}
+			if n := len(h.streams.byStream[redisqueue.StreamDelivery]); n != 0 {
+				t.Fatalf("internal output reached delivery queue: count=%d", n)
+			}
+			if len(h.releaser.released) != 1 || h.releaser.released[0] != job.ID {
+				t.Fatalf("expected reservation release for rejected job, got %v", h.releaser.released)
+			}
+		})
+	}
+}
+
+func TestInternalOutputGuardAllowsPublicProductLabels(t *testing.T) {
+	ctx := context.Background()
+	textCtx := &fakeTextContext{preparedPrompt: "context packet\n"}
+	provider := &internalMarkerTextProvider{
+		Provider: mock.New(),
+		output:   "Runway Gen-4 Turbo and GPT Image 2 are public product labels.",
+	}
+	h := newHarnessCore(t, provider, textCtx, nil)
+
+	job := h.queueJob(t, domain.OperationTextGenerate, domain.ModalityText, "clean prompt")
+	if err := h.gen.Process(ctx, taskFor(job)); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+
+	if got := h.reload(t, job.ID); got.Status != domain.JobStatusResultReady {
+		t.Fatalf("status = %q, want result_ready", got.Status)
+	}
+	if textCtx.completeCalls != 1 {
+		t.Fatalf("public product output did not reach dialog context: calls=%d", textCtx.completeCalls)
+	}
+	if n := len(h.streams.byStream[redisqueue.StreamDelivery]); n != 1 {
+		t.Fatalf("public product output delivery count=%d, want 1", n)
+	}
+}
+
 // An allowed output proceeds to delivery as before.
 func TestOutputModerationAllowsDelivery(t *testing.T) {
 	ctx := context.Background()
@@ -181,7 +300,7 @@ func TestExhaustedRetryRoutesToDLQ(t *testing.T) {
 	}
 }
 
-func TestGenerationWorkerResumesDurableSyncProviderResultAfterSubmitCrash(t *testing.T) {
+func TestGenerationWorkerRecoversSanitizedSyncProviderResultAfterSubmitCrash(t *testing.T) {
 	ctx := context.Background()
 	provider := &durableSyncProvider{}
 	var failingJobs *failStatusOnceJobRepo
@@ -215,8 +334,8 @@ func TestGenerationWorkerResumesDurableSyncProviderResultAfterSubmitCrash(t *tes
 	if got := h.reload(t, job.ID); got.Status != domain.JobStatusResultReady {
 		t.Fatalf("status after retry = %q, want result_ready", got.Status)
 	}
-	if provider.pollCalls != 0 {
-		t.Fatalf("retry used provider Poll instead of durable result: calls=%d", provider.pollCalls)
+	if provider.pollCalls != 1 {
+		t.Fatalf("retry should recover by polling sanitized provider task, calls=%d", provider.pollCalls)
 	}
 	if provider.submitCalls != 1 {
 		t.Fatalf("provider Submit calls = %d, want 1", provider.submitCalls)
@@ -245,6 +364,7 @@ func (r *failStatusOnceJobRepo) UpdateStatus(ctx context.Context, id uuid.UUID, 
 type durableSyncProvider struct {
 	submitCalls int
 	pollCalls   int
+	result      domain.ProviderTaskResult
 }
 
 func (p *durableSyncProvider) Name() domain.ProviderName { return domain.ProviderMock }
@@ -269,6 +389,7 @@ func (p *durableSyncProvider) Submit(_ context.Context, req domain.ProviderReque
 		OutputURLs: []string{"data:text/plain;base64,b2s="},
 		Text:       "ok",
 	}
+	p.result = res
 	raw, _ := json.Marshal(res)
 	return domain.ProviderTask{
 		JobID:          req.JobID,
@@ -283,7 +404,10 @@ func (p *durableSyncProvider) Submit(_ context.Context, req domain.ProviderReque
 
 func (p *durableSyncProvider) Poll(context.Context, domain.ProviderTaskRef) (domain.ProviderTaskResult, error) {
 	p.pollCalls++
-	return domain.ProviderTaskResult{Status: domain.ProviderTaskFailed, ErrorClass: domain.ProviderErrTaskNotFound}, nil
+	if p.result.Status == "" {
+		return domain.ProviderTaskResult{Status: domain.ProviderTaskFailed, ErrorClass: domain.ProviderErrTaskNotFound}, nil
+	}
+	return p.result, nil
 }
 
 func (p *durableSyncProvider) Cancel(context.Context, domain.ProviderTaskRef) error { return nil }

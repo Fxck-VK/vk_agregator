@@ -45,8 +45,8 @@ if [ "${BACKUP_MINIO_ENABLED:-true}" != "true" ]; then
   exit 0
 fi
 
-if ! command -v aws >/dev/null 2>&1; then
-  write_metrics "error" "aws_cli_missing" 0
+if ! command -v objectsync >/dev/null 2>&1; then
+  write_metrics "error" "object_sync_missing" 0
   exit 1
 fi
 
@@ -55,23 +55,15 @@ if [ -z "${S3_ENDPOINT:-}" ] || [ -z "${S3_BUCKET:-}" ]; then
   exit 1
 fi
 
-scheme="http"
-if [ "${S3_USE_SSL:-false}" = "true" ]; then
-  scheme="https"
-fi
-endpoint="${scheme}://${S3_ENDPOINT}"
+access_key="${S3_ACCESS_KEY:-${AWS_ACCESS_KEY_ID:-}}"
+secret_key="${S3_SECRET_KEY:-${AWS_SECRET_ACCESS_KEY:-}}"
 
-export AWS_ACCESS_KEY_ID="${S3_ACCESS_KEY:-${AWS_ACCESS_KEY_ID:-}}"
-export AWS_SECRET_ACCESS_KEY="${S3_SECRET_KEY:-${AWS_SECRET_ACCESS_KEY:-}}"
-export AWS_DEFAULT_REGION="${S3_REGION:-${AWS_DEFAULT_REGION:-us-east-1}}"
-export AWS_EC2_METADATA_DISABLED=true
-
-if [ -z "${AWS_ACCESS_KEY_ID}" ] || [ -z "${AWS_SECRET_ACCESS_KEY}" ]; then
+if [ -z "${access_key}" ] || [ -z "${secret_key}" ]; then
   write_metrics "error" "missing_s3_credentials" 0
   exit 1
 fi
 
-if aws --endpoint-url "${endpoint}" s3 sync "s3://${S3_BUCKET}" "${out_dir}" --only-show-errors; then
+if objectsync backup --directory "${out_dir}"; then
   size_bytes="$(find "${out_dir}" -type f -printf '%s\n' | awk '{s+=$1} END {print s+0}')"
   find "${backup_root}/minio" -mindepth 1 -maxdepth 1 -type d -mtime +"${retention_days}" -exec rm -rf {} +
   write_metrics "success" "none" "${size_bytes}"

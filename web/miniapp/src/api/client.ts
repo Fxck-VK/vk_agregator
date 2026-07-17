@@ -22,6 +22,7 @@ export interface Job {
   cost_captured: number;
   output_artifact_ids: string[];
   error_code?: string;
+  user_message?: string;
   created_at: string;
   updated_at: string;
 }
@@ -184,6 +185,38 @@ export interface PaymentIntentListResponse {
     count: number;
     has_more: boolean;
   };
+}
+
+export type AccountIdentityProvider = "vk" | "telegram" | "google" | "apple" | "email" | "phone" | "password";
+
+export interface AccountIdentity {
+  id: string;
+  account_id: string;
+  provider: AccountIdentityProvider | string;
+  label: string;
+  verified: boolean;
+  last_used_at?: string;
+  created_at: string;
+}
+
+export interface AccountProfile {
+  account_id: string;
+  identity_refs: AccountIdentity[];
+}
+
+export interface AccountIdentityListResponse {
+  items: AccountIdentity[];
+  pagination: {
+    limit: number;
+    offset: number;
+    count: number;
+    has_more: boolean;
+  };
+}
+
+export interface AccountLinkRequestResult {
+  status: string;
+  expires_in_seconds: number;
 }
 
 export interface ArtifactUploadResponse {
@@ -775,6 +808,49 @@ export async function listPaymentIntents(): Promise<PaymentIntent[]> {
   return data.items ?? [];
 }
 
+export async function getAccountProfile(): Promise<AccountProfile> {
+  return request<AccountProfile>("/account/me");
+}
+
+export async function listAccountIdentities(): Promise<AccountIdentity[]> {
+  const data = await request<AccountIdentityListResponse>("/account/identities");
+  return data.items ?? [];
+}
+
+export async function requestAccountEmailCode(email: string): Promise<AccountLinkRequestResult> {
+  return request<AccountLinkRequestResult>("/account/identities/email/request-code", {
+    method: "POST",
+    body: JSON.stringify({ email }),
+  });
+}
+
+export async function verifyAccountEmailCode(email: string, code: string): Promise<AccountIdentity> {
+  return request<AccountIdentity>("/account/identities/email/verify", {
+    method: "POST",
+    body: JSON.stringify({ email, code }),
+  });
+}
+
+export async function requestAccountPhoneOTP(phone: string): Promise<AccountLinkRequestResult> {
+  return request<AccountLinkRequestResult>("/account/identities/phone/request-otp", {
+    method: "POST",
+    body: JSON.stringify({ phone }),
+  });
+}
+
+export async function verifyAccountPhoneOTP(phone: string, code: string): Promise<AccountIdentity> {
+  return request<AccountIdentity>("/account/identities/phone/verify", {
+    method: "POST",
+    body: JSON.stringify({ phone, code }),
+  });
+}
+
+export async function unlinkAccountIdentity(id: string): Promise<void> {
+  return request<void>(`/account/identities/${encodeURIComponent(id)}/unlink`, {
+    method: "POST",
+  });
+}
+
 function validateVideoRouteAlias(alias?: string): void {
   if (!alias) return;
   if (!VIDEO_ROUTE_ALIAS_RE.test(alias)) {
@@ -993,6 +1069,10 @@ export function statusLabel(s: string): string {
 const ERROR_LABELS: Record<string, string> = {
   insufficient_credits: "Недостаточно ⭐️",
   provider_error: "Временная ошибка генерации",
+  model_unavailable: "Выбранная модель сейчас недоступна. Попробуйте другую модель. ⭐️ не списаны",
+  invalid_request:
+    "Модель не приняла запрос. Попробуйте другую модель или измените описание; возможны ограничения по содержанию. ⭐️ не списаны",
+  content_rejected: "Запрос отклонён правилами безопасности. Измените описание. ⭐️ не списаны",
   timeout: "Превышено время ожидания",
   rate_limited: "Слишком много запросов",
   media_upload_invalid: "Не удалось прочитать файл",
@@ -1005,6 +1085,8 @@ const ERROR_LABELS: Record<string, string> = {
 };
 
 export function errorLabel(job: Job): string {
+  const userMessage = job.user_message?.trim();
+  if (userMessage) return userMessage;
   if (job.error_code && ERROR_LABELS[job.error_code]) return ERROR_LABELS[job.error_code];
   if (job.status === "expired") return "Истёк срок";
   if (job.status === "cancelled") return "Отменено";

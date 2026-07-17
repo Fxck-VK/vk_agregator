@@ -144,6 +144,7 @@ type TopUpPackage = PaymentProduct
 type PaymentIntent struct {
 	ID                 uuid.UUID           `json:"id"`
 	UserID             uuid.UUID           `json:"user_id"`
+	AccountID          uuid.UUID           `json:"account_id,omitempty"`
 	ProductID          *uuid.UUID          `json:"product_id,omitempty"`
 	Status             PaymentIntentStatus `json:"status"`
 	Amount             int64               `json:"amount"`
@@ -209,6 +210,7 @@ type PaymentRefund struct {
 // money provider. Amount is in minor currency units (kopecks for RUB).
 type CreatePaymentInput struct {
 	IntentID       uuid.UUID       `json:"intent_id"`
+	AccountID      uuid.UUID       `json:"account_id,omitempty"`
 	UserID         uuid.UUID       `json:"user_id"`
 	Amount         int64           `json:"amount"`
 	Currency       Currency        `json:"currency"`

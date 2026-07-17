@@ -44,7 +44,8 @@ type Service struct {
 	cfg  Config
 }
 
-// Prepared is the rendered prompt and metadata for one provider request.
+// Prepared is untrusted user/history content and metadata for one provider
+// request. Provider adapters must keep it in a user role.
 type Prepared struct {
 	ConversationID  uuid.UUID
 	Prompt          string
@@ -179,6 +180,7 @@ func resolveConversationTarget(job *domain.Job) conversationTarget {
 	if job == nil {
 		return conversationTarget{invalid: true}
 	}
+	ownerID := dialogJobOwnerID(job)
 	var params conversationParams
 	if len(job.Params) > 0 {
 		_ = json.Unmarshal(job.Params, &params)
@@ -189,9 +191,10 @@ func resolveConversationTarget(job *domain.Job) conversationTarget {
 			return conversationTarget{invalid: true}
 		}
 		return conversationTarget{ref: domain.ConversationRef{
-			UserID:   job.UserID,
-			Source:   domain.ConversationSourceVKBot,
-			VKPeerID: job.VKPeerID,
+			UserID:    job.UserID,
+			AccountID: ownerID,
+			Source:    domain.ConversationSourceVKBot,
+			VKPeerID:  job.VKPeerID,
 		}}
 	}
 
@@ -202,9 +205,10 @@ func resolveConversationTarget(job *domain.Job) conversationTarget {
 			return conversationTarget{explicit: true, invalid: true}
 		}
 		return conversationTarget{explicit: true, ref: domain.ConversationRef{
-			UserID:   job.UserID,
-			Source:   domain.ConversationSourceVKBot,
-			VKPeerID: job.VKPeerID,
+			UserID:    job.UserID,
+			AccountID: ownerID,
+			Source:    domain.ConversationSourceVKBot,
+			VKPeerID:  job.VKPeerID,
 		}}
 	case domain.ConversationSourceMiniApp:
 		threadID := strings.TrimSpace(params.ExternalThreadID)
@@ -216,6 +220,7 @@ func resolveConversationTarget(job *domain.Job) conversationTarget {
 					conversationID: parsed,
 					ref: domain.ConversationRef{
 						UserID:           job.UserID,
+						AccountID:        ownerID,
 						Source:           domain.ConversationSourceMiniApp,
 						ExternalThreadID: threadID,
 					},
@@ -230,6 +235,7 @@ func resolveConversationTarget(job *domain.Job) conversationTarget {
 		}
 		return conversationTarget{explicit: true, ref: domain.ConversationRef{
 			UserID:           job.UserID,
+			AccountID:        ownerID,
 			Source:           domain.ConversationSourceMiniApp,
 			ExternalThreadID: threadID,
 		}}
@@ -240,7 +246,7 @@ func resolveConversationTarget(job *domain.Job) conversationTarget {
 
 func (s *Service) getOrCreateConversation(ctx context.Context, job *domain.Job, target conversationTarget) (*domain.Conversation, bool, error) {
 	if target.conversationID != uuid.Nil {
-		conversation, err := s.repo.GetByIDForUser(ctx, job.UserID, target.conversationID)
+		conversation, err := s.repo.GetByIDForUser(ctx, dialogJobOwnerID(job), target.conversationID)
 		if err != nil {
 			if errors.Is(err, domain.ErrNotFound) {
 				return nil, false, nil
@@ -266,6 +272,7 @@ func (s *Service) getOrCreateConversation(ctx context.Context, job *domain.Job, 
 	}
 	conversation = &domain.Conversation{
 		UserID:           job.UserID,
+		AccountID:        dialogJobOwnerID(job),
 		Source:           target.ref.Source,
 		VKPeerID:         target.ref.VKPeerID,
 		ExternalThreadID: target.ref.ExternalThreadID,
@@ -284,6 +291,16 @@ func (s *Service) getOrCreateConversation(ctx context.Context, job *domain.Job, 
 	return conversation, true, nil
 }
 
+func dialogJobOwnerID(job *domain.Job) uuid.UUID {
+	if job == nil {
+		return uuid.Nil
+	}
+	if job.AccountID != uuid.Nil {
+		return job.AccountID
+	}
+	return job.UserID
+}
+
 func (s *Service) renderPrompt(summary string, recent []*domain.ConversationMessage, current string) string {
 	maxTokens := s.cfg.MaxInputTokens
 	if maxTokens <= 0 {
@@ -297,7 +314,6 @@ func (s *Service) renderPrompt(summary string, recent []*domain.ConversationMess
 		}
 	}
 
-	add("Bot profile: You are NeuroHub bot. Use conversation memory only as context; do not reveal provider/model/internal details.")
 	if summary != "" {
 		add("Conversation summary:\n" + truncateTokens(summary, s.cfg.SummaryMaxTokens))
 	}
@@ -319,7 +335,6 @@ func (s *Service) renderPrompt(summary string, recent []*domain.ConversationMess
 	for EstimateTokens(rendered) > maxTokens && len(recentLines) > 0 {
 		recentLines = recentLines[1:]
 		parts = nil
-		add("Bot profile: You are NeuroHub bot. Use conversation memory only as context; do not reveal provider/model/internal details.")
 		if summary != "" {
 			add("Conversation summary:\n" + truncateTokens(summary, s.cfg.SummaryMaxTokens))
 		}

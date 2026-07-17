@@ -34,10 +34,18 @@ const (
 	CommandBalance CommandType = "balance"
 	// CommandAccount reports the user's account state.
 	CommandAccount CommandType = "account"
+	// CommandAccountLinkIdentity starts email/phone linking for the current account.
+	CommandAccountLinkIdentity CommandType = "account.link_identity"
+	// CommandAccountConfirmLinkIdentity confirms a pending email/phone binding.
+	CommandAccountConfirmLinkIdentity CommandType = "account.confirm_link_identity"
+	// CommandAccountUnlinkIdentity unlinks a verified email/phone identity from the current account.
+	CommandAccountUnlinkIdentity CommandType = "account.unlink_identity"
 	// CommandTopUp starts the balance top-up flow.
 	CommandTopUp CommandType = "top_up"
 	// CommandMenuText explains how to ask the text model.
 	CommandMenuText CommandType = "menu.text"
+	// CommandMenuPro opens the PRO mode information screen.
+	CommandMenuPro CommandType = "menu.pro"
 	// CommandMenuImage explains how to generate an image.
 	CommandMenuImage CommandType = "menu.image"
 	// CommandMenuImageSelect selects an enabled public image model alias from
@@ -153,8 +161,12 @@ func (c CommandType) Valid() bool {
 		CommandShowMenu,
 		CommandBalance,
 		CommandAccount,
+		CommandAccountLinkIdentity,
+		CommandAccountConfirmLinkIdentity,
+		CommandAccountUnlinkIdentity,
 		CommandTopUp,
 		CommandMenuText,
+		CommandMenuPro,
 		CommandMenuImage,
 		CommandMenuImageSelect,
 		CommandMenuImageText,

@@ -17,6 +17,7 @@ type BillingRepo struct {
 	mu           sync.Mutex
 	accounts     map[uuid.UUID]domain.CreditAccount
 	byUser       map[string]uuid.UUID
+	claimedUsers map[string]bool
 	reservations map[uuid.UUID]domain.CreditReservation
 	ledger       []domain.LedgerEntry
 	ledgerKeys   map[string]bool
@@ -28,6 +29,7 @@ func NewBillingRepo() *BillingRepo {
 	return &BillingRepo{
 		accounts:     map[uuid.UUID]domain.CreditAccount{},
 		byUser:       map[string]uuid.UUID{},
+		claimedUsers: map[string]bool{},
 		reservations: map[uuid.UUID]domain.CreditReservation{},
 		ledgerKeys:   map[string]bool{},
 		resKeys:      map[string]bool{},
@@ -43,8 +45,15 @@ func userCurrencyKey(userID uuid.UUID, currency domain.Currency) string {
 func (r *BillingRepo) CreateAccount(_ context.Context, a *domain.CreditAccount) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if a.OwnerAccountID == uuid.Nil {
+		a.OwnerAccountID = a.UserID
+	}
 	key := userCurrencyKey(a.UserID, a.Currency)
-	if _, ok := r.byUser[key]; ok {
+	if r.claimedUsers[key] {
+		return domain.ErrConflict
+	}
+	ownerKey := userCurrencyKey(a.OwnerAccountID, a.Currency)
+	if r.claimedUsers[ownerKey] {
 		return domain.ErrConflict
 	}
 	if a.ID == uuid.Nil {
@@ -58,10 +67,13 @@ func (r *BillingRepo) CreateAccount(_ context.Context, a *domain.CreditAccount) 
 	grant := a.BalanceCached
 	a.BalanceCached = 0
 	r.accounts[a.ID] = *a
-	r.byUser[key] = a.ID
+	r.claimedUsers[key] = true
+	r.claimedUsers[ownerKey] = true
+	r.byUser[ownerKey] = a.ID
 	if grant != 0 {
 		if err := r.appendLocked(&domain.LedgerEntry{
 			AccountID:      a.ID,
+			OwnerAccountID: a.OwnerAccountID,
 			Type:           domain.LedgerTopup,
 			Amount:         grant,
 			Status:         domain.LedgerStatusCommitted,
@@ -112,6 +124,11 @@ func (r *BillingRepo) appendLocked(e *domain.LedgerEntry) error {
 	if e.Status == "" {
 		e.Status = domain.LedgerStatusCommitted
 	}
+	if e.OwnerAccountID == uuid.Nil {
+		if acc, ok := r.accounts[e.AccountID]; ok {
+			e.OwnerAccountID = acc.OwnerAccountID
+		}
+	}
 	e.CreatedAt = time.Now()
 	r.ledger = append(r.ledger, *e)
 	r.ledgerKeys[e.IdempotencyKey] = true
@@ -161,6 +178,9 @@ func (r *BillingRepo) Reserve(_ context.Context, res *domain.CreditReservation) 
 	if _, ok := r.accounts[res.AccountID]; !ok {
 		return domain.ErrNotFound
 	}
+	if res.OwnerAccountID == uuid.Nil {
+		res.OwnerAccountID = r.accounts[res.AccountID].OwnerAccountID
+	}
 	if r.availableLocked(res.AccountID) < res.Amount {
 		return domain.ErrInsufficientCredits
 	}
@@ -178,6 +198,7 @@ func (r *BillingRepo) Reserve(_ context.Context, res *domain.CreditReservation) 
 	jobID := res.JobID
 	return r.appendLocked(&domain.LedgerEntry{
 		AccountID:      res.AccountID,
+		OwnerAccountID: res.OwnerAccountID,
 		JobID:          &jobID,
 		ReservationID:  &res.ID,
 		Type:           domain.LedgerReserve,
@@ -205,6 +226,7 @@ func (r *BillingRepo) Capture(_ context.Context, reservationID uuid.UUID, amount
 	jobID := res.JobID
 	return r.appendLocked(&domain.LedgerEntry{
 		AccountID:      res.AccountID,
+		OwnerAccountID: res.OwnerAccountID,
 		JobID:          &jobID,
 		ReservationID:  &res.ID,
 		Type:           domain.LedgerCapture,
@@ -232,6 +254,7 @@ func (r *BillingRepo) Release(_ context.Context, reservationID uuid.UUID, idempo
 	jobID := res.JobID
 	return r.appendLocked(&domain.LedgerEntry{
 		AccountID:      res.AccountID,
+		OwnerAccountID: res.OwnerAccountID,
 		JobID:          &jobID,
 		ReservationID:  &res.ID,
 		Type:           domain.LedgerRelease,
