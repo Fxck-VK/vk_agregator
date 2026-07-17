@@ -100,6 +100,8 @@ run_valid_case() {
   assert_not_contains "${log}" "RUNWAY_TEST" "${name} log"
 
   assert_file_contains "${rendered}" "APIMART_PROVIDER_ENABLED=true"
+  assert_file_contains "${rendered}" "IMAGE_TAG=sha-test123"
+  assert_file_contains "${rendered}" "BACKUP_IMAGE_TAG=sha-test123"
   assert_file_contains "${rendered}" "POYO_PROVIDER_ENABLED=true"
   assert_file_contains "${rendered}" "RUNWAY_PROVIDER_ENABLED=true"
   assert_file_contains "${rendered}" "VK_MENU_VIDEO_ENABLED=true"
