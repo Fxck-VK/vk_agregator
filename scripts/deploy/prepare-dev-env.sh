@@ -319,6 +319,7 @@ sed \
   -e '/^GHCR_USERNAME=/d' \
   -e '/^GHCR_TOKEN=/d' \
   -e '/^IMAGE_TAG=/d' \
+  -e '/^BACKUP_IMAGE_TAG=/d' \
   -e '/^APP_ENV_FILE=/d' \
   -e '/^PROVIDER_BALANCE_BOT_ENABLED=/d' \
   -e '/^APIMART_PROVIDER_ENABLED=/d' \
@@ -363,6 +364,7 @@ sed \
   printf 'APP_ENV=development\n'
   printf 'APP_ENV_FILE=.env\n'
   printf 'IMAGE_TAG=%s\n' "${image_tag}"
+  printf 'BACKUP_IMAGE_TAG=%s\n' "${image_tag}"
   printf 'PROVIDER=%s\n' "${provider_tokens[0]}"
   printf 'PROVIDER_CHAIN=%s\n' "${provider_chain}"
   printf 'IMAGE_PROVIDER=\n'

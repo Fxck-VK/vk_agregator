@@ -112,8 +112,9 @@ run scripts/deploy/smoke-dev.sh
 write GitHub summary / Telegram notification
 ```
 
-`prepare-dev-env.sh` renders the final server `.env`, appends the deploy image
-tag and GHCR pull credentials, and prints only non-secret readiness flags.
+`prepare-dev-env.sh` renders the final server `.env`, pins runtime and backup
+images to the deploy SHA, appends GHCR pull credentials, and prints only
+non-secret readiness flags.
 `check-dev-env.sh` blocks production hostnames, production VK group id, missing
 Cloudflare tunnel token, unsupported payment providers and non-development
 `APP_ENV` before the env can reach the VPS.
