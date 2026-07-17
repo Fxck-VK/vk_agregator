@@ -220,8 +220,8 @@ services:
       - no-new-privileges:true
     read_only: true
     tmpfs:
-      - /var/cache/nginx:rw,noexec,nosuid,size=32m
-      - /var/run:rw,noexec,nosuid,size=4m
+      - /var/cache/nginx:rw,noexec,nosuid,size=32m,uid=101,gid=101,mode=0750
+      - /var/run:rw,noexec,nosuid,size=4m,uid=101,gid=101,mode=0750
       - /tmp:rw,noexec,nosuid,size=16m
     pids_limit: 64
     cpus: "0.25"

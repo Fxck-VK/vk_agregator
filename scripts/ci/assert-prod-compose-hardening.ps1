@@ -242,6 +242,15 @@ Assert-Matches `
     -Pattern '(?m)^\s+cpus:\s+["'']?\$\{WORKER_CPU_LIMIT:-2\.00\}["'']?\s*$' `
     -Message "worker CPU limit must be configurable with production default 2.00"
 
+$miniAppBlock = Get-ServiceBlock -Content $prod -ServiceName "miniapp" -FileName "docker-compose.prod.yml"
+foreach ($tmpfsPath in @("/var/cache/nginx", "/var/run")) {
+    $escapedPath = [regex]::Escape($tmpfsPath)
+    Assert-Matches `
+        -Text $miniAppBlock `
+        -Pattern "(?m)^\s+-\s+${escapedPath}:[^\r\n]*uid=101[^\r\n]*gid=101[^\r\n]*mode=0750\s*$" `
+        -Message "miniapp tmpfs $tmpfsPath must be writable by the non-root nginx user"
+}
+
 foreach ($service in @(
     "backup-postgres",
     "backup-minio",
