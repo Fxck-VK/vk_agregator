@@ -22,8 +22,7 @@ func NewAccountSecurityRepository(db Querier) *AccountSecurityRepository {
 var _ domain.AccountCredentialRepository = (*AccountSecurityRepository)(nil)
 var _ domain.AccountLinkAuditRepository = (*AccountSecurityRepository)(nil)
 
-const accountCredentialColumns = `id, account_id, credential_type, secret_hash,
-	changed_at, created_at, updated_at`
+const accountCredentialColumns = `id, account_id, credential_type, secret_hash, changed_at, created_at, updated_at` // #nosec G101 -- SQL column names only, no credential value.
 
 func (r *AccountSecurityRepository) UpsertCredential(ctx context.Context, credential domain.AccountCredential) (*domain.AccountCredential, error) {
 	if err := credential.Validate(); err != nil {

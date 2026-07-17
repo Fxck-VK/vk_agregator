@@ -108,6 +108,7 @@ $runtime = Get-MiniAppRuntimeDir -Root $root
 Ensure-Directory -Path $runtime
 Import-MiniAppDevEnv -Root $root
 $tokenFile = Join-Path $runtime "cloudflare-token.txt"
+Remove-Item -LiteralPath (Join-Path $runtime "miniapp-cloudflare-launch.url") -Force -ErrorAction SilentlyContinue
 
 $cloudflared = Get-Command cloudflared -ErrorAction SilentlyContinue | Select-Object -First 1
 if ($null -eq $cloudflared) {
@@ -146,9 +147,7 @@ try {
         -TimeoutSeconds $TimeoutSeconds
 
     Import-MiniAppDevEnv -Root $root
-    $launchParams = New-MiniAppLaunchParams -UserID $VkUserID
     $publicUrl = "https://$Hostname"
-    $launchUrl = "$publicUrl/?$launchParams"
 
     $stdout = Join-Path $runtime "cloudflared-dashboard-live.log"
     $stderr = Join-Path $runtime "cloudflared-dashboard-live.err"
@@ -183,14 +182,12 @@ try {
     }
     Set-Content -Path (Join-Path $runtime "tunnel.pid") -Value $tunnelProc.Id -Encoding ASCII
     Set-Content -Path (Join-Path $runtime "frontend-url.txt") -Value $publicUrl -Encoding ASCII
-    Set-Content -Path (Join-Path $runtime "miniapp-cloudflare-launch.url") -Encoding ASCII -Value "[InternetShortcut]`r`nURL=$launchUrl`r`n"
 
     $connected = Wait-CloudflaredLog -LogPath $stdout -ErrPath $stderr -TimeoutSeconds 60
 
     Write-Host ""
     Write-Host "VK Mini App Cloudflare stack is running."
     Write-Host "Public URL:    $publicUrl"
-    Write-Host "Launch URL:    $launchUrl"
     Write-Host "API health:    http://127.0.0.1:$ApiPort/health"
     Write-Host "Vite local:    http://127.0.0.1:$MiniAppPort"
     Write-Host "Worker health: http://127.0.0.1:$WorkerMetricsPort/healthz"
@@ -209,7 +206,9 @@ try {
     }
 
     if ($OpenBrowser) {
-        Start-Process $launchUrl
+        $launchParams = New-MiniAppLaunchParams -UserID $VkUserID
+        Open-MiniAppBrowserWithoutDisclosure -PublicUrl $publicUrl -LaunchParams $launchParams
+        Remove-Variable launchParams -ErrorAction SilentlyContinue
     }
 
     if ($NoWait) {

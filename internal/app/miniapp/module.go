@@ -78,6 +78,7 @@ func NewHandler(ctx context.Context, cfg config.Config, deps Deps) *miniappapi.H
 	return miniappapi.NewHandler(miniappapi.Config{
 		AppSecret:                           cfg.VKAppSecret,
 		LaunchParamsMaxAge:                  cfg.MiniAppLaunchParamsMaxAge,
+		AllowQueryLaunchParams:              cfg.MiniAppAllowQueryLaunchParams,
 		JobRateLimiter:                      miniappJobLimiter,
 		UploadConcurrencyLimiter:            uploadLimiter,
 		ReferenceUploadsDisabled:            !cfg.MediaReferenceUploadsEnabled,

@@ -44,7 +44,8 @@ type Service struct {
 	cfg  Config
 }
 
-// Prepared is the rendered prompt and metadata for one provider request.
+// Prepared is untrusted user/history content and metadata for one provider
+// request. Provider adapters must keep it in a user role.
 type Prepared struct {
 	ConversationID  uuid.UUID
 	Prompt          string
@@ -313,7 +314,6 @@ func (s *Service) renderPrompt(summary string, recent []*domain.ConversationMess
 		}
 	}
 
-	add("Bot profile: You are NeuroHub bot. Use conversation memory only as context; do not reveal provider/model/internal details.")
 	if summary != "" {
 		add("Conversation summary:\n" + truncateTokens(summary, s.cfg.SummaryMaxTokens))
 	}
@@ -335,7 +335,6 @@ func (s *Service) renderPrompt(summary string, recent []*domain.ConversationMess
 	for EstimateTokens(rendered) > maxTokens && len(recentLines) > 0 {
 		recentLines = recentLines[1:]
 		parts = nil
-		add("Bot profile: You are NeuroHub bot. Use conversation memory only as context; do not reveal provider/model/internal details.")
 		if summary != "" {
 			add("Conversation summary:\n" + truncateTokens(summary, s.cfg.SummaryMaxTokens))
 		}

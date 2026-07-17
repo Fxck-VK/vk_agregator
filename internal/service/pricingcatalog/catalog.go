@@ -57,8 +57,8 @@ type FloorUnit string
 
 const (
 	FloorUnitUSDMicros       FloorUnit = "usd_micros"
-	FloorUnitPoYoCredits     FloorUnit = "poyo_credit_micros"
-	FloorUnitAPIMartCredits  FloorUnit = "apimart_credit_micros"
+	FloorUnitPoYoCredits     FloorUnit = "poyo_credit_micros"    // #nosec G101 -- pricing unit identifier, not a credential.
+	FloorUnitAPIMartCredits  FloorUnit = "apimart_credit_micros" // #nosec G101 -- pricing unit identifier, not a credential.
 	FloorUnitRunwayCredits   FloorUnit = "runway_credit_micros"
 	FloorUnitInternalCredits FloorUnit = "internal_credit_micros"
 )

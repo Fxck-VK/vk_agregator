@@ -391,6 +391,10 @@ type Config struct {
 	// MiniAppLaunchParamsMaxAge is the maximum age of VK launch params before
 	// they are rejected. Zero disables the age check.
 	MiniAppLaunchParamsMaxAge time.Duration
+	// MiniAppAllowQueryLaunchParams enables the legacy launch_params query
+	// fallback for explicit local development/tests only. Server environments
+	// reject this setting because signed credentials must use a request header.
+	MiniAppAllowQueryLaunchParams bool
 	// AccountEmailLink* control short-lived email identity verification codes.
 	AccountEmailLinkCodeTTL       time.Duration
 	AccountEmailLinkCodeDigits    int
@@ -577,6 +581,9 @@ func (c Config) PaymentWebhookHTTPSRequired() bool {
 // and the admin API must be set. Returns a descriptive error otherwise.
 func (c Config) Validate() error {
 	var missing []string
+	if c.IsServerEnv() && c.MiniAppAllowQueryLaunchParams {
+		return fmt.Errorf("config: MINIAPP_ALLOW_QUERY_LAUNCH_PARAMS must be false in production/staging")
+	}
 	if err := c.ValidateDataServiceModes(); err != nil {
 		return err
 	}
@@ -1360,6 +1367,7 @@ func Load() Config {
 		VKAppID:                         env("VK_APP_ID", ""),
 		VKAppSecret:                     env("VK_APP_SECRET", ""),
 		MiniAppLaunchParamsMaxAge:       envDuration("MINIAPP_LAUNCH_PARAMS_MAX_AGE", time.Hour),
+		MiniAppAllowQueryLaunchParams:   envBool("MINIAPP_ALLOW_QUERY_LAUNCH_PARAMS", false),
 		AccountEmailLinkCodeTTL:         envDuration("ACCOUNT_EMAIL_LINK_CODE_TTL", 10*time.Minute),
 		AccountEmailLinkCodeDigits:      envInt("ACCOUNT_EMAIL_LINK_CODE_DIGITS", 6),
 		AccountEmailLinkRequestLimit:    envInt("ACCOUNT_EMAIL_LINK_REQUEST_LIMIT", 3),

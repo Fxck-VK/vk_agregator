@@ -63,9 +63,17 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
-          ref: ${{ github.event.workflow_run.head_sha || 'main' }}
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          persist-credentials: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Install Cosign
+        shell: bash
+        run: bash scripts/ci/install-cosign.sh
 
       - name: Resolve deployment image tag
         id: release
@@ -125,35 +133,25 @@ jobs:
             exit 1
           fi
 
-      - name: Verify production GHCR images
+      - name: Verify signed production GHCR images
         shell: bash
         env:
           GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
           GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
           IMAGE_TAG: ${{ steps.release.outputs.image_tag }}
-          IMAGE_NAMESPACE: ${{ github.repository }}
+          EXPECTED_SOURCE_REPOSITORY: ${{ github.repository }}
+          EXPECTED_SOURCE_REVISION: ${{ steps.release.outputs.commit_sha }}
+          EXPECTED_WORKFLOW_REF: refs/heads/main
         run: |
           set -euo pipefail
-
-          image_namespace="${IMAGE_NAMESPACE,,}"
-          services=(api worker provider-webhook provider-balance-bot miniapp migrate backup)
-          missing=()
-
           printf '%s' "${GHCR_TOKEN}" | docker login ghcr.io -u "${GHCR_USERNAME}" --password-stdin >/dev/null
-
-          for service in "${services[@]}"; do
-            image="ghcr.io/${image_namespace}/${service}:${IMAGE_TAG}"
-            if ! docker manifest inspect "${image}" >/dev/null 2>&1; then
-              missing+=("${service}")
-            fi
-          done
-
-          if (( ${#missing[@]} > 0 )); then
-            printf 'Production images with immutable tag %s are missing: %s\n' "${IMAGE_TAG}" "${missing[*]}" >&2
-            exit 1
-          fi
-
-          echo "All production GHCR images are available for ${IMAGE_TAG}."
+          image_registry="ghcr.io/${EXPECTED_SOURCE_REPOSITORY,,}"
+          bash scripts/deploy/verify-release-images.sh \
+            --image-registry "${image_registry}" \
+            --image-tag "${IMAGE_TAG}" \
+            --repository "${EXPECTED_SOURCE_REPOSITORY}" \
+            --revision "${EXPECTED_SOURCE_REVISION}" \
+            --workflow-ref "${EXPECTED_WORKFLOW_REF}"
 
       - name: Prepare SSH
         shell: bash
@@ -205,21 +203,25 @@ jobs:
             env_tag="${env_tag#\'}"
           fi
 
-          git_short="$(git rev-parse --short=7 HEAD 2>/dev/null || true)"
-          if [[ "${env_tag}" == sha-* ]]; then
+          git_revision="$(git rev-parse --verify HEAD 2>/dev/null || true)"
+          if [[ "${git_revision}" =~ ^[0-9a-f]{40}$ ]]; then
+            if [[ "${env_tag}" == sha-* && ! "${git_revision}" == "${env_tag#sha-}"* ]]; then
+              echo "Current IMAGE_TAG does not match the checked-out production revision." >&2
+              exit 1
+            fi
+            tag="sha-${git_revision}"
+          elif [[ "${env_tag}" =~ ^sha-[0-9a-f]{40}$ ]]; then
             tag="${env_tag}"
-          elif [[ -n "${git_short}" ]]; then
-            tag="sha-${git_short}"
           else
-            tag="${env_tag}"
+            tag=""
           fi
 
           printf '%s' "${tag}"
           REMOTE
           )"
 
-          if [[ -n "${previous_image_tag}" && ! "${previous_image_tag}" =~ ^[A-Za-z0-9._-]+$ ]]; then
-            echo "Captured unsafe previous IMAGE_TAG" >&2
+          if [[ -n "${previous_image_tag}" && ! "${previous_image_tag}" =~ ^sha-[0-9a-f]{40}$ ]]; then
+            echo "Captured previous IMAGE_TAG is not an immutable full-SHA tag." >&2
             exit 1
           fi
 
@@ -293,8 +295,15 @@ jobs:
             --ghcr-token "${GHCR_TOKEN}"
 
           scp "${ssh_opts[@]}" "${tmp_env}" "${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_PATH}/.env.next"
-          ssh "${ssh_opts[@]}" "${DEPLOY_USER}@${DEPLOY_HOST}" \
-            "set -euo pipefail; cd '${DEPLOY_PATH}'; install -m 600 .env.next .env; rm -f .env.next"
+          {
+            printf 'deploy_path=%q\n' "${DEPLOY_PATH}"
+            cat <<'REMOTE'
+          set -euo pipefail
+          cd "${deploy_path}"
+          install -m 600 .env.next .env
+          rm -f .env.next
+          REMOTE
+          } | ssh "${ssh_opts[@]}" "${DEPLOY_USER}@${DEPLOY_HOST}" bash -s
 
       - name: Run production deploy
         id: production_deploy
@@ -308,8 +317,15 @@ jobs:
           set -euo pipefail
           ssh_opts=(-i "${HOME}/.ssh/deploy_key" -o StrictHostKeyChecking=yes -o UserKnownHostsFile="${HOME}/.ssh/known_hosts" -o GlobalKnownHostsFile=/dev/null)
 
-          ssh "${ssh_opts[@]}" "${DEPLOY_USER}@${DEPLOY_HOST}" \
-            "set -euo pipefail; cd '${DEPLOY_PATH}'; bash scripts/deploy/deploy-prod.sh --branch main --env-file .env --skip-pull --with-cloudflare --skip-public-smoke --image-tag '${DEPLOY_IMAGE_TAG}' --timeout-seconds 240"
+          {
+            printf 'deploy_path=%q\n' "${DEPLOY_PATH}"
+            printf 'deploy_image_tag=%q\n' "${DEPLOY_IMAGE_TAG}"
+            cat <<'REMOTE'
+          set -euo pipefail
+          cd "${deploy_path}"
+          bash scripts/deploy/deploy-prod.sh --branch main --env-file .env --skip-pull --with-cloudflare --skip-public-smoke --image-tag "${deploy_image_tag}" --timeout-seconds 240
+          REMOTE
+          } | ssh "${ssh_opts[@]}" "${DEPLOY_USER}@${DEPLOY_HOST}" bash -s
 
       - name: Run production smoke
         id: production_smoke
@@ -322,8 +338,14 @@ jobs:
           set -euo pipefail
           ssh_opts=(-i "${HOME}/.ssh/deploy_key" -o StrictHostKeyChecking=yes -o UserKnownHostsFile="${HOME}/.ssh/known_hosts" -o GlobalKnownHostsFile=/dev/null)
 
-          ssh "${ssh_opts[@]}" "${DEPLOY_USER}@${DEPLOY_HOST}" \
-            "set -euo pipefail; cd '${DEPLOY_PATH}'; bash scripts/deploy/smoke-prod.sh --env-file .env --timeout-seconds 60"
+          {
+            printf 'deploy_path=%q\n' "${DEPLOY_PATH}"
+            cat <<'REMOTE'
+          set -euo pipefail
+          cd "${deploy_path}"
+          bash scripts/deploy/smoke-prod.sh --env-file .env --timeout-seconds 60
+          REMOTE
+          } | ssh "${ssh_opts[@]}" "${DEPLOY_USER}@${DEPLOY_HOST}" bash -s
 
       - name: Roll back after failed deploy or smoke
         id: production_rollback
@@ -335,6 +357,9 @@ jobs:
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
           DEPLOY_IMAGE_TAG: ${{ steps.release.outputs.image_tag }}
           PREVIOUS_IMAGE_TAG: ${{ steps.current_release.outputs.previous_image_tag }}
+          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+          EXPECTED_SOURCE_REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
           ssh_opts=(-i "${HOME}/.ssh/deploy_key" -o StrictHostKeyChecking=yes -o UserKnownHostsFile="${HOME}/.ssh/known_hosts" -o GlobalKnownHostsFile=/dev/null)
@@ -348,6 +373,21 @@ jobs:
             echo "Previous IMAGE_TAG equals deployed IMAGE_TAG; rollback would be a no-op." >&2
             exit 1
           fi
+
+          if [[ ! "${PREVIOUS_IMAGE_TAG}" =~ ^sha-[0-9a-f]{40}$ ]]; then
+            echo "Previous IMAGE_TAG is not an immutable full-SHA tag." >&2
+            exit 1
+          fi
+
+          previous_revision="${PREVIOUS_IMAGE_TAG#sha-}"
+          printf '%s' "${GHCR_TOKEN}" | docker login ghcr.io -u "${GHCR_USERNAME}" --password-stdin >/dev/null
+          image_registry="ghcr.io/${EXPECTED_SOURCE_REPOSITORY,,}"
+          bash scripts/deploy/verify-release-images.sh \
+            --image-registry "${image_registry}" \
+            --image-tag "${PREVIOUS_IMAGE_TAG}" \
+            --repository "${EXPECTED_SOURCE_REPOSITORY}" \
+            --revision "${previous_revision}" \
+            --workflow-ref refs/heads/main
 
           ssh "${ssh_opts[@]}" "${DEPLOY_USER}@${DEPLOY_HOST}" 'bash -s' -- "${DEPLOY_PATH}" "${PREVIOUS_IMAGE_TAG}" <<'REMOTE'
           set -euo pipefail

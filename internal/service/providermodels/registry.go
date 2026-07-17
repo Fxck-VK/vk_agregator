@@ -49,11 +49,11 @@ const (
 	ProviderFlagRunway   = "RUNWAY_PROVIDER_ENABLED"
 	ProviderFlagLoadtest = "APP_ENV"
 
-	ConfigKeyAPIMartAPIKey  = "APIMART_API_KEY"
+	ConfigKeyAPIMartAPIKey  = "APIMART_API_KEY" // #nosec G101 -- environment variable name only, never a credential value.
 	ConfigKeyAPIMartBaseURL = "APIMART_BASE_URL"
-	ConfigKeyPoYoAPIKey     = "POYO_API_KEY"
+	ConfigKeyPoYoAPIKey     = "POYO_API_KEY" // #nosec G101 -- environment variable name only, never a credential value.
 	ConfigKeyPoYoBaseURL    = "POYO_BASE_URL"
-	ConfigKeyRunwaySecret   = "RUNWAYML_API_SECRET"
+	ConfigKeyRunwaySecret   = "RUNWAYML_API_SECRET" // #nosec G101 -- environment variable name only, never a credential value.
 	ConfigKeyRunwayBaseURL  = "RUNWAYML_BASE_URL"
 	ConfigKeyDeepInfraKey   = "DEEPINFRA_API_KEY"
 	ConfigKeyDeepInfraURL   = "DEEPINFRA_BASE_URL"

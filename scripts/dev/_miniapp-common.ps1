@@ -116,6 +116,26 @@ function New-MiniAppLaunchParams {
     }) -join "&")
 }
 
+function Open-MiniAppBrowserWithoutDisclosure {
+    param(
+        [Parameter(Mandatory = $true)][string]$PublicUrl,
+        [Parameter(Mandatory = $true)][string]$LaunchParams,
+        [scriptblock]$BrowserLauncher
+    )
+
+    if ([string]::IsNullOrWhiteSpace($PublicUrl) -or [string]::IsNullOrWhiteSpace($LaunchParams)) {
+        throw "Public URL and signed launch params are required."
+    }
+
+    $target = $PublicUrl.TrimEnd("/") + "/?" + $LaunchParams
+    if ($null -ne $BrowserLauncher) {
+        & $BrowserLauncher $target | Out-Null
+        return
+    }
+
+    Start-Process -FilePath $target | Out-Null
+}
+
 function Stop-ViteDevServer {
     param([Parameter(Mandatory = $true)][int]$Port)
 

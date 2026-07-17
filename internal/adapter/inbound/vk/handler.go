@@ -2240,44 +2240,6 @@ func parseAccountLinkVerifyMode(mode dialogMode) (domain.IdentityProvider, strin
 	}
 }
 
-func accountLinkPendingMode(provider domain.IdentityProvider, externalID string) dialogMode {
-	return dialogMode(dialogModeAccountLinkConfirmPrefix + string(provider) + ":" + url.QueryEscape(externalID))
-}
-
-func parseAccountLinkPendingMode(mode dialogMode) (domain.IdentityProvider, string, bool) {
-	raw := string(mode)
-	if !strings.HasPrefix(raw, dialogModeAccountLinkConfirmPrefix) {
-		return "", "", false
-	}
-	body := strings.TrimPrefix(raw, dialogModeAccountLinkConfirmPrefix)
-	providerRaw, externalRaw, ok := strings.Cut(body, ":")
-	if !ok || providerRaw == "" || externalRaw == "" {
-		return "", "", false
-	}
-	externalID, err := url.QueryUnescape(externalRaw)
-	if err != nil || strings.TrimSpace(externalID) == "" {
-		return "", "", false
-	}
-	provider := domain.NormalizeIdentityProvider(domain.IdentityProvider(providerRaw))
-	switch provider {
-	case domain.IdentityProviderEmail, domain.IdentityProviderPhone:
-		return provider, externalID, true
-	default:
-		return "", "", false
-	}
-}
-
-func accountLinkIdentityConfirmText(provider domain.IdentityProvider, externalID string) string {
-	label := "способ входа"
-	switch provider {
-	case domain.IdentityProviderEmail:
-		label = "email"
-	case domain.IdentityProviderPhone:
-		label = "телефон"
-	}
-	return fmt.Sprintf("Подтвердите привязку\n\n%s: %s\n\nОн будет добавлен к вашему текущему аккаунту\n\nБаланс, платежи, история и артефакты останутся на месте", label, maskedAccountLinkIdentity(provider, externalID))
-}
-
 func accountLinkStartText(provider domain.IdentityProvider) string {
 	switch provider {
 	case domain.IdentityProviderEmail:
@@ -2305,30 +2267,6 @@ func accountLinkCodeSentText(provider domain.IdentityProvider, expiresInSeconds 
 		return fmt.Sprintf("Мы отправили %s\n\nПришлите код обычным сообщением", label)
 	}
 	return fmt.Sprintf("Мы отправили %s\n\nПришлите код обычным сообщением\n\nКод действует %d мин", label, minutes)
-}
-
-func maskedAccountLinkIdentity(provider domain.IdentityProvider, externalID string) string {
-	externalID = strings.TrimSpace(externalID)
-	switch provider {
-	case domain.IdentityProviderEmail:
-		parts := strings.SplitN(externalID, "@", 2)
-		if len(parts) != 2 {
-			return "email"
-		}
-		local := []rune(parts[0])
-		if len(local) <= 2 {
-			return "***@" + parts[1]
-		}
-		return string(local[:2]) + "***@" + parts[1]
-	case domain.IdentityProviderPhone:
-		normalized, err := domain.NormalizeExternalIdentity(domain.IdentityProviderPhone, externalID)
-		if err != nil || len(normalized) <= 4 {
-			return "телефон"
-		}
-		return "***" + normalized[len(normalized)-4:]
-	default:
-		return "скрыто"
-	}
 }
 
 func accountLinkIdentitySuccessText(provider domain.IdentityProvider) string {

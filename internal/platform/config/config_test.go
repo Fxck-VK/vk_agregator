@@ -140,6 +140,32 @@ func TestLoadProviderChain(t *testing.T) {
 	}
 }
 
+func TestLoadMiniAppQueryLaunchParamsDefaultsOffAndSupportsDevOptIn(t *testing.T) {
+	restore := clearEnv(t, "MINIAPP_ALLOW_QUERY_LAUNCH_PARAMS")
+	defer restore()
+
+	cfg := config.Load()
+	if cfg.MiniAppAllowQueryLaunchParams {
+		t.Fatal("query launch params fallback must default to false")
+	}
+
+	t.Setenv("MINIAPP_ALLOW_QUERY_LAUNCH_PARAMS", "true")
+	cfg = config.Load()
+	if !cfg.MiniAppAllowQueryLaunchParams {
+		t.Fatal("explicit development query launch params opt-in was not loaded")
+	}
+}
+
+func TestValidateProductionRejectsQueryLaunchParamsFallback(t *testing.T) {
+	cfg := productionDeepInfraConfig()
+	cfg.MiniAppAllowQueryLaunchParams = true
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "MINIAPP_ALLOW_QUERY_LAUNCH_PARAMS") {
+		t.Fatalf("expected production query fallback validation error, got %v", err)
+	}
+}
+
 func TestLoadDataServiceModesDefaultLocal(t *testing.T) {
 	for _, key := range []string{"DATA_SERVICES_MODE", "POSTGRES_MODE", "REDIS_MODE", "S3_MODE"} {
 		restore := clearEnv(t, key)

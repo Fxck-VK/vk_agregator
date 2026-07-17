@@ -2,6 +2,7 @@ package memory
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/google/uuid"
@@ -169,6 +170,49 @@ func TestArtifactRepoReadsAccountFirstWithLegacyFallback(t *testing.T) {
 	}
 	if reusableLegacy.ID != legacyArtifact.ID {
 		t.Fatalf("reusable legacy artifact ID = %s, want %s", reusableLegacy.ID, legacyArtifact.ID)
+	}
+}
+
+func TestBillingRepoDoesNotExposeCanonicalAccountThroughLegacyUserID(t *testing.T) {
+	ctx := context.Background()
+	repo := NewBillingRepo()
+	legacyUserID := uuid.New()
+	accountID := uuid.New()
+	account := &domain.CreditAccount{
+		UserID:         legacyUserID,
+		OwnerAccountID: accountID,
+		Currency:       domain.CurrencyCredits,
+	}
+	if err := repo.CreateAccount(ctx, account); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+	if _, err := repo.GetAccountByUser(ctx, accountID, domain.CurrencyCredits); err != nil {
+		t.Fatalf("get canonical account: %v", err)
+	}
+	if _, err := repo.GetAccountByUser(ctx, legacyUserID, domain.CurrencyCredits); !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("legacy user id exposed canonical account, err=%v", err)
+	}
+}
+
+func TestBillingRepoRejectsLegacyIDClaimedAsAnotherCanonicalOwner(t *testing.T) {
+	ctx := context.Background()
+	repo := NewBillingRepo()
+	canonicalOwner := uuid.New()
+	if err := repo.CreateAccount(ctx, &domain.CreditAccount{
+		UserID:         uuid.New(),
+		OwnerAccountID: canonicalOwner,
+		Currency:       domain.CurrencyCredits,
+	}); err != nil {
+		t.Fatalf("create canonical account: %v", err)
+	}
+
+	err := repo.CreateAccount(ctx, &domain.CreditAccount{
+		UserID:         canonicalOwner,
+		OwnerAccountID: uuid.New(),
+		Currency:       domain.CurrencyCredits,
+	})
+	if !errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("legacy id reused another canonical owner, err=%v", err)
 	}
 }
 

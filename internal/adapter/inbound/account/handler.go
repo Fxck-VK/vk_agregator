@@ -22,7 +22,11 @@ import (
 	"vk-ai-aggregator/internal/service/accountservice"
 )
 
-const maxLinkRequestBytes = 8 << 10
+const (
+	maxLinkRequestBytes        = 8 << 10
+	passwordResetConcurrency   = 16
+	passwordResetWorkerTimeout = 15 * time.Second
+)
 
 type contextKey int
 
@@ -36,6 +40,9 @@ type Config struct {
 	// LaunchParamsMaxAge bounds replay of VK launch params. Zero disables age
 	// validation and is intended only for local tests.
 	LaunchParamsMaxAge time.Duration
+	// AllowQueryLaunchParams permits the legacy launch_params query fallback.
+	// It is dev/test-only because URLs leak through browser and proxy surfaces.
+	AllowQueryLaunchParams bool
 }
 
 // AccountService is the safe product account boundary.
@@ -97,9 +104,10 @@ type Deps struct {
 
 // Handler serves /account/* endpoints.
 type Handler struct {
-	cfg    Config
-	deps   Deps
-	logger *slog.Logger
+	cfg                Config
+	deps               Deps
+	logger             *slog.Logger
+	passwordResetSlots chan struct{}
 }
 
 // NewHandler builds an account API handler.
@@ -108,7 +116,12 @@ func NewHandler(cfg Config, deps Deps) *Handler {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Handler{cfg: cfg, deps: deps, logger: logger}
+	return &Handler{
+		cfg:                cfg,
+		deps:               deps,
+		logger:             logger,
+		passwordResetSlots: make(chan struct{}, passwordResetConcurrency),
+	}
 }
 
 // Routes returns the account API router.
@@ -154,7 +167,7 @@ func (h *Handler) accountIDFromRequest(r *http.Request) (uuid.UUID, error) {
 		return uuid.Nil, errors.New("account api: identity resolver is required")
 	}
 	raw := strings.TrimSpace(r.Header.Get("X-Launch-Params"))
-	if raw == "" {
+	if raw == "" && h.cfg.AllowQueryLaunchParams {
 		raw = strings.TrimSpace(r.URL.Query().Get("launch_params"))
 	}
 	if raw == "" && h.cfg.AppSecret == "" {
@@ -246,10 +259,7 @@ type linkRequest struct {
 
 func (h *Handler) linkIdentity(w http.ResponseWriter, r *http.Request) {
 	var req linkRequest
-	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxLinkRequestBytes))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid identity link request")
+	if !decodeRequiredJSON(w, r, &req, "invalid identity link request") {
 		return
 	}
 	if strings.TrimSpace(string(req.Method)) == "" || strings.TrimSpace(req.ExternalID) == "" {
@@ -281,10 +291,7 @@ func (h *Handler) requestEmailCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req emailCodeRequest
-	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxLinkRequestBytes))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid email verification request")
+	if !decodeRequiredJSON(w, r, &req, "invalid email verification request") {
 		return
 	}
 	if strings.TrimSpace(req.Email) == "" {
@@ -315,10 +322,7 @@ func (h *Handler) verifyEmailCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req emailVerifyRequest
-	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxLinkRequestBytes))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid email verification request")
+	if !decodeRequiredJSON(w, r, &req, "invalid email verification request") {
 		return
 	}
 	if strings.TrimSpace(req.Email) == "" || strings.TrimSpace(req.Code) == "" {
@@ -348,10 +352,7 @@ func (h *Handler) requestPhoneOTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req phoneOTPRequest
-	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxLinkRequestBytes))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid phone verification request")
+	if !decodeRequiredJSON(w, r, &req, "invalid phone verification request") {
 		return
 	}
 	if strings.TrimSpace(req.Phone) == "" {
@@ -382,10 +383,7 @@ func (h *Handler) verifyPhoneOTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req phoneVerifyRequest
-	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxLinkRequestBytes))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid phone verification request")
+	if !decodeRequiredJSON(w, r, &req, "invalid phone verification request") {
 		return
 	}
 	if strings.TrimSpace(req.Phone) == "" || strings.TrimSpace(req.Code) == "" {
@@ -450,6 +448,10 @@ type passwordResetRequest struct {
 	Email       string `json:"email"`
 	Code        string `json:"code"`
 	NewPassword string `json:"new_password"`
+}
+
+type passwordResetAcceptedResponse struct {
+	Status string `json:"status"`
 }
 
 type oauthRequest struct {
@@ -632,21 +634,34 @@ func (h *Handler) requestPasswordReset(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid password reset request")
 		return
 	}
-	accountID, err := h.deps.Identity.Resolve(r.Context(), domain.IdentityProviderEmail, email)
-	if err != nil {
-		if errors.Is(err, domain.ErrNotFound) || errors.Is(err, domain.ErrInvalidIdentity) {
-			writeJSON(w, http.StatusAccepted, accountlink.RequestResult{Status: "verification_sent"})
+	h.enqueuePasswordReset(email)
+	writeJSON(w, http.StatusAccepted, passwordResetAcceptedResponse{Status: "verification_sent"})
+}
+
+func (h *Handler) enqueuePasswordReset(email string) {
+	select {
+	case h.passwordResetSlots <- struct{}{}:
+	default:
+		h.logger.Warn("password reset queue is saturated")
+		return
+	}
+
+	go func() {
+		defer func() { <-h.passwordResetSlots }()
+		ctx, cancel := context.WithTimeout(context.Background(), passwordResetWorkerTimeout)
+		defer cancel()
+
+		accountID, err := h.deps.Identity.Resolve(ctx, domain.IdentityProviderEmail, email)
+		if err != nil {
+			if !errors.Is(err, domain.ErrNotFound) && !errors.Is(err, domain.ErrInvalidIdentity) {
+				h.logger.Warn("password reset identity lookup failed")
+			}
 			return
 		}
-		writeError(w, statusForError(err), "password reset unavailable")
-		return
-	}
-	result, err := h.deps.Linker.RequestEmailCode(r.Context(), accountID, email)
-	if err != nil {
-		writeError(w, statusForError(err), "password reset unavailable")
-		return
-	}
-	writeJSON(w, http.StatusAccepted, result)
+		if _, err := h.deps.Linker.RequestEmailCode(ctx, accountID, email); err != nil {
+			h.logger.Warn("password reset delivery failed")
+		}
+	}()
 }
 
 func (h *Handler) resetPassword(w http.ResponseWriter, r *http.Request) {
@@ -822,6 +837,11 @@ func decodeRequiredJSON(w http.ResponseWriter, r *http.Request, dst any, message
 			writeError(w, http.StatusBadRequest, message)
 			return false
 		}
+		writeError(w, http.StatusBadRequest, message)
+		return false
+	}
+	var extra struct{}
+	if err := dec.Decode(&extra); err != io.EOF {
 		writeError(w, http.StatusBadRequest, message)
 		return false
 	}

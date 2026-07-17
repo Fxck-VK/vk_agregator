@@ -287,8 +287,9 @@ func main() {
 		VKIDJWKSURL:       cfg.AccountOAuthVKIDJWKSURL,
 	})
 	account := accountapi.NewHandler(accountapi.Config{
-		AppSecret:          cfg.VKAppSecret,
-		LaunchParamsMaxAge: cfg.MiniAppLaunchParamsMaxAge,
+		AppSecret:              cfg.VKAppSecret,
+		LaunchParamsMaxAge:     cfg.MiniAppLaunchParamsMaxAge,
+		AllowQueryLaunchParams: cfg.MiniAppAllowQueryLaunchParams,
 	}, accountapi.Deps{
 		Identity:  core.Identity,
 		Account:   core.Account,

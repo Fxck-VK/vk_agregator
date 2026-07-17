@@ -943,22 +943,6 @@ func accountText(balance int64) string {
 	return fmt.Sprintf("👤 Мой аккаунт\n\nВаш баланс: %d ⭐️\n\nВыберите действие:", balance)
 }
 
-func accountDetailsText(view accountView) string {
-	referralLink := view.ReferralLink
-	if referralLink == "" {
-		referralLink = "ссылка появится после настройки VK_REFERRAL_LINK_BASE"
-	}
-	return fmt.Sprintf("👤 Мой аккаунт\n\n• общение с НейроХаб\n\n👥 Реферальная программа\n\n• Приглашённых: %d\n• Зарегистрировано: %d\n• Активировано: %d\n• Бонус начислен: %d\n\n• Ссылка: %s\n\nПоддержка: @neirohub_help",
-		view.InvitedCount,
-		view.RegisteredCount,
-		view.ActivatedCount,
-		view.RewardedCount,
-		referralLink,
-	)
-}
-
-const accountLinkIdentityText = "🔐 Привязка email или телефона\n\nПришлите email или телефон обычным сообщением\n\nОн будет привязан к вашему текущему аккаунту\n\nБаланс, платежи, история и артефакты останутся на месте"
-
 const accountLinkIdentityTextV2 = "🔐 Привязка способа входа\n\nВыберите email или телефон в разделе «Мой аккаунт»\n\nПосле подтверждения баланс, платежи, история и артефакты останутся на месте"
 
 func accountDetailsTextV2(view accountView) string {
@@ -1493,21 +1477,6 @@ func backKeyboard() *vkdelivery.Keyboard {
 		OneTime: false,
 		Inline:  true,
 		Buttons: [][]vkdelivery.KeyboardButton{
-			{
-				button("⬅️ Назад", domain.CommandShowMenu, "secondary"),
-			},
-		},
-	}
-}
-
-func accountLinkConfirmKeyboard() *vkdelivery.Keyboard {
-	return &vkdelivery.Keyboard{
-		OneTime: false,
-		Inline:  true,
-		Buttons: [][]vkdelivery.KeyboardButton{
-			{
-				button("Подтвердить привязку", domain.CommandAccountConfirmLinkIdentity, "positive"),
-			},
 			{
 				button("⬅️ Назад", domain.CommandShowMenu, "secondary"),
 			},

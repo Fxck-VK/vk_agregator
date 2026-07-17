@@ -18,20 +18,62 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  validate_source:
+    name: Validate DEV source
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enforce dev-deploy-only rollout
+        shell: bash
+        env:
+          WORKFLOW_RUN_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          WORKFLOW_RUN_EVENT: ${{ github.event.workflow_run.event }}
+          WORKFLOW_RUN_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          set -euo pipefail
+
+          case "${GITHUB_EVENT_NAME}" in
+            workflow_dispatch)
+              if [[ "${GITHUB_REF}" != "refs/heads/dev-deploy" ]]; then
+                echo "Manual DEV deploy must be dispatched from refs/heads/dev-deploy." >&2
+                exit 1
+              fi
+              ;;
+            workflow_run)
+              if [[ "${WORKFLOW_RUN_CONCLUSION}" != "success" || "${WORKFLOW_RUN_EVENT}" != "push" || "${WORKFLOW_RUN_HEAD_BRANCH}" != "dev-deploy" ]]; then
+                echo "DEV deploy requires a successful Docker Images push from dev-deploy." >&2
+                exit 1
+              fi
+              ;;
+            *)
+              echo "Unsupported DEV deploy event: ${GITHUB_EVENT_NAME}" >&2
+              exit 1
+              ;;
+          esac
+
   deploy:
     name: Deploy DEV VPS
     runs-on: ubuntu-latest
+    environment: development
+    needs: validate_source
     if: >
-      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/dev-deploy') ||
       (github.event.workflow_run.conclusion == 'success' &&
        github.event.workflow_run.event == 'push' &&
        github.event.workflow_run.head_branch == 'dev-deploy')
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
-          ref: dev-deploy
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          persist-credentials: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Install Cosign
+        shell: bash
+        run: bash scripts/ci/install-cosign.sh
 
       - name: Resolve deployment image tag
         id: release
@@ -42,11 +84,10 @@ jobs:
           set -euo pipefail
 
           deploy_sha="${WORKFLOW_RUN_SHA:-$(git rev-parse HEAD)}"
-          deploy_short_sha="${deploy_sha:0:7}"
-          deploy_image_tag="sha-${deploy_short_sha}"
+          deploy_image_tag="sha-${deploy_sha}"
 
-          if [[ ! "${deploy_image_tag}" =~ ^sha-[A-Za-z0-9._-]+$ ]]; then
-            echo "Resolved unsafe IMAGE_TAG: ${deploy_image_tag}" >&2
+          if [[ ! "${deploy_sha}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Resolved unsafe DEV commit SHA." >&2
             exit 1
           fi
 
@@ -94,44 +135,25 @@ jobs:
             exit 1
           fi
 
-      - name: Wait for GHCR images
+      - name: Verify signed DEV GHCR images
         shell: bash
         env:
           GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
           GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
           IMAGE_TAG: ${{ steps.release.outputs.image_tag }}
-          IMAGE_NAMESPACE: ${{ github.repository }}
+          EXPECTED_SOURCE_REPOSITORY: ${{ github.repository }}
+          EXPECTED_SOURCE_REVISION: ${{ steps.release.outputs.commit_sha }}
+          EXPECTED_WORKFLOW_REF: refs/heads/dev-deploy
         run: |
           set -euo pipefail
-
-          image_namespace="${IMAGE_NAMESPACE,,}"
-          services=(api worker provider-webhook provider-balance-bot miniapp migrate backup)
-          deadline=$((SECONDS + 1200))
-
           printf '%s' "${GHCR_TOKEN}" | docker login ghcr.io -u "${GHCR_USERNAME}" --password-stdin >/dev/null
-
-          while true; do
-            missing=()
-            for service in "${services[@]}"; do
-              image="ghcr.io/${image_namespace}/${service}:${IMAGE_TAG}"
-              if ! docker manifest inspect "${image}" >/dev/null 2>&1; then
-                missing+=("${service}")
-              fi
-            done
-
-            if (( ${#missing[@]} == 0 )); then
-              echo "All GHCR images are available for ${IMAGE_TAG}."
-              break
-            fi
-
-            if (( SECONDS >= deadline )); then
-              printf 'Timed out waiting for GHCR images with tag %s. Missing: %s\n' "${IMAGE_TAG}" "${missing[*]}" >&2
-              exit 1
-            fi
-
-            printf 'Waiting for GHCR images with tag %s. Missing: %s\n' "${IMAGE_TAG}" "${missing[*]}"
-            sleep 15
-          done
+          image_registry="ghcr.io/${EXPECTED_SOURCE_REPOSITORY,,}"
+          bash scripts/deploy/verify-release-images.sh \
+            --image-registry "${image_registry}" \
+            --image-tag "${IMAGE_TAG}" \
+            --repository "${EXPECTED_SOURCE_REPOSITORY}" \
+            --revision "${EXPECTED_SOURCE_REVISION}" \
+            --workflow-ref "${EXPECTED_WORKFLOW_REF}"
 
       - name: Prepare SSH
         shell: bash
@@ -157,32 +179,6 @@ jobs:
             exit 1
           fi
 
-      - name: Ensure repository on DEV VPS
-        shell: bash
-        env:
-          DEV_DEPLOY_HOST: ${{ secrets.DEV_DEPLOY_HOST }}
-          DEV_DEPLOY_USER: ${{ secrets.DEV_DEPLOY_USER }}
-          DEV_DEPLOY_PATH: ${{ secrets.DEV_DEPLOY_PATH }}
-          REPOSITORY: ${{ github.repository }}
-        run: |
-          set -euo pipefail
-          ssh_opts=(-i "${HOME}/.ssh/deploy_key" -o StrictHostKeyChecking=yes -o UserKnownHostsFile="${HOME}/.ssh/known_hosts" -o GlobalKnownHostsFile=/dev/null)
-
-          ssh "${ssh_opts[@]}" "${DEV_DEPLOY_USER}@${DEV_DEPLOY_HOST}" 'bash -s' -- "${DEV_DEPLOY_PATH}" "${REPOSITORY}" <<'REMOTE'
-          set -euo pipefail
-          deploy_path="$1"
-          repository="$2"
-
-          if [[ ! -d "${deploy_path}/.git" ]]; then
-            mkdir -p "$(dirname "${deploy_path}")"
-            git clone "https://github.com/${repository}.git" "${deploy_path}"
-          fi
-
-          cd "${deploy_path}"
-          git fetch --prune origin
-          git checkout -B dev-deploy origin/dev-deploy
-          REMOTE
-
       - name: Capture current DEV image tag
         id: current_release
         shell: bash
@@ -198,6 +194,9 @@ jobs:
             ssh "${ssh_opts[@]}" "${DEV_DEPLOY_USER}@${DEV_DEPLOY_HOST}" 'bash -s' -- "${DEV_DEPLOY_PATH}" <<'REMOTE'
           set -euo pipefail
           deploy_path="$1"
+          if [[ ! -d "${deploy_path}/.git" ]]; then
+            exit 0
+          fi
           cd "${deploy_path}"
 
           env_tag=""
@@ -209,25 +208,76 @@ jobs:
             env_tag="${env_tag#\'}"
           fi
 
-          git_short="$(git rev-parse --short=7 HEAD 2>/dev/null || true)"
-          if [[ "${env_tag}" == sha-* ]]; then
+          git_revision="$(git rev-parse --verify HEAD 2>/dev/null || true)"
+          if [[ "${git_revision}" =~ ^[0-9a-f]{40}$ ]]; then
+            if [[ "${env_tag}" == sha-* && ! "${git_revision}" == "${env_tag#sha-}"* ]]; then
+              echo "Current IMAGE_TAG does not match the checked-out DEV revision." >&2
+              exit 1
+            fi
+            tag="sha-${git_revision}"
+          elif [[ "${env_tag}" =~ ^sha-[0-9a-f]{40}$ ]]; then
             tag="${env_tag}"
-          elif [[ -n "${git_short}" ]]; then
-            tag="sha-${git_short}"
           else
-            tag="${env_tag}"
+            tag=""
           fi
 
           printf '%s' "${tag}"
           REMOTE
           )"
 
-          if [[ -n "${previous_image_tag}" && ! "${previous_image_tag}" =~ ^[A-Za-z0-9._-]+$ ]]; then
-            echo "Captured unsafe previous IMAGE_TAG" >&2
+          if [[ -n "${previous_image_tag}" && ! "${previous_image_tag}" =~ ^sha-[0-9a-f]{40}$ ]]; then
+            echo "Captured previous IMAGE_TAG is not an immutable full-SHA tag." >&2
             exit 1
           fi
 
           echo "previous_image_tag=${previous_image_tag}" >> "${GITHUB_OUTPUT}"
+
+      - name: Checkout exact repository commit on DEV VPS
+        shell: bash
+        env:
+          DEV_DEPLOY_HOST: ${{ secrets.DEV_DEPLOY_HOST }}
+          DEV_DEPLOY_USER: ${{ secrets.DEV_DEPLOY_USER }}
+          DEV_DEPLOY_PATH: ${{ secrets.DEV_DEPLOY_PATH }}
+          REPOSITORY: ${{ github.repository }}
+          DEPLOY_COMMIT_SHA: ${{ steps.release.outputs.commit_sha }}
+        run: |
+          set -euo pipefail
+          ssh_opts=(-i "${HOME}/.ssh/deploy_key" -o StrictHostKeyChecking=yes -o UserKnownHostsFile="${HOME}/.ssh/known_hosts" -o GlobalKnownHostsFile=/dev/null)
+
+          ssh "${ssh_opts[@]}" "${DEV_DEPLOY_USER}@${DEV_DEPLOY_HOST}" 'bash -s' -- "${DEV_DEPLOY_PATH}" "${REPOSITORY}" "${DEPLOY_COMMIT_SHA}" <<'REMOTE'
+          set -euo pipefail
+          deploy_path="$1"
+          repository="$2"
+          deploy_sha="$3"
+
+          if [[ ! "${deploy_sha}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Invalid immutable DEV deploy commit SHA." >&2
+            exit 1
+          fi
+
+          if [[ ! -d "${deploy_path}/.git" ]]; then
+            mkdir -p "$(dirname "${deploy_path}")"
+            git clone "https://github.com/${repository}.git" "${deploy_path}"
+          fi
+
+          cd "${deploy_path}"
+          if [[ -n "$(git status --porcelain --untracked-files=no)" ]]; then
+            echo "Tracked DEV VPS repository changes block immutable deploy." >&2
+            exit 1
+          fi
+
+          git fetch --prune origin dev-deploy
+          if ! git cat-file -e "${deploy_sha}^{commit}"; then
+            echo "Selected DEV deploy commit is unavailable on the VPS." >&2
+            exit 1
+          fi
+          git checkout --detach "${deploy_sha}"
+
+          if [[ "$(git rev-parse --verify HEAD)" != "${deploy_sha}" || -n "$(git status --porcelain --untracked-files=no)" ]]; then
+            echo "DEV VPS repository does not match the immutable deploy commit." >&2
+            exit 1
+          fi
+          REMOTE
 
       - name: Upload DEV env
         shell: bash
@@ -264,8 +314,15 @@ jobs:
           bash scripts/deploy/check-dev-env.sh --env-file "${rendered_env}"
 
           scp "${ssh_opts[@]}" "${rendered_env}" "${DEV_DEPLOY_USER}@${DEV_DEPLOY_HOST}:${DEV_DEPLOY_PATH}/.env.next"
-          ssh "${ssh_opts[@]}" "${DEV_DEPLOY_USER}@${DEV_DEPLOY_HOST}" \
-            "set -euo pipefail; cd '${DEV_DEPLOY_PATH}'; install -m 600 .env.next .env; rm -f .env.next"
+          {
+            printf 'deploy_path=%q\n' "${DEV_DEPLOY_PATH}"
+            cat <<'REMOTE'
+          set -euo pipefail
+          cd "${deploy_path}"
+          install -m 600 .env.next .env
+          rm -f .env.next
+          REMOTE
+          } | ssh "${ssh_opts[@]}" "${DEV_DEPLOY_USER}@${DEV_DEPLOY_HOST}" bash -s
       - name: Run DEV deploy
         id: dev_deploy
         shell: bash
@@ -278,8 +335,15 @@ jobs:
           set -euo pipefail
           ssh_opts=(-i "${HOME}/.ssh/deploy_key" -o StrictHostKeyChecking=yes -o UserKnownHostsFile="${HOME}/.ssh/known_hosts" -o GlobalKnownHostsFile=/dev/null)
 
-          ssh "${ssh_opts[@]}" "${DEV_DEPLOY_USER}@${DEV_DEPLOY_HOST}" \
-            "set -euo pipefail; cd '${DEV_DEPLOY_PATH}'; bash scripts/deploy/deploy-dev.sh --branch dev-deploy --env-file .env --with-cloudflare --skip-public-smoke --image-tag '${DEPLOY_IMAGE_TAG}' --timeout-seconds 240"
+          {
+            printf 'deploy_path=%q\n' "${DEV_DEPLOY_PATH}"
+            printf 'deploy_image_tag=%q\n' "${DEPLOY_IMAGE_TAG}"
+            cat <<'REMOTE'
+          set -euo pipefail
+          cd "${deploy_path}"
+          bash scripts/deploy/deploy-dev.sh --branch dev-deploy --env-file .env --skip-pull --with-cloudflare --skip-public-smoke --image-tag "${deploy_image_tag}" --timeout-seconds 240
+          REMOTE
+          } | ssh "${ssh_opts[@]}" "${DEV_DEPLOY_USER}@${DEV_DEPLOY_HOST}" bash -s
 
       - name: Run DEV smoke
         id: dev_smoke
@@ -292,8 +356,14 @@ jobs:
           set -euo pipefail
           ssh_opts=(-i "${HOME}/.ssh/deploy_key" -o StrictHostKeyChecking=yes -o UserKnownHostsFile="${HOME}/.ssh/known_hosts" -o GlobalKnownHostsFile=/dev/null)
 
-          ssh "${ssh_opts[@]}" "${DEV_DEPLOY_USER}@${DEV_DEPLOY_HOST}" \
-            "set -euo pipefail; cd '${DEV_DEPLOY_PATH}'; bash scripts/deploy/smoke-dev.sh --env-file .env --timeout-seconds 60"
+          {
+            printf 'deploy_path=%q\n' "${DEV_DEPLOY_PATH}"
+            cat <<'REMOTE'
+          set -euo pipefail
+          cd "${deploy_path}"
+          bash scripts/deploy/smoke-dev.sh --env-file .env --timeout-seconds 60
+          REMOTE
+          } | ssh "${ssh_opts[@]}" "${DEV_DEPLOY_USER}@${DEV_DEPLOY_HOST}" bash -s
 
       - name: Collect DEV diagnostics after failed deploy or smoke
         if: ${{ failure() && (steps.dev_deploy.outcome == 'failure' || steps.dev_smoke.outcome == 'failure') }}
@@ -339,6 +409,9 @@ jobs:
           DEV_DEPLOY_PATH: ${{ secrets.DEV_DEPLOY_PATH }}
           DEPLOY_IMAGE_TAG: ${{ steps.release.outputs.image_tag }}
           PREVIOUS_IMAGE_TAG: ${{ steps.current_release.outputs.previous_image_tag }}
+          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+          EXPECTED_SOURCE_REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
           ssh_opts=(-i "${HOME}/.ssh/deploy_key" -o StrictHostKeyChecking=yes -o UserKnownHostsFile="${HOME}/.ssh/known_hosts" -o GlobalKnownHostsFile=/dev/null)
@@ -352,6 +425,21 @@ jobs:
             echo "Previous IMAGE_TAG equals deployed IMAGE_TAG; rollback would be a no-op." >&2
             exit 1
           fi
+
+          if [[ ! "${PREVIOUS_IMAGE_TAG}" =~ ^sha-[0-9a-f]{40}$ ]]; then
+            echo "Previous IMAGE_TAG is not an immutable full-SHA tag." >&2
+            exit 1
+          fi
+
+          previous_revision="${PREVIOUS_IMAGE_TAG#sha-}"
+          printf '%s' "${GHCR_TOKEN}" | docker login ghcr.io -u "${GHCR_USERNAME}" --password-stdin >/dev/null
+          image_registry="ghcr.io/${EXPECTED_SOURCE_REPOSITORY,,}"
+          bash scripts/deploy/verify-release-images.sh \
+            --image-registry "${image_registry}" \
+            --image-tag "${PREVIOUS_IMAGE_TAG}" \
+            --repository "${EXPECTED_SOURCE_REPOSITORY}" \
+            --revision "${previous_revision}" \
+            --workflow-ref refs/heads/dev-deploy
 
           ssh "${ssh_opts[@]}" "${DEV_DEPLOY_USER}@${DEV_DEPLOY_HOST}" 'bash -s' -- "${DEV_DEPLOY_PATH}" "${PREVIOUS_IMAGE_TAG}" <<'REMOTE'
           set -euo pipefail
@@ -369,6 +457,7 @@ jobs:
             --branch dev-deploy \
             --env-file .env \
             --project-name vk-ai-aggregator-dev \
+            --skip-pull \
             --with-cloudflare \
             --skip-migrate \
             --skip-public-smoke \

@@ -77,6 +77,14 @@ run_step() {
   "$@"
 }
 
+validate_image_tag() {
+  local value="${1:-}"
+  if [[ ! "${value}" =~ ^sha-[0-9a-f]{40}$ ]]; then
+    echo "IMAGE_TAG must be an immutable sha-<40 lowercase hex> release tag" >&2
+    return 1
+  fi
+}
+
 check_docker() {
   if ! command -v docker >/dev/null 2>&1; then
     echo "Docker CLI is not installed or not in PATH" >&2
@@ -96,6 +104,10 @@ fi
 if [[ ! -f "${env_file}" ]]; then
   echo "Server env file not found: ${env_file}. Assemble it from split PROD env secrets or create it on the server with real production values." >&2
   exit 1
+fi
+
+if [[ -n "${image_tag}" ]]; then
+  validate_image_tag "${image_tag}"
 fi
 
 echo "==> check Docker"
@@ -165,7 +177,7 @@ check_external_postgres() {
   database_url="$(get_env_value DATABASE_URL "")"
   run_container_check \
     -e DATABASE_URL="${database_url}" \
-    postgres:16-alpine \
+    postgres:16-alpine@sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777 \
     sh -ec 'pg_isready -d "$DATABASE_URL" >/dev/null'
 }
 
@@ -195,7 +207,7 @@ check_external_redis() {
     -e REDIS_CHECK_HOST="${REDIS_CHECK_HOST}" \
     -e REDIS_CHECK_PORT="${REDIS_CHECK_PORT}" \
     -e REDIS_CHECK_DB="${redis_db}" \
-    redis:7-alpine \
+    redis:7-alpine@sha256:6ab0b6e7381779332f97b8ca76193e45b0756f38d4c0dcda72dbb3c32061ab99 \
     sh -ec 'redis-cli -h "$REDIS_CHECK_HOST" -p "$REDIS_CHECK_PORT" -n "$REDIS_CHECK_DB" ping | grep -qx PONG'
 }
 
@@ -213,7 +225,7 @@ check_external_s3() {
     -e S3_SECRET_KEY="${s3_secret_key}" \
     -e S3_BUCKET="${s3_bucket}" \
     -e S3_USE_SSL="${s3_use_ssl}" \
-    minio/mc:latest \
+    minio/mc:RELEASE.2025-08-13T08-35-41Z@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727 \
     sh -ec '
       case "$S3_ENDPOINT" in
         http://*|https://*) endpoint_url="$S3_ENDPOINT" ;;
@@ -306,6 +318,9 @@ run_public_smoke() {
   echo "Public Cloudflare/DNS smoke did not pass within ${timeout_seconds}s" >&2
   return 1
 }
+
+effective_image_tag="${image_tag:-$(get_env_value IMAGE_TAG "")}"
+validate_image_tag "${effective_image_tag}"
 
 if [[ "${skip_pull}" != "true" ]]; then
   if [[ "${allow_dirty}" != "true" ]]; then

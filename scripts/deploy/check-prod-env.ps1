@@ -313,7 +313,7 @@ if ($BackupBeforeDeploy) {
 }
 
 if ($IncludeObservability) {
-    foreach ($required in @("GRAFANA_ADMIN_PASSWORD", "GRAFANA_SECRET_KEY", "POSTGRES_EXPORTER_DATA_SOURCE_NAME")) {
+    foreach ($required in @("GRAFANA_ADMIN_USER", "GRAFANA_ADMIN_PASSWORD", "GRAFANA_SECRET_KEY", "POSTGRES_EXPORTER_DATA_SOURCE_NAME")) {
         Require-Value -Values $envValues -Problems $problems -Name $required -Reason "required for production observability"
     }
     if (Is-TrueValue (Get-Value -Values $envValues -Name "ALERT_TELEGRAM_ENABLED")) {

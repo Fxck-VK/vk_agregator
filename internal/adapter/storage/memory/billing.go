@@ -17,6 +17,7 @@ type BillingRepo struct {
 	mu           sync.Mutex
 	accounts     map[uuid.UUID]domain.CreditAccount
 	byUser       map[string]uuid.UUID
+	claimedUsers map[string]bool
 	reservations map[uuid.UUID]domain.CreditReservation
 	ledger       []domain.LedgerEntry
 	ledgerKeys   map[string]bool
@@ -28,6 +29,7 @@ func NewBillingRepo() *BillingRepo {
 	return &BillingRepo{
 		accounts:     map[uuid.UUID]domain.CreditAccount{},
 		byUser:       map[string]uuid.UUID{},
+		claimedUsers: map[string]bool{},
 		reservations: map[uuid.UUID]domain.CreditReservation{},
 		ledgerKeys:   map[string]bool{},
 		resKeys:      map[string]bool{},
@@ -47,14 +49,12 @@ func (r *BillingRepo) CreateAccount(_ context.Context, a *domain.CreditAccount) 
 		a.OwnerAccountID = a.UserID
 	}
 	key := userCurrencyKey(a.UserID, a.Currency)
-	if _, ok := r.byUser[key]; ok {
+	if r.claimedUsers[key] {
 		return domain.ErrConflict
 	}
 	ownerKey := userCurrencyKey(a.OwnerAccountID, a.Currency)
-	if ownerKey != key {
-		if _, ok := r.byUser[ownerKey]; ok {
-			return domain.ErrConflict
-		}
+	if r.claimedUsers[ownerKey] {
+		return domain.ErrConflict
 	}
 	if a.ID == uuid.Nil {
 		a.ID = uuid.New()
@@ -67,10 +67,9 @@ func (r *BillingRepo) CreateAccount(_ context.Context, a *domain.CreditAccount) 
 	grant := a.BalanceCached
 	a.BalanceCached = 0
 	r.accounts[a.ID] = *a
-	r.byUser[key] = a.ID
-	if ownerKey != key {
-		r.byUser[ownerKey] = a.ID
-	}
+	r.claimedUsers[key] = true
+	r.claimedUsers[ownerKey] = true
+	r.byUser[ownerKey] = a.ID
 	if grant != 0 {
 		if err := r.appendLocked(&domain.LedgerEntry{
 			AccountID:      a.ID,

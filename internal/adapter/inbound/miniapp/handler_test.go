@@ -453,6 +453,21 @@ func TestHandler_ClientEvent_RejectsPromptField(t *testing.T) {
 	}
 }
 
+func TestHandler_ClientEvent_RejectsTrailingJSONValue(t *testing.T) {
+	fixture := newTestFixtureWithConfig("", nil, func(cfg *miniappinbound.Config) {
+		cfg.FrontendTelemetryEnabled = true
+	})
+	req := httptest.NewRequest(http.MethodPost, "/miniapp/client-events", bytes.NewReader([]byte(`{"event_type":"ui_event"}{"event_type":"api_failure"}`)))
+	req.Header.Set("X-VK-User-ID", "777")
+
+	w := httptest.NewRecorder()
+	fixture.handler.Routes().ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
 func newArtifactHandler(t *testing.T, jobStatus domain.JobStatus, decision *domain.ModerationDecision) (http.Handler, uuid.UUID) {
 	t.Helper()
 	ctx := context.Background()
@@ -771,6 +786,99 @@ func TestHandler_BillableEndpointsRequireBoundedIdempotencyKey(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestHandler_StrictJSONDecode64KiBRequests(t *testing.T) {
+	const limit = int64(64 << 10)
+
+	t.Run("estimate rejects unknown fields", func(t *testing.T) {
+		fixture := newTestFixture("", nil)
+		rec := performMiniAppJSONPost(t, fixture.handler.Routes(), "/miniapp/estimate", []byte(`{"operation":"text_generate","prompt":"hello","user_id":"777"}`), "")
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("chat rejects trailing json beyond limit", func(t *testing.T) {
+		fixture := newTestFixture("", nil)
+		body := jsonBodyPaddedPastLimit(`{"prompt":"hello"}`, limit, `{}`)
+		rec := performMiniAppJSONPost(t, fixture.handler.Routes(), "/miniapp/chat/messages", body, "strict-json-chat-trailing")
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("estimate rejects over-limit body after valid prefix", func(t *testing.T) {
+		fixture := newTestFixture("", nil)
+		body := jsonBodyPaddedPastLimit(`{"operation":"text_generate","prompt":"hello"}`, limit, " ")
+		rec := performMiniAppJSONPost(t, fixture.handler.Routes(), "/miniapp/estimate", body, "")
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+}
+
+func TestHandler_StrictJSONDecode16KiBRequests(t *testing.T) {
+	const limit = int64(16 << 10)
+
+	t.Run("referral rejects unknown fields", func(t *testing.T) {
+		fixture := newTestFixture("", nil)
+		rec := performMiniAppJSONPost(t, fixture.handler.Routes(), "/miniapp/referral/accept", []byte(`{"code":"","vk_user_id":777}`), "")
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("payment rejects trailing json beyond limit", func(t *testing.T) {
+		provider := &recordingPaymentProvider{}
+		fixture := newTestFixtureWithConfigAndPaymentProvider("", nil, nil, provider)
+		fixture.paymentRepo.PutProduct(&domain.PaymentProduct{
+			Code:         "credits_100",
+			Title:        "100 credits",
+			Amount:       9900,
+			Currency:     domain.CurrencyRUB,
+			Credits:      100,
+			PriceVersion: 1,
+			IsActive:     true,
+		})
+		body := jsonBodyPaddedPastLimit(`{"product_code":"credits_100","receipt_email":"user@example.com"}`, limit, `{}`)
+		rec := performMiniAppJSONPost(t, fixture.handler.Routes(), "/miniapp/payments/intents", body, "strict-json-payment-trailing")
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+		}
+		if len(provider.createInputs) != 0 {
+			t.Fatalf("invalid JSON must not call payment provider, got %d calls", len(provider.createInputs))
+		}
+	})
+
+	t.Run("referral rejects over-limit body after valid prefix", func(t *testing.T) {
+		fixture := newTestFixture("", nil)
+		body := jsonBodyPaddedPastLimit(`{"code":""}`, limit, " ")
+		rec := performMiniAppJSONPost(t, fixture.handler.Routes(), "/miniapp/referral/accept", body, "")
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+}
+
+func performMiniAppJSONPost(t *testing.T, routes http.Handler, path string, body []byte, idempotencyKey string) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodPost, path, bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Launch-Params", devLaunchParams(777))
+	if idempotencyKey != "" {
+		req.Header.Set("X-Idempotency-Key", idempotencyKey)
+	}
+	rec := httptest.NewRecorder()
+	routes.ServeHTTP(rec, req)
+	return rec
+}
+
+func jsonBodyPaddedPastLimit(validJSON string, limit int64, suffix string) []byte {
+	if int64(len(validJSON)) >= limit {
+		panic("test JSON must be shorter than limit")
+	}
+	return []byte(validJSON + strings.Repeat(" ", int(limit)-len(validJSON)) + suffix)
 }
 
 func TestHandler_ListJobs_HidesChatJobsAndExposesImageJobs(t *testing.T) {
@@ -1569,6 +1677,42 @@ func TestHandler_CreateJob_UnauthorizedNoParams(t *testing.T) {
 
 	if w.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401, got %d", w.Code)
+	}
+}
+
+func TestHandler_LaunchParamsTransportIsHeaderOnlyByDefault(t *testing.T) {
+	const secret = "my-app-secret"
+	raw := buildSignedParams(777, secret, time.Now().Unix())
+	routes := newTestHandler(secret).Routes()
+
+	queryReq := httptest.NewRequest(http.MethodGet, "/miniapp/balance?launch_params="+url.QueryEscape(raw), nil)
+	queryW := httptest.NewRecorder()
+	routes.ServeHTTP(queryW, queryReq)
+	if queryW.Code != http.StatusUnauthorized {
+		t.Fatalf("query launch params status = %d, want 401", queryW.Code)
+	}
+
+	headerReq := httptest.NewRequest(http.MethodGet, "/miniapp/balance", nil)
+	headerReq.Header.Set("X-Launch-Params", raw)
+	headerW := httptest.NewRecorder()
+	routes.ServeHTTP(headerW, headerReq)
+	if headerW.Code != http.StatusOK {
+		t.Fatalf("header launch params status = %d, want 200: %s", headerW.Code, headerW.Body.String())
+	}
+}
+
+func TestHandler_LaunchParamsQueryRequiresExplicitOptIn(t *testing.T) {
+	const secret = "my-app-secret"
+	raw := buildSignedParams(777, secret, time.Now().Unix())
+	fixture := newTestFixtureWithConfig(secret, nil, func(cfg *miniappinbound.Config) {
+		cfg.AllowQueryLaunchParams = true
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/miniapp/balance?launch_params="+url.QueryEscape(raw), nil)
+	w := httptest.NewRecorder()
+	fixture.handler.Routes().ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("opt-in query launch params status = %d, want 200: %s", w.Code, w.Body.String())
 	}
 }
 
@@ -3965,7 +4109,7 @@ func TestHandler_CreateJob_ImageQualityPersistsServerOwnedSnapshot(t *testing.T)
 	}
 }
 
-func TestHandler_CreateJob_IgnoresClientProviderAndPriceFields(t *testing.T) {
+func TestHandler_CreateJob_RejectsClientProviderAndPriceFields(t *testing.T) {
 	fixture := newTestFixtureWithConfig("", nil, func(cfg *miniappinbound.Config) {
 		cfg.ImageModels = []miniappinbound.ImageModelDTO{{
 			Type:            "image",
@@ -4007,72 +4151,20 @@ func TestHandler_CreateJob_IgnoresClientProviderAndPriceFields(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	routes.ServeHTTP(w, req)
-	if w.Code != http.StatusCreated {
-		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
 	}
-	lower := strings.ToLower(w.Body.String())
-	for _, private := range []string{
-		"client-provider",
-		"client-provider-model",
-		"client-model-code",
-		"provider",
-		"model_code",
-		"provider_model_id",
-		"resolved_snapshot",
-		"price_multiplier",
-		"provider_cost_credits",
-		"max_internal_cost_credits",
-	} {
-		if strings.Contains(lower, private) {
-			t.Fatalf("job response leaked client/provider private detail %q: %s", private, w.Body.String())
+	ctx := context.Background()
+	if user, err := fixture.userRepo.GetByVKUserID(ctx, 777); err == nil {
+		jobs, err := fixture.jobRepo.ListByUser(ctx, user.ID, 10, 0)
+		if err != nil {
+			t.Fatalf("list jobs: %v", err)
 		}
-	}
-	var resp struct {
-		ID           string `json:"id"`
-		ModelID      string `json:"model_id"`
-		ModelName    string `json:"model_name"`
-		ImageQuality string `json:"image_quality"`
-		CostEstimate int64  `json:"cost_estimate"`
-	}
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("invalid response json: %v", err)
-	}
-	if resp.ModelID != modelcatalog.MiniAppImageNanoBanana2 ||
-		resp.ModelName != "Nano Banana 2" ||
-		resp.ImageQuality != modelcatalog.ImageQuality2K ||
-		resp.CostEstimate != 24 {
-		t.Fatalf("client-provided price/provider fields affected response: %+v", resp)
-	}
-
-	jobID, err := uuid.Parse(resp.ID)
-	if err != nil {
-		t.Fatalf("invalid job id: %v", err)
-	}
-	job, err := fixture.jobRepo.GetByID(context.Background(), jobID)
-	if err != nil {
-		t.Fatalf("get job: %v", err)
-	}
-	if job.CostEstimate != 24 || job.CostReserved != 24 {
-		t.Fatalf("client-provided price affected billing, estimate/reserved=%d/%d", job.CostEstimate, job.CostReserved)
-	}
-	var params struct {
-		ModelID      string `json:"model_id"`
-		ModelName    string `json:"model_name"`
-		Provider     string `json:"provider"`
-		ModelCode    string `json:"model_code"`
-		Resolution   string `json:"resolution"`
-		ImageQuality string `json:"image_quality"`
-	}
-	if err := json.Unmarshal(job.Params, &params); err != nil {
-		t.Fatalf("invalid params: %v", err)
-	}
-	if params.ModelID != modelcatalog.MiniAppImageNanoBanana2 ||
-		params.ModelName != "Nano Banana 2" ||
-		params.Provider != "poyo" ||
-		params.ModelCode != "nano-banana-2-new" ||
-		params.Resolution != modelcatalog.ImageQuality2K ||
-		params.ImageQuality != modelcatalog.ImageQuality2K {
-		t.Fatalf("client-provided provider/model fields affected stored server snapshot: %+v", params)
+		if len(jobs) != 0 {
+			t.Fatalf("invalid client provider/price fields must not create a job, got %d", len(jobs))
+		}
+	} else if !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("get user: %v", err)
 	}
 }
 
@@ -4358,7 +4450,6 @@ func TestHandler_CreateJob_VideoDerivesAspectRatioFromReferenceArtifact(t *testi
 		"video_route_alias":      string(domain.VideoRouteRunwayGen4Turbo),
 		"reference_artifact_ids": []string{artifact.ID.String()},
 		"duration_sec":           5,
-		"aspect_ratio":           "16:9",
 	})
 	req := httptest.NewRequest(http.MethodPost, "/miniapp/jobs", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")

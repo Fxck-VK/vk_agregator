@@ -141,6 +141,7 @@ test("admin operator smoke keeps sensitive data out of UI, console, network bodi
   await page.getByRole("button", { name: "Провайдеры Модели" }).click();
   await expect(page.getByRole("heading", { name: "Control room" })).toBeVisible();
   await expect(page.getByText("deepinfra", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "0 route aliases" })).toBeVisible();
 
   await page.getByRole("button", { name: "Медиа-безопасность Политики медиа" }).click();
   await expect(page.getByRole("heading", { name: "Worker-owned safety config" })).toBeVisible();

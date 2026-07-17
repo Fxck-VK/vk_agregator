@@ -1,0 +1,4 @@
+-- 000040_provider_task_payload_redaction.down.sql
+-- no-op: provider task payload redaction is intentionally irreversible.
+-- Reintroducing raw provider payloads, temporary URLs or inline text would
+-- violate the current storage contract.
