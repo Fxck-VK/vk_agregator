@@ -12,6 +12,7 @@ on:
 
 permissions:
   contents: read
+  packages: read
 
 concurrency:
   group: dev-deploy
@@ -102,8 +103,8 @@ jobs:
           DEV_DEPLOY_PATH: ${{ secrets.DEV_DEPLOY_PATH }}
           DEV_DEPLOY_SSH_KEY: ${{ secrets.DEV_DEPLOY_SSH_KEY }}
           DEV_DEPLOY_SSH_KNOWN_HOSTS: ${{ secrets.DEV_DEPLOY_SSH_KNOWN_HOSTS }}
-          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
-          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+          GHCR_USERNAME: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ENV_COMMON: ${{ secrets.ENV_COMMON }}
           ENV_PROVIDERS_COMMON: ${{ secrets.ENV_PROVIDERS_COMMON }}
           ENV_SECRETS_DEV: ${{ secrets.ENV_SECRETS_DEV }}
@@ -138,8 +139,8 @@ jobs:
       - name: Verify signed DEV GHCR images
         shell: bash
         env:
-          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
-          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+          GHCR_USERNAME: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           IMAGE_TAG: ${{ steps.release.outputs.image_tag }}
           EXPECTED_SOURCE_REPOSITORY: ${{ github.repository }}
           EXPECTED_SOURCE_REVISION: ${{ steps.release.outputs.commit_sha }}
@@ -285,8 +286,8 @@ jobs:
           DEV_DEPLOY_HOST: ${{ secrets.DEV_DEPLOY_HOST }}
           DEV_DEPLOY_USER: ${{ secrets.DEV_DEPLOY_USER }}
           DEV_DEPLOY_PATH: ${{ secrets.DEV_DEPLOY_PATH }}
-          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
-          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+          GHCR_USERNAME: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ENV_COMMON: ${{ secrets.ENV_COMMON }}
           ENV_PROVIDERS_COMMON: ${{ secrets.ENV_PROVIDERS_COMMON }}
           ENV_SECRETS_DEV: ${{ secrets.ENV_SECRETS_DEV }}
@@ -409,8 +410,8 @@ jobs:
           DEV_DEPLOY_PATH: ${{ secrets.DEV_DEPLOY_PATH }}
           DEPLOY_IMAGE_TAG: ${{ steps.release.outputs.image_tag }}
           PREVIOUS_IMAGE_TAG: ${{ steps.current_release.outputs.previous_image_tag }}
-          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
-          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+          GHCR_USERNAME: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           EXPECTED_SOURCE_REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
