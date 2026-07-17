@@ -115,6 +115,9 @@ write GitHub summary / Telegram notification
 `prepare-dev-env.sh` renders the final server `.env`, pins runtime and backup
 images to the deploy SHA, appends GHCR pull credentials, and prints only
 non-secret readiness flags.
+It also caps the DEV jobs worker at `1.00` CPU for the current one-vCPU DEV
+server. Production keeps the Compose default of `2.00` CPUs unless
+`WORKER_CPU_LIMIT` is explicitly overridden there.
 `check-dev-env.sh` blocks production hostnames, production VK group id, missing
 Cloudflare tunnel token, unsupported payment providers and non-development
 `APP_ENV` before the env can reach the VPS.
