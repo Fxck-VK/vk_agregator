@@ -216,6 +216,9 @@ Assert-Contains $deployDev 'deploy_image_tag="sha-${deploy_sha}"' 'DEV immutable
 Assert-Contains $deployDev 'git checkout --detach "${deploy_sha}"' 'DEV immutable deployment'
 Assert-Contains $deployDev 'DEV VPS repository does not match the immutable deploy commit.' 'DEV immutable deployment'
 Assert-Contains $deployDev '--skip-pull --with-cloudflare' 'DEV immutable deployment'
+Assert-Contains $deployDev 'if [[ "${env_tag}" =~ ^sha-[0-9a-f]{40}$ ]]; then' 'DEV previous release capture'
+Assert-Contains $deployDev 'tag="${env_tag}"' 'DEV previous release capture'
+Assert-NotMatch $deployDev 'Current IMAGE_TAG does not match the checked-out DEV revision\.' 'DEV recoverable checkout drift'
 
 $releaseVerifierTest = Get-Content -LiteralPath $releaseVerifierTestPath -Raw
 Assert-Contains $releaseVerifierTest 'mismatched image tag' 'Release verifier negative tests'
