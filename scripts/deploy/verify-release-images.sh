@@ -49,8 +49,10 @@ certificate_identity="https://github.com/${repository}/.github/workflows/docker-
 oidc_issuer="https://token.actions.githubusercontent.com"
 repository_lc="${repository,,}"
 repository_uri="https://github.com/${repository_lc}"
-expected_build_type="https://mobyproject.org/buildkit@v1"
-expected_builder_id="https://github.com/docker/build-push-action"
+expected_legacy_build_type="https://mobyproject.org/buildkit@v1"
+expected_legacy_builder_id="https://github.com/docker/build-push-action"
+expected_v1_build_type="https://github.com/moby/buildkit/blob/master/docs/attestations/slsa-definitions.md"
+expected_v1_builder_prefix="https://github.com/${repository_lc}/actions/runs/"
 
 for service in "${services[@]}"; do
   tagged_ref="${image_registry}/${service}:${image_tag}"
@@ -90,17 +92,21 @@ for service in "${services[@]}"; do
   if ! jq -e \
     --arg repository_uri "${repository_uri}" \
     --arg revision "${revision}" \
-    --arg build_type "${expected_build_type}" \
-    --arg builder_id "${expected_builder_id}" \
+    --arg legacy_build_type "${expected_legacy_build_type}" \
+    --arg legacy_builder_id "${expected_legacy_builder_id}" \
+    --arg v1_build_type "${expected_v1_build_type}" \
+    --arg v1_builder_prefix "${expected_v1_builder_prefix}" \
     'def normalized_provenance:
        if (.buildDefinition? | type) == "object" then
          {
+           schema: "v1",
            build_type: .buildDefinition.buildType,
            builder_id: .runDetails.builder.id,
            materials: (.buildDefinition.resolvedDependencies // [])
          }
        else
          {
+           schema: "v0.2",
            build_type: .buildType,
            builder_id: .builder.id,
            materials: (.materials // [])
@@ -113,11 +119,21 @@ for service in "${services[@]}"; do
        | sub("\\.git$"; "")
        | sub("/$"; "");
      type == "object" and
-     (normalized_provenance | .build_type == $build_type) and
-     (normalized_provenance | .builder_id == $builder_id) and
-     any((normalized_provenance | .materials)[];
-       ((.uri // "") | normalized_material_uri) == $repository_uri and
-       ((.digest.sha1 // "") == $revision)
+     ((normalized_provenance) as $p |
+       ((
+         $p.schema == "v1" and
+         $p.build_type == $v1_build_type and
+         (($p.builder_id // "") | ascii_downcase | startswith($v1_builder_prefix)) and
+         (($p.builder_id // "") | ascii_downcase | ltrimstr($v1_builder_prefix) | test("^[0-9]+/attempts/[1-9][0-9]*$"))
+       ) or (
+         $p.schema == "v0.2" and
+         $p.build_type == $legacy_build_type and
+         $p.builder_id == $legacy_builder_id
+       )) and
+       any($p.materials[];
+         ((.uri // "") | normalized_material_uri) == $repository_uri and
+         ((.digest.sha1 // "") == $revision)
+       )
      )' <<<"${provenance}" >/dev/null; then
     echo "SLSA provenance assertion failed: service=${service}" >&2
     exit 1
