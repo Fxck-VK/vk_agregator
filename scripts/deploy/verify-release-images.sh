@@ -71,20 +71,23 @@ for service in "${services[@]}"; do
     --output json \
     "${immutable_ref}")"
 
-  jq -e \
+  if ! jq -e \
     --arg digest "${digest}" \
-    --arg repository "${repository}" \
-    --arg revision "${revision}" \
-    --arg workflow_ref "${workflow_ref}" \
     'type == "array" and length > 0 and any(.[];
       (.critical.image["docker-manifest-digest"] // .critical.image["Docker-manifest-digest"]) == $digest
-    )' <<<"${signature_json}" >/dev/null
+    )' <<<"${signature_json}" >/dev/null; then
+    echo "Cosign payload digest assertion failed: service=${service}" >&2
+    exit 1
+  fi
 
   sbom="$(docker buildx imagetools inspect "${immutable_ref}" --format '{{ json .SBOM.SPDX }}')"
   provenance="$(docker buildx imagetools inspect "${immutable_ref}" --format '{{ json .Provenance.SLSA }}')"
 
-  jq -e 'type == "object" and (.spdxVersion | startswith("SPDX-")) and ((.packages // []) | length > 0)' <<<"${sbom}" >/dev/null
-  jq -e \
+  if ! jq -e 'type == "object" and (.spdxVersion | startswith("SPDX-")) and ((.packages // []) | length > 0)' <<<"${sbom}" >/dev/null; then
+    echo "SPDX SBOM assertion failed: service=${service}" >&2
+    exit 1
+  fi
+  if ! jq -e \
     --arg repository_uri "${repository_uri}" \
     --arg revision "${revision}" \
     --arg build_type "${expected_build_type}" \
@@ -105,6 +108,7 @@ for service in "${services[@]}"; do
        end;
      def normalized_material_uri:
        ascii_downcase
+       | split("#")[0]
        | sub("^git\\+"; "")
        | sub("\\.git$"; "")
        | sub("/$"; "");
@@ -114,7 +118,10 @@ for service in "${services[@]}"; do
      any((normalized_provenance | .materials)[];
        ((.uri // "") | normalized_material_uri) == $repository_uri and
        ((.digest.sha1 // "") == $revision)
-     )' <<<"${provenance}" >/dev/null
+     )' <<<"${provenance}" >/dev/null; then
+    echo "SLSA provenance assertion failed: service=${service}" >&2
+    exit 1
+  fi
 
   rm -f "${raw_manifest}"
   trap - EXIT

@@ -28,11 +28,11 @@ elif [[ "${joined}" == *".Provenance.SLSA"* ]]; then
   build_type="${MOCK_BUILD_TYPE:-https://mobyproject.org/buildkit@v1}"
   builder_id="${MOCK_BUILDER_ID:-https://github.com/docker/build-push-action}"
   if [[ "${MOCK_PROVENANCE_SCHEMA:-v02}" == "v1" ]]; then
-    printf '{"buildDefinition":{"buildType":"%s","resolvedDependencies":[{"uri":"https://github.com/%s.git","digest":{"sha1":"%s"}}]},"runDetails":{"builder":{"id":"%s"}}}\n' \
-      "${build_type}" "${material_repository}" "${MOCK_REVISION}" "${builder_id}"
+    printf '{"buildDefinition":{"buildType":"%s","resolvedDependencies":[{"uri":"https://github.com/%s.git%s","digest":{"sha1":"%s"}}]},"runDetails":{"builder":{"id":"%s"}}}\n' \
+      "${build_type}" "${material_repository}" "${MOCK_MATERIAL_SUFFIX:-}" "${MOCK_REVISION}" "${builder_id}"
   else
-    printf '{"buildType":"%s","builder":{"id":"%s"},"materials":[{"uri":"https://github.com/%s.git","digest":{"sha1":"%s"}}]}\n' \
-      "${build_type}" "${builder_id}" "${material_repository}" "${MOCK_REVISION}"
+    printf '{"buildType":"%s","builder":{"id":"%s"},"materials":[{"uri":"https://github.com/%s.git%s","digest":{"sha1":"%s"}}]}\n' \
+      "${build_type}" "${builder_id}" "${material_repository}" "${MOCK_MATERIAL_SUFFIX:-}" "${MOCK_REVISION}"
   fi
 else
   echo "Unexpected docker mock invocation." >&2
@@ -104,6 +104,11 @@ v1_success_output="$(MOCK_PROVENANCE_SCHEMA=v1 run_verifier)"
 v1_verified_count="$(grep -c '^Verified signed release image:' <<<"${v1_success_output}")"
 [[ "${v1_verified_count}" == "7" ]] || { echo "Expected seven verified SLSA v1 release images; got ${v1_verified_count}." >&2; exit 1; }
 echo "PASS positive: seven exact signed image digests with SLSA v1 provenance"
+
+fragment_success_output="$(MOCK_MATERIAL_SUFFIX="#${MOCK_REVISION}" run_verifier)"
+fragment_verified_count="$(grep -c '^Verified signed release image:' <<<"${fragment_success_output}")"
+[[ "${fragment_verified_count}" == "7" ]] || { echo "Expected seven verified provenance materials with pinned Git fragments; got ${fragment_verified_count}." >&2; exit 1; }
+echo "PASS positive: provenance Git material fragment matches the exact revision"
 
 expect_failure "mismatched image tag" \
   bash "${verifier}" \
