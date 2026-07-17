@@ -195,6 +195,11 @@ foreach ($workflow in @($dockerImages, $deployProd, $deployDev)) {
 }
 
 foreach ($deploy in @($deployProd, $deployDev)) {
+    Assert-Contains $deploy 'packages: read' 'Deployment GHCR permissions'
+    Assert-Contains $deploy 'GHCR_USERNAME: ${{ github.actor }}' 'Deployment ephemeral GHCR identity'
+    Assert-Contains $deploy 'GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}' 'Deployment ephemeral GHCR token'
+    Assert-NotMatch $deploy 'GHCR_USERNAME:\s*\$\{\{\s*secrets\.GHCR_USERNAME\s*\}\}' 'Deployment long-lived GHCR identity'
+    Assert-NotMatch $deploy 'GHCR_TOKEN:\s*\$\{\{\s*secrets\.GHCR_TOKEN\s*\}\}' 'Deployment long-lived GHCR token'
     Assert-Contains $deploy 'scripts/deploy/verify-release-images.sh' 'Deployment image verification'
     Assert-Contains $deploy 'EXPECTED_SOURCE_REPOSITORY' 'Deployment image verification'
     Assert-Contains $deploy 'EXPECTED_SOURCE_REVISION' 'Deployment image verification'
