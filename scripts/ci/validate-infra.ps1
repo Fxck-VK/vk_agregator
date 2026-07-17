@@ -141,6 +141,7 @@ function New-ComposeValidationEnvFile {
         "IMAGE_TAG=infra-validate",
         "BACKUP_IMAGE_TAG=infra-validate",
         "DATABASE_URL=config-validation-placeholder",
+        "POSTGRES_PASSWORD=pg-config",
         "REDIS_ADDR=redis:6379",
         "S3_ENDPOINT=minio:9000",
         "S3_ACCESS_KEY=compose_validate_access",
@@ -149,6 +150,8 @@ function New-ComposeValidationEnvFile {
         "S3_USE_SSL=false",
         "S3_REGION=us-east-1",
         "S3_ADDRESSING_STYLE=path",
+        "MINIO_ROOT_USER=minio-config",
+        "MINIO_ROOT_PASSWORD=minio-config",
         "CLOUDFLARED_TUNNEL_TOKEN=compose-validate-token",
         "COMPOSE_NETWORK_NAME=vk-ai-aggregator-prod"
     )
@@ -580,8 +583,9 @@ function Assert-ProductionDataServices {
         "redis_data:/data",
         "minio:",
         "minio_data:/data",
-        "local-postgres-disabled",
-        "local-minio-disabled",
+        '${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}',
+        '${MINIO_ROOT_USER:?MINIO_ROOT_USER is required}',
+        '${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}',
         "postgres_data:",
         "redis_data:",
         "minio_data:",
@@ -679,6 +683,30 @@ function Assert-ProductionComposeHardening {
     }
 
     & $path
+
+    $dataComposePath = Join-Path $repoRoot "docker-compose.data.yml"
+    $dataCompose = Get-Content -LiteralPath $dataComposePath -Raw
+    foreach ($requiredSecret in @(
+        '${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}',
+        '${MINIO_ROOT_USER:?MINIO_ROOT_USER is required}',
+        '${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}'
+    )) {
+        if (-not $dataCompose.Contains($requiredSecret)) {
+            throw "data compose must fail closed for missing credential: $requiredSecret"
+        }
+    }
+    if ($dataCompose -match '(?i)local-(?:postgres|minio)-disabled') {
+        throw "data compose must not provide disabled-looking credential fallbacks"
+    }
+    if ([regex]::Matches($dataCompose, '(?m)^\s+cap_drop:\s*$').Count -ne 3) {
+        throw "all three data services must drop the default Linux capability set"
+    }
+    if ([regex]::Matches($dataCompose, '(?m)^\s+read_only:\s+true\s*$').Count -ne 3) {
+        throw "all three data services must use a read-only root filesystem"
+    }
+    if ([regex]::Matches($dataCompose, '(?m)^\s+tmpfs:\s*$').Count -ne 3) {
+        throw "all three data services must declare bounded writable tmpfs mounts"
+    }
 }
 
 function Assert-DeployScripts {
@@ -922,6 +950,18 @@ function Assert-DeployScripts {
         }
     }
 
+    foreach ($deployScript in @(
+        @{ Path = "scripts\deploy\deploy-prod.sh"; EnvCheck = "check-prod-env.sh" },
+        @{ Path = "scripts\deploy\deploy-dev.sh"; EnvCheck = "check-dev-env.sh" }
+    )) {
+        $content = Get-Content -LiteralPath (Join-Path $repoRoot $deployScript.Path) -Raw
+        $tagValidation = $content.IndexOf('validate_image_tag "${image_tag}"', [StringComparison]::Ordinal)
+        $envValidation = $content.IndexOf($deployScript.EnvCheck, [StringComparison]::Ordinal)
+        if ($tagValidation -lt 0 -or $envValidation -lt 0 -or $tagValidation -ge $envValidation) {
+            throw "deploy script $($deployScript.Path) must validate an explicit image tag before env validation"
+        }
+    }
+
     Write-Host "deploy scripts OK"
 }
 
@@ -958,7 +998,8 @@ function Assert-DockerImageWorkflow {
         "Build without registry publication",
         "push: false",
         "publish:",
-        "if: github.event_name != 'pull_request'",
+        "github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev-deploy'",
+        "type=sha,prefix=sha-,format=long",
         "push: true",
         "id-token: write",
         "sbom: true",
@@ -970,6 +1011,11 @@ function Assert-DockerImageWorkflow {
         if (-not $content.Contains($snippet)) {
             throw "Docker image workflow is missing required snippet: $snippet"
         }
+    }
+
+    if ($content -match '(?m)^\s*type=ref,event=branch\s*$' -or
+        $content -match '(?m)^\s*type=sha,prefix=sha-,format=short\s*$') {
+        throw "Docker image workflow must publish only immutable full-SHA tags"
     }
 
     Write-Host "Docker image workflow OK"

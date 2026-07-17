@@ -6,11 +6,17 @@ on:
       - main
       - serega
       - feature/integration-web-backend
+      - integration-web-backend
+      - integration_web_backend
+      - dev-deploy
   push:
     branches:
       - main
       - serega
       - feature/integration-web-backend
+      - integration-web-backend
+      - integration_web_backend
+      - dev-deploy
 
 permissions:
   contents: read

@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -13,6 +14,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -632,12 +634,10 @@ func TestAccountAPIPasswordResetUsesEmailCode(t *testing.T) {
 	if rec.Code != http.StatusAccepted {
 		t.Fatalf("request reset status = %d, body = %s", rec.Code, rec.Body.String())
 	}
-	if service.emailSender.code == "" {
-		t.Fatal("reset code was not sent")
-	}
+	resetCode := service.emailSender.waitEmailCode(t)
 	assertNoRawPasswordMaterial(t, rec.Body.String())
 
-	resetBody := fmt.Sprintf(`{"email":"owner@example.com","code":%q,"new_password":"new password value"}`, service.emailSender.code)
+	resetBody := fmt.Sprintf(`{"email":"owner@example.com","code":%q,"new_password":"new password value"}`, resetCode)
 	req = httptest.NewRequest(http.MethodPost, "/account/password/reset", strings.NewReader(resetBody))
 	rec = httptest.NewRecorder()
 	h.Routes().ServeHTTP(rec, req)
@@ -675,6 +675,107 @@ func TestAccountAPIPasswordResetUsesEmailCode(t *testing.T) {
 	}
 	if !foundReset {
 		t.Fatalf("password reset audit was not recorded: %+v", audits)
+	}
+}
+
+func TestAccountAPIPasswordResetDoesNotEnumerateEmailIdentity(t *testing.T) {
+	h, service := newTestHandler(t)
+	ctx := context.Background()
+	vk, err := service.auth.ResolveVKID(ctx, 556)
+	if err != nil {
+		t.Fatalf("resolve vk: %v", err)
+	}
+	if _, err := service.account.LinkVerifiedIdentity(ctx, vk.AccountID, vk.AccountID, domain.VerifiedAccountLogin{
+		Method:     domain.AccountLoginEmailPassword,
+		ExternalID: "known@example.com",
+		Verified:   true,
+	}); err != nil {
+		t.Fatalf("link email: %v", err)
+	}
+
+	request := func(email string) *httptest.ResponseRecorder {
+		t.Helper()
+		body := fmt.Sprintf(`{"email":%q}`, email)
+		req := httptest.NewRequest(http.MethodPost, "/account/password/request-reset", strings.NewReader(body))
+		rec := httptest.NewRecorder()
+		h.Routes().ServeHTTP(rec, req)
+		return rec
+	}
+
+	known := request("known@example.com")
+	unknown := request("unknown@example.com")
+	if known.Code != http.StatusAccepted || unknown.Code != http.StatusAccepted {
+		t.Fatalf("reset statuses = known:%d unknown:%d", known.Code, unknown.Code)
+	}
+	if known.Body.String() != unknown.Body.String() {
+		t.Fatalf("password reset response enumerates identities: known=%q unknown=%q", known.Body.String(), unknown.Body.String())
+	}
+	if strings.Contains(known.Body.String(), "expires_in_seconds") {
+		t.Fatalf("password reset response leaks delivery metadata: %s", known.Body.String())
+	}
+}
+
+func TestAccountAPIPasswordResetHidesDeliveryFailure(t *testing.T) {
+	h, service := newTestHandler(t)
+	ctx := context.Background()
+	vk, err := service.auth.ResolveVKID(ctx, 557)
+	if err != nil {
+		t.Fatalf("resolve vk: %v", err)
+	}
+	if _, err := service.account.LinkVerifiedIdentity(ctx, vk.AccountID, vk.AccountID, domain.VerifiedAccountLogin{
+		Method:     domain.AccountLoginEmailPassword,
+		ExternalID: "delivery@example.com",
+		Verified:   true,
+	}); err != nil {
+		t.Fatalf("link email: %v", err)
+	}
+	h.deps.Linker = identityLinkerOverride{
+		IdentityLinker: h.deps.Linker,
+		requestEmailCode: func(context.Context, uuid.UUID, string) (accountlink.RequestResult, error) {
+			return accountlink.RequestResult{}, errors.New("synthetic delivery failure")
+		},
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/account/password/request-reset", strings.NewReader(`{"email":"delivery@example.com"}`))
+	rec := httptest.NewRecorder()
+	h.Routes().ServeHTTP(rec, req)
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("request reset status = %d, want 202, body = %s", rec.Code, rec.Body.String())
+	}
+	if rec.Body.String() != "{\"status\":\"verification_sent\"}\n" {
+		t.Fatalf("request reset returned non-generic response: %q", rec.Body.String())
+	}
+}
+
+func TestAccountAPIPasswordResetDoesNotWaitForIdentityLookup(t *testing.T) {
+	h, _ := newTestHandler(t)
+	release := make(chan struct{})
+	h.deps.Identity = identityResolverOverride{
+		IdentityResolver: h.deps.Identity,
+		resolve: func(context.Context, domain.IdentityProvider, string) (uuid.UUID, error) {
+			<-release
+			return uuid.Nil, domain.ErrNotFound
+		},
+	}
+
+	done := make(chan *httptest.ResponseRecorder, 1)
+	go func() {
+		req := httptest.NewRequest(http.MethodPost, "/account/password/request-reset", strings.NewReader(`{"email":"slow@example.com"}`))
+		rec := httptest.NewRecorder()
+		h.Routes().ServeHTTP(rec, req)
+		done <- rec
+	}()
+
+	select {
+	case rec := <-done:
+		close(release)
+		if rec.Code != http.StatusAccepted {
+			t.Fatalf("request reset status = %d, want 202, body = %s", rec.Code, rec.Body.String())
+		}
+	case <-time.After(100 * time.Millisecond):
+		close(release)
+		<-done
+		t.Fatal("password reset response waited for identity lookup and leaks account timing")
 	}
 }
 
@@ -884,6 +985,24 @@ type fakeOAuthVerifier struct {
 	err   error
 }
 
+type identityResolverOverride struct {
+	domain.IdentityResolver
+	resolve func(context.Context, domain.IdentityProvider, string) (uuid.UUID, error)
+}
+
+func (r identityResolverOverride) Resolve(ctx context.Context, provider domain.IdentityProvider, externalID string) (uuid.UUID, error) {
+	return r.resolve(ctx, provider, externalID)
+}
+
+type identityLinkerOverride struct {
+	IdentityLinker
+	requestEmailCode func(context.Context, uuid.UUID, string) (accountlink.RequestResult, error)
+}
+
+func (l identityLinkerOverride) RequestEmailCode(ctx context.Context, accountID uuid.UUID, email string) (accountlink.RequestResult, error) {
+	return l.requestEmailCode(ctx, accountID, email)
+}
+
 func signedAccountLaunchParams(t *testing.T, vkUserID int64, secret string) string {
 	t.Helper()
 	values := url.Values{
@@ -917,6 +1036,7 @@ func (f fakeOAuthVerifier) Verify(_ context.Context, _ accountoauth.VerifyReques
 }
 
 type captureEmailSender struct {
+	mu             sync.RWMutex
 	email          string
 	code           string
 	expiresAt      time.Time
@@ -926,6 +1046,8 @@ type captureEmailSender struct {
 }
 
 func (s *captureEmailSender) SendEmailLinkCode(_ context.Context, email, code string, expiresAt time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.email = email
 	s.code = code
 	s.expiresAt = expiresAt
@@ -933,10 +1055,28 @@ func (s *captureEmailSender) SendEmailLinkCode(_ context.Context, email, code st
 }
 
 func (s *captureEmailSender) SendPhoneLinkOTP(_ context.Context, phone, code string, expiresAt time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.phone = phone
 	s.phoneCode = code
 	s.phoneExpiresAt = expiresAt
 	return nil
+}
+
+func (s *captureEmailSender) waitEmailCode(t *testing.T) string {
+	t.Helper()
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		s.mu.RLock()
+		code := s.code
+		s.mu.RUnlock()
+		if code != "" {
+			return code
+		}
+		time.Sleep(time.Millisecond)
+	}
+	t.Fatal("reset code was not sent")
+	return ""
 }
 
 func assertNoRawPII(t *testing.T, body string) {

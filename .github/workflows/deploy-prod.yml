@@ -203,21 +203,25 @@ jobs:
             env_tag="${env_tag#\'}"
           fi
 
-          git_short="$(git rev-parse --short=7 HEAD 2>/dev/null || true)"
-          if [[ "${env_tag}" == sha-* ]]; then
+          git_revision="$(git rev-parse --verify HEAD 2>/dev/null || true)"
+          if [[ "${git_revision}" =~ ^[0-9a-f]{40}$ ]]; then
+            if [[ "${env_tag}" == sha-* && ! "${git_revision}" == "${env_tag#sha-}"* ]]; then
+              echo "Current IMAGE_TAG does not match the checked-out production revision." >&2
+              exit 1
+            fi
+            tag="sha-${git_revision}"
+          elif [[ "${env_tag}" =~ ^sha-[0-9a-f]{40}$ ]]; then
             tag="${env_tag}"
-          elif [[ -n "${git_short}" ]]; then
-            tag="sha-${git_short}"
           else
-            tag="${env_tag}"
+            tag=""
           fi
 
           printf '%s' "${tag}"
           REMOTE
           )"
 
-          if [[ -n "${previous_image_tag}" && ! "${previous_image_tag}" =~ ^[A-Za-z0-9._-]+$ ]]; then
-            echo "Captured unsafe previous IMAGE_TAG" >&2
+          if [[ -n "${previous_image_tag}" && ! "${previous_image_tag}" =~ ^sha-[0-9a-f]{40}$ ]]; then
+            echo "Captured previous IMAGE_TAG is not an immutable full-SHA tag." >&2
             exit 1
           fi
 
@@ -353,6 +357,9 @@ jobs:
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
           DEPLOY_IMAGE_TAG: ${{ steps.release.outputs.image_tag }}
           PREVIOUS_IMAGE_TAG: ${{ steps.current_release.outputs.previous_image_tag }}
+          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+          EXPECTED_SOURCE_REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
           ssh_opts=(-i "${HOME}/.ssh/deploy_key" -o StrictHostKeyChecking=yes -o UserKnownHostsFile="${HOME}/.ssh/known_hosts" -o GlobalKnownHostsFile=/dev/null)
@@ -366,6 +373,21 @@ jobs:
             echo "Previous IMAGE_TAG equals deployed IMAGE_TAG; rollback would be a no-op." >&2
             exit 1
           fi
+
+          if [[ ! "${PREVIOUS_IMAGE_TAG}" =~ ^sha-[0-9a-f]{40}$ ]]; then
+            echo "Previous IMAGE_TAG is not an immutable full-SHA tag." >&2
+            exit 1
+          fi
+
+          previous_revision="${PREVIOUS_IMAGE_TAG#sha-}"
+          printf '%s' "${GHCR_TOKEN}" | docker login ghcr.io -u "${GHCR_USERNAME}" --password-stdin >/dev/null
+          image_registry="ghcr.io/${EXPECTED_SOURCE_REPOSITORY,,}"
+          bash scripts/deploy/verify-release-images.sh \
+            --image-registry "${image_registry}" \
+            --image-tag "${PREVIOUS_IMAGE_TAG}" \
+            --repository "${EXPECTED_SOURCE_REPOSITORY}" \
+            --revision "${previous_revision}" \
+            --workflow-ref refs/heads/main
 
           ssh "${ssh_opts[@]}" "${DEPLOY_USER}@${DEPLOY_HOST}" 'bash -s' -- "${DEPLOY_PATH}" "${PREVIOUS_IMAGE_TAG}" <<'REMOTE'
           set -euo pipefail

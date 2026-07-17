@@ -102,8 +102,17 @@ New-Item -ItemType Directory -Path (Join-Path $policyCanaryRoot "internal\adapte
 
 try {
     $policyCanaryPrefix = "SECURITY_SCAN_" + "CANARY_"
-    Set-Content -LiteralPath (Join-Path $policyCanaryRoot "RUNBOOK.md") `
-        -Value ("ADMIN_TOKEN=" + $policyCanaryPrefix + "0123456789ABCDEF") -Encoding ascii
+    Set-Content -LiteralPath (Join-Path $policyCanaryRoot "RUNBOOK.md") -Value @(
+        "ADMIN_TOKEN=" + $policyCanaryPrefix + "0123456789ABCDEF",
+        "APIMART_API_KEY=" + $policyCanaryPrefix + "1123456789ABCDEF",
+        "POYO_API_KEY=" + $policyCanaryPrefix + "2123456789ABCDEF",
+        "RUNWAYML_API_SECRET=" + $policyCanaryPrefix + "3123456789ABCDEF",
+        "GHCR_TOKEN=" + $policyCanaryPrefix + "4123456789ABCDEF",
+        "CLOUDFLARED_TUNNEL_TOKEN=" + $policyCanaryPrefix + "5123456789ABCDEF",
+        "ACCOUNT_EMAIL_SMTP_PASSWORD=" + $policyCanaryPrefix + "6123456789ABCDEF",
+        "S3_SECRET_KEY=" + $policyCanaryPrefix + "7123456789ABCDEF",
+        "POSTGRES_PASSWORD=" + $policyCanaryPrefix + "8123456789ABCDEF"
+    ) -Encoding ascii
     Set-Content -LiteralPath (Join-Path $policyCanaryRoot "internal\adapter\inbound\admin\handler_test.go") `
         -Value ("ADMIN_TOKEN=" + $policyCanaryPrefix + "FEDCBA9876543210") -Encoding ascii
 
@@ -122,8 +131,8 @@ try {
     }
 
     $policyFindings = Get-Content -Raw $policyCanaryReport | ConvertFrom-Json
-    if ($policyFindings.Count -ne 2) {
-        throw "Allowlist policy canary must return exactly two synthetic findings; got $($policyFindings.Count)."
+    if ($policyFindings.Count -ne 10) {
+        throw "Allowlist policy canary must return exactly ten synthetic findings; got $($policyFindings.Count)."
     }
     foreach ($finding in $policyFindings) {
         if ($finding.RuleID -ne "project-secret-assignment") {
@@ -152,7 +161,7 @@ try {
         throw "Exact committed environment placeholders must remain clean."
     }
 
-    Write-Output "Allowlist policy canary detected both synthetic findings; exact placeholders remained clean."
+    Write-Output "Allowlist policy canary detected all ten synthetic findings; exact placeholders remained clean."
 }
 finally {
     if (Test-Path $policyCanaryRoot) {

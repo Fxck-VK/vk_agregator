@@ -152,7 +152,13 @@ Assert-ExactInventory $dockerImagesInventory 'Docker Images build matrix'
 
 Assert-NotMatch $dockerImages '(?m)^  packages:\s*write\s*$' 'Docker Images top-level permissions'
 Assert-Contains $dockerImages 'pull-request-build:' 'Docker Images'
+Assert-Contains $dockerImages 'quality-gate:' 'Docker Images same-SHA quality gate'
 Assert-Contains $dockerImages 'publish:' 'Docker Images'
+Assert-Contains $dockerImages 'actions: read' 'Docker Images same-SHA quality gate permissions'
+Assert-Contains $dockerImages 'head_sha=${GITHUB_SHA}' 'Docker Images same-SHA quality gate'
+Assert-Contains $dockerImages 'conclusion == "success"' 'Docker Images same-SHA quality gate'
+Assert-Contains $dockerImages 'needs: [validate_source, quality-gate]' 'Docker Images publish dependencies'
+Assert-Contains $dockerImages "github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev-deploy'" 'Docker Images release publication gate'
 Assert-Contains $dockerImages 'packages: write' 'Docker Images publish permissions'
 Assert-Contains $dockerImages 'id-token: write' 'Docker Images publish permissions'
 Assert-Contains $dockerImages 'sbom: true' 'Docker Images publish build'
@@ -165,7 +171,17 @@ Assert-Contains $dockerImages '.runDetails.builder.id' 'Docker Images SLSA v1 as
 Assert-Contains $dockerImages 'context: https://github.com/${{ github.repository }}.git#${{ github.sha }}' 'Docker Images immutable Git context'
 Assert-Contains $dockerImages 'github-token: ${{ github.token }}' 'Docker Images private Git context authentication'
 Assert-Contains $dockerImages 'cosign sign --yes' 'Docker Images signing'
+Assert-Contains $dockerImages 'bash scripts/ci/install-trivy.sh' 'Docker Images pre-sign vulnerability gate'
+Assert-Contains $dockerImages 'trivy image --scanners vuln --severity HIGH,CRITICAL --exit-code 1' 'Docker Images pre-sign vulnerability gate'
+$trivyGateOffset = $dockerImages.IndexOf('trivy image --scanners vuln --severity HIGH,CRITICAL --exit-code 1', [StringComparison]::Ordinal)
+$signOffset = $dockerImages.IndexOf('cosign sign --yes', [StringComparison]::Ordinal)
+if ($trivyGateOffset -lt 0 -or $signOffset -lt 0 -or $trivyGateOffset -ge $signOffset) {
+    throw 'Docker Images must scan immutable digests before signing them.'
+}
 Assert-NotMatch $dockerImages '(?i)type=raw,value=latest' 'Docker Images tags'
+Assert-NotMatch $dockerImages '(?m)^\s*type=ref,event=branch\s*$' 'Docker Images mutable branch tags'
+Assert-NotMatch $dockerImages '(?m)^\s*type=sha,prefix=sha-,format=short\s*$' 'Docker Images short SHA tags'
+Assert-Contains $dockerImages 'type=sha,prefix=sha-,format=long' 'Docker Images immutable full-SHA tag'
 
 Assert-Contains $cosignInstaller 'readonly COSIGN_VERSION="3.0.2"' 'Pinned Cosign installer'
 Assert-Contains $cosignInstaller 'readonly COSIGN_LINUX_AMD64_SHA256="46dbdcb5467a3dfec2526923d0b3365e40c8d9dc00ec23d5aca3437449e8cbfd"' 'Pinned Cosign installer'
@@ -184,8 +200,12 @@ foreach ($deploy in @($deployProd, $deployDev)) {
     Assert-Contains $deploy 'EXPECTED_SOURCE_REVISION' 'Deployment image verification'
     Assert-Contains $deploy 'EXPECTED_WORKFLOW_REF' 'Deployment image verification'
     Assert-Contains $deploy 'github.event.workflow_run.head_sha || github.sha' 'Deployment immutable checkout'
+    Assert-Contains $deploy 'previous_revision="${PREVIOUS_IMAGE_TAG#sha-}"' 'Rollback immutable revision derivation'
+    Assert-Contains $deploy 'verify-release-images.sh' 'Rollback image verification'
+    Assert-Contains $deploy '--revision "${previous_revision}"' 'Rollback image verification'
 }
 
+Assert-Contains $deployDev 'environment: development' 'DEV protected environment'
 Assert-Contains $deployDev 'Manual DEV deploy must be dispatched from refs/heads/dev-deploy.' 'DEV immutable deployment'
 Assert-Contains $deployDev 'deploy_image_tag="sha-${deploy_sha}"' 'DEV immutable deployment'
 Assert-Contains $deployDev 'git checkout --detach "${deploy_sha}"' 'DEV immutable deployment'
@@ -205,11 +225,17 @@ if ([regex]::Matches($dependabot, 'package-ecosystem:\s*"npm"').Count -ne 2) {
     throw 'Dependabot must audit both Mini App and Admin npm lockfiles.'
 }
 Assert-Contains $codeowners '.github/workflows/' 'CODEOWNERS workflow protection'
+Assert-Contains $codeowners 'scripts/deploy/**' 'CODEOWNERS deploy script protection'
+Assert-Contains $codeowners 'scripts/ci/install-*.sh' 'CODEOWNERS scanner installer protection'
 
 foreach ($dockerfile in $expectedDockerfiles) {
     $dockerfilePath = Join-Path $repoRoot $dockerfile
     if (-not (Test-Path -LiteralPath $dockerfilePath -PathType Leaf)) {
         throw "expected production Dockerfile is missing: $dockerfile"
+    }
+    $dockerfileContent = Get-Content -LiteralPath $dockerfilePath -Raw
+    if ($dockerfileContent -match '(?im)^\s*RUN\s+.*\bapk\s+upgrade\b') {
+        throw "$dockerfile must not run apk upgrade during an otherwise pinned image build"
     }
 }
 

@@ -37,18 +37,37 @@ keywords = [
 [[rules]]
 id = "project-secret-assignment"
 description = "Project secret assigned to an environment-like key"
-regex = '''(?i)(?:VK_ACCESS_TOKEN|VK_SECRET|VK_CONFIRMATION_TOKEN|OPENAI_API_KEY|DEEPINFRA_API_KEY|YOOKASSA_SECRET_KEY|TELEGRAM_BOT_TOKEN|GRAFANA_ADMIN_PASSWORD|ADMIN_TOKEN)[ \t]*[:=][ \t]*['"]?([A-Za-z0-9._~:/+=-]{16,})['"]?'''
+regex = '''(?i)(?:VK_ACCESS_TOKEN|VK_VIDEO_ACCESS_TOKEN|VK_SECRET|VK_APP_SECRET|VK_CONFIRMATION_TOKEN|OPENAI_API_KEY|DEEPINFRA_API_KEY|GEMINI_API_KEY|APIMART_API_KEY|POYO_API_KEY|RUNWAYML_API_SECRET|YOOKASSA_SECRET_KEY|TELEGRAM_BOT_TOKEN|ACCOUNT_OAUTH_TELEGRAM_BOT_TOKEN|ALERT_TELEGRAM_BOT_TOKEN|DEV_TELEGRAM_BOT_TOKEN|GRAFANA_ADMIN_PASSWORD|GRAFANA_SECRET_KEY|ADMIN_TOKEN|GHCR_TOKEN|CLOUDFLARED_TUNNEL_TOKEN|ACCOUNT_EMAIL_SMTP_PASSWORD|FRONTEND_TELEMETRY_USER_HASH_SECRET|POSTGRES_PASSWORD|REDIS_PASSWORD|MINIO_ROOT_PASSWORD|S3_ACCESS_KEY|S3_SECRET_KEY)[ \t]*[:=][ \t]*['"]?([A-Za-z0-9._~:/+=-]{16,})['"]?'''
 secretGroup = 1
 keywords = [
   "VK_ACCESS_TOKEN",
+  "VK_VIDEO_ACCESS_TOKEN",
   "VK_SECRET",
+  "VK_APP_SECRET",
   "VK_CONFIRMATION_TOKEN",
   "OPENAI_API_KEY",
   "DEEPINFRA_API_KEY",
+  "GEMINI_API_KEY",
+  "APIMART_API_KEY",
+  "POYO_API_KEY",
+  "RUNWAYML_API_SECRET",
   "YOOKASSA_SECRET_KEY",
   "TELEGRAM_BOT_TOKEN",
+  "ACCOUNT_OAUTH_TELEGRAM_BOT_TOKEN",
+  "ALERT_TELEGRAM_BOT_TOKEN",
+  "DEV_TELEGRAM_BOT_TOKEN",
   "GRAFANA_ADMIN_PASSWORD",
+  "GRAFANA_SECRET_KEY",
   "ADMIN_TOKEN",
+  "GHCR_TOKEN",
+  "CLOUDFLARED_TUNNEL_TOKEN",
+  "ACCOUNT_EMAIL_SMTP_PASSWORD",
+  "FRONTEND_TELEMETRY_USER_HASH_SECRET",
+  "POSTGRES_PASSWORD",
+  "REDIS_PASSWORD",
+  "MINIO_ROOT_PASSWORD",
+  "S3_ACCESS_KEY",
+  "S3_SECRET_KEY",
 ]
 
   [[rules.allowlists]]
@@ -59,7 +78,7 @@ keywords = [
     '''(?i)(^|/)\.env(?:\.[a-z0-9_-]+)?\.example$''',
   ]
   regexes = [
-    '''^(?:loadtest-confirmation|loadtest-admin-token|CHANGE_ME_DEV_VK_ACCESS_TOKEN|CHANGE_ME_DEV_VK_CALLBACK_SECRET|CHANGE_ME_DEV_VK_CONFIRMATION_TOKEN|CHANGE_ME_DEV_ADMIN_TOKEN|CHANGE_ME_VK_ACCESS_TOKEN|CHANGE_ME_VK_CALLBACK_SECRET|CHANGE_ME_VK_CONFIRMATION_TOKEN|CHANGE_ME_LONG_RANDOM_ADMIN_TOKEN|CHANGE_ME_YOOKASSA_SECRET_KEY|CHANGE_ME_DEEPINFRA_API_KEY|CHANGE_ME_OPENAI_API_KEY|CHANGE_ME_GRAFANA_ADMIN_PASSWORD|change-me-local-only|dev-confirmation)$''',
+    '''^(?:loadtest-confirmation|loadtest-admin-token|CHANGE_ME_DEV_VK_ACCESS_TOKEN|CHANGE_ME_DEV_VK_CALLBACK_SECRET|CHANGE_ME_DEV_VK_CONFIRMATION_TOKEN|CHANGE_ME_DEV_ADMIN_TOKEN|CHANGE_ME_VK_ACCESS_TOKEN|CHANGE_ME_VK_CALLBACK_SECRET|CHANGE_ME_VK_CONFIRMATION_TOKEN|CHANGE_ME_LONG_RANDOM_ADMIN_TOKEN|CHANGE_ME_YOOKASSA_SECRET_KEY|CHANGE_ME_DEEPINFRA_API_KEY|CHANGE_ME_OPENAI_API_KEY|CHANGE_ME_GRAFANA_ADMIN_PASSWORD|CHANGE_ME_S3_ACCESS_KEY|CHANGE_ME_S3_SECRET_KEY|change-me-local-only|dev-confirmation)$''',
   ]
 
   [[rules.allowlists]]
@@ -115,6 +134,20 @@ keywords = [
   ]
   regexes = [
     '''^(?:CHANGE_ME_DEV_VK_ACCESS_TOKEN|CHANGE_ME_DEV_VK_CALLBACK_SECRET|CHANGE_ME_DEV_VK_CONFIRMATION_TOKEN)$''',
+  ]
+
+  [[rules.allowlists]]
+  description = "Word-only placeholders in historical env templates and validation fixtures"
+  condition = "AND"
+  regexTarget = "secret"
+  paths = [
+    '''(?i)(^|/)\.env(?:\.[a-z0-9_-]+)?\.example$''',
+    '''(?i)(^|/)docker-compose(?:\.data|\.observability)?\.yml$''',
+    '''(?i)(^|/)scripts/(?:ci/validate-infra\.ps1|deploy/test-(?:dev-env\.sh|env-parity\.sh|release-bundle\.ps1))$''',
+  ]
+  regexes = [
+    '''^-?[A-Za-z]{2,}(?:[-_][A-Za-z]{2,}){1,}$''',
+    '''^-?(?:local-postgres-password|local-minio-password|change-me-local-only-secret)$''',
   ]
 
   [[rules.allowlists]]

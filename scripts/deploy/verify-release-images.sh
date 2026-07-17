@@ -6,7 +6,7 @@ usage() {
   cat >&2 <<'USAGE'
 Usage: verify-release-images.sh \
   --image-registry <registry/repository-prefix> \
-  --image-tag <sha-abcdef0> \
+  --image-tag <sha-40-lowercase-hex> \
   --repository <owner/repository> \
   --revision <40-hex-commit> \
   --workflow-ref <refs/heads/main|refs/heads/dev-deploy>
@@ -33,7 +33,7 @@ done
 
 [[ -n "${image_registry}" && -n "${image_tag}" && -n "${repository}" && -n "${revision}" && -n "${workflow_ref}" ]] || usage
 [[ "${revision}" =~ ^[0-9a-f]{40}$ ]] || { echo "Expected a lowercase 40-hex source revision." >&2; exit 1; }
-if [[ "${image_tag}" != "sha-${revision:0:7}" && "${image_tag}" != "sha-${revision}" ]]; then
+if [[ "${image_tag}" != "sha-${revision}" ]]; then
   echo "Image tag does not match the expected source revision." >&2
   exit 1
 fi

@@ -82,6 +82,14 @@ run_step() {
   "$@"
 }
 
+validate_image_tag() {
+  local value="${1:-}"
+  if [[ ! "${value}" =~ ^sha-[0-9a-f]{40}$ ]]; then
+    echo "IMAGE_TAG must be an immutable sha-<40 lowercase hex> release tag" >&2
+    return 1
+  fi
+}
+
 check_docker() {
   if ! command -v docker >/dev/null 2>&1; then
     echo "Docker CLI is not installed or not in PATH" >&2
@@ -277,9 +285,17 @@ if [[ ! -f "${env_file}" ]]; then
   exit 1
 fi
 
+if [[ -n "${image_tag}" ]]; then
+  validate_image_tag "${image_tag}"
+fi
+
 echo "==> check Docker"
 check_docker
+run_step bash scripts/deploy/check-dev-env.sh --env-file "${env_file}"
 validate_dev_env
+
+effective_image_tag="${image_tag:-$(get_env_value IMAGE_TAG "")}"
+validate_image_tag "${effective_image_tag}"
 
 if [[ "${skip_pull}" != "true" ]]; then
   if [[ "${allow_dirty}" != "true" ]]; then

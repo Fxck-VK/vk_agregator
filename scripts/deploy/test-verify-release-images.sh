@@ -113,6 +113,14 @@ expect_failure "mismatched image tag" \
     --revision "${MOCK_REVISION}" \
     --workflow-ref "${MOCK_WORKFLOW_REF}"
 
+expect_failure "short SHA image tag" \
+  bash "${verifier}" \
+    --image-registry "ghcr.io/example/project" \
+    --image-tag "sha-${MOCK_REVISION:0:7}" \
+    --repository "${MOCK_REPOSITORY}" \
+    --revision "${MOCK_REVISION}" \
+    --workflow-ref "${MOCK_WORKFLOW_REF}"
+
 expect_failure "unsupported workflow ref" \
   bash "${verifier}" \
     --image-registry "ghcr.io/example/project" \

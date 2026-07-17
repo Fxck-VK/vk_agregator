@@ -2,4 +2,5 @@
 .github/workflows/ @makar0ww @sohighimigt-cpu
 .github/dependabot.yml @makar0ww @sohighimigt-cpu
 .github/CODEOWNERS @makar0ww @sohighimigt-cpu
-scripts/deploy/verify-release-images.sh @makar0ww @sohighimigt-cpu
+scripts/deploy/** @makar0ww @sohighimigt-cpu
+scripts/ci/install-*.sh @makar0ww @sohighimigt-cpu

@@ -2604,12 +2604,57 @@ func (p *processor) shouldNotifyTerminalProviderFailure(job *domain.Job) bool {
 	return p.streams != nil && job.VKPeerID != 0 && (job.Modality == domain.ModalityImage || job.Modality == domain.ModalityVideo)
 }
 
-// moderateOutput runs the output moderation check and, on a block, rejects the
-// job (no delivery, no capture), releases the reservation and records an audit
-// verdict. It returns blocked=true when delivery must be stopped. When no
-// moderator is configured it is a no-op (allow).
+const internalOutputPolicyProvider = "internal-output-policy"
+
+var internalOutputMarkers = []string{
+	"факты нейрохаб:",
+	"<|im_start|>system",
+	"<|start_header_id|>system",
+	"все содержимое сообщения с ролью user",
+	"deepinfra",
+	"apimart",
+	"poyo",
+	"runwayml",
+	"aimlapi",
+	"deepseek-ai/deepseek-v4-flash",
+	"internal generation provider",
+	"internal provider:",
+	"provider model id",
+	"provider_model_id",
+	"model code:",
+	"backend api endpoint",
+	"api endpoint:",
+	"api key:",
+	"base_url",
+	"system prompt:",
+	"developer message:",
+	"внутренний провайдер:",
+	"системный промпт:",
+	"системное сообщение:",
+	"сообщение разработчика:",
+}
+
+func internalOutputPolicy(outputText string) (moderationservice.Outcome, bool) {
+	normalized := strings.ToLower(outputText)
+	for _, marker := range internalOutputMarkers {
+		if strings.Contains(normalized, marker) {
+			return moderationservice.Outcome{
+				Decision:   domain.ModerationBlock,
+				Categories: []string{"internal_detail_disclosure"},
+			}, true
+		}
+	}
+	return moderationservice.Outcome{}, false
+}
+
+// moderateOutput runs the deterministic internal-detail policy and the
+// configured output moderator. A block rejects the job before dialog storage,
+// delivery, or capture, releases the reservation, and records an audit verdict.
+// The deterministic policy remains active when no external moderator exists.
 func (p *processor) moderateOutput(ctx context.Context, job *domain.Job, outputText string) (bool, error) {
-	if p.moderator == nil {
+	out, policyBlocked := internalOutputPolicy(outputText)
+	moderationProvider := internalOutputPolicyProvider
+	if !policyBlocked && p.moderator == nil {
 		return false, nil
 	}
 	ctx, span := tracing.Start(ctx, "moderation.output",
@@ -2619,19 +2664,23 @@ func (p *processor) moderateOutput(ctx context.Context, job *domain.Job, outputT
 	)
 	defer span.End()
 
-	var pp promptParams
-	if len(job.Params) > 0 {
-		_ = json.Unmarshal(job.Params, &pp)
-	}
-	out, err := p.moderator.Check(ctx, moderationservice.Input{
-		Stage:    domain.ModerationStageOutput,
-		Modality: job.Modality,
-		Prompt:   pp.Prompt,
-		Text:     outputText,
-	})
-	if err != nil {
-		tracing.RecordError(span, err)
-		return false, err
+	if !policyBlocked {
+		var pp promptParams
+		if len(job.Params) > 0 {
+			_ = json.Unmarshal(job.Params, &pp)
+		}
+		var err error
+		out, err = p.moderator.Check(ctx, moderationservice.Input{
+			Stage:    domain.ModerationStageOutput,
+			Modality: job.Modality,
+			Prompt:   pp.Prompt,
+			Text:     outputText,
+		})
+		if err != nil {
+			tracing.RecordError(span, err)
+			return false, err
+		}
+		moderationProvider = p.moderator.Name()
 	}
 	span.SetAttributes(attribute.String("moderation.decision", string(out.Decision)))
 
@@ -2647,7 +2696,7 @@ func (p *processor) moderateOutput(ctx context.Context, job *domain.Job, outputT
 			Stage:      domain.ModerationStageOutput,
 			Decision:   out.Decision,
 			Categories: out.Categories,
-			Provider:   p.moderator.Name(),
+			Provider:   moderationProvider,
 		})
 	}
 

@@ -22,7 +22,11 @@ import (
 	"vk-ai-aggregator/internal/service/accountservice"
 )
 
-const maxLinkRequestBytes = 8 << 10
+const (
+	maxLinkRequestBytes        = 8 << 10
+	passwordResetConcurrency   = 16
+	passwordResetWorkerTimeout = 15 * time.Second
+)
 
 type contextKey int
 
@@ -100,9 +104,10 @@ type Deps struct {
 
 // Handler serves /account/* endpoints.
 type Handler struct {
-	cfg    Config
-	deps   Deps
-	logger *slog.Logger
+	cfg                Config
+	deps               Deps
+	logger             *slog.Logger
+	passwordResetSlots chan struct{}
 }
 
 // NewHandler builds an account API handler.
@@ -111,7 +116,12 @@ func NewHandler(cfg Config, deps Deps) *Handler {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Handler{cfg: cfg, deps: deps, logger: logger}
+	return &Handler{
+		cfg:                cfg,
+		deps:               deps,
+		logger:             logger,
+		passwordResetSlots: make(chan struct{}, passwordResetConcurrency),
+	}
 }
 
 // Routes returns the account API router.
@@ -440,6 +450,10 @@ type passwordResetRequest struct {
 	NewPassword string `json:"new_password"`
 }
 
+type passwordResetAcceptedResponse struct {
+	Status string `json:"status"`
+}
+
 type oauthRequest struct {
 	Provider   domain.IdentityProvider `json:"provider"`
 	IDToken    string                  `json:"id_token"`
@@ -620,21 +634,34 @@ func (h *Handler) requestPasswordReset(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid password reset request")
 		return
 	}
-	accountID, err := h.deps.Identity.Resolve(r.Context(), domain.IdentityProviderEmail, email)
-	if err != nil {
-		if errors.Is(err, domain.ErrNotFound) || errors.Is(err, domain.ErrInvalidIdentity) {
-			writeJSON(w, http.StatusAccepted, accountlink.RequestResult{Status: "verification_sent"})
+	h.enqueuePasswordReset(email)
+	writeJSON(w, http.StatusAccepted, passwordResetAcceptedResponse{Status: "verification_sent"})
+}
+
+func (h *Handler) enqueuePasswordReset(email string) {
+	select {
+	case h.passwordResetSlots <- struct{}{}:
+	default:
+		h.logger.Warn("password reset queue is saturated")
+		return
+	}
+
+	go func() {
+		defer func() { <-h.passwordResetSlots }()
+		ctx, cancel := context.WithTimeout(context.Background(), passwordResetWorkerTimeout)
+		defer cancel()
+
+		accountID, err := h.deps.Identity.Resolve(ctx, domain.IdentityProviderEmail, email)
+		if err != nil {
+			if !errors.Is(err, domain.ErrNotFound) && !errors.Is(err, domain.ErrInvalidIdentity) {
+				h.logger.Warn("password reset identity lookup failed")
+			}
 			return
 		}
-		writeError(w, statusForError(err), "password reset unavailable")
-		return
-	}
-	result, err := h.deps.Linker.RequestEmailCode(r.Context(), accountID, email)
-	if err != nil {
-		writeError(w, statusForError(err), "password reset unavailable")
-		return
-	}
-	writeJSON(w, http.StatusAccepted, result)
+		if _, err := h.deps.Linker.RequestEmailCode(ctx, accountID, email); err != nil {
+			h.logger.Warn("password reset delivery failed")
+		}
+	}()
 }
 
 func (h *Handler) resetPassword(w http.ResponseWriter, r *http.Request) {

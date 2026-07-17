@@ -68,6 +68,7 @@ func (r *BillingRepository) inTx(ctx context.Context, fn func(q Querier) error) 
 }
 
 const accountColumns = `id, user_id, owner_account_id, currency, balance_cached, created_at, updated_at`
+const creditAccountOwnerFilter = `(owner_account_id = $1 OR (owner_account_id IS NULL AND user_id = $1))`
 
 const reservationColumns = `id, account_id, owner_account_id, job_id, amount, status, idempotency_key,
 	expires_at, created_at, updated_at`
@@ -136,20 +137,9 @@ func (r *BillingRepository) GetAccount(ctx context.Context, id uuid.UUID) (*doma
 
 // GetAccountByUser fetches a user's account for a currency.
 func (r *BillingRepository) GetAccountByUser(ctx context.Context, userID uuid.UUID, currency domain.Currency) (*domain.CreditAccount, error) {
-	account, err := r.getAccountByOwnerColumn(ctx, "owner_account_id", userID, currency)
-	if err == nil {
-		return account, nil
-	}
-	if !errors.Is(err, domain.ErrNotFound) {
-		return nil, err
-	}
-	return r.getAccountByOwnerColumn(ctx, "user_id", userID, currency)
-}
-
-func (r *BillingRepository) getAccountByOwnerColumn(ctx context.Context, column string, ownerID uuid.UUID, currency domain.Currency) (*domain.CreditAccount, error) {
-	q := `SELECT ` + accountColumns + ` FROM credit_accounts WHERE ` + column + ` = $1 AND currency = $2`
+	q := `SELECT ` + accountColumns + ` FROM credit_accounts WHERE ` + creditAccountOwnerFilter + ` AND currency = $2`
 	var a domain.CreditAccount
-	if err := mapError(scanAccount(r.q().QueryRow(ctx, q, ownerID, currency), &a)); err != nil {
+	if err := mapError(scanAccount(r.q().QueryRow(ctx, q, userID, currency), &a)); err != nil {
 		return nil, err
 	}
 	return &a, nil

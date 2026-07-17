@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"strconv"
 	"strings"
 
 	"github.com/google/uuid"
@@ -29,7 +30,7 @@ const conversationSummaryColumns = `id, conversation_id, text, token_count, summ
 func (r *ConversationRepository) GetActiveByUserPeer(ctx context.Context, userID uuid.UUID, vkPeerID int64) (*domain.Conversation, error) {
 	const q = `SELECT ` + conversationColumns + `
 		FROM conversations
-		WHERE (user_id = $1 OR account_id = $1) AND source = 'vk_bot' AND vk_peer_id = $2 AND status = 'active'`
+		WHERE user_id = $1 AND source = 'vk_bot' AND vk_peer_id = $2 AND status = 'active'`
 	var c domain.Conversation
 	if err := mapError(scanConversation(r.db.QueryRow(ctx, q, userID, vkPeerID), &c)); err != nil {
 		return nil, err
@@ -38,29 +39,44 @@ func (r *ConversationRepository) GetActiveByUserPeer(ctx context.Context, userID
 }
 
 func (r *ConversationRepository) GetActiveByReference(ctx context.Context, ref domain.ConversationRef) (*domain.Conversation, error) {
+	q, args := activeConversationLookup(ref)
+	var c domain.Conversation
+	if err := mapError(scanConversation(r.db.QueryRow(ctx, q, args...), &c)); err != nil {
+		return nil, err
+	}
+	return &c, nil
+}
+
+func activeConversationLookup(ref domain.ConversationRef) (string, []any) {
 	source := ref.Source
 	if source == "" {
 		source = domain.ConversationSourceVKBot
 	}
-	if source == domain.ConversationSourceVKBot {
-		if ref.AccountID != uuid.Nil {
-			return r.GetActiveByUserPeer(ctx, ref.AccountID, ref.VKPeerID)
+
+	ownerFilter := "user_id = $1"
+	ownerArgs := []any{ref.UserID}
+	nextParam := 2
+	if ref.AccountID != uuid.Nil {
+		ownerFilter = "account_id = $1"
+		ownerArgs = []any{ref.AccountID}
+		if ref.UserID != uuid.Nil {
+			ownerFilter = "(account_id = $1 OR (account_id IS NULL AND user_id = $2))"
+			ownerArgs = append(ownerArgs, ref.UserID)
+			nextParam = 3
 		}
-		return r.GetActiveByUserPeer(ctx, ref.UserID, ref.VKPeerID)
 	}
 
-	const q = `SELECT ` + conversationColumns + `
+	if source == domain.ConversationSourceVKBot {
+		q := `SELECT ` + conversationColumns + `
+			FROM conversations
+			WHERE ` + ownerFilter + ` AND source = 'vk_bot' AND vk_peer_id = $` + strconv.Itoa(nextParam) + ` AND status = 'active'`
+		return q, append(ownerArgs, ref.VKPeerID)
+	}
+
+	q := `SELECT ` + conversationColumns + `
 		FROM conversations
-		WHERE (user_id = $1 OR account_id = $1) AND source = $2 AND external_thread_id = $3 AND status = 'active'`
-	var c domain.Conversation
-	ownerID := ref.UserID
-	if ref.AccountID != uuid.Nil {
-		ownerID = ref.AccountID
-	}
-	if err := mapError(scanConversation(r.db.QueryRow(ctx, q, ownerID, source, ref.ExternalThreadID), &c)); err != nil {
-		return nil, err
-	}
-	return &c, nil
+		WHERE ` + ownerFilter + ` AND source = $` + strconv.Itoa(nextParam) + ` AND external_thread_id = $` + strconv.Itoa(nextParam+1) + ` AND status = 'active'`
+	return q, append(ownerArgs, source, ref.ExternalThreadID)
 }
 
 func (r *ConversationRepository) GetByIDForUser(ctx context.Context, userID, conversationID uuid.UUID) (*domain.Conversation, error) {

@@ -77,6 +77,14 @@ run_step() {
   "$@"
 }
 
+validate_image_tag() {
+  local value="${1:-}"
+  if [[ ! "${value}" =~ ^sha-[0-9a-f]{40}$ ]]; then
+    echo "IMAGE_TAG must be an immutable sha-<40 lowercase hex> release tag" >&2
+    return 1
+  fi
+}
+
 check_docker() {
   if ! command -v docker >/dev/null 2>&1; then
     echo "Docker CLI is not installed or not in PATH" >&2
@@ -96,6 +104,10 @@ fi
 if [[ ! -f "${env_file}" ]]; then
   echo "Server env file not found: ${env_file}. Assemble it from split PROD env secrets or create it on the server with real production values." >&2
   exit 1
+fi
+
+if [[ -n "${image_tag}" ]]; then
+  validate_image_tag "${image_tag}"
 fi
 
 echo "==> check Docker"
@@ -306,6 +318,9 @@ run_public_smoke() {
   echo "Public Cloudflare/DNS smoke did not pass within ${timeout_seconds}s" >&2
   return 1
 }
+
+effective_image_tag="${image_tag:-$(get_env_value IMAGE_TAG "")}"
+validate_image_tag "${effective_image_tag}"
 
 if [[ "${skip_pull}" != "true" ]]; then
   if [[ "${allow_dirty}" != "true" ]]; then
