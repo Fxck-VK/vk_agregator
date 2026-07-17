@@ -219,6 +219,10 @@ Assert-Contains $deployDev '--skip-pull --with-cloudflare' 'DEV immutable deploy
 Assert-Contains $deployDev 'if [[ "${env_tag}" =~ ^sha-[0-9a-f]{40}$ ]]; then' 'DEV previous release capture'
 Assert-Contains $deployDev 'tag="${env_tag}"' 'DEV previous release capture'
 Assert-NotMatch $deployDev 'Current IMAGE_TAG does not match the checked-out DEV revision\.' 'DEV recoverable checkout drift'
+Assert-Contains $deployDev 'name: Ensure DEV VPS disk headroom' 'DEV disk preflight'
+Assert-Contains $deployDev 'required_kb=$((2 * 1024 * 1024))' 'DEV disk preflight'
+Assert-Contains $deployDev 'docker system prune --all --force' 'DEV disk preflight'
+Assert-NotMatch $deployDev '(?m)docker\s+volume\s+prune|docker\s+system\s+prune[^\r\n]*--volumes' 'DEV disk preflight volume safety'
 
 $releaseVerifierTest = Get-Content -LiteralPath $releaseVerifierTestPath -Raw
 Assert-Contains $releaseVerifierTest 'mismatched image tag' 'Release verifier negative tests'
