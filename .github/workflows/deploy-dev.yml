@@ -210,14 +210,12 @@ jobs:
           fi
 
           git_revision="$(git rev-parse --verify HEAD 2>/dev/null || true)"
-          if [[ "${git_revision}" =~ ^[0-9a-f]{40}$ ]]; then
-            if [[ "${env_tag}" == sha-* && ! "${git_revision}" == "${env_tag#sha-}"* ]]; then
-              echo "Current IMAGE_TAG does not match the checked-out DEV revision." >&2
-              exit 1
-            fi
-            tag="sha-${git_revision}"
-          elif [[ "${env_tag}" =~ ^sha-[0-9a-f]{40}$ ]]; then
+          if [[ "${env_tag}" =~ ^sha-[0-9a-f]{40}$ ]]; then
             tag="${env_tag}"
+          elif [[ "${git_revision}" =~ ^[0-9a-f]{40}$ ]]; then
+            # A prior failed rollout can update the checkout before runtime .env.
+            # Keep the next deploy recoverable; rollback still verifies this tag.
+            tag="sha-${git_revision}"
           else
             tag=""
           fi
