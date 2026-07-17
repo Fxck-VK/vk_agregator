@@ -112,7 +112,7 @@ function Assert-ServiceResourceBounds {
     )
 
     Assert-Matches -Text $Block -Pattern '(?m)^\s+pids_limit:\s+\d+\s*$' -Message "$ServiceName must set pids_limit"
-    Assert-Matches -Text $Block -Pattern '(?m)^\s+cpus:\s+"?[0-9.]+[0-9]"?\s*$' -Message "$ServiceName must set cpus"
+    Assert-Matches -Text $Block -Pattern '(?m)^\s+cpus:\s+["'']?(?:[0-9.]+[0-9]|\$\{[A-Z0-9_]+:-[0-9.]+[0-9]\})["'']?\s*$' -Message "$ServiceName must set cpus"
     Assert-Matches -Text $Block -Pattern '(?m)^\s+mem_limit:\s+\S+\s*$' -Message "$ServiceName must set mem_limit"
 }
 
@@ -169,7 +169,7 @@ function Assert-ServiceHardening {
         -Message "$ServiceName must set pids_limit"
     Assert-Matches `
         -Text $Block `
-        -Pattern '(?m)^\s+cpus:\s+"?[0-9.]+[0-9]"?\s*$' `
+        -Pattern '(?m)^\s+cpus:\s+["'']?(?:[0-9.]+[0-9]|\$\{[A-Z0-9_]+:-[0-9.]+[0-9]\})["'']?\s*$' `
         -Message "$ServiceName must set cpus"
     Assert-Matches `
         -Text $Block `
@@ -235,6 +235,12 @@ foreach ($service in @(
     Assert-RequiredTag -Block $block -ServiceName $service -VariableName "IMAGE_TAG"
     Assert-ServiceHardening -Block $block -ServiceName $service
 }
+
+$workerBlock = Get-ServiceBlock -Content $prod -ServiceName "worker" -FileName "docker-compose.prod.yml"
+Assert-Matches `
+    -Text $workerBlock `
+    -Pattern '(?m)^\s+cpus:\s+["'']?\$\{WORKER_CPU_LIMIT:-2\.00\}["'']?\s*$' `
+    -Message "worker CPU limit must be configurable with production default 2.00"
 
 foreach ($service in @(
     "backup-postgres",

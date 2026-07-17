@@ -73,7 +73,7 @@ services:
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=512m
     pids_limit: 256
-    cpus: "2.00"
+    cpus: "${WORKER_CPU_LIMIT:-2.00}"
     mem_limit: 1536m
     env_file:
       - ${APP_ENV_FILE:?APP_ENV_FILE is required}
