@@ -237,6 +237,7 @@ services:
   reverse-proxy:
     image: ${REVERSE_PROXY_IMAGE:-nginx:1.31.3-alpine@sha256:7068961d45b07b2af510ac002e9daa63a1d3eba2111202d6768798690800fffd}
     restart: unless-stopped
+    user: "101:101"
     cap_drop:
       - ALL
     cap_add:
@@ -245,8 +246,8 @@ services:
       - no-new-privileges:true
     read_only: true
     tmpfs:
-      - /var/cache/nginx:rw,noexec,nosuid,size=64m
-      - /var/run:rw,noexec,nosuid,size=4m
+      - /var/cache/nginx:rw,noexec,nosuid,size=64m,uid=101,gid=101,mode=0750
+      - /var/run:rw,noexec,nosuid,size=4m,uid=101,gid=101,mode=0750
       - /tmp:rw,noexec,nosuid,size=16m
     pids_limit: 128
     cpus: "0.50"

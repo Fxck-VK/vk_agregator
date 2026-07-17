@@ -267,6 +267,19 @@ foreach ($service in @("reverse-proxy", "cloudflared")) {
     Assert-ServiceHardening -Block $block -ServiceName $service
 }
 
+$reverseProxyBlock = Get-ServiceBlock -Content $prod -ServiceName "reverse-proxy" -FileName "docker-compose.prod.yml"
+Assert-Matches `
+    -Text $reverseProxyBlock `
+    -Pattern '(?m)^\s+user:\s+["'']?101:101["'']?\s*$' `
+    -Message "reverse-proxy must run as the non-root nginx user"
+foreach ($tmpfsPath in @("/var/cache/nginx", "/var/run")) {
+    $escapedPath = [regex]::Escape($tmpfsPath)
+    Assert-Matches `
+        -Text $reverseProxyBlock `
+        -Pattern "(?m)^\s+-\s+${escapedPath}:[^\r\n]*uid=101[^\r\n]*gid=101[^\r\n]*mode=0750\s*$" `
+        -Message "reverse-proxy tmpfs $tmpfsPath must be writable by the non-root nginx user"
+}
+
 foreach ($service in @("postgres", "redis", "minio")) {
     $block = Get-ServiceBlock -Content $data -ServiceName $service -FileName "docker-compose.data.yml"
     Assert-NoNewPrivileges -Block $block -ServiceName $service
