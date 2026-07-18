@@ -2572,15 +2572,14 @@ func TestValidateProductionRequiresArtifactScanner(t *testing.T) {
 	}
 }
 
-func TestValidateProductionExplicitFlagCannotDisableArtifactScanner(t *testing.T) {
+func TestValidateProductionExplicitFlagAllowsDisabledArtifactScanner(t *testing.T) {
 	cfg := productionDeepInfraConfig()
 	cfg.ArtifactScanner = "none"
 	cfg.OpenAIAPIKey = ""
 	cfg.AllowUnscannedArtifactsInProduction = true
 
-	err := cfg.Validate()
-	if err == nil || !strings.Contains(err.Error(), "ARTIFACT_SCANNER=openai") {
-		t.Fatalf("expected production artifact scanner validation error, got %v", err)
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate() error = %v", err)
 	}
 }
 

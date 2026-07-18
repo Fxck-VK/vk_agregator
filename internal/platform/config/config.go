@@ -930,8 +930,8 @@ func (c Config) Validate() error {
 		if c.usesMockProvider() {
 			return fmt.Errorf("config: mock provider is not allowed in production")
 		}
-		if c.usesRealGenerationProvider() && artifactScannerDisabled(c.ArtifactScanner) {
-			return fmt.Errorf("config: ARTIFACT_SCANNER=openai is required in production")
+		if c.usesRealGenerationProvider() && artifactScannerDisabled(c.ArtifactScanner) && !c.AllowUnscannedArtifactsInProduction {
+			return fmt.Errorf("config: ARTIFACT_SCANNER=openai is required in production unless ALLOW_UNSCANNED_ARTIFACTS_IN_PRODUCTION=true")
 		}
 		if strings.EqualFold(strings.TrimSpace(c.PaymentProvider), "mock") {
 			return fmt.Errorf("config: PAYMENT_PROVIDER=mock is not allowed in production")

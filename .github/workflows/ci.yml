@@ -199,6 +199,7 @@ jobs:
         shell: bash
         run: |
           bash scripts/deploy/test-dev-env.sh
+          bash scripts/deploy/test-prod-env.sh
           bash scripts/deploy/test-env-parity.sh
           bash scripts/deploy/test-verify-release-images.sh
 
