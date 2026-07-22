@@ -9,6 +9,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -74,8 +75,27 @@ func ensureTable(ctx context.Context, pool *pgxpool.Pool) error {
 	return err
 }
 
-// checksum returns the hex-encoded SHA-256 of a migration file's contents.
+// checksum returns a platform-independent SHA-256 for a migration file.
 func checksum(data []byte) string {
+	return rawChecksum(normalizeLineEndings(data))
+}
+
+// checksumMatches accepts the canonical LF hash and the legacy CRLF hash while
+// still rejecting SQL content changes.
+func checksumMatches(recorded string, data []byte) bool {
+	normalized := normalizeLineEndings(data)
+	if recorded == rawChecksum(normalized) {
+		return true
+	}
+	legacyCRLF := bytes.ReplaceAll(normalized, []byte("\n"), []byte("\r\n"))
+	return recorded == rawChecksum(legacyCRLF)
+}
+
+func normalizeLineEndings(data []byte) []byte {
+	return bytes.ReplaceAll(data, []byte("\r\n"), []byte("\n"))
+}
+
+func rawChecksum(data []byte) string {
 	sum := sha256.Sum256(data)
 	return hex.EncodeToString(sum[:])
 }
@@ -98,7 +118,7 @@ func up(ctx context.Context, pool *pgxpool.Pool, dir string) error {
 		sum := checksum(sqlText)
 		if rec, ok := applied[v]; ok {
 			// Detect drift: a previously applied migration whose file changed.
-			if rec != "" && rec != sum {
+			if rec != "" && !checksumMatches(rec, sqlText) {
 				return fmt.Errorf("checksum mismatch for %s: applied %s, file %s", v, rec, sum)
 			}
 			continue
