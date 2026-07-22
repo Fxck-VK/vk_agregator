@@ -169,7 +169,7 @@ func TestFromConfigSeedream45VisibleWhenReadyEnabledAndPriced(t *testing.T) {
 	if image == nil {
 		t.Fatalf("Seedream 4.5 missing from ready priced public catalog: %+v", runtimeCatalog.ImageModels())
 	}
-	if image.DefaultQuality != modelcatalog.ImageQuality2K || image.EstimateCredits != 10 || !image.SupportsReferenceImage || image.MaxReferenceImages != 10 {
+	if image.DefaultQuality != modelcatalog.ImageQuality2K || image.EstimateCredits != 15 || !image.SupportsReferenceImage || image.MaxReferenceImages != 10 {
 		t.Fatalf("Seedream 4.5 public catalog contract = %+v", image)
 	}
 	assertNoPrivateProviderFields(t, runtimeCatalog.Catalog.Items())
@@ -190,7 +190,7 @@ func TestFromConfigNanoBananaProUsesAPIMartReadiness(t *testing.T) {
 	if image == nil {
 		t.Fatalf("Nano Banana Pro missing from APIMart-ready public catalog: %+v", runtimeCatalog.ImageModels())
 	}
-	if image.DefaultQuality != modelcatalog.ImageQuality1K || image.EstimateCredits != 24 || !image.SupportsReferenceImage || image.MaxReferenceImages != 14 {
+	if image.DefaultQuality != modelcatalog.ImageQuality1K || image.EstimateCredits != 25 || !image.SupportsReferenceImage || image.MaxReferenceImages != 14 {
 		t.Fatalf("Nano Banana Pro public catalog contract = %+v", image)
 	}
 
