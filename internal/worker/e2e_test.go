@@ -65,7 +65,7 @@ func TestEndToEnd(t *testing.T) {
 			Enabled:         true,
 			DefaultQuality:  pricingcatalog.ImageQuality1K,
 			QualityOptions:  []string{pricingcatalog.ImageQuality1K},
-			EstimateCredits: 15,
+			EstimateCredits: 25,
 		}},
 	}, vkinbound.Deps{
 		Idempotency:    idem,
@@ -141,11 +141,11 @@ func TestEndToEnd(t *testing.T) {
 	if job.Status != domain.JobStatusSucceeded {
 		t.Fatalf("final status=%q, want succeeded", job.Status)
 	}
-	if job.CostCaptured != 15 {
-		t.Fatalf("captured=%d, want 15", job.CostCaptured)
+	if job.CostCaptured != 25 {
+		t.Fatalf("captured=%d, want 25", job.CostCaptured)
 	}
-	if credits, ok := job.PricingSnapshotCredits(); !ok || credits != 15 {
-		t.Fatalf("pricing snapshot credits=%d/%v, want 15/true", credits, ok)
+	if credits, ok := job.PricingSnapshotCredits(); !ok || credits != 25 {
+		t.Fatalf("pricing snapshot credits=%d/%v, want 25/true", credits, ok)
 	}
 	sent := vkClient.Sent()
 	if len(sent) != 1 || sent[0].Type != "message" || sent[0].Attachment == "" {
@@ -155,8 +155,8 @@ func TestEndToEnd(t *testing.T) {
 		t.Fatalf("expected image result navigation keyboard, got %q", sent[0].Keyboard)
 	}
 	acc, _ := billingRepo.GetAccountByUser(ctx, job.UserID, domain.CurrencyCredits)
-	if acc.BalanceCached != billingservice.DefaultStartingBalance-15 {
-		t.Fatalf("balance=%d, want %d", acc.BalanceCached, billingservice.DefaultStartingBalance-15)
+	if acc.BalanceCached != billingservice.DefaultStartingBalance-25 {
+		t.Fatalf("balance=%d, want %d", acc.BalanceCached, billingservice.DefaultStartingBalance-25)
 	}
 }
 
