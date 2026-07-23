@@ -80,6 +80,12 @@ FEATURE_VIDEO_ROUTE_RUNWAY_GEN4_5_ENABLED=false
 FEATURE_VIDEO_ROUTE_MOCK_TEXT_TO_VIDEO_ENABLED=false
 ```
 
+The production profile is stricter than the opt-in defaults above. Production
+must keep both Hailuo routes disabled and expose Kling O3 Standard, Runway
+Gen-4 Turbo, Seedance 2.0 Fast and Runway Gen-4.5. `check-prod-env.*` rejects a
+production deploy when this profile or the required PoYo/Runway readiness is
+missing.
+
 Provider switches must match enabled routes. Example:
 
 ```env

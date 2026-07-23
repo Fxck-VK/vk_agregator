@@ -59,6 +59,33 @@ function Is-TrueValue {
     return @("1", "true", "yes", "on") -contains $Value.Trim().ToLowerInvariant()
 }
 
+function Require-TrueValue {
+    param(
+        [Parameter(Mandatory = $true)][hashtable]$Values,
+        [System.Collections.Generic.List[string]]$Problems,
+        [Parameter(Mandatory = $true)][string]$Name,
+        [Parameter(Mandatory = $true)][string]$Reason
+    )
+
+    if (-not (Is-TrueValue (Get-Value -Values $Values -Name $Name))) {
+        Add-Problem -Problems $Problems -Name $Name -Reason "$Reason; must be true"
+    }
+}
+
+function Require-FalseValue {
+    param(
+        [Parameter(Mandatory = $true)][hashtable]$Values,
+        [System.Collections.Generic.List[string]]$Problems,
+        [Parameter(Mandatory = $true)][string]$Name,
+        [Parameter(Mandatory = $true)][string]$Reason
+    )
+
+    $value = (Get-Value -Values $Values -Name $Name).Trim().ToLowerInvariant()
+    if (@("0", "false", "no", "off") -notcontains $value) {
+        Add-Problem -Problems $Problems -Name $Name -Reason "$Reason; must be false"
+    }
+}
+
 function Add-Problem {
     param(
         [System.Collections.Generic.List[string]]$Problems,
@@ -230,6 +257,36 @@ if ($providerValues -match "(^|,)mock(,|$)") {
 }
 if ($providerValues -match "(^|,)deepinfra(,|$)") {
     Require-Value -Values $envValues -Problems $problems -Name "DEEPINFRA_API_KEY" -Reason "required when a DeepInfra provider is configured"
+}
+
+if ($appEnv -eq "production") {
+    Require-TrueValue -Values $envValues -Problems $problems -Name "FEATURE_VIDEO_ROUTER_ENABLED" -Reason "required by the production video catalog"
+    Require-FalseValue -Values $envValues -Problems $problems -Name "FEATURE_VIDEO_ROUTE_HAILUO_2_3_FAST_ENABLED" -Reason "Hailuo is excluded from the production video catalog"
+    Require-FalseValue -Values $envValues -Problems $problems -Name "FEATURE_VIDEO_ROUTE_HAILUO_2_3_STANDARD_ENABLED" -Reason "Hailuo is excluded from the production video catalog"
+
+    foreach ($routeFlag in @(
+        "FEATURE_VIDEO_ROUTE_KLING_O3_STANDARD_ENABLED",
+        "FEATURE_VIDEO_ROUTE_RUNWAY_GEN4_TURBO_ENABLED",
+        "FEATURE_VIDEO_ROUTE_SEEDANCE_2_0_FAST_ENABLED",
+        "FEATURE_VIDEO_ROUTE_RUNWAY_GEN4_5_ENABLED"
+    )) {
+        Require-TrueValue -Values $envValues -Problems $problems -Name $routeFlag -Reason "required by the production video catalog"
+    }
+
+    $providerChain = "," + ((Get-Value -Values $envValues -Name "PROVIDER_CHAIN") -replace "\s+", "").ToLowerInvariant() + ","
+    if (-not $providerChain.Contains(",poyo,")) {
+        Add-Problem -Problems $problems -Name "PROVIDER_CHAIN" -Reason "must include poyo for Kling O3, Seedance 2.0 Fast and Runway Gen-4.5"
+    }
+    if (-not $providerChain.Contains(",runway,")) {
+        Add-Problem -Problems $problems -Name "PROVIDER_CHAIN" -Reason "must include runway for Runway Gen-4 Turbo"
+    }
+
+    Require-TrueValue -Values $envValues -Problems $problems -Name "POYO_PROVIDER_ENABLED" -Reason "required for Kling O3, Seedance 2.0 Fast and Runway Gen-4.5"
+    Require-Value -Values $envValues -Problems $problems -Name "POYO_API_KEY" -Reason "required for Kling O3, Seedance 2.0 Fast and Runway Gen-4.5"
+    Require-HttpsUrl -Values $envValues -Problems $problems -Name "POYO_BASE_URL" -Reason "required for Kling O3, Seedance 2.0 Fast and Runway Gen-4.5"
+    Require-TrueValue -Values $envValues -Problems $problems -Name "RUNWAY_PROVIDER_ENABLED" -Reason "required for Runway Gen-4 Turbo"
+    Require-Value -Values $envValues -Problems $problems -Name "RUNWAYML_API_SECRET" -Reason "required for Runway Gen-4 Turbo"
+    Require-HttpsUrl -Values $envValues -Problems $problems -Name "RUNWAYML_BASE_URL" -Reason "required for Runway Gen-4 Turbo"
 }
 
 if (Is-TrueValue (Get-Value -Values $envValues -Name "PROVIDER_BALANCE_BOT_ENABLED" -Default "false")) {
