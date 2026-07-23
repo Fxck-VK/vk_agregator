@@ -120,6 +120,27 @@ sed '/^RUNWAYML_API_SECRET=/d' "${bypass_env}" > "${missing_runway_secret_env}"
 expect_failure "bash Runway secret missing" bash "${bash_checker}" --env-file "${missing_runway_secret_env}"
 expect_failure "PowerShell Runway secret missing" run_powershell_checker "${missing_runway_secret_env}"
 
+topup_miniapp_env="${tmpdir}/topup-miniapp.env"
+cp "${bypass_env}" "${topup_miniapp_env}"
+cat >> "${topup_miniapp_env}" <<'EOF'
+VK_MENU_TOP_UP_ENABLED=true
+PUBLIC_VK_BASE_URL=https://vk.example.test
+YOOKASSA_RETURN_URL_MINIAPP=https://vk.com/app54623372?section_type=public_r_app
+EOF
+bash "${bash_checker}" --env-file "${topup_miniapp_env}" >/dev/null
+run_powershell_checker "${topup_miniapp_env}" >/dev/null
+
+topup_missing_contact_route_env="${tmpdir}/topup-missing-contact-route.env"
+sed '/^YOOKASSA_RETURN_URL_MINIAPP=/d' "${topup_miniapp_env}" > "${topup_missing_contact_route_env}"
+expect_failure "bash VK top-up without receipt contact or Mini App route" bash "${bash_checker}" --env-file "${topup_missing_contact_route_env}"
+expect_failure "PowerShell VK top-up without receipt contact or Mini App route" run_powershell_checker "${topup_missing_contact_route_env}"
+
+topup_quick_without_status_env="${tmpdir}/topup-quick-without-status.env"
+cp "${topup_missing_contact_route_env}" "${topup_quick_without_status_env}"
+printf '%s\n' 'VK_TOP_UP_RECEIPT_EMAIL=receipt@service.invalid' >> "${topup_quick_without_status_env}"
+expect_failure "bash VK quick top-up without status editing" bash "${bash_checker}" --env-file "${topup_quick_without_status_env}"
+expect_failure "PowerShell VK quick top-up without status editing" run_powershell_checker "${topup_quick_without_status_env}"
+
 openai_env="${tmpdir}/openai.env"
 cp "${bypass_env}" "${openai_env}"
 sed -i 's/ARTIFACT_SCANNER=none/ARTIFACT_SCANNER=openai/' "${openai_env}"

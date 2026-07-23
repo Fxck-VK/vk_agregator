@@ -317,12 +317,13 @@ fi
 if is_true_value "$(get_value VK_MENU_TOP_UP_ENABLED)"; then
   email="$(get_value VK_TOP_UP_RECEIPT_EMAIL)"
   phone="$(get_value VK_TOP_UP_RECEIPT_PHONE)"
-  require_https_url PUBLIC_VK_BASE_URL "required for VK top-up payment links"
-  if ! is_true_value "$(get_value FEATURE_VK_TOPUP_STATUS_EDIT_ENABLED false)"; then
-    add_problem FEATURE_VK_TOPUP_STATUS_EDIT_ENABLED "must be true when VK_MENU_TOP_UP_ENABLED=true"
-  fi
   if [[ -z "${email//[[:space:]]/}" && -z "${phone//[[:space:]]/}" ]]; then
-    add_problem "VK_TOP_UP_RECEIPT_EMAIL/VK_TOP_UP_RECEIPT_PHONE" "one receipt contact is required when VK_MENU_TOP_UP_ENABLED=true"
+    require_https_url YOOKASSA_RETURN_URL_MINIAPP "required when VK top-up has no server receipt contact"
+  else
+    require_https_url PUBLIC_VK_BASE_URL "required for VK top-up payment links"
+    if ! is_true_value "$(get_value FEATURE_VK_TOPUP_STATUS_EDIT_ENABLED false)"; then
+      add_problem FEATURE_VK_TOPUP_STATUS_EDIT_ENABLED "must be true for VK Bot quick top-up"
+    fi
   fi
   email_lc="$(printf '%s' "${email}" | tr '[:upper:]' '[:lower:]')"
   phone_lc="$(printf '%s' "${phone}" | tr '[:upper:]' '[:lower:]')"

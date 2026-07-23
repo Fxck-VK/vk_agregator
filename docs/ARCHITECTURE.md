@@ -336,11 +336,13 @@ Current payment/top-up foundation:
   renders the safe payment history DTOs and may redirect the user to a returned
   `confirmation_url`, including active waiting-intent continuation links, but the return URL is
   only navigation and must not grant credits.
-- VK Bot top-up is a control path: it lists the same active products, creates a
-  payment intent through `internal/service/paymentservice` immediately after
-  product selection with the server-side `VK_TOP_UP_RECEIPT_EMAIL` /
-  `VK_TOP_UP_RECEIPT_PHONE` receipt contact and sends a payment link. It must
-  not call YooKassa directly and must not mutate balance from a button click or
+- VK Bot top-up is a control path. When a server-side
+  `VK_TOP_UP_RECEIPT_EMAIL` / `VK_TOP_UP_RECEIPT_PHONE` contact exists, it lists
+  the shared products, creates the intent through
+  `internal/service/paymentservice` and sends the safe payment link. Without a
+  server receipt contact, the bot opens the configured Mini App instead; the
+  payer selects the product and enters the receipt contact there. Neither path
+  calls YooKassa from the handler or mutates balance from a button click or
   provider redirect.
 - `cmd/provider-webhook` owns payment provider webhook intake. It exposes
   `POST /billing/webhooks/yookassa` without VK launch auth, stores normalized

@@ -87,6 +87,9 @@ type Config struct {
 	// TopUpReturnURL is the server-owned YooKassa redirect target for bot
 	// top-up intents.
 	TopUpReturnURL string
+	// TopUpMiniAppURL opens the Mini App top-up UI when the VK bot does not
+	// have a server-side receipt contact configured.
+	TopUpMiniAppURL string
 	// TopUpPaymentRedirectBaseURL is the public API base used to hide provider
 	// confirmation URLs behind a server-owned redirect endpoint.
 	TopUpPaymentRedirectBaseURL string
@@ -1399,6 +1402,9 @@ func (h *Handler) createAndSendTopUpPayment(ctx context.Context, groupID int64, 
 	email := strings.TrimSpace(h.cfg.TopUpReceiptEmail)
 	phone := strings.TrimSpace(h.cfg.TopUpReceiptPhone)
 	if email == "" && phone == "" {
+		if _, ok := h.topUpMiniAppLink(); ok {
+			return h.sendTopUpCatalog(ctx, idemKey, peerID, user, forceNew, false)
+		}
 		return h.sendTopUpNotice(ctx, idemKey, peerID, "Платежи временно недоступны: не настроены данные для чека.")
 	}
 	if h.deps.Payment == nil {

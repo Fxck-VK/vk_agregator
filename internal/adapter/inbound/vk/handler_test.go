@@ -1613,6 +1613,67 @@ func TestTopUpMenuWithoutServerReceiptContactDoesNotCreateIntent(t *testing.T) {
 	}
 }
 
+func TestTopUpMenuWithoutServerReceiptContactLinksToMiniApp(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	h := newHarnessWithConfig(control, vk.Config{
+		ConfirmationToken: "conf-token-123",
+		Secret:            "s3cr3t",
+		TopUpMiniAppURL:   "https://vk.com/app54623372?section_type=public_r_app",
+	})
+
+	body := `{
+		"type":"message_new","group_id":1,"event_id":"evt-topup-miniapp","secret":"s3cr3t",
+		"object":{"message":{"from_id":597,"peer_id":597,"text":"topup","payload":"{\"command\":\"top_up\"}"}}
+	}`
+	if rec := h.post(body); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	ctx := context.Background()
+	user, err := h.users.GetByVKUserID(ctx, 597)
+	if err != nil {
+		t.Fatalf("user not created: %v", err)
+	}
+	intents, err := h.payment.ListIntentsByUser(ctx, user.ID, 10, 0)
+	if err != nil {
+		t.Fatalf("list payment intents: %v", err)
+	}
+	if len(intents) != 0 {
+		t.Fatalf("Mini App fallback must not create a VK bot payment intent, got %d", len(intents))
+	}
+	sent := control.Sent()
+	if len(sent) != 1 ||
+		!strings.Contains(sent[0].Text, "Mini App") ||
+		!strings.Contains(sent[0].Keyboard, `"type":"open_link"`) ||
+		!strings.Contains(sent[0].Keyboard, "https://vk.com/app54623372?section_type=public_r_app") {
+		t.Fatalf("expected Mini App top-up link, got %+v", sent)
+	}
+}
+
+func TestTopUpMenuWithoutServerReceiptContactRejectsUnsafeMiniAppURL(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	h := newHarnessWithConfig(control, vk.Config{
+		ConfirmationToken: "conf-token-123",
+		Secret:            "s3cr3t",
+		TopUpMiniAppURL:   "http://vk.example.test/app",
+	})
+
+	body := `{
+		"type":"message_new","group_id":1,"event_id":"evt-topup-unsafe-miniapp","secret":"s3cr3t",
+		"object":{"message":{"from_id":598,"peer_id":598,"text":"99 crystals","payload":"{\"command\":\"top_up\",\"product_code\":\"crystals_99\"}"}}
+	}`
+	if rec := h.post(body); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	sent := control.Sent()
+	if len(sent) != 1 ||
+		strings.Contains(sent[0].Keyboard, `"type":"open_link"`) ||
+		strings.Contains(sent[0].Keyboard, "http://vk.example.test/app") {
+		t.Fatalf("unsafe Mini App URL must fail closed, got %+v", sent)
+	}
+}
+
 func TestDisabledMenuPayloadFallsBackToCurrentMenuNoJob(t *testing.T) {
 	control := vkdelivery.NewMockClient()
 	h := newHarnessWithConfig(control, vk.Config{

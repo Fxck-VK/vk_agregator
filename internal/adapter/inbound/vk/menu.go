@@ -392,6 +392,9 @@ func (h *Handler) sendControlResponse(ctx context.Context, t domain.CommandType,
 				msgText = topUpPendingText(balance, pending)
 				keyboard = topUpPendingKeyboard(link)
 			}
+		} else if miniAppText, miniAppKeyboard, ok := h.topUpMiniAppView(balance); ok {
+			msgText = miniAppText
+			keyboard = miniAppKeyboard
 		} else {
 			products, err := h.topUpProducts(ctx)
 			if err != nil {
@@ -586,6 +589,19 @@ func (h *Handler) sendTopUpCatalog(ctx context.Context, idemKey string, peerID i
 	}
 	balance, err := h.currentBalance(ctx, user)
 	if err != nil {
+		return err
+	}
+	if text, keyboard, ok := h.topUpMiniAppView(balance); ok {
+		msg := vkdelivery.Message{
+			Text:     text,
+			Keyboard: keyboard,
+		}
+		h.applyMenuButtonMode(msg.Keyboard)
+		randomID := vkdelivery.DeterministicRandomID(fmt.Sprintf("vk_control_topup_miniapp:%s:%t", idemKey, forceNew))
+		result, err := h.deliverControlResponse(ctx, domain.CommandTopUp, peerID, randomID, msg, allowEdit)
+		if err == nil {
+			h.setActiveMenu(peerID, result.MessageID)
+		}
 		return err
 	}
 	products, err := h.topUpProducts(ctx)
@@ -1079,6 +1095,21 @@ func topUpCatalogKeyboard(products []*domain.PaymentProduct, forceNew bool) *vkd
 	}
 }
 
+func topUpMiniAppKeyboard(link string) *vkdelivery.Keyboard {
+	return &vkdelivery.Keyboard{
+		OneTime: false,
+		Inline:  true,
+		Buttons: [][]vkdelivery.KeyboardButton{
+			{
+				openLinkButton("Пополнить в Mini App", link),
+			},
+			{
+				button("⬅️ Назад", domain.CommandShowMenu, "secondary"),
+			},
+		},
+	}
+}
+
 func topUpPendingKeyboard(link string) *vkdelivery.Keyboard {
 	return &vkdelivery.Keyboard{
 		OneTime: false,
@@ -1114,6 +1145,30 @@ func (h *Handler) topUpPaymentLink(intent *domain.PaymentIntent) (string, bool) 
 func (h *Handler) topUpPaymentRedirectConfigured() bool {
 	_, ok := h.topUpPaymentRedirectBase()
 	return ok
+}
+
+func (h *Handler) topUpMiniAppView(balance int64) (string, *vkdelivery.Keyboard, bool) {
+	if strings.TrimSpace(h.cfg.TopUpReceiptEmail) != "" || strings.TrimSpace(h.cfg.TopUpReceiptPhone) != "" {
+		return "", nil, false
+	}
+	link, ok := h.topUpMiniAppLink()
+	if !ok {
+		return "", nil, false
+	}
+	text := fmt.Sprintf(
+		"💰 Пополнить баланс\n\nБаланс сейчас: %d ⭐️\n\nОткройте Mini App и перейдите в «Настройки», чтобы выбрать пакет и указать контакт для чека.",
+		balance,
+	)
+	return text, topUpMiniAppKeyboard(link), true
+}
+
+func (h *Handler) topUpMiniAppLink() (string, bool) {
+	raw := strings.TrimSpace(h.cfg.TopUpMiniAppURL)
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil {
+		return "", false
+	}
+	return u.String(), true
 }
 
 func (h *Handler) topUpPaymentRedirectBase() (*url.URL, bool) {

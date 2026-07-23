@@ -57,9 +57,11 @@ git:
 Optional production repository variable:
 
 - `PROD_VK_MENU_TOP_UP_ENABLED` — when set to `true` or `false`, replaces
-  `VK_MENU_TOP_UP_ENABLED` after split env assembly. Use `false` when VK Bot
-  quick top-up is intentionally disabled; Mini App payments remain available
-  and continue collecting the payer's receipt contact.
+  `VK_MENU_TOP_UP_ENABLED` after split env assembly. With `true`, the VK Bot
+  creates quick top-ups only when a server receipt contact exists; otherwise
+  its top-up action opens the HTTPS `YOOKASSA_RETURN_URL_MINIAPP`, where the
+  payer enters the receipt contact. Use `false` only to hide VK Bot top-up
+  entirely.
 
 `ENV_PROVIDERS_COMMON` owns provider routing and model feature flags. The
 production preflight requires Hailuo to stay disabled and requires Kling O3
