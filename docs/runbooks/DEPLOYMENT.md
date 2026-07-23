@@ -54,6 +54,11 @@ git:
 - `GHCR_TOKEN`
 - optional Telegram notification secrets
 
+`ENV_PROVIDERS_COMMON` owns provider routing and model feature flags. The
+production preflight requires Hailuo to stay disabled and requires Kling O3
+Standard, Runway Gen-4 Turbo, Seedance 2.0 Fast and Runway Gen-4.5 plus their
+PoYo/Runway provider readiness.
+
 `DEPLOY_SSH_KNOWN_HOSTS` must contain the production VPS SSH host key line(s)
 verified out of band, in OpenSSH `known_hosts` format. The deploy workflow
 does not trust live `ssh-keyscan`; if the secret is missing, invalid, does not

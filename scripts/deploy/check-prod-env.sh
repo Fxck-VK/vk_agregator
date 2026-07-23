@@ -75,6 +75,25 @@ is_true_value() {
   [[ "${value}" == "1" || "${value}" == "true" || "${value}" == "yes" || "${value}" == "on" ]]
 }
 
+require_true_value() {
+  local name="$1"
+  local reason="$2"
+  if ! is_true_value "$(get_value "${name}")"; then
+    add_problem "${name}" "${reason}; must be true"
+  fi
+}
+
+require_false_value() {
+  local name="$1"
+  local reason="$2"
+  local value
+  value="$(printf '%s' "$(get_value "${name}")" | tr '[:upper:]' '[:lower:]')"
+  case "${value}" in
+    0|false|no|off) ;;
+    *) add_problem "${name}" "${reason}; must be false" ;;
+  esac
+}
+
 add_problem() {
   problems+=("$1 - $2")
 }
@@ -217,6 +236,35 @@ if [[ ",${provider_values_lc}," == *",mock,"* ]]; then
 fi
 if [[ ",${provider_values_lc}," == *",deepinfra,"* ]]; then
   require_value DEEPINFRA_API_KEY "required when a DeepInfra provider is configured"
+fi
+
+if [[ "${app_env}" == "production" ]]; then
+  require_true_value FEATURE_VIDEO_ROUTER_ENABLED "required by the production video catalog"
+  require_false_value FEATURE_VIDEO_ROUTE_HAILUO_2_3_FAST_ENABLED "Hailuo is excluded from the production video catalog"
+  require_false_value FEATURE_VIDEO_ROUTE_HAILUO_2_3_STANDARD_ENABLED "Hailuo is excluded from the production video catalog"
+
+  for route_flag in \
+    FEATURE_VIDEO_ROUTE_KLING_O3_STANDARD_ENABLED \
+    FEATURE_VIDEO_ROUTE_RUNWAY_GEN4_TURBO_ENABLED \
+    FEATURE_VIDEO_ROUTE_SEEDANCE_2_0_FAST_ENABLED \
+    FEATURE_VIDEO_ROUTE_RUNWAY_GEN4_5_ENABLED; do
+    require_true_value "${route_flag}" "required by the production video catalog"
+  done
+
+  provider_chain_lc=",$(printf '%s' "$(get_value PROVIDER_CHAIN)" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]'),"
+  if [[ "${provider_chain_lc}" != *",poyo,"* ]]; then
+    add_problem PROVIDER_CHAIN "must include poyo for Kling O3, Seedance 2.0 Fast and Runway Gen-4.5"
+  fi
+  if [[ "${provider_chain_lc}" != *",runway,"* ]]; then
+    add_problem PROVIDER_CHAIN "must include runway for Runway Gen-4 Turbo"
+  fi
+
+  require_true_value POYO_PROVIDER_ENABLED "required for Kling O3, Seedance 2.0 Fast and Runway Gen-4.5"
+  require_value POYO_API_KEY "required for Kling O3, Seedance 2.0 Fast and Runway Gen-4.5"
+  require_https_url POYO_BASE_URL "required for Kling O3, Seedance 2.0 Fast and Runway Gen-4.5"
+  require_true_value RUNWAY_PROVIDER_ENABLED "required for Runway Gen-4 Turbo"
+  require_value RUNWAYML_API_SECRET "required for Runway Gen-4 Turbo"
+  require_https_url RUNWAYML_BASE_URL "required for Runway Gen-4 Turbo"
 fi
 
 if is_true_value "$(get_value PROVIDER_BALANCE_BOT_ENABLED false)"; then
