@@ -337,7 +337,7 @@ type videoModeSpec struct {
 func videoModeForCommand(t domain.CommandType) (videoModeSpec, bool) {
 	switch t {
 	case domain.CommandMenuVideoSora2Start:
-		return videoRouteMode("video:runway_gen4_turbo", "Runway Gen-4 Turbo", domain.VideoRouteRunwayGen4Turbo, 5, []int{3, 5, 10}, true, 1, "16:9", "9:16", "4:3", "3:4", "1:1", "21:9"), true
+		return videoRouteMode("video:runway_gen4_turbo", "Runway Gen-4 Turbo", domain.VideoRouteRunwayGen4Turbo, 5, []int{5, 10}, true, 1, "16:9", "9:16", "4:3", "3:4", "1:1", "21:9"), true
 	case domain.CommandMenuVideoKling21Start:
 		return videoRouteMode("video:kling_o3_standard", "Kling O3 Standard", domain.VideoRouteKlingO3Standard, 5, []int{5, 10}, false, 1, "16:9", "9:16", "1:1"), true
 	case domain.CommandMenuVideoSeedance1Lite:

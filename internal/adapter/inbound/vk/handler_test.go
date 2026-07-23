@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -2091,6 +2092,56 @@ func TestVideoMenuButtonUsesProductCatalogRoutes(t *testing.T) {
 	}
 }
 
+func TestLegacyRunwayDurationMenuOnlyOffersFiveAndTenSeconds(t *testing.T) {
+	control := vkdelivery.NewMockClient()
+	h := newHarnessWithConfig(control, vk.Config{
+		ConfirmationToken: "conf-token-123",
+		Secret:            "s3cr3t",
+		MenuFeatures: enabledVideoCommands(
+			domain.CommandMenuVideo,
+			domain.CommandMenuVideoSora2,
+			domain.CommandMenuVideoSora2Start,
+		),
+	})
+	body := `{
+		"type":"message_new","group_id":1,"event_id":"evt-runway-legacy-durations","secret":"s3cr3t",
+		"object":{"message":{"from_id":5602,"peer_id":5602,"text":"Runway Gen-4 Turbo","payload":"{\"command\":\"menu.video.sora_v2.start\"}"}}
+	}`
+	rec := h.post(body)
+	if rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+	}
+
+	sent := control.Sent()
+	if len(sent) != 1 {
+		t.Fatalf("expected one duration message, got %+v", sent)
+	}
+	var keyboard struct {
+		Buttons [][]struct {
+			Action struct {
+				Payload string `json:"payload"`
+			} `json:"action"`
+		} `json:"buttons"`
+	}
+	if err := json.Unmarshal([]byte(sent[0].Keyboard), &keyboard); err != nil {
+		t.Fatalf("decode duration keyboard: %v", err)
+	}
+	var durations []int
+	for _, row := range keyboard.Buttons {
+		for _, button := range row {
+			var payload struct {
+				DurationSec int `json:"duration_sec"`
+			}
+			if err := json.Unmarshal([]byte(button.Action.Payload), &payload); err == nil && payload.DurationSec > 0 {
+				durations = append(durations, payload.DurationSec)
+			}
+		}
+	}
+	if !reflect.DeepEqual(durations, []int{5, 10}) {
+		t.Fatalf("legacy Runway durations = %#v, want 5/10", durations)
+	}
+}
+
 func TestPoyoRunwayGen45RouteButtonEnablesTextOnlyVideoJobs(t *testing.T) {
 	control := vkdelivery.NewMockClient()
 	h := newHarnessWithConfig(control, vk.Config{
@@ -2693,7 +2744,7 @@ func TestPhotoNanoBananaProQualityFlowCreatesImageJob(t *testing.T) {
 	if rec := h.post(quality); rec.Code != http.StatusOK || rec.Body.String() != "ok" {
 		t.Fatalf("unexpected quality response: %d %q", rec.Code, rec.Body.String())
 	}
-	h.grantTestCredits(t, 5632, 1000)
+	h.grantTestCredits(t, 5631, 1000)
 
 	prompt := `{
 		"type":"message_new","group_id":1,"event_id":"evt-photo-text-prompt","secret":"s3cr3t",
