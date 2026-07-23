@@ -138,6 +138,7 @@ func NewHandler(ctx context.Context, cfg config.Config, deps Deps) http.Handler 
 		TopUpReceiptEmail:                   cfg.VKTopUpReceiptEmail,
 		TopUpReceiptPhone:                   cfg.VKTopUpReceiptPhone,
 		TopUpReturnURL:                      firstNonEmpty(cfg.YooKassaReturnURLVKBot, cfg.YooKassaReturnURL),
+		TopUpMiniAppURL:                     cfg.YooKassaReturnURLMiniApp,
 		TopUpPaymentRedirectBaseURL:         cfg.PublicVKBaseURL,
 		TopUpStatusEditEnabled:              cfg.FeatureVKTopUpStatusEditEnabled,
 		ReferenceUploadsDisabled:            !cfg.MediaReferenceUploadsEnabled,

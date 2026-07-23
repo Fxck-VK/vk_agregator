@@ -167,10 +167,11 @@ Real integrations are implemented at adapter level and remain **opt-in**:
   `confirmation_url`. It also shows safe payment history from
   `GET /miniapp/payments`, including active payment continuation links without
   treating provider redirects as balance proof. The VK Bot top-up control path
-  uses the same product catalog, creates a payment intent through
-  `paymentservice` immediately after product selection with the server-side
-  `VK_TOP_UP_RECEIPT_EMAIL` / `VK_TOP_UP_RECEIPT_PHONE` receipt contact, and
-  sends a payment link; it does not grant credits from the bot handler.
+  uses the same product catalog. With a server-side
+  `VK_TOP_UP_RECEIPT_EMAIL` / `VK_TOP_UP_RECEIPT_PHONE` contact it creates the
+  intent through `paymentservice` and sends a safe payment link. Without that
+  contact it opens the Mini App, where the payer selects the package and enters
+  the receipt contact. The bot handler never grants credits.
   `cmd/provider-webhook` exposes
   `POST /billing/webhooks/yookassa`, stores raw provider events in the
   `payment_events` inbox, returns 200 quickly, then asynchronously verifies the

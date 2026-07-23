@@ -343,12 +343,13 @@ if ($prices -match "(^|,)image_generate=0(,|$)") {
 if (Is-TrueValue (Get-Value -Values $envValues -Name "VK_MENU_TOP_UP_ENABLED")) {
     $email = Get-Value -Values $envValues -Name "VK_TOP_UP_RECEIPT_EMAIL"
     $phone = Get-Value -Values $envValues -Name "VK_TOP_UP_RECEIPT_PHONE"
-    Require-HttpsUrl -Values $envValues -Problems $problems -Name "PUBLIC_VK_BASE_URL" -Reason "required for VK top-up payment links"
-    if (-not (Is-TrueValue (Get-Value -Values $envValues -Name "FEATURE_VK_TOPUP_STATUS_EDIT_ENABLED" -Default "false"))) {
-        Add-Problem -Problems $problems -Name "FEATURE_VK_TOPUP_STATUS_EDIT_ENABLED" -Reason "must be true when VK_MENU_TOP_UP_ENABLED=true"
-    }
     if ([string]::IsNullOrWhiteSpace($email) -and [string]::IsNullOrWhiteSpace($phone)) {
-        Add-Problem -Problems $problems -Name "VK_TOP_UP_RECEIPT_EMAIL/VK_TOP_UP_RECEIPT_PHONE" -Reason "one receipt contact is required when VK_MENU_TOP_UP_ENABLED=true"
+        Require-HttpsUrl -Values $envValues -Problems $problems -Name "YOOKASSA_RETURN_URL_MINIAPP" -Reason "required when VK top-up has no server receipt contact"
+    } else {
+        Require-HttpsUrl -Values $envValues -Problems $problems -Name "PUBLIC_VK_BASE_URL" -Reason "required for VK top-up payment links"
+        if (-not (Is-TrueValue (Get-Value -Values $envValues -Name "FEATURE_VK_TOPUP_STATUS_EDIT_ENABLED" -Default "false"))) {
+            Add-Problem -Problems $problems -Name "FEATURE_VK_TOPUP_STATUS_EDIT_ENABLED" -Reason "must be true for VK Bot quick top-up"
+        }
     }
     $emailLower = $email.ToLowerInvariant()
     $phoneLower = $phone.ToLowerInvariant()
