@@ -54,6 +54,13 @@ git:
 - `GHCR_TOKEN`
 - optional Telegram notification secrets
 
+Optional production repository variable:
+
+- `PROD_VK_MENU_TOP_UP_ENABLED` — when set to `true` or `false`, replaces
+  `VK_MENU_TOP_UP_ENABLED` after split env assembly. Use `false` when VK Bot
+  quick top-up is intentionally disabled; Mini App payments remain available
+  and continue collecting the payer's receipt contact.
+
 `ENV_PROVIDERS_COMMON` owns provider routing and model feature flags. The
 production preflight requires Hailuo to stay disabled and requires Kling O3
 Standard, Runway Gen-4 Turbo, Seedance 2.0 Fast and Runway Gen-4.5 plus their

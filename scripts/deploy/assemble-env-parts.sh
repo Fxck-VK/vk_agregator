@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat >&2 <<'USAGE'
-Usage: assemble-env-parts.sh --target prod|dev --output <path> [--image-tag <tag>] [--ghcr-username <name>] [--ghcr-token <token>]
+Usage: assemble-env-parts.sh --target prod|dev --output <path> [--image-tag <tag>] [--ghcr-username <name>] [--ghcr-token <token>] [--vk-menu-top-up-enabled <true|false>]
 
 Reads split env parts from GitHub Actions environment variables:
   ENV_COMMON
@@ -13,6 +13,8 @@ Reads split env parts from GitHub Actions environment variables:
 
 The script writes a single runtime .env file and never prints secret values.
 For production, --image-tag pins both IMAGE_TAG and BACKUP_IMAGE_TAG.
+The optional VK menu override is production-only and replaces the assembled
+VK_MENU_TOP_UP_ENABLED value without printing it.
 USAGE
 }
 
@@ -21,6 +23,7 @@ output=""
 image_tag=""
 ghcr_username=""
 ghcr_token=""
+vk_menu_top_up_enabled=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -42,6 +45,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --ghcr-token)
       ghcr_token="${2:-}"
+      shift 2
+      ;;
+    --vk-menu-top-up-enabled)
+      vk_menu_top_up_enabled="$(printf '%s' "${2:-}" | tr '[:upper:]' '[:lower:]')"
       shift 2
       ;;
     -h|--help)
@@ -98,8 +105,20 @@ if [[ -n "${ghcr_username}" || -n "${ghcr_token}" ]]; then
   fi
 fi
 
+if [[ -n "${vk_menu_top_up_enabled}" ]]; then
+  if [[ "${target}" != "prod" ]]; then
+    echo "VK menu top-up override is production-only" >&2
+    exit 1
+  fi
+  if [[ "${vk_menu_top_up_enabled}" != "true" && "${vk_menu_top_up_enabled}" != "false" ]]; then
+    echo "VK menu top-up override must be true or false" >&2
+    exit 1
+  fi
+fi
+
 tmp="$(mktemp)"
-trap 'rm -f "${tmp}"' EXIT
+override_tmp="${tmp}.override"
+trap 'rm -f "${tmp}" "${override_tmp}"' EXIT
 declare -A seen
 
 append_part() {
@@ -136,6 +155,12 @@ append_part() {
 for part in "${part_vars[@]}"; do
   append_part "${part}"
 done
+
+if [[ -n "${vk_menu_top_up_enabled}" ]]; then
+  awk '!/^[[:space:]]*VK_MENU_TOP_UP_ENABLED[[:space:]]*=/' "${tmp}" > "${override_tmp}"
+  mv "${override_tmp}" "${tmp}"
+  printf 'VK_MENU_TOP_UP_ENABLED=%s\n' "${vk_menu_top_up_enabled}" >> "${tmp}"
+fi
 
 if [[ -n "${image_tag}" ]]; then
   printf 'IMAGE_TAG=%s\n' "${image_tag}" >> "${tmp}"

@@ -280,6 +280,7 @@ jobs:
           ENV_PROVIDERS_COMMON: ${{ secrets.ENV_PROVIDERS_COMMON }}
           ENV_SECRETS_PROD: ${{ secrets.ENV_SECRETS_PROD }}
           ENV_PAYMENTS_PROD: ${{ secrets.ENV_PAYMENTS_PROD }}
+          PROD_VK_MENU_TOP_UP_ENABLED: ${{ vars.PROD_VK_MENU_TOP_UP_ENABLED }}
           DEPLOY_IMAGE_TAG: ${{ steps.release.outputs.image_tag }}
         run: |
           set -euo pipefail
@@ -287,13 +288,18 @@ jobs:
 
           tmp_env="$(mktemp)"
           trap 'rm -f "${tmp_env}"' EXIT
+          vk_top_up_override=()
+          if [[ -n "${PROD_VK_MENU_TOP_UP_ENABLED:-}" ]]; then
+            vk_top_up_override=(--vk-menu-top-up-enabled "${PROD_VK_MENU_TOP_UP_ENABLED}")
+          fi
 
           bash scripts/deploy/assemble-env-parts.sh \
             --target prod \
             --output "${tmp_env}" \
             --image-tag "${DEPLOY_IMAGE_TAG}" \
             --ghcr-username "${GHCR_USERNAME}" \
-            --ghcr-token "${GHCR_TOKEN}"
+            --ghcr-token "${GHCR_TOKEN}" \
+            "${vk_top_up_override[@]}"
 
           scp "${ssh_opts[@]}" "${tmp_env}" "${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_PATH}/.env.next"
           {
