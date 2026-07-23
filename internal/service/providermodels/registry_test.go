@@ -280,6 +280,12 @@ func TestRegistryKeepsOfficialRunwayAndAddsPoyoRunwayGen45Separately(t *testing.
 	if len(official.PricingKeys) == 0 {
 		t.Fatalf("official Runway route lost active pricing keys: %+v", official)
 	}
+	if !reflect.DeepEqual(official.Limits.AllowedDurationsSec, []int{5, 10}) {
+		t.Fatalf("official Runway durations = %#v, want 5/10", official.Limits.AllowedDurationsSec)
+	}
+	if len(official.PricingKeys) != 2 {
+		t.Fatalf("official Runway pricing keys = %d, want 2", len(official.PricingKeys))
+	}
 
 	poyo, ok := registry.VideoRoute(domain.VideoRouteRunwayGen45)
 	if !ok {

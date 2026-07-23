@@ -3,7 +3,7 @@ package pricingcatalog
 import "vk-ai-aggregator/internal/domain"
 
 const (
-	StaticCatalogVersion = 2
+	StaticCatalogVersion = 3
 
 	PublicImageNanoBanana2   = "nano_banana_2"
 	PublicImageNanoBananaPro = "nano_banana_pro"
@@ -48,16 +48,16 @@ func NewStaticCatalog() (*Catalog, error) {
 func StaticProductPrices() []ProductPrice {
 	prices := []ProductPrice{
 		imageTariff(PublicImageNanoBanana2, ImageQuality1K, 5_000_000, FloorUnitPoYoCredits, poyoCreditToInternal, 25),
-		imageTariff(PublicImageNanoBanana2, ImageQuality2K, 8_000_000, FloorUnitPoYoCredits, poyoCreditToInternal, 25),
-		imageTariff(PublicImageNanoBanana2, ImageQuality4K, 12_000_000, FloorUnitPoYoCredits, poyoCreditToInternal, 25),
+		imageTariff(PublicImageNanoBanana2, ImageQuality2K, 8_000_000, FloorUnitPoYoCredits, poyoCreditToInternal, 30),
+		imageTariff(PublicImageNanoBanana2, ImageQuality4K, 12_000_000, FloorUnitPoYoCredits, poyoCreditToInternal, 35),
 		imageTariff(PublicImageGPTImage2, ImageQuality1K, 60_000, FloorUnitAPIMartCredits, apimartCreditToInternal, 20),
-		imageTariff(PublicImageGPTImage2, ImageQuality2K, 120_000, FloorUnitAPIMartCredits, apimartCreditToInternal, 20),
-		imageTariff(PublicImageGPTImage2, ImageQuality4K, 180_000, FloorUnitAPIMartCredits, apimartCreditToInternal, 20),
+		imageTariff(PublicImageGPTImage2, ImageQuality2K, 120_000, FloorUnitAPIMartCredits, apimartCreditToInternal, 25),
+		imageTariff(PublicImageGPTImage2, ImageQuality4K, 180_000, FloorUnitAPIMartCredits, apimartCreditToInternal, 30),
 		imageTariff(PublicImageNanoBananaPro, ImageQuality1K, 400_000, FloorUnitAPIMartCredits, apimartCreditToInternal, 25),
-		imageTariff(PublicImageNanoBananaPro, ImageQuality2K, 500_000, FloorUnitAPIMartCredits, apimartCreditToInternal, 25),
-		imageTariff(PublicImageNanoBananaPro, ImageQuality4K, 500_000, FloorUnitAPIMartCredits, apimartCreditToInternal, 25),
+		imageTariff(PublicImageNanoBananaPro, ImageQuality2K, 500_000, FloorUnitAPIMartCredits, apimartCreditToInternal, 30),
+		imageTariff(PublicImageNanoBananaPro, ImageQuality4K, 500_000, FloorUnitAPIMartCredits, apimartCreditToInternal, 35),
 		fixedInternalImageTariff(PublicImageSeedream45, ImageQuality2K, 10, 15),
-		fixedInternalImageTariff(PublicImageSeedream45, ImageQuality4K, 15, 15),
+		fixedInternalImageTariff(PublicImageSeedream45, ImageQuality4K, 15, 20),
 	}
 
 	for _, resolution := range []string{VideoResolution720p, VideoResolution1080p} {
@@ -84,7 +84,7 @@ func StaticProductPrices() []ProductPrice {
 			int64(duration)*30,
 		))
 	}
-	for duration := 2; duration <= 10; duration++ {
+	for _, duration := range []int{5, 10} {
 		prices = append(prices, videoTariff(
 			domain.VideoRouteRunwayGen4Turbo,
 			VideoResolution720p,
