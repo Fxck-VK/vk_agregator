@@ -329,6 +329,7 @@ if ($env:FAKE_RELEASE_MANIFEST_INVALID -eq "true") {
     [IO.File]::WriteAllText($fakeDocker, ($fakeDockerLines -join "`r`n"), [Text.Encoding]::ASCII)
 
     $runtimeEnv = Join-Path $tempRoot "runtime.env"
+    # Keep credential-shaped fixtures short and clearly synthetic so repository-wide secret scans do not flag them as live credentials.
     $runtimeLines = @(
         "APP_ENV=staging",
         "DATA_SERVICES_MODE=managed",
