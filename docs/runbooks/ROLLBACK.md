@@ -24,6 +24,10 @@ deploy -> smoke fails -> rollback to previous image tag -> smoke rollback result
 Workflow may still be red after successful rollback. That is correct: the new
 release failed, but production was restored.
 
+After rollback smoke succeeds, the workflow also checks out the restored
+release commit on the VPS. The runtime `IMAGE_TAG` and repository checkout must
+therefore point to the same immutable revision before a later deploy.
+
 ## Manual Runtime Rollback
 
 On VPS:
