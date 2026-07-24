@@ -391,7 +391,8 @@ fi
 if [[ "${with_cloudflare}" == "true" ]]; then
   image_pull_services+=(cloudflared)
 fi
-run_step "${compose[@]}" pull "${image_pull_services[@]}"
+bash "${script_dir}/compose-pull-retry.sh" -- \
+  "${compose[@]}" pull "${image_pull_services[@]}"
 
 if [[ ${#stateful_services[@]} -gt 0 ]]; then
   run_step "${compose[@]}" up -d --no-build --wait --wait-timeout "${timeout_seconds}" "${stateful_services[@]}"
@@ -448,7 +449,8 @@ if [[ "${skip_migrate}" != "true" ]]; then
         backup_compose+=(--profile cloudflare)
       fi
       if [[ "${build_on_vps}" != "true" ]]; then
-        run_step "${compose[@]}" pull backup-postgres
+        bash "${script_dir}/compose-pull-retry.sh" -- \
+          "${compose[@]}" pull backup-postgres
       fi
       run_step "${backup_compose[@]}" run --rm backup-postgres
       migration_backup_status="postgres-backup"

@@ -10,6 +10,10 @@ $ciPath = Join-Path $repoRoot ".github\workflows\ci.yml"
 $dockerImagesPath = Join-Path $repoRoot ".github\workflows\docker-images.yml"
 $deployProdPath = Join-Path $repoRoot ".github\workflows\deploy-prod.yml"
 $deployDevPath = Join-Path $repoRoot ".github\workflows\deploy-dev.yml"
+$deployProdScriptPath = Join-Path $repoRoot "scripts\deploy\deploy-prod.sh"
+$deployDevScriptPath = Join-Path $repoRoot "scripts\deploy\deploy-dev.sh"
+$rollbackProdScriptPath = Join-Path $repoRoot "scripts\deploy\rollback-prod.sh"
+$composePullRetryPath = Join-Path $repoRoot "scripts\deploy\compose-pull-retry.sh"
 $dependabotPath = Join-Path $repoRoot ".github\dependabot.yml"
 $codeownersPath = Join-Path $repoRoot ".github\CODEOWNERS"
 $releaseVerifierTestPath = Join-Path $repoRoot "scripts\deploy\test-verify-release-images.sh"
@@ -80,7 +84,7 @@ foreach ($path in @($nightlyPath, $ciPath, $dockerImagesPath)) {
     }
 }
 
-foreach ($path in @($deployProdPath, $deployDevPath, $dependabotPath, $codeownersPath, $releaseVerifierTestPath, $cosignInstallerPath, $trivyInstallerPath, $npmLockValidatorPath)) {
+foreach ($path in @($deployProdPath, $deployDevPath, $deployProdScriptPath, $deployDevScriptPath, $rollbackProdScriptPath, $composePullRetryPath, $dependabotPath, $codeownersPath, $releaseVerifierTestPath, $cosignInstallerPath, $trivyInstallerPath, $npmLockValidatorPath)) {
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
         throw "required supply-chain policy file is missing: $path"
     }
@@ -91,6 +95,10 @@ $ci = Get-Content -LiteralPath $ciPath -Raw
 $dockerImages = Get-Content -LiteralPath $dockerImagesPath -Raw
 $deployProd = Get-Content -LiteralPath $deployProdPath -Raw
 $deployDev = Get-Content -LiteralPath $deployDevPath -Raw
+$deployProdScript = Get-Content -LiteralPath $deployProdScriptPath -Raw
+$deployDevScript = Get-Content -LiteralPath $deployDevScriptPath -Raw
+$rollbackProdScript = Get-Content -LiteralPath $rollbackProdScriptPath -Raw
+$composePullRetry = Get-Content -LiteralPath $composePullRetryPath -Raw
 $dependabot = Get-Content -LiteralPath $dependabotPath -Raw
 $codeowners = Get-Content -LiteralPath $codeownersPath -Raw
 $cosignInstaller = Get-Content -LiteralPath $cosignInstallerPath -Raw
@@ -230,6 +238,11 @@ Assert-NotMatch $deployProd 'Current IMAGE_TAG does not match the checked-out pr
 Assert-Contains $deployProd 'git checkout --detach "${previous_revision}"' 'Production rollback source alignment'
 Assert-Contains $deployProd 'scripts/deploy/docker-login-retry.sh' 'Production GHCR login retry'
 Assert-Contains $ci 'bash scripts/deploy/test-docker-login-retry.sh' 'GHCR login retry regression test'
+Assert-Contains $deployProdScript 'compose-pull-retry.sh' 'Production image pull retry'
+Assert-Contains $deployDevScript 'compose-pull-retry.sh' 'DEV image pull retry'
+Assert-Contains $rollbackProdScript 'compose-pull-retry.sh' 'Production rollback image pull retry'
+Assert-Contains $composePullRetry '--kill-after=' 'Bounded image pull timeout'
+Assert-Contains $ci 'bash scripts/deploy/test-compose-pull-retry.sh' 'Image pull retry regression test'
 
 $releaseVerifierTest = Get-Content -LiteralPath $releaseVerifierTestPath -Raw
 Assert-Contains $releaseVerifierTest 'mismatched image tag' 'Release verifier negative tests'

@@ -194,14 +194,16 @@ if ! is_placeholder_value "${ghcr_username}" && ! is_placeholder_value "${ghcr_t
 fi
 
 if [[ ${#stateful_services[@]} -gt 0 ]]; then
-  run_step "${compose[@]}" pull "${stateful_services[@]}"
+  bash "${script_dir}/compose-pull-retry.sh" -- \
+    "${compose[@]}" pull "${stateful_services[@]}"
   run_step "${compose[@]}" up -d --no-build --wait --wait-timeout "${timeout_seconds}" "${stateful_services[@]}"
 else
   echo "Skipping local stateful containers; DATA_SERVICES_MODE/POSTGRES_MODE/REDIS_MODE/S3_MODE point to external or managed services."
 fi
 
 if [[ "${skip_backup}" != "true" ]]; then
-  run_step "${backup_compose[@]}" pull backup-postgres backup-minio
+  bash "${script_dir}/compose-pull-retry.sh" -- \
+    "${backup_compose[@]}" pull backup-postgres backup-minio
   run_step "${backup_compose[@]}" run --rm backup-postgres
   run_step "${backup_compose[@]}" run --rm backup-minio
   backup_status="completed"
@@ -220,7 +222,8 @@ if [[ "${with_cloudflare}" == "true" ]]; then
   rollback_services+=(cloudflared)
 fi
 
-run_step "${compose[@]}" pull "${rollback_services[@]}"
+bash "${script_dir}/compose-pull-retry.sh" -- \
+  "${compose[@]}" pull "${rollback_services[@]}"
 run_step "${compose[@]}" up -d --no-build --no-deps "${rollback_services[@]}"
 run_step "${compose[@]}" up -d --no-build --force-recreate --no-deps reverse-proxy
 
