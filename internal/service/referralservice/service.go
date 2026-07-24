@@ -268,8 +268,9 @@ func (s *Service) applySignupRewards(ctx context.Context, referral *domain.Refer
 		return s.repo.MarkRewardApplied(ctx, referral.ID, s.now())
 	}
 	if amount := s.cfg.ReferrerSignupRewardCredits; amount > 0 {
-		if err := s.billing.Grant(ctx,
+		if err := s.billing.GrantForOwner(ctx,
 			referral.ReferrerUserID,
+			referral.ReferrerAccountID,
 			amount,
 			"referral:signup:referrer:"+referral.ID.String(),
 			"referral signup reward",
@@ -278,8 +279,9 @@ func (s *Service) applySignupRewards(ctx context.Context, referral *domain.Refer
 		}
 	}
 	if amount := s.cfg.ReferredSignupRewardCredits; amount > 0 {
-		if err := s.billing.Grant(ctx,
+		if err := s.billing.GrantForOwner(ctx,
 			referral.ReferredUserID,
+			referral.ReferredAccountID,
 			amount,
 			"referral:signup:referred:"+referral.ID.String(),
 			"referral signup bonus",
