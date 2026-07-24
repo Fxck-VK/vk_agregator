@@ -348,7 +348,9 @@ ghcr_username="$(get_env_value GHCR_USERNAME "")"
 ghcr_token="$(get_env_value GHCR_TOKEN "")"
 if ! is_placeholder_value "${ghcr_username}" && ! is_placeholder_value "${ghcr_token}"; then
   echo "==> docker login ghcr.io"
-  printf '%s' "${ghcr_token}" | docker login ghcr.io -u "${ghcr_username}" --password-stdin >/dev/null
+  printf '%s' "${ghcr_token}" | bash "${script_dir}/docker-login-retry.sh" \
+    --registry ghcr.io \
+    --username "${ghcr_username}"
 fi
 
 image_pull_services=("${stateful_services[@]}" reverse-proxy)

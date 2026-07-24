@@ -147,7 +147,9 @@ jobs:
           EXPECTED_WORKFLOW_REF: refs/heads/dev-deploy
         run: |
           set -euo pipefail
-          printf '%s' "${GHCR_TOKEN}" | docker login ghcr.io -u "${GHCR_USERNAME}" --password-stdin >/dev/null
+          printf '%s' "${GHCR_TOKEN}" | bash scripts/deploy/docker-login-retry.sh \
+            --registry ghcr.io \
+            --username "${GHCR_USERNAME}"
           image_registry="ghcr.io/${EXPECTED_SOURCE_REPOSITORY,,}"
           bash scripts/deploy/verify-release-images.sh \
             --image-registry "${image_registry}" \
@@ -471,7 +473,9 @@ jobs:
           fi
 
           previous_revision="${PREVIOUS_IMAGE_TAG#sha-}"
-          printf '%s' "${GHCR_TOKEN}" | docker login ghcr.io -u "${GHCR_USERNAME}" --password-stdin >/dev/null
+          printf '%s' "${GHCR_TOKEN}" | bash scripts/deploy/docker-login-retry.sh \
+            --registry ghcr.io \
+            --username "${GHCR_USERNAME}"
           image_registry="ghcr.io/${EXPECTED_SOURCE_REPOSITORY,,}"
           bash scripts/deploy/verify-release-images.sh \
             --image-registry "${image_registry}" \

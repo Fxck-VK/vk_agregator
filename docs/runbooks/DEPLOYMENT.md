@@ -96,13 +96,17 @@ bash scripts/deploy/deploy-prod.sh --branch main --env-file .env --with-cloudfla
 Expected behavior:
 
 - verifies Docker and env;
-- logs in to GHCR if credentials are present;
+- logs in to GHCR with bounded retry if credentials are present;
 - starts local data services only when `DATA_SERVICES_MODE=local`;
 - waits for Postgres/Redis/MinIO health before migrations;
 - runs migrations before runtime services;
 - starts `api`, `worker`, `maintenance-worker`, `provider-webhook`,
   `miniapp`, `reverse-proxy` and optionally `cloudflared`;
 - runs health checks and prints a deploy summary.
+
+The active immutable `IMAGE_TAG` in the VPS `.env` is the source of truth when
+capturing the previous release. This keeps a retry recoverable when a failed
+rollout updated the repository checkout before runtime rollback completed.
 
 ## Public Routes
 

@@ -145,7 +145,9 @@ jobs:
           EXPECTED_WORKFLOW_REF: refs/heads/main
         run: |
           set -euo pipefail
-          printf '%s' "${GHCR_TOKEN}" | docker login ghcr.io -u "${GHCR_USERNAME}" --password-stdin >/dev/null
+          printf '%s' "${GHCR_TOKEN}" | bash scripts/deploy/docker-login-retry.sh \
+            --registry ghcr.io \
+            --username "${GHCR_USERNAME}"
           image_registry="ghcr.io/${EXPECTED_SOURCE_REPOSITORY,,}"
           bash scripts/deploy/verify-release-images.sh \
             --image-registry "${image_registry}" \
@@ -205,14 +207,12 @@ jobs:
           fi
 
           git_revision="$(git rev-parse --verify HEAD 2>/dev/null || true)"
-          if [[ "${git_revision}" =~ ^[0-9a-f]{40}$ ]]; then
-            if [[ "${env_tag}" == sha-* && ! "${git_revision}" == "${env_tag#sha-}"* ]]; then
-              echo "Current IMAGE_TAG does not match the checked-out production revision." >&2
-              exit 1
-            fi
-            tag="sha-${git_revision}"
-          elif [[ "${env_tag}" =~ ^sha-[0-9a-f]{40}$ ]]; then
+          if [[ "${env_tag}" =~ ^sha-[0-9a-f]{40}$ ]]; then
             tag="${env_tag}"
+          elif [[ "${git_revision}" =~ ^[0-9a-f]{40}$ ]]; then
+            # A failed rollout can update the checkout before runtime rollback.
+            # The active immutable image tag remains the rollback source of truth.
+            tag="sha-${git_revision}"
           else
             tag=""
           fi
@@ -387,7 +387,9 @@ jobs:
           fi
 
           previous_revision="${PREVIOUS_IMAGE_TAG#sha-}"
-          printf '%s' "${GHCR_TOKEN}" | docker login ghcr.io -u "${GHCR_USERNAME}" --password-stdin >/dev/null
+          printf '%s' "${GHCR_TOKEN}" | bash scripts/deploy/docker-login-retry.sh \
+            --registry ghcr.io \
+            --username "${GHCR_USERNAME}"
           image_registry="ghcr.io/${EXPECTED_SOURCE_REPOSITORY,,}"
           bash scripts/deploy/verify-release-images.sh \
             --image-registry "${image_registry}" \
@@ -396,10 +398,11 @@ jobs:
             --revision "${previous_revision}" \
             --workflow-ref refs/heads/main
 
-          ssh "${ssh_opts[@]}" "${DEPLOY_USER}@${DEPLOY_HOST}" 'bash -s' -- "${DEPLOY_PATH}" "${PREVIOUS_IMAGE_TAG}" <<'REMOTE'
+          ssh "${ssh_opts[@]}" "${DEPLOY_USER}@${DEPLOY_HOST}" 'bash -s' -- "${DEPLOY_PATH}" "${PREVIOUS_IMAGE_TAG}" "${previous_revision}" <<'REMOTE'
           set -euo pipefail
           deploy_path="$1"
           previous_image_tag="$2"
+          previous_revision="$3"
           cd "${deploy_path}"
 
           tmp_env="$(mktemp)"
@@ -416,6 +419,16 @@ jobs:
             --timeout-seconds 240
 
           bash scripts/deploy/smoke-prod.sh --env-file .env --timeout-seconds 60
+
+          if ! git cat-file -e "${previous_revision}^{commit}"; then
+            echo "Previous production revision is unavailable for checkout recovery." >&2
+            exit 1
+          fi
+          git checkout --detach "${previous_revision}"
+          if [[ "$(git rev-parse --verify HEAD)" != "${previous_revision}" || -n "$(git status --porcelain --untracked-files=no)" ]]; then
+            echo "Production checkout does not match the restored release." >&2
+            exit 1
+          fi
           REMOTE
 
       - name: Deployment summary
