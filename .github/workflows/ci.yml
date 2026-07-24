@@ -204,6 +204,7 @@ jobs:
           bash scripts/deploy/test-assemble-env-parts.sh
           bash scripts/deploy/test-verify-release-images.sh
           bash scripts/deploy/test-docker-login-retry.sh
+          bash scripts/deploy/test-compose-pull-retry.sh
 
       - name: Test S3-compatible backup scripts
         shell: bash
