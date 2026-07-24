@@ -97,6 +97,8 @@ Expected behavior:
 
 - verifies Docker and env;
 - logs in to GHCR with bounded retry if credentials are present;
+- pulls compose images with a per-attempt timeout and bounded retry, so a
+  stalled registry transfer fails predictably and can enter rollback;
 - starts local data services only when `DATA_SERVICES_MODE=local`;
 - waits for Postgres/Redis/MinIO health before migrations;
 - runs migrations before runtime services;

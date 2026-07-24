@@ -15,6 +15,10 @@ Rollback should restore service without pretending schema rollback is safe.
 Production deploy can rollback stateless services to the previous image tag if
 deploy or smoke fails.
 
+Registry login and compose image pulls use bounded retries. A stalled pull is
+terminated after the per-attempt timeout instead of leaving the deploy or
+rollback workflow running indefinitely.
+
 Expected behavior:
 
 ```text
