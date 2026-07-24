@@ -224,6 +224,13 @@ Assert-Contains $deployDev 'required_kb=$((2 * 1024 * 1024))' 'DEV disk prefligh
 Assert-Contains $deployDev 'docker system prune --all --force' 'DEV disk preflight'
 Assert-NotMatch $deployDev '(?m)docker\s+volume\s+prune|docker\s+system\s+prune[^\r\n]*--volumes' 'DEV disk preflight volume safety'
 
+Assert-Contains $deployProd 'if [[ "${env_tag}" =~ ^sha-[0-9a-f]{40}$ ]]; then' 'Production previous release capture'
+Assert-Contains $deployProd 'tag="${env_tag}"' 'Production previous release capture'
+Assert-NotMatch $deployProd 'Current IMAGE_TAG does not match the checked-out production revision\.' 'Production recoverable checkout drift'
+Assert-Contains $deployProd 'git checkout --detach "${previous_revision}"' 'Production rollback source alignment'
+Assert-Contains $deployProd 'scripts/deploy/docker-login-retry.sh' 'Production GHCR login retry'
+Assert-Contains $ci 'bash scripts/deploy/test-docker-login-retry.sh' 'GHCR login retry regression test'
+
 $releaseVerifierTest = Get-Content -LiteralPath $releaseVerifierTestPath -Raw
 Assert-Contains $releaseVerifierTest 'mismatched image tag' 'Release verifier negative tests'
 Assert-Contains $releaseVerifierTest 'wrong signed revision' 'Release verifier negative tests'
