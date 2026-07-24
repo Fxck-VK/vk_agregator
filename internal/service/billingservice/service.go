@@ -306,6 +306,12 @@ func (s *Service) Grant(ctx context.Context, userID uuid.UUID, amount int64, ide
 	return s.GrantWith(ctx, s.repo, userID, amount, idempotencyKey, reason)
 }
 
+// GrantForOwner appends an idempotent positive top-up to the canonical account
+// while retaining userID as legacy channel metadata.
+func (s *Service) GrantForOwner(ctx context.Context, userID, accountID uuid.UUID, amount int64, idempotencyKey, reason string) error {
+	return s.GrantWithOwner(ctx, s.repo, userID, accountID, amount, idempotencyKey, reason)
+}
+
 // GrantWith appends an idempotent positive top-up entry using the supplied
 // repository. Passing a transaction-bound billing repository lets payment
 // webhook processing commit payment event processing, intent status and the

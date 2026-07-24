@@ -223,6 +223,68 @@ func TestActivateReferralGrantsLedgerRewardIdempotently(t *testing.T) {
 	}
 }
 
+func TestActivateReferralRewardsCanonicalAccounts(t *testing.T) {
+	ctx := context.Background()
+	referrals := memory.NewReferralRepo()
+	billingRepo := memory.NewBillingRepo()
+	billing := billingservice.New(billingRepo, billingservice.WithStartingBalance(0))
+	svc := referralservice.New(referrals, billing, referralservice.Config{
+		ReferrerSignupRewardCredits: 10,
+		ReferredSignupRewardCredits: 3,
+		RewardOnActivation:          true,
+	})
+
+	referrerUserID := uuid.New()
+	referrerAccountID := uuid.New()
+	referredUserID := uuid.New()
+	referredAccountID := uuid.New()
+	if _, err := billing.EnsureAccountForOwner(ctx, referrerUserID, referrerAccountID); err != nil {
+		t.Fatalf("ensure referrer account: %v", err)
+	}
+	if _, err := billing.EnsureAccountForOwner(ctx, referredUserID, referredAccountID); err != nil {
+		t.Fatalf("ensure referred account: %v", err)
+	}
+	referral := &domain.Referral{
+		ReferrerUserID:    referrerUserID,
+		ReferrerAccountID: referrerAccountID,
+		ReferredUserID:    referredUserID,
+		ReferredAccountID: referredAccountID,
+		ReferralCode:      "OWNER234",
+		Source:            domain.ReferralSourceVKBot,
+		Status:            domain.ReferralStatusRegistered,
+		RewardStatus:      domain.ReferralRewardPending,
+	}
+	if err := referrals.CreateReferral(ctx, referral); err != nil {
+		t.Fatalf("create referral: %v", err)
+	}
+
+	result, err := svc.Activate(ctx, referralservice.ActivateInput{
+		ReferredUserID: referredUserID,
+		Source:         domain.ReferralSourceVKBot,
+	})
+	if err != nil {
+		t.Fatalf("activate referral: %v", err)
+	}
+	if !result.Rewarded {
+		t.Fatalf("expected canonical account rewards, got %+v", result)
+	}
+
+	referrerAccount, err := billingRepo.GetAccountByUser(ctx, referrerAccountID, domain.CurrencyCredits)
+	if err != nil {
+		t.Fatalf("get canonical referrer account: %v", err)
+	}
+	if referrerAccount.BalanceCached != 10 {
+		t.Fatalf("referrer balance = %d, want 10", referrerAccount.BalanceCached)
+	}
+	referredAccount, err := billingRepo.GetAccountByUser(ctx, referredAccountID, domain.CurrencyCredits)
+	if err != nil {
+		t.Fatalf("get canonical referred account: %v", err)
+	}
+	if referredAccount.BalanceCached != 3 {
+		t.Fatalf("referred balance = %d, want 3", referredAccount.BalanceCached)
+	}
+}
+
 func TestRewardOnActivationFlagAllowsSafeRollout(t *testing.T) {
 	ctx := context.Background()
 	referrals := memory.NewReferralRepo()
