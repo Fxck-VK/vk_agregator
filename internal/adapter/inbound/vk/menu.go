@@ -1281,7 +1281,7 @@ func sora2BackKeyboard() *vkdelivery.Keyboard {
 }
 
 func sora2DurationKeyboard() *vkdelivery.Keyboard {
-	return videoDurationKeyboard(domain.CommandMenuVideoSora2Start, domain.CommandMenuVideoSora2, 3, 5, 10)
+	return videoDurationKeyboard(domain.CommandMenuVideoSora2Start, domain.CommandMenuVideoSora2, 5, 10)
 }
 
 func kling21Keyboard() *vkdelivery.Keyboard {

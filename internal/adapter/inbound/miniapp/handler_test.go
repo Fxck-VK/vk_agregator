@@ -3156,7 +3156,7 @@ func TestHandler_Estimate_ImageQualityUsesServerOwnedCost(t *testing.T) {
 	if resp.ModelID != modelcatalog.MiniAppImageNanoBanana2 ||
 		resp.ModelName != "Nano Banana 2" ||
 		resp.ImageQuality != modelcatalog.ImageQuality4K ||
-		resp.CostEstimate != 25 {
+		resp.CostEstimate != 35 {
 		t.Fatalf("unexpected quality estimate response: %+v", resp)
 	}
 }
@@ -3562,7 +3562,7 @@ func TestHandler_Estimate_Seedream45UsesPricingSnapshot(t *testing.T) {
 		resp.ModelID != modelcatalog.MiniAppImageSeedream45 ||
 		resp.ModelName != "Seedream 4.5" ||
 		resp.ImageQuality != modelcatalog.ImageQuality4K ||
-		resp.CostEstimate != 15 ||
+		resp.CostEstimate != 20 ||
 		resp.BalanceCredits <= 0 ||
 		!resp.EnoughCredits {
 		t.Fatalf("unexpected Seedream estimate response: %+v", resp)
@@ -4072,7 +4072,7 @@ func TestHandler_CreateJob_ImageQualityPersistsServerOwnedSnapshot(t *testing.T)
 		resp.ModelID != modelcatalog.MiniAppImageNanoBanana2 ||
 		resp.ModelName != "Nano Banana 2" ||
 		resp.ImageQuality != modelcatalog.ImageQuality2K ||
-		resp.CostEstimate != 25 {
+		resp.CostEstimate != 30 {
 		t.Fatalf("unexpected response: %+v", resp)
 	}
 	jobID, err := uuid.Parse(resp.ID)
@@ -4083,8 +4083,8 @@ func TestHandler_CreateJob_ImageQualityPersistsServerOwnedSnapshot(t *testing.T)
 	if err != nil {
 		t.Fatalf("get job: %v", err)
 	}
-	if job.CostEstimate != 25 || job.CostReserved != 25 {
-		t.Fatalf("cost estimate/reserved = %d/%d, want 25/25", job.CostEstimate, job.CostReserved)
+	if job.CostEstimate != 30 || job.CostReserved != 30 {
+		t.Fatalf("cost estimate/reserved = %d/%d, want 30/30", job.CostEstimate, job.CostReserved)
 	}
 	var params struct {
 		ModelID      string `json:"model_id"`

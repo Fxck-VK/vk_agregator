@@ -56,7 +56,7 @@ Routes are defined in:
 | `video_hailuo_2_3_standard` | APIMart | `MiniMax-Hailuo-2.3` | text or image | 6s, 10s | 768p, 1080p | Supports one reference image. 1080p is limited to 6s. |
 | `video_kling_o3_standard` | PoYo | `kling-o3/standard` | text or image | 5s, 10s | 720p, 1080p | Supports 16:9, 9:16, 1:1 and one reference image. |
 | `video_seedance_2_0_fast` | PoYo | `seedance-2-fast` | text, image or reference | 5s, 10s | 720p | Supports 16:9, 9:16, 1:1 and up to 4 reference images. |
-| `video_runway_gen4_turbo` | Runway | `gen4_turbo` | image/start image | 2s-10s | 720p | Official Runway route. Requires start image. Supports 16:9, 9:16, 4:3, 3:4, 1:1, 21:9. |
+| `video_runway_gen4_turbo` | Runway | `gen4_turbo` | image/start image | 5s, 10s | 720p | Official Runway route. Requires start image. Supports 16:9, 9:16, 4:3, 3:4, 1:1, 21:9. |
 | `video_runway_gen4_5` | PoYo | `runway-gen-4.5` | text or optional image | 5s, 10s | 720p, 1080p | Distinct PoYo route. Text-only is valid; optional single reference image uses the provider list input and supports 16:9, 9:16, 4:3, 3:4, 1:1, 21:9. |
 | `video_mock_text_to_video` | Mock | `mock-video` | text | 3s, 5s, 10s | 720p, 1080p | Load-test only. Must not be enabled in dev/staging/prod. |
 

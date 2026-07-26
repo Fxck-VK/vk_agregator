@@ -224,8 +224,8 @@ func TestSeedream45AsyncPoYoImageFlowStoresArtifactAndCapturesPrice(t *testing.T
 		Status:          domain.JobStatusQueued,
 		IdempotencyKey:  "job:" + uuid.NewString(),
 		CorrelationID:   "corr",
-		CostEstimate:    15,
-		CostReserved:    15,
+		CostEstimate:    20,
+		CostReserved:    20,
 		PricingSnapshot: snapshotRaw,
 		Params:          params,
 	}
@@ -290,15 +290,15 @@ func TestSeedream45AsyncPoYoImageFlowStoresArtifactAndCapturesPrice(t *testing.T
 		t.Fatalf("delivery: %v", err)
 	}
 	job = h.reload(t, job.ID)
-	if job.Status != domain.JobStatusSucceeded || job.CostCaptured != 15 {
-		t.Fatalf("final job status/captured = %q/%d, want succeeded/15", job.Status, job.CostCaptured)
+	if job.Status != domain.JobStatusSucceeded || job.CostCaptured != 20 {
+		t.Fatalf("final job status/captured = %q/%d, want succeeded/20", job.Status, job.CostCaptured)
 	}
 	acc, err := billingRepo.GetAccountByUser(ctx, userID, domain.CurrencyCredits)
 	if err != nil {
 		t.Fatalf("get billing account: %v", err)
 	}
-	if acc.BalanceCached != billingservice.DefaultStartingBalance-15 {
-		t.Fatalf("balance=%d, want %d", acc.BalanceCached, billingservice.DefaultStartingBalance-15)
+	if acc.BalanceCached != billingservice.DefaultStartingBalance-20 {
+		t.Fatalf("balance=%d, want %d", acc.BalanceCached, billingservice.DefaultStartingBalance-20)
 	}
 	sent := vkClient.Sent()
 	if len(sent) != 1 || sent[0].Attachment == "" {
