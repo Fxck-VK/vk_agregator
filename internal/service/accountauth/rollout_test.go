@@ -78,7 +78,7 @@ func TestAccountIdentityRolloutPreservesLegacyVKBusinessState(t *testing.T) {
 	if resolvedOld.AccountID != accountID {
 		t.Fatalf("old VK account id = %s, want %s", resolvedOld.AccountID, accountID)
 	}
-	assertBalance(t, ctx, billing, accountID, 100)
+	assertBalance(t, ctx, billing, accountID, 130)
 	assertOldJobsVisible(t, ctx, jobs, accountID, oldJob.ID)
 	assertOldPaymentsVisible(t, ctx, payments, accountID, oldIntent.ID)
 	assertLedgerOwnedByAccount(t, ctx, billingRepo, accountID)
@@ -123,7 +123,7 @@ func TestAccountIdentityRolloutPreservesLegacyVKBusinessState(t *testing.T) {
 	if resolvedLinkedEmail.AccountID != accountID {
 		t.Fatalf("linked email resolved to account %s, want existing account %s", resolvedLinkedEmail.AccountID, accountID)
 	}
-	assertBalance(t, ctx, billing, accountID, 100)
+	assertBalance(t, ctx, billing, accountID, 130)
 
 	other, err := auth.ResolveVerifiedEmailPassword(ctx, "other@example.com")
 	if err != nil {
@@ -137,7 +137,7 @@ func TestAccountIdentityRolloutPreservesLegacyVKBusinessState(t *testing.T) {
 	if !errors.Is(err, domain.ErrAccountMergeRequiresConfirmation) {
 		t.Fatalf("conflicting email link error = %v, want merge confirmation required", err)
 	}
-	assertBalance(t, ctx, billing, accountID, 100)
+	assertBalance(t, ctx, billing, accountID, 130)
 	assertOldPaymentsVisible(t, ctx, payments, accountID, oldIntent.ID)
 	assertOldJobsVisible(t, ctx, jobs, accountID, oldJob.ID)
 }

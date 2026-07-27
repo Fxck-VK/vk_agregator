@@ -1356,7 +1356,7 @@ func Load() Config {
 		ReferralCodeLength:                envInt("REFERRAL_CODE_LENGTH", 10),
 		ReferralReferrerSignupRewardCredits: int64(envInt(
 			"REFERRAL_REFERRER_SIGNUP_REWARD_CREDITS",
-			10,
+			20,
 		)),
 		ReferralReferredSignupRewardCredits: int64(envInt(
 			"REFERRAL_REFERRED_SIGNUP_REWARD_CREDITS",

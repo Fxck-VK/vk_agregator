@@ -926,37 +926,41 @@ func (h *Handler) writeProductError(w http.ResponseWriter, err error) {
 }
 
 type PaymentProductDTO struct {
-	ID             uuid.UUID `json:"id"`
-	Code           string    `json:"code"`
-	Title          string    `json:"title"`
-	Amount         int64     `json:"amount"`
-	Currency       string    `json:"currency"`
-	Credits        int64     `json:"credits"`
-	PriceVersion   int       `json:"price_version"`
-	VATCode        *int16    `json:"vat_code,omitempty"`
-	PaymentSubject string    `json:"payment_subject"`
-	PaymentMode    string    `json:"payment_mode"`
-	IsActive       bool      `json:"is_active"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
+	ID                        uuid.UUID `json:"id"`
+	Code                      string    `json:"code"`
+	Title                     string    `json:"title"`
+	Amount                    int64     `json:"amount"`
+	Currency                  string    `json:"currency"`
+	Credits                   int64     `json:"credits"`
+	CreditDenominationVersion int       `json:"credit_denomination_version"`
+	StarKopecks               int64     `json:"star_kopecks"`
+	PriceVersion              int       `json:"price_version"`
+	VATCode                   *int16    `json:"vat_code,omitempty"`
+	PaymentSubject            string    `json:"payment_subject"`
+	PaymentMode               string    `json:"payment_mode"`
+	IsActive                  bool      `json:"is_active"`
+	CreatedAt                 time.Time `json:"created_at"`
+	UpdatedAt                 time.Time `json:"updated_at"`
 }
 
 type PaymentIntentDTO struct {
-	ID                uuid.UUID `json:"id"`
-	UserID            uuid.UUID `json:"user_id,omitempty"`
-	ProductID         uuid.UUID `json:"product_id,omitempty"`
-	Status            string    `json:"status"`
-	Amount            int64     `json:"amount"`
-	Currency          string    `json:"currency"`
-	Credits           int64     `json:"credits"`
-	PriceVersion      int       `json:"price_version"`
-	Provider          string    `json:"provider,omitempty"`
-	ProviderPaymentID string    `json:"provider_payment_id,omitempty"`
-	ConfirmationURL   string    `json:"confirmation_url,omitempty"`
-	Stale             bool      `json:"stale,omitempty"`
-	StaleSeconds      int64     `json:"stale_seconds,omitempty"`
-	CreatedAt         time.Time `json:"created_at"`
-	UpdatedAt         time.Time `json:"updated_at"`
+	ID                        uuid.UUID `json:"id"`
+	UserID                    uuid.UUID `json:"user_id,omitempty"`
+	ProductID                 uuid.UUID `json:"product_id,omitempty"`
+	Status                    string    `json:"status"`
+	Amount                    int64     `json:"amount"`
+	Currency                  string    `json:"currency"`
+	Credits                   int64     `json:"credits"`
+	CreditDenominationVersion int       `json:"credit_denomination_version"`
+	StarKopecks               int64     `json:"star_kopecks"`
+	PriceVersion              int       `json:"price_version"`
+	Provider                  string    `json:"provider,omitempty"`
+	ProviderPaymentID         string    `json:"provider_payment_id,omitempty"`
+	ConfirmationURL           string    `json:"confirmation_url,omitempty"`
+	Stale                     bool      `json:"stale,omitempty"`
+	StaleSeconds              int64     `json:"stale_seconds,omitempty"`
+	CreatedAt                 time.Time `json:"created_at"`
+	UpdatedAt                 time.Time `json:"updated_at"`
 }
 
 type PaymentEventDTO struct {
@@ -1007,16 +1011,22 @@ type listResponse[T any] struct {
 }
 
 func newIntentDTO(intent *domain.PaymentIntent, includeOperatorFields bool) PaymentIntentDTO {
+	credits, err := intent.CurrentCredits()
+	if err != nil {
+		credits = 0
+	}
 	dto := PaymentIntentDTO{
-		ID:              intent.ID,
-		Status:          string(intent.Status),
-		Amount:          intent.Amount,
-		Currency:        string(intent.Currency),
-		Credits:         intent.Credits,
-		PriceVersion:    intent.PriceVersion,
-		ConfirmationURL: intent.ConfirmationURL,
-		CreatedAt:       intent.CreatedAt,
-		UpdatedAt:       intent.UpdatedAt,
+		ID:                        intent.ID,
+		Status:                    string(intent.Status),
+		Amount:                    intent.Amount,
+		Currency:                  string(intent.Currency),
+		Credits:                   credits,
+		CreditDenominationVersion: domain.CurrentCreditDenominationVersion,
+		StarKopecks:               domain.StarKopecks,
+		PriceVersion:              intent.PriceVersion,
+		ConfirmationURL:           intent.ConfirmationURL,
+		CreatedAt:                 intent.CreatedAt,
+		UpdatedAt:                 intent.UpdatedAt,
 	}
 	if intent.ProductID != nil {
 		dto.ProductID = *intent.ProductID
@@ -1033,20 +1043,26 @@ func newProductDTO(product *domain.PaymentProduct) PaymentProductDTO {
 	if product == nil {
 		return PaymentProductDTO{}
 	}
+	credits, err := product.CurrentCredits()
+	if err != nil {
+		credits = 0
+	}
 	return PaymentProductDTO{
-		ID:             product.ID,
-		Code:           product.Code,
-		Title:          product.Title,
-		Amount:         product.Amount,
-		Currency:       string(product.Currency),
-		Credits:        product.Credits,
-		PriceVersion:   product.PriceVersion,
-		VATCode:        product.VATCode,
-		PaymentSubject: product.PaymentSubject,
-		PaymentMode:    product.PaymentMode,
-		IsActive:       product.IsActive,
-		CreatedAt:      product.CreatedAt,
-		UpdatedAt:      product.UpdatedAt,
+		ID:                        product.ID,
+		Code:                      product.Code,
+		Title:                     product.Title,
+		Amount:                    product.Amount,
+		Currency:                  string(product.Currency),
+		Credits:                   credits,
+		CreditDenominationVersion: domain.CurrentCreditDenominationVersion,
+		StarKopecks:               domain.StarKopecks,
+		PriceVersion:              product.PriceVersion,
+		VATCode:                   product.VATCode,
+		PaymentSubject:            product.PaymentSubject,
+		PaymentMode:               product.PaymentMode,
+		IsActive:                  product.IsActive,
+		CreatedAt:                 product.CreatedAt,
+		UpdatedAt:                 product.UpdatedAt,
 	}
 }
 

@@ -312,6 +312,10 @@ func (h *Handler) newOperatorPaymentIntentDTO(intent *domain.PaymentIntent, now,
 	if intent == nil {
 		return OperatorPaymentIntentDTO{}
 	}
+	credits, err := intent.CurrentCredits()
+	if err != nil {
+		credits = 0
+	}
 	stale := (intent.Status == domain.PaymentIntentProviderPending || intent.Status == domain.PaymentIntentWaitingForUser) &&
 		!intent.UpdatedAt.After(staleCutoff)
 	dto := OperatorPaymentIntentDTO{
@@ -321,7 +325,7 @@ func (h *Handler) newOperatorPaymentIntentDTO(intent *domain.PaymentIntent, now,
 		Status:             string(intent.Status),
 		Amount:             intent.Amount,
 		Currency:           string(intent.Currency),
-		Credits:            intent.Credits,
+		Credits:            credits,
 		Provider:           string(intent.Provider),
 		ProviderPaymentRef: safeStringRef("provider_payment", intent.ProviderPaymentID),
 		ConfirmationState:  confirmationState(intent.ConfirmationURL),
@@ -378,11 +382,15 @@ func newOperatorLedgerEntryDTO(entry *domain.LedgerEntry) OperatorLedgerEntryDTO
 	if entry == nil {
 		return OperatorLedgerEntryDTO{}
 	}
+	amount, err := domain.CurrentCreditAmount(entry.Amount, entry.CreditDenominationVersion)
+	if err != nil {
+		amount = 0
+	}
 	dto := OperatorLedgerEntryDTO{
 		DisplayID:   safeUUIDRef("ledger", entry.ID),
 		Type:        string(entry.Type),
 		Status:      string(entry.Status),
-		Amount:      entry.Amount,
+		Amount:      amount,
 		ReasonClass: ledgerReasonClass(entry.Reason),
 		CreatedAt:   entry.CreatedAt,
 	}

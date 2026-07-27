@@ -17,10 +17,10 @@ func TestEstimate(t *testing.T) {
 
 	cases := map[domain.OperationType]int64{
 		domain.OperationTextGenerate:      0,
-		domain.OperationImageGenerate:     10,
-		domain.OperationImageEdit:         10,
-		domain.OperationVideoGenerate:     50,
-		domain.OperationVideoImageToVideo: 50,
+		domain.OperationImageGenerate:     20,
+		domain.OperationImageEdit:         20,
+		domain.OperationVideoGenerate:     100,
+		domain.OperationVideoImageToVideo: 100,
 	}
 	for op, want := range cases {
 		got, err := svc.Estimate(op)

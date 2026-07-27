@@ -47,7 +47,7 @@ func TestVKTopUpNotifierEditsOnlyTrackedVKBotMessage(t *testing.T) {
 	if len(edits) != 1 {
 		t.Fatalf("edits = %d, want 1", len(edits))
 	}
-	wantText := "✅ Пополнение успешно\n\nБаланс пополнен на 99 ⭐️\nСумма: 99₽"
+	wantText := "✅ Пополнение успешно\n\nБаланс пополнен на 198 ⭐️\nСумма: 99₽"
 	if edits[0].Text != wantText || edits[0].Keyboard != "" {
 		t.Fatalf("unexpected edit: %+v", edits[0])
 	}

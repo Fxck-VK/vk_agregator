@@ -630,12 +630,16 @@ func (h *Handler) sendTopUpPaymentLink(ctx context.Context, idemKey string, peer
 	if !ok {
 		return 0, h.sendTopUpNotice(ctx, idemKey, peerID, topUpPaymentUnavailableText(balance))
 	}
+	credits, err := intent.CurrentCredits()
+	if err != nil {
+		return 0, h.sendTopUpNotice(ctx, idemKey, peerID, topUpPaymentUnavailableText(balance))
+	}
 	msg := vkdelivery.Message{
 		Text: fmt.Sprintf("%s СЧЕТ\n\nПокупка: %d ⭐️\nБаланс сейчас: %d ⭐️\nПосле оплаты: %d ⭐️\n\nОткройте оплату кнопкой ниже\nСсылка на оплату действует ограниченное время",
 			formatRubAmount(intent.Amount),
-			intent.Credits,
+			credits,
 			balance,
-			balance+intent.Credits,
+			balance+credits,
 		),
 		Keyboard: paymentLinkKeyboard(link),
 	}
@@ -1057,11 +1061,15 @@ func topUpCatalogText(balance int64, products []*domain.PaymentProduct) string {
 	if len(products) == 0 {
 		return fmt.Sprintf("💰 Пополнить баланс\n\nБаланс сейчас: %d ⭐️\n\nТарифы пока недоступны. Попробуйте позже.", balance)
 	}
-	return fmt.Sprintf("💰 Пополнить баланс\n\nБаланс сейчас: %d ⭐️\n\nВыберите пакет для пополнения баланса:", balance)
+	return fmt.Sprintf("💰 Пополнить баланс\n\nБаланс сейчас: %d ⭐️\nКурс: 1 ⭐️ = 0,5 ₽\n\nВыберите пакет для пополнения баланса:", balance)
 }
 
 func topUpPendingText(balance int64, intent *domain.PaymentIntent) string {
-	return fmt.Sprintf("💰 У вас есть незавершенный платеж\n\nБаланс сейчас: %d ⭐️\nПакет: %d ⭐️\nСумма: %s\nПосле оплаты: %d ⭐️\n\nПродолжите оплату кнопкой ниже\nПосле оплаты баланс обновится автоматически", balance, intent.Credits, formatRubAmount(intent.Amount), balance+intent.Credits)
+	credits, err := intent.CurrentCredits()
+	if err != nil {
+		return topUpPaymentUnavailableText(balance)
+	}
+	return fmt.Sprintf("💰 У вас есть незавершенный платеж\n\nБаланс сейчас: %d ⭐️\nПакет: %d ⭐️\nСумма: %s\nПосле оплаты: %d ⭐️\n\nПродолжите оплату кнопкой ниже\nПосле оплаты баланс обновится автоматически", balance, credits, formatRubAmount(intent.Amount), balance+credits)
 }
 
 func topUpPaymentUnavailableText(balance int64) string {
@@ -1181,7 +1189,11 @@ func (h *Handler) topUpPaymentRedirectBase() (*url.URL, bool) {
 }
 
 func topUpProductLabel(product *domain.PaymentProduct) string {
-	return fmt.Sprintf("%d ⭐️ — %s", product.Credits, formatRubAmount(product.Amount))
+	credits, err := product.CurrentCredits()
+	if err != nil {
+		return fmt.Sprintf("Пакет недоступен — %s", formatRubAmount(product.Amount))
+	}
+	return fmt.Sprintf("%d ⭐️ — %s", credits, formatRubAmount(product.Amount))
 }
 
 func formatRubAmount(amount int64) string {

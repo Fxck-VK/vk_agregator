@@ -262,7 +262,9 @@ func (h *Handler) operatorUserPaymentSummary(ctx context.Context, userID uuid.UU
 		switch intent.Status {
 		case domain.PaymentIntentSucceeded:
 			dto.Succeeded++
-			dto.CreditsPurchased += intent.Credits
+			if credits, err := intent.CurrentCredits(); err == nil {
+				dto.CreditsPurchased += credits
+			}
 		case domain.PaymentIntentCreated, domain.PaymentIntentProviderPending, domain.PaymentIntentWaitingForUser:
 			dto.Pending++
 		case domain.PaymentIntentRefunded, domain.PaymentIntentPartiallyRefunded:

@@ -88,6 +88,8 @@ type CreditAccount struct {
 	Currency Currency `json:"currency"`
 	// BalanceCached is the projected available balance from the ledger.
 	BalanceCached int64 `json:"balance_cached"`
+	// CreditDenominationVersion identifies how balance units are interpreted.
+	CreditDenominationVersion int `json:"credit_denomination_version"`
 	// CreatedAt is the row creation timestamp.
 	CreatedAt time.Time `json:"created_at"`
 	// UpdatedAt is the last mutation timestamp.
@@ -113,6 +115,8 @@ type LedgerEntry struct {
 	// Amount is the signed magnitude in the account's currency. Positive adds
 	// to the available balance, negative removes from it.
 	Amount int64 `json:"amount"`
+	// CreditDenominationVersion identifies the historical unit of Amount.
+	CreditDenominationVersion int `json:"credit_denomination_version"`
 	// Status is the commit state of the entry.
 	Status LedgerEntryStatus `json:"status"`
 	// IdempotencyKey makes the entry safe to create exactly once.
@@ -136,6 +140,8 @@ type CreditReservation struct {
 	JobID uuid.UUID `json:"job_id"`
 	// Amount is the held amount in the account's currency.
 	Amount int64 `json:"amount"`
+	// CreditDenominationVersion identifies the unit of Amount.
+	CreditDenominationVersion int `json:"credit_denomination_version"`
 	// Status is the lifecycle state of the reservation.
 	Status ReservationStatus `json:"status"`
 	// IdempotencyKey makes the reservation safe to create exactly once.

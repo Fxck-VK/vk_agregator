@@ -56,7 +56,7 @@ func TestMiniAppImageModelsExposeOnlyPublicCatalogFields(t *testing.T) {
 				len(model.QualityOptions) != 2 ||
 				model.QualityOptions[0] != modelcatalog.ImageQuality2K ||
 				model.QualityOptions[1] != modelcatalog.ImageQuality4K ||
-				model.EstimateCredits != 15 ||
+				model.EstimateCredits != 30 ||
 				!model.SupportsReferenceImage ||
 				model.MaxReferenceImages != 10 {
 				t.Fatalf("missing Seedream 4.5 public image contract: %+v", model)

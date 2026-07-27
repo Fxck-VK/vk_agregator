@@ -141,6 +141,8 @@ export interface PaymentProduct {
   amount: number;
   currency: string;
   credits: number;
+  credit_denomination_version: number;
+  star_kopecks: number;
   price_version: number;
 }
 
@@ -151,6 +153,8 @@ export interface PaymentIntent {
   amount: number;
   currency: string;
   credits: number;
+  credit_denomination_version: number;
+  star_kopecks: number;
   price_version: number;
   confirmation_url?: string;
   reused_active_payment?: boolean;

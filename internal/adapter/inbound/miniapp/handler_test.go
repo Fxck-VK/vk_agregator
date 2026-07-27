@@ -3098,7 +3098,7 @@ func TestHandler_Estimate_NanoBanana2UsesServerOwnedCost(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("invalid response json: %v", err)
 	}
-	if resp.ModelID != "nano_banana_2" || resp.ModelName != "Nano Banana 2" || resp.CostEstimate != 25 {
+	if resp.ModelID != "nano_banana_2" || resp.ModelName != "Nano Banana 2" || resp.CostEstimate != 50 {
 		t.Fatalf("unexpected model estimate response: %+v", resp)
 	}
 }
@@ -3156,7 +3156,7 @@ func TestHandler_Estimate_ImageQualityUsesServerOwnedCost(t *testing.T) {
 	if resp.ModelID != modelcatalog.MiniAppImageNanoBanana2 ||
 		resp.ModelName != "Nano Banana 2" ||
 		resp.ImageQuality != modelcatalog.ImageQuality4K ||
-		resp.CostEstimate != 35 {
+		resp.CostEstimate != 70 {
 		t.Fatalf("unexpected quality estimate response: %+v", resp)
 	}
 }
@@ -3255,14 +3255,14 @@ func TestHandler_ListModelCatalog_PublicItemsOnly(t *testing.T) {
 		t.Fatalf("unexpected model catalog length: %+v", resp.Items)
 	}
 	image := resp.Items[0]
-	if image.Type != "image" || image.ID != "nano_banana_2" || image.Alias != "" || image.EstimateCredits != 25 || !image.Enabled {
+	if image.Type != "image" || image.ID != "nano_banana_2" || image.Alias != "" || image.EstimateCredits != 50 || !image.Enabled {
 		t.Fatalf("unexpected public image catalog item: %+v", image)
 	}
 	if image.DefaultQuality != "1K" || len(image.QualityOptions) != 3 || !image.SupportsReferenceImage || image.MaxReferenceImages != 4 {
 		t.Fatalf("missing public image constraints: %+v", image)
 	}
 	video := resp.Items[1]
-	if video.Type != "video" || video.ID != string(domain.VideoRouteKlingO3Standard) || video.Alias != string(domain.VideoRouteKlingO3Standard) || video.EstimateCredits != 100 || !video.Enabled {
+	if video.Type != "video" || video.ID != string(domain.VideoRouteKlingO3Standard) || video.Alias != string(domain.VideoRouteKlingO3Standard) || video.EstimateCredits != 200 || !video.Enabled {
 		t.Fatalf("unexpected public video catalog item: %+v", video)
 	}
 	if video.Name == "" || video.Description == "" || len(video.AllowedDurationsSec) != 2 || video.DefaultDurationSec != 5 || video.MaxReferenceImages != 1 {
@@ -3562,7 +3562,7 @@ func TestHandler_Estimate_Seedream45UsesPricingSnapshot(t *testing.T) {
 		resp.ModelID != modelcatalog.MiniAppImageSeedream45 ||
 		resp.ModelName != "Seedream 4.5" ||
 		resp.ImageQuality != modelcatalog.ImageQuality4K ||
-		resp.CostEstimate != 20 ||
+		resp.CostEstimate != 40 ||
 		resp.BalanceCredits <= 0 ||
 		!resp.EnoughCredits {
 		t.Fatalf("unexpected Seedream estimate response: %+v", resp)
@@ -3608,7 +3608,7 @@ func TestHandler_Estimate_VideoRouteUsesPricingCatalogCost(t *testing.T) {
 	if resp.Operation != "video_generate" || resp.ModelID != "" || resp.VideoRouteAlias != string(domain.VideoRouteKlingO3Standard) {
 		t.Fatalf("unexpected estimate identity fields: %+v", resp)
 	}
-	if resp.CostEstimate != 200 {
+	if resp.CostEstimate != 400 {
 		t.Fatalf("cost estimate = %d, want 200", resp.CostEstimate)
 	}
 }
@@ -3927,7 +3927,7 @@ func TestHandler_CreateJob_GPTImage2PersistsAPIMartSnapshotPrivately(t *testing.
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("invalid response json: %v", err)
 	}
-	if resp.Operation != "image_generate" || resp.ModelID != "gpt_image_2" || resp.ModelName != "GPT Image 2" || resp.CostEstimate != 20 {
+	if resp.Operation != "image_generate" || resp.ModelID != "gpt_image_2" || resp.ModelName != "GPT Image 2" || resp.CostEstimate != 40 {
 		t.Fatalf("unexpected response: %+v", resp)
 	}
 	jobID, err := uuid.Parse(resp.ID)
@@ -3987,7 +3987,7 @@ func TestHandler_CreateJob_NanoBanana2PersistsPoYoSnapshotPrivately(t *testing.T
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("invalid response json: %v", err)
 	}
-	if resp.Operation != "image_generate" || resp.ModelID != "nano_banana_2" || resp.ModelName != "Nano Banana 2" || resp.CostEstimate != 25 {
+	if resp.Operation != "image_generate" || resp.ModelID != "nano_banana_2" || resp.ModelName != "Nano Banana 2" || resp.CostEstimate != 50 {
 		t.Fatalf("unexpected response: %+v", resp)
 	}
 	jobID, err := uuid.Parse(resp.ID)
@@ -3998,7 +3998,7 @@ func TestHandler_CreateJob_NanoBanana2PersistsPoYoSnapshotPrivately(t *testing.T
 	if err != nil {
 		t.Fatalf("get job: %v", err)
 	}
-	if job.CostEstimate != 25 || job.CostReserved != 25 {
+	if job.CostEstimate != 50 || job.CostReserved != 50 {
 		t.Fatalf("cost estimate/reserved = %d/%d, want 25/25", job.CostEstimate, job.CostReserved)
 	}
 	var params struct {
@@ -4072,7 +4072,7 @@ func TestHandler_CreateJob_ImageQualityPersistsServerOwnedSnapshot(t *testing.T)
 		resp.ModelID != modelcatalog.MiniAppImageNanoBanana2 ||
 		resp.ModelName != "Nano Banana 2" ||
 		resp.ImageQuality != modelcatalog.ImageQuality2K ||
-		resp.CostEstimate != 30 {
+		resp.CostEstimate != 60 {
 		t.Fatalf("unexpected response: %+v", resp)
 	}
 	jobID, err := uuid.Parse(resp.ID)
@@ -4083,7 +4083,7 @@ func TestHandler_CreateJob_ImageQualityPersistsServerOwnedSnapshot(t *testing.T)
 	if err != nil {
 		t.Fatalf("get job: %v", err)
 	}
-	if job.CostEstimate != 30 || job.CostReserved != 30 {
+	if job.CostEstimate != 60 || job.CostReserved != 60 {
 		t.Fatalf("cost estimate/reserved = %d/%d, want 30/30", job.CostEstimate, job.CostReserved)
 	}
 	var params struct {
@@ -4426,7 +4426,7 @@ func TestHandler_CreateJob_VideoReferenceArtifactPassesRouteValidation(t *testin
 	if len(job.InputArtifactIDs) != 1 || job.InputArtifactIDs[0] != artifact.ID {
 		t.Fatalf("unexpected input artifacts: %+v", job.InputArtifactIDs)
 	}
-	if job.CostEstimate != 100 || job.CostReserved != 100 {
+	if job.CostEstimate != 200 || job.CostReserved != 200 {
 		t.Fatalf("cost estimate/reserved = %d/%d, want 100/100", job.CostEstimate, job.CostReserved)
 	}
 }
@@ -4702,7 +4702,7 @@ func TestHandler_CreateJob_Seedream45TextOnlyDefaultsTo2K(t *testing.T) {
 		resp.ModelID != modelcatalog.MiniAppImageSeedream45 ||
 		resp.ModelName != "Seedream 4.5" ||
 		resp.ImageQuality != modelcatalog.ImageQuality2K ||
-		resp.CostEstimate != 15 {
+		resp.CostEstimate != 30 {
 		t.Fatalf("unexpected Seedream create response: %+v", resp)
 	}
 	jobID, err := uuid.Parse(resp.ID)
@@ -4713,7 +4713,7 @@ func TestHandler_CreateJob_Seedream45TextOnlyDefaultsTo2K(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get job: %v", err)
 	}
-	if job.CostEstimate != 15 || job.CostReserved != 15 {
+	if job.CostEstimate != 30 || job.CostReserved != 30 {
 		t.Fatalf("unexpected Seedream job cost: %+v", job)
 	}
 	var params struct {

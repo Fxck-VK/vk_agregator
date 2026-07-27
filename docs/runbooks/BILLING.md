@@ -6,6 +6,8 @@ payment.
 ## Core Invariants
 
 - Balance changes go through ledger entries only.
+- The public currency is stars. Denomination v2 is fixed at
+  `1 star = 50 kopecks`; money conversion uses integers, never floating point.
 - Payment top-ups require payment intent, webhook inbox/dedup, provider
   `GetPayment` verification and idempotent ledger top-up.
 - Mini App/VK redirect return never credits balance by itself.
@@ -13,6 +15,31 @@ payment.
 - Refunds must use safe backend/operator flow.
 - Do not expose raw YooKassa payloads, auth headers or customer PII in logs or
   operator DTOs.
+
+## Star Denomination
+
+Migration `000041_star_denomination` introduces denomination v2:
+
+| RUB | Stars |
+| ---: | ---: |
+| 10 | 20 |
+| 99 | 198 |
+| 150 | 300 |
+| 250 | 500 |
+| 400 | 800 |
+| 700 | 1400 |
+
+- One legacy credit is converted to two current stars.
+- Existing balances are doubled through an idempotent append-only ledger
+  adjustment. Historical ledger rows are not rewritten.
+- New accounts receive 60 stars, preserving the former 30 RUB signup value.
+- Generation prices are doubled in stars so their RUB value stays unchanged.
+- Products and payment intents snapshot `credit_denomination_version`.
+  Historical v1 intents are converted only when displayed, credited or
+  refunded; they are never recalculated from the current product catalog.
+- Refund debits use the intent denomination that was active at purchase time.
+- The migration down file is intentionally a no-op. Never attempt to reverse
+  financial denomination changes by rewriting balances or ledger history.
 
 ## YooKassa Webhook
 

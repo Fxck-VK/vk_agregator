@@ -118,16 +118,17 @@ func (s *Service) CreateProduct(ctx context.Context, in CreateProductInput) (*do
 		return nil, errors.New("paymentservice: service is not configured")
 	}
 	product := &domain.PaymentProduct{
-		Code:           strings.TrimSpace(in.Code),
-		Title:          strings.TrimSpace(in.Title),
-		Amount:         in.Amount,
-		Currency:       in.Currency,
-		Credits:        in.Credits,
-		PriceVersion:   1,
-		VATCode:        cloneInt16(in.VATCode),
-		PaymentSubject: strings.TrimSpace(in.PaymentSubject),
-		PaymentMode:    strings.TrimSpace(in.PaymentMode),
-		IsActive:       in.IsActive,
+		Code:                      strings.TrimSpace(in.Code),
+		Title:                     strings.TrimSpace(in.Title),
+		Amount:                    in.Amount,
+		Currency:                  in.Currency,
+		Credits:                   in.Credits,
+		CreditDenominationVersion: domain.CurrentCreditDenominationVersion,
+		PriceVersion:              1,
+		VATCode:                   cloneInt16(in.VATCode),
+		PaymentSubject:            strings.TrimSpace(in.PaymentSubject),
+		PaymentMode:               strings.TrimSpace(in.PaymentMode),
+		IsActive:                  in.IsActive,
 	}
 	if product.Currency == "" {
 		product.Currency = domain.CurrencyRUB
@@ -351,9 +352,10 @@ func (s *Service) CreateIntent(ctx context.Context, in CreateIntentInput) (Creat
 		}
 	}
 	metadataFields := map[string]any{
-		"product_code":  product.Code,
-		"price_version": product.PriceVersion,
-		"source":        in.Source,
+		"product_code":                product.Code,
+		"price_version":               product.PriceVersion,
+		"credit_denomination_version": product.CreditDenominationVersion,
+		"source":                      in.Source,
 	}
 	if resolvedReturnURL != "" {
 		metadataFields["return_url"] = resolvedReturnURL
@@ -367,23 +369,24 @@ func (s *Service) CreateIntent(ctx context.Context, in CreateIntentInput) (Creat
 		return CreateIntentResult{}, err
 	}
 	intent := &domain.PaymentIntent{
-		UserID:             in.UserID,
-		AccountID:          ownerID,
-		ProductID:          &product.ID,
-		Status:             domain.PaymentIntentCreated,
-		Amount:             product.Amount,
-		Currency:           product.Currency,
-		Credits:            product.Credits,
-		PriceVersion:       product.PriceVersion,
-		ReceiptDescription: paymentDescription(product),
-		VATCode:            cloneInt16(product.VATCode),
-		PaymentSubject:     strings.TrimSpace(product.PaymentSubject),
-		PaymentMode:        strings.TrimSpace(product.PaymentMode),
-		Provider:           s.provider.Code(),
-		IdempotencyKey:     in.IdempotencyKey,
-		ReceiptEmail:       in.ReceiptEmail,
-		ReceiptPhone:       in.ReceiptPhone,
-		Metadata:           metadata,
+		UserID:                    in.UserID,
+		AccountID:                 ownerID,
+		ProductID:                 &product.ID,
+		Status:                    domain.PaymentIntentCreated,
+		Amount:                    product.Amount,
+		Currency:                  product.Currency,
+		Credits:                   product.Credits,
+		CreditDenominationVersion: product.CreditDenominationVersion,
+		PriceVersion:              product.PriceVersion,
+		ReceiptDescription:        paymentDescription(product),
+		VATCode:                   cloneInt16(product.VATCode),
+		PaymentSubject:            strings.TrimSpace(product.PaymentSubject),
+		PaymentMode:               strings.TrimSpace(product.PaymentMode),
+		Provider:                  s.provider.Code(),
+		IdempotencyKey:            in.IdempotencyKey,
+		ReceiptEmail:              in.ReceiptEmail,
+		ReceiptPhone:              in.ReceiptPhone,
+		Metadata:                  metadata,
 	}
 	if err := s.repo.CreateIntent(ctx, intent); err != nil {
 		if !errors.Is(err, domain.ErrConflict) {
@@ -658,23 +661,28 @@ func (s *Service) ensureProviderPayment(ctx context.Context, intent *domain.Paym
 			product = existingProduct
 		}
 	}
+	currentCredits, err := currentIntentCredits(intent)
+	if err != nil {
+		return nil, err
+	}
 	createInput := domain.CreatePaymentInput{
-		IntentID:       intent.ID,
-		AccountID:      intentOwnerID(intent),
-		UserID:         intent.UserID,
-		Amount:         intent.Amount,
-		Currency:       intent.Currency,
-		Credits:        intent.Credits,
-		Description:    paymentIntentDescription(intent, product),
-		ReturnURL:      defaultString(returnURL, s.cfg.ReturnURL),
-		ReceiptEmail:   intent.ReceiptEmail,
-		ReceiptPhone:   intent.ReceiptPhone,
-		VATCode:        paymentIntentVATCode(intent, product),
-		PaymentSubject: paymentIntentSubject(intent, product),
-		PaymentMode:    paymentIntentMode(intent, product),
-		Metadata:       intent.Metadata,
-		IdempotencyKey: "pay:" + intent.ID.String(),
-		Capture:        paymentIntentCapture(intent),
+		IntentID:                  intent.ID,
+		AccountID:                 intentOwnerID(intent),
+		UserID:                    intent.UserID,
+		Amount:                    intent.Amount,
+		Currency:                  intent.Currency,
+		Credits:                   currentCredits,
+		CreditDenominationVersion: domain.CurrentCreditDenominationVersion,
+		Description:               paymentIntentDescription(intent, product),
+		ReturnURL:                 defaultString(returnURL, s.cfg.ReturnURL),
+		ReceiptEmail:              intent.ReceiptEmail,
+		ReceiptPhone:              intent.ReceiptPhone,
+		VATCode:                   paymentIntentVATCode(intent, product),
+		PaymentSubject:            paymentIntentSubject(intent, product),
+		PaymentMode:               paymentIntentMode(intent, product),
+		Metadata:                  intent.Metadata,
+		IdempotencyKey:            "pay:" + intent.ID.String(),
+		Capture:                   paymentIntentCapture(intent),
 	}
 	result, err := s.provider.CreatePayment(ctx, createInput)
 	if err != nil {
@@ -874,6 +882,9 @@ func validateProduct(product *domain.PaymentProduct) error {
 		return ErrInvalidInput
 	}
 	if product.Amount <= 0 || product.Credits <= 0 || product.PriceVersion <= 0 {
+		return ErrInvalidInput
+	}
+	if product.CreditDenominationVersion != domain.CurrentCreditDenominationVersion {
 		return ErrInvalidInput
 	}
 	if product.Currency == "" {

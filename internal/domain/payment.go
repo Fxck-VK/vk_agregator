@@ -121,50 +121,64 @@ func (s PaymentRefundStatus) Valid() bool {
 // units (kopecks for RUB); credits is the internal ledger amount granted after
 // trusted provider confirmation.
 type PaymentProduct struct {
-	ID             uuid.UUID `json:"id"`
-	Code           string    `json:"code"`
-	Title          string    `json:"title"`
-	Amount         int64     `json:"amount"`
-	Currency       Currency  `json:"currency"`
-	Credits        int64     `json:"credits"`
-	PriceVersion   int       `json:"price_version"`
-	VATCode        *int16    `json:"vat_code,omitempty"`
-	PaymentSubject string    `json:"payment_subject,omitempty"`
-	PaymentMode    string    `json:"payment_mode,omitempty"`
-	IsActive       bool      `json:"is_active"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
+	ID                        uuid.UUID `json:"id"`
+	Code                      string    `json:"code"`
+	Title                     string    `json:"title"`
+	Amount                    int64     `json:"amount"`
+	Currency                  Currency  `json:"currency"`
+	Credits                   int64     `json:"credits"`
+	CreditDenominationVersion int       `json:"credit_denomination_version"`
+	PriceVersion              int       `json:"price_version"`
+	VATCode                   *int16    `json:"vat_code,omitempty"`
+	PaymentSubject            string    `json:"payment_subject,omitempty"`
+	PaymentMode               string    `json:"payment_mode,omitempty"`
+	IsActive                  bool      `json:"is_active"`
+	CreatedAt                 time.Time `json:"created_at"`
+	UpdatedAt                 time.Time `json:"updated_at"`
 }
 
 // TopUpPackage is a product alias used by payment UX docs.
 type TopUpPackage = PaymentProduct
 
+// CurrentCredits returns the product amount expressed in the current public
+// star denomination.
+func (p PaymentProduct) CurrentCredits() (int64, error) {
+	return CurrentCreditAmount(p.Credits, p.CreditDenominationVersion)
+}
+
 // PaymentIntent is an idempotent attempt to purchase credits. Amount, credits
 // and price version are snapshots from PaymentProduct at creation time.
 type PaymentIntent struct {
-	ID                 uuid.UUID           `json:"id"`
-	UserID             uuid.UUID           `json:"user_id"`
-	AccountID          uuid.UUID           `json:"account_id,omitempty"`
-	ProductID          *uuid.UUID          `json:"product_id,omitempty"`
-	Status             PaymentIntentStatus `json:"status"`
-	Amount             int64               `json:"amount"`
-	Currency           Currency            `json:"currency"`
-	Credits            int64               `json:"credits"`
-	PriceVersion       int                 `json:"price_version"`
-	ReceiptDescription string              `json:"receipt_description,omitempty"`
-	VATCode            *int16              `json:"vat_code,omitempty"`
-	PaymentSubject     string              `json:"payment_subject,omitempty"`
-	PaymentMode        string              `json:"payment_mode,omitempty"`
-	Provider           PaymentProviderCode `json:"provider"`
-	ProviderPaymentID  string              `json:"provider_payment_id,omitempty"`
-	ConfirmationURL    string              `json:"confirmation_url,omitempty"`
-	IdempotencyKey     string              `json:"idempotency_key"`
-	ReceiptEmail       string              `json:"receipt_email,omitempty"`
-	ReceiptPhone       string              `json:"receipt_phone,omitempty"`
-	Metadata           json.RawMessage     `json:"metadata,omitempty"`
-	CreatedAt          time.Time           `json:"created_at"`
-	UpdatedAt          time.Time           `json:"updated_at"`
-	ExpiresAt          *time.Time          `json:"expires_at,omitempty"`
+	ID                        uuid.UUID           `json:"id"`
+	UserID                    uuid.UUID           `json:"user_id"`
+	AccountID                 uuid.UUID           `json:"account_id,omitempty"`
+	ProductID                 *uuid.UUID          `json:"product_id,omitempty"`
+	Status                    PaymentIntentStatus `json:"status"`
+	Amount                    int64               `json:"amount"`
+	Currency                  Currency            `json:"currency"`
+	Credits                   int64               `json:"credits"`
+	CreditDenominationVersion int                 `json:"credit_denomination_version"`
+	PriceVersion              int                 `json:"price_version"`
+	ReceiptDescription        string              `json:"receipt_description,omitempty"`
+	VATCode                   *int16              `json:"vat_code,omitempty"`
+	PaymentSubject            string              `json:"payment_subject,omitempty"`
+	PaymentMode               string              `json:"payment_mode,omitempty"`
+	Provider                  PaymentProviderCode `json:"provider"`
+	ProviderPaymentID         string              `json:"provider_payment_id,omitempty"`
+	ConfirmationURL           string              `json:"confirmation_url,omitempty"`
+	IdempotencyKey            string              `json:"idempotency_key"`
+	ReceiptEmail              string              `json:"receipt_email,omitempty"`
+	ReceiptPhone              string              `json:"receipt_phone,omitempty"`
+	Metadata                  json.RawMessage     `json:"metadata,omitempty"`
+	CreatedAt                 time.Time           `json:"created_at"`
+	UpdatedAt                 time.Time           `json:"updated_at"`
+	ExpiresAt                 *time.Time          `json:"expires_at,omitempty"`
+}
+
+// CurrentCredits returns the immutable intent amount expressed in the current
+// public star denomination. Legacy intents keep their purchase-time version.
+func (i PaymentIntent) CurrentCredits() (int64, error) {
+	return CurrentCreditAmount(i.Credits, i.CreditDenominationVersion)
 }
 
 // PaymentEvent is the provider webhook inbox row. It stores raw provider data
@@ -209,22 +223,23 @@ type PaymentRefund struct {
 // CreatePaymentInput is the provider-agnostic request to create a payment on a
 // money provider. Amount is in minor currency units (kopecks for RUB).
 type CreatePaymentInput struct {
-	IntentID       uuid.UUID       `json:"intent_id"`
-	AccountID      uuid.UUID       `json:"account_id,omitempty"`
-	UserID         uuid.UUID       `json:"user_id"`
-	Amount         int64           `json:"amount"`
-	Currency       Currency        `json:"currency"`
-	Credits        int64           `json:"credits"`
-	Description    string          `json:"description,omitempty"`
-	ReturnURL      string          `json:"return_url,omitempty"`
-	ReceiptEmail   string          `json:"receipt_email,omitempty"`
-	ReceiptPhone   string          `json:"receipt_phone,omitempty"`
-	VATCode        *int16          `json:"vat_code,omitempty"`
-	PaymentSubject string          `json:"payment_subject,omitempty"`
-	PaymentMode    string          `json:"payment_mode,omitempty"`
-	Metadata       json.RawMessage `json:"metadata,omitempty"`
-	IdempotencyKey string          `json:"idempotency_key"`
-	Capture        *bool           `json:"capture,omitempty"`
+	IntentID                  uuid.UUID       `json:"intent_id"`
+	AccountID                 uuid.UUID       `json:"account_id,omitempty"`
+	UserID                    uuid.UUID       `json:"user_id"`
+	Amount                    int64           `json:"amount"`
+	Currency                  Currency        `json:"currency"`
+	Credits                   int64           `json:"credits"`
+	CreditDenominationVersion int             `json:"credit_denomination_version"`
+	Description               string          `json:"description,omitempty"`
+	ReturnURL                 string          `json:"return_url,omitempty"`
+	ReceiptEmail              string          `json:"receipt_email,omitempty"`
+	ReceiptPhone              string          `json:"receipt_phone,omitempty"`
+	VATCode                   *int16          `json:"vat_code,omitempty"`
+	PaymentSubject            string          `json:"payment_subject,omitempty"`
+	PaymentMode               string          `json:"payment_mode,omitempty"`
+	Metadata                  json.RawMessage `json:"metadata,omitempty"`
+	IdempotencyKey            string          `json:"idempotency_key"`
+	Capture                   *bool           `json:"capture,omitempty"`
 }
 
 // CreatePaymentResult is a normalized provider response for a newly created

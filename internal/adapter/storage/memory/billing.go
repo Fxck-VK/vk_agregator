@@ -48,6 +48,9 @@ func (r *BillingRepo) CreateAccount(_ context.Context, a *domain.CreditAccount) 
 	if a.OwnerAccountID == uuid.Nil {
 		a.OwnerAccountID = a.UserID
 	}
+	if a.CreditDenominationVersion == 0 {
+		a.CreditDenominationVersion = domain.CurrentCreditDenominationVersion
+	}
 	key := userCurrencyKey(a.UserID, a.Currency)
 	if r.claimedUsers[key] {
 		return domain.ErrConflict
@@ -72,13 +75,14 @@ func (r *BillingRepo) CreateAccount(_ context.Context, a *domain.CreditAccount) 
 	r.byUser[ownerKey] = a.ID
 	if grant != 0 {
 		if err := r.appendLocked(&domain.LedgerEntry{
-			AccountID:      a.ID,
-			OwnerAccountID: a.OwnerAccountID,
-			Type:           domain.LedgerTopup,
-			Amount:         grant,
-			Status:         domain.LedgerStatusCommitted,
-			IdempotencyKey: "grant:open:" + a.ID.String(),
-			Reason:         "opening balance grant",
+			AccountID:                 a.ID,
+			OwnerAccountID:            a.OwnerAccountID,
+			Type:                      domain.LedgerTopup,
+			Amount:                    grant,
+			CreditDenominationVersion: a.CreditDenominationVersion,
+			Status:                    domain.LedgerStatusCommitted,
+			IdempotencyKey:            "grant:open:" + a.ID.String(),
+			Reason:                    "opening balance grant",
 		}); err != nil {
 			return err
 		}
@@ -123,6 +127,9 @@ func (r *BillingRepo) appendLocked(e *domain.LedgerEntry) error {
 	}
 	if e.Status == "" {
 		e.Status = domain.LedgerStatusCommitted
+	}
+	if e.CreditDenominationVersion == 0 {
+		e.CreditDenominationVersion = domain.CurrentCreditDenominationVersion
 	}
 	if e.OwnerAccountID == uuid.Nil {
 		if acc, ok := r.accounts[e.AccountID]; ok {
@@ -190,6 +197,9 @@ func (r *BillingRepo) Reserve(_ context.Context, res *domain.CreditReservation) 
 	if res.Status == "" {
 		res.Status = domain.ReservationReserved
 	}
+	if res.CreditDenominationVersion == 0 {
+		res.CreditDenominationVersion = domain.CurrentCreditDenominationVersion
+	}
 	now := time.Now()
 	res.CreatedAt, res.UpdatedAt = now, now
 	r.reservations[res.ID] = *res
@@ -197,15 +207,16 @@ func (r *BillingRepo) Reserve(_ context.Context, res *domain.CreditReservation) 
 
 	jobID := res.JobID
 	return r.appendLocked(&domain.LedgerEntry{
-		AccountID:      res.AccountID,
-		OwnerAccountID: res.OwnerAccountID,
-		JobID:          &jobID,
-		ReservationID:  &res.ID,
-		Type:           domain.LedgerReserve,
-		Amount:         -res.Amount,
-		Status:         domain.LedgerStatusPending,
-		IdempotencyKey: "reserve:" + res.IdempotencyKey,
-		Reason:         "credit reservation",
+		AccountID:                 res.AccountID,
+		OwnerAccountID:            res.OwnerAccountID,
+		JobID:                     &jobID,
+		ReservationID:             &res.ID,
+		Type:                      domain.LedgerReserve,
+		Amount:                    -res.Amount,
+		CreditDenominationVersion: res.CreditDenominationVersion,
+		Status:                    domain.LedgerStatusPending,
+		IdempotencyKey:            "reserve:" + res.IdempotencyKey,
+		Reason:                    "credit reservation",
 	})
 }
 
@@ -225,15 +236,16 @@ func (r *BillingRepo) Capture(_ context.Context, reservationID uuid.UUID, amount
 
 	jobID := res.JobID
 	return r.appendLocked(&domain.LedgerEntry{
-		AccountID:      res.AccountID,
-		OwnerAccountID: res.OwnerAccountID,
-		JobID:          &jobID,
-		ReservationID:  &res.ID,
-		Type:           domain.LedgerCapture,
-		Amount:         -amount,
-		Status:         domain.LedgerStatusCommitted,
-		IdempotencyKey: idempotencyKey,
-		Reason:         "credit capture",
+		AccountID:                 res.AccountID,
+		OwnerAccountID:            res.OwnerAccountID,
+		JobID:                     &jobID,
+		ReservationID:             &res.ID,
+		Type:                      domain.LedgerCapture,
+		Amount:                    -amount,
+		CreditDenominationVersion: res.CreditDenominationVersion,
+		Status:                    domain.LedgerStatusCommitted,
+		IdempotencyKey:            idempotencyKey,
+		Reason:                    "credit capture",
 	})
 }
 
@@ -253,15 +265,16 @@ func (r *BillingRepo) Release(_ context.Context, reservationID uuid.UUID, idempo
 
 	jobID := res.JobID
 	return r.appendLocked(&domain.LedgerEntry{
-		AccountID:      res.AccountID,
-		OwnerAccountID: res.OwnerAccountID,
-		JobID:          &jobID,
-		ReservationID:  &res.ID,
-		Type:           domain.LedgerRelease,
-		Amount:         0,
-		Status:         domain.LedgerStatusCommitted,
-		IdempotencyKey: idempotencyKey,
-		Reason:         "credit release",
+		AccountID:                 res.AccountID,
+		OwnerAccountID:            res.OwnerAccountID,
+		JobID:                     &jobID,
+		ReservationID:             &res.ID,
+		Type:                      domain.LedgerRelease,
+		Amount:                    0,
+		CreditDenominationVersion: res.CreditDenominationVersion,
+		Status:                    domain.LedgerStatusCommitted,
+		IdempotencyKey:            idempotencyKey,
+		Reason:                    "credit release",
 	})
 }
 

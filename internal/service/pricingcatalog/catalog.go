@@ -257,16 +257,17 @@ func (p ProductPrice) Snapshot() (PricingSnapshot, error) {
 		return PricingSnapshot{}, err
 	}
 	snapshot := PricingSnapshot{
-		Version:               p.Version,
-		Source:                p.Source,
-		Key:                   p.Key,
-		Floor:                 p.Floor,
-		Multiplier:            p.Multiplier,
-		UnitConversion:        p.UnitConversion,
-		InternalCredits:       internalCredits,
-		InternalCreditCap:     p.Caps.InternalCreditCap,
-		FloorAmountCap:        p.Caps.FloorAmountCap,
-		DefaultDisplayCredits: p.DefaultDisplayCredits,
+		Version:                   p.Version,
+		CreditDenominationVersion: domain.CurrentCreditDenominationVersion,
+		Source:                    p.Source,
+		Key:                       p.Key,
+		Floor:                     p.Floor,
+		Multiplier:                p.Multiplier,
+		UnitConversion:            p.UnitConversion,
+		InternalCredits:           internalCredits,
+		InternalCreditCap:         p.Caps.InternalCreditCap,
+		FloorAmountCap:            p.Caps.FloorAmountCap,
+		DefaultDisplayCredits:     p.DefaultDisplayCredits,
 	}
 	if !snapshot.Valid() {
 		return PricingSnapshot{}, ErrInvalidSnapshot
@@ -279,17 +280,18 @@ func (p ProductPrice) Snapshot() (PricingSnapshot, error) {
 // and exact backend pricing facts, but no prompt, provider payload, private URL
 // or provider-native model id.
 type PricingSnapshot struct {
-	Version                int            `json:"version"`
-	Source                 string         `json:"source"`
-	Key                    ProductKey     `json:"key"`
-	Floor                  PriceFloor     `json:"floor"`
-	Multiplier             Multiplier     `json:"multiplier"`
-	UnitConversion         UnitConversion `json:"unit_conversion"`
-	InternalCredits        int64          `json:"internal_credits"`
-	InternalCreditCap      int64          `json:"internal_credit_cap,omitempty"`
-	FloorAmountCap         int64          `json:"floor_amount_cap,omitempty"`
-	DefaultDisplayCredits  int64          `json:"default_display_credits,omitempty"`
-	CalculationDescription string         `json:"calculation_description,omitempty"`
+	Version                   int            `json:"version"`
+	CreditDenominationVersion int            `json:"credit_denomination_version"`
+	Source                    string         `json:"source"`
+	Key                       ProductKey     `json:"key"`
+	Floor                     PriceFloor     `json:"floor"`
+	Multiplier                Multiplier     `json:"multiplier"`
+	UnitConversion            UnitConversion `json:"unit_conversion"`
+	InternalCredits           int64          `json:"internal_credits"`
+	InternalCreditCap         int64          `json:"internal_credit_cap,omitempty"`
+	FloorAmountCap            int64          `json:"floor_amount_cap,omitempty"`
+	DefaultDisplayCredits     int64          `json:"default_display_credits,omitempty"`
+	CalculationDescription    string         `json:"calculation_description,omitempty"`
 }
 
 // Valid reports whether a snapshot has the minimum data needed to keep an old
@@ -297,6 +299,9 @@ type PricingSnapshot struct {
 func (s PricingSnapshot) Valid() bool {
 	s.Source = strings.TrimSpace(s.Source)
 	return s.Version > 0 &&
+		(s.CreditDenominationVersion == 0 ||
+			s.CreditDenominationVersion == domain.LegacyCreditDenominationVersion ||
+			s.CreditDenominationVersion == domain.CurrentCreditDenominationVersion) &&
 		s.Source != "" &&
 		s.Key.Valid() &&
 		s.Floor.Valid() &&

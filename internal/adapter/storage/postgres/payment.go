@@ -26,11 +26,11 @@ func NewPaymentRepository(db Querier) *PaymentRepository {
 var _ domain.PaymentRepository = (*PaymentRepository)(nil)
 
 const paymentProductColumns = `id, code, title, amount, currency, credits,
-	price_version, vat_code, payment_subject, payment_mode, is_active,
+	credit_denomination_version, price_version, vat_code, payment_subject, payment_mode, is_active,
 	created_at, updated_at`
 
 const paymentIntentColumns = `id, user_id, account_id, product_id, status, amount, currency,
-	credits, price_version, receipt_description, vat_code, payment_subject,
+	credits, credit_denomination_version, price_version, receipt_description, vat_code, payment_subject,
 	payment_mode, provider, provider_payment_id, confirmation_url,
 	idempotency_key, receipt_email, receipt_phone, metadata, created_at,
 	updated_at, expires_at`
@@ -119,12 +119,15 @@ func (r *PaymentRepository) CreateProduct(ctx context.Context, product *domain.P
 	if product.PriceVersion == 0 {
 		product.PriceVersion = 1
 	}
+	if product.CreditDenominationVersion == 0 {
+		product.CreditDenominationVersion = domain.CurrentCreditDenominationVersion
+	}
 	const q = `
 		INSERT INTO payment_products (
-			id, code, title, amount, currency, credits, price_version,
+			id, code, title, amount, currency, credits, credit_denomination_version, price_version,
 			vat_code, payment_subject, payment_mode, is_active
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 		RETURNING ` + paymentProductColumns
 	return mapError(scanPaymentProduct(r.db.QueryRow(ctx, q,
 		product.ID,
@@ -133,6 +136,7 @@ func (r *PaymentRepository) CreateProduct(ctx context.Context, product *domain.P
 		product.Amount,
 		product.Currency,
 		product.Credits,
+		product.CreditDenominationVersion,
 		product.PriceVersion,
 		product.VATCode,
 		strings.TrimSpace(product.PaymentSubject),
@@ -150,16 +154,20 @@ func (r *PaymentRepository) UpdateProduct(ctx context.Context, product *domain.P
 		    amount = $4,
 		    currency = $5,
 		    credits = $6,
-		    price_version = $7,
-		    vat_code = $8,
-		    payment_subject = $9,
-		    payment_mode = $10,
-		    is_active = $11,
+		    credit_denomination_version = $7,
+		    price_version = $8,
+		    vat_code = $9,
+		    payment_subject = $10,
+		    payment_mode = $11,
+		    is_active = $12,
 		    updated_at = now()
 		WHERE id = $1
 		RETURNING ` + paymentProductColumns
 	if product.Currency == "" {
 		product.Currency = domain.CurrencyRUB
+	}
+	if product.CreditDenominationVersion == 0 {
+		product.CreditDenominationVersion = domain.CurrentCreditDenominationVersion
 	}
 	return mapError(scanPaymentProduct(r.db.QueryRow(ctx, q,
 		product.ID,
@@ -168,6 +176,7 @@ func (r *PaymentRepository) UpdateProduct(ctx context.Context, product *domain.P
 		product.Amount,
 		product.Currency,
 		product.Credits,
+		product.CreditDenominationVersion,
 		product.PriceVersion,
 		product.VATCode,
 		strings.TrimSpace(product.PaymentSubject),
@@ -190,14 +199,17 @@ func (r *PaymentRepository) CreateIntent(ctx context.Context, intent *domain.Pay
 	if len(intent.Metadata) == 0 {
 		intent.Metadata = json.RawMessage(`{}`)
 	}
+	if intent.CreditDenominationVersion == 0 {
+		intent.CreditDenominationVersion = domain.CurrentCreditDenominationVersion
+	}
 	const q = `
 		INSERT INTO payment_intents (
 			id, user_id, account_id, product_id, status, amount, currency, credits,
-			price_version, receipt_description, vat_code, payment_subject,
+			credit_denomination_version, price_version, receipt_description, vat_code, payment_subject,
 			payment_mode, provider, provider_payment_id, confirmation_url,
 			idempotency_key, receipt_email, receipt_phone, metadata, expires_at
 		)
-		VALUES ($1, $2, COALESCE($3::uuid, (SELECT account_id FROM users WHERE id = $2)), $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, COALESCE($20::jsonb, '{}'::jsonb), $21)
+		VALUES ($1, $2, COALESCE($3::uuid, (SELECT account_id FROM users WHERE id = $2)), $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, COALESCE($21::jsonb, '{}'::jsonb), $22)
 		RETURNING ` + paymentIntentColumns
 	return mapError(scanPaymentIntent(r.db.QueryRow(ctx, q,
 		intent.ID,
@@ -208,6 +220,7 @@ func (r *PaymentRepository) CreateIntent(ctx context.Context, intent *domain.Pay
 		intent.Amount,
 		intent.Currency,
 		intent.Credits,
+		intent.CreditDenominationVersion,
 		intent.PriceVersion,
 		strings.TrimSpace(intent.ReceiptDescription),
 		intent.VATCode,
@@ -653,6 +666,7 @@ func scanPaymentProduct(row rowScanner, product *domain.PaymentProduct) error {
 		&product.Amount,
 		&product.Currency,
 		&product.Credits,
+		&product.CreditDenominationVersion,
 		&product.PriceVersion,
 		&product.VATCode,
 		&product.PaymentSubject,
@@ -677,6 +691,7 @@ func scanPaymentIntent(row rowScanner, intent *domain.PaymentIntent) error {
 		&intent.Amount,
 		&intent.Currency,
 		&intent.Credits,
+		&intent.CreditDenominationVersion,
 		&intent.PriceVersion,
 		&intent.ReceiptDescription,
 		&intent.VATCode,

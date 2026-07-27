@@ -1474,6 +1474,79 @@ func TestRefundIntentReplayIsIdempotent(t *testing.T) {
 	}
 }
 
+func TestLegacyDenominationTopupAndRefundUseCurrentStars(t *testing.T) {
+	ctx := context.Background()
+	repo := memory.NewPaymentRepo()
+	repo.PutProduct(&domain.PaymentProduct{
+		Code:                      "legacy_credits_100",
+		Title:                     "Legacy 100 credits",
+		Amount:                    9900,
+		Currency:                  domain.CurrencyRUB,
+		Credits:                   100,
+		CreditDenominationVersion: domain.LegacyCreditDenominationVersion,
+		PriceVersion:              1,
+		IsActive:                  true,
+	})
+	provider := paymentmock.New()
+	intentSvc := paymentservice.New(repo, provider, paymentservice.Config{})
+	userID := uuid.New()
+	created, err := intentSvc.CreateIntent(ctx, paymentservice.CreateIntentInput{
+		UserID:         userID,
+		ProductCode:    "legacy_credits_100",
+		ReceiptEmail:   "user@example.com",
+		IdempotencyKey: "legacy-denomination-intent",
+	})
+	if err != nil {
+		t.Fatalf("create legacy intent: %v", err)
+	}
+	if created.Intent.CreditDenominationVersion != domain.LegacyCreditDenominationVersion {
+		t.Fatalf("intent denomination = %d, want legacy", created.Intent.CreditDenominationVersion)
+	}
+	if err := provider.SetPaymentStatus(created.Intent.ProviderPaymentID, domain.PaymentIntentSucceeded); err != nil {
+		t.Fatalf("set provider status: %v", err)
+	}
+
+	billingRepo := memory.NewBillingRepo()
+	processor := newTestWebhookProcessor(repo, provider, billingRepo)
+	if _, err := processor.ReconcilePendingOlderThan(ctx, 10, -time.Nanosecond); err != nil {
+		t.Fatalf("reconcile legacy payment: %v", err)
+	}
+	account, err := billingRepo.GetAccountByUser(ctx, userID, domain.CurrencyCredits)
+	if err != nil {
+		t.Fatalf("get account after legacy topup: %v", err)
+	}
+	if account.BalanceCached != 200 {
+		t.Fatalf("balance after legacy topup = %d, want 200 current stars", account.BalanceCached)
+	}
+
+	first, err := processor.RefundIntent(ctx, paymentservice.RefundIntentInput{
+		IntentID:       created.Intent.ID,
+		IdempotencyKey: "legacy-denomination-refund",
+		Reason:         "operator refund",
+	})
+	if err != nil {
+		t.Fatalf("refund legacy intent: %v", err)
+	}
+	second, err := processor.RefundIntent(ctx, paymentservice.RefundIntentInput{
+		IntentID:       created.Intent.ID,
+		IdempotencyKey: "legacy-denomination-refund",
+		Reason:         "operator refund replay",
+	})
+	if err != nil {
+		t.Fatalf("replay legacy refund: %v", err)
+	}
+	if first.Refund.ID != second.Refund.ID {
+		t.Fatalf("legacy refund replay returned different refund: first=%s second=%s", first.Refund.ID, second.Refund.ID)
+	}
+	account, err = billingRepo.GetAccountByUser(ctx, userID, domain.CurrencyCredits)
+	if err != nil {
+		t.Fatalf("get account after legacy refund: %v", err)
+	}
+	if account.BalanceCached != 0 {
+		t.Fatalf("balance after legacy refund replay = %d, want 0", account.BalanceCached)
+	}
+}
+
 func TestRefundIntentReplayResumesPendingRefundBeforeProviderCall(t *testing.T) {
 	ctx := context.Background()
 	repo, billingRepo, intent := createSucceededTopupForRefund(t, ctx, "resume-before-provider-intent-key")

@@ -65,7 +65,7 @@ func TestCatalogBuildsOnlyPublicEnabledItems(t *testing.T) {
 		len(seedream.QualityOptions) != 2 ||
 		seedream.QualityOptions[0] != modelcatalog.ImageQuality2K ||
 		seedream.QualityOptions[1] != modelcatalog.ImageQuality4K ||
-		seedream.EstimateCredits != 15 ||
+		seedream.EstimateCredits != 30 ||
 		!seedream.SupportsReferenceImage ||
 		seedream.MaxReferenceImages != 10 {
 		t.Fatalf("Seedream 4.5 public contract mismatch: %+v", seedream)

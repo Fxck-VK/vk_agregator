@@ -403,6 +403,7 @@ export function SettingsScreen({
             </button>
           </div>
         </div>
+        <p className="settings-notice">Курс: 1 ⭐️ = 0,5 ₽</p>
         {activePaymentIntent && activePaymentConfirmationUrl && !creatingNewPayment ? (
           <div className="payment-pending" role="status">
             <strong>У вас есть незавершенный платеж</strong>

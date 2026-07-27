@@ -3,7 +3,7 @@ package pricingcatalog
 import "vk-ai-aggregator/internal/domain"
 
 const (
-	StaticCatalogVersion = 3
+	StaticCatalogVersion = 4
 
 	PublicImageNanoBanana2   = "nano_banana_2"
 	PublicImageNanoBananaPro = "nano_banana_pro"
@@ -47,17 +47,17 @@ func NewStaticCatalog() (*Catalog, error) {
 // StaticProductPrices returns enabled, exact generation tariffs.
 func StaticProductPrices() []ProductPrice {
 	prices := []ProductPrice{
-		imageTariff(PublicImageNanoBanana2, ImageQuality1K, 5_000_000, FloorUnitPoYoCredits, poyoCreditToInternal, 25),
-		imageTariff(PublicImageNanoBanana2, ImageQuality2K, 8_000_000, FloorUnitPoYoCredits, poyoCreditToInternal, 30),
-		imageTariff(PublicImageNanoBanana2, ImageQuality4K, 12_000_000, FloorUnitPoYoCredits, poyoCreditToInternal, 35),
-		imageTariff(PublicImageGPTImage2, ImageQuality1K, 60_000, FloorUnitAPIMartCredits, apimartCreditToInternal, 20),
-		imageTariff(PublicImageGPTImage2, ImageQuality2K, 120_000, FloorUnitAPIMartCredits, apimartCreditToInternal, 25),
-		imageTariff(PublicImageGPTImage2, ImageQuality4K, 180_000, FloorUnitAPIMartCredits, apimartCreditToInternal, 30),
-		imageTariff(PublicImageNanoBananaPro, ImageQuality1K, 400_000, FloorUnitAPIMartCredits, apimartCreditToInternal, 25),
-		imageTariff(PublicImageNanoBananaPro, ImageQuality2K, 500_000, FloorUnitAPIMartCredits, apimartCreditToInternal, 30),
-		imageTariff(PublicImageNanoBananaPro, ImageQuality4K, 500_000, FloorUnitAPIMartCredits, apimartCreditToInternal, 35),
-		fixedInternalImageTariff(PublicImageSeedream45, ImageQuality2K, 10, 15),
-		fixedInternalImageTariff(PublicImageSeedream45, ImageQuality4K, 15, 20),
+		imageTariff(PublicImageNanoBanana2, ImageQuality1K, 5_000_000, FloorUnitPoYoCredits, poyoCreditToInternal, 50),
+		imageTariff(PublicImageNanoBanana2, ImageQuality2K, 8_000_000, FloorUnitPoYoCredits, poyoCreditToInternal, 60),
+		imageTariff(PublicImageNanoBanana2, ImageQuality4K, 12_000_000, FloorUnitPoYoCredits, poyoCreditToInternal, 70),
+		imageTariff(PublicImageGPTImage2, ImageQuality1K, 60_000, FloorUnitAPIMartCredits, apimartCreditToInternal, 40),
+		imageTariff(PublicImageGPTImage2, ImageQuality2K, 120_000, FloorUnitAPIMartCredits, apimartCreditToInternal, 50),
+		imageTariff(PublicImageGPTImage2, ImageQuality4K, 180_000, FloorUnitAPIMartCredits, apimartCreditToInternal, 60),
+		imageTariff(PublicImageNanoBananaPro, ImageQuality1K, 400_000, FloorUnitAPIMartCredits, apimartCreditToInternal, 50),
+		imageTariff(PublicImageNanoBananaPro, ImageQuality2K, 500_000, FloorUnitAPIMartCredits, apimartCreditToInternal, 60),
+		imageTariff(PublicImageNanoBananaPro, ImageQuality4K, 500_000, FloorUnitAPIMartCredits, apimartCreditToInternal, 70),
+		fixedInternalImageTariff(PublicImageSeedream45, ImageQuality2K, 10, 30),
+		fixedInternalImageTariff(PublicImageSeedream45, ImageQuality4K, 15, 40),
 	}
 
 	for _, resolution := range []string{VideoResolution720p, VideoResolution1080p} {
@@ -69,7 +69,7 @@ func StaticProductPrices() []ProductPrice {
 				int64(duration)*10_000_000,
 				FloorUnitPoYoCredits,
 				poyoCreditToInternal,
-				int64(duration)*20,
+				int64(duration)*40,
 			))
 		}
 	}
@@ -81,7 +81,7 @@ func StaticProductPrices() []ProductPrice {
 			int64(duration)*28_000_000,
 			FloorUnitPoYoCredits,
 			poyoCreditToInternal,
-			int64(duration)*30,
+			int64(duration)*60,
 		))
 	}
 	for _, duration := range []int{5, 10} {
@@ -92,13 +92,13 @@ func StaticProductPrices() []ProductPrice {
 			int64(duration)*5_000_000,
 			FloorUnitRunwayCredits,
 			runwayCreditToInternal,
-			int64(duration)*30,
+			int64(duration)*60,
 		))
 	}
 	for _, resolution := range []string{VideoResolution720p, VideoResolution1080p} {
 		prices = append(prices,
-			videoTariff(domain.VideoRouteRunwayGen45, resolution, 5, 75_000_000, FloorUnitPoYoCredits, poyoCreditToInternal, 225),
-			videoTariff(domain.VideoRouteRunwayGen45, resolution, 10, 150_000_000, FloorUnitPoYoCredits, poyoCreditToInternal, 450),
+			videoTariff(domain.VideoRouteRunwayGen45, resolution, 5, 75_000_000, FloorUnitPoYoCredits, poyoCreditToInternal, 450),
+			videoTariff(domain.VideoRouteRunwayGen45, resolution, 10, 150_000_000, FloorUnitPoYoCredits, poyoCreditToInternal, 900),
 		)
 	}
 

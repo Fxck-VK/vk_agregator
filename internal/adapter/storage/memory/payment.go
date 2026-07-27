@@ -64,6 +64,9 @@ func (r *PaymentRepo) PutProduct(product *domain.PaymentProduct) {
 	if product.PriceVersion == 0 {
 		product.PriceVersion = 1
 	}
+	if product.CreditDenominationVersion == 0 {
+		product.CreditDenominationVersion = domain.CurrentCreditDenominationVersion
+	}
 	now := time.Now()
 	if product.CreatedAt.IsZero() {
 		product.CreatedAt = now
@@ -158,6 +161,9 @@ func (r *PaymentRepo) CreateProduct(_ context.Context, product *domain.PaymentPr
 	if product.Currency == "" {
 		product.Currency = domain.CurrencyRUB
 	}
+	if product.CreditDenominationVersion == 0 {
+		product.CreditDenominationVersion = domain.CurrentCreditDenominationVersion
+	}
 	if product.PriceVersion == 0 {
 		product.PriceVersion = 1
 	}
@@ -218,6 +224,9 @@ func (r *PaymentRepo) CreateIntent(_ context.Context, intent *domain.PaymentInte
 	}
 	if intent.Provider == "" {
 		intent.Provider = domain.PaymentProviderMock
+	}
+	if intent.CreditDenominationVersion == 0 {
+		intent.CreditDenominationVersion = domain.CurrentCreditDenominationVersion
 	}
 	if intent.AccountID == uuid.Nil {
 		intent.AccountID = intent.UserID

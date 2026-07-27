@@ -140,6 +140,11 @@ Real integrations are implemented at adapter level and remain **opt-in**:
   `000012_neirohub_crystal_catalog` switches the active public catalog to
   99/150/250/400/700 crystal packages and hides the original seed packages
   without breaking existing intent snapshots.
+  Migration `000041_star_denomination` keeps the public name "stars", fixes the
+  rate at `1 star = 50 kopecks`, converts one legacy credit into two stars
+  through append-only ledger adjustments, and changes the active packages to
+  198/300/500/800/1400 stars. Existing intents keep their denomination
+  snapshot so top-ups and refunds use the purchase-time rate.
   Runtime config exposes `PAYMENT_PROVIDER`, YooKassa
   env placeholders and payment reconciliation intervals. `billingservice.GrantWith(ctx, repo, ...)`
   exists so webhook/reconciliation processors can commit

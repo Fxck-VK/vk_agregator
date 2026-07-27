@@ -142,11 +142,11 @@ func TestEndToEnd(t *testing.T) {
 	if job.Status != domain.JobStatusSucceeded {
 		t.Fatalf("final status=%q, want succeeded", job.Status)
 	}
-	if job.CostCaptured != 25 {
-		t.Fatalf("captured=%d, want 25", job.CostCaptured)
+	if job.CostCaptured != 50 {
+		t.Fatalf("captured=%d, want 50", job.CostCaptured)
 	}
-	if credits, ok := job.PricingSnapshotCredits(); !ok || credits != 25 {
-		t.Fatalf("pricing snapshot credits=%d/%v, want 25/true", credits, ok)
+	if credits, ok := job.PricingSnapshotCredits(); !ok || credits != 50 {
+		t.Fatalf("pricing snapshot credits=%d/%v, want 50/true", credits, ok)
 	}
 	sent := vkClient.Sent()
 	if len(sent) != 1 || sent[0].Type != "message" || sent[0].Attachment == "" {
@@ -156,8 +156,8 @@ func TestEndToEnd(t *testing.T) {
 		t.Fatalf("expected image result navigation keyboard, got %q", sent[0].Keyboard)
 	}
 	acc, _ := billingRepo.GetAccountByUser(ctx, job.UserID, domain.CurrencyCredits)
-	if acc.BalanceCached != billingservice.DefaultStartingBalance-25 {
-		t.Fatalf("balance=%d, want %d", acc.BalanceCached, billingservice.DefaultStartingBalance-25)
+	if acc.BalanceCached != billingservice.DefaultStartingBalance-50 {
+		t.Fatalf("balance=%d, want %d", acc.BalanceCached, billingservice.DefaultStartingBalance-50)
 	}
 }
 
@@ -290,15 +290,15 @@ func TestSeedream45AsyncPoYoImageFlowStoresArtifactAndCapturesPrice(t *testing.T
 		t.Fatalf("delivery: %v", err)
 	}
 	job = h.reload(t, job.ID)
-	if job.Status != domain.JobStatusSucceeded || job.CostCaptured != 20 {
-		t.Fatalf("final job status/captured = %q/%d, want succeeded/20", job.Status, job.CostCaptured)
+	if job.Status != domain.JobStatusSucceeded || job.CostCaptured != 40 {
+		t.Fatalf("final job status/captured = %q/%d, want succeeded/40", job.Status, job.CostCaptured)
 	}
 	acc, err := billingRepo.GetAccountByUser(ctx, userID, domain.CurrencyCredits)
 	if err != nil {
 		t.Fatalf("get billing account: %v", err)
 	}
-	if acc.BalanceCached != billingservice.DefaultStartingBalance-20 {
-		t.Fatalf("balance=%d, want %d", acc.BalanceCached, billingservice.DefaultStartingBalance-20)
+	if acc.BalanceCached != billingservice.DefaultStartingBalance-40 {
+		t.Fatalf("balance=%d, want %d", acc.BalanceCached, billingservice.DefaultStartingBalance-40)
 	}
 	sent := vkClient.Sent()
 	if len(sent) != 1 || sent[0].Attachment == "" {

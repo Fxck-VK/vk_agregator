@@ -3,8 +3,8 @@ import type { PaymentProduct } from "../api/client";
 import { paymentHistoryCountLabel, selectedPaymentProduct } from "./paymentUi";
 
 const products: PaymentProduct[] = [
-  { id: "1", code: "starter", title: "Starter", amount: 9900, currency: "RUB", credits: 100, price_version: 1 },
-  { id: "2", code: "pro", title: "Pro", amount: 19900, currency: "RUB", credits: 250, price_version: 1 },
+  { id: "1", code: "starter", title: "Starter", amount: 9900, currency: "RUB", credits: 100, credit_denomination_version: 2, star_kopecks: 50, price_version: 1 },
+  { id: "2", code: "pro", title: "Pro", amount: 19900, currency: "RUB", credits: 250, credit_denomination_version: 2, star_kopecks: 50, price_version: 1 },
 ];
 
 describe("payment UI helpers", () => {

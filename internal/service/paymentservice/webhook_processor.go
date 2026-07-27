@@ -465,11 +465,15 @@ func (p *WebhookProcessor) ensureRefundIntentRecord(ctx context.Context, in Refu
 		if strings.TrimSpace(intent.ProviderPaymentID) == "" {
 			return ErrRefundNotAllowed
 		}
+		currentCredits, err := currentIntentCredits(intent)
+		if err != nil {
+			return err
+		}
 		account, err := billingRepo.GetAccountByUser(ctx, intentOwnerID(intent), domain.CurrencyCredits)
 		if err != nil {
 			return err
 		}
-		if account.BalanceCached < intent.Credits {
+		if account.BalanceCached < currentCredits {
 			return ErrRefundCreditsSpent
 		}
 		if err := ensureTopupCreditsRefundable(ctx, billingRepo, account.ID, intent); err != nil {
@@ -486,12 +490,13 @@ func (p *WebhookProcessor) ensureRefundIntentRecord(ctx context.Context, in Refu
 			return err
 		}
 		return billingRepo.AppendEntry(ctx, &domain.LedgerEntry{
-			AccountID:      account.ID,
-			Type:           domain.LedgerAdjustment,
-			Amount:         -intent.Credits,
-			Status:         domain.LedgerStatusCommitted,
-			IdempotencyKey: refundDebitLedgerKey(intent.Provider, intent.ProviderPaymentID, refund.ID),
-			Reason:         "payment refund debit",
+			AccountID:                 account.ID,
+			Type:                      domain.LedgerAdjustment,
+			Amount:                    -currentCredits,
+			CreditDenominationVersion: domain.CurrentCreditDenominationVersion,
+			Status:                    domain.LedgerStatusCommitted,
+			IdempotencyKey:            refundDebitLedgerKey(intent.Provider, intent.ProviderPaymentID, refund.ID),
+			Reason:                    "payment refund debit",
 		})
 	}); err != nil {
 		return nil, err
@@ -616,18 +621,23 @@ func (p *WebhookProcessor) compensateRefundDebit(ctx context.Context, intent *do
 		status = domain.PaymentRefundFailed
 	}
 	return p.tx.RunPaymentTx(ctx, func(ctx context.Context, payments domain.PaymentRepository, billingRepo domain.BillingRepository) error {
+		currentCredits, err := currentIntentCredits(intent)
+		if err != nil {
+			return err
+		}
 		account, err := billingRepo.GetAccountByUser(ctx, intentOwnerID(intent), domain.CurrencyCredits)
 		if err != nil {
 			return err
 		}
 		if err := billingRepo.AppendEntry(ctx, &domain.LedgerEntry{
-			AccountID:      account.ID,
-			OwnerAccountID: intentOwnerID(intent),
-			Type:           domain.LedgerAdjustment,
-			Amount:         intent.Credits,
-			Status:         domain.LedgerStatusCommitted,
-			IdempotencyKey: refundCompensateLedgerKey(refund.ID),
-			Reason:         "payment refund provider failure compensation",
+			AccountID:                 account.ID,
+			OwnerAccountID:            intentOwnerID(intent),
+			Type:                      domain.LedgerAdjustment,
+			Amount:                    currentCredits,
+			CreditDenominationVersion: domain.CurrentCreditDenominationVersion,
+			Status:                    domain.LedgerStatusCommitted,
+			IdempotencyKey:            refundCompensateLedgerKey(refund.ID),
+			Reason:                    "payment refund provider failure compensation",
 		}); err != nil && !errors.Is(err, domain.ErrConflict) {
 			return err
 		}
@@ -637,6 +647,10 @@ func (p *WebhookProcessor) compensateRefundDebit(ctx context.Context, intent *do
 
 func ensureTopupCreditsRefundable(ctx context.Context, repo domain.BillingRepository, accountID uuid.UUID, intent *domain.PaymentIntent) error {
 	if intent == nil || strings.TrimSpace(intent.ProviderPaymentID) == "" || intent.Credits <= 0 {
+		return ErrRefundNotAllowed
+	}
+	currentCredits, err := currentIntentCredits(intent)
+	if err != nil {
 		return ErrRefundNotAllowed
 	}
 	topupKey := topUpLedgerKey(intent.Provider, intent.ProviderPaymentID)
@@ -658,9 +672,13 @@ func ensureTopupCreditsRefundable(ctx context.Context, repo domain.BillingReposi
 				continue
 			}
 			if entry.IdempotencyKey == topupKey {
+				entryCredits, err := domain.CurrentCreditAmount(entry.Amount, entry.CreditDenominationVersion)
+				if err != nil {
+					return ErrRefundNotAllowed
+				}
 				if entry.Type != domain.LedgerTopup ||
 					entry.Status != domain.LedgerStatusCommitted ||
-					entry.Amount != intent.Credits {
+					entryCredits != currentCredits {
 					return ErrRefundNotAllowed
 				}
 				return nil
@@ -816,12 +834,16 @@ func (p *WebhookProcessor) applyProviderPayment(ctx context.Context, payments do
 		}
 	}
 	if target == domain.PaymentIntentSucceeded {
+		currentCredits, err := currentIntentCredits(intent)
+		if err != nil {
+			return result, err
+		}
 		if err := p.billing.GrantWithOwner(
 			ctx,
 			billingRepo,
 			intent.UserID,
 			intentOwnerID(intent),
-			intent.Credits,
+			currentCredits,
 			topUpLedgerKey(intent.Provider, intent.ProviderPaymentID),
 			"payment top-up via "+string(intent.Provider),
 		); err != nil {
@@ -832,7 +854,7 @@ func (p *WebhookProcessor) applyProviderPayment(ctx context.Context, payments do
 			metrics.PaymentTopups.WithLabelValues(string(intent.Provider)).Inc()
 			metrics.LedgerEntries.WithLabelValues(string(domain.LedgerTopup), paymentSource(intent)).Inc()
 			metrics.ObserveProductEvent(paymentSource(intent), "payment", "ledger_topup", "top_up", "credits", "success")
-			metrics.AddProductCreditsFlow(paymentSource(intent), "topup", "success", intent.Credits)
+			metrics.AddProductCreditsFlow(paymentSource(intent), "topup", "success", currentCredits)
 			if !intent.CreatedAt.IsZero() {
 				duration := p.now().Sub(intent.CreatedAt)
 				if duration > 0 {

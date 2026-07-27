@@ -404,24 +404,32 @@ type ApplyReferralDTO struct {
 // PaymentProductDTO is the Mini App-safe representation of an active top-up
 // catalog entry.
 type PaymentProductDTO struct {
-	ID           uuid.UUID `json:"id"`
-	Code         string    `json:"code"`
-	Title        string    `json:"title"`
-	Amount       int64     `json:"amount"`
-	Currency     string    `json:"currency"`
-	Credits      int64     `json:"credits"`
-	PriceVersion int       `json:"price_version"`
+	ID                        uuid.UUID `json:"id"`
+	Code                      string    `json:"code"`
+	Title                     string    `json:"title"`
+	Amount                    int64     `json:"amount"`
+	Currency                  string    `json:"currency"`
+	Credits                   int64     `json:"credits"`
+	CreditDenominationVersion int       `json:"credit_denomination_version"`
+	StarKopecks               int64     `json:"star_kopecks"`
+	PriceVersion              int       `json:"price_version"`
 }
 
 func newPaymentProductDTO(product *domain.PaymentProduct) PaymentProductDTO {
+	credits, err := product.CurrentCredits()
+	if err != nil {
+		credits = 0
+	}
 	return PaymentProductDTO{
-		ID:           product.ID,
-		Code:         product.Code,
-		Title:        product.Title,
-		Amount:       product.Amount,
-		Currency:     string(product.Currency),
-		Credits:      product.Credits,
-		PriceVersion: product.PriceVersion,
+		ID:                        product.ID,
+		Code:                      product.Code,
+		Title:                     product.Title,
+		Amount:                    product.Amount,
+		Currency:                  string(product.Currency),
+		Credits:                   credits,
+		CreditDenominationVersion: domain.CurrentCreditDenominationVersion,
+		StarKopecks:               domain.StarKopecks,
+		PriceVersion:              product.PriceVersion,
 	}
 }
 
@@ -438,31 +446,39 @@ type CreatePaymentIntentRequest struct {
 
 // PaymentIntentDTO is the Mini App-safe representation of a top-up intent.
 type PaymentIntentDTO struct {
-	ID                  uuid.UUID `json:"id"`
-	ProductID           uuid.UUID `json:"product_id,omitempty"`
-	Status              string    `json:"status"`
-	Amount              int64     `json:"amount"`
-	Currency            string    `json:"currency"`
-	Credits             int64     `json:"credits"`
-	PriceVersion        int       `json:"price_version"`
-	ConfirmationURL     string    `json:"confirmation_url,omitempty"`
-	ReusedActivePayment bool      `json:"reused_active_payment,omitempty"`
-	Notice              string    `json:"notice,omitempty"`
-	CreatedAt           time.Time `json:"created_at"`
-	UpdatedAt           time.Time `json:"updated_at"`
+	ID                        uuid.UUID `json:"id"`
+	ProductID                 uuid.UUID `json:"product_id,omitempty"`
+	Status                    string    `json:"status"`
+	Amount                    int64     `json:"amount"`
+	Currency                  string    `json:"currency"`
+	Credits                   int64     `json:"credits"`
+	CreditDenominationVersion int       `json:"credit_denomination_version"`
+	StarKopecks               int64     `json:"star_kopecks"`
+	PriceVersion              int       `json:"price_version"`
+	ConfirmationURL           string    `json:"confirmation_url,omitempty"`
+	ReusedActivePayment       bool      `json:"reused_active_payment,omitempty"`
+	Notice                    string    `json:"notice,omitempty"`
+	CreatedAt                 time.Time `json:"created_at"`
+	UpdatedAt                 time.Time `json:"updated_at"`
 }
 
 func newPaymentIntentDTO(intent *domain.PaymentIntent) PaymentIntentDTO {
+	credits, err := intent.CurrentCredits()
+	if err != nil {
+		credits = 0
+	}
 	dto := PaymentIntentDTO{
-		ID:              intent.ID,
-		Status:          string(intent.Status),
-		Amount:          intent.Amount,
-		Currency:        string(intent.Currency),
-		Credits:         intent.Credits,
-		PriceVersion:    intent.PriceVersion,
-		ConfirmationURL: intent.ConfirmationURL,
-		CreatedAt:       intent.CreatedAt,
-		UpdatedAt:       intent.UpdatedAt,
+		ID:                        intent.ID,
+		Status:                    string(intent.Status),
+		Amount:                    intent.Amount,
+		Currency:                  string(intent.Currency),
+		Credits:                   credits,
+		CreditDenominationVersion: domain.CurrentCreditDenominationVersion,
+		StarKopecks:               domain.StarKopecks,
+		PriceVersion:              intent.PriceVersion,
+		ConfirmationURL:           intent.ConfirmationURL,
+		CreatedAt:                 intent.CreatedAt,
+		UpdatedAt:                 intent.UpdatedAt,
 	}
 	if intent.ProductID != nil {
 		dto.ProductID = *intent.ProductID

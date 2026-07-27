@@ -17,7 +17,7 @@ import (
 
 // DefaultStartingBalance is the amount of credits granted to a freshly created
 // account.
-const DefaultStartingBalance int64 = 30
+const DefaultStartingBalance int64 = 60
 
 // DefaultReservationTTL bounds how long a hold may live before it is eligible
 // for automatic release.
@@ -36,10 +36,10 @@ var ErrInvalidAmount = errors.New("billingservice: amount must be positive")
 // Per the product spec image_to_video shares the video fallback.
 var defaultPrices = map[domain.OperationType]int64{
 	domain.OperationTextGenerate:      0,
-	domain.OperationImageGenerate:     10,
-	domain.OperationImageEdit:         10,
-	domain.OperationVideoGenerate:     50,
-	domain.OperationVideoImageToVideo: 50,
+	domain.OperationImageGenerate:     20,
+	domain.OperationImageEdit:         20,
+	domain.OperationVideoGenerate:     100,
+	domain.OperationVideoImageToVideo: 100,
 }
 
 // Service provides credit estimation and lifecycle operations.
@@ -158,10 +158,11 @@ func (s *Service) ensureAccountWith(ctx context.Context, repo domain.BillingRepo
 		return nil, err
 	}
 	acc = &domain.CreditAccount{
-		UserID:         userID,
-		OwnerAccountID: accountID,
-		Currency:       s.currency,
-		BalanceCached:  s.startingBalance,
+		UserID:                    userID,
+		OwnerAccountID:            accountID,
+		Currency:                  s.currency,
+		BalanceCached:             s.startingBalance,
+		CreditDenominationVersion: domain.CurrentCreditDenominationVersion,
 	}
 	if err := repo.CreateAccount(ctx, acc); err != nil {
 		// A concurrent creation may have won the race; re-read in that case.
@@ -199,13 +200,14 @@ func (s *Service) ReserveWithOwner(ctx context.Context, repo domain.BillingRepos
 		return nil, err
 	}
 	res := &domain.CreditReservation{
-		AccountID:      acc.ID,
-		OwnerAccountID: creditAccountOwnerID(acc, accountOwnerID(userID, accountID)),
-		JobID:          jobID,
-		Amount:         amount,
-		Status:         domain.ReservationReserved,
-		IdempotencyKey: "resv:" + jobID.String(),
-		ExpiresAt:      s.now().Add(s.reservationTTL),
+		AccountID:                 acc.ID,
+		OwnerAccountID:            creditAccountOwnerID(acc, accountOwnerID(userID, accountID)),
+		JobID:                     jobID,
+		Amount:                    amount,
+		CreditDenominationVersion: domain.CurrentCreditDenominationVersion,
+		Status:                    domain.ReservationReserved,
+		IdempotencyKey:            "resv:" + jobID.String(),
+		ExpiresAt:                 s.now().Add(s.reservationTTL),
 	}
 	if err := repo.Reserve(ctx, res); err != nil {
 		return nil, err
@@ -287,14 +289,15 @@ func (s *Service) RefundForOwner(ctx context.Context, userID, accountID, jobID u
 		return err
 	}
 	entry := &domain.LedgerEntry{
-		AccountID:      acc.ID,
-		OwnerAccountID: creditAccountOwnerID(acc, ownerID),
-		JobID:          &jobID,
-		Type:           domain.LedgerRefund,
-		Amount:         amount,
-		Status:         domain.LedgerStatusCommitted,
-		IdempotencyKey: "refund:" + jobID.String(),
-		Reason:         "job refund",
+		AccountID:                 acc.ID,
+		OwnerAccountID:            creditAccountOwnerID(acc, ownerID),
+		JobID:                     &jobID,
+		Type:                      domain.LedgerRefund,
+		Amount:                    amount,
+		CreditDenominationVersion: domain.CurrentCreditDenominationVersion,
+		Status:                    domain.LedgerStatusCommitted,
+		IdempotencyKey:            "refund:" + jobID.String(),
+		Reason:                    "job refund",
 	}
 	return s.repo.AppendEntry(ctx, entry)
 }
@@ -328,13 +331,14 @@ func (s *Service) GrantWithOwner(ctx context.Context, repo domain.BillingReposit
 		return err
 	}
 	entry := &domain.LedgerEntry{
-		AccountID:      acc.ID,
-		OwnerAccountID: creditAccountOwnerID(acc, ownerID),
-		Type:           domain.LedgerTopup,
-		Amount:         amount,
-		Status:         domain.LedgerStatusCommitted,
-		IdempotencyKey: idempotencyKey,
-		Reason:         reason,
+		AccountID:                 acc.ID,
+		OwnerAccountID:            creditAccountOwnerID(acc, ownerID),
+		Type:                      domain.LedgerTopup,
+		Amount:                    amount,
+		CreditDenominationVersion: domain.CurrentCreditDenominationVersion,
+		Status:                    domain.LedgerStatusCommitted,
+		IdempotencyKey:            idempotencyKey,
+		Reason:                    reason,
 	}
 	if err := repo.AppendEntry(ctx, entry); err != nil {
 		if errors.Is(err, domain.ErrConflict) {
