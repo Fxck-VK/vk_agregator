@@ -1,9 +1,9 @@
 {
   "schema_version": 5,
-  "updated_at": "2026-07-05T00:00:00+03:00",
-  "branch": "serega",
-  "remote_tracking": "origin/serega",
-  "head": "2a273ed",
+  "updated_at": "2026-07-29T00:00:00+03:00",
+  "branch": "dev-deploy",
+  "remote_tracking": "origin/dev-deploy",
+  "head": "5fe9ddb",
   "purpose": "Short machine-readable current context and routing for agents. This file is not project history.",
   "read_policy": {
     "canonical_read_order": [
@@ -39,7 +39,8 @@
       "docs/ACCOUNT_IDENTITY_CONTRACT.md",
       "docs/OPERATOR_UI.md",
       "docs/VIDEO_GENERATION.md",
-      "docs/VK_BOT_AGENT_GUIDE.md"
+      "docs/VK_BOT_AGENT_GUIDE.md",
+      "docs/superpowers/specs/2026-07-29-neirohub-web-platform-design.md"
     ],
     "do_not_read_by_default": [
       ".agents/logs/**",
@@ -50,12 +51,12 @@
     "history_read_condition": "Read logs/archive only when explicitly asked for history, repeated-error debugging, regression archaeology, or old audit details."
   },
   "current_context": {
-    "worktree": "dirty: multiple documentation, deploy, loadtest and admin/operator changes are in progress",
-    "active_branch_role": "serega is the current integration/development branch",
+    "worktree": "The accepted NeiroHub web platform design is the only active documentation change in this task.",
+    "active_branch_role": "dev-deploy is the current integration/deployment branch for this workspace; production remains main-only.",
     "dev_contour": "dev-deploy branch plus DEV VPS, DEV Cloudflare tunnel, DEV VK group and DEV payment/provider secrets. DEV should mirror production architecture with separate secrets and routes.",
     "prod_contour": "main only. Production deploy goes through GitHub Actions, GHCR images, VPS deploy script, smoke checks and rollback policy.",
     "loadtest_contour": "APP_ENV=loadtest with mock providers, mock payments and mock delivery only. Production hosts and paid providers are blocked for load tests.",
-    "current_doc_work": "Canonical documentation cleanup is active. Keep AGENTS.md, docs/INDEX.md, RUNBOOK.md/runbooks and this state file concise."
+    "current_doc_work": "The accepted NeiroHub web platform design is active; implementation has not started and requires written-spec review followed by an implementation plan."
   },
   "recent_decisions": [
     "Default context is intentionally small: AGENTS.md, .agents/state.json and docs/ARCHITECTURE.md.",
@@ -76,7 +77,8 @@
     "DEV is the daily integration/testing contour; PROD secrets must not be copied from DEV.",
     "YooKassa payment values are contour-specific: do not value-sync payments.dev.env and payments.prod.env, and do not force YOOKASSA_SECRET_KEY, YOOKASSA_SHOP_ID or YooKassa return URLs to match across DEV, PROD, .env and dev.env.",
     "Provider calls remain isolated in workers/adapters; VK bot, Mini App and cmd/api must not call AI providers directly.",
-    "Billing remains ledger-based and payment top-ups require provider-verified webhook/reconciliation."
+    "Billing remains ledger-based and payment top-ups require provider-verified webhook/reconciliation.",
+    "The standalone NeiroHub web platform uses one independently deployable Next.js application with public SSG/ISR routes, authenticated no-store/noindex routes, secure server-managed web sessions and a channel-neutral versioned /web/v1 Go API."
   ],
   "active_priorities": [
     "Finish documentation canonicalization without turning docs into history logs.",
@@ -84,7 +86,8 @@
     "Run longer sustained load tests before claiming scale readiness.",
     "Verify live YooKassa smoke before real-money confidence: payment.succeeded, payment.canceled, refund.succeeded, replay/idempotency and reconciliation.",
     "Plan operational migration to external/managed Postgres, Redis and S3 before serious traffic.",
-    "Use protected PR/review flow for main; no force push."
+    "Use protected PR/review flow for main; no force push.",
+    "Implement the accepted NeiroHub web platform design in independently verifiable vertical slices, beginning with web identity/session verification and the /web/v1 API foundation."
   ],
   "open_risks": [
     "DEV/PROD env drift is still possible if the parity allowlist becomes too broad or secret files are edited manually.",
