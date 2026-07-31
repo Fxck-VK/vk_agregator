@@ -362,6 +362,68 @@ function Assert-ReverseProxyConfig {
     Write-Host "reverse proxy config OK"
 }
 
+function Assert-ImageDependencySecurityFloor {
+    $goModPath = Join-Path $repoRoot "go.mod"
+    if (-not (Test-Path -LiteralPath $goModPath)) {
+        throw "go.mod is missing"
+    }
+
+    $goMod = Get-Content -LiteralPath $goModPath -Raw
+    $match = [regex]::Match($goMod, '(?m)^\s*golang\.org/x/text\s+v(?<version>\d+\.\d+\.\d+)')
+    if (-not $match.Success) {
+        throw "go.mod must pin golang.org/x/text"
+    }
+
+    $installed = [version]$match.Groups['version'].Value
+    $minimum = [version]"0.39.0"
+    if ($installed -lt $minimum) {
+        throw "golang.org/x/text must be at least v$minimum (found v$installed)"
+    }
+
+    $platformDockerfilePath = Join-Path $repoRoot "Dockerfile.platform"
+    if (-not (Test-Path -LiteralPath $platformDockerfilePath)) {
+        throw "Dockerfile.platform is missing"
+    }
+
+    $platformDockerfile = Get-Content -LiteralPath $platformDockerfilePath -Raw
+    $runtimeStage = [regex]::Match($platformDockerfile, '(?ms)^FROM\s+node:[^\r\n]+\s+AS\s+runtime\s*\r?\n(?<body>.*)\z')
+    if (-not $runtimeStage.Success) {
+        throw "Dockerfile.platform must have a node runtime stage"
+    }
+
+    $runtimeBody = $runtimeStage.Groups['body'].Value
+    $cleanupRun = [regex]::Match($runtimeBody, '(?ms)^RUN\s+rm\s+-rf\b(?<paths>.*?)(?=^\S|\z)')
+    if (-not $cleanupRun.Success) {
+        throw "Dockerfile.platform runtime must remove unused package-manager payload in a RUN instruction"
+    }
+
+    $copyMatches = [regex]::Matches($runtimeBody, '(?m)^COPY\s+')
+    if ($copyMatches.Count -eq 0) {
+        throw "Dockerfile.platform runtime must copy the standalone application"
+    }
+    if ($cleanupRun.Index -le $copyMatches[$copyMatches.Count - 1].Index) {
+        throw "Dockerfile.platform runtime must remove package-manager payload after application copies"
+    }
+
+    $cleanupPaths = $cleanupRun.Groups['paths'].Value
+    foreach ($path in @(
+        "/usr/local/lib/node_modules/npm",
+        "/usr/local/lib/node_modules/corepack",
+        "/usr/local/bin/npm",
+        "/usr/local/bin/npx",
+        "/usr/local/bin/corepack",
+        "/usr/local/bin/yarn",
+        "/usr/local/bin/yarnpkg",
+        "/opt/yarn-v*"
+    )) {
+        if (-not $cleanupPaths.Contains($path)) {
+            throw "Dockerfile.platform runtime must remove unused package-manager payload: $path"
+        }
+    }
+
+    Write-Host "image dependency security floor OK: golang.org/x/text v$installed; platform runtime excludes unused package managers"
+}
+
 function Assert-MiniAppStaticSecurityHeaders {
     $path = Join-Path $repoRoot "deployments\nginx\miniapp.static.conf"
     if (-not (Test-Path -LiteralPath $path)) {
@@ -1590,6 +1652,7 @@ if (Test-Path -LiteralPath "docker-compose.prod.yml") {
 }
 
 Assert-Migrations
+Assert-ImageDependencySecurityFloor
 Assert-NoTrackedEnvFiles
 Assert-NoActiveEnvExampleReferences
 Assert-CloudflareConfigHasNoSecrets

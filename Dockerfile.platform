@@ -23,6 +23,19 @@ COPY --from=build --chown=node:node /app/.next/standalone ./
 COPY --from=build --chown=node:node /app/.next/static ./.next/static
 COPY --from=build --chown=node:node /app/public ./public
 
+# The prebuilt standalone server needs Node.js, not package-management tools.
+# Remove their full payload after all application copies to keep npm-only CVEs
+# and unused package-manager attack surface out of the runtime image.
+RUN rm -rf \
+    /usr/local/lib/node_modules/npm \
+    /usr/local/lib/node_modules/corepack \
+    /usr/local/bin/npm \
+    /usr/local/bin/npx \
+    /usr/local/bin/corepack \
+    /usr/local/bin/yarn \
+    /usr/local/bin/yarnpkg \
+    /opt/yarn-v*
+
 USER node
 
 EXPOSE 3000
