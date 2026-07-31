@@ -56,7 +56,9 @@ type Config struct {
 	RedisMode        string
 	S3Mode           string
 
-	HTTPAddr      string
+	HTTPAddr string
+	// WebOrigin is the exact trusted browser origin for /web/v1 unsafe requests.
+	WebOrigin     string
 	DatabaseURL   string
 	MigrationsDir string
 
@@ -533,6 +535,14 @@ func (c Config) IsProduction() bool {
 // contour. Load tests must stay mock-backed and isolated from paid providers.
 func (c Config) IsLoadTest() bool {
 	return isLoadTestEnv(c.Env)
+}
+
+func validWebOrigin(raw string) bool {
+	origin, err := url.Parse(raw)
+	if raw == "" || err != nil || !origin.IsAbs() || origin.Opaque != "" || origin.Scheme != "https" || origin.Host == "" || origin.Host != strings.ToLower(origin.Host) || origin.User != nil || origin.Path != "" || origin.RawQuery != "" || origin.ForceQuery || origin.Fragment != "" || origin.Port() == "443" {
+		return false
+	}
+	return origin.String() == raw
 }
 
 // EffectiveMediaVideoProbePolicy returns the normalized worker probe policy.
@@ -1013,6 +1023,9 @@ func (c Config) Validate() error {
 			missing = append(missing, "YOOKASSA_RETURN_URL")
 		}
 	}
+	if c.IsServerEnv() && !validWebOrigin(c.WebOrigin) {
+		missing = append(missing, "WEB_ORIGIN (exact absolute HTTPS origin without path, query, fragment, or credentials)")
+	}
 	if len(missing) > 0 {
 		return fmt.Errorf("config: missing required production secrets: %s", strings.Join(missing, ", "))
 	}
@@ -1099,6 +1112,7 @@ func Load() Config {
 		RedisMode:        envMode("REDIS_MODE", dataServicesMode),
 		S3Mode:           envMode("S3_MODE", dataServicesMode),
 		HTTPAddr:         env("HTTP_ADDR", ":8080"),
+		WebOrigin:        env("WEB_ORIGIN", ""),
 		DatabaseURL:      env("DATABASE_URL", "postgres://vk_ai_aggregator:vk_ai_aggregator@localhost:5432/vk_ai_aggregator?sslmode=disable"),
 		MigrationsDir:    env("MIGRATIONS_DIR", "migrations"),
 

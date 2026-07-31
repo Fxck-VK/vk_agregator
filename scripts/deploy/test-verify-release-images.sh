@@ -99,17 +99,17 @@ expect_failure() {
 
 success_output="$(run_verifier)"
 verified_count="$(grep -c '^Verified signed release image:' <<<"${success_output}")"
-[[ "${verified_count}" == "7" ]] || { echo "Expected seven verified release images; got ${verified_count}." >&2; exit 1; }
-echo "PASS positive: seven exact signed image digests"
+[[ "${verified_count}" == "8" ]] || { echo "Expected eight verified release images; got ${verified_count}." >&2; exit 1; }
+echo "PASS positive: eight exact signed image digests"
 
 v1_success_output="$(MOCK_PROVENANCE_SCHEMA=v1 run_verifier)"
 v1_verified_count="$(grep -c '^Verified signed release image:' <<<"${v1_success_output}")"
-[[ "${v1_verified_count}" == "7" ]] || { echo "Expected seven verified SLSA v1 release images; got ${v1_verified_count}." >&2; exit 1; }
-echo "PASS positive: seven exact signed image digests with SLSA v1 provenance"
+[[ "${v1_verified_count}" == "8" ]] || { echo "Expected eight verified SLSA v1 release images; got ${v1_verified_count}." >&2; exit 1; }
+echo "PASS positive: eight exact signed image digests with SLSA v1 provenance"
 
 fragment_success_output="$(MOCK_PROVENANCE_SCHEMA=v1 MOCK_MATERIAL_SUFFIX="#${MOCK_REVISION}" run_verifier)"
 fragment_verified_count="$(grep -c '^Verified signed release image:' <<<"${fragment_success_output}")"
-[[ "${fragment_verified_count}" == "7" ]] || { echo "Expected seven verified provenance materials with pinned Git fragments; got ${fragment_verified_count}." >&2; exit 1; }
+[[ "${fragment_verified_count}" == "8" ]] || { echo "Expected eight verified provenance materials with pinned Git fragments; got ${fragment_verified_count}." >&2; exit 1; }
 echo "PASS positive: provenance Git material fragment matches the exact revision"
 
 expect_failure "mismatched image tag" \

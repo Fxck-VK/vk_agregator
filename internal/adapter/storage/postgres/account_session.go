@@ -21,21 +21,21 @@ func NewAccountSessionRepository(db Querier) *AccountSessionRepository {
 
 var _ domain.AccountSessionRepository = (*AccountSessionRepository)(nil)
 
-const accountSessionColumns = `id, account_id, identity_id, refresh_token_hash,
-	device_id, ip_hash, user_agent_hash, expires_at, revoked_at, created_at, updated_at`
+const accountSessionColumns = `id, account_id, identity_id, access_token_hash, access_expires_at,
+	refresh_token_hash, device_id, ip_hash, user_agent_hash, expires_at, revoked_at, created_at, updated_at`
 
 func (r *AccountSessionRepository) CreateSession(ctx context.Context, session domain.AccountSession) (*domain.AccountSession, error) {
 	if err := session.Validate(); err != nil {
 		return nil, err
 	}
 	const q = `INSERT INTO account_sessions (
-			id, account_id, identity_id, refresh_token_hash,
+			id, account_id, identity_id, access_token_hash, access_expires_at, refresh_token_hash,
 			device_id, ip_hash, user_agent_hash,
 			expires_at, revoked_at, created_at, updated_at
 		) VALUES (
-			COALESCE($1, gen_random_uuid()), $2, $3, $4,
-			$5, $6, $7,
-			$8, $9, COALESCE($10, now()), COALESCE($11, COALESCE($10, now()))
+			COALESCE($1, gen_random_uuid()), $2, $3, $4, $5, $6,
+			$7, $8, $9,
+			$10, $11, COALESCE($12, now()), COALESCE($13, COALESCE($12, now()))
 		)
 		RETURNING ` + accountSessionColumns
 	var out domain.AccountSession
@@ -43,6 +43,8 @@ func (r *AccountSessionRepository) CreateSession(ctx context.Context, session do
 		nullableUUIDOrNil(session.ID),
 		session.AccountID,
 		nullableUUIDPtr(session.IdentityID),
+		nullableString(session.AccessTokenHash),
+		nullableTimePtr(session.AccessExpiresAt),
 		session.RefreshTokenHash,
 		session.DeviceID,
 		session.IPHash,
@@ -53,6 +55,17 @@ func (r *AccountSessionRepository) CreateSession(ctx context.Context, session do
 		nullableTime(session.UpdatedAt),
 	), &out)
 	if err != nil {
+		return nil, mapError(err)
+	}
+	return &out, nil
+}
+
+func (r *AccountSessionRepository) FindSessionByAccessHash(ctx context.Context, accessTokenHash string) (*domain.AccountSession, error) {
+	const q = `SELECT ` + accountSessionColumns + `
+		FROM account_sessions
+		WHERE access_token_hash = $1`
+	var out domain.AccountSession
+	if err := scanAccountSession(r.db.QueryRow(ctx, q, accessTokenHash), &out); err != nil {
 		return nil, mapError(err)
 	}
 	return &out, nil
@@ -114,9 +127,10 @@ func (r *AccountSessionRepository) RevokeSession(ctx context.Context, accountID,
 
 func (r *AccountSessionRepository) RevokeSessionByRefreshHash(ctx context.Context, refreshTokenHash string, revokedAt time.Time) (*domain.AccountSession, error) {
 	const q = `UPDATE account_sessions
-		SET revoked_at = COALESCE(revoked_at, $2),
+		SET revoked_at = $2,
 		    updated_at = $2
 		WHERE refresh_token_hash = $1
+		  AND revoked_at IS NULL
 		RETURNING ` + accountSessionColumns
 	var out domain.AccountSession
 	if err := scanAccountSession(r.db.QueryRow(ctx, q, refreshTokenHash, revokedAt), &out); err != nil {
@@ -137,11 +151,15 @@ func (r *AccountSessionRepository) RevokeAllSessions(ctx context.Context, accoun
 
 func scanAccountSession(row rowScanner, session *domain.AccountSession) error {
 	var identityID *uuid.UUID
+	var accessTokenHash *string
+	var accessExpiresAt *time.Time
 	var revokedAt *time.Time
 	if err := row.Scan(
 		&session.ID,
 		&session.AccountID,
 		&identityID,
+		&accessTokenHash,
+		&accessExpiresAt,
 		&session.RefreshTokenHash,
 		&session.DeviceID,
 		&session.IPHash,
@@ -154,8 +172,19 @@ func scanAccountSession(row rowScanner, session *domain.AccountSession) error {
 		return err
 	}
 	session.IdentityID = identityID
+	if accessTokenHash != nil {
+		session.AccessTokenHash = *accessTokenHash
+	}
+	session.AccessExpiresAt = accessExpiresAt
 	session.RevokedAt = revokedAt
 	return nil
+}
+
+func nullableString(value string) *string {
+	if value == "" {
+		return nil
+	}
+	return &value
 }
 
 func nullableUUIDPtr(id *uuid.UUID) *uuid.UUID {

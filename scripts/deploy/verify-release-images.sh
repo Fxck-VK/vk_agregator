@@ -44,7 +44,7 @@ for command_name in docker cosign jq sha256sum; do
   command -v "${command_name}" >/dev/null 2>&1 || { echo "Required verifier is unavailable: ${command_name}" >&2; exit 1; }
 done
 
-services=(api worker provider-webhook provider-balance-bot miniapp migrate backup)
+services=(api worker provider-webhook provider-balance-bot miniapp platform migrate backup)
 certificate_identity="https://github.com/${repository}/.github/workflows/docker-images.yml@${workflow_ref}"
 oidc_issuer="https://token.actions.githubusercontent.com"
 repository_lc="${repository,,}"

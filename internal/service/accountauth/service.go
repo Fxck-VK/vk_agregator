@@ -21,13 +21,14 @@ import (
 
 // Service is the single entry point for current and future login methods.
 type Service struct {
-	resolver    domain.IdentityResolver
-	limiter     RateLimiter
-	sessions    domain.AccountSessionRepository
-	credentials domain.AccountCredentialRepository
-	audit       domain.AccountLinkAuditRepository
-	sessionTTL  time.Duration
-	now         func() time.Time
+	resolver       domain.IdentityResolver
+	limiter        RateLimiter
+	sessions       domain.AccountSessionRepository
+	credentials    domain.AccountCredentialRepository
+	audit          domain.AccountLinkAuditRepository
+	sessionTTL     time.Duration
+	accessTokenTTL time.Duration
+	now            func() time.Time
 }
 
 // RateLimiter is the optional shared limiter for login/link flows.

@@ -137,6 +137,7 @@ type AccountIdentityRepository interface {
 // agents.
 type AccountSessionRepository interface {
 	CreateSession(ctx context.Context, session AccountSession) (*AccountSession, error)
+	FindSessionByAccessHash(ctx context.Context, accessTokenHash string) (*AccountSession, error)
 	FindSessionByRefreshHash(ctx context.Context, refreshTokenHash string) (*AccountSession, error)
 	ListActiveSessionsByAccount(ctx context.Context, accountID uuid.UUID, now time.Time, limit int) ([]*AccountSession, error)
 	RevokeSession(ctx context.Context, accountID, sessionID uuid.UUID, revokedAt time.Time) (*AccountSession, error)
@@ -267,6 +268,13 @@ type ConversationRepository interface {
 	GetByIDForUser(ctx context.Context, userID, conversationID uuid.UUID) (*Conversation, error)
 	// ListByUserSource returns conversations for a user/source, newest first.
 	ListByUserSource(ctx context.Context, userID uuid.UUID, source ConversationSource, limit, offset int) ([]*Conversation, error)
+	// GetByIDForAccount returns a conversation for its exact canonical account
+	// owner. It never falls back to legacy user provenance.
+	GetByIDForAccount(ctx context.Context, accountID, conversationID uuid.UUID) (*Conversation, error)
+	// ListByAccountSource returns conversations for the exact canonical account
+	// owner and source, newest first. It never falls back to legacy user
+	// provenance.
+	ListByAccountSource(ctx context.Context, accountID uuid.UUID, source ConversationSource, limit, offset int) ([]*Conversation, error)
 	// CreateConversation inserts a new conversation.
 	CreateConversation(ctx context.Context, conversation *Conversation) error
 	// SetConversationTitleIfEmpty fills an empty title without overwriting an

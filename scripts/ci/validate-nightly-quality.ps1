@@ -26,6 +26,7 @@ $expectedDockerfiles = @(
     "Dockerfile.backup",
     "Dockerfile.migrate",
     "Dockerfile.miniapp",
+    "Dockerfile.platform",
     "Dockerfile.provider-balance-bot",
     "Dockerfile.provider-webhook",
     "Dockerfile.worker"
@@ -74,7 +75,7 @@ function Assert-ExactInventory {
     $missing = @($expectedDockerfiles | Where-Object { $Actual -notcontains $_ })
     $unexpected = @($Actual | Where-Object { $expectedDockerfiles -notcontains $_ })
     if ($Actual.Count -ne $expectedDockerfiles.Count -or $missing.Count -gt 0 -or $unexpected.Count -gt 0) {
-        throw "$Description must contain exactly seven production Dockerfiles; missing=[$($missing -join ', ')], unexpected=[$($unexpected -join ', ')]"
+        throw "$Description must contain exactly eight production Dockerfiles; missing=[$($missing -join ', ')], unexpected=[$($unexpected -join ', ')]"
     }
 }
 
@@ -122,10 +123,11 @@ Assert-Contains $nightly 'github.com/securego/gosec/v2/cmd/gosec@v2.28.0' 'Night
 Assert-Contains $nightly 'golang.org/x/vuln/cmd/govulncheck@v1.6.0' 'Nightly Quality'
 Assert-Contains $nightly 'path: web/miniapp' 'Nightly Quality frontend matrix'
 Assert-Contains $nightly 'path: web/admin' 'Nightly Quality frontend matrix'
+Assert-Contains $nightly 'path: web/platform' 'Nightly Quality frontend matrix'
 Assert-Contains $nightly 'npm --prefix "${{ matrix.path }}" audit --audit-level=moderate' 'Nightly Quality'
 Assert-Contains $nightly 'node scripts/ci/validate-npm-lockfiles.mjs "${{ matrix.lockfile }}"' 'Nightly Quality lockfile integrity'
-if ([regex]::Matches($ci, 'node scripts/ci/validate-npm-lockfiles\.mjs web/(?:miniapp|admin)/package-lock\.json').Count -ne 2) {
-    throw 'CI must validate immutable source metadata for both frontend lockfiles.'
+if ([regex]::Matches($ci, 'node scripts/ci/validate-npm-lockfiles\.mjs web/(?:miniapp|admin|platform)/package-lock\.json').Count -ne 3) {
+    throw 'CI must validate immutable source metadata for all three frontend lockfiles.'
 }
 Assert-Contains $nightly 'trivy-filesystem:' 'Nightly Quality'
 Assert-Contains $nightly 'trivy-images:' 'Nightly Quality'
@@ -253,8 +255,8 @@ Assert-Contains $dependabot 'package-ecosystem: "github-actions"' 'Dependabot Gi
 Assert-Contains $dependabot 'package-ecosystem: "docker"' 'Dependabot Docker updates'
 Assert-Contains $dependabot 'package-ecosystem: "gomod"' 'Dependabot Go updates'
 Assert-Contains $dependabot 'package-ecosystem: "npm"' 'Dependabot npm updates'
-if ([regex]::Matches($dependabot, 'package-ecosystem:\s*"npm"').Count -ne 2) {
-    throw 'Dependabot must audit both Mini App and Admin npm lockfiles.'
+if ([regex]::Matches($dependabot, 'package-ecosystem:\s*"npm"').Count -ne 3) {
+    throw 'Dependabot must audit Mini App, Admin, and Platform npm lockfiles.'
 }
 Assert-Contains $codeowners '.github/workflows/' 'CODEOWNERS workflow protection'
 Assert-Contains $codeowners 'scripts/deploy/**' 'CODEOWNERS deploy script protection'

@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
@@ -12,7 +13,12 @@ type ConversationSource string
 const (
 	ConversationSourceVKBot   ConversationSource = "vk_bot"
 	ConversationSourceMiniApp ConversationSource = "miniapp"
+	ConversationSourceWeb     ConversationSource = "web"
 )
+
+// ErrConversationAccountOwnershipRequired is returned when a web conversation
+// lacks the canonical account owner required for account-native access.
+var ErrConversationAccountOwnershipRequired = errors.New("domain: conversation account ownership required")
 
 // ConversationStatus describes whether a dialog thread can receive new
 // messages. VK bot context uses one active conversation per user/peer.
@@ -37,6 +43,15 @@ type Conversation struct {
 	Title            string             `json:"title,omitempty"`
 	CreatedAt        time.Time          `json:"created_at"`
 	UpdatedAt        time.Time          `json:"updated_at"`
+}
+
+// ValidateOwnership verifies source-specific ownership invariants before a
+// conversation reaches storage.
+func (c Conversation) ValidateOwnership() error {
+	if c.Source == ConversationSourceWeb && c.AccountID == uuid.Nil {
+		return ErrConversationAccountOwnershipRequired
+	}
+	return nil
 }
 
 // ConversationRef is a stable lookup key for an active conversation. VK bot

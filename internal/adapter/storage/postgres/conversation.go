@@ -110,12 +110,46 @@ func (r *ConversationRepository) ListByUserSource(ctx context.Context, userID uu
 	return scanConversations(rows)
 }
 
-func (r *ConversationRepository) CreateConversation(ctx context.Context, c *domain.Conversation) error {
-	if c.ID == uuid.Nil {
-		c.ID = uuid.New()
+func (r *ConversationRepository) GetByIDForAccount(ctx context.Context, accountID, conversationID uuid.UUID) (*domain.Conversation, error) {
+	const q = `SELECT ` + conversationColumns + `
+		FROM conversations
+		WHERE account_id = $1 AND id = $2`
+	var c domain.Conversation
+	if err := mapError(scanConversation(r.db.QueryRow(ctx, q, accountID, conversationID), &c)); err != nil {
+		return nil, err
 	}
+	return &c, nil
+}
+
+func (r *ConversationRepository) ListByAccountSource(ctx context.Context, accountID uuid.UUID, source domain.ConversationSource, limit, offset int) ([]*domain.Conversation, error) {
+	if limit <= 0 {
+		return nil, nil
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	const q = `SELECT ` + conversationColumns + `
+		FROM conversations
+		WHERE account_id = $1 AND source = $2
+		ORDER BY updated_at DESC, created_at DESC
+		LIMIT $3 OFFSET $4`
+	rows, err := r.db.Query(ctx, q, accountID, source, limit, offset)
+	if err != nil {
+		return nil, mapError(err)
+	}
+	defer rows.Close()
+	return scanConversations(rows)
+}
+
+func (r *ConversationRepository) CreateConversation(ctx context.Context, c *domain.Conversation) error {
 	if c.Source == "" {
 		c.Source = domain.ConversationSourceVKBot
+	}
+	if err := c.ValidateOwnership(); err != nil {
+		return err
+	}
+	if c.ID == uuid.Nil {
+		c.ID = uuid.New()
 	}
 	if c.Status == "" {
 		c.Status = domain.ConversationActive
@@ -125,7 +159,7 @@ func (r *ConversationRepository) CreateConversation(ctx context.Context, c *doma
 		VALUES ($1, $2, COALESCE($3::uuid, (SELECT account_id FROM users WHERE id = $2)), $4, $5, $6, $7, $8)
 		RETURNING ` + conversationColumns
 	return mapError(scanConversation(r.db.QueryRow(ctx, q,
-		c.ID, c.UserID, nullableUUID(c.AccountID), c.Source, c.VKPeerID, c.ExternalThreadID, c.Status, c.Title), c))
+		c.ID, nullableUUID(c.UserID), nullableUUID(c.AccountID), c.Source, c.VKPeerID, c.ExternalThreadID, c.Status, c.Title), c))
 }
 
 func (r *ConversationRepository) SetConversationTitleIfEmpty(ctx context.Context, conversationID uuid.UUID, title string) error {
@@ -238,12 +272,19 @@ func (r *ConversationRepository) UpsertSummary(ctx context.Context, s *domain.Co
 }
 
 func scanConversation(row rowScanner, c *domain.Conversation) error {
-	var accountID *uuid.UUID
-	if err := row.Scan(&c.ID, &c.UserID, &accountID, &c.Source, &c.VKPeerID, &c.ExternalThreadID, &c.Status, &c.Title, &c.CreatedAt, &c.UpdatedAt); err != nil {
+	var userID, accountID *uuid.UUID
+	if err := row.Scan(&c.ID, &userID, &accountID, &c.Source, &c.VKPeerID, &c.ExternalThreadID, &c.Status, &c.Title, &c.CreatedAt, &c.UpdatedAt); err != nil {
 		return err
+	}
+	if userID != nil {
+		c.UserID = *userID
+	} else {
+		c.UserID = uuid.Nil
 	}
 	if accountID != nil {
 		c.AccountID = *accountID
+	} else {
+		c.AccountID = uuid.Nil
 	}
 	return nil
 }

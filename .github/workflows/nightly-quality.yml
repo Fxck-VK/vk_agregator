@@ -73,6 +73,9 @@ jobs:
           - app: Admin
             path: web/admin
             lockfile: web/admin/package-lock.json
+          - app: Web Platform
+            path: web/platform
+            lockfile: web/platform/package-lock.json
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -160,6 +163,8 @@ jobs:
             dockerfile: Dockerfile.provider-balance-bot
           - service: miniapp
             dockerfile: Dockerfile.miniapp
+          - service: platform
+            dockerfile: Dockerfile.platform
           - service: migrate
             dockerfile: Dockerfile.migrate
           - service: backup

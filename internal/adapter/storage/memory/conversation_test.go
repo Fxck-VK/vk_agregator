@@ -105,3 +105,70 @@ func TestConversationRepoMiniAppThreadsAreIsolated(t *testing.T) {
 		t.Fatalf("listed threads = %d, want 2", len(listed))
 	}
 }
+
+func TestConversationRepoWebThreadsUseExactAccountOwner(t *testing.T) {
+	ctx := context.Background()
+	repo := NewConversationRepo()
+	accountA := uuid.New()
+	accountB := uuid.New()
+
+	webA := &domain.Conversation{
+		UserID:           uuid.Nil,
+		AccountID:        accountA,
+		Source:           domain.ConversationSourceWeb,
+		ExternalThreadID: "shared-thread",
+	}
+	webB := &domain.Conversation{
+		UserID:           uuid.Nil,
+		AccountID:        accountB,
+		Source:           domain.ConversationSourceWeb,
+		ExternalThreadID: "shared-thread",
+	}
+	legacyUserMatch := &domain.Conversation{
+		UserID:           accountA,
+		AccountID:        accountB,
+		Source:           domain.ConversationSourceWeb,
+		ExternalThreadID: "legacy-user-match",
+	}
+	for _, conversation := range []*domain.Conversation{webA, webB, legacyUserMatch} {
+		if err := repo.CreateConversation(ctx, conversation); err != nil {
+			t.Fatalf("create web conversation: %v", err)
+		}
+	}
+	if webA.UserID != uuid.Nil {
+		t.Fatalf("account-only web conversation user id = %s, want nil", webA.UserID)
+	}
+
+	got, err := repo.GetByIDForAccount(ctx, accountA, webA.ID)
+	if err != nil {
+		t.Fatalf("get account a web conversation: %v", err)
+	}
+	if got.ID != webA.ID || got.UserID != uuid.Nil || got.AccountID != accountA {
+		t.Fatalf("account a conversation = %#v, want account-only web conversation", got)
+	}
+	if _, err := repo.GetByIDForAccount(ctx, accountB, webA.ID); !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("foreign account get error = %v, want %v", err, domain.ErrNotFound)
+	}
+	if _, err := repo.GetByIDForAccount(ctx, accountA, legacyUserMatch.ID); !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("legacy user fallback get error = %v, want %v", err, domain.ErrNotFound)
+	}
+
+	listed, err := repo.ListByAccountSource(ctx, accountA, domain.ConversationSourceWeb, 10, 0)
+	if err != nil {
+		t.Fatalf("list account a web conversations: %v", err)
+	}
+	if len(listed) != 1 || listed[0].ID != webA.ID {
+		t.Fatalf("account a web conversations = %#v, want only %s", listed, webA.ID)
+	}
+}
+
+func TestConversationRepoRejectsUnownedWebConversation(t *testing.T) {
+	repo := NewConversationRepo()
+	err := repo.CreateConversation(context.Background(), &domain.Conversation{
+		Source:           domain.ConversationSourceWeb,
+		ExternalThreadID: "unowned-web-thread",
+	})
+	if !errors.Is(err, domain.ErrConversationAccountOwnershipRequired) {
+		t.Fatalf("create unowned web conversation error = %v, want %v", err, domain.ErrConversationAccountOwnershipRequired)
+	}
+}

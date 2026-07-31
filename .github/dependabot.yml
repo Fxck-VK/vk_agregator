@@ -45,3 +45,12 @@ updates:
       admin-dependencies:
         patterns:
           - "*"
+
+  - package-ecosystem: "npm"
+    directory: "/web/platform"
+    schedule:
+      interval: "weekly"
+    groups:
+      platform-dependencies:
+        patterns:
+          - "*"

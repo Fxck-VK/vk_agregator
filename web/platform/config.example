@@ -1,0 +1,5 @@
+# The platform and shared Go API run as two local processes. Point this server-only
+# value at the configured development API origin; never use NEXT_PUBLIC_ here.
+# Browser code stays same-origin and requests only /web/v1/* through the platform.
+# Keep real credentials and secrets in ignored local env files, never in this file.
+WEB_API_INTERNAL_ORIGIN=http://127.0.0.1:8080

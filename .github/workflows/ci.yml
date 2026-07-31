@@ -151,6 +151,53 @@ jobs:
       - name: Build
         run: npm --prefix web/miniapp run build
 
+  platform:
+    name: Web Platform
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/platform/package-lock.json
+
+      - name: Validate lockfile integrity
+        run: node scripts/ci/validate-npm-lockfiles.mjs web/platform/package-lock.json
+
+      - name: Install dependencies
+        run: npm --prefix web/platform ci
+
+      - name: Lint
+        run: npm --prefix web/platform run lint
+
+      - name: Typecheck
+        run: npm --prefix web/platform run typecheck
+
+      - name: Test
+        run: npm --prefix web/platform run test
+
+      - name: Verify packaging contract
+        run: npm --prefix web/platform run test:packaging
+
+      - name: Audit runtime dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm --prefix web/platform audit --omit=dev --audit-level=high --json | tee "$RUNNER_TEMP/platform-runtime-audit.json"
+
+      - name: Audit full dependency tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm --prefix web/platform audit --audit-level=high --json | tee "$RUNNER_TEMP/platform-full-audit.json"
+
+      - name: Build
+        run: npm --prefix web/platform run build
+
   admin:
     name: Admin Web
     runs-on: ubuntu-latest
@@ -198,6 +245,7 @@ jobs:
       - name: Test deploy env scripts
         shell: bash
         run: |
+          bash scripts/deploy/test-dev-web-auth.sh
           bash scripts/deploy/test-dev-env.sh
           bash scripts/deploy/test-prod-env.sh
           bash scripts/deploy/test-env-parity.sh

@@ -3,6 +3,7 @@ param(
     [string]$VkBaseUrl = "https://dev-vk.neiirohub.ru",
     [string]$AppBaseUrl = "https://dev-app.neiirohub.ru",
     [string]$DevBaseUrl = "https://dev.neiirohub.ru",
+    [string]$DevWebBaseUrl = "https://dev-web.neiirohub.ru",
     [int]$TimeoutSeconds = 10
 )
 
@@ -73,6 +74,16 @@ function Invoke-HttpCheck {
     throw "$Name returned HTTP $status, expected one of: $($ExpectedStatuses -join ', ')"
 }
 
+function Assert-DevWebRootUrl {
+    param(
+        [Parameter(Mandatory = $true)][string]$Url
+    )
+
+    if ($Url -ne "https://dev-web.neiirohub.ru") {
+        throw "DEV web base URL must be exactly https://dev-web.neiirohub.ru, got $Url"
+    }
+}
+
 $VkBaseUrl = $VkBaseUrl.TrimEnd("/")
 $AppBaseUrl = $AppBaseUrl.TrimEnd("/")
 $DevBaseUrl = $DevBaseUrl.TrimEnd("/")
@@ -80,6 +91,7 @@ $DevBaseUrl = $DevBaseUrl.TrimEnd("/")
 Assert-DevUrl -Name "VK DEV base URL" -Url $VkBaseUrl -ExpectedHost "dev-vk.neiirohub.ru"
 Assert-DevUrl -Name "Mini App DEV base URL" -Url $AppBaseUrl -ExpectedHost "dev-app.neiirohub.ru"
 Assert-DevUrl -Name "Shared DEV base URL" -Url $DevBaseUrl -ExpectedHost "dev.neiirohub.ru"
+Assert-DevWebRootUrl -Url $DevWebBaseUrl
 
 Write-Host "== DEV public smoke"
 
@@ -112,6 +124,12 @@ Invoke-HttpCheck `
     -Body "{}" `
     -ExpectedStatuses @(400, 401, 403) `
     -ForbiddenStatuses @(404, 500, 502, 503, 504)
+
+Invoke-HttpCheck `
+    -Name "DEV web gateway required" `
+    -Url "$DevWebBaseUrl/" `
+    -ExpectedStatuses @(401) `
+    -ForbiddenStatuses @(200, 400, 403, 404, 500, 502, 503, 504)
 
 $blockedPublicRoutes = @(
     [pscustomobject]@{ Name = "DEV VK admin blocked"; Url = "$VkBaseUrl/admin/jobs" },

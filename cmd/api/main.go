@@ -24,6 +24,7 @@ import (
 	adminapi "vk-ai-aggregator/internal/adapter/inbound/admin"
 	billingapi "vk-ai-aggregator/internal/adapter/inbound/billing"
 	paymentredirect "vk-ai-aggregator/internal/adapter/inbound/paymentredirect"
+	websession "vk-ai-aggregator/internal/adapter/inbound/websession"
 	redisqueue "vk-ai-aggregator/internal/adapter/queue/redis"
 	"vk-ai-aggregator/internal/adapter/storage/postgres"
 	redisstore "vk-ai-aggregator/internal/adapter/storage/redis"
@@ -300,6 +301,13 @@ func main() {
 		Linker:    emailLinker,
 		Logger:    logger,
 	})
+	web := websession.NewHandler(websession.Config{WebOrigin: cfg.WebOrigin}, websession.Deps{
+		Authenticator: core.AccountAuth,
+		Sessions:      core.AccountAuth,
+		Passwords:     core.AccountAuth,
+		Account:       core.Account,
+		Conversations: core.Conversations,
+	})
 
 	miniapp := miniappapp.NewHandler(ctx, cfg, miniappapp.Deps{
 		Users:          core.Users,
@@ -327,6 +335,7 @@ func main() {
 	mux.Handle("/billing/", metrics.Middleware("billing", billing.Routes()))
 	mux.Handle("/payments/", metrics.Middleware("payment_redirect", paymentRedirect.Routes()))
 	mux.Handle("/account/", metrics.Middleware("account", account.Routes()))
+	mux.Handle("/web/v1/", metrics.Middleware("websession", web.Routes()))
 	mux.Handle("/miniapp/", metrics.Middleware("miniapp", miniapp.Routes()))
 	mux.Handle("GET /metrics", metrics.PrivateHandler())
 	mux.HandleFunc("GET /health", healthHandler(pool, rdb))

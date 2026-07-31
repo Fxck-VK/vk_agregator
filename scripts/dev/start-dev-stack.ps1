@@ -645,7 +645,7 @@ try {
     Wait-Http -Name "Reverse proxy health" -Url "http://127.0.0.1:$reverseProxyPort/proxy-health" -ExpectedStatuses @(200) -TimeoutSeconds $TimeoutSeconds
 
     Invoke-Step "DEV reverse proxy smoke" {
-        & (Join-Path $PSScriptRoot "check-dev-reverse-proxy.ps1") -BaseUrl "http://127.0.0.1:$reverseProxyPort" -TimeoutSec 10
+        & (Join-Path $PSScriptRoot "check-dev-reverse-proxy.ps1") -BaseUrl "http://127.0.0.1:$reverseProxyPort" -TimeoutSec 10 -SkipDevWebGatewayCheck
     }
 
     if ($WithCloudflare) {

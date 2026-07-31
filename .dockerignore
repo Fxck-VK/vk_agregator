@@ -6,6 +6,9 @@ docs/archive
 .env
 .env.*
 _env
+**/.env*
+**/dev.env*
+**/_env*
 *.log
 *.err
 
@@ -16,6 +19,11 @@ coverage
 
 **/node_modules
 web/miniapp/dist
+web/platform/.next
+web/platform/playwright-report
+web/platform/test-results
+web/platform/coverage
+web/platform/tsconfig.tsbuildinfo
 
 Dockerfile*
 docker-compose*.yml

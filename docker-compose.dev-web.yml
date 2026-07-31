@@ -1,0 +1,42 @@
+services:
+  platform:
+    image: ${APP_IMAGE_REGISTRY}/platform:${IMAGE_TAG}
+    build:
+      context: .
+      dockerfile: Dockerfile.platform
+    restart: unless-stopped
+    user: "1000:1000"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m
+    pids_limit: 128
+    cpus: "0.50"
+    mem_limit: 512m
+    environment:
+      WEB_API_INTERNAL_ORIGIN: http://api:8080
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health').then((response) => { if (!response.ok) process.exit(1); }).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  reverse-proxy:
+    volumes:
+      - ./deployments/nginx/dev-web.conf:/etc/nginx/dev-web.conf:ro
+    environment:
+      DEV_WEB_BASIC_AUTH_HTPASSWD: ${DEV_WEB_BASIC_AUTH_HTPASSWD:?DEV_WEB_BASIC_AUTH_HTPASSWD is required for DEV web Basic Auth}
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        umask 077
+        printf '%s\n' "$${DEV_WEB_BASIC_AUTH_HTPASSWD}" > /tmp/dev-web.htpasswd
+        unset DEV_WEB_BASIC_AUTH_HTPASSWD
+        exec nginx -g 'daemon off;'
+    depends_on:
+      platform:
+        condition: service_healthy

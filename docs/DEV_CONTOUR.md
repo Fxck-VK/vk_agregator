@@ -13,6 +13,7 @@ surface shape as production:
 - VK Callback API
 - VK Mini App frontend
 - Mini App BFF
+- Browser platform (outer-gated for DEV only)
 - YooKassa webhook entrypoint
 - reverse proxy routing
 
@@ -29,16 +30,18 @@ webhook/reconciliation and billing ledger.
 | Mini App | `https://dev-app.neiirohub.ru` | `https://app.neiirohub.ru` |
 | Mini App BFF | `https://dev-app.neiirohub.ru/miniapp/*` | `https://app.neiirohub.ru/miniapp/*` |
 | YooKassa webhook | `https://dev.neiirohub.ru/billing/webhooks/yookassa` | `https://neiirohub.ru/billing/webhooks/yookassa` |
+| Browser platform | `https://dev-web.neiirohub.ru` | not published in this rollout |
 
-All DEV hostnames should point through a separate dashboard-managed Cloudflare
-Tunnel to the same local reverse-proxy origin:
+The three local DEV hostnames (`dev-vk`, `dev-app`, and `dev`) point through
+the existing dashboard-managed Cloudflare Tunnel for DEV, separate from
+production, to the same local reverse-proxy origin:
 
 ```text
 http://127.0.0.1:8088
 ```
 
-The reverse proxy is responsible for routing by hostname/path to the local
-services:
+The local reverse proxy is responsible for routing these three local routes by
+hostname/path:
 
 | DEV hostname/path | Target service |
 |---|---|
@@ -50,25 +53,37 @@ services:
 
 The local reverse proxy listens on `127.0.0.1:8088`. Cloudflare must not route
 directly to `cmd/api`, `cmd/provider-webhook` or the Mini App dev server; all
-three DEV hostnames go to the same reverse proxy origin and are separated by
+three local DEV hostnames go to the same reverse proxy origin and are separated by
 `Host` header plus path.
 
-After the local services and DEV Cloudflare tunnel are running, verify routing
-from the workstation:
+The browser platform is a remote-only browser platform overlay. It is supplied
+by `docker-compose.dev-web.yml` on the remote DEV deployment, not by the
+standard local `start-dev-stack.ps1` Compose set. When that remote overlay is
+published, its additional DEV-only route is
+`dev-web.neiirohub.ru/* -> http://127.0.0.1:8088` and Nginx requires the
+gateway before forwarding to the platform.
+
+After the local services and DEV Cloudflare tunnel are running, verify the
+three local routes from the workstation:
 
 ```powershell
-.\scripts\dev\check-dev-reverse-proxy.ps1
-.\scripts\dev\smoke-dev.ps1
+.\scripts\dev\check-dev-reverse-proxy.ps1 -SkipDevWebGatewayCheck
 ```
 
 The script sends local requests to `http://127.0.0.1:8088` with DEV `Host`
 headers. It expects the API/Mini App/webhook paths to be routed and sensitive
-paths such as `/admin/*` and `/metrics` to stay blocked.
+paths such as `/admin/*` and `/metrics` to stay blocked. The explicit
+`-SkipDevWebGatewayCheck` is required only because the standard local stack
+does not include the remote platform overlay. Without that switch, the script
+strictly requires `dev-web.neiirohub.ru/` to return `401`.
 
-`smoke-dev.ps1` verifies the public DEV Cloudflare routes over HTTPS. It checks
-the DEV VK health/callback route, Mini App frontend and BFF, YooKassa webhook
-entrypoint, and confirms that `/admin/*` and `/metrics` are not publicly open.
-It refuses non-HTTPS URLs and production hostnames.
+`smoke-dev.ps1` verifies the remote DEV deployment's public Cloudflare routes
+over HTTPS after its browser-platform overlay is published. It checks the DEV
+VK health/callback route, Mini App frontend and BFF, YooKassa webhook entrypoint,
+an unauthenticated `https://dev-web.neiirohub.ru/` gateway response of exactly
+`401`, and confirms that `/admin/*` and `/metrics` are not publicly open. It
+refuses non-HTTPS URLs and production hostnames. Smoke scripts never read, send
+or log gateway credentials.
 
 ## GitHub Actions DEV Deploy
 
@@ -89,7 +104,12 @@ ENV_SECRETS_DEV
 ENV_PAYMENTS_DEV
 GHCR_USERNAME
 GHCR_TOKEN
+DEV_WEB_BASIC_AUTH_HTPASSWD
 ```
+
+`DEV_WEB_BASIC_AUTH_HTPASSWD` is a separate Development-environment secret.
+Store a single pre-hashed htpasswd entry only; it is never a plaintext password
+and must not be added to the assembled application `.env`.
 
 The workflow assembles the DEV server `.env` from split GitHub Secrets. The DEV
 parts must contain DEV-only values: `APP_ENV=development`, `dev-*` public URLs,
@@ -205,6 +225,9 @@ What it does:
 - runs migrations through the existing `migrate` service;
 - starts `cmd/api`, `cmd/worker`, `cmd/provider-webhook`, Mini App and the
   reverse proxy;
+- does not start the remote-only `docker-compose.dev-web.yml` browser-platform
+  overlay, so its local reverse-proxy smoke explicitly skips only that gateway
+  assertion;
 - starts the local `cloudflared` connector when `-WithCloudflare` is passed;
 - verifies local service health and reverse-proxy routing;
 - verifies public DEV hosts unless `-SkipPublicSmoke` is passed.
@@ -239,8 +262,8 @@ does not print VK tokens, tunnel tokens or other secrets.
 and preserves Docker volumes. It does not delete local Postgres/Redis/MinIO
 data and does not touch production infrastructure.
 
-`smoke-dev.ps1` is the public Cloudflare smoke check for DEV. Run it after the
-DEV stack and DEV tunnel are up to verify:
+`smoke-dev.ps1` is the public smoke check for the remote DEV deployment. Run it
+after that deployment has published `docker-compose.dev-web.yml` to verify:
 
 ```text
 https://dev-vk.neiirohub.ru/health
@@ -248,6 +271,7 @@ https://dev-vk.neiirohub.ru/webhooks/vk
 https://dev-app.neiirohub.ru
 https://dev-app.neiirohub.ru/miniapp/balance
 https://dev.neiirohub.ru/billing/webhooks/yookassa
+https://dev-web.neiirohub.ru/ -> exactly 401 without gateway credentials
 ```
 
 The same smoke also verifies that public `/admin/*` and `/metrics` routes are
@@ -317,6 +341,7 @@ notepad dev.env
 PUBLIC_VK_BASE_URL=https://dev-vk.neiirohub.ru
 PUBLIC_APP_BASE_URL=https://dev-app.neiirohub.ru
 PUBLIC_PAYMENT_WEBHOOK_URL=https://dev.neiirohub.ru/billing/webhooks/yookassa
+WEB_ORIGIN=https://dev-web.neiirohub.ru
 
 VK_ACCESS_TOKEN=<dev VK community token>
 VK_SECRET=<dev VK Callback API secret>
@@ -375,13 +400,14 @@ production.
 
 ## Cloudflare
 
-Use a separate dashboard-managed tunnel for DEV, for example:
+Use the existing dashboard-managed DEV tunnel, separate from production, for
+example:
 
 ```text
 neiirohub-vk-dev
 ```
 
-Published application routes:
+The local DEV tunnel publishes these three host routes:
 
 | Hostname | Service |
 |---|---|
@@ -389,12 +415,16 @@ Published application routes:
 | `dev-app.neiirohub.ru` | `http://127.0.0.1:8088` |
 | `dev.neiirohub.ru` | `http://127.0.0.1:8088` |
 
+The remote DEV browser-platform overlay additionally publishes
+`dev-web.neiirohub.ru/* -> http://127.0.0.1:8088` through that same DEV tunnel.
+It is not part of the local start flow.
+
 Do not add broad public routes for `/admin/*`, `/metrics`, `/debug/*` or broad
 `/billing/*`. Only the exact YooKassa webhook path is public.
 
 ## Readiness Criteria
 
-The DEV contour is ready when all checks pass:
+The remote DEV deployment is ready when all checks pass:
 
 ```text
 https://dev-vk.neiirohub.ru/health -> 200
@@ -402,7 +432,34 @@ https://dev-vk.neiirohub.ru/webhooks/vk -> controlled non-5xx for invalid GET
 https://dev-app.neiirohub.ru -> Mini App frontend
 https://dev-app.neiirohub.ru/miniapp/* -> API/BFF responses
 https://dev.neiirohub.ru/billing/webhooks/yookassa -> controlled non-5xx for invalid body
+https://dev-web.neiirohub.ru/ -> exactly 401 without gateway credentials
 .\scripts\dev\smoke-dev.ps1 -> public DEV smoke passes
 ```
+
+## DEV Web Manual Acceptance
+
+After the DEV-only dashboard-managed route
+`dev-web.neiirohub.ru/* -> http://127.0.0.1:8088` is published, use this exact
+manual sequence:
+
+`401 outside gate`; gateway credentials then password login; Secure host-only Lax cookies; `/web/v1/me`; CSRF reject; deep-link return.
+
+1. From outside the gateway, request `https://dev-web.neiirohub.ru/` and verify
+   `401 outside the gateway`.
+2. Clear the outer Basic Auth gate temporarily. Before platform sign-in, verify
+   `/web/v1/me -> 401` from the anonymous BFF and a protected administrative
+   path -> 404.
+3. Restore the gateway, enter the gateway credentials, then password login
+   with a verified DEV account.
+4. Confirm `Secure, host-only, SameSite=Lax cookies` on
+   `dev-web.neiirohub.ru`.
+5. Verify the authenticated `/web/v1/me` response.
+6. Submit a mutation without its CSRF value and verify CSRF rejection.
+7. Start at a protected deep link, sign in, and verify deep-link return.
+
+The DEV API value must be exactly
+`WEB_ORIGIN=https://dev-web.neiirohub.ru`. The outer gateway uses the distinct
+`DEV_WEB_BASIC_AUTH_HTPASSWD` Development secret as one single pre-hashed
+htpasswd entry, never a plaintext password.
 
 Production must remain reachable and unchanged while DEV is started/stopped.

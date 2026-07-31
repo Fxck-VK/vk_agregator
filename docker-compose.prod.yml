@@ -254,6 +254,9 @@ services:
     mem_limit: 256m
     volumes:
       - ./deployments/nginx/nginx.prod.conf:/etc/nginx/nginx.conf:ro
+      # The DEV web host is inert until docker-compose.dev-web.yml replaces
+      # this mount with its protected virtual-host fragment.
+      - ./deployments/nginx/dev-web.disabled.conf:/etc/nginx/dev-web.conf:ro
     depends_on:
       api:
         condition: service_healthy

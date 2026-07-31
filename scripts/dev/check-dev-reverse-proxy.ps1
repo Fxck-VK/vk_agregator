@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
     [string]$BaseUrl = "http://127.0.0.1:8088",
-    [int]$TimeoutSec = 10
+    [int]$TimeoutSec = 10,
+    [switch]$SkipDevWebGatewayCheck
 )
 
 $ErrorActionPreference = "Stop"
@@ -107,6 +108,16 @@ $checks = @(
         ForbiddenStatuses = @(200, 500, 502, 503, 504)
     }
 )
+
+if (-not $SkipDevWebGatewayCheck) {
+    $checks += @{
+        Name = "DEV web gateway required"
+        HostName = "dev-web.neiirohub.ru"
+        Path = "/"
+        ExpectedStatuses = @(401)
+        ForbiddenStatuses = @(200, 400, 403, 404, 500, 502, 503, 504)
+    }
+}
 
 foreach ($check in $checks) {
     Invoke-DevProxyRequest @check

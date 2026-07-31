@@ -1,0 +1,71 @@
+.content {
+  inline-size: min(100%, 72rem);
+  margin-inline: auto;
+  padding: clamp(5rem, 10vw, 8rem) clamp(var(--space-4), 6vw, 5rem);
+}
+
+.eyebrow {
+  margin: 0 0 var(--space-2);
+  color: var(--color-accent);
+  font-size: 0.875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.content h1,
+.content h2,
+.content p {
+  margin-block-start: 0;
+}
+
+.content h1 {
+  max-inline-size: 36rem;
+  margin-block-end: var(--space-3);
+  font-size: clamp(2rem, 5vw, 3.5rem);
+  line-height: 1.08;
+}
+
+.description {
+  max-inline-size: 42rem;
+  margin-block-end: var(--space-8);
+  color: var(--color-text-muted);
+  font-size: 1.125rem;
+}
+
+.quickStart {
+  display: grid;
+  gap: var(--space-6);
+  padding: var(--space-6);
+  border: 0.0625rem solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+}
+
+.quickStart h2 {
+  margin-block-end: var(--space-2);
+}
+
+.quickStart p {
+  margin-block-end: 0;
+  color: var(--color-text-muted);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.actions a {
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-accent);
+  color: var(--color-text);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.actions a:hover {
+  background: var(--color-accent-strong);
+}

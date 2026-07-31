@@ -17,6 +17,7 @@ import (
 
 const (
 	defaultSessionTTL        = 30 * 24 * time.Hour
+	defaultAccessTokenTTL    = 15 * time.Minute
 	defaultSessionTokenBytes = 32
 )
 
@@ -54,10 +55,11 @@ type AccountSessionSafe struct {
 // SessionTokens contains a newly issued access/refresh token pair. Raw tokens
 // are returned only to the caller and are never stored by AccountAuth.
 type SessionTokens struct {
-	AccessToken  string             `json:"access_token"`
-	RefreshToken string             `json:"refresh_token"`
-	ExpiresAt    string             `json:"expires_at"`
-	Session      AccountSessionSafe `json:"session"`
+	AccessToken     string             `json:"access_token"`
+	RefreshToken    string             `json:"refresh_token"`
+	AccessExpiresAt string             `json:"access_expires_at"`
+	ExpiresAt       string             `json:"expires_at"`
+	Session         AccountSessionSafe `json:"session"`
 }
 
 // WithSessionRepository enables Web/Mobile session persistence.
@@ -73,6 +75,16 @@ func WithSessionTTL(ttl time.Duration) Option {
 	return func(s *Service) {
 		if ttl > 0 {
 			s.sessionTTL = ttl
+		}
+	}
+}
+
+// WithAccessTokenTTL overrides access-token lifetime. Non-positive values keep
+// the production-safe default.
+func WithAccessTokenTTL(ttl time.Duration) Option {
+	return func(s *Service) {
+		if ttl > 0 {
+			s.accessTokenTTL = ttl
 		}
 	}
 }
@@ -103,28 +115,72 @@ func (s *Service) IssueSession(ctx context.Context, accountID uuid.UUID, meta Se
 		return SessionTokens{}, err
 	}
 	now := s.currentTime()
+	expiresAt := now.Add(s.effectiveSessionTTL())
+	accessExpiresAt := now.Add(s.effectiveAccessTokenTTL())
+	if accessExpiresAt.After(expiresAt) {
+		accessExpiresAt = expiresAt
+	}
 	session := domain.AccountSession{
 		ID:               uuid.New(),
 		AccountID:        accountID,
 		IdentityID:       normalizedIdentityID(meta.IdentityID),
+		AccessTokenHash:  hashSecret("access", accessToken),
+		AccessExpiresAt:  &accessExpiresAt,
 		RefreshTokenHash: hashSecret("refresh", refreshToken),
 		DeviceID:         hashSecret("device", nonEmpty(meta.DeviceInfo)),
 		IPHash:           hashSecret("ip", nonEmpty(meta.IP)),
 		UserAgentHash:    hashSecret("ua", nonEmpty(meta.UserAgent)),
 		CreatedAt:        now,
 		UpdatedAt:        now,
-		ExpiresAt:        now.Add(s.effectiveSessionTTL()),
+		ExpiresAt:        expiresAt,
 	}
 	created, err := s.sessions.CreateSession(ctx, session)
 	if err != nil {
 		return SessionTokens{}, err
 	}
 	return SessionTokens{
-		AccessToken:  accessToken,
-		RefreshToken: refreshToken,
-		ExpiresAt:    formatSessionTime(created.ExpiresAt),
-		Session:      SafeSessionDTO(created),
+		AccessToken:     accessToken,
+		RefreshToken:    refreshToken,
+		AccessExpiresAt: formatSessionTime(*created.AccessExpiresAt),
+		ExpiresAt:       formatSessionTime(created.ExpiresAt),
+		Session:         SafeSessionDTO(created),
 	}, nil
+}
+
+// AuthenticateAccessToken resolves a valid short-lived access secret into the
+// canonical account principal. Legacy refresh-only rows have no access hash and
+// therefore cannot authorize generic requests.
+func (s *Service) AuthenticateAccessToken(ctx context.Context, accessToken string) (domain.RequestPrincipal, error) {
+	if s == nil || s.sessions == nil {
+		return domain.RequestPrincipal{}, ErrSessionStoreUnavailable
+	}
+	accessToken = strings.TrimSpace(accessToken)
+	if accessToken == "" {
+		return domain.RequestPrincipal{}, ErrInvalidSession
+	}
+	session, err := s.sessions.FindSessionByAccessHash(ctx, hashSecret("access", accessToken))
+	if errors.Is(err, domain.ErrNotFound) {
+		return domain.RequestPrincipal{}, ErrInvalidSession
+	}
+	if err != nil {
+		return domain.RequestPrincipal{}, err
+	}
+	now := s.currentTime()
+	if session.RevokedAt != nil {
+		return domain.RequestPrincipal{}, ErrInvalidSession
+	}
+	if session.AccessExpiresAt == nil || !session.AccessExpiresAt.After(now) {
+		return domain.RequestPrincipal{}, ErrSessionExpired
+	}
+	principal := domain.RequestPrincipal{
+		AccountID: session.AccountID,
+		SessionID: session.ID,
+		Method:    domain.AuthenticationMethodAccountSession,
+	}
+	if err := principal.Validate(); err != nil {
+		return domain.RequestPrincipal{}, err
+	}
+	return principal, nil
 }
 
 // RefreshSession revokes the supplied refresh token and issues a new session.
@@ -151,6 +207,9 @@ func (s *Service) RefreshSession(ctx context.Context, refreshToken string, meta 
 		return SessionTokens{}, ErrSessionExpired
 	}
 	if _, err := s.sessions.RevokeSessionByRefreshHash(ctx, old.RefreshTokenHash, now); err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return SessionTokens{}, ErrInvalidSession
+		}
 		return SessionTokens{}, err
 	}
 	if meta.IdentityID == nil {
@@ -234,6 +293,13 @@ func (s *Service) effectiveSessionTTL() time.Duration {
 		return defaultSessionTTL
 	}
 	return s.sessionTTL
+}
+
+func (s *Service) effectiveAccessTokenTTL() time.Duration {
+	if s == nil || s.accessTokenTTL <= 0 {
+		return defaultAccessTokenTTL
+	}
+	return s.accessTokenTTL
 }
 
 func (s *Service) currentTime() time.Time {

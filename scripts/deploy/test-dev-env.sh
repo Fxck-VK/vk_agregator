@@ -38,6 +38,7 @@ DEV_EXPECTED_VK_GROUP_ID=239658332
 PUBLIC_VK_BASE_URL=https://dev-vk.neiirohub.ru
 PUBLIC_APP_BASE_URL=https://dev-app.neiirohub.ru
 PUBLIC_PAYMENT_WEBHOOK_URL=https://dev.neiirohub.ru/billing/webhooks/yookassa
+WEB_ORIGIN=https://dev-web.neiirohub.ru
 VK_GROUP_ID=239658332
 VK_ACCESS_TOKEN=VK_TEST
 VK_SECRET=VK_CB_TEST
@@ -143,5 +144,10 @@ prod_url_env="${tmpdir}/prod-url.env"
 write_common_dev_env "${prod_url_env}" "mock"
 sed -i 's#PUBLIC_VK_BASE_URL=https://dev-vk.neiirohub.ru#PUBLIC_VK_BASE_URL=https://vk.neiirohub.ru#' "${prod_url_env}"
 expect_failure "prod URL in DEV env" bash "${check_script}" --env-file "${prod_url_env}"
+
+wrong_web_origin_env="${tmpdir}/wrong-web-origin.env"
+write_common_dev_env "${wrong_web_origin_env}" "mock"
+sed -i 's#WEB_ORIGIN=https://dev-web.neiirohub.ru#WEB_ORIGIN=https://dev-app.neiirohub.ru#' "${wrong_web_origin_env}"
+expect_failure "wrong DEV web origin" bash "${check_script}" --env-file "${wrong_web_origin_env}"
 
 echo "DEV deploy env script tests passed"

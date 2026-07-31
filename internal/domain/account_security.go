@@ -29,11 +29,13 @@ const (
 	AccountLinkActionPasswordReset  AccountLinkAction = "password_reset"
 )
 
-// AccountSession stores only hashed refresh-token and device/network material.
+// AccountSession stores only hashed access/refresh-token and device/network material.
 type AccountSession struct {
 	ID               uuid.UUID  `json:"id"`
 	AccountID        uuid.UUID  `json:"account_id"`
 	IdentityID       *uuid.UUID `json:"identity_id,omitempty"`
+	AccessTokenHash  string     `json:"access_token_hash,omitempty"`
+	AccessExpiresAt  *time.Time `json:"access_expires_at,omitempty"`
 	RefreshTokenHash string     `json:"refresh_token_hash"`
 	DeviceID         string     `json:"device_id"`
 	IPHash           string     `json:"ip_hash"`
@@ -49,6 +51,18 @@ func (s AccountSession) Validate() error {
 	if s.AccountID == uuid.Nil ||
 		strings.TrimSpace(s.RefreshTokenHash) == "" ||
 		s.ExpiresAt.IsZero() {
+		return ErrInvalidIdentity
+	}
+	accessHash := strings.TrimSpace(s.AccessTokenHash)
+	if s.AccessTokenHash != "" && accessHash == "" {
+		return ErrInvalidIdentity
+	}
+	accessHashPresent := accessHash != ""
+	accessExpiryPresent := s.AccessExpiresAt != nil && !s.AccessExpiresAt.IsZero()
+	if accessHashPresent != accessExpiryPresent {
+		return ErrInvalidIdentity
+	}
+	if accessExpiryPresent && s.AccessExpiresAt.After(s.ExpiresAt) {
 		return ErrInvalidIdentity
 	}
 	return nil

@@ -153,6 +153,7 @@ function New-ComposeValidationEnvFile {
         "MINIO_ROOT_USER=minio-config",
         "MINIO_ROOT_PASSWORD=minio-config",
         "CLOUDFLARED_TUNNEL_TOKEN=compose-validate-token",
+        "DEV_WEB_BASIC_AUTH_HTPASSWD=compose-validation-placeholder",
         "COMPOSE_NETWORK_NAME=vk-ai-aggregator-prod"
     )
     [IO.File]::WriteAllLines($path, $lines, [Text.UTF8Encoding]::new($false))
@@ -210,6 +211,7 @@ function Assert-ReverseProxyConfig {
 
     $content = Get-Content -LiteralPath $path -Raw
     $requiredSnippets = @(
+        "include /etc/nginx/dev-web.conf;",
         "vk.neiirohub.ru",
         "app.neiirohub.ru",
         "neiirohub.ru",
@@ -250,6 +252,111 @@ function Assert-ReverseProxyConfig {
     }
     if ($content -match '(?im)script-src\s+[^;]*(unsafe-inline|unsafe-eval)') {
         throw "reverse proxy CSP must not allow unsafe inline/eval scripts"
+    }
+
+    $disabledDevWebPath = Join-Path $repoRoot "deployments\nginx\dev-web.disabled.conf"
+    if (-not (Test-Path -LiteralPath $disabledDevWebPath)) {
+        throw "DEV web disabled nginx fragment is missing: deployments/nginx/dev-web.disabled.conf"
+    }
+    $disabledDevWeb = Get-Content -LiteralPath $disabledDevWebPath -Raw
+    $disabledDevWebLines = @(
+        $disabledDevWeb -split "`r?`n" |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) -and -not $_.TrimStart().StartsWith("#") }
+    )
+    if ($disabledDevWebLines.Count -gt 0 -or $disabledDevWeb -notmatch '(?m)^\s*#') {
+        throw "DEV web disabled nginx fragment must contain only a comment"
+    }
+
+    $devWebPath = Join-Path $repoRoot "deployments\nginx\dev-web.conf"
+    if (-not (Test-Path -LiteralPath $devWebPath)) {
+        throw "DEV web nginx host fragment is missing: deployments/nginx/dev-web.conf"
+    }
+    $devWeb = Get-Content -LiteralPath $devWebPath -Raw
+    foreach ($snippet in @(
+        "upstream platform_frontend",
+        "server platform:3000;",
+        "keepalive 16;",
+        "server_name dev-web.neiirohub.ru;",
+        'auth_basic "NeiroHub development";',
+        "auth_basic_user_file /tmp/dev-web.htpasswd;",
+        'proxy_set_header Authorization "";',
+        "proxy_set_header Host `$host;",
+        "proxy_set_header X-Real-IP `$remote_addr;",
+        "proxy_set_header X-Forwarded-For `$proxy_add_x_forwarded_for;",
+        "proxy_set_header X-Forwarded-Proto `$forwarded_proto;",
+        "proxy_set_header X-Forwarded-Host `$host;",
+        'proxy_set_header Connection "";',
+        "proxy_pass http://platform_frontend;",
+        "Strict-Transport-Security",
+        "X-Content-Type-Options",
+        "Referrer-Policy",
+        "Permissions-Policy",
+        "X-Frame-Options",
+        "admin|metrics|debug|billing|readyz|healthz",
+        "return 404;"
+    )) {
+        if (-not $devWeb.Contains($snippet)) {
+            throw "DEV web nginx host fragment is missing required snippet: $snippet"
+        }
+    }
+    if ($devWeb -match '(?im)^\s*auth_basic\s+off\s*;') {
+        throw "DEV web nginx host fragment must keep basic authentication enabled"
+    }
+    if ($devWeb -match '(?im)^\s*add_header\s+Access-Control-Allow-Origin\s+["'']?\*') {
+        throw "DEV web nginx host fragment must not enable broad wildcard CORS"
+    }
+    if ($devWeb -match '(?im)^\s*(proxy_hide_header|add_header)\s+Content-Security-Policy\b') {
+        throw "DEV web nginx must not hide or overwrite the platform nonce CSP"
+    }
+
+    $platformProxyPath = Join-Path $repoRoot "web\platform\src\proxy.ts"
+    if (-not (Test-Path -LiteralPath $platformProxyPath)) {
+        throw "platform nonce proxy is missing: web/platform/src/proxy.ts"
+    }
+    $platformProxy = Get-Content -LiteralPath $platformProxyPath -Raw
+    foreach ($snippet in @(
+        'matcher: ["/", "/login", "/app/:path*"]',
+        "crypto.getRandomValues",
+        'requestHeaders.set("x-nonce", nonce)',
+        'requestHeaders.set("Content-Security-Policy", contentSecurityPolicy)',
+        'response.headers.set("Content-Security-Policy", contentSecurityPolicy)',
+        "'strict-dynamic'",
+        "style-src 'self' 'nonce-",
+        "media-src 'self' blob:",
+        "object-src 'none'",
+        "base-uri 'none'",
+        "form-action 'self'",
+        "frame-src 'none'",
+        "frame-ancestors 'none'",
+        "upgrade-insecure-requests"
+    )) {
+        if (-not $platformProxy.Contains($snippet)) {
+            throw "platform nonce proxy is missing required snippet: $snippet"
+        }
+    }
+    if ($platformProxy -match "unsafe-inline|unsafe-eval") {
+        throw "platform nonce proxy must not allow unsafe inline/eval execution"
+    }
+    if ($platformProxy.Contains('response.headers.set("x-nonce", nonce)')) {
+        throw "platform nonce proxy must keep the nonce in request headers and CSP, not expose a redundant response header"
+    }
+    if ($platformProxy.Contains('response.headers.delete("Set-Cookie")')) {
+        throw "platform nonce proxy must preserve the browser-visible return-path cookie"
+    }
+
+    $platformHomePagePath = Join-Path $repoRoot "web\platform\src\app\page.tsx"
+    if (-not (Test-Path -LiteralPath $platformHomePagePath)) {
+        throw "platform root page is missing: web/platform/src/app/page.tsx"
+    }
+    $platformHomePage = Get-Content -LiteralPath $platformHomePagePath -Raw
+    foreach ($snippet in @(
+        'import { connection } from "next/server";',
+        "export default async function HomePage()",
+        "await connection();"
+    )) {
+        if (-not $platformHomePage.Contains($snippet)) {
+            throw "platform root page must use request-bound rendering for nonce CSP: $snippet"
+        }
     }
 
     Write-Host "reverse proxy config OK"
@@ -298,11 +405,16 @@ function Assert-DevReverseProxySmokeScript {
         "dev-vk.neiirohub.ru",
         "dev-app.neiirohub.ru",
         "dev.neiirohub.ru",
+        "dev-web.neiirohub.ru",
         "/health",
         "/miniapp/balance",
         "/billing/webhooks/yookassa",
         "/metrics",
         "/admin/jobs",
+        "DEV web gateway required",
+        "ExpectedStatuses = @(401)",
+        "SkipDevWebGatewayCheck",
+        "if (-not `$SkipDevWebGatewayCheck)",
         "ForbiddenStatuses",
         "DEV reverse proxy smoke OK"
     )
@@ -344,6 +456,7 @@ function Assert-DevStartStackScript {
         "VK_GROUP_ID must not be the production group id",
         "YOOKASSA_SECRET_KEY must be a YooKassa test key in DEV",
         "check-dev-reverse-proxy.ps1",
+        "-SkipDevWebGatewayCheck",
         "https://dev-vk.neiirohub.ru/health",
         "https://dev-app.neiirohub.ru/",
         "https://dev.neiirohub.ru/billing/webhooks/yookassa",
@@ -358,6 +471,9 @@ function Assert-DevStartStackScript {
 
     if ($content -match "docker compose down -v|reset --hard|push --force|--force-with-lease") {
         throw "DEV stack start script contains a forbidden destructive operation"
+    }
+    if ($content.Contains("docker-compose.dev-web.yml")) {
+        throw "standard DEV stack start script must not include the remote DEV web Compose overlay"
     }
 
     Write-Host "DEV stack start script OK"
@@ -429,6 +545,7 @@ function Assert-DevPublicSmokeScript {
         "https://dev-vk.neiirohub.ru",
         "https://dev-app.neiirohub.ru",
         "https://dev.neiirohub.ru",
+        "https://dev-web.neiirohub.ru",
         "must use HTTPS",
         "/health",
         "/webhooks/vk",
@@ -436,6 +553,8 @@ function Assert-DevPublicSmokeScript {
         "/billing/webhooks/yookassa",
         "/admin/jobs",
         "/metrics",
+        "DEV web gateway required",
+        "-ExpectedStatuses @(401)",
         "ForbiddenStatuses",
         "DEV public smoke OK"
     )
@@ -458,11 +577,91 @@ function Assert-DevPublicSmokeScript {
         }
     }
 
-    if ($content -match "VK_ACCESS_TOKEN|VK_SECRET|YOOKASSA_SECRET|DEEPINFRA_API_KEY|OPENAI_API_KEY|CLOUDFLARED_TUNNEL_TOKEN") {
+    if ($content -match "VK_ACCESS_TOKEN|VK_SECRET|YOOKASSA_SECRET|DEEPINFRA_API_KEY|OPENAI_API_KEY|CLOUDFLARED_TUNNEL_TOKEN|DEV_WEB_BASIC_AUTH_HTPASSWD|Authorization|Get-Credential") {
         throw "DEV public smoke script must not reference secrets"
     }
 
     Write-Host "DEV public smoke script OK"
+}
+
+function Assert-DevDeploySmokeScript {
+    $path = Join-Path $repoRoot "scripts\deploy\smoke-dev.sh"
+    if (-not (Test-Path -LiteralPath $path)) {
+        throw "DEV deploy smoke script is missing: scripts/deploy/smoke-dev.sh"
+    }
+
+    $content = Get-Content -LiteralPath $path -Raw
+    foreach ($snippet in @(
+        "https://dev-web.neiirohub.ru",
+        "DEV web gateway required",
+        '"401"'
+    )) {
+        if (-not $content.Contains($snippet)) {
+            throw "DEV deploy smoke script is missing required snippet: $snippet"
+        }
+    }
+
+    if ($content -match "DEV_WEB_BASIC_AUTH_HTPASSWD|Authorization|Get-Credential|--user|-u[[:space:]]") {
+        throw "DEV deploy smoke script must not read or send DEV web gateway credentials"
+    }
+
+    Write-Host "DEV deploy smoke script OK"
+}
+
+function Assert-DevWebOperatorDocs {
+    $documents = @{
+        "deployments/cloudflare/README.md" = @(
+            "dashboard-managed",
+            "dev-web.neiirohub.ru/* -> http://127.0.0.1:8088",
+            "DEV-only",
+            "three local hostnames",
+            "remote DEV browser platform",
+            "docker-compose.dev-web.yml"
+        )
+        "docs/DEV_CONTOUR.md" = @(
+            "WEB_ORIGIN=https://dev-web.neiirohub.ru",
+            "DEV_WEB_BASIC_AUTH_HTPASSWD",
+            "single pre-hashed htpasswd entry",
+            "never a plaintext password",
+            "401 outside gate",
+            "gateway credentials then password login",
+            "Secure host-only Lax cookies",
+            "/web/v1/me",
+            "CSRF reject",
+            "deep-link return",
+            "three local DEV hostnames",
+            "remote-only browser platform overlay",
+            "-SkipDevWebGatewayCheck"
+        )
+        "web/platform/README.md" = @(
+            "https://dev-web.neiirohub.ru",
+            "WEB_ORIGIN=https://dev-web.neiirohub.ru",
+            "DEV-only",
+            "remote DEV deployment",
+            "docker-compose.dev-web.yml",
+            "clear the outer Basic Auth gate",
+            "/web/v1/me -> 401",
+            "protected administrative path -> 404"
+        )
+    }
+
+    foreach ($relativePath in $documents.Keys) {
+        $path = Join-Path $repoRoot $relativePath
+        if (-not (Test-Path -LiteralPath $path)) {
+            throw "DEV web operator documentation is missing: $relativePath"
+        }
+        $content = Get-Content -LiteralPath $path -Raw
+        foreach ($snippet in $documents[$relativePath]) {
+            if (-not $content.Contains($snippet)) {
+                throw "DEV web operator documentation is missing required snippet in ${relativePath}: $snippet"
+            }
+        }
+        if ($relativePath -eq "docs/DEV_CONTOUR.md" -and $content -match "all three DEV hostnames") {
+            throw "DEV contour docs must not describe every DEV hostname as a three-host local route set"
+        }
+    }
+
+    Write-Host "DEV web operator documentation OK"
 }
 
 function Assert-CloudflareDeploymentConfig {
@@ -985,6 +1184,7 @@ function Assert-DockerImageWorkflow {
         "Dockerfile.provider-webhook",
         "Dockerfile.provider-balance-bot",
         "Dockerfile.miniapp",
+        "Dockerfile.platform",
         "Dockerfile.migrate",
         "Dockerfile.backup",
         "service: api",
@@ -992,6 +1192,7 @@ function Assert-DockerImageWorkflow {
         "service: provider-webhook",
         "service: provider-balance-bot",
         "service: miniapp",
+        "service: platform",
         "service: migrate",
         "service: backup",
         "pull-request-build:",
@@ -1316,6 +1517,75 @@ if (Test-Path -LiteralPath "docker-compose.prod.yml") {
             }
         }
     }
+    $devWebComposePath = Join-Path $repoRoot "docker-compose.dev-web.yml"
+    if (-not (Test-Path -LiteralPath $devWebComposePath)) {
+        throw "DEV web Compose overlay is missing: docker-compose.dev-web.yml"
+    }
+    $devWebCompose = Get-Content -LiteralPath $devWebComposePath -Raw
+    foreach ($snippet in @(
+        "platform:",
+        'image: ${APP_IMAGE_REGISTRY}/platform:${IMAGE_TAG}',
+        'user: "1000:1000"',
+        "cap_drop:",
+        "- ALL",
+        "no-new-privileges:true",
+        "read_only: true",
+        "tmpfs:",
+        "WEB_API_INTERNAL_ORIGIN: http://api:8080",
+        "healthcheck:",
+        "http://127.0.0.1:3000/health",
+        "reverse-proxy:",
+        "./deployments/nginx/dev-web.conf:/etc/nginx/dev-web.conf:ro",
+        "condition: service_healthy"
+    )) {
+        if (-not $devWebCompose.Contains($snippet)) {
+            throw "DEV web Compose overlay is missing required snippet: $snippet"
+        }
+    }
+    if ($devWebCompose -match '(?m)^\s+ports:\s*$') {
+        throw "DEV web platform service must not publish host ports"
+    }
+
+    Invoke-Step "docker compose prod app+dev-web config" {
+        $previousAppEnvFile = $env:APP_ENV_FILE
+        try {
+            $env:APP_ENV_FILE = $composeEnvFile
+            $baseRendered = docker compose --project-name vk-ai-aggregator-prod --env-file $composeEnvFile -f docker-compose.prod.yml config | Out-String
+            if ($LASTEXITCODE -ne 0) {
+                throw "docker compose base production config failed"
+            }
+            if ($baseRendered -match '(?m)^  platform:\s*$') {
+                throw "base production Compose must not define the DEV web platform service"
+            }
+
+            $devWebRendered = docker compose --project-name vk-ai-aggregator-prod --env-file $composeEnvFile -f docker-compose.prod.yml -f docker-compose.dev-web.yml config | Out-String
+            if ($LASTEXITCODE -ne 0) {
+                throw "docker compose DEV web overlay config failed"
+            }
+            if ($devWebRendered -notmatch '(?m)^  platform:\s*$') {
+                throw "rendered DEV web Compose config is missing the platform service"
+            }
+
+            $platformBlock = [regex]::Match($devWebRendered, '(?ms)^  platform:\s*\r?\n(?<body>.*?)(?=^  [A-Za-z0-9_-]+:|\z)').Groups['body'].Value
+            if ([string]::IsNullOrWhiteSpace($platformBlock)) {
+                throw "rendered DEV web Compose config has an invalid platform service"
+            }
+            if ($platformBlock -match '(?m)^    ports:\s*$') {
+                throw "rendered DEV web platform service must not publish host ports"
+            }
+
+            $reverseProxyBlock = [regex]::Match($devWebRendered, '(?ms)^  reverse-proxy:\s*\r?\n(?<body>.*?)(?=^  [A-Za-z0-9_-]+:|\z)').Groups['body'].Value
+            if ($reverseProxyBlock -notmatch '(?ms)^    depends_on:\s*\r?\n.*?^      platform:\s*\r?\n        condition: service_healthy\s*$') {
+                throw "rendered DEV web reverse proxy must depend on healthy platform"
+            }
+        } finally {
+            if ($null -eq $previousAppEnvFile) {
+                Remove-Item Env:\APP_ENV_FILE -ErrorAction SilentlyContinue
+            } else {
+                $env:APP_ENV_FILE = $previousAppEnvFile
+            }
+        }
+    }
     Remove-Item -LiteralPath $composeEnvFile -Force -ErrorAction SilentlyContinue
 }
 
@@ -1330,6 +1600,8 @@ Assert-DevReverseProxySmokeScript
 Assert-DevStartStackScript
 Assert-DevStopStatusScripts
 Assert-DevPublicSmokeScript
+Assert-DevDeploySmokeScript
+Assert-DevWebOperatorDocs
 Assert-ProductionDataServices
 Assert-CloudflaredComposeConfig
 Assert-ProductionComposeHardening

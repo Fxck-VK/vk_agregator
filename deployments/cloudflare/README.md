@@ -33,14 +33,20 @@ health/readiness endpoints publicly.
 
 ## Development Tunnel Route Map
 
-For an isolated VK dev community, use a separate dashboard-managed tunnel and
-route the dev hostnames to the same loopback reverse-proxy origin:
+For an isolated local VK dev community, use the existing DEV dashboard-managed
+tunnel (separate from production) and route these three local hostnames to the
+same loopback reverse-proxy origin:
 
 | Public hostname/path | Cloudflare Tunnel service | Reverse proxy target |
 |---|---|---|
 | `dev-vk.neiirohub.ru` | `http://127.0.0.1:8088` | `cmd/api` for `/webhooks/vk` and `/health` |
 | `dev-app.neiirohub.ru` | `http://127.0.0.1:8088` | Mini App static for `/`, `cmd/api` for `/miniapp/*` |
 | `dev.neiirohub.ru` | `http://127.0.0.1:8088` | `cmd/provider-webhook` only for `/billing/webhooks/yookassa` |
+
+The remote DEV browser platform is a separate `docker-compose.dev-web.yml`
+overlay. Its DEV-only route is `dev-web.neiirohub.ru/* -> http://127.0.0.1:8088`;
+it is published only with the remote DEV deployment and is behind the
+reverse-proxy gateway.
 
 The dev VK callback URL is:
 
@@ -56,16 +62,20 @@ https://dev.neiirohub.ru/billing/webhooks/yookassa
 
 ### DEV Dashboard Setup
 
-Create or use a separate dashboard-managed tunnel, for example
+Use the existing dashboard-managed DEV tunnel, for example
 `neiirohub-vk-dev`. Do not reuse the production tunnel token locally.
 
-Add these published application routes:
+Add these three local published application routes:
 
 | Hostname | Path | Service |
 |---|---|---|
 | `dev-vk.neiirohub.ru` | `*` | `http://127.0.0.1:8088` |
 | `dev-app.neiirohub.ru` | `*` | `http://127.0.0.1:8088` |
 | `dev.neiirohub.ru` | `*` | `http://127.0.0.1:8088` |
+
+For the remote DEV browser-platform overlay, add the DEV-only dashboard-managed
+route `dev-web.neiirohub.ru/* -> http://127.0.0.1:8088` to that same DEV
+tunnel. It is not a production route.
 
 Use these values in the DEV VK community Callback API settings:
 
@@ -87,9 +97,14 @@ Local DEV lifecycle:
 
 ```powershell
 .\scripts\dev\start-dev-stack.ps1 -WithCloudflare
-.\scripts\dev\smoke-dev.ps1
+.\scripts\dev\check-dev-reverse-proxy.ps1 -SkipDevWebGatewayCheck
 .\scripts\dev\stop-dev-stack.ps1
 ```
+
+The local lifecycle starts only the three local routes; it does not start the
+remote browser-platform overlay. Run `scripts/dev/smoke-dev.ps1` after the
+remote DEV deployment to retain the strict unauthenticated `401` check for
+`dev-web.neiirohub.ru` without supplying gateway credentials.
 
 The standard DEV startup rebuilds app images from the current working tree.
 This keeps DEV as a production-shaped copy with different env/tunnel/community

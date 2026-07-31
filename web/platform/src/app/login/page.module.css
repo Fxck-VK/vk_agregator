@@ -1,0 +1,7 @@
+.page {
+  display: grid;
+  min-block-size: 100dvh;
+  place-items: center;
+  padding: var(--space-4);
+  background: var(--color-background);
+}

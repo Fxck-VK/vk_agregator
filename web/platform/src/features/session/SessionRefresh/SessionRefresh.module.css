@@ -1,0 +1,21 @@
+.state {
+  display: grid;
+  min-block-size: 100dvh;
+  place-items: center;
+  padding: var(--space-4);
+  background: var(--color-background);
+}
+
+.surface {
+  inline-size: min(100%, 32rem);
+  padding: var(--space-6);
+  border: 0.0625rem solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+.surface p {
+  margin: 0;
+}

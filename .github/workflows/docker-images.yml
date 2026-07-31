@@ -116,6 +116,8 @@ jobs:
             dockerfile: Dockerfile.provider-balance-bot
           - service: miniapp
             dockerfile: Dockerfile.miniapp
+          - service: platform
+            dockerfile: Dockerfile.platform
           - service: migrate
             dockerfile: Dockerfile.migrate
           - service: backup
@@ -177,6 +179,8 @@ jobs:
             dockerfile: Dockerfile.provider-balance-bot
           - service: miniapp
             dockerfile: Dockerfile.miniapp
+          - service: platform
+            dockerfile: Dockerfile.platform
           - service: migrate
             dockerfile: Dockerfile.migrate
           - service: backup

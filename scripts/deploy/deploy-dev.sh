@@ -3,6 +3,7 @@ set -euo pipefail
 
 branch="dev-deploy"
 env_file=".env"
+web_auth_env_file=".dev-web-auth.env"
 project_name="vk-ai-aggregator-dev"
 image_tag=""
 skip_pull="false"
@@ -25,6 +26,7 @@ Usage: scripts/deploy/deploy-dev.sh [options]
 Options:
   --branch <name>              Git branch to deploy, default: dev-deploy
   --env-file <path>            DEV env file, default: .env
+  --web-auth-env-file <path>   DEV web Basic Auth env file, default: .dev-web-auth.env
   --project-name <name>        Compose project name, default: vk-ai-aggregator-dev
   --image-tag <tag>            Docker image tag to pull and run, default from env/.env
   --skip-pull                  Do not fetch/checkout/pull git
@@ -44,6 +46,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --branch) branch="$2"; shift 2 ;;
     --env-file) env_file="$2"; shift 2 ;;
+    --web-auth-env-file) web_auth_env_file="$2"; shift 2 ;;
     --project-name) project_name="$2"; shift 2 ;;
     --image-tag) image_tag="$2"; shift 2 ;;
     --skip-pull) skip_pull="true"; shift ;;
@@ -280,10 +283,30 @@ if [[ ! -f docker-compose.data.yml ]]; then
   echo "docker-compose.data.yml not found" >&2
   exit 1
 fi
+if [[ ! -f docker-compose.dev-web.yml ]]; then
+  echo "docker-compose.dev-web.yml not found" >&2
+  exit 1
+fi
 if [[ ! -f "${env_file}" ]]; then
   echo "DEV env file not found: ${env_file}" >&2
   exit 1
 fi
+if [[ ! -f "${web_auth_env_file}" ]]; then
+  echo "DEV web auth env file not found: ${web_auth_env_file}" >&2
+  exit 1
+fi
+if [[ "$(stat -c '%a' "${web_auth_env_file}")" != "600" ]]; then
+  echo "DEV web auth env file must be mode 600" >&2
+  exit 1
+fi
+
+auth_validation_file="$(mktemp "${TMPDIR:-/tmp}/dev-web-auth.XXXXXX")"
+trap 'rm -f "${auth_validation_file}"; unset DEV_WEB_BASIC_AUTH_HTPASSWD' EXIT
+bash "${script_dir}/prepare-dev-web-auth.sh" \
+  --input "${web_auth_env_file}" \
+  --output "${auth_validation_file}"
+auth_line="$(<"${auth_validation_file}")"
+dev_web_basic_auth_htpasswd="${auth_line#DEV_WEB_BASIC_AUTH_HTPASSWD=}"
 
 if [[ -n "${image_tag}" ]]; then
   validate_image_tag "${image_tag}"
@@ -333,7 +356,7 @@ if is_true_value "$(get_env_value PROVIDER_BALANCE_BOT_ENABLED false)"; then
   provider_balance_bot_enabled="true"
 fi
 
-compose=(docker compose --project-name "${project_name}" --env-file "${env_file}" -f docker-compose.prod.yml)
+compose=(docker compose --project-name "${project_name}" --env-file "${env_file}" -f docker-compose.prod.yml -f docker-compose.dev-web.yml)
 if [[ ${#stateful_services[@]} -gt 0 ]]; then
   compose+=(-f docker-compose.data.yml)
 fi
@@ -342,7 +365,17 @@ if [[ "${with_cloudflare}" == "true" ]]; then
 fi
 compose+=(--profile provider-balance)
 
-run_step "${compose[@]}" config >/dev/null
+run_compose() {
+  DEV_WEB_BASIC_AUTH_HTPASSWD="${dev_web_basic_auth_htpasswd}" "${compose[@]}" "$@"
+}
+
+run_compose_pull() {
+  DEV_WEB_BASIC_AUTH_HTPASSWD="${dev_web_basic_auth_htpasswd}" \
+    bash "${script_dir}/compose-pull-retry.sh" -- \
+    "${compose[@]}" pull "$@"
+}
+
+run_step run_compose config >/dev/null
 
 ghcr_username="$(get_env_value GHCR_USERNAME "")"
 ghcr_token="$(get_env_value GHCR_TOKEN "")"
@@ -353,7 +386,7 @@ if ! is_placeholder_value "${ghcr_username}" && ! is_placeholder_value "${ghcr_t
     --username "${ghcr_username}"
 fi
 
-image_pull_services=("${stateful_services[@]}" reverse-proxy)
+image_pull_services=("${stateful_services[@]}" platform reverse-proxy)
 if [[ "${build_on_vps}" != "true" ]]; then
   image_pull_services+=(api worker maintenance-worker provider-webhook miniapp migrate)
   if [[ "${provider_balance_bot_enabled}" == "true" ]]; then
@@ -363,11 +396,10 @@ fi
 if [[ "${with_cloudflare}" == "true" ]]; then
   image_pull_services+=(cloudflared)
 fi
-bash "${script_dir}/compose-pull-retry.sh" -- \
-  "${compose[@]}" pull "${image_pull_services[@]}"
+run_compose_pull "${image_pull_services[@]}"
 
 if [[ ${#stateful_services[@]} -gt 0 ]]; then
-  run_step "${compose[@]}" up -d --no-build --wait --wait-timeout "${timeout_seconds}" "${stateful_services[@]}"
+  run_step run_compose up -d --no-build --wait --wait-timeout "${timeout_seconds}" "${stateful_services[@]}"
 else
   echo "Skipping local stateful containers; data service modes point to external or managed services."
 fi
@@ -377,34 +409,34 @@ if [[ "${build_on_vps}" == "true" ]]; then
   if [[ "${pull_base_images}" == "true" ]]; then
     build_args+=(--pull)
   fi
-  build_args+=(api worker maintenance-worker provider-webhook miniapp migrate)
+  build_args+=(api worker maintenance-worker provider-webhook miniapp platform migrate)
   if [[ "${provider_balance_bot_enabled}" == "true" ]]; then
     build_args+=(provider-balance-bot)
   fi
-  run_step "${compose[@]}" "${build_args[@]}"
+  run_step run_compose "${build_args[@]}"
 else
   echo "Skipping VPS image build; using images pulled from registry."
 fi
 
 if [[ "${skip_migrate}" != "true" ]]; then
   run_step bash scripts/deploy/check-migrations-safe.sh --env-file "${env_file}" --migrations-dir "$(get_env_value MIGRATIONS_DIR migrations)"
-  "${compose[@]}" rm -f -s migrate >/dev/null 2>&1 || true
+  run_compose rm -f -s migrate >/dev/null 2>&1 || true
   docker rm -f "${project_name}-migrate-1" >/dev/null 2>&1 || true
   migrate_args=(up --no-deps --exit-code-from migrate)
   if [[ "${build_on_vps}" != "true" ]]; then
     migrate_args+=(--no-build)
   fi
   migrate_args+=(migrate)
-  run_step "${compose[@]}" "${migrate_args[@]}"
+  run_step run_compose "${migrate_args[@]}"
 else
   echo "WARNING: skipping migrations. Runtime services still require a successful migrate service state in this compose project." >&2
 fi
 
 if [[ "${provider_balance_bot_enabled}" != "true" ]]; then
-  "${compose[@]}" rm -f -s provider-balance-bot >/dev/null 2>&1 || true
+  run_compose rm -f -s provider-balance-bot >/dev/null 2>&1 || true
 fi
 
-runtime_services=(api worker maintenance-worker provider-webhook miniapp reverse-proxy)
+runtime_services=(api worker maintenance-worker provider-webhook miniapp platform reverse-proxy)
 if [[ "${provider_balance_bot_enabled}" == "true" ]]; then
   runtime_services+=(provider-balance-bot)
 fi
@@ -419,8 +451,8 @@ if [[ "${build_on_vps}" != "true" ]]; then
   runtime_up_args+=(--no-build)
 fi
 runtime_up_args+=("${runtime_services[@]}")
-run_step "${compose[@]}" "${runtime_up_args[@]}"
-run_step "${compose[@]}" up -d --no-build --force-recreate --no-deps reverse-proxy
+run_step run_compose "${runtime_up_args[@]}"
+run_step run_compose up -d --no-build --force-recreate reverse-proxy
 
 if [[ "${no_health_check}" != "true" ]]; then
   reverse_proxy_port="$(get_env_value REVERSE_PROXY_HTTP_PORT 8088)"
@@ -438,7 +470,7 @@ if [[ "${no_health_check}" != "true" ]]; then
   fi
 fi
 
-run_step "${compose[@]}" ps
+run_step run_compose ps
 echo
 echo "DEV deploy completed."
 echo "Started at: ${deploy_started_at}"

@@ -5,6 +5,7 @@ import { readFile } from "node:fs/promises";
 const defaultLockfiles = [
   "web/miniapp/package-lock.json",
   "web/admin/package-lock.json",
+  "web/platform/package-lock.json",
 ];
 const lockfiles = process.argv.slice(2);
 const targets = lockfiles.length > 0 ? lockfiles : defaultLockfiles;

@@ -140,7 +140,59 @@ func (r *ConversationRepo) ListByUserSource(_ context.Context, userID uuid.UUID,
 	return out, nil
 }
 
+func (r *ConversationRepo) GetByIDForAccount(_ context.Context, accountID, conversationID uuid.UUID) (*domain.Conversation, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	c, ok := r.byID[conversationID]
+	if !ok || c.AccountID != accountID {
+		return nil, domain.ErrNotFound
+	}
+	return &c, nil
+}
+
+func (r *ConversationRepo) ListByAccountSource(_ context.Context, accountID uuid.UUID, source domain.ConversationSource, limit, offset int) ([]*domain.Conversation, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if limit <= 0 {
+		return nil, nil
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	var matched []domain.Conversation
+	for _, c := range r.byID {
+		if c.AccountID == accountID && c.Source == source {
+			matched = append(matched, c)
+		}
+	}
+	sort.Slice(matched, func(i, j int) bool {
+		if matched[i].UpdatedAt.Equal(matched[j].UpdatedAt) {
+			return matched[i].CreatedAt.After(matched[j].CreatedAt)
+		}
+		return matched[i].UpdatedAt.After(matched[j].UpdatedAt)
+	})
+	if offset > len(matched) {
+		return nil, nil
+	}
+	matched = matched[offset:]
+	if len(matched) > limit {
+		matched = matched[:limit]
+	}
+	out := make([]*domain.Conversation, 0, len(matched))
+	for i := range matched {
+		c := matched[i]
+		out = append(out, &c)
+	}
+	return out, nil
+}
+
 func (r *ConversationRepo) CreateConversation(_ context.Context, c *domain.Conversation) error {
+	if c.Source == "" {
+		c.Source = domain.ConversationSourceVKBot
+	}
+	if err := c.ValidateOwnership(); err != nil {
+		return err
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if c.ID == uuid.Nil {
@@ -148,9 +200,6 @@ func (r *ConversationRepo) CreateConversation(_ context.Context, c *domain.Conve
 	}
 	if c.AccountID == uuid.Nil {
 		c.AccountID = c.UserID
-	}
-	if c.Source == "" {
-		c.Source = domain.ConversationSourceVKBot
 	}
 	if c.Status == "" {
 		c.Status = domain.ConversationActive
@@ -173,7 +222,7 @@ func (r *ConversationRepo) CreateConversation(_ context.Context, c *domain.Conve
 			VKPeerID:         c.VKPeerID,
 			ExternalThreadID: c.ExternalThreadID,
 		})
-		if legacyKey != key {
+		if c.UserID != uuid.Nil && legacyKey != key {
 			r.activeByRef[legacyKey] = c.ID
 		}
 	}

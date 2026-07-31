@@ -28,6 +28,8 @@ web/admin/playwright-report/
 .env.*
 dev.env
 dev.env.*
+.dev-web-auth.env
+.dev-web-auth*.next
 _env
 _env.*
 

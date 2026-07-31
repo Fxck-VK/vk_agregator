@@ -1477,6 +1477,7 @@ func TestLoadProviderCostLegacyPriceAliases(t *testing.T) {
 func validProductionConfig() config.Config {
 	return config.Config{
 		Env:                          "production",
+		WebOrigin:                    "https://app.example.test",
 		Provider:                     "deepinfra",
 		ProviderChain:                []string{"deepinfra"},
 		DeepInfraAPIKey:              "test-deepinfra-key",
@@ -2620,6 +2621,7 @@ func TestLoadAllowUnscannedArtifactsInProduction(t *testing.T) {
 func productionDeepInfraConfig() config.Config {
 	return config.Config{
 		Env:                          "production",
+		WebOrigin:                    "https://app.example.test",
 		VKConfirmationToken:          "prod-confirmation",
 		VKSecret:                     "vk-secret",
 		VKAppSecret:                  "vk-app-secret",

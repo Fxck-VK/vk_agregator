@@ -1,0 +1,21 @@
+.button {
+  border: 0;
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+  transition: background-color var(--motion-fast), color var(--motion-fast), transform var(--motion-fast);
+}
+
+.button:hover:not(:disabled) {
+  background: var(--color-border);
+}
+
+.button:active:not(:disabled) {
+  transform: translateY(0.0625rem);
+}
+
+.button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}

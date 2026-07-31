@@ -1,0 +1,29 @@
+.shell {
+  min-block-size: 100dvh;
+  background: var(--color-background);
+}
+
+.sidebar {
+  position: fixed;
+  z-index: 20;
+  inset: 0 auto 0 0;
+  inline-size: var(--sidebar-width);
+  block-size: 100dvh;
+}
+
+.workspace {
+  block-size: 100dvh;
+  margin-inline-start: var(--sidebar-width);
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+@media (max-width: 47.99rem) {
+  .sidebar {
+    inline-size: 0;
+  }
+
+  .workspace {
+    margin-inline-start: 0;
+  }
+}

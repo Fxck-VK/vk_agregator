@@ -146,6 +146,7 @@ fi
 require_dev_url PUBLIC_VK_BASE_URL "https://dev-vk.neiirohub.ru"
 require_dev_url PUBLIC_APP_BASE_URL "https://dev-app.neiirohub.ru"
 require_dev_url PUBLIC_PAYMENT_WEBHOOK_URL "https://dev.neiirohub.ru"
+require_exact WEB_ORIGIN "https://dev-web.neiirohub.ru"
 
 reject_exact_value PUBLIC_VK_BASE_URL "https://vk.neiirohub.ru"
 reject_exact_value PUBLIC_APP_BASE_URL "https://app.neiirohub.ru"

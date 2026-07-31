@@ -14,15 +14,17 @@ import (
 // AccountSessionRepo is an in-memory account session repository for tests and
 // local mock runs.
 type AccountSessionRepo struct {
-	mu     sync.Mutex
-	byID   map[uuid.UUID]*domain.AccountSession
-	byHash map[string]uuid.UUID
+	mu            sync.Mutex
+	byID          map[uuid.UUID]*domain.AccountSession
+	byRefreshHash map[string]uuid.UUID
+	byAccessHash  map[string]uuid.UUID
 }
 
 func NewAccountSessionRepo() *AccountSessionRepo {
 	return &AccountSessionRepo{
-		byID:   map[uuid.UUID]*domain.AccountSession{},
-		byHash: map[string]uuid.UUID{},
+		byID:          map[uuid.UUID]*domain.AccountSession{},
+		byRefreshHash: map[string]uuid.UUID{},
+		byAccessHash:  map[string]uuid.UUID{},
 	}
 }
 
@@ -37,25 +39,46 @@ func (r *AccountSessionRepo) CreateSession(_ context.Context, session domain.Acc
 	if session.ID == uuid.Nil {
 		session.ID = uuid.New()
 	}
+	if _, exists := r.byID[session.ID]; exists {
+		return nil, domain.ErrConflict
+	}
 	if session.CreatedAt.IsZero() {
 		session.CreatedAt = time.Now().UTC()
 	}
 	if session.UpdatedAt.IsZero() {
 		session.UpdatedAt = session.CreatedAt
 	}
-	if _, exists := r.byHash[session.RefreshTokenHash]; exists {
+	if _, exists := r.byRefreshHash[session.RefreshTokenHash]; exists {
 		return nil, domain.ErrConflict
+	}
+	if session.AccessTokenHash != "" {
+		if _, exists := r.byAccessHash[session.AccessTokenHash]; exists {
+			return nil, domain.ErrConflict
+		}
 	}
 	cp := session
 	r.byID[session.ID] = &cp
-	r.byHash[session.RefreshTokenHash] = session.ID
+	r.byRefreshHash[session.RefreshTokenHash] = session.ID
+	if session.AccessTokenHash != "" {
+		r.byAccessHash[session.AccessTokenHash] = session.ID
+	}
 	return cloneAccountSession(&cp), nil
+}
+
+func (r *AccountSessionRepo) FindSessionByAccessHash(_ context.Context, accessTokenHash string) (*domain.AccountSession, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	id, ok := r.byAccessHash[accessTokenHash]
+	if !ok {
+		return nil, domain.ErrNotFound
+	}
+	return cloneAccountSession(r.byID[id]), nil
 }
 
 func (r *AccountSessionRepo) FindSessionByRefreshHash(_ context.Context, refreshTokenHash string) (*domain.AccountSession, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	id, ok := r.byHash[refreshTokenHash]
+	id, ok := r.byRefreshHash[refreshTokenHash]
 	if !ok {
 		return nil, domain.ErrNotFound
 	}
@@ -106,11 +129,14 @@ func (r *AccountSessionRepo) RevokeSession(_ context.Context, accountID, session
 func (r *AccountSessionRepo) RevokeSessionByRefreshHash(_ context.Context, refreshTokenHash string, revokedAt time.Time) (*domain.AccountSession, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	id, ok := r.byHash[refreshTokenHash]
+	id, ok := r.byRefreshHash[refreshTokenHash]
 	if !ok {
 		return nil, domain.ErrNotFound
 	}
 	session := r.byID[id]
+	if session.RevokedAt != nil {
+		return nil, domain.ErrNotFound
+	}
 	r.revokeLocked(session, revokedAt)
 	return cloneAccountSession(session), nil
 }
@@ -145,6 +171,10 @@ func cloneAccountSession(session *domain.AccountSession) *domain.AccountSession 
 	if session.IdentityID != nil {
 		id := *session.IdentityID
 		cp.IdentityID = &id
+	}
+	if session.AccessExpiresAt != nil {
+		t := *session.AccessExpiresAt
+		cp.AccessExpiresAt = &t
 	}
 	if session.RevokedAt != nil {
 		t := *session.RevokedAt

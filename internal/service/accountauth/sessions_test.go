@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 
 	"vk-ai-aggregator/internal/adapter/storage/memory"
+	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/service/accountauth"
 	"vk-ai-aggregator/internal/service/identityresolver"
 )
@@ -130,7 +131,195 @@ func TestSessionServiceRequiresRepository(t *testing.T) {
 	}
 }
 
+func TestRefreshSessionConsumesRefreshTokenOnlyOnceConcurrently(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 7, 30, 12, 0, 0, 0, time.UTC)
+	readsReady := make(chan struct{}, 2)
+	releaseReads := make(chan struct{})
+	repo := &refreshReadBarrier{
+		AccountSessionRepository: memory.NewAccountSessionRepo(),
+		readsReady:               readsReady,
+		releaseReads:             releaseReads,
+	}
+	service := accountauth.New(
+		identityresolver.New(memory.NewUserRepo(), memory.NewAccountIdentityRepo(), nil),
+		accountauth.WithSessionRepository(repo),
+		accountauth.WithClock(func() time.Time { return now }),
+	)
+	tokens, err := service.IssueSession(ctx, uuid.New(), accountauth.SessionMetadata{})
+	if err != nil {
+		t.Fatalf("issue session: %v", err)
+	}
+
+	results := make(chan error, 2)
+	for range 2 {
+		go func() {
+			_, err := service.RefreshSession(ctx, tokens.RefreshToken, accountauth.SessionMetadata{})
+			results <- err
+		}()
+	}
+	for range 2 {
+		<-readsReady
+	}
+	close(releaseReads)
+
+	var succeeded, invalid int
+	for range 2 {
+		err := <-results
+		switch {
+		case err == nil:
+			succeeded++
+		case errors.Is(err, accountauth.ErrInvalidSession):
+			invalid++
+		default:
+			t.Fatalf("concurrent refresh error = %v, want success or %v", err, accountauth.ErrInvalidSession)
+		}
+	}
+	if succeeded != 1 || invalid != 1 {
+		t.Fatalf("concurrent refresh results: succeeded=%d invalid=%d, want 1 each", succeeded, invalid)
+	}
+}
+
+func TestSessionServiceAuthenticatesIssuedAccessToken(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 7, 30, 12, 0, 0, 0, time.UTC)
+	repo := memory.NewAccountSessionRepo()
+	service := accountauth.New(
+		identityresolver.New(memory.NewUserRepo(), memory.NewAccountIdentityRepo(), nil),
+		accountauth.WithSessionRepository(repo),
+		accountauth.WithClock(func() time.Time { return now }),
+	)
+	accountID := uuid.New()
+
+	tokens, err := service.IssueSession(ctx, accountID, accountauth.SessionMetadata{})
+	if err != nil {
+		t.Fatalf("issue session: %v", err)
+	}
+	principal, err := service.AuthenticateAccessToken(ctx, tokens.AccessToken)
+	if err != nil {
+		t.Fatalf("authenticate access token: %v", err)
+	}
+	if principal.AccountID != accountID ||
+		principal.SessionID != tokens.Session.ID ||
+		principal.Method != domain.AuthenticationMethodAccountSession {
+		t.Fatalf("unexpected principal: %+v", principal)
+	}
+
+	stored, err := repo.FindSessionByAccessHash(ctx, "sha256:"+hashForTest("access", tokens.AccessToken))
+	if err != nil {
+		t.Fatalf("find stored access session: %v", err)
+	}
+	if stored.AccessTokenHash == tokens.AccessToken || strings.Contains(stored.AccessTokenHash, tokens.AccessToken) {
+		t.Fatalf("stored raw access token: %+v", stored)
+	}
+	if stored.AccessExpiresAt == nil || !stored.AccessExpiresAt.Equal(now.Add(15*time.Minute)) {
+		t.Fatalf("access expiry = %v, want %v", stored.AccessExpiresAt, now.Add(15*time.Minute))
+	}
+}
+
+func TestSessionServiceRejectsRotatedAndExpiredAccessTokens(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 7, 30, 12, 0, 0, 0, time.UTC)
+	repo := memory.NewAccountSessionRepo()
+	service := accountauth.New(
+		identityresolver.New(memory.NewUserRepo(), memory.NewAccountIdentityRepo(), nil),
+		accountauth.WithSessionRepository(repo),
+		accountauth.WithAccessTokenTTL(time.Minute),
+		accountauth.WithClock(func() time.Time { return now }),
+	)
+	tokens, err := service.IssueSession(ctx, uuid.New(), accountauth.SessionMetadata{})
+	if err != nil {
+		t.Fatalf("issue session: %v", err)
+	}
+	refreshed, err := service.RefreshSession(ctx, tokens.RefreshToken, accountauth.SessionMetadata{})
+	if err != nil {
+		t.Fatalf("refresh session: %v", err)
+	}
+	if _, err := service.AuthenticateAccessToken(ctx, tokens.AccessToken); !errors.Is(err, accountauth.ErrInvalidSession) {
+		t.Fatalf("rotated access error = %v, want %v", err, accountauth.ErrInvalidSession)
+	}
+	if _, err := service.AuthenticateAccessToken(ctx, refreshed.AccessToken); err != nil {
+		t.Fatalf("authenticate refreshed access token: %v", err)
+	}
+
+	expired := accountauth.New(
+		identityresolver.New(memory.NewUserRepo(), memory.NewAccountIdentityRepo(), nil),
+		accountauth.WithSessionRepository(repo),
+		accountauth.WithAccessTokenTTL(time.Minute),
+		accountauth.WithClock(func() time.Time { return now.Add(time.Minute) }),
+	)
+	if _, err := expired.AuthenticateAccessToken(ctx, refreshed.AccessToken); !errors.Is(err, accountauth.ErrSessionExpired) {
+		t.Fatalf("expired access error = %v, want %v", err, accountauth.ErrSessionExpired)
+	}
+}
+
+func TestSessionAccessExpiryDoesNotOutliveRefreshSession(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 7, 30, 12, 0, 0, 0, time.UTC)
+	service := accountauth.New(
+		identityresolver.New(memory.NewUserRepo(), memory.NewAccountIdentityRepo(), nil),
+		accountauth.WithSessionRepository(memory.NewAccountSessionRepo()),
+		accountauth.WithSessionTTL(time.Second),
+		accountauth.WithClock(func() time.Time { return now }),
+	)
+	tokens, err := service.IssueSession(ctx, uuid.New(), accountauth.SessionMetadata{})
+	if err != nil {
+		t.Fatalf("issue session: %v", err)
+	}
+	if tokens.AccessExpiresAt != now.Add(time.Second).Format(time.RFC3339) {
+		t.Fatalf("access expiry = %q, want %q", tokens.AccessExpiresAt, now.Add(time.Second).Format(time.RFC3339))
+	}
+}
+
+func TestSessionServiceAllowsLegacyRefreshOnlySessionWithoutAccessAuthentication(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 7, 30, 12, 0, 0, 0, time.UTC)
+	legacyRefresh := "legacy-refresh-token"
+	repo := memory.NewAccountSessionRepo()
+	legacy := domain.AccountSession{
+		ID:               uuid.New(),
+		AccountID:        uuid.New(),
+		RefreshTokenHash: "sha256:" + hashForTest("refresh", legacyRefresh),
+		DeviceID:         "sha256:device",
+		IPHash:           "sha256:ip",
+		UserAgentHash:    "sha256:ua",
+		ExpiresAt:        now.Add(time.Hour),
+		CreatedAt:        now,
+		UpdatedAt:        now,
+	}
+	if _, err := repo.CreateSession(ctx, legacy); err != nil {
+		t.Fatalf("create legacy session: %v", err)
+	}
+	service := accountauth.New(
+		identityresolver.New(memory.NewUserRepo(), memory.NewAccountIdentityRepo(), nil),
+		accountauth.WithSessionRepository(repo),
+		accountauth.WithClock(func() time.Time { return now }),
+	)
+	if _, err := service.AuthenticateAccessToken(ctx, "legacy-access-token"); !errors.Is(err, accountauth.ErrInvalidSession) {
+		t.Fatalf("legacy access authentication error = %v, want %v", err, accountauth.ErrInvalidSession)
+	}
+	if _, err := service.RefreshSession(ctx, legacyRefresh, accountauth.SessionMetadata{}); err != nil {
+		t.Fatalf("refresh legacy session: %v", err)
+	}
+}
+
 func hashForTest(scope, value string) string {
 	sum := sha256.Sum256([]byte(scope + ":" + value))
 	return hex.EncodeToString(sum[:])
+}
+
+type refreshReadBarrier struct {
+	domain.AccountSessionRepository
+	readsReady   chan<- struct{}
+	releaseReads <-chan struct{}
+}
+
+func (r *refreshReadBarrier) FindSessionByRefreshHash(ctx context.Context, refreshTokenHash string) (*domain.AccountSession, error) {
+	session, err := r.AccountSessionRepository.FindSessionByRefreshHash(ctx, refreshTokenHash)
+	if err != nil {
+		return nil, err
+	}
+	r.readsReady <- struct{}{}
+	<-r.releaseReads
+	return session, nil
 }
