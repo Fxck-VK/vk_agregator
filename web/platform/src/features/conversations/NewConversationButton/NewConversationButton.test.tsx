@@ -28,7 +28,7 @@ describe("NewConversationButton", () => {
   beforeEach(() => {
     vi.mocked(useRouter).mockReturnValue({ push } as never);
     vi.stubGlobal("crypto", {
-      randomUUID: vi.fn().mockReturnValue("a2a006fc-4457-4bb5-bc4d-4f553d51766b"),
+      randomUUID: vi.fn().mockReturnValue("test-request-1"),
     });
   });
 
@@ -38,7 +38,7 @@ describe("NewConversationButton", () => {
     vi.unstubAllGlobals();
   });
 
-  it.each([200, 201])("uses a fresh UUID and navigates only after a parsed %i response", async (status) => {
+  it.each([200, 201])("uses a fresh request identifier and navigates only after a parsed %i response", async (status) => {
     vi.mocked(webBrowserMutation).mockResolvedValue(Response.json(conversation, { status }));
     render(<NewConversationButton />);
 
@@ -49,7 +49,7 @@ describe("NewConversationButton", () => {
     );
     expect(webBrowserMutation).toHaveBeenCalledWith("/web/v1/conversations", {
       method: "POST",
-      headers: { "X-Idempotency-Key": "a2a006fc-4457-4bb5-bc4d-4f553d51766b" },
+      headers: { "X-Idempotency-Key": "test-request-1" },
     });
   });
 
@@ -89,10 +89,10 @@ describe("NewConversationButton", () => {
     expect(screen.queryByText("untrusted backend detail")).not.toBeInTheDocument();
   });
 
-  it("uses another UUID after a failed attempt", async () => {
+  it("uses another request identifier after a failed attempt", async () => {
     vi.mocked(globalThis.crypto.randomUUID)
-      .mockReturnValueOnce("a2a006fc-4457-4bb5-bc4d-4f553d51766b")
-      .mockReturnValueOnce("6fc25ee1-1f6f-47ac-b46f-f4b21c0ad5cd");
+      .mockReturnValueOnce("test-request-1")
+      .mockReturnValueOnce("test-request-2");
     vi.mocked(webBrowserMutation)
       .mockRejectedValueOnce(new Error("Unable to complete the request."))
       .mockResolvedValueOnce(new Response(null, { status: 500 }));
@@ -105,11 +105,11 @@ describe("NewConversationButton", () => {
     await vi.waitFor(() => expect(webBrowserMutation).toHaveBeenCalledTimes(2));
     expect(webBrowserMutation).toHaveBeenNthCalledWith(1, "/web/v1/conversations", {
       method: "POST",
-      headers: { "X-Idempotency-Key": "a2a006fc-4457-4bb5-bc4d-4f553d51766b" },
+      headers: { "X-Idempotency-Key": "test-request-1" },
     });
     expect(webBrowserMutation).toHaveBeenNthCalledWith(2, "/web/v1/conversations", {
       method: "POST",
-      headers: { "X-Idempotency-Key": "6fc25ee1-1f6f-47ac-b46f-f4b21c0ad5cd" },
+      headers: { "X-Idempotency-Key": "test-request-2" },
     });
   });
 });

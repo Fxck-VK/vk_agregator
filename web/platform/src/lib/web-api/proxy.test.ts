@@ -47,7 +47,7 @@ describe("proxyWebApiRequest", () => {
         "User-Agent": "platform-test",
         "X-Account-ID": "forged-account",
         "X-CSRF-Token": "browser-issued-csrf",
-        "X-Idempotency-Key": "d7c979f5-24e5-4f88-924b-a592d6e5a906",
+        "X-Idempotency-Key": "test-request-key",
         "X-Untrusted": "must-not-forward",
       },
       body: '{"ignored":true}',
@@ -73,7 +73,7 @@ describe("proxyWebApiRequest", () => {
     expect(forwarded.get("Origin")).toBe("https://platform.example");
     expect(forwarded.get("User-Agent")).toBe("platform-test");
     expect(forwarded.get("X-CSRF-Token")).toBe("browser-issued-csrf");
-    expect(forwarded.get("X-Idempotency-Key")).toBe("d7c979f5-24e5-4f88-924b-a592d6e5a906");
+    expect(forwarded.get("X-Idempotency-Key")).toBe("test-request-key");
     expect(forwarded.has("Authorization")).toBe(false);
     expect(forwarded.has("X-Account-ID")).toBe(false);
     expect(forwarded.has("X-Untrusted")).toBe(false);
