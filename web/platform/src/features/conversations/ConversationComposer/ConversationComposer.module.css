@@ -1,0 +1,72 @@
+.dock {
+  position: sticky;
+  z-index: 10;
+  inset-block-end: 0;
+  inline-size: 100%;
+  padding: var(--space-4) clamp(var(--space-4), 6vw, 5rem) max(var(--space-4), env(safe-area-inset-bottom));
+  border: 0;
+  border-block-start: 0.0625rem solid var(--color-border);
+  background: var(--color-background);
+}
+
+.composer {
+  display: grid;
+  gap: var(--space-3);
+  inline-size: min(100%, 58rem);
+  margin-inline: auto;
+  padding: var(--space-4);
+  border: 0.0625rem solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+}
+
+.field {
+  display: grid;
+  gap: var(--space-2);
+  font-weight: 700;
+}
+
+.field textarea {
+  inline-size: 100%;
+  min-block-size: 5rem;
+  resize: vertical;
+  border: 0.0625rem solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
+  background: var(--color-background);
+  color: var(--color-text);
+  font: inherit;
+  line-height: 1.5;
+}
+
+.field textarea:focus-visible {
+  outline: 0.1875rem solid color-mix(in srgb, var(--color-accent) 45%, transparent);
+  outline-offset: 0.125rem;
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.feedback {
+  min-block-size: 1.5rem;
+  color: var(--color-text-muted);
+}
+
+.feedback p {
+  margin: 0;
+}
+
+@media (width < 40rem) {
+  .dock {
+    padding-inline: var(--space-3);
+  }
+
+  .footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}

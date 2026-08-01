@@ -1,7 +1,15 @@
 .content {
+  display: flex;
+  flex-direction: column;
+  min-block-size: 100%;
+}
+
+.history {
+  flex: 1;
   inline-size: min(100%, 58rem);
   margin-inline: auto;
   padding: clamp(3rem, 7vw, 6rem) clamp(var(--space-4), 6vw, 5rem);
+  padding-block-end: var(--space-8);
 }
 
 .header {
@@ -45,7 +53,12 @@
 
 .loadEarlierFailure {
   margin: 0;
-  color: var(--color-danger, #ef4444);
+  color: var(--color-text-muted);
+}
+
+.refreshStatus {
+  margin: 0 0 var(--space-4);
+  color: var(--color-text-muted);
 }
 
 .userMessage,
@@ -83,4 +96,10 @@
 
 .empty {
   color: var(--color-text-muted);
+}
+
+.state {
+  inline-size: min(100%, 58rem);
+  margin-inline: auto;
+  padding: clamp(3rem, 7vw, 6rem) clamp(var(--space-4), 6vw, 5rem);
 }

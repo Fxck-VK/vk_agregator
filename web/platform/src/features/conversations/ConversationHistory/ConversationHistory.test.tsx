@@ -1,15 +1,21 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/web-api/browser", () => ({
   webBrowserFetch: vi.fn(),
+  webBrowserMutation: vi.fn(),
 }));
 
-import { webBrowserFetch } from "@/lib/web-api/browser";
+import { ru } from "@/i18n/ru";
+import { webBrowserFetch, webBrowserMutation } from "@/lib/web-api/browser";
 
 import { ConversationHistory } from "./ConversationHistory";
 
 const conversationId = "d7c979f5-24e5-4f88-924b-a592d6e5a906";
+const queuedJob = {
+  job_id: "a2a006fc-4457-4bb5-bc4d-4f553d51766b",
+  status: "queued",
+};
 
 const initialHistory = {
   kind: "ready" as const,
@@ -36,7 +42,9 @@ const initialHistory = {
 describe("ConversationHistory", () => {
   afterEach(() => {
     cleanup();
+    vi.useRealTimers();
     vi.clearAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it("prepends a bounded older page and keeps its next cursor on the first loaded message", async () => {
@@ -64,7 +72,7 @@ describe("ConversationHistory", () => {
 
     render(<ConversationHistory history={initialHistory as never} />);
 
-    fireEvent.click(screen.getByRole("button"));
+    fireEvent.click(screen.getByRole("button", { name: ru.conversations.historyLoadEarlier }));
 
     await vi.waitFor(() =>
       expect(webBrowserFetch).toHaveBeenCalledWith(
@@ -104,5 +112,150 @@ describe("ConversationHistory", () => {
 
     expect(screen.getByText("message from another chat")).toBeTruthy();
     expect(screen.queryByText("message 102")).toBeNull();
+  });
+
+  it("does not poll for newer messages before a user message is accepted", () => {
+    render(<ConversationHistory history={initialHistory as never} />);
+
+    expect(webBrowserFetch).not.toHaveBeenCalled();
+  });
+
+  it("appends strictly newer records in order and deduplicates after an accepted send", async () => {
+    vi.mocked(webBrowserMutation).mockResolvedValueOnce(Response.json(queuedJob, { status: 201 }));
+    vi.mocked(webBrowserFetch).mockResolvedValueOnce(
+      Response.json({
+        items: [
+          initialHistory.messages[1],
+          {
+            id: "33333333-3333-4333-8333-333333333333",
+            seq: 104,
+            role: "user",
+            text: "message 104",
+            created_at: "2026-08-01T12:00:02Z",
+          },
+          {
+            id: "33333333-3333-4333-8333-333333333333",
+            seq: 104,
+            role: "user",
+            text: "message 104",
+            created_at: "2026-08-01T12:00:02Z",
+          },
+          {
+            id: "44444444-4444-4444-8444-444444444444",
+            seq: 105,
+            role: "assistant",
+            text: "message 105",
+            created_at: "2026-08-01T12:00:03Z",
+          },
+        ],
+      }),
+    );
+    render(<ConversationHistory history={initialHistory as never} />);
+
+    fireEvent.change(screen.getByLabelText(ru.conversations.composerLabel), { target: { value: "Продолжить" } });
+    fireEvent.click(screen.getByRole("button", { name: ru.conversations.composerSubmit }));
+
+    await screen.findByText("message 105");
+    expect(webBrowserFetch).toHaveBeenCalledWith(
+      `/web/v1/conversations/${conversationId}/messages?after_seq=103&limit=100`,
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+    expect(screen.getAllByRole("listitem").map((item) => item.textContent)).toEqual([
+      expect.stringContaining("message 102"),
+      expect.stringContaining("message 103"),
+      expect.stringContaining("message 104"),
+      expect.stringContaining("message 105"),
+    ]);
+    expect(screen.getAllByText("message 104")).toHaveLength(1);
+    expect(webBrowserFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps polling after a neutral refresh failure and can still observe completion", async () => {
+    vi.useFakeTimers();
+    vi.mocked(webBrowserMutation).mockResolvedValueOnce(Response.json(queuedJob, { status: 201 }));
+    vi.mocked(webBrowserFetch)
+      .mockRejectedValueOnce(new Error("private backend detail"))
+      .mockResolvedValueOnce(
+        Response.json({
+          items: [
+            {
+              id: "55555555-5555-4555-8555-555555555555",
+              seq: 104,
+              role: "assistant",
+              text: "message after retry",
+              created_at: "2026-08-01T12:00:04Z",
+            },
+          ],
+        }),
+      );
+    render(<ConversationHistory history={initialHistory as never} />);
+
+    fireEvent.change(screen.getByLabelText(ru.conversations.composerLabel), { target: { value: "Продолжить" } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: ru.conversations.composerSubmit }));
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(screen.getByText(ru.conversations.refreshDelayed)).toBeTruthy();
+    expect(screen.queryByText("private backend detail")).toBeNull();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_000);
+    });
+
+    expect(screen.getByText("message after retry")).toBeTruthy();
+    expect(webBrowserFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("never overlaps polling requests", async () => {
+    vi.useFakeTimers();
+    vi.mocked(webBrowserMutation).mockResolvedValueOnce(Response.json(queuedJob, { status: 201 }));
+    vi.mocked(webBrowserFetch).mockImplementationOnce(
+      (_path, init) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")));
+        }),
+    );
+    const { unmount } = render(<ConversationHistory history={initialHistory as never} />);
+
+    fireEvent.change(screen.getByLabelText(ru.conversations.composerLabel), { target: { value: "Продолжить" } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: ru.conversations.composerSubmit }));
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(webBrowserFetch).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10_000);
+    });
+    expect(webBrowserFetch).toHaveBeenCalledTimes(1);
+
+    unmount();
+  });
+
+  it("stops polling at fifteen attempts and never fetches after the thirty-second deadline", async () => {
+    vi.useFakeTimers();
+    vi.mocked(webBrowserMutation).mockResolvedValueOnce(Response.json(queuedJob, { status: 201 }));
+    vi.mocked(webBrowserFetch).mockResolvedValue(Response.json({ items: [] }));
+    render(<ConversationHistory history={initialHistory as never} />);
+
+    fireEvent.change(screen.getByLabelText(ru.conversations.composerLabel), { target: { value: "Продолжить" } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: ru.conversations.composerSubmit }));
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(webBrowserFetch).toHaveBeenCalledTimes(1);
+
+    for (let attempt = 1; attempt < 15; attempt += 1) {
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2_000);
+      });
+    }
+    expect(webBrowserFetch).toHaveBeenCalledTimes(15);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(62_000);
+    });
+    expect(webBrowserFetch).toHaveBeenCalledTimes(15);
   });
 });
