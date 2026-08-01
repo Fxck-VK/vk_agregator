@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type ChangeEvent, type FormEvent } from "react";
+import { useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent } from "react";
 
 import { Button } from "@/components/ui/Button/Button";
 import { ru } from "@/i18n/ru";
@@ -12,6 +12,7 @@ import styles from "./ConversationComposer.module.css";
 type ConversationComposerProps = {
   conversationId: string;
   disabled?: boolean;
+  isAwaitingResponse?: boolean;
   onAccepted: () => void;
 };
 
@@ -20,9 +21,14 @@ type RetryIntent = {
   idempotencyKey: string;
 };
 
-type ComposerFeedback = "accepted" | "error" | null;
+type ComposerFeedback = "error" | null;
 
-export function ConversationComposer({ conversationId, disabled = false, onAccepted }: ConversationComposerProps) {
+export function ConversationComposer({
+  conversationId,
+  disabled = false,
+  isAwaitingResponse = false,
+  onAccepted,
+}: ConversationComposerProps) {
   const [draft, setDraft] = useState("");
   const [isPending, setIsPending] = useState(false);
   const [feedback, setFeedback] = useState<ComposerFeedback>(null);
@@ -41,8 +47,7 @@ export function ConversationComposer({ conversationId, disabled = false, onAccep
     setFeedback(null);
   };
 
-  const submit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const submit = async () => {
     if (disabled || isSubmittingRef.current || normalizedDraft === "") {
       return;
     }
@@ -75,7 +80,6 @@ export function ConversationComposer({ conversationId, disabled = false, onAccep
 
       retryIntentRef.current = null;
       setDraft("");
-      setFeedback("accepted");
       onAccepted();
     } catch {
       setFeedback("error");
@@ -85,14 +89,28 @@ export function ConversationComposer({ conversationId, disabled = false, onAccep
     }
   };
 
+  const submitForm = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    void submit();
+  };
+
+  const submitOnEnter = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) {
+      return;
+    }
+    event.preventDefault();
+    void submit();
+  };
+
   return (
-    <form className={styles.dock} onSubmit={(event) => void submit(event)}>
+    <form className={styles.dock} onSubmit={submitForm}>
       <div className={styles.composer}>
         <label className={styles.field}>
           <span>{ru.conversations.composerLabel}</span>
           <textarea
             disabled={isPending || disabled}
             onChange={changeDraft}
+            onKeyDown={submitOnEnter}
             placeholder={ru.conversations.composerPlaceholder}
             rows={3}
             value={draft}
@@ -100,7 +118,13 @@ export function ConversationComposer({ conversationId, disabled = false, onAccep
         </label>
         <div className={styles.footer}>
           <div className={styles.feedback}>
-            {feedback === "accepted" ? <p role="status">{ru.conversations.composerAccepted}</p> : null}
+            {isAwaitingResponse ? (
+              <p aria-label={ru.conversations.composerAwaitingResponse} aria-live="polite" className={styles.waitingStatus} role="status">
+                <span aria-hidden="true" className={styles.waitingDot} />
+                <span aria-hidden="true" className={styles.waitingDot} />
+                <span aria-hidden="true" className={styles.waitingDot} />
+              </p>
+            ) : null}
             {feedback === "error" ? <p role="alert">{ru.conversations.composerFailure}</p> : null}
           </div>
           <Button disabled={!canSubmit} type="submit">

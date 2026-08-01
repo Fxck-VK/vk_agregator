@@ -28,8 +28,8 @@
 
 .field textarea {
   inline-size: 100%;
-  min-block-size: 5rem;
-  resize: vertical;
+  block-size: 5rem;
+  resize: none;
   border: 0.0625rem solid var(--color-border);
   border-radius: var(--radius-sm);
   padding: var(--space-3);
@@ -58,6 +58,37 @@
 
 .feedback p {
   margin: 0;
+}
+
+.waitingStatus {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.1875rem;
+}
+
+.waitingDot {
+  inline-size: 0.375rem;
+  block-size: 0.375rem;
+  border-radius: 50%;
+  background: currentColor;
+  animation: waiting-dot 1.2s ease-in-out infinite;
+}
+
+.waitingDot:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.waitingDot:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes waiting-dot {
+  0%, 80%, 100% { opacity: 0.35; transform: translateY(0); }
+  40% { opacity: 1; transform: translateY(-0.1875rem); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .waitingDot { animation: none; }
 }
 
 @media (width < 40rem) {

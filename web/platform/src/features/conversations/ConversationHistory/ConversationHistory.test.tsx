@@ -205,6 +205,10 @@ describe("ConversationHistory", () => {
     await vi.waitFor(() => expect(webBrowserFetch).toHaveBeenCalledTimes(1));
     expect(textarea).toBeDisabled();
     expect(screen.getByRole("button", { name: ru.conversations.composerSubmit })).toBeDisabled();
+    expect(screen.getByRole("status", { name: ru.conversations.composerAwaitingResponse })).toHaveAttribute(
+      "aria-live",
+      "polite",
+    );
     expect(webBrowserMutation).toHaveBeenCalledTimes(1);
 
     resolveRefresh(
@@ -223,6 +227,7 @@ describe("ConversationHistory", () => {
 
     await screen.findByText("ответ на первый запрос");
     await vi.waitFor(() => expect(textarea).not.toBeDisabled());
+    await vi.waitFor(() => expect(screen.queryByRole("status", { name: ru.conversations.composerAwaitingResponse })).toBeNull());
     fireEvent.change(textarea, { target: { value: "Второй запрос" } });
     expect(screen.getByRole("button", { name: ru.conversations.composerSubmit })).toBeEnabled();
     expect(webBrowserMutation).toHaveBeenCalledTimes(1);

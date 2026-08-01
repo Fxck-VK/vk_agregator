@@ -27,8 +27,58 @@ describe("ConversationComposer", () => {
 
   afterEach(() => {
     cleanup();
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     vi.unstubAllGlobals();
+  });
+
+  it("uses the exact NeiroHub question placeholder", () => {
+    render(<ConversationComposer conversationId={conversationId} onAccepted={vi.fn()} />);
+
+    expect(screen.getByLabelText(ru.conversations.composerLabel)).toHaveAttribute(
+      "placeholder",
+      "Задайте вопрос NeiroHub",
+    );
+  });
+
+  it("submits a non-empty draft when Enter is pressed", async () => {
+    vi.mocked(webBrowserMutation).mockResolvedValueOnce(Response.json(queuedJob, { status: 201 }));
+    const onAccepted = vi.fn();
+    render(<ConversationComposer conversationId={conversationId} onAccepted={onAccepted} />);
+
+    const textarea = screen.getByLabelText(ru.conversations.composerLabel);
+    fireEvent.change(textarea, { target: { value: "Вопрос с клавиатуры" } });
+    const event = new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Enter" });
+    fireEvent(textarea, event);
+
+    await vi.waitFor(() => expect(webBrowserMutation).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(onAccepted).toHaveBeenCalledTimes(1));
+    expect(event.defaultPrevented).toBe(true);
+  });
+
+  it("leaves Shift+Enter to the textarea without submitting", () => {
+    render(<ConversationComposer conversationId={conversationId} onAccepted={vi.fn()} />);
+
+    const textarea = screen.getByLabelText(ru.conversations.composerLabel);
+    fireEvent.change(textarea, { target: { value: "Первая строка" } });
+    const event = new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Enter", shiftKey: true });
+    fireEvent(textarea, event);
+
+    expect(event.defaultPrevented).toBe(false);
+    expect(webBrowserMutation).not.toHaveBeenCalled();
+  });
+
+  it("shows an accessible three-dot waiting status only while awaiting a response", () => {
+    const { rerender } = render(
+      <ConversationComposer conversationId={conversationId} isAwaitingResponse onAccepted={vi.fn()} />,
+    );
+
+    const waitingStatus = screen.getByRole("status", { name: ru.conversations.composerAwaitingResponse });
+    expect(waitingStatus).toHaveAttribute("aria-live", "polite");
+    expect(waitingStatus.querySelectorAll('[aria-hidden="true"]')).toHaveLength(3);
+
+    rerender(<ConversationComposer conversationId={conversationId} isAwaitingResponse={false} onAccepted={vi.fn()} />);
+
+    expect(screen.queryByRole("status", { name: ru.conversations.composerAwaitingResponse })).toBeNull();
   });
 
   it.each([
@@ -57,7 +107,7 @@ describe("ConversationComposer", () => {
       body: JSON.stringify({ prompt: "Продолжи диалог" }),
     });
     expect(screen.getByLabelText(ru.conversations.composerLabel)).toHaveValue("");
-    expect(screen.getByRole("status")).toHaveTextContent(ru.conversations.composerAccepted);
+    expect(screen.queryByText("Сообщение принято. Ответ появится в этом чате.")).toBeNull();
   });
 
   it("retains a failed draft and reuses its idempotency key for an exact normalized retry", async () => {

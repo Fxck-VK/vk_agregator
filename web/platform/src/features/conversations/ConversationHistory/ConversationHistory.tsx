@@ -234,6 +234,7 @@ function ConversationHistoryReady({
       <ConversationComposer
         conversationId={history.conversationId}
         disabled={activeRefreshID !== null}
+        isAwaitingResponse={activeRefreshID !== null}
         onAccepted={beginRefresh}
       />
     </section>
