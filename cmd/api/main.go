@@ -139,6 +139,7 @@ func main() {
 	mediaQueueGuard := redisqueue.NewBackpressureGuard(rdb, cfg.WorkerGroup, cfg.MediaQueueDegradeThreshold)
 	videoRouteResolver := videoRouteResolverFromCatalog(runtimeCatalog.VideoRouteCatalog)
 	webPreparedJobLimit, webPreparedJobTTL, webPrepareRateLimit, webPrepareRateWindow := webImagePreparationLimits(cfg)
+	webChatMessageRateLimit, webChatMessageRateWindow := webChatMessageLimits(cfg)
 	webPreparedJobReconcileInterval, webPreparedJobReconcileLimit := webImagePreparedJobReconciliation(cfg)
 	core, err := apiapp.NewSharedCore(pool, cfg, apiapp.WithOrchestratorOptions(
 		joborchestrator.WithMaxActiveVideoJobsPerUser(cfg.MediaMaxActiveVideoJobsPerUser),
@@ -316,6 +317,12 @@ func main() {
 		webPrepareRateLimit,
 		webPrepareRateWindow,
 	)
+	webChatMessageLimiter := ratelimit.NewRedisFixedWindowLimiter(
+		rdb,
+		"web_chat_message",
+		webChatMessageRateLimit,
+		webChatMessageRateWindow,
+	)
 	webImagePreparedExpiry := preparedjobexpiry.New(postgres.NewPreparedWebImageExpiryRepository(pool))
 	web := websession.NewHandler(websession.Config{
 		WebOrigin:                   cfg.WebOrigin,
@@ -338,6 +345,8 @@ func main() {
 		ImageResults:           webResults,
 		ImageArtifacts:         core.Artifacts,
 		ImageArtifactURLSigner: webArtifactURLSigner,
+		WebChatJobs:            core.Orchestrator,
+		WebChatMessageLimiter:  webChatMessageLimiter,
 	})
 	webImageExpiryCtx, stopWebImageExpiry := context.WithCancel(context.Background())
 	defer stopWebImageExpiry()
@@ -445,6 +454,20 @@ func webImagePreparationLimits(cfg config.Config) (preparedLimit int, preparedTT
 		rateWindow = time.Hour
 	}
 	return preparedLimit, preparedTTL, rateLimit, rateWindow
+}
+
+// webChatMessageLimits protects zero-value Config callers while keeping the
+// deployed shared per-account quota explicit and independently adjustable.
+func webChatMessageLimits(cfg config.Config) (limit int, window time.Duration) {
+	limit = cfg.WebChatMessageRateLimit
+	if limit <= 0 {
+		limit = 30
+	}
+	window = cfg.WebChatMessageRateLimitWindow
+	if window <= 0 {
+		window = time.Minute
+	}
+	return limit, window
 }
 
 // webImagePreparedJobReconciliation protects zero-value Config callers while

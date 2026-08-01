@@ -75,8 +75,12 @@ type Config struct {
 	// browser image preparations through the shared Redis limiter.
 	WebImagePrepareRateLimit       int
 	WebImagePrepareRateLimitWindow time.Duration
-	DatabaseURL                    string
-	MigrationsDir                  string
+	// WebChatMessageRateLimit and WebChatMessageRateLimitWindow bound browser
+	// text messages per canonical account through a distinct shared limiter.
+	WebChatMessageRateLimit       int
+	WebChatMessageRateLimitWindow time.Duration
+	DatabaseURL                   string
+	MigrationsDir                 string
 	// MigrationTimeout bounds one cmd/migrate invocation. It is deliberately
 	// long enough for CREATE INDEX CONCURRENTLY on a production-sized table.
 	MigrationTimeout time.Duration
@@ -730,6 +734,12 @@ func (c Config) Validate() error {
 	if c.WebImagePrepareRateLimitWindow < 0 {
 		return fmt.Errorf("config: WEB_IMAGE_PREPARE_RATE_LIMIT_WINDOW must be non-negative")
 	}
+	if c.WebChatMessageRateLimit < 0 {
+		return fmt.Errorf("config: WEB_CHAT_MESSAGE_RATE_LIMIT must be non-negative")
+	}
+	if c.WebChatMessageRateLimitWindow < 0 {
+		return fmt.Errorf("config: WEB_CHAT_MESSAGE_RATE_LIMIT_WINDOW must be non-negative")
+	}
 	if c.AccountOAuthTelegramMaxAge < 0 {
 		return fmt.Errorf("config: ACCOUNT_OAUTH_TELEGRAM_MAX_AGE must be non-negative")
 	}
@@ -1164,6 +1174,8 @@ func Load() Config {
 		WebImagePreparedJobReconcileLimit:    envInt("WEB_IMAGE_PREPARED_JOB_RECONCILE_LIMIT", 100),
 		WebImagePrepareRateLimit:             envInt("WEB_IMAGE_PREPARE_RATE_LIMIT", 10),
 		WebImagePrepareRateLimitWindow:       envDuration("WEB_IMAGE_PREPARE_RATE_LIMIT_WINDOW", time.Hour),
+		WebChatMessageRateLimit:              envInt("WEB_CHAT_MESSAGE_RATE_LIMIT", 30),
+		WebChatMessageRateLimitWindow:        envDuration("WEB_CHAT_MESSAGE_RATE_LIMIT_WINDOW", time.Minute),
 		DatabaseURL:                          env("DATABASE_URL", "postgres://vk_ai_aggregator:vk_ai_aggregator@localhost:5432/vk_ai_aggregator?sslmode=disable"),
 		MigrationsDir:                        env("MIGRATIONS_DIR", "migrations"),
 		MigrationTimeout:                     envDuration("MIGRATION_TIMEOUT", 30*time.Minute),

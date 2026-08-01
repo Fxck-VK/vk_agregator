@@ -32,6 +32,23 @@ func TestWebImagePreparationLimitsUseConfiguredValues(t *testing.T) {
 	}
 }
 
+func TestWebChatMessageLimitsUseSafeDefaults(t *testing.T) {
+	limit, window := webChatMessageLimits(config.Config{})
+	if limit != 30 || window != time.Minute {
+		t.Fatalf("web chat message defaults = limit:%d window:%s", limit, window)
+	}
+}
+
+func TestWebChatMessageLimitsUseConfiguredValues(t *testing.T) {
+	limit, window := webChatMessageLimits(config.Config{
+		WebChatMessageRateLimit:       42,
+		WebChatMessageRateLimitWindow: 2 * time.Minute,
+	})
+	if limit != 42 || window != 2*time.Minute {
+		t.Fatalf("web chat message values = limit:%d window:%s", limit, window)
+	}
+}
+
 func TestWebImagePreparedJobReconciliationUsesSafeDefaultsAndConfiguredValues(t *testing.T) {
 	interval, limit := webImagePreparedJobReconciliation(config.Config{})
 	if interval != time.Minute || limit != 100 {

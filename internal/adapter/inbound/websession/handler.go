@@ -23,6 +23,7 @@ import (
 	"vk-ai-aggregator/internal/service/accountservice"
 	"vk-ai-aggregator/internal/service/imagegeneration"
 	"vk-ai-aggregator/internal/service/joborchestrator"
+	"vk-ai-aggregator/internal/service/modelcatalog"
 	"vk-ai-aggregator/internal/service/preparedjobexpiry"
 	"vk-ai-aggregator/internal/service/pricingcatalog"
 	"vk-ai-aggregator/internal/service/resultservice"
@@ -289,6 +290,17 @@ type ImageArtifactObjectReader interface {
 	GetObject(ctx context.Context, bucket, key string) ([]byte, error)
 }
 
+// WebChatJobCreator queues a normalized text job through the shared
+// orchestrator. The adapter deliberately depends only on job creation.
+type WebChatJobCreator interface {
+	CreateJob(ctx context.Context, input joborchestrator.CreateJobInput) (*domain.Job, error)
+}
+
+// WebChatMessageLimiter enforces the shared per-account web chat quota.
+type WebChatMessageLimiter interface {
+	Allow(ctx context.Context, key string) (bool, error)
+}
+
 // Deps are services shared with other account adapters.
 type Deps struct {
 	Authenticator          PrincipalAuthenticator
@@ -307,6 +319,8 @@ type Deps struct {
 	ImageResults           ImageResultReader
 	ImageArtifacts         ImageArtifactReader
 	ImageArtifactURLSigner ImageArtifactURLSigner
+	WebChatJobs            WebChatJobCreator
+	WebChatMessageLimiter  WebChatMessageLimiter
 }
 
 // Handler serves the browser-only /web/v1 endpoints.
@@ -335,6 +349,7 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /web/v1/image-jobs/{jobID}/result", h.requirePrincipal(h.getImageJobResult))
 	mux.HandleFunc("GET /web/v1/image-artifacts/{artifactID}", h.requirePrincipal(h.getImageArtifact))
 	mux.HandleFunc("POST /web/v1/conversations", h.requireUnsafePrincipal(h.createConversation))
+	mux.HandleFunc("POST /web/v1/conversations/{conversationID}/messages", h.requireUnsafePrincipal(h.createConversationMessage))
 	mux.HandleFunc("POST /web/v1/image-jobs/prepare", h.requireUnsafePrincipal(h.prepareImageJob))
 	mux.HandleFunc("POST /web/v1/image-jobs/{jobID}/activate", h.requireUnsafePrincipal(h.activateImageJob))
 	return mux
@@ -1113,6 +1128,106 @@ func (h *Handler) createConversation(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, newSafeConversation(*existing))
 }
 
+func (h *Handler) createConversationMessage(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	principal, ok := PrincipalFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	conversationID, err := uuid.Parse(strings.TrimSpace(r.PathValue("conversationID")))
+	if err != nil || conversationID == uuid.Nil {
+		writeError(w, http.StatusBadRequest, "invalid conversation id")
+		return
+	}
+	var req struct {
+		Prompt string `json:"prompt"`
+	}
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	req.Prompt = strings.TrimSpace(req.Prompt)
+	if req.Prompt == "" {
+		writeError(w, http.StatusBadRequest, "invalid chat message request")
+		return
+	}
+	idempotencyKey, err := uuid.Parse(strings.TrimSpace(r.Header.Get("X-Idempotency-Key")))
+	if err != nil || idempotencyKey == uuid.Nil {
+		writeError(w, http.StatusBadRequest, "invalid idempotency key")
+		return
+	}
+	if h.deps.Conversations == nil || h.deps.WebChatJobs == nil || h.deps.WebChatMessageLimiter == nil {
+		writeError(w, http.StatusServiceUnavailable, "chat message unavailable")
+		return
+	}
+	conversation, err := h.deps.Conversations.GetByIDForAccount(r.Context(), principal.AccountID, conversationID)
+	if errors.Is(err, domain.ErrNotFound) || (err == nil && conversation != nil && (conversation.AccountID != principal.AccountID || conversation.Source != domain.ConversationSourceWeb || conversation.Status != domain.ConversationActive)) {
+		writeError(w, http.StatusNotFound, "conversation not found")
+		return
+	}
+	if err != nil || conversation == nil {
+		writeError(w, http.StatusServiceUnavailable, "chat message unavailable")
+		return
+	}
+	allowed, err := h.deps.WebChatMessageLimiter.Allow(r.Context(), "account:"+principal.AccountID.String())
+	if err != nil {
+		writeError(w, http.StatusServiceUnavailable, "chat message unavailable")
+		return
+	}
+	if !allowed {
+		writeError(w, http.StatusTooManyRequests, "chat message rate limited")
+		return
+	}
+	model, ok := modelcatalog.ResolvePublicModel(domain.OperationTextGenerate, "")
+	if !ok {
+		writeError(w, http.StatusServiceUnavailable, "chat message unavailable")
+		return
+	}
+	orchestrationKey := "web-chat:" + principal.AccountID.String() + ":" + idempotencyKey.String()
+	params, err := json.Marshal(webChatJobParams{
+		Prompt:             req.Prompt,
+		ModelID:            model.ModelID,
+		ModelName:          model.ModelName,
+		Provider:           model.Provider,
+		ModelCode:          model.ModelCode,
+		ConversationID:     conversation.ID.String(),
+		ConversationSource: domain.ConversationSourceWeb,
+	})
+	if err != nil {
+		writeError(w, http.StatusServiceUnavailable, "chat message unavailable")
+		return
+	}
+	job, err := h.deps.WebChatJobs.CreateJob(r.Context(), joborchestrator.CreateJobInput{
+		UserID:         uuid.Nil,
+		AccountID:      principal.AccountID,
+		Source:         "web",
+		ChannelContext: &domain.ChannelContext{Channel: domain.ChannelWeb},
+		ResultMode:     domain.ResultModeAccountHistory,
+		VKPeerID:       0,
+		CommandID:      uuid.Nil,
+		Operation:      domain.OperationTextGenerate,
+		Modality:       domain.ModalityText,
+		IdempotencyKey: orchestrationKey,
+		CorrelationID:  orchestrationKey,
+		Params:         params,
+	})
+	switch {
+	case err == nil && job != nil && job.ID != uuid.Nil:
+		writeJSON(w, http.StatusCreated, safeWebChatJob{JobID: job.ID, Status: job.Status})
+	case errors.Is(err, domain.ErrActiveJobLimitExceeded):
+		writeError(w, http.StatusTooManyRequests, "chat message rate limited")
+	case errors.Is(err, domain.ErrInsufficientCredits):
+		writeError(w, http.StatusPaymentRequired, "insufficient credits")
+	case errors.Is(err, domain.ErrCostCapExceeded):
+		writeError(w, http.StatusBadRequest, "invalid chat message request")
+	case errors.Is(err, domain.ErrCapacityDegraded):
+		w.Header().Set("Retry-After", "30")
+		writeError(w, http.StatusServiceUnavailable, "chat message unavailable")
+	default:
+		writeError(w, http.StatusServiceUnavailable, "chat message unavailable")
+	}
+}
+
 func conversationLimit(values []string, provided bool) (int, error) {
 	const (
 		defaultConversationLimit = 20
@@ -1381,6 +1496,21 @@ type safeConversationMessage struct {
 	Role      domain.ConversationMessageRole `json:"role"`
 	Text      string                         `json:"text"`
 	CreatedAt time.Time                      `json:"created_at"`
+}
+
+type safeWebChatJob struct {
+	JobID  uuid.UUID        `json:"job_id"`
+	Status domain.JobStatus `json:"status"`
+}
+
+type webChatJobParams struct {
+	Prompt             string                    `json:"prompt"`
+	ModelID            string                    `json:"model_id"`
+	ModelName          string                    `json:"model_name"`
+	Provider           domain.ProviderName       `json:"provider"`
+	ModelCode          string                    `json:"model_code"`
+	ConversationID     string                    `json:"conversation_id"`
+	ConversationSource domain.ConversationSource `json:"conversation_source"`
 }
 
 type safeImageModelList struct {

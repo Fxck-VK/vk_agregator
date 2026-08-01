@@ -2440,6 +2440,25 @@ func TestLoadWebImagePreparationPolicy(t *testing.T) {
 	}
 }
 
+func TestLoadWebChatMessagePolicy(t *testing.T) {
+	restoreLimit := clearEnv(t, "WEB_CHAT_MESSAGE_RATE_LIMIT")
+	defer restoreLimit()
+	restoreWindow := clearEnv(t, "WEB_CHAT_MESSAGE_RATE_LIMIT_WINDOW")
+	defer restoreWindow()
+
+	cfg := config.Load()
+	if cfg.WebChatMessageRateLimit != 30 || cfg.WebChatMessageRateLimitWindow != time.Minute {
+		t.Fatalf("default web chat message policy = limit:%d window:%s", cfg.WebChatMessageRateLimit, cfg.WebChatMessageRateLimitWindow)
+	}
+
+	t.Setenv("WEB_CHAT_MESSAGE_RATE_LIMIT", "42")
+	t.Setenv("WEB_CHAT_MESSAGE_RATE_LIMIT_WINDOW", "2m")
+	cfg = config.Load()
+	if cfg.WebChatMessageRateLimit != 42 || cfg.WebChatMessageRateLimitWindow != 2*time.Minute {
+		t.Fatalf("configured web chat message policy = limit:%d window:%s", cfg.WebChatMessageRateLimit, cfg.WebChatMessageRateLimitWindow)
+	}
+}
+
 func TestLoadMigrationTimeout(t *testing.T) {
 	restore := clearEnv(t, "MIGRATION_TIMEOUT")
 	defer restore()
@@ -2465,6 +2484,8 @@ func TestValidateWebImagePreparationPolicyRejectsNegativeValues(t *testing.T) {
 		{name: "prepared reconciliation limit", cfg: config.Config{WebImagePreparedJobReconcileLimit: -1}, want: "WEB_IMAGE_PREPARED_JOB_RECONCILE_LIMIT"},
 		{name: "rate limit", cfg: config.Config{WebImagePrepareRateLimit: -1}, want: "WEB_IMAGE_PREPARE_RATE_LIMIT"},
 		{name: "rate window", cfg: config.Config{WebImagePrepareRateLimitWindow: -time.Second}, want: "WEB_IMAGE_PREPARE_RATE_LIMIT_WINDOW"},
+		{name: "web chat rate limit", cfg: config.Config{WebChatMessageRateLimit: -1}, want: "WEB_CHAT_MESSAGE_RATE_LIMIT"},
+		{name: "web chat rate window", cfg: config.Config{WebChatMessageRateLimitWindow: -time.Second}, want: "WEB_CHAT_MESSAGE_RATE_LIMIT_WINDOW"},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			err := testCase.cfg.Validate()
