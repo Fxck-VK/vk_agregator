@@ -38,4 +38,30 @@ if bash "${script}" \
   exit 1
 fi
 
+export ENV_COMMON=$'APP_ENV=development\nWEB_ORIGIN=https://stale-dev-origin.invalid'
+export ENV_PROVIDERS_COMMON='PROVIDER=fixture'
+export ENV_SECRETS_DEV='ADMIN_TOKEN=fixture'
+export ENV_PAYMENTS_DEV='PAYMENT_PROVIDER=mock'
+
+dev_overridden="${tmpdir}/dev-overridden.env"
+bash "${script}" \
+  --target dev \
+  --output "${dev_overridden}" \
+  --web-origin https://dev-web.neiirohub.ru
+
+if [[ "$(grep -Ec '^WEB_ORIGIN=' "${dev_overridden}")" -ne 1 ]]; then
+  echo "Expected exactly one WEB_ORIGIN entry" >&2
+  exit 1
+fi
+grep -Fx 'WEB_ORIGIN=https://dev-web.neiirohub.ru' "${dev_overridden}" >/dev/null
+
+if bash "${script}" \
+  --target prod \
+  --output "${tmpdir}/invalid-web-origin.env" \
+  --web-origin https://dev-web.neiirohub.ru \
+  >/dev/null 2>&1; then
+  echo "Expected production WEB_ORIGIN override to fail" >&2
+  exit 1
+fi
+
 echo "Split env assembly override tests passed"

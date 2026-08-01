@@ -670,6 +670,32 @@ function Assert-DevDeploySmokeScript {
     Write-Host "DEV deploy smoke script OK"
 }
 
+function Assert-DevDeployWorkflow {
+    $path = Join-Path $repoRoot ".github\workflows\deploy-dev.yml"
+    if (-not (Test-Path -LiteralPath $path)) {
+        throw "DEV deploy workflow is missing: .github/workflows/deploy-dev.yml"
+    }
+
+    $content = Get-Content -LiteralPath $path -Raw
+    $uploadStep = [regex]::Match($content, '(?ms)^      - name: Upload DEV env\s*\r?\n(?<body>.*?)(?=^      - name:|\z)')
+    if (-not $uploadStep.Success) {
+        throw "DEV deploy workflow is missing the Upload DEV env step"
+    }
+
+    $uploadBody = $uploadStep.Groups['body'].Value
+    foreach ($snippet in @(
+        "scripts/deploy/assemble-env-parts.sh",
+        "--target dev",
+        "--web-origin https://dev-web.neiirohub.ru"
+    )) {
+        if (-not $uploadBody.Contains($snippet)) {
+            throw "DEV deploy workflow Upload DEV env step is missing required snippet: $snippet"
+        }
+    }
+
+    Write-Host "DEV deploy workflow WEB_ORIGIN override OK"
+}
+
 function Assert-DevWebOperatorDocs {
     $documents = @{
         "deployments/cloudflare/README.md" = @(
@@ -1664,6 +1690,7 @@ Assert-DevStartStackScript
 Assert-DevStopStatusScripts
 Assert-DevPublicSmokeScript
 Assert-DevDeploySmokeScript
+Assert-DevDeployWorkflow
 Assert-DevWebOperatorDocs
 Assert-ProductionDataServices
 Assert-CloudflaredComposeConfig

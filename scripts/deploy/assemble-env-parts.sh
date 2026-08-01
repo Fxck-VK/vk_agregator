@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat >&2 <<'USAGE'
-Usage: assemble-env-parts.sh --target prod|dev --output <path> [--image-tag <tag>] [--ghcr-username <name>] [--ghcr-token <token>] [--vk-menu-top-up-enabled <true|false>]
+Usage: assemble-env-parts.sh --target prod|dev --output <path> [--image-tag <tag>] [--ghcr-username <name>] [--ghcr-token <token>] [--vk-menu-top-up-enabled <true|false>] [--web-origin <https-url>]
 
 Reads split env parts from GitHub Actions environment variables:
   ENV_COMMON
@@ -15,6 +15,8 @@ The script writes a single runtime .env file and never prints secret values.
 For production, --image-tag pins both IMAGE_TAG and BACKUP_IMAGE_TAG.
 The optional VK menu override is production-only and replaces the assembled
 VK_MENU_TOP_UP_ENABLED value without printing it.
+The optional web origin override is DEV-only and replaces WEB_ORIGIN without
+reading or printing split secret values.
 USAGE
 }
 
@@ -24,6 +26,7 @@ image_tag=""
 ghcr_username=""
 ghcr_token=""
 vk_menu_top_up_enabled=""
+web_origin=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -49,6 +52,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --vk-menu-top-up-enabled)
       vk_menu_top_up_enabled="$(printf '%s' "${2:-}" | tr '[:upper:]' '[:lower:]')"
+      shift 2
+      ;;
+    --web-origin)
+      web_origin="${2:-}"
       shift 2
       ;;
     -h|--help)
@@ -116,6 +123,17 @@ if [[ -n "${vk_menu_top_up_enabled}" ]]; then
   fi
 fi
 
+if [[ -n "${web_origin}" ]]; then
+  if [[ "${target}" != "dev" ]]; then
+    echo "WEB_ORIGIN override is DEV-only" >&2
+    exit 1
+  fi
+  if [[ ! "${web_origin}" =~ ^https://[A-Za-z0-9.-]+(:[0-9]+)?$ ]]; then
+    echo "WEB_ORIGIN override must be an HTTPS origin without a path" >&2
+    exit 1
+  fi
+fi
+
 tmp="$(mktemp)"
 override_tmp="${tmp}.override"
 trap 'rm -f "${tmp}" "${override_tmp}"' EXIT
@@ -160,6 +178,12 @@ if [[ -n "${vk_menu_top_up_enabled}" ]]; then
   awk '!/^[[:space:]]*VK_MENU_TOP_UP_ENABLED[[:space:]]*=/' "${tmp}" > "${override_tmp}"
   mv "${override_tmp}" "${tmp}"
   printf 'VK_MENU_TOP_UP_ENABLED=%s\n' "${vk_menu_top_up_enabled}" >> "${tmp}"
+fi
+
+if [[ -n "${web_origin}" ]]; then
+  awk '!/^[[:space:]]*WEB_ORIGIN[[:space:]]*=/' "${tmp}" > "${override_tmp}"
+  mv "${override_tmp}" "${tmp}"
+  printf 'WEB_ORIGIN=%s\n' "${web_origin}" >> "${tmp}"
 fi
 
 if [[ -n "${image_tag}" ]]; then
