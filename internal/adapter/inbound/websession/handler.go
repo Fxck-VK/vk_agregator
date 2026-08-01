@@ -281,6 +281,14 @@ type ImageArtifactURLSigner interface {
 	PresignedGetURL(ctx context.Context, bucket, key string, expiry time.Duration) (string, error)
 }
 
+// ImageArtifactObjectReader loads a verified artifact from private object
+// storage. Implementations may also be URL signers, which lets the web adapter
+// keep its legacy redirect fallback when a deployment has not yet enabled
+// same-origin artifact delivery.
+type ImageArtifactObjectReader interface {
+	GetObject(ctx context.Context, bucket, key string) ([]byte, error)
+}
+
 // Deps are services shared with other account adapters.
 type Deps struct {
 	Authenticator          PrincipalAuthenticator
@@ -855,9 +863,10 @@ func (h *Handler) getImageJobResult(w http.ResponseWriter, r *http.Request) {
 }
 
 // getImageArtifact verifies the complete account-owned result chain before
-// redirecting to a one-minute object-store URL. The browser never receives the
-// storage location in JSON and cannot use this endpoint for arbitrary
-// account-owned inputs or unmoderated outputs.
+// delivering the output. When the configured store can read objects, the
+// bytes are returned from this same origin so browser CSP never needs to trust
+// a private object-store hostname. Older signer-only deployments retain the
+// strictly attested redirect fallback.
 func (h *Handler) getImageArtifact(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	principal, ok := PrincipalFromContext(r.Context())
@@ -912,6 +921,20 @@ func (h *Handler) getImageArtifact(w http.ResponseWriter, r *http.Request) {
 	safeResult, ok := newSafeImageJobResult(result, job.ID)
 	if !ok || !safeResultContainsArtifact(safeResult, artifactID) {
 		writeError(w, http.StatusNotFound, "image artifact not found")
+		return
+	}
+	if objectReader, ok := h.deps.ImageArtifactURLSigner.(ImageArtifactObjectReader); ok {
+		data, err := objectReader.GetObject(r.Context(), artifact.StorageBucket, artifact.StorageKey)
+		if err != nil || len(data) == 0 || int64(len(data)) != artifact.SizeBytes {
+			writeError(w, http.StatusServiceUnavailable, "image generation unavailable")
+			return
+		}
+		w.Header().Set("Content-Type", artifact.MimeType)
+		w.Header().Set("Content-Length", strconv.Itoa(len(data)))
+		w.WriteHeader(http.StatusOK)
+		if r.Method != http.MethodHead {
+			_, _ = w.Write(data)
+		}
 		return
 	}
 	signedURL, err := h.deps.ImageArtifactURLSigner.PresignedGetURL(r.Context(), artifact.StorageBucket, artifact.StorageKey, webImageArtifactURLTTL)

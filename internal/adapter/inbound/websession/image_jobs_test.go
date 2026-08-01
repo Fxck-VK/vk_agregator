@@ -777,11 +777,12 @@ func TestWebImageJobResultUsesOwnerScopedWebJobAndSafeMetadata(t *testing.T) {
 	}
 }
 
-func TestWebImageArtifactRedirectsOnlyAfterOwnerAndResultChecks(t *testing.T) {
+func TestWebImageArtifactStreamsOwnerModeratedOutputThroughWebOrigin(t *testing.T) {
 	h, _, sessions := newImageJobTestHandler(t)
 	accountID := uuid.New()
 	jobID := uuid.New()
 	artifactID := uuid.New()
+	artifactBytes := []byte("safe generated image bytes")
 	h.deps.ImageJobReader = &imageJobReaderStub{job: &domain.Job{
 		ID:            jobID,
 		AccountID:     accountID,
@@ -804,7 +805,7 @@ func TestWebImageArtifactRedirectsOnlyAfterOwnerAndResultChecks(t *testing.T) {
 		Operation: domain.OperationImageGenerate,
 		Modality:  domain.ModalityImage,
 		Status:    domain.JobStatusSucceeded,
-		Artifacts: []resultservice.ArtifactMetadata{{ID: artifactID, MediaType: domain.MediaTypeImage, MIMEType: "image/png", SizeBytes: 42}},
+		Artifacts: []resultservice.ArtifactMetadata{{ID: artifactID, MediaType: domain.MediaTypeImage, MIMEType: "image/png", SizeBytes: int64(len(artifactBytes))}},
 	}}
 	h.deps.ImageArtifacts = &imageArtifactReaderStub{artifact: &domain.Artifact{
 		ID:             artifactID,
@@ -815,27 +816,30 @@ func TestWebImageArtifactRedirectsOnlyAfterOwnerAndResultChecks(t *testing.T) {
 		MimeType:       "image/png",
 		StorageBucket:  "private-artifacts",
 		StorageKey:     "web/generated/output.png",
-		SizeBytes:      42,
+		SizeBytes:      int64(len(artifactBytes)),
 		Status:         domain.ArtifactStatusReady,
 	}}
-	signer := &imageArtifactURLSignerStub{url: "https://objects.example.test/signed-output"}
-	h.deps.ImageArtifactURLSigner = signer
+	store := &imageArtifactObjectStoreStub{data: artifactBytes}
+	h.deps.ImageArtifactURLSigner = store
 	req := authenticatedConversationRequest(t, http.MethodGet, "/web/v1/image-artifacts/"+artifactID.String(), sessions, accountID)
 	rec := httptest.NewRecorder()
 
 	h.Routes().ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusTemporaryRedirect {
+	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
 	}
-	if got := rec.Header().Get("Location"); got != signer.url {
-		t.Fatalf("redirect = %q, want %q", got, signer.url)
+	if got := rec.Header().Get("Content-Type"); got != "image/png" {
+		t.Fatalf("content type = %q, want image/png", got)
 	}
-	if got := rec.Header().Get(ImageArtifactRedirectOriginHeader); got != "https://objects.example.test" {
-		t.Fatalf("attested redirect origin = %q, want object-store origin", got)
+	if !bytes.Equal(rec.Body.Bytes(), artifactBytes) {
+		t.Fatalf("artifact body = %q, want %q", rec.Body.Bytes(), artifactBytes)
 	}
-	if signer.bucket != "private-artifacts" || signer.key != "web/generated/output.png" || signer.expiry != webImageArtifactURLTTL {
-		t.Fatalf("signer invocation = bucket:%q key:%q ttl:%s", signer.bucket, signer.key, signer.expiry)
+	if got := rec.Header().Get("Location"); got != "" {
+		t.Fatalf("artifact response must remain same-origin, location = %q", got)
+	}
+	if store.bucket != "private-artifacts" || store.key != "web/generated/output.png" {
+		t.Fatalf("object store invocation = bucket:%q key:%q", store.bucket, store.key)
 	}
 }
 
@@ -1201,6 +1205,26 @@ func (s *imageArtifactURLSignerStub) PresignedGetURL(_ context.Context, bucket, 
 	s.key = key
 	s.expiry = expiry
 	return s.url, s.err
+}
+
+type imageArtifactObjectStoreStub struct {
+	bucket string
+	key    string
+	data   []byte
+	err    error
+}
+
+func (s *imageArtifactObjectStoreStub) PresignedGetURL(_ context.Context, bucket, key string, expiry time.Duration) (string, error) {
+	_ = bucket
+	_ = key
+	_ = expiry
+	return "", errors.New("object store should stream the artifact instead of presigning it")
+}
+
+func (s *imageArtifactObjectStoreStub) GetObject(_ context.Context, bucket, key string) ([]byte, error) {
+	s.bucket = bucket
+	s.key = key
+	return s.data, s.err
 }
 
 func (s *imageJobReaderStub) GetByIDForAccount(_ context.Context, accountID, jobID uuid.UUID) (*domain.Job, error) {
