@@ -209,6 +209,17 @@ id = "generic-api-key"
     '''^(?:d7c979f5-24e5-4f88-924b-a592d6e5a906|a2a006fc-4457-4bb5-bc4d-4f553d51766b|6fc25ee1-1f6f-47ac-b46f-f4b21c0ad5cd)$''',
   ]
 
+  [[rules.allowlists]]
+  description = "Exact non-secret idempotency UUID fixtures in workspace prompt tests"
+  condition = "AND"
+  regexTarget = "secret"
+  paths = [
+    '''(?i)(^|/)web/platform/src/features/workspace/WorkspacePrompt/WorkspacePrompt\.test\.tsx$''',
+  ]
+  regexes = [
+    '''^(?:c7c979f5-24e5-4f88-924b-a592d6e5a906|e7c979f5-24e5-4f88-924b-a592d6e5a906)$''',
+  ]
+
 [[rules]]
 id = "curl-auth-header"
 
