@@ -67,7 +67,7 @@ describe("ConversationHistory", () => {
   });
 
   it("keeps the workspace position when a polling reply arrives above the bottom", async () => {
-    const { region, scrollTo } = addWorkspaceScrollRegion();
+    const { region, scrollTo, setScrollHeight } = addWorkspaceScrollRegion();
     let resolveRefresh: (response: Response) => void = () => {};
     vi.mocked(webBrowserMutation).mockResolvedValueOnce(Response.json(queuedJob, { status: 201 }));
     vi.mocked(webBrowserFetch).mockReturnValueOnce(
@@ -88,6 +88,7 @@ describe("ConversationHistory", () => {
 
     region.scrollTop = 100;
     fireEvent.scroll(region);
+    setScrollHeight(1_800);
     resolveRefresh(
       Response.json({
         items: [
@@ -105,6 +106,47 @@ describe("ConversationHistory", () => {
     await screen.findByText("assistant reply while scrolled away");
     expect(scrollTo).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: ru.conversations.scrollToLatest })).toBeVisible();
+  });
+
+  it("follows a polling reply while the workspace is already at the bottom", async () => {
+    const { region, scrollTo, setScrollHeight } = addWorkspaceScrollRegion();
+    let resolveRefresh: (response: Response) => void = () => {};
+    vi.mocked(webBrowserMutation).mockResolvedValueOnce(Response.json(queuedJob, { status: 201 }));
+    vi.mocked(webBrowserFetch).mockReturnValueOnce(
+      new Promise<Response>((resolve) => {
+        resolveRefresh = resolve;
+      }),
+    );
+    render(<ConversationHistory history={initialHistory as never} />);
+
+    fireEvent.change(screen.getByLabelText(ru.conversations.composerLabel), { target: { value: "Pending stream prompt" } });
+    fireEvent.click(screen.getByRole("button", { name: ru.conversations.composerSubmit }));
+    await screen.findByText("Pending stream prompt");
+    await vi.waitFor(() =>
+      expect(scrollTo).toHaveBeenCalledWith({ behavior: "smooth", top: region.scrollHeight }),
+    );
+    scrollTo.mockClear();
+
+    setScrollHeight(1_800);
+    resolveRefresh(
+      Response.json({
+        items: [
+          {
+            id: "77777777-7777-4777-8777-777777777777",
+            seq: 104,
+            role: "assistant",
+            text: "assistant reply while following latest",
+            created_at: "2026-08-01T12:00:04Z",
+          },
+        ],
+      }),
+    );
+
+    await screen.findByText("assistant reply while following latest");
+    await vi.waitFor(() =>
+      expect(scrollTo).toHaveBeenCalledWith({ behavior: "smooth", top: region.scrollHeight }),
+    );
+    expect(screen.queryByRole("button", { name: ru.conversations.scrollToLatest })).toBeNull();
   });
 
   it("prepends a bounded older page and keeps its next cursor on the first loaded message", async () => {
@@ -585,11 +627,17 @@ function addWorkspaceScrollRegion() {
   region.dataset.testid = "workspace-scroll-region";
   Object.defineProperties(region, {
     clientHeight: { configurable: true, value: 400 },
-    scrollHeight: { configurable: true, value: 1_600 },
+    scrollHeight: { configurable: true, writable: true, value: 1_600 },
     scrollTo: { configurable: true, value: scrollTo },
     scrollTop: { configurable: true, writable: true, value: 1_200 },
   });
   document.body.append(region);
 
-  return { region, scrollTo };
+  return {
+    region,
+    scrollTo,
+    setScrollHeight: (scrollHeight: number) => {
+      Object.defineProperty(region, "scrollHeight", { configurable: true, value: scrollHeight });
+    },
+  };
 }

@@ -21,17 +21,31 @@ export function ChatScrollToBottom({
   scrollContainer,
 }: ChatScrollToBottomProps) {
   const [atBottom, setAtBottom] = useState(() => !scrollContainer || isAtBottom(scrollContainer));
+  const followLatestRef = useRef(atBottom);
+  const previousContentVersion = useRef(contentVersion);
   const previousForceScrollRequest = useRef(forceScrollRequest);
 
   useEffect(() => {
-    if (scrollContainer === null || forceScrollRequest === previousForceScrollRequest.current) {
+    if (scrollContainer === null) {
       return;
     }
 
+    const contentChanged = contentVersion !== previousContentVersion.current;
+    const forceScrollRequested = forceScrollRequest !== previousForceScrollRequest.current;
+    previousContentVersion.current = contentVersion;
     previousForceScrollRequest.current = forceScrollRequest;
-    scrollContainer.scrollTo({ behavior: "smooth", top: scrollContainer.scrollHeight });
+
+    if (!forceScrollRequested && (!contentChanged || !followLatestRef.current)) {
+      return;
+    }
+
+    followLatestRef.current = true;
     setAtBottom(true);
-  }, [forceScrollRequest, scrollContainer]);
+    scrollContainer.scrollTo({
+      behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ? "auto" : "smooth",
+      top: scrollContainer.scrollHeight,
+    });
+  }, [contentVersion, forceScrollRequest, scrollContainer]);
 
   useEffect(() => {
     if (!scrollContainer) {
@@ -39,7 +53,9 @@ export function ChatScrollToBottom({
     }
 
     const updatePosition = () => {
-      setAtBottom(isAtBottom(scrollContainer));
+      const nextAtBottom = isAtBottom(scrollContainer);
+      followLatestRef.current = nextAtBottom;
+      setAtBottom(nextAtBottom);
     };
 
     updatePosition();
@@ -48,14 +64,19 @@ export function ChatScrollToBottom({
     return () => {
       scrollContainer.removeEventListener("scroll", updatePosition);
     };
-  }, [contentVersion, forceScrollRequest, scrollContainer]);
+  }, [scrollContainer]);
 
   if (atBottom || !scrollContainer) {
     return null;
   }
 
   const scrollToLatest = () => {
-    scrollContainer.scrollTo({ behavior: "smooth", top: scrollContainer.scrollHeight - scrollContainer.clientHeight });
+    followLatestRef.current = true;
+    setAtBottom(true);
+    scrollContainer.scrollTo({
+      behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ? "auto" : "smooth",
+      top: scrollContainer.scrollHeight - scrollContainer.clientHeight,
+    });
   };
 
   return (
