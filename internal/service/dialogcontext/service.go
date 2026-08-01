@@ -117,7 +117,7 @@ func (s *Service) Prepare(ctx context.Context, job *domain.Job, prompt string) (
 	if err != nil {
 		return Prepared{}, err
 	}
-	if conversation.Source == domain.ConversationSourceMiniApp {
+	if conversation.Source == domain.ConversationSourceMiniApp || conversation.Source == domain.ConversationSourceWeb {
 		if title := titleFromUserPrompt(prompt); title != "" {
 			if err := s.repo.SetConversationTitleIfEmpty(ctx, conversation.ID, title); err != nil {
 				return Prepared{}, err
@@ -239,6 +239,15 @@ func resolveConversationTarget(job *domain.Job) conversationTarget {
 			Source:           domain.ConversationSourceMiniApp,
 			ExternalThreadID: threadID,
 		}}
+	case domain.ConversationSourceWeb:
+		id, err := uuid.Parse(strings.TrimSpace(params.ConversationID))
+		if err != nil || id == uuid.Nil {
+			return conversationTarget{explicit: true, invalid: true}
+		}
+		return conversationTarget{explicit: true, conversationID: id, ref: domain.ConversationRef{
+			AccountID: ownerID,
+			Source:    domain.ConversationSourceWeb,
+		}}
 	default:
 		return conversationTarget{explicit: true, invalid: true}
 	}
@@ -246,7 +255,15 @@ func resolveConversationTarget(job *domain.Job) conversationTarget {
 
 func (s *Service) getOrCreateConversation(ctx context.Context, job *domain.Job, target conversationTarget) (*domain.Conversation, bool, error) {
 	if target.conversationID != uuid.Nil {
-		conversation, err := s.repo.GetByIDForUser(ctx, dialogJobOwnerID(job), target.conversationID)
+		var (
+			conversation *domain.Conversation
+			err          error
+		)
+		if target.ref.Source == domain.ConversationSourceWeb {
+			conversation, err = s.repo.GetByIDForAccount(ctx, dialogJobOwnerID(job), target.conversationID)
+		} else {
+			conversation, err = s.repo.GetByIDForUser(ctx, dialogJobOwnerID(job), target.conversationID)
+		}
 		if err != nil {
 			if errors.Is(err, domain.ErrNotFound) {
 				return nil, false, nil

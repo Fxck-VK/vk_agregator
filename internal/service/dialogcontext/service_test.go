@@ -203,6 +203,83 @@ func TestPrepareUsesExplicitMiniAppThreadsWithoutMixing(t *testing.T) {
 	}
 }
 
+func TestPrepareUsesOnlyOwnedWebConversation(t *testing.T) {
+	ctx := context.Background()
+	repo := memory.NewConversationRepo()
+	svc := dialogcontext.New(repo, dialogcontext.Config{Enabled: true})
+	accountID := uuid.New()
+	conversation := &domain.Conversation{
+		AccountID: accountID,
+		Source:    domain.ConversationSourceWeb,
+		Status:    domain.ConversationActive,
+	}
+	if err := repo.CreateConversation(ctx, conversation); err != nil {
+		t.Fatalf("create web conversation: %v", err)
+	}
+
+	job := textJobWithParams(uuid.New(), 0, map[string]string{
+		"conversation_id":     conversation.ID.String(),
+		"conversation_source": "web",
+	})
+	job.AccountID = accountID
+	prepared, err := svc.Prepare(ctx, job, "web prompt")
+	if err != nil {
+		t.Fatalf("prepare: %v", err)
+	}
+	if prepared.ConversationID != conversation.ID {
+		t.Fatalf("conversation id = %s, want %s", prepared.ConversationID, conversation.ID)
+	}
+	messages, err := repo.ListMessagesAfter(ctx, conversation.ID, 0, 10)
+	if err != nil {
+		t.Fatalf("list messages: %v", err)
+	}
+	if len(messages) != 1 || messages[0].Role != domain.ConversationRoleUser || messages[0].Text != "web prompt" {
+		t.Fatalf("messages = %+v, want persisted web user prompt", messages)
+	}
+	stored, err := repo.GetByIDForAccount(ctx, accountID, conversation.ID)
+	if err != nil {
+		t.Fatalf("get web conversation: %v", err)
+	}
+	if stored.Title != "web prompt" {
+		t.Fatalf("title = %q, want first web prompt", stored.Title)
+	}
+}
+
+func TestPrepareDoesNotUseForeignWebConversation(t *testing.T) {
+	ctx := context.Background()
+	repo := memory.NewConversationRepo()
+	svc := dialogcontext.New(repo, dialogcontext.Config{Enabled: true})
+	accountA := uuid.New()
+	conversation := &domain.Conversation{
+		AccountID: uuid.New(),
+		Source:    domain.ConversationSourceWeb,
+		Status:    domain.ConversationActive,
+	}
+	if err := repo.CreateConversation(ctx, conversation); err != nil {
+		t.Fatalf("create foreign web conversation: %v", err)
+	}
+
+	job := textJobWithParams(uuid.New(), 0, map[string]string{
+		"conversation_id":     conversation.ID.String(),
+		"conversation_source": "web",
+	})
+	job.AccountID = accountA
+	prepared, err := svc.Prepare(ctx, job, "foreign web prompt")
+	if err != nil {
+		t.Fatalf("prepare: %v", err)
+	}
+	if prepared.ConversationID != uuid.Nil {
+		t.Fatalf("conversation id = %s, want nil", prepared.ConversationID)
+	}
+	messages, err := repo.ListMessagesAfter(ctx, conversation.ID, 0, 10)
+	if err != nil {
+		t.Fatalf("list messages: %v", err)
+	}
+	if len(messages) != 0 {
+		t.Fatalf("foreign conversation messages = %+v, want none", messages)
+	}
+}
+
 func TestPrepareSetsMiniAppConversationTitleFromFirstUserPrompt(t *testing.T) {
 	ctx := context.Background()
 	repo := memory.NewConversationRepo()
