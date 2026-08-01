@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { type MouseEvent as ReactMouseEvent, type ReactNode, useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/Button/Button";
 import { ru } from "@/i18n/ru";
@@ -130,6 +130,27 @@ export function Sidebar({ account, conversations, isDesktopCollapsed = false, on
     setIsOpen(true);
   };
 
+  const closeAfterConversationSelection = (event: ReactMouseEvent<HTMLDivElement>) => {
+    const target = event.target;
+    const conversationLink = target instanceof Element ? target.closest<HTMLAnchorElement>("a[href]") : null;
+    const href = conversationLink?.getAttribute("href");
+
+    if (
+      !isNarrowViewport ||
+      !isOpen ||
+      event.button !== 0 ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey ||
+      !href?.startsWith("/app/chat/")
+    ) {
+      return;
+    }
+
+    closeNavigation();
+  };
+
   return (
     <>
       {onDesktopToggle ? (
@@ -194,7 +215,11 @@ export function Sidebar({ account, conversations, isDesktopCollapsed = false, on
             ))}
           </ul>
         </nav>
-        {conversations ? <div className={styles.conversationsSlot}>{conversations}</div> : null}
+        {conversations ? (
+          <div className={styles.conversationsSlot} onClickCapture={closeAfterConversationSelection}>
+            {conversations}
+          </div>
+        ) : null}
         {account ? <div className={styles.accountSlot}>{account}</div> : null}
       </div>
     </>

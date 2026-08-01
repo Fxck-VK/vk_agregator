@@ -135,6 +135,23 @@ describe("Sidebar", () => {
     expect(screen.queryByRole("link", { name: ru.navigation.workspace })).not.toBeInTheDocument();
   });
 
+  it("closes the narrow drawer after a recent chat selection without restoring trigger focus", () => {
+    const { panel, trigger } = renderNarrowSidebar({
+      conversations: <Link href="/app/chat/recent">Recent chat</Link>,
+    });
+
+    openNavigation(trigger);
+    const recentChat = screen.getByRole("link", { name: "Recent chat" });
+    recentChat.addEventListener("click", (event) => event.preventDefault(), { once: true });
+
+    fireEvent.click(recentChat);
+
+    expect(panel).toHaveAttribute("data-open", "false");
+    expect(panel).toHaveAttribute("aria-hidden", "true");
+    expect(panel).toHaveAttribute("inert");
+    expect(trigger).not.toHaveFocus();
+  });
+
   it("keeps twenty recent chat links reachable above a focusable account control", () => {
     mockWideViewport();
     render(
