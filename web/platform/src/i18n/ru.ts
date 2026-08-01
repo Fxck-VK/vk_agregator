@@ -59,6 +59,7 @@ export const ru = {
     historyLoadEarlierPending: "Загружаем сообщения…",
     historyLoadEarlierFailure: "Не удалось загрузить более ранние сообщения. Попробуйте ещё раз.",
     refreshDelayed: "Автоматическое обновление задерживается. Ответ можно проверить позже.",
+    scrollToLatest: "К последнему сообщению",
     composerLabel: "Новое сообщение",
     composerPlaceholder: "Задайте вопрос NeiroHub",
     composerSubmit: "Отправить",

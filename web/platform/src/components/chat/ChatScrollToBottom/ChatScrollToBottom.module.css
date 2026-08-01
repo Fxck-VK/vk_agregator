@@ -1,0 +1,31 @@
+.button {
+  position: absolute;
+  z-index: 1;
+  inset-block-end: calc(100% + 0.75rem);
+  inset-inline-start: 50%;
+  display: inline-grid;
+  place-items: center;
+  inline-size: 2.5rem;
+  block-size: 2.5rem;
+  padding: 0;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  box-shadow: 0 0.5rem 1.5rem rgb(0 0 0 / 25%);
+  transform: translateX(-50%);
+}
+
+.button:hover {
+  background: var(--color-surface-raised);
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.button svg {
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+}
