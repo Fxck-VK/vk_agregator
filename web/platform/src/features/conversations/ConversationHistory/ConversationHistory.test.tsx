@@ -120,6 +120,46 @@ describe("ConversationHistory", () => {
     expect(webBrowserFetch).not.toHaveBeenCalled();
   });
 
+  it("keeps the composer disabled until the accepted message refresh observes its assistant reply", async () => {
+    let resolveRefresh: (response: Response) => void = () => {};
+    vi.mocked(webBrowserMutation).mockResolvedValueOnce(Response.json(queuedJob, { status: 201 }));
+    vi.mocked(webBrowserFetch).mockReturnValueOnce(
+      new Promise<Response>((resolve) => {
+        resolveRefresh = resolve;
+      }),
+    );
+    render(<ConversationHistory history={initialHistory as never} />);
+
+    const textarea = screen.getByLabelText(ru.conversations.composerLabel);
+    fireEvent.change(textarea, { target: { value: "Первый запрос" } });
+    fireEvent.click(screen.getByRole("button", { name: ru.conversations.composerSubmit }));
+
+    await vi.waitFor(() => expect(webBrowserFetch).toHaveBeenCalledTimes(1));
+    expect(textarea).toBeDisabled();
+    expect(screen.getByRole("button", { name: ru.conversations.composerSubmit })).toBeDisabled();
+    expect(webBrowserMutation).toHaveBeenCalledTimes(1);
+
+    resolveRefresh(
+      Response.json({
+        items: [
+          {
+            id: "66666666-6666-4666-8666-666666666666",
+            seq: 104,
+            role: "assistant",
+            text: "ответ на первый запрос",
+            created_at: "2026-08-01T12:00:05Z",
+          },
+        ],
+      }),
+    );
+
+    await screen.findByText("ответ на первый запрос");
+    await vi.waitFor(() => expect(textarea).not.toBeDisabled());
+    fireEvent.change(textarea, { target: { value: "Второй запрос" } });
+    expect(screen.getByRole("button", { name: ru.conversations.composerSubmit })).toBeEnabled();
+    expect(webBrowserMutation).toHaveBeenCalledTimes(1);
+  });
+
   it("appends strictly newer records in order and deduplicates after an accepted send", async () => {
     vi.mocked(webBrowserMutation).mockResolvedValueOnce(Response.json(queuedJob, { status: 201 }));
     vi.mocked(webBrowserFetch).mockResolvedValueOnce(

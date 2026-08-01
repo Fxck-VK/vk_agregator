@@ -11,6 +11,7 @@ import styles from "./ConversationComposer.module.css";
 
 type ConversationComposerProps = {
   conversationId: string;
+  disabled?: boolean;
   onAccepted: () => void;
 };
 
@@ -37,14 +38,14 @@ const safeReplayStatuses = new Set<WebChatJob["status"]>([
   "succeeded",
 ]);
 
-export function ConversationComposer({ conversationId, onAccepted }: ConversationComposerProps) {
+export function ConversationComposer({ conversationId, disabled = false, onAccepted }: ConversationComposerProps) {
   const [draft, setDraft] = useState("");
   const [isPending, setIsPending] = useState(false);
   const [feedback, setFeedback] = useState<ComposerFeedback>(null);
   const retryIntentRef = useRef<RetryIntent | null>(null);
   const isSubmittingRef = useRef(false);
   const normalizedDraft = draft.trim();
-  const canSubmit = normalizedDraft !== "" && !isPending;
+  const canSubmit = normalizedDraft !== "" && !isPending && !disabled;
 
   const changeDraft = (event: ChangeEvent<HTMLTextAreaElement>) => {
     const nextDraft = event.target.value;
@@ -58,7 +59,7 @@ export function ConversationComposer({ conversationId, onAccepted }: Conversatio
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (isSubmittingRef.current || normalizedDraft === "") {
+    if (disabled || isSubmittingRef.current || normalizedDraft === "") {
       return;
     }
 
@@ -106,7 +107,7 @@ export function ConversationComposer({ conversationId, onAccepted }: Conversatio
         <label className={styles.field}>
           <span>{ru.conversations.composerLabel}</span>
           <textarea
-            disabled={isPending}
+            disabled={isPending || disabled}
             onChange={changeDraft}
             placeholder={ru.conversations.composerPlaceholder}
             rows={3}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   conversationHistoryPageLimit,
@@ -49,7 +49,9 @@ function ConversationHistoryReady({
   const [isLoadingEarlier, setIsLoadingEarlier] = useState(false);
   const [loadEarlierFailed, setLoadEarlierFailed] = useState(false);
   const [pollRequest, setPollRequest] = useState<PollRequest | null>(null);
+  const [activeRefreshID, setActiveRefreshID] = useState<number | null>(null);
   const [refreshDelayed, setRefreshDelayed] = useState(false);
+  const refreshSequenceRef = useRef(0);
 
   const loadEarlier = async () => {
     const beforeSeq = messages[0]?.seq;
@@ -78,11 +80,14 @@ function ConversationHistoryReady({
 
   const beginRefresh = () => {
     const baselineSeq = messages.at(-1)?.seq ?? 0;
-    setRefreshDelayed(false);
-    setPollRequest((currentRequest) => ({
-      id: (currentRequest?.id ?? 0) + 1,
+    refreshSequenceRef.current += 1;
+    const request = {
+      id: refreshSequenceRef.current,
       baselineSeq,
-    }));
+    };
+    setRefreshDelayed(false);
+    setActiveRefreshID(request.id);
+    setPollRequest(request);
   };
 
   useEffect(() => {
@@ -106,6 +111,7 @@ function ConversationHistoryReady({
       }
       clearTimeout(deadlineTimer);
       activeRequest?.abort();
+      setActiveRefreshID((currentID) => currentID === pollRequest.id ? null : currentID);
     };
 
     const poll = async () => {
@@ -218,7 +224,11 @@ function ConversationHistoryReady({
           </>
         )}
       </div>
-      <ConversationComposer conversationId={history.conversationId} onAccepted={beginRefresh} />
+      <ConversationComposer
+        conversationId={history.conversationId}
+        disabled={activeRefreshID !== null}
+        onAccepted={beginRefresh}
+      />
     </section>
   );
 }
