@@ -33,7 +33,7 @@ function mockNarrowViewport() {
 
 function mockWideViewport() {
   vi.stubGlobal("matchMedia", (query: string): MediaQueryList => ({
-    matches: false,
+    matches: true,
     media: query,
     onchange: null,
     addEventListener: vi.fn(),
@@ -155,6 +155,60 @@ describe("Sidebar", () => {
     logoutControl.focus();
     expect(logoutControl).toHaveFocus();
     expect(conversationsSlot).toHaveClass(sidebarStyles.conversationsSlot);
+  });
+
+  it("calls the desktop sidebar toggle from its dedicated control", () => {
+    mockWideViewport();
+    const onDesktopToggle = vi.fn();
+
+    render(<Sidebar isDesktopCollapsed={false} onDesktopToggle={onDesktopToggle} />);
+
+    const control = screen.getByRole("button", { name: ru.navigation.collapseSidebarLabel });
+
+    expect(control).toHaveAttribute("aria-controls", "sidebar-panel");
+    expect(control).toHaveAttribute("aria-expanded", "true");
+
+    fireEvent.click(control);
+
+    expect(onDesktopToggle).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not render a no-op desktop toggle when no toggle handler is supplied", () => {
+    mockWideViewport();
+
+    render(<Sidebar />);
+
+    expect(screen.queryByRole("button", { name: ru.navigation.collapseSidebarLabel })).not.toBeInTheDocument();
+  });
+
+  it("derives narrow drawer behavior by inverting the exact desktop breakpoint query", () => {
+    const matchMedia = vi.fn((query: string): MediaQueryList => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+    }));
+    vi.stubGlobal("matchMedia", matchMedia);
+
+    render(<Sidebar />);
+
+    expect(matchMedia).toHaveBeenCalledWith("(min-width: 48rem)");
+  });
+
+  it("makes a collapsed desktop panel inaccessible while keeping its restore control available", () => {
+    mockWideViewport();
+    const onDesktopToggle = vi.fn();
+
+    render(<Sidebar isDesktopCollapsed onDesktopToggle={onDesktopToggle} />);
+
+    expect(screen.getByRole("button", { name: ru.navigation.expandSidebarLabel })).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getByTestId("sidebar-panel")).toHaveAttribute("data-desktop-collapsed", "true");
+    expect(screen.getByTestId("sidebar-panel")).toHaveAttribute("aria-hidden", "true");
+    expect(screen.getByTestId("sidebar-panel")).toHaveAttribute("inert");
   });
 
   it("keeps the final recent chat and account control in the narrow drawer focus trap", () => {

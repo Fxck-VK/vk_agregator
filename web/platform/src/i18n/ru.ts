@@ -14,6 +14,8 @@ export const ru = {
     supportingText: "Новый интерфейс развивается поэтапно: без переноса личных данных в публичную страницу.",
   },
   navigation: {
+    collapseSidebarLabel: "Свернуть боковую панель",
+    expandSidebarLabel: "Развернуть боковую панель",
     regionLabel: "Навигационная панель",
     label: "Основная навигация",
     openMenuLabel: "Открыть меню",

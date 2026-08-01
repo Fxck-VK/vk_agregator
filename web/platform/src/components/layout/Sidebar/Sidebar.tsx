@@ -8,7 +8,7 @@ import { ru } from "@/i18n/ru";
 
 import styles from "./Sidebar.module.css";
 
-const narrowViewportQuery = "(max-width: 47.99rem)";
+const desktopViewportQuery = "(min-width: 48rem)";
 
 const navigationItems = [
   { href: "/app", label: ru.navigation.workspace },
@@ -21,9 +21,11 @@ const navigationItems = [
 type SidebarProps = {
   account?: ReactNode;
   conversations?: ReactNode;
+  isDesktopCollapsed?: boolean;
+  onDesktopToggle?: () => void;
 };
 
-export function Sidebar({ account, conversations }: SidebarProps) {
+export function Sidebar({ account, conversations, isDesktopCollapsed = false, onDesktopToggle }: SidebarProps) {
   const [isNarrowViewport, setIsNarrowViewport] = useState<boolean | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const firstLinkRef = useRef<HTMLAnchorElement>(null);
@@ -31,14 +33,14 @@ export function Sidebar({ account, conversations }: SidebarProps) {
   const restoreFocusRef = useRef(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const navigationId = "workspace-navigation";
-  const panelIsOpen = isNarrowViewport === false || isOpen;
-  const panelIsInactive = isNarrowViewport === true && !isOpen;
+  const panelIsOpen = (isNarrowViewport === false && !isDesktopCollapsed) || isOpen;
+  const panelIsInactive = isNarrowViewport === true ? !isOpen : isDesktopCollapsed;
 
   useEffect(() => {
-    const mediaQuery = window.matchMedia(narrowViewportQuery);
+    const mediaQuery = window.matchMedia(desktopViewportQuery);
     const updateViewport = () => {
-      setIsNarrowViewport(mediaQuery.matches);
-      if (!mediaQuery.matches) {
+      setIsNarrowViewport(!mediaQuery.matches);
+      if (mediaQuery.matches) {
         setIsOpen(false);
       }
     };
@@ -130,6 +132,20 @@ export function Sidebar({ account, conversations }: SidebarProps) {
 
   return (
     <>
+      {onDesktopToggle ? (
+        <Button
+          aria-controls="sidebar-panel"
+          aria-expanded={!isDesktopCollapsed}
+          aria-label={isDesktopCollapsed ? ru.navigation.expandSidebarLabel : ru.navigation.collapseSidebarLabel}
+          className={styles.desktopTrigger}
+          data-desktop-collapsed={isDesktopCollapsed}
+          onClick={onDesktopToggle}
+        >
+          <svg aria-hidden="true" viewBox="0 0 24 24">
+            <path d="m14 6-6 6 6 6" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
+          </svg>
+        </Button>
+      ) : null}
       <Button
         aria-controls={navigationId}
         aria-expanded={isOpen}
@@ -153,8 +169,10 @@ export function Sidebar({ account, conversations }: SidebarProps) {
         aria-label={isNarrowViewport && isOpen ? ru.navigation.label : undefined}
         aria-modal={isNarrowViewport && isOpen ? true : undefined}
         className={styles.panel}
+        data-desktop-collapsed={isDesktopCollapsed}
         data-open={panelIsOpen}
         data-testid="sidebar-panel"
+        id="sidebar-panel"
         inert={panelIsInactive || undefined}
         ref={panelRef}
         role={isNarrowViewport && isOpen ? "dialog" : undefined}

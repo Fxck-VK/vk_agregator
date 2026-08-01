@@ -2,8 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 
-import { AppShell } from "@/components/layout/AppShell/AppShell";
-import { Sidebar } from "@/components/layout/Sidebar/Sidebar";
+import { WorkspaceFrame } from "@/components/layout/WorkspaceFrame/WorkspaceFrame";
 import { AccountControl } from "@/features/account/AccountControl/AccountControl";
 import { SidebarConversations } from "@/features/conversations/SidebarConversations/SidebarConversations";
 import { SessionRefresh } from "@/features/session/SessionRefresh/SessionRefresh";
@@ -45,15 +44,11 @@ export default async function WorkspaceLayout({ children }: Readonly<{ children:
   }
 
   return (
-    <AppShell
-      sidebar={
-        <Sidebar
-          account={<AccountControl profile={session.profile} />}
-          conversations={<SidebarConversations conversations={session.conversations} />}
-        />
-      }
+    <WorkspaceFrame
+      account={<AccountControl profile={session.profile} />}
+      conversations={<SidebarConversations conversations={session.conversations} />}
     >
       {children}
-    </AppShell>
+    </WorkspaceFrame>
   );
 }

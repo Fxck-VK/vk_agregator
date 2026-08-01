@@ -7,12 +7,21 @@ import styles from "./AppShell.module.css";
 type AppShellProps = {
   sidebar: ReactNode;
   children: ReactNode;
+  isDesktopSidebarCollapsed?: boolean;
 };
 
-export function AppShell({ sidebar, children }: AppShellProps) {
+export function AppShell({ sidebar, children, isDesktopSidebarCollapsed = false }: AppShellProps) {
   return (
-    <div className={styles.shell}>
-      <aside aria-label={ru.navigation.regionLabel} className={styles.sidebar}>
+    <div
+      className={styles.shell}
+      data-desktop-sidebar-collapsed={isDesktopSidebarCollapsed}
+      data-testid="app-shell"
+    >
+      <aside
+        aria-label={ru.navigation.regionLabel}
+        className={styles.sidebar}
+        data-desktop-sidebar-collapsed={isDesktopSidebarCollapsed}
+      >
         {sidebar}
       </aside>
       <main className={styles.workspace} data-testid="workspace-scroll-region" tabIndex={-1}>

@@ -18,12 +18,22 @@
   overflow-y: auto;
 }
 
-@media (max-width: 47.99rem) {
+@media (width < 48rem) {
   .sidebar {
     inline-size: 0;
   }
 
   .workspace {
+    margin-inline-start: 0;
+  }
+}
+
+@media (min-width: 48rem) {
+  .shell[data-desktop-sidebar-collapsed="true"] .sidebar {
+    inline-size: 0;
+  }
+
+  .shell[data-desktop-sidebar-collapsed="true"] .workspace {
     margin-inline-start: 0;
   }
 }
