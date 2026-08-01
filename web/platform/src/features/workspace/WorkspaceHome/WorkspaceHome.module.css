@@ -4,6 +4,18 @@
   padding: clamp(5rem, 10vw, 8rem) clamp(var(--space-4), 6vw, 5rem);
 }
 
+.startScreen {
+  display: grid;
+  gap: var(--space-6);
+  max-inline-size: 58rem;
+  min-block-size: min(100%, 48rem);
+  align-content: center;
+}
+
+.welcome {
+  text-align: center;
+}
+
 .eyebrow {
   margin: 0 0 var(--space-2);
   color: var(--color-accent);
@@ -33,39 +45,44 @@
   font-size: 1.125rem;
 }
 
-.quickStart {
-  display: grid;
-  gap: var(--space-6);
-  padding: var(--space-6);
-  border: 0.0625rem solid var(--color-border);
-  border-radius: var(--radius-lg);
-  background: var(--color-surface);
-}
-
-.quickStart h2 {
-  margin-block-end: var(--space-2);
-}
-
-.quickStart p {
+.welcome .description {
+  margin-inline: auto;
   margin-block-end: 0;
-  color: var(--color-text-muted);
 }
 
-.actions {
-  display: flex;
-  flex-wrap: wrap;
+.quickActions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-3);
 }
 
-.actions a {
+.quickAction {
+  display: grid;
+  gap: var(--space-1);
   border-radius: var(--radius-sm);
-  padding: var(--space-2) var(--space-3);
-  background: var(--color-accent);
+  padding: var(--space-4);
+  border: 0.0625rem solid var(--color-border);
+  background: var(--color-surface);
   color: var(--color-text);
-  font-weight: 700;
   text-decoration: none;
 }
 
-.actions a:hover {
-  background: var(--color-accent-strong);
+.quickAction:hover {
+  border-color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-surface) 90%, var(--color-accent));
+}
+
+.quickAction span {
+  font-weight: 700;
+}
+
+.quickAction small {
+  color: var(--color-text-muted);
+  line-height: 1.4;
+}
+
+@media (width < 40rem) {
+  .quickActions {
+    grid-template-columns: 1fr;
+  }
 }

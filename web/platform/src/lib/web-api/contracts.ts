@@ -101,6 +101,13 @@ export const imageJobStatusSchema = z.enum([
   "refunded",
 ]);
 
+export const webChatJobSchema = z
+  .object({
+    job_id: z.string().uuid(),
+    status: imageJobStatusSchema,
+  })
+  .strict();
+
 export const imageJobSchema = z
   .object({
     id: z.string().uuid(),
@@ -166,6 +173,7 @@ export type ImageJobActivation = z.infer<typeof imageJobActivationSchema>;
 export type ImageJobList = z.infer<typeof imageJobListSchema>;
 export type ImageArtifactMetadata = z.infer<typeof imageArtifactMetadataSchema>;
 export type ImageJobResult = z.infer<typeof imageJobResultSchema>;
+export type WebChatJob = z.infer<typeof webChatJobSchema>;
 
 export const publicApiErrorSchema = z
   .object({
@@ -185,6 +193,10 @@ export function parseConversationList(payload: unknown): ConversationList {
 
 export function parseConversationMessageList(payload: unknown): ConversationMessageList {
   return conversationMessageListSchema.parse(payload);
+}
+
+export function parseWebChatJob(payload: unknown): WebChatJob {
+  return webChatJobSchema.parse(payload);
 }
 
 export function parseImageModelList(payload: unknown): ImageModelList {

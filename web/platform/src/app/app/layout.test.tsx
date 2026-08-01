@@ -107,12 +107,17 @@ describe("WorkspaceLayout", () => {
 });
 
 describe("Workspace destinations", () => {
-  it("replaces the static chat call-to-action with the authenticated creation control", () => {
+  it("renders the normal chat start prompt and explicit workspace destinations", () => {
     const markup = renderToStaticMarkup(<WorkspaceHome />);
 
-    expect(markup).toContain(ru.conversations.createLabel);
-    expect(markup).toContain(ru.imageGeneration.open);
-    expect(markup).toContain(ru.imageHistory.load);
+    expect(markup).toContain(ru.workspace.startTitle);
+    expect(markup).toContain(ru.workspace.promptLabel);
+    expect(markup).toContain(ru.workspace.imageActionTitle);
+    expect(markup).toContain(ru.workspace.modelsActionTitle);
+    expect(markup).toContain('href="/app/image"');
+    expect(markup).toContain('href="/app/models"');
+    expect(markup).not.toContain("image-generation-title");
+    expect(markup).not.toContain(ru.imageHistory.load);
     expect(markup).not.toContain('href="/app/chats"');
   });
 

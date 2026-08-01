@@ -1,0 +1,63 @@
+.form {
+  display: grid;
+  gap: var(--space-4);
+  padding: clamp(var(--space-5), 4vw, var(--space-7));
+  border: 0.0625rem solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: 0 1.25rem 3.5rem rgb(19 29 50 / 0.08);
+  text-align: start;
+}
+
+.promptField {
+  display: grid;
+  gap: var(--space-2);
+  color: var(--color-text);
+  font-weight: 700;
+}
+
+.promptField textarea {
+  inline-size: 100%;
+  min-block-size: 8rem;
+  resize: vertical;
+  border: 0.0625rem solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  line-height: 1.5;
+}
+
+.promptField textarea:focus-visible {
+  outline: 0.1875rem solid color-mix(in srgb, var(--color-accent) 45%, transparent);
+  outline-offset: 0.125rem;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.actions p,
+.error {
+  margin: 0;
+}
+
+.actions p {
+  color: var(--color-text-muted);
+  font-size: 0.9375rem;
+}
+
+.error {
+  color: var(--color-danger);
+}
+
+@media (width < 40rem) {
+  .actions {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
