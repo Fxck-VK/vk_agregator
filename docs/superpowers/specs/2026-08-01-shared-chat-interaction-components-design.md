@@ -28,11 +28,13 @@ These rules apply to the start-a-chat surface and to every conversation composer
 
 `ConversationHistory` remains the owner of polling. Once the message request is safely accepted, it begins the existing bounded refresh and displays an optimistic user bubble followed by `AssistantTypingIndicator`. This guarantees that the dots are visibly below the question immediately, including before the history endpoint has returned the persisted user message. When a matching persisted user message arrives, the optimistic bubble is removed so the question is rendered exactly once. The indicator disappears only when the matching refresh stops (assistant reply observed, timeout, or unmount).
 
+The first prompt from `WorkspacePrompt` crosses the client-side route transition through session-scoped browser storage keyed by the new conversation ID. It is read without deletion and cleared only once that prompt is visibly optimistic or already persisted in history; this makes the handoff safe under React Strict Mode effect replay. The prompt never appears in a URL or in a backend contract.
+
 No backend endpoint, API response, authentication flow, model routing, query string, or billing logic changes.
 
 ## Testing
 
 - Unit-test the shared input for Enter, Shift+Enter, IME composition, and its non-resizable fixed-height class.
 - Test `WorkspacePrompt` uses the shared Enter behaviour without changing its create-conversation/idempotency sequence.
-- Test `ConversationHistory` renders the optimistic user bubble followed immediately by the left-aligned three-dot indicator, replaces the optimistic bubble with the server message without duplication, and removes the indicator on the assistant reply.
+- Test `ConversationHistory` renders the optimistic user bubble followed immediately by the left-aligned three-dot indicator, replaces the optimistic bubble with the server message without duplication, and removes the indicator on the assistant reply. Cover an already-persisted first prompt, Strict Mode replay, and newly arrived server messages that must remain before the optimistic turn.
 - Preserve existing retry, polling, idempotency, and safe-response tests.

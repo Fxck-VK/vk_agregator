@@ -2,12 +2,17 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { AssistantTypingIndicator } from "@/components/chat/AssistantTypingIndicator/AssistantTypingIndicator";
+import { Button } from "@/components/ui/Button/Button";
 import {
   conversationHistoryPageLimit,
   type ConversationHistoryData,
 } from "@/features/conversations/conversation-history-contract";
 import { ConversationComposer } from "@/features/conversations/ConversationComposer/ConversationComposer";
-import { Button } from "@/components/ui/Button/Button";
+import {
+  clearPendingConversationPrompt,
+  readPendingConversationPrompt,
+} from "@/features/conversations/pending-conversation-prompt";
 import { ru } from "@/i18n/ru";
 import { parseConversationMessageList, type ConversationMessage } from "@/lib/web-api/contracts";
 import { webBrowserFetch } from "@/lib/web-api/browser";
@@ -22,6 +27,10 @@ type ConversationHistoryProps = {
 type PollRequest = {
   id: number;
   baselineSeq: number;
+};
+
+type PendingTurn = PollRequest & {
+  prompt: string;
 };
 
 const conversationRefreshIntervalMs = 2_000;
@@ -47,9 +56,10 @@ function ConversationHistoryReady({
   history: Extract<ConversationHistoryData, { kind: "ready" }>;
   initialRefresh: boolean;
 }>) {
+  const initialRefreshBaselineSeq = history.messages.at(-1)?.seq ?? 0;
   const shouldStartInitialRefresh = initialRefresh && !history.messages.some((message) => message.role === "assistant");
   const initialRefreshRequest = shouldStartInitialRefresh
-    ? { id: 1, baselineSeq: history.messages.at(-1)?.seq ?? 0 }
+    ? { id: 1, baselineSeq: initialRefreshBaselineSeq }
     : null;
   const [messages, setMessages] = useState(history.messages);
   const [hasMoreBefore, setHasMoreBefore] = useState(history.hasMoreBefore);
@@ -58,6 +68,7 @@ function ConversationHistoryReady({
   const [pollRequest, setPollRequest] = useState<PollRequest | null>(initialRefreshRequest);
   const [activeRefreshID, setActiveRefreshID] = useState<number | null>(initialRefreshRequest?.id ?? null);
   const [refreshDelayed, setRefreshDelayed] = useState(false);
+  const [pendingTurn, setPendingTurn] = useState<PendingTurn | null>(null);
   const refreshSequenceRef = useRef(initialRefreshRequest?.id ?? 0);
 
   const loadEarlier = async () => {
@@ -85,7 +96,7 @@ function ConversationHistoryReady({
     }
   };
 
-  const beginRefresh = () => {
+  const beginRefresh = (prompt: string) => {
     const baselineSeq = messages.at(-1)?.seq ?? 0;
     refreshSequenceRef.current += 1;
     const request = {
@@ -93,9 +104,48 @@ function ConversationHistoryReady({
       baselineSeq,
     };
     setRefreshDelayed(false);
+    setPendingTurn({ ...request, prompt });
     setActiveRefreshID(request.id);
     setPollRequest(request);
   };
+
+  useEffect(() => {
+    if (!initialRefresh) {
+      return;
+    }
+
+    const prompt = readPendingConversationPrompt(history.conversationId);
+    if (prompt === null) {
+      return;
+    }
+
+    const persistedPrompt = messages.some(
+      (message) => message.role === "user" && message.text.trim() === prompt,
+    );
+    if (persistedPrompt || pendingTurn !== null) {
+      clearPendingConversationPrompt(history.conversationId);
+      return;
+    }
+
+    if (activeRefreshID === null) {
+      return;
+    }
+
+    let active = true;
+    queueMicrotask(() => {
+      if (active) {
+        setPendingTurn({
+          id: activeRefreshID,
+          baselineSeq: initialRefreshBaselineSeq,
+          prompt,
+        });
+      }
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [activeRefreshID, history.conversationId, initialRefresh, initialRefreshBaselineSeq, messages, pendingTurn]);
 
   useEffect(() => {
     if (pollRequest === null) {
@@ -108,7 +158,7 @@ function ConversationHistoryReady({
     let nextPollTimer: ReturnType<typeof setTimeout> | undefined;
     let activeRequest: AbortController | undefined;
 
-    const stop = () => {
+    const stop = (clearActiveRefresh = true) => {
       if (!active) {
         return;
       }
@@ -118,7 +168,9 @@ function ConversationHistoryReady({
       }
       clearTimeout(deadlineTimer);
       activeRequest?.abort();
-      setActiveRefreshID((currentID) => currentID === pollRequest.id ? null : currentID);
+      if (clearActiveRefresh) {
+        setActiveRefreshID((currentID) => currentID === pollRequest.id ? null : currentID);
+      }
     };
 
     const poll = async () => {
@@ -152,6 +204,20 @@ function ConversationHistoryReady({
         if (newerMessages.length > 0) {
           afterSeq = newerMessages.at(-1)?.seq ?? afterSeq;
           setMessages((currentMessages) => appendNewerMessages(currentMessages, newerMessages, requestCursor));
+          setPendingTurn((currentTurn) => {
+            if (currentTurn?.id !== pollRequest.id) {
+              return currentTurn;
+            }
+
+            const persistedPrompt = newerMessages.some(
+              (message) => (
+                message.role === "user"
+                && message.seq > pollRequest.baselineSeq
+                && message.text.trim() === currentTurn.prompt
+              ),
+            );
+            return persistedPrompt ? null : currentTurn;
+          });
           assistantObserved = newerMessages.some(
             (message) => message.role === "assistant" && message.seq > pollRequest.baselineSeq,
           );
@@ -182,8 +248,11 @@ function ConversationHistoryReady({
     const deadlineTimer = setTimeout(stop, conversationRefreshDeadlineMs);
     void poll();
 
-    return stop;
+    return () => stop(false);
   }, [history.conversationId, pollRequest]);
+
+  const pendingTurnIsActive = pendingTurn?.id === activeRefreshID;
+  const hasVisibleMessages = messages.length > 0 || pendingTurn !== null || activeRefreshID !== null;
 
   return (
     <section aria-labelledby="conversation-history-title" className={styles.content}>
@@ -197,7 +266,7 @@ function ConversationHistoryReady({
             {ru.conversations.refreshDelayed}
           </p>
         ) : null}
-        {messages.length === 0 ? (
+        {!hasVisibleMessages ? (
           <p className={styles.empty} role="status">
             {ru.conversations.historyEmpty}
           </p>
@@ -227,6 +296,14 @@ function ConversationHistoryReady({
                   <p>{message.text}</p>
                 </li>
               ))}
+              {pendingTurn !== null ? (
+                <PendingTurnItems pendingTurn={pendingTurn} showIndicator={pendingTurnIsActive} />
+              ) : null}
+              {pendingTurn === null && activeRefreshID !== null ? (
+                <li className={styles.assistantMessage} data-chat-pending="assistant">
+                  <AssistantTypingIndicator label={ru.conversations.composerAwaitingResponse} />
+                </li>
+              ) : null}
             </ol>
           </>
         )}
@@ -234,10 +311,31 @@ function ConversationHistoryReady({
       <ConversationComposer
         conversationId={history.conversationId}
         disabled={activeRefreshID !== null}
-        isAwaitingResponse={activeRefreshID !== null}
         onAccepted={beginRefresh}
       />
     </section>
+  );
+}
+
+function PendingTurnItems({
+  pendingTurn,
+  showIndicator,
+}: Readonly<{
+  pendingTurn: PendingTurn;
+  showIndicator: boolean;
+}>) {
+  return (
+    <>
+      <li className={styles.userMessage} data-chat-pending="user">
+        <span className={styles.role}>{ru.conversations.userRole}</span>
+        <p>{pendingTurn.prompt}</p>
+      </li>
+      {showIndicator ? (
+        <li className={styles.assistantMessage} data-chat-pending="assistant">
+          <AssistantTypingIndicator label={ru.conversations.composerAwaitingResponse} />
+        </li>
+      ) : null}
+    </>
   );
 }
 

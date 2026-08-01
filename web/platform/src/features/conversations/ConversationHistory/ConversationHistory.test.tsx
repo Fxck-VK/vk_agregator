@@ -1,4 +1,5 @@
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { StrictMode } from "react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/web-api/browser", () => ({
@@ -7,6 +8,7 @@ vi.mock("@/lib/web-api/browser", () => ({
 }));
 
 import { ru } from "@/i18n/ru";
+import { savePendingConversationPrompt } from "@/features/conversations/pending-conversation-prompt";
 import { webBrowserFetch, webBrowserMutation } from "@/lib/web-api/browser";
 
 import { ConversationHistory } from "./ConversationHistory";
@@ -188,6 +190,152 @@ describe("ConversationHistory", () => {
     expect(screen.getByLabelText(ru.conversations.composerLabel)).not.toBeDisabled();
   });
 
+  it("places a pending assistant indicator below the optimistic user message and replaces it with server history", async () => {
+    let resolveRefresh: (response: Response) => void = () => {};
+    vi.mocked(webBrowserMutation).mockResolvedValueOnce(Response.json(queuedJob, { status: 201 }));
+    vi.mocked(webBrowserFetch).mockReturnValueOnce(
+      new Promise<Response>((resolve) => {
+        resolveRefresh = resolve;
+      }),
+    );
+    render(<ConversationHistory history={initialHistory as never} />);
+
+    const textarea = screen.getByLabelText(ru.conversations.composerLabel);
+    fireEvent.change(textarea, { target: { value: "Pending stream prompt" } });
+    fireEvent.click(screen.getByRole("button", { name: ru.conversations.composerSubmit }));
+
+    const messageList = screen.getByRole("list");
+    await within(messageList).findByText("Pending stream prompt");
+    const messageItems = within(messageList).getAllByRole("listitem");
+    expect(messageItems.at(-2)).toHaveTextContent("Pending stream prompt");
+    expect(messageItems.at(-1)).toHaveAttribute("data-chat-pending", "assistant");
+    expect(
+      within(messageItems.at(-1) as HTMLElement).getByRole("status", { name: ru.conversations.composerAwaitingResponse }),
+    ).toBeTruthy();
+
+    resolveRefresh(
+      Response.json({
+        items: [
+          {
+            id: "66666666-6666-4666-8666-666666666666",
+            seq: 104,
+            role: "user",
+            text: "Pending stream prompt",
+            created_at: "2026-08-01T12:00:04Z",
+          },
+          {
+            id: "77777777-7777-4777-8777-777777777777",
+            seq: 105,
+            role: "assistant",
+            text: "assistant completion",
+            created_at: "2026-08-01T12:00:05Z",
+          },
+        ],
+      }),
+    );
+
+    await screen.findByText("assistant completion");
+    expect(screen.getAllByText("Pending stream prompt")).toHaveLength(1);
+    expect(screen.queryByRole("status", { name: ru.conversations.composerAwaitingResponse })).toBeNull();
+  });
+
+  it("shows the first pending prompt in the stream after the workspace opens its new chat", async () => {
+    vi.mocked(webBrowserFetch).mockReturnValueOnce(new Promise<Response>(() => {}));
+    savePendingConversationPrompt(conversationId, "First workspace prompt");
+
+    render(
+      <ConversationHistory
+        history={{ kind: "ready", conversationId, hasMoreBefore: false, messages: [] } as never}
+        initialRefresh
+      />,
+    );
+
+    const messageList = await screen.findByRole("list");
+    expect(await within(messageList).findByText("First workspace prompt")).toBeTruthy();
+    expect(within(messageList).getAllByRole("listitem").at(-1)).toHaveAttribute("data-chat-pending", "assistant");
+  });
+
+  it("does not duplicate the first prompt when the server already rendered it", async () => {
+    vi.mocked(webBrowserFetch).mockReturnValueOnce(new Promise<Response>(() => {}));
+    savePendingConversationPrompt(conversationId, "Already persisted prompt");
+
+    render(
+      <ConversationHistory
+        history={{
+          kind: "ready",
+          conversationId,
+          hasMoreBefore: false,
+          messages: [
+            {
+              id: "88888888-8888-4888-8888-888888888888",
+              seq: 1,
+              role: "user",
+              text: "Already persisted prompt",
+              created_at: "2026-08-01T12:00:00Z",
+            },
+          ],
+        } as never}
+        initialRefresh
+      />,
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const messageList = screen.getByRole("list");
+    expect(within(messageList).getAllByText("Already persisted prompt")).toHaveLength(1);
+    expect(within(messageList).getAllByRole("listitem").at(-1)).toHaveAttribute("data-chat-pending", "assistant");
+  });
+
+  it("keeps the first pending prompt through Strict Mode effect replay", async () => {
+    vi.mocked(webBrowserFetch).mockReturnValue(new Promise<Response>(() => {}));
+    savePendingConversationPrompt(conversationId, "Strict Mode prompt");
+
+    render(
+      <StrictMode>
+        <ConversationHistory
+          history={{ kind: "ready", conversationId, hasMoreBefore: false, messages: [] } as never}
+          initialRefresh
+        />
+      </StrictMode>,
+    );
+
+    const messageList = await screen.findByRole("list");
+    expect(await within(messageList).findByText("Strict Mode prompt")).toBeTruthy();
+  });
+
+  it("places the optimistic prompt after server messages that arrive while it is pending", async () => {
+    vi.mocked(webBrowserMutation).mockResolvedValueOnce(Response.json(queuedJob, { status: 201 }));
+    vi.mocked(webBrowserFetch).mockResolvedValueOnce(
+      Response.json({
+        items: [
+          {
+            id: "99999999-9999-4999-8999-999999999999",
+            seq: 104,
+            role: "user",
+            text: "Earlier server message",
+            created_at: "2026-08-01T12:00:04Z",
+          },
+        ],
+      }),
+    );
+    render(<ConversationHistory history={initialHistory as never} />);
+
+    fireEvent.change(screen.getByLabelText(ru.conversations.composerLabel), {
+      target: { value: "My pending prompt" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: ru.conversations.composerSubmit }));
+
+    await screen.findByText("Earlier server message");
+    const messageItems = within(screen.getByRole("list")).getAllByRole("listitem");
+    const itemTexts = messageItems.map((item) => item.textContent);
+    expect(itemTexts.findIndex((text) => text?.includes("Earlier server message") ?? false)).toBeLessThan(
+      itemTexts.findIndex((text) => text?.includes("My pending prompt") ?? false),
+    );
+    expect(messageItems.at(-1)).toHaveAttribute("data-chat-pending", "assistant");
+  });
+
   it("keeps the composer disabled until the accepted message refresh observes its assistant reply", async () => {
     let resolveRefresh: (response: Response) => void = () => {};
     vi.mocked(webBrowserMutation).mockResolvedValueOnce(Response.json(queuedJob, { status: 201 }));
@@ -243,14 +391,14 @@ describe("ConversationHistory", () => {
             id: "33333333-3333-4333-8333-333333333333",
             seq: 104,
             role: "user",
-            text: "message 104",
+            text: "Продолжить",
             created_at: "2026-08-01T12:00:02Z",
           },
           {
             id: "33333333-3333-4333-8333-333333333333",
             seq: 104,
             role: "user",
-            text: "message 104",
+            text: "Продолжить",
             created_at: "2026-08-01T12:00:02Z",
           },
           {
@@ -276,10 +424,10 @@ describe("ConversationHistory", () => {
     expect(screen.getAllByRole("listitem").map((item) => item.textContent)).toEqual([
       expect.stringContaining("message 102"),
       expect.stringContaining("message 103"),
-      expect.stringContaining("message 104"),
+      expect.stringContaining("Продолжить"),
       expect.stringContaining("message 105"),
     ]);
-    expect(screen.getAllByText("message 104")).toHaveLength(1);
+    expect(screen.getAllByText("Продолжить")).toHaveLength(1);
     expect(webBrowserFetch).toHaveBeenCalledTimes(1);
   });
 

@@ -13,8 +13,7 @@ import styles from "./ConversationComposer.module.css";
 type ConversationComposerProps = {
   conversationId: string;
   disabled?: boolean;
-  isAwaitingResponse?: boolean;
-  onAccepted: () => void;
+  onAccepted: (prompt: string) => void;
 };
 
 type RetryIntent = {
@@ -27,7 +26,6 @@ type ComposerFeedback = "error" | null;
 export function ConversationComposer({
   conversationId,
   disabled = false,
-  isAwaitingResponse = false,
   onAccepted,
 }: ConversationComposerProps) {
   const [draft, setDraft] = useState("");
@@ -81,7 +79,7 @@ export function ConversationComposer({
 
       retryIntentRef.current = null;
       setDraft("");
-      onAccepted();
+      onAccepted(intent.prompt);
     } catch {
       setFeedback("error");
     } finally {
@@ -113,13 +111,6 @@ export function ConversationComposer({
         </label>
         <div className={styles.footer}>
           <div className={styles.feedback}>
-            {isAwaitingResponse ? (
-              <p aria-label={ru.conversations.composerAwaitingResponse} aria-live="polite" className={styles.waitingStatus} role="status">
-                <span aria-hidden="true" className={styles.waitingDot} />
-                <span aria-hidden="true" className={styles.waitingDot} />
-                <span aria-hidden="true" className={styles.waitingDot} />
-              </p>
-            ) : null}
             {feedback === "error" ? <p role="alert">{ru.conversations.composerFailure}</p> : null}
           </div>
           <Button disabled={!canSubmit} type="submit">

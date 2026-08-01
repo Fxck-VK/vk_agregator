@@ -12,6 +12,7 @@ vi.mock("@/lib/web-api/browser", () => ({
 import { useRouter } from "next/navigation";
 
 import { ru } from "@/i18n/ru";
+import { readPendingConversationPrompt } from "@/features/conversations/pending-conversation-prompt";
 import { webBrowserMutation } from "@/lib/web-api/browser";
 
 import { WorkspacePrompt } from "./WorkspacePrompt";
@@ -42,6 +43,7 @@ describe("WorkspacePrompt", () => {
     cleanup();
     vi.clearAllMocks();
     vi.unstubAllGlobals();
+    window.sessionStorage.clear();
   });
 
   it.each([
@@ -91,6 +93,7 @@ describe("WorkspacePrompt", () => {
     fireEvent.keyDown(textarea, { key: "Enter" });
 
     await vi.waitFor(() => expect(push).toHaveBeenCalledWith("/app/chat/d7c979f5-24e5-4f88-924b-a592d6e5a906?refresh=1"));
+    expect(readPendingConversationPrompt("d7c979f5-24e5-4f88-924b-a592d6e5a906")).toBe("Enter submission");
     expect(webBrowserMutation).toHaveBeenCalledTimes(2);
     expect(webBrowserMutation).toHaveBeenNthCalledWith(1, "/web/v1/conversations", {
       method: "POST",

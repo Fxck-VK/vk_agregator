@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 import { ChatTextInput } from "@/components/chat/ChatTextInput/ChatTextInput";
 import { Button } from "@/components/ui/Button/Button";
+import { savePendingConversationPrompt } from "@/features/conversations/pending-conversation-prompt";
 import { ru } from "@/i18n/ru";
 import { webBrowserMutation } from "@/lib/web-api/browser";
 import { isSafeWebChatAcceptedResponse, parseConversationList, parseWebChatJob } from "@/lib/web-api/contracts";
@@ -70,7 +71,12 @@ export function WorkspacePrompt() {
         intent.conversationId = conversation.id;
       }
 
-      const messageResponse = await webBrowserMutation(`/web/v1/conversations/${intent.conversationId}/messages`, {
+      const conversationID = intent.conversationId;
+      if (conversationID === undefined) {
+        throw new Error("Unable to complete the request.");
+      }
+
+      const messageResponse = await webBrowserMutation(`/web/v1/conversations/${conversationID}/messages`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -86,7 +92,8 @@ export function WorkspacePrompt() {
         throw new Error("Unable to complete the request.");
       }
       retryIntentRef.current = null;
-      router.push(`/app/chat/${intent.conversationId}?refresh=1`);
+      savePendingConversationPrompt(conversationID, intent.prompt);
+      router.push(`/app/chat/${conversationID}?refresh=1`);
     } catch {
       setHasError(true);
     } finally {

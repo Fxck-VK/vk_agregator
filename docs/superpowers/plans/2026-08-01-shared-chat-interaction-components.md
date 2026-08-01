@@ -94,7 +94,7 @@ Expected: exit code 0 for both commands.
 **Interfaces:**
 - Produces `AssistantTypingIndicator({ label })`, which renders a live status with exactly three `aria-hidden` dot elements.
 - `ConversationComposer.onAccepted` changes to `(prompt: string) => void` and supplies the normalized accepted prompt.
-- `ConversationHistory.beginRefresh(prompt?: string)` records the prompt, starts the existing poll, and clears the optimistic prompt once a matching persisted user record arrives.
+- `ConversationHistory.beginRefresh(prompt: string)` records the prompt, starts the existing poll, and clears the optimistic prompt once a matching persisted user record arrives. The first start-screen prompt is handed to the new chat through session-scoped browser storage, never through the URL.
 
 - [ ] **Step 1: Write the failing test**
 

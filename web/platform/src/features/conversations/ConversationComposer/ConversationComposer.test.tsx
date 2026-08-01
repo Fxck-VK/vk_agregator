@@ -67,20 +67,6 @@ describe("ConversationComposer", () => {
     expect(webBrowserMutation).not.toHaveBeenCalled();
   });
 
-  it("shows an accessible three-dot waiting status only while awaiting a response", () => {
-    const { rerender } = render(
-      <ConversationComposer conversationId={conversationId} isAwaitingResponse onAccepted={vi.fn()} />,
-    );
-
-    const waitingStatus = screen.getByRole("status", { name: ru.conversations.composerAwaitingResponse });
-    expect(waitingStatus).toHaveAttribute("aria-live", "polite");
-    expect(waitingStatus.querySelectorAll('[aria-hidden="true"]')).toHaveLength(3);
-
-    rerender(<ConversationComposer conversationId={conversationId} isAwaitingResponse={false} onAccepted={vi.fn()} />);
-
-    expect(screen.queryByRole("status", { name: ru.conversations.composerAwaitingResponse })).toBeNull();
-  });
-
   it.each([
     { httpStatus: 201, jobStatus: "queued" },
     { httpStatus: 200, jobStatus: "provider_processing" },
@@ -97,7 +83,7 @@ describe("ConversationComposer", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: ru.conversations.composerSubmit }));
 
-    await vi.waitFor(() => expect(onAccepted).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(onAccepted).toHaveBeenCalledWith("Продолжи диалог"));
     expect(webBrowserMutation).toHaveBeenCalledWith(`/web/v1/conversations/${conversationId}/messages`, {
       method: "POST",
       headers: {
