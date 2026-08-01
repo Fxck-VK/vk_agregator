@@ -280,6 +280,40 @@ func TestPrepareDoesNotUseForeignWebConversation(t *testing.T) {
 	}
 }
 
+func TestPrepareDoesNotUseWebConversationWithoutJobAccount(t *testing.T) {
+	ctx := context.Background()
+	repo := memory.NewConversationRepo()
+	svc := dialogcontext.New(repo, dialogcontext.Config{Enabled: true})
+	userID := uuid.New()
+	conversation := &domain.Conversation{
+		AccountID: userID,
+		Source:    domain.ConversationSourceWeb,
+		Status:    domain.ConversationActive,
+	}
+	if err := repo.CreateConversation(ctx, conversation); err != nil {
+		t.Fatalf("create web conversation: %v", err)
+	}
+
+	job := textJobWithParams(userID, 0, map[string]string{
+		"conversation_id":     conversation.ID.String(),
+		"conversation_source": "web",
+	})
+	prepared, err := svc.Prepare(ctx, job, "account-less web prompt")
+	if err != nil {
+		t.Fatalf("prepare: %v", err)
+	}
+	if prepared.ConversationID != uuid.Nil {
+		t.Fatalf("conversation id = %s, want nil", prepared.ConversationID)
+	}
+	messages, err := repo.ListMessagesAfter(ctx, conversation.ID, 0, 10)
+	if err != nil {
+		t.Fatalf("list messages: %v", err)
+	}
+	if len(messages) != 0 {
+		t.Fatalf("account-less job wrote web messages = %+v, want none", messages)
+	}
+}
+
 func TestPrepareSetsMiniAppConversationTitleFromFirstUserPrompt(t *testing.T) {
 	ctx := context.Background()
 	repo := memory.NewConversationRepo()

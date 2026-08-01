@@ -240,12 +240,15 @@ func resolveConversationTarget(job *domain.Job) conversationTarget {
 			ExternalThreadID: threadID,
 		}}
 	case domain.ConversationSourceWeb:
+		if job.AccountID == uuid.Nil {
+			return conversationTarget{explicit: true, invalid: true}
+		}
 		id, err := uuid.Parse(strings.TrimSpace(params.ConversationID))
 		if err != nil || id == uuid.Nil {
 			return conversationTarget{explicit: true, invalid: true}
 		}
 		return conversationTarget{explicit: true, conversationID: id, ref: domain.ConversationRef{
-			AccountID: ownerID,
+			AccountID: job.AccountID,
 			Source:    domain.ConversationSourceWeb,
 		}}
 	default:
@@ -260,7 +263,7 @@ func (s *Service) getOrCreateConversation(ctx context.Context, job *domain.Job, 
 			err          error
 		)
 		if target.ref.Source == domain.ConversationSourceWeb {
-			conversation, err = s.repo.GetByIDForAccount(ctx, dialogJobOwnerID(job), target.conversationID)
+			conversation, err = s.repo.GetByIDForAccount(ctx, target.ref.AccountID, target.conversationID)
 		} else {
 			conversation, err = s.repo.GetByIDForUser(ctx, dialogJobOwnerID(job), target.conversationID)
 		}
