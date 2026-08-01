@@ -114,6 +114,91 @@ describe("proxyWebApiRequest", () => {
     await expect(response.json()).resolves.toEqual({ error: "Service unavailable." });
   });
 
+  it("relays only a safe temporary redirect for one platform image artifact", async () => {
+    const signedLocation =
+      "https://objects.example.test/private/signed-image?X-Amz-Credential=access%2F20260801&X-Amz-Signature=encoded%2Bsignature";
+    const upstreamHeaders = new Headers({
+      "Cache-Control": "no-store",
+      Location: signedLocation,
+      "X-NeiroHub-Image-Artifact-Origin": "https://objects.example.test",
+    });
+    upstreamHeaders.append("Set-Cookie", "nh_access=must-not-forward; HttpOnly; Path=/");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 307, headers: upstreamHeaders })));
+
+    const response = await proxyWebApiRequest(
+      new Request("https://platform.example/web/v1/image-artifacts/4e9defcb-59d7-4d45-bc2e-7cdb770ad729"),
+      "/web/v1/image-artifacts/4e9defcb-59d7-4d45-bc2e-7cdb770ad729",
+      internalOrigin,
+    );
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("Location")).toBe(signedLocation);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+    expect(response.headers.get("X-NeiroHub-Image-Artifact-Origin")).toBeNull();
+    expect(response.headers.getSetCookie()).toEqual([]);
+  });
+
+  it("fails closed when an image artifact redirect has an unsafe destination", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response(null, { status: 307, headers: { Location: "javascript:alert(1)" } })),
+    );
+
+    const response = await proxyWebApiRequest(
+      new Request("https://platform.example/web/v1/image-artifacts/4e9defcb-59d7-4d45-bc2e-7cdb770ad729"),
+      "/web/v1/image-artifacts/4e9defcb-59d7-4d45-bc2e-7cdb770ad729",
+      internalOrigin,
+    );
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get("Location")).toBeNull();
+  });
+
+  it("fails closed when an image artifact redirect host differs from the backend-attested storage origin", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(null, {
+          status: 307,
+          headers: {
+            Location: "https://attacker.example.test/private/signed-image?X-Amz-Signature=secret",
+            "X-NeiroHub-Image-Artifact-Origin": "https://objects.example.test",
+          },
+        }),
+      ),
+    );
+
+    const response = await proxyWebApiRequest(
+      new Request("https://platform.example/web/v1/image-artifacts/4e9defcb-59d7-4d45-bc2e-7cdb770ad729"),
+      "/web/v1/image-artifacts/4e9defcb-59d7-4d45-bc2e-7cdb770ad729",
+      internalOrigin,
+    );
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get("Location")).toBeNull();
+  });
+
+  it("fails closed when the backend does not attest an image artifact redirect origin", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(null, {
+          status: 307,
+          headers: { Location: "https://objects.example.test/private/signed-image?X-Amz-Signature=secret" },
+        }),
+      ),
+    );
+
+    const response = await proxyWebApiRequest(
+      new Request("https://platform.example/web/v1/image-artifacts/4e9defcb-59d7-4d45-bc2e-7cdb770ad729"),
+      "/web/v1/image-artifacts/4e9defcb-59d7-4d45-bc2e-7cdb770ad729",
+      internalOrigin,
+    );
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get("Location")).toBeNull();
+  });
+
   it("rejects an oversized declared request body without calling upstream", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);

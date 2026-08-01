@@ -68,6 +68,7 @@ func applySchema(ctx context.Context, pool *pgxpool.Pool) error {
 		"000016_video_media_metadata.up.sql",
 		"000018_media_lifecycle.up.sql",
 		"000035_account_identity.up.sql",
+		"000045_outbox_claim_lease.up.sql",
 	}
 	for _, name := range scripts {
 		raw, err := os.ReadFile(filepath.Join(root, "migrations", name))

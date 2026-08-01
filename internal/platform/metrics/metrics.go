@@ -45,6 +45,77 @@ var (
 		Help: "Tasks routed to the dead-letter queue, labeled by phase.",
 	}, []string{"phase"})
 
+	// OutboxRelayClaims counts bounded relay claim outcomes by event class.
+	OutboxRelayClaims = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "vkagg_outbox_relay_claims_total",
+		Help: "Outbox relay claim outcomes by bounded event class.",
+	}, []string{"event_class", "outcome"})
+
+	// OutboxRelayClaimDuration tracks the duration of short claim transactions.
+	OutboxRelayClaimDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "vkagg_outbox_relay_claim_duration_seconds",
+		Help:    "Duration of outbox relay claim transactions by bounded outcome.",
+		Buckets: prometheus.DefBuckets,
+	}, []string{"outcome"})
+
+	// OutboxRelayPublishDuration tracks each executable outbox event from the
+	// beginning of its batch claim transaction until Redis acknowledges its
+	// publication. It therefore includes the claim transaction and time waiting
+	// behind earlier sequential publications in the same batch. It records only
+	// acknowledged Redis publications; audit-only events and failed queue calls
+	// have no sample. Labels are normalized to finite vocabularies.
+	OutboxRelayPublishDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "vkagg_outbox_relay_publish_duration_seconds",
+		Help:    "Per-event duration from batch outbox claim start to acknowledged Redis publication, including earlier same-batch work.",
+		Buckets: prometheus.DefBuckets,
+	}, []string{"event_class", "outcome"})
+
+	// OutboxRelayPublishes counts bounded external publication outcomes.
+	OutboxRelayPublishes = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "vkagg_outbox_relay_publishes_total",
+		Help: "Outbox relay external publication outcomes.",
+	}, []string{"event_class", "outcome", "failure_class"})
+
+	// OutboxRelayResolutions counts publish, retry, and quarantine resolutions.
+	OutboxRelayResolutions = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "vkagg_outbox_relay_resolutions_total",
+		Help: "Outbox relay claim resolution outcomes.",
+	}, []string{"event_class", "outcome", "failure_class"})
+
+	// OutboxRelayLeaseRecoveries counts unresolved leases and later recoveries.
+	OutboxRelayLeaseRecoveries = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "vkagg_outbox_relay_lease_recoveries_total",
+		Help: "Outbox relay lease recovery lifecycle outcomes.",
+	}, []string{"event_class", "outcome"})
+
+	// ResultReadyReconciliationDuration tracks one bounded reconciliation page.
+	ResultReadyReconciliationDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "vkagg_result_ready_reconciliation_duration_seconds",
+		Help:    "Duration of one bounded result-ready reconciliation page by outcome.",
+		Buckets: prometheus.DefBuckets,
+	}, []string{"outcome"})
+
+	// ResultReadyReconciliationItems accumulates count-only page summaries.
+	ResultReadyReconciliationItems = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "vkagg_result_ready_reconciliation_items_total",
+		Help: "Count-only result-ready reconciliation items by bounded category.",
+	}, []string{"item"})
+
+	// FinalizationReadinessFailures counts fail-closed readiness decisions
+	// without account, job, provider, or raw error labels.
+	FinalizationReadinessFailures = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "vkagg_finalization_readiness_failures_total",
+		Help: "Finalization readiness failures by bounded result mode and reason.",
+	}, []string{"result_mode", "reason"})
+
+	// ResultFinalizationCaptureDuration tracks the time from the job's latest
+	// durable pre-success update until a successful capture.
+	ResultFinalizationCaptureDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "vkagg_result_finalization_capture_duration_seconds",
+		Help:    "Duration from the latest durable pre-success job update to successful capture by bounded result mode.",
+		Buckets: prometheus.DefBuckets,
+	}, []string{"result_mode"})
+
 	// DeliveriesSent counts successful VK deliveries.
 	DeliveriesSent = prometheus.NewCounter(prometheus.CounterOpts{
 		Name: "vkagg_deliveries_sent_total",
@@ -712,6 +783,10 @@ func init() {
 		collectors.NewGoCollector(),
 		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
 		WebhookReceived, JobsTerminal, ModerationDecisions, DLQRouted,
+		OutboxRelayClaims, OutboxRelayClaimDuration, OutboxRelayPublishDuration,
+		OutboxRelayPublishes, OutboxRelayResolutions, OutboxRelayLeaseRecoveries,
+		ResultReadyReconciliationDuration, ResultReadyReconciliationItems, FinalizationReadinessFailures,
+		ResultFinalizationCaptureDuration,
 		DeliveriesSent, HTTPRequests, HTTPDuration, MaintenanceDeleted,
 		StreamTrimmed, BillingMismatches, PaymentsCreated, PaymentsSucceeded,
 		PaymentsCanceled, PaymentWebhooks, PaymentWebhookSecurityDenials,
@@ -743,6 +818,159 @@ func init() {
 		BackupDuration, BackupSizeBytes, BackupFailures,
 		RestoreTestLastSuccessTimestamp,
 	)
+}
+
+// ObserveOutboxRelayClaim records a claim result using finite label vocabularies.
+func ObserveOutboxRelayClaim(eventType, outcome string) {
+	OutboxRelayClaims.WithLabelValues(outboxEventClass(eventType), outboxOutcome(outcome)).Inc()
+}
+
+// ObserveOutboxRelayClaimDuration records one claim transaction duration.
+func ObserveOutboxRelayClaimDuration(outcome string, duration time.Duration) {
+	OutboxRelayClaimDuration.WithLabelValues(outboxOutcome(outcome)).Observe(duration.Seconds())
+}
+
+// ObserveOutboxRelayClaimToAcknowledgedPublicationDuration records the
+// end-to-end duration from the start of the batch claim transaction until an
+// executable event's Redis publication is acknowledged. It must not be used
+// for audit-only events or failed queue calls.
+func ObserveOutboxRelayClaimToAcknowledgedPublicationDuration(eventType string, duration time.Duration) {
+	OutboxRelayPublishDuration.WithLabelValues(
+		outboxEventClass(eventType),
+		"success",
+	).Observe(nonNegativeSeconds(duration))
+}
+
+// ObserveOutboxRelayPublish records an external publication result.
+func ObserveOutboxRelayPublish(eventType, outcome, failureClass string) {
+	OutboxRelayPublishes.WithLabelValues(
+		outboxEventClass(eventType),
+		outboxOutcome(outcome),
+		outboxFailureClass(failureClass),
+	).Inc()
+}
+
+// ObserveOutboxRelayResolution records a conditional claim resolution result.
+func ObserveOutboxRelayResolution(eventType, outcome, failureClass string) {
+	OutboxRelayResolutions.WithLabelValues(
+		outboxEventClass(eventType),
+		outboxOutcome(outcome),
+		outboxFailureClass(failureClass),
+	).Inc()
+}
+
+// ObserveOutboxRelayLeaseRecovery records an unresolved or recovered lease.
+func ObserveOutboxRelayLeaseRecovery(eventType, outcome string) {
+	OutboxRelayLeaseRecoveries.WithLabelValues(
+		outboxEventClass(eventType),
+		outboxOutcome(outcome),
+	).Inc()
+}
+
+// ObserveResultReadyReconciliationDuration records one bounded page duration.
+func ObserveResultReadyReconciliationDuration(outcome string, duration time.Duration) {
+	ResultReadyReconciliationDuration.WithLabelValues(reconciliationOutcome(outcome)).Observe(nonNegativeSeconds(duration))
+}
+
+// AddResultReadyReconciliationItems adds a count-only page summary.
+func AddResultReadyReconciliationItems(item string, count int) {
+	if count <= 0 {
+		return
+	}
+	ResultReadyReconciliationItems.WithLabelValues(reconciliationItem(item)).Add(float64(count))
+}
+
+// ObserveFinalizationReadinessFailure records a bounded fail-closed reason.
+func ObserveFinalizationReadinessFailure(resultMode, reason string) {
+	FinalizationReadinessFailures.WithLabelValues(
+		finalizationResultMode(resultMode),
+		finalizationReadinessReason(reason),
+	).Inc()
+}
+
+// ObserveResultFinalizationCaptureDuration records successful capture latency.
+func ObserveResultFinalizationCaptureDuration(resultMode string, duration time.Duration) {
+	ResultFinalizationCaptureDuration.WithLabelValues(
+		finalizationResultMode(resultMode),
+	).Observe(nonNegativeSeconds(duration))
+}
+
+func outboxEventClass(eventType string) string {
+	switch eventType {
+	case "event.job.created":
+		return "created"
+	case "event.job.queued":
+		return "queued"
+	case "event.job.result_ready":
+		return "result_ready"
+	case "batch":
+		return "batch"
+	default:
+		return "unknown"
+	}
+}
+
+func reconciliationOutcome(outcome string) string {
+	switch outcome {
+	case "success", "error":
+		return outcome
+	default:
+		return "other"
+	}
+}
+
+func reconciliationItem(item string) string {
+	switch item {
+	case "candidates", "eligible", "existing", "created", "blocked":
+		return item
+	default:
+		return "other"
+	}
+}
+
+func finalizationResultMode(resultMode string) string {
+	switch resultMode {
+	case "account_history", "external_push":
+		return resultMode
+	default:
+		return "unknown"
+	}
+}
+
+func finalizationReadinessReason(reason string) string {
+	switch reason {
+	case "missing_owner", "unconfigured", "incomplete", "invalid_contract", "dependency_error":
+		return reason
+	default:
+		return "other"
+	}
+}
+
+func nonNegativeSeconds(duration time.Duration) float64 {
+	if duration <= 0 {
+		return 0
+	}
+	return duration.Seconds()
+}
+
+func outboxOutcome(outcome string) string {
+	switch outcome {
+	case "claimed", "error", "audit_only", "success", "invalid", "retry",
+		"quarantine", "published", "resolve_error", "lost_claim",
+		"awaiting_expiry", "recovered":
+		return outcome
+	default:
+		return "other"
+	}
+}
+
+func outboxFailureClass(failureClass string) string {
+	switch failureClass {
+	case "none", "invalid_event", "publish_error", "claim_error", "resolve_error", "lost_claim":
+		return failureClass
+	default:
+		return "other"
+	}
 }
 
 // InitPaymentProviderMetrics pre-creates bounded payment metric series for a

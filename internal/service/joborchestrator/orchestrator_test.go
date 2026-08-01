@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -687,6 +688,302 @@ func TestCreateJobIdempotentExistingBypassesCapacityGuard(t *testing.T) {
 	}
 	if first.ID != second.ID {
 		t.Fatalf("expected existing job %s, got %s", first.ID, second.ID)
+	}
+}
+
+func TestPrepareAccountJobPersistsOnlyCreatedEventAndNeverEnqueues(t *testing.T) {
+	f := newFixture()
+	ctx := context.Background()
+	accountID := uuid.New()
+	artifactID := seedInputArtifactForAccount(t, f, uuid.Nil, accountID, domain.ArtifactKindInput, domain.MediaTypeImage, domain.ArtifactStatusReady, "artifacts", "refs/account-native.png")
+	in := joborchestrator.PrepareAccountJobInput{
+		AccountID:           accountID,
+		Operation:           domain.OperationImageGenerate,
+		Modality:            domain.ModalityImage,
+		IdempotencyKey:      "web:prepare:one",
+		CorrelationID:       "web-corr-one",
+		InputArtifactIDs:    []uuid.UUID{artifactID},
+		Params:              json.RawMessage(`{"quality":"high","count":1}`),
+		CostEstimateCredits: 25,
+	}
+
+	job, err := f.orch.PrepareAccountJob(ctx, in)
+	if err != nil {
+		t.Fatalf("prepare: %v", err)
+	}
+	if job.AccountID != accountID || job.UserID != uuid.Nil || job.CommandID != uuid.Nil || job.VKPeerID != 0 || job.Source != "web" || job.Status != domain.JobStatusPrepared {
+		t.Fatalf("unexpected prepared job: %+v", job)
+	}
+	if job.CostEstimate != 25 || job.CostReserved != 0 || job.CostCaptured != 0 {
+		t.Fatalf("prepared job costs = %d/%d/%d, want 25/0/0", job.CostEstimate, job.CostReserved, job.CostCaptured)
+	}
+
+	events := f.outbox.Events()
+	if len(events) != 1 || events[0].EventType != "event.job.created" {
+		t.Fatalf("prepared job events = %+v, want one created event", events)
+	}
+	if _, err := f.bill.GetAccountByOwner(ctx, accountID, domain.CurrencyCredits); !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("prepared job must not create a credit account/reservation, got %v", err)
+	}
+	f.drain(t)
+	if f.pub.Len() != 0 {
+		t.Fatalf("prepared job must not publish a worker task, got %d", f.pub.Len())
+	}
+
+	// Canonically equivalent parameters replay the same immutable prepared row.
+	in.Params = json.RawMessage(`{"count":1,"quality":"high"}`)
+	replayed, err := f.orch.PrepareAccountJob(ctx, in)
+	if err != nil || replayed.ID != job.ID {
+		t.Fatalf("equivalent replay = %+v, %v; want %s, nil", replayed, err, job.ID)
+	}
+	if events := f.outbox.Events(); len(events) != 1 {
+		t.Fatalf("replay wrote another created event: %+v", events)
+	}
+
+	in.Params = json.RawMessage(`{"count":2,"quality":"high"}`)
+	if _, err := f.orch.PrepareAccountJob(ctx, in); !errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("changed payload error = %v, want ErrConflict", err)
+	}
+	in.Params = json.RawMessage(`{"quality":"high","count":1}`)
+	in.CostEstimateCredits = 26
+	if _, err := f.orch.PrepareAccountJob(ctx, in); !errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("changed pricing error = %v, want ErrConflict", err)
+	}
+	in.CostEstimateCredits = 25
+	in.AccountID = uuid.New()
+	in.Params = json.RawMessage(`{"quality":"high","count":1}`)
+	in.InputArtifactIDs = nil
+	if _, err := f.orch.PrepareAccountJob(ctx, in); !errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("cross-account key error = %v, want ErrConflict", err)
+	}
+}
+
+func TestPrepareAccountJobCapsUnexpiredWebImageJobsPerAccount(t *testing.T) {
+	f := newFixtureWithOrchestratorOptions([]joborchestrator.Option{
+		joborchestrator.WithMaxPreparedWebImageJobsPerAccount(2, time.Hour),
+	})
+	ctx := context.Background()
+	accountID := uuid.New()
+
+	for _, key := range []string{"web:prepare:cap:first", "web:prepare:cap:second"} {
+		job, err := f.orch.PrepareAccountJob(ctx, joborchestrator.PrepareAccountJobInput{
+			AccountID:           accountID,
+			Operation:           domain.OperationImageGenerate,
+			Modality:            domain.ModalityImage,
+			IdempotencyKey:      key,
+			CostEstimateCredits: 25,
+		})
+		if err != nil || job == nil || job.Status != domain.JobStatusPrepared {
+			t.Fatalf("prepare %q = %+v, %v", key, job, err)
+		}
+		if job.ExpiresAt == nil {
+			t.Fatalf("prepare %q must receive a confirmation expiry", key)
+		}
+	}
+
+	job, err := f.orch.PrepareAccountJob(ctx, joborchestrator.PrepareAccountJobInput{
+		AccountID:           accountID,
+		Operation:           domain.OperationImageGenerate,
+		Modality:            domain.ModalityImage,
+		IdempotencyKey:      "web:prepare:cap:third",
+		CostEstimateCredits: 25,
+	})
+	if !errors.Is(err, domain.ErrPreparedJobLimitExceeded) || job != nil {
+		t.Fatalf("third distinct prepare = %+v, %v; want nil ErrPreparedJobLimitExceeded", job, err)
+	}
+	if events := f.outbox.Events(); len(events) != 2 {
+		t.Fatalf("cap rejection must not add an outbox event: %+v", events)
+	}
+}
+
+func TestCreateJobRejectsPreparedAccountIdempotencyCollision(t *testing.T) {
+	f := newFixture()
+	ctx := context.Background()
+	key := "cross-surface-prepared-key"
+	prepared, err := f.orch.PrepareAccountJob(ctx, joborchestrator.PrepareAccountJobInput{
+		AccountID:           uuid.New(),
+		Operation:           domain.OperationTextGenerate,
+		Modality:            domain.ModalityText,
+		IdempotencyKey:      key,
+		CostEstimateCredits: 1,
+	})
+	if err != nil {
+		t.Fatalf("prepare account job: %v", err)
+	}
+
+	job, err := f.orch.CreateJob(ctx, joborchestrator.CreateJobInput{
+		UserID:         uuid.New(),
+		VKPeerID:       42,
+		CommandID:      uuid.New(),
+		Operation:      domain.OperationTextGenerate,
+		Modality:       domain.ModalityText,
+		IdempotencyKey: key,
+	})
+	if !errors.Is(err, domain.ErrConflict) || job != nil {
+		t.Fatalf("legacy collision = %+v, %v; want nil, ErrConflict", job, err)
+	}
+	if events := f.outbox.Events(); len(events) != 1 || events[0].EventType != "event.job.created" {
+		t.Fatalf("collision changed outbox: %+v", events)
+	}
+	f.drain(t)
+	if f.pub.Len() != 0 {
+		t.Fatalf("collision published worker work: %d", f.pub.Len())
+	}
+	stored, err := f.jobs.GetByID(ctx, prepared.ID)
+	if err != nil || stored.Status != domain.JobStatusPrepared || stored.CostReserved != 0 {
+		t.Fatalf("prepared row mutated: %+v, %v", stored, err)
+	}
+}
+
+func TestPrepareAccountJobRejectsLegacyIdempotencyCollision(t *testing.T) {
+	f := newFixture()
+	ctx := context.Background()
+	key := "cross-surface-legacy-key"
+	legacy, err := f.orch.CreateJob(ctx, joborchestrator.CreateJobInput{
+		UserID:         uuid.New(),
+		VKPeerID:       42,
+		CommandID:      uuid.New(),
+		Operation:      domain.OperationTextGenerate,
+		Modality:       domain.ModalityText,
+		IdempotencyKey: key,
+	})
+	if err != nil {
+		t.Fatalf("create legacy job: %v", err)
+	}
+
+	prepared, err := f.orch.PrepareAccountJob(ctx, joborchestrator.PrepareAccountJobInput{
+		AccountID:           uuid.New(),
+		Operation:           domain.OperationTextGenerate,
+		Modality:            domain.ModalityText,
+		IdempotencyKey:      key,
+		CostEstimateCredits: 1,
+	})
+	if !errors.Is(err, domain.ErrConflict) || prepared != nil {
+		t.Fatalf("prepared collision = %+v, %v; want nil, ErrConflict", prepared, err)
+	}
+	stored, err := f.jobs.GetByID(ctx, legacy.ID)
+	if err != nil || stored.Status != domain.JobStatusQueued {
+		t.Fatalf("legacy row mutated: %+v, %v", stored, err)
+	}
+}
+
+func TestPrepareAccountJobRejectsInvalidSnapshotAndConflictsOnSnapshotReplayChange(t *testing.T) {
+	f := newFixture()
+	ctx := context.Background()
+	catalog, err := pricingcatalog.NewStaticCatalog()
+	if err != nil {
+		t.Fatalf("new pricing catalog: %v", err)
+	}
+	snapshot, err := catalog.Snapshot(pricingcatalog.ProductKey{
+		Operation:    domain.OperationImageGenerate,
+		Modality:     domain.ModalityImage,
+		ImageModelID: pricingcatalog.PublicImageNanoBanana2,
+		Quality:      pricingcatalog.ImageQuality1K,
+	})
+	if err != nil {
+		t.Fatalf("snapshot: %v", err)
+	}
+
+	invalid := snapshot
+	invalid.Source = ""
+	if _, err := f.orch.PrepareAccountJob(ctx, joborchestrator.PrepareAccountJobInput{
+		AccountID:           uuid.New(),
+		Operation:           domain.OperationImageGenerate,
+		Modality:            domain.ModalityImage,
+		IdempotencyKey:      "prepared-invalid-pricing-snapshot",
+		CostEstimateCredits: snapshot.InternalCredits,
+		PricingSnapshot:     invalid,
+	}); err == nil {
+		t.Fatal("invalid nonzero pricing snapshot must be rejected")
+	}
+
+	zeroSnapshot, err := f.orch.PrepareAccountJob(ctx, joborchestrator.PrepareAccountJobInput{
+		AccountID:           uuid.New(),
+		Operation:           domain.OperationTextGenerate,
+		Modality:            domain.ModalityText,
+		IdempotencyKey:      "prepared-omitted-pricing-snapshot",
+		CostEstimateCredits: 1,
+	})
+	if err != nil || len(zeroSnapshot.PricingSnapshot) != 0 {
+		t.Fatalf("omitted snapshot = %+v, %v; want no stored snapshot", zeroSnapshot, err)
+	}
+
+	in := joborchestrator.PrepareAccountJobInput{
+		AccountID:       uuid.New(),
+		Operation:       domain.OperationImageGenerate,
+		Modality:        domain.ModalityImage,
+		IdempotencyKey:  "prepared-pricing-snapshot-replay",
+		PricingSnapshot: snapshot,
+	}
+	if _, err := f.orch.PrepareAccountJob(ctx, in); err != nil {
+		t.Fatalf("prepare valid snapshot: %v", err)
+	}
+	in.PricingSnapshot.Source = "alternate-catalog"
+	if _, err := f.orch.PrepareAccountJob(ctx, in); !errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("changed valid snapshot replay error = %v, want ErrConflict", err)
+	}
+}
+
+func TestPrepareAccountJobConcurrentReplayCreatesOneRecordAndEvent(t *testing.T) {
+	f := newFixture()
+	ctx := context.Background()
+	in := joborchestrator.PrepareAccountJobInput{
+		AccountID:           uuid.New(),
+		Operation:           domain.OperationImageGenerate,
+		Modality:            domain.ModalityImage,
+		IdempotencyKey:      "web:prepare:concurrent",
+		CostEstimateCredits: 25,
+	}
+	start := make(chan struct{})
+	results := make(chan *domain.Job, 2)
+	errs := make(chan error, 2)
+	for range 2 {
+		go func() {
+			<-start
+			job, err := f.orch.PrepareAccountJob(ctx, in)
+			results <- job
+			errs <- err
+		}()
+	}
+	close(start)
+	first, second := <-results, <-results
+	if err := <-errs; err != nil {
+		t.Fatalf("first concurrent prepare: %v", err)
+	}
+	if err := <-errs; err != nil {
+		t.Fatalf("second concurrent prepare: %v", err)
+	}
+	if first.ID == uuid.Nil || first.ID != second.ID {
+		t.Fatalf("concurrent jobs = %v and %v, want one id", first, second)
+	}
+	jobs, err := f.jobs.ListByAccount(ctx, in.AccountID, 10, 0)
+	if err != nil || len(jobs) != 1 {
+		t.Fatalf("account jobs = %+v, %v; want exactly one", jobs, err)
+	}
+	if events := f.outbox.Events(); len(events) != 1 || events[0].EventType != "event.job.created" {
+		t.Fatalf("concurrent prepare events = %+v", events)
+	}
+}
+
+func TestPrepareAccountJobRequiresExactlyOwnedInputArtifact(t *testing.T) {
+	f := newFixture()
+	ctx := context.Background()
+	accountID := uuid.New()
+	foreignID := seedInputArtifactForAccount(t, f, uuid.Nil, uuid.New(), domain.ArtifactKindInput, domain.MediaTypeImage, domain.ArtifactStatusReady, "artifacts", "refs/foreign-native.png")
+	ownerlessID := seedInputArtifactForAccount(t, f, uuid.Nil, uuid.Nil, domain.ArtifactKindInput, domain.MediaTypeImage, domain.ArtifactStatusReady, "artifacts", "refs/ownerless.png")
+
+	for _, artifactID := range []uuid.UUID{foreignID, ownerlessID} {
+		_, err := f.orch.PrepareAccountJob(ctx, joborchestrator.PrepareAccountJobInput{
+			AccountID:           accountID,
+			Operation:           domain.OperationImageGenerate,
+			Modality:            domain.ModalityImage,
+			IdempotencyKey:      "web:prepare:artifact:" + artifactID.String(),
+			InputArtifactIDs:    []uuid.UUID{artifactID},
+			CostEstimateCredits: 25,
+		})
+		if !errors.Is(err, joborchestrator.ErrInvalidInputArtifact) {
+			t.Fatalf("artifact %s error = %v, want ErrInvalidInputArtifact", artifactID, err)
+		}
 	}
 }
 

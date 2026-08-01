@@ -14,25 +14,29 @@ import (
 // semantics of the PostgreSQL implementation: balance_cached changes only via
 // committed ledger entries, and available balance subtracts active holds.
 type BillingRepo struct {
-	mu           sync.Mutex
-	accounts     map[uuid.UUID]domain.CreditAccount
-	byUser       map[string]uuid.UUID
-	claimedUsers map[string]bool
-	reservations map[uuid.UUID]domain.CreditReservation
-	ledger       []domain.LedgerEntry
-	ledgerKeys   map[string]bool
-	resKeys      map[string]bool
+	mu            sync.Mutex
+	accounts      map[uuid.UUID]domain.CreditAccount
+	byUser        map[string]uuid.UUID
+	byOwner       map[string]uuid.UUID
+	claimedUsers  map[string]bool
+	claimedOwners map[string]bool
+	reservations  map[uuid.UUID]domain.CreditReservation
+	ledger        []domain.LedgerEntry
+	ledgerKeys    map[string]bool
+	resKeys       map[string]uuid.UUID
 }
 
 // NewBillingRepo builds an empty BillingRepo.
 func NewBillingRepo() *BillingRepo {
 	return &BillingRepo{
-		accounts:     map[uuid.UUID]domain.CreditAccount{},
-		byUser:       map[string]uuid.UUID{},
-		claimedUsers: map[string]bool{},
-		reservations: map[uuid.UUID]domain.CreditReservation{},
-		ledgerKeys:   map[string]bool{},
-		resKeys:      map[string]bool{},
+		accounts:      map[uuid.UUID]domain.CreditAccount{},
+		byUser:        map[string]uuid.UUID{},
+		byOwner:       map[string]uuid.UUID{},
+		claimedUsers:  map[string]bool{},
+		claimedOwners: map[string]bool{},
+		reservations:  map[uuid.UUID]domain.CreditReservation{},
+		ledgerKeys:    map[string]bool{},
+		resKeys:       map[string]uuid.UUID{},
 	}
 }
 
@@ -51,13 +55,18 @@ func (r *BillingRepo) CreateAccount(_ context.Context, a *domain.CreditAccount) 
 	if a.CreditDenominationVersion == 0 {
 		a.CreditDenominationVersion = domain.CurrentCreditDenominationVersion
 	}
-	key := userCurrencyKey(a.UserID, a.Currency)
-	if r.claimedUsers[key] {
-		return domain.ErrConflict
+	var legacyKey, ownerKey string
+	if a.UserID != uuid.Nil {
+		legacyKey = userCurrencyKey(a.UserID, a.Currency)
+		if r.claimedUsers[legacyKey] || r.claimedOwners[legacyKey] {
+			return domain.ErrConflict
+		}
 	}
-	ownerKey := userCurrencyKey(a.OwnerAccountID, a.Currency)
-	if r.claimedUsers[ownerKey] {
-		return domain.ErrConflict
+	if a.OwnerAccountID != uuid.Nil {
+		ownerKey = userCurrencyKey(a.OwnerAccountID, a.Currency)
+		if r.claimedOwners[ownerKey] || r.claimedUsers[ownerKey] {
+			return domain.ErrConflict
+		}
 	}
 	if a.ID == uuid.Nil {
 		a.ID = uuid.New()
@@ -70,9 +79,16 @@ func (r *BillingRepo) CreateAccount(_ context.Context, a *domain.CreditAccount) 
 	grant := a.BalanceCached
 	a.BalanceCached = 0
 	r.accounts[a.ID] = *a
-	r.claimedUsers[key] = true
-	r.claimedUsers[ownerKey] = true
-	r.byUser[ownerKey] = a.ID
+	if legacyKey != "" {
+		r.claimedUsers[legacyKey] = true
+	}
+	if ownerKey != "" {
+		r.claimedOwners[ownerKey] = true
+		// GetAccountByUser is a legacy compatibility lookup that has long
+		// resolved the effective owner key. Keep that public behavior intact.
+		r.byUser[ownerKey] = a.ID
+		r.byOwner[ownerKey] = a.ID
+	}
 	if grant != 0 {
 		if err := r.appendLocked(&domain.LedgerEntry{
 			AccountID:                 a.ID,
@@ -105,6 +121,18 @@ func (r *BillingRepo) GetAccountByUser(_ context.Context, userID uuid.UUID, curr
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	id, ok := r.byUser[userCurrencyKey(userID, currency)]
+	if !ok {
+		return nil, domain.ErrNotFound
+	}
+	a := r.accounts[id]
+	return &a, nil
+}
+
+// GetAccountByOwner fetches only by the canonical owner/currency key.
+func (r *BillingRepo) GetAccountByOwner(_ context.Context, ownerAccountID uuid.UUID, currency domain.Currency) (*domain.CreditAccount, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	id, ok := r.byOwner[userCurrencyKey(ownerAccountID, currency)]
 	if !ok {
 		return nil, domain.ErrNotFound
 	}
@@ -176,17 +204,47 @@ func (r *BillingRepo) availableLocked(accountID uuid.UUID) int64 {
 	return avail
 }
 
-func (r *BillingRepo) Reserve(_ context.Context, res *domain.CreditReservation) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if r.resKeys[res.IdempotencyKey] {
+func (r *BillingRepo) Reserve(ctx context.Context, res *domain.CreditReservation) error {
+	return r.reserve(ctx, uuid.Nil, res, false)
+}
+
+// ReserveForOwner creates a reservation only for the supplied canonical owner.
+// A supplied stored owner must match that canonical owner; the stored owner is
+// then copied from the selected credit account.
+func (r *BillingRepo) ReserveForOwner(ctx context.Context, ownerAccountID uuid.UUID, res *domain.CreditReservation) error {
+	if ownerAccountID == uuid.Nil {
 		return domain.ErrConflict
 	}
-	if _, ok := r.accounts[res.AccountID]; !ok {
+	return r.reserve(ctx, ownerAccountID, res, true)
+}
+
+func (r *BillingRepo) reserve(_ context.Context, requestedOwner uuid.UUID, res *domain.CreditReservation, ownerScoped bool) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	account, ok := r.accounts[res.AccountID]
+	if !ok {
 		return domain.ErrNotFound
 	}
-	if res.OwnerAccountID == uuid.Nil {
-		res.OwnerAccountID = r.accounts[res.AccountID].OwnerAccountID
+	if requestedOwner != uuid.Nil && requestedOwner != account.OwnerAccountID {
+		return domain.ErrConflict
+	}
+	if res.OwnerAccountID != uuid.Nil && res.OwnerAccountID != account.OwnerAccountID {
+		return domain.ErrConflict
+	}
+	if ownerScoped && account.OwnerAccountID == uuid.Nil {
+		return domain.ErrConflict
+	}
+	if existingID, ok := r.resKeys[res.IdempotencyKey]; ok {
+		existing := r.reservations[existingID]
+		if existing.OwnerAccountID == account.OwnerAccountID &&
+			existing.AccountID == res.AccountID &&
+			existing.JobID == res.JobID &&
+			existing.Amount == res.Amount &&
+			existing.CreditDenominationVersion == reservationDenomination(res) {
+			*res = existing
+			return nil
+		}
+		return domain.ErrConflict
 	}
 	if r.availableLocked(res.AccountID) < res.Amount {
 		return domain.ErrInsufficientCredits
@@ -200,13 +258,18 @@ func (r *BillingRepo) Reserve(_ context.Context, res *domain.CreditReservation) 
 	if res.CreditDenominationVersion == 0 {
 		res.CreditDenominationVersion = domain.CurrentCreditDenominationVersion
 	}
+	res.OwnerAccountID = account.OwnerAccountID
+	// Preflight the linked ledger idempotency key so a collision cannot leave a
+	// new reservation without its pending reserve ledger entry.
+	if r.ledgerKeys["reserve:"+res.IdempotencyKey] {
+		return domain.ErrConflict
+	}
 	now := time.Now()
 	res.CreatedAt, res.UpdatedAt = now, now
 	r.reservations[res.ID] = *res
-	r.resKeys[res.IdempotencyKey] = true
 
 	jobID := res.JobID
-	return r.appendLocked(&domain.LedgerEntry{
+	if err := r.appendLocked(&domain.LedgerEntry{
 		AccountID:                 res.AccountID,
 		OwnerAccountID:            res.OwnerAccountID,
 		JobID:                     &jobID,
@@ -217,25 +280,50 @@ func (r *BillingRepo) Reserve(_ context.Context, res *domain.CreditReservation) 
 		Status:                    domain.LedgerStatusPending,
 		IdempotencyKey:            "reserve:" + res.IdempotencyKey,
 		Reason:                    "credit reservation",
-	})
+	}); err != nil {
+		delete(r.reservations, res.ID)
+		return err
+	}
+	r.resKeys[res.IdempotencyKey] = res.ID
+	return nil
 }
 
-func (r *BillingRepo) Capture(_ context.Context, reservationID uuid.UUID, amount int64, idempotencyKey string) error {
+func (r *BillingRepo) Capture(ctx context.Context, reservationID uuid.UUID, amount int64, idempotencyKey string) error {
+	return r.capture(ctx, uuid.Nil, reservationID, amount, idempotencyKey, false)
+}
+
+func (r *BillingRepo) CaptureForOwner(ctx context.Context, ownerAccountID, reservationID uuid.UUID, amount int64, idempotencyKey string) error {
+	if ownerAccountID == uuid.Nil {
+		return domain.ErrConflict
+	}
+	return r.capture(ctx, ownerAccountID, reservationID, amount, idempotencyKey, true)
+}
+
+func (r *BillingRepo) capture(_ context.Context, ownerAccountID, reservationID uuid.UUID, amount int64, idempotencyKey string, ownerScoped bool) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	res, ok := r.reservations[reservationID]
 	if !ok {
 		return domain.ErrNotFound
 	}
-	if res.Status != domain.ReservationReserved {
+	if ownerScoped && res.OwnerAccountID != ownerAccountID {
 		return domain.ErrConflict
 	}
-	res.Status = domain.ReservationCaptured
-	res.UpdatedAt = time.Now()
-	r.reservations[reservationID] = res
+	if amount <= 0 || amount != res.Amount {
+		return domain.ErrConflict
+	}
+	if res.Status == domain.ReservationCaptured {
+		if ledgerMatches(r.ledgerByKeyLocked(idempotencyKey), res, domain.LedgerCapture, -amount, idempotencyKey) {
+			return nil
+		}
+		return domain.ErrConflict
+	}
+	if res.Status != domain.ReservationReserved || r.ledgerKeys[idempotencyKey] {
+		return domain.ErrConflict
+	}
 
 	jobID := res.JobID
-	return r.appendLocked(&domain.LedgerEntry{
+	if err := r.appendLocked(&domain.LedgerEntry{
 		AccountID:                 res.AccountID,
 		OwnerAccountID:            res.OwnerAccountID,
 		JobID:                     &jobID,
@@ -246,25 +334,48 @@ func (r *BillingRepo) Capture(_ context.Context, reservationID uuid.UUID, amount
 		Status:                    domain.LedgerStatusCommitted,
 		IdempotencyKey:            idempotencyKey,
 		Reason:                    "credit capture",
-	})
+	}); err != nil {
+		return err
+	}
+	res.Status = domain.ReservationCaptured
+	res.UpdatedAt = time.Now()
+	r.reservations[reservationID] = res
+	return nil
 }
 
-func (r *BillingRepo) Release(_ context.Context, reservationID uuid.UUID, idempotencyKey string) error {
+func (r *BillingRepo) Release(ctx context.Context, reservationID uuid.UUID, idempotencyKey string) error {
+	return r.release(ctx, uuid.Nil, reservationID, idempotencyKey, false)
+}
+
+func (r *BillingRepo) ReleaseForOwner(ctx context.Context, ownerAccountID, reservationID uuid.UUID, idempotencyKey string) error {
+	if ownerAccountID == uuid.Nil {
+		return domain.ErrConflict
+	}
+	return r.release(ctx, ownerAccountID, reservationID, idempotencyKey, true)
+}
+
+func (r *BillingRepo) release(_ context.Context, ownerAccountID, reservationID uuid.UUID, idempotencyKey string, ownerScoped bool) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	res, ok := r.reservations[reservationID]
 	if !ok {
 		return domain.ErrNotFound
 	}
-	if res.Status != domain.ReservationReserved {
+	if ownerScoped && res.OwnerAccountID != ownerAccountID {
 		return domain.ErrConflict
 	}
-	res.Status = domain.ReservationReleased
-	res.UpdatedAt = time.Now()
-	r.reservations[reservationID] = res
+	if res.Status == domain.ReservationReleased {
+		if ledgerMatches(r.ledgerByKeyLocked(idempotencyKey), res, domain.LedgerRelease, 0, idempotencyKey) {
+			return nil
+		}
+		return domain.ErrConflict
+	}
+	if res.Status != domain.ReservationReserved || r.ledgerKeys[idempotencyKey] {
+		return domain.ErrConflict
+	}
 
 	jobID := res.JobID
-	return r.appendLocked(&domain.LedgerEntry{
+	if err := r.appendLocked(&domain.LedgerEntry{
 		AccountID:                 res.AccountID,
 		OwnerAccountID:            res.OwnerAccountID,
 		JobID:                     &jobID,
@@ -275,7 +386,36 @@ func (r *BillingRepo) Release(_ context.Context, reservationID uuid.UUID, idempo
 		Status:                    domain.LedgerStatusCommitted,
 		IdempotencyKey:            idempotencyKey,
 		Reason:                    "credit release",
-	})
+	}); err != nil {
+		return err
+	}
+	res.Status = domain.ReservationReleased
+	res.UpdatedAt = time.Now()
+	r.reservations[reservationID] = res
+	return nil
+}
+
+func reservationDenomination(res *domain.CreditReservation) int {
+	if res.CreditDenominationVersion == 0 {
+		return domain.CurrentCreditDenominationVersion
+	}
+	return res.CreditDenominationVersion
+}
+
+func (r *BillingRepo) ledgerByKeyLocked(key string) *domain.LedgerEntry {
+	for i := range r.ledger {
+		if r.ledger[i].IdempotencyKey == key {
+			entry := r.ledger[i]
+			return &entry
+		}
+	}
+	return nil
+}
+
+func ledgerMatches(entry *domain.LedgerEntry, res domain.CreditReservation, entryType domain.LedgerEntryType, amount int64, key string) bool {
+	return entry != nil && entry.IdempotencyKey == key && entry.AccountID == res.AccountID &&
+		entry.OwnerAccountID == res.OwnerAccountID && entry.Type == entryType && entry.Amount == amount &&
+		entry.ReservationID != nil && *entry.ReservationID == res.ID
 }
 
 func (r *BillingRepo) GetReservation(_ context.Context, id uuid.UUID) (*domain.CreditReservation, error) {

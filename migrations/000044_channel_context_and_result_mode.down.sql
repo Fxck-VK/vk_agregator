@@ -45,18 +45,3 @@ ALTER TABLE deliveries
     ALTER COLUMN user_id SET NOT NULL,
     ALTER COLUMN vk_peer_id SET NOT NULL,
     ALTER COLUMN vk_random_id SET NOT NULL;
-
-ALTER TABLE jobs
-    DROP COLUMN IF EXISTS target_thread_ref,
-    DROP COLUMN IF EXISTS target_recipient_ref,
-    DROP COLUMN IF EXISTS target_channel,
-    DROP COLUMN IF EXISTS result_mode,
-    DROP COLUMN IF EXISTS thread_ref,
-    DROP COLUMN IF EXISTS recipient_ref,
-    DROP COLUMN IF EXISTS channel;
-
-ALTER TABLE deliveries
-    DROP COLUMN IF EXISTS thread_ref,
-    DROP COLUMN IF EXISTS recipient_ref,
-    DROP COLUMN IF EXISTS channel,
-    DROP COLUMN IF EXISTS account_id;

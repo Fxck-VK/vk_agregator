@@ -1,9 +1,13 @@
-import { ru } from "@/i18n/ru";
+import { ConversationHistory } from "@/features/conversations/ConversationHistory/ConversationHistory";
+import { loadConversationHistory } from "@/features/conversations/conversation-history-data";
 
-export default function ConversationPage() {
-  return (
-    <section>
-      <h1>{ru.workspace.chatPlaceholder}</h1>
-    </section>
-  );
+export default async function ConversationPage({
+  params,
+}: Readonly<{
+  params: Promise<{ conversationId: string }>;
+}>) {
+  const { conversationId } = await params;
+  const history = await loadConversationHistory(conversationId);
+
+  return <ConversationHistory history={history} />;
 }

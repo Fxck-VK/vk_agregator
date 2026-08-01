@@ -1,14 +1,81 @@
 package main
 
 import (
+	"errors"
 	"reflect"
+	"strings"
 	"testing"
+	"time"
 
 	"vk-ai-aggregator/internal/adapter/provider/runway"
 	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/platform/config"
 	"vk-ai-aggregator/internal/service/providermodels"
 )
+
+func TestOutboxRelayOwnerUsesStableSanitizedProcessIdentity(t *testing.T) {
+	if got := outboxRelayOwner(func() (string, error) { return "worker-01", nil }, 4321); got != "worker-01-4321" {
+		t.Fatalf("outboxRelayOwner() = %q, want worker-01-4321", got)
+	}
+
+	unsafe := strings.Repeat("host name/secret@", 20)
+	got := outboxRelayOwner(func() (string, error) { return unsafe, nil }, 4321)
+	if len(got) > maxOutboxRelayOwnerLength {
+		t.Fatalf("owner length = %d, want <= %d", len(got), maxOutboxRelayOwnerLength)
+	}
+	if strings.ContainsAny(got, " /@") {
+		t.Fatalf("owner contains unsafe characters: %q", got)
+	}
+
+	if got := outboxRelayOwner(func() (string, error) { return "", errors.New("hostname unavailable") }, 4321); got != "worker-4321" {
+		t.Fatalf("fallback owner = %q, want worker-4321", got)
+	}
+}
+
+func TestOutboxRelayWorkerConfigurationIsBounded(t *testing.T) {
+	if outboxRelayLeaseDuration < 10*time.Second || outboxRelayLeaseDuration > 5*time.Minute {
+		t.Fatalf("lease duration = %s, want enough for one Redis call and bounded", outboxRelayLeaseDuration)
+	}
+	if outboxRelayMaxAttempts < 1 || outboxRelayMaxAttempts > 10 {
+		t.Fatalf("max attempts = %d, want within [1, 10]", outboxRelayMaxAttempts)
+	}
+	if outboxRelayRetryBase <= 0 || outboxRelayRetryBase > outboxRelayLeaseDuration {
+		t.Fatalf("retry base = %s, want positive and no longer than lease", outboxRelayRetryBase)
+	}
+	if outboxRelayRetryMax < outboxRelayRetryBase || outboxRelayRetryMax > 10*time.Minute {
+		t.Fatalf("retry max = %s, want bounded and >= base", outboxRelayRetryMax)
+	}
+}
+
+func TestWorkerRuntimeLoopSelection(t *testing.T) {
+	tests := []struct {
+		name        string
+		mode        string
+		jobs        bool
+		relay       bool
+		maintenance bool
+	}{
+		{name: "default", mode: "", jobs: true, relay: true, maintenance: true},
+		{name: "all", mode: config.WorkerModeAll, jobs: true, relay: true, maintenance: true},
+		{name: "jobs", mode: config.WorkerModeJobs, jobs: true, relay: true, maintenance: false},
+		{name: "relay only", mode: config.WorkerModeRelay, jobs: false, relay: true, maintenance: false},
+		{name: "maintenance", mode: config.WorkerModeMaintenance, jobs: false, relay: false, maintenance: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := shouldRunJobWorkers(tt.mode); got != tt.jobs {
+				t.Fatalf("shouldRunJobWorkers(%q) = %t, want %t", tt.mode, got, tt.jobs)
+			}
+			if got := shouldRunOutboxRelay(tt.mode); got != tt.relay {
+				t.Fatalf("shouldRunOutboxRelay(%q) = %t, want %t", tt.mode, got, tt.relay)
+			}
+			if got := shouldRunMaintenance(tt.mode); got != tt.maintenance {
+				t.Fatalf("shouldRunMaintenance(%q) = %t, want %t", tt.mode, got, tt.maintenance)
+			}
+		})
+	}
+}
 
 func TestDefaultProviderMediaContractsRunwayMatchesRouteAspects(t *testing.T) {
 	contracts := defaultProviderMediaContracts(config.Config{})

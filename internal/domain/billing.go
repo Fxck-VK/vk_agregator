@@ -79,7 +79,8 @@ const (
 type CreditAccount struct {
 	// ID is the internal primary key.
 	ID uuid.UUID `json:"id"`
-	// UserID is the owner of the account.
+	// UserID is the legacy user provenance for the account. uuid.Nil means an
+	// account-native balance has no legacy user provenance; it is not an owner.
 	UserID uuid.UUID `json:"user_id"`
 	// OwnerAccountID is the canonical account owner. ID remains the credit
 	// account id used by ledger_entries.account_id.

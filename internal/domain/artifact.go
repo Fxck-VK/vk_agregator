@@ -294,6 +294,8 @@ type Artifact struct {
 	// ID is the internal primary key.
 	ID uuid.UUID `json:"id"`
 	// OwnerUserID is the legacy channel user that created the artifact.
+	// uuid.Nil means account-native data has no legacy user provenance; it is
+	// not an identity.
 	OwnerUserID uuid.UUID `json:"owner_user_id"`
 	// OwnerAccountID is the canonical account owner for access and lifecycle.
 	// OwnerUserID remains for legacy compatibility.

@@ -111,6 +111,43 @@ func TestSaveInputReferenceDedupeIsOwnerIsolated(t *testing.T) {
 	}
 }
 
+func TestAccountInputArtifactsUseStrictCanonicalOwnership(t *testing.T) {
+	repo := memory.NewArtifactRepo()
+	store := memory.NewObjectStore()
+	svc := artifactservice.New(repo, store, testBucket)
+	ctx := context.Background()
+	accountID := uuid.New()
+	payload := []byte{0x1, 0x2, 0x3}
+
+	first, err := svc.SaveAccountInputArtifact(ctx, accountID, domain.MediaTypeImage, "image/png", payload)
+	if err != nil {
+		t.Fatalf("save account input: %v", err)
+	}
+	if first.OwnerAccountID != accountID || first.OwnerUserID != uuid.Nil || first.Kind != domain.ArtifactKindInput || first.JobID != nil {
+		t.Fatalf("unexpected account input artifact: %+v", first)
+	}
+
+	second, err := svc.SaveAccountInputArtifact(ctx, accountID, domain.MediaTypeImage, "image/png", payload)
+	if err != nil || second.ID != first.ID {
+		t.Fatalf("account input replay = %+v, %v; want %s, nil", second, err, first.ID)
+	}
+	if _, err := svc.GetArtifactForAccount(ctx, uuid.New(), first.ID); !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("foreign account read error = %v, want ErrNotFound", err)
+	}
+	if got, err := svc.GetArtifactForAccount(ctx, accountID, first.ID); err != nil || got.ID != first.ID {
+		t.Fatalf("owner read = %+v, %v", got, err)
+	}
+
+	legacyOwner := uuid.New()
+	legacy, err := svc.SaveBytesArtifact(ctx, legacyOwner, nil, domain.ArtifactKindInput, domain.MediaTypeImage, "image/png", []byte("legacy"))
+	if err != nil {
+		t.Fatalf("save legacy input: %v", err)
+	}
+	if _, err := repo.GetBySHA256(ctx, legacyOwner, legacy.SHA256); err != nil {
+		t.Fatalf("legacy lookup must retain fallback behavior: %v", err)
+	}
+}
+
 func TestSaveInputReferenceDedupeIgnoresOldPolicy(t *testing.T) {
 	repo := memory.NewArtifactRepo()
 	store := memory.NewObjectStore()

@@ -190,6 +190,38 @@ func (s *Service) SaveBytesArtifactWithMetadataForAccount(ctx context.Context, u
 	return s.saveBytes(ctx, userID, accountID, jobID, kind, mediaType, mimeType, data, metadata)
 }
 
+// SaveAccountInputArtifact stores a browser-neutral account-owned input image.
+// It records no legacy user provenance and has no job link; later preparation
+// may reference it through the strict account-scoped repository APIs.
+func (s *Service) SaveAccountInputArtifact(ctx context.Context, accountID uuid.UUID, mediaType domain.MediaType, mimeType string, data []byte) (*domain.Artifact, error) {
+	if accountID == uuid.Nil {
+		return nil, fmt.Errorf("artifactservice: account id is required")
+	}
+	if mediaType != domain.MediaTypeImage {
+		return nil, fmt.Errorf("artifactservice: account input must be an image")
+	}
+	return s.saveAccountInputBytes(ctx, accountID, mediaType, mimeType, data)
+}
+
+// GetArtifactForAccount returns an artifact only for its exact canonical owner.
+// A foreign or legacy-only artifact is intentionally indistinguishable from a
+// missing one.
+func (s *Service) GetArtifactForAccount(ctx context.Context, accountID, artifactID uuid.UUID) (*domain.Artifact, error) {
+	if accountID == uuid.Nil {
+		return nil, domain.ErrNotFound
+	}
+	return s.repo.GetByIDForAccount(ctx, accountID, artifactID)
+}
+
+// FindReusableInputReferenceForAccount is the strict canonical-owner reuse API
+// for account-native input uploads.
+func (s *Service) FindReusableInputReferenceForAccount(ctx context.Context, accountID uuid.UUID, sha256, mimeType string) (*domain.Artifact, error) {
+	if accountID == uuid.Nil {
+		return nil, domain.ErrNotFound
+	}
+	return s.repo.FindReusableInputReferenceForAccount(ctx, accountID, sha256, ReferenceImageValidationPolicyVersion, mimeType)
+}
+
 // SaveVariantWithMetadata stores a derived rendition of an existing artifact.
 // The variant row is idempotent by (artifact_id, variant_type): retrying the
 // same worker step returns the existing row instead of creating duplicates.
@@ -407,6 +439,46 @@ func (s *Service) saveBytes(ctx context.Context, userID, accountID uuid.UUID, jo
 		return nil, fmt.Errorf("artifactservice: record artifact: %w", err)
 	}
 	span.SetAttributes(attribute.String("artifact.id", artifact.ID.String()))
+	return artifact, nil
+}
+
+func (s *Service) saveAccountInputBytes(ctx context.Context, accountID uuid.UUID, mediaType domain.MediaType, mimeType string, data []byte) (*domain.Artifact, error) {
+	sum := sha256.Sum256(data)
+	sha := hex.EncodeToString(sum[:])
+	lifecycleClass, validationPolicyVersion := classifyArtifact(domain.ArtifactKindInput, mediaType, domain.ArtifactStatusReady)
+	if existing, err := s.repo.FindReusableInputReferenceForAccount(ctx, accountID, sha, validationPolicyVersion, mimeType); err == nil {
+		return existing, nil
+	} else if !errors.Is(err, domain.ErrNotFound) {
+		return nil, err
+	}
+	if s.scanner != nil {
+		if err := s.scanner.Scan(ctx, mediaType, mimeType, data); err != nil {
+			return nil, ContentScanError{Err: err}
+		}
+	}
+	artifactID := uuid.New()
+	key := fmt.Sprintf("artifacts/%s/%s-%s.%s", accountID, artifactID, sha, extFor(mediaType))
+	if err := s.store.Put(ctx, s.bucket, key, data, mimeType); err != nil {
+		return nil, fmt.Errorf("artifactservice: store object: %w", err)
+	}
+	artifact := &domain.Artifact{
+		ID:                      artifactID,
+		OwnerUserID:             uuid.Nil,
+		OwnerAccountID:          accountID,
+		Kind:                    domain.ArtifactKindInput,
+		MediaType:               mediaType,
+		MimeType:                mimeType,
+		StorageBucket:           s.bucket,
+		StorageKey:              key,
+		SHA256:                  sha,
+		ValidationPolicyVersion: validationPolicyVersion,
+		LifecycleClass:          lifecycleClass,
+		SizeBytes:               int64(len(data)),
+		Status:                  domain.ArtifactStatusReady,
+	}
+	if err := s.repo.Create(ctx, artifact); err != nil {
+		return nil, fmt.Errorf("artifactservice: record artifact: %w", err)
+	}
 	return artifact, nil
 }
 

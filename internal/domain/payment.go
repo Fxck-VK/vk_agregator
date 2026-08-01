@@ -149,7 +149,9 @@ func (p PaymentProduct) CurrentCredits() (int64, error) {
 // PaymentIntent is an idempotent attempt to purchase credits. Amount, credits
 // and price version are snapshots from PaymentProduct at creation time.
 type PaymentIntent struct {
-	ID                        uuid.UUID           `json:"id"`
+	ID uuid.UUID `json:"id"`
+	// UserID is legacy payment provenance. uuid.Nil means an account-native
+	// payment has no legacy user provenance; it is not an identity.
 	UserID                    uuid.UUID           `json:"user_id"`
 	AccountID                 uuid.UUID           `json:"account_id,omitempty"`
 	ProductID                 *uuid.UUID          `json:"product_id,omitempty"`

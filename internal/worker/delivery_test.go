@@ -9,12 +9,17 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/prometheus/client_golang/prometheus"
+	dto "github.com/prometheus/client_model/go"
 
 	vkdelivery "vk-ai-aggregator/internal/adapter/delivery/vk"
+	redisqueue "vk-ai-aggregator/internal/adapter/queue/redis"
 	"vk-ai-aggregator/internal/adapter/storage/memory"
 	"vk-ai-aggregator/internal/domain"
+	"vk-ai-aggregator/internal/platform/metrics"
 	"vk-ai-aggregator/internal/platform/queue"
 	"vk-ai-aggregator/internal/service/billingservice"
+	"vk-ai-aggregator/internal/service/resultservice"
 	"vk-ai-aggregator/internal/worker"
 )
 
@@ -22,6 +27,7 @@ type deliveryHarness struct {
 	jobs       *memory.JobRepo
 	deliveries *memory.DeliveryRepo
 	artifacts  *memory.ArtifactRepo
+	moderation *memory.ModerationRepo
 	objects    *memory.ObjectStore
 	vk         *vkdelivery.MockClient
 	uploader   *fakeVKUploader
@@ -35,31 +41,45 @@ func newDeliveryHarness(t *testing.T) *deliveryHarness {
 	jobs := memory.NewJobRepo()
 	deliveries := memory.NewDeliveryRepo()
 	artifacts := memory.NewArtifactRepo()
+	moderation := memory.NewModerationRepo()
 	objects := memory.NewObjectStore()
 	vk := vkdelivery.NewMockClient()
 	uploader := &fakeVKUploader{}
 	billingRpo := memory.NewBillingRepo()
 	billing := billingservice.New(billingRpo, billingservice.WithStartingBalance(1000))
-	dw := worker.NewDeliveryWorker(worker.DeliveryDeps{
-		Jobs:       jobs,
-		Deliveries: deliveries,
-		Artifacts:  artifacts,
-		Objects:    objects,
-		VK:         vk,
-		VKUploader: uploader,
-		Billing:    billing,
-	})
-	return &deliveryHarness{
+	harness := &deliveryHarness{
 		jobs:       jobs,
 		deliveries: deliveries,
 		artifacts:  artifacts,
+		moderation: moderation,
 		objects:    objects,
 		vk:         vk,
 		uploader:   uploader,
 		billingRpo: billingRpo,
 		billing:    billing,
-		worker:     dw,
 	}
+	harness.worker = harness.deliveryWorker(vkdelivery.PublisherDeps{Uploader: uploader}, worker.DeliveryDeps{})
+	return harness
+}
+
+func (h *deliveryHarness) deliveryWorker(publisherDeps vkdelivery.PublisherDeps, workerDeps worker.DeliveryDeps) *worker.DeliveryWorker {
+	publisherDeps.Deliveries = h.deliveries
+	publisherDeps.Artifacts = h.artifacts
+	publisherDeps.Objects = h.objects
+	if publisherDeps.Client == nil {
+		publisherDeps.Client = h.vk
+	}
+	workerDeps.Jobs = h.jobs
+	workerDeps.Deliveries = h.deliveries
+	workerDeps.Artifacts = h.artifacts
+	workerDeps.Publishers = []worker.ExternalPublisher{vkdelivery.NewPublisher(publisherDeps)}
+	if workerDeps.Billing == nil {
+		workerDeps.Billing = h.billing
+	}
+	if workerDeps.Readiness == nil {
+		workerDeps.Readiness = resultservice.New(h.jobs, h.artifacts, h.moderation)
+	}
+	return worker.NewDeliveryWorker(workerDeps)
 }
 
 type fakeVKUploader struct {
@@ -99,6 +119,95 @@ func (s fakeURLSigner) PresignedGetURL(context.Context, string, string, time.Dur
 	return "https://signed-delivery.example/artifact", nil
 }
 
+type failOnceDeliveryBiller struct {
+	inner        worker.DeliveryBiller
+	captureCalls int
+}
+
+func (b *failOnceDeliveryBiller) CaptureForJob(ctx context.Context, jobID uuid.UUID, amount int64) error {
+	b.captureCalls++
+	if b.captureCalls == 1 {
+		return errors.New("capture unavailable")
+	}
+	return b.inner.CaptureForJob(ctx, jobID, amount)
+}
+
+func (b *failOnceDeliveryBiller) ReleaseForJob(ctx context.Context, jobID uuid.UUID) error {
+	return b.inner.ReleaseForJob(ctx, jobID)
+}
+
+type completionReadinessCall struct {
+	accountID uuid.UUID
+	jobID     uuid.UUID
+}
+
+type recordingCompletionReadiness struct {
+	inner worker.CompletionReadiness
+	err   error
+	calls []completionReadinessCall
+}
+
+func (r *recordingCompletionReadiness) RequireCompletionReady(ctx context.Context, accountID, jobID uuid.UUID) error {
+	r.calls = append(r.calls, completionReadinessCall{accountID: accountID, jobID: jobID})
+	if r.err != nil {
+		return r.err
+	}
+	return r.inner.RequireCompletionReady(ctx, accountID, jobID)
+}
+
+type failFailedDeliveryUpdateRepo struct {
+	domain.DeliveryRepository
+	err    error
+	failed bool
+}
+
+func (r *failFailedDeliveryUpdateRepo) Update(ctx context.Context, delivery *domain.Delivery) error {
+	if delivery.Status == domain.DeliveryStatusFailed && !r.failed {
+		r.failed = true
+		return r.err
+	}
+	return r.DeliveryRepository.Update(ctx, delivery)
+}
+
+type failReleaseOnceDeliveryBiller struct {
+	inner        worker.DeliveryBiller
+	err          error
+	releaseCalls int
+}
+
+func (b *failReleaseOnceDeliveryBiller) CaptureForJob(ctx context.Context, jobID uuid.UUID, amount int64) error {
+	return b.inner.CaptureForJob(ctx, jobID, amount)
+}
+
+func (b *failReleaseOnceDeliveryBiller) ReleaseForJob(ctx context.Context, jobID uuid.UUID) error {
+	b.releaseCalls++
+	if b.releaseCalls == 1 {
+		return b.err
+	}
+	return b.inner.ReleaseForJob(ctx, jobID)
+}
+
+type failTerminalStatusOnceJobRepo struct {
+	domain.JobRepository
+	err      error
+	attempts int
+}
+
+func (r *failTerminalStatusOnceJobRepo) UpdateStatus(
+	ctx context.Context,
+	id uuid.UUID,
+	from, to domain.JobStatus,
+	errCode, errMessage string,
+) error {
+	if to == domain.JobStatusFailedTerminal {
+		r.attempts++
+		if r.attempts == 1 {
+			return r.err
+		}
+	}
+	return r.JobRepository.UpdateStatus(ctx, id, from, to, errCode, errMessage)
+}
+
 // resultReadyJob creates a user account, reserves credits, stores an output
 // artifact and a job in result_ready, returning the job.
 func (h *deliveryHarness) resultReadyJob(t *testing.T, mediaType domain.MediaType, body string) *domain.Job {
@@ -116,7 +225,11 @@ func (h *deliveryHarness) resultReadyJobWithCost(t *testing.T, mediaType domain.
 	job := &domain.Job{
 		ID:              uuid.New(),
 		UserID:          userID,
+		AccountID:       userID,
+		Source:          "vk",
 		VKPeerID:        555,
+		ResultMode:      domain.ResultModeExternalPush,
+		DeliveryTarget:  &domain.DeliveryTarget{Channel: domain.ChannelVKBot, RecipientRef: "555"},
 		OperationType:   domain.OperationImageGenerate,
 		Modality:        domain.ModalityImage,
 		Status:          domain.JobStatusResultReady,
@@ -132,15 +245,16 @@ func (h *deliveryHarness) resultReadyJobWithCost(t *testing.T, mediaType domain.
 	}
 
 	art := &domain.Artifact{
-		ID:            uuid.New(),
-		OwnerUserID:   userID,
-		JobID:         &job.ID,
-		Kind:          domain.ArtifactKindOutput,
-		MediaType:     mediaType,
-		StorageBucket: "artifacts",
-		StorageKey:    "k/" + job.ID.String(),
-		SHA256:        uuid.NewString(),
-		Status:        domain.ArtifactStatusReady,
+		ID:             uuid.New(),
+		OwnerUserID:    userID,
+		OwnerAccountID: userID,
+		JobID:          &job.ID,
+		Kind:           domain.ArtifactKindOutput,
+		MediaType:      mediaType,
+		StorageBucket:  "artifacts",
+		StorageKey:     "k/" + job.ID.String(),
+		SHA256:         uuid.NewString(),
+		Status:         domain.ArtifactStatusReady,
 	}
 	if err := h.artifacts.Create(ctx, art); err != nil {
 		t.Fatalf("create artifact: %v", err)
@@ -149,6 +263,16 @@ func (h *deliveryHarness) resultReadyJobWithCost(t *testing.T, mediaType domain.
 	job.OutputArtifactIDs = []uuid.UUID{art.ID}
 	if err := h.jobs.Update(ctx, job); err != nil {
 		t.Fatalf("attach artifact: %v", err)
+	}
+	artifactID := art.ID
+	if err := h.moderation.Create(ctx, &domain.ModerationResult{
+		JobID:      job.ID,
+		ArtifactID: &artifactID,
+		Stage:      domain.ModerationStageOutput,
+		Decision:   domain.ModerationAllow,
+		Provider:   "test",
+	}); err != nil {
+		t.Fatalf("create output moderation verdict: %v", err)
 	}
 	return job
 }
@@ -307,6 +431,8 @@ func TestDeliveryMiniAppJobCapturesWithoutVKSend(t *testing.T) {
 	ctx := context.Background()
 	job := h.resultReadyJob(t, domain.MediaTypeText, "generated answer")
 	job.Source = "miniapp"
+	job.ResultMode = domain.ResultModeAccountHistory
+	job.DeliveryTarget = nil
 	job.OperationType = domain.OperationTextGenerate
 	job.Modality = domain.ModalityText
 	if err := h.jobs.Update(ctx, job); err != nil {
@@ -334,20 +460,852 @@ func TestDeliveryMiniAppJobCapturesWithoutVKSend(t *testing.T) {
 	if balance := h.balance(t, job.UserID); balance != 990 {
 		t.Fatalf("balance = %d, want 990", balance)
 	}
+	if err := h.worker.Process(ctx, deliveryTask(job)); err != nil {
+		t.Fatalf("repeat process: %v", err)
+	}
+	if captures := h.captureEntryCount(t, job.UserID); captures != 1 {
+		t.Fatalf("capture entries after repeat = %d, want 1", captures)
+	}
+}
+
+func TestDeliveryWebAccountHistoryCapturesWithoutVKSendOrDelivery(t *testing.T) {
+	h := newDeliveryHarness(t)
+	ctx := context.Background()
+	job := h.resultReadyJob(t, domain.MediaTypeImage, "generated image")
+	job.Source = "web"
+	job.ResultMode = domain.ResultModeAccountHistory
+	job.DeliveryTarget = nil
+	if err := h.jobs.Update(ctx, job); err != nil {
+		t.Fatalf("update job: %v", err)
+	}
+
+	if err := h.worker.Process(ctx, deliveryTask(job)); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+	if err := h.worker.Process(ctx, deliveryTask(job)); err != nil {
+		t.Fatalf("repeat process: %v", err)
+	}
+
+	got, err := h.jobs.GetByID(ctx, job.ID)
+	if err != nil {
+		t.Fatalf("reload job: %v", err)
+	}
+	if got.Status != domain.JobStatusSucceeded || got.CostCaptured != 10 {
+		t.Fatalf("account-history job = %+v, want one capture and succeeded", got)
+	}
+	if sent := h.vk.Sent(); len(sent) != 0 {
+		t.Fatalf("account-history job must not send VK messages, got %+v", sent)
+	}
+	deliveries, err := h.deliveries.ListByJob(ctx, job.ID)
+	if err != nil {
+		t.Fatalf("list deliveries: %v", err)
+	}
+	if len(deliveries) != 0 {
+		t.Fatalf("account-history job must not create delivery rows, got %+v", deliveries)
+	}
+	if captures := h.captureEntryCount(t, job.UserID); captures != 1 {
+		t.Fatalf("capture entries = %d, want 1", captures)
+	}
+}
+
+func TestDeliveryAccountHistoryCaptureFailureStaysResultReadyAndRetries(t *testing.T) {
+	h := newDeliveryHarness(t)
+	biller := &failOnceDeliveryBiller{inner: h.billing}
+	h.worker = h.deliveryWorker(vkdelivery.PublisherDeps{Uploader: h.uploader}, worker.DeliveryDeps{Billing: biller})
+	ctx := context.Background()
+	job := h.resultReadyJob(t, domain.MediaTypeImage, "generated image")
+	job.ResultMode = domain.ResultModeAccountHistory
+	job.DeliveryTarget = nil
+	if err := h.jobs.Update(ctx, job); err != nil {
+		t.Fatalf("update job: %v", err)
+	}
+
+	if err := h.worker.Process(ctx, deliveryTask(job)); err == nil {
+		t.Fatal("expected capture error")
+	}
+	got, err := h.jobs.GetByID(ctx, job.ID)
+	if err != nil {
+		t.Fatalf("reload job: %v", err)
+	}
+	if got.Status != domain.JobStatusResultReady || got.CostCaptured != 0 {
+		t.Fatalf("job after failed capture = %+v, want result_ready without capture", got)
+	}
+	deliveries, _ := h.deliveries.ListByJob(ctx, job.ID)
+	if len(deliveries) != 0 || len(h.vk.Sent()) != 0 {
+		t.Fatalf("capture failure created external work: deliveries=%+v sends=%+v", deliveries, h.vk.Sent())
+	}
+
+	if err := h.worker.Process(ctx, deliveryTask(job)); err != nil {
+		t.Fatalf("capture retry: %v", err)
+	}
+	got, _ = h.jobs.GetByID(ctx, job.ID)
+	if got.Status != domain.JobStatusSucceeded || got.CostCaptured != 10 {
+		t.Fatalf("job after capture retry = %+v, want succeeded", got)
+	}
+	if biller.captureCalls != 2 || h.captureEntryCount(t, job.UserID) != 1 {
+		t.Fatalf("capture attempts/entries = %d/%d, want 2/1", biller.captureCalls, h.captureEntryCount(t, job.UserID))
+	}
+}
+
+func TestDeliveryAccountHistoryRequiresOwnedReadyMediaArtifact(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*deliveryHarness, *domain.Job)
+	}{
+		{
+			name: "missing output link",
+			mutate: func(_ *deliveryHarness, job *domain.Job) {
+				job.OutputArtifactIDs = nil
+			},
+		},
+		{
+			name: "foreign artifact",
+			mutate: func(h *deliveryHarness, job *domain.Job) {
+				artifact, err := h.artifacts.GetByID(context.Background(), job.OutputArtifactIDs[0])
+				if err != nil {
+					t.Fatalf("get artifact: %v", err)
+				}
+				artifact.OwnerAccountID = uuid.New()
+				if err := h.artifacts.Update(context.Background(), artifact); err != nil {
+					t.Fatalf("make artifact foreign: %v", err)
+				}
+			},
+		},
+		{
+			name: "non-ready artifact",
+			mutate: func(h *deliveryHarness, job *domain.Job) {
+				artifact, err := h.artifacts.GetByID(context.Background(), job.OutputArtifactIDs[0])
+				if err != nil {
+					t.Fatalf("get artifact: %v", err)
+				}
+				artifact.Status = domain.ArtifactStatusStored
+				if err := h.artifacts.Update(context.Background(), artifact); err != nil {
+					t.Fatalf("mark artifact non-ready: %v", err)
+				}
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			h := newDeliveryHarness(t)
+			ctx := context.Background()
+			job := h.resultReadyJob(t, domain.MediaTypeImage, "generated image")
+			job.ResultMode = domain.ResultModeAccountHistory
+			job.DeliveryTarget = nil
+			test.mutate(h, job)
+			if err := h.jobs.Update(ctx, job); err != nil {
+				t.Fatalf("update job: %v", err)
+			}
+
+			if err := h.worker.Process(ctx, deliveryTask(job)); err == nil {
+				t.Fatal("expected unsafe account-history result to fail closed")
+			}
+			got, _ := h.jobs.GetByID(ctx, job.ID)
+			deliveries, _ := h.deliveries.ListByJob(ctx, job.ID)
+			if got.Status != domain.JobStatusResultReady ||
+				got.CostCaptured != 0 ||
+				len(deliveries) != 0 ||
+				len(h.vk.Sent()) != 0 ||
+				h.captureEntryCount(t, job.UserID) != 0 {
+				t.Fatalf("unsafe result mutated finalization: job=%+v deliveries=%+v sends=%+v", got, deliveries, h.vk.Sent())
+			}
+		})
+	}
+}
+
+func TestDeliveryAccountHistoryRejectsTextWithoutArtifact(t *testing.T) {
+	h := newDeliveryHarness(t)
+	ctx := context.Background()
+	job := h.resultReadyJob(t, domain.MediaTypeText, "generated answer")
+	job.ResultMode = domain.ResultModeAccountHistory
+	job.DeliveryTarget = nil
+	job.OperationType = domain.OperationTextGenerate
+	job.Modality = domain.ModalityText
+	job.OutputArtifactIDs = nil
+	if err := h.jobs.Update(ctx, job); err != nil {
+		t.Fatalf("update job: %v", err)
+	}
+
+	if err := h.worker.Process(ctx, deliveryTask(job)); err == nil {
+		t.Fatal("expected text result without durable artifact to fail closed")
+	}
+	got, _ := h.jobs.GetByID(ctx, job.ID)
+	if got.Status != domain.JobStatusResultReady || got.CostCaptured != 0 || len(h.vk.Sent()) != 0 || h.captureEntryCount(t, job.UserID) != 0 {
+		t.Fatalf("text account-history finalization = %+v sends=%+v", got, h.vk.Sent())
+	}
+}
+
+func TestDeliveryExternalResultReadinessFailsClosedBeforeSideEffects(t *testing.T) {
+	tests := []struct {
+		name          string
+		prepare       func(*deliveryHarness) (*domain.Job, worker.CompletionReadiness)
+		readinessCall int
+		metricReason  string
+	}{
+		{
+			name: "missing account owner",
+			prepare: func(h *deliveryHarness) (*domain.Job, worker.CompletionReadiness) {
+				ctx := context.Background()
+				job := &domain.Job{
+					ID:             uuid.New(),
+					ResultMode:     domain.ResultModeExternalPush,
+					DeliveryTarget: &domain.DeliveryTarget{Channel: domain.ChannelVKBot, RecipientRef: "555"},
+					OperationType:  domain.OperationTextGenerate,
+					Modality:       domain.ModalityText,
+					Status:         domain.JobStatusResultReady,
+					IdempotencyKey: "job:" + uuid.NewString(),
+				}
+				if err := h.jobs.Create(ctx, job); err != nil {
+					t.Fatalf("create accountless job: %v", err)
+				}
+				artifact := &domain.Artifact{
+					ID:            uuid.New(),
+					JobID:         &job.ID,
+					Kind:          domain.ArtifactKindOutput,
+					MediaType:     domain.MediaTypeText,
+					StorageBucket: "artifacts",
+					StorageKey:    "k/" + job.ID.String(),
+					SHA256:        uuid.NewString(),
+					Status:        domain.ArtifactStatusReady,
+				}
+				if err := h.artifacts.Create(ctx, artifact); err != nil {
+					t.Fatalf("create accountless artifact: %v", err)
+				}
+				job.OutputArtifactIDs = []uuid.UUID{artifact.ID}
+				if err := h.jobs.Update(ctx, job); err != nil {
+					t.Fatalf("attach accountless artifact: %v", err)
+				}
+				artifactID := artifact.ID
+				if err := h.moderation.Create(ctx, &domain.ModerationResult{
+					JobID:      job.ID,
+					ArtifactID: &artifactID,
+					Stage:      domain.ModerationStageOutput,
+					Decision:   domain.ModerationAllow,
+					Provider:   "test",
+				}); err != nil {
+					t.Fatalf("moderate accountless artifact: %v", err)
+				}
+				return job, &recordingCompletionReadiness{
+					inner: resultservice.New(h.jobs, h.artifacts, h.moderation),
+				}
+			},
+			metricReason: "missing_owner",
+		},
+		{
+			name: "missing output",
+			prepare: func(h *deliveryHarness) (*domain.Job, worker.CompletionReadiness) {
+				ctx := context.Background()
+				job := h.resultReadyJob(t, domain.MediaTypeText, "generated answer")
+				job.OperationType = domain.OperationTextGenerate
+				job.Modality = domain.ModalityText
+				job.OutputArtifactIDs = nil
+				if err := h.jobs.Update(ctx, job); err != nil {
+					t.Fatalf("remove output link: %v", err)
+				}
+				return job, &recordingCompletionReadiness{
+					inner: resultservice.New(h.jobs, h.artifacts, h.moderation),
+				}
+			},
+			readinessCall: 1,
+			metricReason:  "incomplete",
+		},
+		{
+			name: "missing output moderation",
+			prepare: func(h *deliveryHarness) (*domain.Job, worker.CompletionReadiness) {
+				job := h.resultReadyJob(t, domain.MediaTypeImage, "generated image")
+				return job, &recordingCompletionReadiness{
+					inner: resultservice.New(h.jobs, h.artifacts, memory.NewModerationRepo()),
+				}
+			},
+			readinessCall: 1,
+			metricReason:  "incomplete",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			h := newDeliveryHarness(t)
+			ctx := context.Background()
+			job, readiness := test.prepare(h)
+			readinessFailuresBefore := deliveryCounterValue(
+				t,
+				metrics.FinalizationReadinessFailures,
+				"external_push",
+				test.metricReason,
+			)
+			h.worker = h.deliveryWorker(
+				vkdelivery.PublisherDeps{Uploader: h.uploader},
+				worker.DeliveryDeps{Readiness: readiness},
+			)
+
+			err := h.worker.Process(ctx, deliveryTask(job))
+			if err == nil {
+				t.Fatal("Process succeeded without durable result")
+			}
+			got, reloadErr := h.jobs.GetByID(ctx, job.ID)
+			if reloadErr != nil {
+				t.Fatalf("reload job: %v", reloadErr)
+			}
+			if got.Status != domain.JobStatusResultReady || got.CostCaptured != 0 {
+				t.Fatalf("job = %+v, want unchanged result_ready and no capture", got)
+			}
+			deliveries, listErr := h.deliveries.ListByJob(ctx, job.ID)
+			if listErr != nil {
+				t.Fatalf("list deliveries: %v", listErr)
+			}
+			if len(h.vk.Sent()) != 0 || len(deliveries) != 0 {
+				t.Fatal("unsafe external result created delivery side effects")
+			}
+			recorder := readiness.(*recordingCompletionReadiness)
+			if len(recorder.calls) != test.readinessCall {
+				t.Fatalf("readiness calls = %+v, want %d", recorder.calls, test.readinessCall)
+			}
+			if got := deliveryCounterValue(
+				t,
+				metrics.FinalizationReadinessFailures,
+				"external_push",
+				test.metricReason,
+			); got != readinessFailuresBefore+1 {
+				t.Fatalf("readiness failure metric = %v, want %v", got, readinessFailuresBefore+1)
+			}
+		})
+	}
+}
+
+func TestDeliveryExternalResultReadinessAllowsOnePublishAndCapture(t *testing.T) {
+	h := newDeliveryHarness(t)
+	ctx := context.Background()
+	job := h.resultReadyJob(t, domain.MediaTypeImage, "generated image")
+	readiness := &recordingCompletionReadiness{
+		inner: resultservice.New(h.jobs, h.artifacts, h.moderation),
+	}
+	h.worker = h.deliveryWorker(
+		vkdelivery.PublisherDeps{Uploader: h.uploader},
+		worker.DeliveryDeps{Readiness: readiness},
+	)
+	captureLatencyBefore := deliveryHistogramCount(
+		t,
+		metrics.ResultFinalizationCaptureDuration,
+		"external_push",
+	)
+
+	if err := h.worker.Process(ctx, deliveryTask(job)); err != nil {
+		t.Fatalf("process completion-ready external result: %v", err)
+	}
+	got, err := h.jobs.GetByID(ctx, job.ID)
+	if err != nil {
+		t.Fatalf("reload job: %v", err)
+	}
+	deliveries, err := h.deliveries.ListByJob(ctx, job.ID)
+	if err != nil {
+		t.Fatalf("list deliveries: %v", err)
+	}
+	if len(readiness.calls) != 1 ||
+		readiness.calls[0].accountID != job.AccountID ||
+		readiness.calls[0].jobID != job.ID {
+		t.Fatalf("readiness calls = %+v, want exact account/job pair", readiness.calls)
+	}
+	if got.Status != domain.JobStatusSucceeded ||
+		got.CostCaptured != 10 ||
+		len(h.vk.Sent()) != 1 ||
+		len(deliveries) != 1 ||
+		h.captureEntryCount(t, job.UserID) != 1 {
+		t.Fatalf("completed external finalization: job=%+v sends=%+v deliveries=%+v", got, h.vk.Sent(), deliveries)
+	}
+	if got := deliveryHistogramCount(
+		t,
+		metrics.ResultFinalizationCaptureDuration,
+		"external_push",
+	); got != captureLatencyBefore+1 {
+		t.Fatalf("capture latency samples = %d, want %d", got, captureLatencyBefore+1)
+	}
+}
+
+func TestDeliveryExternalFailureNoticeSkipsReadinessAndCapture(t *testing.T) {
+	h := newDeliveryHarness(t)
+	readiness := &recordingCompletionReadiness{err: errors.New("readiness must not be called")}
+	biller := &failOnceDeliveryBiller{inner: h.billing}
+	h.worker = h.deliveryWorker(
+		vkdelivery.PublisherDeps{Uploader: h.uploader},
+		worker.DeliveryDeps{Readiness: readiness, Billing: biller},
+	)
+	ctx := context.Background()
+	job := &domain.Job{
+		ID:             uuid.New(),
+		AccountID:      uuid.New(),
+		ResultMode:     domain.ResultModeExternalPush,
+		DeliveryTarget: &domain.DeliveryTarget{Channel: domain.ChannelVKBot, RecipientRef: "555"},
+		OperationType:  domain.OperationImageGenerate,
+		Modality:       domain.ModalityImage,
+		Status:         domain.JobStatusFailedTerminal,
+		IdempotencyKey: "job:" + uuid.NewString(),
+		CostReserved:   10,
+		ErrorCode:      string(domain.ProviderErrInternal),
+		ErrorMessage:   "provider failed",
+	}
+	if err := h.jobs.Create(ctx, job); err != nil {
+		t.Fatalf("create terminal job: %v", err)
+	}
+
+	if err := h.worker.Process(ctx, deliveryTask(job)); err != nil {
+		t.Fatalf("process terminal failure notice: %v", err)
+	}
+	got, err := h.jobs.GetByID(ctx, job.ID)
+	if err != nil {
+		t.Fatalf("reload job: %v", err)
+	}
+	deliveries, err := h.deliveries.ListByJob(ctx, job.ID)
+	if err != nil {
+		t.Fatalf("list deliveries: %v", err)
+	}
+	if len(readiness.calls) != 0 || biller.captureCalls != 0 {
+		t.Fatalf("failure notice called readiness/capture: readiness=%+v capture=%d", readiness.calls, biller.captureCalls)
+	}
+	if got.Status != domain.JobStatusFailedTerminal ||
+		got.CostCaptured != 0 ||
+		len(h.vk.Sent()) != 1 ||
+		len(deliveries) != 1 {
+		t.Fatalf("failure notice finalization: job=%+v sends=%+v deliveries=%+v", got, h.vk.Sent(), deliveries)
+	}
+}
+
+func TestDeliveryExternalAccountlessDeliveringReplayFailsBeforeSideEffects(t *testing.T) {
+	h := newDeliveryHarness(t)
+	readiness := &recordingCompletionReadiness{err: errors.New("readiness must not be called")}
+	biller := &failOnceDeliveryBiller{inner: h.billing}
+	h.worker = h.deliveryWorker(
+		vkdelivery.PublisherDeps{Uploader: h.uploader},
+		worker.DeliveryDeps{Readiness: readiness, Billing: biller},
+	)
+	ctx := context.Background()
+	job := &domain.Job{
+		ID:             uuid.New(),
+		ResultMode:     domain.ResultModeExternalPush,
+		DeliveryTarget: &domain.DeliveryTarget{Channel: domain.ChannelVKBot, RecipientRef: "555"},
+		OperationType:  domain.OperationTextGenerate,
+		Modality:       domain.ModalityText,
+		Status:         domain.JobStatusDelivering,
+		IdempotencyKey: "job:" + uuid.NewString(),
+		CostReserved:   10,
+	}
+	if err := h.jobs.Create(ctx, job); err != nil {
+		t.Fatalf("create accountless delivering job: %v", err)
+	}
+	artifact := &domain.Artifact{
+		ID:            uuid.New(),
+		JobID:         &job.ID,
+		Kind:          domain.ArtifactKindOutput,
+		MediaType:     domain.MediaTypeText,
+		StorageBucket: "artifacts",
+		StorageKey:    "k/" + job.ID.String(),
+		SHA256:        uuid.NewString(),
+		Status:        domain.ArtifactStatusReady,
+	}
+	if err := h.artifacts.Create(ctx, artifact); err != nil {
+		t.Fatalf("create accountless output: %v", err)
+	}
+	job.OutputArtifactIDs = []uuid.UUID{artifact.ID}
+	if err := h.jobs.Update(ctx, job); err != nil {
+		t.Fatalf("attach accountless output: %v", err)
+	}
+	key := "delivery:" + job.ID.String()
+	existing := &domain.Delivery{
+		JobID:          job.ID,
+		VKPeerID:       555,
+		Type:           domain.DeliveryTypeMessage,
+		Status:         domain.DeliveryStatusPending,
+		VKRandomID:     vkdelivery.DeterministicRandomID(key),
+		IdempotencyKey: key,
+		AttemptNo:      1,
+		Text:           "must not send",
+	}
+	if err := h.deliveries.Create(ctx, existing); err != nil {
+		t.Fatalf("create accountless delivery replay: %v", err)
+	}
+
+	err := h.worker.Process(ctx, deliveryTask(job))
+	if !errors.Is(err, domain.ErrInvalidResultContract) {
+		t.Fatalf("process error = %v, want invalid result contract", err)
+	}
+	gotJob, _ := h.jobs.GetByID(ctx, job.ID)
+	gotDelivery, _ := h.deliveries.GetByID(ctx, existing.ID)
+	if len(readiness.calls) != 0 ||
+		biller.captureCalls != 0 ||
+		len(h.vk.Sent()) != 0 ||
+		gotJob.Status != domain.JobStatusDelivering ||
+		gotJob.CostCaptured != 0 ||
+		gotDelivery.AccountID != uuid.Nil ||
+		gotDelivery.Target != nil ||
+		gotDelivery.Status != domain.DeliveryStatusPending ||
+		gotDelivery.AttemptNo != 1 {
+		t.Fatalf(
+			"accountless delivering replay consumed side effects: job=%+v delivery=%+v readiness=%+v capture=%d sends=%+v",
+			gotJob,
+			gotDelivery,
+			readiness.calls,
+			biller.captureCalls,
+			h.vk.Sent(),
+		)
+	}
+}
+
+func TestDeliveryExternalAccountlessTerminalFailureFailsBeforeNoticeSideEffects(t *testing.T) {
+	h := newDeliveryHarness(t)
+	readiness := &recordingCompletionReadiness{err: errors.New("readiness must not be called")}
+	biller := &failOnceDeliveryBiller{inner: h.billing}
+	h.worker = h.deliveryWorker(
+		vkdelivery.PublisherDeps{Uploader: h.uploader},
+		worker.DeliveryDeps{Readiness: readiness, Billing: biller},
+	)
+	ctx := context.Background()
+	job := &domain.Job{
+		ID:             uuid.New(),
+		ResultMode:     domain.ResultModeExternalPush,
+		DeliveryTarget: &domain.DeliveryTarget{Channel: domain.ChannelVKBot, RecipientRef: "555"},
+		OperationType:  domain.OperationImageGenerate,
+		Modality:       domain.ModalityImage,
+		Status:         domain.JobStatusFailedTerminal,
+		IdempotencyKey: "job:" + uuid.NewString(),
+		CostReserved:   10,
+		ErrorCode:      string(domain.ProviderErrInternal),
+		ErrorMessage:   "provider failed",
+	}
+	if err := h.jobs.Create(ctx, job); err != nil {
+		t.Fatalf("create accountless terminal job: %v", err)
+	}
+
+	err := h.worker.Process(ctx, deliveryTask(job))
+	if !errors.Is(err, domain.ErrInvalidResultContract) {
+		t.Fatalf("process error = %v, want invalid result contract", err)
+	}
+	got, _ := h.jobs.GetByID(ctx, job.ID)
+	deliveries, _ := h.deliveries.ListByJob(ctx, job.ID)
+	if len(readiness.calls) != 0 ||
+		biller.captureCalls != 0 ||
+		len(h.vk.Sent()) != 0 ||
+		len(deliveries) != 0 ||
+		got.Status != domain.JobStatusFailedTerminal ||
+		got.CostCaptured != 0 {
+		t.Fatalf(
+			"accountless terminal notice consumed side effects: job=%+v deliveries=%+v readiness=%+v capture=%d sends=%+v",
+			got,
+			deliveries,
+			readiness.calls,
+			biller.captureCalls,
+			h.vk.Sent(),
+		)
+	}
+}
+
+func TestDeliveryExternalDeliveringReadinessRejectsPendingAndRetryingBeforePublishOrReconciliation(t *testing.T) {
+	for _, status := range []domain.DeliveryStatus{
+		domain.DeliveryStatusPending,
+		domain.DeliveryStatusRetrying,
+	} {
+		t.Run(string(status), func(t *testing.T) {
+			h := newDeliveryHarness(t)
+			ctx := context.Background()
+			job := h.resultReadyJob(t, domain.MediaTypeText, "generated answer")
+			if err := h.jobs.UpdateStatus(
+				ctx,
+				job.ID,
+				domain.JobStatusResultReady,
+				domain.JobStatusDelivering,
+				"",
+				"",
+			); err != nil {
+				t.Fatalf("mark job delivering: %v", err)
+			}
+			readinessErr := errors.New("durable result unavailable")
+			readiness := &recordingCompletionReadiness{err: readinessErr}
+			biller := &failOnceDeliveryBiller{inner: h.billing}
+			h.worker = h.deliveryWorker(
+				vkdelivery.PublisherDeps{Uploader: h.uploader},
+				worker.DeliveryDeps{Readiness: readiness, Billing: biller},
+			)
+			key := "delivery:" + job.ID.String()
+			existing := &domain.Delivery{
+				JobID:          job.ID,
+				UserID:         job.UserID,
+				VKPeerID:       555,
+				Type:           domain.DeliveryTypeMessage,
+				Status:         status,
+				VKRandomID:     vkdelivery.DeterministicRandomID(key),
+				IdempotencyKey: key,
+				AttemptNo:      2,
+				Text:           "must not send",
+			}
+			if err := h.deliveries.Create(ctx, existing); err != nil {
+				t.Fatalf("create delivery replay: %v", err)
+			}
+
+			err := h.worker.Process(ctx, deliveryTask(job))
+			if !errors.Is(err, readinessErr) {
+				t.Fatalf("process error = %v, want readiness rejection", err)
+			}
+			gotJob, _ := h.jobs.GetByID(ctx, job.ID)
+			gotDelivery, _ := h.deliveries.GetByID(ctx, existing.ID)
+			if len(readiness.calls) != 1 ||
+				readiness.calls[0].accountID != job.AccountID ||
+				readiness.calls[0].jobID != job.ID ||
+				biller.captureCalls != 0 ||
+				len(h.vk.Sent()) != 0 ||
+				gotJob.Status != domain.JobStatusDelivering ||
+				gotJob.CostCaptured != 0 ||
+				gotDelivery.AccountID != uuid.Nil ||
+				gotDelivery.Target != nil ||
+				gotDelivery.Status != status ||
+				gotDelivery.AttemptNo != 2 {
+				t.Fatalf(
+					"rejected delivering replay consumed side effects: job=%+v delivery=%+v readiness=%+v capture=%d sends=%+v",
+					gotJob,
+					gotDelivery,
+					readiness.calls,
+					biller.captureCalls,
+					h.vk.Sent(),
+				)
+			}
+		})
+	}
+}
+
+func TestDeliveryExternalDeliveringReadinessRejectsSentBeforeCapture(t *testing.T) {
+	h := newDeliveryHarness(t)
+	ctx := context.Background()
+	job := h.resultReadyJob(t, domain.MediaTypeImage, "generated image")
+	if err := h.jobs.UpdateStatus(
+		ctx,
+		job.ID,
+		domain.JobStatusResultReady,
+		domain.JobStatusDelivering,
+		"",
+		"",
+	); err != nil {
+		t.Fatalf("mark job delivering: %v", err)
+	}
+	readinessErr := errors.New("durable result unavailable")
+	readiness := &recordingCompletionReadiness{err: readinessErr}
+	biller := &failOnceDeliveryBiller{inner: h.billing}
+	h.worker = h.deliveryWorker(
+		vkdelivery.PublisherDeps{Uploader: h.uploader},
+		worker.DeliveryDeps{Readiness: readiness, Billing: biller},
+	)
+	key := "delivery:" + job.ID.String()
+	existing := &domain.Delivery{
+		JobID:          job.ID,
+		UserID:         job.UserID,
+		AccountID:      job.AccountID,
+		VKPeerID:       555,
+		Target:         &domain.DeliveryTarget{Channel: domain.ChannelVKBot, RecipientRef: "555"},
+		Type:           domain.DeliveryTypePhoto,
+		Status:         domain.DeliveryStatusSent,
+		VKRandomID:     vkdelivery.DeterministicRandomID(key),
+		IdempotencyKey: key,
+		AttemptNo:      1,
+	}
+	if err := h.deliveries.Create(ctx, existing); err != nil {
+		t.Fatalf("create sent delivery replay: %v", err)
+	}
+
+	err := h.worker.Process(ctx, deliveryTask(job))
+	if !errors.Is(err, readinessErr) {
+		t.Fatalf("process error = %v, want readiness rejection", err)
+	}
+	gotJob, _ := h.jobs.GetByID(ctx, job.ID)
+	gotDelivery, _ := h.deliveries.GetByID(ctx, existing.ID)
+	if len(readiness.calls) != 1 ||
+		readiness.calls[0].accountID != job.AccountID ||
+		readiness.calls[0].jobID != job.ID ||
+		biller.captureCalls != 0 ||
+		h.captureEntryCount(t, job.UserID) != 0 ||
+		len(h.vk.Sent()) != 0 ||
+		gotJob.Status != domain.JobStatusDelivering ||
+		gotJob.CostCaptured != 0 ||
+		gotDelivery.Status != domain.DeliveryStatusSent ||
+		gotDelivery.AttemptNo != 1 {
+		t.Fatalf(
+			"rejected sent replay consumed capture: job=%+v delivery=%+v readiness=%+v capture=%d sends=%+v",
+			gotJob,
+			gotDelivery,
+			readiness.calls,
+			biller.captureCalls,
+			h.vk.Sent(),
+		)
+	}
+}
+
+func TestDeliveryExternalPushCaptureRetryDoesNotRepublish(t *testing.T) {
+	h := newDeliveryHarness(t)
+	biller := &failOnceDeliveryBiller{inner: h.billing}
+	h.worker = h.deliveryWorker(vkdelivery.PublisherDeps{Uploader: h.uploader}, worker.DeliveryDeps{Billing: biller})
+	ctx := context.Background()
+	job := h.resultReadyJob(t, domain.MediaTypeImage, "generated image")
+
+	if err := h.worker.Process(ctx, deliveryTask(job)); err == nil {
+		t.Fatal("expected capture error after successful publication")
+	}
+	got, _ := h.jobs.GetByID(ctx, job.ID)
+	if got.Status != domain.JobStatusDelivering || got.CostCaptured != 0 {
+		t.Fatalf("job after failed capture = %+v, want delivering without capture", got)
+	}
+	deliveries, _ := h.deliveries.ListByJob(ctx, job.ID)
+	if len(deliveries) != 1 || deliveries[0].Status != domain.DeliveryStatusSent || len(h.vk.Sent()) != 1 {
+		t.Fatalf("publication was not persisted exactly once: deliveries=%+v sends=%+v", deliveries, h.vk.Sent())
+	}
+
+	if err := h.worker.Process(ctx, deliveryTask(job)); err != nil {
+		t.Fatalf("capture retry: %v", err)
+	}
+	got, _ = h.jobs.GetByID(ctx, job.ID)
+	if got.Status != domain.JobStatusSucceeded || got.CostCaptured != 10 {
+		t.Fatalf("job after capture retry = %+v, want succeeded", got)
+	}
+	if len(h.vk.Sent()) != 1 || h.captureEntryCount(t, job.UserID) != 1 {
+		t.Fatalf("capture retry duplicated side effects: sends=%d captures=%d", len(h.vk.Sent()), h.captureEntryCount(t, job.UserID))
+	}
+}
+
+func TestDeliveryInvalidAndLegacyContractsFailWithoutMutation(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*domain.Job)
+	}{
+		{
+			name: "malformed VK target",
+			mutate: func(job *domain.Job) {
+				job.DeliveryTarget.RecipientRef = "not-a-peer"
+			},
+		},
+		{
+			name: "legacy unknown",
+			mutate: func(job *domain.Job) {
+				job.ResultMode = domain.ResultModeLegacyUnknown
+				job.DeliveryTarget = nil
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			h := newDeliveryHarness(t)
+			ctx := context.Background()
+			job := h.resultReadyJob(t, domain.MediaTypeImage, "generated image")
+			test.mutate(job)
+			if err := h.jobs.Update(ctx, job); err != nil {
+				t.Fatalf("update job: %v", err)
+			}
+
+			if err := h.worker.Process(ctx, deliveryTask(job)); err == nil {
+				t.Fatal("expected fail-closed finalization error")
+			}
+			got, _ := h.jobs.GetByID(ctx, job.ID)
+			deliveries, _ := h.deliveries.ListByJob(ctx, job.ID)
+			if got.Status != domain.JobStatusResultReady ||
+				got.CostCaptured != 0 ||
+				len(deliveries) != 0 ||
+				len(h.vk.Sent()) != 0 ||
+				h.captureEntryCount(t, job.UserID) != 0 ||
+				h.releaseEntryCount(t, job.UserID) != 0 {
+				t.Fatalf("invalid contract mutated finalization state: job=%+v deliveries=%+v sends=%+v", got, deliveries, h.vk.Sent())
+			}
+		})
+	}
+}
+
+func TestDeliveryAccountHistoryTerminalFailureDoesNotPublishNotice(t *testing.T) {
+	h := newDeliveryHarness(t)
+	ctx := context.Background()
+	job := h.resultReadyJob(t, domain.MediaTypeImage, "generated image")
+	job.ResultMode = domain.ResultModeAccountHistory
+	job.DeliveryTarget = nil
+	if err := h.jobs.Update(ctx, job); err != nil {
+		t.Fatalf("update job: %v", err)
+	}
+	if err := h.jobs.UpdateStatus(ctx, job.ID, domain.JobStatusResultReady, domain.JobStatusFailedTerminal, string(domain.ProviderErrInternal), "provider failed"); err != nil {
+		t.Fatalf("mark failed: %v", err)
+	}
+
+	if err := h.worker.Process(ctx, deliveryTask(job)); err != nil {
+		t.Fatalf("process account-history failure: %v", err)
+	}
+	got, _ := h.jobs.GetByID(ctx, job.ID)
+	deliveries, _ := h.deliveries.ListByJob(ctx, job.ID)
+	if got.Status != domain.JobStatusFailedTerminal ||
+		got.CostCaptured != 0 ||
+		len(deliveries) != 0 ||
+		len(h.vk.Sent()) != 0 ||
+		h.captureEntryCount(t, job.UserID) != 0 ||
+		h.releaseEntryCount(t, job.UserID) != 0 {
+		t.Fatalf("account-history failure produced notice side effects: job=%+v deliveries=%+v sends=%+v", got, deliveries, h.vk.Sent())
+	}
+}
+
+func TestDeliveryLegacyUnknownTerminalFailureFailsWithoutNotice(t *testing.T) {
+	h := newDeliveryHarness(t)
+	ctx := context.Background()
+	job := h.resultReadyJob(t, domain.MediaTypeImage, "generated image")
+	job.ResultMode = domain.ResultModeLegacyUnknown
+	job.DeliveryTarget = nil
+	if err := h.jobs.Update(ctx, job); err != nil {
+		t.Fatalf("update job: %v", err)
+	}
+	if err := h.jobs.UpdateStatus(ctx, job.ID, domain.JobStatusResultReady, domain.JobStatusFailedTerminal, string(domain.ProviderErrInternal), "provider failed"); err != nil {
+		t.Fatalf("mark failed: %v", err)
+	}
+
+	if err := h.worker.Process(ctx, deliveryTask(job)); !errors.Is(err, domain.ErrInvalidResultContract) {
+		t.Fatalf("process error = %v, want invalid result contract", err)
+	}
+	got, _ := h.jobs.GetByID(ctx, job.ID)
+	deliveries, _ := h.deliveries.ListByJob(ctx, job.ID)
+	if got.Status != domain.JobStatusFailedTerminal ||
+		got.CostCaptured != 0 ||
+		len(deliveries) != 0 ||
+		len(h.vk.Sent()) != 0 ||
+		h.captureEntryCount(t, job.UserID) != 0 ||
+		h.releaseEntryCount(t, job.UserID) != 0 {
+		t.Fatalf("legacy terminal failure produced side effects: job=%+v deliveries=%+v sends=%+v", got, deliveries, h.vk.Sent())
+	}
+}
+
+func TestDeliveryReplayTargetMismatchDoesNotPublishOrCapture(t *testing.T) {
+	h := newDeliveryHarness(t)
+	ctx := context.Background()
+	job := h.resultReadyJob(t, domain.MediaTypeImage, "generated image")
+	key := "delivery:" + job.ID.String()
+	delivery := &domain.Delivery{
+		JobID:          job.ID,
+		UserID:         job.UserID,
+		AccountID:      job.AccountID,
+		VKPeerID:       999,
+		Target:         &domain.DeliveryTarget{Channel: domain.ChannelVKBot, RecipientRef: "999"},
+		Type:           domain.DeliveryTypePhoto,
+		Status:         domain.DeliveryStatusPending,
+		VKRandomID:     vkdelivery.DeterministicRandomID(key),
+		IdempotencyKey: key,
+		AttemptNo:      1,
+	}
+	if err := h.deliveries.Create(ctx, delivery); err != nil {
+		t.Fatalf("create mismatched delivery: %v", err)
+	}
+
+	if err := h.worker.Process(ctx, deliveryTask(job)); err == nil {
+		t.Fatal("expected replay target mismatch error")
+	}
+	gotJob, _ := h.jobs.GetByID(ctx, job.ID)
+	gotDelivery, _ := h.deliveries.GetByID(ctx, delivery.ID)
+	if len(h.vk.Sent()) != 0 ||
+		h.captureEntryCount(t, job.UserID) != 0 ||
+		gotJob.Status != domain.JobStatusResultReady ||
+		gotDelivery.Status != domain.DeliveryStatusPending ||
+		gotDelivery.AttemptNo != 1 {
+		t.Fatalf("mismatched replay consumed side effects: job=%+v delivery=%+v sends=%+v", gotJob, gotDelivery, h.vk.Sent())
+	}
 }
 
 func TestDeliveryUploadsRawPhotoArtifactToVK(t *testing.T) {
 	h := newDeliveryHarness(t)
 	uploader := &fakeVKUploader{}
-	h.worker = worker.NewDeliveryWorker(worker.DeliveryDeps{
-		Jobs:       h.jobs,
-		Deliveries: h.deliveries,
-		Artifacts:  h.artifacts,
-		Objects:    h.objects,
-		VK:         h.vk,
-		VKUploader: uploader,
-		Billing:    h.billing,
-	})
+	h.worker = h.deliveryWorker(vkdelivery.PublisherDeps{Uploader: uploader}, worker.DeliveryDeps{})
 	ctx := context.Background()
 	job := h.resultReadyJob(t, domain.MediaTypeImage, "raw png bytes")
 
@@ -365,15 +1323,7 @@ func TestDeliveryUploadsRawPhotoArtifactToVK(t *testing.T) {
 
 func TestDeliveryFailsClosedWithoutVKAttachmentOrSignedURL(t *testing.T) {
 	h := newDeliveryHarness(t)
-	h.worker = worker.NewDeliveryWorker(worker.DeliveryDeps{
-		Jobs:        h.jobs,
-		Deliveries:  h.deliveries,
-		Artifacts:   h.artifacts,
-		Objects:     h.objects,
-		VK:          h.vk,
-		Billing:     h.billing,
-		MaxAttempts: 1,
-	})
+	h.worker = h.deliveryWorker(vkdelivery.PublisherDeps{}, worker.DeliveryDeps{MaxAttempts: 1})
 	ctx := context.Background()
 	job := h.resultReadyJob(t, domain.MediaTypeImage, "raw png bytes")
 
@@ -394,16 +1344,10 @@ func TestDeliveryFailsClosedWithoutVKAttachmentOrSignedURL(t *testing.T) {
 
 func TestDeliveryUsesSignedURLWhenExplicitlyEnabled(t *testing.T) {
 	h := newDeliveryHarness(t)
-	h.worker = worker.NewDeliveryWorker(worker.DeliveryDeps{
-		Jobs:       h.jobs,
-		Deliveries: h.deliveries,
-		Artifacts:  h.artifacts,
-		Objects:    h.objects,
-		VK:         h.vk,
-		Billing:    h.billing,
+	h.worker = h.deliveryWorker(vkdelivery.PublisherDeps{
 		SignedURLs: true,
 		Signer:     fakeURLSigner{},
-	})
+	}, worker.DeliveryDeps{})
 	ctx := context.Background()
 	job := h.resultReadyJob(t, domain.MediaTypeImage, "raw png bytes")
 
@@ -423,15 +1367,7 @@ func TestDeliveryUsesSignedURLWhenExplicitlyEnabled(t *testing.T) {
 func TestDeliveryNamesRawVideoArtifactFromPrompt(t *testing.T) {
 	h := newDeliveryHarness(t)
 	uploader := &fakeVKUploader{}
-	h.worker = worker.NewDeliveryWorker(worker.DeliveryDeps{
-		Jobs:       h.jobs,
-		Deliveries: h.deliveries,
-		Artifacts:  h.artifacts,
-		Objects:    h.objects,
-		VK:         h.vk,
-		VKUploader: uploader,
-		Billing:    h.billing,
-	})
+	h.worker = h.deliveryWorker(vkdelivery.PublisherDeps{Uploader: uploader}, worker.DeliveryDeps{})
 	ctx := context.Background()
 	job := h.resultReadyJob(t, domain.MediaTypeVideo, "raw mp4 bytes")
 	job.OperationType = domain.OperationVideoGenerate
@@ -460,16 +1396,10 @@ func TestDeliveryNamesRawVideoArtifactFromPrompt(t *testing.T) {
 func TestDeliveryAllowsProbePassedRawVideoOriginalByPolicy(t *testing.T) {
 	h := newDeliveryHarness(t)
 	uploader := &fakeVKUploader{}
-	h.worker = worker.NewDeliveryWorker(worker.DeliveryDeps{
-		Jobs:                   h.jobs,
-		Deliveries:             h.deliveries,
-		Artifacts:              h.artifacts,
-		Objects:                h.objects,
-		VK:                     h.vk,
-		VKUploader:             uploader,
-		Billing:                h.billing,
+	h.worker = h.deliveryWorker(vkdelivery.PublisherDeps{
+		Uploader:               uploader,
 		RawVideoDeliveryPolicy: "if_probe_passed",
-	})
+	}, worker.DeliveryDeps{})
 	ctx := context.Background()
 	job := h.resultReadyJob(t, domain.MediaTypeVideo, "safe original mp4")
 	job.OperationType = domain.OperationVideoGenerate
@@ -505,17 +1435,10 @@ func TestDeliveryAllowsProbePassedRawVideoOriginalByPolicy(t *testing.T) {
 func TestDeliveryRejectsRawVideoOriginalWhenPolicyNever(t *testing.T) {
 	h := newDeliveryHarness(t)
 	uploader := &fakeVKUploader{}
-	h.worker = worker.NewDeliveryWorker(worker.DeliveryDeps{
-		Jobs:                   h.jobs,
-		Deliveries:             h.deliveries,
-		Artifacts:              h.artifacts,
-		Objects:                h.objects,
-		VK:                     h.vk,
-		VKUploader:             uploader,
-		Billing:                h.billing,
-		MaxAttempts:            1,
+	h.worker = h.deliveryWorker(vkdelivery.PublisherDeps{
+		Uploader:               uploader,
 		RawVideoDeliveryPolicy: "never",
-	})
+	}, worker.DeliveryDeps{MaxAttempts: 1})
 	ctx := context.Background()
 	job := h.resultReadyJob(t, domain.MediaTypeVideo, "safe original mp4")
 	job.OperationType = domain.OperationVideoGenerate
@@ -552,15 +1475,7 @@ func TestDeliveryUploadsVKReadyVideoVariantWhenPresent(t *testing.T) {
 		t.Run(string(variantType), func(t *testing.T) {
 			h := newDeliveryHarness(t)
 			uploader := &fakeVKUploader{}
-			h.worker = worker.NewDeliveryWorker(worker.DeliveryDeps{
-				Jobs:       h.jobs,
-				Deliveries: h.deliveries,
-				Artifacts:  h.artifacts,
-				Objects:    h.objects,
-				VK:         h.vk,
-				VKUploader: uploader,
-				Billing:    h.billing,
-			})
+			h.worker = h.deliveryWorker(vkdelivery.PublisherDeps{Uploader: uploader}, worker.DeliveryDeps{})
 			ctx := context.Background()
 			job := h.resultReadyJob(t, domain.MediaTypeVideo, "raw provider video")
 			job.OperationType = domain.OperationVideoGenerate
@@ -594,15 +1509,7 @@ func TestDeliveryUploadsVKReadyVideoVariantWhenPresent(t *testing.T) {
 func TestDeliveryPrefersVKDocVariantWhenBothVideoVariantsAreReady(t *testing.T) {
 	h := newDeliveryHarness(t)
 	uploader := &fakeVKUploader{}
-	h.worker = worker.NewDeliveryWorker(worker.DeliveryDeps{
-		Jobs:       h.jobs,
-		Deliveries: h.deliveries,
-		Artifacts:  h.artifacts,
-		Objects:    h.objects,
-		VK:         h.vk,
-		VKUploader: uploader,
-		Billing:    h.billing,
-	})
+	h.worker = h.deliveryWorker(vkdelivery.PublisherDeps{Uploader: uploader}, worker.DeliveryDeps{})
 	ctx := context.Background()
 	job := h.resultReadyJob(t, domain.MediaTypeVideo, "raw provider video")
 	job.OperationType = domain.OperationVideoGenerate
@@ -624,16 +1531,7 @@ func TestDeliveryPrefersVKDocVariantWhenBothVideoVariantsAreReady(t *testing.T) 
 func TestDeliveryMediaUploadFailureUsesRetryBudget(t *testing.T) {
 	h := newDeliveryHarness(t)
 	uploader := &fakeVKUploader{err: errors.New("vk video.save denied")}
-	h.worker = worker.NewDeliveryWorker(worker.DeliveryDeps{
-		Jobs:        h.jobs,
-		Deliveries:  h.deliveries,
-		Artifacts:   h.artifacts,
-		Objects:     h.objects,
-		VK:          h.vk,
-		VKUploader:  uploader,
-		Billing:     h.billing,
-		MaxAttempts: 2,
-	})
+	h.worker = h.deliveryWorker(vkdelivery.PublisherDeps{Uploader: uploader}, worker.DeliveryDeps{MaxAttempts: 2})
 	ctx := context.Background()
 	job := h.resultReadyJob(t, domain.MediaTypeVideo, "raw mp4 bytes")
 	job.OperationType = domain.OperationVideoGenerate
@@ -671,6 +1569,262 @@ func TestDeliveryMediaUploadFailureUsesRetryBudget(t *testing.T) {
 	}
 }
 
+func TestDeliveryExhaustedMediaIsNotRepublishedAsFailureNotice(t *testing.T) {
+	h := newDeliveryHarness(t)
+	uploader := &fakeVKUploader{err: errors.New("vk video.save denied")}
+	h.worker = h.deliveryWorker(vkdelivery.PublisherDeps{Uploader: uploader}, worker.DeliveryDeps{MaxAttempts: 1})
+	ctx := context.Background()
+	job := h.resultReadyJob(t, domain.MediaTypeVideo, "raw mp4 bytes")
+	job.OperationType = domain.OperationVideoGenerate
+	job.Modality = domain.ModalityVideo
+	if err := h.jobs.Update(ctx, job); err != nil {
+		t.Fatalf("update job: %v", err)
+	}
+	h.addVideoVariant(t, job, domain.VariantVKVideo, "vk-ready mp4 bytes")
+
+	if err := h.worker.Process(ctx, deliveryTask(job)); err != nil {
+		t.Fatalf("exhausted delivery should be acknowledged: %v", err)
+	}
+	got, _ := h.jobs.GetByID(ctx, job.ID)
+	if got.Status != domain.JobStatusFailedTerminal {
+		t.Fatalf("status after exhaustion = %q, want failed_terminal", got.Status)
+	}
+
+	uploader.err = nil
+	if err := h.worker.Process(ctx, deliveryTask(job)); err != nil {
+		t.Fatalf("terminal redelivery: %v", err)
+	}
+	deliveries, _ := h.deliveries.ListByJob(ctx, job.ID)
+	if len(deliveries) != 1 || deliveries[0].Status != domain.DeliveryStatusFailed {
+		t.Fatalf("exhausted delivery = %+v, want one terminally failed row", deliveries)
+	}
+	if len(h.vk.Sent()) != 0 ||
+		h.captureEntryCount(t, job.UserID) != 0 ||
+		h.releaseEntryCount(t, job.UserID) != 1 {
+		t.Fatalf("terminal redelivery published or billed original media: sends=%+v captures=%d releases=%d",
+			h.vk.Sent(), h.captureEntryCount(t, job.UserID), h.releaseEntryCount(t, job.UserID))
+	}
+}
+
+func TestDeliveryExhaustionRequiresFailedStatusPersistenceBeforeBookkeeping(t *testing.T) {
+	h := newDeliveryHarness(t)
+	ctx := context.Background()
+	persistErr := errors.New("delivery update unavailable")
+	deliveries := &failFailedDeliveryUpdateRepo{
+		DeliveryRepository: h.deliveries,
+		err:                persistErr,
+	}
+	uploader := &fakeVKUploader{err: errors.New("vk video.save denied")}
+	publisher := vkdelivery.NewPublisher(vkdelivery.PublisherDeps{
+		Deliveries: deliveries,
+		Artifacts:  h.artifacts,
+		Objects:    h.objects,
+		Client:     h.vk,
+		Uploader:   uploader,
+	})
+	streams := newFakeStreams()
+	deliveryWorker := worker.NewDeliveryWorker(worker.DeliveryDeps{
+		Jobs:        h.jobs,
+		Deliveries:  deliveries,
+		Artifacts:   h.artifacts,
+		Publishers:  []worker.ExternalPublisher{publisher},
+		Billing:     h.billing,
+		Readiness:   resultservice.New(h.jobs, h.artifacts, h.moderation),
+		Streams:     streams,
+		MaxAttempts: 1,
+	})
+	job := h.resultReadyJob(t, domain.MediaTypeVideo, "raw mp4 bytes")
+	job.OperationType = domain.OperationVideoGenerate
+	job.Modality = domain.ModalityVideo
+	if err := h.jobs.Update(ctx, job); err != nil {
+		t.Fatalf("update job: %v", err)
+	}
+	h.addVideoVariant(t, job, domain.VariantVKVideo, "vk-ready mp4 bytes")
+
+	err := deliveryWorker.Process(ctx, deliveryTask(job))
+	if !errors.Is(err, persistErr) {
+		t.Fatalf("process error = %v, want failed-delivery persistence error", err)
+	}
+	got, _ := h.jobs.GetByID(ctx, job.ID)
+	if got.Status != domain.JobStatusDelivering {
+		t.Fatalf("status after persistence failure = %q, want delivering", got.Status)
+	}
+	stored, _ := h.deliveries.ListByJob(ctx, job.ID)
+	if len(stored) != 1 || stored[0].Status == domain.DeliveryStatusFailed {
+		t.Fatalf("failed marker unexpectedly durable after update error: %+v", stored)
+	}
+	if len(streams.byStream[redisqueue.StreamDLQ]) != 0 ||
+		h.releaseEntryCount(t, job.UserID) != 0 ||
+		h.captureEntryCount(t, job.UserID) != 0 ||
+		len(h.vk.Sent()) != 0 {
+		t.Fatalf("persistence failure performed terminal bookkeeping: dlq=%d releases=%d captures=%d sends=%d",
+			len(streams.byStream[redisqueue.StreamDLQ]),
+			h.releaseEntryCount(t, job.UserID),
+			h.captureEntryCount(t, job.UserID),
+			len(h.vk.Sent()))
+	}
+}
+
+func TestDeliveryReleaseFailureResumesFailedBookkeepingWithoutRepublish(t *testing.T) {
+	h := newDeliveryHarness(t)
+	ctx := context.Background()
+	uploader := &fakeVKUploader{err: errors.New("vk video.save denied")}
+	releaseErr := errors.New("release unavailable")
+	biller := &failReleaseOnceDeliveryBiller{inner: h.billing, err: releaseErr}
+	streams := newFakeStreams()
+	publisher := vkdelivery.NewPublisher(vkdelivery.PublisherDeps{
+		Deliveries: h.deliveries,
+		Artifacts:  h.artifacts,
+		Objects:    h.objects,
+		Client:     h.vk,
+		Uploader:   uploader,
+	})
+	deliveryWorker := worker.NewDeliveryWorker(worker.DeliveryDeps{
+		Jobs:        h.jobs,
+		Deliveries:  h.deliveries,
+		Artifacts:   h.artifacts,
+		Publishers:  []worker.ExternalPublisher{publisher},
+		Billing:     biller,
+		Readiness:   resultservice.New(h.jobs, h.artifacts, h.moderation),
+		Streams:     streams,
+		MaxAttempts: 1,
+	})
+	job := h.resultReadyJob(t, domain.MediaTypeVideo, "raw mp4 bytes")
+	job.OperationType = domain.OperationVideoGenerate
+	job.Modality = domain.ModalityVideo
+	if err := h.jobs.Update(ctx, job); err != nil {
+		t.Fatalf("update job: %v", err)
+	}
+	h.addVideoVariant(t, job, domain.VariantVKVideo, "vk-ready mp4 bytes")
+
+	if err := deliveryWorker.Process(ctx, deliveryTask(job)); !errors.Is(err, releaseErr) {
+		t.Fatalf("first process error = %v, want release error", err)
+	}
+	stored, _ := h.deliveries.ListByJob(ctx, job.ID)
+	if len(stored) != 1 || stored[0].Status != domain.DeliveryStatusFailed {
+		t.Fatalf("delivery after exhaustion = %+v, want durable failed", stored)
+	}
+	got, _ := h.jobs.GetByID(ctx, job.ID)
+	if got.Status != domain.JobStatusDelivering {
+		t.Fatalf("status after release failure = %q, want delivering", got.Status)
+	}
+	if biller.releaseCalls != 1 ||
+		len(streams.byStream[redisqueue.StreamDLQ]) != 1 ||
+		len(h.vk.Sent()) != 0 {
+		t.Fatalf("first attempt bookkeeping: release calls=%d dlq=%d sends=%d",
+			biller.releaseCalls, len(streams.byStream[redisqueue.StreamDLQ]), len(h.vk.Sent()))
+	}
+
+	uploader.err = nil
+	if err := deliveryWorker.Process(ctx, deliveryTask(job)); err != nil {
+		t.Fatalf("bookkeeping retry: %v", err)
+	}
+	got, _ = h.jobs.GetByID(ctx, job.ID)
+	if got.Status != domain.JobStatusFailedTerminal {
+		t.Fatalf("status after bookkeeping retry = %q, want failed_terminal", got.Status)
+	}
+	if biller.releaseCalls != 2 ||
+		h.releaseEntryCount(t, job.UserID) != 1 ||
+		h.captureEntryCount(t, job.UserID) != 0 ||
+		len(streams.byStream[redisqueue.StreamDLQ]) != 1 ||
+		len(h.vk.Sent()) != 0 {
+		t.Fatalf("retry repeated delivery side effects: release calls=%d entries=%d captures=%d dlq=%d sends=%d",
+			biller.releaseCalls,
+			h.releaseEntryCount(t, job.UserID),
+			h.captureEntryCount(t, job.UserID),
+			len(streams.byStream[redisqueue.StreamDLQ]),
+			len(h.vk.Sent()))
+	}
+
+	if err := deliveryWorker.Process(ctx, deliveryTask(job)); err != nil {
+		t.Fatalf("terminal redelivery: %v", err)
+	}
+	if biller.releaseCalls != 2 ||
+		h.releaseEntryCount(t, job.UserID) != 1 ||
+		len(streams.byStream[redisqueue.StreamDLQ]) != 1 ||
+		len(h.vk.Sent()) != 0 {
+		t.Fatalf("terminal redelivery repeated bookkeeping: release calls=%d entries=%d dlq=%d sends=%d",
+			biller.releaseCalls,
+			h.releaseEntryCount(t, job.UserID),
+			len(streams.byStream[redisqueue.StreamDLQ]),
+			len(h.vk.Sent()))
+	}
+}
+
+func TestDeliveryTerminalStatusFailureResumesFailedBookkeepingWithoutRepublish(t *testing.T) {
+	h := newDeliveryHarness(t)
+	ctx := context.Background()
+	uploader := &fakeVKUploader{err: errors.New("vk video.save denied")}
+	statusErr := errors.New("job status update unavailable")
+	jobs := &failTerminalStatusOnceJobRepo{JobRepository: h.jobs, err: statusErr}
+	streams := newFakeStreams()
+	publisher := vkdelivery.NewPublisher(vkdelivery.PublisherDeps{
+		Deliveries: h.deliveries,
+		Artifacts:  h.artifacts,
+		Objects:    h.objects,
+		Client:     h.vk,
+		Uploader:   uploader,
+	})
+	deliveryWorker := worker.NewDeliveryWorker(worker.DeliveryDeps{
+		Jobs:        jobs,
+		Deliveries:  h.deliveries,
+		Artifacts:   h.artifacts,
+		Publishers:  []worker.ExternalPublisher{publisher},
+		Billing:     h.billing,
+		Readiness:   resultservice.New(h.jobs, h.artifacts, h.moderation),
+		Streams:     streams,
+		MaxAttempts: 1,
+	})
+	job := h.resultReadyJob(t, domain.MediaTypeVideo, "raw mp4 bytes")
+	job.OperationType = domain.OperationVideoGenerate
+	job.Modality = domain.ModalityVideo
+	if err := h.jobs.Update(ctx, job); err != nil {
+		t.Fatalf("update job: %v", err)
+	}
+	h.addVideoVariant(t, job, domain.VariantVKVideo, "vk-ready mp4 bytes")
+
+	if err := deliveryWorker.Process(ctx, deliveryTask(job)); !errors.Is(err, statusErr) {
+		t.Fatalf("first process error = %v, want terminal-status error", err)
+	}
+	stored, _ := h.deliveries.ListByJob(ctx, job.ID)
+	if len(stored) != 1 || stored[0].Status != domain.DeliveryStatusFailed {
+		t.Fatalf("delivery after exhaustion = %+v, want durable failed", stored)
+	}
+	got, _ := h.jobs.GetByID(ctx, job.ID)
+	if got.Status != domain.JobStatusDelivering {
+		t.Fatalf("status after terminal transition failure = %q, want delivering", got.Status)
+	}
+	if h.releaseEntryCount(t, job.UserID) != 1 ||
+		len(streams.byStream[redisqueue.StreamDLQ]) != 1 ||
+		len(h.vk.Sent()) != 0 {
+		t.Fatalf("first attempt bookkeeping: releases=%d dlq=%d sends=%d",
+			h.releaseEntryCount(t, job.UserID),
+			len(streams.byStream[redisqueue.StreamDLQ]),
+			len(h.vk.Sent()))
+	}
+
+	uploader.err = nil
+	if err := deliveryWorker.Process(ctx, deliveryTask(job)); err != nil {
+		t.Fatalf("bookkeeping retry: %v", err)
+	}
+	got, _ = h.jobs.GetByID(ctx, job.ID)
+	if got.Status != domain.JobStatusFailedTerminal {
+		t.Fatalf("status after bookkeeping retry = %q, want failed_terminal", got.Status)
+	}
+	if jobs.attempts != 2 ||
+		h.releaseEntryCount(t, job.UserID) != 1 ||
+		h.captureEntryCount(t, job.UserID) != 0 ||
+		len(streams.byStream[redisqueue.StreamDLQ]) != 1 ||
+		len(h.vk.Sent()) != 0 {
+		t.Fatalf("retry repeated delivery side effects: status attempts=%d releases=%d captures=%d dlq=%d sends=%d",
+			jobs.attempts,
+			h.releaseEntryCount(t, job.UserID),
+			h.captureEntryCount(t, job.UserID),
+			len(streams.byStream[redisqueue.StreamDLQ]),
+			len(h.vk.Sent()))
+	}
+}
+
 func TestDeliveryIdempotentNoDuplicateSendOrCharge(t *testing.T) {
 	h := newDeliveryHarness(t)
 	ctx := context.Background()
@@ -701,15 +1855,7 @@ func TestDeliveryIdempotentNoDuplicateSendOrCharge(t *testing.T) {
 func TestDeliveryVideoVariantIdempotentNoDuplicateSendOrCharge(t *testing.T) {
 	h := newDeliveryHarness(t)
 	uploader := &fakeVKUploader{}
-	h.worker = worker.NewDeliveryWorker(worker.DeliveryDeps{
-		Jobs:       h.jobs,
-		Deliveries: h.deliveries,
-		Artifacts:  h.artifacts,
-		Objects:    h.objects,
-		VK:         h.vk,
-		VKUploader: uploader,
-		Billing:    h.billing,
-	})
+	h.worker = h.deliveryWorker(vkdelivery.PublisherDeps{Uploader: uploader}, worker.DeliveryDeps{})
 	ctx := context.Background()
 	job := h.resultReadyJob(t, domain.MediaTypeVideo, "raw provider video")
 	job.OperationType = domain.OperationVideoGenerate
@@ -880,6 +2026,8 @@ func TestDeliverySendsImageProviderFailureNoticeWithoutCapture(t *testing.T) {
 		ID:             uuid.New(),
 		UserID:         userID,
 		VKPeerID:       555,
+		ResultMode:     domain.ResultModeExternalPush,
+		DeliveryTarget: &domain.DeliveryTarget{Channel: domain.ChannelVKBot, RecipientRef: "555"},
 		OperationType:  domain.OperationImageGenerate,
 		Modality:       domain.ModalityImage,
 		Status:         domain.JobStatusFailedTerminal,
@@ -939,6 +2087,8 @@ func TestDeliverySendsVideoMediaFailureNoticeWithoutCapture(t *testing.T) {
 		ID:             uuid.New(),
 		UserID:         userID,
 		VKPeerID:       556,
+		ResultMode:     domain.ResultModeExternalPush,
+		DeliveryTarget: &domain.DeliveryTarget{Channel: domain.ChannelVKBot, RecipientRef: "556"},
 		OperationType:  domain.OperationVideoGenerate,
 		Modality:       domain.ModalityVideo,
 		Status:         domain.JobStatusFailedTerminal,
@@ -1012,6 +2162,8 @@ func TestDeliveryUsesSpecificModelAndInvalidRequestFailureNotices(t *testing.T) 
 				ID:             uuid.New(),
 				UserID:         userID,
 				VKPeerID:       557,
+				ResultMode:     domain.ResultModeExternalPush,
+				DeliveryTarget: &domain.DeliveryTarget{Channel: domain.ChannelVKBot, RecipientRef: "557"},
 				OperationType:  domain.OperationImageGenerate,
 				Modality:       domain.ModalityImage,
 				Status:         domain.JobStatusFailedTerminal,
@@ -1080,4 +2232,34 @@ func TestDeliverySendFailureRetries(t *testing.T) {
 	if got.Status != domain.JobStatusSucceeded {
 		t.Fatalf("status = %q, want succeeded after retry", got.Status)
 	}
+}
+
+func deliveryCounterValue(t *testing.T, counter *prometheus.CounterVec, labels ...string) float64 {
+	t.Helper()
+	metricCounter, err := counter.GetMetricWithLabelValues(labels...)
+	if err != nil {
+		t.Fatalf("GetMetricWithLabelValues() error = %v", err)
+	}
+	var metric dto.Metric
+	if err := metricCounter.Write(&metric); err != nil {
+		t.Fatalf("counter.Write() error = %v", err)
+	}
+	return metric.GetCounter().GetValue()
+}
+
+func deliveryHistogramCount(t *testing.T, histogram *prometheus.HistogramVec, labels ...string) uint64 {
+	t.Helper()
+	observer, err := histogram.GetMetricWithLabelValues(labels...)
+	if err != nil {
+		t.Fatalf("GetMetricWithLabelValues() error = %v", err)
+	}
+	metricWriter, ok := observer.(prometheus.Metric)
+	if !ok {
+		t.Fatal("histogram observer does not implement prometheus.Metric")
+	}
+	var metric dto.Metric
+	if err := metricWriter.Write(&metric); err != nil {
+		t.Fatalf("histogram.Write() error = %v", err)
+	}
+	return metric.GetHistogram().GetSampleCount()
 }

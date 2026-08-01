@@ -24,19 +24,21 @@ Read only the document that matches the current task:
 
 | Task scope | Active document |
 | --- | --- |
+| Account-first backend core independence, VK adapter separation, neutral sessions and delivery | docs/superpowers/specs/2026-07-30-account-first-backend-core-design.md; implementation plan: docs/superpowers/plans/2026-07-30-channel-neutral-result-delivery.md |
 | Production deploy, domains, Cloudflare, VPS runtime | `docs/runbooks/DEPLOYMENT.md` |
 | Local DEV contour and DEV GitHub deploy | `docs/runbooks/DEV.md` |
 | YooKassa, payment intents, refunds, billing smoke | `docs/runbooks/BILLING.md` |
 | k6, loadtest contour, capacity reports | `docs/runbooks/LOAD_TESTING.md` |
 | Incidents, broken deploys, provider/payment/queue triage | `docs/runbooks/INCIDENTS.md` |
 | Rollback, backups, restore policy | `docs/runbooks/ROLLBACK.md` |
+| Channel-neutral result delivery migrations `000043`/`000044`/`000045`, rollout and canaries | `docs/runbooks/channel-neutral-result-delivery-rollout.md` |
 | Provider/model registry, adapter contracts, add-provider/add-model checklist | `docs/ARCHITECTURE.md` and `docs/runbooks/DEV.md` |
 | APIMart Nano Banana Pro provider migration | `docs/superpowers/plans/2026-07-05-apimart-nano-banana-pro-migration.md` |
 | DEV contour, local DEV tunnel, DEV deploy | `docs/DEV_CONTOUR.md` |
 | Production/runtime deployment domains | `docs/DOMAIN_DEPLOYMENT_PLAN.md` |
 | Data services, Postgres/Redis/S3 modes | `docs/DATA_SERVICES_CONTRACT.md` |
 | Account identity, multi-UI login, VK/TG/Web/Mobile ownership model | `docs/ACCOUNT_IDENTITY_CONTRACT.md`; current account-only rollout audit: `docs/ACCOUNT_ID_ONLY_AUDIT.md` |
-| Standalone NeiroHub web platform, browser UX, SEO, performance, web sessions | `docs/superpowers/specs/2026-07-29-neirohub-web-platform-design.md` |
+| Standalone NeiroHub web platform, browser UX, SEO, performance, web sessions | approved design: `docs/superpowers/specs/2026-07-31-web-session-live-workspace-design.md`; implementation plan: `docs/superpowers/plans/2026-07-31-web-session-live-workspace.md`; local platform setup: `web/platform/README.md` |
 | Retention, cleanup, analytics aggregates | `docs/DATA_RETENTION_POLICY.md` |
 | Load testing, k6, capacity report | `docs/LOAD_TESTING.md` |
 | Operator/admin UI and safety | `docs/OPERATOR_UI.md` |

@@ -23,6 +23,7 @@ import (
 	"vk-ai-aggregator/internal/service/joborchestrator"
 	"vk-ai-aggregator/internal/service/pricingcatalog"
 	"vk-ai-aggregator/internal/service/productcatalog"
+	"vk-ai-aggregator/internal/service/resultservice"
 	"vk-ai-aggregator/internal/worker"
 )
 
@@ -42,6 +43,7 @@ func TestEndToEnd(t *testing.T) {
 	ptasks := memory.NewProviderTaskRepo()
 	deliveries := memory.NewDeliveryRepo()
 	artRepo := memory.NewArtifactRepo()
+	modResults := memory.NewModerationRepo()
 	objects := memory.NewObjectStore()
 	billingRepo := memory.NewBillingRepo()
 
@@ -83,21 +85,31 @@ func TestEndToEnd(t *testing.T) {
 		artifactservice.WithDownloader(stubDownloader{data: []byte("pixels"), contentType: "image/png"}))
 	streams := newFakeStreams()
 	gen := worker.NewGenerationWorker(worker.Deps{
-		Jobs:      jobs,
-		Tasks:     ptasks,
-		Artifacts: artSvc,
-		Providers: worker.NewRegistry(mock.New()),
-		Streams:   streams,
+		Jobs:           jobs,
+		ResultReadyUOW: uowMgr,
+		Tasks:          ptasks,
+		Artifacts:      artSvc,
+		ArtifactRepo:   artRepo,
+		Objects:        objects,
+		Providers:      worker.NewRegistry(mock.New()),
+		Streams:        streams,
+		ModResults:     modResults,
 	})
 	vkClient := vkdelivery.NewMockClient()
+	vkPublisher := vkdelivery.NewPublisher(vkdelivery.PublisherDeps{
+		Deliveries: deliveries,
+		Artifacts:  artRepo,
+		Objects:    objects,
+		Client:     vkClient,
+		Uploader:   &fakeVKUploader{},
+	})
 	del := worker.NewDeliveryWorker(worker.DeliveryDeps{
 		Jobs:       jobs,
 		Deliveries: deliveries,
 		Artifacts:  artRepo,
-		Objects:    objects,
-		VK:         vkClient,
-		VKUploader: &fakeVKUploader{},
+		Publishers: []worker.ExternalPublisher{vkPublisher},
 		Billing:    billing,
+		Readiness:  resultservice.New(jobs, artRepo, modResults),
 	})
 
 	// 1. VK delivers a message_new event.
@@ -128,8 +140,11 @@ func TestEndToEnd(t *testing.T) {
 	if job.Status != domain.JobStatusResultReady {
 		t.Fatalf("after generation status=%q, want result_ready", job.Status)
 	}
-	if len(streams.byStream[redisqueue.StreamDelivery]) != 1 {
-		t.Fatalf("expected delivery enqueue, got %v", streams.byStream)
+	if resultReadyEventCount(outbox, job.ID) != 1 {
+		t.Fatalf("result-ready outbox events = %+v, want one", outbox.Events())
+	}
+	if len(streams.byStream[redisqueue.StreamDelivery]) != 0 {
+		t.Fatalf("direct delivery enqueue = %v, want none before relay", streams.byStream)
 	}
 
 	// 4. Delivery worker sends to VK and captures credits.
@@ -177,14 +192,20 @@ func TestSeedream45AsyncPoYoImageFlowStoresArtifactAndCapturesPrice(t *testing.T
 	billing := billingservice.New(billingRepo)
 	deliveries := memory.NewDeliveryRepo()
 	vkClient := vkdelivery.NewMockClient()
+	vkPublisher := vkdelivery.NewPublisher(vkdelivery.PublisherDeps{
+		Deliveries: deliveries,
+		Artifacts:  h.artRepo,
+		Objects:    h.store,
+		Client:     vkClient,
+		Uploader:   &fakeVKUploader{},
+	})
 	del := worker.NewDeliveryWorker(worker.DeliveryDeps{
 		Jobs:       h.jobs,
 		Deliveries: deliveries,
 		Artifacts:  h.artRepo,
-		Objects:    h.store,
-		VK:         vkClient,
-		VKUploader: &fakeVKUploader{},
+		Publishers: []worker.ExternalPublisher{vkPublisher},
 		Billing:    billing,
+		Readiness:  resultservice.New(h.jobs, h.artRepo, h.modRepo),
 	})
 	prices, err := pricingcatalog.NewStaticCatalog()
 	if err != nil {
@@ -219,6 +240,8 @@ func TestSeedream45AsyncPoYoImageFlowStoresArtifactAndCapturesPrice(t *testing.T
 		ID:              uuid.New(),
 		UserID:          userID,
 		VKPeerID:        777,
+		ResultMode:      domain.ResultModeExternalPush,
+		DeliveryTarget:  &domain.DeliveryTarget{Channel: domain.ChannelVKBot, RecipientRef: "777"},
 		OperationType:   domain.OperationImageGenerate,
 		Modality:        domain.ModalityImage,
 		Status:          domain.JobStatusQueued,
@@ -232,7 +255,7 @@ func TestSeedream45AsyncPoYoImageFlowStoresArtifactAndCapturesPrice(t *testing.T
 	if err := h.jobs.Create(ctx, job); err != nil {
 		t.Fatalf("create job: %v", err)
 	}
-	if _, err := billing.Reserve(ctx, userID, job.ID, 15); err != nil {
+	if _, err := billing.Reserve(ctx, userID, job.ID, 40); err != nil {
 		t.Fatalf("reserve: %v", err)
 	}
 
@@ -281,12 +304,11 @@ func TestSeedream45AsyncPoYoImageFlowStoresArtifactAndCapturesPrice(t *testing.T
 	if string(data) != "output" {
 		t.Fatalf("stored output = %q", data)
 	}
-	deliveryTasks := h.streams.byStream[redisqueue.StreamDelivery]
-	if len(deliveryTasks) != 1 {
-		t.Fatalf("delivery stream = %v, want one task after artifact storage", deliveryTasks)
+	if resultReadyEventCount(h.outbox, job.ID) != 1 {
+		t.Fatalf("result-ready outbox events = %+v, want one", h.outbox.Events())
 	}
 
-	if err := del.Process(ctx, deliveryTasks[0]); err != nil {
+	if err := del.Process(ctx, taskFor(job)); err != nil {
 		t.Fatalf("delivery: %v", err)
 	}
 	job = h.reload(t, job.ID)

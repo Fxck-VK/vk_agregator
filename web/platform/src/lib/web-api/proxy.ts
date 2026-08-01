@@ -11,6 +11,9 @@ const forwardedRequestHeaders = [
   "User-Agent",
 ] as const;
 const returnCookieName = "__Host-nh-return-to";
+const imageArtifactRedirectOriginHeader = "X-NeiroHub-Image-Artifact-Origin";
+const imageArtifactPathPattern =
+  /^\/web\/v1\/image-artifacts\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export const MAX_PROXY_REQUEST_BODY_BYTES = 64 * 1024;
 
@@ -51,6 +54,50 @@ function proxyResponseHeaders(upstream: Headers): Headers {
     headers.append("Set-Cookie", cookie);
   }
   return headers;
+}
+
+function proxyImageArtifactRedirectHeaders(upstream: Headers, location: string): Headers {
+  const headers = new Headers({ Location: location });
+  const cacheControl = upstream.get("Cache-Control");
+  if (cacheControl) {
+    headers.set("Cache-Control", cacheControl);
+  }
+  return headers;
+}
+
+function safeImageArtifactRedirectLocation(request: Request, safePath: string, upstream: Response): string | null {
+  if (request.method !== "GET" || upstream.status !== 307 || !imageArtifactPathPattern.test(safePath)) {
+    return null;
+  }
+  const location = upstream.headers.get("Location")?.trim();
+  const attestedOrigin = upstream.headers.get(imageArtifactRedirectOriginHeader)?.trim();
+  if (!location || !attestedOrigin) {
+    return null;
+  }
+  try {
+    const target = new URL(location);
+    const trusted = new URL(attestedOrigin);
+    if (
+      (target.protocol !== "https:" && target.protocol !== "http:") ||
+      target.host === "" ||
+      target.username ||
+      target.password ||
+      trusted.origin !== attestedOrigin ||
+      trusted.username ||
+      trusted.password ||
+      trusted.pathname !== "/" ||
+      trusted.search ||
+      trusted.hash ||
+      target.origin !== trusted.origin
+    ) {
+      return null;
+    }
+    // Preserve the exact signed query string. Re-serializing a URL can change
+    // encoding that an object-store signature covers.
+    return location;
+  } catch {
+    return null;
+  }
 }
 
 function genericUnavailableResponse(): Response {
@@ -153,6 +200,13 @@ export async function proxyWebApiRequest(
   }
 
   if (upstream.status >= 300 && upstream.status < 400) {
+    const location = safeImageArtifactRedirectLocation(request, safePath, upstream);
+    if (location) {
+      return new Response(null, {
+        status: 307,
+        headers: proxyImageArtifactRedirectHeaders(upstream.headers, location),
+      });
+    }
     return genericUnavailableResponse();
   }
 

@@ -26,6 +26,16 @@ func TestValidateProductionSecrets(t *testing.T) {
 	}
 }
 
+func TestValidateRejectsInsecureWebImageArtifactHTTPOutsideDevelopment(t *testing.T) {
+	err := (config.Config{
+		Env:                               "staging",
+		WebImageArtifactAllowInsecureHTTP: true,
+	}).Validate()
+	if err == nil || !strings.Contains(err.Error(), "WEB_IMAGE_ARTIFACT_ALLOW_INSECURE_HTTP") {
+		t.Fatalf("Validate() error = %v, want insecure artifact HTTP rejection", err)
+	}
+}
+
 func TestValidateRealModesRequireCredentialsOutsideProduction(t *testing.T) {
 	cfg := config.Config{
 		Env:                 "development",
@@ -209,6 +219,21 @@ func TestLoadWorkerModeDefaultAll(t *testing.T) {
 	cfg := config.Load()
 	if cfg.WorkerMode != config.WorkerModeAll {
 		t.Fatalf("WorkerMode = %q, want %q", cfg.WorkerMode, config.WorkerModeAll)
+	}
+}
+
+func TestValidateWorkerModeAcceptsRelayOnly(t *testing.T) {
+	cfg := config.Config{
+		DataServicesMode:    config.DataServiceModeLocal,
+		PostgresMode:        config.DataServiceModeLocal,
+		RedisMode:           config.DataServiceModeLocal,
+		S3Mode:              config.DataServiceModeLocal,
+		WorkerMode:          "relay",
+		VKConfirmationToken: "dev-confirmation",
+	}
+
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate() error = %v", err)
 	}
 }
 
@@ -2398,6 +2423,55 @@ func TestLoadMiniAppJobRateLimit(t *testing.T) {
 	}
 	if cfg.AccountAuthRateLimitWindow != 4*time.Minute {
 		t.Fatalf("AccountAuthRateLimitWindow = %v", cfg.AccountAuthRateLimitWindow)
+	}
+}
+
+func TestLoadWebImagePreparationPolicy(t *testing.T) {
+	t.Setenv("WEB_IMAGE_PREPARED_JOB_LIMIT", "4")
+	t.Setenv("WEB_IMAGE_PREPARED_JOB_TTL", "20m")
+	t.Setenv("WEB_IMAGE_PREPARED_JOB_RECONCILE_INTERVAL", "45s")
+	t.Setenv("WEB_IMAGE_PREPARED_JOB_RECONCILE_LIMIT", "29")
+	t.Setenv("WEB_IMAGE_PREPARE_RATE_LIMIT", "12")
+	t.Setenv("WEB_IMAGE_PREPARE_RATE_LIMIT_WINDOW", "90m")
+
+	cfg := config.Load()
+	if cfg.WebImagePreparedJobLimit != 4 || cfg.WebImagePreparedJobTTL != 20*time.Minute || cfg.WebImagePreparedJobReconcileInterval != 45*time.Second || cfg.WebImagePreparedJobReconcileLimit != 29 || cfg.WebImagePrepareRateLimit != 12 || cfg.WebImagePrepareRateLimitWindow != 90*time.Minute {
+		t.Fatalf("web image preparation policy = %+v", cfg)
+	}
+}
+
+func TestLoadMigrationTimeout(t *testing.T) {
+	restore := clearEnv(t, "MIGRATION_TIMEOUT")
+	defer restore()
+
+	if got := config.Load().MigrationTimeout; got != 30*time.Minute {
+		t.Fatalf("default MigrationTimeout = %s, want 30m", got)
+	}
+	t.Setenv("MIGRATION_TIMEOUT", "45m")
+	if got := config.Load().MigrationTimeout; got != 45*time.Minute {
+		t.Fatalf("configured MigrationTimeout = %s, want 45m", got)
+	}
+}
+
+func TestValidateWebImagePreparationPolicyRejectsNegativeValues(t *testing.T) {
+	for _, testCase := range []struct {
+		name string
+		cfg  config.Config
+		want string
+	}{
+		{name: "prepared limit", cfg: config.Config{WebImagePreparedJobLimit: -1}, want: "WEB_IMAGE_PREPARED_JOB_LIMIT"},
+		{name: "prepared ttl", cfg: config.Config{WebImagePreparedJobTTL: -time.Second}, want: "WEB_IMAGE_PREPARED_JOB_TTL"},
+		{name: "prepared reconciliation interval", cfg: config.Config{WebImagePreparedJobReconcileInterval: -time.Second}, want: "WEB_IMAGE_PREPARED_JOB_RECONCILE_INTERVAL"},
+		{name: "prepared reconciliation limit", cfg: config.Config{WebImagePreparedJobReconcileLimit: -1}, want: "WEB_IMAGE_PREPARED_JOB_RECONCILE_LIMIT"},
+		{name: "rate limit", cfg: config.Config{WebImagePrepareRateLimit: -1}, want: "WEB_IMAGE_PREPARE_RATE_LIMIT"},
+		{name: "rate window", cfg: config.Config{WebImagePrepareRateLimitWindow: -time.Second}, want: "WEB_IMAGE_PREPARE_RATE_LIMIT_WINDOW"},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			err := testCase.cfg.Validate()
+			if err == nil || !strings.Contains(err.Error(), testCase.want) {
+				t.Fatalf("Validate() error = %v, want %s", err, testCase.want)
+			}
+		})
 	}
 }
 

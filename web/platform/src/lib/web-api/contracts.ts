@@ -39,6 +39,134 @@ export const conversationListSchema = z
 export type ConversationItem = z.infer<typeof conversationItemSchema>;
 export type ConversationList = z.infer<typeof conversationListSchema>;
 
+export const conversationMessageSchema = z
+  .object({
+    id: z.string().uuid(),
+    seq: z.number().int().positive(),
+    role: z.enum(["user", "assistant"]),
+    text: z.string(),
+    created_at: z.string().datetime({ offset: true }),
+  })
+  .strict();
+
+export const conversationMessageListSchema = z
+  .object({
+    items: z.array(conversationMessageSchema),
+    has_more_before: z.boolean().optional().default(false),
+  })
+  .strict();
+
+export type ConversationMessage = z.infer<typeof conversationMessageSchema>;
+export type ConversationMessageList = z.infer<typeof conversationMessageListSchema>;
+
+export const imageModelSchema = z
+  .object({
+    id: z.string().trim().min(1),
+    name: z.string().trim().min(1),
+    quality_options: z.array(z.string().trim().min(1)),
+    default_quality: z.string().trim().min(1),
+    supports_reference_image: z.boolean(),
+    max_reference_images: z.number().int().nonnegative(),
+  })
+  .strict();
+
+export const imageModelListSchema = z
+  .object({
+    items: z.array(imageModelSchema),
+  })
+  .strict();
+
+export const imageJobStatusSchema = z.enum([
+  "prepared",
+  "received",
+  "validated",
+  "rejected",
+  "awaiting_payment",
+  "credits_reserved",
+  "queued",
+  "dispatching_provider",
+  "provider_submitted",
+  "provider_pending",
+  "provider_processing",
+  "provider_succeeded",
+  "provider_failed",
+  "postprocessing",
+  "result_ready",
+  "delivering",
+  "succeeded",
+  "failed_retryable",
+  "failed_terminal",
+  "cancelled",
+  "expired",
+  "refunded",
+]);
+
+export const imageJobSchema = z
+  .object({
+    id: z.string().uuid(),
+    status: imageJobStatusSchema,
+    prompt: z.string().trim().min(1),
+    model_id: z.string().trim().min(1),
+    model_name: z.string().trim().min(1),
+    image_quality: z.string().trim().min(1),
+    cost_estimate: z.number().int().positive(),
+    created_at: z.string().datetime({ offset: true }),
+    updated_at: z.string().datetime({ offset: true }),
+  })
+  .strict();
+
+export const imageJobPreparationSchema = z
+  .object({
+    job: imageJobSchema,
+    balance: z.number().int().nonnegative(),
+    can_afford: z.boolean(),
+  })
+  .strict();
+
+export const imageJobActivationSchema = z
+  .object({
+    job: imageJobSchema,
+  })
+  .strict();
+
+export const imageJobListSchema = z
+  .object({
+    items: z.array(imageJobSchema),
+    has_more: z.boolean(),
+    next_cursor: z.string().trim().min(1).nullable(),
+  })
+  .refine((page) => page.has_more === (page.next_cursor !== null), {
+    message: "Image job history cursor must match has_more.",
+  })
+  .strict();
+
+export const imageArtifactMetadataSchema = z
+  .object({
+    id: z.string().uuid(),
+    mime_type: z.string().trim().min(1),
+    size_bytes: z.number().int().positive(),
+    width: z.number().int().nonnegative(),
+    height: z.number().int().nonnegative(),
+  })
+  .strict();
+
+export const imageJobResultSchema = z
+  .object({
+    job_id: z.string().uuid(),
+    status: z.literal("succeeded"),
+    artifacts: z.array(imageArtifactMetadataSchema).min(1),
+  })
+  .strict();
+
+export type ImageModel = z.infer<typeof imageModelSchema>;
+export type ImageModelList = z.infer<typeof imageModelListSchema>;
+export type ImageJob = z.infer<typeof imageJobSchema>;
+export type ImageJobPreparation = z.infer<typeof imageJobPreparationSchema>;
+export type ImageJobActivation = z.infer<typeof imageJobActivationSchema>;
+export type ImageJobList = z.infer<typeof imageJobListSchema>;
+export type ImageArtifactMetadata = z.infer<typeof imageArtifactMetadataSchema>;
+export type ImageJobResult = z.infer<typeof imageJobResultSchema>;
+
 export const publicApiErrorSchema = z
   .object({
     error: z.string().trim().min(1),
@@ -53,4 +181,28 @@ export function parseAccountProfile(payload: unknown): AccountProfile {
 
 export function parseConversationList(payload: unknown): ConversationList {
   return conversationListSchema.parse(payload);
+}
+
+export function parseConversationMessageList(payload: unknown): ConversationMessageList {
+  return conversationMessageListSchema.parse(payload);
+}
+
+export function parseImageModelList(payload: unknown): ImageModelList {
+  return imageModelListSchema.parse(payload);
+}
+
+export function parseImageJobPreparation(payload: unknown): ImageJobPreparation {
+  return imageJobPreparationSchema.parse(payload);
+}
+
+export function parseImageJobActivation(payload: unknown): ImageJobActivation {
+  return imageJobActivationSchema.parse(payload);
+}
+
+export function parseImageJobList(payload: unknown): ImageJobList {
+  return imageJobListSchema.parse(payload);
+}
+
+export function parseImageJobResult(payload: unknown): ImageJobResult {
+  return imageJobResultSchema.parse(payload);
 }

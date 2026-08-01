@@ -26,26 +26,30 @@ func (r *fakeReleaser) ReleaseForJob(_ context.Context, jobID uuid.UUID) error {
 	return nil
 }
 
-func moderationHarness(t *testing.T, mod worker.Moderator, modResults domain.ModerationResultRepository, rel worker.ReservationReleaser) (*worker.GenerationWorker, *memory.JobRepo, *fakeStreams) {
+func moderationHarness(t *testing.T, mod worker.Moderator, modResults domain.ModerationResultRepository, rel worker.ReservationReleaser) (*worker.GenerationWorker, *memory.JobRepo, *memory.OutboxRepo, *fakeStreams) {
 	t.Helper()
 	jobs := memory.NewJobRepo()
 	tasks := memory.NewProviderTaskRepo()
 	artRepo := memory.NewArtifactRepo()
+	outbox := memory.NewOutboxRepo()
 	store := memory.NewObjectStore()
 	dl := stubDownloader{data: []byte("output"), contentType: "application/octet-stream"}
 	artSvc := artifactservice.New(artRepo, store, "artifacts", artifactservice.WithDownloader(dl))
 	streams := newFakeStreams()
 	deps := worker.Deps{
-		Jobs:       jobs,
-		Tasks:      tasks,
-		Artifacts:  artSvc,
-		Providers:  worker.NewRegistry(mock.New()),
-		Streams:    streams,
-		Moderator:  mod,
-		ModResults: modResults,
-		Releaser:   rel,
+		Jobs:           jobs,
+		ResultReadyUOW: memory.NewUnitOfWork(jobs, outbox, nil),
+		Tasks:          tasks,
+		Artifacts:      artSvc,
+		ArtifactRepo:   artRepo,
+		Objects:        store,
+		Providers:      worker.NewRegistry(mock.New()),
+		Streams:        streams,
+		Moderator:      mod,
+		ModResults:     modResults,
+		Releaser:       rel,
 	}
-	return worker.NewGenerationWorker(deps), jobs, streams
+	return worker.NewGenerationWorker(deps), jobs, outbox, streams
 }
 
 func insertQueuedJob(t *testing.T, jobs *memory.JobRepo, op domain.OperationType, modality domain.Modality, prompt string) *domain.Job {
@@ -73,7 +77,7 @@ func TestOutputModerationBlocksDelivery(t *testing.T) {
 	ctx := context.Background()
 	modRepo := memory.NewModerationRepo()
 	rel := &fakeReleaser{}
-	gen, jobs, streams := moderationHarness(t, moderationservice.NewKeywordModerator(), modRepo, rel)
+	gen, jobs, _, streams := moderationHarness(t, moderationservice.NewKeywordModerator(), modRepo, rel)
 
 	job := insertQueuedJob(t, jobs, domain.OperationImageGenerate, domain.ModalityImage, "please render nsfw content")
 	if err := gen.Process(ctx, queue.Task{JobID: job.ID, Operation: job.OperationType, Modality: job.Modality}); err != nil {
@@ -253,15 +257,15 @@ func TestInternalOutputGuardAllowsPublicProductLabels(t *testing.T) {
 	if textCtx.completeCalls != 1 {
 		t.Fatalf("public product output did not reach dialog context: calls=%d", textCtx.completeCalls)
 	}
-	if n := len(h.streams.byStream[redisqueue.StreamDelivery]); n != 1 {
-		t.Fatalf("public product output delivery count=%d, want 1", n)
+	if n := resultReadyEventCount(h.outbox, job.ID); n != 1 {
+		t.Fatalf("public product output result-ready events=%d, want 1", n)
 	}
 }
 
 // An allowed output proceeds to delivery as before.
 func TestOutputModerationAllowsDelivery(t *testing.T) {
 	ctx := context.Background()
-	gen, jobs, streams := moderationHarness(t, moderationservice.NewKeywordModerator(), memory.NewModerationRepo(), &fakeReleaser{})
+	gen, jobs, outbox, streams := moderationHarness(t, moderationservice.NewKeywordModerator(), memory.NewModerationRepo(), &fakeReleaser{})
 
 	job := insertQueuedJob(t, jobs, domain.OperationImageGenerate, domain.ModalityImage, "a friendly cat")
 	if err := gen.Process(ctx, queue.Task{JobID: job.ID, Operation: job.OperationType, Modality: job.Modality}); err != nil {
@@ -272,8 +276,11 @@ func TestOutputModerationAllowsDelivery(t *testing.T) {
 	if got.Status != domain.JobStatusResultReady {
 		t.Fatalf("status = %q, want result_ready", got.Status)
 	}
-	if n := len(streams.byStream[redisqueue.StreamDelivery]); n != 1 {
-		t.Fatalf("expected one delivery enqueue, got %d", n)
+	if n := resultReadyEventCount(outbox, job.ID); n != 1 {
+		t.Fatalf("expected one result-ready outbox event, got %d", n)
+	}
+	if n := len(streams.byStream[redisqueue.StreamDelivery]); n != 0 {
+		t.Fatalf("direct delivery enqueue = %d, want none before relay", n)
 	}
 }
 
@@ -340,8 +347,8 @@ func TestGenerationWorkerRecoversSanitizedSyncProviderResultAfterSubmitCrash(t *
 	if provider.submitCalls != 1 {
 		t.Fatalf("provider Submit calls = %d, want 1", provider.submitCalls)
 	}
-	if n := len(h.streams.byStream[redisqueue.StreamDelivery]); n != 1 {
-		t.Fatalf("delivery enqueue count = %d, want 1", n)
+	if n := resultReadyEventCount(h.outbox, job.ID); n != 1 {
+		t.Fatalf("result-ready outbox event count = %d, want 1", n)
 	}
 }
 

@@ -2,6 +2,7 @@ package miniapp
 
 import (
 	"vk-ai-aggregator/internal/domain"
+	"vk-ai-aggregator/internal/service/imagegeneration"
 	"vk-ai-aggregator/internal/service/modelcatalog"
 )
 
@@ -10,20 +11,29 @@ const (
 	miniAppChatPublicModelName = modelcatalog.MiniAppChatModelName
 )
 
-type miniAppModelSpec = modelcatalog.Model
+type miniAppModelSpec struct {
+	modelcatalog.Model
+	imageResolution *imagegeneration.Resolution
+}
 
 func resolveMiniAppModel(op domain.OperationType, raw string) (miniAppModelSpec, bool) {
-	return modelcatalog.ResolveMiniAppModel(op, raw)
+	model, ok := modelcatalog.ResolveMiniAppModel(op, raw)
+	return miniAppModelSpec{Model: model}, ok
 }
 
 func miniAppResponseModelID(model miniAppModelSpec) string {
-	return modelcatalog.MiniAppResponseModelID(model)
+	return modelcatalog.MiniAppResponseModelID(model.Model)
 }
 
-func normalizeMiniAppImageQuality(raw string) (string, bool) {
-	return modelcatalog.NormalizeImageQuality(raw)
-}
-
-func applyMiniAppImageQuality(model miniAppModelSpec, quality string) miniAppModelSpec {
-	return modelcatalog.ApplyImageQuality(model, quality)
+func miniAppModelFromImageResolution(resolution imagegeneration.Resolution) miniAppModelSpec {
+	return miniAppModelSpec{
+		Model: modelcatalog.Model{
+			ModelID:   resolution.Worker.ModelID,
+			ModelName: resolution.Worker.ModelName,
+			Provider:  resolution.Worker.Provider,
+			ModelCode: resolution.Worker.ModelCode,
+			ExposeID:  true,
+		},
+		imageResolution: &resolution,
+	}
 }

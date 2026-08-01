@@ -80,6 +80,18 @@ func (o OperationType) Valid() bool {
 type JobStatus string
 
 const (
+	// PreparedConfirmationExpiredCode and PreparedConfirmationExpiredMessage
+	// are the stable persisted outcome for a browser image preparation whose
+	// explicit confirmation deadline elapsed. They are shared by activation and
+	// bounded reconciliation so the same durable job state is observable through
+	// every path.
+	PreparedConfirmationExpiredCode    = "prepared_confirmation_expired"
+	PreparedConfirmationExpiredMessage = "image generation confirmation expired"
+
+	// JobStatusPrepared is an account-owned request recorded before a future
+	// activation flow atomically reserves credits and queues delivery-neutral
+	// work. Prepared jobs are neither active work nor terminal outcomes.
+	JobStatusPrepared JobStatus = "prepared"
 	// JobStatusReceived means the job was created from a command.
 	JobStatusReceived JobStatus = "received"
 	// JobStatusValidated means input and quota checks passed.
@@ -128,6 +140,7 @@ const (
 // machine-readable form of the job state machine and is consulted by the
 // orchestrator before applying a transition.
 var jobTransitions = map[JobStatus][]JobStatus{
+	JobStatusPrepared:            {JobStatusValidated, JobStatusExpired},
 	JobStatusReceived:            {JobStatusValidated, JobStatusRejected, JobStatusCancelled},
 	JobStatusValidated:           {JobStatusAwaitingPayment, JobStatusCreditsReserved, JobStatusQueued, JobStatusRejected, JobStatusCancelled},
 	JobStatusRejected:            {JobStatusRefunded},
@@ -141,7 +154,7 @@ var jobTransitions = map[JobStatus][]JobStatus{
 	JobStatusProviderSucceeded:   {JobStatusPostprocessing, JobStatusResultReady, JobStatusFailedRetryable, JobStatusRejected},
 	JobStatusProviderFailed:      {JobStatusFailedRetryable, JobStatusFailedTerminal, JobStatusRefunded},
 	JobStatusPostprocessing:      {JobStatusResultReady, JobStatusFailedRetryable, JobStatusFailedTerminal},
-	JobStatusResultReady:         {JobStatusDelivering, JobStatusFailedRetryable},
+	JobStatusResultReady:         {JobStatusDelivering, JobStatusSucceeded, JobStatusFailedRetryable},
 	JobStatusDelivering:          {JobStatusSucceeded, JobStatusFailedRetryable, JobStatusFailedTerminal},
 	JobStatusSucceeded:           {},
 	JobStatusFailedRetryable:     {JobStatusQueued, JobStatusFailedTerminal, JobStatusRefunded},
@@ -235,14 +248,25 @@ func (s JobStatus) AllowedNextStatuses() []JobStatus {
 type Job struct {
 	// ID is the internal primary key.
 	ID uuid.UUID `json:"id"`
-	// UserID is the legacy channel user that created the job.
+	// UserID is the legacy channel user that created the job. uuid.Nil means
+	// account-native data has no legacy user provenance; it is not an identity.
 	UserID uuid.UUID `json:"user_id"`
 	// AccountID is the canonical owner for billing, history and artifacts.
 	// Legacy user_id remains populated for channel compatibility.
 	AccountID uuid.UUID `json:"account_id,omitempty"`
 	// Source is the trusted product surface that created the job.
 	Source string `json:"source"`
-	// VKPeerID is the VK conversation the job belongs to.
+	// ChannelContext is bounded opaque origin provenance. It is never an owner
+	// or authorization input.
+	ChannelContext *ChannelContext `json:"channel_context,omitempty"`
+	// ResultMode controls whether a ready result is externally pushed or made
+	// available through account history.
+	ResultMode ResultMode `json:"result_mode"`
+	// DeliveryTarget is required only for external-push finalization and is
+	// intentionally separate from the origin context.
+	DeliveryTarget *DeliveryTarget `json:"delivery_target,omitempty"`
+	// VKPeerID is the VK conversation the job belongs to. Zero means
+	// account-native data has no legacy VK provenance; it is not an identity.
 	VKPeerID int64 `json:"vk_peer_id"`
 	// CommandID is the command that produced this job.
 	CommandID uuid.UUID `json:"command_id"`

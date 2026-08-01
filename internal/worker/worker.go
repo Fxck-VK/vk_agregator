@@ -32,6 +32,7 @@ import (
 	"vk-ai-aggregator/internal/platform/queue"
 	"vk-ai-aggregator/internal/platform/ratelimit"
 	"vk-ai-aggregator/internal/platform/tracing"
+	"vk-ai-aggregator/internal/platform/uow"
 	"vk-ai-aggregator/internal/service/assistantfacts"
 	"vk-ai-aggregator/internal/service/dialogcontext"
 	"vk-ai-aggregator/internal/service/moderationservice"
@@ -65,6 +66,7 @@ const (
 // artifactservice.Service.
 type ArtifactSaver interface {
 	SaveRemoteArtifactForAccount(ctx context.Context, userID, accountID uuid.UUID, jobID *uuid.UUID, kind domain.ArtifactKind, mediaType domain.MediaType, url string) (*domain.Artifact, error)
+	SaveTextArtifactForAccount(ctx context.Context, userID, accountID uuid.UUID, jobID *uuid.UUID, kind domain.ArtifactKind, text string) (*domain.Artifact, error)
 	SaveVariantWithMetadata(ctx context.Context, artifact *domain.Artifact, variantType domain.VariantType, mimeType string, data []byte, metadata domain.ArtifactMediaMetadata) (*domain.ArtifactVariant, error)
 	EnsureArtifactScanned(ctx context.Context, artifactID uuid.UUID) error
 }
@@ -892,6 +894,7 @@ func (e providerResultError) ProviderErrorClass() domain.ProviderErrorClass { re
 // both the generation and poll workers.
 type processor struct {
 	jobs                 domain.JobRepository
+	resultReadyUOW       uow.Manager
 	tasks                domain.ProviderTaskRepository
 	artifacts            ArtifactSaver
 	artifactRepo         domain.ArtifactRepository
@@ -953,9 +956,13 @@ type AssistantFacts interface {
 
 // Deps bundles the dependencies shared by the workers.
 type Deps struct {
-	Jobs      domain.JobRepository
-	Tasks     domain.ProviderTaskRepository
-	Artifacts ArtifactSaver
+	Jobs domain.JobRepository
+	// ResultReadyUOW atomically persists the result_ready status and its
+	// finalization outbox event. It is required: without it workers fail closed
+	// instead of making a result ready with no recoverable finalization task.
+	ResultReadyUOW uow.Manager
+	Tasks          domain.ProviderTaskRepository
+	Artifacts      ArtifactSaver
 	// ArtifactRepo loads input artifact metadata for provider request assembly.
 	ArtifactRepo domain.ArtifactRepository
 	// Objects loads input artifact bytes for provider request assembly.
@@ -1010,9 +1017,11 @@ type Deps struct {
 	// conversation history.
 	AssistantFacts AssistantFacts
 	// Moderator, when set, runs an output moderation check before delivery.
-	// When nil, moderation is skipped (allow-all) for local/test wiring.
+	// When nil, the deterministic internal policy produces an explicit verdict;
+	// result readiness still requires that verdict to be persisted.
 	Moderator Moderator
-	// ModResults, when set, persists moderation verdicts for audit.
+	// ModResults persists one output-stage verdict per linked artifact and is
+	// required before a job may become result_ready.
 	ModResults domain.ModerationResultRepository
 	// Releaser, when set, frees reserved credits for moderation-blocked jobs
 	// and terminal provider failures before capture.
@@ -1079,6 +1088,7 @@ func newProcessor(d Deps) processor {
 	}
 	return processor{
 		jobs:                 d.Jobs,
+		resultReadyUOW:       d.ResultReadyUOW,
 		tasks:                d.Tasks,
 		artifacts:            d.Artifacts,
 		artifactRepo:         d.ArtifactRepo,
@@ -1532,6 +1542,23 @@ func workerJobOwnerID(job *domain.Job) uuid.UUID {
 	return job.UserID
 }
 
+func workerOutputOwnerID(job *domain.Job) (uuid.UUID, error) {
+	if job == nil {
+		return uuid.Nil, errors.New("worker: output job is required")
+	}
+	if job.ResultMode == domain.ResultModeAccountHistory {
+		if job.AccountID == uuid.Nil {
+			return uuid.Nil, errors.New("worker: account-history output requires account owner")
+		}
+		return job.AccountID, nil
+	}
+	ownerID := workerJobOwnerID(job)
+	if ownerID == uuid.Nil {
+		return uuid.Nil, errors.New("worker: output owner is required")
+	}
+	return ownerID, nil
+}
+
 func workerArtifactOwnerID(artifact *domain.Artifact) uuid.UUID {
 	if artifact == nil {
 		return uuid.Nil
@@ -1781,6 +1808,11 @@ func (p *processor) setStatus(ctx context.Context, job *domain.Job, to domain.Jo
 		return err
 	}
 	job.Status = to
+	p.recordStatusTransition(job, from, to, errCode)
+	return nil
+}
+
+func (p *processor) recordStatusTransition(job *domain.Job, from, to domain.JobStatus, errCode string) {
 	metrics.JobStatusCurrent.WithLabelValues(string(from), operationMetricLabel(job.OperationType), modalityMetricLabel(job.Modality)).Dec()
 	metrics.JobStatusCurrent.WithLabelValues(string(to), operationMetricLabel(job.OperationType), modalityMetricLabel(job.Modality)).Inc()
 	if to.IsTerminal() && !job.CreatedAt.IsZero() {
@@ -1803,7 +1835,64 @@ func (p *processor) setStatus(ctx context.Context, job *domain.Job, to domain.Jo
 		}
 		metrics.JobRejected.WithLabelValues(metricLabel(reason), modalityMetricLabel(job.Modality)).Inc()
 	}
+}
+
+const eventJobResultReady = "event.job.result_ready"
+
+// markResultReady commits the state transition and durable finalization intent
+// together. The queue relay later turns the intent into delivery-stream work,
+// so a crash after this commit cannot strand a ready result without a task.
+func (p *processor) markResultReady(ctx context.Context, job *domain.Job) error {
+	if p.resultReadyUOW == nil {
+		return errors.New("worker: result-ready unit of work is required")
+	}
+	if job == nil {
+		return errors.New("worker: result-ready job is required")
+	}
+	if job.Status == domain.JobStatusResultReady {
+		return nil
+	}
+
+	from := job.Status
+	ready := *job
+	ready.Status = domain.JobStatusResultReady
+	if err := p.resultReadyUOW.Within(ctx, func(ctx context.Context, repos uow.Repositories) error {
+		if repos.Jobs == nil || repos.Outbox == nil {
+			return errors.New("worker: result-ready unit of work is incomplete")
+		}
+		if err := repos.Jobs.UpdateStatus(ctx, job.ID, from, domain.JobStatusResultReady, "", ""); err != nil {
+			return err
+		}
+		return repos.Outbox.Add(ctx, resultReadyEvent(ctx, &ready))
+	}); err != nil {
+		return err
+	}
+
+	job.Status = domain.JobStatusResultReady
+	p.recordStatusTransition(job, from, domain.JobStatusResultReady, "")
 	return nil
+}
+
+func resultReadyEvent(ctx context.Context, job *domain.Job) *domain.OutboxEvent {
+	payload, _ := json.Marshal(struct {
+		JobID         uuid.UUID            `json:"job_id"`
+		Operation     domain.OperationType `json:"operation"`
+		Modality      domain.Modality      `json:"modality"`
+		CorrelationID string               `json:"correlation_id,omitempty"`
+		Traceparent   string               `json:"traceparent,omitempty"`
+	}{
+		JobID:         job.ID,
+		Operation:     job.OperationType,
+		Modality:      job.Modality,
+		CorrelationID: job.CorrelationID,
+		Traceparent:   tracing.Traceparent(ctx),
+	})
+	return &domain.OutboxEvent{
+		AggregateType: "job",
+		AggregateID:   job.ID,
+		EventType:     eventJobResultReady,
+		Payload:       payload,
+	}
 }
 
 // activeTask returns the most recent provider task for a job that is still
@@ -1943,7 +2032,7 @@ func (p *processor) applyResult(ctx context.Context, job *domain.Job, pt *domain
 	switch res.Status {
 	case domain.ProviderTaskSucceeded:
 		p.recordProviderOutputs(pt, job, res)
-		if err := p.saveOutputs(ctx, job, res.OutputURLs); err != nil {
+		if err := p.saveOutputs(ctx, job, res.OutputURLs, res.Text); err != nil {
 			failureClass := outputArtifactFailureClass(err)
 			p.recordProviderProductFailureForTask(job, pt, string(failureClass))
 			observeVideoRouteMediaFailureForJob(job, "download", string(failureClass))
@@ -1970,22 +2059,22 @@ func (p *processor) applyResult(ctx context.Context, job *domain.Job, pt *domain
 		}
 		// Output moderation gates delivery (invariant #15). A block stops the
 		// pipeline here: no dialog answer persistence, no delivery, no capture.
-		blocked, err := p.moderateOutput(ctx, job, res.Text)
+		blocked, dialogAnswer, err := p.moderateOutputs(ctx, job, res.Text)
 		if err != nil {
 			return err
 		}
 		if blocked {
 			return nil
 		}
-		if err := p.saveDialogAnswer(ctx, job, res.Text); err != nil {
+		if err := p.saveDialogAnswer(ctx, job, dialogAnswer); err != nil {
 			slog.WarnContext(ctx, "dialog context answer save failed",
 				slog.String("job_id", job.ID.String()),
 				logging.ErrorAttr(err))
 		}
-		if err := p.setStatus(ctx, job, domain.JobStatusResultReady, "", ""); err != nil {
+		if err := p.markResultReady(ctx, job); err != nil {
 			return err
 		}
-		return p.streams.PublishTo(ctx, redisqueue.StreamDelivery, taskOf(job))
+		return nil
 
 	case domain.ProviderTaskProcessing:
 		if err := p.setStatus(ctx, job, domain.JobStatusProviderProcessing, "", ""); err != nil {
@@ -2451,13 +2540,22 @@ func (p *processor) saveDialogAnswer(ctx context.Context, job *domain.Job, answe
 	return p.textContext.Complete(ctx, job, conversationID, answer)
 }
 
-// saveOutputs stores each provider output URL as an output artifact and records
-// the artifact ids on the job, skipping ids already attached (idempotent).
-func (p *processor) saveOutputs(ctx context.Context, job *domain.Job, urls []string) error {
+// saveOutputs stores the provider's canonical outputs and records their ids on
+// the job. Text is persisted directly from the normalized provider body;
+// provider URLs are used only for non-text media.
+func (p *processor) saveOutputs(ctx context.Context, job *domain.Job, urls []string, outputText string) error {
+	ownerID, err := workerOutputOwnerID(job)
+	if err != nil {
+		return err
+	}
+	outputCount := len(urls)
+	if job.Modality == domain.ModalityText && outputText != "" {
+		outputCount = 1
+	}
 	ctx, span := tracing.Start(ctx, "artifact.save_outputs",
 		attribute.String("job.id", job.ID.String()),
 		attribute.String("modality", string(job.Modality)),
-		attribute.Int("artifact.output_count", len(urls)),
+		attribute.Int("artifact.output_count", outputCount),
 		tracing.CorrelationAttr(job.CorrelationID),
 	)
 	defer span.End()
@@ -2467,6 +2565,34 @@ func (p *processor) saveOutputs(ctx context.Context, job *domain.Job, urls []str
 			return err
 		}
 	}
+
+	if job.Modality == domain.ModalityText {
+		if len(job.OutputArtifactIDs) > 0 {
+			return p.jobs.Update(ctx, job)
+		}
+		if outputText == "" {
+			return errors.New("worker: provider text output is unavailable")
+		}
+		art, err := p.artifacts.SaveTextArtifactForAccount(
+			ctx,
+			job.UserID,
+			ownerID,
+			&job.ID,
+			domain.ArtifactKindOutput,
+			outputText,
+		)
+		if err != nil {
+			tracing.RecordError(span, err)
+			return err
+		}
+		job.OutputArtifactIDs = append(job.OutputArtifactIDs, art.ID)
+		if err := p.jobs.Update(ctx, job); err != nil {
+			tracing.RecordError(span, err)
+			return err
+		}
+		return nil
+	}
+
 	existingCount := len(job.OutputArtifactIDs)
 	if len(urls) == 0 || existingCount >= len(urls) {
 		return p.jobs.Update(ctx, job)
@@ -2474,7 +2600,7 @@ func (p *processor) saveOutputs(ctx context.Context, job *domain.Job, urls []str
 
 	mediaType := mediaTypeFor(job.Modality)
 	for _, url := range urls[existingCount:] {
-		art, err := p.artifacts.SaveRemoteArtifactForAccount(ctx, job.UserID, workerJobOwnerID(job), &job.ID, domain.ArtifactKindOutput, mediaType, url)
+		art, err := p.artifacts.SaveRemoteArtifactForAccount(ctx, job.UserID, ownerID, &job.ID, domain.ArtifactKindOutput, mediaType, url)
 		if err != nil {
 			tracing.RecordError(span, err)
 			return err
@@ -2647,80 +2773,190 @@ func internalOutputPolicy(outputText string) (moderationservice.Outcome, bool) {
 	return moderationservice.Outcome{}, false
 }
 
-// moderateOutput runs the deterministic internal-detail policy and the
-// configured output moderator. A block rejects the job before dialog storage,
-// delivery, or capture, releases the reservation, and records an audit verdict.
-// The deterministic policy remains active when no external moderator exists.
-func (p *processor) moderateOutput(ctx context.Context, job *domain.Job, outputText string) (bool, error) {
-	out, policyBlocked := internalOutputPolicy(outputText)
-	moderationProvider := internalOutputPolicyProvider
-	if !policyBlocked && p.moderator == nil {
-		return false, nil
+// moderateOutputs applies and persists an output-stage verdict for every linked
+// output artifact. Existing complete verdicts are reused on retry; any
+// conflicting or disallowed verdict fails closed.
+func (p *processor) moderateOutputs(ctx context.Context, job *domain.Job, providerText string) (bool, string, error) {
+	if len(job.OutputArtifactIDs) == 0 {
+		return false, "", errors.New("worker: output moderation requires linked artifacts")
 	}
+	if p.artifactRepo == nil {
+		return false, "", errors.New("worker: artifact repository is required for output moderation")
+	}
+	if p.modResults == nil {
+		return false, "", errors.New("worker: moderation result repository is required")
+	}
+
 	ctx, span := tracing.Start(ctx, "moderation.output",
 		attribute.String("job.id", job.ID.String()),
 		attribute.String("modality", string(job.Modality)),
+		attribute.Int("artifact.output_count", len(job.OutputArtifactIDs)),
 		tracing.CorrelationAttr(job.CorrelationID),
 	)
 	defer span.End()
 
-	if !policyBlocked {
-		var pp promptParams
-		if len(job.Params) > 0 {
-			_ = json.Unmarshal(job.Params, &pp)
-		}
-		var err error
-		out, err = p.moderator.Check(ctx, moderationservice.Input{
-			Stage:    domain.ModerationStageOutput,
-			Modality: job.Modality,
-			Prompt:   pp.Prompt,
-			Text:     outputText,
-		})
+	artifacts := make([]*domain.Artifact, len(job.OutputArtifactIDs))
+	ownerID, err := workerOutputOwnerID(job)
+	if err != nil {
+		return false, "", err
+	}
+	for i, artifactID := range job.OutputArtifactIDs {
+		artifact, err := p.artifactRepo.GetByIDForAccount(ctx, ownerID, artifactID)
 		if err != nil {
 			tracing.RecordError(span, err)
-			return false, err
+			return false, "", fmt.Errorf("worker: load output artifact for moderation: %w", err)
 		}
-		moderationProvider = p.moderator.Name()
+		if artifact == nil ||
+			artifact.ID != artifactID ||
+			artifact.JobID == nil ||
+			*artifact.JobID != job.ID ||
+			artifact.Kind != domain.ArtifactKindOutput ||
+			artifact.Status != domain.ArtifactStatusReady ||
+			!artifact.MediaType.Valid() {
+			return false, "", errors.New("worker: output artifact is not ready for moderation")
+		}
+		artifacts[i] = artifact
 	}
-	span.SetAttributes(attribute.String("moderation.decision", string(out.Decision)))
 
-	if p.modResults != nil {
-		var artID *uuid.UUID
-		if len(job.OutputArtifactIDs) > 0 {
-			id := job.OutputArtifactIDs[0]
-			artID = &id
+	existing, err := p.modResults.ListByJob(ctx, job.ID)
+	if err != nil {
+		tracing.RecordError(span, err)
+		return false, "", err
+	}
+
+	var pp promptParams
+	if len(job.Params) > 0 {
+		_ = json.Unmarshal(job.Params, &pp)
+	}
+	blocked := false
+	dialogAnswer := ""
+	for _, artifact := range artifacts {
+		hasVerdict, allowed := artifactModerationState(job.ID, artifact.ID, existing)
+		if hasVerdict {
+			if !allowed {
+				blocked = true
+			}
+			if artifact.MediaType == domain.MediaTypeText && dialogAnswer == "" {
+				if text, loadErr := p.loadStoredTextOutput(ctx, artifact); loadErr == nil {
+					dialogAnswer = text
+				}
+			}
+			continue
 		}
-		_ = p.modResults.Create(ctx, &domain.ModerationResult{
+
+		moderationText := providerText
+		if artifact.MediaType == domain.MediaTypeText {
+			moderationText, err = p.loadStoredTextOutput(ctx, artifact)
+			if err != nil {
+				tracing.RecordError(span, err)
+				return false, "", err
+			}
+			if dialogAnswer == "" {
+				dialogAnswer = moderationText
+			}
+		}
+		out, moderationProvider, checkErr := p.checkOutputArtifact(ctx, job, pp.Prompt, moderationText)
+		if checkErr != nil {
+			tracing.RecordError(span, checkErr)
+			return false, "", checkErr
+		}
+		artifactID := artifact.ID
+		if err := p.modResults.Create(ctx, &domain.ModerationResult{
 			JobID:      job.ID,
-			ArtifactID: artID,
+			ArtifactID: &artifactID,
+			Stage:      domain.ModerationStageOutput,
+			Decision:   out.Decision,
+			Categories: out.Categories,
+			Provider:   moderationProvider,
+		}); err != nil {
+			tracing.RecordError(span, err)
+			return false, "", err
+		}
+		existing = append(existing, &domain.ModerationResult{
+			JobID:      job.ID,
+			ArtifactID: &artifactID,
 			Stage:      domain.ModerationStageOutput,
 			Decision:   out.Decision,
 			Categories: out.Categories,
 			Provider:   moderationProvider,
 		})
+		metrics.ModerationDecisions.WithLabelValues(string(out.Decision)).Inc()
+		if !out.Decision.Allowed() {
+			blocked = true
+		}
 	}
 
-	metrics.ModerationDecisions.WithLabelValues(string(out.Decision)).Inc()
-	if out.Decision.Allowed() {
-		return false, nil
+	if !blocked {
+		return false, dialogAnswer, nil
 	}
-
+	if err := p.releaseReserved(ctx, job); err != nil {
+		tracing.RecordError(span, err)
+		return false, "", err
+	}
 	if err := p.setStatus(ctx, job, domain.JobStatusRejected, "content_rejected", "blocked by output moderation"); err != nil {
 		tracing.RecordError(span, err)
-		return false, err
+		return false, "", err
 	}
 	metrics.JobsTerminal.WithLabelValues(string(domain.JobStatusRejected)).Inc()
-	if p.releaser != nil {
-		if err := p.releaser.ReleaseForJob(ctx, job.ID); err != nil {
-			metrics.BillingReleases.WithLabelValues(operationMetricLabel(job.OperationType), "error").Inc()
-			observeVideoRouteBillingForJob(job, "release", "error")
-			tracing.RecordError(span, err)
-			return false, err
-		}
-		metrics.BillingReleases.WithLabelValues(operationMetricLabel(job.OperationType), "success").Inc()
-		observeVideoRouteBillingForJob(job, "release", "success")
+	return true, "", nil
+}
+
+func (p *processor) checkOutputArtifact(
+	ctx context.Context,
+	job *domain.Job,
+	prompt, outputText string,
+) (moderationservice.Outcome, string, error) {
+	if out, blocked := internalOutputPolicy(outputText); blocked {
+		return out, internalOutputPolicyProvider, nil
 	}
-	return true, nil
+	if p.moderator == nil {
+		return moderationservice.Outcome{Decision: domain.ModerationAllow}, internalOutputPolicyProvider, nil
+	}
+	out, err := p.moderator.Check(ctx, moderationservice.Input{
+		Stage:    domain.ModerationStageOutput,
+		Modality: job.Modality,
+		Prompt:   prompt,
+		Text:     outputText,
+	})
+	if err != nil {
+		return moderationservice.Outcome{}, "", err
+	}
+	return out, p.moderator.Name(), nil
+}
+
+func (p *processor) loadStoredTextOutput(ctx context.Context, artifact *domain.Artifact) (string, error) {
+	if p.objects == nil {
+		return "", errors.New("worker: object store is required to recover text output")
+	}
+	if artifact == nil || artifact.MediaType != domain.MediaTypeText || artifact.StorageBucket == "" || artifact.StorageKey == "" {
+		return "", errors.New("worker: stored text output coordinates are unavailable")
+	}
+	body, err := p.objects.GetObject(ctx, artifact.StorageBucket, artifact.StorageKey)
+	if err != nil {
+		return "", fmt.Errorf("worker: load stored text output: %w", err)
+	}
+	if len(body) == 0 {
+		return "", errors.New("worker: stored text output is empty")
+	}
+	return string(body), nil
+}
+
+func artifactModerationState(jobID, artifactID uuid.UUID, results []*domain.ModerationResult) (matched, allowed bool) {
+	allowed = true
+	for _, result := range results {
+		if result == nil ||
+			result.JobID != jobID ||
+			result.Stage != domain.ModerationStageOutput ||
+			result.ArtifactID == nil ||
+			*result.ArtifactID != artifactID {
+			continue
+		}
+		matched = true
+		if !result.Decision.Allowed() {
+			allowed = false
+		}
+	}
+	return matched, allowed
 }
 
 // toDLQ publishes the exhausted task to the dead-letter stream. It is best

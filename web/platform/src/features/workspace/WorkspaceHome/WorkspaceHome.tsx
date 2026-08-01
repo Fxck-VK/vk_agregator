@@ -1,6 +1,8 @@
 import Link from "next/link";
 
 import { NewConversationButton } from "@/features/conversations/NewConversationButton/NewConversationButton";
+import { ImageGenerationPanel } from "@/features/image-generation/ImageGenerationPanel/ImageGenerationPanel";
+import { ImageJobHistory } from "@/features/image-generation/ImageJobHistory/ImageJobHistory";
 import { ru } from "@/i18n/ru";
 
 import styles from "./WorkspaceHome.module.css";
@@ -20,16 +22,20 @@ export function WorkspaceHome({ section = "home" }: WorkspaceHomeProps) {
       <h1 id="workspace-title">{content.title}</h1>
       <p className={styles.description}>{content.description}</p>
       {section === "home" ? (
-        <div className={styles.quickStart}>
-          <div>
-            <h2>{ru.workspace.quickStartTitle}</h2>
-            <p>{ru.workspace.quickStartDescription}</p>
+        <>
+          <div className={styles.quickStart}>
+            <div>
+              <h2>{ru.workspace.quickStartTitle}</h2>
+              <p>{ru.workspace.quickStartDescription}</p>
+            </div>
+            <div className={styles.actions}>
+              <NewConversationButton />
+              <Link href="/app/models">{ru.workspace.openModels}</Link>
+            </div>
           </div>
-          <div className={styles.actions}>
-            <NewConversationButton />
-            <Link href="/app/models">{ru.workspace.openModels}</Link>
-          </div>
-        </div>
+          <ImageGenerationPanel />
+          <ImageJobHistory />
+        </>
       ) : null}
     </section>
   );

@@ -46,7 +46,7 @@ func (r *ArtifactRepository) Create(ctx context.Context, a *domain.Artifact) err
 		) VALUES ($1, $2, COALESCE($3::uuid, (SELECT account_id FROM users WHERE id = $2)), $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
 		RETURNING ` + artifactColumns
 	row := r.db.QueryRow(ctx, q,
-		a.ID, a.OwnerUserID, nullableUUID(a.OwnerAccountID), a.JobID, a.Kind, a.MediaType, a.MimeType,
+		a.ID, nullableUUID(a.OwnerUserID), nullableUUID(a.OwnerAccountID), a.JobID, a.Kind, a.MediaType, a.MimeType,
 		a.StorageBucket, a.StorageKey, a.PublicURL, a.SHA256, a.ValidationPolicyVersion,
 		a.LifecycleClass, a.SizeBytes, a.Width, a.Height, a.DurationMS, a.Codec,
 		a.Container, a.BitrateBPS, a.ProbeStatus, a.Status,
@@ -86,6 +86,20 @@ func (r *ArtifactRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain
 	return &a, nil
 }
 
+// GetByIDForAccount fetches an artifact only for its exact canonical account
+// owner and intentionally does not consult legacy owner_user_id.
+func (r *ArtifactRepository) GetByIDForAccount(ctx context.Context, accountID, id uuid.UUID) (*domain.Artifact, error) {
+	if accountID == uuid.Nil {
+		return nil, domain.ErrNotFound
+	}
+	const q = `SELECT ` + artifactColumns + ` FROM artifacts WHERE id = $1 AND owner_account_id = $2`
+	var a domain.Artifact
+	if err := mapError(scanArtifact(r.db.QueryRow(ctx, q, id, accountID), &a)); err != nil {
+		return nil, err
+	}
+	return &a, nil
+}
+
 // GetBySHA256 fetches an artifact by content hash for deduplication.
 func (r *ArtifactRepository) GetBySHA256(ctx context.Context, ownerID uuid.UUID, sha256 string) (*domain.Artifact, error) {
 	artifact, err := r.getBySHA256OwnerColumn(ctx, "owner_account_id", ownerID, sha256)
@@ -96,6 +110,15 @@ func (r *ArtifactRepository) GetBySHA256(ctx context.Context, ownerID uuid.UUID,
 		return nil, err
 	}
 	return r.getBySHA256OwnerColumn(ctx, "owner_user_id", ownerID, sha256)
+}
+
+// GetBySHA256ForAccount fetches an artifact by hash only for its exact
+// canonical owner.
+func (r *ArtifactRepository) GetBySHA256ForAccount(ctx context.Context, accountID uuid.UUID, sha256 string) (*domain.Artifact, error) {
+	if accountID == uuid.Nil {
+		return nil, domain.ErrNotFound
+	}
+	return r.getBySHA256OwnerColumn(ctx, "owner_account_id", accountID, sha256)
 }
 
 func (r *ArtifactRepository) getBySHA256OwnerColumn(ctx context.Context, column string, ownerID uuid.UUID, sha256 string) (*domain.Artifact, error) {
@@ -118,6 +141,15 @@ func (r *ArtifactRepository) FindReusableInputReference(ctx context.Context, own
 		return nil, err
 	}
 	return r.findReusableInputReferenceByOwnerColumn(ctx, "owner_user_id", ownerID, sha256, validationPolicyVersion, mimeType)
+}
+
+// FindReusableInputReferenceForAccount finds a reusable input reference only
+// for its exact canonical owner and never falls back to owner_user_id.
+func (r *ArtifactRepository) FindReusableInputReferenceForAccount(ctx context.Context, accountID uuid.UUID, sha256, validationPolicyVersion, mimeType string) (*domain.Artifact, error) {
+	if accountID == uuid.Nil {
+		return nil, domain.ErrNotFound
+	}
+	return r.findReusableInputReferenceByOwnerColumn(ctx, "owner_account_id", accountID, sha256, validationPolicyVersion, mimeType)
 }
 
 func (r *ArtifactRepository) findReusableInputReferenceByOwnerColumn(ctx context.Context, column string, ownerID uuid.UUID, sha256, validationPolicyVersion, mimeType string) (*domain.Artifact, error) {
@@ -194,9 +226,10 @@ func (r *ArtifactRepository) ListVariants(ctx context.Context, artifactID uuid.U
 }
 
 func scanArtifact(row rowScanner, a *domain.Artifact) error {
+	var legacyOwnerUserID *uuid.UUID
 	var ownerAccountID *uuid.UUID
 	if err := row.Scan(
-		&a.ID, &a.OwnerUserID, &ownerAccountID, &a.JobID, &a.Kind, &a.MediaType, &a.MimeType,
+		&a.ID, &legacyOwnerUserID, &ownerAccountID, &a.JobID, &a.Kind, &a.MediaType, &a.MimeType,
 		&a.StorageBucket, &a.StorageKey, &a.PublicURL, &a.SHA256, &a.ValidationPolicyVersion,
 		&a.LifecycleClass, &a.SizeBytes, &a.Width, &a.Height, &a.DurationMS, &a.Codec,
 		&a.Container, &a.BitrateBPS, &a.ProbeStatus, &a.Status, &a.CreatedAt, &a.UpdatedAt,
@@ -205,6 +238,10 @@ func scanArtifact(row rowScanner, a *domain.Artifact) error {
 	}
 	if ownerAccountID != nil {
 		a.OwnerAccountID = *ownerAccountID
+	}
+	a.OwnerUserID = uuid.Nil
+	if legacyOwnerUserID != nil {
+		a.OwnerUserID = *legacyOwnerUserID
 	}
 	return nil
 }

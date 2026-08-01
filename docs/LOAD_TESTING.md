@@ -1721,3 +1721,182 @@ Admin capacity is acceptable only when:
   payment payloads, private URLs or raw PII;
 - Postgres diagnostics do not show long-running scans from admin dashboards;
 - audit log volume remains bounded and searchable.
+
+## Chapter 11. Account-first finalization and relay scale gate
+
+“One million monthly active users” is not a traffic model. This chapter cannot
+be marked green from MAU, local defaults, or a single canary. Product,
+infrastructure, and SRE owners must supply the exact environment-specific
+inputs below before a capacity run is scheduled.
+
+### Required external inputs
+
+Record values, units, source, owner, and approval date in the load-test report:
+
+| Input | Required definition |
+|---|---|
+| Peak submitted jobs/minute | Peak and sustained submitted jobs per minute, split by text/image/video/audio and by VK Bot/Mini App/web source |
+| Relay count | Initial canary count, each scale step, and maximum relay instances authorized for the target topology |
+| Redis throughput | Provisioned and observed operations/second plus stream publish/acknowledgement throughput available to generation and delivery |
+| PostgreSQL connection cap | Hard server/pool cap and the maximum connections budgeted separately to API, workers, relays, reconciliation, and operator tooling |
+| Publish latency SLO | Maximum accepted p95 and p99 from outbox eligibility/claim to acknowledged Redis publication |
+| Capture latency SLO | Maximum accepted p95 and p99 from durable `result_ready` to committed billing capture |
+| Maximum backlog age | Maximum accepted age of the oldest pending outbox event and finalization stream item at steady state and after the peak step |
+| Retry/quarantine bound | Maximum retry rate and maximum quarantine rate/count for the run, including whether any semantic result-ready quarantine is permitted |
+
+Missing, estimated-without-owner, or unitless values are a hard stop. Do not
+substitute repository defaults or derive them from MAU. Also record the test
+duration, warm-up, workload mix, dataset size, lease duration, retry budget,
+Redis topology, PostgreSQL topology, and whether indexes from
+`deployments/postgres/000045_outbox_lease_indexes.concurrent.sql` are present
+and valid.
+
+### Publish-latency measurement
+
+Use `vkagg_outbox_relay_publish_duration_seconds{outcome="success"}` for the
+publish-latency SLO. Each sample starts immediately before the relay begins the
+short batch claim transaction and stops only when Redis acknowledges that
+event's `Enqueue` or `PublishTo` call. It includes the claim transaction and
+the time an event waits behind earlier sequential publications from the same
+claimed batch; it excludes the later conditional outbox-resolution transaction.
+Audit-only events and failed Redis calls create no latency sample because they
+do not have an acknowledged Redis publication. Evaluate p95/p99 separately for
+the executable `queued` and `result_ready` event classes, then use the stricter
+result for the declared gate. This is deliberately not a bare Redis-client-call
+latency metric.
+
+### Test contour and sequence
+
+Run only in `APP_ENV=loadtest` or an approved staging environment with mock
+providers, synthetic accounts, sanitized diagnostics, and web prepared-job
+activation disabled.
+
+1. Run the read-only outbox preflight and require every hard acceptance query
+   to return zero/no rows.
+2. Record the valid/ready state and definitions of all five `000045` operator
+   indexes. Do not create or repair indexes as part of the load runner.
+3. Start one `cmd/worker` with `WORKER_MODE=relay` and run a warm-up at the
+   approved low step. This mode runs the leased outbox relay without starting
+   generation, provider-poll, delivery, or maintenance engines. Confirm leases
+   resolve and no semantic row is double-claimed.
+4. Increase submitted jobs/minute and relay instances only through the declared
+   steps. Hold every step long enough to measure steady-state p95/p99 and
+   backlog age. Existing `WORKER_MODE=jobs` and `WORKER_MODE=all` processes
+   include an embedded relay, so count them in the total relay topology before
+   adding relay-only processes.
+5. Include an incident-style relay interruption in the synthetic contour.
+   Verify expired leases recover and at-least-once re-publication does not
+   duplicate job finalization, billing capture, or delivery.
+6. Stop offered load and measure time to drain. Rerun the complete read-only
+   preflight and retain the count-only reconciliation observation after the
+   worker and relay are hard-drained as required by the rollout runbook.
+
+### Outbox and reconciliation evidence collection
+
+Create a private load-evidence directory before the warm-up. At the start and
+end of every load step, and every 60 seconds during each sustained hold, retain
+one count-only outbox-health snapshot. In a shell that propagates pipeline
+failures:
+
+```bash
+: "${LOAD_EVIDENCE_DIR:?set this to a private load-evidence path}"
+mkdir -p "$LOAD_EVIDENCE_DIR"
+set -o pipefail
+sample_at=$(date -u +%Y%m%dT%H%M%SZ)
+sample_file=$(mktemp "$LOAD_EVIDENCE_DIR/outbox-health-${sample_at}.XXXXXXXX")
+observe-outbox-health \
+  | tee "$sample_file"
+```
+
+The snapshot is the source for `pending`, `processing`, `failed`,
+`oldest_pending_age_seconds`, and `expired_leases`. Record published throughput
+at the same 60-second cadence from the private Prometheus query, summed over
+all active relays:
+
+```promql
+sum(increase(vkagg_outbox_relay_resolutions_total{outcome="published"}[1m]))
+```
+
+This is a one-minute published-resolution count. Do not use the cumulative
+database count of rows whose outbox status is `published` as a per-step
+throughput value.
+
+After the hard drain, retain every bounded reconciliation page in that same
+directory until `has_more` is `false`:
+
+```bash
+: "${LOAD_EVIDENCE_DIR:?set this to a private load-evidence path}"
+mkdir -p "$LOAD_EVIDENCE_DIR"
+set -o pipefail
+page_at=$(date -u +%Y%m%dT%H%M%SZ)
+page_file=$(mktemp "$LOAD_EVIDENCE_DIR/reconciliation-${page_at}.XXXXXXXX")
+reconcile-result-ready --limit 1000 \
+  | tee "$page_file"
+```
+
+Each reconciliation document contains only `duration_seconds`, page count
+summaries, `blocked`, and `has_more`; it contains no job, account, correlation,
+or payload fields. Use these durable JSON observations rather than the
+short-lived command's in-process Prometheus metrics. Any nonzero `blocked`
+count, command failure, or page sequence that does not end with `has_more=false`
+fails the contour.
+
+The load generator must report offered, accepted, and completed jobs separately.
+Relay throughput is not generation-provider throughput, and a flat HTTP error
+rate does not prove that durable outbox work is draining.
+
+### Hard acceptance gates
+
+The run passes only when all declared inputs exist and all of these conditions
+hold for the full sustained and recovery windows:
+
+- accepted job rate meets the declared traffic envelope without unbounded API,
+  outbox, generation-stream, or finalization-stream growth;
+- p95 and p99 publish latency are at or below their declared SLOs;
+- p95 and p99 capture latency are at or below their declared SLOs;
+- oldest pending outbox and finalization backlog age stays at or below the
+  declared maximum and returns to the approved post-load baseline;
+- observed retry and quarantine rates stay within their declared bounds;
+- semantic result-ready quarantine, invalid executable events, unknown event
+  types, over-threshold expired leases, duplicate semantic events, missing
+  canonical events, and stale finalization rows are all zero unless the
+  approved input explicitly permits a non-semantic retry/quarantine budget;
+- Redis observed throughput stays within its provisioned envelope with bounded
+  lag, pending entries, memory, and DLQ;
+- PostgreSQL connection usage stays below the declared cap and per-component
+  budgets, with no connection starvation, blocking-lock incident, invalid
+  index, or unbounded reconciliation query;
+- every retained reconciliation page has `blocked=0`, and the retained sequence
+  ends with `has_more=false`;
+- scaling from one relay to the declared relay count does not double-claim a
+  lease or duplicate capture/delivery;
+- the owner-safe history/result surfaces expose results only to the canonical
+  `AccountID`; no capacity shortcut uses a VK peer or legacy `UserID` owner.
+
+If any gate fails, stop scaling, preserve durable jobs/outbox rows, collect
+read-only evidence, and schedule a new reviewed run after the bottleneck is
+addressed. Do not repair data, weaken checksum enforcement, enable web prepared
+jobs, or claim a production launch from a failed or incomplete run.
+
+### Required report verdict
+
+The report must include the input table, actual environment topology, git/image
+identifier, workload timeline, relay count at each step, Redis and PostgreSQL
+budgets versus observations, p95/p99 publish and capture latency, maximum
+backlog age, retry/quarantine outcomes, preflight results before/after, the
+60-second outbox-health JSON snapshots, matching published-resolution query
+values, retained reconciliation-page duration/count observations (including
+`blocked`), and the first bottleneck.
+
+Use one of these verdicts:
+
+- `PASS FOR DECLARED ENVELOPE`: every input and hard gate passed for the exact
+  recorded environment and workload.
+- `FAIL`: at least one measured gate failed.
+- `INCOMPLETE`: an input, metric, preflight, recovery step, or review is
+  missing.
+
+Even `PASS FOR DECLARED ENVELOPE` is not a general “1M-MAU ready” claim. It is
+evidence only for the recorded envelope and remains a web-activation hold until
+the rollout runbook's independent task reviews and cross-layer review are
+complete.

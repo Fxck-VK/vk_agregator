@@ -1,12 +1,13 @@
 package domain
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
 )
 
-// DeliveryType is the kind of VK delivery being performed.
+// DeliveryType is the kind of content in an external delivery attempt.
 type DeliveryType string
 
 const (
@@ -57,25 +58,33 @@ func (s DeliveryStatus) IsTerminal() bool {
 	}
 }
 
-// Delivery is the persisted record of delivering a job result to VK. The VK
-// random_id deduplicates sends so that retries never produce duplicate messages
-// (invariant: every delivery attempt is persisted and deduplicated).
+// Delivery is the persisted record of an external delivery attempt. Account
+// ownership and an explicit target are transport-neutral; legacy VK fields are
+// retained only as compatibility provenance during the migration.
 type Delivery struct {
 	// ID is the internal primary key.
 	ID uuid.UUID `json:"id"`
 	// JobID is the job whose result is being delivered.
 	JobID uuid.UUID `json:"job_id"`
-	// UserID is the recipient user.
+	// UserID is the legacy recipient user. uuid.Nil means account-native data
+	// has no legacy user provenance.
 	UserID uuid.UUID `json:"user_id"`
-	// VKPeerID is the VK conversation to deliver into.
+	// AccountID is the canonical owner of this delivery attempt.
+	AccountID uuid.UUID `json:"account_id,omitempty"`
+	// VKPeerID is the legacy VK conversation provenance. Zero means no legacy
+	// VK routing data is present.
 	VKPeerID int64 `json:"vk_peer_id"`
+	// Target is the explicit external publication target. Account-history
+	// results intentionally create no Delivery row.
+	Target *DeliveryTarget `json:"target,omitempty"`
 	// ArtifactID is the artifact being delivered, nil for plain messages.
 	ArtifactID *uuid.UUID `json:"artifact_id,omitempty"`
 	// Type is the kind of delivery.
 	Type DeliveryType `json:"type"`
 	// Status is the current delivery state.
 	Status DeliveryStatus `json:"status"`
-	// VKRandomID is the unique id used by messages.send to avoid duplicates.
+	// VKRandomID is the legacy unique id used by VK messages.send to avoid
+	// duplicates. Zero means the delivery is not a legacy VK attempt.
 	VKRandomID int64 `json:"vk_random_id"`
 	// VKMessageID is the VK message id assigned once sent.
 	VKMessageID *int64 `json:"vk_message_id,omitempty"`
@@ -95,6 +104,16 @@ type Delivery struct {
 	CreatedAt time.Time `json:"created_at"`
 	// UpdatedAt is the last mutation timestamp.
 	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// ValidateTarget verifies optional target provenance on a persisted delivery.
+// A nil target remains valid for legacy VK rows created before channel-neutral
+// targets existed; newly supplied targets must be publishable.
+func (d Delivery) ValidateTarget() error {
+	if d.Target != nil && !d.Target.Valid() {
+		return fmt.Errorf("%w: invalid delivery target", ErrInvalidResultContract)
+	}
+	return nil
 }
 
 // DeliveryHealth is a bounded aggregate for operator delivery health screens.

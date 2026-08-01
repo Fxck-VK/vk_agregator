@@ -102,6 +102,63 @@ func TestCreatePaymentSendsYooKassaContract(t *testing.T) {
 	}
 }
 
+func TestCreatePaymentUsesCanonicalMetadataAndProtectsReservedKeys(t *testing.T) {
+	intentID := uuid.New()
+	accountID := uuid.New()
+	var seen createPaymentRequest
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&seen); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"pay-native","status":"pending","amount":{"value":"100.00","currency":"RUB"},"confirmation":{"type":"redirect","confirmation_url":"https://yookassa.example/confirm/pay-native"}}`))
+	}))
+	defer server.Close()
+
+	provider := newTestProvider(t, server.URL)
+	if _, err := provider.CreatePayment(context.Background(), domain.CreatePaymentInput{
+		IntentID: intentID, AccountID: accountID, Amount: 10000, Currency: domain.CurrencyRUB,
+		Credits: 100, ReceiptEmail: "account@example.com", ReturnURL: "https://neiirohub.ru/payments/return",
+		IdempotencyKey: "pay:" + intentID.String(),
+		Metadata:       json.RawMessage(`{"user_id":"forged-user","account_id":"forged-account","intent_id":"forged-intent","custom":"kept"}`),
+	}); err != nil {
+		t.Fatalf("create account payment: %v", err)
+	}
+	if seen.Metadata["account_id"] != accountID.String() || seen.Metadata["intent_id"] != intentID.String() || seen.Metadata["custom"] != "kept" {
+		t.Fatalf("canonical metadata was not preserved: %#v", seen.Metadata)
+	}
+	if _, ok := seen.Metadata["user_id"]; ok {
+		t.Fatalf("native metadata must omit legacy user_id: %#v", seen.Metadata)
+	}
+}
+
+func TestCreatePaymentLegacyUserOnlyMetadataOmitsAccountID(t *testing.T) {
+	intentID, userID := uuid.New(), uuid.New()
+	var seen createPaymentRequest
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&seen); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"pay-legacy","status":"pending","amount":{"value":"100.00","currency":"RUB"},"confirmation":{"type":"redirect","confirmation_url":"https://yookassa.example/confirm/pay-legacy"}}`))
+	}))
+	defer server.Close()
+
+	if _, err := newTestProvider(t, server.URL).CreatePayment(context.Background(), domain.CreatePaymentInput{
+		IntentID: intentID, UserID: userID, Amount: 10000, Currency: domain.CurrencyRUB,
+		Credits: 100, ReceiptEmail: "legacy@example.com", IdempotencyKey: "pay:" + intentID.String(),
+		Metadata: json.RawMessage(`{"account_id":"forged-account"}`),
+	}); err != nil {
+		t.Fatalf("create legacy payment: %v", err)
+	}
+	if seen.Metadata["user_id"] != userID.String() || seen.Metadata["intent_id"] != intentID.String() {
+		t.Fatalf("legacy metadata = %#v, want canonical user and intent", seen.Metadata)
+	}
+	if _, ok := seen.Metadata["account_id"]; ok {
+		t.Fatalf("legacy user-only payment must omit account_id: %#v", seen.Metadata)
+	}
+}
+
 func TestCreatePaymentCanDisableCaptureForOperatorSmoke(t *testing.T) {
 	intentID := uuid.New()
 	var seen createPaymentRequest
@@ -203,6 +260,7 @@ func TestGetPaymentParsesAmountAndStatus(t *testing.T) {
 
 func TestCreateRefundSendsYooKassaContract(t *testing.T) {
 	refundID := uuid.New()
+	intentID := uuid.New()
 	vatCode := int16(2)
 	var seen struct {
 		IdempotencyKey string
@@ -229,7 +287,7 @@ func TestCreateRefundSendsYooKassaContract(t *testing.T) {
 	provider := newTestProvider(t, server.URL)
 	result, err := provider.CreateRefund(context.Background(), domain.CreateRefundInput{
 		RefundID:          refundID,
-		IntentID:          uuid.New(),
+		IntentID:          intentID,
 		ProviderPaymentID: "pay-1",
 		Amount:            1050,
 		Currency:          domain.CurrencyRUB,
@@ -240,6 +298,7 @@ func TestCreateRefundSendsYooKassaContract(t *testing.T) {
 		PaymentSubject:    "service",
 		PaymentMode:       "full_prepayment",
 		IdempotencyKey:    "payrefund:" + refundID.String(),
+		Metadata:          json.RawMessage(`{"refund_id":"forged-refund","intent_id":"forged-intent","custom":"kept"}`),
 	})
 	if err != nil {
 		t.Fatalf("create refund: %v", err)
@@ -252,6 +311,9 @@ func TestCreateRefundSendsYooKassaContract(t *testing.T) {
 	}
 	if seen.Body.PaymentID != "pay-1" || seen.Body.Amount.Value != "10.50" || seen.Body.Description != "manual refund" {
 		t.Fatalf("unexpected refund request: %#v", seen.Body)
+	}
+	if seen.Body.Metadata["refund_id"] != refundID.String() || seen.Body.Metadata["intent_id"] != intentID.String() || seen.Body.Metadata["custom"] != "kept" {
+		t.Fatalf("refund reserved metadata override: %#v", seen.Body.Metadata)
 	}
 	if seen.Body.Receipt.Customer.Email != "user@example.com" ||
 		len(seen.Body.Receipt.Items) != 1 ||

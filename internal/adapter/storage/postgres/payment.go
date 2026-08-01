@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"strconv"
 	"strings"
 	"time"
@@ -21,6 +22,13 @@ type PaymentRepository struct {
 // NewPaymentRepository builds a PaymentRepository over the given querier.
 func NewPaymentRepository(db Querier) *PaymentRepository {
 	return &PaymentRepository{db: db}
+}
+
+// NewPaymentRepositoryTx builds a transaction-bound PaymentRepository. Its
+// idempotency conflict path uses ON CONFLICT DO NOTHING so callers can re-read
+// safely without poisoning the surrounding transaction.
+func NewPaymentRepositoryTx(db Querier) *PaymentRepository {
+	return NewPaymentRepository(db)
 }
 
 var _ domain.PaymentRepository = (*PaymentRepository)(nil)
@@ -210,10 +218,11 @@ func (r *PaymentRepository) CreateIntent(ctx context.Context, intent *domain.Pay
 			idempotency_key, receipt_email, receipt_phone, metadata, expires_at
 		)
 		VALUES ($1, $2, COALESCE($3::uuid, (SELECT account_id FROM users WHERE id = $2)), $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, COALESCE($21::jsonb, '{}'::jsonb), $22)
+		ON CONFLICT (idempotency_key) DO NOTHING
 		RETURNING ` + paymentIntentColumns
-	return mapError(scanPaymentIntent(r.db.QueryRow(ctx, q,
+	err := mapError(scanPaymentIntent(r.db.QueryRow(ctx, q,
 		intent.ID,
-		intent.UserID,
+		nullableUUID(intent.UserID),
 		nullableUUID(intent.AccountID),
 		intent.ProductID,
 		intent.Status,
@@ -235,6 +244,10 @@ func (r *PaymentRepository) CreateIntent(ctx context.Context, intent *domain.Pay
 		rawOrNil(intent.Metadata),
 		intent.ExpiresAt,
 	), intent))
+	if errors.Is(err, domain.ErrNotFound) {
+		return domain.ErrConflict
+	}
+	return err
 }
 
 // GetIntentByID fetches one intent by id.
@@ -247,11 +260,35 @@ func (r *PaymentRepository) GetIntentByID(ctx context.Context, id uuid.UUID) (*d
 	return &intent, nil
 }
 
+func (r *PaymentRepository) GetIntentByIDForAccount(ctx context.Context, accountID, id uuid.UUID) (*domain.PaymentIntent, error) {
+	if accountID == uuid.Nil || id == uuid.Nil {
+		return nil, domain.ErrNotFound
+	}
+	const q = `SELECT ` + paymentIntentColumns + ` FROM payment_intents WHERE id = $1 AND account_id = $2`
+	var intent domain.PaymentIntent
+	if err := mapError(scanPaymentIntent(r.db.QueryRow(ctx, q, id, accountID), &intent)); err != nil {
+		return nil, err
+	}
+	return &intent, nil
+}
+
 // GetIntentByIdempotencyKey fetches one intent by idempotency key.
 func (r *PaymentRepository) GetIntentByIdempotencyKey(ctx context.Context, key string) (*domain.PaymentIntent, error) {
 	const q = `SELECT ` + paymentIntentColumns + ` FROM payment_intents WHERE idempotency_key = $1`
 	var intent domain.PaymentIntent
 	if err := mapError(scanPaymentIntent(r.db.QueryRow(ctx, q, strings.TrimSpace(key)), &intent)); err != nil {
+		return nil, err
+	}
+	return &intent, nil
+}
+
+func (r *PaymentRepository) GetIntentByIdempotencyKeyForAccount(ctx context.Context, accountID uuid.UUID, key string) (*domain.PaymentIntent, error) {
+	if accountID == uuid.Nil {
+		return nil, domain.ErrNotFound
+	}
+	const q = `SELECT ` + paymentIntentColumns + ` FROM payment_intents WHERE idempotency_key = $1 AND account_id = $2`
+	var intent domain.PaymentIntent
+	if err := mapError(scanPaymentIntent(r.db.QueryRow(ctx, q, strings.TrimSpace(key), accountID), &intent)); err != nil {
 		return nil, err
 	}
 	return &intent, nil
@@ -331,6 +368,13 @@ func (r *PaymentRepository) ListIntentsByUser(ctx context.Context, userID uuid.U
 		return intents, nil
 	}
 	return r.listIntentsByOwnerColumn(ctx, "user_id", userID, limit, offset)
+}
+
+func (r *PaymentRepository) ListIntentsByAccount(ctx context.Context, accountID uuid.UUID, limit, offset int) ([]*domain.PaymentIntent, error) {
+	if accountID == uuid.Nil {
+		return []*domain.PaymentIntent{}, nil
+	}
+	return r.listIntentsByOwnerColumn(ctx, "account_id", accountID, limit, offset)
 }
 
 func (r *PaymentRepository) listIntentsByOwnerColumn(ctx context.Context, column string, ownerID uuid.UUID, limit, offset int) ([]*domain.PaymentIntent, error) {
@@ -680,11 +724,12 @@ func scanPaymentProduct(row rowScanner, product *domain.PaymentProduct) error {
 func scanPaymentIntent(row rowScanner, intent *domain.PaymentIntent) error {
 	var productID *uuid.UUID
 	var accountID *uuid.UUID
+	var legacyUserID *uuid.UUID
 	var providerPaymentID, receiptEmail, receiptPhone *string
 	var metadata []byte
 	if err := row.Scan(
 		&intent.ID,
-		&intent.UserID,
+		&legacyUserID,
 		&accountID,
 		&productID,
 		&intent.Status,
@@ -712,6 +757,10 @@ func scanPaymentIntent(row rowScanner, intent *domain.PaymentIntent) error {
 	}
 	if accountID != nil {
 		intent.AccountID = *accountID
+	}
+	intent.UserID = uuid.Nil
+	if legacyUserID != nil {
+		intent.UserID = *legacyUserID
 	}
 	intent.ProductID = productID
 	if providerPaymentID != nil {

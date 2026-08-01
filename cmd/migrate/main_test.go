@@ -8,6 +8,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	"vk-ai-aggregator/internal/platform/config"
 )
 
 func TestChecksumNormalizesLineEndings(t *testing.T) {
@@ -34,6 +37,131 @@ func TestChecksumMatchesRejectsSQLDrift(t *testing.T) {
 
 	if checksumMatches(recorded, []byte("SELECT 2;\n")) {
 		t.Fatal("checksum accepted changed SQL")
+	}
+}
+
+func TestMigrationTimeoutRequiresPositiveDuration(t *testing.T) {
+	for _, tt := range []struct {
+		name    string
+		timeout time.Duration
+		wantErr bool
+	}{
+		{name: "positive", timeout: 30 * time.Minute},
+		{name: "zero", timeout: 0, wantErr: true},
+		{name: "negative", timeout: -time.Second, wantErr: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := migrationTimeout(config.Config{MigrationTimeout: tt.timeout})
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("migrationTimeout() error = nil, want validation error")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("migrationTimeout() error = %v", err)
+			}
+			if got != tt.timeout {
+				t.Fatalf("migrationTimeout() = %s, want %s", got, tt.timeout)
+			}
+		})
+	}
+}
+
+func TestMigrationExecutionModeRequiresExplicitLeadingDirective(t *testing.T) {
+	tests := []struct {
+		name    string
+		sql     string
+		want    migrationExecutionMode
+		wantErr string
+	}{
+		{
+			name: "ordinary migration stays transactional",
+			sql:  "CREATE TABLE example (id BIGINT);\n",
+			want: migrationExecutionTransactional,
+		},
+		{
+			name: "leading directive enables concurrent index migration",
+			sql: "-- migrate: no-transaction\n" +
+				"CREATE INDEX CONCURRENTLY example_idx ON example (id);\n",
+			want: migrationExecutionNonTransactional,
+		},
+		{
+			name:    "concurrent index without directive is rejected",
+			sql:     "CREATE INDEX CONCURRENTLY example_idx ON example (id);\n",
+			wantErr: "requires -- migrate: no-transaction",
+		},
+		{
+			name: "directive after SQL is rejected rather than silently ignored",
+			sql: "CREATE INDEX CONCURRENTLY example_idx ON example (id);\n" +
+				"-- migrate: no-transaction\n",
+			wantErr: "first non-empty line",
+		},
+		{
+			name: "non transactional directive requires concurrent index DDL",
+			sql: "-- migrate: no-transaction\n" +
+				"CREATE TABLE example (id BIGINT);\n",
+			wantErr: "CONCURRENTLY",
+		},
+		{
+			name: "non transactional directive rejects mixed arbitrary DDL",
+			sql: "-- migrate: no-transaction\n" +
+				"CREATE TABLE example (id BIGINT);\n" +
+				"CREATE INDEX CONCURRENTLY example_idx ON example (id);\n",
+			wantErr: "only CREATE INDEX CONCURRENTLY or DROP INDEX CONCURRENTLY",
+		},
+		{
+			name: "non transactional directive rejects explicit transaction control",
+			sql: "-- migrate: no-transaction\n" +
+				"BEGIN;\n" +
+				"DROP INDEX CONCURRENTLY IF EXISTS example_idx;\n",
+			wantErr: "only CREATE INDEX CONCURRENTLY or DROP INDEX CONCURRENTLY",
+		},
+		{
+			name: "non transactional directive permits retry safe drop and create",
+			sql: "-- migrate: no-transaction\n" +
+				"DROP INDEX CONCURRENTLY IF EXISTS example_idx;\n" +
+				"CREATE UNIQUE INDEX CONCURRENTLY example_idx ON example (id);\n",
+			want: migrationExecutionNonTransactional,
+		},
+		{
+			name:    "unknown migrate directive is rejected",
+			sql:     "-- migrate: unsafe\nCREATE TABLE example (id BIGINT);\n",
+			wantErr: "unsupported migration directive",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := migrationExecutionModeForSQL([]byte(tt.sql))
+			if tt.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("migrationExecutionModeForSQL() error = %v, want %q", err, tt.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("migrationExecutionModeForSQL() error = %v", err)
+			}
+			if got != tt.want {
+				t.Fatalf("migrationExecutionModeForSQL() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestNonTransactionalMigrationSplitsConcurrentDDLIntoAutocommitStatements(t *testing.T) {
+	statements, err := splitMigrationSQLStatements(`-- migrate: no-transaction
+DROP INDEX CONCURRENTLY IF EXISTS example_idx;
+CREATE INDEX CONCURRENTLY example_idx ON example (id);`)
+	if err != nil {
+		t.Fatalf("split migration: %v", err)
+	}
+	if len(statements) != 2 {
+		t.Fatalf("statement count = %d, want 2", len(statements))
+	}
+	if !strings.Contains(statements[0], "DROP INDEX CONCURRENTLY") || !strings.Contains(statements[1], "CREATE INDEX CONCURRENTLY") {
+		t.Fatalf("statements = %#v, want separate concurrent DROP and CREATE", statements)
 	}
 }
 
@@ -65,17 +193,69 @@ func TestMigrationFilesDelegateTransactionsToRunner(t *testing.T) {
 	}
 }
 
+func TestConcurrentIndexMigrationsAreExplicitAndRetrySafe(t *testing.T) {
+	for _, tc := range []struct {
+		version string
+		index   string
+	}{
+		{version: "000047_web_image_history_cursor", index: "jobs_web_image_history_cursor_idx"},
+		{version: "000048_web_image_prepared_capacity", index: "jobs_web_image_prepared_capacity_idx"},
+		{version: "000049_web_image_prepared_expiry_reconciliation", index: "jobs_web_image_prepared_expiry_reconciliation_idx"},
+	} {
+		t.Run(tc.version, func(t *testing.T) {
+			upSQL, err := os.ReadFile(filepath.Join("..", "..", "migrations", tc.version+".up.sql"))
+			if err != nil {
+				t.Fatalf("read up migration: %v", err)
+			}
+			mode, err := migrationExecutionModeForSQL(upSQL)
+			if err != nil {
+				t.Fatalf("validate up migration: %v", err)
+			}
+			if mode != migrationExecutionNonTransactional {
+				t.Fatalf("up migration mode = %v, want non-transactional", mode)
+			}
+			upText := string(upSQL)
+			for _, required := range []string{
+				"DROP INDEX CONCURRENTLY IF EXISTS " + tc.index,
+				"CREATE INDEX CONCURRENTLY " + tc.index,
+			} {
+				if !strings.Contains(upText, required) {
+					t.Fatalf("up migration must contain retry-safe %q", required)
+				}
+			}
+
+			downSQL, err := os.ReadFile(filepath.Join("..", "..", "migrations", tc.version+".down.sql"))
+			if err != nil {
+				t.Fatalf("read down migration: %v", err)
+			}
+			mode, err = migrationExecutionModeForSQL(downSQL)
+			if err != nil {
+				t.Fatalf("validate down migration: %v", err)
+			}
+			if mode != migrationExecutionNonTransactional {
+				t.Fatalf("down migration mode = %v, want non-transactional", mode)
+			}
+			if required := "DROP INDEX CONCURRENTLY IF EXISTS " + tc.index; !strings.Contains(string(downSQL), required) {
+				t.Fatalf("down migration must contain retry-safe %q", required)
+			}
+		})
+	}
+}
+
 func TestAccountFirstRollbackMigrationsProtectPersistedData(t *testing.T) {
 	for _, tc := range []struct {
-		name     string
-		required []string
+		name      string
+		required  []string
+		forbidden []string
 	}{
 		{
 			name: "000044_channel_context_and_result_mode.down.sql",
 			required: []string{
 				"cannot roll back 000044",
-				"DROP COLUMN IF EXISTS result_mode",
 				"ALTER COLUMN user_id SET NOT NULL",
+			},
+			forbidden: []string{
+				"drop column",
 			},
 		},
 		{
@@ -92,9 +272,15 @@ func TestAccountFirstRollbackMigrationsProtectPersistedData(t *testing.T) {
 			if err != nil {
 				t.Fatalf("read migration: %v", err)
 			}
+			rawText := strings.ToLower(string(raw))
 			for _, fragment := range tc.required {
-				if !strings.Contains(string(raw), fragment) {
+				if !strings.Contains(rawText, strings.ToLower(fragment)) {
 					t.Errorf("rollback migration must contain %q", fragment)
+				}
+			}
+			for _, fragment := range tc.forbidden {
+				if strings.Contains(rawText, strings.ToLower(fragment)) {
+					t.Errorf("rollback migration must preserve additive schema and omit %q", fragment)
 				}
 			}
 		})

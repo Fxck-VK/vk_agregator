@@ -26,6 +26,7 @@ const (
 
 	WorkerModeAll         = "all"
 	WorkerModeJobs        = "jobs"
+	WorkerModeRelay       = "relay"
 	WorkerModeMaintenance = "maintenance"
 
 	MediaVideoProbePolicyDisabled        = "disabled"
@@ -58,9 +59,27 @@ type Config struct {
 
 	HTTPAddr string
 	// WebOrigin is the exact trusted browser origin for /web/v1 unsafe requests.
-	WebOrigin     string
-	DatabaseURL   string
-	MigrationsDir string
+	WebOrigin string
+	// WebImagePreparedJobLimit and WebImagePreparedJobTTL bound the number and
+	// lifetime of unconfirmed browser image jobs per account. cmd/api supplies
+	// fail-closed defaults when a zero-value Config is constructed in tests.
+	WebImagePreparedJobLimit int
+	WebImagePreparedJobTTL   time.Duration
+	// WebImagePreparedJobReconcileInterval and
+	// WebImagePreparedJobReconcileLimit bound one global durable expiry pass
+	// for abandoned browser image confirmations. Zero values keep the safe API
+	// defaults for programmatic Config construction.
+	WebImagePreparedJobReconcileInterval time.Duration
+	WebImagePreparedJobReconcileLimit    int
+	// WebImagePrepareRateLimit and WebImagePrepareRateLimitWindow bound fresh
+	// browser image preparations through the shared Redis limiter.
+	WebImagePrepareRateLimit       int
+	WebImagePrepareRateLimitWindow time.Duration
+	DatabaseURL                    string
+	MigrationsDir                  string
+	// MigrationTimeout bounds one cmd/migrate invocation. It is deliberately
+	// long enough for CREATE INDEX CONCURRENTLY on a production-sized table.
+	MigrationTimeout time.Duration
 
 	RedisAddr     string
 	RedisPassword string
@@ -70,8 +89,12 @@ type Config struct {
 	S3AccessKey string
 	S3SecretKey string
 	S3UseSSL    bool
-	S3Bucket    string
-	S3Region    string
+	// WebImageArtifactAllowInsecureHTTP enables HTTP signed-image redirects
+	// only for explicit loopback APP_ENV=development storage. It defaults to
+	// false and is rejected outside local development.
+	WebImageArtifactAllowInsecureHTTP bool
+	S3Bucket                          string
+	S3Region                          string
 	// S3AddressingStyle controls bucket addressing for S3-compatible storage:
 	// path, virtual-hosted or auto.
 	S3AddressingStyle string
@@ -82,7 +105,8 @@ type Config struct {
 	AdminToken string
 
 	// WorkerMode selects which loops cmd/worker starts. Production runs job
-	// consumers and maintenance as separate processes.
+	// consumers and maintenance as separate processes; relay runs only the
+	// leased outbox relay. Jobs retains its embedded relay for compatibility.
 	WorkerMode     string
 	WorkerGroup    string
 	WorkerConsumer string
@@ -591,6 +615,9 @@ func (c Config) PaymentWebhookHTTPSRequired() bool {
 // and the admin API must be set. Returns a descriptive error otherwise.
 func (c Config) Validate() error {
 	var missing []string
+	if c.WebImageArtifactAllowInsecureHTTP && !strings.EqualFold(strings.TrimSpace(c.Env), "development") {
+		return fmt.Errorf("config: WEB_IMAGE_ARTIFACT_ALLOW_INSECURE_HTTP is allowed only in development")
+	}
 	if c.IsServerEnv() && c.MiniAppAllowQueryLaunchParams {
 		return fmt.Errorf("config: MINIAPP_ALLOW_QUERY_LAUNCH_PARAMS must be false in production/staging")
 	}
@@ -606,8 +633,8 @@ func (c Config) Validate() error {
 	if mode := strings.ToLower(strings.TrimSpace(c.VKUnroutedTextMode)); mode != "" && mode != "reply" && mode != "silent" && mode != "gpt" {
 		return fmt.Errorf("config: VK_UNROUTED_TEXT_MODE must be reply, silent, or gpt")
 	}
-	if mode := strings.ToLower(strings.TrimSpace(c.WorkerMode)); mode != "" && mode != WorkerModeAll && mode != WorkerModeJobs && mode != WorkerModeMaintenance {
-		return fmt.Errorf("config: WORKER_MODE must be all, jobs, or maintenance")
+	if mode := strings.ToLower(strings.TrimSpace(c.WorkerMode)); mode != "" && mode != WorkerModeAll && mode != WorkerModeJobs && mode != WorkerModeRelay && mode != WorkerModeMaintenance {
+		return fmt.Errorf("config: WORKER_MODE must be all, jobs, relay, or maintenance")
 	}
 	if mode := strings.ToLower(strings.TrimSpace(c.VKVideoDeliveryMode)); mode != "" && mode != "doc" && mode != "video" {
 		return fmt.Errorf("config: VK_VIDEO_DELIVERY_MODE must be doc or video")
@@ -684,6 +711,24 @@ func (c Config) Validate() error {
 	}
 	if c.AccountAuthRateLimitWindow < 0 {
 		return fmt.Errorf("config: ACCOUNT_AUTH_RATE_LIMIT_WINDOW must be non-negative")
+	}
+	if c.WebImagePreparedJobLimit < 0 {
+		return fmt.Errorf("config: WEB_IMAGE_PREPARED_JOB_LIMIT must be non-negative")
+	}
+	if c.WebImagePreparedJobTTL < 0 {
+		return fmt.Errorf("config: WEB_IMAGE_PREPARED_JOB_TTL must be non-negative")
+	}
+	if c.WebImagePreparedJobReconcileInterval < 0 {
+		return fmt.Errorf("config: WEB_IMAGE_PREPARED_JOB_RECONCILE_INTERVAL must be non-negative")
+	}
+	if c.WebImagePreparedJobReconcileLimit < 0 {
+		return fmt.Errorf("config: WEB_IMAGE_PREPARED_JOB_RECONCILE_LIMIT must be non-negative")
+	}
+	if c.WebImagePrepareRateLimit < 0 {
+		return fmt.Errorf("config: WEB_IMAGE_PREPARE_RATE_LIMIT must be non-negative")
+	}
+	if c.WebImagePrepareRateLimitWindow < 0 {
+		return fmt.Errorf("config: WEB_IMAGE_PREPARE_RATE_LIMIT_WINDOW must be non-negative")
 	}
 	if c.AccountOAuthTelegramMaxAge < 0 {
 		return fmt.Errorf("config: ACCOUNT_OAUTH_TELEGRAM_MAX_AGE must be non-negative")
@@ -1106,26 +1151,34 @@ func Load() Config {
 	mediaProviderContracts, _ := parseMediaProviderContracts(mediaProviderContractsRaw)
 	artifactRetentionDays := envInt("ARTIFACT_RETENTION_DAYS", 0)
 	return Config{
-		Env:              appEnv,
-		DataServicesMode: dataServicesMode,
-		PostgresMode:     envMode("POSTGRES_MODE", dataServicesMode),
-		RedisMode:        envMode("REDIS_MODE", dataServicesMode),
-		S3Mode:           envMode("S3_MODE", dataServicesMode),
-		HTTPAddr:         env("HTTP_ADDR", ":8080"),
-		WebOrigin:        env("WEB_ORIGIN", ""),
-		DatabaseURL:      env("DATABASE_URL", "postgres://vk_ai_aggregator:vk_ai_aggregator@localhost:5432/vk_ai_aggregator?sslmode=disable"),
-		MigrationsDir:    env("MIGRATIONS_DIR", "migrations"),
+		Env:                                  appEnv,
+		DataServicesMode:                     dataServicesMode,
+		PostgresMode:                         envMode("POSTGRES_MODE", dataServicesMode),
+		RedisMode:                            envMode("REDIS_MODE", dataServicesMode),
+		S3Mode:                               envMode("S3_MODE", dataServicesMode),
+		HTTPAddr:                             env("HTTP_ADDR", ":8080"),
+		WebOrigin:                            env("WEB_ORIGIN", ""),
+		WebImagePreparedJobLimit:             envInt("WEB_IMAGE_PREPARED_JOB_LIMIT", 3),
+		WebImagePreparedJobTTL:               envDuration("WEB_IMAGE_PREPARED_JOB_TTL", 15*time.Minute),
+		WebImagePreparedJobReconcileInterval: envDuration("WEB_IMAGE_PREPARED_JOB_RECONCILE_INTERVAL", time.Minute),
+		WebImagePreparedJobReconcileLimit:    envInt("WEB_IMAGE_PREPARED_JOB_RECONCILE_LIMIT", 100),
+		WebImagePrepareRateLimit:             envInt("WEB_IMAGE_PREPARE_RATE_LIMIT", 10),
+		WebImagePrepareRateLimitWindow:       envDuration("WEB_IMAGE_PREPARE_RATE_LIMIT_WINDOW", time.Hour),
+		DatabaseURL:                          env("DATABASE_URL", "postgres://vk_ai_aggregator:vk_ai_aggregator@localhost:5432/vk_ai_aggregator?sslmode=disable"),
+		MigrationsDir:                        env("MIGRATIONS_DIR", "migrations"),
+		MigrationTimeout:                     envDuration("MIGRATION_TIMEOUT", 30*time.Minute),
 
 		RedisAddr:     env("REDIS_ADDR", "localhost:6379"),
 		RedisPassword: env("REDIS_PASSWORD", ""),
 		RedisDB:       envInt("REDIS_DB", 0),
 
-		S3Endpoint:  env("S3_ENDPOINT", "localhost:9000"),
-		S3AccessKey: env("S3_ACCESS_KEY", "minioadmin"),
-		S3SecretKey: env("S3_SECRET_KEY", "minioadmin"),
-		S3UseSSL:    envBool("S3_USE_SSL", false),
-		S3Bucket:    env("S3_BUCKET", "artifacts"),
-		S3Region:    env("S3_REGION", "us-east-1"),
+		S3Endpoint:                        env("S3_ENDPOINT", "localhost:9000"),
+		S3AccessKey:                       env("S3_ACCESS_KEY", "minioadmin"),
+		S3SecretKey:                       env("S3_SECRET_KEY", "minioadmin"),
+		S3UseSSL:                          envBool("S3_USE_SSL", false),
+		WebImageArtifactAllowInsecureHTTP: envBool("WEB_IMAGE_ARTIFACT_ALLOW_INSECURE_HTTP", false),
+		S3Bucket:                          env("S3_BUCKET", "artifacts"),
+		S3Region:                          env("S3_REGION", "us-east-1"),
 		// path is the safest default for local MinIO and most S3-compatible
 		// providers. Set virtual-hosted or auto only when the provider DNS/TLS
 		// setup supports bucket hostnames.

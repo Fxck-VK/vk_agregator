@@ -59,7 +59,10 @@ var miniAppDefaultModel = map[domain.OperationType]string{
 
 var vkVideoModels = map[string]Model{}
 
-func ResolveMiniAppModel(op domain.OperationType, raw string) (Model, bool) {
+// ResolvePublicModel resolves a server-trusted public product identifier to its
+// private execution model. The name is channel-neutral: Mini App is one
+// consumer, not the owner of the underlying product catalog.
+func ResolvePublicModel(op domain.OperationType, raw string) (Model, bool) {
 	modelID := strings.TrimSpace(raw)
 	if modelID == "" {
 		modelID = miniAppDefaultModel[op]
@@ -67,6 +70,12 @@ func ResolveMiniAppModel(op domain.OperationType, raw string) (Model, bool) {
 	models := miniAppModels(op)
 	model, ok := models[modelID]
 	return model, ok
+}
+
+// ResolveMiniAppModel is kept for compatibility with existing Mini App callers.
+// New channel-neutral services should use ResolvePublicModel.
+func ResolveMiniAppModel(op domain.OperationType, raw string) (Model, bool) {
+	return ResolvePublicModel(op, raw)
 }
 
 func MiniAppResponseModelID(model Model) string {

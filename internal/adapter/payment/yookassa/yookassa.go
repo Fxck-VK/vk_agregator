@@ -14,6 +14,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+
 	"vk-ai-aggregator/internal/domain"
 )
 
@@ -522,11 +524,20 @@ func newRefundReceipt(in domain.CreateRefundInput) (receipt, error) {
 
 func metadataForPayment(in domain.CreatePaymentInput) map[string]any {
 	metadata := metadataFromRaw(in.Metadata)
-	if in.IntentID.String() != "" {
+	// Canonical payment provenance is set after merging raw metadata. Raw data
+	// is not an authorization source and must never override these keys.
+	delete(metadata, "intent_id")
+	delete(metadata, "user_id")
+	delete(metadata, "account_id")
+	delete(metadata, "credits")
+	if in.IntentID != uuid.Nil {
 		metadata["intent_id"] = in.IntentID.String()
 	}
-	if in.UserID.String() != "" {
+	if in.UserID != uuid.Nil {
 		metadata["user_id"] = in.UserID.String()
+	}
+	if in.AccountID != uuid.Nil {
+		metadata["account_id"] = in.AccountID.String()
 	}
 	if in.Credits > 0 {
 		metadata["credits"] = in.Credits
@@ -536,10 +547,12 @@ func metadataForPayment(in domain.CreatePaymentInput) map[string]any {
 
 func metadataForRefund(in domain.CreateRefundInput) map[string]any {
 	metadata := metadataFromRaw(in.Metadata)
-	if in.RefundID.String() != "" {
+	delete(metadata, "refund_id")
+	delete(metadata, "intent_id")
+	if in.RefundID != uuid.Nil {
 		metadata["refund_id"] = in.RefundID.String()
 	}
-	if in.IntentID.String() != "" {
+	if in.IntentID != uuid.Nil {
 		metadata["intent_id"] = in.IntentID.String()
 	}
 	return metadata

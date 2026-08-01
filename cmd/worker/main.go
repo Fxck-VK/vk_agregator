@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -47,6 +48,7 @@ import (
 	"vk-ai-aggregator/internal/service/pricingcatalog"
 	"vk-ai-aggregator/internal/service/productcatalog"
 	"vk-ai-aggregator/internal/service/providermodels"
+	"vk-ai-aggregator/internal/service/resultservice"
 	"vk-ai-aggregator/internal/worker"
 )
 
@@ -58,6 +60,15 @@ type workerReadyPool interface {
 type workerReadyObjectStore interface {
 	BucketReady(context.Context, string) error
 }
+
+const (
+	outboxRelayLeaseDuration     = 30 * time.Second
+	outboxRelayMaxAttempts       = 5
+	outboxRelayRetryBase         = time.Second
+	outboxRelayRetryMax          = time.Minute
+	maxOutboxRelayOwnerLength    = 96
+	outboxRelayFallbackOwnerHost = "worker"
+)
 
 func main() {
 	logger := slog.New(logging.NewJSONHandler(os.Stdout, nil))
@@ -367,6 +378,7 @@ func main() {
 
 	deps := worker.Deps{
 		Jobs:                                  jobs,
+		ResultReadyUOW:                        postgres.NewUnitOfWork(pool),
 		Tasks:                                 tasks,
 		Artifacts:                             artSvc,
 		ArtifactRepo:                          artRepo,
@@ -416,28 +428,44 @@ func main() {
 	}
 	gen := worker.NewGenerationWorker(deps)
 	poll := worker.NewPollWorker(deps)
-	delivery := worker.NewDeliveryWorker(worker.DeliveryDeps{
-		Jobs:                   jobs,
+	vkResultPublisher := vkdelivery.NewPublisher(vkdelivery.PublisherDeps{
 		Deliveries:             deliveries,
 		Artifacts:              artRepo,
 		Objects:                store,
-		VK:                     vkClient,
-		Billing:                billing,
-		Streams:                publisher,
-		MaxAttempts:            cfg.MaxAttempts,
-		Backoff:                worker.ExponentialBackoff(cfg.RetryBaseDelay, cfg.RetryMaxDelay),
+		Client:                 vkClient,
 		Signer:                 store,
 		SignedURLs:             cfg.SignedDelivery,
 		RawVideoDeliveryPolicy: cfg.EffectiveMediaDeliverRawProviderVideo(),
 		URLTTL:                 cfg.ArtifactURLTTL,
 	})
+	resultReadiness := resultservice.New(jobs, artRepo, modResults)
+	delivery := worker.NewDeliveryWorker(worker.DeliveryDeps{
+		Jobs:        jobs,
+		Deliveries:  deliveries,
+		Artifacts:   artRepo,
+		Publishers:  []worker.ExternalPublisher{vkResultPublisher},
+		Billing:     billing,
+		Readiness:   resultReadiness,
+		Streams:     publisher,
+		MaxAttempts: cfg.MaxAttempts,
+		Backoff:     worker.ExponentialBackoff(cfg.RetryBaseDelay, cfg.RetryMaxDelay),
+	})
 
 	// The outbox relay publishes queued jobs from the transactional outbox to the
 	// worker queue, so a crash between commit and enqueue cannot lose work
 	// (audit A2).
-	relay := outboxrelay.New(postgres.NewUnitOfWork(pool), publisher, outboxrelay.WithLogger(logger))
+	relay := outboxrelay.New(
+		postgres.NewUnitOfWork(pool),
+		publisher,
+		outboxrelay.WithOwner(outboxRelayOwner(os.Hostname, os.Getpid())),
+		outboxrelay.WithLeaseDuration(outboxRelayLeaseDuration),
+		outboxrelay.WithMaxAttempts(outboxRelayMaxAttempts),
+		outboxrelay.WithRetryBackoff(worker.ExponentialBackoff(outboxRelayRetryBase, outboxRelayRetryMax)),
+		outboxrelay.WithLogger(logger),
+	)
 
 	runJobWorkers := shouldRunJobWorkers(cfg.WorkerMode)
+	runRelay := shouldRunOutboxRelay(cfg.WorkerMode)
 	runMaintenance := shouldRunMaintenance(cfg.WorkerMode)
 	var wg sync.WaitGroup
 	if runJobWorkers {
@@ -466,14 +494,20 @@ func main() {
 				_ = eng.RunWithHandlerContext(readCtx, handlerCtx)
 			}(e)
 		}
+		logger.Info("job worker loops started", "mode", cfg.WorkerMode, "group", cfg.WorkerGroup, "consumer", cfg.WorkerConsumer)
+	} else {
+		logger.Info("job worker loops disabled", "mode", cfg.WorkerMode)
+	}
+
+	if runRelay {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			relay.Run(readCtx, time.Second)
 		}()
-		logger.Info("job worker loops started", "mode", cfg.WorkerMode, "group", cfg.WorkerGroup, "consumer", cfg.WorkerConsumer)
+		logger.Info("outbox relay loop started", "mode", cfg.WorkerMode)
 	} else {
-		logger.Info("job worker loops disabled", "mode", cfg.WorkerMode)
+		logger.Info("outbox relay loop disabled", "mode", cfg.WorkerMode)
 	}
 
 	if runMaintenance {
@@ -572,6 +606,41 @@ func main() {
 		<-done
 	}
 	logger.Info("workers stopped")
+}
+
+func outboxRelayOwner(hostname func() (string, error), pid int) string {
+	host, err := hostname()
+	if err != nil {
+		host = ""
+	}
+	host = strings.TrimSpace(strings.ToLower(host))
+	var safe strings.Builder
+	for _, char := range host {
+		switch {
+		case char >= 'a' && char <= 'z',
+			char >= '0' && char <= '9',
+			char == '.', char == '-', char == '_':
+			safe.WriteRune(char)
+		default:
+			safe.WriteByte('-')
+		}
+	}
+	host = strings.Trim(safe.String(), ".-_")
+	if host == "" {
+		host = outboxRelayFallbackOwnerHost
+	}
+	processID := "unknown"
+	if pid > 0 {
+		processID = strconv.Itoa(pid)
+	}
+	suffix := "-" + processID
+	if maxHostLength := maxOutboxRelayOwnerLength - len(suffix); len(host) > maxHostLength {
+		host = strings.TrimRight(host[:maxHostLength], ".-_")
+		if host == "" {
+			host = outboxRelayFallbackOwnerHost
+		}
+	}
+	return host + suffix
 }
 
 func workerReadinessHandler(pool workerReadyPool, rdb *redis.Client, store workerReadyObjectStore, bucket, migrationsDir string) http.HandlerFunc {
@@ -674,6 +743,15 @@ func defaultProviderMediaContracts(cfg config.Config) []domain.ProviderMediaCont
 func shouldRunJobWorkers(mode string) bool {
 	switch strings.ToLower(strings.TrimSpace(mode)) {
 	case "", config.WorkerModeAll, config.WorkerModeJobs:
+		return true
+	default:
+		return false
+	}
+}
+
+func shouldRunOutboxRelay(mode string) bool {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "", config.WorkerModeAll, config.WorkerModeJobs, config.WorkerModeRelay:
 		return true
 	default:
 		return false

@@ -259,6 +259,19 @@ func (r *PaymentRepo) GetIntentByID(_ context.Context, id uuid.UUID) (*domain.Pa
 	return out, nil
 }
 
+func (r *PaymentRepo) GetIntentByIDForAccount(_ context.Context, accountID, id uuid.UUID) (*domain.PaymentIntent, error) {
+	if accountID == uuid.Nil || id == uuid.Nil {
+		return nil, domain.ErrNotFound
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	intent, ok := r.intentsByID[id]
+	if !ok || intent.AccountID != accountID {
+		return nil, domain.ErrNotFound
+	}
+	return copyPaymentIntentPtr(intent), nil
+}
+
 func (r *PaymentRepo) GetIntentByIdempotencyKey(_ context.Context, key string) (*domain.PaymentIntent, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -269,6 +282,23 @@ func (r *PaymentRepo) GetIntentByIdempotencyKey(_ context.Context, key string) (
 	intent := r.intentsByID[id]
 	out := copyPaymentIntentPtr(intent)
 	return out, nil
+}
+
+func (r *PaymentRepo) GetIntentByIdempotencyKeyForAccount(_ context.Context, accountID uuid.UUID, key string) (*domain.PaymentIntent, error) {
+	if accountID == uuid.Nil {
+		return nil, domain.ErrNotFound
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	id, ok := r.intentIDByKey[strings.TrimSpace(key)]
+	if !ok {
+		return nil, domain.ErrNotFound
+	}
+	intent := r.intentsByID[id]
+	if intent.AccountID != accountID {
+		return nil, domain.ErrNotFound
+	}
+	return copyPaymentIntentPtr(intent), nil
 }
 
 func (r *PaymentRepo) SetIntentProviderState(_ context.Context, id uuid.UUID, status domain.PaymentIntentStatus, providerPaymentID, confirmationURL string) error {
@@ -347,6 +377,22 @@ func (r *PaymentRepo) ListIntentsByUser(_ context.Context, userID uuid.UUID, lim
 	for i := offset; i < len(matched) && len(out) < limit; i++ {
 		intent := matched[i]
 		out = append(out, copyPaymentIntentPtr(intent))
+	}
+	return out, nil
+}
+
+func (r *PaymentRepo) ListIntentsByAccount(_ context.Context, accountID uuid.UUID, limit, offset int) ([]*domain.PaymentIntent, error) {
+	if accountID == uuid.Nil {
+		return []*domain.PaymentIntent{}, nil
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	matched := r.intentListMatchingOwnerLocked(accountID, func(intent domain.PaymentIntent, ownerID uuid.UUID) bool {
+		return intent.AccountID == ownerID
+	})
+	var out []*domain.PaymentIntent
+	for i := offset; i < len(matched) && len(out) < limit; i++ {
+		out = append(out, copyPaymentIntentPtr(matched[i]))
 	}
 	return out, nil
 }

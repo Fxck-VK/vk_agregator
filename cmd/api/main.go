@@ -41,10 +41,13 @@ import (
 	"vk-ai-aggregator/internal/platform/tracing"
 	"vk-ai-aggregator/internal/service/accountauth"
 	"vk-ai-aggregator/internal/service/accountlink"
+	"vk-ai-aggregator/internal/service/imagegeneration"
 	"vk-ai-aggregator/internal/service/joborchestrator"
 	"vk-ai-aggregator/internal/service/maintenance"
+	"vk-ai-aggregator/internal/service/preparedjobexpiry"
 	"vk-ai-aggregator/internal/service/pricingcatalog"
 	"vk-ai-aggregator/internal/service/productcatalog"
+	"vk-ai-aggregator/internal/service/resultservice"
 	"vk-ai-aggregator/internal/service/videorouter"
 )
 
@@ -135,8 +138,11 @@ func main() {
 
 	mediaQueueGuard := redisqueue.NewBackpressureGuard(rdb, cfg.WorkerGroup, cfg.MediaQueueDegradeThreshold)
 	videoRouteResolver := videoRouteResolverFromCatalog(runtimeCatalog.VideoRouteCatalog)
+	webPreparedJobLimit, webPreparedJobTTL, webPrepareRateLimit, webPrepareRateWindow := webImagePreparationLimits(cfg)
+	webPreparedJobReconcileInterval, webPreparedJobReconcileLimit := webImagePreparedJobReconciliation(cfg)
 	core, err := apiapp.NewSharedCore(pool, cfg, apiapp.WithOrchestratorOptions(
 		joborchestrator.WithMaxActiveVideoJobsPerUser(cfg.MediaMaxActiveVideoJobsPerUser),
+		joborchestrator.WithMaxPreparedWebImageJobsPerAccount(webPreparedJobLimit, webPreparedJobTTL),
 		joborchestrator.WithCapacityGuard(mediaCapacityGuard(mediaQueueGuard)),
 		joborchestrator.WithVideoRouteResolver(videoRouteResolver),
 	), apiapp.WithPricingCatalog(pricingCatalog), apiapp.WithAccountAuthOptions(
@@ -301,12 +307,42 @@ func main() {
 		Linker:    emailLinker,
 		Logger:    logger,
 	})
-	web := websession.NewHandler(websession.Config{WebOrigin: cfg.WebOrigin}, websession.Deps{
-		Authenticator: core.AccountAuth,
-		Sessions:      core.AccountAuth,
-		Passwords:     core.AccountAuth,
-		Account:       core.Account,
-		Conversations: core.Conversations,
+	webArtifactURLSigner := newWebImageArtifactURLSigner(ctx, cfg, logger)
+	webArtifactRedirectPolicy := newWebImageArtifactRedirectPolicy(cfg, logger)
+	webResults := resultservice.New(core.Jobs, core.Artifacts, core.Moderation)
+	webImagePrepareLimiter := ratelimit.NewRedisFixedWindowLimiter(
+		rdb,
+		"web_image_prepare",
+		webPrepareRateLimit,
+		webPrepareRateWindow,
+	)
+	webImagePreparedExpiry := preparedjobexpiry.New(postgres.NewPreparedWebImageExpiryRepository(pool))
+	web := websession.NewHandler(websession.Config{
+		WebOrigin:                   cfg.WebOrigin,
+		ImageModels:                 webImageModelsFromRuntimeCatalog(runtimeCatalog.ImageModels()),
+		ImageArtifactRedirectPolicy: webArtifactRedirectPolicy,
+	}, websession.Deps{
+		Authenticator:          core.AccountAuth,
+		Sessions:               core.AccountAuth,
+		Passwords:              core.AccountAuth,
+		Account:                core.Account,
+		Conversations:          core.Conversations,
+		ImageJobs:              core.Orchestrator,
+		ImageBalance:           core.Billing,
+		ImagePricing:           runtimeCatalog.PricingCatalog,
+		ImageJobReader:         core.Jobs,
+		ImageJobIdempotency:    core.Jobs,
+		ImageJobPrepareLimiter: webImagePrepareLimiter,
+		ImageJobHistory:        core.Jobs,
+		ImageJobExpiry:         webImagePreparedExpiry,
+		ImageResults:           webResults,
+		ImageArtifacts:         core.Artifacts,
+		ImageArtifactURLSigner: webArtifactURLSigner,
+	})
+	webImageExpiryCtx, stopWebImageExpiry := context.WithCancel(context.Background())
+	defer stopWebImageExpiry()
+	go webImagePreparedExpiry.Run(webImageExpiryCtx, webPreparedJobReconcileInterval, webPreparedJobReconcileLimit, func(err error) {
+		logger.Warn("web image preparation expiry reconciliation failed", logging.ErrorAttr(err))
 	})
 
 	miniapp := miniappapp.NewHandler(ctx, cfg, miniappapp.Deps{
@@ -360,6 +396,7 @@ func main() {
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 	<-stop
+	stopWebImageExpiry()
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -386,6 +423,110 @@ func videoRouteResolverFromCatalog(catalog *videorouter.Catalog) joborchestrator
 			InternalCostCredits: resolution.InternalCostCredits,
 		}, nil
 	})
+}
+
+// webImagePreparationLimits protects zero-value Config callers while keeping
+// the deployed policy explicit and adjustable through the environment.
+func webImagePreparationLimits(cfg config.Config) (preparedLimit int, preparedTTL time.Duration, rateLimit int, rateWindow time.Duration) {
+	preparedLimit = cfg.WebImagePreparedJobLimit
+	if preparedLimit <= 0 {
+		preparedLimit = 3
+	}
+	preparedTTL = cfg.WebImagePreparedJobTTL
+	if preparedTTL <= 0 {
+		preparedTTL = 15 * time.Minute
+	}
+	rateLimit = cfg.WebImagePrepareRateLimit
+	if rateLimit <= 0 {
+		rateLimit = 10
+	}
+	rateWindow = cfg.WebImagePrepareRateLimitWindow
+	if rateWindow <= 0 {
+		rateWindow = time.Hour
+	}
+	return preparedLimit, preparedTTL, rateLimit, rateWindow
+}
+
+// webImagePreparedJobReconciliation protects zero-value Config callers while
+// keeping each API instance's cross-account expiry claim bounded. The service
+// uses SKIP LOCKED, so identical scheduled passes are safe across replicas.
+func webImagePreparedJobReconciliation(cfg config.Config) (interval time.Duration, limit int) {
+	interval = cfg.WebImagePreparedJobReconcileInterval
+	if interval <= 0 {
+		interval = preparedjobexpiry.DefaultGlobalReconcileInterval
+	}
+	limit = cfg.WebImagePreparedJobReconcileLimit
+	if limit <= 0 {
+		limit = preparedjobexpiry.DefaultGlobalReconcileLimit
+	}
+	return interval, limit
+}
+
+// webImageModelsFromRuntimeCatalog converts the already readiness-filtered
+// runtime product catalog into the narrow, safe input accepted by the web
+// image resolver. Price and provider routing never cross this boundary.
+func webImageModelsFromRuntimeCatalog(runtimeModels []productcatalog.ImageModel) []imagegeneration.PublicModel {
+	models := make([]imagegeneration.PublicModel, 0, len(runtimeModels))
+	for _, model := range runtimeModels {
+		id := strings.TrimSpace(model.ID)
+		name := strings.TrimSpace(model.Name)
+		if id == "" || name == "" || !model.Enabled {
+			continue
+		}
+		models = append(models, imagegeneration.PublicModel{
+			ID:                     id,
+			Name:                   name,
+			Enabled:                true,
+			Ready:                  true,
+			QualityOptions:         append([]string(nil), model.QualityOptions...),
+			DefaultQuality:         model.DefaultQuality,
+			SupportsReferenceImage: model.SupportsReferenceImage,
+			MaxReferenceImages:     model.MaxReferenceImages,
+		})
+	}
+	return models
+}
+
+// newWebImageArtifactURLSigner creates a local S3 client only. It does not
+// probe storage or call an AI provider during API startup. If storage is not
+// configured correctly, the browser artifact endpoint remains unavailable
+// rather than exposing any fallback URL.
+func newWebImageArtifactURLSigner(ctx context.Context, cfg config.Config, logger *slog.Logger) websession.ImageArtifactURLSigner {
+	store, err := s3store.New(ctx, s3store.Config{
+		Endpoint:        cfg.S3Endpoint,
+		AccessKey:       cfg.S3AccessKey,
+		SecretKey:       cfg.S3SecretKey,
+		UseSSL:          cfg.S3UseSSL,
+		Region:          cfg.S3Region,
+		AddressingStyle: cfg.S3AddressingStyle,
+	})
+	if err != nil {
+		if logger != nil {
+			logger.Warn("web image artifact signing unavailable", logging.ErrorAttr(err))
+		}
+		return nil
+	}
+	return store
+}
+
+// newWebImageArtifactRedirectPolicy fails closed when S3 redirect policy is
+// incomplete or insecure. It has no network side effects and deliberately
+// shares the configured object-store endpoint with the URL signer.
+func newWebImageArtifactRedirectPolicy(cfg config.Config, logger *slog.Logger) websession.ImageArtifactRedirectPolicy {
+	policy, err := websession.NewImageArtifactRedirectPolicy(
+		cfg.S3Endpoint,
+		cfg.S3UseSSL,
+		cfg.S3AddressingStyle,
+		cfg.Env,
+		cfg.WebImageArtifactAllowInsecureHTTP,
+	)
+	if err != nil {
+		if logger != nil {
+			logger.Warn("web image artifact redirects unavailable", logging.ErrorAttr(err))
+		}
+		return websession.ImageArtifactRedirectPolicy{}
+	}
+	return policy
 }
 
 func mediaCapacityGuard(queueGuard *redisqueue.BackpressureGuard) joborchestrator.CapacityGuard {

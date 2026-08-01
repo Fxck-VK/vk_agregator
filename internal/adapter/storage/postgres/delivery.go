@@ -24,28 +24,32 @@ func NewDeliveryRepository(db Querier) *DeliveryRepository {
 
 var _ domain.DeliveryRepository = (*DeliveryRepository)(nil)
 
-const deliveryColumns = `id, job_id, user_id, vk_peer_id, artifact_id, type, status,
-	vk_random_id, vk_message_id, attachment, text, attempt_no, idempotency_key,
+const deliveryColumns = `id, job_id, user_id, account_id, vk_peer_id, artifact_id,
+	channel, recipient_ref, thread_ref, type, status, vk_random_id, vk_message_id, attachment, text, attempt_no, idempotency_key,
 	error_code, error_message, created_at, updated_at`
 
 // Create inserts a new delivery attempt.
 func (r *DeliveryRepository) Create(ctx context.Context, d *domain.Delivery) error {
+	if err := d.ValidateTarget(); err != nil {
+		return err
+	}
 	if d.ID == uuid.Nil {
 		d.ID = uuid.New()
 	}
 	if d.AttemptNo == 0 {
 		d.AttemptNo = 1
 	}
+	targetChannel, targetRecipientRef, targetThreadRef := deliveryTargetValues(d.Target)
 	const q = `
 		INSERT INTO deliveries (
-			id, job_id, user_id, vk_peer_id, artifact_id, type, status,
-			vk_random_id, vk_message_id, attachment, text, attempt_no, idempotency_key,
+			id, job_id, user_id, account_id, vk_peer_id, artifact_id,
+			channel, recipient_ref, thread_ref, type, status, vk_random_id, vk_message_id, attachment, text, attempt_no, idempotency_key,
 			error_code, error_message
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
 		RETURNING ` + deliveryColumns
 	row := r.db.QueryRow(ctx, q,
-		d.ID, d.JobID, d.UserID, d.VKPeerID, d.ArtifactID, d.Type, d.Status,
-		d.VKRandomID, d.VKMessageID, d.Attachment, d.Text, d.AttemptNo, d.IdempotencyKey,
+		d.ID, d.JobID, nullableUUID(d.UserID), nullableUUID(d.AccountID), nullableInt64(d.VKPeerID), d.ArtifactID,
+		targetChannel, targetRecipientRef, targetThreadRef, d.Type, d.Status, nullableInt64(d.VKRandomID), d.VKMessageID, d.Attachment, d.Text, d.AttemptNo, d.IdempotencyKey,
 		d.ErrorCode, d.ErrorMessage,
 	)
 	return mapError(scanDelivery(row, d))
@@ -53,14 +57,21 @@ func (r *DeliveryRepository) Create(ctx context.Context, d *domain.Delivery) err
 
 // Update persists changes to a delivery attempt.
 func (r *DeliveryRepository) Update(ctx context.Context, d *domain.Delivery) error {
+	if err := d.ValidateTarget(); err != nil {
+		return err
+	}
+	targetChannel, targetRecipientRef, targetThreadRef := deliveryTargetValues(d.Target)
 	const q = `
 		UPDATE deliveries
-		SET status = $2, vk_message_id = $3, attachment = $4, text = $5, attempt_no = $6,
-		    error_code = $7, error_message = $8, updated_at = now()
+		SET account_id = COALESCE(account_id, $2),
+		    status = $3, vk_message_id = $4, attachment = $5, text = $6, attempt_no = $7,
+		    channel = $8, recipient_ref = $9, thread_ref = $10,
+		    error_code = $11, error_message = $12, updated_at = now()
 		WHERE id = $1
 		RETURNING ` + deliveryColumns
 	row := r.db.QueryRow(ctx, q,
-		d.ID, d.Status, d.VKMessageID, d.Attachment, d.Text, d.AttemptNo,
+		d.ID, nullableUUID(d.AccountID), d.Status, d.VKMessageID, d.Attachment, d.Text, d.AttemptNo,
+		targetChannel, targetRecipientRef, targetThreadRef,
 		d.ErrorCode, d.ErrorMessage,
 	)
 	return mapError(scanDelivery(row, d))
@@ -162,9 +173,32 @@ func (r *DeliveryRepository) HealthSnapshot(ctx context.Context, since time.Time
 }
 
 func scanDelivery(row rowScanner, d *domain.Delivery) error {
-	return row.Scan(
-		&d.ID, &d.JobID, &d.UserID, &d.VKPeerID, &d.ArtifactID, &d.Type, &d.Status,
-		&d.VKRandomID, &d.VKMessageID, &d.Attachment, &d.Text, &d.AttemptNo, &d.IdempotencyKey,
+	var legacyUserID, accountID *uuid.UUID
+	var legacyPeerID, legacyRandomID *int64
+	var channel, recipientRef, threadRef *string
+	if err := row.Scan(
+		&d.ID, &d.JobID, &legacyUserID, &accountID, &legacyPeerID, &d.ArtifactID,
+		&channel, &recipientRef, &threadRef, &d.Type, &d.Status, &legacyRandomID, &d.VKMessageID, &d.Attachment, &d.Text, &d.AttemptNo, &d.IdempotencyKey,
 		&d.ErrorCode, &d.ErrorMessage, &d.CreatedAt, &d.UpdatedAt,
-	)
+	); err != nil {
+		return err
+	}
+	d.UserID = uuid.Nil
+	if legacyUserID != nil {
+		d.UserID = *legacyUserID
+	}
+	d.AccountID = uuid.Nil
+	if accountID != nil {
+		d.AccountID = *accountID
+	}
+	d.VKPeerID = 0
+	if legacyPeerID != nil {
+		d.VKPeerID = *legacyPeerID
+	}
+	d.VKRandomID = 0
+	if legacyRandomID != nil {
+		d.VKRandomID = *legacyRandomID
+	}
+	d.Target = deliveryTargetFromColumns(channel, recipientRef, threadRef)
+	return nil
 }

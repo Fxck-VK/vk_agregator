@@ -33,12 +33,20 @@ var ErrCapacityDegraded = errors.New("domain: capacity degraded")
 // active jobs for an expensive operation.
 var ErrActiveJobLimitExceeded = errors.New("domain: active job limit exceeded")
 
+// ErrPreparedJobLimitExceeded is returned when an account has too many
+// unconfirmed durable preparation records for one operation. Unlike active-job
+// capacity, this bounds pre-billing storage and outbox abuse.
+var ErrPreparedJobLimitExceeded = errors.New("domain: prepared job limit exceeded")
+
 // OutboxStatus is the publishing state of an outbox event.
 type OutboxStatus string
 
 const (
 	// OutboxPending means the event is awaiting publication.
 	OutboxPending OutboxStatus = "pending"
+	// OutboxStatusProcessing means the event is held by an unexpired publisher
+	// claim and may only be resolved by that claim token.
+	OutboxStatusProcessing OutboxStatus = "processing"
 	// OutboxPublished means the event was published to the bus.
 	OutboxPublished OutboxStatus = "published"
 	// OutboxFailed means publication permanently failed.
@@ -68,6 +76,26 @@ type OutboxEvent struct {
 	CreatedAt time.Time `json:"created_at"`
 	// PublishedAt is when the event was published, if it was.
 	PublishedAt *time.Time `json:"published_at,omitempty"`
+	// ClaimToken identifies the publisher lease currently owning the event.
+	ClaimToken *uuid.UUID `json:"claim_token,omitempty"`
+	// ClaimOwner identifies the publisher process currently owning the event.
+	ClaimOwner string `json:"claim_owner,omitempty"`
+	// LeaseUntil is when the current processing claim expires.
+	LeaseUntil *time.Time `json:"lease_until,omitempty"`
+	// LastErrorCode is the bounded normalized code recorded by the last failure.
+	LastErrorCode string `json:"last_error_code,omitempty"`
+	// FailedAt is when the event entered terminal failed quarantine.
+	FailedAt *time.Time `json:"failed_at,omitempty"`
+}
+
+// OutboxHealth is a count-only operational snapshot. It contains no aggregate
+// identifiers, payloads, claim owners, or raw error details.
+type OutboxHealth struct {
+	Pending                int64
+	Processing             int64
+	Failed                 int64
+	OldestPendingCreatedAt *time.Time
+	ExpiredLeases          int64
 }
 
 // IdempotencyStatus is the processing state of an idempotency key.
@@ -174,6 +202,8 @@ type JobFilter struct {
 	UserID *uuid.UUID
 	// AccountID, when set, restricts results to one canonical account owner.
 	AccountID *uuid.UUID
+	// Source, when non-empty, restricts results to one trusted inbound surface.
+	Source string
 	// Status, when non-empty, restricts results to one job status.
 	Status JobStatus
 	// Operation, when non-empty, restricts results to one operation type.
@@ -202,14 +232,31 @@ type JobCursor struct {
 	ID        uuid.UUID
 }
 
+// ResultReadyCandidateRepository lists one bounded keyset page of canonical
+// result-ready jobs that have no semantic result-ready outbox event in any
+// status.
+type ResultReadyCandidateRepository interface {
+	ListMissingCanonicalResultReady(ctx context.Context, limit int, after *JobCursor) (jobs []*Job, hasMore bool, err error)
+}
+
 // JobRepository persists jobs.
 type JobRepository interface {
 	// Create inserts a new job.
 	Create(ctx context.Context, job *Job) error
 	// GetByID fetches a job by id, ErrNotFound if missing.
 	GetByID(ctx context.Context, id uuid.UUID) (*Job, error)
+	// GetByIDForAccount fetches a job only when accountID is its exact canonical
+	// owner. It never falls back to legacy user provenance.
+	GetByIDForAccount(ctx context.Context, accountID, id uuid.UUID) (*Job, error)
 	// GetByIdempotencyKey fetches a job by its idempotency key.
 	GetByIdempotencyKey(ctx context.Context, key string) (*Job, error)
+	// GetByIdempotencyKeyForAccount fetches a job only for its exact canonical
+	// owner. It returns ErrNotFound for a key owned by another account.
+	GetByIdempotencyKeyForAccount(ctx context.Context, accountID uuid.UUID, key string) (*Job, error)
+	// LockAccountForCapacity serializes capacity-sensitive activation for one
+	// exact canonical account until the surrounding unit of work commits. It is
+	// a no-op only in in-memory storage, where the service owns serialization.
+	LockAccountForCapacity(ctx context.Context, accountID uuid.UUID) error
 	// UpdateStatus applies an explicit state-machine transition, persisting the
 	// new status together with any error code/message. It returns ErrConflict if
 	// the stored status does not match from (lost-update protection).
@@ -218,6 +265,9 @@ type JobRepository interface {
 	Update(ctx context.Context, job *Job) error
 	// ListByUser returns the most recent jobs for a user, newest first.
 	ListByUser(ctx context.Context, userID uuid.UUID, limit, offset int) ([]*Job, error)
+	// ListByAccount returns jobs for the exact canonical account owner, newest
+	// first. It does not include legacy user-owned rows without that account id.
+	ListByAccount(ctx context.Context, accountID uuid.UUID, limit, offset int) ([]*Job, error)
 	// List returns jobs matching the filter, newest first, for admin queries.
 	List(ctx context.Context, filter JobFilter, limit, offset int) ([]*Job, error)
 	// ListCursor returns jobs matching the filter using keyset pagination. It is
@@ -228,6 +278,14 @@ type JobRepository interface {
 	// user and operation. It is used by abuse protection before enqueueing more
 	// expensive work for the same user.
 	CountActiveByUserOperation(ctx context.Context, userID uuid.UUID, operation OperationType) (int, error)
+	// CountActiveByAccountOperation returns active, capacity-consuming jobs for
+	// one exact canonical account and operation. It never falls back to legacy
+	// user provenance and is required for account-native activation.
+	CountActiveByAccountOperation(ctx context.Context, accountID uuid.UUID, operation OperationType) (int, error)
+	// CountUnexpiredPreparedByAccountOperation returns preparation records that
+	// remain activatable for one exact canonical account and trusted product
+	// surface. It never falls back to legacy user provenance.
+	CountUnexpiredPreparedByAccountOperation(ctx context.Context, accountID uuid.UUID, source string, operation OperationType, modality Modality, now time.Time) (int, error)
 	// CountSucceededByUser returns completed successful jobs for account stats.
 	CountSucceededByUser(ctx context.Context, userID uuid.UUID) (int, error)
 }
@@ -321,12 +379,22 @@ type ArtifactRepository interface {
 	Update(ctx context.Context, artifact *Artifact) error
 	// GetByID fetches an artifact by id, ErrNotFound if missing.
 	GetByID(ctx context.Context, id uuid.UUID) (*Artifact, error)
+	// GetByIDForAccount fetches an artifact only for its exact canonical account
+	// owner. It never falls back to legacy owner_user_id provenance.
+	GetByIDForAccount(ctx context.Context, accountID, id uuid.UUID) (*Artifact, error)
 	// GetBySHA256 fetches an artifact by content hash for deduplication.
 	GetBySHA256(ctx context.Context, ownerID uuid.UUID, sha256 string) (*Artifact, error)
+	// GetBySHA256ForAccount fetches an artifact by hash only for its exact
+	// canonical account owner.
+	GetBySHA256ForAccount(ctx context.Context, accountID uuid.UUID, sha256 string) (*Artifact, error)
 	// FindReusableInputReference fetches a ready input reference image scoped by
 	// owner, content hash and validation policy. It must not return provider
 	// originals, delivery variants or artifacts validated under older policies.
 	FindReusableInputReference(ctx context.Context, ownerID uuid.UUID, sha256, validationPolicyVersion, mimeType string) (*Artifact, error)
+	// FindReusableInputReferenceForAccount is the strict canonical-owner variant
+	// used by account-native input creation. It never falls back to legacy owner
+	// provenance, including uuid.Nil.
+	FindReusableInputReferenceForAccount(ctx context.Context, accountID uuid.UUID, sha256, validationPolicyVersion, mimeType string) (*Artifact, error)
 
 	// AddVariant inserts a derived variant of an artifact.
 	AddVariant(ctx context.Context, variant *ArtifactVariant) error
@@ -366,6 +434,9 @@ type BillingRepository interface {
 	GetAccount(ctx context.Context, id uuid.UUID) (*CreditAccount, error)
 	// GetAccountByUser fetches a user's account for a currency.
 	GetAccountByUser(ctx context.Context, userID uuid.UUID, currency Currency) (*CreditAccount, error)
+	// GetAccountByOwner fetches an account-native credit account by its canonical
+	// owner and currency. It never falls back to legacy user provenance.
+	GetAccountByOwner(ctx context.Context, ownerAccountID uuid.UUID, currency Currency) (*CreditAccount, error)
 	// CreateAccount inserts a new credit account.
 	CreateAccount(ctx context.Context, account *CreditAccount) error
 
@@ -378,10 +449,18 @@ type BillingRepository interface {
 	// Reserve creates a reservation and its reserve ledger entry atomically,
 	// returning ErrInsufficientCredits if the balance is too low.
 	Reserve(ctx context.Context, reservation *CreditReservation) error
+	// ReserveForOwner creates a reservation only when ownerAccountID owns the
+	// selected credit account. Implementations derive the stored reservation
+	// owner from that account rather than trusting the request payload.
+	ReserveForOwner(ctx context.Context, ownerAccountID uuid.UUID, reservation *CreditReservation) error
 	// Capture converts a reservation into a charge with a capture entry.
 	Capture(ctx context.Context, reservationID uuid.UUID, amount int64, idempotencyKey string) error
+	// CaptureForOwner converts an owner's reservation into its full charge.
+	CaptureForOwner(ctx context.Context, ownerAccountID, reservationID uuid.UUID, amount int64, idempotencyKey string) error
 	// Release frees a reservation with a release entry.
 	Release(ctx context.Context, reservationID uuid.UUID, idempotencyKey string) error
+	// ReleaseForOwner releases an owner's reservation idempotently.
+	ReleaseForOwner(ctx context.Context, ownerAccountID, reservationID uuid.UUID, idempotencyKey string) error
 	// GetReservation fetches a reservation by id, ErrNotFound if missing.
 	GetReservation(ctx context.Context, id uuid.UUID) (*CreditReservation, error)
 	// GetReservationByJob fetches the most recent reservation for a job, used by
@@ -454,8 +533,14 @@ type PaymentRepository interface {
 	CreateIntent(ctx context.Context, intent *PaymentIntent) error
 	// GetIntentByID fetches one payment intent by id.
 	GetIntentByID(ctx context.Context, id uuid.UUID) (*PaymentIntent, error)
+	// GetIntentByIDForAccount fetches an intent only for its exact canonical
+	// account owner. It never falls back to legacy user provenance.
+	GetIntentByIDForAccount(ctx context.Context, accountID, id uuid.UUID) (*PaymentIntent, error)
 	// GetIntentByIdempotencyKey fetches one payment intent by idempotency key.
 	GetIntentByIdempotencyKey(ctx context.Context, key string) (*PaymentIntent, error)
+	// GetIntentByIdempotencyKeyForAccount fetches an intent only for its exact
+	// canonical account owner. A foreign key is indistinguishable from missing.
+	GetIntentByIdempotencyKeyForAccount(ctx context.Context, accountID uuid.UUID, key string) (*PaymentIntent, error)
 	// SetIntentProviderState stores the provider-created payment id,
 	// confirmation URL and normalized provider status.
 	SetIntentProviderState(ctx context.Context, id uuid.UUID, status PaymentIntentStatus, providerPaymentID, confirmationURL string) error
@@ -470,6 +555,9 @@ type PaymentRepository interface {
 	UpdateIntentMetadata(ctx context.Context, id uuid.UUID, metadata json.RawMessage) error
 	// ListIntentsByUser lists intents for one user, newest first.
 	ListIntentsByUser(ctx context.Context, userID uuid.UUID, limit, offset int) ([]*PaymentIntent, error)
+	// ListIntentsByAccount lists intents for the exact canonical account owner,
+	// newest first. It does not include legacy rows through fallback reads.
+	ListIntentsByAccount(ctx context.Context, accountID uuid.UUID, limit, offset int) ([]*PaymentIntent, error)
 	// ListIntents lists intents for protected operator endpoints, newest first.
 	ListIntents(ctx context.Context, filter PaymentIntentFilter, limit, offset int) ([]*PaymentIntent, error)
 	// ListIntentsForReconciliation lists stale provider-backed intents that
@@ -539,12 +627,32 @@ type OutboxRepository interface {
 	// Add inserts an outbox event. It is expected to be called inside the same
 	// transaction as the state change that produced the event.
 	Add(ctx context.Context, event *OutboxEvent) error
+	// ExistsForAggregateEvent reports whether any row, in any status, already
+	// represents the exact aggregate event.
+	ExistsForAggregateEvent(ctx context.Context, aggregateType string, aggregateID uuid.UUID, eventType string) (bool, error)
+	// AddIfAbsentByID inserts an event unless its primary key already exists.
+	// The boolean reports whether a row was inserted.
+	AddIfAbsentByID(ctx context.Context, event *OutboxEvent) (bool, error)
+	// ClaimPending atomically leases ready pending or expired processing events.
+	ClaimPending(ctx context.Context, owner string, now, leaseUntil time.Time, limit int) ([]*OutboxEvent, error)
+	// MarkPublishedClaimed publishes an event only for its current claim token.
+	MarkPublishedClaimed(ctx context.Context, id, claimToken uuid.UUID, publishedAt time.Time) (bool, error)
+	// RetryClaimed returns an event to pending only for its current claim token.
+	RetryClaimed(ctx context.Context, id, claimToken uuid.UUID, nextAttemptAt time.Time, errorCode string) (bool, error)
+	// FailClaimed quarantines an event only for its current claim token.
+	FailClaimed(ctx context.Context, id, claimToken uuid.UUID, failedAt time.Time, errorCode string) (bool, error)
 	// FetchPending returns up to limit events ready for publication.
 	FetchPending(ctx context.Context, limit int) ([]*OutboxEvent, error)
 	// MarkPublished marks an event as successfully published.
 	MarkPublished(ctx context.Context, id uuid.UUID, publishedAt time.Time) error
 	// MarkFailed records a failed publication and schedules the next attempt.
 	MarkFailed(ctx context.Context, id uuid.UUID, nextAttemptAt time.Time) error
+}
+
+// OutboxHealthRepository exposes a read-only, count-only outbox snapshot for
+// private operational metrics.
+type OutboxHealthRepository interface {
+	OutboxHealthSnapshot(ctx context.Context, now time.Time) (OutboxHealth, error)
 }
 
 // IdempotencyRepository guarantees at-most-once processing of external

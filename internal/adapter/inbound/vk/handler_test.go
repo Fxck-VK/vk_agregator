@@ -539,6 +539,12 @@ func TestMessageNewCreatesJob(t *testing.T) {
 	if jobs[0].OperationType != domain.OperationImageGenerate {
 		t.Fatalf("operation = %q, want image_generate", jobs[0].OperationType)
 	}
+	if jobs[0].ChannelContext == nil || jobs[0].ChannelContext.Channel != domain.ChannelVKBot ||
+		jobs[0].ChannelContext.RecipientRef != "555" || jobs[0].ResultMode != domain.ResultModeExternalPush ||
+		jobs[0].DeliveryTarget == nil || jobs[0].DeliveryTarget.Channel != domain.ChannelVKBot ||
+		jobs[0].DeliveryTarget.RecipientRef != "555" {
+		t.Fatalf("VK job result contract = %+v, want VK external push to exact peer", jobs[0])
+	}
 	if h.pub.Len() != 1 {
 		t.Fatalf("expected 1 enqueued task, got %d", h.pub.Len())
 	}

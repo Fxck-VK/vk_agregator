@@ -163,6 +163,95 @@ func TestInitPaymentProviderMetricsCreatesZeroProviderErrorSeries(t *testing.T) 
 	}
 }
 
+func TestOutboxRelayMetricLabelsAreFiniteAndBounded(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		got  string
+		want string
+	}{
+		{name: "known queued class", got: outboxEventClass("event.job.queued"), want: "queued"},
+		{name: "unknown event does not escape", got: outboxEventClass("event.job.secret." + strings.Repeat("x", 200)), want: "unknown"},
+		{name: "known outcome", got: outboxOutcome("retry"), want: "retry"},
+		{name: "raw outcome does not escape", got: outboxOutcome("job-" + strings.Repeat("1", 100)), want: "other"},
+		{name: "known failure", got: outboxFailureClass("publish_error"), want: "publish_error"},
+		{name: "raw error does not escape", got: outboxFailureClass("redis password=secret"), want: "other"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if test.got != test.want {
+				t.Fatalf("bounded label = %q, want %q", test.got, test.want)
+			}
+		})
+	}
+}
+
+func TestOutboxRelayMetricHelpersRecordBoundedOutcomes(t *testing.T) {
+	ObserveOutboxRelayClaim("event.job.queued", "claimed")
+	ObserveOutboxRelayClaimDuration("claimed", time.Second)
+	ObserveOutboxRelayPublish("event.job.queued", "success", "none")
+	ObserveOutboxRelayResolution("event.job.queued", "retry", "publish_error")
+	ObserveOutboxRelayLeaseRecovery("event.job.queued", "recovered")
+
+	if got := counterValue(t, OutboxRelayClaims, "queued", "claimed"); got <= 0 {
+		t.Fatalf("claim counter = %v, want > 0", got)
+	}
+	if got := counterValue(t, OutboxRelayPublishes, "queued", "success", "none"); got <= 0 {
+		t.Fatalf("publish counter = %v, want > 0", got)
+	}
+	if got := counterValue(t, OutboxRelayResolutions, "queued", "retry", "publish_error"); got <= 0 {
+		t.Fatalf("resolution counter = %v, want > 0", got)
+	}
+	if got := counterValue(t, OutboxRelayLeaseRecoveries, "queued", "recovered"); got <= 0 {
+		t.Fatalf("lease recovery counter = %v, want > 0", got)
+	}
+}
+
+func TestScalableFinalizationMetricHelpersRecordBoundedSamples(t *testing.T) {
+	publishBefore := histogramCount(t, OutboxRelayPublishDuration, "unknown", "success")
+	reconcileBefore := histogramCount(t, ResultReadyReconciliationDuration, "error")
+	blockedBefore := counterValue(t, ResultReadyReconciliationItems, "blocked")
+	readinessBefore := counterValue(t, FinalizationReadinessFailures, "unknown", "other")
+	captureBefore := histogramCount(t, ResultFinalizationCaptureDuration, "unknown")
+
+	ObserveOutboxRelayClaimToAcknowledgedPublicationDuration("private."+strings.Repeat("x", 100), time.Second)
+	ObserveResultReadyReconciliationDuration("error", time.Second)
+	AddResultReadyReconciliationItems("blocked", 2)
+	ObserveFinalizationReadinessFailure("private-mode", "raw secret")
+	ObserveResultFinalizationCaptureDuration("private-mode", time.Second)
+
+	if got := histogramCount(t, OutboxRelayPublishDuration, "unknown", "success"); got != publishBefore+1 {
+		t.Fatalf("publish duration samples = %d, want %d", got, publishBefore+1)
+	}
+	if got := histogramCount(t, ResultReadyReconciliationDuration, "error"); got != reconcileBefore+1 {
+		t.Fatalf("reconciliation duration samples = %d, want %d", got, reconcileBefore+1)
+	}
+	if got := counterValue(t, ResultReadyReconciliationItems, "blocked"); got != blockedBefore+2 {
+		t.Fatalf("blocked reconciliation items = %v, want %v", got, blockedBefore+2)
+	}
+	if got := counterValue(t, FinalizationReadinessFailures, "unknown", "other"); got != readinessBefore+1 {
+		t.Fatalf("bounded readiness failures = %v, want %v", got, readinessBefore+1)
+	}
+	if got := histogramCount(t, ResultFinalizationCaptureDuration, "unknown"); got != captureBefore+1 {
+		t.Fatalf("capture latency samples = %d, want %d", got, captureBefore+1)
+	}
+}
+
+func histogramCount(t *testing.T, histogram *prometheus.HistogramVec, labels ...string) uint64 {
+	t.Helper()
+	observer, err := histogram.GetMetricWithLabelValues(labels...)
+	if err != nil {
+		t.Fatalf("GetMetricWithLabelValues() error = %v", err)
+	}
+	metricWriter, ok := observer.(prometheus.Metric)
+	if !ok {
+		t.Fatal("histogram observer does not implement prometheus.Metric")
+	}
+	var metric dto.Metric
+	if err := metricWriter.Write(&metric); err != nil {
+		t.Fatalf("histogram.Write() error = %v", err)
+	}
+	return metric.GetHistogram().GetSampleCount()
+}
+
 func mediaProbeCounterValue(t *testing.T, labels ...string) float64 {
 	t.Helper()
 	counter, err := MediaProbeResults.GetMetricWithLabelValues(labels...)

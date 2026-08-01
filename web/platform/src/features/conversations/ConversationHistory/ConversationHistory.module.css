@@ -1,0 +1,86 @@
+.content {
+  inline-size: min(100%, 58rem);
+  margin-inline: auto;
+  padding: clamp(3rem, 7vw, 6rem) clamp(var(--space-4), 6vw, 5rem);
+}
+
+.header {
+  margin-block-end: var(--space-6);
+}
+
+.eyebrow,
+.header h1,
+.empty,
+.messages,
+.messages p {
+  margin: 0;
+}
+
+.eyebrow {
+  margin-block-end: var(--space-2);
+  color: var(--color-accent);
+  font-size: 0.875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.header h1 {
+  font-size: clamp(2rem, 5vw, 3.5rem);
+  line-height: 1.08;
+}
+
+.messages {
+  display: grid;
+  gap: var(--space-4);
+  padding: 0;
+  list-style: none;
+}
+
+.loadEarlier {
+  display: grid;
+  gap: var(--space-2);
+  margin-block-end: var(--space-4);
+}
+
+.loadEarlierFailure {
+  margin: 0;
+  color: var(--color-danger, #ef4444);
+}
+
+.userMessage,
+.assistantMessage,
+.empty {
+  border: 0.0625rem solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+}
+
+.userMessage {
+  margin-inline-start: min(12%, 6rem);
+  background: var(--color-accent);
+  color: var(--color-text);
+}
+
+.assistantMessage,
+.empty {
+  margin-inline-end: min(12%, 6rem);
+  background: var(--color-surface);
+}
+
+.role {
+  display: block;
+  margin-block-end: var(--space-2);
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+
+.userMessage .role {
+  color: inherit;
+  opacity: 0.8;
+}
+
+.empty {
+  color: var(--color-text-muted);
+}

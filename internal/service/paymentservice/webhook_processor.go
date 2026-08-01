@@ -810,6 +810,9 @@ func (p *WebhookProcessor) applyProviderPayment(ctx context.Context, payments do
 		return applyResult{}, nil
 	}
 	if target == domain.PaymentIntentSucceeded {
+		if intent.AccountID == uuid.Nil && intent.UserID == uuid.Nil {
+			return applyResult{}, fmt.Errorf("%w: payment intent has no owner", ErrWebhookInvalid)
+		}
 		if !providerPayment.Paid || !providerPayment.Captured {
 			return applyResult{}, fmt.Errorf("%w: succeeded payment is not paid/captured", ErrWebhookUnverified)
 		}
@@ -838,16 +841,29 @@ func (p *WebhookProcessor) applyProviderPayment(ctx context.Context, payments do
 		if err != nil {
 			return result, err
 		}
-		if err := p.billing.GrantWithOwner(
-			ctx,
-			billingRepo,
-			intent.UserID,
-			intentOwnerID(intent),
-			currentCredits,
-			topUpLedgerKey(intent.Provider, intent.ProviderPaymentID),
-			"payment top-up via "+string(intent.Provider),
-		); err != nil {
-			return result, err
+		var grantErr error
+		if intent.AccountID != uuid.Nil {
+			grantErr = p.billing.GrantWithAccount(
+				ctx,
+				billingRepo,
+				intent.AccountID,
+				currentCredits,
+				topUpLedgerKey(intent.Provider, intent.ProviderPaymentID),
+				"payment top-up via "+string(intent.Provider),
+			)
+		} else {
+			grantErr = p.billing.GrantWithOwner(
+				ctx,
+				billingRepo,
+				intent.UserID,
+				uuid.Nil,
+				currentCredits,
+				topUpLedgerKey(intent.Provider, intent.ProviderPaymentID),
+				"payment top-up via "+string(intent.Provider),
+			)
+		}
+		if grantErr != nil {
+			return result, grantErr
 		}
 		if result.StatusChanged {
 			result.TopupGranted = true
@@ -872,6 +888,9 @@ func (p *WebhookProcessor) notifyPaymentStatus(ctx context.Context, intentID uui
 	}
 	intent, err := p.repo.GetIntentByID(ctx, intentID)
 	if err != nil {
+		return
+	}
+	if paymentSource(intent) == "web" {
 		return
 	}
 	_ = p.notifier.PaymentStatusChanged(ctx, PaymentStatusNotification{

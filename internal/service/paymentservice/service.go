@@ -36,6 +36,9 @@ const (
 type Config struct {
 	ReturnURL                    string
 	IncludeDevTestPaymentProduct bool
+	// AccountIntentCapture is the server-owned capture policy for strict
+	// account-native payments. Nil preserves the provider-safe default of true.
+	AccountIntentCapture *bool
 }
 
 // Service creates and reads payment intents without mutating credit balances.
@@ -263,6 +266,17 @@ type CreateIntentResult struct {
 	ReusedActive bool
 }
 
+// CreateAccountIntentInput accepts only the account identity established by a
+// trusted caller plus approved catalog and receipt facts. Provider, amount,
+// credits, source, return URL, metadata, and capture policy are server-owned.
+type CreateAccountIntentInput struct {
+	AccountID      uuid.UUID
+	ProductCode    string
+	ReceiptEmail   string
+	ReceiptPhone   string
+	IdempotencyKey string
+}
+
 // AttachVKBotPaymentMessageInput links a VK bot payment message to a local
 // intent so webhook/reconciliation status changes can edit that message later.
 type AttachVKBotPaymentMessageInput struct {
@@ -421,6 +435,106 @@ func (s *Service) CreateIntent(ctx context.Context, in CreateIntentInput) (Creat
 	return CreateIntentResult{Intent: intent, Created: true}, nil
 }
 
+// CreateAccountIntent creates or resumes a strict account-owned web payment.
+// It intentionally does not reuse a different active waiting intent: each
+// caller-controlled idempotency key names exactly one immutable operation.
+func (s *Service) CreateAccountIntent(ctx context.Context, in CreateAccountIntentInput) (CreateIntentResult, error) {
+	if s == nil || s.repo == nil || s.provider == nil {
+		return CreateIntentResult{}, errors.New("paymentservice: service is not configured")
+	}
+	in.ProductCode = strings.TrimSpace(in.ProductCode)
+	in.ReceiptEmail = strings.TrimSpace(in.ReceiptEmail)
+	in.ReceiptPhone = strings.TrimSpace(in.ReceiptPhone)
+	in.IdempotencyKey = strings.TrimSpace(in.IdempotencyKey)
+	if in.AccountID == uuid.Nil || in.ProductCode == "" || in.IdempotencyKey == "" {
+		return CreateIntentResult{}, ErrInvalidInput
+	}
+	if in.ReceiptEmail == "" && in.ReceiptPhone == "" {
+		return CreateIntentResult{}, ErrReceiptContactRequired
+	}
+	product, err := s.repo.GetActiveProductByCode(ctx, in.ProductCode)
+	if err != nil {
+		return CreateIntentResult{}, err
+	}
+	if !s.userFacingProductAllowed(product) {
+		return CreateIntentResult{}, domain.ErrNotFound
+	}
+	returnURL := strings.TrimSpace(s.cfg.ReturnURL)
+	capture := s.accountIntentCapturePolicy()
+
+	if existing, err := s.repo.GetIntentByIdempotencyKey(ctx, in.IdempotencyKey); err == nil {
+		if existing.AccountID != in.AccountID {
+			return CreateIntentResult{}, domain.ErrConflict
+		}
+		if !accountIntentMatches(existing, product, in.ReceiptEmail, in.ReceiptPhone, returnURL, capture, s.provider.Code()) {
+			return CreateIntentResult{}, domain.ErrConflict
+		}
+		intent, err := s.ensureProviderPayment(ctx, existing, nil, returnURL)
+		if err != nil {
+			return CreateIntentResult{}, err
+		}
+		return CreateIntentResult{Intent: intent, Created: false}, nil
+	} else if !errors.Is(err, domain.ErrNotFound) {
+		return CreateIntentResult{}, err
+	}
+
+	metadata, err := json.Marshal(map[string]any{
+		"product_code":                product.Code,
+		"price_version":               product.PriceVersion,
+		"credit_denomination_version": product.CreditDenominationVersion,
+		"source":                      "web",
+		"return_url":                  returnURL,
+		"capture":                     capture,
+	})
+	if err != nil {
+		return CreateIntentResult{}, err
+	}
+	intent := &domain.PaymentIntent{
+		UserID:                    uuid.Nil,
+		AccountID:                 in.AccountID,
+		ProductID:                 &product.ID,
+		Status:                    domain.PaymentIntentCreated,
+		Amount:                    product.Amount,
+		Currency:                  product.Currency,
+		Credits:                   product.Credits,
+		CreditDenominationVersion: product.CreditDenominationVersion,
+		PriceVersion:              product.PriceVersion,
+		ReceiptDescription:        paymentDescription(product),
+		VATCode:                   cloneInt16(product.VATCode),
+		PaymentSubject:            strings.TrimSpace(product.PaymentSubject),
+		PaymentMode:               strings.TrimSpace(product.PaymentMode),
+		Provider:                  s.provider.Code(),
+		IdempotencyKey:            in.IdempotencyKey,
+		ReceiptEmail:              in.ReceiptEmail,
+		ReceiptPhone:              in.ReceiptPhone,
+		Metadata:                  metadata,
+	}
+	if err := s.repo.CreateIntent(ctx, intent); err != nil {
+		if !errors.Is(err, domain.ErrConflict) {
+			return CreateIntentResult{}, err
+		}
+		existing, getErr := s.repo.GetIntentByIdempotencyKey(ctx, in.IdempotencyKey)
+		if getErr != nil {
+			return CreateIntentResult{}, getErr
+		}
+		if existing.AccountID != in.AccountID || !accountIntentMatches(existing, product, in.ReceiptEmail, in.ReceiptPhone, returnURL, capture, s.provider.Code()) {
+			return CreateIntentResult{}, domain.ErrConflict
+		}
+		intent, err := s.ensureProviderPayment(ctx, existing, nil, returnURL)
+		if err != nil {
+			return CreateIntentResult{}, err
+		}
+		return CreateIntentResult{Intent: intent, Created: false}, nil
+	}
+	intent, err = s.ensureProviderPayment(ctx, intent, product, returnURL)
+	if err != nil {
+		return CreateIntentResult{}, err
+	}
+	metrics.PaymentsCreated.WithLabelValues(string(intent.Provider), "web").Inc()
+	metrics.ObserveProductEvent("web", "payment", "intent_create", "top_up", "credits", "created")
+	return CreateIntentResult{Intent: intent, Created: true}, nil
+}
+
 func (s *Service) filterUserFacingProducts(products []*domain.PaymentProduct) []*domain.PaymentProduct {
 	if len(products) == 0 {
 		return products
@@ -551,6 +665,57 @@ func (s *Service) CancelUserWaitingIntent(ctx context.Context, in CancelUserInte
 	}
 }
 
+// CancelAccountWaitingIntent cancels a strict web intent only when accountID is
+// the exact canonical owner. It still verifies provider state and never writes
+// credits from a browser-side action.
+func (s *Service) CancelAccountWaitingIntent(ctx context.Context, accountID, intentID uuid.UUID) (*domain.PaymentIntent, error) {
+	if s == nil || s.repo == nil || s.provider == nil {
+		return nil, errors.New("paymentservice: service is not configured")
+	}
+	if accountID == uuid.Nil || intentID == uuid.Nil {
+		return nil, domain.ErrNotFound
+	}
+	intent, err := s.repo.GetIntentByIDForAccount(ctx, accountID, intentID)
+	if err != nil {
+		return nil, err
+	}
+	if intent.UserID != uuid.Nil || paymentMetadataSource(intent.Metadata) != "web" {
+		return nil, domain.ErrNotFound
+	}
+	switch intent.Status {
+	case domain.PaymentIntentCanceled, domain.PaymentIntentExpired, domain.PaymentIntentFailed:
+		return intent, nil
+	case domain.PaymentIntentWaitingForUser:
+	default:
+		return nil, domain.ErrConflict
+	}
+	if strings.TrimSpace(intent.ProviderPaymentID) == "" {
+		return nil, ErrInvalidInput
+	}
+	if err := s.provider.CancelPayment(ctx, intent.ProviderPaymentID); err != nil {
+		recordPaymentProviderError(s.provider.Code(), "cancel_payment", err)
+		return nil, fmt.Errorf("paymentservice: cancel provider payment: %w", err)
+	}
+	providerPayment, err := s.provider.GetPayment(ctx, intent.ProviderPaymentID)
+	if err != nil {
+		recordPaymentProviderError(s.provider.Code(), "get_payment", err)
+		return nil, fmt.Errorf("paymentservice: verify canceled payment: %w", err)
+	}
+	switch providerPayment.Status {
+	case domain.PaymentIntentCanceled, domain.PaymentIntentExpired, domain.PaymentIntentFailed:
+		if intent.Status != providerPayment.Status {
+			if err := s.repo.UpdateIntentStatus(ctx, intent.ID, intent.Status, providerPayment.Status); err != nil && !errors.Is(err, domain.ErrConflict) {
+				return nil, err
+			}
+		}
+		return s.repo.GetIntentByIDForAccount(ctx, accountID, intent.ID)
+	case domain.PaymentIntentWaitingForUser, domain.PaymentIntentProviderPending:
+		return s.repo.GetIntentByIDForAccount(ctx, accountID, intent.ID)
+	default:
+		return nil, domain.ErrConflict
+	}
+}
+
 // ActiveWaitingIntent returns the newest user-owned payment that still needs
 // user confirmation. It does not grant credits and does not query the provider.
 func (s *Service) ActiveWaitingIntent(ctx context.Context, ownerID uuid.UUID) (*domain.PaymentIntent, error) {
@@ -595,6 +760,18 @@ func (s *Service) GetIntent(ctx context.Context, ownerID, intentID uuid.UUID) (*
 	return intent, nil
 }
 
+// GetAccountIntent fetches one exact canonical account-owned intent. It does
+// not expose historical legacy rows by fallback provenance.
+func (s *Service) GetAccountIntent(ctx context.Context, accountID, intentID uuid.UUID) (*domain.PaymentIntent, error) {
+	if s == nil || s.repo == nil {
+		return nil, errors.New("paymentservice: service is not configured")
+	}
+	if accountID == uuid.Nil || intentID == uuid.Nil {
+		return nil, domain.ErrNotFound
+	}
+	return s.repo.GetIntentByIDForAccount(ctx, accountID, intentID)
+}
+
 // GetIntentAdmin fetches one intent for a protected operator endpoint.
 func (s *Service) GetIntentAdmin(ctx context.Context, intentID uuid.UUID) (*domain.PaymentIntent, error) {
 	return s.repo.GetIntentByID(ctx, intentID)
@@ -603,6 +780,17 @@ func (s *Service) GetIntentAdmin(ctx context.Context, intentID uuid.UUID) (*doma
 // ListIntentsByUser returns user-owned payment history.
 func (s *Service) ListIntentsByUser(ctx context.Context, ownerID uuid.UUID, limit, offset int) ([]*domain.PaymentIntent, error) {
 	return s.repo.ListIntentsByUser(ctx, ownerID, normalizeLimit(limit), normalizeOffset(offset))
+}
+
+// ListAccountIntents lists only records explicitly owned by accountID.
+func (s *Service) ListAccountIntents(ctx context.Context, accountID uuid.UUID, limit, offset int) ([]*domain.PaymentIntent, error) {
+	if s == nil || s.repo == nil {
+		return nil, errors.New("paymentservice: service is not configured")
+	}
+	if accountID == uuid.Nil {
+		return []*domain.PaymentIntent{}, nil
+	}
+	return s.repo.ListIntentsByAccount(ctx, accountID, normalizeLimit(limit), normalizeOffset(offset))
 }
 
 // ListIntentsByUserSource returns user-owned payment history for one product
@@ -667,7 +855,7 @@ func (s *Service) ensureProviderPayment(ctx context.Context, intent *domain.Paym
 	}
 	createInput := domain.CreatePaymentInput{
 		IntentID:                  intent.ID,
-		AccountID:                 intentOwnerID(intent),
+		AccountID:                 intent.AccountID,
 		UserID:                    intent.UserID,
 		Amount:                    intent.Amount,
 		Currency:                  intent.Currency,
@@ -845,6 +1033,31 @@ func paymentIntentMatchesReturnURL(intent *domain.PaymentIntent, resolvedReturnU
 		return strings.TrimSpace(resolvedReturnURL) == ""
 	}
 	return stored == strings.TrimSpace(resolvedReturnURL)
+}
+
+func accountIntentMatches(intent *domain.PaymentIntent, product *domain.PaymentProduct, receiptEmail, receiptPhone, returnURL string, capture bool, provider domain.PaymentProviderCode) bool {
+	if intent == nil || product == nil || intent.UserID != uuid.Nil || intent.AccountID == uuid.Nil ||
+		intent.Provider != provider || intent.ProductID == nil || *intent.ProductID != product.ID ||
+		intent.Amount != product.Amount || intent.Currency != product.Currency || intent.Credits != product.Credits ||
+		intent.CreditDenominationVersion != product.CreditDenominationVersion || intent.PriceVersion != product.PriceVersion ||
+		intent.ReceiptDescription != paymentDescription(product) || !sameInt16(intent.VATCode, product.VATCode) ||
+		intent.PaymentSubject != strings.TrimSpace(product.PaymentSubject) || intent.PaymentMode != strings.TrimSpace(product.PaymentMode) ||
+		intent.ReceiptEmail != receiptEmail || intent.ReceiptPhone != receiptPhone {
+		return false
+	}
+	metadata, err := paymentMetadataMap(intent.Metadata)
+	if err != nil {
+		return false
+	}
+	storedCapture, ok := metadata["capture"].(bool)
+	return metadata["source"] == "web" && paymentMetadataReturnURL(intent.Metadata) == returnURL && ok && storedCapture == capture
+}
+
+func (s *Service) accountIntentCapturePolicy() bool {
+	if s != nil && s.cfg.AccountIntentCapture != nil {
+		return *s.cfg.AccountIntentCapture
+	}
+	return true
 }
 
 func cloneInt16(value *int16) *int16 {

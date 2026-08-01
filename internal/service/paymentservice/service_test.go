@@ -83,6 +83,156 @@ func TestCreateIntentCreatesProviderPaymentAndIsIdempotent(t *testing.T) {
 	}
 }
 
+func TestCreateIntentLegacyProvenanceForwardsNilAccountIDToProvider(t *testing.T) {
+	ctx := context.Background()
+	backing := memory.NewPaymentRepo()
+	userID := uuid.New()
+	legacy := &domain.PaymentIntent{
+		ID: uuid.New(), UserID: userID, Status: domain.PaymentIntentCreated,
+		Amount: 9900, Currency: domain.CurrencyRUB, Credits: 100,
+		Provider: domain.PaymentProviderMock, IdempotencyKey: "legacy-user-only-intent",
+		ReceiptEmail: "legacy@example.com",
+	}
+	if err := backing.CreateIntent(ctx, legacy); err != nil {
+		t.Fatalf("seed legacy intent: %v", err)
+	}
+	provider := &recordingPaymentProvider{}
+	repo := legacyPaymentIntentViewRepo{PaymentRepository: backing, legacyIntentID: legacy.ID}
+
+	_, err := paymentservice.New(repo, provider, paymentservice.Config{}).CreateIntent(ctx, paymentservice.CreateIntentInput{
+		UserID: userID, ProductCode: "unused-on-replay", ReceiptEmail: "legacy@example.com",
+		IdempotencyKey: legacy.IdempotencyKey, Source: "vk_bot",
+	})
+	if err != nil {
+		t.Fatalf("resume legacy intent: %v", err)
+	}
+	if len(provider.createInputs) != 1 {
+		t.Fatalf("provider create calls = %d, want 1", len(provider.createInputs))
+	}
+	got := provider.createInputs[0]
+	if got.UserID != userID || got.AccountID != uuid.Nil {
+		t.Fatalf("legacy provider provenance = user %s account %s, want user %s and nil account", got.UserID, got.AccountID, userID)
+	}
+}
+
+func TestCreateAccountIntentUsesOnlyCanonicalAccountOwnershipAndExactReplay(t *testing.T) {
+	ctx := context.Background()
+	repo := memory.NewPaymentRepo()
+	repo.PutProduct(&domain.PaymentProduct{
+		Code: "credits_100", Title: "100 credits", Amount: 9900,
+		Currency: domain.CurrencyRUB, Credits: 100, PriceVersion: 3, IsActive: true,
+	})
+	svc := paymentservice.New(repo, paymentmock.New(), paymentservice.Config{
+		ReturnURL: "https://neiirohub.ru/payments/return",
+	})
+	accountID := uuid.New()
+	in := paymentservice.CreateAccountIntentInput{
+		AccountID:      accountID,
+		ProductCode:    "credits_100",
+		ReceiptEmail:   "account@example.com",
+		IdempotencyKey: "web-payment-account-replay",
+	}
+
+	first, err := svc.CreateAccountIntent(ctx, in)
+	if err != nil {
+		t.Fatalf("create account intent: %v", err)
+	}
+	if !first.Created || first.ReusedActive {
+		t.Fatalf("unexpected creation result: %+v", first)
+	}
+	if first.Intent.AccountID != accountID || first.Intent.UserID != uuid.Nil ||
+		first.Intent.Amount != 9900 || first.Intent.Credits != 100 ||
+		first.Intent.Provider != domain.PaymentProviderMock {
+		t.Fatalf("unexpected account intent: %+v", first.Intent)
+	}
+	var metadata map[string]any
+	if err := json.Unmarshal(first.Intent.Metadata, &metadata); err != nil {
+		t.Fatalf("decode metadata: %v", err)
+	}
+	if metadata["source"] != "web" || metadata["return_url"] != "https://neiirohub.ru/payments/return" || metadata["capture"] != true {
+		t.Fatalf("native intent must use server-owned facts, got %+v", metadata)
+	}
+
+	second, err := svc.CreateAccountIntent(ctx, in)
+	if err != nil {
+		t.Fatalf("replay account intent: %v", err)
+	}
+	if second.Created || second.ReusedActive || second.Intent.ID != first.Intent.ID {
+		t.Fatalf("unexpected replay result: first=%+v second=%+v", first, second)
+	}
+
+	if _, err := svc.CreateAccountIntent(ctx, paymentservice.CreateAccountIntentInput{
+		AccountID: uuid.New(), ProductCode: in.ProductCode, ReceiptEmail: in.ReceiptEmail, IdempotencyKey: in.IdempotencyKey,
+	}); !errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("foreign global key error = %v, want conflict", err)
+	}
+	if _, err := svc.CreateAccountIntent(ctx, paymentservice.CreateAccountIntentInput{
+		AccountID: accountID, ProductCode: in.ProductCode, ReceiptPhone: "+79990000000", IdempotencyKey: in.IdempotencyKey,
+	}); !errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("changed immutable replay error = %v, want conflict", err)
+	}
+	capture := false
+	if _, err := paymentservice.New(repo, paymentmock.New(), paymentservice.Config{
+		ReturnURL: "https://neiirohub.ru/payments/return", AccountIntentCapture: &capture,
+	}).CreateAccountIntent(ctx, in); !errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("changed capture policy replay error = %v, want conflict", err)
+	}
+	if _, err := svc.GetAccountIntent(ctx, uuid.New(), first.Intent.ID); !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("foreign account read error = %v, want not found", err)
+	}
+}
+
+func TestCancelAccountWaitingIntentUsesExactCanonicalOwner(t *testing.T) {
+	ctx := context.Background()
+	repo := memory.NewPaymentRepo()
+	repo.PutProduct(&domain.PaymentProduct{Code: "credits_100", Title: "100 credits", Amount: 9900, Currency: domain.CurrencyRUB, Credits: 100, PriceVersion: 1, IsActive: true})
+	provider := &cancelTrackingProvider{Provider: paymentmock.New()}
+	svc := paymentservice.New(repo, provider, paymentservice.Config{})
+	owner := uuid.New()
+	created, err := svc.CreateAccountIntent(ctx, paymentservice.CreateAccountIntentInput{
+		AccountID: owner, ProductCode: "credits_100", ReceiptEmail: "account@example.com", IdempotencyKey: "native-cancel",
+	})
+	if err != nil {
+		t.Fatalf("create native intent: %v", err)
+	}
+	if _, err := svc.CancelAccountWaitingIntent(ctx, uuid.New(), created.Intent.ID); !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("foreign cancel error = %v, want not found", err)
+	}
+	if provider.cancelCalls != 0 || provider.getCalls != 0 {
+		t.Fatalf("foreign cancel called provider: cancel=%d get=%d, want 0/0", provider.cancelCalls, provider.getCalls)
+	}
+	canceled, err := svc.CancelAccountWaitingIntent(ctx, owner, created.Intent.ID)
+	if err != nil {
+		t.Fatalf("cancel native intent: %v", err)
+	}
+	if canceled.Status != domain.PaymentIntentCanceled {
+		t.Fatalf("native cancel status = %q, want canceled", canceled.Status)
+	}
+}
+
+func TestListAccountIntentsDoesNotExposeForeignNativeEntries(t *testing.T) {
+	ctx := context.Background()
+	repo := memory.NewPaymentRepo()
+	svc := paymentservice.New(repo, paymentmock.New(), paymentservice.Config{})
+	owner, foreign := uuid.New(), uuid.New()
+	for _, intent := range []*domain.PaymentIntent{
+		{AccountID: owner, Status: domain.PaymentIntentWaitingForUser, Amount: 9900, Currency: domain.CurrencyRUB, Credits: 100, Provider: domain.PaymentProviderMock, IdempotencyKey: "native-list-owner", ReceiptEmail: "owner@example.com"},
+		{AccountID: foreign, Status: domain.PaymentIntentWaitingForUser, Amount: 9900, Currency: domain.CurrencyRUB, Credits: 100, Provider: domain.PaymentProviderMock, IdempotencyKey: "native-list-foreign", ReceiptEmail: "foreign@example.com"},
+	} {
+		if err := repo.CreateIntent(ctx, intent); err != nil {
+			t.Fatalf("seed native intent: %v", err)
+		}
+	}
+
+	intents, err := svc.ListAccountIntents(ctx, foreign, 10, 0)
+	if err != nil {
+		t.Fatalf("list foreign native intents: %v", err)
+	}
+	if len(intents) != 1 || intents[0].AccountID != foreign || intents[0].IdempotencyKey != "native-list-foreign" {
+		t.Fatalf("foreign account list leaked entries: %#v", intents)
+	}
+}
+
 func TestDevPaymentTestProductRequiresExplicitFlag(t *testing.T) {
 	ctx := context.Background()
 	repo := memory.NewPaymentRepo()
@@ -739,6 +889,119 @@ func TestWebhookProcessorVerifiedSuccessGrantsOnce(t *testing.T) {
 	}
 	if acc.BalanceCached != 100 {
 		t.Fatalf("balance after replay = %d, want 100", acc.BalanceCached)
+	}
+}
+
+func TestWebhookProcessorNativeIntentCreditsCanonicalOwnerWithoutVKNotification(t *testing.T) {
+	ctx := context.Background()
+	repo := memory.NewPaymentRepo()
+	repo.PutProduct(&domain.PaymentProduct{
+		Code: "credits_100", Title: "100 credits", Amount: 9900,
+		Currency: domain.CurrencyRUB, Credits: 100, PriceVersion: 1, IsActive: true,
+	})
+	provider := paymentmock.New()
+	accountID := uuid.New()
+	created, err := paymentservice.New(repo, provider, paymentservice.Config{}).CreateAccountIntent(ctx, paymentservice.CreateAccountIntentInput{
+		AccountID: accountID, ProductCode: "credits_100", ReceiptEmail: "account@example.com", IdempotencyKey: "webhook-native-owner",
+	})
+	if err != nil {
+		t.Fatalf("create native intent: %v", err)
+	}
+	if err := provider.SetPaymentStatus(created.Intent.ProviderPaymentID, domain.PaymentIntentSucceeded); err != nil {
+		t.Fatalf("set provider status: %v", err)
+	}
+	billingRepo := memory.NewBillingRepo()
+	billing := billingservice.New(billingRepo, billingservice.WithStartingBalance(0))
+	notifier := &recordingStatusNotifier{}
+	processor := paymentservice.NewWebhookProcessor(repo, provider, billing, paymentservice.TxRunnerFunc(func(ctx context.Context, fn func(context.Context, domain.PaymentRepository, domain.BillingRepository) error) error {
+		return fn(ctx, repo, billingRepo)
+	}), paymentservice.WithPaymentStatusNotifier(notifier))
+	for _, eventType := range []string{"payment.succeeded", "payment.succeeded.retry"} {
+		raw := []byte(`{"event_type":"` + eventType + `","provider_payment_id":"` + created.Intent.ProviderPaymentID + `","object":{"metadata":{"account_id":"` + uuid.NewString() + `"}}}`)
+		if _, _, err := processor.IngestWebhook(ctx, raw, nil); err != nil {
+			t.Fatalf("ingest %s: %v", eventType, err)
+		}
+		if _, err := processor.ProcessBatch(ctx, 10); err != nil {
+			t.Fatalf("process %s: %v", eventType, err)
+		}
+	}
+	account, err := billingRepo.GetAccountByOwner(ctx, accountID, domain.CurrencyCredits)
+	if err != nil || account.BalanceCached != 100 || account.UserID != uuid.Nil {
+		t.Fatalf("native owner credit account = %#v, %v", account, err)
+	}
+	if len(notifier.events) != 0 {
+		t.Fatalf("web payment must not notify VK: %+v", notifier.events)
+	}
+}
+
+func TestWebhookProcessorLegacyUserOnlyIntentFallsBackToUserOwnerOnce(t *testing.T) {
+	ctx := context.Background()
+	backing := memory.NewPaymentRepo()
+	provider := paymentmock.New()
+	userID := uuid.New()
+	created, err := provider.CreatePayment(ctx, domain.CreatePaymentInput{
+		IntentID: uuid.New(), UserID: userID, Amount: 9900, Currency: domain.CurrencyRUB,
+		Credits: 100, ReceiptEmail: "legacy@example.com", IdempotencyKey: "legacy-webhook-provider",
+	})
+	if err != nil {
+		t.Fatalf("create provider payment: %v", err)
+	}
+	legacy := &domain.PaymentIntent{
+		ID: uuid.New(), UserID: userID, Status: domain.PaymentIntentWaitingForUser,
+		Amount: 9900, Currency: domain.CurrencyRUB, Credits: 100,
+		Provider: domain.PaymentProviderMock, ProviderPaymentID: created.ProviderPaymentID,
+		IdempotencyKey: "legacy-webhook-intent", ReceiptEmail: "legacy@example.com",
+	}
+	if err := backing.CreateIntent(ctx, legacy); err != nil {
+		t.Fatalf("seed legacy intent: %v", err)
+	}
+	if err := provider.SetPaymentStatus(created.ProviderPaymentID, domain.PaymentIntentSucceeded); err != nil {
+		t.Fatalf("set provider status: %v", err)
+	}
+	repo := legacyPaymentIntentViewRepo{PaymentRepository: backing, legacyIntentID: legacy.ID}
+	billingRepo := memory.NewBillingRepo()
+	billing := billingservice.New(billingRepo, billingservice.WithStartingBalance(0))
+	processor := paymentservice.NewWebhookProcessor(repo, provider, billing, paymentservice.TxRunnerFunc(func(ctx context.Context, fn func(context.Context, domain.PaymentRepository, domain.BillingRepository) error) error {
+		return fn(ctx, repo, billingRepo)
+	}))
+	for _, eventType := range []string{"payment.succeeded", "payment.succeeded.retry"} {
+		if _, _, err := processor.IngestWebhook(ctx, []byte(`{"event_type":"`+eventType+`","provider_payment_id":"`+created.ProviderPaymentID+`"}`), nil); err != nil {
+			t.Fatalf("ingest %s: %v", eventType, err)
+		}
+		if _, err := processor.ProcessBatch(ctx, 10); err != nil {
+			t.Fatalf("process %s: %v", eventType, err)
+		}
+	}
+	account, err := billingRepo.GetAccountByUser(ctx, userID, domain.CurrencyCredits)
+	if err != nil {
+		t.Fatalf("get legacy user credit account: %v", err)
+	}
+	if account.BalanceCached != 100 || account.UserID != userID {
+		t.Fatalf("legacy fallback credit account = %#v, want user-owned one-time topup", account)
+	}
+}
+
+func TestWebhookProcessorRejectsOwnerlessSucceededIntentBeforeBilling(t *testing.T) {
+	ctx := context.Background()
+	repo := memory.NewPaymentRepo()
+	provider := paymentmock.New()
+	intent := &domain.PaymentIntent{
+		ID: uuid.New(), Status: domain.PaymentIntentWaitingForUser, Amount: 9900, Currency: domain.CurrencyRUB,
+		Credits: 100, Provider: domain.PaymentProviderMock, ProviderPaymentID: "ownerless-payment", IdempotencyKey: "ownerless-intent",
+	}
+	if err := repo.CreateIntent(ctx, intent); err != nil {
+		t.Fatalf("create ownerless fixture: %v", err)
+	}
+	billingRepo := memory.NewBillingRepo()
+	processor := newTestWebhookProcessor(repo, provider, billingRepo)
+	if _, _, err := processor.IngestWebhook(ctx, []byte(`{"event_type":"payment.succeeded","provider_payment_id":"ownerless-payment"}`), nil); err != nil {
+		t.Fatalf("ingest ownerless event: %v", err)
+	}
+	if _, err := processor.ProcessBatch(ctx, 10); !errors.Is(err, paymentservice.ErrWebhookInvalid) {
+		t.Fatalf("process ownerless event error = %v, want ErrWebhookInvalid", err)
+	}
+	if _, err := billingRepo.GetAccountByUser(ctx, uuid.Nil, domain.CurrencyCredits); !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("ownerless intent must not create a nil-user credit account: %v", err)
 	}
 }
 
@@ -1886,6 +2149,46 @@ type recordingPaymentProvider struct {
 	refundCurrency  domain.Currency
 	refundErr       error
 	refundResults   map[string]domain.RefundResult
+}
+
+type cancelTrackingProvider struct {
+	*paymentmock.Provider
+	cancelCalls int
+	getCalls    int
+}
+
+func (p *cancelTrackingProvider) CancelPayment(ctx context.Context, providerPaymentID string) error {
+	p.cancelCalls++
+	return p.Provider.CancelPayment(ctx, providerPaymentID)
+}
+
+func (p *cancelTrackingProvider) GetPayment(ctx context.Context, providerPaymentID string) (domain.ProviderPayment, error) {
+	p.getCalls++
+	return p.Provider.GetPayment(ctx, providerPaymentID)
+}
+
+type legacyPaymentIntentViewRepo struct {
+	domain.PaymentRepository
+	legacyIntentID uuid.UUID
+}
+
+func (r legacyPaymentIntentViewRepo) GetIntentByIdempotencyKey(ctx context.Context, key string) (*domain.PaymentIntent, error) {
+	intent, err := r.PaymentRepository.GetIntentByIdempotencyKey(ctx, key)
+	return r.legacyView(intent), err
+}
+
+func (r legacyPaymentIntentViewRepo) GetIntentByProviderPaymentID(ctx context.Context, provider domain.PaymentProviderCode, providerPaymentID string) (*domain.PaymentIntent, error) {
+	intent, err := r.PaymentRepository.GetIntentByProviderPaymentID(ctx, provider, providerPaymentID)
+	return r.legacyView(intent), err
+}
+
+func (r legacyPaymentIntentViewRepo) legacyView(intent *domain.PaymentIntent) *domain.PaymentIntent {
+	if intent == nil || intent.ID != r.legacyIntentID {
+		return intent
+	}
+	legacy := *intent
+	legacy.AccountID = uuid.Nil
+	return &legacy
 }
 
 func (p *recordingPaymentProvider) Code() domain.PaymentProviderCode {

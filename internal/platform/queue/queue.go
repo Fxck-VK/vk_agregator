@@ -58,13 +58,17 @@ type Publisher interface {
 // MemoryPublisher is an in-memory Publisher that records enqueued tasks per
 // queue name. It is safe for concurrent use.
 type MemoryPublisher struct {
-	mu     sync.Mutex
-	queues map[string][]Task
+	mu      sync.Mutex
+	queues  map[string][]Task
+	streams map[string][]Task
 }
 
 // NewMemoryPublisher builds an empty in-memory publisher.
 func NewMemoryPublisher() *MemoryPublisher {
-	return &MemoryPublisher{queues: make(map[string][]Task)}
+	return &MemoryPublisher{
+		queues:  make(map[string][]Task),
+		streams: make(map[string][]Task),
+	}
 }
 
 var _ Publisher = (*MemoryPublisher)(nil)
@@ -78,12 +82,31 @@ func (p *MemoryPublisher) Enqueue(_ context.Context, task Task) error {
 	return nil
 }
 
+// PublishTo records a task for an explicit stream. It mirrors the Redis
+// publisher capability used by outbox relays for work whose destination is not
+// derived from the operation, such as result finalization.
+func (p *MemoryPublisher) PublishTo(_ context.Context, stream string, task Task) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.streams[stream] = append(p.streams[stream], task)
+	return nil
+}
+
 // Tasks returns a copy of the tasks enqueued on the named queue.
 func (p *MemoryPublisher) Tasks(queueName string) []Task {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	out := make([]Task, len(p.queues[queueName]))
 	copy(out, p.queues[queueName])
+	return out
+}
+
+// StreamTasks returns a copy of the tasks published to one explicit stream.
+func (p *MemoryPublisher) StreamTasks(stream string) []Task {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	out := make([]Task, len(p.streams[stream]))
+	copy(out, p.streams[stream])
 	return out
 }
 
@@ -94,6 +117,9 @@ func (p *MemoryPublisher) Len() int {
 	total := 0
 	for _, q := range p.queues {
 		total += len(q)
+	}
+	for _, stream := range p.streams {
+		total += len(stream)
 	}
 	return total
 }

@@ -23,7 +23,9 @@ import (
 	"vk-ai-aggregator/internal/platform/metrics"
 	"vk-ai-aggregator/internal/service/billingservice"
 	"vk-ai-aggregator/internal/service/identityresolver"
+	"vk-ai-aggregator/internal/service/imagegeneration"
 	"vk-ai-aggregator/internal/service/joborchestrator"
+	"vk-ai-aggregator/internal/service/modelcatalog"
 	"vk-ai-aggregator/internal/service/paymentservice"
 	"vk-ai-aggregator/internal/service/pricingcatalog"
 	"vk-ai-aggregator/internal/service/referralservice"
@@ -652,119 +654,71 @@ func (h *Handler) readJobRequest(w http.ResponseWriter, r *http.Request) (Create
 			writeError(w, http.StatusBadRequest, "unsupported model")
 			return CreateJobRequest{}, "", "", miniAppModelSpec{}, false
 		}
-		if opType == domain.OperationImageGenerate && !h.imageModelEnabled(model.ModelID) {
-			writeError(w, http.StatusBadRequest, "unsupported model")
-			return CreateJobRequest{}, "", "", miniAppModelSpec{}, false
-		}
 		if opType == domain.OperationImageGenerate {
-			adjusted, quality, ok := h.applyImageQuality(w, model, req.ImageQuality)
+			referenceCount, ok := uniqueImageReferenceCount(w, req.ReferenceArtifactIDs)
 			if !ok {
 				return CreateJobRequest{}, "", "", miniAppModelSpec{}, false
 			}
-			model = adjusted
-			req.ImageQuality = quality
-		}
-		if opType == domain.OperationImageGenerate && !validateImageReferenceCount(w, model, req.ReferenceArtifactIDs) {
-			return CreateJobRequest{}, "", "", miniAppModelSpec{}, false
+			resolution, err := h.resolveImageGeneration(imagegeneration.Request{
+				ModelID:        req.ModelID,
+				Quality:        req.ImageQuality,
+				ReferenceCount: referenceCount,
+			})
+			if err != nil {
+				writeImageGenerationResolveError(w, err)
+				return CreateJobRequest{}, "", "", miniAppModelSpec{}, false
+			}
+			model = miniAppModelFromImageResolution(resolution)
+			req.ImageQuality = resolution.Public.ImageQuality
 		}
 	}
 	return req, opType, modality, model, true
 }
 
-func (h *Handler) imageModelEnabled(modelID string) bool {
-	if len(h.cfg.ImageModels) == 0 {
-		return true
-	}
+func (h *Handler) resolveImageGeneration(request imagegeneration.Request) (imagegeneration.Resolution, error) {
+	models := make([]imagegeneration.PublicModel, 0, len(h.cfg.ImageModels))
 	for _, model := range h.cfg.ImageModels {
-		if model.ID == modelID {
-			return model.Enabled
-		}
+		models = append(models, imagegeneration.PublicModel{
+			ID:      model.ID,
+			Name:    model.Name,
+			Enabled: model.Enabled,
+			// ImageModels are built from the already readiness-filtered public
+			// product catalog. Keep this explicit at the shared-service boundary.
+			Ready:                  true,
+			QualityOptions:         append([]string(nil), model.QualityOptions...),
+			DefaultQuality:         model.DefaultQuality,
+			SupportsReferenceImage: model.SupportsReferenceImage,
+			MaxReferenceImages:     model.MaxReferenceImages,
+		})
 	}
-	return false
+	return imagegeneration.NewResolver(models, h.deps.PricingCatalog).Resolve(request)
 }
 
-func (h *Handler) applyImageQuality(w http.ResponseWriter, model miniAppModelSpec, raw string) (miniAppModelSpec, string, bool) {
-	publicModel, found := h.imageModelByID(model.ModelID)
-	raw = strings.TrimSpace(raw)
-	if !found {
-		quality := raw
-		if quality == "" {
-			quality = defaultMiniAppImageQuality(model.ModelID)
-		}
-		if quality == "" {
-			return model, "", true
-		}
-		quality, ok := normalizeMiniAppImageQuality(quality)
-		if !ok {
-			writeError(w, http.StatusBadRequest, "unsupported image quality")
-			return miniAppModelSpec{}, "", false
-		}
-		return applyMiniAppImageQuality(model, quality), quality, true
-	}
-	options := publicModel.QualityOptions
-	if len(options) == 0 {
-		if raw != "" {
-			writeError(w, http.StatusBadRequest, "unsupported image quality")
-			return miniAppModelSpec{}, "", false
-		}
-		return model, "", true
-	}
-	quality := raw
-	if quality == "" {
-		quality = publicModel.DefaultQuality
-	}
-	quality, ok := normalizeMiniAppImageQuality(quality)
-	if !ok || !imageQualityAllowed(quality, options) {
+func writeImageGenerationResolveError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, imagegeneration.ErrUnsupportedQuality):
 		writeError(w, http.StatusBadRequest, "unsupported image quality")
-		return miniAppModelSpec{}, "", false
-	}
-	return applyMiniAppImageQuality(model, quality), quality, true
-}
-
-func defaultMiniAppImageQuality(modelID string) string {
-	switch modelID {
-	case pricingcatalog.PublicImageNanoBanana2,
-		pricingcatalog.PublicImageNanoBananaPro,
-		pricingcatalog.PublicImageGPTImage2:
-		return pricingcatalog.ImageQuality1K
-	case pricingcatalog.PublicImageSeedream45:
-		return pricingcatalog.ImageQuality2K
+	case errors.Is(err, imagegeneration.ErrReferenceUnsupported):
+		writeError(w, http.StatusBadRequest, "reference_artifacts_unsupported")
+	case errors.Is(err, imagegeneration.ErrReferenceLimit):
+		writeError(w, http.StatusBadRequest, "too many reference artifacts")
+	case errors.Is(err, imagegeneration.ErrInvalidReferenceCount):
+		writeError(w, http.StatusBadRequest, "invalid reference artifact id")
 	default:
-		return ""
+		writeError(w, http.StatusBadRequest, "unsupported model")
 	}
 }
 
-func (h *Handler) imageModelByID(modelID string) (ImageModelDTO, bool) {
-	for _, model := range h.cfg.ImageModels {
-		if model.ID == modelID && model.Enabled {
-			return copyImageModelDTO(model), true
+func uniqueImageReferenceCount(w http.ResponseWriter, ids []uuid.UUID) (int, bool) {
+	seen := make(map[uuid.UUID]struct{}, len(ids))
+	for _, id := range ids {
+		if id == uuid.Nil {
+			writeError(w, http.StatusBadRequest, "invalid reference artifact id")
+			return 0, false
 		}
+		seen[id] = struct{}{}
 	}
-	return ImageModelDTO{}, false
-}
-
-func imageQualityAllowed(quality string, options []string) bool {
-	for _, option := range options {
-		normalized, ok := normalizeMiniAppImageQuality(option)
-		if ok && normalized == quality {
-			return true
-		}
-	}
-	return false
-}
-
-func imageSizeForMiniAppQuality(model miniAppModelSpec, quality string) string {
-	if model.Provider == domain.ProviderDeepInfra {
-		switch quality {
-		case "2K":
-			return "2048x2048"
-		case "4K":
-			return "4096x4096"
-		default:
-			return "1024x1024"
-		}
-	}
-	return "1:1"
+	return len(seen), true
 }
 
 func normalizeVideoDurationSec(sec int, route VideoRouteDTO) (int, bool) {
@@ -824,37 +778,16 @@ func validateVideoReferenceCount(w http.ResponseWriter, route VideoRouteDTO, ids
 	return true
 }
 
-func validateImageReferenceCount(w http.ResponseWriter, model miniAppModelSpec, ids []uuid.UUID) bool {
-	seen := make(map[uuid.UUID]struct{}, len(ids))
-	for _, id := range ids {
-		if id == uuid.Nil {
-			writeError(w, http.StatusBadRequest, "invalid reference artifact id")
-			return false
-		}
-		seen[id] = struct{}{}
-	}
-	count := len(seen)
-	if count > 0 && !model.SupportsReferenceImage {
-		writeError(w, http.StatusBadRequest, "reference_artifacts_unsupported")
-		return false
-	}
-	if model.MaxReferenceImages > 0 && count > model.MaxReferenceImages {
-		writeError(w, http.StatusBadRequest, "too many reference artifacts")
-		return false
-	}
-	return true
-}
-
 func videoRouteModelSpec(route VideoRouteDTO) miniAppModelSpec {
 	name := strings.TrimSpace(route.Name)
 	if name == "" {
 		name = videoRouteDisplayName(route.Alias)
 	}
-	return miniAppModelSpec{
+	return miniAppModelSpec{Model: modelcatalog.Model{
 		ModelID:   route.Alias,
 		ModelName: name,
 		ExposeID:  true,
-	}
+	}}
 }
 
 func videoRouteDisplayName(alias string) string {
@@ -1101,6 +1034,9 @@ func (h *Handler) estimateRequestCost(ctx context.Context, userID uuid.UUID, opT
 	if opType == domain.OperationTextGenerate {
 		return h.deps.Billing.Estimate(opType)
 	}
+	if model.imageResolution != nil {
+		return model.imageResolution.PricingSnapshot.InternalCredits, nil
+	}
 	snapshot, err := h.pricingSnapshotForRequest(ctx, userID, opType, modality, model, req)
 	if err != nil {
 		return 0, err
@@ -1153,19 +1089,6 @@ func (h *Handler) pricingSnapshotForRequest(ctx context.Context, userID uuid.UUI
 
 func (h *Handler) pricingProductKey(opType domain.OperationType, modality domain.Modality, model miniAppModelSpec, req CreateJobRequest) (pricingcatalog.ProductKey, bool) {
 	switch opType {
-	case domain.OperationImageGenerate:
-		modelID := miniAppResponseModelID(model)
-		if modelID == "" {
-			modelID = model.ModelID
-		}
-		key := pricingcatalog.ProductKey{
-			Operation:    opType,
-			Modality:     modality,
-			ImageModelID: modelID,
-			Quality:      req.ImageQuality,
-		}
-		key = key.Normalize()
-		return key, key.Valid()
 	case domain.OperationVideoGenerate:
 		resolution := strings.TrimSpace(req.Resolution)
 		if resolution == "" {
@@ -1248,16 +1171,20 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 		jobParams.VideoRouteAlias = strings.TrimSpace(req.VideoRouteAlias)
 		jobParams.Resolution = req.Resolution
 		jobParams.AspectRatio = req.AspectRatio
+	} else if model.imageResolution != nil {
+		worker := model.imageResolution.Worker
+		jobParams.ModelID = worker.ModelID
+		jobParams.ModelName = worker.ModelName
+		jobParams.Provider = worker.Provider
+		jobParams.ModelCode = worker.ModelCode
+		jobParams.ImageQuality = worker.ImageQuality
+		jobParams.Resolution = worker.Resolution
+		jobParams.Size = worker.Size
 	} else {
 		jobParams.ModelID = model.ModelID
 		jobParams.ModelName = model.ModelName
 		jobParams.Provider = model.Provider
 		jobParams.ModelCode = model.ModelCode
-		if opType == domain.OperationImageGenerate && req.ImageQuality != "" {
-			jobParams.ImageQuality = req.ImageQuality
-			jobParams.Resolution = req.ImageQuality
-			jobParams.Size = imageSizeForMiniAppQuality(model, req.ImageQuality)
-		}
 	}
 	params, _ := json.Marshal(jobParams)
 	metrics.ObserveProductPromptLength("miniapp", string(opType), string(modality), req.Prompt)
@@ -1265,6 +1192,9 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 	var costEstimate int64
 	if opType == domain.OperationTextGenerate {
 		costEstimate, err = h.deps.Billing.Estimate(opType)
+	} else if model.imageResolution != nil {
+		pricingSnapshot = model.imageResolution.PricingSnapshot
+		costEstimate = pricingSnapshot.InternalCredits
 	} else {
 		pricingSnapshot, err = h.pricingSnapshotForRequest(r.Context(), accountID, opType, modality, model, req)
 		if err == nil {
@@ -1281,6 +1211,8 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 		UserID:              user.ID,
 		AccountID:           accountID,
 		Source:              "miniapp",
+		ChannelContext:      &domain.ChannelContext{Channel: domain.ChannelVKMiniApp},
+		ResultMode:          domain.ResultModeAccountHistory,
 		VKPeerID:            vkUserID, // peer_id = user_id for direct messages
 		CommandID:           uuid.Nil, // no VK command for mini app path
 		Operation:           opType,
@@ -1379,6 +1311,8 @@ func (h *Handler) createChatMessage(w http.ResponseWriter, r *http.Request) {
 		UserID:         user.ID,
 		AccountID:      accountID,
 		Source:         "miniapp",
+		ChannelContext: &domain.ChannelContext{Channel: domain.ChannelVKMiniApp},
+		ResultMode:     domain.ResultModeAccountHistory,
 		VKPeerID:       vkUserID,
 		CommandID:      uuid.Nil,
 		Operation:      domain.OperationTextGenerate,
@@ -1993,15 +1927,21 @@ func (h *Handler) artifactVisible(ctx context.Context, art *domain.Artifact, acc
 		h.logger.Error("miniapp: list moderation results failed", logging.ErrorAttr(err))
 		return false
 	}
+	matched := false
 	for _, result := range results {
-		if result.Stage != domain.ModerationStageOutput || result.ArtifactID == nil || *result.ArtifactID != art.ID {
+		if result == nil ||
+			result.JobID != job.ID ||
+			result.Stage != domain.ModerationStageOutput ||
+			result.ArtifactID == nil ||
+			*result.ArtifactID != art.ID {
 			continue
 		}
-		if result.Decision.Allowed() {
-			return true
+		matched = true
+		if !result.Decision.Allowed() {
+			return false
 		}
 	}
-	return false
+	return matched
 }
 
 func uuidInSlice(ids []uuid.UUID, target uuid.UUID) bool {

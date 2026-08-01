@@ -34,6 +34,9 @@ var _ domain.DeliveryRepository = (*DeliveryRepo)(nil)
 func (r *DeliveryRepo) Create(_ context.Context, d *domain.Delivery) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if err := d.ValidateTarget(); err != nil {
+		return err
+	}
 	if d.IdempotencyKey != "" {
 		if _, ok := r.byKey[d.IdempotencyKey]; ok {
 			return domain.ErrConflict
@@ -47,7 +50,9 @@ func (r *DeliveryRepo) Create(_ context.Context, d *domain.Delivery) error {
 	}
 	now := time.Now()
 	d.CreatedAt, d.UpdatedAt = now, now
-	r.byID[d.ID] = *d
+	stored := cloneDelivery(*d)
+	r.byID[d.ID] = stored
+	*d = cloneDelivery(stored)
 	if d.IdempotencyKey != "" {
 		r.byKey[d.IdempotencyKey] = d.ID
 	}
@@ -58,13 +63,18 @@ func (r *DeliveryRepo) Create(_ context.Context, d *domain.Delivery) error {
 func (r *DeliveryRepo) Update(_ context.Context, d *domain.Delivery) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if err := d.ValidateTarget(); err != nil {
+		return err
+	}
 	cur, ok := r.byID[d.ID]
 	if !ok {
 		return domain.ErrNotFound
 	}
 	d.CreatedAt = cur.CreatedAt
 	d.UpdatedAt = time.Now()
-	r.byID[d.ID] = *d
+	stored := cloneDelivery(*d)
+	r.byID[d.ID] = stored
+	*d = cloneDelivery(stored)
 	return nil
 }
 
@@ -75,6 +85,7 @@ func (r *DeliveryRepo) GetByID(_ context.Context, id uuid.UUID) (*domain.Deliver
 	if !ok {
 		return nil, domain.ErrNotFound
 	}
+	d = cloneDelivery(d)
 	return &d, nil
 }
 
@@ -86,6 +97,7 @@ func (r *DeliveryRepo) GetByIdempotencyKey(_ context.Context, key string) (*doma
 		return nil, domain.ErrNotFound
 	}
 	d := r.byID[id]
+	d = cloneDelivery(d)
 	return &d, nil
 }
 
@@ -95,9 +107,18 @@ func (r *DeliveryRepo) ListByJob(_ context.Context, jobID uuid.UUID) ([]*domain.
 	var out []*domain.Delivery
 	for _, id := range r.byJob[jobID] {
 		d := r.byID[id]
+		d = cloneDelivery(d)
 		out = append(out, &d)
 	}
 	return out, nil
+}
+
+func cloneDelivery(delivery domain.Delivery) domain.Delivery {
+	if delivery.Target != nil {
+		target := *delivery.Target
+		delivery.Target = &target
+	}
+	return delivery
 }
 
 func (r *DeliveryRepo) HealthSnapshot(_ context.Context, since time.Time) (domain.DeliveryHealth, error) {

@@ -35,6 +35,7 @@ import (
 	"vk-ai-aggregator/internal/service/modelcatalog"
 	"vk-ai-aggregator/internal/service/paymentservice"
 	"vk-ai-aggregator/internal/service/pricingcatalog"
+	"vk-ai-aggregator/internal/service/productcatalog"
 	"vk-ai-aggregator/internal/service/referralservice"
 )
 
@@ -254,6 +255,7 @@ func newTestFixtureWithConfigAndPaymentProvider(appSecret string, limiter interf
 		ReferralLinkBase:                    "https://vk.com/write-239332376",
 		ReferralReferrerSignupRewardCredits: 10,
 		PaymentReturnURL:                    "https://neiirohub.ru/payments/return",
+		ImageModels:                         defaultTestImageModels(),
 	}
 	if configure != nil {
 		configure(&cfg)
@@ -469,6 +471,13 @@ func TestHandler_ClientEvent_RejectsTrailingJSONValue(t *testing.T) {
 }
 
 func newArtifactHandler(t *testing.T, jobStatus domain.JobStatus, decision *domain.ModerationDecision) (http.Handler, uuid.UUID) {
+	if decision == nil {
+		return newArtifactHandlerWithDecisions(t, jobStatus)
+	}
+	return newArtifactHandlerWithDecisions(t, jobStatus, *decision)
+}
+
+func newArtifactHandlerWithDecisions(t *testing.T, jobStatus domain.JobStatus, decisions ...domain.ModerationDecision) (http.Handler, uuid.UUID) {
 	t.Helper()
 	ctx := context.Background()
 	userRepo := memory.NewUserRepo()
@@ -514,13 +523,13 @@ func newArtifactHandler(t *testing.T, jobStatus domain.JobStatus, decision *doma
 	if err := objects.Put(ctx, artifact.StorageBucket, artifact.StorageKey, []byte("safe result"), artifact.MimeType); err != nil {
 		t.Fatalf("put object: %v", err)
 	}
-	if decision != nil {
+	for _, decision := range decisions {
 		artID := artifact.ID
 		if err := moderationRepo.Create(ctx, &domain.ModerationResult{
 			JobID:      job.ID,
 			ArtifactID: &artID,
 			Stage:      domain.ModerationStageOutput,
-			Decision:   *decision,
+			Decision:   decision,
 			Provider:   "test",
 		}); err != nil {
 			t.Fatalf("create moderation result: %v", err)
@@ -571,6 +580,41 @@ func mustStaticPricingCatalog() *pricingcatalog.Catalog {
 		panic(err)
 	}
 	return catalog
+}
+
+func defaultTestImageModels() []miniappinbound.ImageModelDTO {
+	pricing, err := pricingcatalog.NewStaticCatalog()
+	if err != nil {
+		panic(fmt.Sprintf("new static pricing catalog: %v", err))
+	}
+	trusted := modelcatalog.ListMiniAppModels(domain.OperationImageGenerate)
+	enabled := make(map[string]bool, len(trusted))
+	ready := make(map[domain.ProviderName]bool, len(trusted))
+	for _, model := range trusted {
+		enabled[model.ModelID] = true
+		ready[model.Provider] = true
+	}
+	publicModels := productcatalog.New(productcatalog.Config{
+		ImageProviderReady: ready,
+		EnabledImageModels: enabled,
+		PricingCatalog:     pricing,
+	}).ImageModels()
+	out := make([]miniappinbound.ImageModelDTO, 0, len(publicModels))
+	for _, model := range publicModels {
+		out = append(out, miniappinbound.ImageModelDTO{
+			Type:                   model.Type,
+			ID:                     model.ID,
+			Name:                   model.Name,
+			Description:            model.Description,
+			EstimateCredits:        model.EstimateCredits,
+			Enabled:                model.Enabled,
+			QualityOptions:         append([]string(nil), model.QualityOptions...),
+			DefaultQuality:         model.DefaultQuality,
+			SupportsReferenceImage: model.SupportsReferenceImage,
+			MaxReferenceImages:     model.MaxReferenceImages,
+		})
+	}
+	return out
 }
 
 func multipartUploadBody(t *testing.T, data []byte) (*bytes.Buffer, string) {
@@ -706,7 +750,8 @@ func enableTestVideoRoute(cfg *miniappinbound.Config, alias domain.VideoRouteAli
 }
 
 func TestHandler_CreateJob_OK(t *testing.T) {
-	routes := newTestHandler("").Routes()
+	fixture := newTestFixture("", nil)
+	routes := fixture.handler.Routes()
 
 	body, _ := json.Marshal(map[string]string{
 		"operation": "text_generate",
@@ -732,6 +777,18 @@ func TestHandler_CreateJob_OK(t *testing.T) {
 	}
 	if resp["prompt"] != "hello world" {
 		t.Fatalf("expected prompt in job response, got %#v", resp["prompt"])
+	}
+	jobID, err := uuid.Parse(resp["id"].(string))
+	if err != nil {
+		t.Fatalf("parse created job id: %v", err)
+	}
+	job, err := fixture.jobRepo.GetByID(context.Background(), jobID)
+	if err != nil {
+		t.Fatalf("read created job: %v", err)
+	}
+	if job.ChannelContext == nil || job.ChannelContext.Channel != domain.ChannelVKMiniApp ||
+		job.ResultMode != domain.ResultModeAccountHistory || job.DeliveryTarget != nil {
+		t.Fatalf("Mini App job result contract = %+v, want account history without target", job)
 	}
 }
 
@@ -1044,6 +1101,10 @@ func TestHandler_ChatMessage_CreatesTextJobWithPublicAlias(t *testing.T) {
 	}
 	if strings.Contains(strings.ToLower(string(job.Params)), "deepseek") || strings.Contains(strings.ToLower(string(job.Params)), "deepinfra") {
 		t.Fatalf("job params leaked provider/model detail: %s", string(job.Params))
+	}
+	if job.ChannelContext == nil || job.ChannelContext.Channel != domain.ChannelVKMiniApp ||
+		job.ResultMode != domain.ResultModeAccountHistory || job.DeliveryTarget != nil {
+		t.Fatalf("Mini App chat result contract = %+v, want account history without target", job)
 	}
 }
 
@@ -1938,6 +1999,35 @@ func TestHandler_GetArtifact_GuardsSucceededAndModerationPassed(t *testing.T) {
 			}
 			if tc.wantBody != "" && w.Body.String() != tc.wantBody {
 				t.Fatalf("body = %q, want %q", w.Body.String(), tc.wantBody)
+			}
+		})
+	}
+}
+
+func TestHandler_GetArtifactRejectsConflictingMatchingModerationVerdicts(t *testing.T) {
+	tests := []struct {
+		name     string
+		decision domain.ModerationDecision
+	}{
+		{name: "block", decision: domain.ModerationBlock},
+		{name: "review", decision: domain.ModerationReview},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			routes, artifactID := newArtifactHandlerWithDecisions(
+				t,
+				domain.JobStatusSucceeded,
+				domain.ModerationAllow,
+				test.decision,
+			)
+			req := httptest.NewRequest(http.MethodGet, "/miniapp/artifacts/"+artifactID.String(), nil)
+			req.Header.Set("X-Launch-Params", devLaunchParams(777))
+			w := httptest.NewRecorder()
+
+			routes.ServeHTTP(w, req)
+
+			if w.Code != http.StatusNotFound {
+				t.Fatalf("conflicting moderation returned %d: %s", w.Code, w.Body.String())
 			}
 		})
 	}
@@ -4201,6 +4291,36 @@ func TestHandler_CreateJob_RejectsDisabledImageModelAlias(t *testing.T) {
 	}
 	if len(jobs) != 0 {
 		t.Fatalf("disabled image model must not create a job, got %d", len(jobs))
+	}
+}
+
+func TestHandler_CreateJob_ImageModelMissingFromReadyCatalogFailsClosed(t *testing.T) {
+	fixture := newTestFixtureWithConfig("", nil, func(cfg *miniappinbound.Config) {
+		cfg.ImageModels = nil
+	})
+	routes := fixture.handler.Routes()
+
+	body, _ := json.Marshal(map[string]string{
+		"operation": "image_generate",
+		"prompt":    "image prompt",
+		"model_id":  modelcatalog.MiniAppImageNanoBanana2,
+	})
+	req := httptest.NewRequest(http.MethodPost, "/miniapp/jobs", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Launch-Params", devLaunchParams(777))
+	req.Header.Set("X-Idempotency-Key", "missing-ready-image-catalog")
+
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+	jobs, err := fixture.jobRepo.List(context.Background(), domain.JobFilter{}, 10, 0)
+	if err != nil {
+		t.Fatalf("list jobs: %v", err)
+	}
+	if len(jobs) != 0 {
+		t.Fatalf("missing ready image catalog must not create a job, got %d", len(jobs))
 	}
 }
 

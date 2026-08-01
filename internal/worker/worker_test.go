@@ -30,6 +30,7 @@ import (
 	"vk-ai-aggregator/internal/adapter/storage/memory"
 	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/platform/queue"
+	"vk-ai-aggregator/internal/platform/uow"
 	"vk-ai-aggregator/internal/service/artifactservice"
 	"vk-ai-aggregator/internal/service/assistantfacts"
 	"vk-ai-aggregator/internal/service/dialogcontext"
@@ -76,6 +77,8 @@ type harness struct {
 	jobs     *memory.JobRepo
 	tasks    *memory.ProviderTaskRepo
 	artRepo  *memory.ArtifactRepo
+	modRepo  *memory.ModerationRepo
+	outbox   *memory.OutboxRepo
 	store    *memory.ObjectStore
 	streams  *fakeStreams
 	provider domain.Provider
@@ -104,6 +107,8 @@ func newHarnessCore(t *testing.T, provider domain.Provider, textContext worker.T
 	jobs := memory.NewJobRepo()
 	tasks := memory.NewProviderTaskRepo()
 	artRepo := memory.NewArtifactRepo()
+	modRepo := memory.NewModerationRepo()
+	outbox := memory.NewOutboxRepo()
 	store := memory.NewObjectStore()
 	// Download anything to fixed bytes so SaveRemoteArtifact succeeds offline.
 	dl := stubDownloader{data: []byte("output"), contentType: "application/octet-stream"}
@@ -111,15 +116,17 @@ func newHarnessCore(t *testing.T, provider domain.Provider, textContext worker.T
 	streams := newFakeStreams()
 	releaser := &fakeReleaser{}
 	deps := worker.Deps{
-		Jobs:         jobs,
-		Tasks:        tasks,
-		Artifacts:    artSvc,
-		ArtifactRepo: artRepo,
-		Objects:      store,
-		Providers:    worker.NewRegistry(provider),
-		Streams:      streams,
-		TextContext:  textContext,
-		Releaser:     releaser,
+		Jobs:           jobs,
+		ResultReadyUOW: memory.NewUnitOfWork(jobs, outbox, nil),
+		Tasks:          tasks,
+		Artifacts:      artSvc,
+		ArtifactRepo:   artRepo,
+		Objects:        store,
+		Providers:      worker.NewRegistry(provider),
+		Streams:        streams,
+		TextContext:    textContext,
+		ModResults:     modRepo,
+		Releaser:       releaser,
 	}
 	if configure != nil {
 		configure(&deps)
@@ -128,6 +135,8 @@ func newHarnessCore(t *testing.T, provider domain.Provider, textContext worker.T
 		jobs:     jobs,
 		tasks:    tasks,
 		artRepo:  artRepo,
+		modRepo:  modRepo,
+		outbox:   outbox,
 		store:    store,
 		streams:  streams,
 		provider: provider,
@@ -135,6 +144,49 @@ func newHarnessCore(t *testing.T, provider domain.Provider, textContext worker.T
 		gen:      worker.NewGenerationWorker(deps),
 		poll:     worker.NewPollWorker(deps),
 	}
+}
+
+type stagedResultReadyJobs struct{ domain.JobRepository }
+
+func (stagedResultReadyJobs) UpdateStatus(context.Context, uuid.UUID, domain.JobStatus, domain.JobStatus, string, string) error {
+	return nil
+}
+
+type failingResultReadyOutbox struct {
+	domain.OutboxRepository
+	err error
+}
+
+func (r failingResultReadyOutbox) Add(context.Context, *domain.OutboxEvent) error { return r.err }
+
+type failingResultReadyUOW struct {
+	jobs domain.JobRepository
+	err  error
+}
+
+func (u failingResultReadyUOW) Within(ctx context.Context, fn func(context.Context, uow.Repositories) error) error {
+	return fn(ctx, uow.Repositories{
+		Jobs:   stagedResultReadyJobs{JobRepository: u.jobs},
+		Outbox: failingResultReadyOutbox{err: u.err},
+	})
+}
+
+type failOnceResultReadyUOW struct {
+	delegate uow.Manager
+	jobs     domain.JobRepository
+	err      error
+	failed   bool
+}
+
+func (u *failOnceResultReadyUOW) Within(ctx context.Context, fn func(context.Context, uow.Repositories) error) error {
+	if !u.failed {
+		u.failed = true
+		return fn(ctx, uow.Repositories{
+			Jobs:   stagedResultReadyJobs{JobRepository: u.jobs},
+			Outbox: failingResultReadyOutbox{err: u.err},
+		})
+	}
+	return u.delegate.Within(ctx, fn)
 }
 
 type fakeTextContext struct {
@@ -453,6 +505,16 @@ func (h *harness) reload(t *testing.T, id uuid.UUID) *domain.Job {
 	return j
 }
 
+func resultReadyEventCount(outbox *memory.OutboxRepo, jobID uuid.UUID) int {
+	count := 0
+	for _, event := range outbox.Events() {
+		if event.EventType == "event.job.result_ready" && event.AggregateID == jobID {
+			count++
+		}
+	}
+	return count
+}
+
 func taskFor(job *domain.Job) queue.Task {
 	return queue.Task{JobID: job.ID, Operation: job.OperationType, Modality: job.Modality}
 }
@@ -475,12 +537,134 @@ func TestGenerationSyncSuccess(t *testing.T) {
 	if len(got.OutputArtifactIDs) != 1 {
 		t.Fatalf("expected 1 output artifact, got %d", len(got.OutputArtifactIDs))
 	}
-	if len(h.streams.byStream[redisqueue.StreamDelivery]) != 1 {
-		t.Fatalf("expected one delivery enqueue, got %v", h.streams.byStream)
+	events := h.outbox.Events()
+	if len(events) != 1 || events[0].EventType != "event.job.result_ready" {
+		t.Fatalf("outbox events = %+v, want one result-ready event", events)
+	}
+	if len(h.streams.byStream[redisqueue.StreamDelivery]) != 0 {
+		t.Fatalf("direct delivery tasks = %v, want none before relay", h.streams.byStream)
 	}
 	tasks, _ := h.tasks.ListByJob(ctx, job.ID)
 	if len(tasks) != 1 || tasks[0].Status != domain.ProviderTaskSucceeded {
 		t.Fatalf("unexpected provider tasks: %+v", tasks)
+	}
+}
+
+func TestGenerationResultReadyFailsClosedWithoutUnitOfWork(t *testing.T) {
+	h := newHarnessWithProvider(t, mock.New(), func(d *worker.Deps) {
+		d.ResultReadyUOW = nil
+	})
+	ctx := context.Background()
+	job := h.queueJob(t, domain.OperationImageGenerate, domain.ModalityImage, "a cat")
+
+	if err := h.gen.Process(ctx, taskFor(job)); err == nil {
+		t.Fatal("process without result-ready unit of work = nil, want error")
+	}
+
+	if got := h.reload(t, job.ID); got.Status == domain.JobStatusResultReady {
+		t.Fatalf("status = %q, result_ready must not be persisted without a unit of work", got.Status)
+	}
+	if len(h.streams.byStream[redisqueue.StreamDelivery]) != 0 {
+		t.Fatalf("delivery tasks = %v, want none without a durable result-ready event", h.streams.byStream)
+	}
+}
+
+func TestGenerationResultReadyOutboxFailureDoesNotPersistStatus(t *testing.T) {
+	failure := errors.New("outbox unavailable")
+	h := newHarnessWithProvider(t, mock.New(), func(d *worker.Deps) {
+		d.ResultReadyUOW = failingResultReadyUOW{jobs: d.Jobs, err: failure}
+	})
+	ctx := context.Background()
+	job := h.queueJob(t, domain.OperationImageGenerate, domain.ModalityImage, "a cat")
+
+	err := h.gen.Process(ctx, taskFor(job))
+	if !errors.Is(err, failure) {
+		t.Fatalf("process error = %v, want outbox failure", err)
+	}
+	if got := h.reload(t, job.ID); got.Status == domain.JobStatusResultReady {
+		t.Fatalf("status = %q, want no result_ready after outbox failure", got.Status)
+	}
+	if len(h.outbox.Events()) != 0 {
+		t.Fatalf("outbox events = %+v, want none after failed transaction", h.outbox.Events())
+	}
+	if len(h.streams.byStream[redisqueue.StreamDelivery]) != 0 {
+		t.Fatalf("delivery tasks = %v, want none after outbox failure", h.streams.byStream)
+	}
+}
+
+func TestPollWorkerRetriesSavedOutputAfterResultReadyOutboxFailure(t *testing.T) {
+	failure := errors.New("outbox temporarily unavailable")
+	h := newHarnessWithProvider(t, mock.New(), func(d *worker.Deps) {
+		d.ResultReadyUOW = &failOnceResultReadyUOW{
+			delegate: d.ResultReadyUOW,
+			jobs:     d.Jobs,
+			err:      failure,
+		}
+	})
+	ctx := context.Background()
+	job := h.queueJob(t, domain.OperationImageGenerate, domain.ModalityImage, "a cat")
+
+	if err := h.gen.Process(ctx, taskFor(job)); !errors.Is(err, failure) {
+		t.Fatalf("first generation error = %v, want outbox failure", err)
+	}
+	first := h.reload(t, job.ID)
+	if first.Status == domain.JobStatusResultReady || len(first.OutputArtifactIDs) != 1 {
+		t.Fatalf("first state = status %q, artifacts %v; want saved output before result_ready", first.Status, first.OutputArtifactIDs)
+	}
+	if resultReadyEventCount(h.outbox, job.ID) != 0 {
+		t.Fatalf("result-ready outbox events after failed transition = %+v, want none", h.outbox.Events())
+	}
+
+	if err := h.poll.Process(ctx, taskFor(first)); err != nil {
+		t.Fatalf("recovery poll: %v", err)
+	}
+	second := h.reload(t, job.ID)
+	if second.Status != domain.JobStatusResultReady {
+		t.Fatalf("recovery status = %q, want result_ready", second.Status)
+	}
+	if resultReadyEventCount(h.outbox, job.ID) != 1 {
+		t.Fatalf("result-ready outbox events after recovery = %+v, want exactly one", h.outbox.Events())
+	}
+}
+
+func TestGenerationWorkerAcknowledgesPreparedJobWithoutSideEffects(t *testing.T) {
+	provider := &routingProvider{name: domain.ProviderMock, operation: domain.OperationImageGenerate, modality: domain.ModalityImage}
+	h := newHarnessWithProvider(t, provider, nil)
+	ctx := context.Background()
+	job := &domain.Job{
+		ID:             uuid.New(),
+		AccountID:      uuid.New(),
+		OperationType:  domain.OperationImageGenerate,
+		Modality:       domain.ModalityImage,
+		Status:         domain.JobStatusPrepared,
+		IdempotencyKey: "prepared:" + uuid.NewString(),
+		CorrelationID:  "prepared-task",
+		CostEstimate:   25,
+		Params:         json.RawMessage(`{"prompt":"must not run"}`),
+	}
+	if err := h.jobs.Create(ctx, job); err != nil {
+		t.Fatalf("create prepared job: %v", err)
+	}
+
+	if err := h.gen.Process(ctx, taskFor(job)); err != nil {
+		t.Fatalf("process prepared task: %v", err)
+	}
+
+	got := h.reload(t, job.ID)
+	if got.Status != domain.JobStatusPrepared || got.CostReserved != 0 || got.CostCaptured != 0 {
+		t.Fatalf("prepared job mutated: status=%q reserved=%d captured=%d", got.Status, got.CostReserved, got.CostCaptured)
+	}
+	if provider.submits != 0 {
+		t.Fatalf("provider submissions = %d, want none", provider.submits)
+	}
+	if tasks, err := h.tasks.ListByJob(ctx, job.ID); err != nil || len(tasks) != 0 {
+		t.Fatalf("provider tasks = %+v, %v; want none", tasks, err)
+	}
+	if len(h.streams.byStream) != 0 {
+		t.Fatalf("streams mutated: %+v", h.streams.byStream)
+	}
+	if len(h.releaser.released) != 0 {
+		t.Fatalf("reservations released: %+v", h.releaser.released)
 	}
 }
 
@@ -510,8 +694,8 @@ func TestAsyncFlowViaPollWorker(t *testing.T) {
 	if got.Status != domain.JobStatusResultReady {
 		t.Fatalf("after poll status = %q, want result_ready", got.Status)
 	}
-	if len(h.streams.byStream[redisqueue.StreamDelivery]) != 1 {
-		t.Fatalf("expected delivery enqueue after poll")
+	if n := resultReadyEventCount(h.outbox, job.ID); n != 1 {
+		t.Fatalf("result-ready outbox events after poll = %d, want 1", n)
 	}
 }
 
@@ -522,6 +706,7 @@ func TestPollWorkerResumesTerminalProviderTaskWithSavedArtifact(t *testing.T) {
 	job := h.queueJob(t, domain.OperationImageGenerate, domain.ModalityImage, "a cat")
 	artifact := &domain.Artifact{
 		OwnerUserID:   job.UserID,
+		JobID:         &job.ID,
 		Kind:          domain.ArtifactKindOutput,
 		MediaType:     domain.MediaTypeImage,
 		MimeType:      "image/png",
@@ -570,8 +755,8 @@ func TestPollWorkerResumesTerminalProviderTaskWithSavedArtifact(t *testing.T) {
 	if len(got.OutputArtifactIDs) != 1 || got.OutputArtifactIDs[0] != artifact.ID {
 		t.Fatalf("output artifacts = %v, want existing %s", got.OutputArtifactIDs, artifact.ID)
 	}
-	if len(h.streams.byStream[redisqueue.StreamDelivery]) != 1 {
-		t.Fatalf("expected delivery enqueue after recovery, got %v", h.streams.byStream)
+	if n := resultReadyEventCount(h.outbox, job.ID); n != 1 {
+		t.Fatalf("result-ready outbox events after recovery = %d, want 1", n)
 	}
 	if provider.polls != 0 {
 		t.Fatalf("provider poll called during durable recovery: %d", provider.polls)
@@ -759,8 +944,8 @@ func TestVideoProbeSuccessBeforeDelivery(t *testing.T) {
 	if prober.calls != 1 {
 		t.Fatalf("probe calls = %d, want 1", prober.calls)
 	}
-	if len(h.streams.byStream[redisqueue.StreamDelivery]) != 1 {
-		t.Fatalf("expected delivery enqueue, got %v", h.streams.byStream)
+	if n := resultReadyEventCount(h.outbox, job.ID); n != 1 {
+		t.Fatalf("result-ready outbox events = %d, want 1", n)
 	}
 	if len(got.OutputArtifactIDs) != 1 {
 		t.Fatalf("expected one output artifact, got %d", len(got.OutputArtifactIDs))
@@ -876,8 +1061,8 @@ func TestVideoTranscodeCreatesVKReadyVariantBeforeDelivery(t *testing.T) {
 	if string(data) != "vk-ready-video" {
 		t.Fatalf("variant bytes = %q", string(data))
 	}
-	if len(h.streams.byStream[redisqueue.StreamDelivery]) != 1 {
-		t.Fatalf("expected delivery enqueue after variant creation, got %v", h.streams.byStream)
+	if n := resultReadyEventCount(h.outbox, job.ID); n != 1 {
+		t.Fatalf("result-ready outbox events after variant creation = %d, want 1", n)
 	}
 }
 
@@ -922,8 +1107,8 @@ func TestVideoFastPathSkipsTranscodeForSafeProviderOutput(t *testing.T) {
 	if len(variants) != 0 {
 		t.Fatalf("safe fast path must not create variants, got %+v", variants)
 	}
-	if len(h.streams.byStream[redisqueue.StreamDelivery]) != 1 {
-		t.Fatalf("expected delivery enqueue after safe fast path, got %v", h.streams.byStream)
+	if n := resultReadyEventCount(h.outbox, job.ID); n != 1 {
+		t.Fatalf("result-ready outbox events after safe fast path = %d, want 1", n)
 	}
 }
 
@@ -1095,8 +1280,8 @@ func TestVideoProbeDisabledDevMockStaysSimple(t *testing.T) {
 	if got.Status != domain.JobStatusResultReady {
 		t.Fatalf("status = %q, want result_ready", got.Status)
 	}
-	if len(h.streams.byStream[redisqueue.StreamDelivery]) != 1 {
-		t.Fatalf("expected delivery enqueue in dev/mock disabled policy, got %v", h.streams.byStream)
+	if n := resultReadyEventCount(h.outbox, job.ID); n != 1 {
+		t.Fatalf("result-ready outbox events in dev/mock disabled policy = %d, want 1", n)
 	}
 }
 
@@ -2669,8 +2854,8 @@ func TestGenerationVideoAPIMartStoresOutputBeforeDelivery(t *testing.T) {
 	if string(data) != "output" {
 		t.Fatalf("stored output = %q", data)
 	}
-	if len(h.streams.byStream[redisqueue.StreamDelivery]) != 1 {
-		t.Fatalf("delivery stream = %v, want one task after artifact storage", h.streams.byStream[redisqueue.StreamDelivery])
+	if n := resultReadyEventCount(h.outbox, job.ID); n != 1 {
+		t.Fatalf("result-ready outbox events after artifact storage = %d, want 1", n)
 	}
 }
 
@@ -2881,8 +3066,8 @@ func TestExternalAsyncVideoPollTransportErrorKeepsTaskPolling(t *testing.T) {
 	if provider.polls != 3 {
 		t.Fatalf("polls = %d, want 3", provider.polls)
 	}
-	if len(h.streams.byStream[redisqueue.StreamDelivery]) != 1 {
-		t.Fatalf("expected one delivery task, got %v", h.streams.byStream[redisqueue.StreamDelivery])
+	if n := resultReadyEventCount(h.outbox, job.ID); n != 1 {
+		t.Fatalf("result-ready outbox events after successful poll = %d, want 1", n)
 	}
 }
 
@@ -2963,8 +3148,8 @@ func TestExternalAsyncImagePollTaskNotFoundKeepsTaskPolling(t *testing.T) {
 	if provider.polls != 2 {
 		t.Fatalf("polls = %d, want 2", provider.polls)
 	}
-	if len(h.streams.byStream[redisqueue.StreamDelivery]) != 1 {
-		t.Fatalf("expected one delivery task, got %v", h.streams.byStream[redisqueue.StreamDelivery])
+	if n := resultReadyEventCount(h.outbox, job.ID); n != 1 {
+		t.Fatalf("result-ready outbox events after successful poll = %d, want 1", n)
 	}
 	if len(h.releaser.released) != 0 {
 		t.Fatalf("successful async image job must not release credits: %v", h.releaser.released)

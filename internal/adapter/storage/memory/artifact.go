@@ -89,6 +89,16 @@ func (r *ArtifactRepo) GetByID(_ context.Context, id uuid.UUID) (*domain.Artifac
 	return &a, nil
 }
 
+func (r *ArtifactRepo) GetByIDForAccount(_ context.Context, accountID, id uuid.UUID) (*domain.Artifact, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	a, ok := r.byID[id]
+	if !ok || accountID == uuid.Nil || a.OwnerAccountID != accountID {
+		return nil, domain.ErrNotFound
+	}
+	return &a, nil
+}
+
 func (r *ArtifactRepo) GetBySHA256(_ context.Context, ownerID uuid.UUID, sha256 string) (*domain.Artifact, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -99,6 +109,20 @@ func (r *ArtifactRepo) GetBySHA256(_ context.Context, ownerID uuid.UUID, sha256 
 	}
 	if artifact, ok := r.findBySHA256Locked(ownerID, sha256, func(artifact domain.Artifact, ownerID uuid.UUID) bool {
 		return artifact.OwnerUserID == ownerID
+	}); ok {
+		return artifact, nil
+	}
+	return nil, domain.ErrNotFound
+}
+
+func (r *ArtifactRepo) GetBySHA256ForAccount(_ context.Context, accountID uuid.UUID, sha256 string) (*domain.Artifact, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if accountID == uuid.Nil {
+		return nil, domain.ErrNotFound
+	}
+	if artifact, ok := r.findBySHA256Locked(accountID, sha256, func(artifact domain.Artifact, ownerID uuid.UUID) bool {
+		return artifact.OwnerAccountID == ownerID
 	}); ok {
 		return artifact, nil
 	}
@@ -125,6 +149,20 @@ func (r *ArtifactRepo) FindReusableInputReference(_ context.Context, ownerID uui
 	}
 	if artifact, ok := r.findReusableInputReferenceLocked(ownerID, sha256, validationPolicyVersion, mimeType, func(artifact domain.Artifact, ownerID uuid.UUID) bool {
 		return artifact.OwnerUserID == ownerID
+	}); ok {
+		return artifact, nil
+	}
+	return nil, domain.ErrNotFound
+}
+
+func (r *ArtifactRepo) FindReusableInputReferenceForAccount(_ context.Context, accountID uuid.UUID, sha256, validationPolicyVersion, mimeType string) (*domain.Artifact, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if accountID == uuid.Nil {
+		return nil, domain.ErrNotFound
+	}
+	if artifact, ok := r.findReusableInputReferenceLocked(accountID, sha256, validationPolicyVersion, mimeType, func(artifact domain.Artifact, ownerID uuid.UUID) bool {
+		return artifact.OwnerAccountID == ownerID
 	}); ok {
 		return artifact, nil
 	}

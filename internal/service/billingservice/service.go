@@ -31,6 +31,10 @@ var ErrUnknownOperation = errors.New("billingservice: unknown operation type")
 // amount is zero or negative where a positive credit amount is required.
 var ErrInvalidAmount = errors.New("billingservice: amount must be positive")
 
+// ErrInvalidOwnerAccount is returned when an account-native credit operation
+// omits its canonical account owner.
+var ErrInvalidOwnerAccount = errors.New("billingservice: owner account ID is required")
+
 // defaultPrices is a legacy fallback price list for uncataloged/old jobs.
 // Cataloged generation products must reserve from pricingcatalog snapshots.
 // Per the product spec image_to_video shares the video fallback.
@@ -142,6 +146,36 @@ func (s *Service) EnsureAccountForOwner(ctx context.Context, userID, accountID u
 	return s.ensureAccountWith(ctx, s.repo, userID, accountID)
 }
 
+// EnsureAccountForAccount resolves or creates the account-native credit account
+// for one canonical owner and currency. Native accounts intentionally have no
+// legacy user provenance, so lookup and conflict recovery are owner-only.
+func (s *Service) EnsureAccountForAccount(ctx context.Context, repo domain.BillingRepository, ownerAccountID uuid.UUID, currency domain.Currency) (*domain.CreditAccount, error) {
+	if ownerAccountID == uuid.Nil {
+		return nil, ErrInvalidOwnerAccount
+	}
+	acc, err := repo.GetAccountByOwner(ctx, ownerAccountID, currency)
+	if err == nil {
+		return acc, nil
+	}
+	if !errors.Is(err, domain.ErrNotFound) {
+		return nil, err
+	}
+	acc = &domain.CreditAccount{
+		UserID:                    uuid.Nil,
+		OwnerAccountID:            ownerAccountID,
+		Currency:                  currency,
+		BalanceCached:             s.startingBalance,
+		CreditDenominationVersion: domain.CurrentCreditDenominationVersion,
+	}
+	if err := repo.CreateAccount(ctx, acc); err != nil {
+		if errors.Is(err, domain.ErrConflict) {
+			return repo.GetAccountByOwner(ctx, ownerAccountID, currency)
+		}
+		return nil, err
+	}
+	return acc, nil
+}
+
 // ensureAccountWith resolves or creates the owner's account using the supplied
 // repository, which may be transaction-bound so account creation joins the
 // caller's unit of work.
@@ -209,7 +243,51 @@ func (s *Service) ReserveWithOwner(ctx context.Context, repo domain.BillingRepos
 		IdempotencyKey:            "resv:" + jobID.String(),
 		ExpiresAt:                 s.now().Add(s.reservationTTL),
 	}
-	if err := repo.Reserve(ctx, res); err != nil {
+	if accountID == uuid.Nil {
+		err = repo.Reserve(ctx, res)
+	} else {
+		err = repo.ReserveForOwner(ctx, res.OwnerAccountID, res)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return res, nil
+}
+
+// ReserveForAccount creates an account-native reservation. The canonical owner
+// is required and the deterministic job-derived key makes only an exact replay
+// safe; repository storage verifies it against the selected credit account.
+func (s *Service) ReserveForAccount(ctx context.Context, ownerAccountID, jobID uuid.UUID, amount int64) (*domain.CreditReservation, error) {
+	return s.ReserveForAccountWith(ctx, s.repo, ownerAccountID, jobID, amount)
+}
+
+// ReserveForAccountWith creates an account-native reservation through the
+// caller's repository. It is the transactional counterpart of
+// ReserveForAccount: callers that also transition a Job and write an outbox
+// event must pass their UOW-bound repository so all three changes commit or
+// roll back together.
+func (s *Service) ReserveForAccountWith(ctx context.Context, repo domain.BillingRepository, ownerAccountID, jobID uuid.UUID, amount int64) (*domain.CreditReservation, error) {
+	if ownerAccountID == uuid.Nil {
+		return nil, ErrInvalidOwnerAccount
+	}
+	if amount <= 0 {
+		return nil, fmt.Errorf("%w: reservation amount %d", ErrInvalidAmount, amount)
+	}
+	acc, err := s.EnsureAccountForAccount(ctx, repo, ownerAccountID, s.currency)
+	if err != nil {
+		return nil, err
+	}
+	res := &domain.CreditReservation{
+		AccountID:                 acc.ID,
+		OwnerAccountID:            ownerAccountID,
+		JobID:                     jobID,
+		Amount:                    amount,
+		CreditDenominationVersion: domain.CurrentCreditDenominationVersion,
+		Status:                    domain.ReservationReserved,
+		IdempotencyKey:            "resv:" + jobID.String(),
+		ExpiresAt:                 s.now().Add(s.reservationTTL),
+	}
+	if err := repo.ReserveForOwner(ctx, ownerAccountID, res); err != nil {
 		return nil, err
 	}
 	return res, nil
@@ -234,16 +312,20 @@ func (s *Service) CaptureForJob(ctx context.Context, jobID uuid.UUID, amount int
 	if err != nil {
 		return err
 	}
-	if res.Status == domain.ReservationCaptured {
-		return nil
+	return s.repo.Capture(ctx, res.ID, amount, "cap:"+res.ID.String())
+}
+
+// CaptureForAccount captures only an account owner's full reservation. It uses
+// the same deterministic operation key as legacy capture so retries are exact
+// replays rather than new charges.
+func (s *Service) CaptureForAccount(ctx context.Context, ownerAccountID, reservationID uuid.UUID, amount int64) error {
+	if ownerAccountID == uuid.Nil {
+		return ErrInvalidOwnerAccount
 	}
-	if err := s.repo.Capture(ctx, res.ID, amount, "cap:"+res.ID.String()); err != nil {
-		if errors.Is(err, domain.ErrConflict) {
-			return nil
-		}
-		return err
+	if amount <= 0 {
+		return fmt.Errorf("%w: capture amount %d", ErrInvalidAmount, amount)
 	}
-	return nil
+	return s.repo.CaptureForOwner(ctx, ownerAccountID, reservationID, amount, "cap:"+reservationID.String())
 }
 
 // Release frees a reservation without charging the account.
@@ -251,10 +333,18 @@ func (s *Service) Release(ctx context.Context, reservationID uuid.UUID) error {
 	return s.repo.Release(ctx, reservationID, "rel:"+reservationID.String())
 }
 
+// ReleaseForAccount releases a reservation only for its canonical owner.
+func (s *Service) ReleaseForAccount(ctx context.Context, ownerAccountID, reservationID uuid.UUID) error {
+	if ownerAccountID == uuid.Nil {
+		return ErrInvalidOwnerAccount
+	}
+	return s.repo.ReleaseForOwner(ctx, ownerAccountID, reservationID, "rel:"+reservationID.String())
+}
+
 // ReleaseForJob frees the job's reservation without charging it. It is
-// idempotent: a reservation that is no longer in the reserved state (already
-// captured/released) is treated as success. Used when output moderation blocks
-// delivery so reserved credits are not held or charged.
+// idempotent after release, but propagates a conflict if the reservation was
+// already captured. Used when output moderation blocks delivery so reserved
+// credits are not held or charged.
 func (s *Service) ReleaseForJob(ctx context.Context, jobID uuid.UUID) error {
 	res, err := s.repo.GetReservationByJob(ctx, jobID)
 	if err != nil {
@@ -263,16 +353,7 @@ func (s *Service) ReleaseForJob(ctx context.Context, jobID uuid.UUID) error {
 		}
 		return err
 	}
-	if res.Status != domain.ReservationReserved {
-		return nil
-	}
-	if err := s.repo.Release(ctx, res.ID, "rel:"+res.ID.String()); err != nil {
-		if errors.Is(err, domain.ErrConflict) {
-			return nil
-		}
-		return err
-	}
-	return nil
+	return s.repo.Release(ctx, res.ID, "rel:"+res.ID.String())
 }
 
 // Refund returns previously captured credits to the owner's account by appending
@@ -347,6 +428,39 @@ func (s *Service) GrantWithOwner(ctx context.Context, repo domain.BillingReposit
 		return err
 	}
 	return nil
+}
+
+// GrantWithAccount appends an idempotent top-up for a native payment using the
+// canonical account lookup only. It must not let a nil legacy user id select a
+// compatibility account.
+func (s *Service) GrantWithAccount(ctx context.Context, repo domain.BillingRepository, accountID uuid.UUID, amount int64, idempotencyKey, reason string) error {
+	if accountID == uuid.Nil {
+		return ErrInvalidOwnerAccount
+	}
+	if amount <= 0 {
+		return nil
+	}
+	if idempotencyKey == "" {
+		return errors.New("billingservice: grant idempotency key is required")
+	}
+	acc, err := s.EnsureAccountForAccount(ctx, repo, accountID, s.currency)
+	if err != nil {
+		return err
+	}
+	err = repo.AppendEntry(ctx, &domain.LedgerEntry{
+		AccountID:                 acc.ID,
+		OwnerAccountID:            accountID,
+		Type:                      domain.LedgerTopup,
+		Amount:                    amount,
+		CreditDenominationVersion: domain.CurrentCreditDenominationVersion,
+		Status:                    domain.LedgerStatusCommitted,
+		IdempotencyKey:            idempotencyKey,
+		Reason:                    reason,
+	})
+	if errors.Is(err, domain.ErrConflict) {
+		return nil
+	}
+	return err
 }
 
 func accountOwnerID(userID, accountID uuid.UUID) uuid.UUID {

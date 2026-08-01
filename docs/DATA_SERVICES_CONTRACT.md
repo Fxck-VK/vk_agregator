@@ -81,6 +81,8 @@ Required environment:
 ```env
 DATABASE_URL=postgres://...
 MIGRATIONS_DIR=migrations
+# Bounds one dedicated migration run; must stay positive.
+MIGRATION_TIMEOUT=30m
 ```
 
 For `POSTGRES_MODE=local`, the local Docker service also needs:

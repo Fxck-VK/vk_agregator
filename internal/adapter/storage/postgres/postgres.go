@@ -100,6 +100,15 @@ func nullableUUID(id uuid.UUID) *uuid.UUID {
 	return &id
 }
 
+// nullableInt64 returns nil for an absent legacy numeric identifier so it is
+// stored as SQL NULL rather than as an identity-like zero value.
+func nullableInt64(value int64) *int64 {
+	if value == 0 {
+		return nil
+	}
+	return &value
+}
+
 // rawOrNil returns nil for an empty JSON payload so the column is stored as
 // SQL NULL rather than an invalid empty JSONB value.
 func rawOrNil(raw json.RawMessage) []byte {

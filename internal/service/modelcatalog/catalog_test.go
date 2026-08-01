@@ -65,3 +65,11 @@ func TestResolveMiniAppMockImageModel(t *testing.T) {
 		t.Fatalf("mock image resolved to %+v", model)
 	}
 }
+
+func TestResolvePublicModelKeepsLegacyMiniAppResolutionCompatible(t *testing.T) {
+	legacy, legacyOK := ResolveMiniAppModel(domain.OperationImageGenerate, MiniAppImageNanoBanana2)
+	public, publicOK := ResolvePublicModel(domain.OperationImageGenerate, MiniAppImageNanoBanana2)
+	if !legacyOK || !publicOK || public != legacy {
+		t.Fatalf("public resolver = %+v/%v, legacy resolver = %+v/%v", public, publicOK, legacy, legacyOK)
+	}
+}

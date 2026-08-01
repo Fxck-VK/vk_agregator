@@ -8,6 +8,7 @@ This is the active runbook for production-shaped deployment.
 | --- | --- | --- |
 | `cmd/api` | Yes | VK Callback API, Mini App BFF, protected admin/operator routes, health |
 | `cmd/worker` | No | AI provider calls, polling, artifacts, moderation, delivery, billing capture/release |
+| `cmd/worker` with `WORKER_MODE=relay` | No | leased transactional outbox relay only; no generation, provider-poll, or delivery engines |
 | `cmd/worker` with `WORKER_MODE=maintenance` | No | retention cleanup, provider payload redaction, analytics aggregates |
 | `cmd/provider-webhook` | Yes, exact route only | YooKassa webhook inbox and provider-verified processing |
 | `web/miniapp/dist` | Yes | Static VK Mini App frontend |

@@ -43,6 +43,13 @@ func (g *GenerationWorker) Process(ctx context.Context, task queue.Task) error {
 	if isDone(job.Status) {
 		return nil
 	}
+	if !generationProcessStatus(job.Status) {
+		// A queue entry is not authority to run a job. In particular, prepared
+		// account-native jobs have not reserved credits or been activated yet.
+		// Acknowledge stale or misrouted tasks without touching provider, stream,
+		// status, or billing-related state.
+		return nil
+	}
 
 	// Recovery / idempotency: if a provider task is already in flight, do not
 	// submit again; resume by polling it.
@@ -116,6 +123,24 @@ func (g *GenerationWorker) Process(ctx context.Context, task queue.Task) error {
 		return g.streams.PublishTo(ctx, redisqueue.StreamProviderPoll, taskOf(job))
 	}
 	return g.pollOnce(ctx, job, pt, provider, task)
+}
+
+// generationProcessStatus lists the states that may safely resume work in the
+// generation worker. The provider lifecycle states are needed to recover a
+// crash after submit/poll but before the follow-up stream task is published.
+func generationProcessStatus(status domain.JobStatus) bool {
+	switch status {
+	case domain.JobStatusQueued,
+		domain.JobStatusDispatchingProvider,
+		domain.JobStatusProviderSubmitted,
+		domain.JobStatusProviderPending,
+		domain.JobStatusProviderProcessing,
+		domain.JobStatusProviderSucceeded,
+		domain.JobStatusPostprocessing:
+		return true
+	default:
+		return false
+	}
 }
 
 func shouldDeferInitialPoll(job *domain.Job, provider domain.ProviderName, pt *domain.ProviderTask) bool {

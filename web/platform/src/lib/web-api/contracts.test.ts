@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { parseAccountProfile, parseConversationList, publicApiErrorSchema } from "./contracts";
+import {
+  parseAccountProfile,
+  parseConversationList,
+  parseImageJobPreparation,
+  parseImageJobList,
+  parseImageModelList,
+  publicApiErrorSchema,
+} from "./contracts";
 
 describe("AccountProfile contract", () => {
   it("accepts only the documented safe profile fields", () => {
@@ -66,5 +73,61 @@ describe("Conversation list contract", () => {
 
   it.each(["account_id", "source"])("rejects a conversation item with %s", (field) => {
     expect(() => parseConversationList({ items: [{ ...item, [field]: "forged" }] })).toThrow();
+  });
+});
+
+describe("Image generation contracts", () => {
+  const imageModel = {
+    id: "nano-banana-2",
+    name: "Nano Banana 2",
+    quality_options: ["1K", "2K"],
+    default_quality: "1K",
+    supports_reference_image: true,
+    max_reference_images: 4,
+  };
+
+  const imageJob = {
+    id: "d7c979f5-24e5-4f88-924b-a592d6e5a906",
+    status: "prepared",
+    prompt: "night city after rain",
+    model_id: "nano-banana-2",
+    model_name: "Nano Banana 2",
+    image_quality: "2K",
+    cost_estimate: 60,
+    created_at: "2026-08-01T12:00:00Z",
+    updated_at: "2026-08-01T12:00:00Z",
+  };
+
+  it("accepts the explicitly safe image model and preparation payloads", () => {
+    expect(parseImageModelList({ items: [imageModel] })).toEqual({ items: [imageModel] });
+    expect(
+      parseImageJobPreparation({
+        job: imageJob,
+        balance: 104,
+        can_afford: true,
+      }),
+    ).toEqual({
+      job: imageJob,
+      balance: 104,
+      can_afford: true,
+    });
+  });
+
+  it.each(["provider", "model_code", "pricing_snapshot", "storage_key"])(
+    "rejects a browser response that exposes %s",
+    (privateField) => {
+      expect(() => parseImageJobPreparation({ job: { ...imageJob, [privateField]: "private" }, balance: 104, can_afford: true })).toThrow();
+    },
+  );
+
+  it("accepts an opaque cursor for the next bounded image history page", () => {
+    const page = {
+      items: [imageJob],
+      has_more: true,
+      next_cursor: "eyJjcmVhdGVkX2F0IjoiMjAyNi0wOC0wMVQxMjowMDowMFoiLCJpZCI6ImQ3Yzk3ZjUtMjRlNS00Zjg4LTkyNGItYTU5MmQ2ZTVhOTA2In0",
+    };
+
+    expect(parseImageJobList(page)).toEqual(page);
+    expect(() => parseImageJobList({ ...page, storage_url: "https://objects.example.test/private" })).toThrow();
   });
 });

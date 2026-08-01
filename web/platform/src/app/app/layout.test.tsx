@@ -1,5 +1,4 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const redirectError = vi.hoisted(() => new Error("redirected"));
@@ -22,7 +21,6 @@ import { loadWorkspaceSession } from "@/features/session/session-data";
 import { WorkspaceHome } from "@/features/workspace/WorkspaceHome/WorkspaceHome";
 
 import WorkspaceLayout, { dynamic, metadata, revalidate } from "./layout";
-import ChatPage from "./chat/[conversationId]/page";
 
 const authenticatedSession = {
   kind: "authenticated" as const,
@@ -113,23 +111,9 @@ describe("Workspace destinations", () => {
     const markup = renderToStaticMarkup(<WorkspaceHome />);
 
     expect(markup).toContain(ru.conversations.createLabel);
+    expect(markup).toContain(ru.imageGeneration.open);
+    expect(markup).toContain(ru.imageHistory.load);
     expect(markup).not.toContain('href="/app/chats"');
   });
 
-  it("does not fetch or echo an untrusted conversation route parameter", () => {
-    const fetchMock = vi.fn();
-    vi.stubGlobal("fetch", fetchMock);
-    const page = ChatPage as unknown as (props: {
-      params: Promise<{ conversationId: string }>;
-    }) => ReactElement;
-
-    const markup = renderToStaticMarkup(
-      page({ params: Promise.resolve({ conversationId: "d7c979f5-24e5-4f88-924b-a592d6e5a906" }) }),
-    );
-
-    expect(markup).toContain(ru.workspace.chatPlaceholder);
-    expect(markup).not.toContain("d7c979f5-24e5-4f88-924b-a592d6e5a906");
-    expect(fetchMock).not.toHaveBeenCalled();
-    vi.unstubAllGlobals();
-  });
 });
