@@ -1212,17 +1212,85 @@ func (h *Handler) createConversationMessage(w http.ResponseWriter, r *http.Reque
 		Params:         params,
 	})
 	switch {
-	case err == nil && job != nil && job.ID != uuid.Nil:
-		writeJSON(w, http.StatusCreated, safeWebChatJob{JobID: job.ID, Status: job.Status})
 	case errors.Is(err, domain.ErrActiveJobLimitExceeded):
 		writeError(w, http.StatusTooManyRequests, "chat message rate limited")
+		return
 	case errors.Is(err, domain.ErrInsufficientCredits):
 		writeError(w, http.StatusPaymentRequired, "insufficient credits")
+		return
 	case errors.Is(err, domain.ErrCostCapExceeded):
 		writeError(w, http.StatusBadRequest, "invalid chat message request")
+		return
 	case errors.Is(err, domain.ErrCapacityDegraded):
 		w.Header().Set("Retry-After", "30")
 		writeError(w, http.StatusServiceUnavailable, "chat message unavailable")
+		return
+	case err != nil:
+		writeError(w, http.StatusServiceUnavailable, "chat message unavailable")
+		return
+	}
+	expectedParams := webChatJobParams{
+		Prompt:             req.Prompt,
+		ModelID:            model.ModelID,
+		ModelName:          model.ModelName,
+		Provider:           model.Provider,
+		ModelCode:          model.ModelCode,
+		ConversationID:     conversation.ID.String(),
+		ConversationSource: domain.ConversationSourceWeb,
+	}
+	if !validPersistedWebChatJob(job, principal.AccountID, orchestrationKey, expectedParams) {
+		writeError(w, http.StatusServiceUnavailable, "chat message unavailable")
+		return
+	}
+	writePersistedWebChatJob(w, job)
+}
+
+func validPersistedWebChatJob(job *domain.Job, accountID uuid.UUID, orchestrationKey string, expectedParams webChatJobParams) bool {
+	if job == nil || job.ID == uuid.Nil || job.UserID != uuid.Nil || job.AccountID != accountID || job.Source != "web" ||
+		job.ChannelContext == nil || job.ChannelContext.Channel != domain.ChannelWeb || job.ChannelContext.RecipientRef != "" || job.ChannelContext.ThreadRef != "" ||
+		job.ResultMode != domain.ResultModeAccountHistory || job.DeliveryTarget != nil || job.VKPeerID != 0 || job.CommandID != uuid.Nil ||
+		job.OperationType != domain.OperationTextGenerate || job.Modality != domain.ModalityText ||
+		len(job.InputArtifactIDs) != 0 ||
+		job.IdempotencyKey != orchestrationKey || job.CorrelationID != orchestrationKey {
+		return false
+	}
+	decoder := json.NewDecoder(strings.NewReader(string(job.Params)))
+	decoder.DisallowUnknownFields()
+	var persistedParams webChatJobParams
+	if err := decoder.Decode(&persistedParams); err != nil || persistedParams != expectedParams {
+		return false
+	}
+	var extra struct{}
+	return errors.Is(decoder.Decode(&extra), io.EOF)
+}
+
+func writePersistedWebChatJob(w http.ResponseWriter, job *domain.Job) {
+	safeJob := safeWebChatJob{JobID: job.ID, Status: job.Status}
+	switch job.Status {
+	case domain.JobStatusQueued:
+		writeJSON(w, http.StatusCreated, safeJob)
+	case domain.JobStatusReceived,
+		domain.JobStatusValidated,
+		domain.JobStatusCreditsReserved,
+		domain.JobStatusDispatchingProvider,
+		domain.JobStatusProviderSubmitted,
+		domain.JobStatusProviderPending,
+		domain.JobStatusProviderProcessing,
+		domain.JobStatusProviderSucceeded,
+		domain.JobStatusPostprocessing,
+		domain.JobStatusResultReady,
+		domain.JobStatusDelivering,
+		domain.JobStatusFailedRetryable,
+		domain.JobStatusSucceeded:
+		writeJSON(w, http.StatusOK, safeJob)
+	case domain.JobStatusAwaitingPayment:
+		writeError(w, http.StatusPaymentRequired, "insufficient credits")
+	case domain.JobStatusRejected,
+		domain.JobStatusFailedTerminal,
+		domain.JobStatusCancelled,
+		domain.JobStatusExpired,
+		domain.JobStatusRefunded:
+		writeError(w, http.StatusConflict, "chat message unavailable")
 	default:
 		writeError(w, http.StatusServiceUnavailable, "chat message unavailable")
 	}

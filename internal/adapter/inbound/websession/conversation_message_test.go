@@ -257,6 +257,78 @@ func TestCreateWebConversationMessageMapsOrchestrationFailuresSafely(t *testing.
 	}
 }
 
+func TestCreateWebConversationMessageMapsPersistedReplayStatuses(t *testing.T) {
+	for _, testCase := range []struct {
+		name        string
+		jobStatus   domain.JobStatus
+		wantHTTP    int
+		wantSafeJob bool
+	}{
+		{name: "awaiting payment", jobStatus: domain.JobStatusAwaitingPayment, wantHTTP: http.StatusPaymentRequired},
+		{name: "progressed", jobStatus: domain.JobStatusProviderProcessing, wantHTTP: http.StatusOK, wantSafeJob: true},
+		{name: "succeeded", jobStatus: domain.JobStatusSucceeded, wantHTTP: http.StatusOK, wantSafeJob: true},
+		{name: "terminal failure", jobStatus: domain.JobStatusFailedTerminal, wantHTTP: http.StatusConflict},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			h, conversations, sessions, jobs, _ := newWebConversationMessageTestHandler(t)
+			accountID := uuid.New()
+			conversation := seedWebMessageConversation(t, conversations, accountID, domain.ConversationSourceWeb)
+			jobID := uuid.New()
+			jobs.job = &domain.Job{ID: jobID, Status: testCase.jobStatus}
+
+			rec := httptest.NewRecorder()
+			h.Routes().ServeHTTP(rec, safeWebConversationMessageRequest(t, sessions, accountID, conversation.ID, uuid.New(), `{"prompt":"hello"}`))
+
+			if rec.Code != testCase.wantHTTP {
+				t.Fatalf("status = %d, want %d, body = %s", rec.Code, testCase.wantHTTP, rec.Body.String())
+			}
+			if testCase.wantSafeJob {
+				assertSafeWebChatResponse(t, rec.Body.Bytes(), jobID, testCase.jobStatus)
+			} else {
+				assertWebChatErrorHidesJob(t, rec.Body.Bytes())
+			}
+		})
+	}
+}
+
+func TestCreateWebConversationMessageRejectsInvalidPersistedJobContract(t *testing.T) {
+	for _, testCase := range []struct {
+		name   string
+		mutate func(*domain.Job)
+	}{
+		{name: "foreign account", mutate: func(job *domain.Job) { job.AccountID = uuid.New() }},
+		{name: "wrong source", mutate: func(job *domain.Job) { job.Source = "miniapp" }},
+		{name: "wrong channel", mutate: func(job *domain.Job) { job.ChannelContext = &domain.ChannelContext{Channel: domain.ChannelVKMiniApp} }},
+		{name: "wrong result mode", mutate: func(job *domain.Job) { job.ResultMode = domain.ResultModeExternalPush }},
+		{name: "legacy owner", mutate: func(job *domain.Job) { job.UserID = uuid.New() }},
+		{name: "legacy peer", mutate: func(job *domain.Job) { job.VKPeerID = 1 }},
+		{name: "legacy command", mutate: func(job *domain.Job) { job.CommandID = uuid.New() }},
+		{name: "wrong operation", mutate: func(job *domain.Job) { job.OperationType = domain.OperationImageGenerate }},
+		{name: "wrong modality", mutate: func(job *domain.Job) { job.Modality = domain.ModalityImage }},
+		{name: "unexpected input artifact", mutate: func(job *domain.Job) { job.InputArtifactIDs = []uuid.UUID{uuid.New()} }},
+		{name: "wrong internal key", mutate: func(job *domain.Job) { job.IdempotencyKey = "foreign-key" }},
+		{name: "wrong correlation", mutate: func(job *domain.Job) { job.CorrelationID = "foreign-correlation" }},
+		{name: "wrong params", mutate: func(job *domain.Job) { job.Params = json.RawMessage(`{"prompt":"other"}`) }},
+		{name: "unknown status", mutate: func(job *domain.Job) { job.Status = domain.JobStatus("unknown") }},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			h, conversations, sessions, jobs, _ := newWebConversationMessageTestHandler(t)
+			accountID := uuid.New()
+			conversation := seedWebMessageConversation(t, conversations, accountID, domain.ConversationSourceWeb)
+			jobs.job = &domain.Job{ID: uuid.New(), Status: domain.JobStatusQueued}
+			jobs.mutateJob = testCase.mutate
+
+			rec := httptest.NewRecorder()
+			h.Routes().ServeHTTP(rec, safeWebConversationMessageRequest(t, sessions, accountID, conversation.ID, uuid.New(), `{"prompt":"hello"}`))
+
+			if rec.Code != http.StatusServiceUnavailable {
+				t.Fatalf("status = %d, want 503, body = %s", rec.Code, rec.Body.String())
+			}
+			assertWebChatErrorHidesJob(t, rec.Body.Bytes())
+		})
+	}
+}
+
 func TestCreateWebConversationMessageReplayUsesStableOrchestratorKey(t *testing.T) {
 	h, conversations, sessions, _, _ := newWebConversationMessageTestHandler(t)
 	jobs := &statefulWebChatJobCreatorStub{jobsByKey: make(map[string]*domain.Job)}
@@ -336,14 +408,22 @@ func TestCreateWebConversationMessageScopesIdempotencyByAccount(t *testing.T) {
 }
 
 type webChatJobCreatorStub struct {
-	inputs []joborchestrator.CreateJobInput
-	job    *domain.Job
-	err    error
+	inputs    []joborchestrator.CreateJobInput
+	job       *domain.Job
+	err       error
+	mutateJob func(*domain.Job)
 }
 
 func (s *webChatJobCreatorStub) CreateJob(_ context.Context, input joborchestrator.CreateJobInput) (*domain.Job, error) {
 	s.inputs = append(s.inputs, input)
-	return s.job, s.err
+	if s.job == nil {
+		return nil, s.err
+	}
+	job := newPersistedWebChatJob(input, s.job.ID, s.job.Status)
+	if s.mutateJob != nil {
+		s.mutateJob(job)
+	}
+	return job, s.err
 }
 
 type webChatMessageLimiterStub struct {
@@ -363,9 +443,34 @@ func (s *statefulWebChatJobCreatorStub) CreateJob(_ context.Context, input jobor
 	if job := s.jobsByKey[input.IdempotencyKey]; job != nil {
 		return job, nil
 	}
-	job := &domain.Job{ID: uuid.New(), Status: domain.JobStatusQueued}
+	job := newPersistedWebChatJob(input, uuid.New(), domain.JobStatusQueued)
 	s.jobsByKey[input.IdempotencyKey] = job
 	return job, nil
+}
+
+func newPersistedWebChatJob(input joborchestrator.CreateJobInput, jobID uuid.UUID, status domain.JobStatus) *domain.Job {
+	var channelContext *domain.ChannelContext
+	if input.ChannelContext != nil {
+		value := *input.ChannelContext
+		channelContext = &value
+	}
+	return &domain.Job{
+		ID:             jobID,
+		UserID:         input.UserID,
+		AccountID:      input.AccountID,
+		Source:         input.Source,
+		ChannelContext: channelContext,
+		ResultMode:     input.ResultMode,
+		DeliveryTarget: input.DeliveryTarget,
+		VKPeerID:       input.VKPeerID,
+		CommandID:      input.CommandID,
+		OperationType:  input.Operation,
+		Modality:       input.Modality,
+		Status:         status,
+		IdempotencyKey: input.IdempotencyKey,
+		CorrelationID:  input.CorrelationID,
+		Params:         append(json.RawMessage(nil), input.Params...),
+	}
 }
 
 func (s *webChatMessageLimiterStub) Allow(_ context.Context, key string) (bool, error) {
@@ -430,6 +535,10 @@ func safeWebConversationMessageRequest(t *testing.T, sessions *sessionStub, acco
 }
 
 func assertSafeQueuedWebChatResponse(t *testing.T, body []byte, jobID uuid.UUID) {
+	assertSafeWebChatResponse(t, body, jobID, domain.JobStatusQueued)
+}
+
+func assertSafeWebChatResponse(t *testing.T, body []byte, jobID uuid.UUID, wantStatus domain.JobStatus) {
 	t.Helper()
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(body, &fields); err != nil {
@@ -446,7 +555,18 @@ func assertSafeQueuedWebChatResponse(t *testing.T, body []byte, jobID uuid.UUID)
 	if err := json.Unmarshal(fields["status"], &status); err != nil {
 		t.Fatalf("decode status: %v", err)
 	}
-	if gotID != jobID || status != domain.JobStatusQueued {
+	if gotID != jobID || status != wantStatus {
 		t.Fatalf("response = job:%s status:%q", gotID, status)
+	}
+}
+
+func assertWebChatErrorHidesJob(t *testing.T, body []byte) {
+	t.Helper()
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(body, &fields); err != nil {
+		t.Fatalf("decode error response: %v", err)
+	}
+	if len(fields) != 1 || fields["error"] == nil || fields["job_id"] != nil || fields["status"] != nil {
+		t.Fatalf("error response fields = %v, want only error", fields)
 	}
 }
