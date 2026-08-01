@@ -44,10 +44,14 @@ describe("WorkspacePrompt", () => {
     vi.unstubAllGlobals();
   });
 
-  it.each([201, 200])("creates a normal chat and accepts a safe %i message response", async (messageStatus) => {
+  it.each([
+    { messageStatus: 201, jobStatus: "queued" },
+    { messageStatus: 200, jobStatus: "provider_processing" },
+    { messageStatus: 200, jobStatus: "succeeded" },
+  ])("creates a normal chat and accepts a safe $messageStatus $jobStatus message response", async ({ messageStatus, jobStatus }) => {
     vi.mocked(webBrowserMutation)
       .mockResolvedValueOnce(Response.json(conversation, { status: 201 }))
-      .mockResolvedValueOnce(Response.json(queuedChatJob, { status: messageStatus }));
+      .mockResolvedValueOnce(Response.json({ ...queuedChatJob, status: jobStatus }, { status: messageStatus }));
     render(<WorkspacePrompt />);
 
     fireEvent.change(screen.getByLabelText(ru.workspace.promptLabel), {
@@ -56,7 +60,7 @@ describe("WorkspacePrompt", () => {
     fireEvent.click(screen.getByRole("button", { name: ru.workspace.promptSubmit }));
 
     await vi.waitFor(() =>
-      expect(push).toHaveBeenCalledWith("/app/chat/d7c979f5-24e5-4f88-924b-a592d6e5a906"),
+      expect(push).toHaveBeenCalledWith("/app/chat/d7c979f5-24e5-4f88-924b-a592d6e5a906?refresh=1"),
     );
     expect(webBrowserMutation).toHaveBeenNthCalledWith(1, "/web/v1/conversations", {
       method: "POST",
@@ -74,6 +78,94 @@ describe("WorkspacePrompt", () => {
         body: JSON.stringify({ prompt: "Помогите подготовить план" }),
       },
     );
+  });
+
+  it.each([
+    { messageStatus: 200, jobStatus: "queued" },
+    { messageStatus: 201, jobStatus: "succeeded" },
+    { messageStatus: 200, jobStatus: "failed_terminal" },
+  ])("keeps the draft for an unsafe $messageStatus $jobStatus response", async ({ messageStatus, jobStatus }) => {
+    vi.mocked(webBrowserMutation)
+      .mockResolvedValueOnce(Response.json(conversation, { status: 201 }))
+      .mockResolvedValueOnce(Response.json({ ...queuedChatJob, status: jobStatus }, { status: messageStatus }));
+    render(<WorkspacePrompt />);
+
+    const textarea = screen.getByLabelText(ru.workspace.promptLabel);
+    fireEvent.change(textarea, { target: { value: "important draft" } });
+    fireEvent.click(screen.getByRole("button", { name: ru.workspace.promptSubmit }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(ru.workspace.promptFailure);
+    expect(textarea).toHaveValue("important draft");
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("reuses the conversation request key after a lost create response", async () => {
+    vi.mocked(webBrowserMutation)
+      .mockRejectedValueOnce(new Error("lost create response"))
+      .mockResolvedValueOnce(Response.json(conversation, { status: 200 }))
+      .mockResolvedValueOnce(Response.json(queuedChatJob, { status: 201 }));
+    render(<WorkspacePrompt />);
+
+    const textarea = screen.getByLabelText(ru.workspace.promptLabel);
+    fireEvent.change(textarea, { target: { value: "same draft" } });
+    fireEvent.click(screen.getByRole("button", { name: ru.workspace.promptSubmit }));
+    await screen.findByRole("alert");
+    fireEvent.click(screen.getByRole("button", { name: ru.workspace.promptSubmit }));
+
+    await vi.waitFor(() => expect(push).toHaveBeenCalledTimes(1));
+    const createCalls = vi.mocked(webBrowserMutation).mock.calls.filter(([path]) => path === "/web/v1/conversations");
+    expect(createCalls).toHaveLength(2);
+    expect(createCalls.map(([, init]) => new Headers(init.headers).get("X-Idempotency-Key"))).toEqual([
+      "c7c979f5-24e5-4f88-924b-a592d6e5a906",
+      "c7c979f5-24e5-4f88-924b-a592d6e5a906",
+    ]);
+    expect(crypto.randomUUID).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([402, 429])("does not create a second conversation when a known conversation returns %i", async (status) => {
+    vi.mocked(webBrowserMutation)
+      .mockResolvedValueOnce(Response.json(conversation, { status: 201 }))
+      .mockResolvedValueOnce(new Response(null, { status }))
+      .mockResolvedValueOnce(Response.json(queuedChatJob, { status: 201 }));
+    render(<WorkspacePrompt />);
+
+    const textarea = screen.getByLabelText(ru.workspace.promptLabel);
+    fireEvent.change(textarea, { target: { value: "same draft" } });
+    fireEvent.click(screen.getByRole("button", { name: ru.workspace.promptSubmit }));
+    await screen.findByRole("alert");
+    fireEvent.click(screen.getByRole("button", { name: ru.workspace.promptSubmit }));
+
+    await vi.waitFor(() => expect(push).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(webBrowserMutation).mock.calls.filter(([path]) => path === "/web/v1/conversations")).toHaveLength(1);
+    const messageCalls = vi.mocked(webBrowserMutation).mock.calls.filter(([path]) => path.includes("/messages"));
+    expect(messageCalls).toHaveLength(2);
+    expect(messageCalls.map(([, init]) => new Headers(init.headers).get("X-Idempotency-Key"))).toEqual([
+      "e7c979f5-24e5-4f88-924b-a592d6e5a906",
+      "e7c979f5-24e5-4f88-924b-a592d6e5a906",
+    ]);
+    expect(crypto.randomUUID).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not create a second conversation and reuses the message key after a lost message response", async () => {
+    vi.mocked(webBrowserMutation)
+      .mockResolvedValueOnce(Response.json(conversation, { status: 201 }))
+      .mockRejectedValueOnce(new Error("lost message response"))
+      .mockResolvedValueOnce(Response.json({ ...queuedChatJob, status: "provider_processing" }, { status: 200 }));
+    render(<WorkspacePrompt />);
+
+    const textarea = screen.getByLabelText(ru.workspace.promptLabel);
+    fireEvent.change(textarea, { target: { value: "same draft" } });
+    fireEvent.click(screen.getByRole("button", { name: ru.workspace.promptSubmit }));
+    await screen.findByRole("alert");
+    fireEvent.click(screen.getByRole("button", { name: ru.workspace.promptSubmit }));
+
+    await vi.waitFor(() => expect(push).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(webBrowserMutation).mock.calls.filter(([path]) => path === "/web/v1/conversations")).toHaveLength(1);
+    const messageCalls = vi.mocked(webBrowserMutation).mock.calls.filter(([path]) => path.includes("/messages"));
+    expect(messageCalls.map(([, init]) => new Headers(init.headers).get("X-Idempotency-Key"))).toEqual([
+      "e7c979f5-24e5-4f88-924b-a592d6e5a906",
+      "e7c979f5-24e5-4f88-924b-a592d6e5a906",
+    ]);
   });
 
   it("does not submit an empty prompt and keeps text after a recoverable failure", async () => {

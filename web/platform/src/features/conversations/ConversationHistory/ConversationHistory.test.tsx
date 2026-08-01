@@ -120,6 +120,74 @@ describe("ConversationHistory", () => {
     expect(webBrowserFetch).not.toHaveBeenCalled();
   });
 
+  it("starts a bounded initial refresh from the current last sequence and appends a delayed first reply", async () => {
+    vi.useFakeTimers();
+    const firstPromptHistory = {
+      kind: "ready" as const,
+      conversationId,
+      hasMoreBefore: false,
+      messages: [initialHistory.messages[0]],
+    };
+    vi.mocked(webBrowserFetch)
+      .mockResolvedValueOnce(Response.json({ items: [] }))
+      .mockResolvedValueOnce(
+        Response.json({
+          items: [
+            {
+              id: "77777777-7777-4777-8777-777777777777",
+              seq: 103,
+              role: "assistant",
+              text: "delayed first reply",
+              created_at: "2026-08-01T12:00:02Z",
+            },
+          ],
+        }),
+      );
+
+    render(<ConversationHistory history={firstPromptHistory as never} initialRefresh />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(webBrowserFetch).toHaveBeenNthCalledWith(
+      1,
+      `/web/v1/conversations/${conversationId}/messages?after_seq=102&limit=100`,
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_000);
+    });
+
+    expect(screen.getByText("delayed first reply")).toBeTruthy();
+    expect(webBrowserFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("starts an initial refresh from zero when server-rendered history is empty", async () => {
+    vi.mocked(webBrowserFetch).mockResolvedValueOnce(Response.json({ items: [] }));
+
+    render(
+      <ConversationHistory
+        history={{ kind: "ready", conversationId, hasMoreBefore: false, messages: [] } as never}
+        initialRefresh
+      />,
+    );
+
+    await vi.waitFor(() =>
+      expect(webBrowserFetch).toHaveBeenCalledWith(
+        `/web/v1/conversations/${conversationId}/messages?after_seq=0&limit=100`,
+        expect.objectContaining({ signal: expect.any(AbortSignal) }),
+      ),
+    );
+  });
+
+  it("does not start an initial refresh when the server-rendered history already has an assistant reply", () => {
+    render(<ConversationHistory history={initialHistory as never} initialRefresh />);
+
+    expect(webBrowserFetch).not.toHaveBeenCalled();
+    expect(screen.getByLabelText(ru.conversations.composerLabel)).not.toBeDisabled();
+  });
+
   it("keeps the composer disabled until the accepted message refresh observes its assistant reply", async () => {
     let resolveRefresh: (response: Response) => void = () => {};
     vi.mocked(webBrowserMutation).mockResolvedValueOnce(Response.json(queuedJob, { status: 201 }));

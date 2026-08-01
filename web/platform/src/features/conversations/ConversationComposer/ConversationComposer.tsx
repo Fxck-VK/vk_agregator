@@ -5,7 +5,7 @@ import { useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { Button } from "@/components/ui/Button/Button";
 import { ru } from "@/i18n/ru";
 import { webBrowserMutation } from "@/lib/web-api/browser";
-import { parseWebChatJob, type WebChatJob } from "@/lib/web-api/contracts";
+import { isSafeWebChatAcceptedResponse, parseWebChatJob } from "@/lib/web-api/contracts";
 
 import styles from "./ConversationComposer.module.css";
 
@@ -21,22 +21,6 @@ type RetryIntent = {
 };
 
 type ComposerFeedback = "accepted" | "error" | null;
-
-const safeReplayStatuses = new Set<WebChatJob["status"]>([
-  "received",
-  "validated",
-  "credits_reserved",
-  "dispatching_provider",
-  "provider_submitted",
-  "provider_pending",
-  "provider_processing",
-  "provider_succeeded",
-  "postprocessing",
-  "result_ready",
-  "delivering",
-  "failed_retryable",
-  "succeeded",
-]);
 
 export function ConversationComposer({ conversationId, disabled = false, onAccepted }: ConversationComposerProps) {
   const [draft, setDraft] = useState("");
@@ -85,7 +69,7 @@ export function ConversationComposer({ conversationId, disabled = false, onAccep
         throw new Error("Unable to complete the request.");
       }
       const job = parseWebChatJob(await response.json());
-      if (!isSafeAcceptedResponse(response.status, job)) {
+      if (!isSafeWebChatAcceptedResponse(response.status, job)) {
         throw new Error("Unable to complete the request.");
       }
 
@@ -126,11 +110,4 @@ export function ConversationComposer({ conversationId, disabled = false, onAccep
       </div>
     </form>
   );
-}
-
-function isSafeAcceptedResponse(status: number, job: WebChatJob): boolean {
-  if (status === 201) {
-    return job.status === "queued";
-  }
-  return status === 200 && safeReplayStatuses.has(job.status);
 }

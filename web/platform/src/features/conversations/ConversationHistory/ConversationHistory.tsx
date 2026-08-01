@@ -16,6 +16,7 @@ import styles from "./ConversationHistory.module.css";
 
 type ConversationHistoryProps = {
   history: ConversationHistoryData;
+  initialRefresh?: boolean;
 };
 
 type PollRequest = {
@@ -27,7 +28,7 @@ const conversationRefreshIntervalMs = 2_000;
 const conversationRefreshDeadlineMs = 30_000;
 const conversationRefreshMaxAttempts = 15;
 
-export function ConversationHistory({ history }: ConversationHistoryProps) {
+export function ConversationHistory({ history, initialRefresh = false }: ConversationHistoryProps) {
   if (history.kind === "not_found") {
     return <ConversationHistoryState message={ru.conversations.historyUnavailable} />;
   }
@@ -36,22 +37,28 @@ export function ConversationHistory({ history }: ConversationHistoryProps) {
     return <ConversationHistoryState message={ru.conversations.historyLoadFailure} />;
   }
 
-  return <ConversationHistoryReady key={history.conversationId} history={history} />;
+  return <ConversationHistoryReady key={history.conversationId} history={history} initialRefresh={initialRefresh} />;
 }
 
 function ConversationHistoryReady({
   history,
+  initialRefresh,
 }: Readonly<{
   history: Extract<ConversationHistoryData, { kind: "ready" }>;
+  initialRefresh: boolean;
 }>) {
+  const shouldStartInitialRefresh = initialRefresh && !history.messages.some((message) => message.role === "assistant");
+  const initialRefreshRequest = shouldStartInitialRefresh
+    ? { id: 1, baselineSeq: history.messages.at(-1)?.seq ?? 0 }
+    : null;
   const [messages, setMessages] = useState(history.messages);
   const [hasMoreBefore, setHasMoreBefore] = useState(history.hasMoreBefore);
   const [isLoadingEarlier, setIsLoadingEarlier] = useState(false);
   const [loadEarlierFailed, setLoadEarlierFailed] = useState(false);
-  const [pollRequest, setPollRequest] = useState<PollRequest | null>(null);
-  const [activeRefreshID, setActiveRefreshID] = useState<number | null>(null);
+  const [pollRequest, setPollRequest] = useState<PollRequest | null>(initialRefreshRequest);
+  const [activeRefreshID, setActiveRefreshID] = useState<number | null>(initialRefreshRequest?.id ?? null);
   const [refreshDelayed, setRefreshDelayed] = useState(false);
-  const refreshSequenceRef = useRef(0);
+  const refreshSequenceRef = useRef(initialRefreshRequest?.id ?? 0);
 
   const loadEarlier = async () => {
     const beforeSeq = messages[0]?.seq;

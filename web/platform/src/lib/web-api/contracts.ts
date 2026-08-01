@@ -175,6 +175,22 @@ export type ImageArtifactMetadata = z.infer<typeof imageArtifactMetadataSchema>;
 export type ImageJobResult = z.infer<typeof imageJobResultSchema>;
 export type WebChatJob = z.infer<typeof webChatJobSchema>;
 
+const safeWebChatReplayStatuses = new Set<WebChatJob["status"]>([
+  "received",
+  "validated",
+  "credits_reserved",
+  "dispatching_provider",
+  "provider_submitted",
+  "provider_pending",
+  "provider_processing",
+  "provider_succeeded",
+  "postprocessing",
+  "result_ready",
+  "delivering",
+  "failed_retryable",
+  "succeeded",
+]);
+
 export const publicApiErrorSchema = z
   .object({
     error: z.string().trim().min(1),
@@ -197,6 +213,13 @@ export function parseConversationMessageList(payload: unknown): ConversationMess
 
 export function parseWebChatJob(payload: unknown): WebChatJob {
   return webChatJobSchema.parse(payload);
+}
+
+export function isSafeWebChatAcceptedResponse(status: number, job: WebChatJob): boolean {
+  if (status === 201) {
+    return job.status === "queued";
+  }
+  return status === 200 && safeWebChatReplayStatuses.has(job.status);
 }
 
 export function parseImageModelList(payload: unknown): ImageModelList {

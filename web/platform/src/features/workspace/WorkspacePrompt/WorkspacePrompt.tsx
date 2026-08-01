@@ -1,21 +1,39 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/Button/Button";
 import { ru } from "@/i18n/ru";
 import { webBrowserMutation } from "@/lib/web-api/browser";
-import { parseConversationList, parseWebChatJob } from "@/lib/web-api/contracts";
+import { isSafeWebChatAcceptedResponse, parseConversationList, parseWebChatJob } from "@/lib/web-api/contracts";
 
 import styles from "./WorkspacePrompt.module.css";
+
+type RetryIntent = {
+  prompt: string;
+  conversationKey: string;
+  messageKey: string;
+  conversationId?: string;
+};
 
 export function WorkspacePrompt() {
   const router = useRouter();
   const [prompt, setPrompt] = useState("");
   const [isPending, setIsPending] = useState(false);
   const [hasError, setHasError] = useState(false);
+  const retryIntentRef = useRef<RetryIntent | null>(null);
   const canSubmit = prompt.trim() !== "" && !isPending;
+
+  const changePrompt = (event: ChangeEvent<HTMLTextAreaElement>) => {
+    const nextPrompt = event.target.value;
+    const retryIntent = retryIntentRef.current;
+    if (retryIntent !== null && retryIntent.prompt !== nextPrompt.trim()) {
+      retryIntentRef.current = null;
+    }
+    setPrompt(nextPrompt);
+    setHasError(false);
+  };
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -27,33 +45,48 @@ export function WorkspacePrompt() {
     setHasError(false);
     setIsPending(true);
     try {
-      const conversationKey = crypto.randomUUID();
-      const messageKey = crypto.randomUUID();
-      const conversationResponse = await webBrowserMutation("/web/v1/conversations", {
-        method: "POST",
-        headers: { "X-Idempotency-Key": conversationKey },
-      });
-      if (conversationResponse.status !== 200 && conversationResponse.status !== 201) {
-        throw new Error("Unable to complete the request.");
-      }
-      const conversation = parseConversationList({ items: [await conversationResponse.json()] }).items[0];
-      if (conversation === undefined) {
-        throw new Error("Unable to complete the request.");
+      const retryIntent = retryIntentRef.current;
+      const intent = retryIntent?.prompt === normalizedPrompt
+        ? retryIntent
+        : {
+            prompt: normalizedPrompt,
+            conversationKey: crypto.randomUUID(),
+            messageKey: crypto.randomUUID(),
+          };
+      retryIntentRef.current = intent;
+
+      if (intent.conversationId === undefined) {
+        const conversationResponse = await webBrowserMutation("/web/v1/conversations", {
+          method: "POST",
+          headers: { "X-Idempotency-Key": intent.conversationKey },
+        });
+        if (conversationResponse.status !== 200 && conversationResponse.status !== 201) {
+          throw new Error("Unable to complete the request.");
+        }
+        const conversation = parseConversationList({ items: [await conversationResponse.json()] }).items[0];
+        if (conversation === undefined) {
+          throw new Error("Unable to complete the request.");
+        }
+        intent.conversationId = conversation.id;
       }
 
-      const messageResponse = await webBrowserMutation(`/web/v1/conversations/${conversation.id}/messages`, {
+      const messageResponse = await webBrowserMutation(`/web/v1/conversations/${intent.conversationId}/messages`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Idempotency-Key": messageKey,
+          "X-Idempotency-Key": intent.messageKey,
         },
-        body: JSON.stringify({ prompt: normalizedPrompt }),
+        body: JSON.stringify({ prompt: intent.prompt }),
       });
       if (messageResponse.status !== 200 && messageResponse.status !== 201) {
         throw new Error("Unable to complete the request.");
       }
-      parseWebChatJob(await messageResponse.json());
-      router.push(`/app/chat/${conversation.id}`);
+      const job = parseWebChatJob(await messageResponse.json());
+      if (!isSafeWebChatAcceptedResponse(messageResponse.status, job)) {
+        throw new Error("Unable to complete the request.");
+      }
+      retryIntentRef.current = null;
+      router.push(`/app/chat/${intent.conversationId}?refresh=1`);
     } catch {
       setHasError(true);
     } finally {
@@ -67,7 +100,7 @@ export function WorkspacePrompt() {
         <span>{ru.workspace.promptLabel}</span>
         <textarea
           disabled={isPending}
-          onChange={(event) => setPrompt(event.target.value)}
+          onChange={changePrompt}
           placeholder={ru.workspace.promptPlaceholder}
           rows={5}
           value={prompt}

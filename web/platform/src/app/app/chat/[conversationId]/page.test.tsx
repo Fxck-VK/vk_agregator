@@ -15,9 +15,10 @@ const conversationID = "d7c979f5-24e5-4f88-924b-a592d6e5a906";
 function renderConversationPage(conversationId: string): Promise<string> {
   const page = ConversationPage as unknown as (props: {
     params: Promise<{ conversationId: string }>;
+    searchParams: Promise<{ refresh?: string }>;
   }) => ReactElement | Promise<ReactElement>;
 
-  return Promise.resolve(page({ params: Promise.resolve({ conversationId }) })).then((element) => renderToStaticMarkup(element));
+  return Promise.resolve(page({ params: Promise.resolve({ conversationId }), searchParams: Promise.resolve({}) })).then((element) => renderToStaticMarkup(element));
 }
 
 describe("ConversationPage", () => {
@@ -88,5 +89,22 @@ describe("ConversationPage", () => {
     expect(webServerFetch).not.toHaveBeenCalled();
     expect(markup).toContain("Этот чат недоступен.");
     expect(markup).not.toContain("not-a-uuid");
+  });
+
+  it("passes the explicit start-prompt refresh signal to conversation history", async () => {
+    vi.mocked(webServerFetch).mockResolvedValue(
+      new Response(JSON.stringify({ items: [] }), { status: 200, headers: { "Content-Type": "application/json" } }),
+    );
+    const page = ConversationPage as unknown as (props: {
+      params: Promise<{ conversationId: string }>;
+      searchParams: Promise<{ refresh?: string }>;
+    }) => ReactElement | Promise<ReactElement>;
+
+    const element = await page({
+      params: Promise.resolve({ conversationId: conversationID }),
+      searchParams: Promise.resolve({ refresh: "1" }),
+    });
+
+    expect((element as ReactElement<{ initialRefresh?: boolean }>).props.initialRefresh).toBe(true);
   });
 });
