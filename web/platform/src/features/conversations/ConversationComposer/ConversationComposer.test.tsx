@@ -17,6 +17,11 @@ const queuedJob = {
   job_id: "a2a006fc-4457-4bb5-bc4d-4f553d51766b",
   status: "queued",
 };
+const chatScrollProps = {
+  contentVersion: "",
+  forceScrollRequest: 0,
+  scrollContainer: null,
+};
 
 describe("ConversationComposer", () => {
   beforeEach(() => {
@@ -32,7 +37,7 @@ describe("ConversationComposer", () => {
   });
 
   it("uses the exact NeiroHub question placeholder", () => {
-    render(<ConversationComposer conversationId={conversationId} onAccepted={vi.fn()} />);
+    render(<ConversationComposer {...chatScrollProps} conversationId={conversationId} onAccepted={vi.fn()} />);
 
     expect(screen.getByLabelText(ru.conversations.composerLabel)).toHaveAttribute(
       "placeholder",
@@ -43,7 +48,7 @@ describe("ConversationComposer", () => {
   it("submits a non-empty draft when Enter is pressed", async () => {
     vi.mocked(webBrowserMutation).mockResolvedValueOnce(Response.json(queuedJob, { status: 201 }));
     const onAccepted = vi.fn();
-    render(<ConversationComposer conversationId={conversationId} onAccepted={onAccepted} />);
+    render(<ConversationComposer {...chatScrollProps} conversationId={conversationId} onAccepted={onAccepted} />);
 
     const textarea = screen.getByLabelText(ru.conversations.composerLabel);
     fireEvent.change(textarea, { target: { value: "Вопрос с клавиатуры" } });
@@ -56,7 +61,7 @@ describe("ConversationComposer", () => {
   });
 
   it("leaves Shift+Enter to the textarea without submitting", () => {
-    render(<ConversationComposer conversationId={conversationId} onAccepted={vi.fn()} />);
+    render(<ConversationComposer {...chatScrollProps} conversationId={conversationId} onAccepted={vi.fn()} />);
 
     const textarea = screen.getByLabelText(ru.conversations.composerLabel);
     fireEvent.change(textarea, { target: { value: "Первая строка" } });
@@ -76,7 +81,7 @@ describe("ConversationComposer", () => {
     vi.mocked(webBrowserMutation).mockResolvedValueOnce(
       Response.json({ ...queuedJob, status: jobStatus }, { status: httpStatus }),
     );
-    render(<ConversationComposer conversationId={conversationId} onAccepted={onAccepted} />);
+    render(<ConversationComposer {...chatScrollProps} conversationId={conversationId} onAccepted={onAccepted} />);
 
     fireEvent.change(screen.getByLabelText(ru.conversations.composerLabel), {
       target: { value: "  Продолжи диалог  " },
@@ -101,7 +106,7 @@ describe("ConversationComposer", () => {
       .mockRejectedValueOnce(new Error("private backend detail"))
       .mockResolvedValueOnce(Response.json(queuedJob, { status: 201 }));
     const onAccepted = vi.fn();
-    render(<ConversationComposer conversationId={conversationId} onAccepted={onAccepted} />);
+    render(<ConversationComposer {...chatScrollProps} conversationId={conversationId} onAccepted={onAccepted} />);
 
     const textarea = screen.getByLabelText(ru.conversations.composerLabel);
     fireEvent.change(textarea, { target: { value: "  Сохрани черновик  " } });
@@ -126,7 +131,7 @@ describe("ConversationComposer", () => {
     vi.mocked(webBrowserMutation)
       .mockRejectedValueOnce(new Error("lost response"))
       .mockResolvedValueOnce(Response.json(queuedJob, { status: 201 }));
-    render(<ConversationComposer conversationId={conversationId} onAccepted={vi.fn()} />);
+    render(<ConversationComposer {...chatScrollProps} conversationId={conversationId} onAccepted={vi.fn()} />);
 
     const textarea = screen.getByLabelText(ru.conversations.composerLabel);
     fireEvent.change(textarea, { target: { value: "Первый текст" } });
@@ -151,7 +156,7 @@ describe("ConversationComposer", () => {
   ])("keeps the draft and reports a safe error for a %s", async (_caseName, response) => {
     const onAccepted = vi.fn();
     vi.mocked(webBrowserMutation).mockResolvedValueOnce(response);
-    render(<ConversationComposer conversationId={conversationId} onAccepted={onAccepted} />);
+    render(<ConversationComposer {...chatScrollProps} conversationId={conversationId} onAccepted={onAccepted} />);
 
     fireEvent.change(screen.getByLabelText(ru.conversations.composerLabel), { target: { value: "Важный текст" } });
     fireEvent.click(screen.getByRole("button", { name: ru.conversations.composerSubmit }));

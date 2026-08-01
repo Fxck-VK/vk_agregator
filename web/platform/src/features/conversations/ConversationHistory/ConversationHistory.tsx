@@ -69,7 +69,23 @@ function ConversationHistoryReady({
   const [activeRefreshID, setActiveRefreshID] = useState<number | null>(initialRefreshRequest?.id ?? null);
   const [refreshDelayed, setRefreshDelayed] = useState(false);
   const [pendingTurn, setPendingTurn] = useState<PendingTurn | null>(null);
+  const [forceScrollRequest, setForceScrollRequest] = useState(0);
+  const [workspaceScrollRegion, setWorkspaceScrollRegion] = useState<HTMLElement | null>(null);
   const refreshSequenceRef = useRef(initialRefreshRequest?.id ?? 0);
+
+  useEffect(() => {
+    const scrollRegion = document.querySelector<HTMLElement>('main[data-testid="workspace-scroll-region"]');
+    let active = true;
+    queueMicrotask(() => {
+      if (active) {
+        setWorkspaceScrollRegion(scrollRegion);
+      }
+    });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const loadEarlier = async () => {
     const beforeSeq = messages[0]?.seq;
@@ -107,6 +123,7 @@ function ConversationHistoryReady({
     setPendingTurn({ ...request, prompt });
     setActiveRefreshID(request.id);
     setPollRequest(request);
+    setForceScrollRequest((currentRequest) => currentRequest + 1);
   };
 
   useEffect(() => {
@@ -253,6 +270,7 @@ function ConversationHistoryReady({
 
   const pendingTurnIsActive = pendingTurn?.id === activeRefreshID;
   const hasVisibleMessages = messages.length > 0 || pendingTurn !== null || activeRefreshID !== null;
+  const contentVersion = `${messages.at(-1)?.id ?? ""}:${pendingTurn?.id ?? ""}:${activeRefreshID ?? ""}`;
 
   return (
     <section aria-labelledby="conversation-history-title" className={styles.content}>
@@ -310,8 +328,11 @@ function ConversationHistoryReady({
       </div>
       <ConversationComposer
         conversationId={history.conversationId}
+        contentVersion={contentVersion}
         disabled={activeRefreshID !== null}
+        forceScrollRequest={forceScrollRequest}
         onAccepted={beginRefresh}
+        scrollContainer={workspaceScrollRegion}
       />
     </section>
   );

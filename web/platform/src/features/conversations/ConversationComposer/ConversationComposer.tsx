@@ -3,6 +3,7 @@
 import { useRef, useState, type ChangeEvent, type FormEvent } from "react";
 
 import { ChatTextInput } from "@/components/chat/ChatTextInput/ChatTextInput";
+import { ChatScrollToBottom } from "@/components/chat/ChatScrollToBottom/ChatScrollToBottom";
 import { Button } from "@/components/ui/Button/Button";
 import { ru } from "@/i18n/ru";
 import { webBrowserMutation } from "@/lib/web-api/browser";
@@ -12,8 +13,11 @@ import styles from "./ConversationComposer.module.css";
 
 type ConversationComposerProps = {
   conversationId: string;
+  contentVersion: string;
   disabled?: boolean;
+  forceScrollRequest: number;
   onAccepted: (prompt: string) => void;
+  scrollContainer: HTMLElement | null;
 };
 
 type RetryIntent = {
@@ -25,8 +29,11 @@ type ComposerFeedback = "error" | null;
 
 export function ConversationComposer({
   conversationId,
+  contentVersion,
   disabled = false,
+  forceScrollRequest,
   onAccepted,
+  scrollContainer,
 }: ConversationComposerProps) {
   const [draft, setDraft] = useState("");
   const [isPending, setIsPending] = useState(false);
@@ -95,6 +102,11 @@ export function ConversationComposer({
 
   return (
     <form className={styles.dock} onSubmit={submitForm}>
+      <ChatScrollToBottom
+        contentVersion={contentVersion}
+        forceScrollRequest={forceScrollRequest}
+        scrollContainer={scrollContainer}
+      />
       <div className={styles.composer}>
         <label className={styles.field}>
           <span>{ru.conversations.composerLabel}</span>

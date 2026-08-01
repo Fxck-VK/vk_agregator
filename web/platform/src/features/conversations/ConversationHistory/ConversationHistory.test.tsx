@@ -44,9 +44,67 @@ const initialHistory = {
 describe("ConversationHistory", () => {
   afterEach(() => {
     cleanup();
+    document.querySelector("main[data-testid=\"workspace-scroll-region\"]")?.remove();
     vi.useRealTimers();
     vi.clearAllMocks();
     vi.unstubAllGlobals();
+  });
+
+  it("smoothly scrolls the workspace after an accepted Enter send", async () => {
+    const { region, scrollTo } = addWorkspaceScrollRegion();
+    vi.mocked(webBrowserMutation).mockResolvedValueOnce(Response.json(queuedJob, { status: 201 }));
+    vi.mocked(webBrowserFetch).mockReturnValueOnce(new Promise<Response>(() => {}));
+    render(<ConversationHistory history={initialHistory as never} />);
+
+    const textarea = screen.getByLabelText(ru.conversations.composerLabel);
+    fireEvent.change(textarea, { target: { value: "Pending stream prompt" } });
+    fireEvent.keyDown(textarea, { key: "Enter" });
+
+    await screen.findByText("Pending stream prompt");
+    await vi.waitFor(() =>
+      expect(scrollTo).toHaveBeenCalledWith({ behavior: "smooth", top: region.scrollHeight }),
+    );
+  });
+
+  it("keeps the workspace position when a polling reply arrives above the bottom", async () => {
+    const { region, scrollTo } = addWorkspaceScrollRegion();
+    let resolveRefresh: (response: Response) => void = () => {};
+    vi.mocked(webBrowserMutation).mockResolvedValueOnce(Response.json(queuedJob, { status: 201 }));
+    vi.mocked(webBrowserFetch).mockReturnValueOnce(
+      new Promise<Response>((resolve) => {
+        resolveRefresh = resolve;
+      }),
+    );
+    render(<ConversationHistory history={initialHistory as never} />);
+
+    const textarea = screen.getByLabelText(ru.conversations.composerLabel);
+    fireEvent.change(textarea, { target: { value: "Pending stream prompt" } });
+    fireEvent.click(screen.getByRole("button", { name: ru.conversations.composerSubmit }));
+    await screen.findByText("Pending stream prompt");
+    await vi.waitFor(() =>
+      expect(scrollTo).toHaveBeenCalledWith({ behavior: "smooth", top: region.scrollHeight }),
+    );
+    scrollTo.mockClear();
+
+    region.scrollTop = 100;
+    fireEvent.scroll(region);
+    resolveRefresh(
+      Response.json({
+        items: [
+          {
+            id: "77777777-7777-4777-8777-777777777777",
+            seq: 104,
+            role: "assistant",
+            text: "assistant reply while scrolled away",
+            created_at: "2026-08-01T12:00:04Z",
+          },
+        ],
+      }),
+    );
+
+    await screen.findByText("assistant reply while scrolled away");
+    expect(scrollTo).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: ru.conversations.scrollToLatest })).toBeVisible();
   });
 
   it("prepends a bounded older page and keeps its next cursor on the first loaded message", async () => {
@@ -520,3 +578,18 @@ describe("ConversationHistory", () => {
     expect(webBrowserFetch).toHaveBeenCalledTimes(15);
   });
 });
+
+function addWorkspaceScrollRegion() {
+  const region = document.createElement("main");
+  const scrollTo = vi.fn();
+  region.dataset.testid = "workspace-scroll-region";
+  Object.defineProperties(region, {
+    clientHeight: { configurable: true, value: 400 },
+    scrollHeight: { configurable: true, value: 1_600 },
+    scrollTo: { configurable: true, value: scrollTo },
+    scrollTop: { configurable: true, writable: true, value: 1_200 },
+  });
+  document.body.append(region);
+
+  return { region, scrollTo };
+}

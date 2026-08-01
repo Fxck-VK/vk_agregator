@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { ru } from "@/i18n/ru";
 
@@ -21,10 +21,20 @@ export function ChatScrollToBottom({
   scrollContainer,
 }: ChatScrollToBottomProps) {
   const [atBottom, setAtBottom] = useState(() => !scrollContainer || isAtBottom(scrollContainer));
+  const previousForceScrollRequest = useRef(forceScrollRequest);
+
+  useEffect(() => {
+    if (scrollContainer === null || forceScrollRequest === previousForceScrollRequest.current) {
+      return;
+    }
+
+    previousForceScrollRequest.current = forceScrollRequest;
+    scrollContainer.scrollTo({ behavior: "smooth", top: scrollContainer.scrollHeight });
+    setAtBottom(true);
+  }, [forceScrollRequest, scrollContainer]);
 
   useEffect(() => {
     if (!scrollContainer) {
-      setAtBottom(true);
       return;
     }
 
