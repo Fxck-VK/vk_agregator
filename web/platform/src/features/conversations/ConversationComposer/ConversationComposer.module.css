@@ -26,24 +26,6 @@
   font-weight: 700;
 }
 
-.field textarea {
-  inline-size: 100%;
-  block-size: 5rem;
-  resize: none;
-  border: 0.0625rem solid var(--color-border);
-  border-radius: var(--radius-sm);
-  padding: var(--space-3);
-  background: var(--color-background);
-  color: var(--color-text);
-  font: inherit;
-  line-height: 1.5;
-}
-
-.field textarea:focus-visible {
-  outline: 0.1875rem solid color-mix(in srgb, var(--color-accent) 45%, transparent);
-  outline-offset: 0.125rem;
-}
-
 .footer {
   display: flex;
   align-items: center;

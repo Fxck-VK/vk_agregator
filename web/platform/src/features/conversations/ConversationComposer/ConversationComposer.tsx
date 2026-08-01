@@ -1,7 +1,8 @@
 "use client";
 
-import { useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent } from "react";
+import { useRef, useState, type ChangeEvent, type FormEvent } from "react";
 
+import { ChatTextInput } from "@/components/chat/ChatTextInput/ChatTextInput";
 import { Button } from "@/components/ui/Button/Button";
 import { ru } from "@/i18n/ru";
 import { webBrowserMutation } from "@/lib/web-api/browser";
@@ -94,25 +95,19 @@ export function ConversationComposer({
     void submit();
   };
 
-  const submitOnEnter = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) {
-      return;
-    }
-    event.preventDefault();
-    void submit();
-  };
-
   return (
     <form className={styles.dock} onSubmit={submitForm}>
       <div className={styles.composer}>
         <label className={styles.field}>
           <span>{ru.conversations.composerLabel}</span>
-          <textarea
+          <ChatTextInput
+            appearance="inset"
             disabled={isPending || disabled}
             onChange={changeDraft}
-            onKeyDown={submitOnEnter}
+            onSend={() => void submit()}
             placeholder={ru.conversations.composerPlaceholder}
             rows={3}
+            size="compact"
             value={draft}
           />
         </label>

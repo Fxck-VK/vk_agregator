@@ -80,6 +80,36 @@ describe("WorkspacePrompt", () => {
     );
   });
 
+  it("uses the existing create-then-message request sequence when Enter is pressed", async () => {
+    vi.mocked(webBrowserMutation)
+      .mockResolvedValueOnce(Response.json(conversation, { status: 201 }))
+      .mockResolvedValueOnce(Response.json(queuedChatJob, { status: 201 }));
+    render(<WorkspacePrompt />);
+
+    const textarea = screen.getByLabelText(ru.workspace.promptLabel);
+    fireEvent.change(textarea, { target: { value: "Enter submission" } });
+    fireEvent.keyDown(textarea, { key: "Enter" });
+
+    await vi.waitFor(() => expect(push).toHaveBeenCalledWith("/app/chat/d7c979f5-24e5-4f88-924b-a592d6e5a906?refresh=1"));
+    expect(webBrowserMutation).toHaveBeenCalledTimes(2);
+    expect(webBrowserMutation).toHaveBeenNthCalledWith(1, "/web/v1/conversations", {
+      method: "POST",
+      headers: { "X-Idempotency-Key": "c7c979f5-24e5-4f88-924b-a592d6e5a906" },
+    });
+    expect(webBrowserMutation).toHaveBeenNthCalledWith(
+      2,
+      "/web/v1/conversations/d7c979f5-24e5-4f88-924b-a592d6e5a906/messages",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Idempotency-Key": "e7c979f5-24e5-4f88-924b-a592d6e5a906",
+        },
+        body: JSON.stringify({ prompt: "Enter submission" }),
+      },
+    );
+  });
+
   it.each([
     { messageStatus: 200, jobStatus: "queued" },
     { messageStatus: 201, jobStatus: "succeeded" },

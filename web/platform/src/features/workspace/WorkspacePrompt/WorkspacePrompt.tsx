@@ -3,6 +3,7 @@
 import { useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 
+import { ChatTextInput } from "@/components/chat/ChatTextInput/ChatTextInput";
 import { Button } from "@/components/ui/Button/Button";
 import { ru } from "@/i18n/ru";
 import { webBrowserMutation } from "@/lib/web-api/browser";
@@ -35,8 +36,7 @@ export function WorkspacePrompt() {
     setHasError(false);
   };
 
-  const submit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const submit = async () => {
     const normalizedPrompt = prompt.trim();
     if (isPending || normalizedPrompt === "") {
       return;
@@ -94,15 +94,23 @@ export function WorkspacePrompt() {
     }
   };
 
+  const submitForm = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    void submit();
+  };
+
   return (
-    <form className={styles.form} onSubmit={(event) => void submit(event)}>
+    <form className={styles.form} onSubmit={submitForm}>
       <label className={styles.promptField}>
         <span>{ru.workspace.promptLabel}</span>
-        <textarea
+        <ChatTextInput
+          appearance="plain"
           disabled={isPending}
           onChange={changePrompt}
+          onSend={() => void submit()}
           placeholder={ru.workspace.promptPlaceholder}
           rows={5}
+          size="expanded"
           value={prompt}
         />
       </label>
