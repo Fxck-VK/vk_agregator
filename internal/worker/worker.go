@@ -1981,10 +1981,6 @@ func (p *processor) requeueProviderPollAfterError(ctx context.Context, job *doma
 	return p.streams.PublishTo(ctx, redisqueue.StreamProviderPoll, next)
 }
 
-func durableProviderTaskResult(pt *domain.ProviderTask) (domain.ProviderTaskResult, bool) {
-	return durableProviderTaskResultForJob(pt, nil)
-}
-
 func durableProviderTaskResultForJob(pt *domain.ProviderTask, job *domain.Job) (domain.ProviderTaskResult, bool) {
 	if pt == nil || !pt.Status.IsTerminal() || len(pt.Result) == 0 {
 		return domain.ProviderTaskResult{}, false

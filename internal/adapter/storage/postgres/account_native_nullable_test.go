@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"reflect"
 	"strings"
 	"testing"
 
@@ -199,7 +198,21 @@ func assertNilArgument(t *testing.T, args []any, index int, label string) {
 	if len(args) <= index {
 		t.Fatalf("%s missing argument %d: %#v", label, index, args)
 	}
-	if args[index] != nil && !(reflect.ValueOf(args[index]).Kind() == reflect.Ptr && reflect.ValueOf(args[index]).IsNil()) {
-		t.Fatalf("%s must bind SQL NULL, got %#v", label, args[index])
+	switch value := args[index].(type) {
+	case nil:
+		return
+	case *uuid.UUID:
+		if value == nil {
+			return
+		}
+	case *int64:
+		if value == nil {
+			return
+		}
+	case *string:
+		if value == nil {
+			return
+		}
 	}
+	t.Fatalf("%s must bind SQL NULL, got %#v", label, args[index])
 }

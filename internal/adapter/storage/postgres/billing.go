@@ -464,24 +464,6 @@ func (r *BillingRepository) GetReservationByJob(ctx context.Context, jobID uuid.
 	return &res, nil
 }
 
-// availableBalance returns balance_cached minus the sum of active holds for an
-// account, locking the account row for the duration of the transaction.
-func availableBalance(ctx context.Context, q Querier, accountID uuid.UUID) (int64, error) {
-	const sql = `
-		SELECT c.balance_cached - COALESCE((
-			SELECT SUM(amount) FROM credit_reservations
-			WHERE account_id = c.id AND status = 'reserved'
-		), 0)
-		FROM credit_accounts c
-		WHERE c.id = $1
-		FOR UPDATE`
-	var available int64
-	if err := q.QueryRow(ctx, sql, accountID).Scan(&available); err != nil {
-		return 0, mapError(err)
-	}
-	return available, nil
-}
-
 // lockCreditAccountOwner serializes reservations for one credit account and
 // returns the authoritative canonical owner from the selected row.
 func lockCreditAccountOwner(ctx context.Context, q Querier, accountID uuid.UUID) (uuid.UUID, error) {
