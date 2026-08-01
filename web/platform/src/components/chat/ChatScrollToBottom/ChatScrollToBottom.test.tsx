@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ru } from "@/i18n/ru";
@@ -9,6 +9,7 @@ describe("ChatScrollToBottom", () => {
   afterEach(() => {
     cleanup();
     vi.unstubAllGlobals();
+    vi.useRealTimers();
   });
 
   it("shows away from the bottom and smoothly returns to the latest message", () => {
@@ -43,6 +44,8 @@ describe("ChatScrollToBottom", () => {
     rerender(<ChatScrollToBottom contentVersion="2" forceScrollRequest={0} scrollContainer={region.element} />);
 
     expect(region.scrollTo).toHaveBeenCalledWith({ behavior: "smooth", top: 1800 });
+    region.element.scrollTop = 1400;
+    fireEvent.scroll(region.element);
     expect(screen.queryByRole("button", { name: ru.conversations.scrollToLatest })).toBeNull();
 
     region.scrollTo.mockClear();
@@ -65,6 +68,8 @@ describe("ChatScrollToBottom", () => {
     rerender(<ChatScrollToBottom contentVersion="1" forceScrollRequest={1} scrollContainer={region.element} />);
 
     expect(region.scrollTo).toHaveBeenCalledWith({ behavior: "smooth", top: 1600 });
+    region.element.scrollTop = 1200;
+    fireEvent.scroll(region.element);
     expect(screen.queryByRole("button", { name: ru.conversations.scrollToLatest })).toBeNull();
   });
 
@@ -78,6 +83,62 @@ describe("ChatScrollToBottom", () => {
     rerender(<ChatScrollToBottom contentVersion="1" forceScrollRequest={1} scrollContainer={region.element} />);
 
     expect(region.scrollTo).toHaveBeenCalledWith({ behavior: "auto", top: 1600 });
+  });
+
+  it("keeps following through intermediate programmatic scroll events", () => {
+    const region = createScrollRegion({ scrollTop: 1200 });
+    const { rerender } = render(
+      <ChatScrollToBottom contentVersion="1" forceScrollRequest={0} scrollContainer={region.element} />,
+    );
+
+    region.setScrollHeight(1800);
+    rerender(<ChatScrollToBottom contentVersion="2" forceScrollRequest={0} scrollContainer={region.element} />);
+    expect(screen.getByRole("button", { name: ru.conversations.scrollToLatest })).toBeVisible();
+
+    region.element.scrollTop = 1300;
+    fireEvent.scroll(region.element);
+    region.setScrollHeight(2000);
+    rerender(<ChatScrollToBottom contentVersion="3" forceScrollRequest={0} scrollContainer={region.element} />);
+
+    expect(region.scrollTo).toHaveBeenLastCalledWith({ behavior: "smooth", top: 2000 });
+  });
+
+  it("shows the control until a programmatic scroll actually reaches the bottom", () => {
+    const region = createScrollRegion({ scrollTop: 1200 });
+    const { rerender } = render(
+      <ChatScrollToBottom contentVersion="1" forceScrollRequest={0} scrollContainer={region.element} />,
+    );
+
+    region.setScrollHeight(1800);
+    rerender(<ChatScrollToBottom contentVersion="2" forceScrollRequest={0} scrollContainer={region.element} />);
+    expect(screen.getByRole("button", { name: ru.conversations.scrollToLatest })).toBeVisible();
+
+    region.element.scrollTop = 1400;
+    fireEvent.scroll(region.element);
+
+    expect(screen.queryByRole("button", { name: ru.conversations.scrollToLatest })).toBeNull();
+  });
+
+  it("stops following after a programmatic scroll settles away from the bottom", () => {
+    vi.useFakeTimers();
+    const region = createScrollRegion({ scrollTop: 1200 });
+    const { rerender } = render(
+      <ChatScrollToBottom contentVersion="1" forceScrollRequest={0} scrollContainer={region.element} />,
+    );
+
+    region.setScrollHeight(1800);
+    rerender(<ChatScrollToBottom contentVersion="2" forceScrollRequest={0} scrollContainer={region.element} />);
+    region.element.scrollTop = 900;
+    fireEvent.scroll(region.element);
+    act(() => {
+      vi.advanceTimersByTime(200);
+    });
+
+    region.setScrollHeight(2000);
+    rerender(<ChatScrollToBottom contentVersion="3" forceScrollRequest={0} scrollContainer={region.element} />);
+
+    expect(region.scrollTo).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("button", { name: ru.conversations.scrollToLatest })).toBeVisible();
   });
 });
 

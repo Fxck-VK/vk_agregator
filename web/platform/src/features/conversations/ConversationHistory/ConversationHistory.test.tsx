@@ -146,6 +146,8 @@ describe("ConversationHistory", () => {
     await vi.waitFor(() =>
       expect(scrollTo).toHaveBeenCalledWith({ behavior: "smooth", top: region.scrollHeight }),
     );
+    region.scrollTop = 1_400;
+    fireEvent.scroll(region);
     expect(screen.queryByRole("button", { name: ru.conversations.scrollToLatest })).toBeNull();
   });
 

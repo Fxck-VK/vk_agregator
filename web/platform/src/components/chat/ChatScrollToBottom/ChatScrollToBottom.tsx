@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { ru } from "@/i18n/ru";
 
@@ -15,6 +15,10 @@ type ChatScrollToBottomProps = {
 const isAtBottom = (container: HTMLElement) =>
   container.scrollHeight - container.scrollTop - container.clientHeight <= 1;
 
+const scrollBehavior = () => (window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ? "auto" : "smooth");
+
+const SCROLL_SETTLE_DELAY_MS = 150;
+
 export function ChatScrollToBottom({
   contentVersion,
   forceScrollRequest,
@@ -22,8 +26,50 @@ export function ChatScrollToBottom({
 }: ChatScrollToBottomProps) {
   const [atBottom, setAtBottom] = useState(() => !scrollContainer || isAtBottom(scrollContainer));
   const followLatestRef = useRef(atBottom);
+  const programmaticScrollRef = useRef(false);
+  const settleTimerRef = useRef<number | null>(null);
   const previousContentVersion = useRef(contentVersion);
   const previousForceScrollRequest = useRef(forceScrollRequest);
+
+  const scheduleSettle = useCallback(() => {
+    if (settleTimerRef.current !== null) {
+      window.clearTimeout(settleTimerRef.current);
+    }
+
+    settleTimerRef.current = window.setTimeout(() => {
+      settleTimerRef.current = null;
+      if (!scrollContainer || !programmaticScrollRef.current) {
+        return;
+      }
+
+      const settledAtBottom = isAtBottom(scrollContainer);
+      programmaticScrollRef.current = false;
+      followLatestRef.current = settledAtBottom;
+      setAtBottom(settledAtBottom);
+    }, SCROLL_SETTLE_DELAY_MS);
+  }, [scrollContainer]);
+
+  const scrollToLatest = useCallback(
+    (top: number) => {
+      if (!scrollContainer) {
+        return;
+      }
+
+      programmaticScrollRef.current = true;
+      scrollContainer.scrollTo({ behavior: scrollBehavior(), top });
+
+      const nextAtBottom = isAtBottom(scrollContainer);
+      setAtBottom(nextAtBottom);
+      if (nextAtBottom) {
+        programmaticScrollRef.current = false;
+        followLatestRef.current = true;
+        return;
+      }
+
+      scheduleSettle();
+    },
+    [scheduleSettle, scrollContainer],
+  );
 
   useEffect(() => {
     if (scrollContainer === null) {
@@ -40,12 +86,8 @@ export function ChatScrollToBottom({
     }
 
     followLatestRef.current = true;
-    setAtBottom(true);
-    scrollContainer.scrollTo({
-      behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ? "auto" : "smooth",
-      top: scrollContainer.scrollHeight,
-    });
-  }, [contentVersion, forceScrollRequest, scrollContainer]);
+    scrollToLatest(scrollContainer.scrollHeight);
+  }, [contentVersion, forceScrollRequest, scrollContainer, scrollToLatest]);
 
   useEffect(() => {
     if (!scrollContainer) {
@@ -54,8 +96,23 @@ export function ChatScrollToBottom({
 
     const updatePosition = () => {
       const nextAtBottom = isAtBottom(scrollContainer);
-      followLatestRef.current = nextAtBottom;
       setAtBottom(nextAtBottom);
+      if (programmaticScrollRef.current) {
+        if (nextAtBottom) {
+          if (settleTimerRef.current !== null) {
+            window.clearTimeout(settleTimerRef.current);
+            settleTimerRef.current = null;
+          }
+          programmaticScrollRef.current = false;
+          followLatestRef.current = true;
+          return;
+        }
+
+        scheduleSettle();
+        return;
+      }
+
+      followLatestRef.current = nextAtBottom;
     };
 
     updatePosition();
@@ -64,26 +121,31 @@ export function ChatScrollToBottom({
     return () => {
       scrollContainer.removeEventListener("scroll", updatePosition);
     };
-  }, [scrollContainer]);
+  }, [scheduleSettle, scrollContainer]);
+
+  useEffect(
+    () => () => {
+      if (settleTimerRef.current !== null) {
+        window.clearTimeout(settleTimerRef.current);
+      }
+    },
+    [],
+  );
 
   if (atBottom || !scrollContainer) {
     return null;
   }
 
-  const scrollToLatest = () => {
+  const handleScrollToLatest = () => {
     followLatestRef.current = true;
-    setAtBottom(true);
-    scrollContainer.scrollTo({
-      behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ? "auto" : "smooth",
-      top: scrollContainer.scrollHeight - scrollContainer.clientHeight,
-    });
+    scrollToLatest(scrollContainer.scrollHeight - scrollContainer.clientHeight);
   };
 
   return (
     <button
       aria-label={ru.conversations.scrollToLatest}
       className={styles.button}
-      onClick={scrollToLatest}
+      onClick={handleScrollToLatest}
       type="button"
     >
       <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24">
