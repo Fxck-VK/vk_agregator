@@ -1,0 +1,9 @@
+.workspace {
+  inline-size: min(100%, 72rem);
+  margin-inline: auto;
+  padding: clamp(5rem, 10vw, 8rem) clamp(var(--space-4), 6vw, 5rem);
+}
+
+.workspace > :first-child {
+  margin-block-start: 0;
+}

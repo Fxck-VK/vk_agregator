@@ -112,4 +112,61 @@ describe("WorkspacePrompt", () => {
     settleRequest(new Response(null, { status: 500 }));
     expect(await screen.findByRole("alert")).toHaveTextContent(ru.workspace.promptFailure);
   });
+
+  it("does not route when the conversation payload is malformed", async () => {
+    vi.mocked(webBrowserMutation).mockResolvedValueOnce(Response.json({ id: "not-a-uuid" }, { status: 201 }));
+    render(<WorkspacePrompt />);
+
+    fireEvent.change(screen.getByLabelText(ru.workspace.promptLabel), { target: { value: "Проверочный запрос" } });
+    fireEvent.click(screen.getByRole("button", { name: ru.workspace.promptSubmit }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(ru.workspace.promptFailure);
+    expect(webBrowserMutation).toHaveBeenCalledTimes(1);
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("does not route when the chat-job payload is malformed", async () => {
+    vi.mocked(webBrowserMutation)
+      .mockResolvedValueOnce(Response.json(conversation, { status: 201 }))
+      .mockResolvedValueOnce(Response.json({ job_id: "not-a-uuid", status: "queued" }, { status: 201 }));
+    render(<WorkspacePrompt />);
+
+    fireEvent.change(screen.getByLabelText(ru.workspace.promptLabel), { target: { value: "Проверочный запрос" } });
+    fireEvent.click(screen.getByRole("button", { name: ru.workspace.promptSubmit }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(ru.workspace.promptFailure);
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("keeps the draft and shows safe failure when the message request fails", async () => {
+    const draft = "Текст нужно сохранить";
+    vi.mocked(webBrowserMutation)
+      .mockResolvedValueOnce(Response.json(conversation, { status: 201 }))
+      .mockRejectedValueOnce(new Error("Unable to complete the request."));
+    render(<WorkspacePrompt />);
+
+    fireEvent.change(screen.getByLabelText(ru.workspace.promptLabel), { target: { value: draft } });
+    fireEvent.click(screen.getByRole("button", { name: ru.workspace.promptSubmit }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(ru.workspace.promptFailure);
+    expect(screen.getByLabelText(ru.workspace.promptLabel)).toHaveValue(draft);
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("posts a trimmed prompt after successful whitespace-padded input", async () => {
+    vi.mocked(webBrowserMutation)
+      .mockResolvedValueOnce(Response.json(conversation, { status: 201 }))
+      .mockResolvedValueOnce(Response.json(queuedChatJob, { status: 201 }));
+    render(<WorkspacePrompt />);
+
+    fireEvent.change(screen.getByLabelText(ru.workspace.promptLabel), { target: { value: "  Проверочный запрос  " } });
+    fireEvent.click(screen.getByRole("button", { name: ru.workspace.promptSubmit }));
+
+    await vi.waitFor(() => expect(push).toHaveBeenCalled());
+    expect(webBrowserMutation).toHaveBeenNthCalledWith(
+      2,
+      "/web/v1/conversations/d7c979f5-24e5-4f88-924b-a592d6e5a906/messages",
+      expect.objectContaining({ body: JSON.stringify({ prompt: "Проверочный запрос" }) }),
+    );
+  });
 });

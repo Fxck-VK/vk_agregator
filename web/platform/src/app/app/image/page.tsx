@@ -1,11 +1,5 @@
-import { ImageGenerationPanel } from "@/features/image-generation/ImageGenerationPanel/ImageGenerationPanel";
-import { ImageJobHistory } from "@/features/image-generation/ImageJobHistory/ImageJobHistory";
+import { ImageWorkspace } from "@/features/image-generation/ImageWorkspace/ImageWorkspace";
 
 export default function ImagePage() {
-  return (
-    <>
-      <ImageGenerationPanel />
-      <ImageJobHistory />
-    </>
-  );
+  return <ImageWorkspace />;
 }
