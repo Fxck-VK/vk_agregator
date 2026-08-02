@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { type JSX, useEffect, useRef, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { type JSX, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { ru } from "@/i18n/ru";
 import { webBrowserMutation } from "@/lib/web-api/browser";
@@ -19,6 +19,7 @@ type RowPanel = "actions" | "rename" | "archive" | null;
 
 export function ConversationRow({ conversation, isActive }: ConversationRowProps): JSX.Element {
   const router = useRouter();
+  const pathname = usePathname();
   const title = conversation.title.trim() || ru.conversations.unnamed;
   const conversationPath = `/web/v1/conversations/${conversation.id}` as const;
   const [panel, setPanel] = useState<RowPanel>(null);
@@ -31,6 +32,9 @@ export function ConversationRow({ conversation, isActive }: ConversationRowProps
   const focusAfterPendingRef = useRef<"rename" | "archive" | null>(null);
   const restoreActionFocusRef = useRef(false);
   const rowRef = useRef<HTMLElement>(null);
+  const mountedRef = useRef(true);
+  const pathnameRef = useRef(pathname);
+  const requestGenerationRef = useRef(0);
 
   const closePanel = (restoreActionFocus = false) => {
     if (isPending) return;
@@ -41,6 +45,11 @@ export function ConversationRow({ conversation, isActive }: ConversationRowProps
 
   const openPanel = (nextPanel: Exclude<RowPanel, null>) => {
     if (isPending) return;
+    if (nextPanel === "actions") {
+      window.dispatchEvent(
+        new CustomEvent("conversation-row-panel-open", { detail: { conversationId: conversation.id } }),
+      );
+    }
     setHasError(false);
     setPanel(nextPanel);
     if (nextPanel === "rename") setNextTitle(title);
@@ -70,6 +79,38 @@ export function ConversationRow({ conversation, isActive }: ConversationRowProps
   }, [conversation.id, panel]);
 
   useEffect(() => {
+    const closeForOtherConversation = (event: Event) => {
+      const { conversationId } = (event as CustomEvent<{ conversationId?: unknown }>).detail;
+      if (conversationId !== conversation.id) {
+        restoreActionFocusRef.current = false;
+        setPanel(null);
+      }
+    };
+    window.addEventListener("conversation-row-panel-open", closeForOtherConversation);
+    return () => window.removeEventListener("conversation-row-panel-open", closeForOtherConversation);
+  }, [conversation.id]);
+
+  useLayoutEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      requestGenerationRef.current += 1;
+    };
+  }, []);
+
+  useLayoutEffect(() => {
+    if (pathnameRef.current === pathname) {
+      return;
+    }
+
+    pathnameRef.current = pathname;
+    requestGenerationRef.current += 1;
+    focusAfterPendingRef.current = null;
+    setIsPending(false);
+    setPanel(null);
+  }, [pathname]);
+
+  useEffect(() => {
     if (isPending || focusAfterPendingRef.current === null) return;
 
     const focusTarget = focusAfterPendingRef.current;
@@ -94,6 +135,8 @@ export function ConversationRow({ conversation, isActive }: ConversationRowProps
 
   const renameConversation = async () => {
     if (isPending) return;
+    const requestGeneration = requestGenerationRef.current + 1;
+    requestGenerationRef.current = requestGeneration;
     setHasError(false);
     setIsPending(true);
     try {
@@ -102,35 +145,49 @@ export function ConversationRow({ conversation, isActive }: ConversationRowProps
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title: nextTitle }),
       });
+      if (!mountedRef.current || requestGeneration !== requestGenerationRef.current) return;
       if (response.status !== 200) throw new Error("Unable to complete the request.");
 
-      parseConversationList({ items: [await response.json()] });
+      const payload = await response.json();
+      if (!mountedRef.current || requestGeneration !== requestGenerationRef.current) return;
+      parseConversationList({ items: [payload] });
       setPanel(null);
       actionToggleRef.current?.focus();
       router.refresh();
     } catch {
+      if (!mountedRef.current || requestGeneration !== requestGenerationRef.current) return;
       focusAfterPendingRef.current = "rename";
       setHasError(true);
     } finally {
-      setIsPending(false);
+      if (mountedRef.current && requestGeneration === requestGenerationRef.current) setIsPending(false);
     }
   };
 
   const archiveConversation = async () => {
     if (isPending) return;
+    const requestGeneration = requestGenerationRef.current + 1;
+    requestGenerationRef.current = requestGeneration;
     setHasError(false);
     setIsPending(true);
     try {
       const response = await webBrowserMutation(conversationPath, { method: "DELETE" });
+      if (!mountedRef.current || requestGeneration !== requestGenerationRef.current) return;
       if (response.status !== 204) throw new Error("Unable to complete the request.");
 
-      if (isActive) router.replace("/app");
-      else router.refresh();
+      window.dispatchEvent(new CustomEvent("conversation-row-panel-change", { detail: { conversationId: conversation.id, open: false } }));
+      window.dispatchEvent(new CustomEvent("conversation-row-archived", { detail: { conversationId: conversation.id } }));
+      setPanel(null);
+
+      if (isActive) {
+        router.refresh();
+        router.replace("/app");
+      } else router.refresh();
     } catch {
+      if (!mountedRef.current || requestGeneration !== requestGenerationRef.current) return;
       focusAfterPendingRef.current = "archive";
       setHasError(true);
     } finally {
-      setIsPending(false);
+      if (mountedRef.current && requestGeneration === requestGenerationRef.current) setIsPending(false);
     }
   };
 
@@ -186,9 +243,9 @@ export function ConversationRow({ conversation, isActive }: ConversationRowProps
             ) : null}
             {panel === "archive" ? (
               <div className={styles.confirmation}>
-                <p>{ru.conversations.archiveConfirmation}</p>
+                <p id={`archive-confirmation-${conversation.id}`}>{ru.conversations.archiveConfirmation}</p>
                 <div className={styles.formActions}>
-                  <button disabled={isPending} onClick={() => void archiveConversation()} ref={archiveConfirmRef} type="button">{isPending ? ru.conversations.archivePending : ru.conversations.archiveConfirmLabel}</button>
+                  <button aria-describedby={`archive-confirmation-${conversation.id}`} disabled={isPending} onClick={() => void archiveConversation()} ref={archiveConfirmRef} type="button">{isPending ? ru.conversations.archivePending : ru.conversations.archiveConfirmLabel}</button>
                   <button disabled={isPending} onClick={() => closePanel(true)} type="button">{ru.conversations.cancelLabel}</button>
                 </div>
               </div>

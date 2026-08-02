@@ -226,14 +226,19 @@ describe("Sidebar", () => {
     vi.mocked(usePathname).mockImplementation(() => pathname);
     vi.mocked(webBrowserMutation).mockResolvedValue(new Response(null, { status: 204 }));
 
+    let conversations = recentConversations;
     let rerenderSidebar: (ui: ReactNode) => void = () => {};
+    const refresh = vi.fn(() => {
+      conversations = conversations.slice(1);
+      rerenderSidebar(<Sidebar conversations={<SidebarConversations conversations={conversations} />} />);
+    });
     const replace = vi.fn((nextPath: string) => {
       pathname = nextPath;
-      rerenderSidebar(<Sidebar conversations={<SidebarConversations conversations={recentConversations} />} />);
+      rerenderSidebar(<Sidebar conversations={<SidebarConversations conversations={conversations} />} />);
     });
-    vi.mocked(useRouter).mockReturnValue({ refresh: vi.fn(), replace } as never);
+    vi.mocked(useRouter).mockReturnValue({ refresh, replace } as never);
 
-    const rendered = render(<Sidebar conversations={<SidebarConversations conversations={recentConversations} />} />);
+    const rendered = render(<Sidebar conversations={<SidebarConversations conversations={conversations} />} />);
     rerenderSidebar = rendered.rerender;
     const trigger = screen.getByRole("button", { name: ru.navigation.openMenuLabel });
     const panel = screen.getByTestId("sidebar-panel");
@@ -248,6 +253,11 @@ describe("Sidebar", () => {
     expect(panel).toHaveAttribute("inert");
     expect(trigger).not.toHaveFocus();
     expect(replace).toHaveBeenCalledWith("/app");
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("link", { name: "Recent chat 1" })).not.toBeInTheDocument();
+
+    fireEvent.click(trigger);
+    expect(screen.queryByRole("link", { name: "Recent chat 1" })).not.toBeInTheDocument();
   });
 
   it("closes only an open conversation panel on Escape inside the narrow drawer", () => {
@@ -284,7 +294,7 @@ describe("Sidebar", () => {
     expect(trigger).toHaveFocus();
   });
 
-  it("keeps the drawer open while any other conversation panel remains open", () => {
+  it("closes the first row panel when a second row panel opens", () => {
     const { panel, trigger } = renderNarrowSidebar({
       conversations: <SidebarConversations conversations={recentConversations} />,
     });
@@ -294,10 +304,10 @@ describe("Sidebar", () => {
 
     fireEvent.click(firstActions);
     fireEvent.click(secondActions);
-    fireEvent.click(firstActions);
     fireEvent.keyDown(window, { key: "Escape" });
 
     expect(panel).toHaveAttribute("data-open", "true");
+    expect(firstActions).toHaveAttribute("aria-expanded", "false");
     expect(secondActions).toHaveAttribute("aria-expanded", "false");
     expect(trigger).not.toHaveFocus();
   });

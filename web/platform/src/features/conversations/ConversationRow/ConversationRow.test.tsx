@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({
+  usePathname: vi.fn(),
   useRouter: vi.fn(),
 }));
 
@@ -9,7 +10,7 @@ vi.mock("@/lib/web-api/browser", () => ({
   webBrowserMutation: vi.fn(),
 }));
 
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 import { ru } from "@/i18n/ru";
 import { webBrowserMutation } from "@/lib/web-api/browser";
@@ -38,10 +39,13 @@ function renderRow(isActive = false, item: ConversationItem = conversation) {
 describe("ConversationRow", () => {
   beforeEach(() => {
     vi.mocked(useRouter).mockReturnValue({ refresh, replace } as never);
+    vi.mocked(usePathname).mockReturnValue("/app/chat/d7c979f5-24e5-4f88-924b-a592d6e5a906");
   });
 
   afterEach(() => {
     cleanup();
+    refresh.mockReset();
+    replace.mockReset();
     vi.clearAllMocks();
   });
 
@@ -181,7 +185,7 @@ describe("ConversationRow", () => {
     fireEvent.click(screen.getByRole("button", { name: ru.conversations.archiveConfirmLabel }));
 
     await vi.waitFor(() => expect(replace).toHaveBeenCalledWith("/app"));
-    expect(refresh).not.toHaveBeenCalled();
+    expect(refresh).toHaveBeenCalledTimes(1);
   });
 
   it("keeps the row and shows neutral feedback after a failed delete", async () => {
@@ -210,6 +214,57 @@ describe("ConversationRow", () => {
 
     await screen.findByRole("alert");
     expect(archiveConfirm).toHaveFocus();
+  });
+
+  it("describes archive confirmation to its confirm control", () => {
+    renderRow();
+    fireEvent.click(screen.getByRole("button", { name: actionsLabel() }));
+    fireEvent.click(screen.getByRole("button", { name: ru.conversations.archiveLabel }));
+
+    const confirmation = screen.getByText(ru.conversations.archiveConfirmation);
+    expect(screen.getByRole("button", { name: ru.conversations.archiveConfirmLabel })).toHaveAttribute(
+      "aria-describedby",
+      confirmation.id,
+    );
+  });
+
+  it("ignores a settled rename after navigation changes while it is pending", async () => {
+    let pathname = "/app/chat/d7c979f5-24e5-4f88-924b-a592d6e5a906";
+    let settleRequest: (response: Response) => void = () => {};
+    vi.mocked(usePathname).mockImplementation(() => pathname);
+    vi.mocked(webBrowserMutation).mockReturnValue(new Promise<Response>((resolve) => { settleRequest = resolve; }));
+    const rendered = renderRow();
+
+    fireEvent.click(screen.getByRole("button", { name: actionsLabel() }));
+    fireEvent.click(screen.getByRole("button", { name: ru.conversations.renameLabel }));
+    fireEvent.keyDown(screen.getByRole("textbox", { name: ru.conversations.renameInputLabel }), { key: "Enter" });
+    await vi.waitFor(() => expect(webBrowserMutation).toHaveBeenCalledTimes(1));
+
+    pathname = "/app";
+    rendered.rerender(<ConversationRow conversation={conversation} isActive={false} />);
+    settleRequest(Response.json(conversation, { status: 200 }));
+
+    await Promise.resolve();
+    expect(refresh).not.toHaveBeenCalled();
+    expect(replace).not.toHaveBeenCalled();
+  });
+
+  it("ignores a settled archive after its row unmounts while pending", async () => {
+    let settleRequest: (response: Response) => void = () => {};
+    vi.mocked(webBrowserMutation).mockReturnValue(new Promise<Response>((resolve) => { settleRequest = resolve; }));
+    const rendered = renderRow(true);
+
+    fireEvent.click(screen.getByRole("button", { name: actionsLabel() }));
+    fireEvent.click(screen.getByRole("button", { name: ru.conversations.archiveLabel }));
+    fireEvent.click(screen.getByRole("button", { name: ru.conversations.archiveConfirmLabel }));
+    await vi.waitFor(() => expect(webBrowserMutation).toHaveBeenCalledTimes(1));
+
+    rendered.unmount();
+    settleRequest(new Response(null, { status: 204 }));
+
+    await Promise.resolve();
+    expect(refresh).not.toHaveBeenCalled();
+    expect(replace).not.toHaveBeenCalled();
   });
 
   it("keeps the row after a 200 delete response instead of treating it as archived", async () => {
