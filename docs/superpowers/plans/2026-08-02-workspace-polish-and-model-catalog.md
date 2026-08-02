@@ -121,7 +121,7 @@ Run the same focused test. Expected: PASS.
 Mock only `webBrowserFetch`. Test:
 
     expect(webBrowserFetch).toHaveBeenCalledWith("/web/v1/image-models");
-    expect(await screen.findByRole("link", { name: /Open generator.*Nano Banana/i }))
+    expect(await screen.findByRole("link", { name: `${ru.modelsCatalog.openGeneratorLabel}: Nano Banana` }))
       .toHaveAttribute("href", "/app/image?model=nano-banana-2");
     fireEvent.change(screen.getByRole("searchbox", { name: ru.modelsCatalog.searchLabel }), {
       target: { value: "banana" },
@@ -165,7 +165,7 @@ Use a client component with `useEffect` for the one-time fetch. State is `loadin
       {imageModelQualities(models).map((value) => <option key={value} value={value}>{value}</option>)}
     </select>
 
-Each card shows `model.name`, the truthful type `Генерация изображений`, quality chips, and a reference-image label. Build the link using `encodeURIComponent(model.id)`. Add all Russian copy under `modelsCatalog` in `ru`.
+Each card shows `model.name`, the truthful type `Генерация изображений`, quality chips, and a reference-image label. Build the link using `encodeURIComponent(model.id)`. Add exactly these Russian strings under `modelsCatalog` in `ru`: `eyebrow: "NeiroHub"`, `title: "Все нейросети"`, `description: "Выберите модель для генерации изображений."`, `searchLabel: "Поиск модели"`, `referenceFilterLabel: "С поддержкой референсов"`, `qualityFilterLabel: "Качество"`, `allQualitiesLabel: "Любое качество"`, `imageTypeLabel: "Генерация изображений"`, `referenceSupportedLabel: "Референсы поддерживаются"`, `referenceUnsupportedLabel: "Без референсов"`, `loading: "Загружаем доступные модели…"`, `loadFailure: "Не удалось загрузить каталог моделей. Попробуйте ещё раз."`, `empty: "Подходящих моделей пока нет."`, `openGeneratorLabel: "Открыть генератор"`, and `clearFiltersLabel: "Сбросить фильтры"`.
 
 - [ ] **Step 8: Verify green and commit**
 
