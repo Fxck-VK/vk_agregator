@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({
@@ -85,6 +85,47 @@ describe("WorkspacePrompt", () => {
 
     settleMessage(Response.json(queuedChatJob, { status: 201 }));
     await vi.waitFor(() => expect(push).toHaveBeenCalledWith(`/app/chat/${visibleConversation.id}?refresh=1`));
+  });
+
+  it("keeps refreshed sidebar conversations when a pending create response resolves", async () => {
+    const createdConversation = { ...conversation, title: "Created after refresh" };
+    const refreshedConversations = [
+      { ...conversation, id: "f9712bca-8d98-448d-b595-2a80bc9c2b1a", title: "Refreshed first chat" },
+      { ...conversation, id: "8e1a77d8-0a9c-45ef-ba5f-1c5cc6e1772b", title: "Refreshed second chat" },
+    ];
+    let settleCreate: (response: Response) => void = () => {};
+    let settleMessage: (response: Response) => void = () => {};
+    vi.mocked(webBrowserMutation)
+      .mockReturnValueOnce(new Promise<Response>((resolve) => { settleCreate = resolve; }))
+      .mockReturnValueOnce(new Promise<Response>((resolve) => { settleMessage = resolve; }));
+    const rendered = render(
+      <WorkspaceConversationListProvider accountId={workspaceAccountId} initialConversations={[]}>
+        <WorkspacePrompt />
+        <SidebarConversations />
+      </WorkspaceConversationListProvider>,
+    );
+
+    fireEvent.change(screen.getByLabelText(ru.workspace.promptLabel), { target: { value: "Keep refreshed chats" } });
+    fireEvent.click(screen.getByRole("button", { name: ru.workspace.promptSubmit }));
+    await vi.waitFor(() => expect(webBrowserMutation).toHaveBeenCalledTimes(1));
+
+    rendered.rerender(
+      <WorkspaceConversationListProvider accountId={workspaceAccountId} initialConversations={refreshedConversations}>
+        <WorkspacePrompt />
+        <SidebarConversations />
+      </WorkspaceConversationListProvider>,
+    );
+    settleCreate(Response.json(createdConversation, { status: 201 }));
+
+    await vi.waitFor(() => expect(webBrowserMutation).toHaveBeenCalledTimes(2));
+    expect(within(screen.getByRole("list")).getAllByRole("link").map((link) => link.textContent)).toEqual([
+      createdConversation.title,
+      ...refreshedConversations.map((refreshedConversation) => refreshedConversation.title),
+    ]);
+    expect(push).not.toHaveBeenCalled();
+
+    settleMessage(Response.json(queuedChatJob, { status: 201 }));
+    await vi.waitFor(() => expect(push).toHaveBeenCalledWith(`/app/chat/${createdConversation.id}?refresh=1`));
   });
 
   it("does not add malformed create data to the sidebar", async () => {

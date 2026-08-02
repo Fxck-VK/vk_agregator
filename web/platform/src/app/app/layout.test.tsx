@@ -18,6 +18,7 @@ vi.mock("@/features/session/session-data", () => ({
 import { redirect, usePathname, useRouter } from "next/navigation";
 
 import { ru } from "@/i18n/ru";
+import { WorkspaceConversationListProvider } from "@/features/conversations/WorkspaceConversationList/WorkspaceConversationList";
 import { loadWorkspaceSession } from "@/features/session/session-data";
 import { WorkspaceHome } from "@/features/workspace/WorkspaceHome/WorkspaceHome";
 
@@ -110,7 +111,11 @@ describe("WorkspaceLayout", () => {
 
 describe("Workspace destinations", () => {
   it("renders the normal chat start prompt and explicit workspace destinations", () => {
-    const markup = renderToStaticMarkup(<WorkspaceHome />);
+    const markup = renderToStaticMarkup(
+      <WorkspaceConversationListProvider accountId="workspace-destinations-test-account" initialConversations={[]}>
+        <WorkspaceHome />
+      </WorkspaceConversationListProvider>,
+    );
 
     expect(markup).toContain(ru.workspace.startTitle);
     expect(markup).toContain(ru.workspace.promptLabel);

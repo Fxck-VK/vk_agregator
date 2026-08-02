@@ -30,17 +30,13 @@ export function WorkspaceConversationListProvider({ accountId, children, initial
 
   const upsertConversation = useCallback((conversation: ConversationItem) => {
     setConversationListState((previousState) => ({
-      accountId,
-      initialConversations,
+      ...previousState,
       conversations: [
         conversation,
-        ...(previousState.accountId === accountId && previousState.initialConversations === initialConversations
-          ? previousState.conversations
-          : initialConversations
-        ).filter((previousConversation) => previousConversation.id !== conversation.id),
+        ...previousState.conversations.filter((previousConversation) => previousConversation.id !== conversation.id),
       ],
     }));
-  }, [accountId, initialConversations]);
+  }, []);
 
   const value = useMemo(() => ({ conversations, upsertConversation }), [conversations, upsertConversation]);
 

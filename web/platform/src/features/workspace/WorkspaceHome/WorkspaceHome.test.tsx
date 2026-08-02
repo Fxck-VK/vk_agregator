@@ -6,12 +6,17 @@ vi.mock("next/navigation", () => ({
 }));
 
 import { ru } from "@/i18n/ru";
+import { WorkspaceConversationListProvider } from "@/features/conversations/WorkspaceConversationList/WorkspaceConversationList";
 
 import { WorkspaceHome } from "./WorkspaceHome";
 
 describe("WorkspaceHome", () => {
   it("uses a normal chat start prompt and keeps image generation on its explicit route", () => {
-    const markup = renderToStaticMarkup(<WorkspaceHome />);
+    const markup = renderToStaticMarkup(
+      <WorkspaceConversationListProvider accountId="workspace-home-test-account" initialConversations={[]}>
+        <WorkspaceHome />
+      </WorkspaceConversationListProvider>,
+    );
 
     expect(markup).toContain(ru.workspace.startTitle);
     expect(markup).toContain(ru.workspace.promptSupport);
