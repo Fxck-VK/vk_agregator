@@ -4,8 +4,20 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("next/navigation", () => ({
+  usePathname: vi.fn(),
+  useRouter: vi.fn(),
+}));
+
+vi.mock("@/lib/web-api/browser", () => ({
+  webBrowserMutation: vi.fn(),
+}));
+
+import { usePathname, useRouter } from "next/navigation";
+
 import { ru } from "@/i18n/ru";
 import { SidebarConversations } from "@/features/conversations/SidebarConversations/SidebarConversations";
+import { webBrowserMutation } from "@/lib/web-api/browser";
 import type { ConversationItem } from "@/lib/web-api/contracts";
 
 import { Sidebar } from "./Sidebar";
@@ -69,6 +81,7 @@ function openNavigation(trigger: HTMLElement) {
 describe("Sidebar", () => {
   afterEach(() => {
     cleanup();
+    vi.clearAllMocks();
     vi.unstubAllGlobals();
   });
 
@@ -150,6 +163,47 @@ describe("Sidebar", () => {
     expect(panel).toHaveAttribute("aria-hidden", "true");
     expect(panel).toHaveAttribute("inert");
     expect(trigger).not.toHaveFocus();
+  });
+
+  it("closes the narrow drawer after creating a chat changes the pathname without restoring trigger focus", async () => {
+    mockNarrowViewport();
+    let pathname = "/app/chat/current";
+    vi.mocked(usePathname).mockImplementation(() => pathname);
+    vi.stubGlobal("crypto", {
+      randomUUID: vi.fn().mockReturnValue("test-request-1"),
+    });
+    vi.mocked(webBrowserMutation).mockResolvedValue(
+      Response.json(
+        {
+          id: "d7c979f5-24e5-4f88-924b-a592d6e5a906",
+          title: "",
+          created_at: "2026-07-31T09:00:00Z",
+          updated_at: "2026-07-31T09:05:00Z",
+        },
+        { status: 201 },
+      ),
+    );
+
+    let rerenderSidebar: (ui: ReactNode) => void = () => {};
+    const push = vi.fn((nextPath: string) => {
+      pathname = nextPath;
+      rerenderSidebar(<Sidebar conversations={<SidebarConversations conversations={recentConversations} />} />);
+    });
+    vi.mocked(useRouter).mockReturnValue({ push, refresh: vi.fn() } as never);
+
+    const rendered = render(<Sidebar conversations={<SidebarConversations conversations={recentConversations} />} />);
+    rerenderSidebar = rendered.rerender;
+    const trigger = screen.getByRole("button", { name: ru.navigation.openMenuLabel });
+    const panel = screen.getByTestId("sidebar-panel");
+    openNavigation(trigger);
+
+    fireEvent.click(screen.getByRole("button", { name: ru.conversations.createLabel }));
+
+    await vi.waitFor(() => expect(panel).toHaveAttribute("data-open", "false"));
+    expect(panel).toHaveAttribute("aria-hidden", "true");
+    expect(panel).toHaveAttribute("inert");
+    expect(trigger).not.toHaveFocus();
+    expect(push).toHaveBeenCalledWith("/app/chat/d7c979f5-24e5-4f88-924b-a592d6e5a906");
   });
 
   it("keeps twenty recent chat links reachable above a focusable account control", () => {

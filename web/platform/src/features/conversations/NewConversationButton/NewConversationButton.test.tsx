@@ -81,6 +81,7 @@ describe("NewConversationButton", () => {
     ["a rejected request", () => Promise.reject(new Error("untrusted backend detail"))],
     ["a non-success response", () => Promise.resolve(new Response(null, { status: 500 }))],
     ["invalid JSON", () => Promise.resolve(new Response("not JSON", { status: 201 }))],
+    ["a valid JSON response that violates the conversation DTO", () => Promise.resolve(Response.json({ id: "not-a-uuid" }, { status: 201 }))],
   ])("shows neutral feedback without routing after %s", async (_caseName, request) => {
     vi.mocked(webBrowserMutation).mockImplementationOnce(request);
     render(<NewConversationButton />);

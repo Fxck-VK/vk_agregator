@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { type MouseEvent as ReactMouseEvent, type ReactNode, useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/Button/Button";
@@ -26,15 +27,23 @@ type SidebarProps = {
 };
 
 export function Sidebar({ account, conversations, isDesktopCollapsed = false, onDesktopToggle }: SidebarProps) {
+  const pathname = usePathname();
   const [isNarrowViewport, setIsNarrowViewport] = useState<boolean | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const firstLinkRef = useRef<HTMLAnchorElement>(null);
+  const hasObservedPathnameRef = useRef(false);
   const panelRef = useRef<HTMLDivElement>(null);
+  const previousPathnameRef = useRef(pathname);
   const restoreFocusRef = useRef(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const navigationId = "workspace-navigation";
   const panelIsOpen = (isNarrowViewport === false && !isDesktopCollapsed) || isOpen;
   const panelIsInactive = isNarrowViewport === true ? !isOpen : isDesktopCollapsed;
+
+  const closeNavigation = (restoreFocus = false) => {
+    restoreFocusRef.current = restoreFocus;
+    setIsOpen(false);
+  };
 
   useEffect(() => {
     const mediaQuery = window.matchMedia(desktopViewportQuery);
@@ -50,6 +59,22 @@ export function Sidebar({ account, conversations, isDesktopCollapsed = false, on
 
     return () => mediaQuery.removeEventListener("change", updateViewport);
   }, []);
+
+  useEffect(() => {
+    if (!hasObservedPathnameRef.current) {
+      hasObservedPathnameRef.current = true;
+      previousPathnameRef.current = pathname;
+
+      return;
+    }
+
+    const pathnameChanged = previousPathnameRef.current !== pathname;
+    previousPathnameRef.current = pathname;
+
+    if (pathnameChanged && isNarrowViewport && isOpen) {
+      closeNavigation(false);
+    }
+  }, [isNarrowViewport, isOpen, pathname]);
 
   useEffect(() => {
     if (!isNarrowViewport) {
@@ -114,11 +139,6 @@ export function Sidebar({ account, conversations, isDesktopCollapsed = false, on
 
     return () => window.removeEventListener("keydown", keepFocusInDrawer);
   }, [isNarrowViewport, isOpen]);
-
-  const closeNavigation = (restoreFocus = false) => {
-    restoreFocusRef.current = restoreFocus;
-    setIsOpen(false);
-  };
 
   const toggleNavigation = () => {
     if (isOpen) {

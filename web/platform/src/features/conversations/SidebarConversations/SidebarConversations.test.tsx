@@ -45,6 +45,15 @@ describe("SidebarConversations", () => {
     expect(screen.getByRole("button", { name: ru.conversations.createLabel })).toBeEnabled();
   });
 
+  it("does not mark a nested conversation route as active", () => {
+    vi.mocked(usePathname).mockReturnValue("/app/chat/d7c979f5-24e5-4f88-924b-a592d6e5a906/child");
+    vi.mocked(useRouter).mockReturnValue({ push: vi.fn(), refresh: vi.fn() } as never);
+
+    render(<SidebarConversations conversations={conversations} />);
+
+    expect(screen.getByRole("link", { name: conversations[0].title })).not.toHaveAttribute("aria-current");
+  });
+
   it("renders safe conversation titles as local chat links and uses the unnamed fallback", () => {
     render(<SidebarConversations conversations={conversations} />);
 
