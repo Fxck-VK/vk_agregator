@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, type ReactNode, useCallback, useContext, useMemo, useState } from "react";
 
 import type { ConversationItem } from "@/lib/web-api/contracts";
 
@@ -18,18 +18,29 @@ type WorkspaceConversationListProviderProps = {
 const WorkspaceConversationListContext = createContext<WorkspaceConversationList | undefined>(undefined);
 
 export function WorkspaceConversationListProvider({ accountId, children, initialConversations }: WorkspaceConversationListProviderProps) {
-  const [conversations, setConversations] = useState(initialConversations);
+  const [conversationListState, setConversationListState] = useState({ accountId, initialConversations, conversations: initialConversations });
+  const hasChangedServerInput = conversationListState.accountId !== accountId
+    || conversationListState.initialConversations !== initialConversations;
 
-  useEffect(() => {
-    setConversations(initialConversations);
-  }, [accountId, initialConversations]);
+  if (hasChangedServerInput) {
+    setConversationListState({ accountId, initialConversations, conversations: initialConversations });
+  }
+
+  const conversations = hasChangedServerInput ? initialConversations : conversationListState.conversations;
 
   const upsertConversation = useCallback((conversation: ConversationItem) => {
-    setConversations((previousConversations) => [
-      conversation,
-      ...previousConversations.filter((previousConversation) => previousConversation.id !== conversation.id),
-    ]);
-  }, []);
+    setConversationListState((previousState) => ({
+      accountId,
+      initialConversations,
+      conversations: [
+        conversation,
+        ...(previousState.accountId === accountId && previousState.initialConversations === initialConversations
+          ? previousState.conversations
+          : initialConversations
+        ).filter((previousConversation) => previousConversation.id !== conversation.id),
+      ],
+    }));
+  }, [accountId, initialConversations]);
 
   const value = useMemo(() => ({ conversations, upsertConversation }), [conversations, upsertConversation]);
 

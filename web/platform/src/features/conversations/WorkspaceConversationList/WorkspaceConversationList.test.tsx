@@ -95,6 +95,33 @@ describe("WorkspaceConversationListProvider", () => {
     expect(screen.getByRole("status")).not.toHaveTextContent(accountAConversations[0].id);
   });
 
+  it("exposes the changed server list to children on their first rerender", () => {
+    const refreshedConversations = [{ ...createdConversation, title: "Server title" }];
+    const observedLists: string[][] = [];
+
+    function RenderProbe() {
+      const { conversations } = useWorkspaceConversationList();
+      observedLists.push(conversations.map((conversation) => conversation.id));
+
+      return null;
+    }
+
+    const rendered = render(
+      <WorkspaceConversationListProvider accountId="0ce06a6a-16d8-4b16-b9df-5e63175a4a0c" initialConversations={accountAConversations}>
+        <RenderProbe />
+      </WorkspaceConversationListProvider>,
+    );
+    observedLists.length = 0;
+
+    rendered.rerender(
+      <WorkspaceConversationListProvider accountId="0ce06a6a-16d8-4b16-b9df-5e63175a4a0c" initialConversations={refreshedConversations}>
+        <RenderProbe />
+      </WorkspaceConversationListProvider>,
+    );
+
+    expect(observedLists[0]).toEqual([createdConversation.id]);
+  });
+
   it("resets to the next account's initial list", () => {
     const accountBConversations: ConversationItem[] = [{ ...createdConversation, title: "Account B chat" }];
     const rendered = render(
