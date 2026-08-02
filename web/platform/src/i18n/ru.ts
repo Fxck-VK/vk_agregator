@@ -155,6 +155,7 @@ export const ru = {
   },
   workspace: {
     eyebrow: "NeiroHub",
+    navigationLoading: "Открываем раздел…",
     startTitle: "Что хотите сделать?",
     startDescription: "Опишите задачу — откроем обычный чат и сохраним контекст для продолжения работы.",
     promptLabel: "Ваш запрос",
