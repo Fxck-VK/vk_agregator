@@ -7,6 +7,7 @@ vi.mock("next/navigation", () => ({
   redirect: vi.fn(() => {
     throw redirectError;
   }),
+  usePathname: vi.fn(),
   useRouter: vi.fn(),
 }));
 
@@ -14,7 +15,7 @@ vi.mock("@/features/session/session-data", () => ({
   loadWorkspaceSession: vi.fn(),
 }));
 
-import { redirect, useRouter } from "next/navigation";
+import { redirect, usePathname, useRouter } from "next/navigation";
 
 import { ru } from "@/i18n/ru";
 import { loadWorkspaceSession } from "@/features/session/session-data";
@@ -49,6 +50,7 @@ const authenticatedSession = {
 
 describe("WorkspaceLayout", () => {
   beforeEach(() => {
+    vi.mocked(usePathname).mockReturnValue("/app");
     vi.mocked(useRouter).mockReturnValue({ push: vi.fn(), replace: vi.fn() } as never);
   });
 
