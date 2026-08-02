@@ -34,6 +34,7 @@ export function NewConversationButton() {
       }
 
       const conversation = parseConversationList({ items: [await response.json()] }).items[0];
+      router.refresh();
       router.push("/app/chat/" + conversation.id);
     } catch {
       setHasError(true);

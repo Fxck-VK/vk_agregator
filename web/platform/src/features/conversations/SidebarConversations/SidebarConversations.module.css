@@ -42,3 +42,14 @@
   background: var(--color-surface-raised);
   color: var(--color-text);
 }
+
+.list a[aria-current="page"] {
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.list a:focus-visible {
+  outline: 0.125rem solid var(--color-focus);
+  outline-offset: 0.125rem;
+}

@@ -17,6 +17,7 @@ import { webBrowserMutation } from "@/lib/web-api/browser";
 import { NewConversationButton } from "./NewConversationButton";
 
 const push = vi.fn();
+const refresh = vi.fn();
 const conversation = {
   id: "d7c979f5-24e5-4f88-924b-a592d6e5a906",
   title: "",
@@ -26,7 +27,7 @@ const conversation = {
 
 describe("NewConversationButton", () => {
   beforeEach(() => {
-    vi.mocked(useRouter).mockReturnValue({ push } as never);
+    vi.mocked(useRouter).mockReturnValue({ push, refresh } as never);
     vi.stubGlobal("crypto", {
       randomUUID: vi.fn().mockReturnValue("test-request-1"),
     });
@@ -38,7 +39,7 @@ describe("NewConversationButton", () => {
     vi.unstubAllGlobals();
   });
 
-  it.each([200, 201])("uses a fresh request identifier and navigates only after a parsed %i response", async (status) => {
+  it.each([200, 201])("refreshes and navigates only after a parsed %i response", async (status) => {
     vi.mocked(webBrowserMutation).mockResolvedValue(Response.json(conversation, { status }));
     render(<NewConversationButton />);
 
@@ -47,6 +48,8 @@ describe("NewConversationButton", () => {
     await vi.waitFor(() =>
       expect(push).toHaveBeenCalledWith("/app/chat/d7c979f5-24e5-4f88-924b-a592d6e5a906"),
     );
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(refresh.mock.invocationCallOrder[0]).toBeLessThan(push.mock.invocationCallOrder[0]);
     expect(webBrowserMutation).toHaveBeenCalledWith("/web/v1/conversations", {
       method: "POST",
       headers: { "X-Idempotency-Key": "test-request-1" },
@@ -86,6 +89,7 @@ describe("NewConversationButton", () => {
 
     expect(await screen.findByRole("alert")).toHaveTextContent(ru.conversations.createFailure);
     expect(push).not.toHaveBeenCalled();
+    expect(refresh).not.toHaveBeenCalled();
     expect(screen.queryByText("untrusted backend detail")).not.toBeInTheDocument();
   });
 
