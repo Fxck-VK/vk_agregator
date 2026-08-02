@@ -1,17 +1,40 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+
+	"vk-ai-aggregator/internal/adapter/provider/deepinfra"
+	"vk-ai-aggregator/internal/adapter/provider/mock"
 	"vk-ai-aggregator/internal/adapter/provider/runway"
 	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/platform/config"
 	"vk-ai-aggregator/internal/service/providermodels"
 )
+
+type nonDeepInfraTitleProvider struct{ domain.Provider }
+
+func (*nonDeepInfraTitleProvider) Name() domain.ProviderName { return domain.ProviderMock }
+
+func (*nonDeepInfraTitleProvider) GenerateConversationTitle(context.Context, uuid.UUID, string) (string, error) {
+	return "must not be selected", nil
+}
+
+func TestFindConversationTitleGeneratorUsesDeepInfraOnly(t *testing.T) {
+	deepInfra := deepinfra.New(deepinfra.Config{APIKey: "test-key"})
+	if got := findConversationTitleGenerator([]domain.Provider{&nonDeepInfraTitleProvider{}, mock.New(), deepInfra}); got != deepInfra {
+		t.Fatalf("title generator = %T, want DeepInfra", got)
+	}
+	if got := findConversationTitleGenerator([]domain.Provider{mock.New()}); got != nil {
+		t.Fatalf("title generator = %T, want nil without DeepInfra", got)
+	}
+}
 
 func TestOutboxRelayOwnerUsesStableSanitizedProcessIdentity(t *testing.T) {
 	if got := outboxRelayOwner(func() (string, error) { return "worker-01", nil }, 4321); got != "worker-01-4321" {

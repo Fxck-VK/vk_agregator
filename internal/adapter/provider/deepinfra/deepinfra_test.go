@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 
@@ -16,6 +17,63 @@ import (
 )
 
 const defaultImageModel = "ByteDance/Seedream-4.5"
+
+func TestGenerateConversationTitleUsesDedicatedPromptAndTokenCap(t *testing.T) {
+	var seen chatRequest
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Idempotency-Key"); got != "conversation-title:00000000-0000-0000-0000-000000000123" {
+			t.Fatalf("idempotency key = %q", got)
+		}
+		if err := json.NewDecoder(r.Body).Decode(&seen); err != nil {
+			t.Fatalf("decode title request: %v", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"  \"Photo launch plan\"  "}}]}`))
+	}))
+	defer srv.Close()
+
+	p := New(Config{APIKey: "test-key", BaseURL: srv.URL, HTTPClient: srv.Client()})
+	title, err := p.GenerateConversationTitle(context.Background(), uuid.MustParse("00000000-0000-0000-0000-000000000123"), "Make a photo app launch plan")
+	if err != nil {
+		t.Fatalf("GenerateConversationTitle: %v", err)
+	}
+	if title != "  \"Photo launch plan\"  " {
+		t.Fatalf("title = %q", title)
+	}
+	if seen.Model != defaultTextModel || seen.MaxTokens != 32 || seen.Stream {
+		t.Fatalf("unexpected title request config: %+v", seen)
+	}
+	if len(seen.Messages) != 2 || seen.Messages[0].Role != "system" || seen.Messages[1].Role != "user" {
+		t.Fatalf("title request roles = %+v", seen.Messages)
+	}
+	if strings.Contains(seen.Messages[0].Content, "3000") || !strings.Contains(seen.Messages[0].Content, "1-6") {
+		t.Fatalf("title request reused normal assistant prompt: %q", seen.Messages[0].Content)
+	}
+	if seen.Messages[1].Content != "Make a photo app launch plan" {
+		t.Fatalf("title request prompt = %q", seen.Messages[1].Content)
+	}
+}
+
+func TestGenerateConversationTitleBoundsUntrustedPrompt(t *testing.T) {
+	var seen chatRequest
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&seen); err != nil {
+			t.Fatalf("decode title request: %v", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"Bounded"}}]}`))
+	}))
+	defer srv.Close()
+
+	p := New(Config{APIKey: "test-key", BaseURL: srv.URL, HTTPClient: srv.Client()})
+	_, err := p.GenerateConversationTitle(context.Background(), uuid.New(), strings.Repeat("Ж", 1300))
+	if err != nil {
+		t.Fatalf("GenerateConversationTitle: %v", err)
+	}
+	if len(seen.Messages) != 2 || utf8.RuneCountInString(seen.Messages[1].Content) != 1200 {
+		t.Fatalf("bounded title prompt = %#v", seen.Messages)
+	}
+}
 
 func TestSubmitPollTextSuccess(t *testing.T) {
 	var seen chatRequest

@@ -228,6 +228,8 @@ func streamPhase(stream string) string {
 		return "provider_poll"
 	case redisqueue.StreamDelivery:
 		return "delivery"
+	case redisqueue.StreamConversationTitle:
+		return "conversation_title"
 	default:
 		return "unknown"
 	}

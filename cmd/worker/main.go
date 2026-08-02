@@ -39,6 +39,7 @@ import (
 	"vk-ai-aggregator/internal/service/artifactservice"
 	"vk-ai-aggregator/internal/service/assistantfacts"
 	"vk-ai-aggregator/internal/service/billingservice"
+	"vk-ai-aggregator/internal/service/conversationtitle"
 	"vk-ai-aggregator/internal/service/dialogcontext"
 	"vk-ai-aggregator/internal/service/maintenance"
 	"vk-ai-aggregator/internal/service/mediaprobe"
@@ -427,6 +428,11 @@ func main() {
 		Backoff:        worker.ExponentialBackoff(cfg.RetryBaseDelay, cfg.RetryMaxDelay),
 	}
 	gen := worker.NewGenerationWorker(deps)
+	title := conversationtitle.New(conversationtitle.Deps{
+		Jobs:          jobs,
+		Conversations: conversations,
+		Generator:     findConversationTitleGenerator(providerList),
+	})
 	poll := worker.NewPollWorker(deps)
 	vkResultPublisher := vkdelivery.NewPublisher(vkdelivery.PublisherDeps{
 		Deliveries:             deliveries,
@@ -478,6 +484,7 @@ func main() {
 		genStreams := []string{redisqueue.StreamText, redisqueue.StreamImage, redisqueue.StreamVideo}
 		engines := []*worker.Engine{
 			worker.NewEngine(consumer, genStreams, gen.Process, worker.WithLogger(logger)),
+			worker.NewConversationTitleEngine(consumer, title.Process, logger),
 			worker.NewEngine(consumer, []string{redisqueue.StreamProviderPoll}, poll.Process, worker.WithLogger(logger)),
 			worker.NewEngine(consumer, []string{redisqueue.StreamDelivery}, delivery.Process, worker.WithLogger(logger)),
 		}
@@ -693,6 +700,18 @@ func containsProvider(names []string, want string) bool {
 		}
 	}
 	return false
+}
+
+func findConversationTitleGenerator(providers []domain.Provider) conversationtitle.Generator {
+	for _, provider := range providers {
+		if provider == nil || provider.Name() != domain.ProviderDeepInfra {
+			continue
+		}
+		if generator, ok := provider.(conversationtitle.Generator); ok {
+			return generator
+		}
+	}
+	return nil
 }
 
 func runQueueMetrics(ctx context.Context, rdb redis.Cmdable, group string, interval time.Duration, logger *slog.Logger) {
