@@ -306,4 +306,3 @@ git commit -m "feat: manage chats from workspace sidebar"
 - [ ] Run typecheck, lint, production build, `test:packaging`, and `git diff --check` from the pre-task base through HEAD.
 - [ ] Run independent task and final review; resolve all Critical/Important findings.
 - [ ] Push `dev-deploy`, require green CI and signed images, manually dispatch existing DEV deployment if necessary, wait for DEV smoke, and confirm `https://dev-web.neiirohub.ru/` returns unauthenticated `401 Basic realm="NeiroHub development"`.
-
