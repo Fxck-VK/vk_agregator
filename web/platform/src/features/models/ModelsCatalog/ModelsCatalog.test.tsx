@@ -13,7 +13,7 @@ import { ModelsCatalog } from "./ModelsCatalog";
 const modelsResponse = {
   items: [
     {
-      id: "nano-banana-2",
+      id: "nano banana/2&preview",
       name: "Nano Banana",
       quality_options: ["1K", "2K"],
       default_quality: "1K",
@@ -52,7 +52,7 @@ describe("ModelsCatalog", () => {
     expect(webBrowserFetch).toHaveBeenCalledWith("/web/v1/image-models");
     expect(await screen.findByRole("link", { name: `${ru.modelsCatalog.openGeneratorLabel}: Nano Banana` })).toHaveAttribute(
       "href",
-      "/app/image?model=nano-banana-2",
+      "/app/image?model=nano%20banana%2F2%26preview",
     );
     const nanoCard = screen.getByText("Nano Banana").closest("article")!;
     const otherCard = screen.getByText("Other Model").closest("article")!;
@@ -79,11 +79,13 @@ describe("ModelsCatalog", () => {
   it.each([
     ["a failed response", () => Promise.resolve(new Response(null, { status: 500 }))],
     ["an invalid response", () => Promise.resolve(Response.json({ items: [{ id: "missing required fields" }] }))],
+    ["a rejected request", () => Promise.reject(new Error("untrusted backend detail"))],
   ])("shows a neutral alert after %s", async (_caseName, request) => {
     vi.mocked(webBrowserFetch).mockImplementationOnce(request);
     render(<ModelsCatalog />);
 
     expect(await screen.findByRole("alert")).toHaveTextContent(ru.modelsCatalog.loadFailure);
+    expect(screen.queryByText("untrusted backend detail")).not.toBeInTheDocument();
   });
 
   it("distinguishes a valid empty catalog from a load failure", async () => {
