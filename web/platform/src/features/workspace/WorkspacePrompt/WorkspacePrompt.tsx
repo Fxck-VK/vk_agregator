@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { ChatTextInput } from "@/components/chat/ChatTextInput/ChatTextInput";
 import { Button } from "@/components/ui/Button/Button";
 import { savePendingConversationPrompt } from "@/features/conversations/pending-conversation-prompt";
+import { useWorkspaceConversationList } from "@/features/conversations/WorkspaceConversationList/WorkspaceConversationList";
 import { ru } from "@/i18n/ru";
 import { webBrowserMutation } from "@/lib/web-api/browser";
 import { isSafeWebChatAcceptedResponse, parseConversationList, parseWebChatJob } from "@/lib/web-api/contracts";
@@ -21,6 +22,7 @@ type RetryIntent = {
 
 export function WorkspacePrompt() {
   const router = useRouter();
+  const { upsertConversation } = useWorkspaceConversationList();
   const [prompt, setPrompt] = useState("");
   const [isPending, setIsPending] = useState(false);
   const [hasError, setHasError] = useState(false);
@@ -69,6 +71,7 @@ export function WorkspacePrompt() {
           throw new Error("Unable to complete the request.");
         }
         intent.conversationId = conversation.id;
+        upsertConversation(conversation);
       }
 
       const conversationID = intent.conversationId;

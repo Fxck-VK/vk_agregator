@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({
+  usePathname: vi.fn(),
   useRouter: vi.fn(),
 }));
 
@@ -9,10 +10,12 @@ vi.mock("@/lib/web-api/browser", () => ({
   webBrowserMutation: vi.fn(),
 }));
 
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
-import { ru } from "@/i18n/ru";
+import { SidebarConversations } from "@/features/conversations/SidebarConversations/SidebarConversations";
 import { readPendingConversationPrompt } from "@/features/conversations/pending-conversation-prompt";
+import { WorkspaceConversationListProvider } from "@/features/conversations/WorkspaceConversationList/WorkspaceConversationList";
+import { ru } from "@/i18n/ru";
 import { webBrowserMutation } from "@/lib/web-api/browser";
 
 import { WorkspacePrompt } from "./WorkspacePrompt";
@@ -28,9 +31,28 @@ const queuedChatJob = {
   job_id: "a2a006fc-4457-4bb5-bc4d-4f553d51766b",
   status: "queued",
 };
+const workspaceAccountId = "0ce06a6a-16d8-4b16-b9df-5e63175a4a0c";
+
+function renderWorkspacePrompt() {
+  return render(
+    <WorkspaceConversationListProvider accountId={workspaceAccountId} initialConversations={[]}>
+      <WorkspacePrompt />
+    </WorkspaceConversationListProvider>,
+  );
+}
+
+function renderWorkspacePromptWithSidebar() {
+  return render(
+    <WorkspaceConversationListProvider accountId={workspaceAccountId} initialConversations={[]}>
+      <WorkspacePrompt />
+      <SidebarConversations />
+    </WorkspaceConversationListProvider>,
+  );
+}
 
 describe("WorkspacePrompt", () => {
   beforeEach(() => {
+    vi.mocked(usePathname).mockReturnValue("/app");
     vi.mocked(useRouter).mockReturnValue({ push } as never);
     vi.stubGlobal("crypto", {
       randomUUID: vi.fn()
@@ -46,6 +68,38 @@ describe("WorkspacePrompt", () => {
     window.sessionStorage.clear();
   });
 
+  it("adds a validated new conversation to the sidebar before its first message resolves", async () => {
+    const visibleConversation = { ...conversation, title: "Visible new chat" };
+    let settleMessage: (response: Response) => void = () => {};
+    vi.mocked(webBrowserMutation)
+      .mockResolvedValueOnce(Response.json(visibleConversation, { status: 201 }))
+      .mockReturnValueOnce(new Promise<Response>((resolve) => { settleMessage = resolve; }));
+    renderWorkspacePromptWithSidebar();
+
+    fireEvent.change(screen.getByLabelText(ru.workspace.promptLabel), { target: { value: "Add sidebar chat" } });
+    fireEvent.click(screen.getByRole("button", { name: ru.workspace.promptSubmit }));
+
+    await vi.waitFor(() => expect(webBrowserMutation).toHaveBeenCalledTimes(2));
+    expect(screen.getByRole("link", { name: visibleConversation.title })).toHaveAttribute("href", `/app/chat/${visibleConversation.id}`);
+    expect(push).not.toHaveBeenCalled();
+
+    settleMessage(Response.json(queuedChatJob, { status: 201 }));
+    await vi.waitFor(() => expect(push).toHaveBeenCalledWith(`/app/chat/${visibleConversation.id}?refresh=1`));
+  });
+
+  it("does not add malformed create data to the sidebar", async () => {
+    vi.mocked(webBrowserMutation).mockResolvedValueOnce(Response.json({ id: "not-a-uuid" }, { status: 201 }));
+    renderWorkspacePromptWithSidebar();
+
+    fireEvent.change(screen.getByLabelText(ru.workspace.promptLabel), { target: { value: "Reject malformed create data" } });
+    fireEvent.click(screen.getByRole("button", { name: ru.workspace.promptSubmit }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(ru.workspace.promptFailure);
+    expect(screen.queryByRole("link", { name: /.+/ })).not.toBeInTheDocument();
+    expect(webBrowserMutation).toHaveBeenCalledTimes(1);
+    expect(push).not.toHaveBeenCalled();
+  });
+
   it.each([
     { messageStatus: 201, jobStatus: "queued" },
     { messageStatus: 200, jobStatus: "provider_processing" },
@@ -54,7 +108,7 @@ describe("WorkspacePrompt", () => {
     vi.mocked(webBrowserMutation)
       .mockResolvedValueOnce(Response.json(conversation, { status: 201 }))
       .mockResolvedValueOnce(Response.json({ ...queuedChatJob, status: jobStatus }, { status: messageStatus }));
-    render(<WorkspacePrompt />);
+    renderWorkspacePrompt();
 
     fireEvent.change(screen.getByLabelText(ru.workspace.promptLabel), {
       target: { value: "Помогите подготовить план" },
@@ -86,7 +140,7 @@ describe("WorkspacePrompt", () => {
     vi.mocked(webBrowserMutation)
       .mockResolvedValueOnce(Response.json(conversation, { status: 201 }))
       .mockResolvedValueOnce(Response.json(queuedChatJob, { status: 201 }));
-    render(<WorkspacePrompt />);
+    renderWorkspacePrompt();
 
     const textarea = screen.getByLabelText(ru.workspace.promptLabel);
     fireEvent.change(textarea, { target: { value: "Enter submission" } });
@@ -121,7 +175,7 @@ describe("WorkspacePrompt", () => {
     vi.mocked(webBrowserMutation)
       .mockResolvedValueOnce(Response.json(conversation, { status: 201 }))
       .mockResolvedValueOnce(Response.json({ ...queuedChatJob, status: jobStatus }, { status: messageStatus }));
-    render(<WorkspacePrompt />);
+    renderWorkspacePrompt();
 
     const textarea = screen.getByLabelText(ru.workspace.promptLabel);
     fireEvent.change(textarea, { target: { value: "important draft" } });
@@ -137,7 +191,7 @@ describe("WorkspacePrompt", () => {
       .mockRejectedValueOnce(new Error("lost create response"))
       .mockResolvedValueOnce(Response.json(conversation, { status: 200 }))
       .mockResolvedValueOnce(Response.json(queuedChatJob, { status: 201 }));
-    render(<WorkspacePrompt />);
+    renderWorkspacePrompt();
 
     const textarea = screen.getByLabelText(ru.workspace.promptLabel);
     fireEvent.change(textarea, { target: { value: "same draft" } });
@@ -160,7 +214,7 @@ describe("WorkspacePrompt", () => {
       .mockResolvedValueOnce(Response.json(conversation, { status: 201 }))
       .mockResolvedValueOnce(new Response(null, { status }))
       .mockResolvedValueOnce(Response.json(queuedChatJob, { status: 201 }));
-    render(<WorkspacePrompt />);
+    renderWorkspacePrompt();
 
     const textarea = screen.getByLabelText(ru.workspace.promptLabel);
     fireEvent.change(textarea, { target: { value: "same draft" } });
@@ -184,7 +238,7 @@ describe("WorkspacePrompt", () => {
       .mockResolvedValueOnce(Response.json(conversation, { status: 201 }))
       .mockRejectedValueOnce(new Error("lost message response"))
       .mockResolvedValueOnce(Response.json({ ...queuedChatJob, status: "provider_processing" }, { status: 200 }));
-    render(<WorkspacePrompt />);
+    renderWorkspacePrompt();
 
     const textarea = screen.getByLabelText(ru.workspace.promptLabel);
     fireEvent.change(textarea, { target: { value: "same draft" } });
@@ -202,7 +256,7 @@ describe("WorkspacePrompt", () => {
   });
 
   it("does not submit an empty prompt and keeps text after a recoverable failure", async () => {
-    render(<WorkspacePrompt />);
+    renderWorkspacePrompt();
 
     fireEvent.change(screen.getByLabelText(ru.workspace.promptLabel), { target: { value: "   " } });
     fireEvent.click(screen.getByRole("button", { name: ru.workspace.promptSubmit }));
@@ -224,7 +278,7 @@ describe("WorkspacePrompt", () => {
         settleRequest = resolve;
       }),
     );
-    render(<WorkspacePrompt />);
+    renderWorkspacePrompt();
 
     fireEvent.change(screen.getByLabelText(ru.workspace.promptLabel), { target: { value: "Один запрос" } });
     const button = screen.getByRole("button", { name: ru.workspace.promptSubmit });
@@ -240,7 +294,7 @@ describe("WorkspacePrompt", () => {
 
   it("does not route when the conversation payload is malformed", async () => {
     vi.mocked(webBrowserMutation).mockResolvedValueOnce(Response.json({ id: "not-a-uuid" }, { status: 201 }));
-    render(<WorkspacePrompt />);
+    renderWorkspacePrompt();
 
     fireEvent.change(screen.getByLabelText(ru.workspace.promptLabel), { target: { value: "Проверочный запрос" } });
     fireEvent.click(screen.getByRole("button", { name: ru.workspace.promptSubmit }));
@@ -254,7 +308,7 @@ describe("WorkspacePrompt", () => {
     vi.mocked(webBrowserMutation)
       .mockResolvedValueOnce(Response.json(conversation, { status: 201 }))
       .mockResolvedValueOnce(Response.json({ job_id: "not-a-uuid", status: "queued" }, { status: 201 }));
-    render(<WorkspacePrompt />);
+    renderWorkspacePrompt();
 
     fireEvent.change(screen.getByLabelText(ru.workspace.promptLabel), { target: { value: "Проверочный запрос" } });
     fireEvent.click(screen.getByRole("button", { name: ru.workspace.promptSubmit }));
@@ -268,7 +322,7 @@ describe("WorkspacePrompt", () => {
     vi.mocked(webBrowserMutation)
       .mockResolvedValueOnce(Response.json(conversation, { status: 201 }))
       .mockRejectedValueOnce(new Error("Unable to complete the request."));
-    render(<WorkspacePrompt />);
+    renderWorkspacePrompt();
 
     fireEvent.change(screen.getByLabelText(ru.workspace.promptLabel), { target: { value: draft } });
     fireEvent.click(screen.getByRole("button", { name: ru.workspace.promptSubmit }));
@@ -282,7 +336,7 @@ describe("WorkspacePrompt", () => {
     vi.mocked(webBrowserMutation)
       .mockResolvedValueOnce(Response.json(conversation, { status: 201 }))
       .mockResolvedValueOnce(Response.json(queuedChatJob, { status: 201 }));
-    render(<WorkspacePrompt />);
+    renderWorkspacePrompt();
 
     fireEvent.change(screen.getByLabelText(ru.workspace.promptLabel), { target: { value: "  Проверочный запрос  " } });
     fireEvent.click(screen.getByRole("button", { name: ru.workspace.promptSubmit }));
