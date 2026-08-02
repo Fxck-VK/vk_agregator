@@ -259,7 +259,9 @@ func (r *ConversationRepo) ArchiveConversationForAccount(_ context.Context, acco
 			ref.AccountID = uuid.Nil
 			legacyKey := activeConversationRefKey(ref)
 			if legacyKey != key {
-				delete(r.activeByRef, legacyKey)
+				if activeID, ok := r.activeByRef[legacyKey]; ok && activeID == c.ID {
+					delete(r.activeByRef, legacyKey)
+				}
 			}
 		}
 	}

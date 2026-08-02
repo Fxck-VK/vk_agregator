@@ -225,3 +225,58 @@ func TestConversationRepoArchiveDualOwnerRemovesAccountAndLegacyActiveReferences
 		t.Fatalf("foreign account history lookup = %v, want %v", err, domain.ErrNotFound)
 	}
 }
+
+func TestConversationRepoArchiveKeepsLegacyReferenceReownedByAnotherAccount(t *testing.T) {
+	ctx := context.Background()
+	repo := NewConversationRepo()
+	userID := uuid.New()
+	accountA := uuid.New()
+	accountB := uuid.New()
+	const threadID = "shared-legacy-thread"
+	conversationA := &domain.Conversation{
+		UserID:           userID,
+		AccountID:        accountA,
+		Source:           domain.ConversationSourceWeb,
+		ExternalThreadID: threadID,
+	}
+	conversationB := &domain.Conversation{
+		UserID:           userID,
+		AccountID:        accountB,
+		Source:           domain.ConversationSourceWeb,
+		ExternalThreadID: threadID,
+	}
+	for _, conversation := range []*domain.Conversation{conversationA, conversationB} {
+		if err := repo.CreateConversation(ctx, conversation); err != nil {
+			t.Fatalf("create conversation: %v", err)
+		}
+	}
+
+	legacyRef := domain.ConversationRef{
+		UserID:           userID,
+		Source:           domain.ConversationSourceWeb,
+		ExternalThreadID: threadID,
+	}
+	if got, err := repo.GetActiveByReference(ctx, legacyRef); err != nil || got.ID != conversationB.ID {
+		t.Fatalf("legacy active lookup after B creation = %#v, %v; want %s, nil", got, err, conversationB.ID)
+	}
+
+	if err := repo.ArchiveConversationForAccount(ctx, accountA, conversationA.ID, domain.ConversationSourceWeb); err != nil {
+		t.Fatalf("archive A: %v", err)
+	}
+	if got, err := repo.GetActiveByReference(ctx, domain.ConversationRef{
+		AccountID:        accountA,
+		Source:           domain.ConversationSourceWeb,
+		ExternalThreadID: threadID,
+	}); !errors.Is(err, domain.ErrNotFound) || got != nil {
+		t.Fatalf("A account active lookup after archive = %#v, %v; want nil, %v", got, err, domain.ErrNotFound)
+	}
+	if got, err := repo.GetActiveByReference(ctx, legacyRef); err != nil || got.ID != conversationB.ID || got.Status != domain.ConversationActive {
+		t.Fatalf("legacy active lookup after A archive = %#v, %v; want active B %s", got, err, conversationB.ID)
+	}
+	if err := repo.ArchiveConversationForAccount(ctx, accountB, conversationB.ID, domain.ConversationSourceWeb); err != nil {
+		t.Fatalf("archive B: %v", err)
+	}
+	if got, err := repo.GetActiveByReference(ctx, legacyRef); !errors.Is(err, domain.ErrNotFound) || got != nil {
+		t.Fatalf("legacy active lookup after B archive = %#v, %v; want nil, %v", got, err, domain.ErrNotFound)
+	}
+}
