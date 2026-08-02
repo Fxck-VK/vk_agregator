@@ -14,10 +14,11 @@ type ConversationRowProps = {
   activeConversationId?: string | null;
   conversation: ConversationItem;
   isActive: boolean;
-  onArchived?: (conversationId: string) => void;
+  onArchived?: (archive: { conversationId: string; isActive: boolean; sidebarIsActive: boolean; sidebarSession?: number }) => void;
   onPanelClosed?: (conversationId: string) => void;
   onPanelOpened?: (conversationId: string) => void;
   sidebarIsActive?: boolean;
+  sidebarSession?: number;
 };
 
 type RowPanel = "actions" | "rename" | "archive" | null;
@@ -30,6 +31,7 @@ export function ConversationRow({
   onPanelClosed,
   onPanelOpened,
   sidebarIsActive = true,
+  sidebarSession,
 }: ConversationRowProps): JSX.Element {
   const router = useRouter();
   const pathname = usePathname();
@@ -39,10 +41,11 @@ export function ConversationRow({
   const [nextTitle, setNextTitle] = useState(title);
   const [isPending, setIsPending] = useState(false);
   const [hasError, setHasError] = useState(false);
+  const [panelSession, setPanelSession] = useState(sidebarSession);
   const actionToggleRef = useRef<HTMLButtonElement>(null);
   const archiveConfirmRef = useRef<HTMLButtonElement>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
-  const focusAfterPendingRef = useRef<"rename" | "archive" | "success" | null>(null);
+  const focusAfterPendingRef = useRef<{ kind: "rename" | "archive" | "success"; requestGeneration: number; sidebarSession?: number } | null>(null);
   const restoreActionFocusRef = useRef(false);
   const rowRef = useRef<HTMLElement>(null);
   const mountedRef = useRef(true);
@@ -50,7 +53,13 @@ export function ConversationRow({
   const requestGenerationRef = useRef(0);
   const refreshAfterFocusRef = useRef<number | null>(null);
   const sidebarIsActiveRef = useRef(sidebarIsActive);
-  const panelIsVisible = sidebarIsActive && panel !== null && (isPending || activeConversationId === undefined || activeConversationId === conversation.id);
+  const sidebarSessionRef = useRef(sidebarSession);
+  const panelIsVisible = sidebarIsActive
+    && panel !== null
+    && panelSession === sidebarSession
+    && (isPending || activeConversationId === undefined || activeConversationId === conversation.id);
+
+  const isCurrentSidebarSession = (session: number | undefined) => sidebarIsActiveRef.current && sidebarSessionRef.current === session;
 
   const closePanel = (restoreActionFocus = false) => {
     if (isPending) return;
@@ -63,6 +72,7 @@ export function ConversationRow({
   const openPanel = (nextPanel: Exclude<RowPanel, null>) => {
     if (isPending) return;
     if (nextPanel === "actions") {
+      setPanelSession(sidebarSession);
       onPanelOpened?.(conversation.id);
     }
     setHasError(false);
@@ -89,7 +99,8 @@ export function ConversationRow({
 
   useLayoutEffect(() => {
     sidebarIsActiveRef.current = sidebarIsActive;
-  }, [sidebarIsActive]);
+    sidebarSessionRef.current = sidebarSession;
+  }, [sidebarIsActive, sidebarSession]);
 
   useLayoutEffect(() => {
     if (pathnameRef.current === pathname) {
@@ -109,10 +120,13 @@ export function ConversationRow({
 
     const focusTarget = focusAfterPendingRef.current;
     focusAfterPendingRef.current = null;
-    if (focusTarget === "rename") renameInputRef.current?.focus();
-    else if (focusTarget === "archive") archiveConfirmRef.current?.focus();
-    else {
-      actionToggleRef.current?.focus();
+    if (!mountedRef.current || focusTarget.requestGeneration !== requestGenerationRef.current) return;
+    if (isCurrentSidebarSession(focusTarget.sidebarSession)) {
+      if (focusTarget.kind === "rename") renameInputRef.current?.focus();
+      else if (focusTarget.kind === "archive") archiveConfirmRef.current?.focus();
+      else actionToggleRef.current?.focus();
+    }
+    if (focusTarget.kind === "success") {
       const refreshGeneration = refreshAfterFocusRef.current;
       refreshAfterFocusRef.current = null;
       if (mountedRef.current && refreshGeneration === requestGenerationRef.current) router.refresh();
@@ -122,6 +136,7 @@ export function ConversationRow({
   const renameConversation = async () => {
     if (isPending) return;
     const requestGeneration = requestGenerationRef.current + 1;
+    const mutationSidebarSession = panelSession;
     requestGenerationRef.current = requestGeneration;
     setHasError(false);
     setIsPending(true);
@@ -138,13 +153,13 @@ export function ConversationRow({
       if (!mountedRef.current || requestGeneration !== requestGenerationRef.current) return;
       parseConversationList({ items: [payload] });
       refreshAfterFocusRef.current = requestGeneration;
-      focusAfterPendingRef.current = "success";
+      focusAfterPendingRef.current = { kind: "success", requestGeneration, sidebarSession: mutationSidebarSession };
       setPanel(null);
     } catch {
       if (!mountedRef.current || requestGeneration !== requestGenerationRef.current) return;
-      if (sidebarIsActiveRef.current) {
+      if (isCurrentSidebarSession(mutationSidebarSession)) {
         onPanelOpened?.(conversation.id);
-        focusAfterPendingRef.current = "rename";
+        focusAfterPendingRef.current = { kind: "rename", requestGeneration, sidebarSession: mutationSidebarSession };
       }
       setHasError(true);
     } finally {
@@ -155,6 +170,7 @@ export function ConversationRow({
   const archiveConversation = async () => {
     if (isPending) return;
     const requestGeneration = requestGenerationRef.current + 1;
+    const mutationSidebarSession = panelSession;
     requestGenerationRef.current = requestGeneration;
     setHasError(false);
     setIsPending(true);
@@ -165,16 +181,21 @@ export function ConversationRow({
 
       setPanel(null);
       onPanelClosed?.(conversation.id);
-      onArchived?.(conversation.id);
+      onArchived?.({
+        conversationId: conversation.id,
+        isActive,
+        sidebarIsActive: isCurrentSidebarSession(mutationSidebarSession),
+        sidebarSession: mutationSidebarSession,
+      });
 
       if (isActive) {
         router.replace("/app");
       } else router.refresh();
     } catch {
       if (!mountedRef.current || requestGeneration !== requestGenerationRef.current) return;
-      if (sidebarIsActiveRef.current) {
+      if (isCurrentSidebarSession(mutationSidebarSession)) {
         onPanelOpened?.(conversation.id);
-        focusAfterPendingRef.current = "archive";
+        focusAfterPendingRef.current = { kind: "archive", requestGeneration, sidebarSession: mutationSidebarSession };
       }
       setHasError(true);
     } finally {
@@ -191,9 +212,9 @@ export function ConversationRow({
         className={styles.actions}
         onClick={(event) => event.stopPropagation()}
         onKeyDown={(event) => {
-          if (event.key === "Escape" && panelIsVisible && !isPending) {
+          if (event.key === "Escape" && panelIsVisible) {
             event.stopPropagation();
-            closePanel(true);
+            if (!isPending) closePanel(true);
           }
         }}
       >

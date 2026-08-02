@@ -255,6 +255,7 @@ describe("Sidebar", () => {
     expect(replace).toHaveBeenCalledWith("/app");
     expect(refresh).not.toHaveBeenCalled();
     expect(screen.queryByRole("link", { name: "Recent chat 1" })).not.toBeInTheDocument();
+    expect(panel.contains(document.activeElement)).toBe(false);
 
     fireEvent.click(trigger);
     expect(screen.queryByRole("link", { name: "Recent chat 1" })).not.toBeInTheDocument();
@@ -293,6 +294,111 @@ describe("Sidebar", () => {
     fireEvent.click(trigger);
 
     expect(screen.queryByRole("textbox", { name: ru.conversations.renameInputLabel })).not.toBeInTheDocument();
+  });
+
+  it("does not revive or refocus a pending mutation from a closed drawer session", async () => {
+    mockNarrowViewport();
+    let settleRequest: (response: Response) => void = () => {};
+    vi.mocked(usePathname).mockReturnValue("/app");
+    vi.mocked(useRouter).mockReturnValue({ refresh: vi.fn(), replace: vi.fn() } as never);
+    vi.mocked(webBrowserMutation).mockReturnValue(new Promise<Response>((resolve) => { settleRequest = resolve; }));
+
+    render(<Sidebar conversations={<SidebarConversations conversations={recentConversations} />} />);
+    const trigger = screen.getByRole("button", { name: ru.navigation.openMenuLabel });
+    const panel = screen.getByTestId("sidebar-panel");
+    openNavigation(trigger);
+
+    fireEvent.click(screen.getByRole("button", { name: `${ru.conversations.actionsLabel}: Recent chat 1` }));
+    fireEvent.click(screen.getByRole("button", { name: ru.conversations.renameLabel }));
+    fireEvent.click(screen.getByRole("button", { name: ru.conversations.renameSubmitLabel }));
+    await vi.waitFor(() => expect(screen.getByRole("button", { name: ru.conversations.renamePending })).toBeDisabled());
+
+    fireEvent.click(trigger);
+    fireEvent.click(trigger);
+    const focusBeforeSettlement = document.activeElement;
+    expect(screen.queryByRole("textbox", { name: ru.conversations.renameInputLabel })).not.toBeInTheDocument();
+
+    settleRequest(new Response(null, { status: 500 }));
+
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(screen.queryByRole("textbox", { name: ru.conversations.renameInputLabel })).not.toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(document.activeElement).toBe(focusBeforeSettlement);
+
+    fireEvent.keyDown(focusBeforeSettlement as HTMLElement, { key: "Escape" });
+    expect(panel).toHaveAttribute("data-open", "false");
+  });
+
+  it("keeps the drawer open when Escape is pressed in a visible pending row", async () => {
+    mockNarrowViewport();
+    vi.mocked(usePathname).mockReturnValue("/app");
+    vi.mocked(useRouter).mockReturnValue({ refresh: vi.fn(), replace: vi.fn() } as never);
+    vi.mocked(webBrowserMutation).mockReturnValue(new Promise<Response>(() => {}));
+
+    render(<Sidebar conversations={<SidebarConversations conversations={recentConversations} />} />);
+    const trigger = screen.getByRole("button", { name: ru.navigation.openMenuLabel });
+    const panel = screen.getByTestId("sidebar-panel");
+    openNavigation(trigger);
+    fireEvent.click(screen.getByRole("button", { name: `${ru.conversations.actionsLabel}: Recent chat 1` }));
+    fireEvent.click(screen.getByRole("button", { name: ru.conversations.renameLabel }));
+    const titleInput = screen.getByRole("textbox", { name: ru.conversations.renameInputLabel });
+    fireEvent.click(screen.getByRole("button", { name: ru.conversations.renameSubmitLabel }));
+    await vi.waitFor(() => expect(screen.getByRole("button", { name: ru.conversations.renamePending })).toBeDisabled());
+
+    fireEvent.keyDown(titleInput, { key: "Escape" });
+    expect(panel).toHaveAttribute("data-open", "true");
+  });
+
+  it("does not refocus an old drawer session after a successful pending rename", async () => {
+    mockNarrowViewport();
+    let settleRequest: (response: Response) => void = () => {};
+    const refresh = vi.fn();
+    vi.mocked(usePathname).mockReturnValue("/app");
+    vi.mocked(useRouter).mockReturnValue({ refresh, replace: vi.fn() } as never);
+    vi.mocked(webBrowserMutation).mockReturnValue(new Promise<Response>((resolve) => { settleRequest = resolve; }));
+
+    render(<Sidebar conversations={<SidebarConversations conversations={recentConversations} />} />);
+    const trigger = screen.getByRole("button", { name: ru.navigation.openMenuLabel });
+    openNavigation(trigger);
+    fireEvent.click(screen.getByRole("button", { name: `${ru.conversations.actionsLabel}: Recent chat 1` }));
+    fireEvent.click(screen.getByRole("button", { name: ru.conversations.renameLabel }));
+    fireEvent.click(screen.getByRole("button", { name: ru.conversations.renameSubmitLabel }));
+    await vi.waitFor(() => expect(screen.getByRole("button", { name: ru.conversations.renamePending })).toBeDisabled());
+
+    fireEvent.click(trigger);
+    fireEvent.click(trigger);
+    const focusBeforeSettlement = document.activeElement;
+    settleRequest(Response.json(recentConversations[0], { status: 200 }));
+
+    await vi.waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
+    expect(document.activeElement).toBe(focusBeforeSettlement);
+  });
+
+  it("does not focus a successor when a pending archive settles after the drawer closes", async () => {
+    mockNarrowViewport();
+    let settleRequest: (response: Response) => void = () => {};
+    vi.mocked(usePathname).mockReturnValue("/app");
+    vi.mocked(useRouter).mockReturnValue({ refresh: vi.fn(), replace: vi.fn() } as never);
+    vi.mocked(webBrowserMutation).mockReturnValue(new Promise<Response>((resolve) => { settleRequest = resolve; }));
+
+    render(<Sidebar conversations={<SidebarConversations conversations={recentConversations} />} />);
+    const trigger = screen.getByRole("button", { name: ru.navigation.openMenuLabel });
+    const panel = screen.getByTestId("sidebar-panel");
+    openNavigation(trigger);
+
+    fireEvent.click(screen.getByRole("button", { name: `${ru.conversations.actionsLabel}: Recent chat 1` }));
+    fireEvent.click(screen.getByRole("button", { name: ru.conversations.archiveLabel }));
+    fireEvent.click(screen.getByRole("button", { name: ru.conversations.archiveConfirmLabel }));
+    await vi.waitFor(() => expect(screen.getByRole("button", { name: ru.conversations.archivePending })).toBeDisabled());
+
+    fireEvent.click(trigger);
+    const focusBeforeSettlement = document.activeElement;
+    settleRequest(new Response(null, { status: 204 }));
+
+    await vi.waitFor(() => expect(document.getElementById("sidebar-conversation-d7c979f5-24e5-4f88-924b-a592d6e5a000")).not.toBeInTheDocument());
+    expect(document.activeElement).toBe(focusBeforeSettlement);
+    expect(panel.contains(document.activeElement)).toBe(false);
   });
 
   it("clears an unmounted conversation panel before the next Escape", () => {

@@ -23,9 +23,14 @@ export function SidebarConversations({ conversations }: SidebarConversationsProp
   const [openConversationSession, setOpenConversationSession] = useState(0);
   const createConversationRef = useRef<HTMLDivElement>(null);
   const focusAfterArchiveRef = useRef<string | "create" | null>(null);
+  const sidebarActivityRef = useRef({ isActive: sidebarIsActive, session: sidebarSession });
 
   const visibleConversations = conversations.filter((conversation) => !archivedConversationIds.has(conversation.id));
   const activeConversationId = sidebarIsActive && openConversationSession === sidebarSession ? openConversationId : null;
+
+  useLayoutEffect(() => {
+    sidebarActivityRef.current = { isActive: sidebarIsActive, session: sidebarSession };
+  }, [sidebarIsActive, sidebarSession]);
 
   useLayoutEffect(() => {
     const focusTarget = focusAfterArchiveRef.current;
@@ -38,10 +43,15 @@ export function SidebarConversations({ conversations }: SidebarConversationsProp
     focusAfterArchiveRef.current = null;
   }, [visibleConversations]);
 
-  const archiveConversation = (conversationId: string) => {
+  const archiveConversation = ({ conversationId, isActive, sidebarIsActive: archiveSidebarIsActive, sidebarSession: archiveSession }: { conversationId: string; isActive: boolean; sidebarIsActive: boolean; sidebarSession?: number }) => {
     const archiveIndex = visibleConversations.findIndex((conversation) => conversation.id === conversationId);
     const remainingConversations = visibleConversations.filter((conversation) => conversation.id !== conversationId);
-    focusAfterArchiveRef.current = remainingConversations[archiveIndex]?.id ?? remainingConversations.at(-1)?.id ?? "create";
+    const isCurrentActiveSession = archiveSidebarIsActive
+      && sidebarActivityRef.current.isActive
+      && archiveSession === sidebarActivityRef.current.session;
+    if (!isActive && isCurrentActiveSession) {
+      focusAfterArchiveRef.current = remainingConversations[archiveIndex]?.id ?? remainingConversations.at(-1)?.id ?? "create";
+    }
     setArchivedConversationIds((ids) => new Set(ids).add(conversationId));
     setOpenConversationId(null);
   };
@@ -72,6 +82,7 @@ export function SidebarConversations({ conversations }: SidebarConversationsProp
                     setOpenConversationSession(sidebarSession);
                   }}
                   sidebarIsActive={sidebarIsActive}
+                  sidebarSession={sidebarSession}
                 />
               </li>
             );
