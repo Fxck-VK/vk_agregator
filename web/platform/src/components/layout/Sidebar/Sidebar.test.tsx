@@ -239,7 +239,7 @@ describe("Sidebar", () => {
     const panel = screen.getByTestId("sidebar-panel");
     openNavigation(trigger);
 
-    fireEvent.click(screen.getAllByRole("button", { name: ru.conversations.actionsLabel })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: new RegExp(ru.conversations.actionsLabel) })[0]);
     fireEvent.click(screen.getByRole("button", { name: ru.conversations.archiveLabel }));
     fireEvent.click(screen.getByRole("button", { name: ru.conversations.archiveConfirmLabel }));
 
@@ -248,6 +248,25 @@ describe("Sidebar", () => {
     expect(panel).toHaveAttribute("inert");
     expect(trigger).not.toHaveFocus();
     expect(replace).toHaveBeenCalledWith("/app");
+  });
+
+  it("closes only an open conversation panel on Escape inside the narrow drawer", () => {
+    const { panel, trigger } = renderNarrowSidebar({
+      conversations: <SidebarConversations conversations={recentConversations} />,
+    });
+
+    openNavigation(trigger);
+    const actions = screen.getByRole("button", { name: `${ru.conversations.actionsLabel}: Recent chat 1` });
+    fireEvent.click(actions);
+    fireEvent.click(screen.getByRole("button", { name: ru.conversations.renameLabel }));
+    const titleInput = screen.getByRole("textbox", { name: ru.conversations.renameInputLabel });
+
+    fireEvent.keyDown(titleInput, { key: "Escape" });
+
+    expect(screen.queryByRole("textbox", { name: ru.conversations.renameInputLabel })).not.toBeInTheDocument();
+    expect(panel).toHaveAttribute("data-open", "true");
+    expect(actions).toHaveFocus();
+    expect(trigger).not.toHaveFocus();
   });
 
   it("keeps twenty recent chat links reachable above a focusable account control", () => {

@@ -32,6 +32,7 @@ export function Sidebar({ account, conversations, isDesktopCollapsed = false, on
   const [isOpen, setIsOpen] = useState(false);
   const firstLinkRef = useRef<HTMLAnchorElement>(null);
   const hasObservedPathnameRef = useRef(false);
+  const hasOpenConversationPanelRef = useRef(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const previousPathnameRef = useRef(pathname);
   const restoreFocusRef = useRef(false);
@@ -77,6 +78,22 @@ export function Sidebar({ account, conversations, isDesktopCollapsed = false, on
   }, [isNarrowViewport, isOpen, pathname]);
 
   useEffect(() => {
+    const panel = panelRef.current;
+    if (!panel) {
+      return undefined;
+    }
+
+    const observeConversationPanel = (event: Event) => {
+      const { open } = (event as CustomEvent<{ open?: boolean }>).detail;
+      hasOpenConversationPanelRef.current = open === true;
+    };
+
+    panel.addEventListener("conversation-row-panel-change", observeConversationPanel);
+
+    return () => panel.removeEventListener("conversation-row-panel-change", observeConversationPanel);
+  }, []);
+
+  useEffect(() => {
     if (!isNarrowViewport) {
       return undefined;
     }
@@ -93,6 +110,10 @@ export function Sidebar({ account, conversations, isDesktopCollapsed = false, on
     firstLinkRef.current?.focus();
     const keepFocusInDrawer = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
+        if (hasOpenConversationPanelRef.current) {
+          return;
+        }
+
         restoreFocusRef.current = true;
         setIsOpen(false);
 

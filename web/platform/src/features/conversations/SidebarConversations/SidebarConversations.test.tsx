@@ -76,7 +76,7 @@ describe("SidebarConversations", () => {
 
     render(<SidebarConversations conversations={conversations} />);
 
-    expect(screen.getAllByRole("button", { name: ru.conversations.actionsLabel })).toHaveLength(conversations.length);
+    expect(screen.getAllByRole("button", { name: new RegExp(ru.conversations.actionsLabel) })).toHaveLength(conversations.length);
   });
 
   it("renders an explicit empty recent-chat state", () => {

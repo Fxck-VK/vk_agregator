@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { type JSX, useEffect, useState } from "react";
+import { type JSX, useEffect, useRef, useState } from "react";
 
 import { ru } from "@/i18n/ru";
 import { webBrowserMutation } from "@/lib/web-api/browser";
@@ -25,19 +25,18 @@ export function ConversationRow({ conversation, isActive }: ConversationRowProps
   const [nextTitle, setNextTitle] = useState(title);
   const [isPending, setIsPending] = useState(false);
   const [hasError, setHasError] = useState(false);
+  const actionToggleRef = useRef<HTMLButtonElement>(null);
+  const archiveConfirmRef = useRef<HTMLButtonElement>(null);
+  const renameInputRef = useRef<HTMLInputElement>(null);
+  const restoreActionFocusRef = useRef(false);
+  const rowRef = useRef<HTMLElement>(null);
 
-  useEffect(() => {
-    if (panel === null) return undefined;
-
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !isPending) {
-        setHasError(false);
-        setPanel(null);
-      }
-    };
-    window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [isPending, panel]);
+  const closePanel = (restoreActionFocus = false) => {
+    if (isPending) return;
+    restoreActionFocusRef.current = restoreActionFocus;
+    setHasError(false);
+    setPanel(null);
+  };
 
   const openPanel = (nextPanel: Exclude<RowPanel, null>) => {
     if (isPending) return;
@@ -46,11 +45,31 @@ export function ConversationRow({ conversation, isActive }: ConversationRowProps
     if (nextPanel === "rename") setNextTitle(title);
   };
 
-  const closePanel = () => {
-    if (isPending) return;
-    setHasError(false);
-    setPanel(null);
-  };
+  useEffect(() => {
+    rowRef.current?.dispatchEvent(
+      new CustomEvent("conversation-row-panel-change", { bubbles: true, detail: { open: panel !== null } }),
+    );
+    if (panel === "rename") renameInputRef.current?.focus();
+    if (panel === "archive") archiveConfirmRef.current?.focus();
+    if (panel === null && restoreActionFocusRef.current) {
+      restoreActionFocusRef.current = false;
+      actionToggleRef.current?.focus();
+    }
+  }, [panel]);
+
+  useEffect(() => {
+    if (panel === null) return undefined;
+
+    const closeInnerPanelOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !isPending) {
+        restoreActionFocusRef.current = true;
+        setHasError(false);
+        setPanel(null);
+      }
+    };
+    window.addEventListener("keydown", closeInnerPanelOnEscape);
+    return () => window.removeEventListener("keydown", closeInnerPanelOnEscape);
+  }, [isPending, panel]);
 
   const renameConversation = async () => {
     if (isPending) return;
@@ -92,61 +111,67 @@ export function ConversationRow({ conversation, isActive }: ConversationRowProps
   };
 
   return (
-    <article className={styles.row}>
-      <Link aria-current={isActive ? "page" : undefined} className={styles.link} href={"/app/chat/" + conversation.id}>
+    <article className={styles.row} ref={rowRef}>
+      <Link aria-current={isActive ? "page" : undefined} className={styles.link} href={`/app/chat/${conversation.id}`}>
         {title}
       </Link>
       <div className={styles.actions} onClick={(event) => event.stopPropagation()}>
         <button
           aria-expanded={panel !== null}
-          aria-label={ru.conversations.actionsLabel}
+          aria-label={`${ru.conversations.actionsLabel}: ${title}`}
           className={styles.actionToggle}
           disabled={isPending}
-          onClick={() => (panel === "actions" ? closePanel() : openPanel("actions"))}
+          onClick={() => (panel === "actions" ? closePanel(true) : openPanel("actions"))}
+          ref={actionToggleRef}
           type="button"
         >
-          <span aria-hidden="true">•••</span>
+          <span aria-hidden="true">...</span>
         </button>
-        {panel === "actions" ? (
-          <div className={styles.menu}>
-            <button disabled={isPending} onClick={() => openPanel("rename")} type="button">{ru.conversations.renameLabel}</button>
-            <button disabled={isPending} onClick={() => openPanel("archive")} type="button">{ru.conversations.archiveLabel}</button>
-            <button disabled={isPending} onClick={closePanel} type="button">{ru.conversations.cancelLabel}</button>
+        {panel !== null ? (
+          <div className={styles.panel}>
+            {panel === "actions" ? (
+              <div className={styles.menu}>
+                <button disabled={isPending} onClick={() => openPanel("rename")} type="button">{ru.conversations.renameLabel}</button>
+                <button disabled={isPending} onClick={() => openPanel("archive")} type="button">{ru.conversations.archiveLabel}</button>
+                <button disabled={isPending} onClick={() => closePanel(true)} type="button">{ru.conversations.cancelLabel}</button>
+              </div>
+            ) : null}
+            {panel === "rename" ? (
+              <form className={styles.renameForm} onSubmit={(event) => { event.preventDefault(); void renameConversation(); }}>
+                <label>
+                  <span className={styles.visuallyHidden}>{ru.conversations.renameInputLabel}</span>
+                  <input
+                    aria-label={ru.conversations.renameInputLabel}
+                    disabled={isPending}
+                    onChange={(event) => setNextTitle(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        void renameConversation();
+                      }
+                    }}
+                    ref={renameInputRef}
+                    value={nextTitle}
+                  />
+                </label>
+                <div className={styles.formActions}>
+                  <button disabled={isPending} type="submit">{isPending ? ru.conversations.renamePending : ru.conversations.renameSubmitLabel}</button>
+                  <button disabled={isPending} onClick={() => closePanel(true)} type="button">{ru.conversations.cancelLabel}</button>
+                </div>
+              </form>
+            ) : null}
+            {panel === "archive" ? (
+              <div className={styles.confirmation}>
+                <p>{ru.conversations.archiveConfirmation}</p>
+                <div className={styles.formActions}>
+                  <button disabled={isPending} onClick={() => void archiveConversation()} ref={archiveConfirmRef} type="button">{isPending ? ru.conversations.archivePending : ru.conversations.archiveConfirmLabel}</button>
+                  <button disabled={isPending} onClick={() => closePanel(true)} type="button">{ru.conversations.cancelLabel}</button>
+                </div>
+              </div>
+            ) : null}
+            {hasError ? <p className={styles.error} role="alert">{panel === "archive" ? ru.conversations.archiveFailure : ru.conversations.renameFailure}</p> : null}
           </div>
         ) : null}
-        {panel === "rename" ? (
-          <form className={styles.renameForm} onSubmit={(event) => { event.preventDefault(); void renameConversation(); }}>
-            <label>
-              <span className={styles.visuallyHidden}>{ru.conversations.renameInputLabel}</span>
-              <input
-                aria-label={ru.conversations.renameInputLabel}
-                disabled={isPending}
-                onChange={(event) => setNextTitle(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    event.preventDefault();
-                    void renameConversation();
-                  }
-                }}
-                value={nextTitle}
-              />
-            </label>
-            <div className={styles.formActions}>
-              <button disabled={isPending} type="submit">{isPending ? ru.conversations.renamePending : ru.conversations.renameSubmitLabel}</button>
-              <button disabled={isPending} onClick={closePanel} type="button">{ru.conversations.cancelLabel}</button>
-            </div>
-          </form>
-        ) : null}
-        {panel === "archive" ? (
-          <div className={styles.confirmation}>
-            <p>{ru.conversations.archiveConfirmation}</p>
-            <div className={styles.formActions}>
-              <button disabled={isPending} onClick={() => void archiveConversation()} type="button">{isPending ? ru.conversations.archivePending : ru.conversations.archiveConfirmLabel}</button>
-              <button disabled={isPending} onClick={closePanel} type="button">{ru.conversations.cancelLabel}</button>
-            </div>
-          </div>
-        ) : null}
-        {hasError ? <p className={styles.error} role="alert">{panel === "archive" ? ru.conversations.archiveFailure : ru.conversations.renameFailure}</p> : null}
       </div>
     </article>
   );

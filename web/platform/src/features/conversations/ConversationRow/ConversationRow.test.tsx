@@ -27,6 +27,10 @@ const conversation: ConversationItem = {
 const refresh = vi.fn();
 const replace = vi.fn();
 
+function actionsLabel(item: ConversationItem = conversation) {
+  return `${ru.conversations.actionsLabel}: ${item.title.trim() || ru.conversations.unnamed}`;
+}
+
 function renderRow(isActive = false, item: ConversationItem = conversation) {
   return render(<ConversationRow conversation={item} isActive={isActive} />);
 }
@@ -50,13 +54,13 @@ describe("ConversationRow", () => {
   it("opens the labelled actions menu and closes it on cancel or Escape", () => {
     renderRow();
 
-    fireEvent.click(screen.getByRole("button", { name: ru.conversations.actionsLabel }));
+    fireEvent.click(screen.getByRole("button", { name: actionsLabel() }));
     expect(screen.getByRole("button", { name: ru.conversations.renameLabel })).toBeVisible();
 
     fireEvent.click(screen.getByRole("button", { name: ru.conversations.cancelLabel }));
     expect(screen.queryByRole("button", { name: ru.conversations.renameLabel })).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: ru.conversations.actionsLabel }));
+    fireEvent.click(screen.getByRole("button", { name: actionsLabel() }));
 
     fireEvent.keyDown(window, { key: "Escape" });
     expect(screen.queryByRole("button", { name: ru.conversations.renameLabel })).not.toBeInTheDocument();
@@ -67,7 +71,7 @@ describe("ConversationRow", () => {
     vi.mocked(webBrowserMutation).mockResolvedValue(Response.json(unnamedConversation, { status: 200 }));
     renderRow(false, unnamedConversation);
 
-    fireEvent.click(screen.getByRole("button", { name: ru.conversations.actionsLabel }));
+    fireEvent.click(screen.getByRole("button", { name: actionsLabel(unnamedConversation) }));
     fireEvent.click(screen.getByRole("button", { name: ru.conversations.renameLabel }));
     const titleInput = screen.getByRole("textbox", { name: ru.conversations.renameInputLabel });
     expect(titleInput).toHaveValue(ru.conversations.unnamed);
@@ -90,7 +94,7 @@ describe("ConversationRow", () => {
     vi.mocked(webBrowserMutation).mockResolvedValue(new Response("backend detail", { status: 409 }));
     renderRow();
 
-    fireEvent.click(screen.getByRole("button", { name: ru.conversations.actionsLabel }));
+    fireEvent.click(screen.getByRole("button", { name: actionsLabel() }));
     fireEvent.click(screen.getByRole("button", { name: ru.conversations.renameLabel }));
     const titleInput = screen.getByRole("textbox", { name: ru.conversations.renameInputLabel });
     fireEvent.change(titleInput, { target: { value: "Не потерять" } });
@@ -109,7 +113,7 @@ describe("ConversationRow", () => {
     vi.mocked(webBrowserMutation).mockResolvedValue(response());
     renderRow();
 
-    fireEvent.click(screen.getByRole("button", { name: ru.conversations.actionsLabel }));
+    fireEvent.click(screen.getByRole("button", { name: actionsLabel() }));
     fireEvent.click(screen.getByRole("button", { name: ru.conversations.renameLabel }));
     const titleInput = screen.getByRole("textbox", { name: ru.conversations.renameInputLabel });
     fireEvent.change(titleInput, { target: { value: "Оставить открытым" } });
@@ -124,7 +128,7 @@ describe("ConversationRow", () => {
     vi.mocked(webBrowserMutation).mockResolvedValue(new Response(null, { status: 204 }));
     renderRow();
 
-    fireEvent.click(screen.getByRole("button", { name: ru.conversations.actionsLabel }));
+    fireEvent.click(screen.getByRole("button", { name: actionsLabel() }));
     fireEvent.click(screen.getByRole("button", { name: ru.conversations.archiveLabel }));
     expect(screen.getByText(ru.conversations.archiveConfirmation)).toBeVisible();
     expect(webBrowserMutation).not.toHaveBeenCalled();
@@ -144,7 +148,7 @@ describe("ConversationRow", () => {
     vi.mocked(webBrowserMutation).mockResolvedValue(new Response(null, { status: 204 }));
     renderRow(true);
 
-    fireEvent.click(screen.getByRole("button", { name: ru.conversations.actionsLabel }));
+    fireEvent.click(screen.getByRole("button", { name: actionsLabel() }));
     fireEvent.click(screen.getByRole("button", { name: ru.conversations.archiveLabel }));
     fireEvent.click(screen.getByRole("button", { name: ru.conversations.archiveConfirmLabel }));
 
@@ -156,7 +160,7 @@ describe("ConversationRow", () => {
     vi.mocked(webBrowserMutation).mockResolvedValue(new Response("backend detail", { status: 500 }));
     renderRow();
 
-    fireEvent.click(screen.getByRole("button", { name: ru.conversations.actionsLabel }));
+    fireEvent.click(screen.getByRole("button", { name: actionsLabel() }));
     fireEvent.click(screen.getByRole("button", { name: ru.conversations.archiveLabel }));
     fireEvent.click(screen.getByRole("button", { name: ru.conversations.archiveConfirmLabel }));
 
@@ -169,7 +173,7 @@ describe("ConversationRow", () => {
     vi.mocked(webBrowserMutation).mockResolvedValue(new Response(null, { status: 200 }));
     renderRow();
 
-    fireEvent.click(screen.getByRole("button", { name: ru.conversations.actionsLabel }));
+    fireEvent.click(screen.getByRole("button", { name: actionsLabel() }));
     fireEvent.click(screen.getByRole("button", { name: ru.conversations.archiveLabel }));
     fireEvent.click(screen.getByRole("button", { name: ru.conversations.archiveConfirmLabel }));
 
@@ -189,7 +193,7 @@ describe("ConversationRow", () => {
       </>,
     );
 
-    const actionButtons = screen.getAllByRole("button", { name: ru.conversations.actionsLabel });
+    const actionButtons = screen.getAllByRole("button", { name: new RegExp(ru.conversations.actionsLabel) });
     fireEvent.click(actionButtons[0]);
     fireEvent.click(screen.getByRole("button", { name: ru.conversations.renameLabel }));
     fireEvent.click(screen.getByRole("button", { name: ru.conversations.renameSubmitLabel }));
@@ -200,5 +204,44 @@ describe("ConversationRow", () => {
 
     settleRequest(new Response(null, { status: 500 }));
     await screen.findByRole("alert");
+  });
+
+  it("names action toggles with the chat title or fallback", () => {
+    const unnamedConversation = { ...conversation, title: " " };
+    render(
+      <>
+        <ConversationRow conversation={conversation} isActive={false} />
+        <ConversationRow conversation={unnamedConversation} isActive={false} />
+      </>,
+    );
+
+    expect(screen.getByRole("button", { name: actionsLabel() })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: actionsLabel(unnamedConversation) })).toBeInTheDocument();
+  });
+
+  it("moves focus into each inner panel and restores it to actions after cancel or Escape", () => {
+    renderRow();
+    const actions = screen.getByRole("button", { name: actionsLabel() });
+
+    fireEvent.click(actions);
+    fireEvent.click(screen.getByRole("button", { name: ru.conversations.renameLabel }));
+    const titleInput = screen.getByRole("textbox", { name: ru.conversations.renameInputLabel });
+    expect(titleInput).toHaveFocus();
+
+    fireEvent.keyDown(titleInput, { key: "Escape" });
+    expect(actions).toHaveFocus();
+
+    fireEvent.click(actions);
+    fireEvent.click(screen.getByRole("button", { name: ru.conversations.archiveLabel }));
+    const archiveConfirm = screen.getByRole("button", { name: ru.conversations.archiveConfirmLabel });
+    expect(archiveConfirm).toHaveFocus();
+
+    fireEvent.click(screen.getByRole("button", { name: ru.conversations.cancelLabel }));
+    expect(actions).toHaveFocus();
+  });
+
+  it("uses archive copy that explains removal from the visible chat lists", () => {
+    expect(ru.conversations.archiveConfirmation).toContain("списка");
+    expect(ru.conversations.archiveConfirmation).not.toContain("без возможности восстановления");
   });
 });

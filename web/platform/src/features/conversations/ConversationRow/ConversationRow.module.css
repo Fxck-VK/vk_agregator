@@ -33,7 +33,7 @@
   outline-offset: 0.125rem;
 }
 
-.actions { display: grid; justify-items: end; gap: var(--space-1); }
+.actions { display: contents; }
 
 .actionToggle,
 .menu button,
@@ -51,19 +51,25 @@
 .menu button:hover,
 .formActions button:hover { background: var(--color-surface-raised); }
 
-.menu,
-.renameForm,
-.confirmation {
+.panel {
+  position: absolute;
+  z-index: 1;
+  inset-block-start: calc(100% + var(--space-1));
+  inset-inline-end: 0;
   display: grid;
   gap: var(--space-1);
-  inline-size: min(15rem, 75vw);
+  inline-size: min(15rem, 100%);
   padding: var(--space-2);
   border-radius: var(--radius-sm);
   background: var(--color-surface-raised);
 }
 
+.menu,
+.renameForm,
+.confirmation { display: grid; gap: var(--space-1); }
+
 .menu button,
-.formActions button { min-block-size: 2rem; padding-inline: var(--space-2); text-align: start; }
+.formActions button { min-block-size: 2.75rem; padding-inline: var(--space-2); text-align: start; }
 
 .renameForm input {
   box-sizing: border-box;
