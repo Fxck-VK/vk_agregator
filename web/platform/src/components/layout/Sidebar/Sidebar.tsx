@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { type MouseEvent as ReactMouseEvent, type ReactNode, useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/Button/Button";
+import { SidebarConversationsActivityProvider } from "@/features/conversations/SidebarConversations/SidebarConversationsActivity";
 import { ru } from "@/i18n/ru";
 
 import styles from "./Sidebar.module.css";
@@ -30,9 +31,9 @@ export function Sidebar({ account, conversations, isDesktopCollapsed = false, on
   const pathname = usePathname();
   const [isNarrowViewport, setIsNarrowViewport] = useState<boolean | null>(null);
   const [isOpen, setIsOpen] = useState(false);
+  const [conversationPanelSession, setConversationPanelSession] = useState(0);
   const firstLinkRef = useRef<HTMLAnchorElement>(null);
   const hasObservedPathnameRef = useRef(false);
-  const openConversationPanelIdsRef = useRef(new Set<string>());
   const panelRef = useRef<HTMLDivElement>(null);
   const previousPathnameRef = useRef(pathname);
   const restoreFocusRef = useRef(false);
@@ -78,25 +79,6 @@ export function Sidebar({ account, conversations, isDesktopCollapsed = false, on
   }, [isNarrowViewport, isOpen, pathname]);
 
   useEffect(() => {
-    const observeConversationPanel = (event: Event) => {
-      const { conversationId, open } = (event as CustomEvent<{ conversationId?: unknown; open?: boolean }>).detail;
-      if (typeof conversationId !== "string") {
-        return;
-      }
-
-      if (open === true) {
-        openConversationPanelIdsRef.current.add(conversationId);
-      } else {
-        openConversationPanelIdsRef.current.delete(conversationId);
-      }
-    };
-
-    window.addEventListener("conversation-row-panel-change", observeConversationPanel);
-
-    return () => window.removeEventListener("conversation-row-panel-change", observeConversationPanel);
-  }, []);
-
-  useEffect(() => {
     if (!isNarrowViewport) {
       return undefined;
     }
@@ -113,10 +95,6 @@ export function Sidebar({ account, conversations, isDesktopCollapsed = false, on
     firstLinkRef.current?.focus();
     const keepFocusInDrawer = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        if (openConversationPanelIdsRef.current.size > 0) {
-          return;
-        }
-
         restoreFocusRef.current = true;
         setIsOpen(false);
 
@@ -171,7 +149,13 @@ export function Sidebar({ account, conversations, isDesktopCollapsed = false, on
       return;
     }
 
+    setConversationPanelSession((session) => session + 1);
     setIsOpen(true);
+  };
+
+  const toggleDesktopSidebar = () => {
+    setConversationPanelSession((session) => session + 1);
+    onDesktopToggle?.();
   };
 
   const closeAfterConversationSelection = (event: ReactMouseEvent<HTMLDivElement>) => {
@@ -204,7 +188,7 @@ export function Sidebar({ account, conversations, isDesktopCollapsed = false, on
           aria-label={isDesktopCollapsed ? ru.navigation.expandSidebarLabel : ru.navigation.collapseSidebarLabel}
           className={styles.desktopTrigger}
           data-desktop-collapsed={isDesktopCollapsed}
-          onClick={onDesktopToggle}
+          onClick={toggleDesktopSidebar}
         >
           <svg aria-hidden="true" viewBox="0 0 24 24">
             <path d="m14 6-6 6 6 6" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
@@ -261,7 +245,9 @@ export function Sidebar({ account, conversations, isDesktopCollapsed = false, on
         </nav>
         {conversations ? (
           <div className={styles.conversationsSlot} onClickCapture={closeAfterConversationSelection}>
-            {conversations}
+            <SidebarConversationsActivityProvider isActive={panelIsOpen} session={conversationPanelSession}>
+              {conversations}
+            </SidebarConversationsActivityProvider>
           </div>
         ) : null}
         {account ? <div className={styles.accountSlot}>{account}</div> : null}

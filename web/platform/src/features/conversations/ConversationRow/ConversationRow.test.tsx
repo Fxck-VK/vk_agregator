@@ -66,7 +66,7 @@ describe("ConversationRow", () => {
 
     fireEvent.click(screen.getByRole("button", { name: actionsLabel() }));
 
-    fireEvent.keyDown(window, { key: "Escape" });
+    fireEvent.keyDown(screen.getByRole("button", { name: actionsLabel() }), { key: "Escape" });
     expect(screen.queryByRole("button", { name: ru.conversations.renameLabel })).not.toBeInTheDocument();
   });
 
@@ -98,7 +98,10 @@ describe("ConversationRow", () => {
     vi.mocked(webBrowserMutation).mockResolvedValue(Response.json(conversation, { status: 200 }));
     renderRow();
     const actions = screen.getByRole("button", { name: actionsLabel() });
-    refresh.mockImplementation(() => expect(actions).toHaveFocus());
+    refresh.mockImplementation(() => {
+      expect(actions).toBeEnabled();
+      expect(actions).toHaveFocus();
+    });
 
     fireEvent.click(actions);
     fireEvent.click(screen.getByRole("button", { name: ru.conversations.renameLabel }));
@@ -185,7 +188,7 @@ describe("ConversationRow", () => {
     fireEvent.click(screen.getByRole("button", { name: ru.conversations.archiveConfirmLabel }));
 
     await vi.waitFor(() => expect(replace).toHaveBeenCalledWith("/app"));
-    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(refresh).not.toHaveBeenCalled();
   });
 
   it("keeps the row and shows neutral feedback after a failed delete", async () => {

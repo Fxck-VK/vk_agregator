@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({
@@ -6,9 +6,14 @@ vi.mock("next/navigation", () => ({
   useRouter: vi.fn(),
 }));
 
+vi.mock("@/lib/web-api/browser", () => ({
+  webBrowserMutation: vi.fn(),
+}));
+
 import { usePathname, useRouter } from "next/navigation";
 
 import { ru } from "@/i18n/ru";
+import { webBrowserMutation } from "@/lib/web-api/browser";
 import type { ConversationItem } from "@/lib/web-api/contracts";
 
 import { SidebarConversations } from "./SidebarConversations";
@@ -77,6 +82,45 @@ describe("SidebarConversations", () => {
     render(<SidebarConversations conversations={conversations} />);
 
     expect(screen.getAllByRole("button", { name: new RegExp(ru.conversations.actionsLabel) })).toHaveLength(conversations.length);
+  });
+
+  it("keeps a failed pending rename reachable when another row opens", async () => {
+    let settleRename: (response: Response) => void = () => {};
+    vi.mocked(usePathname).mockReturnValue("/app");
+    vi.mocked(useRouter).mockReturnValue({ refresh: vi.fn(), replace: vi.fn() } as never);
+    vi.mocked(webBrowserMutation).mockReturnValue(new Promise<Response>((resolve) => { settleRename = resolve; }));
+
+    render(<SidebarConversations conversations={conversations} />);
+
+    const [firstActions, secondActions] = screen.getAllByRole("button", { name: new RegExp(ru.conversations.actionsLabel) });
+    fireEvent.click(firstActions);
+    fireEvent.click(screen.getByRole("button", { name: ru.conversations.renameLabel }));
+    const titleInput = screen.getByRole("textbox", { name: ru.conversations.renameInputLabel });
+    fireEvent.change(titleInput, { target: { value: "Сохранить при ошибке" } });
+    fireEvent.keyDown(titleInput, { key: "Enter" });
+    fireEvent.click(secondActions);
+
+    settleRename(new Response(null, { status: 500 }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(ru.conversations.renameFailure);
+    expect(titleInput).toHaveValue("Сохранить при ошибке");
+    expect(titleInput).toBeInTheDocument();
+  });
+
+  it("focuses the next chat after archiving a non-active row", async () => {
+    vi.mocked(usePathname).mockReturnValue("/app");
+    vi.mocked(useRouter).mockReturnValue({ refresh: vi.fn(), replace: vi.fn() } as never);
+    vi.mocked(webBrowserMutation).mockResolvedValue(new Response(null, { status: 204 }));
+
+    render(<SidebarConversations conversations={conversations} />);
+
+    fireEvent.click(screen.getAllByRole("button", { name: new RegExp(ru.conversations.actionsLabel) })[0]);
+    fireEvent.click(screen.getByRole("button", { name: ru.conversations.archiveLabel }));
+    fireEvent.click(screen.getByRole("button", { name: ru.conversations.archiveConfirmLabel }));
+
+    const successor = await screen.findByRole("link", { name: ru.conversations.unnamed });
+    await vi.waitFor(() => expect(screen.queryByRole("link", { name: conversations[0].title })).not.toBeInTheDocument());
+    expect(successor).toHaveFocus();
   });
 
   it("renders an explicit empty recent-chat state", () => {

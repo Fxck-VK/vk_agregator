@@ -11,13 +11,26 @@ import { parseConversationList, type ConversationItem } from "@/lib/web-api/cont
 import styles from "./ConversationRow.module.css";
 
 type ConversationRowProps = {
+  activeConversationId?: string | null;
   conversation: ConversationItem;
   isActive: boolean;
+  onArchived?: (conversationId: string) => void;
+  onPanelClosed?: (conversationId: string) => void;
+  onPanelOpened?: (conversationId: string) => void;
+  sidebarIsActive?: boolean;
 };
 
 type RowPanel = "actions" | "rename" | "archive" | null;
 
-export function ConversationRow({ conversation, isActive }: ConversationRowProps): JSX.Element {
+export function ConversationRow({
+  activeConversationId,
+  conversation,
+  isActive,
+  onArchived,
+  onPanelClosed,
+  onPanelOpened,
+  sidebarIsActive = true,
+}: ConversationRowProps): JSX.Element {
   const router = useRouter();
   const pathname = usePathname();
   const title = conversation.title.trim() || ru.conversations.unnamed;
@@ -29,26 +42,28 @@ export function ConversationRow({ conversation, isActive }: ConversationRowProps
   const actionToggleRef = useRef<HTMLButtonElement>(null);
   const archiveConfirmRef = useRef<HTMLButtonElement>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
-  const focusAfterPendingRef = useRef<"rename" | "archive" | null>(null);
+  const focusAfterPendingRef = useRef<"rename" | "archive" | "success" | null>(null);
   const restoreActionFocusRef = useRef(false);
   const rowRef = useRef<HTMLElement>(null);
   const mountedRef = useRef(true);
   const pathnameRef = useRef(pathname);
   const requestGenerationRef = useRef(0);
+  const refreshAfterFocusRef = useRef<number | null>(null);
+  const sidebarIsActiveRef = useRef(sidebarIsActive);
+  const panelIsVisible = sidebarIsActive && panel !== null && (isPending || activeConversationId === undefined || activeConversationId === conversation.id);
 
   const closePanel = (restoreActionFocus = false) => {
     if (isPending) return;
     restoreActionFocusRef.current = restoreActionFocus;
     setHasError(false);
     setPanel(null);
+    onPanelClosed?.(conversation.id);
   };
 
   const openPanel = (nextPanel: Exclude<RowPanel, null>) => {
     if (isPending) return;
     if (nextPanel === "actions") {
-      window.dispatchEvent(
-        new CustomEvent("conversation-row-panel-open", { detail: { conversationId: conversation.id } }),
-      );
+      onPanelOpened?.(conversation.id);
     }
     setHasError(false);
     setPanel(nextPanel);
@@ -64,32 +79,6 @@ export function ConversationRow({ conversation, isActive }: ConversationRowProps
     }
   }, [panel]);
 
-  useEffect(() => {
-    const notifySidebar = (open: boolean) => {
-      window.dispatchEvent(
-        new CustomEvent("conversation-row-panel-change", {
-          bubbles: true,
-          detail: { conversationId: conversation.id, open },
-        }),
-      );
-    };
-
-    notifySidebar(panel !== null);
-    return () => notifySidebar(false);
-  }, [conversation.id, panel]);
-
-  useEffect(() => {
-    const closeForOtherConversation = (event: Event) => {
-      const { conversationId } = (event as CustomEvent<{ conversationId?: unknown }>).detail;
-      if (conversationId !== conversation.id) {
-        restoreActionFocusRef.current = false;
-        setPanel(null);
-      }
-    };
-    window.addEventListener("conversation-row-panel-open", closeForOtherConversation);
-    return () => window.removeEventListener("conversation-row-panel-open", closeForOtherConversation);
-  }, [conversation.id]);
-
   useLayoutEffect(() => {
     mountedRef.current = true;
     return () => {
@@ -99,6 +88,10 @@ export function ConversationRow({ conversation, isActive }: ConversationRowProps
   }, []);
 
   useLayoutEffect(() => {
+    sidebarIsActiveRef.current = sidebarIsActive;
+  }, [sidebarIsActive]);
+
+  useLayoutEffect(() => {
     if (pathnameRef.current === pathname) {
       return;
     }
@@ -106,6 +99,7 @@ export function ConversationRow({ conversation, isActive }: ConversationRowProps
     pathnameRef.current = pathname;
     requestGenerationRef.current += 1;
     focusAfterPendingRef.current = null;
+    refreshAfterFocusRef.current = null;
     setIsPending(false);
     setPanel(null);
   }, [pathname]);
@@ -116,22 +110,14 @@ export function ConversationRow({ conversation, isActive }: ConversationRowProps
     const focusTarget = focusAfterPendingRef.current;
     focusAfterPendingRef.current = null;
     if (focusTarget === "rename") renameInputRef.current?.focus();
-    else archiveConfirmRef.current?.focus();
-  }, [isPending]);
-
-  useEffect(() => {
-    if (panel === null) return undefined;
-
-    const closeInnerPanelOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !isPending) {
-        restoreActionFocusRef.current = true;
-        setHasError(false);
-        setPanel(null);
-      }
-    };
-    window.addEventListener("keydown", closeInnerPanelOnEscape);
-    return () => window.removeEventListener("keydown", closeInnerPanelOnEscape);
-  }, [isPending, panel]);
+    else if (focusTarget === "archive") archiveConfirmRef.current?.focus();
+    else {
+      actionToggleRef.current?.focus();
+      const refreshGeneration = refreshAfterFocusRef.current;
+      refreshAfterFocusRef.current = null;
+      if (mountedRef.current && refreshGeneration === requestGenerationRef.current) router.refresh();
+    }
+  }, [isPending, router]);
 
   const renameConversation = async () => {
     if (isPending) return;
@@ -151,12 +137,15 @@ export function ConversationRow({ conversation, isActive }: ConversationRowProps
       const payload = await response.json();
       if (!mountedRef.current || requestGeneration !== requestGenerationRef.current) return;
       parseConversationList({ items: [payload] });
+      refreshAfterFocusRef.current = requestGeneration;
+      focusAfterPendingRef.current = "success";
       setPanel(null);
-      actionToggleRef.current?.focus();
-      router.refresh();
     } catch {
       if (!mountedRef.current || requestGeneration !== requestGenerationRef.current) return;
-      focusAfterPendingRef.current = "rename";
+      if (sidebarIsActiveRef.current) {
+        onPanelOpened?.(conversation.id);
+        focusAfterPendingRef.current = "rename";
+      }
       setHasError(true);
     } finally {
       if (mountedRef.current && requestGeneration === requestGenerationRef.current) setIsPending(false);
@@ -174,17 +163,19 @@ export function ConversationRow({ conversation, isActive }: ConversationRowProps
       if (!mountedRef.current || requestGeneration !== requestGenerationRef.current) return;
       if (response.status !== 204) throw new Error("Unable to complete the request.");
 
-      window.dispatchEvent(new CustomEvent("conversation-row-panel-change", { detail: { conversationId: conversation.id, open: false } }));
-      window.dispatchEvent(new CustomEvent("conversation-row-archived", { detail: { conversationId: conversation.id } }));
       setPanel(null);
+      onPanelClosed?.(conversation.id);
+      onArchived?.(conversation.id);
 
       if (isActive) {
-        router.refresh();
         router.replace("/app");
       } else router.refresh();
     } catch {
       if (!mountedRef.current || requestGeneration !== requestGenerationRef.current) return;
-      focusAfterPendingRef.current = "archive";
+      if (sidebarIsActiveRef.current) {
+        onPanelOpened?.(conversation.id);
+        focusAfterPendingRef.current = "archive";
+      }
       setHasError(true);
     } finally {
       if (mountedRef.current && requestGeneration === requestGenerationRef.current) setIsPending(false);
@@ -193,22 +184,31 @@ export function ConversationRow({ conversation, isActive }: ConversationRowProps
 
   return (
     <article className={styles.row} ref={rowRef}>
-      <Link aria-current={isActive ? "page" : undefined} className={styles.link} href={`/app/chat/${conversation.id}`}>
+      <Link aria-current={isActive ? "page" : undefined} className={styles.link} href={`/app/chat/${conversation.id}`} id={`sidebar-conversation-${conversation.id}`}>
         {title}
       </Link>
-      <div className={styles.actions} onClick={(event) => event.stopPropagation()}>
+      <div
+        className={styles.actions}
+        onClick={(event) => event.stopPropagation()}
+        onKeyDown={(event) => {
+          if (event.key === "Escape" && panelIsVisible && !isPending) {
+            event.stopPropagation();
+            closePanel(true);
+          }
+        }}
+      >
         <button
-          aria-expanded={panel !== null}
+          aria-expanded={panelIsVisible}
           aria-label={`${ru.conversations.actionsLabel}: ${title}`}
           className={styles.actionToggle}
           disabled={isPending}
-          onClick={() => (panel === "actions" ? closePanel(true) : openPanel("actions"))}
+          onClick={() => (panelIsVisible && panel === "actions" ? closePanel(true) : openPanel("actions"))}
           ref={actionToggleRef}
           type="button"
         >
           <span aria-hidden="true">...</span>
         </button>
-        {panel !== null ? (
+        {panelIsVisible ? (
           <div className={styles.panel}>
             {panel === "actions" ? (
               <div className={styles.menu}>

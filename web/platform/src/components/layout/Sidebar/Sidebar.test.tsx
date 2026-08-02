@@ -253,7 +253,7 @@ describe("Sidebar", () => {
     expect(panel).toHaveAttribute("inert");
     expect(trigger).not.toHaveFocus();
     expect(replace).toHaveBeenCalledWith("/app");
-    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(refresh).not.toHaveBeenCalled();
     expect(screen.queryByRole("link", { name: "Recent chat 1" })).not.toBeInTheDocument();
 
     fireEvent.click(trigger);
@@ -277,6 +277,22 @@ describe("Sidebar", () => {
     expect(panel).toHaveAttribute("data-open", "true");
     expect(actions).toHaveFocus();
     expect(trigger).not.toHaveFocus();
+  });
+
+  it("clears nested conversation panels while the narrow drawer is inactive", () => {
+    const { trigger } = renderNarrowSidebar({
+      conversations: <SidebarConversations conversations={recentConversations} />,
+    });
+    openNavigation(trigger);
+
+    fireEvent.click(screen.getByRole("button", { name: `${ru.conversations.actionsLabel}: Recent chat 1` }));
+    fireEvent.click(screen.getByRole("button", { name: ru.conversations.renameLabel }));
+    expect(screen.getByRole("textbox", { name: ru.conversations.renameInputLabel })).toBeInTheDocument();
+
+    fireEvent.click(trigger);
+    fireEvent.click(trigger);
+
+    expect(screen.queryByRole("textbox", { name: ru.conversations.renameInputLabel })).not.toBeInTheDocument();
   });
 
   it("clears an unmounted conversation panel before the next Escape", () => {
@@ -304,7 +320,7 @@ describe("Sidebar", () => {
 
     fireEvent.click(firstActions);
     fireEvent.click(secondActions);
-    fireEvent.keyDown(window, { key: "Escape" });
+    fireEvent.keyDown(secondActions, { key: "Escape" });
 
     expect(panel).toHaveAttribute("data-open", "true");
     expect(firstActions).toHaveAttribute("aria-expanded", "false");
