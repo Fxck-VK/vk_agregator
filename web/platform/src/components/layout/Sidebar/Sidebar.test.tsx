@@ -781,15 +781,13 @@ describe("Sidebar", () => {
     const recentLinks = screen.getAllByRole("link", { name: /Recent chat/ });
     const finalRecentLink = screen.getByRole("link", { name: "Recent chat 20" });
     const logoutControl = screen.getByRole("button", { name: ru.account.logoutLabel });
-    const conversationsSlot = screen.getByRole("heading", { name: ru.conversations.recentHeading }).closest("section")?.parentElement;
-    const scrollArea = conversationsSlot?.parentElement;
+    const scrollArea = screen.getByRole("heading", { name: ru.conversations.recentHeading }).closest("section")?.parentElement?.parentElement;
 
     expect(recentLinks).toHaveLength(20);
     expect(finalRecentLink).toHaveAttribute("href", "/app/chat/d7c979f5-24e5-4f88-924b-a592d6e5a019");
     expect(logoutControl).toBeInTheDocument();
     logoutControl.focus();
     expect(logoutControl).toHaveFocus();
-    expect(conversationsSlot).toHaveClass(sidebarStyles.conversationsSlot);
     expect(scrollArea).toHaveClass(sidebarStyles.scrollArea);
   });
 

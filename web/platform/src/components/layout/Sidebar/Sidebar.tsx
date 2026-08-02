@@ -306,7 +306,7 @@ export function Sidebar({ account, conversations, isDesktopCollapsed = false, on
             </ul>
           </nav>
           {conversations ? (
-            <div className={styles.conversationsSlot} onClickCapture={closeAfterConversationSelection}>
+            <div onClickCapture={closeAfterConversationSelection}>
               <SidebarConversationsActivityProvider
                 isActive={panelIsOpen}
                 onPendingPanelChange={updatePendingConversationPanel}
