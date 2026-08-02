@@ -6,8 +6,13 @@ vi.mock("@/lib/web-api/browser", () => ({
   webBrowserMutation: vi.fn(),
 }));
 
+vi.mock("next/navigation", () => ({
+  useSearchParams: vi.fn(),
+}));
+
 import { ru } from "@/i18n/ru";
 import { webBrowserFetch, webBrowserMutation } from "@/lib/web-api/browser";
+import { useSearchParams } from "next/navigation";
 
 import { ImageGenerationPanel } from "./ImageGenerationPanel";
 
@@ -36,6 +41,27 @@ const modelsResponse = {
   ],
 };
 
+const multipleModelsResponse = {
+  items: [
+    {
+      id: "first-model",
+      name: "First model",
+      quality_options: ["1K", "2K"],
+      default_quality: "1K",
+      supports_reference_image: false,
+      max_reference_images: 0,
+    },
+    {
+      id: "nano-banana-2",
+      name: "Nano Banana 2",
+      quality_options: ["2K", "4K"],
+      default_quality: "2K",
+      supports_reference_image: true,
+      max_reference_images: 4,
+    },
+  ],
+};
+
 function renderReadyEditor() {
   vi.mocked(webBrowserFetch).mockResolvedValueOnce(Response.json(modelsResponse));
   render(<ImageGenerationPanel />);
@@ -46,6 +72,7 @@ function renderReadyEditor() {
 describe("ImageGenerationPanel", () => {
   beforeEach(() => {
 	vi.resetAllMocks();
+    vi.mocked(useSearchParams).mockReturnValue(new URLSearchParams() as never);
     vi.stubGlobal("crypto", {
       randomUUID: vi.fn().mockReturnValue("11111111-1111-4111-8111-111111111111"),
     });
@@ -64,6 +91,29 @@ describe("ImageGenerationPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: ru.imageGeneration.open }));
 
     await vi.waitFor(() => expect(webBrowserFetch).toHaveBeenCalledWith("/web/v1/image-models"));
+  });
+
+  it("selects a known requested model after the user explicitly opens the generator", async () => {
+    vi.mocked(useSearchParams).mockReturnValue(new URLSearchParams("model=nano-banana-2") as never);
+    vi.mocked(webBrowserFetch).mockResolvedValueOnce(Response.json(multipleModelsResponse));
+    render(<ImageGenerationPanel />);
+
+    expect(webBrowserFetch).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: ru.imageGeneration.open }));
+
+    expect(await screen.findByRole("combobox", { name: ru.imageGeneration.modelLabel })).toHaveValue("nano-banana-2");
+    expect(screen.getByRole("combobox", { name: ru.imageGeneration.qualityLabel })).toHaveValue("2K");
+  });
+
+  it("falls back to the first model and its default quality for an unknown requested model", async () => {
+    vi.mocked(useSearchParams).mockReturnValue(new URLSearchParams("model=unknown-model") as never);
+    vi.mocked(webBrowserFetch).mockResolvedValueOnce(Response.json(multipleModelsResponse));
+    render(<ImageGenerationPanel />);
+
+    fireEvent.click(screen.getByRole("button", { name: ru.imageGeneration.open }));
+
+    expect(await screen.findByRole("combobox", { name: ru.imageGeneration.modelLabel })).toHaveValue("first-model");
+    expect(screen.getByRole("combobox", { name: ru.imageGeneration.qualityLabel })).toHaveValue("1K");
   });
 
   it("uses only explicit public inputs and shows the server-calculated confirmation", async () => {

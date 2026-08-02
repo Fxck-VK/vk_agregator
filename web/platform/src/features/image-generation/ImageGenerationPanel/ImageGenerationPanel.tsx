@@ -3,6 +3,7 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 
 import { Button } from "@/components/ui/Button/Button";
 import { ru } from "@/i18n/ru";
@@ -38,6 +39,7 @@ const completedFailureStatuses = new Set<ImageJob["status"]>([
 ]);
 
 export function ImageGenerationPanel() {
+  const requestedModelID = useSearchParams().get("model");
   const [stage, setStage] = useState<PanelStage>("closed");
   const [models, setModels] = useState<ImageModel[]>([]);
   const [modelID, setModelID] = useState("");
@@ -77,13 +79,16 @@ export function ImageGenerationPanel() {
         throw new Error("Unable to load image models.");
       }
       const catalog = parseImageModelList(await response.json());
-      const firstModel = catalog.items[0];
-      if (!firstModel) {
+      const requestedModel = requestedModelID === null
+        ? undefined
+        : catalog.items.find((model) => model.id === requestedModelID);
+      const initialModel = requestedModel ?? catalog.items[0];
+      if (!initialModel) {
         throw new Error("No image models available.");
       }
       setModels(catalog.items);
-      setModelID(firstModel.id);
-      setImageQuality(firstModel.default_quality);
+      setModelID(initialModel.id);
+      setImageQuality(initialModel.default_quality);
       setStage("editor");
     } catch {
       setError("load");

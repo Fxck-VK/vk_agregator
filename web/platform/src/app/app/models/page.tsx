@@ -1,5 +1,5 @@
-import { WorkspaceHome } from "@/features/workspace/WorkspaceHome/WorkspaceHome";
+import { ModelsCatalog } from "@/features/models/ModelsCatalog/ModelsCatalog";
 
 export default function ModelsPage() {
-  return <WorkspaceHome section="models" />;
+  return <ModelsCatalog />;
 }
