@@ -388,6 +388,36 @@ describe("ConversationRow", () => {
     await screen.findByRole("alert");
   });
 
+  it("registers a pending panel in layout before its final Escape callback update", () => {
+    const transitions: string[] = [];
+    const onPendingPanelChange = vi.fn((_conversationId: string, isPending: boolean) => {
+      transitions.push(`pending:${isPending}`);
+    });
+    const onVisiblePanelChange = vi.fn((_conversationId: string, closePanel: (() => void) | null) => {
+      transitions.push(closePanel === null ? "visible:clear" : "visible:set");
+    });
+    vi.mocked(webBrowserMutation).mockReturnValue(new Promise<Response>(() => {}));
+    render(
+      <ConversationRow
+        conversation={conversation}
+        isActive={false}
+        onPendingPanelChange={onPendingPanelChange}
+        onVisiblePanelChange={onVisiblePanelChange}
+        sidebarSession={1}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: actionsLabel() }));
+    fireEvent.click(screen.getByRole("button", { name: ru.conversations.renameLabel }));
+    transitions.length = 0;
+
+    fireEvent.click(screen.getByRole("button", { name: ru.conversations.renameSubmitLabel }));
+
+    expect(onPendingPanelChange).toHaveBeenCalledWith(conversation.id, true, 1);
+    expect(onVisiblePanelChange).toHaveBeenCalledWith(conversation.id, null, 1);
+    expect(transitions.indexOf("pending:true")).toBeLessThan(transitions.lastIndexOf("visible:clear"));
+  });
+
   it("names action toggles with the chat title or fallback", () => {
     const unnamedConversation = { ...conversation, title: " " };
     render(

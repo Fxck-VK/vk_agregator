@@ -145,7 +145,8 @@ export function ConversationRow({
     if (panel === "archive") archiveConfirmRef.current?.focus();
   }, [panel, panelIsVisible]);
 
-  useEffect(() => {
+  // Sidebar Escape can run after layout work but before passive effects.
+  useLayoutEffect(() => {
     if (typeof panelSession !== "number") return;
     onPendingPanelChange?.(conversation.id, isPending && panelIsVisible, panelSession);
     return () => onPendingPanelChange?.(conversation.id, false, panelSession);
