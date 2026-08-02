@@ -137,4 +137,8 @@
   .catalog {
     padding: var(--space-4);
   }
+
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
