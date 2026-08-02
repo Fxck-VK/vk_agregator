@@ -245,6 +245,48 @@ func TestPrepareUsesOnlyOwnedWebConversation(t *testing.T) {
 	}
 }
 
+func TestPrepareSetsWebFallbackButKeepsMiniAppTitleSemantics(t *testing.T) {
+	ctx := context.Background()
+	repo := memory.NewConversationRepo()
+	svc := dialogcontext.New(repo, dialogcontext.Config{Enabled: true})
+	accountID := uuid.New()
+	webConversation := &domain.Conversation{
+		AccountID: accountID,
+		Source:    domain.ConversationSourceWeb,
+		Status:    domain.ConversationActive,
+	}
+	if err := repo.CreateConversation(ctx, webConversation); err != nil {
+		t.Fatalf("create web conversation: %v", err)
+	}
+	webJob := textJobWithParams(uuid.New(), 0, map[string]string{
+		"conversation_id":     webConversation.ID.String(),
+		"conversation_source": "web",
+	})
+	webJob.AccountID = accountID
+	if _, err := svc.Prepare(ctx, webJob, "  Web fallback title  "); err != nil {
+		t.Fatalf("prepare web conversation: %v", err)
+	}
+	storedWeb, err := repo.GetByIDForAccount(ctx, accountID, webConversation.ID)
+	if err != nil {
+		t.Fatalf("get web conversation: %v", err)
+	}
+	if storedWeb.Title != "Web fallback title" || storedWeb.TitleOrigin != domain.ConversationTitleOriginAutoFallback {
+		t.Fatalf("web fallback = %#v, want fallback title and origin", storedWeb)
+	}
+
+	miniAppJob := textJobWithParams(uuid.New(), 0, map[string]string{
+		"conversation_source": "miniapp",
+		"external_thread_id":  "unchanged-miniapp-title",
+	})
+	if _, err := svc.Prepare(ctx, miniAppJob, "Mini App first title"); err != nil {
+		t.Fatalf("prepare miniapp conversation: %v", err)
+	}
+	miniAppConversation := mustMiniAppConversation(t, repo, miniAppJob.UserID, "unchanged-miniapp-title")
+	if miniAppConversation.Title != "Mini App first title" || miniAppConversation.TitleOrigin != domain.ConversationTitleOriginManual {
+		t.Fatalf("miniapp title = %#v, want existing SetConversationTitleIfEmpty semantics", miniAppConversation)
+	}
+}
+
 func TestPrepareDoesNotUseForeignWebConversation(t *testing.T) {
 	ctx := context.Background()
 	repo := memory.NewConversationRepo()

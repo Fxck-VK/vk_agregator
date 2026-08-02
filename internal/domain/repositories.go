@@ -348,6 +348,20 @@ type ConversationRepository interface {
 	// SetConversationTitleIfEmpty fills an empty title without overwriting an
 	// existing one. This keeps retrying chat jobs idempotent.
 	SetConversationTitleIfEmpty(ctx context.Context, conversationID uuid.UUID, title string) error
+	// SetConversationFallbackTitleIfPending records the deterministic first
+	// prompt fallback only while an active Web conversation remains title-ready.
+	// It returns true only when it changed the durable record.
+	SetConversationFallbackTitleIfPending(ctx context.Context, conversationID uuid.UUID, title string) (bool, error)
+	// SetGeneratedTitleForActiveWebConversation conditionally writes an internal
+	// generated title for the exact active account-owned Web conversation. It
+	// never overwrites a manual title and returns true only when it changed it.
+	SetGeneratedTitleForActiveWebConversation(ctx context.Context, accountID, conversationID uuid.UUID, title string) (bool, error)
+	// GetUserMessageByJobID returns the persisted user message for exactly one
+	// job. The storage-level job/role key makes this retry-safe.
+	GetUserMessageByJobID(ctx context.Context, jobID uuid.UUID) (*ConversationMessage, error)
+	// GetFirstUserMessage returns the earliest retained user message of one
+	// conversation for title eligibility checks.
+	GetFirstUserMessage(ctx context.Context, conversationID uuid.UUID) (*ConversationMessage, error)
 	// UpsertMessage inserts a user/assistant message or returns the existing
 	// row for the same job+role, making worker retries idempotent.
 	UpsertMessage(ctx context.Context, message *ConversationMessage) (*ConversationMessage, error)

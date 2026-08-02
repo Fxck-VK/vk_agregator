@@ -162,6 +162,90 @@ func TestConversationRepoWebThreadsUseExactAccountOwner(t *testing.T) {
 	}
 }
 
+func TestSetGeneratedTitleDoesNotOverwriteManualRename(t *testing.T) {
+	ctx := context.Background()
+	repo := NewConversationRepo()
+	accountID := uuid.New()
+	conversation := &domain.Conversation{
+		AccountID:        accountID,
+		Source:           domain.ConversationSourceWeb,
+		ExternalThreadID: "title-state",
+	}
+	if err := repo.CreateConversation(ctx, conversation); err != nil {
+		t.Fatalf("create conversation: %v", err)
+	}
+	if conversation.TitleOrigin != domain.ConversationTitleOriginAutoPending {
+		t.Fatalf("initial title origin = %q, want %q", conversation.TitleOrigin, domain.ConversationTitleOriginAutoPending)
+	}
+
+	applied, err := repo.SetConversationFallbackTitleIfPending(ctx, conversation.ID, "First user prompt")
+	if err != nil || !applied {
+		t.Fatalf("set fallback = %t, %v; want true, nil", applied, err)
+	}
+	renamed, err := repo.RenameActiveConversationForAccount(ctx, accountID, conversation.ID, domain.ConversationSourceWeb, "My manual name")
+	if err != nil {
+		t.Fatalf("rename conversation: %v", err)
+	}
+	if renamed.TitleOrigin != domain.ConversationTitleOriginManual {
+		t.Fatalf("renamed origin = %q, want %q", renamed.TitleOrigin, domain.ConversationTitleOriginManual)
+	}
+
+	applied, err = repo.SetGeneratedTitleForActiveWebConversation(ctx, accountID, conversation.ID, "Semantic model title")
+	if err != nil {
+		t.Fatalf("set generated title: %v", err)
+	}
+	if applied {
+		t.Fatal("generated title overwrote a manual rename")
+	}
+	stored, err := repo.GetByIDForAccount(ctx, accountID, conversation.ID)
+	if err != nil {
+		t.Fatalf("get conversation: %v", err)
+	}
+	if stored.Title != "My manual name" || stored.TitleOrigin != domain.ConversationTitleOriginManual {
+		t.Fatalf("stored conversation = %#v, want manual title and origin", stored)
+	}
+}
+
+func TestConversationRepoFindsUserMessagesForTitleWork(t *testing.T) {
+	ctx := context.Background()
+	repo := NewConversationRepo()
+	conversation := &domain.Conversation{
+		AccountID:        uuid.New(),
+		Source:           domain.ConversationSourceWeb,
+		ExternalThreadID: "title-messages",
+	}
+	if err := repo.CreateConversation(ctx, conversation); err != nil {
+		t.Fatalf("create conversation: %v", err)
+	}
+	firstJobID := uuid.New()
+	first, err := repo.UpsertMessage(ctx, &domain.ConversationMessage{
+		ConversationID: conversation.ID,
+		JobID:          firstJobID,
+		Role:           domain.ConversationRoleUser,
+		Text:           "First prompt",
+	})
+	if err != nil {
+		t.Fatalf("insert first user message: %v", err)
+	}
+	if _, err := repo.UpsertMessage(ctx, &domain.ConversationMessage{
+		ConversationID: conversation.ID,
+		JobID:          uuid.New(),
+		Role:           domain.ConversationRoleUser,
+		Text:           "Second prompt",
+	}); err != nil {
+		t.Fatalf("insert second user message: %v", err)
+	}
+
+	byJob, err := repo.GetUserMessageByJobID(ctx, firstJobID)
+	if err != nil || byJob.ID != first.ID || byJob.Text != "First prompt" {
+		t.Fatalf("user message by job = %#v, %v", byJob, err)
+	}
+	firstUser, err := repo.GetFirstUserMessage(ctx, conversation.ID)
+	if err != nil || firstUser.ID != first.ID || firstUser.JobID != firstJobID {
+		t.Fatalf("first user message = %#v, %v", firstUser, err)
+	}
+}
+
 func TestConversationRepoRejectsUnownedWebConversation(t *testing.T) {
 	repo := NewConversationRepo()
 	err := repo.CreateConversation(context.Background(), &domain.Conversation{

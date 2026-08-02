@@ -27,6 +27,7 @@ func TestWebConversationManagementPostgresIntegration(t *testing.T) {
 	archivedID := uuid.New()
 	miniAppID := uuid.New()
 	foreignID := uuid.New()
+	titleID := uuid.New()
 	createdAt := time.Date(2026, 8, 2, 10, 0, 0, 0, time.UTC)
 
 	for _, id := range []uuid.UUID{accountID, foreignAccountID} {
@@ -62,12 +63,37 @@ func TestWebConversationManagementPostgresIntegration(t *testing.T) {
 	if len(listed) != 2 || listed[0].ID != secondActiveID || listed[1].ID != activeID {
 		t.Fatalf("active web list = %#v, want only %s then %s", conversationIDs(listed), secondActiveID, activeID)
 	}
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO conversations (id, account_id, source, status, title, title_origin, external_thread_id, created_at, updated_at)
+		VALUES ($1, $2, 'web', 'active', '', 'auto_pending', $3, $4, $4)`,
+		titleID, accountID, "title-"+titleID.String(), createdAt); err != nil {
+		t.Fatalf("seed title-eligible conversation: %v", err)
+	}
+	fallbackSet, err := repository.SetConversationFallbackTitleIfPending(ctx, titleID, "Prompt fallback")
+	if err != nil || !fallbackSet {
+		t.Fatalf("set fallback title = %t, %v; want true, nil", fallbackSet, err)
+	}
+	generatedSet, err := repository.SetGeneratedTitleForActiveWebConversation(ctx, accountID, titleID, "Semantic title")
+	if err != nil || !generatedSet {
+		t.Fatalf("set generated title = %t, %v; want true, nil", generatedSet, err)
+	}
+	if _, err := repository.RenameActiveConversationForAccount(ctx, accountID, titleID, domain.ConversationSourceWeb, "Manual title"); err != nil {
+		t.Fatalf("rename generated title: %v", err)
+	}
+	generatedSet, err = repository.SetGeneratedTitleForActiveWebConversation(ctx, accountID, titleID, "Late title")
+	if err != nil || generatedSet {
+		t.Fatalf("late generated title = %t, %v; want false, nil", generatedSet, err)
+	}
+	storedTitle, err := repository.GetByIDForAccount(ctx, accountID, titleID)
+	if err != nil || storedTitle.Title != "Manual title" || storedTitle.TitleOrigin != domain.ConversationTitleOriginManual {
+		t.Fatalf("stored manual title = %#v, %v", storedTitle, err)
+	}
 
 	renamed, err := repository.RenameActiveConversationForAccount(ctx, accountID, activeID, domain.ConversationSourceWeb, "Renamed title")
 	if err != nil {
 		t.Fatalf("rename active conversation: %v", err)
 	}
-	if renamed.ID != activeID || renamed.AccountID != accountID || renamed.Source != domain.ConversationSourceWeb || renamed.Status != domain.ConversationActive || renamed.Title != "Renamed title" {
+	if renamed.ID != activeID || renamed.AccountID != accountID || renamed.Source != domain.ConversationSourceWeb || renamed.Status != domain.ConversationActive || renamed.Title != "Renamed title" || renamed.TitleOrigin != domain.ConversationTitleOriginManual {
 		t.Fatalf("renamed conversation = %#v", renamed)
 	}
 	for name, tc := range map[string]struct {
@@ -122,8 +148,8 @@ func TestWebConversationManagementPostgresIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list after archive: %v", err)
 	}
-	if len(listed) != 1 || listed[0].ID != secondActiveID {
-		t.Fatalf("active web list after archive = %#v, want only %s", conversationIDs(listed), secondActiveID)
+	if len(listed) != 2 || listed[0].ID != titleID || listed[1].ID != secondActiveID {
+		t.Fatalf("active web list after archive = %#v, want %s then %s", conversationIDs(listed), titleID, secondActiveID)
 	}
 	var messages, summaries int
 	if err := pool.QueryRow(ctx, `SELECT count(*) FROM conversation_messages WHERE conversation_id = $1`, activeID).Scan(&messages); err != nil {
@@ -191,6 +217,7 @@ func conversationManagementIntegrationPool(t *testing.T, ctx context.Context) *p
 			external_thread_id TEXT NOT NULL DEFAULT '',
 			status TEXT NOT NULL CHECK (status IN ('active', 'archived')),
 			title TEXT NOT NULL DEFAULT '',
+			title_origin TEXT NOT NULL DEFAULT 'manual' CHECK (title_origin IN ('manual', 'auto_pending', 'auto_fallback', 'auto_generated')),
 			created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
 			updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 		);

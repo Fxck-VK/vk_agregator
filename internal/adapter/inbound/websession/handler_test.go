@@ -237,6 +237,44 @@ func TestConversationListReturnsEmptyItemsArray(t *testing.T) {
 	}
 }
 
+func TestGetConversationRejectsForeignArchivedAndNonWebRows(t *testing.T) {
+	h, conversations, sessions := newConversationTestHandler(t)
+	accountID := uuid.New()
+	owned := seedManagedWebConversation(t, conversations, accountID, domain.ConversationSourceWeb, domain.ConversationActive)
+	foreign := seedManagedWebConversation(t, conversations, uuid.New(), domain.ConversationSourceWeb, domain.ConversationActive)
+	archived := seedManagedWebConversation(t, conversations, accountID, domain.ConversationSourceWeb, domain.ConversationArchived)
+	miniApp := seedManagedWebConversation(t, conversations, accountID, domain.ConversationSourceMiniApp, domain.ConversationActive)
+
+	t.Run("returns only the safe active owned web conversation", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		h.Routes().ServeHTTP(rec, authenticatedConversationRequest(t, http.MethodGet, "/web/v1/conversations/"+owned.ID.String(), sessions, accountID))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+		}
+		if got := rec.Header().Get("Cache-Control"); got != "no-store" {
+			t.Fatalf("Cache-Control = %q, want no-store", got)
+		}
+		if got := safeConversationDTO(t, rec.Body.Bytes()); got != owned.ID {
+			t.Fatalf("conversation id = %s, want %s", got, owned.ID)
+		}
+	})
+
+	for name, conversationID := range map[string]uuid.UUID{
+		"foreign":   foreign.ID,
+		"archived":  archived.ID,
+		"non-web":   miniApp.ID,
+		"not found": uuid.New(),
+	} {
+		t.Run("hides "+name+" conversation", func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			h.Routes().ServeHTTP(rec, authenticatedConversationRequest(t, http.MethodGet, "/web/v1/conversations/"+conversationID.String(), sessions, accountID))
+			if rec.Code != http.StatusNotFound {
+				t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+			}
+		})
+	}
+}
+
 func TestConversationListRejectsMalformedLimit(t *testing.T) {
 	for _, rawLimit := range []string{"", "0", "51", "-1", "not-a-number"} {
 		t.Run(rawLimit, func(t *testing.T) {
@@ -556,7 +594,7 @@ func TestConversationCreateReturnsCreatedThenExistingForSameIdempotencyKey(t *te
 	if err != nil {
 		t.Fatalf("load stored conversation: %v", err)
 	}
-	if stored.ID != firstID || stored.AccountID != accountID || stored.UserID != uuid.Nil || stored.Source != domain.ConversationSourceWeb || stored.Status != domain.ConversationActive || stored.Title != "" || stored.VKPeerID != 0 {
+	if stored.ID != firstID || stored.AccountID != accountID || stored.UserID != uuid.Nil || stored.Source != domain.ConversationSourceWeb || stored.Status != domain.ConversationActive || stored.Title != "" || stored.TitleOrigin != domain.ConversationTitleOriginAutoPending || stored.VKPeerID != 0 {
 		t.Fatalf("stored conversation = %#v, want account-owned empty active web conversation", stored)
 	}
 }

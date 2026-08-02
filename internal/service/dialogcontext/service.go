@@ -117,9 +117,14 @@ func (s *Service) Prepare(ctx context.Context, job *domain.Job, prompt string) (
 	if err != nil {
 		return Prepared{}, err
 	}
-	if conversation.Source == domain.ConversationSourceMiniApp || conversation.Source == domain.ConversationSourceWeb {
-		if title := titleFromUserPrompt(prompt); title != "" {
+	if title := titleFromUserPrompt(prompt); title != "" {
+		switch conversation.Source {
+		case domain.ConversationSourceMiniApp:
 			if err := s.repo.SetConversationTitleIfEmpty(ctx, conversation.ID, title); err != nil {
+				return Prepared{}, err
+			}
+		case domain.ConversationSourceWeb:
+			if _, err := s.repo.SetConversationFallbackTitleIfPending(ctx, conversation.ID, title); err != nil {
 				return Prepared{}, err
 			}
 		}

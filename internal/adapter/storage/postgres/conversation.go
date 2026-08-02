@@ -23,7 +23,7 @@ func NewConversationRepository(db Querier) *ConversationRepository {
 
 var _ domain.ConversationRepository = (*ConversationRepository)(nil)
 
-const conversationColumns = `id, user_id, account_id, source, vk_peer_id, external_thread_id, status, title, created_at, updated_at`
+const conversationColumns = `id, user_id, account_id, source, vk_peer_id, external_thread_id, status, title, title_origin, created_at, updated_at`
 const conversationMessageColumns = `id, conversation_id, job_id, seq, role, text, token_count, created_at`
 const conversationSummaryColumns = `id, conversation_id, text, token_count, summarized_until_seq, created_at, updated_at`
 
@@ -164,6 +164,7 @@ func (r *ConversationRepository) ListActiveByAccountSource(ctx context.Context, 
 func (r *ConversationRepository) RenameActiveConversationForAccount(ctx context.Context, accountID, conversationID uuid.UUID, source domain.ConversationSource, title string) (*domain.Conversation, error) {
 	const q = `UPDATE conversations
 		SET title = $4,
+		    title_origin = 'manual',
 		    updated_at = now()
 		WHERE id = $1 AND account_id = $2 AND source = $3 AND status = 'active'
 		RETURNING ` + conversationColumns
@@ -197,12 +198,13 @@ func (r *ConversationRepository) CreateConversation(ctx context.Context, c *doma
 	if c.Status == "" {
 		c.Status = domain.ConversationActive
 	}
+	c.NormalizeTitleOrigin()
 	const q = `
-		INSERT INTO conversations (id, user_id, account_id, source, vk_peer_id, external_thread_id, status, title)
-		VALUES ($1, $2, COALESCE($3::uuid, (SELECT account_id FROM users WHERE id = $2)), $4, $5, $6, $7, $8)
+		INSERT INTO conversations (id, user_id, account_id, source, vk_peer_id, external_thread_id, status, title, title_origin)
+		VALUES ($1, $2, COALESCE($3::uuid, (SELECT account_id FROM users WHERE id = $2)), $4, $5, $6, $7, $8, $9)
 		RETURNING ` + conversationColumns
 	return mapError(scanConversation(r.db.QueryRow(ctx, q,
-		c.ID, nullableUUID(c.UserID), nullableUUID(c.AccountID), c.Source, c.VKPeerID, c.ExternalThreadID, c.Status, c.Title), c))
+		c.ID, nullableUUID(c.UserID), nullableUUID(c.AccountID), c.Source, c.VKPeerID, c.ExternalThreadID, c.Status, c.Title, c.TitleOrigin), c))
 }
 
 func (r *ConversationRepository) SetConversationTitleIfEmpty(ctx context.Context, conversationID uuid.UUID, title string) error {
@@ -217,6 +219,78 @@ func (r *ConversationRepository) SetConversationTitleIfEmpty(ctx context.Context
 		WHERE id = $1 AND btrim(title) = ''`
 	_, err := r.db.Exec(ctx, q, conversationID, title)
 	return mapError(err)
+}
+
+func (r *ConversationRepository) SetConversationFallbackTitleIfPending(ctx context.Context, conversationID uuid.UUID, title string) (bool, error) {
+	title = strings.TrimSpace(title)
+	if title == "" {
+		return false, nil
+	}
+	const q = `
+		UPDATE conversations
+		SET title = $2,
+		    title_origin = 'auto_fallback',
+		    updated_at = now()
+		WHERE id = $1
+		  AND source = 'web'
+		  AND title_origin = 'auto_pending'`
+	tag, err := r.db.Exec(ctx, q, conversationID, title)
+	if err != nil {
+		return false, mapError(err)
+	}
+	return tag.RowsAffected() == 1, nil
+}
+
+func (r *ConversationRepository) SetGeneratedTitleForActiveWebConversation(ctx context.Context, accountID, conversationID uuid.UUID, title string) (bool, error) {
+	title = strings.TrimSpace(title)
+	if title == "" || accountID == uuid.Nil {
+		return false, nil
+	}
+	const q = `
+		UPDATE conversations
+		SET title = $3,
+		    title_origin = 'auto_generated',
+		    updated_at = now()
+		WHERE id = $1
+		  AND account_id = $2
+		  AND source = 'web'
+		  AND status = 'active'
+		  AND title_origin IN ('auto_pending', 'auto_fallback')`
+	tag, err := r.db.Exec(ctx, q, conversationID, accountID, title)
+	if err != nil {
+		return false, mapError(err)
+	}
+	return tag.RowsAffected() == 1, nil
+}
+
+func (r *ConversationRepository) GetUserMessageByJobID(ctx context.Context, jobID uuid.UUID) (*domain.ConversationMessage, error) {
+	const q = `SELECT ` + conversationMessageColumns + `
+		FROM conversation_messages
+		WHERE job_id = $1
+		  AND role = 'user'
+		  AND deleted_at IS NULL
+		  AND redacted_at IS NULL`
+	var message domain.ConversationMessage
+	if err := mapError(scanConversationMessage(r.db.QueryRow(ctx, q, jobID), &message)); err != nil {
+		return nil, err
+	}
+	return &message, nil
+}
+
+func (r *ConversationRepository) GetFirstUserMessage(ctx context.Context, conversationID uuid.UUID) (*domain.ConversationMessage, error) {
+	const q = `SELECT ` + conversationMessageColumns + `
+		FROM conversation_messages
+		WHERE conversation_id = $1
+		  AND role = 'user'
+		  AND deleted_at IS NULL
+		  AND redacted_at IS NULL
+		ORDER BY seq ASC
+		LIMIT 1`
+	var message domain.ConversationMessage
+	if err := mapError(scanConversationMessage(r.db.QueryRow(ctx, q, conversationID), &message)); err != nil {
+		return nil, err
+	}
+	return &message, nil
 }
 
 func (r *ConversationRepository) UpsertMessage(ctx context.Context, m *domain.ConversationMessage) (*domain.ConversationMessage, error) {
@@ -316,7 +390,7 @@ func (r *ConversationRepository) UpsertSummary(ctx context.Context, s *domain.Co
 
 func scanConversation(row rowScanner, c *domain.Conversation) error {
 	var userID, accountID *uuid.UUID
-	if err := row.Scan(&c.ID, &userID, &accountID, &c.Source, &c.VKPeerID, &c.ExternalThreadID, &c.Status, &c.Title, &c.CreatedAt, &c.UpdatedAt); err != nil {
+	if err := row.Scan(&c.ID, &userID, &accountID, &c.Source, &c.VKPeerID, &c.ExternalThreadID, &c.Status, &c.Title, &c.TitleOrigin, &c.CreatedAt, &c.UpdatedAt); err != nil {
 		return err
 	}
 	if userID != nil {
@@ -329,6 +403,7 @@ func scanConversation(row rowScanner, c *domain.Conversation) error {
 	} else {
 		c.AccountID = uuid.Nil
 	}
+	c.NormalizeTitleOrigin()
 	return nil
 }
 

@@ -343,6 +343,7 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("POST /web/v1/auth/logout", h.logout)
 	mux.HandleFunc("GET /web/v1/me", h.requirePrincipal(h.me))
 	mux.HandleFunc("GET /web/v1/conversations", h.requirePrincipal(h.listConversations))
+	mux.HandleFunc("GET /web/v1/conversations/{conversationID}", h.requirePrincipal(h.getConversation))
 	mux.HandleFunc("GET /web/v1/conversations/{conversationID}/messages", h.requirePrincipal(h.listConversationMessages))
 	mux.HandleFunc("GET /web/v1/image-models", h.requirePrincipal(h.listImageModels))
 	mux.HandleFunc("GET /web/v1/image-jobs", h.requirePrincipal(h.listImageJobs))
@@ -998,6 +999,34 @@ func (h *Handler) listConversations(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, safeConversationList{Items: items})
 }
 
+func (h *Handler) getConversation(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	principal, ok := PrincipalFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	conversationID, err := uuid.Parse(strings.TrimSpace(r.PathValue("conversationID")))
+	if err != nil || conversationID == uuid.Nil {
+		writeError(w, http.StatusBadRequest, "invalid conversation id")
+		return
+	}
+	if h.deps.Conversations == nil {
+		writeError(w, http.StatusServiceUnavailable, "conversations unavailable")
+		return
+	}
+	conversation, err := h.deps.Conversations.GetByIDForAccount(r.Context(), principal.AccountID, conversationID)
+	if errors.Is(err, domain.ErrNotFound) || (err == nil && conversation != nil && (conversation.Source != domain.ConversationSourceWeb || conversation.Status != domain.ConversationActive)) {
+		writeError(w, http.StatusNotFound, "conversation not found")
+		return
+	}
+	if err != nil || conversation == nil {
+		writeError(w, http.StatusServiceUnavailable, "conversations unavailable")
+		return
+	}
+	writeJSON(w, http.StatusOK, newSafeConversation(*conversation))
+}
+
 const maxConversationTitleRunes = 120
 
 type renameConversationRequest struct {
@@ -1187,6 +1216,7 @@ func (h *Handler) createConversation(w http.ResponseWriter, r *http.Request) {
 		ExternalThreadID: externalThreadID,
 		Status:           domain.ConversationActive,
 		Title:            "",
+		TitleOrigin:      domain.ConversationTitleOriginAutoPending,
 	}
 	if err := h.deps.Conversations.CreateConversation(r.Context(), conversation); err == nil {
 		writeJSON(w, http.StatusCreated, newSafeConversation(*conversation))
@@ -1277,18 +1307,19 @@ func (h *Handler) createConversationMessage(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	job, err := h.deps.WebChatJobs.CreateJob(r.Context(), joborchestrator.CreateJobInput{
-		UserID:         uuid.Nil,
-		AccountID:      principal.AccountID,
-		Source:         "web",
-		ChannelContext: &domain.ChannelContext{Channel: domain.ChannelWeb},
-		ResultMode:     domain.ResultModeAccountHistory,
-		VKPeerID:       0,
-		CommandID:      uuid.Nil,
-		Operation:      domain.OperationTextGenerate,
-		Modality:       domain.ModalityText,
-		IdempotencyKey: orchestrationKey,
-		CorrelationID:  orchestrationKey,
-		Params:         params,
+		UserID:                     uuid.Nil,
+		AccountID:                  principal.AccountID,
+		Source:                     "web",
+		ChannelContext:             &domain.ChannelContext{Channel: domain.ChannelWeb},
+		ResultMode:                 domain.ResultModeAccountHistory,
+		VKPeerID:                   0,
+		CommandID:                  uuid.Nil,
+		Operation:                  domain.OperationTextGenerate,
+		Modality:                   domain.ModalityText,
+		IdempotencyKey:             orchestrationKey,
+		CorrelationID:              orchestrationKey,
+		Params:                     params,
+		ConversationTitleRequested: conversation.TitleOrigin == domain.ConversationTitleOriginAutoPending,
 	})
 	switch {
 	case errors.Is(err, domain.ErrActiveJobLimitExceeded):
