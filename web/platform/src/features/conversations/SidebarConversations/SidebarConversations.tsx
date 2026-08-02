@@ -49,7 +49,11 @@ export function SidebarConversations({ conversations }: SidebarConversationsProp
     const isCurrentActiveSession = archiveSidebarIsActive
       && sidebarActivityRef.current.isActive
       && archiveSession === sidebarActivityRef.current.session;
-    if (!isActive && wasPanelOwner && isCurrentActiveSession) {
+    const conversationRow = document
+      .getElementById(`sidebar-conversation-${conversationId}`)
+      ?.closest("article");
+    const containsFocusedElement = conversationRow?.contains(document.activeElement) ?? false;
+    if (!isActive && isCurrentActiveSession && (wasPanelOwner || containsFocusedElement)) {
       focusAfterArchiveRef.current = remainingConversations[archiveIndex]?.id ?? remainingConversations.at(-1)?.id ?? "create";
     }
     setArchivedConversationIds((ids) => new Set(ids).add(conversationId));

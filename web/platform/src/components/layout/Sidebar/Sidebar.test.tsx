@@ -586,6 +586,35 @@ describe("Sidebar", () => {
     expect(screen.getByRole("button", { name: ru.conversations.createLabel })).toHaveFocus();
   });
 
+  it("focuses create chat when the current second archive settles before the background first archive", async () => {
+    mockNarrowViewport();
+    let settleA: (response: Response) => void = () => {};
+    let settleB: (response: Response) => void = () => {};
+    vi.mocked(usePathname).mockReturnValue("/app");
+    vi.mocked(useRouter).mockReturnValue({ refresh: vi.fn(), replace: vi.fn() } as never);
+    vi.mocked(webBrowserMutation)
+      .mockReturnValueOnce(new Promise<Response>((resolve) => { settleA = resolve; }))
+      .mockReturnValueOnce(new Promise<Response>((resolve) => { settleB = resolve; }));
+
+    render(<Sidebar conversations={<SidebarConversations conversations={recentConversations.slice(0, 2)} />} />);
+    const trigger = screen.getByRole("button", { name: ru.navigation.openMenuLabel });
+    openNavigation(trigger);
+    const [firstActions, secondActions] = screen.getAllByRole("button", { name: new RegExp(ru.conversations.actionsLabel) });
+    fireEvent.click(firstActions);
+    fireEvent.click(screen.getByRole("button", { name: ru.conversations.archiveLabel }));
+    fireEvent.click(screen.getByRole("button", { name: ru.conversations.archiveConfirmLabel }));
+    fireEvent.click(secondActions);
+    fireEvent.click(screen.getByRole("button", { name: ru.conversations.archiveLabel }));
+    fireEvent.click(screen.getByRole("button", { name: ru.conversations.archiveConfirmLabel }));
+
+    settleB(new Response(null, { status: 204 }));
+    await vi.waitFor(() => expect(screen.queryByRole("link", { name: "Recent chat 2" })).not.toBeInTheDocument());
+    settleA(new Response(null, { status: 204 }));
+
+    await vi.waitFor(() => expect(screen.queryByRole("link", { name: "Recent chat 1" })).not.toBeInTheDocument());
+    expect(screen.getByRole("button", { name: ru.conversations.createLabel })).toHaveFocus();
+  });
+
   it("keeps the second row panel and focus when a background first-row archive fails", async () => {
     mockNarrowViewport();
     let settleRequest: (response: Response) => void = () => {};
