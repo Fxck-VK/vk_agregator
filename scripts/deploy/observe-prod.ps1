@@ -87,6 +87,7 @@ Show-MetricLines -Name "payment webhook" -Url "http://127.0.0.1:8082/metrics" -P
 Write-Host "== Redis stream lengths =="
 $streams = @(
     "stream:jobs:text",
+    "stream:conversations:title",
     "stream:jobs:image",
     "stream:jobs:video",
     "stream:jobs:delivery",

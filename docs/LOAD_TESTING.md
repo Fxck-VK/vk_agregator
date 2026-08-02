@@ -835,6 +835,7 @@ health must be checked from the runtime:
 
 ```powershell
 docker compose exec redis redis-cli XLEN stream:jobs:text
+docker compose exec redis redis-cli XLEN stream:conversations:title
 docker compose exec redis redis-cli XLEN stream:jobs:image
 docker compose exec redis redis-cli XLEN stream:jobs:video
 docker compose exec redis redis-cli XLEN stream:jobs:provider_poll
@@ -1145,6 +1146,7 @@ Default streams:
 
 ```text
 stream:jobs:text
+stream:conversations:title
 stream:jobs:image
 stream:jobs:video
 stream:jobs:delivery

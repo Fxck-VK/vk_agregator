@@ -89,6 +89,7 @@ show_metric_lines "payment webhook" "http://127.0.0.1:8082/metrics" "^(payment_w
 echo "== Redis stream lengths =="
 for stream in \
   stream:jobs:text \
+  stream:conversations:title \
   stream:jobs:image \
   stream:jobs:video \
   stream:jobs:delivery \

@@ -432,6 +432,7 @@ $Streams = Split-SettingList `
     -EnvName "LOADTEST_REDIS_STREAMS" `
     -Default @(
         "stream:jobs:text",
+        "stream:conversations:title",
         "stream:jobs:image",
         "stream:jobs:video",
         "stream:jobs:delivery",

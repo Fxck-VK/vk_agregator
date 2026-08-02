@@ -683,6 +683,7 @@ if (-not $SkipRedis) {
 
         $streams = Split-SettingList -Explicit @() -EnvName "LOADTEST_REDIS_STREAMS" -Default @(
             "stream:jobs:text",
+            "stream:conversations:title",
             "stream:jobs:image",
             "stream:jobs:video",
             "stream:jobs:delivery",

@@ -32,11 +32,11 @@ Existing non-empty conversations migrate to `manual`; existing empty Web convers
 
 ### 2. Durable internal title task
 
-The normal transactional outbox event for an accepted Web text job fans out to a dedicated Redis stream, `stream:conversations:title`. The payload contains only job/account/correlation metadata and never the prompt.
+When an accepted Web text job belongs to a title-eligible conversation, its creation transaction records a second, independent `event.conversation_title.queued` outbox row. The existing `event.job.queued` path remains solely responsible for the normal answer. The title event publishes to a dedicated Redis stream, `stream:conversations:title`, and contains only job/account/correlation metadata—never the prompt.
 
 The title worker loads the persisted job and conversation, verifies the exact account, `web` source and active status, and reads only the first stored user message from the database. If the normal worker has not yet stored that message, the title task is retryable. Repeated deliveries are safe: only the first-message job for a conversation may call the generator, and the final write is an atomic compare-and-set.
 
-This keeps title work off the normal chat latency path and gives it the existing Redis claim, retry and recovery behaviour. A failed title task never changes the success or failure state of the user chat job.
+This keeps title work off the normal chat latency path: a Redis or DeepSeek failure retries or falls back only within the title path and cannot duplicate or delay the normal chat generation event. It gives the title worker existing Redis claim and recovery behaviour. A failed title task never changes the success or failure state of the user chat job.
 
 ### 3. DeepSeek generator boundary
 
