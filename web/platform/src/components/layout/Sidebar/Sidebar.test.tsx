@@ -269,6 +269,39 @@ describe("Sidebar", () => {
     expect(trigger).not.toHaveFocus();
   });
 
+  it("clears an unmounted conversation panel before the next Escape", () => {
+    mockNarrowViewport();
+    const rendered = render(<Sidebar conversations={<SidebarConversations conversations={recentConversations} />} />);
+    const trigger = screen.getByRole("button", { name: ru.navigation.openMenuLabel });
+    const panel = screen.getByTestId("sidebar-panel");
+    openNavigation(trigger);
+
+    fireEvent.click(screen.getByRole("button", { name: `${ru.conversations.actionsLabel}: Recent chat 1` }));
+    rendered.rerender(<Sidebar conversations={<SidebarConversations conversations={recentConversations.slice(1)} />} />);
+    fireEvent.keyDown(window, { key: "Escape" });
+
+    expect(panel).toHaveAttribute("data-open", "false");
+    expect(trigger).toHaveFocus();
+  });
+
+  it("keeps the drawer open while any other conversation panel remains open", () => {
+    const { panel, trigger } = renderNarrowSidebar({
+      conversations: <SidebarConversations conversations={recentConversations} />,
+    });
+    openNavigation(trigger);
+    const firstActions = screen.getByRole("button", { name: `${ru.conversations.actionsLabel}: Recent chat 1` });
+    const secondActions = screen.getByRole("button", { name: `${ru.conversations.actionsLabel}: Recent chat 2` });
+
+    fireEvent.click(firstActions);
+    fireEvent.click(secondActions);
+    fireEvent.click(firstActions);
+    fireEvent.keyDown(window, { key: "Escape" });
+
+    expect(panel).toHaveAttribute("data-open", "true");
+    expect(secondActions).toHaveAttribute("aria-expanded", "false");
+    expect(trigger).not.toHaveFocus();
+  });
+
   it("keeps twenty recent chat links reachable above a focusable account control", () => {
     mockWideViewport();
     render(

@@ -28,6 +28,7 @@ export function ConversationRow({ conversation, isActive }: ConversationRowProps
   const actionToggleRef = useRef<HTMLButtonElement>(null);
   const archiveConfirmRef = useRef<HTMLButtonElement>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
+  const focusAfterPendingRef = useRef<"rename" | "archive" | null>(null);
   const restoreActionFocusRef = useRef(false);
   const rowRef = useRef<HTMLElement>(null);
 
@@ -46,9 +47,6 @@ export function ConversationRow({ conversation, isActive }: ConversationRowProps
   };
 
   useEffect(() => {
-    rowRef.current?.dispatchEvent(
-      new CustomEvent("conversation-row-panel-change", { bubbles: true, detail: { open: panel !== null } }),
-    );
     if (panel === "rename") renameInputRef.current?.focus();
     if (panel === "archive") archiveConfirmRef.current?.focus();
     if (panel === null && restoreActionFocusRef.current) {
@@ -56,6 +54,29 @@ export function ConversationRow({ conversation, isActive }: ConversationRowProps
       actionToggleRef.current?.focus();
     }
   }, [panel]);
+
+  useEffect(() => {
+    const notifySidebar = (open: boolean) => {
+      window.dispatchEvent(
+        new CustomEvent("conversation-row-panel-change", {
+          bubbles: true,
+          detail: { conversationId: conversation.id, open },
+        }),
+      );
+    };
+
+    notifySidebar(panel !== null);
+    return () => notifySidebar(false);
+  }, [conversation.id, panel]);
+
+  useEffect(() => {
+    if (isPending || focusAfterPendingRef.current === null) return;
+
+    const focusTarget = focusAfterPendingRef.current;
+    focusAfterPendingRef.current = null;
+    if (focusTarget === "rename") renameInputRef.current?.focus();
+    else archiveConfirmRef.current?.focus();
+  }, [isPending]);
 
   useEffect(() => {
     if (panel === null) return undefined;
@@ -85,8 +106,10 @@ export function ConversationRow({ conversation, isActive }: ConversationRowProps
 
       parseConversationList({ items: [await response.json()] });
       setPanel(null);
+      actionToggleRef.current?.focus();
       router.refresh();
     } catch {
+      focusAfterPendingRef.current = "rename";
       setHasError(true);
     } finally {
       setIsPending(false);
@@ -104,6 +127,7 @@ export function ConversationRow({ conversation, isActive }: ConversationRowProps
       if (isActive) router.replace("/app");
       else router.refresh();
     } catch {
+      focusAfterPendingRef.current = "archive";
       setHasError(true);
     } finally {
       setIsPending(false);

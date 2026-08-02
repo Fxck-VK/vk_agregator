@@ -32,7 +32,7 @@ export function Sidebar({ account, conversations, isDesktopCollapsed = false, on
   const [isOpen, setIsOpen] = useState(false);
   const firstLinkRef = useRef<HTMLAnchorElement>(null);
   const hasObservedPathnameRef = useRef(false);
-  const hasOpenConversationPanelRef = useRef(false);
+  const openConversationPanelIdsRef = useRef(new Set<string>());
   const panelRef = useRef<HTMLDivElement>(null);
   const previousPathnameRef = useRef(pathname);
   const restoreFocusRef = useRef(false);
@@ -78,19 +78,22 @@ export function Sidebar({ account, conversations, isDesktopCollapsed = false, on
   }, [isNarrowViewport, isOpen, pathname]);
 
   useEffect(() => {
-    const panel = panelRef.current;
-    if (!panel) {
-      return undefined;
-    }
-
     const observeConversationPanel = (event: Event) => {
-      const { open } = (event as CustomEvent<{ open?: boolean }>).detail;
-      hasOpenConversationPanelRef.current = open === true;
+      const { conversationId, open } = (event as CustomEvent<{ conversationId?: unknown; open?: boolean }>).detail;
+      if (typeof conversationId !== "string") {
+        return;
+      }
+
+      if (open === true) {
+        openConversationPanelIdsRef.current.add(conversationId);
+      } else {
+        openConversationPanelIdsRef.current.delete(conversationId);
+      }
     };
 
-    panel.addEventListener("conversation-row-panel-change", observeConversationPanel);
+    window.addEventListener("conversation-row-panel-change", observeConversationPanel);
 
-    return () => panel.removeEventListener("conversation-row-panel-change", observeConversationPanel);
+    return () => window.removeEventListener("conversation-row-panel-change", observeConversationPanel);
   }, []);
 
   useEffect(() => {
@@ -110,7 +113,7 @@ export function Sidebar({ account, conversations, isDesktopCollapsed = false, on
     firstLinkRef.current?.focus();
     const keepFocusInDrawer = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        if (hasOpenConversationPanelRef.current) {
+        if (openConversationPanelIdsRef.current.size > 0) {
           return;
         }
 

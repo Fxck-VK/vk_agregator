@@ -90,6 +90,19 @@ describe("ConversationRow", () => {
     expect(screen.queryByRole("textbox", { name: ru.conversations.renameInputLabel })).not.toBeInTheDocument();
   });
 
+  it("restores action-toggle focus before refreshing after a successful rename", async () => {
+    vi.mocked(webBrowserMutation).mockResolvedValue(Response.json(conversation, { status: 200 }));
+    renderRow();
+    const actions = screen.getByRole("button", { name: actionsLabel() });
+    refresh.mockImplementation(() => expect(actions).toHaveFocus());
+
+    fireEvent.click(actions);
+    fireEvent.click(screen.getByRole("button", { name: ru.conversations.renameLabel }));
+    fireEvent.keyDown(screen.getByRole("textbox", { name: ru.conversations.renameInputLabel }), { key: "Enter" });
+
+    await vi.waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
+  });
+
   it("keeps the typed title and shows neutral feedback after a bad rename response", async () => {
     vi.mocked(webBrowserMutation).mockResolvedValue(new Response("backend detail", { status: 409 }));
     renderRow();
@@ -104,6 +117,21 @@ describe("ConversationRow", () => {
     expect(titleInput).toHaveValue("Не потерять");
     expect(screen.queryByText("backend detail")).not.toBeInTheDocument();
     expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it("returns focus to the rename input after a failed rename mutation", async () => {
+    vi.mocked(webBrowserMutation).mockResolvedValue(new Response(null, { status: 500 }));
+    renderRow();
+
+    fireEvent.click(screen.getByRole("button", { name: actionsLabel() }));
+    fireEvent.click(screen.getByRole("button", { name: ru.conversations.renameLabel }));
+    const titleInput = screen.getByRole("textbox", { name: ru.conversations.renameInputLabel });
+    const submit = screen.getByRole("button", { name: ru.conversations.renameSubmitLabel });
+    submit.focus();
+    fireEvent.click(submit);
+
+    await screen.findByRole("alert");
+    expect(titleInput).toHaveFocus();
   });
 
   it.each([
@@ -167,6 +195,21 @@ describe("ConversationRow", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(ru.conversations.archiveFailure);
     expect(screen.getByRole("link", { name: conversation.title })).toBeInTheDocument();
     expect(screen.queryByText("backend detail")).not.toBeInTheDocument();
+  });
+
+  it("returns focus to the archive confirmation after a failed archive mutation", async () => {
+    vi.mocked(webBrowserMutation).mockResolvedValue(new Response(null, { status: 500 }));
+    renderRow();
+
+    fireEvent.click(screen.getByRole("button", { name: actionsLabel() }));
+    fireEvent.click(screen.getByRole("button", { name: ru.conversations.archiveLabel }));
+    const archiveConfirm = screen.getByRole("button", { name: ru.conversations.archiveConfirmLabel });
+    const cancel = screen.getByRole("button", { name: ru.conversations.cancelLabel });
+    cancel.focus();
+    fireEvent.click(archiveConfirm);
+
+    await screen.findByRole("alert");
+    expect(archiveConfirm).toHaveFocus();
   });
 
   it("keeps the row after a 200 delete response instead of treating it as archived", async () => {
