@@ -246,13 +246,22 @@ func (r *ConversationRepo) ArchiveConversationForAccount(_ context.Context, acco
 		c.Status = domain.ConversationArchived
 		c.UpdatedAt = time.Now()
 		r.byID[conversationID] = c
-		delete(r.activeByRef, activeConversationRefKey(domain.ConversationRef{
+		ref := domain.ConversationRef{
 			UserID:           c.UserID,
 			AccountID:        c.AccountID,
 			Source:           c.Source,
 			VKPeerID:         c.VKPeerID,
 			ExternalThreadID: c.ExternalThreadID,
-		}))
+		}
+		key := activeConversationRefKey(ref)
+		delete(r.activeByRef, key)
+		if c.UserID != uuid.Nil {
+			ref.AccountID = uuid.Nil
+			legacyKey := activeConversationRefKey(ref)
+			if legacyKey != key {
+				delete(r.activeByRef, legacyKey)
+			}
+		}
 	}
 	return nil
 }

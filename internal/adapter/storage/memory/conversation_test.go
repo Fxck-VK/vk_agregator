@@ -172,3 +172,56 @@ func TestConversationRepoRejectsUnownedWebConversation(t *testing.T) {
 		t.Fatalf("create unowned web conversation error = %v, want %v", err, domain.ErrConversationAccountOwnershipRequired)
 	}
 }
+
+func TestConversationRepoArchiveDualOwnerRemovesAccountAndLegacyActiveReferences(t *testing.T) {
+	ctx := context.Background()
+	repo := NewConversationRepo()
+	userID := uuid.New()
+	accountID := uuid.New()
+	conversation := &domain.Conversation{
+		UserID:           userID,
+		AccountID:        accountID,
+		Source:           domain.ConversationSourceWeb,
+		ExternalThreadID: "dual-owner-thread",
+	}
+	if err := repo.CreateConversation(ctx, conversation); err != nil {
+		t.Fatalf("create dual-owner conversation: %v", err)
+	}
+
+	if err := repo.ArchiveConversationForAccount(ctx, accountID, conversation.ID, domain.ConversationSourceWeb); err != nil {
+		t.Fatalf("archive conversation: %v", err)
+	}
+	if err := repo.ArchiveConversationForAccount(ctx, accountID, conversation.ID, domain.ConversationSourceWeb); err != nil {
+		t.Fatalf("repeat archive conversation: %v", err)
+	}
+
+	lookups := []domain.ConversationRef{
+		{
+			UserID:           userID,
+			AccountID:        accountID,
+			Source:           domain.ConversationSourceWeb,
+			ExternalThreadID: conversation.ExternalThreadID,
+		},
+		{
+			UserID:           userID,
+			Source:           domain.ConversationSourceWeb,
+			ExternalThreadID: conversation.ExternalThreadID,
+		},
+	}
+	for _, ref := range lookups {
+		if got, err := repo.GetActiveByReference(ctx, ref); !errors.Is(err, domain.ErrNotFound) || got != nil {
+			t.Fatalf("archived active lookup for account=%s user=%s = %#v, %v; want nil, %v", ref.AccountID, ref.UserID, got, err, domain.ErrNotFound)
+		}
+	}
+
+	stored, err := repo.GetByIDForAccount(ctx, accountID, conversation.ID)
+	if err != nil {
+		t.Fatalf("read archived history: %v", err)
+	}
+	if stored.Status != domain.ConversationArchived {
+		t.Fatalf("stored status = %q, want %q", stored.Status, domain.ConversationArchived)
+	}
+	if _, err := repo.GetByIDForAccount(ctx, uuid.New(), conversation.ID); !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("foreign account history lookup = %v, want %v", err, domain.ErrNotFound)
+	}
+}
