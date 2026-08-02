@@ -4,7 +4,6 @@ import type { ReactNode } from "react";
 
 import { WorkspaceFrame } from "@/components/layout/WorkspaceFrame/WorkspaceFrame";
 import { AccountControl } from "@/features/account/AccountControl/AccountControl";
-import { SidebarConversations } from "@/features/conversations/SidebarConversations/SidebarConversations";
 import { SessionRefresh } from "@/features/session/SessionRefresh/SessionRefresh";
 import { loadWorkspaceSession } from "@/features/session/session-data";
 import { ru } from "@/i18n/ru";
@@ -46,7 +45,8 @@ export default async function WorkspaceLayout({ children }: Readonly<{ children:
   return (
     <WorkspaceFrame
       account={<AccountControl profile={session.profile} />}
-      conversations={<SidebarConversations conversations={session.conversations} />}
+      accountId={session.profile.account_id}
+      conversations={session.conversations}
     >
       {children}
     </WorkspaceFrame>

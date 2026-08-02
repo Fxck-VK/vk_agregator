@@ -16,6 +16,7 @@ import { ru } from "@/i18n/ru";
 import { webBrowserMutation } from "@/lib/web-api/browser";
 import type { ConversationItem } from "@/lib/web-api/contracts";
 
+import { WorkspaceConversationListProvider, useWorkspaceConversationList } from "../WorkspaceConversationList/WorkspaceConversationList";
 import { SidebarConversations } from "./SidebarConversations";
 
 const conversations: ConversationItem[] = [
@@ -171,5 +172,37 @@ describe("SidebarConversations", () => {
     expect(screen.getByText(ru.conversations.empty)).toBeInTheDocument();
     expect(screen.queryByRole("link")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: ru.conversations.createLabel })).not.toBeInTheDocument();
+  });
+
+  it("renders conversations added through the workspace provider", () => {
+    const addedConversation: ConversationItem = {
+      id: "3b143cdc-26f3-4d48-ac59-70e40f4a42f3",
+      title: "Added in workspace",
+      created_at: "2026-08-02T10:00:00Z",
+      updated_at: "2026-08-02T10:00:00Z",
+    };
+
+    function ProviderBackedSidebar() {
+      const { upsertConversation } = useWorkspaceConversationList();
+
+      return (
+        <>
+          <button onClick={() => upsertConversation(addedConversation)} type="button">Add workspace chat</button>
+          <SidebarConversations />
+        </>
+      );
+    }
+
+    vi.mocked(usePathname).mockReturnValue("/app");
+    vi.mocked(useRouter).mockReturnValue({ push: vi.fn(), refresh: vi.fn() } as never);
+    render(
+      <WorkspaceConversationListProvider accountId="0ce06a6a-16d8-4b16-b9df-5e63175a4a0c" initialConversations={[]}>
+        <ProviderBackedSidebar />
+      </WorkspaceConversationListProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Add workspace chat" }));
+
+    expect(screen.getByRole("link", { name: addedConversation.title })).toHaveAttribute("href", `/app/chat/${addedConversation.id}`);
   });
 });

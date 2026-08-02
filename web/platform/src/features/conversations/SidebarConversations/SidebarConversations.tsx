@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import { useLayoutEffect, useRef, useState } from "react";
 
 import { ConversationRow } from "@/features/conversations/ConversationRow/ConversationRow";
+import { useOptionalWorkspaceConversationList } from "@/features/conversations/WorkspaceConversationList/WorkspaceConversationList";
 import { ru } from "@/i18n/ru";
 import type { ConversationItem } from "@/lib/web-api/contracts";
 
@@ -11,10 +12,11 @@ import styles from "./SidebarConversations.module.css";
 import { useSidebarConversationsActive } from "./SidebarConversationsActivity";
 
 type SidebarConversationsProps = {
-  conversations: ConversationItem[];
+  conversations?: ConversationItem[];
 };
 
 export function SidebarConversations({ conversations }: SidebarConversationsProps) {
+  const workspaceConversationList = useOptionalWorkspaceConversationList();
   const pathname = usePathname();
   const { isActive: sidebarIsActive, onPendingPanelChange, onVisiblePanelChange, session: sidebarSession } = useSidebarConversationsActive();
   const [archivedConversationIds, setArchivedConversationIds] = useState<Set<string>>(() => new Set());
@@ -23,7 +25,7 @@ export function SidebarConversations({ conversations }: SidebarConversationsProp
   const focusAfterArchiveRef = useRef<string | "new-chat" | null>(null);
   const sidebarActivityRef = useRef({ isActive: sidebarIsActive, ownerConversationId: openConversationId, session: sidebarSession });
 
-  const visibleConversations = conversations.filter((conversation) => !archivedConversationIds.has(conversation.id));
+  const visibleConversations = (workspaceConversationList?.conversations ?? conversations ?? []).filter((conversation) => !archivedConversationIds.has(conversation.id));
   const activeConversationId = sidebarIsActive && openConversationSession === sidebarSession ? openConversationId : null;
 
   useLayoutEffect(() => {

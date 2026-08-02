@@ -5,6 +5,9 @@ import { useState, useSyncExternalStore } from "react";
 
 import { AppShell } from "@/components/layout/AppShell/AppShell";
 import { Sidebar } from "@/components/layout/Sidebar/Sidebar";
+import { SidebarConversations } from "@/features/conversations/SidebarConversations/SidebarConversations";
+import { WorkspaceConversationListProvider } from "@/features/conversations/WorkspaceConversationList/WorkspaceConversationList";
+import type { ConversationItem } from "@/lib/web-api/contracts";
 
 const desktopSidebarCollapsedStorageKey = "neirohub.desktop-sidebar-collapsed";
 
@@ -21,11 +24,12 @@ function getDesktopSidebarPreference() {
 
 type WorkspaceFrameProps = {
   account?: ReactNode;
+  accountId: string;
   children: ReactNode;
-  conversations?: ReactNode;
+  conversations: ConversationItem[];
 };
 
-export function WorkspaceFrame({ account, children, conversations }: WorkspaceFrameProps) {
+export function WorkspaceFrame({ account, accountId, children, conversations }: WorkspaceFrameProps) {
   const restoredDesktopSidebarCollapsed = useSyncExternalStore(
     subscribeToDesktopSidebarPreference,
     getDesktopSidebarPreference,
@@ -46,18 +50,20 @@ export function WorkspaceFrame({ account, children, conversations }: WorkspaceFr
   };
 
   return (
-    <AppShell
-      isDesktopSidebarCollapsed={isDesktopSidebarCollapsed}
-      sidebar={
-        <Sidebar
-          account={account}
-          conversations={conversations}
-          isDesktopCollapsed={isDesktopSidebarCollapsed}
-          onDesktopToggle={toggleDesktopSidebar}
-        />
-      }
-    >
-      {children}
-    </AppShell>
+    <WorkspaceConversationListProvider accountId={accountId} initialConversations={conversations} key={accountId}>
+      <AppShell
+        isDesktopSidebarCollapsed={isDesktopSidebarCollapsed}
+        sidebar={
+          <Sidebar
+            account={account}
+            conversations={<SidebarConversations />}
+            isDesktopCollapsed={isDesktopSidebarCollapsed}
+            onDesktopToggle={toggleDesktopSidebar}
+          />
+        }
+      >
+        {children}
+      </AppShell>
+    </WorkspaceConversationListProvider>
   );
 }
