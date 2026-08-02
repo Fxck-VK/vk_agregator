@@ -903,6 +903,8 @@ func outboxEventClass(eventType string) string {
 		return "queued"
 	case "event.job.result_ready":
 		return "result_ready"
+	case "event.conversation_title.queued":
+		return "conversation_title"
 	case "batch":
 		return "batch"
 	default:

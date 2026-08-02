@@ -1,6 +1,7 @@
 package joborchestrator_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 
+	redisqueue "vk-ai-aggregator/internal/adapter/queue/redis"
 	"vk-ai-aggregator/internal/adapter/storage/memory"
 	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/platform/queue"
@@ -260,6 +262,84 @@ func TestCreateJobAllowsFreeTextWithoutReservation(t *testing.T) {
 	f.drain(t)
 	if f.pub.Len() != 1 {
 		t.Fatalf("free text job enqueued tasks = %d, want 1", f.pub.Len())
+	}
+}
+
+func TestCreateWebTextJobWithConversationTitleRequestAddsIndependentSafeOutboxEvent(t *testing.T) {
+	f := newFixture()
+	ctx := context.Background()
+	accountID := uuid.New()
+	const rawPrompt = "do-not-put-this-prompt-in-the-title-event"
+
+	job, err := f.orch.CreateJob(ctx, joborchestrator.CreateJobInput{
+		AccountID:                  accountID,
+		Source:                     "web",
+		ChannelContext:             &domain.ChannelContext{Channel: domain.ChannelWeb},
+		ResultMode:                 domain.ResultModeAccountHistory,
+		Operation:                  domain.OperationTextGenerate,
+		Modality:                   domain.ModalityText,
+		IdempotencyKey:             "web-chat:title-event",
+		CorrelationID:              "web-chat-title-event",
+		Params:                     json.RawMessage(`{"prompt":"` + rawPrompt + `"}`),
+		ConversationTitleRequested: true,
+	})
+	if err != nil {
+		t.Fatalf("create web text job: %v", err)
+	}
+
+	events := f.outbox.Events()
+	if len(events) != 3 {
+		t.Fatalf("outbox event count = %d, want created + queued + title", len(events))
+	}
+	var titleEvent *domain.OutboxEvent
+	for i := range events {
+		if events[i].EventType == outboxrelay.EventConversationTitleQueued {
+			titleEvent = &events[i]
+			break
+		}
+	}
+	if titleEvent == nil {
+		t.Fatalf("missing %q event in %+v", outboxrelay.EventConversationTitleQueued, events)
+	}
+	if titleEvent.AggregateType != "job" || titleEvent.AggregateID != job.ID {
+		t.Fatalf("title event aggregate = %s/%s, want job/%s", titleEvent.AggregateType, titleEvent.AggregateID, job.ID)
+	}
+	if bytes.Contains(titleEvent.Payload, []byte(rawPrompt)) || bytes.Contains(titleEvent.Payload, []byte(`"params"`)) || bytes.Contains(titleEvent.Payload, []byte(`"prompt"`)) {
+		t.Fatalf("title event leaked request data: %s", titleEvent.Payload)
+	}
+
+	f.drain(t)
+	if normal := f.pub.Tasks("queue.text.generate"); len(normal) != 1 || normal[0].JobID != job.ID {
+		t.Fatalf("normal generation tasks = %+v, want one task for %s", normal, job.ID)
+	}
+	if title := f.pub.StreamTasks(redisqueue.StreamConversationTitle); len(title) != 1 || title[0].JobID != job.ID {
+		t.Fatalf("title stream tasks = %+v, want one task for %s", title, job.ID)
+	}
+}
+
+func TestCreateJobRejectsConversationTitleRequestOutsideWebText(t *testing.T) {
+	f := newFixture()
+	ctx := context.Background()
+
+	job, err := f.orch.CreateJob(ctx, joborchestrator.CreateJobInput{
+		AccountID:                  uuid.New(),
+		Source:                     "web",
+		ChannelContext:             &domain.ChannelContext{Channel: domain.ChannelWeb},
+		ResultMode:                 domain.ResultModeAccountHistory,
+		Operation:                  domain.OperationImageGenerate,
+		Modality:                   domain.ModalityImage,
+		IdempotencyKey:             "web-image:title-event",
+		CostEstimateCredits:        1,
+		ConversationTitleRequested: true,
+	})
+	if !errors.Is(err, joborchestrator.ErrInvalidConversationTitleRequest) {
+		t.Fatalf("CreateJob() error = %v, want ErrInvalidConversationTitleRequest", err)
+	}
+	if job != nil {
+		t.Fatalf("invalid title request created job: %+v", job)
+	}
+	if events := f.outbox.Events(); len(events) != 0 {
+		t.Fatalf("invalid title request created outbox events: %+v", events)
 	}
 }
 

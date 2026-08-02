@@ -478,6 +478,124 @@ func TestDrainTreatsCreatedAsExplicitAuditOnly(t *testing.T) {
 	}
 }
 
+func TestDrainPublishesConversationTitleOnlyToDedicatedStream(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 8, 2, 12, 0, 0, 0, time.UTC)
+	outbox := memory.NewOutboxRepo()
+	manager := memory.NewUnitOfWork(memory.NewJobRepo(), outbox, nil)
+	publisher := newRecordingPublisher()
+	relay := testRelay(manager, publisher, &now)
+	task := queue.Task{
+		JobID:         uuid.New(),
+		Operation:     domain.OperationTextGenerate,
+		Modality:      domain.ModalityText,
+		CorrelationID: "conversation-title",
+	}
+	if err := outbox.Add(ctx, conversationTitleEvent(t, task, uuid.New())); err != nil {
+		t.Fatalf("add title event: %v", err)
+	}
+
+	if got, err := relay.Drain(ctx); err != nil || got != 1 {
+		t.Fatalf("Drain() = (%d, %v), want (1, nil)", got, err)
+	}
+	if publisher.enqueueCalls != 0 {
+		t.Fatalf("title event used normal generation enqueue %d times", publisher.enqueueCalls)
+	}
+	if publisher.publishCalls != 1 {
+		t.Fatalf("title event explicit publish calls = %d, want 1", publisher.publishCalls)
+	}
+	if titleTasks := publisher.inner.StreamTasks(redisqueue.StreamConversationTitle); len(titleTasks) != 1 || titleTasks[0].JobID != task.JobID {
+		t.Fatalf("title stream tasks = %+v, want task for %s", titleTasks, task.JobID)
+	}
+}
+
+func TestDrainQuarantinesConversationTitlePayloadWithRequestData(t *testing.T) {
+	for _, field := range []string{"prompt", "params"} {
+		t.Run(field, func(t *testing.T) {
+			ctx := context.Background()
+			now := time.Date(2026, 8, 2, 12, 0, 0, 0, time.UTC)
+			outbox := memory.NewOutboxRepo()
+			manager := memory.NewUnitOfWork(memory.NewJobRepo(), outbox, nil)
+			publisher := newRecordingPublisher()
+			relay := testRelay(manager, publisher, &now)
+			task := queue.Task{
+				JobID:     uuid.New(),
+				Operation: domain.OperationTextGenerate,
+				Modality:  domain.ModalityText,
+			}
+			event := conversationTitleEvent(t, task, uuid.New())
+			var payload map[string]json.RawMessage
+			if err := json.Unmarshal(event.Payload, &payload); err != nil {
+				t.Fatalf("decode title payload: %v", err)
+			}
+			payload[field] = json.RawMessage(`{"secret":"must-not-enter-title-stream"}`)
+			var err error
+			event.Payload, err = json.Marshal(payload)
+			if err != nil {
+				t.Fatalf("encode unsafe title payload: %v", err)
+			}
+			if err := outbox.Add(ctx, event); err != nil {
+				t.Fatalf("add unsafe title event: %v", err)
+			}
+
+			if got, err := relay.Drain(ctx); err == nil || got != 0 {
+				t.Fatalf("Drain() = (%d, %v), want (0, invalid-event error)", got, err)
+			}
+			if publisher.enqueueCalls != 0 || publisher.publishCalls != 0 {
+				t.Fatalf("unsafe title event reached publisher: enqueue=%d publish=%d", publisher.enqueueCalls, publisher.publishCalls)
+			}
+			stored := outbox.Events()[0]
+			if stored.Status != domain.OutboxFailed || stored.LastErrorCode != "invalid_event" {
+				t.Fatalf("unsafe title event state = %+v, want invalid_event quarantine", stored)
+			}
+		})
+	}
+}
+
+func TestTitleStreamPublishFailureDoesNotRepublishNormalGeneration(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 8, 2, 12, 0, 0, 0, time.UTC)
+	outbox := memory.NewOutboxRepo()
+	manager := memory.NewUnitOfWork(memory.NewJobRepo(), outbox, nil)
+	publisher := newRecordingPublisher()
+	titlePublishFailure := errors.New("title stream unavailable")
+	publisher.publishErrs = []error{titlePublishFailure}
+	relay := testRelay(manager, publisher, &now, WithBatchSize(2), WithRetryBackoff(func(int) time.Duration { return 0 }))
+	normalTask := sampleTask()
+	titleTask := queue.Task{
+		JobID:         uuid.New(),
+		Operation:     domain.OperationTextGenerate,
+		Modality:      domain.ModalityText,
+		CorrelationID: "conversation-title-failure",
+	}
+	if err := outbox.Add(ctx, taskEvent(t, EventJobQueued, normalTask)); err != nil {
+		t.Fatalf("add normal event: %v", err)
+	}
+	if err := outbox.Add(ctx, conversationTitleEvent(t, titleTask, uuid.New())); err != nil {
+		t.Fatalf("add title event: %v", err)
+	}
+
+	if got, err := relay.Drain(ctx); got != 1 || !errors.Is(err, titlePublishFailure) {
+		t.Fatalf("first Drain() = (%d, %v), want (1, title publish failure)", got, err)
+	}
+	if publisher.enqueueCalls != 1 {
+		t.Fatalf("normal generation enqueues after title failure = %d, want 1", publisher.enqueueCalls)
+	}
+	if publisher.publishCalls != 1 {
+		t.Fatalf("title stream publishes after failure = %d, want 1", publisher.publishCalls)
+	}
+
+	if got, err := relay.Drain(ctx); err != nil || got != 1 {
+		t.Fatalf("second Drain() = (%d, %v), want (1, nil)", got, err)
+	}
+	if publisher.enqueueCalls != 1 {
+		t.Fatalf("normal generation was republished after title retry: %d calls", publisher.enqueueCalls)
+	}
+	if publisher.publishCalls != 2 {
+		t.Fatalf("title stream publish retries = %d, want 2", publisher.publishCalls)
+	}
+}
+
 func TestDrainQuarantinesInvalidCreatedEventEnvelope(t *testing.T) {
 	validTask := sampleTask()
 	for _, test := range []struct {
@@ -619,6 +737,28 @@ func taskEvent(t *testing.T, eventType string, task queue.Task) *domain.OutboxEv
 		AggregateType: "job",
 		AggregateID:   task.JobID,
 		EventType:     eventType,
+		Payload:       payload,
+	}
+}
+
+func conversationTitleEvent(t *testing.T, task queue.Task, accountID uuid.UUID) *domain.OutboxEvent {
+	t.Helper()
+	payload, err := json.Marshal(struct {
+		JobID         uuid.UUID            `json:"job_id"`
+		AccountID     uuid.UUID            `json:"account_id"`
+		Source        string               `json:"source"`
+		Operation     domain.OperationType `json:"operation"`
+		Modality      domain.Modality      `json:"modality"`
+		CorrelationID string               `json:"correlation_id,omitempty"`
+		Traceparent   string               `json:"traceparent,omitempty"`
+	}{task.JobID, accountID, "web", task.Operation, task.Modality, task.CorrelationID, task.Traceparent})
+	if err != nil {
+		t.Fatalf("marshal title event payload: %v", err)
+	}
+	return &domain.OutboxEvent{
+		AggregateType: "job",
+		AggregateID:   task.JobID,
+		EventType:     EventConversationTitleQueued,
 		Payload:       payload,
 	}
 }

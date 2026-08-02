@@ -29,6 +29,9 @@ const (
 	StreamVideo        = "stream:jobs:video"
 	StreamDelivery     = "stream:jobs:delivery"
 	StreamProviderPoll = "stream:jobs:provider_poll"
+	// StreamConversationTitle isolates inexpensive, best-effort title work from
+	// user-visible text generation. It carries IDs and queue metadata only.
+	StreamConversationTitle = "stream:conversations:title"
 	// StreamDLQ is the dead-letter stream for tasks that exhausted their retry
 	// budget. It is not consumed by workers; entries are inspected/replayed by
 	// operators.
@@ -37,11 +40,11 @@ const (
 
 // AllStreams lists every worker-consumed stream (the DLQ is intentionally
 // excluded; nothing auto-consumes it).
-var AllStreams = []string{StreamText, StreamImage, StreamVideo, StreamDelivery, StreamProviderPoll}
+var AllStreams = []string{StreamText, StreamImage, StreamVideo, StreamDelivery, StreamProviderPoll, StreamConversationTitle}
 
 // AllStreamsWithDLQ lists worker streams plus the operator-inspected DLQ for
 // maintenance trimming.
-var AllStreamsWithDLQ = []string{StreamText, StreamImage, StreamVideo, StreamDelivery, StreamProviderPoll, StreamDLQ}
+var AllStreamsWithDLQ = []string{StreamText, StreamImage, StreamVideo, StreamDelivery, StreamProviderPoll, StreamConversationTitle, StreamDLQ}
 
 // taskField is the Redis stream entry field that carries the JSON task body.
 const taskField = "task"
@@ -443,6 +446,8 @@ func queueClassForStream(stream string) string {
 		return "delivery"
 	case StreamProviderPoll:
 		return "provider_poll"
+	case StreamConversationTitle:
+		return "conversation_title"
 	case StreamDLQ:
 		return "dlq"
 	default:

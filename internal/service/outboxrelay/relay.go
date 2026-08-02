@@ -8,10 +8,12 @@
 package outboxrelay
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"strings"
 	"sync"
@@ -35,6 +37,10 @@ const (
 	// EventJobResultReady maps to the existing finalization stream only after a
 	// durable result_ready transition has committed.
 	EventJobResultReady = "event.job.result_ready"
+	// EventConversationTitleQueued maps a title-only task to its isolated
+	// stream. Its payload must contain queue metadata only, never prompt or job
+	// params.
+	EventConversationTitleQueued = "event.conversation_title.queued"
 
 	maxTrackedUnresolvedLeases = 1024
 )
@@ -45,6 +51,7 @@ const (
 	actionAuditOnly eventAction = iota
 	actionGeneration
 	actionFinalization
+	actionConversationTitle
 )
 
 // StreamPublisher combines normal generation enqueueing with explicit stream
@@ -287,12 +294,29 @@ type queuedPayload struct {
 	Traceparent   string               `json:"traceparent"`
 }
 
+// conversationTitleQueuedPayload is the intentionally narrow schema for a
+// background title request. Account ownership and Web/text provenance are
+// validated before this task can reach the title worker. It never includes a
+// prompt, job parameters, artifacts, or billing data.
+type conversationTitleQueuedPayload struct {
+	JobID         uuid.UUID            `json:"job_id"`
+	AccountID     uuid.UUID            `json:"account_id"`
+	Source        string               `json:"source"`
+	Operation     domain.OperationType `json:"operation"`
+	Modality      domain.Modality      `json:"modality"`
+	CorrelationID string               `json:"correlation_id,omitempty"`
+	Traceparent   string               `json:"traceparent,omitempty"`
+}
+
 // prepare validates the common job-event envelope and rebuilds its queue task.
 // Creation remains audit-only after passing the same envelope validation.
 func prepare(e *domain.OutboxEvent) (eventAction, queue.Task, error) {
 	action, err := classify(e.EventType)
 	if err != nil {
 		return 0, queue.Task{}, err
+	}
+	if action == actionConversationTitle {
+		return prepareConversationTitle(e)
 	}
 	var p queuedPayload
 	if err := json.Unmarshal(e.Payload, &p); err != nil {
@@ -313,6 +337,32 @@ func prepare(e *domain.OutboxEvent) (eventAction, queue.Task, error) {
 	}, nil
 }
 
+func prepareConversationTitle(e *domain.OutboxEvent) (eventAction, queue.Task, error) {
+	var p conversationTitleQueuedPayload
+	decoder := json.NewDecoder(bytes.NewReader(e.Payload))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&p); err != nil {
+		return 0, queue.Task{}, fmt.Errorf("outboxrelay: invalid conversation title payload: %w", err)
+	}
+	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+		return 0, queue.Task{}, errors.New("outboxrelay: invalid conversation title payload suffix")
+	}
+	if p.JobID == uuid.Nil || p.AccountID == uuid.Nil || p.Source != "web" ||
+		p.Operation != domain.OperationTextGenerate || p.Modality != domain.ModalityText {
+		return 0, queue.Task{}, errors.New("outboxrelay: invalid conversation title event payload")
+	}
+	if e.AggregateType != "job" || e.AggregateID != p.JobID {
+		return 0, queue.Task{}, errors.New("outboxrelay: conversation title event aggregate mismatch")
+	}
+	return actionConversationTitle, queue.Task{
+		JobID:         p.JobID,
+		Operation:     p.Operation,
+		Modality:      p.Modality,
+		CorrelationID: p.CorrelationID,
+		Traceparent:   p.Traceparent,
+	}, nil
+}
+
 // publish performs only the external operation and is always called after the
 // claiming unit of work has returned.
 func (r *Relay) publish(ctx context.Context, action eventAction, task queue.Task) error {
@@ -321,6 +371,9 @@ func (r *Relay) publish(ctx context.Context, action eventAction, task queue.Task
 	}
 	if action == actionFinalization {
 		return r.pub.PublishTo(ctx, redisqueue.StreamDelivery, task)
+	}
+	if action == actionConversationTitle {
+		return r.pub.PublishTo(ctx, redisqueue.StreamConversationTitle, task)
 	}
 	return r.pub.Enqueue(ctx, task)
 }
@@ -438,6 +491,8 @@ func classify(eventType string) (eventAction, error) {
 		return actionGeneration, nil
 	case EventJobResultReady:
 		return actionFinalization, nil
+	case EventConversationTitleQueued:
+		return actionConversationTitle, nil
 	default:
 		return 0, fmt.Errorf("outboxrelay: unsupported event type %q", eventType)
 	}

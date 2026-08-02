@@ -170,6 +170,7 @@ func TestOutboxRelayMetricLabelsAreFiniteAndBounded(t *testing.T) {
 		want string
 	}{
 		{name: "known queued class", got: outboxEventClass("event.job.queued"), want: "queued"},
+		{name: "known conversation title class", got: outboxEventClass("event.conversation_title.queued"), want: "conversation_title"},
 		{name: "unknown event does not escape", got: outboxEventClass("event.job.secret." + strings.Repeat("x", 200)), want: "unknown"},
 		{name: "known outcome", got: outboxOutcome("retry"), want: "retry"},
 		{name: "raw outcome does not escape", got: outboxOutcome("job-" + strings.Repeat("1", 100)), want: "other"},

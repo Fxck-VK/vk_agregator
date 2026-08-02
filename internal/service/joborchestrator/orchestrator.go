@@ -24,6 +24,7 @@ import (
 	"vk-ai-aggregator/internal/platform/metrics"
 	"vk-ai-aggregator/internal/platform/tracing"
 	"vk-ai-aggregator/internal/platform/uow"
+	"vk-ai-aggregator/internal/service/outboxrelay"
 	"vk-ai-aggregator/internal/service/pricingcatalog"
 )
 
@@ -34,6 +35,10 @@ var ErrBackendPriceRequired = errors.New("joborchestrator: backend price is requ
 // ErrInvalidInputArtifact means a job referenced media that is not a ready,
 // owner-scoped, storage-backed input image.
 var ErrInvalidInputArtifact = errors.New("joborchestrator: invalid input artifact")
+
+// ErrInvalidConversationTitleRequest means an internal title request was
+// attached to work that is not an account-owned Web text generation job.
+var ErrInvalidConversationTitleRequest = errors.New("joborchestrator: invalid conversation title request")
 
 // Biller is the subset of the billing service the orchestrator depends on. The
 // reservation is performed with a transaction-bound repository so it commits
@@ -168,6 +173,10 @@ type CreateJobInput struct {
 	// PricingSnapshot is the immutable backend-owned pricingcatalog snapshot for
 	// paid jobs. When present it is the source of reserved/captured amount.
 	PricingSnapshot pricingcatalog.PricingSnapshot
+	// ConversationTitleRequested is internal orchestration metadata. It is never
+	// client input and only enables a separate, best-effort title outbox event
+	// for one account-owned Web text job.
+	ConversationTitleRequested bool
 }
 
 // PrepareAccountJobInput is a trusted, normalized account-native request. It
@@ -324,6 +333,11 @@ func (o *Orchestrator) CreateJob(ctx context.Context, in CreateJobInput) (*domai
 		metrics.ObserveProductEvent(source, "job", "create", string(in.Operation), string(in.Modality), "rejected_result_contract")
 		return nil, err
 	}
+	if err := validateConversationTitleRequest(in, source, channelContext, resultMode, deliveryTarget); err != nil {
+		tracing.RecordError(span, err)
+		metrics.ObserveProductEvent(source, "job", "create", string(in.Operation), string(in.Modality), "rejected_conversation_title")
+		return nil, err
+	}
 	operationLabel := string(in.Operation)
 	modalityLabel := string(in.Modality)
 
@@ -450,7 +464,7 @@ func (o *Orchestrator) CreateJob(ctx context.Context, in CreateJobInput) (*domai
 			}
 			queuedJob := *job
 			queuedJob.Status = domain.JobStatusQueued
-			return repos.Outbox.Add(ctx, jobEvent(ctx, "event.job.queued", &queuedJob))
+			return addQueuedOutboxEvents(ctx, repos.Outbox, &queuedJob, in.ConversationTitleRequested)
 		}
 
 		if _, err := o.billing.ReserveWithOwner(ctx, repos.Billing, in.UserID, ownerID, job.ID, estimate); err != nil {
@@ -488,7 +502,7 @@ func (o *Orchestrator) CreateJob(ctx context.Context, in CreateJobInput) (*domai
 		}
 		queuedJob := *job
 		queuedJob.Status = domain.JobStatusQueued
-		return repos.Outbox.Add(ctx, jobEvent(ctx, "event.job.queued", &queuedJob))
+		return addQueuedOutboxEvents(ctx, repos.Outbox, &queuedJob, in.ConversationTitleRequested)
 	}); err != nil {
 		tracing.RecordError(span, err)
 		metrics.ObserveProductEvent(source, "job", "create", operationLabel, modalityLabel, "error")
@@ -510,6 +524,35 @@ func (o *Orchestrator) CreateJob(ctx context.Context, in CreateJobInput) (*domai
 	metrics.ObserveProductEvent(source, "job", "create", operationLabel, modalityLabel, "queued")
 	metrics.ObserveProductActiveUserEvent(source, operationLabel, modalityLabel, "created")
 	return job, nil
+}
+
+func validateConversationTitleRequest(
+	in CreateJobInput,
+	source string,
+	channelContext *domain.ChannelContext,
+	resultMode domain.ResultMode,
+	deliveryTarget *domain.DeliveryTarget,
+) error {
+	if !in.ConversationTitleRequested {
+		return nil
+	}
+	if in.AccountID == uuid.Nil || source != "web" ||
+		in.Operation != domain.OperationTextGenerate || in.Modality != domain.ModalityText ||
+		channelContext == nil || channelContext.Channel != domain.ChannelWeb ||
+		resultMode != domain.ResultModeAccountHistory || deliveryTarget != nil {
+		return ErrInvalidConversationTitleRequest
+	}
+	return nil
+}
+
+func addQueuedOutboxEvents(ctx context.Context, outbox domain.OutboxRepository, job *domain.Job, conversationTitleRequested bool) error {
+	if err := outbox.Add(ctx, jobEvent(ctx, "event.job.queued", job)); err != nil {
+		return err
+	}
+	if !conversationTitleRequested {
+		return nil
+	}
+	return outbox.Add(ctx, conversationTitleEvent(ctx, job))
 }
 
 // PrepareAccountJob persists a safe account-owned record without reserving
@@ -1142,6 +1185,28 @@ func jobEvent(ctx context.Context, eventType string, job *domain.Job) *domain.Ou
 		AggregateType: "job",
 		AggregateID:   job.ID,
 		EventType:     eventType,
+		Payload:       payload,
+	}
+}
+
+// conversationTitleEvent builds the deliberately narrow title-work envelope.
+// The raw prompt remains in the normal job record for the text worker; it must
+// never enter the outbox or Redis title task.
+func conversationTitleEvent(ctx context.Context, job *domain.Job) *domain.OutboxEvent {
+	payload, _ := json.Marshal(struct {
+		JobID         uuid.UUID            `json:"job_id"`
+		AccountID     uuid.UUID            `json:"account_id"`
+		Source        string               `json:"source"`
+		Operation     domain.OperationType `json:"operation"`
+		Modality      domain.Modality      `json:"modality"`
+		CorrelationID string               `json:"correlation_id,omitempty"`
+		Traceparent   string               `json:"traceparent,omitempty"`
+	}{job.ID, job.AccountID, job.Source, job.OperationType, job.Modality, job.CorrelationID, tracing.Traceparent(ctx)})
+
+	return &domain.OutboxEvent{
+		AggregateType: "job",
+		AggregateID:   job.ID,
+		EventType:     outboxrelay.EventConversationTitleQueued,
 		Payload:       payload,
 	}
 }
