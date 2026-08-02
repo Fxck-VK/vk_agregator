@@ -206,6 +206,34 @@ func TestSetGeneratedTitleDoesNotOverwriteManualRename(t *testing.T) {
 	}
 }
 
+func TestSetConversationFallbackTitleSkipsArchivedWebConversation(t *testing.T) {
+	ctx := context.Background()
+	repo := NewConversationRepo()
+	conversation := &domain.Conversation{
+		ID:          uuid.New(),
+		UserID:      uuid.New(),
+		AccountID:   uuid.New(),
+		Source:      domain.ConversationSourceWeb,
+		Status:      domain.ConversationArchived,
+		TitleOrigin: domain.ConversationTitleOriginAutoPending,
+	}
+	if err := repo.CreateConversation(ctx, conversation); err != nil {
+		t.Fatalf("create archived conversation: %v", err)
+	}
+
+	applied, err := repo.SetConversationFallbackTitleIfPending(ctx, conversation.ID, "Late background prompt")
+	if err != nil || applied {
+		t.Fatalf("set fallback title = %t, %v; want false, nil", applied, err)
+	}
+	stored, err := repo.GetByIDForAccount(ctx, conversation.AccountID, conversation.ID)
+	if err != nil {
+		t.Fatalf("get archived conversation: %v", err)
+	}
+	if stored.Title != "" || stored.TitleOrigin != domain.ConversationTitleOriginAutoPending {
+		t.Fatalf("archived title state = %#v, want unchanged pending state", stored)
+	}
+}
+
 func TestConversationRepoFindsUserMessagesForTitleWork(t *testing.T) {
 	ctx := context.Background()
 	repo := NewConversationRepo()

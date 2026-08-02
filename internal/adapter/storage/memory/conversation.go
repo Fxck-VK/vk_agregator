@@ -363,7 +363,7 @@ func (r *ConversationRepo) SetConversationFallbackTitleIfPending(_ context.Conte
 	if !ok {
 		return false, nil
 	}
-	if c.Source != domain.ConversationSourceWeb || c.TitleOrigin != domain.ConversationTitleOriginAutoPending {
+	if c.Source != domain.ConversationSourceWeb || c.Status != domain.ConversationActive || c.TitleOrigin != domain.ConversationTitleOriginAutoPending {
 		return false, nil
 	}
 	c.Title = title

@@ -233,6 +233,7 @@ func (r *ConversationRepository) SetConversationFallbackTitleIfPending(ctx conte
 		    updated_at = now()
 		WHERE id = $1
 		  AND source = 'web'
+		  AND status = 'active'
 		  AND title_origin = 'auto_pending'`
 	tag, err := r.db.Exec(ctx, q, conversationID, title)
 	if err != nil {
