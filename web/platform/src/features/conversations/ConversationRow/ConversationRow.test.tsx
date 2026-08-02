@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({
@@ -138,7 +139,7 @@ describe("ConversationRow", () => {
     fireEvent.click(submit);
 
     await screen.findByRole("alert");
-    expect(titleInput).toHaveFocus();
+    await vi.waitFor(() => expect(titleInput).toHaveFocus());
   });
 
   it.each([
@@ -216,7 +217,7 @@ describe("ConversationRow", () => {
     fireEvent.click(archiveConfirm);
 
     await screen.findByRole("alert");
-    expect(archiveConfirm).toHaveFocus();
+    await vi.waitFor(() => expect(archiveConfirm).toHaveFocus());
   });
 
   it("describes archive confirmation to its confirm control", () => {
@@ -231,12 +232,17 @@ describe("ConversationRow", () => {
     );
   });
 
-  it("ignores a settled rename after navigation changes while it is pending", async () => {
+  it("reconciles a successful deferred rename after navigation changes without restoring stale focus", async () => {
     let pathname = "/app/chat/d7c979f5-24e5-4f88-924b-a592d6e5a906";
     let settleRequest: (response: Response) => void = () => {};
     vi.mocked(usePathname).mockImplementation(() => pathname);
     vi.mocked(webBrowserMutation).mockReturnValue(new Promise<Response>((resolve) => { settleRequest = resolve; }));
-    const rendered = renderRow();
+    const rendered = render(
+      <>
+        <button type="button">Elsewhere</button>
+        <ConversationRow conversation={conversation} isActive={false} />
+      </>,
+    );
 
     fireEvent.click(screen.getByRole("button", { name: actionsLabel() }));
     fireEvent.click(screen.getByRole("button", { name: ru.conversations.renameLabel }));
@@ -244,12 +250,87 @@ describe("ConversationRow", () => {
     await vi.waitFor(() => expect(webBrowserMutation).toHaveBeenCalledTimes(1));
 
     pathname = "/app";
-    rendered.rerender(<ConversationRow conversation={conversation} isActive={false} />);
+    rendered.rerender(
+      <>
+        <button type="button">Elsewhere</button>
+        <ConversationRow conversation={conversation} isActive={false} />
+      </>,
+    );
+    const elsewhere = screen.getByRole("button", { name: "Elsewhere" });
+    elsewhere.focus();
     settleRequest(Response.json(conversation, { status: 200 }));
 
-    await Promise.resolve();
-    expect(refresh).not.toHaveBeenCalled();
+    await vi.waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
     expect(replace).not.toHaveBeenCalled();
+    expect(elsewhere).toHaveFocus();
+    expect(screen.queryByRole("textbox", { name: ru.conversations.renameInputLabel })).not.toBeInTheDocument();
+  });
+
+  it("refreshes the current route when validated rename completion is followed by a pathname transition", async () => {
+    let pathname = "/app/chat/d7c979f5-24e5-4f88-924b-a592d6e5a906";
+    let rerenderRow: (ui: ReactNode) => void = () => {};
+    let refreshedPathname: string | null = null;
+    vi.mocked(usePathname).mockImplementation(() => pathname);
+    refresh.mockImplementation(() => { refreshedPathname = pathname; });
+    vi.mocked(webBrowserMutation).mockResolvedValue({
+      json: () => new Promise((resolve) => {
+        resolve(conversation);
+        // Let the successful handler set its refresh/focus intent, then change
+        // the pathname before React runs that intent's passive effect.
+        queueMicrotask(() => queueMicrotask(() => {
+          pathname = "/app";
+          rerenderRow(<ConversationRow conversation={conversation} isActive={false} />);
+        }));
+      }),
+      status: 200,
+    } as Response);
+    const rendered = renderRow();
+    rerenderRow = rendered.rerender;
+    const actions = screen.getByRole("button", { name: actionsLabel() });
+
+    fireEvent.click(actions);
+    fireEvent.click(screen.getByRole("button", { name: ru.conversations.renameLabel }));
+    fireEvent.keyDown(screen.getByRole("textbox", { name: ru.conversations.renameInputLabel }), { key: "Enter" });
+
+    await vi.waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
+    expect(refreshedPathname).toBe("/app");
+    expect(replace).not.toHaveBeenCalled();
+  });
+
+  it("reconciles a successful deferred archive after navigation changes without a stale replacement", async () => {
+    let pathname = "/app/chat/d7c979f5-24e5-4f88-924b-a592d6e5a906";
+    let settleRequest: (response: Response) => void = () => {};
+    const onArchived = vi.fn();
+    vi.mocked(usePathname).mockImplementation(() => pathname);
+    vi.mocked(webBrowserMutation).mockReturnValue(new Promise<Response>((resolve) => { settleRequest = resolve; }));
+    const rendered = render(
+      <>
+        <button type="button">Elsewhere</button>
+        <ConversationRow conversation={conversation} isActive onArchived={onArchived} />
+      </>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: actionsLabel() }));
+    fireEvent.click(screen.getByRole("button", { name: ru.conversations.archiveLabel }));
+    fireEvent.click(screen.getByRole("button", { name: ru.conversations.archiveConfirmLabel }));
+    await vi.waitFor(() => expect(webBrowserMutation).toHaveBeenCalledTimes(1));
+
+    pathname = "/app";
+    rendered.rerender(
+      <>
+        <button type="button">Elsewhere</button>
+        <ConversationRow conversation={conversation} isActive={false} onArchived={onArchived} />
+      </>,
+    );
+    const elsewhere = screen.getByRole("button", { name: "Elsewhere" });
+    elsewhere.focus();
+    settleRequest(new Response(null, { status: 204 }));
+
+    await vi.waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
+    expect(replace).not.toHaveBeenCalled();
+    expect(onArchived).not.toHaveBeenCalled();
+    expect(elsewhere).toHaveFocus();
+    expect(screen.queryByText(ru.conversations.archiveConfirmation)).not.toBeInTheDocument();
   });
 
   it("ignores a settled archive after its row unmounts while pending", async () => {

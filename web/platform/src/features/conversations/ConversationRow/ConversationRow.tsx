@@ -18,6 +18,7 @@ type ConversationRowProps = {
   onPanelClosed?: (conversationId: string) => void;
   onPanelOpened?: (conversationId: string) => void;
   onPendingPanelChange?: (conversationId: string, isPending: boolean, session: number) => void;
+  onVisiblePanelChange?: (conversationId: string, closePanel: (() => void) | null, session: number) => void;
   ownsCurrentPanel?: (conversationId: string, session: number | undefined) => boolean;
   sidebarIsActive?: boolean;
   sidebarSession?: number;
@@ -33,6 +34,7 @@ export function ConversationRow({
   onPanelClosed,
   onPanelOpened,
   onPendingPanelChange,
+  onVisiblePanelChange,
   ownsCurrentPanel,
   sidebarIsActive = true,
   sidebarSession,
@@ -48,6 +50,9 @@ export function ConversationRow({
   const [panelSession, setPanelSession] = useState(sidebarSession);
   const actionToggleRef = useRef<HTMLButtonElement>(null);
   const archiveConfirmRef = useRef<HTMLButtonElement>(null);
+  const isPendingRef = useRef(false);
+  const panelIsVisibleRef = useRef(false);
+  const shouldFocusRestoredPanelRef = useRef(false);
   const renameInputRef = useRef<HTMLInputElement>(null);
   const focusAfterPendingRef = useRef<{ kind: "rename" | "archive" | "success"; requestGeneration: number; sidebarSession?: number } | null>(null);
   const restoreActionFocusRef = useRef(false);
@@ -68,24 +73,59 @@ export function ConversationRow({
     (session: number | undefined) => ownsCurrentPanel?.(conversation.id, session) ?? (activeConversationId === undefined || activeConversationId === conversation.id),
     [activeConversationId, conversation.id, ownsCurrentPanel],
   );
+  const hasHiddenFailure = hasError
+    && panel !== null
+    && !panelIsVisible
+    && sidebarIsActive
+    && panelSession === sidebarSession;
 
-  const closePanel = (restoreActionFocus = false) => {
+  const closePanel = useCallback((restoreActionFocus = false) => {
     if (isPending) return;
     restoreActionFocusRef.current = restoreActionFocus;
     setHasError(false);
+    shouldFocusRestoredPanelRef.current = false;
     setPanel(null);
     onPanelClosed?.(conversation.id);
-  };
+  }, [conversation.id, isPending, onPanelClosed]);
+
+  const closeVisiblePanel = useCallback(() => {
+    if (isPendingRef.current || !panelIsVisibleRef.current) return;
+
+    panelIsVisibleRef.current = false;
+    restoreActionFocusRef.current = false;
+    shouldFocusRestoredPanelRef.current = false;
+    setHasError(false);
+    setPanel(null);
+    onPanelClosed?.(conversation.id);
+  }, [conversation.id, onPanelClosed]);
 
   const openPanel = (nextPanel: Exclude<RowPanel, null>) => {
     if (isPending) return;
     if (nextPanel === "actions") {
       setPanelSession(sidebarSession);
+      panelIsVisibleRef.current = true;
       onPanelOpened?.(conversation.id);
+      if (typeof sidebarSession === "number") {
+        onVisiblePanelChange?.(conversation.id, closeVisiblePanel, sidebarSession);
+      }
     }
     setHasError(false);
     setPanel(nextPanel);
     if (nextPanel === "rename") setNextTitle(title);
+  };
+
+  const restoreFailedPanel = () => {
+    if (!hasHiddenFailure || panel === null) {
+      openPanel("actions");
+      return;
+    }
+
+    onPanelOpened?.(conversation.id);
+    panelIsVisibleRef.current = true;
+    if (typeof sidebarSession === "number") {
+      onVisiblePanelChange?.(conversation.id, closeVisiblePanel, sidebarSession);
+    }
+    shouldFocusRestoredPanelRef.current = true;
   };
 
   useEffect(() => {
@@ -98,10 +138,34 @@ export function ConversationRow({
   }, [panel]);
 
   useEffect(() => {
+    if (!shouldFocusRestoredPanelRef.current || !panelIsVisible) return;
+
+    shouldFocusRestoredPanelRef.current = false;
+    if (panel === "rename") renameInputRef.current?.focus();
+    if (panel === "archive") archiveConfirmRef.current?.focus();
+  }, [panel, panelIsVisible]);
+
+  useEffect(() => {
     if (typeof panelSession !== "number") return;
     onPendingPanelChange?.(conversation.id, isPending && panelIsVisible, panelSession);
     return () => onPendingPanelChange?.(conversation.id, false, panelSession);
   }, [conversation.id, isPending, onPendingPanelChange, panelIsVisible, panelSession]);
+
+  useLayoutEffect(() => {
+    isPendingRef.current = isPending;
+    panelIsVisibleRef.current = panelIsVisible;
+  }, [isPending, panelIsVisible]);
+
+  useLayoutEffect(() => {
+    if (typeof panelSession !== "number") return;
+    if (!panelIsVisible || isPending) {
+      onVisiblePanelChange?.(conversation.id, null, panelSession);
+      return () => onVisiblePanelChange?.(conversation.id, null, panelSession);
+    }
+
+    onVisiblePanelChange?.(conversation.id, closeVisiblePanel, panelSession);
+    return () => onVisiblePanelChange?.(conversation.id, null, panelSession);
+  }, [closeVisiblePanel, conversation.id, isPending, onVisiblePanelChange, panelIsVisible, panelSession]);
 
   useEffect(() => {
     if (!panelIsVisible || isPending) return;
@@ -136,13 +200,17 @@ export function ConversationRow({
       return;
     }
 
+    const refreshAfterPathnameChange = refreshAfterFocusRef.current !== null;
     pathnameRef.current = pathname;
     requestGenerationRef.current += 1;
     focusAfterPendingRef.current = null;
     refreshAfterFocusRef.current = null;
+    shouldFocusRestoredPanelRef.current = false;
+    setHasError(false);
     setIsPending(false);
     setPanel(null);
-  }, [pathname]);
+    if (refreshAfterPathnameChange) router.refresh();
+  }, [pathname, router]);
 
   useEffect(() => {
     if (isPending || focusAfterPendingRef.current === null) return;
@@ -175,12 +243,16 @@ export function ConversationRow({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title: nextTitle }),
       });
-      if (!mountedRef.current || requestGeneration !== requestGenerationRef.current) return;
+      if (!mountedRef.current) return;
       if (response.status !== 200) throw new Error("Unable to complete the request.");
 
       const payload = await response.json();
-      if (!mountedRef.current || requestGeneration !== requestGenerationRef.current) return;
+      if (!mountedRef.current) return;
       parseConversationList({ items: [payload] });
+      if (requestGeneration !== requestGenerationRef.current) {
+        router.refresh();
+        return;
+      }
       refreshAfterFocusRef.current = requestGeneration;
       focusAfterPendingRef.current = { kind: "success", requestGeneration, sidebarSession: mutationSidebarSession };
       setPanel(null);
@@ -205,8 +277,12 @@ export function ConversationRow({
     setIsPending(true);
     try {
       const response = await webBrowserMutation(conversationPath, { method: "DELETE" });
-      if (!mountedRef.current || requestGeneration !== requestGenerationRef.current) return;
+      if (!mountedRef.current) return;
       if (response.status !== 204) throw new Error("Unable to complete the request.");
+      if (requestGeneration !== requestGenerationRef.current) {
+        router.refresh();
+        return;
+      }
 
       setPanel(null);
       onPanelClosed?.(conversation.id);
@@ -253,7 +329,11 @@ export function ConversationRow({
           aria-label={`${ru.conversations.actionsLabel}: ${title}`}
           className={styles.actionToggle}
           disabled={isPending}
-          onClick={() => (panelIsVisible && panel === "actions" ? closePanel(true) : openPanel("actions"))}
+          onClick={() => {
+            if (panelIsVisible && panel === "actions") closePanel(true);
+            else if (hasHiddenFailure) restoreFailedPanel();
+            else openPanel("actions");
+          }}
           ref={actionToggleRef}
           type="button"
         >
@@ -305,6 +385,7 @@ export function ConversationRow({
           </div>
         ) : null}
       </div>
+      {hasHiddenFailure ? <p className={styles.error} role="alert">{panel === "archive" ? ru.conversations.archiveFailure : ru.conversations.renameFailure}</p> : null}
     </article>
   );
 }

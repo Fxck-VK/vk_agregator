@@ -84,7 +84,7 @@ describe("SidebarConversations", () => {
     expect(screen.getAllByRole("button", { name: new RegExp(ru.conversations.actionsLabel) })).toHaveLength(conversations.length);
   });
 
-  it("keeps the current row open when another row's pending rename fails", async () => {
+  it("keeps B focused while a background rename failure on A remains visible and restores A's draft when chosen", async () => {
     let settleRename: (response: Response) => void = () => {};
     vi.mocked(usePathname).mockReturnValue("/app");
     vi.mocked(useRouter).mockReturnValue({ refresh: vi.fn(), replace: vi.fn() } as never);
@@ -96,15 +96,54 @@ describe("SidebarConversations", () => {
     fireEvent.click(firstActions);
     fireEvent.click(screen.getByRole("button", { name: ru.conversations.renameLabel }));
     const titleInput = screen.getByRole("textbox", { name: ru.conversations.renameInputLabel });
-    fireEvent.change(titleInput, { target: { value: "Сохранить при ошибке" } });
+    const draft = "Keep this draft";
+    fireEvent.change(titleInput, { target: { value: draft } });
     fireEvent.keyDown(titleInput, { key: "Enter" });
     fireEvent.click(secondActions);
+    secondActions.focus();
 
     settleRename(new Response(null, { status: 500 }));
 
     await vi.waitFor(() => expect(firstActions).toBeEnabled());
+    expect(await screen.findByRole("alert")).toHaveTextContent(ru.conversations.renameFailure);
     expect(secondActions).toHaveAttribute("aria-expanded", "true");
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(secondActions).toHaveFocus();
+    expect(firstActions).toHaveAttribute("aria-expanded", "false");
+
+    fireEvent.click(firstActions);
+
+    expect(secondActions).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getByRole("textbox", { name: ru.conversations.renameInputLabel })).toHaveValue(draft);
+  });
+
+  it("keeps B focused while a background archive failure on A restores its confirmation when chosen", async () => {
+    let settleArchive: (response: Response) => void = () => {};
+    vi.mocked(usePathname).mockReturnValue("/app");
+    vi.mocked(useRouter).mockReturnValue({ refresh: vi.fn(), replace: vi.fn() } as never);
+    vi.mocked(webBrowserMutation).mockReturnValue(new Promise<Response>((resolve) => { settleArchive = resolve; }));
+
+    render(<SidebarConversations conversations={conversations} />);
+
+    const [firstActions, secondActions] = screen.getAllByRole("button", { name: new RegExp(ru.conversations.actionsLabel) });
+    fireEvent.click(firstActions);
+    fireEvent.click(screen.getByRole("button", { name: ru.conversations.archiveLabel }));
+    fireEvent.click(screen.getByRole("button", { name: ru.conversations.archiveConfirmLabel }));
+    await vi.waitFor(() => expect(screen.getByRole("button", { name: ru.conversations.archivePending })).toBeDisabled());
+    fireEvent.click(secondActions);
+    secondActions.focus();
+
+    settleArchive(new Response(null, { status: 500 }));
+
+    await vi.waitFor(() => expect(firstActions).toBeEnabled());
+    expect(await screen.findByRole("alert")).toHaveTextContent(ru.conversations.archiveFailure);
+    expect(secondActions).toHaveAttribute("aria-expanded", "true");
+    expect(secondActions).toHaveFocus();
+
+    fireEvent.click(firstActions);
+
+    expect(secondActions).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getByText(ru.conversations.archiveConfirmation)).toBeVisible();
+    expect(screen.getByRole("button", { name: ru.conversations.archiveConfirmLabel })).toBeEnabled();
   });
 
   it("focuses the next chat after archiving a non-active row", async () => {

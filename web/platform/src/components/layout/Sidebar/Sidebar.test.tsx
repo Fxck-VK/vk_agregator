@@ -302,6 +302,55 @@ describe("Sidebar", () => {
     expect(trigger).not.toHaveFocus();
   });
 
+  it("closes a non-pending row panel before the narrow drawer when Escape starts on another drawer control", () => {
+    const { panel, trigger } = renderNarrowSidebar({
+      conversations: <SidebarConversations conversations={recentConversations} />,
+    });
+    const workspace = openNavigation(trigger);
+    const actions = screen.getByRole("button", { name: `${ru.conversations.actionsLabel}: Recent chat 1` });
+    fireEvent.click(actions);
+    workspace.focus();
+
+    fireEvent.keyDown(workspace, { key: "Escape" });
+
+    expect(actions).toHaveAttribute("aria-expanded", "false");
+    expect(panel).toHaveAttribute("data-open", "true");
+    expect(workspace).toHaveFocus();
+    expect(trigger).not.toHaveFocus();
+  });
+
+  it("closes a non-pending row panel on desktop when Escape starts outside its action container", () => {
+    mockWideViewport();
+    render(<Sidebar conversations={<SidebarConversations conversations={recentConversations} />} />);
+    const workspace = screen.getByRole("link", { name: ru.navigation.workspace });
+    const actions = screen.getByRole("button", { name: `${ru.conversations.actionsLabel}: Recent chat 1` });
+    fireEvent.click(actions);
+    workspace.focus();
+
+    fireEvent.keyDown(workspace, { key: "Escape" });
+
+    expect(actions).toHaveAttribute("aria-expanded", "false");
+    expect(workspace).toHaveFocus();
+  });
+
+  it("closes the current row rather than a prior owner when Escape follows an ownership change", () => {
+    const { panel, trigger } = renderNarrowSidebar({
+      conversations: <SidebarConversations conversations={recentConversations} />,
+    });
+    openNavigation(trigger);
+    const [firstActions, secondActions] = screen.getAllByRole("button", { name: new RegExp(ru.conversations.actionsLabel) });
+    fireEvent.click(firstActions);
+
+    act(() => {
+      secondActions.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+      window.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Escape" }));
+    });
+
+    expect(firstActions).toHaveAttribute("aria-expanded", "false");
+    expect(secondActions).toHaveAttribute("aria-expanded", "false");
+    expect(panel).toHaveAttribute("data-open", "true");
+  });
+
   it("clears nested conversation panels while the narrow drawer is inactive", () => {
     const { trigger } = renderNarrowSidebar({
       conversations: <SidebarConversations conversations={recentConversations} />,

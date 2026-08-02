@@ -17,7 +17,7 @@ type SidebarConversationsProps = {
 
 export function SidebarConversations({ conversations }: SidebarConversationsProps) {
   const pathname = usePathname();
-  const { isActive: sidebarIsActive, onPendingPanelChange, session: sidebarSession } = useSidebarConversationsActive();
+  const { isActive: sidebarIsActive, onPendingPanelChange, onVisiblePanelChange, session: sidebarSession } = useSidebarConversationsActive();
   const [archivedConversationIds, setArchivedConversationIds] = useState<Set<string>>(() => new Set());
   const [openConversationId, setOpenConversationId] = useState<string | null>(null);
   const [openConversationSession, setOpenConversationSession] = useState(0);
@@ -86,6 +86,7 @@ export function SidebarConversations({ conversations }: SidebarConversationsProp
                     setOpenConversationSession(sidebarSession);
                   }}
                   onPendingPanelChange={onPendingPanelChange}
+                  onVisiblePanelChange={onVisiblePanelChange}
                   ownsCurrentPanel={(conversationId, session) => {
                     const sidebarActivity = sidebarActivityRef.current;
                     return sidebarActivity.isActive && sidebarActivity.ownerConversationId === conversationId && sidebarActivity.session === session;

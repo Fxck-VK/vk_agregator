@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { type MouseEvent as ReactMouseEvent, type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { type MouseEvent as ReactMouseEvent, type ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/Button/Button";
 import { SidebarConversationsActivityProvider } from "@/features/conversations/SidebarConversations/SidebarConversationsActivity";
@@ -37,6 +37,7 @@ export function Sidebar({ account, conversations, isDesktopCollapsed = false, on
   const panelRef = useRef<HTMLDivElement>(null);
   const previousPathnameRef = useRef(pathname);
   const pendingConversationPanelIdsRef = useRef(new Set<string>());
+  const visibleConversationPanelRef = useRef<{ closePanel: () => void; conversationId: string; session: number } | null>(null);
   const restoreFocusRef = useRef(false);
   const sidebarActivityRef = useRef({ isActive: false, session: 0 });
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -54,6 +55,7 @@ export function Sidebar({ account, conversations, isDesktopCollapsed = false, on
     if (wasPanelOpenRef.current && !panelIsOpen) {
       setConversationPanelSession((session) => session + 1);
       pendingConversationPanelIdsRef.current.clear();
+      visibleConversationPanelRef.current = null;
     }
     wasPanelOpenRef.current = panelIsOpen;
     sidebarActivityRef.current = { isActive: panelIsOpen, session: conversationPanelSession };
@@ -65,6 +67,30 @@ export function Sidebar({ account, conversations, isDesktopCollapsed = false, on
     if (isPending) pendingConversationPanelIdsRef.current.add(conversationId);
     else pendingConversationPanelIdsRef.current.delete(conversationId);
   };
+
+  const updateVisibleConversationPanel = useCallback((conversationId: string, closePanel: (() => void) | null, session: number) => {
+    const sidebarActivity = sidebarActivityRef.current;
+    if (!sidebarActivity.isActive || sidebarActivity.session !== session) return;
+    if (closePanel) {
+      visibleConversationPanelRef.current = { closePanel, conversationId, session };
+    } else if (
+      visibleConversationPanelRef.current?.conversationId === conversationId
+      && visibleConversationPanelRef.current.session === session
+    ) {
+      visibleConversationPanelRef.current = null;
+    }
+  }, []);
+
+  const consumeConversationEscape = useCallback(() => {
+    if (pendingConversationPanelIdsRef.current.size > 0) return true;
+
+    const visiblePanel = visibleConversationPanelRef.current;
+    const sidebarActivity = sidebarActivityRef.current;
+    if (!visiblePanel || !sidebarActivity.isActive || visiblePanel.session !== sidebarActivity.session) return false;
+
+    visiblePanel.closePanel();
+    return true;
+  }, []);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia(desktopViewportQuery);
@@ -98,6 +124,17 @@ export function Sidebar({ account, conversations, isDesktopCollapsed = false, on
   }, [isNarrowViewport, isOpen, pathname]);
 
   useEffect(() => {
+    if (!panelIsOpen) return undefined;
+
+    const closeConversationOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && consumeConversationEscape()) event.preventDefault();
+    };
+    window.addEventListener("keydown", closeConversationOnEscape);
+
+    return () => window.removeEventListener("keydown", closeConversationOnEscape);
+  }, [consumeConversationEscape, panelIsOpen]);
+
+  useEffect(() => {
     if (!isNarrowViewport) {
       return undefined;
     }
@@ -114,9 +151,7 @@ export function Sidebar({ account, conversations, isDesktopCollapsed = false, on
     firstLinkRef.current?.focus();
     const keepFocusInDrawer = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        if (pendingConversationPanelIdsRef.current.size > 0) {
-          return;
-        }
+        if (event.defaultPrevented || consumeConversationEscape()) return;
 
         restoreFocusRef.current = true;
         setIsOpen(false);
@@ -163,7 +198,7 @@ export function Sidebar({ account, conversations, isDesktopCollapsed = false, on
     window.addEventListener("keydown", keepFocusInDrawer);
 
     return () => window.removeEventListener("keydown", keepFocusInDrawer);
-  }, [isNarrowViewport, isOpen]);
+  }, [consumeConversationEscape, isNarrowViewport, isOpen]);
 
   const toggleNavigation = () => {
     if (isOpen) {
@@ -269,6 +304,7 @@ export function Sidebar({ account, conversations, isDesktopCollapsed = false, on
             <SidebarConversationsActivityProvider
               isActive={panelIsOpen}
               onPendingPanelChange={updatePendingConversationPanel}
+              onVisiblePanelChange={updateVisibleConversationPanel}
               session={conversationPanelSession}
             >
               {conversations}
