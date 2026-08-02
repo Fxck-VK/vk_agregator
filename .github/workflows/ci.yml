@@ -246,6 +246,7 @@ jobs:
         shell: bash
         run: |
           bash scripts/deploy/test-dev-web-auth.sh
+          bash scripts/deploy/test-title-worker-rollout.sh
           bash scripts/deploy/test-dev-env.sh
           bash scripts/deploy/test-prod-env.sh
           bash scripts/deploy/test-env-parity.sh

@@ -14,6 +14,7 @@ param(
     [switch]$PullBaseImages,
     [switch]$NoHealthCheck,
     [switch]$SkipPublicSmoke,
+    [switch]$RelayOnlyWorkersUpgraded,
     [int]$TimeoutSeconds = 180
 )
 
@@ -299,6 +300,10 @@ if (-not (Test-Path -LiteralPath $EnvFile)) {
     throw "Server env file not found: $EnvFile. Assemble it from split PROD env secrets or create it on the server with real production values."
 }
 
+if (-not $RelayOnlyWorkersUpgraded) {
+    throw "Refusing API cutover until every relay-only worker is upgraded or stopped. Pass -RelayOnlyWorkersUpgraded only after completing that rollout gate."
+}
+
 Invoke-Step "check Docker" {
     Test-DockerRuntime
 }
@@ -511,7 +516,19 @@ try {
         }
     }
 
-    $runtimeServices = @("api", "worker", "maintenance-worker", "provider-webhook", "miniapp", "reverse-proxy")
+    # Start the new jobs worker before the API cutover. New API versions may emit
+    # queue event types that an old relay cannot classify; the worker's readiness
+    # gate also provisions every consumer group before those events are published.
+    Invoke-Step "start jobs worker before API rollout" {
+        $workerUpArgs = @("up", "-d", "--no-deps", "--force-recreate", "--wait", "--wait-timeout", "$TimeoutSeconds")
+        if (-not $shouldBuildOnVPS) {
+            $workerUpArgs += "--no-build"
+        }
+        $workerUpArgs += "worker"
+        Invoke-DockerCompose @workerUpArgs
+    }
+
+    $runtimeServices = @("api", "maintenance-worker", "provider-webhook", "miniapp", "reverse-proxy")
     if ($providerBalanceBotEnabled) {
         $runtimeServices += "provider-balance-bot"
     }

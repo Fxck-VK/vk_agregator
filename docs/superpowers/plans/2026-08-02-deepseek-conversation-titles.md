@@ -121,7 +121,7 @@ go test ./internal/service/joborchestrator ./internal/adapter/inbound/websession
    - preserve the fallback, invoke DeepSeek outside a DB transaction, and conditionally write `auto_generated`;
    - treat malformed/terminal/provider-failed title output as a successful no-op with the fallback left in place, so an external model outage cannot build an unbounded pending list;
    - never mutate the parent job's status, billing, artifacts, or deliveries.
-4. Wire one dedicated `worker.Engine` to `StreamConversationTitle`, with a short title-only reclaim idle period for the initial persistence race. If no DeepInfra generator is configured, acknowledge title work and keep the fallback; do not block normal worker startup.
+4. Wire one dedicated `worker.Engine` to `StreamConversationTitle`, with a title-only recovery lease longer than the bounded DeepInfra request timeout. This prevents a second worker from reclaiming an in-flight provider call; the durable fallback remains visible during any retry. If no DeepInfra generator is configured, acknowledge title work and keep the fallback; do not block normal worker startup.
 
 **Tests first:**
 
@@ -190,7 +190,7 @@ npm run lint
 
 1. Add the title stream to any manually enumerated safe queue diagnostics/observability tooling, retaining count-only/no-payload behavior.
 2. Verify the full set of separate title-worker metrics and stream trimming uses the built-in `AllStreams` lists.
-3. Run the complete backend/frontend quality gates, inspect the aggregate diff for prompt leakage and unrelated edits, commit only feature files, push `dev-deploy`, wait for CI/image success, dispatch the existing DEV deployment, and smoke the Basic Auth protected DEV host.
+3. Run the complete backend/frontend quality gates, inspect the aggregate diff for prompt leakage and unrelated edits, commit only feature files, push `dev-deploy`, wait for CI/image success, dispatch the existing DEV deployment, and smoke the Basic Auth protected DEV host. Before API cutover, verify that every relay-only worker has been upgraded or stopped; the deploy command must explicitly acknowledge this rollout gate.
 
 **Verification:**
 

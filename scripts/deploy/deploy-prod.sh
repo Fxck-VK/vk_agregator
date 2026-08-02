@@ -14,6 +14,7 @@ backup_before_deploy="false"
 pull_base_images="false"
 no_health_check="false"
 skip_public_smoke="false"
+relay_only_workers_upgraded="false"
 timeout_seconds="180"
 health_status="skipped"
 public_smoke_status="skipped"
@@ -41,6 +42,9 @@ Options:
   --pull-base-images           Pass --pull to docker compose build
   --no-health-check            Skip local HTTP health checks
   --skip-public-smoke          Skip public Cloudflare/DNS smoke after cloudflared startup
+  --relay-only-workers-upgraded
+                              Confirm every externally managed WORKER_MODE=relay process
+                              is already upgraded to this image or stopped before API cutover
   --timeout-seconds <seconds>  Health check timeout, default: 180
   -h, --help                   Show this help
 EOF
@@ -62,6 +66,7 @@ while [[ $# -gt 0 ]]; do
     --pull-base-images) pull_base_images="true"; shift ;;
     --no-health-check) no_health_check="true"; shift ;;
     --skip-public-smoke) skip_public_smoke="true"; shift ;;
+    --relay-only-workers-upgraded) relay_only_workers_upgraded="true"; shift ;;
     --timeout-seconds) timeout_seconds="$2"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
@@ -71,6 +76,12 @@ done
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "${script_dir}/../.." && pwd)"
 cd "${repo_root}"
+
+if [[ "${relay_only_workers_upgraded}" != "true" ]]; then
+  echo "Refusing API cutover until every relay-only worker is upgraded or stopped." >&2
+  echo "Pass --relay-only-workers-upgraded only after completing that rollout gate." >&2
+  exit 1
+fi
 
 run_step() {
   echo "==> $*"
@@ -471,7 +482,17 @@ if [[ "${provider_balance_bot_enabled}" != "true" ]]; then
   "${compose[@]}" rm -f -s provider-balance-bot >/dev/null 2>&1 || true
 fi
 
-runtime_services=(api worker maintenance-worker provider-webhook miniapp reverse-proxy)
+# Start the new jobs worker before the API cutover. New API versions may emit
+# queue event types that an old relay cannot classify; the worker's readiness
+# gate also provisions every consumer group before those events are published.
+worker_up_args=(up -d --no-deps --force-recreate --wait --wait-timeout "${timeout_seconds}")
+if [[ "${build_on_vps}" != "true" ]]; then
+  worker_up_args+=(--no-build)
+fi
+worker_up_args+=(worker)
+run_step "${compose[@]}" "${worker_up_args[@]}"
+
+runtime_services=(api maintenance-worker provider-webhook miniapp reverse-proxy)
 if [[ "${provider_balance_bot_enabled}" == "true" ]]; then
   runtime_services+=(provider-balance-bot)
 fi

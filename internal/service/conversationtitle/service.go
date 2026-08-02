@@ -17,9 +17,13 @@ import (
 )
 
 const (
-	maxTitleRunes      = 80
-	maxPromptRunes     = 1200
-	defaultCallTimeout = 15 * time.Second
+	maxTitleRunes           = 80
+	maxPromptRunes          = 1200
+	defaultCallTimeout      = 15 * time.Second
+	defaultFirstMessageWait = 500 * time.Millisecond
+	// Five bounded indexed lookups at most under the default 500 ms race window
+	// keep the rare ordering recovery cheap at high request volume.
+	defaultFirstMessagePollInterval = 100 * time.Millisecond
 )
 
 // ErrFirstUserMessageNotReady is retryable only while the normal text worker
@@ -34,18 +38,22 @@ type Generator interface {
 
 // Deps supplies the persistence and provider boundaries for Service.
 type Deps struct {
-	Jobs          domain.JobRepository
-	Conversations domain.ConversationRepository
-	Generator     Generator
-	CallTimeout   time.Duration
+	Jobs                     domain.JobRepository
+	Conversations            domain.ConversationRepository
+	Generator                Generator
+	CallTimeout              time.Duration
+	FirstMessageWait         time.Duration
+	FirstMessagePollInterval time.Duration
 }
 
 // Service processes one isolated title-stream task at a time.
 type Service struct {
-	jobs          domain.JobRepository
-	conversations domain.ConversationRepository
-	generator     Generator
-	callTimeout   time.Duration
+	jobs                     domain.JobRepository
+	conversations            domain.ConversationRepository
+	generator                Generator
+	callTimeout              time.Duration
+	firstMessageWait         time.Duration
+	firstMessagePollInterval time.Duration
 }
 
 // New creates a title service. A nil generator is intentional in deployments
@@ -56,18 +64,31 @@ func New(deps Deps) *Service {
 	if timeout <= 0 {
 		timeout = defaultCallTimeout
 	}
+	firstMessageWait := deps.FirstMessageWait
+	if firstMessageWait <= 0 {
+		firstMessageWait = defaultFirstMessageWait
+	}
+	firstMessagePollInterval := deps.FirstMessagePollInterval
+	if firstMessagePollInterval <= 0 {
+		firstMessagePollInterval = defaultFirstMessagePollInterval
+	}
+	if firstMessagePollInterval > firstMessageWait {
+		firstMessagePollInterval = firstMessageWait
+	}
 	return &Service{
-		jobs:          deps.Jobs,
-		conversations: deps.Conversations,
-		generator:     deps.Generator,
-		callTimeout:   timeout,
+		jobs:                     deps.Jobs,
+		conversations:            deps.Conversations,
+		generator:                deps.Generator,
+		callTimeout:              timeout,
+		firstMessageWait:         firstMessageWait,
+		firstMessagePollInterval: firstMessagePollInterval,
 	}
 }
 
 // Process returns nil when this title task can be acknowledged. Provider and
-// malformed-output failures are deliberately successful no-ops; the only
-// expected retry is the short race before the normal worker persists the first
-// user message.
+// malformed-output failures are deliberately successful no-ops. It waits only
+// briefly for the normal worker's first-message persistence race; a remaining
+// miss is retried through the title stream's durable recovery path.
 func (s *Service) Process(ctx context.Context, task queue.Task) error {
 	if s == nil || s.generator == nil {
 		return nil
@@ -86,13 +107,7 @@ func (s *Service) Process(ctx context.Context, task queue.Task) error {
 		return nil
 	}
 
-	message, err := s.conversations.GetUserMessageByJobID(ctx, job.ID)
-	if errors.Is(err, domain.ErrNotFound) {
-		if mayStillPersistFirstMessage(job.Status) {
-			return ErrFirstUserMessageNotReady
-		}
-		return nil
-	}
+	message, err := s.firstUserMessage(ctx, job)
 	if err != nil {
 		return err
 	}
@@ -158,6 +173,44 @@ func (s *Service) Process(ctx context.Context, task queue.Task) error {
 	}
 	_, err = s.conversations.SetGeneratedTitleForActiveWebConversation(ctx, job.AccountID, conversation.ID, title)
 	return err
+}
+
+// firstUserMessage absorbs the normal ordering race without exposing it to the
+// browser or holding the user-generation worker. This method runs only in the
+// isolated title worker and makes a bounded number of indexed job-ID lookups.
+func (s *Service) firstUserMessage(ctx context.Context, job *domain.Job) (*domain.ConversationMessage, error) {
+	message, err := s.conversations.GetUserMessageByJobID(ctx, job.ID)
+	if !errors.Is(err, domain.ErrNotFound) {
+		return message, err
+	}
+	if !mayStillPersistFirstMessage(job.Status) {
+		return nil, nil
+	}
+
+	timer := time.NewTimer(s.firstMessageWait)
+	defer timer.Stop()
+	ticker := time.NewTicker(s.firstMessagePollInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-timer.C:
+			// A final lookup closes the timer/ticker boundary: the normal worker
+			// may have committed just before the timer became selectable.
+			message, err = s.conversations.GetUserMessageByJobID(ctx, job.ID)
+			if errors.Is(err, domain.ErrNotFound) {
+				return nil, ErrFirstUserMessageNotReady
+			}
+			return message, err
+		case <-ticker.C:
+			message, err = s.conversations.GetUserMessageByJobID(ctx, job.ID)
+			if errors.Is(err, domain.ErrNotFound) {
+				continue
+			}
+			return message, err
+		}
+	}
 }
 
 func eligibleWebTextJob(job *domain.Job) bool {

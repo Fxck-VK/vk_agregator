@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 	"unicode/utf8"
 
 	"github.com/google/uuid"
@@ -26,6 +28,20 @@ type generatorStub struct {
 type fallbackRaceRepo struct {
 	domain.ConversationRepository
 	injectFallback bool
+}
+
+type firstMessageGateRepo struct {
+	domain.ConversationRepository
+	firstMissed chan struct{}
+	once        sync.Once
+}
+
+func (r *firstMessageGateRepo) GetUserMessageByJobID(ctx context.Context, jobID uuid.UUID) (*domain.ConversationMessage, error) {
+	message, err := r.ConversationRepository.GetUserMessageByJobID(ctx, jobID)
+	if errors.Is(err, domain.ErrNotFound) {
+		r.once.Do(func() { close(r.firstMissed) })
+	}
+	return message, err
 }
 
 func (r *fallbackRaceRepo) SetConversationFallbackTitleIfPending(ctx context.Context, conversationID uuid.UUID, title string) (bool, error) {
@@ -173,6 +189,44 @@ func TestProcessWaitsForFirstMessageThenGeneratesOnce(t *testing.T) {
 	}
 	if after.Status != before.Status || after.CostEstimate != before.CostEstimate || after.CostReserved != before.CostReserved || after.CostCaptured != before.CostCaptured {
 		t.Fatalf("title work mutated user job: before=%+v after=%+v", before, after)
+	}
+}
+
+func TestProcessWaitsBrieflyForMessagePersistedByNormalWorker(t *testing.T) {
+	ctx := context.Background()
+	fixture := newTitleFixture(t)
+	firstMissed := make(chan struct{})
+	conversations := &firstMessageGateRepo{
+		ConversationRepository: fixture.conversations,
+		firstMissed:            firstMissed,
+	}
+	service := conversationtitle.New(conversationtitle.Deps{
+		Jobs:                     fixture.jobs,
+		Conversations:            conversations,
+		Generator:                fixture.generator,
+		FirstMessageWait:         100 * time.Millisecond,
+		FirstMessagePollInterval: 5 * time.Millisecond,
+	})
+	persisted := make(chan error, 1)
+	go func() {
+		<-firstMissed
+		_, err := fixture.conversations.UpsertMessage(ctx, &domain.ConversationMessage{
+			ConversationID: fixture.conversation.ID,
+			JobID:          fixture.job.ID,
+			Role:           domain.ConversationRoleUser,
+			Text:           "Give this new chat a semantic title",
+		})
+		persisted <- err
+	}()
+
+	if err := service.Process(ctx, titleTask(fixture.job)); err != nil {
+		t.Fatalf("Process() = %v, want the normal-worker race to resolve in-handler", err)
+	}
+	if err := <-persisted; err != nil {
+		t.Fatalf("persist first message: %v", err)
+	}
+	if fixture.generator.calls != 1 {
+		t.Fatalf("generator calls = %d, want 1 after the first-message race", fixture.generator.calls)
 	}
 }
 

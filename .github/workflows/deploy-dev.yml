@@ -411,7 +411,7 @@ jobs:
             cat <<'REMOTE'
           set -euo pipefail
           cd "${deploy_path}"
-          bash scripts/deploy/deploy-dev.sh --branch dev-deploy --env-file .env --web-auth-env-file .dev-web-auth.env --skip-pull --with-cloudflare --skip-public-smoke --image-tag "${deploy_image_tag}" --timeout-seconds 240
+          bash scripts/deploy/deploy-dev.sh --branch dev-deploy --env-file .env --web-auth-env-file .dev-web-auth.env --skip-pull --with-cloudflare --skip-public-smoke --relay-only-workers-upgraded --image-tag "${deploy_image_tag}" --timeout-seconds 240
           REMOTE
           } | ssh "${ssh_opts[@]}" "${DEV_DEPLOY_USER}@${DEV_DEPLOY_HOST}" bash -s
 
@@ -537,6 +537,7 @@ jobs:
             --with-cloudflare \
             --skip-migrate \
             --skip-public-smoke \
+            --relay-only-workers-upgraded \
             --image-tag "${previous_image_tag}" \
             --timeout-seconds 240
 

@@ -261,12 +261,26 @@ func (c *Consumer) EnsureGroups(ctx context.Context, streams ...string) error {
 		streams = AllStreams
 	}
 	for _, stream := range streams {
-		err := c.client.XGroupCreateMkStream(ctx, stream, c.group, "$").Err()
+		err := c.client.XGroupCreateMkStream(ctx, stream, c.group, groupStartID(stream)).Err()
 		if err != nil && !isBusyGroup(err) {
 			return fmt.Errorf("redisqueue: create group %s/%s: %w", stream, c.group, err)
 		}
 	}
 	return nil
+}
+
+// groupStartID returns the initial cursor for a newly provisioned consumer
+// group. Ordinary generation streams start at the current tail because their
+// outbox relay and consumers are deployed together. Conversation-title work is
+// intentionally replayed from the beginning: a relay-only process can publish
+// best-effort title tasks before the first title consumer comes online, and
+// those tasks must not be skipped. Processing a retained title task twice is
+// harmless because the title service uses durable compare-and-set writes.
+func groupStartID(stream string) string {
+	if stream == StreamConversationTitle {
+		return "0"
+	}
+	return "$"
 }
 
 // Read fetches new, never-delivered entries for this consumer.

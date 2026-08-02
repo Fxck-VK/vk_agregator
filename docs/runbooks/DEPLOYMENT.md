@@ -23,6 +23,7 @@ Production flow:
 ```text
 main push/merge
   -> Docker Images workflow builds immutable sha-<full-main-commit> images in GHCR
+  -> operator manually dispatches Deploy Production from main and confirms the relay-only rollout gate
   -> Deploy Production workflow connects to VPS
   -> deploy-prod.sh pulls immutable images
   -> smoke-prod.sh verifies public/private routes
@@ -91,8 +92,16 @@ Use only when manually operating the VPS:
 
 ```bash
 cd /opt/vk-ai-aggregator
-bash scripts/deploy/deploy-prod.sh --branch main --env-file .env --with-cloudflare
+bash scripts/deploy/deploy-prod.sh --branch main --env-file .env --with-cloudflare --relay-only-workers-upgraded
 ```
+
+The `--relay-only-workers-upgraded` acknowledgement is a hard compatibility
+gate: before it is supplied, upgrade or stop every separately managed
+`WORKER_MODE=relay` process. A new API may emit an outbox event that an older
+relay cannot classify. The command starts and waits for the new compose jobs
+worker before the API, but it cannot discover relay-only processes operated
+outside that compose project. Do not use the acknowledgement to permit a
+rolling overlap with an old relay.
 
 Expected behavior:
 
@@ -103,8 +112,9 @@ Expected behavior:
 - starts local data services only when `DATA_SERVICES_MODE=local`;
 - waits for Postgres/Redis/MinIO health before migrations;
 - runs migrations before runtime services;
-- starts `api`, `worker`, `maintenance-worker`, `provider-webhook`,
-  `miniapp`, `reverse-proxy` and optionally `cloudflared`;
+- starts and waits for the new `worker`, then starts `api`,
+  `maintenance-worker`, `provider-webhook`, `miniapp`, `reverse-proxy` and
+  optionally `cloudflared`;
 - runs health checks and prints a deploy summary.
 
 The active immutable `IMAGE_TAG` in the VPS `.env` is the source of truth when

@@ -36,7 +36,22 @@ When an accepted Web text job belongs to a title-eligible conversation, its crea
 
 The title worker loads the persisted job and conversation, verifies the exact account, `web` source and active status, and reads only the first stored user message from the database. If the normal worker has not yet stored that message, the title task is retryable. Repeated deliveries are safe: only the first-message job for a conversation may call the generator, and the final write is an atomic compare-and-set.
 
-This keeps title work off the normal chat latency path: a Redis or DeepSeek failure retries or falls back only within the title path and cannot duplicate or delay the normal chat generation event. It gives the title worker existing Redis claim and recovery behaviour. A failed title task never changes the success or failure state of the user chat job.
+This keeps title work off the normal chat latency path: a Redis or DeepSeek failure retries or falls back only within the title path and cannot duplicate or delay the normal chat generation event. The title stream has a recovery lease longer than the bounded provider request timeout, so another worker cannot reclaim a live model call. A newly provisioned title consumer group replays retained title entries from the beginning, protecting a relay-first rollout. A failed title task never changes the success or failure state of the user chat job.
+
+Each title-engine replica claims one task at a time. That keeps a Redis lease
+aligned to exactly one bounded provider call; throughput scales by adding title
+worker replicas rather than by pre-claiming a serial batch.
+
+### 2.1 Rollout compatibility gate
+
+`event.conversation_title.queued` is understood only by the new outbox relay.
+Before an API cutover that can emit it, every separately managed
+`WORKER_MODE=relay` process must be upgraded to the same image or stopped. The
+managed deploy scripts make this an explicit `--relay-only-workers-upgraded`
+gate, then start and wait for the new jobs worker before starting the API. The
+DEV workflow can attest to the compose-managed topology; a production operator
+must pass the gate only after completing the equivalent relay fleet rollout.
+No rolling overlap with an old relay is permitted.
 
 ### 3. DeepSeek generator boundary
 

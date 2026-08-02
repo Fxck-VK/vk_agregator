@@ -15,6 +15,15 @@ func TestConversationTitleStreamIsCataloguedAndClassified(t *testing.T) {
 	}
 }
 
+func TestConversationTitleGroupReplaysRetainedTasksCreatedBeforeWorkerStartup(t *testing.T) {
+	if got := groupStartID(StreamConversationTitle); got != "0" {
+		t.Fatalf("title group start id = %q, want 0 so publish-before-group tasks are not skipped", got)
+	}
+	if got := groupStartID(StreamText); got != "$" {
+		t.Fatalf("normal generation group start id = %q, want $", got)
+	}
+}
+
 func containsStream(streams []string, want string) bool {
 	for _, stream := range streams {
 		if stream == want {
