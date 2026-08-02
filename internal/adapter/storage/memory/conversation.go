@@ -80,6 +80,7 @@ func (r *ConversationRepo) GetActiveByUserPeer(_ context.Context, userID uuid.UU
 func (r *ConversationRepo) GetActiveByReference(_ context.Context, ref domain.ConversationRef) (*domain.Conversation, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	requestedAccountID := ref.AccountID
 	id, ok := r.activeByRef[activeConversationRefKey(ref)]
 	if !ok {
 		if ref.AccountID != uuid.Nil && ref.UserID != uuid.Nil {
@@ -91,6 +92,9 @@ func (r *ConversationRepo) GetActiveByReference(_ context.Context, ref domain.Co
 		}
 	}
 	c := r.byID[id]
+	if requestedAccountID != uuid.Nil && c.AccountID != uuid.Nil && c.AccountID != requestedAccountID {
+		return nil, domain.ErrNotFound
+	}
 	return &c, nil
 }
 

@@ -270,6 +270,14 @@ func TestConversationRepoArchiveKeepsLegacyReferenceReownedByAnotherAccount(t *t
 	}); !errors.Is(err, domain.ErrNotFound) || got != nil {
 		t.Fatalf("A account active lookup after archive = %#v, %v; want nil, %v", got, err, domain.ErrNotFound)
 	}
+	if got, err := repo.GetActiveByReference(ctx, domain.ConversationRef{
+		UserID:           userID,
+		AccountID:        accountA,
+		Source:           domain.ConversationSourceWeb,
+		ExternalThreadID: threadID,
+	}); !errors.Is(err, domain.ErrNotFound) || got != nil {
+		t.Fatalf("A account-aware active lookup after archive = %#v, %v; want nil, %v", got, err, domain.ErrNotFound)
+	}
 	if got, err := repo.GetActiveByReference(ctx, legacyRef); err != nil || got.ID != conversationB.ID || got.Status != domain.ConversationActive {
 		t.Fatalf("legacy active lookup after A archive = %#v, %v; want active B %s", got, err, conversationB.ID)
 	}
