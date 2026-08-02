@@ -78,10 +78,14 @@
   border: 0.0625rem solid var(--color-text-muted);
   border-radius: var(--radius-sm);
   padding-inline: var(--space-2);
+  background: var(--color-surface-raised);
   color: var(--color-text);
+  caret-color: var(--color-text);
+  appearance: none;
+  transition: border-color 150ms ease, background 150ms ease;
 }
 
-.formActions { display: flex; flex-wrap: wrap; gap: var(--space-1); }
+.formActions { display: flex; flex-wrap: wrap; align-items: stretch; gap: var(--space-1); }
 .confirmation p, .error { margin: 0; font-size: 0.8125rem; }
 .error { color: var(--color-text-muted); }
 

@@ -13,4 +13,11 @@ describe("ConversationRow styles", () => {
     expect(stylesheet).toMatch(/\.panel\s*\{[^}]*inset-inline-end:/s);
     expect(stylesheet).toMatch(/\.menu,\s*\.renameForm,\s*\.confirmation\s*\{\s*display:\s*grid;/s);
   });
+
+  it("gives the rename control an explicit readable dark surface", () => {
+    expect(stylesheet).toMatch(/\.renameForm input\s*\{[^}]*background:\s*var\(--color-surface-raised\);/s);
+    expect(stylesheet).toMatch(/\.renameForm input\s*\{[^}]*color:\s*var\(--color-text\);/s);
+    expect(stylesheet).toMatch(/\.renameForm input\s*\{[^}]*caret-color:\s*var\(--color-text\);/s);
+    expect(stylesheet).toMatch(/\.formActions\s*\{[^}]*align-items:\s*stretch;/s);
+  });
 });
