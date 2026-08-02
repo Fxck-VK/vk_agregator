@@ -4,6 +4,7 @@ import { createContext, type ReactNode, useContext } from "react";
 
 type SidebarConversationsActivity = {
   isActive: boolean;
+  onPendingPanelChange?: (conversationId: string, isPending: boolean, session: number) => void;
   session: number;
 };
 
@@ -12,12 +13,13 @@ const SidebarConversationsActivityContext = createContext<SidebarConversationsAc
 type SidebarConversationsActivityProviderProps = {
   children: ReactNode;
   isActive: boolean;
+  onPendingPanelChange?: (conversationId: string, isPending: boolean, session: number) => void;
   session: number;
 };
 
-export function SidebarConversationsActivityProvider({ children, isActive, session }: SidebarConversationsActivityProviderProps) {
+export function SidebarConversationsActivityProvider({ children, isActive, onPendingPanelChange, session }: SidebarConversationsActivityProviderProps) {
   return (
-    <SidebarConversationsActivityContext.Provider value={{ isActive, session }}>
+    <SidebarConversationsActivityContext.Provider value={{ isActive, onPendingPanelChange, session }}>
       {children}
     </SidebarConversationsActivityContext.Provider>
   );

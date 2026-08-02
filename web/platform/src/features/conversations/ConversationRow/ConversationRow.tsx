@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { type JSX, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { type JSX, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { ru } from "@/i18n/ru";
 import { webBrowserMutation } from "@/lib/web-api/browser";
@@ -14,9 +14,11 @@ type ConversationRowProps = {
   activeConversationId?: string | null;
   conversation: ConversationItem;
   isActive: boolean;
-  onArchived?: (archive: { conversationId: string; isActive: boolean; sidebarIsActive: boolean; sidebarSession?: number }) => void;
+  onArchived?: (archive: { conversationId: string; isActive: boolean; sidebarIsActive: boolean; sidebarSession?: number; wasPanelOwner: boolean }) => void;
   onPanelClosed?: (conversationId: string) => void;
   onPanelOpened?: (conversationId: string) => void;
+  onPendingPanelChange?: (conversationId: string, isPending: boolean, session: number) => void;
+  ownsCurrentPanel?: (conversationId: string, session: number | undefined) => boolean;
   sidebarIsActive?: boolean;
   sidebarSession?: number;
 };
@@ -30,6 +32,8 @@ export function ConversationRow({
   onArchived,
   onPanelClosed,
   onPanelOpened,
+  onPendingPanelChange,
+  ownsCurrentPanel,
   sidebarIsActive = true,
   sidebarSession,
 }: ConversationRowProps): JSX.Element {
@@ -60,6 +64,10 @@ export function ConversationRow({
     && (isPending || activeConversationId === undefined || activeConversationId === conversation.id);
 
   const isCurrentSidebarSession = (session: number | undefined) => sidebarIsActiveRef.current && sidebarSessionRef.current === session;
+  const isCurrentPanelOwner = useCallback(
+    (session: number | undefined) => ownsCurrentPanel?.(conversation.id, session) ?? (activeConversationId === undefined || activeConversationId === conversation.id),
+    [activeConversationId, conversation.id, ownsCurrentPanel],
+  );
 
   const closePanel = (restoreActionFocus = false) => {
     if (isPending) return;
@@ -88,6 +96,27 @@ export function ConversationRow({
       actionToggleRef.current?.focus();
     }
   }, [panel]);
+
+  useEffect(() => {
+    if (typeof panelSession !== "number") return;
+    onPendingPanelChange?.(conversation.id, isPending && panelIsVisible, panelSession);
+    return () => onPendingPanelChange?.(conversation.id, false, panelSession);
+  }, [conversation.id, isPending, onPendingPanelChange, panelIsVisible, panelSession]);
+
+  useEffect(() => {
+    if (!panelIsVisible || isPending) return;
+
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (event.target instanceof Node && !rowRef.current?.contains(event.target)) {
+        restoreActionFocusRef.current = false;
+        setHasError(false);
+        setPanel(null);
+        onPanelClosed?.(conversation.id);
+      }
+    };
+    document.addEventListener("pointerdown", closeOnOutsidePointer);
+    return () => document.removeEventListener("pointerdown", closeOnOutsidePointer);
+  }, [conversation.id, isPending, onPanelClosed, panelIsVisible]);
 
   useLayoutEffect(() => {
     mountedRef.current = true;
@@ -121,7 +150,7 @@ export function ConversationRow({
     const focusTarget = focusAfterPendingRef.current;
     focusAfterPendingRef.current = null;
     if (!mountedRef.current || focusTarget.requestGeneration !== requestGenerationRef.current) return;
-    if (isCurrentSidebarSession(focusTarget.sidebarSession)) {
+    if (isCurrentSidebarSession(focusTarget.sidebarSession) && isCurrentPanelOwner(focusTarget.sidebarSession)) {
       if (focusTarget.kind === "rename") renameInputRef.current?.focus();
       else if (focusTarget.kind === "archive") archiveConfirmRef.current?.focus();
       else actionToggleRef.current?.focus();
@@ -131,7 +160,7 @@ export function ConversationRow({
       refreshAfterFocusRef.current = null;
       if (mountedRef.current && refreshGeneration === requestGenerationRef.current) router.refresh();
     }
-  }, [isPending, router]);
+  }, [isCurrentPanelOwner, isPending, router]);
 
   const renameConversation = async () => {
     if (isPending) return;
@@ -186,6 +215,7 @@ export function ConversationRow({
         isActive,
         sidebarIsActive: isCurrentSidebarSession(mutationSidebarSession),
         sidebarSession: mutationSidebarSession,
+        wasPanelOwner: isCurrentPanelOwner(mutationSidebarSession),
       });
 
       if (isActive) {

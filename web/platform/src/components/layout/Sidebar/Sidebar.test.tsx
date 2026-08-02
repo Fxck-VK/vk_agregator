@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import Link from "next/link";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { ReactNode } from "react";
@@ -54,6 +54,28 @@ function mockWideViewport() {
     addListener: vi.fn(),
     removeListener: vi.fn(),
   }));
+}
+
+function mockResponsiveViewport(initialDesktop: boolean) {
+  let isDesktop = initialDesktop;
+  const listeners = new Set<(event: MediaQueryListEvent) => void>();
+  vi.stubGlobal("matchMedia", (): MediaQueryList => ({
+    get matches() { return isDesktop; },
+    media: "(min-width: 48rem)",
+    onchange: null,
+    addEventListener: (_type: string, listener: EventListenerOrEventListenerObject) => { listeners.add(listener as (event: MediaQueryListEvent) => void); },
+    removeEventListener: (_type: string, listener: EventListenerOrEventListenerObject) => { listeners.delete(listener as (event: MediaQueryListEvent) => void); },
+    dispatchEvent: vi.fn(),
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+  }));
+
+  return {
+    setDesktop(nextIsDesktop: boolean) {
+      isDesktop = nextIsDesktop;
+      for (const listener of listeners) listener({ matches: isDesktop } as MediaQueryListEvent);
+    },
+  };
 }
 
 function renderNarrowSidebar({
@@ -296,6 +318,61 @@ describe("Sidebar", () => {
     expect(screen.queryByRole("textbox", { name: ru.conversations.renameInputLabel })).not.toBeInTheDocument();
   });
 
+  it("invalidates row panels when the desktop sidebar becomes narrow and then reactivates", () => {
+    const viewport = mockResponsiveViewport(true);
+    render(<Sidebar conversations={<SidebarConversations conversations={recentConversations} />} />);
+    const actions = screen.getByRole("button", { name: `${ru.conversations.actionsLabel}: Recent chat 1` });
+    fireEvent.click(actions);
+    fireEvent.click(screen.getByRole("button", { name: ru.conversations.renameLabel }));
+    expect(screen.getByRole("textbox", { name: ru.conversations.renameInputLabel })).toBeInTheDocument();
+
+    act(() => viewport.setDesktop(false));
+    expect(screen.getByTestId("sidebar-panel")).toHaveAttribute("data-open", "false");
+
+    act(() => viewport.setDesktop(true));
+    expect(screen.getByTestId("sidebar-panel")).toHaveAttribute("data-open", "true");
+    expect(screen.queryByRole("textbox", { name: ru.conversations.renameInputLabel })).not.toBeInTheDocument();
+  });
+
+  it.each(["trigger", "backdrop", "navigation"] as const)("invalidates row panels after the narrow drawer closes through %s", (closeMethod) => {
+    const { trigger } = renderNarrowSidebar({
+      conversations: <SidebarConversations conversations={recentConversations} />,
+    });
+    openNavigation(trigger);
+    fireEvent.click(screen.getByRole("button", { name: `${ru.conversations.actionsLabel}: Recent chat 1` }));
+    fireEvent.click(screen.getByRole("button", { name: ru.conversations.renameLabel }));
+
+    if (closeMethod === "trigger") fireEvent.click(trigger);
+    else if (closeMethod === "backdrop") fireEvent.click(screen.getByRole("button", { name: ru.navigation.closeMenuLabel }));
+    else {
+      const workspace = screen.getByRole("link", { name: ru.navigation.workspace });
+      workspace.addEventListener("click", (event) => event.preventDefault(), { once: true });
+      fireEvent.click(workspace);
+    }
+
+    fireEvent.click(trigger);
+    expect(screen.queryByRole("textbox", { name: ru.conversations.renameInputLabel })).not.toBeInTheDocument();
+  });
+
+  it("invalidates row panels when the desktop sidebar collapses and expands", () => {
+    mockWideViewport();
+    const onDesktopToggle = vi.fn();
+    const rendered = render(
+      <Sidebar conversations={<SidebarConversations conversations={recentConversations} />} isDesktopCollapsed={false} onDesktopToggle={onDesktopToggle} />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: `${ru.conversations.actionsLabel}: Recent chat 1` }));
+    fireEvent.click(screen.getByRole("button", { name: ru.conversations.renameLabel }));
+
+    rendered.rerender(
+      <Sidebar conversations={<SidebarConversations conversations={recentConversations} />} isDesktopCollapsed onDesktopToggle={onDesktopToggle} />,
+    );
+    rendered.rerender(
+      <Sidebar conversations={<SidebarConversations conversations={recentConversations} />} isDesktopCollapsed={false} onDesktopToggle={onDesktopToggle} />,
+    );
+
+    expect(screen.queryByRole("textbox", { name: ru.conversations.renameInputLabel })).not.toBeInTheDocument();
+  });
+
   it("does not revive or refocus a pending mutation from a closed drawer session", async () => {
     mockNarrowViewport();
     let settleRequest: (response: Response) => void = () => {};
@@ -348,6 +425,95 @@ describe("Sidebar", () => {
 
     fireEvent.keyDown(titleInput, { key: "Escape" });
     expect(panel).toHaveAttribute("data-open", "true");
+  });
+
+  it("keeps the drawer open when Escape is pressed on another control while a row is pending", async () => {
+    mockNarrowViewport();
+    vi.mocked(usePathname).mockReturnValue("/app");
+    vi.mocked(useRouter).mockReturnValue({ refresh: vi.fn(), replace: vi.fn() } as never);
+    vi.mocked(webBrowserMutation).mockReturnValue(new Promise<Response>(() => {}));
+
+    render(<Sidebar conversations={<SidebarConversations conversations={recentConversations} />} />);
+    const trigger = screen.getByRole("button", { name: ru.navigation.openMenuLabel });
+    const panel = screen.getByTestId("sidebar-panel");
+    const workspace = openNavigation(trigger);
+    fireEvent.click(screen.getByRole("button", { name: `${ru.conversations.actionsLabel}: Recent chat 1` }));
+    fireEvent.click(screen.getByRole("button", { name: ru.conversations.renameLabel }));
+    fireEvent.click(screen.getByRole("button", { name: ru.conversations.renameSubmitLabel }));
+    await vi.waitFor(() => expect(screen.getByRole("button", { name: ru.conversations.renamePending })).toBeDisabled());
+
+    workspace.focus();
+    fireEvent.keyDown(workspace, { key: "Escape" });
+    expect(panel).toHaveAttribute("data-open", "true");
+  });
+
+  it("does not refocus the first row when a second row owns the panel after a rename settles", async () => {
+    mockNarrowViewport();
+    let settleRequest: (response: Response) => void = () => {};
+    const refresh = vi.fn();
+    vi.mocked(usePathname).mockReturnValue("/app");
+    vi.mocked(useRouter).mockReturnValue({ refresh, replace: vi.fn() } as never);
+    vi.mocked(webBrowserMutation).mockReturnValue(new Promise<Response>((resolve) => { settleRequest = resolve; }));
+
+    render(<Sidebar conversations={<SidebarConversations conversations={recentConversations} />} />);
+    const trigger = screen.getByRole("button", { name: ru.navigation.openMenuLabel });
+    openNavigation(trigger);
+    const firstActions = screen.getByRole("button", { name: `${ru.conversations.actionsLabel}: Recent chat 1` });
+    const secondActions = screen.getByRole("button", { name: `${ru.conversations.actionsLabel}: Recent chat 2` });
+    fireEvent.click(firstActions);
+    fireEvent.click(screen.getByRole("button", { name: ru.conversations.renameLabel }));
+    fireEvent.click(screen.getByRole("button", { name: ru.conversations.renameSubmitLabel }));
+    await vi.waitFor(() => expect(screen.getByRole("button", { name: ru.conversations.renamePending })).toBeDisabled());
+    fireEvent.click(secondActions);
+    secondActions.focus();
+
+    settleRequest(Response.json(recentConversations[0], { status: 200 }));
+
+    await vi.waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
+    expect(secondActions).toHaveAttribute("aria-expanded", "true");
+    expect(document.activeElement).toBe(secondActions);
+  });
+
+  it("preserves the second row panel when a first-row archive settles in the background", async () => {
+    mockNarrowViewport();
+    let settleRequest: (response: Response) => void = () => {};
+    vi.mocked(usePathname).mockReturnValue("/app");
+    vi.mocked(useRouter).mockReturnValue({ refresh: vi.fn(), replace: vi.fn() } as never);
+    vi.mocked(webBrowserMutation).mockReturnValue(new Promise<Response>((resolve) => { settleRequest = resolve; }));
+
+    render(<Sidebar conversations={<SidebarConversations conversations={recentConversations} />} />);
+    const trigger = screen.getByRole("button", { name: ru.navigation.openMenuLabel });
+    openNavigation(trigger);
+    const firstActions = screen.getByRole("button", { name: `${ru.conversations.actionsLabel}: Recent chat 1` });
+    const secondActions = screen.getByRole("button", { name: `${ru.conversations.actionsLabel}: Recent chat 2` });
+    fireEvent.click(firstActions);
+    fireEvent.click(screen.getByRole("button", { name: ru.conversations.archiveLabel }));
+    fireEvent.click(screen.getByRole("button", { name: ru.conversations.archiveConfirmLabel }));
+    await vi.waitFor(() => expect(screen.getByRole("button", { name: ru.conversations.archivePending })).toBeDisabled());
+    fireEvent.click(secondActions);
+    secondActions.focus();
+
+    settleRequest(new Response(null, { status: 204 }));
+
+    await vi.waitFor(() => expect(screen.queryByRole("link", { name: "Recent chat 1" })).not.toBeInTheDocument());
+    expect(secondActions).toHaveAttribute("aria-expanded", "true");
+    expect(document.activeElement).toBe(secondActions);
+  });
+
+  it("dismisses a non-pending row panel on an outside click without stealing the target focus", () => {
+    const { trigger } = renderNarrowSidebar({
+      conversations: <SidebarConversations conversations={recentConversations} />,
+    });
+    const workspace = openNavigation(trigger);
+    const actions = screen.getByRole("button", { name: `${ru.conversations.actionsLabel}: Recent chat 1` });
+    fireEvent.click(actions);
+    expect(actions).toHaveAttribute("aria-expanded", "true");
+
+    fireEvent.pointerDown(workspace);
+    workspace.focus();
+
+    expect(actions).toHaveAttribute("aria-expanded", "false");
+    expect(workspace).toHaveFocus();
   });
 
   it("does not refocus an old drawer session after a successful pending rename", async () => {

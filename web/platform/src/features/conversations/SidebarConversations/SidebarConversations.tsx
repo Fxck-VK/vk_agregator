@@ -17,20 +17,20 @@ type SidebarConversationsProps = {
 
 export function SidebarConversations({ conversations }: SidebarConversationsProps) {
   const pathname = usePathname();
-  const { isActive: sidebarIsActive, session: sidebarSession } = useSidebarConversationsActive();
+  const { isActive: sidebarIsActive, onPendingPanelChange, session: sidebarSession } = useSidebarConversationsActive();
   const [archivedConversationIds, setArchivedConversationIds] = useState<Set<string>>(() => new Set());
   const [openConversationId, setOpenConversationId] = useState<string | null>(null);
   const [openConversationSession, setOpenConversationSession] = useState(0);
   const createConversationRef = useRef<HTMLDivElement>(null);
   const focusAfterArchiveRef = useRef<string | "create" | null>(null);
-  const sidebarActivityRef = useRef({ isActive: sidebarIsActive, session: sidebarSession });
+  const sidebarActivityRef = useRef({ isActive: sidebarIsActive, ownerConversationId: openConversationId, session: sidebarSession });
 
   const visibleConversations = conversations.filter((conversation) => !archivedConversationIds.has(conversation.id));
   const activeConversationId = sidebarIsActive && openConversationSession === sidebarSession ? openConversationId : null;
 
   useLayoutEffect(() => {
-    sidebarActivityRef.current = { isActive: sidebarIsActive, session: sidebarSession };
-  }, [sidebarIsActive, sidebarSession]);
+    sidebarActivityRef.current = { isActive: sidebarIsActive, ownerConversationId: activeConversationId, session: sidebarSession };
+  }, [activeConversationId, sidebarIsActive, sidebarSession]);
 
   useLayoutEffect(() => {
     const focusTarget = focusAfterArchiveRef.current;
@@ -43,17 +43,17 @@ export function SidebarConversations({ conversations }: SidebarConversationsProp
     focusAfterArchiveRef.current = null;
   }, [visibleConversations]);
 
-  const archiveConversation = ({ conversationId, isActive, sidebarIsActive: archiveSidebarIsActive, sidebarSession: archiveSession }: { conversationId: string; isActive: boolean; sidebarIsActive: boolean; sidebarSession?: number }) => {
+  const archiveConversation = ({ conversationId, isActive, sidebarIsActive: archiveSidebarIsActive, sidebarSession: archiveSession, wasPanelOwner }: { conversationId: string; isActive: boolean; sidebarIsActive: boolean; sidebarSession?: number; wasPanelOwner: boolean }) => {
     const archiveIndex = visibleConversations.findIndex((conversation) => conversation.id === conversationId);
     const remainingConversations = visibleConversations.filter((conversation) => conversation.id !== conversationId);
     const isCurrentActiveSession = archiveSidebarIsActive
       && sidebarActivityRef.current.isActive
       && archiveSession === sidebarActivityRef.current.session;
-    if (!isActive && isCurrentActiveSession) {
+    if (!isActive && wasPanelOwner && isCurrentActiveSession) {
       focusAfterArchiveRef.current = remainingConversations[archiveIndex]?.id ?? remainingConversations.at(-1)?.id ?? "create";
     }
     setArchivedConversationIds((ids) => new Set(ids).add(conversationId));
-    setOpenConversationId(null);
+    setOpenConversationId((openId) => openId === conversationId ? null : openId);
   };
 
   return (
@@ -80,6 +80,11 @@ export function SidebarConversations({ conversations }: SidebarConversationsProp
                   onPanelOpened={(conversationId) => {
                     setOpenConversationId(conversationId);
                     setOpenConversationSession(sidebarSession);
+                  }}
+                  onPendingPanelChange={onPendingPanelChange}
+                  ownsCurrentPanel={(conversationId, session) => {
+                    const sidebarActivity = sidebarActivityRef.current;
+                    return sidebarActivity.isActive && sidebarActivity.ownerConversationId === conversationId && sidebarActivity.session === session;
                   }}
                   sidebarIsActive={sidebarIsActive}
                   sidebarSession={sidebarSession}
