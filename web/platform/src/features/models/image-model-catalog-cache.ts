@@ -30,7 +30,7 @@ export function loadImageModelCatalog(options: ImageModelCatalogueLoadOptions = 
         throw new Error("Unable to load image models.");
       }
 
-      const value = parseImageModelList(await response.clone().json());
+      const value = parseImageModelList(await response.json());
       cached = { expiresAt: now() + imageModelCatalogueTtlMs, value };
       return value;
     } catch (error) {

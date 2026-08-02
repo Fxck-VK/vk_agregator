@@ -47,9 +47,21 @@ describe("loadImageModelCatalog", () => {
     ]);
   });
 
+  it("consumes the catalogue response without cloning its body", async () => {
+    const response = Response.json(validCatalogue);
+    const clone = vi.spyOn(response, "clone");
+    const fetcher = vi.fn().mockResolvedValue(response);
+
+    await expect(loadImageModelCatalog({ fetcher })).resolves.toEqual(
+      expect.objectContaining({ items: expect.any(Array) }),
+    );
+
+    expect(clone).not.toHaveBeenCalled();
+  });
+
   it("reuses a fresh successful catalogue then refetches after 60 seconds", async () => {
     let now = 1_000;
-    const fetcher = vi.fn().mockResolvedValue(Response.json(validCatalogue));
+    const fetcher = vi.fn(() => Promise.resolve(Response.json(validCatalogue)));
     await loadImageModelCatalog({ fetcher, now: () => now });
     await loadImageModelCatalog({ fetcher, now: () => now + 59_999 });
     now += 60_000;
