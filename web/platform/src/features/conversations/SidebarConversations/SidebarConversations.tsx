@@ -38,7 +38,7 @@ export function SidebarConversations({ conversations }: SidebarConversationsProp
 
     const target = focusTarget === "create"
       ? createConversationRef.current?.querySelector<HTMLButtonElement>("button:not([disabled])")
-      : document.getElementById(`sidebar-conversation-${focusTarget}`);
+      : document.getElementById(`sidebar-conversation-${focusTarget}`) ?? createConversationRef.current?.querySelector<HTMLButtonElement>("button:not([disabled])");
     if (target instanceof HTMLElement) target.focus();
     focusAfterArchiveRef.current = null;
   }, [visibleConversations]);

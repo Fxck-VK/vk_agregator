@@ -84,7 +84,7 @@ describe("SidebarConversations", () => {
     expect(screen.getAllByRole("button", { name: new RegExp(ru.conversations.actionsLabel) })).toHaveLength(conversations.length);
   });
 
-  it("keeps a failed pending rename reachable when another row opens", async () => {
+  it("keeps the current row open when another row's pending rename fails", async () => {
     let settleRename: (response: Response) => void = () => {};
     vi.mocked(usePathname).mockReturnValue("/app");
     vi.mocked(useRouter).mockReturnValue({ refresh: vi.fn(), replace: vi.fn() } as never);
@@ -102,9 +102,9 @@ describe("SidebarConversations", () => {
 
     settleRename(new Response(null, { status: 500 }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(ru.conversations.renameFailure);
-    expect(titleInput).toHaveValue("Сохранить при ошибке");
-    expect(titleInput).toBeInTheDocument();
+    await vi.waitFor(() => expect(firstActions).toBeEnabled());
+    expect(secondActions).toHaveAttribute("aria-expanded", "true");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("focuses the next chat after archiving a non-active row", async () => {

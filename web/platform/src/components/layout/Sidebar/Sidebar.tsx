@@ -36,7 +36,7 @@ export function Sidebar({ account, conversations, isDesktopCollapsed = false, on
   const hasObservedPathnameRef = useRef(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const previousPathnameRef = useRef(pathname);
-  const pendingConversationPanelRef = useRef<{ conversationId: string; session: number } | null>(null);
+  const pendingConversationPanelIdsRef = useRef(new Set<string>());
   const restoreFocusRef = useRef(false);
   const sidebarActivityRef = useRef({ isActive: false, session: 0 });
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -53,7 +53,7 @@ export function Sidebar({ account, conversations, isDesktopCollapsed = false, on
   useLayoutEffect(() => {
     if (wasPanelOpenRef.current && !panelIsOpen) {
       setConversationPanelSession((session) => session + 1);
-      pendingConversationPanelRef.current = null;
+      pendingConversationPanelIdsRef.current.clear();
     }
     wasPanelOpenRef.current = panelIsOpen;
     sidebarActivityRef.current = { isActive: panelIsOpen, session: conversationPanelSession };
@@ -62,11 +62,8 @@ export function Sidebar({ account, conversations, isDesktopCollapsed = false, on
   const updatePendingConversationPanel = (conversationId: string, isPending: boolean, session: number) => {
     const sidebarActivity = sidebarActivityRef.current;
     if (!sidebarActivity.isActive || sidebarActivity.session !== session) return;
-    if (isPending) {
-      pendingConversationPanelRef.current = { conversationId, session };
-    } else if (pendingConversationPanelRef.current?.conversationId === conversationId) {
-      pendingConversationPanelRef.current = null;
-    }
+    if (isPending) pendingConversationPanelIdsRef.current.add(conversationId);
+    else pendingConversationPanelIdsRef.current.delete(conversationId);
   };
 
   useEffect(() => {
@@ -117,7 +114,7 @@ export function Sidebar({ account, conversations, isDesktopCollapsed = false, on
     firstLinkRef.current?.focus();
     const keepFocusInDrawer = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        if (pendingConversationPanelRef.current?.session === sidebarActivityRef.current.session) {
+        if (pendingConversationPanelIdsRef.current.size > 0) {
           return;
         }
 

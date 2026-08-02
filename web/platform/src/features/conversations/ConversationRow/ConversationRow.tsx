@@ -186,7 +186,7 @@ export function ConversationRow({
       setPanel(null);
     } catch {
       if (!mountedRef.current || requestGeneration !== requestGenerationRef.current) return;
-      if (isCurrentSidebarSession(mutationSidebarSession)) {
+      if (isCurrentSidebarSession(mutationSidebarSession) && isCurrentPanelOwner(mutationSidebarSession)) {
         onPanelOpened?.(conversation.id);
         focusAfterPendingRef.current = { kind: "rename", requestGeneration, sidebarSession: mutationSidebarSession };
       }
@@ -223,7 +223,7 @@ export function ConversationRow({
       } else router.refresh();
     } catch {
       if (!mountedRef.current || requestGeneration !== requestGenerationRef.current) return;
-      if (isCurrentSidebarSession(mutationSidebarSession)) {
+      if (isCurrentSidebarSession(mutationSidebarSession) && isCurrentPanelOwner(mutationSidebarSession)) {
         onPanelOpened?.(conversation.id);
         focusAfterPendingRef.current = { kind: "archive", requestGeneration, sidebarSession: mutationSidebarSession };
       }
