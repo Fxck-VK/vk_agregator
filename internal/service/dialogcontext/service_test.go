@@ -287,6 +287,64 @@ func TestPrepareSetsWebFallbackButKeepsMiniAppTitleSemantics(t *testing.T) {
 	}
 }
 
+func TestPrepareUsesEarliestPersistedWebMessageForFallbackTitle(t *testing.T) {
+	ctx := context.Background()
+	repo := memory.NewConversationRepo()
+	svc := dialogcontext.New(repo, dialogcontext.Config{Enabled: true})
+	accountID := uuid.New()
+	conversation := &domain.Conversation{
+		AccountID: accountID,
+		Source:    domain.ConversationSourceWeb,
+		Status:    domain.ConversationActive,
+	}
+	if err := repo.CreateConversation(ctx, conversation); err != nil {
+		t.Fatalf("create web conversation: %v", err)
+	}
+	firstJob := textJobWithParams(uuid.New(), 0, map[string]string{
+		"conversation_id":     conversation.ID.String(),
+		"conversation_source": "web",
+	})
+	firstJob.AccountID = accountID
+	secondJob := textJobWithParams(uuid.New(), 0, map[string]string{
+		"conversation_id":     conversation.ID.String(),
+		"conversation_source": "web",
+	})
+	secondJob.AccountID = accountID
+
+	// Model the exact race: the first worker persisted seq=1, then paused
+	// before it reached the title transition; a later worker now handles seq=2.
+	if _, err := repo.UpsertMessage(ctx, &domain.ConversationMessage{
+		ConversationID: conversation.ID,
+		JobID:          firstJob.ID,
+		Role:           domain.ConversationRoleUser,
+		Text:           "First persisted prompt",
+		TokenCount:     dialogcontext.EstimateTokens("First persisted prompt"),
+	}); err != nil {
+		t.Fatalf("persist first user message: %v", err)
+	}
+	if _, err := svc.Prepare(ctx, secondJob, "Second worker prompt"); err != nil {
+		t.Fatalf("prepare second worker: %v", err)
+	}
+	stored, err := repo.GetByIDForAccount(ctx, accountID, conversation.ID)
+	if err != nil {
+		t.Fatalf("read conversation after second worker: %v", err)
+	}
+	if stored.Title != "" || stored.TitleOrigin != domain.ConversationTitleOriginAutoPending {
+		t.Fatalf("second worker won fallback = %#v, want unchanged pending title", stored)
+	}
+
+	if _, err := svc.Prepare(ctx, firstJob, "First persisted prompt"); err != nil {
+		t.Fatalf("resume first worker: %v", err)
+	}
+	stored, err = repo.GetByIDForAccount(ctx, accountID, conversation.ID)
+	if err != nil {
+		t.Fatalf("read conversation after first worker: %v", err)
+	}
+	if stored.Title != "First persisted prompt" || stored.TitleOrigin != domain.ConversationTitleOriginAutoFallback {
+		t.Fatalf("first worker fallback = %#v, want first prompt fallback", stored)
+	}
+}
+
 func TestPrepareDoesNotUseForeignWebConversation(t *testing.T) {
 	ctx := context.Background()
 	repo := memory.NewConversationRepo()

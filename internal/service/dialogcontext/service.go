@@ -124,6 +124,18 @@ func (s *Service) Prepare(ctx context.Context, job *domain.Job, prompt string) (
 				return Prepared{}, err
 			}
 		case domain.ConversationSourceWeb:
+			// A parallel later job can persist while the first worker is paused.
+			// Only the earliest persisted user message may establish the fallback.
+			if conversation.TitleOrigin != domain.ConversationTitleOriginAutoPending {
+				break
+			}
+			firstUserMessage, err := s.repo.GetFirstUserMessage(ctx, conversation.ID)
+			if err != nil {
+				return Prepared{}, err
+			}
+			if firstUserMessage.ID != userMessage.ID {
+				break
+			}
 			if _, err := s.repo.SetConversationFallbackTitleIfPending(ctx, conversation.ID, title); err != nil {
 				return Prepared{}, err
 			}
