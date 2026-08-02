@@ -81,7 +81,9 @@ func (r *ConversationRepo) GetActiveByReference(_ context.Context, ref domain.Co
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	requestedAccountID := ref.AccountID
+	requestedUserID := ref.UserID
 	id, ok := r.activeByRef[activeConversationRefKey(ref)]
+	directLookup := ok
 	if !ok {
 		if ref.AccountID != uuid.Nil && ref.UserID != uuid.Nil {
 			ref.AccountID = uuid.Nil
@@ -92,7 +94,16 @@ func (r *ConversationRepo) GetActiveByReference(_ context.Context, ref domain.Co
 		}
 	}
 	c := r.byID[id]
-	if requestedAccountID != uuid.Nil && c.AccountID != uuid.Nil && c.AccountID != requestedAccountID {
+	if requestedAccountID == uuid.Nil {
+		return &c, nil
+	}
+	if directLookup {
+		if c.AccountID != requestedAccountID {
+			return nil, domain.ErrNotFound
+		}
+		return &c, nil
+	}
+	if c.AccountID != uuid.Nil || c.UserID != requestedUserID {
 		return nil, domain.ErrNotFound
 	}
 	return &c, nil

@@ -288,3 +288,103 @@ func TestConversationRepoArchiveKeepsLegacyReferenceReownedByAnotherAccount(t *t
 		t.Fatalf("legacy active lookup after B archive = %#v, %v; want nil, %v", got, err, domain.ErrNotFound)
 	}
 }
+
+func TestConversationRepoAccountAwareReferenceUsesOnlyExactOrHistoricalFallback(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("falls back to matching historical user", func(t *testing.T) {
+		repo := NewConversationRepo()
+		userID := uuid.New()
+		accountID := uuid.New()
+		conversation := domain.Conversation{
+			ID:               uuid.New(),
+			UserID:           userID,
+			Source:           domain.ConversationSourceWeb,
+			ExternalThreadID: "historical-fallback",
+			Status:           domain.ConversationActive,
+		}
+		seedActiveConversationReference(t, repo, conversation, domain.ConversationRef{
+			UserID:           userID,
+			Source:           conversation.Source,
+			ExternalThreadID: conversation.ExternalThreadID,
+		})
+
+		got, err := repo.GetActiveByReference(ctx, domain.ConversationRef{
+			UserID:           userID,
+			AccountID:        accountID,
+			Source:           conversation.Source,
+			ExternalThreadID: conversation.ExternalThreadID,
+		})
+		if err != nil || got.ID != conversation.ID {
+			t.Fatalf("account-aware historical fallback = %#v, %v; want %s, nil", got, err, conversation.ID)
+		}
+	})
+
+	t.Run("rejects canonical same-account candidate reached only through legacy key", func(t *testing.T) {
+		repo := NewConversationRepo()
+		userID := uuid.New()
+		accountID := uuid.New()
+		conversation := domain.Conversation{
+			ID:               uuid.New(),
+			UserID:           userID,
+			AccountID:        accountID,
+			Source:           domain.ConversationSourceWeb,
+			ExternalThreadID: "canonical-legacy-only",
+			Status:           domain.ConversationActive,
+		}
+		seedActiveConversationReference(t, repo, conversation, domain.ConversationRef{
+			UserID:           userID,
+			Source:           conversation.Source,
+			ExternalThreadID: conversation.ExternalThreadID,
+		})
+
+		got, err := repo.GetActiveByReference(ctx, domain.ConversationRef{
+			UserID:           userID,
+			AccountID:        accountID,
+			Source:           conversation.Source,
+			ExternalThreadID: conversation.ExternalThreadID,
+		})
+		if !errors.Is(err, domain.ErrNotFound) || got != nil {
+			t.Fatalf("canonical legacy fallback = %#v, %v; want nil, %v", got, err, domain.ErrNotFound)
+		}
+	})
+
+	t.Run("rejects historical candidate reached through a colliding direct account key", func(t *testing.T) {
+		repo := NewConversationRepo()
+		requestedUserID := uuid.New()
+		requestedAccountID := uuid.New()
+		conversation := domain.Conversation{
+			ID:               uuid.New(),
+			UserID:           requestedAccountID,
+			Source:           domain.ConversationSourceWeb,
+			ExternalThreadID: "direct-account-collision",
+			Status:           domain.ConversationActive,
+		}
+		seedActiveConversationReference(t, repo, conversation, domain.ConversationRef{
+			AccountID:        requestedAccountID,
+			Source:           conversation.Source,
+			ExternalThreadID: conversation.ExternalThreadID,
+		})
+
+		got, err := repo.GetActiveByReference(ctx, domain.ConversationRef{
+			UserID:           requestedUserID,
+			AccountID:        requestedAccountID,
+			Source:           conversation.Source,
+			ExternalThreadID: conversation.ExternalThreadID,
+		})
+		if !errors.Is(err, domain.ErrNotFound) || got != nil {
+			t.Fatalf("direct historical account collision = %#v, %v; want nil, %v", got, err, domain.ErrNotFound)
+		}
+	})
+}
+
+func seedActiveConversationReference(t *testing.T, repo *ConversationRepo, conversation domain.Conversation, ref domain.ConversationRef) {
+	t.Helper()
+	if conversation.ID == uuid.Nil || conversation.Status != domain.ConversationActive {
+		t.Fatalf("invalid active conversation fixture: %#v", conversation)
+	}
+	repo.mu.Lock()
+	defer repo.mu.Unlock()
+	repo.byID[conversation.ID] = conversation
+	repo.activeByRef[activeConversationRefKey(ref)] = conversation.ID
+}
