@@ -288,29 +288,36 @@ export function Sidebar({ account, conversations, isDesktopCollapsed = false, on
           </span>
           <span>{ru.brand.name}</span>
         </div>
-        <nav aria-label={ru.navigation.label} id={navigationId}>
-          <ul className={styles.navigationList}>
-            {navigationItems.map((item, index) => (
-              <li key={item.href}>
-                <Link href={item.href} onClick={() => closeNavigation(true)} ref={index === 0 ? firstLinkRef : undefined}>
-                  {item.label}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </nav>
-        {conversations ? (
-          <div className={styles.conversationsSlot} onClickCapture={closeAfterConversationSelection}>
-            <SidebarConversationsActivityProvider
-              isActive={panelIsOpen}
-              onPendingPanelChange={updatePendingConversationPanel}
-              onVisiblePanelChange={updateVisibleConversationPanel}
-              session={conversationPanelSession}
-            >
-              {conversations}
-            </SidebarConversationsActivityProvider>
-          </div>
-        ) : null}
+        <div className={styles.scrollArea}>
+          <nav aria-label={ru.navigation.label} id={navigationId}>
+            <ul className={styles.navigationList}>
+              {navigationItems.map((item, index) => (
+                <li key={item.href}>
+                  <Link
+                    href={item.href}
+                    id={item.href === "/app/chats" ? "sidebar-new-chat" : undefined}
+                    onClick={() => closeNavigation(true)}
+                    ref={index === 0 ? firstLinkRef : undefined}
+                  >
+                    {item.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </nav>
+          {conversations ? (
+            <div className={styles.conversationsSlot} onClickCapture={closeAfterConversationSelection}>
+              <SidebarConversationsActivityProvider
+                isActive={panelIsOpen}
+                onPendingPanelChange={updatePendingConversationPanel}
+                onVisiblePanelChange={updateVisibleConversationPanel}
+                session={conversationPanelSession}
+              >
+                {conversations}
+              </SidebarConversationsActivityProvider>
+            </div>
+          ) : null}
+        </div>
         {account ? <div className={styles.accountSlot}>{account}</div> : null}
       </div>
     </>

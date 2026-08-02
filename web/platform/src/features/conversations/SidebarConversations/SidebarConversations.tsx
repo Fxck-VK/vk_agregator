@@ -4,7 +4,6 @@ import { usePathname } from "next/navigation";
 import { useLayoutEffect, useRef, useState } from "react";
 
 import { ConversationRow } from "@/features/conversations/ConversationRow/ConversationRow";
-import { NewConversationButton } from "@/features/conversations/NewConversationButton/NewConversationButton";
 import { ru } from "@/i18n/ru";
 import type { ConversationItem } from "@/lib/web-api/contracts";
 
@@ -21,8 +20,7 @@ export function SidebarConversations({ conversations }: SidebarConversationsProp
   const [archivedConversationIds, setArchivedConversationIds] = useState<Set<string>>(() => new Set());
   const [openConversationId, setOpenConversationId] = useState<string | null>(null);
   const [openConversationSession, setOpenConversationSession] = useState(0);
-  const createConversationRef = useRef<HTMLDivElement>(null);
-  const focusAfterArchiveRef = useRef<string | "create" | null>(null);
+  const focusAfterArchiveRef = useRef<string | "new-chat" | null>(null);
   const sidebarActivityRef = useRef({ isActive: sidebarIsActive, ownerConversationId: openConversationId, session: sidebarSession });
 
   const visibleConversations = conversations.filter((conversation) => !archivedConversationIds.has(conversation.id));
@@ -36,9 +34,9 @@ export function SidebarConversations({ conversations }: SidebarConversationsProp
     const focusTarget = focusAfterArchiveRef.current;
     if (focusTarget === null) return;
 
-    const target = focusTarget === "create"
-      ? createConversationRef.current?.querySelector<HTMLButtonElement>("button:not([disabled])")
-      : document.getElementById(`sidebar-conversation-${focusTarget}`) ?? createConversationRef.current?.querySelector<HTMLButtonElement>("button:not([disabled])");
+    const target = focusTarget === "new-chat"
+      ? document.getElementById("sidebar-new-chat")
+      : document.getElementById(`sidebar-conversation-${focusTarget}`) ?? document.getElementById("sidebar-new-chat");
     if (target instanceof HTMLElement) target.focus();
     focusAfterArchiveRef.current = null;
   }, [visibleConversations]);
@@ -54,7 +52,7 @@ export function SidebarConversations({ conversations }: SidebarConversationsProp
       ?.closest("article");
     const containsFocusedElement = conversationRow?.contains(document.activeElement) ?? false;
     if (!isActive && isCurrentActiveSession && (wasPanelOwner || containsFocusedElement)) {
-      focusAfterArchiveRef.current = remainingConversations[archiveIndex]?.id ?? remainingConversations.at(-1)?.id ?? "create";
+      focusAfterArchiveRef.current = remainingConversations[archiveIndex]?.id ?? remainingConversations.at(-1)?.id ?? "new-chat";
     }
     setArchivedConversationIds((ids) => new Set(ids).add(conversationId));
     setOpenConversationId((openId) => openId === conversationId ? null : openId);
@@ -63,9 +61,6 @@ export function SidebarConversations({ conversations }: SidebarConversationsProp
   return (
     <section aria-labelledby="recent-conversations-title" className={styles.conversations}>
       <h2 id="recent-conversations-title">{ru.conversations.recentHeading}</h2>
-      <div ref={createConversationRef}>
-        <NewConversationButton />
-      </div>
       {visibleConversations.length === 0 ? (
         <p className={styles.empty}>{ru.conversations.empty}</p>
       ) : (

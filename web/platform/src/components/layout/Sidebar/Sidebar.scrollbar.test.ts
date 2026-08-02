@@ -9,23 +9,31 @@ const stylesheet = readFileSync(
 );
 
 const thumbRule = stylesheet.match(
-  /\.conversationsSlot::-webkit-scrollbar-thumb \{([\s\S]*?)\n\}/,
+  /\.scrollArea::-webkit-scrollbar-thumb \{([\s\S]*?)\n\}/,
 )?.[1];
 
 const activeThumbRule = stylesheet.match(
-  /\.conversationsSlot:hover::-webkit-scrollbar-thumb,\n\.conversationsSlot:focus-within::-webkit-scrollbar-thumb \{([\s\S]*?)\n\}/,
+  /\.scrollArea:hover::-webkit-scrollbar-thumb,\n\.scrollArea:focus-within::-webkit-scrollbar-thumb \{([\s\S]*?)\n\}/,
 )?.[1];
 
+const scrollAreaRule = stylesheet.match(/\.scrollArea \{([\s\S]*?)\n\}/)?.[1];
+const conversationsSlotRule = stylesheet.match(/\.conversationsSlot \{([\s\S]*?)\n\}/)?.[1];
+
 describe("Sidebar scrollbar", () => {
-  it("keeps the chat-list scrollbar compact, token-based, and free of system arrows", () => {
+  it("makes the shared navigation and chat area the only vertical scroll owner with a compact custom scrollbar", () => {
+    expect(scrollAreaRule).toContain("flex: 1 1 auto");
+    expect(scrollAreaRule).toContain("min-block-size: 0");
+    expect(scrollAreaRule).toContain("overflow-y: auto");
+    expect(conversationsSlotRule).toBeUndefined();
+    expect(stylesheet.match(/overflow-y:\s*auto/g)).toHaveLength(1);
     expect(stylesheet).toContain("@supports (-moz-appearance: none)");
     expect(stylesheet).toMatch(
       /@supports \(-moz-appearance: none\) \{[\s\S]*scrollbar-width: thin;[\s\S]*scrollbar-color: var\(--color-border\) transparent;/,
     );
-    expect(stylesheet).toContain(".conversationsSlot::-webkit-scrollbar");
-    expect(stylesheet).toContain(".conversationsSlot::-webkit-scrollbar-track");
-    expect(stylesheet).toContain(".conversationsSlot::-webkit-scrollbar-button");
-    expect(stylesheet).toContain(".conversationsSlot::-webkit-scrollbar-thumb");
+    expect(stylesheet).toContain(".scrollArea::-webkit-scrollbar");
+    expect(stylesheet).toContain(".scrollArea::-webkit-scrollbar-track");
+    expect(stylesheet).toContain(".scrollArea::-webkit-scrollbar-button");
+    expect(stylesheet).toContain(".scrollArea::-webkit-scrollbar-thumb");
     expect(stylesheet).toContain("inline-size: 0.5rem");
     expect(stylesheet).toContain("border-radius: 999px");
     expect(stylesheet).toContain("background-clip: content-box");

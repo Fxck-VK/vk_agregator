@@ -201,45 +201,22 @@ describe("Sidebar", () => {
     expect(trigger).not.toHaveFocus();
   });
 
-  it("closes the narrow drawer after creating a chat changes the pathname without restoring trigger focus", async () => {
-    mockNarrowViewport();
-    let pathname = "/app/chat/current";
-    vi.mocked(usePathname).mockImplementation(() => pathname);
-    vi.stubGlobal("crypto", {
-      randomUUID: vi.fn().mockReturnValue("test-request-1"),
+  it("uses the chats navigation link as the single new-chat action", () => {
+    const { panel, trigger } = renderNarrowSidebar({
+      conversations: <SidebarConversations conversations={recentConversations} />,
     });
-    vi.mocked(webBrowserMutation).mockResolvedValue(
-      Response.json(
-        {
-          id: "d7c979f5-24e5-4f88-924b-a592d6e5a906",
-          title: "",
-          created_at: "2026-07-31T09:00:00Z",
-          updated_at: "2026-07-31T09:05:00Z",
-        },
-        { status: 201 },
-      ),
-    );
-
-    let rerenderSidebar: (ui: ReactNode) => void = () => {};
-    const push = vi.fn((nextPath: string) => {
-      pathname = nextPath;
-      rerenderSidebar(<Sidebar conversations={<SidebarConversations conversations={recentConversations} />} />);
-    });
-    vi.mocked(useRouter).mockReturnValue({ push, refresh: vi.fn() } as never);
-
-    const rendered = render(<Sidebar conversations={<SidebarConversations conversations={recentConversations} />} />);
-    rerenderSidebar = rendered.rerender;
-    const trigger = screen.getByRole("button", { name: ru.navigation.openMenuLabel });
-    const panel = screen.getByTestId("sidebar-panel");
     openNavigation(trigger);
+    const chatsLink = screen.getByRole("link", { name: ru.navigation.chats });
 
-    fireEvent.click(screen.getByRole("button", { name: ru.conversations.createLabel }));
+    expect(chatsLink).toHaveAttribute("href", "/app/chats");
+    expect(chatsLink).toHaveAttribute("id", "sidebar-new-chat");
+    expect(chatsLink).toHaveTextContent(ru.navigation.chats);
+    expect(screen.queryByRole("button", { name: ru.conversations.createLabel })).not.toBeInTheDocument();
+    chatsLink.addEventListener("click", (event) => event.preventDefault(), { once: true });
+    fireEvent.click(chatsLink);
 
-    await vi.waitFor(() => expect(panel).toHaveAttribute("data-open", "false"));
-    expect(panel).toHaveAttribute("aria-hidden", "true");
-    expect(panel).toHaveAttribute("inert");
-    expect(trigger).not.toHaveFocus();
-    expect(push).toHaveBeenCalledWith("/app/chat/d7c979f5-24e5-4f88-924b-a592d6e5a906");
+    expect(panel).toHaveAttribute("data-open", "false");
+    expect(trigger).toHaveFocus();
   });
 
   it("closes the narrow drawer after deleting the active chat changes the pathname without restoring trigger focus", async () => {
@@ -606,7 +583,7 @@ describe("Sidebar", () => {
     expect(document.activeElement).toBe(secondActions);
   });
 
-  it("focuses create chat after two deferred archives remove their stale successor", async () => {
+  it("focuses the stable new-chat navigation link after two deferred archives remove their stale successor", async () => {
     mockNarrowViewport();
     let settleA: (response: Response) => void = () => {};
     let settleB: (response: Response) => void = () => {};
@@ -632,10 +609,11 @@ describe("Sidebar", () => {
     settleB(new Response(null, { status: 204 }));
 
     await vi.waitFor(() => expect(screen.queryByRole("link", { name: "Recent chat 2" })).not.toBeInTheDocument());
-    expect(screen.getByRole("button", { name: ru.conversations.createLabel })).toHaveFocus();
+    expect(screen.getByRole("link", { name: ru.navigation.chats })).toHaveAttribute("id", "sidebar-new-chat");
+    expect(screen.getByRole("link", { name: ru.navigation.chats })).toHaveFocus();
   });
 
-  it("focuses create chat when the current second archive settles before the background first archive", async () => {
+  it("focuses the stable new-chat navigation link when the current second archive settles before the background first archive", async () => {
     mockNarrowViewport();
     let settleA: (response: Response) => void = () => {};
     let settleB: (response: Response) => void = () => {};
@@ -661,7 +639,8 @@ describe("Sidebar", () => {
     settleA(new Response(null, { status: 204 }));
 
     await vi.waitFor(() => expect(screen.queryByRole("link", { name: "Recent chat 1" })).not.toBeInTheDocument());
-    expect(screen.getByRole("button", { name: ru.conversations.createLabel })).toHaveFocus();
+    expect(screen.getByRole("link", { name: ru.navigation.chats })).toHaveAttribute("id", "sidebar-new-chat");
+    expect(screen.getByRole("link", { name: ru.navigation.chats })).toHaveFocus();
   });
 
   it("keeps the second row panel and focus when a background first-row archive fails", async () => {
@@ -803,6 +782,7 @@ describe("Sidebar", () => {
     const finalRecentLink = screen.getByRole("link", { name: "Recent chat 20" });
     const logoutControl = screen.getByRole("button", { name: ru.account.logoutLabel });
     const conversationsSlot = screen.getByRole("heading", { name: ru.conversations.recentHeading }).closest("section")?.parentElement;
+    const scrollArea = conversationsSlot?.parentElement;
 
     expect(recentLinks).toHaveLength(20);
     expect(finalRecentLink).toHaveAttribute("href", "/app/chat/d7c979f5-24e5-4f88-924b-a592d6e5a019");
@@ -810,6 +790,7 @@ describe("Sidebar", () => {
     logoutControl.focus();
     expect(logoutControl).toHaveFocus();
     expect(conversationsSlot).toHaveClass(sidebarStyles.conversationsSlot);
+    expect(scrollArea).toHaveClass(sidebarStyles.scrollArea);
   });
 
   it("calls the desktop sidebar toggle from its dedicated control", () => {
