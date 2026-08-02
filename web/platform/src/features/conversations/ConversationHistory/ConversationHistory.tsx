@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { AssistantTypingIndicator } from "@/components/chat/AssistantTypingIndicator/AssistantTypingIndicator";
 import { Button } from "@/components/ui/Button/Button";
@@ -9,12 +9,20 @@ import {
   type ConversationHistoryData,
 } from "@/features/conversations/conversation-history-contract";
 import { ConversationComposer } from "@/features/conversations/ConversationComposer/ConversationComposer";
+import { ConversationTitleSync } from "@/features/conversations/ConversationTitleSync/ConversationTitleSync";
 import {
   clearPendingConversationPrompt,
   readPendingConversationPrompt,
 } from "@/features/conversations/pending-conversation-prompt";
+import {
+  clearPendingConversationTitleSync,
+  fallbackConversationTitle,
+  readPendingConversationTitleSync,
+  savePendingConversationTitleSync,
+} from "@/features/conversations/pending-conversation-title-sync";
+import { useOptionalWorkspaceConversationList } from "@/features/conversations/WorkspaceConversationList/WorkspaceConversationList";
 import { ru } from "@/i18n/ru";
-import { parseConversationMessageList, type ConversationMessage } from "@/lib/web-api/contracts";
+import { parseConversationMessageList, type ConversationItem, type ConversationMessage } from "@/lib/web-api/contracts";
 import { webBrowserFetch } from "@/lib/web-api/browser";
 
 import styles from "./ConversationHistory.module.css";
@@ -56,6 +64,9 @@ function ConversationHistoryReady({
   history: Extract<ConversationHistoryData, { kind: "ready" }>;
   initialRefresh: boolean;
 }>) {
+  const workspaceConversationList = useOptionalWorkspaceConversationList();
+  const replaceConversation = workspaceConversationList?.replaceConversation;
+  const updateConversationTitle = workspaceConversationList?.updateConversationTitle;
   const initialRefreshBaselineSeq = history.messages.at(-1)?.seq ?? 0;
   const shouldStartInitialRefresh = initialRefresh && !history.messages.some((message) => message.role === "assistant");
   const initialRefreshRequest = shouldStartInitialRefresh
@@ -71,7 +82,17 @@ function ConversationHistoryReady({
   const [pendingTurn, setPendingTurn] = useState<PendingTurn | null>(null);
   const [forceScrollRequest, setForceScrollRequest] = useState(0);
   const [workspaceScrollRegion, setWorkspaceScrollRegion] = useState<HTMLElement | null>(null);
+  const [titleSyncFallback, setTitleSyncFallback] = useState(() => readPendingConversationTitleSync(history.conversationId));
   const refreshSequenceRef = useRef(initialRefreshRequest?.id ?? 0);
+
+  const completeTitleSync = useCallback(() => {
+    clearPendingConversationTitleSync(history.conversationId);
+    setTitleSyncFallback(null);
+  }, [history.conversationId]);
+
+  const acceptSyncedConversation = useCallback((conversation: ConversationItem) => {
+    replaceConversation?.(conversation);
+  }, [replaceConversation]);
 
   useEffect(() => {
     const scrollRegion = document.querySelector<HTMLElement>('main[data-testid="workspace-scroll-region"]');
@@ -114,6 +135,14 @@ function ConversationHistoryReady({
 
   const beginRefresh = (prompt: string) => {
     const baselineSeq = messages.at(-1)?.seq ?? 0;
+    if (baselineSeq === 0 && titleSyncFallback === null) {
+      const fallbackTitle = fallbackConversationTitle(prompt);
+      if (fallbackTitle !== "") {
+        updateConversationTitle?.(history.conversationId, fallbackTitle);
+        savePendingConversationTitleSync(history.conversationId, fallbackTitle);
+        setTitleSyncFallback(fallbackTitle);
+      }
+    }
     refreshSequenceRef.current += 1;
     const request = {
       id: refreshSequenceRef.current,
@@ -274,6 +303,14 @@ function ConversationHistoryReady({
 
   return (
     <section aria-labelledby="conversation-history-title" className={styles.content}>
+      {titleSyncFallback !== null ? (
+        <ConversationTitleSync
+          conversationId={history.conversationId}
+          fallbackTitle={titleSyncFallback}
+          onComplete={completeTitleSync}
+          onConversation={acceptSyncedConversation}
+        />
+      ) : null}
       <div className={styles.history}>
         <header className={styles.header}>
           <p className={styles.eyebrow}>{ru.conversations.historyEyebrow}</p>

@@ -22,11 +22,12 @@ const createdConversation: ConversationItem = {
 };
 
 function ConversationListProbe({ conversation = createdConversation }: { conversation?: ConversationItem }) {
-  const { conversations, upsertConversation } = useWorkspaceConversationList();
+  const { conversations, replaceConversation, upsertConversation } = useWorkspaceConversationList();
 
   return (
     <>
       <button onClick={() => upsertConversation(conversation)} type="button">Upsert</button>
+      <button onClick={() => replaceConversation(conversation)} type="button">Replace</button>
       <output>{conversations.map(({ id, title }) => `${id}:${title}`).join(",")}</output>
     </>
   );
@@ -75,6 +76,27 @@ describe("WorkspaceConversationListProvider", () => {
 
     expect(screen.getByRole("status")).toHaveTextContent(`${createdConversation.id}:Renamed chat,${accountAConversations[0].id}:${accountAConversations[0].title}`);
     expect(screen.getByRole("status").textContent?.match(new RegExp(createdConversation.id, "g"))).toHaveLength(1);
+  });
+
+  it("updates a title in place without moving a recent conversation", () => {
+    const anotherConversation = { ...createdConversation, id: "219db10b-9ee6-4242-a04c-27ab6916f745", title: "Newest chat" };
+    const generatedTitle = { ...accountAConversations[0], title: "Generated concise title" };
+    const rendered = render(
+      <WorkspaceConversationListProvider accountId="0ce06a6a-16d8-4b16-b9df-5e63175a4a0c" initialConversations={[anotherConversation, ...accountAConversations]}>
+        <ConversationListProbe />
+      </WorkspaceConversationListProvider>,
+    );
+
+    rendered.rerender(
+      <WorkspaceConversationListProvider accountId="0ce06a6a-16d8-4b16-b9df-5e63175a4a0c" initialConversations={[anotherConversation, ...accountAConversations]}>
+        <ConversationListProbe conversation={generatedTitle} />
+      </WorkspaceConversationListProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Replace" }));
+
+    expect(screen.getByRole("status")).toHaveTextContent(
+      `${anotherConversation.id}:${anotherConversation.title},${generatedTitle.id}:${generatedTitle.title}`,
+    );
   });
 
   it("reconciles a changed server list", () => {

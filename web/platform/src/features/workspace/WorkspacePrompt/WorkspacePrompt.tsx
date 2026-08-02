@@ -6,10 +6,11 @@ import { useRouter } from "next/navigation";
 import { ChatTextInput } from "@/components/chat/ChatTextInput/ChatTextInput";
 import { Button } from "@/components/ui/Button/Button";
 import { savePendingConversationPrompt } from "@/features/conversations/pending-conversation-prompt";
+import { fallbackConversationTitle, savePendingConversationTitleSync } from "@/features/conversations/pending-conversation-title-sync";
 import { useWorkspaceConversationList } from "@/features/conversations/WorkspaceConversationList/WorkspaceConversationList";
 import { ru } from "@/i18n/ru";
 import { webBrowserMutation } from "@/lib/web-api/browser";
-import { isSafeWebChatAcceptedResponse, parseConversationList, parseWebChatJob } from "@/lib/web-api/contracts";
+import { isSafeWebChatAcceptedResponse, parseConversationItem, parseWebChatJob } from "@/lib/web-api/contracts";
 
 import styles from "./WorkspacePrompt.module.css";
 
@@ -22,7 +23,7 @@ type RetryIntent = {
 
 export function WorkspacePrompt() {
   const router = useRouter();
-  const { upsertConversation } = useWorkspaceConversationList();
+  const { updateConversationTitle, upsertConversation } = useWorkspaceConversationList();
   const [prompt, setPrompt] = useState("");
   const [isPending, setIsPending] = useState(false);
   const [hasError, setHasError] = useState(false);
@@ -66,10 +67,7 @@ export function WorkspacePrompt() {
         if (conversationResponse.status !== 200 && conversationResponse.status !== 201) {
           throw new Error("Unable to complete the request.");
         }
-        const conversation = parseConversationList({ items: [await conversationResponse.json()] }).items[0];
-        if (conversation === undefined) {
-          throw new Error("Unable to complete the request.");
-        }
+        const conversation = parseConversationItem(await conversationResponse.json());
         intent.conversationId = conversation.id;
         upsertConversation(conversation);
       }
@@ -95,6 +93,11 @@ export function WorkspacePrompt() {
         throw new Error("Unable to complete the request.");
       }
       retryIntentRef.current = null;
+      const fallbackTitle = fallbackConversationTitle(intent.prompt);
+      if (fallbackTitle !== "") {
+        updateConversationTitle(conversationID, fallbackTitle);
+        savePendingConversationTitleSync(conversationID, fallbackTitle);
+      }
       savePendingConversationPrompt(conversationID, intent.prompt);
       router.push(`/app/chat/${conversationID}?refresh=1`);
     } catch {

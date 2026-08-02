@@ -87,6 +87,19 @@ describe("WorkspacePrompt", () => {
     await vi.waitFor(() => expect(push).toHaveBeenCalledWith(`/app/chat/${visibleConversation.id}?refresh=1`));
   });
 
+  it("uses the first accepted prompt as the immediate sidebar fallback title", async () => {
+    vi.mocked(webBrowserMutation)
+      .mockResolvedValueOnce(Response.json(conversation, { status: 201 }))
+      .mockResolvedValueOnce(Response.json(queuedChatJob, { status: 201 }));
+    renderWorkspacePromptWithSidebar();
+
+    fireEvent.change(screen.getByLabelText(ru.workspace.promptLabel), { target: { value: "  План запуска нового продукта  " } });
+    fireEvent.click(screen.getByRole("button", { name: ru.workspace.promptSubmit }));
+
+    await vi.waitFor(() => expect(push).toHaveBeenCalledWith(`/app/chat/${conversation.id}?refresh=1`));
+    expect(screen.getByRole("link", { name: "План запуска нового продукта" })).toHaveAttribute("href", `/app/chat/${conversation.id}`);
+  });
+
   it("keeps refreshed sidebar conversations when a pending create response resolves", async () => {
     const createdConversation = { ...conversation, title: "Created after refresh" };
     const refreshedConversations = [

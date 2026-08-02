@@ -207,6 +207,10 @@ export function parseConversationList(payload: unknown): ConversationList {
   return conversationListSchema.parse(payload);
 }
 
+export function parseConversationItem(payload: unknown): ConversationItem {
+  return conversationItemSchema.parse(payload);
+}
+
 export function parseConversationMessageList(payload: unknown): ConversationMessageList {
   return conversationMessageListSchema.parse(payload);
 }
