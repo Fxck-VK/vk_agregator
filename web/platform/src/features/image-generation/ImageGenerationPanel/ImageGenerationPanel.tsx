@@ -11,13 +11,14 @@ import {
   parseImageJobActivation,
   parseImageJobPreparation,
   parseImageJobResult,
-  parseImageModelList,
   type ImageJob,
   type ImageJobPreparation,
   type ImageJobResult,
   type ImageModel,
 } from "@/lib/web-api/contracts";
 import { webBrowserFetch, webBrowserMutation } from "@/lib/web-api/browser";
+
+import { loadImageModelCatalog } from "@/features/models/image-model-catalog-cache";
 
 import styles from "./ImageGenerationPanel.module.css";
 
@@ -74,11 +75,7 @@ export function ImageGenerationPanel() {
     setError(null);
     setStage("loading");
     try {
-      const response = await webBrowserFetch("/web/v1/image-models");
-      if (response.status !== 200) {
-        throw new Error("Unable to load image models.");
-      }
-      const catalog = parseImageModelList(await response.json());
+      const catalog = await loadImageModelCatalog();
       const requestedModel = requestedModelID === null
         ? undefined
         : catalog.items.find((model) => model.id === requestedModelID);

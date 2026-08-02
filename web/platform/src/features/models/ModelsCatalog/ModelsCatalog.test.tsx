@@ -1,12 +1,23 @@
+import type { ReactNode } from "react";
+
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@/lib/web-api/browser", () => ({
-  webBrowserFetch: vi.fn(),
+vi.mock("next/link", () => ({
+  default: ({ children, href, ...props }: { children: ReactNode; href: string }) => (
+    <a data-next-link="true" href={href} {...props}>
+      {children}
+    </a>
+  ),
+}));
+
+vi.mock("../image-model-catalog-cache", () => ({
+  loadImageModelCatalog: vi.fn(),
 }));
 
 import { ru } from "@/i18n/ru";
-import { webBrowserFetch } from "@/lib/web-api/browser";
+
+import { loadImageModelCatalog } from "../image-model-catalog-cache";
 
 import { ModelsCatalog } from "./ModelsCatalog";
 
@@ -46,13 +57,17 @@ afterEach(() => {
 
 describe("ModelsCatalog", () => {
   it("loads catalog data, exposes truthful DTO card facts, and links to the selected generator", async () => {
-    vi.mocked(webBrowserFetch).mockResolvedValue(Response.json(modelsResponse));
+    vi.mocked(loadImageModelCatalog).mockResolvedValue(modelsResponse);
     render(<ModelsCatalog />);
 
-    expect(webBrowserFetch).toHaveBeenCalledWith("/web/v1/image-models");
+    expect(loadImageModelCatalog).toHaveBeenCalledTimes(1);
     expect(await screen.findByRole("link", { name: `${ru.modelsCatalog.openGeneratorLabel}: Nano Banana` })).toHaveAttribute(
       "href",
       "/app/image?model=nano%20banana%2F2%26preview",
+    );
+    expect(screen.getByRole("link", { name: `${ru.modelsCatalog.openGeneratorLabel}: Nano Banana` })).toHaveAttribute(
+      "data-next-link",
+      "true",
     );
     const nanoCard = screen.getByText("Nano Banana").closest("article")!;
     const otherCard = screen.getByText("Other Model").closest("article")!;
@@ -69,19 +84,29 @@ describe("ModelsCatalog", () => {
     expect(screen.queryByText("Other Model")).not.toBeInTheDocument();
   });
 
+  it("asks the shared loader on every catalogue mount", async () => {
+    vi.mocked(loadImageModelCatalog).mockResolvedValue(modelsResponse);
+    const firstMount = render(<ModelsCatalog />);
+
+    await screen.findByText("Nano Banana");
+    firstMount.unmount();
+    render(<ModelsCatalog />);
+
+    await screen.findByText("Nano Banana");
+    expect(loadImageModelCatalog).toHaveBeenCalledTimes(2);
+  });
+
   it("shows a loading status while the catalog request is pending", () => {
-    vi.mocked(webBrowserFetch).mockReturnValue(new Promise<Response>(() => {}));
+    vi.mocked(loadImageModelCatalog).mockReturnValue(new Promise(() => {}));
     render(<ModelsCatalog />);
 
     expect(screen.getByRole("status")).toHaveTextContent(ru.modelsCatalog.loading);
   });
 
   it.each([
-    ["a failed response", () => Promise.resolve(new Response(null, { status: 500 }))],
-    ["an invalid response", () => Promise.resolve(Response.json({ items: [{ id: "missing required fields" }] }))],
-    ["a rejected request", () => Promise.reject(new Error("untrusted backend detail"))],
-  ])("shows a neutral alert after %s", async (_caseName, request) => {
-    vi.mocked(webBrowserFetch).mockImplementationOnce(request);
+    ["a rejected loader", () => Promise.reject(new Error("untrusted backend detail"))],
+  ])("shows a neutral alert after %s", async (_caseName, load) => {
+    vi.mocked(loadImageModelCatalog).mockImplementationOnce(load);
     render(<ModelsCatalog />);
 
     expect(await screen.findByRole("alert")).toHaveTextContent(ru.modelsCatalog.loadFailure);
@@ -89,7 +114,7 @@ describe("ModelsCatalog", () => {
   });
 
   it("distinguishes a valid empty catalog from a load failure", async () => {
-    vi.mocked(webBrowserFetch).mockResolvedValue(Response.json({ items: [] }));
+    vi.mocked(loadImageModelCatalog).mockResolvedValue({ items: [] });
     render(<ModelsCatalog />);
 
     expect(await screen.findByText(ru.modelsCatalog.empty)).toBeInTheDocument();
@@ -97,7 +122,7 @@ describe("ModelsCatalog", () => {
   });
 
   it("combines reference-image and quality filters", async () => {
-    vi.mocked(webBrowserFetch).mockResolvedValue(Response.json(modelsResponse));
+    vi.mocked(loadImageModelCatalog).mockResolvedValue(modelsResponse);
     render(<ModelsCatalog />);
 
     await screen.findByText("Nano Banana");

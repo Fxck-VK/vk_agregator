@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 
 import { ru } from "@/i18n/ru";
-import { parseImageModelList, type ImageModel } from "@/lib/web-api/contracts";
-import { webBrowserFetch } from "@/lib/web-api/browser";
+import type { ImageModel } from "@/lib/web-api/contracts";
 
+import { loadImageModelCatalog } from "../image-model-catalog-cache";
 import { filterImageModels, imageModelQualities } from "./model-filters";
 import styles from "./ModelsCatalog.module.css";
 
@@ -23,11 +24,7 @@ export function ModelsCatalog() {
 
     const loadModels = async () => {
       try {
-        const response = await webBrowserFetch("/web/v1/image-models");
-        if (response.status !== 200) {
-          throw new Error("Unable to load image models.");
-        }
-        const catalog = parseImageModelList(await response.json());
+        const catalog = await loadImageModelCatalog();
         if (!active) {
           return;
         }
@@ -128,9 +125,12 @@ export function ModelsCatalog() {
                       ? ru.modelsCatalog.referenceSupportedLabel
                       : ru.modelsCatalog.referenceUnsupportedLabel}
                   </p>
-                  <a aria-label={`${ru.modelsCatalog.openGeneratorLabel}: ${model.name}`} href={`/app/image?model=${encodeURIComponent(model.id)}`}>
+                  <Link
+                    aria-label={`${ru.modelsCatalog.openGeneratorLabel}: ${model.name}`}
+                    href={`/app/image?model=${encodeURIComponent(model.id)}`}
+                  >
                     {ru.modelsCatalog.openGeneratorLabel}
-                  </a>
+                  </Link>
                 </article>
               ))}
             </div>
