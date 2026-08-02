@@ -141,6 +141,49 @@ func (r *ConversationRepository) ListByAccountSource(ctx context.Context, accoun
 	return scanConversations(rows)
 }
 
+func (r *ConversationRepository) ListActiveByAccountSource(ctx context.Context, accountID uuid.UUID, source domain.ConversationSource, limit, offset int) ([]*domain.Conversation, error) {
+	if limit <= 0 {
+		return nil, nil
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	const q = `SELECT ` + conversationColumns + `
+		FROM conversations
+		WHERE account_id = $1 AND source = $2 AND status = 'active'
+		ORDER BY updated_at DESC, created_at DESC
+		LIMIT $3 OFFSET $4`
+	rows, err := r.db.Query(ctx, q, accountID, source, limit, offset)
+	if err != nil {
+		return nil, mapError(err)
+	}
+	defer rows.Close()
+	return scanConversations(rows)
+}
+
+func (r *ConversationRepository) RenameActiveConversationForAccount(ctx context.Context, accountID, conversationID uuid.UUID, source domain.ConversationSource, title string) (*domain.Conversation, error) {
+	const q = `UPDATE conversations
+		SET title = $4,
+		    updated_at = now()
+		WHERE id = $1 AND account_id = $2 AND source = $3 AND status = 'active'
+		RETURNING ` + conversationColumns
+	var conversation domain.Conversation
+	if err := mapError(scanConversation(r.db.QueryRow(ctx, q, conversationID, accountID, source, title), &conversation)); err != nil {
+		return nil, err
+	}
+	return &conversation, nil
+}
+
+func (r *ConversationRepository) ArchiveConversationForAccount(ctx context.Context, accountID, conversationID uuid.UUID, source domain.ConversationSource) error {
+	const q = `UPDATE conversations
+		SET status = 'archived',
+		    updated_at = CASE WHEN status = 'active' THEN now() ELSE updated_at END
+		WHERE id = $1 AND account_id = $2 AND source = $3 AND status IN ('active', 'archived')
+		RETURNING id`
+	var archivedID uuid.UUID
+	return mapError(r.db.QueryRow(ctx, q, conversationID, accountID, source).Scan(&archivedID))
+}
+
 func (r *ConversationRepository) CreateConversation(ctx context.Context, c *domain.Conversation) error {
 	if c.Source == "" {
 		c.Source = domain.ConversationSourceVKBot

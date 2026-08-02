@@ -252,6 +252,168 @@ func TestConversationListRejectsMalformedLimit(t *testing.T) {
 	}
 }
 
+func TestWebConversationRename(t *testing.T) {
+	ctx := context.Background()
+	h, conversations, sessions := newConversationTestHandler(t)
+	accountID := uuid.New()
+	foreignAccountID := uuid.New()
+	owned := seedManagedWebConversation(t, conversations, accountID, domain.ConversationSourceWeb, domain.ConversationActive)
+	foreign := seedManagedWebConversation(t, conversations, foreignAccountID, domain.ConversationSourceWeb, domain.ConversationActive)
+	miniApp := seedManagedWebConversation(t, conversations, accountID, domain.ConversationSourceMiniApp, domain.ConversationActive)
+	vkBot := seedManagedWebConversation(t, conversations, accountID, domain.ConversationSourceVKBot, domain.ConversationActive)
+	archived := seedManagedWebConversation(t, conversations, accountID, domain.ConversationSourceWeb, domain.ConversationArchived)
+
+	t.Run("renames an owned active web conversation and returns only the safe DTO", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		h.Routes().ServeHTTP(rec, safeConversationManagementRequest(t, http.MethodPatch, "/web/v1/conversations/"+owned.ID.String(), sessions, accountID, `{"title":"  План запуска  "}`))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+		}
+		if got := safeConversationDTO(t, rec.Body.Bytes()); got != owned.ID {
+			t.Fatalf("response id = %s, want %s", got, owned.ID)
+		}
+		var response struct {
+			Title string `json:"title"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+			t.Fatalf("decode response: %v", err)
+		}
+		if response.Title != "План запуска" {
+			t.Fatalf("title = %q, want trimmed title", response.Title)
+		}
+		stored, err := conversations.GetByIDForAccount(ctx, accountID, owned.ID)
+		if err != nil || stored.Title != "План запуска" {
+			t.Fatalf("stored conversation = %#v, err = %v", stored, err)
+		}
+	})
+
+	for _, test := range []struct {
+		name string
+		body string
+	}{
+		{name: "empty", body: `{"title":"   "}`},
+		{name: "too many runes", body: `{"title":"` + strings.Repeat("я", 121) + `"}`},
+		{name: "unknown field", body: `{"title":"valid","unexpected":true}`},
+	} {
+		t.Run("rejects "+test.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			h.Routes().ServeHTTP(rec, safeConversationManagementRequest(t, http.MethodPatch, "/web/v1/conversations/"+owned.ID.String(), sessions, accountID, test.body))
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+			}
+		})
+	}
+
+	for _, test := range []struct {
+		name           string
+		accountID      uuid.UUID
+		conversationID uuid.UUID
+	}{
+		{name: "foreign", accountID: accountID, conversationID: foreign.ID},
+		{name: "mini app", accountID: accountID, conversationID: miniApp.ID},
+		{name: "vk bot", accountID: accountID, conversationID: vkBot.ID},
+		{name: "archived", accountID: accountID, conversationID: archived.ID},
+		{name: "missing", accountID: accountID, conversationID: uuid.New()},
+	} {
+		t.Run("hides "+test.name+" conversation", func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			h.Routes().ServeHTTP(rec, safeConversationManagementRequest(t, http.MethodPatch, "/web/v1/conversations/"+test.conversationID.String(), sessions, test.accountID, `{"title":"Renamed"}`))
+			if rec.Code != http.StatusNotFound {
+				t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+			}
+		})
+	}
+
+	for _, test := range []struct {
+		name   string
+		mutate func(*http.Request)
+	}{
+		{name: "missing origin", mutate: func(req *http.Request) { req.Header.Del("Origin") }},
+		{name: "missing csrf", mutate: func(req *http.Request) { req.Header.Del("X-CSRF-Token") }},
+	} {
+		t.Run("rejects "+test.name+" before repository", func(t *testing.T) {
+			spy := &conversationRepositorySpy{ConversationRepository: conversations}
+			h.deps.Conversations = spy
+			req := safeConversationManagementRequest(t, http.MethodPatch, "/web/v1/conversations/"+owned.ID.String(), sessions, accountID, `{"title":"Renamed"}`)
+			test.mutate(req)
+			rec := httptest.NewRecorder()
+			h.Routes().ServeHTTP(rec, req)
+			if rec.Code != http.StatusForbidden {
+				t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+			}
+			if spy.renameCalls != 0 {
+				t.Fatal("conversation repository called before origin/CSRF validation")
+			}
+			h.deps.Conversations = conversations
+		})
+	}
+}
+
+func TestWebConversationArchive(t *testing.T) {
+	ctx := context.Background()
+	h, conversations, sessions := newConversationTestHandler(t)
+	accountID := uuid.New()
+	owned := seedManagedWebConversation(t, conversations, accountID, domain.ConversationSourceWeb, domain.ConversationActive)
+	foreign := seedManagedWebConversation(t, conversations, uuid.New(), domain.ConversationSourceWeb, domain.ConversationActive)
+	miniApp := seedManagedWebConversation(t, conversations, accountID, domain.ConversationSourceMiniApp, domain.ConversationActive)
+	archived := seedManagedWebConversation(t, conversations, accountID, domain.ConversationSourceWeb, domain.ConversationArchived)
+
+	deleteConversation := func(t *testing.T, conversationID uuid.UUID) *httptest.ResponseRecorder {
+		t.Helper()
+		rec := httptest.NewRecorder()
+		h.Routes().ServeHTTP(rec, safeConversationManagementRequest(t, http.MethodDelete, "/web/v1/conversations/"+conversationID.String(), sessions, accountID, ""))
+		return rec
+	}
+
+	if rec := deleteConversation(t, owned.ID); rec.Code != http.StatusNoContent {
+		t.Fatalf("archive status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	stored, err := conversations.GetByIDForAccount(ctx, accountID, owned.ID)
+	if err != nil || stored.Status != domain.ConversationArchived {
+		t.Fatalf("stored conversation = %#v, err = %v", stored, err)
+	}
+	list := httptest.NewRecorder()
+	h.Routes().ServeHTTP(list, authenticatedConversationRequest(t, http.MethodGet, "/web/v1/conversations", sessions, accountID))
+	if list.Code != http.StatusOK {
+		t.Fatalf("list status = %d, body = %s", list.Code, list.Body.String())
+	}
+	if ids := assertSafeConversationList(t, list.Body.Bytes()); len(ids) != 0 {
+		t.Fatalf("active conversation list = %v, want no archived conversation", ids)
+	}
+	if rec := deleteConversation(t, owned.ID); rec.Code != http.StatusNoContent {
+		t.Fatalf("repeat archive status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+
+	for _, test := range []struct {
+		name           string
+		conversationID uuid.UUID
+	}{
+		{name: "foreign", conversationID: foreign.ID},
+		{name: "wrong source", conversationID: miniApp.ID},
+		{name: "missing", conversationID: uuid.New()},
+	} {
+		t.Run("hides "+test.name+" conversation", func(t *testing.T) {
+			if rec := deleteConversation(t, test.conversationID); rec.Code != http.StatusNotFound {
+				t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+			}
+		})
+	}
+	if rec := deleteConversation(t, archived.ID); rec.Code != http.StatusNoContent {
+		t.Fatalf("already archived status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+
+	messageHandler, messageConversations, messageSessions, _, _ := newWebConversationMessageTestHandler(t)
+	messageConversation := seedWebMessageConversation(t, messageConversations, accountID, domain.ConversationSourceWeb)
+	if err := messageConversations.ArchiveConversationForAccount(ctx, accountID, messageConversation.ID, domain.ConversationSourceWeb); err != nil {
+		t.Fatalf("archive message conversation: %v", err)
+	}
+	message := httptest.NewRecorder()
+	messageHandler.Routes().ServeHTTP(message, safeWebConversationMessageRequest(t, messageSessions, accountID, messageConversation.ID, uuid.New(), `{"prompt":"hello"}`))
+	if message.Code != http.StatusNotFound {
+		t.Fatalf("archived message status = %d, body = %s", message.Code, message.Body.String())
+	}
+}
+
 func TestConversationCreateRejectsOriginAndCSRFFailuresBeforeRepository(t *testing.T) {
 	for _, test := range []struct {
 		name       string
@@ -486,6 +648,7 @@ type conversationRepositorySpy struct {
 	domain.ConversationRepository
 	createCalls    int
 	referenceCalls int
+	renameCalls    int
 }
 
 func (s *conversationRepositorySpy) CreateConversation(ctx context.Context, conversation *domain.Conversation) error {
@@ -496,6 +659,11 @@ func (s *conversationRepositorySpy) CreateConversation(ctx context.Context, conv
 func (s *conversationRepositorySpy) GetActiveByReference(ctx context.Context, ref domain.ConversationRef) (*domain.Conversation, error) {
 	s.referenceCalls++
 	return s.ConversationRepository.GetActiveByReference(ctx, ref)
+}
+
+func (s *conversationRepositorySpy) RenameActiveConversationForAccount(ctx context.Context, accountID, conversationID uuid.UUID, source domain.ConversationSource, title string) (*domain.Conversation, error) {
+	s.renameCalls++
+	return s.ConversationRepository.RenameActiveConversationForAccount(ctx, accountID, conversationID, source, title)
 }
 
 func newConversationTestHandler(t *testing.T) (*Handler, *memory.ConversationRepo, *sessionStub) {
@@ -525,6 +693,36 @@ func safeConversationCreateRequest(t *testing.T, sessions *sessionStub, accountI
 	req.Header.Set("X-Idempotency-Key", idempotencyKey)
 	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
 	return req
+}
+
+func safeConversationManagementRequest(t *testing.T, method, path string, sessions *sessionStub, accountID uuid.UUID, body string) *http.Request {
+	t.Helper()
+	req := authenticatedConversationRequest(t, method, path, sessions, accountID)
+	if body != "" {
+		req.Body = io.NopCloser(strings.NewReader(body))
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Origin", "https://app.example.test")
+	req.Header.Set("X-CSRF-Token", "csrf")
+	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
+	return req
+}
+
+func seedManagedWebConversation(t *testing.T, conversations *memory.ConversationRepo, accountID uuid.UUID, source domain.ConversationSource, status domain.ConversationStatus) *domain.Conversation {
+	t.Helper()
+	conversation := &domain.Conversation{
+		AccountID:        accountID,
+		Source:           source,
+		ExternalThreadID: uuid.NewString(),
+		Status:           status,
+	}
+	if source == domain.ConversationSourceVKBot {
+		conversation.VKPeerID = int64(uuid.New().ID())
+	}
+	if err := conversations.CreateConversation(context.Background(), conversation); err != nil {
+		t.Fatalf("seed conversation: %v", err)
+	}
+	return conversation
 }
 
 func assertSafeConversationList(t *testing.T, body []byte) []uuid.UUID {

@@ -333,6 +333,16 @@ type ConversationRepository interface {
 	// owner and source, newest first. It never falls back to legacy user
 	// provenance.
 	ListByAccountSource(ctx context.Context, accountID uuid.UUID, source ConversationSource, limit, offset int) ([]*Conversation, error)
+	// ListActiveByAccountSource returns active conversations for the exact
+	// canonical account owner and source, newest first. It never falls back to
+	// legacy user provenance.
+	ListActiveByAccountSource(ctx context.Context, accountID uuid.UUID, source ConversationSource, limit, offset int) ([]*Conversation, error)
+	// RenameActiveConversationForAccount updates the title of one active
+	// conversation owned by the exact canonical account and source.
+	RenameActiveConversationForAccount(ctx context.Context, accountID, conversationID uuid.UUID, source ConversationSource, title string) (*Conversation, error)
+	// ArchiveConversationForAccount archives one active or already archived
+	// conversation owned by the exact canonical account and source.
+	ArchiveConversationForAccount(ctx context.Context, accountID, conversationID uuid.UUID, source ConversationSource) error
 	// CreateConversation inserts a new conversation.
 	CreateConversation(ctx context.Context, conversation *Conversation) error
 	// SetConversationTitleIfEmpty fills an empty title without overwriting an

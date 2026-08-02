@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 
@@ -350,6 +351,8 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /web/v1/image-artifacts/{artifactID}", h.requirePrincipal(h.getImageArtifact))
 	mux.HandleFunc("POST /web/v1/conversations", h.requireUnsafePrincipal(h.createConversation))
 	mux.HandleFunc("POST /web/v1/conversations/{conversationID}/messages", h.requireUnsafePrincipal(h.createConversationMessage))
+	mux.HandleFunc("PATCH /web/v1/conversations/{conversationID}", h.requireUnsafePrincipal(h.renameConversation))
+	mux.HandleFunc("DELETE /web/v1/conversations/{conversationID}", h.requireUnsafePrincipal(h.archiveConversation))
 	mux.HandleFunc("POST /web/v1/image-jobs/prepare", h.requireUnsafePrincipal(h.prepareImageJob))
 	mux.HandleFunc("POST /web/v1/image-jobs/{jobID}/activate", h.requireUnsafePrincipal(h.activateImageJob))
 	return mux
@@ -979,7 +982,7 @@ func (h *Handler) listConversations(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusServiceUnavailable, "conversations unavailable")
 		return
 	}
-	conversations, err := h.deps.Conversations.ListByAccountSource(r.Context(), principal.AccountID, domain.ConversationSourceWeb, limit, 0)
+	conversations, err := h.deps.Conversations.ListActiveByAccountSource(r.Context(), principal.AccountID, domain.ConversationSourceWeb, limit, 0)
 	if err != nil {
 		writeError(w, http.StatusServiceUnavailable, "conversations unavailable")
 		return
@@ -993,6 +996,82 @@ func (h *Handler) listConversations(w http.ResponseWriter, r *http.Request) {
 		items = append(items, newSafeConversation(*conversation))
 	}
 	writeJSON(w, http.StatusOK, safeConversationList{Items: items})
+}
+
+const maxConversationTitleRunes = 120
+
+type renameConversationRequest struct {
+	Title string `json:"title"`
+}
+
+func validConversationTitle(raw string) (string, bool) {
+	title := strings.TrimSpace(raw)
+	return title, title != "" && utf8.RuneCountInString(title) <= maxConversationTitleRunes
+}
+
+func (h *Handler) renameConversation(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	principal, ok := PrincipalFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	conversationID, err := uuid.Parse(strings.TrimSpace(r.PathValue("conversationID")))
+	if err != nil || conversationID == uuid.Nil {
+		writeError(w, http.StatusBadRequest, "invalid conversation id")
+		return
+	}
+	var req renameConversationRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	title, valid := validConversationTitle(req.Title)
+	if !valid {
+		writeError(w, http.StatusBadRequest, "invalid conversation title")
+		return
+	}
+	if h.deps.Conversations == nil {
+		writeError(w, http.StatusServiceUnavailable, "conversations unavailable")
+		return
+	}
+	conversation, err := h.deps.Conversations.RenameActiveConversationForAccount(r.Context(), principal.AccountID, conversationID, domain.ConversationSourceWeb, title)
+	if errors.Is(err, domain.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "conversation not found")
+		return
+	}
+	if err != nil || conversation == nil {
+		writeError(w, http.StatusServiceUnavailable, "conversations unavailable")
+		return
+	}
+	writeJSON(w, http.StatusOK, newSafeConversation(*conversation))
+}
+
+func (h *Handler) archiveConversation(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	principal, ok := PrincipalFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	conversationID, err := uuid.Parse(strings.TrimSpace(r.PathValue("conversationID")))
+	if err != nil || conversationID == uuid.Nil {
+		writeError(w, http.StatusBadRequest, "invalid conversation id")
+		return
+	}
+	if h.deps.Conversations == nil {
+		writeError(w, http.StatusServiceUnavailable, "conversations unavailable")
+		return
+	}
+	err = h.deps.Conversations.ArchiveConversationForAccount(r.Context(), principal.AccountID, conversationID, domain.ConversationSourceWeb)
+	if errors.Is(err, domain.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "conversation not found")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusServiceUnavailable, "conversations unavailable")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *Handler) listConversationMessages(w http.ResponseWriter, r *http.Request) {

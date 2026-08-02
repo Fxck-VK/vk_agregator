@@ -186,6 +186,77 @@ func (r *ConversationRepo) ListByAccountSource(_ context.Context, accountID uuid
 	return out, nil
 }
 
+func (r *ConversationRepo) ListActiveByAccountSource(_ context.Context, accountID uuid.UUID, source domain.ConversationSource, limit, offset int) ([]*domain.Conversation, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if limit <= 0 {
+		return nil, nil
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	var matched []domain.Conversation
+	for _, c := range r.byID {
+		if c.AccountID == accountID && c.Source == source && c.Status == domain.ConversationActive {
+			matched = append(matched, c)
+		}
+	}
+	sort.Slice(matched, func(i, j int) bool {
+		if matched[i].UpdatedAt.Equal(matched[j].UpdatedAt) {
+			return matched[i].CreatedAt.After(matched[j].CreatedAt)
+		}
+		return matched[i].UpdatedAt.After(matched[j].UpdatedAt)
+	})
+	if offset > len(matched) {
+		return nil, nil
+	}
+	matched = matched[offset:]
+	if len(matched) > limit {
+		matched = matched[:limit]
+	}
+	out := make([]*domain.Conversation, 0, len(matched))
+	for i := range matched {
+		c := matched[i]
+		out = append(out, &c)
+	}
+	return out, nil
+}
+
+func (r *ConversationRepo) RenameActiveConversationForAccount(_ context.Context, accountID, conversationID uuid.UUID, source domain.ConversationSource, title string) (*domain.Conversation, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	c, ok := r.byID[conversationID]
+	if !ok || c.AccountID != accountID || c.Source != source || c.Status != domain.ConversationActive {
+		return nil, domain.ErrNotFound
+	}
+	c.Title = title
+	c.UpdatedAt = time.Now()
+	r.byID[conversationID] = c
+	return &c, nil
+}
+
+func (r *ConversationRepo) ArchiveConversationForAccount(_ context.Context, accountID, conversationID uuid.UUID, source domain.ConversationSource) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	c, ok := r.byID[conversationID]
+	if !ok || c.AccountID != accountID || c.Source != source || (c.Status != domain.ConversationActive && c.Status != domain.ConversationArchived) {
+		return domain.ErrNotFound
+	}
+	if c.Status == domain.ConversationActive {
+		c.Status = domain.ConversationArchived
+		c.UpdatedAt = time.Now()
+		r.byID[conversationID] = c
+		delete(r.activeByRef, activeConversationRefKey(domain.ConversationRef{
+			UserID:           c.UserID,
+			AccountID:        c.AccountID,
+			Source:           c.Source,
+			VKPeerID:         c.VKPeerID,
+			ExternalThreadID: c.ExternalThreadID,
+		}))
+	}
+	return nil
+}
+
 func (r *ConversationRepo) CreateConversation(_ context.Context, c *domain.Conversation) error {
 	if c.Source == "" {
 		c.Source = domain.ConversationSourceVKBot
