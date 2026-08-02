@@ -165,6 +165,20 @@ describe("Sidebar", () => {
     expect(trigger).not.toHaveFocus();
   });
 
+  it("does not close the narrow drawer when an action inside the conversations slot is clicked", () => {
+    const onAction = vi.fn();
+    const { panel, trigger } = renderNarrowSidebar({
+      conversations: <button onClick={onAction} type="button">Chat action</button>,
+    });
+
+    openNavigation(trigger);
+    fireEvent.click(screen.getByRole("button", { name: "Chat action" }));
+
+    expect(onAction).toHaveBeenCalledTimes(1);
+    expect(panel).toHaveAttribute("data-open", "true");
+    expect(trigger).not.toHaveFocus();
+  });
+
   it("closes the narrow drawer after creating a chat changes the pathname without restoring trigger focus", async () => {
     mockNarrowViewport();
     let pathname = "/app/chat/current";
@@ -204,6 +218,36 @@ describe("Sidebar", () => {
     expect(panel).toHaveAttribute("inert");
     expect(trigger).not.toHaveFocus();
     expect(push).toHaveBeenCalledWith("/app/chat/d7c979f5-24e5-4f88-924b-a592d6e5a906");
+  });
+
+  it("closes the narrow drawer after deleting the active chat changes the pathname without restoring trigger focus", async () => {
+    mockNarrowViewport();
+    let pathname = "/app/chat/d7c979f5-24e5-4f88-924b-a592d6e5a000";
+    vi.mocked(usePathname).mockImplementation(() => pathname);
+    vi.mocked(webBrowserMutation).mockResolvedValue(new Response(null, { status: 204 }));
+
+    let rerenderSidebar: (ui: ReactNode) => void = () => {};
+    const replace = vi.fn((nextPath: string) => {
+      pathname = nextPath;
+      rerenderSidebar(<Sidebar conversations={<SidebarConversations conversations={recentConversations} />} />);
+    });
+    vi.mocked(useRouter).mockReturnValue({ refresh: vi.fn(), replace } as never);
+
+    const rendered = render(<Sidebar conversations={<SidebarConversations conversations={recentConversations} />} />);
+    rerenderSidebar = rendered.rerender;
+    const trigger = screen.getByRole("button", { name: ru.navigation.openMenuLabel });
+    const panel = screen.getByTestId("sidebar-panel");
+    openNavigation(trigger);
+
+    fireEvent.click(screen.getAllByRole("button", { name: ru.conversations.actionsLabel })[0]);
+    fireEvent.click(screen.getByRole("button", { name: ru.conversations.archiveLabel }));
+    fireEvent.click(screen.getByRole("button", { name: ru.conversations.archiveConfirmLabel }));
+
+    await vi.waitFor(() => expect(panel).toHaveAttribute("data-open", "false"));
+    expect(panel).toHaveAttribute("aria-hidden", "true");
+    expect(panel).toHaveAttribute("inert");
+    expect(trigger).not.toHaveFocus();
+    expect(replace).toHaveBeenCalledWith("/app");
   });
 
   it("keeps twenty recent chat links reachable above a focusable account control", () => {

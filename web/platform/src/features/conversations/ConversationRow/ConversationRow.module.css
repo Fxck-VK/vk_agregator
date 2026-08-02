@@ -1,0 +1,94 @@
+.row {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.link {
+  display: block;
+  min-inline-size: 0;
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  color: var(--color-text-muted);
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.link:hover,
+.link[aria-current="page"] {
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+}
+
+.link[aria-current="page"] { font-weight: 600; }
+
+.link:focus-visible,
+.actions button:focus-visible,
+.renameForm input:focus-visible {
+  outline: 0.125rem solid var(--color-focus);
+  outline-offset: 0.125rem;
+}
+
+.actions { display: grid; justify-items: end; gap: var(--space-1); }
+
+.actionToggle,
+.menu button,
+.formActions button {
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.actionToggle { min-inline-size: 2.25rem; min-block-size: 2.25rem; padding: var(--space-1); }
+
+.actionToggle:hover,
+.menu button:hover,
+.formActions button:hover { background: var(--color-surface-raised); }
+
+.menu,
+.renameForm,
+.confirmation {
+  display: grid;
+  gap: var(--space-1);
+  inline-size: min(15rem, 75vw);
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-raised);
+}
+
+.menu button,
+.formActions button { min-block-size: 2rem; padding-inline: var(--space-2); text-align: start; }
+
+.renameForm input {
+  box-sizing: border-box;
+  inline-size: 100%;
+  min-block-size: 2.25rem;
+  border: 0.0625rem solid var(--color-text-muted);
+  border-radius: var(--radius-sm);
+  padding-inline: var(--space-2);
+  color: var(--color-text);
+}
+
+.formActions { display: flex; flex-wrap: wrap; gap: var(--space-1); }
+.confirmation p, .error { margin: 0; font-size: 0.8125rem; }
+.error { color: var(--color-text-muted); }
+
+.visuallyHidden {
+  position: absolute;
+  overflow: hidden;
+  inline-size: 0.0625rem;
+  block-size: 0.0625rem;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .actionToggle { opacity: 0; }
+  .row:hover .actionToggle, .actions:focus-within .actionToggle { opacity: 1; }
+}

@@ -70,6 +70,15 @@ describe("SidebarConversations", () => {
     expect(screen.queryByText(conversations[0].updated_at)).not.toBeInTheDocument();
   });
 
+  it("renders each recent chat through an independently labelled action control", () => {
+    vi.mocked(usePathname).mockReturnValue("/app");
+    vi.mocked(useRouter).mockReturnValue({ refresh: vi.fn(), replace: vi.fn() } as never);
+
+    render(<SidebarConversations conversations={conversations} />);
+
+    expect(screen.getAllByRole("button", { name: ru.conversations.actionsLabel })).toHaveLength(conversations.length);
+  });
+
   it("renders an explicit empty recent-chat state", () => {
     vi.mocked(usePathname).mockReturnValue("/app/chat");
     vi.mocked(useRouter).mockReturnValue({ push: vi.fn(), refresh: vi.fn() } as never);

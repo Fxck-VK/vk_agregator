@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { ConversationRow } from "@/features/conversations/ConversationRow/ConversationRow";
 import { NewConversationButton } from "@/features/conversations/NewConversationButton/NewConversationButton";
 import { ru } from "@/i18n/ru";
 import type { ConversationItem } from "@/lib/web-api/contracts";
@@ -25,14 +25,11 @@ export function SidebarConversations({ conversations }: SidebarConversationsProp
       ) : (
         <ul className={styles.list}>
           {conversations.map((conversation) => {
-            const title = conversation.title.trim() || ru.conversations.unnamed;
             const isActive = pathname === "/app/chat/" + conversation.id;
 
             return (
               <li key={conversation.id}>
-                <Link aria-current={isActive ? "page" : undefined} href={"/app/chat/" + conversation.id}>
-                  {title}
-                </Link>
+                <ConversationRow conversation={conversation} isActive={isActive} />
               </li>
             );
           })}

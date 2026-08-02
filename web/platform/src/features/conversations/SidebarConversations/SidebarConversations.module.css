@@ -26,30 +26,3 @@
   padding: 0;
   list-style: none;
 }
-
-.list a {
-  display: block;
-  overflow: hidden;
-  border-radius: var(--radius-sm);
-  padding: var(--space-2) var(--space-3);
-  color: var(--color-text-muted);
-  text-decoration: none;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.list a:hover {
-  background: var(--color-surface-raised);
-  color: var(--color-text);
-}
-
-.list a[aria-current="page"] {
-  background: var(--color-surface-raised);
-  color: var(--color-text);
-  font-weight: 600;
-}
-
-.list a:focus-visible {
-  outline: 0.125rem solid var(--color-focus);
-  outline-offset: 0.125rem;
-}
