@@ -30,9 +30,7 @@ export function ProfileReferralFaq() {
                 <span>{item.question}</span>
                 <span aria-hidden="true" className={styles.indicator}>{isExpanded ? "−" : "+"}</span>
               </button>
-              {isExpanded ? (
-                <p aria-labelledby={questionId} id={answerId} role="region">{item.answer}</p>
-              ) : null}
+              <p aria-labelledby={questionId} hidden={!isExpanded} id={answerId} role="region">{item.answer}</p>
             </article>
           );
         })}

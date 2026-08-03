@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { type KeyboardEvent, useRef, useState } from "react";
 
 import { ProfileBalanceCard } from "@/features/account/ProfileBalanceCard/ProfileBalanceCard";
 import { ProfileIdentityCard } from "@/features/account/ProfileIdentityCard/ProfileIdentityCard";
@@ -15,6 +15,9 @@ const overviewTabId = "profile-overview-tab";
 const overviewPanelId = "profile-overview-panel";
 const referralTabId = "profile-referral-tab";
 const referralPanelId = "profile-referral-panel";
+const profileTabs = ["overview", "referral"] as const;
+
+type ProfileTab = (typeof profileTabs)[number];
 
 type PrimaryIdentity = {
   hasVerifiedIdentity: boolean;
@@ -33,7 +36,35 @@ function getPrimaryIdentity(identityRefs: ReturnType<typeof useWorkspaceAccountS
 export function ProfileWorkspace() {
   const { balance, profile } = useWorkspaceAccountSnapshot();
   const primaryIdentity = getPrimaryIdentity(profile.identity_refs);
-  const [activeTab, setActiveTab] = useState<"overview" | "referral">("overview");
+  const [activeTab, setActiveTab] = useState<ProfileTab>("overview");
+  const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
+
+  function selectTab(tab: ProfileTab) {
+    setActiveTab(tab);
+  }
+
+  function handleTabKeyDown(event: KeyboardEvent<HTMLButtonElement>, currentTab: ProfileTab) {
+    const currentIndex = profileTabs.indexOf(currentTab);
+    let nextIndex: number | null = null;
+
+    if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+      nextIndex = (currentIndex + 1) % profileTabs.length;
+    } else if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+      nextIndex = (currentIndex - 1 + profileTabs.length) % profileTabs.length;
+    } else if (event.key === "Home") {
+      nextIndex = 0;
+    } else if (event.key === "End") {
+      nextIndex = profileTabs.length - 1;
+    }
+
+    if (nextIndex === null) {
+      return;
+    }
+
+    event.preventDefault();
+    selectTab(profileTabs[nextIndex]);
+    tabRefs.current[nextIndex]?.focus();
+  }
 
   return (
     <section aria-labelledby="profile-title" className={styles.workspace}>
@@ -49,8 +80,13 @@ export function ProfileWorkspace() {
           aria-selected={activeTab === "overview"}
           className={styles.tab}
           id={overviewTabId}
-          onClick={() => setActiveTab("overview")}
+          onClick={() => selectTab("overview")}
+          onKeyDown={(event) => handleTabKeyDown(event, "overview")}
+          ref={(element) => {
+            tabRefs.current[0] = element;
+          }}
           role="tab"
+          tabIndex={activeTab === "overview" ? 0 : -1}
           type="button"
         >
           {ru.profile.overviewTabLabel}
@@ -60,16 +96,26 @@ export function ProfileWorkspace() {
           aria-selected={activeTab === "referral"}
           className={styles.tab}
           id={referralTabId}
-          onClick={() => setActiveTab("referral")}
+          onClick={() => selectTab("referral")}
+          onKeyDown={(event) => handleTabKeyDown(event, "referral")}
+          ref={(element) => {
+            tabRefs.current[1] = element;
+          }}
           role="tab"
+          tabIndex={activeTab === "referral" ? 0 : -1}
           type="button"
         >
           {ru.profile.referralTabLabel}
         </button>
       </div>
 
-      {activeTab === "overview" ? (
-        <div aria-labelledby={overviewTabId} className={styles.content} id={overviewPanelId} role="tabpanel">
+      <div
+        aria-labelledby={overviewTabId}
+        className={styles.content}
+        hidden={activeTab !== "overview"}
+        id={overviewPanelId}
+        role="tabpanel"
+      >
           <section aria-labelledby="profile-tariff-title" className={styles.section}>
             <h2 id="profile-tariff-title">{ru.profile.tariffSectionTitle}</h2>
             <ProfileBalanceCard balance={balance} />
@@ -91,12 +137,17 @@ export function ProfileWorkspace() {
               <p>{ru.profile.billingPlaceholder}</p>
             </div>
           </section>
-        </div>
-      ) : (
-        <div aria-labelledby={referralTabId} className={styles.content} id={referralPanelId} role="tabpanel">
-          <ProfileReferralProgram />
-        </div>
-      )}
+      </div>
+
+      <div
+        aria-labelledby={referralTabId}
+        className={styles.content}
+        hidden={activeTab !== "referral"}
+        id={referralPanelId}
+        role="tabpanel"
+      >
+        <ProfileReferralProgram />
+      </div>
     </section>
   );
 }

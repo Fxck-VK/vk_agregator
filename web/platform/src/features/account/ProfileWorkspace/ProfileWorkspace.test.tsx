@@ -78,10 +78,27 @@ describe("ProfileWorkspace", () => {
       </WorkspaceAccountProvider>,
     );
 
-    fireEvent.click(screen.getByRole("tab", { name: ru.profile.referralTabLabel }));
+    const overviewTab = screen.getByRole("tab", { name: ru.profile.overviewTabLabel });
+    const referralTab = screen.getByRole("tab", { name: ru.profile.referralTabLabel });
+
+    for (const tab of [overviewTab, referralTab]) {
+      const panelId = tab.getAttribute("aria-controls");
+
+      expect(panelId).not.toBeNull();
+      expect(document.getElementById(panelId ?? "")).toHaveAttribute("role", "tabpanel");
+    }
+
+    fireEvent.click(referralTab);
 
     expect(screen.getByRole("tabpanel", { name: ru.profile.referralTabLabel })).toBeInTheDocument();
     expect(screen.getByText(ru.profile.referralLaunchTitle)).toBeInTheDocument();
-    expect(screen.queryByText(ru.profile.billingTitle)).not.toBeInTheDocument();
+    expect(document.getElementById(overviewTab.getAttribute("aria-controls") ?? "")).toHaveAttribute("hidden");
+    expect(screen.queryByRole("heading", { name: ru.profile.billingTitle })).not.toBeInTheDocument();
+
+    fireEvent.keyDown(referralTab, { key: "ArrowLeft" });
+
+    expect(overviewTab).toHaveAttribute("aria-selected", "true");
+    expect(overviewTab).toHaveFocus();
+    expect(screen.getByRole("tabpanel", { name: ru.profile.overviewTabLabel })).toBeInTheDocument();
   });
 });
