@@ -3,7 +3,7 @@
 import { usePathname } from "next/navigation";
 import { useEffect, useRef } from "react";
 
-import { beginWorkspaceNavigation, completeWorkspaceNavigation } from "./workspace-navigation-metrics";
+import { beginWorkspaceNavigation, completeWorkspaceNavigation, isWorkspaceMetricsEnabled } from "./workspace-navigation-metrics";
 
 export function WorkspaceNavigationMetrics() {
   const pathname = usePathname();
@@ -16,6 +16,8 @@ export function WorkspaceNavigationMetrics() {
   }, [pathname]);
 
   useEffect(() => {
+    if (!isWorkspaceMetricsEnabled()) return;
+
     const observeNavigation = (event: MouseEvent) => {
       if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
 
@@ -24,7 +26,7 @@ export function WorkspaceNavigationMetrics() {
         ? (target as Element).closest<HTMLAnchorElement>("a[href]")
         : null;
 
-      if (!anchor || anchor.target === "_blank" || anchor.hasAttribute("download")) return;
+      if (!anchor || (anchor.target && anchor.target !== "_self") || anchor.hasAttribute("download")) return;
 
       const destination = new URL(anchor.href, window.location.origin);
 

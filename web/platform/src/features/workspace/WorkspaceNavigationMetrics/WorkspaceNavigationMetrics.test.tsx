@@ -37,6 +37,16 @@ describe("workspace navigation metrics", () => {
     expect(getMetrics()).toEqual([]);
   });
 
+  it("does not install a document click listener on a production hostname", async () => {
+    vi.stubGlobal("location", new URL("https://neiirohub.ru/app"));
+    const addEventListener = vi.spyOn(document, "addEventListener");
+
+    render(<WorkspaceNavigationMetrics />);
+    await act(async () => {});
+
+    expect(addEventListener.mock.calls.filter(([type, _listener, options]) => type === "click" && options === true)).toHaveLength(0);
+  });
+
   it("keeps data metrics limited to their category, source, and integer duration", () => {
     vi.stubGlobal("location", new URL("http://localhost/app"));
 
@@ -100,6 +110,43 @@ describe("workspace navigation metrics", () => {
     expect(getMetrics()).toEqual([
       { type: "navigation", target: "files", durationMs: 43 },
     ]);
+  });
+
+  it.each(["_parent", "_top", "workspace-frame"])("does not measure navigation from a %s target", async (target) => {
+    let pathname = "/app";
+    vi.mocked(usePathname).mockImplementation(() => pathname);
+    vi.stubGlobal("location", new URL(`${window.location.origin}/app`));
+    const now = vi.spyOn(performance, "now").mockReturnValue(100);
+    const rendered = render(
+      <>
+        <a href="/app/files" onClick={(event) => event.preventDefault()} target={target}>Files</a>
+        <WorkspaceNavigationMetrics />
+      </>,
+    );
+
+    await act(async () => {});
+    fireEvent.click(document.querySelector<HTMLAnchorElement>("a[href='/app/files']")!);
+    now.mockReturnValue(143.2);
+    pathname = "/app/files";
+    rendered.rerender(
+      <>
+        <a href="/app/files" onClick={(event) => event.preventDefault()} target={target}>Files</a>
+        <WorkspaceNavigationMetrics />
+      </>,
+    );
+
+    expect(getMetrics()).toEqual([]);
+  });
+
+  it("ignores a stale pending navigation duration", () => {
+    vi.stubGlobal("location", new URL("http://localhost/app"));
+    const now = vi.spyOn(performance, "now").mockReturnValue(100);
+
+    beginWorkspaceNavigation("/app/files");
+    now.mockReturnValue(10_101);
+    completeWorkspaceNavigation("/app/files");
+
+    expect(getMetrics()).toEqual([]);
   });
 
   it("ignores modified, non-primary, external, and unchanged workspace link clicks", () => {

@@ -10,7 +10,7 @@ declare global {
 }
 
 const metricsHosts = new Set(["localhost", "127.0.0.1", "dev-web.neiirohub.ru"]);
-const startedAtByTarget = new Map<WorkspaceMetricTarget, number>();
+const maxPendingNavigationDurationMs = 10_000;
 const fixedTargets: Record<string, Exclude<WorkspaceMetricTarget, "conversation">> = {
   "/app": "workspace",
   "/app/chats": "chats",
@@ -18,11 +18,22 @@ const fixedTargets: Record<string, Exclude<WorkspaceMetricTarget, "conversation"
   "/app/models": "models",
   "/app/inspiration": "inspiration",
 };
+type PendingWorkspaceNavigation = {
+  target: WorkspaceMetricTarget;
+  startedAt: number;
+  timeoutId: number;
+};
+
+let pendingWorkspaceNavigation: PendingWorkspaceNavigation | undefined;
 
 function getMetricsWindow() {
   if (typeof window === "undefined" || !metricsHosts.has(globalThis.location.hostname)) return undefined;
 
   return window;
+}
+
+export function isWorkspaceMetricsEnabled(): boolean {
+  return getMetricsWindow() !== undefined;
 }
 
 function getTarget(pathname: string): WorkspaceMetricTarget | undefined {
@@ -49,24 +60,42 @@ function appendMetric(metric: WorkspaceMetric) {
   metricsWindow.__NEIROHUB_WORKSPACE_METRICS__ = [...current, metric].slice(-50);
 }
 
+function clearPendingWorkspaceNavigation() {
+  if (!pendingWorkspaceNavigation) return;
+
+  window.clearTimeout(pendingWorkspaceNavigation.timeoutId);
+  pendingWorkspaceNavigation = undefined;
+}
+
 export function beginWorkspaceNavigation(pathname: string): void {
   const target = getTarget(pathname);
+  const metricsWindow = getMetricsWindow();
 
-  if (!target || !getMetricsWindow()) return;
+  if (!target || !metricsWindow) return;
 
-  startedAtByTarget.set(target, performance.now());
+  clearPendingWorkspaceNavigation();
+  const startedAt = performance.now();
+
+  if (!Number.isFinite(startedAt)) return;
+
+  const pendingNavigation: PendingWorkspaceNavigation = { target, startedAt, timeoutId: 0 };
+  pendingNavigation.timeoutId = metricsWindow.setTimeout(() => {
+    if (pendingWorkspaceNavigation === pendingNavigation) pendingWorkspaceNavigation = undefined;
+  }, maxPendingNavigationDurationMs);
+  pendingWorkspaceNavigation = pendingNavigation;
 }
 
 export function completeWorkspaceNavigation(pathname: string): void {
   const target = getTarget(pathname);
-  const startedAt = target ? startedAtByTarget.get(target) : undefined;
+  const pendingNavigation = pendingWorkspaceNavigation;
 
-  if (!target || startedAt === undefined || !getMetricsWindow()) return;
+  clearPendingWorkspaceNavigation();
 
-  startedAtByTarget.delete(target);
-  const durationMs = toDurationMs(performance.now() - startedAt);
+  if (!target || !pendingNavigation || pendingNavigation.target !== target || !getMetricsWindow()) return;
 
-  if (durationMs === undefined) return;
+  const durationMs = toDurationMs(performance.now() - pendingNavigation.startedAt);
+
+  if (durationMs === undefined || durationMs > maxPendingNavigationDurationMs) return;
 
   appendMetric({ type: "navigation", target, durationMs });
 }
