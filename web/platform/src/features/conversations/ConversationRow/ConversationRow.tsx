@@ -4,15 +4,16 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { type JSX, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
+import type { WorkspaceConversationItem } from "@/features/conversations/WorkspaceConversationList/WorkspaceConversationList";
 import { ru } from "@/i18n/ru";
 import { webBrowserMutation } from "@/lib/web-api/browser";
-import { parseConversationList, type ConversationItem } from "@/lib/web-api/contracts";
+import { parseConversationList } from "@/lib/web-api/contracts";
 
 import styles from "./ConversationRow.module.css";
 
 type ConversationRowProps = {
   activeConversationId?: string | null;
-  conversation: ConversationItem;
+  conversation: WorkspaceConversationItem;
   isActive: boolean;
   onArchived?: (archive: { conversationId: string; isActive: boolean; sidebarIsActive: boolean; sidebarSession?: number; wasPanelOwner: boolean }) => void;
   onPanelClosed?: (conversationId: string) => void;
@@ -312,10 +313,17 @@ export function ConversationRow({
 
   return (
     <article className={styles.row} ref={rowRef}>
-      <Link aria-current={isActive ? "page" : undefined} className={styles.link} href={`/app/chat/${conversation.id}`} id={`sidebar-conversation-${conversation.id}`}>
-        {title}
-      </Link>
-      <div
+      {conversation.isPending ? (
+        <span aria-busy="true" className={styles.link}>
+          {title}
+        </span>
+      ) : (
+        <Link aria-current={isActive ? "page" : undefined} className={styles.link} href={`/app/chat/${conversation.id}`} id={`sidebar-conversation-${conversation.id}`}>
+          {title}
+        </Link>
+      )}
+      {conversation.isPending ? null : (
+        <div
         className={styles.actions}
         onClick={(event) => event.stopPropagation()}
         onKeyDown={(event) => {
@@ -386,6 +394,7 @@ export function ConversationRow({
           </div>
         ) : null}
       </div>
+      )}
       {hasHiddenFailure ? <p className={styles.error} role="alert">{panel === "archive" ? ru.conversations.archiveFailure : ru.conversations.renameFailure}</p> : null}
     </article>
   );

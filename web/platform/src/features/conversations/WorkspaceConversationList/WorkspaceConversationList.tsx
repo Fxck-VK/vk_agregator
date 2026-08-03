@@ -4,11 +4,17 @@ import { createContext, type ReactNode, useCallback, useContext, useMemo, useSta
 
 import type { ConversationItem } from "@/lib/web-api/contracts";
 
+export type WorkspaceConversationItem = ConversationItem & {
+  isPending?: true;
+};
+
 type WorkspaceConversationList = {
-  conversations: ConversationItem[];
+  conversations: WorkspaceConversationItem[];
+  discardPendingConversation: (conversationID: string) => void;
+  resolvePendingConversation: (pendingConversationID: string, conversation: ConversationItem) => void;
   replaceConversation: (conversation: ConversationItem) => void;
   updateConversationTitle: (conversationID: string, title: string) => void;
-  upsertConversation: (conversation: ConversationItem) => void;
+  upsertConversation: (conversation: WorkspaceConversationItem) => void;
 };
 
 type WorkspaceConversationListProviderProps = {
@@ -17,26 +23,85 @@ type WorkspaceConversationListProviderProps = {
   initialConversations: ConversationItem[];
 };
 
+type WorkspaceConversationListState = {
+  accountId: string;
+  conversations: WorkspaceConversationItem[];
+  initialConversations: ConversationItem[];
+};
+
 const WorkspaceConversationListContext = createContext<WorkspaceConversationList | undefined>(undefined);
 
+function reconcileServerConversations(
+  serverConversations: ConversationItem[],
+  localConversations: WorkspaceConversationItem[],
+): WorkspaceConversationItem[] {
+  const localConversationsByID = new Map(localConversations.map((conversation) => [conversation.id, conversation]));
+  const serverConversationIDs = new Set(serverConversations.map((conversation) => conversation.id));
+  const pendingConversations = localConversations.filter(
+    (conversation) => conversation.isPending === true && !serverConversationIDs.has(conversation.id),
+  );
+
+  const reconciledServerConversations = serverConversations.map((serverConversation) => {
+    const localConversation = localConversationsByID.get(serverConversation.id);
+    if (
+      serverConversation.title.trim() !== ""
+      || localConversation === undefined
+      || localConversation.title.trim() === ""
+    ) {
+      return serverConversation;
+    }
+    return { ...serverConversation, title: localConversation.title };
+  });
+
+  return [...pendingConversations, ...reconciledServerConversations];
+}
+
 export function WorkspaceConversationListProvider({ accountId, children, initialConversations }: WorkspaceConversationListProviderProps) {
-  const [conversationListState, setConversationListState] = useState({ accountId, initialConversations, conversations: initialConversations });
+  const [conversationListState, setConversationListState] = useState<WorkspaceConversationListState>({
+    accountId,
+    initialConversations,
+    conversations: initialConversations,
+  });
   const hasChangedServerInput = conversationListState.accountId !== accountId
     || conversationListState.initialConversations !== initialConversations;
+  const reconciledConversations = conversationListState.accountId === accountId
+    ? reconcileServerConversations(initialConversations, conversationListState.conversations)
+    : initialConversations;
 
   if (hasChangedServerInput) {
-    setConversationListState({ accountId, initialConversations, conversations: initialConversations });
+    setConversationListState({ accountId, initialConversations, conversations: reconciledConversations });
   }
 
-  const conversations = hasChangedServerInput ? initialConversations : conversationListState.conversations;
+  const conversations = hasChangedServerInput ? reconciledConversations : conversationListState.conversations;
 
-  const upsertConversation = useCallback((conversation: ConversationItem) => {
+  const upsertConversation = useCallback((conversation: WorkspaceConversationItem) => {
     setConversationListState((previousState) => ({
       ...previousState,
       conversations: [
         conversation,
         ...previousState.conversations.filter((previousConversation) => previousConversation.id !== conversation.id),
       ],
+    }));
+  }, []);
+
+  const resolvePendingConversation = useCallback((pendingConversationID: string, conversation: ConversationItem) => {
+    setConversationListState((previousState) => ({
+      ...previousState,
+      conversations: [
+        conversation,
+        ...previousState.conversations.filter(
+          (previousConversation) => previousConversation.id !== pendingConversationID && previousConversation.id !== conversation.id,
+        ),
+      ],
+    }));
+  }, []);
+
+  const discardPendingConversation = useCallback((conversationID: string) => {
+    setConversationListState((previousState) => ({
+      ...previousState,
+      conversations: previousState.conversations.filter(
+        (conversation) => conversation.id !== conversationID || conversation.isPending !== true,
+      ),
     }));
   }, []);
 
@@ -87,8 +152,8 @@ export function WorkspaceConversationListProvider({ accountId, children, initial
   }, []);
 
   const value = useMemo(
-    () => ({ conversations, replaceConversation, updateConversationTitle, upsertConversation }),
-    [conversations, replaceConversation, updateConversationTitle, upsertConversation],
+    () => ({ conversations, discardPendingConversation, replaceConversation, resolvePendingConversation, updateConversationTitle, upsertConversation }),
+    [conversations, discardPendingConversation, replaceConversation, resolvePendingConversation, updateConversationTitle, upsertConversation],
   );
 
   return (

@@ -1,0 +1,42 @@
+.confirmation {
+  display: grid;
+  gap: var(--space-4);
+  border: 0.0625rem solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised);
+  padding: var(--space-5);
+}
+
+.confirmation h3,
+.confirmation p {
+  margin: 0;
+}
+
+.confirmation dl {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.confirmation dl div {
+  display: flex;
+  gap: var(--space-4);
+  justify-content: space-between;
+}
+
+.confirmation dt {
+  color: var(--color-text-muted);
+}
+
+.confirmation dd {
+  margin: 0;
+  font-weight: 700;
+}
+
+.confirmation button {
+  inline-size: fit-content;
+}
+
+.error {
+  color: var(--color-danger);
+}

@@ -71,7 +71,6 @@ const multipleModelsResponse = {
 function renderReadyEditor() {
   vi.mocked(loadImageModelCatalog).mockResolvedValueOnce(modelsResponse);
   render(<ImageGenerationPanel />);
-  fireEvent.click(screen.getByRole("button", { name: ru.imageGeneration.open }));
   return screen.findByRole("textbox", { name: ru.imageGeneration.promptLabel });
 }
 
@@ -90,24 +89,19 @@ describe("ImageGenerationPanel", () => {
     vi.unstubAllGlobals();
   });
 
-  it("keeps the generator closed until the user explicitly opens it", async () => {
+  it("loads the direct editor when the image workspace opens", async () => {
+    vi.mocked(loadImageModelCatalog).mockResolvedValueOnce(modelsResponse);
     render(<ImageGenerationPanel />);
 
-    expect(loadImageModelCatalog).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: ru.imageGeneration.open }));
-
-    await vi.waitFor(() => expect(loadImageModelCatalog).toHaveBeenCalledTimes(1));
+    expect(await screen.findByRole("combobox", { name: ru.imageGeneration.modelLabel })).toHaveValue("nano-banana-2");
+    expect(loadImageModelCatalog).toHaveBeenCalledTimes(1);
   });
 
-  it("selects a known requested model after the user explicitly opens the generator", async () => {
+  it("selects a known requested model when the direct editor loads", async () => {
     vi.mocked(useSearchParams).mockReturnValue(new URLSearchParams("model=nano-banana-2") as never);
     vi.mocked(loadImageModelCatalog).mockResolvedValueOnce(multipleModelsResponse);
     render(<ImageGenerationPanel />);
 
-    expect(loadImageModelCatalog).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: ru.imageGeneration.open }));
-
-    expect(loadImageModelCatalog).toHaveBeenCalledTimes(1);
     expect(await screen.findByRole("combobox", { name: ru.imageGeneration.modelLabel })).toHaveValue("nano-banana-2");
     expect(screen.getByRole("combobox", { name: ru.imageGeneration.qualityLabel })).toHaveValue("2K");
   });
@@ -116,8 +110,6 @@ describe("ImageGenerationPanel", () => {
     vi.mocked(useSearchParams).mockReturnValue(new URLSearchParams("model=unknown-model") as never);
     vi.mocked(loadImageModelCatalog).mockResolvedValueOnce(multipleModelsResponse);
     render(<ImageGenerationPanel />);
-
-    fireEvent.click(screen.getByRole("button", { name: ru.imageGeneration.open }));
 
     expect(await screen.findByRole("combobox", { name: ru.imageGeneration.modelLabel })).toHaveValue("first-model");
     expect(screen.getByRole("combobox", { name: ru.imageGeneration.qualityLabel })).toHaveValue("1K");
@@ -252,6 +244,24 @@ describe("ImageGenerationPanel", () => {
 
     expect(await screen.findByRole("alert")).toHaveTextContent(ru.imageGeneration.activationFailure);
     expect(screen.getByRole("heading", { name: ru.imageGeneration.confirmationTitle })).toBeInTheDocument();
+  });
+
+  it("emits the activated job without reloading the workspace", async () => {
+    const onJobChange = vi.fn();
+    vi.mocked(loadImageModelCatalog).mockResolvedValueOnce(modelsResponse);
+    vi.mocked(webBrowserMutation)
+      .mockResolvedValueOnce(Response.json({ job, balance: 104, can_afford: true }, { status: 201 }))
+      .mockResolvedValueOnce(Response.json({ job: { ...job, status: "queued" } }, { status: 200 }));
+    render(<ImageGenerationPanel onJobChange={onJobChange} />);
+
+    fireEvent.change(await screen.findByRole("textbox", { name: ru.imageGeneration.promptLabel }), {
+      target: { value: job.prompt },
+    });
+    fireEvent.click(screen.getByRole("button", { name: ru.imageGeneration.prepare }));
+    await screen.findByRole("heading", { name: ru.imageGeneration.confirmationTitle });
+    fireEvent.click(screen.getByRole("button", { name: new RegExp(ru.imageGeneration.confirm) }));
+
+    await vi.waitFor(() => expect(onJobChange).toHaveBeenCalledWith(expect.objectContaining({ status: "queued" })));
   });
 
   it("reads the submitted job until it succeeds and renders only a platform artifact URL", async () => {

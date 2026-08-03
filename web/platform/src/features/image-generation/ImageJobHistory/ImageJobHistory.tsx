@@ -2,7 +2,7 @@
 
 /* eslint-disable @next/next/no-img-element */
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/Button/Button";
 import { ru } from "@/i18n/ru";
@@ -31,7 +31,11 @@ type OpenedResult = {
   result: ImageJobResult;
 };
 
-export function ImageJobHistory() {
+type ImageJobHistoryProps = {
+  latestJob?: ImageJob | null;
+};
+
+export function ImageJobHistory({ latestJob = null }: Readonly<ImageJobHistoryProps>) {
   const [jobs, setJobs] = useState<ImageJob[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [hasLoaded, setHasLoaded] = useState(false);
@@ -41,6 +45,11 @@ export function ImageJobHistory() {
   const [openedResult, setOpenedResult] = useState<OpenedResult | null>(null);
   const [resultLoadingJobID, setResultLoadingJobID] = useState<string | null>(null);
   const [resultErrorJobID, setResultErrorJobID] = useState<string | null>(null);
+
+  const visibleJobs = useMemo(
+    () => (hasLoaded && latestJob !== null ? upsertImageJob(jobs, latestJob) : jobs),
+    [hasLoaded, jobs, latestJob],
+  );
 
   const loadFirstPage = async () => {
     if (isLoading) {
@@ -128,11 +137,11 @@ export function ImageJobHistory() {
             {loadFailed ? <p className={styles.error} role="alert">{ru.imageHistory.loadFailure}</p> : null}
           </div>
 
-          {jobs.length === 0 ? (
+          {visibleJobs.length === 0 ? (
             <p className={styles.empty} role="status">{ru.imageHistory.empty}</p>
           ) : (
             <ol className={styles.jobs}>
-              {jobs.map((job) => {
+              {visibleJobs.map((job) => {
                 const result = openedResult?.jobID === job.id ? openedResult.result : null;
                 const isLoadingResult = resultLoadingJobID === job.id;
                 const resultFailed = resultErrorJobID === job.id;
@@ -217,6 +226,14 @@ async function fetchImageJobHistoryPage(cursor?: string) {
 function appendDistinctImageJobs(currentJobs: ImageJob[], additionalJobs: ImageJob[]): ImageJob[] {
   const knownIDs = new Set(currentJobs.map((job) => job.id));
   return [...currentJobs, ...additionalJobs.filter((job) => !knownIDs.has(job.id))];
+}
+
+export function upsertImageJob(currentJobs: ImageJob[], nextJob: ImageJob): ImageJob[] {
+  const knownJobIndex = currentJobs.findIndex((job) => job.id === nextJob.id);
+  if (knownJobIndex === -1) {
+    return [nextJob, ...currentJobs];
+  }
+  return currentJobs.map((job) => (job.id === nextJob.id ? nextJob : job));
 }
 
 function historyStatusLabel(status: ImageJob["status"]): string {

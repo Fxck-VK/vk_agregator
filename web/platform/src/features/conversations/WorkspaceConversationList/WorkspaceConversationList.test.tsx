@@ -117,6 +117,25 @@ describe("WorkspaceConversationListProvider", () => {
     expect(screen.getByRole("status")).not.toHaveTextContent(accountAConversations[0].id);
   });
 
+  it("keeps a client fallback title while the refreshed server item is still blank", () => {
+    const fallbackConversation = { ...createdConversation, title: "Первый вопрос пользователя" };
+    const blankServerConversation = { ...createdConversation, title: "" };
+    const rendered = render(
+      <WorkspaceConversationListProvider accountId="0ce06a6a-16d8-4b16-b9df-5e63175a4a0c" initialConversations={[]}>
+        <ConversationListProbe conversation={fallbackConversation} />
+      </WorkspaceConversationListProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Upsert" }));
+    rendered.rerender(
+      <WorkspaceConversationListProvider accountId="0ce06a6a-16d8-4b16-b9df-5e63175a4a0c" initialConversations={[blankServerConversation]}>
+        <ConversationListProbe conversation={fallbackConversation} />
+      </WorkspaceConversationListProvider>,
+    );
+
+    expect(screen.getByRole("status")).toHaveTextContent(`${createdConversation.id}:Первый вопрос пользователя`);
+  });
+
   it("exposes the changed server list to children on their first rerender", () => {
     const refreshedConversations = [{ ...createdConversation, title: "Server title" }];
     const observedLists: string[][] = [];

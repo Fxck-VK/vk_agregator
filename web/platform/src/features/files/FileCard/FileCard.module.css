@@ -1,0 +1,77 @@
+.card {
+  display: grid;
+  overflow: hidden;
+  border: 0.0625rem solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised);
+}
+
+.preview {
+  display: grid;
+  min-block-size: 12rem;
+  place-items: center;
+  padding: var(--space-3);
+  background: var(--color-background);
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+.preview figure {
+  display: grid;
+  gap: var(--space-2);
+  inline-size: 100%;
+  margin: 0;
+}
+
+.preview img {
+  inline-size: 100%;
+  max-block-size: 24rem;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+}
+
+.preview figcaption a {
+  color: var(--color-primary);
+  font-weight: 700;
+}
+
+.previewFailure {
+  display: grid;
+  gap: var(--space-3);
+  justify-items: center;
+}
+
+.previewFailure p {
+  margin: 0;
+  color: var(--color-danger, #ef4444);
+}
+
+.content {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-4);
+}
+
+.content h2,
+.content p {
+  margin: 0;
+}
+
+.content h2 {
+  font-size: 1rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.content > p:last-child {
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+}
+
+.status {
+  color: var(--color-primary);
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}

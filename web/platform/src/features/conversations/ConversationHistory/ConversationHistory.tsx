@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { AssistantTypingIndicator } from "@/components/chat/AssistantTypingIndicator/AssistantTypingIndicator";
 import { Button } from "@/components/ui/Button/Button";
@@ -93,6 +93,12 @@ function ConversationHistoryReady({
   const acceptSyncedConversation = useCallback((conversation: ConversationItem) => {
     replaceConversation?.(conversation);
   }, [replaceConversation]);
+
+  useLayoutEffect(() => {
+    if (titleSyncFallback !== null) {
+      updateConversationTitle?.(history.conversationId, titleSyncFallback);
+    }
+  }, [history.conversationId, titleSyncFallback, updateConversationTitle]);
 
   useEffect(() => {
     const scrollRegion = document.querySelector<HTMLElement>('main[data-testid="workspace-scroll-region"]');

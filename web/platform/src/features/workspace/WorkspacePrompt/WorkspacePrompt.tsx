@@ -23,7 +23,11 @@ type RetryIntent = {
 
 export function WorkspacePrompt() {
   const router = useRouter();
-  const { updateConversationTitle, upsertConversation } = useWorkspaceConversationList();
+  const {
+    discardPendingConversation,
+    resolvePendingConversation,
+    upsertConversation,
+  } = useWorkspaceConversationList();
   const [prompt, setPrompt] = useState("");
   const [isPending, setIsPending] = useState(false);
   const [hasError, setHasError] = useState(false);
@@ -48,9 +52,10 @@ export function WorkspacePrompt() {
 
     setHasError(false);
     setIsPending(true);
+    let intent: RetryIntent | null = null;
     try {
       const retryIntent = retryIntentRef.current;
-      const intent = retryIntent?.prompt === normalizedPrompt
+      intent = retryIntent?.prompt === normalizedPrompt
         ? retryIntent
         : {
             prompt: normalizedPrompt,
@@ -60,6 +65,15 @@ export function WorkspacePrompt() {
       retryIntentRef.current = intent;
 
       if (intent.conversationId === undefined) {
+        const fallbackTitle = fallbackConversationTitle(intent.prompt);
+        const createdAt = new Date().toISOString();
+        upsertConversation({
+          id: intent.conversationKey,
+          title: fallbackTitle,
+          created_at: createdAt,
+          updated_at: createdAt,
+          isPending: true,
+        });
         const conversationResponse = await webBrowserMutation("/web/v1/conversations", {
           method: "POST",
           headers: { "X-Idempotency-Key": intent.conversationKey },
@@ -69,7 +83,12 @@ export function WorkspacePrompt() {
         }
         const conversation = parseConversationItem(await conversationResponse.json());
         intent.conversationId = conversation.id;
-        upsertConversation(conversation);
+        const hasServerTitle = conversation.title.trim() !== "";
+        const visibleConversation = hasServerTitle || fallbackTitle === "" ? conversation : { ...conversation, title: fallbackTitle };
+        resolvePendingConversation(intent.conversationKey, visibleConversation);
+        if (!hasServerTitle && fallbackTitle !== "") {
+          savePendingConversationTitleSync(conversation.id, fallbackTitle);
+        }
       }
 
       const conversationID = intent.conversationId;
@@ -93,14 +112,12 @@ export function WorkspacePrompt() {
         throw new Error("Unable to complete the request.");
       }
       retryIntentRef.current = null;
-      const fallbackTitle = fallbackConversationTitle(intent.prompt);
-      if (fallbackTitle !== "") {
-        updateConversationTitle(conversationID, fallbackTitle);
-        savePendingConversationTitleSync(conversationID, fallbackTitle);
-      }
       savePendingConversationPrompt(conversationID, intent.prompt);
       router.push(`/app/chat/${conversationID}?refresh=1`);
     } catch {
+      if (intent !== null && intent.conversationId === undefined) {
+        discardPendingConversation(intent.conversationKey);
+      }
       setHasError(true);
     } finally {
       setIsPending(false);

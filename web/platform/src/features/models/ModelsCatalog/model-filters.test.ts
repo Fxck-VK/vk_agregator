@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { ImageModel } from "@/lib/web-api/contracts";
 
-import { filterImageModels, imageModelQualities } from "./model-filters";
+import { filterAndSortImageModels, filterImageModels, imageModelQualities } from "./model-filters";
 
 const models: ImageModel[] = [
   {
@@ -38,6 +38,21 @@ describe("filterImageModels", () => {
 
   it("matches a query by model id without applying optional filters", () => {
     expect(filterImageModels(models, { query: "model-id", referenceOnly: false, quality: null })).toEqual([models[1]]);
+  });
+});
+
+describe("filterAndSortImageModels", () => {
+  it("orders only matching models by name without mutating the cached catalog", () => {
+    const unsortedModels = [models[2], models[0], models[1]];
+
+    const result = filterAndSortImageModels(
+      unsortedModels,
+      { query: "", referenceOnly: false, quality: null },
+      "name",
+    );
+
+    expect(result.map((model) => model.name)).toEqual(["Nano Banana", "Other Model", "Third Model"]);
+    expect(unsortedModels.map((model) => model.name)).toEqual(["Third Model", "Nano Banana", "Other Model"]);
   });
 });
 

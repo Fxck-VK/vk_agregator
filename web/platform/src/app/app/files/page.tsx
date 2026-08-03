@@ -1,5 +1,5 @@
-import { WorkspaceHome } from "@/features/workspace/WorkspaceHome/WorkspaceHome";
+import { FilesWorkspace } from "@/features/files/FilesWorkspace/FilesWorkspace";
 
 export default function FilesPage() {
-  return <WorkspaceHome section="files" />;
+  return <FilesWorkspace />;
 }

@@ -1,0 +1,55 @@
+.result {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.result header h3,
+.result header p,
+.result > p {
+  margin: 0;
+}
+
+.result header p {
+  color: var(--color-text-muted);
+  margin-top: var(--space-1);
+}
+
+.artifacts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: var(--space-3);
+}
+
+.artifacts figure {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.artifacts img {
+  inline-size: 100%;
+  max-block-size: 32rem;
+  border: 0.0625rem solid var(--color-border);
+  border-radius: var(--radius-md);
+  object-fit: contain;
+}
+
+.artifacts a {
+  color: var(--color-accent);
+  font-weight: 700;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.secondaryAction {
+  border: 0.0625rem solid var(--color-border);
+  background: var(--color-surface-raised);
+}
+
+.error {
+  color: var(--color-danger);
+}

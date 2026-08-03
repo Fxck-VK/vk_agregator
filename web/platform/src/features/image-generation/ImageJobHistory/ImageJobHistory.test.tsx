@@ -8,11 +8,11 @@ vi.mock("@/lib/web-api/browser", () => ({
 import { ru } from "@/i18n/ru";
 import { webBrowserFetch } from "@/lib/web-api/browser";
 
-import { ImageJobHistory } from "./ImageJobHistory";
+import { ImageJobHistory, upsertImageJob } from "./ImageJobHistory";
 
 const succeededJob = {
   id: "d7c979f5-24e5-4f88-924b-a592d6e5a906",
-  status: "succeeded",
+  status: "succeeded" as const,
   prompt: "night city after rain",
   model_id: "nano-banana-2",
   model_name: "Nano Banana 2",
@@ -44,6 +44,28 @@ describe("ImageJobHistory", () => {
     expect(await screen.findByText(succeededJob.prompt)).toBeInTheDocument();
     expect(webBrowserFetch).toHaveBeenCalledWith("/web/v1/image-jobs?limit=10");
     expect(screen.getByRole("button", { name: ru.imageHistory.loadMore })).toBeInTheDocument();
+  });
+
+  it("upserts the latest visible job without a second history request", async () => {
+    vi.mocked(webBrowserFetch).mockResolvedValueOnce(
+      Response.json({ items: [succeededJob], has_more: false, next_cursor: null }),
+    );
+    const view = render(<ImageJobHistory latestJob={null} />);
+
+    fireEvent.click(screen.getByRole("button", { name: ru.imageHistory.load }));
+    await screen.findByText(succeededJob.prompt);
+    view.rerender(<ImageJobHistory latestJob={{ ...succeededJob, prompt: "fresh image job" }} />);
+
+    expect(await screen.findByText("fresh image job")).toBeInTheDocument();
+    expect(webBrowserFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("replaces a matching job or prepends a new job locally", () => {
+    const refreshedJob = { ...succeededJob, prompt: "fresh image job" };
+    const anotherJob = { ...succeededJob, id: "4e9defcb-59d7-4d45-bc2e-7cdb770ad729", prompt: "another image" };
+
+    expect(upsertImageJob([succeededJob], refreshedJob)).toEqual([refreshedJob]);
+    expect(upsertImageJob([succeededJob], anotherJob)).toEqual([anotherJob, succeededJob]);
   });
 
   it("uses the opaque cursor for the next page", async () => {

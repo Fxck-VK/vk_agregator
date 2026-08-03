@@ -7,11 +7,15 @@ const stylesheet = readFileSync(
   resolve(process.cwd(), "src/features/models/ModelsCatalog/ModelsCatalog.module.css"),
   "utf8",
 );
+const modelCardStylesheet = readFileSync(
+  resolve(process.cwd(), "src/features/models/ModelCard/ModelCard.module.css"),
+  "utf8",
+);
 
 describe("ModelsCatalog responsive styles", () => {
   it("uses the global text token for CTAs on the accent surface", () => {
-    expect(stylesheet).toMatch(
-      /\.clearFilters,\s*\.card a\s*\{[^}]*background:\s*var\(--color-accent\);[^}]*color:\s*var\(--color-text\);/s,
+    expect(modelCardStylesheet).toMatch(
+      /\.card a\s*\{[^}]*background:\s*var\(--color-accent\);[^}]*color:\s*var\(--color-text\);/s,
     );
   });
 

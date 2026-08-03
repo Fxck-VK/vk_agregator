@@ -6,6 +6,8 @@ export type ModelCatalogFilters = {
   quality: string | null;
 };
 
+export type ImageModelSort = "catalog" | "name";
+
 export function filterImageModels(models: ImageModel[], filters: ModelCatalogFilters): ImageModel[] {
   const query = filters.query.trim().toLowerCase();
 
@@ -17,6 +19,16 @@ export function filterImageModels(models: ImageModel[], filters: ModelCatalogFil
 
     return matchesQuery && matchesReference && matchesQuality;
   });
+}
+
+export function filterAndSortImageModels(
+  models: ImageModel[],
+  filters: ModelCatalogFilters,
+  sort: ImageModelSort,
+): ImageModel[] {
+  const filtered = filterImageModels(models, filters);
+
+  return sort === "name" ? [...filtered].sort((left, right) => left.name.localeCompare(right.name)) : filtered;
 }
 
 export function imageModelQualities(models: ImageModel[]): string[] {

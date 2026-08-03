@@ -68,11 +68,25 @@ describe("WorkspacePrompt", () => {
     window.sessionStorage.clear();
   });
 
+  it("shows the first prompt in the sidebar before the create response returns", async () => {
+    vi.mocked(webBrowserMutation).mockReturnValueOnce(new Promise<Response>(() => {}));
+    renderWorkspacePromptWithSidebar();
+
+    fireEvent.change(screen.getByLabelText(ru.workspace.promptLabel), { target: { value: "Visible before create resolves" } });
+    fireEvent.click(screen.getByRole("button", { name: ru.workspace.promptSubmit }));
+
+    await vi.waitFor(() => expect(webBrowserMutation).toHaveBeenCalledTimes(1));
+    const sidebar = screen.getByRole("heading", { name: ru.conversations.recentHeading }).closest("section");
+    expect(sidebar).not.toBeNull();
+    expect(within(sidebar as HTMLElement).getByText("Visible before create resolves")).toBeVisible();
+    expect(within(sidebar as HTMLElement).queryByRole("link", { name: ru.conversations.unnamed })).not.toBeInTheDocument();
+    expect(push).not.toHaveBeenCalled();
+  });
+
   it("adds a validated new conversation to the sidebar before its first message resolves", async () => {
-    const visibleConversation = { ...conversation, title: "Visible new chat" };
     let settleMessage: (response: Response) => void = () => {};
     vi.mocked(webBrowserMutation)
-      .mockResolvedValueOnce(Response.json(visibleConversation, { status: 201 }))
+      .mockResolvedValueOnce(Response.json(conversation, { status: 201 }))
       .mockReturnValueOnce(new Promise<Response>((resolve) => { settleMessage = resolve; }));
     renderWorkspacePromptWithSidebar();
 
@@ -80,11 +94,12 @@ describe("WorkspacePrompt", () => {
     fireEvent.click(screen.getByRole("button", { name: ru.workspace.promptSubmit }));
 
     await vi.waitFor(() => expect(webBrowserMutation).toHaveBeenCalledTimes(2));
-    expect(screen.getByRole("link", { name: visibleConversation.title })).toHaveAttribute("href", `/app/chat/${visibleConversation.id}`);
+    expect(screen.getByRole("link", { name: "Add sidebar chat" })).toHaveAttribute("href", `/app/chat/${conversation.id}`);
+    expect(screen.queryByRole("link", { name: ru.conversations.unnamed })).not.toBeInTheDocument();
     expect(push).not.toHaveBeenCalled();
 
     settleMessage(Response.json(queuedChatJob, { status: 201 }));
-    await vi.waitFor(() => expect(push).toHaveBeenCalledWith(`/app/chat/${visibleConversation.id}?refresh=1`));
+    await vi.waitFor(() => expect(push).toHaveBeenCalledWith(`/app/chat/${conversation.id}?refresh=1`));
   });
 
   it("uses the first accepted prompt as the immediate sidebar fallback title", async () => {
@@ -98,6 +113,21 @@ describe("WorkspacePrompt", () => {
 
     await vi.waitFor(() => expect(push).toHaveBeenCalledWith(`/app/chat/${conversation.id}?refresh=1`));
     expect(screen.getByRole("link", { name: "План запуска нового продукта" })).toHaveAttribute("href", `/app/chat/${conversation.id}`);
+  });
+
+  it("keeps a nonempty server title instead of replacing it with the first prompt", async () => {
+    const namedConversation = { ...conversation, title: "Название уже готово" };
+    vi.mocked(webBrowserMutation)
+      .mockResolvedValueOnce(Response.json(namedConversation, { status: 201 }))
+      .mockResolvedValueOnce(Response.json(queuedChatJob, { status: 201 }));
+    renderWorkspacePromptWithSidebar();
+
+    fireEvent.change(screen.getByLabelText(ru.workspace.promptLabel), { target: { value: "Текст первого запроса" } });
+    fireEvent.click(screen.getByRole("button", { name: ru.workspace.promptSubmit }));
+
+    await vi.waitFor(() => expect(push).toHaveBeenCalledWith(`/app/chat/${conversation.id}?refresh=1`));
+    expect(screen.getByRole("link", { name: namedConversation.title })).toHaveAttribute("href", `/app/chat/${conversation.id}`);
+    expect(screen.queryByRole("link", { name: "Текст первого запроса" })).not.toBeInTheDocument();
   });
 
   it("keeps refreshed sidebar conversations when a pending create response resolves", async () => {

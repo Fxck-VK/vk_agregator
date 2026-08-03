@@ -28,104 +28,10 @@
   font-weight: 700;
 }
 
-.filters {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-3);
-}
-
-.filters input[type="search"],
-.filters select {
-  min-block-size: 2.75rem;
-  border: 0.0625rem solid var(--color-border);
-  border-radius: var(--radius-sm);
-  padding: 0 var(--space-3);
-  background: var(--color-surface-raised);
-  color: var(--color-text);
-  font: inherit;
-}
-
-.filters input[type="search"] {
-  flex: 1 1 16rem;
-}
-
-.filters input:focus,
-.filters select:focus,
-.clearFilters:focus,
-.card a:focus {
-  outline: 0.125rem solid var(--color-accent);
-  outline-offset: 0.125rem;
-}
-
-.checkbox {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  color: var(--color-text-muted);
-  font-weight: 700;
-}
-
-.clearFilters,
-.card a {
-  border: 0;
-  border-radius: var(--radius-sm);
-  padding: var(--space-3) var(--space-4);
-  background: var(--color-accent);
-  color: var(--color-text);
-  font: inherit;
-  font-weight: 700;
-  text-decoration: none;
-}
-
-.clearFilters {
-  cursor: pointer;
-}
-
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
   gap: var(--space-4);
-}
-
-.card {
-  display: grid;
-  align-content: start;
-  gap: var(--space-3);
-  padding: var(--space-5);
-  border: 0.0625rem solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-surface-raised);
-}
-
-.card h2,
-.card p,
-.qualities {
-  margin: 0;
-}
-
-.type,
-.reference {
-  color: var(--color-text-muted);
-}
-
-.qualities {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  padding: 0;
-  list-style: none;
-}
-
-.qualities li {
-  border: 0.0625rem solid var(--color-border);
-  border-radius: var(--radius-sm);
-  padding: var(--space-1) var(--space-2);
-  color: var(--color-text-muted);
-}
-
-.card a {
-  justify-self: start;
 }
 
 .error {

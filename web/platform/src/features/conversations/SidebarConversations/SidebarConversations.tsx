@@ -4,15 +4,17 @@ import { usePathname } from "next/navigation";
 import { useLayoutEffect, useRef, useState } from "react";
 
 import { ConversationRow } from "@/features/conversations/ConversationRow/ConversationRow";
-import { useOptionalWorkspaceConversationList } from "@/features/conversations/WorkspaceConversationList/WorkspaceConversationList";
+import {
+  type WorkspaceConversationItem,
+  useOptionalWorkspaceConversationList,
+} from "@/features/conversations/WorkspaceConversationList/WorkspaceConversationList";
 import { ru } from "@/i18n/ru";
-import type { ConversationItem } from "@/lib/web-api/contracts";
 
 import styles from "./SidebarConversations.module.css";
 import { useSidebarConversationsActive } from "./SidebarConversationsActivity";
 
 type SidebarConversationsProps = {
-  conversations?: ConversationItem[];
+  conversations?: WorkspaceConversationItem[];
 };
 
 export function SidebarConversations({ conversations }: SidebarConversationsProps) {

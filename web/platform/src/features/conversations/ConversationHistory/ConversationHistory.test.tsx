@@ -9,6 +9,8 @@ vi.mock("@/lib/web-api/browser", () => ({
 
 import { ru } from "@/i18n/ru";
 import { savePendingConversationPrompt } from "@/features/conversations/pending-conversation-prompt";
+import { savePendingConversationTitleSync } from "@/features/conversations/pending-conversation-title-sync";
+import { WorkspaceConversationListProvider, useWorkspaceConversationList } from "@/features/conversations/WorkspaceConversationList/WorkspaceConversationList";
 import { webBrowserFetch, webBrowserMutation } from "@/lib/web-api/browser";
 
 import { ConversationHistory } from "./ConversationHistory";
@@ -18,6 +20,12 @@ const queuedJob = {
   job_id: "a2a006fc-4457-4bb5-bc4d-4f553d51766b",
   status: "queued",
 };
+
+function WorkspaceConversationTitleProbe() {
+  const { conversations } = useWorkspaceConversationList();
+
+  return <output data-testid="workspace-conversation-titles">{conversations.map((conversation) => conversation.title).join(",")}</output>;
+}
 
 const initialHistory = {
   kind: "ready" as const,
@@ -45,6 +53,7 @@ describe("ConversationHistory", () => {
   afterEach(() => {
     cleanup();
     document.querySelector("main[data-testid=\"workspace-scroll-region\"]")?.remove();
+    window.sessionStorage.clear();
     vi.useRealTimers();
     vi.clearAllMocks();
     vi.unstubAllGlobals();
@@ -355,6 +364,29 @@ describe("ConversationHistory", () => {
     const messageList = await screen.findByRole("list");
     expect(await within(messageList).findByText("First workspace prompt")).toBeTruthy();
     expect(within(messageList).getAllByRole("listitem").at(-1)).toHaveAttribute("data-chat-pending", "assistant");
+  });
+
+  it("restores the pending fallback title into the workspace list after a page reload", () => {
+    savePendingConversationTitleSync(conversationId, "First workspace prompt");
+
+    render(
+      <WorkspaceConversationListProvider
+        accountId="0ce06a6a-16d8-4b16-b9df-5e63175a4a0c"
+        initialConversations={[
+          {
+            id: conversationId,
+            title: "",
+            created_at: "2026-08-01T12:00:00Z",
+            updated_at: "2026-08-01T12:00:00Z",
+          },
+        ]}
+      >
+        <ConversationHistory history={{ kind: "ready", conversationId, hasMoreBefore: false, messages: [] } as never} />
+        <WorkspaceConversationTitleProbe />
+      </WorkspaceConversationListProvider>,
+    );
+
+    expect(screen.getByTestId("workspace-conversation-titles")).toHaveTextContent("First workspace prompt");
   });
 
   it("does not duplicate the first prompt when the server already rendered it", async () => {

@@ -1,0 +1,88 @@
+.toolbar {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--space-3);
+}
+
+.search,
+.selectLabel select {
+  min-block-size: 2.75rem;
+  border: 0.0625rem solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 0 var(--space-3);
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+  font: inherit;
+}
+
+.search {
+  flex: 1 1 16rem;
+}
+
+.checkbox,
+.selectLabel {
+  display: inline-flex;
+  gap: var(--space-2);
+  color: var(--color-text-muted);
+  font-weight: 700;
+}
+
+.checkbox {
+  align-items: center;
+  min-block-size: 2.75rem;
+}
+
+.selectLabel {
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: 0.875rem;
+}
+
+.summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.resultCount {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.summary button {
+  border: 0;
+  border-radius: var(--radius-sm);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-accent);
+  color: var(--color-text);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+}
+
+.summary button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.search:focus,
+.selectLabel select:focus,
+.checkbox input:focus,
+.summary button:focus {
+  outline: 0.125rem solid var(--color-accent);
+  outline-offset: 0.125rem;
+}
+
+@media (max-width: 42rem) {
+  .controls > * {
+    flex: 1 1 100%;
+  }
+}
