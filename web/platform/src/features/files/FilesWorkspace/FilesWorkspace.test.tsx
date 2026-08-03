@@ -335,6 +335,7 @@ describe("FilesWorkspace", () => {
     renderFilesWorkspace();
 
     await screen.findByText(firstSucceededJob.prompt);
+    await screen.findByRole("img", { name: ru.files.generatedImageAlt });
     fireEvent.click(screen.getByRole("button", { name: ru.files.loadMore }));
 
     expect(await screen.findByText(secondSucceededJob.prompt)).toBeInTheDocument();
@@ -424,6 +425,140 @@ describe("FilesWorkspace", () => {
     expect(screen.getByRole("img", { name: ru.files.generatedImageAlt })).toBe(image);
     expect(screen.getByText(serverSiblingJob.prompt)).toBeInTheDocument();
     expect(webBrowserFetch).toHaveBeenCalledTimes(3);
+  });
+
+  it("preserves the latest retry child and tracking across a cached workspace remount", async () => {
+    const cachedPage: ImageJobList = {
+      items: [expiredPreparationJob],
+      has_more: false,
+      next_cursor: null,
+    };
+    const staleChild = { ...retriedQueuedJob, updated_at: "2026-08-03T12:01:00Z" };
+    const retriedSucceededJob = {
+      ...retriedQueuedJob,
+      status: "succeeded" as const,
+      updated_at: "2026-08-03T12:02:00Z",
+    };
+    const serverSiblingJob = {
+      ...secondSucceededJob,
+      status: "queued" as const,
+      prompt: "server sibling retained across remount",
+    };
+    let resolveInitialRevalidation: (response: Response) => void = () => {};
+    const initialRevalidation = new Promise<Response>((resolve) => {
+      resolveInitialRevalidation = resolve;
+    });
+    let listRequestCount = 0;
+    vi.mocked(webBrowserFetch).mockImplementation((path) => {
+      if (path === "/web/v1/image-jobs?limit=12") {
+        listRequestCount += 1;
+        return listRequestCount === 1 ? initialRevalidation : new Promise<Response>(() => {});
+      }
+      if (path === `/web/v1/image-jobs/${retriedQueuedJob.id}`) {
+        return Promise.resolve(Response.json({ job: retriedSucceededJob }));
+      }
+      if (path === `/web/v1/image-jobs/${retriedQueuedJob.id}/result`) {
+        return Promise.resolve(Response.json(retriedResult));
+      }
+      return Promise.reject(new Error("Unexpected test request."));
+    });
+    vi.mocked(webBrowserMutation).mockResolvedValueOnce(Response.json({ job: retriedQueuedJob }, { status: 200 }));
+    const workspace = render(
+      <WorkspaceDataCacheProvider>
+        <WorkspaceDataCacheSeed page={cachedPage} />
+        <FilesWorkspace />
+      </WorkspaceDataCacheProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: ru.files.retry }));
+    await vi.waitFor(() => {
+      expect(screen.getByRole("status", { name: ru.files.retrying })).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: ru.files.retry })).not.toBeInTheDocument();
+    });
+
+    resolveInitialRevalidation(Response.json({
+      items: [expiredPreparationJob, staleChild, serverSiblingJob],
+      has_more: false,
+      next_cursor: null,
+    }));
+    expect(await screen.findByText(serverSiblingJob.prompt)).toBeInTheDocument();
+
+    workspace.rerender(<WorkspaceDataCacheProvider>{null}</WorkspaceDataCacheProvider>);
+    workspace.rerender(
+      <WorkspaceDataCacheProvider>
+        <FilesWorkspace />
+      </WorkspaceDataCacheProvider>,
+    );
+
+    expect(screen.queryByRole("button", { name: ru.files.retry })).not.toBeInTheDocument();
+    expect(screen.getAllByRole("heading", { name: retriedQueuedJob.prompt })).toHaveLength(1);
+    expect(await screen.findByRole("img", { name: ru.files.generatedImageAlt }, { timeout: 3000 })).toBeInTheDocument();
+    expect(webBrowserFetch).toHaveBeenCalledWith(`/web/v1/image-jobs/${retriedQueuedJob.id}`, expect.anything());
+  });
+
+  it("deduplicates an existing retry child when idempotent retry replaces the original card", async () => {
+    const existingChild = {
+      ...retriedQueuedJob,
+      status: "provider_processing" as const,
+      updated_at: "2026-08-03T12:05:00Z",
+    };
+    vi.mocked(webBrowserFetch)
+      .mockResolvedValueOnce(Response.json({
+        items: [expiredPreparationJob, existingChild],
+        has_more: false,
+        next_cursor: null,
+      }))
+      .mockReturnValue(new Promise<Response>(() => {}));
+    vi.mocked(webBrowserMutation).mockResolvedValueOnce(Response.json({ job: retriedQueuedJob }, { status: 200 }));
+
+    renderFilesWorkspace();
+
+    fireEvent.click(await screen.findByRole("button", { name: ru.files.retry }));
+
+    await vi.waitFor(() => expect(screen.queryByRole("button", { name: ru.files.retry })).not.toBeInTheDocument());
+    expect(screen.getAllByRole("heading", { name: retriedQueuedJob.prompt })).toHaveLength(1);
+    expect(screen.getByRole("status", { name: ru.files.retrying })).toBeInTheDocument();
+  });
+
+  it("retains a tracked retry child when a full stale first page contains neither retry ID", async () => {
+    const unrelatedJobs = Array.from({ length: 12 }, (_, index) => ({
+      ...firstSucceededJob,
+      id: `00000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
+      status: "queued" as const,
+      prompt: `unrelated stale job ${index + 1}`,
+    }));
+    let resolveRevalidation: (response: Response) => void = () => {};
+    const revalidation = new Promise<Response>((resolve) => {
+      resolveRevalidation = resolve;
+    });
+    const retriedSucceededJob = {
+      ...retriedQueuedJob,
+      status: "succeeded" as const,
+      updated_at: "2026-08-03T12:10:00Z",
+    };
+    vi.mocked(webBrowserFetch)
+      .mockReturnValueOnce(revalidation)
+      .mockResolvedValueOnce(Response.json({ job: retriedSucceededJob }))
+      .mockResolvedValueOnce(Response.json(retriedResult));
+    vi.mocked(webBrowserMutation).mockResolvedValueOnce(Response.json({ job: retriedQueuedJob }, { status: 200 }));
+
+    renderFilesWorkspace({ cachePage: {
+      items: [expiredPreparationJob],
+      has_more: false,
+      next_cursor: null,
+    } });
+
+    fireEvent.click(screen.getByRole("button", { name: ru.files.retry }));
+    await vi.waitFor(() => expect(screen.queryByRole("button", { name: ru.files.retry })).not.toBeInTheDocument());
+
+    resolveRevalidation(Response.json({ items: unrelatedJobs, has_more: false, next_cursor: null }));
+
+    expect(await screen.findByText(unrelatedJobs[0].prompt)).toBeInTheDocument();
+    expect(screen.getAllByRole("heading", { name: retriedQueuedJob.prompt })).toHaveLength(1);
+    expect(screen.getAllByRole("heading", { level: 2 })).toHaveLength(12);
+    expect(screen.getByRole("status", { name: ru.files.retrying })).toBeInTheDocument();
+    expect(await screen.findByRole("img", { name: ru.files.generatedImageAlt }, { timeout: 3000 })).toBeInTheDocument();
+    expect(screen.getAllByRole("heading", { name: retriedQueuedJob.prompt })).toHaveLength(1);
   });
 
   it("resumes polling only the returned retry job when the files tab becomes visible", async () => {

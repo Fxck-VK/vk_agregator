@@ -1,9 +1,14 @@
 import type { ConversationHistoryData } from "@/features/conversations/conversation-history-data";
-import type { ImageJobList } from "@/lib/web-api/contracts";
+import type { ImageJob, ImageJobList } from "@/lib/web-api/contracts";
 
 export const maxCachedConversationHistoryPages = 8;
 
 export type ReadyConversationHistory = Extract<ConversationHistoryData, { kind: "ready" }>;
+
+export type ImageFileRetryReplacement = {
+  originalJobID: string;
+  job: ImageJob;
+};
 
 export type WorkspaceDataCache = {
   getConversationHistory: (conversationId: string) => ReadyConversationHistory | undefined;
@@ -11,10 +16,13 @@ export type WorkspaceDataCache = {
   deleteConversationHistory: (conversationId: string) => void;
   getImageFilesFirstPage: () => ImageJobList | undefined;
   setImageFilesFirstPage: (page: ImageJobList) => void;
+  getImageFileRetryReplacements: () => ImageFileRetryReplacement[];
+  setImageFileRetryReplacement: (replacement: ImageFileRetryReplacement) => void;
 };
 
 export function createWorkspaceDataCache(): WorkspaceDataCache {
   const conversationHistories = new Map<string, ReadyConversationHistory>();
+  const imageFileRetryReplacements = new Map<string, ImageJob>();
   let imageFilesFirstPage: ImageJobList | undefined;
 
   return {
@@ -50,6 +58,12 @@ export function createWorkspaceDataCache(): WorkspaceDataCache {
     },
     setImageFilesFirstPage(page) {
       imageFilesFirstPage = page;
+    },
+    getImageFileRetryReplacements() {
+      return [...imageFileRetryReplacements].map(([originalJobID, job]) => ({ originalJobID, job }));
+    },
+    setImageFileRetryReplacement({ originalJobID, job }) {
+      imageFileRetryReplacements.set(originalJobID, job);
     },
   };
 }

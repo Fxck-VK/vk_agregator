@@ -4,7 +4,13 @@ import { createContext, type ReactNode, useContext, useState } from "react";
 
 import { createWorkspaceDataCache, type WorkspaceDataCache } from "./workspace-data-cache";
 
-export { createWorkspaceDataCache, maxCachedConversationHistoryPages, type ReadyConversationHistory, type WorkspaceDataCache } from "./workspace-data-cache";
+export {
+  createWorkspaceDataCache,
+  maxCachedConversationHistoryPages,
+  type ImageFileRetryReplacement,
+  type ReadyConversationHistory,
+  type WorkspaceDataCache,
+} from "./workspace-data-cache";
 
 const WorkspaceDataCacheContext = createContext<WorkspaceDataCache | undefined>(undefined);
 
