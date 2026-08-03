@@ -18,7 +18,7 @@ try {
 }
 
 const dockerignore = await readFile(dockerignorePath, "utf8");
-const ciWorkflow = await readFile(ciWorkflowPath, "utf8");
+const ciWorkflow = (await readFile(ciWorkflowPath, "utf8")).replace(/\r\n/g, "\n");
 
 assert.doesNotMatch(
   dockerfile,
