@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/web-api/browser", () => ({
@@ -10,6 +10,7 @@ import {
   WorkspaceDataCacheProvider,
   type WorkspaceDataCache,
 } from "@/features/workspace/WorkspaceDataCache/WorkspaceDataCache";
+import { ru } from "@/i18n/ru";
 import { webBrowserFetch } from "@/lib/web-api/browser";
 
 import { ConversationHistoryLoader } from "./ConversationHistoryLoader";
@@ -120,6 +121,44 @@ describe("ConversationHistoryLoader", () => {
     renderLoader({ onCache: (cache) => { observedCache = cache; } });
 
     await screen.findByRole("status");
+    expect(observedCache?.getConversationHistory(conversationId)).toBeUndefined();
+  });
+
+  it("keeps cached history visible when a background revalidation fails", async () => {
+    let resolveRevalidation: (response: Response) => void = () => {};
+    vi.mocked(webBrowserFetch).mockReturnValueOnce(
+      new Promise<Response>((resolve) => {
+        resolveRevalidation = resolve;
+      }),
+    );
+
+    renderLoader({ cacheHistory: cachedHistory });
+    expect(screen.getByText("cached private message")).toBeInTheDocument();
+
+    await act(async () => {
+      resolveRevalidation(new Response(null, { status: 503 }));
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText("cached private message")).toBeInTheDocument();
+    expect(screen.queryByText(ru.conversations.historyLoadFailure)).not.toBeInTheDocument();
+  });
+
+  it("shows an unavailable state on a cold revalidation failure", async () => {
+    vi.mocked(webBrowserFetch).mockResolvedValueOnce(new Response(null, { status: 503 }));
+
+    renderLoader();
+
+    expect(await screen.findByText(ru.conversations.historyLoadFailure)).toBeInTheDocument();
+  });
+
+  it("evicts cached history when the server returns not found", async () => {
+    let observedCache: WorkspaceDataCache | undefined;
+    vi.mocked(webBrowserFetch).mockResolvedValueOnce(new Response(null, { status: 404 }));
+
+    renderLoader({ cacheHistory: cachedHistory, onCache: (cache) => { observedCache = cache; } });
+
+    expect(await screen.findByText(ru.conversations.historyUnavailable)).toBeInTheDocument();
     expect(observedCache?.getConversationHistory(conversationId)).toBeUndefined();
   });
 

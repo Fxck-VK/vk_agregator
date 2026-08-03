@@ -50,6 +50,7 @@ function ConversationHistoryLoaderContent({
   );
   const [state, setState] = useState<LoaderState>(() => ({ history: initialHistory, readyRevision: 0 }));
   const hasRecordedCacheLoad = useRef(false);
+  const hasCachedReadyHistory = initialHistory.kind === "ready";
 
   useEffect(() => {
     if (initialHistory.kind !== "ready" || hasRecordedCacheLoad.current) {
@@ -87,11 +88,14 @@ function ConversationHistoryLoaderContent({
           return;
         }
         if (response.status === 404) {
+          cache.deleteConversationHistory(parsedConversationID.data);
           setState((current) => ({ ...current, history: { kind: "not_found" } }));
           return;
         }
         if (response.status !== 200) {
-          setState((current) => ({ ...current, history: { kind: "unavailable" } }));
+          if (!hasCachedReadyHistory) {
+            setState((current) => ({ ...current, history: { kind: "unavailable" } }));
+          }
           return;
         }
 
@@ -109,7 +113,7 @@ function ConversationHistoryLoaderContent({
         cache.setConversationHistory(history);
         setState((current) => ({ history, readyRevision: current.readyRevision + 1 }));
       } catch {
-        if (!request.signal.aborted) {
+        if (!request.signal.aborted && !hasCachedReadyHistory) {
           setState((current) => ({ ...current, history: { kind: "unavailable" } }));
         }
       } finally {
@@ -127,7 +131,7 @@ function ConversationHistoryLoaderContent({
     void load();
 
     return () => request.abort();
-  }, [cache, conversationId]);
+  }, [cache, conversationId, hasCachedReadyHistory]);
 
   return (
     <ConversationHistory

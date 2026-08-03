@@ -48,6 +48,16 @@ describe("WorkspaceDataCache", () => {
     expect(cache.getConversationHistory(histories[8].conversationId)).toBe(histories[8]);
   });
 
+  it("removes a cached history when the server revokes access", () => {
+    const cache = createWorkspaceDataCache();
+    const ready = readyHistory("revoked-conversation");
+
+    cache.setConversationHistory(ready);
+    cache.deleteConversationHistory(ready.conversationId);
+
+    expect(cache.getConversationHistory(ready.conversationId)).toBeUndefined();
+  });
+
   it("replaces the cached image files first page", () => {
     const cache = createWorkspaceDataCache();
     const firstPage: ImageJobList = { items: [], has_more: true, next_cursor: "first-page" };

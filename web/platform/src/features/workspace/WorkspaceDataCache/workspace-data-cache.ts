@@ -8,6 +8,7 @@ export type ReadyConversationHistory = Extract<ConversationHistoryData, { kind: 
 export type WorkspaceDataCache = {
   getConversationHistory: (conversationId: string) => ReadyConversationHistory | undefined;
   setConversationHistory: (history: ConversationHistoryData) => void;
+  deleteConversationHistory: (conversationId: string) => void;
   getImageFilesFirstPage: () => ImageJobList | undefined;
   setImageFilesFirstPage: (page: ImageJobList) => void;
 };
@@ -40,6 +41,9 @@ export function createWorkspaceDataCache(): WorkspaceDataCache {
           conversationHistories.delete(oldestConversationId);
         }
       }
+    },
+    deleteConversationHistory(conversationId) {
+      conversationHistories.delete(conversationId);
     },
     getImageFilesFirstPage() {
       return imageFilesFirstPage;
