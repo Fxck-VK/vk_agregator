@@ -4,8 +4,17 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next/link", () => ({
-  default: ({ children, href, ...props }: { children: ReactNode; href: string }) => (
-    <a data-next-link="true" href={href} {...props}>
+  default: ({
+    children,
+    href,
+    prefetch,
+    ...props
+  }: {
+    children: ReactNode;
+    href: string;
+    prefetch?: boolean;
+  }) => (
+    <a data-next-link="true" data-prefetch={String(prefetch)} href={href} {...props}>
       {children}
     </a>
   ),
@@ -69,6 +78,10 @@ describe("ModelsCatalog", () => {
     expect(screen.getByRole("link", { name: `${ru.modelsCatalog.openGeneratorLabel}: Nano Banana` })).toHaveAttribute(
       "data-next-link",
       "true",
+    );
+    expect(screen.getByRole("link", { name: `${ru.modelsCatalog.openGeneratorLabel}: Nano Banana` })).toHaveAttribute(
+      "data-prefetch",
+      "false",
     );
     const nanoCard = screen.getByText("Nano Banana").closest("article")!;
     const otherCard = screen.getByText("Other Model").closest("article")!;
