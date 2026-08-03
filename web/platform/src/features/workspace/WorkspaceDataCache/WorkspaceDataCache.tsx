@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, type ReactNode, useContext, useRef } from "react";
+import { createContext, type ReactNode, useContext, useState } from "react";
 
 import { createWorkspaceDataCache, type WorkspaceDataCache } from "./workspace-data-cache";
 
@@ -9,9 +9,9 @@ export { createWorkspaceDataCache, maxCachedConversationHistoryPages, type Ready
 const WorkspaceDataCacheContext = createContext<WorkspaceDataCache | undefined>(undefined);
 
 export function WorkspaceDataCacheProvider({ children }: { children: ReactNode }): ReactNode {
-  const cache = useRef(createWorkspaceDataCache());
+  const [cache] = useState(createWorkspaceDataCache);
 
-  return <WorkspaceDataCacheContext.Provider value={cache.current}>{children}</WorkspaceDataCacheContext.Provider>;
+  return <WorkspaceDataCacheContext.Provider value={cache}>{children}</WorkspaceDataCacheContext.Provider>;
 }
 
 export function useWorkspaceDataCache(): WorkspaceDataCache {

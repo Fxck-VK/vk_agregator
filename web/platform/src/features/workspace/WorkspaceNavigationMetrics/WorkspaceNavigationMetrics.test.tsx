@@ -44,7 +44,7 @@ describe("workspace navigation metrics", () => {
     render(<WorkspaceNavigationMetrics />);
     await act(async () => {});
 
-    expect(addEventListener.mock.calls.filter(([type, _listener, options]) => type === "click" && options === true)).toHaveLength(0);
+    expect(addEventListener.mock.calls.filter(([type, , options]) => type === "click" && options === true)).toHaveLength(0);
   });
 
   it("keeps data metrics limited to their category, source, and integer duration", () => {
