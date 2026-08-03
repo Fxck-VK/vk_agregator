@@ -318,7 +318,7 @@ export function ConversationRow({
           {title}
         </span>
       ) : (
-        <Link aria-current={isActive ? "page" : undefined} className={styles.link} href={`/app/chat/${conversation.id}`} id={`sidebar-conversation-${conversation.id}`}>
+        <Link aria-current={isActive ? "page" : undefined} className={styles.link} href={`/app/chat/${conversation.id}`} id={`sidebar-conversation-${conversation.id}`} prefetch={false}>
           {title}
         </Link>
       )}

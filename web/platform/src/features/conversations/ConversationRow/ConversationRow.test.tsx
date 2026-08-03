@@ -11,6 +11,14 @@ vi.mock("@/lib/web-api/browser", () => ({
   webBrowserMutation: vi.fn(),
 }));
 
+vi.mock("next/link", () => ({
+  default: ({ children, href, prefetch, ...props }: { children: ReactNode; href: string; prefetch?: boolean }) => (
+    <a data-prefetch={String(prefetch)} href={href} {...props}>
+      {children}
+    </a>
+  ),
+}));
+
 import { usePathname, useRouter } from "next/navigation";
 
 import { ru } from "@/i18n/ru";
@@ -54,6 +62,12 @@ describe("ConversationRow", () => {
     renderRow(true);
 
     expect(screen.getByRole("link", { name: conversation.title })).toHaveAttribute("aria-current", "page");
+  });
+
+  it("does not prefetch the conversation-specific route", () => {
+    renderRow();
+
+    expect(screen.getByRole("link", { name: conversation.title })).toHaveAttribute("data-prefetch", "false");
   });
 
   it("opens the labelled actions menu and closes it on cancel or Escape", () => {

@@ -29,7 +29,7 @@ export function ModelCard({ model }: ModelCardProps) {
       <Link
         aria-label={`${ru.modelsCatalog.openGeneratorLabel}: ${model.name}`}
         href={`/app/image?model=${encodeURIComponent(model.id)}`}
-        prefetch
+        prefetch={false}
       >
         {ru.modelsCatalog.openGeneratorLabel}
       </Link>
