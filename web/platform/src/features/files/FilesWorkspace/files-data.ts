@@ -1,11 +1,12 @@
 import {
+  parseImageJobActivation,
   parseImageJobList,
   parseImageJobResult,
   type ImageJob,
   type ImageJobList,
   type ImageJobResult,
 } from "@/lib/web-api/contracts";
-import { webBrowserFetch } from "@/lib/web-api/browser";
+import { webBrowserFetch, webBrowserMutation } from "@/lib/web-api/browser";
 
 export const imageFilesPageLimit = 12;
 export const maxConcurrentImageFilePreviews = 2;
@@ -84,6 +85,30 @@ export async function fetchImageFilesPage(cursor?: string): Promise<ImageJobList
     throw new Error("Unable to load image files.");
   }
   return parseImageJobList(await response.json());
+}
+
+export async function retryExpiredImageJob(jobID: string): Promise<ImageJob> {
+  const response = await webBrowserMutation(`/web/v1/image-jobs/${jobID}/retry`, { method: "POST" });
+  if (response.status !== 200 && response.status !== 402) {
+    throw new Error("Unable to retry image job.");
+  }
+  const retriedJob = parseImageJobActivation(await response.json()).job;
+  if (response.status === 402 && retriedJob.status !== "awaiting_payment") {
+    throw new Error("Image job retry payment response is invalid.");
+  }
+  return retriedJob;
+}
+
+export async function fetchImageFileJob(jobID: string, signal?: AbortSignal): Promise<ImageJob> {
+  const response = await webBrowserFetch(`/web/v1/image-jobs/${jobID}`, { signal });
+  if (response.status !== 200) {
+    throw new Error("Unable to load image job.");
+  }
+  const job = parseImageJobActivation(await response.json()).job;
+  if (job.id !== jobID) {
+    throw new Error("Image job response does not match its request.");
+  }
+  return job;
 }
 
 export async function fetchImageFileResult(job: ImageJob): Promise<ImageJobResult> {

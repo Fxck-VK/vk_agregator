@@ -12,17 +12,8 @@ import {
 } from "@/lib/web-api/contracts";
 import { webBrowserFetch } from "@/lib/web-api/browser";
 
-import { nextImageJobPollDelay } from "./image-job-polling";
+import { isTerminalImageJobStatus, nextImageJobPollDelay } from "./image-job-polling";
 import styles from "./ImageJobTracker.module.css";
-
-const terminalStatuses = new Set<ImageJob["status"]>([
-  "succeeded",
-  "rejected",
-  "failed_terminal",
-  "cancelled",
-  "expired",
-  "refunded",
-]);
 
 type TrackerError = "status" | "result" | null;
 
@@ -190,15 +181,11 @@ export function ImageJobTracker({ job, onError, onJobUpdate, onResult }: Readonl
   );
 }
 
-function isTerminalImageJobStatus(status: ImageJob["status"]): boolean {
-  return terminalStatuses.has(status);
-}
-
 function imageJobStatusLabel(status: ImageJob["status"]): string {
   if (status === "succeeded") {
     return ru.imageGeneration.statusReady;
   }
-  if (terminalStatuses.has(status)) {
+  if (isTerminalImageJobStatus(status)) {
     return ru.imageGeneration.statusAttention;
   }
   if (status === "queued" || status === "dispatching_provider" || status === "provider_submitted") {

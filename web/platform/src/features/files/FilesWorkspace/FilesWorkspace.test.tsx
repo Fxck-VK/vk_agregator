@@ -1,13 +1,14 @@
 import { StrictMode } from "react";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/web-api/browser", () => ({
   webBrowserFetch: vi.fn(),
+  webBrowserMutation: vi.fn(),
 }));
 
 import { ru } from "@/i18n/ru";
-import { webBrowserFetch } from "@/lib/web-api/browser";
+import { webBrowserFetch, webBrowserMutation } from "@/lib/web-api/browser";
 import type { ImageJobList } from "@/lib/web-api/contracts";
 import {
   useWorkspaceDataCache,
@@ -83,6 +84,34 @@ const secondResult = {
       id: "d066a4a0-647e-407b-b9c4-2c5b03a4b0da",
       mime_type: "image/png",
       size_bytes: 84,
+      width: 1024,
+      height: 1024,
+    },
+  ],
+};
+
+const expiredPreparationJob = {
+  ...firstSucceededJob,
+  id: "6db2f5ed-7b3f-4e32-9a3e-b6e50d2d2a4d",
+  status: "expired" as const,
+};
+
+const retriedQueuedJob = {
+  ...expiredPreparationJob,
+  id: "e585d540-a579-4f59-b6cd-f95288be4c14",
+  status: "queued" as const,
+  created_at: "2026-08-03T12:00:00Z",
+  updated_at: "2026-08-03T12:00:00Z",
+};
+
+const retriedResult = {
+  job_id: retriedQueuedJob.id,
+  status: "succeeded" as const,
+  artifacts: [
+    {
+      id: "20993a1e-ef04-4d76-a751-f553401b5cbd",
+      mime_type: "image/png",
+      size_bytes: 96,
       width: 1024,
       height: 1024,
     },
@@ -234,10 +263,8 @@ describe("FilesWorkspace", () => {
     expect(screen.getByText("Пополните баланс, чтобы повторить запуск.")).toBeInTheDocument();
     expect(screen.getByText("Запрос не был отправлен")).toBeInTheDocument();
     expect(screen.getByText("Подтверждение запуска истекло.")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Повторить" })).toHaveAttribute(
-      "href",
-      "/app/image?model=gpt-image-2&quality=1K&prompt=night+city+after+rain",
-    );
+    expect(screen.getByRole("button", { name: "Повторить" })).toBeEnabled();
+    expect(screen.queryByRole("link", { name: "Повторить" })).not.toBeInTheDocument();
     expect(screen.queryAllByText(ru.files.noReadyArtifact)).toHaveLength(0);
   });
 
@@ -352,5 +379,106 @@ describe("FilesWorkspace", () => {
     resolveRevalidation(Response.json(refreshedPage));
 
     expect(await screen.findByText("refreshed workspace file")).toBeInTheDocument();
+  });
+
+  it("retries only the clicked expired card in place and marks it busy while the mutation is unresolved", async () => {
+    const anotherExpiredJob = {
+      ...expiredPreparationJob,
+      id: "cd343230-4037-4cf7-99f3-af572b9eac96",
+      prompt: "another expired prompt",
+    };
+    let settleRetry: (response: Response) => void = () => {};
+    vi.mocked(webBrowserFetch).mockResolvedValueOnce(Response.json({
+      items: [expiredPreparationJob, anotherExpiredJob],
+      has_more: false,
+      next_cursor: null,
+    }));
+    vi.mocked(webBrowserMutation).mockReturnValueOnce(new Promise<Response>((resolve) => {
+      settleRetry = resolve;
+    }));
+    window.history.replaceState(null, "", "/app/files");
+
+    renderFilesWorkspace();
+
+    const firstCard = (await screen.findByText(expiredPreparationJob.prompt)).closest("article");
+    const secondCard = screen.getByText(anotherExpiredJob.prompt).closest("article");
+    expect(firstCard).not.toBeNull();
+    expect(secondCard).not.toBeNull();
+    const firstRetry = within(firstCard!).getByRole("button", { name: ru.files.retry });
+    fireEvent.click(firstRetry);
+
+    expect(window.location.pathname).toBe("/app/files");
+    expect(screen.queryByRole("link", { name: ru.files.retry })).not.toBeInTheDocument();
+    expect(webBrowserMutation).toHaveBeenCalledWith(`/web/v1/image-jobs/${expiredPreparationJob.id}/retry`, {
+      method: "POST",
+    });
+    expect(firstCard).toHaveAttribute("aria-busy", "true");
+    expect(firstRetry).toBeDisabled();
+    expect(within(firstCard!).getByRole("status", { name: ru.files.retrying })).toBeInTheDocument();
+    expect(secondCard).not.toHaveAttribute("aria-busy", "true");
+    expect(within(secondCard!).getByRole("button", { name: ru.files.retry })).toBeEnabled();
+
+    settleRetry(Response.json({ job: retriedQueuedJob }, { status: 200 }));
+  });
+
+  it("replaces the expired card, polls only the returned retry job, and renders its preview without refetching the list", async () => {
+    const retriedSucceededJob = { ...retriedQueuedJob, status: "succeeded" as const };
+    vi.mocked(webBrowserFetch)
+      .mockResolvedValueOnce(Response.json({ items: [expiredPreparationJob], has_more: false, next_cursor: null }))
+      .mockResolvedValueOnce(Response.json({ job: retriedSucceededJob }))
+      .mockResolvedValueOnce(Response.json(retriedResult));
+    vi.mocked(webBrowserMutation).mockResolvedValueOnce(Response.json({ job: retriedQueuedJob }, { status: 200 }));
+
+    renderFilesWorkspace();
+
+    fireEvent.click(await screen.findByRole("button", { name: ru.files.retry }));
+    const busyCard = (await screen.findByText(retriedQueuedJob.prompt)).closest("article");
+    expect(busyCard).toHaveAttribute("aria-busy", "true");
+
+    const image = await screen.findByRole("img", { name: ru.files.generatedImageAlt }, { timeout: 3000 });
+    expect(webBrowserFetch).toHaveBeenNthCalledWith(1, "/web/v1/image-jobs?limit=12");
+    expect(webBrowserFetch).toHaveBeenNthCalledWith(2, `/web/v1/image-jobs/${retriedQueuedJob.id}`, expect.anything());
+    expect(webBrowserFetch).toHaveBeenNthCalledWith(3, `/web/v1/image-jobs/${retriedQueuedJob.id}/result`);
+    expect(webBrowserFetch).toHaveBeenCalledTimes(3);
+    expect(webBrowserFetch).not.toHaveBeenCalledWith(`/web/v1/image-jobs/${expiredPreparationJob.id}`, expect.anything());
+    expect(image).toHaveAttribute("src", `/web/v1/image-artifacts/${retriedResult.artifacts[0].id}`);
+    expect(image.closest("article")).not.toHaveAttribute("aria-busy", "true");
+  });
+
+  it("replaces the expired card with the returned awaiting-payment retry without redirecting", async () => {
+    const awaitingPaymentRetry = { ...retriedQueuedJob, status: "awaiting_payment" as const };
+    vi.mocked(webBrowserFetch).mockResolvedValueOnce(Response.json({
+      items: [expiredPreparationJob],
+      has_more: false,
+      next_cursor: null,
+    }));
+    vi.mocked(webBrowserMutation).mockResolvedValueOnce(Response.json({ job: awaitingPaymentRetry }, { status: 402 }));
+    window.history.replaceState(null, "", "/app/files");
+
+    renderFilesWorkspace();
+
+    fireEvent.click(await screen.findByRole("button", { name: ru.files.retry }));
+
+    expect(await screen.findByText(ru.files.statusInsufficientTokens)).toBeInTheDocument();
+    expect(screen.getByText(ru.files.insufficientTokensDescription)).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/app/files");
+    expect(webBrowserFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("restores the retry button when the inline retry mutation fails", async () => {
+    vi.mocked(webBrowserFetch).mockResolvedValueOnce(Response.json({
+      items: [expiredPreparationJob],
+      has_more: false,
+      next_cursor: null,
+    }));
+    vi.mocked(webBrowserMutation).mockRejectedValueOnce(new Error("raw backend detail"));
+
+    renderFilesWorkspace();
+
+    fireEvent.click(await screen.findByRole("button", { name: ru.files.retry }));
+
+    expect(await screen.findByRole("button", { name: ru.files.retry })).toBeEnabled();
+    expect(screen.queryByText("raw backend detail")).not.toBeInTheDocument();
+    expect(webBrowserFetch).toHaveBeenCalledTimes(1);
   });
 });

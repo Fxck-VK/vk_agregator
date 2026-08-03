@@ -2,7 +2,6 @@
 
 /* eslint-disable @next/next/no-img-element */
 
-import Link from "next/link";
 import { useEffect, useRef } from "react";
 
 import { Button } from "@/components/ui/Button/Button";
@@ -15,15 +14,16 @@ export type FileResultState = "idle" | "loading" | "error";
 
 type FileCardProps = {
   job: ImageJob;
+  isRetrying: boolean;
+  onRetryJob: (job: ImageJob) => void;
   onRequestResult: (job: ImageJob) => void;
   result: ImageJobResult | null;
   resultState: FileResultState;
 };
 
-export function FileCard({ job, onRequestResult, result, resultState }: Readonly<FileCardProps>) {
+export function FileCard({ isRetrying, job, onRequestResult, onRetryJob, result, resultState }: Readonly<FileCardProps>) {
   const cardRef = useRef<HTMLElement | null>(null);
   const canPreview = job.status === "succeeded";
-  const retryHref = imageRetryHref(job);
 
   useEffect(() => {
     if (!canPreview || result !== null || resultState !== "idle") {
@@ -48,7 +48,7 @@ export function FileCard({ job, onRequestResult, result, resultState }: Readonly
   }, [canPreview, job, onRequestResult, result, resultState]);
 
   return (
-    <article className={styles.card} ref={cardRef}>
+    <article aria-busy={isRetrying || undefined} className={styles.card} ref={cardRef}>
       <div className={styles.preview}>
         {result?.artifacts.map((artifact) => {
           const artifactPath = `/web/v1/image-artifacts/${artifact.id}`;
@@ -82,10 +82,13 @@ export function FileCard({ job, onRequestResult, result, resultState }: Readonly
         {!canPreview && job.status === "expired" ? (
           <div className={styles.jobState}>
             <p>{ru.files.expiredPreparationDescription}</p>
-            <Link className={styles.retryLink} href={retryHref}>{ru.files.retry}</Link>
+            {isRetrying ? <RetrySpinner /> : null}
+            <Button disabled={isRetrying} onClick={() => onRetryJob(job)}>{ru.files.retry}</Button>
           </div>
         ) : null}
-        {!canPreview && job.status !== "awaiting_payment" && job.status !== "expired" ? <p>{ru.files.noReadyArtifact}</p> : null}
+        {!canPreview && job.status !== "awaiting_payment" && job.status !== "expired" ? (
+          isRetrying ? <RetrySpinner /> : <p>{ru.files.noReadyArtifact}</p>
+        ) : null}
       </div>
       <div className={styles.content}>
         <p className={styles.status}>{statusLabel(job.status)}</p>
@@ -112,11 +115,11 @@ function statusLabel(status: ImageJob["status"]): string {
   return ru.files.statusInProgress;
 }
 
-function imageRetryHref(job: ImageJob): string {
-  const searchParams = new URLSearchParams({
-    model: job.model_id,
-    quality: job.image_quality,
-    prompt: job.prompt,
-  });
-  return `/app/image?${searchParams.toString()}`;
+function RetrySpinner() {
+  return (
+    <span aria-label={ru.files.retrying} className={styles.retryState} role="status">
+      <span aria-hidden="true" className={styles.retrySpinner} />
+      {ru.files.retrying}
+    </span>
+  );
 }

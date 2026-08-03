@@ -10,10 +10,16 @@ import { FilesToolbar, type FileStatusFilter } from "@/features/files/FilesToolb
 import { FileTypeTabs, type FileCategory } from "@/features/files/FileTypeTabs/FileTypeTabs";
 import { useWorkspaceDataCache } from "@/features/workspace/WorkspaceDataCache/WorkspaceDataCache";
 import { recordWorkspaceDataLoad } from "@/features/workspace/WorkspaceNavigationMetrics/workspace-navigation-metrics";
+import { isTerminalImageJobStatus, nextImageJobPollDelay } from "@/features/image-generation/ImageJobTracker/image-job-polling";
 import { ru } from "@/i18n/ru";
 import type { ImageJob, ImageJobResult } from "@/lib/web-api/contracts";
 
-import { createImageFilePreviewQueue, fetchImageFilesPage } from "./files-data";
+import {
+  createImageFilePreviewQueue,
+  fetchImageFileJob,
+  fetchImageFilesPage,
+  retryExpiredImageJob,
+} from "./files-data";
 import styles from "./FilesWorkspace.module.css";
 
 function appendDistinctImageJobs(currentJobs: ImageJob[], additionalJobs: ImageJob[]): ImageJob[] {
@@ -29,6 +35,92 @@ function matchesStatusFilter(job: ImageJob, filter: FileStatusFilter): boolean {
     return job.status === "succeeded";
   }
   return job.status !== "succeeded";
+}
+
+function shouldTrackRetryJob(job: ImageJob): boolean {
+  return job.status !== "awaiting_payment" && !isTerminalImageJobStatus(job.status);
+}
+
+type RetryJobPollerProps = {
+  jobID: string;
+  onJobUpdate: (job: ImageJob) => void;
+};
+
+function RetryJobPoller({ jobID, onJobUpdate }: Readonly<RetryJobPollerProps>) {
+  useEffect(() => {
+    let active = true;
+    let attempt = 0;
+    let generation = 0;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let activeRequest: AbortController | undefined;
+
+    const isVisible = () => document.visibilityState !== "hidden";
+    const clearTimer = () => {
+      if (timer !== undefined) {
+        clearTimeout(timer);
+        timer = undefined;
+      }
+    };
+    const invalidateActiveRequest = () => {
+      generation += 1;
+      activeRequest?.abort();
+      activeRequest = undefined;
+    };
+    const schedule = () => {
+      clearTimer();
+      if (!active || !isVisible()) {
+        return;
+      }
+      const delay = nextImageJobPollDelay(attempt);
+      attempt += 1;
+      timer = setTimeout(() => void poll(), delay);
+    };
+    const poll = async () => {
+      if (!active || !isVisible()) {
+        return;
+      }
+
+      const requestGeneration = ++generation;
+      const request = new AbortController();
+      activeRequest = request;
+      try {
+        const updatedJob = await fetchImageFileJob(jobID, request.signal);
+        if (!active || !isVisible() || generation !== requestGeneration) {
+          return;
+        }
+        activeRequest = undefined;
+        onJobUpdate(updatedJob);
+        if (shouldTrackRetryJob(updatedJob)) {
+          schedule();
+        }
+      } catch {
+        if (active && isVisible() && generation === requestGeneration) {
+          activeRequest = undefined;
+          schedule();
+        }
+      }
+    };
+    const onVisibilityChange = () => {
+      if (!isVisible()) {
+        clearTimer();
+        invalidateActiveRequest();
+        return;
+      }
+      attempt = 0;
+      void poll();
+    };
+
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    schedule();
+    return () => {
+      active = false;
+      clearTimer();
+      invalidateActiveRequest();
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [jobID, onJobUpdate]);
+
+  return null;
 }
 
 function isImageCategory(category: FileCategory): category is "all" | "images" {
@@ -62,9 +154,13 @@ export function FilesWorkspace() {
   const [statusFilter, setStatusFilter] = useState<FileStatusFilter>("all");
   const [resultsByJobID, setResultsByJobID] = useState<Record<string, ImageJobResult>>({});
   const [resultStatesByJobID, setResultStatesByJobID] = useState<Record<string, FileResultState>>({});
+  const [retryMutationJobIDs, setRetryMutationJobIDs] = useState<ReadonlySet<string>>(() => new Set());
+  const [trackedRetryJobIDs, setTrackedRetryJobIDs] = useState<ReadonlySet<string>>(() => new Set());
   const listRequestInFlight = useRef(false);
   const hasRecordedCacheHit = useRef(false);
   const imagePreviewQueueRef = useRef<ReturnType<typeof createImageFilePreviewQueue> | null>(null);
+  const retryRequestsInFlightRef = useRef(new Set<string>());
+  const workspaceActiveRef = useRef(true);
   const createPreviewQueue = useCallback(() =>
     createImageFilePreviewQueue({
       onFailure: (job) => {
@@ -124,6 +220,13 @@ export function FilesWorkspace() {
   }, [cache]);
 
   useEffect(() => {
+    workspaceActiveRef.current = true;
+    return () => {
+      workspaceActiveRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
     if (cachedFirstPage === undefined || hasRecordedCacheHit.current) {
       return;
     }
@@ -159,6 +262,57 @@ export function FilesWorkspace() {
     imagePreviewQueueRef.current?.enqueue(job);
   }, [resultsByJobID]);
 
+  const handleTrackedRetryJobUpdate = useCallback((updatedJob: ImageJob) => {
+    setJobs((currentJobs) => currentJobs.map((job) => (job.id === updatedJob.id ? updatedJob : job)));
+    if (!shouldTrackRetryJob(updatedJob)) {
+      setTrackedRetryJobIDs((currentIDs) => {
+        const nextIDs = new Set(currentIDs);
+        nextIDs.delete(updatedJob.id);
+        return nextIDs;
+      });
+    }
+    if (updatedJob.status === "succeeded") {
+      imagePreviewQueueRef.current?.enqueue(updatedJob);
+    }
+  }, []);
+
+  const retryJob = useCallback(async (expiredJob: ImageJob) => {
+    if (expiredJob.status !== "expired" || retryRequestsInFlightRef.current.has(expiredJob.id)) {
+      return;
+    }
+
+    retryRequestsInFlightRef.current.add(expiredJob.id);
+    setRetryMutationJobIDs((currentIDs) => new Set(currentIDs).add(expiredJob.id));
+    try {
+      const retriedJob = await retryExpiredImageJob(expiredJob.id);
+      if (!workspaceActiveRef.current) {
+        return;
+      }
+      setJobs((currentJobs) => currentJobs.map((job) => (job.id === expiredJob.id ? retriedJob : job)));
+      if (shouldTrackRetryJob(retriedJob)) {
+        setTrackedRetryJobIDs((currentIDs) => new Set(currentIDs).add(retriedJob.id));
+      } else if (retriedJob.status === "succeeded") {
+        imagePreviewQueueRef.current?.enqueue(retriedJob);
+      }
+    } catch {
+      // The expired card remains retryable; transport and server details stay private.
+    } finally {
+      retryRequestsInFlightRef.current.delete(expiredJob.id);
+      if (workspaceActiveRef.current) {
+        setRetryMutationJobIDs((currentIDs) => {
+          const nextIDs = new Set(currentIDs);
+          nextIDs.delete(expiredJob.id);
+          return nextIDs;
+        });
+      }
+    }
+  }, []);
+
+  const busyRetryJobIDs = useMemo(() => new Set([
+    ...retryMutationJobIDs,
+    ...trackedRetryJobIDs,
+  ]), [retryMutationJobIDs, trackedRetryJobIDs]);
+
   const visibleJobs = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase();
     return jobs.filter((job) => {
@@ -179,6 +333,9 @@ export function FilesWorkspace() {
 
   return (
     <section aria-labelledby="files-title" className={styles.workspace}>
+      {[...trackedRetryJobIDs].map((jobID) => (
+        <RetryJobPoller jobID={jobID} key={jobID} onJobUpdate={handleTrackedRetryJobUpdate} />
+      ))}
       <header className={styles.header}>
         <h1 id="files-title">{ru.files.title}</h1>
       </header>
@@ -228,8 +385,10 @@ export function FilesWorkspace() {
           <FilesGrid
             jobs={visibleJobs}
             onRequestResult={requestResult}
+            onRetryJob={(job) => void retryJob(job)}
             resultsByJobID={resultsByJobID}
             resultStatesByJobID={resultStatesByJobID}
+            retryingJobIDs={busyRetryJobIDs}
           />
         ) : null}
 
