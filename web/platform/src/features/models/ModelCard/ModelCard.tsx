@@ -29,7 +29,7 @@ export function ModelCard({ model }: ModelCardProps) {
           ? ru.modelsCatalog.referenceSupportedLabel
           : ru.modelsCatalog.referenceUnsupportedLabel}
       </p>
-      {minimumPrice !== null ? <p>{`От ${minimumPrice} ★`}</p> : null}
+      {minimumPrice !== null ? <p className={styles.price}>{ru.modelsCatalog.priceFrom(minimumPrice)}</p> : null}
       <Link
         aria-label={`${ru.modelsCatalog.openGeneratorLabel}: ${model.name}`}
         href={`/app/image?model=${encodeURIComponent(model.id)}`}
