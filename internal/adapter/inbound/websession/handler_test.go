@@ -182,6 +182,55 @@ func TestMeRejectsBearerAndQueryIdentityWithoutAccessCookie(t *testing.T) {
 	}
 }
 
+func TestWebBalanceUsesCookiePrincipalAndIsNotCached(t *testing.T) {
+	h, _, sessions := newTestHandler(t)
+	accountID := uuid.New()
+	balance := &balanceSpy{balance: 104}
+	h.deps.ImageBalance = balance
+
+	req := authenticatedConversationRequest(t, http.MethodGet, "/web/v1/balance", sessions, accountID)
+	req.Header.Set("X-Account-ID", uuid.NewString())
+	rec := httptest.NewRecorder()
+
+	h.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if got := rec.Header().Get("Cache-Control"); got != "no-store" {
+		t.Fatalf("Cache-Control = %q, want no-store", got)
+	}
+	if balance.lastAccountID != accountID {
+		t.Fatalf("balance account = %s, want cookie principal %s", balance.lastAccountID, accountID)
+	}
+	var response map[string]json.RawMessage
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode balance response: %v", err)
+	}
+	if len(response) != 1 || response["balance"] == nil {
+		t.Fatalf("response fields = %v, want only balance", response)
+	}
+	var gotBalance int64
+	if err := json.Unmarshal(response["balance"], &gotBalance); err != nil {
+		t.Fatalf("decode balance: %v", err)
+	}
+	if gotBalance != 104 {
+		t.Fatalf("balance = %d, want 104", gotBalance)
+	}
+}
+
+func TestWebBalanceRequiresAccessCookie(t *testing.T) {
+	h, _, _ := newTestHandler(t)
+	h.deps.ImageBalance = &balanceSpy{balance: 104}
+	rec := httptest.NewRecorder()
+
+	h.Routes().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/web/v1/balance", nil))
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401", rec.Code)
+	}
+}
+
 func TestConversationListRequiresAccessCookie(t *testing.T) {
 	h, _, _ := newTestHandler(t)
 	req := httptest.NewRequest(http.MethodGet, "/web/v1/conversations", nil)
@@ -847,6 +896,17 @@ type profileStub struct{ lastAccountID uuid.UUID }
 func (s *profileStub) Profile(_ context.Context, accountID uuid.UUID) (accountservice.AccountProfile, error) {
 	s.lastAccountID = accountID
 	return accountservice.AccountProfile{AccountID: accountID}, nil
+}
+
+type balanceSpy struct {
+	balance       int64
+	lastAccountID uuid.UUID
+	err           error
+}
+
+func (s *balanceSpy) BalanceForEstimate(_ context.Context, accountID uuid.UUID) (int64, error) {
+	s.lastAccountID = accountID
+	return s.balance, s.err
 }
 
 type sessionStub struct {

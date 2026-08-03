@@ -21,6 +21,14 @@ export const accountProfileSchema = z
 
 export type AccountProfile = z.infer<typeof accountProfileSchema>;
 
+export const accountBalanceSchema = z
+  .object({
+    balance: z.number().int().nonnegative(),
+  })
+  .strict();
+
+export type AccountBalance = z.infer<typeof accountBalanceSchema>;
+
 export const conversationItemSchema = z
   .object({
     id: z.string().uuid(),
@@ -64,6 +72,7 @@ export const imageModelSchema = z
     id: z.string().trim().min(1),
     name: z.string().trim().min(1),
     quality_options: z.array(z.string().trim().min(1)),
+    price_by_quality: z.record(z.string().trim().min(1), z.number().int().positive()).optional(),
     default_quality: z.string().trim().min(1),
     supports_reference_image: z.boolean(),
     max_reference_images: z.number().int().nonnegative(),
@@ -201,6 +210,10 @@ export type PublicApiError = z.infer<typeof publicApiErrorSchema>;
 
 export function parseAccountProfile(payload: unknown): AccountProfile {
   return accountProfileSchema.parse(payload);
+}
+
+export function parseAccountBalance(payload: unknown): AccountBalance {
+  return accountBalanceSchema.parse(payload);
 }
 
 export function parseConversationList(payload: unknown): ConversationList {

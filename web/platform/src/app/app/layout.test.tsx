@@ -39,6 +39,7 @@ const authenticatedSession = {
       },
     ],
   },
+  balance: 104,
   conversations: [
     {
       id: "a2a006fc-4457-4bb5-bc4d-4f553d51766b",

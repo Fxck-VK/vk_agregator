@@ -5,6 +5,7 @@ import { useState, useSyncExternalStore } from "react";
 
 import { AppShell } from "@/components/layout/AppShell/AppShell";
 import { Sidebar } from "@/components/layout/Sidebar/Sidebar";
+import { WorkspaceHeader } from "@/components/layout/WorkspaceHeader/WorkspaceHeader";
 import { SidebarConversations } from "@/features/conversations/SidebarConversations/SidebarConversations";
 import { WorkspaceConversationListProvider } from "@/features/conversations/WorkspaceConversationList/WorkspaceConversationList";
 import type { ConversationItem } from "@/lib/web-api/contracts";
@@ -25,11 +26,12 @@ function getDesktopSidebarPreference() {
 type WorkspaceFrameProps = {
   account?: ReactNode;
   accountId: string;
+  balance?: number | null;
   children: ReactNode;
   conversations: ConversationItem[];
 };
 
-export function WorkspaceFrame({ account, accountId, children, conversations }: WorkspaceFrameProps) {
+export function WorkspaceFrame({ account, accountId, balance = null, children, conversations }: WorkspaceFrameProps) {
   const restoredDesktopSidebarCollapsed = useSyncExternalStore(
     subscribeToDesktopSidebarPreference,
     getDesktopSidebarPreference,
@@ -52,6 +54,7 @@ export function WorkspaceFrame({ account, accountId, children, conversations }: 
   return (
     <WorkspaceConversationListProvider accountId={accountId} initialConversations={conversations} key={accountId}>
       <AppShell
+        header={<WorkspaceHeader balance={balance} />}
         isDesktopSidebarCollapsed={isDesktopSidebarCollapsed}
         sidebar={
           <Sidebar

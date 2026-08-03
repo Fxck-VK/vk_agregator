@@ -342,6 +342,7 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("POST /web/v1/auth/refresh", h.refresh)
 	mux.HandleFunc("POST /web/v1/auth/logout", h.logout)
 	mux.HandleFunc("GET /web/v1/me", h.requirePrincipal(h.me))
+	mux.HandleFunc("GET /web/v1/balance", h.requirePrincipal(h.balance))
 	mux.HandleFunc("GET /web/v1/conversations", h.requirePrincipal(h.listConversations))
 	mux.HandleFunc("GET /web/v1/conversations/{conversationID}", h.requirePrincipal(h.getConversation))
 	mux.HandleFunc("GET /web/v1/conversations/{conversationID}/messages", h.requirePrincipal(h.listConversationMessages))
@@ -490,15 +491,35 @@ func (h *Handler) me(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, profile)
 }
 
+func (h *Handler) balance(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	if h.deps.ImageBalance == nil {
+		writeError(w, http.StatusServiceUnavailable, "balance unavailable")
+		return
+	}
+	principal, ok := PrincipalFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	balance, err := h.deps.ImageBalance.BalanceForEstimate(r.Context(), principal.AccountID)
+	if err != nil {
+		writeError(w, http.StatusServiceUnavailable, "balance unavailable")
+		return
+	}
+	writeJSON(w, http.StatusOK, safeBalance{Balance: balance})
+}
+
 func (h *Handler) listImageModels(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	if h.deps.ImagePricing == nil || len(h.cfg.ImageModels) == 0 {
 		writeError(w, http.StatusServiceUnavailable, "image generation unavailable")
 		return
 	}
+	resolver := imagegeneration.NewResolver(h.cfg.ImageModels, h.deps.ImagePricing)
 	items := make([]safeImageModel, 0, len(h.cfg.ImageModels))
 	for _, model := range h.cfg.ImageModels {
-		safeModel, ok := newSafeImageModel(model)
+		safeModel, ok := newSafeImageModel(model, resolver)
 		if !ok {
 			continue
 		}
@@ -1652,6 +1673,10 @@ type safeSessionResponse struct {
 	Session accountauth.AccountSessionSafe `json:"session"`
 }
 
+type safeBalance struct {
+	Balance int64 `json:"balance"`
+}
+
 type safeConversationList struct {
 	Items []safeConversation `json:"items"`
 }
@@ -1696,12 +1721,13 @@ type safeImageModelList struct {
 }
 
 type safeImageModel struct {
-	ID                     string   `json:"id"`
-	Name                   string   `json:"name"`
-	QualityOptions         []string `json:"quality_options"`
-	DefaultQuality         string   `json:"default_quality"`
-	SupportsReferenceImage bool     `json:"supports_reference_image"`
-	MaxReferenceImages     int      `json:"max_reference_images"`
+	ID                     string           `json:"id"`
+	Name                   string           `json:"name"`
+	QualityOptions         []string         `json:"quality_options"`
+	PriceByQuality         map[string]int64 `json:"price_by_quality"`
+	DefaultQuality         string           `json:"default_quality"`
+	SupportsReferenceImage bool             `json:"supports_reference_image"`
+	MaxReferenceImages     int              `json:"max_reference_images"`
 }
 
 // webImageJobParams is stored with the job for the worker. It is deliberately
@@ -1782,17 +1808,41 @@ func newSafeConversationMessage(message domain.ConversationMessage) (safeConvers
 	}, true
 }
 
-func newSafeImageModel(model imagegeneration.PublicModel) (safeImageModel, bool) {
+func newSafeImageModel(model imagegeneration.PublicModel, resolver imagegeneration.Resolver) (safeImageModel, bool) {
 	model.ID = strings.TrimSpace(model.ID)
 	model.Name = strings.TrimSpace(model.Name)
 	if model.ID == "" || model.Name == "" || !model.Enabled || !model.Ready {
 		return safeImageModel{}, false
 	}
+	qualityOptions := make([]string, 0, len(model.QualityOptions))
+	priceByQuality := make(map[string]int64, len(model.QualityOptions))
+	for _, requestedQuality := range model.QualityOptions {
+		resolution, err := resolver.Resolve(imagegeneration.Request{ModelID: model.ID, Quality: requestedQuality})
+		if err != nil || resolution.PricingSnapshot.InternalCredits <= 0 {
+			continue
+		}
+		quality := resolution.Public.ImageQuality
+		if _, alreadyIncluded := priceByQuality[quality]; alreadyIncluded {
+			continue
+		}
+		qualityOptions = append(qualityOptions, quality)
+		priceByQuality[quality] = resolution.PricingSnapshot.InternalCredits
+	}
+	if len(qualityOptions) == 0 {
+		return safeImageModel{}, false
+	}
+	defaultQuality := qualityOptions[0]
+	if resolution, err := resolver.Resolve(imagegeneration.Request{ModelID: model.ID, Quality: model.DefaultQuality}); err == nil {
+		if _, priced := priceByQuality[resolution.Public.ImageQuality]; priced {
+			defaultQuality = resolution.Public.ImageQuality
+		}
+	}
 	return safeImageModel{
 		ID:                     model.ID,
 		Name:                   model.Name,
-		QualityOptions:         append([]string(nil), model.QualityOptions...),
-		DefaultQuality:         model.DefaultQuality,
+		QualityOptions:         qualityOptions,
+		PriceByQuality:         priceByQuality,
+		DefaultQuality:         defaultQuality,
 		SupportsReferenceImage: model.SupportsReferenceImage,
 		MaxReferenceImages:     model.MaxReferenceImages,
 	}, true

@@ -31,6 +31,8 @@ const conversations = {
   ],
 };
 
+const balance = { balance: 104 };
+
 describe("loadWorkspaceSession", () => {
   beforeEach(() => {
     vi.mocked(cookies).mockResolvedValue({ has: vi.fn(() => false) } as never);
@@ -82,17 +84,34 @@ describe("loadWorkspaceSession", () => {
     await expect(loadWorkspaceSession()).resolves.toEqual({ kind: "unavailable" });
   });
 
-  it("returns parsed profile and conversations after two successful responses", async () => {
+  it("returns parsed profile, conversations, and the independently scoped balance", async () => {
     vi.mocked(webServerFetch)
       .mockResolvedValueOnce(Response.json(profile))
-      .mockResolvedValueOnce(Response.json(conversations));
+      .mockResolvedValueOnce(Response.json(conversations))
+      .mockResolvedValueOnce(Response.json(balance));
 
     await expect(loadWorkspaceSession()).resolves.toEqual({
       kind: "authenticated",
       profile,
       conversations: conversations.items,
+      balance: 104,
     });
     expect(webServerFetch).toHaveBeenNthCalledWith(1, "/web/v1/me");
     expect(webServerFetch).toHaveBeenNthCalledWith(2, "/web/v1/conversations?limit=20");
+    expect(webServerFetch).toHaveBeenNthCalledWith(3, "/web/v1/balance");
+  });
+
+  it("keeps the workspace available without inventing a zero balance when the balance response is unavailable", async () => {
+    vi.mocked(webServerFetch)
+      .mockResolvedValueOnce(Response.json(profile))
+      .mockResolvedValueOnce(Response.json(conversations))
+      .mockResolvedValueOnce(new Response(null, { status: 503 }));
+
+    await expect(loadWorkspaceSession()).resolves.toEqual({
+      kind: "authenticated",
+      profile,
+      conversations: conversations.items,
+      balance: null,
+    });
   });
 });

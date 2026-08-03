@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -374,12 +375,13 @@ func TestWebImageModelsReturnsOnlyServerSafeCatalog(t *testing.T) {
 	}
 	var response struct {
 		Items []struct {
-			ID                     string   `json:"id"`
-			Name                   string   `json:"name"`
-			QualityOptions         []string `json:"quality_options"`
-			DefaultQuality         string   `json:"default_quality"`
-			SupportsReferenceImage bool     `json:"supports_reference_image"`
-			MaxReferenceImages     int      `json:"max_reference_images"`
+			ID                     string           `json:"id"`
+			Name                   string           `json:"name"`
+			QualityOptions         []string         `json:"quality_options"`
+			PriceByQuality         map[string]int64 `json:"price_by_quality"`
+			DefaultQuality         string           `json:"default_quality"`
+			SupportsReferenceImage bool             `json:"supports_reference_image"`
+			MaxReferenceImages     int              `json:"max_reference_images"`
 		} `json:"items"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
@@ -391,8 +393,83 @@ func TestWebImageModelsReturnsOnlyServerSafeCatalog(t *testing.T) {
 	if response.Items[0].MaxReferenceImages != 4 || !response.Items[0].SupportsReferenceImage {
 		t.Fatalf("reference support = %+v", response.Items[0])
 	}
+	if got := response.Items[0].PriceByQuality; !reflect.DeepEqual(got, map[string]int64{
+		modelcatalog.ImageQuality1K: 50,
+		modelcatalog.ImageQuality2K: 60,
+		modelcatalog.ImageQuality4K: 70,
+	}) {
+		t.Fatalf("price_by_quality = %+v, want exact public price for each displayed quality", got)
+	}
 	if bytes.Contains(bytes.ToLower(rec.Body.Bytes()), []byte("provider")) || bytes.Contains(bytes.ToLower(rec.Body.Bytes()), []byte("model_code")) || bytes.Contains(bytes.ToLower(rec.Body.Bytes()), []byte("estimate_credits")) {
 		t.Fatalf("catalog leaked private routing or mutable price: %s", rec.Body.String())
+	}
+}
+
+func TestWebImageModelsHideUnpricedQualitiesAndModels(t *testing.T) {
+	h, _, sessions := newImageJobTestHandler(t)
+	h.cfg.ImageModels = []imagegeneration.PublicModel{
+		{
+			ID:             modelcatalog.MiniAppImageNanoBanana2,
+			Name:           "Nano Banana 2",
+			Enabled:        true,
+			Ready:          true,
+			QualityOptions: []string{modelcatalog.ImageQuality1K, modelcatalog.ImageQuality2K},
+			DefaultQuality: modelcatalog.ImageQuality1K,
+		},
+		{
+			ID:             modelcatalog.MiniAppImageGPTImage2,
+			Name:           "GPT Image 2",
+			Enabled:        true,
+			Ready:          true,
+			QualityOptions: []string{modelcatalog.ImageQuality1K},
+			DefaultQuality: modelcatalog.ImageQuality1K,
+		},
+	}
+	h.deps.ImagePricing = imagePricingCatalogFilter{
+		delegate: h.deps.ImagePricing,
+		unavailable: map[pricingcatalog.ProductKey]bool{
+			{
+				Operation:    domain.OperationImageGenerate,
+				Modality:     domain.ModalityImage,
+				ImageModelID: modelcatalog.MiniAppImageNanoBanana2,
+				Quality:      modelcatalog.ImageQuality1K,
+			}: true,
+			{
+				Operation:    domain.OperationImageGenerate,
+				Modality:     domain.ModalityImage,
+				ImageModelID: modelcatalog.MiniAppImageGPTImage2,
+				Quality:      modelcatalog.ImageQuality1K,
+			}: true,
+		},
+	}
+	req := authenticatedConversationRequest(t, http.MethodGet, "/web/v1/image-models", sessions, uuid.New())
+	rec := httptest.NewRecorder()
+
+	h.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	var response struct {
+		Items []struct {
+			ID             string           `json:"id"`
+			QualityOptions []string         `json:"quality_options"`
+			PriceByQuality map[string]int64 `json:"price_by_quality"`
+			DefaultQuality string           `json:"default_quality"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode catalog: %v", err)
+	}
+	if len(response.Items) != 1 {
+		t.Fatalf("catalog items = %+v, want only the model with a priced quality", response.Items)
+	}
+	item := response.Items[0]
+	if item.ID != modelcatalog.MiniAppImageNanoBanana2 || !reflect.DeepEqual(item.QualityOptions, []string{modelcatalog.ImageQuality2K}) || item.DefaultQuality != modelcatalog.ImageQuality2K {
+		t.Fatalf("priced catalog model = %+v, want Nano Banana 2 with only its priced default quality", item)
+	}
+	if !reflect.DeepEqual(item.PriceByQuality, map[string]int64{modelcatalog.ImageQuality2K: 60}) {
+		t.Fatalf("price_by_quality = %+v, want only the available exact price", item.PriceByQuality)
 	}
 }
 
@@ -1074,6 +1151,18 @@ type imagePricingSnapshotStub struct {
 	snapshot pricingcatalog.PricingSnapshot
 	calls    int
 	err      error
+}
+
+type imagePricingCatalogFilter struct {
+	delegate    imagegeneration.SnapshotCatalog
+	unavailable map[pricingcatalog.ProductKey]bool
+}
+
+func (s imagePricingCatalogFilter) Snapshot(key pricingcatalog.ProductKey) (pricingcatalog.PricingSnapshot, error) {
+	if s.unavailable[key.Normalize()] {
+		return pricingcatalog.PricingSnapshot{}, errors.New("price unavailable")
+	}
+	return s.delegate.Snapshot(key)
 }
 
 func (s *imagePricingSnapshotStub) Snapshot(pricingcatalog.ProductKey) (pricingcatalog.PricingSnapshot, error) {

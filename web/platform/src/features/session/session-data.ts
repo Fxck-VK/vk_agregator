@@ -3,6 +3,7 @@ import "server-only";
 import { cookies } from "next/headers";
 
 import {
+  parseAccountBalance,
   parseAccountProfile,
   parseConversationList,
   type AccountProfile,
@@ -11,7 +12,7 @@ import {
 import { webServerFetch } from "../../lib/web-api/server";
 
 export type WorkspaceSession =
-  | { kind: "authenticated"; profile: AccountProfile; conversations: ConversationItem[] }
+  | { kind: "authenticated"; profile: AccountProfile; conversations: ConversationItem[]; balance: number | null }
   | { kind: "unauthenticated" }
   | { kind: "refresh_required" }
   | { kind: "unavailable" };
@@ -31,12 +32,23 @@ export async function loadWorkspaceSession(): Promise<WorkspaceSession> {
     }
     const profile = parseAccountProfile(await profileResponse.json());
 
-    const conversationsResponse = await webServerFetch("/web/v1/conversations?limit=20");
+    const [conversationsResponse, balanceResponse] = await Promise.all([
+      webServerFetch("/web/v1/conversations?limit=20"),
+      webServerFetch("/web/v1/balance"),
+    ]);
     if (conversationsResponse.status !== 200) {
       return { kind: "unavailable" };
     }
     const conversations = parseConversationList(await conversationsResponse.json());
-    return { kind: "authenticated", profile, conversations: conversations.items };
+    let balance: number | null = null;
+    if (balanceResponse.status === 200) {
+      try {
+        balance = parseAccountBalance(await balanceResponse.json()).balance;
+      } catch {
+        // The workspace remains usable; the header must not invent a balance if a safe response cannot be parsed.
+      }
+    }
+    return { kind: "authenticated", profile, conversations: conversations.items, balance };
   } catch {
     return { kind: "unavailable" };
   }

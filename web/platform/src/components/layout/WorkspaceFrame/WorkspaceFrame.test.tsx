@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { usePathname } from "next/navigation";
 import { hydrateRoot } from "react-dom/client";
 import { renderToString } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -142,5 +143,40 @@ describe("WorkspaceFrame", () => {
     );
 
     expect(screen.getByRole("status")).toHaveTextContent(workspaceConversation.title);
+  });
+
+  it.each([
+    ["/app", ru.navigation.workspace],
+    ["/app/chat/f9712bca-8d98-448d-b595-2a80bc9c2b1a", ru.navigation.workspace],
+    ["/app/chats", ru.navigation.chats],
+    ["/app/files", ru.navigation.files],
+    ["/app/models", ru.navigation.models],
+    ["/app/inspiration", ru.navigation.inspiration],
+    ["/app/image", ru.navigation.workspace],
+  ])("keeps the persistent header route-based for %s", (pathname, expectedTitle) => {
+    vi.mocked(usePathname).mockReturnValue(pathname);
+    mockWideViewport();
+
+    render(
+      <WorkspaceFrame {...workspaceProps} balance={42}>
+        Workspace
+      </WorkspaceFrame>,
+    );
+
+    const header = screen.getByTestId("workspace-header");
+    expect(header).toHaveTextContent(expectedTitle);
+    expect(header).toHaveTextContent("42 ★");
+    expect(screen.queryByRole("button", { name: "Выбрать тариф" })).toBeNull();
+  });
+
+  it("shows a neutral balance state instead of a made-up zero while the value is unavailable", () => {
+    vi.mocked(usePathname).mockReturnValue("/app");
+    mockWideViewport();
+
+    render(<WorkspaceFrame {...workspaceProps}>Workspace</WorkspaceFrame>);
+
+    expect(screen.getByTestId("workspace-balance")).toHaveAttribute("aria-busy", "true");
+    expect(screen.getByTestId("workspace-balance")).toHaveAttribute("aria-label", "Загружаем баланс…");
+    expect(screen.getByTestId("workspace-balance")).not.toHaveTextContent("0");
   });
 });

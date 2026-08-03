@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   parseAccountProfile,
+  parseAccountBalance,
   parseConversationList,
   parseImageJobPreparation,
   parseImageJobList,
@@ -51,6 +52,13 @@ describe("AccountProfile contract", () => {
   });
 });
 
+describe("Account balance contract", () => {
+  it("accepts only an account-scoped credit balance", () => {
+    expect(parseAccountBalance({ balance: 104 })).toEqual({ balance: 104 });
+    expect(() => parseAccountBalance({ balance: 104, account_id: "private" })).toThrow();
+  });
+});
+
 describe("public API error contract", () => {
   it("trims the backend's public error text", () => {
     expect(publicApiErrorSchema.parse({ error: " unauthorized " })).toEqual({
@@ -81,6 +89,7 @@ describe("Image generation contracts", () => {
     id: "nano-banana-2",
     name: "Nano Banana 2",
     quality_options: ["1K", "2K"],
+    price_by_quality: { "1K": 16, "2K": 60 },
     default_quality: "1K",
     supports_reference_image: true,
     max_reference_images: 4,
@@ -111,6 +120,12 @@ describe("Image generation contracts", () => {
       balance: 104,
       can_afford: true,
     });
+  });
+
+  it("accepts only positive public prices for a model quality", () => {
+    expect(() => parseImageModelList({
+      items: [{ ...imageModel, price_by_quality: { "1K": 0 } }],
+    })).toThrow();
   });
 
   it.each(["provider", "model_code", "pricing_snapshot", "storage_key"])(

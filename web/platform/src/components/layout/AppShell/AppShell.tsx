@@ -6,11 +6,12 @@ import styles from "./AppShell.module.css";
 
 type AppShellProps = {
   sidebar: ReactNode;
+  header?: ReactNode;
   children: ReactNode;
   isDesktopSidebarCollapsed?: boolean;
 };
 
-export function AppShell({ sidebar, children, isDesktopSidebarCollapsed = false }: AppShellProps) {
+export function AppShell({ sidebar, header, children, isDesktopSidebarCollapsed = false }: AppShellProps) {
   return (
     <div
       className={styles.shell}
@@ -25,6 +26,7 @@ export function AppShell({ sidebar, children, isDesktopSidebarCollapsed = false 
         {sidebar}
       </aside>
       <main className={styles.workspace} data-testid="workspace-scroll-region" tabIndex={-1}>
+        {header}
         {children}
       </main>
     </div>

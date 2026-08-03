@@ -50,7 +50,12 @@ export function ImageGenerationPanel({ onJobChange }: Readonly<ImageGenerationPa
   const [error, setError] = useState<"load" | "noModels" | "prepare" | "activation" | "insufficient" | null>(null);
 
   const selectedModel = useMemo(() => models.find((model) => model.id === modelID) ?? null, [modelID, models]);
-  const canPrepare = stage === "editor" && prompt.trim() !== "" && selectedModel !== null && imageQuality !== "";
+  const selectedPrice = selectedModel?.price_by_quality?.[imageQuality] ?? null;
+  const canPrepare = stage === "editor"
+    && prompt.trim() !== ""
+    && selectedModel !== null
+    && imageQuality !== ""
+    && selectedPrice !== null;
 
   useEffect(() => {
     let active = true;
@@ -259,6 +264,7 @@ export function ImageGenerationPanel({ onJobChange }: Readonly<ImageGenerationPa
           onModelChange={selectModel}
           onPromptChange={changePrompt}
           onSubmit={() => void prepareImage()}
+          price={selectedPrice}
           prompt={prompt}
         />
       ) : null}

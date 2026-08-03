@@ -16,6 +16,7 @@ vi.mock("@/features/models/image-model-catalog-cache", () => ({
 
 import { ru } from "@/i18n/ru";
 import { webBrowserFetch, webBrowserMutation } from "@/lib/web-api/browser";
+import type { ImageModelList } from "@/lib/web-api/contracts";
 import { useSearchParams } from "next/navigation";
 
 import { loadImageModelCatalog } from "@/features/models/image-model-catalog-cache";
@@ -34,12 +35,13 @@ const job = {
   updated_at: "2026-08-01T12:00:00Z",
 };
 
-const modelsResponse = {
+const modelsResponse: ImageModelList = {
   items: [
     {
       id: "nano-banana-2",
       name: "Nano Banana 2",
       quality_options: ["1K", "2K"],
+      price_by_quality: { "1K": 16, "2K": 60 },
       default_quality: "1K",
       supports_reference_image: true,
       max_reference_images: 4,
@@ -47,12 +49,13 @@ const modelsResponse = {
   ],
 };
 
-const multipleModelsResponse = {
+const multipleModelsResponse: ImageModelList = {
   items: [
     {
       id: "first-model",
       name: "First model",
       quality_options: ["1K", "2K"],
+      price_by_quality: { "1K": 12, "2K": 24 },
       default_quality: "1K",
       supports_reference_image: false,
       max_reference_images: 0,
@@ -61,6 +64,7 @@ const multipleModelsResponse = {
       id: "nano-banana-2",
       name: "Nano Banana 2",
       quality_options: ["2K", "4K"],
+      price_by_quality: { "2K": 60, "4K": 120 },
       default_quality: "2K",
       supports_reference_image: true,
       max_reference_images: 4,
@@ -72,6 +76,10 @@ function renderReadyEditor() {
   vi.mocked(loadImageModelCatalog).mockResolvedValueOnce(modelsResponse);
   render(<ImageGenerationPanel />);
   return screen.findByRole("textbox", { name: ru.imageGeneration.promptLabel });
+}
+
+function getGenerateButton() {
+  return screen.getByRole("button", { name: new RegExp(`^${ru.imageGeneration.generate}`) });
 }
 
 describe("ImageGenerationPanel", () => {
@@ -95,6 +103,34 @@ describe("ImageGenerationPanel", () => {
 
     expect(await screen.findByRole("combobox", { name: ru.imageGeneration.modelLabel })).toHaveValue("nano-banana-2");
     expect(loadImageModelCatalog).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows the selected model and quality price immediately without preparing a job", async () => {
+    vi.mocked(loadImageModelCatalog).mockResolvedValueOnce(modelsResponse);
+    render(<ImageGenerationPanel />);
+
+    await screen.findByRole("combobox", { name: ru.imageGeneration.modelLabel });
+    expect(screen.getByText(`${ru.imageGeneration.priceLabel}: 16 \u2605`)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: `${ru.imageGeneration.generate} \u00b7 16 \u2605` })).toBeDisabled();
+    expect(webBrowserMutation).not.toHaveBeenCalled();
+  });
+
+  it("updates the preview price for a model or quality change but not for a prompt edit", async () => {
+    vi.mocked(loadImageModelCatalog).mockResolvedValueOnce(multipleModelsResponse);
+    render(<ImageGenerationPanel />);
+
+    await screen.findByRole("combobox", { name: ru.imageGeneration.modelLabel });
+    expect(screen.getByText(`${ru.imageGeneration.priceLabel}: 12 \u2605`)).toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole("combobox", { name: ru.imageGeneration.qualityLabel }), { target: { value: "2K" } });
+    expect(screen.getByText(`${ru.imageGeneration.priceLabel}: 24 \u2605`)).toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole("combobox", { name: ru.imageGeneration.modelLabel }), { target: { value: "nano-banana-2" } });
+    expect(screen.getByText(`${ru.imageGeneration.priceLabel}: 60 \u2605`)).toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole("textbox", { name: ru.imageGeneration.promptLabel }), { target: { value: "new prompt" } });
+    expect(screen.getByText(`${ru.imageGeneration.priceLabel}: 60 \u2605`)).toBeInTheDocument();
+    expect(webBrowserMutation).not.toHaveBeenCalled();
   });
 
   it("selects a known requested model when the direct editor loads", async () => {
@@ -125,7 +161,7 @@ describe("ImageGenerationPanel", () => {
     fireEvent.change(screen.getByRole("combobox", { name: ru.imageGeneration.qualityLabel }), {
       target: { value: "2K" },
     });
-    fireEvent.click(screen.getByRole("button", { name: ru.imageGeneration.prepare }));
+    fireEvent.click(screen.getByRole("button", { name: `${ru.imageGeneration.generate} \u00b7 60 \u2605` }));
 
     await screen.findByRole("heading", { name: ru.imageGeneration.confirmationTitle });
     expect(webBrowserMutation).toHaveBeenCalledWith("/web/v1/image-jobs/prepare", {
@@ -152,7 +188,7 @@ describe("ImageGenerationPanel", () => {
       .mockResolvedValueOnce(Response.json({ job: { ...job, status: "awaiting_payment" } }, { status: 402 }));
 
     fireEvent.change(promptInput, { target: { value: job.prompt } });
-    fireEvent.click(screen.getByRole("button", { name: ru.imageGeneration.prepare }));
+    fireEvent.click(getGenerateButton());
     await screen.findByRole("heading", { name: ru.imageGeneration.confirmationTitle });
     fireEvent.click(screen.getByRole("button", { name: new RegExp(ru.imageGeneration.confirm) }));
 
@@ -171,9 +207,9 @@ describe("ImageGenerationPanel", () => {
       .mockResolvedValueOnce(Response.json({ job, balance: 104, can_afford: true }, { status: 201 }));
 
     fireEvent.change(promptInput, { target: { value: job.prompt } });
-    fireEvent.click(screen.getByRole("button", { name: ru.imageGeneration.prepare }));
+    fireEvent.click(getGenerateButton());
     await screen.findByRole("alert");
-    fireEvent.click(screen.getByRole("button", { name: ru.imageGeneration.prepare }));
+    fireEvent.click(getGenerateButton());
 
     await screen.findByRole("heading", { name: ru.imageGeneration.confirmationTitle });
     expect(webBrowserMutation).toHaveBeenNthCalledWith(1, "/web/v1/image-jobs/prepare", expect.objectContaining({
@@ -191,9 +227,9 @@ describe("ImageGenerationPanel", () => {
       .mockResolvedValueOnce(Response.json({ job, balance: 104, can_afford: true }, { status: 201 }));
 
     fireEvent.change(promptInput, { target: { value: job.prompt } });
-    fireEvent.click(screen.getByRole("button", { name: ru.imageGeneration.prepare }));
+    fireEvent.click(getGenerateButton());
     await screen.findByRole("alert");
-    fireEvent.click(screen.getByRole("button", { name: ru.imageGeneration.prepare }));
+    fireEvent.click(getGenerateButton());
 
     await screen.findByRole("heading", { name: ru.imageGeneration.confirmationTitle });
     expect(webBrowserMutation).toHaveBeenNthCalledWith(1, "/web/v1/image-jobs/prepare", expect.objectContaining({
@@ -215,12 +251,12 @@ describe("ImageGenerationPanel", () => {
       .mockResolvedValueOnce(Response.json({ job, balance: 104, can_afford: true }, { status: 201 }));
 
     fireEvent.change(promptInput, { target: { value: job.prompt } });
-    fireEvent.click(screen.getByRole("button", { name: ru.imageGeneration.prepare }));
+    fireEvent.click(getGenerateButton());
     await screen.findByRole("heading", { name: ru.imageGeneration.confirmationTitle });
     fireEvent.click(screen.getByRole("button", { name: new RegExp(ru.imageGeneration.confirm) }));
 
     await screen.findByRole("textbox", { name: ru.imageGeneration.promptLabel });
-    fireEvent.click(screen.getByRole("button", { name: ru.imageGeneration.prepare }));
+    fireEvent.click(getGenerateButton());
 
     await screen.findByRole("heading", { name: ru.imageGeneration.confirmationTitle });
     expect(webBrowserMutation).toHaveBeenNthCalledWith(1, "/web/v1/image-jobs/prepare", expect.objectContaining({
@@ -238,7 +274,7 @@ describe("ImageGenerationPanel", () => {
       .mockResolvedValueOnce(Response.json({ error: "temporarily unavailable" }, { status: 503 }));
 
     fireEvent.change(promptInput, { target: { value: job.prompt } });
-    fireEvent.click(screen.getByRole("button", { name: ru.imageGeneration.prepare }));
+    fireEvent.click(getGenerateButton());
     await screen.findByRole("heading", { name: ru.imageGeneration.confirmationTitle });
     fireEvent.click(screen.getByRole("button", { name: new RegExp(ru.imageGeneration.confirm) }));
 
@@ -257,7 +293,7 @@ describe("ImageGenerationPanel", () => {
     fireEvent.change(await screen.findByRole("textbox", { name: ru.imageGeneration.promptLabel }), {
       target: { value: job.prompt },
     });
-    fireEvent.click(screen.getByRole("button", { name: ru.imageGeneration.prepare }));
+    fireEvent.click(getGenerateButton());
     await screen.findByRole("heading", { name: ru.imageGeneration.confirmationTitle });
     fireEvent.click(screen.getByRole("button", { name: new RegExp(ru.imageGeneration.confirm) }));
 
@@ -288,7 +324,7 @@ describe("ImageGenerationPanel", () => {
       );
 
     fireEvent.change(promptInput, { target: { value: job.prompt } });
-    fireEvent.click(screen.getByRole("button", { name: ru.imageGeneration.prepare }));
+    fireEvent.click(getGenerateButton());
     await screen.findByRole("heading", { name: ru.imageGeneration.confirmationTitle });
     fireEvent.click(screen.getByRole("button", { name: new RegExp(ru.imageGeneration.confirm) }));
     await screen.findByRole("heading", { name: ru.imageGeneration.statusTitle });
@@ -319,7 +355,7 @@ describe("ImageGenerationPanel", () => {
       .mockResolvedValueOnce(Response.json({ job_id: job.id, status: "succeeded", artifacts: [artifact] }));
 
     fireEvent.change(promptInput, { target: { value: job.prompt } });
-    fireEvent.click(screen.getByRole("button", { name: ru.imageGeneration.prepare }));
+    fireEvent.click(getGenerateButton());
     await screen.findByRole("heading", { name: ru.imageGeneration.confirmationTitle });
     fireEvent.click(screen.getByRole("button", { name: new RegExp(ru.imageGeneration.confirm) }));
     await screen.findByRole("heading", { name: ru.imageGeneration.statusTitle });

@@ -17,6 +17,7 @@ type ImageGenerationEditorProps = {
   onModelChange: (modelID: string) => void;
   onPromptChange: (prompt: string) => void;
   onSubmit: () => void;
+  price: number | null;
   prompt: string;
 };
 
@@ -31,6 +32,7 @@ export function ImageGenerationEditor({
   onModelChange,
   onPromptChange,
   onSubmit,
+  price,
   prompt,
 }: Readonly<ImageGenerationEditorProps>) {
   const selectedModel = models.find((model) => model.id === modelID) ?? null;
@@ -79,8 +81,15 @@ export function ImageGenerationEditor({
           value={prompt}
         />
       </label>
+      {price === null ? (
+        <p className={styles.priceUnavailable} role="status">{ru.imageGeneration.priceUnavailable}</p>
+      ) : (
+        <p className={styles.price} role="status">
+          {ru.imageGeneration.priceLabel}: {formatStars(price)}
+        </p>
+      )}
       <Button disabled={!canSubmit || isSubmitting} type="submit">
-        {isSubmitting ? ru.imageGeneration.preparing : ru.imageGeneration.prepare}
+        {isSubmitting ? ru.imageGeneration.preparing : generateLabel(price)}
       </Button>
       {errorMessage !== null ? (
         <p className={styles.error} role="alert">
@@ -89,4 +98,12 @@ export function ImageGenerationEditor({
       ) : null}
     </form>
   );
+}
+
+function formatStars(value: number): string {
+  return `${value} \u2605`;
+}
+
+function generateLabel(price: number | null): string {
+  return price === null ? ru.imageGeneration.generate : `${ru.imageGeneration.generate} · ${formatStars(price)}`;
 }
