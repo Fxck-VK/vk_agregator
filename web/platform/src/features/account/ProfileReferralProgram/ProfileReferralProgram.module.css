@@ -16,7 +16,31 @@
 }
 
 .launchCard {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
   padding: var(--space-5);
+  border: 0.0625rem solid var(--color-border);
+  background: radial-gradient(
+      circle at 100% 0%,
+      color-mix(in srgb, var(--color-accent) 30%, transparent),
+      transparent 52%
+    ),
+    var(--color-surface-raised);
+}
+
+.launchCard::before {
+  position: absolute;
+  inset-block-start: -5rem;
+  inset-inline-end: -4rem;
+  z-index: -1;
+  inline-size: 13rem;
+  block-size: 13rem;
+  border-radius: 999px;
+  background: var(--color-accent);
+  content: "";
+  filter: blur(4rem);
+  opacity: 0.22;
 }
 
 .launchCard h2,
@@ -41,8 +65,7 @@
   color: var(--color-text-muted);
 }
 
-.steps,
-.statistics {
+.steps {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--space-3);
@@ -56,6 +79,7 @@
   display: grid;
   gap: var(--space-2);
   padding: var(--space-4);
+  border: 0.0625rem solid var(--color-border);
 }
 
 .steps li > span {
@@ -68,7 +92,9 @@
 }
 
 .statistics {
+  display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
 }
 
 .statistic h3 {

@@ -18,7 +18,9 @@
 }
 
 .item {
+  inline-size: 100%;
   overflow: hidden;
+  border: 0.0625rem solid var(--color-border);
   border-radius: var(--radius-lg);
   background: var(--color-surface-raised);
 }
@@ -44,6 +46,13 @@
 }
 
 .indicator {
-  flex: 0 0 auto;
-  font-size: 1.25rem;
+  display: grid;
+  flex: 0 0 2rem;
+  inline-size: 2rem;
+  block-size: 2rem;
+  place-items: center;
+  border: 0.0625rem solid var(--color-border);
+  border-radius: 999px;
+  color: var(--color-text-muted);
+  font-size: 1.125rem;
 }
