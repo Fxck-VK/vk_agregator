@@ -10,6 +10,9 @@ type ModelCardProps = {
 };
 
 export function ModelCard({ model }: ModelCardProps) {
+  const prices = Object.values(model.price_by_quality ?? {});
+  const minimumPrice = prices.length > 0 ? Math.min(...prices) : null;
+
   return (
     <article className={styles.card}>
       <div className={styles.heading}>
@@ -26,6 +29,7 @@ export function ModelCard({ model }: ModelCardProps) {
           ? ru.modelsCatalog.referenceSupportedLabel
           : ru.modelsCatalog.referenceUnsupportedLabel}
       </p>
+      {minimumPrice !== null ? <p>{`От ${minimumPrice} ★`}</p> : null}
       <Link
         aria-label={`${ru.modelsCatalog.openGeneratorLabel}: ${model.name}`}
         href={`/app/image?model=${encodeURIComponent(model.id)}`}

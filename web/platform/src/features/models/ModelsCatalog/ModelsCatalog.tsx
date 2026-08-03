@@ -7,8 +7,8 @@ import type { ImageModel } from "@/lib/web-api/contracts";
 
 import { loadImageModelCatalog } from "../image-model-catalog-cache";
 import { ModelCard } from "../ModelCard/ModelCard";
-import { ModelCatalogToolbar } from "../ModelCatalogToolbar/ModelCatalogToolbar";
-import { filterAndSortImageModels, imageModelQualities, type ImageModelSort } from "./model-filters";
+import { ModelCatalogToolbar, type ModelCatalogCategory } from "../ModelCatalogToolbar/ModelCatalogToolbar";
+import { filterAndSortImageModels } from "./model-filters";
 import styles from "./ModelsCatalog.module.css";
 
 type CatalogStatus = "loading" | "ready" | "failure";
@@ -17,9 +17,7 @@ export function ModelsCatalog() {
   const [status, setStatus] = useState<CatalogStatus>("loading");
   const [models, setModels] = useState<ImageModel[]>([]);
   const [query, setQuery] = useState("");
-  const [referenceOnly, setReferenceOnly] = useState(false);
-  const [quality, setQuality] = useState<string | null>(null);
-  const [sort, setSort] = useState<ImageModelSort>("catalog");
+  const [category, setCategory] = useState<ModelCatalogCategory["id"]>("popular");
   const deferredQuery = useDeferredValue(query);
 
   useEffect(() => {
@@ -47,17 +45,11 @@ export function ModelsCatalog() {
   }, []);
 
   const filteredModels = useMemo(
-    () => filterAndSortImageModels(models, { query: deferredQuery, referenceOnly, quality }, sort),
-    [deferredQuery, models, quality, referenceOnly, sort],
+    () => filterAndSortImageModels(models, { query: deferredQuery, referenceOnly: false, quality: null }, "catalog"),
+    [deferredQuery, models],
   );
-  const qualities = useMemo(() => imageModelQualities(models), [models]);
-
-  const clearFilters = () => {
-    setQuery("");
-    setReferenceOnly(false);
-    setQuality(null);
-    setSort("catalog");
-  };
+  const selectedCategory = ru.modelsCatalog.categories.find((item) => item.id === category) ?? ru.modelsCatalog.categories[0];
+  const showImageModels = category === "popular" || category === "images";
 
   return (
     <section aria-labelledby="models-catalog-title" className={styles.catalog}>
@@ -77,28 +69,32 @@ export function ModelsCatalog() {
       {status === "ready" ? (
         <>
           <ModelCatalogToolbar
-            onClear={clearFilters}
-            onQualityChange={setQuality}
+            categories={ru.modelsCatalog.categories}
+            category={category}
+            onCategoryChange={setCategory}
             onQueryChange={setQuery}
-            onReferenceOnlyChange={setReferenceOnly}
-            onSortChange={setSort}
-            qualities={qualities}
-            quality={quality}
             query={query}
-            referenceOnly={referenceOnly}
-            resultCount={filteredModels.length}
-            sort={sort}
           />
 
-          {filteredModels.length === 0 ? <p>{ru.modelsCatalog.empty}</p> : null}
+          <div className={styles.section}>
+            <h2 className={styles.sectionTitle}>{selectedCategory.label}</h2>
 
-          {filteredModels.length > 0 ? (
-            <div className={styles.grid}>
-              {filteredModels.map((model) => (
-                <ModelCard key={model.id} model={model} />
-              ))}
-            </div>
-          ) : null}
+            {showImageModels && filteredModels.length === 0 ? (
+              <p className={styles.emptyState}>{ru.modelsCatalog.empty}</p>
+            ) : null}
+
+            {showImageModels && filteredModels.length > 0 ? (
+              <div className={styles.grid}>
+                {filteredModels.map((model) => (
+                  <ModelCard key={model.id} model={model} />
+                ))}
+              </div>
+            ) : null}
+
+            {!showImageModels ? (
+              <p className={styles.emptyState}>{ru.modelsCatalog.categoryComingSoon(selectedCategory.label)}</p>
+            ) : null}
+          </div>
         </>
       ) : null}
     </section>

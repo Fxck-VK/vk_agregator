@@ -1,93 +1,92 @@
 "use client";
 
-import { ru } from "@/i18n/ru";
+import { useRef } from "react";
 
-import type { ImageModelSort } from "../ModelsCatalog/model-filters";
+import { ru } from "@/i18n/ru";
 
 import styles from "./ModelCatalogToolbar.module.css";
 
+export type ModelCatalogCategory = (typeof ru.modelsCatalog.categories)[number];
+
 type ModelCatalogToolbarProps = {
   query: string;
-  referenceOnly: boolean;
-  quality: string | null;
-  qualities: string[];
-  sort: ImageModelSort;
-  resultCount: number;
+  categories: readonly ModelCatalogCategory[];
+  category: ModelCatalogCategory["id"];
   onQueryChange: (value: string) => void;
-  onReferenceOnlyChange: (value: boolean) => void;
-  onQualityChange: (value: string | null) => void;
-  onSortChange: (value: ImageModelSort) => void;
-  onClear: () => void;
+  onCategoryChange: (value: ModelCatalogCategory["id"]) => void;
 };
 
 export function ModelCatalogToolbar({
-  onClear,
-  onQualityChange,
+  categories,
+  category,
+  onCategoryChange,
   onQueryChange,
-  onReferenceOnlyChange,
-  onSortChange,
-  qualities,
-  quality,
   query,
-  referenceOnly,
-  resultCount,
-  sort,
 }: ModelCatalogToolbarProps) {
-  const hasActiveFilters = query.trim() !== "" || referenceOnly || quality !== null || sort !== "catalog";
+  const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
+
+  const selectCategory = (index: number) => {
+    const nextCategory = categories[index];
+    if (!nextCategory) {
+      return;
+    }
+
+    onCategoryChange(nextCategory.id);
+    tabRefs.current[index]?.focus();
+  };
 
   return (
     <div className={styles.toolbar}>
       <div className={styles.controls}>
-        <input
-          aria-label={ru.modelsCatalog.searchLabel}
-          className={styles.search}
-          onChange={(event) => onQueryChange(event.target.value)}
-          placeholder={ru.modelsCatalog.searchPlaceholder}
-          type="search"
-          value={query}
-        />
-        <label className={styles.checkbox}>
+        <div className={styles.searchField}>
+          <span aria-hidden="true" className={styles.searchIcon}>
+            ⌕
+          </span>
           <input
-            checked={referenceOnly}
-            onChange={(event) => onReferenceOnlyChange(event.target.checked)}
-            type="checkbox"
+            aria-label={ru.modelsCatalog.searchLabel}
+            className={styles.search}
+            onChange={(event) => onQueryChange(event.target.value)}
+            placeholder={ru.modelsCatalog.searchPlaceholder}
+            type="search"
+            value={query}
           />
-          {ru.modelsCatalog.referenceFilterLabel}
-        </label>
-        <label className={styles.selectLabel}>
-          <span>{ru.modelsCatalog.qualityFilterLabel}</span>
-          <select
-            aria-label={ru.modelsCatalog.qualityFilterLabel}
-            onChange={(event) => onQualityChange(event.target.value || null)}
-            value={quality ?? ""}
-          >
-            <option value="">{ru.modelsCatalog.allQualitiesLabel}</option>
-            {qualities.map((value) => (
-              <option key={value} value={value}>
-                {value}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className={styles.selectLabel}>
-          <span>{ru.modelsCatalog.sortLabel}</span>
-          <select
-            aria-label={ru.modelsCatalog.sortLabel}
-            onChange={(event) => onSortChange(event.target.value as ImageModelSort)}
-            value={sort}
-          >
-            <option value="catalog">{ru.modelsCatalog.catalogSortLabel}</option>
-            <option value="name">{ru.modelsCatalog.nameSortLabel}</option>
-          </select>
-        </label>
-      </div>
-      <div className={styles.summary}>
-        <p aria-live="polite" className={styles.resultCount}>
-          {ru.modelsCatalog.resultCount(resultCount)}
-        </p>
-        <button disabled={!hasActiveFilters} onClick={onClear} type="button">
-          {ru.modelsCatalog.clearFiltersLabel}
-        </button>
+        </div>
+        <div className={styles.categoryList} role="tablist">
+          {categories.map((item, index) => (
+            <button
+              aria-selected={item.id === category}
+              className={styles.category}
+              key={item.id}
+              onClick={() => onCategoryChange(item.id)}
+              onKeyDown={(event) => {
+                if (event.key === "ArrowLeft") {
+                  event.preventDefault();
+                  selectCategory((index - 1 + categories.length) % categories.length);
+                }
+                if (event.key === "ArrowRight") {
+                  event.preventDefault();
+                  selectCategory((index + 1) % categories.length);
+                }
+                if (event.key === "Home") {
+                  event.preventDefault();
+                  selectCategory(0);
+                }
+                if (event.key === "End") {
+                  event.preventDefault();
+                  selectCategory(categories.length - 1);
+                }
+              }}
+              ref={(element) => {
+                tabRefs.current[index] = element;
+              }}
+              role="tab"
+              tabIndex={item.id === category ? 0 : -1}
+              type="button"
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );
