@@ -827,6 +827,88 @@ func (o *Orchestrator) ActivatePreparedAccountJob(ctx context.Context, accountID
 	return activated, nil
 }
 
+// RetryExpiredAccountImageJob creates one new account-native image job from a
+// confirmation that expired before activation. All executable facts come from
+// the owned stored job; the browser supplies only its identity. A deterministic
+// idempotency key makes repeated clicks return or resume the same retry job.
+func (o *Orchestrator) RetryExpiredAccountImageJob(ctx context.Context, accountID, originalJobID uuid.UUID) (*domain.Job, error) {
+	if accountID == uuid.Nil || originalJobID == uuid.Nil {
+		return nil, domain.ErrNotFound
+	}
+	original, err := o.jobs.GetByIDForAccount(ctx, accountID, originalJobID)
+	if err != nil {
+		return nil, err
+	}
+	if original == nil || original.Status != domain.JobStatusExpired || original.ErrorCode != domain.PreparedConfirmationExpiredCode ||
+		original.OperationType != domain.OperationImageGenerate || original.Modality != domain.ModalityImage {
+		return nil, domain.ErrConflict
+	}
+	if err := validatePreparedActivation(original, accountID); err != nil {
+		return nil, err
+	}
+	amount, err := preparedActivationAmount(original)
+	if err != nil || len(original.PricingSnapshot) == 0 {
+		return nil, domain.ErrConflict
+	}
+	var snapshot pricingcatalog.PricingSnapshot
+	if err := json.Unmarshal(original.PricingSnapshot, &snapshot); err != nil || !snapshot.Valid() || snapshot.InternalCredits != amount {
+		return nil, domain.ErrConflict
+	}
+
+	idempotencyKey := "web:image-retry:" + originalJobID.String()
+	retry, createErr := o.CreateJob(ctx, CreateJobInput{
+		AccountID:           accountID,
+		Source:              "web",
+		ChannelContext:      &domain.ChannelContext{Channel: domain.ChannelWeb},
+		ResultMode:          domain.ResultModeAccountHistory,
+		Operation:           original.OperationType,
+		Modality:            original.Modality,
+		IdempotencyKey:      idempotencyKey,
+		CorrelationID:       "web-image-retry:" + originalJobID.String(),
+		InputArtifactIDs:    append([]uuid.UUID(nil), original.InputArtifactIDs...),
+		Params:              append(json.RawMessage(nil), original.Params...),
+		CostEstimateCredits: amount,
+		PricingSnapshot:     snapshot,
+	})
+	if retry == nil && errors.Is(createErr, domain.ErrConflict) {
+		retry, err = o.jobs.GetByIdempotencyKeyForAccount(ctx, accountID, idempotencyKey)
+		if err != nil {
+			return nil, createErr
+		}
+	}
+	if retry == nil {
+		return nil, createErr
+	}
+	if !retryImageJobMatchesOriginal(retry, original, accountID, idempotencyKey) {
+		return nil, domain.ErrConflict
+	}
+	if errors.Is(createErr, domain.ErrInsufficientCredits) {
+		return retry, createErr
+	}
+	if retry.Status == domain.JobStatusAwaitingPayment {
+		return o.ActivatePreparedAccountJob(ctx, accountID, retry.ID)
+	}
+	return retry, createErr
+}
+
+func retryImageJobMatchesOriginal(retry, original *domain.Job, accountID uuid.UUID, idempotencyKey string) bool {
+	if retry == nil || original == nil || retry.ID == original.ID || retry.AccountID != accountID || retry.UserID != uuid.Nil ||
+		retry.Source != "web" || retry.ChannelContext == nil || retry.ChannelContext.Channel != domain.ChannelWeb ||
+		retry.ResultMode != domain.ResultModeAccountHistory || retry.DeliveryTarget != nil || retry.VKPeerID != 0 || retry.CommandID != uuid.Nil ||
+		retry.OperationType != original.OperationType || retry.Modality != original.Modality || retry.IdempotencyKey != idempotencyKey ||
+		retry.CostEstimate != original.CostEstimate || (retry.Status != domain.JobStatusAwaitingPayment && !activationReplayStatus(retry.Status)) ||
+		!bytes.Equal(retry.Params, original.Params) ||
+		!bytes.Equal(retry.PricingSnapshot, original.PricingSnapshot) || len(retry.InputArtifactIDs) != len(original.InputArtifactIDs) {
+		return false
+	}
+	for i := range retry.InputArtifactIDs {
+		if retry.InputArtifactIDs[i] != original.InputArtifactIDs[i] {
+			return false
+		}
+	}
+	return true
+}
+
 func validatePreparedActivation(job *domain.Job, accountID uuid.UUID) error {
 	if job == nil || job.AccountID != accountID || job.UserID != uuid.Nil || job.CommandID != uuid.Nil || job.VKPeerID != 0 ||
 		job.Source != "web" || job.ChannelContext == nil || job.ChannelContext.Channel != domain.ChannelWeb ||

@@ -224,6 +224,7 @@ type AccountService interface {
 type ImageJobService interface {
 	PrepareAccountJob(ctx context.Context, input joborchestrator.PrepareAccountJobInput) (*domain.Job, error)
 	ActivatePreparedAccountJob(ctx context.Context, accountID, jobID uuid.UUID) (*domain.Job, error)
+	RetryExpiredAccountImageJob(ctx context.Context, accountID, originalJobID uuid.UUID) (*domain.Job, error)
 }
 
 // ImageBalanceService returns the backend-owned balance used in a preparation
@@ -357,6 +358,7 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("DELETE /web/v1/conversations/{conversationID}", h.requireUnsafePrincipal(h.archiveConversation))
 	mux.HandleFunc("POST /web/v1/image-jobs/prepare", h.requireUnsafePrincipal(h.prepareImageJob))
 	mux.HandleFunc("POST /web/v1/image-jobs/{jobID}/activate", h.requireUnsafePrincipal(h.activateImageJob))
+	mux.HandleFunc("POST /web/v1/image-jobs/{jobID}/retry", h.requireUnsafePrincipal(h.retryImageJob))
 	return mux
 }
 
@@ -707,6 +709,47 @@ func (h *Handler) activateImageJob(w http.ResponseWriter, r *http.Request) {
 	if err != nil && !errors.Is(err, domain.ErrInsufficientCredits) {
 		if errors.Is(err, domain.ErrConflict) {
 			writeError(w, http.StatusConflict, "image generation activation conflict")
+			return
+		}
+		writeError(w, http.StatusServiceUnavailable, "image generation unavailable")
+		return
+	}
+	safeJob, ok := newSafeImageJob(job)
+	if !ok {
+		writeError(w, http.StatusServiceUnavailable, "image generation unavailable")
+		return
+	}
+	status := http.StatusOK
+	if errors.Is(err, domain.ErrInsufficientCredits) {
+		status = http.StatusPaymentRequired
+	}
+	writeJSON(w, status, safeImageJobActivation{Job: safeJob})
+}
+
+func (h *Handler) retryImageJob(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	principal, ok := PrincipalFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	if h.deps.ImageJobs == nil {
+		writeError(w, http.StatusServiceUnavailable, "image generation unavailable")
+		return
+	}
+	originalJobID, err := uuid.Parse(r.PathValue("jobID"))
+	if err != nil || originalJobID == uuid.Nil {
+		writeError(w, http.StatusBadRequest, "invalid image job id")
+		return
+	}
+	job, err := h.deps.ImageJobs.RetryExpiredAccountImageJob(r.Context(), principal.AccountID, originalJobID)
+	if errors.Is(err, domain.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "image job not found")
+		return
+	}
+	if err != nil && !errors.Is(err, domain.ErrInsufficientCredits) {
+		if errors.Is(err, domain.ErrConflict) {
+			writeError(w, http.StatusConflict, "image generation retry conflict")
 			return
 		}
 		writeError(w, http.StatusServiceUnavailable, "image generation unavailable")

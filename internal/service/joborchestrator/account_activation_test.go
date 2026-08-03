@@ -2,6 +2,7 @@ package joborchestrator_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"sync"
 	"testing"
@@ -13,6 +14,7 @@ import (
 	"vk-ai-aggregator/internal/platform/uow"
 	"vk-ai-aggregator/internal/service/billingservice"
 	"vk-ai-aggregator/internal/service/joborchestrator"
+	"vk-ai-aggregator/internal/service/pricingcatalog"
 )
 
 // preparedJobActivator keeps the activation API testable before it exists: the
@@ -20,6 +22,19 @@ import (
 // method is still absent.
 type preparedJobActivator interface {
 	ActivatePreparedAccountJob(context.Context, uuid.UUID, uuid.UUID) (*domain.Job, error)
+}
+
+type expiredAccountImageJobRetrier interface {
+	RetryExpiredAccountImageJob(context.Context, uuid.UUID, uuid.UUID) (*domain.Job, error)
+}
+
+func retryExpiredAccountImageJob(t *testing.T, orch *joborchestrator.Orchestrator, accountID, originalJobID uuid.UUID) (*domain.Job, error) {
+	t.Helper()
+	retrier, ok := any(orch).(expiredAccountImageJobRetrier)
+	if !ok {
+		t.Fatal("RetryExpiredAccountImageJob is not implemented")
+	}
+	return retrier.RetryExpiredAccountImageJob(context.Background(), accountID, originalJobID)
 }
 
 func activatePreparedAccountJob(t *testing.T, orch *joborchestrator.Orchestrator, accountID, jobID uuid.UUID) (*domain.Job, error) {
@@ -45,6 +60,136 @@ func prepareActivatableAccountJob(t *testing.T, f *fixture, accountID uuid.UUID,
 		t.Fatalf("prepare account job: %v", err)
 	}
 	return job
+}
+
+func prepareExpiredAccountImageJob(t *testing.T, f *fixture, accountID uuid.UUID, key string) *domain.Job {
+	t.Helper()
+	catalog, err := pricingcatalog.NewStaticCatalog()
+	if err != nil {
+		t.Fatalf("new static pricing catalog: %v", err)
+	}
+	snapshot, err := catalog.Snapshot(pricingcatalog.ProductKey{
+		Operation:    domain.OperationImageGenerate,
+		Modality:     domain.ModalityImage,
+		ImageModelID: pricingcatalog.PublicImageNanoBanana2,
+		Quality:      pricingcatalog.ImageQuality1K,
+	})
+	if err != nil {
+		t.Fatalf("image pricing snapshot: %v", err)
+	}
+	artifactID := seedInputArtifactForAccount(t, f, uuid.Nil, accountID, domain.ArtifactKindInput, domain.MediaTypeImage, domain.ArtifactStatusReady, "private-artifacts", "retry/input.png")
+	params := json.RawMessage(`{"prompt":"night city","provider":"poyo","model_code":"trusted-private-code","image_quality":"1K"}`)
+	job, err := f.orch.PrepareAccountJob(context.Background(), joborchestrator.PrepareAccountJobInput{
+		AccountID:        accountID,
+		Operation:        domain.OperationImageGenerate,
+		Modality:         domain.ModalityImage,
+		IdempotencyKey:   key,
+		CorrelationID:    "retry-original:" + key,
+		InputArtifactIDs: []uuid.UUID{artifactID},
+		Params:           params,
+		PricingSnapshot:  snapshot,
+	})
+	if err != nil {
+		t.Fatalf("prepare original image job: %v", err)
+	}
+	if err := f.jobs.UpdateStatus(context.Background(), job.ID, domain.JobStatusPrepared, domain.JobStatusExpired, domain.PreparedConfirmationExpiredCode, domain.PreparedConfirmationExpiredMessage); err != nil {
+		t.Fatalf("expire original image job: %v", err)
+	}
+	job.Status = domain.JobStatusExpired
+	job.ErrorCode = domain.PreparedConfirmationExpiredCode
+	job.ErrorMessage = domain.PreparedConfirmationExpiredMessage
+	return job
+}
+
+func TestRetryExpiredAccountImageJobCreatesOneQueuedAccountJobAndReplaysIt(t *testing.T) {
+	f := newFixture(billingservice.WithStartingBalance(100))
+	accountID := uuid.New()
+	original := prepareExpiredAccountImageJob(t, f, accountID, "web:image:retry:queued-original")
+
+	retried, err := retryExpiredAccountImageJob(t, f.orch, accountID, original.ID)
+	if err != nil {
+		t.Fatalf("retry expired image job: %v", err)
+	}
+	if retried == nil || retried.ID == original.ID || retried.Status != domain.JobStatusQueued {
+		t.Fatalf("retried job = %+v, want a new queued job", retried)
+	}
+	if retried.AccountID != accountID || retried.UserID != uuid.Nil || retried.Source != "web" || retried.ChannelContext == nil || retried.ChannelContext.Channel != domain.ChannelWeb || retried.ResultMode != domain.ResultModeAccountHistory || retried.DeliveryTarget != nil {
+		t.Fatalf("retry ownership/result contract = %+v, want account-native Web history", retried)
+	}
+	if string(retried.Params) != string(original.Params) || len(retried.InputArtifactIDs) != 1 || retried.InputArtifactIDs[0] != original.InputArtifactIDs[0] || string(retried.PricingSnapshot) != string(original.PricingSnapshot) {
+		t.Fatalf("retry did not preserve trusted stored facts: original=%+v retry=%+v", original, retried)
+	}
+	reservation, err := f.bill.GetReservationByJob(context.Background(), retried.ID)
+	if err != nil || reservation.OwnerAccountID != accountID || reservation.Amount != retried.CostEstimate {
+		t.Fatalf("retry reservation = %+v, %v", reservation, err)
+	}
+	if events := f.outbox.Events(); len(events) != 3 || events[0].EventType != "event.job.created" || events[1].EventType != "event.job.created" || events[2].EventType != "event.job.queued" {
+		t.Fatalf("retry events = %+v, want original created plus one retry created/queued", events)
+	}
+
+	replayed, err := retryExpiredAccountImageJob(t, f.orch, accountID, original.ID)
+	if err != nil || replayed == nil || replayed.ID != retried.ID || replayed.Status != domain.JobStatusQueued {
+		t.Fatalf("retry replay = %+v, %v; want same queued job", replayed, err)
+	}
+	if events := f.outbox.Events(); len(events) != 3 {
+		t.Fatalf("retry replay wrote duplicate events: %+v", events)
+	}
+	replayedReservation, err := f.bill.GetReservationByJob(context.Background(), retried.ID)
+	if err != nil || replayedReservation.ID != reservation.ID {
+		t.Fatalf("retry replay reservation = %+v, %v; want original reservation %+v", replayedReservation, err, reservation)
+	}
+}
+
+func TestRetryExpiredAccountImageJobInsufficientCreditsCreatesOneResumableJobWithoutQueue(t *testing.T) {
+	f := newFixture(billingservice.WithStartingBalance(1))
+	countingBiller := &retryCountingBiller{Service: f.billing}
+	f.orch = joborchestrator.New(
+		f.jobs,
+		activationTestUnitOfWork{repos: uow.Repositories{Jobs: f.jobs, Outbox: f.outbox, Billing: f.bill}},
+		countingBiller,
+		0,
+		joborchestrator.WithArtifactRepository(f.arts),
+	)
+	accountID := uuid.New()
+	original := prepareExpiredAccountImageJob(t, f, accountID, "web:image:retry:insufficient-original")
+
+	retried, err := retryExpiredAccountImageJob(t, f.orch, accountID, original.ID)
+	if !errors.Is(err, domain.ErrInsufficientCredits) || retried == nil || retried.ID == original.ID || retried.Status != domain.JobStatusAwaitingPayment {
+		t.Fatalf("insufficient retry = %+v, %v; want new awaiting_payment job", retried, err)
+	}
+	if _, err := f.bill.GetReservationByJob(context.Background(), retried.ID); !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("insufficient retry created reservation: %v", err)
+	}
+	if events := f.outbox.Events(); len(events) != 2 || events[0].EventType != "event.job.created" || events[1].EventType != "event.job.created" {
+		t.Fatalf("insufficient retry events = %+v, want no queue event", events)
+	}
+	if countingBiller.reserveWithOwnerCalls != 1 || countingBiller.reserveForAccountCalls != 0 {
+		t.Fatalf("first insufficient retry reservation attempts = create:%d activate:%d, want one create attempt", countingBiller.reserveWithOwnerCalls, countingBiller.reserveForAccountCalls)
+	}
+
+	replayed, replayErr := retryExpiredAccountImageJob(t, f.orch, accountID, original.ID)
+	if !errors.Is(replayErr, domain.ErrInsufficientCredits) || replayed == nil || replayed.ID != retried.ID || replayed.Status != domain.JobStatusAwaitingPayment {
+		t.Fatalf("insufficient retry replay = %+v, %v", replayed, replayErr)
+	}
+	if events := f.outbox.Events(); len(events) != 2 {
+		t.Fatalf("insufficient retry replay wrote duplicate events: %+v", events)
+	}
+}
+
+type retryCountingBiller struct {
+	*billingservice.Service
+	reserveWithOwnerCalls  int
+	reserveForAccountCalls int
+}
+
+func (b *retryCountingBiller) ReserveWithOwner(ctx context.Context, repo domain.BillingRepository, userID, accountID, jobID uuid.UUID, amount int64) (*domain.CreditReservation, error) {
+	b.reserveWithOwnerCalls++
+	return b.Service.ReserveWithOwner(ctx, repo, userID, accountID, jobID, amount)
+}
+
+func (b *retryCountingBiller) ReserveForAccountWith(ctx context.Context, repo domain.BillingRepository, accountID, jobID uuid.UUID, amount int64) (*domain.CreditReservation, error) {
+	b.reserveForAccountCalls++
+	return b.Service.ReserveForAccountWith(ctx, repo, accountID, jobID, amount)
 }
 
 func TestPrepareAccountJobWritesWebAccountHistoryContract(t *testing.T) {

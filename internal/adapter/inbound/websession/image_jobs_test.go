@@ -509,6 +509,89 @@ func TestWebImageJobActivateUsesCookiePrincipalAndMapsInsufficientCredits(t *tes
 	assertSafeWebImageActivation(t, rec.Body.Bytes(), jobID, domain.JobStatusAwaitingPayment)
 }
 
+func TestWebImageJobRetryUsesCookiePrincipalAndReturnsSafeQueuedJob(t *testing.T) {
+	h, jobs, sessions := newImageJobTestHandler(t)
+	accountID := uuid.New()
+	originalJobID := uuid.New()
+	retryJobID := uuid.New()
+	jobs.retryJob = &domain.Job{
+		ID:            retryJobID,
+		AccountID:     accountID,
+		Source:        "web",
+		OperationType: domain.OperationImageGenerate,
+		Modality:      domain.ModalityImage,
+		Status:        domain.JobStatusQueued,
+		CostEstimate:  60,
+		Params: mustMarshalWebImageJobParams(t, webImageJobParams{
+			Prompt:       "image prompt",
+			ModelID:      modelcatalog.MiniAppImageNanoBanana2,
+			ModelName:    "Nano Banana 2",
+			ImageQuality: modelcatalog.ImageQuality2K,
+			Provider:     domain.ProviderPoYo,
+			ModelCode:    "private-model-code",
+		}),
+	}
+	req := safeImageMutationRequest(t, sessions, accountID, http.MethodPost, "/web/v1/image-jobs/"+originalJobID.String()+"/retry", nil)
+	rec := httptest.NewRecorder()
+
+	h.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if jobs.retryCalls != 1 || jobs.retryAccountID != accountID || jobs.retryOriginalJobID != originalJobID {
+		t.Fatalf("retry invocation = calls:%d account:%s original:%s", jobs.retryCalls, jobs.retryAccountID, jobs.retryOriginalJobID)
+	}
+	assertSafeWebImageActivation(t, rec.Body.Bytes(), retryJobID, domain.JobStatusQueued)
+}
+
+func TestWebImageJobRetryMapsInsufficientCreditsToSafePaymentJob(t *testing.T) {
+	h, jobs, sessions := newImageJobTestHandler(t)
+	accountID := uuid.New()
+	originalJobID := uuid.New()
+	retryJobID := uuid.New()
+	jobs.retryJob = &domain.Job{
+		ID:            retryJobID,
+		AccountID:     accountID,
+		Source:        "web",
+		OperationType: domain.OperationImageGenerate,
+		Modality:      domain.ModalityImage,
+		Status:        domain.JobStatusAwaitingPayment,
+		CostEstimate:  60,
+		Params: mustMarshalWebImageJobParams(t, webImageJobParams{
+			Prompt:       "image prompt",
+			ModelID:      modelcatalog.MiniAppImageNanoBanana2,
+			ModelName:    "Nano Banana 2",
+			ImageQuality: modelcatalog.ImageQuality2K,
+			Provider:     domain.ProviderPoYo,
+			ModelCode:    "private-model-code",
+		}),
+	}
+	jobs.retryErr = domain.ErrInsufficientCredits
+	req := safeImageMutationRequest(t, sessions, accountID, http.MethodPost, "/web/v1/image-jobs/"+originalJobID.String()+"/retry", nil)
+	rec := httptest.NewRecorder()
+
+	h.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusPaymentRequired {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	assertSafeWebImageActivation(t, rec.Body.Bytes(), retryJobID, domain.JobStatusAwaitingPayment)
+}
+
+func TestWebImageJobRetryFailsClosedWhenServiceUnavailable(t *testing.T) {
+	h, _, sessions := newImageJobTestHandler(t)
+	h.deps.ImageJobs = nil
+	req := safeImageMutationRequest(t, sessions, uuid.New(), http.MethodPost, "/web/v1/image-jobs/"+uuid.NewString()+"/retry", nil)
+	rec := httptest.NewRecorder()
+
+	h.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestWebImageJobReadUsesExactCookieAccountAndSafeDTO(t *testing.T) {
 	h, _, sessions := newImageJobTestHandler(t)
 	accountID := uuid.New()
@@ -1089,6 +1172,12 @@ type imageJobServiceStub struct {
 	activateJobID     uuid.UUID
 	activateJob       *domain.Job
 	activateErr       error
+
+	retryCalls         int
+	retryAccountID     uuid.UUID
+	retryOriginalJobID uuid.UUID
+	retryJob           *domain.Job
+	retryErr           error
 }
 
 type imageJobReaderStub struct {
@@ -1349,6 +1438,13 @@ func (s *imageJobServiceStub) ActivatePreparedAccountJob(_ context.Context, acco
 	s.activateAccountID = accountID
 	s.activateJobID = jobID
 	return s.activateJob, s.activateErr
+}
+
+func (s *imageJobServiceStub) RetryExpiredAccountImageJob(_ context.Context, accountID, originalJobID uuid.UUID) (*domain.Job, error) {
+	s.retryCalls++
+	s.retryAccountID = accountID
+	s.retryOriginalJobID = originalJobID
+	return s.retryJob, s.retryErr
 }
 
 type imageBalanceStub struct{ balance int64 }
