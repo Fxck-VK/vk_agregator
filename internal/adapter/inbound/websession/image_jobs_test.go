@@ -592,6 +592,34 @@ func TestWebImageJobRetryFailsClosedWhenServiceUnavailable(t *testing.T) {
 	}
 }
 
+func TestWebImageJobRetryMapsSafeDomainAndInternalErrors(t *testing.T) {
+	for _, testCase := range []struct {
+		name       string
+		err        error
+		wantStatus int
+	}{
+		{name: "owned job absent", err: domain.ErrNotFound, wantStatus: http.StatusNotFound},
+		{name: "not retryable", err: domain.ErrConflict, wantStatus: http.StatusConflict},
+		{name: "internal failure", err: errors.New("database unavailable"), wantStatus: http.StatusServiceUnavailable},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			h, jobs, sessions := newImageJobTestHandler(t)
+			jobs.retryErr = testCase.err
+			req := safeImageMutationRequest(t, sessions, uuid.New(), http.MethodPost, "/web/v1/image-jobs/"+uuid.NewString()+"/retry", nil)
+			rec := httptest.NewRecorder()
+
+			h.Routes().ServeHTTP(rec, req)
+
+			if rec.Code != testCase.wantStatus {
+				t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+			}
+			if bytes.Contains(rec.Body.Bytes(), []byte("database unavailable")) {
+				t.Fatalf("response leaked internal error: %s", rec.Body.String())
+			}
+		})
+	}
+}
+
 func TestWebImageJobReadUsesExactCookieAccountAndSafeDTO(t *testing.T) {
 	h, _, sessions := newImageJobTestHandler(t)
 	accountID := uuid.New()

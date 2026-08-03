@@ -138,6 +138,67 @@ func TestRetryExpiredAccountImageJobCreatesOneQueuedAccountJobAndReplaysIt(t *te
 	if err != nil || replayedReservation.ID != reservation.ID {
 		t.Fatalf("retry replay reservation = %+v, %v; want original reservation %+v", replayedReservation, err, reservation)
 	}
+	storedOriginal, err := f.jobs.GetByID(context.Background(), original.ID)
+	if err != nil || storedOriginal.Status != domain.JobStatusExpired || storedOriginal.ErrorCode != domain.PreparedConfirmationExpiredCode || storedOriginal.CostReserved != 0 || storedOriginal.CostCaptured != 0 {
+		t.Fatalf("original after retry = %+v, %v; want unchanged expired confirmation without billing", storedOriginal, err)
+	}
+}
+
+func TestRetryExpiredAccountImageJobConcurrentCallsCreateOneRetryReservationAndQueueEvent(t *testing.T) {
+	f := newFixture(billingservice.WithStartingBalance(100))
+	accountID := uuid.New()
+	original := prepareExpiredAccountImageJob(t, f, accountID, "web:image:retry:concurrent-original")
+	retrier, ok := any(f.orch).(expiredAccountImageJobRetrier)
+	if !ok {
+		t.Fatal("RetryExpiredAccountImageJob is not implemented")
+	}
+
+	type result struct {
+		job *domain.Job
+		err error
+	}
+	start := make(chan struct{})
+	results := make(chan result, 2)
+	var wg sync.WaitGroup
+	for range 2 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			job, err := retrier.RetryExpiredAccountImageJob(context.Background(), accountID, original.ID)
+			results <- result{job: job, err: err}
+		}()
+	}
+	close(start)
+	wg.Wait()
+	close(results)
+
+	var retryID uuid.UUID
+	for result := range results {
+		if result.err != nil || result.job == nil || result.job.Status != domain.JobStatusQueued || result.job.ID == original.ID {
+			t.Fatalf("concurrent retry = %+v, %v; want queued retry", result.job, result.err)
+		}
+		if retryID == uuid.Nil {
+			retryID = result.job.ID
+		} else if result.job.ID != retryID {
+			t.Fatalf("concurrent retries created %s and %s", retryID, result.job.ID)
+		}
+	}
+	jobs, err := f.jobs.ListByAccount(context.Background(), accountID, 10, 0)
+	if err != nil || len(jobs) != 2 {
+		t.Fatalf("account jobs after concurrent retry = %+v, %v; want original plus one retry", jobs, err)
+	}
+	reservation, err := f.bill.GetReservationByJob(context.Background(), retryID)
+	if err != nil || reservation.OwnerAccountID != accountID {
+		t.Fatalf("concurrent retry reservation = %+v, %v", reservation, err)
+	}
+	if events := f.outbox.Events(); len(events) != 3 || events[2].EventType != "event.job.queued" {
+		t.Fatalf("concurrent retry events = %+v, want one retry queue event", events)
+	}
+	storedOriginal, err := f.jobs.GetByID(context.Background(), original.ID)
+	if err != nil || storedOriginal.Status != domain.JobStatusExpired || storedOriginal.ErrorCode != domain.PreparedConfirmationExpiredCode || storedOriginal.CostReserved != 0 || storedOriginal.CostCaptured != 0 {
+		t.Fatalf("original after concurrent retry = %+v, %v", storedOriginal, err)
+	}
 }
 
 func TestRetryExpiredAccountImageJobInsufficientCreditsCreatesOneResumableJobWithoutQueue(t *testing.T) {
@@ -173,6 +234,31 @@ func TestRetryExpiredAccountImageJobInsufficientCreditsCreatesOneResumableJobWit
 	}
 	if events := f.outbox.Events(); len(events) != 2 {
 		t.Fatalf("insufficient retry replay wrote duplicate events: %+v", events)
+	}
+	if err := f.billing.GrantWithAccount(context.Background(), f.bill, accountID, 100, "retry-top-up:"+original.ID.String(), "retry recovery test"); err != nil {
+		t.Fatalf("top up retry account: %v", err)
+	}
+	queued, queuedErr := retryExpiredAccountImageJob(t, f.orch, accountID, original.ID)
+	if queuedErr != nil || queued == nil || queued.ID != retried.ID || queued.Status != domain.JobStatusQueued {
+		t.Fatalf("retry after top-up = %+v, %v; want same queued job", queued, queuedErr)
+	}
+	reservation, err := f.bill.GetReservationByJob(context.Background(), retried.ID)
+	if err != nil || reservation.OwnerAccountID != accountID || reservation.Amount != retried.CostEstimate {
+		t.Fatalf("retry reservation after top-up = %+v, %v", reservation, err)
+	}
+	if events := f.outbox.Events(); len(events) != 3 || events[2].EventType != "event.job.queued" {
+		t.Fatalf("retry after top-up events = %+v, want exactly one queue event", events)
+	}
+	queuedReplay, queuedReplayErr := retryExpiredAccountImageJob(t, f.orch, accountID, original.ID)
+	if queuedReplayErr != nil || queuedReplay == nil || queuedReplay.ID != retried.ID || queuedReplay.Status != domain.JobStatusQueued {
+		t.Fatalf("queued retry replay = %+v, %v", queuedReplay, queuedReplayErr)
+	}
+	if events := f.outbox.Events(); len(events) != 3 {
+		t.Fatalf("queued retry replay wrote duplicate events: %+v", events)
+	}
+	storedOriginal, err := f.jobs.GetByID(context.Background(), original.ID)
+	if err != nil || storedOriginal.Status != domain.JobStatusExpired || storedOriginal.ErrorCode != domain.PreparedConfirmationExpiredCode || storedOriginal.CostReserved != 0 || storedOriginal.CostCaptured != 0 {
+		t.Fatalf("original after top-up retry = %+v, %v", storedOriginal, err)
 	}
 }
 

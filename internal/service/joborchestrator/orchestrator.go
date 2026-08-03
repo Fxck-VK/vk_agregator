@@ -835,6 +835,15 @@ func (o *Orchestrator) RetryExpiredAccountImageJob(ctx context.Context, accountI
 	if accountID == uuid.Nil || originalJobID == uuid.Nil {
 		return nil, domain.ErrNotFound
 	}
+	var unlock func()
+	if locker, ok := o.jobs.(memoryActivationLocker); ok {
+		unlock = locker.LockAccountActivation(accountID)
+		defer func() {
+			if unlock != nil {
+				unlock()
+			}
+		}()
+	}
 	original, err := o.jobs.GetByIDForAccount(ctx, accountID, originalJobID)
 	if err != nil {
 		return nil, err
@@ -875,6 +884,7 @@ func (o *Orchestrator) RetryExpiredAccountImageJob(ctx context.Context, accountI
 		if err != nil {
 			return nil, createErr
 		}
+		createErr = nil
 	}
 	if retry == nil {
 		return nil, createErr
@@ -886,6 +896,10 @@ func (o *Orchestrator) RetryExpiredAccountImageJob(ctx context.Context, accountI
 		return retry, createErr
 	}
 	if retry.Status == domain.JobStatusAwaitingPayment {
+		if unlock != nil {
+			unlock()
+			unlock = nil
+		}
 		return o.ActivatePreparedAccountJob(ctx, accountID, retry.ID)
 	}
 	return retry, createErr
