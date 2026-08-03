@@ -1,0 +1,83 @@
+.program,
+.section {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.program {
+  gap: var(--space-6);
+}
+
+.launchCard,
+.statistic,
+.steps li {
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-raised);
+}
+
+.launchCard {
+  padding: var(--space-5);
+}
+
+.launchCard h2,
+.launchCard p,
+.section h2,
+.steps p,
+.statistic h3,
+.statistic p,
+.unavailable {
+  margin: 0;
+}
+
+.launchCard h2,
+.section h2 {
+  font-size: 1.125rem;
+}
+
+.launchCard p,
+.steps p,
+.statistic p,
+.unavailable {
+  color: var(--color-text-muted);
+}
+
+.steps,
+.statistics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.steps li,
+.statistic {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-4);
+}
+
+.steps li > span {
+  display: grid;
+  inline-size: 2rem;
+  block-size: 2rem;
+  place-items: center;
+  border: 0.0625rem solid var(--color-border);
+  border-radius: 999px;
+}
+
+.statistics {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.statistic h3 {
+  font-size: 1rem;
+}
+
+@media (width < 42rem) {
+  .steps,
+  .statistics {
+    grid-template-columns: 1fr;
+  }
+}

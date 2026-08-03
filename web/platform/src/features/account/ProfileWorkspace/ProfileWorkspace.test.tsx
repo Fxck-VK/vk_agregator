@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { WorkspaceAccountProvider } from "@/features/account/WorkspaceAccount/WorkspaceAccount";
@@ -37,7 +37,7 @@ describe("ProfileWorkspace", () => {
     expect(screen.getByLabelText("104 ★")).toBeInTheDocument();
     expect(screen.getByText("Электронная почта")).toBeInTheDocument();
     expect(screen.getByText("История покупок и списаний появится здесь после подключения биллинга.")).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "Реферальная программа" })).toBeDisabled();
+    expect(screen.getByRole("tab", { name: "Реферальная программа" })).toHaveAttribute("aria-selected", "false");
     expect(screen.getByRole("button", { name: "Ввести промокод" })).toBeDisabled();
     expect(screen.queryByText(profile.account_id)).not.toBeInTheDocument();
     expect(screen.queryByText("Lite")).not.toBeInTheDocument();
@@ -69,5 +69,19 @@ describe("ProfileWorkspace", () => {
     expect(screen.getByText(ru.account.unavailableLabel)).toBeInTheDocument();
     expect(screen.getByText(ru.profile.noVerifiedIdentity)).toBeInTheDocument();
     expect(screen.queryByText(ru.profile.verifiedIdentity)).not.toBeInTheDocument();
+  });
+
+  it("opens the referral launch state without showing the general billing panel", () => {
+    render(
+      <WorkspaceAccountProvider snapshot={{ balance: 104, profile }}>
+        <ProfileWorkspace />
+      </WorkspaceAccountProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("tab", { name: ru.profile.referralTabLabel }));
+
+    expect(screen.getByRole("tabpanel", { name: ru.profile.referralTabLabel })).toBeInTheDocument();
+    expect(screen.getByText(ru.profile.referralLaunchTitle)).toBeInTheDocument();
+    expect(screen.queryByText(ru.profile.billingTitle)).not.toBeInTheDocument();
   });
 });
