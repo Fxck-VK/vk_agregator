@@ -13,7 +13,7 @@ const thumbRule = stylesheet.match(
 )?.[1];
 
 const activeThumbRule = stylesheet.match(
-  /\.scrollArea:hover::-webkit-scrollbar-thumb,\n\.scrollArea:focus-within::-webkit-scrollbar-thumb \{([\s\S]*?)\n\}/,
+  /\.scrollArea:hover::-webkit-scrollbar-thumb,\r?\n\.scrollArea:focus-within::-webkit-scrollbar-thumb \{([\s\S]*?)\r?\n\}/,
 )?.[1];
 
 const scrollAreaRule = stylesheet.match(/\.scrollArea \{([\s\S]*?)\n\}/)?.[1];
@@ -40,6 +40,7 @@ describe("Sidebar scrollbar", () => {
     expect(stylesheet).toContain("background-color: var(--color-border)");
     expect(stylesheet).toContain("background-color: var(--color-accent)");
     expect(thumbRule).not.toContain("background:");
+    expect(activeThumbRule).toBeDefined();
     expect(activeThumbRule).not.toContain("background:");
   });
 });

@@ -1,15 +1,8 @@
-import { renderToStaticMarkup } from "react-dom/server";
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 import { expect, it } from "vitest";
 
-import { ru } from "@/i18n/ru";
-
-import WorkspaceLoading from "./loading";
-
-it("renders a neutral status fallback while workspace navigation is pending", () => {
-  const markup = renderToStaticMarkup(<WorkspaceLoading />);
-
-  expect(markup.match(/role="status"/g)).toHaveLength(1);
-  expect(markup).toContain(ru.workspace.navigationLoading);
-  expect(markup).not.toContain("workspace-navigation");
-  expect(markup).not.toContain("/web/v1/");
+it("does not install a route-level loading UI for workspace navigation", () => {
+  expect(existsSync(resolve(process.cwd(), "src/app/app/loading.tsx"))).toBe(false);
+  expect(existsSync(resolve(process.cwd(), "src/app/app/loading.module.css"))).toBe(false);
 });
