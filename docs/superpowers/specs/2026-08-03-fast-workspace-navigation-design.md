@@ -38,7 +38,11 @@ or the tab closes. It stores only:
 - one ready first page of the current account's image-job file list.
 
 It does not use `localStorage`, cookies, module-global account state, CDN
-caching, result artifacts, prompts in telemetry, or cached balances/prices.
+caching, result artifacts, prompts in telemetry, or cached balances/prices as
+a source of truth. The account-tab cache necessarily retains the safe text
+already displayed in a ready conversation page and the safe DTO fields in a
+ready files page; those values remain only in the mounted React tree and never
+enter persistent storage, external telemetry, or another account's tree.
 
 ### Stale-while-revalidate private views
 
@@ -77,7 +81,9 @@ fixed sidebar link enters viewport
   account/tab, preventing a long chat list from growing browser memory without
   bound.
 - Files cache retains one 12-item list page, not files themselves or artifact
-  bytes. Artifact metadata and previews remain owner-checked requests.
+  bytes. Its safe DTO may include the prompt and current server-provided
+  estimate because those are required to render the previously displayed cards;
+  artifact metadata and previews remain owner-checked requests.
 - The backend remains the authority for session, account ownership, messages,
   files, jobs, pricing, and balances. Cache data is presentation-only.
 - All browser requests remain same-origin `/web/v1/*`; no provider, storage,

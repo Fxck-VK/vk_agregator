@@ -13,7 +13,7 @@
 - Keep `/app/**` authenticated, dynamic, no-store, and noindex; do not restore `app/app/loading.tsx`.
 - Force prefetch for exactly `/app`, `/app/chats`, `/app/files`, `/app/models`, and `/app/inspiration`; do not prefetch recent chats or all chat histories.
 - Cache only in the React tree for one account and one tab. Do not use `localStorage`, `sessionStorage`, cookies, module-global account state, CDN, or a backend cache for the new cache.
-- Cache at most eight ready first history pages and one ready 12-item image-job page. Never cache failure/not-found state, files/artifact bytes, prices, balances, credentials, prompts, or private URLs.
+- Cache at most eight ready first history pages and one ready 12-item image-job page. Never cache history failure/not-found state, files/artifact bytes, credentials, or private URLs. Safe message text and safe image-job DTO fields already rendered for the current account may remain only in this React-tree cache; they never enter persistent storage or metrics.
 - Browser traffic remains same-origin `/web/v1/*`; frontend never calls providers, payments, storage, databases, or VK directly.
 - DEV metrics never leave the browser and must retain only bounded anonymous categories plus duration.
 - Keep components in their own folders; use CSS Modules only for component-specific visual styles.
