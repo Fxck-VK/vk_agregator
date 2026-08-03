@@ -1,11 +1,13 @@
 .catalog {
   display: grid;
-  gap: var(--space-5);
-  margin-block-start: var(--space-8);
-  padding: var(--space-6);
-  border: 0.0625rem solid var(--color-border);
-  border-radius: var(--radius-lg);
-  background: var(--color-surface);
+  inline-size: min(100%, 72rem);
+  gap: var(--space-8);
+  margin-inline: auto;
+  padding: var(--space-8);
+}
+
+.header {
+  max-inline-size: 46rem;
 }
 
 .header h1,
@@ -14,34 +16,66 @@
 }
 
 .header h1 {
-  margin-block-end: var(--space-2);
+  margin-block-end: var(--space-3);
+  font-size: clamp(2rem, 5vw, 3.75rem);
+  letter-spacing: -0.04em;
+  line-height: 1.05;
 }
 
 .header p {
   margin-block-end: 0;
   color: var(--color-text-muted);
+  font-size: 1.0625rem;
 }
 
 .eyebrow {
-  margin-block-end: var(--space-2) !important;
+  margin-block-end: var(--space-3) !important;
   color: var(--color-accent) !important;
+  font-size: 0.8125rem !important;
   font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.section {
+  display: grid;
+  min-inline-size: 0;
+  gap: var(--space-5);
+}
+
+.sectionTitle {
+  margin: 0;
+  font-size: clamp(1.5rem, 3vw, 2rem);
+  letter-spacing: -0.02em;
 }
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
-  gap: var(--space-4);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-5);
+}
+
+.emptyState,
+.error {
+  margin: 0;
+}
+
+.emptyState {
+  color: var(--color-text-muted);
 }
 
 .error {
-  margin: 0;
-  color: #ff9a9a;
+  color: var(--color-danger);
 }
 
 @media (max-width: 42rem) {
   .catalog {
+    gap: var(--space-6);
     padding: var(--space-4);
+  }
+
+  .header h1 {
+    font-size: clamp(2rem, 12vw, 3rem);
   }
 
   .grid {
