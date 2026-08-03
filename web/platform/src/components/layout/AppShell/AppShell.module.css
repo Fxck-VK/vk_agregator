@@ -19,6 +19,42 @@
   overflow-y: auto;
 }
 
+@supports (-moz-appearance: none) {
+  .workspace {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border) transparent;
+  }
+
+  .workspace:hover,
+  .workspace:focus-within {
+    scrollbar-color: var(--color-text-muted) transparent;
+  }
+}
+
+.workspace::-webkit-scrollbar {
+  inline-size: 0.75rem;
+}
+
+.workspace::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.workspace::-webkit-scrollbar-button {
+  display: none;
+}
+
+.workspace::-webkit-scrollbar-thumb {
+  border: 0.125rem solid transparent;
+  border-radius: 999px;
+  background-clip: content-box;
+  background-color: var(--color-border);
+}
+
+.workspace:hover::-webkit-scrollbar-thumb,
+.workspace:focus-within::-webkit-scrollbar-thumb {
+  background-color: var(--color-text-muted);
+}
+
 @media (width < 48rem) {
   .sidebar {
     inline-size: 0;
