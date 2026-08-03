@@ -11,6 +11,7 @@ vi.mock("next/navigation", () => ({
 
 import { ru } from "@/i18n/ru";
 import { useWorkspaceConversationList } from "@/features/conversations/WorkspaceConversationList/WorkspaceConversationList";
+import { useWorkspaceDataCache, type WorkspaceDataCache } from "@/features/workspace/WorkspaceDataCache/WorkspaceDataCache";
 import type { ConversationItem } from "@/lib/web-api/contracts";
 
 import { WorkspaceFrame } from "./WorkspaceFrame";
@@ -31,6 +32,12 @@ function WorkspaceConversationListProbe() {
   const { conversations } = useWorkspaceConversationList();
 
   return <output>{conversations.map((conversation) => conversation.title).join(",")}</output>;
+}
+
+function WorkspaceDataCacheProbe({ onCache }: { onCache: (cache: WorkspaceDataCache) => void }) {
+  onCache(useWorkspaceDataCache());
+
+  return null;
 }
 
 function mockWideViewport() {
@@ -143,6 +150,30 @@ describe("WorkspaceFrame", () => {
     );
 
     expect(screen.getByRole("status")).toHaveTextContent(workspaceConversation.title);
+  });
+
+  it("recreates the workspace cache when the account changes", () => {
+    const observedCaches: WorkspaceDataCache[] = [];
+    const onCache = (cache: WorkspaceDataCache) => observedCaches.push(cache);
+    mockWideViewport();
+    const rendered = render(
+      <WorkspaceFrame {...workspaceProps}>
+        <WorkspaceDataCacheProbe onCache={onCache} />
+      </WorkspaceFrame>,
+    );
+    const firstCache = observedCaches[0];
+    const firstPage = { items: [], has_more: false, next_cursor: null };
+
+    firstCache.setImageFilesFirstPage(firstPage);
+    rendered.rerender(
+      <WorkspaceFrame {...workspaceProps} accountId="c0d90c5e-9da6-45d6-9868-ffbf25b48d4d">
+        <WorkspaceDataCacheProbe onCache={onCache} />
+      </WorkspaceFrame>,
+    );
+
+    const secondCache = observedCaches[1];
+    expect(secondCache).not.toBe(firstCache);
+    expect(secondCache.getImageFilesFirstPage()).toBeUndefined();
   });
 
   it.each([

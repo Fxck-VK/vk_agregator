@@ -8,6 +8,7 @@ import { Sidebar } from "@/components/layout/Sidebar/Sidebar";
 import { WorkspaceHeader } from "@/components/layout/WorkspaceHeader/WorkspaceHeader";
 import { SidebarConversations } from "@/features/conversations/SidebarConversations/SidebarConversations";
 import { WorkspaceConversationListProvider } from "@/features/conversations/WorkspaceConversationList/WorkspaceConversationList";
+import { WorkspaceDataCacheProvider } from "@/features/workspace/WorkspaceDataCache/WorkspaceDataCache";
 import type { ConversationItem } from "@/lib/web-api/contracts";
 
 const desktopSidebarCollapsedStorageKey = "neirohub.desktop-sidebar-collapsed";
@@ -53,20 +54,22 @@ export function WorkspaceFrame({ account, accountId, balance = null, children, c
 
   return (
     <WorkspaceConversationListProvider accountId={accountId} initialConversations={conversations} key={accountId}>
-      <AppShell
-        header={<WorkspaceHeader balance={balance} />}
-        isDesktopSidebarCollapsed={isDesktopSidebarCollapsed}
-        sidebar={
-          <Sidebar
-            account={account}
-            conversations={<SidebarConversations />}
-            isDesktopCollapsed={isDesktopSidebarCollapsed}
-            onDesktopToggle={toggleDesktopSidebar}
-          />
-        }
-      >
-        {children}
-      </AppShell>
+      <WorkspaceDataCacheProvider>
+        <AppShell
+          header={<WorkspaceHeader balance={balance} />}
+          isDesktopSidebarCollapsed={isDesktopSidebarCollapsed}
+          sidebar={
+            <Sidebar
+              account={account}
+              conversations={<SidebarConversations />}
+              isDesktopCollapsed={isDesktopSidebarCollapsed}
+              onDesktopToggle={toggleDesktopSidebar}
+            />
+          }
+        >
+          {children}
+        </AppShell>
+      </WorkspaceDataCacheProvider>
     </WorkspaceConversationListProvider>
   );
 }
