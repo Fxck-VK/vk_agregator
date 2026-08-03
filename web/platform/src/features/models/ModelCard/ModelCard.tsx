@@ -17,7 +17,7 @@ export function ModelCard({ model }: ModelCardProps) {
     <article className={styles.card}>
       <div className={styles.heading}>
         <p className={styles.type}>{ru.modelsCatalog.imageTypeLabel}</p>
-        <h2>{model.name}</h2>
+        <h3>{model.name}</h3>
       </div>
       <ul aria-label={ru.modelsCatalog.qualityFilterLabel} className={styles.qualities}>
         {model.quality_options.map((value) => (

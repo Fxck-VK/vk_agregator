@@ -18,6 +18,23 @@ import { ModelCard } from "./ModelCard";
 describe("ModelCard", () => {
   afterEach(() => cleanup());
 
+  it("uses a level-three heading beneath the catalog category heading", () => {
+    render(
+      <ModelCard
+        model={{
+          default_quality: "1K",
+          id: "nano-banana-2",
+          max_reference_images: 1,
+          name: "Nano Banana",
+          quality_options: ["1K", "2K"],
+          supports_reference_image: true,
+        }}
+      />,
+    );
+
+    expect(screen.getByRole("heading", { level: 3, name: "Nano Banana" })).toBeInTheDocument();
+  });
+
   it("links a safe model card to the selected generator", () => {
     render(
       <ModelCard

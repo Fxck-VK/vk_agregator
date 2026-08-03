@@ -32,7 +32,7 @@
   line-height: 1;
 }
 
-.heading h2,
+.heading h3,
 .type,
 .price,
 .reference,
@@ -48,7 +48,7 @@
   gap: var(--space-1);
 }
 
-.heading h2 {
+.heading h3 {
   overflow-wrap: anywhere;
   font-size: clamp(1.375rem, 3vw, 1.75rem);
   letter-spacing: -0.02em;
@@ -142,7 +142,7 @@
     align-self: center;
   }
 
-  .heading h2 {
+  .heading h3 {
     font-size: 1.375rem;
   }
 }

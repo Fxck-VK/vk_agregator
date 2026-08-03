@@ -23,9 +23,15 @@ describe("ModelsCatalog responsive styles", () => {
     );
   });
 
-  it("uses a single non-overflowing column at the small-screen breakpoint", () => {
+  it("establishes the catalog as an inline-size query container", () => {
     expect(stylesheet).toMatch(
-      /@media \(max-width: 42rem\) \{[\s\S]*?\.grid\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\);/,
+      /\.catalog\s*\{[^}]*container-name:\s*models-catalog;[^}]*container-type:\s*inline-size;/s,
+    );
+  });
+
+  it("uses one non-overflowing column when the catalog container is narrow", () => {
+    expect(stylesheet).toMatch(
+      /@container models-catalog \(max-width: 52rem\) \{[\s\S]*?\.grid\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\);/,
     );
   });
 
