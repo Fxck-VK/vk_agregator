@@ -1,5 +1,5 @@
 import { StrictMode } from "react";
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/web-api/browser", () => ({
@@ -9,7 +9,7 @@ vi.mock("@/lib/web-api/browser", () => ({
 
 import { ru } from "@/i18n/ru";
 import { webBrowserFetch, webBrowserMutation } from "@/lib/web-api/browser";
-import type { ImageJobList } from "@/lib/web-api/contracts";
+import type { ImageJob, ImageJobList } from "@/lib/web-api/contracts";
 import {
   useWorkspaceDataCache,
   WorkspaceDataCacheProvider,
@@ -17,22 +17,39 @@ import {
 
 import { FilesWorkspace } from "./FilesWorkspace";
 
-function WorkspaceDataCacheSeed({ page }: { page?: ImageJobList }) {
+function WorkspaceDataCacheSeed({
+  page,
+  retryReplacement,
+}: {
+  page?: ImageJobList;
+  retryReplacement?: { job: ImageJob; originalJobID: string };
+}) {
   const cache = useWorkspaceDataCache();
 
   if (page !== undefined) {
     cache.setImageFilesFirstPage(page);
   }
+  if (retryReplacement !== undefined) {
+    cache.setImageFileRetryReplacement(retryReplacement);
+  }
 
   return null;
 }
 
-function renderFilesWorkspace({ cachePage, strictMode = false }: { cachePage?: ImageJobList; strictMode?: boolean } = {}) {
+function renderFilesWorkspace({
+  cachePage,
+  retryReplacement,
+  strictMode = false,
+}: {
+  cachePage?: ImageJobList;
+  retryReplacement?: { job: ImageJob; originalJobID: string };
+  strictMode?: boolean;
+} = {}) {
   const workspace = <FilesWorkspace />;
 
   return render(
     <WorkspaceDataCacheProvider>
-      <WorkspaceDataCacheSeed page={cachePage} />
+      <WorkspaceDataCacheSeed page={cachePage} retryReplacement={retryReplacement} />
       {strictMode ? <StrictMode>{workspace}</StrictMode> : workspace}
     </WorkspaceDataCacheProvider>,
   );
@@ -425,6 +442,87 @@ describe("FilesWorkspace", () => {
     expect(screen.getByRole("img", { name: ru.files.generatedImageAlt })).toBe(image);
     expect(screen.getByText(serverSiblingJob.prompt)).toBeInTheDocument();
     expect(webBrowserFetch).toHaveBeenCalledTimes(3);
+  });
+
+  it("keeps a newer terminal revalidation when an older in-flight retry poll resolves", async () => {
+    vi.useFakeTimers();
+    try {
+      const retryingChild = { ...retriedQueuedJob, prompt: "retry child race result" };
+      const cachedPage: ImageJobList = {
+        items: [retryingChild],
+        has_more: false,
+        next_cursor: null,
+      };
+      const newerSucceededChild = {
+        ...retryingChild,
+        status: "succeeded" as const,
+        updated_at: "2026-08-03T12:02:00Z",
+      };
+      const olderPollingChild = {
+        ...retryingChild,
+        status: "provider_processing" as const,
+        updated_at: "2026-08-03T12:01:00Z",
+      };
+      let resolveRevalidation: (response: Response) => void = () => {};
+      const revalidation = new Promise<Response>((resolve) => {
+        resolveRevalidation = resolve;
+      });
+      let resolveStalePoll: (response: Response) => void = () => {};
+      const stalePoll = new Promise<Response>((resolve) => {
+        resolveStalePoll = resolve;
+      });
+      let retryPollRequests = 0;
+      vi.mocked(webBrowserFetch).mockImplementation((path) => {
+        if (path === "/web/v1/image-jobs?limit=12") {
+          return revalidation;
+        }
+        if (path === `/web/v1/image-jobs/${retryingChild.id}`) {
+          retryPollRequests += 1;
+          return retryPollRequests === 1 ? stalePoll : Promise.reject(new Error("Unexpected retry poll."));
+        }
+        if (path === `/web/v1/image-jobs/${retryingChild.id}/result`) {
+          return Promise.resolve(Response.json(retriedResult));
+        }
+        return Promise.reject(new Error("Unexpected test request."));
+      });
+
+      renderFilesWorkspace({
+        cachePage: cachedPage,
+        retryReplacement: { originalJobID: expiredPreparationJob.id, job: retryingChild },
+      });
+
+      act(() => {
+        vi.advanceTimersByTime(0);
+      });
+      expect(screen.getByRole("status", { name: ru.files.retrying })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: retryingChild.prompt })).toBeInTheDocument();
+
+      act(() => {
+        vi.advanceTimersByTime(1501);
+      });
+      expect(retryPollRequests).toBe(1);
+
+      await act(async () => {
+        resolveRevalidation(Response.json({ items: [newerSucceededChild], has_more: false, next_cursor: null }));
+        await Promise.resolve();
+      });
+      expect(screen.getByRole("img", { name: ru.files.generatedImageAlt })).toBeInTheDocument();
+
+      await act(async () => {
+        resolveStalePoll(Response.json({ job: olderPollingChild }));
+        await Promise.resolve();
+      });
+
+      expect(screen.getByRole("img", { name: ru.files.generatedImageAlt })).toBeInTheDocument();
+      expect(screen.getByText(ru.files.statusReady)).toBeInTheDocument();
+      expect(screen.queryByRole("status", { name: ru.files.retrying })).not.toBeInTheDocument();
+      act(() => {
+        vi.advanceTimersByTime(3000);
+      });
+      expect(retryPollRequests).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("preserves the latest retry child and tracking across a cached workspace remount", async () => {

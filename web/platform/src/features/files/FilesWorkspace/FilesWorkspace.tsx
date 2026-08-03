@@ -32,7 +32,30 @@ function latestKnownImageJob(currentJob: ImageJob | undefined, incomingJob: Imag
   if (currentJob === undefined) {
     return incomingJob;
   }
-  return Date.parse(incomingJob.updated_at) > Date.parse(currentJob.updated_at) ? incomingJob : currentJob;
+  const incomingUpdatedAt = Date.parse(incomingJob.updated_at);
+  const currentUpdatedAt = Date.parse(currentJob.updated_at);
+  if (incomingUpdatedAt > currentUpdatedAt) {
+    return incomingJob;
+  }
+  if (incomingUpdatedAt < currentUpdatedAt) {
+    return currentJob;
+  }
+
+  return isTerminalImageJobStatus(incomingJob.status) && !isTerminalImageJobStatus(currentJob.status)
+    ? incomingJob
+    : currentJob;
+}
+
+function findRetryReplacementByChildJobID(
+  replacementsByOriginalJobID: ReadonlyMap<string, ImageJob>,
+  childJobID: string,
+): { job: ImageJob; originalJobID: string } | undefined {
+  for (const [originalJobID, job] of replacementsByOriginalJobID) {
+    if (job.id === childJobID) {
+      return { job, originalJobID };
+    }
+  }
+  return undefined;
 }
 
 function replaceOriginalWithUniqueChild(currentJobs: ImageJob[], originalJobID: string, childJob: ImageJob): ImageJob[] {
@@ -139,7 +162,7 @@ function shouldTrackRetryJob(job: ImageJob): boolean {
 
 type RetryJobPollerProps = {
   jobID: string;
-  onJobUpdate: (job: ImageJob) => void;
+  onJobUpdate: (job: ImageJob) => ImageJob;
 };
 
 function RetryJobPoller({ jobID, onJobUpdate }: Readonly<RetryJobPollerProps>) {
@@ -185,8 +208,8 @@ function RetryJobPoller({ jobID, onJobUpdate }: Readonly<RetryJobPollerProps>) {
           return;
         }
         activeRequest = undefined;
-        onJobUpdate(updatedJob);
-        if (shouldTrackRetryJob(updatedJob)) {
+        const canonicalJob = onJobUpdate(updatedJob);
+        if (shouldTrackRetryJob(canonicalJob)) {
           schedule();
         }
       } catch {
@@ -285,7 +308,8 @@ export function FilesWorkspace() {
     imagePreviewQueueRef.current = createPreviewQueue();
   }
 
-  const rememberRetryReplacement = useCallback((originalJobID: string, job: ImageJob) => {
+  const rememberRetryReplacement = useCallback((originalJobID: string, incomingJob: ImageJob): ImageJob => {
+    const job = latestKnownImageJob(retryReplacementsRef.current.get(originalJobID), incomingJob);
     retryReplacementsRef.current.set(originalJobID, job);
     cache.setImageFileRetryReplacement({ originalJobID, job });
 
@@ -298,7 +322,28 @@ export function FilesWorkspace() {
       }
       cache.setImageFilesFirstPage({ ...cachedPage, items: reconciledPage.jobs });
     }
+
+    return retryReplacementsRef.current.get(originalJobID) ?? job;
   }, [cache]);
+
+  const stopTrackingTerminalRetryJobs = useCallback(() => {
+    const terminalJobIDs = new Set(
+      [...retryReplacementsRef.current.values()]
+        .filter((job) => !shouldTrackRetryJob(job))
+        .map((job) => job.id),
+    );
+    if (terminalJobIDs.size === 0) {
+      return;
+    }
+
+    setTrackedRetryJobIDs((currentIDs) => {
+      const nextIDs = new Set(currentIDs);
+      for (const jobID of terminalJobIDs) {
+        nextIDs.delete(jobID);
+      }
+      return nextIDs.size === currentIDs.size ? currentIDs : nextIDs;
+    });
+  }, []);
 
   const loadPage = useCallback(async (cursor?: string) => {
     if (listRequestInFlight.current) {
@@ -322,6 +367,7 @@ export function FilesWorkspace() {
           retryReplacementsRef.current.set(replacement.originalJobID, replacement.job);
           cache.setImageFileRetryReplacement(replacement);
         }
+        stopTrackingTerminalRetryJobs();
         cache.setImageFilesFirstPage({ ...page, items: reconciledPage.jobs });
         setJobs(reconciledPage.jobs);
       } else {
@@ -345,7 +391,7 @@ export function FilesWorkspace() {
         setIsLoadingMore(false);
       }
     }
-  }, [cache]);
+  }, [cache, stopTrackingTerminalRetryJobs]);
 
   useEffect(() => {
     workspaceActiveRef.current = true;
@@ -394,24 +440,31 @@ export function FilesWorkspace() {
     imagePreviewQueueRef.current?.enqueue(job);
   }, [resultsByJobID]);
 
-  const handleTrackedRetryJobUpdate = useCallback((updatedJob: ImageJob) => {
-    for (const [originalJobID, retriedJob] of retryReplacementsRef.current) {
-      if (retriedJob.id === updatedJob.id) {
-        rememberRetryReplacement(originalJobID, updatedJob);
-        break;
-      }
+  const handleTrackedRetryJobUpdate = useCallback((updatedJob: ImageJob): ImageJob => {
+    const visibleJob = jobsRef.current.find((job) => job.id === updatedJob.id);
+    let canonicalJob = latestKnownImageJob(visibleJob, updatedJob);
+    const knownReplacement = findRetryReplacementByChildJobID(retryReplacementsRef.current, updatedJob.id);
+    if (knownReplacement !== undefined) {
+      canonicalJob = latestKnownImageJob(knownReplacement.job, canonicalJob);
+      canonicalJob = rememberRetryReplacement(knownReplacement.originalJobID, canonicalJob);
     }
-    setJobs((currentJobs) => replaceJobByIDOnce(currentJobs, updatedJob));
-    if (!shouldTrackRetryJob(updatedJob)) {
+
+    setJobs((currentJobs) => replaceJobByIDOnce(currentJobs, canonicalJob));
+    if (shouldTrackRetryJob(canonicalJob)) {
+      setTrackedRetryJobIDs((currentIDs) => currentIDs.has(canonicalJob.id)
+        ? currentIDs
+        : new Set(currentIDs).add(canonicalJob.id));
+    } else {
       setTrackedRetryJobIDs((currentIDs) => {
         const nextIDs = new Set(currentIDs);
-        nextIDs.delete(updatedJob.id);
-        return nextIDs;
+        const removed = nextIDs.delete(updatedJob.id) || nextIDs.delete(canonicalJob.id);
+        return removed ? nextIDs : currentIDs;
       });
     }
-    if (updatedJob.status === "succeeded") {
-      imagePreviewQueueRef.current?.enqueue(updatedJob);
+    if (canonicalJob.status === "succeeded") {
+      imagePreviewQueueRef.current?.enqueue(canonicalJob);
     }
+    return canonicalJob;
   }, [rememberRetryReplacement]);
 
   const retryJob = useCallback(async (expiredJob: ImageJob) => {
