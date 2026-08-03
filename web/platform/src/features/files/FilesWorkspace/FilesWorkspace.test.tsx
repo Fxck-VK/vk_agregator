@@ -8,8 +8,34 @@ vi.mock("@/lib/web-api/browser", () => ({
 
 import { ru } from "@/i18n/ru";
 import { webBrowserFetch } from "@/lib/web-api/browser";
+import type { ImageJobList } from "@/lib/web-api/contracts";
+import {
+  useWorkspaceDataCache,
+  WorkspaceDataCacheProvider,
+} from "@/features/workspace/WorkspaceDataCache/WorkspaceDataCache";
 
 import { FilesWorkspace } from "./FilesWorkspace";
+
+function WorkspaceDataCacheSeed({ page }: { page?: ImageJobList }) {
+  const cache = useWorkspaceDataCache();
+
+  if (page !== undefined) {
+    cache.setImageFilesFirstPage(page);
+  }
+
+  return null;
+}
+
+function renderFilesWorkspace({ cachePage, strictMode = false }: { cachePage?: ImageJobList; strictMode?: boolean } = {}) {
+  const workspace = <FilesWorkspace />;
+
+  return render(
+    <WorkspaceDataCacheProvider>
+      <WorkspaceDataCacheSeed page={cachePage} />
+      {strictMode ? <StrictMode>{workspace}</StrictMode> : workspace}
+    </WorkspaceDataCacheProvider>,
+  );
+}
 
 const firstSucceededJob = {
   id: "d7c979f5-24e5-4f88-924b-a592d6e5a906",
@@ -74,7 +100,7 @@ describe("FilesWorkspace", () => {
       .mockResolvedValueOnce(Response.json({ items: [firstSucceededJob], has_more: false, next_cursor: null }))
       .mockResolvedValueOnce(Response.json(firstResult));
 
-    render(<FilesWorkspace />);
+    renderFilesWorkspace();
 
     const image = await screen.findByRole("img", { name: ru.files.generatedImageAlt });
     expect(webBrowserFetch).toHaveBeenNthCalledWith(1, "/web/v1/image-jobs?limit=12");
@@ -88,11 +114,7 @@ describe("FilesWorkspace", () => {
       .mockResolvedValueOnce(Response.json({ items: [firstSucceededJob], has_more: false, next_cursor: null }))
       .mockResolvedValueOnce(Response.json(firstResult));
 
-    render(
-      <StrictMode>
-        <FilesWorkspace />
-      </StrictMode>,
-    );
+    renderFilesWorkspace({ strictMode: true });
 
     expect(await screen.findByRole("img", { name: ru.files.generatedImageAlt })).toHaveAttribute(
       "src",
@@ -106,7 +128,7 @@ describe("FilesWorkspace", () => {
       .mockResolvedValueOnce(Response.json(firstResult))
       .mockResolvedValueOnce(Response.json(secondResult));
 
-    render(<FilesWorkspace />);
+    renderFilesWorkspace();
 
     await screen.findByText(firstSucceededJob.prompt);
     await screen.findByText(secondSucceededJob.prompt);
@@ -123,7 +145,7 @@ describe("FilesWorkspace", () => {
       .mockResolvedValueOnce(Response.json({ items: [firstSucceededJob, pendingJob], has_more: false, next_cursor: null }))
       .mockResolvedValueOnce(Response.json(firstResult));
 
-    render(<FilesWorkspace />);
+    renderFilesWorkspace();
 
     await screen.findByText(firstSucceededJob.prompt);
     await screen.findByText(pendingJob.prompt);
@@ -142,7 +164,7 @@ describe("FilesWorkspace", () => {
       .mockResolvedValueOnce(Response.json({ items: [firstSucceededJob, secondSucceededJob, thirdSucceededJob], has_more: false, next_cursor: null }))
       .mockReturnValue(new Promise<Response>(() => {}));
 
-    render(<FilesWorkspace />);
+    renderFilesWorkspace();
 
     await screen.findByText(thirdSucceededJob.prompt);
     await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
@@ -165,7 +187,7 @@ describe("FilesWorkspace", () => {
       .mockReturnValueOnce(firstPreview)
       .mockReturnValueOnce(secondPreview);
 
-    const workspace = render(<FilesWorkspace />);
+    const workspace = renderFilesWorkspace();
 
     await screen.findByText(thirdSucceededJob.prompt);
     await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
@@ -184,7 +206,7 @@ describe("FilesWorkspace", () => {
       .mockResolvedValueOnce(Response.json({ items: [firstSucceededJob], has_more: false, next_cursor: null }))
       .mockResolvedValueOnce(Response.json(firstResult));
 
-    render(<FilesWorkspace />);
+    renderFilesWorkspace();
 
     await screen.findByRole("img", { name: ru.files.generatedImageAlt });
     fireEvent.change(screen.getByRole("searchbox", { name: ru.files.searchLabel }), { target: { value: "night" } });
@@ -200,7 +222,7 @@ describe("FilesWorkspace", () => {
       .mockResolvedValueOnce(Response.json({ items: [secondSucceededJob], has_more: false, next_cursor: null }))
       .mockResolvedValueOnce(Response.json(secondResult));
 
-    render(<FilesWorkspace />);
+    renderFilesWorkspace();
 
     await screen.findByText(firstSucceededJob.prompt);
     fireEvent.click(screen.getByRole("button", { name: ru.files.loadMore }));
@@ -214,12 +236,39 @@ describe("FilesWorkspace", () => {
       .mockResolvedValueOnce(Response.json({ items: [firstSucceededJob], has_more: false, next_cursor: null }))
       .mockResolvedValueOnce(Response.json({ error: "Unavailable" }, { status: 503 }));
 
-    render(<FilesWorkspace />);
+    renderFilesWorkspace();
 
     await screen.findByRole("alert");
     expect(webBrowserFetch).toHaveBeenCalledTimes(2);
 
     fireEvent.click(screen.getByRole("button", { name: ru.files.previewRetry }));
     await vi.waitFor(() => expect(webBrowserFetch).toHaveBeenCalledTimes(3));
+  });
+
+  it("renders a cached first file page before delayed revalidation completes", async () => {
+    const cachedPage: ImageJobList = {
+      items: [{ ...firstSucceededJob, status: "queued", prompt: "cached workspace file" }],
+      has_more: false,
+      next_cursor: null,
+    };
+    const refreshedPage: ImageJobList = {
+      items: [{ ...firstSucceededJob, status: "queued", prompt: "refreshed workspace file" }],
+      has_more: false,
+      next_cursor: null,
+    };
+    let resolveRevalidation: (response: Response) => void = () => {};
+    const revalidation = new Promise<Response>((resolve) => {
+      resolveRevalidation = resolve;
+    });
+    vi.mocked(webBrowserFetch).mockReturnValueOnce(revalidation);
+
+    renderFilesWorkspace({ cachePage: cachedPage });
+
+    expect(screen.getByText("cached workspace file")).toBeInTheDocument();
+    expect(screen.queryByText(ru.files.loading)).not.toBeInTheDocument();
+
+    resolveRevalidation(Response.json(refreshedPage));
+
+    expect(await screen.findByText("refreshed workspace file")).toBeInTheDocument();
   });
 });

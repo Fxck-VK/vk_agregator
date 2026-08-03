@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/Button/Button";
 import { type FileResultState } from "@/features/files/FileCard/FileCard";
 import { FilesGrid } from "@/features/files/FilesGrid/FilesGrid";
 import { FilesToolbar, type FileStatusFilter } from "@/features/files/FilesToolbar/FilesToolbar";
+import { useWorkspaceDataCache } from "@/features/workspace/WorkspaceDataCache/WorkspaceDataCache";
+import { recordWorkspaceDataLoad } from "@/features/workspace/WorkspaceNavigationMetrics/workspace-navigation-metrics";
 import { ru } from "@/i18n/ru";
 import type { ImageJob, ImageJobResult } from "@/lib/web-api/contracts";
 
@@ -28,9 +30,11 @@ function matchesStatusFilter(job: ImageJob, filter: FileStatusFilter): boolean {
 }
 
 export function FilesWorkspace() {
-  const [jobs, setJobs] = useState<ImageJob[]>([]);
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
-  const [hasLoaded, setHasLoaded] = useState(false);
+  const cache = useWorkspaceDataCache();
+  const [cachedFirstPage] = useState(() => cache.getImageFilesFirstPage());
+  const [jobs, setJobs] = useState<ImageJob[]>(() => cachedFirstPage?.items ?? []);
+  const [nextCursor, setNextCursor] = useState<string | null>(() => cachedFirstPage?.next_cursor ?? null);
+  const [hasLoaded, setHasLoaded] = useState(() => cachedFirstPage !== undefined);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [loadFailed, setLoadFailed] = useState(false);
@@ -39,6 +43,7 @@ export function FilesWorkspace() {
   const [resultsByJobID, setResultsByJobID] = useState<Record<string, ImageJobResult>>({});
   const [resultStatesByJobID, setResultStatesByJobID] = useState<Record<string, FileResultState>>({});
   const listRequestInFlight = useRef(false);
+  const hasRecordedCacheHit = useRef(false);
   const imagePreviewQueueRef = useRef<ReturnType<typeof createImageFilePreviewQueue> | null>(null);
   const createPreviewQueue = useCallback(() =>
     createImageFilePreviewQueue({
@@ -64,6 +69,7 @@ export function FilesWorkspace() {
     }
 
     const isFirstPage = cursor === undefined;
+    const requestStartedAt = performance.now();
     listRequestInFlight.current = true;
     if (isFirstPage) {
       setIsLoading(true);
@@ -73,6 +79,9 @@ export function FilesWorkspace() {
     setLoadFailed(false);
     try {
       const page = await fetchImageFilesPage(cursor);
+      if (isFirstPage) {
+        cache.setImageFilesFirstPage(page);
+      }
       setJobs((currentJobs) => (isFirstPage ? page.items : appendDistinctImageJobs(currentJobs, page.items)));
       setNextCursor(page.next_cursor);
       setHasLoaded(true);
@@ -82,11 +91,26 @@ export function FilesWorkspace() {
       listRequestInFlight.current = false;
       if (isFirstPage) {
         setIsLoading(false);
+        recordWorkspaceDataLoad({
+          type: "data",
+          target: "files",
+          source: "network",
+          durationMs: performance.now() - requestStartedAt,
+        });
       } else {
         setIsLoadingMore(false);
       }
     }
-  }, []);
+  }, [cache]);
+
+  useEffect(() => {
+    if (cachedFirstPage === undefined || hasRecordedCacheHit.current) {
+      return;
+    }
+
+    hasRecordedCacheHit.current = true;
+    recordWorkspaceDataLoad({ type: "data", target: "files", source: "cache", durationMs: 0 });
+  }, [cachedFirstPage]);
 
   useEffect(() => {
     const startupTimer = window.setTimeout(() => {
