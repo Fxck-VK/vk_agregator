@@ -27,6 +27,47 @@ function appendDistinctImageJobs(currentJobs: ImageJob[], additionalJobs: ImageJ
   return [...currentJobs, ...additionalJobs.filter((job) => !knownIDs.has(job.id))];
 }
 
+function reconcileRetryReplacements(
+  serverJobs: ImageJob[],
+  replacementsByOriginalJobID: ReadonlyMap<string, ImageJob>,
+): { confirmedOriginalJobIDs: string[]; jobs: ImageJob[] } {
+  const serverJobIDs = new Set(serverJobs.map((job) => job.id));
+  const replacementsByChildJobID = new Map(
+    [...replacementsByOriginalJobID].map(([originalJobID, job]) => [job.id, { job, originalJobID }] as const),
+  );
+  const confirmedOriginalJobIDs: string[] = [];
+  const addedJobIDs = new Set<string>();
+  const jobs: ImageJob[] = [];
+
+  for (const serverJob of serverJobs) {
+    const confirmedReplacement = replacementsByChildJobID.get(serverJob.id);
+    if (confirmedReplacement !== undefined) {
+      confirmedOriginalJobIDs.push(confirmedReplacement.originalJobID);
+      if (!addedJobIDs.has(confirmedReplacement.job.id)) {
+        jobs.push(confirmedReplacement.job);
+        addedJobIDs.add(confirmedReplacement.job.id);
+      }
+      continue;
+    }
+
+    const localReplacement = replacementsByOriginalJobID.get(serverJob.id);
+    if (localReplacement !== undefined) {
+      if (!serverJobIDs.has(localReplacement.id) && !addedJobIDs.has(localReplacement.id)) {
+        jobs.push(localReplacement);
+        addedJobIDs.add(localReplacement.id);
+      }
+      continue;
+    }
+
+    if (!addedJobIDs.has(serverJob.id)) {
+      jobs.push(serverJob);
+      addedJobIDs.add(serverJob.id);
+    }
+  }
+
+  return { confirmedOriginalJobIDs, jobs };
+}
+
 function matchesStatusFilter(job: ImageJob, filter: FileStatusFilter): boolean {
   if (filter === "all") {
     return true;
@@ -160,6 +201,7 @@ export function FilesWorkspace() {
   const hasRecordedCacheHit = useRef(false);
   const imagePreviewQueueRef = useRef<ReturnType<typeof createImageFilePreviewQueue> | null>(null);
   const retryRequestsInFlightRef = useRef(new Set<string>());
+  const retryReplacementsRef = useRef(new Map<string, ImageJob>());
   const workspaceActiveRef = useRef(true);
   const createPreviewQueue = useCallback(() =>
     createImageFilePreviewQueue({
@@ -197,8 +239,14 @@ export function FilesWorkspace() {
       const page = await fetchImageFilesPage(cursor);
       if (isFirstPage) {
         cache.setImageFilesFirstPage(page);
+        const reconciledPage = reconcileRetryReplacements(page.items, retryReplacementsRef.current);
+        for (const originalJobID of reconciledPage.confirmedOriginalJobIDs) {
+          retryReplacementsRef.current.delete(originalJobID);
+        }
+        setJobs(reconciledPage.jobs);
+      } else {
+        setJobs((currentJobs) => appendDistinctImageJobs(currentJobs, page.items));
       }
-      setJobs((currentJobs) => (isFirstPage ? page.items : appendDistinctImageJobs(currentJobs, page.items)));
       setNextCursor(page.next_cursor);
       setHasLoaded(true);
     } catch {
@@ -263,6 +311,12 @@ export function FilesWorkspace() {
   }, [resultsByJobID]);
 
   const handleTrackedRetryJobUpdate = useCallback((updatedJob: ImageJob) => {
+    for (const [originalJobID, retriedJob] of retryReplacementsRef.current) {
+      if (retriedJob.id === updatedJob.id) {
+        retryReplacementsRef.current.set(originalJobID, updatedJob);
+        break;
+      }
+    }
     setJobs((currentJobs) => currentJobs.map((job) => (job.id === updatedJob.id ? updatedJob : job)));
     if (!shouldTrackRetryJob(updatedJob)) {
       setTrackedRetryJobIDs((currentIDs) => {
@@ -288,6 +342,7 @@ export function FilesWorkspace() {
       if (!workspaceActiveRef.current) {
         return;
       }
+      retryReplacementsRef.current.set(expiredJob.id, retriedJob);
       setJobs((currentJobs) => currentJobs.map((job) => (job.id === expiredJob.id ? retriedJob : job)));
       if (shouldTrackRetryJob(retriedJob)) {
         setTrackedRetryJobIDs((currentIDs) => new Set(currentIDs).add(retriedJob.id));

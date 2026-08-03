@@ -121,6 +121,7 @@ const retriedResult = {
 describe("FilesWorkspace", () => {
   afterEach(() => {
     cleanup();
+    vi.restoreAllMocks();
     vi.resetAllMocks();
   });
 
@@ -379,6 +380,77 @@ describe("FilesWorkspace", () => {
     resolveRevalidation(Response.json(refreshedPage));
 
     expect(await screen.findByText("refreshed workspace file")).toBeInTheDocument();
+  });
+
+  it("preserves a locally retried child when stale cached-page revalidation completes", async () => {
+    const cachedPage: ImageJobList = {
+      items: [expiredPreparationJob],
+      has_more: false,
+      next_cursor: null,
+    };
+    const serverSiblingJob = {
+      ...secondSucceededJob,
+      status: "queued" as const,
+      prompt: "server sibling from revalidation",
+    };
+    const staleRevalidationPage: ImageJobList = {
+      items: [expiredPreparationJob, serverSiblingJob],
+      has_more: false,
+      next_cursor: null,
+    };
+    const retriedSucceededJob = { ...retriedQueuedJob, status: "succeeded" as const };
+    let resolveRevalidation: (response: Response) => void = () => {};
+    const revalidation = new Promise<Response>((resolve) => {
+      resolveRevalidation = resolve;
+    });
+    vi.mocked(webBrowserFetch)
+      .mockReturnValueOnce(revalidation)
+      .mockResolvedValueOnce(Response.json({ job: retriedSucceededJob }))
+      .mockResolvedValueOnce(Response.json(retriedResult));
+    vi.mocked(webBrowserMutation).mockResolvedValueOnce(Response.json({ job: retriedQueuedJob }, { status: 200 }));
+
+    renderFilesWorkspace({ cachePage: cachedPage });
+
+    fireEvent.click(screen.getByRole("button", { name: ru.files.retry }));
+    await vi.waitFor(() => expect(screen.getByRole("status", { name: ru.files.retrying })).toBeInTheDocument());
+
+    const image = await screen.findByRole("img", { name: ru.files.generatedImageAlt }, { timeout: 3000 });
+    expect(image).toHaveAttribute("src", `/web/v1/image-artifacts/${retriedResult.artifacts[0].id}`);
+
+    resolveRevalidation(Response.json(staleRevalidationPage));
+
+    expect(await screen.findByText(serverSiblingJob.prompt)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: ru.files.retry })).not.toBeInTheDocument();
+    expect(screen.getByRole("img", { name: ru.files.generatedImageAlt })).toBe(image);
+    expect(screen.getByText(serverSiblingJob.prompt)).toBeInTheDocument();
+    expect(webBrowserFetch).toHaveBeenCalledTimes(3);
+  });
+
+  it("resumes polling only the returned retry job when the files tab becomes visible", async () => {
+    let visibilityState: DocumentVisibilityState = "hidden";
+    vi.spyOn(document, "visibilityState", "get").mockImplementation(() => visibilityState);
+    const retriedSucceededJob = { ...retriedQueuedJob, status: "succeeded" as const };
+    vi.mocked(webBrowserFetch)
+      .mockResolvedValueOnce(Response.json({ items: [expiredPreparationJob], has_more: false, next_cursor: null }))
+      .mockResolvedValueOnce(Response.json({ job: retriedSucceededJob }))
+      .mockResolvedValueOnce(Response.json(retriedResult));
+    vi.mocked(webBrowserMutation).mockResolvedValueOnce(Response.json({ job: retriedQueuedJob }, { status: 200 }));
+
+    renderFilesWorkspace();
+
+    fireEvent.click(await screen.findByRole("button", { name: ru.files.retry }));
+    await vi.waitFor(() => {
+      expect(screen.getByRole("status", { name: ru.files.retrying })).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: ru.files.retry })).not.toBeInTheDocument();
+    });
+    expect(webBrowserFetch).toHaveBeenCalledTimes(1);
+
+    visibilityState = "visible";
+    fireEvent(document, new Event("visibilitychange"));
+
+    expect(await screen.findByRole("img", { name: ru.files.generatedImageAlt })).toBeInTheDocument();
+    expect(webBrowserFetch).toHaveBeenNthCalledWith(2, `/web/v1/image-jobs/${retriedQueuedJob.id}`, expect.anything());
+    expect(webBrowserFetch).toHaveBeenCalledTimes(3);
   });
 
   it("retries only the clicked expired card in place and marks it busy while the mutation is unresolved", async () => {
