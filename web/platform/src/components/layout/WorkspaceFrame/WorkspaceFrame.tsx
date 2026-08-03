@@ -9,6 +9,7 @@ import { WorkspaceHeader } from "@/components/layout/WorkspaceHeader/WorkspaceHe
 import { SidebarConversations } from "@/features/conversations/SidebarConversations/SidebarConversations";
 import { WorkspaceConversationListProvider } from "@/features/conversations/WorkspaceConversationList/WorkspaceConversationList";
 import { WorkspaceDataCacheProvider } from "@/features/workspace/WorkspaceDataCache/WorkspaceDataCache";
+import { WorkspaceNavigationMetrics } from "@/features/workspace/WorkspaceNavigationMetrics/WorkspaceNavigationMetrics";
 import type { ConversationItem } from "@/lib/web-api/contracts";
 
 const desktopSidebarCollapsedStorageKey = "neirohub.desktop-sidebar-collapsed";
@@ -67,6 +68,7 @@ export function WorkspaceFrame({ account, accountId, balance = null, children, c
             />
           }
         >
+          <WorkspaceNavigationMetrics />
           {children}
         </AppShell>
       </WorkspaceDataCacheProvider>

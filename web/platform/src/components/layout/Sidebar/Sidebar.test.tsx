@@ -20,7 +20,7 @@ import { SidebarConversations } from "@/features/conversations/SidebarConversati
 import { webBrowserMutation } from "@/lib/web-api/browser";
 import type { ConversationItem } from "@/lib/web-api/contracts";
 
-import { Sidebar } from "./Sidebar";
+import { Sidebar, workspaceNavigationItems } from "./Sidebar";
 import sidebarStyles from "./Sidebar.module.css";
 
 const recentConversations: ConversationItem[] = Array.from({ length: 20 }, (_, index) => ({
@@ -105,6 +105,16 @@ describe("Sidebar", () => {
     cleanup();
     vi.clearAllMocks();
     vi.unstubAllGlobals();
+  });
+
+  it("defines exactly the five fixed workspace routes as full prefetch targets", () => {
+    expect(workspaceNavigationItems).toEqual([
+      { href: "/app", label: ru.navigation.workspace, prefetch: true },
+      { href: "/app/chats", label: ru.navigation.chats, prefetch: true },
+      { href: "/app/files", label: ru.navigation.files, prefetch: true },
+      { href: "/app/models", label: ru.navigation.models, prefetch: true },
+      { href: "/app/inspiration", label: ru.navigation.inspiration, prefetch: true },
+    ]);
   });
 
   it("keeps the narrow drawer closed and inaccessible until its trigger opens it", () => {

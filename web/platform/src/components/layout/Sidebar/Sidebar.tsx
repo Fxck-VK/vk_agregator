@@ -12,12 +12,12 @@ import styles from "./Sidebar.module.css";
 
 const desktopViewportQuery = "(min-width: 48rem)";
 
-const navigationItems = [
-  { href: "/app", label: ru.navigation.workspace },
-  { href: "/app/chats", label: ru.navigation.chats },
-  { href: "/app/files", label: ru.navigation.files },
-  { href: "/app/models", label: ru.navigation.models },
-  { href: "/app/inspiration", label: ru.navigation.inspiration },
+export const workspaceNavigationItems = [
+  { href: "/app", label: ru.navigation.workspace, prefetch: true },
+  { href: "/app/chats", label: ru.navigation.chats, prefetch: true },
+  { href: "/app/files", label: ru.navigation.files, prefetch: true },
+  { href: "/app/models", label: ru.navigation.models, prefetch: true },
+  { href: "/app/inspiration", label: ru.navigation.inspiration, prefetch: true },
 ] as const;
 
 type SidebarProps = {
@@ -291,12 +291,13 @@ export function Sidebar({ account, conversations, isDesktopCollapsed = false, on
         <div className={styles.scrollArea}>
           <nav aria-label={ru.navigation.label} id={navigationId}>
             <ul className={styles.navigationList}>
-              {navigationItems.map((item, index) => (
+              {workspaceNavigationItems.map((item, index) => (
                 <li key={item.href}>
                   <Link
                     href={item.href}
                     id={item.href === "/app/chats" ? "sidebar-new-chat" : undefined}
                     onClick={() => closeNavigation(true)}
+                    prefetch={item.prefetch}
                     ref={index === 0 ? firstLinkRef : undefined}
                   >
                     {item.label}
