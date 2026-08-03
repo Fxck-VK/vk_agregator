@@ -42,15 +42,30 @@ describe("AccountControl", () => {
     vi.clearAllMocks();
   });
 
-  it("shows only the first verified, non-empty identity label", () => {
-    render(<AccountControl profile={profile} />);
+  it("opens a compact account menu with placeholder actions and no future routes", () => {
+    const { container } = render(<AccountControl profile={profile} />);
+    const trigger = screen.getByRole("button", { name: "Открыть меню аккаунта" });
 
-    expect(screen.getByRole("heading", { name: ru.account.heading })).toBeInTheDocument();
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
     expect(screen.getByText("member@example.com")).toBeInTheDocument();
+    expect(screen.queryByText("ME")).not.toBeInTheDocument();
     expect(screen.queryByText(profile.account_id)).not.toBeInTheDocument();
     expect(screen.queryByText(profile.identity_refs[0].id)).not.toBeInTheDocument();
     expect(screen.queryByText(profile.identity_refs[0].provider)).not.toBeInTheDocument();
     expect(screen.queryByRole("img")).not.toBeInTheDocument();
+
+    fireEvent.click(trigger);
+
+    expect(trigger).toHaveAttribute("aria-expanded", "true");
+    const menu = screen.getByRole("region", { name: "Меню аккаунта" });
+    expect(menu).toHaveFocus();
+    expect(screen.getByRole("button", { name: "Профиль" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Поддержка" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Что нового?" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Системная тема" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "Светлая тема" })).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("button", { name: "Тёмная тема" })).toHaveAttribute("aria-pressed", "false");
+    expect(container.querySelectorAll("a")).toHaveLength(0);
   });
 
   it("uses a generic unavailable label when no verified safe label exists", () => {
@@ -69,6 +84,7 @@ describe("AccountControl", () => {
     vi.mocked(webBrowserMutation).mockResolvedValue(new Response(null, { status: 204 }));
     render(<AccountControl profile={profile} />);
 
+    fireEvent.click(screen.getByRole("button", { name: "Открыть меню аккаунта" }));
     fireEvent.click(screen.getByRole("button", { name: ru.account.logoutLabel }));
 
     await vi.waitFor(() => expect(replace).toHaveBeenCalledWith("/login"));
@@ -82,10 +98,22 @@ describe("AccountControl", () => {
     vi.mocked(webBrowserMutation).mockImplementationOnce(request);
     render(<AccountControl profile={profile} />);
 
+    fireEvent.click(screen.getByRole("button", { name: "Открыть меню аккаунта" }));
     fireEvent.click(screen.getByRole("button", { name: ru.account.logoutLabel }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(ru.account.logoutFailure);
     expect(replace).not.toHaveBeenCalled();
     expect(screen.queryByText("untrusted detail")).not.toBeInTheDocument();
+  });
+
+  it("closes the account menu with Escape and returns focus to the account trigger", () => {
+    render(<AccountControl profile={profile} />);
+    const trigger = screen.getByRole("button", { name: "Открыть меню аккаунта" });
+
+    fireEvent.click(trigger);
+    fireEvent.keyDown(document.activeElement as HTMLElement, { key: "Escape" });
+
+    expect(screen.queryByRole("region", { name: "Меню аккаунта" })).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
   });
 });

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { Button } from "@/components/ui/Button/Button";
+import { AccountMenu } from "@/features/account/AccountMenu/AccountMenu";
 import { ru } from "@/i18n/ru";
 import type { AccountProfile } from "@/lib/web-api/contracts";
 import { webBrowserMutation } from "@/lib/web-api/browser";
@@ -40,17 +40,13 @@ export function AccountControl({ profile }: AccountControlProps) {
   };
 
   return (
-    <section aria-labelledby="account-control-title" className={styles.control}>
-      <h2 id="account-control-title">{ru.account.heading}</h2>
-      <p className={styles.identity}>{label ?? ru.account.unavailableLabel}</p>
-      {hasError ? (
-        <p className={styles.error} role="alert">
-          {ru.account.logoutFailure}
-        </p>
-      ) : null}
-      <Button disabled={isPending} onClick={logout}>
-        {isPending ? ru.account.logoutPending : ru.account.logoutLabel}
-      </Button>
-    </section>
+    <div className={styles.control}>
+      <AccountMenu
+        identityLabel={label ?? ru.account.unavailableLabel}
+        isLogoutPending={isPending}
+        logoutFailure={hasError ? ru.account.logoutFailure : undefined}
+        onLogout={logout}
+      />
+    </div>
   );
 }
