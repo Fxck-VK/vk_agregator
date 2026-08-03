@@ -2,6 +2,7 @@
 
 /* eslint-disable @next/next/no-img-element */
 
+import Link from "next/link";
 import { useEffect, useRef } from "react";
 
 import { Button } from "@/components/ui/Button/Button";
@@ -22,6 +23,7 @@ type FileCardProps = {
 export function FileCard({ job, onRequestResult, result, resultState }: Readonly<FileCardProps>) {
   const cardRef = useRef<HTMLElement | null>(null);
   const canPreview = job.status === "succeeded";
+  const retryHref = imageRetryHref(job);
 
   useEffect(() => {
     if (!canPreview || result !== null || resultState !== "idle") {
@@ -72,7 +74,18 @@ export function FileCard({ job, onRequestResult, result, resultState }: Readonly
             <Button onClick={() => onRequestResult(job)}>{ru.files.previewRetry}</Button>
           </div>
         ) : null}
-        {!canPreview ? <p>{ru.files.noReadyArtifact}</p> : null}
+        {!canPreview && job.status === "awaiting_payment" ? (
+          <div className={styles.jobState}>
+            <p>{ru.files.insufficientTokensDescription}</p>
+          </div>
+        ) : null}
+        {!canPreview && job.status === "expired" ? (
+          <div className={styles.jobState}>
+            <p>{ru.files.expiredPreparationDescription}</p>
+            <Link className={styles.retryLink} href={retryHref}>{ru.files.retry}</Link>
+          </div>
+        ) : null}
+        {!canPreview && job.status !== "awaiting_payment" && job.status !== "expired" ? <p>{ru.files.noReadyArtifact}</p> : null}
       </div>
       <div className={styles.content}>
         <p className={styles.status}>{statusLabel(job.status)}</p>
@@ -87,8 +100,23 @@ function statusLabel(status: ImageJob["status"]): string {
   if (status === "succeeded") {
     return ru.files.statusReady;
   }
-  if (["rejected", "failed_terminal", "cancelled", "expired", "refunded"].includes(status)) {
+  if (status === "awaiting_payment") {
+    return ru.files.statusInsufficientTokens;
+  }
+  if (status === "expired") {
+    return ru.files.statusRequestNotSent;
+  }
+  if (["rejected", "failed_terminal", "cancelled", "refunded"].includes(status)) {
     return ru.files.statusAttention;
   }
   return ru.files.statusInProgress;
+}
+
+function imageRetryHref(job: ImageJob): string {
+  const searchParams = new URLSearchParams({
+    model: job.model_id,
+    quality: job.image_quality,
+    prompt: job.prompt,
+  });
+  return `/app/image?${searchParams.toString()}`;
 }

@@ -142,6 +142,18 @@ describe("ImageGenerationPanel", () => {
     expect(screen.getByRole("combobox", { name: ru.imageGeneration.qualityLabel })).toHaveValue("2K");
   });
 
+  it("restores every image setting from an expired-generation retry link", async () => {
+    vi.mocked(useSearchParams).mockReturnValue(
+      new URLSearchParams("model=nano-banana-2&quality=2K&prompt=night+city+after+rain") as never,
+    );
+    vi.mocked(loadImageModelCatalog).mockResolvedValueOnce(modelsResponse);
+    render(<ImageGenerationPanel />);
+
+    expect(await screen.findByRole("textbox", { name: ru.imageGeneration.promptLabel })).toHaveValue("night city after rain");
+    expect(screen.getByRole("combobox", { name: ru.imageGeneration.modelLabel })).toHaveValue("nano-banana-2");
+    expect(screen.getByRole("combobox", { name: ru.imageGeneration.qualityLabel })).toHaveValue("2K");
+  });
+
   it("falls back to the first model and its default quality for an unknown requested model", async () => {
     vi.mocked(useSearchParams).mockReturnValue(new URLSearchParams("model=unknown-model") as never);
     vi.mocked(loadImageModelCatalog).mockResolvedValueOnce(multipleModelsResponse);

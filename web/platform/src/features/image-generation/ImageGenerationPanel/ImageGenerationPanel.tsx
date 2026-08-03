@@ -36,7 +36,10 @@ type ImageGenerationPanelProps = {
 };
 
 export function ImageGenerationPanel({ onJobChange }: Readonly<ImageGenerationPanelProps>) {
-  const requestedModelID = useSearchParams().get("model");
+  const searchParams = useSearchParams();
+  const requestedModelID = searchParams.get("model");
+  const requestedImageQuality = searchParams.get("quality");
+  const requestedPrompt = searchParams.get("prompt") ?? "";
   const [stage, setStage] = useState<PanelStage>("loading");
   const [catalogLoadAttempt, setCatalogLoadAttempt] = useState(0);
   const [models, setModels] = useState<ImageModel[]>([]);
@@ -77,7 +80,12 @@ export function ImageGenerationPanel({ onJobChange }: Readonly<ImageGenerationPa
         }
         setModels(catalog.items);
         setModelID(initialModel.id);
-        setImageQuality(initialModel.default_quality);
+        setImageQuality(
+          requestedImageQuality !== null && initialModel.quality_options.includes(requestedImageQuality)
+            ? requestedImageQuality
+            : initialModel.default_quality,
+        );
+        setPrompt(requestedPrompt);
         setStage("editor");
       } catch {
         if (active) {
@@ -91,7 +99,7 @@ export function ImageGenerationPanel({ onJobChange }: Readonly<ImageGenerationPa
     return () => {
       active = false;
     };
-  }, [catalogLoadAttempt, requestedModelID]);
+  }, [catalogLoadAttempt, requestedImageQuality, requestedModelID, requestedPrompt]);
 
   const retryModelCatalog = () => {
     setError(null);

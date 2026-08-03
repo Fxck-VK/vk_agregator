@@ -159,6 +159,41 @@ describe("FilesWorkspace", () => {
     expect(screen.getByText(pendingJob.prompt)).toBeInTheDocument();
   });
 
+  it("explains jobs that stopped before submission and restores an expired request for retry", async () => {
+    const awaitingPaymentJob = {
+      ...firstSucceededJob,
+      id: "c90a04c6-8f0c-4c94-bfe2-b3ca0b72f2ec",
+      status: "awaiting_payment" as const,
+      prompt: "bmx monkey",
+      model_id: "gpt-image-2",
+      model_name: "GPT Image 2",
+      image_quality: "1K",
+    };
+    const expiredPreparationJob = {
+      ...awaitingPaymentJob,
+      id: "6db2f5ed-7b3f-4e32-9a3e-b6e50d2d2a4d",
+      status: "expired" as const,
+      prompt: "night city after rain",
+    };
+    vi.mocked(webBrowserFetch).mockResolvedValueOnce(Response.json({
+      items: [awaitingPaymentJob, expiredPreparationJob],
+      has_more: false,
+      next_cursor: null,
+    }));
+
+    renderFilesWorkspace();
+
+    expect(await screen.findByText("Не хватило токенов")).toBeInTheDocument();
+    expect(screen.getByText("Пополните баланс, чтобы повторить запуск.")).toBeInTheDocument();
+    expect(screen.getByText("Запрос не был отправлен")).toBeInTheDocument();
+    expect(screen.getByText("Подтверждение запуска истекло.")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Повторить" })).toHaveAttribute(
+      "href",
+      "/app/image?model=gpt-image-2&quality=1K&prompt=night+city+after+rain",
+    );
+    expect(screen.queryAllByText(ru.files.noReadyArtifact)).toHaveLength(0);
+  });
+
   it("limits simultaneous artifact metadata requests for visible ready cards", async () => {
     vi.mocked(webBrowserFetch)
       .mockResolvedValueOnce(Response.json({ items: [firstSucceededJob, secondSucceededJob, thirdSucceededJob], has_more: false, next_cursor: null }))
