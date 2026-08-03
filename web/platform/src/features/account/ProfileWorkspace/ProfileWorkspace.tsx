@@ -12,9 +12,8 @@ import { ru } from "@/i18n/ru";
 import styles from "./ProfileWorkspace.module.css";
 
 const overviewTabId = "profile-overview-tab";
-const overviewPanelId = "profile-overview-panel";
 const referralTabId = "profile-referral-tab";
-const referralPanelId = "profile-referral-panel";
+const profilePanelId = "profile-content-panel";
 const profileTabs = ["overview", "referral"] as const;
 
 type ProfileTab = (typeof profileTabs)[number];
@@ -76,7 +75,7 @@ export function ProfileWorkspace() {
 
       <div aria-label={ru.profile.tabsLabel} className={styles.tabs} role="tablist">
         <button
-          aria-controls={overviewPanelId}
+          aria-controls={profilePanelId}
           aria-selected={activeTab === "overview"}
           className={styles.tab}
           id={overviewTabId}
@@ -92,7 +91,7 @@ export function ProfileWorkspace() {
           {ru.profile.overviewTabLabel}
         </button>
         <button
-          aria-controls={referralPanelId}
+          aria-controls={profilePanelId}
           aria-selected={activeTab === "referral"}
           className={styles.tab}
           id={referralTabId}
@@ -110,43 +109,38 @@ export function ProfileWorkspace() {
       </div>
 
       <div
-        aria-labelledby={overviewTabId}
+        aria-labelledby={activeTab === "overview" ? overviewTabId : referralTabId}
         className={styles.content}
-        hidden={activeTab !== "overview"}
-        id={overviewPanelId}
+        id={profilePanelId}
         role="tabpanel"
       >
-          <section aria-labelledby="profile-tariff-title" className={styles.section}>
-            <h2 id="profile-tariff-title">{ru.profile.tariffSectionTitle}</h2>
-            <ProfileBalanceCard balance={balance} />
-          </section>
+        {activeTab === "overview" ? (
+          <>
+            <section aria-labelledby="profile-tariff-title" className={styles.section}>
+              <h2 id="profile-tariff-title">{ru.profile.tariffSectionTitle}</h2>
+              <ProfileBalanceCard balance={balance} />
+            </section>
 
-          <section aria-labelledby="profile-promo-title" className={styles.section}>
-            <h2 id="profile-promo-title">{ru.profile.promoTitle}</h2>
-            <div className={styles.placeholderCard}>
-              <p>{ru.profile.promoDescription}</p>
-              <button disabled type="button">{ru.profile.promoActionLabel}</button>
-            </div>
-          </section>
+            <section aria-labelledby="profile-promo-title" className={styles.section}>
+              <h2 id="profile-promo-title">{ru.profile.promoTitle}</h2>
+              <div className={styles.placeholderCard}>
+                <p>{ru.profile.promoDescription}</p>
+                <button disabled type="button">{ru.profile.promoActionLabel}</button>
+              </div>
+            </section>
 
-          <ProfileLoginMethods identityRefs={profile.identity_refs} />
+            <ProfileLoginMethods identityRefs={profile.identity_refs} />
 
-          <section aria-labelledby="profile-billing-title" className={styles.section}>
-            <h2 id="profile-billing-title">{ru.profile.billingTitle}</h2>
-            <div className={styles.placeholderCard}>
-              <p>{ru.profile.billingPlaceholder}</p>
-            </div>
-          </section>
-      </div>
-
-      <div
-        aria-labelledby={referralTabId}
-        className={styles.content}
-        hidden={activeTab !== "referral"}
-        id={referralPanelId}
-        role="tabpanel"
-      >
-        <ProfileReferralProgram />
+            <section aria-labelledby="profile-billing-title" className={styles.section}>
+              <h2 id="profile-billing-title">{ru.profile.billingTitle}</h2>
+              <div className={styles.placeholderCard}>
+                <p>{ru.profile.billingPlaceholder}</p>
+              </div>
+            </section>
+          </>
+        ) : (
+          <ProfileReferralProgram />
+        )}
       </div>
     </section>
   );

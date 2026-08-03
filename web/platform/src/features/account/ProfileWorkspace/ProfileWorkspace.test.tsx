@@ -71,7 +71,7 @@ describe("ProfileWorkspace", () => {
     expect(screen.queryByText(ru.profile.verifiedIdentity)).not.toBeInTheDocument();
   });
 
-  it("opens the referral launch state without showing the general billing panel", () => {
+  it("replaces the general panel with the referral panel content", () => {
     render(
       <WorkspaceAccountProvider snapshot={{ balance: 104, profile }}>
         <ProfileWorkspace />
@@ -80,25 +80,27 @@ describe("ProfileWorkspace", () => {
 
     const overviewTab = screen.getByRole("tab", { name: ru.profile.overviewTabLabel });
     const referralTab = screen.getByRole("tab", { name: ru.profile.referralTabLabel });
+    const panelId = overviewTab.getAttribute("aria-controls");
 
-    for (const tab of [overviewTab, referralTab]) {
-      const panelId = tab.getAttribute("aria-controls");
-
-      expect(panelId).not.toBeNull();
-      expect(document.getElementById(panelId ?? "")).toHaveAttribute("role", "tabpanel");
-    }
+    expect(panelId).not.toBeNull();
+    expect(referralTab).toHaveAttribute("aria-controls", panelId ?? "");
+    expect(document.querySelectorAll('[role="tabpanel"]')).toHaveLength(1);
+    expect(screen.getByText(ru.profile.billingPlaceholder)).toBeInTheDocument();
+    expect(screen.queryByText(ru.profile.referralLaunchTitle)).not.toBeInTheDocument();
 
     fireEvent.click(referralTab);
 
     expect(screen.getByRole("tabpanel", { name: ru.profile.referralTabLabel })).toBeInTheDocument();
+    expect(document.querySelectorAll('[role="tabpanel"]')).toHaveLength(1);
     expect(screen.getByText(ru.profile.referralLaunchTitle)).toBeInTheDocument();
-    expect(document.getElementById(overviewTab.getAttribute("aria-controls") ?? "")).toHaveAttribute("hidden");
-    expect(screen.queryByRole("heading", { name: ru.profile.billingTitle })).not.toBeInTheDocument();
+    expect(screen.queryByText(ru.profile.billingPlaceholder)).not.toBeInTheDocument();
 
     fireEvent.keyDown(referralTab, { key: "ArrowLeft" });
 
     expect(overviewTab).toHaveAttribute("aria-selected", "true");
     expect(overviewTab).toHaveFocus();
     expect(screen.getByRole("tabpanel", { name: ru.profile.overviewTabLabel })).toBeInTheDocument();
+    expect(screen.getByText(ru.profile.billingPlaceholder)).toBeInTheDocument();
+    expect(screen.queryByText(ru.profile.referralLaunchTitle)).not.toBeInTheDocument();
   });
 });
