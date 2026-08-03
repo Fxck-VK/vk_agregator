@@ -1,4 +1,5 @@
 .shell {
+  --sidebar-collapsed-rail-width: calc(var(--space-3) + 2.25rem);
   min-block-size: 100dvh;
   background: var(--color-background);
 }
@@ -34,6 +35,6 @@
   }
 
   .shell[data-desktop-sidebar-collapsed="true"] .workspace {
-    margin-inline-start: 0;
+    margin-inline-start: var(--sidebar-collapsed-rail-width);
   }
 }

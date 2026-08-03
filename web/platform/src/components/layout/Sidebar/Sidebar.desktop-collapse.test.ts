@@ -26,10 +26,22 @@ describe("Sidebar desktop collapse stylesheet", () => {
       /@media \(width < 48rem\) \{[\s\S]*?\.workspace \{[\s\S]*?margin-inline-start: 0;/,
     );
     expect(appShellStylesheet).toMatch(
-      /@media \(min-width: 48rem\) \{[\s\S]*?\.shell\[data-desktop-sidebar-collapsed="true"\] \.workspace \{[\s\S]*?margin-inline-start: 0;/,
+      /@media \(min-width: 48rem\) \{[\s\S]*?\.shell\[data-desktop-sidebar-collapsed="true"\] \.workspace \{[\s\S]*?margin-inline-start: var\(--sidebar-collapsed-rail-width\);/,
     );
     expect(stylesheet).toMatch(
       /\.desktopTrigger\[data-desktop-collapsed="true"\] svg \{[\s\S]*?transform: rotate\(180deg\);/,
+    );
+  });
+
+  it("reserves a collapsed desktop rail for the fixed sidebar trigger", () => {
+    expect(stylesheet).toMatch(
+      /\.desktopTrigger \{[\s\S]*?inline-size: 2\.25rem;/,
+    );
+    expect(stylesheet).toMatch(
+      /\.desktopTrigger\[data-desktop-collapsed="true"\] \{[\s\S]*?inset-inline-start: var\(--space-3\);/,
+    );
+    expect(appShellStylesheet).toMatch(
+      /\.shell \{[\s\S]*?--sidebar-collapsed-rail-width: calc\(var\(--space-3\) \+ 2\.25rem\);/,
     );
   });
 });
