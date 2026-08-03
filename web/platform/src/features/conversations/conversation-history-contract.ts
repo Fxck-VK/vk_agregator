@@ -9,5 +9,6 @@ export type ConversationHistoryData =
       messages: ConversationMessage[];
       hasMoreBefore: boolean;
     }
+  | { kind: "loading" }
   | { kind: "not_found" }
   | { kind: "unavailable" };

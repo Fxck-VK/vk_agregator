@@ -1,5 +1,4 @@
-import { ConversationHistory } from "@/features/conversations/ConversationHistory/ConversationHistory";
-import { loadConversationHistory } from "@/features/conversations/conversation-history-data";
+import { ConversationHistoryLoader } from "@/features/conversations/ConversationHistoryLoader/ConversationHistoryLoader";
 
 export default async function ConversationPage({
   params,
@@ -10,7 +9,6 @@ export default async function ConversationPage({
 }>) {
   const { conversationId } = await params;
   const { refresh } = await searchParams;
-  const history = await loadConversationHistory(conversationId);
 
-  return <ConversationHistory history={history} initialRefresh={refresh === "1"} />;
+  return <ConversationHistoryLoader key={conversationId} conversationId={conversationId} initialRefresh={refresh === "1"} />;
 }

@@ -46,6 +46,10 @@ const conversationRefreshDeadlineMs = 30_000;
 const conversationRefreshMaxAttempts = 15;
 
 export function ConversationHistory({ history, initialRefresh = false }: ConversationHistoryProps) {
+  if (history.kind === "loading") {
+    return <ConversationHistoryState message={ru.conversations.historyLoadEarlierPending} />;
+  }
+
   if (history.kind === "not_found") {
     return <ConversationHistoryState message={ru.conversations.historyUnavailable} />;
   }
