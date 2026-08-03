@@ -27,6 +27,7 @@ const modelsResponse = {
       id: "nano banana/2&preview",
       name: "Nano Banana",
       quality_options: ["1K", "2K"],
+      price_by_quality: { "1K": 16, "2K": 60 },
       default_quality: "1K",
       supports_reference_image: true,
       max_reference_images: 1,
@@ -76,7 +77,7 @@ describe("ModelsCatalog", () => {
     expect(within(nanoCard).getByText("2K")).toBeInTheDocument();
     expect(within(nanoCard).getByText(ru.modelsCatalog.referenceSupportedLabel)).toBeInTheDocument();
     expect(within(otherCard).getByText(ru.modelsCatalog.referenceUnsupportedLabel)).toBeInTheDocument();
-    expect(screen.queryByText(/provider|price|description/i)).not.toBeInTheDocument();
+    expect(within(nanoCard).getByText("От 16 ★")).toBeInTheDocument();
 
     fireEvent.change(screen.getByRole("searchbox", { name: ru.modelsCatalog.searchLabel }), {
       target: { value: "banana" },
@@ -121,18 +122,20 @@ describe("ModelsCatalog", () => {
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
-  it("combines reference-image and quality filters", async () => {
+  it("shows the popular image catalogue and switches future categories to their planned state", async () => {
     vi.mocked(loadImageModelCatalog).mockResolvedValue(modelsResponse);
     render(<ModelsCatalog />);
 
     await screen.findByText("Nano Banana");
-    fireEvent.click(screen.getByRole("checkbox", { name: ru.modelsCatalog.referenceFilterLabel }));
-    fireEvent.change(screen.getByRole("combobox", { name: ru.modelsCatalog.qualityFilterLabel }), {
-      target: { value: "2K" },
-    });
-
+    expect(screen.getByRole("heading", { name: "Популярные" })).toBeInTheDocument();
+    for (const category of ["Популярные", "Изображения", "Текст", "Видео и аудио", "Бесплатные", "Учёба и работа"]) {
+      expect(screen.getByRole("tab", { name: category })).toBeInTheDocument();
+    }
     expect(screen.getByText("Nano Banana")).toBeInTheDocument();
-    expect(screen.getByText("Reference 2K")).toBeInTheDocument();
-    expect(screen.queryByText("Other Model")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Текст" }));
+
+    expect(await screen.findByText("Категория «Текст» появится позже.")).toBeInTheDocument();
+    expect(screen.queryByText("Nano Banana")).not.toBeInTheDocument();
   });
 });

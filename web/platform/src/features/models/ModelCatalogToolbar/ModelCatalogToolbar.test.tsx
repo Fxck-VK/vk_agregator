@@ -6,30 +6,34 @@ import { ru } from "@/i18n/ru";
 import { ModelCatalogToolbar } from "./ModelCatalogToolbar";
 
 describe("ModelCatalogToolbar", () => {
-  it("shows the number of matching models and reports changed sort", () => {
-    const onSortChange = vi.fn();
+  it("reports search input and category-tab selection through the refreshed public API", () => {
+    const onCategoryChange = vi.fn();
+    const onQueryChange = vi.fn();
 
     render(
       <ModelCatalogToolbar
-        onClear={vi.fn()}
-        onQualityChange={vi.fn()}
-        onQueryChange={vi.fn()}
-        onReferenceOnlyChange={vi.fn()}
-        onSortChange={onSortChange}
-        qualities={["1K"]}
-        quality={null}
+        categories={[
+          { id: "popular", label: "Популярные" },
+          { id: "images", label: "Изображения" },
+          { id: "text", label: "Текст" },
+        ]}
+        category="popular"
+        onCategoryChange={onCategoryChange}
+        onQueryChange={onQueryChange}
         query=""
-        referenceOnly={false}
-        resultCount={2}
-        sort="catalog"
       />,
     );
 
-    fireEvent.change(screen.getByRole("combobox", { name: ru.modelsCatalog.sortLabel }), {
-      target: { value: "name" },
+    fireEvent.change(screen.getByRole("searchbox", { name: ru.modelsCatalog.searchLabel }), {
+      target: { value: "banana" },
     });
+    fireEvent.click(screen.getByRole("tab", { name: "Текст" }));
 
-    expect(onSortChange).toHaveBeenCalledWith("name");
-    expect(screen.getByText(ru.modelsCatalog.resultCount(2))).toBeInTheDocument();
+    expect(onQueryChange).toHaveBeenCalledWith("banana");
+    expect(onCategoryChange).toHaveBeenCalledWith("text");
+    expect(screen.getByRole("tab", { name: "Популярные" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.queryByRole("checkbox", { name: ru.modelsCatalog.referenceFilterLabel })).not.toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: ru.modelsCatalog.qualityFilterLabel })).not.toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: ru.modelsCatalog.sortLabel })).not.toBeInTheDocument();
   });
 });

@@ -56,4 +56,38 @@ describe("ModelCard", () => {
       screen.getByRole("link", { name: `${ru.modelsCatalog.openGeneratorLabel}: Nano Banana` }),
     ).toHaveAttribute("data-prefetch", "false");
   });
+
+  it("shows the lowest verified quality price and omits pricing without API data", () => {
+    const { rerender } = render(
+      <ModelCard
+        model={{
+          default_quality: "1K",
+          id: "nano-banana-2",
+          max_reference_images: 1,
+          name: "Nano Banana",
+          price_by_quality: { "1K": 16, "2K": 60 },
+          quality_options: ["1K", "2K"],
+          supports_reference_image: true,
+        }}
+      />,
+    );
+
+    expect(screen.getByText("От 16 ★")).toBeInTheDocument();
+    expect(screen.queryByText("От 60 ★")).not.toBeInTheDocument();
+
+    rerender(
+      <ModelCard
+        model={{
+          default_quality: "1K",
+          id: "price-not-published",
+          max_reference_images: 0,
+          name: "No published price",
+          quality_options: ["1K"],
+          supports_reference_image: false,
+        }}
+      />,
+    );
+
+    expect(screen.queryByText(/★/)).not.toBeInTheDocument();
+  });
 });
