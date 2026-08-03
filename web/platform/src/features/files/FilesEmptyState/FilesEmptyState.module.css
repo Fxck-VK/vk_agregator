@@ -1,0 +1,45 @@
+.emptyState {
+  display: grid;
+  min-block-size: clamp(22rem, 52vh, 38rem);
+  place-content: center;
+  gap: var(--space-6);
+  padding: var(--space-6);
+  text-align: center;
+}
+
+.folder {
+  inline-size: 7rem;
+  block-size: auto;
+  justify-self: center;
+  filter: drop-shadow(0 0.75rem 1rem rgb(255 193 61 / 0.18));
+}
+
+.folder path:first-child {
+  fill: #ffbd36;
+}
+
+.folder path:last-child {
+  fill: #ffd268;
+}
+
+.emptyState div {
+  display: grid;
+  gap: var(--space-3);
+  max-inline-size: 30rem;
+}
+
+.emptyState h2,
+.emptyState p {
+  margin: 0;
+}
+
+.emptyState h2 {
+  font-size: clamp(1.5rem, 3vw, 2.25rem);
+  letter-spacing: -0.03em;
+}
+
+.emptyState p {
+  color: var(--color-text-muted);
+  font-size: 1.0625rem;
+  line-height: 1.5;
+}

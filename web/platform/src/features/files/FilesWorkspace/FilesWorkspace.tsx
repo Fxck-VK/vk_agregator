@@ -4,8 +4,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/Button/Button";
 import { type FileResultState } from "@/features/files/FileCard/FileCard";
+import { FilesEmptyState } from "@/features/files/FilesEmptyState/FilesEmptyState";
 import { FilesGrid } from "@/features/files/FilesGrid/FilesGrid";
 import { FilesToolbar, type FileStatusFilter } from "@/features/files/FilesToolbar/FilesToolbar";
+import { FileTypeTabs, type FileCategory } from "@/features/files/FileTypeTabs/FileTypeTabs";
 import { useWorkspaceDataCache } from "@/features/workspace/WorkspaceDataCache/WorkspaceDataCache";
 import { recordWorkspaceDataLoad } from "@/features/workspace/WorkspaceNavigationMetrics/workspace-navigation-metrics";
 import { ru } from "@/i18n/ru";
@@ -29,6 +31,23 @@ function matchesStatusFilter(job: ImageJob, filter: FileStatusFilter): boolean {
   return job.status !== "succeeded";
 }
 
+function isImageCategory(category: FileCategory): category is "all" | "images" {
+  return category === "all" || category === "images";
+}
+
+function futureCategoryDescription(category: Exclude<FileCategory, "all" | "images">): string {
+  switch (category) {
+    case "reports":
+      return ru.files.emptyReportsDescription;
+    case "presentations":
+      return ru.files.emptyPresentationsDescription;
+    case "video":
+      return ru.files.emptyVideoDescription;
+    case "uploads":
+      return ru.files.emptyUploadsDescription;
+  }
+}
+
 export function FilesWorkspace() {
   const cache = useWorkspaceDataCache();
   const [cachedFirstPage] = useState(() => cache.getImageFilesFirstPage());
@@ -38,6 +57,7 @@ export function FilesWorkspace() {
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [loadFailed, setLoadFailed] = useState(false);
+  const [fileCategory, setFileCategory] = useState<FileCategory>("all");
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<FileStatusFilter>("all");
   const [resultsByJobID, setResultsByJobID] = useState<Record<string, ImageJobResult>>({});
@@ -152,46 +172,74 @@ export function FilesWorkspace() {
     });
   }, [jobs, query, statusFilter]);
 
+  const hasImageCategory = isImageCategory(fileCategory);
+  const hasImageJobs = jobs.length > 0;
+  const hasActiveImageFilters = query.trim() !== "" || statusFilter !== "all";
+  const shouldShowToolbar = hasImageCategory && hasImageJobs;
+
   return (
     <section aria-labelledby="files-title" className={styles.workspace}>
       <header className={styles.header}>
-        <p className={styles.eyebrow}>{ru.files.eyebrow}</p>
         <h1 id="files-title">{ru.files.title}</h1>
-        <p>{ru.files.description}</p>
       </header>
 
-      <FilesToolbar
-        onQueryChange={setQuery}
-        onStatusChange={setStatusFilter}
-        query={query}
-        status={statusFilter}
-      />
-      <p className={styles.scopeNotice}>{ru.files.loadedScopeNotice}</p>
+      <FileTypeTabs onValueChange={setFileCategory} value={fileCategory} />
 
-      {isLoading && !hasLoaded ? <p className={styles.state} role="status">{ru.files.loading}</p> : null}
-      {loadFailed && !hasLoaded ? (
-        <div className={styles.failure}>
-          <p role="alert">{ru.files.loadFailure}</p>
-          <Button disabled={isLoading} onClick={() => void loadPage()}>{ru.files.retry}</Button>
-        </div>
-      ) : null}
+      <section
+        aria-labelledby={`files-tab-${fileCategory}`}
+        className={styles.panel}
+        id="files-panel"
+        role="tabpanel"
+      >
+        {!hasImageCategory ? (
+          <FilesEmptyState
+            description={futureCategoryDescription(fileCategory)}
+            title={ru.files.emptyLibraryTitle}
+          />
+        ) : null}
 
-      {hasLoaded && visibleJobs.length === 0 ? <p className={styles.state} role="status">{ru.files.empty}</p> : null}
-      {hasLoaded && visibleJobs.length > 0 ? (
-        <FilesGrid
-          jobs={visibleJobs}
-          onRequestResult={requestResult}
-          resultsByJobID={resultsByJobID}
-          resultStatesByJobID={resultStatesByJobID}
-        />
-      ) : null}
+        {hasImageCategory && isLoading && !hasLoaded ? <p className={styles.state} role="status">{ru.files.loading}</p> : null}
+        {hasImageCategory && loadFailed && !hasLoaded ? (
+          <div className={styles.failure}>
+            <p role="alert">{ru.files.loadFailure}</p>
+            <Button disabled={isLoading} onClick={() => void loadPage()}>{ru.files.retry}</Button>
+          </div>
+        ) : null}
 
-      {loadFailed && hasLoaded ? <p className={styles.inlineFailure} role="alert">{ru.files.loadFailure}</p> : null}
-      {nextCursor !== null ? (
-        <Button disabled={isLoadingMore} onClick={() => void loadPage(nextCursor)}>
-          {isLoadingMore ? ru.files.loadingMore : ru.files.loadMore}
-        </Button>
-      ) : null}
+        {shouldShowToolbar ? (
+          <>
+            <FilesToolbar
+              onQueryChange={setQuery}
+              onStatusChange={setStatusFilter}
+              query={query}
+              status={statusFilter}
+            />
+            <p className={styles.scopeNotice}>{ru.files.loadedScopeNotice}</p>
+          </>
+        ) : null}
+
+        {hasImageCategory && hasLoaded && !hasImageJobs ? (
+          <FilesEmptyState description={ru.files.emptyAllDescription} title={ru.files.emptyLibraryTitle} />
+        ) : null}
+        {hasImageCategory && hasLoaded && hasImageJobs && visibleJobs.length === 0 && hasActiveImageFilters ? (
+          <p className={styles.state} role="status">{ru.files.empty}</p>
+        ) : null}
+        {hasImageCategory && hasLoaded && visibleJobs.length > 0 ? (
+          <FilesGrid
+            jobs={visibleJobs}
+            onRequestResult={requestResult}
+            resultsByJobID={resultsByJobID}
+            resultStatesByJobID={resultStatesByJobID}
+          />
+        ) : null}
+
+        {hasImageCategory && loadFailed && hasLoaded ? <p className={styles.inlineFailure} role="alert">{ru.files.loadFailure}</p> : null}
+        {hasImageCategory && nextCursor !== null ? (
+          <Button disabled={isLoadingMore} onClick={() => void loadPage(nextCursor)}>
+            {isLoadingMore ? ru.files.loadingMore : ru.files.loadMore}
+          </Button>
+        ) : null}
+      </section>
     </section>
   );
 }

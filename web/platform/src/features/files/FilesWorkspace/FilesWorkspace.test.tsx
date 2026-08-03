@@ -159,6 +159,53 @@ describe("FilesWorkspace", () => {
     expect(screen.getByText(pendingJob.prompt)).toBeInTheDocument();
   });
 
+  it("keeps image files available while future categories show their own empty state without another request", async () => {
+    vi.mocked(webBrowserFetch)
+      .mockResolvedValueOnce(Response.json({ items: [firstSucceededJob], has_more: false, next_cursor: null }))
+      .mockResolvedValueOnce(Response.json(firstResult));
+
+    renderFilesWorkspace();
+
+    expect(await screen.findByText(firstSucceededJob.prompt)).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Все файлы" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual([
+      "Все файлы",
+      "Изображения",
+      "Рефераты",
+      "Презентации",
+      "Видео",
+      "Загруженные",
+    ]);
+
+    const requestCountBeforeTabSwitch = vi.mocked(webBrowserFetch).mock.calls.length;
+    fireEvent.click(screen.getByRole("tab", { name: "Рефераты" }));
+
+    expect(screen.getByRole("tab", { name: "Рефераты" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("heading", { name: "Пока ничего нет" })).toBeInTheDocument();
+    expect(screen.getByText("Здесь будут ваши рефераты.")).toBeInTheDocument();
+    expect(screen.queryByText(firstSucceededJob.prompt)).not.toBeInTheDocument();
+    expect(webBrowserFetch).toHaveBeenCalledTimes(requestCountBeforeTabSwitch);
+
+    fireEvent.click(screen.getByRole("tab", { name: "Изображения" }));
+
+    expect(screen.getByRole("tab", { name: "Изображения" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByText(firstSucceededJob.prompt)).toBeInTheDocument();
+
+    fireEvent.keyDown(screen.getByRole("tab", { name: "Изображения" }), { key: "ArrowRight" });
+
+    expect(screen.getByRole("tab", { name: "Рефераты" })).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("uses the illustrated library empty state when there are no image files", async () => {
+    vi.mocked(webBrowserFetch).mockResolvedValueOnce(Response.json({ items: [], has_more: false, next_cursor: null }));
+
+    renderFilesWorkspace();
+
+    expect(await screen.findByRole("heading", { name: "Пока ничего нет" })).toBeInTheDocument();
+    expect(screen.getByText("Здесь будут храниться ваши сгенерированные изображения и другие файлы.")).toBeInTheDocument();
+    expect(screen.queryByRole("searchbox", { name: ru.files.searchLabel })).not.toBeInTheDocument();
+  });
+
   it("explains jobs that stopped before submission and restores an expired request for retry", async () => {
     const awaitingPaymentJob = {
       ...firstSucceededJob,

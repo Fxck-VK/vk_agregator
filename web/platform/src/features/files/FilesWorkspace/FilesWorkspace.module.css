@@ -3,17 +3,14 @@
   inline-size: min(100%, 78rem);
   gap: var(--space-5);
   margin-inline: auto;
-  padding: clamp(5rem, 10vw, 8rem) clamp(var(--space-4), 6vw, 5rem);
+  padding: clamp(var(--space-6), 5vw, 4rem) clamp(var(--space-4), 6vw, 5rem);
 }
 
 .header {
-  display: grid;
-  gap: var(--space-3);
-  max-inline-size: 44rem;
+  margin-block-end: var(--space-1);
 }
 
 .header h1,
-.header p,
 .state,
 .failure p,
 .inlineFailure,
@@ -22,22 +19,17 @@
 }
 
 .header h1 {
-  font-size: clamp(2.25rem, 6vw, 4rem);
+  font-size: clamp(2rem, 4vw, 2.75rem);
   letter-spacing: -0.04em;
 }
 
-.header > p:last-child,
 .scopeNotice,
 .state {
   color: var(--color-text-muted);
 }
 
-.eyebrow {
-  color: var(--color-primary);
-  font-size: 0.875rem;
-  font-weight: 800;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+.panel {
+  min-inline-size: 0;
 }
 
 .scopeNotice {
