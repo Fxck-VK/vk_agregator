@@ -7,11 +7,17 @@ import type { ImageModel } from "@/lib/web-api/contracts";
 
 import { loadImageModelCatalog } from "../image-model-catalog-cache";
 import { ModelCard } from "../ModelCard/ModelCard";
-import { ModelCatalogToolbar, type ModelCatalogCategory } from "../ModelCatalogToolbar/ModelCatalogToolbar";
+import {
+  getModelCatalogCategoryTabId,
+  ModelCatalogToolbar,
+  type ModelCatalogCategory,
+} from "../ModelCatalogToolbar/ModelCatalogToolbar";
 import { filterAndSortImageModels } from "./model-filters";
 import styles from "./ModelsCatalog.module.css";
 
 type CatalogStatus = "loading" | "ready" | "failure";
+
+const modelsCatalogPanelId = "models-catalog-panel";
 
 export function ModelsCatalog() {
   const [status, setStatus] = useState<CatalogStatus>("loading");
@@ -74,9 +80,15 @@ export function ModelsCatalog() {
             onCategoryChange={setCategory}
             onQueryChange={setQuery}
             query={query}
+            tabPanelId={modelsCatalogPanelId}
           />
 
-          <div className={styles.section}>
+          <div
+            aria-labelledby={getModelCatalogCategoryTabId(category)}
+            className={styles.section}
+            id={modelsCatalogPanelId}
+            role="tabpanel"
+          >
             <h2 className={styles.sectionTitle}>{selectedCategory.label}</h2>
 
             {showImageModels && filteredModels.length === 0 ? (

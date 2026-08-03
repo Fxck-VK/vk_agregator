@@ -12,9 +12,14 @@ type ModelCatalogToolbarProps = {
   query: string;
   categories: readonly ModelCatalogCategory[];
   category: ModelCatalogCategory["id"];
+  tabPanelId: string;
   onQueryChange: (value: string) => void;
   onCategoryChange: (value: ModelCatalogCategory["id"]) => void;
 };
+
+export function getModelCatalogCategoryTabId(category: ModelCatalogCategory["id"]) {
+  return `model-category-tab-${category}`;
+}
 
 export function ModelCatalogToolbar({
   categories,
@@ -22,6 +27,7 @@ export function ModelCatalogToolbar({
   onCategoryChange,
   onQueryChange,
   query,
+  tabPanelId,
 }: ModelCatalogToolbarProps) {
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
@@ -51,11 +57,13 @@ export function ModelCatalogToolbar({
             value={query}
           />
         </div>
-        <div className={styles.categoryList} role="tablist">
+        <div aria-label={ru.modelsCatalog.categoryTabsLabel} className={styles.categoryList} role="tablist">
           {categories.map((item, index) => (
             <button
+              aria-controls={tabPanelId}
               aria-selected={item.id === category}
               className={styles.category}
+              id={getModelCatalogCategoryTabId(item.id)}
               key={item.id}
               onClick={() => onCategoryChange(item.id)}
               onKeyDown={(event) => {

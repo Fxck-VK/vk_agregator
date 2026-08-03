@@ -133,6 +133,7 @@ export const ru = {
     description: "Каталог нейросетей NeiroHub для творческих и рабочих задач.",
     searchLabel: "Поиск нейросети",
     searchPlaceholder: "Поиск нейросети",
+    categoryTabsLabel: "Категории нейросетей",
     categories: [
       { id: "popular", label: "Популярные" },
       { id: "images", label: "Изображения" },

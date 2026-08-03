@@ -141,6 +141,7 @@ describe("ModelsCatalog", () => {
 
     await screen.findByText("Nano Banana");
     expect(screen.getByRole("heading", { name: "Популярные" })).toBeInTheDocument();
+    expect(screen.getByRole("tabpanel", { name: "Популярные" })).toHaveAttribute("id", "models-catalog-panel");
     for (const category of ["Популярные", "Изображения", "Текст", "Видео и аудио", "Бесплатные", "Учёба и работа"]) {
       expect(screen.getByRole("tab", { name: category })).toBeInTheDocument();
     }
@@ -149,6 +150,10 @@ describe("ModelsCatalog", () => {
     fireEvent.click(screen.getByRole("tab", { name: "Текст" }));
 
     expect(await screen.findByText("Категория «Текст» появится позже.")).toBeInTheDocument();
+    expect(screen.getByRole("tabpanel", { name: "Текст" })).toHaveAttribute(
+      "aria-labelledby",
+      "model-category-tab-text",
+    );
     expect(screen.queryByText("Nano Banana")).not.toBeInTheDocument();
   });
 });
