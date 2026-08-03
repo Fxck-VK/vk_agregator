@@ -10,16 +10,22 @@ vi.mock("next/navigation", () => ({
 }));
 
 import { ru } from "@/i18n/ru";
+import { useWorkspaceAccountSnapshot } from "@/features/account/WorkspaceAccount/WorkspaceAccount";
 import { useWorkspaceConversationList } from "@/features/conversations/WorkspaceConversationList/WorkspaceConversationList";
 import { useWorkspaceDataCache, type WorkspaceDataCache } from "@/features/workspace/WorkspaceDataCache/WorkspaceDataCache";
-import type { ConversationItem } from "@/lib/web-api/contracts";
+import type { AccountProfile, ConversationItem } from "@/lib/web-api/contracts";
 
 import { WorkspaceFrame } from "./WorkspaceFrame";
 
 const storageKey = "neirohub.desktop-sidebar-collapsed";
-const workspaceProps: { accountId: string; conversations: ConversationItem[] } = {
+const workspaceProfile: AccountProfile = {
+  account_id: "0ce06a6a-16d8-4b16-b9df-5e63175a4a0c",
+  identity_refs: [],
+};
+const workspaceProps: { accountId: string; conversations: ConversationItem[]; profile: AccountProfile } = {
   accountId: "0ce06a6a-16d8-4b16-b9df-5e63175a4a0c",
   conversations: [],
+  profile: workspaceProfile,
 };
 const workspaceConversation: ConversationItem = {
   id: "f9712bca-8d98-448d-b595-2a80bc9c2b1a",
@@ -32,6 +38,12 @@ function WorkspaceConversationListProbe() {
   const { conversations } = useWorkspaceConversationList();
 
   return <output>{conversations.map((conversation) => conversation.title).join(",")}</output>;
+}
+
+function WorkspaceAccountProbe() {
+  const { balance, profile } = useWorkspaceAccountSnapshot();
+
+  return <output>{`${profile.account_id}:${balance}`}</output>;
 }
 
 function WorkspaceDataCacheProbe({ onCache }: { onCache: (cache: WorkspaceDataCache) => void }) {
@@ -152,6 +164,18 @@ describe("WorkspaceFrame", () => {
     expect(screen.getByRole("status")).toHaveTextContent(workspaceConversation.title);
   });
 
+  it("provides the already loaded account snapshot to workspace children", () => {
+    mockWideViewport();
+
+    render(
+      <WorkspaceFrame {...workspaceProps} balance={42}>
+        <WorkspaceAccountProbe />
+      </WorkspaceFrame>,
+    );
+
+    expect(screen.getByRole("status")).toHaveTextContent(`${workspaceProfile.account_id}:42`);
+  });
+
   it("recreates the workspace cache when the account changes", () => {
     const observedCaches: WorkspaceDataCache[] = [];
     const onCache = (cache: WorkspaceDataCache) => observedCaches.push(cache);
@@ -184,6 +208,7 @@ describe("WorkspaceFrame", () => {
     ["/app/models", ru.navigation.models],
     ["/app/inspiration", ru.navigation.inspiration],
     ["/app/image", ru.navigation.workspace],
+    ["/app/profile", ru.navigation.profile],
   ])("keeps the persistent header route-based for %s", (pathname, expectedTitle) => {
     vi.mocked(usePathname).mockReturnValue(pathname);
     mockWideViewport();

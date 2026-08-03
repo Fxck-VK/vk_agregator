@@ -1,0 +1,101 @@
+.workspace {
+  display: grid;
+  inline-size: min(100%, 62rem);
+  gap: var(--space-6);
+  margin-inline: auto;
+  padding: clamp(var(--space-5), 5vw, 4rem) clamp(var(--space-4), 6vw, 5rem);
+}
+
+.screenReaderOnly {
+  position: absolute;
+  inline-size: 0.0625rem;
+  block-size: 0.0625rem;
+  margin: -0.0625rem;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.tabs {
+  display: flex;
+  gap: var(--space-4);
+  overflow-x: auto;
+  border-block-end: 0.0625rem solid var(--color-border);
+}
+
+.tab {
+  flex: 0 0 auto;
+  padding: 0 var(--space-1) var(--space-3);
+  border: 0;
+  border-block-end: 0.125rem solid transparent;
+  background: transparent;
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.tab[aria-selected="true"] {
+  border-block-end-color: var(--color-text);
+  color: var(--color-text);
+}
+
+.tab:disabled {
+  cursor: default;
+  opacity: 1;
+}
+
+.content {
+  display: grid;
+  gap: var(--space-6);
+}
+
+.section {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.section h2 {
+  margin: 0;
+  font-size: 1.125rem;
+}
+
+.placeholderCard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  min-block-size: 6.75rem;
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-raised);
+}
+
+.placeholderCard p {
+  max-inline-size: 32rem;
+  margin: 0;
+  font-size: 1rem;
+}
+
+.placeholderCard button {
+  flex: 0 0 auto;
+  padding: var(--space-3) var(--space-4);
+  border: 0;
+  border-radius: 999px;
+  background: var(--color-background);
+  color: var(--color-text-muted);
+  font: inherit;
+  font-weight: 700;
+}
+
+.placeholderCard button:disabled {
+  cursor: default;
+  opacity: 1;
+}
+
+@media (width < 36rem) {
+  .placeholderCard {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

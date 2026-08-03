@@ -42,7 +42,7 @@ describe("AccountControl", () => {
     vi.clearAllMocks();
   });
 
-  it("opens a compact account menu with placeholder actions and no future routes", () => {
+  it("opens a compact account menu with a profile route and placeholder actions", () => {
     const { container } = render(<AccountControl profile={profile} />);
     const trigger = screen.getByRole("button", { name: "Открыть меню аккаунта" });
 
@@ -59,13 +59,13 @@ describe("AccountControl", () => {
     expect(trigger).toHaveAttribute("aria-expanded", "true");
     const menu = screen.getByRole("region", { name: "Меню аккаунта" });
     expect(menu).toHaveFocus();
-    expect(screen.getByRole("button", { name: "Профиль" })).toBeDisabled();
+    expect(screen.getByRole("link", { name: "Профиль" })).toHaveAttribute("href", "/app/profile");
     expect(screen.getByRole("button", { name: "Поддержка" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Что нового?" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Системная тема" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByRole("button", { name: "Светлая тема" })).toHaveAttribute("aria-pressed", "false");
     expect(screen.getByRole("button", { name: "Тёмная тема" })).toHaveAttribute("aria-pressed", "false");
-    expect(container.querySelectorAll("a")).toHaveLength(0);
+    expect(container.querySelectorAll("a")).toHaveLength(1);
   });
 
   it("uses a generic unavailable label when no verified safe label exists", () => {

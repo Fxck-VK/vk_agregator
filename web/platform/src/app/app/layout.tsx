@@ -48,6 +48,7 @@ export default async function WorkspaceLayout({ children }: Readonly<{ children:
       accountId={session.profile.account_id}
       balance={session.balance}
       conversations={session.conversations}
+      profile={session.profile}
     >
       {children}
     </WorkspaceFrame>

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 
 import { ru } from "@/i18n/ru";
@@ -55,12 +56,12 @@ export function AccountMenu({ identityLabel, isLogoutPending, logoutFailure, onL
           tabIndex={-1}
         >
           <div className={styles.menuList}>
-            <button aria-disabled="true" className={styles.menuAction} disabled type="button">
+            <Link className={styles.menuAction} href="/app/profile" onClick={closeMenu}>
               <AccountIcon>
                 <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-7 8a7 7 0 0 1 14 0" fill="currentColor" />
               </AccountIcon>
               <span>{ru.account.profileLabel}</span>
-            </button>
+            </Link>
             <button aria-disabled="true" className={styles.menuAction} disabled type="button">
               <AccountIcon>
                 <path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Zm0 3.3 2 2 2.8-.4-.4 2.8 2 2-2 2 .4 2.8-2.8-.4-2 2-2-2-2.8.4.4-2.8-2-2 2-2-.4-2.8 2.8.4 2-2Z" fill="currentColor" />

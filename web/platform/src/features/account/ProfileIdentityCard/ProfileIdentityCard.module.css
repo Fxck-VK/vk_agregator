@@ -1,0 +1,44 @@
+.card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: clamp(var(--space-4), 4vw, var(--space-5));
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-raised);
+}
+
+.identityMark {
+  display: grid;
+  flex: 0 0 auto;
+  inline-size: 3rem;
+  block-size: 3rem;
+  place-items: center;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.content {
+  display: grid;
+  min-inline-size: 0;
+  gap: var(--space-1);
+}
+
+.content strong,
+.content p {
+  margin: 0;
+}
+
+.content strong {
+  overflow: hidden;
+  font-size: clamp(1.125rem, 2vw, 1.5rem);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.content p {
+  color: var(--color-text-muted);
+}

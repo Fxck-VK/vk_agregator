@@ -20,6 +20,8 @@ function getWorkspaceHeaderTitle(pathname: string | null) {
       return ru.navigation.models;
     case "/app/inspiration":
       return ru.navigation.inspiration;
+    case "/app/profile":
+      return ru.navigation.profile;
     default:
       return ru.navigation.workspace;
   }

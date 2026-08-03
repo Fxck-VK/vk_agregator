@@ -8,9 +8,10 @@ import { Sidebar } from "@/components/layout/Sidebar/Sidebar";
 import { WorkspaceHeader } from "@/components/layout/WorkspaceHeader/WorkspaceHeader";
 import { SidebarConversations } from "@/features/conversations/SidebarConversations/SidebarConversations";
 import { WorkspaceConversationListProvider } from "@/features/conversations/WorkspaceConversationList/WorkspaceConversationList";
+import { WorkspaceAccountProvider } from "@/features/account/WorkspaceAccount/WorkspaceAccount";
 import { WorkspaceDataCacheProvider } from "@/features/workspace/WorkspaceDataCache/WorkspaceDataCache";
 import { WorkspaceNavigationMetrics } from "@/features/workspace/WorkspaceNavigationMetrics/WorkspaceNavigationMetrics";
-import type { ConversationItem } from "@/lib/web-api/contracts";
+import type { AccountProfile, ConversationItem } from "@/lib/web-api/contracts";
 
 const desktopSidebarCollapsedStorageKey = "neirohub.desktop-sidebar-collapsed";
 
@@ -31,9 +32,10 @@ type WorkspaceFrameProps = {
   balance?: number | null;
   children: ReactNode;
   conversations: ConversationItem[];
+  profile: AccountProfile;
 };
 
-export function WorkspaceFrame({ account, accountId, balance = null, children, conversations }: WorkspaceFrameProps) {
+export function WorkspaceFrame({ account, accountId, balance = null, children, conversations, profile }: WorkspaceFrameProps) {
   const restoredDesktopSidebarCollapsed = useSyncExternalStore(
     subscribeToDesktopSidebarPreference,
     getDesktopSidebarPreference,
@@ -54,24 +56,26 @@ export function WorkspaceFrame({ account, accountId, balance = null, children, c
   };
 
   return (
-    <WorkspaceConversationListProvider accountId={accountId} initialConversations={conversations} key={accountId}>
-      <WorkspaceDataCacheProvider>
-        <AppShell
-          header={<WorkspaceHeader balance={balance} />}
-          isDesktopSidebarCollapsed={isDesktopSidebarCollapsed}
-          sidebar={
-            <Sidebar
-              account={account}
-              conversations={<SidebarConversations />}
-              isDesktopCollapsed={isDesktopSidebarCollapsed}
-              onDesktopToggle={toggleDesktopSidebar}
-            />
-          }
-        >
-          <WorkspaceNavigationMetrics />
-          {children}
-        </AppShell>
-      </WorkspaceDataCacheProvider>
-    </WorkspaceConversationListProvider>
+    <WorkspaceAccountProvider snapshot={{ balance, profile }}>
+      <WorkspaceConversationListProvider accountId={accountId} initialConversations={conversations} key={accountId}>
+        <WorkspaceDataCacheProvider>
+          <AppShell
+            header={<WorkspaceHeader balance={balance} />}
+            isDesktopSidebarCollapsed={isDesktopSidebarCollapsed}
+            sidebar={
+              <Sidebar
+                account={account}
+                conversations={<SidebarConversations />}
+                isDesktopCollapsed={isDesktopSidebarCollapsed}
+                onDesktopToggle={toggleDesktopSidebar}
+              />
+            }
+          >
+            <WorkspaceNavigationMetrics />
+            {children}
+          </AppShell>
+        </WorkspaceDataCacheProvider>
+      </WorkspaceConversationListProvider>
+    </WorkspaceAccountProvider>
   );
 }

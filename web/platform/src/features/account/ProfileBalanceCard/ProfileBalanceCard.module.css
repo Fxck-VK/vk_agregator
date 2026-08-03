@@ -1,0 +1,63 @@
+.card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-5);
+  align-items: center;
+  padding: clamp(var(--space-4), 4vw, var(--space-5));
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-raised);
+}
+
+.plan,
+.balance {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.plan p,
+.plan strong,
+.balance span,
+.balance strong {
+  margin: 0;
+}
+
+.plan p,
+.balance span {
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+}
+
+.plan strong {
+  font-size: 1.25rem;
+}
+
+.balance {
+  min-inline-size: 7rem;
+  padding-inline-start: var(--space-5);
+  border-inline-start: 0.0625rem solid var(--color-border);
+}
+
+.balance strong {
+  color: var(--color-accent);
+  font-size: clamp(1.5rem, 4vw, 2rem);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.balance strong span {
+  color: inherit;
+  font-size: inherit;
+}
+
+@media (width < 36rem) {
+  .card {
+    grid-template-columns: 1fr;
+  }
+
+  .balance {
+    padding-block-start: var(--space-4);
+    padding-inline-start: 0;
+    border-block-start: 0.0625rem solid var(--color-border);
+    border-inline-start: 0;
+  }
+}

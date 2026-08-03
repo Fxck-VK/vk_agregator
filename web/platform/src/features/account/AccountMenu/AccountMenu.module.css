@@ -83,8 +83,14 @@
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--color-text);
+  font: inherit;
   text-align: start;
+  text-decoration: none;
   font-weight: 700;
+}
+
+.menuAction:hover:not(:disabled) {
+  background: var(--color-surface-raised);
 }
 
 .menuAction:disabled,

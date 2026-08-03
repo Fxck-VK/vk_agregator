@@ -1,0 +1,73 @@
+.section {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.section h2,
+.card p {
+  margin: 0;
+}
+
+.section h2 {
+  font-size: 1.125rem;
+}
+
+.card {
+  padding: var(--space-3);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-raised);
+}
+
+.card p {
+  padding: var(--space-2);
+  color: var(--color-text-muted);
+}
+
+.list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.list li {
+  display: flex;
+  min-inline-size: min(100%, 15rem);
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2);
+  border: 0.0625rem solid var(--color-border);
+  border-radius: 999px;
+}
+
+.glyph {
+  display: grid;
+  flex: 0 0 auto;
+  inline-size: 2.25rem;
+  block-size: 2.25rem;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--color-border);
+  color: var(--color-text);
+  font-weight: 800;
+}
+
+.details {
+  display: grid;
+  min-inline-size: 0;
+  gap: 0.125rem;
+}
+
+.details strong,
+.details span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.details span {
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+}
