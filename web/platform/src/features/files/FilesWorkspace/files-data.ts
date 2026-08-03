@@ -99,6 +99,22 @@ export async function retryExpiredImageJob(jobID: string): Promise<ImageJob> {
   return retriedJob;
 }
 
+export async function activateAwaitingPaymentImageJob(jobID: string): Promise<ImageJob> {
+  const response = await webBrowserMutation(`/web/v1/image-jobs/${jobID}/activate`, { method: "POST" });
+  if (response.status !== 200 && response.status !== 402) {
+    throw new Error("Unable to activate image job.");
+  }
+
+  const activatedJob = parseImageJobActivation(await response.json()).job;
+  if (activatedJob.id !== jobID) {
+    throw new Error("Image job activation response does not match its request.");
+  }
+  if (response.status === 402 && activatedJob.status !== "awaiting_payment") {
+    throw new Error("Image job activation payment response is invalid.");
+  }
+  return activatedJob;
+}
+
 export async function fetchImageFileJob(jobID: string, signal?: AbortSignal): Promise<ImageJob> {
   const response = await webBrowserFetch(`/web/v1/image-jobs/${jobID}`, { signal });
   if (response.status !== 200) {

@@ -77,6 +77,8 @@ export function FileCard({ isRetrying, job, onRequestResult, onRetryJob, result,
         {!canPreview && job.status === "awaiting_payment" ? (
           <div className={styles.jobState}>
             <p>{ru.files.insufficientTokensDescription}</p>
+            {isRetrying ? <RetrySpinner /> : null}
+            <Button disabled={isRetrying} onClick={() => onRetryJob(job)}>{ru.files.retry}</Button>
           </div>
         ) : null}
         {!canPreview && job.status === "expired" ? (

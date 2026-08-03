@@ -15,6 +15,7 @@ import { ru } from "@/i18n/ru";
 import type { ImageJob, ImageJobResult } from "@/lib/web-api/contracts";
 
 import {
+  activateAwaitingPaymentImageJob,
   createImageFilePreviewQueue,
   fetchImageFileJob,
   fetchImageFilesPage,
@@ -160,6 +161,26 @@ function shouldTrackRetryJob(job: ImageJob): boolean {
   return job.status !== "awaiting_payment" && !isTerminalImageJobStatus(job.status);
 }
 
+function reconcileLocallyActivatedImageJobs(
+  serverJobs: ImageJob[],
+  locallyActivatedJobsByID: Map<string, ImageJob>,
+): ImageJob[] {
+  return serverJobs.map((serverJob) => {
+    const locallyActivatedJob = locallyActivatedJobsByID.get(serverJob.id);
+    if (locallyActivatedJob === undefined) {
+      return serverJob;
+    }
+
+    const latestJob = latestKnownImageJob(locallyActivatedJob, serverJob);
+    if (shouldTrackRetryJob(latestJob)) {
+      locallyActivatedJobsByID.set(latestJob.id, latestJob);
+    } else {
+      locallyActivatedJobsByID.delete(serverJob.id);
+    }
+    return latestJob;
+  });
+}
+
 type RetryJobPollerProps = {
   jobID: string;
   onJobUpdate: (job: ImageJob) => ImageJob;
@@ -288,6 +309,7 @@ export function FilesWorkspace() {
   const hasRecordedCacheHit = useRef(false);
   const imagePreviewQueueRef = useRef<ReturnType<typeof createImageFilePreviewQueue> | null>(null);
   const jobsRef = useRef(jobs);
+  const locallyActivatedJobsRef = useRef(new Map<string, ImageJob>());
   const retryRequestsInFlightRef = useRef(new Set<string>());
   const workspaceActiveRef = useRef(true);
   const createPreviewQueue = useCallback(() =>
@@ -363,15 +385,22 @@ export function FilesWorkspace() {
       const page = await fetchImageFilesPage(cursor);
       if (isFirstPage) {
         const reconciledPage = reconcileRetryReplacements(page.items, retryReplacementsRef.current);
+        const latestPageJobs = reconcileLocallyActivatedImageJobs(
+          reconciledPage.jobs,
+          locallyActivatedJobsRef.current,
+        );
         for (const replacement of reconciledPage.updatedReplacements) {
           retryReplacementsRef.current.set(replacement.originalJobID, replacement.job);
           cache.setImageFileRetryReplacement(replacement);
         }
         stopTrackingTerminalRetryJobs();
-        cache.setImageFilesFirstPage({ ...page, items: reconciledPage.jobs });
-        setJobs(reconciledPage.jobs);
+        cache.setImageFilesFirstPage({ ...page, items: latestPageJobs });
+        jobsRef.current = latestPageJobs;
+        setJobs(latestPageJobs);
       } else {
-        setJobs((currentJobs) => appendDistinctImageJobs(currentJobs, page.items));
+        const nextVisibleJobs = appendDistinctImageJobs(jobsRef.current, page.items);
+        jobsRef.current = nextVisibleJobs;
+        setJobs(nextVisibleJobs);
       }
       setNextCursor(page.next_cursor);
       setHasLoaded(true);
@@ -443,13 +472,31 @@ export function FilesWorkspace() {
   const handleTrackedRetryJobUpdate = useCallback((updatedJob: ImageJob): ImageJob => {
     const visibleJob = jobsRef.current.find((job) => job.id === updatedJob.id);
     let canonicalJob = latestKnownImageJob(visibleJob, updatedJob);
+    const locallyActivatedJob = locallyActivatedJobsRef.current.get(updatedJob.id);
+    if (locallyActivatedJob !== undefined) {
+      canonicalJob = latestKnownImageJob(locallyActivatedJob, canonicalJob);
+      if (shouldTrackRetryJob(canonicalJob)) {
+        locallyActivatedJobsRef.current.set(canonicalJob.id, canonicalJob);
+      } else {
+        locallyActivatedJobsRef.current.delete(updatedJob.id);
+      }
+    }
     const knownReplacement = findRetryReplacementByChildJobID(retryReplacementsRef.current, updatedJob.id);
     if (knownReplacement !== undefined) {
       canonicalJob = latestKnownImageJob(knownReplacement.job, canonicalJob);
       canonicalJob = rememberRetryReplacement(knownReplacement.originalJobID, canonicalJob);
     }
 
-    setJobs((currentJobs) => replaceJobByIDOnce(currentJobs, canonicalJob));
+    const nextVisibleJobs = replaceJobByIDOnce(jobsRef.current, canonicalJob);
+    jobsRef.current = nextVisibleJobs;
+    setJobs(nextVisibleJobs);
+    const cachedPage = cache.getImageFilesFirstPage();
+    if (cachedPage?.items.some((job) => job.id === canonicalJob.id)) {
+      cache.setImageFilesFirstPage({
+        ...cachedPage,
+        items: replaceJobByIDOnce(cachedPage.items, canonicalJob),
+      });
+    }
     if (shouldTrackRetryJob(canonicalJob)) {
       setTrackedRetryJobIDs((currentIDs) => currentIDs.has(canonicalJob.id)
         ? currentIDs
@@ -465,9 +512,46 @@ export function FilesWorkspace() {
       imagePreviewQueueRef.current?.enqueue(canonicalJob);
     }
     return canonicalJob;
-  }, [rememberRetryReplacement]);
+  }, [cache, rememberRetryReplacement]);
+
+  const activateAwaitingPaymentJob = useCallback(async (awaitingPaymentJob: ImageJob) => {
+    if (awaitingPaymentJob.status !== "awaiting_payment" || retryRequestsInFlightRef.current.has(awaitingPaymentJob.id)) {
+      return;
+    }
+
+    retryRequestsInFlightRef.current.add(awaitingPaymentJob.id);
+    setRetryMutationJobIDs((currentIDs) => new Set(currentIDs).add(awaitingPaymentJob.id));
+    try {
+      const activatedJob = await activateAwaitingPaymentImageJob(awaitingPaymentJob.id);
+      if (!workspaceActiveRef.current) {
+        return;
+      }
+
+      if (shouldTrackRetryJob(activatedJob)) {
+        locallyActivatedJobsRef.current.set(activatedJob.id, activatedJob);
+      } else {
+        locallyActivatedJobsRef.current.delete(activatedJob.id);
+      }
+      handleTrackedRetryJobUpdate(activatedJob);
+    } catch {
+      // The payment card remains retryable; transport and server details stay private.
+    } finally {
+      retryRequestsInFlightRef.current.delete(awaitingPaymentJob.id);
+      if (workspaceActiveRef.current) {
+        setRetryMutationJobIDs((currentIDs) => {
+          const nextIDs = new Set(currentIDs);
+          nextIDs.delete(awaitingPaymentJob.id);
+          return nextIDs;
+        });
+      }
+    }
+  }, [handleTrackedRetryJobUpdate]);
 
   const retryJob = useCallback(async (expiredJob: ImageJob) => {
+    if (expiredJob.status === "awaiting_payment") {
+      await activateAwaitingPaymentJob(expiredJob);
+      return;
+    }
     if (expiredJob.status !== "expired" || retryRequestsInFlightRef.current.has(expiredJob.id)) {
       return;
     }
@@ -486,7 +570,9 @@ export function FilesWorkspace() {
         latestChild = latestKnownImageJob(latestChild, rememberedChild);
       }
       rememberRetryReplacement(expiredJob.id, latestChild);
-      setJobs((currentJobs) => replaceOriginalWithUniqueChild(currentJobs, expiredJob.id, latestChild));
+      const nextVisibleJobs = replaceOriginalWithUniqueChild(jobsRef.current, expiredJob.id, latestChild);
+      jobsRef.current = nextVisibleJobs;
+      setJobs(nextVisibleJobs);
       if (shouldTrackRetryJob(latestChild)) {
         setTrackedRetryJobIDs((currentIDs) => new Set(currentIDs).add(latestChild.id));
       } else if (latestChild.status === "succeeded") {
@@ -504,7 +590,7 @@ export function FilesWorkspace() {
         });
       }
     }
-  }, [rememberRetryReplacement]);
+  }, [activateAwaitingPaymentJob, rememberRetryReplacement]);
 
   const busyRetryJobIDs = useMemo(() => new Set([
     ...retryMutationJobIDs,
