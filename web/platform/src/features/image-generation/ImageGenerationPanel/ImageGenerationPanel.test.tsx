@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/web-api/browser", () => ({
@@ -362,6 +362,9 @@ describe("ImageGenerationPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: ru.imageGeneration.statusRefresh }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(ru.imageGeneration.resultFailure);
+    await waitFor(() => expect(webBrowserFetch).toHaveBeenCalledTimes(2));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(webBrowserFetch).toHaveBeenCalledTimes(2);
     expect(screen.getByRole("button", { name: ru.imageGeneration.statusRefresh })).toBeInTheDocument();
     expect(screen.queryByText(ru.imageGeneration.statusFailure)).not.toBeInTheDocument();
 

@@ -37,6 +37,7 @@ export function ImageJobTracker({ job, onError, onJobUpdate, onResult }: Readonl
   const [error, setError] = useState<TrackerError>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const refreshInFlight = useRef(false);
+  const requestedStatusJobID = useRef<string | null>(null);
   const jobIsTerminal = isTerminalImageJobStatus(job.status);
 
   const refresh = useCallback(async (): Promise<ImageJob | null> => {
@@ -45,6 +46,7 @@ export function ImageJobTracker({ job, onError, onJobUpdate, onResult }: Readonl
     }
 
     refreshInFlight.current = true;
+    requestedStatusJobID.current = job.id;
     setIsRefreshing(true);
     setError(null);
 
@@ -89,10 +91,9 @@ export function ImageJobTracker({ job, onError, onJobUpdate, onResult }: Readonl
 
   useEffect(() => {
     if (job.status === "succeeded") {
-      const recoverSucceededJob = async () => {
-        await refresh();
-      };
-      void recoverSucceededJob();
+      if (requestedStatusJobID.current !== job.id) {
+        void refresh();
+      }
       return;
     }
 
