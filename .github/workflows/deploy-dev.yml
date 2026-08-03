@@ -343,6 +343,7 @@ jobs:
 
           bash scripts/deploy/assemble-env-parts.sh \
             --target dev \
+            --web-origin https://dev-web.neiirohub.ru \
             --output "${raw_env}"
 
           bash scripts/deploy/prepare-dev-env.sh \
