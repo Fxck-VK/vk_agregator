@@ -121,7 +121,10 @@ export function AccountMenu({ identityLabel, isLogoutPending, logoutFailure, onL
                 type="button"
               >
                 <AccountIcon>
-                  <path d="M19.7 15.2A7 7 0 0 1 8.8 4.3 7 7 0 1 0 19.7 15.2Z" fill="currentColor" />
+                  <path
+                    d="M9.528 1.718a.75.75 0 0 1 1.162.81 8.25 8.25 0 0 0 10.78 10.78.75.75 0 0 1 .81 1.163A9.75 9.75 0 1 1 9.528 1.718Z"
+                    fill="currentColor"
+                  />
                 </AccountIcon>
               </button>
             </div>

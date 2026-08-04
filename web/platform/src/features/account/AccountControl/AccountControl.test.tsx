@@ -104,6 +104,20 @@ describe("AccountControl", () => {
     expect(screen.getByRole("region", { name: ru.account.menuLabel })).toBeInTheDocument();
   });
 
+  it("renders a filled moon glyph for the dark theme option", () => {
+    render(<AccountControl profile={profile} />);
+    fireEvent.click(screen.getByRole("button", { name: ru.account.openMenuLabel }));
+
+    const darkTheme = screen.getByRole("button", { name: ru.account.darkThemeLabel });
+    const moonPath = darkTheme.querySelector("path");
+
+    expect(moonPath).toHaveAttribute("fill", "currentColor");
+    expect(moonPath).toHaveAttribute(
+      "d",
+      "M9.528 1.718a.75.75 0 0 1 1.162.81 8.25 8.25 0 0 0 10.78 10.78.75.75 0 0 1 .81 1.163A9.75 9.75 0 1 1 9.528 1.718Z",
+    );
+  });
+
   it("uses the mutation boundary for logout and redirects only after 204", async () => {
     vi.mocked(webBrowserMutation).mockResolvedValue(new Response(null, { status: 204 }));
     render(<AccountControl profile={profile} />);
