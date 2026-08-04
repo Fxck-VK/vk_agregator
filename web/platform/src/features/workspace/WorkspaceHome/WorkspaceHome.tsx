@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { ru } from "@/i18n/ru";
+import { InspirationGallery } from "@/features/inspiration/InspirationGallery/InspirationGallery";
 
 import { WorkspacePrompt } from "../WorkspacePrompt/WorkspacePrompt";
 
@@ -14,6 +15,10 @@ type WorkspaceHomeProps = {
 
 export function WorkspaceHome({ section = "home" }: WorkspaceHomeProps) {
   const content = ru.workspace.sections[section];
+
+  if (section === "inspiration") {
+    return <InspirationGallery />;
+  }
 
   if (section === "home") {
     return (

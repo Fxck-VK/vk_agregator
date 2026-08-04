@@ -25,4 +25,13 @@ describe("WorkspaceHome", () => {
     expect(markup).not.toContain("image-generation-title");
     expect(markup).not.toContain("image-job-history-title");
   });
+
+  it("renders the interactive inspiration example instead of a placeholder", () => {
+    const markup = renderToStaticMarkup(<WorkspaceHome section="inspiration" />);
+
+    expect(markup).toContain(ru.inspiration.title);
+    expect(markup).toContain(ru.inspiration.openExample);
+    expect(markup).toContain("%2Finspiration%2Fpaper-crane-cloud.png");
+    expect(markup).not.toContain(ru.workspace.sections.inspiration.description);
+  });
 });
