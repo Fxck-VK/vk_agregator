@@ -40,6 +40,8 @@ describe("AccountControl", () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
+    localStorage.clear();
+    document.documentElement.removeAttribute("data-theme");
   });
 
   it("opens a compact account menu with a profile route and placeholder actions", () => {
@@ -78,6 +80,28 @@ describe("AccountControl", () => {
     expect(screen.getByText(ru.account.unavailableLabel)).toBeInTheDocument();
     expect(screen.queryByText(profile.identity_refs[0].label.trim())).not.toBeInTheDocument();
     expect(screen.queryByRole("img")).not.toBeInTheDocument();
+  });
+
+  it("switches and persists the selected appearance without closing the menu", () => {
+    render(<AccountControl profile={profile} />);
+    fireEvent.click(screen.getByRole("button", { name: ru.account.openMenuLabel }));
+
+    const systemTheme = screen.getByRole("button", { name: ru.account.systemThemeLabel });
+    const lightTheme = screen.getByRole("button", { name: ru.account.lightThemeLabel });
+    const darkTheme = screen.getByRole("button", { name: ru.account.darkThemeLabel });
+
+    expect(systemTheme).toBeEnabled();
+    expect(lightTheme).toBeEnabled();
+    expect(darkTheme).toBeEnabled();
+
+    fireEvent.click(lightTheme);
+
+    expect(lightTheme).toHaveAttribute("aria-pressed", "true");
+    expect(systemTheme).toHaveAttribute("aria-pressed", "false");
+    expect(darkTheme).toHaveAttribute("aria-pressed", "false");
+    expect(document.documentElement).toHaveAttribute("data-theme", "light");
+    expect(localStorage.getItem("neirohub.theme")).toBe("light");
+    expect(screen.getByRole("region", { name: ru.account.menuLabel })).toBeInTheDocument();
   });
 
   it("uses the mutation boundary for logout and redirects only after 204", async () => {

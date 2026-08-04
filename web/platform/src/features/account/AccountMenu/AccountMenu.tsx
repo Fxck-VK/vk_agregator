@@ -3,6 +3,11 @@
 import Link from "next/link";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 
+import {
+  applyThemePreference,
+  readThemePreference,
+  type ThemePreference,
+} from "@/features/theme/theme-preference";
 import { ru } from "@/i18n/ru";
 
 import styles from "./AccountMenu.module.css";
@@ -26,6 +31,9 @@ function AccountIcon({ children }: { children: ReactNode }) {
 
 export function AccountMenu({ identityLabel, isLogoutPending, logoutFailure, onLogout }: AccountMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [themePreference, setThemePreference] = useState<ThemePreference>(() =>
+    typeof window === "undefined" ? "system" : readThemePreference(),
+  );
   const menuRef = useRef<HTMLElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
@@ -36,6 +44,11 @@ export function AccountMenu({ identityLabel, isLogoutPending, logoutFailure, onL
   const closeMenu = () => {
     setIsOpen(false);
     triggerRef.current?.focus();
+  };
+
+  const selectTheme = (preference: ThemePreference) => {
+    applyThemePreference(preference);
+    setThemePreference(preference);
   };
 
   return (
@@ -80,21 +93,33 @@ export function AccountMenu({ identityLabel, isLogoutPending, logoutFailure, onL
             <div aria-label={ru.account.themeLabel} className={styles.themeSwitcher} role="group">
               <button
                 aria-label={ru.account.systemThemeLabel}
-                aria-pressed="true"
-                className={`${styles.themeOption} ${styles.themeSelected}`}
-                disabled
+                aria-pressed={themePreference === "system"}
+                className={`${styles.themeOption} ${themePreference === "system" ? styles.themeSelected : ""}`}
+                onClick={() => selectTheme("system")}
                 type="button"
               >
                 <AccountIcon>
                   <path d="M5 5h14v10H5V5Zm2 2v6h10V7H7Zm3 10h4v2h-4v-2Z" fill="currentColor" />
                 </AccountIcon>
               </button>
-              <button aria-label={ru.account.lightThemeLabel} aria-pressed="false" className={styles.themeOption} disabled type="button">
+              <button
+                aria-label={ru.account.lightThemeLabel}
+                aria-pressed={themePreference === "light"}
+                className={`${styles.themeOption} ${themePreference === "light" ? styles.themeSelected : ""}`}
+                onClick={() => selectTheme("light")}
+                type="button"
+              >
                 <AccountIcon>
                   <path d="M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10Zm0-4h1v3h-1V3Zm0 15h1v3h-1v-3ZM3 11h3v1H3v-1Zm15 0h3v1h-3v-1ZM5.6 4.9l2.1 2.1-.7.7L4.9 5.6l.7-.7Zm11.4 11.4 2.1 2.1-.7.7-2.1-2.1.7-.7Zm1.4-11.4.7.7L17 7.7l-.7-.7 2.1-2.1ZM7.7 16.3l.7.7-2.1 2.1-.7-.7 2.1-2.1Z" fill="currentColor" />
                 </AccountIcon>
               </button>
-              <button aria-label={ru.account.darkThemeLabel} aria-pressed="false" className={styles.themeOption} disabled type="button">
+              <button
+                aria-label={ru.account.darkThemeLabel}
+                aria-pressed={themePreference === "dark"}
+                className={`${styles.themeOption} ${themePreference === "dark" ? styles.themeSelected : ""}`}
+                onClick={() => selectTheme("dark")}
+                type="button"
+              >
                 <AccountIcon>
                   <path d="M19.7 15.2A7 7 0 0 1 8.8 4.3 7 7 0 1 0 19.7 15.2Z" fill="currentColor" />
                 </AccountIcon>

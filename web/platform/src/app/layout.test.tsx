@@ -1,17 +1,42 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("next/headers", () => ({
+  headers: vi.fn(),
+}));
+
+import { headers } from "next/headers";
 
 import RootLayout from "./layout";
 
 describe("RootLayout", () => {
-  it("sets Russian as the document language", () => {
+  beforeEach(() => {
+    vi.mocked(headers).mockResolvedValue(new Headers({ "x-nonce": "test-theme-nonce" }) as never);
+  });
+
+  it("sets Russian as the document language", async () => {
     const markup = renderToStaticMarkup(
-      <RootLayout>
-        <main>Тест</main>
-      </RootLayout>,
+      await RootLayout({
+        children: <main>Тест</main>,
+      }),
     );
     const document = new DOMParser().parseFromString(markup, "text/html");
 
     expect(document.documentElement.getAttribute("lang")).toBe("ru");
+  });
+
+  it("bootstraps the persisted theme in the head before page content with the request CSP nonce", async () => {
+    const markup = renderToStaticMarkup(
+      await RootLayout({
+        children: <main>Theme content</main>,
+      }),
+    );
+    const document = new DOMParser().parseFromString(markup, "text/html");
+    const bootstrapScript = document.querySelector("head script");
+
+    expect(document.documentElement.getAttribute("data-theme")).toBe("system");
+    expect(bootstrapScript?.textContent).toContain("neirohub.theme");
+    expect(bootstrapScript?.getAttribute("nonce")).toBe("test-theme-nonce");
+    expect(markup.indexOf("<script")).toBeLessThan(markup.indexOf("<body"));
   });
 });

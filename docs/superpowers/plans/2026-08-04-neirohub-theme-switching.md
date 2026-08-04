@@ -13,6 +13,7 @@
 - Theme preference is one of `system`, `light`, or `dark`.
 - Preference storage is local, non-sensitive and must never block rendering.
 - System appearance follows `prefers-color-scheme` without an API request.
+- The early script uses the existing per-request CSP nonce; CSP is never weakened.
 - Backend, auth, billing, jobs and account contracts remain unchanged.
 - All implementation steps follow red-green-refactor.
 
@@ -220,9 +221,11 @@ Expected: FAIL because the layout has no theme bootstrap and global CSS has no l
 Render the root as:
 
 ```tsx
+const nonce = (await headers()).get("x-nonce") ?? undefined;
+
 <html data-theme="system" lang="ru" suppressHydrationWarning>
   <head>
-    <script dangerouslySetInnerHTML={{ __html: themeBootstrapScript }} />
+    <script dangerouslySetInnerHTML={{ __html: themeBootstrapScript }} nonce={nonce} />
   </head>
   <body>{children}</body>
 </html>

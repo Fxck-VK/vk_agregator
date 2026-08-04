@@ -29,7 +29,9 @@ The browser preference is the non-sensitive local value `system`, `light` or
 validation, reading and applying that value so account UI does not duplicate
 storage rules. The root layout emits `data-theme="system"` and a synchronous,
 fail-safe bootstrap script in `<head>` updates the attribute from local storage
-before the body is painted.
+before the body is painted. The layout reads the per-request `x-nonce` supplied
+by the existing strict-CSP proxy and attaches it to this owned inline script;
+theme startup must not weaken `script-src` or add `unsafe-inline`.
 
 CSS variables remain the only application-wide color contract. Dark values
 stay the default and light mode overrides the same tokens. In system mode a
