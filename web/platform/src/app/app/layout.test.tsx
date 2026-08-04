@@ -111,22 +111,25 @@ describe("WorkspaceLayout", () => {
 });
 
 describe("Workspace destinations", () => {
-  it("renders the normal chat start prompt and explicit workspace destinations", () => {
+  it("renders the complete workspace overview with explicit internal destinations", () => {
     const markup = renderToStaticMarkup(
       <WorkspaceConversationListProvider accountId="workspace-destinations-test-account" initialConversations={[]}>
         <WorkspaceHome />
       </WorkspaceConversationListProvider>,
     );
 
-    expect(markup).toContain(ru.workspace.startTitle);
-    expect(markup).toContain(ru.workspace.promptLabel);
-    expect(markup).toContain(ru.workspace.imageActionTitle);
-    expect(markup).toContain(ru.workspace.modelsActionTitle);
+    expect(markup).toContain("Задайте вопрос NeiroHub");
+    expect(markup).toContain("Новости");
+    expect(markup).toContain("Нейросети для разных задач");
+    expect(markup).toContain("Частые вопросы");
+    expect(markup).toContain('href="/app/chats"');
     expect(markup).toContain('href="/app/image"');
     expect(markup).toContain('href="/app/models"');
+    expect(markup).toContain('href="/app/files"');
+    expect(markup).toContain('href="/app/inspiration"');
+    expect(markup).toContain('href="/app/profile"');
     expect(markup).not.toContain("image-generation-title");
     expect(markup).not.toContain(ru.imageHistory.load);
-    expect(markup).not.toContain('href="/app/chats"');
   });
 
 });

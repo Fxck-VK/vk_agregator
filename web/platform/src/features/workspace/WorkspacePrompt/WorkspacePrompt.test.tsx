@@ -49,6 +49,14 @@ function renderNewChatPrompt() {
   );
 }
 
+function renderHeroPrompt() {
+  return render(
+    <WorkspaceConversationListProvider accountId={workspaceAccountId} initialConversations={[]}>
+      <WorkspacePrompt variant="hero" />
+    </WorkspaceConversationListProvider>,
+  );
+}
+
 function renderWorkspacePromptWithSidebar() {
   return render(
     <WorkspaceConversationListProvider accountId={workspaceAccountId} initialConversations={[]}>
@@ -82,6 +90,16 @@ describe("WorkspacePrompt", () => {
     expect(screen.getByLabelText(ru.conversations.composerPlaceholder)).toHaveAttribute(
       "placeholder",
       ru.conversations.composerPlaceholder,
+    );
+    expect(screen.queryByText(ru.workspace.promptSupport)).not.toBeInTheDocument();
+  });
+
+  it("presents the existing conversation workflow as the workspace hero composer", () => {
+    renderHeroPrompt();
+
+    expect(screen.getByLabelText("Задайте вопрос NeiroHub")).toHaveAttribute(
+      "placeholder",
+      "Напиши свой вопрос, и я помогу тебе",
     );
     expect(screen.queryByText(ru.workspace.promptSupport)).not.toBeInTheDocument();
   });

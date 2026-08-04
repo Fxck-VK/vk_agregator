@@ -22,7 +22,7 @@ type RetryIntent = {
 };
 
 type WorkspacePromptProps = {
-  variant?: "workspace" | "newChat";
+  variant?: "workspace" | "newChat" | "hero";
 };
 
 export function WorkspacePrompt({ variant = "workspace" }: WorkspacePromptProps) {
@@ -38,8 +38,17 @@ export function WorkspacePrompt({ variant = "workspace" }: WorkspacePromptProps)
   const retryIntentRef = useRef<RetryIntent | null>(null);
   const canSubmit = prompt.trim() !== "" && !isPending;
   const isNewChat = variant === "newChat";
-  const promptLabel = isNewChat ? ru.conversations.composerPlaceholder : ru.workspace.promptLabel;
-  const promptPlaceholder = isNewChat ? ru.conversations.composerPlaceholder : ru.workspace.promptPlaceholder;
+  const isHero = variant === "hero";
+  const promptLabel = isHero
+    ? "Задайте вопрос NeiroHub"
+    : isNewChat
+      ? ru.conversations.composerPlaceholder
+      : ru.workspace.promptLabel;
+  const promptPlaceholder = isHero
+    ? "Напиши свой вопрос, и я помогу тебе"
+    : isNewChat
+      ? ru.conversations.composerPlaceholder
+      : ru.workspace.promptPlaceholder;
 
   const changePrompt = (event: ChangeEvent<HTMLTextAreaElement>) => {
     const nextPrompt = event.target.value;
@@ -137,7 +146,10 @@ export function WorkspacePrompt({ variant = "workspace" }: WorkspacePromptProps)
   };
 
   return (
-    <form className={`${styles.form} ${isNewChat ? styles.newChatForm : ""}`} onSubmit={submitForm}>
+    <form
+      className={`${styles.form} ${isNewChat ? styles.newChatForm : ""} ${isHero ? styles.heroForm : ""}`}
+      onSubmit={submitForm}
+    >
       <label className={styles.promptField}>
         <span>{promptLabel}</span>
         <ChatTextInput
@@ -146,7 +158,7 @@ export function WorkspacePrompt({ variant = "workspace" }: WorkspacePromptProps)
           onChange={changePrompt}
           onSend={() => void submit()}
           placeholder={promptPlaceholder}
-          rows={isNewChat ? 4 : 5}
+          rows={isNewChat || isHero ? 4 : 5}
           size="expanded"
           value={prompt}
         />
@@ -155,7 +167,7 @@ export function WorkspacePrompt({ variant = "workspace" }: WorkspacePromptProps)
         <Button disabled={!canSubmit} type="submit">
           {isPending ? ru.workspace.promptPending : ru.workspace.promptSubmit}
         </Button>
-        {isNewChat ? null : <p>{ru.workspace.promptSupport}</p>}
+        {isNewChat || isHero ? null : <p>{ru.workspace.promptSupport}</p>}
       </div>
       {hasError ? (
         <p className={styles.error} role="alert">
