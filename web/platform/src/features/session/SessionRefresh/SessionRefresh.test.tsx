@@ -47,7 +47,7 @@ describe("SessionRefresh", () => {
 
     render(<SessionRefresh />);
 
-    await vi.waitFor(() => expect(replace).toHaveBeenCalledWith("/login?refresh_failed=1"));
+    await vi.waitFor(() => expect(replace).toHaveBeenCalledWith("/login"));
     expect(refresh).not.toHaveBeenCalled();
   });
 

@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
-import Script from "next/script";
+import { headers } from "next/headers";
 import type { ReactNode } from "react";
 
+import { themeBootstrapScript } from "@/features/theme/theme-preference";
 import { publicSiteOrigin } from "@/features/landing/seo/landing-json-ld";
 
 import "./globals.css";
@@ -15,11 +16,13 @@ export const metadata: Metadata = {
   description: "Единая веб-платформа для общения с нейросетями, создания контента и хранения результатов.",
 };
 
-export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
+export default async function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
+
   return (
     <html data-theme="system" lang="ru" suppressHydrationWarning>
       <head>
-        <Script src="/theme-bootstrap.js" strategy="beforeInteractive" />
+        <script dangerouslySetInnerHTML={{ __html: themeBootstrapScript }} nonce={nonce} />
       </head>
       <body>{children}</body>
     </html>

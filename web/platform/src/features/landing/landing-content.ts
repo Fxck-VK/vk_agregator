@@ -25,7 +25,6 @@ export const landingTools: LandingTool[] = [
     href: "/login?next=/app/image",
     icon: "◈",
     kind: "image",
-    priceStarsByQuality: { "1K": 16, "2K": 60 },
   },
   {
     id: "gpt-image",
@@ -34,7 +33,6 @@ export const landingTools: LandingTool[] = [
     href: "/login?next=/app/image",
     icon: "◎",
     kind: "image",
-    priceStarsByQuality: { "1K": 16, "2K": 60 },
   },
   {
     id: "video-generator",
@@ -62,10 +60,10 @@ export const landingTools: LandingTool[] = [
   },
   {
     id: "all-models",
-    name: "Все нейросети",
+    name: "90+ нейросетей",
     description: "Весь каталог в одном месте",
     href: "/login?next=/app/models",
-    icon: "AI",
+    icon: "90+",
     kind: "catalog",
   },
 ];

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 import { Button } from "@/components/ui/Button/Button";
@@ -9,7 +9,6 @@ import { ImageGenerationEditor } from "@/features/image-generation/ImageGenerati
 import { ImageGenerationResult } from "@/features/image-generation/ImageGenerationResult/ImageGenerationResult";
 import { ImageJobTracker } from "@/features/image-generation/ImageJobTracker/ImageJobTracker";
 import { loadImageModelCatalog } from "@/features/models/image-model-catalog-cache";
-import { consumeGuestDraft } from "@/features/landing/HeroComposer/guest-draft";
 import { ru } from "@/i18n/ru";
 import {
   parseImageJobActivation,
@@ -41,7 +40,6 @@ export function ImageGenerationPanel({ onJobChange }: Readonly<ImageGenerationPa
   const requestedModelID = searchParams.get("model");
   const requestedImageQuality = searchParams.get("quality");
   const requestedPrompt = searchParams.get("prompt") ?? "";
-  const guestPromptRef = useRef<string | undefined>(undefined);
   const [stage, setStage] = useState<PanelStage>("loading");
   const [catalogLoadAttempt, setCatalogLoadAttempt] = useState(0);
   const [models, setModels] = useState<ImageModel[]>([]);
@@ -87,10 +85,7 @@ export function ImageGenerationPanel({ onJobChange }: Readonly<ImageGenerationPa
             ? requestedImageQuality
             : initialModel.default_quality,
         );
-        if (guestPromptRef.current === undefined) {
-          guestPromptRef.current = consumeGuestDraft("image") ?? "";
-        }
-        setPrompt(requestedPrompt || guestPromptRef.current);
+        setPrompt(requestedPrompt);
         setStage("editor");
       } catch {
         if (active) {

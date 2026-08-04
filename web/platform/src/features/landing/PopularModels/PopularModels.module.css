@@ -1,8 +1,0 @@
-.heading { display: flex; align-items: end; justify-content: space-between; gap: var(--space-5); margin-block-end: var(--space-7); }
-.heading h2 { margin: 0; font-size: clamp(2rem, 5vw, 4rem); line-height: 1.05; letter-spacing: -.04em; }
-.heading p { max-inline-size: 38rem; color: var(--color-text-muted); }
-.heading a, .more { display: inline-flex; min-block-size: 2.75rem; align-items: center; justify-content: center; border: .0625rem solid var(--color-border); border-radius: 999px; padding-inline: var(--space-5); background: var(--color-surface); color: var(--color-text); font-weight: 750; text-decoration: none; }
-.grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--space-4); }
-.more { margin-block-start: var(--space-6); }
-@media (max-width: 55rem) { .grid { grid-template-columns: 1fr; } }
-@media (max-width: 40rem) { .heading { align-items: flex-start; flex-direction: column; } }

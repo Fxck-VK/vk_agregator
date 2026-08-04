@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import { ChatTextInput } from "@/components/chat/ChatTextInput/ChatTextInput";
 import { Button } from "@/components/ui/Button/Button";
 import { savePendingConversationPrompt } from "@/features/conversations/pending-conversation-prompt";
-import { consumeGuestDraft } from "@/features/landing/HeroComposer/guest-draft";
 import { fallbackConversationTitle, savePendingConversationTitleSync } from "@/features/conversations/pending-conversation-title-sync";
 import { useWorkspaceConversationList } from "@/features/conversations/WorkspaceConversationList/WorkspaceConversationList";
 import { ru } from "@/i18n/ru";
@@ -33,7 +32,7 @@ export function WorkspacePrompt({ variant = "workspace" }: WorkspacePromptProps)
     resolvePendingConversation,
     upsertConversation,
   } = useWorkspaceConversationList();
-  const [prompt, setPrompt] = useState(() => variant === "newChat" ? consumeGuestDraft("chat") ?? "" : "");
+  const [prompt, setPrompt] = useState("");
   const [isPending, setIsPending] = useState(false);
   const [hasError, setHasError] = useState(false);
   const retryIntentRef = useRef<RetryIntent | null>(null);

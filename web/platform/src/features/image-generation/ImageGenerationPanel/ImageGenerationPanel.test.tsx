@@ -20,7 +20,6 @@ import type { ImageModelList } from "@/lib/web-api/contracts";
 import { useSearchParams } from "next/navigation";
 
 import { loadImageModelCatalog } from "@/features/models/image-model-catalog-cache";
-import { guestDraftStorageKey, saveGuestDraft } from "@/features/landing/HeroComposer/guest-draft";
 
 import { ImageGenerationPanel } from "./ImageGenerationPanel";
 
@@ -96,7 +95,6 @@ describe("ImageGenerationPanel", () => {
     cleanup();
     vi.clearAllMocks();
     vi.unstubAllGlobals();
-    window.sessionStorage.clear();
   });
 
   it("loads the direct editor when the image workspace opens", async () => {
@@ -105,16 +103,6 @@ describe("ImageGenerationPanel", () => {
 
     expect(await screen.findByRole("combobox", { name: ru.imageGeneration.modelLabel })).toHaveValue("nano-banana-2");
     expect(loadImageModelCatalog).toHaveBeenCalledTimes(1);
-  });
-
-  it("consumes a public image draft when no explicit prompt query is present", async () => {
-    saveGuestDraft("A lighthouse in a storm", "image", window.sessionStorage);
-    vi.mocked(loadImageModelCatalog).mockResolvedValueOnce(modelsResponse);
-
-    render(<ImageGenerationPanel />);
-
-    expect(await screen.findByRole("textbox", { name: ru.imageGeneration.promptLabel })).toHaveValue("A lighthouse in a storm");
-    expect(window.sessionStorage.getItem(guestDraftStorageKey)).toBeNull();
   });
 
   it("shows the selected model and quality price immediately without preparing a job", async () => {
