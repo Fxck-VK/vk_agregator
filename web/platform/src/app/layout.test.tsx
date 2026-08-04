@@ -7,7 +7,7 @@ vi.mock("next/headers", () => ({
 
 import { headers } from "next/headers";
 
-import RootLayout from "./layout";
+import RootLayout, { metadata } from "./layout";
 
 describe("RootLayout", () => {
   beforeEach(() => {
@@ -23,6 +23,14 @@ describe("RootLayout", () => {
     const document = new DOMParser().parseFromString(markup, "text/html");
 
     expect(document.documentElement.getAttribute("lang")).toBe("ru");
+  });
+
+  it("defines the production metadata base for absolute social and canonical URLs", () => {
+    expect(metadata.metadataBase?.toString()).toBe("https://neiirohub.ru/");
+    expect(metadata.title).toEqual({
+      default: "NeiroHub — нейросети на русском в одном месте",
+      template: "%s | NeiroHub",
+    });
   });
 
   it("bootstraps the persisted theme in the head before page content with the request CSP nonce", async () => {
