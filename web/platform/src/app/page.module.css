@@ -1,0 +1,60 @@
+.home {
+  display: grid;
+  min-block-size: 100dvh;
+  place-items: center;
+  padding: var(--space-6);
+}
+
+.content {
+  inline-size: min(100%, 48rem);
+  padding: clamp(var(--space-6), 8vw, 6rem);
+  border: 0.0625rem solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background:
+    linear-gradient(135deg, rgb(33 135 255 / 15%), transparent 45%),
+    var(--color-surface);
+}
+
+.brand {
+  margin: 0 0 var(--space-3);
+  color: var(--color-accent);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.content h1 {
+  max-inline-size: 36rem;
+  margin: 0 0 var(--space-4);
+  font-size: clamp(2.25rem, 7vw, 4.75rem);
+  line-height: 1.03;
+}
+
+.description {
+  max-inline-size: 38rem;
+  margin: 0 0 var(--space-6);
+  color: var(--color-text-muted);
+  font-size: 1.125rem;
+}
+
+.primaryAction {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: 2.75rem;
+  border-radius: var(--radius-sm);
+  padding-inline: var(--space-4);
+  background: var(--color-accent);
+  color: var(--color-text);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.primaryAction:hover {
+  background: var(--color-accent-strong);
+}
+
+.supportingText {
+  margin: var(--space-6) 0 0;
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+}

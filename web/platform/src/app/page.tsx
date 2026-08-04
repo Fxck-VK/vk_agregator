@@ -1,64 +1,30 @@
 import type { Metadata } from "next";
-import { headers } from "next/headers";
+import Link from "next/link";
 import { connection } from "next/server";
 
-import { PublicHome } from "@/features/landing/PublicHome/PublicHome";
-import { PublicShell } from "@/features/landing/PublicShell/PublicShell";
-import { createLandingJsonLd, serializeJsonLd } from "@/features/landing/seo/landing-json-ld";
+import { ru } from "@/i18n/ru";
+
+import styles from "./page.module.css";
 
 export const metadata: Metadata = {
-  title: "Нейросети онлайн на русском — NeiroHub",
-  description: "Общайтесь с нейросетями, создавайте изображения и решайте рабочие задачи на русском языке в единой платформе NeiroHub.",
-  alternates: {
-    canonical: "/",
-  },
-  robots: {
-    index: true,
-    follow: true,
-    googleBot: {
-      index: true,
-      follow: true,
-      "max-image-preview": "large",
-      "max-snippet": -1,
-      "max-video-preview": -1,
-    },
-  },
-  openGraph: {
-    type: "website",
-    url: "/",
-    locale: "ru_RU",
-    siteName: "NeiroHub",
-    title: "Нейросети онлайн на русском — NeiroHub",
-    description: "Единая платформа для общения с нейросетями и создания контента.",
-    images: [
-      {
-        url: "/inspiration/paper-crane-cloud.png",
-        alt: "NeiroHub — нейросети и создание контента в одном месте",
-      },
-    ],
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: "Нейросети онлайн на русском — NeiroHub",
-    description: "Единая платформа для общения с нейросетями и создания контента.",
-    images: ["/inspiration/paper-crane-cloud.png"],
-  },
+  title: ru.home.title,
+  description: ru.home.description,
 };
 
 export default async function HomePage() {
   await connection();
-  const nonce = (await headers()).get("x-nonce") ?? undefined;
 
   return (
-    <>
-      <PublicShell>
-        <PublicHome />
-      </PublicShell>
-      <script
-        dangerouslySetInnerHTML={{ __html: serializeJsonLd(createLandingJsonLd()) }}
-        nonce={nonce}
-        type="application/ld+json"
-      />
-    </>
+    <main className={styles.home}>
+      <section className={styles.content}>
+        <p className={styles.brand}>{ru.brand.name}</p>
+        <h1>{ru.home.title}</h1>
+        <p className={styles.description}>{ru.home.description}</p>
+        <Link className={styles.primaryAction} href="/app">
+          {ru.home.primaryAction}
+        </Link>
+        <p className={styles.supportingText}>{ru.home.supportingText}</p>
+      </section>
+    </main>
   );
 }
